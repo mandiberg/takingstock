@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation, PillowWriter
 import mediapipe as mp
 import pandas as pd
+from pose_est_mp import SelectPose
 
 import os
 import math
@@ -38,7 +39,6 @@ def touch(folder):
     if not os.path.exists(folder):
         os.makedirs(folder)
 touch(outputfolder)
-
 
 
 pi = 22.0/7.0
@@ -141,6 +141,10 @@ def get_face_landmarks(results):
 
         # Display the nose direction
         nose_3d_projection, jacobian = cv2.projectPoints(nose_3d, rot_vec, trans_vec, cam_matrix, dist_matrix)
+        
+        # display the pose estimation box projection
+        pose_estimator = SelectPose(img_size=(img_h, img_w))
+        pose_estimator.draw_annotation_box(image, rot_vec, trans_vec, color=(0, 255, 0))
 
         #set main points for drawing/cropping
         #p1 is tip of nose
