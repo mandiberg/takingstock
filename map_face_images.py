@@ -26,7 +26,8 @@ start = time.time()
 ROOT= os.path.join(os.environ['HOME'], "Documents/projects-active/facemap_production") 
 # folder ="sourceimages"
 folder ="images5test"
-outputfolder = folder+"_output"
+outputfolder = os.path.join(ROOT,folder+"_output")
+
 # file = "auto-service-workerowner-picture-id931914734.jpg"
 # # path = "sourceimages/auto-service-workerowner-picture-id931914734.jpg"
 # image = cv2.imread(os.path.join(root,folder, file))  # read any image containing a face
@@ -36,16 +37,9 @@ MINSIZE = 700
 def touch(folder):
     if not os.path.exists(folder):
         os.makedirs(folder)
-
-outputfolderRGB = os.path.join(ROOT,"face_mesh_outputsRGB")
-outputfolderBW = os.path.join(ROOT,"face_mesh_outputsBW")
-outputfolderMEH = os.path.join(ROOT,"face_mesh_outputsMEH")
-outputfolder = os.path.join(ROOT,"face_mesh_outputsORIG")
-
-touch(outputfolderBW)
-touch(outputfolderRGB)
-touch(outputfolderMEH)
 touch(outputfolder)
+
+
 
 pi = 22.0/7.0
 def eulerToDegree(euler):
