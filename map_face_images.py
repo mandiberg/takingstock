@@ -22,9 +22,11 @@ start = time.time()
 #concurrent 
 
 #declariing path and image before function, but will reassign in the main loop
-ROOT="/Users/michaelmandiberg/Documents/projects-active/facemap_production/"
+#location of source and output files outside repo
+ROOT= os.path.join(os.environ['HOME'], "Documents/projects-active/facemap_production") 
 # folder ="sourceimages"
 folder ="images5test"
+outputfolder = folder+"_output"
 # file = "auto-service-workerowner-picture-id931914734.jpg"
 # # path = "sourceimages/auto-service-workerowner-picture-id931914734.jpg"
 # image = cv2.imread(os.path.join(root,folder, file))  # read any image containing a face
@@ -44,6 +46,10 @@ touch(outputfolderBW)
 touch(outputfolderRGB)
 touch(outputfolderMEH)
 touch(outputfolder)
+
+pi = 22.0/7.0
+def eulerToDegree(euler):
+    return ( (euler) / (2 * pi) ) * 360
 
 
 def get_dir_files(folder):
@@ -66,19 +72,6 @@ def get_dir_files(folder):
 
 #constructing image object with first image as placeholder, just so these next functions don't bork b/c they expect obj
 # image = cv2.imread(os.path.join(root,folder, meta_file_list[0]))  # read any image containing a face
-
-
-def image_iscolor(image):
-    image = cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
-    # split the channels
-    el, ea, eb = cv2.split(image)
-    # obtain difference between A and B channel at every pixel location
-    de = abs(ea-eb)
-    # find the mean of this difference
-    mean_e = np.mean(de)
-    std_a = np.std(ea)
-    std_b = np.std(eb)
-    return (mean_e, std_a, std_b)
 
 
 def get_face_landmarks(results):
@@ -132,10 +125,12 @@ def get_face_landmarks(results):
         # print(angles)
 
         # Get the y rotation degree
-        x = angles[0] * 360
-        y = angles[1] * 360
-        z = angles[2] * 360
+        x = eulerToDegree(angles[0])
+        y = eulerToDegree(angles[1])
+        z = eulerToDegree(angles[2])
 
+
+		# --this is me trying to debug the pose estimation errors--
         # print(f"x: {x} y: {y} z {z}")
         # print(f"Qx: {Qx} Qy: {Qy} Qz {Qz}")
 
@@ -230,7 +225,7 @@ def get_face_landmarks(results):
         # Add the text on the image
         cv2.putText(image, "x: " + str(np.round(x,2)), (500, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
         cv2.putText(image, "y: " + str(np.round(y,2)), (500, 100), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
-        cv2.putText(image, "tanZ: " + str(np.round(tanZ,2)), (500, 150), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+        cv2.putText(image, "z: " + str(np.round(tanZ,2)), (500, 150), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
 
         #draw mesh on image
         mp_drawing.draw_landmarks(
@@ -270,41 +265,10 @@ for item in meta_file_list:
             #get landmarks
             #added returning meshimage (was image)
             face_landmarks, crop, meshimage, filename, toobig, this_meta = get_face_landmarks(results)
-            
-            #check if color/bw
-            colordata = image_iscolor(image)
-            # print(colordata)
-            if  (colordata[0] > 6 and colordata[1] > 12 and colordata[2] > 12) or (colordata[1] > 20 or colordata[2] > 20):
-                print('its a color image...')
-                color=True
-                outputfolder = outputfolderRGB
-
-            # elif colordata[1] > 20 or colordata[2] > 20 :
-            #     print('its a color image...')
-            #     color=True
-            #     outputfolder = outputfolderRGB
-
-            elif (colordata[0] < 6) or (colordata[0] > 100 and colordata[1] < 10 and colordata[2] < 10 ) :
-                print('Black and white image...')
-                color=False
-                outputfolder = outputfolderBW
-
-            # elif colordata[0] > 100 and colordata[1] < 10 and colordata[2] < 10:
-            #     color=False
-            #     outputfolder = outputfolderBW
-
-            else:
-                print('Not Sure...')
-                color=None
-                outputfolder = outputfolderMEH
-
-            # #diagnostic data for lab color/bw determination
-            # cv2.putText(crop, f"diff: {round(colordata[0])} a: {round(colordata[1])} b:{    round(colordata[2])}", (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
-
 
             filename=f"{this_meta[0]}_{this_meta[1]}_{this_meta[2]}_{this_meta[3]}_{this_meta[4]}"
             cropname=os.path.join(ROOT,outputfolder,f"crop_{filename}_{item}")
-            dfthismap = pd.DataFrame({'name': item, 'cropX':this_meta[0], 'x':this_meta[1], 'y':this_meta[2], 'z':this_meta[3], 'resize':this_meta[4], 'newname':cropname, 'color':color}, index=[0])
+            dfthismap = pd.DataFrame({'name': item, 'cropX':this_meta[0], 'x':this_meta[1], 'y':this_meta[2], 'z':this_meta[3], 'resize':this_meta[4], 'newname':cropname}, index=[0])
             dfallmaps = pd.concat([dfallmaps, dfthismap], ignore_index=True, sort=False)
 
             # #draw mesh on image / moved to function
