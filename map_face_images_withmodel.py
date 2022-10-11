@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation, PillowWriter
 import mediapipe as mp
 import pandas as pd
+from pose_est_mp import SelectPose
 
 import os
 import math
@@ -25,7 +26,7 @@ start = time.time()
 #location of source and output files outside repo
 ROOT= os.path.join(os.environ['HOME'], "Documents/projects-active/facemap_production") 
 # folder ="sourceimages"
-folder ="files_for_testing"
+folder ="files_for_testing3"
 outputfolder = os.path.join(ROOT,folder+"_output")
 
 # file = "auto-service-workerowner-picture-id931914734.jpg"
@@ -404,6 +405,12 @@ for item in meta_file_list:
         #read any image containing a face
 
         if results.multi_face_landmarks:
+            #construct pose_estimator object to solve pose
+            pose_estimator = SelectPose(img_size=(image.shape[0], image.shape[1]))
+
+
+
+
             #get landmarks
             #added returning meshimage (was image)
             meshimage = get_face_landmarks(results)
