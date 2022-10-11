@@ -4,7 +4,6 @@ import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation, PillowWriter
 import mediapipe as mp
 import pandas as pd
-from pose_est_mp import SelectPose
 
 import os
 import math
@@ -26,7 +25,7 @@ start = time.time()
 #location of source and output files outside repo
 ROOT= os.path.join(os.environ['HOME'], "Documents/projects-active/facemap_production") 
 # folder ="sourceimages"
-folder ="images5test"
+folder ="files_for_testing3"
 outputfolder = os.path.join(ROOT,folder+"_output")
 
 # file = "auto-service-workerowner-picture-id931914734.jpg"
@@ -93,9 +92,11 @@ def get_face_landmarks(results):
                 face_3d.append([x, y, lm.z])       
         
         # Convert it to the NumPy array
+        # image points
         face_2d = np.array(face_2d, dtype=np.float64)
 
         # Convert it to the NumPy array
+        # face model
         face_3d = np.array(face_3d, dtype=np.float64)
 
         # The camera matrix
@@ -143,8 +144,17 @@ def get_face_landmarks(results):
         nose_3d_projection, jacobian = cv2.projectPoints(nose_3d, rot_vec, trans_vec, cam_matrix, dist_matrix)
         
         # display the pose estimation box projection
-        pose_estimator = SelectPose(img_size=(img_h, img_w))
-        pose_estimator.draw_annotation_box(image, rot_vec, trans_vec, color=(0, 255, 0))
+
+        rotation_vector=rot_vec
+        translation_vector=trans_vec
+        
+        # print(image)
+        print(rotation_vector)
+        print(translation_vector)
+
+
+        # draw_pose_estimation(image, rotation_vector, translation_vector)
+
 
         #set main points for drawing/cropping
         #p1 is tip of nose
