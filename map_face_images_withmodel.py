@@ -84,57 +84,6 @@ def get_dir_files(folder):
 #constructing image object with first image as placeholder, just so these next functions don't bork b/c they expect obj
 # image = cv2.imread(os.path.join(root,folder, meta_file_list[0]))  # read any image containing a face
 
-def draw_pose_estimation(img, rotation_vector, translation_vector, color=(255, 255, 255), line_width=2):
-    img_h, img_w, img_c = img.shape
-
-    img_size=(img_w, img_h)
-    size = img_size
-    focal_length = size[1]
-    camera_center = (size[1] / 2, size[0] / 2)
-    camera_matrix = np.array(
-        [[focal_length, 0, camera_center[0]],
-         [0, focal_length, camera_center[1]],
-         [0, 0, 1]], dtype="double")
-    # Assuming no lens distortion
-    dist_coeefs = np.zeros((4, 1))
-
-
-    """Draw a 3D box as annotation of pose"""
-    point_3d = []
-    rear_size = 75
-    rear_depth = 0
-    point_3d.append((-rear_size, -rear_size, rear_depth))
-    point_3d.append((-rear_size, rear_size, rear_depth))
-    point_3d.append((rear_size, rear_size, rear_depth))
-    point_3d.append((rear_size, -rear_size, rear_depth))
-    point_3d.append((-rear_size, -rear_size, rear_depth))
-
-    front_size = 100
-    front_depth = 100
-    point_3d.append((-front_size, -front_size, front_depth))
-    point_3d.append((-front_size, front_size, front_depth))
-    point_3d.append((front_size, front_size, front_depth))
-    point_3d.append((front_size, -front_size, front_depth))
-    point_3d.append((-front_size, -front_size, front_depth))
-    point_3d = np.array(point_3d, dtype=np.float64).reshape(-1, 3)
-
-    # Map to 2d image points
-    (point_2d, _) = cv2.projectPoints(point_3d,
-                                      rotation_vector,
-                                      translation_vector,
-                                      camera_matrix,
-                                      dist_coeefs)
-    point_2d = np.int32(point_2d.reshape(-1, 2))
-
-    # Draw all the lines
-    cv2.polylines(img, [point_2d], True, color, line_width, cv2.LINE_AA)
-    cv2.line(img, tuple(point_2d[1]), tuple(
-        point_2d[6]), color, line_width, cv2.LINE_AA)
-    cv2.line(img, tuple(point_2d[2]), tuple(
-        point_2d[7]), color, line_width, cv2.LINE_AA)
-    cv2.line(img, tuple(point_2d[3]), tuple(
-        point_2d[8]), color, line_width, cv2.LINE_AA)
-
 # def get_face_landmarks(results):
 #     img_h, img_w, img_c = image.shape
 #     face_3d = []
@@ -415,7 +364,7 @@ for item in meta_file_list:
             meshimage = image
             mp_drawing.draw_landmarks(meshimage, faceLms, landmark_drawing_spec=drawing_spec, connections=mp_face_mesh.FACEMESH_TESSELATION) # draw every match
 
-            draw_pose_estimation(meshimage, pose_estimator.r_vec, pose_estimator.t_vec)
+            pose_estimator.draw_annotation_box(meshimage, pose_estimator.r_vec, pose_estimator.t_vec)
 
             cropped_image = pose_estimator.crop_image(image)
 

@@ -89,28 +89,8 @@ class SelectPose:
             # cv2.line(self.image, p1, p2, (255, 0, 0), 2)
             return faceLms
 
-    def solve_pose_by_68_points(self, image_points):
-        """
-        Solve pose from all the 68 image points
-        Return (rotation_vector, translation_vector) as pose.
-        """
 
-        if self.r_vec is None:
-            (_, rotation_vector, translation_vector) = cv2.solvePnP(
-                self.model_points_68, image_points, self.camera_matrix, self.dist_coeefs)
-            self.r_vec = rotation_vector
-            self.t_vec = translation_vector
 
-        (_, rotation_vector, translation_vector) = cv2.solvePnP(
-            self.model_points_68,
-            image_points,
-            self.camera_matrix,
-            self.dist_coeefs,
-            rvec=self.r_vec,
-            tvec=self.t_vec,
-            useExtrinsicGuess=True)
-
-        return (rotation_vector, translation_vector)
 
     def draw_annotation_box(self, image, rotation_vector, translation_vector, color=(255, 255, 255), line_width=2):
         """Draw a 3D box as annotation of pose"""
@@ -150,10 +130,32 @@ class SelectPose:
             point_2d[8]), color, line_width, cv2.LINE_AA)
 
     def crop_image(self,cropped_image):
-        
+
         return cropped_image
 
 
+    # def solve_pose_by_68_points(self, image_points):
+        """
+        Solve pose from all the 68 image points
+        Return (rotation_vector, translation_vector) as pose.
+        """
+
+        if self.r_vec is None:
+            (_, rotation_vector, translation_vector) = cv2.solvePnP(
+                self.model_points_68, image_points, self.camera_matrix, self.dist_coeefs)
+            self.r_vec = rotation_vector
+            self.t_vec = translation_vector
+
+        (_, rotation_vector, translation_vector) = cv2.solvePnP(
+            self.model_points_68,
+            image_points,
+            self.camera_matrix,
+            self.dist_coeefs,
+            rvec=self.r_vec,
+            tvec=self.t_vec,
+            useExtrinsicGuess=True)
+
+        return (rotation_vector, translation_vector)
 
     # def _get_full_model_points(self, filename='assets/model.txt'):
     #     """Get all 68 3D model points from file"""
