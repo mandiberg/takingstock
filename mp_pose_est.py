@@ -129,8 +129,115 @@ class SelectPose:
         cv2.line(image, tuple(point_2d[3]), tuple(
             point_2d[8]), color, line_width, cv2.LINE_AA)
 
-    def crop_image(self,cropped_image):
+    def get_angles(self):
+        #     # Get rotational matrix
+        #     rmat, jac = cv2.Rodrigues(rot_vec)
+        #     # print(rmat)
+        #     # Get angles
+        #     angles, mtxR, mtxQ, Qx, Qy, Qz = cv2.RQDecomp3x3(rmat)
+        #     # print(angles)
 
+        #     # Get the y rotation degree
+        #     x = eulerToDegree(angles[0])
+        #     y = eulerToDegree(angles[1])
+        #     z = eulerToDegree(angles[2])
+
+        pass
+
+        #needs to return a set of angles. This is the meta. 
+
+    def crop_image(self,cropped_image):
+        # I don't think i need all of this. but putting it here.
+
+        #     #set main points for drawing/cropping
+        #     #p1 is tip of nose
+        #     p1 = (int(nose_2d[0]), int(nose_2d[1]))
+        #     p2 = (int(nose_2d[0] + y * 70) , int(nose_2d[1] - x * 70))
+        #     ptop = (int(top_2d[0]), int(top_2d[1]))
+        #     pbot = (int(bottom_2d[0]), int(bottom_2d[1]))
+        #     height = int(pbot[1]-ptop[1])
+
+        #     # math.atan2(dy, dx)
+        #     # ptop = (int(top_2d[0]), int(top_2d[1]))
+        #     # pbot = (int(bottom_2d[0]), int(bottom_2d[1]))
+        #     tanZ = math.degrees(math.atan2((top_2d[1]-bottom_2d[1]),(top_2d[0]-bottom_2d[0])))+90
+        #     # (y2 - y1)/(x2-x1)
+
+        #     # print(f"is {p1[1]} greater than {height}")
+        #     # print(f"is {img_h-p1[1]} greater than {height}")
+
+        #     toobig = False
+        #     # if p1[1]>(height*1.5) and (img_h-p1[1])>(height*1.5):
+        #     #     crop_multiplier = 1.5
+        #     if p1[1]>(height*1) and (img_h-p1[1])>(height*1):
+        #         crop_multiplier = 1
+        #     # elif p1[1]>(height*.75) and (img_h-p1[1])>(height*.75):
+        #     #     crop_multiplier = .75
+        #     # elif p1[1]>(height*.65) and (img_h-p1[1])>(height*.65):
+        #     #     crop_multiplier = .65
+        #     # elif p1[1]>(height*.5) and (img_h-p1[1])>(height*.5):
+        #     #     crop_multiplier = .5
+        #     else:
+        #         crop_multiplier = .25
+        #         print('face too biiiiigggggg')
+        #         toobig=True
+
+        #     # print(crop_multiplier)
+        #     # img_h - p1[1]
+        #     # top_overlap = p1[1]-height
+
+            
+        #     # noselinelength=p2[0]-p1[0]
+        #     # noselineheight=p2[1]-p1[1]
+        #     # r = 1
+        #     # displacement = r* math.cos(x)
+        #     # print(displacement)
+        #     # # displacement = r* cos O 
+                    
+
+        #     #set crop
+        #     # crop_multiplier = 1
+        #     leftcrop = int(p1[0]-(height*crop_multiplier))
+        #     rightcrop = int(p1[0]+(height*crop_multiplier))
+        #     topcrop = int(p1[1]-(height*crop_multiplier))
+        #     botcrop = int(p1[1]+(height*crop_multiplier))
+        #     newsize = 750
+              
+
+        #     #convert this to a list, and return it. then take this structure into the main function, and do it there, but with list[0,1,etc]
+        #     this_meta = [crop_multiplier, np.round(x, 3), np.round(y, 3), np.round(tanZ, 3), np.round(newsize/(height*2.5), 3)]
+        #     filename=f"{crop_multiplier}_{np.round(x, 3)}_{np.round(y, 3)}_{np.round(tanZ, 3)}_{np.round(newsize/(height*2.5), 3)}"
+        #     # cv2.putText(crop, "scale ratio: " + str(np.round(newsize/(height*2.5),2)), (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+
+
+
+        #     #moved this back up so it would NOT     draw map on both sets of images
+        #     try:
+        #         crop = cv2.resize(image[topcrop:botcrop, leftcrop:rightcrop], (newsize,newsize), interpolation= cv2.INTER_LINEAR)
+        #     except:
+        #         crop = None
+        #         print(img_h, img_w, img_c)
+                    
+        #     #draw data
+        #     cv2.circle(image, (p1), radius=5, color=(0, 0, 255), thickness=-1)
+        #     cv2.line(image, p1, p2, (255, 0, 0), 3)
+        #     cv2.line(image, ptop, pbot, (0, 255, 0), 3)
+        #     cv2.rectangle(image, (leftcrop,topcrop), (rightcrop,botcrop), (255,0,0), 2)
+        #     # Add the text on the image
+        #     cv2.putText(image, "x: " + str(np.round(x,2)), (500, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+        #     cv2.putText(image, "y: " + str(np.round(y,2)), (500, 100), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+        #     cv2.putText(image, "z: " + str(np.round(tanZ,2)), (500, 150), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+
+        #     #draw mesh on image
+        #     mp_drawing.draw_landmarks(
+        #                 image=image,
+        #                 landmark_list=face_landmarks,
+        #                 connections=mp_face_mesh.FACEMESH_TESSELATION,
+        #                 landmark_drawing_spec=drawing_spec,
+        #                 connection_drawing_spec=drawing_spec)
+
+        #         #added returning meshimage as image
+        #     return face_landmarks, crop, image, filename, toobig, this_meta
         return cropped_image
 
 
