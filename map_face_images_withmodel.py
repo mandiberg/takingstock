@@ -29,23 +29,8 @@ ROOT= os.path.join(os.environ['HOME'], "Documents/projects-active/facemap_produc
 folder ="files_for_testing3"
 outputfolder = os.path.join(ROOT,folder+"_output")
 
-# file = "auto-service-workerowner-picture-id931914734.jpg"
-# # path = "sourceimages/auto-service-workerowner-picture-id931914734.jpg"
-# image = cv2.imread(os.path.join(root,folder, file))  # read any image containing a face
 dfallmaps = pd.DataFrame(columns=['name', 'cropX', 'x', 'y', 'z', 'resize', 'newname', 'color']) 
 MINSIZE = 700
-
-
-#carlos
-# 3D model points.
-face3Dmodel = np.array([
-    (0.0, 0.0, 0.0),  # Nose tip
-    (0.0, -330.0, -65.0),  # Chin
-    (-225.0, 170.0, -135.0),  # Left eye left corner
-    (225.0, 170.0, -135.0),  # Right eye right corne
-    (-150.0, -150.0, -125.0),  # Left Mouth corner
-    (150.0, -150.0, -125.0)  # Right mouth corner
-],dtype=np.float64)
 
 
 def touch(folder):
@@ -57,11 +42,6 @@ touch(outputfolder)
 pi = 22.0/7.0
 def eulerToDegree(euler):
     return ( (euler) / (2 * pi) ) * 360
-
-def x_element(elem):
-    return elem[0]
-def y_element(elem):
-    return elem[1]
 
 def get_dir_files(folder):
     # counter = 1
