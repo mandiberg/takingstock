@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation, PillowWriter
 import mediapipe as mp
 import pandas as pd
-from pose_est_mp import SelectPose
+from mp_pose_est import SelectPose
 
 import os
 import math
@@ -116,7 +116,7 @@ def draw_pose_estimation(img, rotation_vector, translation_vector, color=(255, 2
     point_3d.append((front_size, front_size, front_depth))
     point_3d.append((front_size, -front_size, front_depth))
     point_3d.append((-front_size, -front_size, front_depth))
-    point_3d = np.array(point_3d, dtype=np.float).reshape(-1, 3)
+    point_3d = np.array(point_3d, dtype=np.float64).reshape(-1, 3)
 
     # Map to 2d image points
     (point_2d, _) = cv2.projectPoints(point_3d,
@@ -135,61 +135,61 @@ def draw_pose_estimation(img, rotation_vector, translation_vector, color=(255, 2
     cv2.line(img, tuple(point_2d[3]), tuple(
         point_2d[8]), color, line_width, cv2.LINE_AA)
 
-def get_face_landmarks(results):
-    img_h, img_w, img_c = image.shape
-    face_3d = []
-    face_2d = []
+# def get_face_landmarks(results):
+#     img_h, img_w, img_c = image.shape
+#     face_3d = []
+#     face_2d = []
 
-    height, width = image.shape[:2]
-    size = image.shape
-    dist_coeffs = np.zeros((4, 1))  # Assuming no lens distortion
-    focal_length = size[1]
-    center = (size[1] / 2, size[0] / 2)
-    camera_matrix = np.array(
-        [[focal_length, 0, center[0]],
-         [0, focal_length, center[1]],
-         [0, 0, 1]], dtype="double"
-    )
+#     height, width = image.shape[:2]
+#     size = image.shape
+#     dist_coeffs = np.zeros((4, 1))  # Assuming no lens distortion
+#     focal_length = size[1]
+#     center = (size[1] / 2, size[0] / 2)
+#     camera_matrix = np.array(
+#         [[focal_length, 0, center[0]],
+#          [0, focal_length, center[1]],
+#          [0, 0, 1]], dtype="double"
+#     )
 
-    dist=[]
-    for faceNum, faceLms in enumerate(results.multi_face_landmarks):                            # loop through all matches
-        mp_drawing.draw_landmarks(image, faceLms, landmark_drawing_spec=drawing_spec, connections=mp_face_mesh.FACEMESH_TESSELATION) # draw every match
-        faceXY = []
-        for id,lm in enumerate(faceLms.landmark):                           # loop over all land marks of one face
-            ih, iw, _ = image.shape
-            x,y = int(lm.x*iw), int(lm.y*ih)
-            # print(lm)
-            faceXY.append((x, y))                                           # put all xy points in neat array
-        image_points = np.array([
-            faceXY[1],      # "nose"
-            faceXY[152],    # "chin"
-            faceXY[226],    # "left eye"
-            faceXY[446],    # "right eye"
-            faceXY[57],     # "left mouth"
-            faceXY[287]     # "right mouth"
-        ], dtype="double")
+#     dist=[]
+#     for faceNum, faceLms in enumerate(results.multi_face_landmarks):                            # loop through all matches
+#         mp_drawing.draw_landmarks(image, faceLms, landmark_drawing_spec=drawing_spec, connections=mp_face_mesh.FACEMESH_TESSELATION) # draw every match
+#         faceXY = []
+#         for id,lm in enumerate(faceLms.landmark):                           # loop over all land marks of one face
+#             ih, iw, _ = image.shape
+#             x,y = int(lm.x*iw), int(lm.y*ih)
+#             # print(lm)
+#             faceXY.append((x, y))                                           # put all xy points in neat array
+#         image_points = np.array([
+#             faceXY[1],      # "nose"
+#             faceXY[152],    # "chin"
+#             faceXY[226],    # "left eye"
+#             faceXY[446],    # "right eye"
+#             faceXY[57],     # "left mouth"
+#             faceXY[287]     # "right mouth"
+#         ], dtype="double")
 
-        for i in image_points:
-            cv2.circle(image,(int(i[0]),int(i[1])),4,(255,0,0),-1)
-        maxXY = max(faceXY, key=x_element)[0], max(faceXY, key=y_element)[1]
-        minXY = min(faceXY, key=x_element)[0], min(faceXY, key=y_element)[1]
+#         for i in image_points:
+#             cv2.circle(image,(int(i[0]),int(i[1])),4,(255,0,0),-1)
+#         maxXY = max(faceXY, key=x_element)[0], max(faceXY, key=y_element)[1]
+#         minXY = min(faceXY, key=x_element)[0], min(faceXY, key=y_element)[1]
 
-        xcenter = (maxXY[0] + minXY[0]) / 2
-        ycenter = (maxXY[1] + minXY[1]) / 2
+#         xcenter = (maxXY[0] + minXY[0]) / 2
+#         ycenter = (maxXY[1] + minXY[1]) / 2
 
-        dist.append((faceNum, (int(((xcenter-width/2)**2+(ycenter-height/2)**2)**.4)), maxXY, minXY))     # faceID, distance, maxXY, minXY
+#         dist.append((faceNum, (int(((xcenter-width/2)**2+(ycenter-height/2)**2)**.4)), maxXY, minXY))     # faceID, distance, maxXY, minXY
 
-        # print(image_points)
+#         # print(image_points)
 
-        (success, rotation_vector, translation_vector) = cv2.solvePnP(face3Dmodel, image_points,  camera_matrix, dist_coeffs)
-        (nose_end_point2D, jacobian) = cv2.projectPoints(np.array([(0.0, 0.0, 1000.0)]), rotation_vector, translation_vector, camera_matrix, dist_coeffs)
-        print(rotation_vector)
-        p1 = (int(image_points[0][0]), int(image_points[0][1]))
-        p2 = (int(nose_end_point2D[0][0][0]), int(nose_end_point2D[0][0][1]))
+#         (success, rotation_vector, translation_vector) = cv2.solvePnP(face3Dmodel, image_points,  camera_matrix, dist_coeffs)
+#         (nose_end_point2D, jacobian) = cv2.projectPoints(np.array([(0.0, 0.0, 1000.0)]), rotation_vector, translation_vector, camera_matrix, dist_coeffs)
+#         print(rotation_vector)
+#         p1 = (int(image_points[0][0]), int(image_points[0][1]))
+#         p2 = (int(nose_end_point2D[0][0][0]), int(nose_end_point2D[0][0][1]))
 
-        cv2.line(image, p1, p2, (255, 0, 0), 2)
-        draw_pose_estimation(image, rotation_vector, translation_vector)
-        return image
+#         cv2.line(image, p1, p2, (255, 0, 0), 2)
+#         draw_pose_estimation(image, rotation_vector, translation_vector)
+#         return image
 
 
     # dist.sort(key=y_element)
@@ -406,18 +406,22 @@ for item in meta_file_list:
 
         if results.multi_face_landmarks:
             #construct pose_estimator object to solve pose
-            pose_estimator = SelectPose(img_size=(image.shape[0], image.shape[1]))
-
-
+            pose_estimator = SelectPose(image)
 
 
             #get landmarks
             #added returning meshimage (was image)
-            meshimage = get_face_landmarks(results)
+            faceLms = pose_estimator.get_face_landmarks(results)
+            meshimage = image
+            mp_drawing.draw_landmarks(meshimage, faceLms, landmark_drawing_spec=drawing_spec, connections=mp_face_mesh.FACEMESH_TESSELATION) # draw every match
+
+            draw_pose_estimation(meshimage, pose_estimator.r_vec, pose_estimator.t_vec)
+
+            cropped_image = pose_estimator.crop_image(image)
 
             this_meta=["foo","foo","foo","foo","foo",]
             toobig=False
-            crop=True
+            # crop=True
             # this_meta[0]="foo"
             # this_meta[1]="foo"
             # this_meta[2]="foo"
@@ -431,8 +435,8 @@ for item in meta_file_list:
 
             markedname=os.path.join(ROOT,outputfolder,f"marked_{filename}_{item}")
             cv2.imwrite(markedname, meshimage)
-            if (toobig==False) and (crop is not None):
-                cv2.imwrite(cropname, crop)
+            if (toobig==False) and (cropped_image is not None):
+                cv2.imwrite(cropname, cropped_image)
 
 
 
