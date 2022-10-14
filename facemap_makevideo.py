@@ -9,12 +9,12 @@ import math
 import time
 import sys
 
-XLOW = -.5
-XHIGH = .5
-YLOW = -30
-YHIGH = 30
-ZLOW = -2
-ZHIGH = 2
+XLOW = -20
+XHIGH = 20
+YLOW = -60
+YHIGH = 60
+ZLOW = -3
+ZHIGH = 3
 MINCROP = 1
 MAXRESIZE = .5
 FRAMERATE = 15
@@ -32,7 +32,7 @@ ROOT="/Users/michaelmandiberg/Documents/projects-active/facemap_production/"
 
 # folder ="sourceimages"
 # FOLDER ="/Users/michaelmandiberg/Dropbox/Photo Scraping/facemesh/facemeshes_commons/"
-MAPDATA_FILE = "allmaps_61529.csv"
+MAPDATA_FILE = "allmaps_1545.csv"
 # size = (750, 750) #placeholder 
 
 
@@ -44,6 +44,9 @@ MAPDATA_FILE = "allmaps_61529.csv"
 # def touch(folder):
 #     if not os.path.exists(folder):
 #         os.makedirs(folder)
+
+
+FOLDER = os.path.join(ROOT,"5GB_testimages_output")
 
 outputfolderRGB = os.path.join(ROOT,"face_mesh_outputsRGB")
 outputfolderBW = os.path.join(ROOT,"face_mesh_outputsBW")
@@ -65,6 +68,8 @@ print(df)
 segment = df.loc[((df['y'] < YHIGH) & (df['y'] > YLOW))]
 segment = segment.loc[((segment['x'] < XHIGH) & (segment['x'] > XLOW))]
 segment = segment.loc[((segment['z'] < ZHIGH) & (segment['z'] > ZLOW))]
+# segment = segment.loc[((segment['z'] > Zneg))]
+# segment = segment.loc[((segment['z'] < Zpos))]
 # segment = segment.loc[segment['color'] >= True]
 segment = segment.loc[segment['cropX'] >= MINCROP]
 segment = segment.loc[segment['resize'] < MAXRESIZE]
