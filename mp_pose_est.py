@@ -52,7 +52,7 @@ class SelectPose:
     def y_element(self, elem):
         return elem[1]
 
-    def get_face_landmarks(self,results):
+    def get_face_landmarks(self,results, meshimage):
 
         height = self.h
         width = self.w
@@ -77,7 +77,7 @@ class SelectPose:
             ], dtype="double")
 
             for i in image_points:
-                cv2.circle(self.image,(int(i[0]),int(i[1])),4,(255,0,0),-1)
+                cv2.circle(meshimage,(int(i[0]),int(i[1])),4,(255,0,0),-1)
             maxXY = max(faceXY, key=self.x_element)[0], max(faceXY, key=self.y_element)[1]
             minXY = min(faceXY, key=self.x_element)[0], min(faceXY, key=self.y_element)[1]
 
@@ -95,7 +95,7 @@ class SelectPose:
             # p2 = (int(nose_end_point2D[0][0][0]), int(nose_end_point2D[0][0][1]))
 
             # cv2.line(self.image, p1, p2, (255, 0, 0), 2)
-            return faceLms
+            return faceLms, meshimage
 
 
 
