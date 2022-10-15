@@ -88,49 +88,32 @@ for item in meta_file_list:
             #construct pose_estimator object to solve pose
             pose_estimator = SelectPose(image)
 
-            #meshimage is fullsized image with mesh info
-            meshimage = image
             #prod is fullsized image with no cv drawing on it
             prodimage = image.copy()
-            # cv2.imshow('image',prodimage)
-            # cv2.waitKey(1000)
-            # cv2.destroyAllWindows()
 
             #get landmarks
             #added returning meshimage (was image)
-            faceLms,meshimage = pose_estimator.get_face_landmarks(results, meshimage)
+            faceLms = pose_estimator.get_face_landmarks(results, image)
 
-            # cv2.imshow('image',prodimage)
-            # cv2.waitKey(1000)
-            # cv2.destroyAllWindows()
 
             # draw mesh on meshimage
-            mp_drawing.draw_landmarks(meshimage, faceLms, landmark_drawing_spec=drawing_spec, connections=mp_face_mesh.FACEMESH_TESSELATION) # draw every match
-            # cv2.imshow('image',prodimage)
-            # cv2.waitKey(1000)
-            # cv2.destroyAllWindows()
+            mp_drawing.draw_landmarks(image, faceLms, landmark_drawing_spec=drawing_spec, connections=mp_face_mesh.FACEMESH_TESSELATION) # draw every match
 
             # draw pose on meshimage
-            pose_estimator.draw_annotation_box(meshimage)
-            # cv2.imshow('image',prodimage)
-            # cv2.waitKey(1000)
-            # cv2.destroyAllWindows()
+            pose_estimator.draw_annotation_box(image)
 
             # get angles, using r_vec property stored in class
             # angles are meta. there are other meta --- size and resize or something.
             angles = pose_estimator.rotationMatrixToEulerAnglesToDegrees()
             print("angles")
             print(angles)
-            # cv2.imshow('image',prodimage)
-            # cv2.waitKey(1000)
-            # cv2.destroyAllWindows()
 
             # crop image - needs to be refactored, not sure which image object is being touched here.
             # should this return an object, or just save it?
             cropped_image, crop_multiplier, resize, toobig = pose_estimator.crop_image(prodimage, faceLms)
-            cv2.putText(meshimage, "x: " + str(np.round(angles[0],2)), (500, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
-            cv2.putText(meshimage, "y: " + str(np.round(angles[1],2)), (500, 100), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
-            cv2.putText(meshimage, "z: " + str(np.round(angles[2],2)), (500, 150), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+            cv2.putText(image, "x: " + str(np.round(angles[0],2)), (500, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+            cv2.putText(image, "y: " + str(np.round(angles[1],2)), (500, 100), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+            cv2.putText(image, "z: " + str(np.round(angles[2],2)), (500, 150), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
 
             
             filename=f"{crop_multiplier}_{angles[0]}_{angles[1]}_{angles[2]}_{resize}"
@@ -138,7 +121,7 @@ for item in meta_file_list:
             markedname=os.path.join(ROOT,outputfolder,f"marked_{filename}_{item}")
 
             # temporarily not writing main image
-            cv2.imwrite(markedname, meshimage)
+            cv2.imwrite(markedname, image)
             if (toobig==False) and (cropped_image is not None):
                 # only writes to file and CSV if the file is cropped well and not too big
                 cv2.imwrite(cropname, cropped_image)
