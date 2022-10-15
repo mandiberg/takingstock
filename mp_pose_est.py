@@ -207,6 +207,24 @@ class SelectPose:
 
     #     #needs to return a set of angles. This is the meta. 
 
+    def point(self,coords):
+        newpoint = (int(coords[0]), int(coords[1]))
+        return newpoint
+
+    def dist(self,p, q):
+        """ 
+        Return euclidean distance between points p and q
+        assuming both to have the same number of dimensions
+        """
+        # sum of squared difference between coordinates
+        s_sq_difference = 0
+        for p_i,q_i in zip(p,q):
+            s_sq_difference += (p_i - q_i)**2
+        
+        # take sq root of sum of squared difference
+        distance = s_sq_difference**0.5
+        return distance    
+
     def crop_image(self,cropped_image, faceLms):
         # I don't think i need all of this. but putting it here.
         img_h = self.h
@@ -231,8 +249,12 @@ class SelectPose:
                 face_2d.append([x, y])
 
                 # Get the 3D Coordinates
-                face_3d.append([x, y, lm.z])       
-        
+                face_3d.append([x, y, lm.z])      
+            elif idx == 13:
+                toplip = (lm.x * img_w, lm.y * img_h)
+            elif idx == 14:
+                botlip = (lm.x * img_w, lm.y * img_h)
+
         # Convert it to the NumPy array
         # image points
         face_2d = np.array(face_2d, dtype=np.float64)
@@ -249,6 +271,13 @@ class SelectPose:
         ptop = (int(top_2d[0]), int(top_2d[1]))
         pbot = (int(bottom_2d[0]), int(bottom_2d[1]))
         height = int(pbot[1]-ptop[1])
+
+        face_height = self.dist(self.point(pbot), self.point(ptop))
+
+        mouth_gap = self.dist(self.point(botlip), self.point(toplip))
+        mouth_pct = mouth_gap/face_height*100
+        print(mouth_pct)
+        # cv2.line(image, ptop, pbot, (0, 255, 0), 3)
 
         # math.atan2(dy, dx)
         # ptop = (int(top_2d[0]), int(top_2d[1]))
@@ -301,9 +330,9 @@ class SelectPose:
             cropped_image = cv2.resize(cropped_image[topcrop:botcrop, leftcrop:rightcrop], (newsize,newsize), interpolation= cv2.INTER_LINEAR)
         except:
             cropped_image = None
-            print(img_h, img_w, img_c)
+            print(img_h, img_w)
                
-        return cropped_image, crop_multiplier, resize, toobig
+        return cropped_image, crop_multiplier, resize, toobig, mouth_pct
 
 
     # def solve_pose_by_68_points(self, image_points):

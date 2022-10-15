@@ -26,7 +26,7 @@ start = time.time()
 #location of source and output files outside repo
 ROOT= os.path.join(os.environ['HOME'], "Documents/projects-active/facemap_production") 
 # folder ="commonsimages"
-folder ="files_for_testing3"
+folder ="files_for_testing"
 outputfolder = os.path.join(ROOT,folder+"_output")
 
 dfallmaps = pd.DataFrame(columns=['name', 'cropX', 'x', 'y', 'z', 'resize', 'newname', 'color']) 
@@ -110,10 +110,11 @@ for item in meta_file_list:
 
             # crop image - needs to be refactored, not sure which image object is being touched here.
             # should this return an object, or just save it?
-            cropped_image, crop_multiplier, resize, toobig = pose_estimator.crop_image(prodimage, faceLms)
+            cropped_image, crop_multiplier, resize, toobig, mouth_gap = pose_estimator.crop_image(prodimage, faceLms)
             cv2.putText(image, "x: " + str(np.round(angles[0],2)), (500, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
             cv2.putText(image, "y: " + str(np.round(angles[1],2)), (500, 100), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
             cv2.putText(image, "z: " + str(np.round(angles[2],2)), (500, 150), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+            cv2.putText(image, "mouth_gap: " + str(np.round(mouth_gap,2)), (500, 200), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
 
             
             filename=f"{crop_multiplier}_{angles[0]}_{angles[1]}_{angles[2]}_{resize}"
