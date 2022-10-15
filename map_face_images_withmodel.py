@@ -25,11 +25,11 @@ start = time.time()
 #declariing path and image before function, but will reassign in the main loop
 #location of source and output files outside repo
 ROOT= os.path.join(os.environ['HOME'], "Documents/projects-active/facemap_production") 
-# folder ="commonsimages"
-folder ="files_for_testing"
+folder ="5GB_testimages"
+# folder ="files_for_testing"
 outputfolder = os.path.join(ROOT,folder+"_output")
 
-dfallmaps = pd.DataFrame(columns=['name', 'cropX', 'x', 'y', 'z', 'resize', 'newname', 'color']) 
+dfallmaps = pd.DataFrame(columns=['name', 'cropX', 'x', 'y', 'z', 'resize', 'newname', 'mouth_gap']) 
 MINSIZE = 700
 
 
@@ -126,7 +126,7 @@ for item in meta_file_list:
             if (toobig==False) and (cropped_image is not None):
                 # only writes to file and CSV if the file is cropped well and not too big
                 cv2.imwrite(cropname, cropped_image)
-                dfthismap = pd.DataFrame({'name': item, 'cropX':crop_multiplier, 'x':angles[0], 'y':angles[1], 'z':angles[2], 'resize':resize, 'newname':cropname}, index=[0])
+                dfthismap = pd.DataFrame({'name': item, 'cropX':crop_multiplier, 'x':angles[0], 'y':angles[1], 'z':angles[2], 'resize':resize, 'newname':cropname, 'mouth_gap':mouth_gap}, index=[0])
                 dfallmaps = pd.concat([dfallmaps, dfthismap], ignore_index=True, sort=False)
             else:
                 print("not hitting the write cropped_image loop")

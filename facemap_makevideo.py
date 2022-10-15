@@ -9,16 +9,16 @@ import math
 import time
 import sys
 
-XLOW = -12
-XHIGH = -8
-YLOW = -2
-YHIGH = 2
-ZLOW = -2
-ZHIGH = 2
+XLOW = -20
+XHIGH = 10
+YLOW = -10
+YHIGH = 10
+ZLOW = -10
+ZHIGH = 10
 MINCROP = 1
 MAXRESIZE = .5
 FRAMERATE = 15
-SORT = 'y'
+SORT = 'mouth_gap'
 
 #creating my objects
 
@@ -32,14 +32,14 @@ ROOT="/Users/michaelmandiberg/Documents/projects-active/facemap_production/"
 
 # folder ="sourceimages"
 # FOLDER ="/Users/michaelmandiberg/Dropbox/Photo Scraping/facemesh/facemeshes_commons/"
-MAPDATA_FILE = "allmaps_61529.csv"
+MAPDATA_FILE = "allmaps_1246.csv"
 # size = (750, 750) #placeholder 
 
 
 # file = "auto-service-workerowner-picture-id931914734.jpg"
 # path = "sourceimages/auto-service-workerowner-picture-id931914734.jpg"
 # image = cv2.imread(os.path.join(root,folder, file))  # read any image containing a face
-# dfallmaps = pd.DataFrame(columns=['name', 'cropX', 'x', 'y', 'z', 'resize', 'newname', 'color']) 
+# dfallmaps = pd.DataFrame(columns=['name', 'cropX', 'x', 'y', 'z', 'resize', 'newname', 'mouth_gap']) 
 
 # def touch(folder):
 #     if not os.path.exists(folder):
