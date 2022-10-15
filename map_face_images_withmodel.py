@@ -25,8 +25,8 @@ start = time.time()
 #declariing path and image before function, but will reassign in the main loop
 #location of source and output files outside repo
 ROOT= os.path.join(os.environ['HOME'], "Documents/projects-active/facemap_production") 
-folder ="commonsimages"
-# folder ="files_for_testing"
+# folder ="commonsimages"
+folder ="files_for_testing3"
 outputfolder = os.path.join(ROOT,folder+"_output")
 
 dfallmaps = pd.DataFrame(columns=['name', 'cropX', 'x', 'y', 'z', 'resize', 'newname', 'color']) 
@@ -88,11 +88,16 @@ for item in meta_file_list:
             #construct pose_estimator object to solve pose
             pose_estimator = SelectPose(image)
 
+            #meshimage is fullsized image with mesh info
+            meshimage = image
+            #prod is fullsized image with no cv drawing on it
+            prodimage = image
 
             #get landmarks
             #added returning meshimage (was image)
             faceLms = pose_estimator.get_face_landmarks(results)
-            meshimage = image
+
+
 
             # draw mesh on meshimage
             mp_drawing.draw_landmarks(meshimage, faceLms, landmark_drawing_spec=drawing_spec, connections=mp_face_mesh.FACEMESH_TESSELATION) # draw every match
@@ -109,46 +114,26 @@ for item in meta_file_list:
 
             # crop image - needs to be refactored, not sure which image object is being touched here.
             # should this return an object, or just save it?
-            cropped_image, crop_multiplier, resize = pose_estimator.crop_image(image, faceLms)
-            cv2.putText(cropped_image, "x: " + str(np.round(angles[0],2)), (500, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
-            cv2.putText(cropped_image, "y: " + str(np.round(angles[1],2)), (500, 100), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
-            cv2.putText(cropped_image, "z: " + str(np.round(angles[2],2)), (500, 150), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+            cropped_image, crop_multiplier, resize, toobig = pose_estimator.crop_image(image, faceLms)
+            cv2.putText(meshimage, "x: " + str(np.round(angles[0],2)), (500, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+            cv2.putText(meshimage, "y: " + str(np.round(angles[1],2)), (500, 100), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+            cv2.putText(meshimage, "z: " + str(np.round(angles[2],2)), (500, 150), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
 
-
-            #this is temp, until can get these variables again
-            this_meta=["foo","foo","foo","foo","foo",]
-            toobig=False
             
             filename=f"{crop_multiplier}_{angles[0]}_{angles[1]}_{angles[2]}_{resize}"
             cropname=os.path.join(ROOT,outputfolder,f"crop_{filename}_{item}")
-            dfthismap = pd.DataFrame({'name': item, 'cropX':crop_multiplier, 'x':angles[0], 'y':angles[1], 'z':angles[2], 'resize':resize, 'newname':cropname}, index=[0])
-            dfallmaps = pd.concat([dfallmaps, dfthismap], ignore_index=True, sort=False)
-
             markedname=os.path.join(ROOT,outputfolder,f"marked_{filename}_{item}")
+
             # temporarily not writing main image
-            # cv2.imwrite(markedname, meshimage)
+            cv2.imwrite(markedname, meshimage)
             if (toobig==False) and (cropped_image is not None):
+                # only writes to file and CSV if the file is cropped well and not too big
                 cv2.imwrite(cropname, cropped_image)
+                dfthismap = pd.DataFrame({'name': item, 'cropX':crop_multiplier, 'x':angles[0], 'y':angles[1], 'z':angles[2], 'resize':resize, 'newname':cropname}, index=[0])
+                dfallmaps = pd.concat([dfallmaps, dfthismap], ignore_index=True, sort=False)
             else:
                 print("not hitting the write cropped_image loop")
 
-
-
-        #commenting out for refactor
-        # if results.multi_face_landmarks:
-        #     #get landmarks
-        #     #added returning meshimage (was image)
-        #     face_landmarks, crop, meshimage, filename, toobig, this_meta = get_face_landmarks(results)
-
-        #     filename=f"{this_meta[0]}_{this_meta[1]}_{this_meta[2]}_{this_meta[3]}_{this_meta[4]}"
-        #     cropname=os.path.join(ROOT,outputfolder,f"crop_{filename}_{item}")
-        #     dfthismap = pd.DataFrame({'name': item, 'cropX':this_meta[0], 'x':this_meta[1], 'y':this_meta[2], 'z':this_meta[3], 'resize':this_meta[4], 'newname':cropname}, index=[0])
-        #     dfallmaps = pd.concat([dfallmaps, dfthismap], ignore_index=True, sort=False)
-
-        #     markedname=os.path.join(ROOT,outputfolder,f"marked_{filename}_{item}")
-        #     cv2.imwrite(markedname, meshimage)
-        #     if (toobig==False) and (crop is not None):
-        #         cv2.imwrite(cropname, crop)
 
         else: 
             print(f"no face found {item}")

@@ -10,6 +10,11 @@ class SelectPose:
     def __init__(self, image):
         self.image = image
         self.size = (image.shape[0], image.shape[1])
+        self.h = image.shape[0]
+        self.w = image.shape[1]
+
+        # self.image = image
+        # self.size = (image.shape[0], image.shape[1])
 
         # 3D model points.
         self.model_points = np.array([
@@ -49,15 +54,17 @@ class SelectPose:
 
     def get_face_landmarks(self,results):
 
-        height, width = self.image.shape[:2]
+        height = self.h
+        width = self.w
         center = (self.size[1] / 2, self.size[0] / 2)
 
         dist=[]
         for faceNum, faceLms in enumerate(results.multi_face_landmarks):                            # loop through all matches
             faceXY = []
             for id,lm in enumerate(faceLms.landmark):                           # loop over all land marks of one face
-                ih, iw, _ = self.image.shape
-                x,y = int(lm.x*iw), int(lm.y*ih)
+                # ih, iw, _ = self.image.shape
+                # gone direct to obj dimensions
+                x,y = int(lm.x*self.w), int(lm.y*self.h)
                 # print(lm)
                 faceXY.append((x, y))                                           # put all xy points in neat array
             image_points = np.array([
@@ -202,7 +209,8 @@ class SelectPose:
 
     def crop_image(self,cropped_image, faceLms):
         # I don't think i need all of this. but putting it here.
-        img_h, img_w, img_c = self.image.shape
+        img_h = self.h
+        img_w = self.w
         face_3d = []
         face_2d = []
 
@@ -252,16 +260,8 @@ class SelectPose:
         # print(f"is {img_h-p1[1]} greater than {height}")
 
         toobig = False
-        # if p1[1]>(height*1.5) and (img_h-p1[1])>(height*1.5):
-        #     crop_multiplier = 1.5
         if p1[1]>(height*1) and (img_h-p1[1])>(height*1):
             crop_multiplier = 1
-        # elif p1[1]>(height*.75) and (img_h-p1[1])>(height*.75):
-        #     crop_multiplier = .75
-        # elif p1[1]>(height*.65) and (img_h-p1[1])>(height*.65):
-        #     crop_multiplier = .65
-        # elif p1[1]>(height*.5) and (img_h-p1[1])>(height*.5):
-        #     crop_multiplier = .5
         else:
             crop_multiplier = .25
             print('face too biiiiigggggg')
@@ -300,27 +300,10 @@ class SelectPose:
         try:
             cropped_image = cv2.resize(cropped_image[topcrop:botcrop, leftcrop:rightcrop], (newsize,newsize), interpolation= cv2.INTER_LINEAR)
         except:
-            crop = None
+            cropped_image = None
             print(img_h, img_w, img_c)
                
-        #draw data
-        # cv2.circle(cropped_image, (p1), radius=5, color=(0, 0, 255), thickness=-1)
-        # cv2.line(cropped_image, p1, p2, (255, 0, 0), 3)
-        # cv2.line(cropped_image, ptop, pbot, (0, 255, 0), 3)
-        # cv2.rectangle(cropped_image, (leftcrop,topcrop), (rightcrop,botcrop), (255,0,0), 2)
-        # Add the text on the image
-
-        #     #draw mesh on image
-        #     mp_drawing.draw_landmarks(
-        #                 image=image,
-        #                 landmark_list=face_landmarks,
-        #                 connections=mp_face_mesh.FACEMESH_TESSELATION,
-        #                 landmark_drawing_spec=drawing_spec,
-        #                 connection_drawing_spec=drawing_spec)
-
-        #         #added returning meshimage as image
-        #     return face_landmarks, crop, image, filename, toobig, this_meta
-        return cropped_image, crop_multiplier, resize
+        return cropped_image, crop_multiplier, resize, toobig
 
 
     # def solve_pose_by_68_points(self, image_points):
