@@ -230,8 +230,6 @@ class SelectPose:
         # I don't think i need all of this. but putting it here.
         img_h = self.h
         img_w = self.w
-        face_3d = []
-        face_2d = []
         for idx, lm in enumerate(faceLms.landmark):
             if idx == point:
                 pointXY = (lm.x * img_w, lm.y * img_h)
@@ -245,14 +243,6 @@ class SelectPose:
         face_2d = []
         for idx, lm in enumerate(faceLms.landmark):
             if idx == 33 or idx == 263 or idx == 1 or idx == 61 or idx == 291 or idx == 199 or idx == 10 or idx == 152:
-                if idx == 1:
-                    nose_2d = (lm.x * img_w, lm.y * img_h)
-                    nose_3d = (lm.x * img_w, lm.y * img_h, lm.z * 3000)
-                elif idx == 10:
-                    top_2d = (lm.x * img_w, lm.y * img_h)
-                elif idx == 152:
-                    bottom_2d = (lm.x * img_w, lm.y * img_h)
-
                 x, y = int(lm.x * img_w), int(lm.y * img_h)
 
                 # Get the 2D Coordinates
@@ -260,10 +250,6 @@ class SelectPose:
 
                 # Get the 3D Coordinates
                 face_3d.append([x, y, lm.z])      
-            elif idx == 13:
-                toplip = (lm.x * img_w, lm.y * img_h)
-            elif idx == 14:
-                botlip = (lm.x * img_w, lm.y * img_h)
 
         # Convert it to the NumPy array
         # image points
