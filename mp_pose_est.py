@@ -334,27 +334,3 @@ class SelectPose:
                
         return cropped_image, crop_multiplier, resize, toobig, mouth_pct
 
-
-    # def solve_pose_by_68_points(self, image_points):
-        """
-        Solve pose from all the 68 image points
-        Return (rotation_vector, translation_vector) as pose.
-        """
-
-        if self.r_vec is None:
-            (_, rotation_vector, translation_vector) = cv2.solvePnP(
-                self.model_points_68, image_points, self.camera_matrix, self.dist_coeefs)
-            self.r_vec = rotation_vector
-            self.t_vec = translation_vector
-
-        (_, rotation_vector, translation_vector) = cv2.solvePnP(
-            self.model_points_68,
-            image_points,
-            self.camera_matrix,
-            self.dist_coeefs,
-            rvec=self.r_vec,
-            tvec=self.t_vec,
-            useExtrinsicGuess=True)
-
-        return (rotation_vector, translation_vector)
-
