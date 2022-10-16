@@ -26,6 +26,8 @@ start = time.time()
 #location of source and output files outside repo
 ROOT= os.path.join(os.environ['HOME'], "Documents/projects-active/facemap_production") 
 folder ="5GB_testimages"
+http="https://media.gettyimages.com/photos/"
+gettyfolder = "gettyimages"
 # folder ="files_for_testing"
 outputfolder = os.path.join(ROOT,folder+"_output")
 
@@ -35,13 +37,10 @@ SOURCEFILE="_SELECT_FROM_Images_i_JOIN_ImagesKeywords_ik_ON_i_UID_ik_UID_JOI_202
 dfallmaps = pd.DataFrame(columns=['name', 'cropX', 'x', 'y', 'z', 'resize', 'newname', 'mouth_gap']) 
 MINSIZE = 700
 
-
 def touch(folder):
     if not os.path.exists(folder):
         os.makedirs(folder)
 touch(outputfolder)
-
-
 
 def get_dir_files(folder):
     # counter = 1
@@ -62,24 +61,23 @@ def get_dir_files(folder):
     return meta_file_list
 
 
-#constructing image object with first image as placeholder, just so these next functions don't bork b/c they expect obj
-# image = cv2.imread(os.path.join(root,folder, meta_file_list[0]))  # read any image containing a face
-
+#setting the workfile list
 if SOURCEFILE:
     csvpath = os.path.join(ROOT, SOURCEFILE)
     df_files = pd.read_csv(csvpath)
     meta_file_list = df_files['contentUrl'].tolist()
 else:
     meta_file_list = get_dir_files(folder)
-# print(meta_file_list)
 
 for item in meta_file_list:
-    print("starting: " +item)
 
-    if item
-        imagepath=os.path.join(ROOT,folder, item)
+    if SOURCEFILE:
+        file = item.replace(http, "")+".jpg"
+        imagepath=os.path.join(ROOT,gettyfolder, file)
     else:
         imagepath=os.path.join(ROOT,folder, item)
+
+        print("starting: " +item)
 
     try:
         image = cv2.imread(imagepath) 
