@@ -133,7 +133,8 @@ for item in meta_file_list:
 
             # crop image - needs to be refactored, not sure which image object is being touched here.
             # should this return an object, or just save it?
-            cropped_image, crop_multiplier, resize, toobig, mouth_gap = pose_estimator.crop_image(prodimage, faceLms)
+            mouth_gap = pose_estimator.get_mouth_data(faceLms)
+            cropped_image, crop_multiplier, resize, toobig = pose_estimator.crop_image(prodimage, faceLms)
             cv2.putText(image, "x: " + str(np.round(angles[0],2)), (500, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
             cv2.putText(image, "y: " + str(np.round(angles[1],2)), (500, 100), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
             cv2.putText(image, "z: " + str(np.round(angles[2],2)), (500, 150), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)

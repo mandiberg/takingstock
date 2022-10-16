@@ -262,40 +262,66 @@ class SelectPose:
         return face_2d, face_3d
 
 
+    def get_mouth_data(self, faceLms):
+        toplip = self.get_face_2d_point(faceLms,13)
+        botlip = self.get_face_2d_point(faceLms,14)
+        #calculate mouth gap
+        mouth_gap = self.dist(self.point(botlip), self.point(toplip))
+        _, _, face_height = self.get_faceheight_data(faceLms)
+        mouth_pct = mouth_gap/face_height*100
+        print(mouth_pct)
+        return mouth_pct
+
+
+    def get_faceheight_data(self, faceLms):
+        top_2d = self.get_face_2d_point(faceLms,10)
+        bottom_2d = self.get_face_2d_point(faceLms,152)
+        ptop = (int(top_2d[0]), int(top_2d[1]))
+        pbot = (int(bottom_2d[0]), int(bottom_2d[1]))
+        # height = int(pbot[1]-ptop[1])
+        face_height = self.dist(self.point(pbot), self.point(ptop))
+
+        return ptop, pbot, face_height
+
+
+    def get_crop_data(self,cropped_image, faceLms):
+        pass
+
+    def draw_crop_frame(self,cropped_image, faceLms):
+        # cv2.rectangle(image, (leftcrop,topcrop), (rightcrop,botcrop), (255,0,0), 2)
+        pass
 
     def crop_image(self,cropped_image, faceLms):
         # I don't think i need all of this. but putting it here.
         img_h = self.h
         img_w = self.w
         
+        #i don't think I actually need this.
         face_2d, face_3d = self.get_face_2d_3d(faceLms)
 
         #it would prob be better to do this with a dict and a loop
         nose_2d = self.get_face_2d_point(faceLms,1)
-        top_2d = self.get_face_2d_point(faceLms,10)
-        bottom_2d = self.get_face_2d_point(faceLms,152)
-        toplip = self.get_face_2d_point(faceLms,13)
-        botlip = self.get_face_2d_point(faceLms,14)
-
+        # top_2d = self.get_face_2d_point(faceLms,10)
+        # bottom_2d = self.get_face_2d_point(faceLms,152)
+        ptop, pbot, height = self.get_faceheight_data(faceLms)
         #set main points for drawing/cropping
         #p1 is tip of nose
         p1 = (int(nose_2d[0]), int(nose_2d[1]))
         # p2 = (int(nose_2d[0] + y * 70) , int(nose_2d[1] - x * 70))
-        ptop = (int(top_2d[0]), int(top_2d[1]))
-        pbot = (int(bottom_2d[0]), int(bottom_2d[1]))
-        height = int(pbot[1]-ptop[1])
+        # ptop = (int(top_2d[0]), int(top_2d[1]))
+        # pbot = (int(bottom_2d[0]), int(bottom_2d[1]))
+        # height = int(pbot[1]-ptop[1])
 
-        face_height = self.dist(self.point(pbot), self.point(ptop))
+        # face_height = self.dist(self.point(pbot), self.point(ptop))
 
-        mouth_gap = self.dist(self.point(botlip), self.point(toplip))
-        mouth_pct = mouth_gap/face_height*100
-        print(mouth_pct)
         # cv2.line(image, ptop, pbot, (0, 255, 0), 3)
 
         # math.atan2(dy, dx)
         # ptop = (int(top_2d[0]), int(top_2d[1]))
         # pbot = (int(bottom_2d[0]), int(bottom_2d[1]))
-        tanZ = math.degrees(math.atan2((top_2d[1]-bottom_2d[1]),(top_2d[0]-bottom_2d[0])))+90
+        
+        #I think this is for calculating the angle based on the meridian line
+        # tanZ = math.degrees(math.atan2((top_2d[1]-bottom_2d[1]),(top_2d[0]-bottom_2d[0])))+90
         # (y2 - y1)/(x2-x1)
 
         # print(f"is {p1[1]} greater than {height}")
@@ -322,7 +348,6 @@ class SelectPose:
         newsize = 750
         resize = np.round(newsize/(height*2.5), 3)
 
-        # cv2.rectangle(image, (leftcrop,topcrop), (rightcrop,botcrop), (255,0,0), 2)
 
 
         #moved this back up so it would NOT     draw map on both sets of images
@@ -332,5 +357,5 @@ class SelectPose:
             cropped_image = None
             print(img_h, img_w)
                
-        return cropped_image, crop_multiplier, resize, toobig, mouth_pct
+        return cropped_image, crop_multiplier, resize, toobig
 
