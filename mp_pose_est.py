@@ -277,41 +277,6 @@ class SelectPose:
         toplip = self.get_face_2d_point(faceLms,13)
         botlip = self.get_face_2d_point(faceLms,14)
 
-
-        # face_3d = []
-        # face_2d = []
-
-
-        # for idx, lm in enumerate(faceLms.landmark):
-        #     if idx == 33 or idx == 263 or idx == 1 or idx == 61 or idx == 291 or idx == 199 or idx == 10 or idx == 152:
-        #         if idx == 1:
-        #             nose_2d = (lm.x * img_w, lm.y * img_h)
-        #             nose_3d = (lm.x * img_w, lm.y * img_h, lm.z * 3000)
-        #         elif idx == 10:
-        #             top_2d = (lm.x * img_w, lm.y * img_h)
-        #         elif idx == 152:
-        #             bottom_2d = (lm.x * img_w, lm.y * img_h)
-
-        #         x, y = int(lm.x * img_w), int(lm.y * img_h)
-
-        #         # Get the 2D Coordinates
-        #         face_2d.append([x, y])
-
-        #         # Get the 3D Coordinates
-        #         face_3d.append([x, y, lm.z])      
-        #     elif idx == 13:
-        #         toplip = (lm.x * img_w, lm.y * img_h)
-        #     elif idx == 14:
-        #         botlip = (lm.x * img_w, lm.y * img_h)
-
-        # # Convert it to the NumPy array
-        # # image points
-        # face_2d = np.array(face_2d, dtype=np.float64)
-
-        # # Convert it to the NumPy array
-        # # face model
-        # face_3d = np.array(face_3d, dtype=np.float64)
-
         #set main points for drawing/cropping
         #p1 is tip of nose
         p1 = (int(nose_2d[0]), int(nose_2d[1]))
@@ -348,15 +313,6 @@ class SelectPose:
         img_h - p1[1]
         top_overlap = p1[1]-height
 
-        
-        # noselinelength=p2[0]-p1[0]
-        # noselineheight=p2[1]-p1[1]
-        # r = 1
-        # displacement = r* math.cos(x)
-        # print(displacement)
-        # displacement = r* cos O 
-                    
-
         #set crop
         # crop_multiplier = 1
         leftcrop = int(p1[0]-(height*crop_multiplier))
@@ -367,12 +323,6 @@ class SelectPose:
         resize = np.round(newsize/(height*2.5), 3)
 
         # cv2.rectangle(image, (leftcrop,topcrop), (rightcrop,botcrop), (255,0,0), 2)
-
-        #convert this to a list, and return it. then take this structure into the main function, and do it there, but with list[0,1,etc]
-        # this_meta = [crop_multiplier, np.round(x, 3), np.round(y, 3), np.round(tanZ, 3), np.round(newsize/(height*2.5), 3)]
-        # filename=f"{crop_multiplier}_{np.round(x, 3)}_{np.round(y, 3)}_{np.round(tanZ, 3)}_{np.round(newsize/(height*2.5), 3)}"
-        # # cv2.putText(crop, "scale ratio: " + str(np.round(newsize/(height*2.5),2)), (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
-
 
 
         #moved this back up so it would NOT     draw map on both sets of images
