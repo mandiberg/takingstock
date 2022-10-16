@@ -29,6 +29,9 @@ folder ="5GB_testimages"
 # folder ="files_for_testing"
 outputfolder = os.path.join(ROOT,folder+"_output")
 
+#comment this out to run testing mode with variables above
+SOURCEFILE="_SELECT_FROM_Images_i_JOIN_ImagesKeywords_ik_ON_i_UID_ik_UID_JOI_202210151942.csv"
+
 dfallmaps = pd.DataFrame(columns=['name', 'cropX', 'x', 'y', 'z', 'resize', 'newname', 'mouth_gap']) 
 MINSIZE = 700
 
@@ -58,16 +61,28 @@ def get_dir_files(folder):
             meta_file_list.append(filename)
     return meta_file_list
 
+
 #constructing image object with first image as placeholder, just so these next functions don't bork b/c they expect obj
 # image = cv2.imread(os.path.join(root,folder, meta_file_list[0]))  # read any image containing a face
 
-meta_file_list = get_dir_files(folder)
+if SOURCEFILE:
+    csvpath = os.path.join(ROOT, SOURCEFILE)
+    df_files = pd.read_csv(csvpath)
+    meta_file_list = df_files['contentUrl'].tolist()
+else:
+    meta_file_list = get_dir_files(folder)
 # print(meta_file_list)
 
 for item in meta_file_list:
     print("starting: " +item)
+
+    if item
+        imagepath=os.path.join(ROOT,folder, item)
+    else:
+        imagepath=os.path.join(ROOT,folder, item)
+
     try:
-        image = cv2.imread(os.path.join(ROOT,folder, item)) 
+        image = cv2.imread(imagepath) 
     except:
         print(f"this item failed: {item}")
     if image is not None and image.shape[0]>MINSIZE and image.shape[1]>MINSIZE:
