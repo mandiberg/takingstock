@@ -26,9 +26,8 @@ start = time.time()
 #declariing path and image before function, but will reassign in the main loop
 #location of source and output files outside repo
 ROOT= os.path.join(os.environ['HOME'], "Documents/projects-active/facemap_production") 
-folder ="5GB_testimages"
+folder ="gettyimages_smears"
 http="https://media.gettyimages.com/photos/"
-gettyfolder = "gettyimages"
 # folder ="files_for_testing"
 outputfolder = os.path.join(ROOT,folder+"_output")
 
@@ -68,9 +67,9 @@ def get_hash_folders(filename):
     # csvWriter1.writerow(["https://upload.wikimedia.org/wikipedia/commons/"+d[0]+'/'+d[0:2]+'/'+filename])
     return d[0], d[0:2]
 
-
+counter = 0
 #setting the workfile list
-if SOURCEFILE:
+if folder == "gettyimages":
     csvpath = os.path.join(ROOT, SOURCEFILE)
     df_files = pd.read_csv(csvpath)
     meta_file_list = df_files['contentUrl'].tolist()
@@ -79,15 +78,15 @@ else:
 
 for item in meta_file_list:
 
-    if SOURCEFILE:
-        file = item.replace(http, "")  #+".jpg"
-        d0, d02 = get_hash_folders(file)
-        imagepath=os.path.join(ROOT,gettyfolder, "images",d0, d02, file)
+    if folder == "gettyimages":
+        orig_filename = item.replace(http, "")+".jpg"
+        d0, d02 = get_hash_folders(orig_filename)
+        imagepath=os.path.join(ROOT,folder, "newimages",d0, d02, orig_filename)
         isExist = os.path.exists(imagepath)
         print(isExist)
     else:
         imagepath=os.path.join(ROOT,folder, item)
-
+        orig_filename = item
         print("starting: " +item)
 
     try:
@@ -141,17 +140,20 @@ for item in meta_file_list:
             cv2.putText(image, "mouth_gap: " + str(np.round(mouth_gap,2)), (500, 200), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
 
             
-            filename=f"{crop_multiplier}_{angles[0]}_{angles[1]}_{angles[2]}_{resize}"
-            cropname=os.path.join(ROOT,outputfolder,f"crop_{filename}_{item}")
-            markedname=os.path.join(ROOT,outputfolder,f"marked_{filename}_{item}")
-
+            filename_meta=f"{crop_multiplier}_{angles[0]}_{angles[1]}_{angles[2]}_{resize}"
+            cropname=os.path.join(ROOT,outputfolder,f"crop_{filename_meta}_{orig_filename}")
+            markedname=os.path.join(ROOT,outputfolder,f"marked_{filename_meta}_{orig_filename}")
+            print(cropname)
+            print(markedname)
             # temporarily not writing main image
             cv2.imwrite(markedname, image)
             if (toobig==False) and (cropped_image is not None):
                 # only writes to file and CSV if the file is cropped well and not too big
                 cv2.imwrite(cropname, cropped_image)
+                print("just wrote file")
                 dfthismap = pd.DataFrame({'name': item, 'cropX':crop_multiplier, 'x':angles[0], 'y':angles[1], 'z':angles[2], 'resize':resize, 'newname':cropname, 'mouth_gap':mouth_gap}, index=[0])
                 dfallmaps = pd.concat([dfallmaps, dfthismap], ignore_index=True, sort=False)
+                print("just wrote DataFrame")
             else:
                 print("not hitting the write cropped_image loop")
 
@@ -166,10 +168,18 @@ for item in meta_file_list:
     else:
         print('toooooo smallllll')
         # os.remove(item)
+    counter = counter+1
 csv_name = "allmaps_"+str(len(dfallmaps))+".csv"
 dfallmaps.to_csv(os.path.join(ROOT,csv_name), index=False)
 print('just wrote csv')
 end = time.time()
 print (end - start)
 
+imgpermin = counter/((time.time() - start)/60)
+hours = (time.time() - start)/3600
+
+print("--- %s images per minute ---" % (imgpermin))
+print("--- %s images per day ---" % (imgpermin*1440))
+if imgpermin:
+    print("--- %s days per 1M images ---" % (1000000/(imgpermin*1440)))
 

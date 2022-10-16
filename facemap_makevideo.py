@@ -11,10 +11,10 @@ import sys
 
 XLOW = -20
 XHIGH = 10
-YLOW = -10
-YHIGH = 10
-ZLOW = -10
-ZHIGH = 10
+YLOW = -2
+YHIGH = 2
+ZLOW = -2
+ZHIGH = 2
 MINCROP = 1
 MAXRESIZE = .5
 FRAMERATE = 15
@@ -32,7 +32,7 @@ ROOT="/Users/michaelmandiberg/Documents/projects-active/facemap_production/"
 
 # folder ="sourceimages"
 # FOLDER ="/Users/michaelmandiberg/Dropbox/Photo Scraping/facemesh/facemeshes_commons/"
-MAPDATA_FILE = "allmaps_1246.csv"
+MAPDATA_FILE = "allmaps_65814.csv"
 # size = (750, 750) #placeholder 
 
 
