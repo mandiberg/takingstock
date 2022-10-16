@@ -9,6 +9,7 @@ from mp_pose_est import SelectPose
 import os
 import math
 import time
+import hashlib
 
 
 #creating my objects
@@ -60,6 +61,13 @@ def get_dir_files(folder):
             meta_file_list.append(filename)
     return meta_file_list
 
+def get_hash_folders(filename):
+    m = hashlib.md5()
+    m.update(filename.encode('utf-8'))
+    d = m.hexdigest()
+    # csvWriter1.writerow(["https://upload.wikimedia.org/wikipedia/commons/"+d[0]+'/'+d[0:2]+'/'+filename])
+    return d[0], d[0:2]
+
 
 #setting the workfile list
 if SOURCEFILE:
@@ -72,8 +80,11 @@ else:
 for item in meta_file_list:
 
     if SOURCEFILE:
-        file = item.replace(http, "")+".jpg"
-        imagepath=os.path.join(ROOT,gettyfolder, file)
+        file = item.replace(http, "")  #+".jpg"
+        d0, d02 = get_hash_folders(file)
+        imagepath=os.path.join(ROOT,gettyfolder, "images",d0, d02, file)
+        isExist = os.path.exists(imagepath)
+        print(isExist)
     else:
         imagepath=os.path.join(ROOT,folder, item)
 
