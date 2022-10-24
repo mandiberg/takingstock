@@ -225,6 +225,20 @@ class SelectPose:
         distance = s_sq_difference**0.5
         return distance    
 
+    def calc_face_data(self, faceLms):
+
+        # check for face_2d, and if not exist, then get
+        if not hasattr(self, 'face_2d'): 
+            self.get_face_2d_3d(faceLms)
+
+        # check for face height, and if not exist, then get
+        if not hasattr(self, 'face_height'): 
+            self.get_faceheight_data(faceLms)
+
+        # check for crop, and if not exist, then get
+        if not hasattr(self, 'crop'): 
+            self.get_crop_data(faceLms)
+        
 
     def get_face_2d_point(self, faceLms, point):
         # I don't think i need all of this. but putting it here.
@@ -253,11 +267,11 @@ class SelectPose:
 
         # Convert it to the NumPy array
         # image points
-        face_2d = np.array(face_2d, dtype=np.float64)
+        self.face_2d = np.array(face_2d, dtype=np.float64)
 
         # Convert it to the NumPy array
         # face model
-        face_3d = np.array(face_3d, dtype=np.float64)
+        self.face_3d = np.array(face_3d, dtype=np.float64)
 
         return face_2d, face_3d
 
@@ -288,20 +302,10 @@ class SelectPose:
         # return ptop, pbot, face_height
 
 
-    def get_crop_data(self,cropped_image, faceLms):
-        # I don't think i need all of this. but putting it here.
-        # img_h = self.h
-        # img_w = self.w
+    def get_crop_data(self, faceLms):
         
-        #i don't think I actually need this.
-        face_2d, face_3d = self.get_face_2d_3d(faceLms)
-
         #it would prob be better to do this with a dict and a loop
         nose_2d = self.get_face_2d_point(faceLms,1)
-
-        # check for face height, and if not exist, then get
-        if not hasattr(self, 'face_height'): 
-            self.get_faceheight_data(faceLms)
 
         #set main points for drawing/cropping
         #p1 is tip of nose
@@ -330,60 +334,26 @@ class SelectPose:
 
     def draw_crop_frame(self,cropped_image, faceLms):
   
-        # check for crop, and if not exist, then get
-        if not hasattr(self, 'crop'): 
-            self.get_crop_data(cropped_image, faceLms)
-
       # cv2.rectangle(image, (leftcrop,topcrop), (rightcrop,botcrop), (255,0,0), 2)
         pass
 
     def crop_image(self,cropped_image, faceLms):
 
-        # check for crop, and if not exist, then get
-        if not hasattr(self, 'crop'): 
-            self.get_crop_data(cropped_image, faceLms)
-        
-        # check for face height, and if not exist, then get
-        if not hasattr(self, 'face_height'): 
-            self.get_faceheight_data(faceLms)
 
-        #i don't think I actually need this?
-        face_2d, face_3d = self.get_face_2d_3d(faceLms)
-
+        #I'm not sure the diff between nose_2d and p1. May be redundant.
         #it would prob be better to do this with a dict and a loop
         nose_2d = self.get_face_2d_point(faceLms,1)
-        
 
         #set main points for drawing/cropping
         #p1 is tip of nose
         p1 = (int(nose_2d[0]), int(nose_2d[1]))
 
-        # toobig = False
-        # if p1[1]>(self.face_height*1) and (self.h-p1[1])>(self.face_height*1):
-        #     crop_multiplier = 1
-        # else:
-        #     crop_multiplier = .25
-        #     print('face too biiiiigggggg')
-        #     # toobig=True
-
         # print(crop_multiplier)
         self.h - p1[1]
         top_overlap = p1[1]-self.face_height
 
-        # #set crop
-        # # crop_multiplier = 1
-        # leftcrop = int(p1[0]-(self.face_height*crop_multiplier))
-        # rightcrop = int(p1[0]+(self.face_height*crop_multiplier))
-        # topcrop = int(p1[1]-(self.face_height*crop_multiplier))
-        # botcrop = int(p1[1]+(self.face_height*crop_multiplier))
-
-        # leftcrop, rightcrop, topcrop, botcrop = self.get_crop_data(cropped_image, faceLms)
-
-
         newsize = 750
         resize = np.round(newsize/(self.face_height*2.5), 3)
-
-
 
         #moved this back up so it would NOT     draw map on both sets of images
         try:

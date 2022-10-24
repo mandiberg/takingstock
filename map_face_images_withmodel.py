@@ -118,6 +118,8 @@ for item in meta_file_list:
             #added returning meshimage (was image)
             faceLms = pose.get_face_landmarks(results, image)
 
+            #calculate base data from landmarks
+            pose.calc_face_data(faceLms)
 
             # draw mesh on meshimage
             mp_drawing.draw_landmarks(image, faceLms, landmark_drawing_spec=drawing_spec, connections=mp_face_mesh.FACEMESH_TESSELATION) # draw every match
