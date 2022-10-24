@@ -267,8 +267,9 @@ class SelectPose:
         botlip = self.get_face_2d_point(faceLms,14)
         #calculate mouth gap
         mouth_gap = self.dist(self.point(botlip), self.point(toplip))
-        _, _, face_height = self.get_faceheight_data(faceLms)
-        mouth_pct = mouth_gap/face_height*100
+        self.get_faceheight_data(faceLms)
+        # _, _, face_height = self.get_faceheight_data(faceLms)
+        mouth_pct = mouth_gap/self.face_height*100
         print(mouth_pct)
         return mouth_pct
 
@@ -276,43 +277,28 @@ class SelectPose:
     def get_faceheight_data(self, faceLms):
         top_2d = self.get_face_2d_point(faceLms,10)
         bottom_2d = self.get_face_2d_point(faceLms,152)
-        ptop = (int(top_2d[0]), int(top_2d[1]))
-        pbot = (int(bottom_2d[0]), int(bottom_2d[1]))
+        self.ptop = (int(top_2d[0]), int(top_2d[1]))
+        self.pbot = (int(bottom_2d[0]), int(bottom_2d[1]))
         # height = int(pbot[1]-ptop[1])
-        face_height = self.dist(self.point(pbot), self.point(ptop))
+        self.face_height = self.dist(self.point(self.pbot), self.point(self.ptop))
 
-        return ptop, pbot, face_height
+        # return ptop, pbot, face_height
 
 
     def get_crop_data(self,cropped_image, faceLms):
-        pass
-
-    def draw_crop_frame(self,cropped_image, faceLms):
-        # cv2.rectangle(image, (leftcrop,topcrop), (rightcrop,botcrop), (255,0,0), 2)
-        pass
-
-    def crop_image(self,cropped_image, faceLms):
         # I don't think i need all of this. but putting it here.
-        img_h = self.h
-        img_w = self.w
+        # img_h = self.h
+        # img_w = self.w
         
         #i don't think I actually need this.
         face_2d, face_3d = self.get_face_2d_3d(faceLms)
 
         #it would prob be better to do this with a dict and a loop
         nose_2d = self.get_face_2d_point(faceLms,1)
-        # top_2d = self.get_face_2d_point(faceLms,10)
-        # bottom_2d = self.get_face_2d_point(faceLms,152)
-        ptop, pbot, height = self.get_faceheight_data(faceLms)
+        self.get_faceheight_data(faceLms)
         #set main points for drawing/cropping
         #p1 is tip of nose
         p1 = (int(nose_2d[0]), int(nose_2d[1]))
-        # p2 = (int(nose_2d[0] + y * 70) , int(nose_2d[1] - x * 70))
-        # ptop = (int(top_2d[0]), int(top_2d[1]))
-        # pbot = (int(bottom_2d[0]), int(bottom_2d[1]))
-        # height = int(pbot[1]-ptop[1])
-
-        # face_height = self.dist(self.point(pbot), self.point(ptop))
 
         # cv2.line(image, ptop, pbot, (0, 255, 0), 3)
 
@@ -328,7 +314,59 @@ class SelectPose:
         # print(f"is {img_h-p1[1]} greater than {height}")
 
         toobig = False
-        if p1[1]>(height*1) and (img_h-p1[1])>(height*1):
+        if p1[1]>(self.face_height*1) and (self.h-p1[1])>(self.face_height*1):
+            crop_multiplier = 1
+        else:
+            crop_multiplier = .25
+            print('face too biiiiigggggg')
+            toobig=True
+
+        # print(crop_multiplier)
+        self.h - p1[1]
+        top_overlap = p1[1]-self.face_height
+
+        #set crop
+        # crop_multiplier = 1
+        leftcrop = int(p1[0]-(self.face_height*crop_multiplier))
+        rightcrop = int(p1[0]+(self.face_height*crop_multiplier))
+        topcrop = int(p1[1]-(self.face_height*crop_multiplier))
+        botcrop = int(p1[1]+(self.face_height*crop_multiplier))
+        return leftcrop, rightcrop, topcrop, botcrop
+
+    def draw_crop_frame(self,cropped_image, faceLms):
+        # cv2.rectangle(image, (leftcrop,topcrop), (rightcrop,botcrop), (255,0,0), 2)
+        pass
+
+    def crop_image(self,cropped_image, faceLms):
+        # I don't think i need all of this. but putting it here.
+        img_h = self.h
+        img_w = self.w
+        
+        #i don't think I actually need this.
+        face_2d, face_3d = self.get_face_2d_3d(faceLms)
+
+        #it would prob be better to do this with a dict and a loop
+        nose_2d = self.get_face_2d_point(faceLms,1)
+        self.get_faceheight_data(faceLms)
+        #set main points for drawing/cropping
+        #p1 is tip of nose
+        p1 = (int(nose_2d[0]), int(nose_2d[1]))
+
+        # cv2.line(image, ptop, pbot, (0, 255, 0), 3)
+
+        # math.atan2(dy, dx)
+        # ptop = (int(top_2d[0]), int(top_2d[1]))
+        # pbot = (int(bottom_2d[0]), int(bottom_2d[1]))
+        
+        #I think this is for calculating the angle based on the meridian line
+        # tanZ = math.degrees(math.atan2((top_2d[1]-bottom_2d[1]),(top_2d[0]-bottom_2d[0])))+90
+        # (y2 - y1)/(x2-x1)
+
+        # print(f"is {p1[1]} greater than {height}")
+        # print(f"is {img_h-p1[1]} greater than {height}")
+
+        toobig = False
+        if p1[1]>(self.face_height*1) and (img_h-p1[1])>(self.face_height*1):
             crop_multiplier = 1
         else:
             crop_multiplier = .25
@@ -337,16 +375,20 @@ class SelectPose:
 
         # print(crop_multiplier)
         img_h - p1[1]
-        top_overlap = p1[1]-height
+        top_overlap = p1[1]-self.face_height
 
         #set crop
         # crop_multiplier = 1
-        leftcrop = int(p1[0]-(height*crop_multiplier))
-        rightcrop = int(p1[0]+(height*crop_multiplier))
-        topcrop = int(p1[1]-(height*crop_multiplier))
-        botcrop = int(p1[1]+(height*crop_multiplier))
+        leftcrop = int(p1[0]-(self.face_height*crop_multiplier))
+        rightcrop = int(p1[0]+(self.face_height*crop_multiplier))
+        topcrop = int(p1[1]-(self.face_height*crop_multiplier))
+        botcrop = int(p1[1]+(self.face_height*crop_multiplier))
+
+        leftcrop, rightcrop, topcrop, botcrop = self.get_crop_data(cropped_image, faceLms)
+
+
         newsize = 750
-        resize = np.round(newsize/(height*2.5), 3)
+        resize = np.round(newsize/(self.face_height*2.5), 3)
 
 
 
