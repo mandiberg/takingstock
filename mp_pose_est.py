@@ -358,13 +358,13 @@ class SelectPose:
         #p1 is tip of nose
         p1 = (int(nose_2d[0]), int(nose_2d[1]))
 
-        toobig = False
-        if p1[1]>(self.face_height*1) and (self.h-p1[1])>(self.face_height*1):
-            crop_multiplier = 1
-        else:
-            crop_multiplier = .25
-            print('face too biiiiigggggg')
-            # toobig=True
+        # toobig = False
+        # if p1[1]>(self.face_height*1) and (self.h-p1[1])>(self.face_height*1):
+        #     crop_multiplier = 1
+        # else:
+        #     crop_multiplier = .25
+        #     print('face too biiiiigggggg')
+        #     # toobig=True
 
         # print(crop_multiplier)
         self.h - p1[1]
