@@ -134,25 +134,25 @@ for item in meta_file_list:
             # crop image - needs to be refactored, not sure which image object is being touched here.
             # should this return an object, or just save it?
             mouth_gap = pose_estimator.get_mouth_data(faceLms)
-            cropped_image, crop_multiplier, resize, toobig = pose_estimator.crop_image(prodimage, faceLms)
+            cropped_image, resize = pose_estimator.crop_image(prodimage, faceLms)
             cv2.putText(image, "x: " + str(np.round(angles[0],2)), (500, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
             cv2.putText(image, "y: " + str(np.round(angles[1],2)), (500, 100), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
             cv2.putText(image, "z: " + str(np.round(angles[2],2)), (500, 150), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
             cv2.putText(image, "mouth_gap: " + str(np.round(mouth_gap,2)), (500, 200), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
 
             
-            filename_meta=f"{crop_multiplier}_{angles[0]}_{angles[1]}_{angles[2]}_{resize}"
+            filename_meta=f"{pose_estimator.crop_multiplier}_{angles[0]}_{angles[1]}_{angles[2]}_{resize}"
             cropname=os.path.join(ROOT,outputfolder,f"crop_{filename_meta}_{orig_filename}")
             markedname=os.path.join(ROOT,outputfolder,f"marked_{filename_meta}_{orig_filename}")
             print(cropname)
             print(markedname)
             # temporarily not writing main image
             cv2.imwrite(markedname, image)
-            if (toobig==False) and (cropped_image is not None):
+            if (pose_estimator.crop_multiplier<=.25) and (cropped_image is not None):
                 # only writes to file and CSV if the file is cropped well and not too big
                 cv2.imwrite(cropname, cropped_image)
                 print("just wrote file")
-                dfthismap = pd.DataFrame({'name': item, 'cropX':crop_multiplier, 'x':angles[0], 'y':angles[1], 'z':angles[2], 'resize':resize, 'newname':cropname, 'mouth_gap':mouth_gap}, index=[0])
+                dfthismap = pd.DataFrame({'name': item, 'cropX':pose_estimator.crop_multiplier, 'x':angles[0], 'y':angles[1], 'z':angles[2], 'resize':resize, 'newname':cropname, 'mouth_gap':mouth_gap}, index=[0])
                 dfallmaps = pd.concat([dfallmaps, dfthismap], ignore_index=True, sort=False)
                 print("just wrote DataFrame")
             else:

@@ -307,18 +307,6 @@ class SelectPose:
         #p1 is tip of nose
         p1 = (int(nose_2d[0]), int(nose_2d[1]))
 
-        # cv2.line(image, ptop, pbot, (0, 255, 0), 3)
-
-        # math.atan2(dy, dx)
-        # ptop = (int(top_2d[0]), int(top_2d[1]))
-        # pbot = (int(bottom_2d[0]), int(bottom_2d[1]))
-        
-        #I think this is for calculating the angle based on the meridian line
-        # tanZ = math.degrees(math.atan2((top_2d[1]-bottom_2d[1]),(top_2d[0]-bottom_2d[0])))+90
-        # (y2 - y1)/(x2-x1)
-
-        # print(f"is {p1[1]} greater than {height}")
-        # print(f"is {img_h-p1[1]} greater than {height}")
 
         toobig = False
         if p1[1]>(self.face_height*1) and (self.h-p1[1])>(self.face_height*1):
@@ -376,18 +364,18 @@ class SelectPose:
         else:
             crop_multiplier = .25
             print('face too biiiiigggggg')
-            toobig=True
+            # toobig=True
 
         # print(crop_multiplier)
         self.h - p1[1]
         top_overlap = p1[1]-self.face_height
 
-        #set crop
-        # crop_multiplier = 1
-        leftcrop = int(p1[0]-(self.face_height*crop_multiplier))
-        rightcrop = int(p1[0]+(self.face_height*crop_multiplier))
-        topcrop = int(p1[1]-(self.face_height*crop_multiplier))
-        botcrop = int(p1[1]+(self.face_height*crop_multiplier))
+        # #set crop
+        # # crop_multiplier = 1
+        # leftcrop = int(p1[0]-(self.face_height*crop_multiplier))
+        # rightcrop = int(p1[0]+(self.face_height*crop_multiplier))
+        # topcrop = int(p1[1]-(self.face_height*crop_multiplier))
+        # botcrop = int(p1[1]+(self.face_height*crop_multiplier))
 
         # leftcrop, rightcrop, topcrop, botcrop = self.get_crop_data(cropped_image, faceLms)
 
@@ -405,5 +393,5 @@ class SelectPose:
             cropped_image = None
             print(self.h, self.w)
                
-        return cropped_image, crop_multiplier, resize, toobig
+        return cropped_image, resize
 
