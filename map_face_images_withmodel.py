@@ -14,7 +14,7 @@ import hashlib
 
 #creating my objects
 mp_face_mesh = mp.solutions.face_mesh
-face_mesh = mp_face_mesh.FaceMesh(min_detection_confidence=0.8, min_tracking_confidence=0.5)
+face_mesh = mp_face_mesh.FaceMesh(min_detection_confidence=1, static_image_mode=True)
 mp_drawing = mp.solutions.drawing_utils
 drawing_spec = mp_drawing.DrawingSpec(thickness=1, circle_radius=1)
 
@@ -26,13 +26,14 @@ start = time.time()
 #declariing path and image before function, but will reassign in the main loop
 #location of source and output files outside repo
 ROOT= os.path.join(os.environ['HOME'], "Documents/projects-active/facemap_production") 
-folder ="gettyimages_smears"
+folder ="gettyimages"
 http="https://media.gettyimages.com/photos/"
 # folder ="files_for_testing"
 outputfolder = os.path.join(ROOT,folder+"_output")
 
 #comment this out to run testing mode with variables above
-SOURCEFILE="_SELECT_FROM_Images_i_JOIN_ImagesKeywords_ik_ON_i_UID_ik_UID_JOI_202210151942.csv"
+# SOURCEFILE="_SELECT_FROM_Images_i_JOIN_ImagesKeywords_ik_ON_i_UID_ik_UID_JOI_202210151942.csv"
+SOURCEFILE="test2000.csv"
 
 dfallmaps = pd.DataFrame(columns=['name', 'cropX', 'x', 'y', 'z', 'resize', 'newname', 'mouth_gap']) 
 MINSIZE = 700
@@ -127,6 +128,11 @@ for item in meta_file_list:
             # draw pose on meshimage
             pose.draw_annotation_box(image)
 
+            # TEMP draw nose and pose on production image
+            pose.draw_annotation_box(prodimage)
+            pose.draw_nose(prodimage)
+
+
             # get angles, using r_vec property stored in class
             # angles are meta. there are other meta --- size and resize or something.
             angles = pose.rotationMatrixToEulerAnglesToDegrees()
@@ -137,6 +143,9 @@ for item in meta_file_list:
             # should this return an object, or just save it?
             mouth_gap = pose.get_mouth_data(faceLms)
             cropped_image, resize = pose.crop_image(prodimage, faceLms)
+
+            #annotate full size image
+            pose.draw_crop_frame(image)
             cv2.putText(image, "x: " + str(np.round(angles[0],2)), (500, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
             cv2.putText(image, "y: " + str(np.round(angles[1],2)), (500, 100), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
             cv2.putText(image, "z: " + str(np.round(angles[2],2)), (500, 150), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
@@ -148,9 +157,12 @@ for item in meta_file_list:
             markedname=os.path.join(ROOT,outputfolder,f"marked_{filename_meta}_{orig_filename}")
             print(cropname)
             print(markedname)
+            print(pose.crop_multiplier)
+            if cropped_image is None:
+                print("null value for cropped image")
             # temporarily not writing main image
             cv2.imwrite(markedname, image)
-            if (pose.crop_multiplier<=.25) and (cropped_image is not None):
+            if (pose.crop_multiplier==1) and (cropped_image is not None):
                 # only writes to file and CSV if the file is cropped well and not too big
                 cv2.imwrite(cropname, cropped_image)
                 print("just wrote file")

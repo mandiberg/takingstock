@@ -314,7 +314,13 @@ class SelectPose:
 
         toobig = False
         if p1[1]>(self.face_height*1) and (self.h-p1[1])>(self.face_height*1):
-            self.crop_multiplier = 1
+            if p1[0]>(self.face_height*1) and (self.w-p1[0])>(self.face_height*1):
+                self.crop_multiplier = 1
+            else:
+                print('face too wiiiiiiiide')
+                self.crop_multiplier = .25
+                toobig=True
+
         else:
             self.crop_multiplier = .25
             print('face too biiiiigggggg')
@@ -332,9 +338,23 @@ class SelectPose:
         botcrop = int(p1[1]+(self.face_height*self.crop_multiplier))
         self.crop = [topcrop, rightcrop, botcrop, leftcrop]
 
-    def draw_crop_frame(self,cropped_image, faceLms):
+
+    def draw_nose(self,image):
+        #it would prob be better to do this with a dict and a loop
+        # nose_2d = self.get_face_2d_point(faceLms,1)
+        nose_2d = self.face_2d[0]
+
+        #set main points for drawing/cropping
+        #p1 is tip of nose
+        p1 = (int(nose_2d[0]), int(nose_2d[1]))
+        cv2.circle(image,(int(p1[0]),int(p1[1])),4,(255,0,0),-1)
+
+
+    def draw_crop_frame(self,image):
   
       # cv2.rectangle(image, (leftcrop,topcrop), (rightcrop,botcrop), (255,0,0), 2)
+        cv2.rectangle(image, (self.crop[3],self.crop[0]), (self.crop[1],self.crop[2]), (255,0,0), 2)
+
         pass
 
     def crop_image(self,cropped_image, faceLms):
@@ -358,9 +378,11 @@ class SelectPose:
         #moved this back up so it would NOT     draw map on both sets of images
         try:
             # crop[0] is top, and clockwise from there. Right is 1, Bottom is 2, Left is 3. 
-            cropped_image = cv2.resize(cropped_image[crop[0]:crop[2], crop[3]:crop[1]], (newsize,newsize), interpolation= cv2.INTER_LINEAR)
+            cropped_image = cv2.resize(cropped_image[self.crop[0]:self.crop[2], self.crop[3]:self.crop[1]], (newsize,newsize), interpolation= cv2.INTER_LINEAR)
         except:
             cropped_image = None
+            print("not cropped_image loop")
+
             print(self.h, self.w)
                
         return cropped_image, resize
