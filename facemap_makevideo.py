@@ -8,6 +8,7 @@ import os
 import math
 import time
 import sys
+import statistics
 
 XLOW = -20
 XHIGH = 1
@@ -19,6 +20,7 @@ MINCROP = 1
 MAXRESIZE = .5
 FRAMERATE = 15
 SORT = 'y'
+SECOND_SORT = 'x'
 # SORT = 'mouth_gap'
 startAngle=YLOW
 endAngle=YHIGH
@@ -35,7 +37,7 @@ ROOT="/Users/michaelmandiberg/Documents/projects-active/facemap_production/"
 
 # folder ="sourceimages"
 # FOLDER ="/Users/michaelmandiberg/Dropbox/Photo Scraping/facemesh/facemeshes_commons/"
-MAPDATA_FILE = "allmaps_64910.csv"
+MAPDATA_FILE = "allmaps_62607.csv"
 # size = (750, 750) #placeholder 
 
 
@@ -142,10 +144,22 @@ angle_list_pop = angle_list.pop()
 
 img_array = []
 videofile = f"facevid_crop{str(MINCROP)}_X{str(XLOW)}toX{str(XHIGH)}_Y{str(YLOW)}toY{str(YHIGH)}_Z{str(ZLOW)}toZ{str(ZHIGH)}_maxResize{str(MAXRESIZE)}_ct{str(len(rotation))}_rate{(str(FRAMERATE))}.mp4"
+
+median = d[0][SECOND_SORT].median()
+print("starting from this median: ",median)
+
+medians = []
 for angle in angle_list:
     print(angle)
     print (d[angle].size)
-    print(d[angle].iloc[1]['newname'])
+    # print(d[angle].iloc[1]['newname'])
+    this_median = d[angle]['x'].median()
+    medians.append(this_median)
+
+print("all medians: ",medians)
+print("median of all medians: ",statistics.median(medians))
+metamedian = statistics.mean(medians)
+print("mean of all medians: ",metamedian)
 
 # #old structure
 # for index, row in rotation.iterrows():
@@ -157,8 +171,18 @@ for angle in angle_list:
 # filenames.sort()
 # for filename in filenames:
 #     print(filename)
+
+for angle in angle_list:
+    print('closest: ')
+    # print(d[angle].iloc[(d[angle][SECOND_SORT]-metamedian).abs().argsort()[:2]])
     try:
-        img = cv2.imread(d[angle].iloc[1]['newname'])
+        closest = d[angle].iloc[(d[angle][SECOND_SORT]-metamedian).abs().argsort()[:1]]
+        # cprint(closest)
+        closest_file = closest.iloc[0]['newname']
+        first = d[angle].iloc[1]['newname']
+        print(first)
+        img = cv2.imread(closest_file)
+        # img = cv2.imread(closest)
         #old version
         # img = cv2.imread(row['newname'])
         height, width, layers = img.shape
@@ -172,6 +196,9 @@ for angle in angle_list:
 # self._cap = VideoCapture(0)
 # self._fourcc = VideoWriter_fourcc(*'MP4V')
 # self._out = VideoWriter(self._name, self._fourcc, 20.0, (640,480))
+
+
+
 try:
     out = cv2.VideoWriter(os.path.join(ROOT,videofile), cv2.VideoWriter_fourcc(*'mp4v'), FRAMERATE, size)
     for i in range(len(img_array)):
