@@ -32,8 +32,8 @@ http="https://media.gettyimages.com/photos/"
 outputfolder = os.path.join(ROOT,folder+"_output")
 
 #comment this out to run testing mode with variables above
-# SOURCEFILE="_SELECT_FROM_Images_i_JOIN_ImagesKeywords_ik_ON_i_UID_ik_UID_JOI_202210151942.csv"
-SOURCEFILE="test2000.csv"
+SOURCEFILE="_SELECT_FROM_Images_i_JOIN_ImagesKeywords_ik_ON_i_UID_ik_UID_JOI_202210151942.csv"
+# SOURCEFILE="test2000.csv"
 
 dfallmaps = pd.DataFrame(columns=['name', 'cropX', 'x', 'y', 'z', 'resize', 'newname', 'mouth_gap']) 
 MINSIZE = 700

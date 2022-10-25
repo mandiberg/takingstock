@@ -10,15 +10,18 @@ import time
 import sys
 
 XLOW = -20
-XHIGH = 10
-YLOW = -2
-YHIGH = 2
-ZLOW = -2
-ZHIGH = 2
+XHIGH = 1
+YLOW = -30
+YHIGH = 30
+ZLOW = -3
+ZHIGH = -2
 MINCROP = 1
 MAXRESIZE = .5
 FRAMERATE = 15
-SORT = 'mouth_gap'
+SORT = 'y'
+# SORT = 'mouth_gap'
+startAngle=YLOW
+endAngle=YHIGH
 
 #creating my objects
 
@@ -32,7 +35,7 @@ ROOT="/Users/michaelmandiberg/Documents/projects-active/facemap_production/"
 
 # folder ="sourceimages"
 # FOLDER ="/Users/michaelmandiberg/Dropbox/Photo Scraping/facemesh/facemeshes_commons/"
-MAPDATA_FILE = "allmaps_65814.csv"
+MAPDATA_FILE = "allmaps_64910.csv"
 # size = (750, 750) #placeholder 
 
 
@@ -46,11 +49,31 @@ MAPDATA_FILE = "allmaps_65814.csv"
 #         os.makedirs(folder)
 
 
+#Do These matter?
 FOLDER = os.path.join(ROOT,"5GB_testimages_output")
-
 outputfolderRGB = os.path.join(ROOT,"face_mesh_outputsRGB")
 outputfolderBW = os.path.join(ROOT,"face_mesh_outputsBW")
 outputfolderMEH = os.path.join(ROOT,"face_mesh_outputsMEH")
+
+
+# Python3 Program to Create list
+# with integers within given range
+
+def createList(r1, r2):
+    # Testing if range r1 and r2
+    # are equal
+    if (r1 == r2):
+        return r1
+    else:
+        # Create empty list
+        res = []
+        # loop to append successors to
+        # list until r2 is reached.
+        while(r1 < r2+1 ):
+            res.append(r1)
+            r1 += 1
+        return res
+
 
 try:
     df = pd.read_csv(os.path.join(ROOT,MAPDATA_FILE))
@@ -66,36 +89,84 @@ print(df)
 # display(df)
 
 segment = df.loc[((df['y'] < YHIGH) & (df['y'] > YLOW))]
+print(segment.size)
 segment = segment.loc[((segment['x'] < XHIGH) & (segment['x'] > XLOW))]
+print(segment.size)
 segment = segment.loc[((segment['z'] < ZHIGH) & (segment['z'] > ZLOW))]
+print(segment.size)
 # segment = segment.loc[((segment['z'] > Zneg))]
 # segment = segment.loc[((segment['z'] < Zpos))]
 # segment = segment.loc[segment['color'] >= True]
 segment = segment.loc[segment['cropX'] >= MINCROP]
-segment = segment.loc[segment['resize'] < MAXRESIZE]
+print(segment.size)
+# segment = segment.loc[segment['resize'] < MAXRESIZE]
+print(segment.size)
 
 print(segment)
-rotation = segment.sort_values(by=SORT)
 
+
+#simple ordering
+rotation = segment.sort_values(by=SORT)
 print(rotation)
+
+# #complex ordering
+# angle = startAngle
+# counter = 0
+
+# Driver Code
+r1, r2 = startAngle, endAngle
+print(createList(r1, r2))
+
+angle_list = createList(r1, r2)
+
+
+d = {}
+for angle in angle_list:
+    d[angle] = segment.loc[((segment['y'] > angle) & (segment['y'] < angle+1))]
+
+print('manual test of -30')
+print(d[-30].size)
+
+
+
+
+# while (angle < endAngle):
+#     segment+str(counter) = segment.loc[((segment['y'] < segment) & (segment['y'] > segment+1))]
+#     segment = segment+1
+
+# print(segment0.size)
+
+
+
+angle_list_pop = angle_list.pop()
 
 img_array = []
 videofile = f"facevid_crop{str(MINCROP)}_X{str(XLOW)}toX{str(XHIGH)}_Y{str(YLOW)}toY{str(YHIGH)}_Z{str(ZLOW)}toZ{str(ZHIGH)}_maxResize{str(MAXRESIZE)}_ct{str(len(rotation))}_rate{(str(FRAMERATE))}.mp4"
+for angle in angle_list:
+    print(angle)
+    print (d[angle].size)
+    print(d[angle].iloc[1]['newname'])
 
-for index, row in rotation.iterrows():
-    print(row['x'], row['y'], row['newname'])
-    print(row['newname'])
+# #old structure
+# for index, row in rotation.iterrows():
+#     print(row['x'], row['y'], row['newname'])
+#     print(row['newname'])
+
+
 # filenames = glob.glob('image-*.png')
 # filenames.sort()
 # for filename in filenames:
 #     print(filename)
     try:
-        img = cv2.imread(row['newname'])
+        img = cv2.imread(d[angle].iloc[1]['newname'])
+        #old version
+        # img = cv2.imread(row['newname'])
         height, width, layers = img.shape
         size = (width, height)
         img_array.append(img)
     except:
-        print('failed:',row['newname'])
+        print('failed:')
+        # print('failed:',row['newname'])
 
 # self._name = name + '.mp4'
 # self._cap = VideoCapture(0)
