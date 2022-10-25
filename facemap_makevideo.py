@@ -18,12 +18,13 @@ ZLOW = -3
 ZHIGH = -2
 MINCROP = 1
 MAXRESIZE = .5
-FRAMERATE = 15
+FRAMERATE = 30
 SORT = 'y'
 SECOND_SORT = 'x'
 # SORT = 'mouth_gap'
 startAngle=YLOW
 endAngle=YHIGH
+CYCLECOUNT = 2
 
 #creating my objects
 
@@ -86,7 +87,7 @@ if df.empty:
     print('dataframe empty, probably bad path')
     sys.exit()
 
-print(df)
+# print(df)
 
 # display(df)
 
@@ -96,38 +97,27 @@ segment = segment.loc[((segment['x'] < XHIGH) & (segment['x'] > XLOW))]
 print(segment.size)
 segment = segment.loc[((segment['z'] < ZHIGH) & (segment['z'] > ZLOW))]
 print(segment.size)
-# segment = segment.loc[((segment['z'] > Zneg))]
-# segment = segment.loc[((segment['z'] < Zpos))]
-# segment = segment.loc[segment['color'] >= True]
 segment = segment.loc[segment['cropX'] >= MINCROP]
 print(segment.size)
 # segment = segment.loc[segment['resize'] < MAXRESIZE]
-print(segment.size)
-
-print(segment)
-
 
 #simple ordering
 rotation = segment.sort_values(by=SORT)
-print(rotation)
+# print(rotation)
 
 # #complex ordering
 # angle = startAngle
 # counter = 0
 
-# Driver Code
-r1, r2 = startAngle, endAngle
-print(createList(r1, r2))
-
-angle_list = createList(r1, r2)
+angle_list = createList(startAngle, endAngle)
 
 
 d = {}
 for angle in angle_list:
     d[angle] = segment.loc[((segment['y'] > angle) & (segment['y'] < angle+1))]
 
-print('manual test of -30')
-print(d[-30].size)
+# print('manual test of -30')
+# print(d[-30].size)
 
 
 
@@ -150,8 +140,8 @@ print("starting from this median: ",median)
 
 medians = []
 for angle in angle_list:
-    print(angle)
-    print (d[angle].size)
+    # print(angle)
+    # print (d[angle].size)
     # print(d[angle].iloc[1]['newname'])
     this_median = d[angle]['x'].median()
     medians.append(this_median)
@@ -172,25 +162,31 @@ print("mean of all medians: ",metamedian)
 # for filename in filenames:
 #     print(filename)
 
-for angle in angle_list:
-    print('closest: ')
-    # print(d[angle].iloc[(d[angle][SECOND_SORT]-metamedian).abs().argsort()[:2]])
-    try:
-        closest = d[angle].iloc[(d[angle][SECOND_SORT]-metamedian).abs().argsort()[:1]]
-        # cprint(closest)
-        closest_file = closest.iloc[0]['newname']
-        first = d[angle].iloc[1]['newname']
-        print(first)
-        img = cv2.imread(closest_file)
-        # img = cv2.imread(closest)
-        #old version
-        # img = cv2.imread(row['newname'])
-        height, width, layers = img.shape
-        size = (width, height)
-        img_array.append(img)
-    except:
-        print('failed:')
-        # print('failed:',row['newname'])
+# angle_list = angle_list[:-1]
+# angle_list_pop = del angle_list[-1]
+# print(record)
+cycle = 0 
+while cycle < CYCLECOUNT:
+    print("CYCLE: ",cycle)
+    for angle in angle_list:
+        # print(d[angle].iloc[(d[angle][SECOND_SORT]-metamedian).abs().argsort()[:2]])
+        print(angle)
+        try:
+            closest = d[angle].iloc[(d[angle][SECOND_SORT]-metamedian).abs().argsort()[:1]]
+            closest_file = closest.iloc[0]['newname']
+            # print('closest: ')
+            # print(closest_file)
+            img = cv2.imread(closest_file)
+            height, width, layers = img.shape
+            size = (width, height)
+            img_array.append(img)
+        except:
+            print('failed:')
+            # print('failed:',row['newname'])
+    # print('finished a cycle')
+    angle_list.reverse()
+    cycle = cycle +1
+    # print(angle_list)
 
 # self._name = name + '.mp4'
 # self._cap = VideoCapture(0)
