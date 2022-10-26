@@ -128,9 +128,9 @@ for item in meta_file_list:
             # draw pose on meshimage
             pose.draw_annotation_box(image)
 
-            # TEMP draw nose and pose on production image
-            pose.draw_annotation_box(prodimage)
-            pose.draw_nose(prodimage)
+            # # TEMP draw nose and pose on production image
+            # pose.draw_annotation_box(prodimage)
+            # pose.draw_nose(prodimage)
 
 
             # get angles, using r_vec property stored in class

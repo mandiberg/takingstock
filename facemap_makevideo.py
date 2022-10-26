@@ -10,21 +10,39 @@ import time
 import sys
 import statistics
 
-XLOW = -20
-XHIGH = 1
-YLOW = -30
-YHIGH = 30
-ZLOW = -1
-ZHIGH = 1
-MINCROP = 1
-MAXRESIZE = .5
-FRAMERATE = 15
-SORT = 'y'
-SECOND_SORT = 'x'
-# SORT = 'mouth_gap'
-startAngle=YLOW
-endAngle=YHIGH
-CYCLECOUNT = 2
+
+side_to_side = True
+forward_smile = False
+
+if side_to_side == True:
+    XLOW = -20
+    XHIGH = 1
+    YLOW = -30
+    YHIGH = 30
+    ZLOW = -1
+    ZHIGH = 1
+    MINCROP = 1
+    MAXRESIZE = .5
+    FRAMERATE = 15
+    SORT = 'y'
+    SECOND_SORT = 'x'
+    # SORT = 'mouth_gap'
+    CYCLECOUNT = 2
+    ROUND = 0
+elif forward_smile == True:
+    XLOW = -20
+    XHIGH = 1
+    YLOW = -2
+    YHIGH = 2
+    ZLOW = -1
+    ZHIGH = 1
+    MINCROP = 1
+    MAXRESIZE = .5
+    FRAMERATE = 15
+    SECOND_SORT = 'x'
+    SORT = 'mouth_gap'
+    CYCLECOUNT = 2
+    ROUND = 1
 
 #creating my objects
 
@@ -62,7 +80,7 @@ outputfolderMEH = os.path.join(ROOT,"face_mesh_outputsMEH")
 # Python3 Program to Create list
 # with integers within given range
 
-def createList(r1, r2):
+def createList(r1, r2, ROUND):
     # Testing if range r1 and r2
     # are equal
     if (r1 == r2):
@@ -73,8 +91,8 @@ def createList(r1, r2):
         # loop to append successors to
         # list until r2 is reached.
         while(r1 < r2+1 ):
-            res.append(r1)
-            r1 += 1
+            res.append(round(r1,ROUND))
+            r1 += 1/(10^ROUND)
         return res
 
 
@@ -109,7 +127,10 @@ rotation = segment.sort_values(by=SORT)
 # angle = startAngle
 # counter = 0
 
-angle_list = createList(startAngle, endAngle)
+startAngle = segment[SORT].min()
+endAngle = segment[SORT].max()
+print(startAngle, endAngle)
+angle_list = createList(startAngle, endAngle, ROUND)
 
 
 d = {}
