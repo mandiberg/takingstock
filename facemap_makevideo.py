@@ -14,11 +14,11 @@ XLOW = -20
 XHIGH = 1
 YLOW = -30
 YHIGH = 30
-ZLOW = -3
-ZHIGH = -2
+ZLOW = -1
+ZHIGH = 1
 MINCROP = 1
 MAXRESIZE = .5
-FRAMERATE = 30
+FRAMERATE = 15
 SORT = 'y'
 SECOND_SORT = 'x'
 # SORT = 'mouth_gap'
@@ -172,8 +172,8 @@ while cycle < CYCLECOUNT:
         # print(d[angle].iloc[(d[angle][SECOND_SORT]-metamedian).abs().argsort()[:2]])
         print(angle)
         try:
-            closest = d[angle].iloc[(d[angle][SECOND_SORT]-metamedian).abs().argsort()[:1]]
-            closest_file = closest.iloc[0]['newname']
+            closest = d[angle].iloc[(d[angle][SECOND_SORT]-metamedian).abs().argsort()[:CYCLECOUNT]]
+            closest_file = closest.iloc[cycle]['newname']
             # print('closest: ')
             # print(closest_file)
             img = cv2.imread(closest_file)
