@@ -10,9 +10,10 @@ import time
 import sys
 import statistics
 
-
-side_to_side = True
-forward_smile = False
+VIDEO = True
+side_to_side = False
+forward_smile = True
+CYCLECOUNT = 1
 
 if side_to_side == True:
     XLOW = -20
@@ -23,25 +24,24 @@ if side_to_side == True:
     ZHIGH = 1
     MINCROP = 1
     MAXRESIZE = .5
+    MAXMOUTHGAP = 4
     FRAMERATE = 15
     SORT = 'y'
     SECOND_SORT = 'x'
     # SORT = 'mouth_gap'
-    CYCLECOUNT = 2
     ROUND = 0
 elif forward_smile == True:
     XLOW = -20
     XHIGH = 1
     YLOW = -2
     YHIGH = 2
-    ZLOW = -1
-    ZHIGH = 1
+    ZLOW = -2
+    ZHIGH = 2
     MINCROP = 1
     MAXRESIZE = .5
     FRAMERATE = 15
     SECOND_SORT = 'x'
     SORT = 'mouth_gap'
-    CYCLECOUNT = 2
     ROUND = 1
 
 #creating my objects
@@ -122,6 +122,8 @@ segment = segment.loc[((segment['z'] < ZHIGH) & (segment['z'] > ZLOW))]
 print(segment.size)
 segment = segment.loc[segment['cropX'] >= MINCROP]
 print(segment.size)
+# segment = segment.loc[segment['mouth_gap'] <= MAXMOUTHGAP]
+print(segment.size)
 # segment = segment.loc[segment['resize'] < MAXRESIZE]
 
 #simple ordering
@@ -160,18 +162,21 @@ angle_list_pop = angle_list.pop()
 
 img_array = []
 videofile = f"facevid_crop{str(MINCROP)}_X{str(XLOW)}toX{str(XHIGH)}_Y{str(YLOW)}toY{str(YHIGH)}_Z{str(ZLOW)}toZ{str(ZHIGH)}_maxResize{str(MAXRESIZE)}_ct{str(len(rotation))}_rate{(str(FRAMERATE))}.mp4"
+imgfileprefix = f"faceimg_crop{str(MINCROP)}_X{str(XLOW)}toX{str(XHIGH)}_Y{str(YLOW)}toY{str(YHIGH)}_Z{str(ZLOW)}toZ{str(ZHIGH)}_maxResize{str(MAXRESIZE)}_ct{str(len(rotation))}"
 
 median = d[0][SECOND_SORT].median()
 print("starting from this median: ",median)
 
 medians = []
 for angle in angle_list:
-    # print(angle)
-    # print (d[angle].size)
-    # print(d[angle].iloc[1]['newname'])
-    this_median = d[angle]['x'].median()
-    medians.append(this_median)
-
+    print(angle)
+    print (d[angle].size)
+    try:
+        print(d[angle].iloc[1]['newname'])
+        this_median = d[angle]['x'].median()
+        medians.append(this_median)
+    except:
+        print("empty set, moving on")
 print("all medians: ",medians)
 print("median of all medians: ",statistics.median(medians))
 metamedian = statistics.mean(medians)
@@ -191,17 +196,20 @@ print("mean of all medians: ",metamedian)
 # angle_list = angle_list[:-1]
 # angle_list_pop = del angle_list[-1]
 # print(record)
+
 cycle = 0 
 while cycle < CYCLECOUNT:
     print("CYCLE: ",cycle)
     for angle in angle_list:
-        # print(d[angle].iloc[(d[angle][SECOND_SORT]-metamedian).abs().argsort()[:2]])
-        print(angle)
+        print("angle: ",str(angle))
+        print(d[angle].iloc[(d[angle][SECOND_SORT]-metamedian).abs().argsort()[:2]])
+        print(d[angle].size)
         try:
             closest = d[angle].iloc[(d[angle][SECOND_SORT]-metamedian).abs().argsort()[:CYCLECOUNT]]
             closest_file = closest.iloc[cycle]['newname']
+            closest_mouth = closest.iloc[cycle]['mouth_gap']
             # print('closest: ')
-            # print(closest_file)
+            print(closest_mouth)
             img = cv2.imread(closest_file)
             height, width, layers = img.shape
             size = (width, height)
@@ -220,12 +228,32 @@ while cycle < CYCLECOUNT:
 # self._out = VideoWriter(self._name, self._fourcc, 20.0, (640,480))
 
 
+if VIDEO == True:
+    try:
+        out = cv2.VideoWriter(os.path.join(ROOT,videofile), cv2.VideoWriter_fourcc(*'mp4v'), FRAMERATE, size)
+        for i in range(len(img_array)):
+            out.write(img_array[i])
+        out.release()
+        print('wrote:',videofile)
+    except:
+        print('failed VIDEO, probably because segmented df until empty')
 
-try:
-    out = cv2.VideoWriter(os.path.join(ROOT,videofile), cv2.VideoWriter_fourcc(*'mp4v'), FRAMERATE, size)
-    for i in range(len(img_array)):
-        out.write(img_array[i])
-    out.release()
-    print('wrote:',videofile)
-except:
-    print('failed, probably because segmented df until empty')
+else:
+    #save individual as images
+    try:
+        counter = 1
+        # out = cv2.VideoWriter(os.path.join(ROOT,videofile), cv2.VideoWriter_fourcc(*'mp4v'), FRAMERATE, size)
+        for i in range(len(img_array)):
+            print('in loop')
+            imgfilename = imgfileprefix+"_"+str(counter)+".jpg"
+            print(imgfilename)
+            outpath = os.path.join(ROOT,"images",imgfilename)
+            print(outpath)
+            cv2.imwrite(outpath, img_array[i])
+            print(outpath)
+            # out.write(img_array[i])
+            counter += 1
+        # out.release()
+        # print('wrote:',videofile)
+    except:
+        print('failed IMAGES, probably because segmented df until empty')
