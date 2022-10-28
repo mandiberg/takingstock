@@ -10,10 +10,12 @@ import time
 import sys
 import statistics
 
-VIDEO = True
+VIDEO = False
 side_to_side = False
-forward_smile = True
-CYCLECOUNT = 1
+forward_smile = False
+forward_nosmile = False
+static_pose = True
+CYCLECOUNT = 4
 
 if side_to_side == True:
     XLOW = -20
@@ -33,16 +35,48 @@ if side_to_side == True:
 elif forward_smile == True:
     XLOW = -20
     XHIGH = 1
-    YLOW = -2
-    YHIGH = 2
-    ZLOW = -2
-    ZHIGH = 2
+    YLOW = -4
+    YHIGH = 4
+    ZLOW = -3
+    ZHIGH = 3
     MINCROP = 1
     MAXRESIZE = .5
     FRAMERATE = 15
     SECOND_SORT = 'x'
     SORT = 'mouth_gap'
     ROUND = 1
+elif forward_nosmile == True:
+    XLOW = -20
+    XHIGH = 1
+    YLOW = -4
+    YHIGH = 4
+    ZLOW = -3
+    ZHIGH = 3
+    MINCROP = 1
+    MAXRESIZE = .5
+    FRAMERATE = 15
+    SECOND_SORT = 'x'
+    MAXMOUTHGAP = 2
+    SORT = 'mouth_gap'
+    ROUND = 1
+elif static_pose == True:
+    XLOW = -20
+    XHIGH = 1
+    YLOW = -4
+    YHIGH = 4
+    ZLOW = -3
+    ZHIGH = 3
+    MINCROP = 1
+    MAXRESIZE = .5
+    FRAMERATE = 15
+    SECOND_SORT = 'mouth_gap'
+    MAXMOUTHGAP = 10
+    SORT = 'x'
+    ROUND = 1
+
+
+divisor = eval(f"1e{ROUND}")
+
 
 #creating my objects
 
@@ -122,6 +156,7 @@ segment = segment.loc[((segment['z'] < ZHIGH) & (segment['z'] > ZLOW))]
 print(segment.size)
 segment = segment.loc[segment['cropX'] >= MINCROP]
 print(segment.size)
+segment = segment.loc[segment['mouth_gap'] >= MAXMOUTHGAP]
 # segment = segment.loc[segment['mouth_gap'] <= MAXMOUTHGAP]
 print(segment.size)
 # segment = segment.loc[segment['resize'] < MAXRESIZE]
@@ -136,13 +171,16 @@ rotation = segment.sort_values(by=SORT)
 
 startAngle = segment[SORT].min()
 endAngle = segment[SORT].max()
+print("startAngle, endAngle")
 print(startAngle, endAngle)
 angle_list = createList(startAngle, endAngle, ROUND)
 
 
 d = {}
 for angle in angle_list:
-    d[angle] = segment.loc[((segment['y'] > angle) & (segment['y'] < angle+1))]
+    # print(angle)
+    d[angle] = segment.loc[((segment[SORT] > angle) & (segment[SORT] < angle+(1/divisor)))]
+    # print(d[angle].size)
 
 # print('manual test of -30')
 # print(d[-30].size)
