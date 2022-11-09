@@ -221,7 +221,6 @@ def get_metamedian(angle_list):
     print("mean of all medians: ",metamedian)
     return metamedian
 
-metamedian = get_metamedian(angle_list)
 
 # #old structure
 # for index, row in rotation.iterrows():
@@ -258,10 +257,11 @@ def simple_order(rotation):
     return img_array
 
 
-def cycling_order(angle_list, metamedian, CYCLECOUNT, SECOND_SORT):
+def cycling_order(angle_list, CYCLECOUNT, SECOND_SORT):
     img_array = []
-
     cycle = 0 
+    metamedian = get_metamedian(angle_list)
+
     while cycle < CYCLECOUNT:
         print("CYCLE: ",cycle)
         for angle in angle_list:
@@ -292,7 +292,7 @@ def cycling_order(angle_list, metamedian, CYCLECOUNT, SECOND_SORT):
 # self._fourcc = VideoWriter_fourcc(*'MP4V')
 # self._out = VideoWriter(self._name, self._fourcc, 20.0, (640,480))
 
-img_array = cycling_order(angle_list, metamedian, CYCLECOUNT, SECOND_SORT)
+img_array = cycling_order(angle_list, CYCLECOUNT, SECOND_SORT)
 # img_array = simple_order(rotation)
 
 if VIDEO == True:
