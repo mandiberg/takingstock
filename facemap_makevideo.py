@@ -198,7 +198,6 @@ for angle in angle_list:
 
 angle_list_pop = angle_list.pop()
 
-img_array = []
 videofile = f"facevid_crop{str(MINCROP)}_X{str(XLOW)}toX{str(XHIGH)}_Y{str(YLOW)}toY{str(YHIGH)}_Z{str(ZLOW)}toZ{str(ZHIGH)}_maxResize{str(MAXRESIZE)}_ct{str(len(rotation))}_rate{(str(FRAMERATE))}.mp4"
 imgfileprefix = f"faceimg_crop{str(MINCROP)}_X{str(XLOW)}toX{str(XHIGH)}_Y{str(YLOW)}toY{str(YHIGH)}_Z{str(ZLOW)}toZ{str(ZHIGH)}_maxResize{str(MAXRESIZE)}_ct{str(len(rotation))}"
 
@@ -240,6 +239,8 @@ metamedian = get_metamedian(angle_list)
 # print(record)
 
 def simple_order(rotation):
+    img_array = []
+
     for index, row in rotation.iterrows():
         print(row['x'], row['y'], row['newname'])
         print(row['newname'])
@@ -257,36 +258,42 @@ def simple_order(rotation):
     return img_array
 
 
-cycle = 0 
-while cycle < CYCLECOUNT:
-    print("CYCLE: ",cycle)
-    for angle in angle_list:
-        print("angle: ",str(angle))
-        print(d[angle].iloc[(d[angle][SECOND_SORT]-metamedian).abs().argsort()[:2]])
-        print(d[angle].size)
-        try:
-            closest = d[angle].iloc[(d[angle][SECOND_SORT]-metamedian).abs().argsort()[:CYCLECOUNT]]
-            closest_file = closest.iloc[cycle]['newname']
-            closest_mouth = closest.iloc[cycle]['mouth_gap']
-            # print('closest: ')
-            print(closest_mouth)
-            img = cv2.imread(closest_file)
-            height, width, layers = img.shape
-            size = (width, height)
-            img_array.append(img)
-        except:
-            print('failed:')
-            # print('failed:',row['newname'])
-    # print('finished a cycle')
-    angle_list.reverse()
-    cycle = cycle +1
-    # print(angle_list)
+def cycling_order(angle_list, metamedian, CYCLECOUNT, SECOND_SORT):
+    img_array = []
+
+    cycle = 0 
+    while cycle < CYCLECOUNT:
+        print("CYCLE: ",cycle)
+        for angle in angle_list:
+            print("angle: ",str(angle))
+            print(d[angle].iloc[(d[angle][SECOND_SORT]-metamedian).abs().argsort()[:2]])
+            print(d[angle].size)
+            try:
+                closest = d[angle].iloc[(d[angle][SECOND_SORT]-metamedian).abs().argsort()[:CYCLECOUNT]]
+                closest_file = closest.iloc[cycle]['newname']
+                closest_mouth = closest.iloc[cycle]['mouth_gap']
+                # print('closest: ')
+                print(closest_mouth)
+                img = cv2.imread(closest_file)
+                height, width, layers = img.shape
+                size = (width, height)
+                img_array.append(img)
+            except:
+                print('failed:')
+                # print('failed:',row['newname'])
+        # print('finished a cycle')
+        angle_list.reverse()
+        cycle = cycle +1
+        # print(angle_list)
+        return img_array
 
 # self._name = name + '.mp4'
 # self._cap = VideoCapture(0)
 # self._fourcc = VideoWriter_fourcc(*'MP4V')
 # self._out = VideoWriter(self._name, self._fourcc, 20.0, (640,480))
 
+img_array = cycling_order(angle_list, metamedian, CYCLECOUNT, SECOND_SORT)
+# img_array = simple_order(rotation)
 
 if VIDEO == True:
     try:
