@@ -239,6 +239,24 @@ metamedian = get_metamedian(angle_list)
 # angle_list_pop = del angle_list[-1]
 # print(record)
 
+def simple_order(rotation):
+    for index, row in rotation.iterrows():
+        print(row['x'], row['y'], row['newname'])
+        print(row['newname'])
+    # filenames = glob.glob('image-*.png')
+    # filenames.sort()
+    # for filename in filenames:
+    #     print(filename)
+        try:
+            img = cv2.imread(row['newname'])
+            height, width, layers = img.shape
+            size = (width, height)
+            img_array.append(img)
+        except:
+            print('failed:',row['newname'])
+    return img_array
+
+
 cycle = 0 
 while cycle < CYCLECOUNT:
     print("CYCLE: ",cycle)
