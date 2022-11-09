@@ -205,20 +205,24 @@ imgfileprefix = f"faceimg_crop{str(MINCROP)}_X{str(XLOW)}toX{str(XHIGH)}_Y{str(Y
 median = d[0][SECOND_SORT].median()
 print("starting from this median: ",median)
 
-medians = []
-for angle in angle_list:
-    print(angle)
-    print (d[angle].size)
-    try:
-        print(d[angle].iloc[1]['newname'])
-        this_median = d[angle]['x'].median()
-        medians.append(this_median)
-    except:
-        print("empty set, moving on")
-print("all medians: ",medians)
-print("median of all medians: ",statistics.median(medians))
-metamedian = statistics.mean(medians)
-print("mean of all medians: ",metamedian)
+def get_metamedian(angle_list):
+    medians = []
+    for angle in angle_list:
+        print(angle)
+        print (d[angle].size)
+        try:
+            print(d[angle].iloc[1]['newname'])
+            this_median = d[angle]['x'].median()
+            medians.append(this_median)
+        except:
+            print("empty set, moving on")
+    print("all medians: ",medians)
+    print("median of all medians: ",statistics.median(medians))
+    metamedian = statistics.mean(medians)
+    print("mean of all medians: ",metamedian)
+    return metamedian
+
+metamedian = get_metamedian(angle_list)
 
 # #old structure
 # for index, row in rotation.iterrows():
@@ -278,6 +282,10 @@ if VIDEO == True:
 
 else:
     #save individual as images
+    outfolder = os.path.join(ROOT,"images"+str(time.time()))
+    if not os.path.exists(outfolder):      
+        os.mkdir(outfolder)
+
     try:
         counter = 1
         # out = cv2.VideoWriter(os.path.join(ROOT,videofile), cv2.VideoWriter_fourcc(*'mp4v'), FRAMERATE, size)
@@ -285,8 +293,7 @@ else:
             print('in loop')
             imgfilename = imgfileprefix+"_"+str(counter)+".jpg"
             print(imgfilename)
-            outpath = os.path.join(ROOT,"images",imgfilename)
-            print(outpath)
+            outpath = os.path.join(outfolder,imgfilename)
             cv2.imwrite(outpath, img_array[i])
             print(outpath)
             # out.write(img_array[i])
