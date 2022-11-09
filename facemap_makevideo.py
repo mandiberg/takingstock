@@ -14,7 +14,8 @@ VIDEO = False
 side_to_side = False
 forward_smile = False
 forward_nosmile = False
-static_pose = True
+static_pose = False
+simple = True
 CYCLECOUNT = 4
 
 if side_to_side == True:
@@ -60,6 +61,20 @@ elif forward_nosmile == True:
     SORT = 'mouth_gap'
     ROUND = 1
 elif static_pose == True:
+    XLOW = -20
+    XHIGH = 1
+    YLOW = -4
+    YHIGH = 4
+    ZLOW = -3
+    ZHIGH = 3
+    MINCROP = 1
+    MAXRESIZE = .5
+    FRAMERATE = 15
+    SECOND_SORT = 'mouth_gap'
+    MAXMOUTHGAP = 10
+    SORT = 'x'
+    ROUND = 1
+elif simple == True:
     XLOW = -20
     XHIGH = 1
     YLOW = -4
@@ -161,8 +176,6 @@ segment = segment.loc[segment['mouth_gap'] >= MAXMOUTHGAP]
 print(segment.size)
 # segment = segment.loc[segment['resize'] < MAXRESIZE]
 
-#simple ordering
-rotation = segment.sort_values(by=SORT)
 # print(rotation)
 
 # #complex ordering
@@ -198,8 +211,8 @@ for angle in angle_list:
 
 angle_list_pop = angle_list.pop()
 
-videofile = f"facevid_crop{str(MINCROP)}_X{str(XLOW)}toX{str(XHIGH)}_Y{str(YLOW)}toY{str(YHIGH)}_Z{str(ZLOW)}toZ{str(ZHIGH)}_maxResize{str(MAXRESIZE)}_ct{str(len(rotation))}_rate{(str(FRAMERATE))}.mp4"
-imgfileprefix = f"faceimg_crop{str(MINCROP)}_X{str(XLOW)}toX{str(XHIGH)}_Y{str(YLOW)}toY{str(YHIGH)}_Z{str(ZLOW)}toZ{str(ZHIGH)}_maxResize{str(MAXRESIZE)}_ct{str(len(rotation))}"
+videofile = f"facevid_crop{str(MINCROP)}_X{str(XLOW)}toX{str(XHIGH)}_Y{str(YLOW)}toY{str(YHIGH)}_Z{str(ZLOW)}toZ{str(ZHIGH)}_maxResize{str(MAXRESIZE)}_ct{str(len(segment))}_rate{(str(FRAMERATE))}.mp4"
+imgfileprefix = f"faceimg_crop{str(MINCROP)}_X{str(XLOW)}toX{str(XHIGH)}_Y{str(YLOW)}toY{str(YHIGH)}_Z{str(ZLOW)}toZ{str(ZHIGH)}_maxResize{str(MAXRESIZE)}_ct{str(len(segment))}"
 
 median = d[0][SECOND_SORT].median()
 print("starting from this median: ",median)
@@ -237,12 +250,15 @@ def get_metamedian(angle_list):
 # angle_list_pop = del angle_list[-1]
 # print(record)
 
-def simple_order(rotation):
+def simple_order(segment, this_sort):
     img_array = []
+    delta_array = []
+    #simple ordering
+    rotation = segment.sort_values(by=this_sort)
 
     for index, row in rotation.iterrows():
-        print(row['x'], row['y'], row['newname'])
-        print(row['newname'])
+        # print(row['x'], row['y'], row['newname'])
+        delta_array.append(row['mouth_gap'])
     # filenames = glob.glob('image-*.png')
     # filenames.sort()
     # for filename in filenames:
@@ -254,6 +270,8 @@ def simple_order(rotation):
             img_array.append(img)
         except:
             print('failed:',row['newname'])
+    print("delta_array")
+    print(delta_array)
     return img_array
 
 
@@ -292,8 +310,8 @@ def cycling_order(angle_list, CYCLECOUNT, SECOND_SORT):
 # self._fourcc = VideoWriter_fourcc(*'MP4V')
 # self._out = VideoWriter(self._name, self._fourcc, 20.0, (640,480))
 
-img_array = cycling_order(angle_list, CYCLECOUNT, SECOND_SORT)
-# img_array = simple_order(rotation)
+# img_array = cycling_order(angle_list, CYCLECOUNT, SECOND_SORT)
+img_array = simple_order(segment, SECOND_SORT)
 
 if VIDEO == True:
     try:
