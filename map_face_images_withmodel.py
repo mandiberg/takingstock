@@ -141,17 +141,16 @@ for item in meta_file_list:
             angles = pose.rotationMatrixToEulerAnglesToDegrees()
             print("angles")
             print(angles)
+            sinY = math.sin(np.round(angles[1],2)* (math.pi/180.0))
 
             # crop image - needs to be refactored, not sure which image object is being touched here.
             # should this return an object, or just save it?
             mouth_gap = pose.get_mouth_data(faceLms)
-            cropped_image, resize = pose.crop_image(prodimage, faceLms)
+            cropped_image, resize = pose.crop_image(prodimage, faceLms, sinY)
 
             #annotate full size image
             pose.draw_crop_frame(image)
             
-            sinY = math.sin(np.round(angles[1],2)* (math.pi/180.0))
-            print(sinY)
 
             cv2.putText(image, "x: " + str(np.round(angles[0],2)), (500, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
             cv2.putText(image, "y: " + str(np.round(angles[1],2)), (500, 100), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)

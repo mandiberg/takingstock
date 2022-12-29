@@ -12,7 +12,6 @@ class SelectPose:
         self.size = (image.shape[0], image.shape[1])
         self.h = image.shape[0]
         self.w = image.shape[1]
-        self.sinY =""
 
         # self.image = image
         # self.size = (image.shape[0], image.shape[1])
@@ -299,11 +298,11 @@ class SelectPose:
         # return ptop, pbot, face_height
 
 
-    def get_crop_data(self, faceLms):
+    def get_crop_data(self, faceLms, sinY):
         
         #it would prob be better to do this with a dict and a loop
         nose_2d = self.get_face_2d_point(faceLms,1)
-        print("self.sinY: ",self.sinY)
+        print("sinY: ",sinY)
         #set main points for drawing/cropping
         #p1 is tip of nose
         p1 = (int(nose_2d[0]), int(nose_2d[1]))
@@ -326,13 +325,21 @@ class SelectPose:
         # print(crop_multiplier)
         self.h - p1[1]
         top_overlap = p1[1]-self.face_height
+        print("sin ",sinY)
+        print("height ",self.face_height)
+        neck_offset = sinY*int(self.face_height)
 
+        print("neck offset ",neck_offset)
+        # neck = (p1[0]-int(sinY)*int(self.face_height),p1[1])
+        neck = (p1[0]+neck_offset,p1[1])
+        print("nose ",p1[0])
+        print("neck ",neck[0])
         #set crop
         # crop_multiplier = 1
-        leftcrop = int(p1[0]-(self.face_height*self.crop_multiplier))
-        rightcrop = int(p1[0]+(self.face_height*self.crop_multiplier))
-        topcrop = int(p1[1]-(self.face_height*self.crop_multiplier))
-        botcrop = int(p1[1]+(self.face_height*self.crop_multiplier))
+        leftcrop = int(neck[0]-(self.face_height*self.crop_multiplier))
+        rightcrop = int(neck[0]+(self.face_height*self.crop_multiplier))
+        topcrop = int(neck[1]-(self.face_height*self.crop_multiplier))
+        botcrop = int(neck[1]+(self.face_height*self.crop_multiplier))
         self.crop = [topcrop, rightcrop, botcrop, leftcrop]
 
 
@@ -354,7 +361,7 @@ class SelectPose:
 
         pass
 
-    def crop_image(self,cropped_image, faceLms):
+    def crop_image(self,cropped_image, faceLms, sinY):
 
 
         #I'm not sure the diff between nose_2d and p1. May be redundant.
@@ -363,7 +370,7 @@ class SelectPose:
 
         # check for crop, and if not exist, then get
         if not hasattr(self, 'crop'): 
-            self.get_crop_data(faceLms)
+            self.get_crop_data(faceLms, sinY)
 
         #set main points for drawing/cropping
         #p1 is tip of nose
