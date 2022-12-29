@@ -318,36 +318,29 @@ class SelectPose:
         # determine crop shape/ratio
         crops = [.75,1,1.5,2,2.5,3]
         toobig = False
+        balance = 1
         for ratio in crops:
             if neck[0]>(self.face_height*ratio) and (self.w-neck[0])>(self.face_height*ratio):
                 self.crop[0]=ratio
-            if neck[1]>(self.face_height*ratio) and (self.h-neck[1])>(self.face_height*ratio):
+                maxcrop = True
+            # this isn't totally working. I'm trying to add space below, but it isn't working.
+            # it is still centering on neck and isn't passing the values to the actual crop 
+            if neck[1]>(self.face_height*crops[0]+self.face_height*(ratio-crops[0])) and (self.h-neck[1])>(self.face_height*crops[0]):
                 self.crop[1]=ratio
+            try:
+                balance = self.crop[0]/self.crop[1]
+                print(balance)
+                #this might not be set right. seems to be weird with < or >
+                if .6 > balance > 1.5:
+                    balance = 1
+                    continue
+            except:
+                toobig = True
+                balance = 1
 
         if self.crop[0] == 0 or self.crop[1] == 0:
             toobig = True
         print("toobig and crop ",toobig,self.crop)
-
-
-                # if p1[0]>(self.face_height*1) and (self.w-p1[0])>(self.face_height*1):
-                #     self.crop_multiplier = 
-                # else:
-                #     print('face too wiiiiiiiide')
-                #     self.crop_multiplier = .25
-                #     toobig=True
-
-        # if p1[1]>(self.face_height*1) and (self.h-p1[1])>(self.face_height*1):
-        #     if p1[0]>(self.face_height*1) and (self.w-p1[0])>(self.face_height*1):
-        #         self.crop_multiplier = 1
-        #     else:
-        #         print('face too wiiiiiiiide')
-        #         self.crop_multiplier = .25
-        #         toobig=True
-
-        # else:
-        #     self.crop_multiplier = .25
-        #     print('face too biiiiigggggg')
-        #     toobig=True
 
         #set crop
         # crop_multiplier = 1
@@ -355,7 +348,7 @@ class SelectPose:
         rightcrop = int(neck[0]+(self.face_height*self.crop[0]))
         topcrop = int(neck[1]-(self.face_height*self.crop[1]))
         botcrop = int(neck[1]+(self.face_height*self.crop[1]))
-        self.crop = [topcrop, rightcrop, botcrop, leftcrop]
+        self.crop_points = [topcrop, rightcrop, botcrop, leftcrop]
 
 
     def draw_nose(self,image):
@@ -372,7 +365,7 @@ class SelectPose:
     def draw_crop_frame(self,image):
   
       # cv2.rectangle(image, (leftcrop,topcrop), (rightcrop,botcrop), (255,0,0), 2)
-        cv2.rectangle(image, (self.crop[3],self.crop[0]), (self.crop[1],self.crop[2]), (255,0,0), 2)
+        cv2.rectangle(image, (self.crop_points[3],self.crop_points[0]), (self.crop_points[1],self.crop_points[2]), (255,0,0), 2)
 
         pass
 
@@ -395,13 +388,14 @@ class SelectPose:
         self.h - p1[1]
         top_overlap = p1[1]-self.face_height
 
-        newsize = 750
-        resize = np.round(newsize/(self.face_height*2.5), 3)
+        basesize = 750
+        newsize = (basesize*self.crop[0],basesize*self.crop[1])
+        resize = np.round(newsize[0]/(self.face_height*2.5), 3)
 
         #moved this back up so it would NOT     draw map on both sets of images
         try:
             # crop[0] is top, and clockwise from there. Right is 1, Bottom is 2, Left is 3. 
-            cropped_image = cv2.resize(cropped_image[self.crop[0]:self.crop[2], self.crop[3]:self.crop[1]], (newsize,newsize), interpolation= cv2.INTER_LINEAR)
+            cropped_image = cv2.resize(cropped_image[self.crop_points[0]:self.crop_points[2], self.crop_points[3]:self.crop_points[1]], (newsize), interpolation= cv2.INTER_LINEAR)
         except:
             cropped_image = None
             print("not cropped_image loop")
