@@ -235,10 +235,6 @@ class SelectPose:
         # check for face height, and if not exist, then get
         if not hasattr(self, 'face_height'): 
             self.get_faceheight_data(faceLms)
-
-        # check for crop, and if not exist, then get
-        if not hasattr(self, 'crop'): 
-            self.get_crop_data(faceLms)
         
 
     def get_face_2d_point(self, faceLms, point):
@@ -364,6 +360,10 @@ class SelectPose:
         #I'm not sure the diff between nose_2d and p1. May be redundant.
         #it would prob be better to do this with a dict and a loop
         nose_2d = self.get_face_2d_point(faceLms,1)
+
+        # check for crop, and if not exist, then get
+        if not hasattr(self, 'crop'): 
+            self.get_crop_data(faceLms)
 
         #set main points for drawing/cropping
         #p1 is tip of nose
