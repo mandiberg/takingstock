@@ -103,7 +103,7 @@ for item in meta_file_list:
         with mp.solutions.face_mesh.FaceMesh(static_image_mode=True,
                                              refine_landmarks=False,
                                              max_num_faces=1,
-                                             min_detection_confidence=0.5
+                                             min_detection_confidence=0.9
                                              ) as face_mesh:
             # Convert the BGR image to RGB and process it with MediaPipe Face Mesh.
             results = face_mesh.process(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
@@ -159,22 +159,22 @@ for item in meta_file_list:
             cv2.putText(image, "rotation SIN: " + str(sinY), (500, 250), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
 
             
-            filename_meta=f"{pose.crop_multiplier}_{angles[0]}_{angles[1]}_{angles[2]}_{resize}"
+            filename_meta=f"{pose.crop[0]}_{angles[0]}_{angles[1]}_{angles[2]}_{resize}"
             cropname=os.path.join(ROOT,outputfolder,f"crop_{filename_meta}_{orig_filename}")
             markedname=os.path.join(ROOT,outputfolder,f"marked_{filename_meta}_{orig_filename}")
             print(cropname)
             print(markedname)
-            print(pose.crop_multiplier)
+            print(pose.crop)
             if cropped_image is None:
                 print("null value for cropped image")
             # temporarily not writing main image
             if SAVE_ORIG is True:
                 cv2.imwrite(markedname, image)
-            if (pose.crop_multiplier==1) and (cropped_image is not None):
+            if (pose.crop[0]>.75) and (cropped_image is not None):
                 # only writes to file and CSV if the file is cropped well and not too big
                 cv2.imwrite(cropname, cropped_image)
                 print("just wrote file")
-                dfthismap = pd.DataFrame({'name': item, 'cropX':pose.crop_multiplier, 'x':angles[0], 'y':angles[1], 'z':angles[2], 'resize':resize, 'newname':cropname, 'mouth_gap':mouth_gap}, index=[0])
+                dfthismap = pd.DataFrame({'name': item, 'cropX':pose.crop[0], 'x':angles[0], 'y':angles[1], 'z':angles[2], 'resize':resize, 'newname':cropname, 'mouth_gap':mouth_gap}, index=[0])
                 dfallmaps = pd.concat([dfallmaps, dfthismap], ignore_index=True, sort=False)
                 print("just wrote DataFrame")
             else:

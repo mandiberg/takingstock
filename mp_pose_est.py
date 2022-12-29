@@ -306,40 +306,55 @@ class SelectPose:
         #set main points for drawing/cropping
         #p1 is tip of nose
         p1 = (int(nose_2d[0]), int(nose_2d[1]))
-
-
-        toobig = False
-        if p1[1]>(self.face_height*1) and (self.h-p1[1])>(self.face_height*1):
-            if p1[0]>(self.face_height*1) and (self.w-p1[0])>(self.face_height*1):
-                self.crop_multiplier = 1
-            else:
-                print('face too wiiiiiiiide')
-                self.crop_multiplier = .25
-                toobig=True
-
-        else:
-            self.crop_multiplier = .25
-            print('face too biiiiigggggg')
-            toobig=True
-
         # print(crop_multiplier)
-        self.h - p1[1]
+        # self.h - p1[1]
         top_overlap = p1[1]-self.face_height
-        print("sin ",sinY)
-        print("height ",self.face_height)
         neck_offset = sinY*int(self.face_height)
-
-        print("neck offset ",neck_offset)
-        # neck = (p1[0]-int(sinY)*int(self.face_height),p1[1])
+        #neck is point to crop image off of
         neck = (p1[0]+neck_offset,p1[1])
         print("nose ",p1[0])
         print("neck ",neck[0])
+        self.crop =[0,0]
+        # determine crop shape/ratio
+        crops = [.75,1,1.5,2,2.5,3]
+        toobig = False
+        for ratio in crops:
+            if neck[0]>(self.face_height*ratio) and (self.w-neck[0])>(self.face_height*ratio):
+                self.crop[0]=ratio
+            if neck[1]>(self.face_height*ratio) and (self.h-neck[1])>(self.face_height*ratio):
+                self.crop[1]=ratio
+
+        if self.crop[0] == 0 or self.crop[1] == 0:
+            toobig = True
+        print("toobig and crop ",toobig,self.crop)
+
+
+                # if p1[0]>(self.face_height*1) and (self.w-p1[0])>(self.face_height*1):
+                #     self.crop_multiplier = 
+                # else:
+                #     print('face too wiiiiiiiide')
+                #     self.crop_multiplier = .25
+                #     toobig=True
+
+        # if p1[1]>(self.face_height*1) and (self.h-p1[1])>(self.face_height*1):
+        #     if p1[0]>(self.face_height*1) and (self.w-p1[0])>(self.face_height*1):
+        #         self.crop_multiplier = 1
+        #     else:
+        #         print('face too wiiiiiiiide')
+        #         self.crop_multiplier = .25
+        #         toobig=True
+
+        # else:
+        #     self.crop_multiplier = .25
+        #     print('face too biiiiigggggg')
+        #     toobig=True
+
         #set crop
         # crop_multiplier = 1
-        leftcrop = int(neck[0]-(self.face_height*self.crop_multiplier))
-        rightcrop = int(neck[0]+(self.face_height*self.crop_multiplier))
-        topcrop = int(neck[1]-(self.face_height*self.crop_multiplier))
-        botcrop = int(neck[1]+(self.face_height*self.crop_multiplier))
+        leftcrop = int(neck[0]-(self.face_height*self.crop[0]))
+        rightcrop = int(neck[0]+(self.face_height*self.crop[0]))
+        topcrop = int(neck[1]-(self.face_height*self.crop[1]))
+        botcrop = int(neck[1]+(self.face_height*self.crop[1]))
         self.crop = [topcrop, rightcrop, botcrop, leftcrop]
 
 
