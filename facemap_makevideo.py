@@ -16,7 +16,7 @@ forward_smile = False
 forward_nosmile = False
 static_pose = False
 simple = True
-CYCLECOUNT = 4
+CYCLECOUNT = 1
 
 if side_to_side == True:
     XLOW = -20
@@ -44,6 +44,7 @@ elif forward_smile == True:
     MAXRESIZE = .5
     FRAMERATE = 15
     SECOND_SORT = 'x'
+    # MAXMOUTHGAP = 40
     SORT = 'mouth_gap'
     ROUND = 1
 elif forward_nosmile == True:
@@ -105,7 +106,7 @@ ROOT="/Users/michaelmandiberg/Documents/projects-active/facemap_production/"
 
 # folder ="sourceimages"
 # FOLDER ="/Users/michaelmandiberg/Dropbox/Photo Scraping/facemesh/facemeshes_commons/"
-MAPDATA_FILE = "allmaps_62607.csv"
+MAPDATA_FILE = "allmaps_2046.csv"
 # size = (750, 750) #placeholder 
 
 
@@ -146,7 +147,7 @@ def createList(r1, r2, ROUND):
         while(r1 < r2+1 ):
             res.append(round(r1,ROUND))
             r1 += 1/divisor
-            print(r1 )
+            # print(r1 )
         return res
 
 
@@ -214,7 +215,9 @@ angle_list_pop = angle_list.pop()
 videofile = f"facevid_crop{str(MINCROP)}_X{str(XLOW)}toX{str(XHIGH)}_Y{str(YLOW)}toY{str(YHIGH)}_Z{str(ZLOW)}toZ{str(ZHIGH)}_maxResize{str(MAXRESIZE)}_ct{str(len(segment))}_rate{(str(FRAMERATE))}.mp4"
 imgfileprefix = f"faceimg_crop{str(MINCROP)}_X{str(XLOW)}toX{str(XHIGH)}_Y{str(YLOW)}toY{str(YHIGH)}_Z{str(ZLOW)}toZ{str(ZHIGH)}_maxResize{str(MAXRESIZE)}_ct{str(len(segment))}"
 
-median = d[0][SECOND_SORT].median()
+# print(d[1])
+
+median = d[math.round(statistics.median(angle_list))][SECOND_SORT].median()
 print("starting from this median: ",median)
 
 def get_metamedian(angle_list):
@@ -310,8 +313,8 @@ def cycling_order(angle_list, CYCLECOUNT, SECOND_SORT):
 # self._fourcc = VideoWriter_fourcc(*'MP4V')
 # self._out = VideoWriter(self._name, self._fourcc, 20.0, (640,480))
 
-# img_array = cycling_order(angle_list, CYCLECOUNT, SECOND_SORT)
-img_array = simple_order(segment, SECOND_SORT)
+img_array = cycling_order(angle_list, CYCLECOUNT, SECOND_SORT)
+# img_array = simple_order(segment, SECOND_SORT)
 
 if VIDEO == True:
     try:

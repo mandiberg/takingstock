@@ -30,9 +30,11 @@ folder ="gettyimages"
 http="https://media.gettyimages.com/photos/"
 # folder ="files_for_testing"
 outputfolder = os.path.join(ROOT,folder+"_output")
+SAVE_ORIG = True
+DRAW_BOX = True
 
 #comment this out to run testing mode with variables above
-SOURCEFILE="_SELECT_FROM_Images_i_JOIN_ImagesKeywords_ik_ON_i_UID_ik_UID_JOI_202210151942.csv"
+SOURCEFILE="_SELECT_FROM_faceimages_query_mouthopen.csv"
 # SOURCEFILE="test2000.csv"
 
 dfallmaps = pd.DataFrame(columns=['name', 'cropX', 'x', 'y', 'z', 'resize', 'newname', 'mouth_gap']) 
@@ -129,8 +131,9 @@ for item in meta_file_list:
             pose.draw_annotation_box(image)
 
             # # TEMP draw nose and pose on production image
-            # pose.draw_annotation_box(prodimage)
-            # pose.draw_nose(prodimage)
+            if DRAW_BOX is True:
+                pose.draw_annotation_box(prodimage)
+                pose.draw_nose(prodimage)
 
 
             # get angles, using r_vec property stored in class
@@ -146,10 +149,15 @@ for item in meta_file_list:
 
             #annotate full size image
             pose.draw_crop_frame(image)
+            
+            sinY = math.sin(np.round(angles[1],2)* (math.pi/180.0))
+            print(sinY)
+
             cv2.putText(image, "x: " + str(np.round(angles[0],2)), (500, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
             cv2.putText(image, "y: " + str(np.round(angles[1],2)), (500, 100), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
             cv2.putText(image, "z: " + str(np.round(angles[2],2)), (500, 150), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
-            cv2.putText(image, "mouth_gap: " + str(np.round(mouth_gap,2)), (500, 200), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+            cv2.putText(image, "ytemp: "+str(np.round(angles[2],2))+" sinytemp: " + str(sinY), (500, 200), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+            cv2.putText(image, "rotation SIN: " + str(sinY), (500, 250), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
 
             
             filename_meta=f"{pose.crop_multiplier}_{angles[0]}_{angles[1]}_{angles[2]}_{resize}"
@@ -161,7 +169,8 @@ for item in meta_file_list:
             if cropped_image is None:
                 print("null value for cropped image")
             # temporarily not writing main image
-            cv2.imwrite(markedname, image)
+            if SAVE_ORIG is True:
+                cv2.imwrite(markedname, image)
             if (pose.crop_multiplier==1) and (cropped_image is not None):
                 # only writes to file and CSV if the file is cropped well and not too big
                 cv2.imwrite(cropname, cropped_image)

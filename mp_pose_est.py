@@ -12,6 +12,7 @@ class SelectPose:
         self.size = (image.shape[0], image.shape[1])
         self.h = image.shape[0]
         self.w = image.shape[1]
+        self.sinY =""
 
         # self.image = image
         # self.size = (image.shape[0], image.shape[1])
@@ -306,7 +307,7 @@ class SelectPose:
         
         #it would prob be better to do this with a dict and a loop
         nose_2d = self.get_face_2d_point(faceLms,1)
-
+        print("self.sinY: ",self.sinY)
         #set main points for drawing/cropping
         #p1 is tip of nose
         p1 = (int(nose_2d[0]), int(nose_2d[1]))
