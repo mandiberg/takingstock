@@ -106,7 +106,7 @@ ROOT="/Users/michaelmandiberg/Documents/projects-active/facemap_production/"
 
 # folder ="sourceimages"
 # FOLDER ="/Users/michaelmandiberg/Dropbox/Photo Scraping/facemesh/facemeshes_commons/"
-MAPDATA_FILE = "allmaps_2046.csv"
+MAPDATA_FILE = "allmaps_64910.csv"
 # size = (750, 750) #placeholder 
 
 
@@ -217,7 +217,7 @@ imgfileprefix = f"faceimg_crop{str(MINCROP)}_X{str(XLOW)}toX{str(XHIGH)}_Y{str(Y
 
 # print(d[1])
 
-median = d[math.round(statistics.median(angle_list))][SECOND_SORT].median()
+median = d[round(statistics.median(angle_list))][SECOND_SORT].median()
 print("starting from this median: ",median)
 
 def get_metamedian(angle_list):
@@ -340,7 +340,9 @@ else:
             imgfilename = imgfileprefix+"_"+str(counter)+".jpg"
             print(imgfilename)
             outpath = os.path.join(outfolder,imgfilename)
-            cv2.imwrite(outpath, img_array[i])
+            # this code takes image i, and blends it with the subsequent image
+            blend = cv2.addWeighted(img_array[i], 0.5, img_array[(i+1)], 0.5, 0.0)
+            cv2.imwrite(outpath, blend)
             print(outpath)
             # out.write(img_array[i])
             counter += 1
