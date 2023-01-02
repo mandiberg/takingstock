@@ -110,15 +110,15 @@ d = sort.get_d(segment)
 divisor = eval(f"1e{ROUND}")
 dd = {}
 for angle in angle_list:
-    # print(angle)
+    print(angle)
     dd[angle] = segment.loc[((segment[SORT] > angle) & (segment[SORT] < angle+(1/divisor)))]
     # print(d[angle].size)
 
-print("original d")
-print (dd)
+# print("original d")
+# print (dd)
 
-print("classy d")
-print(d)
+# print("classy d")
+# print(d)
 
 # print('manual test of -30')
 # print(d[-30].size)

@@ -101,13 +101,15 @@ class SortPose:
             return res
 
     def get_d(self, segment):
+        print('SELF.segment size: ',segment.size)
+
         divisor = eval(f"1e{self.ROUND}")
         self.d = {}
         for angle in self.angle_list:
-            # print(angle)
+            print(angle)
             self.d[angle] = segment.loc[((segment[self.SORT] > angle) & (segment[self.SORT] < angle+(1/divisor)))]
-            # print(d[angle].size)
-            return self.d
+            print(self.d[angle].size)
+        return self.d
 
 
     def get_metamedian(self):
