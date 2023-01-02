@@ -8,7 +8,6 @@ import os
 import math
 import time
 import sys
-import statistics
 
 #mine
 from mp_sort_pose import SortPose
@@ -107,34 +106,9 @@ angle_list = sort.createList(startAngle, endAngle)
 # moving to class
 d = sort.get_d(segment)
 
-# divisor = eval(f"1e{ROUND}")
-# dd = {}
-# for angle in angle_list:
-#     print(angle)
-#     dd[angle] = segment.loc[((segment[SORT] > angle) & (segment[SORT] < angle+(1/divisor)))]
-#     # print(d[angle].size)
-
-# # print("original d")
-# # print (dd)
-
-# print("classy d")
-# print(d)
-
-# # print('manual test of -30')
-# # print(d[-30].size)
 
 
-
-
-
-# while (angle < endAngle):
-#     segment+str(counter) = segment.loc[((segment['y'] < segment) & (segment['y'] > segment+1))]
-#     segment = segment+1
-
-# print(segment0.size)
-
-
-
+# is this used anywhere? 
 angle_list_pop = angle_list.pop()
 
 videofile = f"facevid_crop{str(MINCROP)}_X{str(XLOW)}toX{str(XHIGH)}_Y{str(YLOW)}toY{str(YHIGH)}_Z{str(ZLOW)}toZ{str(ZHIGH)}_maxResize{str(MAXRESIZE)}_ct{str(len(segment))}_rate{(str(FRAMERATE))}.mp4"
@@ -143,50 +117,8 @@ imgfileprefix = f"faceimg_crop{str(MINCROP)}_X{str(XLOW)}toX{str(XHIGH)}_Y{str(Y
 # print(d[1])
 
 
-angle_list_median = round(statistics.median(angle_list))
-print('angle_list_median: ',angle_list_median)
 
-
-print('angle_list_median][SECOND_SORT',d[angle_list_median])
-
-if not d[angle_list_median][SECOND_SORT].empty:
-    median = d[angle_list_median][SECOND_SORT].median()
-else:
-    newmedian = angle_list_median+1
-    while newmedian < max(angle_list):
-        if d[newmedian][SECOND_SORT].empty:
-            newmedian += 1
-        else:
-            median = d[newmedian][SECOND_SORT].median()
-            print('good newmedian is: ',newmedian)
-            print('good new median is: ', median)
-            print(d[newmedian][SECOND_SORT].size)
-            break
-
-
-
-print("starting from this median: ",median)
-
-### moved to class
-def get_metamedian(angle_list):
-    print('anglelist: ',angle_list)
-    medians = []
-    for angle in angle_list:
-        print('angle: ',angle)
-        print ('d angle size: ',d[angle].size)
-        try:
-            print("not empty set!")
-            print(d[angle].iloc[1]['newname'])
-            this_median = d[angle]['x'].median()
-            medians.append(this_median)
-        except:
-            print("empty set, moving on")
-    print("all medians: ",medians)
-    print("median of all medians: ",statistics.median(medians))
-    metamedian = statistics.mean(medians)
-    print("mean of all medians: ",metamedian)
-    return metamedian
-
+median = sort.get_median()
 
 
 def simple_order(segment, this_sort):

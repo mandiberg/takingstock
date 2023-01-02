@@ -77,8 +77,6 @@ class SortPose:
             self.SORT = 'x'
             self.ROUND = 1
 
-        
-
 
     def createList(self,r1, r2):
 
@@ -111,6 +109,30 @@ class SortPose:
             # print(self.d[angle].size)
         return self.d
 
+    def get_median(self):
+
+        angle_list_median = round(statistics.median(self.angle_list))
+        print('angle_list_median: ',angle_list_median)
+        print('angle_list_median][SECOND_SORT]',self.d[angle_list_median])
+
+        if not self.d[angle_list_median][self.SECOND_SORT].empty:
+            median = self.d[angle_list_median][self.SECOND_SORT].median()
+        else:
+            newmedian = angle_list_median+1
+            while newmedian < max(self.angle_list):
+                if self.d[newmedian][self.SECOND_SORT].empty:
+                    newmedian += 1
+                else:
+                    median = self.d[newmedian][self.SECOND_SORT].median()
+                    print('good newmedian is: ',newmedian)
+                    print('good new median is: ', median)
+                    print(self.d[newmedian][self.SECOND_SORT].size)
+                    break
+        return median
+
+
+
+        print("starting from this median: ",median)
 
     def get_metamedian(self):
         medians = []
