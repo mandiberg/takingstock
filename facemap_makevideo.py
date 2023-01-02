@@ -95,11 +95,7 @@ print(segment.size)
 # angle = startAngle
 # counter = 0
 
-startAngle = segment[SORT].min()
-endAngle = segment[SORT].max()
-print("startAngle, endAngle")
-print(startAngle, endAngle)
-angle_list = sort.createList(startAngle, endAngle)
+angle_list = sort.createList(segment)
 
 
 

@@ -78,7 +78,12 @@ class SortPose:
             self.ROUND = 1
 
 
-    def createList(self,r1, r2):
+    def createList(self,segment):
+
+        r1 = segment[self.SORT].min()
+        r2 = segment[self.SORT].max()
+        print("startAngle, endAngle")
+        print(r1, r2)
 
         # divides angles based off of ROUND    
         divisor = eval(f"1e{self.ROUND}")
