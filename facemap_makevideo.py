@@ -98,6 +98,7 @@ elif simple == True:
         "MAXMOUTHGAP":10,
         "SORT":"x",
         "ROUND":1,
+    }
 
 
 divisor = eval(f"1e{ROUND}")
