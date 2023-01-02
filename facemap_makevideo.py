@@ -24,6 +24,23 @@ motion = {
     "simple": True,
 }
 
+#declariing path and image before function, but will reassign in the main loop
+ROOT="/Users/michaelmandiberg/Documents/projects-active/facemap_production/"
+
+# folder ="sourceimages"
+# FOLDER ="/Users/michaelmandiberg/Dropbox/Photo Scraping/facemesh/facemeshes_commons/"
+MAPDATA_FILE = "allmaps_64910.csv"
+# size = (750, 750) #placeholder 
+
+#Do These matter?
+FOLDER = os.path.join(ROOT,"5GB_testimages_output")
+outputfolderRGB = os.path.join(ROOT,"face_mesh_outputsRGB")
+outputfolderBW = os.path.join(ROOT,"face_mesh_outputsBW")
+outputfolderMEH = os.path.join(ROOT,"face_mesh_outputsMEH")
+
+
+#creating my objects
+start = time.time()
 sort = SortPose(motion)
 
 XLOW = sort.XLOW
@@ -41,123 +58,10 @@ SECOND_SORT = sort.SECOND_SORT
 ROUND = sort.ROUND
 
 
-# if side_to_side == True:
-#     settings {
-#         "XLOW":-20,
-#         "XHIGH":1,
-#         "YLOW":-30,
-#         "YHIGH":30,
-#         "ZLOW":-1,
-#         "ZHIGH":1,
-#         "MINCROP":1,
-#         "MAXRESIZE":.5,
-#         "MAXMOUTHGAP":4,
-#         "FRAMERATE":15,
-#         "SORT":"y",
-#         "SECOND_SORT":"x",
-#         "# SORT":"mouth_gap",
-#         "ROUND":0,
-#     }
-# elif forward_smile == True:
-#     settings {
-#         "XLOW":-20,
-#         "XHIGH":1,
-#         "YLOW":-4,
-#         "YHIGH":4,
-#         "ZLOW":-3,
-#         "ZHIGH":3,
-#         "MINCROP":1,
-#         "MAXRESIZE":.5,
-#         "FRAMERATE":15,
-#         "SECOND_SORT":"x",
-#         "# MAXMOUTHGAP":40,
-#         "SORT":"mouth_gap",
-#         "ROUND":1,
-#     }
-# elif forward_nosmile == True:
-#     settings {
-#         "XLOW":-20,
-#         "XHIGH":1,
-#         "YLOW":-4,
-#         "YHIGH":4,
-#         "ZLOW":-3,
-#         "ZHIGH":3,
-#         "MINCROP":1,
-#         "MAXRESIZE":.5,
-#         "FRAMERATE":15,
-#         "SECOND_SORT":"x",
-#         "MAXMOUTHGAP":2,
-#         "SORT":"mouth_gap",
-#         "ROUND":1,
-#     }
-# elif static_pose == True:
-#      settings {
-#        "XLOW":-20,
-#         "XHIGH":1,
-#         "YLOW":-4,
-#         "YHIGH":4,
-#         "ZLOW":-3,
-#         "ZHIGH":3,
-#         "MINCROP":1,
-#         "MAXRESIZE":.5,
-#         "FRAMERATE":15,
-#         "SECOND_SORT":"mouth_gap",
-#         "MAXMOUTHGAP":10,
-#         "SORT":"x",
-#         "ROUND":1,
-#     }
-# elif simple == True:
-#     settings {
-#         "XLOW":-20,
-#         "XHIGH":1,
-#         "YLOW":-4,
-#         "YHIGH":4,
-#         "ZLOW":-3,
-#         "ZHIGH":3,
-#         "MINCROP":1,
-#         "MAXRESIZE":.5,
-#         "FRAMERATE":15,
-#         "SECOND_SORT":"mouth_gap",
-#         "MAXMOUTHGAP":10,
-#         "SORT":"x",
-#         "ROUND":1,
-#     }
-
-
 divisor = eval(f"1e{ROUND}")
 
 
-#creating my objects
 
-start = time.time()
-
-#regular 31.8s
-#concurrent 
-
-#declariing path and image before function, but will reassign in the main loop
-ROOT="/Users/michaelmandiberg/Documents/projects-active/facemap_production/"
-
-# folder ="sourceimages"
-# FOLDER ="/Users/michaelmandiberg/Dropbox/Photo Scraping/facemesh/facemeshes_commons/"
-MAPDATA_FILE = "allmaps_64910.csv"
-# size = (750, 750) #placeholder 
-
-
-# file = "auto-service-workerowner-picture-id931914734.jpg"
-# path = "sourceimages/auto-service-workerowner-picture-id931914734.jpg"
-# image = cv2.imread(os.path.join(root,folder, file))  # read any image containing a face
-# dfallmaps = pd.DataFrame(columns=['name', 'cropX', 'x', 'y', 'z', 'resize', 'newname', 'mouth_gap']) 
-
-# def touch(folder):
-#     if not os.path.exists(folder):
-#         os.makedirs(folder)
-
-
-#Do These matter?
-FOLDER = os.path.join(ROOT,"5GB_testimages_output")
-outputfolderRGB = os.path.join(ROOT,"face_mesh_outputsRGB")
-outputfolderBW = os.path.join(ROOT,"face_mesh_outputsBW")
-outputfolderMEH = os.path.join(ROOT,"face_mesh_outputsMEH")
 
 
 # Python3 Program to Create list
