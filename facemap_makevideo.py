@@ -7,7 +7,7 @@ import sys
 #mine
 from mp_sort_pose import SortPose
 
-VIDEO = True
+VIDEO = False
 CYCLECOUNT = 1
 ROOT="/Users/michaelmandiberg/Documents/projects-active/facemap_production/"
 MAPDATA_FILE = "allmaps_64910.csv"
@@ -56,7 +56,11 @@ sort.get_metamedian()
 
 ### BUILD THE LIST OF SELECTED IMAGES ###
 
-img_array, size = sort.cycling_order(CYCLECOUNT)
+# img_array, size = sort.cycling_order(CYCLECOUNT)
+
+# dont neet to pass SECOND_SORT, because it is already there
+img_array, size = sort.simple_order(segment) 
+
 
 ### WRITE THE IMAGES TO VIDEO/FILES ###
 

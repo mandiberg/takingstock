@@ -1,12 +1,18 @@
 import statistics
 import os
 import cv2
+import pandas as pd
+import mediapipe as mp
 
 
 class SortPose:
     # """Sort image files based on head pose"""
 
     def __init__(self, motion):
+
+        self.mp_face_detection = mp.solutions.face_detection
+        self.mp_drawing = mp.solutions.drawing_utils
+
         if motion['side_to_side'] == True:
             self.XLOW = -20
             self.XHIGH = 1
@@ -178,31 +184,95 @@ class SortPose:
         print("mean of all medians: ",self.metamedian)
         return self.metamedian
 
+    def is_face(self, image):
+        # For static images:
+        IMAGE_FILES = []
+        with self.mp_face_detection.FaceDetection(model_selection=1, 
+                                            min_detection_confidence=0.6
+                                            ) as face_detection:
+            # image = cv2.imread(file)
+            # Convert the BGR image to RGB and process it with MediaPipe Face Detection.
+            results = face_detection.process(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+
+            # Draw face detections of each face.
+            if not results.detections:
+                is_face = False
+            else:
+                is_face = True
+            # annotated_image = image.copy()
+            # for detection in results.detections:
+            #     is_face = True
+            #     print('Nose tip:')
+            #     print(mp_face_detection.get_key_point(
+            #       detection, mp_face_detection.FaceKeyPoint.NOSE_TIP))
+            #     mp_drawing.draw_detection(annotated_image, detection)
+            # cv2.imwrite('/tmp/annotated_image' + str(idx) + '.png', annotated_image)
+
+        return is_face
+
+
     #not currently in use. not sure what the diff is between this and cycling order. 
     # will need to be refactored into a class method if I use in the future. 
-    def simple_order(segment, this_sort):
+    def simple_order(self, segment):
         img_array = []
         delta_array = []
         #simple ordering
-        rotation = segment.sort_values(by=this_sort)
+        rotation = segment.sort_values(by=self.SECOND_SORT)
 
+        # for num, name in enumerate(presidents, start=1):
+        i = 0
         for index, row in rotation.iterrows():
             # print(row['x'], row['y'], row['newname'])
             delta_array.append(row['mouth_gap'])
-        # filenames = glob.glob('image-*.png')
-        # filenames.sort()
-        # for filename in filenames:
-        #     print(filename)
             try:
                 img = cv2.imread(row['newname'])
                 height, width, layers = img.shape
                 size = (width, height)
-                img_array.append(img)
+                # test to see if this is actually an face, to get rid of blank ones/bad ones
+                # this may not be necessary
+                if self.is_face(img):
+                    # if not the first image
+                    if i>0:
+                        # blend this image with the last image
+                        blend = cv2.addWeighted(img, 0.5, img_array[i-1], 0.5, 0.0)
+                        blended_face = self.is_face(blend)
+                        print('is_face ',blended_face)
+                        # if blended image has a detectable face, append the img
+                        if blended_face:
+                            img_array.append(img)
+                            print('is a face! adding it')
+                        else:
+                            print('skipping this one')
+                    # for the first one, just add the image
+                    # this may need to be refactored in case the first one is bad?
+                    else:
+                        img_array.append(img)
+                else:
+                    print('skipping this one: ',row['newname'])
+
+                i+=1
+
+                ## attempt, not working right
+                # newimg = cv2.imread(row['newname'])
+                
+                # if lastimg:
+                #     img = cv2.addWeighted(lastimg, 0.5, newimg, 0.5, 0.0)
+                #     # cv2.imwrite(outpath, blend)
+                #     lastimg = newimg
+                # else:
+                #     img = newimg
+                # height, width, layers = img.shape
+                # size = (width, height)
+                # img_array.append(img)
+                # print('this index: ',index)
+                # print(outpath)
+                # # out.write(img_array[i])
+                # counter += 1
             except:
                 print('failed:',row['newname'])
         print("delta_array")
         print(delta_array)
-        return img_array
+        return img_array, size
 
 
     def cycling_order(self, CYCLECOUNT):
@@ -268,6 +338,7 @@ class SortPose:
             os.mkdir(outfolder)
 
         try:
+            # couldn't I use i here? 
             counter = 1
             # out = cv2.VideoWriter(os.path.join(ROOT,videofile), cv2.VideoWriter_fourcc(*'mp4v'), FRAMERATE, size)
             for i in range(len(img_array)):
@@ -279,8 +350,12 @@ class SortPose:
                 # next step is to test to see if mp can recognize a face in the image
                 # if no face, a bad blend, try again with i+2, etc. 
                 # except it would need to do that with the sub-array, so move above? 
-                blend = cv2.addWeighted(img_array[i], 0.5, img_array[(i+1)], 0.5, 0.0)
-                cv2.imwrite(outpath, blend)
+                # blend = cv2.addWeighted(img_array[i], 0.5, img_array[(i+1)], 0.5, 0.0)
+                # cv2.imwrite(outpath, blend)
+
+                # here is the original noblend write:
+                cv2.imwrite(outpath, img_array[i])
+
                 print(outpath)
                 # out.write(img_array[i])
                 counter += 1
