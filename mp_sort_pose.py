@@ -78,6 +78,23 @@ class SortPose:
             self.ROUND = 1
 
 
+    def make_segment(self, df):
+
+        segment = df.loc[((df['y'] < self.YHIGH) & (df['y'] > self.YLOW))]
+        print(segment.size)
+        segment = segment.loc[((segment['x'] < self.XHIGH) & (segment['x'] > self.XLOW))]
+        print(segment.size)
+        segment = segment.loc[((segment['z'] < self.ZHIGH) & (segment['z'] > self.ZLOW))]
+        print(segment.size)
+        segment = segment.loc[segment['cropX'] >= self.MINCROP]
+        print(segment.size)
+        segment = segment.loc[segment['mouth_gap'] >= self.MAXMOUTHGAP]
+        # segment = segment.loc[segment['mouth_gap'] <= MAXMOUTHGAP]
+        print(segment.size)
+        # segment = segment.loc[segment['resize'] < MAXRESIZE]
+        return segment
+
+
     def createList(self,segment):
 
         r1 = segment[self.SORT].min()
@@ -185,41 +202,4 @@ class SortPose:
         print(delta_array)
         return img_array
 
-
-    def cycling_order(self, angle_list, CYCLECOUNT, SECOND_SORT):
-        img_array = []
-        cycle = 0 
-        # metamedian = get_metamedian(angle_list)
-        metamedian = self.metamedian
-        d = self.d
-
-        while cycle < CYCLECOUNT:
-            print("CYCLE: ",cycle)
-            for angle in angle_list:
-                print("angle: ",str(angle))
-                print(d[angle].iloc[(d[angle][SECOND_SORT]-metamedian).abs().argsort()[:2]])
-                print(d[angle].size)
-                try:
-                    closest = d[angle].iloc[(d[angle][SECOND_SORT]-metamedian).abs().argsort()[:CYCLECOUNT]]
-                    closest_file = closest.iloc[cycle]['newname']
-                    closest_mouth = closest.iloc[cycle]['mouth_gap']
-                    # print('closest: ')
-                    print(closest_mouth)
-                    img = cv2.imread(closest_file)
-                    height, width, layers = img.shape
-                    size = (width, height)
-                    img_array.append(img)
-                except:
-                    print('failed:')
-                    # print('failed:',row['newname'])
-            # print('finished a cycle')
-            angle_list.reverse()
-            cycle = cycle +1
-            # print(angle_list)
-            return img_array
-
-    # self._name = name + '.mp4'
-    # self._cap = VideoCapture(0)
-    # self._fourcc = VideoWriter_fourcc(*'MP4V')
-    # self._out = VideoWriter(self._name, self._fourcc, 20.0, (640,480))
 

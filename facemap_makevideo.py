@@ -37,7 +37,6 @@ outputfolderRGB = os.path.join(ROOT,"face_mesh_outputsRGB")
 outputfolderBW = os.path.join(ROOT,"face_mesh_outputsBW")
 outputfolderMEH = os.path.join(ROOT,"face_mesh_outputsMEH")
 
-
 #creating my objects
 start = time.time()
 sort = SortPose(motion)
@@ -56,41 +55,20 @@ SORT = sort.SORT
 SECOND_SORT = sort.SECOND_SORT
 ROUND = sort.ROUND
 
-
-
-
-
-
-
-
+# read the csv and construct dataframe
 try:
     df = pd.read_csv(os.path.join(ROOT,MAPDATA_FILE))
 except:
     print('you forgot to change the filename DUH')
-
 if df.empty:
     print('dataframe empty, probably bad path')
     sys.exit()
 
-# print(df)
+# make the segment based on settings
+segment = sort.make_segment(df)
 
-# display(df)
 
-segment = df.loc[((df['y'] < YHIGH) & (df['y'] > YLOW))]
-print(segment.size)
-segment = segment.loc[((segment['x'] < XHIGH) & (segment['x'] > XLOW))]
-print(segment.size)
-segment = segment.loc[((segment['z'] < ZHIGH) & (segment['z'] > ZLOW))]
-print(segment.size)
-segment = segment.loc[segment['cropX'] >= MINCROP]
-print(segment.size)
-segment = segment.loc[segment['mouth_gap'] >= MAXMOUTHGAP]
-# segment = segment.loc[segment['mouth_gap'] <= MAXMOUTHGAP]
-print(segment.size)
-# segment = segment.loc[segment['resize'] < MAXRESIZE]
-
-# print(rotation)
-
+### PROCESS THE DATA ###
 
 # get list of all angles in segment
 angle_list = sort.createList(segment)
@@ -102,15 +80,14 @@ d = sort.get_d(segment)
 # is this used anywhere? 
 angle_list_pop = angle_list.pop()
 
-videofile = f"facevid_crop{str(MINCROP)}_X{str(XLOW)}toX{str(XHIGH)}_Y{str(YLOW)}toY{str(YHIGH)}_Z{str(ZLOW)}toZ{str(ZHIGH)}_maxResize{str(MAXRESIZE)}_ct{str(len(segment))}_rate{(str(FRAMERATE))}.mp4"
-imgfileprefix = f"faceimg_crop{str(MINCROP)}_X{str(XLOW)}toX{str(XHIGH)}_Y{str(YLOW)}toY{str(YHIGH)}_Z{str(ZLOW)}toZ{str(ZHIGH)}_maxResize{str(MAXRESIZE)}_ct{str(len(segment))}"
-
 # get median for first sort
 median = sort.get_median()
 
 # get metamedian for second sort, creates sort.metamedian attribute
 sort.get_metamedian()
 
+
+### BUILD THE LIST OF SELECTED IMAGES ###
 
 # borks when I put it in class
 def cycling_order(angle_list, CYCLECOUNT, SECOND_SORT):
@@ -148,7 +125,10 @@ img_array = cycling_order(angle_list, CYCLECOUNT, SECOND_SORT)
 # img_array = simple_order(segment, SECOND_SORT)
 
 
+### WRITE THE IMAGES TO VIDEO/FILES ###
 
+videofile = f"facevid_crop{str(MINCROP)}_X{str(XLOW)}toX{str(XHIGH)}_Y{str(YLOW)}toY{str(YHIGH)}_Z{str(ZLOW)}toZ{str(ZHIGH)}_maxResize{str(MAXRESIZE)}_ct{str(len(segment))}_rate{(str(FRAMERATE))}.mp4"
+imgfileprefix = f"faceimg_crop{str(MINCROP)}_X{str(XLOW)}toX{str(XHIGH)}_Y{str(YLOW)}toY{str(YHIGH)}_Z{str(ZLOW)}toZ{str(ZHIGH)}_maxResize{str(MAXRESIZE)}_ct{str(len(segment))}"
 
 if VIDEO == True:
     try:
