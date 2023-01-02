@@ -58,7 +58,6 @@ SECOND_SORT = sort.SECOND_SORT
 ROUND = sort.ROUND
 
 
-divisor = eval(f"1e{ROUND}")
 
 
 
@@ -104,11 +103,22 @@ print(startAngle, endAngle)
 angle_list = sort.createList(startAngle, endAngle)
 
 
-d = {}
+
+# moving to class
+d = sort.get_d(segment)
+
+divisor = eval(f"1e{ROUND}")
+dd = {}
 for angle in angle_list:
     # print(angle)
-    d[angle] = segment.loc[((segment[SORT] > angle) & (segment[SORT] < angle+(1/divisor)))]
+    dd[angle] = segment.loc[((segment[SORT] > angle) & (segment[SORT] < angle+(1/divisor)))]
     # print(d[angle].size)
+
+print("original d")
+print (dd)
+
+print("classy d")
+print(d)
 
 # print('manual test of -30')
 # print(d[-30].size)
@@ -196,7 +206,8 @@ def simple_order(segment, this_sort):
 def cycling_order(angle_list, CYCLECOUNT, SECOND_SORT):
     img_array = []
     cycle = 0 
-    metamedian = get_metamedian(angle_list)
+    # metamedian = get_metamedian(angle_list)
+    metamedian = sort.get_metamedian()
 
     while cycle < CYCLECOUNT:
         print("CYCLE: ",cycle)
