@@ -163,8 +163,8 @@ class SortPose:
         print('anglelist: ',self.angle_list)
 
         for angle in self.angle_list:
-            print('angle: ',angle)
-            print ('d angle size: ',self.d[angle].size)
+            # print('angle: ',angle)
+            # print ('d angle size: ',self.d[angle].size)
             try:
                 print("not empty set!")
                 print(self.d[angle].iloc[1]['newname'])
@@ -203,6 +203,51 @@ class SortPose:
         print("delta_array")
         print(delta_array)
         return img_array
+
+
+    def cycling_order(self, CYCLECOUNT):
+        img_array = []
+        cycle = 0 
+        # metamedian = get_metamedian(angle_list)
+        metamedian = self.metamedian
+        d = self.d
+
+        while cycle < CYCLECOUNT:
+            print("CYCLE: ",cycle)
+            for angle in self.angle_list:
+                # print("angle: ",str(angle))
+                # # print(d[angle].iloc[(d[angle][SECOND_SORT]-metamedian).abs().argsort()[:2]])
+                # # print(d[angle].size)
+                try:
+                    # I don't remember exactly how this segments the data...!!!
+                    # [:CYCLECOUNT] gets the first [:0] value on first cycle?
+                    # or does it limit the total number of values to the number of cycles?
+                    mysteryvalue = (d[angle][self.SECOND_SORT]-self.metamedian)
+                    print('mysteryvalue ',mysteryvalue)
+                    mysterykey = mysteryvalue.abs().argsort()[:CYCLECOUNT]
+                    print('mysterykey: ',mysterykey)
+                    closest = d[angle].iloc[mysterykey]
+                    closest_file = closest.iloc[cycle]['newname']
+                    closest_mouth = closest.iloc[cycle]['mouth_gap']
+                    print('closest: ')
+                    print(closest_file)
+                    img = cv2.imread(closest_file)
+                    height, width, layers = img.shape
+                    size = (width, height)
+                    img_array.append(img)
+                except:
+                    print('failed cycle angle:')
+                    # print('failed:',row['newname'])
+            # print('finished a cycle')
+            self.angle_list.reverse()
+            cycle = cycle +1
+            # print(angle_list)
+            return img_array, size
+
+
+
+
+
 
     def write_video(self, ROOT, img_array, segment, size):
         videofile = f"facevid_crop{str(self.MINCROP)}_X{str(self.XLOW)}toX{str(self.XHIGH)}_Y{str(self.YLOW)}toY{str(self.YHIGH)}_Z{str(self.ZLOW)}toZ{str(self.ZHIGH)}_maxResize{str(self.MAXRESIZE)}_ct{str(len(segment))}_rate{(str(self.FRAMERATE))}.mp4"
