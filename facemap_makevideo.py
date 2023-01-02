@@ -10,95 +10,118 @@ import time
 import sys
 import statistics
 
+#mine
+from mp_sort_pose import SortPose
+
 VIDEO = False
-side_to_side = False
-forward_smile = False
-forward_nosmile = False
-static_pose = False
-simple = True
 CYCLECOUNT = 1
 
-if side_to_side == True:
-    settings {
-        "XLOW":-20,
-        "XHIGH":1,
-        "YLOW":-30,
-        "YHIGH":30,
-        "ZLOW":-1,
-        "ZHIGH":1,
-        "MINCROP":1,
-        "MAXRESIZE":.5,
-        "MAXMOUTHGAP":4,
-        "FRAMERATE":15,
-        "SORT":"y",
-        "SECOND_SORT":"x",
-        "# SORT":"mouth_gap",
-        "ROUND":0,
-    }
-elif forward_smile == True:
-    settings {
-        "XLOW":-20,
-        "XHIGH":1,
-        "YLOW":-4,
-        "YHIGH":4,
-        "ZLOW":-3,
-        "ZHIGH":3,
-        "MINCROP":1,
-        "MAXRESIZE":.5,
-        "FRAMERATE":15,
-        "SECOND_SORT":"x",
-        "# MAXMOUTHGAP":40,
-        "SORT":"mouth_gap",
-        "ROUND":1,
-    }
-elif forward_nosmile == True:
-    settings {
-        "XLOW":-20,
-        "XHIGH":1,
-        "YLOW":-4,
-        "YHIGH":4,
-        "ZLOW":-3,
-        "ZHIGH":3,
-        "MINCROP":1,
-        "MAXRESIZE":.5,
-        "FRAMERATE":15,
-        "SECOND_SORT":"x",
-        "MAXMOUTHGAP":2,
-        "SORT":"mouth_gap",
-        "ROUND":1,
-    }
-elif static_pose == True:
-     settings {
-       "XLOW":-20,
-        "XHIGH":1,
-        "YLOW":-4,
-        "YHIGH":4,
-        "ZLOW":-3,
-        "ZHIGH":3,
-        "MINCROP":1,
-        "MAXRESIZE":.5,
-        "FRAMERATE":15,
-        "SECOND_SORT":"mouth_gap",
-        "MAXMOUTHGAP":10,
-        "SORT":"x",
-        "ROUND":1,
-    }
-elif simple == True:
-    settings {
-        "XLOW":-20,
-        "XHIGH":1,
-        "YLOW":-4,
-        "YHIGH":4,
-        "ZLOW":-3,
-        "ZHIGH":3,
-        "MINCROP":1,
-        "MAXRESIZE":.5,
-        "FRAMERATE":15,
-        "SECOND_SORT":"mouth_gap",
-        "MAXMOUTHGAP":10,
-        "SORT":"x",
-        "ROUND":1,
-    }
+motion = {
+    "side_to_side": False,
+    "forward_smile": False,
+    "forward_nosmile":  False,
+    "static_pose":  False,
+    "simple": True,
+}
+
+sort = SortPose(motion)
+
+XLOW = sort.XLOW
+XHIGH = sort.XHIGH
+YLOW = sort.YLOW
+YHIGH = sort.YHIGH
+ZLOW = sort.ZLOW
+ZHIGH = sort.ZHIGH
+MINCROP = sort.MINCROP
+MAXRESIZE = sort.MAXRESIZE
+MAXMOUTHGAP = sort.MAXMOUTHGAP
+FRAMERATE = sort.FRAMERATE
+SORT = sort.SORT
+SECOND_SORT = sort.SECOND_SORT
+ROUND = sort.ROUND
+
+
+# if side_to_side == True:
+#     settings {
+#         "XLOW":-20,
+#         "XHIGH":1,
+#         "YLOW":-30,
+#         "YHIGH":30,
+#         "ZLOW":-1,
+#         "ZHIGH":1,
+#         "MINCROP":1,
+#         "MAXRESIZE":.5,
+#         "MAXMOUTHGAP":4,
+#         "FRAMERATE":15,
+#         "SORT":"y",
+#         "SECOND_SORT":"x",
+#         "# SORT":"mouth_gap",
+#         "ROUND":0,
+#     }
+# elif forward_smile == True:
+#     settings {
+#         "XLOW":-20,
+#         "XHIGH":1,
+#         "YLOW":-4,
+#         "YHIGH":4,
+#         "ZLOW":-3,
+#         "ZHIGH":3,
+#         "MINCROP":1,
+#         "MAXRESIZE":.5,
+#         "FRAMERATE":15,
+#         "SECOND_SORT":"x",
+#         "# MAXMOUTHGAP":40,
+#         "SORT":"mouth_gap",
+#         "ROUND":1,
+#     }
+# elif forward_nosmile == True:
+#     settings {
+#         "XLOW":-20,
+#         "XHIGH":1,
+#         "YLOW":-4,
+#         "YHIGH":4,
+#         "ZLOW":-3,
+#         "ZHIGH":3,
+#         "MINCROP":1,
+#         "MAXRESIZE":.5,
+#         "FRAMERATE":15,
+#         "SECOND_SORT":"x",
+#         "MAXMOUTHGAP":2,
+#         "SORT":"mouth_gap",
+#         "ROUND":1,
+#     }
+# elif static_pose == True:
+#      settings {
+#        "XLOW":-20,
+#         "XHIGH":1,
+#         "YLOW":-4,
+#         "YHIGH":4,
+#         "ZLOW":-3,
+#         "ZHIGH":3,
+#         "MINCROP":1,
+#         "MAXRESIZE":.5,
+#         "FRAMERATE":15,
+#         "SECOND_SORT":"mouth_gap",
+#         "MAXMOUTHGAP":10,
+#         "SORT":"x",
+#         "ROUND":1,
+#     }
+# elif simple == True:
+#     settings {
+#         "XLOW":-20,
+#         "XHIGH":1,
+#         "YLOW":-4,
+#         "YHIGH":4,
+#         "ZLOW":-3,
+#         "ZHIGH":3,
+#         "MINCROP":1,
+#         "MAXRESIZE":.5,
+#         "FRAMERATE":15,
+#         "SECOND_SORT":"mouth_gap",
+#         "MAXMOUTHGAP":10,
+#         "SORT":"x",
+#         "ROUND":1,
+#     }
 
 
 divisor = eval(f"1e{ROUND}")
