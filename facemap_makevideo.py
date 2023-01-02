@@ -64,29 +64,6 @@ divisor = eval(f"1e{ROUND}")
 
 
 
-# Python3 Program to Create list
-# with integers within given range
-
-def createList(r1, r2, ROUND):
-
-    # divides angles based off of ROUND    
-    divisor = eval(f"1e{ROUND}")
-
-    # Testing if range r1 and r2
-    # are equal
-    if (r1 == r2):
-        return r1
-    else:
-        # Create empty list
-        res = []
-        # loop to append successors to
-        # list until r2 is reached.
-        while(r1 < r2+1 ):
-            res.append(round(r1,ROUND))
-            r1 += 1/divisor
-            # print(r1 )
-        return res
-
 
 try:
     df = pd.read_csv(os.path.join(ROOT,MAPDATA_FILE))
@@ -124,7 +101,7 @@ startAngle = segment[SORT].min()
 endAngle = segment[SORT].max()
 print("startAngle, endAngle")
 print(startAngle, endAngle)
-angle_list = createList(startAngle, endAngle, ROUND)
+angle_list = sort.createList(startAngle, endAngle)
 
 
 d = {}
