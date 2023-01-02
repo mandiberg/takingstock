@@ -91,18 +91,13 @@ print(segment.size)
 
 # print(rotation)
 
-# #complex ordering
-# angle = startAngle
-# counter = 0
 
+# get list of all angles in segment
 angle_list = sort.createList(segment)
 
-
-
-# moving to class
+# sort segment by angle list
+# d is a dataframe organized (indexed?) by angle list
 d = sort.get_d(segment)
-
-
 
 # is this used anywhere? 
 angle_list_pop = angle_list.pop()
@@ -110,11 +105,11 @@ angle_list_pop = angle_list.pop()
 videofile = f"facevid_crop{str(MINCROP)}_X{str(XLOW)}toX{str(XHIGH)}_Y{str(YLOW)}toY{str(YHIGH)}_Z{str(ZLOW)}toZ{str(ZHIGH)}_maxResize{str(MAXRESIZE)}_ct{str(len(segment))}_rate{(str(FRAMERATE))}.mp4"
 imgfileprefix = f"faceimg_crop{str(MINCROP)}_X{str(XLOW)}toX{str(XHIGH)}_Y{str(YLOW)}toY{str(YHIGH)}_Z{str(ZLOW)}toZ{str(ZHIGH)}_maxResize{str(MAXRESIZE)}_ct{str(len(segment))}"
 
-# print(d[1])
-
-
-
+# get median for first sort
 median = sort.get_median()
+
+# get metamedian for second sort, creates sort.metamedian attribute
+sort.get_metamedian()
 
 
 def simple_order(segment, this_sort):
@@ -146,7 +141,7 @@ def cycling_order(angle_list, CYCLECOUNT, SECOND_SORT):
     img_array = []
     cycle = 0 
     # metamedian = get_metamedian(angle_list)
-    metamedian = sort.get_metamedian()
+    metamedian = sort.metamedian
 
     while cycle < CYCLECOUNT:
         print("CYCLE: ",cycle)
