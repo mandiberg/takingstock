@@ -159,3 +159,67 @@ class SortPose:
         print("mean of all medians: ",self.metamedian)
         return self.metamedian
 
+    #not currently in use. not sure what the diff is between this and cycling order. 
+    # will need to be refactored into a class method if I use in the future. 
+    def simple_order(segment, this_sort):
+        img_array = []
+        delta_array = []
+        #simple ordering
+        rotation = segment.sort_values(by=this_sort)
+
+        for index, row in rotation.iterrows():
+            # print(row['x'], row['y'], row['newname'])
+            delta_array.append(row['mouth_gap'])
+        # filenames = glob.glob('image-*.png')
+        # filenames.sort()
+        # for filename in filenames:
+        #     print(filename)
+            try:
+                img = cv2.imread(row['newname'])
+                height, width, layers = img.shape
+                size = (width, height)
+                img_array.append(img)
+            except:
+                print('failed:',row['newname'])
+        print("delta_array")
+        print(delta_array)
+        return img_array
+
+
+    def cycling_order(self, angle_list, CYCLECOUNT, SECOND_SORT):
+        img_array = []
+        cycle = 0 
+        # metamedian = get_metamedian(angle_list)
+        metamedian = self.metamedian
+        d = self.d
+
+        while cycle < CYCLECOUNT:
+            print("CYCLE: ",cycle)
+            for angle in angle_list:
+                print("angle: ",str(angle))
+                print(d[angle].iloc[(d[angle][SECOND_SORT]-metamedian).abs().argsort()[:2]])
+                print(d[angle].size)
+                try:
+                    closest = d[angle].iloc[(d[angle][SECOND_SORT]-metamedian).abs().argsort()[:CYCLECOUNT]]
+                    closest_file = closest.iloc[cycle]['newname']
+                    closest_mouth = closest.iloc[cycle]['mouth_gap']
+                    # print('closest: ')
+                    print(closest_mouth)
+                    img = cv2.imread(closest_file)
+                    height, width, layers = img.shape
+                    size = (width, height)
+                    img_array.append(img)
+                except:
+                    print('failed:')
+                    # print('failed:',row['newname'])
+            # print('finished a cycle')
+            angle_list.reverse()
+            cycle = cycle +1
+            # print(angle_list)
+            return img_array
+
+    # self._name = name + '.mp4'
+    # self._cap = VideoCapture(0)
+    # self._fourcc = VideoWriter_fourcc(*'MP4V')
+    # self._out = VideoWriter(self._name, self._fourcc, 20.0, (640,480))
+

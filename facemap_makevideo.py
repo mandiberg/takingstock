@@ -112,31 +112,7 @@ median = sort.get_median()
 sort.get_metamedian()
 
 
-def simple_order(segment, this_sort):
-    img_array = []
-    delta_array = []
-    #simple ordering
-    rotation = segment.sort_values(by=this_sort)
-
-    for index, row in rotation.iterrows():
-        # print(row['x'], row['y'], row['newname'])
-        delta_array.append(row['mouth_gap'])
-    # filenames = glob.glob('image-*.png')
-    # filenames.sort()
-    # for filename in filenames:
-    #     print(filename)
-        try:
-            img = cv2.imread(row['newname'])
-            height, width, layers = img.shape
-            size = (width, height)
-            img_array.append(img)
-        except:
-            print('failed:',row['newname'])
-    print("delta_array")
-    print(delta_array)
-    return img_array
-
-
+# borks when I put it in class
 def cycling_order(angle_list, CYCLECOUNT, SECOND_SORT):
     img_array = []
     cycle = 0 
@@ -167,11 +143,6 @@ def cycling_order(angle_list, CYCLECOUNT, SECOND_SORT):
         cycle = cycle +1
         # print(angle_list)
         return img_array
-
-# self._name = name + '.mp4'
-# self._cap = VideoCapture(0)
-# self._fourcc = VideoWriter_fourcc(*'MP4V')
-# self._out = VideoWriter(self._name, self._fourcc, 20.0, (640,480))
 
 img_array = cycling_order(angle_list, CYCLECOUNT, SECOND_SORT)
 # img_array = simple_order(segment, SECOND_SORT)
