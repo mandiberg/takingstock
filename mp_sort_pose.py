@@ -30,7 +30,7 @@ class SortPose:
             self.MAXRESIZE = .5
             self.FRAMERATE = 15
             self.SECOND_SORT = 'x'
-            # self.# MAXMOUTHGAP = 40
+            self.MAXMOUTHGAP = 40
             self.SORT = 'mouth_gap'
             self.ROUND = 1
         elif motion['forward_nosmile'] == True:
@@ -101,25 +101,27 @@ class SortPose:
             return res
 
     def get_d(self, segment):
-        print('SELF.segment size: ',segment.size)
 
         divisor = eval(f"1e{self.ROUND}")
         self.d = {}
         for angle in self.angle_list:
-            print(angle)
+            # print(angle)
             self.d[angle] = segment.loc[((segment[self.SORT] > angle) & (segment[self.SORT] < angle+(1/divisor)))]
-            print(self.d[angle].size)
+            # print(self.d[angle].size)
         return self.d
 
 
     def get_metamedian(self):
         medians = []
+        print('anglelist: ',self.angle_list)
+
         for angle in self.angle_list:
-            print(angle)
-            print (d[angle].size)
+            print('angle: ',angle)
+            print ('d angle size: ',self.d[angle].size)
             try:
-                print(d[angle].iloc[1]['newname'])
-                this_median = d[angle]['x'].median()
+                print("not empty set!")
+                print(self.d[angle].iloc[1]['newname'])
+                this_median = self.d[angle]['x'].median()
                 medians.append(this_median)
             except:
                 print("empty set, moving on")

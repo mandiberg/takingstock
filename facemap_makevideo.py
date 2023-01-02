@@ -107,21 +107,21 @@ angle_list = sort.createList(startAngle, endAngle)
 # moving to class
 d = sort.get_d(segment)
 
-divisor = eval(f"1e{ROUND}")
-dd = {}
-for angle in angle_list:
-    print(angle)
-    dd[angle] = segment.loc[((segment[SORT] > angle) & (segment[SORT] < angle+(1/divisor)))]
-    # print(d[angle].size)
+# divisor = eval(f"1e{ROUND}")
+# dd = {}
+# for angle in angle_list:
+#     print(angle)
+#     dd[angle] = segment.loc[((segment[SORT] > angle) & (segment[SORT] < angle+(1/divisor)))]
+#     # print(d[angle].size)
 
-# print("original d")
-# print (dd)
+# # print("original d")
+# # print (dd)
 
-print("classy d")
-print(d)
+# print("classy d")
+# print(d)
 
-# print('manual test of -30')
-# print(d[-30].size)
+# # print('manual test of -30')
+# # print(d[-30].size)
 
 
 
@@ -160,18 +160,22 @@ else:
             median = d[newmedian][SECOND_SORT].median()
             print('good newmedian is: ',newmedian)
             print('good new median is: ', median)
+            print(d[newmedian][SECOND_SORT].size)
             break
 
 
 
 print("starting from this median: ",median)
 
+### moved to class
 def get_metamedian(angle_list):
+    print('anglelist: ',angle_list)
     medians = []
     for angle in angle_list:
-        print(angle)
-        print (d[angle].size)
+        print('angle: ',angle)
+        print ('d angle size: ',d[angle].size)
         try:
+            print("not empty set!")
             print(d[angle].iloc[1]['newname'])
             this_median = d[angle]['x'].median()
             medians.append(this_median)
