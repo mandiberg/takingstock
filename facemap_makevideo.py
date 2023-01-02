@@ -19,76 +19,85 @@ simple = True
 CYCLECOUNT = 1
 
 if side_to_side == True:
-    XLOW = -20
-    XHIGH = 1
-    YLOW = -30
-    YHIGH = 30
-    ZLOW = -1
-    ZHIGH = 1
-    MINCROP = 1
-    MAXRESIZE = .5
-    MAXMOUTHGAP = 4
-    FRAMERATE = 15
-    SORT = 'y'
-    SECOND_SORT = 'x'
-    # SORT = 'mouth_gap'
-    ROUND = 0
+    settings {
+        "XLOW":-20,
+        "XHIGH":1,
+        "YLOW":-30,
+        "YHIGH":30,
+        "ZLOW":-1,
+        "ZHIGH":1,
+        "MINCROP":1,
+        "MAXRESIZE":.5,
+        "MAXMOUTHGAP":4,
+        "FRAMERATE":15,
+        "SORT":"y",
+        "SECOND_SORT":"x",
+        "# SORT":"mouth_gap",
+        "ROUND":0,
+    }
 elif forward_smile == True:
-    XLOW = -20
-    XHIGH = 1
-    YLOW = -4
-    YHIGH = 4
-    ZLOW = -3
-    ZHIGH = 3
-    MINCROP = 1
-    MAXRESIZE = .5
-    FRAMERATE = 15
-    SECOND_SORT = 'x'
-    # MAXMOUTHGAP = 40
-    SORT = 'mouth_gap'
-    ROUND = 1
+    settings {
+        "XLOW":-20,
+        "XHIGH":1,
+        "YLOW":-4,
+        "YHIGH":4,
+        "ZLOW":-3,
+        "ZHIGH":3,
+        "MINCROP":1,
+        "MAXRESIZE":.5,
+        "FRAMERATE":15,
+        "SECOND_SORT":"x",
+        "# MAXMOUTHGAP":40,
+        "SORT":"mouth_gap",
+        "ROUND":1,
+    }
 elif forward_nosmile == True:
-    XLOW = -20
-    XHIGH = 1
-    YLOW = -4
-    YHIGH = 4
-    ZLOW = -3
-    ZHIGH = 3
-    MINCROP = 1
-    MAXRESIZE = .5
-    FRAMERATE = 15
-    SECOND_SORT = 'x'
-    MAXMOUTHGAP = 2
-    SORT = 'mouth_gap'
-    ROUND = 1
+    settings {
+        "XLOW":-20,
+        "XHIGH":1,
+        "YLOW":-4,
+        "YHIGH":4,
+        "ZLOW":-3,
+        "ZHIGH":3,
+        "MINCROP":1,
+        "MAXRESIZE":.5,
+        "FRAMERATE":15,
+        "SECOND_SORT":"x",
+        "MAXMOUTHGAP":2,
+        "SORT":"mouth_gap",
+        "ROUND":1,
+    }
 elif static_pose == True:
-    XLOW = -20
-    XHIGH = 1
-    YLOW = -4
-    YHIGH = 4
-    ZLOW = -3
-    ZHIGH = 3
-    MINCROP = 1
-    MAXRESIZE = .5
-    FRAMERATE = 15
-    SECOND_SORT = 'mouth_gap'
-    MAXMOUTHGAP = 10
-    SORT = 'x'
-    ROUND = 1
+     settings {
+       "XLOW":-20,
+        "XHIGH":1,
+        "YLOW":-4,
+        "YHIGH":4,
+        "ZLOW":-3,
+        "ZHIGH":3,
+        "MINCROP":1,
+        "MAXRESIZE":.5,
+        "FRAMERATE":15,
+        "SECOND_SORT":"mouth_gap",
+        "MAXMOUTHGAP":10,
+        "SORT":"x",
+        "ROUND":1,
+    }
 elif simple == True:
-    XLOW = -20
-    XHIGH = 1
-    YLOW = -4
-    YHIGH = 4
-    ZLOW = -3
-    ZHIGH = 3
-    MINCROP = 1
-    MAXRESIZE = .5
-    FRAMERATE = 15
-    SECOND_SORT = 'mouth_gap'
-    MAXMOUTHGAP = 10
-    SORT = 'x'
-    ROUND = 1
+    settings {
+        "XLOW":-20,
+        "XHIGH":1,
+        "YLOW":-4,
+        "YHIGH":4,
+        "ZLOW":-3,
+        "ZHIGH":3,
+        "MINCROP":1,
+        "MAXRESIZE":.5,
+        "FRAMERATE":15,
+        "SECOND_SORT":"mouth_gap",
+        "MAXMOUTHGAP":10,
+        "SORT":"x",
+        "ROUND":1,
 
 
 divisor = eval(f"1e{ROUND}")
@@ -198,6 +207,7 @@ for angle in angle_list:
 
 # print('manual test of -30')
 # print(d[-30].size)
+
 
 
 
@@ -316,6 +326,9 @@ def cycling_order(angle_list, CYCLECOUNT, SECOND_SORT):
 img_array = cycling_order(angle_list, CYCLECOUNT, SECOND_SORT)
 # img_array = simple_order(segment, SECOND_SORT)
 
+
+
+
 if VIDEO == True:
     try:
         out = cv2.VideoWriter(os.path.join(ROOT,videofile), cv2.VideoWriter_fourcc(*'mp4v'), FRAMERATE, size)
@@ -341,6 +354,9 @@ else:
             print(imgfilename)
             outpath = os.path.join(outfolder,imgfilename)
             # this code takes image i, and blends it with the subsequent image
+            # next step is to test to see if mp can recognize a face in the image
+            # if no face, a bad blend, try again with i+2, etc. 
+            # except it would need to do that with the sub-array, so move above? 
             blend = cv2.addWeighted(img_array[i], 0.5, img_array[(i+1)], 0.5, 0.0)
             cv2.imwrite(outpath, blend)
             print(outpath)
