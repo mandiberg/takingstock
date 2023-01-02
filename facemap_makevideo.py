@@ -12,8 +12,9 @@ import sys
 #mine
 from mp_sort_pose import SortPose
 
-VIDEO = False
+VIDEO = True
 CYCLECOUNT = 1
+ROOT="/Users/michaelmandiberg/Documents/projects-active/facemap_production/"
 
 motion = {
     "side_to_side": False,
@@ -24,7 +25,6 @@ motion = {
 }
 
 #declariing path and image before function, but will reassign in the main loop
-ROOT="/Users/michaelmandiberg/Documents/projects-active/facemap_production/"
 
 # folder ="sourceimages"
 # FOLDER ="/Users/michaelmandiberg/Dropbox/Photo Scraping/facemesh/facemeshes_commons/"
@@ -64,11 +64,10 @@ if df.empty:
     print('dataframe empty, probably bad path')
     sys.exit()
 
+### PROCESS THE DATA ###
+
 # make the segment based on settings
 segment = sort.make_segment(df)
-
-
-### PROCESS THE DATA ###
 
 # get list of all angles in segment
 angle_list = sort.createList(segment)
@@ -119,9 +118,9 @@ def cycling_order(angle_list, CYCLECOUNT, SECOND_SORT):
         angle_list.reverse()
         cycle = cycle +1
         # print(angle_list)
-        return img_array
+        return img_array, size
 
-img_array = cycling_order(angle_list, CYCLECOUNT, SECOND_SORT)
+img_array, size = cycling_order(angle_list, CYCLECOUNT, SECOND_SORT)
 # img_array = simple_order(segment, SECOND_SORT)
 
 
@@ -131,6 +130,8 @@ videofile = f"facevid_crop{str(MINCROP)}_X{str(XLOW)}toX{str(XHIGH)}_Y{str(YLOW)
 imgfileprefix = f"faceimg_crop{str(MINCROP)}_X{str(XLOW)}toX{str(XHIGH)}_Y{str(YLOW)}toY{str(YHIGH)}_Z{str(ZLOW)}toZ{str(ZHIGH)}_maxResize{str(MAXRESIZE)}_ct{str(len(segment))}"
 
 if VIDEO == True:
+    #realizing that I didn't test to see if this was wrorking beforehand... 
+    # sort.write_video(ROOT, img_array, segment, size)
     try:
         out = cv2.VideoWriter(os.path.join(ROOT,videofile), cv2.VideoWriter_fourcc(*'mp4v'), FRAMERATE, size)
         for i in range(len(img_array)):
@@ -143,27 +144,4 @@ if VIDEO == True:
 else:
     #save individual as images
     outfolder = os.path.join(ROOT,"images"+str(time.time()))
-    if not os.path.exists(outfolder):      
-        os.mkdir(outfolder)
-
-    try:
-        counter = 1
-        # out = cv2.VideoWriter(os.path.join(ROOT,videofile), cv2.VideoWriter_fourcc(*'mp4v'), FRAMERATE, size)
-        for i in range(len(img_array)):
-            print('in loop')
-            imgfilename = imgfileprefix+"_"+str(counter)+".jpg"
-            print(imgfilename)
-            outpath = os.path.join(outfolder,imgfilename)
-            # this code takes image i, and blends it with the subsequent image
-            # next step is to test to see if mp can recognize a face in the image
-            # if no face, a bad blend, try again with i+2, etc. 
-            # except it would need to do that with the sub-array, so move above? 
-            blend = cv2.addWeighted(img_array[i], 0.5, img_array[(i+1)], 0.5, 0.0)
-            cv2.imwrite(outpath, blend)
-            print(outpath)
-            # out.write(img_array[i])
-            counter += 1
-        # out.release()
-        # print('wrote:',videofile)
-    except:
-        print('failed IMAGES, probably because segmented df until empty')
+    sort.write_images(outfolder, img_array, segment, size)

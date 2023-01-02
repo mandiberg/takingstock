@@ -1,4 +1,6 @@
 import statistics
+import os
+import cv2
 
 
 class SortPose:
@@ -201,5 +203,46 @@ class SortPose:
         print("delta_array")
         print(delta_array)
         return img_array
+
+    def write_video(self, ROOT, img_array, segment, size):
+        videofile = f"facevid_crop{str(self.MINCROP)}_X{str(self.XLOW)}toX{str(self.XHIGH)}_Y{str(self.YLOW)}toY{str(self.YHIGH)}_Z{str(self.ZLOW)}toZ{str(self.ZHIGH)}_maxResize{str(self.MAXRESIZE)}_ct{str(len(segment))}_rate{(str(self.FRAMERATE))}.mp4"
+
+        try:
+            out = cv2.VideoWriter(os.path.join(ROOT,videofile), cv2.VideoWriter_fourcc(*'mp4v'), self.FRAMERATE, size)
+            for i in range(len(img_array)):
+                out.write(img_array[i])
+            out.release()
+            print('wrote:',videofile)
+        except:
+            print('failed VIDEO, probably because segmented df until empty')
+
+    def write_images(self, outfolder, img_array, segment, size):
+        imgfileprefix = f"faceimg_crop{str(self.MINCROP)}_X{str(self.XLOW)}toX{str(self.XHIGH)}_Y{str(self.YLOW)}toY{str(self.YHIGH)}_Z{str(self.ZLOW)}toZ{str(self.ZHIGH)}_maxResize{str(self.MAXRESIZE)}_ct{str(len(segment))}"
+        
+        if not os.path.exists(outfolder):      
+            os.mkdir(outfolder)
+
+        try:
+            counter = 1
+            # out = cv2.VideoWriter(os.path.join(ROOT,videofile), cv2.VideoWriter_fourcc(*'mp4v'), FRAMERATE, size)
+            for i in range(len(img_array)):
+                print('in loop')
+                imgfilename = imgfileprefix+"_"+str(counter)+".jpg"
+                print(imgfilename)
+                outpath = os.path.join(outfolder,imgfilename)
+                # this code takes image i, and blends it with the subsequent image
+                # next step is to test to see if mp can recognize a face in the image
+                # if no face, a bad blend, try again with i+2, etc. 
+                # except it would need to do that with the sub-array, so move above? 
+                blend = cv2.addWeighted(img_array[i], 0.5, img_array[(i+1)], 0.5, 0.0)
+                cv2.imwrite(outpath, blend)
+                print(outpath)
+                # out.write(img_array[i])
+                counter += 1
+            # out.release()
+            # print('wrote:',videofile)
+        except:
+            print('failed IMAGES, probably because segmented df until empty')
+
 
 
