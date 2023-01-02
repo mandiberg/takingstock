@@ -117,8 +117,8 @@ for angle in angle_list:
 # print("original d")
 # print (dd)
 
-# print("classy d")
-# print(d)
+print("classy d")
+print(d)
 
 # print('manual test of -30')
 # print(d[-30].size)
@@ -142,7 +142,28 @@ imgfileprefix = f"faceimg_crop{str(MINCROP)}_X{str(XLOW)}toX{str(XHIGH)}_Y{str(Y
 
 # print(d[1])
 
-median = d[round(statistics.median(angle_list))][SECOND_SORT].median()
+
+angle_list_median = round(statistics.median(angle_list))
+print('angle_list_median: ',angle_list_median)
+
+
+print('angle_list_median][SECOND_SORT',d[angle_list_median])
+
+if not d[angle_list_median][SECOND_SORT].empty:
+    median = d[angle_list_median][SECOND_SORT].median()
+else:
+    newmedian = angle_list_median+1
+    while newmedian < max(angle_list):
+        if d[newmedian][SECOND_SORT].empty:
+            newmedian += 1
+        else:
+            median = d[newmedian][SECOND_SORT].median()
+            print('good newmedian is: ',newmedian)
+            print('good new median is: ', median)
+            break
+
+
+
 print("starting from this median: ",median)
 
 def get_metamedian(angle_list):
@@ -163,20 +184,6 @@ def get_metamedian(angle_list):
     return metamedian
 
 
-# #old structure
-# for index, row in rotation.iterrows():
-#     print(row['x'], row['y'], row['newname'])
-#     print(row['newname'])
-
-
-# filenames = glob.glob('image-*.png')
-# filenames.sort()
-# for filename in filenames:
-#     print(filename)
-
-# angle_list = angle_list[:-1]
-# angle_list_pop = del angle_list[-1]
-# print(record)
 
 def simple_order(segment, this_sort):
     img_array = []
