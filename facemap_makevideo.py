@@ -126,20 +126,9 @@ img_array, size = cycling_order(angle_list, CYCLECOUNT, SECOND_SORT)
 
 ### WRITE THE IMAGES TO VIDEO/FILES ###
 
-videofile = f"facevid_crop{str(MINCROP)}_X{str(XLOW)}toX{str(XHIGH)}_Y{str(YLOW)}toY{str(YHIGH)}_Z{str(ZLOW)}toZ{str(ZHIGH)}_maxResize{str(MAXRESIZE)}_ct{str(len(segment))}_rate{(str(FRAMERATE))}.mp4"
-imgfileprefix = f"faceimg_crop{str(MINCROP)}_X{str(XLOW)}toX{str(XHIGH)}_Y{str(YLOW)}toY{str(YHIGH)}_Z{str(ZLOW)}toZ{str(ZHIGH)}_maxResize{str(MAXRESIZE)}_ct{str(len(segment))}"
-
 if VIDEO == True:
-    #realizing that I didn't test to see if this was wrorking beforehand... 
-    # sort.write_video(ROOT, img_array, segment, size)
-    try:
-        out = cv2.VideoWriter(os.path.join(ROOT,videofile), cv2.VideoWriter_fourcc(*'mp4v'), FRAMERATE, size)
-        for i in range(len(img_array)):
-            out.write(img_array[i])
-        out.release()
-        print('wrote:',videofile)
-    except:
-        print('failed VIDEO, probably because segmented df until empty')
+    #save individual as video
+    sort.write_video(ROOT, img_array, segment, size)
 
 else:
     #save individual as images
