@@ -275,6 +275,34 @@ class SortPose:
         return img_array, size
 
 
+    def simplest_order(self, segment):
+        img_array = []
+        delta_array = []
+        #simple ordering
+        rotation = segment.sort_values(by=self.SECOND_SORT)
+
+        # for num, name in enumerate(presidents, start=1):
+        i = 0
+        for index, row in rotation.iterrows():
+            # print(row['x'], row['y'], row['newname'])
+            delta_array.append(row['mouth_gap'])
+            try:
+                img = cv2.imread(row['newname'])
+                height, width, layers = img.shape
+                size = (width, height)
+                # test to see if this is actually an face, to get rid of blank ones/bad ones
+                # this may not be necessary
+                img_array.append(img)
+
+                i+=1
+
+            except:
+                print('failed:',row['newname'])
+        print("delta_array")
+        print(delta_array)
+        return img_array, size        
+
+
     def cycling_order(self, CYCLECOUNT):
         img_array = []
         cycle = 0 

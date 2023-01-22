@@ -15,9 +15,9 @@ MAPDATA_FILE = "allmaps_64910.csv"
 motion = {
     "side_to_side": False,
     "forward_smile": False,
-    "forward_nosmile":  False,
+    "forward_nosmile":  True,
     "static_pose":  False,
-    "simple": True,
+    "simple": False,
 }
 
 #creating my objects
@@ -59,7 +59,9 @@ sort.get_metamedian()
 # img_array, size = sort.cycling_order(CYCLECOUNT)
 
 # dont neet to pass SECOND_SORT, because it is already there
-img_array, size = sort.simple_order(segment) 
+# img_array, size = sort.simple_order(segment) 
+
+img_array, size = sort.simplest_order(segment) 
 
 
 ### WRITE THE IMAGES TO VIDEO/FILES ###
