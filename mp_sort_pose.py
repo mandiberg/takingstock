@@ -211,12 +211,12 @@ class SortPose:
 
         return is_face
 
-    def get_hash_folders(self,filename):
-        m = hashlib.md5()
-        m.update(filename.encode('utf-8'))
-        d = m.hexdigest()
-        # csvWriter1.writerow(["https://upload.wikimedia.org/wikipedia/commons/"+d[0]+'/'+d[0:2]+'/'+filename])
-        return d[0], d[0:2]
+    # def get_hash_folders(self,filename):
+    #     m = hashlib.md5()
+    #     m.update(filename.encode('utf-8'))
+    #     d = m.hexdigest()
+    #     # csvWriter1.writerow(["https://upload.wikimedia.org/wikipedia/commons/"+d[0]+'/'+d[0:2]+'/'+filename])
+    #     return d[0], d[0:2]
 
     #not currently in use. not sure what the diff is between this and cycling order. 
     # will need to be refactored into a class method if I use in the future. 
@@ -234,11 +234,6 @@ class SortPose:
         for index, row in rotation.iterrows():
             print(index, row['x'], row['y'], row['newname'])
             delta_array.append(row['mouth_gap'])
-            # datapath = row['newname'].split("gettyimages_output/")
-            # # filepath = os.path.join(str(datapath[0]),self.get_hash_folders(datapath[1]),str(datapath[1]))
-            # a, b = self.get_hash_folders(datapath[1][0])
-            # filepath = str(datapath[0])+str(a)+"/"+str(b)+"/"+str(datapath[1])
-            # print(filepath)
             try:
                 img = cv2.imread(row['newname'])
                 height, width, layers = img.shape
@@ -248,15 +243,11 @@ class SortPose:
                 if self.is_face(img):
                     # if not the first image
                     if i>0:
-                        print("in loop")
                         # blend this image with the last image
                         blend = cv2.addWeighted(img, 0.5, img, 0.5, 0.0)
                         # blend = cv2.addWeighted(img, 0.5, img_array[i-1], 0.5, 0.0)
-                        print("blended")
                         blended_face = self.is_face(blend)
-                        print("blended_face")
-
-                        # print('is_face ',blended_face)
+                        print('is_face ',blended_face)
                         # if blended image has a detectable face, append the img
                         if blended_face:
                             img_array.append(img)
