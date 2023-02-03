@@ -341,8 +341,11 @@ def encode_list_df(folder, img_list):
     clms = clms[-1:] + clms[:-1]
     output_data=output_data[clms]
     # saving without index
-    output_data.to_csv(csv_name, index=False)
-    df = pd.read_csv(csv_name)
+    # i think this needs to be refactored to get rid of this step. just drop index
+    # output_data.to_csv(csv_name, index=False)
+    # df = pd.read_csv(csv_name)
+    output_data.set_index('file_name', inplace=True)
+
     
     return output_data
 
@@ -465,22 +468,7 @@ def test_pair(last_file, new_file):
 folder = os.path.join(ROOT,"images1675441632.138345")
 
 
-## Create DF of encodings from list
-
-#define the list of images to sort by distance
-img_list = get_img_list(folder)
-#set start images as median
-start_img = "median"
-# encode all images in list, and use name as df index
-df_enc = encode_list_df(folder, img_list)
-df_enc.set_index('file_name', inplace=True)
-
-## sort list by distance, recursively
-
-dist=0
-print(len(df_enc.index))
-
-
+# takes a list of images and encodings and returns a df sorted by distance
 def sort_by_face_dist(folder, start_img,df_enc):
     face_distances=[]
     for i in range(len(df_enc.index)-2):
@@ -492,30 +480,31 @@ def sort_by_face_dist(folder, start_img,df_enc):
         face_distances.append(this_dist)
 
         #debuggin
-        print(i)
-        print(len(df_enc.index))
-        print(dist)
-        print (start_img)
+        # print(i)
+        # print(len(df_enc.index))
+        # print(dist)
+        # print (start_img)
     df = pd.DataFrame(face_distances, columns =['dist', 'folder', 'filename'])
+    df = df.sort_values(by=['dist'])
     return df
 
 
+## Create DF of encodings from list
+
+#define the list of images to sort by distance
+img_list = get_img_list(folder)
+
+# encode all images in list, and use name as df index
+df_enc = encode_list_df(folder, img_list)
+
+# not being used currently
 # save_sorted(i, folder, start_img, dist)
 
+# get dataframe sorted by distance
+start_img = "median"
 df_sorted = sort_by_face_dist(folder, start_img,df_enc)
-df_sorted
+print(df_sorted)
 
-# for i in range(len(df_enc.index)-2):
-#     # find the image
-#     dist, start_img, df_enc = get_closest_df(folder, start_img,df_enc)
-#     # save the image -- this prob will be to append to list, and return list? 
-#     save_sorted(folder, start_img, i, dist)
-
-#     #debuggin
-#     print(i)
-#     print(len(df_enc.index))
-#     print(dist)
-#     print (start_img)
 
 exit()
 ############
