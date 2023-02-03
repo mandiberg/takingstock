@@ -272,22 +272,6 @@ class SortPose:
 
                 i+=1
 
-                # # attempt, not working right
-                # newimg = cv2.imread(row['newname'])
-                
-                # if lastimg:
-                #     img = cv2.addWeighted(lastimg, 0.5, newimg, 0.5, 0.0)
-                #     # cv2.imwrite(outpath, blend)
-                #     lastimg = newimg
-                # else:
-                #     img = newimg
-                # height, width, layers = img.shape
-                # size = (width, height)
-                # img_array.append(img)
-                # print('this index: ',index)
-                # print(outpath)
-                # # out.write(img_array[i])
-                # counter += 1
             except:
                 print('failed:',row['newname'])
         print("delta_array")
