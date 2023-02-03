@@ -555,9 +555,9 @@ if motion["side_to_side"] is True:
     img_array, size = sort.cycling_order(CYCLECOUNT)
 else:
 # dont neet to pass SECOND_SORT, because it is already there
-    # img_array, size = sort.simple_order(segment) 
+    img_array, size = sort.simple_order(segment) 
 
-    img_array, size = sort.simplest_order(segment) 
+    # img_array, size = sort.simplest_order(segment) 
 
 # print("img_array: ",img_array)
 ### WRITE THE IMAGES TO VIDEO/FILES ###

@@ -3,6 +3,7 @@ import os
 import cv2
 import pandas as pd
 import mediapipe as mp
+import hashlib
 
 
 class SortPose:
@@ -52,9 +53,9 @@ class SortPose:
             self.MINCROP = 1
             self.MAXRESIZE = .5
             self.FRAMERATE = 15
-            self.SECOND_SORT = 'x'
+            self.SECOND_SORT = 'y'
             self.MAXMOUTHGAP = 2
-            self.SORT = 'y'
+            self.SORT = 'x'
             self.ROUND = 1
         elif motion['static_pose'] == True:
             self.XLOW = -20
@@ -210,23 +211,36 @@ class SortPose:
 
         return is_face
 
+    def get_hash_folders(self,filename):
+        m = hashlib.md5()
+        m.update(filename.encode('utf-8'))
+        d = m.hexdigest()
+        # csvWriter1.writerow(["https://upload.wikimedia.org/wikipedia/commons/"+d[0]+'/'+d[0:2]+'/'+filename])
+        return d[0], d[0:2]
 
     #not currently in use. not sure what the diff is between this and cycling order. 
     # will need to be refactored into a class method if I use in the future. 
     def simple_order(self, segment):
         img_array = []
         delta_array = []
-        size = []
+        # size = []
         #simple ordering
-        rotation = segment.sort_values(by=self.SECOND_SORT)
+        rotation = segment.sort_values(by=self.SORT)
+        print("rotation: ")
+        print(rotation)
 
         # for num, name in enumerate(presidents, start=1):
         i = 0
         for index, row in rotation.iterrows():
-            # print(row['x'], row['y'], row['newname'])
+            print(index, row['x'], row['y'], row['newname'])
             delta_array.append(row['mouth_gap'])
+            # datapath = row['newname'].split("gettyimages_output/")
+            # # filepath = os.path.join(str(datapath[0]),self.get_hash_folders(datapath[1]),str(datapath[1]))
+            # a, b = self.get_hash_folders(datapath[1][0])
+            # filepath = str(datapath[0])+str(a)+"/"+str(b)+"/"+str(datapath[1])
+            # print(filepath)
             try:
-                img = cv2.imread(row['newname'].replace("gettyimages_output","gettyimages"))
+                img = cv2.imread(row['newname'])
                 height, width, layers = img.shape
                 size = (width, height)
                 # test to see if this is actually an face, to get rid of blank ones/bad ones
@@ -234,10 +248,15 @@ class SortPose:
                 if self.is_face(img):
                     # if not the first image
                     if i>0:
+                        print("in loop")
                         # blend this image with the last image
-                        blend = cv2.addWeighted(img, 0.5, img_array[i-1], 0.5, 0.0)
+                        blend = cv2.addWeighted(img, 0.5, img, 0.5, 0.0)
+                        # blend = cv2.addWeighted(img, 0.5, img_array[i-1], 0.5, 0.0)
+                        print("blended")
                         blended_face = self.is_face(blend)
-                        print('is_face ',blended_face)
+                        print("blended_face")
+
+                        # print('is_face ',blended_face)
                         # if blended image has a detectable face, append the img
                         if blended_face:
                             img_array.append(img)
@@ -253,22 +272,22 @@ class SortPose:
 
                 i+=1
 
-                # attempt, not working right
-                newimg = cv2.imread(row['newname'])
+                # # attempt, not working right
+                # newimg = cv2.imread(row['newname'])
                 
-                if lastimg:
-                    img = cv2.addWeighted(lastimg, 0.5, newimg, 0.5, 0.0)
-                    # cv2.imwrite(outpath, blend)
-                    lastimg = newimg
-                else:
-                    img = newimg
-                height, width, layers = img.shape
-                size = (width, height)
-                img_array.append(img)
-                print('this index: ',index)
-                print(outpath)
-                # out.write(img_array[i])
-                counter += 1
+                # if lastimg:
+                #     img = cv2.addWeighted(lastimg, 0.5, newimg, 0.5, 0.0)
+                #     # cv2.imwrite(outpath, blend)
+                #     lastimg = newimg
+                # else:
+                #     img = newimg
+                # height, width, layers = img.shape
+                # size = (width, height)
+                # img_array.append(img)
+                # print('this index: ',index)
+                # print(outpath)
+                # # out.write(img_array[i])
+                # counter += 1
             except:
                 print('failed:',row['newname'])
         print("delta_array")
@@ -279,13 +298,16 @@ class SortPose:
     def simplest_order(self, segment):
         img_array = []
         delta_array = []
-        #simple ordering
+        #simple ordering, second sort, because this is the...?
         rotation = segment.sort_values(by=self.SORT)
 
         i = 0
         for index, row in rotation.iterrows():
-            # print(row['x'], row['y'], row['newname'])
+            print(row['x'], row['y'], row['newname'])
+
+            #I don't know what this does or why
             delta_array.append(row['mouth_gap'])
+
             try:
                 img = cv2.imread(row['newname'])
                 height, width, layers = img.shape
