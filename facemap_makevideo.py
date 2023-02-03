@@ -23,8 +23,19 @@ from mp_sort_pose import SortPose
 
 VIDEO = False
 CYCLECOUNT = 2
-ROOT="/Users/michaelmandiberg/Documents/projects-active/facemap_production/"
+# ROOT="/Users/michaelmandiberg/Documents/projects-active/facemap_production/"
 MAPDATA_FILE = "allmaps_64910.csv"
+
+# platform specific file folder (mac for michael, win for satyam)
+if platform == "darwin":
+    # OS X
+    folder="Documents/projects-active/facemap_production/"
+elif platform == "win32":
+    # Windows...
+    folder="foobar"
+#set home location
+ROOT = os.path.join(str(Path.home()),folder)
+
 
 motion = {
     "side_to_side": False,
@@ -33,6 +44,11 @@ motion = {
     "static_pose":  False,
     "simple": False,
 }
+
+
+
+
+
 
 #creating my objects
 start = time.time()
