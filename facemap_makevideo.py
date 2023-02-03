@@ -30,11 +30,13 @@ MAPDATA_FILE = "allmaps_64910.csv"
 if platform == "darwin":
     # OS X
     folder="Documents/projects-active/facemap_production/"
+    ROOT = os.path.join(str(Path.home()),folder)
 elif platform == "win32":
     # Windows...
     folder="foobar"
+    # S may not be using home
+    ROOT = os.path.join(str(Path.home()),folder)
 #set home location
-ROOT = os.path.join(str(Path.home()),folder)
 
 
 motion = {
@@ -464,9 +466,6 @@ def test_pair(last_file, new_file):
         print('failed:',new_file)
         return False
 
-# /Users/michaelmandiberg/Documents/projects-active/facemap_production/images1675441632.138345
-folder = os.path.join(ROOT,"images1675441632.138345")
-
 
 # takes a list of images and encodings and returns a df sorted by distance
 def sort_by_face_dist(folder, start_img,df_enc):
@@ -491,22 +490,24 @@ def sort_by_face_dist(folder, start_img,df_enc):
 
 ## Create DF of encodings from list
 
-#define the list of images to sort by distance
-img_list = get_img_list(folder)
+# /Users/michaelmandiberg/Documents/projects-active/facemap_production/images1675441632.138345
+# folder = os.path.join(ROOT,"images1675441632.138345")
 
-# encode all images in list, and use name as df index
-df_enc = encode_list_df(folder, img_list)
+# #define the list of images to sort by distance
+# img_list = get_img_list(folder)
 
-# not being used currently
-# save_sorted(i, folder, start_img, dist)
+# # encode all images in list, and use name as df index
+# df_enc = encode_list_df(folder, img_list)
 
-# get dataframe sorted by distance
-start_img = "median"
-df_sorted = sort_by_face_dist(folder, start_img,df_enc)
-print(df_sorted)
+# # not being used currently
+# # save_sorted(i, folder, start_img, dist)
+
+# # get dataframe sorted by distance
+# start_img = "median"
+# df_sorted = sort_by_face_dist(folder, start_img,df_enc)
+# print(df_sorted)
 
 
-exit()
 ############
 # MY CODE  #
 ############
@@ -537,8 +538,8 @@ angle_list = sort.createList(segment)
 # d is a dataframe organized (indexed?) by angle list
 d = sort.get_d(segment)
 
-# is this used anywhere? 
-angle_list_pop = angle_list.pop()
+# # is this used anywhere? 
+# angle_list_pop = angle_list.pop()
 
 # get median for first sort
 median = sort.get_median()
@@ -548,16 +549,17 @@ sort.get_metamedian()
 
 ### BUILD THE LIST OF SELECTED IMAGES ###
 
+# img_array is actual bitmap data? 
 if motion["side_to_side"] is True:
 
     img_array, size = sort.cycling_order(CYCLECOUNT)
 else:
 # dont neet to pass SECOND_SORT, because it is already there
-    img_array, size = sort.simple_order(segment) 
+    # img_array, size = sort.simple_order(segment) 
 
-    # img_array, size = sort.simplest_order(segment) 
+    img_array, size = sort.simplest_order(segment) 
 
-
+# print("img_array: ",img_array)
 ### WRITE THE IMAGES TO VIDEO/FILES ###
 
 if VIDEO == True:

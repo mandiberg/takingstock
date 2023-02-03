@@ -54,7 +54,7 @@ class SortPose:
             self.FRAMERATE = 15
             self.SECOND_SORT = 'x'
             self.MAXMOUTHGAP = 2
-            self.SORT = 'mouth_gap'
+            self.SORT = 'y'
             self.ROUND = 1
         elif motion['static_pose'] == True:
             self.XLOW = -20
@@ -216,6 +216,7 @@ class SortPose:
     def simple_order(self, segment):
         img_array = []
         delta_array = []
+        size = []
         #simple ordering
         rotation = segment.sort_values(by=self.SECOND_SORT)
 
@@ -225,7 +226,7 @@ class SortPose:
             # print(row['x'], row['y'], row['newname'])
             delta_array.append(row['mouth_gap'])
             try:
-                img = cv2.imread(row['newname'])
+                img = cv2.imread(row['newname'].replace("gettyimages_output","gettyimages"))
                 height, width, layers = img.shape
                 size = (width, height)
                 # test to see if this is actually an face, to get rid of blank ones/bad ones
@@ -252,22 +253,22 @@ class SortPose:
 
                 i+=1
 
-                ## attempt, not working right
-                # newimg = cv2.imread(row['newname'])
+                # attempt, not working right
+                newimg = cv2.imread(row['newname'])
                 
-                # if lastimg:
-                #     img = cv2.addWeighted(lastimg, 0.5, newimg, 0.5, 0.0)
-                #     # cv2.imwrite(outpath, blend)
-                #     lastimg = newimg
-                # else:
-                #     img = newimg
-                # height, width, layers = img.shape
-                # size = (width, height)
-                # img_array.append(img)
-                # print('this index: ',index)
-                # print(outpath)
-                # # out.write(img_array[i])
-                # counter += 1
+                if lastimg:
+                    img = cv2.addWeighted(lastimg, 0.5, newimg, 0.5, 0.0)
+                    # cv2.imwrite(outpath, blend)
+                    lastimg = newimg
+                else:
+                    img = newimg
+                height, width, layers = img.shape
+                size = (width, height)
+                img_array.append(img)
+                print('this index: ',index)
+                print(outpath)
+                # out.write(img_array[i])
+                counter += 1
             except:
                 print('failed:',row['newname'])
         print("delta_array")
@@ -279,9 +280,8 @@ class SortPose:
         img_array = []
         delta_array = []
         #simple ordering
-        rotation = segment.sort_values(by=self.SECOND_SORT)
+        rotation = segment.sort_values(by=self.SORT)
 
-        # for num, name in enumerate(presidents, start=1):
         i = 0
         for index, row in rotation.iterrows():
             # print(row['x'], row['y'], row['newname'])
@@ -298,8 +298,8 @@ class SortPose:
 
             except:
                 print('failed:',row['newname'])
-        print("delta_array")
-        print(delta_array)
+        # print("delta_array")
+        # print(delta_array)
         return img_array, size        
 
 
@@ -372,9 +372,8 @@ class SortPose:
             counter = 1
             # out = cv2.VideoWriter(os.path.join(ROOT,videofile), cv2.VideoWriter_fourcc(*'mp4v'), FRAMERATE, size)
             for i in range(len(img_array)):
-                print('in loop')
+                # print('in loop')
                 imgfilename = imgfileprefix+"_"+str(counter)+".jpg"
-                print(imgfilename)
                 outpath = os.path.join(outfolder,imgfilename)
                 # this code takes image i, and blends it with the subsequent image
                 # next step is to test to see if mp can recognize a face in the image
@@ -385,8 +384,9 @@ class SortPose:
 
                 # here is the original noblend write:
                 cv2.imwrite(outpath, img_array[i])
+                print("saved: ",imgfilename)
 
-                print(outpath)
+                # print(outpath)
                 # out.write(img_array[i])
                 counter += 1
             # out.release()
