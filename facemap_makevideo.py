@@ -4,11 +4,25 @@ import os
 import time
 import sys
 
+#linear sort imports non-class
+import numpy as np
+import mediapipe as mp
+import face_recognition_models
+import dlib
+from mediapipe.python.solutions.drawing_utils import _normalized_to_pixel_coordinates
+import matplotlib.pyplot as plt
+import imutils
+from imutils import face_utils
+import face_recognition
+import shutil
+from sys import platform
+from pathlib import Path
+
 #mine
 from mp_sort_pose import SortPose
 
 VIDEO = False
-CYCLECOUNT = 1
+CYCLECOUNT = 2
 ROOT="/Users/michaelmandiberg/Documents/projects-active/facemap_production/"
 MAPDATA_FILE = "allmaps_64910.csv"
 
@@ -56,12 +70,14 @@ sort.get_metamedian()
 
 ### BUILD THE LIST OF SELECTED IMAGES ###
 
-# img_array, size = sort.cycling_order(CYCLECOUNT)
+if motion["side_to_side"] is True:
 
+    img_array, size = sort.cycling_order(CYCLECOUNT)
+else:
 # dont neet to pass SECOND_SORT, because it is already there
-# img_array, size = sort.simple_order(segment) 
+    img_array, size = sort.simple_order(segment) 
 
-img_array, size = sort.simplest_order(segment) 
+    # img_array, size = sort.simplest_order(segment) 
 
 
 ### WRITE THE IMAGES TO VIDEO/FILES ###

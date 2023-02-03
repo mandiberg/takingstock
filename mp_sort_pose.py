@@ -310,10 +310,12 @@ class SortPose:
         metamedian = self.metamedian
         d = self.d
 
+        print("CYCLE to test: ",cycle)
+
         while cycle < CYCLECOUNT:
             print("CYCLE: ",cycle)
             for angle in self.angle_list:
-                # print("angle: ",str(angle))
+                print("angle: ",str(angle))
                 # # print(d[angle].iloc[(d[angle][SECOND_SORT]-metamedian).abs().argsort()[:2]])
                 # # print(d[angle].size)
                 try:
@@ -336,11 +338,11 @@ class SortPose:
                 except:
                     print('failed cycle angle:')
                     # print('failed:',row['newname'])
-            # print('finished a cycle')
+            print('finished a cycle')
             self.angle_list.reverse()
             cycle = cycle +1
             # print(angle_list)
-            return img_array, size
+        return img_array, size
 
 
 
