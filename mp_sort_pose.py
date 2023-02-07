@@ -227,54 +227,7 @@ class SortPose:
     #     # csvWriter1.writerow(["https://upload.wikimedia.org/wikipedia/commons/"+d[0]+'/'+d[0:2]+'/'+filename])
     #     return d[0], d[0:2]
 
-    def simple_order(self, segment):
-        img_array = []
-        delta_array = []
-        # size = []
-        #simple ordering
-        rotation = segment.sort_values(by=self.SORT)
-        print("rotation: ")
-        print(rotation)
 
-        # for num, name in enumerate(presidents, start=1):
-        i = 0
-        for index, row in rotation.iterrows():
-            print(index, row['x'], row['y'], row['newname'])
-            delta_array.append(row['mouth_gap'])
-            try:
-                img = cv2.imread(row['newname'])
-                height, width, layers = img.shape
-                size = (width, height)
-                # test to see if this is actually an face, to get rid of blank ones/bad ones
-                # this may not be necessary
-                if self.is_face(img):
-                    # if not the first image
-                    if i>0:
-                        # blend this image with the last image
-                        blend = cv2.addWeighted(img, 0.5, img, 0.5, 0.0)
-                        # blend = cv2.addWeighted(img, 0.5, img_array[i-1], 0.5, 0.0)
-                        blended_face = self.is_face(blend)
-                        print('is_face ',blended_face)
-                        # if blended image has a detectable face, append the img
-                        if blended_face:
-                            img_array.append(img)
-                            print('is a face! adding it')
-                        else:
-                            print('skipping this one')
-                    # for the first one, just add the image
-                    # this may need to be refactored in case the first one is bad?
-                    else:
-                        img_array.append(img)
-                else:
-                    print('skipping this one: ',row['newname'])
-
-                i+=1
-
-            except:
-                print('failed:',row['newname'])
-        print("delta_array")
-        print(delta_array)
-        return img_array, size
 
 
     def simplest_order(self, segment):
@@ -307,46 +260,6 @@ class SortPose:
         return img_array, size        
 
 
-    def cycling_order(self, CYCLECOUNT):
-        img_array = []
-        cycle = 0 
-        # metamedian = get_metamedian(angle_list)
-        metamedian = self.metamedian
-        d = self.d
-
-        print("CYCLE to test: ",cycle)
-
-        while cycle < CYCLECOUNT:
-            print("CYCLE: ",cycle)
-            for angle in self.angle_list:
-                print("angle: ",str(angle))
-                # # print(d[angle].iloc[(d[angle][SECOND_SORT]-metamedian).abs().argsort()[:2]])
-                # # print(d[angle].size)
-                try:
-                    # I don't remember exactly how this segments the data...!!!
-                    # [:CYCLECOUNT] gets the first [:0] value on first cycle?
-                    # or does it limit the total number of values to the number of cycles?
-                    mysteryvalue = (d[angle][self.SECOND_SORT]-self.metamedian)
-                    print('mysteryvalue ',mysteryvalue)
-                    mysterykey = mysteryvalue.abs().argsort()[:CYCLECOUNT]
-                    print('mysterykey: ',mysterykey)
-                    closest = d[angle].iloc[mysterykey]
-                    closest_file = closest.iloc[cycle]['newname']
-                    closest_mouth = closest.iloc[cycle]['mouth_gap']
-                    print('closest: ')
-                    print(closest_file)
-                    img = cv2.imread(closest_file)
-                    height, width, layers = img.shape
-                    size = (width, height)
-                    img_array.append(img)
-                except:
-                    print('failed cycle angle:')
-                    # print('failed:',row['newname'])
-            print('finished a cycle')
-            self.angle_list.reverse()
-            cycle = cycle +1
-            # print(angle_list)
-        return img_array, size
 
 
 

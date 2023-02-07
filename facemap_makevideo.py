@@ -40,9 +40,9 @@ elif platform == "win32":
 
 
 motion = {
-    "side_to_side": False,
+    "side_to_side": True,
     "forward_smile": False,
-    "forward_nosmile":  True,
+    "forward_nosmile":  False,
     "static_pose":  False,
     "simple": False,
 }
@@ -629,7 +629,53 @@ def simple_order(segment):
 
 
 
+def cycling_order(CYCLECOUNT):
+    img_array = []
+    cycle = 0 
+    # metamedian = get_metamedian(angle_list)
+    metamedian = sort.metamedian
+    d = sort.d
 
+    print("CYCLE to test: ",cycle)
+
+    while cycle < CYCLECOUNT:
+        print("CYCLE: ",cycle)
+        for angle in sort.angle_list:
+            print("angle: ",str(angle))
+            # # print(d[angle].iloc[(d[angle][SECOND_SORT]-metamedian).abs().argsort()[:2]])
+            # # print(d[angle].size)
+            try:
+                # I don't remember exactly how this segments the data...!!!
+                # [:CYCLECOUNT] gets the first [:0] value on first cycle?
+                # or does it limit the total number of values to the number of cycles?
+                print(d[angle])
+                
+                #this is a way of finding the image with closest second sort (Y)
+                #mystery value is the image to be matched? 
+                print("second sort, metamedian ",d[angle][sort.SECOND_SORT],sort.metamedian)
+                mysteryvalue = (d[angle][sort.SECOND_SORT]-sort.metamedian)
+                print('mysteryvalue ',mysteryvalue)
+                #is mystery value a df?
+                #this is finding the 
+                mysterykey = mysteryvalue.abs().argsort()[:CYCLECOUNT]
+                print('mysterykey: ',mysterykey)
+                closest = d[angle].iloc[mysterykey]
+                closest_file = closest.iloc[cycle]['newname']
+                closest_mouth = closest.iloc[cycle]['mouth_gap']
+                print('closest: ')
+                print(closest_file)
+                img = cv2.imread(closest_file)
+                height, width, layers = img.shape
+                size = (width, height)
+                img_array.append(img)
+            except:
+                print('failed cycle angle:')
+                # print('failed:',row['newname'])
+        print('finished a cycle')
+        sort.angle_list.reverse()
+        cycle = cycle +1
+        # print(angle_list)
+    return img_array, size
 
 
 ###################
@@ -679,8 +725,8 @@ df_enc = encode_df(ROOT, segment)
 
 # img_array is actual bitmap data? 
 if motion["side_to_side"] is True:
-
-    img_list, size = sort.cycling_order(CYCLECOUNT)
+    img_list, size = cycling_order(CYCLECOUNT)
+    # size = sort.get_cv2size(ROOT, img_list[0])
 else:
 # dont neet to pass SECOND_SORT, because it is already there
 
