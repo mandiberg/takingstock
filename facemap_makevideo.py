@@ -21,10 +21,10 @@ from pathlib import Path
 #mine
 from mp_sort_pose import SortPose
 
-VIDEO = False
+VIDEO = True
 CYCLECOUNT = 2
 # ROOT="/Users/michaelmandiberg/Documents/projects-active/facemap_production/"
-MAPDATA_FILE = "allmaps_64910.csv"
+MAPDATA_FILE = "allmaps_46999.csv"
 
 # platform specific file folder (mac for michael, win for satyam)
 if platform == "darwin":
@@ -304,16 +304,68 @@ def get_d(enc1, enc2):
 
 # ### dataframe creation and sorting
 
-# In[17]:
 
+    
+#     return output_data
 
+#takes list input -- currently deprecated 
 def encode_list_df(folder, img_list):
 #     enc_dict={}
+    #img_list could be a list, but most likely will be dataframe
     csv_name="face_encodings.csv"
     col1="file_name"
     col2="encoding"
     curr=0
     total = len(img_list)
+
+    # encodings column list for splitting
+    col_list=[]
+    for i in range(128):
+        col_list.append(col2+str(i))
+
+    #initializing the dataframe
+    image_data=pd.DataFrame(columns=[col1, col2])
+
+    
+    for img in img_list:
+        if curr%10==0:print(curr,"/",total)
+        curr+=1
+        filepath = os.path.join(folder,img)        
+        filepath=filepath.replace('\\' , '/')  ## cv2 accepts files with "/" instead of "\"
+        encodings=ret_encoding(filepath)
+        if encodings is not None:              ## checking if a face is found
+            
+            data=pd.DataFrame({col1:img,col2:[np.array(encodings)]})
+            image_data = pd.concat([image_data,data],ignore_index=True)  
+
+    #splitting the encodings column
+    output_data = pd.DataFrame(image_data[col2].to_list(), columns=col_list)
+    #adding the filename column and then puting it first
+    output_data[[col1]]=pd.DataFrame(image_data[col1].tolist(),index=image_data.index)
+    clms = output_data.columns.tolist()
+    clms = clms[-1:] + clms[:-1]
+    output_data=output_data[clms]
+    # saving without index
+    # i think this needs to be refactored to get rid of this step. just drop index
+    # output_data.to_csv(csv_name, index=False)
+    # df = pd.read_csv(csv_name)
+    output_data.set_index('file_name', inplace=True)
+
+    
+    return output_data
+
+
+def encode_df(folder,df_segment):
+    print(df_segment)
+
+    csv_name="face_encodings.csv"
+    col1="file_name"
+    col2="encoding" 
+    curr=0
+    img_list = df_segment['newname'].tolist()
+
+    total = len(img_list)
+
 
     # encodings column list for splitting
     col_list=[]
@@ -493,14 +545,14 @@ def sort_by_face_dist(folder, start_img,df_enc):
 # /Users/michaelmandiberg/Documents/projects-active/facemap_production/images1675441632.138345
 # folder = os.path.join(ROOT,"images1675441632.138345")
 
-# #define the list of images to sort by distance
+#define the list of images to sort by distance
 # img_list = get_img_list(folder)
 
-# # encode all images in list, and use name as df index
+# encode all images in list, and use name as df index
 # df_enc = encode_list_df(folder, img_list)
 
-# # not being used currently
-# # save_sorted(i, folder, start_img, dist)
+# not being used currently
+# save_sorted(i, folder, start_img, dist)
 
 # # get dataframe sorted by distance
 # start_img = "median"
@@ -508,9 +560,71 @@ def sort_by_face_dist(folder, start_img,df_enc):
 # print(df_sorted)
 
 
-############
-# MY CODE  #
-############
+
+###################
+# SORT FUNCTIONS  #
+###################
+
+
+
+
+def simple_order(segment):
+    img_array = []
+    delta_array = []
+    # size = []
+    #simple ordering
+    rotation = segment.sort_values(by=sort.SORT)
+    print("rotation: ")
+    print(rotation)
+
+    # for num, name in enumerate(presidents, start=1):
+    i = 0
+    for index, row in rotation.iterrows():
+        print(index, row['x'], row['y'], row['newname'])
+        delta_array.append(row['mouth_gap'])
+        try:
+            img = cv2.imread(row['newname'])
+            height, width, layers = img.shape
+            size = (width, height)
+            # test to see if this is actually an face, to get rid of blank ones/bad ones
+            # this may not be necessary
+            if sort.is_face(img):
+                # if not the first image
+                if i>0:
+                    # blend this image with the last image
+                    blend = cv2.addWeighted(img, 0.5, img, 0.5, 0.0)
+                    # blend = cv2.addWeighted(img, 0.5, img_array[i-1], 0.5, 0.0)
+                    blended_face = sort.is_face(blend)
+                    print('is_face ',blended_face)
+                    # if blended image has a detectable face, append the img
+                    if blended_face:
+                        img_array.append(img)
+                        print('is a face! adding it')
+                    else:
+                        print('skipping this one')
+                # for the first one, just add the image
+                # this may need to be refactored in case the first one is bad?
+                else:
+                    img_array.append(img)
+            else:
+                print('skipping this one: ',row['newname'])
+
+            i+=1
+
+        except:
+            print('failed:',row['newname'])
+    print("delta_array")
+    print(delta_array)
+    return img_array, size
+
+
+
+
+
+
+###################
+#  MY MAIN CODE   #
+###################
 
 
 #creating my objects
@@ -547,15 +661,36 @@ median = sort.get_median()
 # get metamedian for second sort, creates sort.metamedian attribute
 sort.get_metamedian()
 
+# encode all images in list, and use name as df index
+df_enc = encode_df(ROOT, segment)
+
+
 ### BUILD THE LIST OF SELECTED IMAGES ###
 
 # img_array is actual bitmap data? 
 if motion["side_to_side"] is True:
 
-    img_array, size = sort.cycling_order(CYCLECOUNT)
+    img_list, size = sort.cycling_order(CYCLECOUNT)
 else:
 # dont neet to pass SECOND_SORT, because it is already there
-    img_array, size = sort.simple_order(segment) 
+    # df_enc = encode_df(segment)
+
+    # img_list, size = simple_order(segment)
+
+
+    # not being used currently
+    # save_sorted(i, folder, start_img, dist)
+
+    # # get dataframe sorted by distance
+    start_img = "median"
+    df_sorted = sort_by_face_dist(ROOT, start_img,df_enc)
+    # print("df_sorted")
+    # print(df_sorted)
+    img_list = df_sorted['filename'].tolist()
+    size = sort.get_cv2size(ROOT, img_list[0])
+    # print(img_list)
+
+
 
     # img_array, size = sort.simplest_order(segment) 
 
@@ -564,9 +699,11 @@ else:
 
 if VIDEO == True:
     #save individual as video
-    sort.write_video(ROOT, img_array, segment, size)
+    sort.write_video(ROOT, img_list, segment, size)
 
 else:
     #save individual as images
-    outfolder = os.path.join(ROOT,"images"+str(time.time()))
-    sort.write_images(outfolder, img_array, segment, size)
+    
+    sort.write_images(ROOT, img_list, segment)
+
+

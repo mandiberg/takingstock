@@ -29,12 +29,12 @@ ROOT= os.path.join(os.environ['HOME'], "Documents/projects-active/facemap_produc
 folder ="gettyimages"
 http="https://media.gettyimages.com/photos/"
 # folder ="files_for_testing"
-outputfolder = os.path.join(ROOT,folder+"_output")
-SAVE_ORIG = True
-DRAW_BOX = True
+outputfolder = os.path.join(ROOT,folder+"_output_feb")
+SAVE_ORIG = False
+DRAW_BOX = False
 
 #comment this out to run testing mode with variables above
-SOURCEFILE="_SELECT_FROM_faceimages_query_mouthopen.csv"
+SOURCEFILE="_SELECT_contentUrl_FROM_Images_i_JOIN_ImagesKeywords_ik_ON_i_UID_202302041743.csv"
 # SOURCEFILE="test2000.csv"
 
 dfallmaps = pd.DataFrame(columns=['name', 'cropX', 'x', 'y', 'z', 'resize', 'newname', 'mouth_gap']) 
