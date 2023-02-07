@@ -212,6 +212,14 @@ class SortPose:
 
         return is_face
 
+    def blend_is_face(self, oldimage, newimage):
+        blend = cv2.addWeighted(oldimage, 0.5, newimage, 0.5, 0.0)
+        # blend = cv2.addWeighted(img, 0.5, img_array[i-1], 0.5, 0.0)
+        blended_face = sort.is_face(blend)
+        return blended_face
+
+
+
     # def get_hash_folders(self,filename):
     #     m = hashlib.md5()
     #     m.update(filename.encode('utf-8'))

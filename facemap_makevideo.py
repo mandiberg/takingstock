@@ -519,7 +519,15 @@ def test_pair(last_file, new_file):
         return False
 
 
-# takes a list of images and encodings and returns a df sorted by distance
+
+
+
+###################
+# SORT FUNCTIONS  #
+###################
+
+
+# takes a dataframe of images and encodings and returns a df sorted by distance
 def sort_by_face_dist(folder, start_img,df_enc):
     face_distances=[]
     for i in range(len(df_enc.index)-2):
@@ -560,14 +568,6 @@ def sort_by_face_dist(folder, start_img,df_enc):
 # print(df_sorted)
 
 
-
-###################
-# SORT FUNCTIONS  #
-###################
-
-
-
-
 def simple_order(segment):
     img_array = []
     delta_array = []
@@ -580,24 +580,33 @@ def simple_order(segment):
     # for num, name in enumerate(presidents, start=1):
     i = 0
     for index, row in rotation.iterrows():
-        print(index, row['x'], row['y'], row['newname'])
+        # print(index, row['x'], row['y'], row['newname'])
         delta_array.append(row['mouth_gap'])
         try:
-            img = cv2.imread(row['newname'])
+            print(row['newname'])
+            #this is pointin to the wrong location
+            #/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages_output_feb/crop_1_3.9980554263116233_-3.8588402232564545_2.2552074063078456_0.494_portrait-of-young-woman-covering-eye-with-compass-morocco-picture-id1227557214.jpg
+            #original files are actually here:
+            #/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/F/F0/portrait-of-young-woman-covering-eye-with-compass-morocco-picture-id1227557214.jpg
+            #doesn't seem to be picking up the cropped image.
+
+            newimage = cv2.imread(row['newname'])
             height, width, layers = img.shape
             size = (width, height)
             # test to see if this is actually an face, to get rid of blank ones/bad ones
             # this may not be necessary
             if sort.is_face(img):
                 # if not the first image
+                print('is_face')
                 if i>0:
+                    print('i is greater than 0')
                     # blend this image with the last image
-                    blend = cv2.addWeighted(img, 0.5, img, 0.5, 0.0)
-                    # blend = cv2.addWeighted(img, 0.5, img_array[i-1], 0.5, 0.0)
-                    blended_face = sort.is_face(blend)
-                    print('is_face ',blended_face)
+                    # blend = cv2.addWeighted(img, 0.5, img, 0.5, 0.0)
+                    # # blend = cv2.addWeighted(img, 0.5, img_array[i-1], 0.5, 0.0)
+                    # blended_face = sort.is_face(blend)
+                    # print('is_face ',blended_face)
                     # if blended image has a detectable face, append the img
-                    if blended_face:
+                    if blend_is_face(oldimage, newimage):
                         img_array.append(img)
                         print('is a face! adding it')
                     else:
@@ -610,11 +619,12 @@ def simple_order(segment):
                 print('skipping this one: ',row['newname'])
 
             i+=1
+            oldimage = newimage
 
         except:
             print('failed:',row['newname'])
-    print("delta_array")
-    print(delta_array)
+    # print("delta_array")
+    # print(delta_array)
     return img_array, size
 
 
@@ -675,20 +685,20 @@ else:
 # dont neet to pass SECOND_SORT, because it is already there
     # df_enc = encode_df(segment)
 
-    # img_list, size = simple_order(segment)
+    img_list, size = simple_order(segment)
 
 
     # not being used currently
     # save_sorted(i, folder, start_img, dist)
 
-    # # get dataframe sorted by distance
-    start_img = "median"
-    df_sorted = sort_by_face_dist(ROOT, start_img,df_enc)
-    # print("df_sorted")
-    # print(df_sorted)
-    img_list = df_sorted['filename'].tolist()
-    size = sort.get_cv2size(ROOT, img_list[0])
-    # print(img_list)
+    # # # get dataframe sorted by distance
+    # start_img = "median"
+    # df_sorted = sort_by_face_dist(ROOT, start_img,df_enc)
+    # # print("df_sorted")
+    # # print(df_sorted)
+    # img_list = df_sorted['filename'].tolist()
+    # size = sort.get_cv2size(ROOT, img_list[0])
+    # # print(img_list)
 
 
 
