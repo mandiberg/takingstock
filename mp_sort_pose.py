@@ -131,7 +131,7 @@ class SortPose:
             self.angle_list = res
             return res
 
-    def get_d(self, segment):
+    def get_divisor(self, segment):
 
         divisor = eval(f"1e{self.ROUND}")
         self.d = {}
@@ -139,7 +139,7 @@ class SortPose:
             # print(angle)
             self.d[angle] = segment.loc[((segment[self.SORT] > angle) & (segment[self.SORT] < angle+(1/divisor)))]
             # print(self.d[angle].size)
-        return self.d
+        
 
     def get_median(self):
 

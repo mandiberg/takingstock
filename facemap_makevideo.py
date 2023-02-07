@@ -659,8 +659,8 @@ segment = sort.make_segment(df)
 angle_list = sort.createList(segment)
 
 # sort segment by angle list
-# d is a dataframe organized (indexed?) by angle list
-d = sort.get_d(segment)
+# creates sort.d attribute: a dataframe organized (indexed?) by angle list
+sort.get_divisor(segment)
 
 # # is this used anywhere? 
 # angle_list_pop = angle_list.pop()
@@ -683,22 +683,21 @@ if motion["side_to_side"] is True:
     img_list, size = sort.cycling_order(CYCLECOUNT)
 else:
 # dont neet to pass SECOND_SORT, because it is already there
-    # df_enc = encode_df(segment)
 
-    img_list, size = simple_order(segment)
+    # img_list, size = simple_order(segment)
 
 
     # not being used currently
     # save_sorted(i, folder, start_img, dist)
 
-    # # # get dataframe sorted by distance
-    # start_img = "median"
-    # df_sorted = sort_by_face_dist(ROOT, start_img,df_enc)
-    # # print("df_sorted")
-    # # print(df_sorted)
-    # img_list = df_sorted['filename'].tolist()
-    # size = sort.get_cv2size(ROOT, img_list[0])
-    # # print(img_list)
+    # # get dataframe sorted by distance
+    start_img = "median"
+    df_sorted = sort_by_face_dist(ROOT, start_img,df_enc)
+    # print("df_sorted")
+    # print(df_sorted)
+    img_list = df_sorted['filename'].tolist()
+    size = sort.get_cv2size(ROOT, img_list[0])
+    # print(img_list)
 
 
 
