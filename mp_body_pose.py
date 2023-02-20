@@ -3,6 +3,8 @@ import mediapipe as mp
 mp_drawing = mp.solutions.drawing_utils
 mp_pose = mp.solutions.pose
 
+file_list = ("/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/d/da/cambodian-young-girl-selling-fresh-bananas-cambodia-picture-id1000006994.jpg","/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/5/52/vietnamese-little-boy-having-fun-on-slide-south-vietnam-picture-id1000007056.jpg","/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/0/0b/young-woman-using-smartphone-in-downtown-district-at-night-against-picture-id1000159770.jpg","/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/0/09/young-woman-overlooking-the-spectacular-city-night-scene-of-hong-kong-picture-id1000160314.jpg","/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/d/d6/closeup-portrait-of-an-elderly-woman-80-years-old-in-a-blue-dress-picture-id1000278268.jpg","/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/c/c4/elderly-80-year-old-woman-meets-guests-with-traditional-food-picture-id1000278270.jpg","/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/e/e4/elderly-80-year-old-woman-meets-guests-with-traditional-food-picture-id1000278272.jpg","/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/2/21/closeup-portrait-of-an-elderly-woman-80-years-old-in-a-blue-dress-picture-id1000279376.jpg","/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/4/4c/closeup-portrait-of-an-elderly-woman-80-years-old-in-a-blue-dress-picture-id1000279382.jpg","/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/0/0b/elderly-80-year-old-woman-meets-guests-with-traditional-food-picture-id1000316538.jpg","/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/6/6d/beautiful-young-asian-woman-using-smartphone-in-urban-city-against-picture-id1000577964.jpg","/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/6/6b/young-man-overlooking-the-spectacular-city-night-scene-of-hong-kong-picture-id1000578168.jpg","/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/a/a3/summer-dinner-party-picture-id1000892794.jpg","/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/4/4e/runner-girl-listening-to-music-picture-id1001013592.jpg","/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/f/fc/businesswoman-in-singapore-picture-id1001121282.jpg","/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/f/f4/young-woman-laughing-picture-id1001121288.jpg","/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/8/88/attractive-sensual-strap-and-female-skin-picture-id100114998.jpg","/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/b/b4/confident-pregnant-woman-social-networking-on-mobile-phone-in-city-picture-id1001377914.jpg","/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/6/6e/happy-skateboarder-relaxing-at-urban-skateboarding-park-with-coffee-picture-id1001379392.jpg","/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/d/dc/happy-senior-woman-picture-id1001592726.jpg","/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/5/5c/smiling-woman-takes-a-photo-on-the-beach-picture-id1001592788.jpg","/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/0/03/happy-tourist-woman-resting-on-sea-summer-vacation-picture-id1001595294.jpg","/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/0/0b/happy-tourist-woman-resting-on-sea-beach-summer-vacation-picture-id1001595308.jpg","/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/8/83/happy-senior-woman-picture-id1001595348.jpg","/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/6/68/retired-senior-woman-enjoying-the-day-on-the-sea-picture-id1001596810.jpg","/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/2/26/retired-senior-woman-enjoying-the-day-on-the-sea-picture-id1001596834.jpg","/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/5/55/retired-senior-man-enjoying-the-day-on-the-sea-picture-id1001596896.jpg","/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/b/be/retired-senior-man-enjoying-the-day-on-the-sea-picture-id1001596930.jpg","/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/c/c0/retired-senior-woman-enjoying-the-day-on-the-sea-picture-id1001596974.jpg","/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/5/51/retired-senior-man-enjoying-the-day-on-the-sea-picture-id1001596984.jpg","/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/6/6d/retired-senior-man-enjoying-the-day-on-the-sea-picture-id1001597030.jpg","/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/1/19/retired-senior-man-enjoying-the-day-on-the-sea-picture-id1001597058.jpg","/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/9/96/retired-senior-man-enjoying-the-day-on-the-sea-picture-id1001597066.jpg","/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/3/30/retired-senior-man-enjoying-the-day-on-the-sea-picture-id1001597074.jpg","/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/c/cc/travel-pool-fun-picture-id1001599868.jpg","/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/c/c2/retired-senior-man-enjoying-the-day-on-the-sea-picture-id1001615222.jpg","/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/6/6c/retired-senior-man-enjoying-the-day-on-the-sea-picture-id1001615240.jpg","/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/9/9b/smiling-woman-swimming-on-the-paddle-board-picture-id1001615278.jpg","/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/d/d5/smiling-woman-swimming-on-the-paddle-board-picture-id1001615288.jpg","/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/f/fe/retired-senior-man-enjoying-the-day-on-the-sea-picture-id1001615290.jpg","/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/5/58/smiling-woman-swimming-on-the-paddle-board-picture-id1001615294.jpg","/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/1/19/smiling-woman-swimming-on-the-paddle-board-picture-id1001615332.jpg","/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/4/4b/young-girl-in-the-mediterranean-sea-picture-id1001653454.jpg","/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/9/9c/entrepreneur-at-modern-urban-setting-picture-id1001754000.jpg","/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/d/d3/cheerful-young-business-woman-picture-id1001835342.jpg","/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/b/b0/cheerful-young-business-woman-in-tram-picture-id1001835880.jpg","/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/5/5d/confident-business-woman-picture-id1001840574.jpg","/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/2/2f/cheerful-young-business-woman-picture-id1001840948.jpg","/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/4/49/cheerful-young-business-woman-in-tram-picture-id1001843300.jpg","/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/9/9d/confident-business-woman-picture-id1001843478.jpg","/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/6/6c/runner-tidying-hair-picture-id1001983748.jpg","/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/4/4f/beautiful-smiling-young-confident-african-girl-talking-on-mobile-at-picture-id1002033608.jpg","/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/6/6b/beautiful-smiling-young-confident-african-girl-talking-on-mobile-picture-id1002033648.jpg","/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/7/76/beautiful-smiling-young-confident-african-woman-talking-on-mobile-picture-id1002035866.jpg","/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/3/32/beautiful-confident-smiling-young-confident-african-girl-talking-on-picture-id1002036148.jpg","/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/f/f8/beautiful-smiling-young-confident-african-girl-talking-on-mobile-in-picture-id1002036162.jpg","/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/7/79/beautiful-young-confident-african-girl-talking-on-mobile-phone-picture-id1002036328.jpg","/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/7/7b/beautiful-young-confident-african-girl-talking-on-mobile-phone-and-picture-id1002036530.jpg","/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/a/a6/beautiful-confident-young-confident-african-girl-talking-on-mobile-picture-id1002036574.jpg","/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/c/cd/beautiful-young-confident-african-girl-talking-on-mobile-phone-away-picture-id1002036690.jpg","/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/b/b9/beautiful-young-confident-african-girl-talking-on-mobile-phone-at-picture-id1002036704.jpg","/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/c/c3/beautiful-portrait-of-a-young-confident-african-woman-laughing-with-picture-id1002037130.jpg","/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/6/6f/beautiful-smiling-young-confident-african-girl-talking-on-mobile-in-picture-id1002037238.jpg","/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/6/6c/beautiful-portrait-of-a-young-confident-african-woman-laughing-on-picture-id1002037252.jpg","/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/c/c7/beautiful-portrait-of-a-confident-african-teenage-girl-laughing-on-picture-id1002037464.jpg","/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/b/b1/portrait-of-a-beautiful-young-confident-african-girl-talking-laughing-picture-id1002037552.jpg","/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/2/23/full-length-beautiful-young-african-woman-on-mobile-phone-against-picture-id1002037696.jpg","/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/b/b0/portrait-of-beautiful-young-african-woman-on-mobile-phone-against-picture-id1002037968.jpg","/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/7/71/young-beautiful-african-girl-against-a-warm-brown-traditional-copy-picture-id1002038308.jpg","/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/3/30/young-beautiful-african-girl-on-mobile-phone-laughing-against-a-warm-picture-id1002038342.jpg","/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/a/aa/young-beautiful-african-girl-side-view-against-a-warm-brown-copy-picture-id1002038742.jpg","/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/1/18/portrait-of-young-beautiful-smiling-african-girl-against-a-warm-brown-picture-id1002040876.jpg","/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/e/e6/teenage-african-girl-against-a-warm-brown-traditional-background-copy-picture-id1002040910.jpg","/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/f/ff/young-beautiful-african-girl-texting-on-her-mobile-phone-smiling-a-picture-id1002041062.jpg","/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/0/08/young-beautiful-african-girl-texting-on-her-mobile-phone-looking-at-picture-id1002041486.jpg","/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/7/76/beautiful-portrait-of-a-young-african-girl-on-her-mobile-phone-girl-picture-id1002041512.jpg","/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/6/66/city-centre-young-african-girl-portrait-on-mobile-phone-looking-at-picture-id1002043002.jpg","/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/b/be/woman-with-peasant-snack-hearty-snack-in-front-of-the-koschutahaus-picture-id1002131464.jpg","/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/1/14/woman-with-peasant-snack-hearty-snack-in-front-of-the-koschutahaus-picture-id1002131468.jpg","/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/d/db/young-woman-looking-up-picture-id100224075.jpg","/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/3/38/woman-with-huge-eyes-touching-wall-picture-id100224196.jpg","/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/d/d1/portrait-of-smiling-young-woman-standing-against-sky-picture-id1002482594.jpg","/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/6/69/young-woman-sitting-on-raft-over-sea-against-blue-sky-picture-id1002492628.jpg","/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/2/25/portrait-of-young-woman-standing-on-field-during-sunset-picture-id1002497328.jpg","/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/d/da/portrait-of-smiling-young-woman-with-blanket-standing-on-road-picture-id1002497338.jpg","/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/7/71/tourist-woman-walking-on-sea-shore-picture-id1002572258.jpg","/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/b/bb/morning-at-the-beach-to-clear-your-thoughts-picture-id1002572260.jpg","/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/d/df/handsome-tourist-in-gamla-stan-stockholm-picture-id1002851002.jpg","/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/d/d5/tourist-picture-id1002851066.jpg","/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/8/89/tourist-showing-sweden-flag-in-stockholm-picture-id1002851112.jpg","/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/e/ea/young-man-standing-in-the-clear-blue-water-on-the-beach-smiling-small-picture-id1002884054.jpg","/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/f/fe/tourist-man-taking-selfie-with-stockholm-cityscape-picture-id1002890052.jpg","/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/b/b0/real-people-portrait-picture-id1002893482.jpg","/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/8/85/real-people-portrait-picture-id1002893494.jpg","/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/e/ef/tourist-man-taking-selfie-with-stockholm-cityscape-picture-id1002894148.jpg","/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/3/3d/tourist-man-taking-selfie-with-stockholm-cityscape-picture-id1002901516.jpg","/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/7/74/male-runner-tying-shoes-picture-id1003246308.jpg","/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/9/9d/tourist-man-enjoying-beautiful-view-on-stockholm-city-picture-id1003386494.jpg","/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/c/c0/tourist-man-enjoying-beautiful-view-on-stockholm-city-picture-id1003386636.jpg","/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/6/6b/tourist-man-enjoying-beautiful-view-on-stockholm-city-picture-id1003386658.jpg")
+
 
 # https://colab.research.google.com/drive/1uCuA6We9T5r0WljspEHWPHXCT_2bMKUy
 
@@ -10,52 +12,58 @@ mp_pose = mp.solutions.pose
 with mp_pose.Pose(
     static_image_mode=True, min_detection_confidence=0.5) as pose:
   for idx, file in enumerate(file_list):
-    image = cv2.imread(file)
-    image_height, image_width, _ = image.shape
-    # Convert the BGR image to RGB before processing.
-    results = pose.process(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+    try:
+        image = cv2.imread(file)
+        image_height, image_width, _ = image.shape
+        # Convert the BGR image to RGB before processing.
+        results = pose.process(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
 
-    if not results.pose_landmarks:
-      continue
-    print(
-        f'Nose coordinates: ('
-        f'{results.pose_landmarks.landmark[mp_holistic.PoseLandmark.NOSE].x * image_width}, '
-        f'{results.pose_landmarks.landmark[mp_holistic.PoseLandmark.NOSE].y * image_height})'
-    )
-    # Draw pose landmarks on the image.
-    annotated_image = image.copy()
-    # Use mp_pose.UPPER_BODY_POSE_CONNECTIONS for drawing below when
-    # upper_body_only is set to True.
-    mp_drawing.draw_landmarks(
-        annotated_image, results.pose_landmarks, mp_pose.POSE_CONNECTIONS)
-    cv2.imwrite('/tmp/annotated_image' + str(idx) + '.png', annotated_image)
+        if not results.pose_landmarks:
+          continue
+        # print(results.pose_landmarks)
+        # print(
+        #     f'Nose coordinates: ('
+        #     f'{results.pose_landmarks.landmark[mp_holistic.PoseLandmark.NOSE].x * image_width}, '
+        #     f'{results.pose_landmarks.landmark[mp_holistic.PoseLandmark.NOSE].y * image_height})'
+        # )
+        # Draw pose landmarks on the image.
+        annotated_image = image.copy()
+        # Use mp_pose.UPPER_BODY_POSE_CONNECTIONS for drawing below when
+        # upper_body_only is set to True.
+        mp_drawing.draw_landmarks(
+            annotated_image, results.pose_landmarks, mp_pose.POSE_CONNECTIONS)
+        cv2.imwrite('annotated_image' + str(idx) + '.png', annotated_image)
 
-# For webcam input:
-cap = cv2.VideoCapture(0)
-with mp_pose.Pose(
-    min_detection_confidence=0.5,
-    min_tracking_confidence=0.5) as pose:
-  while cap.isOpened():
-    success, image = cap.read()
-    if not success:
-      print("Ignoring empty camera frame.")
-      # If loading a video, use 'break' instead of 'continue'.
-      continue
+    except:
+        print(f"this item failed: {file}")
 
-    # Flip the image horizontally for a later selfie-view display, and convert
-    # the BGR image to RGB.
-    image = cv2.cvtColor(cv2.flip(image, 1), cv2.COLOR_BGR2RGB)
-    # To improve performance, optionally mark the image as not writeable to
-    # pass by reference.
-    image.flags.writeable = False
-    results = pose.process(image)
 
-    # Draw the pose annotation on the image.
-    image.flags.writeable = True
-    image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
-    mp_drawing.draw_landmarks(
-        image, results.pose_landmarks, mp_pose.POSE_CONNECTIONS)
-    cv2.imshow('MediaPipe Pose', image)
-    if cv2.waitKey(5) & 0xFF == 27:
-      break
-cap.release()
+# # For webcam input:
+# cap = cv2.VideoCapture(0)
+# with mp_pose.Pose(
+#     min_detection_confidence=0.5,
+#     min_tracking_confidence=0.5) as pose:
+#   while cap.isOpened():
+#     success, image = cap.read()
+#     if not success:
+#       print("Ignoring empty camera frame.")
+#       # If loading a video, use 'break' instead of 'continue'.
+#       continue
+
+#     # Flip the image horizontally for a later selfie-view display, and convert
+#     # the BGR image to RGB.
+#     image = cv2.cvtColor(cv2.flip(image, 1), cv2.COLOR_BGR2RGB)
+#     # To improve performance, optionally mark the image as not writeable to
+#     # pass by reference.
+#     image.flags.writeable = False
+#     results = pose.process(image)
+
+#     # Draw the pose annotation on the image.
+#     image.flags.writeable = True
+#     image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+#     mp_drawing.draw_landmarks(
+#         image, results.pose_landmarks, mp_pose.POSE_CONNECTIONS)
+#     cv2.imshow('MediaPipe Pose', image)
+#     if cv2.waitKey(5) & 0xFF == 27:
+#       break
+# cap.release()
