@@ -28,18 +28,9 @@ i think i want the whole row:
  i need the UID to add the data back, and the filepath to read it
  so easiest just to send the whole thing in?
 
-do_job will
-mediapipe post est
-write is_face and landmarks
-write calc data
-
-
-/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/9/94/sporty-girl-picture-id1098415730.jpg
-/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/9/94/sporty-girl-picture-id1098415730.jpg
-
 '''
 
-csv_file = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/test100.csv"
+csv_file = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/test2500.csv"
 ROOT= os.path.join(os.environ['HOME'], "Documents/projects-active/facemap_production") 
 folder ="gettyimages"
 http="https://media.gettyimages.com/photos/"
@@ -56,6 +47,8 @@ face_mesh = mp_face_mesh.FaceMesh(min_detection_confidence=1, static_image_mode=
 mp_pose = mp.solutions.pose
 mp_drawing = mp.solutions.drawing_utils
 drawing_spec = mp_drawing.DrawingSpec(thickness=1, circle_radius=1)
+
+start = time.time()
 
 
 def get_hash_folders(filename):
@@ -103,14 +96,14 @@ def find_face(image):
         mouth_gap = pose.get_mouth_data(faceLms)
 
         data_to_store = (is_face, angles[0], angles[1], angles[2], mouth_gap, faceLms)
-        print(data_to_store)
+        # print(data_to_store)
 
     else: 
-        print(f"no face found {image}")
+        # print(f"no face found")
         is_face = False
 
         data_to_store = (is_face)
-        print(data_to_store)
+        # print(data_to_store)
     return data_to_store
 
 def calc_encodings(image):
@@ -154,12 +147,14 @@ def process_image(task):
         if not data_to_store:
             # Calculate Face Encodings if is_face = True
             encodings = calc_encodings(image)
+        if data_to_store or is_body:
+            print("processed image")
+        else:
+            print("no face or body found")
 
     else:
         print('toooooo smallllll')
         # os.remove(item)
-
-
 
 
 def do_job(tasks_to_accomplish, tasks_that_are_done):
@@ -202,7 +197,7 @@ def main():
             isExist = os.path.exists(imagepath)
             if isExist: 
                 tasks_to_accomplish.put(imagepath)
-                print(imagepath)
+                # print(imagepath)
         else:
             imagepath=os.path.join(ROOT,folder, item)
             orig_filename = item
@@ -226,6 +221,20 @@ def main():
     # print the output
     while not tasks_that_are_done.empty():
         print(tasks_that_are_done.get())
+
+        end = time.time()
+        print (end - start)
+
+        # need to pull count from tasks_that_are_done
+        # imgpermin = tasks_that_are_done.count()/((time.time() - start)/60)
+        # hours = (time.time() - start)/3600
+
+        # print("--- %s images per minute ---" % (imgpermin))
+        # print("--- %s images per day ---" % (imgpermin*1440))
+        # if imgpermin:
+        #     print("--- %s days per 1M images ---" % (1000000/(imgpermin*1440)))
+
+
 
     return True
 
