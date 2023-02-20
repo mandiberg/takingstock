@@ -7,10 +7,11 @@ import hashlib
 import cv2
 import math
 
-
 import numpy as np
 import mediapipe as mp
 import pandas as pd
+from sqlalchemy import create_engine
+
 from mp_pose_est import SelectPose
 
 '''
@@ -65,6 +66,41 @@ def read_csv(csv_file):
 
         for row in reader:
             yield row
+
+
+def create_my_engine(db):
+
+    # Create SQLAlchemy engine to connect to MySQL Database
+    engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}"
+                                    .format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']))
+
+def insertignore(dataframe,table):
+
+     # creating column list for insertion
+     cols = "`,`".join([str(i) for i in dataframe.columns.tolist()])
+
+     # Insert DataFrame recrds one by one.
+     for i,row in dataframe.iterrows():
+         sql = "INSERT IGNORE INTO `"+table+"` (`" +cols + "`) VALUES (" + "%s,"*(len(row)-1) + "%s)"
+         engine.connect().execute(sql, tuple(row))
+
+
+def selectSQL(table,column,value):
+    selectsql = "SELECT UID from Images Where UID = '"+1351300526+"';"
+    # selectsql = "SELECT "+ column +" from "+ table +" Where "+ column +" = '"+ value +"';"
+
+    result = engine.connect().execute(selectsql)
+
+    resultsjson = ([dict(row) for row in result.mappings()])
+
+    print(resultsjson)
+    # try:
+    #     myUID = resultsjson[0]['UID']
+    #     alreadyDL = True
+    # except:
+    #     alreadyDL = False
+
+    # return alreadyDL
 
 
 def find_face(image):
@@ -186,6 +222,20 @@ def main():
     tasks_to_accomplish = Queue()
     tasks_that_are_done = Queue()
     processes = []
+
+    table ="gettytest"
+    column = "is_face"
+    value = "NULL"
+
+    db = {
+        "host":"localhost",
+        "name":"gettyimages",
+        "user":"root",
+        "pass":"Fg!27Ejc!Mvr!GT"
+    }
+
+    create_my_engine(db)
+    selectSQL(table,column,value)
 
     for row in read_csv(csv_file):
         # gets contentUrl
