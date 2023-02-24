@@ -10,7 +10,9 @@ import math
 import numpy as np
 import mediapipe as mp
 import pandas as pd
+
 from sqlalchemy import create_engine
+from sqlalchemy import text
 
 from mp_pose_est import SelectPose
 
@@ -31,7 +33,6 @@ i think i want the whole row:
 
 '''
 
-csv_file = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/test2500.csv"
 ROOT= os.path.join(os.environ['HOME'], "Documents/projects-active/facemap_production") 
 folder ="gettyimages"
 http="https://media.gettyimages.com/photos/"
@@ -42,12 +43,24 @@ DRAW_BOX = False
 MINSIZE = 700
 
 
+db = {
+    "host":"localhost",
+    "name":"gettytest",
+    "user":"root",
+    "pass":"Fg!27Ejc!Mvr!GT"
+}
+
+
 #creating my objects
 mp_face_mesh = mp.solutions.face_mesh
 face_mesh = mp_face_mesh.FaceMesh(min_detection_confidence=1, static_image_mode=True)
 mp_pose = mp.solutions.pose
 mp_drawing = mp.solutions.drawing_utils
 drawing_spec = mp_drawing.DrawingSpec(thickness=1, circle_radius=1)
+
+engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}"
+                                .format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']))
+
 
 start = time.time()
 
@@ -85,15 +98,15 @@ def insertignore(dataframe,table):
          engine.connect().execute(sql, tuple(row))
 
 
-def selectSQL(table,column,value):
-    selectsql = "SELECT UID from Images Where UID = '"+1351300526+"';"
-    # selectsql = "SELECT "+ column +" from "+ table +" Where "+ column +" = '"+ value +"';"
+def selectSQL(table,get,column,value):
+    # selectsql = "SELECT UID from Images Where UID = '"+str(1351300526)+"';"
+    selectsql = "SELECT "+ get +" from "+ table +" Where "+ column +" = '"+ value +"';"
 
-    result = engine.connect().execute(selectsql)
+    result = engine.connect().execute(text(selectsql))
 
     resultsjson = ([dict(row) for row in result.mappings()])
 
-    print(resultsjson)
+    return(resultsjson)
     # try:
     #     myUID = resultsjson[0]['UID']
     #     alreadyDL = True
@@ -211,35 +224,33 @@ def do_job(tasks_to_accomplish, tasks_that_are_done):
                 message to task_that_are_done queue
             '''
             process_image(task)
-            tasks_that_are_done.put(task + ' is done by ' + current_process().name)
+            # tasks_that_are_done.put(task + ' is done by ' + current_process().name)
             # time.sleep(.5)
     return True
 
 
 def main():
-    number_of_task = 10
+    # number_of_task = 10
     number_of_processes = 8
     tasks_to_accomplish = Queue()
     tasks_that_are_done = Queue()
     processes = []
 
-    table ="gettytest"
-    column = "is_face"
-    value = "NULL"
+    table ="images"
+    # column = "is_face"
+    # value = "NULL"
 
-    db = {
-        "host":"localhost",
-        "name":"gettyimages",
-        "user":"root",
-        "pass":"Fg!27Ejc!Mvr!GT"
-    }
+    get = "*"
+    column = "author"
+    value = "hadynyah"
 
-    create_my_engine(db)
-    selectSQL(table,column,value)
+    # create_my_engine(db)
+    resultsjson = selectSQL(table,get,column,value)
 
-    for row in read_csv(csv_file):
+
+    for row in resultsjson:
         # gets contentUrl
-        item = (row[4])
+        item = row["contentUrl"]
         if folder == "gettyimages":
             orig_filename = item.replace(http, "")+".jpg"
             d0, d02 = get_hash_folders(orig_filename)
@@ -248,11 +259,12 @@ def main():
             if isExist: 
                 tasks_to_accomplish.put(imagepath)
                 # print(imagepath)
+                # print(tasks_to_accomplish.qsize())
+
         else:
             imagepath=os.path.join(ROOT,folder, item)
             orig_filename = item
             print("starting: " +item)
-
 
 
     # for i in range(number_of_task):
@@ -266,14 +278,16 @@ def main():
 
     # completing process
     for p in processes:
+        print("completing process")
         p.join()
 
-    # print the output
-    while not tasks_that_are_done.empty():
-        print(tasks_that_are_done.get())
+    # # print the output
+    # while not tasks_that_are_done.empty():
+    #     print("tasks are done")
+    #     print(tasks_that_are_done.get())
 
-        end = time.time()
-        print (end - start)
+    end = time.time()
+    print (end - start)
 
         # need to pull count from tasks_that_are_done
         # imgpermin = tasks_that_are_done.count()/((time.time() - start)/60)
