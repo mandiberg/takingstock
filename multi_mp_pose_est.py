@@ -81,11 +81,24 @@ def read_csv(csv_file):
             yield row
 
 
-def create_my_engine(db):
+def save_image_elsewhere(image, path):
+    #saves a CV2 image elsewhere -- used in setting up test segment of images
+    oldfolder = "newimages"
+    newfolder = "testimages"
+    outpath = path.replace(oldfolder, newfolder)
+    try:
+        print(outpath)
+        cv2.imwrite(outpath, image)
+        print("wrote")
 
-    # Create SQLAlchemy engine to connect to MySQL Database
-    engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}"
-                                    .format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']))
+    except:
+        print("couldn't write")
+
+# def create_my_engine(db):
+
+#     # Create SQLAlchemy engine to connect to MySQL Database
+#     engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}"
+#                                     .format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']))
 
 def insertignore(dataframe,table):
 
@@ -100,7 +113,7 @@ def insertignore(dataframe,table):
 
 def selectSQL(table,get,column,value):
     # selectsql = "SELECT UID from Images Where UID = '"+str(1351300526)+"';"
-    selectsql = "SELECT "+ get +" from "+ table +" Where "+ column +" = '"+ value +"';"
+    selectsql = "SELECT "+ get +" from "+ table +" Where "+ column +" "+ value +";"
 
     result = engine.connect().execute(text(selectsql))
 
@@ -182,28 +195,31 @@ def find_body(image):
 def process_image(task):
     try:
         image = cv2.imread(task) 
+        
+        # this is for when you need to move images into a testing folder structure
+        save_image_elsewhere(image, task)
     except:
         print(f"this item failed: {task}")
 
-    if image is not None and image.shape[0]>MINSIZE and image.shape[1]>MINSIZE:
+    # if image is not None and image.shape[0]>MINSIZE and image.shape[1]>MINSIZE:
 
-        # Do FaceMesh
-        data_to_store = find_face(image)
+    #     # Do FaceMesh
+    #     data_to_store = find_face(image)
 
-        # Do Body Pose
-        is_body, results = find_body(image)
+    #     # Do Body Pose
+    #     is_body, results = find_body(image)
 
-        if not data_to_store:
-            # Calculate Face Encodings if is_face = True
-            encodings = calc_encodings(image)
-        if data_to_store or is_body:
-            print("processed image")
-        else:
-            print("no face or body found")
+    #     if not data_to_store:
+    #         # Calculate Face Encodings if is_face = True
+    #         encodings = calc_encodings(image)
+    #     if data_to_store or is_body:
+    #         print("processed image")
+    #     else:
+    #         print("no face or body found")
 
-    else:
-        print('toooooo smallllll')
-        # os.remove(item)
+    # else:
+    #     print('toooooo smallllll')
+    #     # os.remove(item)
 
 
 def do_job(tasks_to_accomplish, tasks_that_are_done):
@@ -237,12 +253,12 @@ def main():
     processes = []
 
     table ="images"
-    # column = "is_face"
-    # value = "NULL"
+    column = "is_face"
+    value = "is NULL"
 
     get = "*"
-    column = "author"
-    value = "hadynyah"
+    # column = "author"
+    # value = "= hadynyah"
 
     # create_my_engine(db)
     resultsjson = selectSQL(table,get,column,value)
