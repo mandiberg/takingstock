@@ -111,10 +111,11 @@ def insertignore(dataframe,table):
          engine.connect().execute(sql, tuple(row))
 
 
-def selectSQL(table,get,column,value):
-    # selectsql = "SELECT UID from Images Where UID = '"+str(1351300526)+"';"
-    selectsql = "SELECT "+ get +" from "+ table +" Where "+ column +" "+ value +";"
+def selectSQL(table,get,column,value,limit):
 
+    # selectsql = "SELECT UID from Images Where UID = '"+str(1351300526)+"';"
+    selectsql = "SELECT "+ get +" from "+ table +" Where "+ column +" "+ value +" LIMIT "+ str(limit) +";"
+    print("actual SELECT is: ",selectsql)
     result = engine.connect().execute(text(selectsql))
 
     resultsjson = ([dict(row) for row in result.mappings()])
@@ -255,13 +256,16 @@ def main():
     table ="images"
     column = "is_face"
     value = "is NULL"
+    limit = 10
 
     get = "*"
     # column = "author"
     # value = "= hadynyah"
 
+    print("about to SQL: ",table,get,column,value,limit)
     # create_my_engine(db)
-    resultsjson = selectSQL(table,get,column,value)
+    resultsjson = selectSQL(table,get,column,value,limit)
+    print("got results, count is: ",len(resultsjson))
 
 
     for row in resultsjson:
