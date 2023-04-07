@@ -6,7 +6,8 @@ import re
 testname = "woman-in-a-music-concert-picture-id505111652.jpg"
 PATH= os.path.join(os.environ['HOME'], "Documents/projects-active/facemap_production/gettyimages") 
 # folder ="5GB_testimages"
-
+COPY=True
+CSV="/Users/michaelmandiberg/Dropbox/facemap_dropbox/test_data/Images_202302101516_30K.csv"
 
 def get_hash_folders(filename):
     m = hashlib.md5()
@@ -16,7 +17,8 @@ def get_hash_folders(filename):
     return d[0], d[0:2]
 # print(get_hash_folders(testname))
 
-
+def get_csv_files(CSV):
+    
 def get_dir_files(folder):
     # counter = 1
 

@@ -266,8 +266,11 @@ class SortPose:
 
 
 
-    def get_cv2size(self, ROOT, filename):
-        img = cv2.imread(os.path.join(ROOT,filename))
+    def get_cv2size(self, ROOT, filename_or_imagedata):
+        #IF filename_or_imagedata IS STRING:
+        img = cv2.imread(os.path.join(ROOT,filename_or_imagedata))
+        #ELIF filename_or_imagedata IS NDARRAY:
+        #img = filename_or_imagedata
         size = (img.shape[0], img.shape[1])
         return size
 
@@ -331,7 +334,8 @@ class SortPose:
             # out = cv2.VideoWriter(os.path.join(ROOT,videofile), cv2.VideoWriter_fourcc(*'mp4v'), FRAMERATE, size)
             for i in range(len(img_array)):
                 # print('in loop')
-                imgfilename = imgfileprefix+"_"+str(counter)+".jpg"
+                UID = img_array[i].split('-id')[-1]
+                imgfilename = imgfileprefix+"_"+UID+"_"+str(counter)+".jpg"
                 outpath = os.path.join(outfolder,imgfilename)
                 # print(img_array[i])
 

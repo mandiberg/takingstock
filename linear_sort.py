@@ -31,7 +31,7 @@ home = str(Path.home())
 # platform specific file folder (mac for michael, win for satyam)
 if platform == "darwin":
     # OS X
-    folder="Documents/projects-active/facemap_production/images1674272442.9258912"
+    folder="Documents/projects-active/facemap_production/gettyimages_output_febbig"
 elif platform == "win32":
     # Windows...
     folder="foobar"

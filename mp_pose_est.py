@@ -90,7 +90,7 @@ class SelectPose:
 
             (success, self.r_vec, self.t_vec) = cv2.solvePnP(self.model_points, image_points,  self.camera_matrix, self.dist_coeefs)
             (nose_end_point2D, jacobian) = cv2.projectPoints(np.array([(0.0, 0.0, 1000.0)]), self.r_vec, self.t_vec, self.camera_matrix, self.dist_coeefs)
-            print(self.r_vec)
+            # print(self.r_vec)
             p1 = (int(image_points[0][0]), int(image_points[0][1]))
             # p2 = (int(nose_end_point2D[0][0][0]), int(nose_end_point2D[0][0][1]))
 
@@ -158,7 +158,7 @@ class SelectPose:
     def rotationMatrixToEulerAnglesToDegrees(self):
         #R is Rotation Matrix
         R, jac = cv2.Rodrigues(self.r_vec)
-        print("r matrix ",R)
+        # print("r matrix ",R)
         #make sure it is actually a rmatrix
         assert(self.isRotationMatrix(R))
 
@@ -283,7 +283,7 @@ class SelectPose:
             self.get_faceheight_data(faceLms)
  
         mouth_pct = mouth_gap/self.face_height*100
-        print(mouth_pct)
+        # print(mouth_pct)
         return mouth_pct
 
 
@@ -334,11 +334,10 @@ class SelectPose:
         self.simple_crop = [topcrop, rightcrop, botcrop, leftcrop]
 
 
-    def get_crop_data(self, faceLms, sinY):
-        
+    def get_crop_data(self, faceLms, sinY, export_size=2500):
         #it would prob be better to do this with a dict and a loop
         nose_2d = self.get_face_2d_point(faceLms,1)
-        print("sinY: ",sinY)
+        # print("sinY: ",sinY)
 
         #cludge to get the new script to not move for neck
         sinY = 0
@@ -352,15 +351,15 @@ class SelectPose:
         neck_offset = sinY*int(self.face_height)
         #neck is point to crop image off of
         neck = (p1[0]+neck_offset,p1[1])
-        print("nose ",p1[0])
-        print("neck ",neck[0])
+        # print("nose ",p1[0])
+        # print("neck ",neck[0])
         self.crop =[0,0]
         # determine crop shape/ratio
         # crops = [.75,1,1.5,2,2.5,3]
 
         #cludge to get the new script to not mess with cropping
         crops = [1]
-        
+
         toobig = False
         balance = 1
         for ratio in crops:
@@ -394,6 +393,20 @@ class SelectPose:
         botcrop = int(neck[1]+(self.face_height*self.crop[1]))
         self.crop_points = [topcrop, rightcrop, botcrop, leftcrop]
 
+        #set padding
+        # figures out how far each dimensions is from nose
+        # subtracts edge_to_nose from export_size/2
+        # crop_multiplier = 1
+        # print("neck, faceheight, crop")
+        # print(neck[0])
+        # print(self.face_height)
+        # print(self.crop[0])
+        leftpadding = int(export_size/2 - int(neck[0]))
+        rightpadding = int(export_size/2 - (self.w - int(neck[0])))
+        toppadding = int(export_size/2 - int(neck[1]))
+        botpadding = int(export_size/2 - (self.h - int(neck[1])))
+        self.padding_points = [toppadding, rightpadding, botpadding, leftpadding]
+
 
     def draw_nose(self,image):
         #it would prob be better to do this with a dict and a loop
@@ -413,6 +426,22 @@ class SelectPose:
 
         pass
 
+    def add_margin(self, src, padding_points):
+        top, right, bottom, left = padding_points   
+        borderType = cv2.BORDER_CONSTANT
+        BLUE = [255,255,255]
+        print(top)
+        print(type(top))
+        # width, height = pil_img.size
+        # new_width = width + right + left
+        # new_height = height + top + bottom
+        
+        padded_image = cv2.copyMakeBorder(src, top, bottom, left, right, cv2.BORDER_CONSTANT, None, value = BLUE)
+
+        # result = Image.new(pil_img.mode, (new_width, new_height), color)
+        # result.paste(pil_img, (left, top))
+        return padded_image
+
     def crop_image(self,cropped_image, faceLms, sinY):
 
 
@@ -427,6 +456,8 @@ class SelectPose:
             # this is the in progress neck rotation stuff
             self.get_crop_data(faceLms, sinY)
 
+        
+        # print (self.padding_points)
         #set main points for drawing/cropping
         #p1 is tip of nose
         p1 = (int(nose_2d[0]), int(nose_2d[1]))
@@ -435,6 +466,11 @@ class SelectPose:
         self.h - p1[1]
         top_overlap = p1[1]-self.face_height
 
+        #adding this in to padd image
+        try:
+            padded_image = self.add_margin(cropped_image, self.padding_points)
+        except:
+            padded_image = False
         basesize = 750
         newsize = (basesize*self.crop[0],basesize*self.crop[1])
         resize = np.round(newsize[0]/(self.face_height*2.5), 3)
@@ -449,5 +485,5 @@ class SelectPose:
 
             print(self.h, self.w)
                
-        return cropped_image, resize
+        return padded_image, cropped_image, resize
 

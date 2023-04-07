@@ -21,10 +21,10 @@ from pathlib import Path
 #mine
 from mp_sort_pose import SortPose
 
-VIDEO = True
+VIDEO = False
 CYCLECOUNT = 2
 # ROOT="/Users/michaelmandiberg/Documents/projects-active/facemap_production/"
-MAPDATA_FILE = "allmaps_46999.csv"
+MAPDATA_FILE = "allmaps_62607.csv"
 
 # platform specific file folder (mac for michael, win for satyam)
 if platform == "darwin":
@@ -40,9 +40,9 @@ elif platform == "win32":
 
 
 motion = {
-    "side_to_side": True,
+    "side_to_side": False,
     "forward_smile": False,
-    "forward_nosmile":  False,
+    "forward_nosmile":  True,
     "static_pose":  False,
     "simple": False,
 }
