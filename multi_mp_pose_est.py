@@ -11,8 +11,7 @@ import numpy as np
 import mediapipe as mp
 import pandas as pd
 
-from sqlalchemy import create_engine
-from sqlalchemy import text
+from sqlalchemy import create_engine, text
 
 from mp_pose_est import SelectPose
 
@@ -158,7 +157,7 @@ def find_face(image):
         angles = pose.rotationMatrixToEulerAnglesToDegrees()
         mouth_gap = pose.get_mouth_data(faceLms)
 
-        data_to_store = (is_face, angles[0], angles[1], angles[2], mouth_gap, faceLms)
+        data_to_store = (angles[0], angles[1], angles[2], mouth_gap)
         # print(data_to_store)
 
     else: 
@@ -167,7 +166,7 @@ def find_face(image):
 
         data_to_store = (is_face)
         # print(data_to_store)
-    return data_to_store
+    return is_face, data_to_store, faceLms
 
 def calc_encodings(image):
     # dlib code will go here
@@ -182,13 +181,13 @@ def find_body(image):
             # image = cv2.imread(file)
             image_height, image_width, _ = image.shape
             # Convert the BGR image to RGB before processing.
-            results = pose.process(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+            bodyLms = pose.process(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
 
-            if not results.pose_landmarks:
+            if not bodyLms.pose_landmarks:
                 is_body = False
             else: 
                 is_body = True
-            return is_body, results
+            return is_body, bodyLms
         except:
             print(f"this item failed: {file}")
 
@@ -202,25 +201,29 @@ def process_image(task):
     except:
         print(f"this item failed: {task}")
 
-    # if image is not None and image.shape[0]>MINSIZE and image.shape[1]>MINSIZE:
+    if image is not None and image.shape[0]>MINSIZE and image.shape[1]>MINSIZE:
 
-    #     # Do FaceMesh
-    #     data_to_store = find_face(image)
+        # Do FaceMesh
+        is_face, data_to_store, faceLms = find_face(image)
+        print("is_face: ",is_face)
 
-    #     # Do Body Pose
-    #     is_body, results = find_body(image)
+        # Do Body Pose
+        is_body, bodyLms = find_body(image)
+        print("is_body: ",is_body)
 
-    #     if not data_to_store:
-    #         # Calculate Face Encodings if is_face = True
-    #         encodings = calc_encodings(image)
-    #     if data_to_store or is_body:
-    #         print("processed image")
-    #     else:
-    #         print("no face or body found")
+        if is_face:
+            # Calculate Face Encodings if is_face = True
+            print("in encodings conditional")
+            encodings = calc_encodings(image)
+        if data_to_store or is_body:
+            print("processed image")
+        else:
+            print("no face or body found")
 
-    # else:
-    #     print('toooooo smallllll')
-    #     # os.remove(item)
+    else:
+        print('toooooo smallllll')
+        # os.remove(item)
+    print("\n\n")
 
 
 def do_job(tasks_to_accomplish, tasks_that_are_done):
