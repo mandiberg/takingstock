@@ -12,6 +12,7 @@ import mediapipe as mp
 import pandas as pd
 
 from sqlalchemy import create_engine, text, MetaData, Table, Column, Numeric, Integer, VARCHAR, update
+from sqlalchemy.exc import OperationalError
 
 from mp_pose_est import SelectPose
 
@@ -77,6 +78,7 @@ metadata = MetaData(engine)
 
 start = time.time()
 
+# not sure if I'm using this
 class Object:
     def toJSON(self):
         return json.dumps(self, default=lambda o: o.__dict__, 
@@ -321,14 +323,26 @@ def process_image(task):
 
     else:
         print('toooooo smallllll')
-        # os.remove(item)
-        # do I say no face, no body, no double face?
-    print("\n\n")
 
-    # global df_all
-    # print(df)
+
+    global df_all
+    print(df)
+
+    # df_all.append(df)
+    # df_all = df_all.append(df.to_dict, ignore_index=True)
+
     # df_all = pd.concat([df_all, df], ignore_index=True, sort=False)
     # print(df_all)
+
+    try:
+        insertignore_df(df,"Encodings", engine)
+    except OperationalError as e:
+        print(e)
+        # return render_error(exc, title, message, code, standalone=True)
+        # engine.close()
+        # engine.connect()
+        # insertignore_df(df,"Encodings", engine)    
+    
     insertignore_df(df,"Encodings", engine)
     #store data here
 
@@ -352,7 +366,7 @@ def do_job(tasks_to_accomplish, tasks_that_are_done):
             '''
             process_image(task)
             # tasks_that_are_done.put(task + ' is done by ' + current_process().name)
-            # time.sleep(.5)
+            time.sleep(.5)
     return True
 
 
