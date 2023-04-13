@@ -211,7 +211,7 @@ def find_face(image, df):
         df.at['1', 'face_z'] = angles[2]
         df.at['1', 'mouth_gap'] = mouth_gap
         # turning off to debug
-        # df.at['1', 'face_landmarks'] = faceLms
+        df.at['1', 'face_landmarks'] = faceLms
 
         # data_to_store = (angles[0], angles[1], angles[2], mouth_gap)
         # print(data_to_store)
@@ -251,7 +251,7 @@ def find_body(image,df):
                 # bodyLms.pose_landmarks = is_body
 
                 # turning this off to debug df
-                # df.at['1', 'body_landmarks'] = bodyLms.pose_landmarks.toJSON()
+                df.at['1', 'body_landmarks'] = bodyLms.pose_landmarks.toJSON()
 
             df.at['1', 'is_body'] = is_body
 
@@ -299,7 +299,7 @@ def process_image(task):
             # Calculate Face Encodings if is_face = True
             print("in encodings conditional")
             # turning off to debug
-            # df = calc_encodings(image, df)
+            df = calc_encodings(image, df)
 
 
             #prepare data package here
