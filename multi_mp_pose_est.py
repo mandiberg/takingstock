@@ -49,7 +49,6 @@ db = {
     "pass":"Fg!27Ejc!Mvr!GT"
 }
 
-
 # table_search ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id"
 SELECT = "DISTINCT(i.image_id), i.gender_id, author, caption, contentUrl, description, imagename"
 FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings e ON i.image_id = e.image_id "
@@ -64,8 +63,11 @@ mp_pose = mp.solutions.pose
 mp_drawing = mp.solutions.drawing_utils
 drawing_spec = mp_drawing.DrawingSpec(thickness=1, circle_radius=1)
 
+# testing to see if it works better to collect all rows, and then insert
+df_all = pd.DataFrame(columns=['image_id','is_face','is_body','is_face_distant','face_x','face_y','face_z','mouth_gap','face_landmarks','face_encodings','body_landmarks'])
+
 engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}"
-                                .format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']))
+                                .format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']), pool_recycle=1800)
 
 metadata = MetaData(engine)
 
@@ -220,7 +222,7 @@ def find_face(image, df):
         # # print(data_to_store)
         # faceLms= is_face
     # return is_face, data_to_store, faceLms
-    print("is_face: ",is_face)
+    # print("is_face: ",is_face)
     return df
 
 def calc_encodings(image, df):
@@ -255,7 +257,7 @@ def find_body(image,df):
         except:
             print(f"this item failed: {image}")
 
-        print("is_body: ",is_body)
+        # print("is_body: ",is_body)
         return df
 
 
@@ -263,7 +265,7 @@ def process_image(task):
     df = pd.DataFrame(columns=['image_id','is_face','is_body','is_face_distant','face_x','face_y','face_z','mouth_gap','face_landmarks','face_encodings','body_landmarks'])
     # data = {}
     # # df['image_id'] = task[0]
-    # df.at['1', 'image_id'] = task[0]
+    df.at['1', 'image_id'] = task[0]
     # # print(task[0])
     # print("df['image_id'] ", df['image_id'])
     try:
@@ -323,6 +325,10 @@ def process_image(task):
         # do I say no face, no body, no double face?
     print("\n\n")
 
+    # global df_all
+    # print(df)
+    # df_all = pd.concat([df_all, df], ignore_index=True, sort=False)
+    # print(df_all)
     insertignore_df(df,"Encodings", engine)
     #store data here
 
@@ -396,7 +402,7 @@ def main():
 
     # completing process
     for p in processes:
-        print("completing process")
+        # print("completing process")
         p.join()
 
     # # print the output
@@ -404,6 +410,8 @@ def main():
     #     print("tasks are done")
     #     print(tasks_that_are_done.get())
 
+    global df_all
+    print(df_all)
     end = time.time()
     print (end - start)
 
