@@ -67,12 +67,18 @@ drawing_spec = mp_drawing.DrawingSpec(thickness=1, circle_radius=1)
 engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}"
                                 .format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']))
 
+metadata = MetaData()
+
 # # initialize the Metadata Object
 # meta = MetaData(bind=engine)
 # MetaData.reflect(meta)
 
 start = time.time()
 
+class Object:
+    def toJSON(self):
+        return json.dumps(self, default=lambda o: o.__dict__, 
+            sort_keys=True, indent=4)
 
 def get_hash_folders(filename):
     m = hashlib.md5()
@@ -120,6 +126,24 @@ def insertignore(dataframe,table):
          engine.connect().execute(sql, tuple(row))
 
 
+def insertignore_dict(dict_data,table_name):
+
+     # # creating column list for insertion
+     # # cols = "`,`".join([str(i) for i in dataframe.columns.tolist()])
+     # cols = "`,`".join([str(i) for i in list(dict.keys())])
+     # tup = tuple(list(dict.values()))
+
+     # sql = "INSERT IGNORE INTO `"+table+"` (`" +cols + "`) VALUES (" + "%s,"*(len(tup)-1) + "%s)"
+     # engine.connect().execute(sql, tup)
+
+     # Create a SQLAlchemy Table object representing the target table
+     target_table = Table(table_name, metadata, extend_existing=True, autoload_with=engine)
+
+     # Insert the dictionary data into the table using SQLAlchemy's insert method
+     with engine.connect() as connection:
+         connection.execute(target_table.insert(), dict_data)
+
+
 def selectSQL():
 
     # selectsql = "SELECT UID from Images Where UID = '"+str(1351300526)+"';"
@@ -141,7 +165,7 @@ def selectSQL():
     # return alreadyDL
 
 
-def find_face(image):
+def find_face(image, df):
     with mp.solutions.face_mesh.FaceMesh(static_image_mode=True,
                                          refine_landmarks=False,
                                          max_num_faces=1,
@@ -169,24 +193,36 @@ def find_face(image):
         angles = pose.rotationMatrixToEulerAnglesToDegrees()
         mouth_gap = pose.get_mouth_data(faceLms)
 
-        data_to_store = (angles[0], angles[1], angles[2], mouth_gap)
+        df.at['1', 'is_face'] = is_face
+        # df.at['1', 'is_face_distant'] = is_face_distant
+        df.at['1', 'face_x'] = angles[0]
+        df.at['1', 'face_y'] = angles[1]
+        df.at['1', 'face_z'] = angles[2]
+        df.at['1', 'mouth_gap'] = mouth_gap
+        df.at['1', 'face_landmarks'] = faceLms
+
+        # data_to_store = (angles[0], angles[1], angles[2], mouth_gap)
         # print(data_to_store)
 
     else: 
         # print(f"no face found")
         is_face = False
+        df.at['1', 'is_face'] = is_face
+        # data_to_store = (is_face)
+        # # print(data_to_store)
+        # faceLms= is_face
+    # return is_face, data_to_store, faceLms
+    print("is_face: ",is_face)
+    return df
 
-        data_to_store = (is_face)
-        # print(data_to_store)
-        faceLms= is_face
-    return is_face, data_to_store, faceLms
-
-def calc_encodings(image):
+def calc_encodings(image, df):
     # dlib code will go here
     encodings = ""
-    return encodings
+    df.at['1', 'face_encodings'] = encodings
 
-def find_body(image):
+    return df
+
+def find_body(image,df):
     with mp_pose.Pose(
         static_image_mode=True, min_detection_confidence=0.5) as pose:
       # for idx, file in enumerate(file_list):
@@ -195,19 +231,33 @@ def find_body(image):
             image_height, image_width, _ = image.shape
             # Convert the BGR image to RGB before processing.
             bodyLms = pose.process(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
-
+            # bodyLms = results.pose_landmarks.landmark
             if not bodyLms.pose_landmarks:
                 is_body = False
             else: 
                 is_body = True
-            return is_body, bodyLms
+                # bodyLms.pose_landmarks = is_body
+
+                # turning this off to debug df
+                # df.at['1', 'body_landmarks'] = bodyLms.pose_landmarks.toJSON()
+
+            df.at['1', 'is_body'] = is_body
+
+            # return is_body, bodyLms.pose_landmarks.toJSON()
         except:
-            print(f"this item failed: {file}")
+            print(f"this item failed: {image}")
+
+        print("is_body: ",is_body)
+        return df
 
 
 def process_image(task):
+    df = pd.DataFrame(columns=['image_id','is_face','is_body','is_face_distant','face_x','face_y','face_z','mouth_gap','face_landmarks','face_encodings','body_landmarks'])
     data = {}
-    data['image_id'] = task[0]
+    # df['image_id'] = task[0]
+    df.at['1', 'image_id'] = task[0]
+    # print(task[0])
+    print("df['image_id'] ", df['image_id'])
     try:
         image = cv2.imread(task[1]) 
         
@@ -219,39 +269,39 @@ def process_image(task):
     if image is not None and image.shape[0]>MINSIZE and image.shape[1]>MINSIZE:
 
         # Do FaceMesh
-        is_face, data_to_store, faceLms = find_face(image)
+        # is_face, data_to_store, faceLms = find_face(image)
+        df = find_face(image, df)
+
         #         data_to_store = (angles[0], angles[1], angles[2], mouth_gap)
 
-        print("is_face: ",is_face)
-
         # Do Body Pose
-        is_body, bodyLms = find_body(image)
-        print("is_body: ",is_body)
+        df = find_body(image, df)
 
-        data['is_face'] = is_face
-        data['is_body'] = is_body
+        # data['is_face'] = is_face
+        # data['is_body'] = is_body
         # 'is_face_distant'] = is_face_distant
 
+        print(df.at['1', 'is_face'])
 
-        if is_face:
+        if df.at['1', 'is_face']:
             # Calculate Face Encodings if is_face = True
             print("in encodings conditional")
-            encodings = calc_encodings(image)
+            df = calc_encodings(image, df)
             #prepare data package here
-            data['face_x'] = data_to_store[0]
-            data['face_y'] = data_to_store[0]
-            data['face_z'] = data_to_store[0]
-            data['mouth_gap'] = data_to_store[0]
-            data['face_landmarks'] = faceLms
-            data['face_encodings'] = encodings
+            # data['face_x'] = data_to_store[0]
+            # data['face_y'] = data_to_store[0]
+            # data['face_z'] = data_to_store[0]
+            # data['mouth_gap'] = data_to_store[0]
+            # data['face_landmarks'] = faceLms
+            # data['face_encodings'] = encodings
 
 
-        if is_body:
-            print("processed image")
-            #prepare data package here
-            data['body_landmarks'] = bodyLms
+        # if df.at['1', 'is_body']:
+        #     print("processed image")
+        #     #prepare data package here
+        #     data['body_landmarks'] = bodyLms
 
-        if not is_face and not is_body:
+        if not df.at['1', 'is_face'] and not df.at['1', 'is_body']:
             print("no face or body found")
             #prepare data package here
 
@@ -262,9 +312,7 @@ def process_image(task):
         # do I say no face, no body, no double face?
     print("\n\n")
 
-
-    print(data)
-
+    # insertignore(df,"Encodings")
     #store data here
 
 
