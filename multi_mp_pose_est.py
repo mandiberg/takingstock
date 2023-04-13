@@ -11,7 +11,7 @@ import numpy as np
 import mediapipe as mp
 import pandas as pd
 
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, text, MetaData, Table, Column, Numeric, Integer, VARCHAR, update
 
 from mp_pose_est import SelectPose
 
@@ -44,10 +44,17 @@ MINSIZE = 700
 
 db = {
     "host":"localhost",
-    "name":"gettytest",
+    "name":"gettytest3",
     "user":"root",
     "pass":"Fg!27Ejc!Mvr!GT"
 }
+
+
+# table_search ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id"
+SELECT = "DISTINCT(i.image_id), i.gender_id, author, caption, contentUrl, description, imagename"
+FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings e ON i.image_id = e.image_id "
+WHERE = "e.image_id IS NULL"
+LIMIT = 10
 
 
 #creating my objects
@@ -60,6 +67,9 @@ drawing_spec = mp_drawing.DrawingSpec(thickness=1, circle_radius=1)
 engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}"
                                 .format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']))
 
+# # initialize the Metadata Object
+# meta = MetaData(bind=engine)
+# MetaData.reflect(meta)
 
 start = time.time()
 
@@ -110,10 +120,12 @@ def insertignore(dataframe,table):
          engine.connect().execute(sql, tuple(row))
 
 
-def selectSQL(table,get,column,value,limit):
+def selectSQL():
 
     # selectsql = "SELECT UID from Images Where UID = '"+str(1351300526)+"';"
-    selectsql = "SELECT "+ get +" from "+ table +" Where "+ column +" "+ value +" LIMIT "+ str(limit) +";"
+    # selectsql = "SELECT "+ get +" from "+ table +" Where "+ column +" "+ value +" LIMIT "+ str(limit) +";"
+    # selectsql = f"SELECT {get} FROM {table} WHERE {column} {value} LIMIT {str(limit)};"
+    selectsql = f"SELECT {SELECT} FROM {FROM} WHERE {WHERE} LIMIT {str(LIMIT)};"
     print("actual SELECT is: ",selectsql)
     result = engine.connect().execute(text(selectsql))
 
@@ -166,6 +178,7 @@ def find_face(image):
 
         data_to_store = (is_face)
         # print(data_to_store)
+        faceLms= is_face
     return is_face, data_to_store, faceLms
 
 def calc_encodings(image):
@@ -193,11 +206,13 @@ def find_body(image):
 
 
 def process_image(task):
+    data = {}
+    data['image_id'] = task[0]
     try:
-        image = cv2.imread(task) 
+        image = cv2.imread(task[1]) 
         
         # this is for when you need to move images into a testing folder structure
-        save_image_elsewhere(image, task)
+        # save_image_elsewhere(image, task)
     except:
         print(f"this item failed: {task}")
 
@@ -205,25 +220,52 @@ def process_image(task):
 
         # Do FaceMesh
         is_face, data_to_store, faceLms = find_face(image)
+        #         data_to_store = (angles[0], angles[1], angles[2], mouth_gap)
+
         print("is_face: ",is_face)
 
         # Do Body Pose
         is_body, bodyLms = find_body(image)
         print("is_body: ",is_body)
 
+        data['is_face'] = is_face
+        data['is_body'] = is_body
+        # 'is_face_distant'] = is_face_distant
+
+
         if is_face:
             # Calculate Face Encodings if is_face = True
             print("in encodings conditional")
             encodings = calc_encodings(image)
-        if data_to_store or is_body:
+            #prepare data package here
+            data['face_x'] = data_to_store[0]
+            data['face_y'] = data_to_store[0]
+            data['face_z'] = data_to_store[0]
+            data['mouth_gap'] = data_to_store[0]
+            data['face_landmarks'] = faceLms
+            data['face_encodings'] = encodings
+
+
+        if is_body:
             print("processed image")
-        else:
+            #prepare data package here
+            data['body_landmarks'] = bodyLms
+
+        if not is_face and not is_body:
             print("no face or body found")
+            #prepare data package here
+
 
     else:
         print('toooooo smallllll')
         # os.remove(item)
+        # do I say no face, no body, no double face?
     print("\n\n")
+
+
+    print(data)
+
+    #store data here
 
 
 def do_job(tasks_to_accomplish, tasks_that_are_done):
@@ -256,23 +298,16 @@ def main():
     tasks_that_are_done = Queue()
     processes = []
 
-    table ="images"
-    column = "is_face"
-    value = "is NULL"
-    limit = 10
-
-    get = "*"
-    # column = "author"
-    # value = "= hadynyah"
-
-    print("about to SQL: ",table,get,column,value,limit)
+    print("about to SQL: ",SELECT,FROM,WHERE,LIMIT)
     # create_my_engine(db)
-    resultsjson = selectSQL(table,get,column,value,limit)
+    resultsjson = selectSQL()
     print("got results, count is: ",len(resultsjson))
 
 
     for row in resultsjson:
         # gets contentUrl
+        print(row)
+        image_id = row["image_id"]
         item = row["contentUrl"]
         if folder == "gettyimages":
             orig_filename = item.replace(http, "")+".jpg"
@@ -280,7 +315,8 @@ def main():
             imagepath=os.path.join(ROOT,folder, "newimages",d0, d02, orig_filename)
             isExist = os.path.exists(imagepath)
             if isExist: 
-                tasks_to_accomplish.put(imagepath)
+                task = (image_id,imagepath)
+                tasks_to_accomplish.put(task)
                 # print(imagepath)
                 # print(tasks_to_accomplish.qsize())
 
