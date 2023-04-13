@@ -67,7 +67,7 @@ drawing_spec = mp_drawing.DrawingSpec(thickness=1, circle_radius=1)
 engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}"
                                 .format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']))
 
-metadata = MetaData()
+metadata = MetaData(engine)
 
 # # initialize the Metadata Object
 # meta = MetaData(bind=engine)
@@ -124,6 +124,13 @@ def insertignore(dataframe,table):
      for i,row in dataframe.iterrows():
          sql = "INSERT IGNORE INTO `"+table+"` (`" +cols + "`) VALUES (" + "%s,"*(len(row)-1) + "%s)"
          engine.connect().execute(sql, tuple(row))
+
+
+def insertignore_df(dataframe,table_name, engine):
+
+     # Convert the DataFrame to a SQL table using pandas' to_sql method
+     with engine.connect() as connection:
+         dataframe.to_sql(name=table_name, con=connection, if_exists='append', index=False)
 
 
 def insertignore_dict(dict_data,table_name):
@@ -199,7 +206,8 @@ def find_face(image, df):
         df.at['1', 'face_y'] = angles[1]
         df.at['1', 'face_z'] = angles[2]
         df.at['1', 'mouth_gap'] = mouth_gap
-        df.at['1', 'face_landmarks'] = faceLms
+        # turning off to debug
+        # df.at['1', 'face_landmarks'] = faceLms
 
         # data_to_store = (angles[0], angles[1], angles[2], mouth_gap)
         # print(data_to_store)
@@ -253,11 +261,11 @@ def find_body(image,df):
 
 def process_image(task):
     df = pd.DataFrame(columns=['image_id','is_face','is_body','is_face_distant','face_x','face_y','face_z','mouth_gap','face_landmarks','face_encodings','body_landmarks'])
-    data = {}
-    # df['image_id'] = task[0]
-    df.at['1', 'image_id'] = task[0]
-    # print(task[0])
-    print("df['image_id'] ", df['image_id'])
+    # data = {}
+    # # df['image_id'] = task[0]
+    # df.at['1', 'image_id'] = task[0]
+    # # print(task[0])
+    # print("df['image_id'] ", df['image_id'])
     try:
         image = cv2.imread(task[1]) 
         
@@ -281,12 +289,15 @@ def process_image(task):
         # data['is_body'] = is_body
         # 'is_face_distant'] = is_face_distant
 
-        print(df.at['1', 'is_face'])
+        # print(df.at['1', 'is_face'])
 
         if df.at['1', 'is_face']:
             # Calculate Face Encodings if is_face = True
             print("in encodings conditional")
-            df = calc_encodings(image, df)
+            # turning off to debug
+            # df = calc_encodings(image, df)
+
+
             #prepare data package here
             # data['face_x'] = data_to_store[0]
             # data['face_y'] = data_to_store[0]
@@ -312,7 +323,7 @@ def process_image(task):
         # do I say no face, no body, no double face?
     print("\n\n")
 
-    # insertignore(df,"Encodings")
+    insertignore_df(df,"Encodings", engine)
     #store data here
 
 
