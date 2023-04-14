@@ -33,10 +33,28 @@ i think i want the whole row:
 
 '''
 
-##ROOT= os.path.join(os.environ['HOME'], "Documents/projects-active/facemap_production") ## only on Mac
+## Satyam's Credentials
+db = {
+    "host":"localhost",
+    "name":"stock",                 
+    "user":"root",
+    "pass":"SSJ2_mysql"
+}
 ##ROOT= os.path.join(os.environ['HOMEDRIVE'],os.environ['HOMEPATH'], "Documents/projects-active/facemap_production") ## local WIN
 ROOT= os.path.join("F:/"+"Documents/projects-active/facemap_production") ## SD CARD
 
+## Michael's Credentials
+'''
+db = {
+    "host":"localhost",
+    "name":"gettytest3",            
+    "user":"root",
+    "pass":"Fg!27Ejc!Mvr!GT"
+}
+
+ROOT= os.path.join(os.environ['HOME'], "Documents/projects-active/facemap_production") ## only on Mac
+
+'''
 
 folder ="gettyimages"
 http="https://media.gettyimages.com/photos/"
@@ -49,20 +67,6 @@ MINSIZE = 700
 NUMBER_OF_PROCESSES = 4
 SLEEP_TIME=.5
 
-db = {
-    "host":"localhost",
-    "name":"stock",                 ## Satyam's Credentials
-    "user":"root",
-    "pass":"SSJ2_mysql"
-}
-'''
-db = {
-    "host":"localhost",
-    "name":"gettytest3",            ## Michael's Credentials
-    "user":"root",
-    "pass":"Fg!27Ejc!Mvr!GT"
-}
-'''
 # table_search ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id"
 SELECT = "DISTINCT(i.image_id), i.gender_id, author, caption, contentUrl, description, imagename"
 FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings e ON i.image_id = e.image_id "
