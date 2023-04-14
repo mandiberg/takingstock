@@ -33,21 +33,21 @@ i think i want the whole row:
 
 '''
 
-
+## Satyam's Credentials
 db = {
     "host":"localhost",
-    "name":"stock",                 ## Satyam's Credentials
+    "name":"stock",                 
     "user":"root",
     "pass":"SSJ2_mysql"
 }
 ##ROOT= os.path.join(os.environ['HOMEDRIVE'],os.environ['HOMEPATH'], "Documents/projects-active/facemap_production") ## local WIN
 ROOT= os.path.join("F:/"+"Documents/projects-active/facemap_production") ## SD CARD
 
-
+## Michael's Credentials
 '''
 db = {
     "host":"localhost",
-    "name":"gettytest3",            ## Michael's Credentials
+    "name":"gettytest3",            
     "user":"root",
     "pass":"Fg!27Ejc!Mvr!GT"
 }
