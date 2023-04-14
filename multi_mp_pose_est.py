@@ -33,7 +33,11 @@ i think i want the whole row:
 
 '''
 
-ROOT= os.path.join(os.environ['HOME'], "Documents/projects-active/facemap_production") 
+##ROOT= os.path.join(os.environ['HOME'], "Documents/projects-active/facemap_production") ## only on Mac
+##ROOT= os.path.join(os.environ['HOMEDRIVE'],os.environ['HOMEPATH'], "Documents/projects-active/facemap_production") ## local WIN
+ROOT= os.path.join("F:/"+"Documents/projects-active/facemap_production") ## SD CARD
+
+
 folder ="gettyimages"
 http="https://media.gettyimages.com/photos/"
 # folder ="files_for_testing"
@@ -41,15 +45,24 @@ outputfolder = os.path.join(ROOT,folder+"_output_febmulti")
 SAVE_ORIG = False
 DRAW_BOX = False
 MINSIZE = 700
-
+# number_of_task = 10
+NUMBER_OF_PROCESSES = 4
+SLEEP_TIME=.5
 
 db = {
     "host":"localhost",
-    "name":"gettytest3",
+    "name":"stock",                 ## Satyam's Credentials
+    "user":"root",
+    "pass":"SSJ2_mysql"
+}
+'''
+db = {
+    "host":"localhost",
+    "name":"gettytest3",            ## Michael's Credentials
     "user":"root",
     "pass":"Fg!27Ejc!Mvr!GT"
 }
-
+'''
 # table_search ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id"
 SELECT = "DISTINCT(i.image_id), i.gender_id, author, caption, contentUrl, description, imagename"
 FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings e ON i.image_id = e.image_id "
@@ -366,13 +379,12 @@ def do_job(tasks_to_accomplish, tasks_that_are_done):
             '''
             process_image(task)
             # tasks_that_are_done.put(task + ' is done by ' + current_process().name)
-            time.sleep(.5)
+            time.sleep(SLEEP_TIME)
     return True
 
 
 def main():
-    # number_of_task = 10
-    number_of_processes = 8
+
     tasks_to_accomplish = Queue()
     tasks_that_are_done = Queue()
     processes = []
@@ -409,7 +421,7 @@ def main():
     #     tasks_to_accomplish.put("Task no " + str(i))
 
     # creating processes
-    for w in range(number_of_processes):
+    for w in range(NUMBER_OF_PROCESSES):
         p = Process(target=do_job, args=(tasks_to_accomplish, tasks_that_are_done))
         processes.append(p)
         p.start()
