@@ -29,12 +29,12 @@ ROOT= os.path.join(os.environ['HOME'], "Documents/projects-active/facemap_produc
 folder ="gettyimages"
 http="https://media.gettyimages.com/photos/"
 # folder ="files_for_testing"
-outputfolder = os.path.join(ROOT,folder+"_output")
-SAVE_ORIG = True
-DRAW_BOX = True
+outputfolder = os.path.join(ROOT,folder+"_output_febbig")
+SAVE_ORIG = False
+DRAW_BOX = False
 
 #comment this out to run testing mode with variables above
-SOURCEFILE="_SELECT_FROM_faceimages_query_mouthopen.csv"
+SOURCEFILE="_SELECT_contentUrl_FROM_Images_i_JOIN_ImagesKeywords_ik_ON_i_UID_202302041743.csv"
 # SOURCEFILE="test2000.csv"
 
 dfallmaps = pd.DataFrame(columns=['name', 'cropX', 'x', 'y', 'z', 'resize', 'newname', 'mouth_gap']) 
@@ -146,7 +146,7 @@ for item in meta_file_list:
             # crop image - needs to be refactored, not sure which image object is being touched here.
             # should this return an object, or just save it?
             mouth_gap = pose.get_mouth_data(faceLms)
-            cropped_image, resize = pose.crop_image(prodimage, faceLms, sinY)
+            padded_image, cropped_image, resize = pose.crop_image(prodimage, faceLms, sinY)
 
             #annotate full size image
             pose.draw_crop_frame(image)
@@ -161,6 +161,7 @@ for item in meta_file_list:
             
             filename_meta=f"{pose.crop[0]}_{angles[0]}_{angles[1]}_{angles[2]}_{resize}"
             cropname=os.path.join(ROOT,outputfolder,f"crop_{filename_meta}_{orig_filename}")
+            padname=os.path.join(ROOT,outputfolder,f"pad_{filename_meta}_{orig_filename}")
             markedname=os.path.join(ROOT,outputfolder,f"marked_{filename_meta}_{orig_filename}")
             print(cropname)
             print(markedname)
@@ -170,9 +171,15 @@ for item in meta_file_list:
             # temporarily not writing main image
             if SAVE_ORIG is True:
                 cv2.imwrite(markedname, image)
-            if (pose.crop[0]>.75) and (cropped_image is not None):
+            #commenting out temporariily
+            # if (pose.crop[0]>.75) and (cropped_image is not None):
+            if (cropped_image is not None):
                 # only writes to file and CSV if the file is cropped well and not too big
-                cv2.imwrite(cropname, cropped_image)
+                if padded_image is not False:
+                    cv2.imwrite(padname, padded_image)
+                
+                # temporarily not saving crop
+                # cv2.imwrite(cropname, cropped_image)
                 print("just wrote file")
                 dfthismap = pd.DataFrame({'name': item, 'cropX':pose.crop[0], 'x':angles[0], 'y':angles[1], 'z':angles[2], 'resize':resize, 'newname':cropname, 'mouth_gap':mouth_gap}, index=[0])
                 dfallmaps = pd.concat([dfallmaps, dfthismap], ignore_index=True, sort=False)

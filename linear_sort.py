@@ -1,15 +1,18 @@
-import cv2
-import pandas as pd
-import os
-import time
-import sys
+#!/usr/bin/env python
+# coding: utf-8
 
-#linear sort imports non-class
+# In[9]:
+
+
 import numpy as np
+import pandas as pd
+import cv2
 import mediapipe as mp
 import face_recognition_models
 import dlib
+import os
 from mediapipe.python.solutions.drawing_utils import _normalized_to_pixel_coordinates
+from time import time
 import matplotlib.pyplot as plt
 import imutils
 from imutils import face_utils
@@ -18,35 +21,22 @@ import shutil
 from sys import platform
 from pathlib import Path
 
-#mine
-from mp_sort_pose import SortPose
 
-VIDEO = False
-CYCLECOUNT = 2
-# ROOT="/Users/michaelmandiberg/Documents/projects-active/facemap_production/"
-MAPDATA_FILE = "allmaps_62607.csv"
+# In[27]:
+
+
+#set home location
+home = str(Path.home())
 
 # platform specific file folder (mac for michael, win for satyam)
 if platform == "darwin":
     # OS X
-    folder="Documents/projects-active/facemap_production/"
-    ROOT = os.path.join(str(Path.home()),folder)
+    folder="Documents/projects-active/facemap_production/gettyimages_output_febbig"
 elif platform == "win32":
     # Windows...
     folder="foobar"
-    # S may not be using home
-    ROOT = os.path.join(str(Path.home()),folder)
-#set home location
 
-
-motion = {
-    "side_to_side": False,
-    "forward_smile": False,
-    "forward_nosmile":  True,
-    "static_pose":  False,
-    "simple": False,
-}
-
+folder = os.path.join(home,folder)
 
 
 # In[11]:
@@ -275,7 +265,7 @@ def get_img_list(folder):
     return img_list        
     print("got image list")
     
-def save_sorted(counter, folder, image, dist):
+def save_sorted(folder, image, counter, dist):
     sorted_name = "linear_sort_"+str(counter)+"_"+str(round(dist, 2))+".jpg"
     sortfolder="sorted2"
     newfolder = os.path.join(folder,sortfolder)
@@ -304,14 +294,11 @@ def get_d(enc1, enc2):
 
 # ### dataframe creation and sorting
 
+# In[17]:
 
-    
-#     return output_data
 
-#takes list input -- currently deprecated 
 def encode_list_df(folder, img_list):
 #     enc_dict={}
-    #img_list could be a list, but most likely will be dataframe
     csv_name="face_encodings.csv"
     col1="file_name"
     col2="encoding"
@@ -346,60 +333,8 @@ def encode_list_df(folder, img_list):
     clms = clms[-1:] + clms[:-1]
     output_data=output_data[clms]
     # saving without index
-    # i think this needs to be refactored to get rid of this step. just drop index
-    # output_data.to_csv(csv_name, index=False)
-    # df = pd.read_csv(csv_name)
-    output_data.set_index('file_name', inplace=True)
-
-    
-    return output_data
-
-
-def encode_df(folder,df_segment):
-    print(df_segment)
-
-    csv_name="face_encodings.csv"
-    col1="file_name"
-    col2="encoding" 
-    curr=0
-    img_list = df_segment['newname'].tolist()
-
-    total = len(img_list)
-
-
-    # encodings column list for splitting
-    col_list=[]
-    for i in range(128):
-        col_list.append(col2+str(i))
-
-    #initializing the dataframe
-    image_data=pd.DataFrame(columns=[col1, col2])
-
-    
-    for img in img_list:
-        if curr%10==0:print(curr,"/",total)
-        curr+=1
-        filepath = os.path.join(folder,img)        
-        filepath=filepath.replace('\\' , '/')  ## cv2 accepts files with "/" instead of "\"
-        encodings=ret_encoding(filepath)
-        if encodings is not None:              ## checking if a face is found
-            
-            data=pd.DataFrame({col1:img,col2:[np.array(encodings)]})
-            image_data = pd.concat([image_data,data],ignore_index=True)  
-
-    #splitting the encodings column
-    output_data = pd.DataFrame(image_data[col2].to_list(), columns=col_list)
-    #adding the filename column and then puting it first
-    output_data[[col1]]=pd.DataFrame(image_data[col1].tolist(),index=image_data.index)
-    clms = output_data.columns.tolist()
-    clms = clms[-1:] + clms[:-1]
-    output_data=output_data[clms]
-    # saving without index
-    # i think this needs to be refactored to get rid of this step. just drop index
-    # output_data.to_csv(csv_name, index=False)
-    # df = pd.read_csv(csv_name)
-    output_data.set_index('file_name', inplace=True)
-
+    output_data.to_csv(csv_name, index=False)
+    df = pd.read_csv(csv_name)
     
     return output_data
 
@@ -519,246 +454,108 @@ def test_pair(last_file, new_file):
         return False
 
 
+# In[28]:
 
 
+img_list = get_img_list(folder)
+# start_img = img_list[1]
+start_img = "median"
 
-###################
-# SORT FUNCTIONS  #
-###################
+# enc_dict = encode_list(folder, img_list)
+df_enc = encode_list_df(folder, img_list)
 
+df_enc.set_index('file_name', inplace=True)
 
-# takes a dataframe of images and encodings and returns a df sorted by distance
-def sort_by_face_dist(folder, start_img,df_enc):
-    face_distances=[]
-    for i in range(len(df_enc.index)-2):
-        # find the image
-        dist, start_img, df_enc = get_closest_df(folder, start_img,df_enc)
-        # save the image -- this prob will be to append to list, and return list? 
-        # save_sorted(i, folder, start_img, dist)
-        this_dist=[dist, folder, start_img]
-        face_distances.append(this_dist)
+# print(df_enc.median().to_list())
 
-        #debuggin
-        # print(i)
-        # print(len(df_enc.index))
-        # print(dist)
-        # print (start_img)
-    df = pd.DataFrame(face_distances, columns =['dist', 'folder', 'filename'])
-    df = df.sort_values(by=['dist'])
-    return df
-
-
-## Create DF of encodings from list
-
-# /Users/michaelmandiberg/Documents/projects-active/facemap_production/images1675441632.138345
-# folder = os.path.join(ROOT,"images1675441632.138345")
-
-#define the list of images to sort by distance
-# img_list = get_img_list(folder)
-
-# encode all images in list, and use name as df index
-# df_enc = encode_list_df(folder, img_list)
-
-# not being used currently
-# save_sorted(i, folder, start_img, dist)
-
-# # get dataframe sorted by distance
-# start_img = "median"
-# df_sorted = sort_by_face_dist(folder, start_img,df_enc)
-# print(df_sorted)
-
-
-def simple_order(segment):
-    img_array = []
-    delta_array = []
-    # size = []
-    #simple ordering
-    rotation = segment.sort_values(by=sort.SORT)
-    print("rotation: ")
-    print(rotation)
-
-    # for num, name in enumerate(presidents, start=1):
-    i = 0
-    for index, row in rotation.iterrows():
-        # print(index, row['x'], row['y'], row['newname'])
-        delta_array.append(row['mouth_gap'])
-        try:
-            print(row['newname'])
-            #this is pointin to the wrong location
-            #/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages_output_feb/crop_1_3.9980554263116233_-3.8588402232564545_2.2552074063078456_0.494_portrait-of-young-woman-covering-eye-with-compass-morocco-picture-id1227557214.jpg
-            #original files are actually here:
-            #/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/F/F0/portrait-of-young-woman-covering-eye-with-compass-morocco-picture-id1227557214.jpg
-            #doesn't seem to be picking up the cropped image.
-
-            newimage = cv2.imread(row['newname'])
-            height, width, layers = img.shape
-            size = (width, height)
-            # test to see if this is actually an face, to get rid of blank ones/bad ones
-            # this may not be necessary
-            if sort.is_face(img):
-                # if not the first image
-                print('is_face')
-                if i>0:
-                    print('i is greater than 0')
-                    # blend this image with the last image
-                    # blend = cv2.addWeighted(img, 0.5, img, 0.5, 0.0)
-                    # # blend = cv2.addWeighted(img, 0.5, img_array[i-1], 0.5, 0.0)
-                    # blended_face = sort.is_face(blend)
-                    # print('is_face ',blended_face)
-                    # if blended image has a detectable face, append the img
-                    if blend_is_face(oldimage, newimage):
-                        img_array.append(img)
-                        print('is a face! adding it')
-                    else:
-                        print('skipping this one')
-                # for the first one, just add the image
-                # this may need to be refactored in case the first one is bad?
-                else:
-                    img_array.append(img)
-            else:
-                print('skipping this one: ',row['newname'])
-
-            i+=1
-            oldimage = newimage
-
-        except:
-            print('failed:',row['newname'])
-    # print("delta_array")
-    # print(delta_array)
-    return img_array, size
-
-
-
-def cycling_order(CYCLECOUNT):
-    img_array = []
-    cycle = 0 
-    # metamedian = get_metamedian(angle_list)
-    metamedian = sort.metamedian
-    d = sort.d
-
-    print("CYCLE to test: ",cycle)
-
-    while cycle < CYCLECOUNT:
-        print("CYCLE: ",cycle)
-        for angle in sort.angle_list:
-            print("angle: ",str(angle))
-            # # print(d[angle].iloc[(d[angle][SECOND_SORT]-metamedian).abs().argsort()[:2]])
-            # # print(d[angle].size)
-            try:
-                # I don't remember exactly how this segments the data...!!!
-                # [:CYCLECOUNT] gets the first [:0] value on first cycle?
-                # or does it limit the total number of values to the number of cycles?
-                print(d[angle])
-                
-                #this is a way of finding the image with closest second sort (Y)
-                #mystery value is the image to be matched? 
-                print("second sort, metamedian ",d[angle][sort.SECOND_SORT],sort.metamedian)
-                mysteryvalue = (d[angle][sort.SECOND_SORT]-sort.metamedian)
-                print('mysteryvalue ',mysteryvalue)
-                #is mystery value a df?
-                #this is finding the 
-                mysterykey = mysteryvalue.abs().argsort()[:CYCLECOUNT]
-                print('mysterykey: ',mysterykey)
-                closest = d[angle].iloc[mysterykey]
-                closest_file = closest.iloc[cycle]['newname']
-                closest_mouth = closest.iloc[cycle]['mouth_gap']
-                print('closest: ')
-                print(closest_file)
-                img = cv2.imread(closest_file)
-                height, width, layers = img.shape
-                size = (width, height)
-                img_array.append(img)
-            except:
-                print('failed cycle angle:')
-                # print('failed:',row['newname'])
-        print('finished a cycle')
-        sort.angle_list.reverse()
-        cycle = cycle +1
-        # print(angle_list)
-    return img_array, size
-
-
-###################
-#  MY MAIN CODE   #
-###################
-
-
-#creating my objects
-start = time.time()
-sort = SortPose(motion)
-
-# read the csv and construct dataframe
-try:
-    df = pd.read_csv(os.path.join(ROOT,MAPDATA_FILE))
-except:
-    print('you forgot to change the filename DUH')
-if df.empty:
-    print('dataframe empty, probably bad path')
-    sys.exit()
-
-### PROCESS THE DATA ###
-
-# make the segment based on settings
-segment = sort.make_segment(df)
-
-# get list of all angles in segment
-angle_list = sort.createList(segment)
-
-# sort segment by angle list
-# creates sort.d attribute: a dataframe organized (indexed?) by angle list
-sort.get_divisor(segment)
-
-# # is this used anywhere? 
-# angle_list_pop = angle_list.pop()
-
-# get median for first sort
-median = sort.get_median()
-
-# get metamedian for second sort, creates sort.metamedian attribute
-sort.get_metamedian()
-
-# encode all images in list, and use name as df index
-df_enc = encode_df(ROOT, segment)
-
-
-### BUILD THE LIST OF SELECTED IMAGES ###
-
-# img_array is actual bitmap data? 
-if motion["side_to_side"] is True:
-    img_list, size = cycling_order(CYCLECOUNT)
-    # size = sort.get_cv2size(ROOT, img_list[0])
-else:
-# dont neet to pass SECOND_SORT, because it is already there
-
-    # img_list, size = simple_order(segment)
-
-
-    # not being used currently
-    # save_sorted(i, folder, start_img, dist)
-
-    # # get dataframe sorted by distance
-    start_img = "median"
-    df_sorted = sort_by_face_dist(ROOT, start_img,df_enc)
-    # print("df_sorted")
-    # print(df_sorted)
-    img_list = df_sorted['filename'].tolist()
-    size = sort.get_cv2size(ROOT, img_list[0])
-    # print(img_list)
-
-
-
-    # img_array, size = sort.simplest_order(segment) 
-
-# print("img_array: ",img_array)
-### WRITE THE IMAGES TO VIDEO/FILES ###
-
-if VIDEO == True:
-    #save individual as video
-    sort.write_video(ROOT, img_list, segment, size)
-
-else:
-    #save individual as images
+#with lists/dicts
+# dist=0
+# for i in range(len(img_list)-1):
+#     save_sorted(folder, start_img, i, dist)
+#     dist, start_img = get_closest(folder, start_img,img_list, enc_dict)
     
-    sort.write_images(ROOT, img_list, segment)
+#     print(dist)
+#     print (start_img)
+    
+#     if dist > .37: 
+#         continue
+
+
+#with df
+dist=0
+print(len(df_enc.index))
+
+for i in range(len(df_enc.index)-2):
+    dist, start_img, df_enc = get_closest_df(folder, start_img,df_enc)
+#     print(folder, start_img, i, dist)
+    save_sorted(folder, start_img, i, dist)
+    print(i)
+    print(len(df_enc.index))
+    print(dist)
+    print (start_img)
+
+# this maybe isn't working right?        
+#     if dist > .37: 
+#         break
+        
+
+# I don't know why, but this isn't working
+# for i in range(len(df_enc.index)-2):
+#     dist, start_img, df_enc = get_closest_df(folder, start_img,df_enc)
+# #     print(folder, start_img, i, dist)
+#     save_sorted(folder, start_img, i, dist)
+
+#     if i>0:
+#         #test blend
+# #         last_file = os.path.join(folder,)
+#         blend_is_face = (test_pair(os.path.join(folder,last_img), os.path.join(folder,start_img)))
+#         print('blend_is_face ',blend_is_face)
+#         if blend_is_face:
+# #         print(test_pair(last_img,start_img))
+#             save_sorted(folder, start_img, i, dist)
+#             last_img = start_img
+# #         else:
+# #             start_img = last_img
+            
+#     print(i)
+#     print(len(df_enc.index))
+#     print(dist)
+#     print (start_img)
+    
+#     if dist > .37: 
+#         break
+
+       
+
+    
+
+
+# In[ ]:
+
+
+
+
+
+# In[ ]:
+
+
+
+
+
+# In[ ]:
+
+
+
+
+
+# In[ ]:
+
+
+
+
+
+# In[ ]:
+
+
 
 
