@@ -6,6 +6,8 @@ import os
 import hashlib
 import cv2
 import math
+import pickle
+import sys # can delete for production
 
 import numpy as np
 import mediapipe as mp
@@ -13,6 +15,7 @@ import pandas as pd
 
 from sqlalchemy import create_engine, text, MetaData, Table, Column, Numeric, Integer, VARCHAR, update
 from sqlalchemy.exc import OperationalError
+from sqlalchemy.pool import NullPool
 
 from mp_pose_est import SelectPose
 
@@ -33,18 +36,19 @@ i think i want the whole row:
 
 '''
 
-## Satyam's Credentials
-db = {
-    "host":"localhost",
-    "name":"stock",                 
-    "user":"root",
-    "pass":"SSJ2_mysql"
-}
+######## Satyam's Credentials #########
+# db = {
+#     "host":"localhost",
+#     "name":"stock",                 
+#     "user":"root",
+#     "pass":"SSJ2_mysql"
+# }
 ##ROOT= os.path.join(os.environ['HOMEDRIVE'],os.environ['HOMEPATH'], "Documents/projects-active/facemap_production") ## local WIN
-ROOT= os.path.join("F:/"+"Documents/projects-active/facemap_production") ## SD CARD
+# ROOT= os.path.join("F:/"+"Documents/projects-active/facemap_production") ## SD CARD
+# NUMBER_OF_PROCESSES = 4
+#######################################
 
-## Michael's Credentials
-'''
+######## Michael's Credentials ########
 db = {
     "host":"localhost",
     "name":"gettytest3",            
@@ -53,8 +57,9 @@ db = {
 }
 
 ROOT= os.path.join(os.environ['HOME'], "Documents/projects-active/facemap_production") ## only on Mac
+NUMBER_OF_PROCESSES = 8
+#######################################
 
-'''
 
 folder ="gettyimages"
 http="https://media.gettyimages.com/photos/"
@@ -64,8 +69,7 @@ SAVE_ORIG = False
 DRAW_BOX = False
 MINSIZE = 700
 # number_of_task = 10
-NUMBER_OF_PROCESSES = 4
-SLEEP_TIME=.5
+SLEEP_TIME=0
 
 # table_search ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id"
 SELECT = "DISTINCT(i.image_id), i.gender_id, author, caption, contentUrl, description, imagename"
@@ -82,16 +86,11 @@ mp_drawing = mp.solutions.drawing_utils
 drawing_spec = mp_drawing.DrawingSpec(thickness=1, circle_radius=1)
 
 # testing to see if it works better to collect all rows, and then insert
-df_all = pd.DataFrame(columns=['image_id','is_face','is_body','is_face_distant','face_x','face_y','face_z','mouth_gap','face_landmarks','face_encodings','body_landmarks'])
+df_all = pd.DataFrame(columns=['image_id','is_face','is_body','is_face_distant','face_x','face_y','face_z','mouth_gap','face_landmarks','face_landmarks_pickle','face_encodings','body_landmarks'])
 
 engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}"
-                                .format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']), pool_recycle=1800)
-
+                                .format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']), poolclass=NullPool)
 metadata = MetaData(engine)
-
-# # initialize the Metadata Object
-# meta = MetaData(bind=engine)
-# MetaData.reflect(meta)
 
 start = time.time()
 
@@ -201,7 +200,6 @@ def find_face(image, df):
                                          ) as face_mesh:
         # Convert the BGR image to RGB and process it with MediaPipe Face Mesh.
         results = face_mesh.process(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
-        # print("has results")
 
     #read any image containing a face
     if results.multi_face_landmarks:
@@ -212,7 +210,6 @@ def find_face(image, df):
         #get landmarks
         #added returning meshimage (was image)
         faceLms = pose.get_face_landmarks(results, image)
-
         #calculate base data from landmarks
         pose.calc_face_data(faceLms)
 
@@ -221,6 +218,12 @@ def find_face(image, df):
         angles = pose.rotationMatrixToEulerAnglesToDegrees()
         mouth_gap = pose.get_mouth_data(faceLms)
 
+        if is_face:
+            # Calculate Face Encodings if is_face = True
+            print("in encodings conditional")
+            # turning off to debug
+            encodings = calc_encodings(image, faceLms)
+
         df.at['1', 'is_face'] = is_face
         # df.at['1', 'is_face_distant'] = is_face_distant
         df.at['1', 'face_x'] = angles[0]
@@ -228,28 +231,25 @@ def find_face(image, df):
         df.at['1', 'face_z'] = angles[2]
         df.at['1', 'mouth_gap'] = mouth_gap
         # turning off to debug
-        df.at['1', 'face_landmarks'] = faceLms
 
-        # data_to_store = (angles[0], angles[1], angles[2], mouth_gap)
-        # print(data_to_store)
+        # df.at['1', 'face_landmarks'] = faceLms
+        print("sys.size", sys.getsizeof(pickle.dumps(faceLms)))
+
+        df.at['1', 'face_landmarks_pickle'] = pickle.dumps(faceLms)
+
 
     else: 
-        # print(f"no face found")
         is_face = False
         df.at['1', 'is_face'] = is_face
-        # data_to_store = (is_face)
-        # # print(data_to_store)
-        # faceLms= is_face
-    # return is_face, data_to_store, faceLms
-    # print("is_face: ",is_face)
     return df
 
-def calc_encodings(image, df):
+def calc_encodings(image, faceLms):
     # dlib code will go here
     encodings = ""
-    df.at['1', 'face_encodings'] = encodings
+    # df.at['1', 'face_encodings'] = encodings
 
-    return df
+
+    return encodings
 
 def find_body(image,df):
     with mp_pose.Pose(
@@ -260,6 +260,7 @@ def find_body(image,df):
             image_height, image_width, _ = image.shape
             # Convert the BGR image to RGB before processing.
             bodyLms = pose.process(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+            print("bodyLms, ", bodyLms)
             # bodyLms = results.pose_landmarks.landmark
             if not bodyLms.pose_landmarks:
                 is_body = False
@@ -267,91 +268,52 @@ def find_body(image,df):
                 is_body = True
                 # bodyLms.pose_landmarks = is_body
 
+                # it seems like this is borking the function
                 # turning this off to debug df
-                df.at['1', 'body_landmarks'] = bodyLms.pose_landmarks.toJSON()
+                # df.at['1', 'body_landmarks'] = bodyLms.pose_landmarks.toJSON()
 
             df.at['1', 'is_body'] = is_body
 
             # return is_body, bodyLms.pose_landmarks.toJSON()
         except:
-            print(f"this item failed: {image}")
+            print(f"[find_body]this item failed: {image}")
 
-        # print("is_body: ",is_body)
         return df
 
 
 def process_image(task):
+    def pickle_df(df):
+
+        # mediapipe_object_pkl = pickle.dumps(mediapipe_object)
+        df.at['1', 'face_landmarks'] = pickle.dumps(df.at['1', 'face_landmarks'])
+
     df = pd.DataFrame(columns=['image_id','is_face','is_body','is_face_distant','face_x','face_y','face_z','mouth_gap','face_landmarks','face_encodings','body_landmarks'])
-    # data = {}
-    # # df['image_id'] = task[0]
     df.at['1', 'image_id'] = task[0]
-    # # print(task[0])
-    # print("df['image_id'] ", df['image_id'])
     try:
         image = cv2.imread(task[1]) 
         
         # this is for when you need to move images into a testing folder structure
         # save_image_elsewhere(image, task)
     except:
-        print(f"this item failed: {task}")
+        print(f"[process_image]this item failed: {task}")
 
     if image is not None and image.shape[0]>MINSIZE and image.shape[1]>MINSIZE:
 
         # Do FaceMesh
-        # is_face, data_to_store, faceLms = find_face(image)
         df = find_face(image, df)
-
-        #         data_to_store = (angles[0], angles[1], angles[2], mouth_gap)
 
         # Do Body Pose
         df = find_body(image, df)
 
-        # data['is_face'] = is_face
-        # data['is_body'] = is_body
-        # 'is_face_distant'] = is_face_distant
-
-        # print(df.at['1', 'is_face'])
-
-        if df.at['1', 'is_face']:
-            # Calculate Face Encodings if is_face = True
-            print("in encodings conditional")
-            # turning off to debug
-            df = calc_encodings(image, df)
-
-
-            #prepare data package here
-            # data['face_x'] = data_to_store[0]
-            # data['face_y'] = data_to_store[0]
-            # data['face_z'] = data_to_store[0]
-            # data['mouth_gap'] = data_to_store[0]
-            # data['face_landmarks'] = faceLms
-            # data['face_encodings'] = encodings
-
-
-        # if df.at['1', 'is_body']:
-        #     print("processed image")
-        #     #prepare data package here
-        #     data['body_landmarks'] = bodyLms
-
         if not df.at['1', 'is_face'] and not df.at['1', 'is_body']:
             print("no face or body found")
             #prepare data package here
-
-
     else:
         print('toooooo smallllll')
 
 
-    global df_all
-    print(df)
-
-    # df_all.append(df)
-    # df_all = df_all.append(df.to_dict, ignore_index=True)
-
-    # df_all = pd.concat([df_all, df], ignore_index=True, sort=False)
-    # print(df_all)
-
     try:
+        # df = pickle_df(df)
         insertignore_df(df,"Encodings", engine)
     except OperationalError as e:
         print(e)
@@ -359,8 +321,7 @@ def process_image(task):
         # engine.close()
         # engine.connect()
         # insertignore_df(df,"Encodings", engine)    
-    
-    insertignore_df(df,"Encodings", engine)
+
     #store data here
 
 
