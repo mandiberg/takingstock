@@ -75,7 +75,7 @@ SLEEP_TIME=0
 SELECT = "DISTINCT(i.image_id), i.gender_id, author, caption, contentUrl, description, imagename"
 FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings e ON i.image_id = e.image_id "
 WHERE = "e.image_id IS NULL"
-LIMIT = 20
+LIMIT = 200
 
 
 #creating my objects
@@ -197,7 +197,7 @@ def find_face(image, df):
     with mp.solutions.face_mesh.FaceMesh(static_image_mode=True,
                                          refine_landmarks=False,
                                          max_num_faces=1,
-                                         min_detection_confidence=0.9
+                                         min_detection_confidence=0.5
                                          ) as face_mesh:
         # Convert the BGR image to RGB and process it with MediaPipe Face Mesh.
         results = face_mesh.process(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
@@ -288,14 +288,18 @@ def process_image(task):
             sort = "body"
         else:
             sort = "none"
-        outpath = os.path.join(ROOT,folder,sort, str(df.at['1', 'image_id'])+".jpg")
+        outfolder = os.path.join(ROOT,folder,sort,)
+        outpath = os.path.join(outfolder, str(df.at['1', 'image_id'])+".jpg")
+
+        isExist = os.path.exists(outfolder)
+        if not isExist: 
+            os.mkdir(outfolder)
+
         # oldfolder = "newimages"
         # newfolder = "testimages"
         # outpath = path.replace(oldfolder, newfolder)
         try:
-            print(outpath)
             cv2.imwrite(outpath, image)
-            print("wrote")
 
         except:
             print("couldn't write")
@@ -320,7 +324,7 @@ def process_image(task):
     else:
         print('toooooo smallllll')
 
-    save_image_triage(image,df)
+    # save_image_triage(image,df)
 
     # store data
     try:
