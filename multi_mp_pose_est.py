@@ -75,7 +75,7 @@ SLEEP_TIME=0
 SELECT = "DISTINCT(i.image_id), i.gender_id, author, caption, contentUrl, description, imagename"
 FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings e ON i.image_id = e.image_id "
 WHERE = "e.image_id IS NULL"
-LIMIT = 10
+LIMIT = 200
 
 
 #creating my objects
@@ -230,12 +230,9 @@ def find_face(image, df):
         df.at['1', 'face_y'] = angles[1]
         df.at['1', 'face_z'] = angles[2]
         df.at['1', 'mouth_gap'] = mouth_gap
-        # turning off to debug
+        df.at['1', 'face_landmarks'] = pickle.dumps(faceLms)
+        # df.at['1', 'face_encodings'] = pickle.dumps(encodings)
 
-        # df.at['1', 'face_landmarks'] = faceLms
-        print("sys.size", sys.getsizeof(pickle.dumps(faceLms)))
-
-        df.at['1', 'face_landmarks_pickle'] = pickle.dumps(faceLms)
 
 
     else: 
@@ -270,7 +267,7 @@ def find_body(image,df):
 
                 # it seems like this is borking the function
                 # turning this off to debug df
-                # df.at['1', 'body_landmarks'] = bodyLms.pose_landmarks.toJSON()
+                df.at['1', 'body_landmarks'] = pickle.dumps(bodyLms.pose_landmarks)
 
             df.at['1', 'is_body'] = is_body
 
@@ -401,8 +398,6 @@ def main():
     #     print("tasks are done")
     #     print(tasks_that_are_done.get())
 
-    global df_all
-    print(df_all)
     end = time.time()
     print (end - start)
 
