@@ -75,7 +75,7 @@ SLEEP_TIME=0
 SELECT = "DISTINCT(i.image_id), i.gender_id, author, caption, contentUrl, description, imagename"
 FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings e ON i.image_id = e.image_id "
 WHERE = "e.image_id IS NULL"
-LIMIT = 200
+LIMIT = 20
 
 
 #creating my objects
@@ -114,6 +114,7 @@ def read_csv(csv_file):
 
         for row in reader:
             yield row
+
 
 
 def save_image_elsewhere(image, path):
@@ -279,10 +280,25 @@ def find_body(image,df):
 
 
 def process_image(task):
-    def pickle_df(df):
+    def save_image_triage(image,df):
+        #saves a CV2 image elsewhere -- used in setting up test segment of images
+        if df.at['1', 'is_face']:
+            sort = "face"
+        elif df.at['1', 'is_body']:
+            sort = "body"
+        else:
+            sort = "none"
+        outpath = os.path.join(ROOT,folder,sort, str(df.at['1', 'image_id'])+".jpg")
+        # oldfolder = "newimages"
+        # newfolder = "testimages"
+        # outpath = path.replace(oldfolder, newfolder)
+        try:
+            print(outpath)
+            cv2.imwrite(outpath, image)
+            print("wrote")
 
-        # mediapipe_object_pkl = pickle.dumps(mediapipe_object)
-        df.at['1', 'face_landmarks'] = pickle.dumps(df.at['1', 'face_landmarks'])
+        except:
+            print("couldn't write")
 
     df = pd.DataFrame(columns=['image_id','is_face','is_body','is_face_distant','face_x','face_y','face_z','mouth_gap','face_landmarks','face_encodings','body_landmarks'])
     df.at['1', 'image_id'] = task[0]
@@ -295,31 +311,22 @@ def process_image(task):
         print(f"[process_image]this item failed: {task}")
 
     if image is not None and image.shape[0]>MINSIZE and image.shape[1]>MINSIZE:
-
         # Do FaceMesh
         df = find_face(image, df)
-
         # Do Body Pose
         df = find_body(image, df)
-
         if not df.at['1', 'is_face'] and not df.at['1', 'is_body']:
             print("no face or body found")
-            #prepare data package here
     else:
         print('toooooo smallllll')
 
+    save_image_triage(image,df)
 
+    # store data
     try:
-        # df = pickle_df(df)
         insertignore_df(df,"Encodings", engine)
     except OperationalError as e:
         print(e)
-        # return render_error(exc, title, message, code, standalone=True)
-        # engine.close()
-        # engine.connect()
-        # insertignore_df(df,"Encodings", engine)    
-
-    #store data here
 
 
 def do_job(tasks_to_accomplish, tasks_that_are_done):
