@@ -19,6 +19,11 @@ from sqlalchemy.pool import NullPool
 
 from mp_pose_est import SelectPose
 
+#####new imports #####
+from mediapipe.python.solutions.drawing_utils import _normalized_to_pixel_coordinates
+import dlib
+import face_recognition_models
+
 '''
 
 select 1k images from database with no is_face variable
@@ -37,27 +42,27 @@ i think i want the whole row:
 '''
 
 ######## Satyam's Credentials #########
-# db = {
-#     "host":"localhost",
-#     "name":"stock",                 
-#     "user":"root",
-#     "pass":"SSJ2_mysql"
-# }
-##ROOT= os.path.join(os.environ['HOMEDRIVE'],os.environ['HOMEPATH'], "Documents/projects-active/facemap_production") ## local WIN
-# ROOT= os.path.join("F:/"+"Documents/projects-active/facemap_production") ## SD CARD
-# NUMBER_OF_PROCESSES = 4
+db = {
+    "host":"localhost",
+    "name":"gettytest3",                 
+    "user":"root",
+    "pass":"SSJ2_mysql"
+}
+#ROOT= os.path.join(os.environ['HOMEDRIVE'],os.environ['HOMEPATH'], "Documents/projects-active/facemap_production") ## local WIN
+ROOT= os.path.join("F:/"+"Documents/projects-active/facemap_production") ## SD CARD
+NUMBER_OF_PROCESSES = 4
 #######################################
 
 ######## Michael's Credentials ########
-db = {
-    "host":"localhost",
-    "name":"gettytest3",            
-    "user":"root",
-    "pass":"Fg!27Ejc!Mvr!GT"
-}
+# db = {
+    # "host":"localhost",
+    # "name":"gettytest3",            
+    # "user":"root",
+    # "pass":"Fg!27Ejc!Mvr!GT"
+# }
 
-ROOT= os.path.join(os.environ['HOME'], "Documents/projects-active/facemap_production") ## only on Mac
-NUMBER_OF_PROCESSES = 8
+# ROOT= os.path.join(os.environ['HOME'], "Documents/projects-active/facemap_production") ## only on Mac
+# NUMBER_OF_PROCESSES = 8
 #######################################
 
 
@@ -75,7 +80,7 @@ SLEEP_TIME=0
 SELECT = "DISTINCT(i.image_id), i.gender_id, author, caption, contentUrl, description, imagename"
 FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings e ON i.image_id = e.image_id "
 WHERE = "e.image_id IS NULL"
-LIMIT = 5000
+LIMIT = 10
 
 
 #creating my objects
@@ -84,6 +89,14 @@ face_mesh = mp_face_mesh.FaceMesh(min_detection_confidence=1, static_image_mode=
 mp_pose = mp.solutions.pose
 mp_drawing = mp.solutions.drawing_utils
 drawing_spec = mp_drawing.DrawingSpec(thickness=1, circle_radius=1)
+
+####### new imports and models ########
+mp_face_detection = mp.solutions.face_detection #### added face detection
+face_detection = mp_face_detection.FaceDetection(min_detection_confidence=0.7)
+
+face_recognition_model = face_recognition_models.face_recognition_model_location()
+face_encoder = dlib.face_recognition_model_v1(face_recognition_model)
+###############
 
 # testing to see if it works better to collect all rows, and then insert
 df_all = pd.DataFrame(columns=['image_id','is_face','is_body','is_face_distant','face_x','face_y','face_z','mouth_gap','face_landmarks','face_landmarks_pickle','face_encodings','body_landmarks'])
@@ -201,7 +214,16 @@ def find_face(image, df):
                                          ) as face_mesh:
         # Convert the BGR image to RGB and process it with MediaPipe Face Mesh.
         results = face_mesh.process(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
-
+        
+    with mp.solutions.face_detection.FaceDetection(model_selection=0, min_detection_confidence=0.7) as face_det: 
+        results_det=face_det.process(image[:,:,::-1])  ## [:,:,::-1] is the shortcut for converting BGR to RGB
+        
+    '''
+    0 type model: When we will select the 0 type model then our face detection model will be able to detect the 
+    faces within the range of 2 meters from the camera.
+    1 type model: When we will select the 1 type model then our face detection model will be able to detect the 
+    faces within the range of 5 meters. Though the default value is 0.
+    '''
     #read any image containing a face
     if results.multi_face_landmarks:
         #construct pose object to solve pose
@@ -218,13 +240,13 @@ def find_face(image, df):
         # angles are meta. there are other meta --- size and resize or something.
         angles = pose.rotationMatrixToEulerAnglesToDegrees()
         mouth_gap = pose.get_mouth_data(faceLms)
-
+        faceDet=results_det.detections[0]             ##### calculated face detection results
         if is_face:
             # Calculate Face Encodings if is_face = True
             print("in encodings conditional")
             # turning off to debug
-            encodings = calc_encodings(image, faceLms)
-
+            encodings = calc_encodings(image, faceLms,faceDet) ## changed parameters
+            print(encodings)
         df.at['1', 'is_face'] = is_face
         # df.at['1', 'is_face_distant'] = is_face_distant
         df.at['1', 'face_x'] = angles[0]
@@ -232,7 +254,7 @@ def find_face(image, df):
         df.at['1', 'face_z'] = angles[2]
         df.at['1', 'mouth_gap'] = mouth_gap
         df.at['1', 'face_landmarks'] = pickle.dumps(faceLms)
-        # df.at['1', 'face_encodings'] = pickle.dumps(encodings)
+        df.at['1', 'face_encodings'] = pickle.dumps(encodings)
 
 
 
@@ -241,15 +263,45 @@ def find_face(image, df):
         df.at['1', 'is_face'] = is_face
     return df
 
-def calc_encodings(image, faceLms):
-    # dlib code will go here
-    encodings = ""
-    # df.at['1', 'face_encodings'] = encodings
+def calc_encodings(image, faceLms,faceDet):## changed parameters and rebuilt
+    print("calc_encodings")
+    height, width, _ = image.shape
+    landmark_points_5 = [ 263, #left eye away from centre
+                       362, #left eye towards centre
+                       33,  #right eye away from centre
+                       133, #right eye towards centre
+                        2 #bottom of nose tip 
+                    ]
+    raw_landmark_set = []
+    for index in landmark_points_5:                       ######### CORRECTION: landmark_points_5_3 is the correct one for sure
+        x = int(faceLms.landmark[index].x * width)
+        y = int(faceLms.landmark[index].y * height)
+        landmark_point=dlib.point([x,y])
+        raw_landmark_set.append(landmark_point)
+    all_points=dlib.points(raw_landmark_set)
+    
+    bbox = faceDet.location_data.relative_bounding_box
+    xy_min = _normalized_to_pixel_coordinates(bbox.xmin, bbox.ymin, height,width)
+    xy_max = _normalized_to_pixel_coordinates(bbox.xmin + bbox.width, bbox.ymin + bbox.height,height,width)
+    if xy_min is not None and xy_max is not None:
+        xmin,ymin =xy_min
+        xmax,ymax = xy_max
+        b_box= dlib.rectangle(left=xmin, top=ymax, right=xmax, bottom=ymin)
+        #in_bounds=True
+    #else:
+        #print("face out of frame")
+        #in_bounds=False
+
+    if (all_points is None) or (b_box is None):return 
+    
+    raw_landmark_set=dlib.full_object_detection(b_box,all_points)
+    encodings=face_encoder.compute_face_descriptor(image, raw_landmark_set, num_jitters=1)
 
 
-    return encodings
+    return np.array(encodings)
 
 def find_body(image,df):
+    print("find_body")
     with mp_pose.Pose(
         static_image_mode=True, min_detection_confidence=0.5) as pose:
       # for idx, file in enumerate(file_list):
@@ -280,6 +332,7 @@ def find_body(image,df):
 
 
 def process_image(task):
+    print("process_image")
     def save_image_triage(image,df):
         #saves a CV2 image elsewhere -- used in setting up test segment of images
         if df.at['1', 'is_face']:
@@ -328,12 +381,13 @@ def process_image(task):
 
     # store data
     try:
-        insertignore_df(df,"Encodings", engine)
+        insertignore_df(df,"encodings", engine)  ### made it all lower case to avoid discrepancy
     except OperationalError as e:
         print(e)
 
 
 def do_job(tasks_to_accomplish, tasks_that_are_done):
+    print("do_job")
     while True:
         try:
             '''
@@ -357,7 +411,7 @@ def do_job(tasks_to_accomplish, tasks_that_are_done):
 
 
 def main():
-
+    print("main")
     tasks_to_accomplish = Queue()
     tasks_that_are_done = Queue()
     processes = []
