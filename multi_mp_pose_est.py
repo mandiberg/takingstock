@@ -80,7 +80,7 @@ SLEEP_TIME=0
 SELECT = "DISTINCT(i.image_id), i.gender_id, author, caption, contentUrl, description, imagename"
 FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings e ON i.image_id = e.image_id "
 WHERE = "e.image_id IS NULL"
-LIMIT = 10
+LIMIT = 100
 
 
 #creating my objects
@@ -217,18 +217,15 @@ def find_face(image, df):
     1 type model: When we will select the 1 type model then our face detection model will be able to detect the 
     faces within the range of 5 meters. Though the default value is 0.
     '''
- 
-    
-    if not results_det.detections:
-        is_face = False
-        df.at['1', 'is_face'] = is_face
-    else:
+    is_face = False
+
+
+    if results_det.detections:
         faceDet=results_det.detections[0]
         bbox = faceDet.location_data.relative_bounding_box
-        xy_min = _normalized_to_pixel_coordinates(bbox.xmin, bbox.ymin, height,width)
-        xy_max = _normalized_to_pixel_coordinates(bbox.xmin + bbox.width, bbox.ymin + bbox.height,height,width)
+        xy_min = _normalized_to_pixel_coordinates(bbox.xmin, bbox.ymin, width,height)
+        xy_max = _normalized_to_pixel_coordinates(bbox.xmin + bbox.width, bbox.ymin + bbox.height,width,height)
         if xy_min is not None and xy_max is not None:
-            in_frame=True
             left,bottom =xy_min
             right,top = xy_max
             bbox={"left":left,"right":right,"top":top,"bottom":bottom
@@ -240,7 +237,6 @@ def find_face(image, df):
                                              ) as face_mesh:
             # Convert the BGR image to RGB and cropping it around face boundary and process it with MediaPipe Face Mesh.
                 results = face_mesh.process(image[bottom:top,left:right,::-1])    
-        else: in_frame=False
         #read any image containing a face
         if results.multi_face_landmarks:
             
@@ -266,14 +262,17 @@ def find_face(image, df):
                 # turning off to debug
                 encodings = calc_encodings(image, faceLms,faceDet) ## changed parameters
                 print(encodings)
-            df.at['1', 'is_face'] = is_face
-            # df.at['1', 'is_face_distant'] = is_face_distant
+            #df.at['1', 'is_face'] = is_face
+            #df.at['1', 'is_face_distant'] = is_face_distant
             df.at['1', 'face_x'] = angles[0]
             df.at['1', 'face_y'] = angles[1]
             df.at['1', 'face_z'] = angles[2]
             df.at['1', 'mouth_gap'] = mouth_gap
             df.at['1', 'face_landmarks'] = pickle.dumps(faceLms)
             df.at['1', 'face_encodings'] = pickle.dumps(encodings)
+    
+    df.at['1', 'is_face'] = is_face
+
 
     return df
 
