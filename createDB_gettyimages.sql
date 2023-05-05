@@ -14,18 +14,34 @@ CREATE TABLE Gender (
     gender varchar(20)
 ); 
 
+CREATE TABLE Age (
+    age_id int NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    age varchar(20)
+); 
+
 CREATE TABLE Site (
     site_name_id int NOT NULL AUTO_INCREMENT PRIMARY KEY,
     site_name varchar(20)
 ); 
 
-CREATE TABLE Images (
+CREATE TABLE Location (
+    location_id int NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    location_text varchar(50),
+    location_number varchar(50),
+    location_code varchar(50)
+); 
+
+CREATE TABLE ImagesTest (
     image_id int NOT NULL AUTO_INCREMENT PRIMARY KEY,
     site_name_id INTEGER,
     FOREIGN KEY (site_name_id) REFERENCES Site (site_name_id),
     site_image_id varchar(50) NOT NULL,
+    age_id INTEGER,
+	FOREIGN KEY (age_id) REFERENCES Age (age_id),
     gender_id INTEGER,
     FOREIGN KEY (gender_id) REFERENCES Gender (gender_id),
+    location_id INTEGER,
+    FOREIGN KEY (location_id) REFERENCES Location (location_id),
     author varchar(100),
     caption varchar(150),
     contentUrl varchar(200) NOT NULL,
