@@ -49,7 +49,6 @@ KEYWORD_PATH = "/Users/michaelmandiberg/Downloads/Pexels_v2/Keywords_20230430093
 CSV_NOKEYS_PATH = "/Users/michaelmandiberg/Downloads/Pexels_v2/CSV_NOKEYS.csv"
 CSV_IMAGEKEYS_PATH = "/Users/michaelmandiberg/Downloads/Pexels_v2/CSV_IMAGEKEYS.csv"
 NEWIMAGES_FOLDER_NAME = 'images_pexels'
-CSV_COUNTOUT_PATH = 'countout.csv'
 
 
 # key2key = {"person":"people", "kid":"child","affection":"Affectionate", "baby":"Baby - Human Age", "beautiful":"Beautiful People", "pretty":"Beautiful People", "blur":"Blurred Motion", "casual":"Casual Clothing", "children":"Child", "kids":"Child", "couple":"Couple - Relationship", "adorable":"Cute", "room":"Domestic Room", "focus":"Focus - Concept", "happy":"Happiness", "at home":"Home Interior", "home":"Home Interior", "face":"Human Face", "hands":"Human Hand", "landscape":"Landscape - Scenery", "outfit":"Landscape - Scenery", "leisure":"Leisure Activity", "love":"Love - Emotion", "guy":"Men", "motherhood":"Mother", "parenthood":"Parent", "positive":"Positive Emotion", "recreation":"Recreational Pursuit", "little":"Small", "studio shoot":"Studio Shot", "together":"Togetherness", "vertical shot":"Vertical", "lady":"women", "young":"Young Adult"}
@@ -425,18 +424,7 @@ def ingest_it():
     df = df.drop_duplicates()
     # print(df)
 
-    # read last completed file
-    try:
-        print("trying to get last saved")
-        last_line = read_csv(CSV_COUNTOUT_PATH)
-        start_counter = last_line
-    except:
-        start_counter = 0
-        print('[download_images_from_cache] set max_element to 0 \n', flush=True)
-    print("max_element,", start_counter)
-
-
-    # ind = 0
+    ind = 0
     # print(len(df.index))
 
     while (ind < len(df.index)):
@@ -507,10 +495,6 @@ def ingest_it():
                 # Row already exists, do not insert
                 print('Row already exists: ', ind)
 
-        # print out to countout every 1000 batches
-        if start_counter % 1000 == 0:
-            print("counter is: ",start_counter)
-            write_log_csv(CSV_COUNTOUT_PATH,start_counter)
 
         ind += 1
 
