@@ -10,6 +10,7 @@ import pickle
 import sys # can delete for production
 import pathlib
 import re
+import traceback
 
 import numpy as np
 import pandas as pd
@@ -33,7 +34,7 @@ _|_|  _|\__, |\___|____/\__| \___|____/  \_/
 ######## Michael's Credentials ########
 db = {
     "host":"localhost",
-    "name":"gettytest3",            
+    "name":"stocktest",            
     "user":"root",
     "pass":"Fg!27Ejc!Mvr!GT"
 }
@@ -47,6 +48,9 @@ CSV_IN_PATH = "/Users/michaelmandiberg/Downloads/Pexels_v2/output.csv"
 KEYWORD_PATH = "/Users/michaelmandiberg/Downloads/Pexels_v2/Keywords_202304300930.csv"
 CSV_NOKEYS_PATH = "/Users/michaelmandiberg/Downloads/Pexels_v2/CSV_NOKEYS.csv"
 CSV_IMAGEKEYS_PATH = "/Users/michaelmandiberg/Downloads/Pexels_v2/CSV_IMAGEKEYS.csv"
+NEWIMAGES_FOLDER_NAME = 'images_pexels'
+CSV_COUNTOUT_PATH = 'countout.csv'
+
 
 # key2key = {"person":"people", "kid":"child","affection":"Affectionate", "baby":"Baby - Human Age", "beautiful":"Beautiful People", "pretty":"Beautiful People", "blur":"Blurred Motion", "casual":"Casual Clothing", "children":"Child", "kids":"Child", "couple":"Couple - Relationship", "adorable":"Cute", "room":"Domestic Room", "focus":"Focus - Concept", "happy":"Happiness", "at home":"Home Interior", "home":"Home Interior", "face":"Human Face", "hands":"Human Hand", "landscape":"Landscape - Scenery", "outfit":"Landscape - Scenery", "leisure":"Leisure Activity", "love":"Love - Emotion", "guy":"Men", "motherhood":"Mother", "parenthood":"Parent", "positive":"Positive Emotion", "recreation":"Recreational Pursuit", "little":"Small", "studio shoot":"Studio Shot", "together":"Togetherness", "vertical shot":"Vertical", "lady":"women", "young":"Young Adult"}
 
@@ -80,7 +84,7 @@ engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}"
 metadata = MetaData(engine)
 
 
-images_table = Table('ImagesTest', metadata,
+images_table = Table('Images', metadata,
     Column('image_id', Integer, primary_key=True, autoincrement=True),
     Column('site_name_id', Integer, ForeignKey('Site.site_name_id')),
     Column('site_image_id', String(50), nullable=False),
@@ -95,14 +99,14 @@ images_table = Table('ImagesTest', metadata,
     Column('uploadDate', Date)
 )
 
-imageskeywords_table = Table('ImagesKeywordsTest', metadata,
+imageskeywords_table = Table('ImagesKeywords', metadata,
     Column('image_id', Integer, ForeignKey('Images.image_id')),
     Column('keyword_id', Integer, ForeignKey('Keywords.keyword_id')),
     PrimaryKeyConstraint('image_id', 'keyword_id'),
     UniqueConstraint('image_id', 'keyword_id', name='uq_image_keyword')
 )
 
-imagesethnicity_table = Table('ImagesEthnicityTest', metadata,
+imagesethnicity_table = Table('ImagesEthnicity', metadata,
     Column('image_id', Integer, ForeignKey('Images.image_id')),
     Column('ethnicity_id', Integer, ForeignKey('Ethnicity.ethnicity_id')),
     PrimaryKeyConstraint('image_id', 'ethnicity_id'),
@@ -142,7 +146,7 @@ def init_csv(path, headers):
 
 def nan2none(this_dict):
     for key, value in this_dict.items():
-        if isinstance(value, float) and np.isnan(value):
+        if isinstance(value, float) and pd.isnull(value):
             this_dict[key] = None
     return this_dict
 
@@ -209,23 +213,6 @@ def unlock_key(site_id,key):
                 write_csv(CSV_IMAGEKEYS_PATH,value_list)
                 return key_no
 
-def insertignore(dataframe,table):
-
-     # creating column list for insertion
-     cols = "`,`".join([str(i) for i in dataframe.columns.tolist()])
-
-     # Insert DataFrame recrds one by one.
-     for i,row in dataframe.iterrows():
-         sql = "INSERT IGNORE INTO `"+table+"` (`" +cols + "`) VALUES (" + "%s,"*(len(row)-1) + "%s)"
-         engine.connect().execute(sql, tuple(row))
-
-
-def insertignore_df(dataframe,table_name, engine):
-
-     # Convert the DataFrame to a SQL table using pandas' to_sql method
-     with engine.connect() as connection:
-         dataframe.to_sql(name=table_name, con=connection, if_exists='append', index=False)
-
 def findall_dict(my_dict,description):
     # Create a regular expression pattern that matches complete words in the dictionary, ignoring case
     pattern = re.compile(r'\b(' + '|'.join(my_dict.keys()) + r')\b', re.IGNORECASE)
@@ -247,16 +234,16 @@ def search_keys(keys_list, this_dict, multi=False):
         found = findall_dict(this_dict,key)
         if found is not None:
             results.append(found)
-            print('found it in keywords:', found,"from key:", key)
+            # print('found it in keywords:', found,"from key:", key)
             #age needs to be int()
-            print(results)
+            # print(results)
 
     if len(set(results)) == 1:
         one_result = int(results[0])
-        print("found a GOOD result: ", one_result)
+        # print("found a GOOD result: ", one_result)
     else:
         one_result = 0
-        print("failed search: ", one_result)
+        # print("failed search: ", one_result)
     if multi:
         results_list = list(set(results))
     else:
@@ -271,11 +258,11 @@ def get_eth(eth_name, keys_list):
     eth_no_list = []
     eth_no = None
     # if eth_name is not None or eth_name is not np.isnan(eth_name):
-    if not np.isnan(eth_name):
+    if not pd.isnull(eth_name):
         try:
             eth_no = eth_dict[eth_name]
         # need to key this into integer, like with keys
-            print("eth_name ",eth_name)
+            # print("eth_name ",eth_name)
         except:
             eth_no = None
             print("eth_dict failed with this key: ", eth_name)
@@ -306,27 +293,24 @@ def insertignore_dict(dict_data,table_name):
 def get_location(df, ind, keys_list):
     location = None
     key = df['country'][ind]
-    if not np.isnan(key):
+    if not pd.isnull(key):
         try:
             location = loc_dict[key]
         except:
             print('NEW KEY, NOT IN COUNTRY -------------------------> ', key)
-    else:
-        print('NULL country: ', key)
+    # else:
+    #     print('NULL country: ', key)
 
     return(location)
 
 
 def get_gender_age(df, ind, keys_list):
     global gender_dict
-
-
-    # gender_pattern = r'\b(' + '|'.join(gender_dict.keys()) + r')\b'
-    gender =0
-    age=0
+    gender = None
+    age= None
     key = df['gender'][ind]
     description = df['title'][ind]
-    if key:
+    if key is not None:
         #convertkeys
         try:
             gender = gender_dict[key]
@@ -348,35 +332,40 @@ def get_gender_age(df, ind, keys_list):
                 age = age_dict[key]
             except:
                 print('NEW KEY, NOT AN AGE OR GENDER -------------------------> ', key)
-    else:
-        print('NULL gender: ', key)
+    # else:
+    #     # print('NULL gender: ', key)
 
     #try to find gender or age in description
-    if gender == 0:
+    if gender is None:
         # print("looking for gender in description")
         try:
             gender = findall_dict(gender_dict,description)
         except:
-            print("no gender, going keyword hunting")
+            # print("no gender, going keyword hunting")
             try:
                 gender = search_keys(keys_list, gender_dict)[0]
             except:
-                print('no gender found: ', description)
+                pass
+                # print('no gender found: ', description)
 
-    if age == 0:
-        print("looking for age in description")
+    if age is None:
+        # print("looking for age in description")
         try:
             age = findall_dict(age_dict,description)
         except:
             try:
                 age = search_keys(keys_list, age_dict)[0]
             except:
-                print('no age found: ', description)
+                pass
+                # print('no age found: ', description)
 
-    print("gender, age: ")
-    print(gender)
-    print (age)
+    # print("gender, age: ")
+    # print(gender)
+    # print (age)
     return gender, age
+
+
+
 '''
 1   getty
 2   shutterstock
@@ -391,6 +380,25 @@ def get_gender_age(df, ind, keys_list):
 '''
 
 def structure_row_pexels(df, ind, keys_list): 
+    def get_hash_folders(filename):
+        m = hashlib.md5()
+        m.update(filename.encode('utf-8'))
+        d = m.hexdigest()
+        print(d)
+        # csvWriter1.writerow(["https://upload.wikimedia.org/wikipedia/commons/"+d[0]+'/'+d[0:2]+'/'+filename])
+        return d[0], d[0:2]
+
+    def generate_local_unhashed_image_filepath(image_name):
+        file_name_path = image_name.split('?')[0]
+        file_name = file_name_path.split('/')[-1].replace(".jpeg",".jpg")
+        extension = file_name.split('.')[-1]
+        hash_folder, hash_subfolder = get_hash_folders(file_name)
+        print("hash_folder: ",hash_folder)
+        print("hash_subfolder: ", hash_subfolder)
+        print (os.path.join(NEWIMAGES_FOLDER_NAME, hash_folder, hash_subfolder,file_name))
+        return os.path.join(NEWIMAGES_FOLDER_NAME, hash_folder, hash_subfolder,file_name)
+            # IMAGES_FOLDER_NAME, hash_folder, '{}.{}'.format(file_name, extension))
+
     gender_key, age_key = get_gender_age(df, ind, keys_list)
     location_no = get_location(df, ind, keys_list)
     image_row = {
@@ -405,26 +413,30 @@ def structure_row_pexels(df, ind, keys_list):
         # "location_id":"0",
         # "": df['mood'][ind]
         "contentUrl": df['image_url'][ind],
-        "imagename": df['image_filename'][ind] # need to refactor this from the contentURL using the hash function
+        "imagename": generate_local_unhashed_image_filepath(df['image_url'][ind]) # need to refactor this from the contentURL using the hash function
     }
     return(nan2none(image_row))
 
-
-# make keyword dict
-# gerund_key = getInflection(key, 'VBG')
-
-# inftest = getInflection('watch', tag='VBG')
-# print(inftest[0])
-# quit()
 
 def ingest_it():
     # print(keys_dict["cute"])
 
     df = pd.read_csv(CSV_IN_PATH)
     df = df.drop_duplicates()
-    print(df)
+    # print(df)
 
-    ind = 0
+    # read last completed file
+    try:
+        print("trying to get last saved")
+        last_line = read_csv(CSV_COUNTOUT_PATH)
+        start_counter = last_line
+    except:
+        start_counter = 0
+        print('[download_images_from_cache] set max_element to 0 \n', flush=True)
+    print("max_element,", start_counter)
+
+
+    # ind = 0
     # print(len(df.index))
 
     while (ind < len(df.index)):
@@ -441,8 +453,7 @@ def ingest_it():
             key_no = unlock_key(image_row['site_image_id'],key)
             if key_no:
                 key_nos_list.append(key_no)
-        print(key_nos_list)
-        ind += 1
+        # print(key_nos_list)
 
         # ethnicity
         eth_no_list = get_eth(df['ethnicity'][ind], keys_list)
@@ -464,28 +475,44 @@ def ingest_it():
                 result = conn.execute(insert_stmt)
                 last_inserted_id = result.lastrowid
 
-                rows = []
-                for keyword_id in key_nos_list:
-                    rows.append({'image_id': last_inserted_id, 'keyword_id': keyword_id})
+                if not key_nos_list:
+                    keyrows = []
+                    for keyword_id in key_nos_list:
+                        keyrows.append({'image_id': last_inserted_id, 'keyword_id': keyword_id})
 
-                with engine.connect() as conn:
-                    imageskeywords_insert_stmt = insert(imageskeywords_table).values(rows)
-                    imageskeywords_insert_stmt = imageskeywords_insert_stmt.on_duplicate_key_update(keyword_id=imageskeywords_insert_stmt.inserted.keyword_id)
-                    conn.execute(imageskeywords_insert_stmt)
+                    with engine.connect() as conn:
+                        imageskeywords_insert_stmt = insert(imageskeywords_table).values(keyrows)
+                        imageskeywords_insert_stmt = imageskeywords_insert_stmt.on_duplicate_key_update(keyword_id=imageskeywords_insert_stmt.inserted.keyword_id)
+                        conn.execute(imageskeywords_insert_stmt)
 
-    # imagesethnicity_table
+                print(last_inserted_id)
+                print("eth_no_list ",eth_no_list)
+                if eth_no_list:
+                    print("trying to insert eth")
+                    ethrows = []
+                    for ethnicity_id in eth_no_list:
+                        ethrows.append({'image_id': last_inserted_id, 'ethnicity_id': ethnicity_id})
+
+                    with engine.connect() as conn:
+                        imagesethnicity_insert_stmt = insert(imagesethnicity_table).values(ethrows)
+                        imagesethnicity_insert_stmt = imagesethnicity_insert_stmt.on_duplicate_key_update(ethnicity_id=imagesethnicity_insert_stmt.inserted.ethnicity_id)
+                        conn.execute(imagesethnicity_insert_stmt)
+
+
+                # list_alchemy_insert(last_inserted_id,key_nos_list,imageskeywords_table)
+                # list_alchemy_insert(last_inserted_id,eth_no_list,imagesethnicity_table)
+                print("last_inserted_id: ",last_inserted_id)
+                
             else:
                 # Row already exists, do not insert
-                print('Row already exists')
+                print('Row already exists: ', ind)
 
+        # print out to countout every 1000 batches
+        if start_counter % 1000 == 0:
+            print("counter is: ",start_counter)
+            write_log_csv(CSV_COUNTOUT_PATH,start_counter)
 
-
-            # # retrieve the image_id of the inserted row
-            # last_inserted_id = result.inserted_primary_key[0]
-            # print(last_inserted_id)
-
-
-    # insertignore_df(df, "images", engine)
+        ind += 1
 
     # print("inserted")
 
@@ -503,6 +530,9 @@ if __name__ == '__main__':
         print('[-] User cancelled.\n', flush=True)
     except Exception as e:
         print('[__main__] %s' % str(e), flush=True)
+        print(traceback.format_exc())
+        # or
+        print(sys.exc_info()[2])
 
 
 

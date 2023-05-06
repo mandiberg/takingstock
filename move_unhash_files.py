@@ -151,13 +151,19 @@ def unhash_files():
     with open(UNIQUE_FILES_PATH, 'r') as csvfile:
         reader = csv.reader(csvfile)
         # Loop over each row in the file
-        counter = 0
+        start_counter = 570000
+        counter = start_counter
         alreadyDL = 0
+        print("starting from start_counter: ",start_counter)
+
+        for i in range(start_counter):
+            next(reader)  # skip the line
+
         # print('starting to traverse the file, starting from: ',str(start_counter))
         for row in reader:
             # obj = json.loads(item)
             # print(counter)
-            # while start_counter > counter:
+            # while start_counter > counter:counter is:  
             #     # print("in while")
             #     counter += 1
             #     print("skipping, ",counter)
@@ -176,7 +182,11 @@ def unhash_files():
             # where the new images goes (PATH2)
             image_unhashed_path = os.path.join(PATH2,generate_local_unhashed_image_filepath(image_url).replace('.jpeg','.jpg'))
             # print out to countout every 1000 batches
-            if counter % 1000 == 0:
+            if start_counter % 10 == 0:
+                print("start_counter is: ",start_counter)
+            start_counter += 1
+
+            if counter % 1000 == 0 and counter > start_counter:
                 print("counter is: ",counter)
                 # write_log_csv(CSV_COUNTOUT_PATH,counter)
 
