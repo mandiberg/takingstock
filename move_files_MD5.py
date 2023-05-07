@@ -4,10 +4,12 @@ import shutil
 import re
 
 testname = "woman-in-a-music-concert-picture-id505111652.jpg"
-PATH= os.path.join(os.environ['HOME'], "Documents/projects-active/facemap_production/gettyimages") 
+# PATH= os.path.join(os.environ['HOME'], "Documents/projects-active/facemap_production/gettyimages") 
+PATH = "/Volumes/Test36/images_pexels"
+NEWPATH = "/Volumes/Test36/new_images_pexels"
 # folder ="5GB_testimages"
 COPY=True
-CSV="/Users/michaelmandiberg/Dropbox/facemap_dropbox/test_data/Images_202302101516_30K.csv"
+# CSV="/Users/michaelmandiberg/Dropbox/facemap_dropbox/test_data/Images_202302101516_30K.csv"
 
 def get_hash_folders(filename):
     m = hashlib.md5()
@@ -17,7 +19,7 @@ def get_hash_folders(filename):
     return d[0], d[0:2]
 # print(get_hash_folders(testname))
 
-def get_csv_files(CSV):
+# def get_csv_files(CSV):
     
 def get_dir_files(folder):
     # counter = 1
@@ -47,7 +49,7 @@ def touch(folder):
         os.makedirs(folder)
 
 def make_hash_folders():
-    basepath = '/newimages'
+    basepath = '/new_images_pexels'
 
     #setup alphabet list
     #long to crate full directory structure
@@ -64,12 +66,12 @@ def make_hash_folders():
     #create depth 0
     for letter in alphabet:
         # print (letter)
-        pth = os.path.join(PATH+basepath,letter)
+        pth = os.path.join(PATH,letter)
         touch(pth)
         for letter2 in alphabet2:
             # print (letter2)
 
-            pth = os.path.join(PATH+basepath,letter,letter+letter2)
+            pth = os.path.join(PATH,letter,letter+letter2)
             touch(pth)
 
 
@@ -78,7 +80,7 @@ def make_hash_folders():
 make_hash_folders()
 
 #loop through all existing folders
-basepath = '/images'
+basepath = '/images_pexels'
 
 #setup alphabet list
 #long to crate full directory structure
@@ -103,20 +105,27 @@ for letter in alphabet:
     for letter2 in alphabet2:
         # print (letter2)
 
-        pth = os.path.join(PATH+basepath,letter,letter+letter2)
+        pth = os.path.join(PATH,letter,letter+letter2)
+        print(pth)
         meta_file_list = get_dir_files(pth)
         for file in meta_file_list:
+
+            # change file name stuff
             #removes jpg in case you did it too many times
             # os.rename(file, file.replace(".jpg",""))
-            newfile = file+".jpg"
+            # adds .jpg if missing
+            # newfile = file+".jpg"
             #this keeps adding jpg, so only do once!
+            # this is if you don't want to change the filename:
+            newfile = file
+
             os.rename(file, newfile)
             if  re.search(r"\.jpg\.jpg", file):
                 print("\n\n\n\n\n\n\n\n\nDOUBLE TROUBLE DOUBLE TROUBLE DOUBLE TROUBLE DOUBLE TROUBLE DOUBLE TROUBLE \n\n\n\n\n\n\n\n\n") 
             print(file)
             a,b = get_hash_folders(newfile)
             currentpathfile = os.path.join(pth,newfile)
-            newpathfile = os.path.join(PATH,"newimages",a,b,newfile)
+            newpathfile = os.path.join(NEWPATH,a,b,newfile)
 
             #if you dont move the files, it will repeate the renaming on about 10% of the files
             shutil.move(currentpathfile, newpathfile)
