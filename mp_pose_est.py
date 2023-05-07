@@ -52,7 +52,7 @@ class SelectPose:
     def y_element(self, elem):
         return elem[1]
 
-    def get_face_landmarks(self,results, image):
+    def get_face_landmarks(self,results, image,bbox):
 
         height = self.h
         width = self.w
@@ -64,7 +64,8 @@ class SelectPose:
             for id,lm in enumerate(faceLms.landmark):                           # loop over all land marks of one face
                 # ih, iw, _ = self.image.shape
                 # gone direct to obj dimensions
-                x,y = int(lm.x*self.w), int(lm.y*self.h)
+                #x,y = int(lm.x*self.w), int(lm.y*self.h)
+                x,y=int(lm.x * (bbox["right"]-bbox["left"])+bbox["left"]),int(lm.y * (bbox["bottom"]-bbox["top"])+bbox["top"]) 
                 # print(lm)
                 faceXY.append((x, y))                                           # put all xy points in neat array
             image_points = np.array([

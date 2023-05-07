@@ -49,7 +49,7 @@ db = {
     "pass":"SSJ2_mysql"
 }
 #ROOT= os.path.join(os.environ['HOMEDRIVE'],os.environ['HOMEPATH'], "Documents/projects-active/facemap_production") ## local WIN
-ROOT= os.path.join("F:/"+"Documents/projects-active/facemap_production") ## SD CARD
+ROOT= os.path.join("D:/"+"Documents/projects-active/facemap_production") ## SD CARD
 NUMBER_OF_PROCESSES = 4
 #######################################
 
@@ -80,7 +80,7 @@ SLEEP_TIME=0
 SELECT = "DISTINCT(i.image_id), i.gender_id, author, caption, contentUrl, description, imagename"
 FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings e ON i.image_id = e.image_id "
 WHERE = "e.image_id IS NULL"
-LIMIT = 10
+LIMIT = 100
 
 
 #creating my objects
@@ -207,15 +207,8 @@ def selectSQL():
 
 
 def find_face(image, df):
-    with mp.solutions.face_mesh.FaceMesh(static_image_mode=True,
-                                         refine_landmarks=False,
-                                         max_num_faces=1,
-                                         min_detection_confidence=0.5
-                                         ) as face_mesh:
-        # Convert the BGR image to RGB and process it with MediaPipe Face Mesh.
-        results = face_mesh.process(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
-        
-    with mp.solutions.face_detection.FaceDetection(model_selection=0, min_detection_confidence=0.7) as face_det: 
+    height, width, _ = image.shape
+    with mp.solutions.face_detection.FaceDetection(model_selection=1, min_detection_confidence=0.7) as face_det: 
         results_det=face_det.process(image[:,:,::-1])  ## [:,:,::-1] is the shortcut for converting BGR to RGB
         
     '''
@@ -224,47 +217,67 @@ def find_face(image, df):
     1 type model: When we will select the 1 type model then our face detection model will be able to detect the 
     faces within the range of 5 meters. Though the default value is 0.
     '''
-    #read any image containing a face
-    if results.multi_face_landmarks:
-        #construct pose object to solve pose
-        is_face = True
-        pose = SelectPose(image)
-
-        #get landmarks
-        #added returning meshimage (was image)
-        faceLms = pose.get_face_landmarks(results, image)
-        #calculate base data from landmarks
-        pose.calc_face_data(faceLms)
-
-        # get angles, using r_vec property stored in class
-        # angles are meta. there are other meta --- size and resize or something.
-        angles = pose.rotationMatrixToEulerAnglesToDegrees()
-        mouth_gap = pose.get_mouth_data(faceLms)
-        faceDet=results_det.detections[0]             ##### calculated face detection results
-        if is_face:
-            # Calculate Face Encodings if is_face = True
-            print("in encodings conditional")
-            # turning off to debug
-            encodings = calc_encodings(image, faceLms,faceDet) ## changed parameters
-            print(encodings)
-        df.at['1', 'is_face'] = is_face
-        # df.at['1', 'is_face_distant'] = is_face_distant
-        df.at['1', 'face_x'] = angles[0]
-        df.at['1', 'face_y'] = angles[1]
-        df.at['1', 'face_z'] = angles[2]
-        df.at['1', 'mouth_gap'] = mouth_gap
-        df.at['1', 'face_landmarks'] = pickle.dumps(faceLms)
-        df.at['1', 'face_encodings'] = pickle.dumps(encodings)
+    is_face = False
 
 
+    if results_det.detections:
+        faceDet=results_det.detections[0]
+        bbox = faceDet.location_data.relative_bounding_box
+        xy_min = _normalized_to_pixel_coordinates(bbox.xmin, bbox.ymin, width,height)
+        xy_max = _normalized_to_pixel_coordinates(bbox.xmin + bbox.width, bbox.ymin + bbox.height,width,height)
+        if xy_min is not None and xy_max is not None:
+            left,bottom =xy_min
+            right,top = xy_max
+            bbox={"left":left,"right":right,"top":top,"bottom":bottom
+            }
+            with mp.solutions.face_mesh.FaceMesh(static_image_mode=True,
+                                             refine_landmarks=False,
+                                             max_num_faces=1,
+                                             min_detection_confidence=0.5
+                                             ) as face_mesh:
+            # Convert the BGR image to RGB and cropping it around face boundary and process it with MediaPipe Face Mesh.
+                results = face_mesh.process(image[bottom:top,left:right,::-1])    
+        #read any image containing a face
+        if results.multi_face_landmarks:
+            
+            #construct pose object to solve pose
+            
+            is_face = True
+            pose = SelectPose(image)
 
-    else: 
-        is_face = False
-        df.at['1', 'is_face'] = is_face
+            #get landmarks
+            #added returning meshimage (was image)
+            faceLms = pose.get_face_landmarks(results, image,bbox)
+            #calculate base data from landmarks
+            pose.calc_face_data(faceLms)
+
+            # get angles, using r_vec property stored in class
+            # angles are meta. there are other meta --- size and resize or something.
+            angles = pose.rotationMatrixToEulerAnglesToDegrees()
+            mouth_gap = pose.get_mouth_data(faceLms)
+                         ##### calculated face detection results
+            if is_face:
+                # Calculate Face Encodings if is_face = True
+                print("in encodings conditional")
+                # turning off to debug
+                encodings = calc_encodings(image, faceLms,faceDet) ## changed parameters
+                print(encodings)
+            #df.at['1', 'is_face'] = is_face
+            #df.at['1', 'is_face_distant'] = is_face_distant
+            df.at['1', 'face_x'] = angles[0]
+            df.at['1', 'face_y'] = angles[1]
+            df.at['1', 'face_z'] = angles[2]
+            df.at['1', 'mouth_gap'] = mouth_gap
+            df.at['1', 'face_landmarks'] = pickle.dumps(faceLms)
+            df.at['1', 'face_encodings'] = pickle.dumps(encodings)
+    
+    df.at['1', 'is_face'] = is_face
+
+
     return df
 
 def calc_encodings(image, faceLms,faceDet):## changed parameters and rebuilt
-    print("calc_encodings")
+    #print("calc_encodings")
     height, width, _ = image.shape
     landmark_points_5 = [ 263, #left eye away from centre
                        362, #left eye towards centre
@@ -301,7 +314,7 @@ def calc_encodings(image, faceLms,faceDet):## changed parameters and rebuilt
     return np.array(encodings)
 
 def find_body(image,df):
-    print("find_body")
+    #print("find_body")
     with mp_pose.Pose(
         static_image_mode=True, min_detection_confidence=0.5) as pose:
       # for idx, file in enumerate(file_list):
@@ -332,7 +345,7 @@ def find_body(image,df):
 
 
 def process_image(task):
-    print("process_image")
+    #print("process_image")
     def save_image_triage(image,df):
         #saves a CV2 image elsewhere -- used in setting up test segment of images
         if df.at['1', 'is_face']:
@@ -387,7 +400,7 @@ def process_image(task):
 
 
 def do_job(tasks_to_accomplish, tasks_that_are_done):
-    print("do_job")
+    #print("do_job")
     while True:
         try:
             '''
@@ -411,7 +424,7 @@ def do_job(tasks_to_accomplish, tasks_that_are_done):
 
 
 def main():
-    print("main")
+    #print("main")
     tasks_to_accomplish = Queue()
     tasks_that_are_done = Queue()
     processes = []
