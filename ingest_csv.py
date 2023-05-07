@@ -49,7 +49,7 @@ KEYWORD_PATH = "/Users/michaelmandiberg/Downloads/Pexels_v2/Keywords_20230430093
 CSV_NOKEYS_PATH = "/Users/michaelmandiberg/Downloads/Pexels_v2/CSV_NOKEYS.csv"
 CSV_IMAGEKEYS_PATH = "/Users/michaelmandiberg/Downloads/Pexels_v2/CSV_IMAGEKEYS.csv"
 NEWIMAGES_FOLDER_NAME = 'images_pexels'
-
+CSV_COUNTOUT_PATH = "countout.csv"
 
 # key2key = {"person":"people", "kid":"child","affection":"Affectionate", "baby":"Baby - Human Age", "beautiful":"Beautiful People", "pretty":"Beautiful People", "blur":"Blurred Motion", "casual":"Casual Clothing", "children":"Child", "kids":"Child", "couple":"Couple - Relationship", "adorable":"Cute", "room":"Domestic Room", "focus":"Focus - Concept", "happy":"Happiness", "at home":"Home Interior", "home":"Home Interior", "face":"Human Face", "hands":"Human Hand", "landscape":"Landscape - Scenery", "outfit":"Landscape - Scenery", "leisure":"Leisure Activity", "love":"Love - Emotion", "guy":"Men", "motherhood":"Mother", "parenthood":"Parent", "positive":"Positive Emotion", "recreation":"Recreational Pursuit", "little":"Small", "studio shoot":"Studio Shot", "together":"Togetherness", "vertical shot":"Vertical", "lady":"women", "young":"Young Adult"}
 
@@ -309,7 +309,7 @@ def get_gender_age(df, ind, keys_list):
     age= None
     key = df['gender'][ind]
     description = df['title'][ind]
-    if key is not None:
+    if not pd.isnull(key):
         #convertkeys
         try:
             gender = gender_dict[key]
@@ -424,11 +424,31 @@ def ingest_it():
     df = df.drop_duplicates()
     # print(df)
 
-    ind = 0
-    # print(len(df.index))
+    # read last completed file
+    try:
+        print("trying to get last saved")
+        with open(CSV_COUNTOUT_PATH, "r") as f1:
+            last_line = f1.readlines()[-1]
+        # last_line = read_csv(CSV_COUNTOUT_PATH)
+        print(type(last_line))
+        start_counter = last_line
+    except:
+        start_counter = 0
+        print('[download_images_from_cache] set max_element to 0 \n', flush=True)
+        print("max_element,", start_counter)
 
-    while (ind < len(df.index)):
+    ind = 0
+    counter = 0
+    # print(len(df.index))
+    # start_counter = 50000
+    # while (ind < len(df.index)):
+    for ind in df.index:
         # make keywords list 
+        print(type(counter))
+        print(type(start_counter))
+        if counter < start_counter:
+            counter += 1
+            continue
         keys_list = df['keywords'][ind].lower().split("|")
 
         # PEXELS_HEADERS = ["id", "title", "keywords", "country", "number_of_people", "orientation", "age","gender", "ethnicity", "mood", "image_url", "image_filename"]
@@ -479,12 +499,14 @@ def ingest_it():
                     print("trying to insert eth")
                     ethrows = []
                     for ethnicity_id in eth_no_list:
-                        ethrows.append({'image_id': last_inserted_id, 'ethnicity_id': ethnicity_id})
+                        if ethnicity_id is not None:
+                            ethrows.append({'image_id': last_inserted_id, 'ethnicity_id': ethnicity_id})
 
-                    with engine.connect() as conn:
-                        imagesethnicity_insert_stmt = insert(imagesethnicity_table).values(ethrows)
-                        imagesethnicity_insert_stmt = imagesethnicity_insert_stmt.on_duplicate_key_update(ethnicity_id=imagesethnicity_insert_stmt.inserted.ethnicity_id)
-                        conn.execute(imagesethnicity_insert_stmt)
+                    if ethrows:
+                        with engine.connect() as conn:
+                            imagesethnicity_insert_stmt = insert(imagesethnicity_table).values(ethrows)
+                            imagesethnicity_insert_stmt = imagesethnicity_insert_stmt.on_duplicate_key_update(ethnicity_id=imagesethnicity_insert_stmt.inserted.ethnicity_id)
+                            conn.execute(imagesethnicity_insert_stmt)
 
 
                 # list_alchemy_insert(last_inserted_id,key_nos_list,imageskeywords_table)
@@ -495,7 +517,12 @@ def ingest_it():
                 # Row already exists, do not insert
                 print('Row already exists: ', ind)
 
-
+        # print out to countout every 1000 batches
+        if counter % 1000 == 0:
+            # turning into a list for purposes of saving to csv with funciton
+            save_counter = [counter]
+            write_csv(CSV_COUNTOUT_PATH,save_counter)
+        counter += 1
         ind += 1
 
     # print("inserted")
