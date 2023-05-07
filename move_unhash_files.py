@@ -27,7 +27,7 @@ COPY=True
 UNIQUE_FILES_PATH="/Volumes/Test36/CSVs_to_ingest/pexelsCSVs/unique_images.csv"
 IMAGES_THREAD_COUNTER = 0
 IMAGES_FOLDER_NAME = 'images_pexels'
-NEWIMAGES_FOLDER_NAME = 'images_pexels'
+NEWIMAGES_FOLDER_NAME = 'new_images_pexels'
 NUMBER_OF_THREADS_IMAGES_DOWNLOAD =15
 OLDPATH = os.path.join(PATH, IMAGES_FOLDER_NAME)
 NEWPATH = os.path.join(PATH2, NEWIMAGES_FOLDER_NAME)
@@ -151,7 +151,7 @@ def unhash_files():
     with open(UNIQUE_FILES_PATH, 'r') as csvfile:
         reader = csv.reader(csvfile)
         # Loop over each row in the file
-        start_counter = 570000
+        start_counter = 1137000
         counter = start_counter
         alreadyDL = 0
         print("starting from start_counter: ",start_counter)
@@ -182,6 +182,8 @@ def unhash_files():
             # where the new images goes (PATH2)
             image_unhashed_path = os.path.join(PATH2,generate_local_unhashed_image_filepath(image_url.replace('.jpeg','.jpg')))
             # print out to countout every 1000 batches
+            # print(image_hashpath, image_unhashed_path)
+            # continue
             if start_counter % 10 == 0:
                 print("start_counter is: ",start_counter)
             start_counter += 1
