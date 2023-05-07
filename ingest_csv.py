@@ -430,8 +430,8 @@ def ingest_it():
         with open(CSV_COUNTOUT_PATH, "r") as f1:
             last_line = f1.readlines()[-1]
         # last_line = read_csv(CSV_COUNTOUT_PATH)
-        print(type(last_line))
-        start_counter = last_line
+        # print(type(last_line))
+        start_counter = int(last_line)
     except:
         start_counter = 0
         print('[download_images_from_cache] set max_element to 0 \n', flush=True)
@@ -444,8 +444,8 @@ def ingest_it():
     # while (ind < len(df.index)):
     for ind in df.index:
         # make keywords list 
-        print(type(counter))
-        print(type(start_counter))
+        # print(type(counter))
+        # print(type(start_counter))
         if counter < start_counter:
             counter += 1
             continue
@@ -483,7 +483,7 @@ def ingest_it():
                 result = conn.execute(insert_stmt)
                 last_inserted_id = result.lastrowid
 
-                if not key_nos_list:
+                if not key_nos_list and last_inserted_id:
                     keyrows = []
                     for keyword_id in key_nos_list:
                         keyrows.append({'image_id': last_inserted_id, 'keyword_id': keyword_id})
@@ -495,7 +495,7 @@ def ingest_it():
 
                 print(last_inserted_id)
                 print("eth_no_list ",eth_no_list)
-                if eth_no_list:
+                if eth_no_list and last_inserted_id:
                     print("trying to insert eth")
                     ethrows = []
                     for ethnicity_id in eth_no_list:
