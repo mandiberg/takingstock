@@ -34,7 +34,7 @@ _|_|  _|\__, |\___|____/\__| \___|____/  \_/
 ######## Michael's Credentials ########
 db = {
     "host":"localhost",
-    "name":"stocktest",            
+    "name":"stock",            
     "user":"root",
     "pass":"Fg!27Ejc!Mvr!GT"
 }
@@ -271,22 +271,22 @@ def get_eth(eth_name, keys_list):
         print("searched keys and found eth_no: ", eth_no)
     return(eth_no_list)
 
-def insertignore_dict(dict_data,table_name):
+# def insertignore_dict(dict_data,table_name):
 
-     # # creating column list for insertion
-     # # cols = "`,`".join([str(i) for i in dataframe.columns.tolist()])
-     # cols = "`,`".join([str(i) for i in list(dict.keys())])
-     # tup = tuple(list(dict.values()))
+#      # # creating column list for insertion
+#      # # cols = "`,`".join([str(i) for i in dataframe.columns.tolist()])
+#      # cols = "`,`".join([str(i) for i in list(dict.keys())])
+#      # tup = tuple(list(dict.values()))
 
-     # sql = "INSERT IGNORE INTO `"+table+"` (`" +cols + "`) VALUES (" + "%s,"*(len(tup)-1) + "%s)"
-     # engine.connect().execute(sql, tup)
+#      # sql = "INSERT IGNORE INTO `"+table+"` (`" +cols + "`) VALUES (" + "%s,"*(len(tup)-1) + "%s)"
+#      # engine.connect().execute(sql, tup)
 
-     # Create a SQLAlchemy Table object representing the target table
-     target_table = Table(table_name, metadata, extend_existing=True, autoload_with=engine)
+#      # Create a SQLAlchemy Table object representing the target table
+#      target_table = Table(table_name, metadata, extend_existing=True, autoload_with=engine)
 
-     # Insert the dictionary data into the table using SQLAlchemy's insert method
-     with engine.connect() as connection:
-         connection.execute(target_table.insert(), dict_data)
+#      # Insert the dictionary data into the table using SQLAlchemy's insert method
+#      with engine.connect() as connection:
+#          connection.execute(target_table.insert(), dict_data)
 
 
 def get_location(df, ind, keys_list):
@@ -378,25 +378,27 @@ def get_gender_age(df, ind, keys_list):
 10  visualchinagroup
 '''
 
-def structure_row_pexels(df, ind, keys_list): 
-    def get_hash_folders(filename):
-        m = hashlib.md5()
-        m.update(filename.encode('utf-8'))
-        d = m.hexdigest()
-        print(d)
-        # csvWriter1.writerow(["https://upload.wikimedia.org/wikipedia/commons/"+d[0]+'/'+d[0:2]+'/'+filename])
-        return d[0], d[0:2]
+def get_hash_folders(filename):
+    m = hashlib.md5()
+    m.update(filename.encode('utf-8'))
+    d = m.hexdigest()
+    # print(d)
+    # csvWriter1.writerow(["https://upload.wikimedia.org/wikipedia/commons/"+d[0]+'/'+d[0:2]+'/'+filename])
+    return d[0], d[0:2]
 
-    def generate_local_unhashed_image_filepath(image_name):
-        file_name_path = image_name.split('?')[0]
-        file_name = file_name_path.split('/')[-1].replace(".jpeg",".jpg")
-        extension = file_name.split('.')[-1]
-        hash_folder, hash_subfolder = get_hash_folders(file_name)
-        print("hash_folder: ",hash_folder)
-        print("hash_subfolder: ", hash_subfolder)
-        print (os.path.join(NEWIMAGES_FOLDER_NAME, hash_folder, hash_subfolder,file_name))
-        return os.path.join(NEWIMAGES_FOLDER_NAME, hash_folder, hash_subfolder,file_name)
-            # IMAGES_FOLDER_NAME, hash_folder, '{}.{}'.format(file_name, extension))
+def generate_local_unhashed_image_filepath(image_name):
+    file_name_path = image_name.split('?')[0]
+    file_name = file_name_path.split('/')[-1].replace(".jpeg",".jpg")
+    # extension = file_name.split('.')[-1]
+    hash_folder, hash_subfolder = get_hash_folders(file_name)
+    # print("hash_folder: ",hash_folder)
+    # print("hash_subfolder: ", hash_subfolder)
+    print (os.path.join(hash_folder, hash_subfolder,file_name))
+    return os.path.join(hash_folder, hash_subfolder,file_name)
+        # IMAGES_FOLDER_NAME, hash_folder, '{}.{}'.format(file_name, extension))
+
+
+def structure_row_pexels(df, ind, keys_list): 
 
     gender_key, age_key = get_gender_age(df, ind, keys_list)
     location_no = get_location(df, ind, keys_list)

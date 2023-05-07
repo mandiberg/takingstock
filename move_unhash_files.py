@@ -180,7 +180,7 @@ def unhash_files():
             # where the old images is (PATH)
             image_hashpath = os.path.join(PATH,generate_local_image_filepath(image_url))
             # where the new images goes (PATH2)
-            image_unhashed_path = os.path.join(PATH2,generate_local_unhashed_image_filepath(image_url).replace('.jpeg','.jpg'))
+            image_unhashed_path = os.path.join(PATH2,generate_local_unhashed_image_filepath(image_url.replace('.jpeg','.jpg')))
             # print out to countout every 1000 batches
             if start_counter % 10 == 0:
                 print("start_counter is: ",start_counter)
