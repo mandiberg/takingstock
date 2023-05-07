@@ -34,7 +34,7 @@ _|_|  _|\__, |\___|____/\__| \___|____/  \_/
 ######## Michael's Credentials ########
 db = {
     "host":"localhost",
-    "name":"stock",            
+    "name":"stock1",            
     "user":"root",
     "pass":"Fg!27Ejc!Mvr!GT"
 }
@@ -485,7 +485,7 @@ def ingest_it():
                 result = conn.execute(insert_stmt)
                 last_inserted_id = result.lastrowid
 
-                if not key_nos_list and last_inserted_id:
+                if key_nos_list and last_inserted_id:
                     keyrows = []
                     for keyword_id in key_nos_list:
                         keyrows.append({'image_id': last_inserted_id, 'keyword_id': keyword_id})
