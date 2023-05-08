@@ -8,6 +8,7 @@ import cv2
 import math
 import pickle
 import sys # can delete for production
+from sys import platform
 
 import numpy as np
 import mediapipe as mp
@@ -41,29 +42,38 @@ i think i want the whole row:
 
 '''
 
-######## Satyam's Credentials #########
-db = {
-    "host":"localhost",
-    "name":"gettytest3",                 
-    "user":"root",
-    "pass":"SSJ2_mysql"
-}
-#ROOT= os.path.join(os.environ['HOMEDRIVE'],os.environ['HOMEPATH'], "Documents/projects-active/facemap_production") ## local WIN
-ROOT= os.path.join("D:/"+"Documents/projects-active/facemap_production") ## SD CARD
-NUMBER_OF_PROCESSES = 4
-#######################################
 
-######## Michael's Credentials ########
-# db = {
-    # "host":"localhost",
-    # "name":"gettytest3",            
-    # "user":"root",
-    # "pass":"Fg!27Ejc!Mvr!GT"
-# }
+# platform specific credentials
+if platform == "darwin":
+    # OS X
 
-# ROOT= os.path.join(os.environ['HOME'], "Documents/projects-active/facemap_production") ## only on Mac
-# NUMBER_OF_PROCESSES = 8
-#######################################
+    ####### Michael's Credentials ########
+    db = {
+        "host":"localhost",
+        "name":"gettytest3",            
+        "user":"root",
+        "pass":"Fg!27Ejc!Mvr!GT"
+    }
+
+    ROOT= os.path.join(os.environ['HOME'], "Documents/projects-active/facemap_production") ## only on Mac
+    NUMBER_OF_PROCESSES = 8
+    ######################################
+
+elif platform == "win32":
+    # Windows...
+
+    ######## Satyam's Credentials #########
+    db = {
+        "host":"localhost",
+        "name":"gettytest3",                 
+        "user":"root",
+        "pass":"SSJ2_mysql"
+    }
+    #ROOT= os.path.join(os.environ['HOMEDRIVE'],os.environ['HOMEPATH'], "Documents/projects-active/facemap_production") ## local WIN
+    ROOT= os.path.join("D:/"+"Documents/projects-active/facemap_production") ## SD CARD
+    NUMBER_OF_PROCESSES = 4
+    #######################################
+
 
 
 folder ="gettyimages"
@@ -80,7 +90,7 @@ SLEEP_TIME=0
 SELECT = "DISTINCT(i.image_id), i.gender_id, author, caption, contentUrl, description, imagename"
 FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings e ON i.image_id = e.image_id "
 WHERE = "e.image_id IS NULL"
-LIMIT = 100
+LIMIT = 10000
 
 
 #creating my objects
@@ -237,39 +247,39 @@ def find_face(image, df):
                                              ) as face_mesh:
             # Convert the BGR image to RGB and cropping it around face boundary and process it with MediaPipe Face Mesh.
                 results = face_mesh.process(image[bottom:top,left:right,::-1])    
-        #read any image containing a face
-        if results.multi_face_landmarks:
-            
-            #construct pose object to solve pose
-            
-            is_face = True
-            pose = SelectPose(image)
+            #read any image containing a face
+            if results.multi_face_landmarks:
+                
+                #construct pose object to solve pose
+                
+                is_face = True
+                pose = SelectPose(image)
 
-            #get landmarks
-            #added returning meshimage (was image)
-            faceLms = pose.get_face_landmarks(results, image,bbox)
-            #calculate base data from landmarks
-            pose.calc_face_data(faceLms)
+                #get landmarks
+                #added returning meshimage (was image)
+                faceLms = pose.get_face_landmarks(results, image,bbox)
+                #calculate base data from landmarks
+                pose.calc_face_data(faceLms)
 
-            # get angles, using r_vec property stored in class
-            # angles are meta. there are other meta --- size and resize or something.
-            angles = pose.rotationMatrixToEulerAnglesToDegrees()
-            mouth_gap = pose.get_mouth_data(faceLms)
-                         ##### calculated face detection results
-            if is_face:
-                # Calculate Face Encodings if is_face = True
-                print("in encodings conditional")
-                # turning off to debug
-                encodings = calc_encodings(image, faceLms,faceDet) ## changed parameters
-                print(encodings)
-            #df.at['1', 'is_face'] = is_face
-            #df.at['1', 'is_face_distant'] = is_face_distant
-            df.at['1', 'face_x'] = angles[0]
-            df.at['1', 'face_y'] = angles[1]
-            df.at['1', 'face_z'] = angles[2]
-            df.at['1', 'mouth_gap'] = mouth_gap
-            df.at['1', 'face_landmarks'] = pickle.dumps(faceLms)
-            df.at['1', 'face_encodings'] = pickle.dumps(encodings)
+                # get angles, using r_vec property stored in class
+                # angles are meta. there are other meta --- size and resize or something.
+                angles = pose.rotationMatrixToEulerAnglesToDegrees()
+                mouth_gap = pose.get_mouth_data(faceLms)
+                             ##### calculated face detection results
+                if is_face:
+                    # Calculate Face Encodings if is_face = True
+                    print("in encodings conditional")
+                    # turning off to debug
+                    encodings = calc_encodings(image, faceLms,faceDet) ## changed parameters
+                    print(encodings)
+                #df.at['1', 'is_face'] = is_face
+                #df.at['1', 'is_face_distant'] = is_face_distant
+                df.at['1', 'face_x'] = angles[0]
+                df.at['1', 'face_y'] = angles[1]
+                df.at['1', 'face_z'] = angles[2]
+                df.at['1', 'mouth_gap'] = mouth_gap
+                df.at['1', 'face_landmarks'] = pickle.dumps(faceLms)
+                df.at['1', 'face_encodings'] = pickle.dumps(encodings)
     
     df.at['1', 'is_face'] = is_face
 
@@ -385,8 +395,24 @@ def process_image(task):
         df = find_face(image, df)
         # Do Body Pose
         df = find_body(image, df)
-        if not df.at['1', 'is_face'] and not df.at['1', 'is_body']:
+
+        if df.at['1', 'is_face']:
+            print("face found")
+            savepath = os.path.join(ROOT, "getty_isface", str(df.at['1', 'image_id'])+".jpg")
+
+        elif not df.at['1', 'is_face'] and df.at['1', 'is_body']:
+            print("body found")
+            savepath = os.path.join(ROOT, "getty_isbody", str(df.at['1', 'image_id'])+".jpg")
+
+        # elif not df.at['1', 'is_face'] and not df.at['1', 'is_body']:
+        else:
             print("no face or body found")
+            savepath = os.path.join(ROOT, "getty_nobodynoface", str(df.at['1', 'image_id'])+".jpg")
+        try:
+            cv2.imwrite(savepath, image)
+        except:
+            print("failed to savepath")
+
     else:
         print('toooooo smallllll')
 
@@ -399,6 +425,8 @@ def process_image(task):
         print(e)
 
 
+
+        # save image based on is_face
 def do_job(tasks_to_accomplish, tasks_that_are_done):
     #print("do_job")
     while True:
