@@ -77,6 +77,7 @@ elif platform == "win32":
 
 
 folder ="gettyimages"
+sortfolder ="getty_test"
 http="https://media.gettyimages.com/photos/"
 # folder ="files_for_testing"
 outputfolder = os.path.join(ROOT,folder+"_output_febmulti")
@@ -364,7 +365,7 @@ def process_image(task):
             sort = "body"
         else:
             sort = "none"
-        outfolder = os.path.join(ROOT,folder,sort,)
+        outfolder = os.path.join(ROOT,sortfolder,sort)
         outpath = os.path.join(outfolder, str(df.at['1', 'image_id'])+".jpg")
 
         isExist = os.path.exists(outfolder)
@@ -396,27 +397,11 @@ def process_image(task):
         # Do Body Pose
         df = find_body(image, df)
 
-        if df.at['1', 'is_face']:
-            print("face found")
-            savepath = os.path.join(ROOT, "getty_isface", str(df.at['1', 'image_id'])+".jpg")
-
-        elif not df.at['1', 'is_face'] and df.at['1', 'is_body']:
-            print("body found")
-            savepath = os.path.join(ROOT, "getty_isbody", str(df.at['1', 'image_id'])+".jpg")
-
-        # elif not df.at['1', 'is_face'] and not df.at['1', 'is_body']:
-        else:
-            print("no face or body found")
-            savepath = os.path.join(ROOT, "getty_nobodynoface", str(df.at['1', 'image_id'])+".jpg")
-        try:
-            cv2.imwrite(savepath, image)
-        except:
-            print("failed to savepath")
-
     else:
         print('toooooo smallllll')
 
-    # save_image_triage(image,df)
+    # for testing: this will save images into folders for is_face, is_body, and none. 
+    save_image_triage(image,df)
 
     # store data
     try:
