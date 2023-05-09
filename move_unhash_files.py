@@ -151,7 +151,7 @@ def unhash_files():
     with open(UNIQUE_FILES_PATH, 'r') as csvfile:
         reader = csv.reader(csvfile)
         # Loop over each row in the file
-        start_counter = 1137000
+        start_counter = 884548
         counter = start_counter
         alreadyDL = 0
         print("starting from start_counter: ",start_counter)
@@ -187,13 +187,13 @@ def unhash_files():
             if start_counter % 10 == 0:
                 print("start_counter is: ",start_counter)
             start_counter += 1
+            counter += 1
 
             if counter % 1000 == 0 and counter > start_counter:
                 print("counter is: ",counter)
                 # write_log_csv(CSV_COUNTOUT_PATH,counter)
 
             if os.path.isfile(image_hashpath):
-                counter += 1
                 print("this file will be moved", str(counter), image_hashpath)
             else:
                 alreadyDL += 1
@@ -209,7 +209,6 @@ def unhash_files():
                 print('[-] Processing batch #%s' %
                       (int(counter / NUMBER_OF_THREADS_IMAGES_DOWNLOAD)), end='\r')
                       # (int(counter / NUMBER_OF_THREADS_IMAGES_DOWNLOAD)),  (int(total_count / NUMBER_OF_THREADS_IMAGES_DOWNLOAD)), end='\r')
-            counter += 1
     print('[-] All images have been downloaded successfully\n')
 
 

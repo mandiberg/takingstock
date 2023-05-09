@@ -91,7 +91,7 @@ SLEEP_TIME=0
 SELECT = "DISTINCT(i.image_id), i.gender_id, author, caption, contentUrl, description, imagename"
 FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings e ON i.image_id = e.image_id "
 WHERE = "e.image_id IS NULL"
-LIMIT = 10000
+LIMIT = 10
 
 
 #creating my objects
@@ -146,6 +146,36 @@ def save_image_elsewhere(image, path):
     oldfolder = "newimages"
     newfolder = "testimages"
     outpath = path.replace(oldfolder, newfolder)
+    try:
+        print(outpath)
+        cv2.imwrite(outpath, image)
+        print("wrote")
+
+    except:
+        print("couldn't write")
+
+def save_image_by_path(image, sort, name):
+    global sortfolder
+    def do_isExist(outfolder):
+        isExist = os.path.exists(outfolder)
+        if not isExist: 
+            os.mkdir(outfolder)
+
+    sortfolder_path = os.path.join(ROOT,sortfolder)
+    outfolder = os.path.join(sortfolder_path,sort)
+    outpath = os.path.join(outfolder, name)
+    do_isExist(sortfolder)
+    do_isExist(outfolder)
+
+    try:
+        cv2.imwrite(outpath, image)
+
+    except:
+        print("couldn't write")
+
+
+
+    outpath = os.path.join(ROOT, sortfolder, folder)
     try:
         print(outpath)
         cv2.imwrite(outpath, image)
@@ -217,6 +247,7 @@ def selectSQL():
     # return alreadyDL
 
 
+
 def find_face(image, df):
     height, width, _ = image.shape
     with mp.solutions.face_detection.FaceDetection(model_selection=1, min_detection_confidence=0.7) as face_det: 
@@ -230,35 +261,48 @@ def find_face(image, df):
     '''
     is_face = False
 
-
     if results_det.detections:
         faceDet=results_det.detections[0]
         bbox = faceDet.location_data.relative_bounding_box
+        print("bbox ", bbox)
         xy_min = _normalized_to_pixel_coordinates(bbox.xmin, bbox.ymin, width,height)
         xy_max = _normalized_to_pixel_coordinates(bbox.xmin + bbox.width, bbox.ymin + bbox.height,width,height)
-        if xy_min is not None and xy_max is not None:
-            left,bottom =xy_min
-            right,top = xy_max
+        if xy_min and xy_max:
+            # TOP AND BOTTOM WERE FLIPPED 
+            # both in xy_min assign, and in face_mesh.process(image[np crop])
+            left,top =xy_min
+            right,bottom = xy_max
             bbox={"left":left,"right":right,"top":top,"bottom":bottom
             }
+            print("bbox ", bbox)
             with mp.solutions.face_mesh.FaceMesh(static_image_mode=True,
                                              refine_landmarks=False,
                                              max_num_faces=1,
                                              min_detection_confidence=0.5
                                              ) as face_mesh:
             # Convert the BGR image to RGB and cropping it around face boundary and process it with MediaPipe Face Mesh.
-                results = face_mesh.process(image[bottom:top,left:right,::-1])    
+                                # crop_img = img[y:y+h, x:x+w]
+                results = face_mesh.process(image[top:bottom,left:right,::-1])    
             #read any image containing a face
             if results.multi_face_landmarks:
                 
+                # # debugging the flipped landmarks
+                # start_point = ((left, top))
+                # end_point = ((right, bottom))
+                # color = (255, 0, 0)
+                # thickness = 1
+                # image = cv2.rectangle(image, start_point, end_point, color, thickness)
+                # image = cv2.line(image, start_point, end_point, color, thickness)
+                # image = cv2.circle(image, start_point, 20, color, 1)
+
                 #construct pose object to solve pose
-                
                 is_face = True
                 pose = SelectPose(image)
 
                 #get landmarks
-                #added returning meshimage (was image)
                 faceLms = pose.get_face_landmarks(results, image,bbox)
+
+
                 #calculate base data from landmarks
                 pose.calc_face_data(faceLms)
 
@@ -365,27 +409,13 @@ def process_image(task):
             sort = "body"
         else:
             sort = "none"
-        outfolder = os.path.join(ROOT,sortfolder,sort)
-        outpath = os.path.join(outfolder, str(df.at['1', 'image_id'])+".jpg")
-
-        isExist = os.path.exists(outfolder)
-        if not isExist: 
-            os.mkdir(outfolder)
-
-        # oldfolder = "newimages"
-        # newfolder = "testimages"
-        # outpath = path.replace(oldfolder, newfolder)
-        try:
-            cv2.imwrite(outpath, image)
-
-        except:
-            print("couldn't write")
+        name = str(df.at['1', 'image_id'])+".jpg"
+        save_image_by_path(image, sort, name)
 
     df = pd.DataFrame(columns=['image_id','is_face','is_body','is_face_distant','face_x','face_y','face_z','mouth_gap','face_landmarks','face_encodings','body_landmarks'])
     df.at['1', 'image_id'] = task[0]
     try:
-        image = cv2.imread(task[1]) 
-        
+        image = cv2.imread(task[1])        
         # this is for when you need to move images into a testing folder structure
         # save_image_elsewhere(image, task)
     except:
@@ -396,7 +426,6 @@ def process_image(task):
         df = find_face(image, df)
         # Do Body Pose
         df = find_body(image, df)
-
     else:
         print('toooooo smallllll')
 
@@ -408,7 +437,6 @@ def process_image(task):
         insertignore_df(df,"encodings", engine)  ### made it all lower case to avoid discrepancy
     except OperationalError as e:
         print(e)
-
 
 
         # save image based on is_face
