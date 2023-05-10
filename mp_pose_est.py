@@ -77,9 +77,10 @@ class SelectPose:
                 faceXY[287]     # "right mouth"
             ], dtype="double")
 
-            #this is where the face points are written to the image
-            for i in image_points:
-                cv2.circle(image,(int(i[0]),int(i[1])),4,(255,0,0),-1)
+            # #this is where the face points are written to the image
+            # # turning this off for production run
+            # for i in image_points:
+            #     cv2.circle(image,(int(i[0]),int(i[1])),4,(255,0,0),-1)
 
             maxXY = max(faceXY, key=self.x_element)[0], max(faceXY, key=self.y_element)[1]
             minXY = min(faceXY, key=self.x_element)[0], min(faceXY, key=self.y_element)[1]

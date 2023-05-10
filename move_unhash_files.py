@@ -151,7 +151,7 @@ def unhash_files():
     with open(UNIQUE_FILES_PATH, 'r') as csvfile:
         reader = csv.reader(csvfile)
         # Loop over each row in the file
-        start_counter = 884548
+        start_counter = 0
         counter = start_counter
         alreadyDL = 0
         print("starting from start_counter: ",start_counter)

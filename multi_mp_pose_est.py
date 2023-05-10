@@ -25,74 +25,43 @@ from mediapipe.python.solutions.drawing_utils import _normalized_to_pixel_coordi
 import dlib
 import face_recognition_models
 
-'''
-
-select 1k images from database with no is_face variable
-
-SELECT column_names
-FROM table_name
-WHERE column_name IS NULL; 
-
-send each row into the 
-        tasks_to_accomplish.put("Task no " + str(i))
-
-i think i want the whole row:
- i need the UID to add the data back, and the filepath to read it
- so easiest just to send the whole thing in?
-
-'''
-
-
 # platform specific credentials
 if platform == "darwin":
-    # OS X
-
-    ####### Michael's Credentials ########
+    ####### Michael's OS X Credentials ########
     db = {
         "host":"localhost",
-        "name":"gettytest3",            
+        "name":"stock1",            
         "user":"root",
         "pass":"Fg!27Ejc!Mvr!GT"
     }
-
     ROOT= os.path.join(os.environ['HOME'], "Documents/projects-active/facemap_production") ## only on Mac
     NUMBER_OF_PROCESSES = 8
-    ######################################
-
 elif platform == "win32":
-    # Windows...
-
-    ######## Satyam's Credentials #########
+    ######## Satyam's WIN Credentials #########
     db = {
         "host":"localhost",
         "name":"gettytest3",                 
         "user":"root",
         "pass":"SSJ2_mysql"
     }
-    #ROOT= os.path.join(os.environ['HOMEDRIVE'],os.environ['HOMEPATH'], "Documents/projects-active/facemap_production") ## local WIN
     ROOT= os.path.join("D:/"+"Documents/projects-active/facemap_production") ## SD CARD
     NUMBER_OF_PROCESSES = 4
-    #######################################
-
-
 
 folder ="gettyimages"
 sortfolder ="getty_test"
 http="https://media.gettyimages.com/photos/"
-# folder ="files_for_testing"
-outputfolder = os.path.join(ROOT,folder+"_output_febmulti")
+# outputfolder = os.path.join(ROOT,folder+"_output_febmulti")
 SAVE_ORIG = False
 DRAW_BOX = False
 MINSIZE = 700
-# number_of_task = 10
 SLEEP_TIME=0
 
-# table_search ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id"
-SELECT = "DISTINCT(i.image_id), i.gender_id, author, caption, contentUrl, description, imagename"
+SELECT = "DISTINCT(i.image_id), contentUrl, imagename"
+# SELECT = "DISTINCT(i.image_id), i.gender_id, author, caption, contentUrl, description, imagename"
 FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings e ON i.image_id = e.image_id "
-WHERE = "e.image_id IS NULL"
-LIMIT = 10
-
+# WHERE = "e.image_id IS NULL AND i.site_name_id = 1 AND k.keyword_text LIKE 'smil%'"
+WHERE = "e.image_id IS NULL "
+LIMIT = 100
 
 #creating my objects
 mp_face_mesh = mp.solutions.face_mesh
@@ -108,9 +77,6 @@ face_detection = mp_face_detection.FaceDetection(min_detection_confidence=0.7)
 face_recognition_model = face_recognition_models.face_recognition_model_location()
 face_encoder = dlib.face_recognition_model_v1(face_recognition_model)
 ###############
-
-# testing to see if it works better to collect all rows, and then insert
-df_all = pd.DataFrame(columns=['image_id','is_face','is_body','is_face_distant','face_x','face_y','face_z','mouth_gap','face_landmarks','face_landmarks_pickle','face_encodings','body_landmarks'])
 
 engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}"
                                 .format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']), poolclass=NullPool)
@@ -152,11 +118,11 @@ def save_image_elsewhere(image, path):
         print("wrote")
 
     except:
-        print("couldn't write")
+        print("save_image_elsewhere couldn't write")
 
 def save_image_by_path(image, sort, name):
     global sortfolder
-    def do_isExist(outfolder):
+    def mkExist(outfolder):
         isExist = os.path.exists(outfolder)
         if not isExist: 
             os.mkdir(outfolder)
@@ -164,25 +130,25 @@ def save_image_by_path(image, sort, name):
     sortfolder_path = os.path.join(ROOT,sortfolder)
     outfolder = os.path.join(sortfolder_path,sort)
     outpath = os.path.join(outfolder, name)
-    do_isExist(sortfolder)
-    do_isExist(outfolder)
+    mkExist(sortfolder)
+    mkExist(outfolder)
 
     try:
         cv2.imwrite(outpath, image)
 
     except:
-        print("couldn't write")
+        print("save_image_by_path couldn't write")
 
 
 
-    outpath = os.path.join(ROOT, sortfolder, folder)
-    try:
-        print(outpath)
-        cv2.imwrite(outpath, image)
-        print("wrote")
+    # outpath = os.path.join(ROOT, sortfolder, folder)
+    # try:
+    #     print(outpath)
+    #     cv2.imwrite(outpath, image)
+    #     print("wrote")
 
-    except:
-        print("couldn't write")
+    # except:
+    #     print("couldn't write")
 
 # def create_my_engine(db):
 
@@ -227,25 +193,24 @@ def insertignore_dict(dict_data,table_name):
 
 
 def selectSQL():
-
-    # selectsql = "SELECT UID from Images Where UID = '"+str(1351300526)+"';"
-    # selectsql = "SELECT "+ get +" from "+ table +" Where "+ column +" "+ value +" LIMIT "+ str(limit) +";"
-    # selectsql = f"SELECT {get} FROM {table} WHERE {column} {value} LIMIT {str(limit)};"
     selectsql = f"SELECT {SELECT} FROM {FROM} WHERE {WHERE} LIMIT {str(LIMIT)};"
-    print("actual SELECT is: ",selectsql)
+    # print("actual SELECT is: ",selectsql)
     result = engine.connect().execute(text(selectsql))
-
     resultsjson = ([dict(row) for row in result.mappings()])
-
     return(resultsjson)
-    # try:
-    #     myUID = resultsjson[0]['UID']
-    #     alreadyDL = True
-    # except:
-    #     alreadyDL = False
 
-    # return alreadyDL
-
+def get_bbox(faceDet, height, width):
+    bbox = {}
+    bbox_obj = faceDet.location_data.relative_bounding_box
+    xy_min = _normalized_to_pixel_coordinates(bbox_obj.xmin, bbox_obj.ymin, width,height)
+    xy_max = _normalized_to_pixel_coordinates(bbox_obj.xmin + bbox_obj.width, bbox_obj.ymin + bbox_obj.height,width,height)
+    if xy_min and xy_max:
+        # TOP AND BOTTOM WERE FLIPPED 
+        # both in xy_min assign, and in face_mesh.process(image[np crop])
+        left,top =xy_min
+        right,bottom = xy_max
+        bbox={"left":left,"right":right,"top":top,"bottom":bottom}
+    return(bbox)
 
 
 def find_face(image, df):
@@ -263,18 +228,18 @@ def find_face(image, df):
 
     if results_det.detections:
         faceDet=results_det.detections[0]
-        bbox = faceDet.location_data.relative_bounding_box
-        print("bbox ", bbox)
-        xy_min = _normalized_to_pixel_coordinates(bbox.xmin, bbox.ymin, width,height)
-        xy_max = _normalized_to_pixel_coordinates(bbox.xmin + bbox.width, bbox.ymin + bbox.height,width,height)
-        if xy_min and xy_max:
-            # TOP AND BOTTOM WERE FLIPPED 
-            # both in xy_min assign, and in face_mesh.process(image[np crop])
-            left,top =xy_min
-            right,bottom = xy_max
-            bbox={"left":left,"right":right,"top":top,"bottom":bottom
-            }
-            print("bbox ", bbox)
+        bbox = get_bbox(faceDet, height, width)
+        # bbox = faceDet.location_data.relative_bounding_box
+        # xy_min = _normalized_to_pixel_coordinates(bbox.xmin, bbox.ymin, width,height)
+        # xy_max = _normalized_to_pixel_coordinates(bbox.xmin + bbox.width, bbox.ymin + bbox.height,width,height)
+        # if xy_min and xy_max:
+        #     # TOP AND BOTTOM WERE FLIPPED 
+        #     # both in xy_min assign, and in face_mesh.process(image[np crop])
+        #     left,top =xy_min
+        #     right,bottom = xy_max
+        #     bbox={"left":left,"right":right,"top":top,"bottom":bottom
+        #     }
+        if bbox:
             with mp.solutions.face_mesh.FaceMesh(static_image_mode=True,
                                              refine_landmarks=False,
                                              max_num_faces=1,
@@ -282,7 +247,7 @@ def find_face(image, df):
                                              ) as face_mesh:
             # Convert the BGR image to RGB and cropping it around face boundary and process it with MediaPipe Face Mesh.
                                 # crop_img = img[y:y+h, x:x+w]
-                results = face_mesh.process(image[top:bottom,left:right,::-1])    
+                results = face_mesh.process(image[bbox["top"]:bbox["bottom"],bbox["left"]:bbox["right"],::-1])    
             #read any image containing a face
             if results.multi_face_landmarks:
                 
@@ -313,10 +278,10 @@ def find_face(image, df):
                              ##### calculated face detection results
                 if is_face:
                     # Calculate Face Encodings if is_face = True
-                    print("in encodings conditional")
+                    # print("in encodings conditional")
                     # turning off to debug
-                    encodings = calc_encodings(image, faceLms,faceDet) ## changed parameters
-                    print(encodings)
+                    encodings = calc_encodings(image, faceLms,bbox) ## changed parameters
+                    # print(encodings)
                 #df.at['1', 'is_face'] = is_face
                 #df.at['1', 'is_face_distant'] = is_face_distant
                 df.at['1', 'face_x'] = angles[0]
@@ -325,13 +290,10 @@ def find_face(image, df):
                 df.at['1', 'mouth_gap'] = mouth_gap
                 df.at['1', 'face_landmarks'] = pickle.dumps(faceLms)
                 df.at['1', 'face_encodings'] = pickle.dumps(encodings)
-    
     df.at['1', 'is_face'] = is_face
-
-
     return df
 
-def calc_encodings(image, faceLms,faceDet):## changed parameters and rebuilt
+def calc_encodings(image, faceLms,bbox):## changed parameters and rebuilt
     #print("calc_encodings")
     height, width, _ = image.shape
     landmark_points_5 = [ 263, #left eye away from centre
@@ -347,22 +309,26 @@ def calc_encodings(image, faceLms,faceDet):## changed parameters and rebuilt
         landmark_point=dlib.point([x,y])
         raw_landmark_set.append(landmark_point)
     all_points=dlib.points(raw_landmark_set)
-    
-    bbox = faceDet.location_data.relative_bounding_box
-    xy_min = _normalized_to_pixel_coordinates(bbox.xmin, bbox.ymin, height,width)
-    xy_max = _normalized_to_pixel_coordinates(bbox.xmin + bbox.width, bbox.ymin + bbox.height,height,width)
-    if xy_min is not None and xy_max is not None:
-        xmin,ymin =xy_min
-        xmax,ymax = xy_max
-        b_box= dlib.rectangle(left=xmin, top=ymax, right=xmax, bottom=ymin)
-        #in_bounds=True
-    #else:
-        #print("face out of frame")
-        #in_bounds=False
+        
+    # bbox = faceDet.location_data.relative_bounding_box
+    # xy_min = _normalized_to_pixel_coordinates(bbox.xmin, bbox.ymin, height,width)
+    # xy_max = _normalized_to_pixel_coordinates(bbox.xmin + bbox.width, bbox.ymin + bbox.height,height,width)
+    # if xy_min and xy_max:
+    #     xmin,ymin =xy_min
+    #     xmax,ymax = xy_max
+    #     b_box= dlib.rectangle(left=xmin, top=ymax, right=xmax, bottom=ymin)
+    #     #in_bounds=True
+    # #else:
+    #     #print("face out of frame")
+    #     #in_bounds=False
 
-    if (all_points is None) or (b_box is None):return 
+    # I'm unsure if top should be ymax or ymin. 
+    # ymin ("top") would be y value for top left point.
+    bbox_rect= dlib.rectangle(left=bbox["left"], top=bbox["top"], right=bbox["right"], bottom=bbox["bottom"])
+
+    if (all_points is None) or (bbox is None):return 
     
-    raw_landmark_set=dlib.full_object_detection(b_box,all_points)
+    raw_landmark_set=dlib.full_object_detection(bbox_rect,all_points)
     encodings=face_encoder.compute_face_descriptor(image, raw_landmark_set, num_jitters=1)
 
 
@@ -378,24 +344,17 @@ def find_body(image,df):
             image_height, image_width, _ = image.shape
             # Convert the BGR image to RGB before processing.
             bodyLms = pose.process(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
-            print("bodyLms, ", bodyLms)
+            # print("bodyLms, ", bodyLms)
             # bodyLms = results.pose_landmarks.landmark
             if not bodyLms.pose_landmarks:
                 is_body = False
             else: 
                 is_body = True
-                # bodyLms.pose_landmarks = is_body
-
-                # it seems like this is borking the function
-                # turning this off to debug df
                 df.at['1', 'body_landmarks'] = pickle.dumps(bodyLms.pose_landmarks)
 
             df.at['1', 'is_body'] = is_body
-
-            # return is_body, bodyLms.pose_landmarks.toJSON()
         except:
             print(f"[find_body]this item failed: {image}")
-
         return df
 
 
@@ -412,7 +371,7 @@ def process_image(task):
         name = str(df.at['1', 'image_id'])+".jpg"
         save_image_by_path(image, sort, name)
 
-    df = pd.DataFrame(columns=['image_id','is_face','is_body','is_face_distant','face_x','face_y','face_z','mouth_gap','face_landmarks','face_encodings','body_landmarks'])
+    df = pd.DataFrame(columns=['image_id','is_face','is_body','is_face_distant','face_x','face_y','face_z','mouth_gap','face_landmarks','face_encodings','body_landmarks','is_face'])
     df.at['1', 'image_id'] = task[0]
     try:
         image = cv2.imread(task[1])        
@@ -426,11 +385,13 @@ def process_image(task):
         df = find_face(image, df)
         # Do Body Pose
         df = find_body(image, df)
+
+        # for testing: this will save images into folders for is_face, is_body, and none. 
+        # only save images that aren't too smallllll
+        # save_image_triage(image,df)
     else:
         print('toooooo smallllll')
-
-    # for testing: this will save images into folders for is_face, is_body, and none. 
-    save_image_triage(image,df)
+        # I should probably assign no_good here...?
 
     # store data
     try:
@@ -465,52 +426,58 @@ def do_job(tasks_to_accomplish, tasks_that_are_done):
 
 
 def main():
-    #print("main")
+    print("main")
     tasks_to_accomplish = Queue()
     tasks_that_are_done = Queue()
     processes = []
 
-    print("about to SQL: ",SELECT,FROM,WHERE,LIMIT)
-    # create_my_engine(db)
-    resultsjson = selectSQL()
-    print("got results, count is: ",len(resultsjson))
+
+    while True:
+        print("about to SQL: ",SELECT,FROM,WHERE,LIMIT)
+        resultsjson = selectSQL()
+        print("got results, count is: ",len(resultsjson))
+        if len(resultsjson) == 0:
+            break
+        # for row in resultsjson:
+
+        # create_my_engine(db)
+        # resultsjson = selectSQL()
 
 
-    for row in resultsjson:
-        # gets contentUrl
-        print(row)
-        image_id = row["image_id"]
-        item = row["contentUrl"]
-        if folder == "gettyimages":
-            orig_filename = item.replace(http, "")+".jpg"
-            d0, d02 = get_hash_folders(orig_filename)
-            imagepath=os.path.join(ROOT,folder, "newimages",d0, d02, orig_filename)
-            isExist = os.path.exists(imagepath)
-            if isExist: 
-                task = (image_id,imagepath)
-                tasks_to_accomplish.put(task)
-                # print(imagepath)
-                # print(tasks_to_accomplish.qsize())
+        for row in resultsjson:
+            # gets contentUrl
+            # print(row)
+            image_id = row["image_id"]
+            item = row["contentUrl"]
+            if folder == "gettyimages":
+                orig_filename = item.replace(http, "")+".jpg"
+                d0, d02 = get_hash_folders(orig_filename)
+                imagepath=os.path.join(ROOT,folder, "newimages",d0, d02, orig_filename)
+                isExist = os.path.exists(imagepath)
+                if isExist: 
+                    task = (image_id,imagepath)
+                    tasks_to_accomplish.put(task)
+                    # print(imagepath)
+                    # print(tasks_to_accomplish.qsize())
+            else:
+                imagepath=os.path.join(ROOT,folder, item)
+                orig_filename = item
+                print("starting: " +item)
 
-        else:
-            imagepath=os.path.join(ROOT,folder, item)
-            orig_filename = item
-            print("starting: " +item)
 
+        # for i in range(number_of_task):
+        #     tasks_to_accomplish.put("Task no " + str(i))
 
-    # for i in range(number_of_task):
-    #     tasks_to_accomplish.put("Task no " + str(i))
+        # creating processes
+        for w in range(NUMBER_OF_PROCESSES):
+            p = Process(target=do_job, args=(tasks_to_accomplish, tasks_that_are_done))
+            processes.append(p)
+            p.start()
 
-    # creating processes
-    for w in range(NUMBER_OF_PROCESSES):
-        p = Process(target=do_job, args=(tasks_to_accomplish, tasks_that_are_done))
-        processes.append(p)
-        p.start()
-
-    # completing process
-    for p in processes:
-        # print("completing process")
-        p.join()
+        # completing process
+        for p in processes:
+            # print("completing process")
+            p.join()
 
     # # print the output
     # while not tasks_that_are_done.empty():
@@ -519,20 +486,7 @@ def main():
 
     end = time.time()
     print (end - start)
-
-        # need to pull count from tasks_that_are_done
-        # imgpermin = tasks_that_are_done.count()/((time.time() - start)/60)
-        # hours = (time.time() - start)/3600
-
-        # print("--- %s images per minute ---" % (imgpermin))
-        # print("--- %s images per day ---" % (imgpermin*1440))
-        # if imgpermin:
-        #     print("--- %s days per 1M images ---" % (1000000/(imgpermin*1440)))
-
-
-
     return True
-
 
 if __name__ == '__main__':
     main()
