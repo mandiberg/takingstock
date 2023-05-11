@@ -39,7 +39,7 @@ SELECT = "i.image_id, i.site_name_id, i.contentUrl, i.imagename, e.face_x, e.fac
 FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings e ON i.image_id = e.image_id "
 WHERE = "e.face_x IS NOT NULL AND i.site_name_id = 1 AND k.keyword_text LIKE 'smil%'"
 # WHERE = "e.image_id IS NULL "
-LIMIT = 10000
+LIMIT = 1000000
 
 
 
@@ -48,7 +48,7 @@ if platform == "darwin":
     ####### Michael's OS X Credentials ########
     db = {
         "host":"localhost",
-        "name":"gettytest3",            
+        "name":"stock1",            
         "user":"root",
         "pass":"Fg!27Ejc!Mvr!GT"
     }
@@ -148,6 +148,11 @@ def get_hash_folders(filename):
     d = m.hexdigest()
     return d[0], d[0:2]
 
+def make_float(value):
+    try:
+        return float(value)
+    except (ValueError, TypeError):
+        return value
 
 # ### MP + Dlib utils
 # 
@@ -770,15 +775,21 @@ def main():
 
         # images_folder = folder_dict[#site_name_id]
 
-        # Apply the unpickling function to the 'face_encodings' column
-        df['face_encodings'] = df_sql['face_encodings'].apply(unpickle_array)
-        df['imagename'] = df_sql['contentUrl'].apply(newname)
 
     except:
         print('you forgot to change the filename DUH')
     if df.empty:
         print('dataframe empty, probably bad path')
         sys.exit()
+
+    # Apply the unpickling function to the 'face_encodings' column
+    df['face_encodings'] = df['face_encodings'].apply(unpickle_array)
+    # turn URL into local hashpath (still needs local root folder)
+    df['imagename'] = df['contentUrl'].apply(newname)
+    # make decimals into float
+    columns_to_convert = ['face_x', 'face_y', 'face_z', 'mouth_gap']
+    df[columns_to_convert] = df[columns_to_convert].applymap(make_float)
+
     print(df)
 
     ### PROCESS THE DATA ###

@@ -145,9 +145,14 @@ class SortPose:
 
     def get_median(self):
 
+        median = None
+        print(self.angle_list)
         angle_list_median = round(statistics.median(self.angle_list))
         print('angle_list_median: ',angle_list_median)
-        print('angle_list_median][SECOND_SORT]',self.d[angle_list_median])
+
+        print(self.d)
+        # this is an empty set
+        print('angle_list_median[SECOND_SORT]',self.d[angle_list_median])
 
         if not self.d[angle_list_median][self.SECOND_SORT].empty:
             median = self.d[angle_list_median][self.SECOND_SORT].median()
@@ -162,6 +167,10 @@ class SortPose:
                     print('good new median is: ', median)
                     print(self.d[newmedian][self.SECOND_SORT].size)
                     break
+        if not median:
+            print("median is none --------- this is a problem")
+            median = None
+
         return median
 
 
