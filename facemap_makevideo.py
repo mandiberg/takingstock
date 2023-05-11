@@ -434,16 +434,23 @@ def encode_df(folder,df_segment):
     image_data=pd.DataFrame(columns=[col1, col2])
 
     
-    for img in img_list:
-        if curr%10==0:print(curr,"/",total)
-        curr+=1
-        filepath = os.path.join(folder,img)        
-        filepath=filepath.replace('\\' , '/')  ## cv2 accepts files with "/" instead of "\"
-        encodings=ret_encoding(filepath)
-        if encodings is not None:              ## checking if a face is found
+    # for img in img_list:
+    #     if curr%10==0:print(curr,"/",total)
+    #     curr+=1
+    #     filepath = os.path.join(folder,img)        
+    #     filepath=filepath.replace('\\' , '/')  ## cv2 accepts files with "/" instead of "\"
+    #     encodings=ret_encoding(filepath)
+    #     if encodings is not None:              ## checking if a face is found
             
-            data=pd.DataFrame({col1:img,col2:[np.array(encodings)]})
-            image_data = pd.concat([image_data,data],ignore_index=True)  
+    #         data=pd.DataFrame({col1:img,col2:[np.array(encodings)]})
+    #         image_data = pd.concat([image_data,data],ignore_index=True)  
+    image_data = pd.DataFrame({col1: df_segment['imagename'], col2: df_segment['face_encodings'].apply(lambda x: np.array(x))})
+    image_data.set_index(col1, inplace=True)
+
+    print(image_data)
+    # image_data = pd.DataFrame({col1: df_segment['imagename'], col2: df_segment['face_encodings'].apply(lambda x: np.array(x))})
+    # image_data.set_index(col1, inplace=True)
+
 
     #splitting the encodings column
     output_data = pd.DataFrame(image_data[col2].to_list(), columns=col_list)
@@ -458,11 +465,42 @@ def encode_df(folder,df_segment):
     # df = pd.read_csv(csv_name)
     output_data.set_index('file_name', inplace=True)
 
+    # image_data = pd.DataFrame({col1: df_segment['imagename'], col2: df_segment['face_encodings'].apply(lambda x: np.array(x))})
+    # image_data.set_index(col1, inplace=True)
     
     return output_data
 
 
 # In[18]:
+
+
+def get_closest_df_v2(folder, start_img, df_enc):
+    if start_img == "median":
+        enc1 = df_enc.median().to_list()
+#         print("in median")
+    else:
+#         enc1 = get 2-129 from df via stimg key
+        enc1 = df_enc.loc[start_img].to_list()
+        df_enc=df_enc.drop(start_img)
+#         print("in new img",len(df_enc.index))
+    
+#     img_list.remove(start_img)
+#     enc1=enc_dict[start_img]
+    
+    dist=[]
+    dist_dict={}
+    for index, row in df_enc.iterrows():
+#         print(row['c1'], row['c2'])
+#     for img in img_list:
+        enc2 = row
+        if (enc1 is not None) and (enc2 is not None):
+            d = get_d(enc1, enc2)
+            dist.append(d)
+            dist_dict[d]=index
+    dist.sort()
+#     print(len(dist))
+    return dist[0], dist_dict[dist[0]], df_enc
+
 
 
 def get_closest_df(folder, start_img, df_enc):
@@ -795,14 +833,14 @@ def main():
     ### PROCESS THE DATA ###
 
     # make the segment based on settings
-    segment = sort.make_segment(df)
+    df_segment = sort.make_segment(df)
 
     # get list of all angles in segment
-    angle_list = sort.createList(segment)
+    angle_list = sort.createList(df_segment)
 
     # sort segment by angle list
     # creates sort.d attribute: a dataframe organized (indexed?) by angle list
-    sort.get_divisor(segment)
+    sort.get_divisor(df_segment)
 
     # # is this used anywhere? 
     # angle_list_pop = angle_list.pop()
@@ -813,8 +851,25 @@ def main():
     # get metamedian for second sort, creates sort.metamedian attribute
     sort.get_metamedian()
 
-    # encode all images in list, and use name as df index
-    df_enc = encode_df(ROOT, segment)
+    # # encode all images in list, and use name as df index
+    # df_enc = encode_df(ROOT, segment)
+
+    df_enc=pd.DataFrame(columns=[col1, col2])
+
+    
+    # for img in img_list:
+    #     if curr%10==0:print(curr,"/",total)
+    #     curr+=1
+    #     filepath = os.path.join(folder,img)        
+    #     filepath=filepath.replace('\\' , '/')  ## cv2 accepts files with "/" instead of "\"
+    #     encodings=ret_encoding(filepath)
+    #     if encodings is not None:              ## checking if a face is found
+            
+    #         data=pd.DataFrame({col1:img,col2:[np.array(encodings)]})
+    #         image_data = pd.concat([image_data,data],ignore_index=True)  
+    df_enc = pd.DataFrame({col1: df_segment['imagename'], col2: df_segment['face_encodings'].apply(lambda x: np.array(x))})
+    df_enc.set_index(col1, inplace=True)
+
 
 
     ### BUILD THE LIST OF SELECTED IMAGES ###
@@ -850,12 +905,12 @@ def main():
 
     if VIDEO == True:
         #save individual as video
-        sort.write_video(ROOT, img_list, segment, size)
+        sort.write_video(ROOT, img_list, df_segment, size)
 
     else:
         #save individual as images
         
-        sort.write_images(ROOT, img_list, segment)
+        sort.write_images(ROOT, img_list, df_segment)
 
 
 if __name__ == '__main__':

@@ -10,6 +10,7 @@ import pickle
 import sys # can delete for production
 from sys import platform
 
+
 import numpy as np
 import mediapipe as mp
 import pandas as pd
@@ -30,7 +31,7 @@ if platform == "darwin":
     ####### Michael's OS X Credentials ########
     db = {
         "host":"localhost",
-        "name":"stock1",            
+        "name":"stock1_alt_encodings",            
         "user":"root",
         "pass":"Fg!27Ejc!Mvr!GT"
     }
@@ -59,9 +60,10 @@ SLEEP_TIME=0
 SELECT = "DISTINCT(i.image_id), contentUrl, imagename"
 # SELECT = "DISTINCT(i.image_id), i.gender_id, author, caption, contentUrl, description, imagename"
 FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings e ON i.image_id = e.image_id "
-WHERE = "e.image_id IS NULL AND i.site_name_id = 1 AND k.keyword_text LIKE 'smil%'"
+# WHERE = "e.image_id IS NULL AND i.site_name_id = 1 AND k.keyword_text LIKE 'smil%'"
+WHERE = "(e.image_id IS NULL AND i.site_name_id = 1 AND  k.keyword_text LIKE 'smil%')OR (e.image_id IS NULL AND k.keyword_text LIKE 'happ%')OR (e.image_id IS NULL AND k.keyword_text LIKE 'laugh%')"
 # WHERE = "e.image_id IS NULL "
-LIMIT = 100
+LIMIT = 5000
 
 #creating my objects
 mp_face_mesh = mp.solutions.face_mesh
@@ -325,6 +327,10 @@ def calc_encodings(image, faceLms,bbox):## changed parameters and rebuilt
     # I'm unsure if top should be ymax or ymin. 
     # ymin ("top") would be y value for top left point.
     bbox_rect= dlib.rectangle(left=bbox["left"], top=bbox["top"], right=bbox["right"], bottom=bbox["bottom"])
+
+    # Here is alt_encodings that match SJ's original structure: left=xmin, top=ymax, right=xmax, bottom=ymin
+    # ymax ("bottom") would be y value for top left point.
+    bbox_rect= dlib.rectangle(left=bbox["left"], top=bbox["bottom"], right=bbox["right"], bottom=bbox["top"])
 
     if (all_points is None) or (bbox is None):return 
     
