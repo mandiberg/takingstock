@@ -186,7 +186,7 @@ class SortPose:
             # print ('d angle size: ',self.d[angle].size)
             try:
                 print("not empty set!")
-                print(self.d[angle].iloc[1]['newname'])
+                print(self.d[angle].iloc[1]['imagename'])
                 this_median = self.d[angle]['face_x'].median()
                 medians.append(this_median)
             except:
@@ -249,13 +249,13 @@ class SortPose:
 
         i = 0
         for index, row in rotation.iterrows():
-            print(row['face_x'], row['face_y'], row['newname'])
+            print(row['face_x'], row['face_y'], row['imagename'])
 
             #I don't know what this does or why
             delta_array.append(row['mouth_gap'])
 
             try:
-                img = cv2.imread(row['newname'])
+                img = cv2.imread(row['imagename'])
                 height, width, layers = img.shape
                 size = (width, height)
                 # test to see if this is actually an face, to get rid of blank ones/bad ones
@@ -265,7 +265,7 @@ class SortPose:
                 i+=1
 
             except:
-                print('failed:',row['newname'])
+                print('failed:',row['imagename'])
         # print("delta_array")
         # print(delta_array)
         return img_array, size        
