@@ -3,6 +3,9 @@ import pandas as pd
 import os
 import time
 import sys
+import pickle
+import hashlib
+
 
 #linear sort imports non-class
 import numpy as np
@@ -18,6 +21,11 @@ import shutil
 from sys import platform
 from pathlib import Path
 
+from sqlalchemy import create_engine, text, MetaData, Table, Column, Numeric, Integer, VARCHAR, update
+from sqlalchemy.exc import OperationalError
+from sqlalchemy.pool import NullPool
+
+
 #mine
 from mp_sort_pose import SortPose
 
@@ -26,18 +34,36 @@ CYCLECOUNT = 2
 # ROOT="/Users/michaelmandiberg/Documents/projects-active/facemap_production/"
 MAPDATA_FILE = "allmaps_62607.csv"
 
+SELECT = "i.image_id, i.site_name_id, i.contentUrl, i.imagename, e.face_x, e.face_y, e.face_z, e.mouth_gap, e.face_encodings"
+# SELECT = "DISTINCT(i.image_id), i.gender_id, author, caption, contentUrl, description, imagename"
+FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings e ON i.image_id = e.image_id "
+WHERE = "e.face_x IS NOT NULL AND i.site_name_id = 1 AND k.keyword_text LIKE 'smil%'"
+# WHERE = "e.image_id IS NULL "
+LIMIT = 10000
+
+
+
 # platform specific file folder (mac for michael, win for satyam)
 if platform == "darwin":
-    # OS X
-    folder="Documents/projects-active/facemap_production/"
-    ROOT = os.path.join(str(Path.home()),folder)
+    ####### Michael's OS X Credentials ########
+    db = {
+        "host":"localhost",
+        "name":"gettytest3",            
+        "user":"root",
+        "pass":"Fg!27Ejc!Mvr!GT"
+    }
+    ROOT= os.path.join(os.environ['HOME'], "Documents/projects-active/facemap_production") ## only on Mac
+    NUMBER_OF_PROCESSES = 8
 elif platform == "win32":
-    # Windows...
-    folder="foobar"
-    # S may not be using home
-    ROOT = os.path.join(str(Path.home()),folder)
-#set home location
-
+    ######## Satyam's WIN Credentials #########
+    db = {
+        "host":"localhost",
+        "name":"gettytest3",                 
+        "user":"root",
+        "pass":"SSJ2_mysql"
+    }
+    ROOT= os.path.join("D:/"+"Documents/projects-active/facemap_production") ## SD CARD
+    NUMBER_OF_PROCESSES = 4
 
 motion = {
     "side_to_side": False,
@@ -46,6 +72,17 @@ motion = {
     "static_pose":  False,
     "simple": False,
 }
+
+
+folder_dict = dict([
+    (1, "gettyimages"), 
+    (5, "images_pexels")
+    ])
+
+engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}"
+                                .format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']), poolclass=NullPool)
+metadata = MetaData(engine)
+
 
 
 
@@ -94,6 +131,22 @@ face_detection = mp_face_detection.FaceDetection(min_detection_confidence=0.7)
 
 mp_face_mesh = mp.solutions.face_mesh
 face_mesh = mp_face_mesh.FaceMesh(static_image_mode=True, max_num_faces=1,min_detection_confidence=0.5)
+
+
+# I/O utils
+
+def selectSQL():
+    selectsql = f"SELECT {SELECT} FROM {FROM} WHERE {WHERE} LIMIT {str(LIMIT)};"
+    # print("actual SELECT is: ",selectsql)
+    result = engine.connect().execute(text(selectsql))
+    resultsjson = ([dict(row) for row in result.mappings()])
+    return(resultsjson)
+
+def get_hash_folders(filename):
+    m = hashlib.md5()
+    m.update(filename.encode('utf-8'))
+    d = m.hexdigest()
+    return d[0], d[0:2]
 
 
 # ### MP + Dlib utils
@@ -362,7 +415,7 @@ def encode_df(folder,df_segment):
     col1="file_name"
     col2="encoding" 
     curr=0
-    img_list = df_segment['newname'].tolist()
+    img_list = df_segment['imagename'].tolist()
 
     total = len(img_list)
 
@@ -580,17 +633,17 @@ def simple_order(segment):
     # for num, name in enumerate(presidents, start=1):
     i = 0
     for index, row in rotation.iterrows():
-        # print(index, row['x'], row['y'], row['newname'])
+        # print(index, row['x'], row['y'], row['imagename'])
         delta_array.append(row['mouth_gap'])
         try:
-            print(row['newname'])
+            print(row['imagename'])
             #this is pointin to the wrong location
             #/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages_output_feb/crop_1_3.9980554263116233_-3.8588402232564545_2.2552074063078456_0.494_portrait-of-young-woman-covering-eye-with-compass-morocco-picture-id1227557214.jpg
             #original files are actually here:
             #/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/F/F0/portrait-of-young-woman-covering-eye-with-compass-morocco-picture-id1227557214.jpg
             #doesn't seem to be picking up the cropped image.
 
-            newimage = cv2.imread(row['newname'])
+            newimage = cv2.imread(row['imagename'])
             height, width, layers = img.shape
             size = (width, height)
             # test to see if this is actually an face, to get rid of blank ones/bad ones
@@ -616,13 +669,13 @@ def simple_order(segment):
                 else:
                     img_array.append(img)
             else:
-                print('skipping this one: ',row['newname'])
+                print('skipping this one: ',row['imagename'])
 
             i+=1
             oldimage = newimage
 
         except:
-            print('failed:',row['newname'])
+            print('failed:',row['imagename'])
     # print("delta_array")
     # print(delta_array)
     return img_array, size
@@ -660,7 +713,7 @@ def cycling_order(CYCLECOUNT):
                 mysterykey = mysteryvalue.abs().argsort()[:CYCLECOUNT]
                 print('mysterykey: ',mysterykey)
                 closest = d[angle].iloc[mysterykey]
-                closest_file = closest.iloc[cycle]['newname']
+                closest_file = closest.iloc[cycle]['imagename']
                 closest_mouth = closest.iloc[cycle]['mouth_gap']
                 print('closest: ')
                 print(closest_file)
@@ -670,7 +723,7 @@ def cycling_order(CYCLECOUNT):
                 img_array.append(img)
             except:
                 print('failed cycle angle:')
-                # print('failed:',row['newname'])
+                # print('failed:',row['imagename'])
         print('finished a cycle')
         sort.angle_list.reverse()
         cycle = cycle +1
@@ -678,87 +731,122 @@ def cycling_order(CYCLECOUNT):
     return img_array, size
 
 
+
 ###################
 #  MY MAIN CODE   #
 ###################
 
-
-#creating my objects
-start = time.time()
-sort = SortPose(motion)
-
-# read the csv and construct dataframe
-try:
-    df = pd.read_csv(os.path.join(ROOT,MAPDATA_FILE))
-except:
-    print('you forgot to change the filename DUH')
-if df.empty:
-    print('dataframe empty, probably bad path')
-    sys.exit()
-
-### PROCESS THE DATA ###
-
-# make the segment based on settings
-segment = sort.make_segment(df)
-
-# get list of all angles in segment
-angle_list = sort.createList(segment)
-
-# sort segment by angle list
-# creates sort.d attribute: a dataframe organized (indexed?) by angle list
-sort.get_divisor(segment)
-
-# # is this used anywhere? 
-# angle_list_pop = angle_list.pop()
-
-# get median for first sort
-median = sort.get_median()
-
-# get metamedian for second sort, creates sort.metamedian attribute
-sort.get_metamedian()
-
-# encode all images in list, and use name as df index
-df_enc = encode_df(ROOT, segment)
-
-
-### BUILD THE LIST OF SELECTED IMAGES ###
-
-# img_array is actual bitmap data? 
-if motion["side_to_side"] is True:
-    img_list, size = cycling_order(CYCLECOUNT)
-    # size = sort.get_cv2size(ROOT, img_list[0])
-else:
-# dont neet to pass SECOND_SORT, because it is already there
-
-    # img_list, size = simple_order(segment)
-
-
-    # not being used currently
-    # save_sorted(i, folder, start_img, dist)
-
-    # # get dataframe sorted by distance
-    start_img = "median"
-    df_sorted = sort_by_face_dist(ROOT, start_img,df_enc)
-    # print("df_sorted")
-    # print(df_sorted)
-    img_list = df_sorted['filename'].tolist()
-    size = sort.get_cv2size(ROOT, img_list[0])
-    # print(img_list)
+def main():
+    def unpickle_array(pickled_array):
+        return pickle.loads(pickled_array)
+    def newname(contentUrl):
+        file_name_path = contentUrl.split('?')[0]
+        file_name = file_name_path.split('/')[-1]
+        extension = file_name.split('.')[-1]
+        if not file_name.endswith(".jpg"):
+            file_name += ".jpg"    
+        hash_folder1, hash_folder2 = get_hash_folders(file_name)
+        newname = os.path.join(hash_folder1, hash_folder2, file_name)
+        return newname
+        # file_name = file_name_path.split('/')[-1]
+    print("main")
 
 
 
-    # img_array, size = sort.simplest_order(segment) 
+    #creating my objects
+    start = time.time()
 
-# print("img_array: ",img_array)
-### WRITE THE IMAGES TO VIDEO/FILES ###
+    resultsjson = selectSQL()
+    print("got results, count is: ",len(resultsjson))
 
-if VIDEO == True:
-    #save individual as video
-    sort.write_video(ROOT, img_list, segment, size)
 
-else:
-    #save individual as images
-    
-    sort.write_images(ROOT, img_list, segment)
+    # print(df_sql)
+    sort = SortPose(motion)
 
+    # read the csv and construct dataframe
+    try:
+        # df = pd.read_csv(os.path.join(ROOT,MAPDATA_FILE))
+        df = pd.json_normalize(resultsjson)
+
+        # images_folder = folder_dict[#site_name_id]
+
+        # Apply the unpickling function to the 'face_encodings' column
+        df['face_encodings'] = df_sql['face_encodings'].apply(unpickle_array)
+        df['imagename'] = df_sql['contentUrl'].apply(newname)
+
+    except:
+        print('you forgot to change the filename DUH')
+    if df.empty:
+        print('dataframe empty, probably bad path')
+        sys.exit()
+    print(df)
+
+    ### PROCESS THE DATA ###
+
+    # make the segment based on settings
+    segment = sort.make_segment(df)
+
+    # get list of all angles in segment
+    angle_list = sort.createList(segment)
+
+    # sort segment by angle list
+    # creates sort.d attribute: a dataframe organized (indexed?) by angle list
+    sort.get_divisor(segment)
+
+    # # is this used anywhere? 
+    # angle_list_pop = angle_list.pop()
+
+    # get median for first sort
+    median = sort.get_median()
+
+    # get metamedian for second sort, creates sort.metamedian attribute
+    sort.get_metamedian()
+
+    # encode all images in list, and use name as df index
+    df_enc = encode_df(ROOT, segment)
+
+
+    ### BUILD THE LIST OF SELECTED IMAGES ###
+
+    # img_array is actual bitmap data? 
+    if motion["side_to_side"] is True:
+        img_list, size = cycling_order(CYCLECOUNT)
+        # size = sort.get_cv2size(ROOT, img_list[0])
+    else:
+    # dont neet to pass SECOND_SORT, because it is already there
+
+        # img_list, size = simple_order(segment)
+
+
+        # not being used currently
+        # save_sorted(i, folder, start_img, dist)
+
+        # # get dataframe sorted by distance
+        start_img = "median"
+        df_sorted = sort_by_face_dist(ROOT, start_img,df_enc)
+        # print("df_sorted")
+        # print(df_sorted)
+        img_list = df_sorted['filename'].tolist()
+        size = sort.get_cv2size(ROOT, img_list[0])
+        # print(img_list)
+
+
+
+        # img_array, size = sort.simplest_order(segment) 
+
+    # print("img_array: ",img_array)
+    ### WRITE THE IMAGES TO VIDEO/FILES ###
+
+    if VIDEO == True:
+        #save individual as video
+        sort.write_video(ROOT, img_list, segment, size)
+
+    else:
+        #save individual as images
+        
+        sort.write_images(ROOT, img_list, segment)
+
+
+if __name__ == '__main__':
+    main()
 

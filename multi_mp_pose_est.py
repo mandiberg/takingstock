@@ -59,8 +59,8 @@ SLEEP_TIME=0
 SELECT = "DISTINCT(i.image_id), contentUrl, imagename"
 # SELECT = "DISTINCT(i.image_id), i.gender_id, author, caption, contentUrl, description, imagename"
 FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings e ON i.image_id = e.image_id "
-# WHERE = "e.image_id IS NULL AND i.site_name_id = 1 AND k.keyword_text LIKE 'smil%'"
-WHERE = "e.image_id IS NULL "
+WHERE = "e.image_id IS NULL AND i.site_name_id = 1 AND k.keyword_text LIKE 'smil%'"
+# WHERE = "e.image_id IS NULL "
 LIMIT = 100
 
 #creating my objects
@@ -430,12 +430,12 @@ def main():
     tasks_to_accomplish = Queue()
     tasks_that_are_done = Queue()
     processes = []
-
+    count = 0
 
     while True:
-        print("about to SQL: ",SELECT,FROM,WHERE,LIMIT)
+        # print("about to SQL: ",SELECT,FROM,WHERE,LIMIT)
         resultsjson = selectSQL()
-        print("got results, count is: ",len(resultsjson))
+        # print("got results, count is: ",len(resultsjson))
         if len(resultsjson) == 0:
             break
         # for row in resultsjson:
@@ -483,9 +483,13 @@ def main():
     # while not tasks_that_are_done.empty():
     #     print("tasks are done")
     #     print(tasks_that_are_done.get())
+        count += len(resultsjson)
+        print("completed round, total results processed is: ",count)
+
 
     end = time.time()
     print (end - start)
+    print ("total processed ",count)
     return True
 
 if __name__ == '__main__':

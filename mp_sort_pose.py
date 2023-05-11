@@ -26,8 +26,8 @@ class SortPose:
             self.MAXRESIZE = .5
             self.MAXMOUTHGAP = 4
             self.FRAMERATE = 15
-            self.SORT = 'y'
-            self.SECOND_SORT = 'x'
+            self.SORT = 'face_y'
+            self.SECOND_SORT = 'face_x'
             # self.SORT = 'mouth_gap'
             self.ROUND = 0
         elif motion['forward_smile'] == True:
@@ -40,7 +40,7 @@ class SortPose:
             self.MINCROP = 1
             self.MAXRESIZE = .5
             self.FRAMERATE = 15
-            self.SECOND_SORT = 'x'
+            self.SECOND_SORT = 'face_x'
             self.MAXMOUTHGAP = 40
             self.SORT = 'mouth_gap'
             self.ROUND = 1
@@ -54,9 +54,9 @@ class SortPose:
             self.MINCROP = 1
             self.MAXRESIZE = .3
             self.FRAMERATE = 15
-            self.SECOND_SORT = 'y'
+            self.SECOND_SORT = 'face_y'
             self.MAXMOUTHGAP = 2
-            self.SORT = 'x'
+            self.SORT = 'face_x'
             self.ROUND = 1
         elif motion['static_pose'] == True:
             self.XLOW = -20
@@ -70,7 +70,7 @@ class SortPose:
             self.FRAMERATE = 15
             self.SECOND_SORT = 'mouth_gap'
             self.MAXMOUTHGAP = 10
-            self.SORT = 'x'
+            self.SORT = 'face_x'
             self.ROUND = 1
         elif motion['simple'] == True:
             self.XLOW = -20
@@ -84,24 +84,26 @@ class SortPose:
             self.FRAMERATE = 15
             self.SECOND_SORT = 'mouth_gap'
             self.MAXMOUTHGAP = 10
-            self.SORT = 'x'
+            self.SORT = 'face_x'
             self.ROUND = 1
 
 
     def make_segment(self, df):
 
-        segment = df.loc[((df['y'] < self.YHIGH) & (df['y'] > self.YLOW))]
+        segment = df.loc[((df['face_y'] < self.YHIGH) & (df['face_y'] > self.YLOW))]
         print(segment.size)
-        segment = segment.loc[((segment['x'] < self.XHIGH) & (segment['x'] > self.XLOW))]
+        segment = segment.loc[((segment['face_x'] < self.XHIGH) & (segment['face_x'] > self.XLOW))]
         print(segment.size)
-        segment = segment.loc[((segment['z'] < self.ZHIGH) & (segment['z'] > self.ZLOW))]
+        segment = segment.loc[((segment['face_z'] < self.ZHIGH) & (segment['face_z'] > self.ZLOW))]
         print(segment.size)
-        segment = segment.loc[segment['cropX'] >= self.MINCROP]
-        print(segment.size)
+        # removing cropX for now. Need to add that back into the data
+        # segment = segment.loc[segment['cropX'] >= self.MINCROP]
+        # print(segment.size)
         segment = segment.loc[segment['mouth_gap'] >= self.MAXMOUTHGAP]
         # segment = segment.loc[segment['mouth_gap'] <= MAXMOUTHGAP]
         print(segment.size)
         # segment = segment.loc[segment['resize'] < MAXRESIZE]
+        print(segment)
         return segment
 
 
@@ -176,7 +178,7 @@ class SortPose:
             try:
                 print("not empty set!")
                 print(self.d[angle].iloc[1]['newname'])
-                this_median = self.d[angle]['x'].median()
+                this_median = self.d[angle]['face_x'].median()
                 medians.append(this_median)
             except:
                 print("empty set, moving on")
@@ -238,7 +240,7 @@ class SortPose:
 
         i = 0
         for index, row in rotation.iterrows():
-            print(row['x'], row['y'], row['newname'])
+            print(row['face_x'], row['face_y'], row['newname'])
 
             #I don't know what this does or why
             delta_array.append(row['mouth_gap'])
