@@ -31,7 +31,7 @@ if platform == "darwin":
     ####### Michael's OS X Credentials ########
     db = {
         "host":"localhost",
-        "name":"stock1_alt_encodings",            
+        "name":"stock1",            
         "user":"root",
         "pass":"Fg!27Ejc!Mvr!GT"
     }
@@ -60,8 +60,8 @@ SLEEP_TIME=0
 SELECT = "DISTINCT(i.image_id), contentUrl, imagename"
 # SELECT = "DISTINCT(i.image_id), i.gender_id, author, caption, contentUrl, description, imagename"
 FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings e ON i.image_id = e.image_id "
-# WHERE = "e.image_id IS NULL AND i.site_name_id = 1 AND k.keyword_text LIKE 'smil%'"
-WHERE = "(e.image_id IS NULL AND i.site_name_id = 1 AND  k.keyword_text LIKE 'smil%')OR (e.image_id IS NULL AND k.keyword_text LIKE 'happ%')OR (e.image_id IS NULL AND k.keyword_text LIKE 'laugh%')"
+WHERE = "e.image_id IS NULL AND i.site_name_id = 1"
+# WHERE = "(e.image_id IS NULL AND k.keyword_text LIKE 'smil%')OR (e.image_id IS NULL AND k.keyword_text LIKE 'happ%')OR (e.image_id IS NULL AND k.keyword_text LIKE 'laugh%')"
 # WHERE = "e.image_id IS NULL "
 LIMIT = 5000
 
@@ -328,9 +328,9 @@ def calc_encodings(image, faceLms,bbox):## changed parameters and rebuilt
     # ymin ("top") would be y value for top left point.
     bbox_rect= dlib.rectangle(left=bbox["left"], top=bbox["top"], right=bbox["right"], bottom=bbox["bottom"])
 
-    # Here is alt_encodings that match SJ's original structure: left=xmin, top=ymax, right=xmax, bottom=ymin
-    # ymax ("bottom") would be y value for top left point.
-    bbox_rect= dlib.rectangle(left=bbox["left"], top=bbox["bottom"], right=bbox["right"], bottom=bbox["top"])
+    # # Here is alt_encodings that match SJ's original structure: left=xmin, top=ymax, right=xmax, bottom=ymin
+    # # ymax ("bottom") would be y value for top left point.
+    # bbox_rect= dlib.rectangle(left=bbox["left"], top=bbox["bottom"], right=bbox["right"], bottom=bbox["top"])
 
     if (all_points is None) or (bbox is None):return 
     
@@ -441,7 +441,7 @@ def main():
     while True:
         # print("about to SQL: ",SELECT,FROM,WHERE,LIMIT)
         resultsjson = selectSQL()
-        # print("got results, count is: ",len(resultsjson))
+        print("got results, count is: ",len(resultsjson))
         if len(resultsjson) == 0:
             break
         # for row in resultsjson:
