@@ -15,36 +15,36 @@ import pandas as pd
 import os
 import time
 import pickle
+from sys import platform
 
-######## Satyam's Credentials #########
-db = {
-    "host":"localhost",
-    "name":"gettytest3",                 
-    "user":"root",
-    "pass":"SSJ2_mysql"
-}
-#ROOT= os.path.join(os.environ['HOMEDRIVE'],os.environ['HOMEPATH'], "Documents/projects-active/facemap_production") ## local WIN
-ROOT= os.path.join("F:/"+"Documents/projects-active/facemap_production") ## SD CARD
-NUMBER_OF_PROCESSES = 4
-#######################################
 
-######## Michael's Credentials ########
-# db = {
-    # "host":"localhost",
-    # "name":"gettytest3",            
-    # "user":"root",
-    # "pass":"Fg!27Ejc!Mvr!GT"
-# }
-
-# ROOT= os.path.join(os.environ['HOME'], "Documents/projects-active/facemap_production") ## only on Mac
-# NUMBER_OF_PROCESSES = 8
-#######################################
+# platform specific file folder (mac for michael, win for satyam)
+if platform == "darwin":
+    ####### Michael's OS X Credentials ########
+    db = {
+        "host":"localhost",
+        "name":"stock1",            
+        "user":"root",
+        "pass":"Fg!27Ejc!Mvr!GT"
+    }
+    ROOT= os.path.join(os.environ['HOME'], "Documents/projects-active/facemap_production") ## only on Mac
+    NUMBER_OF_PROCESSES = 8
+elif platform == "win32":
+    ######## Satyam's WIN Credentials #########
+    db = {
+        "host":"localhost",
+        "name":"gettytest3",                 
+        "user":"root",
+        "pass":"SSJ2_mysql"
+    }
+    ROOT= os.path.join("D:/"+"Documents/projects-active/facemap_production") ## SD CARD
+    NUMBER_OF_PROCESSES = 4
 
 
 SELECT = "DISTINCT(image_id),face_encodings"
 FROM ="encodings"
 WHERE = "face_encodings IS NOT NULL"
-LIMIT = 10
+LIMIT = 1000
 
 engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}"
                                 .format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']), poolclass=NullPool)
@@ -62,7 +62,7 @@ def selectSQL():
     return(resultsjson)
 \
 
-def kmeans_cluster(df,n_clusters=3):
+def kmeans_cluster(df,n_clusters=32):
     kmeans = KMeans(n_clusters,n_init=10, init = 'k-means++', random_state = 42, max_iter = 300)
     kmeans.fit(df)
     clusters = kmeans.predict(df)
@@ -93,7 +93,7 @@ def main():
         enc_data = pd.concat([enc_data,df],ignore_index=True) 
     enc_data["cluster_id"] = kmeans_cluster(enc_data,n_clusters=3)
     print("about to SQL: ",SELECT,FROM,WHERE,LIMIT)
-    print(enc_data)
+    print(set(enc_data["cluster_id"].tolist()))
     end = time.time()
     print (end - start)
     return True

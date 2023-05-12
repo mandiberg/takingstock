@@ -36,6 +36,7 @@ if platform == "darwin":
         "pass":"Fg!27Ejc!Mvr!GT"
     }
     ROOT= os.path.join(os.environ['HOME'], "Documents/projects-active/facemap_production") ## only on Mac
+    ROOT36= "/Volumes/Test36" ## only on Mac
     NUMBER_OF_PROCESSES = 8
 elif platform == "win32":
     ######## Satyam's WIN Credentials #########
@@ -48,7 +49,20 @@ elif platform == "win32":
     ROOT= os.path.join("D:/"+"Documents/projects-active/facemap_production") ## SD CARD
     NUMBER_OF_PROCESSES = 4
 
-folder ="gettyimages"
+
+folder = [
+    "", #0, Empty, there is no site #0 -- starts count at 1
+    os.path.join(ROOT,"localhost"), #1, Getty
+    os.path.join(ROOT36,""),
+    os.path.join(ROOT36,""),
+    os.path.join(ROOT36,""),
+    os.path.join(ROOT36,"images_pexels"), #5, Pexels
+    os.path.join(ROOT36,""),
+    os.path.join(ROOT36,""),
+    os.path.join(ROOT36,""),
+    os.path.join(ROOT36,""),
+]
+
 sortfolder ="getty_test"
 http="https://media.gettyimages.com/photos/"
 # outputfolder = os.path.join(ROOT,folder+"_output_febmulti")
@@ -57,13 +71,13 @@ DRAW_BOX = False
 MINSIZE = 700
 SLEEP_TIME=0
 
-SELECT = "DISTINCT(i.image_id), contentUrl, imagename"
+SELECT = "DISTINCT(i.image_id), i.site_name_id, contentUrl, imagename"
 # SELECT = "DISTINCT(i.image_id), i.gender_id, author, caption, contentUrl, description, imagename"
 FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings e ON i.image_id = e.image_id "
-WHERE = "e.image_id IS NULL AND i.site_name_id = 1"
+WHERE = "e.image_id IS NULL AND i.site_name_id = 5 AND k.keyword_text LIKE 'smil%'"
 # WHERE = "(e.image_id IS NULL AND k.keyword_text LIKE 'smil%')OR (e.image_id IS NULL AND k.keyword_text LIKE 'happ%')OR (e.image_id IS NULL AND k.keyword_text LIKE 'laugh%')"
 # WHERE = "e.image_id IS NULL "
-LIMIT = 5000
+LIMIT = 1000
 
 #creating my objects
 mp_face_mesh = mp.solutions.face_mesh
@@ -444,32 +458,28 @@ def main():
         print("got results, count is: ",len(resultsjson))
         if len(resultsjson) == 0:
             break
-        # for row in resultsjson:
-
-        # create_my_engine(db)
-        # resultsjson = selectSQL()
-
 
         for row in resultsjson:
-            # gets contentUrl
-            # print(row)
             image_id = row["image_id"]
             item = row["contentUrl"]
-            if folder == "gettyimages":
+            hashed_path = row["imagename"]
+            site_id = row["site_name_id"]
+            # print(hashed_path)
+            if site_id == 1:
+                print("fixing gettyimages hash")
                 orig_filename = item.replace(http, "")+".jpg"
                 d0, d02 = get_hash_folders(orig_filename)
-                imagepath=os.path.join(ROOT,folder, "newimages",d0, d02, orig_filename)
-                isExist = os.path.exists(imagepath)
-                if isExist: 
-                    task = (image_id,imagepath)
-                    tasks_to_accomplish.put(task)
-                    # print(imagepath)
-                    # print(tasks_to_accomplish.qsize())
-            else:
-                imagepath=os.path.join(ROOT,folder, item)
-                orig_filename = item
-                print("starting: " +item)
-
+                hashed_path = os.path.join("newimages",d0, d02, orig_filename)
+            
+            # gets folder via the folder list, keyed with site_id integer
+            imagepath=os.path.join(folder[site_id], hashed_path)
+            isExist = os.path.exists(imagepath)
+            if isExist: 
+                task = (image_id,imagepath)
+                tasks_to_accomplish.put(task)
+                # print("tasks_to_accomplish.put(task) ",imagepath)
+        # print("tasks_to_accomplish.qsize()", str(tasks_to_accomplish.qsize()))
+        # print(tasks_to_accomplish.qsize())
 
         # for i in range(number_of_task):
         #     tasks_to_accomplish.put("Task no " + str(i))

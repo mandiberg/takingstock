@@ -31,7 +31,7 @@ CREATE TABLE Location (
     location_code varchar(50)
 ); 
 
-CREATE TABLE ImagesTest (
+CREATE TABLE Images (
     image_id int NOT NULL AUTO_INCREMENT PRIMARY KEY,
     site_name_id INTEGER,
     FOREIGN KEY (site_name_id) REFERENCES Site (site_name_id),
@@ -83,10 +83,10 @@ CREATE TABLE Encodings (
     is_face boolean,
     is_body boolean,
     is_face_distant boolean,
-    face_x DECIMAL (5,2),
-    face_y DECIMAL (5,2),
-    face_z DECIMAL (5,2),
-    mouth_gap DECIMAL (5,2),
+    face_x DECIMAL (6,3),
+    face_y DECIMAL (6,3),
+    face_z DECIMAL (6,3),
+    mouth_gap DECIMAL (6,3),
     face_landmarks BLOB,
     face_encodings BLOB,
     body_landmarks BLOB
@@ -95,12 +95,12 @@ CREATE TABLE Encodings (
 -- calculations that will come later
 CREATE TABLE Clusters (
     cluster_id int NOT NULL AUTO_INCREMENT PRIMARY KEY,
-    cluster_median JSON
+    cluster_median BLOB
 );
 
 -- This is the clusters junction table.
 CREATE TABLE ImagesClusters (
-    site_image_id INTEGER REFERENCES Images (site_image_id),
+    image_id INTEGER REFERENCES Images (image_id),
     cluster_id INTEGER REFERENCES Clusters (cluster_id),
-    PRIMARY KEY (site_image_id)
+    PRIMARY KEY (image_id)
 );

@@ -39,7 +39,7 @@ SELECT = "i.image_id, i.site_name_id, i.contentUrl, i.imagename, e.face_x, e.fac
 FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings e ON i.image_id = e.image_id "
 WHERE = "e.face_x IS NOT NULL AND i.site_name_id = 1 AND k.keyword_text LIKE 'smil%'"
 # WHERE = "e.image_id IS NULL "
-LIMIT = 1000000
+LIMIT = 100000
 
 
 
@@ -351,13 +351,6 @@ def save_sorted(counter, folder, image, dist):
 # In[16]:
 
 
-#get distance beetween encodings
-
-def get_d(enc1, enc2):
-    enc1=np.array(enc1)
-    enc2=np.array(enc2)
-    d=np.linalg.norm(enc1 - enc2, axis=0)
-    return d
 
 
 # ### dataframe creation and sorting
@@ -473,14 +466,35 @@ def encode_df(folder,df_segment):
 
 # In[18]:
 
+#get distance beetween encodings
+
+def get_d(enc1, enc2):
+    enc1=np.array(enc1)
+    # enc2=np.array(enc2)
+    print("enc1")
+    print(enc1.shape)
+    print(enc1)
+    print ("enc2")
+    print(enc2.shape)
+    print(enc2)
+    d=np.linalg.norm(enc1 - enc2, axis=0)
+    print("get_d: ",d)
+    return d
 
 def get_closest_df_v2(folder, start_img, df_enc):
     if start_img == "median":
-        enc1 = df_enc.median().to_list()
-#         print("in median")
+        # print("df_enc: ", df_enc)
+        encodings_array = np.array(df_enc['encoding'].tolist())
+
+        # Calculate the median along axis 0
+        enc1 = np.median(encodings_array, axis=0)
+        # print("median_encoding ",enc1)
+
+        # enc1 = df_enc.median()
+        # print("in median: ", enc1)
     else:
 #         enc1 = get 2-129 from df via stimg key
-        enc1 = df_enc.loc[start_img].to_list()
+        enc1 = df_enc.loc[start_img]
         df_enc=df_enc.drop(start_img)
 #         print("in new img",len(df_enc.index))
     
@@ -492,11 +506,15 @@ def get_closest_df_v2(folder, start_img, df_enc):
     for index, row in df_enc.iterrows():
 #         print(row['c1'], row['c2'])
 #     for img in img_list:
-        enc2 = row
+        enc2 = row['encoding']
         if (enc1 is not None) and (enc2 is not None):
             d = get_d(enc1, enc2)
-            dist.append(d)
-            dist_dict[d]=index
+            print(d)
+            if len(enc1) >1:
+                dist.append(d)
+                dist_dict[d]=index
+            else:
+                print("seems like an 128 array OOPS")
     dist.sort()
 #     print(len(dist))
     return dist[0], dist_dict[dist[0]], df_enc
@@ -628,7 +646,7 @@ def sort_by_face_dist(folder, start_img,df_enc):
     face_distances=[]
     for i in range(len(df_enc.index)-2):
         # find the image
-        dist, start_img, df_enc = get_closest_df(folder, start_img,df_enc)
+        dist, start_img, df_enc = get_closest_df_v2(folder, start_img,df_enc)
         # save the image -- this prob will be to append to list, and return list? 
         # save_sorted(i, folder, start_img, dist)
         this_dist=[dist, folder, start_img]
@@ -725,7 +743,7 @@ def simple_order(segment):
 
 
 
-def cycling_order(CYCLECOUNT):
+def cycling_order(CYCLECOUNT, sort):
     img_array = []
     cycle = 0 
     # metamedian = get_metamedian(angle_list)
@@ -853,6 +871,8 @@ def main():
 
     # # encode all images in list, and use name as df index
     # df_enc = encode_df(ROOT, segment)
+    col1="file_name"
+    col2="encoding"
 
     df_enc=pd.DataFrame(columns=[col1, col2])
 
@@ -876,7 +896,7 @@ def main():
 
     # img_array is actual bitmap data? 
     if motion["side_to_side"] is True:
-        img_list, size = cycling_order(CYCLECOUNT)
+        img_list, size = cycling_order(CYCLECOUNT, sort)
         # size = sort.get_cv2size(ROOT, img_list[0])
     else:
     # dont neet to pass SECOND_SORT, because it is already there
