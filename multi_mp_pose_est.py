@@ -74,7 +74,7 @@ SLEEP_TIME=0
 SELECT = "DISTINCT(i.image_id), i.site_name_id, contentUrl, imagename"
 # SELECT = "DISTINCT(i.image_id), i.gender_id, author, caption, contentUrl, description, imagename"
 FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings e ON i.image_id = e.image_id "
-WHERE = "e.image_id IS NULL AND i.site_name_id = 5 AND k.keyword_text LIKE 'Women%'"
+WHERE = "e.image_id IS NULL AND i.site_name_id = 5 AND k.keyword_text LIKE 'Portrait%'"
 # WHERE = "(e.image_id IS NULL AND k.keyword_text LIKE 'smil%')OR (e.image_id IS NULL AND k.keyword_text LIKE 'happ%')OR (e.image_id IS NULL AND k.keyword_text LIKE 'laugh%')"
 # WHERE = "e.image_id IS NULL "
 LIMIT = 1000
@@ -457,13 +457,16 @@ def main():
         # print("about to SQL: ",SELECT,FROM,WHERE,LIMIT)
         resultsjson = selectSQL()
         print("got results, count is: ",len(resultsjson))
-        
-        #catches the last round, where it returns less than full results
-        if len(resultsjson) != LIMIT:
-            last_round = True
-        elif last_round == True:
-            break
 
+        #catches the last round, where it returns less than full results
+        if last_round == True:
+            print("last_round caught, should break")
+            break
+        elif len(resultsjson) != LIMIT:
+            last_round = True
+            print("last_round just assigned")
+
+        print(last_round)
         for row in resultsjson:
             image_id = row["image_id"]
             item = row["contentUrl"]
