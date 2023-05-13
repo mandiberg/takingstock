@@ -10,13 +10,10 @@ import hashlib
 #linear sort imports non-class
 import numpy as np
 import mediapipe as mp
-import face_recognition_models
-import dlib
 from mediapipe.python.solutions.drawing_utils import _normalized_to_pixel_coordinates
 import matplotlib.pyplot as plt
 import imutils
 from imutils import face_utils
-import face_recognition
 import shutil
 from sys import platform
 from pathlib import Path
@@ -134,7 +131,7 @@ def get_d(enc1, enc2):
     print("get_d: ",d)
     return d
 
-def get_closest_df_v2(start_img, df_enc):
+def get_closest_df(start_img, df_enc):
     if start_img == "median":
         # print("df_enc: ", df_enc)
         encodings_array = np.array(df_enc['encoding'].tolist())
@@ -152,17 +149,10 @@ def get_closest_df_v2(start_img, df_enc):
         print(enc1)
         print(enc1[0])
         df_enc=df_enc.drop(start_img)
-#         print("in new img",len(df_enc.index))
-    
-#     img_list.remove(start_img)
-#     enc1=enc_dict[start_img]
-    
+
     dist=[]
     dist_dict={}
     for index, row in df_enc.iterrows():
-#         print(row['c1'], row['c2'])
-#     for img in img_list:
-
         enc2 = row['encoding']
         if (enc1 is not None) and (enc2 is not None):
             d = get_d(enc1, enc2)
@@ -175,31 +165,6 @@ def get_closest_df_v2(start_img, df_enc):
     dist.sort()
 #     print(len(dist))
     return dist[0], dist_dict[dist[0]], df_enc
-
-
-
-def get_closest_df(folder, start_img, df_enc):
-    if start_img == "median":
-        enc1 = df_enc.median().to_list()
-#         print("in median")
-    else:
-#         enc1 = get 2-129 from df via stimg key
-        enc1 = df_enc.loc[start_img].to_list()
-        df_enc=df_enc.drop(start_img)
-#         print("in new img",len(df_enc.index))
-    
-    dist=[]
-    dist_dict={}
-    for index, row in df_enc.iterrows():
-        enc2 = row
-        if enc1 and enc2:
-            d = get_d(enc1, enc2)
-            dist.append(d)
-            dist_dict[d]=index
-    dist.sort()
-#     print(len(dist))
-    return dist[0], dist_dict[dist[0]], df_enc
-
 
 
 # test if new and old make a face
@@ -220,7 +185,7 @@ def is_face(image):
         return is_face
 
 
-# test if new and old make a face
+# test if new and old make a face, calls is_face
 def test_pair(last_file, new_file):
     try:
         img = cv2.imread(new_file)
@@ -284,7 +249,7 @@ def sort_by_face_dist(start_img,df_enc):
         # the hardcoded #1 needs to be replaced with site_name_id, which needs to be readded to the df
         site_specific_root_folder = io.folder_list[1]
         print("starting sort round ",str(i))
-        dist, start_img, df_enc = get_closest_df_v2(start_img,df_enc)
+        dist, start_img, df_enc = get_closest_df(start_img,df_enc)
         # save the image -- this prob will be to append to list, and return list? 
         # save_sorted(i, folder, start_img, dist)
         this_dist=[dist, site_specific_root_folder, start_img]
