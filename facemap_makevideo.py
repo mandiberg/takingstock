@@ -33,12 +33,12 @@ CYCLECOUNT = 2
 # ROOT="/Users/michaelmandiberg/Documents/projects-active/facemap_production/"
 MAPDATA_FILE = "allmaps_62607.csv"
 
-SELECT = "i.image_id, i.site_name_id, i.contentUrl, i.imagename, e.face_x, e.face_y, e.face_z, e.mouth_gap, e.face_landmarks, e.face_encodings"
+SELECT = "i.image_id, i.site_name_id, i.contentUrl, i.imagename, e.face_x, e.face_y, e.face_z, e.mouth_gap, e.face_landmarks, e.bbox, e.face_encodings"
 # SELECT = "DISTINCT(i.image_id), i.gender_id, author, caption, contentUrl, description, imagename"
 FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings e ON i.image_id = e.image_id "
 WHERE = "e.face_x IS NOT NULL AND i.site_name_id = 1 AND k.keyword_text LIKE 'smil%'"
 # WHERE = "e.image_id IS NULL "
-LIMIT = 5000
+LIMIT = 10000
 
 
 motion = {
@@ -252,16 +252,19 @@ def sort_by_face_dist(start_img,df_enc):
         print("starting sort round ",str(i))
         dist, start_img, df_enc = get_closest_df(start_img,df_enc)
         # dist[0], dist_dict[dist[0]]
+        thisimage=None
+        face_landmarks=None
+        bbox=None
         try:
             site_name_id = df_enc.loc[start_img]['site_name_id']
             face_landmarks = df_enc.loc[start_img]['face_landmarks']
+            bbox = df_enc.loc[start_img]['bbox']
+            print("assigned bbox")
         except:
-            thisimage=None
-            face_landmarks=None
-            print("can't print, maybe empty?")
+            print("won't assign landmarks/bbox")
         # save the image -- this prob will be to append to list, and return list? 
         # save_sorted(i, folder, start_img, dist)
-        this_dist=[dist, site_specific_root_folder, start_img, site_name_id, face_landmarks]
+        this_dist=[dist, site_specific_root_folder, start_img, site_name_id, face_landmarks, bbox]
         face_distances.append(this_dist)
 
         #debuggin
@@ -269,7 +272,7 @@ def sort_by_face_dist(start_img,df_enc):
         print(len(df_enc.index))
         print(dist)
         print (start_img)
-    df = pd.DataFrame(face_distances, columns =['dist', 'folder', 'filename','site_name_id','face_landmarks'])
+    df = pd.DataFrame(face_distances, columns =['dist', 'folder', 'filename','site_name_id','face_landmarks', 'bbox'])
     df = df.sort_values(by=['dist'])
     return df
 
@@ -431,12 +434,14 @@ def main():
 
     # Apply the unpickling function to the 'face_encodings' column
     df['face_encodings'] = df['face_encodings'].apply(unpickle_array)
+    df['face_landmarks'] = df['face_landmarks'].apply(unpickle_array)
     # turn URL into local hashpath (still needs local root folder)
     df['imagename'] = df['contentUrl'].apply(newname)
     # make decimals into float
     columns_to_convert = ['face_x', 'face_y', 'face_z', 'mouth_gap']
     df[columns_to_convert] = df[columns_to_convert].applymap(make_float)
 
+    print("raw df from DB")
     print(df)
 
     ### PROCESS THE DATA ###
@@ -464,11 +469,11 @@ def main():
     col2="encoding"
     col3="site_name_id"
     col4="face_landmarks"
-    df_enc=pd.DataFrame(columns=[col1, col2, col3, col4])
+    col5="bbox"
+    df_enc=pd.DataFrame(columns=[col1, col2, col3, col4, col4])
     df_enc = pd.DataFrame({col1: df_segment['imagename'], col2: df_segment['face_encodings'].apply(lambda x: np.array(x)), 
-                col3: df_segment['site_name_id'], col4: df_segment['face_landmarks'] })
+                col3: df_segment['site_name_id'], col4: df_segment['face_landmarks'], col5: df_segment['bbox'] })
     df_enc.set_index(col1, inplace=True)
-
 
 
     ### BUILD THE LIST OF SELECTED IMAGES ###

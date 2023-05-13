@@ -64,10 +64,11 @@ class SelectPose:
             for id,lm in enumerate(faceLms.landmark):                           # loop over all land marks of one face
                 # ih, iw, _ = self.image.shape
                 # gone direct to obj dimensions
-                #x,y = int(lm.x*self.w), int(lm.y*self.h)
-                x,y=int(lm.x * (bbox["right"]-bbox["left"])+bbox["left"]),int(lm.y * (bbox["bottom"]-bbox["top"])+bbox["top"]) 
+                x,y = int(lm.x*self.w), int(lm.y*self.h)
+                # x,y=int(lm.x * (bbox["right"]-bbox["left"])+bbox["left"]),int(lm.y * (bbox["bottom"]-bbox["top"])+bbox["top"]) 
                 # print(lm)
-                faceXY.append((x, y))                                           # put all xy points in neat array
+                faceXY.append((x, y)) # put all xy points in neat array
+                
             image_points = np.array([
                 faceXY[1],      # "nose"
                 faceXY[152],    # "chin"
@@ -79,8 +80,8 @@ class SelectPose:
 
             # #this is where the face points are written to the image
             # # turning this off for production run
-            # for i in image_points:
-            #     cv2.circle(image,(int(i[0]),int(i[1])),4,(255,0,0),-1)
+            for i in image_points:
+                cv2.circle(image,(int(i[0]),int(i[1])),4,(255,0,0),-1)
 
             maxXY = max(faceXY, key=self.x_element)[0], max(faceXY, key=self.y_element)[1]
             minXY = min(faceXY, key=self.x_element)[0], min(faceXY, key=self.y_element)[1]

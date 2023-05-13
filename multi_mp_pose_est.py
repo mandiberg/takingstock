@@ -9,7 +9,7 @@ import math
 import pickle
 import sys # can delete for production
 from sys import platform
-
+import json
 
 import numpy as np
 import mediapipe as mp
@@ -20,6 +20,7 @@ from sqlalchemy.exc import OperationalError
 from sqlalchemy.pool import NullPool
 
 from mp_pose_est import SelectPose
+from mp_db_io import DataIO
 
 #####new imports #####
 from mediapipe.python.solutions.drawing_utils import _normalized_to_pixel_coordinates
@@ -27,41 +28,47 @@ import dlib
 import face_recognition_models
 
 # platform specific credentials
-if platform == "darwin":
-    ####### Michael's OS X Credentials ########
-    db = {
-        "host":"localhost",
-        "name":"stock1",            
-        "user":"root",
-        "pass":"Fg!27Ejc!Mvr!GT"
-    }
-    ROOT= os.path.join(os.environ['HOME'], "Documents/projects-active/facemap_production") ## only on Mac
-    ROOT36= "/Volumes/Test36" ## only on Mac
-    NUMBER_OF_PROCESSES = 8
-elif platform == "win32":
-    ######## Satyam's WIN Credentials #########
-    db = {
-        "host":"localhost",
-        "name":"gettytest3",                 
-        "user":"root",
-        "pass":"SSJ2_mysql"
-    }
-    ROOT= os.path.join("D:/"+"Documents/projects-active/facemap_production") ## SD CARD
-    NUMBER_OF_PROCESSES = 4
+io = DataIO()
+db = io.db
+ROOT = io.ROOT 
+NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 
 
-folder_list = [
-    "", #0, Empty, there is no site #0 -- starts count at 1
-    os.path.join(ROOT,"localhost"), #1, Getty
-    os.path.join(ROOT36,""),
-    os.path.join(ROOT36,""),
-    os.path.join(ROOT36,""),
-    os.path.join(ROOT36,"images_pexels"), #5, Pexels
-    os.path.join(ROOT36,""),
-    os.path.join(ROOT36,""),
-    os.path.join(ROOT36,""),
-    os.path.join(ROOT36,""),
-]
+# if platform == "darwin":
+#     ####### Michael's OS X Credentials ########
+#     db = {
+#         "host":"localhost",
+#         "name":"gettytest3",            
+#         "user":"root",
+#         "pass":"Fg!27Ejc!Mvr!GT"
+#     }
+#     ROOT= os.path.join(os.environ['HOME'], "Documents/projects-active/facemap_production") ## only on Mac
+#     ROOT36= "/Volumes/Test36" ## only on Mac
+#     NUMBER_OF_PROCESSES = 8
+# elif platform == "win32":
+#     ######## Satyam's WIN Credentials #########
+#     db = {
+#         "host":"localhost",
+#         "name":"gettytest3",                 
+#         "user":"root",
+#         "pass":"SSJ2_mysql"
+#     }
+#     ROOT= os.path.join("D:/"+"Documents/projects-active/facemap_production") ## SD CARD
+#     NUMBER_OF_PROCESSES = 4
+
+
+# io.folder_list = [
+#     "", #0, Empty, there is no site #0 -- starts count at 1
+#     os.path.join(ROOT,"localhost"), #1, Getty
+#     os.path.join(ROOT36,""),
+#     os.path.join(ROOT36,""),
+#     os.path.join(ROOT36,""),
+#     os.path.join(ROOT36,"images_pexels"), #5, Pexels
+#     os.path.join(ROOT36,""),
+#     os.path.join(ROOT36,""),
+#     os.path.join(ROOT36,""),
+#     os.path.join(ROOT36,""),
+# ]
 
 sortfolder ="getty_test"
 http="https://media.gettyimages.com/photos/"
@@ -74,10 +81,10 @@ SLEEP_TIME=0
 SELECT = "DISTINCT(i.image_id), i.site_name_id, contentUrl, imagename"
 # SELECT = "DISTINCT(i.image_id), i.gender_id, author, caption, contentUrl, description, imagename"
 FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings e ON i.image_id = e.image_id "
-WHERE = "e.image_id IS NULL AND i.site_name_id = 5 AND k.keyword_text LIKE 'Portrait%'"
+WHERE = "e.image_id IS NULL AND i.site_name_id = 1 AND k.keyword_text LIKE 'Smil%'"
 # WHERE = "(e.image_id IS NULL AND k.keyword_text LIKE 'smil%')OR (e.image_id IS NULL AND k.keyword_text LIKE 'happ%')OR (e.image_id IS NULL AND k.keyword_text LIKE 'laugh%')"
 # WHERE = "e.image_id IS NULL "
-LIMIT = 1000
+LIMIT = 100
 
 #creating my objects
 mp_face_mesh = mp.solutions.face_mesh
@@ -300,11 +307,14 @@ def find_face(image, df):
                     # print(encodings)
                 #df.at['1', 'is_face'] = is_face
                 #df.at['1', 'is_face_distant'] = is_face_distant
+                bbox_json = json.dumps(bbox, indent = 4) 
+
                 df.at['1', 'face_x'] = angles[0]
                 df.at['1', 'face_y'] = angles[1]
                 df.at['1', 'face_z'] = angles[2]
                 df.at['1', 'mouth_gap'] = mouth_gap
                 df.at['1', 'face_landmarks'] = pickle.dumps(faceLms)
+                df.at['1', 'bbox'] = bbox_json
                 df.at['1', 'face_encodings'] = pickle.dumps(encodings)
     df.at['1', 'is_face'] = is_face
     return df
@@ -391,7 +401,7 @@ def process_image(task):
         name = str(df.at['1', 'image_id'])+".jpg"
         save_image_by_path(image, sort, name)
 
-    df = pd.DataFrame(columns=['image_id','is_face','is_body','is_face_distant','face_x','face_y','face_z','mouth_gap','face_landmarks','face_encodings','body_landmarks','is_face'])
+    df = pd.DataFrame(columns=['image_id','is_face','is_body','is_face_distant','face_x','face_y','face_z','mouth_gap','face_landmarks','bbox','face_encodings','body_landmarks'])
     df.at['1', 'image_id'] = task[0]
     try:
         image = cv2.imread(task[1])        
@@ -405,10 +415,9 @@ def process_image(task):
         df = find_face(image, df)
         # Do Body Pose
         df = find_body(image, df)
-
         # for testing: this will save images into folders for is_face, is_body, and none. 
         # only save images that aren't too smallllll
-        # save_image_triage(image,df)
+        save_image_triage(image,df)
     else:
         print('toooooo smallllll')
         # I should probably assign no_good here...?
@@ -474,15 +483,16 @@ def main():
             site_id = row["site_name_id"]
             # print(hashed_path)
             if site_id == 1:
-                print("fixing gettyimages hash")
+                # print("fixing gettyimages hash")
                 orig_filename = item.replace(http, "")+".jpg"
                 d0, d02 = get_hash_folders(orig_filename)
-                hashed_path = os.path.join("newimages",d0, d02, orig_filename)
+                hashed_path = os.path.join(d0, d02, orig_filename)
             
             # gets folder via the folder list, keyed with site_id integer
-            imagepath=os.path.join(folder_list[site_id], hashed_path)
+            imagepath=os.path.join(io.folder_list[site_id], hashed_path)
             isExist = os.path.exists(imagepath)
             if isExist: 
+                # print("isExist!")
                 task = (image_id,imagepath)
                 tasks_to_accomplish.put(task)
                 # print("tasks_to_accomplish.put(task) ",imagepath)

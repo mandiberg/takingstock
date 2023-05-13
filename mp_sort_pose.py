@@ -5,6 +5,7 @@ import pandas as pd
 import mediapipe as mp
 import hashlib
 import time
+import json
 
 
 class SortPose:
@@ -363,9 +364,18 @@ class SortPose:
                 # blend = cv2.addWeighted(img_array[i], 0.5, img_array[(i+1)], 0.5, 0.0)
                 # cv2.imwrite(outpath, blend)
                 img = cv2.imread(open_path)
-                cv2.imwrite(outpath, img)
-                print("saved: ",imgfilename)
 
+                #crop image here:
+
+                cropped_image = self.crop_image(img, row['face_landmarks'], row['bbox'])
+                print(type(cropped_image))
+                print(cropped_image.shape)
+                if cropped_image is not None:
+                    print("have a cropped image trying to save")
+                    cv2.imwrite(outpath, cropped_image)
+                    print("saved: ",imgfilename)
+                else:
+                    print("no image here, trying next")
                 # print(outpath)
                 # out.write(img_array[i])
                 counter += 1
@@ -379,28 +389,75 @@ class SortPose:
 
 ##############################
 
+    def point(self,coords):
+        newpoint = (int(coords[0]), int(coords[1]))
+        return newpoint
 
-    def get_face_2d_point(self, faceLms, point):
-        # I don't think i need all of this. but putting it here.
+    def dist(self,p, q):
+        """ 
+        Return euclidean distance between points p and q
+        assuming both to have the same number of dimensions
+        """
+        # sum of squared difference between coordinates
+        s_sq_difference = 0
+        for p_i,q_i in zip(p,q):
+            s_sq_difference += (p_i - q_i)**2
+        
+        # take sq root of sum of squared difference
+        distance = s_sq_difference**0.5
+        return distance    
+
+    def get_face_2d_point(self, point):
+        # print("get_face_2d_point")
+        # set bbox dimensions
         img_h = self.h
         img_w = self.w
-        for idx, lm in enumerate(faceLms.landmark):
+        bbox_x = self.bbox['left']
+        bbox_y = self.bbox['top']
+        bbox_w = self.bbox['right'] - self.bbox['left']
+        bbox_h = self.bbox['bottom'] - self.bbox['top']
+        for idx, lm in enumerate(self.faceLms.landmark):
             if idx == point:
-                pointXY = (lm.x * img_w, lm.y * img_h)
+                # print("found point:")
+                # print(idx)
+                # pointXY = (lm.x * img_w, lm.y * img_h)
+                pointXY = (lm.x * bbox_w + bbox_w, lm.y * bbox_w + bbox_w)
+                # print(pointXY)
+                # pointXYonly = (lm.x, lm.y)
+                # print(pointXYonly)
         return pointXY
 
 
-    def get_crop_data_simple(self, faceLms):
-        
+    def get_faceheight_data(self):
+        print("get_faceheight_data")
+        top_2d = self.get_face_2d_point(10)
+        # print(top_2d)
+        bottom_2d = self.get_face_2d_point(152)
+        # print(bottom_2d)
+        self.ptop = (int(top_2d[0]), int(top_2d[1]))
+        self.pbot = (int(bottom_2d[0]), int(bottom_2d[1]))
+        # height = int(pbot[1]-ptop[1])
+        # print(self.ptop)
+        # print(self.pbot)
+        self.face_height = self.dist(self.point(self.pbot), self.point(self.ptop))
+        print("got face_height")
+        print(self.face_height)
+        # return ptop, pbot, face_height
+
+    def get_crop_data_simple(self):
+        print("get_crop_data_simple")
         #it would prob be better to do this with a dict and a loop
-        nose_2d = self.get_face_2d_point(faceLms,1)
+        # nose_2d = self.get_face_2d_point(self.faceLms,1)
         # print("self.sinY: ",self.sinY)
         #set main points for drawing/cropping
         #p1 is tip of nose
-        p1 = (int(nose_2d[0]), int(nose_2d[1]))
-
+        p1 = (int(self.nose_2d[0]), int(self.nose_2d[1]))
+        # print(p1)
 
         toobig = False
+        # print(p1[1])
+        # print(self.face_height)
+        # print(self.h)
         if p1[1]>(self.face_height*1) and (self.h-p1[1])>(self.face_height*1):
             if p1[0]>(self.face_height*1) and (self.w-p1[0])>(self.face_height*1):
                 self.crop_multiplier = 1
@@ -414,123 +471,101 @@ class SortPose:
             print('face too biiiiigggggg')
             toobig=True
 
-        # print(crop_multiplier)
-        self.h - p1[1]
-        top_overlap = p1[1]-self.face_height
+        if not toobig:
+            print(self.crop_multiplier)
+            # self.h - p1[1]
+            top_overlap = p1[1]-self.face_height
 
-        #set crop
-        # crop_multiplier = 1
-        leftcrop = int(p1[0]-(self.face_height*self.crop_multiplier))
-        rightcrop = int(p1[0]+(self.face_height*self.crop_multiplier))
-        topcrop = int(p1[1]-(self.face_height*self.crop_multiplier))
-        botcrop = int(p1[1]+(self.face_height*self.crop_multiplier))
-        self.simple_crop = [topcrop, rightcrop, botcrop, leftcrop]
+            print(top_overlap)
+            if top_overlap > 0:
+                #set crop
+                crop_size = self.face_height*self.crop_multiplier
+                leftcrop = int(p1[0]-crop_size)
+                rightcrop = int(p1[0]+crop_size)
+                topcrop = int(p1[1]-crop_size)
+                botcrop = int(p1[1]+crop_size)
+                self.simple_crop = [topcrop, rightcrop, botcrop, leftcrop]
+                print("crop top, right, bot, left")
+                print(self.simple_crop)
+            else:
+                print("top_overlap is negative")
+        return toobig
 
 
-    def crop_image(self,cropped_image, faceLms, sinY=0):
+    def crop_image(self,cropped_image, faceLms, bbox, sinY=0):
+        self.image = cropped_image
+        self.size = (self.image.shape[0], self.image.shape[1])
+        self.h = self.image.shape[0]
+        self.w = self.image.shape[1]
+        self.faceLms = faceLms
+        self.bbox = json.loads(bbox)
 
-        #commenting out sinY for now
-
+        print("attempting cropped_image")
         #I'm not sure the diff between nose_2d and p1. May be redundant.
         #it would prob be better to do this with a dict and a loop
-        nose_2d = self.get_face_2d_point(faceLms,1)
+        self.nose_2d = self.get_face_2d_point(1)
+        print(self.nose_2d)
 
+        try:
+            # get self.face_height
+            self.get_faceheight_data()
+        except:
+            print("couldn't get_faceheight_data")
+    
         # check for crop, and if not exist, then get
-        if not hasattr(self, 'crop'): 
-            self.get_crop_data_simple(faceLms)
-
+        # if not hasattr(self, 'crop'): 
+        try:
+            toobig = self.get_crop_data_simple()
+        except:
+            print("couldn't get crop data")
             # this is the in progress neck rotation stuff
-            # self.get_crop_data(faceLms, sinY)
+            # self.get_crop_data(sinY)
 
-        
-        # print (self.padding_points)
-        #set main points for drawing/cropping
-        #p1 is tip of nose
-        p1 = (int(nose_2d[0]), int(nose_2d[1]))
+        if not toobig:
+            print("not too big")
+            # print (self.padding_points)
+            #set main points for drawing/cropping
 
-        # print(crop_multiplier)
-        self.h - p1[1]
-        top_overlap = p1[1]-self.face_height
+            # getting rid of this. I think it is for adding padding
+            #p1 is tip of nose
+            # p1 = (int(self.nose_2d[0]), int(self.nose_2d[1]))
 
-        #adding this in to padd image
-        try:
-            padded_image = self.add_margin(cropped_image, self.padding_points)
-        except:
-            padded_image = False
-        basesize = 750
-        newsize = (basesize*self.crop[0],basesize*self.crop[1])
-        resize = np.round(newsize[0]/(self.face_height*2.5), 3)
+            # # print(crop_multiplier)
+            # self.h - p1[1]
+            # top_overlap = p1[1]-self.face_height
 
-        #moved this back up so it would NOT     draw map on both sets of images
-        try:
-            # crop[0] is top, and clockwise from there. Right is 1, Bottom is 2, Left is 3. 
-            cropped_image = cv2.resize(cropped_image[self.crop_points[0]:self.crop_points[2], self.crop_points[3]:self.crop_points[1]], (newsize), interpolation= cv2.INTER_LINEAR)
-        except:
+            # #adding this in to padd image
+            # try:
+            #     padded_image = self.add_margin(cropped_image, self.padding_points)
+            # except:
+            #     padded_image = False
+
+            basesize = 750
+            resize_factor = basesize/self.face_height
+            newsize = basesize*resize_factor
+            # newsize = (basesize*self.simple_crop[0],basesize*self.simple_crop[1])
+            # print(newsize)
+            # resize = np.round(newsize[0]/(self.face_height*2.5), 3)
+            # print(resize)
+
+            #moved this back up so it would NOT     draw map on both sets of images
+            try:
+                print(type(self.image))
+                # image_arr = numpy.array(self.image)
+                # print(type(image_arr))
+                cropped_actualsize_image = self.image[self.simple_crop[0]:self.simple_crop[2], self.simple_crop[3]:self.simple_crop[1]]
+                print(cropped_actualsize_image.shape)
+                desired_width = 750  # Specify the desired width
+                desired_height = 750  # Specify the desired height
+                # crop[0] is top, and clockwise from there. Right is 1, Bottom is 2, Left is 3. 
+                cropped_image = cv2.resize(cropped_actualsize_image, (desired_width, desired_height), interpolation=cv2.INTER_LINEAR)
+                print("image actually cropped")
+            except:
+                cropped_image = None
+                print("not cropped_image loop")
+
+                print(self.h, self.w)
+        else:
             cropped_image = None
-            print("not cropped_image loop")
-
-            print(self.h, self.w)
-               
-        return padded_image, cropped_image, resize
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-################################
-
-    def calc_face_data(self, faceLms):
-
-        # check for face_2d, and if not exist, then get
-        if not hasattr(self, 'face_2d'):
-            self.get_face_2d_3d(faceLms)
-
-        # check for face height, and if not exist, then get
-        if not hasattr(self, 'face_height'): 
-            self.get_faceheight_data(faceLms)
-
-    def get_face_2d_3d(self, faceLms):
-        # I don't think i need all of this. but putting it here.
-        img_h = self.h
-        img_w = self.w
-        face_3d = []
-        face_2d = []
-        for idx, lm in enumerate(faceLms.landmark):
-            if idx == 33 or idx == 263 or idx == 1 or idx == 61 or idx == 291 or idx == 199 or idx == 10 or idx == 152:
-                x, y = int(lm.x * img_w), int(lm.y * img_h)
-
-                # Get the 2D Coordinates
-                face_2d.append([x, y])
-
-                # Get the 3D Coordinates
-                face_3d.append([x, y, lm.z])      
-
-        # Convert it to the NumPy array
-        # image points
-        self.face_2d = np.array(face_2d, dtype=np.float64)
-
-        # Convert it to the NumPy array
-        # face model
-        self.face_3d = np.array(face_3d, dtype=np.float64)
-
-        return face_2d, face_3d
-
-
-    def get_faceheight_data(self, faceLms):
-        top_2d = self.get_face_2d_point(faceLms,10)
-        bottom_2d = self.get_face_2d_point(faceLms,152)
-        self.ptop = (int(top_2d[0]), int(top_2d[1]))
-        self.pbot = (int(bottom_2d[0]), int(bottom_2d[1]))
-        # height = int(pbot[1]-ptop[1])
-        self.face_height = self.dist(self.point(self.pbot), self.point(self.ptop))
-
-        # return ptop, pbot, face_height
+            # resize = None
+        return cropped_image
