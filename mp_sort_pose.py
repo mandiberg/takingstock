@@ -421,7 +421,7 @@ class SortPose:
                 # print("found point:")
                 # print(idx)
                 # pointXY = (lm.x * img_w, lm.y * img_h)
-                pointXY = (lm.x * bbox_w + bbox_w, lm.y * bbox_w + bbox_w)
+                pointXY = (lm.x * bbox_w + bbox_x, lm.y * bbox_h + bbox_y)
                 # print(pointXY)
                 # pointXYonly = (lm.x, lm.y)
                 # print(pointXYonly)
