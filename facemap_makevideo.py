@@ -24,6 +24,7 @@ from sqlalchemy.pool import NullPool
 
 
 #mine
+from mp_pose_est import SelectPose
 from mp_sort_pose import SortPose
 from mp_db_io import DataIO
 
@@ -32,7 +33,7 @@ CYCLECOUNT = 2
 # ROOT="/Users/michaelmandiberg/Documents/projects-active/facemap_production/"
 MAPDATA_FILE = "allmaps_62607.csv"
 
-SELECT = "i.image_id, i.site_name_id, i.contentUrl, i.imagename, e.face_x, e.face_y, e.face_z, e.mouth_gap, e.face_encodings"
+SELECT = "i.image_id, i.site_name_id, i.contentUrl, i.imagename, e.face_x, e.face_y, e.face_z, e.mouth_gap, e.face_landmarks, e.face_encodings"
 # SELECT = "DISTINCT(i.image_id), i.gender_id, author, caption, contentUrl, description, imagename"
 FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings e ON i.image_id = e.image_id "
 WHERE = "e.face_x IS NOT NULL AND i.site_name_id = 1 AND k.keyword_text LIKE 'smil%'"
@@ -164,7 +165,7 @@ def get_closest_df(start_img, df_enc):
                 print("seems like an 128 array OOPS")
     dist.sort()
 #     print(len(dist))
-    return dist[0], dist_dict[dist[0]], df_enc
+    return dist[0], dist_dict[dist[0]], df_enc, 
 
 
 # test if new and old make a face
@@ -250,9 +251,17 @@ def sort_by_face_dist(start_img,df_enc):
         site_specific_root_folder = io.folder_list[1]
         print("starting sort round ",str(i))
         dist, start_img, df_enc = get_closest_df(start_img,df_enc)
+        # dist[0], dist_dict[dist[0]]
+        try:
+            site_name_id = df_enc.loc[start_img]['site_name_id']
+            face_landmarks = df_enc.loc[start_img]['face_landmarks']
+        except:
+            thisimage=None
+            face_landmarks=None
+            print("can't print, maybe empty?")
         # save the image -- this prob will be to append to list, and return list? 
         # save_sorted(i, folder, start_img, dist)
-        this_dist=[dist, site_specific_root_folder, start_img]
+        this_dist=[dist, site_specific_root_folder, start_img, site_name_id, face_landmarks]
         face_distances.append(this_dist)
 
         #debuggin
@@ -260,7 +269,7 @@ def sort_by_face_dist(start_img,df_enc):
         print(len(df_enc.index))
         print(dist)
         print (start_img)
-    df = pd.DataFrame(face_distances, columns =['dist', 'folder', 'filename'])
+    df = pd.DataFrame(face_distances, columns =['dist', 'folder', 'filename','site_name_id','face_landmarks'])
     df = df.sort_values(by=['dist'])
     return df
 
@@ -453,11 +462,11 @@ def main():
 
     col1="file_name"
     col2="encoding"
-
-    df_enc=pd.DataFrame(columns=[col1, col2])
-
-    
-    df_enc = pd.DataFrame({col1: df_segment['imagename'], col2: df_segment['face_encodings'].apply(lambda x: np.array(x))})
+    col3="site_name_id"
+    col4="face_landmarks"
+    df_enc=pd.DataFrame(columns=[col1, col2, col3, col4])
+    df_enc = pd.DataFrame({col1: df_segment['imagename'], col2: df_segment['face_encodings'].apply(lambda x: np.array(x)), 
+                col3: df_segment['site_name_id'], col4: df_segment['face_landmarks'] })
     df_enc.set_index(col1, inplace=True)
 
 
@@ -479,15 +488,14 @@ def main():
 
         # # get dataframe sorted by distance
         start_img = "median"
-        #ROOT is where it is borking
         df_sorted = sort_by_face_dist(start_img,df_enc)
         print("df_sorted")
         print(df_sorted)
-        img_list = df_sorted['filename'].tolist()
-        # the hardcoded #1 needs to be replaced with site_name_id, which needs to be readded to the df
-        site_specific_root_folder = io.folder_list[1]
-        size = sort.get_cv2size(site_specific_root_folder, img_list[0])
-        # print(img_list)
+        # img_list = df_sorted['filename'].tolist()
+        # # the hardcoded #1 needs to be replaced with site_name_id, which needs to be readded to the df
+        # site_specific_root_folder = io.folder_list[1]
+        # size = sort.get_cv2size(site_specific_root_folder, img_list[0])
+        # # print(img_list)
 
 
 
@@ -498,12 +506,13 @@ def main():
 
     if VIDEO == True:
         #save individual as video
+        # need to rework to accept df and calc size internally
         sort.write_video(ROOT, img_list, df_segment, size)
 
     else:
         #save individual as images
         
-        sort.write_images(ROOT, img_list)
+        sort.write_images(ROOT, df_sorted)
 
 
 if __name__ == '__main__':

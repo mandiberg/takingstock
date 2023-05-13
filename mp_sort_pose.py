@@ -330,9 +330,11 @@ class SortPose:
         except:
             print('failed VIDEO, probably because segmented df until empty')
 
-    def write_images(self, ROOT, img_array):
+    def write_images(self, ROOT, df_sorted):
+        # site_name_id = df_enc.loc[start_img]['site_name_id']
+
         print('writing images')
-        imgfileprefix = f"faceimg_crop{str(self.MINCROP)}_X{str(self.XLOW)}toX{str(self.XHIGH)}_Y{str(self.YLOW)}toY{str(self.YHIGH)}_Z{str(self.ZLOW)}toZ{str(self.ZHIGH)}_maxResize{str(self.MAXRESIZE)}_ct{str(len(img_array))}"
+        imgfileprefix = f"faceimg_crop{str(self.MINCROP)}_X{str(self.XLOW)}toX{str(self.XHIGH)}_Y{str(self.YLOW)}toY{str(self.YHIGH)}_Z{str(self.ZLOW)}toZ{str(self.ZHIGH)}_maxResize{str(self.MAXRESIZE)}_ct{str(df_sorted.size)}"
         print(imgfileprefix)
         outfolder = os.path.join(ROOT,"images"+str(time.time()))
         if not os.path.exists(outfolder):      
@@ -341,18 +343,17 @@ class SortPose:
         try:
             # couldn't I use i here? 
             counter = 1
-            print(img_array)
+            # print(df_sorted)
             # out = cv2.VideoWriter(os.path.join(ROOT,videofile), cv2.VideoWriter_fourcc(*'mp4v'), FRAMERATE, size)
-            for i in range(len(img_array)):
+            for index, row in df_sorted.iterrows():
                 print('in loop')
-                UID = img_array[i].split('-id')[-1]
-                imgfilename = imgfileprefix+"_"+UID+"_"+str(counter)+".jpg"
+                UID = row['filename'].split('-id')[-1].replace(".jpg","")
+                imgfilename = imgfileprefix+"_"+str(counter)+"_"+UID+".jpg"
                 outpath = os.path.join(outfolder,imgfilename)
                 print("outpath ",outpath)
 
-                # the hardcoded #1 needs to be replaced with site_name_id, which needs to be readded to the df
-                site_specific_root_folder = "gettyimages/newimages"
-                open_path = os.path.join(ROOT,site_specific_root_folder,img_array[i])
+                # folder is specific to each file's site_name_id
+                open_path = os.path.join(ROOT,row['folder'],row['filename'])
                 print("open_path] ",open_path)
 
                 # this code takes image i, and blends it with the subsequent image
@@ -368,10 +369,168 @@ class SortPose:
                 # print(outpath)
                 # out.write(img_array[i])
                 counter += 1
-            # out.release()
-            # print('wrote:',videofile)
+            out.release()
+            print('wrote:',videofile)
         except:
             print('failed IMAGES, probably because segmented df until empty')
 
 
 
+
+##############################
+
+
+    def get_face_2d_point(self, faceLms, point):
+        # I don't think i need all of this. but putting it here.
+        img_h = self.h
+        img_w = self.w
+        for idx, lm in enumerate(faceLms.landmark):
+            if idx == point:
+                pointXY = (lm.x * img_w, lm.y * img_h)
+        return pointXY
+
+
+    def get_crop_data_simple(self, faceLms):
+        
+        #it would prob be better to do this with a dict and a loop
+        nose_2d = self.get_face_2d_point(faceLms,1)
+        # print("self.sinY: ",self.sinY)
+        #set main points for drawing/cropping
+        #p1 is tip of nose
+        p1 = (int(nose_2d[0]), int(nose_2d[1]))
+
+
+        toobig = False
+        if p1[1]>(self.face_height*1) and (self.h-p1[1])>(self.face_height*1):
+            if p1[0]>(self.face_height*1) and (self.w-p1[0])>(self.face_height*1):
+                self.crop_multiplier = 1
+            else:
+                print('face too wiiiiiiiide')
+                self.crop_multiplier = .25
+                toobig=True
+
+        else:
+            self.crop_multiplier = .25
+            print('face too biiiiigggggg')
+            toobig=True
+
+        # print(crop_multiplier)
+        self.h - p1[1]
+        top_overlap = p1[1]-self.face_height
+
+        #set crop
+        # crop_multiplier = 1
+        leftcrop = int(p1[0]-(self.face_height*self.crop_multiplier))
+        rightcrop = int(p1[0]+(self.face_height*self.crop_multiplier))
+        topcrop = int(p1[1]-(self.face_height*self.crop_multiplier))
+        botcrop = int(p1[1]+(self.face_height*self.crop_multiplier))
+        self.simple_crop = [topcrop, rightcrop, botcrop, leftcrop]
+
+
+    def crop_image(self,cropped_image, faceLms, sinY=0):
+
+        #commenting out sinY for now
+
+        #I'm not sure the diff between nose_2d and p1. May be redundant.
+        #it would prob be better to do this with a dict and a loop
+        nose_2d = self.get_face_2d_point(faceLms,1)
+
+        # check for crop, and if not exist, then get
+        if not hasattr(self, 'crop'): 
+            self.get_crop_data_simple(faceLms)
+
+            # this is the in progress neck rotation stuff
+            # self.get_crop_data(faceLms, sinY)
+
+        
+        # print (self.padding_points)
+        #set main points for drawing/cropping
+        #p1 is tip of nose
+        p1 = (int(nose_2d[0]), int(nose_2d[1]))
+
+        # print(crop_multiplier)
+        self.h - p1[1]
+        top_overlap = p1[1]-self.face_height
+
+        #adding this in to padd image
+        try:
+            padded_image = self.add_margin(cropped_image, self.padding_points)
+        except:
+            padded_image = False
+        basesize = 750
+        newsize = (basesize*self.crop[0],basesize*self.crop[1])
+        resize = np.round(newsize[0]/(self.face_height*2.5), 3)
+
+        #moved this back up so it would NOT     draw map on both sets of images
+        try:
+            # crop[0] is top, and clockwise from there. Right is 1, Bottom is 2, Left is 3. 
+            cropped_image = cv2.resize(cropped_image[self.crop_points[0]:self.crop_points[2], self.crop_points[3]:self.crop_points[1]], (newsize), interpolation= cv2.INTER_LINEAR)
+        except:
+            cropped_image = None
+            print("not cropped_image loop")
+
+            print(self.h, self.w)
+               
+        return padded_image, cropped_image, resize
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+################################
+
+    def calc_face_data(self, faceLms):
+
+        # check for face_2d, and if not exist, then get
+        if not hasattr(self, 'face_2d'):
+            self.get_face_2d_3d(faceLms)
+
+        # check for face height, and if not exist, then get
+        if not hasattr(self, 'face_height'): 
+            self.get_faceheight_data(faceLms)
+
+    def get_face_2d_3d(self, faceLms):
+        # I don't think i need all of this. but putting it here.
+        img_h = self.h
+        img_w = self.w
+        face_3d = []
+        face_2d = []
+        for idx, lm in enumerate(faceLms.landmark):
+            if idx == 33 or idx == 263 or idx == 1 or idx == 61 or idx == 291 or idx == 199 or idx == 10 or idx == 152:
+                x, y = int(lm.x * img_w), int(lm.y * img_h)
+
+                # Get the 2D Coordinates
+                face_2d.append([x, y])
+
+                # Get the 3D Coordinates
+                face_3d.append([x, y, lm.z])      
+
+        # Convert it to the NumPy array
+        # image points
+        self.face_2d = np.array(face_2d, dtype=np.float64)
+
+        # Convert it to the NumPy array
+        # face model
+        self.face_3d = np.array(face_3d, dtype=np.float64)
+
+        return face_2d, face_3d
+
+
+    def get_faceheight_data(self, faceLms):
+        top_2d = self.get_face_2d_point(faceLms,10)
+        bottom_2d = self.get_face_2d_point(faceLms,152)
+        self.ptop = (int(top_2d[0]), int(top_2d[1]))
+        self.pbot = (int(bottom_2d[0]), int(bottom_2d[1]))
+        # height = int(pbot[1]-ptop[1])
+        self.face_height = self.dist(self.point(self.pbot), self.point(self.ptop))
+
+        # return ptop, pbot, face_height
