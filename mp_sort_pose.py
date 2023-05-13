@@ -277,9 +277,9 @@ class SortPose:
 
 
 
-    def get_cv2size(self, ROOT, filename_or_imagedata):
+    def get_cv2size(self, site_specific_root_folder, filename_or_imagedata):
         #IF filename_or_imagedata IS STRING:
-        img = cv2.imread(os.path.join(ROOT,filename_or_imagedata))
+        img = cv2.imread(os.path.join(site_specific_root_folder,filename_or_imagedata))
         #ELIF filename_or_imagedata IS NDARRAY:
         #img = filename_or_imagedata
         size = (img.shape[0], img.shape[1])
@@ -330,10 +330,10 @@ class SortPose:
         except:
             print('failed VIDEO, probably because segmented df until empty')
 
-    def write_images(self, ROOT, img_array, segment):
-        # print('writing images')
-        imgfileprefix = f"faceimg_crop{str(self.MINCROP)}_X{str(self.XLOW)}toX{str(self.XHIGH)}_Y{str(self.YLOW)}toY{str(self.YHIGH)}_Z{str(self.ZLOW)}toZ{str(self.ZHIGH)}_maxResize{str(self.MAXRESIZE)}_ct{str(len(segment))}"
-        # print(imgfileprefix)
+    def write_images(self, ROOT, img_array):
+        print('writing images')
+        imgfileprefix = f"faceimg_crop{str(self.MINCROP)}_X{str(self.XLOW)}toX{str(self.XHIGH)}_Y{str(self.YLOW)}toY{str(self.YHIGH)}_Z{str(self.ZLOW)}toZ{str(self.ZHIGH)}_maxResize{str(self.MAXRESIZE)}_ct{str(len(img_array))}"
+        print(imgfileprefix)
         outfolder = os.path.join(ROOT,"images"+str(time.time()))
         if not os.path.exists(outfolder):      
             os.mkdir(outfolder)
@@ -341,14 +341,19 @@ class SortPose:
         try:
             # couldn't I use i here? 
             counter = 1
-            # print(img_array)
+            print(img_array)
             # out = cv2.VideoWriter(os.path.join(ROOT,videofile), cv2.VideoWriter_fourcc(*'mp4v'), FRAMERATE, size)
             for i in range(len(img_array)):
-                # print('in loop')
+                print('in loop')
                 UID = img_array[i].split('-id')[-1]
                 imgfilename = imgfileprefix+"_"+UID+"_"+str(counter)+".jpg"
                 outpath = os.path.join(outfolder,imgfilename)
-                # print(img_array[i])
+                print("outpath ",outpath)
+
+                # the hardcoded #1 needs to be replaced with site_name_id, which needs to be readded to the df
+                site_specific_root_folder = "gettyimages/newimages"
+                open_path = os.path.join(ROOT,site_specific_root_folder,img_array[i])
+                print("open_path] ",open_path)
 
                 # this code takes image i, and blends it with the subsequent image
                 # next step is to test to see if mp can recognize a face in the image
@@ -356,7 +361,7 @@ class SortPose:
                 # except it would need to do that with the sub-array, so move above? 
                 # blend = cv2.addWeighted(img_array[i], 0.5, img_array[(i+1)], 0.5, 0.0)
                 # cv2.imwrite(outpath, blend)
-                img = cv2.imread(img_array[i])
+                img = cv2.imread(open_path)
                 cv2.imwrite(outpath, img)
                 print("saved: ",imgfilename)
 

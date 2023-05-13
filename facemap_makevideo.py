@@ -28,6 +28,7 @@ from sqlalchemy.pool import NullPool
 
 #mine
 from mp_sort_pose import SortPose
+from mp_db_io import DataIO
 
 VIDEO = False
 CYCLECOUNT = 2
@@ -39,31 +40,31 @@ SELECT = "i.image_id, i.site_name_id, i.contentUrl, i.imagename, e.face_x, e.fac
 FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings e ON i.image_id = e.image_id "
 WHERE = "e.face_x IS NOT NULL AND i.site_name_id = 1 AND k.keyword_text LIKE 'smil%'"
 # WHERE = "e.image_id IS NULL "
-LIMIT = 100000
+LIMIT = 10000
 
 
 
-# platform specific file folder (mac for michael, win for satyam)
-if platform == "darwin":
-    ####### Michael's OS X Credentials ########
-    db = {
-        "host":"localhost",
-        "name":"stock1",            
-        "user":"root",
-        "pass":"Fg!27Ejc!Mvr!GT"
-    }
-    ROOT= os.path.join(os.environ['HOME'], "Documents/projects-active/facemap_production") ## only on Mac
-    NUMBER_OF_PROCESSES = 8
-elif platform == "win32":
-    ######## Satyam's WIN Credentials #########
-    db = {
-        "host":"localhost",
-        "name":"gettytest3",                 
-        "user":"root",
-        "pass":"SSJ2_mysql"
-    }
-    ROOT= os.path.join("D:/"+"Documents/projects-active/facemap_production") ## SD CARD
-    NUMBER_OF_PROCESSES = 4
+# # platform specific file folder (mac for michael, win for satyam)
+# if platform == "darwin":
+#     ####### Michael's OS X Credentials ########
+#     db = {
+#         "host":"localhost",
+#         "name":"stock1",            
+#         "user":"root",
+#         "pass":"Fg!27Ejc!Mvr!GT"
+#     }
+#     ROOT= os.path.join(os.environ['HOME'], "Documents/projects-active/facemap_production") ## only on Mac
+#     NUMBER_OF_PROCESSES = 8
+# elif platform == "win32":
+#     ######## Satyam's WIN Credentials #########
+#     db = {
+#         "host":"localhost",
+#         "name":"gettytest3",                 
+#         "user":"root",
+#         "pass":"SSJ2_mysql"
+#     }
+#     ROOT= os.path.join("D:/"+"Documents/projects-active/facemap_production") ## SD CARD
+#     NUMBER_OF_PROCESSES = 4
 
 motion = {
     "side_to_side": False,
@@ -74,10 +75,14 @@ motion = {
 }
 
 
-folder_dict = dict([
-    (1, "gettyimages"), 
-    (5, "images_pexels")
-    ])
+
+
+# construct my own objects
+sort = SortPose(motion)
+io = DataIO()
+db = io.db
+ROOT = io.ROOT 
+NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 
 engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}"
                                 .format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']), poolclass=NullPool)
@@ -471,17 +476,15 @@ def encode_df(folder,df_segment):
 def get_d(enc1, enc2):
     enc1=np.array(enc1)
     # enc2=np.array(enc2)
-    print("enc1")
+    print("enc1 size ")
     print(enc1.shape)
-    print(enc1)
-    print ("enc2")
+    print("enc2 size ")
     print(enc2.shape)
-    print(enc2)
     d=np.linalg.norm(enc1 - enc2, axis=0)
     print("get_d: ",d)
     return d
 
-def get_closest_df_v2(folder, start_img, df_enc):
+def get_closest_df_v2(start_img, df_enc):
     if start_img == "median":
         # print("df_enc: ", df_enc)
         encodings_array = np.array(df_enc['encoding'].tolist())
@@ -494,7 +497,10 @@ def get_closest_df_v2(folder, start_img, df_enc):
         # print("in median: ", enc1)
     else:
 #         enc1 = get 2-129 from df via stimg key
-        enc1 = df_enc.loc[start_img]
+        enc1 = df_enc.loc[start_img]['encoding'].tolist()
+        print("in else")
+        print(enc1)
+        print(enc1[0])
         df_enc=df_enc.drop(start_img)
 #         print("in new img",len(df_enc.index))
     
@@ -506,6 +512,7 @@ def get_closest_df_v2(folder, start_img, df_enc):
     for index, row in df_enc.iterrows():
 #         print(row['c1'], row['c2'])
 #     for img in img_list:
+
         enc2 = row['encoding']
         if (enc1 is not None) and (enc2 is not None):
             d = get_d(enc1, enc2)
@@ -642,21 +649,25 @@ def test_pair(last_file, new_file):
 
 
 # takes a dataframe of images and encodings and returns a df sorted by distance
-def sort_by_face_dist(folder, start_img,df_enc):
+def sort_by_face_dist(start_img,df_enc):
     face_distances=[]
     for i in range(len(df_enc.index)-2):
         # find the image
-        dist, start_img, df_enc = get_closest_df_v2(folder, start_img,df_enc)
+        print(df_enc)
+        # the hardcoded #1 needs to be replaced with site_name_id, which needs to be readded to the df
+        site_specific_root_folder = io.folder_list[1]
+        print("starting sort round ",str(i))
+        dist, start_img, df_enc = get_closest_df_v2(start_img,df_enc)
         # save the image -- this prob will be to append to list, and return list? 
         # save_sorted(i, folder, start_img, dist)
-        this_dist=[dist, folder, start_img]
+        this_dist=[dist, site_specific_root_folder, start_img]
         face_distances.append(this_dist)
 
         #debuggin
-        # print(i)
-        # print(len(df_enc.index))
-        # print(dist)
-        # print (start_img)
+        print("sorted round ",str(i))
+        print(len(df_enc.index))
+        print(dist)
+        print (start_img)
     df = pd.DataFrame(face_distances, columns =['dist', 'folder', 'filename'])
     df = df.sort_values(by=['dist'])
     return df
@@ -822,14 +833,12 @@ def main():
 
 
     # print(df_sql)
-    sort = SortPose(motion)
 
     # read the csv and construct dataframe
     try:
         # df = pd.read_csv(os.path.join(ROOT,MAPDATA_FILE))
         df = pd.json_normalize(resultsjson)
 
-        # images_folder = folder_dict[#site_name_id]
 
 
     except:
@@ -909,11 +918,14 @@ def main():
 
         # # get dataframe sorted by distance
         start_img = "median"
-        df_sorted = sort_by_face_dist(ROOT, start_img,df_enc)
-        # print("df_sorted")
-        # print(df_sorted)
+        #ROOT is where it is borking
+        df_sorted = sort_by_face_dist(start_img,df_enc)
+        print("df_sorted")
+        print(df_sorted)
         img_list = df_sorted['filename'].tolist()
-        size = sort.get_cv2size(ROOT, img_list[0])
+        # the hardcoded #1 needs to be replaced with site_name_id, which needs to be readded to the df
+        site_specific_root_folder = io.folder_list[1]
+        size = sort.get_cv2size(site_specific_root_folder, img_list[0])
         # print(img_list)
 
 
@@ -930,7 +942,7 @@ def main():
     else:
         #save individual as images
         
-        sort.write_images(ROOT, img_list, df_segment)
+        sort.write_images(ROOT, img_list)
 
 
 if __name__ == '__main__':
