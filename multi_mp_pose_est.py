@@ -50,7 +50,7 @@ elif platform == "win32":
     NUMBER_OF_PROCESSES = 4
 
 
-folder = [
+folder_list = [
     "", #0, Empty, there is no site #0 -- starts count at 1
     os.path.join(ROOT,"localhost"), #1, Getty
     os.path.join(ROOT36,""),
@@ -74,7 +74,7 @@ SLEEP_TIME=0
 SELECT = "DISTINCT(i.image_id), i.site_name_id, contentUrl, imagename"
 # SELECT = "DISTINCT(i.image_id), i.gender_id, author, caption, contentUrl, description, imagename"
 FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings e ON i.image_id = e.image_id "
-WHERE = "e.image_id IS NULL AND i.site_name_id = 5 AND k.keyword_text LIKE 'smil%'"
+WHERE = "e.image_id IS NULL AND i.site_name_id = 5 AND k.keyword_text LIKE 'Women%'"
 # WHERE = "(e.image_id IS NULL AND k.keyword_text LIKE 'smil%')OR (e.image_id IS NULL AND k.keyword_text LIKE 'happ%')OR (e.image_id IS NULL AND k.keyword_text LIKE 'laugh%')"
 # WHERE = "e.image_id IS NULL "
 LIMIT = 1000
@@ -451,12 +451,17 @@ def main():
     tasks_that_are_done = Queue()
     processes = []
     count = 0
+    last_round = False
 
     while True:
         # print("about to SQL: ",SELECT,FROM,WHERE,LIMIT)
         resultsjson = selectSQL()
         print("got results, count is: ",len(resultsjson))
-        if len(resultsjson) == 0:
+        
+        #catches the last round, where it returns less than full results
+        if len(resultsjson) != LIMIT:
+            last_round = True
+        elif last_round == True:
             break
 
         for row in resultsjson:
@@ -472,7 +477,7 @@ def main():
                 hashed_path = os.path.join("newimages",d0, d02, orig_filename)
             
             # gets folder via the folder list, keyed with site_id integer
-            imagepath=os.path.join(folder[site_id], hashed_path)
+            imagepath=os.path.join(folder_list[site_id], hashed_path)
             isExist = os.path.exists(imagepath)
             if isExist: 
                 task = (image_id,imagepath)
