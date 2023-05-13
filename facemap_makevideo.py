@@ -43,29 +43,6 @@ WHERE = "e.face_x IS NOT NULL AND i.site_name_id = 1 AND k.keyword_text LIKE 'sm
 LIMIT = 5000
 
 
-
-# # platform specific file folder (mac for michael, win for satyam)
-# if platform == "darwin":
-#     ####### Michael's OS X Credentials ########
-#     db = {
-#         "host":"localhost",
-#         "name":"stock1",            
-#         "user":"root",
-#         "pass":"Fg!27Ejc!Mvr!GT"
-#     }
-#     ROOT= os.path.join(os.environ['HOME'], "Documents/projects-active/facemap_production") ## only on Mac
-#     NUMBER_OF_PROCESSES = 8
-# elif platform == "win32":
-#     ######## Satyam's WIN Credentials #########
-#     db = {
-#         "host":"localhost",
-#         "name":"gettytest3",                 
-#         "user":"root",
-#         "pass":"SSJ2_mysql"
-#     }
-#     ROOT= os.path.join("D:/"+"Documents/projects-active/facemap_production") ## SD CARD
-#     NUMBER_OF_PROCESSES = 4
-
 motion = {
     "side_to_side": False,
     "forward_smile": False,
@@ -73,8 +50,6 @@ motion = {
     "static_pose":  False,
     "simple": False,
 }
-
-
 
 
 # construct my own objects
@@ -145,120 +120,6 @@ def save_sorted(counter, folder, image, dist):
     shutil.copy(old_name, new_name)
     print('saved, ',sorted_name)
 
-
-
-# ### dataframe creation and sorting
-
-
-    
-#     return output_data
-
-#takes list input -- currently deprecated 
-def encode_list_df(folder, img_list):
-#     enc_dict={}
-    #img_list could be a list, but most likely will be dataframe
-    csv_name="face_encodings.csv"
-    col1="file_name"
-    col2="encoding"
-    curr=0
-    total = len(img_list)
-
-    # encodings column list for splitting
-    col_list=[]
-    for i in range(128):
-        col_list.append(col2+str(i))
-
-    #initializing the dataframe
-    image_data=pd.DataFrame(columns=[col1, col2])
-
-    
-    for img in img_list:
-        if curr%10==0:print(curr,"/",total)
-        curr+=1
-        filepath = os.path.join(folder,img)        
-        filepath=filepath.replace('\\' , '/')  ## cv2 accepts files with "/" instead of "\"
-        encodings=ret_encoding(filepath)
-        if encodings is not None:              ## checking if a face is found
-            
-            data=pd.DataFrame({col1:img,col2:[np.array(encodings)]})
-            image_data = pd.concat([image_data,data],ignore_index=True)  
-
-    #splitting the encodings column
-    output_data = pd.DataFrame(image_data[col2].to_list(), columns=col_list)
-    #adding the filename column and then puting it first
-    output_data[[col1]]=pd.DataFrame(image_data[col1].tolist(),index=image_data.index)
-    clms = output_data.columns.tolist()
-    clms = clms[-1:] + clms[:-1]
-    output_data=output_data[clms]
-    # saving without index
-    # i think this needs to be refactored to get rid of this step. just drop index
-    # output_data.to_csv(csv_name, index=False)
-    # df = pd.read_csv(csv_name)
-    output_data.set_index('file_name', inplace=True)
-
-    
-    return output_data
-
-
-def encode_df(folder,df_segment):
-    print(df_segment)
-
-    csv_name="face_encodings.csv"
-    col1="file_name"
-    col2="encoding" 
-    curr=0
-    img_list = df_segment['imagename'].tolist()
-
-    total = len(img_list)
-
-
-    # encodings column list for splitting
-    col_list=[]
-    for i in range(128):
-        col_list.append(col2+str(i))
-
-    #initializing the dataframe
-    image_data=pd.DataFrame(columns=[col1, col2])
-
-    
-    # for img in img_list:
-    #     if curr%10==0:print(curr,"/",total)
-    #     curr+=1
-    #     filepath = os.path.join(folder,img)        
-    #     filepath=filepath.replace('\\' , '/')  ## cv2 accepts files with "/" instead of "\"
-    #     encodings=ret_encoding(filepath)
-    #     if encodings is not None:              ## checking if a face is found
-            
-    #         data=pd.DataFrame({col1:img,col2:[np.array(encodings)]})
-    #         image_data = pd.concat([image_data,data],ignore_index=True)  
-    image_data = pd.DataFrame({col1: df_segment['imagename'], col2: df_segment['face_encodings'].apply(lambda x: np.array(x))})
-    image_data.set_index(col1, inplace=True)
-
-    print(image_data)
-    # image_data = pd.DataFrame({col1: df_segment['imagename'], col2: df_segment['face_encodings'].apply(lambda x: np.array(x))})
-    # image_data.set_index(col1, inplace=True)
-
-
-    #splitting the encodings column
-    output_data = pd.DataFrame(image_data[col2].to_list(), columns=col_list)
-    #adding the filename column and then puting it first
-    output_data[[col1]]=pd.DataFrame(image_data[col1].tolist(),index=image_data.index)
-    clms = output_data.columns.tolist()
-    clms = clms[-1:] + clms[:-1]
-    output_data=output_data[clms]
-    # saving without index
-    # i think this needs to be refactored to get rid of this step. just drop index
-    # output_data.to_csv(csv_name, index=False)
-    # df = pd.read_csv(csv_name)
-    output_data.set_index('file_name', inplace=True)
-
-    # image_data = pd.DataFrame({col1: df_segment['imagename'], col2: df_segment['face_encodings'].apply(lambda x: np.array(x))})
-    # image_data.set_index(col1, inplace=True)
-    
-    return output_data
-
-
-# In[18]:
 
 #get distance beetween encodings
 
@@ -625,8 +486,6 @@ def main():
     # get metamedian for second sort, creates sort.metamedian attribute
     sort.get_metamedian()
 
-    # # encode all images in list, and use name as df index
-    # df_enc = encode_df(ROOT, segment)
     col1="file_name"
     col2="encoding"
 
