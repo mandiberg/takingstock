@@ -36,9 +36,9 @@ MAPDATA_FILE = "allmaps_62607.csv"
 SELECT = "i.image_id, i.site_name_id, i.contentUrl, i.imagename, e.face_x, e.face_y, e.face_z, e.mouth_gap, e.face_landmarks, e.bbox, e.face_encodings"
 # SELECT = "DISTINCT(i.image_id), i.gender_id, author, caption, contentUrl, description, imagename"
 FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings e ON i.image_id = e.image_id "
-WHERE = "e.face_x IS NOT NULL AND i.site_name_id = 1 AND k.keyword_text LIKE 'smil%'"
+WHERE = "e.bbox IS NOT NULL AND i.site_name_id = 1 AND k.keyword_text LIKE 'smil%'"
 # WHERE = "e.image_id IS NULL "
-LIMIT = 10000
+LIMIT = 20000
 
 
 motion = {
@@ -248,7 +248,6 @@ def sort_by_face_dist(start_img,df_enc):
         # find the image
         print(df_enc)
         # the hardcoded #1 needs to be replaced with site_name_id, which needs to be readded to the df
-        site_specific_root_folder = io.folder_list[1]
         print("starting sort round ",str(i))
         dist, start_img, df_enc = get_closest_df(start_img,df_enc)
         # dist[0], dist_dict[dist[0]]
@@ -262,6 +261,7 @@ def sort_by_face_dist(start_img,df_enc):
             print("assigned bbox")
         except:
             print("won't assign landmarks/bbox")
+        site_specific_root_folder = io.folder_list[site_name_id]
         # save the image -- this prob will be to append to list, and return list? 
         # save_sorted(i, folder, start_img, dist)
         this_dist=[dist, site_specific_root_folder, start_img, site_name_id, face_landmarks, bbox]
@@ -400,7 +400,9 @@ def main():
         file_name_path = contentUrl.split('?')[0]
         file_name = file_name_path.split('/')[-1]
         extension = file_name.split('.')[-1]
-        if not file_name.endswith(".jpg"):
+        if file_name.endswith(".jpeg"):
+            file_name = file_name.replace(".jpeg",".jpg")
+        elif not file_name.endswith(".jpg"):
             file_name += ".jpg"    
         hash_folder1, hash_folder2 = get_hash_folders(file_name)
         newname = os.path.join(hash_folder1, hash_folder2, file_name)

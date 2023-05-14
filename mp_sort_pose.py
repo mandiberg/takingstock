@@ -348,14 +348,16 @@ class SortPose:
             # out = cv2.VideoWriter(os.path.join(ROOT,videofile), cv2.VideoWriter_fourcc(*'mp4v'), FRAMERATE, size)
             for index, row in df_sorted.iterrows():
                 print('in loop')
-                UID = row['filename'].split('-id')[-1].replace(".jpg","")
+                UID = row['filename'].split('-id')[-1].split("/")[-1].replace(".jpg","")
+                print("UID ",UID)
                 imgfilename = imgfileprefix+"_"+str(counter)+"_"+UID+".jpg"
+                print("imgfilename ",imgfilename)
                 outpath = os.path.join(outfolder,imgfilename)
                 print("outpath ",outpath)
 
                 # folder is specific to each file's site_name_id
                 open_path = os.path.join(ROOT,row['folder'],row['filename'])
-                print("open_path] ",open_path)
+                print("open_path ",open_path)
 
                 # this code takes image i, and blends it with the subsequent image
                 # next step is to test to see if mp can recognize a face in the image
@@ -368,12 +370,12 @@ class SortPose:
                 #crop image here:
 
                 cropped_image = self.crop_image(img, row['face_landmarks'], row['bbox'])
-                print(type(cropped_image))
-                print(cropped_image.shape)
+                print("cropped_image type: ",type(cropped_image))
                 if cropped_image is not None:
+                    print(cropped_image.shape)
                     print("have a cropped image trying to save")
                     cv2.imwrite(outpath, cropped_image)
-                    print("saved: ",imgfilename)
+                    print("saved: ",outpath)
                 else:
                     print("no image here, trying next")
                 # print(outpath)

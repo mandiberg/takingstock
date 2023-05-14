@@ -19,15 +19,15 @@ sig = '''
 # PATH= os.path.join(os.environ['HOME'], "Documents/projects-active/facemap_production/gettyimages") 
 
 #where the images are:
-PATH = "/Volumes/Stock12/"
+PATH = "/Volumes/Test36/"
 #where the images are going:
 PATH2 = "/Volumes/Test36/"
 
 COPY=True
-UNIQUE_FILES_PATH="/Volumes/Test36/CSVs_to_ingest/pexelsCSVs/unique_images.csv"
+UNIQUE_FILES_PATH="/Volumes/Test36/scraping phase 2/CSVs_to_ingest/unsplashCSVs/unique_images.csv"
 IMAGES_THREAD_COUNTER = 0
-IMAGES_FOLDER_NAME = 'images_pexels'
-NEWIMAGES_FOLDER_NAME = 'new_images_pexels'
+IMAGES_FOLDER_NAME = 'images_unsplash'
+NEWIMAGES_FOLDER_NAME = 'new_images_unsplash'
 NUMBER_OF_THREADS_IMAGES_DOWNLOAD =15
 OLDPATH = os.path.join(PATH, IMAGES_FOLDER_NAME)
 NEWPATH = os.path.join(PATH2, NEWIMAGES_FOLDER_NAME)
@@ -70,16 +70,18 @@ def make_hash_folders(path):
             pth2 = os.path.join(path,letter,letter+letter2)
             touch(pth2)
 
-def get_hash_folders(filename):
-    m = hashlib.md5()
-    m.update(filename.encode('utf-8'))
-    d = m.hexdigest()
-    return (os.path.join(d[0], d[0:2]), d)
+# def get_hash_folders(filename):
+#     m = hashlib.md5()
+#     m.update(filename.encode('utf-8'))
+#     d = m.hexdigest()
+#     return (os.path.join(d[0], d[0:2]), d)
 
 def generate_local_image_filepath(image_name):
-    file_name = image_name.split('?')[0]
+    file_name_path = image_name.split('?')[0]
+    file_name = file_name_path.split('/')[-1]
     extension = file_name.split('.')[-1]
     hash_folder, image_hashed_filename = get_hash_folders(file_name)
+    print(hash_folder, image_hashed_filename, file_name, extension)
     return os.path.join(
         IMAGES_FOLDER_NAME, hash_folder, '{}.{}'.format(image_hashed_filename, extension))
 
@@ -99,7 +101,7 @@ def unhash_files():
         try:
             #THIS IS WHERE I WILL MOVE THE STUFF
             # move(src,dest)
-            move(image_hashpath, image_unhashed_path)
+            print(image_hashpath, image_unhashed_path)
             print("moved")
         except:
             if retry < 5:

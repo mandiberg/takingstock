@@ -88,6 +88,7 @@ CREATE TABLE Encodings (
     face_z DECIMAL (6,3),
     mouth_gap DECIMAL (6,3),
     face_landmarks BLOB,
+    bbox JSON,
     face_encodings BLOB,
     body_landmarks BLOB
 ); 

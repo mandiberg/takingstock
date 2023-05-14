@@ -307,7 +307,10 @@ def get_gender_age(df, ind, keys_list):
     global gender_dict
     gender = None
     age= None
-    key = df['gender'][ind]
+    if df['gender'][ind] is not None:
+        key = df['gender'][ind]
+    elif df['age'][ind] is not None:
+        key = df['age'][ind]
     description = df['title'][ind]
     if not pd.isnull(key):
         #convertkeys
@@ -418,6 +421,26 @@ def structure_row_pexels(df, ind, keys_list):
     }
     return(nan2none(image_row))
 
+def structure_row_123(df, ind, keys_list): 
+
+    gender_key, age_key = get_gender_age(df, ind, keys_list)
+    location_no = get_location(df, ind, keys_list)
+    image_row = {
+        "site_image_id": df.loc[ind,'id'],
+        "site_name_id": 8,
+        "description": df['title'][ind],
+        "location_id": location_no,
+        # "": df['number_of_people'][ind] # should always be one. If not one, toss it? 
+        # "": df['orientation'][ind]
+        "age_id": age_key,
+        "gender_id": gender_key,  
+        # "location_id":"0",
+        # "": df['mood'][ind]
+        "contentUrl": df['image_url'][ind],
+        "imagename": generate_local_unhashed_image_filepath(df['image_url'][ind]) # need to refactor this from the contentURL using the hash function
+    }
+    return(nan2none(image_row))
+
 
 def ingest_it():
     # print(keys_dict["cute"])
@@ -451,7 +474,11 @@ def ingest_it():
         if counter < start_counter:
             counter += 1
             continue
-        keys_list = df['keywords'][ind].lower().split("|")
+        try:
+            keys_list = df['keywords'][ind].lower().split("|")
+        except:
+            print("no keys")
+            keys_list = df['word'][ind].lower().split(" ")
 
         # PEXELS_HEADERS = ["id", "title", "keywords", "country", "number_of_people", "orientation", "age","gender", "ethnicity", "mood", "image_url", "image_filename"]
         image_row = structure_row_pexels(df, ind, keys_list)

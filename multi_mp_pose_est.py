@@ -78,13 +78,14 @@ DRAW_BOX = False
 MINSIZE = 700
 SLEEP_TIME=0
 
-SELECT = "DISTINCT(i.image_id), i.site_name_id, contentUrl, imagename"
+SELECT = "DISTINCT(i.image_id), i.site_name_id, i.contentUrl, i.imagename, e.encoding_id"
 # SELECT = "DISTINCT(i.image_id), i.gender_id, author, caption, contentUrl, description, imagename"
 FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings e ON i.image_id = e.image_id "
-WHERE = "e.image_id IS NULL AND i.site_name_id = 1 AND k.keyword_text LIKE 'Smil%'"
+WHERE = "e.is_body IS TRUE AND e.bbox IS NULL AND e.face_x IS NOT NULL"
+# WHERE = "e.image_id IS NULL AND i.site_name_id = 5 AND k.keyword_text LIKE 'Women%'"
 # WHERE = "(e.image_id IS NULL AND k.keyword_text LIKE 'smil%')OR (e.image_id IS NULL AND k.keyword_text LIKE 'happ%')OR (e.image_id IS NULL AND k.keyword_text LIKE 'laugh%')"
 # WHERE = "e.image_id IS NULL "
-LIMIT = 100
+LIMIT = 1000
 
 #creating my objects
 mp_face_mesh = mp.solutions.face_mesh
@@ -157,6 +158,8 @@ def save_image_by_path(image, sort, name):
     mkExist(outfolder)
 
     try:
+        print(outpath)
+
         cv2.imwrite(outpath, image)
 
     except:
@@ -233,8 +236,25 @@ def get_bbox(faceDet, height, width):
         left,top =xy_min
         right,bottom = xy_max
         bbox={"left":left,"right":right,"top":top,"bottom":bottom}
+    else:
+        print("no results???")
     return(bbox)
 
+def retro_bbox(image):
+    height, width, _ = image.shape
+    with mp.solutions.face_detection.FaceDetection(model_selection=1, min_detection_confidence=0.7) as face_det: 
+        results_det=face_det.process(image[:,:,::-1])  ## [:,:,::-1] is the shortcut for converting BGR to RGB
+        
+    # is_face = False
+    bbox_json = None
+    if results_det.detections:
+        faceDet=results_det.detections[0]
+        bbox = get_bbox(faceDet, height, width)
+        if bbox:
+            bbox_json = json.dumps(bbox, indent = 4)
+    else:
+        print("no results???")
+    return bbox_json
 
 def find_face(image, df):
     height, width, _ = image.shape
@@ -388,6 +408,66 @@ def find_body(image,df):
         return df
 
 
+def process_image_bbox(task):
+    # df = pd.DataFrame(columns=['image_id','bbox'])
+    encoding_id = task[0]
+    try:
+        image = cv2.imread(task[1])        
+        # this is for when you need to move images into a testing folder structure
+        # save_image_elsewhere(image, task)
+    except:
+        print(f"[process_image]this item failed: {task}")
+    print("processing: ")
+    print(encoding_id)
+    if image is not None and image.shape[0]>MINSIZE and image.shape[1]>MINSIZE:
+        # Do FaceMesh
+        bbox_json = retro_bbox(image)
+        print(bbox_json)
+        if bbox_json: 
+            try:
+                # bbox = retro_bbox(image)
+                
+                # Update the bbox value in the row
+                # encoding_id = row['encoding_id']
+                update_sql = f"UPDATE Encodings SET bbox = '{bbox_json}' WHERE encoding_id = {encoding_id};"
+                engine.connect().execute(text(update_sql))
+                print("bboxxin: ")
+                print(encoding_id)
+
+                # def selectSQL():
+                #     selectsql = f"SELECT {SELECT} FROM {FROM} WHERE {WHERE} LIMIT {str(LIMIT)};"
+                #     result = engine.connect().execute(text(selectsql))
+                #     resultsjson = ([dict(row) for row in result.mappings()])
+
+                #     for row in resultsjson:
+                #         # Get the bbox value using your get_bboxget_bbox function
+                #         bbox = get_bboxget_bbox(row['contentUrl'])
+                        
+                #         # Update the bbox value in the row
+                #         encoding_id = row['encoding_id']
+                #         update_sql = f"UPDATE Encodings SET bbox = '{bbox}' WHERE encoding_id = {encoding_id};"
+                #         engine.connect().execute(text(update_sql))
+                    
+                #     return resultsjson
+
+                # insertignore_df(df,"encodings", engine)  ### made it all lower case to avoid discrepancy
+            except OperationalError as e:
+                print(e)
+        else:
+            print("no bbox")
+            # nobbox = 1
+            # update_sql = f"UPDATE Encodings SET is_face_distant = '{nobbox}' WHERE encoding_id = {encoding_id};"
+            # engine.connect().execute(text(update_sql))
+            # save_image_by_path(image, "nobbox", str(encoding_id)+".jpg")
+
+
+    else:
+        print('toooooo smallllll')
+        # I should probably assign no_good here...?
+
+    # store data
+
+
 def process_image(task):
     #print("process_image")
     def save_image_triage(image,df):
@@ -417,7 +497,7 @@ def process_image(task):
         df = find_body(image, df)
         # for testing: this will save images into folders for is_face, is_body, and none. 
         # only save images that aren't too smallllll
-        save_image_triage(image,df)
+        # save_image_triage(image,df)
     else:
         print('toooooo smallllll')
         # I should probably assign no_good here...?
@@ -448,7 +528,7 @@ def do_job(tasks_to_accomplish, tasks_that_are_done):
                 if no exception has been raised, add the task completion 
                 message to task_that_are_done queue
             '''
-            process_image(task)
+            process_image_bbox(task)
             # tasks_that_are_done.put(task + ' is done by ' + current_process().name)
             time.sleep(SLEEP_TIME)
     return True
@@ -464,9 +544,9 @@ def main():
 
     while True:
         # print("about to SQL: ",SELECT,FROM,WHERE,LIMIT)
-        resultsjson = selectSQL()
+        resultsjson = selectSQL()    
         print("got results, count is: ",len(resultsjson))
-
+        # print(resultsjson)
         #catches the last round, where it returns less than full results
         if last_round == True:
             print("last_round caught, should break")
@@ -477,6 +557,7 @@ def main():
 
         print(last_round)
         for row in resultsjson:
+            # print(row)
             image_id = row["image_id"]
             item = row["contentUrl"]
             hashed_path = row["imagename"]
@@ -493,8 +574,14 @@ def main():
             isExist = os.path.exists(imagepath)
             if isExist: 
                 # print("isExist!")
-                task = (image_id,imagepath)
-                tasks_to_accomplish.put(task)
+                encoding_id = row["encoding_id"]
+                # print(encoding_id)
+                task_bbox = (encoding_id,imagepath)                
+                tasks_to_accomplish.put(task_bbox)
+
+                # need to restore next two lines after done with bbox
+                # task = (image_id,imagepath)
+                # tasks_to_accomplish.put(task)
                 # print("tasks_to_accomplish.put(task) ",imagepath)
         # print("tasks_to_accomplish.qsize()", str(tasks_to_accomplish.qsize()))
         # print(tasks_to_accomplish.qsize())
