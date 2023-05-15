@@ -6,6 +6,7 @@ import mediapipe as mp
 import hashlib
 import time
 import json
+import random
 
 
 class SortPose:
@@ -202,33 +203,24 @@ class SortPose:
         # For static images:
         IMAGE_FILES = []
         with self.mp_face_detection.FaceDetection(model_selection=1, 
-                                            min_detection_confidence=0.6
+                                            min_detection_confidence=0.75
                                             ) as face_detection:
             # image = cv2.imread(file)
             # Convert the BGR image to RGB and process it with MediaPipe Face Detection.
             results = face_detection.process(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
-
             # Draw face detections of each face.
             if not results.detections:
                 is_face = False
             else:
                 is_face = True
-            # annotated_image = image.copy()
-            # for detection in results.detections:
-            #     is_face = True
-            #     print('Nose tip:')
-            #     print(mp_face_detection.get_key_point(
-            #       detection, mp_face_detection.FaceKeyPoint.NOSE_TIP))
-            #     mp_drawing.draw_detection(annotated_image, detection)
-            # cv2.imwrite('/tmp/annotated_image' + str(idx) + '.png', annotated_image)
-
+        print("returning is_face ", is_face)
         return is_face
 
-    def blend_is_face(self, oldimage, newimage):
-        blend = cv2.addWeighted(oldimage, 0.5, newimage, 0.5, 0.0)
-        # blend = cv2.addWeighted(img, 0.5, img_array[i-1], 0.5, 0.0)
-        blended_face = sort.is_face(blend)
-        return blended_face
+    # def blend_is_face(self, oldimage, newimage):
+    #     blend = cv2.addWeighted(oldimage, 0.5, newimage, 0.5, 0.0)
+    #     # blend = cv2.addWeighted(img, 0.5, img_array[i-1], 0.5, 0.0)
+    #     blended_face = sort.is_face(blend)
+    #     return blended_face
 
 
 
@@ -316,71 +308,66 @@ class SortPose:
         size = (img.shape[0], img.shape[1])
         return img, size
 
-    # test if new and old make a face
-    def is_face(self,image):
-        # For static images:
-        # I think this list is not used
-        IMAGE_FILES = []
-        with mp_face_detection.FaceDetection(model_selection=1, 
-                                            min_detection_confidence=0.6
-                                            ) as face_detection:
-            results = face_detection.process(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+    # # test if new and old make a face
+    # def is_face(self,image):
+    #     # For static images:
+    #     # I think this list is not used
+    #     IMAGE_FILES = []
+    #     with mp_face_detection.FaceDetection(model_selection=1, 
+    #                                         min_detection_confidence=0.6
+    #                                         ) as face_detection:
+    #         results = face_detection.process(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
 
-            # Draw face detections of each face.
-            if not results.detections:
-                is_face = False
-            else:
-                is_face = True
-            return is_face
+    #         # Draw face detections of each face.
+    #         if not results.detections:
+    #             is_face = False
+    #         else:
+    #             is_face = True
+    #         return is_face
 
 
 
     # test if new and old make a face, calls is_face
-    def test_pair(self,last_file, new_file):
+    def test_pair(self, last_file, new_file):
         try:
             img = new_file
             height, width, layers = img.shape
             size = (width, height)
             print('loaded img 1')
-            
-            # I think this should be "last_file"
+
             last_img = last_file
             last_height, last_width, last_layers = last_img.shape
             last_size = (last_width, last_height)
             print('loaded img 2')
-            
-            # test to see if this is actually an face, to get rid of blank ones/bad ones
-            # I don't know if this is necessary..... should watch this. 
+
+            # Check if dimensions match
+            if size != last_size:
+                print('Image dimensions do not match. Skipping blending.')
+                return False
+
+            # code for face detection and blending
             if self.is_face(img):
                 print('new file is face')
-                # blend this image with the last image
                 blend = cv2.addWeighted(img, 0.5, last_img, 0.5, 0.0)
+                foopath = os.path.join("/Users/michaelmandiberg/Documents/projects-active/facemap_production/blends", "foobar_"+str(random.random())+".jpg")
+                cv2.imwrite(foopath, blend)
                 print('blended faces')
                 blended_face = self.is_face(blend)
-                print('blended is_face ',blended_face)
-                # if blended image has a detectable face, return True
+                print('blended is_face', blended_face)
                 if blended_face:
-    #                     img_array.append(img)
                     print('is a face! adding it')
                     return True
                 else:
                     print('skipping this one')
                     return False
-                # for the first one, just add the image
-                # this may need to be refactored in case the first one is bad?
-    #             else:
-    #                 print('this is maybe the first round?')
-    #                 img_array.append(img)
             else:
-                print('new_file is not face: ',new_file)
+                print('new_file is not a face:', new_file)
                 return False
 
-    #         i+=1
-
-        except:
-            print('failed:',new_file)
+        except Exception as e:
+            print('failed:', new_file)
+            print('Error:', str(e))
             return False
-
 
 
     def write_video(self, ROOT, img_array, segment, size):
@@ -413,6 +400,7 @@ class SortPose:
             counter = 1
             last_image = None
             is_face = None
+            first_run = True
             # print(df_sorted)
             # out = cv2.VideoWriter(os.path.join(ROOT,videofile), cv2.VideoWriter_fourcc(*'mp4v'), FRAMERATE, size)
             for index, row in df_sorted.iterrows():
@@ -448,14 +436,15 @@ class SortPose:
                     except:
                         print("couldn't test last_image")
                     try:
-                        if last_image:
+                        if not first_run:
                             print("testing is_face")
                             is_face = self.test_pair(last_image, cropped_image)
                         else:
                             print("first round, skipping the pair test")
                     except:
                         print("last_image try failed")
-                    if is_face or last_image is None:
+                    if is_face or first_run:
+                        first_run = False
                         cv2.imwrite(outpath, cropped_image)
                         last_image = cropped_image
                         print("saved: ",outpath)
