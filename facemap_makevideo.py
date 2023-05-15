@@ -194,6 +194,7 @@ def test_pair(last_file, new_file):
         size = (width, height)
         print('loaded img 1')
         
+        # I think this should be "last_file"
         last_img = cv2.imread(new_file)
         last_height, last_width, last_layers = last_img.shape
         last_size = (last_width, last_height)

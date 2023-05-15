@@ -316,6 +316,73 @@ class SortPose:
         size = (img.shape[0], img.shape[1])
         return img, size
 
+    # test if new and old make a face
+    def is_face(self,image):
+        # For static images:
+        # I think this list is not used
+        IMAGE_FILES = []
+        with mp_face_detection.FaceDetection(model_selection=1, 
+                                            min_detection_confidence=0.6
+                                            ) as face_detection:
+            results = face_detection.process(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+
+            # Draw face detections of each face.
+            if not results.detections:
+                is_face = False
+            else:
+                is_face = True
+            return is_face
+
+
+
+    # test if new and old make a face, calls is_face
+    def test_pair(self,last_file, new_file):
+        try:
+            img = new_file
+            height, width, layers = img.shape
+            size = (width, height)
+            print('loaded img 1')
+            
+            # I think this should be "last_file"
+            last_img = last_file
+            last_height, last_width, last_layers = last_img.shape
+            last_size = (last_width, last_height)
+            print('loaded img 2')
+            
+            # test to see if this is actually an face, to get rid of blank ones/bad ones
+            # I don't know if this is necessary..... should watch this. 
+            if self.is_face(img):
+                print('new file is face')
+                # blend this image with the last image
+                blend = cv2.addWeighted(img, 0.5, last_img, 0.5, 0.0)
+                print('blended faces')
+                blended_face = self.is_face(blend)
+                print('blended is_face ',blended_face)
+                # if blended image has a detectable face, return True
+                if blended_face:
+    #                     img_array.append(img)
+                    print('is a face! adding it')
+                    return True
+                else:
+                    print('skipping this one')
+                    return False
+                # for the first one, just add the image
+                # this may need to be refactored in case the first one is bad?
+    #             else:
+    #                 print('this is maybe the first round?')
+    #                 img_array.append(img)
+            else:
+                print('new_file is not face: ',new_file)
+                return False
+
+    #         i+=1
+
+        except:
+            print('failed:',new_file)
+            return False
+
+
+
     def write_video(self, ROOT, img_array, segment, size):
         videofile = f"facevid_crop{str(self.MINCROP)}_X{str(self.XLOW)}toX{str(self.XHIGH)}_Y{str(self.YLOW)}toY{str(self.YHIGH)}_Z{str(self.ZLOW)}toZ{str(self.ZHIGH)}_maxResize{str(self.MAXRESIZE)}_ct{str(len(segment))}_rate{(str(self.FRAMERATE))}.mp4"
         size = self.get_cv2size(ROOT, img_array[0])
@@ -344,6 +411,8 @@ class SortPose:
         try:
             # couldn't I use i here? 
             counter = 1
+            last_image = None
+            is_face = None
             # print(df_sorted)
             # out = cv2.VideoWriter(os.path.join(ROOT,videofile), cv2.VideoWriter_fourcc(*'mp4v'), FRAMERATE, size)
             for index, row in df_sorted.iterrows():
@@ -374,8 +443,24 @@ class SortPose:
                 if cropped_image is not None:
                     print(cropped_image.shape)
                     print("have a cropped image trying to save")
-                    cv2.imwrite(outpath, cropped_image)
-                    print("saved: ",outpath)
+                    try:
+                        print(type(last_image))
+                    except:
+                        print("couldn't test last_image")
+                    try:
+                        if last_image:
+                            print("testing is_face")
+                            is_face = self.test_pair(last_image, cropped_image)
+                        else:
+                            print("first round, skipping the pair test")
+                    except:
+                        print("last_image try failed")
+                    if is_face or last_image is None:
+                        cv2.imwrite(outpath, cropped_image)
+                        last_image = cropped_image
+                        print("saved: ",outpath)
+                    else: 
+                        print("pair do not make a face, skipping")
                 else:
                     print("no image here, trying next")
                 # print(outpath)
