@@ -33,12 +33,13 @@ CYCLECOUNT = 2
 # ROOT="/Users/michaelmandiberg/Documents/projects-active/facemap_production/"
 MAPDATA_FILE = "allmaps_62607.csv"
 
-SELECT = "i.image_id, i.site_name_id, i.contentUrl, i.imagename, e.face_x, e.face_y, e.face_z, e.mouth_gap, e.face_landmarks, e.bbox, e.face_encodings"
+SELECT = "DISTINCT(i.image_id), i.site_name_id, i.contentUrl, i.imagename, e.face_x, e.face_y, e.face_z, e.mouth_gap, e.face_landmarks, e.bbox, e.face_encodings"
 # SELECT = "DISTINCT(i.image_id), i.gender_id, author, caption, contentUrl, description, imagename"
 FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings e ON i.image_id = e.image_id "
-WHERE = "e.bbox IS NOT NULL AND i.site_name_id = 5 AND e.mouth_gap < 3"
+WHERE = "e.is_face IS TRUE AND e.bbox IS NOT NULL AND i.site_name_id = 5 AND e.mouth_gap > 1"
+# WHERE = "e.is_face IS TRUE AND e.bbox IS NOT NULL AND i.site_name_id = 5 AND k.keyword_text LIKE 'smil%'"
 # WHERE = "e.image_id IS NULL "
-LIMIT = 250000
+LIMIT = 10000
 
 
 motion = {

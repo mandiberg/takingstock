@@ -34,7 +34,7 @@ _|_|  _|\__, |\___|____/\__| \___|____/  \_/
 ######## Michael's Credentials ########
 db = {
     "host":"localhost",
-    "name":"stock1",            
+    "name":"123test",            
     "user":"root",
     "pass":"Fg!27Ejc!Mvr!GT"
 }
@@ -44,12 +44,12 @@ NUMBER_OF_PROCESSES = 8
 #######################################
 
 
-CSV_IN_PATH = "/Users/michaelmandiberg/Downloads/Pexels_v2/output.csv"
-KEYWORD_PATH = "/Users/michaelmandiberg/Downloads/Pexels_v2/Keywords_202304300930.csv"
-CSV_NOKEYS_PATH = "/Users/michaelmandiberg/Downloads/Pexels_v2/CSV_NOKEYS.csv"
-CSV_IMAGEKEYS_PATH = "/Users/michaelmandiberg/Downloads/Pexels_v2/CSV_IMAGEKEYS.csv"
-NEWIMAGES_FOLDER_NAME = 'images_pexels'
-CSV_COUNTOUT_PATH = "countout.csv"
+CSV_IN_PATH = "/Volumes/Test36/CSVs_to_ingest/123rfCSVs/123rf.10000.csv"
+KEYWORD_PATH = "/Volumes/Test36/CSVs_to_ingest/123rfCSVs/Keywords_202305150950.csv"
+CSV_NOKEYS_PATH = "/Volumes/Test36/CSVs_to_ingest/123rfCSVs/CSV_NOKEYS.csv"
+CSV_IMAGEKEYS_PATH = "/Volumes/Test36/CSVs_to_ingest/123rfCSVs/CSV_IMAGEKEYS.csv"
+# NEWIMAGES_FOLDER_NAME = 'images_pexels'
+CSV_COUNTOUT_PATH = "/Volumes/Test36/CSVs_to_ingest/123rfCSVs/countout.csv"
 
 # key2key = {"person":"people", "kid":"child","affection":"Affectionate", "baby":"Baby - Human Age", "beautiful":"Beautiful People", "pretty":"Beautiful People", "blur":"Blurred Motion", "casual":"Casual Clothing", "children":"Child", "kids":"Child", "couple":"Couple - Relationship", "adorable":"Cute", "room":"Domestic Room", "focus":"Focus - Concept", "happy":"Happiness", "at home":"Home Interior", "home":"Home Interior", "face":"Human Face", "hands":"Human Hand", "landscape":"Landscape - Scenery", "outfit":"Landscape - Scenery", "leisure":"Leisure Activity", "love":"Love - Emotion", "guy":"Men", "motherhood":"Mother", "parenthood":"Parent", "positive":"Positive Emotion", "recreation":"Recreational Pursuit", "little":"Small", "studio shoot":"Studio Shot", "together":"Togetherness", "vertical shot":"Vertical", "lady":"women", "young":"Young Adult"}
 
@@ -63,6 +63,7 @@ loc_dict = {"Canada":1989}
 age_dict = {
     "baby":1,
     "infant":2,
+    "infants":2,
     "child":3,
     "teen":4,
     "teenager":4,
@@ -113,6 +114,7 @@ imagesethnicity_table = Table('ImagesEthnicity', metadata,
 )
 
 PEXELS_HEADERS = ["id", "title", "keywords", "country", "number_of_people", "orientation", "age","gender", "ethnicity", "mood", "image_url", "image_filename"]
+ONETWOTHREE_HEADERS = ["id","title","keywords","orientation","age","word","exclude","people","ethnicity","image_url","image_filename"]
 KEYWORD_HEADERS = ["keyword_id","keyword_number","keyword_text","keytype","weight","parent_keyword_id","parent_keyword_text"]
 IMG_KEYWORD_HEADERS = ["site_image_id","keyword_text"]
 header_list = PEXELS_HEADERS
@@ -157,15 +159,17 @@ def make_key_dict(keys):
     return keys_dict
 
 
-def unlock_key(site_id,key):
+def unlock_key(site_id,key, this_dict):
     key_no = 0
     try:
-        key_no = keys_dict[key]
+        # print("trying basic keys_dict")
+        key_no = this_dict[key]
+        # print(key_no)
         return(key_no)
     except:
         try:
             key = key2key[key]
-            key_no = keys_dict[key]
+            key_no = this_dict[key]
             return(key_no)
         except:
             # try:
@@ -178,14 +182,14 @@ def unlock_key(site_id,key):
             # print("inflected are: ", plur_key, sing_key, gerund_key)
             if plur_key and key != plur_key:
                 try:
-                    key_no = keys_dict[plur_key[0]]
+                    key_no = this_dict[plur_key[0]]
                     # key = plur_key
                     # print(key_no)
                 except:
                     pass# print(key)
             elif sing_key and key != sing_key:
                 try:
-                    key_no = keys_dict[sing_key[0]]
+                    key_no = this_dict[sing_key[0]]
                     # key = plur_key
                     # print(key_no)
                 except:
@@ -194,9 +198,9 @@ def unlock_key(site_id,key):
             
             if gerund_key and key != gerund_key:
                 try:
-                    key_no = keys_dict[gerund_key[0]]
+                    key_no = this_dict[gerund_key[0]]
                     # key = plur_key
-                    # print(key_no)
+                    # print("gotta key_no, " ,key_no)
                 except:
                     pass
                     # print(key)
@@ -302,14 +306,39 @@ def get_location(df, ind, keys_list):
 
     return(location)
 
+def description_to_keys(df, ind, site_id, this_dict="keys_dict"):
+    if this_dict=="keys_dict":
+        this_dict = keys_dict
+    elif this_dict=="gender_dict":
+        this_dict = gender_dict
+    elif this_dict=="age_dict":
+        this_dict = age_dict
+    # skipping eth_dict out of an abundance of caution:
+    # white and black in description are not consistently ethnicity descriptors
 
-def get_gender_age(df, ind, keys_list):
+    # print("description_to_keys")    
+    key_nos_list =[]
+    description = df['title'][ind]
+    # print(description)
+    key_no = None
+    desc_keys = description.split(" ")
+    # print("desc_keys ",desc_keys)
+    for key in desc_keys:
+        if not pd.isnull(key):
+            key_no = unlock_key(site_id,key,this_dict)
+            # print(key_no)
+            if key_no:
+                key_nos_list.append(key_no)
+    return key_nos_list
+
+
+def get_gender_age(df, ind, keys_list, site_id):
     global gender_dict
     gender = None
     age= None
-    if df['gender'][ind] is not None:
+    if 'gender' in df.columns and df['gender'][ind] is not None:
         key = df['gender'][ind]
-    elif df['age'][ind] is not None:
+    elif 'age' in df.columns and df['age'][ind] is not None:
         key = df['age'][ind]
     description = df['title'][ind]
     if not pd.isnull(key):
@@ -331,7 +360,7 @@ def get_gender_age(df, ind, keys_list):
             # gender_dict={"men":1, "none":2, "oldmen":3, "oldwomen":4, "nonbinary":5, "other":6, "trans":7, "women":8, "youngmen":9, "youngwomen":10}
         except:
             try:
-                age = age_dict[key]
+                age = age_dict[key.lower()]
             except:
                 print('NEW KEY, NOT AN AGE OR GENDER -------------------------> ', key)
     # else:
@@ -360,6 +389,8 @@ def get_gender_age(df, ind, keys_list):
             except:
                 pass
                 # print('no age found: ', description)
+
+
 
     # print("gender, age: ")
     # print(gender)
@@ -402,12 +433,15 @@ def generate_local_unhashed_image_filepath(image_name):
 
 
 def structure_row_pexels(df, ind, keys_list): 
-
-    gender_key, age_key = get_gender_age(df, ind, keys_list)
-    location_no = get_location(df, ind, keys_list)
+    site_id = 5
+    gender_key, age_key = get_gender_age(df, ind, keys_list, site_id)
+    if 'country' in df.columns:
+        location_no = get_location(df, ind, keys_list)
+    else:
+        location_no = None
     image_row = {
         "site_image_id": df.loc[ind,'id'],
-        "site_name_id": 5,
+        "site_name_id": site_id,
         "description": df['title'][ind],
         "location_id": location_no,
         # "": df['number_of_people'][ind] # should always be one. If not one, toss it? 
@@ -422,14 +456,18 @@ def structure_row_pexels(df, ind, keys_list):
     return(nan2none(image_row))
 
 def structure_row_123(df, ind, keys_list): 
+    site_id = 8
 
-    gender_key, age_key = get_gender_age(df, ind, keys_list)
-    location_no = get_location(df, ind, keys_list)
+    gender_key, age_key = get_gender_age(df, ind, keys_list, site_id)
+    # if 'country' in df.columns:
+    #     location_no = get_location(df, ind, keys_list)
+    # else:
+    #     location_no = None
     image_row = {
         "site_image_id": df.loc[ind,'id'],
-        "site_name_id": 8,
+        "site_name_id": site_id,
         "description": df['title'][ind],
-        "location_id": location_no,
+        # "location_id": location_no,
         # "": df['number_of_people'][ind] # should always be one. If not one, toss it? 
         # "": df['orientation'][ind]
         "age_id": age_key,
@@ -477,19 +515,25 @@ def ingest_it():
         try:
             keys_list = df['keywords'][ind].lower().split("|")
         except:
-            print("no keys")
+            # print("no keys, tryin 123 word")
             keys_list = df['word'][ind].lower().split(" ")
 
         # PEXELS_HEADERS = ["id", "title", "keywords", "country", "number_of_people", "orientation", "age","gender", "ethnicity", "mood", "image_url", "image_filename"]
-        image_row = structure_row_pexels(df, ind, keys_list)
-        # print(image_row)
+        image_row = structure_row_123(df, ind, keys_list)
+        # print("image_row ",image_row)
 
         # turn keywords into keyword_id
+        # print(keys_list)
         key_nos_list =[]
         for key in keys_list:
-            key_no = unlock_key(image_row['site_image_id'],key)
+            # print(key)
+            key_no = unlock_key(image_row['site_image_id'],key, keys_list)
             if key_no:
                 key_nos_list.append(key_no)
+        if image_row['site_name_id'] == 8:
+            desc_key_nos_list = description_to_keys(df, ind, image_row['site_image_id'])
+            # print(desc_key_nos_list)
+            key_nos_list = set(key_nos_list + desc_key_nos_list)
         # print(key_nos_list)
 
         # ethnicity
@@ -522,10 +566,10 @@ def ingest_it():
                         imageskeywords_insert_stmt = imageskeywords_insert_stmt.on_duplicate_key_update(keyword_id=imageskeywords_insert_stmt.inserted.keyword_id)
                         conn.execute(imageskeywords_insert_stmt)
 
-                print(last_inserted_id)
-                print("eth_no_list ",eth_no_list)
+                # print(last_inserted_id)
+                # print("eth_no_list ",eth_no_list)
                 if eth_no_list and last_inserted_id:
-                    print("trying to insert eth")
+                    # print("trying to insert eth")
                     ethrows = []
                     for ethnicity_id in eth_no_list:
                         if ethnicity_id is not None:

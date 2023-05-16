@@ -84,8 +84,8 @@ FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords
 # WHERE = "e.is_body IS TRUE AND e.bbox IS NULL AND e.face_x IS NOT NULL"
 # WHERE = "e.image_id IS NULL AND i.site_name_id = 5 AND k.keyword_text LIKE 'Women%'"
 # WHERE = "(e.image_id IS NULL AND k.keyword_text LIKE 'smil%')OR (e.image_id IS NULL AND k.keyword_text LIKE 'happ%')OR (e.image_id IS NULL AND k.keyword_text LIKE 'laugh%')"
-WHERE = "e.image_id IS NULL AND i.site_name_id = 5"
-LIMIT = 1000
+WHERE = "e.image_id IS NULL AND i.site_name_id = 1"
+LIMIT = 5000
 
 #creating my objects
 mp_face_mesh = mp.solutions.face_mesh

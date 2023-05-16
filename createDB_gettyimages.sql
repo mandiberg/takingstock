@@ -1,4 +1,4 @@
-USE gettytest3;
+USE 123test;
 
 -- These remove repeated values and reduce repetition
 
