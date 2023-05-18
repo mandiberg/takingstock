@@ -36,7 +36,7 @@ db = {
     "host":"localhost",
     "name":"123test",            
     "user":"root",
-    "pass":"Fg!27Ejc!Mvr!GT"
+    "pass":"XFZ5dPJq2"
 }
 
 ROOT= os.path.join(os.environ['HOME'], "Documents/projects-active/facemap_production") ## only on Mac
@@ -118,9 +118,6 @@ ONETWOTHREE_HEADERS = ["id","title","keywords","orientation","age","word","exclu
 KEYWORD_HEADERS = ["keyword_id","keyword_number","keyword_text","keytype","weight","parent_keyword_id","parent_keyword_text"]
 IMG_KEYWORD_HEADERS = ["site_image_id","keyword_text"]
 header_list = PEXELS_HEADERS
-
-
-
 
 def read_csv(csv_file):
     with open(csv_file, encoding="utf-8", newline="") as in_file:
@@ -418,7 +415,7 @@ def get_hash_folders(filename):
     d = m.hexdigest()
     # print(d)
     # csvWriter1.writerow(["https://upload.wikimedia.org/wikipedia/commons/"+d[0]+'/'+d[0:2]+'/'+filename])
-    return d[0], d[0:2]
+    return d[0].upper(), d[0:2].upper()
 
 def generate_local_unhashed_image_filepath(image_name):
     file_name_path = image_name.split('?')[0]
@@ -485,6 +482,8 @@ def ingest_it():
 
     df = pd.read_csv(CSV_IN_PATH)
     df = df.drop_duplicates()
+    df['title'] = df['title'].apply(lambda x: x[:140])
+
     # print(df)
 
     # read last completed file
@@ -507,7 +506,7 @@ def ingest_it():
     # while (ind < len(df.index)):
     for ind in df.index:
         # make keywords list 
-        # print(type(counter))
+        print(df['title'][ind])
         # print(type(start_counter))
         if counter < start_counter:
             counter += 1
@@ -541,6 +540,8 @@ def ingest_it():
 
         # reparse the filename. should be able to bring over this code from the scraper_download.py
 
+
+
         with engine.connect() as conn:
             # Check if a row with the same data already exists
             select_stmt = select([images_table]).where(
@@ -552,7 +553,11 @@ def ingest_it():
 
             if row is None:
                 # Row does not exist, insert it
-                insert_stmt = insert(images_table).values(image_row).prefix_with('IGNORE')
+                # insert_stmt = insert(images_table).values(image_row).prefix_with('IGNORE')
+                insert_stmt = insert(images_table).values(image_row)
+
+                print(insert_stmt)
+                print(image_row)
                 result = conn.execute(insert_stmt)
                 last_inserted_id = result.lastrowid
 
@@ -563,7 +568,9 @@ def ingest_it():
 
                     with engine.connect() as conn:
                         imageskeywords_insert_stmt = insert(imageskeywords_table).values(keyrows)
-                        imageskeywords_insert_stmt = imageskeywords_insert_stmt.on_duplicate_key_update(keyword_id=imageskeywords_insert_stmt.inserted.keyword_id)
+                        imageskeywords_insert_stmt = imageskeywords_insert_stmt.on_duplicate_key_update(
+                            keyword_id=imageskeywords_insert_stmt.inserted.keyword_id
+                        )
                         conn.execute(imageskeywords_insert_stmt)
 
                 # print(last_inserted_id)

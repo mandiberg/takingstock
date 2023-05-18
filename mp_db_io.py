@@ -6,6 +6,8 @@ class DataIO:
     """Store key database and file IO info for use across codebase"""
 
     def __init__(self):
+        self.max_retries = 3
+        self.retry_delay = 0.3
 
         # platform specific file folder (mac for michael, win for satyam)
         if platform == "darwin":
@@ -14,7 +16,7 @@ class DataIO:
                 "host":"localhost",
                 "name":"stock1",            
                 "user":"root",
-                "pass":"Fg!27Ejc!Mvr!GT"
+                "pass":"XFZ5dPJq2"
             }
             self.ROOT= os.path.join(os.environ['HOME'], "Documents/projects-active/facemap_production") ## only on Mac
             self.ROOT36= "/Volumes/Test36" ## only on Mac

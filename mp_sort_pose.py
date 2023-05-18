@@ -349,9 +349,9 @@ class SortPose:
             if self.is_face(img):
                 print('new file is face')
                 blend = cv2.addWeighted(img, 0.5, last_img, 0.5, 0.0)
-                foopath = os.path.join("/Users/michaelmandiberg/Documents/projects-active/facemap_production/blends", "foobar_"+str(random.random())+".jpg")
-                cv2.imwrite(foopath, blend)
-                print('blended faces')
+                # foopath = os.path.join("/Users/michaelmandiberg/Documents/projects-active/facemap_production/blends", "foobar_"+str(random.random())+".jpg")
+                # cv2.imwrite(foopath, blend)
+                # print('blended faces')
                 blended_face = self.is_face(blend)
                 print('blended is_face', blended_face)
                 if blended_face:

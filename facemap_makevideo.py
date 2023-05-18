@@ -35,11 +35,11 @@ MAPDATA_FILE = "allmaps_62607.csv"
 
 SELECT = "DISTINCT(i.image_id), i.site_name_id, i.contentUrl, i.imagename, e.face_x, e.face_y, e.face_z, e.mouth_gap, e.face_landmarks, e.bbox, e.face_encodings"
 # SELECT = "DISTINCT(i.image_id), i.gender_id, author, caption, contentUrl, description, imagename"
-FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings e ON i.image_id = e.image_id "
-WHERE = "e.is_face IS TRUE AND e.bbox IS NOT NULL AND i.site_name_id = 5 AND e.mouth_gap > 1"
+FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings e ON i.image_id = e.image_id INNER JOIN Allmaps am ON i.site_image_id = am.site_image_id"
+WHERE = "e.is_face IS TRUE AND e.bbox IS NOT NULL AND i.site_name_id = 1"
 # WHERE = "e.is_face IS TRUE AND e.bbox IS NOT NULL AND i.site_name_id = 5 AND k.keyword_text LIKE 'smil%'"
 # WHERE = "e.image_id IS NULL "
-LIMIT = 10000
+LIMIT = 100000
 
 
 motion = {
@@ -50,6 +50,11 @@ motion = {
     "simple": False,
 }
 
+start_img = "median"
+start_img = "start_site_image_id"
+start_site_image_id = "e/ea/portrait-of-funny-afro-guy-picture-id1402424532.jpg"
+# 274243    Portrait of funny afro guy  76865   {"top": 380, "left": 749, "right": 1204, "bottom": 835}
+# faceimg_crop1_X-15toX5_Y-4toY4_Z-3toZ3_maxResize0.3_ct2412_76_1402424532.jpg
 
 # construct my own objects
 sort = SortPose(motion)
@@ -134,6 +139,7 @@ def get_d(enc1, enc2):
     return d
 
 def get_closest_df(start_img, df_enc):
+    print(df_enc)
     if start_img == "median":
         # print("df_enc: ", df_enc)
         encodings_array = np.array(df_enc['encoding'].tolist())
@@ -144,8 +150,24 @@ def get_closest_df(start_img, df_enc):
 
         # enc1 = df_enc.median()
         # print("in median: ", enc1)
+    elif start_img == "start_site_image_id":
+        print("start_site_image_id")
+        print(start_site_image_id)
+        enc1 = df_enc.loc[start_site_image_id]['encoding'].tolist()
+        # print(df_enc)
+        # enc1 = df_enc.index[df_enc['file_name']==start_site_image_id].tolist()[0]
+        print(enc1)
+        # start_site_image_id
+        # enc1 = df_enc.loc[start_img]['encoding'].tolist()
+
     else:
 #         enc1 = get 2-129 from df via stimg key
+        print("start_img")
+        print(start_img)
+
+        # start_img
+        # 2/2c/beautiful-taiwanese-woman-on-the-street-of-taipei-picture-id1152386040.jpg
+
         enc1 = df_enc.loc[start_img]['encoding'].tolist()
         print("in else")
         print(enc1)
@@ -496,7 +518,6 @@ def main():
         # save_sorted(i, folder, start_img, dist)
 
         # # get dataframe sorted by distance
-        start_img = "median"
         df_sorted = sort_by_face_dist(start_img,df_enc)
         print("df_sorted")
         print(df_sorted)

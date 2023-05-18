@@ -64,11 +64,11 @@ class SelectPose:
             for id,lm in enumerate(faceLms.landmark):                           # loop over all land marks of one face
                 # ih, iw, _ = self.image.shape
                 # gone direct to obj dimensions
-                x,y = int(lm.x*self.w), int(lm.y*self.h)
-                # x,y=int(lm.x * (bbox["right"]-bbox["left"])+bbox["left"]),int(lm.y * (bbox["bottom"]-bbox["top"])+bbox["top"]) 
+                # x,y = int(lm.x*self.w), int(lm.y*self.h)
+                x,y=int(lm.x * (bbox["right"]-bbox["left"])+bbox["left"]),int(lm.y * (bbox["bottom"]-bbox["top"])+bbox["top"]) 
                 # print(lm)
                 faceXY.append((x, y)) # put all xy points in neat array
-                
+
             image_points = np.array([
                 faceXY[1],      # "nose"
                 faceXY[152],    # "chin"

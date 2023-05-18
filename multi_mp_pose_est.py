@@ -33,43 +33,6 @@ db = io.db
 ROOT = io.ROOT 
 NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 
-
-# if platform == "darwin":
-#     ####### Michael's OS X Credentials ########
-#     db = {
-#         "host":"localhost",
-#         "name":"gettytest3",            
-#         "user":"root",
-#         "pass":"Fg!27Ejc!Mvr!GT"
-#     }
-#     ROOT= os.path.join(os.environ['HOME'], "Documents/projects-active/facemap_production") ## only on Mac
-#     ROOT36= "/Volumes/Test36" ## only on Mac
-#     NUMBER_OF_PROCESSES = 8
-# elif platform == "win32":
-#     ######## Satyam's WIN Credentials #########
-#     db = {
-#         "host":"localhost",
-#         "name":"gettytest3",                 
-#         "user":"root",
-#         "pass":"SSJ2_mysql"
-#     }
-#     ROOT= os.path.join("D:/"+"Documents/projects-active/facemap_production") ## SD CARD
-#     NUMBER_OF_PROCESSES = 4
-
-
-# io.folder_list = [
-#     "", #0, Empty, there is no site #0 -- starts count at 1
-#     os.path.join(ROOT,"localhost"), #1, Getty
-#     os.path.join(ROOT36,""),
-#     os.path.join(ROOT36,""),
-#     os.path.join(ROOT36,""),
-#     os.path.join(ROOT36,"images_pexels"), #5, Pexels
-#     os.path.join(ROOT36,""),
-#     os.path.join(ROOT36,""),
-#     os.path.join(ROOT36,""),
-#     os.path.join(ROOT36,""),
-# ]
-
 sortfolder ="getty_test"
 http="https://media.gettyimages.com/photos/"
 # outputfolder = os.path.join(ROOT,folder+"_output_febmulti")
@@ -80,12 +43,12 @@ SLEEP_TIME=0
 
 SELECT = "DISTINCT(i.image_id), i.site_name_id, i.contentUrl, i.imagename, e.encoding_id"
 # SELECT = "DISTINCT(i.image_id), i.gender_id, author, caption, contentUrl, description, imagename"
-FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings e ON i.image_id = e.image_id "
+FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings e ON i.image_id = e.image_id"
 # WHERE = "e.is_body IS TRUE AND e.bbox IS NULL AND e.face_x IS NOT NULL"
-# WHERE = "e.image_id IS NULL AND i.site_name_id = 5 AND k.keyword_text LIKE 'Women%'"
+WHERE = "e.image_id IS NULL AND i.site_name_id = 5 AND k.keyword_text LIKE 'work%'"
 # WHERE = "(e.image_id IS NULL AND k.keyword_text LIKE 'smil%')OR (e.image_id IS NULL AND k.keyword_text LIKE 'happ%')OR (e.image_id IS NULL AND k.keyword_text LIKE 'laugh%')"
-WHERE = "e.image_id IS NULL AND i.site_name_id = 1"
-LIMIT = 5000
+# WHERE = "e.face_landmarks IS NOT NULL AND e.bbox IS NULL AND i.site_name_id = 1"
+LIMIT = 10000
 
 #creating my objects
 mp_face_mesh = mp.solutions.face_mesh
@@ -407,16 +370,25 @@ def find_body(image,df):
             print(f"[find_body]this item failed: {image}")
         return df
 
+def capitalize_directory(path):
+    dirname, filename = os.path.split(path)
+    parts = dirname.split('/')
+    capitalized_parts = [part if i < len(parts) - 2 else part.upper() for i, part in enumerate(parts)]
+    capitalized_dirname = '/'.join(capitalized_parts)
+    return os.path.join(capitalized_dirname, filename)
+
 # this was for reprocessing the missing bbox
 def process_image_bbox(task):
     # df = pd.DataFrame(columns=['image_id','bbox'])
+    print("task is: ",task)
     encoding_id = task[0]
+    cap_path = capitalize_directory(task[1])
     try:
-        image = cv2.imread(task[1])        
+        image = cv2.imread(cap_path)        
         # this is for when you need to move images into a testing folder structure
         # save_image_elsewhere(image, task)
     except:
-        print(f"[process_image]this item failed: {task}")
+        print(f"[process_image]this item failed, even after uppercasing: {task}")
     print("processing: ")
     print(encoding_id)
     if image is not None and image.shape[0]>MINSIZE and image.shape[1]>MINSIZE:
@@ -424,42 +396,18 @@ def process_image_bbox(task):
         bbox_json = retro_bbox(image)
         print(bbox_json)
         if bbox_json: 
-            try:
-                # bbox = retro_bbox(image)
-                
-                # Update the bbox value in the row
-                # encoding_id = row['encoding_id']
-                update_sql = f"UPDATE Encodings SET bbox = '{bbox_json}' WHERE encoding_id = {encoding_id};"
-                engine.connect().execute(text(update_sql))
-                print("bboxxin: ")
-                print(encoding_id)
-
-                # def selectSQL():
-                #     selectsql = f"SELECT {SELECT} FROM {FROM} WHERE {WHERE} LIMIT {str(LIMIT)};"
-                #     result = engine.connect().execute(text(selectsql))
-                #     resultsjson = ([dict(row) for row in result.mappings()])
-
-                #     for row in resultsjson:
-                #         # Get the bbox value using your get_bboxget_bbox function
-                #         bbox = get_bboxget_bbox(row['contentUrl'])
-                        
-                #         # Update the bbox value in the row
-                #         encoding_id = row['encoding_id']
-                #         update_sql = f"UPDATE Encodings SET bbox = '{bbox}' WHERE encoding_id = {encoding_id};"
-                #         engine.connect().execute(text(update_sql))
-                    
-                #     return resultsjson
-
-                # insertignore_df(df,"encodings", engine)  ### made it all lower case to avoid discrepancy
-            except OperationalError as e:
-                print(e)
+            for _ in range(io.max_retries):
+                try:
+                    update_sql = f"UPDATE Encodings SET bbox = '{bbox_json}' WHERE encoding_id = {encoding_id};"
+                    engine.connect().execute(text(update_sql))
+                    print("bboxxin:")
+                    print(encoding_id)
+                    break  # Transaction succeeded, exit the loop
+                except OperationalError as e:
+                    print(e)
+                    time.sleep(io.retry_delay)
         else:
             print("no bbox")
-            # nobbox = 1
-            # update_sql = f"UPDATE Encodings SET is_face_distant = '{nobbox}' WHERE encoding_id = {encoding_id};"
-            # engine.connect().execute(text(update_sql))
-            # save_image_by_path(image, "nobbox", str(encoding_id)+".jpg")
-
 
     else:
         print('toooooo smallllll')
@@ -483,8 +431,9 @@ def process_image(task):
 
     df = pd.DataFrame(columns=['image_id','is_face','is_body','is_face_distant','face_x','face_y','face_z','mouth_gap','face_landmarks','bbox','face_encodings','body_landmarks'])
     df.at['1', 'image_id'] = task[0]
+    cap_path = capitalize_directory(task[1])
     try:
-        image = cv2.imread(task[1])        
+        image = cv2.imread(cap_path)        
         # this is for when you need to move images into a testing folder structure
         # save_image_elsewhere(image, task)
     except:
