@@ -41,20 +41,20 @@ DRAW_BOX = False
 MINSIZE = 700
 SLEEP_TIME=0
 
-SELECT = "DISTINCT(i.image_id), i.site_name_id, i.contentUrl, i.imagename, e.encoding_id, i.site_image_id"
+SELECT = "DISTINCT(i.image_id), i.site_name_id, i.contentUrl, i.imagename, e.encoding_id, i.site_image_id, e.face_landmarks, e.bbox"
 # SELECT = "DISTINCT(i.image_id), i.gender_id, author, caption, contentUrl, description, imagename"
 
 
 # DEBUGGING --> need to change this back to "encodings"
-FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings2 e ON i.image_id = e.image_id INNER JOIN Allmaps am ON i.site_image_id = am.site_image_id"
+FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings e ON i.image_id = e.image_id INNER JOIN Allmaps am ON i.site_image_id = am.site_image_id"
 
 # WHERE = "e.is_body IS TRUE AND e.bbox IS NULL AND e.face_x IS NOT NULL"
-WHERE = "e.image_id IS NULL"
+# WHERE = "e.face_encodings IS NULL"
 # WHERE = "e.image_id IS NULL AND i.site_name_id = 5 AND k.keyword_text LIKE 'work%'"
 # WHERE = "(e.image_id IS NULL AND k.keyword_text LIKE 'smil%')OR (e.image_id IS NULL AND k.keyword_text LIKE 'happ%')OR (e.image_id IS NULL AND k.keyword_text LIKE 'laugh%')"
 # WHERE = "e.face_landmarks IS NOT NULL AND e.bbox IS NULL AND i.site_name_id = 1"
-# WHERE = "i.site_name_id = 1 AND i.site_image_id LIKE '1402424532'"
-LIMIT = 10
+WHERE = "i.site_name_id = 1 AND i.site_image_id LIKE '1402424532'"
+LIMIT = 100
 
 #creating my objects
 mp_face_mesh = mp.solutions.face_mesh
@@ -212,7 +212,7 @@ def get_bbox(faceDet, height, width):
 def retro_bbox(image):
     height, width, _ = image.shape
     with mp.solutions.face_detection.FaceDetection(model_selection=1, min_detection_confidence=0.7) as face_det: 
-        results_det=face_det.process(image[:,:,::-1])  ## [:,:,::-1] is the shortcut for converting BGR to RGB
+        results_det=face_det.process(image)  ## [:,:,::-1] is the shortcut for converting BGR to RGB
         
     # is_face = False
     bbox_json = None
@@ -225,10 +225,18 @@ def retro_bbox(image):
         print("no results???")
     return bbox_json
 
-def find_face(image, df):
+def find_face_wholeimage(image, df):
+    # window_name = 'image'
+    # cv2.imshow(window_name, image)
+    # cv2.waitKey(0)
+    # cv2.destroyAllWindows()
+
     height, width, _ = image.shape
     with mp.solutions.face_detection.FaceDetection(model_selection=1, min_detection_confidence=0.7) as face_det: 
-        results_det=face_det.process(image[:,:,::-1])  ## [:,:,::-1] is the shortcut for converting BGR to RGB
+        # image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        # results_det=face_det.process(image)  ## [:,:,::-1] is the shortcut for converting BGR to RGB
+       
+        results_det=face_det.process(image)  ## [:,:,::-1] is the shortcut for converting BGR to RGB
         
     '''
     0 type model: When we will select the 0 type model then our face detection model will be able to detect the 
@@ -259,7 +267,99 @@ def find_face(image, df):
                                              ) as face_mesh:
             # Convert the BGR image to RGB and cropping it around face boundary and process it with MediaPipe Face Mesh.
                                 # crop_img = img[y:y+h, x:x+w]
-                results = face_mesh.process(image[bbox["top"]:bbox["bottom"],bbox["left"]:bbox["right"],::-1])    
+                # old version, crop to bbox
+                # results = face_mesh.process(image[bbox["top"]:bbox["bottom"],bbox["left"]:bbox["right"]])    
+                # image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+
+                # results = face_mesh.process(image)    
+                results = face_mesh.process(image)    
+
+            #read any image containing a face
+            if results.multi_face_landmarks:
+                print("faceLmsfaceLmsfaceLmsfaceLmsfaceLmsfaceLms")
+                print(results.multi_face_landmarks)
+
+                # # debugging the flipped landmarks
+                # start_point = ((left, top))
+                # end_point = ((right, bottom))
+                # color = (255, 0, 0)
+                # thickness = 1
+                # image = cv2.rectangle(image, start_point, end_point, color, thickness)
+                # image = cv2.line(image, start_point, end_point, color, thickness)
+                # image = cv2.circle(image, start_point, 20, color, 1)
+
+                #construct pose object to solve pose
+                is_face = True
+                pose = SelectPose(image)
+
+                #get landmarks
+                faceLms = pose.get_face_landmarks_wholeimage(results, image,bbox)
+
+
+                #calculate base data from landmarks
+                pose.calc_face_data(faceLms)
+
+                # get angles, using r_vec property stored in class
+                # angles are meta. there are other meta --- size and resize or something.
+                angles = pose.rotationMatrixToEulerAnglesToDegrees()
+                mouth_gap = pose.get_mouth_data(faceLms)
+                             ##### calculated face detection results
+                if is_face:
+                    # Calculate Face Encodings if is_face = True
+                    # print("in encodings conditional")
+                    # turning off to debug
+                    encodings = calc_encodings(image, faceLms,bbox) ## changed parameters
+                    print(encodings)
+                    exit()
+                #df.at['1', 'is_face'] = is_face
+                #df.at['1', 'is_face_distant'] = is_face_distant
+                bbox_json = json.dumps(bbox, indent = 4) 
+
+                df.at['1', 'face_x'] = angles[0]
+                df.at['1', 'face_y'] = angles[1]
+                df.at['1', 'face_z'] = angles[2]
+                df.at['1', 'mouth_gap'] = mouth_gap
+                df.at['1', 'face_landmarks'] = pickle.dumps(faceLms)
+                df.at['1', 'bbox'] = bbox_json
+                df.at['1', 'face_encodings'] = pickle.dumps(encodings)
+    df.at['1', 'is_face'] = is_face
+    return df
+def find_face(image, df):
+
+    height, width, _ = image.shape
+    with mp.solutions.face_detection.FaceDetection(model_selection=1, min_detection_confidence=0.7) as face_det: 
+        results_det=face_det.process(image)  ## [:,:,::-1] is the shortcut for converting BGR to RGB
+        
+    '''
+    0 type model: When we will select the 0 type model then our face detection model will be able to detect the 
+    faces within the range of 2 meters from the camera.
+    1 type model: When we will select the 1 type model then our face detection model will be able to detect the 
+    faces within the range of 5 meters. Though the default value is 0.
+    '''
+    is_face = False
+
+    if results_det.detections:
+        faceDet=results_det.detections[0]
+        bbox = get_bbox(faceDet, height, width)
+        # bbox = faceDet.location_data.relative_bounding_box
+        # xy_min = _normalized_to_pixel_coordinates(bbox.xmin, bbox.ymin, width,height)
+        # xy_max = _normalized_to_pixel_coordinates(bbox.xmin + bbox.width, bbox.ymin + bbox.height,width,height)
+        # if xy_min and xy_max:
+        #     # TOP AND BOTTOM WERE FLIPPED 
+        #     # both in xy_min assign, and in face_mesh.process(image[np crop])
+        #     left,top =xy_min
+        #     right,bottom = xy_max
+        #     bbox={"left":left,"right":right,"top":top,"bottom":bottom
+        #     }
+        if bbox:
+            with mp.solutions.face_mesh.FaceMesh(static_image_mode=True,
+                                             refine_landmarks=False,
+                                             max_num_faces=1,
+                                             min_detection_confidence=0.5
+                                             ) as face_mesh:
+            # Convert the BGR image to RGB and cropping it around face boundary and process it with MediaPipe Face Mesh.
+                                # crop_img = img[y:y+h, x:x+w]
+                results = face_mesh.process(image[bbox["top"]:bbox["bottom"],bbox["left"]:bbox["right"]])    
             #read any image containing a face
             if results.multi_face_landmarks:
                 
@@ -293,8 +393,8 @@ def find_face(image, df):
                     # print("in encodings conditional")
                     # turning off to debug
                     encodings = calc_encodings(image, faceLms,bbox) ## changed parameters
-                    # print(encodings)
-                    # exit()
+                    print(encodings)
+                    exit()
                 #df.at['1', 'is_face'] = is_face
                 #df.at['1', 'is_face_distant'] = is_face_distant
                 bbox_json = json.dumps(bbox, indent = 4) 
@@ -310,10 +410,30 @@ def find_face(image, df):
     return df
 
 def calc_encodings(image, faceLms,bbox):## changed parameters and rebuilt
-    #print("calc_encodings")
+
+    # # original, treats uncropped image as .shape
     height, width, _ = image.shape
-    width = (bbox["right"]-bbox["left"])
-    height = (bbox["bottom"]-bbox["top"])
+
+    # second attempt, tries to project faceLms from bbox origin
+    # width = (bbox["right"]-bbox["left"])
+    # height = (bbox["bottom"]-bbox["top"])
+
+    # third attempt, crops image to bbox, and keeps faceLms relative to bbox 
+    # print("bbox:")
+    # print(bbox)
+    # print(bbox["top"])
+    # bbox = json.loads(bbox)
+    # print("bbox")
+    # print(bbox)
+    # top = int(bbox["top"])
+    # bottom = int(bbox["bottom"])
+    # left = int(bbox["left"])
+    # right = int(bbox["right"])
+    # image = image[top:bottom, left:right]
+
+    # # image = image[bbox["top"]:bbox["bottom"],bbox["left"]:bbox["right"]]
+    # height, width, _ = image.shape
+
 
     landmark_points_5 = [ 263, #left eye away from centre
                        362, #left eye towards centre
@@ -324,14 +444,21 @@ def calc_encodings(image, faceLms,bbox):## changed parameters and rebuilt
     raw_landmark_set = []
     for index in landmark_points_5:                       ######### CORRECTION: landmark_points_5_3 is the correct one for sure
         # print(faceLms.landmark[index].x)
-        x = int(faceLms.landmark[index].x * width + bbox["left"])
-        y = int(faceLms.landmark[index].y * height + bbox["top"])
+
+        # second attempt, tries to project faceLms from bbox origin
+        # x = int(faceLms.landmark[index].x * width + bbox["left"])
+        # y = int(faceLms.landmark[index].y * height + bbox["top"])
+
+        x = int(faceLms.landmark[index].x * width)
+        y = int(faceLms.landmark[index].y * height)
+
         # print(x)
         # print(y)
         landmark_point=dlib.point([x,y])
         raw_landmark_set.append(landmark_point)
     all_points=dlib.points(raw_landmark_set)
-    # print("all_points", all_points)
+    print("all_points", all_points)
+    print(bbox)
         
     # bbox = faceDet.location_data.relative_bounding_box
     # xy_min = _normalized_to_pixel_coordinates(bbox.xmin, bbox.ymin, height,width)
@@ -356,6 +483,12 @@ def calc_encodings(image, faceLms,bbox):## changed parameters and rebuilt
     if (all_points is None) or (bbox is None):return 
     
     raw_landmark_set=dlib.full_object_detection(bbox_rect,all_points)
+
+    # window_name = 'image'
+    # cv2.imshow(window_name, image)
+    # cv2.waitKey(0)
+    # cv2.destroyAllWindows()
+
     encodings=face_encoder.compute_face_descriptor(image, raw_landmark_set, num_jitters=1)
 
 
@@ -430,6 +563,61 @@ def process_image_bbox(task):
     # store data
 
 
+def process_image_enc_only(task):
+    #print("process_image")
+    def save_image_triage(image,df):
+        #saves a CV2 image elsewhere -- used in setting up test segment of images
+        if df.at['1', 'is_face']:
+            sort = "face"
+        elif df.at['1', 'is_body']:
+            sort = "body"
+        else:
+            sort = "none"
+        name = str(df.at['1', 'image_id'])+".jpg"
+        save_image_by_path(image, sort, name)
+
+    df = pd.DataFrame(columns=['image_id','is_face','is_body','is_face_distant','face_x','face_y','face_z','mouth_gap','face_landmarks','bbox','face_encodings','body_landmarks'])
+    # print(task)
+    # df.at['1', 'image_id'] = task[0]
+    encoding_id = task[0]
+    faceLms = task[2]
+    bbox = task[3]
+    cap_path = capitalize_directory(task[1])
+    try:
+        image = cv2.imread(cap_path)        
+        # this is for when you need to move images into a testing folder structure
+        # save_image_elsewhere(image, task)
+    except:
+        print(f"[process_image]this item failed: {task}")
+
+    if image is not None and image.shape[0]>MINSIZE and image.shape[1]>MINSIZE:
+        face_enc = calc_encodings(image, faceLms,bbox)
+        # Do FaceMesh
+        df = find_face(image, df)
+        # Do Body Pose
+        df = find_body(image, df)
+        # for testing: this will save images into folders for is_face, is_body, and none. 
+        # only save images that aren't too smallllll
+        # save_image_triage(image,df)
+    else:
+        print('toooooo smallllll')
+        # I should probably assign no_good here...?
+
+    # store data
+    # print(df)
+    try:
+        update_sql = f"UPDATE Encodings4 SET bbox = '{face_encodings}' WHERE encoding_id = {encoding_id};"
+        # print(update_sql)
+        # quit()
+        engine.connect().execute(text(update_sql))
+        print("face_encodingsssssssssssss:")
+        print(encoding_id)
+
+        # # DEBUGGING --> need to change this back to "encodings"
+        # insertignore_df(df,"encodings4", engine)  ### made it all lower case to avoid discrepancy
+    except OperationalError as e:
+        print(e)
+
 def process_image(task):
     #print("process_image")
     def save_image_triage(image,df):
@@ -448,7 +636,8 @@ def process_image(task):
     df.at['1', 'image_id'] = task[0]
     cap_path = capitalize_directory(task[1])
     try:
-        image = cv2.imread(cap_path)        
+        image = cv2.imread(cap_path)
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)    
         # this is for when you need to move images into a testing folder structure
         # save_image_elsewhere(image, task)
     except:
@@ -456,7 +645,7 @@ def process_image(task):
 
     if image is not None and image.shape[0]>MINSIZE and image.shape[1]>MINSIZE:
         # Do FaceMesh
-        df = find_face(image, df)
+        df = find_face_wholeimage(image, df)
         # Do Body Pose
         df = find_body(image, df)
         # for testing: this will save images into folders for is_face, is_body, and none. 
@@ -467,10 +656,10 @@ def process_image(task):
         # I should probably assign no_good here...?
 
     # store data
-    print(df)
+    # print(df)
     try:
         # DEBUGGING --> need to change this back to "encodings"
-        insertignore_df(df,"encodings2", engine)  ### made it all lower case to avoid discrepancy
+        insertignore_df(df,"encodings3", engine)  ### made it all lower case to avoid discrepancy
     except OperationalError as e:
         print(e)
 
@@ -523,7 +712,9 @@ def main():
 
         # print(last_round)
         for row in resultsjson:
-            print(row)
+            # print(row)
+            # face_landmarks, e2.bbox
+            encoding_id = row["encoding_id"]
             image_id = row["image_id"]
             item = row["contentUrl"]
             hashed_path = row["imagename"]
@@ -539,16 +730,14 @@ def main():
             imagepath=os.path.join(io.folder_list[site_id], hashed_path)
             isExist = os.path.exists(imagepath)
             if isExist: 
-                # print("isExist!")
-                encoding_id = row["encoding_id"]
-                # print(encoding_id)
-                # task_bbox = (encoding_id,imagepath)                
-                # tasks_to_accomplish.put(task_bbox)
-
-                # need to restore next two lines after done with bbox
-                task = (image_id,imagepath)
+                if row["face_landmarks"] is not None:
+                    task = (encoding_id,imagepath,pickle.loads(row["face_landmarks"]),row["bbox"])
+                else:
+                    task = (image_id,imagepath)
                 tasks_to_accomplish.put(task)
                 # print("tasks_to_accomplish.put(task) ",imagepath)
+            else:
+                print("this file is missssssssssing --------> ",imagepath)
         # print("tasks_to_accomplish.qsize()", str(tasks_to_accomplish.qsize()))
         # print(tasks_to_accomplish.qsize())
 
