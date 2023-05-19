@@ -41,14 +41,20 @@ DRAW_BOX = False
 MINSIZE = 700
 SLEEP_TIME=0
 
-SELECT = "DISTINCT(i.image_id), i.site_name_id, i.contentUrl, i.imagename, e.encoding_id"
+SELECT = "DISTINCT(i.image_id), i.site_name_id, i.contentUrl, i.imagename, e.encoding_id, i.site_image_id"
 # SELECT = "DISTINCT(i.image_id), i.gender_id, author, caption, contentUrl, description, imagename"
-FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings e ON i.image_id = e.image_id"
+
+
+# DEBUGGING --> need to change this back to "encodings"
+FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings2 e ON i.image_id = e.image_id INNER JOIN Allmaps am ON i.site_image_id = am.site_image_id"
+
 # WHERE = "e.is_body IS TRUE AND e.bbox IS NULL AND e.face_x IS NOT NULL"
-WHERE = "e.image_id IS NULL AND i.site_name_id = 5 AND k.keyword_text LIKE 'work%'"
+WHERE = "e.image_id IS NULL"
+# WHERE = "e.image_id IS NULL AND i.site_name_id = 5 AND k.keyword_text LIKE 'work%'"
 # WHERE = "(e.image_id IS NULL AND k.keyword_text LIKE 'smil%')OR (e.image_id IS NULL AND k.keyword_text LIKE 'happ%')OR (e.image_id IS NULL AND k.keyword_text LIKE 'laugh%')"
 # WHERE = "e.face_landmarks IS NOT NULL AND e.bbox IS NULL AND i.site_name_id = 1"
-LIMIT = 10000
+# WHERE = "i.site_name_id = 1 AND i.site_image_id LIKE '1402424532'"
+LIMIT = 10
 
 #creating my objects
 mp_face_mesh = mp.solutions.face_mesh
@@ -288,6 +294,7 @@ def find_face(image, df):
                     # turning off to debug
                     encodings = calc_encodings(image, faceLms,bbox) ## changed parameters
                     # print(encodings)
+                    # exit()
                 #df.at['1', 'is_face'] = is_face
                 #df.at['1', 'is_face_distant'] = is_face_distant
                 bbox_json = json.dumps(bbox, indent = 4) 
@@ -305,6 +312,9 @@ def find_face(image, df):
 def calc_encodings(image, faceLms,bbox):## changed parameters and rebuilt
     #print("calc_encodings")
     height, width, _ = image.shape
+    width = (bbox["right"]-bbox["left"])
+    height = (bbox["bottom"]-bbox["top"])
+
     landmark_points_5 = [ 263, #left eye away from centre
                        362, #left eye towards centre
                        33,  #right eye away from centre
@@ -313,11 +323,15 @@ def calc_encodings(image, faceLms,bbox):## changed parameters and rebuilt
                     ]
     raw_landmark_set = []
     for index in landmark_points_5:                       ######### CORRECTION: landmark_points_5_3 is the correct one for sure
-        x = int(faceLms.landmark[index].x * width)
-        y = int(faceLms.landmark[index].y * height)
+        # print(faceLms.landmark[index].x)
+        x = int(faceLms.landmark[index].x * width + bbox["left"])
+        y = int(faceLms.landmark[index].y * height + bbox["top"])
+        # print(x)
+        # print(y)
         landmark_point=dlib.point([x,y])
         raw_landmark_set.append(landmark_point)
     all_points=dlib.points(raw_landmark_set)
+    # print("all_points", all_points)
         
     # bbox = faceDet.location_data.relative_bounding_box
     # xy_min = _normalized_to_pixel_coordinates(bbox.xmin, bbox.ymin, height,width)
@@ -430,6 +444,7 @@ def process_image(task):
         save_image_by_path(image, sort, name)
 
     df = pd.DataFrame(columns=['image_id','is_face','is_body','is_face_distant','face_x','face_y','face_z','mouth_gap','face_landmarks','bbox','face_encodings','body_landmarks'])
+    print(task)
     df.at['1', 'image_id'] = task[0]
     cap_path = capitalize_directory(task[1])
     try:
@@ -452,8 +467,10 @@ def process_image(task):
         # I should probably assign no_good here...?
 
     # store data
+    print(df)
     try:
-        insertignore_df(df,"encodings", engine)  ### made it all lower case to avoid discrepancy
+        # DEBUGGING --> need to change this back to "encodings"
+        insertignore_df(df,"encodings2", engine)  ### made it all lower case to avoid discrepancy
     except OperationalError as e:
         print(e)
 
@@ -506,7 +523,7 @@ def main():
 
         # print(last_round)
         for row in resultsjson:
-            # print(row)
+            print(row)
             image_id = row["image_id"]
             item = row["contentUrl"]
             hashed_path = row["imagename"]
@@ -525,12 +542,12 @@ def main():
                 # print("isExist!")
                 encoding_id = row["encoding_id"]
                 # print(encoding_id)
-                task_bbox = (encoding_id,imagepath)                
-                tasks_to_accomplish.put(task_bbox)
+                # task_bbox = (encoding_id,imagepath)                
+                # tasks_to_accomplish.put(task_bbox)
 
                 # need to restore next two lines after done with bbox
-                # task = (image_id,imagepath)
-                # tasks_to_accomplish.put(task)
+                task = (image_id,imagepath)
+                tasks_to_accomplish.put(task)
                 # print("tasks_to_accomplish.put(task) ",imagepath)
         # print("tasks_to_accomplish.qsize()", str(tasks_to_accomplish.qsize()))
         # print(tasks_to_accomplish.qsize())

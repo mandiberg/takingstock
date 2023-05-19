@@ -14,7 +14,7 @@ class DataIO:
             ####### Michael's OS X Credentials ########
             self.db = {
                 "host":"localhost",
-                "name":"stock1",            
+                "name":"stock",            
                 "user":"root",
                 "pass":"XFZ5dPJq2"
             }
