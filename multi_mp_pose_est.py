@@ -225,105 +225,7 @@ def retro_bbox(image):
         print("no results???")
     return bbox_json
 
-def find_face_wholeimage(image, df):
-    # window_name = 'image'
-    # cv2.imshow(window_name, image)
-    # cv2.waitKey(0)
-    # cv2.destroyAllWindows()
 
-    height, width, _ = image.shape
-    with mp.solutions.face_detection.FaceDetection(model_selection=1, min_detection_confidence=0.7) as face_det: 
-        # image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        # results_det=face_det.process(image)  ## [:,:,::-1] is the shortcut for converting BGR to RGB
-       
-        results_det=face_det.process(image)  ## [:,:,::-1] is the shortcut for converting BGR to RGB
-        
-    '''
-    0 type model: When we will select the 0 type model then our face detection model will be able to detect the 
-    faces within the range of 2 meters from the camera.
-    1 type model: When we will select the 1 type model then our face detection model will be able to detect the 
-    faces within the range of 5 meters. Though the default value is 0.
-    '''
-    is_face = False
-
-    if results_det.detections:
-        faceDet=results_det.detections[0]
-        bbox = get_bbox(faceDet, height, width)
-        # bbox = faceDet.location_data.relative_bounding_box
-        # xy_min = _normalized_to_pixel_coordinates(bbox.xmin, bbox.ymin, width,height)
-        # xy_max = _normalized_to_pixel_coordinates(bbox.xmin + bbox.width, bbox.ymin + bbox.height,width,height)
-        # if xy_min and xy_max:
-        #     # TOP AND BOTTOM WERE FLIPPED 
-        #     # both in xy_min assign, and in face_mesh.process(image[np crop])
-        #     left,top =xy_min
-        #     right,bottom = xy_max
-        #     bbox={"left":left,"right":right,"top":top,"bottom":bottom
-        #     }
-        if bbox:
-            with mp.solutions.face_mesh.FaceMesh(static_image_mode=True,
-                                             refine_landmarks=False,
-                                             max_num_faces=1,
-                                             min_detection_confidence=0.5
-                                             ) as face_mesh:
-            # Convert the BGR image to RGB and cropping it around face boundary and process it with MediaPipe Face Mesh.
-                                # crop_img = img[y:y+h, x:x+w]
-                # old version, crop to bbox
-                # results = face_mesh.process(image[bbox["top"]:bbox["bottom"],bbox["left"]:bbox["right"]])    
-                # image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-
-                # results = face_mesh.process(image)    
-                results = face_mesh.process(image)    
-
-            #read any image containing a face
-            if results.multi_face_landmarks:
-                print("faceLmsfaceLmsfaceLmsfaceLmsfaceLmsfaceLms")
-                print(results.multi_face_landmarks)
-
-                # # debugging the flipped landmarks
-                # start_point = ((left, top))
-                # end_point = ((right, bottom))
-                # color = (255, 0, 0)
-                # thickness = 1
-                # image = cv2.rectangle(image, start_point, end_point, color, thickness)
-                # image = cv2.line(image, start_point, end_point, color, thickness)
-                # image = cv2.circle(image, start_point, 20, color, 1)
-
-                #construct pose object to solve pose
-                is_face = True
-                pose = SelectPose(image)
-
-                #get landmarks
-                faceLms = pose.get_face_landmarks_wholeimage(results, image,bbox)
-
-
-                #calculate base data from landmarks
-                pose.calc_face_data(faceLms)
-
-                # get angles, using r_vec property stored in class
-                # angles are meta. there are other meta --- size and resize or something.
-                angles = pose.rotationMatrixToEulerAnglesToDegrees()
-                mouth_gap = pose.get_mouth_data(faceLms)
-                             ##### calculated face detection results
-                if is_face:
-                    # Calculate Face Encodings if is_face = True
-                    # print("in encodings conditional")
-                    # turning off to debug
-                    encodings = calc_encodings(image, faceLms,bbox) ## changed parameters
-                    print(encodings)
-                    exit()
-                #df.at['1', 'is_face'] = is_face
-                #df.at['1', 'is_face_distant'] = is_face_distant
-                bbox_json = json.dumps(bbox, indent = 4) 
-
-                df.at['1', 'face_x'] = angles[0]
-                df.at['1', 'face_y'] = angles[1]
-                df.at['1', 'face_z'] = angles[2]
-                df.at['1', 'mouth_gap'] = mouth_gap
-                df.at['1', 'face_landmarks'] = pickle.dumps(faceLms)
-                df.at['1', 'bbox'] = bbox_json
-                df.at['1', 'face_encodings'] = pickle.dumps(encodings)
-    df.at['1', 'is_face'] = is_face
-    return df
 def find_face(image, df):
 
     height, width, _ = image.shape
@@ -412,11 +314,11 @@ def find_face(image, df):
 def calc_encodings(image, faceLms,bbox):## changed parameters and rebuilt
 
     # # original, treats uncropped image as .shape
-    height, width, _ = image.shape
+    # height, width, _ = image.shape
 
     # second attempt, tries to project faceLms from bbox origin
-    # width = (bbox["right"]-bbox["left"])
-    # height = (bbox["bottom"]-bbox["top"])
+    width = (bbox["right"]-bbox["left"])
+    height = (bbox["bottom"]-bbox["top"])
 
     # third attempt, crops image to bbox, and keeps faceLms relative to bbox 
     # print("bbox:")
@@ -446,11 +348,11 @@ def calc_encodings(image, faceLms,bbox):## changed parameters and rebuilt
         # print(faceLms.landmark[index].x)
 
         # second attempt, tries to project faceLms from bbox origin
-        # x = int(faceLms.landmark[index].x * width + bbox["left"])
-        # y = int(faceLms.landmark[index].y * height + bbox["top"])
+        x = int(faceLms.landmark[index].x * width + bbox["left"])
+        y = int(faceLms.landmark[index].y * height + bbox["top"])
 
-        x = int(faceLms.landmark[index].x * width)
-        y = int(faceLms.landmark[index].y * height)
+        # x = int(faceLms.landmark[index].x * width)
+        # y = int(faceLms.landmark[index].y * height)
 
         # print(x)
         # print(y)
@@ -645,7 +547,7 @@ def process_image(task):
 
     if image is not None and image.shape[0]>MINSIZE and image.shape[1]>MINSIZE:
         # Do FaceMesh
-        df = find_face_wholeimage(image, df)
+        df = find_face(image, df)
         # Do Body Pose
         df = find_body(image, df)
         # for testing: this will save images into folders for is_face, is_body, and none. 

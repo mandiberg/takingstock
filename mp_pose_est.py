@@ -52,55 +52,7 @@ class SelectPose:
     def y_element(self, elem):
         return elem[1]
 
-    def get_face_landmarks_wholeimage(self,results, image,bbox):
 
-        height = self.h
-        width = self.w
-        center = (self.size[1] / 2, self.size[0] / 2)
-
-        dist=[]
-        for faceNum, faceLms in enumerate(results.multi_face_landmarks):                            # loop through all matches
-            faceXY = []
-            for id,lm in enumerate(faceLms.landmark):                           # loop over all land marks of one face
-                # ih, iw, _ = self.image.shape
-                # gone direct to obj dimensions
-                x,y = int(lm.x*self.w), int(lm.y*self.h)
-                # x,y=int(lm.x * (bbox["right"]-bbox["left"])+bbox["left"]),int(lm.y * (bbox["bottom"]-bbox["top"])+bbox["top"]) 
-                # print(lm)
-                faceXY.append((x, y)) # put all xy points in neat array
-
-            image_points = np.array([
-                faceXY[1],      # "nose"
-                faceXY[152],    # "chin"
-                faceXY[226],    # "left eye"
-                faceXY[446],    # "right eye"
-                faceXY[57],     # "left mouth"
-                faceXY[287]     # "right mouth"
-            ], dtype="double")
-
-            # #this is where the face points are written to the image
-            # # turning this off for production run
-            # for i in image_points:
-            #     cv2.circle(image,(int(i[0]),int(i[1])),4,(255,0,0),-1)
-
-            maxXY = max(faceXY, key=self.x_element)[0], max(faceXY, key=self.y_element)[1]
-            minXY = min(faceXY, key=self.x_element)[0], min(faceXY, key=self.y_element)[1]
-
-            xcenter = (maxXY[0] + minXY[0]) / 2
-            ycenter = (maxXY[1] + minXY[1]) / 2
-
-            dist.append((faceNum, (int(((xcenter-width/2)**2+(ycenter-height/2)**2)**.4)), maxXY, minXY))     # faceID, distance, maxXY, minXY
-
-            # print(image_points)
-
-            (success, self.r_vec, self.t_vec) = cv2.solvePnP(self.model_points, image_points,  self.camera_matrix, self.dist_coeefs)
-            (nose_end_point2D, jacobian) = cv2.projectPoints(np.array([(0.0, 0.0, 1000.0)]), self.r_vec, self.t_vec, self.camera_matrix, self.dist_coeefs)
-            # print(self.r_vec)
-            p1 = (int(image_points[0][0]), int(image_points[0][1]))
-            # p2 = (int(nose_end_point2D[0][0][0]), int(nose_end_point2D[0][0][1]))
-
-            # cv2.line(self.image, p1, p2, (255, 0, 0), 2)
-            return faceLms
 
     def get_face_landmarks(self,results, image,bbox):
 
