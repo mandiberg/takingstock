@@ -10,6 +10,7 @@ import pickle
 import sys # can delete for production
 from sys import platform
 import json
+import base64
 
 import numpy as np
 import mediapipe as mp
@@ -46,15 +47,15 @@ SELECT = "DISTINCT(i.image_id), i.site_name_id, i.contentUrl, i.imagename, e.enc
 
 
 # DEBUGGING --> need to change this back to "encodings"
-FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings e ON i.image_id = e.image_id INNER JOIN Allmaps am ON i.site_image_id = am.site_image_id"
+FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings e ON i.image_id = e.image_id"
 
 # WHERE = "e.is_body IS TRUE AND e.bbox IS NULL AND e.face_x IS NOT NULL"
-# WHERE = "e.face_encodings IS NULL"
+WHERE = "e.face_encodings IS NULL AND e.face_landmarks IS NOT NULL AND e.bbox IS NOT NULL"
 # WHERE = "e.image_id IS NULL AND i.site_name_id = 5 AND k.keyword_text LIKE 'work%'"
 # WHERE = "(e.image_id IS NULL AND k.keyword_text LIKE 'smil%')OR (e.image_id IS NULL AND k.keyword_text LIKE 'happ%')OR (e.image_id IS NULL AND k.keyword_text LIKE 'laugh%')"
 # WHERE = "e.face_landmarks IS NOT NULL AND e.bbox IS NULL AND i.site_name_id = 1"
-WHERE = "i.site_name_id = 1 AND i.site_image_id LIKE '1402424532'"
-LIMIT = 100
+# WHERE = "i.site_name_id = 1 AND i.site_image_id LIKE '1402424532'"
+LIMIT = 10000
 
 #creating my objects
 mp_face_mesh = mp.solutions.face_mesh
@@ -295,9 +296,9 @@ def find_face(image, df):
                     # print("in encodings conditional")
                     # turning off to debug
                     encodings = calc_encodings(image, faceLms,bbox) ## changed parameters
-                    print(encodings)
-                    exit()
-                #df.at['1', 'is_face'] = is_face
+                #     print(encodings)
+                #     exit()
+                # #df.at['1', 'is_face'] = is_face
                 #df.at['1', 'is_face_distant'] = is_face_distant
                 bbox_json = json.dumps(bbox, indent = 4) 
 
@@ -315,10 +316,19 @@ def calc_encodings(image, faceLms,bbox):## changed parameters and rebuilt
 
     # # original, treats uncropped image as .shape
     # height, width, _ = image.shape
+    # print("bbox ontology")
+    # print(type(bbox))
+    # print(bbox)
+    # print("bbox jsoned")
+    # print(type(bbox))
+    # print(type(bbox["right"]))
+    # print(bbox["right"])
 
     # second attempt, tries to project faceLms from bbox origin
     width = (bbox["right"]-bbox["left"])
     height = (bbox["bottom"]-bbox["top"])
+
+    # print(height)
 
     # third attempt, crops image to bbox, and keeps faceLms relative to bbox 
     # print("bbox:")
@@ -359,8 +369,8 @@ def calc_encodings(image, faceLms,bbox):## changed parameters and rebuilt
         landmark_point=dlib.point([x,y])
         raw_landmark_set.append(landmark_point)
     all_points=dlib.points(raw_landmark_set)
-    print("all_points", all_points)
-    print(bbox)
+    # print("all_points", all_points)
+    # print(bbox)
         
     # bbox = faceDet.location_data.relative_bounding_box
     # xy_min = _normalized_to_pixel_coordinates(bbox.xmin, bbox.ymin, height,width)
@@ -394,7 +404,7 @@ def calc_encodings(image, faceLms,bbox):## changed parameters and rebuilt
     encodings=face_encoder.compute_face_descriptor(image, raw_landmark_set, num_jitters=1)
 
 
-    return np.array(encodings)
+    return np.array(encodings).tolist()
 
 def find_body(image,df):
     #print("find_body")
@@ -429,7 +439,7 @@ def capitalize_directory(path):
 # this was for reprocessing the missing bbox
 def process_image_bbox(task):
     # df = pd.DataFrame(columns=['image_id','bbox'])
-    print("task is: ",task)
+    # print("task is: ",task)
     encoding_id = task[0]
     cap_path = capitalize_directory(task[1])
     try:
@@ -438,12 +448,12 @@ def process_image_bbox(task):
         # save_image_elsewhere(image, task)
     except:
         print(f"[process_image]this item failed, even after uppercasing: {task}")
-    print("processing: ")
-    print(encoding_id)
+    # print("processing: ")
+    # print(encoding_id)
     if image is not None and image.shape[0]>MINSIZE and image.shape[1]>MINSIZE:
         # Do FaceMesh
         bbox_json = retro_bbox(image)
-        print(bbox_json)
+        # print(bbox_json)
         if bbox_json: 
             for _ in range(io.max_retries):
                 try:
@@ -478,43 +488,56 @@ def process_image_enc_only(task):
         name = str(df.at['1', 'image_id'])+".jpg"
         save_image_by_path(image, sort, name)
 
-    df = pd.DataFrame(columns=['image_id','is_face','is_body','is_face_distant','face_x','face_y','face_z','mouth_gap','face_landmarks','bbox','face_encodings','body_landmarks'])
+    # df = pd.DataFrame(columns=['image_id','is_face','is_body','is_face_distant','face_x','face_y','face_z','mouth_gap','face_landmarks','bbox','face_encodings','body_landmarks'])
     # print(task)
     # df.at['1', 'image_id'] = task[0]
     encoding_id = task[0]
     faceLms = task[2]
-    bbox = task[3]
+    bbox = json.loads(task[3])
     cap_path = capitalize_directory(task[1])
+    # print("SELECTED bbox faceLms")
+    # print(bbox)
+    # print(faceLms)
+
     try:
-        image = cv2.imread(cap_path)        
+        image = cv2.imread(cap_path)  
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)    
+      
         # this is for when you need to move images into a testing folder structure
         # save_image_elsewhere(image, task)
     except:
         print(f"[process_image]this item failed: {task}")
 
     if image is not None and image.shape[0]>MINSIZE and image.shape[1]>MINSIZE:
-        face_enc = calc_encodings(image, faceLms,bbox)
-        # Do FaceMesh
-        df = find_face(image, df)
-        # Do Body Pose
-        df = find_body(image, df)
-        # for testing: this will save images into folders for is_face, is_body, and none. 
-        # only save images that aren't too smallllll
-        # save_image_triage(image,df)
+        # now a list
+
+        face_encodings = calc_encodings(image, faceLms,bbox)
+        # print(face_encodings)
+
     else:
         print('toooooo smallllll')
         # I should probably assign no_good here...?
 
     # store data
     # print(df)
+    # print(face_encodings)
+    pickled_encodings = pickle.dumps(face_encodings)
+    # encoded_encodings = base64.b64encode(face_encodings)
+    df = pd.DataFrame(columns=['encoding_id','face_encodings'])
+    df.at['1', 'encoding_id'] = encoding_id
+    df.at['1', 'face_encodings'] = pickled_encodings
     try:
-        update_sql = f"UPDATE Encodings4 SET bbox = '{face_encodings}' WHERE encoding_id = {encoding_id};"
-        # print(update_sql)
-        # quit()
-        engine.connect().execute(text(update_sql))
-        print("face_encodingsssssssssssss:")
-        print(encoding_id)
+        with engine.begin() as conn:
+            sql = """
+            UPDATE Encodings SET face_encodings = :face_encodings
+            WHERE encoding_id = :encoding_id
+            """
+            params = df.to_dict("records")
+            conn.execute(text(sql), params)
 
+        # update_sql = f"UPDATE Encodings6 SET face_encodings = '{pickled_encodings}' WHERE encoding_id = {encoding_id};"
+        # engine.connect().execute(text(update_sql))
+        print("updated:",str(encoding_id))
         # # DEBUGGING --> need to change this back to "encodings"
         # insertignore_df(df,"encodings4", engine)  ### made it all lower case to avoid discrepancy
     except OperationalError as e:
@@ -585,7 +608,7 @@ def do_job(tasks_to_accomplish, tasks_that_are_done):
                 if no exception has been raised, add the task completion 
                 message to task_that_are_done queue
             '''
-            process_image(task)
+            process_image_enc_only(task)
             # tasks_that_are_done.put(task + ' is done by ' + current_process().name)
             time.sleep(SLEEP_TIME)
     return True

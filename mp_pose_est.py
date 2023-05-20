@@ -67,6 +67,8 @@ class SelectPose:
                 # ih, iw, _ = self.image.shape
                 # gone direct to obj dimensions
                 # x,y = int(lm.x*self.w), int(lm.y*self.h)
+
+                #this is just for the faceXY -- it isn't returned with faceLms
                 x,y=int(lm.x * (bbox["right"]-bbox["left"])+bbox["left"]),int(lm.y * (bbox["bottom"]-bbox["top"])+bbox["top"]) 
                 # print(lm)
                 faceXY.append((x, y)) # put all xy points in neat array

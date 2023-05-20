@@ -5,6 +5,7 @@ import time
 import sys
 import pickle
 import hashlib
+import base64
 
 
 #linear sort imports non-class
@@ -33,10 +34,10 @@ CYCLECOUNT = 2
 # ROOT="/Users/michaelmandiberg/Documents/projects-active/facemap_production/"
 MAPDATA_FILE = "allmaps_62607.csv"
 
-SELECT = "DISTINCT(i.image_id), i.site_name_id, i.contentUrl, i.imagename, e.face_x, e.face_y, e.face_z, e.mouth_gap, e.face_landmarks, e.bbox, e.face_encodings"
+SELECT = "DISTINCT(i.image_id), i.site_name_id, i.contentUrl, i.imagename, e.face_x, e.face_y, e.face_z, e.mouth_gap, e.face_landmarks, e.bbox, e.face_encodings, i.site_image_id"
 # SELECT = "DISTINCT(i.image_id), i.gender_id, author, caption, contentUrl, description, imagename"
-FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings2 e ON i.image_id = e.image_id INNER JOIN Allmaps am ON i.site_image_id = am.site_image_id"
-WHERE = "e.is_face IS TRUE AND e.bbox IS NOT NULL AND i.site_name_id = 1"
+FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings6 e ON i.image_id = e.image_id INNER JOIN Allmaps am ON i.site_image_id = am.site_image_id"
+WHERE = "e.is_face IS TRUE AND e.face_encodings IS NOT NULL AND e.bbox IS NOT NULL AND i.site_name_id = 1"
 # WHERE = "e.is_face IS TRUE AND e.bbox IS NOT NULL AND i.site_name_id = 5 AND k.keyword_text LIKE 'smil%'"
 # WHERE = "e.image_id IS NULL "
 LIMIT = 100000
@@ -420,6 +421,10 @@ def cycling_order(CYCLECOUNT, sort):
 def main():
     def unpickle_array(pickled_array):
         return pickle.loads(pickled_array)
+    def decode_64_array(encoded):
+        decoded = base64.b64decode(encoded).decode('utf-8')
+        return decoded
+
     def newname(contentUrl):
         file_name_path = contentUrl.split('?')[0]
         file_name = file_name_path.split('/')[-1]
@@ -449,7 +454,7 @@ def main():
     try:
         # df = pd.read_csv(os.path.join(ROOT,MAPDATA_FILE))
         df = pd.json_normalize(resultsjson)
-
+        print(df)
 
 
     except:
@@ -468,7 +473,7 @@ def main():
     df[columns_to_convert] = df[columns_to_convert].applymap(make_float)
 
     print("raw df from DB")
-    print(df)
+    print(df['face_encodings'])
 
     ### PROCESS THE DATA ###
 
