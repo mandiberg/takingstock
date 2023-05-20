@@ -50,11 +50,12 @@ SELECT = "DISTINCT(i.image_id), i.site_name_id, i.contentUrl, i.imagename, e.enc
 FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings e ON i.image_id = e.image_id"
 
 # WHERE = "e.is_body IS TRUE AND e.bbox IS NULL AND e.face_x IS NOT NULL"
-WHERE = "e.face_encodings IS NULL AND e.face_landmarks IS NOT NULL AND e.bbox IS NOT NULL"
+# WHERE = "e.face_encodings IS NULL AND i.site_name_id = 5 AND k.keyword_text LIKE 'laugh%'"
+# WHERE = "e.face_encodings IS NULL AND e.face_landmarks IS NOT NULL AND e.bbox IS NOT NULL"
 # WHERE = "e.image_id IS NULL AND i.site_name_id = 5 AND k.keyword_text LIKE 'work%'"
 # WHERE = "(e.image_id IS NULL AND k.keyword_text LIKE 'smil%')OR (e.image_id IS NULL AND k.keyword_text LIKE 'happ%')OR (e.image_id IS NULL AND k.keyword_text LIKE 'laugh%')"
 # WHERE = "e.face_landmarks IS NOT NULL AND e.bbox IS NULL AND i.site_name_id = 1"
-# WHERE = "i.site_name_id = 1 AND i.site_image_id LIKE '1402424532'"
+WHERE = "i.site_name_id = 1 AND i.site_image_id LIKE '1402424532'"
 LIMIT = 10000
 
 #creating my objects
@@ -584,7 +585,10 @@ def process_image(task):
     # print(df)
     try:
         # DEBUGGING --> need to change this back to "encodings"
-        insertignore_df(df,"encodings3", engine)  ### made it all lower case to avoid discrepancy
+        # print(df)  ### made it all lower case to avoid discrepancy
+        # print(df.at['1', 'face_encodings'])
+
+        insertignore_df(df,"encodings", engine)  ### made it all lower case to avoid discrepancy
     except OperationalError as e:
         print(e)
 
@@ -608,7 +612,7 @@ def do_job(tasks_to_accomplish, tasks_that_are_done):
                 if no exception has been raised, add the task completion 
                 message to task_that_are_done queue
             '''
-            process_image_enc_only(task)
+            process_image(task)
             # tasks_that_are_done.put(task + ' is done by ' + current_process().name)
             time.sleep(SLEEP_TIME)
     return True
