@@ -34,7 +34,7 @@ _|_|  _|\__, |\___|____/\__| \___|____/  \_/
 ######## Michael's Credentials ########
 db = {
     "host":"localhost",
-    "name":"123test",            
+    "name":"stock",            
     "user":"root",
     "pass":"XFZ5dPJq2"
 }
@@ -54,8 +54,8 @@ CSV_COUNTOUT_PATH = "/Volumes/Test36/CSVs_to_ingest/123rfCSVs/countout.csv"
 # key2key = {"person":"people", "kid":"child","affection":"Affectionate", "baby":"Baby - Human Age", "beautiful":"Beautiful People", "pretty":"Beautiful People", "blur":"Blurred Motion", "casual":"Casual Clothing", "children":"Child", "kids":"Child", "couple":"Couple - Relationship", "adorable":"Cute", "room":"Domestic Room", "focus":"Focus - Concept", "happy":"Happiness", "at home":"Home Interior", "home":"Home Interior", "face":"Human Face", "hands":"Human Hand", "landscape":"Landscape - Scenery", "outfit":"Landscape - Scenery", "leisure":"Leisure Activity", "love":"Love - Emotion", "guy":"Men", "motherhood":"Mother", "parenthood":"Parent", "positive":"Positive Emotion", "recreation":"Recreational Pursuit", "little":"Small", "studio shoot":"Studio Shot", "together":"Togetherness", "vertical shot":"Vertical", "lady":"women", "young":"Young Adult"}
 
 key2key = {"person":"people", "kid":"child","affection":"affectionate", "baby":"baby - human age", "beautiful":"beautiful people", "pretty":"beautiful people", "blur":"blurred motion", "casual":"casual clothing", "children":"child", "kids":"child", "couple":"couple - relationship", "adorable":"cute", "room":"domestic room", "focus":"focus - concept", "happy":"happiness", "at home":"home interior", "home":"home interior", "face":"human face", "hands":"human hand", "landscape":"landscape - scenery", "outfit":"landscape - scenery", "leisure":"leisure activity", "love":"love - emotion", "guy":"men", "motherhood":"mother", "parenthood":"parent", "positive":"positive emotion", "recreation":"recreational pursuit", "little":"small", "studio shoot":"studio shot", "together":"togetherness", "vertical shot":"vertical", "lady":"women", "young":"young adult", "light":"light - natural phenomenon", "trees":"tree"}
-gender_dict = {"men":1,"man":1,"his":1,"him":1,"Businessman":1,"father":1,"boy":1, "boys":1, "none":2, "oldmen":3, "grandfather":3,"oldwomen":4, "grandmother":4, "nonbinary":5, "other":6, "trans":7, 
-        "women":8,"woman":8, "hers":8, "her":8, "businesswoman":8, "mother":8, "girl":8, "girls":8, "youngmen":9, "youngwomen":10}
+gender_dict = {"men":1,"man":1,"male":1,"males":1,"his":1,"him":1,"Businessman":1,"Businessmen":1,"father":1,"boy":1, "boys":1, "none":2, "oldmen":3, "grandfather":3,"oldwomen":4, "grandmother":4, "nonbinary":5, "other":6, "trans":7, 
+        "women":8,"woman":8,"female":8,"females":8, "hers":8, "her":8, "businesswoman":8, "businesswomen":8, "mother":8, "girl":8, "girls":8, "youngmen":9, "youngwomen":10}
 # gender2key = {"man":"men", "woman":"women"}
 eth_dict = {"Black":1, "African-American":1, "AfricanAmerican":1, "African American":1, "African":1, "caucasian":2, "white people":2, "europeans":2, "eastasian":3, "chinese":3, "japanese":3, "asian":3, "hispaniclatino":4, "latino":4, "hispanic":4, "mexican":4, "middleeastern":5, "middle eastern":5, "arab":5, "mixedraceperson":6, "mixedrace":6, "mixed race":6, "mixed ethnicity":6, "multiethnic":6, "multi ethnic":6, "multi-ethnic":6, "nativeamericanfirstnations":7, "native american":7, "nativeamerican":7, "native-american":7, "indian american":7, "indianamerican":7, "indian-american":7, "first nations":7, "firstnations":7, "first-nations":7, "indigenous":7, "pacificislander":8, "pacific islander":8, "pacific-islander":8, "southasian":9, "south asian":9, "south-asian":9, "indian":9, "southeastasian":10, "southeast asian":10, "southeast-asian":10}
 # load Keywords_202304300930.csv as df, drop all but keytype Locations, create two dicts: string->ID & GettyID->ID  
@@ -172,11 +172,18 @@ def get_counter():
 
 
 def unlock_key(site_id,key, this_dict):
-    key_no = 0
+    key_no = None
     try:
-        # print("trying basic keys_dict")
+        print("trying basic keys_dict for this key:")
+        print(key)
+        print("from dict this long")
+        print(len(this_dict))
+        # print(this_dict)
+
+        # print(this_dict["office"])
         key_no = this_dict[key]
-        # print(key_no)
+        print("this is the key_no")
+        print(key_no)
         return(key_no)
     except:
         try:
@@ -186,12 +193,13 @@ def unlock_key(site_id,key, this_dict):
         except:
             # try:
             # try with inflections
-            # print(site_id)
+            print(site_id)
+            print(key)
 
             plur_key = getInflection(key, 'NNS')
             sing_key = getInflection(key, 'NN')
             gerund_key = getInflection(key, 'VBG')
-            # print("inflected are: ", plur_key, sing_key, gerund_key)
+            print("inflected are: ", plur_key, sing_key, gerund_key)
             if plur_key and key != plur_key:
                 try:
                     key_no = this_dict[plur_key[0]]
@@ -217,7 +225,7 @@ def unlock_key(site_id,key, this_dict):
                     pass
                     # print(key)
 
-            if key_no == 0:
+            if pd.isnull(key_no):
                 # if nothing worked, save key
                 value_list = [site_id,key]
                 write_csv(CSV_NOKEYS_PATH,value_list)
@@ -318,31 +326,31 @@ def get_location(df, ind, keys_list):
 
     return(location)
 
-def description_to_keys(df, ind, site_id, this_dict="keys_dict"):
-    if this_dict=="keys_dict":
-        this_dict = keys_dict
-    elif this_dict=="gender_dict":
-        this_dict = gender_dict
-    elif this_dict=="age_dict":
-        this_dict = age_dict
-    # skipping eth_dict out of an abundance of caution:
-    # white and black in description are not consistently ethnicity descriptors
+# def description_to_keys(df, ind, site_id, this_dict="keys_dict"):
+#     if this_dict=="keys_dict":
+#         this_dict = keys_dict
+#     elif this_dict=="gender_dict":
+#         this_dict = gender_dict
+#     elif this_dict=="age_dict":
+#         this_dict = age_dict
+#     # skipping eth_dict out of an abundance of caution:
+#     # white and black in description are not consistently ethnicity descriptors
 
-    # print("description_to_keys")    
-    key_nos_list =[]
-    description = df['title'][ind]
-    # print(description)
-    key_no = None
-    desc_keys = description.split(" ")
-    # print("desc_keys ",desc_keys)
-    for key in desc_keys:
-        if not pd.isnull(key):
-            key_no = unlock_key(site_id,key,this_dict)
-            # print(key_no)
-            if key_no:
-                key_nos_list.append(key_no)
-    return key_nos_list
+#     # print("description_to_keys")    
+#     key_nos_list =[]
+#     description = df['title'][ind]
+#     # print(description)
+#     key_no = None
+#     desc_keys = description.split(" ")
+#     # print("desc_keys ",desc_keys)
+#     for key in desc_keys:
+#         if not pd.isnull(key):
+#             key_no = unlock_key(site_id,key,this_dict)
+#             if key_no:
+#                 key_nos_list.append(key_no)
+#     return key_nos_list
 
+#currently only called for keys to desc in main show. not for gender.
 def description_to_keys_row(description, site_id, this_dict="keys_dict"):
     if this_dict=="keys_dict":
         this_dict = keys_dict
@@ -361,145 +369,162 @@ def description_to_keys_row(description, site_id, this_dict="keys_dict"):
     desc_keys = description.split(" ")
     # print("desc_keys ",desc_keys)
     for key in desc_keys:
+        print("checking key ", key)
         if not pd.isnull(key):
             key_no = unlock_key(site_id,key,this_dict)
-            # print(key_no)
+            print("key_no passed through:")
+            print(key_no)
             if key_no:
                 key_nos_list.append(key_no)
+            print("key_nos_list ",key_nos_list)
     return key_nos_list
 
 
-def get_gender_age(df, ind, keys_list, site_id):
-    global gender_dict
-    gender = None
-    age= None
-    if 'gender' in df.columns and df['gender'][ind] is not None:
-        key = df['gender'][ind]
-    elif 'age' in df.columns and df['age'][ind] is not None:
-        key = df['age'][ind]
-    description = df['title'][ind]
-    if not pd.isnull(key):
-        #convertkeys
-        try:
-            gender = gender_dict[key]
-            if gender == 3:
-                gender = 1
-                age = 7
-            elif gender == 4:
-                gender = 8
-                age = 7
-            elif gender == 9:
-                gender = 1
-                age = 5
-            elif gender == 10:
-                gender = 8
-                age = 5
-            # gender_dict={"men":1, "none":2, "oldmen":3, "oldwomen":4, "nonbinary":5, "other":6, "trans":7, "women":8, "youngmen":9, "youngwomen":10}
-        except:
-            try:
-                age = age_dict[key.lower()]
-            except:
-                print('NEW KEY, NOT AN AGE OR GENDER -------------------------> ', key)
-    # else:
-    #     # print('NULL gender: ', key)
+# def get_gender_age(df, ind, keys_list, site_id):
+#     global gender_dict
+#     gender = None
+#     age= None
+#     if 'gender' in df.columns and df['gender'][ind] is not None:
+#         key = df['gender'][ind]
+#     elif 'age' in df.columns and df['age'][ind] is not None:
+#         key = df['age'][ind]
+#     description = df['title'][ind]
+#     if not pd.isnull(key):
+#         #convertkeys
+#         try:
+#             gender = gender_dict[key]
+#             if gender == 3:
+#                 gender = 1
+#                 age = 7
+#             elif gender == 4:
+#                 gender = 8
+#                 age = 7
+#             elif gender == 9:
+#                 gender = 1
+#                 age = 5
+#             elif gender == 10:
+#                 gender = 8
+#                 age = 5
+#             # gender_dict={"men":1, "none":2, "oldmen":3, "oldwomen":4, "nonbinary":5, "other":6, "trans":7, "women":8, "youngmen":9, "youngwomen":10}
+#         except:
+#             try:
+#                 age = age_dict[key.lower()]
+#             except:
+#                 print('NEW KEY, NOT AN AGE OR GENDER -------------------------> ', key)
+#     # else:
+#     #     # print('NULL gender: ', key)
 
-    #try to find gender or age in description
-    if gender is None:
-        # print("looking for gender in description")
-        try:
-            gender = findall_dict(gender_dict,description)
-        except:
-            # print("no gender, going keyword hunting")
-            try:
-                gender = search_keys(keys_list, gender_dict)[0]
-            except:
-                pass
-                # print('no gender found: ', description)
+#     #try to find gender or age in description
+#     if gender is None:
+#         # print("looking for gender in description")
+#         try:
+#             gender = findall_dict(gender_dict,description)
+#         except:
+#             # print("no gender, going keyword hunting")
+#             try:
+#                 gender = search_keys(keys_list, gender_dict)[0]
+#             except:
+#                 pass
+#                 # print('no gender found: ', description)
 
-    if age is None:
-        # print("looking for age in description")
-        try:
-            age = findall_dict(age_dict,description)
-        except:
-            try:
-                age = search_keys(keys_list, age_dict)[0]
-            except:
-                pass
-                # print('no age found: ', description)
+#     if age is None:
+#         # print("looking for age in description")
+#         try:
+#             age = findall_dict(age_dict,description)
+#         except:
+#             try:
+#                 age = search_keys(keys_list, age_dict)[0]
+#             except:
+#                 pass
+#                 # print('no age found: ', description)
 
 
 
-    # print("gender, age: ")
-    # print(gender)
-    # print (age)
-    return gender, age
+#     # print("gender, age: ")
+#     # print(gender)
+#     # print (age)
+#     return gender, age
 
 def get_gender_age_row(gender_string, age_string, description, keys_list, site_id):
+    def try_key(gender, age, this_string):
+        if not pd.isnull(this_string):
+            print(f"looking for {this_string} in dict")
+            #convertkeys
+            try:
+                gender = gender_dict[this_string.lower()]
+                if gender == 3:
+                    gender = 1
+                    age = 7
+                elif gender == 4:
+                    gender = 8
+                    age = 7
+                elif gender == 9:
+                    gender = 1
+                    age = 5
+                elif gender == 10:
+                    gender = 8
+                    age = 5
+                # gender_dict={"men":1, "none":2, "oldmen":3, "oldwomen":4, "nonbinary":5, "other":6, "trans":7, "women":8, "youngmen":9, "youngwomen":10}
+            except:
+                try:
+                    age = age_dict[this_string.lower()]
+                except:
+                    print('NEW KEY, NOT AGE OR GENDER -------------------------> ', this_string)
+        else:
+            print("string is None")
+        return gender, age
+
+    def key_in_desc(key, key_dict, description, keys_list):
+        #try to find gender or age in description
+        # print(f"looking for {key_dict} in description: {description} and {keys_list}")
+        try:
+            key = findall_dict(key_dict,description)
+            # print("key found")
+            # print(key)
+        except:
+            print("no key found, going keyword hunting")
+            try:
+                key = search_keys(keys_list, key_dict)[0]
+            except:
+                pass
+                print('no key found: ', description)
+        return key
+
+
+
+    print("get_gender_age_row starting")
     global gender_dict
     gender = None
     age= None
-    # if 'gender' in df.columns and df['gender'][ind] is not None:
-    #     key = df['gender'][ind]
-    # elif 'age' in df.columns and df['age'][ind] is not None:
-    #     key = df['age'][ind]
-    # description = df['title'][ind]
-    if not pd.isnull(gender_string):
-        #convertkeys
-        try:
-            gender = gender_dict[gender_string.lower()]
-            if gender == 3:
-                gender = 1
-                age = 7
-            elif gender == 4:
-                gender = 8
-                age = 7
-            elif gender == 9:
-                gender = 1
-                age = 5
-            elif gender == 10:
-                gender = 8
-                age = 5
-            # gender_dict={"men":1, "none":2, "oldmen":3, "oldwomen":4, "nonbinary":5, "other":6, "trans":7, "women":8, "youngmen":9, "youngwomen":10}
-        except:
-            print('NEW GENDER KEY -------------------------> ', gender_string)
 
-    if not pd.isnull(age_string):
-        try:
-            age = age_dict[key.lower()]
-        except:
-            print('NEW GENDER KEY -------------------------> ', age_string)
-    # else:
-    #     # print('NULL gender: ', key)
+    print("gender_string, age_string",gender_string, age_string)
 
-    #try to find gender or age in description
-    if gender is None:
-        # print("looking for gender in description")
-        try:
-            gender = findall_dict(gender_dict,description)
-        except:
-            # print("no gender, going keyword hunting")
-            try:
-                gender = search_keys(keys_list, gender_dict)[0]
-            except:
-                pass
-                # print('no gender found: ', description)
-
-    if age is None:
-        # print("looking for age in description")
-        try:
-            age = findall_dict(age_dict,description)
-        except:
-            try:
-                age = search_keys(keys_list, age_dict)[0]
-            except:
-                pass
-                # print('no age found: ', description)
-
-
-
-    # print("gender, age: ")
+    gender, age = try_key(gender, age, gender_string)
+    # print("gender, age, after try key gender_string")
     # print(gender)
-    # print (age)
+    # print(age)
+
+
+    gender, age = try_key(gender, age, age_string)
+    # print("gender, age, after try key age_string")
+    # print(gender)
+    # print(age)
+
+    if pd.isnull(gender): 
+        print("gender is null")
+        gender = key_in_desc(gender, gender_dict, description, keys_list)
+    # print("gender, age, after try description gender_string")
+    # print(gender)
+    # print(age)
+
+    if pd.isnull(age):
+        print("age is null")
+
+        age = key_in_desc(age, age_dict, description, keys_list)
+    print("gender, age, after everything")
+    print(gender)
+    print(age)
+
     return gender, age
 
 
@@ -559,29 +584,29 @@ def structure_row_pexels(df, ind, keys_list):
     }
     return(nan2none(image_row))
 
-def structure_row_123(df, ind, keys_list): 
-    site_id = 8
+# def structure_row_123(df, ind, keys_list): 
+#     site_id = 8
 
-    gender_key, age_key = get_gender_age(df, ind, keys_list, site_id)
-    # if 'country' in df.columns:
-    #     location_no = get_location(df, ind, keys_list)
-    # else:
-    #     location_no = None
-    image_row = {
-        "site_image_id": df.loc[ind,'id'],
-        "site_name_id": site_id,
-        "description": df['title'][ind],
-        # "location_id": location_no,
-        # "": df['number_of_people'][ind] # should always be one. If not one, toss it? 
-        # "": df['orientation'][ind]
-        "age_id": age_key,
-        "gender_id": gender_key,  
-        # "location_id":"0",
-        # "": df['mood'][ind]
-        "contentUrl": df['image_url'][ind],
-        "imagename": generate_local_unhashed_image_filepath(df['image_url'][ind]) # need to refactor this from the contentURL using the hash function
-    }
-    return(nan2none(image_row))
+#     gender_key, age_key = get_gender_age(df, ind, keys_list, site_id)
+#     # if 'country' in df.columns:
+#     #     location_no = get_location(df, ind, keys_list)
+#     # else:
+#     #     location_no = None
+#     image_row = {
+#         "site_image_id": df.loc[ind,'id'],
+#         "site_name_id": site_id,
+#         "description": df['title'][ind],
+#         # "location_id": location_no,
+#         # "": df['number_of_people'][ind] # should always be one. If not one, toss it? 
+#         # "": df['orientation'][ind]
+#         "age_id": age_key,
+#         "gender_id": gender_key,  
+#         # "location_id":"0",
+#         # "": df['mood'][ind]
+#         "contentUrl": df['image_url'][ind],
+#         "imagename": generate_local_unhashed_image_filepath(df['image_url'][ind]) # need to refactor this from the contentURL using the hash function
+    # }
+    # return(nan2none(image_row))
 
 def structure_row_123_asrow(row, ind, keys_list):
     site_id = 8
@@ -602,8 +627,135 @@ def structure_row_123_asrow(row, ind, keys_list):
     
     return nan2none(image_row)
 
+# def ingest_it():
+#     # print(keys_dict["cute"])
+
+#     # df = pd.read_csv(CSV_IN_PATH)
+#     # df = df.drop_duplicates()
+#     df['title'] = df['title'].apply(lambda x: x[:140])
+
+#     # print(df)
+#     start_counter = get_counter()
+#     ind = 0
+#     counter = 0
+#     # print(len(df.index))
+#     # start_counter = 50000
+#     # while (ind < len(df.index)):
+#     with open('samplecsv.csv') as file_obj:
+#         reader_obj = csv.reader(file_obj)
+#         for row in reader_obj:
+
+#     # for ind in df.index:
+#         # make keywords list 
+#             # print(df['title'][ind])
+#             # print(type(start_counter))
+#             if counter < start_counter:
+#                 counter += 1
+#                 continue
+#             try:
+#                 keys_list = df['keywords'][ind].lower().split("|")
+#             except:
+#                 # print("no keys, tryin 123 word")
+#                 keys_list = df['word'][ind].lower().split(" ")
+
+#             # PEXELS_HEADERS = ["id", "title", "keywords", "country", "number_of_people", "orientation", "age","gender", "ethnicity", "mood", "image_url", "image_filename"]
+#             image_row = structure_row_123(df, ind, keys_list)
+#             # print("image_row ",image_row)
+
+#             # turn keywords into keyword_id
+#             # print(keys_list)
+#             key_nos_list =[]
+#             for key in keys_list:
+#                 # print(key)
+#                 key_no = unlock_key(image_row['site_image_id'],key, keys_list)
+#                 if key_no:
+#                     key_nos_list.append(key_no)
+#             if image_row['site_name_id'] == 8:
+#                 desc_key_nos_list = description_to_keys(df, ind, image_row['site_image_id'])
+#                 # print(desc_key_nos_list)
+#                 key_nos_list = set(key_nos_list + desc_key_nos_list)
+#             # print(key_nos_list)
+
+#             # ethnicity
+#             eth_no_list = get_eth(df['ethnicity'][ind], keys_list)
+
+#             # reparse the filename. should be able to bring over this code from the scraper_download.py
+
+
+
+#             with engine.connect() as conn:
+#                 # Check if a row with the same data already exists
+#                 select_stmt = select([images_table]).where(
+#                     (images_table.c.site_name_id == image_row['site_name_id']) &
+#                     (images_table.c.site_image_id == image_row['site_image_id'])
+#                 )
+
+#                 row = conn.execute(select_stmt).fetchone()
+
+#                 if row is None:
+#                     # Row does not exist, insert it
+#                     # insert_stmt = insert(images_table).values(image_row).prefix_with('IGNORE')
+#                     insert_stmt = insert(images_table).values(image_row)
+
+#                     print(insert_stmt)
+#                     # print(image_row)
+#                     result = conn.execute(insert_stmt)
+#                     last_inserted_id = result.lastrowid
+
+#                     if key_nos_list and last_inserted_id:
+#                         keyrows = []
+#                         for keyword_id in key_nos_list:
+#                             keyrows.append({'image_id': last_inserted_id, 'keyword_id': keyword_id})
+
+#                         with engine.connect() as conn:
+#                             imageskeywords_insert_stmt = insert(imageskeywords_table).values(keyrows)
+#                             imageskeywords_insert_stmt = imageskeywords_insert_stmt.on_duplicate_key_update(
+#                                 keyword_id=imageskeywords_insert_stmt.inserted.keyword_id
+#                             )
+#                             conn.execute(imageskeywords_insert_stmt)
+
+#                     # print(last_inserted_id)
+#                     # print("eth_no_list ",eth_no_list)
+#                     if eth_no_list and last_inserted_id:
+#                         # print("trying to insert eth")
+#                         ethrows = []
+#                         for ethnicity_id in eth_no_list:
+#                             if ethnicity_id is not None:
+#                                 ethrows.append({'image_id': last_inserted_id, 'ethnicity_id': ethnicity_id})
+
+#                         if ethrows:
+#                             with engine.connect() as conn:
+#                                 imagesethnicity_insert_stmt = insert(imagesethnicity_table).values(ethrows)
+#                                 imagesethnicity_insert_stmt = imagesethnicity_insert_stmt.on_duplicate_key_update(ethnicity_id=imagesethnicity_insert_stmt.inserted.ethnicity_id)
+#                                 conn.execute(imagesethnicity_insert_stmt)
+
+
+#                     # list_alchemy_insert(last_inserted_id,key_nos_list,imageskeywords_table)
+#                     # list_alchemy_insert(last_inserted_id,eth_no_list,imagesethnicity_table)
+#                     print("last_inserted_id: ",last_inserted_id)
+                    
+#                 else:
+#                     # Row already exists, do not insert
+#                     print('Row already exists: ', ind)
+
+#             # print out to countout every 1000 batches
+#             if counter % 1000 == 0:
+#                 # turning into a list for purposes of saving to csv with funciton
+#                 save_counter = [counter]
+#                 write_csv(CSV_COUNTOUT_PATH,save_counter)
+#             counter += 1
+#             ind += 1
+
 
 def ingest_csv():
+
+    column_keys = 5
+    separator_keys = " "
+    column_site = 8
+    column_eth = 8
+    search_desc_for_keys = True
+
+
     with open(CSV_IN_PATH) as file_obj:
         reader_obj = csv.reader(file_obj)
         next(reader_obj)  # Skip header row
@@ -612,29 +764,36 @@ def ingest_csv():
         ind = 0
         
         for row in reader_obj:
-            print(row[1])
+            # print(row[1])
             
             if counter < start_counter:
                 counter += 1
                 continue
             
+            # splitting keys. try is for getty, except is currently set for pexels.
             try:
-                keys_list = row[2].lower().split("|")
+                keys_list = row[column_keys].lower().split(separator_keys)
             except IndexError:
-                keys_list = row[5].lower().split(" ")
-            
+                print("keys failed")
+            # print(keys_list)
+
             image_row = structure_row_123_asrow(row, ind, keys_list)
             key_nos_list = []
             
             for key in keys_list:
-                key_no = unlock_key(image_row['site_image_id'], key, keys_list)
+                key_no = unlock_key(image_row['site_image_id'], key, keys_dict)
+                # print(key_no)
                 if key_no:
                     key_nos_list.append(key_no)
             
-            if image_row['site_name_id'] == 8:
-                desc_key_nos_list = description_to_keys_row(image_row['description'], ind, image_row['site_image_id'])
+            # print(key_nos_list)
+
+            if search_desc_for_keys == True:
+                desc_key_nos_list = description_to_keys_row(image_row['description'], image_row['site_image_id'])
                 key_nos_list = set(key_nos_list + desc_key_nos_list)
             
+            print(key_nos_list)
+            pass
             eth_no_list = get_eth(row[8], keys_list)
             
             with engine.connect() as conn:
@@ -681,124 +840,6 @@ def ingest_csv():
 
 
 
-def ingest_it():
-    # print(keys_dict["cute"])
-
-    # df = pd.read_csv(CSV_IN_PATH)
-    # df = df.drop_duplicates()
-    df['title'] = df['title'].apply(lambda x: x[:140])
-
-    # print(df)
-    start_counter = get_counter()
-    ind = 0
-    counter = 0
-    # print(len(df.index))
-    # start_counter = 50000
-    # while (ind < len(df.index)):
-    with open('samplecsv.csv') as file_obj:
-        reader_obj = csv.reader(file_obj)
-        for row in reader_obj:
-
-    # for ind in df.index:
-        # make keywords list 
-            print(df['title'][ind])
-            # print(type(start_counter))
-            if counter < start_counter:
-                counter += 1
-                continue
-            try:
-                keys_list = df['keywords'][ind].lower().split("|")
-            except:
-                # print("no keys, tryin 123 word")
-                keys_list = df['word'][ind].lower().split(" ")
-
-            # PEXELS_HEADERS = ["id", "title", "keywords", "country", "number_of_people", "orientation", "age","gender", "ethnicity", "mood", "image_url", "image_filename"]
-            image_row = structure_row_123(df, ind, keys_list)
-            # print("image_row ",image_row)
-
-            # turn keywords into keyword_id
-            # print(keys_list)
-            key_nos_list =[]
-            for key in keys_list:
-                # print(key)
-                key_no = unlock_key(image_row['site_image_id'],key, keys_list)
-                if key_no:
-                    key_nos_list.append(key_no)
-            if image_row['site_name_id'] == 8:
-                desc_key_nos_list = description_to_keys(df, ind, image_row['site_image_id'])
-                # print(desc_key_nos_list)
-                key_nos_list = set(key_nos_list + desc_key_nos_list)
-            # print(key_nos_list)
-
-            # ethnicity
-            eth_no_list = get_eth(df['ethnicity'][ind], keys_list)
-
-            # reparse the filename. should be able to bring over this code from the scraper_download.py
-
-
-
-            with engine.connect() as conn:
-                # Check if a row with the same data already exists
-                select_stmt = select([images_table]).where(
-                    (images_table.c.site_name_id == image_row['site_name_id']) &
-                    (images_table.c.site_image_id == image_row['site_image_id'])
-                )
-
-                row = conn.execute(select_stmt).fetchone()
-
-                if row is None:
-                    # Row does not exist, insert it
-                    # insert_stmt = insert(images_table).values(image_row).prefix_with('IGNORE')
-                    insert_stmt = insert(images_table).values(image_row)
-
-                    print(insert_stmt)
-                    print(image_row)
-                    result = conn.execute(insert_stmt)
-                    last_inserted_id = result.lastrowid
-
-                    if key_nos_list and last_inserted_id:
-                        keyrows = []
-                        for keyword_id in key_nos_list:
-                            keyrows.append({'image_id': last_inserted_id, 'keyword_id': keyword_id})
-
-                        with engine.connect() as conn:
-                            imageskeywords_insert_stmt = insert(imageskeywords_table).values(keyrows)
-                            imageskeywords_insert_stmt = imageskeywords_insert_stmt.on_duplicate_key_update(
-                                keyword_id=imageskeywords_insert_stmt.inserted.keyword_id
-                            )
-                            conn.execute(imageskeywords_insert_stmt)
-
-                    # print(last_inserted_id)
-                    # print("eth_no_list ",eth_no_list)
-                    if eth_no_list and last_inserted_id:
-                        # print("trying to insert eth")
-                        ethrows = []
-                        for ethnicity_id in eth_no_list:
-                            if ethnicity_id is not None:
-                                ethrows.append({'image_id': last_inserted_id, 'ethnicity_id': ethnicity_id})
-
-                        if ethrows:
-                            with engine.connect() as conn:
-                                imagesethnicity_insert_stmt = insert(imagesethnicity_table).values(ethrows)
-                                imagesethnicity_insert_stmt = imagesethnicity_insert_stmt.on_duplicate_key_update(ethnicity_id=imagesethnicity_insert_stmt.inserted.ethnicity_id)
-                                conn.execute(imagesethnicity_insert_stmt)
-
-
-                    # list_alchemy_insert(last_inserted_id,key_nos_list,imageskeywords_table)
-                    # list_alchemy_insert(last_inserted_id,eth_no_list,imagesethnicity_table)
-                    print("last_inserted_id: ",last_inserted_id)
-                    
-                else:
-                    # Row already exists, do not insert
-                    print('Row already exists: ', ind)
-
-            # print out to countout every 1000 batches
-            if counter % 1000 == 0:
-                # turning into a list for purposes of saving to csv with funciton
-                save_counter = [counter]
-                write_csv(CSV_COUNTOUT_PATH,save_counter)
-            counter += 1
-            ind += 1
 
     # print("inserted")
 
