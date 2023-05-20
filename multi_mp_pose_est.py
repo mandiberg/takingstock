@@ -16,9 +16,14 @@ import numpy as np
 import mediapipe as mp
 import pandas as pd
 
-from sqlalchemy import create_engine, text, MetaData, Table, Column, Numeric, Integer, VARCHAR, update
+from sqlalchemy import create_engine, text, MetaData, Table, Column, Numeric, Integer, VARCHAR, Boolean, DECIMAL, BLOB, JSON, String, Date, ForeignKey, update
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import relationship
+from sqlalchemy.ext.declarative import declarative_base
+
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.pool import NullPool
+
 
 from mp_pose_est import SelectPose
 from mp_db_io import DataIO
@@ -50,13 +55,13 @@ SELECT = "DISTINCT(i.image_id), i.site_name_id, i.contentUrl, i.imagename, e.enc
 FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings e ON i.image_id = e.image_id"
 
 # WHERE = "e.is_body IS TRUE AND e.bbox IS NULL AND e.face_x IS NOT NULL"
-# WHERE = "e.face_encodings IS NULL AND i.site_name_id = 5 AND k.keyword_text LIKE 'laugh%'"
+WHERE = "e.face_encodings IS NULL AND i.site_name_id = 8 AND k.keyword_text LIKE 'smil%'"
 # WHERE = "e.face_encodings IS NULL AND e.face_landmarks IS NOT NULL AND e.bbox IS NOT NULL"
 # WHERE = "e.image_id IS NULL AND i.site_name_id = 5 AND k.keyword_text LIKE 'work%'"
 # WHERE = "(e.image_id IS NULL AND k.keyword_text LIKE 'smil%')OR (e.image_id IS NULL AND k.keyword_text LIKE 'happ%')OR (e.image_id IS NULL AND k.keyword_text LIKE 'laugh%')"
 # WHERE = "e.face_landmarks IS NOT NULL AND e.bbox IS NULL AND i.site_name_id = 1"
-WHERE = "i.site_name_id = 1 AND i.site_image_id LIKE '1402424532'"
-LIMIT = 10000
+# WHERE = "i.site_name_id = 1 AND i.site_image_id LIKE '1402424532'"
+LIMIT = 100
 
 #creating my objects
 mp_face_mesh = mp.solutions.face_mesh
@@ -76,6 +81,94 @@ face_encoder = dlib.face_recognition_model_v1(face_recognition_model)
 engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}"
                                 .format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']), poolclass=NullPool)
 metadata = MetaData(engine)
+
+Session = sessionmaker(bind=engine)
+session = Session()
+
+Base = declarative_base()
+
+class Ethnicity(Base):
+    __tablename__ = 'ethnicity'
+    ethnicity_id = Column(Integer, primary_key=True, autoincrement=True)
+    ethnicity = Column(String(40))
+
+class Gender(Base):
+    __tablename__ = 'gender'
+    gender_id = Column(Integer, primary_key=True, autoincrement=True)
+    gender = Column(String(20))
+
+class Age(Base):
+    __tablename__ = 'age'
+    age_id = Column(Integer, primary_key=True, autoincrement=True)
+    age = Column(String(20))
+
+class Site(Base):
+    __tablename__ = 'site'
+    site_name_id = Column(Integer, primary_key=True, autoincrement=True)
+    site_name = Column(String(20))
+
+class Location(Base):
+    __tablename__ = 'location'
+    location_id = Column(Integer, primary_key=True, autoincrement=True)
+    location_text = Column(String(50))
+    location_number = Column(String(50))
+    location_code = Column(String(50))
+
+class Images(Base):
+    __tablename__ = 'images'
+    image_id = Column(Integer, primary_key=True, autoincrement=True)
+    site_name_id = Column(Integer, ForeignKey('site.site_name_id'))
+    site_image_id = Column(String(50), nullable=False)
+    age_id = Column(Integer, ForeignKey('age.age_id'))
+    gender_id = Column(Integer, ForeignKey('gender.gender_id'))
+    location_id = Column(Integer, ForeignKey('location.location_id'))
+    author = Column(String(100))
+    caption = Column(String(150))
+    contentUrl = Column(String(300), nullable=False)
+    description = Column(String(150))
+    imagename = Column(String(200))
+    uploadDate = Column(Date)
+
+    site = relationship("Site")
+    age = relationship("Age")
+    gender = relationship("Gender")
+    location = relationship("Location")
+
+class Keywords(Base):
+    __tablename__ = 'keywords'
+    keyword_id = Column(Integer, primary_key=True, autoincrement=True)
+    keyword_number = Column(Integer)
+    keyword_text = Column(String(50), nullable=False)
+    keytype = Column(String(50))
+    weight = Column(Integer)
+    parent_keyword_id = Column(String(50))
+    parent_keyword_text = Column(String(50))
+
+class ImagesKeywords(Base):
+    __tablename__ = 'imageskeywords'
+    image_id = Column(Integer, ForeignKey('images.image_id'), primary_key=True)
+    keyword_id = Column(Integer, ForeignKey('keywords.keyword_id'), primary_key=True)
+
+class ImagesEthnicity(Base):
+    __tablename__ = 'imagesethnicity'
+    image_id = Column(Integer, ForeignKey('images.image_id'), primary_key=True)
+    ethnicity_id = Column(Integer, ForeignKey('ethnicity.ethnicity_id'), primary_key=True)
+
+class Encodings(Base):
+    __tablename__ = 'encodings'
+    encoding_id = Column(Integer, primary_key=True, autoincrement=True)
+    image_id = Column(Integer, ForeignKey('images.image_id'))
+    is_face = Column(Boolean)
+    is_body = Column(Boolean)
+    is_face_distant = Column(Boolean)
+    face_x = Column(DECIMAL(6, 3))
+    face_y = Column(DECIMAL(6, 3))
+    face_z = Column(DECIMAL(6, 3))
+    mouth_gap = Column(DECIMAL(6, 3))
+    face_landmarks = Column(BLOB)
+    bbox = Column(JSON)
+    face_encodings = Column(BLOB)
+    body_landmarks = Column(BLOB)
 
 start = time.time()
 
@@ -188,6 +281,18 @@ def insertignore_dict(dict_data,table_name):
      with engine.connect() as connection:
          connection.execute(target_table.insert(), dict_data)
 
+def selectORM(session, FILTER, LIMIT):
+    query = session.query(Images.image_id, Images.site_name_id, Images.contentUrl, Images.imagename,
+                          Encodings.encoding_id, Images.site_image_id, Encodings.face_landmarks, Encodings.bbox)\
+        .join(ImagesKeywords, Images.image_id == ImagesKeywords.image_id)\
+        .join(Keywords, ImagesKeywords.keyword_id == Keywords.keyword_id)\
+        .outerjoin(Encodings, Images.image_id == Encodings.image_id)\
+        .filter(*FILTER)\
+        .limit(LIMIT)
+
+    results = query.all()
+    results_dict = [dict(row) for row in results]
+    return results_dict
 
 def selectSQL():
     selectsql = f"SELECT {SELECT} FROM {FROM} WHERE {WHERE} LIMIT {str(LIMIT)};"
@@ -587,23 +692,56 @@ def process_image(task):
         # DEBUGGING --> need to change this back to "encodings"
         # print(df)  ### made it all lower case to avoid discrepancy
         # print(df.at['1', 'face_encodings'])
-        print(df)
         dict_df = df.to_dict('index')
-        print("dict_df", dict_df["1"])
-        quit()
-        with engine.connect() as conn:
-            select_stmt = select([images_table]).where(
-                (images_table.c.site_name_id == image_row['site_name_id']) &
-                (images_table.c.site_image_id == image_row['site_image_id'])
-            )
-            row = conn.execute(select_stmt).fetchone()
-            
-            if row is None:
-                insert_stmt = insert(images_table).values(image_row)
-                result = conn.execute(insert_stmt)
+        insert_dict = dict_df["1"]
+
+        # remove all nan/none/null values
+        keys_to_remove = []
+        for key, value in insert_dict.items():
+            # print("about to try", key)
+            try:
+                if np.isnan(value):
+                    # print("is NaN")
+                    # print(key, value)
+                    keys_to_remove.append(key)
+                else:
+                    pass 
+                    #is non NaN
+                    # print("slips through")
+                    # print(key, value)
+            except TypeError:
+                # print("is not NaN")
+                # print(key, value)
+                pass 
+                #is non NaN
+
+        for key in keys_to_remove:
+            del insert_dict[key]
 
 
-        insertignore_df(df,"encodings", engine)  ### made it all lower case to avoid discrepancy
+
+        # print("dict_df", insert_dict)
+        # quit()
+
+        # Check if the entry exists in the Encodings table
+        image_id = insert_dict['image_id']
+        existing_entry = session.query(Encodings).filter_by(image_id=image_id).first()
+
+        if existing_entry is None:
+            # Entry does not exist, insert insert_dict into the table
+            new_entry = Encodings(**insert_dict)
+            session.add(new_entry)
+            session.commit()
+            print(f"just added {image_id}")
+        else:
+            print("already exists, not adding")
+
+        # Close the session
+        session.close()
+
+
+
+        # insertignore_df(df,"encodings", engine)  ### made it all lower case to avoid discrepancy
     except OperationalError as e:
         print(e)
 

@@ -44,7 +44,7 @@ NUMBER_OF_PROCESSES = 8
 #######################################
 
 
-CSV_IN_PATH = "/Volumes/Test36/CSVs_to_ingest/123rfCSVs/123rf.10000.csv"
+CSV_IN_PATH = "/Volumes/Test36/CSVs_to_ingest/123rfCSVs/123rf.output.csv"
 KEYWORD_PATH = "/Volumes/Test36/CSVs_to_ingest/123rfCSVs/Keywords_202305150950.csv"
 CSV_NOKEYS_PATH = "/Volumes/Test36/CSVs_to_ingest/123rfCSVs/CSV_NOKEYS.csv"
 CSV_IMAGEKEYS_PATH = "/Volumes/Test36/CSVs_to_ingest/123rfCSVs/CSV_IMAGEKEYS.csv"
@@ -174,16 +174,16 @@ def get_counter():
 def unlock_key(site_id,key, this_dict):
     key_no = None
     try:
-        print("trying basic keys_dict for this key:")
-        print(key)
-        print("from dict this long")
-        print(len(this_dict))
-        # print(this_dict)
+        # print("trying basic keys_dict for this key:")
+        # print(key)
+        # print("from dict this long")
+        # print(len(this_dict))
+        # # print(this_dict)
 
         # print(this_dict["office"])
         key_no = this_dict[key]
-        print("this is the key_no")
-        print(key_no)
+        # print("this is the key_no")
+        # print(key_no)
         return(key_no)
     except:
         try:
@@ -193,13 +193,13 @@ def unlock_key(site_id,key, this_dict):
         except:
             # try:
             # try with inflections
-            print(site_id)
-            print(key)
+            # print(site_id)
+            # print(key)
 
             plur_key = getInflection(key, 'NNS')
             sing_key = getInflection(key, 'NN')
             gerund_key = getInflection(key, 'VBG')
-            print("inflected are: ", plur_key, sing_key, gerund_key)
+            # print("inflected are: ", plur_key, sing_key, gerund_key)
             if plur_key and key != plur_key:
                 try:
                     key_no = this_dict[plur_key[0]]
@@ -329,14 +329,14 @@ def description_to_keys(description, site_id, this_dict="keys_dict"):
     desc_keys = description.split(" ")
     # print("desc_keys ",desc_keys)
     for key in desc_keys:
-        print("checking key ", key)
+        # print("checking key ", key)
         if not pd.isnull(key):
             key_no = unlock_key(site_id,key,this_dict)
-            print("key_no passed through:")
-            print(key_no)
+            # print("key_no passed through:")
+            # print(key_no)
             if key_no:
                 key_nos_list.append(key_no)
-            print("key_nos_list ",key_nos_list)
+            # print("key_nos_list ",key_nos_list)
     return key_nos_list
 
 
@@ -344,7 +344,7 @@ def description_to_keys(description, site_id, this_dict="keys_dict"):
 def get_gender_age_row(gender_string, age_string, description, keys_list, site_id):
     def try_key(gender, age, this_string):
         if not pd.isnull(this_string):
-            print(f"looking for {this_string} in dict")
+            # print(f"looking for {this_string} in dict")
             #convertkeys
             try:
                 gender = gender_dict[this_string.lower()]
@@ -366,8 +366,8 @@ def get_gender_age_row(gender_string, age_string, description, keys_list, site_i
                     age = age_dict[this_string.lower()]
                 except:
                     print('NEW KEY, NOT AGE OR GENDER -------------------------> ', this_string)
-        else:
-            print("string is None")
+        # else:
+        #     print("string is None")
         return gender, age
 
 
@@ -390,7 +390,7 @@ def get_gender_age_row(gender_string, age_string, description, keys_list, site_i
     # print(age)
 
     if pd.isnull(gender): 
-        print("gender is null")
+        # print("gender is null")
         gender_results = description_to_keys(description, site_id, gender_dict)
         if len(set(gender_results)) == 1:
             gender = gender_results[0]
@@ -401,14 +401,14 @@ def get_gender_age_row(gender_string, age_string, description, keys_list, site_i
     # print(age)
 
     if pd.isnull(age):
-        print("age is null")
+        # print("age is null")
         age_results = description_to_keys(description, site_id, age_dict)
         if len(set(age_results)) == 1:
             age = age_results[0]
 
-    print("gender, age, after everything")
-    print(gender)
-    print(age)
+    # print("gender, age, after everything")
+    # print(gender)
+    # print(age)
 
     return gender, age
 
@@ -535,8 +535,9 @@ def ingest_csv():
                 desc_key_nos_list = description_to_keys(image_row['description'], image_row['site_image_id'])
                 key_nos_list = set(key_nos_list + desc_key_nos_list)
             
-            print(key_nos_list)
+            # print(key_nos_list)
             eth_no_list = get_eth(row[8], keys_list)
+            print("eth_no_list " , eth_no_list)
 
             with engine.connect() as conn:
                 select_stmt = select([images_table]).where(

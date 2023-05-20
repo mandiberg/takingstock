@@ -42,6 +42,6 @@ class DataIO:
             os.path.join(self.ROOT36,"images_pexels"), #5, Pexels
             os.path.join(self.ROOT36,""),
             os.path.join(self.ROOT36,""),
-            os.path.join(self.ROOT36,""),
+            os.path.join(self.ROOT36,"images_123rf"), #8, images_123rf
             os.path.join(self.ROOT36,""),
         ]
