@@ -311,13 +311,13 @@ def get_location(df, ind, keys_list):
 
 
 #currently only called for keys to desc in main show. not for gender.
-def description_to_keys_row(description, site_id, this_dict="keys_dict"):
+def description_to_keys(description, site_id, this_dict="keys_dict"):
     if this_dict=="keys_dict":
         this_dict = keys_dict
-    elif this_dict=="gender_dict":
-        this_dict = gender_dict
-    elif this_dict=="age_dict":
-        this_dict = age_dict
+    # elif this_dict=="gender_dict":
+    #     this_dict = gender_dict
+    # elif this_dict=="age_dict":
+    #     this_dict = age_dict
     # skipping eth_dict out of an abundance of caution:
     # white and black in description are not consistently ethnicity descriptors
 
@@ -370,23 +370,6 @@ def get_gender_age_row(gender_string, age_string, description, keys_list, site_i
             print("string is None")
         return gender, age
 
-    def key_in_desc(key, key_dict, description, keys_list):
-        #try to find gender or age in description
-        # print(f"looking for {key_dict} in description: {description} and {keys_list}")
-        try:
-            key = findall_dict(key_dict,description)
-            # print("key found")
-            # print(key)
-        except:
-            print("no key found, going keyword hunting")
-            try:
-                key = search_keys(keys_list, key_dict)[0]
-            except:
-                pass
-                print('no key found: ', description)
-        return key
-
-
 
     print("get_gender_age_row starting")
     global gender_dict
@@ -408,15 +391,21 @@ def get_gender_age_row(gender_string, age_string, description, keys_list, site_i
 
     if pd.isnull(gender): 
         print("gender is null")
-        gender = key_in_desc(gender, gender_dict, description, keys_list)
+        gender_results = description_to_keys(description, site_id, gender_dict)
+        if len(set(gender_results)) == 1:
+            gender = gender_results[0]
+
+
     # print("gender, age, after try description gender_string")
     # print(gender)
     # print(age)
 
     if pd.isnull(age):
         print("age is null")
+        age_results = description_to_keys(description, site_id, age_dict)
+        if len(set(age_results)) == 1:
+            age = age_results[0]
 
-        age = key_in_desc(age, age_dict, description, keys_list)
     print("gender, age, after everything")
     print(gender)
     print(age)
@@ -543,13 +532,12 @@ def ingest_csv():
             # print(key_nos_list)
 
             if search_desc_for_keys == True:
-                desc_key_nos_list = description_to_keys_row(image_row['description'], image_row['site_image_id'])
+                desc_key_nos_list = description_to_keys(image_row['description'], image_row['site_image_id'])
                 key_nos_list = set(key_nos_list + desc_key_nos_list)
             
             print(key_nos_list)
-            pass
             eth_no_list = get_eth(row[8], keys_list)
-            
+
             with engine.connect() as conn:
                 select_stmt = select([images_table]).where(
                     (images_table.c.site_name_id == image_row['site_name_id']) &

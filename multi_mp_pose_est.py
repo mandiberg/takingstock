@@ -587,6 +587,21 @@ def process_image(task):
         # DEBUGGING --> need to change this back to "encodings"
         # print(df)  ### made it all lower case to avoid discrepancy
         # print(df.at['1', 'face_encodings'])
+        print(df)
+        dict_df = df.to_dict('index')
+        print("dict_df", dict_df["1"])
+        quit()
+        with engine.connect() as conn:
+            select_stmt = select([images_table]).where(
+                (images_table.c.site_name_id == image_row['site_name_id']) &
+                (images_table.c.site_image_id == image_row['site_image_id'])
+            )
+            row = conn.execute(select_stmt).fetchone()
+            
+            if row is None:
+                insert_stmt = insert(images_table).values(image_row)
+                result = conn.execute(insert_stmt)
+
 
         insertignore_df(df,"encodings", engine)  ### made it all lower case to avoid discrepancy
     except OperationalError as e:
