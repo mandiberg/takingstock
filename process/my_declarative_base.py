@@ -84,4 +84,5 @@ class Encodings(Base):
     mouth_gap = Column(DECIMAL(6, 3))
     face_landmarks = Column(BLOB)
     bbox = Column(JSON)
-    face_encodings = Column
+    face_encodings = Column(BLOB)
+    body_landmarks = Column(BLOB)

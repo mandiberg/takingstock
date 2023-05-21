@@ -64,6 +64,7 @@ age_dict = {
     "baby":1,
     "infant":2,
     "infants":2,
+    "toddler":3,
     "child":3,
     "teen":4,
     "teenager":4,
@@ -283,7 +284,7 @@ def get_eth(eth_name, keys_list):
     # if eth_name is not None or eth_name is not np.isnan(eth_name):
     if not pd.isnull(eth_name):
         try:
-            eth_no = eth_dict[eth_name]
+            eth_no = eth_dict[eth_name.lower()]
         # need to key this into integer, like with keys
             # print("eth_name ",eth_name)
         except:

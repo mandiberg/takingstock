@@ -35,9 +35,13 @@ CYCLECOUNT = 2
 MAPDATA_FILE = "allmaps_62607.csv"
 
 SELECT = "DISTINCT(i.image_id), i.site_name_id, i.contentUrl, i.imagename, e.face_x, e.face_y, e.face_z, e.mouth_gap, e.face_landmarks, e.bbox, e.face_encodings, i.site_image_id"
-# SELECT = "DISTINCT(i.image_id), i.gender_id, author, caption, contentUrl, description, imagename"
 FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings6 e ON i.image_id = e.image_id INNER JOIN Allmaps am ON i.site_image_id = am.site_image_id"
 WHERE = "e.is_face IS TRUE AND e.face_encodings IS NOT NULL AND e.bbox IS NOT NULL AND i.site_name_id = 1"
+
+# WHERE = "i.site_image_id LIKE '1402424532'"
+# WHERE = "i.site_image_id IN (1402424532)"
+# WHERE = "i.site_image_id IN (1311507298, 1402424532, 168449643, 1182617710)"
+
 # WHERE = "e.is_face IS TRUE AND e.bbox IS NOT NULL AND i.site_name_id = 5 AND k.keyword_text LIKE 'smil%'"
 # WHERE = "e.image_id IS NULL "
 LIMIT = 100000
@@ -130,66 +134,122 @@ def save_sorted(counter, folder, image, dist):
 
 def get_d(enc1, enc2):
     enc1=np.array(enc1)
-    # enc2=np.array(enc2)
-    print("enc1 size ")
-    print(enc1.shape)
-    print("enc2 size ")
-    print(enc2.shape)
+    print("enc1")
+    print(enc1[0])
+    enc2=np.array(enc2)
+    print("enc2")
+    print(enc2[0])
     d=np.linalg.norm(enc1 - enc2, axis=0)
-    print("get_d: ",d)
+    print("d")
+    print(d)
     return d
 
+# def get_d(enc1, enc2):
+#     enc1=np.array(enc1)
+#     # enc2=np.array(enc2)
+#     print("enc1 size ")
+#     print(enc1.shape)
+#     print("enc2 size ")
+#     print(enc2.shape)
+#     d=np.linalg.norm(enc1 - enc2, axis=0)
+#     print("get_d: ",d)
+#     return d
+
 def get_closest_df(start_img, df_enc):
-    print(df_enc)
     if start_img == "median":
-        # print("df_enc: ", df_enc)
-        encodings_array = np.array(df_enc['encoding'].tolist())
-
-        # Calculate the median along axis 0
-        enc1 = np.median(encodings_array, axis=0)
-        # print("median_encoding ",enc1)
-
-        # enc1 = df_enc.median()
-        # print("in median: ", enc1)
+        enc1 = df_enc.median().to_list()
+        print("in median")
+        # print(enc1)
     elif start_img == "start_site_image_id":
-        print("start_site_image_id")
+        print("start_site_image_id (this is what we are comparing to)")
         print(start_site_image_id)
-        enc1 = df_enc.loc[start_site_image_id]['encoding'].tolist()
-        # print(df_enc)
-        # enc1 = df_enc.index[df_enc['file_name']==start_site_image_id].tolist()[0]
-        print(enc1)
-        # start_site_image_id
-        # enc1 = df_enc.loc[start_img]['encoding'].tolist()
-
+        enc1 = df_enc.loc[start_site_image_id].to_list()
+        # print(enc1)
+        
     else:
 #         enc1 = get 2-129 from df via stimg key
-        print("start_img")
+        print("start_img key is (this is what we are comparing to):")
         print(start_img)
-
-        # start_img
-        # 2/2c/beautiful-taiwanese-woman-on-the-street-of-taipei-picture-id1152386040.jpg
-
-        enc1 = df_enc.loc[start_img]['encoding'].tolist()
-        print("in else")
-        print(enc1)
-        print(enc1[0])
+        enc1 = df_enc.loc[start_img].to_list()
         df_enc=df_enc.drop(start_img)
-
+        # print("in new img",len(df_enc.index))
+        # print(enc1)
+    
+#     img_list.remove(start_img)
+#     enc1=enc_dict[start_img]
+    
     dist=[]
     dist_dict={}
+    
+    # print("df_enc for ", )
+    # print(df_enc)
+    
     for index, row in df_enc.iterrows():
-        enc2 = row['encoding']
+#         print(row['c1'], row['c2'])
+#     for img in img_list:
+        enc2 = row
+        print("testing this", index, "against the start img",start_img)
         if (enc1 is not None) and (enc2 is not None):
             d = get_d(enc1, enc2)
-            print(d)
-            if len(enc1) >1:
-                dist.append(d)
-                dist_dict[d]=index
-            else:
-                print("seems like an 128 array OOPS")
+            print ("d is", str(d), "for", index)
+            dist.append(d)
+            dist_dict[d]=index
     dist.sort()
+    print ("the winner is: ", str(dist[0]), dist_dict[dist[0]])
 #     print(len(dist))
-    return dist[0], dist_dict[dist[0]], df_enc, 
+    return dist[0], dist_dict[dist[0]], df_enc
+
+# def get_closest_df(start_img, df_enc):
+#     print(df_enc)
+#     if start_img == "median":
+#         # print("df_enc: ", df_enc)
+#         encodings_array = np.array(df_enc['encoding'].tolist())
+
+#         # Calculate the median along axis 0
+#         enc1 = np.median(encodings_array, axis=0)
+#         # print("median_encoding ",enc1)
+
+#         # enc1 = df_enc.median()
+#         # print("in median: ", enc1)
+#     elif start_img == "start_site_image_id":
+#         print("start_site_image_id")
+#         print(start_site_image_id)
+#         enc1 = df_enc.loc[start_site_image_id]['encoding'].tolist()
+#         # print(df_enc)
+#         # enc1 = df_enc.index[df_enc['file_name']==start_site_image_id].tolist()[0]
+#         print(enc1)
+#         # start_site_image_id
+#         # enc1 = df_enc.loc[start_img]['encoding'].tolist()
+
+#     else:
+# #         enc1 = get 2-129 from df via stimg key
+#         print("start_img")
+#         print(start_img)
+
+#         # start_img
+#         # 2/2c/beautiful-taiwanese-woman-on-the-street-of-taipei-picture-id1152386040.jpg
+
+#         enc1 = df_enc.loc[start_img]['encoding'].tolist()
+#         print("in else")
+#         print(enc1)
+#         print(enc1[0])
+#         df_enc=df_enc.drop(start_img)
+
+#     dist=[]
+#     dist_dict={}
+#     for index, row in df_enc.iterrows():
+#         enc2 = row['encoding']
+#         if (enc1 is not None) and (enc2 is not None):
+#             d = get_d(enc1, enc2)
+#             print(d)
+#             if len(enc1) >1:
+#                 dist.append(d)
+#                 dist_dict[d]=index
+#             else:
+#                 print("seems like an 128 array OOPS")
+#     dist.sort()
+# #     print(len(dist))
+#     return dist[0], dist_dict[dist[0]], df_enc, 
 
 
 # test if new and old make a face
@@ -267,14 +327,15 @@ def test_pair(last_file, new_file):
 
 
 # takes a dataframe of images and encodings and returns a df sorted by distance
-def sort_by_face_dist(start_img,df_enc):
+def sort_by_face_dist(start_img,df_enc, df_128_enc):
     face_distances=[]
+    # this prob should be a df.iterrows
     for i in range(len(df_enc.index)-2):
         # find the image
         print(df_enc)
         # the hardcoded #1 needs to be replaced with site_name_id, which needs to be readded to the df
         print("starting sort round ",str(i))
-        dist, start_img, df_enc = get_closest_df(start_img,df_enc)
+        dist, start_img, df_128_enc = get_closest_df(start_img,df_128_enc)
         # dist[0], dist_dict[dist[0]]
         thisimage=None
         face_landmarks=None
@@ -294,11 +355,15 @@ def sort_by_face_dist(start_img,df_enc):
 
         #debuggin
         print("sorted round ",str(i))
-        print(len(df_enc.index))
+        print(len(df_128_enc.index))
         print(dist)
         print (start_img)
+        for row in face_distances:
+            print(str(row[0]), row[2])
     df = pd.DataFrame(face_distances, columns =['dist', 'folder', 'filename','site_name_id','face_landmarks', 'bbox'])
-    df = df.sort_values(by=['dist'])
+    print(df)
+    # df = df.sort_values(by=['dist']) # this was sorting based on delta distance, not sequential distance
+    # print(df)
     return df
 
 
@@ -475,29 +540,40 @@ def main():
     print("raw df from DB")
     print(df['face_encodings'])
 
-    ### PROCESS THE DATA ###
+
+# turning this off for debugging
+    # ### PROCESS THE DATA ###
+
+    # # make the segment based on settings
+    # df_segment = sort.make_segment(df)
+
+    # # get list of all angles in segment
+    # angle_list = sort.createList(df_segment)
+
+    # # sort segment by angle list
+    # # creates sort.d attribute: a dataframe organized (indexed?) by angle list
+    # sort.get_divisor(df_segment)
+
+    # # # is this used anywhere? 
+    # # angle_list_pop = angle_list.pop()
+
+    # # get median for first sort
+    # median = sort.get_median()
+
+    # # get metamedian for second sort, creates sort.metamedian attribute
+    # sort.get_metamedian()
+
+
+# adding this for debugging
 
     # make the segment based on settings
     df_segment = sort.make_segment(df)
 
-    # get list of all angles in segment
-    angle_list = sort.createList(df_segment)
+    # df_segment = df
 
-    # sort segment by angle list
-    # creates sort.d attribute: a dataframe organized (indexed?) by angle list
-    sort.get_divisor(df_segment)
-
-    # # is this used anywhere? 
-    # angle_list_pop = angle_list.pop()
-
-    # get median for first sort
-    median = sort.get_median()
-
-    # get metamedian for second sort, creates sort.metamedian attribute
-    sort.get_metamedian()
-
-    col1="file_name"
-    col2="encoding"
+    # # OLD format the encodings for sorting by distance
+    col1="imagename"
+    col2="face_encodings"
     col3="site_name_id"
     col4="face_landmarks"
     col5="bbox"
@@ -505,7 +581,31 @@ def main():
     df_enc = pd.DataFrame({col1: df_segment['imagename'], col2: df_segment['face_encodings'].apply(lambda x: np.array(x)), 
                 col3: df_segment['site_name_id'], col4: df_segment['face_landmarks'], col5: df_segment['bbox'] })
     df_enc.set_index(col1, inplace=True)
+    print(df_enc)
 
+    # Create column names for the 128 encoding columns
+    encoding_cols = [f"encoding{i}" for i in range(128)]
+
+    # Create a new DataFrame with the expanded encoding columns
+    df_expanded = df_enc.apply(lambda row: pd.Series(row[col2], index=encoding_cols), axis=1)
+
+    # Concatenate the expanded DataFrame with the original DataFrame
+    df_final = pd.concat([df_enc, df_expanded], axis=1)
+
+    # Optionally, drop the original 'face_encodings' column
+    # df_final.drop(col2, axis=1, inplace=True)
+    df_128_enc = df_final.drop([col2, col3, col4, col5], axis=1)
+
+    print(df_128_enc)
+
+    # start_img = "f/f4/young-woman-laughing-picture-id1001121288.jpg"
+    # enc1 = df_enc.loc[start_img].to_list()
+    # print(enc1)
+
+
+    # for index, row in df_128_enc.iterrows():
+    #     enc2 = row
+    #     print("this is the enc2 row passing in", enc2)
 
     ### BUILD THE LIST OF SELECTED IMAGES ###
 
@@ -523,7 +623,8 @@ def main():
         # save_sorted(i, folder, start_img, dist)
 
         # # get dataframe sorted by distance
-        df_sorted = sort_by_face_dist(start_img,df_enc)
+
+        df_sorted = sort_by_face_dist(start_img,df_enc, df_128_enc)
         print("df_sorted")
         print(df_sorted)
         # img_list = df_sorted['filename'].tolist()
