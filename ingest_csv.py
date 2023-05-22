@@ -57,7 +57,7 @@ key2key = {"person":"people", "kid":"child","affection":"affectionate", "baby":"
 gender_dict = {"men":1,"man":1,"male":1,"males":1,"his":1,"him":1,"Businessman":1,"Businessmen":1,"father":1,"boy":1, "boys":1, "none":2, "oldmen":3, "grandfather":3,"oldwomen":4, "grandmother":4, "nonbinary":5, "other":6, "trans":7, 
         "women":8,"woman":8,"female":8,"females":8, "hers":8, "her":8, "businesswoman":8, "businesswomen":8, "mother":8, "girl":8, "girls":8, "youngmen":9, "youngwomen":10}
 # gender2key = {"man":"men", "woman":"women"}
-eth_dict = {"Black":1, "African-American":1, "AfricanAmerican":1, "African American":1, "African":1, "caucasian":2, "white people":2, "europeans":2, "eastasian":3, "chinese":3, "japanese":3, "asian":3, "hispaniclatino":4, "latino":4, "hispanic":4, "mexican":4, "middleeastern":5, "middle eastern":5, "arab":5, "mixedraceperson":6, "mixedrace":6, "mixed race":6, "mixed ethnicity":6, "multiethnic":6, "multi ethnic":6, "multi-ethnic":6, "nativeamericanfirstnations":7, "native american":7, "nativeamerican":7, "native-american":7, "indian american":7, "indianamerican":7, "indian-american":7, "first nations":7, "firstnations":7, "first-nations":7, "indigenous":7, "pacificislander":8, "pacific islander":8, "pacific-islander":8, "southasian":9, "south asian":9, "south-asian":9, "indian":9, "southeastasian":10, "southeast asian":10, "southeast-asian":10}
+eth_dict = {"Black":1, "African-American":1, "AfricanAmerican":1, "African American":1, "African":1, "caucasian":2, "white people":2, "europeans":2, "eastasian":3,"east asian":3, "chinese":3, "japanese":3, "asian":3, "hispaniclatino":4, "latino":4, "hispanic":4, "mexican":4, "middleeastern":5, "middle eastern":5, "arab":5, "mixedraceperson":6, "mixedrace":6, "mixed race":6, "mixed ethnicity":6, "multiethnic":6, "multi ethnic":6, "multi-ethnic":6, "nativeamericanfirstnations":7, "native american":7, "nativeamerican":7, "native-american":7, "indian american":7, "indianamerican":7, "indian-american":7, "first nations":7, "firstnations":7, "first-nations":7, "indigenous":7, "pacificislander":8, "pacific islander":8, "pacific-islander":8, "southasian":9, "south asian":9, "south-asian":9, "indian":9, "southeastasian":10, "southeast asian":10, "southeast-asian":10}
 # load Keywords_202304300930.csv as df, drop all but keytype Locations, create two dicts: string->ID & GettyID->ID  
 loc_dict = {"Canada":1989}
 age_dict = {
@@ -69,9 +69,26 @@ age_dict = {
     "teen":4,
     "teenager":4,
     "young":5,
+    "20s":5,
+    "30s":5,
     "adult":6,
-    "old":7
+    "40s":6,
+    "50s":6,
+    "old":7,
+    "60s":7,
+    "70s":7
 }
+
+age_details_dict = {
+    'Toddler': 2,
+    '20s': 4,
+    '30s': 5,
+    '40s': 6,
+    '50s': 7,
+    '60s': 8,
+    '70+': 9
+}
+
 
 # table_search ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id"
 SELECT = "DISTINCT(i.image_id), i.gender_id, author, caption, contentUrl, description, imagename"
@@ -90,6 +107,7 @@ images_table = Table('Images', metadata,
     Column('site_name_id', Integer, ForeignKey('Site.site_name_id')),
     Column('site_image_id', String(50), nullable=False),
     Column('age_id', Integer, ForeignKey('Age.age_id')),
+    Column('age_detail_id', Integer, ForeignKey('AgeDetail.age_detail_id')),
     Column('gender_id', Integer, ForeignKey('Gender.gender_id')),
     Column('location_id', Integer, ForeignKey('Location.location_id')),
     Column('author', String(100)),
@@ -174,6 +192,7 @@ def get_counter():
 
 def unlock_key(site_id,key, this_dict):
     key_no = None
+    key = key.lower()
     try:
         # print("trying basic keys_dict for this key:")
         # print(key)
@@ -315,12 +334,6 @@ def get_location(df, ind, keys_list):
 def description_to_keys(description, site_id, this_dict="keys_dict"):
     if this_dict=="keys_dict":
         this_dict = keys_dict
-    # elif this_dict=="gender_dict":
-    #     this_dict = gender_dict
-    # elif this_dict=="age_dict":
-    #     this_dict = age_dict
-    # skipping eth_dict out of an abundance of caution:
-    # white and black in description are not consistently ethnicity descriptors
 
     # print("description_to_keys")    
     key_nos_list =[]
@@ -343,7 +356,7 @@ def description_to_keys(description, site_id, this_dict="keys_dict"):
 
 
 def get_gender_age_row(gender_string, age_string, description, keys_list, site_id):
-    def try_key(gender, age, this_string):
+    def try_key(gender, age, age_detail, this_string):
         if not pd.isnull(this_string):
             # print(f"looking for {this_string} in dict")
             #convertkeys
@@ -367,25 +380,32 @@ def get_gender_age_row(gender_string, age_string, description, keys_list, site_i
                     age = age_dict[this_string.lower()]
                 except:
                     print('NEW KEY, NOT AGE OR GENDER -------------------------> ', this_string)
+            try:
+                age_detail = age_details_dict[this_string.lower()]
+            except:
+                # no age detail. it is only on some sites
+                pass
+
         # else:
         #     print("string is None")
-        return gender, age
+        return gender, age, age_detail
 
 
     print("get_gender_age_row starting")
     global gender_dict
     gender = None
     age= None
+    age_detail= None
 
     print("gender_string, age_string",gender_string, age_string)
 
-    gender, age = try_key(gender, age, gender_string)
+    gender, age, age_detail = try_key(gender, age, age_detail, gender_string)
     # print("gender, age, after try key gender_string")
     # print(gender)
     # print(age)
 
 
-    gender, age = try_key(gender, age, age_string)
+    gender, age, age_detail = try_key(gender, age, age_detail, age_string)
     # print("gender, age, after try key age_string")
     # print(gender)
     # print(age)
@@ -407,11 +427,12 @@ def get_gender_age_row(gender_string, age_string, description, keys_list, site_i
         if len(set(age_results)) == 1:
             age = age_results[0]
 
+
     # print("gender, age, after everything")
     # print(gender)
     # print(age)
 
-    return gender, age
+    return gender, age, age_detail
 
 
 '''
@@ -476,7 +497,7 @@ def structure_row_123_asrow(row, ind, keys_list):
     gender = None
     age = row[4]
     description = row[1]
-    gender_key, age_key = get_gender_age_row(gender, age, description, keys_list, site_id)
+    gender_key, age_key, age_detail_key = get_gender_age_row(gender, age, description, keys_list, site_id)
 
     image_row = {
         "site_image_id": row[0],
@@ -484,6 +505,7 @@ def structure_row_123_asrow(row, ind, keys_list):
         "description": description[:140],
         "age_id": age_key,
         "gender_id": gender_key,
+        "age_detail_id": age_detail_key,
         "contentUrl": row[9],
         "imagename": generate_local_unhashed_image_filepath(row[9])  # need to refactor this from the contentURL using the hash function
     }
@@ -525,7 +547,7 @@ def ingest_csv():
             key_nos_list = []
             
             for key in keys_list:
-                key_no = unlock_key(image_row['site_image_id'], key, keys_dict)
+                key_no = unlock_key(image_row['site_image_id'].lower(), key, keys_dict)
                 # print(key_no)
                 if key_no:
                     key_nos_list.append(key_no)

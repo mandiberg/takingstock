@@ -35,8 +35,9 @@ CYCLECOUNT = 2
 MAPDATA_FILE = "allmaps_62607.csv"
 
 SELECT = "DISTINCT(i.image_id), i.site_name_id, i.contentUrl, i.imagename, e.face_x, e.face_y, e.face_z, e.mouth_gap, e.face_landmarks, e.bbox, e.face_encodings, i.site_image_id"
-FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings6 e ON i.image_id = e.image_id INNER JOIN Allmaps am ON i.site_image_id = am.site_image_id"
-WHERE = "e.is_face IS TRUE AND e.face_encodings IS NOT NULL AND e.bbox IS NOT NULL AND i.site_name_id = 1"
+FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings e ON i.image_id = e.image_id"
+# FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings6 e ON i.image_id = e.image_id INNER JOIN Allmaps am ON i.site_image_id = am.site_image_id"
+WHERE = "e.is_face IS TRUE AND e.face_encodings IS NOT NULL AND e.bbox IS NOT NULL AND i.site_name_id = 8"
 
 # WHERE = "i.site_image_id LIKE '1402424532'"
 # WHERE = "i.site_image_id IN (1402424532)"
@@ -44,7 +45,7 @@ WHERE = "e.is_face IS TRUE AND e.face_encodings IS NOT NULL AND e.bbox IS NOT NU
 
 # WHERE = "e.is_face IS TRUE AND e.bbox IS NOT NULL AND i.site_name_id = 5 AND k.keyword_text LIKE 'smil%'"
 # WHERE = "e.image_id IS NULL "
-LIMIT = 100000
+LIMIT = 5000
 
 
 motion = {
@@ -56,7 +57,7 @@ motion = {
 }
 
 start_img = "median"
-start_img = "start_site_image_id"
+# start_img = "start_site_image_id"
 start_site_image_id = "e/ea/portrait-of-funny-afro-guy-picture-id1402424532.jpg"
 # 274243    Portrait of funny afro guy  76865   {"top": 380, "left": 749, "right": 1204, "bottom": 835}
 # faceimg_crop1_X-15toX5_Y-4toY4_Z-3toZ3_maxResize0.3_ct2412_76_1402424532.jpg
@@ -94,7 +95,7 @@ def get_hash_folders(filename):
     m = hashlib.md5()
     m.update(filename.encode('utf-8'))
     d = m.hexdigest()
-    return d[0], d[0:2]
+    return d[0].upper(), d[0:2].upper()
 
 def make_float(value):
     try:
@@ -496,6 +497,8 @@ def main():
         extension = file_name.split('.')[-1]
         if file_name.endswith(".jpeg"):
             file_name = file_name.replace(".jpeg",".jpg")
+        elif file_name.endswith(".png") or file_name.endswith(".webm"):
+            pass
         elif not file_name.endswith(".jpg"):
             file_name += ".jpg"    
         hash_folder1, hash_folder2 = get_hash_folders(file_name)

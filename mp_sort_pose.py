@@ -7,6 +7,7 @@ import hashlib
 import time
 import json
 import random
+import ast
 
 
 class SortPose:
@@ -404,10 +405,11 @@ class SortPose:
             # print(df_sorted)
             # out = cv2.VideoWriter(os.path.join(ROOT,videofile), cv2.VideoWriter_fourcc(*'mp4v'), FRAMERATE, size)
             for index, row in df_sorted.iterrows():
-                print('in loop')
+                print('in loop, index is', str(index))
                 UID = row['filename'].split('-id')[-1].split("/")[-1].replace(".jpg","")
                 print("UID ",UID)
-                imgfilename = imgfileprefix+"_"+str(counter)+"_"+UID+".jpg"
+                counter_str = str(counter).zfill(len(str(df_sorted.size)))  # Add leading zeros to the counter
+                imgfilename = imgfileprefix+"_"+str(counter_str)+"_"+UID+".jpg"
                 print("imgfilename ",imgfilename)
                 outpath = os.path.join(outfolder,imgfilename)
                 print("outpath ",outpath)
@@ -457,8 +459,8 @@ class SortPose:
                 counter += 1
             out.release()
             print('wrote:',videofile)
-        except:
-            print('failed IMAGES, probably because segmented df until empty')
+        except Exception as e:
+            print(str(e))
 
 
 
@@ -484,17 +486,26 @@ class SortPose:
         return distance    
 
     def get_face_2d_point(self, point):
-        # print("get_face_2d_point")
+        print("get_face_2d_point")
+
+        print(self.bbox)
+        print(type(self.bbox))
+        # print(self.bbox['left'])
         # set bbox dimensions
         img_h = self.h
         img_w = self.w
-        bbox_x = self.bbox['left']
-        bbox_y = self.bbox['top']
-        bbox_w = self.bbox['right'] - self.bbox['left']
-        bbox_h = self.bbox['bottom'] - self.bbox['top']
+        bbox_x = 100
+        bbox_y = 100
+        bbox_w = 100
+        bbox_h = 100
+        quit()
+        # bbox_x = self.bbox['left']
+        # bbox_y = self.bbox['top']
+        # bbox_w = self.bbox['right'] - self.bbox['left']
+        # bbox_h = self.bbox['bottom'] - self.bbox['top']
         for idx, lm in enumerate(self.faceLms.landmark):
             if idx == point:
-                # print("found point:")
+                print("found point:")
                 # print(idx)
                 # pointXY = (lm.x * img_w, lm.y * img_h)
                 pointXY = (lm.x * bbox_w + bbox_x, lm.y * bbox_h + bbox_y)
@@ -574,12 +585,19 @@ class SortPose:
         self.h = self.image.shape[0]
         self.w = self.image.shape[1]
         self.faceLms = faceLms
-        self.bbox = json.loads(bbox)
+        print("about to load_ json")
+        # self.bbox = json.loads(bbox)
+        self.bbox = ast.literal_eval(bbox)
+        print(self.bbox)
+        print(type(self.bbox))
+        print(self.bbox['left'])
 
         print("attempting cropped_image")
         #I'm not sure the diff between nose_2d and p1. May be redundant.
         #it would prob be better to do this with a dict and a loop
-        self.nose_2d = self.get_face_2d_point(1)
+        # Instead of hard-coding the index 1, you can use a variable or constant for the point index
+        nose_point_index = 1
+        self.nose_2d = self.get_face_2d_point(nose_point_index)
         print(self.nose_2d)
 
         try:
@@ -598,7 +616,7 @@ class SortPose:
             # self.get_crop_data(sinY)
 
         if not toobig:
-            print("not too big")
+            print("not too big, this big: ", toobig)
             # print (self.padding_points)
             #set main points for drawing/cropping
 

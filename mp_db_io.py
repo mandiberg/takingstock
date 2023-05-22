@@ -45,3 +45,10 @@ class DataIO:
             os.path.join(self.ROOT36,"images_123rf"), #8, images_123rf
             os.path.join(self.ROOT36,""),
         ]
+
+    def capitalize_directory(self,path):
+        dirname, filename = os.path.split(path)
+        parts = dirname.split('/')
+        capitalized_parts = [part if i < len(parts) - 2 else part.upper() for i, part in enumerate(parts)]
+        capitalized_dirname = '/'.join(capitalized_parts)
+        return os.path.join(capitalized_dirname, filename)

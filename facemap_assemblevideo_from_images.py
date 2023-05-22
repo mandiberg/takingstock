@@ -9,6 +9,8 @@ import numpy as np
 #mine
 from mp_sort_pose import SortPose
 
+FRAMERATE = 15
+
 def get_img_list(folder):
     img_list=[]
     for file in os.listdir(folder):
@@ -56,14 +58,14 @@ def selectDir():
     return file_path
 
 
-FRAMERATE = 10
 ROOT = selectDir()
 
 if not ROOT:
     print('No Folder Selected', 'Please select a valid Folder')
 else :
     list_of_files= get_img_list(ROOT)
-    # print(list_of_files)
+    print(list_of_files)
     list_of_files.sort()
+    print(list_of_files)
     
     write_video(list_of_files, ROOT, FRAMERATE)
