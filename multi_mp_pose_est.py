@@ -50,12 +50,20 @@ SLEEP_TIME=0
 SELECT = "DISTINCT(i.image_id), i.site_name_id, i.contentUrl, i.imagename, e.encoding_id, i.site_image_id, e.face_landmarks, e.bbox"
 # SELECT = "DISTINCT(i.image_id), i.gender_id, author, caption, contentUrl, description, imagename"
 
-
-# DEBUGGING --> need to change this back to "encodings"
+# FROM only ik and e
 FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings e ON i.image_id = e.image_id"
+WHERE = "e.encoding_id IS NULL AND i.site_name_id = 8 AND i.age_id NOT IN (1,2,3,4) AND k.keyword_text LIKE 'yelling%'"
+
+# FROM ik and e and ieth
+# FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id JOIN ImagesEthnicity ieth ON i.image_id = ieth.image_id JOIN Ethnicity eth on ieth.ethnicity_id = eth.ethnicity_id LEFT JOIN Encodings e ON i.image_id = e.image_id"
+# WHERE = "e.encoding_id IS NULL AND i.site_name_id = 8 AND i.age_id NOT IN (1,2,3,4) AND k.keyword_text LIKE 'smil%' AND eth.ethnicity_id = 2"
+
+# WHERE = "e.encoding_id IS NULL AND i.site_name_id = 8 AND i.age_id NOT IN (1,2,3,4) AND eth.ethnicity_id = 2"
+
 
 # WHERE = "e.is_body IS TRUE AND e.bbox IS NULL AND e.face_x IS NOT NULL"
-WHERE = "e.encoding_id IS NULL AND i.site_name_id = 8 AND i.age_id NOT IN (1,2,3,4) AND k.keyword_text LIKE 'smil%'"
+
+
 # WHERE = "e.face_encodings IS NULL AND e.face_landmarks IS NOT NULL AND e.bbox IS NOT NULL"
 # WHERE = "e.image_id IS NULL AND i.site_name_id = 5 AND k.keyword_text LIKE 'work%'"
 # WHERE = "(e.image_id IS NULL AND k.keyword_text LIKE 'smil%')OR (e.image_id IS NULL AND k.keyword_text LIKE 'happ%')OR (e.image_id IS NULL AND k.keyword_text LIKE 'laugh%')"
@@ -725,6 +733,7 @@ def process_image(task):
 
         # Check if the entry exists in the Encodings table
         image_id = insert_dict['image_id']
+        # can I filter this by site_id? would that make it faster or slower? 
         existing_entry = session.query(Encodings).filter_by(image_id=image_id).first()
 
         print("existing_entry", existing_entry)

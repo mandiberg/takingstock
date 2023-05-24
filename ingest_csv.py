@@ -54,10 +54,10 @@ CSV_COUNTOUT_PATH = "/Volumes/Test36/CSVs_to_ingest/123rfCSVs/countout.csv"
 # key2key = {"person":"people", "kid":"child","affection":"Affectionate", "baby":"Baby - Human Age", "beautiful":"Beautiful People", "pretty":"Beautiful People", "blur":"Blurred Motion", "casual":"Casual Clothing", "children":"Child", "kids":"Child", "couple":"Couple - Relationship", "adorable":"Cute", "room":"Domestic Room", "focus":"Focus - Concept", "happy":"Happiness", "at home":"Home Interior", "home":"Home Interior", "face":"Human Face", "hands":"Human Hand", "landscape":"Landscape - Scenery", "outfit":"Landscape - Scenery", "leisure":"Leisure Activity", "love":"Love - Emotion", "guy":"Men", "motherhood":"Mother", "parenthood":"Parent", "positive":"Positive Emotion", "recreation":"Recreational Pursuit", "little":"Small", "studio shoot":"Studio Shot", "together":"Togetherness", "vertical shot":"Vertical", "lady":"women", "young":"Young Adult"}
 
 key2key = {"person":"people", "kid":"child","affection":"affectionate", "baby":"baby - human age", "beautiful":"beautiful people", "pretty":"beautiful people", "blur":"blurred motion", "casual":"casual clothing", "children":"child", "kids":"child", "couple":"couple - relationship", "adorable":"cute", "room":"domestic room", "focus":"focus - concept", "happy":"happiness", "at home":"home interior", "home":"home interior", "face":"human face", "hands":"human hand", "landscape":"landscape - scenery", "outfit":"landscape - scenery", "leisure":"leisure activity", "love":"love - emotion", "guy":"men", "motherhood":"mother", "parenthood":"parent", "positive":"positive emotion", "recreation":"recreational pursuit", "little":"small", "studio shoot":"studio shot", "together":"togetherness", "vertical shot":"vertical", "lady":"women", "young":"young adult", "light":"light - natural phenomenon", "trees":"tree"}
-gender_dict = {"men":1,"man":1,"male":1,"males":1,"his":1,"him":1,"Businessman":1,"Businessmen":1,"father":1,"boy":1, "boys":1, "none":2, "oldmen":3, "grandfather":3,"oldwomen":4, "grandmother":4, "nonbinary":5, "other":6, "trans":7, 
+gender_dict = {"men":1,"man":1,"male":1,"males":1,"his":1,"him":1,"businessman":1,"businessmen":1,"father":1,"boy":1, "boys":1, "none":2, "oldmen":3, "grandfather":3,"oldwomen":4, "grandmother":4, "nonbinary":5, "other":6, "trans":7, 
         "women":8,"woman":8,"female":8,"females":8, "hers":8, "her":8, "businesswoman":8, "businesswomen":8, "mother":8, "girl":8, "girls":8, "youngmen":9, "youngwomen":10}
 # gender2key = {"man":"men", "woman":"women"}
-eth_dict = {"Black":1, "African-American":1, "AfricanAmerican":1, "African American":1, "African":1, "caucasian":2, "white people":2, "europeans":2, "eastasian":3,"east asian":3, "chinese":3, "japanese":3, "asian":3, "hispaniclatino":4, "latino":4, "hispanic":4, "mexican":4, "middleeastern":5, "middle eastern":5, "arab":5, "mixedraceperson":6, "mixedrace":6, "mixed race":6, "mixed ethnicity":6, "multiethnic":6, "multi ethnic":6, "multi-ethnic":6, "nativeamericanfirstnations":7, "native american":7, "nativeamerican":7, "native-american":7, "indian american":7, "indianamerican":7, "indian-american":7, "first nations":7, "firstnations":7, "first-nations":7, "indigenous":7, "pacificislander":8, "pacific islander":8, "pacific-islander":8, "southasian":9, "south asian":9, "south-asian":9, "indian":9, "southeastasian":10, "southeast asian":10, "southeast-asian":10}
+eth_dict = {"black":1, "african-american":1, "africanamerican":1, "african american":1, "african":1, "caucasian":2, "white people":2, "europeans":2, "eastasian":3,"east asian":3, "chinese":3, "japanese":3, "asian":3, "hispaniclatino":4, "latino":4, "hispanic":4, "mexican":4, "middleeastern":5, "middle eastern":5, "arab":5, "mixedraceperson":6, "mixedrace":6, "mixed race":6, "mixed ethnicity":6, "multiethnic":6, "multi ethnic":6, "multi-ethnic":6, "nativeamericanfirstnations":7, "native american":7, "nativeamerican":7, "native-american":7, "indian american":7, "indianamerican":7, "indian-american":7, "first nations":7, "firstnations":7, "first-nations":7, "indigenous":7, "pacificislander":8, "pacific islander":8, "pacific-islander":8, "southasian":9, "south asian":9, "south-asian":9, "indian":9, "southeastasian":10, "southest asian":10, "southeast asian":10, "southeast-asian":10}
 # load Keywords_202304300930.csv as df, drop all but keytype Locations, create two dicts: string->ID & GettyID->ID  
 loc_dict = {"Canada":1989}
 age_dict = {
@@ -76,11 +76,12 @@ age_dict = {
     "50s":6,
     "old":7,
     "60s":7,
-    "70s":7
+    "70s":7,
+    "70+":7
 }
 
 age_details_dict = {
-    'Toddler': 2,
+    'toddler': 2,
     '20s': 4,
     '30s': 5,
     '40s': 6,
@@ -515,6 +516,7 @@ def structure_row_123_asrow(row, ind, keys_list):
 
 def ingest_csv():
 
+    # change this for each site ingested
     column_keys = 5
     separator_keys = " "
     column_site = 8
@@ -559,7 +561,7 @@ def ingest_csv():
                 key_nos_list = set(key_nos_list + desc_key_nos_list)
             
             # print(key_nos_list)
-            eth_no_list = get_eth(row[8], keys_list)
+            eth_no_list = get_eth(row[column_eth].lower(), keys_list)
             print("eth_no_list " , eth_no_list)
 
             with engine.connect() as conn:
@@ -604,7 +606,120 @@ def ingest_csv():
             counter += 1
             ind += 1
 
+def update_csv():
 
+    # change this for each site ingested
+    column_keys = 5
+    separator_keys = " "
+    column_site = 8
+    column_eth = 8
+    search_desc_for_keys = True
+
+
+    with open(CSV_IN_PATH) as file_obj:
+        reader_obj = csv.reader(file_obj)
+        next(reader_obj)  # Skip header row
+        start_counter = get_counter()
+        counter = 0
+        ind = 0
+        
+        for row in reader_obj:
+            # print(row[1])
+            
+            if counter < start_counter:
+                counter += 1
+                continue
+            if counter >4001000:
+                quit()
+            # splitting keys. try is for getty, except is currently set for pexels.
+            try:
+                keys_list = row[column_keys].lower().split(separator_keys)
+            except IndexError:
+                print("keys failed")
+            # print(keys_list)
+
+            image_row = structure_row_123_asrow(row, ind, keys_list)
+            key_nos_list = []
+            
+            for key in keys_list:
+                key_no = unlock_key(image_row['site_image_id'].lower(), key, keys_dict)
+                # print(key_no)
+                if key_no:
+                    key_nos_list.append(key_no)
+            
+            # print(key_nos_list)
+
+            if search_desc_for_keys == True:
+                desc_key_nos_list = description_to_keys(image_row['description'], image_row['site_image_id'])
+                key_nos_list = set(key_nos_list + desc_key_nos_list)
+            
+            # print(key_nos_list)
+            eth_no_list = get_eth(row[column_eth].lower(), keys_list)
+            print("eth_no_list " , eth_no_list)
+
+
+            # Define the maximum number of retries and the delay between retries
+            max_retries = 3
+            retry_delay = 20  # in seconds
+
+            # Retry loop
+            for retry in range(max_retries):
+                try:
+                    with engine.connect() as conn:
+                        select_stmt = select([images_table]).where(
+                            (images_table.c.site_name_id == image_row['site_name_id']) &
+                            (images_table.c.site_image_id == image_row['site_image_id'])
+                        )
+                        row = conn.execute(select_stmt).fetchone()
+                        
+                        if row is None:
+                            insert_stmt = insert(images_table).values(image_row)
+                            result = conn.execute(insert_stmt)
+                            last_inserted_id = result.lastrowid
+
+                            if key_nos_list and last_inserted_id:
+                                keyrows = [{'image_id': last_inserted_id, 'keyword_id': keyword_id} for keyword_id in key_nos_list]
+                                with engine.connect() as conn:
+                                    imageskeywords_insert_stmt = insert(imageskeywords_table).values(keyrows)
+                                    imageskeywords_insert_stmt = imageskeywords_insert_stmt.on_duplicate_key_update(
+                                        keyword_id=imageskeywords_insert_stmt.inserted.keyword_id
+                                    )
+                                    conn.execute(imageskeywords_insert_stmt)
+                            
+                            if eth_no_list and last_inserted_id:
+                                ethrows = [{'image_id': last_inserted_id, 'ethnicity_id': ethnicity_id} for ethnicity_id in eth_no_list if ethnicity_id is not None]
+                                if ethrows:
+                                    with engine.connect() as conn:
+                                        imagesethnicity_insert_stmt = insert(imagesethnicity_table).values(ethrows)
+                                        imagesethnicity_insert_stmt = imagesethnicity_insert_stmt.on_duplicate_key_update(
+                                            ethnicity_id=imagesethnicity_insert_stmt.inserted.ethnicity_id
+                                        )
+                                        conn.execute(imagesethnicity_insert_stmt)
+                            
+                            print("last_inserted_id:", last_inserted_id)
+                        else:
+                            print('Row already exists:', ind)
+            
+                        break  # If the execution reaches here without exceptions, exit the loop
+
+                except OperationalError as e:
+                    print(f"Database connection error: {e}")
+
+                    # Retry after a delay
+                    print(f"Retrying in {retry_delay} seconds...")
+                    time.sleep(retry_delay)
+                    continue
+
+            else:
+                # If the loop completes without a successful connection, handle the error
+                print(f"Failed to connect to the database after {max_retries} attempts.")
+
+            if counter % 1000 == 0:
+                save_counter = [counter]
+                write_csv(CSV_COUNTOUT_PATH, save_counter)
+            
+            counter += 1
+            ind += 1
 
 
     # print("inserted")

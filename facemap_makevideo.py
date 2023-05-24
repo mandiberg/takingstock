@@ -145,17 +145,6 @@ def get_d(enc1, enc2):
     print(d)
     return d
 
-# def get_d(enc1, enc2):
-#     enc1=np.array(enc1)
-#     # enc2=np.array(enc2)
-#     print("enc1 size ")
-#     print(enc1.shape)
-#     print("enc2 size ")
-#     print(enc2.shape)
-#     d=np.linalg.norm(enc1 - enc2, axis=0)
-#     print("get_d: ",d)
-#     return d
-
 def get_closest_df(start_img, df_enc):
     if start_img == "median":
         enc1 = df_enc.median().to_list()
@@ -200,57 +189,6 @@ def get_closest_df(start_img, df_enc):
 #     print(len(dist))
     return dist[0], dist_dict[dist[0]], df_enc
 
-# def get_closest_df(start_img, df_enc):
-#     print(df_enc)
-#     if start_img == "median":
-#         # print("df_enc: ", df_enc)
-#         encodings_array = np.array(df_enc['encoding'].tolist())
-
-#         # Calculate the median along axis 0
-#         enc1 = np.median(encodings_array, axis=0)
-#         # print("median_encoding ",enc1)
-
-#         # enc1 = df_enc.median()
-#         # print("in median: ", enc1)
-#     elif start_img == "start_site_image_id":
-#         print("start_site_image_id")
-#         print(start_site_image_id)
-#         enc1 = df_enc.loc[start_site_image_id]['encoding'].tolist()
-#         # print(df_enc)
-#         # enc1 = df_enc.index[df_enc['file_name']==start_site_image_id].tolist()[0]
-#         print(enc1)
-#         # start_site_image_id
-#         # enc1 = df_enc.loc[start_img]['encoding'].tolist()
-
-#     else:
-# #         enc1 = get 2-129 from df via stimg key
-#         print("start_img")
-#         print(start_img)
-
-#         # start_img
-#         # 2/2c/beautiful-taiwanese-woman-on-the-street-of-taipei-picture-id1152386040.jpg
-
-#         enc1 = df_enc.loc[start_img]['encoding'].tolist()
-#         print("in else")
-#         print(enc1)
-#         print(enc1[0])
-#         df_enc=df_enc.drop(start_img)
-
-#     dist=[]
-#     dist_dict={}
-#     for index, row in df_enc.iterrows():
-#         enc2 = row['encoding']
-#         if (enc1 is not None) and (enc2 is not None):
-#             d = get_d(enc1, enc2)
-#             print(d)
-#             if len(enc1) >1:
-#                 dist.append(d)
-#                 dist_dict[d]=index
-#             else:
-#                 print("seems like an 128 array OOPS")
-#     dist.sort()
-# #     print(len(dist))
-#     return dist[0], dist_dict[dist[0]], df_enc, 
 
 
 # test if new and old make a face
