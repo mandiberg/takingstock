@@ -19,7 +19,13 @@ import shutil
 from sys import platform
 from pathlib import Path
 
-from sqlalchemy import create_engine, text, MetaData, Table, Column, Numeric, Integer, VARCHAR, update
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.ext.declarative import declarative_base
+from my_declarative_base import Base, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON
+
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy import create_engine, text, MetaData, Table, Column, Numeric, Integer, VARCHAR, update, Float
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.pool import NullPool
 
@@ -34,10 +40,11 @@ CYCLECOUNT = 2
 # ROOT="/Users/michaelmandiberg/Documents/projects-active/facemap_production/"
 MAPDATA_FILE = "allmaps_62607.csv"
 
-SELECT = "DISTINCT(i.image_id), i.site_name_id, i.contentUrl, i.imagename, e.face_x, e.face_y, e.face_z, e.mouth_gap, e.face_landmarks, e.bbox, e.face_encodings, i.site_image_id"
-FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings e ON i.image_id = e.image_id"
-# FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings6 e ON i.image_id = e.image_id INNER JOIN Allmaps am ON i.site_image_id = am.site_image_id"
-WHERE = "e.is_face IS TRUE AND e.face_encodings IS NOT NULL AND e.bbox IS NOT NULL AND i.site_name_id = 8"
+# # Main process, temp commented
+# SELECT = "DISTINCT(i.image_id), i.site_name_id, i.contentUrl, i.imagename, e.face_x, e.face_y, e.face_z, e.mouth_gap, e.face_landmarks, e.bbox, e.face_encodings, i.site_image_id"
+# FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings e ON i.image_id = e.image_id"
+# # FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings6 e ON i.image_id = e.image_id INNER JOIN Allmaps am ON i.site_image_id = am.site_image_id"
+# WHERE = "e.is_face IS TRUE AND e.face_encodings IS NOT NULL AND e.bbox IS NOT NULL AND i.site_name_id = 8"
 
 # WHERE = "i.site_image_id LIKE '1402424532'"
 # WHERE = "i.site_image_id IN (1402424532)"
@@ -45,7 +52,22 @@ WHERE = "e.is_face IS TRUE AND e.face_encodings IS NOT NULL AND e.bbox IS NOT NU
 
 # WHERE = "e.is_face IS TRUE AND e.bbox IS NOT NULL AND i.site_name_id = 5 AND k.keyword_text LIKE 'smil%'"
 # WHERE = "e.image_id IS NULL "
-LIMIT = 5000
+
+# for move to SSD
+SELECT = "DISTINCT(i.image_id), i.site_name_id, i.contentUrl, i.imagename, e.face_x, e.face_y, e.face_z, e.mouth_gap, e.face_landmarks, e.bbox, e.face_encodings, i.site_image_id"
+FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings e ON i.image_id = e.image_id"
+# # for smiling images
+WHERE = "e.is_face IS TRUE AND e.face_encodings IS NOT NULL AND e.bbox IS NOT NULL AND i.site_name_id = 8 AND k.keyword_text LIKE 'smil%'"
+SegmentTable_name = 'SegmentLeftToRight123smil'
+# # for laugh images
+# WHERE = "e.is_face IS TRUE AND e.face_encodings IS NOT NULL AND e.bbox IS NOT NULL AND i.site_name_id = 8 AND k.keyword_text LIKE 'laugh%'"
+# SegmentTable_name = 'SegmentForward123laugh'
+
+# yelling, screaming, shouting, yells, laugh; x is -4 to 30, y ~ 0, z ~ 0
+# regular rotation left to right, which should include the straight ahead? 
+
+
+LIMIT = 5000000
 
 
 motion = {
@@ -69,9 +91,37 @@ db = io.db
 ROOT = io.ROOT 
 NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 
+# override io.db for testing mode
+# db['name'] = "123test"
+
 engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}"
                                 .format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']), poolclass=NullPool)
-metadata = MetaData(engine)
+# metadata = MetaData(engine)
+Session = sessionmaker(bind=engine)
+session = Session()
+Base = declarative_base()
+
+class SegmentTable(Base):
+    __tablename__ = SegmentTable_name
+
+    image_id = Column(Integer, primary_key=True)
+    site_name_id = Column(Integer)
+    contentUrl = Column(String(300), nullable=False)
+    imagename = Column(String(200))
+    face_x = Column(DECIMAL(6, 3))
+    face_y = Column(DECIMAL(6, 3))
+    face_z = Column(DECIMAL(6, 3))
+    mouth_gap = Column(DECIMAL(6, 3))
+    face_landmarks = Column(BLOB)
+    bbox = Column(JSON)
+    face_encodings = Column(BLOB)
+    body_landmarks = Column(BLOB)
+    site_image_id = Column(String(50), nullable=False)
+
+
+# create new SegmentTable
+Base.metadata.create_all(engine)
+
 
 mp_drawing = mp.solutions.drawing_utils
 
@@ -102,6 +152,42 @@ def make_float(value):
         return float(value)
     except (ValueError, TypeError):
         return value
+
+
+# def save_segment_DB(df_segment):
+#     try:
+#         df_segment_unique = df_segment.drop_duplicates(subset=['site_image_id'])
+#         df_segment_unique.to_sql('SegmentLeftToRight1', engine, if_exists='append', index=False)
+#         session.commit()
+#     except IntegrityError as e:
+#         session.rollback()
+#         print("Ignoring duplicate entry error:", e)
+#     finally:
+#         session.close()
+
+def save_segment_DB(df_segment):
+    #save the df to a table
+
+    # Assuming you have your DataFrame named 'df' containing the query results
+    for _, row in df_segment.iterrows():
+        instance = SegmentTable(
+            image_id=row['image_id'],
+            site_name_id=row['site_name_id'],
+            contentUrl=row['contentUrl'],
+            imagename=row['imagename'],
+            face_x=row['face_x'],
+            face_y=row['face_y'],
+            face_z=row['face_z'],
+            mouth_gap=row['mouth_gap'],
+            face_landmarks=pickle.dumps(row['face_landmarks']),
+            bbox=row['bbox'],
+            face_encodings=pickle.dumps(row['face_encodings']),
+            site_image_id=row['site_image_id']
+        )
+        session.add(instance)
+
+    session.commit()
+
 
 
 # ### Linear sorting
@@ -478,8 +564,8 @@ def main():
     columns_to_convert = ['face_x', 'face_y', 'face_z', 'mouth_gap']
     df[columns_to_convert] = df[columns_to_convert].applymap(make_float)
 
-    print("raw df from DB")
-    print(df['face_encodings'])
+    # print("raw df from DB")
+    # print(df['face_encodings'])
 
 
 # turning this off for debugging
@@ -509,6 +595,14 @@ def main():
 
     # make the segment based on settings
     df_segment = sort.make_segment(df)
+    print(df_segment)
+
+    # duplicate_site_ids = df_segment[df_segment.duplicated(['site_image_id'])]['site_image_id']
+    # print("duplicate_site_ids")
+    # print(duplicate_site_ids)
+
+    save_segment_DB(df_segment)
+    quit()
 
     # df_segment = df
 
@@ -522,6 +616,8 @@ def main():
     df_enc = pd.DataFrame({col1: df_segment['imagename'], col2: df_segment['face_encodings'].apply(lambda x: np.array(x)), 
                 col3: df_segment['site_name_id'], col4: df_segment['face_landmarks'], col5: df_segment['bbox'] })
     df_enc.set_index(col1, inplace=True)
+
+
     print(df_enc)
 
     # Create column names for the 128 encoding columns

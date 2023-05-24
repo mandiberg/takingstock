@@ -61,13 +61,18 @@ eth_dict = {"black":1, "african-american":1, "africanamerican":1, "african ameri
 # load Keywords_202304300930.csv as df, drop all but keytype Locations, create two dicts: string->ID & GettyID->ID  
 loc_dict = {"Canada":1989}
 age_dict = {
+    "newborn":1,
     "baby":1,
     "infant":2,
     "infants":2,
+    "toddlers":3,
     "toddler":3,
     "child":3,
+    "children":3,
     "teen":4,
+    "teens":4,
     "teenager":4,
+    "teenagers":4,
     "young":5,
     "20s":5,
     "30s":5,

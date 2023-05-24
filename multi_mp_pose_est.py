@@ -52,7 +52,13 @@ SELECT = "DISTINCT(i.image_id), i.site_name_id, i.contentUrl, i.imagename, e.enc
 
 # FROM only ik and e
 FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings e ON i.image_id = e.image_id"
-WHERE = "e.encoding_id IS NULL AND i.site_name_id = 8 AND i.age_id NOT IN (1,2,3,4) AND k.keyword_text LIKE 'yelling%'"
+WHERE = "e.encoding_id IS NULL AND i.site_name_id = 8 AND i.age_id NOT IN (1,2,3,4) AND k.keyword_text LIKE 'laugh%'"
+
+
+# yelling, screaming, shouting, yells, laughing; x is -4 to 30, y ~ 0, z ~ 0
+# regular rotation left to right, which should include the straight ahead? 
+
+
 
 # FROM ik and e and ieth
 # FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id JOIN ImagesEthnicity ieth ON i.image_id = ieth.image_id JOIN Ethnicity eth on ieth.ethnicity_id = eth.ethnicity_id LEFT JOIN Encodings e ON i.image_id = e.image_id"
