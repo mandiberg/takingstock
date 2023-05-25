@@ -414,7 +414,15 @@ class SortPose:
                 print("outpath ",outpath)
 
                 # folder is specific to each file's site_name_id
-                open_path = os.path.join(ROOT,row['folder'],row['filename'])
+
+                # this is how it was, and seems hardcoded to Test36
+                # open_path = os.path.join(ROOT,row['folder'],row['filename'])
+
+                # here I'm using the actual root. Root gets pulled from io, then passed back to sort pose.
+                # but the folder is fused to the root somewhere... in makevideo? it needs to be found and pulled off there. 
+                open_path = os.path.join(ROOT,row['folder'].replace("/Volumes/Test36/",""),row['filename'])
+                print(ROOT,row['folder'],row['filename'])
+
                 print("open_path ",open_path)
 
                 # this code takes image i, and blends it with the subsequent image

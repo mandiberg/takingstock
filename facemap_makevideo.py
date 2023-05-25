@@ -61,7 +61,7 @@ if not IS_MOVE:
 
     # don't need keywords if SegmentTable_name
     FROM =f"Images i LEFT JOIN Encodings e ON i.image_id = e.image_id INNER JOIN {SegmentTable_name} seg ON i.site_image_id = seg.site_image_id"
-    WHERE = "e.is_face IS TRUE AND e.face_encodings IS NOT NULL AND e.bbox IS NOT NULL AND i.site_name_id = 8"
+    WHERE = "e.is_face IS TRUE AND e.face_encodings IS NOT NULL AND e.bbox IS NOT NULL AND i.site_name_id = 8 AND i.age_id NOT IN (1,2,3,4)"
 
     # WHERE = "i.site_image_id LIKE '1402424532'"
     # WHERE = "i.site_image_id IN (1402424532)"
@@ -706,7 +706,6 @@ def main():
 
     else:
         #save individual as images
-        
         sort.write_images(ROOT, df_sorted)
 
 
