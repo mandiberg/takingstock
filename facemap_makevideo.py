@@ -6,7 +6,8 @@ import sys
 import pickle
 import hashlib
 import base64
-
+import json
+import ast
 
 #linear sort imports non-class
 import numpy as np
@@ -38,36 +39,60 @@ from mp_db_io import DataIO
 VIDEO = False
 CYCLECOUNT = 2
 # ROOT="/Users/michaelmandiberg/Documents/projects-active/facemap_production/"
-MAPDATA_FILE = "allmaps_62607.csv"
 
-# # Main process, temp commented
-# SELECT = "DISTINCT(i.image_id), i.site_name_id, i.contentUrl, i.imagename, e.face_x, e.face_y, e.face_z, e.mouth_gap, e.face_landmarks, e.bbox, e.face_encodings, i.site_image_id"
-# FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings e ON i.image_id = e.image_id"
-# # FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings6 e ON i.image_id = e.image_id INNER JOIN Allmaps am ON i.site_image_id = am.site_image_id"
-# WHERE = "e.is_face IS TRUE AND e.face_encodings IS NOT NULL AND e.bbox IS NOT NULL AND i.site_name_id = 8"
+# keep this live, even if not SSD
+# SegmentTable_name = 'Segment123side_to_side'
+SegmentTable_name = 'SegmentLeftToRight123smil' #actually straight ahead smile
 
-# WHERE = "i.site_image_id LIKE '1402424532'"
-# WHERE = "i.site_image_id IN (1402424532)"
-# WHERE = "i.site_image_id IN (1311507298, 1402424532, 168449643, 1182617710)"
+IS_MOVE = False
+IS_SSD = True
 
-# WHERE = "e.is_face IS TRUE AND e.bbox IS NOT NULL AND i.site_name_id = 5 AND k.keyword_text LIKE 'smil%'"
-# WHERE = "e.image_id IS NULL "
+if not IS_MOVE:
+    print("production run. IS_SSD is", IS_SSD)
 
-# for move to SSD
-SELECT = "DISTINCT(i.image_id), i.site_name_id, i.contentUrl, i.imagename, e.face_x, e.face_y, e.face_z, e.mouth_gap, e.face_landmarks, e.bbox, e.face_encodings, i.site_image_id"
-FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings e ON i.image_id = e.image_id"
-# # for smiling images
-WHERE = "e.is_face IS TRUE AND e.face_encodings IS NOT NULL AND e.bbox IS NOT NULL AND i.site_name_id = 8 AND k.keyword_text LIKE 'smil%'"
-SegmentTable_name = 'SegmentLeftToRight123smil'
-# # for laugh images
-# WHERE = "e.is_face IS TRUE AND e.face_encodings IS NOT NULL AND e.bbox IS NOT NULL AND i.site_name_id = 8 AND k.keyword_text LIKE 'laugh%'"
-# SegmentTable_name = 'SegmentForward123laugh'
+    # # # # # # # # # # # #
+    # # for production  # #
+    # # # # # # # # # # # #
 
-# yelling, screaming, shouting, yells, laugh; x is -4 to 30, y ~ 0, z ~ 0
-# regular rotation left to right, which should include the straight ahead? 
+    SAVE_SEGMENT = False
+    SELECT = "DISTINCT(i.image_id), i.site_name_id, i.contentUrl, i.imagename, e.face_x, e.face_y, e.face_z, e.mouth_gap, e.face_landmarks, e.bbox, e.face_encodings, i.site_image_id"
+    # FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings e ON i.image_id = e.image_id"
+    # FROM =f"Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings6 e ON i.image_id = e.image_id INNER JOIN {SegmentTable_name} seg ON i.site_image_id = seg.site_image_id"
+
+    # don't need keywords if SegmentTable_name
+    FROM =f"Images i LEFT JOIN Encodings e ON i.image_id = e.image_id INNER JOIN {SegmentTable_name} seg ON i.site_image_id = seg.site_image_id"
+    WHERE = "e.is_face IS TRUE AND e.face_encodings IS NOT NULL AND e.bbox IS NOT NULL AND i.site_name_id = 8"
+
+    # WHERE = "i.site_image_id LIKE '1402424532'"
+    # WHERE = "i.site_image_id IN (1402424532)"
+    # WHERE = "i.site_image_id IN (1311507298, 1402424532, 168449643, 1182617710)"
+
+    # WHERE = "e.is_face IS TRUE AND e.bbox IS NOT NULL AND i.site_name_id = 5 AND k.keyword_text LIKE 'smil%'"
+    # WHERE = "e.image_id IS NULL "
+
+elif IS_MOVE:
+    print("moving to SSD")
+
+    # # # # # # # # # # # #
+    # # for move to SSD # #
+    # # # # # # # # # # # #
+
+    SAVE_SEGMENT = True
+    SELECT = "DISTINCT(i.image_id), i.site_name_id, i.contentUrl, i.imagename, e.face_x, e.face_y, e.face_z, e.mouth_gap, e.face_landmarks, e.bbox, e.face_encodings, i.site_image_id"
+    FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings e ON i.image_id = e.image_id"
+    # # for smiling images
+    WHERE = "e.is_face IS TRUE AND e.face_encodings IS NOT NULL AND e.bbox IS NOT NULL AND i.site_name_id = 8 AND k.keyword_text LIKE 'smil%'"
 
 
-LIMIT = 5000000
+    # # for laugh images
+    # WHERE = "e.is_face IS TRUE AND e.face_encodings IS NOT NULL AND e.bbox IS NOT NULL AND i.site_name_id = 8 AND k.keyword_text LIKE 'laugh%'"
+    # SegmentTable_name = 'SegmentForward123laugh'
+
+    # yelling, screaming, shouting, yells, laugh; x is -4 to 30, y ~ 0, z ~ 0
+    # regular rotation left to right, which should include the straight ahead? 
+
+
+LIMIT = 100
 
 
 motion = {
@@ -82,7 +107,6 @@ start_img = "median"
 # start_img = "start_site_image_id"
 start_site_image_id = "e/ea/portrait-of-funny-afro-guy-picture-id1402424532.jpg"
 # 274243    Portrait of funny afro guy  76865   {"top": 380, "left": 749, "right": 1204, "bottom": 835}
-# faceimg_crop1_X-15toX5_Y-4toY4_Z-3toZ3_maxResize0.3_ct2412_76_1402424532.jpg
 
 # construct my own objects
 sort = SortPose(motion)
@@ -120,7 +144,6 @@ class SegmentTable(Base):
 
 
 # create new SegmentTable
-Base.metadata.create_all(engine)
 
 
 mp_drawing = mp.solutions.drawing_utils
@@ -154,16 +177,6 @@ def make_float(value):
         return value
 
 
-# def save_segment_DB(df_segment):
-#     try:
-#         df_segment_unique = df_segment.drop_duplicates(subset=['site_image_id'])
-#         df_segment_unique.to_sql('SegmentLeftToRight1', engine, if_exists='append', index=False)
-#         session.commit()
-#     except IntegrityError as e:
-#         session.rollback()
-#         print("Ignoring duplicate entry error:", e)
-#     finally:
-#         session.close()
 
 def save_segment_DB(df_segment):
     #save the df to a table
@@ -369,7 +382,7 @@ def sort_by_face_dist(start_img,df_enc, df_128_enc):
             site_name_id = df_enc.loc[start_img]['site_name_id']
             face_landmarks = df_enc.loc[start_img]['face_landmarks']
             bbox = df_enc.loc[start_img]['bbox']
-            print("assigned bbox")
+            print("assigned bbox", bbox)
         except:
             print("won't assign landmarks/bbox")
         site_specific_root_folder = io.folder_list[site_name_id]
@@ -511,6 +524,11 @@ def cycling_order(CYCLECOUNT, sort):
 def main():
     def unpickle_array(pickled_array):
         return pickle.loads(pickled_array)
+    def unstring_json(json_string):
+        eval_string = ast.literal_eval(json_string)
+        json_dict = json.loads(eval_string)
+        return json_dict
+
     def decode_64_array(encoded):
         decoded = base64.b64decode(encoded).decode('utf-8')
         return decoded
@@ -529,7 +547,7 @@ def main():
         newname = os.path.join(hash_folder1, hash_folder2, file_name)
         return newname
         # file_name = file_name_path.split('/')[-1]
-    print("main")
+    print("in main, making SQL query")
 
 
 
@@ -544,7 +562,6 @@ def main():
 
     # read the csv and construct dataframe
     try:
-        # df = pd.read_csv(os.path.join(ROOT,MAPDATA_FILE))
         df = pd.json_normalize(resultsjson)
         print(df)
 
@@ -558,6 +575,7 @@ def main():
     # Apply the unpickling function to the 'face_encodings' column
     df['face_encodings'] = df['face_encodings'].apply(unpickle_array)
     df['face_landmarks'] = df['face_landmarks'].apply(unpickle_array)
+    df['bbox'] = df['bbox'].apply(lambda x: unstring_json(x))
     # turn URL into local hashpath (still needs local root folder)
     df['imagename'] = df['contentUrl'].apply(newname)
     # make decimals into float
@@ -601,8 +619,12 @@ def main():
     # print("duplicate_site_ids")
     # print(duplicate_site_ids)
 
-    save_segment_DB(df_segment)
-    quit()
+    if SAVE_SEGMENT:
+        Base.metadata.create_all(engine)
+        print(df_segment.size)
+        save_segment_DB(df_segment)
+        print("saved segment to ", SegmentTable_name)
+        quit()
 
     # df_segment = df
 

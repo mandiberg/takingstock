@@ -75,7 +75,7 @@ WHERE = "e.encoding_id IS NULL AND i.site_name_id = 8 AND i.age_id NOT IN (1,2,3
 # WHERE = "(e.image_id IS NULL AND k.keyword_text LIKE 'smil%')OR (e.image_id IS NULL AND k.keyword_text LIKE 'happ%')OR (e.image_id IS NULL AND k.keyword_text LIKE 'laugh%')"
 # WHERE = "e.face_landmarks IS NOT NULL AND e.bbox IS NULL AND i.site_name_id = 1"
 # WHERE = "i.site_name_id = 1 AND i.site_image_id LIKE '1402424532'"
-LIMIT = 1000
+LIMIT = 10000
 
 #creating my objects
 mp_face_mesh = mp.solutions.face_mesh

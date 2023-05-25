@@ -32,7 +32,7 @@ sig = '''
 PATH = "/Volumes/Test36/"
 #where the images are going:
 PATH2 = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/"
-SEGMENTTABLE_NAME = 'SegmentLeftToRight123smil'
+SEGMENTTABLE_NAME = 'Segment123side_to_side'
 
 COPY=True
 IMAGES_THREAD_COUNTER = 0
@@ -81,13 +81,13 @@ class SegmentTable(Base):
 
 #setup alphabet list
 #long to crate full directory structure
-alphabet = 'A B C D E F G H I J K L M N O P Q R S T U V W X Y Z 0 1 2 3 4 5 6 7 8 9 0'  
-# alphabet = '0'  
-alphabet2 = 'A B C D E F G H I J K L M N O P Q R S T U V W X Y Z 0 1 2 3 4 5 6 7 8 9 0'  
-# alphabet = 'A B C 0 1 2'   #short alphabet for testing purposes
-# alphabet2 = 'A B C 0 1 2'   #short alphabet for testing purposes
-alphabet = alphabet.split()
-alphabet2 = alphabet2.split()
+# alphabet = 'A B C D E F G H I J K L M N O P Q R S T U V W X Y Z 0 1 2 3 4 5 6 7 8 9 0'  
+# # alphabet = '0'  
+# alphabet2 = 'A B C D E F G H I J K L M N O P Q R S T U V W X Y Z 0 1 2 3 4 5 6 7 8 9 0'  
+# # alphabet = 'A B C 0 1 2'   #short alphabet for testing purposes
+# # alphabet2 = 'A B C 0 1 2'   #short alphabet for testing purposes
+# alphabet = alphabet.split()
+# alphabet2 = alphabet2.split()
 
 
 # def get_hash_folders(filename):

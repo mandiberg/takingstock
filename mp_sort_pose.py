@@ -7,7 +7,6 @@ import hashlib
 import time
 import json
 import random
-import ast
 
 
 class SortPose:
@@ -34,8 +33,8 @@ class SortPose:
             # self.SORT = 'mouth_gap'
             self.ROUND = 0
         elif motion['forward_smile'] == True:
-            self.XLOW = -20
-            self.XHIGH = 1
+            self.XLOW = -40
+            self.XHIGH = 20
             self.YLOW = -4
             self.YHIGH = 4
             self.ZLOW = -3
@@ -486,23 +485,18 @@ class SortPose:
         return distance    
 
     def get_face_2d_point(self, point):
-        print("get_face_2d_point")
+        # print("get_face_2d_point")
 
-        print(self.bbox)
-        print(type(self.bbox))
+        # print(self.bbox)
+        # print(type(self.bbox))
         # print(self.bbox['left'])
         # set bbox dimensions
         img_h = self.h
         img_w = self.w
-        bbox_x = 100
-        bbox_y = 100
-        bbox_w = 100
-        bbox_h = 100
-        quit()
-        # bbox_x = self.bbox['left']
-        # bbox_y = self.bbox['top']
-        # bbox_w = self.bbox['right'] - self.bbox['left']
-        # bbox_h = self.bbox['bottom'] - self.bbox['top']
+        bbox_x = self.bbox['left']
+        bbox_y = self.bbox['top']
+        bbox_w = self.bbox['right'] - self.bbox['left']
+        bbox_h = self.bbox['bottom'] - self.bbox['top']
         for idx, lm in enumerate(self.faceLms.landmark):
             if idx == point:
                 print("found point:")
@@ -587,7 +581,7 @@ class SortPose:
         self.faceLms = faceLms
         print("about to load_ json")
         # self.bbox = json.loads(bbox)
-        self.bbox = ast.literal_eval(bbox)
+        self.bbox = (bbox)
         print(self.bbox)
         print(type(self.bbox))
         print(self.bbox['left'])

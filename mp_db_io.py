@@ -93,12 +93,20 @@ class DataIO:
 
     def make_hash_folders(self,path):
         #create depth 0
+        alphabet = 'A B C D E F G H I J K L M N O P Q R S T U V W X Y Z 0 1 2 3 4 5 6 7 8 9 0'  
+        # alphabet = '0'  
+        alphabet2 = 'A B C D E F G H I J K L M N O P Q R S T U V W X Y Z 0 1 2 3 4 5 6 7 8 9 0'  
+        # alphabet = 'A B C 0 1 2'   #short alphabet for testing purposes
+        # alphabet2 = 'A B C 0 1 2'   #short alphabet for testing purposes
+        alphabet = alphabet.split()
+        alphabet2 = alphabet2.split()
+
         for letter in alphabet:
             # print (letter)
             pth = os.path.join(path,letter)
-            touch(pth)
+            self.touch(pth)
             for letter2 in alphabet2:
                 # print (letter2)
 
                 pth2 = os.path.join(path,letter,letter+letter2)
-                touch(pth2)
+                self.touch(pth2)
