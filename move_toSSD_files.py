@@ -32,7 +32,7 @@ sig = '''
 PATH = "/Volumes/Test36/"
 #where the images are going:
 PATH2 = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/"
-SEGMENTTABLE_NAME = 'Segment123side_to_side'
+SEGMENTTABLE_NAME = 'May25segment123straight_lessrange'
 
 COPY=True
 IMAGES_THREAD_COUNTER = 0
@@ -114,7 +114,9 @@ class SegmentTable(Base):
 
 
 def copy_files(source, destination):
-    shutil.copy(source, destination)
+    isExist = os.path.exists(destination)
+    if not isExist: 
+        shutil.copy(source, destination)
 
 
 

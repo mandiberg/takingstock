@@ -19,6 +19,11 @@ CREATE TABLE Age (
     age varchar(20)
 ); 
 
+CREATE TABLE AgeDetail (
+    age_detail_id int NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    age_detail varchar(20)
+); 
+
 CREATE TABLE Site (
     site_name_id int NOT NULL AUTO_INCREMENT PRIMARY KEY,
     site_name varchar(20)
@@ -38,17 +43,29 @@ CREATE TABLE Images (
     site_image_id varchar(50) NOT NULL,
     age_id INTEGER,
 	FOREIGN KEY (age_id) REFERENCES Age (age_id),
+    age_detail_id INTEGER,
+	FOREIGN KEY (age_detail_id) REFERENCES AgeDetail (age_detail_id),
     gender_id INTEGER,
     FOREIGN KEY (gender_id) REFERENCES Gender (gender_id),
     location_id INTEGER,
     FOREIGN KEY (location_id) REFERENCES Location (location_id),
     author varchar(100),
     caption varchar(150),
-    contentUrl varchar(200) NOT NULL,
+    contentUrl varchar(300) NOT NULL,
     description varchar(150),
-    imagename varchar(100),
+    imagename varchar(200),
     uploadDate DATE
 );
+
+
+CREATE TABLE Allmaps (
+    Allmaps_id int NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    site_image_id varchar(50) NOT NULL,
+    filename varchar(150),
+    uploadDate DATE,
+    INDEX idx_site_image_id (site_image_id)
+);
+
 
 CREATE TABLE Keywords (
     keyword_id int NOT NULL AUTO_INCREMENT PRIMARY KEY,

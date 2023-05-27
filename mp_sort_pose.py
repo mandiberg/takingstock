@@ -7,6 +7,7 @@ import hashlib
 import time
 import json
 import random
+import numpy as np
 
 
 class SortPose:
@@ -33,8 +34,8 @@ class SortPose:
             # self.SORT = 'mouth_gap'
             self.ROUND = 0
         elif motion['forward_smile'] == True:
-            self.XLOW = -40
-            self.XHIGH = 20
+            self.XLOW = -20
+            self.XHIGH = 1
             self.YLOW = -4
             self.YHIGH = 4
             self.ZLOW = -3
@@ -43,7 +44,7 @@ class SortPose:
             self.MAXRESIZE = .5
             self.FRAMERATE = 15
             self.SECOND_SORT = 'face_x'
-            self.MAXMOUTHGAP = 40
+            self.MAXMOUTHGAP = 2
             self.SORT = 'mouth_gap'
             self.ROUND = 1
         elif motion['forward_nosmile'] == True:
@@ -101,7 +102,9 @@ class SortPose:
         # removing cropX for now. Need to add that back into the data
         # segment = segment.loc[segment['cropX'] >= self.MINCROP]
         # print(segment.size)
-        segment = segment.loc[segment['mouth_gap'] >= self.MAXMOUTHGAP]
+
+        # COMMENTING OUT MOUTHGAP as it is functioning as a minimum. Needs refactoring
+        segment = segment.loc[segment['mouth_gap'] <= self.MAXMOUTHGAP]
         # segment = segment.loc[segment['mouth_gap'] <= MAXMOUTHGAP]
         print(segment.size)
         # segment = segment.loc[segment['resize'] < MAXRESIZE]
@@ -370,6 +373,44 @@ class SortPose:
             return False
 
 
+    def unique_face(self,img1,img2):
+        def preview_img(img):
+            cv2.imshow("difference", img)
+            cv2.waitKey(0)
+            cv2.destroyAllWindows()
+
+
+        # convert the images to grayscale
+        img1 = cv2.cvtColor(img1, cv2.COLOR_BGR2GRAY)
+        img2 = cv2.cvtColor(img2, cv2.COLOR_BGR2GRAY)
+
+        # define the function to compute MSE between two images
+        def mse(img1, img2):
+            h, w = img1.shape
+            try:
+                diff = cv2.subtract(img1, img2)
+                err = np.sum(diff**2)
+                mse = err/(float(h*w))
+            except Exception as e:
+                print('failed mse')
+                print('Error:', str(e))
+
+            return mse, diff
+
+        error, diff = mse(img1, img2)
+        
+        print("Image matching Error between the two images:",error)
+        # i don't know what number to use
+        if error == 0:
+            return False
+        elif error < 15:
+            preview_img(diff)
+            preview_img(img1)
+            preview_img(img2)
+            return False
+        else:
+            return True
+
     def write_video(self, ROOT, img_array, segment, size):
         videofile = f"facevid_crop{str(self.MINCROP)}_X{str(self.XLOW)}toX{str(self.XHIGH)}_Y{str(self.YLOW)}toY{str(self.YHIGH)}_Z{str(self.ZLOW)}toZ{str(self.ZHIGH)}_maxResize{str(self.MAXRESIZE)}_ct{str(len(segment))}_rate{(str(self.FRAMERATE))}.mp4"
         size = self.get_cv2size(ROOT, img_array[0])
@@ -448,6 +489,12 @@ class SortPose:
                         if not first_run:
                             print("testing is_face")
                             is_face = self.test_pair(last_image, cropped_image)
+                            if is_face and row['dist'] < 0.35:
+                                print("same person, testing mse")
+                                # print(start_img,index,site_name_id)
+                                # mse = self.test_mse(ROOT,last_image,cropped_image,site_name_id)
+                                is_face = self.unique_face(last_image,cropped_image)
+                                print ("mse ",mse)
                         else:
                             print("first round, skipping the pair test")
                     except:
@@ -464,8 +511,10 @@ class SortPose:
                 # print(outpath)
                 # out.write(img_array[i])
                 counter += 1
-            out.release()
-            print('wrote:',videofile)
+
+            # i think this is left over from video???
+            # out.release()
+            print('wrote files')
         except Exception as e:
             print(str(e))
 

@@ -36,16 +36,29 @@ from mp_pose_est import SelectPose
 from mp_sort_pose import SortPose
 from mp_db_io import DataIO
 
+
 VIDEO = False
 CYCLECOUNT = 2
 # ROOT="/Users/michaelmandiberg/Documents/projects-active/facemap_production/"
 
 # keep this live, even if not SSD
-# SegmentTable_name = 'Segment123side_to_side'
-SegmentTable_name = 'SegmentLeftToRight123smil' #actually straight ahead smile
+# SegmentTable_name = 'May25segment123side_to_side'
+# SegmentTable_name = 'May25segment123updown_laugh'
+SegmentTable_name = 'May25segment123straight_lessrange'  #actually straight ahead smile
 
+# SATYAM, this is MM specific
+# for when I'm using files on my SSD vs RAID
 IS_MOVE = False
 IS_SSD = True
+io = DataIO(IS_SSD)
+db = io.db
+NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
+
+# if IS_SSD:
+#     io.ROOT = io.ROOT_PROD 
+# else:
+#     io.ROOT = io.ROOT36
+
 
 if not IS_MOVE:
     print("production run. IS_SSD is", IS_SSD)
@@ -92,28 +105,26 @@ elif IS_MOVE:
     # regular rotation left to right, which should include the straight ahead? 
 
 
-LIMIT = 100
+LIMIT = 200
 
 
 motion = {
     "side_to_side": False,
-    "forward_smile": False,
-    "forward_nosmile":  True,
+    "forward_smile": True,
+    "forward_nosmile":  False,
     "static_pose":  False,
     "simple": False,
 }
+
+# construct my own objects
+sort = SortPose(motion)
 
 start_img = "median"
 # start_img = "start_site_image_id"
 start_site_image_id = "e/ea/portrait-of-funny-afro-guy-picture-id1402424532.jpg"
 # 274243    Portrait of funny afro guy  76865   {"top": 380, "left": 749, "right": 1204, "bottom": 835}
 
-# construct my own objects
-sort = SortPose(motion)
-io = DataIO()
-db = io.db
-ROOT = io.ROOT 
-NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
+
 
 # override io.db for testing mode
 # db['name'] = "123test"
@@ -230,6 +241,10 @@ def save_sorted(counter, folder, image, dist):
     print('saved, ',sorted_name)
 
 
+#compare image bitmaps 
+
+
+
 #get distance beetween encodings
 
 def get_d(enc1, enc2):
@@ -244,11 +259,14 @@ def get_d(enc1, enc2):
     print(d)
     return d
 
-def get_closest_df(start_img, df_enc):
+def get_closest_df(start_img, df_enc,site_name_id):
+    first = True
     if start_img == "median":
         enc1 = df_enc.median().to_list()
         print("in median")
+
         # print(enc1)
+
     elif start_img == "start_site_image_id":
         print("start_site_image_id (this is what we are comparing to)")
         print(start_site_image_id)
@@ -261,6 +279,7 @@ def get_closest_df(start_img, df_enc):
         print(start_img)
         enc1 = df_enc.loc[start_img].to_list()
         df_enc=df_enc.drop(start_img)
+        first = False
         # print("in new img",len(df_enc.index))
         # print(enc1)
     
@@ -279,6 +298,7 @@ def get_closest_df(start_img, df_enc):
         enc2 = row
         print("testing this", index, "against the start img",start_img)
         if (enc1 is not None) and (enc2 is not None):
+            # mse = False
             d = get_d(enc1, enc2)
             print ("d is", str(d), "for", index)
             dist.append(d)
@@ -307,53 +327,53 @@ def is_face(image):
             is_face = True
         return is_face
 
-
-# test if new and old make a face, calls is_face
-def test_pair(last_file, new_file):
-    try:
-        img = cv2.imread(new_file)
-        height, width, layers = img.shape
-        size = (width, height)
-        print('loaded img 1')
+# in class now...?
+# # test if new and old make a face, calls is_face
+# def test_pair(last_file, new_file):
+#     try:
+#         img = cv2.imread(new_file)
+#         height, width, layers = img.shape
+#         size = (width, height)
+#         print('loaded img 1')
         
-        # I think this should be "last_file"
-        last_img = cv2.imread(new_file)
-        last_height, last_width, last_layers = last_img.shape
-        last_size = (last_width, last_height)
-        print('loaded img 2')
+#         # I think this should be "last_file"
+#         last_img = cv2.imread(new_file)
+#         last_height, last_width, last_layers = last_img.shape
+#         last_size = (last_width, last_height)
+#         print('loaded img 2')
         
-        # test to see if this is actually an face, to get rid of blank ones/bad ones
-        if is_face(img):
-            print('new file is face')
-            # if not the first image
-#             if i>0:
-            # blend this image with the last image
-            blend = cv2.addWeighted(img, 0.5, last_img, 0.5, 0.0)
-            print('blended faces')
-            blended_face = is_face(blend)
-            print('is_face ',blended_face)
-            # if blended image has a detectable face, append the img
-            if blended_face:
-#                     img_array.append(img)
-                print('is a face! adding it')
-                return True
-            else:
-                print('skipping this one')
-                return False
-            # for the first one, just add the image
-            # this may need to be refactored in case the first one is bad?
+#         # test to see if this is actually an face, to get rid of blank ones/bad ones
+#         if is_face(img):
+#             print('new file is face')
+#             # if not the first image
+# #             if i>0:
+#             # blend this image with the last image
+#             blend = cv2.addWeighted(img, 0.5, last_img, 0.5, 0.0)
+#             print('blended faces')
+#             blended_face = is_face(blend)
+#             print('is_face ',blended_face)
+#             # if blended image has a detectable face, append the img
+#             if blended_face:
+# #                     img_array.append(img)
+#                 print('test_pair is a face! adding it')
+#                 return True
 #             else:
-#                 print('this is maybe the first round?')
-#                 img_array.append(img)
-        else:
-            print('new_file is not face: ',new_file)
-            return False
+#                 print('skipping this one')
+#                 return False
+#             # for the first one, just add the image
+#             # this may need to be refactored in case the first one is bad?
+# #             else:
+# #                 print('this is maybe the first round?')
+# #                 img_array.append(img)
+#         else:
+#             print('new_file is not face: ',new_file)
+#             return False
 
-#         i+=1
+# #         i+=1
 
-    except:
-        print('failed:',new_file)
-        return False
+#     except:
+#         print('failed:',new_file)
+#         return False
 
 
 
@@ -371,9 +391,15 @@ def sort_by_face_dist(start_img,df_enc, df_128_enc):
     for i in range(len(df_enc.index)-2):
         # find the image
         print(df_enc)
+        # this is the site_name_id for start_img, needed to test mse
+        if start_img is "median":
+            # setting to zero for first one, as not relevant
+            site_name_id = 0
+        else: 
+            site_name_id = df_enc.loc[start_img]['site_name_id']
         # the hardcoded #1 needs to be replaced with site_name_id, which needs to be readded to the df
         print("starting sort round ",str(i))
-        dist, start_img, df_128_enc = get_closest_df(start_img,df_128_enc)
+        dist, start_img, df_128_enc = get_closest_df(start_img,df_128_enc,site_name_id)
         # dist[0], dist_dict[dist[0]]
         thisimage=None
         face_landmarks=None
@@ -446,7 +472,7 @@ def simple_order(segment):
                     # if blended image has a detectable face, append the img
                     if blend_is_face(oldimage, newimage):
                         img_array.append(img)
-                        print('is a face! adding it')
+                        print('simple_order is a face! adding it')
                     else:
                         print('skipping this one')
                 # for the first one, just add the image
@@ -611,6 +637,7 @@ def main():
 
 # adding this for debugging
 
+    print("about to segment")
     # make the segment based on settings
     df_segment = sort.make_segment(df)
     print(df_segment)
@@ -619,6 +646,7 @@ def main():
     # print("duplicate_site_ids")
     # print(duplicate_site_ids)
 
+    print("will I save segment? ", SAVE_SEGMENT)
     if SAVE_SEGMENT:
         Base.metadata.create_all(engine)
         print(df_segment.size)
@@ -702,11 +730,11 @@ def main():
     if VIDEO == True:
         #save individual as video
         # need to rework to accept df and calc size internally
-        sort.write_video(ROOT, img_list, df_segment, size)
+        sort.write_video(io.ROOT, img_list, df_segment, size)
 
     else:
         #save individual as images
-        sort.write_images(ROOT, df_sorted)
+        sort.write_images(io.ROOT, df_sorted)
 
 
 if __name__ == '__main__':
