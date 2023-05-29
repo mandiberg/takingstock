@@ -105,8 +105,7 @@ elif IS_MOVE:
     # regular rotation left to right, which should include the straight ahead? 
 
 
-LIMIT = 300
-
+LIMIT = 3000
 
 motion = {
     "side_to_side": False,
@@ -116,25 +115,28 @@ motion = {
     "simple": False,
 }
 
+EXPAND = True
 
 # face_height_output is how large each face will be. default is 750
-base_image_size = 750
+# base_image_size = 750
+face_height_output = 400
 
 # define ratios, in relationship to nose
 # units are ratio of faceheight
 # top, right, bottom, left
-image_edge_multiplier = [1, 1, 1, 1]
+image_edge_multiplier = [1.5, 2, 1.5, 2]
 # image_edge_multiplier = [1.2, 1.2, 1.6, 1.2]
 
 
 # construct my own objects
-sort = SortPose(motion, base_image_size, image_edge_multiplier)
+sort = SortPose(motion, face_height_output, image_edge_multiplier,EXPAND)
 
 start_img = "median"
 # start_img = "start_site_image_id"
 start_site_image_id = "e/ea/portrait-of-funny-afro-guy-picture-id1402424532.jpg"
+# start_site_image_id = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/images_123rf/E/E8/95447708-portrait-of-happy-smiling-beautiful-young-woman-touching-skin-or-applying-cream-isolated-over-white.jpg"
 # 274243    Portrait of funny afro guy  76865   {"top": 380, "left": 749, "right": 1204, "bottom": 835}
-
+enc_persist = None
 
 
 # override io.db for testing mode
@@ -271,10 +273,24 @@ def get_d(enc1, enc2):
     return d
 
 def get_closest_df(start_img, df_enc,site_name_id):
-    first = True
+    def stash_enc1(enc1):
+        if EXPAND:
+            print("enc1 is being stored from this", enc1)            
+            enc_persist = enc1
+            print("enc1 is being stored here", enc_persist)
+            # setattr(sort, 'expand_enc1', enc1)
+            # print("expand_enc1 added:", getattr(sort, 'expand_enc1', None))
+            # # print(enc1)
+
+    global enc_persist
+    first = True #does this do anything?
     if start_img == "median":
         enc1 = df_enc.median().to_list()
         print("in median")
+        # stash_enc1(enc1)
+        if EXPAND:
+            print("enc1 is being stored from this", enc1)            
+            enc_persist = enc1
 
         # print(enc1)
 
@@ -282,7 +298,20 @@ def get_closest_df(start_img, df_enc,site_name_id):
         print("start_site_image_id (this is what we are comparing to)")
         print(start_site_image_id)
         enc1 = df_enc.loc[start_site_image_id].to_list()
-        # print(enc1)
+        # stash_enc1(enc1)
+        if EXPAND:
+            print("enc1 is being stored from this", enc1)            
+            enc_persist = enc1
+
+
+    # elif EXPAND:
+    #     # retaining the original encoding, to try to match it. 
+    #     print("got expand enc1 ", enc_persist)
+    #     enc1 = enc_persist
+    #     # enc1 = getattr(sort, 'expand_enc1', None)
+    #     # # drops the most recent success
+    #     df_enc=df_enc.drop(start_img)
+
         
     else:
 #         enc1 = get 2-129 from df via stimg key
@@ -290,7 +319,7 @@ def get_closest_df(start_img, df_enc,site_name_id):
         print(start_img)
         enc1 = df_enc.loc[start_img].to_list()
         df_enc=df_enc.drop(start_img)
-        first = False
+        first = False #does this do anything?
         # print("in new img",len(df_enc.index))
         # print(enc1)
     
@@ -315,6 +344,9 @@ def get_closest_df(start_img, df_enc,site_name_id):
             dist.append(d)
             dist_dict[d]=index
     dist.sort()
+    print("debug index")
+    print(dist)
+    print(len(dist))
     print ("the winner is: ", str(dist[0]), dist_dict[dist[0]])
 #     print(len(dist))
     return dist[0], dist_dict[dist[0]], df_enc

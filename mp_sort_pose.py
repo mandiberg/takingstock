@@ -8,12 +8,13 @@ import time
 import json
 import random
 import numpy as np
+import sys
 
 
 class SortPose:
     # """Sort image files based on head pose"""
 
-    def __init__(self, motion, base_image_size, image_edge_multiplier):
+    def __init__(self, motion, face_height_output, image_edge_multiplier, EXPAND):
 
         self.mp_face_detection = mp.solutions.face_detection
         self.mp_drawing = mp.solutions.drawing_utils
@@ -21,10 +22,10 @@ class SortPose:
         # maximum allowable scale up
         self.resize_max = 1.6
         self.image_edge_multiplier = image_edge_multiplier
-        self.face_height_output = base_image_size
+        self.face_height_output = face_height_output
         # takes base image size and multiplies by avg of multiplier
-        self.output_dims = (int(base_image_size*(image_edge_multiplier[1]+image_edge_multiplier[3])/2),int(base_image_size*(image_edge_multiplier[0]+image_edge_multiplier[2])/2))
-
+        self.output_dims = (int(face_height_output*(image_edge_multiplier[1]+image_edge_multiplier[3])/2),int(face_height_output*(image_edge_multiplier[0]+image_edge_multiplier[2])/2))
+        self.EXPAND = EXPAND
 
         if motion['side_to_side'] == True:
             self.XLOW = -20
@@ -380,12 +381,12 @@ class SortPose:
             print('Error:', str(e))
             return False
 
+    def preview_img(self,img):
+        cv2.imshow("difference", img)
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
 
     def unique_face(self,img1,img2):
-        def preview_img(img):
-            cv2.imshow("difference", img)
-            cv2.waitKey(0)
-            cv2.destroyAllWindows()
 
 
         # convert the images to grayscale
@@ -412,9 +413,9 @@ class SortPose:
         if error == 0:
             return False
         elif error < 15:
-            preview_img(diff)
-            preview_img(img1)
-            preview_img(img2)
+            # preview_img(diff)
+            # preview_img(img1)
+            # preview_img(img2)
             return False
         else:
             return True
@@ -438,7 +439,8 @@ class SortPose:
         # site_name_id = df_enc.loc[start_img]['site_name_id']
 
         print('writing images')
-        imgfileprefix = f"faceimg_crop{str(self.MINCROP)}_X{str(self.XLOW)}toX{str(self.XHIGH)}_Y{str(self.YLOW)}toY{str(self.YHIGH)}_Z{str(self.ZLOW)}toZ{str(self.ZHIGH)}_maxResize{str(self.MAXRESIZE)}_ct{str(df_sorted.size)}"
+        # imgfileprefix = f"faceimg_crop{str(self.MINCROP)}_X{str(self.XLOW)}toX{str(self.XHIGH)}_Y{str(self.YLOW)}toY{str(self.YHIGH)}_Z{str(self.ZLOW)}toZ{str(self.ZHIGH)}_maxResize{str(self.MAXRESIZE)}_ct{str(df_sorted.size)}"
+        imgfileprefix = f"X{str(self.XLOW)}-{str(self.XHIGH)}_Y{str(self.YLOW)}-{str(self.YHIGH)}_Z{str(self.ZLOW)}-{str(self.ZHIGH)}_ct{str(df_sorted.size)}"
         print(imgfileprefix)
         outfolder = os.path.join(ROOT,"images"+str(time.time()))
         if not os.path.exists(outfolder):      
@@ -488,8 +490,10 @@ class SortPose:
                 img = cv2.imread(open_path)
 
                 #crop image here:
-
-                cropped_image = self.crop_image(img, row['face_landmarks'], row['bbox'])
+                if self.EXPAND:
+                    cropped_image = self.expand_image(img, row['face_landmarks'], row['bbox'])
+                else:
+                    cropped_image = self.crop_image(img, row['face_landmarks'], row['bbox'])
                 print("cropped_image type: ",type(cropped_image))
                 if cropped_image is not None:
                     print(cropped_image.shape)
@@ -608,49 +612,6 @@ class SortPose:
         print(self.face_height)
         # return ptop, pbot, face_height
 
-    # def get_crop_data_simple(self):
-    #     print("get_crop_data_simple")
-    #     #it would prob be better to do this with a dict and a loop
-    #     # nose_2d = self.get_face_2d_point(self.faceLms,1)
-    #     # print("self.sinY: ",self.sinY)
-    #     #set main points for drawing/cropping
-    #     #p1 is tip of nose
-    #     p1 = (int(self.nose_2d[0]), int(self.nose_2d[1]))
-    #     # print(p1)
-
-    #     toobig = False
-    #     if p1[1]>(self.face_height*1) and (self.h-p1[1])>(self.face_height*1):
-    #         if p1[0]>(self.face_height*1) and (self.w-p1[0])>(self.face_height*1):
-    #             self.crop_multiplier = 1
-    #         else:
-    #             print('face too wiiiiiiiide')
-    #             self.crop_multiplier = .25
-    #             toobig=True
-
-    #     else:
-    #         self.crop_multiplier = .25
-    #         print('face too biiiiigggggg')
-    #         toobig=True
-
-    #     if not toobig:
-    #         print(self.crop_multiplier)
-    #         # self.h - p1[1]
-    #         top_overlap = p1[1]-self.face_height
-
-    #         print(top_overlap)
-    #         if top_overlap > 0:
-    #             #set crop
-    #             crop_size = self.face_height*self.crop_multiplier
-    #             leftcrop = int(p1[0]-crop_size)
-    #             rightcrop = int(p1[0]+crop_size)
-    #             topcrop = int(p1[1]-crop_size)
-    #             botcrop = int(p1[1]+crop_size)
-    #             self.simple_crop = [topcrop, rightcrop, botcrop, leftcrop]
-    #             print("crop top, right, bot, left")
-    #             print(self.simple_crop)
-    #         else:
-    #             print("top_overlap is negative")
-    #     return toobig
 
 
     def get_crop_data_scalable(self):
@@ -682,8 +643,7 @@ class SortPose:
             self.negmargin_count += 1
         return toobig
 
-
-    def crop_image(self,image, faceLms, bbox, sinY=0):
+    def get_image_face_data(self,image, faceLms, bbox):
         self.image = image
         self.size = (self.image.shape[0], self.image.shape[1])
         self.h = self.image.shape[0]
@@ -704,7 +664,75 @@ class SortPose:
             self.get_faceheight_data()
         except:
             print("couldn't get_faceheight_data")
-    
+
+            # this is the in progress neck rotation stuff
+            # self.get_crop_data(sinY)
+
+
+    def expand_image(self,image, faceLms, bbox, sinY=0):
+        self.get_image_face_data(image, faceLms, bbox)    
+        print("going to expand now")
+        try:
+            print(type(self.image))
+            borderType = cv2.BORDER_CONSTANT
+            self.EXPAND_SIZE = (5000,5000)
+            value = [255,255,255]
+
+            # scale image to match face heights
+            resize = self.face_height_output/self.face_height
+            if resize < 2:
+                print("resize")
+                print(resize)
+                # image.shape is height[0] and width[1]
+                resize_dims = (int(self.image.shape[1]*resize),int(self.image.shape[0]*resize))
+                # resize_nose.shape is  width[0] and height[1]
+                resize_nose = (int(self.nose_2d[0]*resize),int(self.nose_2d[1]*resize))
+                print("resize_dims")
+                print(resize_dims)
+                print("resize_nose")
+                print(resize_nose)
+                # this wants width and height
+                resized_image = cv2.resize(self.image, resize_dims, interpolation=cv2.INTER_LINEAR)
+                # self.preview_img(resized_image)
+
+                # calculate boder size by comparing scaled image dimensions to EXPAND_SIZE
+                # nose as center
+                # set top, bottom, left, right
+                top_border = int(self.EXPAND_SIZE[1]/2 - resize_nose[1])
+                bottom_border = int(self.EXPAND_SIZE[1]/2 - (resize_dims[1]-resize_nose[1]))
+                left_border = int(self.EXPAND_SIZE[0]/2 - resize_nose[0])
+                right_border = int(self.EXPAND_SIZE[0]/2 - (resize_dims[0]-resize_nose[0]))
+
+                print([top_border, bottom_border, left_border, right_border])
+                print([top_border, resize_dims[0]/2-right_border, resize_dims[1]/2-bottom_border, left_border])
+                print([top_border, self.EXPAND_SIZE[0]/2-right_border, self.EXPAND_SIZE[1]/2-bottom_border, left_border])
+
+                # expand image with borders
+                if top_border >= 0 and right_border >= 0 and self.EXPAND_SIZE[0]/2-right_border >= 0 and bottom_border >= 0 and self.EXPAND_SIZE [1]/2-bottom_border>= 0 and left_border>= 0:
+                # if topcrop >= 0 and self.w-rightcrop >= 0 and self.h-botcrop>= 0 and leftcrop>= 0:
+                    print("all positive")
+                    new_image = cv2.copyMakeBorder(resized_image, top_border, bottom_border, left_border, right_border, borderType, None, value)
+                else:
+                    print("one is negative")
+                    new_image = None
+                    self.negmargin_count += 1
+                # self.preview_img(new_image)
+                # quit()
+            else:
+                new_image = None
+                print("failed expand loop")
+
+
+        except Exception as e:
+            print("not expand_image loop failed")
+            print('Error:', str(e))
+            sys.exit(1)
+        # quit() 
+        return new_image  
+
+    def crop_image(self,image, faceLms, bbox, sinY=0):
+
+        self.get_image_face_data(image, faceLms, bbox)    
         # check for crop, and if not exist, then get
         # if not hasattr(self, 'crop'): 
         try:
@@ -712,9 +740,6 @@ class SortPose:
         except:
             print("couldn't get crop data")
             toobig = True
-
-            # this is the in progress neck rotation stuff
-            # self.get_crop_data(sinY)
 
         if not toobig:
             print("going to crop because too big is ", toobig)
@@ -745,7 +770,9 @@ class SortPose:
                 print("not cropped_image loop")
 
                 print(self.h, self.w)
+
         else:
             cropped_image = None
             # resize = None
         return cropped_image
+
