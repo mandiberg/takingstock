@@ -43,8 +43,8 @@ CYCLECOUNT = 2
 
 # keep this live, even if not SSD
 # SegmentTable_name = 'May25segment123side_to_side'
-# SegmentTable_name = 'May25segment123updown_laugh'
-SegmentTable_name = 'May25segment123straight_lessrange'  #actually straight ahead smile
+SegmentTable_name = 'May25segment123updown_laugh'
+# SegmentTable_name = 'May25segment123straight_lessrange'  #actually straight ahead smile
 
 # SATYAM, this is MM specific
 # for when I'm using files on my SSD vs RAID
@@ -105,17 +105,18 @@ elif IS_MOVE:
     # regular rotation left to right, which should include the straight ahead? 
 
 
-LIMIT = 3000
+LIMIT = 30000
 
 motion = {
     "side_to_side": False,
-    "forward_smile": True,
+    "forward_smile": False,
+    "laugh": True,
     "forward_nosmile":  False,
     "static_pose":  False,
     "simple": False,
 }
 
-EXPAND = True
+EXPAND = False
 
 # face_height_output is how large each face will be. default is 750
 # base_image_size = 750
@@ -124,8 +125,11 @@ face_height_output = 400
 # define ratios, in relationship to nose
 # units are ratio of faceheight
 # top, right, bottom, left
-image_edge_multiplier = [1.5, 2, 1.5, 2]
-# image_edge_multiplier = [1.2, 1.2, 1.6, 1.2]
+# image_edge_multiplier = [1, 1, 1, 1]
+
+
+# image_edge_multiplier = [1.5, 2, 1.5, 2]
+image_edge_multiplier = [1.2, 1.2, 1.6, 1.2]
 
 
 # construct my own objects

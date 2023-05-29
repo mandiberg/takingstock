@@ -56,6 +56,20 @@ class SortPose:
             self.MAXMOUTHGAP = 2
             self.SORT = 'mouth_gap'
             self.ROUND = 1
+        elif motion['laugh'] == True:
+            self.XLOW = 5
+            self.XHIGH = 40
+            self.YLOW = -4
+            self.YHIGH = 4
+            self.ZLOW = -3
+            self.ZHIGH = 3
+            self.MINCROP = 1
+            self.MAXRESIZE = .5
+            self.FRAMERATE = 15
+            self.SECOND_SORT = 'face_x'
+            self.MAXMOUTHGAP = 20
+            self.SORT = 'mouth_gap'
+            self.ROUND = 1
         elif motion['forward_nosmile'] == True:
             self.XLOW = -15
             self.XHIGH = 5
@@ -113,7 +127,7 @@ class SortPose:
         # print(segment.size)
 
         # COMMENTING OUT MOUTHGAP as it is functioning as a minimum. Needs refactoring
-        segment = segment.loc[segment['mouth_gap'] <= self.MAXMOUTHGAP]
+        segment = segment.loc[segment['mouth_gap'] >= self.MAXMOUTHGAP]
         # segment = segment.loc[segment['mouth_gap'] <= MAXMOUTHGAP]
         print(segment.size)
         # segment = segment.loc[segment['resize'] < MAXRESIZE]
