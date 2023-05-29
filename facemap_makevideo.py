@@ -105,7 +105,7 @@ elif IS_MOVE:
     # regular rotation left to right, which should include the straight ahead? 
 
 
-LIMIT = 200
+LIMIT = 3000
 
 
 motion = {
@@ -116,8 +116,15 @@ motion = {
     "simple": False,
 }
 
+
+# face_height_output is how large each face will be. default is 750
+base_image_size = 750
+
+image_edge_multiplier = [1.25, 1.25, 1.65, 1.25]
+
+
 # construct my own objects
-sort = SortPose(motion)
+sort = SortPose(motion, base_image_size, image_edge_multiplier)
 
 start_img = "median"
 # start_img = "start_site_image_id"

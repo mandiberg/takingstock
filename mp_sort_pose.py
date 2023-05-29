@@ -13,10 +13,18 @@ import numpy as np
 class SortPose:
     # """Sort image files based on head pose"""
 
-    def __init__(self, motion):
+    def __init__(self, motion, base_image_size, image_edge_multiplier):
 
         self.mp_face_detection = mp.solutions.face_detection
         self.mp_drawing = mp.solutions.drawing_utils
+
+        # maximum allowable scale up
+        self.resize_max = 1.6
+        self.image_edge_multiplier = image_edge_multiplier
+        self.face_height_output = base_image_size
+        # takes base image size and multiplies by avg of multiplier
+        self.output_dims = (int(base_image_size*(image_edge_multiplier[1]+image_edge_multiplier[3])/2),int(base_image_size*(image_edge_multiplier[0]+image_edge_multiplier[2])/2))
+
 
         if motion['side_to_side'] == True:
             self.XLOW = -20
@@ -499,6 +507,7 @@ class SortPose:
                             print("first round, skipping the pair test")
                     except:
                         print("last_image try failed")
+                    # if is_face or first_run and self.resize_factor < self.resize_max:
                     if is_face or first_run:
                         first_run = False
                         cv2.imwrite(outpath, cropped_image)
@@ -556,7 +565,7 @@ class SortPose:
         bbox_h = self.bbox['bottom'] - self.bbox['top']
         for idx, lm in enumerate(self.faceLms.landmark):
             if idx == point:
-                print("found point:")
+                # print("found point:")
                 # print(idx)
                 # pointXY = (lm.x * img_w, lm.y * img_h)
                 pointXY = (lm.x * bbox_w + bbox_x, lm.y * bbox_h + bbox_y)
@@ -593,9 +602,6 @@ class SortPose:
         # print(p1)
 
         toobig = False
-        # print(p1[1])
-        # print(self.face_height)
-        # print(self.h)
         if p1[1]>(self.face_height*1) and (self.h-p1[1])>(self.face_height*1):
             if p1[0]>(self.face_height*1) and (self.w-p1[0])>(self.face_height*1):
                 self.crop_multiplier = 1
@@ -630,26 +636,116 @@ class SortPose:
         return toobig
 
 
-    def crop_image(self,cropped_image, faceLms, bbox, sinY=0):
-        self.image = cropped_image
+    def get_crop_data_scalable(self):
+        # define ratios, in relationship to nose
+        # units are ratio of faceheight
+        # top, right, bottom, left
+
+
+        # p1 is tip of nose
+        p1 = (int(self.nose_2d[0]), int(self.nose_2d[1]))
+
+        toobig = False  # Default value
+
+        print("checkig boundaries")
+        print(self.w, self.h)
+        print(p1)
+        print(self.face_height)
+
+        topcrop = int(p1[1]-self.face_height*self.image_edge_multiplier[0])
+        rightcrop = int(p1[0]+self.face_height*self.image_edge_multiplier[1])
+        botcrop = int(p1[1]+self.face_height*self.image_edge_multiplier[2])
+        leftcrop = int(p1[0]-self.face_height*self.image_edge_multiplier[3])
+        self.simple_crop = [topcrop, rightcrop, botcrop, leftcrop]
+        print("crop top, right, bot, left")
+        print(self.simple_crop)
+
+        if topcrop >= 0 and self.w-rightcrop >= 0 and self.h-botcrop>= 0 and leftcrop>= 0:
+            print("all positive")
+            toobig = False
+        else:
+            print("one is negative")
+            toobig = True
+
+
+        # if p1[1]>(self.face_height*self.image_edge_multiplier[0]) and (self.h-p1[1])>(self.face_height*self.image_edge_multiplier[2]):
+        #     if p1[0]>(self.face_height*self.image_edge_multiplier[1]) and (self.w-p1[0])>(self.face_height*self.image_edge_multiplier[3]):
+        #         self.crop_multiplier = 1
+        #         print("both conditions met")
+        #         toobig = False
+        #     else:
+        #         print('face too wiiiiiiiide')
+        #         # self.crop_multiplier = .25
+        #         toobig=True
+        # else:
+        #     # self.crop_multiplier = .25
+        #     print('face too biiiiigggggg')
+        #     toobig=True
+
+        # if not toobig:
+        #     print(self.crop_multiplier)
+        #     # self.h - p1[1]
+        #     top_overlap = p1[1]-self.face_height
+
+        #     print(top_overlap)
+        #     if top_overlap > 0:
+        #         #set crop
+        #         crop_size = self.face_height*self.crop_multiplier
+        #         leftcrop = int(p1[0]-crop_size)
+        #         rightcrop = int(p1[0]+crop_size)
+        #         topcrop = int(p1[1]-crop_size)
+        #         botcrop = int(p1[1]+crop_size)
+        #         self.simple_crop = [topcrop, rightcrop, botcrop, leftcrop]
+        #         print("crop top, right, bot, left")
+        #         print(self.simple_crop)
+        #     else:
+        #         print("top_overlap is negative")
+        return toobig
+
+        # if p1[1] > (self.face_height * self.image_edge_multiplier[1]) and (self.h - p1[1]) > (self.face_height * self.image_edge_multiplier[3]):
+        #     print("First condition met")
+        #     # if p1[0] > (self.face_height * self.image_edge_multiplier[4]) and (self.w - p1[0]) > (self.face_height * self.image_edge_multiplier[2]):
+        #     if p1[1] > (self.face_height * self.image_edge_multiplier[1]) and (self.h - p1[1]) > (self.face_height * self.image_edge_multiplier[3]):
+        #         print("Inside inner if-statement")
+        #         print("good crop size! setting too big to False")
+        #         toobig = False
+        #     else:
+        #         print("Second condition not met")
+        # else:
+        #     print("First condition not met")
+        #     print("Boundary check failed. Setting toobig to True")  # Add this line
+        #     toobig = True
+
+        # # print("get_crop_data_simple")
+
+        # # need to sort this
+        # # if not toobig:
+        # leftcrop = int(p1[0]-self.face_height*self.image_edge_multiplier[4])
+        # rightcrop = int(p1[0]+self.face_height*self.image_edge_multiplier[2])
+        # topcrop = int(p1[1]-self.face_height*self.image_edge_multiplier[1])
+        # botcrop = int(p1[1]+self.face_height*self.image_edge_multiplier[3])
+        # self.simple_crop = [topcrop, rightcrop, botcrop, leftcrop]
+        # print("crop top, right, bot, left")
+        # print(self.simple_crop)
+
+        # return toobig
+
+
+    def crop_image(self,image, faceLms, bbox, sinY=0):
+        self.image = image
         self.size = (self.image.shape[0], self.image.shape[1])
         self.h = self.image.shape[0]
         self.w = self.image.shape[1]
         self.faceLms = faceLms
-        print("about to load_ json")
-        # self.bbox = json.loads(bbox)
         self.bbox = (bbox)
-        print(self.bbox)
-        print(type(self.bbox))
-        print(self.bbox['left'])
 
         print("attempting cropped_image")
+        print(self.size)
         #I'm not sure the diff between nose_2d and p1. May be redundant.
         #it would prob be better to do this with a dict and a loop
         # Instead of hard-coding the index 1, you can use a variable or constant for the point index
         nose_point_index = 1
         self.nose_2d = self.get_face_2d_point(nose_point_index)
-        print(self.nose_2d)
 
         try:
             # get self.face_height
@@ -660,38 +756,18 @@ class SortPose:
         # check for crop, and if not exist, then get
         # if not hasattr(self, 'crop'): 
         try:
-            toobig = self.get_crop_data_simple()
+            toobig = self.get_crop_data_scalable()
         except:
             print("couldn't get crop data")
+            toobig = True
+
             # this is the in progress neck rotation stuff
             # self.get_crop_data(sinY)
 
         if not toobig:
-            print("not too big, this big: ", toobig)
+            print("going to crop because too big is ", toobig)
             # print (self.padding_points)
             #set main points for drawing/cropping
-
-            # getting rid of this. I think it is for adding padding
-            #p1 is tip of nose
-            # p1 = (int(self.nose_2d[0]), int(self.nose_2d[1]))
-
-            # # print(crop_multiplier)
-            # self.h - p1[1]
-            # top_overlap = p1[1]-self.face_height
-
-            # #adding this in to padd image
-            # try:
-            #     padded_image = self.add_margin(cropped_image, self.padding_points)
-            # except:
-            #     padded_image = False
-
-            basesize = 750
-            resize_factor = basesize/self.face_height
-            newsize = basesize*resize_factor
-            # newsize = (basesize*self.simple_crop[0],basesize*self.simple_crop[1])
-            # print(newsize)
-            # resize = np.round(newsize[0]/(self.face_height*2.5), 3)
-            # print(resize)
 
             #moved this back up so it would NOT     draw map on both sets of images
             try:
@@ -699,11 +775,17 @@ class SortPose:
                 # image_arr = numpy.array(self.image)
                 # print(type(image_arr))
                 cropped_actualsize_image = self.image[self.simple_crop[0]:self.simple_crop[2], self.simple_crop[3]:self.simple_crop[1]]
+                print("cropped_actualsize_image.shape")
                 print(cropped_actualsize_image.shape)
-                desired_width = 750  # Specify the desired width
-                desired_height = 750  # Specify the desired height
+                resize = self.output_dims[0]/cropped_actualsize_image.shape[0] 
+                print(resize)
+                if resize > self.resize_max:
+                    print("toosmall")
+                    return None
+                print("about to resize")
                 # crop[0] is top, and clockwise from there. Right is 1, Bottom is 2, Left is 3. 
-                cropped_image = cv2.resize(cropped_actualsize_image, (desired_width, desired_height), interpolation=cv2.INTER_LINEAR)
+                print(self.output_dims)
+                cropped_image = cv2.resize(cropped_actualsize_image, (self.output_dims), interpolation=cv2.INTER_LINEAR)
                 print("image actually cropped")
             except:
                 cropped_image = None
