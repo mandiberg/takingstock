@@ -447,6 +447,11 @@ class SortPose:
         try:
             # couldn't I use i here? 
             counter = 1
+            good_count = 0
+            isnot_face_count = 0
+            cropfail_count = 0
+            self.negmargin_count = 0
+            self.toosmall_count = 0 
             last_image = None
             is_face = None
             first_run = True
@@ -513,16 +518,28 @@ class SortPose:
                         cv2.imwrite(outpath, cropped_image)
                         last_image = cropped_image
                         print("saved: ",outpath)
+                        good_count += 1
                     else: 
                         print("pair do not make a face, skipping")
+                        isnot_face_count += 1
                 else:
                     print("no image here, trying next")
-                # print(outpath)
-                # out.write(img_array[i])
+                    cropfail_count += 1
                 counter += 1
 
-            # i think this is left over from video???
-            # out.release()
+            print("good_count")
+            print(good_count)
+            print("isnot_face_count")
+            print(isnot_face_count)
+            print("cropfail_count")
+            print(cropfail_count)
+            print("self.negmargin_count")
+            print(self.negmargin_count)
+            print("self.toosmall_count")
+            print(self.toosmall_count)
+            print("total count")
+            print(counter)
+
             print('wrote files')
         except Exception as e:
             print(str(e))
@@ -591,56 +608,52 @@ class SortPose:
         print(self.face_height)
         # return ptop, pbot, face_height
 
-    def get_crop_data_simple(self):
-        print("get_crop_data_simple")
-        #it would prob be better to do this with a dict and a loop
-        # nose_2d = self.get_face_2d_point(self.faceLms,1)
-        # print("self.sinY: ",self.sinY)
-        #set main points for drawing/cropping
-        #p1 is tip of nose
-        p1 = (int(self.nose_2d[0]), int(self.nose_2d[1]))
-        # print(p1)
+    # def get_crop_data_simple(self):
+    #     print("get_crop_data_simple")
+    #     #it would prob be better to do this with a dict and a loop
+    #     # nose_2d = self.get_face_2d_point(self.faceLms,1)
+    #     # print("self.sinY: ",self.sinY)
+    #     #set main points for drawing/cropping
+    #     #p1 is tip of nose
+    #     p1 = (int(self.nose_2d[0]), int(self.nose_2d[1]))
+    #     # print(p1)
 
-        toobig = False
-        if p1[1]>(self.face_height*1) and (self.h-p1[1])>(self.face_height*1):
-            if p1[0]>(self.face_height*1) and (self.w-p1[0])>(self.face_height*1):
-                self.crop_multiplier = 1
-            else:
-                print('face too wiiiiiiiide')
-                self.crop_multiplier = .25
-                toobig=True
+    #     toobig = False
+    #     if p1[1]>(self.face_height*1) and (self.h-p1[1])>(self.face_height*1):
+    #         if p1[0]>(self.face_height*1) and (self.w-p1[0])>(self.face_height*1):
+    #             self.crop_multiplier = 1
+    #         else:
+    #             print('face too wiiiiiiiide')
+    #             self.crop_multiplier = .25
+    #             toobig=True
 
-        else:
-            self.crop_multiplier = .25
-            print('face too biiiiigggggg')
-            toobig=True
+    #     else:
+    #         self.crop_multiplier = .25
+    #         print('face too biiiiigggggg')
+    #         toobig=True
 
-        if not toobig:
-            print(self.crop_multiplier)
-            # self.h - p1[1]
-            top_overlap = p1[1]-self.face_height
+    #     if not toobig:
+    #         print(self.crop_multiplier)
+    #         # self.h - p1[1]
+    #         top_overlap = p1[1]-self.face_height
 
-            print(top_overlap)
-            if top_overlap > 0:
-                #set crop
-                crop_size = self.face_height*self.crop_multiplier
-                leftcrop = int(p1[0]-crop_size)
-                rightcrop = int(p1[0]+crop_size)
-                topcrop = int(p1[1]-crop_size)
-                botcrop = int(p1[1]+crop_size)
-                self.simple_crop = [topcrop, rightcrop, botcrop, leftcrop]
-                print("crop top, right, bot, left")
-                print(self.simple_crop)
-            else:
-                print("top_overlap is negative")
-        return toobig
+    #         print(top_overlap)
+    #         if top_overlap > 0:
+    #             #set crop
+    #             crop_size = self.face_height*self.crop_multiplier
+    #             leftcrop = int(p1[0]-crop_size)
+    #             rightcrop = int(p1[0]+crop_size)
+    #             topcrop = int(p1[1]-crop_size)
+    #             botcrop = int(p1[1]+crop_size)
+    #             self.simple_crop = [topcrop, rightcrop, botcrop, leftcrop]
+    #             print("crop top, right, bot, left")
+    #             print(self.simple_crop)
+    #         else:
+    #             print("top_overlap is negative")
+    #     return toobig
 
 
     def get_crop_data_scalable(self):
-        # define ratios, in relationship to nose
-        # units are ratio of faceheight
-        # top, right, bottom, left
-
 
         # p1 is tip of nose
         p1 = (int(self.nose_2d[0]), int(self.nose_2d[1]))
@@ -666,69 +679,8 @@ class SortPose:
         else:
             print("one is negative")
             toobig = True
-
-
-        # if p1[1]>(self.face_height*self.image_edge_multiplier[0]) and (self.h-p1[1])>(self.face_height*self.image_edge_multiplier[2]):
-        #     if p1[0]>(self.face_height*self.image_edge_multiplier[1]) and (self.w-p1[0])>(self.face_height*self.image_edge_multiplier[3]):
-        #         self.crop_multiplier = 1
-        #         print("both conditions met")
-        #         toobig = False
-        #     else:
-        #         print('face too wiiiiiiiide')
-        #         # self.crop_multiplier = .25
-        #         toobig=True
-        # else:
-        #     # self.crop_multiplier = .25
-        #     print('face too biiiiigggggg')
-        #     toobig=True
-
-        # if not toobig:
-        #     print(self.crop_multiplier)
-        #     # self.h - p1[1]
-        #     top_overlap = p1[1]-self.face_height
-
-        #     print(top_overlap)
-        #     if top_overlap > 0:
-        #         #set crop
-        #         crop_size = self.face_height*self.crop_multiplier
-        #         leftcrop = int(p1[0]-crop_size)
-        #         rightcrop = int(p1[0]+crop_size)
-        #         topcrop = int(p1[1]-crop_size)
-        #         botcrop = int(p1[1]+crop_size)
-        #         self.simple_crop = [topcrop, rightcrop, botcrop, leftcrop]
-        #         print("crop top, right, bot, left")
-        #         print(self.simple_crop)
-        #     else:
-        #         print("top_overlap is negative")
+            self.negmargin_count += 1
         return toobig
-
-        # if p1[1] > (self.face_height * self.image_edge_multiplier[1]) and (self.h - p1[1]) > (self.face_height * self.image_edge_multiplier[3]):
-        #     print("First condition met")
-        #     # if p1[0] > (self.face_height * self.image_edge_multiplier[4]) and (self.w - p1[0]) > (self.face_height * self.image_edge_multiplier[2]):
-        #     if p1[1] > (self.face_height * self.image_edge_multiplier[1]) and (self.h - p1[1]) > (self.face_height * self.image_edge_multiplier[3]):
-        #         print("Inside inner if-statement")
-        #         print("good crop size! setting too big to False")
-        #         toobig = False
-        #     else:
-        #         print("Second condition not met")
-        # else:
-        #     print("First condition not met")
-        #     print("Boundary check failed. Setting toobig to True")  # Add this line
-        #     toobig = True
-
-        # # print("get_crop_data_simple")
-
-        # # need to sort this
-        # # if not toobig:
-        # leftcrop = int(p1[0]-self.face_height*self.image_edge_multiplier[4])
-        # rightcrop = int(p1[0]+self.face_height*self.image_edge_multiplier[2])
-        # topcrop = int(p1[1]-self.face_height*self.image_edge_multiplier[1])
-        # botcrop = int(p1[1]+self.face_height*self.image_edge_multiplier[3])
-        # self.simple_crop = [topcrop, rightcrop, botcrop, leftcrop]
-        # print("crop top, right, bot, left")
-        # print(self.simple_crop)
-
-        # return toobig
 
 
     def crop_image(self,image, faceLms, bbox, sinY=0):
@@ -781,6 +733,7 @@ class SortPose:
                 print(resize)
                 if resize > self.resize_max:
                     print("toosmall")
+                    self.toosmall_count += 1
                     return None
                 print("about to resize")
                 # crop[0] is top, and clockwise from there. Right is 1, Bottom is 2, Left is 3. 

@@ -105,7 +105,7 @@ elif IS_MOVE:
     # regular rotation left to right, which should include the straight ahead? 
 
 
-LIMIT = 3000
+LIMIT = 300
 
 
 motion = {
@@ -120,7 +120,11 @@ motion = {
 # face_height_output is how large each face will be. default is 750
 base_image_size = 750
 
-image_edge_multiplier = [1.25, 1.25, 1.65, 1.25]
+# define ratios, in relationship to nose
+# units are ratio of faceheight
+# top, right, bottom, left
+image_edge_multiplier = [1, 1, 1, 1]
+# image_edge_multiplier = [1.2, 1.2, 1.6, 1.2]
 
 
 # construct my own objects
