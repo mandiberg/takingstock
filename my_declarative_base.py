@@ -86,3 +86,16 @@ class Encodings(Base):
     bbox = Column(JSON)
     face_encodings = Column(BLOB)
     body_landmarks = Column(BLOB)
+
+class Clusters(Base):
+    __tablename__ = 'Clusters'
+
+    cluster_id = Column(Integer, primary_key=True, autoincrement=True)
+    cluster_median = Column(BLOB)
+
+class ImagesClusters(Base):
+    __tablename__ = 'ImagesClusters'
+
+    image_id = Column(Integer, ForeignKey('images.image_id'), primary_key=True)
+    cluster_id = Column(Integer, ForeignKey('Clusters.cluster_id'))
+
