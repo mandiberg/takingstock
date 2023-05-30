@@ -6,7 +6,14 @@ from sklearn.preprocessing import StandardScaler #used for 'Feature Scaling'
 from sklearn.model_selection import ParameterGrid
 from sklearn import metrics
 
-from sqlalchemy import create_engine, text, MetaData, Table, Column, Numeric, Integer, VARCHAR, update
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.ext.declarative import declarative_base
+# my ORM
+from my_declarative_base import Base, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON
+
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy import create_engine, text, MetaData, Table, Column, Numeric, Integer, VARCHAR, update, Float
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.pool import NullPool
 
@@ -17,28 +24,36 @@ import time
 import pickle
 from sys import platform
 
+#mine
+from mp_db_io import DataIO
 
-# platform specific file folder (mac for michael, win for satyam)
-if platform == "darwin":
-    ####### Michael's OS X Credentials ########
-    db = {
-        "host":"localhost",
-        "name":"stock1",            
-        "user":"root",
-        "pass":"Fg!27Ejc!Mvr!GT"
-    }
-    ROOT= os.path.join(os.environ['HOME'], "Documents/projects-active/facemap_production") ## only on Mac
-    NUMBER_OF_PROCESSES = 8
-elif platform == "win32":
-    ######## Satyam's WIN Credentials #########
-    db = {
-        "host":"localhost",
-        "name":"gettytest3",                 
-        "user":"root",
-        "pass":"SSJ2_mysql"
-    }
-    ROOT= os.path.join("D:/"+"Documents/projects-active/facemap_production") ## SD CARD
-    NUMBER_OF_PROCESSES = 4
+
+io = DataIO()
+db = io.db
+NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
+
+
+# # platform specific file folder (mac for michael, win for satyam)
+# if platform == "darwin":
+#     ####### Michael's OS X Credentials ########
+#     db = {
+#         "host":"localhost",
+#         "name":"stock1",            
+#         "user":"root",
+#         "pass":"Fg!27Ejc!Mvr!GT"
+#     }
+#     ROOT= os.path.join(os.environ['HOME'], "Documents/projects-active/facemap_production") ## only on Mac
+#     NUMBER_OF_PROCESSES = 8
+# elif platform == "win32":
+#     ######## Satyam's WIN Credentials #########
+#     db = {
+#         "host":"localhost",
+#         "name":"gettytest3",                 
+#         "user":"root",
+#         "pass":"SSJ2_mysql"
+#     }
+#     ROOT= os.path.join("D:/"+"Documents/projects-active/facemap_production") ## SD CARD
+#     NUMBER_OF_PROCESSES = 4
 
 
 SELECT = "DISTINCT(image_id),face_encodings"
@@ -48,7 +63,10 @@ LIMIT = 1000
 
 engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}"
                                 .format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']), poolclass=NullPool)
-metadata = MetaData(engine)
+# metadata = MetaData(engine)
+Session = sessionmaker(bind=engine)
+session = Session()
+Base = declarative_base()
 
 start = time.time()
 

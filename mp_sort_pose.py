@@ -690,11 +690,12 @@ class SortPose:
             print(type(self.image))
             borderType = cv2.BORDER_CONSTANT
             self.EXPAND_SIZE = (5000,5000)
-            value = [255,255,255]
+            # value = [255,255,255]
+            value = [0,0,0]
 
             # scale image to match face heights
             resize = self.face_height_output/self.face_height
-            if resize < 2:
+            if resize < 4:
                 print("resize")
                 print(resize)
                 # image.shape is height[0] and width[1]

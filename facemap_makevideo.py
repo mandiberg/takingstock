@@ -116,11 +116,11 @@ motion = {
     "simple": False,
 }
 
-EXPAND = False
+EXPAND = True
 
 # face_height_output is how large each face will be. default is 750
 # base_image_size = 750
-face_height_output = 400
+face_height_output = 200
 
 # define ratios, in relationship to nose
 # units are ratio of faceheight
