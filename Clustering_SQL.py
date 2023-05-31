@@ -28,15 +28,54 @@ from sys import platform
 #mine
 from mp_db_io import DataIO
 
+# MM you need to use conda activate minimal_ds 
 
 io = DataIO()
 db = io.db
 NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 
-SELECT = "DISTINCT(image_id),face_encodings"
-FROM ="encodings"
-WHERE = "face_encodings IS NOT NULL"
-LIMIT = 1000
+# join with SSD tables
+
+SELECT = "DISTINCT(e.image_id), e.face_encodings"
+FROM = "Encodings e"
+QUERY = "e.image_id IN"
+SUBQUERY = "(SELECT * FROM May25segment123side_to_side seg1 )"
+WHERE = f"{QUERY} {SUBQUERY}"
+
+JOIN May25segment123updown_laugh seg2 ON seg1.image_id = seg2.image_id
+
+# SEG1 = "JOIN May25segment123side_to_side seg1 ON e.image_id = seg1.image_id"
+# SEG2 = "JOIN May25segment123updown_laugh seg2 ON e.image_id = seg2.image_id"
+# SEG3 = "JOIN May25segment123straight_lessrange seg3 ON e.image_id = seg3.image_id"
+
+# FROM = f"(SELECT e.image_id, e.face_encodings FROM Encodings e {SEG1} {SEG2} {SEG3}) AS subquery"
+# WHERE = "face_encodings IS NOT NULL"
+# LIMIT = 100000
+
+
+# SELECT column_name
+# FROM table_name
+# WHERE column_name expression operator 
+#     ( SELECT COLUMN_NAME  from TABLE_NAME   WHERE ... );
+
+
+# SELECT = "DISTINCT(i.image_id), e.face_encodings"
+# IMAGES = "Images i LEFT JOIN Encodings e ON i.image_id = e.image_id"
+# SEG1 = "RIGHT JOIN May25segment123side_to_side seg1 ON i.image_id = seg1.image_id"
+# SEG2 = "RIGHT JOIN May25segment123updown_laugh seg2 ON i.image_id = seg2.image_id"
+# SEG3 = "RIGHT JOIN May25segment123straight_lessrange seg3 ON i.image_id = seg3.image_id"
+
+# FROM = f"{IMAGES} {SEG1} {SEG2} {SEG3}"
+# WHERE = "e.face_encodings IS NOT NULL"
+LIMIT = 100000
+
+
+
+# Basic Query
+# SELECT = "DISTINCT(image_id),face_encodings"
+# FROM ="encodings"
+# WHERE = "face_encodings IS NOT NULL"
+# LIMIT = 1000
 
 engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}"
                                 .format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']), poolclass=NullPool)
@@ -163,6 +202,7 @@ def main():
     print("about to SQL: ",SELECT,FROM,WHERE,LIMIT)
     print(enc_data)
     print(set(enc_data["cluster_id"].tolist()))
+    quit()
     save_clusters_DB(enc_data)
     save_images_clusters_DB(enc_data)
     print("saved segment to clusters")

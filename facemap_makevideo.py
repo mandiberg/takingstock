@@ -23,6 +23,7 @@ from pathlib import Path
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
+# my ORM
 from my_declarative_base import Base, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON
 
 from sqlalchemy.exc import IntegrityError
@@ -69,19 +70,15 @@ if not IS_MOVE:
 
     SAVE_SEGMENT = False
     SELECT = "DISTINCT(i.image_id), i.site_name_id, i.contentUrl, i.imagename, e.face_x, e.face_y, e.face_z, e.mouth_gap, e.face_landmarks, e.bbox, e.face_encodings, i.site_image_id"
-    # FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings e ON i.image_id = e.image_id"
-    # FROM =f"Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings6 e ON i.image_id = e.image_id INNER JOIN {SegmentTable_name} seg ON i.site_image_id = seg.site_image_id"
 
     # don't need keywords if SegmentTable_name
-    FROM =f"Images i LEFT JOIN Encodings e ON i.image_id = e.image_id INNER JOIN {SegmentTable_name} seg ON i.site_image_id = seg.site_image_id"
-    WHERE = "e.is_face IS TRUE AND e.face_encodings IS NOT NULL AND e.bbox IS NOT NULL AND i.site_name_id = 8 AND i.age_id NOT IN (1,2,3,4)"
+    # this is for MM segment table
+    # FROM =f"Images i LEFT JOIN Encodings e ON i.image_id = e.image_id INNER JOIN {SegmentTable_name} seg ON i.site_image_id = seg.site_image_id"
+    # WHERE = "e.is_face IS TRUE AND e.face_encodings IS NOT NULL AND e.bbox IS NOT NULL AND i.site_name_id = 8 AND i.age_id NOT IN (1,2,3,4)"
 
-    # WHERE = "i.site_image_id LIKE '1402424532'"
-    # WHERE = "i.site_image_id IN (1402424532)"
-    # WHERE = "i.site_image_id IN (1311507298, 1402424532, 168449643, 1182617710)"
-
-    # WHERE = "e.is_face IS TRUE AND e.bbox IS NOT NULL AND i.site_name_id = 5 AND k.keyword_text LIKE 'smil%'"
-    # WHERE = "e.image_id IS NULL "
+    # this is for gettytest3 table
+    FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings e ON i.image_id = e.image_id"
+    WHERE = "e.is_face IS TRUE AND e.bbox IS NOT NULL AND i.site_name_id = 1 AND k.keyword_text LIKE 'smil%'"
 
 elif IS_MOVE:
     print("moving to SSD")
@@ -105,18 +102,18 @@ elif IS_MOVE:
     # regular rotation left to right, which should include the straight ahead? 
 
 
-LIMIT = 30000
+LIMIT = 10000
 
 motion = {
     "side_to_side": False,
-    "forward_smile": False,
-    "laugh": True,
+    "forward_smile": True,
+    "laugh": False,
     "forward_nosmile":  False,
     "static_pose":  False,
     "simple": False,
 }
 
-EXPAND = True
+EXPAND = False
 
 # face_height_output is how large each face will be. default is 750
 # base_image_size = 750
@@ -599,8 +596,11 @@ def main():
         return pickle.loads(pickled_array)
     def unstring_json(json_string):
         eval_string = ast.literal_eval(json_string)
-        json_dict = json.loads(eval_string)
-        return json_dict
+        if isinstance(eval_string, dict):
+            return eval_string
+        else:
+            json_dict = json.loads(eval_string)
+            return json_dict
 
     def decode_64_array(encoded):
         decoded = base64.b64decode(encoded).decode('utf-8')
