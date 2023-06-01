@@ -32,36 +32,15 @@ from mp_db_io import DataIO
 
 start = time.time()
 
-io = DataIO()
-db = io.db
-NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
+# number of clusters created, will be added to table names if USE_SEGMENT
+N_CLUSTERS = 12
 
 # Satyam, you want to set this to False
 USE_SEGMENT = False
 
-
-if USE_SEGMENT is True:
-
-    # where the script is looking for files list
-    # do not use this if you are using the regular Clusters and ImagesClusters tables
-    SegmentTable_name = 'May25segment123side_to_side'
-
-    # join with SSD tables. Satyam, use the one below
-    SELECT = "DISTINCT(e.image_id), e.face_encodings"
-    FROM = "Encodings e"
-    QUERY = "e.image_id IN"
-    SUBQUERY = f"(SELECT seg1.image_id FROM {SegmentTable_name} seg1 )"
-    WHERE = f"{QUERY} {SUBQUERY}"
-    LIMIT = 1000
-
-else:
-    # Basic Query, this works with gettytest3
-    SELECT = "DISTINCT(image_id),face_encodings"
-    FROM ="encodings"
-    WHERE = "face_encodings IS NOT NULL"
-    LIMIT = 1000
-    SegmentTable_name = ""
-
+io = DataIO()
+db = io.db
+NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 
 engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}"
                                 .format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']), poolclass=NullPool)
@@ -70,21 +49,62 @@ Session = sessionmaker(bind=engine)
 session = Session()
 Base = declarative_base()
 
-# define new cluster table names based on segment name
-SegmentClustersTable_name = "Clusters_"+SegmentTable_name
-SegmentImagesClustersTable_name = "ImagesClusters_"+SegmentTable_name
 
-class SegmentClustersTable(Base):
-    __tablename__ = SegmentClustersTable_name
+if USE_SEGMENT is True:
 
-    cluster_id = Column(Integer, primary_key=True, autoincrement=True)
-    cluster_median = Column(BLOB)
+    # where the script is looking for files list
+    # do not use this if you are using the regular Clusters and ImagesClusters tables
+    SegmentTable_name = 'May25seg123y'
 
-class SegmentImagesClustersTable(Base):
-    __tablename__ = SegmentImagesClustersTable_name
+    # MM join with SSD tables. Satyam, use the one below
+    SELECT = "DISTINCT(e.image_id), e.face_encodings"
+    FROM = "Encodings e"
+    QUERY = "e.image_id IN"
+    SUBQUERY = f"(SELECT seg1.image_id FROM {SegmentTable_name} seg1 )"
+    WHERE = f"{QUERY} {SUBQUERY}"
+    LIMIT = 1000
 
-    image_id = Column(Integer, ForeignKey('Images.image_id'), primary_key=True)
-    cluster_id = Column(Integer, ForeignKey('Clusters.cluster_id'))
+    # define new cluster table names based on segment name
+    SegmentClustersTable_name = "Clusters_"+SegmentTable_name+str(N_CLUSTERS)
+    print("SegmentClustersTable_name")
+    print(SegmentClustersTable_name)
+    SegmentImagesClustersTable_name = "ImagesClusters_"+SegmentTable_name+str(N_CLUSTERS)
+
+    class SegmentClustersTable(Base):
+        __tablename__ = SegmentClustersTable_name
+
+        cluster_id = Column(Integer, primary_key=True, autoincrement=True)
+        cluster_median = Column(BLOB)
+
+    class SegmentImagesClustersTable(Base):
+        __tablename__ = SegmentImagesClustersTable_name
+
+        image_id = Column(Integer, ForeignKey(Images.image_id), primary_key=True)
+        cluster_id = Column(Integer, ForeignKey(SegmentClustersTable.cluster_id))
+    
+    # class SegmentClustersTable(Base):
+    #     __tablename__ = SegmentClustersTable_name
+
+    #     cluster_id = Column(Integer, primary_key=True, autoincrement=True)
+    #     cluster_median = Column(BLOB)
+
+    # class SegmentImagesClustersTable(Base):
+    #     __tablename__ = SegmentImagesClustersTable_name
+
+    #     image_id = Column(Integer, ForeignKey(Images.image_id), primary_key=True)
+    #     cluster_id = Column(Integer, ForeignKey(SegmentClustersTable.cluster_id))
+
+
+else:
+    # Basic Query, this works with gettytest3
+    SELECT = "DISTINCT(image_id),face_encodings"
+    FROM ="encodings"
+    WHERE = "face_encodings IS NOT NULL"
+    LIMIT = 1000
+    SegmentTable_name = None
+
+
+
 
 
 def selectSQL():
@@ -95,7 +115,7 @@ def selectSQL():
     return(resultsjson)
 
 
-def kmeans_cluster(df,n_clusters=32):
+def kmeans_cluster(df,n_clusters=32): 
     kmeans = KMeans(n_clusters,n_init=10, init = 'k-means++', random_state = 42, max_iter = 300)
     kmeans.fit(df)
     clusters = kmeans.predict(df)
@@ -114,9 +134,17 @@ def save_clusters_DB(df):
     # Convert to set and Save the df to a table
     unique_clusters = set(df['cluster_id'])
     for cluster_id in unique_clusters:
-        existing_record = session.query(Clusters).filter_by(cluster_id=cluster_id).first()
+        if SegmentTable_name is None:
+            print("first condition")
+            existing_record = session.query(Clusters).filter_by(cluster_id=cluster_id).first()
+        elif SegmentTable_name:
+            print("second condition")
 
-        if existing_record is None and pd.isnull(SegmentTable_name):
+            existing_record = session.query(SegmentClustersTable).filter_by(cluster_id=cluster_id).first()
+        else:
+            print("failing the existing_record record test in save_clusters_DB")
+
+        if existing_record is None and SegmentTable_name is False:
             instance = Clusters(
                 cluster_id=cluster_id,
                 cluster_median=None
@@ -171,7 +199,13 @@ def save_images_clusters_DB(df):
     for _, row in df.iterrows():
         image_id = row['image_id']
         cluster_id = row['cluster_id']
-        existing_record = session.query(ImagesClusters).filter_by(image_id=image_id).first()
+        if SegmentTable_name is None:
+            existing_record = session.query(ImagesClusters).filter_by(image_id=image_id).first()
+        elif SegmentTable_name:
+            existing_record = session.query(SegmentImagesClustersTable).filter_by(image_id=image_id).first()
+        else:
+            print("failing the existing_record record test in save_images_clusters_DB")
+
 
         if existing_record is None and pd.isnull(SegmentTable_name):
             instance = ImagesClusters(
@@ -211,11 +245,17 @@ def main():
         df["image_id"]=row["image_id"]
         enc_data = pd.concat([enc_data,df],ignore_index=True) 
     # I changed n_clusters to 128, from 3, and now it returns 128 clusters
-    enc_data["cluster_id"] = kmeans_cluster(enc_data,n_clusters=128)
+    enc_data["cluster_id"] = kmeans_cluster(enc_data,n_clusters=N_CLUSTERS)
     print(enc_data)
     print(set(enc_data["cluster_id"].tolist()))
     if USE_SEGMENT:
-        Base.metadata.create_all(engine)
+        tables = [
+            Table(SegmentClustersTable.__tablename__, Base.metadata),
+            Table(SegmentImagesClustersTable.__tablename__, Base.metadata),
+        ]
+
+        # tables = [SegmentClustersTable.__tablename__, SegmentImagesClustersTable.__tablename__]
+        Base.metadata.create_all(engine, tables=tables)
     save_clusters_DB(enc_data)
     save_images_clusters_DB(enc_data)
     print("saved segment to clusters")
