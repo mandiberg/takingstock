@@ -43,8 +43,8 @@ CYCLECOUNT = 2
 # ROOT="/Users/michaelmandiberg/Documents/projects-active/facemap_production/"
 
 # keep this live, even if not SSD
-SegmentTable_name = 'May25segment123side_to_side'
-# SegmentTable_name = 'May25segment123updown_laugh'
+# SegmentTable_name = 'May25segment123side_to_side'
+SegmentTable_name = 'May25segment123updown_laugh'
 # SegmentTable_name = 'May25segment123straight_lessrange'  #actually straight ahead smile
 
 # SATYAM, this is MM specific
@@ -105,8 +105,8 @@ elif IS_MOVE:
 LIMIT = 10000
 
 motion = {
-    "side_to_side": True,
-    "forward_smile": False,
+    "side_to_side": False,
+    "forward_smile": True,
     "laugh": False,
     "forward_nosmile":  False,
     "static_pose":  False,
@@ -184,7 +184,7 @@ face_mesh = mp_face_mesh.FaceMesh(static_image_mode=True, max_num_faces=1,min_de
 
 def selectSQL():
     selectsql = f"SELECT {SELECT} FROM {FROM} WHERE {WHERE} LIMIT {str(LIMIT)};"
-    print("actual SELECT is: ",selectsql)
+    # print("actual SELECT is: ",selectsql)
     result = engine.connect().execute(text(selectsql))
     resultsjson = ([dict(row) for row in result.mappings()])
     return(resultsjson)
