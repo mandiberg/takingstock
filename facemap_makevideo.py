@@ -77,8 +77,8 @@ if not IS_MOVE:
     # WHERE = "e.is_face IS TRUE AND e.face_encodings IS NOT NULL AND e.bbox IS NOT NULL AND i.site_name_id = 8 AND i.age_id NOT IN (1,2,3,4)"
 
     # this is for gettytest3 table
-    FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings e ON i.image_id = e.image_id"
-    WHERE = "e.is_face IS TRUE AND e.bbox IS NOT NULL AND i.site_name_id = 1 AND k.keyword_text LIKE 'smil%'"
+    FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings e ON i.image_id = e.image_id JOIN ImagesClusters ic ON i.image_id = ic.image_id"
+    WHERE = "e.is_face IS TRUE AND e.bbox IS NOT NULL AND i.site_name_id = 8 AND k.keyword_text LIKE 'smil%' AND ic.cluster_id = 50"
 
 elif IS_MOVE:
     print("moving to SSD")
@@ -102,7 +102,7 @@ elif IS_MOVE:
     # regular rotation left to right, which should include the straight ahead? 
 
 
-LIMIT = 10000
+LIMIT = 100000
 
 motion = {
     "side_to_side": False,
@@ -642,7 +642,7 @@ def main():
     except:
         print('you forgot to change the filename DUH')
     if df.empty:
-        print('dataframe empty, probably bad path')
+        print('dataframe empty, probably bad path or bad SQL')
         sys.exit()
 
     # Apply the unpickling function to the 'face_encodings' column

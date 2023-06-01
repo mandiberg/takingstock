@@ -39,6 +39,9 @@ NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 # Satyam, you want to set this to False
 USE_SEGMENT = False
 
+# number of clusters produced
+N_CLUSTERS = 128
+
 
 if USE_SEGMENT is True:
 
@@ -52,7 +55,7 @@ if USE_SEGMENT is True:
     QUERY = "e.image_id IN"
     SUBQUERY = f"(SELECT seg1.image_id FROM {SegmentTable_name} seg1 )"
     WHERE = f"{QUERY} {SUBQUERY}"
-    LIMIT = 1000
+    LIMIT = 100000
 
 else:
     # Basic Query, this works with gettytest3
@@ -70,21 +73,21 @@ Session = sessionmaker(bind=engine)
 session = Session()
 Base = declarative_base()
 
-# define new cluster table names based on segment name
-SegmentClustersTable_name = "Clusters_"+SegmentTable_name
-SegmentImagesClustersTable_name = "ImagesClusters_"+SegmentTable_name
+# # define new cluster table names based on segment name
+# SegmentClustersTable_name = "Clusters_"+SegmentTable_name
+# SegmentImagesClustersTable_name = "ImagesClusters_"+SegmentTable_name
 
-class SegmentClustersTable(Base):
-    __tablename__ = SegmentClustersTable_name
+# class SegmentClustersTable(Base):
+#     __tablename__ = SegmentClustersTable_name
 
-    cluster_id = Column(Integer, primary_key=True, autoincrement=True)
-    cluster_median = Column(BLOB)
+#     cluster_id = Column(Integer, primary_key=True, autoincrement=True)
+#     cluster_median = Column(BLOB)
 
-class SegmentImagesClustersTable(Base):
-    __tablename__ = SegmentImagesClustersTable_name
+# class SegmentImagesClustersTable(Base):
+#     __tablename__ = SegmentImagesClustersTable_name
 
-    image_id = Column(Integer, ForeignKey('Images.image_id'), primary_key=True)
-    cluster_id = Column(Integer, ForeignKey('Clusters.cluster_id'))
+#     image_id = Column(Integer, ForeignKey('Images.image_id'), primary_key=True)
+#     cluster_id = Column(Integer, ForeignKey('Clusters.cluster_id'))
 
 
 def selectSQL():
@@ -116,14 +119,8 @@ def save_clusters_DB(df):
     for cluster_id in unique_clusters:
         existing_record = session.query(Clusters).filter_by(cluster_id=cluster_id).first()
 
-        if existing_record is None and pd.isnull(SegmentTable_name):
+        if existing_record is None:
             instance = Clusters(
-                cluster_id=cluster_id,
-                cluster_median=None
-            )
-            session.add(instance)
-        elif existing_record is None and SegmentTable_name:
-            instance = SegmentClustersTable(
                 cluster_id=cluster_id,
                 cluster_median=None
             )
@@ -173,15 +170,8 @@ def save_images_clusters_DB(df):
         cluster_id = row['cluster_id']
         existing_record = session.query(ImagesClusters).filter_by(image_id=image_id).first()
 
-        if existing_record is None and pd.isnull(SegmentTable_name):
+        if existing_record is None:
             instance = ImagesClusters(
-                image_id=image_id,
-                cluster_id=cluster_id,
-            )
-            session.add(instance)
-
-        elif existing_record is None and SegmentTable_name:
-            instance = SegmentImagesClustersTable(
                 image_id=image_id,
                 cluster_id=cluster_id,
             )
@@ -211,11 +201,11 @@ def main():
         df["image_id"]=row["image_id"]
         enc_data = pd.concat([enc_data,df],ignore_index=True) 
     # I changed n_clusters to 128, from 3, and now it returns 128 clusters
-    enc_data["cluster_id"] = kmeans_cluster(enc_data,n_clusters=128)
+    enc_data["cluster_id"] = kmeans_cluster(enc_data,n_clusters=N_CLUSTERS)
     print(enc_data)
     print(set(enc_data["cluster_id"].tolist()))
-    if USE_SEGMENT:
-        Base.metadata.create_all(engine)
+    # if USE_SEGMENT:
+    #     Base.metadata.create_all(engine)
     save_clusters_DB(enc_data)
     save_images_clusters_DB(enc_data)
     print("saved segment to clusters")
