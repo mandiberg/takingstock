@@ -99,4 +99,6 @@ class ImagesClusters(Base):
     image_id = Column(Integer, ForeignKey('images.image_id'), primary_key=True)
     cluster_id = Column(Integer, ForeignKey('Clusters.cluster_id'))
 
+    images = relationship("Images")
+    cluster_id = relationship("Clusters")
 
