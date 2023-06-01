@@ -70,28 +70,18 @@ if USE_SEGMENT is True:
     print(SegmentClustersTable_name)
     SegmentImagesClustersTable_name = "ImagesClusters_"+SegmentTable_name+str(N_CLUSTERS)
 
+    class SegmentClustersTable(Base):
+        __tablename__ = SegmentClustersTable_name
 
+        cluster_id = Column(Integer, primary_key=True, autoincrement=True)
+        cluster_median = Column(BLOB)
 
+    class SegmentImagesClustersTable(Base):
+        __tablename__ = SegmentImagesClustersTable_name
 
-# # instable relationship code
-#     class SegmentClustersTable(Base):
-#         __tablename__ = SegmentClustersTable_name
-
-#         cluster_id = Column(Integer, primary_key=True, autoincrement=True)
-#         cluster_median = Column(BLOB)
-#         SegmentImagesClustersTable = relationship(SegmentClustersTable_name, back_populates=SegmentClustersTable_name)
-
-#     class SegmentImagesClustersTable(Base):
-#         __tablename__ = SegmentImagesClustersTable_name
-
-        # image_id = Column(Integer, ForeignKey(Images.image_id), primary_key=True)
-        # cluster_id = Column(Integer, ForeignKey(SegmentClustersTable.cluster_id))
+        image_id = Column(Integer, ForeignKey(Images.image_id), primary_key=True)
+        cluster_id = Column(Integer, ForeignKey(SegmentClustersTable.cluster_id))
     
-        # images = relationship(Images)
-        # # parent = relationship("Parent", back_populates="children")
-        # SegmentClustersTable = relationship(SegmentImagesClustersTable_name, back_populates=SegmentImagesClustersTable_name)
-
-# non functioning old code
     # class SegmentClustersTable(Base):
     #     __tablename__ = SegmentClustersTable_name
 
@@ -112,6 +102,9 @@ else:
     WHERE = "face_encodings IS NOT NULL"
     LIMIT = 1000
     SegmentTable_name = None
+
+
+
 
 
 def selectSQL():
@@ -172,6 +165,34 @@ def save_clusters_DB(df):
     except IntegrityError as e:
         session.rollback()
         print(f"Error occurred during data saving: {str(e)}")
+
+
+# could also use df drop tolist
+# unique_clusters = df['cluster_id'].drop_duplicates().tolist()
+# saving this here, because may need to roll back to this
+# when I have to calculate the median enc for each cluster. 
+# # that will require access to all the encodings in the df? 
+# def save_clusters_DB(df):
+#     #save the df to a table
+#     for _, row in df.iterrows():
+#         cluster_id = row['cluster_id']
+#         existing_record = session.query(Clusters).filter_by(cluster_id=cluster_id).first()
+
+#         if existing_record is None:
+#             instance = Clusters(
+#                 cluster_id=cluster_id,
+#                 cluster_median=None
+#             )
+#             session.add(instance)
+#         else:
+#             print(f"Skipping duplicate record with cluster_id {cluster_id}")
+
+#     try:
+#         session.commit()
+#         print("Data saved successfully.")
+#     except exc.IntegrityError as e:
+#         session.rollback()
+#         print(f"Error occurred during data saving: {str(e)}")
 
 def save_images_clusters_DB(df):
     #save the df to a table
