@@ -449,14 +449,14 @@ class SortPose:
         except:
             print('failed VIDEO, probably because segmented df until empty')
 
-    def write_images(self, ROOT, df_sorted):
+    def write_images(self, ROOT, df_sorted,cluster_no):
         # site_name_id = df_enc.loc[start_img]['site_name_id']
 
         print('writing images')
         # imgfileprefix = f"faceimg_crop{str(self.MINCROP)}_X{str(self.XLOW)}toX{str(self.XHIGH)}_Y{str(self.YLOW)}toY{str(self.YHIGH)}_Z{str(self.ZLOW)}toZ{str(self.ZHIGH)}_maxResize{str(self.MAXRESIZE)}_ct{str(df_sorted.size)}"
         imgfileprefix = f"X{str(self.XLOW)}-{str(self.XHIGH)}_Y{str(self.YLOW)}-{str(self.YHIGH)}_Z{str(self.ZLOW)}-{str(self.ZHIGH)}_ct{str(df_sorted.size)}"
         print(imgfileprefix)
-        outfolder = os.path.join(ROOT,"images"+str(time.time()))
+        outfolder = os.path.join(ROOT,"cluster"+str(cluster_no)+"_"+str(time.time()))
         if not os.path.exists(outfolder):      
             os.mkdir(outfolder)
 
