@@ -189,13 +189,15 @@ face_mesh = mp_face_mesh.FaceMesh(static_image_mode=True, max_num_faces=1,min_de
 # I/O utils
 
 def selectSQL(cluster_no=None):
-    if cluster_no:
+    print(f"cluster_no is")
+    print(cluster_no)
+    if cluster_no is not None:
         cluster =f"AND ic.cluster_id = {str(cluster_no)}"
     else:
         cluster=""
     print(f"cluster SELECT is {cluster}")
     selectsql = f"SELECT {SELECT} FROM {FROM} WHERE {WHERE} {cluster} LIMIT {str(LIMIT)};"
-    # print("actual SELECT is: ",selectsql)
+    print("actual SELECT is: ",selectsql)
     result = engine.connect().execute(text(selectsql))
     resultsjson = ([dict(row) for row in result.mappings()])
     return(resultsjson)
@@ -797,6 +799,7 @@ def main():
         for cluster_no in range(N_CLUSTERS):
             print(f"SELECTing cluster {cluster_no} of {N_CLUSTERS}")
             resultsjson = selectSQL(cluster_no)
+            print(f"resultsjson contains {len(resultsjson)} images")
             map_images(resultsjson, cluster_no)
     else:
         resultsjson = selectSQL() 
