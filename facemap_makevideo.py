@@ -111,7 +111,7 @@ elif IS_MOVE:
     # regular rotation left to right, which should include the straight ahead? 
 
 
-LIMIT = 10000
+LIMIT = 100
 
 motion = {
     "side_to_side": False,
@@ -261,6 +261,8 @@ def sort_by_face_dist(start_img,df_enc, df_128_enc):
         except:
             print("won't assign landmarks/bbox")
         site_specific_root_folder = io.folder_list[site_name_id]
+        print("site_specific_root_folder")
+        print(site_specific_root_folder)
         # save the image -- this prob will be to append to list, and return list? 
         # save_sorted(i, folder, start_img, dist)
         this_dist=[dist, site_specific_root_folder, start_img, site_name_id, face_landmarks, bbox]
@@ -420,7 +422,7 @@ def prep_encodings(df_segment):
     print(df_128_enc)
     return df_enc, df_128_enc
 
-def compare_images(last_image, img, face_landmarks, bbox, first_run, good_count, isnot_face_count, cropfail_count):
+def compare_images(last_image, img, face_landmarks, bbox, counter_dict):
     is_face = None
 
     #crop image here:
@@ -441,7 +443,7 @@ def compare_images(last_image, img, face_landmarks, bbox, first_run, good_count,
         except:
             print("couldn't test last_image")
         try:
-            if not first_run:
+            if not counter_dict["first_run"]:
                 print("testing is_face")
                 is_face = sort.test_pair(last_image, cropped_image)
                 if is_face:
@@ -453,82 +455,97 @@ def compare_images(last_image, img, face_landmarks, bbox, first_run, good_count,
         except:
             print("last_image try failed")
         # if is_face or first_run and sort.resize_factor < sort.resize_max:
-        if is_face or first_run:
-            first_run = False
+        if is_face or counter_dict["first_run"]:
+            counter_dict["first_run"] = False
             last_image = cropped_image
-            good_count += 1
+            counter_dict["good_count"] += 1
         else: 
             print("pair do not make a face, skipping")
-            isnot_face_count += 1
+            counter_dict["isnot_face_count"] += 1
     else:
         print("no image here, trying next")
-        cropfail_count += 1
-    return last_image, cropped_image, first_run, good_count, isnot_face_count, cropfail_count
+        counter_dict["cropfail_count"] += 1
+    return last_image, cropped_image, counter_dict
 
-def write_images(df,cluster_no):
-    print('writing images')
-    # imgfileprefix = f"faceimg_crop{str(sort.MINCROP)}_X{str(sort.XLOW)}toX{str(sort.XHIGH)}_Y{str(sort.YLOW)}toY{str(sort.YHIGH)}_Z{str(sort.ZLOW)}toZ{str(sort.ZHIGH)}_maxResize{str(sort.MAXRESIZE)}_ct{str(df.size)}"
+def set_counters(df,cluster_no):
+    sort.negmargin_count = 0
+    sort.toosmall_count = 0 
+
+    counter_dict = {
+        "counter": 1,
+        "good_count": 0,
+        "isnot_face_count": 0,
+        "cropfail_count":  0,
+        "failed_dist_count": 1,
+        "first_run":  True
+    }
+
     imgfileprefix = f"X{str(sort.XLOW)}-{str(sort.XHIGH)}_Y{str(sort.YLOW)}-{str(sort.YHIGH)}_Z{str(sort.ZLOW)}-{str(sort.ZHIGH)}_ct{str(df.size)}"
     print(imgfileprefix)
     outfolder = os.path.join(io.ROOT,"cluster"+str(cluster_no)+"_"+str(time.time()))
     if not os.path.exists(outfolder):      
         os.mkdir(outfolder)
 
+    return counter_dict, imgfileprefix, outfolder
+
+def print_counters(counter_dict):
+    print("good_count")
+    print(counter_dict["good_count"])
+    print("isnot_face_count")
+    print(counter_dict["isnot_face_count"])
+    print("cropfail_count")
+    print(counter_dict["cropfail_count"])
+    print("sort.negmargin_count")
+    print(sort.negmargin_count)
+    print("sort.toosmall_count")
+    print(sort.toosmall_count)
+    print("total count")
+    print(counter_dict["counter"])
+
+
+def const_imgfilename(filename, counter_dict, df, imgfileprefix):
+    print("filename", filename)
+    UID = filename.split('-id')[-1].split("/")[-1].replace(".jpg","")
+    print("UID ",UID)
+    counter_str = str(counter_dict["counter"]).zfill(len(str(df.size)))  # Add leading zeros to the counter
+    imgfilename = imgfileprefix+"_"+str(counter_str)+"_"+UID+".jpg"
+    print("imgfilename ",imgfilename)
+    return imgfilename
+
+def linear_sort_df(df,cluster_no, last_image=None):
+    print('writing images')
+    counter_dict, imgfileprefix, outfolder = set_counters(df,cluster_no)
+    img_list = []
     try:
-        counter = 1
-        good_count = 0
-        isnot_face_count = 0
-        cropfail_count = 0
-        sort.negmargin_count = 0
-        sort.toosmall_count = 0 
-        last_image = None
-        first_run = True
         for index, row in df.iterrows():
             print('in loop, index is', str(index))
-            UID = row['filename'].split('-id')[-1].split("/")[-1].replace(".jpg","")
-            print("UID ",UID)
-            counter_str = str(counter).zfill(len(str(df.size)))  # Add leading zeros to the counter
-            imgfilename = imgfileprefix+"_"+str(counter_str)+"_"+UID+".jpg"
-            print("imgfilename ",imgfilename)
+            print(row)
+            imgfilename = const_imgfilename(row['filename'], counter_dict, df, imgfileprefix)
             outpath = os.path.join(outfolder,imgfilename)
-            print("outpath ",outpath)
-
-            # folder is specific to each file's site_name_id
-            # this is how it was, and seems hardcoded to Test36
-            # open_path = os.path.join(ROOT,row['folder'],row['filename'])
-
-            # here I'm using the actual root. Root gets pulled from io, then passed back to sort pose.
-            # but the folder is fused to the root somewhere... in makevideo? it needs to be found and pulled off there. 
-            open_path = os.path.join(io.ROOT,row['folder'].replace("/Volumes/Test36/",""),row['filename'])
+            open_path = os.path.join(io.ROOT,row['folder'],row['filename'])
+            print(outpath, open_path)
             img = cv2.imread(open_path)
             if row['dist'] < sort.MAXDIST:
                 # compare_images to make sure they are face and not the same
-                last_image, cropped_image, first_run, good_count, isnot_face_count, cropfail_count = compare_images(last_image, img, row['face_landmarks'], row['bbox'], first_run, good_count, isnot_face_count, cropfail_count)
+                last_image, cropped_image, counter_dict = compare_images(last_image, img, row['face_landmarks'], row['bbox'], counter_dict)
                 if cropped_image is not None:
-                    cv2.imwrite(outpath, cropped_image)
+                    img_list.append((outpath, cropped_image))
                     print("saved: ",outpath)
             else:
+                counter_dict["failed_dist_count"] += 1
                 print("MAXDIST too big:" , str(sort.MAXDIST))
+            counter_dict["counter"] += 1
+        print_counters(counter_dict)
 
-
-            counter += 1
-
-        print("good_count")
-        print(good_count)
-        print("isnot_face_count")
-        print(isnot_face_count)
-        print("cropfail_count")
-        print(cropfail_count)
-        print("sort.negmargin_count")
-        print(sort.negmargin_count)
-        print("sort.toosmall_count")
-        print(sort.toosmall_count)
-        print("total count")
-        print(counter)
-
-        print('wrote files')
     except Exception as e:
         print(str(e))
+
+    return img_list
+    
+def write_images(img_list):
+    for path_img in img_list:
+        cv2.imwrite(path_img[0],path_img[1])
+
 
 def write_images_by_angle(df,cluster_no, sort):
     print('writing images')
@@ -609,22 +626,13 @@ def write_images_by_angle(df,cluster_no, sort):
         is_face = None
         first_run = True
         for index, row in df.iterrows():
+            # loop through df, create in/out paths, read img
             print('in loop, index is', str(index))
             UID = row['filename'].split('-id')[-1].split("/")[-1].replace(".jpg","")
-            print("UID ",UID)
             counter_str = str(counter).zfill(len(str(df.size)))  # Add leading zeros to the counter
             imgfilename = imgfileprefix+"_"+str(counter_str)+"_"+UID+".jpg"
-            print("imgfilename ",imgfilename)
             outpath = os.path.join(outfolder,imgfilename)
-            print("outpath ",outpath)
-
-            # folder is specific to each file's site_name_id
-            # this is how it was, and seems hardcoded to Test36
-            # open_path = os.path.join(ROOT,row['folder'],row['filename'])
-
-            # here I'm using the actual root. Root gets pulled from io, then passed back to sort pose.
-            # but the folder is fused to the root somewhere... in makevideo? it needs to be found and pulled off there. 
-            open_path = os.path.join(io.ROOT,row['folder'].replace("/Volumes/Test36/",""),row['filename'])
+            open_path = os.path.join(io.ROOT,row['folder'],row['filename'])
             img = cv2.imread(open_path)
 
             #crop image here:
@@ -638,20 +646,13 @@ def write_images_by_angle(df,cluster_no, sort):
             # next step is to test to see if mp can recognize a face in the image
             # if no face, a bad blend, try again with i+2, etc. 
             if cropped_image is not None:
-                print(cropped_image.shape)
                 print("have a cropped image trying to save")
-                try:
-                    print(type(last_image))
-                except:
-                    print("couldn't test last_image")
                 try:
                     if not first_run:
                         print("testing is_face")
                         is_face = sort.test_pair(last_image, cropped_image)
                         if is_face and row['dist'] < sort.MAXDIST:
-                            print("same person, testing mse")
                             is_face = sort.unique_face(last_image,cropped_image)
-                            print ("mse ",mse)
                     else:
                         print("first round, skipping the pair test")
                 except:
@@ -807,7 +808,9 @@ def main():
             df_sorted = sort_by_face_dist(start_img,df_enc, df_128_enc)
             print("df_sorted")
             print(df_sorted)
-            write_images(df_sorted, cluster_no)
+            # write_images(df_sorted, cluster_no)
+            img_list = linear_sort_df(df_sorted,cluster_no)
+            write_images(img_list)
 
             # img_list = df_sorted['filename'].tolist()
             # # the hardcoded #1 needs to be replaced with site_name_id, which needs to be readded to the df
