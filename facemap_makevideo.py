@@ -39,7 +39,7 @@ from mp_db_io import DataIO
 
 
 VIDEO = False
-CYCLECOUNT = 2
+CYCLECOUNT = 1
 # ROOT="/Users/michaelmandiberg/Documents/projects-active/facemap_production/"
 
 # keep this live, even if not SSD
@@ -52,9 +52,12 @@ SegmentTable_name = 'May25segment123updown_laugh'
 IS_MOVE = False
 IS_SSD = True
 IS_CLUSTER = False
+IS_ONE_CLUSTER = True
 IS_ANGLE_SORT = False
 # number of clusters to analyze -- this is also declared in Clustering_SQL. Move to IO?
 N_CLUSTERS = 128
+# this is for IS_ONE_CLUSTER to only run on a specific cluster
+CLUSTER_NO = 11
 
 # I/O utils
 io = DataIO(IS_SSD)
@@ -108,7 +111,7 @@ elif IS_MOVE:
     # regular rotation left to right, which should include the straight ahead? 
 
 
-LIMIT = 100
+LIMIT = 10000
 
 motion = {
     "side_to_side": False,
@@ -417,22 +420,185 @@ def prep_encodings(df_segment):
     print(df_128_enc)
     return df_enc, df_128_enc
 
+def compare_images(last_image, img, face_landmarks, bbox, first_run, good_count, isnot_face_count, cropfail_count):
+    is_face = None
 
+    #crop image here:
+    if sort.EXPAND:
+        cropped_image = sort.expand_image(img, face_landmarks, bbox)
+    else:
+        cropped_image = sort.crop_image(img, face_landmarks, bbox)
+    print("cropped_image type: ",type(cropped_image))
 
+    # this code takes image i, and blends it with the subsequent image
+    # next step is to test to see if mp can recognize a face in the image
+    # if no face, a bad blend, try again with i+2, etc. 
+    if cropped_image is not None:
+        print(cropped_image.shape)
+        print("have a cropped image trying to save")
+        try:
+            print(type(last_image))
+        except:
+            print("couldn't test last_image")
+        try:
+            if not first_run:
+                print("testing is_face")
+                is_face = sort.test_pair(last_image, cropped_image)
+                if is_face:
+                    print("same person, testing mse")
+                    is_face = sort.unique_face(last_image,cropped_image)
+                    print ("mse ",mse)
+            else:
+                print("first round, skipping the pair test")
+        except:
+            print("last_image try failed")
+        # if is_face or first_run and sort.resize_factor < sort.resize_max:
+        if is_face or first_run:
+            first_run = False
+            last_image = cropped_image
+            good_count += 1
+        else: 
+            print("pair do not make a face, skipping")
+            isnot_face_count += 1
+    else:
+        print("no image here, trying next")
+        cropfail_count += 1
+    return last_image, cropped_image, first_run, good_count, isnot_face_count, cropfail_count
 
-def write_images(ROOT, df_sorted,cluster_no):
-    # site_name_id = df_enc.loc[start_img]['site_name_id']
-
+def write_images(df,cluster_no):
     print('writing images')
-    # imgfileprefix = f"faceimg_crop{str(sort.MINCROP)}_X{str(sort.XLOW)}toX{str(sort.XHIGH)}_Y{str(sort.YLOW)}toY{str(sort.YHIGH)}_Z{str(sort.ZLOW)}toZ{str(sort.ZHIGH)}_maxResize{str(sort.MAXRESIZE)}_ct{str(df_sorted.size)}"
-    imgfileprefix = f"X{str(sort.XLOW)}-{str(sort.XHIGH)}_Y{str(sort.YLOW)}-{str(sort.YHIGH)}_Z{str(sort.ZLOW)}-{str(sort.ZHIGH)}_ct{str(df_sorted.size)}"
+    # imgfileprefix = f"faceimg_crop{str(sort.MINCROP)}_X{str(sort.XLOW)}toX{str(sort.XHIGH)}_Y{str(sort.YLOW)}toY{str(sort.YHIGH)}_Z{str(sort.ZLOW)}toZ{str(sort.ZHIGH)}_maxResize{str(sort.MAXRESIZE)}_ct{str(df.size)}"
+    imgfileprefix = f"X{str(sort.XLOW)}-{str(sort.XHIGH)}_Y{str(sort.YLOW)}-{str(sort.YHIGH)}_Z{str(sort.ZLOW)}-{str(sort.ZHIGH)}_ct{str(df.size)}"
     print(imgfileprefix)
-    outfolder = os.path.join(ROOT,"cluster"+str(cluster_no)+"_"+str(time.time()))
+    outfolder = os.path.join(io.ROOT,"cluster"+str(cluster_no)+"_"+str(time.time()))
     if not os.path.exists(outfolder):      
         os.mkdir(outfolder)
 
     try:
-        # couldn't I use i here? 
+        counter = 1
+        good_count = 0
+        isnot_face_count = 0
+        cropfail_count = 0
+        sort.negmargin_count = 0
+        sort.toosmall_count = 0 
+        last_image = None
+        first_run = True
+        for index, row in df.iterrows():
+            print('in loop, index is', str(index))
+            UID = row['filename'].split('-id')[-1].split("/")[-1].replace(".jpg","")
+            print("UID ",UID)
+            counter_str = str(counter).zfill(len(str(df.size)))  # Add leading zeros to the counter
+            imgfilename = imgfileprefix+"_"+str(counter_str)+"_"+UID+".jpg"
+            print("imgfilename ",imgfilename)
+            outpath = os.path.join(outfolder,imgfilename)
+            print("outpath ",outpath)
+
+            # folder is specific to each file's site_name_id
+            # this is how it was, and seems hardcoded to Test36
+            # open_path = os.path.join(ROOT,row['folder'],row['filename'])
+
+            # here I'm using the actual root. Root gets pulled from io, then passed back to sort pose.
+            # but the folder is fused to the root somewhere... in makevideo? it needs to be found and pulled off there. 
+            open_path = os.path.join(io.ROOT,row['folder'].replace("/Volumes/Test36/",""),row['filename'])
+            img = cv2.imread(open_path)
+            if row['dist'] < sort.MAXDIST:
+                # compare_images to make sure they are face and not the same
+                last_image, cropped_image, first_run, good_count, isnot_face_count, cropfail_count = compare_images(last_image, img, row['face_landmarks'], row['bbox'], first_run, good_count, isnot_face_count, cropfail_count)
+                if cropped_image is not None:
+                    cv2.imwrite(outpath, cropped_image)
+                    print("saved: ",outpath)
+            else:
+                print("MAXDIST too big:" , str(sort.MAXDIST))
+
+
+            counter += 1
+
+        print("good_count")
+        print(good_count)
+        print("isnot_face_count")
+        print(isnot_face_count)
+        print("cropfail_count")
+        print(cropfail_count)
+        print("sort.negmargin_count")
+        print(sort.negmargin_count)
+        print("sort.toosmall_count")
+        print(sort.toosmall_count)
+        print("total count")
+        print(counter)
+
+        print('wrote files')
+    except Exception as e:
+        print(str(e))
+
+def write_images_by_angle(df,cluster_no, sort):
+    print('writing images')
+    # imgfileprefix = f"faceimg_crop{str(sort.MINCROP)}_X{str(sort.XLOW)}toX{str(sort.XHIGH)}_Y{str(sort.YLOW)}toY{str(sort.YHIGH)}_Z{str(sort.ZLOW)}toZ{str(sort.ZHIGH)}_maxResize{str(sort.MAXRESIZE)}_ct{str(df.size)}"
+    imgfileprefix = f"X{str(sort.XLOW)}-{str(sort.XHIGH)}_Y{str(sort.YLOW)}-{str(sort.YHIGH)}_Z{str(sort.ZLOW)}-{str(sort.ZHIGH)}_ct{str(df.size)}"
+    print(imgfileprefix)
+    outfolder = os.path.join(io.ROOT,"cluster"+str(cluster_no)+"_"+str(time.time()))
+    if not os.path.exists(outfolder):      
+        os.mkdir(outfolder)
+
+
+    #cycling patch
+    img_array = []
+    cycle = 0 
+    # metamedian = get_metamedian(angle_list)
+    metamedian = sort.metamedian
+    d = sort.d
+
+    print("CYCLE to test: ",cycle)
+
+    while cycle < CYCLECOUNT:
+        print("CYCLE: ",cycle)
+        for angle in sort.angle_list:
+            print("angle: ",str(angle))
+            # print(d[angle].iloc[(d[angle][sort.SECOND_SORT]-metamedian).abs().argsort()[:2]])
+            if(d[angle].size) != 0:
+                try:
+                    
+
+
+
+
+                    # I don't remember exactly how this segments the data...!!!
+                    # [:CYCLECOUNT] gets the first [:0] value on first cycle?
+                    # or does it limit the total number of values to the number of cycles?
+                    print(d[angle])
+                    #this is a way of finding the image with closest second sort (Y)
+                    #mystery value is the image to be matched? 
+                    print("second sort, metamedian ",d[angle][sort.SECOND_SORT],sort.metamedian)
+                    mysteryvalue = (d[angle][sort.SECOND_SORT]-sort.metamedian)
+                    print('mysteryvalue ',mysteryvalue)
+                    #is mystery value a df?
+                    #this is finding the 
+                    mysterykey = mysteryvalue.abs().argsort()[:CYCLECOUNT]
+                    print('mysterykey: ',mysterykey)
+                    closest = d[angle].iloc[mysterykey]
+                    closest_file = closest.iloc[cycle]['imagename']
+                    closest_mouth = closest.iloc[cycle]['mouth_gap']
+                    print('closest: ')
+                    print(closest_file)
+                    continue
+
+
+
+                    img = cv2.imread(closest_file)
+                    sort.preview_img(img)
+                    height, width, layers = img.shape
+                    size = (width, height)
+                    img_array.append(img)
+                except:
+                    print('failed cycle angle:')
+                    # print('failed:',row['imagename'])
+            else:
+                print("skipping empty angle")
+        print('finished a cycle')
+        sort.angle_list.reverse()
+        cycle = cycle +1
+        # # print(angle_list)
+    quit()
+    try:
         counter = 1
         good_count = 0
         isnot_face_count = 0
@@ -442,36 +608,23 @@ def write_images(ROOT, df_sorted,cluster_no):
         last_image = None
         is_face = None
         first_run = True
-        # print(df_sorted)
-        # out = cv2.VideoWriter(os.path.join(ROOT,videofile), cv2.VideoWriter_fourcc(*'mp4v'), FRAMERATE, size)
-        for index, row in df_sorted.iterrows():
+        for index, row in df.iterrows():
             print('in loop, index is', str(index))
             UID = row['filename'].split('-id')[-1].split("/")[-1].replace(".jpg","")
             print("UID ",UID)
-            counter_str = str(counter).zfill(len(str(df_sorted.size)))  # Add leading zeros to the counter
+            counter_str = str(counter).zfill(len(str(df.size)))  # Add leading zeros to the counter
             imgfilename = imgfileprefix+"_"+str(counter_str)+"_"+UID+".jpg"
             print("imgfilename ",imgfilename)
             outpath = os.path.join(outfolder,imgfilename)
             print("outpath ",outpath)
 
             # folder is specific to each file's site_name_id
-
             # this is how it was, and seems hardcoded to Test36
             # open_path = os.path.join(ROOT,row['folder'],row['filename'])
 
             # here I'm using the actual root. Root gets pulled from io, then passed back to sort pose.
             # but the folder is fused to the root somewhere... in makevideo? it needs to be found and pulled off there. 
-            open_path = os.path.join(ROOT,row['folder'].replace("/Volumes/Test36/",""),row['filename'])
-            print(ROOT,row['folder'],row['filename'])
-
-            print("open_path ",open_path)
-
-            # this code takes image i, and blends it with the subsequent image
-            # next step is to test to see if mp can recognize a face in the image
-            # if no face, a bad blend, try again with i+2, etc. 
-            # except it would need to do that with the sub-array, so move above? 
-            # blend = cv2.addWeighted(img_array[i], 0.5, img_array[(i+1)], 0.5, 0.0)
-            # cv2.imwrite(outpath, blend)
+            open_path = os.path.join(io.ROOT,row['folder'].replace("/Volumes/Test36/",""),row['filename'])
             img = cv2.imread(open_path)
 
             #crop image here:
@@ -480,6 +633,10 @@ def write_images(ROOT, df_sorted,cluster_no):
             else:
                 cropped_image = sort.crop_image(img, row['face_landmarks'], row['bbox'])
             print("cropped_image type: ",type(cropped_image))
+
+            # this code takes image i, and blends it with the subsequent image
+            # next step is to test to see if mp can recognize a face in the image
+            # if no face, a bad blend, try again with i+2, etc. 
             if cropped_image is not None:
                 print(cropped_image.shape)
                 print("have a cropped image trying to save")
@@ -530,7 +687,6 @@ def write_images(ROOT, df_sorted,cluster_no):
         print('wrote files')
     except Exception as e:
         print(str(e))
-
 
 
 ###################
@@ -641,7 +797,7 @@ def main():
             img_list, size = cycling_order(CYCLECOUNT, sort)
             # size = sort.get_cv2size(ROOT, img_list[0])
         elif IS_ANGLE_SORT is True:
-            pass
+            write_images_by_angle(df_segment, cluster_no, sort)
         else:
             # simple sort by encoding distance
             # preps the encodings for sort
@@ -651,7 +807,7 @@ def main():
             df_sorted = sort_by_face_dist(start_img,df_enc, df_128_enc)
             print("df_sorted")
             print(df_sorted)
-            write_images(io.ROOT, df_sorted, cluster_no)
+            write_images(df_sorted, cluster_no)
 
             # img_list = df_sorted['filename'].tolist()
             # # the hardcoded #1 needs to be replaced with site_name_id, which needs to be readded to the df
@@ -691,6 +847,11 @@ def main():
             resultsjson = selectSQL(cluster_no)
             print(f"resultsjson contains {len(resultsjson)} images")
             map_images(resultsjson, cluster_no)
+    if IS_ONE_CLUSTER:
+        print(f"SELECTing cluster {CLUSTER_NO}")
+        resultsjson = selectSQL(CLUSTER_NO)
+        print(f"resultsjson contains {len(resultsjson)} images")
+        map_images(resultsjson, CLUSTER_NO)
     else:
         resultsjson = selectSQL() 
         map_images(resultsjson)
