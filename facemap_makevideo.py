@@ -390,6 +390,63 @@ def cycling_order(CYCLECOUNT, sort):
     return img_array, size
 
 
+def segment_df(df):
+    # make the segment based on settings
+    df_segment = sort.make_segment(df)
+
+    # get list of all angles in segment
+    angle_list = sort.createList(df_segment)
+
+    # sort segment by angle list
+    # creates sort.d attribute: a dataframe organized (indexed?) by angle list
+    sort.get_divisor(df_segment)
+
+    # # is this used anywhere? 
+    # angle_list_pop = angle_list.pop()
+
+    # get median for first sort
+    median = sort.get_median()
+
+    # get metamedian for second sort, creates sort.metamedian attribute
+    sort.get_metamedian()
+    # print(df_segment)
+
+    # this is to save files from a segment to the SSD
+    print("will I save segment? ", SAVE_SEGMENT)
+    if SAVE_SEGMENT:
+        Base.metadata.create_all(engine)
+        print(df_segment.size)
+        save_segment_DB(df_segment)
+        print("saved segment to ", SegmentTable_name)
+        quit()
+
+    # format the encodings for sorting by distance
+    # df_enc will be the df with bbox, site_name_id, etc, keyed to filename
+    # df_128_enc will be 128 colums of encodings, keyed to filename
+    col1="imagename"
+    col2="face_encodings"
+    col3="site_name_id"
+    col4="face_landmarks"
+    col5="bbox"
+    df_enc=pd.DataFrame(columns=[col1, col2, col3, col4, col5])
+    df_enc = pd.DataFrame({col1: df_segment['imagename'], col2: df_segment['face_encodings'].apply(lambda x: np.array(x)), 
+                col3: df_segment['site_name_id'], col4: df_segment['face_landmarks'], col5: df_segment['bbox'] })
+    df_enc.set_index(col1, inplace=True)
+
+    # Create column names for the 128 encoding columns
+    encoding_cols = [f"encoding{i}" for i in range(128)]
+
+    # Create a new DataFrame with the expanded encoding columns
+    df_expanded = df_enc.apply(lambda row: pd.Series(row[col2], index=encoding_cols), axis=1)
+
+    # Concatenate the expanded DataFrame with the original DataFrame
+    df_final = pd.concat([df_enc, df_expanded], axis=1)
+
+    # make a separate df that just has the encodings
+    df_128_enc = df_final.drop([col2, col3, col4, col5], axis=1)
+
+    print(df_128_enc)
+    return df_enc, df_128_enc
 
 ###################
 #  MY MAIN CODE   #
@@ -455,89 +512,13 @@ def main():
         columns_to_convert = ['face_x', 'face_y', 'face_z', 'mouth_gap']
         df[columns_to_convert] = df[columns_to_convert].applymap(make_float)
 
-        # print("raw df from DB")
-        # print(df['face_encodings'])
+
+        ### SEGMENT THE DATA ###
 
 
-    # turning this off for debugging
-        ### PROCESS THE DATA ###
+        df_enc, df_128_enc = segment_df(df)
 
-        # make the segment based on settings
-        df_segment = sort.make_segment(df)
-
-        # # get list of all angles in segment
-        # angle_list = sort.createList(df_segment)
-
-        # # sort segment by angle list
-        # # creates sort.d attribute: a dataframe organized (indexed?) by angle list
-        # sort.get_divisor(df_segment)
-
-        # # # is this used anywhere? 
-        # # angle_list_pop = angle_list.pop()
-
-        # # get median for first sort
-        # median = sort.get_median()
-
-        # # get metamedian for second sort, creates sort.metamedian attribute
-        # sort.get_metamedian()
-
-
-        # this is the simple code that skips the angle segments
-        # print("about to segment")
-        # # make the segment based on settings
-        # df_segment = sort.make_segment(df)
-        print(df_segment)
-
-        # this is to save files from a segment to the SSD
-        print("will I save segment? ", SAVE_SEGMENT)
-        if SAVE_SEGMENT:
-            Base.metadata.create_all(engine)
-            print(df_segment.size)
-            save_segment_DB(df_segment)
-            print("saved segment to ", SegmentTable_name)
-            quit()
-
-        # df_segment = df
-
-        # # OLD format the encodings for sorting by distance
-        col1="imagename"
-        col2="face_encodings"
-        col3="site_name_id"
-        col4="face_landmarks"
-        col5="bbox"
-        df_enc=pd.DataFrame(columns=[col1, col2, col3, col4, col4])
-        df_enc = pd.DataFrame({col1: df_segment['imagename'], col2: df_segment['face_encodings'].apply(lambda x: np.array(x)), 
-                    col3: df_segment['site_name_id'], col4: df_segment['face_landmarks'], col5: df_segment['bbox'] })
-        df_enc.set_index(col1, inplace=True)
-
-
-        print(df_enc)
-
-        # Create column names for the 128 encoding columns
-        encoding_cols = [f"encoding{i}" for i in range(128)]
-
-        # Create a new DataFrame with the expanded encoding columns
-        df_expanded = df_enc.apply(lambda row: pd.Series(row[col2], index=encoding_cols), axis=1)
-
-        # Concatenate the expanded DataFrame with the original DataFrame
-        df_final = pd.concat([df_enc, df_expanded], axis=1)
-
-        # Optionally, drop the original 'face_encodings' column
-        # df_final.drop(col2, axis=1, inplace=True)
-        df_128_enc = df_final.drop([col2, col3, col4, col5], axis=1)
-
-        print(df_128_enc)
-
-        # start_img = "f/f4/young-woman-laughing-picture-id1001121288.jpg"
-        # enc1 = df_enc.loc[start_img].to_list()
-        # print(enc1)
-
-
-        # for index, row in df_128_enc.iterrows():
-        #     enc2 = row
-        #     print("this is the enc2 row passing in", enc2)
-
-        ### BUILD THE LIST OF SELECTED IMAGES ###
+        ### SORT THE LIST OF SELECTED IMAGES ###
 
         # img_array is actual bitmap data? 
         if motion["side_to_side"] is True:
@@ -568,6 +549,7 @@ def main():
             # img_array, size = sort.simplest_order(segment) 
 
         # print("img_array: ",img_array)
+
         ### WRITE THE IMAGES TO VIDEO/FILES ###
 
         if VIDEO == True:
