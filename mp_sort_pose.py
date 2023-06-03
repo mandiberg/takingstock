@@ -448,7 +448,7 @@ class SortPose:
 
     def get_closest_df(self, start_img, df_enc,site_name_id):
         def stash_enc1(enc1):
-            if EXPAND:
+            if self.EXPAND:
                 print("enc1 is being stored from this", enc1)            
                 enc_persist = enc1
                 print("enc1 is being stored here", enc_persist)
@@ -462,7 +462,7 @@ class SortPose:
             enc1 = df_enc.median().to_list()
             print("in median")
             # stash_enc1(enc1)
-            if EXPAND:
+            if self.EXPAND:
                 print("enc1 is being stored from this", enc1)            
                 enc_persist = enc1
 
@@ -473,7 +473,7 @@ class SortPose:
             print(start_site_image_id)
             enc1 = df_enc.loc[start_site_image_id].to_list()
             # stash_enc1(enc1)
-            if EXPAND:
+            if self.EXPAND:
                 print("enc1 is being stored from this", enc1)            
                 enc_persist = enc1
 
@@ -513,7 +513,7 @@ class SortPose:
             print("testing this", index, "against the start img",start_img)
             if (enc1 is not None) and (enc2 is not None):
                 # mse = False
-                d = sort.get_d(enc1, enc2)
+                d = self.get_d(enc1, enc2)
                 print ("d is", str(d), "for", index)
                 dist.append(d)
                 dist_dict[d]=index

@@ -198,13 +198,6 @@ def selectSQL(cluster_no=None):
     return(resultsjson)
 
 
-def make_float(value):
-    try:
-        return float(value)
-    except (ValueError, TypeError):
-        return value
-
-
 
 def save_segment_DB(df_segment):
     #save the df to a table
@@ -233,89 +226,6 @@ def save_segment_DB(df_segment):
 
 
 
-def get_closest_df(start_img, df_enc,site_name_id):
-    def stash_enc1(enc1):
-        if EXPAND:
-            print("enc1 is being stored from this", enc1)            
-            enc_persist = enc1
-            print("enc1 is being stored here", enc_persist)
-            # setattr(sort, 'expand_enc1', enc1)
-            # print("expand_enc1 added:", getattr(sort, 'expand_enc1', None))
-            # # print(enc1)
-
-    global enc_persist
-    first = True #does this do anything?
-    if start_img == "median":
-        enc1 = df_enc.median().to_list()
-        print("in median")
-        # stash_enc1(enc1)
-        if EXPAND:
-            print("enc1 is being stored from this", enc1)            
-            enc_persist = enc1
-
-        # print(enc1)
-
-    elif start_img == "start_site_image_id":
-        print("start_site_image_id (this is what we are comparing to)")
-        print(start_site_image_id)
-        enc1 = df_enc.loc[start_site_image_id].to_list()
-        # stash_enc1(enc1)
-        if EXPAND:
-            print("enc1 is being stored from this", enc1)            
-            enc_persist = enc1
-
-
-    # elif EXPAND:
-    #     # retaining the original encoding, to try to match it. 
-    #     print("got expand enc1 ", enc_persist)
-    #     enc1 = enc_persist
-    #     # enc1 = getattr(sort, 'expand_enc1', None)
-    #     # # drops the most recent success
-    #     df_enc=df_enc.drop(start_img)
-
-        
-    else:
-#         enc1 = get 2-129 from df via stimg key
-        print("start_img key is (this is what we are comparing to):")
-        print(start_img)
-        enc1 = df_enc.loc[start_img].to_list()
-        df_enc=df_enc.drop(start_img)
-        first = False #does this do anything?
-        # print("in new img",len(df_enc.index))
-        # print(enc1)
-    
-#     img_list.remove(start_img)
-#     enc1=enc_dict[start_img]
-    
-    dist=[]
-    dist_dict={}
-    
-    # print("df_enc for ", )
-    # print(df_enc)
-    
-    for index, row in df_enc.iterrows():
-#         print(row['c1'], row['c2'])
-#     for img in img_list:
-        enc2 = row
-        print("testing this", index, "against the start img",start_img)
-        if (enc1 is not None) and (enc2 is not None):
-            # mse = False
-            d = sort.get_d(enc1, enc2)
-            print ("d is", str(d), "for", index)
-            dist.append(d)
-            dist_dict[d]=index
-    dist.sort()
-    print("debug index")
-    print(dist)
-    print(len(dist))
-    print ("the winner is: ", str(dist[0]), dist_dict[dist[0]])
-#     print(len(dist))
-    return dist[0], dist_dict[dist[0]], df_enc
-
-
-
-
-
 
 ###################
 # SORT FUNCTIONS  #
@@ -337,7 +247,7 @@ def sort_by_face_dist(start_img,df_enc, df_128_enc):
             site_name_id = df_enc.loc[start_img]['site_name_id']
         # the hardcoded #1 needs to be replaced with site_name_id, which needs to be readded to the df
         print("starting sort round ",str(i))
-        dist, start_img, df_128_enc = get_closest_df(start_img,df_128_enc,site_name_id)
+        dist, start_img, df_128_enc = sort.get_closest_df(start_img,df_128_enc,site_name_id)
         # dist[0], dist_dict[dist[0]]
         thisimage=None
         face_landmarks=None
@@ -369,7 +279,7 @@ def sort_by_face_dist(start_img,df_enc, df_128_enc):
     return df
 
 
-
+# not currently in use
 def simple_order(segment):
     img_array = []
     delta_array = []
@@ -486,6 +396,7 @@ def cycling_order(CYCLECOUNT, sort):
 ###################
 
 def main():
+    # these are used in cleaning up fresh df from SQL
     def unpickle_array(pickled_array):
         return pickle.loads(pickled_array)
     def unstring_json(json_string):
@@ -495,11 +406,14 @@ def main():
         else:
             json_dict = json.loads(eval_string)
             return json_dict
-
+    def make_float(value):
+        try:
+            return float(value)
+        except (ValueError, TypeError):
+            return value
     def decode_64_array(encoded):
         decoded = base64.b64decode(encoded).decode('utf-8')
         return decoded
-
     def newname(contentUrl):
         file_name_path = contentUrl.split('?')[0]
         file_name = file_name_path.split('/')[-1]
@@ -516,6 +430,8 @@ def main():
         # file_name = file_name_path.split('/')[-1]
     print("in main, making SQL query")
 
+    # this is the main function, which is called for each cluster
+    # or only once if no clusters
     def map_images(resultsjson, cluster_no=None):
         # print(df_sql)
 
@@ -523,8 +439,6 @@ def main():
         try:
             df = pd.json_normalize(resultsjson)
             print(df)
-
-
         except:
             print('you forgot to change the filename DUH')
         if df.empty:
@@ -546,10 +460,10 @@ def main():
 
 
     # turning this off for debugging
-        # ### PROCESS THE DATA ###
+        ### PROCESS THE DATA ###
 
-        # # make the segment based on settings
-        # df_segment = sort.make_segment(df)
+        # make the segment based on settings
+        df_segment = sort.make_segment(df)
 
         # # get list of all angles in segment
         # angle_list = sort.createList(df_segment)
@@ -568,17 +482,13 @@ def main():
         # sort.get_metamedian()
 
 
-    # adding this for debugging
-
-        print("about to segment")
-        # make the segment based on settings
-        df_segment = sort.make_segment(df)
+        # this is the simple code that skips the angle segments
+        # print("about to segment")
+        # # make the segment based on settings
+        # df_segment = sort.make_segment(df)
         print(df_segment)
 
-        # duplicate_site_ids = df_segment[df_segment.duplicated(['site_image_id'])]['site_image_id']
-        # print("duplicate_site_ids")
-        # print(duplicate_site_ids)
-
+        # this is to save files from a segment to the SSD
         print("will I save segment? ", SAVE_SEGMENT)
         if SAVE_SEGMENT:
             Base.metadata.create_all(engine)
@@ -669,12 +579,13 @@ def main():
             #save individual as images
             sort.write_images(io.ROOT, df_sorted, cluster_no)
 
+
+    ### this is the start of the real action ###
+
     #creating my objects
     start = time.time()
 
-
-
-
+    # to loop or not to loop that is the cluster
     if IS_CLUSTER:
         print(f"IS_CLUSTER is {IS_CLUSTER} with {N_CLUSTERS}")
         for cluster_no in range(N_CLUSTERS):
