@@ -97,6 +97,15 @@ class DataIO:
             writer=csv.writer(csvfile, delimiter=',')
             writer.writerow(value_list)
 
+    def get_img_list(self, folder):
+        img_list=[]
+        for file in os.listdir(folder):
+            if not file.startswith('.') and os.path.isfile(os.path.join(folder, file)):
+                filepath = os.path.join(folder, file)
+                filepath=filepath.replace('\\' , '/')
+                img_list.append(file)
+        return img_list        
+        print("got image list")
 
     def get_hash_folders(self,filename):
         m = hashlib.md5()

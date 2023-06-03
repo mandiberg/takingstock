@@ -257,6 +257,18 @@ class SortPose:
     #     # csvWriter1.writerow(["https://upload.wikimedia.org/wikipedia/commons/"+d[0]+'/'+d[0:2]+'/'+filename])
     #     return d[0], d[0:2]
 
+    #get distance beetween encodings
+    def get_d(self, enc1, enc2):
+        enc1=np.array(enc1)
+        print("enc1")
+        print(enc1[0])
+        enc2=np.array(enc2)
+        print("enc2")
+        print(enc2[0])
+        d=np.linalg.norm(enc1 - enc2, axis=0)
+        print("d")
+        print(d)
+        return d
 
 
 
@@ -433,6 +445,87 @@ class SortPose:
             return False
         else:
             return True
+
+    def get_closest_df(self, start_img, df_enc,site_name_id):
+        def stash_enc1(enc1):
+            if EXPAND:
+                print("enc1 is being stored from this", enc1)            
+                enc_persist = enc1
+                print("enc1 is being stored here", enc_persist)
+                # setattr(sort, 'expand_enc1', enc1)
+                # print("expand_enc1 added:", getattr(sort, 'expand_enc1', None))
+                # # print(enc1)
+
+        global enc_persist
+        first = True #does this do anything?
+        if start_img == "median":
+            enc1 = df_enc.median().to_list()
+            print("in median")
+            # stash_enc1(enc1)
+            if EXPAND:
+                print("enc1 is being stored from this", enc1)            
+                enc_persist = enc1
+
+            # print(enc1)
+
+        elif start_img == "start_site_image_id":
+            print("start_site_image_id (this is what we are comparing to)")
+            print(start_site_image_id)
+            enc1 = df_enc.loc[start_site_image_id].to_list()
+            # stash_enc1(enc1)
+            if EXPAND:
+                print("enc1 is being stored from this", enc1)            
+                enc_persist = enc1
+
+
+        # elif EXPAND:
+        #     # retaining the original encoding, to try to match it. 
+        #     print("got expand enc1 ", enc_persist)
+        #     enc1 = enc_persist
+        #     # enc1 = getattr(sort, 'expand_enc1', None)
+        #     # # drops the most recent success
+        #     df_enc=df_enc.drop(start_img)
+
+            
+        else:
+    #         enc1 = get 2-129 from df via stimg key
+            print("start_img key is (this is what we are comparing to):")
+            print(start_img)
+            enc1 = df_enc.loc[start_img].to_list()
+            df_enc=df_enc.drop(start_img)
+            first = False #does this do anything?
+            # print("in new img",len(df_enc.index))
+            # print(enc1)
+        
+    #     img_list.remove(start_img)
+    #     enc1=enc_dict[start_img]
+        
+        dist=[]
+        dist_dict={}
+        
+        # print("df_enc for ", )
+        # print(df_enc)
+        
+        for index, row in df_enc.iterrows():
+    #         print(row['c1'], row['c2'])
+    #     for img in img_list:
+            enc2 = row
+            print("testing this", index, "against the start img",start_img)
+            if (enc1 is not None) and (enc2 is not None):
+                # mse = False
+                d = sort.get_d(enc1, enc2)
+                print ("d is", str(d), "for", index)
+                dist.append(d)
+                dist_dict[d]=index
+        dist.sort()
+        print("debug index")
+        print(dist)
+        print(len(dist))
+        print ("the winner is: ", str(dist[0]), dist_dict[dist[0]])
+    #     print(len(dist))
+        return dist[0], dist_dict[dist[0]], df_enc
+
+
 
     def write_video(self, ROOT, img_array, segment, size):
         videofile = f"facevid_crop{str(self.MINCROP)}_X{str(self.XLOW)}toX{str(self.XHIGH)}_Y{str(self.YLOW)}toY{str(self.YHIGH)}_Z{str(self.ZLOW)}toZ{str(self.ZHIGH)}_maxResize{str(self.MAXRESIZE)}_ct{str(len(segment))}_rate{(str(self.FRAMERATE))}.mp4"

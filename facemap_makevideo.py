@@ -51,12 +51,12 @@ SegmentTable_name = 'May25segment123updown_laugh'
 # for when I'm using files on my SSD vs RAID
 IS_MOVE = False
 IS_SSD = True
-IS_CLUSTER = True
+IS_CLUSTER = False
 
 # number of clusters to analyze -- this is also declared in Clustering_SQL. Move to IO?
 N_CLUSTERS = 128
 
-
+# I/O utils
 io = DataIO(IS_SSD)
 db = io.db
 NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
@@ -108,7 +108,7 @@ elif IS_MOVE:
     # regular rotation left to right, which should include the straight ahead? 
 
 
-LIMIT = 100000
+LIMIT = 100
 
 motion = {
     "side_to_side": False,
@@ -123,14 +123,12 @@ EXPAND = False
 
 # face_height_output is how large each face will be. default is 750
 # base_image_size = 750
-face_height_output = 200
+face_height_output = 400
 
 # define ratios, in relationship to nose
 # units are ratio of faceheight
 # top, right, bottom, left
 # image_edge_multiplier = [1, 1, 1, 1]
-
-
 # image_edge_multiplier = [1.5, 2, 1.5, 2]
 image_edge_multiplier = [1.2, 1.2, 1.6, 1.2]
 
@@ -156,6 +154,7 @@ Session = sessionmaker(bind=engine)
 session = Session()
 Base = declarative_base()
 
+# to create new SegmentTable with variable as name
 class SegmentTable(Base):
     __tablename__ = SegmentTable_name
 
@@ -173,10 +172,7 @@ class SegmentTable(Base):
     body_landmarks = Column(BLOB)
     site_image_id = Column(String(50), nullable=False)
 
-
-# create new SegmentTable
-
-
+# construct mediapipe objects
 mp_drawing = mp.solutions.drawing_utils
 
 mp_face_detection = mp.solutions.face_detection
@@ -186,7 +182,6 @@ mp_face_mesh = mp.solutions.face_mesh
 face_mesh = mp_face_mesh.FaceMesh(static_image_mode=True, max_num_faces=1,min_detection_confidence=0.5)
 
 
-# I/O utils
 
 def selectSQL(cluster_no=None):
     print(f"cluster_no is")
@@ -202,11 +197,6 @@ def selectSQL(cluster_no=None):
     resultsjson = ([dict(row) for row in result.mappings()])
     return(resultsjson)
 
-def get_hash_folders(filename):
-    m = hashlib.md5()
-    m.update(filename.encode('utf-8'))
-    d = m.hexdigest()
-    return d[0].upper(), d[0:2].upper()
 
 def make_float(value):
     try:
@@ -241,50 +231,7 @@ def save_segment_DB(df_segment):
 
 
 
-# ### Linear sorting
 
-def get_img_list(folder):
-    img_list=[]
-    for file in os.listdir(folder):
-        if not file.startswith('.') and os.path.isfile(os.path.join(folder, file)):
-            filepath = os.path.join(folder, file)
-            filepath=filepath.replace('\\' , '/')
-            img_list.append(file)
-    return img_list        
-    print("got image list")
-    
-def save_sorted(counter, folder, image, dist):
-    sorted_name = "linear_sort_"+str(counter)+"_"+str(round(dist, 2))+".jpg"
-    sortfolder="sorted2"
-    newfolder = os.path.join(folder,sortfolder)
-    print(newfolder)
-    old_name=os.path.join(folder,image)
-    new_name=os.path.join(newfolder,sorted_name)
-    print(old_name)
-    print(new_name)
-    if not os.path.exists(newfolder):
-        os.makedirs(newfolder)
-    shutil.copy(old_name, new_name)
-    print('saved, ',sorted_name)
-
-
-#compare image bitmaps 
-
-
-
-#get distance beetween encodings
-
-def get_d(enc1, enc2):
-    enc1=np.array(enc1)
-    print("enc1")
-    print(enc1[0])
-    enc2=np.array(enc2)
-    print("enc2")
-    print(enc2[0])
-    d=np.linalg.norm(enc1 - enc2, axis=0)
-    print("d")
-    print(d)
-    return d
 
 def get_closest_df(start_img, df_enc,site_name_id):
     def stash_enc1(enc1):
@@ -353,7 +300,7 @@ def get_closest_df(start_img, df_enc,site_name_id):
         print("testing this", index, "against the start img",start_img)
         if (enc1 is not None) and (enc2 is not None):
             # mse = False
-            d = get_d(enc1, enc2)
+            d = sort.get_d(enc1, enc2)
             print ("d is", str(d), "for", index)
             dist.append(d)
             dist_dict[d]=index
@@ -365,72 +312,6 @@ def get_closest_df(start_img, df_enc,site_name_id):
 #     print(len(dist))
     return dist[0], dist_dict[dist[0]], df_enc
 
-
-
-# test if new and old make a face
-def is_face(image):
-    # For static images:
-    # I think this list is not used
-    IMAGE_FILES = []
-    with mp_face_detection.FaceDetection(model_selection=1, 
-                                        min_detection_confidence=0.6
-                                        ) as face_detection:
-        results = face_detection.process(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
-
-        # Draw face detections of each face.
-        if not results.detections:
-            is_face = False
-        else:
-            is_face = True
-        return is_face
-
-# in class now...?
-# # test if new and old make a face, calls is_face
-# def test_pair(last_file, new_file):
-#     try:
-#         img = cv2.imread(new_file)
-#         height, width, layers = img.shape
-#         size = (width, height)
-#         print('loaded img 1')
-        
-#         # I think this should be "last_file"
-#         last_img = cv2.imread(new_file)
-#         last_height, last_width, last_layers = last_img.shape
-#         last_size = (last_width, last_height)
-#         print('loaded img 2')
-        
-#         # test to see if this is actually an face, to get rid of blank ones/bad ones
-#         if is_face(img):
-#             print('new file is face')
-#             # if not the first image
-# #             if i>0:
-#             # blend this image with the last image
-#             blend = cv2.addWeighted(img, 0.5, last_img, 0.5, 0.0)
-#             print('blended faces')
-#             blended_face = is_face(blend)
-#             print('is_face ',blended_face)
-#             # if blended image has a detectable face, append the img
-#             if blended_face:
-# #                     img_array.append(img)
-#                 print('test_pair is a face! adding it')
-#                 return True
-#             else:
-#                 print('skipping this one')
-#                 return False
-#             # for the first one, just add the image
-#             # this may need to be refactored in case the first one is bad?
-# #             else:
-# #                 print('this is maybe the first round?')
-# #                 img_array.append(img)
-#         else:
-#             print('new_file is not face: ',new_file)
-#             return False
-
-# #         i+=1
-
-#     except:
-#         print('failed:',new_file)
-#         return False
 
 
 
@@ -629,7 +510,7 @@ def main():
             pass
         elif not file_name.endswith(".jpg"):
             file_name += ".jpg"    
-        hash_folder1, hash_folder2 = get_hash_folders(file_name)
+        hash_folder1, hash_folder2 = io.get_hash_folders(file_name)
         newname = os.path.join(hash_folder1, hash_folder2, file_name)
         return newname
         # file_name = file_name_path.split('/')[-1]
