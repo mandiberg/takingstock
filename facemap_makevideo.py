@@ -182,6 +182,9 @@ mp_face_mesh = mp.solutions.face_mesh
 face_mesh = mp_face_mesh.FaceMesh(static_image_mode=True, max_num_faces=1,min_detection_confidence=0.5)
 
 
+###################
+# SQL  FUNCTIONS  #
+###################
 
 def selectSQL(cluster_no=None):
     print(f"cluster_no is")
@@ -201,7 +204,6 @@ def selectSQL(cluster_no=None):
 
 def save_segment_DB(df_segment):
     #save the df to a table
-
     # Assuming you have your DataFrame named 'df' containing the query results
     for _, row in df_segment.iterrows():
         instance = SegmentTable(
@@ -219,11 +221,7 @@ def save_segment_DB(df_segment):
             site_image_id=row['site_image_id']
         )
         session.add(instance)
-
     session.commit()
-
-
-
 
 
 
@@ -390,36 +388,7 @@ def cycling_order(CYCLECOUNT, sort):
     return img_array, size
 
 
-def segment_df(df):
-    # make the segment based on settings
-    df_segment = sort.make_segment(df)
-
-    # get list of all angles in segment
-    angle_list = sort.createList(df_segment)
-
-    # sort segment by angle list
-    # creates sort.d attribute: a dataframe organized (indexed?) by angle list
-    sort.get_divisor(df_segment)
-
-    # # is this used anywhere? 
-    # angle_list_pop = angle_list.pop()
-
-    # get median for first sort
-    median = sort.get_median()
-
-    # get metamedian for second sort, creates sort.metamedian attribute
-    sort.get_metamedian()
-    # print(df_segment)
-
-    # this is to save files from a segment to the SSD
-    print("will I save segment? ", SAVE_SEGMENT)
-    if SAVE_SEGMENT:
-        Base.metadata.create_all(engine)
-        print(df_segment.size)
-        save_segment_DB(df_segment)
-        print("saved segment to ", SegmentTable_name)
-        quit()
-
+def prep_encodings(df_segment):
     # format the encodings for sorting by distance
     # df_enc will be the df with bbox, site_name_id, etc, keyed to filename
     # df_128_enc will be 128 colums of encodings, keyed to filename
@@ -487,7 +456,12 @@ def main():
         # file_name = file_name_path.split('/')[-1]
     print("in main, making SQL query")
 
-    # this is the main function, which is called for each cluster
+
+    ###################
+    #  MAP THE IMGS   #
+    ###################
+
+    # this is the key function, which is called for each cluster
     # or only once if no clusters
     def map_images(resultsjson, cluster_no=None):
         # print(df_sql)
@@ -512,11 +486,37 @@ def main():
         columns_to_convert = ['face_x', 'face_y', 'face_z', 'mouth_gap']
         df[columns_to_convert] = df[columns_to_convert].applymap(make_float)
 
-
         ### SEGMENT THE DATA ###
 
+        # make the segment based on settings
+        df_segment = sort.make_segment(df)
 
-        df_enc, df_128_enc = segment_df(df)
+        # get list of all angles in segment
+        angle_list = sort.createList(df_segment)
+
+        # sort segment by angle list
+        # creates sort.d attribute: a dataframe organized (indexed?) by angle list
+        sort.get_divisor(df_segment)
+
+        # # is this used anywhere? 
+        # angle_list_pop = angle_list.pop()
+
+        # get median for first sort
+        median = sort.get_median()
+
+        # get metamedian for second sort, creates sort.metamedian attribute
+        sort.get_metamedian()
+        # print(df_segment)
+
+        # this is to save files from a segment to the SSD
+        print("will I save segment? ", SAVE_SEGMENT)
+        if SAVE_SEGMENT:
+            Base.metadata.create_all(engine)
+            print(df_segment.size)
+            save_segment_DB(df_segment)
+            print("saved segment to ", SegmentTable_name)
+            quit()
+
 
         ### SORT THE LIST OF SELECTED IMAGES ###
 
@@ -525,16 +525,11 @@ def main():
             img_list, size = cycling_order(CYCLECOUNT, sort)
             # size = sort.get_cv2size(ROOT, img_list[0])
         else:
-        # dont neet to pass SECOND_SORT, because it is already there
-
-            # img_list, size = simple_order(segment)
-
-
-            # not being used currently
-            # save_sorted(i, folder, start_img, dist)
+            # simple sort by encoding distance
+            # preps the encodings for sort
+            df_enc, df_128_enc = prep_encodings(df_segment)
 
             # # get dataframe sorted by distance
-
             df_sorted = sort_by_face_dist(start_img,df_enc, df_128_enc)
             print("df_sorted")
             print(df_sorted)

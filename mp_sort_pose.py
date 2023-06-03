@@ -19,6 +19,9 @@ class SortPose:
         self.mp_face_detection = mp.solutions.face_detection
         self.mp_drawing = mp.solutions.drawing_utils
 
+        #maximum allowable distance between encodings
+        self.MAXDIST = 0.35
+
         # maximum allowable scale up
         self.resize_max = 1.6
         self.image_edge_multiplier = image_edge_multiplier
@@ -446,219 +449,9 @@ class SortPose:
         else:
             return True
 
-    def get_closest_df(self, start_img, df_enc,site_name_id):
-        def stash_enc1(enc1):
-            if self.EXPAND:
-                print("enc1 is being stored from this", enc1)            
-                enc_persist = enc1
-                print("enc1 is being stored here", enc_persist)
-                # setattr(sort, 'expand_enc1', enc1)
-                # print("expand_enc1 added:", getattr(sort, 'expand_enc1', None))
-                # # print(enc1)
-
-        global enc_persist
-        first = True #does this do anything?
-        if start_img == "median":
-            enc1 = df_enc.median().to_list()
-            print("in median")
-            # stash_enc1(enc1)
-            if self.EXPAND:
-                print("enc1 is being stored from this", enc1)            
-                enc_persist = enc1
-
-            # print(enc1)
-
-        elif start_img == "start_site_image_id":
-            print("start_site_image_id (this is what we are comparing to)")
-            print(start_site_image_id)
-            enc1 = df_enc.loc[start_site_image_id].to_list()
-            # stash_enc1(enc1)
-            if self.EXPAND:
-                print("enc1 is being stored from this", enc1)            
-                enc_persist = enc1
-
-
-        # elif EXPAND:
-        #     # retaining the original encoding, to try to match it. 
-        #     print("got expand enc1 ", enc_persist)
-        #     enc1 = enc_persist
-        #     # enc1 = getattr(sort, 'expand_enc1', None)
-        #     # # drops the most recent success
-        #     df_enc=df_enc.drop(start_img)
-
-            
-        else:
-    #         enc1 = get 2-129 from df via stimg key
-            print("start_img key is (this is what we are comparing to):")
-            print(start_img)
-            enc1 = df_enc.loc[start_img].to_list()
-            df_enc=df_enc.drop(start_img)
-            first = False #does this do anything?
-            # print("in new img",len(df_enc.index))
-            # print(enc1)
-        
-    #     img_list.remove(start_img)
-    #     enc1=enc_dict[start_img]
-        
-        dist=[]
-        dist_dict={}
-        
-        # print("df_enc for ", )
-        # print(df_enc)
-        
-        for index, row in df_enc.iterrows():
-    #         print(row['c1'], row['c2'])
-    #     for img in img_list:
-            enc2 = row
-            print("testing this", index, "against the start img",start_img)
-            if (enc1 is not None) and (enc2 is not None):
-                # mse = False
-                d = self.get_d(enc1, enc2)
-                print ("d is", str(d), "for", index)
-                dist.append(d)
-                dist_dict[d]=index
-        dist.sort()
-        print("debug index")
-        print(dist)
-        print(len(dist))
-        print ("the winner is: ", str(dist[0]), dist_dict[dist[0]])
-    #     print(len(dist))
-        return dist[0], dist_dict[dist[0]], df_enc
 
 
 
-    def write_video(self, ROOT, img_array, segment, size):
-        videofile = f"facevid_crop{str(self.MINCROP)}_X{str(self.XLOW)}toX{str(self.XHIGH)}_Y{str(self.YLOW)}toY{str(self.YHIGH)}_Z{str(self.ZLOW)}toZ{str(self.ZHIGH)}_maxResize{str(self.MAXRESIZE)}_ct{str(len(segment))}_rate{(str(self.FRAMERATE))}.mp4"
-        size = self.get_cv2size(ROOT, img_array[0])
-        try:
-            out = cv2.VideoWriter(os.path.join(ROOT,videofile), cv2.VideoWriter_fourcc(*'mp4v'), self.FRAMERATE, size)
-            for i in range(len(img_array)):
-                print(img_array[i])
-                img = cv2.imread(img_array[i])
-                print('read file')
-                out.write(img)
-            out.release()
-            # print('wrote:',videofile)
-        except:
-            print('failed VIDEO, probably because segmented df until empty')
-
-    def write_images(self, ROOT, df_sorted,cluster_no):
-        # site_name_id = df_enc.loc[start_img]['site_name_id']
-
-        print('writing images')
-        # imgfileprefix = f"faceimg_crop{str(self.MINCROP)}_X{str(self.XLOW)}toX{str(self.XHIGH)}_Y{str(self.YLOW)}toY{str(self.YHIGH)}_Z{str(self.ZLOW)}toZ{str(self.ZHIGH)}_maxResize{str(self.MAXRESIZE)}_ct{str(df_sorted.size)}"
-        imgfileprefix = f"X{str(self.XLOW)}-{str(self.XHIGH)}_Y{str(self.YLOW)}-{str(self.YHIGH)}_Z{str(self.ZLOW)}-{str(self.ZHIGH)}_ct{str(df_sorted.size)}"
-        print(imgfileprefix)
-        outfolder = os.path.join(ROOT,"cluster"+str(cluster_no)+"_"+str(time.time()))
-        if not os.path.exists(outfolder):      
-            os.mkdir(outfolder)
-
-        try:
-            # couldn't I use i here? 
-            counter = 1
-            good_count = 0
-            isnot_face_count = 0
-            cropfail_count = 0
-            self.negmargin_count = 0
-            self.toosmall_count = 0 
-            last_image = None
-            is_face = None
-            first_run = True
-            # print(df_sorted)
-            # out = cv2.VideoWriter(os.path.join(ROOT,videofile), cv2.VideoWriter_fourcc(*'mp4v'), FRAMERATE, size)
-            for index, row in df_sorted.iterrows():
-                print('in loop, index is', str(index))
-                UID = row['filename'].split('-id')[-1].split("/")[-1].replace(".jpg","")
-                print("UID ",UID)
-                counter_str = str(counter).zfill(len(str(df_sorted.size)))  # Add leading zeros to the counter
-                imgfilename = imgfileprefix+"_"+str(counter_str)+"_"+UID+".jpg"
-                print("imgfilename ",imgfilename)
-                outpath = os.path.join(outfolder,imgfilename)
-                print("outpath ",outpath)
-
-                # folder is specific to each file's site_name_id
-
-                # this is how it was, and seems hardcoded to Test36
-                # open_path = os.path.join(ROOT,row['folder'],row['filename'])
-
-                # here I'm using the actual root. Root gets pulled from io, then passed back to sort pose.
-                # but the folder is fused to the root somewhere... in makevideo? it needs to be found and pulled off there. 
-                open_path = os.path.join(ROOT,row['folder'].replace("/Volumes/Test36/",""),row['filename'])
-                print(ROOT,row['folder'],row['filename'])
-
-                print("open_path ",open_path)
-
-                # this code takes image i, and blends it with the subsequent image
-                # next step is to test to see if mp can recognize a face in the image
-                # if no face, a bad blend, try again with i+2, etc. 
-                # except it would need to do that with the sub-array, so move above? 
-                # blend = cv2.addWeighted(img_array[i], 0.5, img_array[(i+1)], 0.5, 0.0)
-                # cv2.imwrite(outpath, blend)
-                img = cv2.imread(open_path)
-
-                #crop image here:
-                if self.EXPAND:
-                    cropped_image = self.expand_image(img, row['face_landmarks'], row['bbox'])
-                else:
-                    cropped_image = self.crop_image(img, row['face_landmarks'], row['bbox'])
-                print("cropped_image type: ",type(cropped_image))
-                if cropped_image is not None:
-                    print(cropped_image.shape)
-                    print("have a cropped image trying to save")
-                    try:
-                        print(type(last_image))
-                    except:
-                        print("couldn't test last_image")
-                    try:
-                        if not first_run:
-                            print("testing is_face")
-                            is_face = self.test_pair(last_image, cropped_image)
-                            if is_face and row['dist'] < 0.35:
-                                print("same person, testing mse")
-                                # print(start_img,index,site_name_id)
-                                # mse = self.test_mse(ROOT,last_image,cropped_image,site_name_id)
-                                is_face = self.unique_face(last_image,cropped_image)
-                                print ("mse ",mse)
-                        else:
-                            print("first round, skipping the pair test")
-                    except:
-                        print("last_image try failed")
-                    # if is_face or first_run and self.resize_factor < self.resize_max:
-                    if is_face or first_run:
-                        first_run = False
-                        cv2.imwrite(outpath, cropped_image)
-                        last_image = cropped_image
-                        print("saved: ",outpath)
-                        good_count += 1
-                    else: 
-                        print("pair do not make a face, skipping")
-                        isnot_face_count += 1
-                else:
-                    print("no image here, trying next")
-                    cropfail_count += 1
-                counter += 1
-
-            print("good_count")
-            print(good_count)
-            print("isnot_face_count")
-            print(isnot_face_count)
-            print("cropfail_count")
-            print(cropfail_count)
-            print("self.negmargin_count")
-            print(self.negmargin_count)
-            print("self.toosmall_count")
-            print(self.toosmall_count)
-            print("total count")
-            print(counter)
-
-            print('wrote files')
-        except Exception as e:
-            print(str(e))
-
-
-
-
-##############################
 
     def point(self,coords):
         newpoint = (int(coords[0]), int(coords[1]))
@@ -883,4 +676,215 @@ class SortPose:
             cropped_image = None
             # resize = None
         return cropped_image
+
+
+
+
+    def get_closest_df(self, start_img, df_enc,site_name_id):
+        def stash_enc1(enc1):
+            if self.EXPAND:
+                print("enc1 is being stored from this", enc1)            
+                enc_persist = enc1
+                print("enc1 is being stored here", enc_persist)
+                # setattr(sort, 'expand_enc1', enc1)
+                # print("expand_enc1 added:", getattr(sort, 'expand_enc1', None))
+                # # print(enc1)
+
+        global enc_persist
+        first = True #does this do anything?
+        if start_img == "median":
+            enc1 = df_enc.median().to_list()
+            print("in median")
+            # stash_enc1(enc1)
+            if self.EXPAND:
+                print("enc1 is being stored from this", enc1)            
+                enc_persist = enc1
+
+            # print(enc1)
+
+        elif start_img == "start_site_image_id":
+            print("start_site_image_id (this is what we are comparing to)")
+            print(start_site_image_id)
+            enc1 = df_enc.loc[start_site_image_id].to_list()
+            # stash_enc1(enc1)
+            if self.EXPAND:
+                print("enc1 is being stored from this", enc1)            
+                enc_persist = enc1
+
+
+        # elif EXPAND:
+        #     # retaining the original encoding, to try to match it. 
+        #     print("got expand enc1 ", enc_persist)
+        #     enc1 = enc_persist
+        #     # enc1 = getattr(sort, 'expand_enc1', None)
+        #     # # drops the most recent success
+        #     df_enc=df_enc.drop(start_img)
+
+            
+        else:
+    #         enc1 = get 2-129 from df via stimg key
+            print("start_img key is (this is what we are comparing to):")
+            print(start_img)
+            enc1 = df_enc.loc[start_img].to_list()
+            df_enc=df_enc.drop(start_img)
+            first = False #does this do anything?
+            # print("in new img",len(df_enc.index))
+            # print(enc1)
+        
+    #     img_list.remove(start_img)
+    #     enc1=enc_dict[start_img]
+        
+        dist=[]
+        dist_dict={}
+        
+        # print("df_enc for ", )
+        # print(df_enc)
+        
+        for index, row in df_enc.iterrows():
+    #         print(row['c1'], row['c2'])
+    #     for img in img_list:
+            enc2 = row
+            print("testing this", index, "against the start img",start_img)
+            if (enc1 is not None) and (enc2 is not None):
+                # mse = False
+                d = self.get_d(enc1, enc2)
+                print ("d is", str(d), "for", index)
+                dist.append(d)
+                dist_dict[d]=index
+        dist.sort()
+        print("debug index")
+        print(dist)
+        print(len(dist))
+        print ("the winner is: ", str(dist[0]), dist_dict[dist[0]])
+    #     print(len(dist))
+        return dist[0], dist_dict[dist[0]], df_enc
+
+
+
+    def write_video(self, ROOT, img_array, segment, size):
+        videofile = f"facevid_crop{str(self.MINCROP)}_X{str(self.XLOW)}toX{str(self.XHIGH)}_Y{str(self.YLOW)}toY{str(self.YHIGH)}_Z{str(self.ZLOW)}toZ{str(self.ZHIGH)}_maxResize{str(self.MAXRESIZE)}_ct{str(len(segment))}_rate{(str(self.FRAMERATE))}.mp4"
+        size = self.get_cv2size(ROOT, img_array[0])
+        try:
+            out = cv2.VideoWriter(os.path.join(ROOT,videofile), cv2.VideoWriter_fourcc(*'mp4v'), self.FRAMERATE, size)
+            for i in range(len(img_array)):
+                print(img_array[i])
+                img = cv2.imread(img_array[i])
+                print('read file')
+                out.write(img)
+            out.release()
+            # print('wrote:',videofile)
+        except:
+            print('failed VIDEO, probably because segmented df until empty')
+
+    def write_images(self, ROOT, df_sorted,cluster_no):
+        # site_name_id = df_enc.loc[start_img]['site_name_id']
+
+        print('writing images')
+        # imgfileprefix = f"faceimg_crop{str(self.MINCROP)}_X{str(self.XLOW)}toX{str(self.XHIGH)}_Y{str(self.YLOW)}toY{str(self.YHIGH)}_Z{str(self.ZLOW)}toZ{str(self.ZHIGH)}_maxResize{str(self.MAXRESIZE)}_ct{str(df_sorted.size)}"
+        imgfileprefix = f"X{str(self.XLOW)}-{str(self.XHIGH)}_Y{str(self.YLOW)}-{str(self.YHIGH)}_Z{str(self.ZLOW)}-{str(self.ZHIGH)}_ct{str(df_sorted.size)}"
+        print(imgfileprefix)
+        outfolder = os.path.join(ROOT,"cluster"+str(cluster_no)+"_"+str(time.time()))
+        if not os.path.exists(outfolder):      
+            os.mkdir(outfolder)
+
+        try:
+            # couldn't I use i here? 
+            counter = 1
+            good_count = 0
+            isnot_face_count = 0
+            cropfail_count = 0
+            self.negmargin_count = 0
+            self.toosmall_count = 0 
+            last_image = None
+            is_face = None
+            first_run = True
+            # print(df_sorted)
+            # out = cv2.VideoWriter(os.path.join(ROOT,videofile), cv2.VideoWriter_fourcc(*'mp4v'), FRAMERATE, size)
+            for index, row in df_sorted.iterrows():
+                print('in loop, index is', str(index))
+                UID = row['filename'].split('-id')[-1].split("/")[-1].replace(".jpg","")
+                print("UID ",UID)
+                counter_str = str(counter).zfill(len(str(df_sorted.size)))  # Add leading zeros to the counter
+                imgfilename = imgfileprefix+"_"+str(counter_str)+"_"+UID+".jpg"
+                print("imgfilename ",imgfilename)
+                outpath = os.path.join(outfolder,imgfilename)
+                print("outpath ",outpath)
+
+                # folder is specific to each file's site_name_id
+
+                # this is how it was, and seems hardcoded to Test36
+                # open_path = os.path.join(ROOT,row['folder'],row['filename'])
+
+                # here I'm using the actual root. Root gets pulled from io, then passed back to sort pose.
+                # but the folder is fused to the root somewhere... in makevideo? it needs to be found and pulled off there. 
+                open_path = os.path.join(ROOT,row['folder'].replace("/Volumes/Test36/",""),row['filename'])
+                print(ROOT,row['folder'],row['filename'])
+
+                print("open_path ",open_path)
+
+                # this code takes image i, and blends it with the subsequent image
+                # next step is to test to see if mp can recognize a face in the image
+                # if no face, a bad blend, try again with i+2, etc. 
+                # except it would need to do that with the sub-array, so move above? 
+                # blend = cv2.addWeighted(img_array[i], 0.5, img_array[(i+1)], 0.5, 0.0)
+                # cv2.imwrite(outpath, blend)
+                img = cv2.imread(open_path)
+
+                #crop image here:
+                if self.EXPAND:
+                    cropped_image = self.expand_image(img, row['face_landmarks'], row['bbox'])
+                else:
+                    cropped_image = self.crop_image(img, row['face_landmarks'], row['bbox'])
+                print("cropped_image type: ",type(cropped_image))
+                if cropped_image is not None:
+                    print(cropped_image.shape)
+                    print("have a cropped image trying to save")
+                    try:
+                        print(type(last_image))
+                    except:
+                        print("couldn't test last_image")
+                    try:
+                        if not first_run:
+                            print("testing is_face")
+                            is_face = self.test_pair(last_image, cropped_image)
+                            if is_face and row['dist'] < self.MAXDIST:
+                                print("same person, testing mse")
+                                is_face = self.unique_face(last_image,cropped_image)
+                                print ("mse ",mse)
+                        else:
+                            print("first round, skipping the pair test")
+                    except:
+                        print("last_image try failed")
+                    # if is_face or first_run and self.resize_factor < self.resize_max:
+                    if is_face or first_run:
+                        first_run = False
+                        cv2.imwrite(outpath, cropped_image)
+                        last_image = cropped_image
+                        print("saved: ",outpath)
+                        good_count += 1
+                    else: 
+                        print("pair do not make a face, skipping")
+                        isnot_face_count += 1
+                else:
+                    print("no image here, trying next")
+                    cropfail_count += 1
+                counter += 1
+
+            print("good_count")
+            print(good_count)
+            print("isnot_face_count")
+            print(isnot_face_count)
+            print("cropfail_count")
+            print(cropfail_count)
+            print("self.negmargin_count")
+            print(self.negmargin_count)
+            print("self.toosmall_count")
+            print(self.toosmall_count)
+            print("total count")
+            print(counter)
+
+            print('wrote files')
+        except Exception as e:
+            print(str(e))
+
 
