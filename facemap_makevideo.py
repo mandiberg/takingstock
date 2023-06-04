@@ -131,16 +131,16 @@ face_height_output = 400
 # define ratios, in relationship to nose
 # units are ratio of faceheight
 # top, right, bottom, left
-# image_edge_multiplier = [1, 1, 1, 1]
+image_edge_multiplier = [1, 1, 1, 1]
 # image_edge_multiplier = [1.5, 2, 1.5, 2]
-image_edge_multiplier = [1.2, 1.2, 1.6, 1.2]
+# image_edge_multiplier = [1.2, 1.2, 1.6, 1.2]
 
 
 # construct my own objects
 sort = SortPose(motion, face_height_output, image_edge_multiplier,EXPAND)
 
-start_img = "median"
-# start_img = "start_site_image_id"
+start_img_name = "median"
+# start_img_name = "start_site_image_id"
 start_site_image_id = "e/ea/portrait-of-funny-afro-guy-picture-id1402424532.jpg"
 # start_site_image_id = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/images_123rf/E/E8/95447708-portrait-of-happy-smiling-beautiful-young-woman-touching-skin-or-applying-cream-isolated-over-white.jpg"
 # 274243    Portrait of funny afro guy  76865   {"top": 380, "left": 749, "right": 1204, "bottom": 835}
@@ -233,30 +233,60 @@ def save_segment_DB(df_segment):
 ###################
 
 
+# need to pass through start_img_enc rather than start_img_name
+# for linear it is in the df_enc, but for itter, the start_img_name is in prev df_enc
 # takes a dataframe of images and encodings and returns a df sorted by distance
-def sort_by_face_dist(start_img,df_enc, df_128_enc):
+def sort_by_face_dist(start_img_name_or_enc,df_enc, df_128_enc, counter_dict=None):
     face_distances=[]
     # this prob should be a df.iterrows
-    for i in range(len(df_enc.index)-2):
+    print("df_enc.index")
+    print(df_enc.index)
+    print(len(df_enc.index))
+    print(counter_dict)
+    for i in range(len(df_enc.index)):
         # find the image
         print(df_enc)
-        # this is the site_name_id for start_img, needed to test mse
-        if start_img is "median":
-            # setting to zero for first one, as not relevant
-            site_name_id = 0
-        else: 
-            site_name_id = df_enc.loc[start_img]['site_name_id']
-        # the hardcoded #1 needs to be replaced with site_name_id, which needs to be readded to the df
+        # this is the site_name_id for start_img_name_or_enc, needed to test mse
+        print("start_img_name_or_enc", start_img_name_or_enc)
+        # THIS IS WHERE I NEED TO START MY WORK
+        if i == 0 and start_img_name_or_enc != "median":
+            #this is the first round. set encodings to the passed through encodings
+            # need to get old encodings from previous round. through counter_dict?
+            print("attempting set enc1 from pass through")
+            enc1 = counter_dict["last_image"]
+            # enc1 = df_enc.loc[start_img_name_or_enc]['face_encodings']
+            print(enc1)
+            print("set enc1 from pass through")
+        else:
+            #this is the second round, set via df
+            print("trying get_start_enc()")
+            enc1, df_128_enc = sort.get_start_enc(start_img_name_or_enc, df_128_enc)
+            print("set enc1 from get_start_enc()")
+
+
+        # # get rid of this
+        # if start_img_name_or_enc is "median":
+        #     # setting to zero for first one, as not relevant
+        #     site_name_id = 0
+        # else: 
+        #     site_name_id = df_enc.loc[start_img_name]['site_name_id']
+        # # the hardcoded #1 needs to be replaced with site_name_id, which needs to be readded to the df
+
         print("starting sort round ",str(i))
-        dist, start_img, df_128_enc = sort.get_closest_df(start_img,df_128_enc,site_name_id)
+        try:
+            dist, start_img_name_or_enc, df_128_enc = sort.get_closest_df(enc1,df_128_enc)
+            print("start_img_name_or_enc assigned as ", start_img_name_or_enc)
+        except Exception as e:
+            print(str(e))
+
         # dist[0], dist_dict[dist[0]]
         thisimage=None
         face_landmarks=None
         bbox=None
         try:
-            site_name_id = df_enc.loc[start_img]['site_name_id']
-            face_landmarks = df_enc.loc[start_img]['face_landmarks']
-            bbox = df_enc.loc[start_img]['bbox']
+            site_name_id = df_enc.loc[start_img_name_or_enc]['site_name_id']
+            face_landmarks = df_enc.loc[start_img_name_or_enc]['face_landmarks']
+            bbox = df_enc.loc[start_img_name_or_enc]['bbox']
             print("assigned bbox", bbox)
         except:
             print("won't assign landmarks/bbox")
@@ -264,22 +294,22 @@ def sort_by_face_dist(start_img,df_enc, df_128_enc):
         print("site_specific_root_folder")
         print(site_specific_root_folder)
         # save the image -- this prob will be to append to list, and return list? 
-        # save_sorted(i, folder, start_img, dist)
-        this_dist=[dist, site_specific_root_folder, start_img, site_name_id, face_landmarks, bbox]
+        # save_sorted(i, folder, start_img_name, dist)
+        this_dist=[dist, site_specific_root_folder, start_img_name_or_enc, site_name_id, face_landmarks, bbox]
         face_distances.append(this_dist)
 
         #debuggin
         print("sorted round ",str(i))
         print(len(df_128_enc.index))
         print(dist)
-        print (start_img)
-        for row in face_distances:
-            print(str(row[0]), row[2])
+        print (start_img_name)
+        # for row in face_distances:
+        #     print(str(row[0]), row[2])
     df = pd.DataFrame(face_distances, columns =['dist', 'folder', 'filename','site_name_id','face_landmarks', 'bbox'])
     print(df)
     # df = df.sort_values(by=['dist']) # this was sorting based on delta distance, not sequential distance
     # print(df)
-    return df
+    return df, start_img_name_or_enc, counter_dict
 
 
 # not currently in use
@@ -397,6 +427,7 @@ def prep_encodings(df_segment):
     # format the encodings for sorting by distance
     # df_enc will be the df with bbox, site_name_id, etc, keyed to filename
     # df_128_enc will be 128 colums of encodings, keyed to filename
+    # print("prep_encodings df_segment", df_segment)
     col1="imagename"
     col2="face_encodings"
     col3="site_name_id"
@@ -465,28 +496,28 @@ def compare_images(last_image, img, face_landmarks, bbox, counter_dict):
     else:
         print("no image here, trying next")
         counter_dict["cropfail_count"] += 1
-    return last_image, cropped_image, counter_dict
+    return cropped_image, counter_dict
 
-def set_counters(df,cluster_no):
+def set_counters(cluster_no,start_img_name):
     sort.negmargin_count = 0
     sort.toosmall_count = 0 
-
+    outfolder = os.path.join(io.ROOT,"cluster"+str(cluster_no)+"_"+str(time.time()))
+    if not os.path.exists(outfolder):      
+        os.mkdir(outfolder)
     counter_dict = {
         "counter": 1,
         "good_count": 0,
         "isnot_face_count": 0,
         "cropfail_count":  0,
         "failed_dist_count": 1,
-        "first_run":  True
+        "outfolder":  outfolder,
+        "first_run":  True,
+        "start_img_name":start_img_name,
+        "last_image":None,
+        "last_image_enc":None
+
     }
-
-    imgfileprefix = f"X{str(sort.XLOW)}-{str(sort.XHIGH)}_Y{str(sort.YLOW)}-{str(sort.YHIGH)}_Z{str(sort.ZLOW)}-{str(sort.ZHIGH)}_ct{str(df.size)}"
-    print(imgfileprefix)
-    outfolder = os.path.join(io.ROOT,"cluster"+str(cluster_no)+"_"+str(time.time()))
-    if not os.path.exists(outfolder):      
-        os.mkdir(outfolder)
-
-    return counter_dict, imgfileprefix, outfolder
+    return counter_dict
 
 def print_counters(counter_dict):
     print("good_count")
@@ -512,51 +543,52 @@ def const_imgfilename(filename, counter_dict, df, imgfileprefix):
     print("imgfilename ",imgfilename)
     return imgfilename
 
-def linear_sort_df(df,cluster_no, last_image=None):
+def linear_test_df(df,cluster_no, counter_dict):
     print('writing images')
-    counter_dict, imgfileprefix, outfolder = set_counters(df,cluster_no)
+    imgfileprefix = f"X{str(sort.XLOW)}-{str(sort.XHIGH)}_Y{str(sort.YLOW)}-{str(sort.YHIGH)}_Z{str(sort.ZLOW)}-{str(sort.ZHIGH)}_ct{str(df.size)}"
+    print(imgfileprefix)
+
     img_list = []
     try:
         for index, row in df.iterrows():
             print('in loop, index is', str(index))
             print(row)
             imgfilename = const_imgfilename(row['filename'], counter_dict, df, imgfileprefix)
-            outpath = os.path.join(outfolder,imgfilename)
+            outpath = os.path.join(counter_dict["outfolder"],imgfilename)
             open_path = os.path.join(io.ROOT,row['folder'],row['filename'])
             print(outpath, open_path)
             img = cv2.imread(open_path)
             if row['dist'] < sort.MAXDIST:
                 # compare_images to make sure they are face and not the same
-                last_image, cropped_image, counter_dict = compare_images(last_image, img, row['face_landmarks'], row['bbox'], counter_dict)
+                # last_image is cv2 np.array
+                cropped_image, counter_dict = compare_images(counter_dict["last_image"], img, row['face_landmarks'], row['bbox'], counter_dict)
                 if cropped_image is not None:
                     img_list.append((outpath, cropped_image))
+
+                    print("row['filename']")
+                    print(row['filename'])
+                    counter_dict["start_img_name"] = row['filename']
+                    print(counter_dict["last_image"])
                     print("saved: ",outpath)
             else:
                 counter_dict["failed_dist_count"] += 1
                 print("MAXDIST too big:" , str(sort.MAXDIST))
             counter_dict["counter"] += 1
-        print_counters(counter_dict)
+        counter_dict["last_image"] = img_list[-1][1]  #last pair in list, second item in pair
+        print("counter_dict with last_image???")
+        print(counter_dict)
 
     except Exception as e:
         print(str(e))
 
-    return img_list
+    return img_list, counter_dict
     
 def write_images(img_list):
     for path_img in img_list:
         cv2.imwrite(path_img[0],path_img[1])
 
 
-def write_images_by_angle(df,cluster_no, sort):
-    print('writing images')
-    # imgfileprefix = f"faceimg_crop{str(sort.MINCROP)}_X{str(sort.XLOW)}toX{str(sort.XHIGH)}_Y{str(sort.YLOW)}toY{str(sort.YHIGH)}_Z{str(sort.ZLOW)}toZ{str(sort.ZHIGH)}_maxResize{str(sort.MAXRESIZE)}_ct{str(df.size)}"
-    imgfileprefix = f"X{str(sort.XLOW)}-{str(sort.XHIGH)}_Y{str(sort.YLOW)}-{str(sort.YHIGH)}_Z{str(sort.ZLOW)}-{str(sort.ZHIGH)}_ct{str(df.size)}"
-    print(imgfileprefix)
-    outfolder = os.path.join(io.ROOT,"cluster"+str(cluster_no)+"_"+str(time.time()))
-    if not os.path.exists(outfolder):      
-        os.mkdir(outfolder)
-
-
+def iterr_angles_df(start_img_name, df_segment, cluster_no, sort):
     #cycling patch
     img_array = []
     cycle = 0 
@@ -564,8 +596,10 @@ def write_images_by_angle(df,cluster_no, sort):
     metamedian = sort.metamedian
     d = sort.d
 
-    print("CYCLE to test: ",cycle)
-
+    print("CYCLE to test: ",cycle, start_img_name)
+    counter_dict = set_counters(cluster_no, start_img_name)
+    print("set counter_dict:" )
+    print(counter_dict)
     while cycle < CYCLECOUNT:
         print("CYCLE: ",cycle)
         for angle in sort.angle_list:
@@ -573,38 +607,42 @@ def write_images_by_angle(df,cluster_no, sort):
             # print(d[angle].iloc[(d[angle][sort.SECOND_SORT]-metamedian).abs().argsort()[:2]])
             if(d[angle].size) != 0:
                 try:
+
+                    try:
+                        last_row = df_segment.loc[counter_dict["start_img_name"]]
+                        print(last_row)
+                    except Exception as e:
+                        print(str(e))
+                    df_enc, df_128_enc = prep_encodings(d[angle])
+                    print("counter_dict[start_img_name] before sort_by_face_dist")
+                    print(counter_dict["start_img_name"] )
+                    # # get dataframe sorted by distance
+                    df_sorted, counter_dict["start_img_name"], counter_dict = sort_by_face_dist(counter_dict["start_img_name"],df_enc, df_128_enc, counter_dict)
+                    print("df_sorted")
+                    print(df_sorted)
+                    print("counter_dict before linear_test_df")
+                    print(counter_dict)
+                    if counter_dict["last_image"] is None:
+                        try:
+                            counter_dict["last_image"] = cv2.imread(counter_dict["start_img_name"])
+                        except:
+                            print("failed to open counter_dict[start_img_name]")
+                    else:
+                        print("counter_dict has a last_image")
+                    # write_images(df_sorted, cluster_no)
+                    # print("df_sorted before linear_test_df")
+
+                    # print(type(df_sorted.size))
+                    # print(df_sorted.size)
+                    # print(df_sorted)
+                    img_list, counter_dict = linear_test_df(df_sorted,cluster_no, counter_dict)
+                    print("counter_dict after linear_test_df")
+                    print(counter_dict)
+                    print("img_list")
+                    print(img_list)
                     
 
 
-
-
-                    # I don't remember exactly how this segments the data...!!!
-                    # [:CYCLECOUNT] gets the first [:0] value on first cycle?
-                    # or does it limit the total number of values to the number of cycles?
-                    print(d[angle])
-                    #this is a way of finding the image with closest second sort (Y)
-                    #mystery value is the image to be matched? 
-                    print("second sort, metamedian ",d[angle][sort.SECOND_SORT],sort.metamedian)
-                    mysteryvalue = (d[angle][sort.SECOND_SORT]-sort.metamedian)
-                    print('mysteryvalue ',mysteryvalue)
-                    #is mystery value a df?
-                    #this is finding the 
-                    mysterykey = mysteryvalue.abs().argsort()[:CYCLECOUNT]
-                    print('mysterykey: ',mysterykey)
-                    closest = d[angle].iloc[mysterykey]
-                    closest_file = closest.iloc[cycle]['imagename']
-                    closest_mouth = closest.iloc[cycle]['mouth_gap']
-                    print('closest: ')
-                    print(closest_file)
-                    continue
-
-
-
-                    img = cv2.imread(closest_file)
-                    sort.preview_img(img)
-                    height, width, layers = img.shape
-                    size = (width, height)
-                    img_array.append(img)
                 except:
                     print('failed cycle angle:')
                     # print('failed:',row['imagename'])
@@ -614,80 +652,8 @@ def write_images_by_angle(df,cluster_no, sort):
         sort.angle_list.reverse()
         cycle = cycle +1
         # # print(angle_list)
-    quit()
-    try:
-        counter = 1
-        good_count = 0
-        isnot_face_count = 0
-        cropfail_count = 0
-        sort.negmargin_count = 0
-        sort.toosmall_count = 0 
-        last_image = None
-        is_face = None
-        first_run = True
-        for index, row in df.iterrows():
-            # loop through df, create in/out paths, read img
-            print('in loop, index is', str(index))
-            UID = row['filename'].split('-id')[-1].split("/")[-1].replace(".jpg","")
-            counter_str = str(counter).zfill(len(str(df.size)))  # Add leading zeros to the counter
-            imgfilename = imgfileprefix+"_"+str(counter_str)+"_"+UID+".jpg"
-            outpath = os.path.join(outfolder,imgfilename)
-            open_path = os.path.join(io.ROOT,row['folder'],row['filename'])
-            img = cv2.imread(open_path)
 
-            #crop image here:
-            if sort.EXPAND:
-                cropped_image = sort.expand_image(img, row['face_landmarks'], row['bbox'])
-            else:
-                cropped_image = sort.crop_image(img, row['face_landmarks'], row['bbox'])
-            print("cropped_image type: ",type(cropped_image))
-
-            # this code takes image i, and blends it with the subsequent image
-            # next step is to test to see if mp can recognize a face in the image
-            # if no face, a bad blend, try again with i+2, etc. 
-            if cropped_image is not None:
-                print("have a cropped image trying to save")
-                try:
-                    if not first_run:
-                        print("testing is_face")
-                        is_face = sort.test_pair(last_image, cropped_image)
-                        if is_face and row['dist'] < sort.MAXDIST:
-                            is_face = sort.unique_face(last_image,cropped_image)
-                    else:
-                        print("first round, skipping the pair test")
-                except:
-                    print("last_image try failed")
-                # if is_face or first_run and sort.resize_factor < sort.resize_max:
-                if is_face or first_run:
-                    first_run = False
-                    cv2.imwrite(outpath, cropped_image)
-                    last_image = cropped_image
-                    print("saved: ",outpath)
-                    good_count += 1
-                else: 
-                    print("pair do not make a face, skipping")
-                    isnot_face_count += 1
-            else:
-                print("no image here, trying next")
-                cropfail_count += 1
-            counter += 1
-
-        print("good_count")
-        print(good_count)
-        print("isnot_face_count")
-        print(isnot_face_count)
-        print("cropfail_count")
-        print(cropfail_count)
-        print("sort.negmargin_count")
-        print(sort.negmargin_count)
-        print("sort.toosmall_count")
-        print(sort.toosmall_count)
-        print("total count")
-        print(counter)
-
-        print('wrote files')
-    except Exception as e:
-        print(str(e))
+    print_counters(counter_dict)
 
 
 ###################
@@ -798,19 +764,31 @@ def main():
             img_list, size = cycling_order(CYCLECOUNT, sort)
             # size = sort.get_cv2size(ROOT, img_list[0])
         elif IS_ANGLE_SORT is True:
-            write_images_by_angle(df_segment, cluster_no, sort)
+            iterr_angles_df(start_img_name,df_segment, cluster_no, sort)
         else:
             # simple sort by encoding distance
             # preps the encodings for sort
+            counter_dict = set_counters(cluster_no, start_img_name)
+            print("set counter_dict:" )
+            print(counter_dict)
+
             df_enc, df_128_enc = prep_encodings(df_segment)
 
             # # get dataframe sorted by distance
-            df_sorted = sort_by_face_dist(start_img,df_enc, df_128_enc)
+            # start_img_name needs to be replaced by counter_dict
+            df_sorted, _, counter_dict = sort_by_face_dist(start_img_name,df_enc, df_128_enc, counter_dict)
             print("df_sorted")
             print(df_sorted)
+            print("df_sorted before linear_test_df")
+
+            print(type(df_sorted.size))
+            print(df_sorted.size)
+            print(df_sorted)
+
             # write_images(df_sorted, cluster_no)
-            img_list = linear_sort_df(df_sorted,cluster_no)
+            img_list, counter_dict = linear_test_df(df_sorted,cluster_no, counter_dict)
             write_images(img_list)
+            print_counters(counter_dict)
 
             # img_list = df_sorted['filename'].tolist()
             # # the hardcoded #1 needs to be replaced with site_name_id, which needs to be readded to the df
