@@ -43,8 +43,8 @@ CYCLECOUNT = 1
 # ROOT="/Users/michaelmandiberg/Documents/projects-active/facemap_production/"
 
 # keep this live, even if not SSD
-# SegmentTable_name = 'May25segment123side_to_side'
-SegmentTable_name = 'May25segment123updown_laugh'
+SegmentTable_name = 'May25segment123side_to_side'
+# SegmentTable_name = 'May25segment123updown_laugh'
 # SegmentTable_name = 'May25segment123straight_lessrange'  #actually straight ahead smile
 
 # SATYAM, this is MM specific
@@ -114,8 +114,8 @@ elif IS_MOVE:
 LIMIT = 1000
 
 motion = {
-    "side_to_side": False,
-    "forward_smile": True,
+    "side_to_side": True,
+    "forward_smile": False,
     "laugh": False,
     "forward_nosmile":  False,
     "static_pose":  False,
@@ -562,10 +562,10 @@ def process_iterr_angles(start_img_name, df_segment, cluster_no, sort):
                     # # only write the first, closest one
                     # # in the future, prob want to assign each image list to
                     # # a list/df keyed by angle, so can iterate through it? 
-                    if angle > 15:
-                        cv2.imwrite(img_list[0][0],img_list[0][1])
-                    else:
+                    if angle < 15 and motion['forward_smile'] == True:
                         write_images(img_list)
+                    else:
+                        cv2.imwrite(img_list[0][0],img_list[0][1])
                     
 
 
@@ -702,7 +702,7 @@ def main():
         ### SORT THE LIST OF SELECTED IMAGES ###
         ###    THESE ARE THE VARIATIONS      ###
 
-        if motion["side_to_side"] is True:
+        if motion["side_to_side"] is True and IS_ANGLE_SORT is False:
             # this is old, hasn't been refactored.
             img_list, size = cycling_order(CYCLECOUNT, sort)
             # size = sort.get_cv2size(ROOT, img_list[0])
