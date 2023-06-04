@@ -20,7 +20,7 @@ class SortPose:
         self.mp_drawing = mp.solutions.drawing_utils
 
         #maximum allowable distance between encodings
-        self.MAXDIST = 0.6
+        self.MAXDIST = 0.75
 
         # maximum allowable scale up
         self.resize_max = 1.6
@@ -127,7 +127,7 @@ class SortPose:
             "good_count": 0,
             "isnot_face_count": 0,
             "cropfail_count":  0,
-            "failed_dist_count": 1,
+            "failed_dist_count": 0,
             "outfolder":  self.outfolder,
             "first_run":  True,
             "start_img_name":start_img_name,

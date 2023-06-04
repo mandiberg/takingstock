@@ -445,6 +445,8 @@ def print_counters():
     print(sort.negmargin_count)
     print("sort.toosmall_count")
     print(sort.toosmall_count)
+    print("failed_dist_count")
+    print(sort.counter_dict["failed_dist_count"])
     print("total count")
     print(sort.counter_dict["counter"])
 
@@ -555,8 +557,15 @@ def process_iterr_angles(start_img_name, df_segment, cluster_no, sort):
                     print("sort.counter_dict after linear_test_df")
                     print(sort.counter_dict)
                     print("img_list")
-                    print(img_list)
-                    write_images(img_list)
+                    print(img_list[0])
+                    # print(len(img_list))
+                    # # only write the first, closest one
+                    # # in the future, prob want to assign each image list to
+                    # # a list/df keyed by angle, so can iterate through it? 
+                    if angle > 15:
+                        cv2.imwrite(img_list[0][0],img_list[0][1])
+                    else:
+                        write_images(img_list)
                     
 
 
