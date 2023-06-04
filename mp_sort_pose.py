@@ -116,6 +116,26 @@ class SortPose:
             self.SORT = 'face_x'
             self.ROUND = 1
 
+    def set_counters(self,ROOT,cluster_no,start_img_name):
+        self.negmargin_count = 0
+        self.toosmall_count = 0 
+        self.outfolder = os.path.join(ROOT,"cluster"+str(cluster_no)+"_"+str(time.time()))
+        if not os.path.exists(self.outfolder):      
+            os.mkdir(self.outfolder)
+        self.counter_dict = {
+            "counter": 1,
+            "good_count": 0,
+            "isnot_face_count": 0,
+            "cropfail_count":  0,
+            "failed_dist_count": 1,
+            "outfolder":  self.outfolder,
+            "first_run":  True,
+            "start_img_name":start_img_name,
+            "last_image":None,
+            "last_image_enc":None
+
+        }
+
 
     def make_segment(self, df):
 
