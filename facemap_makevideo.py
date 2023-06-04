@@ -312,67 +312,6 @@ def sort_by_face_dist(start_img_name_or_enc,df_enc, df_128_enc):
     return df, start_img_name_or_enc
 
 
-# not currently in use
-def simple_order(segment):
-    img_array = []
-    delta_array = []
-    # size = []
-    #simple ordering
-    rotation = segment.sort_values(by=sort.SORT)
-    print("rotation: ")
-    print(rotation)
-
-    # for num, name in enumerate(presidents, start=1):
-    i = 0
-    for index, row in rotation.iterrows():
-        # print(index, row['x'], row['y'], row['imagename'])
-        delta_array.append(row['mouth_gap'])
-        try:
-            print(row['imagename'])
-            #this is pointin to the wrong location
-            #/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages_output_feb/crop_1_3.9980554263116233_-3.8588402232564545_2.2552074063078456_0.494_portrait-of-young-woman-covering-eye-with-compass-morocco-picture-id1227557214.jpg
-            #original files are actually here:
-            #/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages/F/F0/portrait-of-young-woman-covering-eye-with-compass-morocco-picture-id1227557214.jpg
-            #doesn't seem to be picking up the cropped image.
-
-            newimage = cv2.imread(row['imagename'])
-            height, width, layers = img.shape
-            size = (width, height)
-            # test to see if this is actually an face, to get rid of blank ones/bad ones
-            # this may not be necessary
-            if sort.is_face(img):
-                # if not the first image
-                print('is_face')
-                if i>0:
-                    print('i is greater than 0')
-                    # blend this image with the last image
-                    # blend = cv2.addWeighted(img, 0.5, img, 0.5, 0.0)
-                    # # blend = cv2.addWeighted(img, 0.5, img_array[i-1], 0.5, 0.0)
-                    # blended_face = sort.is_face(blend)
-                    # print('is_face ',blended_face)
-                    # if blended image has a detectable face, append the img
-                    if blend_is_face(oldimage, newimage):
-                        img_array.append(img)
-                        print('simple_order is a face! adding it')
-                    else:
-                        print('skipping this one')
-                # for the first one, just add the image
-                # this may need to be refactored in case the first one is bad?
-                else:
-                    img_array.append(img)
-            else:
-                print('skipping this one: ',row['imagename'])
-
-            i+=1
-            oldimage = newimage
-
-        except:
-            print('failed:',row['imagename'])
-    # print("delta_array")
-    # print(delta_array)
-    return img_array, size
-
-
 
 def cycling_order(CYCLECOUNT, sort):
     img_array = []
@@ -769,9 +708,10 @@ def main():
 
 
         ### SORT THE LIST OF SELECTED IMAGES ###
+        ###    THESE ARE THE VARIATIONS      ###
 
-        # img_array is actual bitmap data? 
         if motion["side_to_side"] is True:
+            # this is old, hasn't been refactored.
             img_list, size = cycling_order(CYCLECOUNT, sort)
             # size = sort.get_cv2size(ROOT, img_list[0])
         elif IS_ANGLE_SORT is True:
@@ -780,24 +720,9 @@ def main():
             process_linear(start_img_name,df_segment, cluster_no, sort)
 
 
-            # img_array, size = sort.simplest_order(segment) 
 
-        # print("img_array: ",img_array)
-
-        ### WRITE THE IMAGES TO VIDEO/FILES ###
-        # turning off for now
-
-        # if VIDEO == True:
-        #     #save individual as video
-        #     # need to rework to accept df and calc size internally
-        #     sort.write_video(io.ROOT, img_list, df_segment, size)
-
-        # else:
-        #     #save individual as images
-        #     sort.write_images(io.ROOT, df_sorted, cluster_no)
-
-
-    ### this is the start of the real action ###
+    ###          THE MAIN PART OF MAIN()           ###
+    ### QUERY SQL BASED ON CLUSTERS AND MAP_IMAGES ###
 
     #creating my objects
     start = time.time()
