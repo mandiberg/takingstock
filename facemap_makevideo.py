@@ -544,6 +544,7 @@ def linear_test_df(df,cluster_no):
                 cropped_image = compare_images(sort.counter_dict["last_image"], img, row['face_landmarks'], row['bbox'])
                 if cropped_image is not None:
                     img_list.append((outpath, cropped_image))
+                    sort.counter_dict["good_count"] += 1
 
                     print("row['filename']")
                     print(row['filename'])
@@ -568,7 +569,7 @@ def write_images(img_list):
         cv2.imwrite(path_img[0],path_img[1])
 
 
-def iterr_angles_df(start_img_name, df_segment, cluster_no, sort):
+def process_iterr_angles(start_img_name, df_segment, cluster_no, sort):
     #cycling patch
     img_array = []
     cycle = 0 
@@ -634,6 +635,36 @@ def iterr_angles_df(start_img_name, df_segment, cluster_no, sort):
         # # print(angle_list)
 
     print_counters()
+
+
+def process_linear(start_img_name, df_segment, cluster_no, sort):
+    # simple sort by encoding distance
+    # preps the encodings for sort
+    sort.set_counters(io.ROOT,cluster_no, start_img_name)
+    
+    df_enc, df_128_enc = prep_encodings(df_segment)
+
+    # # get dataframe sorted by distance
+    # start_img_name needs to be replaced by sort.counter_dict
+    df_sorted, _ = sort_by_face_dist(start_img_name,df_enc, df_128_enc)
+    # print("df_sorted")
+    # print(df_sorted)
+    # print("df_sorted before linear_test_df")
+
+    # print(type(df_sorted.size))
+    # print(df_sorted.size)
+    # print(df_sorted)
+
+    # write_images(df_sorted, cluster_no)
+    img_list = linear_test_df(df_sorted,cluster_no)
+    write_images(img_list)
+    print_counters()
+
+    # img_list = df_sorted['filename'].tolist()
+    # # the hardcoded #1 needs to be replaced with site_name_id, which needs to be readded to the df
+    # site_specific_root_folder = io.folder_list[1]
+    # size = sort.get_cv2size(site_specific_root_folder, img_list[0])
+    # # print(img_list)
 
 
 ###################
@@ -744,38 +775,9 @@ def main():
             img_list, size = cycling_order(CYCLECOUNT, sort)
             # size = sort.get_cv2size(ROOT, img_list[0])
         elif IS_ANGLE_SORT is True:
-            iterr_angles_df(start_img_name,df_segment, cluster_no, sort)
+            process_iterr_angles(start_img_name,df_segment, cluster_no, sort)
         else:
-            # simple sort by encoding distance
-            # preps the encodings for sort
-            sort.set_counters(io.ROOT,cluster_no, start_img_name)
-            print("set sort.counter_dict:" )
-            print(sort.counter_dict)
-
-            df_enc, df_128_enc = prep_encodings(df_segment)
-
-            # # get dataframe sorted by distance
-            # start_img_name needs to be replaced by sort.counter_dict
-            df_sorted, _ = sort_by_face_dist(start_img_name,df_enc, df_128_enc)
-            print("df_sorted")
-            print(df_sorted)
-            print("df_sorted before linear_test_df")
-
-            print(type(df_sorted.size))
-            print(df_sorted.size)
-            print(df_sorted)
-
-            # write_images(df_sorted, cluster_no)
-            img_list = linear_test_df(df_sorted,cluster_no)
-            write_images(img_list)
-            print_counters()
-
-            # img_list = df_sorted['filename'].tolist()
-            # # the hardcoded #1 needs to be replaced with site_name_id, which needs to be readded to the df
-            # site_specific_root_folder = io.folder_list[1]
-            # size = sort.get_cv2size(site_specific_root_folder, img_list[0])
-            # # print(img_list)
-
+            process_linear(start_img_name,df_segment, cluster_no, sort)
 
 
             # img_array, size = sort.simplest_order(segment) 
