@@ -285,6 +285,7 @@ class SortPose:
         enc1=np.array(enc1)
         print("enc1")
         print(enc1)
+        # this is currently an np.array, not 128d list
         print(enc1[0])
         enc2=np.array(enc2)
         print("enc2")
@@ -724,6 +725,7 @@ class SortPose:
         print("get_closest_df")
         dist=[]
         dist_dict={}
+        enc2_dict={}
         
         for index, row in df_128_enc.iterrows():
     #         print(row['c1'], row['c2'])
@@ -732,15 +734,17 @@ class SortPose:
             # print("testing this", index, "against the start img",start_img)
             if (enc1 is not None) and (enc2 is not None):
                 d = self.get_d(enc1, enc2)
-                print ("d is", str(d), "for", index)
+                print ("d is", str(d), "for", index, enc2)
                 dist.append(d)
                 dist_dict[d]=index
+                enc2_dict[d]=enc2
         dist.sort()
         print("debug index")
         print(dist)
         print(len(dist))
-        print ("the winner is: ", str(dist[0]), dist_dict[dist[0]])
+        print ("the winner is: ", str(dist[0]), dist_dict[dist[0]], enc2_dict[dist[0]])
     #     print(len(dist))
+        self.counter_dict["last_image_enc"]=enc2_dict[dist[0]]
         return dist[0], dist_dict[dist[0]], df_128_enc
 
 

@@ -53,7 +53,7 @@ IS_MOVE = False
 IS_SSD = True
 IS_CLUSTER = False
 IS_ONE_CLUSTER = True
-IS_ANGLE_SORT = False
+IS_ANGLE_SORT = True
 # number of clusters to analyze -- this is also declared in Clustering_SQL. Move to IO?
 N_CLUSTERS = 128
 # this is for IS_ONE_CLUSTER to only run on a specific cluster
@@ -111,7 +111,7 @@ elif IS_MOVE:
     # regular rotation left to right, which should include the straight ahead? 
 
 
-LIMIT = 100
+LIMIT = 1000
 
 motion = {
     "side_to_side": False,
@@ -236,7 +236,8 @@ def save_segment_DB(df_segment):
 # need to pass through start_img_enc rather than start_img_name
 # for linear it is in the df_enc, but for itter, the start_img_name is in prev df_enc
 # takes a dataframe of images and encodings and returns a df sorted by distance
-def sort_by_face_dist(start_img_name_or_enc,df_enc, df_128_enc):
+def sort_by_face_dist(df_enc, df_128_enc):
+    this_start = sort.counter_dict["start_img_name"]
     face_distances=[]
     # this prob should be a df.iterrows
     print("df_enc.index")
@@ -246,36 +247,27 @@ def sort_by_face_dist(start_img_name_or_enc,df_enc, df_128_enc):
     for i in range(len(df_enc.index)):
         # find the image
         print(df_enc)
-        # this is the site_name_id for start_img_name_or_enc, needed to test mse
-        print("start_img_name_or_enc", start_img_name_or_enc)
+        # this is the site_name_id for this_start, needed to test mse
+        print("this_start", this_start)
         # THIS IS WHERE I NEED TO START MY WORK
-        if i == 0 and start_img_name_or_enc != "median":
+        if i == 0 and this_start != "median":
             #this is the first round. set encodings to the passed through encodings
             # need to get old encodings from previous round. through sort.counter_dict?
             print("attempting set enc1 from pass through")
-            enc1 = sort.counter_dict["last_image"]
-            # enc1 = df_enc.loc[start_img_name_or_enc]['face_encodings']
+            enc1 = sort.counter_dict["last_image_enc"]
+            # enc1 = df_enc.loc[this_start]['face_encodings']
             print(enc1)
             print("set enc1 from pass through")
         else:
             #this is the second round, set via df
             print("trying get_start_enc()")
-            enc1, df_128_enc = sort.get_start_enc(start_img_name_or_enc, df_128_enc)
+            enc1, df_128_enc = sort.get_start_enc(this_start, df_128_enc)
             print("set enc1 from get_start_enc()")
-
-
-        # # get rid of this
-        # if start_img_name_or_enc is "median":
-        #     # setting to zero for first one, as not relevant
-        #     site_name_id = 0
-        # else: 
-        #     site_name_id = df_enc.loc[start_img_name]['site_name_id']
-        # # the hardcoded #1 needs to be replaced with site_name_id, which needs to be readded to the df
 
         print("starting sort round ",str(i))
         try:
-            dist, start_img_name_or_enc, df_128_enc = sort.get_closest_df(enc1,df_128_enc)
-            print("start_img_name_or_enc assigned as ", start_img_name_or_enc)
+            dist, this_start, df_128_enc = sort.get_closest_df(enc1,df_128_enc)
+            print("this_start assigned as ", this_start)
         except Exception as e:
             print(str(e))
 
@@ -284,9 +276,9 @@ def sort_by_face_dist(start_img_name_or_enc,df_enc, df_128_enc):
         face_landmarks=None
         bbox=None
         try:
-            site_name_id = df_enc.loc[start_img_name_or_enc]['site_name_id']
-            face_landmarks = df_enc.loc[start_img_name_or_enc]['face_landmarks']
-            bbox = df_enc.loc[start_img_name_or_enc]['bbox']
+            site_name_id = df_enc.loc[this_start]['site_name_id']
+            face_landmarks = df_enc.loc[this_start]['face_landmarks']
+            bbox = df_enc.loc[this_start]['bbox']
             print("assigned bbox", bbox)
         except:
             print("won't assign landmarks/bbox")
@@ -295,7 +287,7 @@ def sort_by_face_dist(start_img_name_or_enc,df_enc, df_128_enc):
         print(site_specific_root_folder)
         # save the image -- this prob will be to append to list, and return list? 
         # save_sorted(i, folder, start_img_name, dist)
-        this_dist=[dist, site_specific_root_folder, start_img_name_or_enc, site_name_id, face_landmarks, bbox]
+        this_dist=[dist, site_specific_root_folder, this_start, site_name_id, face_landmarks, bbox]
         face_distances.append(this_dist)
 
         #debuggin
@@ -307,9 +299,13 @@ def sort_by_face_dist(start_img_name_or_enc,df_enc, df_128_enc):
         #     print(str(row[0]), row[2])
     df = pd.DataFrame(face_distances, columns =['dist', 'folder', 'filename','site_name_id','face_landmarks', 'bbox'])
     print(df)
+    last_file = face_distances[-1][2]
+    print("last_file ",last_file)
+    sort.counter_dict["start_img_name"] = last_file
+
     # df = df.sort_values(by=['dist']) # this was sorting based on delta distance, not sequential distance
     # print(df)
-    return df, start_img_name_or_enc
+    return df
 
 
 
@@ -510,9 +506,8 @@ def write_images(img_list):
 
 def process_iterr_angles(start_img_name, df_segment, cluster_no, sort):
     #cycling patch
-    img_array = []
+    img_list = []
     cycle = 0 
-    # metamedian = get_metamedian(angle_list)
     metamedian = sort.metamedian
     d = sort.d
 
@@ -527,17 +522,18 @@ def process_iterr_angles(start_img_name, df_segment, cluster_no, sort):
             # print(d[angle].iloc[(d[angle][sort.SECOND_SORT]-metamedian).abs().argsort()[:2]])
             if(d[angle].size) != 0:
                 try:
-
-                    try:
-                        last_row = df_segment.loc[sort.counter_dict["start_img_name"]]
-                        print(last_row)
-                    except Exception as e:
-                        print(str(e))
-                    df_enc, df_128_enc = prep_encodings(d[angle])
                     print("sort.counter_dict[start_img_name] before sort_by_face_dist")
                     print(sort.counter_dict["start_img_name"] )
+                    if sort.counter_dict["start_img_name"] != "median":
+                        try:
+                            last_row = df_segment.loc[sort.counter_dict["start_img_name"]]
+                            print("last_row")
+                            print(last_row)
+                        except Exception as e:
+                            print(str(e))
+                    df_enc, df_128_enc = prep_encodings(d[angle])
                     # # get dataframe sorted by distance
-                    df_sorted["start_img_name"] = sort_by_face_dist(sort.counter_dict["start_img_name"],df_enc, df_128_enc)
+                    df_sorted = sort_by_face_dist(df_enc, df_128_enc)
                     print("df_sorted")
                     print(df_sorted)
                     print("sort.counter_dict before linear_test_df")
@@ -560,6 +556,7 @@ def process_iterr_angles(start_img_name, df_segment, cluster_no, sort):
                     print(sort.counter_dict)
                     print("img_list")
                     print(img_list)
+                    write_images(img_list)
                     
 
 
@@ -577,33 +574,19 @@ def process_iterr_angles(start_img_name, df_segment, cluster_no, sort):
 
 
 def process_linear(start_img_name, df_segment, cluster_no, sort):
-    # simple sort by encoding distance
-    # preps the encodings for sort
-    sort.set_counters(io.ROOT,cluster_no, start_img_name)
+    # linear sort by encoding distance
     
+    # preps the encodings for sort
+    sort.set_counters(io.ROOT,cluster_no, start_img_name)  
     df_enc, df_128_enc = prep_encodings(df_segment)
 
     # # get dataframe sorted by distance
-    # start_img_name needs to be replaced by sort.counter_dict
-    df_sorted, _ = sort_by_face_dist(start_img_name,df_enc, df_128_enc)
-    # print("df_sorted")
-    # print(df_sorted)
-    # print("df_sorted before linear_test_df")
+    df_sorted = sort_by_face_dist(df_enc, df_128_enc)
 
-    # print(type(df_sorted.size))
-    # print(df_sorted.size)
-    # print(df_sorted)
-
-    # write_images(df_sorted, cluster_no)
+    # test to see if they make good faces
     img_list = linear_test_df(df_sorted,cluster_no)
     write_images(img_list)
     print_counters()
-
-    # img_list = df_sorted['filename'].tolist()
-    # # the hardcoded #1 needs to be replaced with site_name_id, which needs to be readded to the df
-    # site_specific_root_folder = io.folder_list[1]
-    # size = sort.get_cv2size(site_specific_root_folder, img_list[0])
-    # # print(img_list)
 
 
 ###################
