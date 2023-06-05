@@ -1,4 +1,4 @@
-USE stock;
+USE gettytest3;
 
 -- These remove repeated values and reduce repetition
 
@@ -111,16 +111,13 @@ CREATE TABLE Encodings (
 ); 
 
 -- calculations that will come later
-CREATE TABLE Clusters_May25segment123side_to_side12 (
-
--- CREATE TABLE Clusters (
+CREATE TABLE Clusters (
     cluster_id int NOT NULL AUTO_INCREMENT PRIMARY KEY,
     cluster_median BLOB
 );
 
 -- This is the clusters junction table.
-CREATE TABLE ImagesClusters_May25segment123side_to_side12 (
--- CREATE TABLE ImagesClusters (
+CREATE TABLE ImagesClusters (
     image_id INTEGER REFERENCES Images (image_id),
     cluster_id INTEGER REFERENCES Clusters (cluster_id),
     PRIMARY KEY (image_id)

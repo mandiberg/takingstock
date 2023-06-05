@@ -43,8 +43,8 @@ CYCLECOUNT = 1
 # ROOT="/Users/michaelmandiberg/Documents/projects-active/facemap_production/"
 
 # keep this live, even if not SSD
-# SegmentTable_name = 'May25segment123side_to_side'
-SegmentTable_name = 'May25segment123updown_laugh'
+SegmentTable_name = 'May25segment123side_to_side'
+# SegmentTable_name = 'May25segment123updown_laugh'
 # SegmentTable_name = 'May25segment123straight_lessrange'  #actually straight ahead smile
 
 # SATYAM, this is MM specific
@@ -92,7 +92,7 @@ if not IS_MOVE:
 
     # this is for gettytest3 table
     FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings e ON i.image_id = e.image_id JOIN ImagesClusters ic ON i.image_id = ic.image_id"
-    WHERE = "e.is_face IS TRUE AND e.bbox IS NOT NULL AND i.site_name_id = 8 AND k.keyword_text LIKE 'smil%'"
+    WHERE = "e.is_face IS TRUE AND e.bbox IS NOT NULL AND i.site_name_id = 1 AND k.keyword_text LIKE 'smil%'"
 
 elif IS_MOVE:
     print("moving to SSD")
