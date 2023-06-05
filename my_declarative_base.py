@@ -87,15 +87,27 @@ class Encodings(Base):
     face_encodings = Column(BLOB)
     body_landmarks = Column(BLOB)
 
+# class Clusters(Base):
+#     __tablename__ = 'Clusters'
+
+#     cluster_id = Column(Integer, primary_key=True, autoincrement=True)
+#     cluster_median = Column(BLOB)
+
+# class ImagesClusters(Base):
+#     __tablename__ = 'ImagesClusters'
+
+#     image_id = Column(Integer, ForeignKey('images.image_id'), primary_key=True)
+#     cluster_id = Column(Integer, ForeignKey('Clusters.cluster_id'))
+
 class Clusters(Base):
-    __tablename__ = 'Clusters'
+    __tablename__ = 'Clusters_May25segment123straight_lessrange'
 
     cluster_id = Column(Integer, primary_key=True, autoincrement=True)
     cluster_median = Column(BLOB)
 
 class ImagesClusters(Base):
-    __tablename__ = 'ImagesClusters'
+    __tablename__ = 'ImagesClusters_May25segment123straight_lessrange'
 
     image_id = Column(Integer, ForeignKey('images.image_id'), primary_key=True)
-    cluster_id = Column(Integer, ForeignKey('Clusters.cluster_id'))
+    cluster_id = Column(Integer, ForeignKey('Clusters_May25segment123straight_lessrange.cluster_id'))
 

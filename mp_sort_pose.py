@@ -20,7 +20,7 @@ class SortPose:
         self.mp_drawing = mp.solutions.drawing_utils
 
         #maximum allowable distance between encodings
-        self.MAXDIST = 0.75
+        self.MAXDIST = 0.5
 
         # maximum allowable scale up
         self.resize_max = 1.6
@@ -29,6 +29,22 @@ class SortPose:
         # takes base image size and multiplies by avg of multiplier
         self.output_dims = (int(face_height_output*(image_edge_multiplier[1]+image_edge_multiplier[3])/2),int(face_height_output*(image_edge_multiplier[0]+image_edge_multiplier[2])/2))
         self.EXPAND = EXPAND
+
+        # set some defaults, looking forward
+        self.XLOW = -20
+        self.XHIGH = 1
+        self.YLOW = -4
+        self.YHIGH = 4
+        self.ZLOW = -3
+        self.ZHIGH = 3
+        self.MINCROP = 1
+        self.MAXRESIZE = .5
+        self.MINMOUTHGAP = 0
+        self.MAXMOUTHGAP = 4
+        self.FRAMERATE = 15
+        self.SORT = 'face_y'
+        self.SECOND_SORT = 'face_x'
+        self.ROUND = 0
 
         if motion['side_to_side'] == True:
             self.XLOW = -20
@@ -56,7 +72,8 @@ class SortPose:
             self.MAXRESIZE = .5
             self.FRAMERATE = 15
             self.SECOND_SORT = 'face_x'
-            self.MAXMOUTHGAP = 2
+            self.MINMOUTHGAP = 15
+            self.MAXMOUTHGAP = 20
             self.SORT = 'mouth_gap'
             self.ROUND = 1
         elif motion['laugh'] == True:
@@ -150,6 +167,7 @@ class SortPose:
         # print(segment.size)
 
         # COMMENTING OUT MOUTHGAP as it is functioning as a minimum. Needs refactoring
+        segment = segment.loc[segment['mouth_gap'] >= self.MINMOUTHGAP]
         segment = segment.loc[segment['mouth_gap'] >= self.MAXMOUTHGAP]
         # segment = segment.loc[segment['mouth_gap'] <= MAXMOUTHGAP]
         print(segment.size)
@@ -283,13 +301,13 @@ class SortPose:
     #get distance beetween encodings
     def get_d(self, enc1, enc2):
         enc1=np.array(enc1)
-        print("enc1")
-        print(enc1)
-        # this is currently an np.array, not 128d list
-        print(enc1[0])
+        # print("enc1")
+        # # print(enc1)
+        # # this is currently an np.array, not 128d list
+        # print(enc1[0])
         enc2=np.array(enc2)
-        print("enc2")
-        print(enc2[0])
+        # print("enc2")
+        # print(enc2[0])
         d=np.linalg.norm(enc1 - enc2, axis=0)
         print("d")
         print(d)
@@ -734,7 +752,7 @@ class SortPose:
             # print("testing this", index, "against the start img",start_img)
             if (enc1 is not None) and (enc2 is not None):
                 d = self.get_d(enc1, enc2)
-                print ("d is", str(d), "for", index, enc2)
+                print ("d is", str(d), "for", index)
                 dist.append(d)
                 dist_dict[d]=index
                 enc2_dict[d]=enc2
@@ -742,7 +760,7 @@ class SortPose:
         print("debug index")
         print(dist)
         print(len(dist))
-        print ("the winner is: ", str(dist[0]), dist_dict[dist[0]], enc2_dict[dist[0]])
+        print ("the winner is: ", str(dist[0]), dist_dict[dist[0]])
     #     print(len(dist))
         self.counter_dict["last_image_enc"]=enc2_dict[dist[0]]
         return dist[0], dist_dict[dist[0]], df_128_enc

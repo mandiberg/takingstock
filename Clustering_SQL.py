@@ -47,7 +47,7 @@ if USE_SEGMENT is True:
 
     # where the script is looking for files list
     # do not use this if you are using the regular Clusters and ImagesClusters tables
-    SegmentTable_name = 'May25segment123side_to_side'
+    SegmentTable_name = 'Clusters_May25segment123straight_lessrange'
 
     # join with SSD tables. Satyam, use the one below
     SELECT = "DISTINCT(e.image_id), e.face_encodings"

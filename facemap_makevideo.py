@@ -43,21 +43,26 @@ CYCLECOUNT = 1
 # ROOT="/Users/michaelmandiberg/Documents/projects-active/facemap_production/"
 
 # keep this live, even if not SSD
-SegmentTable_name = 'May25segment123side_to_side'
-# SegmentTable_name = 'May25segment123updown_laugh'
+# SegmentTable_name = 'May25segment123side_to_side'
+SegmentTable_name = 'May25segment123updown_laugh'
 # SegmentTable_name = 'May25segment123straight_lessrange'  #actually straight ahead smile
 
 # SATYAM, this is MM specific
 # for when I'm using files on my SSD vs RAID
 IS_MOVE = False
 IS_SSD = True
+
+# this is for controlling if it is using
+# all clusters,
 IS_CLUSTER = False
-IS_ONE_CLUSTER = True
-IS_ANGLE_SORT = True
 # number of clusters to analyze -- this is also declared in Clustering_SQL. Move to IO?
 N_CLUSTERS = 128
-# this is for IS_ONE_CLUSTER to only run on a specific cluster
+# this is for IS_ONE_CLUSTER to only run on a specific CLUSTER_NO
+IS_ONE_CLUSTER = False
 CLUSTER_NO = 11
+
+# this controls whether it is using the linear or angle process
+IS_ANGLE_SORT = False
 
 # I/O utils
 io = DataIO(IS_SSD)
@@ -111,11 +116,11 @@ elif IS_MOVE:
     # regular rotation left to right, which should include the straight ahead? 
 
 
-LIMIT = 1000
+LIMIT = 50000
 
 motion = {
-    "side_to_side": True,
-    "forward_smile": False,
+    "side_to_side": False,
+    "forward_smile": True,
     "laugh": False,
     "forward_nosmile":  False,
     "static_pose":  False,
@@ -131,9 +136,9 @@ face_height_output = 400
 # define ratios, in relationship to nose
 # units are ratio of faceheight
 # top, right, bottom, left
-image_edge_multiplier = [1, 1, 1, 1]
+# image_edge_multiplier = [1, 1, 1, 1]
 # image_edge_multiplier = [1.5, 2, 1.5, 2]
-# image_edge_multiplier = [1.2, 1.2, 1.6, 1.2]
+image_edge_multiplier = [1.2, 1.2, 1.6, 1.2]
 
 
 # construct my own objects
@@ -218,9 +223,9 @@ def save_segment_DB(df_segment):
             face_y=row['face_y'],
             face_z=row['face_z'],
             mouth_gap=row['mouth_gap'],
-            face_landmarks=pickle.dumps(row['face_landmarks']),
+            face_landmarks=pickle.dumps(row['face_landmarks'], protocol=3),
             bbox=row['bbox'],
-            face_encodings=pickle.dumps(row['face_encodings']),
+            face_encodings=pickle.dumps(row['face_encodings'], protocol=3),
             site_image_id=row['site_image_id']
         )
         session.add(instance)
@@ -460,11 +465,12 @@ def const_imgfilename(filename, df, imgfileprefix):
     print("imgfilename ",imgfilename)
     return imgfilename
 
-def linear_test_df(df,cluster_no):
+def linear_test_df(df,cluster_no, itter=None):
+    #itter is a cap, to stop the process after a certain number of rounds
     print('writing images')
     imgfileprefix = f"X{str(sort.XLOW)}-{str(sort.XHIGH)}_Y{str(sort.YLOW)}-{str(sort.YHIGH)}_Z{str(sort.ZLOW)}-{str(sort.ZHIGH)}_ct{str(df.size)}"
     print(imgfileprefix)
-
+    good = 0
     img_list = []
     try:
         for index, row in df.iterrows():
@@ -482,19 +488,22 @@ def linear_test_df(df,cluster_no):
                 if cropped_image is not None:
                     img_list.append((outpath, cropped_image))
                     sort.counter_dict["good_count"] += 1
-
+                    good += 1
                     print("row['filename']")
                     print(row['filename'])
                     sort.counter_dict["start_img_name"] = row['filename']
-                    print(sort.counter_dict["last_image"])
+                    # print(sort.counter_dict["last_image"])
                     print("saved: ",outpath)
             else:
                 sort.counter_dict["failed_dist_count"] += 1
                 print("MAXDIST too big:" , str(sort.MAXDIST))
             sort.counter_dict["counter"] += 1
+            if itter and good > itter:
+                print("breaking after this many itters,", str(good), str(itter))
+                continue
         sort.counter_dict["last_image"] = img_list[-1][1]  #last pair in list, second item in pair
-        print("sort.counter_dict with last_image???")
-        print(sort.counter_dict)
+        # print("sort.counter_dict with last_image???")
+        # print(sort.counter_dict)
 
     except Exception as e:
         print(str(e))
@@ -536,10 +545,10 @@ def process_iterr_angles(start_img_name, df_segment, cluster_no, sort):
                     df_enc, df_128_enc = prep_encodings(d[angle])
                     # # get dataframe sorted by distance
                     df_sorted = sort_by_face_dist(df_enc, df_128_enc)
-                    print("df_sorted")
-                    print(df_sorted)
-                    print("sort.counter_dict before linear_test_df")
-                    print(sort.counter_dict)
+                    # print("df_sorted")
+                    # print(df_sorted)
+                    # print("sort.counter_dict before linear_test_df")
+                    # print(sort.counter_dict)
                     if sort.counter_dict["last_image"] is None:
                         try:
                             sort.counter_dict["last_image"] = cv2.imread(sort.counter_dict["start_img_name"])
@@ -553,18 +562,20 @@ def process_iterr_angles(start_img_name, df_segment, cluster_no, sort):
                     # print(type(df_sorted.size))
                     # print(df_sorted.size)
                     # print(df_sorted)
-                    img_list = linear_test_df(df_sorted,cluster_no)
-                    print("sort.counter_dict after linear_test_df")
-                    print(sort.counter_dict)
-                    print("img_list")
-                    print(img_list[0])
+                    # print("sort.counter_dict after linear_test_df")
+                    # print(sort.counter_dict)
+                    # print("img_list")
+                    # print(img_list[0])
                     # print(len(img_list))
                     # # only write the first, closest one
                     # # in the future, prob want to assign each image list to
                     # # a list/df keyed by angle, so can iterate through it? 
-                    if angle < 15 and motion['forward_smile'] == True:
+                    if angle > 15 and motion['forward_smile'] == True:
+                        img_list = linear_test_df(df_sorted,cluster_no)
                         write_images(img_list)
                     else:
+                        print("sending in an itter cap")
+                        img_list = linear_test_df(df_sorted,cluster_no, 1)
                         cv2.imwrite(img_list[0][0],img_list[0][1])
                     
 
@@ -584,7 +595,7 @@ def process_iterr_angles(start_img_name, df_segment, cluster_no, sort):
 
 def process_linear(start_img_name, df_segment, cluster_no, sort):
     # linear sort by encoding distance
-    
+    print("processing linear")
     # preps the encodings for sort
     sort.set_counters(io.ROOT,cluster_no, start_img_name)  
     df_enc, df_128_enc = prep_encodings(df_segment)
@@ -605,7 +616,12 @@ def process_linear(start_img_name, df_segment, cluster_no, sort):
 def main():
     # these are used in cleaning up fresh df from SQL
     def unpickle_array(pickled_array):
-        return pickle.loads(pickled_array)
+        try:
+            # Attempt to unpickle using Protocol 3
+            return pickle.loads(pickled_array, encoding='latin1')
+        except TypeError:
+            # If TypeError occurs, unpickle using Protocol 4
+            return pickle.loads(pickled_array, encoding='latin1', fix_imports=True)
     def unstring_json(json_string):
         eval_string = ast.literal_eval(json_string)
         if isinstance(eval_string, dict):
@@ -672,22 +688,6 @@ def main():
         # make the segment based on settings
         df_segment = sort.make_segment(df)
 
-        # get list of all angles in segment
-        angle_list = sort.createList(df_segment)
-
-        # sort segment by angle list
-        # creates sort.d attribute: a dataframe organized (indexed?) by angle list
-        sort.get_divisor(df_segment)
-
-        # # is this used anywhere? 
-        # angle_list_pop = angle_list.pop()
-
-        # get median for first sort
-        median = sort.get_median()
-
-        # get metamedian for second sort, creates sort.metamedian attribute
-        sort.get_metamedian()
-        # print(df_segment)
 
         # this is to save files from a segment to the SSD
         print("will I save segment? ", SAVE_SEGMENT)
@@ -707,6 +707,23 @@ def main():
             img_list, size = cycling_order(CYCLECOUNT, sort)
             # size = sort.get_cv2size(ROOT, img_list[0])
         elif IS_ANGLE_SORT is True:
+            # get list of all angles in segment
+            angle_list = sort.createList(df_segment)
+
+            # sort segment by angle list
+            # creates sort.d attribute: a dataframe organized (indexed?) by angle list
+            sort.get_divisor(df_segment)
+
+            # # is this used anywhere? 
+            # angle_list_pop = angle_list.pop()
+
+            # get median for first sort
+            median = sort.get_median()
+
+            # get metamedian for second sort, creates sort.metamedian attribute
+            sort.get_metamedian()
+            # print(df_segment)
+
             process_iterr_angles(start_img_name,df_segment, cluster_no, sort)
         else:
             process_linear(start_img_name,df_segment, cluster_no, sort)

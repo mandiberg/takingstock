@@ -80,11 +80,11 @@ def save_merge(merged_image, count, cluster_no, folder_path):
 IS_CLUSTER = True
 
 # Provide the path to the folder containing the images
-root_folder_path = '/Users/michaelmandiberg/Documents/projects-active/facemap_production/'
-
+# root_folder_path = '/Users/michaelmandiberg/Documents/projects-active/facemap_production/'
+root_folder_path = "/Users/michaelmandiberg/Dropbox/facemap_dropbox/June_tests"
 # if IS_CLUSTER this should be the folder holding all the cluster folders
 # if not, this should be the individual folder holding the images
-folder_name ="June2_clusters"
+folder_name ="June5_128clusters"
 folder_path = os.path.join(root_folder_path,folder_name)
 
 if IS_CLUSTER is True:
