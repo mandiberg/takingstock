@@ -617,11 +617,18 @@ def main():
     # these are used in cleaning up fresh df from SQL
     def unpickle_array(pickled_array):
         try:
-            # Attempt to unpickle using Protocol 3
+            # Attempt to unpickle using Protocol 3 in v3.7
             return pickle.loads(pickled_array, encoding='latin1')
         except TypeError:
-            # If TypeError occurs, unpickle using Protocol 4
-            return pickle.loads(pickled_array, encoding='latin1', fix_imports=True)
+            # If TypeError occurs, unpickle using specific protocl 3 in v3.11
+            # return pickle.loads(pickled_array, encoding='latin1', fix_imports=True)
+            try:
+                # Set the encoding argument to 'latin1' and protocol argument to 3
+                obj = pickle.loads(pickled_data, encoding='latin1', fix_imports=True, errors='strict', protocol=3)
+                return obj
+            except pickle.UnpicklingError as e:
+                print(f"Error loading pickle data: {e}")
+                return None
     def unstring_json(json_string):
         eval_string = ast.literal_eval(json_string)
         if isinstance(eval_string, dict):
