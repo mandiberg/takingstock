@@ -52,6 +52,9 @@ SegmentTable_name = 'May25segment123side_to_side'
 IS_MOVE = False
 IS_SSD = True
 
+# This is for when you only have the segment table. RW SQL query
+IS_SEGONLY= True
+
 # this is for controlling if it is using
 # all clusters,
 IS_CLUSTER = False
@@ -75,7 +78,7 @@ NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 #     io.ROOT = io.ROOT36
 
 
-if not IS_MOVE:
+if not IS_MOVE and IS_SEGONLY is not True:
     print("production run. IS_SSD is", IS_SSD)
 
     # # # # # # # # # # # #
@@ -94,7 +97,7 @@ if not IS_MOVE:
     FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings e ON i.image_id = e.image_id JOIN ImagesClusters ic ON i.image_id = ic.image_id"
     WHERE = "e.is_face IS TRUE AND e.bbox IS NOT NULL AND i.site_name_id = 1 AND k.keyword_text LIKE 'smil%'"
 
-elif IS_MOVE:
+elif IS_MOVE and IS_SEGONLY is not True:
     print("moving to SSD")
 
     # # # # # # # # # # # #
@@ -115,8 +118,23 @@ elif IS_MOVE:
     # yelling, screaming, shouting, yells, laugh; x is -4 to 30, y ~ 0, z ~ 0
     # regular rotation left to right, which should include the straight ahead? 
 
+elif IS_SEGONLY:
 
-LIMIT = 50000
+    SAVE_SEGMENT = False
+    SELECT = "DISTINCT(image_id), site_name_id, contentUrl, imagename, face_x, face_y, face_z, mouth_gap, face_landmarks, bbox, face_encodings, site_image_id"
+
+    # don't need keywords if SegmentTable_name
+    # this is for MM segment table
+    # FROM =f"Images i LEFT JOIN Encodings e ON i.image_id = e.image_id INNER JOIN {SegmentTable_name} seg ON i.site_image_id = seg.site_image_id"
+    # WHERE = "e.is_face IS TRUE AND e.face_encodings IS NOT NULL AND e.bbox IS NOT NULL AND i.site_name_id = 8 AND i.age_id NOT IN (1,2,3,4)"
+
+    # this is for gettytest3 table
+    FROM = SegmentTable_name
+    # "Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings e ON i.image_id = e.image_id JOIN ImagesClusters ic ON i.image_id = ic.image_id"
+    WHERE = "bbox IS NOT NULL"
+    # AND i.site_name_id = 1 AND k.keyword_text LIKE 'smil%'"
+
+LIMIT = 500
 
 motion = {
     "side_to_side": False,
