@@ -53,6 +53,7 @@ SELECT = "DISTINCT(i.image_id), i.site_name_id, i.contentUrl, i.imagename, e.enc
 # FROM only ik and e
 FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings e ON i.image_id = e.image_id"
 WHERE = "e.encoding_id IS NULL AND i.site_name_id = 8 AND i.age_id NOT IN (1,2,3,4) AND k.keyword_text LIKE 'laugh%'"
+#WHERE = "e.encoding_id IS NULL "
 
 
 # yelling, screaming, shouting, yells, laughing; x is -4 to 30, y ~ 0, z ~ 0
@@ -75,7 +76,7 @@ WHERE = "e.encoding_id IS NULL AND i.site_name_id = 8 AND i.age_id NOT IN (1,2,3
 # WHERE = "(e.image_id IS NULL AND k.keyword_text LIKE 'smil%')OR (e.image_id IS NULL AND k.keyword_text LIKE 'happ%')OR (e.image_id IS NULL AND k.keyword_text LIKE 'laugh%')"
 # WHERE = "e.face_landmarks IS NOT NULL AND e.bbox IS NULL AND i.site_name_id = 1"
 # WHERE = "i.site_name_id = 1 AND i.site_image_id LIKE '1402424532'"
-LIMIT = 10000
+LIMIT = 1000
 
 #creating my objects
 mp_face_mesh = mp.solutions.face_mesh
@@ -432,7 +433,7 @@ def find_face(image, df):
     df.at['1', 'is_face'] = is_face
     return df
 
-def calc_encodings(image, faceLms,bbox):## changed parameters and rebuilt
+def calc_encodings(image, faceLms,bbox,model='small'):## changed parameters and rebuilt
 
     # # original, treats uncropped image as .shape
     # height, width, _ = image.shape
@@ -466,15 +467,24 @@ def calc_encodings(image, faceLms,bbox):## changed parameters and rebuilt
     # # image = image[bbox["top"]:bbox["bottom"],bbox["left"]:bbox["right"]]
     # height, width, _ = image.shape
 
-
+    landmark_points_68 = [162,234,93,58,172,136,149,148,152,377,378,365,397,
+                      288,323,454,389,71,63,105,66,107,336,296,334,293,
+                      301,168,197,5,4,75,97,2,326,305,33,160,158,133,
+                      153,144,362,385,387,263,373,380,61,39,37,0,267,
+                      269,291,405,314,17,84,181,78,82,13,312,308,317,
+                      14,87]
+                      
     landmark_points_5 = [ 263, #left eye away from centre
                        362, #left eye towards centre
                        33,  #right eye away from centre
                        133, #right eye towards centre
                         2 #bottom of nose tip 
                     ]
+                    
+    if model=='small':landmark_points=landmark_points_5
+    else:landmark_points=landmark_points_68
     raw_landmark_set = []
-    for index in landmark_points_5:                       ######### CORRECTION: landmark_points_5_3 is the correct one for sure
+    for index in landmark_points:                       ######### CORRECTION: landmark_points_5_3 is the correct one for sure
         # print(faceLms.landmark[index].x)
 
         # second attempt, tries to project faceLms from bbox origin
@@ -522,7 +532,7 @@ def calc_encodings(image, faceLms,bbox):## changed parameters and rebuilt
     # cv2.destroyAllWindows()
 
     encodings=face_encoder.compute_face_descriptor(image, raw_landmark_set, num_jitters=1)
-
+    print(len(encodings))
 
     return np.array(encodings).tolist()
 
