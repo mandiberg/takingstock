@@ -62,7 +62,7 @@ else:
     SELECT = "DISTINCT(image_id),face_encodings"
     FROM ="encodings"
     WHERE = "face_encodings IS NOT NULL"
-    LIMIT = 10000
+    LIMIT = 1000
     SegmentTable_name = ""
 
 
@@ -114,15 +114,21 @@ def encodings_split(encodings):
     return df
 
 def save_clusters_DB(df):
+    col="encodings"
+    col_list=[]
+    for i in range(128):col_list.append(col+str(i))
+
     # Convert to set and Save the df to a table
     unique_clusters = set(df['cluster_id'])
     for cluster_id in unique_clusters:
+        cluster_df=df[df['cluster_id']==cluster_id]
+        cluster_mean=np.array(df[col_list].mean())
         existing_record = session.query(Clusters).filter_by(cluster_id=cluster_id).first()
 
         if existing_record is None:
             instance = Clusters(
                 cluster_id=cluster_id,
-                cluster_median=None
+                cluster_median=pickle.dumps(cluster_mean)
             )
             session.add(instance)
         else:
@@ -189,7 +195,6 @@ def save_images_clusters_DB(df):
 
 
 def main():
-    
     # create_my_engine(db)
     print("about to SQL: ",SELECT,FROM,WHERE,LIMIT)
     resultsjson = selectSQL()
@@ -197,7 +202,7 @@ def main():
     enc_data=pd.DataFrame()
     for row in resultsjson:
         # gets contentUrl
-        df=encodings_split(pickle.loads(row["face_encodings"]))
+        df=encodings_split(pickle.loads(row["face_encodings"], encoding='latin1'))
         df["image_id"]=row["image_id"]
         enc_data = pd.concat([enc_data,df],ignore_index=True) 
     # I changed n_clusters to 128, from 3, and now it returns 128 clusters
