@@ -50,7 +50,7 @@ MINSIZE = 700
 SLEEP_TIME=0
 
 # am I looking on SSD for a folder? If not, will pull directly from SQL
-IS_FOLDER = False
+IS_FOLDER = True
 
 SELECT = "DISTINCT(i.image_id), i.site_name_id, i.contentUrl, i.imagename, e.encoding_id, i.site_image_id, e.face_landmarks, e.bbox"
 # SELECT = "DISTINCT(i.image_id), i.gender_id, author, caption, contentUrl, description, imagename"
@@ -59,9 +59,9 @@ SELECT = "DISTINCT(i.image_id), i.site_name_id, i.contentUrl, i.imagename, e.enc
 # FROM ="Images i LEFT JOIN Encodings e ON i.image_id = e.image_id"
 FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings e ON i.image_id = e.image_id"
 # gettytest3
-# WHERE = "e.encoding_id IS NULL"
+WHERE = "e.encoding_id IS NULL"
 # production
-WHERE = "e.encoding_id IS NULL AND i.site_name_id = 8 AND i.age_id NOT IN (1,2,3,4) AND k.keyword_text LIKE 'smil%'"
+# WHERE = "e.encoding_id IS NULL AND i.site_name_id = 8 AND i.age_id NOT IN (1,2,3,4) AND k.keyword_text LIKE 'smil%'"
 
 
 # yelling, screaming, shouting, yells, laughing; x is -4 to 30, y ~ 0, z ~ 0
@@ -84,7 +84,7 @@ WHERE = "e.encoding_id IS NULL AND i.site_name_id = 8 AND i.age_id NOT IN (1,2,3
 # WHERE = "(e.image_id IS NULL AND k.keyword_text LIKE 'smil%')OR (e.image_id IS NULL AND k.keyword_text LIKE 'happ%')OR (e.image_id IS NULL AND k.keyword_text LIKE 'laugh%')"
 # WHERE = "e.face_landmarks IS NOT NULL AND e.bbox IS NULL AND i.site_name_id = 1"
 # WHERE = "i.site_name_id = 1 AND i.site_image_id LIKE '1402424532'"
-LIMIT = 10000
+LIMIT = 100
 
 #creating my objects
 mp_face_mesh = mp.solutions.face_mesh
@@ -646,7 +646,7 @@ def process_image(task):
         pr_split = print_get_split(pr_split)
 
         print("existing_entry", existing_entry)
-        if existing_entry is None:
+        if existing_entry is None or IS_FOLDER is True:
             # Entry does not exist, insert insert_dict into the table
             new_entry = Encodings(**insert_dict)
             session.add(new_entry)
@@ -702,70 +702,38 @@ def main():
 
     count = 0
     last_round = False
+    jsonsplit = time.time()
 
-    # if IS_FOLDER is True:
-    #     print("in IS_SSD")
-    #     # open folder
-    #     # for each image, 
-    #         # parse to extract site_image_id
-    #         #query SQL with site_image_id for: image_id, e.encoding_id
-    #         # if encoding_id is NULL:
-    #             # task = (image_id,imagepath)
-    # else:
+    if IS_FOLDER is True:
+        print("in IS_SSD")
+        folder = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/testimages/3/30"
+        img_list = io.get_img_list(folder)
+        for img in img_list:
+            # for getty
+            site_image_id = img.split("-id")[-1].replace(".jpg","")
+            try:
+                results = session.query(Images.image_id, Encodings.encoding_id)\
+                .outerjoin(Encodings, Images.image_id == Encodings.image_id)\
+                .filter(Images.site_image_id==site_image_id)\
+                .first()
+            except OperationalError as e:
+                print(e)
+                time.sleep(io.retry_delay)
 
-    while True:
-        print("about to SQL: ",SELECT,FROM,WHERE,LIMIT)
-        jsonsplit = time.time()
-        resultsjson = selectSQL()    
-        print("got results, count is: ",len(resultsjson))
-        # print(resultsjson)
-        print(">> SPLIT >> jsonsplit")
-        split = print_get_split(jsonsplit)
-        #catches the last round, where it returns less than full results
-        if last_round == True:
-            print("last_round caught, should break")
-            break
-        elif len(resultsjson) != LIMIT:
-            last_round = True
-            print("last_round just assigned")
-        # process resultsjson
-        for row in resultsjson:
-            # print(row)
-            encoding_id = row["encoding_id"]
-            image_id = row["image_id"]
-            item = row["contentUrl"]
-            hashed_path = row["imagename"]
-            site_id = row["site_name_id"]
-            if site_id == 1:
-                # print("fixing gettyimages hash")
-                orig_filename = item.replace(http, "")+".jpg"
-                d0, d02 = get_hash_folders(orig_filename)
-                hashed_path = os.path.join(d0, d02, orig_filename)
-            
-            # gets folder via the folder list, keyed with site_id integer
-            imagepath=os.path.join(io.folder_list[site_id], hashed_path)
-            isExist = os.path.exists(imagepath)
-            print(">> SPLIT >> isExist")
-            split = print_get_split(split)
 
-            if isExist: 
-                if row["face_landmarks"] is not None:
-                    task = (encoding_id,imagepath,pickle.loads(row["face_landmarks"]),row["bbox"])
-                else:
-                    task = (image_id,imagepath)
+            if results and not results.encoding_id:
+                imagepath = os.path.join(folder,img)
+                task = (results.image_id,imagepath)
+
+                print(task)
                 tasks_to_accomplish.put(task)
-                # print("tasks_to_accomplish.put(task) ",imagepath)
-            else:
-                print("this file is missssssssssing --------> ",imagepath)
-        # print("tasks_to_accomplish.qsize()", str(tasks_to_accomplish.qsize()))
-        # print(tasks_to_accomplish.qsize())
-        print(">> SPLIT >> row in resultsjson")
-        split = print_get_split(split)
 
-        # for i in range(number_of_task):
-        #     tasks_to_accomplish.put("Task no " + str(i))
-
-        # creating processes
+        # open folder
+        # for each image, 
+            # parse to extract site_image_id
+            #query SQL with site_image_id for: image_id, e.encoding_id
+            # if encoding_id is NULL:
+                # task = (image_id,imagepath)
         for w in range(NUMBER_OF_PROCESSES):
             p = Process(target=do_job, args=(tasks_to_accomplish, tasks_that_are_done))
             processes.append(p)
@@ -775,15 +743,78 @@ def main():
         for p in processes:
             # print("completing process")
             p.join()
-        print(">> SPLIT >> p.join, done with this query")
-        split = print_get_split(split)
+        print(">> SPLIT >> p.join, done with this folder")
+        split = print_get_split(jsonsplit)
 
-    # # print the output
-    # while not tasks_that_are_done.empty():
-    #     print("tasks are done")
-    #     print(tasks_that_are_done.get())
-        count += len(resultsjson)
-        print("completed round, total results processed is: ",count)
+        count += len(img_list)
+        print(f"completed round of {str(len(img_list))} total results processed is: {str(count)}")
+
+    else:
+        print("old school SQL")
+
+        while True:
+            print("about to SQL: ",SELECT,FROM,WHERE,LIMIT)
+            resultsjson = selectSQL()    
+            print("got results, count is: ",len(resultsjson))
+            # print(resultsjson)
+            print(">> SPLIT >> jsonsplit")
+            split = print_get_split(jsonsplit)
+            #catches the last round, where it returns less than full results
+            if last_round == True:
+                print("last_round caught, should break")
+                break
+            elif len(resultsjson) != LIMIT:
+                last_round = True
+                print("last_round just assigned")
+            # process resultsjson
+            for row in resultsjson:
+                # print(row)
+                encoding_id = row["encoding_id"]
+                image_id = row["image_id"]
+                item = row["contentUrl"]
+                hashed_path = row["imagename"]
+                site_id = row["site_name_id"]
+                if site_id == 1:
+                    # print("fixing gettyimages hash")
+                    orig_filename = item.replace(http, "")+".jpg"
+                    d0, d02 = get_hash_folders(orig_filename)
+                    hashed_path = os.path.join(d0, d02, orig_filename)
+                
+                # gets folder via the folder list, keyed with site_id integer
+                imagepath=os.path.join(io.folder_list[site_id], hashed_path)
+                isExist = os.path.exists(imagepath)
+                print(">> SPLIT >> isExist")
+                split = print_get_split(split)
+
+                if isExist: 
+                    if row["face_landmarks"] is not None:
+                        task = (encoding_id,imagepath,pickle.loads(row["face_landmarks"]),row["bbox"])
+                    else:
+                        task = (image_id,imagepath)
+                    tasks_to_accomplish.put(task)
+                    # print("tasks_to_accomplish.put(task) ",imagepath)
+                else:
+                    print("this file is missssssssssing --------> ",imagepath)
+
+            # creating processes
+            for w in range(NUMBER_OF_PROCESSES):
+                p = Process(target=do_job, args=(tasks_to_accomplish, tasks_that_are_done))
+                processes.append(p)
+                p.start()
+
+            # completing process
+            for p in processes:
+                # print("completing process")
+                p.join()
+            print(">> SPLIT >> p.join, done with this query")
+            split = print_get_split(split)
+
+        # # print the output
+        # while not tasks_that_are_done.empty():
+        #     print("tasks are done")
+        #     print(tasks_that_are_done.get())
+            count += len(resultsjson)
+            print("completed round, total results processed is: ",count)
 
 
     end = time.time()
