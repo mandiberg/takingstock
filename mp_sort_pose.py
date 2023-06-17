@@ -720,6 +720,14 @@ class SortPose:
 
     def get_start_enc(self, start_img, df_128_enc):
         print("get_start_enc")
+        '''
+        if start_img == "median" and not self.CLNO:
+            get median
+
+        elif start_img == "median" and self.CLNO:
+            get cluster median
+
+        '''
         if start_img == "median":
             enc1 = df_128_enc.median().to_list()
             print("in median")
