@@ -637,21 +637,34 @@ def process_image(task):
         # print("dict_df", insert_dict)
         # quit()
 
-        # Check if the entry exists in the Encodings table
-        image_id = insert_dict['image_id']
-        # can I filter this by site_id? would that make it faster or slower? 
-        existing_entry = session.query(Encodings).filter_by(image_id=image_id).first()
+        if IS_FOLDER is not True:
+            # Check if the entry exists in the Encodings table
+            image_id = insert_dict['image_id']
+            # can I filter this by site_id? would that make it faster or slower? 
+            existing_entry = session.query(Encodings).filter_by(image_id=image_id).first()
+            print("existing_entry", existing_entry)
 
         print(">> SPLIT >> done query for existing_entry")
         pr_split = print_get_split(pr_split)
 
-        print("existing_entry", existing_entry)
-        if existing_entry is None or IS_FOLDER is True:
-            # Entry does not exist, insert insert_dict into the table
-            new_entry = Encodings(**insert_dict)
-            session.add(new_entry)
-            session.commit()
-            print(f"just added {image_id}")
+        if IS_FOLDER is True or existing_entry is None:
+            for _ in range(io.max_retries):
+                try:
+                    # update_sql = f"UPDATE Encodings SET bbox = '{bbox_json}' WHERE encoding_id = {encoding_id};"
+                    # engine.connect().execute(text(update_sql))
+                    # print("bboxxin:")
+                    # print(encoding_id)
+                    # Entry does not exist, insert insert_dict into the table
+                    new_entry = Encodings(**insert_dict)
+                    session.add(new_entry)
+                    session.commit()
+                    print(f"just added {image_id}")
+
+                    break  # Transaction succeeded, exit the loop
+                except OperationalError as e:
+                    print(e)
+                    time.sleep(io.retry_delay)
+
         else:
             print("already exists, not adding")
 
@@ -708,25 +721,35 @@ def main():
         print("in IS_SSD")
         folder = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/testimages/3/30"
         img_list = io.get_img_list(folder)
+
+        # Collect site_image_id values from the image filenames
+        site_image_ids = [img.split("-id")[-1].replace(".jpg", "") for img in img_list]
+
+        try:
+            results = session.query(Images.image_id, Images.site_image_id, Encodings.encoding_id) \
+                .outerjoin(Encodings, Images.image_id == Encodings.image_id) \
+                .filter(Images.site_image_id.in_(site_image_ids)) \
+                .all()
+        except OperationalError as e:
+            print(e)
+            time.sleep(io.retry_delay)
+
+        for row in results:
+            print(row)
+        # quit()
+        # Create a dictionary to map site_image_id to the corresponding result
+        results_dict = {result.site_image_id: result for result in results}
+
         for img in img_list:
-            # for getty
-            site_image_id = img.split("-id")[-1].replace(".jpg","")
-            try:
-                results = session.query(Images.image_id, Encodings.encoding_id)\
-                .outerjoin(Encodings, Images.image_id == Encodings.image_id)\
-                .filter(Images.site_image_id==site_image_id)\
-                .first()
-            except OperationalError as e:
-                print(e)
-                time.sleep(io.retry_delay)
+            site_image_id = img.split("-id")[-1].replace(".jpg", "")
 
-
-            if results and not results.encoding_id:
-                imagepath = os.path.join(folder,img)
-                task = (results.image_id,imagepath)
-
-                print(task)
-                tasks_to_accomplish.put(task)
+            if site_image_id in results_dict:
+                result = results_dict[site_image_id]
+                if not result.encoding_id:
+                    imagepath = os.path.join(folder, img)
+                    task = (result.image_id, imagepath)
+                    print(task)
+                    tasks_to_accomplish.put(task)
 
         # open folder
         # for each image, 

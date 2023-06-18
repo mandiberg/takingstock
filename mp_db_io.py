@@ -9,7 +9,7 @@ class DataIO:
 
     def __init__(self, IS_SSD=False):
         self.max_retries = 3
-        self.retry_delay = 0.3
+        self.retry_delay = 1.3
 
         # platform specific file folder (mac for michael, win for satyam)
         if platform == "darwin":
