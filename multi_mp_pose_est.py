@@ -42,7 +42,7 @@ ROOT = io.ROOT
 NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 
 # overriding DB for testing
-io.db["name"] = "gettytest3"
+# io.db["name"] = "gettytest3"
 
 sortfolder ="getty_test"
 http="https://media.gettyimages.com/photos/"
@@ -53,7 +53,7 @@ MINSIZE = 700
 SLEEP_TIME=0
 
 # am I looking on SSD for a folder? If not, will pull directly from SQL
-IS_FOLDER = True
+IS_FOLDER = False
 
 SELECT = "DISTINCT(i.image_id), i.site_name_id, i.contentUrl, i.imagename, e.encoding_id, i.site_image_id, e.face_landmarks, e.bbox"
 # SELECT = "DISTINCT(i.image_id), i.gender_id, author, caption, contentUrl, description, imagename"
@@ -62,9 +62,9 @@ SELECT = "DISTINCT(i.image_id), i.site_name_id, i.contentUrl, i.imagename, e.enc
 # FROM ="Images i LEFT JOIN Encodings e ON i.image_id = e.image_id"
 FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings e ON i.image_id = e.image_id"
 # gettytest3
-WHERE = "e.encoding_id IS NULL"
+# WHERE = "e.encoding_id IS NULL"
 # production
-# WHERE = "e.encoding_id IS NULL AND i.site_name_id = 8 AND i.age_id NOT IN (1,2,3,4) AND k.keyword_text LIKE 'smil%'"
+WHERE = "e.encoding_id IS NULL AND i.site_name_id = 8 AND i.age_id NOT IN (1,2,3,4) AND k.keyword_text LIKE 'smil%'"
 
 
 # yelling, screaming, shouting, yells, laughing; x is -4 to 30, y ~ 0, z ~ 0
@@ -87,7 +87,7 @@ WHERE = "e.encoding_id IS NULL"
 # WHERE = "(e.image_id IS NULL AND k.keyword_text LIKE 'smil%')OR (e.image_id IS NULL AND k.keyword_text LIKE 'happ%')OR (e.image_id IS NULL AND k.keyword_text LIKE 'laugh%')"
 # WHERE = "e.face_landmarks IS NOT NULL AND e.bbox IS NULL AND i.site_name_id = 1"
 # WHERE = "i.site_name_id = 1 AND i.site_image_id LIKE '1402424532'"
-LIMIT = 100
+LIMIT = 50000
 
 #creating my objects
 mp_face_mesh = mp.solutions.face_mesh
@@ -107,7 +107,19 @@ face_encoder = dlib.face_recognition_model_v1(face_recognition_model)
 
 start = time.time()
 
+def init_session():
+    # init session
+    global engine, Session, session
+    engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}"
+                                    .format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']), poolclass=NullPool)
+    metadata = MetaData(engine)
+    Session = sessionmaker(bind=engine)
+    session = Session()
+    Base = declarative_base()
 
+def close_session():
+    session.close()
+    engine.dispose()
 
 # not sure if I'm using this
 class Object:
@@ -223,10 +235,12 @@ def selectORM(session, FILTER, LIMIT):
     return results_dict
 
 def selectSQL():
+    init_session()
     selectsql = f"SELECT {SELECT} FROM {FROM} WHERE {WHERE} LIMIT {str(LIMIT)};"
     # print("actual SELECT is: ",selectsql)
     result = engine.connect().execute(text(selectsql))
     resultsjson = ([dict(row) for row in result.mappings()])
+    close_session()
     return(resultsjson)
 
 def get_bbox(faceDet, height, width):
@@ -556,13 +570,7 @@ def process_image(task):
         name = str(df.at['1', 'image_id'])+".jpg"
         save_image_by_path(image, sort, name)
 
-    # init session
-    engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}"
-                                    .format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']), poolclass=NullPool)
-    metadata = MetaData(engine)
-    Session = sessionmaker(bind=engine)
-    session = Session()
-    Base = declarative_base()
+    init_session()
     
 
     df = pd.DataFrame(columns=['image_id','is_face','is_body','is_face_distant','face_x','face_y','face_z','mouth_gap','face_landmarks','bbox','face_encodings','body_landmarks'])
@@ -686,9 +694,7 @@ def process_image(task):
         print(e)
 
     # Close the session and dispose of the engine before the worker process exits
-    session.close()
-    engine.dispose()
-
+    close_session()
 
         # save image based on is_face
 def do_job(tasks_to_accomplish, tasks_that_are_done):
@@ -718,13 +724,7 @@ def do_job(tasks_to_accomplish, tasks_that_are_done):
 def main():
     print("main")
 
-    # init session
-    engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}"
-                                    .format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']), poolclass=NullPool)
-    metadata = MetaData(engine)
-    Session = sessionmaker(bind=engine)
-    session = Session()
-    Base = declarative_base()
+    init_session()
 
     tasks_to_accomplish = Queue()
     tasks_that_are_done = Queue()
@@ -856,8 +856,7 @@ def main():
             print("completed round, total results processed is: ",count)
 
     # Close the session and dispose of the engine before the worker process exits
-    session.close()
-    engine.dispose()
+    close_session()
 
     end = time.time()
     print (end - start)
