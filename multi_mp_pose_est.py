@@ -736,52 +736,57 @@ def main():
 
     if IS_FOLDER is True:
         print("in IS_SSD")
-        folder = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/testimages/3/30"
-        img_list = io.get_img_list(folder)
+        # mainfolder = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/testimages/3/30"
+        mainfolder = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/testimages/"
+        folder_paths = io.make_hash_folders(mainfolder, as_list=True)
+        for folder_path in folder_paths:
+            folder = os.path.join(mainfolder,folder_path)
+            print(folder)
+            img_list = io.get_img_list(folder)
 
-        # Collect site_image_id values from the image filenames
-        site_image_ids = [img.split("-id")[-1].replace(".jpg", "") for img in img_list]
+            # Collect site_image_id values from the image filenames
+            site_image_ids = [img.split("-id")[-1].replace(".jpg", "") for img in img_list]
 
-        try:
-            results = session.query(Images.image_id, Images.site_image_id, Encodings.encoding_id) \
-                .outerjoin(Encodings, Images.image_id == Encodings.image_id) \
-                .filter(Images.site_image_id.in_(site_image_ids)) \
-                .all()
-        except OperationalError as e:
-            print(e)
-            time.sleep(io.retry_delay)
+            try:
+                results = session.query(Images.image_id, Images.site_image_id, Encodings.encoding_id) \
+                    .outerjoin(Encodings, Images.image_id == Encodings.image_id) \
+                    .filter(Images.site_image_id.in_(site_image_ids)) \
+                    .all()
+            except OperationalError as e:
+                print(e)
+                time.sleep(io.retry_delay)
 
-        for row in results:
-            print(row)
-        # quit()
-        # Create a dictionary to map site_image_id to the corresponding result
-        results_dict = {result.site_image_id: result for result in results}
+            for row in results:
+                print(row)
+            # quit()
+            # Create a dictionary to map site_image_id to the corresponding result
+            results_dict = {result.site_image_id: result for result in results}
 
-        for img in img_list:
-            site_image_id = img.split("-id")[-1].replace(".jpg", "")
+            for img in img_list:
+                site_image_id = img.split("-id")[-1].replace(".jpg", "")
 
-            if site_image_id in results_dict:
-                result = results_dict[site_image_id]
-                if not result.encoding_id:
-                    imagepath = os.path.join(folder, img)
-                    task = (result.image_id, imagepath)
-                    print(task)
-                    tasks_to_accomplish.put(task)
+                if site_image_id in results_dict:
+                    result = results_dict[site_image_id]
+                    if not result.encoding_id:
+                        imagepath = os.path.join(folder, img)
+                        task = (result.image_id, imagepath)
+                        print(task)
+                        tasks_to_accomplish.put(task)
 
-        for w in range(NUMBER_OF_PROCESSES):
-            p = Process(target=do_job, args=(tasks_to_accomplish, tasks_that_are_done))
-            processes.append(p)
-            p.start()
+            for w in range(NUMBER_OF_PROCESSES):
+                p = Process(target=do_job, args=(tasks_to_accomplish, tasks_that_are_done))
+                processes.append(p)
+                p.start()
 
-        # completing process
-        for p in processes:
-            # print("completing process")
-            p.join()
-        print(">> SPLIT >> p.join, done with this folder")
-        split = print_get_split(jsonsplit)
+            # completing process
+            for p in processes:
+                # print("completing process")
+                p.join()
+            print(">> SPLIT >> p.join, done with this folder")
+            split = print_get_split(jsonsplit)
 
-        count += len(img_list)
-        print(f"completed round of {str(len(img_list))} total results processed is: {str(count)}")
+            count += len(img_list)
+            print(f"completed round of {str(len(img_list))} total results processed is: {str(count)}")
 
     else:
         print("old school SQL")
