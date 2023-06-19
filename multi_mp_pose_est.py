@@ -41,6 +41,9 @@ db = io.db
 ROOT = io.ROOT 
 NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 
+# overriding DB for testing
+io.db["name"] = "gettytest3"
+
 sortfolder ="getty_test"
 http="https://media.gettyimages.com/photos/"
 # outputfolder = os.path.join(ROOT,folder+"_output_febmulti")
@@ -101,16 +104,10 @@ face_recognition_model = face_recognition_models.face_recognition_model_location
 face_encoder = dlib.face_recognition_model_v1(face_recognition_model)
 ###############
 
-engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}"
-                                .format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']), poolclass=NullPool)
-metadata = MetaData(engine)
-
-Session = sessionmaker(bind=engine)
-session = Session()
-
-Base = declarative_base()
 
 start = time.time()
+
+
 
 # not sure if I'm using this
 class Object:
@@ -559,6 +556,15 @@ def process_image(task):
         name = str(df.at['1', 'image_id'])+".jpg"
         save_image_by_path(image, sort, name)
 
+    # init session
+    engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}"
+                                    .format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']), poolclass=NullPool)
+    metadata = MetaData(engine)
+    Session = sessionmaker(bind=engine)
+    session = Session()
+    Base = declarative_base()
+    
+
     df = pd.DataFrame(columns=['image_id','is_face','is_body','is_face_distant','face_x','face_y','face_z','mouth_gap','face_landmarks','bbox','face_encodings','body_landmarks'])
     print(task)
     df.at['1', 'image_id'] = task[0]
@@ -658,7 +664,7 @@ def process_image(task):
                     new_entry = Encodings(**insert_dict)
                     session.add(new_entry)
                     session.commit()
-                    print(f"just added {image_id}")
+                    print(f"just added to db")
 
                     break  # Transaction succeeded, exit the loop
                 except OperationalError as e:
@@ -668,8 +674,6 @@ def process_image(task):
         else:
             print("already exists, not adding")
 
-        # Close the session
-        session.close()
 
 
         print(">> SPLIT >> done commit new_entry")
@@ -680,6 +684,10 @@ def process_image(task):
         # insertignore_df(df,"encodings", engine)  ### made it all lower case to avoid discrepancy
     except OperationalError as e:
         print(e)
+
+    # Close the session and dispose of the engine before the worker process exits
+    session.close()
+    engine.dispose()
 
 
         # save image based on is_face
@@ -709,6 +717,15 @@ def do_job(tasks_to_accomplish, tasks_that_are_done):
 
 def main():
     print("main")
+
+    # init session
+    engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}"
+                                    .format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']), poolclass=NullPool)
+    metadata = MetaData(engine)
+    Session = sessionmaker(bind=engine)
+    session = Session()
+    Base = declarative_base()
+
     tasks_to_accomplish = Queue()
     tasks_that_are_done = Queue()
     processes = []
@@ -751,12 +768,6 @@ def main():
                     print(task)
                     tasks_to_accomplish.put(task)
 
-        # open folder
-        # for each image, 
-            # parse to extract site_image_id
-            #query SQL with site_image_id for: image_id, e.encoding_id
-            # if encoding_id is NULL:
-                # task = (image_id,imagepath)
         for w in range(NUMBER_OF_PROCESSES):
             p = Process(target=do_job, args=(tasks_to_accomplish, tasks_that_are_done))
             processes.append(p)
@@ -839,6 +850,9 @@ def main():
             count += len(resultsjson)
             print("completed round, total results processed is: ",count)
 
+    # Close the session and dispose of the engine before the worker process exits
+    session.close()
+    engine.dispose()
 
     end = time.time()
     print (end - start)

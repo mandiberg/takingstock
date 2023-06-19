@@ -16,7 +16,7 @@ class DataIO:
             ####### Michael's OS X Credentials ########
             self.db = {
                 "host":"localhost",
-                "name":"gettytest3",            
+                "name":"stock",            
                 "user":"root",
                 "pass":"XFZ5dPJq2"
             }
@@ -121,7 +121,7 @@ class DataIO:
         if not os.path.exists(folder):
             os.makedirs(folder)
 
-    def make_hash_folders(self,path):
+    def make_hash_folders(self,path, as_list=False):
         #create depth 0
         alphabet = 'A B C D E F G H I J K L M N O P Q R S T U V W X Y Z 0 1 2 3 4 5 6 7 8 9 0'  
         # alphabet = '0'  
@@ -131,12 +131,23 @@ class DataIO:
         alphabet = alphabet.split()
         alphabet2 = alphabet2.split()
 
-        for letter in alphabet:
-            # print (letter)
-            pth = os.path.join(path,letter)
-            self.touch(pth)
-            for letter2 in alphabet2:
-                # print (letter2)
+        if as_list is False:
+            for letter in alphabet:
+                # print (letter)
+                pth = os.path.join(path,letter)
+                self.touch(pth)
+                for letter2 in alphabet2:
+                    # print (letter2)
 
-                pth2 = os.path.join(path,letter,letter+letter2)
-                self.touch(pth2)
+                    pth2 = os.path.join(path,letter,letter+letter2)
+                    self.touch(pth2)
+        elif as_list is True:
+            folder_paths = []
+            for letter in alphabet:
+                for letter2 in alphabet2:
+                    path = os.path.join(letter,letter+letter2)
+                    folder_paths.append(path)
+            return folder_paths
+
+
+
