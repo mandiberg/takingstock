@@ -24,7 +24,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
 # my ORM
-from my_declarative_base import Base, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON
+from my_declarative_base import Base, Clusters, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import create_engine, text, MetaData, Table, Column, Numeric, Integer, VARCHAR, update, Float
@@ -61,7 +61,7 @@ IS_CLUSTER = False
 # number of clusters to analyze -- this is also declared in Clustering_SQL. Move to IO?
 N_CLUSTERS = 128
 # this is for IS_ONE_CLUSTER to only run on a specific CLUSTER_NO
-IS_ONE_CLUSTER = False
+IS_ONE_CLUSTER = True
 CLUSTER_NO = 11
 
 # this controls whether it is using the linear or angle process
@@ -121,17 +121,21 @@ elif IS_MOVE and IS_SEGONLY is not True:
 elif IS_SEGONLY:
 
     SAVE_SEGMENT = False
-    SELECT = "DISTINCT(image_id), site_name_id, contentUrl, imagename, face_x, face_y, face_z, mouth_gap, face_landmarks, bbox, face_encodings, site_image_id"
 
     # don't need keywords if SegmentTable_name
     # this is for MM segment table
-    # FROM =f"Images i LEFT JOIN Encodings e ON i.image_id = e.image_id INNER JOIN {SegmentTable_name} seg ON i.site_image_id = seg.site_image_id"
-    # WHERE = "e.is_face IS TRUE AND e.face_encodings IS NOT NULL AND e.bbox IS NOT NULL AND i.site_name_id = 8 AND i.age_id NOT IN (1,2,3,4)"
+    SELECT = "DISTINCT(i.image_id), i.site_name_id, i.contentUrl, i.imagename, e.face_x, e.face_y, e.face_z, e.mouth_gap, e.face_landmarks, e.bbox, e.face_encodings, i.site_image_id" 
+    FROM =f"Images i LEFT JOIN Encodings e ON i.image_id = e.image_id INNER JOIN {SegmentTable_name} seg ON i.site_image_id = seg.site_image_id"
+    if IS_CLUSTER is True or IS_ONE_CLUSTER is True:
+        FROM += " JOIN ImagesClusters ic ON i.image_id = ic.image_id"
+    WHERE = "e.is_face IS TRUE AND e.face_encodings IS NOT NULL AND e.bbox IS NOT NULL AND i.site_name_id = 8 AND i.age_id NOT IN (1,2,3,4)"
 
     # this is for gettytest3 table
-    FROM = SegmentTable_name
+    # SELECT = "DISTINCT(image_id), site_name_id, contentUrl, imagename, face_x, face_y, face_z, mouth_gap, face_landmarks, bbox, face_encodings, site_image_id"
+    # FROM = SegmentTable_name
+    # FROM = f"{SegmentTable_name} st JOIN ImagesClusters ic ON st.image_id = ic.image_id JOIN Clusters c ON ic.cluster_no = c.cluster_no"
     # "Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings e ON i.image_id = e.image_id JOIN ImagesClusters ic ON i.image_id = ic.image_id"
-    WHERE = "bbox IS NOT NULL"
+    # WHERE = "bbox IS NOT NULL"
     # AND i.site_name_id = 1 AND k.keyword_text LIKE 'smil%'"
 
 LIMIT = 500
@@ -227,6 +231,14 @@ def selectSQL(cluster_no=None):
     return(resultsjson)
 
 
+def select_cluster_median(cluster_no):
+    cluster_selectsql = f"SELECT c.cluster_median FROM Clusters c WHERE cluster_id={cluster_no};"
+    result = engine.connect().execute(text(cluster_selectsql))
+    resultsjson = ([dict(row) for row in result.mappings()])
+    cluster_median = (resultsjson[0]['cluster_median'])
+    return(cluster_median)
+
+
 
 def save_segment_DB(df_segment):
     #save the df to a table
@@ -273,7 +285,7 @@ def sort_by_face_dist(df_enc, df_128_enc):
         # this is the site_name_id for this_start, needed to test mse
         print("this_start", this_start)
         # THIS IS WHERE I NEED TO START MY WORK
-        if i == 0 and this_start != "median":
+        if i == 0 and not np.isnan(sort.counter_dict["last_image_enc"].all()):
             #this is the first round. set encodings to the passed through encodings
             # need to get old encodings from previous round. through sort.counter_dict?
             print("attempting set enc1 from pass through")
@@ -541,9 +553,6 @@ def process_iterr_angles(start_img_name, df_segment, cluster_no, sort):
     d = sort.d
 
     print("CYCLE to test: ",cycle, start_img_name)
-    sort.set_counters(io.ROOT,cluster_no, start_img_name)
-    print("set sort.counter_dict:" )
-    print(sort.counter_dict)
     while cycle < CYCLECOUNT:
         print("CYCLE: ",cycle)
         for angle in sort.angle_list:
@@ -615,7 +624,8 @@ def process_linear(start_img_name, df_segment, cluster_no, sort):
     # linear sort by encoding distance
     print("processing linear")
     # preps the encodings for sort
-    sort.set_counters(io.ROOT,cluster_no, start_img_name)  
+    # sort.set_counters(io.ROOT,cluster_no, start_img_name)  
+
     df_enc, df_128_enc = prep_encodings(df_segment)
 
     # # get dataframe sorted by distance
@@ -642,7 +652,7 @@ def main():
             # return pickle.loads(pickled_array, encoding='latin1', fix_imports=True)
             try:
                 # Set the encoding argument to 'latin1' and protocol argument to 3
-                obj = pickle.loads(pickled_data, encoding='latin1', fix_imports=True, errors='strict', protocol=3)
+                obj = pickle.loads(pickled_array, encoding='latin1', fix_imports=True, errors='strict', protocol=3)
                 return obj
             except pickle.UnpicklingError as e:
                 print(f"Error loading pickle data: {e}")
@@ -722,6 +732,25 @@ def main():
             save_segment_DB(df_segment)
             print("saved segment to ", SegmentTable_name)
             quit()
+
+        ### Set counter_dict ###
+
+        sort.set_counters(io.ROOT,cluster_no, start_img_name)
+        print("set sort.counter_dict:" )
+        print(sort.counter_dict)
+
+
+        ### Get cluster_median encodings for cluster_no ###
+
+        if cluster_no is not None:
+
+            # cluster_median = select_cluster_median(cluster_no)
+            # image_id = insert_dict['image_id']
+            # can I filter this by site_id? would that make it faster or slower? 
+            results = session.query(Clusters).filter(Clusters.cluster_id==cluster_no).first()
+            cluster_median = unpickle_array(results.cluster_median)
+            # start_img_name = cluster_median
+            sort.counter_dict["last_image_enc"]=cluster_median
 
 
         ### SORT THE LIST OF SELECTED IMAGES ###
