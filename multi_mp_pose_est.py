@@ -42,7 +42,7 @@ ROOT = io.ROOT
 NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 
 # overriding DB for testing
-# io.db["name"] = "gettytest3"
+io.db["name"] = "gettytest3"
 
 sortfolder ="getty_test"
 http="https://media.gettyimages.com/photos/"
@@ -55,39 +55,27 @@ SLEEP_TIME=0
 # am I looking on SSD for a folder? If not, will pull directly from SQL
 IS_FOLDER = False
 
-SELECT = "DISTINCT(i.image_id), i.site_name_id, i.contentUrl, i.imagename, e.encoding_id, i.site_image_id, e.face_landmarks, e.bbox"
-# SELECT = "DISTINCT(i.image_id), i.gender_id, author, caption, contentUrl, description, imagename"
+SELECT = "DISTINCT i.image_id, i.site_name_id, i.contentUrl, i.imagename, e.encoding_id, i.site_image_id, e.face_landmarks, e.bbox"
 
-# FROM only ik and e
-# FROM ="Images i LEFT JOIN Encodings e ON i.image_id = e.image_id"
-FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings e ON i.image_id = e.image_id"
+############# KEYWORD SELECT #############
+# FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings e ON i.image_id = e.image_id"
 # gettytest3
 # WHERE = "e.encoding_id IS NULL"
 # production
-WHERE = "e.encoding_id IS NULL AND i.site_name_id = 8 AND i.age_id NOT IN (1,2,3,4) AND k.keyword_text LIKE 'smil%'"
+# WHERE = "e.encoding_id IS NULL AND i.site_name_id = 8 AND i.age_id NOT IN (1,2,3,4) AND k.keyword_text LIKE 'smil%'"
+##########################################
 
 
-# yelling, screaming, shouting, yells, laughing; x is -4 to 30, y ~ 0, z ~ 0
-# regular rotation left to right, which should include the straight ahead? 
+############# FROM A SEGMENT #############
+SegmentTable_name = 'June20segment123straight'
+FROM ="Images i LEFT JOIN Encodings e ON i.image_id = e.image_id"
+# QUERY = "e.encoding_id68 IS NULL AND e.bbox IS NOT NULL AND e.image_id IN"
+QUERY = "e.image_id IN"
+SUBQUERY = f"(SELECT seg1.image_id FROM {SegmentTable_name} seg1 )"
+WHERE = f"{QUERY} {SUBQUERY}"
+##########################################
 
-
-
-# FROM ik and e and ieth
-# FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id JOIN ImagesEthnicity ieth ON i.image_id = ieth.image_id JOIN Ethnicity eth on ieth.ethnicity_id = eth.ethnicity_id LEFT JOIN Encodings e ON i.image_id = e.image_id"
-# WHERE = "e.encoding_id IS NULL AND i.site_name_id = 8 AND i.age_id NOT IN (1,2,3,4) AND k.keyword_text LIKE 'smil%' AND eth.ethnicity_id = 2"
-
-# WHERE = "e.encoding_id IS NULL AND i.site_name_id = 8 AND i.age_id NOT IN (1,2,3,4) AND eth.ethnicity_id = 2"
-
-
-# WHERE = "e.is_body IS TRUE AND e.bbox IS NULL AND e.face_x IS NOT NULL"
-
-
-# WHERE = "e.face_encodings IS NULL AND e.face_landmarks IS NOT NULL AND e.bbox IS NOT NULL"
-# WHERE = "e.image_id IS NULL AND i.site_name_id = 5 AND k.keyword_text LIKE 'work%'"
-# WHERE = "(e.image_id IS NULL AND k.keyword_text LIKE 'smil%')OR (e.image_id IS NULL AND k.keyword_text LIKE 'happ%')OR (e.image_id IS NULL AND k.keyword_text LIKE 'laugh%')"
-# WHERE = "e.face_landmarks IS NOT NULL AND e.bbox IS NULL AND i.site_name_id = 1"
-# WHERE = "i.site_name_id = 1 AND i.site_image_id LIKE '1402424532'"
-LIMIT = 1000
+LIMIT = 10000
 
 #creating my objects
 mp_face_mesh = mp.solutions.face_mesh
@@ -102,6 +90,7 @@ face_detection = mp_face_detection.FaceDetection(min_detection_confidence=0.7)
 
 face_recognition_model = face_recognition_models.face_recognition_model_location()
 face_encoder = dlib.face_recognition_model_v1(face_recognition_model)
+SMALL_MODEL = False
 ###############
 
 
@@ -376,14 +365,17 @@ def find_face(image, df):
                 df.at['1', 'mouth_gap'] = mouth_gap
                 df.at['1', 'face_landmarks'] = pickle.dumps(faceLms)
                 df.at['1', 'bbox'] = bbox_json
-                df.at['1', 'face_encodings'] = pickle.dumps(encodings)
+                if SMALL_MODEL is True:
+                    df.at['1', 'face_encodings'] = pickle.dumps(encodings)
+                else:
+                    df.at['1', 'face_encodings68'] = pickle.dumps(encodings)
     df.at['1', 'is_face'] = is_face
     # print(">> find_face SPLIT >> prepped dataframe")
     # ff_split = print_get_split(ff_split)
 
     return df
 
-def calc_encodings(image, faceLms,bbox,model='small'):## changed parameters and rebuilt
+def calc_encodings(image, faceLms,bbox):## changed parameters and rebuilt
 
     # second attempt, tries to project faceLms from bbox origin
     width = (bbox["right"]-bbox["left"])
@@ -421,7 +413,7 @@ def calc_encodings(image, faceLms,bbox,model='small'):## changed parameters and 
                         2 #bottom of nose tip 
                     ]
                     
-    if model=='small':landmark_points=landmark_points_5
+    if SMALL_MODEL is True:landmark_points=landmark_points_5
     else:landmark_points=landmark_points_68
     raw_landmark_set = []
     for index in landmark_points:                       ######### CORRECTION: landmark_points_5_3 is the correct one for sure
@@ -518,70 +510,48 @@ def process_image_bbox(task):
 
 
 def process_image_enc_only(task):
-    #print("process_image")
-    def save_image_triage(image,df):
-        #saves a CV2 image elsewhere -- used in setting up test segment of images
-        if df.at['1', 'is_face']:
-            sort = "face"
-        elif df.at['1', 'is_body']:
-            sort = "body"
-        else:
-            sort = "none"
-        name = str(df.at['1', 'image_id'])+".jpg"
-        save_image_by_path(image, sort, name)
+    print("process_image_enc_only")
 
-    # df = pd.DataFrame(columns=['image_id','is_face','is_body','is_face_distant','face_x','face_y','face_z','mouth_gap','face_landmarks','bbox','face_encodings','body_landmarks'])
-    # print(task)
-    # df.at['1', 'image_id'] = task[0]
     encoding_id = task[0]
     faceLms = task[2]
     bbox = json.loads(task[3])
     cap_path = capitalize_directory(task[1])
-    # print("SELECTED bbox faceLms")
-    # print(bbox)
-    # print(faceLms)
 
     try:
         image = cv2.imread(cap_path)  
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)    
       
-        # this is for when you need to move images into a testing folder structure
-        # save_image_elsewhere(image, task)
     except:
         print(f"[process_image]this item failed: {task}")
 
     if image is not None and image.shape[0]>MINSIZE and image.shape[1]>MINSIZE:
-        # now a list
-
         face_encodings = calc_encodings(image, faceLms,bbox)
-        # print(face_encodings)
 
     else:
         print('toooooo smallllll')
-        # I should probably assign no_good here...?
 
-    # store data
-    # print(df)
-    # print(face_encodings)
     pickled_encodings = pickle.dumps(face_encodings)
-    # encoded_encodings = base64.b64encode(face_encodings)
-    df = pd.DataFrame(columns=['encoding_id','face_encodings'])
+    df = pd.DataFrame(columns=['encoding_id'])
     df.at['1', 'encoding_id'] = encoding_id
-    df.at['1', 'face_encodings'] = pickled_encodings
+    # df.at['1', 'face_encodings'] = pickled_encodings
+    if SMALL_MODEL is True:
+        df.at['1', 'face_encodings'] = pickled_encodings
+        sql = """
+        UPDATE Encodings SET face_encodings = :face_encodings
+        WHERE encoding_id = :encoding_id
+        """
+    else:
+        df.at['1', 'face_encodings68'] = pickled_encodings
+        sql = """
+        UPDATE Encodings SET face_encodings68 = :face_encodings68
+        WHERE encoding_id = :encoding_id
+        """
     try:
         with engine.begin() as conn:
-            sql = """
-            UPDATE Encodings SET face_encodings = :face_encodings
-            WHERE encoding_id = :encoding_id
-            """
             params = df.to_dict("records")
             conn.execute(text(sql), params)
 
-        # update_sql = f"UPDATE Encodings6 SET face_encodings = '{pickled_encodings}' WHERE encoding_id = {encoding_id};"
-        # engine.connect().execute(text(update_sql))
         print("updated:",str(encoding_id))
-        # # DEBUGGING --> need to change this back to "encodings"
-        # insertignore_df(df,"encodings4", engine)  ### made it all lower case to avoid discrepancy
     except OperationalError as e:
         print(e)
 
@@ -602,7 +572,7 @@ def process_image(task):
     init_session()
     
 
-    df = pd.DataFrame(columns=['image_id','is_face','is_body','is_face_distant','face_x','face_y','face_z','mouth_gap','face_landmarks','bbox','face_encodings','body_landmarks'])
+    df = pd.DataFrame(columns=['image_id','is_face','is_body','is_face_distant','face_x','face_y','face_z','mouth_gap','face_landmarks','bbox','face_encodings','face_encodings68','body_landmarks'])
     print(task)
     df.at['1', 'image_id'] = task[0]
     cap_path = capitalize_directory(task[1])
@@ -744,7 +714,11 @@ def do_job(tasks_to_accomplish, tasks_that_are_done):
                 if no exception has been raised, add the task completion 
                 message to task_that_are_done queue
             '''
-            process_image(task)
+            if len(task) > 2:
+                # landmarks and bbox, so this is an encodings only
+                process_image_enc_only(task)
+            else:
+                process_image(task)
             # tasks_that_are_done.put(task + ' is done by ' + current_process().name)
             time.sleep(SLEEP_TIME)
     return True
@@ -850,19 +824,20 @@ def main():
                 
                 # gets folder via the folder list, keyed with site_id integer
                 imagepath=os.path.join(io.folder_list[site_id], hashed_path)
-                isExist = os.path.exists(imagepath)
-                print(">> SPLIT >> isExist")
-                split = print_get_split(split)
 
-                if isExist: 
-                    if row["face_landmarks"] is not None:
-                        task = (encoding_id,imagepath,pickle.loads(row["face_landmarks"]),row["bbox"])
-                    else:
-                        task = (image_id,imagepath)
-                    tasks_to_accomplish.put(task)
-                    # print("tasks_to_accomplish.put(task) ",imagepath)
+                if row["face_landmarks"] is not None:
+                    # this is a reprocessing, so don't need to test isExist
+                    task = (encoding_id,imagepath,pickle.loads(row["face_landmarks"]),row["bbox"])
                 else:
-                    print("this file is missssssssssing --------> ",imagepath)
+                    isExist = os.path.exists(imagepath)
+                    print(">> SPLIT >> isExist")
+                    split = print_get_split(split)
+                    if isExist: 
+                        task = (image_id,imagepath)
+                    else:
+                        print("this file is missssssssssing --------> ",imagepath)
+                tasks_to_accomplish.put(task)
+                # print("tasks_to_accomplish.put(task) ",imagepath)
 
             # creating processes
             for w in range(NUMBER_OF_PROCESSES):

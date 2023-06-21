@@ -85,6 +85,7 @@ class Encodings(Base):
     face_landmarks = Column(BLOB)
     bbox = Column(JSON)
     face_encodings = Column(BLOB)
+    face_encodings68 = Column(BLOB)
     body_landmarks = Column(BLOB)
 
 class Clusters(Base):

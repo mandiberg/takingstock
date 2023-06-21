@@ -30,6 +30,13 @@ from mp_db_io import DataIO
 
 # MM you need to use conda activate minimal_ds 
 
+'''
+tracking time based on items, for speed predictions
+items, seconds
+47000, 240
+100000, 695
+'''
+
 start = time.time()
 
 io = DataIO()
@@ -47,7 +54,7 @@ if USE_SEGMENT is True:
 
     # where the script is looking for files list
     # do not use this if you are using the regular Clusters and ImagesClusters tables
-    SegmentTable_name = 'May25segment123side_to_side'
+    SegmentTable_name = 'June20segment123straight'
 
     # join with SSD tables. Satyam, use the one below
     SELECT = "DISTINCT(e.image_id), e.face_encodings"
@@ -62,7 +69,7 @@ else:
     SELECT = "DISTINCT(image_id),face_encodings"
     FROM ="encodings"
     WHERE = "face_encodings IS NOT NULL"
-    LIMIT = 1000
+    LIMIT = 100000
     SegmentTable_name = ""
 
 

@@ -43,9 +43,9 @@ CYCLECOUNT = 1
 # ROOT="/Users/michaelmandiberg/Documents/projects-active/facemap_production/"
 
 # keep this live, even if not SSD
-SegmentTable_name = 'May25segment123side_to_side'
+# SegmentTable_name = 'May25segment123side_to_side'
 # SegmentTable_name = 'May25segment123updown_laugh'
-# SegmentTable_name = 'May25segment123straight_lessrange'  #actually straight ahead smile
+SegmentTable_name = 'June20segment123straight_lessrange'  #actually straight ahead smile
 
 # SATYAM, this is MM specific
 # for when I'm using files on my SSD vs RAID
@@ -85,6 +85,7 @@ if not IS_MOVE and IS_SEGONLY is not True:
     # # for production  # #
     # # # # # # # # # # # #
 
+    # SAVE_SEGMENT controls whether the result will be saved to the db as a new table
     SAVE_SEGMENT = False
     SELECT = "DISTINCT(i.image_id), i.site_name_id, i.contentUrl, i.imagename, e.face_x, e.face_y, e.face_z, e.mouth_gap, e.face_landmarks, e.bbox, e.face_encodings, i.site_image_id"
 
