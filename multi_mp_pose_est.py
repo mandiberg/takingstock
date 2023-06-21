@@ -42,7 +42,7 @@ ROOT = io.ROOT
 NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 
 # overriding DB for testing
-io.db["name"] = "gettytest3"
+# io.db["name"] = "gettytest3"
 
 sortfolder ="getty_test"
 http="https://media.gettyimages.com/photos/"
@@ -69,13 +69,13 @@ SELECT = "DISTINCT i.image_id, i.site_name_id, i.contentUrl, i.imagename, e.enco
 ############# FROM A SEGMENT #############
 SegmentTable_name = 'June20segment123straight'
 FROM ="Images i LEFT JOIN Encodings e ON i.image_id = e.image_id"
-# QUERY = "e.encoding_id68 IS NULL AND e.bbox IS NOT NULL AND e.image_id IN"
-QUERY = "e.image_id IN"
+QUERY = "e.face_encodings68 IS NULL AND e.bbox IS NOT NULL AND e.image_id IN"
+# QUERY = "e.image_id IN"
 SUBQUERY = f"(SELECT seg1.image_id FROM {SegmentTable_name} seg1 )"
 WHERE = f"{QUERY} {SUBQUERY}"
 ##########################################
 
-LIMIT = 10000
+LIMIT = 1000
 
 #creating my objects
 mp_face_mesh = mp.solutions.face_mesh
@@ -437,7 +437,7 @@ def calc_encodings(image, faceLms,bbox):## changed parameters and rebuilt
    
     raw_landmark_set=dlib.full_object_detection(bbox_rect,all_points)
     encodings=face_encoder.compute_face_descriptor(image, raw_landmark_set, num_jitters=1)
-    print(len(encodings))
+    # print(len(encodings))
     return np.array(encodings).tolist()
 
 def find_body(image,df):
@@ -510,11 +510,11 @@ def process_image_bbox(task):
 
 
 def process_image_enc_only(task):
-    print("process_image_enc_only")
+    # print("process_image_enc_only")
 
     encoding_id = task[0]
     faceLms = task[2]
-    bbox = json.loads(task[3])
+    bbox = io.unstring_json(task[3])
     cap_path = capitalize_directory(task[1])
 
     try:

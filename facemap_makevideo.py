@@ -45,7 +45,7 @@ CYCLECOUNT = 1
 # keep this live, even if not SSD
 # SegmentTable_name = 'May25segment123side_to_side'
 # SegmentTable_name = 'May25segment123updown_laugh'
-SegmentTable_name = 'June20segment123straight_lessrange'  #actually straight ahead smile
+SegmentTable_name = 'June20segment123straight'  #actually straight ahead smile
 
 # SATYAM, this is MM specific
 # for when I'm using files on my SSD vs RAID
@@ -57,11 +57,11 @@ IS_SEGONLY= True
 
 # this is for controlling if it is using
 # all clusters,
-IS_CLUSTER = False
+IS_CLUSTER = True
 # number of clusters to analyze -- this is also declared in Clustering_SQL. Move to IO?
 N_CLUSTERS = 128
 # this is for IS_ONE_CLUSTER to only run on a specific CLUSTER_NO
-IS_ONE_CLUSTER = True
+IS_ONE_CLUSTER = False
 CLUSTER_NO = 11
 
 # this controls whether it is using the linear or angle process

@@ -2,6 +2,8 @@ import os
 from sys import platform
 import csv
 import hashlib
+import json
+import ast
 
 
 class DataIO:
@@ -149,5 +151,12 @@ class DataIO:
                     folder_paths.append(path)
             return folder_paths
 
+    def unstring_json(self, json_string):
+        eval_string = ast.literal_eval(json_string)
+        if isinstance(eval_string, dict):
+            return eval_string
+        else:
+            json_dict = json.loads(eval_string)
+            return json_dict
 
 
