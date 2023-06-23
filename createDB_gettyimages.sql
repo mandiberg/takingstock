@@ -1,4 +1,4 @@
-USE gettytest3;
+USE stock;
 
 -- These remove repeated values and reduce repetition
 
@@ -75,6 +75,8 @@ CREATE TABLE Keywords (
     weight INT,
     parent_keyword_id varchar(50), 
     parent_keyword_text varchar(50)
+    INDEX idx_keyword_text (keyword_text)
+    
 
 );
 

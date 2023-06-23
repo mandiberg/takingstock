@@ -37,7 +37,7 @@ db = io.db
 NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 
 # Satyam, you want to set this to False
-USE_SEGMENT = False
+USE_SEGMENT = True
 
 # number of clusters produced
 opt_c_size=True

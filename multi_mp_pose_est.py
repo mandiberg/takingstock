@@ -20,6 +20,8 @@ from sqlalchemy import create_engine, text, MetaData, Table, Column, Numeric, In
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.orm import relationship
 from sqlalchemy.ext.declarative import declarative_base
+# my ORM
+from my_declarative_base import Base, Images, Keywords, ImagesKeywords, Encodings, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON
 
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.pool import NullPool
@@ -39,6 +41,9 @@ db = io.db
 ROOT = io.ROOT 
 NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 
+# overriding DB for testing
+io.db["name"] = "gettytest3"
+
 sortfolder ="getty_test"
 http="https://media.gettyimages.com/photos/"
 # outputfolder = os.path.join(ROOT,folder+"_output_febmulti")
@@ -47,10 +52,14 @@ DRAW_BOX = False
 MINSIZE = 700
 SLEEP_TIME=0
 
+# am I looking on SSD for a folder? If not, will pull directly from SQL
+IS_FOLDER = True
+
 SELECT = "DISTINCT(i.image_id), i.site_name_id, i.contentUrl, i.imagename, e.encoding_id, i.site_image_id, e.face_landmarks, e.bbox"
 # SELECT = "DISTINCT(i.image_id), i.gender_id, author, caption, contentUrl, description, imagename"
 
 # FROM only ik and e
+# FROM ="Images i LEFT JOIN Encodings e ON i.image_id = e.image_id"
 FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings e ON i.image_id = e.image_id"
 WHERE = "e.encoding_id IS NULL AND i.site_name_id = 8 AND i.age_id NOT IN (1,2,3,4) AND k.keyword_text LIKE 'laugh%'"
 #WHERE = "e.encoding_id IS NULL "
@@ -93,99 +102,10 @@ face_recognition_model = face_recognition_models.face_recognition_model_location
 face_encoder = dlib.face_recognition_model_v1(face_recognition_model)
 ###############
 
-engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}"
-                                .format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']), poolclass=NullPool)
-metadata = MetaData(engine)
-
-Session = sessionmaker(bind=engine)
-session = Session()
-
-Base = declarative_base()
-
-class Ethnicity(Base):
-    __tablename__ = 'ethnicity'
-    ethnicity_id = Column(Integer, primary_key=True, autoincrement=True)
-    ethnicity = Column(String(40))
-
-class Gender(Base):
-    __tablename__ = 'gender'
-    gender_id = Column(Integer, primary_key=True, autoincrement=True)
-    gender = Column(String(20))
-
-class Age(Base):
-    __tablename__ = 'age'
-    age_id = Column(Integer, primary_key=True, autoincrement=True)
-    age = Column(String(20))
-
-class Site(Base):
-    __tablename__ = 'site'
-    site_name_id = Column(Integer, primary_key=True, autoincrement=True)
-    site_name = Column(String(20))
-
-class Location(Base):
-    __tablename__ = 'location'
-    location_id = Column(Integer, primary_key=True, autoincrement=True)
-    location_text = Column(String(50))
-    location_number = Column(String(50))
-    location_code = Column(String(50))
-
-class Images(Base):
-    __tablename__ = 'images'
-    image_id = Column(Integer, primary_key=True, autoincrement=True)
-    site_name_id = Column(Integer, ForeignKey('site.site_name_id'))
-    site_image_id = Column(String(50), nullable=False)
-    age_id = Column(Integer, ForeignKey('age.age_id'))
-    gender_id = Column(Integer, ForeignKey('gender.gender_id'))
-    location_id = Column(Integer, ForeignKey('location.location_id'))
-    author = Column(String(100))
-    caption = Column(String(150))
-    contentUrl = Column(String(300), nullable=False)
-    description = Column(String(150))
-    imagename = Column(String(200))
-    uploadDate = Column(Date)
-
-    site = relationship("Site")
-    age = relationship("Age")
-    gender = relationship("Gender")
-    location = relationship("Location")
-
-class Keywords(Base):
-    __tablename__ = 'keywords'
-    keyword_id = Column(Integer, primary_key=True, autoincrement=True)
-    keyword_number = Column(Integer)
-    keyword_text = Column(String(50), nullable=False)
-    keytype = Column(String(50))
-    weight = Column(Integer)
-    parent_keyword_id = Column(String(50))
-    parent_keyword_text = Column(String(50))
-
-class ImagesKeywords(Base):
-    __tablename__ = 'imageskeywords'
-    image_id = Column(Integer, ForeignKey('images.image_id'), primary_key=True)
-    keyword_id = Column(Integer, ForeignKey('keywords.keyword_id'), primary_key=True)
-
-class ImagesEthnicity(Base):
-    __tablename__ = 'imagesethnicity'
-    image_id = Column(Integer, ForeignKey('images.image_id'), primary_key=True)
-    ethnicity_id = Column(Integer, ForeignKey('ethnicity.ethnicity_id'), primary_key=True)
-
-class Encodings(Base):
-    __tablename__ = 'encodings'
-    encoding_id = Column(Integer, primary_key=True, autoincrement=True)
-    image_id = Column(Integer, ForeignKey('images.image_id'))
-    is_face = Column(Boolean)
-    is_body = Column(Boolean)
-    is_face_distant = Column(Boolean)
-    face_x = Column(DECIMAL(6, 3))
-    face_y = Column(DECIMAL(6, 3))
-    face_z = Column(DECIMAL(6, 3))
-    mouth_gap = Column(DECIMAL(6, 3))
-    face_landmarks = Column(BLOB)
-    bbox = Column(JSON)
-    face_encodings = Column(BLOB)
-    body_landmarks = Column(BLOB)
 
 start = time.time()
+
+
 
 # not sure if I'm using this
 class Object:
@@ -208,6 +128,11 @@ def read_csv(csv_file):
         for row in reader:
             yield row
 
+def print_get_split(split):
+    now = time.time()
+    duration = now - split
+    print(duration)
+    return now
 
 
 def save_image_elsewhere(image, path):
@@ -246,20 +171,6 @@ def save_image_by_path(image, sort, name):
 
 
 
-    # outpath = os.path.join(ROOT, sortfolder, folder)
-    # try:
-    #     print(outpath)
-    #     cv2.imwrite(outpath, image)
-    #     print("wrote")
-
-    # except:
-    #     print("couldn't write")
-
-# def create_my_engine(db):
-
-#     # Create SQLAlchemy engine to connect to MySQL Database
-#     engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}"
-#                                     .format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']))
 
 def insertignore(dataframe,table):
 
@@ -349,10 +260,16 @@ def retro_bbox(image):
 
 
 def find_face(image, df):
-
+    find_face_start = time.time()
     height, width, _ = image.shape
     with mp.solutions.face_detection.FaceDetection(model_selection=1, min_detection_confidence=0.7) as face_det: 
+        # print(">> find_face SPLIT >> with mp.solutions constructed")
+        # ff_split = print_get_split(find_face_start)
+
         results_det=face_det.process(image)  ## [:,:,::-1] is the shortcut for converting BGR to RGB
+
+        # print(">> find_face SPLIT >> face_det.process(image)")
+        # ff_split = print_get_split(ff_split)
         
     '''
     0 type model: When we will select the 0 type model then our face detection model will be able to detect the 
@@ -365,17 +282,11 @@ def find_face(image, df):
     if results_det.detections:
         faceDet=results_det.detections[0]
         bbox = get_bbox(faceDet, height, width)
-        # bbox = faceDet.location_data.relative_bounding_box
-        # xy_min = _normalized_to_pixel_coordinates(bbox.xmin, bbox.ymin, width,height)
-        # xy_max = _normalized_to_pixel_coordinates(bbox.xmin + bbox.width, bbox.ymin + bbox.height,width,height)
-        # if xy_min and xy_max:
-        #     # TOP AND BOTTOM WERE FLIPPED 
-        #     # both in xy_min assign, and in face_mesh.process(image[np crop])
-        #     left,top =xy_min
-        #     right,bottom = xy_max
-        #     bbox={"left":left,"right":right,"top":top,"bottom":bottom
-        #     }
+        # print(">> find_face SPLIT >> get_bbox()")
+        # ff_split = print_get_split(ff_split)
+
         if bbox:
+
             with mp.solutions.face_mesh.FaceMesh(static_image_mode=True,
                                              refine_landmarks=False,
                                              max_num_faces=1,
@@ -383,25 +294,25 @@ def find_face(image, df):
                                              ) as face_mesh:
             # Convert the BGR image to RGB and cropping it around face boundary and process it with MediaPipe Face Mesh.
                                 # crop_img = img[y:y+h, x:x+w]
-                results = face_mesh.process(image[bbox["top"]:bbox["bottom"],bbox["left"]:bbox["right"]])    
+                # print(">> find_face SPLIT >> const face_mesh")
+                # ff_split = print_get_split(ff_split)
+
+                results = face_mesh.process(image[bbox["top"]:bbox["bottom"],bbox["left"]:bbox["right"]])   
+                # print(">> find_face SPLIT >> face_mesh.process")
+                # ff_split = print_get_split(ff_split)
+ 
             #read any image containing a face
             if results.multi_face_landmarks:
                 
-                # # debugging the flipped landmarks
-                # start_point = ((left, top))
-                # end_point = ((right, bottom))
-                # color = (255, 0, 0)
-                # thickness = 1
-                # image = cv2.rectangle(image, start_point, end_point, color, thickness)
-                # image = cv2.line(image, start_point, end_point, color, thickness)
-                # image = cv2.circle(image, start_point, 20, color, 1)
-
                 #construct pose object to solve pose
                 is_face = True
                 pose = SelectPose(image)
 
                 #get landmarks
                 faceLms = pose.get_face_landmarks(results, image,bbox)
+
+                # print(">> find_face SPLIT >> got lms")
+                # ff_split = print_get_split(ff_split)
 
 
                 #calculate base data from landmarks
@@ -412,14 +323,34 @@ def find_face(image, df):
                 angles = pose.rotationMatrixToEulerAnglesToDegrees()
                 mouth_gap = pose.get_mouth_data(faceLms)
                              ##### calculated face detection results
+                # old version, encodes everything
+
+                # print(">> find_face SPLIT >> done face calcs")
+                # ff_split = print_get_split(ff_split)
+
+
                 if is_face:
+
+                # # new version, attempting to filter the amount that get encoded
+                # if is_face  and -20 < angles[0] < 10 and np.abs(angles[1]) < 4 and np.abs(angles[2]) < 3 :
                     # Calculate Face Encodings if is_face = True
                     # print("in encodings conditional")
                     # turning off to debug
                     encodings = calc_encodings(image, faceLms,bbox) ## changed parameters
+                    # print(">> find_face SPLIT >> calc_encodings")
+                    # ff_split = print_get_split(ff_split)
+
                 #     print(encodings)
                 #     exit()
                 # #df.at['1', 'is_face'] = is_face
+
+                # # debug
+                # else:
+                #     print("bad angles")
+                #     print(angles[0])
+                #     print(angles[1])
+                #     print(angles[2])
+
                 #df.at['1', 'is_face_distant'] = is_face_distant
                 bbox_json = json.dumps(bbox, indent = 4) 
 
@@ -431,19 +362,12 @@ def find_face(image, df):
                 df.at['1', 'bbox'] = bbox_json
                 df.at['1', 'face_encodings'] = pickle.dumps(encodings)
     df.at['1', 'is_face'] = is_face
+    # print(">> find_face SPLIT >> prepped dataframe")
+    # ff_split = print_get_split(ff_split)
+
     return df
 
 def calc_encodings(image, faceLms,bbox,model='small'):## changed parameters and rebuilt
-
-    # # original, treats uncropped image as .shape
-    # height, width, _ = image.shape
-    # print("bbox ontology")
-    # print(type(bbox))
-    # print(bbox)
-    # print("bbox jsoned")
-    # print(type(bbox))
-    # print(type(bbox["right"]))
-    # print(bbox["right"])
 
     # second attempt, tries to project faceLms from bbox origin
     width = (bbox["right"]-bbox["left"])
@@ -491,49 +415,21 @@ def calc_encodings(image, faceLms,bbox,model='small'):## changed parameters and 
         x = int(faceLms.landmark[index].x * width + bbox["left"])
         y = int(faceLms.landmark[index].y * height + bbox["top"])
 
-        # x = int(faceLms.landmark[index].x * width)
-        # y = int(faceLms.landmark[index].y * height)
-
-        # print(x)
-        # print(y)
         landmark_point=dlib.point([x,y])
         raw_landmark_set.append(landmark_point)
     all_points=dlib.points(raw_landmark_set)
     # print("all_points", all_points)
     # print(bbox)
         
-    # bbox = faceDet.location_data.relative_bounding_box
-    # xy_min = _normalized_to_pixel_coordinates(bbox.xmin, bbox.ymin, height,width)
-    # xy_max = _normalized_to_pixel_coordinates(bbox.xmin + bbox.width, bbox.ymin + bbox.height,height,width)
-    # if xy_min and xy_max:
-    #     xmin,ymin =xy_min
-    #     xmax,ymax = xy_max
-    #     b_box= dlib.rectangle(left=xmin, top=ymax, right=xmax, bottom=ymin)
-    #     #in_bounds=True
-    # #else:
-    #     #print("face out of frame")
-    #     #in_bounds=False
-
-    # I'm unsure if top should be ymax or ymin. 
     # ymin ("top") would be y value for top left point.
     bbox_rect= dlib.rectangle(left=bbox["left"], top=bbox["top"], right=bbox["right"], bottom=bbox["bottom"])
 
-    # # Here is alt_encodings that match SJ's original structure: left=xmin, top=ymax, right=xmax, bottom=ymin
-    # # ymax ("bottom") would be y value for top left point.
-    # bbox_rect= dlib.rectangle(left=bbox["left"], top=bbox["bottom"], right=bbox["right"], bottom=bbox["top"])
 
     if (all_points is None) or (bbox is None):return 
-    
+   
     raw_landmark_set=dlib.full_object_detection(bbox_rect,all_points)
-
-    # window_name = 'image'
-    # cv2.imshow(window_name, image)
-    # cv2.waitKey(0)
-    # cv2.destroyAllWindows()
-
     encodings=face_encoder.compute_face_descriptor(image, raw_landmark_set, num_jitters=1)
     print(len(encodings))
-
     return np.array(encodings).tolist()
 
 def find_body(image,df):
@@ -675,6 +571,7 @@ def process_image_enc_only(task):
 
 def process_image(task):
     #print("process_image")
+    processes_start = time.time()
     def save_image_triage(image,df):
         #saves a CV2 image elsewhere -- used in setting up test segment of images
         if df.at['1', 'is_face']:
@@ -686,10 +583,22 @@ def process_image(task):
         name = str(df.at['1', 'image_id'])+".jpg"
         save_image_by_path(image, sort, name)
 
+    # init session
+    engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}"
+                                    .format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']), poolclass=NullPool)
+    metadata = MetaData(engine)
+    Session = sessionmaker(bind=engine)
+    session = Session()
+    Base = declarative_base()
+    
+
     df = pd.DataFrame(columns=['image_id','is_face','is_body','is_face_distant','face_x','face_y','face_z','mouth_gap','face_landmarks','bbox','face_encodings','body_landmarks'])
     print(task)
     df.at['1', 'image_id'] = task[0]
     cap_path = capitalize_directory(task[1])
+    print(">> SPLIT >> made DF, about to imread")
+    pr_split = print_get_split(processes_start)
+
     try:
         image = cv2.imread(cap_path)
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)    
@@ -698,11 +607,22 @@ def process_image(task):
     except:
         print(f"[process_image]this item failed: {task}")
 
+    print(">> SPLIT >> done imread, about to find face")
+    pr_split = print_get_split(pr_split)
+
     if image is not None and image.shape[0]>MINSIZE and image.shape[1]>MINSIZE:
         # Do FaceMesh
         df = find_face(image, df)
+        print(">> SPLIT >> done find_face")
+        pr_split = print_get_split(pr_split)
+
         # Do Body Pose
-        df = find_body(image, df)
+        # temporarily commenting this out
+        # df = find_body(image, df)
+
+        print(">> SPLIT >> done find_body")
+        pr_split = print_get_split(pr_split)
+
         # for testing: this will save images into folders for is_face, is_body, and none. 
         # only save images that aren't too smallllll
         # save_image_triage(image,df)
@@ -743,33 +663,58 @@ def process_image(task):
             del insert_dict[key]
 
 
+        print(">> SPLIT >> done insert_dict stuff")
+        pr_split = print_get_split(pr_split)
+
 
         # print("dict_df", insert_dict)
         # quit()
 
-        # Check if the entry exists in the Encodings table
-        image_id = insert_dict['image_id']
-        # can I filter this by site_id? would that make it faster or slower? 
-        existing_entry = session.query(Encodings).filter_by(image_id=image_id).first()
+        if IS_FOLDER is not True:
+            # Check if the entry exists in the Encodings table
+            image_id = insert_dict['image_id']
+            # can I filter this by site_id? would that make it faster or slower? 
+            existing_entry = session.query(Encodings).filter_by(image_id=image_id).first()
+            print("existing_entry", existing_entry)
 
-        print("existing_entry", existing_entry)
-        if existing_entry is None:
-            # Entry does not exist, insert insert_dict into the table
-            new_entry = Encodings(**insert_dict)
-            session.add(new_entry)
-            session.commit()
-            print(f"just added {image_id}")
+        print(">> SPLIT >> done query for existing_entry")
+        pr_split = print_get_split(pr_split)
+
+        if IS_FOLDER is True or existing_entry is None:
+            for _ in range(io.max_retries):
+                try:
+                    # update_sql = f"UPDATE Encodings SET bbox = '{bbox_json}' WHERE encoding_id = {encoding_id};"
+                    # engine.connect().execute(text(update_sql))
+                    # print("bboxxin:")
+                    # print(encoding_id)
+                    # Entry does not exist, insert insert_dict into the table
+                    new_entry = Encodings(**insert_dict)
+                    session.add(new_entry)
+                    session.commit()
+                    print(f"just added to db")
+
+                    break  # Transaction succeeded, exit the loop
+                except OperationalError as e:
+                    print(e)
+                    time.sleep(io.retry_delay)
+
         else:
             print("already exists, not adding")
 
-        # Close the session
-        session.close()
+
+
+        print(">> SPLIT >> done commit new_entry")
+        pr_split = print_get_split(pr_split)
 
 
 
         # insertignore_df(df,"encodings", engine)  ### made it all lower case to avoid discrepancy
     except OperationalError as e:
         print(e)
+
+    # Close the session and dispose of the engine before the worker process exits
+    session.close()
+    engine.dispose()
 
 
         # save image based on is_face
@@ -799,77 +744,147 @@ def do_job(tasks_to_accomplish, tasks_that_are_done):
 
 def main():
     print("main")
+
+    # init session
+    engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}"
+                                    .format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']), poolclass=NullPool)
+    metadata = MetaData(engine)
+    Session = sessionmaker(bind=engine)
+    session = Session()
+    Base = declarative_base()
+
     tasks_to_accomplish = Queue()
     tasks_that_are_done = Queue()
     processes = []
+
     count = 0
     last_round = False
+    jsonsplit = time.time()
 
-    while True:
-        # print("about to SQL: ",SELECT,FROM,WHERE,LIMIT)
-        resultsjson = selectSQL()    
-        print("got results, count is: ",len(resultsjson))
-        # print(resultsjson)
-        #catches the last round, where it returns less than full results
-        if last_round == True:
-            print("last_round caught, should break")
-            break
-        elif len(resultsjson) != LIMIT:
-            last_round = True
-            print("last_round just assigned")
+    if IS_FOLDER is True:
+        print("in IS_SSD")
+        # mainfolder = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/testimages/3/30"
+        mainfolder = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/testimages/"
+        folder_paths = io.make_hash_folders(mainfolder, as_list=True)
+        for folder_path in folder_paths:
+            folder = os.path.join(mainfolder,folder_path)
+            print(folder)
+            img_list = io.get_img_list(folder)
 
-        # print(last_round)
-        for row in resultsjson:
-            # print(row)
-            # face_landmarks, e2.bbox
-            encoding_id = row["encoding_id"]
-            image_id = row["image_id"]
-            item = row["contentUrl"]
-            hashed_path = row["imagename"]
-            site_id = row["site_name_id"]
-            # print(hashed_path)
-            if site_id == 1:
-                # print("fixing gettyimages hash")
-                orig_filename = item.replace(http, "")+".jpg"
-                d0, d02 = get_hash_folders(orig_filename)
-                hashed_path = os.path.join(d0, d02, orig_filename)
-            
-            # gets folder via the folder list, keyed with site_id integer
-            imagepath=os.path.join(io.folder_list[site_id], hashed_path)
-            isExist = os.path.exists(imagepath)
-            if isExist: 
-                if row["face_landmarks"] is not None:
-                    task = (encoding_id,imagepath,pickle.loads(row["face_landmarks"]),row["bbox"])
+            # Collect site_image_id values from the image filenames
+            site_image_ids = [img.split("-id")[-1].replace(".jpg", "") for img in img_list]
+
+            try:
+                results = session.query(Images.image_id, Images.site_image_id, Encodings.encoding_id) \
+                    .outerjoin(Encodings, Images.image_id == Encodings.image_id) \
+                    .filter(Images.site_image_id.in_(site_image_ids)) \
+                    .all()
+            except OperationalError as e:
+                print(e)
+                time.sleep(io.retry_delay)
+
+            for row in results:
+                print(row)
+            # quit()
+            # Create a dictionary to map site_image_id to the corresponding result
+            results_dict = {result.site_image_id: result for result in results}
+
+            for img in img_list:
+                site_image_id = img.split("-id")[-1].replace(".jpg", "")
+
+                if site_image_id in results_dict:
+                    result = results_dict[site_image_id]
+                    if not result.encoding_id:
+                        imagepath = os.path.join(folder, img)
+                        task = (result.image_id, imagepath)
+                        print(task)
+                        tasks_to_accomplish.put(task)
+
+            for w in range(NUMBER_OF_PROCESSES):
+                p = Process(target=do_job, args=(tasks_to_accomplish, tasks_that_are_done))
+                processes.append(p)
+                p.start()
+
+            # completing process
+            for p in processes:
+                # print("completing process")
+                p.join()
+            print(">> SPLIT >> p.join, done with this folder")
+            split = print_get_split(jsonsplit)
+
+            count += len(img_list)
+            print(f"completed round of {str(len(img_list))} total results processed is: {str(count)}")
+
+    else:
+        print("old school SQL")
+
+        while True:
+            print("about to SQL: ",SELECT,FROM,WHERE,LIMIT)
+            resultsjson = selectSQL()    
+            print("got results, count is: ",len(resultsjson))
+            # print(resultsjson)
+            print(">> SPLIT >> jsonsplit")
+            split = print_get_split(jsonsplit)
+            #catches the last round, where it returns less than full results
+            if last_round == True:
+                print("last_round caught, should break")
+                break
+            elif len(resultsjson) != LIMIT:
+                last_round = True
+                print("last_round just assigned")
+            # process resultsjson
+            for row in resultsjson:
+                # print(row)
+                encoding_id = row["encoding_id"]
+                image_id = row["image_id"]
+                item = row["contentUrl"]
+                hashed_path = row["imagename"]
+                site_id = row["site_name_id"]
+                if site_id == 1:
+                    # print("fixing gettyimages hash")
+                    orig_filename = item.replace(http, "")+".jpg"
+                    d0, d02 = get_hash_folders(orig_filename)
+                    hashed_path = os.path.join(d0, d02, orig_filename)
+                
+                # gets folder via the folder list, keyed with site_id integer
+                imagepath=os.path.join(io.folder_list[site_id], hashed_path)
+                isExist = os.path.exists(imagepath)
+                print(">> SPLIT >> isExist")
+                split = print_get_split(split)
+
+                if isExist: 
+                    if row["face_landmarks"] is not None:
+                        task = (encoding_id,imagepath,pickle.loads(row["face_landmarks"]),row["bbox"])
+                    else:
+                        task = (image_id,imagepath)
+                    tasks_to_accomplish.put(task)
+                    # print("tasks_to_accomplish.put(task) ",imagepath)
                 else:
-                    task = (image_id,imagepath)
-                tasks_to_accomplish.put(task)
-                # print("tasks_to_accomplish.put(task) ",imagepath)
-            else:
-                print("this file is missssssssssing --------> ",imagepath)
-        # print("tasks_to_accomplish.qsize()", str(tasks_to_accomplish.qsize()))
-        # print(tasks_to_accomplish.qsize())
+                    print("this file is missssssssssing --------> ",imagepath)
 
-        # for i in range(number_of_task):
-        #     tasks_to_accomplish.put("Task no " + str(i))
+            # creating processes
+            for w in range(NUMBER_OF_PROCESSES):
+                p = Process(target=do_job, args=(tasks_to_accomplish, tasks_that_are_done))
+                processes.append(p)
+                p.start()
 
-        # creating processes
-        for w in range(NUMBER_OF_PROCESSES):
-            p = Process(target=do_job, args=(tasks_to_accomplish, tasks_that_are_done))
-            processes.append(p)
-            p.start()
+            # completing process
+            for p in processes:
+                # print("completing process")
+                p.join()
+            print(">> SPLIT >> p.join, done with this query")
+            split = print_get_split(split)
 
-        # completing process
-        for p in processes:
-            # print("completing process")
-            p.join()
+        # # print the output
+        # while not tasks_that_are_done.empty():
+        #     print("tasks are done")
+        #     print(tasks_that_are_done.get())
+            count += len(resultsjson)
+            print("completed round, total results processed is: ",count)
 
-    # # print the output
-    # while not tasks_that_are_done.empty():
-    #     print("tasks are done")
-    #     print(tasks_that_are_done.get())
-        count += len(resultsjson)
-        print("completed round, total results processed is: ",count)
-
+    # Close the session and dispose of the engine before the worker process exits
+    session.close()
+    engine.dispose()
 
     end = time.time()
     print (end - start)
