@@ -1,0 +1,40 @@
+To store the entire SQLAlchemy ORM model in a separate file and use it in your parent file, you can follow these steps:
+
+1. Create a Separate Model File:
+   - Create a new Python file (e.g., `my_declarative_base.py`) to store your model classes.
+   - Import the necessary modules and functions required for defining the model classes. For example:
+     ```python
+     from sqlalchemy import Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON
+     from sqlalchemy.orm import relationship
+     from sqlalchemy.ext.declarative import declarative_base
+     ```
+
+2. Define the Model Classes:
+   - Copy and paste your ORM model code into the `my_declarative_base.py` file.
+   - Remove the line `Base = declarative_base()` from the model file since you'll define it in the parent file.
+
+3. Import the Model Classes in the Parent File:
+   - In your parent file, import the necessary modules and classes from both the model file (`my_declarative_base.py`) and SQLAlchemy.
+   - For example:
+     ```python
+     from sqlalchemy import create_engine
+     from sqlalchemy.orm import sessionmaker
+     from my_declarative_base import Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON
+     ```
+
+4. Configure the Database Connection:
+   - Set up the database connection parameters and create the SQLAlchemy engine and session as you currently do in the parent file.
+
+5. Use the Model Classes:
+   - You can now use the imported model classes (`Encodings`, `Images`, etc.) in your parent file as needed.
+   - For example:
+     ```python
+     # Create an instance of the Encodings class
+     new_entry = Encodings(is_face=True, face_x=0.5, face_y=0.5)
+     
+     # Add the entry to the session and commit the changes
+     session.add(new_entry)
+     session.commit()
+     ```
+
+By separating the model into a separate file, you can maintain a single source of truth for your model definition and reuse it across different files.
