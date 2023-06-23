@@ -40,6 +40,7 @@ NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 USE_SEGMENT = False
 
 # number of clusters produced
+opt_c_size=True
 N_CLUSTERS = 128
 
 
@@ -103,6 +104,17 @@ def kmeans_cluster(df,n_clusters=32):
     kmeans.fit(df)
     clusters = kmeans.predict(df)
     return clusters
+    
+def best_score(df):
+    n_list=np.linspace(64,128,10,dtype='int')
+    score=np.zeros(len(n_list))
+    for i,n_clusters in enumerate(n_list):
+        kmeans = KMeans(n_clusters,n_init=10, init = 'k-means++', random_state = 42, max_iter = 300)
+        preds = kmeans.fit_predict(df)
+        score[i]=silhouette_score(df, preds)
+    b_score=n_list[np.argmax(score)]
+    
+    return b_score
     
 def encodings_split(encodings):
     col="encodings"
@@ -205,7 +217,8 @@ def main():
         df=encodings_split(pickle.loads(row["face_encodings"], encoding='latin1'))
         df["image_id"]=row["image_id"]
         enc_data = pd.concat([enc_data,df],ignore_index=True) 
-    # I changed n_clusters to 128, from 3, and now it returns 128 clusters
+    # choose if you want optimal cluster size or custom cluster size using the parameter opt_c_size
+    if opt_c_size: N_clusters= best_score(df)
     enc_data["cluster_id"] = kmeans_cluster(enc_data,n_clusters=N_CLUSTERS)
     print(enc_data)
     print(set(enc_data["cluster_id"].tolist()))
