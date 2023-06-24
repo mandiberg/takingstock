@@ -1,15 +1,12 @@
 import cv2
 import os
 
-def get_img_list(folder):
-    img_list=[]
-    for file in os.listdir(folder):
-        if not file.startswith('.') and not file.endswith('.mp4') and os.path.isfile(os.path.join(folder, file)):
-            filepath = os.path.join(folder, file)
-            filepath=filepath.replace('\\' , '/')
-            img_list.append(file)
-    return img_list        
-    print("got image list")
+# mine
+from mp_db_io import DataIO
+
+# I/O utils
+io = DataIO()
+db = io.db
 
 
 def write_video(img_array, ROOT, FRAMERATE=15):
@@ -41,11 +38,11 @@ def write_video(img_array, ROOT, FRAMERATE=15):
 
 
 # img_array = ['image1.jpg', 'image2.jpg', 'image3.jpg']
-HOLDER = '/Users/michaelmandiberg/Dropbox/facemap_dropbox/June_tests/'
+HOLDER = '/Users/michaelmandiberg/Documents/projects-active/facemap_production/june24_100s/'
 FRAMERATE = 15
-FOLDER = "June4_smilescream_itter_25Ksegment"
+FOLDER = "cluster53_1687606249.078825"
 ROOT = os.path.join(HOLDER,FOLDER)
-list_of_files= get_img_list(ROOT)
+list_of_files= io.get_img_list(ROOT)
 print(list_of_files)
 list_of_files.sort()
 

@@ -20,7 +20,7 @@ class SortPose:
         self.mp_drawing = mp.solutions.drawing_utils
 
         #maximum allowable distance between encodings
-        self.MAXDIST = 0.5
+        self.MAXDIST = 0.6
 
         # maximum allowable scale up
         self.resize_max = 1.6
@@ -309,8 +309,6 @@ class SortPose:
         # print("enc2")
         # print(enc2[0])
         d=np.linalg.norm(enc1 - enc2, axis=0)
-        print("d")
-        print(d)
         return d
 
 
@@ -615,13 +613,13 @@ class SortPose:
         try:
             print(type(self.image))
             borderType = cv2.BORDER_CONSTANT
-            self.EXPAND_SIZE = (5000,5000)
-            # value = [255,255,255]
-            value = [0,0,0]
+            self.EXPAND_SIZE = (10000,10000)
+            value = [255,255,255]
+            # value = [0,0,0]
 
             # scale image to match face heights
             resize = self.face_height_output/self.face_height
-            if resize < 4:
+            if resize < 15:
                 print("resize")
                 print(resize)
                 # image.shape is height[0] and width[1]
@@ -765,9 +763,9 @@ class SortPose:
                 dist_dict[d]=index
                 enc2_dict[d]=enc2
         dist.sort()
-        print("debug index")
-        print(dist)
-        print(len(dist))
+        # print("debug index")
+        # print(dist)
+        # print(len(dist))
         print ("the winner is: ", str(dist[0]), dist_dict[dist[0]])
     #     print(len(dist))
         self.counter_dict["last_image_enc"]=enc2_dict[dist[0]]

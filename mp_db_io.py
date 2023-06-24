@@ -110,8 +110,14 @@ class DataIO:
                 filepath = os.path.join(folder, file)
                 filepath=filepath.replace('\\' , '/')
                 img_list.append(file)
+        # img_list.sort()
         return img_list        
         print("got image list")
+
+
+    def get_folders(self,folder):
+        subfolders = [ f.path for f in os.scandir(folder) if f.is_dir() ]
+        return subfolders
 
     def get_hash_folders(self,filename):
         m = hashlib.md5()

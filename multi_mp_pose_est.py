@@ -35,14 +35,7 @@ from mediapipe.python.solutions.drawing_utils import _normalized_to_pixel_coordi
 import dlib
 import face_recognition_models
 
-# platform specific credentials
-io = DataIO()
-db = io.db
-ROOT = io.ROOT 
-NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 
-# overriding DB for testing
-# io.db["name"] = "gettytest3"
 
 sortfolder ="getty_test"
 http="https://media.gettyimages.com/photos/"
@@ -60,22 +53,49 @@ SELECT = "DISTINCT i.image_id, i.site_name_id, i.contentUrl, i.imagename, e.enco
 ############# KEYWORD SELECT #############
 # FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings e ON i.image_id = e.image_id"
 # gettytest3
-# WHERE = "e.encoding_id IS NULL"
+# WHERE = "e.face_encodings68_J3 IS NULL AND e.face_encodings IS NOT NULL"
 # production
 # WHERE = "e.encoding_id IS NULL AND i.site_name_id = 8 AND i.age_id NOT IN (1,2,3,4) AND k.keyword_text LIKE 'smil%'"
+# IS_SSD=False
+##########################################
+
+############# Reencodings #############
+# # SegmentTable_name = 'May25segment123straight_lessrange'
+# SegmentTable_name = 'June20segment123straight'
+FROM ="Images i LEFT JOIN Encodings e ON i.image_id = e.image_id"
+# # WHERE = "e.face_encodings68 IS NULL AND e.face_encodings IS NOT NULL AND i.site_name_id = 8"
+# QUERY = "e.face_encodings68_J3 IS NULL AND e.image_id IN"
+# SUBQUERY = f"(SELECT seg1.image_id FROM {SegmentTable_name} seg1 )"
+# WHERE = f"{QUERY} {SUBQUERY}"
+
+## Gettytest3
+
+WHERE = "e.face_encodings68_J3 IS NULL AND e.face_encodings IS NOT NULL"
+
+# IS_SSD=False
 ##########################################
 
 
 ############# FROM A SEGMENT #############
-SegmentTable_name = 'June20segment123straight'
-FROM ="Images i LEFT JOIN Encodings e ON i.image_id = e.image_id"
-QUERY = "e.face_encodings68 IS NULL AND e.bbox IS NOT NULL AND e.image_id IN"
-# QUERY = "e.image_id IN"
-SUBQUERY = f"(SELECT seg1.image_id FROM {SegmentTable_name} seg1 )"
-WHERE = f"{QUERY} {SUBQUERY}"
+# SegmentTable_name = 'June20segment123straight'
+# FROM ="Images i LEFT JOIN Encodings e ON i.image_id = e.image_id"
+# QUERY = "e.face_encodings68 IS NULL AND e.bbox IS NOT NULL AND e.image_id IN"
+# # QUERY = "e.image_id IN"
+# SUBQUERY = f"(SELECT seg1.image_id FROM {SegmentTable_name} seg1 )"
+# WHERE = f"{QUERY} {SUBQUERY}"
+IS_SSD=True
 ##########################################
 
 LIMIT = 1000
+
+# platform specific credentials
+io = DataIO(IS_SSD)
+db = io.db
+ROOT = io.ROOT 
+NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
+# overriding DB for testing
+io.db["name"] = "gettytest3"
+
 
 #creating my objects
 mp_face_mesh = mp.solutions.face_mesh
@@ -90,7 +110,8 @@ face_detection = mp_face_detection.FaceDetection(min_detection_confidence=0.7)
 
 face_recognition_model = face_recognition_models.face_recognition_model_location()
 face_encoder = dlib.face_recognition_model_v1(face_recognition_model)
-SMALL_MODEL = False
+SMALL_MODEL = True
+NUM_JITTERS = 5
 ###############
 
 
@@ -436,7 +457,7 @@ def calc_encodings(image, faceLms,bbox):## changed parameters and rebuilt
     if (all_points is None) or (bbox is None):return 
    
     raw_landmark_set=dlib.full_object_detection(bbox_rect,all_points)
-    encodings=face_encoder.compute_face_descriptor(image, raw_landmark_set, num_jitters=1)
+    encodings=face_encoder.compute_face_descriptor(image, raw_landmark_set, num_jitters=NUM_JITTERS)
     # print(len(encodings))
     return np.array(encodings).tolist()
 
@@ -534,18 +555,59 @@ def process_image_enc_only(task):
     df = pd.DataFrame(columns=['encoding_id'])
     df.at['1', 'encoding_id'] = encoding_id
     # df.at['1', 'face_encodings'] = pickled_encodings
-    if SMALL_MODEL is True:
+
+    # set name of df and table column, based on model and jitters
+    # df_table_column = "face_encodings"
+    # if SMALL_MODEL is not True:
+    #     df_table_column = df_table_column+"68"
+    # if NUM_JITTERS > 1:
+    #     df_table_column = df_table_column+"_J"+str(NUM_JITTERS)
+
+    # df.at['1', df_table_column] = pickled_encodings
+    # sql = """
+    # UPDATE Encodings SET df_table_column = :df_table_column
+    # WHERE encoding_id = :encoding_id
+    # """
+
+    # else:
+    if SMALL_MODEL is True and NUM_JITTERS == 1:
         df.at['1', 'face_encodings'] = pickled_encodings
         sql = """
         UPDATE Encodings SET face_encodings = :face_encodings
         WHERE encoding_id = :encoding_id
         """
-    else:
+    elif SMALL_MODEL is False and NUM_JITTERS == 1:
         df.at['1', 'face_encodings68'] = pickled_encodings
         sql = """
         UPDATE Encodings SET face_encodings68 = :face_encodings68
         WHERE encoding_id = :encoding_id
         """
+    elif SMALL_MODEL is True and NUM_JITTERS == 3:
+        df.at['1', 'face_encodings_J3'] = pickled_encodings
+        sql = """
+        UPDATE Encodings SET face_encodings_J3 = :face_encodings_J3
+        WHERE encoding_id = :encoding_id
+        """
+    elif SMALL_MODEL is False and NUM_JITTERS == 3:
+        df.at['1', 'face_encodings68_J3'] = pickled_encodings
+        sql = """
+        UPDATE Encodings SET face_encodings68_J3 = :face_encodings68_J3
+        WHERE encoding_id = :encoding_id
+        """
+    elif SMALL_MODEL is True and NUM_JITTERS == 5:
+        df.at['1', 'face_encodings_J5'] = pickled_encodings
+        sql = """
+        UPDATE Encodings SET face_encodings_J5 = :face_encodings_J5
+        WHERE encoding_id = :encoding_id
+        """
+    elif SMALL_MODEL is False and NUM_JITTERS == 5:
+        df.at['1', 'face_encodings68_J5'] = pickled_encodings
+        sql = """
+        UPDATE Encodings SET face_encodings68_J5 = :face_encodings68_J5
+        WHERE encoding_id = :encoding_id
+        """
+
+
     try:
         with engine.begin() as conn:
             params = df.to_dict("records")

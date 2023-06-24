@@ -24,7 +24,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
 # my ORM
-from my_declarative_base import Base, Clusters, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON
+from my_declarative_base import Base, Clusters68, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import create_engine, text, MetaData, Table, Column, Numeric, Integer, VARCHAR, update, Float
@@ -50,7 +50,7 @@ SegmentTable_name = 'June20segment123straight'  #actually straight ahead smile
 # SATYAM, this is MM specific
 # for when I'm using files on my SSD vs RAID
 IS_MOVE = False
-IS_SSD = True
+IS_SSD = False
 
 # This is for when you only have the segment table. RW SQL query
 IS_SEGONLY= True
@@ -62,7 +62,7 @@ IS_CLUSTER = True
 N_CLUSTERS = 128
 # this is for IS_ONE_CLUSTER to only run on a specific CLUSTER_NO
 IS_ONE_CLUSTER = False
-CLUSTER_NO = 11
+CLUSTER_NO = 72
 
 # this controls whether it is using the linear or angle process
 IS_ANGLE_SORT = False
@@ -125,11 +125,11 @@ elif IS_SEGONLY:
 
     # don't need keywords if SegmentTable_name
     # this is for MM segment table
-    SELECT = "DISTINCT(i.image_id), i.site_name_id, i.contentUrl, i.imagename, e.face_x, e.face_y, e.face_z, e.mouth_gap, e.face_landmarks, e.bbox, e.face_encodings, i.site_image_id" 
+    SELECT = "DISTINCT(i.image_id), i.site_name_id, i.contentUrl, i.imagename, e.face_x, e.face_y, e.face_z, e.mouth_gap, e.face_landmarks, e.bbox, e.face_encodings68, i.site_image_id" 
     FROM =f"Images i LEFT JOIN Encodings e ON i.image_id = e.image_id INNER JOIN {SegmentTable_name} seg ON i.site_image_id = seg.site_image_id"
     if IS_CLUSTER is True or IS_ONE_CLUSTER is True:
-        FROM += " JOIN ImagesClusters ic ON i.image_id = ic.image_id"
-    WHERE = "e.is_face IS TRUE AND e.face_encodings IS NOT NULL AND e.bbox IS NOT NULL AND i.site_name_id = 8 AND i.age_id NOT IN (1,2,3,4)"
+        FROM += " JOIN ImagesClusters68 ic ON i.image_id = ic.image_id"
+    WHERE = "e.is_face IS TRUE AND e.face_encodings68 IS NOT NULL AND e.bbox IS NOT NULL AND i.site_name_id = 8 AND i.age_id NOT IN (1,2,3,4)"
 
     # this is for gettytest3 table
     # SELECT = "DISTINCT(image_id), site_name_id, contentUrl, imagename, face_x, face_y, face_z, mouth_gap, face_landmarks, bbox, face_encodings, site_image_id"
@@ -139,7 +139,7 @@ elif IS_SEGONLY:
     # WHERE = "bbox IS NOT NULL"
     # AND i.site_name_id = 1 AND k.keyword_text LIKE 'smil%'"
 
-LIMIT = 500
+LIMIT = 5000
 
 motion = {
     "side_to_side": False,
@@ -239,6 +239,13 @@ def select_cluster_median(cluster_no):
     cluster_median = (resultsjson[0]['cluster_median'])
     return(cluster_median)
 
+def select_cluster68_median(cluster_no):
+    cluster_selectsql = f"SELECT c.cluster_median FROM Clusters68 c WHERE cluster_id={cluster_no};"
+    result = engine.connect().execute(text(cluster_selectsql))
+    resultsjson = ([dict(row) for row in result.mappings()])
+    cluster_median = (resultsjson[0]['cluster_median'])
+    return(cluster_median)
+
 
 
 def save_segment_DB(df_segment):
@@ -286,7 +293,13 @@ def sort_by_face_dist(df_enc, df_128_enc):
         # this is the site_name_id for this_start, needed to test mse
         print("this_start", this_start)
         # THIS IS WHERE I NEED TO START MY WORK
-        if i == 0 and not np.isnan(sort.counter_dict["last_image_enc"].all()):
+        
+        # this line works for no clusters
+        if i == 0 and this_start != "median":
+
+        # this line works for is one cluster. 
+        # I added not sort.counter_dict["last_image_enc"] or but am not 100% confident
+        # if i == 0 and not sort.counter_dict["last_image_enc"] or not np.isnan(sort.counter_dict["last_image_enc"].all()):
             #this is the first round. set encodings to the passed through encodings
             # need to get old encodings from previous round. through sort.counter_dict?
             print("attempting set enc1 from pass through")
@@ -311,6 +324,11 @@ def sort_by_face_dist(df_enc, df_128_enc):
         thisimage=None
         face_landmarks=None
         bbox=None
+
+        # debuggin problem. this_start = median, so can't pass it in as df loc. 
+        # print(df_enc)
+        # print(this_start)
+
         try:
             site_name_id = df_enc.loc[this_start]['site_name_id']
             face_landmarks = df_enc.loc[this_start]['face_landmarks']
@@ -400,12 +418,12 @@ def prep_encodings(df_segment):
     # df_128_enc will be 128 colums of encodings, keyed to filename
     # print("prep_encodings df_segment", df_segment)
     col1="imagename"
-    col2="face_encodings"
+    col2="face_encodings68"
     col3="site_name_id"
     col4="face_landmarks"
     col5="bbox"
     df_enc=pd.DataFrame(columns=[col1, col2, col3, col4, col5])
-    df_enc = pd.DataFrame({col1: df_segment['imagename'], col2: df_segment['face_encodings'].apply(lambda x: np.array(x)), 
+    df_enc = pd.DataFrame({col1: df_segment['imagename'], col2: df_segment['face_encodings68'].apply(lambda x: np.array(x)), 
                 col3: df_segment['site_name_id'], col4: df_segment['face_landmarks'], col5: df_segment['bbox'] })
     df_enc.set_index(col1, inplace=True)
 
@@ -506,11 +524,11 @@ def linear_test_df(df,cluster_no, itter=None):
     try:
         for index, row in df.iterrows():
             print('in loop, index is', str(index))
-            print(row)
+            # print(row)
             imgfilename = const_imgfilename(row['filename'], df, imgfileprefix)
             outpath = os.path.join(sort.counter_dict["outfolder"],imgfilename)
             open_path = os.path.join(io.ROOT,row['folder'],row['filename'])
-            print(outpath, open_path)
+            # print(outpath, open_path)
             img = cv2.imread(open_path)
             if row['dist'] < sort.MAXDIST:
                 # compare_images to make sure they are face and not the same
@@ -520,8 +538,8 @@ def linear_test_df(df,cluster_no, itter=None):
                     img_list.append((outpath, cropped_image))
                     sort.counter_dict["good_count"] += 1
                     good += 1
-                    print("row['filename']")
-                    print(row['filename'])
+                    # print("row['filename']")
+                    # print(row['filename'])
                     sort.counter_dict["start_img_name"] = row['filename']
                     # print(sort.counter_dict["last_image"])
                     print("saved: ",outpath)
@@ -710,7 +728,8 @@ def main():
             sys.exit()
 
         # Apply the unpickling function to the 'face_encodings' column
-        df['face_encodings'] = df['face_encodings'].apply(unpickle_array)
+        # TK this is where I will change face_encodings to the variations
+        df['face_encodings68'] = df['face_encodings68'].apply(unpickle_array)
         df['face_landmarks'] = df['face_landmarks'].apply(unpickle_array)
         df['bbox'] = df['bbox'].apply(lambda x: unstring_json(x))
         # turn URL into local hashpath (still needs local root folder)
@@ -743,12 +762,17 @@ def main():
 
         ### Get cluster_median encodings for cluster_no ###
 
-        if cluster_no is not None:
-
+        if cluster_no is not None and cluster_no !=0:
+            # skips cluster 0 for pulling median because it was returning NULL
             # cluster_median = select_cluster_median(cluster_no)
             # image_id = insert_dict['image_id']
             # can I filter this by site_id? would that make it faster or slower? 
-            results = session.query(Clusters).filter(Clusters.cluster_id==cluster_no).first()
+
+            results = session.query(Clusters68).filter(Clusters68.cluster_id==cluster_no).first()
+
+
+            # results = session.query(Clusters).filter(Clusters.cluster_id==cluster_no).first()
+            print(results)
             cluster_median = unpickle_array(results.cluster_median)
             # start_img_name = cluster_median
             sort.counter_dict["last_image_enc"]=cluster_median
