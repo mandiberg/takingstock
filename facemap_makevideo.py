@@ -57,7 +57,7 @@ IS_SEGONLY= True
 
 # this is for controlling if it is using
 # all clusters,
-IS_CLUSTER = True
+IS_CLUSTER = False
 # number of clusters to analyze -- this is also declared in Clustering_SQL. Move to IO?
 N_CLUSTERS = 128
 # this is for IS_ONE_CLUSTER to only run on a specific CLUSTER_NO
@@ -125,11 +125,11 @@ elif IS_SEGONLY:
 
     # don't need keywords if SegmentTable_name
     # this is for MM segment table
-    SELECT = "DISTINCT(i.image_id), i.site_name_id, i.contentUrl, i.imagename, e.face_x, e.face_y, e.face_z, e.mouth_gap, e.face_landmarks, e.bbox, e.face_encodings68, i.site_image_id" 
+    SELECT = "DISTINCT(i.image_id), i.site_name_id, i.contentUrl, i.imagename, e.face_x, e.face_y, e.face_z, e.mouth_gap, e.face_landmarks, e.bbox, e.face_encodings68_J3, i.site_image_id" 
     FROM =f"Images i LEFT JOIN Encodings e ON i.image_id = e.image_id INNER JOIN {SegmentTable_name} seg ON i.site_image_id = seg.site_image_id"
     if IS_CLUSTER is True or IS_ONE_CLUSTER is True:
         FROM += " JOIN ImagesClusters68 ic ON i.image_id = ic.image_id"
-    WHERE = "e.is_face IS TRUE AND e.face_encodings68 IS NOT NULL AND e.bbox IS NOT NULL AND i.site_name_id = 8 AND i.age_id NOT IN (1,2,3,4)"
+    WHERE = "e.is_face IS TRUE AND e.face_encodings68_J3 IS NOT NULL AND e.bbox IS NOT NULL AND i.site_name_id = 8 AND i.age_id NOT IN (1,2,3,4)"
 
     # this is for gettytest3 table
     # SELECT = "DISTINCT(image_id), site_name_id, contentUrl, imagename, face_x, face_y, face_z, mouth_gap, face_landmarks, bbox, face_encodings, site_image_id"
@@ -418,12 +418,12 @@ def prep_encodings(df_segment):
     # df_128_enc will be 128 colums of encodings, keyed to filename
     # print("prep_encodings df_segment", df_segment)
     col1="imagename"
-    col2="face_encodings68"
+    col2="face_encodings68_J3"
     col3="site_name_id"
     col4="face_landmarks"
     col5="bbox"
     df_enc=pd.DataFrame(columns=[col1, col2, col3, col4, col5])
-    df_enc = pd.DataFrame({col1: df_segment['imagename'], col2: df_segment['face_encodings68'].apply(lambda x: np.array(x)), 
+    df_enc = pd.DataFrame({col1: df_segment['imagename'], col2: df_segment['face_encodings68_J3'].apply(lambda x: np.array(x)), 
                 col3: df_segment['site_name_id'], col4: df_segment['face_landmarks'], col5: df_segment['bbox'] })
     df_enc.set_index(col1, inplace=True)
 
@@ -723,89 +723,93 @@ def main():
             print(df)
         except:
             print('you forgot to change the filename DUH')
-        if df.empty:
-            print('dataframe empty, probably bad path or bad SQL')
+        if not df.empty:
+
+            # Apply the unpickling function to the 'face_encodings' column
+            # TK this is where I will change face_encodings to the variations
+            df['face_encodings68_J3'] = df['face_encodings68_J3'].apply(unpickle_array)
+            df['face_landmarks'] = df['face_landmarks'].apply(unpickle_array)
+            df['bbox'] = df['bbox'].apply(lambda x: unstring_json(x))
+            # turn URL into local hashpath (still needs local root folder)
+            df['imagename'] = df['contentUrl'].apply(newname)
+            # make decimals into float
+            columns_to_convert = ['face_x', 'face_y', 'face_z', 'mouth_gap']
+            df[columns_to_convert] = df[columns_to_convert].applymap(make_float)
+
+            ### SEGMENT THE DATA ###
+
+            # make the segment based on settings
+            df_segment = sort.make_segment(df)
+
+
+            # this is to save files from a segment to the SSD
+            print("will I save segment? ", SAVE_SEGMENT)
+            if SAVE_SEGMENT:
+                Base.metadata.create_all(engine)
+                print(df_segment.size)
+                save_segment_DB(df_segment)
+                print("saved segment to ", SegmentTable_name)
+                quit()
+
+            ### Set counter_dict ###
+
+            sort.set_counters(io.ROOT,cluster_no, start_img_name)
+            print("set sort.counter_dict:" )
+            print(sort.counter_dict)
+
+
+            ### Get cluster_median encodings for cluster_no ###
+
+            if cluster_no is not None and cluster_no !=0:
+                # skips cluster 0 for pulling median because it was returning NULL
+                # cluster_median = select_cluster_median(cluster_no)
+                # image_id = insert_dict['image_id']
+                # can I filter this by site_id? would that make it faster or slower? 
+
+                results = session.query(Clusters68).filter(Clusters68.cluster_id==cluster_no).first()
+
+
+                # results = session.query(Clusters).filter(Clusters.cluster_id==cluster_no).first()
+                print(results)
+                cluster_median = unpickle_array(results.cluster_median)
+                # start_img_name = cluster_median
+                sort.counter_dict["last_image_enc"]=cluster_median
+
+
+            ### SORT THE LIST OF SELECTED IMAGES ###
+            ###    THESE ARE THE VARIATIONS      ###
+
+            if motion["side_to_side"] is True and IS_ANGLE_SORT is False:
+                # this is old, hasn't been refactored.
+                img_list, size = cycling_order(CYCLECOUNT, sort)
+                # size = sort.get_cv2size(ROOT, img_list[0])
+            elif IS_ANGLE_SORT is True:
+                # get list of all angles in segment
+                angle_list = sort.createList(df_segment)
+
+                # sort segment by angle list
+                # creates sort.d attribute: a dataframe organized (indexed?) by angle list
+                sort.get_divisor(df_segment)
+
+                # # is this used anywhere? 
+                # angle_list_pop = angle_list.pop()
+
+                # get median for first sort
+                median = sort.get_median()
+
+                # get metamedian for second sort, creates sort.metamedian attribute
+                sort.get_metamedian()
+                # print(df_segment)
+
+                process_iterr_angles(start_img_name,df_segment, cluster_no, sort)
+            else:
+                process_linear(start_img_name,df_segment, cluster_no, sort)
+        elif df.empty and IS_CLUSTER:
+            print('dataframe empty, but IS_CLUSTER so continuing to next cluster_no')
+
+        else: 
+            print('dataframe empty, and not IS_CLUSTER so probably bad path or bad SQL')
             sys.exit()
-
-        # Apply the unpickling function to the 'face_encodings' column
-        # TK this is where I will change face_encodings to the variations
-        df['face_encodings68'] = df['face_encodings68'].apply(unpickle_array)
-        df['face_landmarks'] = df['face_landmarks'].apply(unpickle_array)
-        df['bbox'] = df['bbox'].apply(lambda x: unstring_json(x))
-        # turn URL into local hashpath (still needs local root folder)
-        df['imagename'] = df['contentUrl'].apply(newname)
-        # make decimals into float
-        columns_to_convert = ['face_x', 'face_y', 'face_z', 'mouth_gap']
-        df[columns_to_convert] = df[columns_to_convert].applymap(make_float)
-
-        ### SEGMENT THE DATA ###
-
-        # make the segment based on settings
-        df_segment = sort.make_segment(df)
-
-
-        # this is to save files from a segment to the SSD
-        print("will I save segment? ", SAVE_SEGMENT)
-        if SAVE_SEGMENT:
-            Base.metadata.create_all(engine)
-            print(df_segment.size)
-            save_segment_DB(df_segment)
-            print("saved segment to ", SegmentTable_name)
-            quit()
-
-        ### Set counter_dict ###
-
-        sort.set_counters(io.ROOT,cluster_no, start_img_name)
-        print("set sort.counter_dict:" )
-        print(sort.counter_dict)
-
-
-        ### Get cluster_median encodings for cluster_no ###
-
-        if cluster_no is not None and cluster_no !=0:
-            # skips cluster 0 for pulling median because it was returning NULL
-            # cluster_median = select_cluster_median(cluster_no)
-            # image_id = insert_dict['image_id']
-            # can I filter this by site_id? would that make it faster or slower? 
-
-            results = session.query(Clusters68).filter(Clusters68.cluster_id==cluster_no).first()
-
-
-            # results = session.query(Clusters).filter(Clusters.cluster_id==cluster_no).first()
-            print(results)
-            cluster_median = unpickle_array(results.cluster_median)
-            # start_img_name = cluster_median
-            sort.counter_dict["last_image_enc"]=cluster_median
-
-
-        ### SORT THE LIST OF SELECTED IMAGES ###
-        ###    THESE ARE THE VARIATIONS      ###
-
-        if motion["side_to_side"] is True and IS_ANGLE_SORT is False:
-            # this is old, hasn't been refactored.
-            img_list, size = cycling_order(CYCLECOUNT, sort)
-            # size = sort.get_cv2size(ROOT, img_list[0])
-        elif IS_ANGLE_SORT is True:
-            # get list of all angles in segment
-            angle_list = sort.createList(df_segment)
-
-            # sort segment by angle list
-            # creates sort.d attribute: a dataframe organized (indexed?) by angle list
-            sort.get_divisor(df_segment)
-
-            # # is this used anywhere? 
-            # angle_list_pop = angle_list.pop()
-
-            # get median for first sort
-            median = sort.get_median()
-
-            # get metamedian for second sort, creates sort.metamedian attribute
-            sort.get_metamedian()
-            # print(df_segment)
-
-            process_iterr_angles(start_img_name,df_segment, cluster_no, sort)
-        else:
-            process_linear(start_img_name,df_segment, cluster_no, sort)
 
 
 
