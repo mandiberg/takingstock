@@ -64,12 +64,12 @@ SELECT = "DISTINCT i.image_id, i.site_name_id, i.contentUrl, i.imagename, e.enco
 # SegmentTable_name = 'June20segment123straight'
 FROM ="Images i LEFT JOIN Encodings e ON i.image_id = e.image_id"
 WHERE = "e.face_encodings68 IS NULL AND e.face_encodings IS NOT NULL AND i.site_name_id = 8"
-# QUERY = "e.face_encodings68_J3 IS NULL AND e.image_id IN"
+# QUERY = "e.face_encodings68_J5 IS NULL AND e.image_id IN"
 # SUBQUERY = f"(SELECT seg1.image_id FROM {SegmentTable_name} seg1 )"
 # WHERE = f"{QUERY} {SUBQUERY}"
 
 ## Gettytest3
-# WHERE = "e.face_encodings68_J3 IS NULL AND e.face_encodings IS NOT NULL"
+# WHERE = "e.face_encodings68_J5 IS NULL AND e.face_encodings IS NOT NULL"
 
 IS_SSD=False
 ##########################################
@@ -108,6 +108,8 @@ mp_face_detection = mp.solutions.face_detection #### added face detection
 face_detection = mp_face_detection.FaceDetection(min_detection_confidence=0.7)
 
 face_recognition_model = face_recognition_models.face_recognition_model_location()
+
+
 face_encoder = dlib.face_recognition_model_v1(face_recognition_model)
 SMALL_MODEL = False
 NUM_JITTERS = 1
@@ -388,7 +390,7 @@ def find_face(image, df):
                 if SMALL_MODEL is True:
                     df.at['1', 'face_encodings'] = pickle.dumps(encodings)
                 else:
-                    df.at['1', 'face_encodings68'] = pickle.dumps(encodings)
+                    df.at['1', 'face_encodings68_J5'] = pickle.dumps(encodings)
     df.at['1', 'is_face'] = is_face
     # print(">> find_face SPLIT >> prepped dataframe")
     # ff_split = print_get_split(ff_split)
@@ -588,7 +590,6 @@ def process_image_enc_only(task):
         WHERE encoding_id = :encoding_id
         """
     elif SMALL_MODEL is False and NUM_JITTERS == 3:
-        print("assigning to face_encodings68_J3")
         df.at['1', 'face_encodings68_J3'] = pickled_encodings
         sql = """
         UPDATE Encodings SET face_encodings68_J3 = :face_encodings68_J3
@@ -634,7 +635,7 @@ def process_image(task):
     init_session()
     
 
-    df = pd.DataFrame(columns=['image_id','is_face','is_body','is_face_distant','face_x','face_y','face_z','mouth_gap','face_landmarks','bbox','face_encodings','face_encodings68','body_landmarks'])
+    df = pd.DataFrame(columns=['image_id','is_face','is_body','is_face_distant','face_x','face_y','face_z','mouth_gap','face_landmarks','bbox','face_encodings','face_encodings68_J','body_landmarks'])
     print(task)
     df.at['1', 'image_id'] = task[0]
     cap_path = capitalize_directory(task[1])
