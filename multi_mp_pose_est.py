@@ -47,6 +47,7 @@ SLEEP_TIME=0
 
 # am I looking on SSD for a folder? If not, will pull directly from SQL
 IS_FOLDER = False
+MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/testimages/"
 
 SELECT = "DISTINCT i.image_id, i.site_name_id, i.contentUrl, i.imagename, e.encoding_id, i.site_image_id, e.face_landmarks, e.bbox"
 
@@ -615,7 +616,7 @@ def process_image_enc_only(task):
     faceLms = task[2]
     bbox = io.unstring_json(task[3])
     cap_path = capitalize_directory(task[1])
-
+    print(cap_path)
     try:
         image = cv2.imread(cap_path)  
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)    
@@ -741,8 +742,8 @@ def process_image(task):
         # temporarily commenting this out
         # df = find_body(image, df)
 
-        print(">> SPLIT >> done find_body")
-        pr_split = print_get_split(pr_split)
+        # print(">> SPLIT >> done find_body")
+        # pr_split = print_get_split(pr_split)
 
         # for testing: this will save images into folders for is_face, is_body, and none. 
         # only save images that aren't too smallllll
@@ -880,11 +881,9 @@ def main():
 
     if IS_FOLDER is True:
         print("in IS_SSD")
-        # mainfolder = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/testimages/3/30"
-        mainfolder = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/testimages/"
-        folder_paths = io.make_hash_folders(mainfolder, as_list=True)
+        folder_paths = io.make_hash_folders(MAIN_FOLDER, as_list=True)
         for folder_path in folder_paths:
-            folder = os.path.join(mainfolder,folder_path)
+            folder = os.path.join(MAIN_FOLDER,folder_path)
             print(folder)
             img_list = io.get_img_list(folder)
 

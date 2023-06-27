@@ -23,7 +23,9 @@ class DataIO:
                 "pass":"XFZ5dPJq2"
             }
             self.ROOT_PROD= os.path.join(os.environ['HOME'], "Documents/projects-active/facemap_production") ## only on Mac
-            self.ROOT36= "/Volumes/Test36" ## only on 
+            # self.ROOT36= "/Volumes/Test36" ## only on 
+            # temp migration for
+            self.ROOT36= "/Volumes/6TB_mayday_2" ## only on 
             self.ROOT= self.ROOT_PROD ## defining ROOT though may be redefinied in main()
 
             self.NUMBER_OF_PROCESSES = 8

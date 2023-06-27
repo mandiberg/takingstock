@@ -21,18 +21,18 @@ IS_VIDEO = True
 ROOT_FOLDER_PATH = '/Users/michaelmandiberg/Documents/projects-active/facemap_production/'
 # if IS_CLUSTER this should be the folder holding all the cluster folders
 # if not, this should be the individual folder holding the images
-FOLDER_NAME ="june24_100s"
+FOLDER_NAME ="june24_enc5"
 FOLDER_PATH = os.path.join(ROOT_FOLDER_PATH,FOLDER_NAME)
 
 # WRITE VIDEO
 # img_array = ['image1.jpg', 'image2.jpg', 'image3.jpg']
-HOLDER = '/Users/michaelmandiberg/Dropbox/facemap_dropbox/June_tests/'
+# HOLDER = '/Users/michaelmandiberg/Dropbox/facemap_dropbox/June_tests/'
 FRAMERATE = 15
-FOLDER = "June4_smilescream_itter_25Ksegment"
-ROOT = os.path.join(HOLDER,FOLDER)
-list_of_files= io.get_img_list(ROOT)
-print(list_of_files)
-list_of_files.sort()
+# FOLDER = "June4_smilescream_itter_25Ksegment"
+# ROOT = os.path.join(HOLDER,FOLDER)
+# list_of_files= io.get_img_list(ROOT)
+# print(list_of_files)
+# list_of_files.sort()
 
 
 def iterate_image_list(FOLDER_PATH,image_files, successes):
@@ -120,23 +120,33 @@ def save_merge(merged_image, count, cluster_no, FOLDER_PATH):
 #     return video_writer
 
 def get_img_list_subfolders(subfolders):
-    all_img_list = []
+    all_img_path_list = []
     for subfolder_path in subfolders:
         img_list = io.get_img_list(subfolder_path)
-        all_img_list += img_list
-    print(all_img_list)
-    return all_img_list
+        img_list.sort()
+        img_path_list = []
+        for img in img_list:
+            img_path = os.path.join (subfolder_path, img)
+            img_path_list.append(img_path)
+        # print(img_path_list)
+        all_img_path_list += img_path_list
+    # print(all_img_path_list)
+    return all_img_path_list
 
-def write_video(img_array, subfolder_path, FRAMERATE=15):
+def write_video(img_array, FRAMERATE=15, subfolder_path=None):
     # Check if the ROOT folder exists, create it if not
     # print("subfolder_path")
     # print(subfolder_path)
     # img_array = io.get_img_list(subfolder_path)
     # print(img_array)
-    cluster_no = subfolder_path.split("/")[-1]
 
     # Get the dimensions of the first image in the array
-    image_path = os.path.join(subfolder_path, img_array[0])
+    if subfolder_path:
+        cluster_no = subfolder_path.split("/")[-1]
+        image_path = os.path.join(subfolder_path, img_array[0])
+    else:
+        cluster_no = img_array[0].replace(FOLDER_PATH,"").split("/")[0]
+        image_path = img_array[0]
     img = cv2.imread(image_path)
     height, width, _ = img.shape
 
@@ -147,7 +157,10 @@ def write_video(img_array, subfolder_path, FRAMERATE=15):
 
     # Iterate over the image array and write frames to the video
     for filename in img_array:
-        image_path = os.path.join(subfolder_path, filename)
+        if subfolder_path:
+            image_path = os.path.join(subfolder_path, filename)
+        else:
+            image_path = filename
         print(image_path)
         img = cv2.imread(image_path)
         video_writer.write(img)
@@ -164,8 +177,8 @@ def main():
         subfolders = io.get_folders(FOLDER_PATH)
         # print(subfolders)
         if IS_VIDEO is True:
-            all_img_list = get_img_list_subfolders(subfolders)
-            write_video(all_img_list, subfolder_path, FRAMERATE)
+            all_img_path_list = get_img_list_subfolders(subfolders)
+            write_video(all_img_path_list, FRAMERATE)
 
             # # const_videowriter(subfolder_path, FRAMERATE)
             # for subfolder_path in subfolders:
