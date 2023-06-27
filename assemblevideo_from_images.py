@@ -38,9 +38,9 @@ def write_video(img_array, ROOT, FRAMERATE=15):
 
 
 # img_array = ['image1.jpg', 'image2.jpg', 'image3.jpg']
-HOLDER = '/Users/michaelmandiberg/Documents/projects-active/facemap_production/june24_100s/'
+HOLDER = '/Users/michaelmandiberg/Documents/projects-active/facemap_production/'
 FRAMERATE = 15
-FOLDER = "cluster53_1687606249.078825"
+FOLDER = "face_encodings5_prize"
 ROOT = os.path.join(HOLDER,FOLDER)
 list_of_files= io.get_img_list(ROOT)
 print(list_of_files)
