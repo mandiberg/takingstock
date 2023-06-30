@@ -35,14 +35,7 @@ from mediapipe.python.solutions.drawing_utils import _normalized_to_pixel_coordi
 import dlib
 import face_recognition_models
 
-# platform specific credentials
-io = DataIO()
-db = io.db
-ROOT = io.ROOT 
-NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 
-# overriding DB for testing
-# io.db["name"] = "gettytest3"
 
 sortfolder ="getty_test"
 http="https://media.gettyimages.com/photos/"
@@ -55,39 +48,53 @@ SLEEP_TIME=0
 # am I looking on SSD for a folder? If not, will pull directly from SQL
 IS_FOLDER = False
 
-SELECT = "DISTINCT(i.image_id), i.site_name_id, i.contentUrl, i.imagename, e.encoding_id, i.site_image_id, e.face_landmarks, e.bbox"
-# SELECT = "DISTINCT(i.image_id), i.gender_id, author, caption, contentUrl, description, imagename"
+SELECT = "DISTINCT i.image_id, i.site_name_id, i.contentUrl, i.imagename, e.encoding_id, i.site_image_id, e.face_landmarks, e.bbox"
 
-# FROM only ik and e
-# FROM ="Images i LEFT JOIN Encodings e ON i.image_id = e.image_id"
-FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings e ON i.image_id = e.image_id"
+############# KEYWORD SELECT #############
+# FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings e ON i.image_id = e.image_id"
 # gettytest3
-# WHERE = "e.encoding_id IS NULL"
+# WHERE = "e.face_encodings68_J3 IS NULL AND e.face_encodings IS NOT NULL"
 # production
-WHERE = "e.encoding_id IS NULL AND i.site_name_id = 8 AND i.age_id NOT IN (1,2,3,4) AND k.keyword_text LIKE 'smil%'"
+# WHERE = "e.encoding_id IS NULL AND i.site_name_id = 8 AND i.age_id NOT IN (1,2,3,4) AND k.keyword_text LIKE 'smil%'"
+# IS_SSD=False
+##########################################
+
+############# Reencodings #############
+# SegmentTable_name = 'May25segment123straight_lessrange'
+# SegmentTable_name = 'June20segment123straight'
+FROM ="Images i LEFT JOIN Encodings e ON i.image_id = e.image_id"
+WHERE = "e.face_encodings68 IS NULL AND e.face_encodings IS NOT NULL AND i.site_name_id = 8"
+# QUERY = "e.face_encodings IS NULL AND e.image_id IN"
+# SUBQUERY = f"(SELECT seg1.image_id FROM {SegmentTable_name} seg1 )"
+# WHERE = f"{QUERY} {SUBQUERY}"
+
+## Gettytest3
+# WHERE = "e.face_encodings IS NULL AND e.bbox IS NOT NULL"
+
+IS_SSD=False
+##########################################
 
 
-# yelling, screaming, shouting, yells, laughing; x is -4 to 30, y ~ 0, z ~ 0
-# regular rotation left to right, which should include the straight ahead? 
+############# FROM A SEGMENT #############
+# SegmentTable_name = 'June20segment123straight'
+# FROM ="Images i LEFT JOIN Encodings e ON i.image_id = e.image_id"
+# QUERY = "e.face_encodings68 IS NULL AND e.bbox IS NOT NULL AND e.image_id IN"
+# # QUERY = "e.image_id IN"
+# SUBQUERY = f"(SELECT seg1.image_id FROM {SegmentTable_name} seg1 )"
+# WHERE = f"{QUERY} {SUBQUERY}"
+# IS_SSD=True
+##########################################
 
+LIMIT = 10000
 
+# platform specific credentials
+io = DataIO(IS_SSD)
+db = io.db
+ROOT = io.ROOT 
+NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
+# overriding DB for testing
+# io.db["name"] = "gettytest3"
 
-# FROM ik and e and ieth
-# FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id JOIN ImagesEthnicity ieth ON i.image_id = ieth.image_id JOIN Ethnicity eth on ieth.ethnicity_id = eth.ethnicity_id LEFT JOIN Encodings e ON i.image_id = e.image_id"
-# WHERE = "e.encoding_id IS NULL AND i.site_name_id = 8 AND i.age_id NOT IN (1,2,3,4) AND k.keyword_text LIKE 'smil%' AND eth.ethnicity_id = 2"
-
-# WHERE = "e.encoding_id IS NULL AND i.site_name_id = 8 AND i.age_id NOT IN (1,2,3,4) AND eth.ethnicity_id = 2"
-
-
-# WHERE = "e.is_body IS TRUE AND e.bbox IS NULL AND e.face_x IS NOT NULL"
-
-
-# WHERE = "e.face_encodings IS NULL AND e.face_landmarks IS NOT NULL AND e.bbox IS NOT NULL"
-# WHERE = "e.image_id IS NULL AND i.site_name_id = 5 AND k.keyword_text LIKE 'work%'"
-# WHERE = "(e.image_id IS NULL AND k.keyword_text LIKE 'smil%')OR (e.image_id IS NULL AND k.keyword_text LIKE 'happ%')OR (e.image_id IS NULL AND k.keyword_text LIKE 'laugh%')"
-# WHERE = "e.face_landmarks IS NOT NULL AND e.bbox IS NULL AND i.site_name_id = 1"
-# WHERE = "i.site_name_id = 1 AND i.site_image_id LIKE '1402424532'"
-LIMIT = 1000
 
 #creating my objects
 mp_face_mesh = mp.solutions.face_mesh
@@ -100,8 +107,19 @@ drawing_spec = mp_drawing.DrawingSpec(thickness=1, circle_radius=1)
 mp_face_detection = mp.solutions.face_detection #### added face detection
 face_detection = mp_face_detection.FaceDetection(min_detection_confidence=0.7)
 
+predictor_path = "shape_predictor_68_face_landmarks.dat"
+sp = dlib.shape_predictor(predictor_path)
+
+# dlib hack
+face_rec_model_path = "dlib_face_recognition_resnet_model_v1.dat"
+facerec = dlib.face_recognition_model_v1(face_rec_model_path)
+detector = dlib.get_frontal_face_detector()
+
 face_recognition_model = face_recognition_models.face_recognition_model_location()
 face_encoder = dlib.face_recognition_model_v1(face_recognition_model)
+
+SMALL_MODEL = False
+NUM_JITTERS = 1
 ###############
 
 
@@ -376,36 +394,37 @@ def find_face(image, df):
                 df.at['1', 'mouth_gap'] = mouth_gap
                 df.at['1', 'face_landmarks'] = pickle.dumps(faceLms)
                 df.at['1', 'bbox'] = bbox_json
-                df.at['1', 'face_encodings'] = pickle.dumps(encodings)
+                if SMALL_MODEL is True:
+                    df.at['1', 'face_encodings'] = pickle.dumps(encodings)
+                else:
+                    df.at['1', 'face_encodings68'] = pickle.dumps(encodings)
     df.at['1', 'is_face'] = is_face
     # print(">> find_face SPLIT >> prepped dataframe")
     # ff_split = print_get_split(ff_split)
 
     return df
 
-def calc_encodings(image, faceLms,bbox,model='small'):## changed parameters and rebuilt
+def calc_encodings(image, faceLms,bbox):## changed parameters and rebuilt
+    def get_dlib_all_points(landmark_points):
+        raw_landmark_set = []
+        for index in landmark_points:                       ######### CORRECTION: landmark_points_5_3 is the correct one for sure
+            # print(faceLms.landmark[index].x)
+
+            # second attempt, tries to project faceLms from bbox origin
+            x = int(faceLms.landmark[index].x * width + bbox["left"])
+            y = int(faceLms.landmark[index].y * height + bbox["top"])
+
+            landmark_point=dlib.point([x,y])
+            raw_landmark_set.append(landmark_point)
+        dlib_all_points=dlib.points(raw_landmark_set)
+        return dlib_all_points
+        # print("all_points", all_points)
+        # print(bbox)
+
 
     # second attempt, tries to project faceLms from bbox origin
     width = (bbox["right"]-bbox["left"])
     height = (bbox["bottom"]-bbox["top"])
-
-    # print(height)
-
-    # third attempt, crops image to bbox, and keeps faceLms relative to bbox 
-    # print("bbox:")
-    # print(bbox)
-    # print(bbox["top"])
-    # bbox = json.loads(bbox)
-    # print("bbox")
-    # print(bbox)
-    # top = int(bbox["top"])
-    # bottom = int(bbox["bottom"])
-    # left = int(bbox["left"])
-    # right = int(bbox["right"])
-    # image = image[top:bottom, left:right]
-
-    # # image = image[bbox["top"]:bbox["bottom"],bbox["left"]:bbox["right"]]
-    # height, width, _ = image.shape
 
     landmark_points_68 = [162,234,93,58,172,136,149,148,152,377,378,365,397,
                       288,323,454,389,71,63,105,66,107,336,296,334,293,
@@ -421,31 +440,103 @@ def calc_encodings(image, faceLms,bbox,model='small'):## changed parameters and 
                         2 #bottom of nose tip 
                     ]
                     
-    if model=='small':landmark_points=landmark_points_5
+    if SMALL_MODEL is True:landmark_points=landmark_points_5
     else:landmark_points=landmark_points_68
-    raw_landmark_set = []
-    for index in landmark_points:                       ######### CORRECTION: landmark_points_5_3 is the correct one for sure
-        # print(faceLms.landmark[index].x)
+    
+    # dlib_all_points = get_dlib_all_points(landmark_points)
 
-        # second attempt, tries to project faceLms from bbox origin
-        x = int(faceLms.landmark[index].x * width + bbox["left"])
-        y = int(faceLms.landmark[index].y * height + bbox["top"])
+    # temp test hack
+    # dlib_all_points5 = get_dlib_all_points(landmark_points_5)
+    dlib_all_points68 = get_dlib_all_points(landmark_points_68)
 
-        landmark_point=dlib.point([x,y])
-        raw_landmark_set.append(landmark_point)
-    all_points=dlib.points(raw_landmark_set)
-    # print("all_points", all_points)
-    # print(bbox)
-        
     # ymin ("top") would be y value for top left point.
     bbox_rect= dlib.rectangle(left=bbox["left"], top=bbox["top"], right=bbox["right"], bottom=bbox["bottom"])
 
 
-    if (all_points is None) or (bbox is None):return 
-   
-    raw_landmark_set=dlib.full_object_detection(bbox_rect,all_points)
-    encodings=face_encoder.compute_face_descriptor(image, raw_landmark_set, num_jitters=1)
-    print(len(encodings))
+    # if (dlib_all_points is None) or (bbox is None):return 
+    # full_object_detection=dlib.full_object_detection(bbox_rect,dlib_all_points)
+    # encodings=face_encoder.compute_face_descriptor(image, full_object_detection, num_jitters=NUM_JITTERS)
+
+    if (dlib_all_points68 is None) or (bbox is None):return 
+    
+    # full_object_detection5=dlib.full_object_detection(bbox_rect,dlib_all_points5)
+    # encodings5=face_encoder.compute_face_descriptor(image, full_object_detection5, num_jitters=NUM_JITTERS)
+    # encodings5j=face_encoder.compute_face_descriptor(image, full_object_detection5, num_jitters=3)
+    # encodings5v2=facerec.compute_face_descriptor(image, full_object_detection5, num_jitters=NUM_JITTERS)
+
+    full_object_detection68=dlib.full_object_detection(bbox_rect,dlib_all_points68)
+    encodings68=face_encoder.compute_face_descriptor(image, full_object_detection68, num_jitters=NUM_JITTERS)
+    # encodings68j=face_encoder.compute_face_descriptor(image, full_object_detection68, num_jitters=3)
+    # encodings68v2=facerec.compute_face_descriptor(image, full_object_detection68, num_jitters=NUM_JITTERS)
+
+    # # hack of full dlib
+    # dets = detector(image, 1)
+    # for k, d in enumerate(dets):
+    #     print("Detection {}: Left: {} Top: {} Right: {} Bottom: {}".format(
+    #         k, d.left(), d.top(), d.right(), d.bottom()))
+    #     # Get the landmarks/parts for the face in box d.
+    #     shape = sp(image, d)
+    #     # print("shape")
+    #     # print(shape.pop())
+    #     face_descriptor = facerec.compute_face_descriptor(image, shape)
+    #     # print(face_descriptor)
+    #     encD=np.array(face_descriptor)
+
+
+    encodings = encodings68
+
+    # enc1=np.array(encodings5)
+    # enc2=np.array(encodings68)
+    # d=np.linalg.norm(enc1 - enc2, axis=0)
+
+    # # distance = pose.get_d(encodings5, encodings68)
+    # print("distance between 5 and 68 ")    
+    # print(d)    
+
+
+    # d=np.linalg.norm(encD - enc2, axis=0)
+
+    # # distance = pose.get_d(encodings5, encodings68)
+    # print("distance between dlib and mp hack - 68 ")    
+    # print(d)    
+
+
+    # # enc12=np.array(encodings5v2)
+    # # enc22=np.array(encodings68v2)
+    # # d=np.linalg.norm(enc12 - enc22, axis=0)
+
+    # # # distance = pose.get_d(encodings5, encodings68)
+    # # print("distance between 5v2 and 68v2 ")    
+    # # print(d)    
+
+
+    # enc1j=np.array(encodings5j)
+    # enc2j=np.array(encodings68j)
+    # d=np.linalg.norm(enc1j - enc2j, axis=0)
+
+    # # distance = pose.get_d(encodings5, encodings68)
+    # print("distance between 5j and 68j ")    
+    # print(d)    
+
+    # d=np.linalg.norm(enc1j - enc1, axis=0)
+    # # distance = pose.get_d(encodings5, encodings68)
+    # print("distance between 5 and 5j ")    
+    # print(d)    
+
+
+    # d=np.linalg.norm(enc2j - enc2, axis=0)
+    # # distance = pose.get_d(encodings5, encodings68)
+    # print("distance between 68 and 68j ")    
+    # print(d)    
+
+
+    # # d=np.linalg.norm(enc2 - enc22, axis=0)
+    # # # distance = pose.get_d(encodings5, encodings68)
+    # # print("distance between 68v and 68v2 ")    
+    # # print(d)    
+
+
+    # print(len(encodings))
     return np.array(encodings).tolist()
 
 def find_body(image,df):
@@ -518,70 +609,90 @@ def process_image_bbox(task):
 
 
 def process_image_enc_only(task):
-    #print("process_image")
-    def save_image_triage(image,df):
-        #saves a CV2 image elsewhere -- used in setting up test segment of images
-        if df.at['1', 'is_face']:
-            sort = "face"
-        elif df.at['1', 'is_body']:
-            sort = "body"
-        else:
-            sort = "none"
-        name = str(df.at['1', 'image_id'])+".jpg"
-        save_image_by_path(image, sort, name)
+    # print("process_image_enc_only")
 
-    # df = pd.DataFrame(columns=['image_id','is_face','is_body','is_face_distant','face_x','face_y','face_z','mouth_gap','face_landmarks','bbox','face_encodings','body_landmarks'])
-    # print(task)
-    # df.at['1', 'image_id'] = task[0]
     encoding_id = task[0]
     faceLms = task[2]
-    bbox = json.loads(task[3])
+    bbox = io.unstring_json(task[3])
     cap_path = capitalize_directory(task[1])
-    # print("SELECTED bbox faceLms")
-    # print(bbox)
-    # print(faceLms)
 
     try:
         image = cv2.imread(cap_path)  
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)    
       
-        # this is for when you need to move images into a testing folder structure
-        # save_image_elsewhere(image, task)
     except:
         print(f"[process_image]this item failed: {task}")
 
     if image is not None and image.shape[0]>MINSIZE and image.shape[1]>MINSIZE:
-        # now a list
-
         face_encodings = calc_encodings(image, faceLms,bbox)
-        # print(face_encodings)
 
     else:
         print('toooooo smallllll')
-        # I should probably assign no_good here...?
 
-    # store data
-    # print(df)
-    # print(face_encodings)
     pickled_encodings = pickle.dumps(face_encodings)
-    # encoded_encodings = base64.b64encode(face_encodings)
-    df = pd.DataFrame(columns=['encoding_id','face_encodings'])
+    df = pd.DataFrame(columns=['encoding_id'])
     df.at['1', 'encoding_id'] = encoding_id
-    df.at['1', 'face_encodings'] = pickled_encodings
+    # df.at['1', 'face_encodings'] = pickled_encodings
+
+    # set name of df and table column, based on model and jitters
+    # df_table_column = "face_encodings"
+    # if SMALL_MODEL is not True:
+    #     df_table_column = df_table_column+"68"
+    # if NUM_JITTERS > 1:
+    #     df_table_column = df_table_column+"_J"+str(NUM_JITTERS)
+
+    # df.at['1', df_table_column] = pickled_encodings
+    # sql = """
+    # UPDATE Encodings SET df_table_column = :df_table_column
+    # WHERE encoding_id = :encoding_id
+    # """
+
+    # else:
+    if SMALL_MODEL is True and NUM_JITTERS == 1:
+        df.at['1', 'face_encodings'] = pickled_encodings
+        sql = """
+        UPDATE Encodings SET face_encodings = :face_encodings
+        WHERE encoding_id = :encoding_id
+        """
+    elif SMALL_MODEL is False and NUM_JITTERS == 1:
+        print("updating face_encodings68")
+        df.at['1', 'face_encodings68'] = pickled_encodings
+        sql = """
+        UPDATE Encodings SET face_encodings68 = :face_encodings68
+        WHERE encoding_id = :encoding_id
+        """
+    elif SMALL_MODEL is True and NUM_JITTERS == 3:
+        df.at['1', 'face_encodings_J3'] = pickled_encodings
+        sql = """
+        UPDATE Encodings SET face_encodings_J3 = :face_encodings_J3
+        WHERE encoding_id = :encoding_id
+        """
+    elif SMALL_MODEL is False and NUM_JITTERS == 3:
+        df.at['1', 'face_encodings68_J3'] = pickled_encodings
+        sql = """
+        UPDATE Encodings SET face_encodings68_J3 = :face_encodings68_J3
+        WHERE encoding_id = :encoding_id
+        """
+    elif SMALL_MODEL is True and NUM_JITTERS == 5:
+        df.at['1', 'face_encodings_J5'] = pickled_encodings
+        sql = """
+        UPDATE Encodings SET face_encodings_J5 = :face_encodings_J5
+        WHERE encoding_id = :encoding_id
+        """
+    elif SMALL_MODEL is False and NUM_JITTERS == 5:
+        df.at['1', 'face_encodings68_J5'] = pickled_encodings
+        sql = """
+        UPDATE Encodings SET face_encodings68_J5 = :face_encodings68_J5
+        WHERE encoding_id = :encoding_id
+        """
+
+
     try:
         with engine.begin() as conn:
-            sql = """
-            UPDATE Encodings SET face_encodings = :face_encodings
-            WHERE encoding_id = :encoding_id
-            """
             params = df.to_dict("records")
             conn.execute(text(sql), params)
 
-        # update_sql = f"UPDATE Encodings6 SET face_encodings = '{pickled_encodings}' WHERE encoding_id = {encoding_id};"
-        # engine.connect().execute(text(update_sql))
         print("updated:",str(encoding_id))
-        # # DEBUGGING --> need to change this back to "encodings"
-        # insertignore_df(df,"encodings4", engine)  ### made it all lower case to avoid discrepancy
     except OperationalError as e:
         print(e)
 
@@ -602,7 +713,7 @@ def process_image(task):
     init_session()
     
 
-    df = pd.DataFrame(columns=['image_id','is_face','is_body','is_face_distant','face_x','face_y','face_z','mouth_gap','face_landmarks','bbox','face_encodings','body_landmarks'])
+    df = pd.DataFrame(columns=['image_id','is_face','is_body','is_face_distant','face_x','face_y','face_z','mouth_gap','face_landmarks','bbox','face_encodings','face_encodings68_J','body_landmarks'])
     print(task)
     df.at['1', 'image_id'] = task[0]
     cap_path = capitalize_directory(task[1])
@@ -744,7 +855,11 @@ def do_job(tasks_to_accomplish, tasks_that_are_done):
                 if no exception has been raised, add the task completion 
                 message to task_that_are_done queue
             '''
-            process_image(task)
+            if len(task) > 2:
+                # landmarks and bbox, so this is an encodings only
+                process_image_enc_only(task)
+            else:
+                process_image(task)
             # tasks_that_are_done.put(task + ' is done by ' + current_process().name)
             time.sleep(SLEEP_TIME)
     return True
@@ -850,19 +965,21 @@ def main():
                 
                 # gets folder via the folder list, keyed with site_id integer
                 imagepath=os.path.join(io.folder_list[site_id], hashed_path)
-                isExist = os.path.exists(imagepath)
-                print(">> SPLIT >> isExist")
-                split = print_get_split(split)
 
-                if isExist: 
-                    if row["face_landmarks"] is not None:
-                        task = (encoding_id,imagepath,pickle.loads(row["face_landmarks"]),row["bbox"])
-                    else:
-                        task = (image_id,imagepath)
-                    tasks_to_accomplish.put(task)
-                    # print("tasks_to_accomplish.put(task) ",imagepath)
+                if row["face_landmarks"] is not None:
+                    # this is a reprocessing, so don't need to test isExist
+                    print("reprocessing")
+                    task = (encoding_id,imagepath,pickle.loads(row["face_landmarks"]),row["bbox"])
                 else:
-                    print("this file is missssssssssing --------> ",imagepath)
+                    isExist = os.path.exists(imagepath)
+                    print(">> SPLIT >> isExist")
+                    split = print_get_split(split)
+                    if isExist: 
+                        task = (image_id,imagepath)
+                    else:
+                        print("this file is missssssssssing --------> ",imagepath)
+                tasks_to_accomplish.put(task)
+                # print("tasks_to_accomplish.put(task) ",imagepath)
 
             # creating processes
             for w in range(NUMBER_OF_PROCESSES):

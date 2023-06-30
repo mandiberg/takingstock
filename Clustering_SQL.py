@@ -11,7 +11,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 # my ORM
-from my_declarative_base import Base, Images, Clusters, ImagesClusters, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON, ForeignKey
+from my_declarative_base import Base, Images, Clusters68, ImagesClusters68, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON, ForeignKey
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import create_engine, text, MetaData, Table, Column, Numeric, Integer, VARCHAR, update, Float
@@ -29,6 +29,13 @@ from sys import platform
 from mp_db_io import DataIO
 
 # MM you need to use conda activate minimal_ds 
+
+'''
+tracking time based on items, for speed predictions
+items, seconds
+47000, 240
+100000, 695
+'''
 
 start = time.time()
 
@@ -48,10 +55,10 @@ if USE_SEGMENT is True:
 
     # where the script is looking for files list
     # do not use this if you are using the regular Clusters and ImagesClusters tables
-    SegmentTable_name = 'May25segment123side_to_side'
+    SegmentTable_name = 'June20segment123straight'
 
     # join with SSD tables. Satyam, use the one below
-    SELECT = "DISTINCT(e.image_id), e.face_encodings"
+    SELECT = "DISTINCT(e.image_id), e.face_encodings68"
     FROM = "Encodings e"
     QUERY = "e.image_id IN"
     SUBQUERY = f"(SELECT seg1.image_id FROM {SegmentTable_name} seg1 )"
@@ -135,10 +142,10 @@ def save_clusters_DB(df):
     for cluster_id in unique_clusters:
         cluster_df=df[df['cluster_id']==cluster_id]
         cluster_mean=np.array(df[col_list].mean())
-        existing_record = session.query(Clusters).filter_by(cluster_id=cluster_id).first()
+        existing_record = session.query(Clusters68).filter_by(cluster_id=cluster_id).first()
 
         if existing_record is None:
-            instance = Clusters(
+            instance = Clusters68(
                 cluster_id=cluster_id,
                 cluster_median=pickle.dumps(cluster_mean)
             )
@@ -186,10 +193,10 @@ def save_images_clusters_DB(df):
     for _, row in df.iterrows():
         image_id = row['image_id']
         cluster_id = row['cluster_id']
-        existing_record = session.query(ImagesClusters).filter_by(image_id=image_id).first()
+        existing_record = session.query(ImagesClusters68).filter_by(image_id=image_id).first()
 
         if existing_record is None:
-            instance = ImagesClusters(
+            instance = ImagesClusters68(
                 image_id=image_id,
                 cluster_id=cluster_id,
             )
@@ -214,7 +221,7 @@ def main():
     enc_data=pd.DataFrame()
     for row in resultsjson:
         # gets contentUrl
-        df=encodings_split(pickle.loads(row["face_encodings"], encoding='latin1'))
+        df=encodings_split(pickle.loads(row["face_encodings68"], encoding='latin1'))
         df["image_id"]=row["image_id"]
         enc_data = pd.concat([enc_data,df],ignore_index=True) 
     # choose if you want optimal cluster size or custom cluster size using the parameter opt_c_size
@@ -222,6 +229,8 @@ def main():
     enc_data["cluster_id"] = kmeans_cluster(enc_data,n_clusters=N_CLUSTERS)
     print(enc_data)
     print(set(enc_data["cluster_id"].tolist()))
+    enc_data.to_csv('clusters68_clusterID_byImageID.csv')
+
     # if USE_SEGMENT:
     #     Base.metadata.create_all(engine)
     save_clusters_DB(enc_data)

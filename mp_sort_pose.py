@@ -20,7 +20,8 @@ class SortPose:
         self.mp_drawing = mp.solutions.drawing_utils
 
         #maximum allowable distance between encodings
-        self.MAXDIST = 0.5
+        self.MAXDIST = 0.6
+        self.CUTOFF = 1000
 
         # maximum allowable scale up
         self.resize_max = 1.6
@@ -62,12 +63,12 @@ class SortPose:
             # self.SORT = 'mouth_gap'
             self.ROUND = 0
         elif motion['forward_smile'] == True:
-            self.XLOW = -20
-            self.XHIGH = 10
-            self.YLOW = -4
-            self.YHIGH = 4
-            self.ZLOW = -3
-            self.ZHIGH = 3
+            self.XLOW = -5
+            self.XHIGH = 1
+            self.YLOW = -2
+            self.YHIGH = 2
+            self.ZLOW = -2
+            self.ZHIGH = 2
             self.MINCROP = 1
             self.MAXRESIZE = .5
             self.FRAMERATE = 15
@@ -133,7 +134,7 @@ class SortPose:
             self.SORT = 'face_x'
             self.ROUND = 1
 
-    def set_counters(self,ROOT,cluster_no,start_img_name):
+    def set_counters(self,ROOT,cluster_no,start_img_name,start_site_image_id):
         self.negmargin_count = 0
         self.toosmall_count = 0 
         self.outfolder = os.path.join(ROOT,"cluster"+str(cluster_no)+"_"+str(time.time()))
@@ -148,6 +149,7 @@ class SortPose:
             "outfolder":  self.outfolder,
             "first_run":  True,
             "start_img_name":start_img_name,
+            "start_site_image_id":start_site_image_id,
             "last_image":None,
             "last_image_enc":None
 
@@ -309,8 +311,6 @@ class SortPose:
         # print("enc2")
         # print(enc2[0])
         d=np.linalg.norm(enc1 - enc2, axis=0)
-        print("d")
-        print(d)
         return d
 
 
@@ -615,13 +615,13 @@ class SortPose:
         try:
             print(type(self.image))
             borderType = cv2.BORDER_CONSTANT
-            self.EXPAND_SIZE = (5000,5000)
-            # value = [255,255,255]
-            value = [0,0,0]
+            self.EXPAND_SIZE = (10000,10000)
+            value = [255,255,255]
+            # value = [0,0,0]
 
             # scale image to match face heights
             resize = self.face_height_output/self.face_height
-            if resize < 4:
+            if resize < 15:
                 print("resize")
                 print(resize)
                 # image.shape is height[0] and width[1]
@@ -734,8 +734,9 @@ class SortPose:
 
         elif start_img == "start_site_image_id":
             print("start_site_image_id (this is what we are comparing to)")
-            print(start_site_image_id)
-            enc1 = df_128_enc.loc[start_site_image_id].to_list()
+            # print(start_site_image_id)
+            print(self.counter_dict["start_site_image_id"])
+            enc1 = df_128_enc.loc[self.counter_dict["start_site_image_id"]].to_list()
         else:
     #         enc1 = get 2-129 from df via stimg key
             print("start_img key is (this is what we are comparing to):")
@@ -765,9 +766,9 @@ class SortPose:
                 dist_dict[d]=index
                 enc2_dict[d]=enc2
         dist.sort()
-        print("debug index")
-        print(dist)
-        print(len(dist))
+        # print("debug index")
+        # print(dist)
+        # print(len(dist))
         print ("the winner is: ", str(dist[0]), dist_dict[dist[0]])
     #     print(len(dist))
         self.counter_dict["last_image_enc"]=enc2_dict[dist[0]]

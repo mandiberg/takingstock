@@ -2,6 +2,8 @@ import os
 from sys import platform
 import csv
 import hashlib
+import json
+import ast
 
 
 class DataIO:
@@ -108,8 +110,14 @@ class DataIO:
                 filepath = os.path.join(folder, file)
                 filepath=filepath.replace('\\' , '/')
                 img_list.append(file)
+        # img_list.sort()
         return img_list        
         print("got image list")
+
+
+    def get_folders(self,folder):
+        subfolders = [ f.path for f in os.scandir(folder) if f.is_dir() ]
+        return subfolders
 
     def get_hash_folders(self,filename):
         m = hashlib.md5()
@@ -149,5 +157,12 @@ class DataIO:
                     folder_paths.append(path)
             return folder_paths
 
+    def unstring_json(self, json_string):
+        eval_string = ast.literal_eval(json_string)
+        if isinstance(eval_string, dict):
+            return eval_string
+        else:
+            json_dict = json.loads(eval_string)
+            return json_dict
 
 
