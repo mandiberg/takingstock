@@ -1,10 +1,19 @@
 #sklearn imports
 from sklearn.decomposition import PCA #Principal Component Analysis
-from sklearn.manifold import TSNE #T-Distributed Stochastic Neighbor Embedding
 from sklearn.cluster import KMeans #K-Means Clustering
-from sklearn.preprocessing import StandardScaler #used for 'Feature Scaling'
-from sklearn.model_selection import ParameterGrid
-from sklearn import metrics
+
+#from sklearn.manifold import TSNE #T-Distributed Stochastic Neighbor Embedding
+#from sklearn.preprocessing import StandardScaler #used for 'Feature Scaling'
+#from sklearn.model_selection import ParameterGrid
+#from sklearn import metrics
+
+import datetime   ####### for saving cluster analytics
+import matplotlib as mpl
+import matplotlib.pyplot as plt
+from matplotlib import cm
+import plotly as py
+import plotly.graph_objs as go
+
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -47,8 +56,9 @@ NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 USE_SEGMENT = True
 
 # number of clusters produced
+opt_c_size=True
 N_CLUSTERS = 128
-
+save_fig=False ##### option for saving the visualized data
 
 if USE_SEGMENT is True:
 
@@ -110,6 +120,65 @@ def kmeans_cluster(df,n_clusters=32):
     kmeans.fit(df)
     clusters = kmeans.predict(df)
     return clusters
+    
+def export_html_clusters(enc_data,n_clusters)  
+    x = datetime.datetime.now()
+    d_time=x.strftime("%c").replace(":","-").replace(" ","_")
+    title = "Visualizing Clusters in Two Dimensions Using PCA"
+    filename="cluster_analytics"+str(d_time)+".html"
+    
+    class MplColorHelper:     ### making a class using matplotlib to choose colors instead of doing it manually
+
+        def __init__(self, cmap_name, start_val, stop_val):
+            self.cmap_name = cmap_name
+            self.cmap = plt.get_cmap(cmap_name)
+            self.norm = mpl.colors.Normalize(vmin=start_val, vmax=stop_val)
+            self.scalarMap = cm.ScalarMappable(norm=self.norm, cmap=self.cmap)
+
+        def get_rgb(self, val):
+            return self.scalarMap.to_rgba(val)
+    COL = MplColorHelper('magma', 0, n_clusters-1)
+    c=COL.get_rgb(np.arange(n_clusters))           ####### determining color for each cluster
+    
+    pca_2d = PCA(n_components=2)
+
+
+    PCs_2d = pd.DataFrame(pca_2d.fit_transform(enc_data.drop(["cluster_id"], axis=1)))
+    PCs_2d.columns = ["PC1_2d", "PC2_2d"]
+    plotX = pd.concat([plotX,PCs_2d], axis=1, join='inner')
+    data=[]
+    for i in range(n_clusters):
+        cluster=plotX[plotX["cluster_id"] == i]        
+        data.append(go.Scatter(
+                        x = cluster["PC1_2d"],
+                        y = cluster["PC2_2d"],
+                        mode = "markers",
+                        name = "Cluster "+str(i),
+                        marker = dict(color = 'rgba'+str(tuple(c[i]))),  ## it has to be tuples
+                        text = None)
+                    )
+
+
+    layout = dict(title = title,
+                  xaxis= dict(title= 'PC1',ticklen= 5,zeroline= False),
+                  yaxis= dict(title= 'PC2',ticklen= 5,zeroline= False)
+                 )
+
+    fig = dict(data = data, layout = layout)
+    py.offline.plot(fig, filename=filename, auto_open=False)
+    
+    return
+
+def best_score(df):
+    n_list=np.linspace(64,128,10,dtype='int')
+    score=np.zeros(len(n_list))
+    for i,n_clusters in enumerate(n_list):
+        kmeans = KMeans(n_clusters,n_init=10, init = 'k-means++', random_state = 42, max_iter = 300)
+        preds = kmeans.fit_predict(df)
+        score[i]=silhouette_score(df, preds)
+    b_score=n_list[np.argmax(score)]
+    
+    return b_score
     
 def encodings_split(encodings):
     col="encodings"
@@ -212,8 +281,10 @@ def main():
         df=encodings_split(pickle.loads(row["face_encodings68"], encoding='latin1'))
         df["image_id"]=row["image_id"]
         enc_data = pd.concat([enc_data,df],ignore_index=True) 
-    # I changed n_clusters to 128, from 3, and now it returns 128 clusters
-    enc_data["cluster_id"] = kmeans_cluster(enc_data,n_clusters=N_CLUSTERS)
+    # choose if you want optimal cluster size or custom cluster size using the parameter opt_c_size
+    if opt_c_size: N_clusters= best_score(enc_data.drop("image_id", axis=1))   #### Input ONLY encodings into clustering alhorithm
+    enc_data["cluster_id"] = kmeans_cluster(enc_data.drop("image_id", axis=1),n_clusters=N_CLUSTERS)
+    if save_fig: export_html_clusters(enc_data.drop("image_id", axis=1))
     print(enc_data)
     print(set(enc_data["cluster_id"].tolist()))
     enc_data.to_csv('clusters68_clusterID_byImageID.csv')
