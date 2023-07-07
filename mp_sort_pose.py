@@ -21,7 +21,7 @@ class SortPose:
 
         #maximum allowable distance between encodings
         self.MAXDIST = 0.6
-        self.CUTOFF = 1000
+        self.CUTOFF = 100
 
         # maximum allowable scale up
         self.resize_max = 1.6

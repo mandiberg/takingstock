@@ -50,7 +50,7 @@ SegmentTable_name = 'June20segment123straight'  #actually straight ahead smile
 # SATYAM, this is MM specific
 # for when I'm using files on my SSD vs RAID
 IS_MOVE = False
-IS_SSD = False
+IS_SSD = True
 
 # This is for when you only have the segment table. RW SQL query
 IS_SEGONLY= True
@@ -62,7 +62,7 @@ IS_CLUSTER = False
 N_CLUSTERS = 128
 # this is for IS_ONE_CLUSTER to only run on a specific CLUSTER_NO
 IS_ONE_CLUSTER = False
-CLUSTER_NO = 72
+CLUSTER_NO = 104
 
 # this controls whether it is using the linear or angle process
 IS_ANGLE_SORT = False
@@ -153,23 +153,25 @@ motion = {
 EXPAND = False
 
 # face_height_output is how large each face will be. default is 750
-# base_image_size = 750
-face_height_output = 400
+# face_height_output = 750
+face_height_output = 256
 
 # define ratios, in relationship to nose
 # units are ratio of faceheight
 # top, right, bottom, left
-# image_edge_multiplier = [1, 1, 1, 1]
+image_edge_multiplier = [1, 1, 1, 1]
+# image_edge_multiplier = [1.5,1.5,1.5,1.5]
 # image_edge_multiplier = [1.5, 2, 1.5, 2]
-image_edge_multiplier = [1.2, 1.2, 1.6, 1.2]
+# image_edge_multiplier = [1.2, 1.2, 1.6, 1.2]
 
 
 # construct my own objects
 sort = SortPose(motion, face_height_output, image_edge_multiplier,EXPAND)
 
-# start_img_name = "median"
-start_img_name = "start_site_image_id"
-start_site_image_id = "0/02/159079944-hopeful-happy-young-woman-looking-amazed-winning-prize-standing-white-background.jpg"
+start_img_name = "median"
+start_site_image_id = None
+# start_img_name = "start_site_image_id"
+# start_site_image_id = "0/02/159079944-hopeful-happy-young-woman-looking-amazed-winning-prize-standing-white-background.jpg"
 # start_site_image_id = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/images_123rf/E/E8/95447708-portrait-of-happy-smiling-beautiful-young-woman-touching-skin-or-applying-cream-isolated-over-white.jpg"
 # 274243    Portrait of funny afro guy  76865   {"top": 380, "left": 749, "right": 1204, "bottom": 835}
 enc_persist = None

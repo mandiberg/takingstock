@@ -16,16 +16,27 @@ class DataIO:
         # platform specific file folder (mac for michael, win for satyam)
         if platform == "darwin":
             ####### Michael's OS X Credentials ########
+            # self.db = {
+            #     "host":"localhost",
+            #     "name":"stock",            
+            #     "user":"root",
+            #     "pass":"XFZ5dPJq2"
+            # }
+
+            ####### Michael's MAMP Credentials ########
             self.db = {
                 "host":"localhost",
                 "name":"stock",            
                 "user":"root",
-                "pass":"XFZ5dPJq2"
+                "pass":"root",
+                "unix_socket":"/Applications/MAMP/tmp/mysql/mysql.sock",
+                "raise_on_warnings": True
             }
+
             self.ROOT_PROD= os.path.join(os.environ['HOME'], "Documents/projects-active/facemap_production") ## only on Mac
-            # self.ROOT36= "/Volumes/Test36" ## only on 
+            self.ROOT54= "/Volumes/RAID54" ## only on 
             # temp migration for
-            self.ROOT36= "/Volumes/6TB_mayday_2" ## only on 
+            # self.ROOT54= "/Volumes/6TB_mayday_2" ## only on 
             self.ROOT= self.ROOT_PROD ## defining ROOT though may be redefinied in main()
 
             self.NUMBER_OF_PROCESSES = 8
@@ -38,7 +49,7 @@ class DataIO:
                 "pass":"SSJ2_mysql"
             }
             self.ROOT= os.path.join("D:/"+"Documents/projects-active/facemap_production") ## SD CARD
-            self.ROOT36= self.ROOT
+            self.ROOT54= self.ROOT
             self.ROOT_PROD= self.ROOT
             self.NUMBER_OF_PROCESSES = 4
 
@@ -47,7 +58,7 @@ class DataIO:
                 "", #0, Empty, there is no site #0 -- starts count at 1
                 os.path.join(self.ROOT_PROD,"gettyimages/newimages"), #1, Getty
                 # temp for testing
-                # os.path.join(self.ROOT36,"gettyimages/testimages"), #1, Getty
+                # os.path.join(self.ROOT54,"gettyimages/testimages"), #1, Getty
                 os.path.join(self.ROOT_PROD,""),
                 os.path.join(self.ROOT_PROD,""),
                 os.path.join(self.ROOT_PROD,""),
@@ -60,17 +71,17 @@ class DataIO:
         else:
             self.folder_list = [
                 "", #0, Empty, there is no site #0 -- starts count at 1
-                os.path.join(self.ROOT_PROD,"gettyimages/newimages"), #1, Getty
+                # os.path.join(self.ROOT54,"gettyimages/newimages"), #1, Getty
                 # temp for testing
-                # os.path.join(self.ROOT36,"gettyimages/testimages"), #1, Getty
-                os.path.join(self.ROOT36,""),
-                os.path.join(self.ROOT36,""),
-                os.path.join(self.ROOT36,""),
-                os.path.join(self.ROOT36,"images_pexels"), #5, Pexels
-                os.path.join(self.ROOT36,""),
-                os.path.join(self.ROOT36,""),
-                os.path.join(self.ROOT36,"images_123rf"), #8, images_123rf
-                os.path.join(self.ROOT36,""),
+                os.path.join(self.ROOT54,"gettyimages/testimages"), #1, Getty
+                os.path.join(self.ROOT54,""),
+                os.path.join(self.ROOT54,""),
+                os.path.join(self.ROOT54,""),
+                os.path.join(self.ROOT54,"images_pexels"), #5, Pexels
+                os.path.join(self.ROOT54,""),
+                os.path.join(self.ROOT54,""),
+                os.path.join(self.ROOT54,"images_123rf"), #8, images_123rf
+                os.path.join(self.ROOT54,""),
             ]
 
     def capitalize_directory(self,path):
@@ -105,16 +116,19 @@ class DataIO:
             writer=csv.writer(csvfile, delimiter=',')
             writer.writerow(value_list)
 
-    def get_img_list(self, folder):
+    def get_img_list(self, folder, sort=True):
         img_list=[]
-        for file in os.listdir(folder):
+        for count,file in enumerate(os.listdir(folder)):
             if not file.startswith('.') and os.path.isfile(os.path.join(folder, file)):
                 filepath = os.path.join(folder, file)
                 filepath=filepath.replace('\\' , '/')
                 img_list.append(file)
-        # img_list.sort()
-        return img_list        
+        if sort is True:
+            img_list.sort()
+        print(len(img_list))
         print("got image list")
+        return img_list    
+
 
 
     def get_folders(self,folder):

@@ -3,10 +3,22 @@ import os
 import shutil
 import re
 
+import sys
+# caution: path[0] is reserved for script path (or '' in REPL)
+sys.path.insert(1, '/Users/michaelmandiberg/Documents/GitHub/facemap/')
+
+# import file
+
+from mp_db_io import DataIO
+
+io = DataIO()
+
 testname = "woman-in-a-music-concert-picture-id505111652.jpg"
 # PATH= os.path.join(os.environ['HOME'], "Documents/projects-active/facemap_production/gettyimages") 
-PATH = "/Volumes/Test36/images_pexels"
-NEWPATH = "/Volumes/Test36/new_images_pexels"
+PATH = "/Volumes/RAID54/scraping_phase_2/adobeStock_phases/adobeStockScraper_v2.1/images_short"
+NEWPATH = "/Volumes/RAID54/images_adobe"
+
+
 # folder ="5GB_testimages"
 COPY=True
 # CSV="/Users/michaelmandiberg/Dropbox/facemap_dropbox/test_data/Images_202302101516_30K.csv"
@@ -49,7 +61,7 @@ def touch(folder):
         os.makedirs(folder)
 
 def make_hash_folders():
-    basepath = '/new_images_pexels'
+    # basepath = '/new_images_pexels'
 
     #setup alphabet list
     #long to crate full directory structure
@@ -66,12 +78,12 @@ def make_hash_folders():
     #create depth 0
     for letter in alphabet:
         # print (letter)
-        pth = os.path.join(PATH,letter)
+        pth = os.path.join(NEWPATH,letter)
         touch(pth)
         for letter2 in alphabet2:
             # print (letter2)
 
-            pth = os.path.join(PATH,letter,letter+letter2)
+            pth = os.path.join(NEWPATH,letter,letter+letter2)
             touch(pth)
 
 
@@ -80,7 +92,7 @@ def make_hash_folders():
 make_hash_folders()
 
 #loop through all existing folders
-basepath = '/images_pexels'
+# basepath = '/images_pexels'
 
 #setup alphabet list
 #long to crate full directory structure
@@ -97,6 +109,36 @@ alphabet2 = alphabet2.split()
 
 counter = 0
 
+
+# for unsorted images, all in one folder
+
+print("going to get get_img_list")
+meta_file_list = io.get_img_list(PATH, sort=False)
+print(len(meta_file_list))
+for newfile in meta_file_list:
+    # newfile = file
+    # os.rename(file, newfile)
+
+    # if  re.search(r"\.jpg\.jpg", file):
+    #     print("\n\n\n\n\n\n\n\n\nDOUBLE TROUBLE DOUBLE TROUBLE DOUBLE TROUBLE DOUBLE TROUBLE DOUBLE TROUBLE \n\n\n\n\n\n\n\n\n") 
+    print(newfile)
+    a,b = get_hash_folders(newfile)
+    currentpathfile = os.path.join(PATH,newfile)
+    newpathfile = os.path.join(NEWPATH,a,b,newfile)
+
+    print(currentpathfile, newpathfile)
+
+    #if you dont move the files, it will repeate the renaming on about 10% of the files
+    shutil.move(currentpathfile, newpathfile)
+
+    print("moved from: ",currentpathfile)
+    print("moved to: ",newpathfile)
+    print(counter)
+    counter = counter+1
+
+
+'''
+# for sorted images, in correct folder
 #create depth 0
 for letter in alphabet:
     # print (letter)
@@ -135,12 +177,4 @@ for letter in alphabet:
             print(counter)
             counter = counter+1
 
-
-#when in each subfolder
-#get_dir_files
-#for each file in meta_file_list
-#rename with jpg
-#get_hash_folders(filename)
-#move filename to new filename with hashfolders
-
-#TEST ON A SMALL SUBSET FIRST!!!!
+'''

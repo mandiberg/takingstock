@@ -18,6 +18,7 @@ def write_video(img_array, ROOT, FRAMERATE=15):
     image_path = os.path.join(ROOT, img_array[0])
     img = cv2.imread(image_path)
     height, width, _ = img.shape
+    print(height, width)
 
     # Define the codec and create VideoWriter object
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
@@ -27,6 +28,7 @@ def write_video(img_array, ROOT, FRAMERATE=15):
     # Iterate over the image array and write frames to the video
     for filename in img_array:
         image_path = os.path.join(ROOT, filename)
+        print(image_path)
         img = cv2.imread(image_path)
         video_writer.write(img)
 
@@ -40,7 +42,7 @@ def write_video(img_array, ROOT, FRAMERATE=15):
 # img_array = ['image1.jpg', 'image2.jpg', 'image3.jpg']
 HOLDER = '/Users/michaelmandiberg/Documents/projects-active/facemap_production/'
 FRAMERATE = 15
-FOLDER = "face_encodings5_prize"
+FOLDER = "none_256x1"
 ROOT = os.path.join(HOLDER,FOLDER)
 list_of_files= io.get_img_list(ROOT)
 print(list_of_files)

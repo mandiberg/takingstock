@@ -11,7 +11,7 @@ io = DataIO()
 db = io.db
 
 # iterate through folders? 
-IS_CLUSTER = True
+IS_CLUSTER = False
 
 # are we making videos or making merged stills?
 IS_VIDEO = True
@@ -21,7 +21,7 @@ IS_VIDEO = True
 ROOT_FOLDER_PATH = '/Users/michaelmandiberg/Documents/projects-active/facemap_production/'
 # if IS_CLUSTER this should be the folder holding all the cluster folders
 # if not, this should be the individual folder holding the images
-FOLDER_NAME ="june24_enc5"
+FOLDER_NAME ="104_256x1"
 FOLDER_PATH = os.path.join(ROOT_FOLDER_PATH,FOLDER_NAME)
 
 # WRITE VIDEO
@@ -193,12 +193,22 @@ def main():
                 else:
                     save_merge(merged_image, count, cluster_no, FOLDER_PATH)
     else:
-        merged_image, count, cluster_no = merge_images(FOLDER_PATH)
-        save_merge(merged_image, count, cluster_no, FOLDER_PATH)
+        if IS_VIDEO is True:
+            all_img_path_list = io.get_img_list(FOLDER_PATH)
+            print(all_img_path_list)
+            write_video(all_img_path_list, FRAMERATE, FOLDER_PATH)
+
+            # # const_videowriter(subfolder_path, FRAMERATE)
+            # for subfolder_path in subfolders:
+            #     write_video(subfolder_path, FRAMERATE)
+        else:
+
+            merged_image, count, cluster_no = merge_images(FOLDER_PATH)
+            save_merge(merged_image, count, cluster_no, FOLDER_PATH)
      
 
 
-    print('Merged image saved successfully.')
+    print('Merged image/video saved successfully.')
 
 
 

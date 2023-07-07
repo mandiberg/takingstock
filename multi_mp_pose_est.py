@@ -47,24 +47,25 @@ SLEEP_TIME=0
 
 # am I looking on SSD for a folder? If not, will pull directly from SQL
 IS_FOLDER = False
-MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/testimages/"
+MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/images_123rf_ingest_test/"
 
 SELECT = "DISTINCT i.image_id, i.site_name_id, i.contentUrl, i.imagename, e.encoding_id, i.site_image_id, e.face_landmarks, e.bbox"
 
 ############# KEYWORD SELECT #############
-# FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings e ON i.image_id = e.image_id"
+FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings e ON i.image_id = e.image_id"
 # gettytest3
-# WHERE = "e.face_encodings68_J3 IS NULL AND e.face_encodings IS NOT NULL"
+# WHERE = "e.face_encodings68 IS NULL AND e.face_encodings IS NOT NULL"
 # production
-# WHERE = "e.encoding_id IS NULL AND i.site_name_id = 8 AND i.age_id NOT IN (1,2,3,4) AND k.keyword_text LIKE 'smil%'"
-# IS_SSD=False
+WHERE = "e.encoding_id IS NULL AND i.site_name_id = 8 AND k.keyword_text LIKE 'laugh%'"
+# AND i.age_id NOT IN (1,2,3,4)
+IS_SSD=False
 ##########################################
 
 ############# Reencodings #############
 # SegmentTable_name = 'May25segment123straight_lessrange'
 # SegmentTable_name = 'June20segment123straight'
-FROM ="Images i LEFT JOIN Encodings e ON i.image_id = e.image_id"
-WHERE = "e.face_encodings68 IS NULL AND e.face_encodings IS NOT NULL AND i.site_name_id = 8"
+# FROM ="Images i LEFT JOIN Encodings e ON i.image_id = e.image_id"
+# WHERE = "e.face_encodings68 IS NULL AND e.face_encodings IS NOT NULL AND i.site_name_id = 8"
 # QUERY = "e.face_encodings IS NULL AND e.image_id IN"
 # SUBQUERY = f"(SELECT seg1.image_id FROM {SegmentTable_name} seg1 )"
 # WHERE = f"{QUERY} {SUBQUERY}"
@@ -72,7 +73,7 @@ WHERE = "e.face_encodings68 IS NULL AND e.face_encodings IS NOT NULL AND i.site_
 ## Gettytest3
 # WHERE = "e.face_encodings IS NULL AND e.bbox IS NOT NULL"
 
-IS_SSD=False
+# IS_SSD=False
 ##########################################
 
 
@@ -86,7 +87,7 @@ IS_SSD=False
 # IS_SSD=True
 ##########################################
 
-LIMIT = 10000
+LIMIT = 25000
 
 # platform specific credentials
 io = DataIO(IS_SSD)
@@ -129,8 +130,13 @@ start = time.time()
 def init_session():
     # init session
     global engine, Session, session
-    engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}"
-                                    .format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']), poolclass=NullPool)
+    # engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}"
+    #                                 .format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']), poolclass=NullPool)
+    
+    engine = create_engine("mysql+pymysql://{user}:{pw}@/{db}?unix_socket={socket}".format(
+        user=db['user'], pw=db['pass'], db=db['name'], socket=db['unix_socket']
+    ), poolclass=NullPool)
+
     metadata = MetaData(engine)
     Session = sessionmaker(bind=engine)
     session = Session()
@@ -699,7 +705,7 @@ def process_image_enc_only(task):
 
 def process_image(task):
     #print("process_image")
-    processes_start = time.time()
+    pr_split = time.time()
     def save_image_triage(image,df):
         #saves a CV2 image elsewhere -- used in setting up test segment of images
         if df.at['1', 'is_face']:
@@ -718,10 +724,11 @@ def process_image(task):
     print(task)
     df.at['1', 'image_id'] = task[0]
     cap_path = capitalize_directory(task[1])
-    print(">> SPLIT >> made DF, about to imread")
-    pr_split = print_get_split(processes_start)
+    # print(">> SPLIT >> made DF, about to imread")
+    # pr_split = print_get_split(pr_split)
 
     try:
+        # i think i'm doing this twice. I should just do it here. 
         image = cv2.imread(cap_path)
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)    
         # this is for when you need to move images into a testing folder structure
@@ -729,14 +736,14 @@ def process_image(task):
     except:
         print(f"[process_image]this item failed: {task}")
 
-    print(">> SPLIT >> done imread, about to find face")
-    pr_split = print_get_split(pr_split)
+    # print(">> SPLIT >> done imread, about to find face")
+    # pr_split = print_get_split(pr_split)
 
     if image is not None and image.shape[0]>MINSIZE and image.shape[1]>MINSIZE:
         # Do FaceMesh
         df = find_face(image, df)
-        print(">> SPLIT >> done find_face")
-        pr_split = print_get_split(pr_split)
+        # print(">> SPLIT >> done find_face")
+        # pr_split = print_get_split(pr_split)
 
         # Do Body Pose
         # temporarily commenting this out
@@ -785,8 +792,8 @@ def process_image(task):
             del insert_dict[key]
 
 
-        print(">> SPLIT >> done insert_dict stuff")
-        pr_split = print_get_split(pr_split)
+        # print(">> SPLIT >> done insert_dict stuff")
+        # pr_split = print_get_split(pr_split)
 
 
         # print("dict_df", insert_dict)
@@ -797,10 +804,10 @@ def process_image(task):
             image_id = insert_dict['image_id']
             # can I filter this by site_id? would that make it faster or slower? 
             existing_entry = session.query(Encodings).filter_by(image_id=image_id).first()
-            print("existing_entry", existing_entry)
+            print("DB: existing_entry", existing_entry)
 
-        print(">> SPLIT >> done query for existing_entry")
-        pr_split = print_get_split(pr_split)
+        # print(">> SPLIT >> done query for existing_entry")
+        # pr_split = print_get_split(pr_split)
 
         if IS_FOLDER is True or existing_entry is None:
             for _ in range(io.max_retries):
@@ -813,7 +820,7 @@ def process_image(task):
                     new_entry = Encodings(**insert_dict)
                     session.add(new_entry)
                     session.commit()
-                    print(f"just added to db")
+                    # print(f"just added to db")
 
                     break  # Transaction succeeded, exit the loop
                 except OperationalError as e:
@@ -825,8 +832,8 @@ def process_image(task):
 
 
 
-        print(">> SPLIT >> done commit new_entry")
-        pr_split = print_get_split(pr_split)
+        # print(">> SPLIT >> done commit new_entry")
+        # pr_split = print_get_split(pr_split)
 
 
 
@@ -859,8 +866,10 @@ def do_job(tasks_to_accomplish, tasks_that_are_done):
             if len(task) > 2:
                 # landmarks and bbox, so this is an encodings only
                 process_image_enc_only(task)
+                print("process_image_enc_only")
             else:
                 process_image(task)
+                print("regular process_image")
             # tasks_that_are_done.put(task + ' is done by ' + current_process().name)
             time.sleep(SLEEP_TIME)
     return True
@@ -876,21 +885,37 @@ def main():
     processes = []
 
     count = 0
+    this_count = 0
+    folder_count = 0
     last_round = False
     jsonsplit = time.time()
 
     if IS_FOLDER is True:
-        print("in IS_SSD")
+        print("in IS_FOLDER")
         folder_paths = io.make_hash_folders(MAIN_FOLDER, as_list=True)
+        print(len(folder_paths))
         for folder_path in folder_paths:
             folder = os.path.join(MAIN_FOLDER,folder_path)
-            print(folder)
+            folder_count += 1
+            if not os.path.exists(folder):
+                print(str(folder_count), "no folder here:",folder)
+                continue
+            else:
+                print(str(folder_count), folder)
+
             img_list = io.get_img_list(folder)
-
+            print(len(img_list))
             # Collect site_image_id values from the image filenames
-            site_image_ids = [img.split("-id")[-1].replace(".jpg", "") for img in img_list]
 
+            # 123rf
+            site_image_ids = [img.split("-")[0] for img in img_list]
+
+            # gettyimages
+            # site_image_ids = [img.split("-id")[-1].replace(".jpg", "") for img in img_list]
+
+            # query all site_image_ids and return image_id and encoding_id
             try:
+                print("trying to get results")
                 results = session.query(Images.image_id, Images.site_image_id, Encodings.encoding_id) \
                     .outerjoin(Encodings, Images.image_id == Encodings.image_id) \
                     .filter(Images.site_image_id.in_(site_image_ids)) \
@@ -899,22 +924,31 @@ def main():
                 print(e)
                 time.sleep(io.retry_delay)
 
+            print("printing all results")
             for row in results:
                 print(row)
-            # quit()
+            quit()
             # Create a dictionary to map site_image_id to the corresponding result
             results_dict = {result.site_image_id: result for result in results}
 
+            # going back through the img_list, to use as key for the results_dict
             for img in img_list:
-                site_image_id = img.split("-id")[-1].replace(".jpg", "")
+
+                # extract site_image_id for 213rf
+                site_image_id = img.split("-")[0]
+
+                # # extract site_image_id for getty images
+                # site_image_id = img.split("-id")[-1].replace(".jpg", "")
 
                 if site_image_id in results_dict:
                     result = results_dict[site_image_id]
                     if not result.encoding_id:
+                        # if it hasn't been encoded yet, add it to the tasks
                         imagepath = os.path.join(folder, img)
                         task = (result.image_id, imagepath)
                         print(task)
                         tasks_to_accomplish.put(task)
+                        this_count += 1
 
             for w in range(NUMBER_OF_PROCESSES):
                 p = Process(target=do_job, args=(tasks_to_accomplish, tasks_that_are_done))
@@ -928,8 +962,13 @@ def main():
             print(">> SPLIT >> p.join, done with this folder")
             split = print_get_split(jsonsplit)
 
-            count += len(img_list)
-            print(f"completed round of {str(len(img_list))} total results processed is: {str(count)}")
+            count += this_count
+            print(f"completed {str(this_count)} of {str(len(img_list))} -- total count: {str(count)}")
+            if this_count > 500:
+                quit()
+            else:
+                this_count = 0
+            # quit()
 
     else:
         print("old school SQL")
@@ -970,13 +1009,16 @@ def main():
                     print("reprocessing")
                     task = (encoding_id,imagepath,pickle.loads(row["face_landmarks"]),row["bbox"])
                 else:
-                    isExist = os.path.exists(imagepath)
-                    print(">> SPLIT >> isExist")
-                    split = print_get_split(split)
-                    if isExist: 
-                        task = (image_id,imagepath)
-                    else:
-                        print("this file is missssssssssing --------> ",imagepath)
+                    task = (image_id,imagepath)
+
+                    # getting rid of isExist test for now
+                    # isExist = os.path.exists(imagepath)
+                    # print(">> SPLIT >> isExist")
+                    # split = print_get_split(split)
+                    # if isExist: 
+                    #     task = (image_id,imagepath)
+                    # else:
+                    #     print("this file is missssssssssing --------> ",imagepath)
                 tasks_to_accomplish.put(task)
                 # print("tasks_to_accomplish.put(task) ",imagepath)
 
