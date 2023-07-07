@@ -11,8 +11,9 @@ import datetime   ####### for saving cluster analytics
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 from matplotlib import cm
-import plotly as py
-import plotly.graph_objs as go
+# temp commented out b/c mm doesn't have installed
+# import plotly as py
+# import plotly.graph_objs as go
 
 
 from sqlalchemy import create_engine
@@ -56,9 +57,10 @@ NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 USE_SEGMENT = True
 
 # number of clusters produced
-opt_c_size=True
+# turning off for testing
+OPT_C_SIZE=True
 N_CLUSTERS = 128
-save_fig=False ##### option for saving the visualized data
+SAVE_FIG=False ##### option for saving the visualized data
 
 if USE_SEGMENT is True:
 
@@ -82,8 +84,13 @@ else:
     LIMIT = 1000
     SegmentTable_name = ""
 
-
-engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}"
+if db['unix_socket']:
+    # for MM's MAMP config
+    engine = create_engine("mysql+pymysql://{user}:{pw}@/{db}?unix_socket={socket}".format(
+        user=db['user'], pw=db['pass'], db=db['name'], socket=db['unix_socket']
+    ), poolclass=NullPool)
+else:
+    engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}"
                                 .format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']), poolclass=NullPool)
 # metadata = MetaData(engine)
 Session = sessionmaker(bind=engine)
@@ -121,7 +128,7 @@ def kmeans_cluster(df,n_clusters=32):
     clusters = kmeans.predict(df)
     return clusters
     
-def export_html_clusters(enc_data,n_clusters)  
+def export_html_clusters(enc_data,n_clusters):
     x = datetime.datetime.now()
     d_time=x.strftime("%c").replace(":","-").replace(" ","_")
     title = "Visualizing Clusters in Two Dimensions Using PCA"
@@ -281,10 +288,12 @@ def main():
         df=encodings_split(pickle.loads(row["face_encodings68"], encoding='latin1'))
         df["image_id"]=row["image_id"]
         enc_data = pd.concat([enc_data,df],ignore_index=True) 
-    # choose if you want optimal cluster size or custom cluster size using the parameter opt_c_size
-    if opt_c_size: N_clusters= best_score(enc_data.drop("image_id", axis=1))   #### Input ONLY encodings into clustering alhorithm
+    
+    # choose if you want optimal cluster size or custom cluster size using the parameter OPT_C_SIZE
+    # if OPT_C_SIZE is True: N_clusters= best_score(enc_data.drop("image_id", axis=1))   #### Input ONLY encodings into clustering alhorithm
     enc_data["cluster_id"] = kmeans_cluster(enc_data.drop("image_id", axis=1),n_clusters=N_CLUSTERS)
-    if save_fig: export_html_clusters(enc_data.drop("image_id", axis=1))
+    
+    if SAVE_FIG: export_html_clusters(enc_data.drop("image_id", axis=1))
     print(enc_data)
     print(set(enc_data["cluster_id"].tolist()))
     enc_data.to_csv('clusters68_clusterID_byImageID.csv')
