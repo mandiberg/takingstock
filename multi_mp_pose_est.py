@@ -56,7 +56,8 @@ FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords
 # gettytest3
 # WHERE = "e.face_encodings68 IS NULL AND e.face_encodings IS NOT NULL"
 # production
-WHERE = "e.encoding_id IS NULL AND i.site_name_id = 8 AND k.keyword_text LIKE 'smil%'"
+# WHERE = "e.is_face IS TRUE AND e.face_encodings68 IS NULL"
+WHERE = "e.encoding_id IS NULL AND  k.keyword_text LIKE 'business%'"
 # AND i.age_id NOT IN (1,2,3,4)
 IS_SSD=False
 ##########################################

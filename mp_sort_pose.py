@@ -21,10 +21,10 @@ class SortPose:
 
         #maximum allowable distance between encodings
         self.MAXDIST = 0.6
-        self.CUTOFF = 100
+        self.CUTOFF = 1000
 
         # maximum allowable scale up
-        self.resize_max = 1.6
+        self.resize_max = 1.99
         self.image_edge_multiplier = image_edge_multiplier
         self.face_height_output = face_height_output
         # takes base image size and multiplies by avg of multiplier

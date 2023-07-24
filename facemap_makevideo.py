@@ -45,7 +45,7 @@ CYCLECOUNT = 1
 # keep this live, even if not SSD
 # SegmentTable_name = 'May25segment123side_to_side'
 # SegmentTable_name = 'May25segment123updown_laugh'
-SegmentTable_name = 'June20segment123straight'  #actually straight ahead smile
+SegmentTable_name = 'July15segment123straight'  #actually straight ahead smile
 
 # SATYAM, this is MM specific
 # for when I'm using files on my SSD vs RAID
@@ -59,10 +59,10 @@ IS_SEGONLY= True
 # all clusters,
 IS_CLUSTER = False
 # number of clusters to analyze -- this is also declared in Clustering_SQL. Move to IO?
-N_CLUSTERS = 128
+N_CLUSTERS = 113
 # this is for IS_ONE_CLUSTER to only run on a specific CLUSTER_NO
 IS_ONE_CLUSTER = False
-CLUSTER_NO = 104
+CLUSTER_NO = 77
 
 # this controls whether it is using the linear or angle process
 IS_ANGLE_SORT = False
@@ -109,7 +109,7 @@ elif IS_MOVE and IS_SEGONLY is not True:
     SELECT = "DISTINCT(i.image_id), i.site_name_id, i.contentUrl, i.imagename, e.face_x, e.face_y, e.face_z, e.mouth_gap, e.face_landmarks, e.bbox, e.face_encodings, i.site_image_id"
     FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings e ON i.image_id = e.image_id"
     # # for smiling images
-    WHERE = "e.is_face IS TRUE AND e.face_encodings IS NOT NULL AND e.bbox IS NOT NULL AND i.site_name_id = 8 AND k.keyword_text LIKE 'smil%'"
+    WHERE = "e.face_encodings68 IS NOT NULL AND i.site_name_id = 8  AND e.face_x > -15 AND e.face_x < 5 AND e.face_y > -4 AND e.face_y < 4     AND e.face_z > -3 AND e.face_z < 3"
 
 
     # # for laugh images
@@ -129,7 +129,10 @@ elif IS_SEGONLY:
     FROM =f"Images i LEFT JOIN Encodings e ON i.image_id = e.image_id INNER JOIN {SegmentTable_name} seg ON i.site_image_id = seg.site_image_id"
     if IS_CLUSTER is True or IS_ONE_CLUSTER is True:
         FROM += " JOIN ImagesClusters68 ic ON i.image_id = ic.image_id"
-    WHERE = "e.is_face IS TRUE AND e.face_encodings68 IS NOT NULL AND e.bbox IS NOT NULL AND i.site_name_id = 8 AND i.age_id NOT IN (1,2,3,4)"
+    # WHERE = "e.is_face IS TRUE AND e.face_encodings68 IS NOT NULL AND e.bbox IS NOT NULL AND i.site_name_id = 8 AND i.age_id NOT IN (1,2,3,4)"
+    WHERE = "e.face_encodings68 IS NOT NULL"
+    # WHERE = "e.mouth_gap > 15"
+
 
     # this is for gettytest3 table
     # SELECT = "DISTINCT(image_id), site_name_id, contentUrl, imagename, face_x, face_y, face_z, mouth_gap, face_landmarks, bbox, face_encodings, site_image_id"
@@ -139,7 +142,7 @@ elif IS_SEGONLY:
     # WHERE = "bbox IS NOT NULL"
     # AND i.site_name_id = 1 AND k.keyword_text LIKE 'smil%'"
 
-LIMIT = 100000
+LIMIT = 110000
 
 motion = {
     "side_to_side": False,
@@ -153,25 +156,31 @@ motion = {
 EXPAND = False
 
 # face_height_output is how large each face will be. default is 750
-# face_height_output = 750
-face_height_output = 256
+face_height_output = 500
+# face_height_output = 256
 
 # define ratios, in relationship to nose
 # units are ratio of faceheight
 # top, right, bottom, left
-image_edge_multiplier = [1, 1, 1, 1]
+# image_edge_multiplier = [1, 1, 1, 1]
 # image_edge_multiplier = [1.5,1.5,1.5,1.5]
 # image_edge_multiplier = [1.5, 2, 1.5, 2]
-# image_edge_multiplier = [1.2, 1.2, 1.6, 1.2]
+image_edge_multiplier = [1.2, 1.2, 1.6, 1.2]
 
 
 # construct my own objects
 sort = SortPose(motion, face_height_output, image_edge_multiplier,EXPAND)
 
-start_img_name = "median"
-start_site_image_id = None
-# start_img_name = "start_site_image_id"
-# start_site_image_id = "0/02/159079944-hopeful-happy-young-woman-looking-amazed-winning-prize-standing-white-background.jpg"
+# start_img_name = "median"
+# start_site_image_id = None
+start_img_name = "start_site_image_id"
+start_site_image_id = "0/02/159079944-hopeful-happy-young-woman-looking-amazed-winning-prize-standing-white-background.jpg"
+# start_site_image_id = "0/08/158083627-man-in-white-t-shirt-gesturing-with-his-hands-studio-cropped.jpg"
+
+# no gap
+# start_site_image_id = "5/58/95516714-happy-well-dressed-man-holding-a-gift-on-white-background.jpg"
+
+
 # start_site_image_id = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/images_123rf/E/E8/95447708-portrait-of-happy-smiling-beautiful-young-woman-touching-skin-or-applying-cream-isolated-over-white.jpg"
 # 274243    Portrait of funny afro guy  76865   {"top": 380, "left": 749, "right": 1204, "bottom": 835}
 enc_persist = None
@@ -180,7 +189,13 @@ enc_persist = None
 # override io.db for testing mode
 # db['name'] = "123test"
 
-engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}"
+if db['unix_socket']:
+    # for MM's MAMP config
+    engine = create_engine("mysql+pymysql://{user}:{pw}@/{db}?unix_socket={socket}".format(
+        user=db['user'], pw=db['pass'], db=db['name'], socket=db['unix_socket']
+    ), poolclass=NullPool)
+else:
+    engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}"
                                 .format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']), poolclass=NullPool)
 # metadata = MetaData(engine)
 Session = sessionmaker(bind=engine)
@@ -202,7 +217,7 @@ class SegmentTable(Base):
     face_landmarks = Column(BLOB)
     bbox = Column(JSON)
     face_encodings = Column(BLOB)
-    body_landmarks = Column(BLOB)
+    face_encodings68 = Column(BLOB)
     site_image_id = Column(String(50), nullable=False)
 
 # construct mediapipe objects
@@ -282,8 +297,11 @@ def save_segment_DB(df_segment):
 # for linear it is in the df_enc, but for itter, the start_img_name is in prev df_enc
 # takes a dataframe of images and encodings and returns a df sorted by distance
 def sort_by_face_dist(df_enc, df_128_enc):
+    
+
     this_start = sort.counter_dict["start_img_name"]
     face_distances=[]
+
     # this prob should be a df.iterrows
     print("df_enc.index")
     print(df_enc.index)
@@ -359,8 +377,13 @@ def sort_by_face_dist(df_enc, df_128_enc):
         #     print(str(row[0]), row[2])
     df = pd.DataFrame(face_distances, columns =['dist', 'folder', 'filename','site_name_id','face_landmarks', 'bbox'])
     print(df)
-    last_file = face_distances[-1][2]
-    print("last_file ",last_file)
+    try:
+        last_file = face_distances[-1][2]
+        print("last_file ",last_file)
+    except:
+        last_file = this_start
+        print("last_file is this_start",last_file)
+
     sort.counter_dict["start_img_name"] = last_file
 
     # df = df.sort_values(by=['dist']) # this was sorting based on delta distance, not sequential distance
@@ -810,6 +833,9 @@ def main():
 
                 process_iterr_angles(start_img_name,df_segment, cluster_no, sort)
             else:
+                # hard coding override to just start from median
+                # sort.counter_dict["start_img_name"] = "median"
+
                 process_linear(start_img_name,df_segment, cluster_no, sort)
         elif df.empty and IS_CLUSTER:
             print('dataframe empty, but IS_CLUSTER so continuing to next cluster_no')

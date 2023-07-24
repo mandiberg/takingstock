@@ -29,19 +29,21 @@ sig = '''
 # PATH= os.path.join(os.environ['HOME'], "Documents/projects-active/facemap_production/gettyimages") 
 
 #where the images are:
-PATH = "/Volumes/Test36/"
+PATH = "/Volumes/RAID54/"
 #where the images are going:
 PATH2 = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/"
-SEGMENTTABLE_NAME = 'May25segment123straight_lessrange'
+SEGMENTTABLE_NAME = 'July15segment123straight'
 
 COPY=True
 IMAGES_THREAD_COUNTER = 0
+
+# right now this is only working for one site at a time
 IMAGES_FOLDER_NAME = 'images_123rf'
 NEWIMAGES_FOLDER_NAME = 'images_123rf'
 NUMBER_OF_THREADS_IMAGES_DOWNLOAD =15
 OLDPATH = os.path.join(PATH, IMAGES_FOLDER_NAME)
 NEWPATH = os.path.join(PATH2, NEWIMAGES_FOLDER_NAME)
-CSV_COUNTOUT_PATH = "/Volumes/Test36/CSVs_to_ingest/123rfCSVs/countout2ssd.csv"
+CSV_COUNTOUT_PATH = "/Volumes/RAID54/CSVs_to_ingest/123rfCSVs/countout2ssd.csv"
 
 # platform specific credentials
 io = DataIO()
@@ -50,8 +52,14 @@ ROOT = io.ROOT
 NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 
 
-engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}"
-                                .format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']), poolclass=NullPool)
+# engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}"
+#                                 .format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']), poolclass=NullPool)
+
+# MAMP
+engine = create_engine("mysql+pymysql://{user}:{pw}@/{db}?unix_socket={socket}".format(
+    user=db['user'], pw=db['pass'], db=db['name'], socket=db['unix_socket']
+), poolclass=NullPool)
+
 Session = sessionmaker(bind=engine)
 session = Session()
 Base = declarative_base()
@@ -72,7 +80,7 @@ class SegmentTable(Base):
     face_landmarks = Column(BLOB)
     bbox = Column(JSON)
     face_encodings = Column(BLOB)
-    body_landmarks = Column(BLOB)
+    face_encodings68 = Column(BLOB)
     site_image_id = Column(String(50), nullable=False)
 
 
@@ -132,6 +140,7 @@ def main():
     session = Session()
 
     query = session.query(SegmentTable.image_id, SegmentTable.imagename)\
+        .filter(SegmentTable.site_name_id==8)\
         # .limit(100)
 
     # Fetch the results

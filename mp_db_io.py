@@ -26,7 +26,7 @@ class DataIO:
             ####### Michael's MAMP Credentials ########
             self.db = {
                 "host":"localhost",
-                "name":"stock",            
+                "name":"gettytest3",            
                 "user":"root",
                 "pass":"root",
                 "unix_socket":"/Applications/MAMP/tmp/mysql/mysql.sock",
@@ -71,9 +71,9 @@ class DataIO:
         else:
             self.folder_list = [
                 "", #0, Empty, there is no site #0 -- starts count at 1
-                # os.path.join(self.ROOT54,"gettyimages/newimages"), #1, Getty
+                os.path.join(self.ROOT54,"gettyimages/newimages"), #1, Getty
                 # temp for testing
-                os.path.join(self.ROOT54,"gettyimages/testimages"), #1, Getty
+                # os.path.join(self.ROOT54,"gettyimages/testimages"), #1, Getty
                 os.path.join(self.ROOT54,""),
                 os.path.join(self.ROOT54,""),
                 os.path.join(self.ROOT54,""),

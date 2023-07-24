@@ -21,7 +21,7 @@ IS_VIDEO = True
 ROOT_FOLDER_PATH = '/Users/michaelmandiberg/Documents/projects-active/facemap_production/'
 # if IS_CLUSTER this should be the folder holding all the cluster folders
 # if not, this should be the individual folder holding the images
-FOLDER_NAME ="104_256x1"
+FOLDER_NAME ="smiling_women_2k_v3"
 FOLDER_PATH = os.path.join(ROOT_FOLDER_PATH,FOLDER_NAME)
 
 # WRITE VIDEO

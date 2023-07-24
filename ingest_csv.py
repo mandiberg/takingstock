@@ -20,6 +20,7 @@ from sqlalchemy import create_engine, text, MetaData, Table, Column, Numeric, In
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.pool import NullPool
 from sqlalchemy.dialects.mysql import insert
+from mp_db_io import DataIO
 
 sig = '''
 
@@ -32,32 +33,32 @@ _|_|  _|\__, |\___|____/\__| \___|____/  \_/
 
 
 ######## Michael's Credentials ########
-db = {
-    "host":"localhost",
-    "name":"stock",            
-    "user":"root",
-    "pass":"XFZ5dPJq2"
-}
-
-ROOT= os.path.join(os.environ['HOME'], "Documents/projects-active/facemap_production") ## only on Mac
-NUMBER_OF_PROCESSES = 8
+# platform specific credentials
+io = DataIO()
+db = io.db
+ROOT = io.ROOT 
+NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 #######################################
 
 
-CSV_IN_PATH = "/Volumes/Test36/CSVs_to_ingest/123rfCSVs/123rf.output.csv"
-KEYWORD_PATH = "/Volumes/Test36/CSVs_to_ingest/123rfCSVs/Keywords_202305150950.csv"
-CSV_NOKEYS_PATH = "/Volumes/Test36/CSVs_to_ingest/123rfCSVs/CSV_NOKEYS.csv"
-CSV_IMAGEKEYS_PATH = "/Volumes/Test36/CSVs_to_ingest/123rfCSVs/CSV_IMAGEKEYS.csv"
+CSV_IN_PATH = "/Users/michaelmandiberg/Downloads/adobe_csv_4ingest/output_test.csv"
+KEYWORD_PATH = "/Users/michaelmandiberg/Downloads/adobe_csv_4ingest/Keywords_202305150950.csv"
+CSV_NOKEYS_PATH = "/Users/michaelmandiberg/Downloads/adobe_csv_4ingest/CSV_NOKEYS.csv"
+CSV_IMAGEKEYS_PATH = "/Users/michaelmandiberg/Downloads/adobe_csv_4ingest/CSV_IMAGEKEYS.csv"
 # NEWIMAGES_FOLDER_NAME = 'images_pexels'
-CSV_COUNTOUT_PATH = "/Volumes/Test36/CSVs_to_ingest/123rfCSVs/countout.csv"
+CSV_COUNTOUT_PATH = "/Users/michaelmandiberg/Downloads/adobe_csv_4ingest/countout.csv"
 
 # key2key = {"person":"people", "kid":"child","affection":"Affectionate", "baby":"Baby - Human Age", "beautiful":"Beautiful People", "pretty":"Beautiful People", "blur":"Blurred Motion", "casual":"Casual Clothing", "children":"Child", "kids":"Child", "couple":"Couple - Relationship", "adorable":"Cute", "room":"Domestic Room", "focus":"Focus - Concept", "happy":"Happiness", "at home":"Home Interior", "home":"Home Interior", "face":"Human Face", "hands":"Human Hand", "landscape":"Landscape - Scenery", "outfit":"Landscape - Scenery", "leisure":"Leisure Activity", "love":"Love - Emotion", "guy":"Men", "motherhood":"Mother", "parenthood":"Parent", "positive":"Positive Emotion", "recreation":"Recreational Pursuit", "little":"Small", "studio shoot":"Studio Shot", "together":"Togetherness", "vertical shot":"Vertical", "lady":"women", "young":"Young Adult"}
 
 key2key = {"person":"people", "kid":"child","affection":"affectionate", "baby":"baby - human age", "beautiful":"beautiful people", "pretty":"beautiful people", "blur":"blurred motion", "casual":"casual clothing", "children":"child", "kids":"child", "couple":"couple - relationship", "adorable":"cute", "room":"domestic room", "focus":"focus - concept", "happy":"happiness", "at home":"home interior", "home":"home interior", "face":"human face", "hands":"human hand", "landscape":"landscape - scenery", "outfit":"landscape - scenery", "leisure":"leisure activity", "love":"love - emotion", "guy":"men", "motherhood":"mother", "parenthood":"parent", "positive":"positive emotion", "recreation":"recreational pursuit", "little":"small", "studio shoot":"studio shot", "together":"togetherness", "vertical shot":"vertical", "lady":"women", "young":"young adult", "light":"light - natural phenomenon", "trees":"tree"}
-gender_dict = {"men":1,"man":1,"male":1,"males":1,"his":1,"him":1,"businessman":1,"businessmen":1,"father":1,"boy":1, "boys":1, "none":2, "oldmen":3, "grandfather":3,"oldwomen":4, "grandmother":4, "nonbinary":5, "other":6, "trans":7, 
-        "women":8,"woman":8,"female":8,"females":8, "hers":8, "her":8, "businesswoman":8, "businesswomen":8, "mother":8, "girl":8, "girls":8, "youngmen":9, "youngwomen":10}
+gender_dict = {"men":1,"man":1,"male":1,"males":1,"his":1,"him":1,"businessman":1,"businessmen":1,"father":1, "men's":1, "himself":1, "homme":1, "hombre":1, "(man)":1, "-women men -children":1, "-women -men -children":2, "none":2, "oldmen":3, "grandfather":3,"oldwomen":4, "grandmother":4, "nonbinary":5, "other":6, "trans":7, 
+        "women":8,"woman":8,"female":8,"females":8, "hers":8, "her":8, "businesswoman":8, "businesswomen":8, "mother":8, "frauen":8, "mujer":8, "haaren":8, "frau":8, "woman-doctor":8, "maiden":8, "hausfrau":8, "women -men -children":8, "youngmen":9, "boy":9, "boys":9, "jungen":9, "youngwomen":10,"girl":10, "girls":10, "ragazza":10, "schoolgirls":8,}
 # gender2key = {"man":"men", "woman":"women"}
-eth_dict = {"black":1, "african-american":1, "africanamerican":1, "african american":1, "african":1, "caucasian":2, "white people":2, "europeans":2, "eastasian":3,"east asian":3, "chinese":3, "japanese":3, "asian":3, "hispaniclatino":4, "latino":4, "hispanic":4, "mexican":4, "middleeastern":5, "middle eastern":5, "arab":5, "mixedraceperson":6, "mixedrace":6, "mixed race":6, "mixed ethnicity":6, "multiethnic":6, "multi ethnic":6, "multi-ethnic":6, "nativeamericanfirstnations":7, "native american":7, "nativeamerican":7, "native-american":7, "indian american":7, "indianamerican":7, "indian-american":7, "first nations":7, "firstnations":7, "first-nations":7, "indigenous":7, "pacificislander":8, "pacific islander":8, "pacific-islander":8, "southasian":9, "south asian":9, "south-asian":9, "indian":9, "southeastasian":10, "southest asian":10, "southeast asian":10, "southeast-asian":10}
+eth_dict = {"black":1, "african-american":1, "afro-american":1, "africanamerican":1, "african american":1, "african":1, "caucasian":2, "white people":2, "europeans":2, "eastasian":3,"east asian":3, "chinese":3, "japanese":3, "asian":3, "hispaniclatino":4, "latino":4, "latina":4, "latinx":4, "hispanic":4, "mexican":4, "middleeastern":5, "middle eastern":5, "arab":5, "mixedraceperson":6, "mixedrace":6, "mixed-race":6, "mixed race":6, "mixed ethnicity":6, "multiethnic":6, "multi ethnic":6, "multi-ethnic":6, "biracial":6, "nativeamericanfirstnations":7, "native american":7, "nativeamerican":7, "native-american":7, "indian american":7, "indianamerican":7, "indian-american":7, "first nations":7, "firstnations":7, "first-nations":7, "indigenous":7, "pacificislander":8, "pacific islander":8, "pacific-islander":8, "southasian":9, "south asian":9, "south-asian":9, "indian":9, "southeastasian":10, "southest asian":10, "southeast asian":10, "southeast-asian":10}
+# for searching descrption for eth keywords
+eth_dict_4desc = eth_dict
+eth_dict_4desc.pop('black')
+
 # load Keywords_202304300930.csv as df, drop all but keytype Locations, create two dicts: string->ID & GettyID->ID  
 loc_dict = {"Canada":1989}
 age_dict = {
@@ -69,6 +70,20 @@ age_dict = {
     "toddler":3,
     "child":3,
     "children":3,
+    "childrens":3,
+    "girls":3,
+    "boys":3,
+    "girl":3,
+    "boy":3,
+    "jeune":3,
+    "junger":3,
+    "kinder":3,
+    "bambino":3,
+    "bambina":3,
+    "ragazza":3, 
+    "schoolgirls":3, 
+    "jungen":3,
+    "-women -men children":3,
     "teen":4,
     "teens":4,
     "teenager":4,
@@ -82,7 +97,8 @@ age_dict = {
     "old":7,
     "60s":7,
     "70s":7,
-    "70+":7
+    "70+":7,
+    "seniorin":7
 }
 
 age_details_dict = {
@@ -103,8 +119,13 @@ WHERE = "e.image_id IS NULL"
 LIMIT = 10
 
 
-engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}"
-                                .format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']), poolclass=NullPool)
+# engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}"
+#                                 .format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']), poolclass=NullPool)
+
+engine = create_engine("mysql+pymysql://{user}:{pw}@/{db}?unix_socket={socket}".format(
+    user=db['user'], pw=db['pass'], db=db['name'], socket=db['unix_socket']
+), poolclass=NullPool)
+
 metadata = MetaData(engine)
 
 
@@ -252,9 +273,15 @@ def unlock_key(site_id,key, this_dict):
                     # print(key)
 
             if pd.isnull(key_no):
-                # if nothing worked, save key
-                value_list = [site_id,key]
-                write_csv(CSV_NOKEYS_PATH,value_list)
+                # if nothing worked, save key, but only if site_id > 10
+                # for gender/age, it passes in site_name_id, not site_image_id
+                if not isinstance(site_id, int) and not key.startswith('-'):
+                    # print(type(site_id))
+                    # print(site_id)
+                    value_list = [site_id,key]
+                    # print("value_list")
+                    # print(value_list)
+                    write_csv(CSV_NOKEYS_PATH,value_list)
                 # print(value_list)
                 return
             else:
@@ -318,7 +345,7 @@ def get_eth(eth_name, keys_list):
         eth_no_list.append(eth_no)
     else:
         eth_no_list = search_keys(keys_list, eth_dict, True)
-        print("searched keys and found eth_no: ", eth_no)
+        print("searched keys and found eth_no: ", eth_no_list)
     return(eth_no_list)
 
 
@@ -340,6 +367,8 @@ def get_location(df, ind, keys_list):
 def description_to_keys(description, site_id, this_dict="keys_dict"):
     if this_dict=="keys_dict":
         this_dict = keys_dict
+
+    description = description.replace(",","").replace("'s","").replace(".","")
 
     # print("description_to_keys")    
     key_nos_list =[]
@@ -403,6 +432,8 @@ def get_gender_age_row(gender_string, age_string, description, keys_list, site_i
     age= None
     age_detail= None
 
+    description = description.replace(",","").replace("'s","").replace(".","")
+
     print("gender_string, age_string",gender_string, age_string)
 
     gender, age, age_detail = try_key(gender, age, age_detail, gender_string)
@@ -434,9 +465,9 @@ def get_gender_age_row(gender_string, age_string, description, keys_list, site_i
             age = age_results[0]
 
 
-    # print("gender, age, after everything")
-    # print(gender)
-    # print(age)
+    print("gender, age, after everything")
+    print(gender)
+    print(age)
 
     return gender, age, age_detail
 
@@ -519,13 +550,35 @@ def structure_row_123_asrow(row, ind, keys_list):
     return nan2none(image_row)
 
 
+def structure_row_adobe(row, ind, keys_list):
+    site_id = 3
+    gender = row[7]
+    age = None
+    description = row[1]
+    gender_key, age_key, age_detail_key = get_gender_age_row(gender, age, description, keys_list, site_id)
+
+    image_row = {
+        "site_image_id": row[0],
+        "site_name_id": site_id,
+        "description": description[:140],
+        "age_id": age_key,
+        "gender_id": gender_key,
+        "age_detail_id": age_detail_key,
+        "contentUrl": row[8],
+        "imagename": generate_local_unhashed_image_filepath(row[9].replace("images/",""))  # need to refactor this from the contentURL using the hash function
+    }
+    
+    return nan2none(image_row)
+
+
 def ingest_csv():
 
+
     # change this for each site ingested
-    column_keys = 5
+    column_keys = 6
     separator_keys = " "
     column_site = 8
-    column_eth = 8
+    column_eth = None
     search_desc_for_keys = True
 
 
@@ -546,11 +599,17 @@ def ingest_csv():
             # splitting keys. try is for getty, except is currently set for pexels.
             try:
                 keys_list = row[column_keys].lower().split(separator_keys)
+
+                # adobe specific. remove for future sites
+                desc_list = row[3].replace(",","").lower().split("-")
+                keys_list = list(filter(None, keys_list + desc_list))
+
             except IndexError:
                 print("keys failed")
-            # print(keys_list)
+            print("keys_list")
+            print(keys_list)
 
-            image_row = structure_row_123_asrow(row, ind, keys_list)
+            image_row = structure_row_adobe(row, ind, keys_list)
             key_nos_list = []
             
             for key in keys_list:
@@ -565,9 +624,26 @@ def ingest_csv():
                 desc_key_nos_list = description_to_keys(image_row['description'], image_row['site_image_id'])
                 key_nos_list = set(key_nos_list + desc_key_nos_list)
             
-            # print(key_nos_list)
-            eth_no_list = get_eth(row[column_eth].lower(), keys_list)
-            print("eth_no_list " , eth_no_list)
+
+            if column_eth:
+                # print(key_nos_list)
+                eth_no_list = get_eth(row[column_eth].lower(), keys_list)
+                print("eth_no_list " , eth_no_list)
+            else:
+                # commented out code finds eth keywords in description, but wasn't reliable
+                # was returning descriptions of objects, not descriptions of people
+                # found = findall_dict(eth_dict_4desc,image_row['description'])
+                # if found:
+                #     print("found eth in description")
+                #     print(found)
+                #     eth_no_list = []
+                #     eth_no_list.append(found)
+                #     print(eth_no_list)
+                # else:
+                #     eth_no_list = None
+
+                eth_no_list = None
+
 
             with engine.connect() as conn:
                 select_stmt = select([images_table]).where(
@@ -611,13 +687,15 @@ def ingest_csv():
             counter += 1
             ind += 1
 
+'''
+# I don't think this is doing anything right now, and I don't know how it is different from ingest_csv
 def update_csv():
 
     # change this for each site ingested
     column_keys = 5
     separator_keys = " "
-    column_site = 8
-    column_eth = 8
+    # column_site = 8
+    column_eth = None
     search_desc_for_keys = True
 
 
@@ -658,9 +736,12 @@ def update_csv():
                 desc_key_nos_list = description_to_keys(image_row['description'], image_row['site_image_id'])
                 key_nos_list = set(key_nos_list + desc_key_nos_list)
             
-            # print(key_nos_list)
-            eth_no_list = get_eth(row[column_eth].lower(), keys_list)
-            print("eth_no_list " , eth_no_list)
+            if column_eth:
+                # print(key_nos_list)
+                eth_no_list = get_eth(row[column_eth].lower(), keys_list)
+                print("eth_no_list " , eth_no_list)
+            else:
+                eth_no_list = None
 
 
             # Define the maximum number of retries and the delay between retries
@@ -678,30 +759,32 @@ def update_csv():
                         row = conn.execute(select_stmt).fetchone()
                         
                         if row is None:
-                            insert_stmt = insert(images_table).values(image_row)
-                            result = conn.execute(insert_stmt)
-                            last_inserted_id = result.lastrowid
 
-                            if key_nos_list and last_inserted_id:
-                                keyrows = [{'image_id': last_inserted_id, 'keyword_id': keyword_id} for keyword_id in key_nos_list]
-                                with engine.connect() as conn:
-                                    imageskeywords_insert_stmt = insert(imageskeywords_table).values(keyrows)
-                                    imageskeywords_insert_stmt = imageskeywords_insert_stmt.on_duplicate_key_update(
-                                        keyword_id=imageskeywords_insert_stmt.inserted.keyword_id
-                                    )
-                                    conn.execute(imageskeywords_insert_stmt)
+                            print("will insert")
+                            # insert_stmt = insert(images_table).values(image_row)
+                            # result = conn.execute(insert_stmt)
+                            # last_inserted_id = result.lastrowid
+
+                            # if key_nos_list and last_inserted_id:
+                            #     keyrows = [{'image_id': last_inserted_id, 'keyword_id': keyword_id} for keyword_id in key_nos_list]
+                            #     with engine.connect() as conn:
+                            #         imageskeywords_insert_stmt = insert(imageskeywords_table).values(keyrows)
+                            #         imageskeywords_insert_stmt = imageskeywords_insert_stmt.on_duplicate_key_update(
+                            #             keyword_id=imageskeywords_insert_stmt.inserted.keyword_id
+                            #         )
+                            #         conn.execute(imageskeywords_insert_stmt)
                             
-                            if eth_no_list and last_inserted_id:
-                                ethrows = [{'image_id': last_inserted_id, 'ethnicity_id': ethnicity_id} for ethnicity_id in eth_no_list if ethnicity_id is not None]
-                                if ethrows:
-                                    with engine.connect() as conn:
-                                        imagesethnicity_insert_stmt = insert(imagesethnicity_table).values(ethrows)
-                                        imagesethnicity_insert_stmt = imagesethnicity_insert_stmt.on_duplicate_key_update(
-                                            ethnicity_id=imagesethnicity_insert_stmt.inserted.ethnicity_id
-                                        )
-                                        conn.execute(imagesethnicity_insert_stmt)
+                            # if eth_no_list and last_inserted_id:
+                            #     ethrows = [{'image_id': last_inserted_id, 'ethnicity_id': ethnicity_id} for ethnicity_id in eth_no_list if ethnicity_id is not None]
+                            #     if ethrows:
+                            #         with engine.connect() as conn:
+                            #             imagesethnicity_insert_stmt = insert(imagesethnicity_table).values(ethrows)
+                            #             imagesethnicity_insert_stmt = imagesethnicity_insert_stmt.on_duplicate_key_update(
+                            #                 ethnicity_id=imagesethnicity_insert_stmt.inserted.ethnicity_id
+                            #             )
+                            #             conn.execute(imagesethnicity_insert_stmt)
                             
-                            print("last_inserted_id:", last_inserted_id)
+                            # print("last_inserted_id:", last_inserted_id)
                         else:
                             print('Row already exists:', ind)
             
@@ -728,6 +811,7 @@ def update_csv():
 
 
     # print("inserted")
+'''
 
 if __name__ == '__main__':
     print(sig)
