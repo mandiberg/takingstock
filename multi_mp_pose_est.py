@@ -42,7 +42,7 @@ http="https://media.gettyimages.com/photos/"
 # outputfolder = os.path.join(ROOT,folder+"_output_febmulti")
 SAVE_ORIG = False
 DRAW_BOX = False
-MINSIZE = 700
+MINSIZE = 500
 SLEEP_TIME=0
 
 # am I looking on SSD for a folder? If not, will pull directly from SQL
@@ -57,9 +57,9 @@ FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords
 # WHERE = "e.face_encodings68 IS NULL AND e.face_encodings IS NOT NULL"
 # production
 # WHERE = "e.is_face IS TRUE AND e.face_encodings68 IS NULL"
-WHERE = "e.encoding_id IS NULL AND  k.keyword_text LIKE 'business%'"
+WHERE = "e.encoding_id IS NULL AND i.site_name_id = 3 AND k.keyword_text LIKE 'business%'"
 # AND i.age_id NOT IN (1,2,3,4)
-IS_SSD=False
+IS_SSD=True
 ##########################################
 
 ############# Reencodings #############
@@ -88,7 +88,7 @@ IS_SSD=False
 # IS_SSD=True
 ##########################################
 
-LIMIT = 25000
+LIMIT = 500
 
 # platform specific credentials
 io = DataIO(IS_SSD)

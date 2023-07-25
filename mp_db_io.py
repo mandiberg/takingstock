@@ -26,7 +26,7 @@ class DataIO:
             ####### Michael's MAMP Credentials ########
             self.db = {
                 "host":"localhost",
-                "name":"gettytest3",            
+                "name":"stock",            
                 "user":"root",
                 "pass":"root",
                 "unix_socket":"/Applications/MAMP/tmp/mysql/mysql.sock",
@@ -38,7 +38,7 @@ class DataIO:
             # temp migration for
             # self.ROOT54= "/Volumes/6TB_mayday_2" ## only on 
             self.ROOT= self.ROOT_PROD ## defining ROOT though may be redefinied in main()
-
+            self.ROOT4 = "/Volumes/SSD4"
             self.NUMBER_OF_PROCESSES = 8
         elif platform == "win32":
             ######## Satyam's WIN Credentials #########
@@ -60,7 +60,7 @@ class DataIO:
                 # temp for testing
                 # os.path.join(self.ROOT54,"gettyimages/testimages"), #1, Getty
                 os.path.join(self.ROOT_PROD,""),
-                os.path.join(self.ROOT_PROD,""),
+                os.path.join(self.ROOT4,"needtomoveinto-images_adobe/images_29cats"), #3, Adobe
                 os.path.join(self.ROOT_PROD,""),
                 os.path.join(self.ROOT_PROD,"images_pexels"), #5, Pexels
                 os.path.join(self.ROOT_PROD,""),

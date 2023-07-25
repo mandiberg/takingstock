@@ -41,7 +41,7 @@ NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 #######################################
 
 
-CSV_IN_PATH = "/Users/michaelmandiberg/Downloads/adobe_csv_4ingest/output_test.csv"
+CSV_IN_PATH = "/Users/michaelmandiberg/Downloads/adobe_csv_4ingest/output.csv"
 KEYWORD_PATH = "/Users/michaelmandiberg/Downloads/adobe_csv_4ingest/Keywords_202305150950.csv"
 CSV_NOKEYS_PATH = "/Users/michaelmandiberg/Downloads/adobe_csv_4ingest/CSV_NOKEYS.csv"
 CSV_IMAGEKEYS_PATH = "/Users/michaelmandiberg/Downloads/adobe_csv_4ingest/CSV_IMAGEKEYS.csv"

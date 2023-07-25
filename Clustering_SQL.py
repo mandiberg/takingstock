@@ -1,6 +1,7 @@
 #sklearn imports
 from sklearn.decomposition import PCA #Principal Component Analysis
 from sklearn.cluster import KMeans #K-Means Clustering
+from sklearn.metrics import silhouette_score
 
 #from sklearn.manifold import TSNE #T-Distributed Stochastic Neighbor Embedding
 #from sklearn.preprocessing import StandardScaler #used for 'Feature Scaling'
@@ -11,9 +12,8 @@ import datetime   ####### for saving cluster analytics
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 from matplotlib import cm
-# temp commented out b/c mm doesn't have installed
-# import plotly as py
-# import plotly.graph_objs as go
+import plotly as py
+import plotly.graph_objs as go
 
 
 from sqlalchemy import create_engine
@@ -56,17 +56,18 @@ NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 # Satyam, you want to set this to False
 USE_SEGMENT = True
 
-# number of clusters produced
-# turning off for testing
-OPT_C_SIZE=True
-N_CLUSTERS = 128
+# get the best fit for clusters
+GET_OPTIMAL_CLUSTERS=False
+
+# number of clusters produced. run GET_OPTIMAL_CLUSTERS and add that number here
+N_CLUSTERS = 113
 SAVE_FIG=False ##### option for saving the visualized data
 
 if USE_SEGMENT is True:
 
     # where the script is looking for files list
     # do not use this if you are using the regular Clusters and ImagesClusters tables
-    SegmentTable_name = 'June20segment123straight'
+    SegmentTable_name = 'July15segment123straight'
 
     # join with SSD tables. Satyam, use the one below
     SELECT = "DISTINCT(e.image_id), e.face_encodings68"
@@ -74,7 +75,7 @@ if USE_SEGMENT is True:
     QUERY = "e.image_id IN"
     SUBQUERY = f"(SELECT seg1.image_id FROM {SegmentTable_name} seg1 )"
     WHERE = f"{QUERY} {SUBQUERY}"
-    LIMIT = 100000
+    LIMIT = 110000
 
 else:
     # Basic Query, this works with gettytest3
@@ -183,6 +184,7 @@ def best_score(df):
         kmeans = KMeans(n_clusters,n_init=10, init = 'k-means++', random_state = 42, max_iter = 300)
         preds = kmeans.fit_predict(df)
         score[i]=silhouette_score(df, preds)
+    print(n_list, score)
     b_score=n_list[np.argmax(score)]
     
     return b_score
@@ -289,8 +291,13 @@ def main():
         df["image_id"]=row["image_id"]
         enc_data = pd.concat([enc_data,df],ignore_index=True) 
     
-    # choose if you want optimal cluster size or custom cluster size using the parameter OPT_C_SIZE
-    # if OPT_C_SIZE is True: N_clusters= best_score(enc_data.drop("image_id", axis=1))   #### Input ONLY encodings into clustering alhorithm
+    # choose if you want optimal cluster size or custom cluster size using the parameter GET_OPTIMAL_CLUSTERS
+    if GET_OPTIMAL_CLUSTERS is True: 
+        OPTIMAL_CLUSTERS= best_score(enc_data.drop("image_id", axis=1))   #### Input ONLY encodings into clustering alhorithm
+        print(OPTIMAL_CLUSTERS)
+        N_CLUSTERS = OPTIMAL_CLUSTERS
+    else:
+        N_CLUSTERS = 113 # hard coding this temporarily b/c python isn't seeing it as variable above...
     enc_data["cluster_id"] = kmeans_cluster(enc_data.drop("image_id", axis=1),n_clusters=N_CLUSTERS)
     
     if SAVE_FIG: export_html_clusters(enc_data.drop("image_id", axis=1))
