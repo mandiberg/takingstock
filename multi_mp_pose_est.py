@@ -47,7 +47,7 @@ SLEEP_TIME=0
 
 # am I looking on SSD for a folder? If not, will pull directly from SQL
 IS_FOLDER = True
-MAIN_FOLDER = "/Volumes/SSD4/needtomoveinto-images_adobe/images_29cats_test"
+MAIN_FOLDER = "/Volumes/SSD4/needtomoveinto-images_adobe/images_29cats"
 CSV_FOLDERCOUNT_PATH = os.path.join(MAIN_FOLDER, "folder_countout.csv")
 
 
@@ -59,7 +59,7 @@ FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords
 # WHERE = "e.face_encodings68 IS NULL AND e.face_encodings IS NOT NULL"
 # production
 # WHERE = "e.is_face IS TRUE AND e.face_encodings68 IS NULL"
-WHERE = "e.encoding_id IS NULL AND i.site_name_id = 3 AND k.keyword_text LIKE 'business%'"
+WHERE = "e.encoding_id IS NULL AND i.site_name_id = 3 AND k.keyword_text LIKE 'working%' AND i.image_id < 33160214"
 # AND i.age_id NOT IN (1,2,3,4)
 IS_SSD=True
 ##########################################
@@ -90,7 +90,7 @@ IS_SSD=True
 # IS_SSD=True
 ##########################################
 
-LIMIT = 500
+LIMIT = 10000
 
 # platform specific credentials
 io = DataIO(IS_SSD)
@@ -913,32 +913,26 @@ def main():
                 img_list = io.get_img_list(folder)
                 print("len(img_list)")
                 print(len(img_list))
-                # Collect site_image_id values from the image filenames
 
-
-
-                # # 123rf
-                # site_image_ids = [img.split("-")[0] for img in img_list]
-
-                # gettyimages
-                # site_image_ids = [img.split("-id")[-1].replace(".jpg", "") for img in img_list]
-
-                # Adobe
-                site_image_ids = [img.split(".")[0] for img in img_list]
-                print(len(site_image_ids))
-
-                # Define the batch size, you can experiment with different values to find the optimal size
-                batch_size = 1000
+                # Define the batch size
+                batch_size = 100
 
                 # Initialize an empty list to store all the results
                 all_results = []
 
-                # this split has to go higher up. Above the site_image_ids creation
-                # split the img_list into batch_img_ids
-                # so that each set of sii's corresponds to the batch_img_ids
-                # Split the site_image_ids into smaller batches and process them one by one
-                for i in range(0, len(site_image_ids), batch_size):
-                    batch_site_image_ids = site_image_ids[i : i + batch_size]
+                # Split the img_list into smaller batches and process them one by one
+                for i in range(0, len(img_list), batch_size):
+                    batch_img_list = img_list[i : i + batch_size]
+
+                    # Collect site_image_id values from the image filenames
+                    # # 123rf
+                    # site_image_ids = [img.split("-")[0] for img in img_list]
+
+                    # gettyimages
+                    # site_image_ids = [img.split("-id")[-1].replace(".jpg", "") for img in img_list]
+
+                    # Adobe
+                    batch_site_image_ids = [img.split(".")[0] for img in batch_img_list]
 
                     # query the database for the current batch and return image_id and encoding_id
                     try:
@@ -954,32 +948,11 @@ def main():
                         time.sleep(io.retry_delay)
                     print(len(all_results))
 
-                # Now all_results contains the aggregated results from all the batches
-                # You can process it further as needed
-
-
-
-                # # query all site_image_ids and return image_id and encoding_id
-                # try:
-                #     print("trying to get results")
-                #     results = session.query(Images.image_id, Images.site_image_id, Encodings.encoding_id) \
-                #         .outerjoin(Encodings, Images.image_id == Encodings.image_id) \
-                #         .filter(Images.site_image_id.in_(site_image_ids)) \
-                #         .all()
-                # except OperationalError as e:
-                #     print(e)
-                #     time.sleep(io.retry_delay)
-
-                # print("printing all results")
-                # for row in results:
-                #     print(row)
-                # Create a dictionary to map site_image_id to the corresponding result
-                # print(len(all_results))
 
                     results_dict = {result.site_image_id: result for result in batch_results}
 
                     # going back through the img_list, to use as key for the results_dict
-                    for img in img_list:
+                    for img in batch_img_list:
 
                         # # extract site_image_id for 213rf
                         # site_image_id = img.split("-")[0]
@@ -1004,33 +977,33 @@ def main():
 
                         else: print("not in results_dict")
 
-                # count += this_count
-                # print(f"completed {str(this_count)} of {str(len(img_list))}")
-                # print(f"total count for {folder_path}: {str(count)}")
-                # this_count = 0
-
-                # # save success to CSV_FOLDERCOUNT_PATH
-                # io.write_csv(CSV_FOLDERCOUNT_PATH, [folder_path])
 
 
-            for w in range(NUMBER_OF_PROCESSES):
-                p = Process(target=do_job, args=(tasks_to_accomplish, tasks_that_are_done))
-                processes.append(p)
-                p.start()
+                    for w in range(NUMBER_OF_PROCESSES):
+                        p = Process(target=do_job, args=(tasks_to_accomplish, tasks_that_are_done))
+                        processes.append(p)
+                        p.start()
 
-            # completing process
-            for p in processes:
-                # print("completing process")
-                p.join()
-            print(">> SPLIT >> p.join, done with this folder")
-            split = print_get_split(jsonsplit)
+                    # completing process
+                    for p in processes:
+                        # print("completing process")
+                        p.join()
+                    print(">> SPLIT >> p.join, done with this folder")
+                    split = print_get_split(jsonsplit)
 
-            print(f"total count for {folder_path}: {str(count)}")
-            # if this_count > 500:
-            #     quit()
-            # else:
-            #     this_count = 0
-            # quit()
+                    print(f"total count for {folder_path}: {str(count)}")
+                    # if this_count > 500:
+                    #     quit()
+                    # else:
+                    #     this_count = 0
+                    # quit()
+                count += this_count
+                print(f"completed {str(this_count)} of {str(len(img_list))}")
+                print(f"total count for {folder_path}: {str(count)}")
+                this_count = 0
+
+                # save success to CSV_FOLDERCOUNT_PATH
+                io.write_csv(CSV_FOLDERCOUNT_PATH, [folder_path])
 
     else:
         print("old school SQL")
