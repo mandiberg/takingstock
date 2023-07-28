@@ -46,8 +46,10 @@ MINSIZE = 500
 SLEEP_TIME=0
 
 # am I looking on SSD for a folder? If not, will pull directly from SQL
-IS_FOLDER = False
-MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/images_123rf_ingest_test/"
+IS_FOLDER = True
+MAIN_FOLDER = "/Volumes/SSD4/needtomoveinto-images_adobe/images_29cats_test"
+CSV_FOLDERCOUNT_PATH = os.path.join(MAIN_FOLDER, "folder_countout.csv")
+
 
 SELECT = "DISTINCT i.image_id, i.site_name_id, i.contentUrl, i.imagename, e.encoding_id, i.site_image_id, e.face_landmarks, e.bbox"
 
@@ -869,8 +871,8 @@ def do_job(tasks_to_accomplish, tasks_that_are_done):
                 process_image_enc_only(task)
                 print("process_image_enc_only")
             else:
+                print("do_job via regular process_image:")
                 process_image(task)
-                print("regular process_image")
             # tasks_that_are_done.put(task + ' is done by ' + current_process().name)
             time.sleep(SLEEP_TIME)
     return True
@@ -895,61 +897,121 @@ def main():
         print("in IS_FOLDER")
         folder_paths = io.make_hash_folders(MAIN_FOLDER, as_list=True)
         print(len(folder_paths))
+        completed_folders = io.get_csv_aslist(CSV_FOLDERCOUNT_PATH)
+        print(len(completed_folders))
         for folder_path in folder_paths:
-            folder = os.path.join(MAIN_FOLDER,folder_path)
-            folder_count += 1
-            if not os.path.exists(folder):
-                print(str(folder_count), "no folder here:",folder)
-                continue
-            else:
-                print(str(folder_count), folder)
+            if folder_path not in completed_folders:
 
-            img_list = io.get_img_list(folder)
-            print(len(img_list))
-            # Collect site_image_id values from the image filenames
+                folder = os.path.join(MAIN_FOLDER,folder_path)
+                folder_count += 1
+                if not os.path.exists(folder):
+                    print(str(folder_count), "no folder here:",folder)
+                    continue
+                else:
+                    print(str(folder_count), folder)
 
-            # 123rf
-            site_image_ids = [img.split("-")[0] for img in img_list]
+                img_list = io.get_img_list(folder)
+                print("len(img_list)")
+                print(len(img_list))
+                # Collect site_image_id values from the image filenames
 
-            # gettyimages
-            # site_image_ids = [img.split("-id")[-1].replace(".jpg", "") for img in img_list]
 
-            # query all site_image_ids and return image_id and encoding_id
-            try:
-                print("trying to get results")
-                results = session.query(Images.image_id, Images.site_image_id, Encodings.encoding_id) \
-                    .outerjoin(Encodings, Images.image_id == Encodings.image_id) \
-                    .filter(Images.site_image_id.in_(site_image_ids)) \
-                    .all()
-            except OperationalError as e:
-                print(e)
-                time.sleep(io.retry_delay)
 
-            print("printing all results")
-            for row in results:
-                print(row)
-            quit()
-            # Create a dictionary to map site_image_id to the corresponding result
-            results_dict = {result.site_image_id: result for result in results}
+                # # 123rf
+                # site_image_ids = [img.split("-")[0] for img in img_list]
 
-            # going back through the img_list, to use as key for the results_dict
-            for img in img_list:
+                # gettyimages
+                # site_image_ids = [img.split("-id")[-1].replace(".jpg", "") for img in img_list]
 
-                # extract site_image_id for 213rf
-                site_image_id = img.split("-")[0]
+                # Adobe
+                site_image_ids = [img.split(".")[0] for img in img_list]
+                print(len(site_image_ids))
 
-                # # extract site_image_id for getty images
-                # site_image_id = img.split("-id")[-1].replace(".jpg", "")
+                # Define the batch size, you can experiment with different values to find the optimal size
+                batch_size = 1000
 
-                if site_image_id in results_dict:
-                    result = results_dict[site_image_id]
-                    if not result.encoding_id:
-                        # if it hasn't been encoded yet, add it to the tasks
-                        imagepath = os.path.join(folder, img)
-                        task = (result.image_id, imagepath)
-                        print(task)
-                        tasks_to_accomplish.put(task)
-                        this_count += 1
+                # Initialize an empty list to store all the results
+                all_results = []
+
+                # this split has to go higher up. Above the site_image_ids creation
+                # split the img_list into batch_img_ids
+                # so that each set of sii's corresponds to the batch_img_ids
+                # Split the site_image_ids into smaller batches and process them one by one
+                for i in range(0, len(site_image_ids), batch_size):
+                    batch_site_image_ids = site_image_ids[i : i + batch_size]
+
+                    # query the database for the current batch and return image_id and encoding_id
+                    try:
+                        print(f"Processing batch {i//batch_size + 1}...")
+                        batch_results = session.query(Images.image_id, Images.site_image_id, Encodings.encoding_id) \
+                            .outerjoin(Encodings, Images.image_id == Encodings.image_id) \
+                            .filter(Images.site_image_id.in_(batch_site_image_ids)) \
+                            .all()
+
+                        all_results.extend(batch_results)
+                    except OperationalError as e:
+                        print(e)
+                        time.sleep(io.retry_delay)
+                    print(len(all_results))
+
+                # Now all_results contains the aggregated results from all the batches
+                # You can process it further as needed
+
+
+
+                # # query all site_image_ids and return image_id and encoding_id
+                # try:
+                #     print("trying to get results")
+                #     results = session.query(Images.image_id, Images.site_image_id, Encodings.encoding_id) \
+                #         .outerjoin(Encodings, Images.image_id == Encodings.image_id) \
+                #         .filter(Images.site_image_id.in_(site_image_ids)) \
+                #         .all()
+                # except OperationalError as e:
+                #     print(e)
+                #     time.sleep(io.retry_delay)
+
+                # print("printing all results")
+                # for row in results:
+                #     print(row)
+                # Create a dictionary to map site_image_id to the corresponding result
+                # print(len(all_results))
+
+                    results_dict = {result.site_image_id: result for result in batch_results}
+
+                    # going back through the img_list, to use as key for the results_dict
+                    for img in img_list:
+
+                        # # extract site_image_id for 213rf
+                        # site_image_id = img.split("-")[0]
+
+                        # # extract site_image_id for getty images
+                        # site_image_id = img.split("-id")[-1].replace(".jpg", "")
+
+                        # extract site_image_id for 213rf
+                        site_image_id = img.split(".")[0]
+
+                        if site_image_id in results_dict:
+                            result = results_dict[site_image_id]
+                            print(result)
+                            # print(result.encoding_id)
+                            if not result.encoding_id:
+                                # if it hasn't been encoded yet, add it to the tasks
+                                imagepath = os.path.join(folder, img)
+                                task = (result.image_id, imagepath)
+                                print(task)
+                                tasks_to_accomplish.put(task)
+                                this_count += 1
+
+                        else: print("not in results_dict")
+
+                # count += this_count
+                # print(f"completed {str(this_count)} of {str(len(img_list))}")
+                # print(f"total count for {folder_path}: {str(count)}")
+                # this_count = 0
+
+                # # save success to CSV_FOLDERCOUNT_PATH
+                # io.write_csv(CSV_FOLDERCOUNT_PATH, [folder_path])
+
 
             for w in range(NUMBER_OF_PROCESSES):
                 p = Process(target=do_job, args=(tasks_to_accomplish, tasks_that_are_done))
@@ -963,12 +1025,11 @@ def main():
             print(">> SPLIT >> p.join, done with this folder")
             split = print_get_split(jsonsplit)
 
-            count += this_count
-            print(f"completed {str(this_count)} of {str(len(img_list))} -- total count: {str(count)}")
-            if this_count > 500:
-                quit()
-            else:
-                this_count = 0
+            print(f"total count for {folder_path}: {str(count)}")
+            # if this_count > 500:
+            #     quit()
+            # else:
+            #     this_count = 0
             # quit()
 
     else:

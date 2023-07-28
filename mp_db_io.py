@@ -106,6 +106,21 @@ class DataIO:
             print("max_element,", start_counter)
         return start_counter
 
+    def get_csv_aslist(self,CSV_COUNTOUT_PATH):
+        list_of_lines = []
+        try:
+            print("trying to get list of saved")
+            with open(CSV_COUNTOUT_PATH, encoding="utf-8", newline="") as in_file:
+                reader = csv.reader(in_file, delimiter=",")
+                # next(reader)  # Header row
+
+                for row in reader:
+                    list_of_lines.append(row[0])
+                    # yield row
+        except:
+            print('[get_csv_aslist] something is wrong here')
+        return list_of_lines
+
 
     def write_csv(self,path,value_list):
 
@@ -147,9 +162,9 @@ class DataIO:
 
     def make_hash_folders(self,path, as_list=False):
         #create depth 0
-        alphabet = 'A B C D E F G H I J K L M N O P Q R S T U V W X Y Z 0 1 2 3 4 5 6 7 8 9 0'  
+        alphabet = 'A B C D E F G H I J K L M N O P Q R S T U V W X Y Z 0 1 2 3 4 5 6 7 8 9'  
         # alphabet = '0'  
-        alphabet2 = 'A B C D E F G H I J K L M N O P Q R S T U V W X Y Z 0 1 2 3 4 5 6 7 8 9 0'  
+        alphabet2 = 'A B C D E F G H I J K L M N O P Q R S T U V W X Y Z 0 1 2 3 4 5 6 7 8 9'  
         # alphabet = 'A B C 0 1 2'   #short alphabet for testing purposes
         # alphabet2 = 'A B C 0 1 2'   #short alphabet for testing purposes
         alphabet = alphabet.split()
