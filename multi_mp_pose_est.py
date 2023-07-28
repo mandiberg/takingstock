@@ -827,6 +827,7 @@ def process_image(task):
 
                     break  # Transaction succeeded, exit the loop
                 except OperationalError as e:
+                    print("exception on new_entry session.commit")
                     print(e)
                     time.sleep(io.retry_delay)
 
@@ -881,7 +882,6 @@ def do_job(tasks_to_accomplish, tasks_that_are_done):
 def main():
     print("main")
 
-    init_session()
 
     tasks_to_accomplish = Queue()
     tasks_that_are_done = Queue()
@@ -915,13 +915,14 @@ def main():
                 print(len(img_list))
 
                 # Define the batch size
-                batch_size = 100
+                batch_size = 5000
 
                 # Initialize an empty list to store all the results
                 all_results = []
 
                 # Split the img_list into smaller batches and process them one by one
                 for i in range(0, len(img_list), batch_size):
+
                     batch_img_list = img_list[i : i + batch_size]
 
                     # Collect site_image_id values from the image filenames
@@ -935,17 +936,25 @@ def main():
                     batch_site_image_ids = [img.split(".")[0] for img in batch_img_list]
 
                     # query the database for the current batch and return image_id and encoding_id
-                    try:
-                        print(f"Processing batch {i//batch_size + 1}...")
-                        batch_results = session.query(Images.image_id, Images.site_image_id, Encodings.encoding_id) \
-                            .outerjoin(Encodings, Images.image_id == Encodings.image_id) \
-                            .filter(Images.site_image_id.in_(batch_site_image_ids)) \
-                            .all()
+                    for _ in range(io.max_retries):
 
-                        all_results.extend(batch_results)
-                    except OperationalError as e:
-                        print(e)
-                        time.sleep(io.retry_delay)
+                        try:
+                            print(f"Processing batch {i//batch_size + 1}...")
+                            init_session()
+                            batch_results = session.query(Images.image_id, Images.site_image_id, Encodings.encoding_id) \
+                                .outerjoin(Encodings, Images.image_id == Encodings.image_id) \
+                                .filter(Images.site_image_id.in_(batch_site_image_ids)) \
+                                .all()
+
+                            all_results.extend(batch_results)
+                            print("about to close_session()")
+                            # Close the session and dispose of the engine before the worker process exits
+                            close_session()
+
+                        except OperationalError as e:
+                            print("error getting batch results")
+                            print(e)
+                            time.sleep(io.retry_delay)
                     print(len(all_results))
 
 
@@ -991,7 +1000,8 @@ def main():
                     print(">> SPLIT >> p.join, done with this folder")
                     split = print_get_split(jsonsplit)
 
-                    print(f"total count for {folder_path}: {str(count)}")
+
+                    print(f"total count for {folder_path}: {str(this_count)}")
                     # if this_count > 500:
                     #     quit()
                     # else:
@@ -1009,6 +1019,8 @@ def main():
         print("old school SQL")
 
         while True:
+            init_session()
+
             print("about to SQL: ",SELECT,FROM,WHERE,LIMIT)
             resultsjson = selectSQL()    
             print("got results, count is: ",len(resultsjson))
@@ -1069,6 +1081,9 @@ def main():
                 p.join()
             print(">> SPLIT >> p.join, done with this query")
             split = print_get_split(split)
+            # Close the session and dispose of the engine before the worker process exits
+            close_session()
+
 
         # # print the output
         # while not tasks_that_are_done.empty():
@@ -1077,8 +1092,6 @@ def main():
             count += len(resultsjson)
             print("completed round, total results processed is: ",count)
 
-    # Close the session and dispose of the engine before the worker process exits
-    close_session()
 
     end = time.time()
     print (end - start)
