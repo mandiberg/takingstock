@@ -41,7 +41,7 @@ NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 #######################################
 
 
-CSV_IN_PATH = "/Users/michaelmandiberg/Downloads/adobe_csv_4ingest/adobe_downloaded.csv"
+CSV_IN_PATH = "/Users/michaelmandiberg/Downloads/adobe_csv_4ingest/unique_lines_B.csv"
 KEYWORD_PATH = "/Users/michaelmandiberg/Downloads/adobe_csv_4ingest/Keywords_202305150950.csv"
 CSV_NOKEYS_PATH = "/Users/michaelmandiberg/Downloads/adobe_csv_4ingest/CSV_NOKEYS.csv"
 CSV_IMAGEKEYS_PATH = "/Users/michaelmandiberg/Downloads/adobe_csv_4ingest/CSV_IMAGEKEYS.csv"
@@ -571,14 +571,43 @@ def structure_row_adobe(row, ind, keys_list):
     return nan2none(image_row)
 
 
+def structure_row_istock(row, ind, keys_list):
+    site_id = 4 #id for the site, not the image
+    gender = row[7]
+    age = row[6]
+    description = row[1]
+    gender_key, age_key, age_detail_key = get_gender_age_row(gender, age, description, keys_list, site_id)
+
+    image_row = {
+        "country": row[3],        
+        "site_image_id": row[0],
+        "site_name_id": site_id,
+        "description": description[:140],
+        "age_id": age_key,
+        "gender_id": gender_key,
+        "age_detail_id": age_detail_key,
+        "contentUrl": row[10],
+        "imagename": generate_local_unhashed_image_filepath(row[9].replace("images/","").split("?")[0])  # need to refactor this from the contentURL using the hash function
+    }
+    
+    return nan2none(image_row)
+
+
 def ingest_csv():
 
 
     # change this for each site ingested
-    column_keys = 6
-    separator_keys = " "
-    column_site = 8
-    column_eth = None
+    column_keys = 6 #where the keywords are
+    separator_keys = " " #for keywords, in the column listed above
+    column_site = 8 #not sure this is used
+    column_eth = None #ethnicity
+    search_desc_for_keys = True
+
+    # istock
+    column_keys = 2 #where the keywords are
+    separator_keys = "|" #for keywords, in the column listed above
+    column_site = 8 #not sure this is used
+    column_eth = None #ethnicity
     search_desc_for_keys = True
 
 

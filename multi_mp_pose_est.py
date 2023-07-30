@@ -928,12 +928,15 @@ def main():
                     # Collect site_image_id values from the image filenames
                     # # 123rf
                     # site_image_ids = [img.split("-")[0] for img in img_list]
+                    # site_name_id = 8
 
                     # gettyimages
                     # site_image_ids = [img.split("-id")[-1].replace(".jpg", "") for img in img_list]
+                    # site_name_id = 1
 
                     # Adobe
                     batch_site_image_ids = [img.split(".")[0] for img in batch_img_list]
+                    site_name_id = 3
 
                     # query the database for the current batch and return image_id and encoding_id
                     for _ in range(io.max_retries):
@@ -943,7 +946,7 @@ def main():
                             init_session()
                             batch_results = session.query(Images.image_id, Images.site_image_id, Encodings.encoding_id) \
                                 .outerjoin(Encodings, Images.image_id == Encodings.image_id) \
-                                .filter(Images.site_image_id.in_(batch_site_image_ids)) \
+                                .filter(Images.site_image_id.in_(batch_site_image_ids), Images.site_name_id==site_name_id) \
                                 .all()
 
                             all_results.extend(batch_results)
