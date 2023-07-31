@@ -36,12 +36,15 @@ _|_|  _|\__, |\___|____/\__| \___|____/  \_/
 # platform specific credentials
 io = DataIO()
 db = io.db
+# overriding DB for testing
+io.db["name"] = "gettytest3"
 ROOT = io.ROOT 
 NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 #######################################
 
 
-CSV_IN_PATH = "/Users/michaelmandiberg/Downloads/adobe_csv_4ingest/unique_lines_B.csv"
+# CSV_IN_PATH = "/Users/michaelmandiberg/Downloads/adobe_csv_4ingest/unique_lines_B.csv"
+CSV_IN_PATH = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/iStock_ingest/april15_iStock_output_sample.jsonl.csv"
 KEYWORD_PATH = "/Users/michaelmandiberg/Downloads/adobe_csv_4ingest/Keywords_202305150950.csv"
 CSV_NOKEYS_PATH = "/Users/michaelmandiberg/Downloads/adobe_csv_4ingest/CSV_NOKEYS.csv"
 CSV_IMAGEKEYS_PATH = "/Users/michaelmandiberg/Downloads/adobe_csv_4ingest/CSV_IMAGEKEYS.csv"
@@ -194,10 +197,20 @@ def nan2none(this_dict):
             this_dict[key] = None
     return this_dict
 
-def make_key_dict(keys):
+def make_key_dict(filepath, keytype=None):
+    keys = read_csv(filepath)
     keys_dict = {}
     for row in keys:
-        keys_dict[row[2].lower()] = row[0]
+        if keytype is None:
+            keys_dict[row[2].lower()] = row[0]
+        elif keytype and row[3].lower() == keytype:
+            # print("gotta keytype")
+            keys_dict[row[2].lower()] = row[0]
+        else:
+            # if not none, but not the specific keytype
+            pass
+            # print("nothing here")
+
     # do I need to pop header? or can I just leave it. 
     return keys_dict
 
@@ -595,8 +608,8 @@ def structure_row_istock(row, ind, keys_list):
 
 def ingest_csv():
 
-
-    # change this for each site ingested
+    # change this for each site ingested #
+    # adobe
     column_keys = 6 #where the keywords are
     separator_keys = " " #for keywords, in the column listed above
     column_site = 8 #not sure this is used
@@ -847,10 +860,12 @@ if __name__ == '__main__':
     try:
         init_csv(CSV_NOKEYS_PATH,IMG_KEYWORD_HEADERS)
         init_csv(CSV_IMAGEKEYS_PATH,IMG_KEYWORD_HEADERS)
-        keys = read_csv(KEYWORD_PATH)
-        keys_dict = make_key_dict(keys)
+        keys_dict = make_key_dict(KEYWORD_PATH)
         print("this many keys", len(keys_dict))
+        locations_dict = make_key_dict(KEYWORD_PATH, "location")
+        print("this many locations", len(locations_dict))
 
+        quit()
         ingest_csv()
     except KeyboardInterrupt as _:
         print('[-] User cancelled.\n', flush=True)

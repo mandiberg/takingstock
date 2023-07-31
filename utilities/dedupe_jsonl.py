@@ -18,6 +18,6 @@ def merge_files(input_folder, output_file):
                             print(data['id'])
 
 if __name__ == "__main__":
-    input_folder = "/Users/michaelmandiberg/Downloads/adobe_4ingest/adobe_downloaded"
-    output_file = "/Users/michaelmandiberg/Downloads/adobe_4ingest/adobe_downloaded.jsonl"
+    input_folder = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/iStock_ingest/"
+    output_file = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/iStock_ingest/april15_iStock_output_deduped.jsonl"
     merge_files(input_folder, output_file)
