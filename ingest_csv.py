@@ -42,17 +42,19 @@ ROOT = io.ROOT
 NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 #######################################
 
-
-# CSV_IN_PATH = "/Users/michaelmandiberg/Downloads/adobe_csv_4ingest/unique_lines_B.csv"
-CSV_IN_PATH = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/iStock_ingest/april15_iStock_output_sample.jsonl.csv"
+# INGEST_FOLDER = "/Users/michaelmandiberg/Downloads/adobe_csv_4ingest/"
+# CSV_IN_PATH = os.path.join("unique_lines_B.csv")
+INGEST_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/iStock_ingest/"
+CSV_IN_PATH = os.path.join(INGEST_FOLDER, "april15_iStock_output_sample.jsonl.csv")
 KEYWORD_PATH = "/Users/michaelmandiberg/Downloads/adobe_csv_4ingest/Keywords_202305150950.csv"
-CSV_NOKEYS_PATH = "/Users/michaelmandiberg/Downloads/adobe_csv_4ingest/CSV_NOKEYS.csv"
-CSV_IMAGEKEYS_PATH = "/Users/michaelmandiberg/Downloads/adobe_csv_4ingest/CSV_IMAGEKEYS.csv"
+CSV_NOKEYS_PATH = os.path.join(INGEST_FOLDER, "CSV_NOKEYS.csv")
+CSV_IMAGEKEYS_PATH = os.path.join(INGEST_FOLDER, "CSV_IMAGEKEYS.csv")
 # NEWIMAGES_FOLDER_NAME = 'images_pexels'
-CSV_COUNTOUT_PATH = "/Users/michaelmandiberg/Downloads/adobe_csv_4ingest/countout.csv"
+CSV_COUNTOUT_PATH = os.path.join(INGEST_FOLDER, "countout.csv")
+CSV_NOLOC_PATH = os.path.join(INGEST_FOLDER, "CSV_NOLOC.csv")
 
 # key2key = {"person":"people", "kid":"child","affection":"Affectionate", "baby":"Baby - Human Age", "beautiful":"Beautiful People", "pretty":"Beautiful People", "blur":"Blurred Motion", "casual":"Casual Clothing", "children":"Child", "kids":"Child", "couple":"Couple - Relationship", "adorable":"Cute", "room":"Domestic Room", "focus":"Focus - Concept", "happy":"Happiness", "at home":"Home Interior", "home":"Home Interior", "face":"Human Face", "hands":"Human Hand", "landscape":"Landscape - Scenery", "outfit":"Landscape - Scenery", "leisure":"Leisure Activity", "love":"Love - Emotion", "guy":"Men", "motherhood":"Mother", "parenthood":"Parent", "positive":"Positive Emotion", "recreation":"Recreational Pursuit", "little":"Small", "studio shoot":"Studio Shot", "together":"Togetherness", "vertical shot":"Vertical", "lady":"women", "young":"Young Adult"}
-
+loc2loc = {"niue":"Niue Island"}
 key2key = {"person":"people", "kid":"child","affection":"affectionate", "baby":"baby - human age", "beautiful":"beautiful people", "pretty":"beautiful people", "blur":"blurred motion", "casual":"casual clothing", "children":"child", "kids":"child", "couple":"couple - relationship", "adorable":"cute", "room":"domestic room", "focus":"focus - concept", "happy":"happiness", "at home":"home interior", "home":"home interior", "face":"human face", "hands":"human hand", "landscape":"landscape - scenery", "outfit":"landscape - scenery", "leisure":"leisure activity", "love":"love - emotion", "guy":"men", "motherhood":"mother", "parenthood":"parent", "positive":"positive emotion", "recreation":"recreational pursuit", "little":"small", "studio shoot":"studio shot", "together":"togetherness", "vertical shot":"vertical", "lady":"women", "young":"young adult", "light":"light - natural phenomenon", "trees":"tree", "disabled":"disability", "landline":"phone", "tradesman":"worker", "apprentice":"work", "arbeit":"work", "wheel-chair":"wheelchair", "treatments":"treatment", "transports":"transportation", "thoughtfully":"thoughtful", "technologies":"technology", "piscine":"swim", "astonished":"surprise", "surgeons":"surgeon", "sommer":"summer", "suffering":"suffer", "studentin":"student", "stressful":"stressed", "smoothies":"smoothie", "smilling":"smiling", "kleines":"small", "sleeps":"sleeping", "dealership":"sales", "salads":"salad", "ressources":"resources", "relaxes":"relaxed", "presentations":"presentation", "phones":"phone", "telefon":"phone", "telefoniert":"phone", "patients":"patient", "papier":"paper", "painful":"pain", "offended":"offend", "occupations":"occupation", "muscled":"muscles", "motivated":"motivation", "pinup":"model", "pin-up":"model", "meetings":"meeting", "massages":"massage", "kleiner":"little", "(lawyer)":"lawyer", "kitchens":"kitchen", "injections":"injection", "hospitals":"hospital", "zuhause":"home", "happily":"happy", "joyfully":"happy", "overjoyed":"happiness", "rejoices":"happiness", "handshaking":"handshake", "groups":"group", "full-length":"Full Length", "blumen":"flowers", "florists":"florist", "panic":"fear", "fell":"fall", "equipements":"equipement", "enthusiastic":"enthusiasm", "osteopathy":"doctor", "disgusted":"disgust", "schreibtisch":"desk", "dances":"dancing", "crowds":"crowd", "robber":"criminal", "copyspace":"Copy Space", "misunderstandings":"confusion", "confidently":"confidence", "concerts":"concert", "climbs":"climb", "celebrations":"celebration", "caught":"catch", "casually":"casual", "motorsports":"car", "banker":"Business Person", "supervisor":"boss", "executives":"boss", "bedrooms":"bedroom", "beautifull":"beautiful", "beaches":"beach", "bathrooms":"bathroom", "backgroud":"background", "attraktive":"attractive", "sportwear":"athletic", "sportliche":"athletic", "addicted":"addiction", "alcoholism":"addiction"}
 gender_dict = {"men":1,"man":1,"male":1,"males":1,"his":1,"him":1,"businessman":1,"businessmen":1,"father":1, "men's":1, "himself":1, "homme":1, "hombre":1, "(man)":1, "-women men -children":1, "-women -men -children":2, "none":2, "oldmen":3, "grandfather":3,"oldwomen":4, "grandmother":4, "nonbinary":5, "other":6, "trans":7, 
         "women":8,"woman":8,"female":8,"females":8, "hers":8, "her":8, "businesswoman":8, "businesswomen":8, "mother":8, "frauen":8, "mujer":8, "haaren":8, "frau":8, "woman-doctor":8, "maiden":8, "hausfrau":8, "women -men -children":8, "youngmen":9, "boy":9, "boys":9, "jungen":9, "youngwomen":10,"girl":10, "girls":10, "ragazza":10, "schoolgirls":8,}
@@ -230,6 +232,32 @@ def get_counter():
     return start_counter
 
 
+def unlock_country_key(key):
+    key_no = None
+    key = key.lower()
+    try:
+        print("trying basic locations_dict for this key:")
+        print(key)
+        key_no = locations_dict[key]
+        print("this is the key_no")
+        print(key_no)
+        return(key_no)
+    except:
+        try:
+            altkey = loc2loc[key.lower()]
+            print("altkey")
+            print(altkey)
+            key_no = locations_dict[altkey.lower()]
+            print("this is the key_no via loc2loc")
+            print(key_no)
+            return(key_no)
+        except:
+            print("NEW LOCATION -------------------------> ", key)
+            write_csv(CSV_NOLOC_PATH,key)
+
+
+
+
 def unlock_key(site_id,key, this_dict):
     key_no = None
     key = key.lower()
@@ -301,6 +329,8 @@ def unlock_key(site_id,key, this_dict):
                 value_list = [site_id,key_no]
                 write_csv(CSV_IMAGEKEYS_PATH,value_list)
                 return key_no
+
+
 
 def findall_dict(my_dict,description):
     # Create a regular expression pattern that matches complete words in the dictionary, ignoring case
@@ -406,7 +436,7 @@ def description_to_keys(description, site_id, this_dict="keys_dict"):
 def get_gender_age_row(gender_string, age_string, description, keys_list, site_id):
     def try_key(gender, age, age_detail, this_string):
         if not pd.isnull(this_string):
-            # print(f"looking for {this_string} in dict")
+            print(f"looking for {this_string} in dict")
             #convertkeys
             try:
                 gender = gender_dict[this_string.lower()]
@@ -448,14 +478,16 @@ def get_gender_age_row(gender_string, age_string, description, keys_list, site_i
     description = description.replace(",","").replace("'s","").replace(".","")
 
     print("gender_string, age_string",gender_string, age_string)
+    # print("types",type(gender_string), type(age_string))
 
-    gender, age, age_detail = try_key(gender, age, age_detail, gender_string)
+    if gender_string != "":
+        gender, age, age_detail = try_key(gender, age, age_detail, gender_string)
     # print("gender, age, after try key gender_string")
     # print(gender)
     # print(age)
 
-
-    gender, age, age_detail = try_key(gender, age, age_detail, age_string)
+    if age_string != "":
+        gender, age, age_detail = try_key(gender, age, age_detail, age_string)
     # print("gender, age, after try key age_string")
     # print(gender)
     # print(age)
@@ -590,9 +622,10 @@ def structure_row_istock(row, ind, keys_list):
     age = row[6]
     description = row[1]
     gender_key, age_key, age_detail_key = get_gender_age_row(gender, age, description, keys_list, site_id)
+    country_key = unlock_country_key(row[3])
 
     image_row = {
-        "country": row[3],        
+        "country": country_key,        
         "site_image_id": row[0],
         "site_name_id": site_id,
         "description": description[:140],
@@ -600,7 +633,7 @@ def structure_row_istock(row, ind, keys_list):
         "gender_id": gender_key,
         "age_detail_id": age_detail_key,
         "contentUrl": row[10],
-        "imagename": generate_local_unhashed_image_filepath(row[9].replace("images/","").split("?")[0])  # need to refactor this from the contentURL using the hash function
+        "imagename": generate_local_unhashed_image_filepath(row[11].replace("images/","").split("?")[0])  # need to refactor this from the contentURL using the hash function
     }
     
     return nan2none(image_row)
@@ -628,6 +661,8 @@ def ingest_csv():
         reader_obj = csv.reader(file_obj)
         next(reader_obj)  # Skip header row
         start_counter = get_counter()
+
+        start_counter = 0 #temporary for testing, while adobe is ongoing
         counter = 0
         ind = 0
         
@@ -651,7 +686,8 @@ def ingest_csv():
             print("keys_list")
             print(keys_list)
 
-            image_row = structure_row_adobe(row, ind, keys_list)
+            # image_row = structure_row_adobe(row, ind, keys_list)
+            image_row = structure_row_istock(row, ind, keys_list)
             key_nos_list = []
             
             for key in keys_list:
@@ -686,6 +722,7 @@ def ingest_csv():
 
                 eth_no_list = None
 
+            print(image_row)
 
             with engine.connect() as conn:
                 select_stmt = select([images_table]).where(
@@ -865,7 +902,6 @@ if __name__ == '__main__':
         locations_dict = make_key_dict(KEYWORD_PATH, "location")
         print("this many locations", len(locations_dict))
 
-        quit()
         ingest_csv()
     except KeyboardInterrupt as _:
         print('[-] User cancelled.\n', flush=True)
