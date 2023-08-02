@@ -21,7 +21,8 @@ class SortPose:
 
         #maximum allowable distance between encodings
         self.MAXDIST = 0.6
-        self.CUTOFF = 1000
+        self.MINDIST = .4
+        self.CUTOFF = 100
 
         # maximum allowable scale up
         self.resize_max = 1.99
@@ -749,9 +750,12 @@ class SortPose:
         return enc1, df_128_enc
 
     def get_closest_df(self, enc1, df_128_enc):
+        print("megatest for baker girl")
+        bakergirl = df_128_enc.loc["2/2C/16597150-adorable-young-chef-girl-mixing-flour-with-whisk-for-baking-and-cooking-isolated.jpg"]
         print("get_closest_df")
         dist=[]
         dist_dict={}
+        dist_run_dict={}
         enc2_dict={}
         
         for index, row in df_128_enc.iterrows():
@@ -761,18 +765,29 @@ class SortPose:
             # print("testing this", index, "against the start img",start_img)
             if (enc1 is not None) and (enc2 is not None):
                 d = self.get_d(enc1, enc2)
-                print ("d is", str(d), "for", index)
-                dist.append(d)
-                dist_dict[d]=index
-                enc2_dict[d]=enc2
-        dist.sort()
-        # print("debug index")
-        # print(dist)
-        # print(len(dist))
-        print ("the winner is: ", str(dist[0]), dist_dict[dist[0]])
-    #     print(len(dist))
-        self.counter_dict["last_image_enc"]=enc2_dict[dist[0]]
-        return dist[0], dist_dict[dist[0]], df_128_enc
+                if d > 0 and d < self.MAXDIST:
+                    print ("d is", str(d), "for", index)
+                    dist.append(d)
+                    dist_dict[d]=index
+                    enc2_dict[d]=enc2
+                    if d < self.MINDIST:
+                        dist_run_dict[d]=index
+ 
+        if len(dist_run_dict) > 2:
+            k = list(dist_run_dict.keys())
+            print("WE HAVE A RUN!!!!! ---------- ", str(len(k)))
+            last_d_in_run = max(k)
+            self.counter_dict["last_image_enc"]=enc2_dict[last_d_in_run]
+            return last_d_in_run, dist_dict[last_d_in_run], df_128_enc
+        else:
+            dist.sort()
+            print("debug index")
+            print(dist)
+            print(len(dist))
+            print ("the winner is: ", str(dist[0]), dist_dict[dist[0]])
+        #     print(len(dist))
+            self.counter_dict["last_image_enc"]=enc2_dict[dist[0]]
+            return dist[0], dist_dict[dist[0]], df_128_enc
 
 
 

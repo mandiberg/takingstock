@@ -42,11 +42,12 @@ ROOT = io.ROOT
 NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 #######################################
 
-# INGEST_FOLDER = "/Users/michaelmandiberg/Downloads/adobe_csv_4ingest/"
-# CSV_IN_PATH = os.path.join("unique_lines_B.csv")
+INGEST_ROOT = "/Users/michaelmandiberg/Documents/projects-active/facemap_production"
+# INGEST_FOLDER = os.path.join(INGEST_ROOT, "adobe_csv_4ingest/")
+# CSV_IN_PATH = os.path.join(INGEST_FOLDER, "unique_lines_B_nogender.csv")
 INGEST_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/iStock_ingest/"
 CSV_IN_PATH = os.path.join(INGEST_FOLDER, "april15_iStock_output_sample.jsonl.csv")
-KEYWORD_PATH = "/Users/michaelmandiberg/Downloads/adobe_csv_4ingest/Keywords_202305150950.csv"
+KEYWORD_PATH = os.path.join(INGEST_FOLDER, "Keywords_202305150950.csv")
 CSV_NOKEYS_PATH = os.path.join(INGEST_FOLDER, "CSV_NOKEYS.csv")
 CSV_IMAGEKEYS_PATH = os.path.join(INGEST_FOLDER, "CSV_IMAGEKEYS.csv")
 # NEWIMAGES_FOLDER_NAME = 'images_pexels'
@@ -625,7 +626,7 @@ def structure_row_istock(row, ind, keys_list):
     country_key = unlock_country_key(row[3])
 
     image_row = {
-        "country": country_key,        
+        "location_id": country_key,        
         "site_image_id": row[0],
         "site_name_id": site_id,
         "description": description[:140],
@@ -643,13 +644,13 @@ def ingest_csv():
 
     # change this for each site ingested #
     # adobe
-    column_keys = 6 #where the keywords are
-    separator_keys = " " #for keywords, in the column listed above
-    column_site = 8 #not sure this is used
-    column_eth = None #ethnicity
-    search_desc_for_keys = True
+    # column_keys = 6 #where the keywords are
+    # separator_keys = " " #for keywords, in the column listed above
+    # column_site = 8 #not sure this is used
+    # column_eth = None #ethnicity
+    # search_desc_for_keys = True
 
-    # istock
+    # # istock
     column_keys = 2 #where the keywords are
     separator_keys = "|" #for keywords, in the column listed above
     column_site = 8 #not sure this is used
@@ -661,8 +662,8 @@ def ingest_csv():
         reader_obj = csv.reader(file_obj)
         next(reader_obj)  # Skip header row
         start_counter = get_counter()
-
-        start_counter = 0 #temporary for testing, while adobe is ongoing
+        print("start_counter: ", start_counter)
+        # start_counter = 0 #temporary for testing, while adobe is ongoing
         counter = 0
         ind = 0
         
@@ -722,7 +723,7 @@ def ingest_csv():
 
                 eth_no_list = None
 
-            print(image_row)
+            # print(image_row)
 
             with engine.connect() as conn:
                 select_stmt = select([images_table]).where(

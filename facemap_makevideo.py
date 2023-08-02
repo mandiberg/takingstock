@@ -171,10 +171,10 @@ image_edge_multiplier = [1.2, 1.2, 1.6, 1.2]
 # construct my own objects
 sort = SortPose(motion, face_height_output, image_edge_multiplier,EXPAND)
 
-# start_img_name = "median"
-# start_site_image_id = None
-start_img_name = "start_site_image_id"
-start_site_image_id = "0/02/159079944-hopeful-happy-young-woman-looking-amazed-winning-prize-standing-white-background.jpg"
+start_img_name = "median"
+start_site_image_id = None
+# start_img_name = "start_site_image_id"
+# start_site_image_id = "0/02/159079944-hopeful-happy-young-woman-looking-amazed-winning-prize-standing-white-background.jpg"
 # start_site_image_id = "0/08/158083627-man-in-white-t-shirt-gesturing-with-his-hands-studio-cropped.jpg"
 
 # no gap
@@ -316,16 +316,12 @@ def sort_by_face_dist(df_enc, df_128_enc):
         print(df_enc)
         # this is the site_name_id for this_start, needed to test mse
         print("this_start", this_start)
-        # THIS IS WHERE I NEED TO START MY WORK
+        print("starting sort round ",str(i))
         
-        # this line works for no clusters
+        ## Get the starting encodings 
         if this_start != "median" and this_start != "start_site_image_id" and i == 0:
-
-        # this line works for is one cluster. 
-        # I added not sort.counter_dict["last_image_enc"] or but am not 100% confident
-        # if i == 0 and not sort.counter_dict["last_image_enc"] or not np.isnan(sort.counter_dict["last_image_enc"].all()):
-            #this is the first round. set encodings to the passed through encodings
-            # need to get old encodings from previous round. through sort.counter_dict?
+            # this is the first round. set encodings to the passed through encodings
+            # IF NO START IMAGE SPECIFIED (this line works for no clusters)
             print("attempting set enc1 from pass through")
             enc1 = sort.counter_dict["last_image_enc"]
             # enc1 = df_enc.loc[this_start]['face_encodings']
@@ -337,7 +333,7 @@ def sort_by_face_dist(df_enc, df_128_enc):
             enc1, df_128_enc = sort.get_start_enc(this_start, df_128_enc)
             print("set enc1 from get_start_enc()")
 
-        print("starting sort round ",str(i))
+        ## Find closest
         try:
             dist, this_start, df_128_enc = sort.get_closest_df(enc1,df_128_enc)
             print("this_start assigned as ", this_start)
@@ -345,14 +341,11 @@ def sort_by_face_dist(df_enc, df_128_enc):
             print(str(e))
 
         # dist[0], dist_dict[dist[0]]
-        thisimage=None
+        # thisimage=None
+        
+        ## Collect values and append to face_distances
         face_landmarks=None
         bbox=None
-
-        # debuggin problem. this_start = median, so can't pass it in as df loc. 
-        # print(df_enc)
-        # print(this_start)
-
         try:
             site_name_id = df_enc.loc[this_start]['site_name_id']
             face_landmarks = df_enc.loc[this_start]['face_landmarks']
@@ -373,17 +366,18 @@ def sort_by_face_dist(df_enc, df_128_enc):
         print(len(df_128_enc.index))
         print(dist)
         print (start_img_name)
-        # for row in face_distances:
-        #     print(str(row[0]), row[2])
+
+    ## When loop is complete, create df
     df = pd.DataFrame(face_distances, columns =['dist', 'folder', 'filename','site_name_id','face_landmarks', 'bbox'])
     print(df)
+
+    ## Set a start_img_name for next round --> for clusters
     try:
         last_file = face_distances[-1][2]
         print("last_file ",last_file)
     except:
         last_file = this_start
         print("last_file is this_start",last_file)
-
     sort.counter_dict["start_img_name"] = last_file
 
     # df = df.sort_values(by=['dist']) # this was sorting based on delta distance, not sequential distance
