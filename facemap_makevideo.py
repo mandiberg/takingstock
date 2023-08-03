@@ -142,7 +142,7 @@ elif IS_SEGONLY:
     # WHERE = "bbox IS NOT NULL"
     # AND i.site_name_id = 1 AND k.keyword_text LIKE 'smil%'"
 
-LIMIT = 110000
+LIMIT = 50000
 
 motion = {
     "side_to_side": False,
@@ -335,34 +335,54 @@ def sort_by_face_dist(df_enc, df_128_enc):
 
         ## Find closest
         try:
-            dist, this_start, df_128_enc = sort.get_closest_df(enc1,df_128_enc)
-            print("this_start assigned as ", this_start)
+            # closest_dict is now a dict with 1 or more items
+            # this_start is a filepath, which serves as df index
+            # it is now a dict of key=distance value=filepath
+            dist, closest_dict, df_128_enc = sort.get_closest_df(enc1,df_128_enc)
         except Exception as e:
             print(str(e))
 
-        # dist[0], dist_dict[dist[0]]
-        # thisimage=None
-        
-        ## Collect values and append to face_distances
-        face_landmarks=None
-        bbox=None
-        try:
-            site_name_id = df_enc.loc[this_start]['site_name_id']
-            face_landmarks = df_enc.loc[this_start]['face_landmarks']
-            bbox = df_enc.loc[this_start]['bbox']
-            print("assigned bbox", bbox)
-        except:
-            print("won't assign landmarks/bbox")
-        site_specific_root_folder = io.folder_list[site_name_id]
-        print("site_specific_root_folder")
-        print(site_specific_root_folder)
-        # save the image -- this prob will be to append to list, and return list? 
-        # save_sorted(i, folder, start_img_name, dist)
-        this_dist=[dist, site_specific_root_folder, this_start, site_name_id, face_landmarks, bbox]
-        face_distances.append(this_dist)
+        # Break out of the loop if greater than MAXDIST
+        # I think this will be graceful with cluster iteration
+        if dist > sort.MAXDIST:
+            break
+
+        # Iterate through the results and append
+        dkeys = list(closest_dict.keys())
+        dkeys.sort()
+        images_to_drop =[]
+        for dkey in dkeys:
+
+
+            ## Collect values and append to face_distances
+            this_start = closest_dict[dkey]
+            print("this_start assigned as ", this_start)
+            face_landmarks=None
+            bbox=None
+            try:
+                site_name_id = df_enc.loc[closest_dict[dkey]]['site_name_id']
+                face_landmarks = df_enc.loc[closest_dict[dkey]]['face_landmarks']
+                bbox = df_enc.loc[closest_dict[dkey]]['bbox']
+                print("assigned bbox", bbox)
+            except:
+                print("won't assign landmarks/bbox")
+            site_specific_root_folder = io.folder_list[site_name_id]
+            print("site_specific_root_folder")
+            print(site_specific_root_folder)
+            # save the image -- this prob will be to append to list, and return list? 
+            # save_sorted(i, folder, start_img_name, dist)
+            this_dist=[dkey, site_specific_root_folder, this_start, site_name_id, face_landmarks, bbox]
+            face_distances.append(this_dist)
+            images_to_drop.append(this_start)
+
+        # remove the last image this_start, then drop them from df_128_enc
+        # the this_start will be dropped in the get_start_enc method
+        images_to_drop.remove(this_start)
+        for dropimage in images_to_drop:
+            df_128_enc=df_128_enc.drop(dropimage)
 
         #debuggin
-        print("sorted round ",str(i))
+        print(f"sorted round {str(i)} which is actually round  {str(i+len(dkeys)-1)}")
         print(len(df_128_enc.index))
         print(dist)
         print (start_img_name)

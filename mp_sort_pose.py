@@ -22,7 +22,7 @@ class SortPose:
         #maximum allowable distance between encodings
         self.MAXDIST = 0.6
         self.MINDIST = .4
-        self.CUTOFF = 100
+        self.CUTOFF = 2000
 
         # maximum allowable scale up
         self.resize_max = 1.99
@@ -742,6 +742,7 @@ class SortPose:
     #         enc1 = get 2-129 from df via stimg key
             print("start_img key is (this is what we are comparing to):")
             print(start_img)
+            print(df_128_enc.loc[start_img])
             enc1 = df_128_enc.loc[start_img].to_list()
             try:
                 df_128_enc=df_128_enc.drop(start_img)
@@ -765,7 +766,7 @@ class SortPose:
             # print("testing this", index, "against the start img",start_img)
             if (enc1 is not None) and (enc2 is not None):
                 d = self.get_d(enc1, enc2)
-                if d > 0 and d < self.MAXDIST:
+                if d > 0:
                     print ("d is", str(d), "for", index)
                     dist.append(d)
                     dist_dict[d]=index
@@ -778,16 +779,25 @@ class SortPose:
             print("WE HAVE A RUN!!!!! ---------- ", str(len(k)))
             last_d_in_run = max(k)
             self.counter_dict["last_image_enc"]=enc2_dict[last_d_in_run]
-            return last_d_in_run, dist_dict[last_d_in_run], df_128_enc
+            # switch to returning dist_run_dict
+            return last_d_in_run, dist_run_dict, df_128_enc
         else:
             dist.sort()
-            print("debug index")
-            print(dist)
+            print("length of dist -- how many enc are left in the mix")
+            # print(dist)
             print(len(dist))
+            # if dist[0] > self.MAXDIST:
+            #     print("TOO GREAT A DISTANCE ---> going to break the loop and keep the last values")
+            #     dist_single_dict = {1: True}
+            #     return 1, dist_single_dict, df_128_enc
+
             print ("the winner is: ", str(dist[0]), dist_dict[dist[0]])
         #     print(len(dist))
             self.counter_dict["last_image_enc"]=enc2_dict[dist[0]]
-            return dist[0], dist_dict[dist[0]], df_128_enc
+            # make dict of one and to return it
+            # dist_single_dict[dist[0]] = dist_dict[dist[0]]
+            dist_single_dict = {dist[0]: dist_dict[dist[0]]}
+            return dist[0], dist_single_dict, df_128_enc
 
 
 
