@@ -129,8 +129,8 @@ elif IS_SEGONLY:
     FROM =f"Images i LEFT JOIN Encodings e ON i.image_id = e.image_id INNER JOIN {SegmentTable_name} seg ON i.site_image_id = seg.site_image_id"
     if IS_CLUSTER is True or IS_ONE_CLUSTER is True:
         FROM += " JOIN ImagesClusters68 ic ON i.image_id = ic.image_id"
-    # WHERE = "e.is_face IS TRUE AND e.face_encodings68 IS NOT NULL AND e.bbox IS NOT NULL AND i.site_name_id = 8 AND i.age_id NOT IN (1,2,3,4)"
-    WHERE = "e.face_encodings68 IS NOT NULL"
+    WHERE = "e.face_encodings68 IS NOT NULL AND i.site_name_id = 8 AND i.age_id NOT IN (1,2,3,4) AND e.mouth_gap > 10"
+    # WHERE = "e.face_encodings68 IS NOT NULL"
     # WHERE = "e.mouth_gap > 15"
 
 
@@ -142,7 +142,7 @@ elif IS_SEGONLY:
     # WHERE = "bbox IS NOT NULL"
     # AND i.site_name_id = 1 AND k.keyword_text LIKE 'smil%'"
 
-LIMIT = 50000
+LIMIT = 110000
 
 motion = {
     "side_to_side": False,
@@ -171,10 +171,10 @@ image_edge_multiplier = [1.2, 1.2, 1.6, 1.2]
 # construct my own objects
 sort = SortPose(motion, face_height_output, image_edge_multiplier,EXPAND)
 
-start_img_name = "median"
-start_site_image_id = None
-# start_img_name = "start_site_image_id"
-# start_site_image_id = "0/02/159079944-hopeful-happy-young-woman-looking-amazed-winning-prize-standing-white-background.jpg"
+# start_img_name = "median"
+# start_site_image_id = None
+start_img_name = "start_site_image_id"
+start_site_image_id = "0/02/159079944-hopeful-happy-young-woman-looking-amazed-winning-prize-standing-white-background.jpg"
 # start_site_image_id = "0/08/158083627-man-in-white-t-shirt-gesturing-with-his-hands-studio-cropped.jpg"
 
 # no gap
@@ -331,6 +331,10 @@ def sort_by_face_dist(df_enc, df_128_enc):
             #this is the second round, set via df
             print("trying get_start_enc()")
             enc1, df_128_enc = sort.get_start_enc(this_start, df_128_enc)
+            # # test to see if get_start_enc was successful
+            # # if not, retain previous enc1. or shoudl it reassign median? 
+            # if enc1_temp is not None:
+            #     enc1 = enc1_temp
             print("set enc1 from get_start_enc()")
 
         ## Find closest
@@ -339,14 +343,15 @@ def sort_by_face_dist(df_enc, df_128_enc):
             # this_start is a filepath, which serves as df index
             # it is now a dict of key=distance value=filepath
             dist, closest_dict, df_128_enc = sort.get_closest_df(enc1,df_128_enc)
+            # Break out of the loop if greater than MAXDIST
+            # I think this will be graceful with cluster iteration
+            if dist > sort.MAXDIST:
+                break
+
         except Exception as e:
             print(str(e))
 
-        # Break out of the loop if greater than MAXDIST
-        # I think this will be graceful with cluster iteration
-        if dist > sort.MAXDIST:
-            break
-
+     
         # Iterate through the results and append
         dkeys = list(closest_dict.keys())
         dkeys.sort()
@@ -377,8 +382,12 @@ def sort_by_face_dist(df_enc, df_128_enc):
 
         # remove the last image this_start, then drop them from df_128_enc
         # the this_start will be dropped in the get_start_enc method
+        print("lenght of images to drop before and after removing this_start")
+        print(len(images_to_drop))
         images_to_drop.remove(this_start)
+        print(len(images_to_drop))
         for dropimage in images_to_drop:
+            print("going to remove this image enc", dropimage)
             df_128_enc=df_128_enc.drop(dropimage)
 
         #debuggin
@@ -513,6 +522,8 @@ def compare_images(last_image, img, face_landmarks, bbox):
                     print("same person, testing mse")
                     is_face = sort.unique_face(last_image,cropped_image)
                     print ("mse ",mse)
+                else:
+                    print("failed is_face test")
             else:
                 print("first round, skipping the pair test")
         except:

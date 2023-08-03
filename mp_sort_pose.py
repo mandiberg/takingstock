@@ -20,9 +20,9 @@ class SortPose:
         self.mp_drawing = mp.solutions.drawing_utils
 
         #maximum allowable distance between encodings
-        self.MAXDIST = 0.6
+        self.MAXDIST = 0.8
         self.MINDIST = .4
-        self.CUTOFF = 2000
+        self.CUTOFF = 4000
 
         # maximum allowable scale up
         self.resize_max = 1.99
@@ -739,20 +739,26 @@ class SortPose:
             print(self.counter_dict["start_site_image_id"])
             enc1 = df_128_enc.loc[self.counter_dict["start_site_image_id"]].to_list()
         else:
-    #         enc1 = get 2-129 from df via stimg key
+            # enc1 = get 2-129 from df via string key
             print("start_img key is (this is what we are comparing to):")
             print(start_img)
-            print(df_128_enc.loc[start_img])
-            enc1 = df_128_enc.loc[start_img].to_list()
+            try:
+                enc1 = df_128_enc.loc[start_img].to_list()
+                print(enc1)
+            except:
+                print("Returning enc1 = median << KeyError for ", start_img)
+                # enc1 = None
+                enc1 = df_128_enc.median().to_list()
+                print(enc1)
+
             try:
                 df_128_enc=df_128_enc.drop(start_img)
+                print("dropped ",start_img)
             except:
                 print("couldn't drop the start_img")
         return enc1, df_128_enc
 
     def get_closest_df(self, enc1, df_128_enc):
-        print("megatest for baker girl")
-        bakergirl = df_128_enc.loc["2/2C/16597150-adorable-young-chef-girl-mixing-flour-with-whisk-for-baking-and-cooking-isolated.jpg"]
         print("get_closest_df")
         dist=[]
         dist_dict={}
