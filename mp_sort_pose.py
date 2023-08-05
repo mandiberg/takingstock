@@ -20,7 +20,7 @@ class SortPose:
         self.mp_drawing = mp.solutions.drawing_utils
 
         #maximum allowable distance between encodings
-        self.MAXDIST = 0.8
+        self.MAXDIST = 0.df_128_enc
         self.MINDIST = .4
         self.CUTOFF = 4000
 

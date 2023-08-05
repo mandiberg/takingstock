@@ -11,6 +11,7 @@ import sys # can delete for production
 import pathlib
 import re
 import traceback
+from collections import Counter
 
 import numpy as np
 import pandas as pd
@@ -60,16 +61,17 @@ loc2loc = {"niue":"Niue Island"}
 key2key = {"person":"people", "kid":"child","affection":"affectionate", "baby":"baby - human age", "beautiful":"beautiful people", "pretty":"beautiful people", "blur":"blurred motion", "casual":"casual clothing", "children":"child", "kids":"child", "couple":"couple - relationship", "adorable":"cute", "room":"domestic room", "focus":"focus - concept", "happy":"happiness", "at home":"home interior", "home":"home interior", "face":"human face", "hands":"human hand", "landscape":"landscape - scenery", "outfit":"landscape - scenery", "leisure":"leisure activity", "love":"love - emotion", "guy":"men", "motherhood":"mother", "parenthood":"parent", "positive":"positive emotion", "recreation":"recreational pursuit", "little":"small", "studio shoot":"studio shot", "together":"togetherness", "vertical shot":"vertical", "lady":"women", "young":"young adult", "light":"light - natural phenomenon", "trees":"tree", "disabled":"disability", "landline":"phone", "tradesman":"worker", "apprentice":"work", "arbeit":"work", "wheel-chair":"wheelchair", "treatments":"treatment", "transports":"transportation", "thoughtfully":"thoughtful", "technologies":"technology", "piscine":"swim", "astonished":"surprise", "surgeons":"surgeon", "sommer":"summer", "suffering":"suffer", "studentin":"student", "stressful":"stressed", "smoothies":"smoothie", "smilling":"smiling", "kleines":"small", "sleeps":"sleeping", "dealership":"sales", "salads":"salad", "ressources":"resources", "relaxes":"relaxed", "presentations":"presentation", "phones":"phone", "telefon":"phone", "telefoniert":"phone", "patients":"patient", "papier":"paper", "painful":"pain", "offended":"offend", "occupations":"occupation", "muscled":"muscles", "motivated":"motivation", "pinup":"model", "pin-up":"model", "meetings":"meeting", "massages":"massage", "kleiner":"little", "(lawyer)":"lawyer", "kitchens":"kitchen", "injections":"injection", "hospitals":"hospital", "zuhause":"home", "happily":"happy", "joyfully":"happy", "overjoyed":"happiness", "rejoices":"happiness", "handshaking":"handshake", "groups":"group", "full-length":"Full Length", "blumen":"flowers", "florists":"florist", "panic":"fear", "fell":"fall", "equipements":"equipement", "enthusiastic":"enthusiasm", "osteopathy":"doctor", "disgusted":"disgust", "schreibtisch":"desk", "dances":"dancing", "crowds":"crowd", "robber":"criminal", "copyspace":"Copy Space", "misunderstandings":"confusion", "confidently":"confidence", "concerts":"concert", "climbs":"climb", "celebrations":"celebration", "caught":"catch", "casually":"casual", "motorsports":"car", "banker":"Business Person", "supervisor":"boss", "executives":"boss", "bedrooms":"bedroom", "beautifull":"beautiful", "beaches":"beach", "bathrooms":"bathroom", "backgroud":"background", "attraktive":"attractive", "sportwear":"athletic", "sportliche":"athletic", "addicted":"addiction", "alcoholism":"addiction"}
 gender_dict = {"men":1,"man":1,"male":1,"males":1,"his":1,"him":1,"businessman":1,"businessmen":1,"father":1, "men's":1, "himself":1, "homme":1, "hombre":1, "(man)":1, "-women men -children":1, "-women -men -children":2, "none":2, "oldmen":3, "grandfather":3,"oldwomen":4, "grandmother":4, "nonbinary":5, "other":6, "trans":7, 
         "women":8,"woman":8,"female":8,"females":8, "hers":8, "her":8, "businesswoman":8, "businesswomen":8, "mother":8, "frauen":8, "mujer":8, "haaren":8, "frau":8, "woman-doctor":8, "maiden":8, "hausfrau":8, "women -men -children":8, "youngmen":9, "boy":9, "boys":9, "jungen":9, "youngwomen":10,"girl":10, "girls":10, "ragazza":10, "schoolgirls":8,}
+gender_dict_istock = {"Mid Adult Men":1, "Only Mid Adult Men":1, "One Mid Adult Man Only":1, "Only Men":1, "One Man Only":1, "Senior Men":3, "Only Senior Men":3, "One Senior Man Only":3, "Mature Men":3, "Only Mature Men":3, "One Mature Man Only":3, "Mature Women":4, "Only Mature Women":4, "One Mature Woman Only":4, "Senior Women":4, "Only Senior Women":4, "One Senior Woman Only":4, "Mid Adult Women":8, "Only Mid Adult Women":8, "One Mid Adult Woman Only":8, "Only Women":8, "One Woman Only":8, "Young Men":9, "Only Young Men":9, "One Young Man Only":9, "Teenage Boys":9, "Only Teenage Boys":9, "One Teenage Boy Only":9, "Only Boys":9, "One Boy Only":9, "Baby Boys":9, "Only Baby Boys":9, "One Baby Boy Only":9, "Young Women":10, "Only Young Women":10, "One Young Woman Only":10, "Teenage Girls":10, "Only Teenage Girls":10, "One Teenage Girl Only":10, "Only Girls":10, "One Girl Only":10, "Baby Girls":10, "Only Baby Girls":10, "One Baby Girl Only":10}
 # gender2key = {"man":"men", "woman":"women"}
-eth_dict = {"black":1, "african-american":1, "afro-american":1, "africanamerican":1, "african american":1, "african":1, "Indigenous Peoples of Africa":1, "african ethnicity":1, "caucasian":2, "white people":2, "europeans":2, "eastasian":3,"east asian":3, "chinese":3, "japanese":3, "asian":3, "hispaniclatino":4, "latino":4, "latina":4, "latinx":4, "hispanic":4, "mexican":4, "middleeastern":5, "middle eastern":5, "arab":5, "mixedraceperson":6, "mixedrace":6, "mixed-race":6, "mixed race":6, "mixed ethnicity":6, "multiethnic":6, "multi ethnic":6, "multi-ethnic":6, "biracial":6, "nativeamericanfirstnations":7, "native american":7, "nativeamerican":7, "native-american":7, "indian american":7, "indianamerican":7, "indian-american":7, "first nations":7, "firstnations":7, "first-nations":7, "indigenous":7, "pacificislander":8, "pacific islander":8, "pacific-islander":8, "southasian":9, "south asian":9, "south-asian":9, "indian":9, "southeastasian":10, "southest asian":10, "southeast asian":10, "southeast-asian":10}
-# for searching descrption for eth keywords
+eth_dict = {"black":1, "african-american":1, "afro-american":1, "africanamerican":1, "african american":1, "african":1, "indigenous peoples of africa":1, "african ethnicity":1, "african-american ethnicity":1, "caucasian":2, "white people":2, "europeans":2, "eastasian":3,"east asian":3, "chinese":3, "japanese":3, "asian":3, "hispaniclatino":4, "latino":4, "latina":4, "latinx":4, "hispanic":4, "mexican":4, "middleeastern":5, "middle eastern":5, "arab":5, "mixedraceperson":6, "mixedrace":6, "mixed-race":6, "mixed race":6, "mixed ethnicity":6, "multiethnic":6, "multi ethnic":6, "multi-ethnic":6, "biracial":6, "nativeamericanfirstnations":7, "native american":7, "nativeamerican":7, "native-american":7, "indian american":7, "indianamerican":7, "indian-american":7, "first nations":7, "firstnations":7, "first-nations":7, "indigenous":7, "pacificislander":8, "pacific islander":8, "pacific-islander":8, "southasian":9, "south asian":9, "south-asian":9, "indian":9, "southeastasian":10, "southest asian":10, "southeast asian":10, "southeast-asian":10}
+eth_dict_istock = {"Northern European Descent":2, "Scandinavian Descent":2, "Southern European Descent":2, "East Asian Ethnicity":3, "Japanese Ethnicity":3, "Chinese Ethnicity":3, "Southeast Asian Ethnicity":10, "South Asian Ethnicity":9, "West Asian Ethnicity":5, "North African Ethnicity":5, "African-American Ethnicity":1, "Latin American and Hispanic Ethnicity":4, "Cuban Ethnicity":4, "Puerto Rican Ethnicity":4, "Mexican Ethnicity":4, "Multiracial Group":6, "Multiracial Person":6}
+# for searching descrption for eth keywords, get rid of ambiguous/polyvalent terms
 eth_keys_dict = eth_dict
-eth_keys_dict.pop('black')
-
-
+for k in ['black', 'african']: eth_keys_dict.pop(k)
 
 # load Keywords_202304300930.csv as df, drop all but keytype Locations, create two dicts: string->ID & GettyID->ID  
-loc_dict = {"Canada":1989}
+# loc_dict = {"Canada":1989}
+
 age_dict = {
     "newborn":1,
     "baby":1,
@@ -97,6 +99,11 @@ age_dict = {
     "teens":4,
     "teenager":4,
     "teenagers":4,
+    "young adult":5,
+    "young man":5,
+    "young woman":5,
+    "young men":5,
+    "young women":5,
     "young":5,
     "20s":5,
     "30s":5,
@@ -109,6 +116,7 @@ age_dict = {
     "70+":7,
     "seniorin":7
 }
+age_dict_istock = {"0-1 Months":1, "0-11 Months":1, "Babies Only":1, "2-5 Months":2, "6-11 Months":2, "Preschool Age":2, "12-17 Months":3, "2-3 Years":3, "4-5 Years":3, "6-7 Years":3, "8-9 Years":3, "10-11 Years":3, "12-13 Years":3, "12-23 Months":3, "Elementary Age":3, "Pre-Adolescent Child":3, "Children Only":3, "18-23 Months":3, "14-15 Years":4, "16-17 Years":4, "18-19 Years":4, "Teenagers Only":4, "20-24 Years":5, "25-29 Years":5, "30-34 Years":5, "20-29 Years":5, "30-39 Years":5, "35-39 Years":6, "40-44 Years":6, "45-49 Years":6, "50-54 Years":6, "55-59 Years":6, "Adults Only":6, "Mid Adult":6, "Mature Adult":6, "40-49 Years":6, "50-59 Years":6, "60-64 Years":7, "65-69 Years":7, "70-79 Years":7, "Senior Adult":7, "60-69 Years":7, "80-89 Years":7, "Over 100":7, "90 Plus Years":7}
 
 age_details_dict = {
     'toddler': 2,
@@ -119,6 +127,19 @@ age_details_dict = {
     '60s': 8,
     '70+': 9
 }
+age_detail_dict_istock = {"0-1 Months":1, "2-5 Months":1, "0-11 Months":1, "Babies Only":1, "12-17 Months":2, "2-3 Years":2, "6-11 Months":2, "12-23 Months":2, "18-23 Months":2, "12-13 Years":3, "14-15 Years":3, "16-17 Years":3, "18-19 Years":3, "20-24 Years":4, "25-29 Years":4, "20-29 Years":4, "30-34 Years":5, "35-39 Years":5, "30-39 Years":5, "40-44 Years":6, "45-49 Years":6, "40-49 Years":6, "50-54 Years":7, "55-59 Years":7, "50-59 Years":7, "60-64 Years":8, "65-69 Years":8, "60-69 Years":8, "70-79 Years":9, "80-89 Years":9, "Over 100":9, "90 Plus Years":9, "4-5 Years":10, "6-7 Years":10, "8-9 Years":11, "10-11 Years":11}
+
+def lower_dict(this_dict):
+    lower_dict = {k.lower(): v for k, v in this_dict.items()}
+    return lower_dict
+
+gender_dict = lower_dict({**gender_dict, **gender_dict_istock})
+eth_dict = lower_dict({**eth_dict, **eth_dict_istock})
+age_dict = lower_dict({**age_dict, **age_dict_istock})
+age_details_dict = lower_dict({**age_details_dict, **age_detail_dict_istock})
+
+
+
 
 
 # table_search ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id"
@@ -236,33 +257,22 @@ def get_counter():
     return start_counter
 
 
-def unlock_country_key(key):
-    key_no = None
-    key = key.lower()
-    try:
-        print("trying basic locations_dict for this key:")
-        print(key)
-        key_no = locations_dict[key]
-        print("this is the key_no")
-        print(key_no)
-        return(key_no)
-    except:
-        try:
-            altkey = loc2loc[key.lower()]
-            print("altkey")
-            print(altkey)
-            key_no = locations_dict[altkey.lower()]
-            print("this is the key_no via loc2loc")
-            print(key_no)
-            return(key_no)
-        except:
-            print("NEW LOCATION -------------------------> ", key)
-            write_csv(CSV_NOLOC_PATH,key)
 
 
+# abstraction to run a list through unlock_key_plurals_etc
+def unlock_key_list(site_image_id, keys_list, keys_dict):
+    key_nos_list = []
+    
+    for key in keys_list:
+        key_no = unlock_key_plurals_etc(site_image_id.lower(), key, keys_dict)
+        # print(key_no)
+        if key_no:
+            key_nos_list.append(key_no)
+    return key_nos_list
 
-
-def unlock_key(site_id,key, this_dict):
+# takes a key and runs all permutations through the dict, and saves missing ones
+# this is the kitchen sink function
+def unlock_key_plurals_etc(site_id,key, this_dict):
     key_no = None
     key = key.lower()
     try:
@@ -335,7 +345,8 @@ def unlock_key(site_id,key, this_dict):
                 return key_no
 
 
-
+# finds dict items in a string
+# called by search_keys
 def findall_dict(my_dict,description):
     # Create a regular expression pattern that matches complete words in the dictionary, ignoring case
     pattern = re.compile(r'\b(' + '|'.join(my_dict.keys()) + r')\b', re.IGNORECASE)
@@ -351,6 +362,8 @@ def findall_dict(my_dict,description):
             # gender = value
             # print(f'The color of {match} is {value}')
 
+# only searches through keys with dict
+# called in by the get_eth_dictonly
 def search_keys(keys_list, this_dict, multi=False):
     results = []
     for key in keys_list:
@@ -373,41 +386,68 @@ def search_keys(keys_list, this_dict, multi=False):
         results_list = [one_result]
     return results_list
 
+# print(key_nos_list)
 
-def get_eth(eth_name, keys_list):
+def get_key_no_dictonly(eth_name, keys_list, this_dict, search_dict=None):
     # eth_name = df['ethnicity'][ind]
     # print('isnan?')
     # print(np.isnan(eth_name))
-    eth_no_list = []
-    eth_no = None
+    key_no_list = []
+    key_no = None
     # if eth_name is not None or eth_name is not np.isnan(eth_name):
     if not pd.isnull(eth_name):
         try:
-            eth_no = eth_dict[eth_name.lower()]
+            key_no = unlock_key_dict(eth_name, this_dict)
+            # key_no = eth_dict[eth_name.lower()]
         # need to key this into integer, like with keys
             # print("eth_name ",eth_name)
         except:
-            eth_no = None
+            key_no = None
             print("eth_dict failed with this key: ", eth_name)
-        eth_no_list.append(eth_no)
-    else:
-        eth_no_list = search_keys(keys_list, eth_keys_dict, True)
-        print("searched keys and found eth_no: ", eth_no_list)
-    return(eth_no_list)
+        key_no_list.append(key_no)
+    elif search_dict:
+        key_no_list = search_keys(keys_list, search_dict, True)
+        print("searched keys and found key_no: ", key_no_list)
+    return(key_no_list)
 
+def unlock_key_dict(key,this_dict,this_key2key=None):
+    key_no = None
+    key = key.lower()
+    try:
+        print("trying basic this_dict for this key:")
+        print(key)
+        key_no = this_dict[key]
+        print("this is the key_no")
+        print(key_no)
+        return(key_no)
+    except:
+        if this_key2key:
+            try:
+                altkey = this_key2key[key.lower()]
+                print("altkey")
+                print(altkey)
+                key_no = this_dict[altkey.lower()]
+                print("this is the key_no via loc2loc")
+                print(key_no)
+                return(key_no)
+            except:
+                print("NEW KEY -------------------------> ", key)
+                write_csv(CSV_NOLOC_PATH,key)
+        else:
+            print("unlock_key_dict failed, and no key2key for this key: ", key)
 
-def get_location(df, ind, keys_list):
-    location = None
-    key = df['country'][ind]
-    if not pd.isnull(key):
-        try:
-            location = loc_dict[key]
-        except:
-            print('NEW KEY, NOT IN COUNTRY -------------------------> ', key)
-    # else:
-    #     print('NULL country: ', key)
+# def get_location(df, ind, keys_list):
+#     location = None
+#     key = df['country'][ind]
+#     if not pd.isnull(key):
+#         try:
+#             location = loc_dict[key]
+#         except:
+#             print('NEW KEY, NOT IN COUNTRY -------------------------> ', key)
+#     # else:
+#     #     print('NULL country: ', key)
 
-    return(location)
+#     return(location)
 
 
 #currently only called for keys to desc in main show. not for gender.
@@ -427,7 +467,7 @@ def description_to_keys(description, site_id, this_dict="keys_dict"):
     for key in desc_keys:
         # print("checking key ", key)
         if not pd.isnull(key):
-            key_no = unlock_key(site_id,key,this_dict)
+            key_no = unlock_key_plurals_etc(site_id,key,this_dict)
             # print("key_no passed through:")
             # print(key_no)
             if key_no:
@@ -438,9 +478,9 @@ def description_to_keys(description, site_id, this_dict="keys_dict"):
 
 
 def get_gender_age_row(gender_string, age_string, description, keys_list, site_id):
-    def try_key(gender, age, age_detail, this_string):
+    def try_gender_age_key(gender, age, age_detail, this_string):
         if not pd.isnull(this_string):
-            print(f"looking for {this_string} in dict")
+            # print(f"looking for {this_string} in dict")
             #convertkeys
             try:
                 gender = gender_dict[this_string.lower()]
@@ -456,11 +496,15 @@ def get_gender_age_row(gender_string, age_string, description, keys_list, site_i
                 elif gender == 10:
                     gender = 8
                     age = 5
+                # print(f"first try, gender is {str(gender)} and age is {str(age)}")
                 # gender_dict={"men":1, "none":2, "oldmen":3, "oldwomen":4, "nonbinary":5, "other":6, "trans":7, "women":8, "youngmen":9, "youngwomen":10}
             except:
                 try:
                     age = age_dict[this_string.lower()]
+                    # print(f"second try age is {str(age)}")
+
                 except:
+                    # this isn't relevant for iStock
                     print('NEW KEY, NOT AGE OR GENDER -------------------------> ', this_string)
             try:
                 age_detail = age_details_dict[this_string.lower()]
@@ -472,6 +516,55 @@ def get_gender_age_row(gender_string, age_string, description, keys_list, site_i
         #     print("string is None")
         return gender, age, age_detail
 
+    def get_mode(data):
+        filtered_data = [value for value in data if value is not None]
+        
+        # Check if the filtered_data is empty before proceeding
+        if not filtered_data:
+            return None  # or return any other default value you prefer
+        
+        mode_counts = Counter(filtered_data)
+        mode_value, max_count = mode_counts.most_common(1)[0]
+        return mode_value
+
+    def prioritize_age_gender(gender_list,age_list):
+        if gender_list.count(3) > 0:
+            gender = 1
+            age = 7
+        elif gender_list.count(4) > 0:
+            gender = 8
+            age = 7
+        elif gender_list.count(9) > 0:
+            gender = 1
+            age = 5
+        elif gender_list.count(10) > 0:
+            gender = 8
+            age = 5
+        else:
+            gender = get_mode(gender_list)
+            age = get_mode(age_list)
+        return gender, age
+
+    def get_gender_age_keywords(gender, age, age_detail, keys_list):
+        gender_list=[]
+        age_list=[]
+        age_detail_list=[]
+        for key in keys_list:
+            # print("key is ", key)
+            # reset variables
+            gender = None
+            age= None
+            age_detail= None
+            gender, age, age_detail = try_gender_age_key(gender, age, age_detail, key)
+            gender_list.append(gender)
+            age_list.append(age)
+            age_detail_list.append(age_detail)
+        # print(gender_list)
+        # print(age_list)
+        # print(age_detail_list)
+        gender, age = prioritize_age_gender(gender_list,age_list)
+        age_detail = get_mode(age_detail_list)
+        return gender, age, age_detail
 
     print("get_gender_age_row starting")
     global gender_dict
@@ -484,34 +577,49 @@ def get_gender_age_row(gender_string, age_string, description, keys_list, site_i
     print("gender_string, age_string",gender_string, age_string)
     # print("types",type(gender_string), type(age_string))
 
+    # this if/if structure is necessary because "" and isnull were not compatible
+    # Get gender
     if gender_string != "":
-        gender, age, age_detail = try_key(gender, age, age_detail, gender_string)
+        gender, age, age_detail = try_gender_age_key(gender, age, age_detail, gender_string)
+    else:
+        gender, age, age_detail = get_gender_age_keywords(gender, age, age_detail, keys_list)
+        print(gender)
+        print(age)
+        print(age_detail)
+
+
+        #try keys for gender
     # print("gender, age, after try key gender_string")
     # print(gender)
     # print(age)
-
-    if age_string != "":
-        gender, age, age_detail = try_key(gender, age, age_detail, age_string)
-    # print("gender, age, after try key age_string")
-    # print(gender)
-    # print(age)
-
     if pd.isnull(gender): 
         # print("gender is null")
         gender_results = description_to_keys(description, site_id, gender_dict)
         if len(set(gender_results)) == 1:
             gender = gender_results[0]
-
-
     # print("gender, age, after try description gender_string")
     # print(gender)
     # print(age)
 
+    # Get age 
+    if age_string != "":
+        gender, age, age_detail = try_gender_age_key(gender, age, age_detail, age_string)
+        #this shouldn't overwrite the existing gender if it is not None
+    # print("gender, age, after try key age_string")
+    # print(gender)
+    # print(age)
     if pd.isnull(age):
-        # print("age is null")
-        age_results = description_to_keys(description, site_id, age_dict)
-        if len(set(age_results)) == 1:
-            age = age_results[0]
+        print("age is still null, trying keywordsa again, but not for gender")
+        _, age, age_detail = get_gender_age_keywords(gender, age, age_detail, keys_list)
+        print(gender)
+        print(age)
+        print(age_detail)
+        if pd.isnull(age):
+            print("age is really still null, trying description")
+
+            age_results = description_to_keys(description, site_id, age_dict)
+            if len(set(age_results)) == 1:
+                age = age_results[0]
 
 
     print("gender, age, after everything")
@@ -553,7 +661,7 @@ def generate_local_unhashed_image_filepath(image_name):
     return os.path.join(hash_folder, hash_subfolder,file_name)
         # IMAGES_FOLDER_NAME, hash_folder, '{}.{}'.format(file_name, extension))
 
-
+# I don't think there is a df? 
 def structure_row_pexels(df, ind, keys_list): 
     site_id = 5
     gender_key, age_key = get_gender_age(df, ind, keys_list, site_id)
@@ -626,7 +734,7 @@ def structure_row_istock(row, ind, keys_list):
     age = row[6]
     description = row[1]
     gender_key, age_key, age_detail_key = get_gender_age_row(gender, age, description, keys_list, site_id)
-    country_key = unlock_country_key(row[3])
+    country_key = unlock_key_dict(row[3],locations_dict, loc2loc)
 
     image_row = {
         "location_id": country_key,        
@@ -642,17 +750,6 @@ def structure_row_istock(row, ind, keys_list):
     
     return nan2none(image_row)
 
-def unlock_key_list(site_image_id, keys_list, keys_dict):
-    key_nos_list = []
-    
-    for key in keys_list:
-        key_no = unlock_key(site_image_id.lower(), key, keys_dict)
-        # print(key_no)
-        if key_no:
-            key_nos_list.append(key_no)
-    return key_nos_list
-
-# print(key_nos_list)
 
 def ingest_csv():
 
@@ -717,33 +814,14 @@ def ingest_csv():
 
             if column_eth:
                 # print(key_nos_list)
-                eth_no_list = get_eth(row[column_eth].lower(), keys_list)
-                # print("eth_no_list " , eth_no_list)
+                eth_no_list = get_key_no_dictonly(row[column_eth].lower(), keys_list, eth_dict)
             else:
                 # get eth from keywords, using keys_list and eth_keys_dict
-                # not sure if this is actualy being picked up
                 print("UNLOCKING KEYS FOR eth_keys_dict <><><><><><><><>")
-                eth_no_list = get_eth(None, keys_list)
-
-                # eth_no_list = unlock_key_list(site_image_id, keys_list, eth_keys_dict)
+                eth_no_list = get_key_no_dictonly(None, keys_list, eth_dict, eth_keys_dict)
                 print(eth_no_list)
 
-                # commented out code finds eth keywords in description, but wasn't reliable
-                # was returning descriptions of objects, not descriptions of people
-                # found = findall_dict(eth_dict_4desc,image_row['description'])
-                # if found:
-                #     print("found eth in description")
-                #     print(found)
-                #     eth_no_list = []
-                #     eth_no_list.append(found)
-                #     print(eth_no_list)
-                # else:
-                #     eth_no_list = None
-
-                eth_no_list = None
-
-            # print(image_row)
-
+            # STORE THE DATA
             with engine.connect() as conn:
                 select_stmt = select([images_table]).where(
                     (images_table.c.site_name_id == image_row['site_name_id']) &
@@ -824,7 +902,7 @@ def update_csv():
             key_nos_list = []
             
             for key in keys_list:
-                key_no = unlock_key(image_row['site_image_id'].lower(), key, keys_dict)
+                key_no = unlock_key_plurals_etc(image_row['site_image_id'].lower(), key, keys_dict)
                 # print(key_no)
                 if key_no:
                     key_nos_list.append(key_no)
