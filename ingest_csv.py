@@ -266,16 +266,16 @@ def unlock_key(site_id,key, this_dict):
     key_no = None
     key = key.lower()
     try:
-        print("trying basic keys_dict for this key:")
-        print(key)
+        # print("trying basic keys_dict for this key:")
+        # print(key)
         # print("from dict this long")
         # print(len(this_dict))
         # # print(this_dict)
 
         # print(this_dict["office"])
         key_no = this_dict[key]
-        print("this is the key_no")
-        print(key_no)
+        # print("this is the key_no")
+        # print(key_no)
         return(key_no)
     except:
         try:
@@ -291,7 +291,7 @@ def unlock_key(site_id,key, this_dict):
             plur_key = getInflection(key, 'NNS')
             sing_key = getInflection(key, 'NN')
             gerund_key = getInflection(key, 'VBG')
-            print("inflected are: ", plur_key, sing_key, gerund_key)
+            # print("inflected are: ", plur_key, sing_key, gerund_key)
             if plur_key and key != plur_key:
                 try:
                     key_no = this_dict[plur_key[0]]
@@ -303,29 +303,29 @@ def unlock_key(site_id,key, this_dict):
                 try:
                     key_no = this_dict[sing_key[0]]
                     # key = plur_key
-                    print(key_no)
+                    # print(key_no)
                 except:
                     pass
-                    print(key)
+                    # print(key)
             
             if gerund_key and key != gerund_key:
                 try:
                     key_no = this_dict[gerund_key[0]]
                     # key = plur_key
-                    print("gotta key_no, " ,key_no)
+                    # print("gotta key_no, " ,key_no)
                 except:
                     pass
-                    print(key)
+                    # print(key)
 
             if pd.isnull(key_no):
                 # if nothing worked, save key, but only if site_id > 10
                 # for gender/age, it passes in site_name_id, not site_image_id
                 if not isinstance(site_id, int) and not key.startswith('-'):
-                    print(type(site_id))
+                    # print(type(site_id))
                     # print(site_id)
                     value_list = [site_id,key]
-                    print("value_list")
-                    print(value_list)
+                    # print("value_list")
+                    # print(value_list)
                     write_csv(CSV_NOKEYS_PATH,value_list)
                 # print(value_list)
                 return
@@ -357,7 +357,7 @@ def search_keys(keys_list, this_dict, multi=False):
         found = findall_dict(this_dict,key)
         if found is not None:
             results.append(found)
-            # print('found it in keywords:', found,"from key:", key)
+            print('found it in keywords:', found,"from key:", key)
             #age needs to be int()
             # print(results)
 
@@ -391,7 +391,7 @@ def get_eth(eth_name, keys_list):
             print("eth_dict failed with this key: ", eth_name)
         eth_no_list.append(eth_no)
     else:
-        eth_no_list = search_keys(keys_list, eth_dict, True)
+        eth_no_list = search_keys(keys_list, eth_keys_dict, True)
         print("searched keys and found eth_no: ", eth_no_list)
     return(eth_no_list)
 
@@ -718,12 +718,15 @@ def ingest_csv():
             if column_eth:
                 # print(key_nos_list)
                 eth_no_list = get_eth(row[column_eth].lower(), keys_list)
-                print("eth_no_list " , eth_no_list)
+                # print("eth_no_list " , eth_no_list)
             else:
                 # get eth from keywords, using keys_list and eth_keys_dict
                 # not sure if this is actualy being picked up
-                eth_no_list = unlock_key_list(site_image_id, keys_list, eth_keys_dict)
+                print("UNLOCKING KEYS FOR eth_keys_dict <><><><><><><><>")
+                eth_no_list = get_eth(None, keys_list)
 
+                # eth_no_list = unlock_key_list(site_image_id, keys_list, eth_keys_dict)
+                print(eth_no_list)
 
                 # commented out code finds eth keywords in description, but wasn't reliable
                 # was returning descriptions of objects, not descriptions of people
