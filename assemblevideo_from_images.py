@@ -41,7 +41,7 @@ def write_video(img_array, ROOT, FRAMERATE=15):
 
 # img_array = ['image1.jpg', 'image2.jpg', 'image3.jpg']
 HOLDER = '/Users/michaelmandiberg/Documents/projects-active/facemap_production/'
-FRAMERATE = 15
+FRAMERATE = 12
 FOLDER = "mouthgap_10_MAX.8"
 ROOT = os.path.join(HOLDER,FOLDER)
 list_of_files= io.get_img_list(ROOT)

@@ -48,6 +48,7 @@ INGEST_ROOT = "/Users/michaelmandiberg/Documents/projects-active/facemap_product
 INGEST_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/iStock_ingest/"
 CSV_IN_PATH = os.path.join(INGEST_FOLDER, "april15_iStock_output_sample.jsonl.csv")
 KEYWORD_PATH = os.path.join(INGEST_FOLDER, "Keywords_202305150950.csv")
+LOCATION_PATH = os.path.join(INGEST_FOLDER, "Location_202308041952.csv")
 CSV_NOKEYS_PATH = os.path.join(INGEST_FOLDER, "CSV_NOKEYS.csv")
 CSV_IMAGEKEYS_PATH = os.path.join(INGEST_FOLDER, "CSV_IMAGEKEYS.csv")
 # NEWIMAGES_FOLDER_NAME = 'images_pexels'
@@ -60,10 +61,12 @@ key2key = {"person":"people", "kid":"child","affection":"affectionate", "baby":"
 gender_dict = {"men":1,"man":1,"male":1,"males":1,"his":1,"him":1,"businessman":1,"businessmen":1,"father":1, "men's":1, "himself":1, "homme":1, "hombre":1, "(man)":1, "-women men -children":1, "-women -men -children":2, "none":2, "oldmen":3, "grandfather":3,"oldwomen":4, "grandmother":4, "nonbinary":5, "other":6, "trans":7, 
         "women":8,"woman":8,"female":8,"females":8, "hers":8, "her":8, "businesswoman":8, "businesswomen":8, "mother":8, "frauen":8, "mujer":8, "haaren":8, "frau":8, "woman-doctor":8, "maiden":8, "hausfrau":8, "women -men -children":8, "youngmen":9, "boy":9, "boys":9, "jungen":9, "youngwomen":10,"girl":10, "girls":10, "ragazza":10, "schoolgirls":8,}
 # gender2key = {"man":"men", "woman":"women"}
-eth_dict = {"black":1, "african-american":1, "afro-american":1, "africanamerican":1, "african american":1, "african":1, "caucasian":2, "white people":2, "europeans":2, "eastasian":3,"east asian":3, "chinese":3, "japanese":3, "asian":3, "hispaniclatino":4, "latino":4, "latina":4, "latinx":4, "hispanic":4, "mexican":4, "middleeastern":5, "middle eastern":5, "arab":5, "mixedraceperson":6, "mixedrace":6, "mixed-race":6, "mixed race":6, "mixed ethnicity":6, "multiethnic":6, "multi ethnic":6, "multi-ethnic":6, "biracial":6, "nativeamericanfirstnations":7, "native american":7, "nativeamerican":7, "native-american":7, "indian american":7, "indianamerican":7, "indian-american":7, "first nations":7, "firstnations":7, "first-nations":7, "indigenous":7, "pacificislander":8, "pacific islander":8, "pacific-islander":8, "southasian":9, "south asian":9, "south-asian":9, "indian":9, "southeastasian":10, "southest asian":10, "southeast asian":10, "southeast-asian":10}
+eth_dict = {"black":1, "african-american":1, "afro-american":1, "africanamerican":1, "african american":1, "african":1, "Indigenous Peoples of Africa":1, "african ethnicity":1, "caucasian":2, "white people":2, "europeans":2, "eastasian":3,"east asian":3, "chinese":3, "japanese":3, "asian":3, "hispaniclatino":4, "latino":4, "latina":4, "latinx":4, "hispanic":4, "mexican":4, "middleeastern":5, "middle eastern":5, "arab":5, "mixedraceperson":6, "mixedrace":6, "mixed-race":6, "mixed race":6, "mixed ethnicity":6, "multiethnic":6, "multi ethnic":6, "multi-ethnic":6, "biracial":6, "nativeamericanfirstnations":7, "native american":7, "nativeamerican":7, "native-american":7, "indian american":7, "indianamerican":7, "indian-american":7, "first nations":7, "firstnations":7, "first-nations":7, "indigenous":7, "pacificislander":8, "pacific islander":8, "pacific-islander":8, "southasian":9, "south asian":9, "south-asian":9, "indian":9, "southeastasian":10, "southest asian":10, "southeast asian":10, "southeast-asian":10}
 # for searching descrption for eth keywords
-eth_dict_4desc = eth_dict
-eth_dict_4desc.pop('black')
+eth_keys_dict = eth_dict
+eth_keys_dict.pop('black')
+
+
 
 # load Keywords_202304300930.csv as df, drop all but keytype Locations, create two dicts: string->ID & GettyID->ID  
 loc_dict = {"Canada":1989}
@@ -263,16 +266,16 @@ def unlock_key(site_id,key, this_dict):
     key_no = None
     key = key.lower()
     try:
-        # print("trying basic keys_dict for this key:")
-        # print(key)
+        print("trying basic keys_dict for this key:")
+        print(key)
         # print("from dict this long")
         # print(len(this_dict))
         # # print(this_dict)
 
         # print(this_dict["office"])
         key_no = this_dict[key]
-        # print("this is the key_no")
-        # print(key_no)
+        print("this is the key_no")
+        print(key_no)
         return(key_no)
     except:
         try:
@@ -288,41 +291,41 @@ def unlock_key(site_id,key, this_dict):
             plur_key = getInflection(key, 'NNS')
             sing_key = getInflection(key, 'NN')
             gerund_key = getInflection(key, 'VBG')
-            # print("inflected are: ", plur_key, sing_key, gerund_key)
+            print("inflected are: ", plur_key, sing_key, gerund_key)
             if plur_key and key != plur_key:
                 try:
                     key_no = this_dict[plur_key[0]]
                     # key = plur_key
-                    # print(key_no)
+                    print(key_no)
                 except:
                     pass# print(key)
             elif sing_key and key != sing_key:
                 try:
                     key_no = this_dict[sing_key[0]]
                     # key = plur_key
-                    # print(key_no)
+                    print(key_no)
                 except:
                     pass
-                    # print(key)
+                    print(key)
             
             if gerund_key and key != gerund_key:
                 try:
                     key_no = this_dict[gerund_key[0]]
                     # key = plur_key
-                    # print("gotta key_no, " ,key_no)
+                    print("gotta key_no, " ,key_no)
                 except:
                     pass
-                    # print(key)
+                    print(key)
 
             if pd.isnull(key_no):
                 # if nothing worked, save key, but only if site_id > 10
                 # for gender/age, it passes in site_name_id, not site_image_id
                 if not isinstance(site_id, int) and not key.startswith('-'):
-                    # print(type(site_id))
+                    print(type(site_id))
                     # print(site_id)
                     value_list = [site_id,key]
-                    # print("value_list")
-                    # print(value_list)
+                    print("value_list")
+                    print(value_list)
                     write_csv(CSV_NOKEYS_PATH,value_list)
                 # print(value_list)
                 return
@@ -639,6 +642,17 @@ def structure_row_istock(row, ind, keys_list):
     
     return nan2none(image_row)
 
+def unlock_key_list(site_image_id, keys_list, keys_dict):
+    key_nos_list = []
+    
+    for key in keys_list:
+        key_no = unlock_key(site_image_id.lower(), key, keys_dict)
+        # print(key_no)
+        if key_no:
+            key_nos_list.append(key_no)
+    return key_nos_list
+
+# print(key_nos_list)
 
 def ingest_csv():
 
@@ -678,26 +692,23 @@ def ingest_csv():
             try:
                 keys_list = row[column_keys].lower().split(separator_keys)
 
-                # adobe specific. remove for future sites
-                desc_list = row[3].replace(",","").lower().split("-")
-                keys_list = list(filter(None, keys_list + desc_list))
+                # # adobe specific. remove for future sites
+                # desc_list = row[3].replace(",","").lower().split("-")
+                # keys_list = list(filter(None, keys_list + desc_list))
 
             except IndexError:
                 print("keys failed")
             print("keys_list")
             print(keys_list)
 
+
             # image_row = structure_row_adobe(row, ind, keys_list)
             image_row = structure_row_istock(row, ind, keys_list)
-            key_nos_list = []
             
-            for key in keys_list:
-                key_no = unlock_key(image_row['site_image_id'].lower(), key, keys_dict)
-                # print(key_no)
-                if key_no:
-                    key_nos_list.append(key_no)
-            
-            # print(key_nos_list)
+            site_image_id = image_row['site_image_id']
+
+            # get keywords
+            key_nos_list = unlock_key_list(site_image_id, keys_list, keys_dict)
 
             if search_desc_for_keys == True:
                 desc_key_nos_list = description_to_keys(image_row['description'], image_row['site_image_id'])
@@ -709,6 +720,11 @@ def ingest_csv():
                 eth_no_list = get_eth(row[column_eth].lower(), keys_list)
                 print("eth_no_list " , eth_no_list)
             else:
+                # get eth from keywords, using keys_list and eth_keys_dict
+                # not sure if this is actualy being picked up
+                eth_no_list = unlock_key_list(site_image_id, keys_list, eth_keys_dict)
+
+
                 # commented out code finds eth keywords in description, but wasn't reliable
                 # was returning descriptions of objects, not descriptions of people
                 # found = findall_dict(eth_dict_4desc,image_row['description'])
@@ -900,7 +916,7 @@ if __name__ == '__main__':
         init_csv(CSV_IMAGEKEYS_PATH,IMG_KEYWORD_HEADERS)
         keys_dict = make_key_dict(KEYWORD_PATH)
         print("this many keys", len(keys_dict))
-        locations_dict = make_key_dict(KEYWORD_PATH, "location")
+        locations_dict = make_key_dict(LOCATION_PATH)
         print("this many locations", len(locations_dict))
 
         ingest_csv()
