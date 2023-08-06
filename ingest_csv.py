@@ -47,7 +47,7 @@ INGEST_ROOT = "/Users/michaelmandiberg/Documents/projects-active/facemap_product
 # INGEST_FOLDER = os.path.join(INGEST_ROOT, "adobe_csv_4ingest/")
 # CSV_IN_PATH = os.path.join(INGEST_FOLDER, "unique_lines_B_nogender.csv")
 INGEST_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/iStock_ingest/"
-CSV_IN_PATH = os.path.join(INGEST_FOLDER, "april15_iStock_output_sample.jsonl.csv")
+CSV_IN_PATH = os.path.join(INGEST_FOLDER, "1000.csv")
 KEYWORD_PATH = os.path.join(INGEST_FOLDER, "Keywords_202305150950.csv")
 LOCATION_PATH = os.path.join(INGEST_FOLDER, "Location_202308041952.csv")
 CSV_NOKEYS_PATH = os.path.join(INGEST_FOLDER, "CSV_NOKEYS.csv")
@@ -66,8 +66,6 @@ gender_dict_istock = {"Mid Adult Men":1, "Only Mid Adult Men":1, "One Mid Adult 
 eth_dict = {"black":1, "african-american":1, "afro-american":1, "africanamerican":1, "african american":1, "african":1, "indigenous peoples of africa":1, "african ethnicity":1, "african-american ethnicity":1, "caucasian":2, "white people":2, "europeans":2, "eastasian":3,"east asian":3, "chinese":3, "japanese":3, "asian":3, "hispaniclatino":4, "latino":4, "latina":4, "latinx":4, "hispanic":4, "mexican":4, "middleeastern":5, "middle eastern":5, "arab":5, "mixedraceperson":6, "mixedrace":6, "mixed-race":6, "mixed race":6, "mixed ethnicity":6, "multiethnic":6, "multi ethnic":6, "multi-ethnic":6, "biracial":6, "nativeamericanfirstnations":7, "native american":7, "nativeamerican":7, "native-american":7, "indian american":7, "indianamerican":7, "indian-american":7, "first nations":7, "firstnations":7, "first-nations":7, "indigenous":7, "pacificislander":8, "pacific islander":8, "pacific-islander":8, "southasian":9, "south asian":9, "south-asian":9, "indian":9, "southeastasian":10, "southest asian":10, "southeast asian":10, "southeast-asian":10}
 eth_dict_istock = {"Northern European Descent":2, "Scandinavian Descent":2, "Southern European Descent":2, "East Asian Ethnicity":3, "Japanese Ethnicity":3, "Chinese Ethnicity":3, "Southeast Asian Ethnicity":10, "South Asian Ethnicity":9, "West Asian Ethnicity":5, "North African Ethnicity":5, "African-American Ethnicity":1, "Latin American and Hispanic Ethnicity":4, "Cuban Ethnicity":4, "Puerto Rican Ethnicity":4, "Mexican Ethnicity":4, "Multiracial Group":6, "Multiracial Person":6}
 # for searching descrption for eth keywords, get rid of ambiguous/polyvalent terms
-eth_keys_dict = eth_dict
-for k in ['black', 'african']: eth_keys_dict.pop(k)
 
 # load Keywords_202304300930.csv as df, drop all but keytype Locations, create two dicts: string->ID & GettyID->ID  
 # loc_dict = {"Canada":1989}
@@ -137,6 +135,8 @@ gender_dict = lower_dict({**gender_dict, **gender_dict_istock})
 eth_dict = lower_dict({**eth_dict, **eth_dict_istock})
 age_dict = lower_dict({**age_dict, **age_dict_istock})
 age_details_dict = lower_dict({**age_details_dict, **age_detail_dict_istock})
+eth_keys_dict = eth_dict
+for k in ['black', 'african']: eth_keys_dict.pop(k)
 
 
 
@@ -349,7 +349,11 @@ def unlock_key_plurals_etc(site_id,key, this_dict):
 # called by search_keys
 def findall_dict(my_dict,description):
     # Create a regular expression pattern that matches complete words in the dictionary, ignoring case
-    pattern = re.compile(r'\b(' + '|'.join(my_dict.keys()) + r')\b', re.IGNORECASE)
+    pattern = re.compile(r'\b(?:' + '|'.join(re.escape(key) for key in my_dict.keys()) + r')\b', re.IGNORECASE)
+
+    # # this re is greedier, matching partial words, w/o boundaries
+    # pattern = re.compile(r'\b(' + '|'.join(my_dict.keys()) + r')\b', re.IGNORECASE)
+
 
     # Use the regular expression pattern to search for matches in the given string
     matches = pattern.findall(description)
@@ -367,12 +371,30 @@ def findall_dict(my_dict,description):
 def search_keys(keys_list, this_dict, multi=False):
     results = []
     for key in keys_list:
-        found = findall_dict(this_dict,key)
+        # found = findall_dict(this_dict,key)
+        try:
+            found = unlock_key_dict(key, this_dict)
+        except:
+            found = None
         if found is not None:
             results.append(found)
-            print('found it in keywords:', found,"from key:", key)
+            print('search_keys found:', found,"from key:", key)
             #age needs to be int()
             # print(results)
+
+        # try:
+        #     found = unlock_key_dict(key, this_dict)
+        # # this is searching the keys based on the dict, note unlocking dict with keys
+        # # found = findall_dict(this_dict,key)
+        #     if found is not None:
+        #         results.append(found)
+        #         print('found it in keywords:', found,"from key:", key)
+        # #     #age needs to be int()
+        # #     # print(results)
+        # except OperationalError as e:
+        #         print("exception on unlock_key_dict")
+        #         print(e)
+
 
     if len(set(results)) == 1:
         one_result = int(results[0])
@@ -380,6 +402,8 @@ def search_keys(keys_list, this_dict, multi=False):
     else:
         one_result = 0
         # print("failed search: ", one_result)
+
+    # returns one or many, in a list
     if multi:
         results_list = list(set(results))
     else:
@@ -414,11 +438,8 @@ def unlock_key_dict(key,this_dict,this_key2key=None):
     key_no = None
     key = key.lower()
     try:
-        print("trying basic this_dict for this key:")
-        print(key)
         key_no = this_dict[key]
-        print("this is the key_no")
-        print(key_no)
+        print(f"unlock_key_dict yields key_no {str(key_no)} for {key}")
         return(key_no)
     except:
         if this_key2key:
@@ -434,7 +455,9 @@ def unlock_key_dict(key,this_dict,this_key2key=None):
                 print("NEW KEY -------------------------> ", key)
                 write_csv(CSV_NOLOC_PATH,key)
         else:
-            print("unlock_key_dict failed, and no key2key for this key: ", key)
+            pass
+            # print out for testing purposes
+            # print("unlock_key_dict failed, and no key2key for this key: ", key)
 
 # def get_location(df, ind, keys_list):
 #     location = None
@@ -505,7 +528,9 @@ def get_gender_age_row(gender_string, age_string, description, keys_list, site_i
 
                 except:
                     # this isn't relevant for iStock
-                    print('NEW KEY, NOT AGE OR GENDER -------------------------> ', this_string)
+                    # commenting out
+                    # print('NEW KEY, NOT AGE OR GENDER -------------------------> ', this_string)
+                    pass
             try:
                 age_detail = age_details_dict[this_string.lower()]
             except:
