@@ -47,7 +47,7 @@ INGEST_ROOT = "/Users/michaelmandiberg/Documents/projects-active/facemap_product
 # INGEST_FOLDER = os.path.join(INGEST_ROOT, "adobe_csv_4ingest/")
 # CSV_IN_PATH = os.path.join(INGEST_FOLDER, "unique_lines_B_nogender.csv")
 INGEST_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/iStock_ingest/"
-CSV_IN_PATH = os.path.join(INGEST_FOLDER, "1000.csv")
+CSV_IN_PATH = os.path.join(INGEST_FOLDER, "1M.csv")
 KEYWORD_PATH = os.path.join(INGEST_FOLDER, "Keywords_202305150950.csv")
 LOCATION_PATH = os.path.join(INGEST_FOLDER, "Location_202308041952.csv")
 CSV_NOKEYS_PATH = os.path.join(INGEST_FOLDER, "CSV_NOKEYS.csv")
@@ -66,6 +66,7 @@ gender_dict_istock = {"Mid Adult Men":1, "Only Mid Adult Men":1, "One Mid Adult 
 eth_dict = {"black":1, "african-american":1, "afro-american":1, "africanamerican":1, "african american":1, "african":1, "indigenous peoples of africa":1, "african ethnicity":1, "african-american ethnicity":1, "caucasian":2, "white people":2, "europeans":2, "eastasian":3,"east asian":3, "chinese":3, "japanese":3, "asian":3, "hispaniclatino":4, "latino":4, "latina":4, "latinx":4, "hispanic":4, "mexican":4, "middleeastern":5, "middle eastern":5, "arab":5, "mixedraceperson":6, "mixedrace":6, "mixed-race":6, "mixed race":6, "mixed ethnicity":6, "multiethnic":6, "multi ethnic":6, "multi-ethnic":6, "biracial":6, "nativeamericanfirstnations":7, "native american":7, "nativeamerican":7, "native-american":7, "indian american":7, "indianamerican":7, "indian-american":7, "first nations":7, "firstnations":7, "first-nations":7, "indigenous":7, "pacificislander":8, "pacific islander":8, "pacific-islander":8, "southasian":9, "south asian":9, "south-asian":9, "indian":9, "southeastasian":10, "southest asian":10, "southeast asian":10, "southeast-asian":10}
 eth_dict_istock = {"Northern European Descent":2, "Scandinavian Descent":2, "Southern European Descent":2, "East Asian Ethnicity":3, "Japanese Ethnicity":3, "Chinese Ethnicity":3, "Southeast Asian Ethnicity":10, "South Asian Ethnicity":9, "West Asian Ethnicity":5, "North African Ethnicity":5, "African-American Ethnicity":1, "Latin American and Hispanic Ethnicity":4, "Cuban Ethnicity":4, "Puerto Rican Ethnicity":4, "Mexican Ethnicity":4, "Multiracial Group":6, "Multiracial Person":6}
 # for searching descrption for eth keywords, get rid of ambiguous/polyvalent terms
+eth_dict_istock_secondary = {"Ethiopian Ethnicity":1, "Southern African Tribe":1, "Maasai People":1, "East African Ethnicity":1, "Western African Peoples":1, "Haitian Ethnicity":1, "Afro-Caribbean Ethnicity":1, "Trinidadian Ethnicity":1, "Creole Ethnicity":1, "Jamaican Ethnicity":1, "Karo Tribe":1, "Nilotic Peoples":1, "Turkana Tribe":1, "Hamer Tribe":1, "Mursi People":1, "Arbore People":1, "Borana Oromo People":1, "Konso - Tribe":1, "Lobi Tribe":1, "Samburu Tribe":1, "Malagasy People":1, "Himba":1, "Herero Tribe":1, "Zulu Tribe":1, "Nuer People":1, "San Peoples":1, "Hadza People":1, "Wodaabe Tribe":1, "Fula People":1, "Indigenous Peoples of Africa":1, "Betsileo Tribe":1, "Tuareg Tribe":1, "Kazakh Ethnicity":3, "Sherpa":3, "Chinese Han":3, "Korean Ethnicity":3, "Nepalese Ethnicity":3, "Taiwanese Ethnicity":3, "Only Japanese":3, "Tibetan Ethnicity":3, "Dong Tribe":3, "Dong Tribe":3, "Meo":3, "Hani Tribe":3, "Miao Minority":3, "Monguor":3, "Sherpa":3, "Central Asian Ethnicity":3, "Kyrgiz":3, "Romani People":2, "Russian Ethnicity":2, "Eastern European Descent":2, "Albanian Ethnicity":2, "Italian Ethnicity":2, "East Slavs":2, "Polish Ethnicity":2, "Ukrainian Ethnicity":2, "Spanish and Portuguese Ethnicity":2, "Israeli Ethnicity":2, "Indigenous Peoples of the Americas":7, "Inuit":7, "Sami People":2, "Métis Ethnicity":7, "Quechua People":7, "Indigenous Peoples of South America":7, "Uros":7, "Argentinian Ethnicity":4, "Ecuadorian Ethnicity":4, "Peruvian Ethnicity":4, "Brazilian Ethnicity":4, "Bolivian Ethnicity":4, "Chilean Ethnicity":4, "Colombian Ethnicity":4, "Venezuelan Ethnicity":4, "South American Ethnicity":4, "Berbers":5, "Egyptian Ethnicity":5, "Armenian Ethnicity":2, "Dominican Ethnicity":6, "Eurasian Ethnicity":6, "Garifuna Ethnicity":6, "Pardo Brazilian":6, "Māori People":7, "Pacific Islanders":7, "Hawaiian Ethnicity":7, "Polynesian Ethnicity":7, "Samoan Ethnicity":7, "Melanesian Ethnicity":7, "Kanak People":7, "Asaro People":7, "Indian Ethnicity":9, "Sri Lankan Ethnicity":9, "Sinhalese People":9, "Bengali People":9, "Maldivian Ethnicity":9, "Kubu Tribe":10, "Filipino Ethnicity":10, "Vietnamese Ethnicity":10, "Thai Ethnicity":10, "Cambodian Ethnicity":10, "Khmer People":10, "Malaysian Ethnicity":10, "Mongolian Ethnicity":10, "Palaung Tribe":10, "Padaung Tribe":10, "Rawang":10, "Burmese Ethnicity":10, "Akha Tribe":10, "Sea Gypsy":10, "Moken Tribespeople":10, "Malay People":10, "Hill Tribes":10, "Red Zao":10, "Indonesian Ethnicity":10, "Kubu Tribe":10, "Kurdish Ethnicity":5, "Lebanese Ethnicity":5, "Middle Eastern Ethnicity":5, "Bedouin":5, "Pakistani Ethnicity":5, "Iranian Ethnicity":5, "Turkish Ethnicity":5, "Afghan Ethnicity":5, "Pashtuns":5, "Hazara":5, "Baloch":5, "Tajiks Ethnicity":5, "Kalash People":5}
 
 # load Keywords_202304300930.csv as df, drop all but keytype Locations, create two dicts: string->ID & GettyID->ID  
 # loc_dict = {"Canada":1989}
@@ -135,6 +136,7 @@ gender_dict = lower_dict({**gender_dict, **gender_dict_istock})
 eth_dict = lower_dict({**eth_dict, **eth_dict_istock})
 age_dict = lower_dict({**age_dict, **age_dict_istock})
 age_details_dict = lower_dict({**age_details_dict, **age_detail_dict_istock})
+eth_dict_istock_secondary = lower_dict(eth_dict_istock_secondary)
 eth_keys_dict = eth_dict
 for k in ['black', 'african']: eth_keys_dict.pop(k)
 
@@ -412,7 +414,7 @@ def search_keys(keys_list, this_dict, multi=False):
 
 # print(key_nos_list)
 
-def get_key_no_dictonly(eth_name, keys_list, this_dict, search_dict=None):
+def get_key_no_dictonly(eth_name, keys_list, this_dict):
     # eth_name = df['ethnicity'][ind]
     # print('isnan?')
     # print(np.isnan(eth_name))
@@ -429,8 +431,8 @@ def get_key_no_dictonly(eth_name, keys_list, this_dict, search_dict=None):
             key_no = None
             print("eth_dict failed with this key: ", eth_name)
         key_no_list.append(key_no)
-    elif search_dict:
-        key_no_list = search_keys(keys_list, search_dict, True)
+    else:
+        key_no_list = search_keys(keys_list, this_dict, True)
         print("searched keys and found key_no: ", key_no_list)
     return(key_no_list)
 
@@ -843,8 +845,14 @@ def ingest_csv():
             else:
                 # get eth from keywords, using keys_list and eth_keys_dict
                 print("UNLOCKING KEYS FOR eth_keys_dict <><><><><><><><>")
-                eth_no_list = get_key_no_dictonly(None, keys_list, eth_dict, eth_keys_dict)
+                # absence of search string ("None") triggers search_keys function
+                eth_no_list = get_key_no_dictonly(None, keys_list, eth_keys_dict)
                 print(eth_no_list)
+                if not eth_no_list:
+                    eth_no_list = get_key_no_dictonly(None, keys_list, eth_dict_istock_secondary)
+                    if eth_no_list: 
+                        print(f"eth_dict_istock_secondary found for {eth_no_list}")
+
 
             # STORE THE DATA
             with engine.connect() as conn:
