@@ -746,7 +746,7 @@ def structure_row_istock(row, ind, keys_list):
     country_key = unlock_key_dict(row[3],locations_dict, loc2loc)
 
     # handle long URLs
-    if len(row[10])>300: contentUrl = None
+    if len(row[10])>300: contentUrl = "contentUrl was greater than 300 characters search for site_image_id"
     else: contentUrl = row[10]
 
     image_row = {

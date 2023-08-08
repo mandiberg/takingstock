@@ -19,6 +19,11 @@ class Age(Base):
     age_id = Column(Integer, primary_key=True, autoincrement=True)
     age = Column(String(20))
 
+class AgeDetail(Base):
+    __tablename__ = 'agedetail'
+    age_detail_id = Column(Integer, primary_key=True, autoincrement=True)
+    age_detail = Column(String(20))
+
 class Site(Base):
     __tablename__ = 'site'
     site_name_id = Column(Integer, primary_key=True, autoincrement=True)
@@ -37,6 +42,7 @@ class Images(Base):
     site_name_id = Column(Integer, ForeignKey('site.site_name_id'))
     site_image_id = Column(String(50), nullable=False)
     age_id = Column(Integer, ForeignKey('age.age_id'))
+    age_detail_id = Column(Integer, ForeignKey('agedetail.age_detail_id'))
     gender_id = Column(Integer, ForeignKey('gender.gender_id'))
     location_id = Column(Integer, ForeignKey('location.location_id'))
     author = Column(String(100))
@@ -48,6 +54,7 @@ class Images(Base):
 
     site = relationship("Site")
     age = relationship("Age")
+    agedetail = relationship("AgeDetail")
     gender = relationship("Gender")
     location = relationship("Location")
 
