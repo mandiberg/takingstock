@@ -17,10 +17,19 @@ import numpy as np
 import pandas as pd
 from pyinflect import getInflection
 
-from sqlalchemy import create_engine, text, MetaData, Table, Column, Numeric, Integer, String, VARCHAR, ForeignKey, Date, update, insert, select, PrimaryKeyConstraint, UniqueConstraint
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.ext.declarative import declarative_base
+# my ORM
+from my_declarative_base import Base, Clusters68, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON, Images, ImagesEthnicity, ImagesKeywords
+
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy import create_engine, text, MetaData, Table, Column, Numeric, Integer, String, VARCHAR, Float, ForeignKey, Date, update, insert, select, PrimaryKeyConstraint, UniqueConstraint
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.pool import NullPool
 from sqlalchemy.dialects.mysql import insert
+
+#mine
 from mp_db_io import DataIO
 
 sig = '''
@@ -158,38 +167,11 @@ engine = create_engine("mysql+pymysql://{user}:{pw}@/{db}?unix_socket={socket}".
     user=db['user'], pw=db['pass'], db=db['name'], socket=db['unix_socket']
 ), poolclass=NullPool)
 
-metadata = MetaData(engine)
+# metadata = MetaData(engine)
+Session = sessionmaker(bind=engine)
+session = Session()
+Base = declarative_base()
 
-
-images_table = Table('Images', metadata,
-    Column('image_id', Integer, primary_key=True, autoincrement=True),
-    Column('site_name_id', Integer, ForeignKey('Site.site_name_id')),
-    Column('site_image_id', String(50), nullable=False),
-    Column('age_id', Integer, ForeignKey('Age.age_id')),
-    Column('age_detail_id', Integer, ForeignKey('AgeDetail.age_detail_id')),
-    Column('gender_id', Integer, ForeignKey('Gender.gender_id')),
-    Column('location_id', Integer, ForeignKey('Location.location_id')),
-    Column('author', String(100)),
-    Column('caption', String(150)),
-    Column('contentUrl', String(200), nullable=False),
-    Column('description', String(150)),
-    Column('imagename', String(100)),
-    Column('uploadDate', Date)
-)
-
-imageskeywords_table = Table('ImagesKeywords', metadata,
-    Column('image_id', Integer, ForeignKey('Images.image_id')),
-    Column('keyword_id', Integer, ForeignKey('Keywords.keyword_id')),
-    PrimaryKeyConstraint('image_id', 'keyword_id'),
-    UniqueConstraint('image_id', 'keyword_id', name='uq_image_keyword')
-)
-
-imagesethnicity_table = Table('ImagesEthnicity', metadata,
-    Column('image_id', Integer, ForeignKey('Images.image_id')),
-    Column('ethnicity_id', Integer, ForeignKey('Ethnicity.ethnicity_id')),
-    PrimaryKeyConstraint('image_id', 'ethnicity_id'),
-    UniqueConstraint('image_id', 'ethnicity_id', name='uq_image_keyword')
-)
 
 PEXELS_HEADERS = ["id", "title", "keywords", "country", "number_of_people", "orientation", "age","gender", "ethnicity", "mood", "image_url", "image_filename"]
 ONETWOTHREE_HEADERS = ["id","title","keywords","orientation","age","word","exclude","people","ethnicity","image_url","image_filename"]
@@ -763,6 +745,10 @@ def structure_row_istock(row, ind, keys_list):
     gender_key, age_key, age_detail_key = get_gender_age_row(gender, age, description, keys_list, site_id)
     country_key = unlock_key_dict(row[3],locations_dict, loc2loc)
 
+    # handle long URLs
+    if len(row[10])>300: contentUrl = None
+    else: contentUrl = row[10]
+
     image_row = {
         "location_id": country_key,        
         "site_image_id": row[0],
@@ -771,7 +757,7 @@ def structure_row_istock(row, ind, keys_list):
         "age_id": age_key,
         "gender_id": gender_key,
         "age_detail_id": age_detail_key,
-        "contentUrl": row[10],
+        "contentUrl": contentUrl,
         "imagename": generate_local_unhashed_image_filepath(row[11].replace("images/","").split("?")[0])  # need to refactor this from the contentURL using the hash function
     }
     
@@ -856,21 +842,21 @@ def ingest_csv():
 
             # STORE THE DATA
             with engine.connect() as conn:
-                select_stmt = select([images_table]).where(
-                    (images_table.c.site_name_id == image_row['site_name_id']) &
-                    (images_table.c.site_image_id == image_row['site_image_id'])
+                select_stmt = select([Images]).where(
+                    (Images.site_name_id == image_row['site_name_id']) &
+                    (Images.site_image_id == image_row['site_image_id'])
                 )
                 row = conn.execute(select_stmt).fetchone()
                 
                 if row is None:
-                    insert_stmt = insert(images_table).values(image_row)
+                    insert_stmt = insert(Images).values(image_row)
                     result = conn.execute(insert_stmt)
                     last_inserted_id = result.lastrowid
 
                     if key_nos_list and last_inserted_id:
                         keyrows = [{'image_id': last_inserted_id, 'keyword_id': keyword_id} for keyword_id in key_nos_list]
                         with engine.connect() as conn:
-                            imageskeywords_insert_stmt = insert(imageskeywords_table).values(keyrows)
+                            imageskeywords_insert_stmt = insert(ImagesKeywords).values(keyrows)
                             imageskeywords_insert_stmt = imageskeywords_insert_stmt.on_duplicate_key_update(
                                 keyword_id=imageskeywords_insert_stmt.inserted.keyword_id
                             )
@@ -880,7 +866,7 @@ def ingest_csv():
                         ethrows = [{'image_id': last_inserted_id, 'ethnicity_id': ethnicity_id} for ethnicity_id in eth_no_list if ethnicity_id is not None]
                         if ethrows:
                             with engine.connect() as conn:
-                                imagesethnicity_insert_stmt = insert(imagesethnicity_table).values(ethrows)
+                                imagesethnicity_insert_stmt = insert(ImagesEthnicity).values(ethrows)
                                 imagesethnicity_insert_stmt = imagesethnicity_insert_stmt.on_duplicate_key_update(
                                     ethnicity_id=imagesethnicity_insert_stmt.inserted.ethnicity_id
                                 )
