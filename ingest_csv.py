@@ -64,18 +64,18 @@ CSV_IMAGEKEYS_PATH = os.path.join(INGEST_FOLDER, "CSV_IMAGEKEYS.csv")
 # NEWIMAGES_FOLDER_NAME = 'images_pexels'
 CSV_COUNTOUT_PATH = os.path.join(INGEST_FOLDER, "countout.csv")
 CSV_NOLOC_PATH = os.path.join(INGEST_FOLDER, "CSV_NOLOC.csv")
+CSV_ETH2_PATH = os.path.join(INGEST_FOLDER, "CSV_ETH2.csv")
 
 # key2key = {"person":"people", "kid":"child","affection":"Affectionate", "baby":"Baby - Human Age", "beautiful":"Beautiful People", "pretty":"Beautiful People", "blur":"Blurred Motion", "casual":"Casual Clothing", "children":"Child", "kids":"Child", "couple":"Couple - Relationship", "adorable":"Cute", "room":"Domestic Room", "focus":"Focus - Concept", "happy":"Happiness", "at home":"Home Interior", "home":"Home Interior", "face":"Human Face", "hands":"Human Hand", "landscape":"Landscape - Scenery", "outfit":"Landscape - Scenery", "leisure":"Leisure Activity", "love":"Love - Emotion", "guy":"Men", "motherhood":"Mother", "parenthood":"Parent", "positive":"Positive Emotion", "recreation":"Recreational Pursuit", "little":"Small", "studio shoot":"Studio Shot", "together":"Togetherness", "vertical shot":"Vertical", "lady":"women", "young":"Young Adult"}
-loc2loc = {"niue":"Niue Island"}
+loc2loc = {"niue":"Niue Island", "east timor":"timor-leste"}
 key2key = {"person":"people", "kid":"child","affection":"affectionate", "baby":"baby - human age", "beautiful":"beautiful people", "pretty":"beautiful people", "blur":"blurred motion", "casual":"casual clothing", "children":"child", "kids":"child", "couple":"couple - relationship", "adorable":"cute", "room":"domestic room", "focus":"focus - concept", "happy":"happiness", "at home":"home interior", "home":"home interior", "face":"human face", "hands":"human hand", "landscape":"landscape - scenery", "outfit":"landscape - scenery", "leisure":"leisure activity", "love":"love - emotion", "guy":"men", "motherhood":"mother", "parenthood":"parent", "positive":"positive emotion", "recreation":"recreational pursuit", "little":"small", "studio shoot":"studio shot", "together":"togetherness", "vertical shot":"vertical", "lady":"women", "young":"young adult", "light":"light - natural phenomenon", "trees":"tree", "disabled":"disability", "landline":"phone", "tradesman":"worker", "apprentice":"work", "arbeit":"work", "wheel-chair":"wheelchair", "treatments":"treatment", "transports":"transportation", "thoughtfully":"thoughtful", "technologies":"technology", "piscine":"swim", "astonished":"surprise", "surgeons":"surgeon", "sommer":"summer", "suffering":"suffer", "studentin":"student", "stressful":"stressed", "smoothies":"smoothie", "smilling":"smiling", "kleines":"small", "sleeps":"sleeping", "dealership":"sales", "salads":"salad", "ressources":"resources", "relaxes":"relaxed", "presentations":"presentation", "phones":"phone", "telefon":"phone", "telefoniert":"phone", "patients":"patient", "papier":"paper", "painful":"pain", "offended":"offend", "occupations":"occupation", "muscled":"muscles", "motivated":"motivation", "pinup":"model", "pin-up":"model", "meetings":"meeting", "massages":"massage", "kleiner":"little", "(lawyer)":"lawyer", "kitchens":"kitchen", "injections":"injection", "hospitals":"hospital", "zuhause":"home", "happily":"happy", "joyfully":"happy", "overjoyed":"happiness", "rejoices":"happiness", "handshaking":"handshake", "groups":"group", "full-length":"Full Length", "blumen":"flowers", "florists":"florist", "panic":"fear", "fell":"fall", "equipements":"equipement", "enthusiastic":"enthusiasm", "osteopathy":"doctor", "disgusted":"disgust", "schreibtisch":"desk", "dances":"dancing", "crowds":"crowd", "robber":"criminal", "copyspace":"Copy Space", "misunderstandings":"confusion", "confidently":"confidence", "concerts":"concert", "climbs":"climb", "celebrations":"celebration", "caught":"catch", "casually":"casual", "motorsports":"car", "banker":"Business Person", "supervisor":"boss", "executives":"boss", "bedrooms":"bedroom", "beautifull":"beautiful", "beaches":"beach", "bathrooms":"bathroom", "backgroud":"background", "attraktive":"attractive", "sportwear":"athletic", "sportliche":"athletic", "addicted":"addiction", "alcoholism":"addiction"}
 gender_dict = {"men":1,"man":1,"male":1,"males":1,"his":1,"him":1,"businessman":1,"businessmen":1,"father":1, "men's":1, "himself":1, "homme":1, "hombre":1, "(man)":1, "-women men -children":1, "-women -men -children":2, "none":2, "oldmen":3, "grandfather":3,"oldwomen":4, "grandmother":4, "nonbinary":5, "other":6, "trans":7, 
         "women":8,"woman":8,"female":8,"females":8, "hers":8, "her":8, "businesswoman":8, "businesswomen":8, "mother":8, "frauen":8, "mujer":8, "haaren":8, "frau":8, "woman-doctor":8, "maiden":8, "hausfrau":8, "women -men -children":8, "youngmen":9, "boy":9, "boys":9, "jungen":9, "youngwomen":10,"girl":10, "girls":10, "ragazza":10, "schoolgirls":8,}
 gender_dict_istock = {"Mid Adult Men":1, "Only Mid Adult Men":1, "One Mid Adult Man Only":1, "Only Men":1, "One Man Only":1, "Senior Men":3, "Only Senior Men":3, "One Senior Man Only":3, "Mature Men":3, "Only Mature Men":3, "One Mature Man Only":3, "Mature Women":4, "Only Mature Women":4, "One Mature Woman Only":4, "Senior Women":4, "Only Senior Women":4, "One Senior Woman Only":4, "Mid Adult Women":8, "Only Mid Adult Women":8, "One Mid Adult Woman Only":8, "Only Women":8, "One Woman Only":8, "Young Men":9, "Only Young Men":9, "One Young Man Only":9, "Teenage Boys":9, "Only Teenage Boys":9, "One Teenage Boy Only":9, "Only Boys":9, "One Boy Only":9, "Baby Boys":9, "Only Baby Boys":9, "One Baby Boy Only":9, "Young Women":10, "Only Young Women":10, "One Young Woman Only":10, "Teenage Girls":10, "Only Teenage Girls":10, "One Teenage Girl Only":10, "Only Girls":10, "One Girl Only":10, "Baby Girls":10, "Only Baby Girls":10, "One Baby Girl Only":10}
 # gender2key = {"man":"men", "woman":"women"}
 eth_dict = {"black":1, "african-american":1, "afro-american":1, "africanamerican":1, "african american":1, "african":1, "indigenous peoples of africa":1, "african ethnicity":1, "african-american ethnicity":1, "caucasian":2, "white people":2, "europeans":2, "eastasian":3,"east asian":3, "chinese":3, "japanese":3, "asian":3, "hispaniclatino":4, "latino":4, "latina":4, "latinx":4, "hispanic":4, "mexican":4, "middleeastern":5, "middle eastern":5, "arab":5, "mixedraceperson":6, "mixedrace":6, "mixed-race":6, "mixed race":6, "mixed ethnicity":6, "multiethnic":6, "multi ethnic":6, "multi-ethnic":6, "biracial":6, "nativeamericanfirstnations":7, "native american":7, "nativeamerican":7, "native-american":7, "indian american":7, "indianamerican":7, "indian-american":7, "first nations":7, "firstnations":7, "first-nations":7, "indigenous":7, "pacificislander":8, "pacific islander":8, "pacific-islander":8, "southasian":9, "south asian":9, "south-asian":9, "indian":9, "southeastasian":10, "southest asian":10, "southeast asian":10, "southeast-asian":10}
-eth_dict_istock = {"Northern European Descent":2, "Scandinavian Descent":2, "Southern European Descent":2, "East Asian Ethnicity":3, "Japanese Ethnicity":3, "Chinese Ethnicity":3, "Southeast Asian Ethnicity":10, "South Asian Ethnicity":9, "West Asian Ethnicity":5, "North African Ethnicity":5, "African-American Ethnicity":1, "Latin American and Hispanic Ethnicity":4, "Cuban Ethnicity":4, "Puerto Rican Ethnicity":4, "Mexican Ethnicity":4, "Multiracial Group":6, "Multiracial Person":6}
-# for searching descrption for eth keywords, get rid of ambiguous/polyvalent terms
-eth_dict_istock_secondary = {"Ethiopian Ethnicity":1, "Southern African Tribe":1, "Maasai People":1, "East African Ethnicity":1, "Western African Peoples":1, "Haitian Ethnicity":1, "Afro-Caribbean Ethnicity":1, "Trinidadian Ethnicity":1, "Creole Ethnicity":1, "Jamaican Ethnicity":1, "Karo Tribe":1, "Nilotic Peoples":1, "Turkana Tribe":1, "Hamer Tribe":1, "Mursi People":1, "Arbore People":1, "Borana Oromo People":1, "Konso - Tribe":1, "Lobi Tribe":1, "Samburu Tribe":1, "Malagasy People":1, "Himba":1, "Herero Tribe":1, "Zulu Tribe":1, "Nuer People":1, "San Peoples":1, "Hadza People":1, "Wodaabe Tribe":1, "Fula People":1, "Indigenous Peoples of Africa":1, "Betsileo Tribe":1, "Tuareg Tribe":1, "Kazakh Ethnicity":3, "Sherpa":3, "Chinese Han":3, "Korean Ethnicity":3, "Nepalese Ethnicity":3, "Taiwanese Ethnicity":3, "Only Japanese":3, "Tibetan Ethnicity":3, "Dong Tribe":3, "Dong Tribe":3, "Meo":3, "Hani Tribe":3, "Miao Minority":3, "Monguor":3, "Sherpa":3, "Central Asian Ethnicity":3, "Kyrgiz":3, "Romani People":2, "Russian Ethnicity":2, "Eastern European Descent":2, "Albanian Ethnicity":2, "Italian Ethnicity":2, "East Slavs":2, "Polish Ethnicity":2, "Ukrainian Ethnicity":2, "Spanish and Portuguese Ethnicity":2, "Israeli Ethnicity":2, "Indigenous Peoples of the Americas":7, "Inuit":7, "Sami People":2, "Métis Ethnicity":7, "Quechua People":7, "Indigenous Peoples of South America":7, "Uros":7, "Argentinian Ethnicity":4, "Ecuadorian Ethnicity":4, "Peruvian Ethnicity":4, "Brazilian Ethnicity":4, "Bolivian Ethnicity":4, "Chilean Ethnicity":4, "Colombian Ethnicity":4, "Venezuelan Ethnicity":4, "South American Ethnicity":4, "Berbers":5, "Egyptian Ethnicity":5, "Armenian Ethnicity":2, "Dominican Ethnicity":6, "Eurasian Ethnicity":6, "Garifuna Ethnicity":6, "Pardo Brazilian":6, "Māori People":7, "Pacific Islanders":7, "Hawaiian Ethnicity":7, "Polynesian Ethnicity":7, "Samoan Ethnicity":7, "Melanesian Ethnicity":7, "Kanak People":7, "Asaro People":7, "Indian Ethnicity":9, "Sri Lankan Ethnicity":9, "Sinhalese People":9, "Bengali People":9, "Maldivian Ethnicity":9, "Kubu Tribe":10, "Filipino Ethnicity":10, "Vietnamese Ethnicity":10, "Thai Ethnicity":10, "Cambodian Ethnicity":10, "Khmer People":10, "Malaysian Ethnicity":10, "Mongolian Ethnicity":10, "Palaung Tribe":10, "Padaung Tribe":10, "Rawang":10, "Burmese Ethnicity":10, "Akha Tribe":10, "Sea Gypsy":10, "Moken Tribespeople":10, "Malay People":10, "Hill Tribes":10, "Red Zao":10, "Indonesian Ethnicity":10, "Kubu Tribe":10, "Kurdish Ethnicity":5, "Lebanese Ethnicity":5, "Middle Eastern Ethnicity":5, "Bedouin":5, "Pakistani Ethnicity":5, "Iranian Ethnicity":5, "Turkish Ethnicity":5, "Afghan Ethnicity":5, "Pashtuns":5, "Hazara":5, "Baloch":5, "Tajiks Ethnicity":5, "Kalash People":5}
+eth_dict_istock = {"Northern European Descent":2, "Scandinavian Descent":2, "Southern European Descent":2, "East Asian Ethnicity":3, "Japanese Ethnicity":3, "Chinese Ethnicity":3, "Southeast Asian Ethnicity":10, "South Asian Ethnicity":9, "West Asian Ethnicity":5, "North African Ethnicity":5, "African-American Ethnicity":1, "Latin American and Hispanic Ethnicity":4, "Cuban Ethnicity":4, "Puerto Rican Ethnicity":4, "Mexican Ethnicity":4, "Multiracial Group":6, "Multiracial Person":6, "Russian Ethnicity":2, "Eastern European Descent":2, "Korean Ethnicity":3,  "Filipino Ethnicity":10, "Vietnamese Ethnicity":10, "Thai Ethnicity":10, "Cambodian Ethnicity":10, "Indian Ethnicity":9, "Sri Lankan Ethnicity":9,  "Italian Ethnicity":2, "East Slavs":2, "Polish Ethnicity":2, "Ukrainian Ethnicity":2, "Spanish and Portuguese Ethnicity":2,  "Chinese Han":3,  "Nepalese Ethnicity":3, "Taiwanese Ethnicity":3, "Only Japanese":3, "Tibetan Ethnicity":3, "Malaysian Ethnicity":10,}
+eth_dict_istock_secondary = {"Ethiopian Ethnicity":1, "Southern African Tribe":1, "Maasai People":1, "East African Ethnicity":1, "Western African Peoples":1, "Haitian Ethnicity":1, "Afro-Caribbean Ethnicity":1, "Trinidadian Ethnicity":1, "Creole Ethnicity":1, "Jamaican Ethnicity":1, "Karo Tribe":1, "Nilotic Peoples":1, "Turkana Tribe":1, "Hamer Tribe":1, "Mursi People":1, "Arbore People":1, "Borana Oromo People":1, "Konso - Tribe":1, "Lobi Tribe":1, "Samburu Tribe":1, "Malagasy People":1, "Himba":1, "Herero Tribe":1, "Zulu Tribe":1, "Nuer People":1, "San Peoples":1, "Hadza People":1, "Wodaabe Tribe":1, "Fula People":1, "Indigenous Peoples of Africa":1, "Betsileo Tribe":1, "Tuareg Tribe":1, "Kazakh Ethnicity":3, "Sherpa":3, "Dong Tribe":3, "Dong Tribe":3, "Meo":3, "Hani Tribe":3, "Miao Minority":3, "Monguor":3, "Sherpa":3, "Central Asian Ethnicity":3, "Kyrgiz":3, "Romani People":2,  "Albanian Ethnicity":2, "Israeli Ethnicity":2, "Indigenous Peoples of the Americas":7, "Inuit":7, "Sami People":2, "Métis Ethnicity":7, "Quechua People":7, "Indigenous Peoples of South America":7, "Uros":7, "Argentinian Ethnicity":4, "Ecuadorian Ethnicity":4, "Peruvian Ethnicity":4, "Brazilian Ethnicity":4, "Bolivian Ethnicity":4, "Chilean Ethnicity":4, "Colombian Ethnicity":4, "Venezuelan Ethnicity":4, "South American Ethnicity":4, "Berbers":5, "Egyptian Ethnicity":5, "Armenian Ethnicity":2, "Dominican Ethnicity":6, "Eurasian Ethnicity":6, "Garifuna Ethnicity":6, "Pardo Brazilian":6, "Māori People":7, "Pacific Islanders":7, "Hawaiian Ethnicity":7, "Polynesian Ethnicity":7, "Samoan Ethnicity":7, "Melanesian Ethnicity":7, "Kanak People":7, "Asaro People":7,  "Sinhalese People":9, "Bengali People":9, "Maldivian Ethnicity":9, "Kubu Tribe":10, "Khmer People":10,  "Mongolian Ethnicity":10, "Palaung Tribe":10, "Padaung Tribe":10, "Rawang":10, "Burmese Ethnicity":10, "Akha Tribe":10, "Sea Gypsy":10, "Moken Tribespeople":10, "Malay People":10, "Hill Tribes":10, "Red Zao":10, "Indonesian Ethnicity":10, "Kubu Tribe":10, "Kurdish Ethnicity":5, "Lebanese Ethnicity":5, "Middle Eastern Ethnicity":5, "Bedouin":5, "Pakistani Ethnicity":5, "Iranian Ethnicity":5, "Turkish Ethnicity":5, "Afghan Ethnicity":5, "Pashtuns":5, "Hazara":5, "Baloch":5, "Tajiks Ethnicity":5, "Kalash People":5}
 
 # load Keywords_202304300930.csv as df, drop all but keytype Locations, create two dicts: string->ID & GettyID->ID  
 # loc_dict = {"Canada":1989}
@@ -146,6 +146,8 @@ eth_dict = lower_dict({**eth_dict, **eth_dict_istock})
 age_dict = lower_dict({**age_dict, **age_dict_istock})
 age_details_dict = lower_dict({**age_details_dict, **age_detail_dict_istock})
 eth_dict_istock_secondary = lower_dict(eth_dict_istock_secondary)
+
+# for searching descrption for eth keywords, get rid of ambiguous/polyvalent terms
 eth_keys_dict = eth_dict
 for k in ['black', 'african']: eth_keys_dict.pop(k)
 
@@ -208,6 +210,15 @@ def nan2none(this_dict):
             this_dict[key] = None
     return this_dict
 
+def make_key_dict_col3(filepath):
+    keys = read_csv(filepath)
+    keys_dict = {}
+    for row in keys:
+        keys_dict[row[2].lower()] = row[0]
+
+    # do I need to pop header? or can I just leave it. 
+    return keys_dict
+
 def make_key_dict(filepath, keytype=None):
     keys = read_csv(filepath)
     keys_dict = {}
@@ -216,7 +227,7 @@ def make_key_dict(filepath, keytype=None):
             keys_dict[row[2].lower()] = row[0]
         elif keytype and row[3].lower() == keytype:
             # print("gotta keytype")
-            keys_dict[row[2].lower()] = row[0]
+            keys_dict[row[3].lower()] = row[0]
         else:
             # if not none, but not the specific keytype
             pass
@@ -352,8 +363,9 @@ def findall_dict(my_dict,description):
 
 # only searches through keys with dict
 # called in by the get_eth_dictonly
-def search_keys(keys_list, this_dict, multi=False):
+def search_keys(keys_list, this_dict, do_write_csv, multi=False):
     results = []
+    found_eth2 = False
     for key in keys_list:
         # found = findall_dict(this_dict,key)
         try:
@@ -361,8 +373,13 @@ def search_keys(keys_list, this_dict, multi=False):
         except:
             found = None
         if found is not None:
+            found_eth2 = True
             results.append(found)
             print('search_keys found:', found,"from key:", key)
+            if do_write_csv:
+                write_csv(CSV_ETH2_PATH,[key,found])
+    if found_eth2 and do_write_csv: 
+        write_csv(CSV_ETH2_PATH,keys_list)
             #age needs to be int()
             # print(results)
 
@@ -396,7 +413,7 @@ def search_keys(keys_list, this_dict, multi=False):
 
 # print(key_nos_list)
 
-def get_key_no_dictonly(eth_name, keys_list, this_dict):
+def get_key_no_dictonly(eth_name, keys_list, this_dict, do_write_csv=False):
     # eth_name = df['ethnicity'][ind]
     # print('isnan?')
     # print(np.isnan(eth_name))
@@ -414,7 +431,7 @@ def get_key_no_dictonly(eth_name, keys_list, this_dict):
             print("eth_dict failed with this key: ", eth_name)
         key_no_list.append(key_no)
     else:
-        key_no_list = search_keys(keys_list, this_dict, True)
+        key_no_list = search_keys(keys_list, this_dict, do_write_csv, True)
         print("searched keys and found key_no: ", key_no_list)
     return(key_no_list)
 
@@ -436,8 +453,12 @@ def unlock_key_dict(key,this_dict,this_key2key=None):
                 print(key_no)
                 return(key_no)
             except:
-                print("NEW KEY -------------------------> ", key)
-                write_csv(CSV_NOLOC_PATH,key)
+                try:
+                    #hard coding the second location dict here
+                    key_no = locations_dict_alt[key.lower()]
+                except:
+                    print("NEW KEY -------------------------> ", key)
+                    write_csv(CSV_NOLOC_PATH,key)
         else:
             pass
             # print out for testing purposes
@@ -835,7 +856,7 @@ def ingest_csv():
                 eth_no_list = get_key_no_dictonly(None, keys_list, eth_keys_dict)
                 print(eth_no_list)
                 if not eth_no_list:
-                    eth_no_list = get_key_no_dictonly(None, keys_list, eth_dict_istock_secondary)
+                    eth_no_list = get_key_no_dictonly(None, keys_list, eth_dict_istock_secondary, True)
                     if eth_no_list: 
                         print(f"eth_dict_istock_secondary found for {eth_no_list}")
 
@@ -1017,6 +1038,7 @@ if __name__ == '__main__':
         keys_dict = make_key_dict(KEYWORD_PATH)
         print("this many keys", len(keys_dict))
         locations_dict = make_key_dict(LOCATION_PATH)
+        locations_dict_alt = make_key_dict_col3(LOCATION_PATH)
         print("this many locations", len(locations_dict))
 
         ingest_csv()
