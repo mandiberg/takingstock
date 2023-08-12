@@ -47,7 +47,7 @@ _|_|  _|\__, |\___|____/\__| \___|____/  \_/
 io = DataIO()
 db = io.db
 # overriding DB for testing
-io.db["name"] = "gettytest3"
+# io.db["name"] = "gettytest3"
 ROOT = io.ROOT 
 NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 #######################################
@@ -56,7 +56,7 @@ INGEST_ROOT = "/Users/michaelmandiberg/Documents/projects-active/facemap_product
 # INGEST_FOLDER = os.path.join(INGEST_ROOT, "adobe_csv_4ingest/")
 # CSV_IN_PATH = os.path.join(INGEST_FOLDER, "unique_lines_B_nogender.csv")
 INGEST_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/iStock_ingest/"
-CSV_IN_PATH = os.path.join(INGEST_FOLDER, "1M.csv")
+CSV_IN_PATH = os.path.join(INGEST_FOLDER, "april15_iStock_output_deduped.csv")
 KEYWORD_PATH = os.path.join(INGEST_FOLDER, "Keywords_202305150950.csv")
 LOCATION_PATH = os.path.join(INGEST_FOLDER, "Location_202308041952.csv")
 CSV_NOKEYS_PATH = os.path.join(INGEST_FOLDER, "CSV_NOKEYS.csv")
@@ -64,11 +64,12 @@ CSV_IMAGEKEYS_PATH = os.path.join(INGEST_FOLDER, "CSV_IMAGEKEYS.csv")
 # NEWIMAGES_FOLDER_NAME = 'images_pexels'
 CSV_COUNTOUT_PATH = os.path.join(INGEST_FOLDER, "countout.csv")
 CSV_NOLOC_PATH = os.path.join(INGEST_FOLDER, "CSV_NOLOC.csv")
+CSV_BLANKLOC_PATH = os.path.join(INGEST_FOLDER, "CSV_BLANKLOC_PATH.csv")
 CSV_ETH2_PATH = os.path.join(INGEST_FOLDER, "CSV_ETH2.csv")
 
 # key2key = {"person":"people", "kid":"child","affection":"Affectionate", "baby":"Baby - Human Age", "beautiful":"Beautiful People", "pretty":"Beautiful People", "blur":"Blurred Motion", "casual":"Casual Clothing", "children":"Child", "kids":"Child", "couple":"Couple - Relationship", "adorable":"Cute", "room":"Domestic Room", "focus":"Focus - Concept", "happy":"Happiness", "at home":"Home Interior", "home":"Home Interior", "face":"Human Face", "hands":"Human Hand", "landscape":"Landscape - Scenery", "outfit":"Landscape - Scenery", "leisure":"Leisure Activity", "love":"Love - Emotion", "guy":"Men", "motherhood":"Mother", "parenthood":"Parent", "positive":"Positive Emotion", "recreation":"Recreational Pursuit", "little":"Small", "studio shoot":"Studio Shot", "together":"Togetherness", "vertical shot":"Vertical", "lady":"women", "young":"Young Adult"}
 loc2loc = {"niue":"Niue Island", "east timor":"timor-leste"}
-key2key = {"person":"people", "kid":"child","affection":"affectionate", "baby":"baby - human age", "beautiful":"beautiful people", "pretty":"beautiful people", "blur":"blurred motion", "casual":"casual clothing", "children":"child", "kids":"child", "couple":"couple - relationship", "adorable":"cute", "room":"domestic room", "focus":"focus - concept", "happy":"happiness", "at home":"home interior", "home":"home interior", "face":"human face", "hands":"human hand", "landscape":"landscape - scenery", "outfit":"landscape - scenery", "leisure":"leisure activity", "love":"love - emotion", "guy":"men", "motherhood":"mother", "parenthood":"parent", "positive":"positive emotion", "recreation":"recreational pursuit", "little":"small", "studio shoot":"studio shot", "together":"togetherness", "vertical shot":"vertical", "lady":"women", "young":"young adult", "light":"light - natural phenomenon", "trees":"tree", "disabled":"disability", "landline":"phone", "tradesman":"worker", "apprentice":"work", "arbeit":"work", "wheel-chair":"wheelchair", "treatments":"treatment", "transports":"transportation", "thoughtfully":"thoughtful", "technologies":"technology", "piscine":"swim", "astonished":"surprise", "surgeons":"surgeon", "sommer":"summer", "suffering":"suffer", "studentin":"student", "stressful":"stressed", "smoothies":"smoothie", "smilling":"smiling", "kleines":"small", "sleeps":"sleeping", "dealership":"sales", "salads":"salad", "ressources":"resources", "relaxes":"relaxed", "presentations":"presentation", "phones":"phone", "telefon":"phone", "telefoniert":"phone", "patients":"patient", "papier":"paper", "painful":"pain", "offended":"offend", "occupations":"occupation", "muscled":"muscles", "motivated":"motivation", "pinup":"model", "pin-up":"model", "meetings":"meeting", "massages":"massage", "kleiner":"little", "(lawyer)":"lawyer", "kitchens":"kitchen", "injections":"injection", "hospitals":"hospital", "zuhause":"home", "happily":"happy", "joyfully":"happy", "overjoyed":"happiness", "rejoices":"happiness", "handshaking":"handshake", "groups":"group", "full-length":"Full Length", "blumen":"flowers", "florists":"florist", "panic":"fear", "fell":"fall", "equipements":"equipement", "enthusiastic":"enthusiasm", "osteopathy":"doctor", "disgusted":"disgust", "schreibtisch":"desk", "dances":"dancing", "crowds":"crowd", "robber":"criminal", "copyspace":"Copy Space", "misunderstandings":"confusion", "confidently":"confidence", "concerts":"concert", "climbs":"climb", "celebrations":"celebration", "caught":"catch", "casually":"casual", "motorsports":"car", "banker":"Business Person", "supervisor":"boss", "executives":"boss", "bedrooms":"bedroom", "beautifull":"beautiful", "beaches":"beach", "bathrooms":"bathroom", "backgroud":"background", "attraktive":"attractive", "sportwear":"athletic", "sportliche":"athletic", "addicted":"addiction", "alcoholism":"addiction"}
+key2key = {"person":"people", "kid":"child","affection":"affectionate", "baby":"baby - human age", "beautiful":"beautiful people", "pretty":"beautiful people", "blur":"blurred motion", "casual":"casual clothing", "children":"child", "kids":"child", "couple":"couple - relationship", "adorable":"cute", "room":"domestic room", "focus":"focus - concept", "happy":"happiness", "at home":"home interior", "home":"home interior", "face":"human face", "hands":"human hand", "landscape":"landscape - scenery", "outfit":"landscape - scenery", "leisure":"leisure activity", "love":"love - emotion", "guy":"men", "motherhood":"mother", "parenthood":"parent", "positive":"positive emotion", "recreation":"recreational pursuit", "little":"small", "studio shoot":"studio shot", "together":"togetherness", "vertical shot":"vertical", "lady":"women", "young":"young adult", "light":"light - natural phenomenon", "trees":"tree", "disabled":"disability", "landline":"phone", "tradesman":"worker", "apprentice":"work", "arbeit":"work", "wheel-chair":"wheelchair", "treatments":"treatment", "transports":"transportation", "thoughtfully":"thoughtful", "technologies":"technology", "piscine":"swim", "astonished":"surprise", "surgeons":"surgeon", "sommer":"summer", "suffering":"suffer", "studentin":"student", "stressful":"stressed", "smoothies":"smoothie", "smilling":"smiling", "kleines":"small", "sleeps":"sleeping", "dealership":"sales", "salads":"salad", "ressources":"resources", "relaxes":"relaxed", "presentations":"presentation", "phones":"phone", "telefon":"phone", "telefoniert":"phone", "patients":"patient", "papier":"paper", "painful":"pain", "offended":"offend", "occupations":"occupation", "muscled":"muscles", "motivated":"motivation", "pinup":"model", "pin-up":"model", "meetings":"meeting", "massages":"massage", "kleiner":"little", "(lawyer)":"lawyer", "kitchens":"kitchen", "injections":"injection", "hospitals":"hospital", "zuhause":"home", "happily":"happy", "joyfully":"happy", "overjoyed":"happiness", "rejoices":"happiness", "handshaking":"handshake", "groups":"group", "full-length":"Full Length", "blumen":"flowers", "florists":"florist", "panic":"fear", "fell":"fall", "equipements":"equipement", "enthusiastic":"enthusiasm", "osteopathy":"doctor", "disgusted":"disgust", "schreibtisch":"desk", "dances":"dancing", "crowds":"crowd", "robber":"criminal", "copyspace":"Copy Space", "misunderstandings":"confusion", "confidently":"confidence", "concerts":"concert", "climbs":"climb", "celebrations":"celebration", "caught":"catch", "casually":"casual", "motorsports":"car", "banker":"Business Person", "supervisor":"boss", "executives":"boss", "bedrooms":"bedroom", "beautifull":"beautiful", "beaches":"beach", "bathrooms":"bathroom", "backgroud":"background", "attraktive":"attractive", "sportwear":"athletic", "sportliche":"athletic", "addicted":"addiction", "alcoholism":"addiction", "enjoy":"enjoyment"}
 gender_dict = {"men":1,"man":1,"male":1,"males":1,"his":1,"him":1,"businessman":1,"businessmen":1,"father":1, "men's":1, "himself":1, "homme":1, "hombre":1, "(man)":1, "-women men -children":1, "-women -men -children":2, "none":2, "oldmen":3, "grandfather":3,"oldwomen":4, "grandmother":4, "nonbinary":5, "other":6, "trans":7, 
         "women":8,"woman":8,"female":8,"females":8, "hers":8, "her":8, "businesswoman":8, "businesswomen":8, "mother":8, "frauen":8, "mujer":8, "haaren":8, "frau":8, "woman-doctor":8, "maiden":8, "hausfrau":8, "women -men -children":8, "youngmen":9, "boy":9, "boys":9, "jungen":9, "youngwomen":10,"girl":10, "girls":10, "ragazza":10, "schoolgirls":8,}
 gender_dict_istock = {"Mid Adult Men":1, "Only Mid Adult Men":1, "One Mid Adult Man Only":1, "Only Men":1, "One Man Only":1, "Senior Men":3, "Only Senior Men":3, "One Senior Man Only":3, "Mature Men":3, "Only Mature Men":3, "One Mature Man Only":3, "Mature Women":4, "Only Mature Women":4, "One Mature Woman Only":4, "Senior Women":4, "Only Senior Women":4, "One Senior Woman Only":4, "Mid Adult Women":8, "Only Mid Adult Women":8, "One Mid Adult Woman Only":8, "Only Women":8, "One Woman Only":8, "Young Men":9, "Only Young Men":9, "One Young Man Only":9, "Teenage Boys":9, "Only Teenage Boys":9, "One Teenage Boy Only":9, "Only Boys":9, "One Boy Only":9, "Baby Boys":9, "Only Baby Boys":9, "One Baby Boy Only":9, "Young Women":10, "Only Young Women":10, "One Young Woman Only":10, "Teenage Girls":10, "Only Teenage Girls":10, "One Teenage Girl Only":10, "Only Girls":10, "One Girl Only":10, "Baby Girls":10, "Only Baby Girls":10, "One Baby Girl Only":10}
@@ -439,9 +440,15 @@ def unlock_key_dict(key,this_dict,this_key2key=None):
     key_no = None
     key = key.lower()
     try:
-        key_no = this_dict[key]
-        print(f"unlock_key_dict yields key_no {str(key_no)} for {key}")
-        return(key_no)
+        try:
+            key_no = this_dict[key]
+            print(f"unlock_key_dict yields key_no {str(key_no)} for {key}")
+            return(key_no)
+        except:
+            # try again without underscores
+            key_no = this_dict[key.replace("_"," ")]
+            print(f"unlock_key_dict without underscores yields key_no {str(key_no)} for {key}")
+            return(key_no)            
     except:
         if this_key2key:
             try:
@@ -458,7 +465,8 @@ def unlock_key_dict(key,this_dict,this_key2key=None):
                     key_no = locations_dict_alt[key.lower()]
                 except:
                     print("NEW KEY -------------------------> ", key)
-                    write_csv(CSV_NOLOC_PATH,key)
+                    write_csv(CSV_NOLOC_PATH,[key])
+                    return(999999999)
         else:
             pass
             # print out for testing purposes
@@ -764,7 +772,14 @@ def structure_row_istock(row, ind, keys_list):
     age = row[6]
     description = row[1]
     gender_key, age_key, age_detail_key = get_gender_age_row(gender, age, description, keys_list, site_id)
-    country_key = unlock_key_dict(row[3],locations_dict, loc2loc)
+    if not pd.isnull(row[3]):
+        country_key = unlock_key_dict(row[3],locations_dict, loc2loc)
+        if country_key == 999999999:
+            write_csv(CSV_BLANKLOC_PATH,row)
+            return(None)
+
+    else:
+        country_key = None
 
     # handle long URLs
     if len(row[10])>300: contentUrl = "contentUrl was greater than 300 characters search for site_image_id"
@@ -835,6 +850,10 @@ def ingest_csv():
 
             # image_row = structure_row_adobe(row, ind, keys_list)
             image_row = structure_row_istock(row, ind, keys_list)
+
+            # if the image row has problems, skip it (structure_row saved it to csv)
+            if not image_row:
+                continue
             
             site_image_id = image_row['site_image_id']
 

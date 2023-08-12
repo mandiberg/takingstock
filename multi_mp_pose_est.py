@@ -48,8 +48,8 @@ SLEEP_TIME=0
 # am I looking on SSD for a folder? If not, will pull directly from SQL
 # if so, also change the site_name_id etc around line 930
 IS_FOLDER = True
-MAIN_FOLDER = "/Volumes/SSD4/needtomoveinto-images_adobe/images_29cats"
-# MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/images_123rf_ingest"
+# MAIN_FOLDER = "/Volumes/SSD4/needtomoveinto-images_adobe/images_29cats"
+MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/images_123rf_ingest"
 CSV_FOLDERCOUNT_PATH = os.path.join(MAIN_FOLDER, "folder_countout.csv")
 
 
@@ -930,17 +930,18 @@ def main():
                     # CHANGE FOR EACH SITE
                     # ALSO site_image_id DOWN BELOW 
                     # Collect site_image_id values from the image filenames
-                    # # 123rf
-                    # batch_site_image_ids = [img.split("-")[0] for img in batch_img_list]
-                    # site_name_id = 8
+                    
+                    # 123rf
+                    batch_site_image_ids = [img.split("-")[0] for img in batch_img_list]
+                    site_name_id = 8
 
                     # gettyimages
                     # batch_site_image_ids = [img.split("-id")[-1].replace(".jpg", "") for img in batch_img_list]
                     # site_name_id = 1
 
                     # Adobe
-                    batch_site_image_ids = [img.split(".")[0] for img in batch_img_list]
-                    site_name_id = 3
+                    # batch_site_image_ids = [img.split(".")[0] for img in batch_img_list]
+                    # site_name_id = 3
 
                     # query the database for the current batch and return image_id and encoding_id
                     for _ in range(io.max_retries):
@@ -970,14 +971,14 @@ def main():
                     # going back through the img_list, to use as key for the results_dict
                     for img in batch_img_list:
 
-                        # # extract site_image_id for 213rf
-                        # site_image_id = img.split("-")[0]
+                        # extract site_image_id for 213rf
+                        site_image_id = img.split("-")[0]
 
                         # # extract site_image_id for getty images
                         # site_image_id = img.split("-id")[-1].replace(".jpg", "")
 
-                        # # extract site_image_id for adobe
-                        site_image_id = img.split(".")[0]
+                        # # # extract site_image_id for adobe
+                        # site_image_id = img.split(".")[0]
 
                         if site_image_id in results_dict:
                             result = results_dict[site_image_id]
