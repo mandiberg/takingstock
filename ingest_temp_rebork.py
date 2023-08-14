@@ -56,7 +56,7 @@ INGEST_ROOT = "/Users/michaelmandiberg/Documents/projects-active/facemap_product
 # INGEST_FOLDER = os.path.join(INGEST_ROOT, "adobe_csv_4ingest/")
 # CSV_IN_PATH = os.path.join(INGEST_FOLDER, "unique_lines_B_nogender.csv")
 INGEST_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/iStock_ingest/"
-CSV_IN_PATH = os.path.join(INGEST_FOLDER, "CSV_BLANKLOC_PATH_cleaned.csv")
+CSV_IN_PATH = os.path.join(INGEST_FOLDER, "8103000.mixed_race_person.csv")
 KEYWORD_PATH = os.path.join(INGEST_FOLDER, "Keywords_202305150950.csv")
 LOCATION_PATH = os.path.join(INGEST_FOLDER, "Location_202308041952.csv")
 CSV_NOKEYS_PATH = os.path.join(INGEST_FOLDER, "CSV_NOKEYS.csv")
@@ -64,10 +64,7 @@ CSV_IMAGEKEYS_PATH = os.path.join(INGEST_FOLDER, "CSV_IMAGEKEYS.csv")
 # NEWIMAGES_FOLDER_NAME = 'images_pexels'
 CSV_COUNTOUT_PATH = os.path.join(INGEST_FOLDER, "countout.csv")
 CSV_NOLOC_PATH = os.path.join(INGEST_FOLDER, "CSV_NOLOC.csv")
-CSV_BLANKLOC_PATH = os.path.join(INGEST_FOLDER, "CSV_BLANKLOC_PATH.csv")
 CSV_ETH2_PATH = os.path.join(INGEST_FOLDER, "CSV_ETH2.csv")
-
-SEARCH_KEYS_FOR_LOC = True
 
 # key2key = {"person":"people", "kid":"child","affection":"Affectionate", "baby":"Baby - Human Age", "beautiful":"Beautiful People", "pretty":"Beautiful People", "blur":"Blurred Motion", "casual":"Casual Clothing", "children":"Child", "kids":"Child", "couple":"Couple - Relationship", "adorable":"Cute", "room":"Domestic Room", "focus":"Focus - Concept", "happy":"Happiness", "at home":"Home Interior", "home":"Home Interior", "face":"Human Face", "hands":"Human Hand", "landscape":"Landscape - Scenery", "outfit":"Landscape - Scenery", "leisure":"Leisure Activity", "love":"Love - Emotion", "guy":"Men", "motherhood":"Mother", "parenthood":"Parent", "positive":"Positive Emotion", "recreation":"Recreational Pursuit", "little":"Small", "studio shoot":"Studio Shot", "together":"Togetherness", "vertical shot":"Vertical", "lady":"women", "young":"Young Adult"}
 loc2loc = {"niue":"Niue Island", "east timor":"timor-leste"}
@@ -254,17 +251,6 @@ def get_counter():
         print("max_element,", start_counter)
     return start_counter
 
-# returns one mode value from list, ignoring None values
-def get_mode(data):
-    filtered_data = [value for value in data if value is not None]
-    
-    # Check if the filtered_data is empty before proceeding
-    if not filtered_data:
-        return None  # or return any other default value you prefer
-    
-    mode_counts = Counter(filtered_data)
-    mode_value, max_count = mode_counts.most_common(1)[0]
-    return mode_value
 
 
 
@@ -453,15 +439,9 @@ def unlock_key_dict(key,this_dict,this_key2key=None):
     key_no = None
     key = key.lower()
     try:
-        try:
-            key_no = this_dict[key]
-            print(f"unlock_key_dict yields key_no {str(key_no)} for {key}")
-            return(key_no)
-        except:
-            # try again without underscores
-            key_no = this_dict[key.replace("_"," ")]
-            print(f"unlock_key_dict without underscores yields key_no {str(key_no)} for {key}")
-            return(key_no)            
+        key_no = this_dict[key]
+        print(f"unlock_key_dict yields key_no {str(key_no)} for {key}")
+        return(key_no)
     except:
         if this_key2key:
             try:
@@ -477,9 +457,8 @@ def unlock_key_dict(key,this_dict,this_key2key=None):
                     #hard coding the second location dict here
                     key_no = locations_dict_alt[key.lower()]
                 except:
-                    print("NEW KEY -------------------------> ", key)
-                    write_csv(CSV_NOLOC_PATH,[key])
-                    return(999999999)
+                    # skipping for bork bork
+                    pass
         else:
             pass
             # print out for testing purposes
@@ -566,6 +545,17 @@ def get_gender_age_row(gender_string, age_string, description, keys_list, site_i
         # else:
         #     print("string is None")
         return gender, age, age_detail
+
+    def get_mode(data):
+        filtered_data = [value for value in data if value is not None]
+        
+        # Check if the filtered_data is empty before proceeding
+        if not filtered_data:
+            return None  # or return any other default value you prefer
+        
+        mode_counts = Counter(filtered_data)
+        mode_value, max_count = mode_counts.most_common(1)[0]
+        return mode_value
 
     def prioritize_age_gender(gender_list,age_list):
         if gender_list.count(3) > 0:
@@ -769,34 +759,13 @@ def structure_row_adobe(row, ind, keys_list):
 
 
 def structure_row_istock(row, ind, keys_list):
-    print(row[11])
     site_id = 4 #id for the site, not the image
-    gender = row[7].replace("_"," ")
-    age = row[6].replace("_"," ")
-    country = row[3].replace("_"," ")
+    gender = row[7]
+    age = row[6]
     description = row[1]
     gender_key, age_key, age_detail_key = get_gender_age_row(gender, age, description, keys_list, site_id)
-    country_key = None
-    print("row 3 is", type(country))
-    if country and country != "":
-        country_key = unlock_key_dict(country,locations_dict, loc2loc)
-        if country_key == 999999999:
-            write_csv(CSV_BLANKLOC_PATH,row)
-            return(None)
-    if not country or country == "":
-        #tk search keys
-        # get eth from keywords, using keys_list and eth_keys_dict
-        print("UNLOCKING SEARCH_KEYS_FOR_LOC <><><><><><><><>")
-        # absence of search string ("None") triggers search_keys function
-        loc_no_list = get_key_no_dictonly(None, keys_list, locations_dict, True)
-        print(loc_no_list)
-        country_key = get_mode(loc_no_list)
-        # if not loc_no_list:
-        #     loc_no_list = get_key_no_dictonly(None, keys_list, locations_dict_alt, True)
-        #     if loc_no_list: 
-        print(f"SEARCH_KEYS_FOR_LOC found for {country_key}")
-
-
+    if not pd.isnull(row[3]):
+        country_key = unlock_key_dict(row[3],locations_dict, loc2loc)
     else:
         country_key = None
 
@@ -841,6 +810,8 @@ def ingest_csv():
         reader_obj = csv.reader(file_obj)
         next(reader_obj)  # Skip header row
         start_counter = get_counter()
+        # bork bork bork
+        start_counter = 0
         print("start_counter: ", start_counter)
         # start_counter = 0 #temporary for testing, while adobe is ongoing
         counter = 0
@@ -869,10 +840,6 @@ def ingest_csv():
 
             # image_row = structure_row_adobe(row, ind, keys_list)
             image_row = structure_row_istock(row, ind, keys_list)
-
-            # if the image row has problems, skip it (structure_row saved it to csv)
-            if not image_row:
-                continue
             
             site_image_id = image_row['site_image_id']
 
@@ -942,131 +909,86 @@ def ingest_csv():
             counter += 1
             ind += 1
 
-'''
-# I don't think this is doing anything right now, and I don't know how it is different from ingest_csv
-def update_csv():
+def reingest_csv():
 
-    # change this for each site ingested
-    column_keys = 5
-    separator_keys = " "
-    # column_site = 8
-    column_eth = None
-    search_desc_for_keys = True
-
-
-    with open(CSV_IN_PATH) as file_obj:
-        reader_obj = csv.reader(file_obj)
-        next(reader_obj)  # Skip header row
-        start_counter = get_counter()
-        counter = 0
-        ind = 0
+    def get_mode(data):
+        filtered_data = [value for value in data if value is not None]
         
-        for row in reader_obj:
-            # print(row[1])
-            
-            if counter < start_counter:
-                counter += 1
-                continue
-            if counter >4001000:
-                quit()
-            # splitting keys. try is for getty, except is currently set for pexels.
+        # Check if the filtered_data is empty before proceeding
+        if not filtered_data:
+            return None  # or return any other default value you prefer
+        
+        mode_counts = Counter(filtered_data)
+        mode_value, max_count = mode_counts.most_common(1)[0]
+        return mode_value
+
+    def research(this_dict, keys_list):
+        loc_list=[]
+        for key in keys_list:
+            location_id = None
+            location_id = unlock_key_dict(key, this_dict, loc2loc)
+            loc_list.append(location_id)
+        # gender, age = prioritize_age_gender(gender_list,age_list)
+        this_location_id = get_mode(loc_list)
+        return this_location_id
+
+    def update_or_insert_ethnicity(session, image_id, ethnicity_id):
+        existing_ethnicities = [eth.ethnicity_id for eth in session.query(ImagesEthnicity).filter_by(image_id=image_id).all()]
+
+        if this_value in existing_ethnicities:
+            print(f"Alert Level 2: An ethnicity with value {this_value} already exists for image_id {image_id}")
+        else:
+            new_ethnicity = ImagesEthnicity(image_id=image_id, ethnicity_id=ethnicity_id)
+            session.add(new_ethnicity)
+            session.commit()
+            print(f"Inserted new ethnicity {ethnicity_id} for image_id {image_id}")
+
+    # what I'm searching for!!
+    this_value = 6
+
+    # Read the CSV file and process each row
+    with open(CSV_IN_PATH, 'r') as csvfile:
+        csvreader = csv.reader(csvfile)
+        # next(csvreader)  # Skip the header row
+
+        for row in csvreader:
             try:
-                keys_list = row[column_keys].lower().split(separator_keys)
+                keys_list = row[2].lower().split("|")
+
+                # # adobe specific. remove for future sites
+                # desc_list = row[3].replace(",","").lower().split("-")
+                # keys_list = list(filter(None, keys_list + desc_list))
+
             except IndexError:
                 print("keys failed")
-            # print(keys_list)
 
-            image_row = structure_row_123_asrow(row, ind, keys_list)
-            key_nos_list = []
-            
-            for key in keys_list:
-                key_no = unlock_key_plurals_etc(image_row['site_image_id'].lower(), key, keys_dict)
-                # print(key_no)
-                if key_no:
-                    key_nos_list.append(key_no)
-            
-            # print(key_nos_list)
+            location_id = research(locations_dict, keys_list)
 
-            if search_desc_for_keys == True:
-                desc_key_nos_list = description_to_keys(image_row['description'], image_row['site_image_id'])
-                key_nos_list = set(key_nos_list + desc_key_nos_list)
-            
-            if column_eth:
-                # print(key_nos_list)
-                eth_no_list = get_eth(row[column_eth].lower(), keys_list)
-                print("eth_no_list " , eth_no_list)
-            else:
-                eth_no_list = None
+            site_image_id = row[0]
+            image = session.query(Images).filter_by(site_image_id=site_image_id).first()
 
+            if image:
+                if location_id is not None:
 
-            # Define the maximum number of retries and the delay between retries
-            max_retries = 3
-            retry_delay = 20  # in seconds
+                    # Update the location_id in the Images table
+                    image.location_id = location_id
+                    session.commit()
+                    print(f"Updated location for site_image_id {site_image_id}")
+                    
+                else:
+                    print("No location found for this row")
 
-            # Retry loop
-            for retry in range(max_retries):
-                try:
-                    with engine.connect() as conn:
-                        select_stmt = select([images_table]).where(
-                            (images_table.c.site_name_id == image_row['site_name_id']) &
-                            (images_table.c.site_image_id == image_row['site_image_id'])
-                        )
-                        row = conn.execute(select_stmt).fetchone()
-                        
-                        if row is None:
-
-                            print("will insert")
-                            # insert_stmt = insert(images_table).values(image_row)
-                            # result = conn.execute(insert_stmt)
-                            # last_inserted_id = result.lastrowid
-
-                            # if key_nos_list and last_inserted_id:
-                            #     keyrows = [{'image_id': last_inserted_id, 'keyword_id': keyword_id} for keyword_id in key_nos_list]
-                            #     with engine.connect() as conn:
-                            #         imageskeywords_insert_stmt = insert(imageskeywords_table).values(keyrows)
-                            #         imageskeywords_insert_stmt = imageskeywords_insert_stmt.on_duplicate_key_update(
-                            #             keyword_id=imageskeywords_insert_stmt.inserted.keyword_id
-                            #         )
-                            #         conn.execute(imageskeywords_insert_stmt)
-                            
-                            # if eth_no_list and last_inserted_id:
-                            #     ethrows = [{'image_id': last_inserted_id, 'ethnicity_id': ethnicity_id} for ethnicity_id in eth_no_list if ethnicity_id is not None]
-                            #     if ethrows:
-                            #         with engine.connect() as conn:
-                            #             imagesethnicity_insert_stmt = insert(imagesethnicity_table).values(ethrows)
-                            #             imagesethnicity_insert_stmt = imagesethnicity_insert_stmt.on_duplicate_key_update(
-                            #                 ethnicity_id=imagesethnicity_insert_stmt.inserted.ethnicity_id
-                            #             )
-                            #             conn.execute(imagesethnicity_insert_stmt)
-                            
-                            # print("last_inserted_id:", last_inserted_id)
-                        else:
-                            print('Row already exists:', ind)
-            
-                        break  # If the execution reaches here without exceptions, exit the loop
-
-                except OperationalError as e:
-                    print(f"Database connection error: {e}")
-
-                    # Retry after a delay
-                    print(f"Retrying in {retry_delay} seconds...")
-                    time.sleep(retry_delay)
-                    continue
+                # Additional process: Update or insert ethnicity records
+                ethnicity_ids = session.query(ImagesEthnicity.ethnicity_id).filter_by(image_id=image.image_id).all()
+                if this_value in [eth[0] for eth in ethnicity_ids]:
+                    print(f"Alert: An ethnicity with value {this_value} already exists for image_id {image.image_id}")
+                else:
+                    update_or_insert_ethnicity(session, image.image_id, this_value)
 
             else:
-                # If the loop completes without a successful connection, handle the error
-                print(f"Failed to connect to the database after {max_retries} attempts.")
-
-            if counter % 1000 == 0:
-                save_counter = [counter]
-                write_csv(CSV_COUNTOUT_PATH, save_counter)
-            
-            counter += 1
-            ind += 1
+                print(f"No image found for site_image_id {site_image_id}")
 
 
-    # print("inserted")
-'''
 
 if __name__ == '__main__':
     print(sig)
@@ -1079,7 +1001,8 @@ if __name__ == '__main__':
         locations_dict_alt = make_key_dict_col3(LOCATION_PATH)
         print("this many locations", len(locations_dict))
 
-        ingest_csv()
+        # ingest_csv()
+        reingest_csv()
     except KeyboardInterrupt as _:
         print('[-] User cancelled.\n', flush=True)
     except Exception as e:
