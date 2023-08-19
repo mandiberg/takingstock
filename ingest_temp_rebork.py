@@ -47,7 +47,7 @@ _|_|  _|\__, |\___|____/\__| \___|____/  \_/
 io = DataIO()
 db = io.db
 # overriding DB for testing
-io.db["name"] = "gettytest3"
+# io.db["name"] = "gettytest3"
 ROOT = io.ROOT 
 NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 #######################################
@@ -56,7 +56,14 @@ INGEST_ROOT = "/Users/michaelmandiberg/Documents/projects-active/facemap_product
 # INGEST_FOLDER = os.path.join(INGEST_ROOT, "adobe_csv_4ingest/")
 # CSV_IN_PATH = os.path.join(INGEST_FOLDER, "unique_lines_B_nogender.csv")
 INGEST_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/iStock_ingest/"
-CSV_IN_PATH = os.path.join(INGEST_FOLDER, "8103000.mixed_race_person.csv")
+CSV_IN_PATH = os.path.join(INGEST_FOLDER, "first_8M_fix/8103000_NOLOC.csv")
+    # what I'm searching for!!
+this_value = 0
+age_id = None
+gender_id = None
+# location_id = 149
+
+
 KEYWORD_PATH = os.path.join(INGEST_FOLDER, "Keywords_202305150950.csv")
 LOCATION_PATH = os.path.join(INGEST_FOLDER, "Location_202308041952.csv")
 CSV_NOKEYS_PATH = os.path.join(INGEST_FOLDER, "CSV_NOKEYS.csv")
@@ -943,8 +950,6 @@ def reingest_csv():
             session.commit()
             print(f"Inserted new ethnicity {ethnicity_id} for image_id {image_id}")
 
-    # what I'm searching for!!
-    this_value = 6
 
     # Read the CSV file and process each row
     with open(CSV_IN_PATH, 'r') as csvfile:
@@ -968,27 +973,48 @@ def reingest_csv():
             image = session.query(Images).filter_by(site_image_id=site_image_id).first()
 
             if image:
-                if location_id is not None:
-
+                if location_id is not None and image.location_id is None:
                     # Update the location_id in the Images table
                     image.location_id = location_id
                     session.commit()
                     print(f"Updated location for site_image_id {site_image_id}")
-                    
-                else:
+                elif location_id is None:
                     print("No location found for this row")
-
-                # Additional process: Update or insert ethnicity records
-                ethnicity_ids = session.query(ImagesEthnicity.ethnicity_id).filter_by(image_id=image.image_id).all()
-                if this_value in [eth[0] for eth in ethnicity_ids]:
-                    print(f"Alert: An ethnicity with value {this_value} already exists for image_id {image.image_id}")
                 else:
-                    update_or_insert_ethnicity(session, image.image_id, this_value)
+                    print("Location already exists for this row")
+
+
+                if age_id is not None and image.age_id is None:
+                    # Update the age_id in the Images table
+                    image.age_id = age_id
+                    session.commit()
+                    print(f"Updated age_id for site_image_id {site_image_id}")
+                elif age_id is None:
+                    print("No age_id found for this row")
+                else:
+                    print("age_id already exists for this row")
+
+                if gender_id is not None and image.gender_id is None:
+                    # Update the gender_id in the Images table
+                    image.gender_id = gender_id
+                    session.commit()
+                    print(f"Updated gender_id for site_image_id {site_image_id}")
+                elif gender_id is None:
+                    print("No gender_id found for this row")
+                else:
+                    print("gender_id already exists for this row")
+
+
+                # # Additional process: Update or insert ethnicity records
+                # ethnicity_ids = session.query(ImagesEthnicity.ethnicity_id).filter_by(image_id=image.image_id).all()
+                # if this_value in [eth[0] for eth in ethnicity_ids]:
+                #     print(f"Alert: An ethnicity with value {this_value} already exists for image_id {image.image_id}")
+                # else:
+                #     print("this is where I would insert")
+                #     # update_or_insert_ethnicity(session, image.image_id, this_value)
 
             else:
                 print(f"No image found for site_image_id {site_image_id}")
-
-
 
 if __name__ == '__main__':
     print(sig)

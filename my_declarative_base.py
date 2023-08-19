@@ -32,10 +32,17 @@ class Site(Base):
 class Location(Base):
     __tablename__ = 'location'
     location_id = Column(Integer, primary_key=True, autoincrement=True)
-    location_text = Column(String(50))
-    location_number = Column(String(50))
-    location_code = Column(String(50))
-
+    location_number_getty = Column(Integer)
+    getty_name = Column(String(70))
+    nation_name = Column(String(70))
+    nation_name_alpha = Column(String(70))
+    official_nation_name = Column(String(150))
+    sovereignty = Column(String(70))
+    code_alpha2 = Column(String(70))
+    code_alpha3 = Column(String(70))
+    code_numeric = Column(Integer)
+    code_iso = Column(String(70))
+    
 class Images(Base):
     __tablename__ = 'images'
     image_id = Column(Integer, primary_key=True, autoincrement=True)
