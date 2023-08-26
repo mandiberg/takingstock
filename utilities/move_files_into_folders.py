@@ -2,8 +2,9 @@ import hashlib
 import os
 import shutil
 import re
-
+import threading
 import sys
+
 # caution: path[0] is reserved for script path (or '' in REPL)
 sys.path.insert(1, '/Users/michaelmandiberg/Documents/GitHub/facemap/')
 
@@ -13,11 +14,21 @@ from mp_db_io import DataIO
 
 io = DataIO()
 
+# moves files from folder located at PATH to hash folders created at NEWPATH
+# uses get_hash_folders to determine which folder to put in
+# if ALL_IN_ONE_FOLDER = True it will look only in the PATH folder 
+# if ALL_IN_ONE_FOLDER = False it will look inside all the folders recursively inside of PATH
+# (does not leave original file in place)
+
 testname = "woman-in-a-music-concert-picture-id505111652.jpg"
 # PATH= os.path.join(os.environ['HOME'], "Documents/projects-active/facemap_production/gettyimages") 
-PATH = "/Volumes/RAID54/scraping_phase_2/adobeStock_phases/adobeStockScraper_v2.1/images_short"
-NEWPATH = "/Volumes/RAID54/images_adobe"
+PATH = "/Volumes/RAID54/adobeStockScraper_v3/test1"
+NEWPATH = "/Volumes/RAID54/adobeStockScraper_v3/dest1"
 
+# PATH = "/Volumes/RAID54/adobeStockScraper_v3/images_doover_4round_july5"
+# NEWPATH = "/Volumes/RAID54/adobeStockScraper_v3/images_adobe"
+
+ALL_IN_ONE_FOLDER = False
 
 # folder ="5GB_testimages"
 COPY=True
@@ -112,69 +123,35 @@ counter = 0
 
 # for unsorted images, all in one folder
 
-print("going to get get_img_list")
-meta_file_list = io.get_img_list(PATH, sort=False)
-print(len(meta_file_list))
-for newfile in meta_file_list:
-    # newfile = file
-    # os.rename(file, newfile)
-
-    # if  re.search(r"\.jpg\.jpg", file):
-    #     print("\n\n\n\n\n\n\n\n\nDOUBLE TROUBLE DOUBLE TROUBLE DOUBLE TROUBLE DOUBLE TROUBLE DOUBLE TROUBLE \n\n\n\n\n\n\n\n\n") 
-    print(newfile)
-    a,b = get_hash_folders(newfile)
-    currentpathfile = os.path.join(PATH,newfile)
-    newpathfile = os.path.join(NEWPATH,a,b,newfile)
-
-    print(currentpathfile, newpathfile)
-
-    #if you dont move the files, it will repeate the renaming on about 10% of the files
-    shutil.move(currentpathfile, newpathfile)
-
-    print("moved from: ",currentpathfile)
-    print("moved to: ",newpathfile)
-    print(counter)
-    counter = counter+1
 
 
-'''
-# for sorted images, in correct folder
-#create depth 0
-for letter in alphabet:
-    # print (letter)
-    # pth = os.path.join(PATH+basepath,letter)
-    # print(pth)
-    for letter2 in alphabet2:
-        # print (letter2)
+def process_files_in_folder(folder):
+    print("going to get get_img_list")
+    meta_file_list = io.get_img_list(folder, sort=False)
+    print(len(meta_file_list))
+    counter = 0
+    for newfile in meta_file_list:
+        # print(newfile)
+        a, b = get_hash_folders(newfile)
+        currentpathfile = os.path.join(folder, newfile)
+        newpathfile = os.path.join(NEWPATH, a, b, newfile)
 
-        pth = os.path.join(PATH,letter,letter+letter2)
-        print(pth)
-        meta_file_list = get_dir_files(pth)
-        for file in meta_file_list:
+        # print(currentpathfile, newpathfile)
 
-            # change file name stuff
-            #removes jpg in case you did it too many times
-            # os.rename(file, file.replace(".jpg",""))
-            # adds .jpg if missing
-            # newfile = file+".jpg"
-            #this keeps adding jpg, so only do once!
-            # this is if you don't want to change the filename:
-            newfile = file
+        shutil.move(currentpathfile, newpathfile)
 
-            os.rename(file, newfile)
-            if  re.search(r"\.jpg\.jpg", file):
-                print("\n\n\n\n\n\n\n\n\nDOUBLE TROUBLE DOUBLE TROUBLE DOUBLE TROUBLE DOUBLE TROUBLE DOUBLE TROUBLE \n\n\n\n\n\n\n\n\n") 
-            print(file)
-            a,b = get_hash_folders(newfile)
-            currentpathfile = os.path.join(pth,newfile)
-            newpathfile = os.path.join(NEWPATH,a,b,newfile)
+        print("moved from: ", currentpathfile)
+        print("moved to: ", newpathfile)
+        print(counter)
+        counter = counter + 1
 
-            #if you dont move the files, it will repeate the renaming on about 10% of the files
-            shutil.move(currentpathfile, newpathfile)
+if ALL_IN_ONE_FOLDER:
+    process_files_in_folder(PATH)
+else:
+    for root, dirs, files in os.walk(PATH):
+        for folder in dirs:
+            process_files_in_folder(os.path.join(root, folder))
 
-            print("moved from: ",currentpathfile)
-            print("moved to: ",newpathfile)
-            print(counter)
-            counter = counter+1
 
-'''
+
+

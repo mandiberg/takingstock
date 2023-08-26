@@ -48,8 +48,8 @@ SLEEP_TIME=0
 # am I looking on SSD for a folder? If not, will pull directly from SQL
 # if so, also change the site_name_id etc around line 930
 IS_FOLDER = True
-# MAIN_FOLDER = "/Volumes/SSD4/needtomoveinto-images_adobe/images_29cats"
-MAIN_FOLDER = "/Volumes/SSD4/adobeStockScraper_v3/images"
+MAIN_FOLDER = "/Volumes/RAID54/adobeStockScraper_v3/images"
+# MAIN_FOLDER = "/Volumes/SSD4/adobeStockScraper_v3/images"
 CSV_FOLDERCOUNT_PATH = os.path.join(MAIN_FOLDER, "folder_countout.csv")
 
 

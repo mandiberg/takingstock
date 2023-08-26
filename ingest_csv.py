@@ -47,7 +47,7 @@ _|_|  _|\__, |\___|____/\__| \___|____/  \_/
 io = DataIO()
 db = io.db
 # overriding DB for testing
-# io.db["name"] = "gettytest3"
+io.db["name"] = "gettytest3"
 ROOT = io.ROOT 
 NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 #######################################
@@ -55,8 +55,8 @@ NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 INGEST_ROOT = "/Users/michaelmandiberg/Documents/projects-active/facemap_production"
 # INGEST_FOLDER = os.path.join(INGEST_ROOT, "adobe_csv_4ingest/")
 # CSV_IN_PATH = os.path.join(INGEST_FOLDER, "unique_lines_B_nogender.csv")
-INGEST_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/iStock_ingest/"
-CSV_IN_PATH = os.path.join(INGEST_FOLDER, "CSV_BLANKLOC_PATH_cleaned.csv")
+INGEST_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/CSVs_to_ingest/shutterstockCSVs"
+CSV_IN_PATH = os.path.join(INGEST_FOLDER, "shutttersock_UK.output.csv")
 KEYWORD_PATH = os.path.join(INGEST_FOLDER, "Keywords_202305150950.csv")
 LOCATION_PATH = os.path.join(INGEST_FOLDER, "Location_202308041952.csv")
 CSV_NOKEYS_PATH = os.path.join(INGEST_FOLDER, "CSV_NOKEYS.csv")
@@ -75,8 +75,11 @@ key2key = {"person":"people", "kid":"child","affection":"affectionate", "baby":"
 gender_dict = {"men":1,"man":1,"male":1,"males":1,"his":1,"him":1,"businessman":1,"businessmen":1,"father":1, "men's":1, "himself":1, "homme":1, "hombre":1, "(man)":1, "-women men -children":1, "-women -men -children":2, "none":2, "oldmen":3, "grandfather":3,"oldwomen":4, "grandmother":4, "nonbinary":5, "other":6, "trans":7, 
         "women":8,"woman":8,"female":8,"females":8, "hers":8, "her":8, "businesswoman":8, "businesswomen":8, "mother":8, "frauen":8, "mujer":8, "haaren":8, "frau":8, "woman-doctor":8, "maiden":8, "hausfrau":8, "women -men -children":8, "youngmen":9, "boy":9, "boys":9, "jungen":9, "youngwomen":10,"girl":10, "girls":10, "ragazza":10, "schoolgirls":8,}
 gender_dict_istock = {"Mid Adult Men":1, "Only Mid Adult Men":1, "One Mid Adult Man Only":1, "Only Men":1, "One Man Only":1, "Senior Men":3, "Only Senior Men":3, "One Senior Man Only":3, "Mature Men":3, "Only Mature Men":3, "One Mature Man Only":3, "Mature Women":4, "Only Mature Women":4, "One Mature Woman Only":4, "Senior Women":4, "Only Senior Women":4, "One Senior Woman Only":4, "Mid Adult Women":8, "Only Mid Adult Women":8, "One Mid Adult Woman Only":8, "Only Women":8, "One Woman Only":8, "Young Men":9, "Only Young Men":9, "One Young Man Only":9, "Teenage Boys":9, "Only Teenage Boys":9, "One Teenage Boy Only":9, "Only Boys":9, "One Boy Only":9, "Baby Boys":9, "Only Baby Boys":9, "One Baby Boy Only":9, "Young Women":10, "Only Young Women":10, "One Young Woman Only":10, "Teenage Girls":10, "Only Teenage Girls":10, "One Teenage Girl Only":10, "Only Girls":10, "One Girl Only":10, "Baby Girls":10, "Only Baby Girls":10, "One Baby Girl Only":10}
+gender_dict_sex = {"Mid Adult Male":1, "Only Mid Adult Male":1, "One Mid Adult Man Only":1, "Only Male":1, "One Man Only":1, "Senior Male":3, "Only Senior Male":3, "One Senior Man Only":3, "Mature Male":3, "Only Mature Male":3, "One Mature Male Only":3, "Mature Female":4, "Only Mature Female":4, "One Mature Woman Only":4, "Senior Female":4, "Only Senior Female":4, "One Senior Woman Only":4, "Mid Adult Female":8, "Only Mid Adult Female":8, "One Mid Adult Woman Only":8, "Only Female":8, "One Woman Only":8, "Young Male":9, "Only Young Male":9, "One Young Man Only":9, "Young Female":10, "Only Young Female":10, "One Young Female Only":10}
+gender_dict_sexplural = {"Mid Adult Males":1, "Only Mid Adult Males":1, "One Mid Adult Man Only":1, "Only Males":1, "Senior Males":3, "Only Senior Males":3,  "Mature Males":3, "Only Mature Males":3,  "Mature Females":4, "Only Mature Females":4, "Senior Females":4, "Only Senior Females":4, "Mid Adult Females":8, "Only Mid Adult Females":8,  "Only Females":8, "One Woman Only":8, "Young Males":9, "Young Adult Males":9, "Young Adult Men":9, "Young Adult Man":9, "Only Young Males":9, "Young Females":10, "Young Ault Women":10, "Young Ault Woman":10, "Young Ault Female":10, "Young Ault Females":10, "Only Young Females":10}
+
 # gender2key = {"man":"men", "woman":"women"}
-eth_dict = {"black":1, "african-american":1, "afro-american":1, "africanamerican":1, "african american":1, "african":1, "indigenous peoples of africa":1, "african ethnicity":1, "african-american ethnicity":1, "caucasian":2, "white people":2, "europeans":2, "eastasian":3,"east asian":3, "chinese":3, "japanese":3, "asian":3, "hispaniclatino":4, "latino":4, "latina":4, "latinx":4, "hispanic":4, "mexican":4, "middleeastern":5, "middle eastern":5, "arab":5, "mixedraceperson":6, "mixedrace":6, "mixed-race":6, "mixed race":6, "mixed ethnicity":6, "multiethnic":6, "multi ethnic":6, "multi-ethnic":6, "biracial":6, "nativeamericanfirstnations":7, "native american":7, "nativeamerican":7, "native-american":7, "indian american":7, "indianamerican":7, "indian-american":7, "first nations":7, "firstnations":7, "first-nations":7, "indigenous":7, "pacificislander":8, "pacific islander":8, "pacific-islander":8, "southasian":9, "south asian":9, "south-asian":9, "indian":9, "southeastasian":10, "southest asian":10, "southeast asian":10, "southeast-asian":10}
+eth_dict = {"black":1, "african-american":1, "afro-american":1, "africanamerican":1, "african american":1, "african":1, "indigenous peoples of africa":1, "african ethnicity":1, "african-american ethnicity":1, "african descent":1, "caucasian":2, "white people":2, "europeans":2, "eastasian":3,"east asian":3, "chinese":3, "japanese":3, "asian":3, "hispaniclatino":4, "latino":4, "latina":4, "latinx":4, "hispanic":4, "mexican":4, "middleeastern":5, "middle eastern":5, "arab":5, "mixedraceperson":6, "mixedrace":6, "mixed-race":6, "mixed race":6, "mixed ethnicity":6, "multiethnic":6, "multi ethnic":6, "multi-ethnic":6, "biracial":6, "nativeamericanfirstnations":7, "native american":7, "nativeamerican":7, "native-american":7, "indian american":7, "indianamerican":7, "indian-american":7, "first nations":7, "firstnations":7, "first-nations":7, "indigenous":7, "pacificislander":8, "pacific islander":8, "pacific-islander":8, "southasian":9, "south asian":9, "south-asian":9, "indian":9, "southeastasian":10, "southest asian":10, "southeast asian":10, "southeast-asian":10}
 eth_dict_istock = {"Northern European Descent":2, "Scandinavian Descent":2, "Southern European Descent":2, "East Asian Ethnicity":3, "Japanese Ethnicity":3, "Chinese Ethnicity":3, "Southeast Asian Ethnicity":10, "South Asian Ethnicity":9, "West Asian Ethnicity":5, "North African Ethnicity":5, "African-American Ethnicity":1, "Latin American and Hispanic Ethnicity":4, "Cuban Ethnicity":4, "Puerto Rican Ethnicity":4, "Mexican Ethnicity":4, "Multiracial Group":6, "Multiracial Person":6, "Russian Ethnicity":2, "Eastern European Descent":2, "Korean Ethnicity":3,  "Filipino Ethnicity":10, "Vietnamese Ethnicity":10, "Thai Ethnicity":10, "Cambodian Ethnicity":10, "Indian Ethnicity":9, "Sri Lankan Ethnicity":9,  "Italian Ethnicity":2, "East Slavs":2, "Polish Ethnicity":2, "Ukrainian Ethnicity":2, "Spanish and Portuguese Ethnicity":2,  "Chinese Han":3,  "Nepalese Ethnicity":3, "Taiwanese Ethnicity":3, "Only Japanese":3, "Tibetan Ethnicity":3, "Malaysian Ethnicity":10,}
 eth_dict_istock_secondary = {"Ethiopian Ethnicity":1, "Southern African Tribe":1, "Maasai People":1, "East African Ethnicity":1, "Western African Peoples":1, "Haitian Ethnicity":1, "Afro-Caribbean Ethnicity":1, "Trinidadian Ethnicity":1, "Creole Ethnicity":1, "Jamaican Ethnicity":1, "Karo Tribe":1, "Nilotic Peoples":1, "Turkana Tribe":1, "Hamer Tribe":1, "Mursi People":1, "Arbore People":1, "Borana Oromo People":1, "Konso - Tribe":1, "Lobi Tribe":1, "Samburu Tribe":1, "Malagasy People":1, "Himba":1, "Herero Tribe":1, "Zulu Tribe":1, "Nuer People":1, "San Peoples":1, "Hadza People":1, "Wodaabe Tribe":1, "Fula People":1, "Indigenous Peoples of Africa":1, "Betsileo Tribe":1, "Tuareg Tribe":1, "Kazakh Ethnicity":3, "Sherpa":3, "Dong Tribe":3, "Dong Tribe":3, "Meo":3, "Hani Tribe":3, "Miao Minority":3, "Monguor":3, "Sherpa":3, "Central Asian Ethnicity":3, "Kyrgiz":3, "Romani People":2,  "Albanian Ethnicity":2, "Israeli Ethnicity":2, "Indigenous Peoples of the Americas":7, "Inuit":7, "Sami People":2, "Métis Ethnicity":7, "Quechua People":7, "Indigenous Peoples of South America":7, "Uros":7, "Argentinian Ethnicity":4, "Ecuadorian Ethnicity":4, "Peruvian Ethnicity":4, "Brazilian Ethnicity":4, "Bolivian Ethnicity":4, "Chilean Ethnicity":4, "Colombian Ethnicity":4, "Venezuelan Ethnicity":4, "South American Ethnicity":4, "Berbers":5, "Egyptian Ethnicity":5, "Armenian Ethnicity":2, "Dominican Ethnicity":6, "Eurasian Ethnicity":6, "Garifuna Ethnicity":6, "Pardo Brazilian":6, "Māori People":7, "Pacific Islanders":7, "Hawaiian Ethnicity":7, "Polynesian Ethnicity":7, "Samoan Ethnicity":7, "Melanesian Ethnicity":7, "Kanak People":7, "Asaro People":7,  "Sinhalese People":9, "Bengali People":9, "Maldivian Ethnicity":9, "Kubu Tribe":10, "Khmer People":10,  "Mongolian Ethnicity":10, "Palaung Tribe":10, "Padaung Tribe":10, "Rawang":10, "Burmese Ethnicity":10, "Akha Tribe":10, "Sea Gypsy":10, "Moken Tribespeople":10, "Malay People":10, "Hill Tribes":10, "Red Zao":10, "Indonesian Ethnicity":10, "Kubu Tribe":10, "Kurdish Ethnicity":5, "Lebanese Ethnicity":5, "Middle Eastern Ethnicity":5, "Bedouin":5, "Pakistani Ethnicity":5, "Iranian Ethnicity":5, "Turkish Ethnicity":5, "Afghan Ethnicity":5, "Pashtuns":5, "Hazara":5, "Baloch":5, "Tajiks Ethnicity":5, "Kalash People":5}
 
@@ -128,6 +131,7 @@ age_dict = {
     "seniorin":7
 }
 age_dict_istock = {"0-1 Months":1, "0-11 Months":1, "Babies Only":1, "2-5 Months":2, "6-11 Months":2, "Preschool Age":2, "12-17 Months":3, "2-3 Years":3, "4-5 Years":3, "6-7 Years":3, "8-9 Years":3, "10-11 Years":3, "12-13 Years":3, "12-23 Months":3, "Elementary Age":3, "Pre-Adolescent Child":3, "Children Only":3, "18-23 Months":3, "14-15 Years":4, "16-17 Years":4, "18-19 Years":4, "Teenagers Only":4, "20-24 Years":5, "25-29 Years":5, "30-34 Years":5, "20-29 Years":5, "30-39 Years":5, "35-39 Years":6, "40-44 Years":6, "45-49 Years":6, "50-54 Years":6, "55-59 Years":6, "Adults Only":6, "Mid Adult":6, "Mature Adult":6, "40-49 Years":6, "50-59 Years":6, "60-64 Years":7, "65-69 Years":7, "70-79 Years":7, "Senior Adult":7, "60-69 Years":7, "80-89 Years":7, "Over 100":7, "90 Plus Years":7}
+age_dict_shutterstock = {"1 to 2 years":2, "10 to 11 years":4, "10 to 12 years":4, "10 to 13 years":4, "10 years":3, "10 years old":3, "10-12 years":4, "11 years old":4, "12 to 13 years":4, "12 years":4, "12 years old":4, "13 to 14 years":4, "13 to 15 years":4, "13 years old":4, "13-14 years":4, "13-15 years":4, "14 years old":4, "14- 15 years":4, "15 years old":4, "15-16 years":4, "16 to 17 years":4, "16 years old":4, "16-25years":4, "17 years":4, "17 years old":4, "18 to 19 years":4, "18 years old":4, "18-19 years old":4, "19 years":4, "19 years old":4, "19-20 years":4, "2 to 3 years":3, "2 years":3, "2 years old":3, "20 to 24 years":5, "20 to 25 years old":5, "20 years old":5, "20-25 years":5, "20-30 years":5, "21 years":5, "23 years":5, "24-29 years":5, "25 to 29 years":5, "25-28 years":5, "25-30 years":5, "25-30 years old":5, "25-30years":5, "26 years":5, "26-30 years":5, "28-29 years":5, "3 to 4 years":3, "3 years old":3, "3-4 years":3, "30 to 34 years":5, "30-35 years":5, "30-40 years":5, "35 to 39 years":6, "35-30 years":6, "35-40 years":6, "35-40-years":6, "35-45 years":6, "4 to 5 years":3, "4 years old":3, "40 to 44 years":6, "40 to 49 years":6, "40 years old":6, "40-45 years":6, "40-50 years":6, "45 to 49 years":6, "45 years old":6, "45-50 years":6, "48 years":6, "49 years":6, "5 to 6 years":3, "5 to 9 years":3, "5 years":3, "5 years old":3, "5-10 years":3, "5-6 years":3, "5-6 years old":3, "50 to 54 years":6, "50 to 59 years":6, "50-55 years":6, "51 years":6, "55 to 59 years":6, "55-60 years":6, "6 to 7 years":3, "6 years":3, "6 years old":3, "60 to 64 years":7, "60 to 69 years":7, "60-65 years":7, "60-70 years":7, "65 to 69 years":7, "65 years":7, "65-70 years":7, "7 to 8 years":3, "7 to 9 years":3, "7 years":3, "7 years old":3, "7-8 years":3, "7-9 years":3, "70 to 74 years":7, "70 to 79 years":7, "70-75 years":7, "75 to 79 years":7, "78 years":7, "8 to 9 years":3, "8 years":3, "8 years old":3, "80 plus years":7, "80 to 84 years":7, "80-84 years":7, "9 years":3, "9 years old":3, "9-10 years":3, "age 20-25 years":5, "eight years old":3, "eighty years old":7, "fifty years old":6, "four years old":3, "nine years old":3, "seven years old":3, "three years old":3, "two years old":3}
 
 age_details_dict = {
     'toddler': 2,
@@ -139,15 +143,15 @@ age_details_dict = {
     '70+': 9
 }
 age_detail_dict_istock = {"0-1 Months":1, "2-5 Months":1, "0-11 Months":1, "Babies Only":1, "12-17 Months":2, "2-3 Years":2, "6-11 Months":2, "12-23 Months":2, "18-23 Months":2, "12-13 Years":3, "14-15 Years":3, "16-17 Years":3, "18-19 Years":3, "20-24 Years":4, "25-29 Years":4, "20-29 Years":4, "30-34 Years":5, "35-39 Years":5, "30-39 Years":5, "40-44 Years":6, "45-49 Years":6, "40-49 Years":6, "50-54 Years":7, "55-59 Years":7, "50-59 Years":7, "60-64 Years":8, "65-69 Years":8, "60-69 Years":8, "70-79 Years":9, "80-89 Years":9, "Over 100":9, "90 Plus Years":9, "4-5 Years":10, "6-7 Years":10, "8-9 Years":11, "10-11 Years":11}
-
+age_details_dict_shutterstock =  = {"20 to 24 years":4, "20 to 25 years old":4, "20 years old":4, "20-25 years":4, "20-30 years":4, "21 years":4, "23 years":4, "24-29 years":4, "25 to 29 years":4, "25-28 years":4, "25-30 years":4, "25-30 years old":4, "25-30years":4, "26 years":4, "26-30 years":4, "28-29 years":4, "30 to 34 years":5, "30-35 years":5, "30-40 years":5, "35 to 39 years":5, "35-30 years":5, "35-40 years":5, "35-40-years":5, "35-45 years":5, "40 to 44 years":6, "40 to 49 years":6, "40 years old":6, "40-45 years":6, "40-50 years":6, "45 to 49 years":6, "45 years old":6, "45-50 years":6, "48 years":6, "49 years":6, "50 to 54 years":7, "50 to 59 years":7, "50-55 years":7, "51 years":7, "55 to 59 years":7, "55-60 years":7, "60 to 64 years":8, "60 to 69 years":8, "60-65 years":8, "60-70 years":8, "65 to 69 years":8, "65 years":8, "65-70 years":8, "70 to 74 years":9, "70 to 79 years":9, "70-75 years":9, "75 to 79 years":9, "78 years":9, "80 plus years":9, "80 to 84 years":9, "80-84 years":9, "age 20-25 years":4, "eighty years old":9, "fifty years old":7}
 def lower_dict(this_dict):
     lower_dict = {k.lower(): v for k, v in this_dict.items()}
     return lower_dict
 
-gender_dict = lower_dict({**gender_dict, **gender_dict_istock})
+gender_dict = lower_dict({**gender_dict, **gender_dict_istock, **gender_dict_sex, **gender_dict_sexplural})
 eth_dict = lower_dict({**eth_dict, **eth_dict_istock})
-age_dict = lower_dict({**age_dict, **age_dict_istock})
-age_details_dict = lower_dict({**age_details_dict, **age_detail_dict_istock})
+age_dict = lower_dict({**age_dict, **age_dict_istock, **age_dict_shutterstock})
+age_details_dict = lower_dict({**age_details_dict, **age_detail_dict_istock, **age_details_dict_shutterstock})
 eth_dict_istock_secondary = lower_dict(eth_dict_istock_secondary)
 
 # for searching descrption for eth keywords, get rid of ambiguous/polyvalent terms
@@ -218,6 +222,15 @@ def make_key_dict_col3(filepath):
     keys_dict = {}
     for row in keys:
         keys_dict[row[2].lower()] = row[0]
+
+    # do I need to pop header? or can I just leave it. 
+    return keys_dict
+
+def make_key_dict_col7(filepath):
+    keys = read_csv(filepath)
+    keys_dict = {}
+    for row in keys:
+        keys_dict[row[7].lower()] = row[0]
 
     # do I need to pop header? or can I just leave it. 
     return keys_dict
@@ -637,6 +650,8 @@ def get_gender_age_row(gender_string, age_string, description, keys_list, site_i
         gender_results = description_to_keys(description, site_id, gender_dict)
         if len(set(gender_results)) == 1:
             gender = gender_results[0]
+        else: 
+            print("too many genders", gender_results)
     # print("gender, age, after try description gender_string")
     # print(gender)
     # print(age)
@@ -665,6 +680,9 @@ def get_gender_age_row(gender_string, age_string, description, keys_list, site_i
     print("gender, age, after everything")
     print(gender)
     print(age)
+
+    if not age or not gender:
+        print("MISSING AGE OR GENDER, IS IT IN THE KEYS?", keys_list)
 
     return gender, age, age_detail
 
@@ -795,8 +813,6 @@ def structure_row_istock(row, ind, keys_list):
         #     loc_no_list = get_key_no_dictonly(None, keys_list, locations_dict_alt, True)
         #     if loc_no_list: 
         print(f"SEARCH_KEYS_FOR_LOC found for {country_key}")
-
-
     else:
         country_key = None
 
@@ -818,6 +834,55 @@ def structure_row_istock(row, ind, keys_list):
     
     return nan2none(image_row)
 
+def structure_row_shutterstock(row, ind, keys_list):
+    # print(row[11])
+    site_id = 2 #id for the site, not the image
+    gender = row[6].replace("_"," ")
+    age = row[5].replace("_"," ")
+    country = row[3].replace("_"," ")
+    description = row[1]
+    gender_key, age_key, age_detail_key = get_gender_age_row(gender, age, description, keys_list, site_id)
+    country_key = None
+    print("row 3 is", type(country))
+    if country and country != "":
+        country_key = unlock_key_dict(country,locations_dict_AA, loc2loc)
+        # print("country_key", str(country_key))
+        if country_key == 999999999:
+            write_csv(CSV_BLANKLOC_PATH,row)
+            return(None)
+    elif not country or country == "":
+        #tk search keys
+        # get eth from keywords, using keys_list and eth_keys_dict
+        print("UNLOCKING SEARCH_KEYS_FOR_LOC <><><><><><><><>")
+        # absence of search string ("None") triggers search_keys function
+        loc_no_list = get_key_no_dictonly(None, keys_list, locations_dict, True)
+        print(loc_no_list)
+        country_key = get_mode(loc_no_list)
+        # if not loc_no_list:
+        #     loc_no_list = get_key_no_dictonly(None, keys_list, locations_dict_alt, True)
+        #     if loc_no_list: 
+        print(f"SEARCH_KEYS_FOR_LOC found for {country_key}")
+    else:
+        country_key = None
+
+    # handle long URLs
+    if len(row[8])>300: contentUrl = "contentUrl was greater than 300 characters search for site_image_id"
+    else: contentUrl = row[8]
+
+    image_row = {
+        "location_id": country_key,        
+        "site_image_id": row[0],
+        "site_name_id": site_id,
+        "description": description[:140],
+        "age_id": age_key,
+        "gender_id": gender_key,
+        "age_detail_id": age_detail_key,
+        "contentUrl": contentUrl,
+        "imagename": generate_local_unhashed_image_filepath(row[9].replace("images/","").split("?")[0])  # need to refactor this from the contentURL using the hash function
+    }
+    # print(image_row)
+    return nan2none(image_row)
+
 
 def ingest_csv():
 
@@ -832,9 +897,9 @@ def ingest_csv():
     # # istock
     column_keys = 2 #where the keywords are
     separator_keys = "|" #for keywords, in the column listed above
-    column_site = 8 #not sure this is used
-    column_eth = None #ethnicity
-    search_desc_for_keys = True
+    # column_site = 8 #not sure this is used
+    column_eth = 7 #ethnicity
+    search_desc_for_keys = False
 
 
     with open(CSV_IN_PATH) as file_obj:
@@ -868,7 +933,7 @@ def ingest_csv():
 
 
             # image_row = structure_row_adobe(row, ind, keys_list)
-            image_row = structure_row_istock(row, ind, keys_list)
+            image_row = structure_row_shutterstock(row, ind, keys_list)
 
             # if the image row has problems, skip it (structure_row saved it to csv)
             if not image_row:
@@ -884,8 +949,9 @@ def ingest_csv():
                 key_nos_list = set(key_nos_list + desc_key_nos_list)
             
 
-            if column_eth:
-                # print(key_nos_list)
+            # this isn't working. not catching nulls. 
+            if not pd.isnull(row[column_eth]) and len(row[column_eth])>0:
+                print("have eth", row[column_eth].lower(), "type is", type(row[column_eth].lower()))
                 eth_no_list = get_key_no_dictonly(row[column_eth].lower(), keys_list, eth_dict)
             else:
                 # get eth from keywords, using keys_list and eth_keys_dict
@@ -1077,6 +1143,8 @@ if __name__ == '__main__':
         print("this many keys", len(keys_dict))
         locations_dict = make_key_dict(LOCATION_PATH)
         locations_dict_alt = make_key_dict_col3(LOCATION_PATH)
+        locations_dict_AA = make_key_dict_col7(LOCATION_PATH)
+        print(locations_dict_AA)
         print("this many locations", len(locations_dict))
 
         ingest_csv()
