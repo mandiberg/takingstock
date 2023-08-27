@@ -3,6 +3,7 @@ import os
 import shutil
 import re
 import threading
+import queue
 import sys
 
 # caution: path[0] is reserved for script path (or '' in REPL)
@@ -22,11 +23,11 @@ io = DataIO()
 
 testname = "woman-in-a-music-concert-picture-id505111652.jpg"
 # PATH= os.path.join(os.environ['HOME'], "Documents/projects-active/facemap_production/gettyimages") 
-PATH = "/Volumes/RAID54/adobeStockScraper_v3/test1"
-NEWPATH = "/Volumes/RAID54/adobeStockScraper_v3/dest1"
+# PATH = "/Volumes/RAID54/adobeStockScraper_v3/test1"
+# NEWPATH = "/Volumes/RAID54/adobeStockScraper_v3/dest1"
 
-# PATH = "/Volumes/RAID54/adobeStockScraper_v3/images_doover_4round_july5"
-# NEWPATH = "/Volumes/RAID54/adobeStockScraper_v3/images_adobe"
+PATH = "/Volumes/RAID54/adobeStockScraper_v3/images_adobe_todo"
+NEWPATH = "/Volumes/RAID54/adobeStockScraper_v3/images_all"
 
 ALL_IN_ONE_FOLDER = False
 
@@ -118,40 +119,68 @@ alphabet2 = alphabet2.split()
 #helper variable for determining what depth you are at
 # c_depth = alphabet
 
-counter = 0
 
 
-# for unsorted images, all in one folder
+# Mutex for thread synchronization
+lock = threading.Lock()
 
+# Event for signaling thread completion
+threads_completed = threading.Event()
 
+# Queue for distributing work among threads
+work_queue = queue.Queue()
 
-def process_files_in_folder(folder):
-    print("going to get get_img_list")
-    meta_file_list = io.get_img_list(folder, sort=False)
-    print(len(meta_file_list))
-    counter = 0
-    for newfile in meta_file_list:
-        # print(newfile)
-        a, b = get_hash_folders(newfile)
-        currentpathfile = os.path.join(folder, newfile)
+def threaded_process_files():
+    while not work_queue.empty():
+        currentpathfile, newfile, a, b = work_queue.get()
         newpathfile = os.path.join(NEWPATH, a, b, newfile)
-
-        # print(currentpathfile, newpathfile)
 
         shutil.move(currentpathfile, newpathfile)
 
-        print("moved from: ", currentpathfile)
+        # print(newfile)
+        # print("moved from: ", currentpathfile)
         print("moved to: ", newpathfile)
-        print(counter)
-        counter = counter + 1
+
+        with lock:
+            global counter
+            counter += 1
+
+        work_queue.task_done()
+
+def threaded_processing():
+    thread_list = []
+    for _ in range(num_threads):
+        thread = threading.Thread(target=threaded_process_files)
+        thread_list.append(thread)
+        thread.start()
+
+    # Wait for all threads to complete
+    for thread in thread_list:
+        thread.join()
+
+    # Set the event to signal that threads are completed
+    threads_completed.set()
+
+counter = 0
 
 if ALL_IN_ONE_FOLDER:
     process_files_in_folder(PATH)
 else:
+    num_threads = 8  
+    print("going to walk folders")
+    # Put work into the queue
     for root, dirs, files in os.walk(PATH):
         for folder in dirs:
-            process_files_in_folder(os.path.join(root, folder))
+            print("looking in ", folder)
+            meta_file_list = get_dir_files(os.path.join(root, folder))
+            for newfile in meta_file_list:
+                a, b = get_hash_folders(newfile)
+                currentpathfile = os.path.join(root, folder, newfile)
+                work_queue.put((currentpathfile, newfile, a, b))
 
+    print("going to start threading")
 
+    threaded_processing()
 
-
+# Wait for threads to complete
+threads_completed.wait()
