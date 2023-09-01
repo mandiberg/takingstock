@@ -75,7 +75,7 @@ class DataIO:
                 # temp for testing
                 # os.path.join(self.ROOT54,"gettyimages/testimages"), #1, Getty
                 os.path.join(self.ROOT54,""),
-                os.path.join(self.ROOT54,""),
+                os.path.join(self.ROOT54,"adobeStockScraper_v3/images_all"), #3, Adobe
                 os.path.join(self.ROOT54,""),
                 os.path.join(self.ROOT54,"images_pexels"), #5, Pexels
                 os.path.join(self.ROOT54,""),

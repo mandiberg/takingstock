@@ -9,6 +9,7 @@ import json
 import random
 import numpy as np
 import sys
+from collections import Counter
 
 
 class SortPose:
@@ -20,9 +21,9 @@ class SortPose:
         self.mp_drawing = mp.solutions.drawing_utils
 
         #maximum allowable distance between encodings
-        self.MAXDIST = 0.df_128_enc
+        self.MAXDIST = 0.8
         self.MINDIST = .4
-        self.CUTOFF = 4000
+        self.CUTOFF = 10000
 
         # maximum allowable scale up
         self.resize_max = 1.99
@@ -64,8 +65,8 @@ class SortPose:
             # self.SORT = 'mouth_gap'
             self.ROUND = 0
         elif motion['forward_smile'] == True:
-            self.XLOW = -5
-            self.XHIGH = 1
+            self.XLOW = -40
+            self.XHIGH = -24
             self.YLOW = -2
             self.YHIGH = 2
             self.ZLOW = -2
@@ -75,7 +76,7 @@ class SortPose:
             self.FRAMERATE = 15
             self.SECOND_SORT = 'face_x'
             self.MINMOUTHGAP = 0
-            self.MAXMOUTHGAP = 30
+            self.MAXMOUTHGAP = 40
             self.SORT = 'mouth_gap'
             self.ROUND = 1
         elif motion['laugh'] == True:
@@ -730,7 +731,27 @@ class SortPose:
 
         '''
         if start_img == "median":
-            enc1 = df_128_enc.median().to_list()
+            # dfmode = df_128_enc.round(2).mode(dropna=True)
+
+            # Step 1: Round all values to 2 decimal points
+            df_rounded = df_128_enc.round(3)
+
+            # Step 2: Flatten the DataFrame into a single array
+            flattened_array = df_rounded.values
+
+            # Step 3: Convert the flattened array into tuples for hashing
+            hashable_rows = [tuple(row) for row in flattened_array]
+
+            # Step 4: Find the mode using the most_common function from the collections module
+            counter = Counter(hashable_rows)
+            most_common_row = counter.most_common(1)[0][0]
+
+            print("Most common face embedding:")
+            print(most_common_row)
+            enc1 = most_common_row
+            # print(dfmode)
+            # enc1 = dfmode.iloc[0].to_list()
+            # enc1 = df_128_enc.median().to_list()
             print("in median")
 
         elif start_img == "start_site_image_id":

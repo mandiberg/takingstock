@@ -26,8 +26,9 @@ testname = "woman-in-a-music-concert-picture-id505111652.jpg"
 # PATH = "/Volumes/RAID54/adobeStockScraper_v3/test1"
 # NEWPATH = "/Volumes/RAID54/adobeStockScraper_v3/dest1"
 
-PATH = "/Volumes/RAID54/adobeStockScraper_v3/images_adobe_todo"
-NEWPATH = "/Volumes/RAID54/adobeStockScraper_v3/images_all"
+PATH = "/Volumes/SSD4/adobe_moveable"
+# PATH = "/Volumes/RAID54/adobeStockScraper_v3/images_all"
+NEWPATH = "/Volumes/RAID54/adobeStockScraper_v3/images"
 
 ALL_IN_ONE_FOLDER = False
 

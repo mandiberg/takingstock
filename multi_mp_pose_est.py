@@ -50,6 +50,7 @@ SLEEP_TIME=0
 IS_FOLDER = True
 # MAIN_FOLDER = "/Volumes/RAID54/adobeStockScraper_v3/images"
 MAIN_FOLDER = "/Volumes/SSD4/adobeStockScraper_v3/images"
+# MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages"
 CSV_FOLDERCOUNT_PATH = os.path.join(MAIN_FOLDER, "folder_countout.csv")
 
 

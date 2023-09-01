@@ -2,9 +2,15 @@ import sqlalchemy
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.pool import NullPool
+
+# go get IO class from parent folder
+# caution: path[0] is reserved for script path (or '' in REPL)
+import sys
+sys.path.insert(1, '/Users/michaelmandiberg/Documents/GitHub/facemap/')
+# import file
 from my_declarative_base import Base, Encodings, Images, Column, Integer, DECIMAL, BLOB, String, JSON
 from mp_db_io import DataIO
-from sqlalchemy.pool import NullPool
 
 ######## Michael's Credentials ########
 # platform specific credentials
@@ -16,7 +22,7 @@ ROOT = io.ROOT
 NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 #######################################
 
-SegmentTable_name = 'SegmentAug27Straightahead'  #actually straight ahead smile
+SegmentTable_name = 'SegmentAug30Straightahead'  #actually straight ahead smile
 
 
 # Connect to the database
@@ -37,6 +43,11 @@ class SegmentTable(Base):
     site_name_id = Column(Integer)
     contentUrl = Column(String(300))
     imagename = Column(String(200))
+    site_image_id = Column(String(50))
+    age_id = Column(Integer)
+    age_detail_id = Column(Integer)
+    gender_id = Column(Integer)
+    location_id = Column(Integer)
     face_x = Column(DECIMAL(6, 3))
     face_y = Column(DECIMAL(6, 3))
     face_z = Column(DECIMAL(6, 3))
@@ -45,11 +56,11 @@ class SegmentTable(Base):
     bbox = Column(JSON)
     face_encodings = Column(BLOB)
     face_encodings68 = Column(BLOB)
-    site_image_id = Column(String(50))
 
-
-xmin = -38
-xmax = -23
+xmin = -33
+xmax = -29
+ymin = -15
+ymax = 15
 step = 2
 
 # Define the batch size
@@ -62,8 +73,8 @@ for angle in range(xmin, xmax, step):
     encodings_filters = [
         Encodings.face_encodings68.isnot(None),
         Encodings.face_x > angle, Encodings.face_x <= angle+step,
-        Encodings.face_y > -4, Encodings.face_y < 4,
-        Encodings.face_z > -3, Encodings.face_z < 3
+        Encodings.face_y > ymin, Encodings.face_y < ymax,
+        Encodings.face_z > -2, Encodings.face_z < 2
     ]
 
     results = session.query(
@@ -86,14 +97,18 @@ for angle in range(xmin, xmax, step):
                 site_name_id=image_data.site_name_id,
                 contentUrl=image_data.contentUrl,
                 imagename=image_data.imagename,
+                site_image_id=image_data.site_image_id,
+                age_id = image_data.age_id,
+                age_detail_id = image_data.age_detail_id,
+                gender_id = image_data.gender_id,
+                location_id = image_data.location_id,
                 face_x=result[1],
                 face_y=result[2],
                 face_z=result[3],
                 mouth_gap=result[4],
                 face_landmarks=result[5],
                 bbox=result[6],
-                face_encodings68=result[7],
-                site_image_id=image_data.site_image_id
+                face_encodings68=result[7]
             )
             batch.append(segment_entry)
 

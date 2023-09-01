@@ -2,13 +2,15 @@ import matplotlib.pyplot as plt
 import numpy as np
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
-from my_declarative_base import Images, Encodings  # Adjust the import as needed
 from sqlalchemy.pool import NullPool
 from sqlalchemy.orm import aliased
 
-
-
-#mine
+# go get IO class from parent folder
+# caution: path[0] is reserved for script path (or '' in REPL)
+import sys
+sys.path.insert(1, '/Users/michaelmandiberg/Documents/GitHub/facemap/')
+# import file
+from my_declarative_base import Base, Encodings, Images, Column, Integer, DECIMAL, BLOB, String, JSON
 from mp_db_io import DataIO
 
 ######## Michael's Credentials ########
@@ -20,6 +22,7 @@ db = io.db
 ROOT = io.ROOT 
 NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 #######################################
+
 
 
 engine = create_engine("mysql+pymysql://{user}:{pw}@/{db}?unix_socket={socket}".format(

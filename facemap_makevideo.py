@@ -43,14 +43,14 @@ CYCLECOUNT = 1
 # ROOT="/Users/michaelmandiberg/Documents/projects-active/facemap_production/"
 
 # keep this live, even if not SSD
-# SegmentTable_name = 'May25segment123side_to_side'
+SegmentTable_name = 'May25segment123side_to_side'
 # SegmentTable_name = 'May25segment123updown_laugh'
-SegmentTable_name = 'July15segment123straight'  #actually straight ahead smile
+# SegmentTable_name = 'SegmentAug30Straightahead'  #actually straight ahead smile
 
 # SATYAM, this is MM specific
 # for when I'm using files on my SSD vs RAID
 IS_MOVE = False
-IS_SSD = True
+IS_SSD = False
 
 # This is for when you only have the segment table. RW SQL query
 IS_SEGONLY= True
@@ -123,16 +123,36 @@ elif IS_SEGONLY:
 
     SAVE_SEGMENT = False
 
+    # no JOIN just Segment table
+
+    # SELECT = "*" 
+    # FROM =f"Images i LEFT JOIN Encodings e ON i.image_id = e.image_id INNER JOIN {SegmentTable_name} seg ON i.site_image_id = seg.site_image_id"
+    # # WHERE = "e.is_face IS TRUE AND e.face_encodings IS NOT NULL AND e.bbox IS NOT NULL AND i.site_name_id = 8 AND i.age_id NOT IN (1,2,3,4)"
+    # WHERE = "e.mouth_gap < 1 AND i.age_id NOT IN (1,2,3,4) AND i.image_id < 40647710 AND i.gender_id = 1"
+    # # WHERE = "mouth_gap < 2 AND age_id NOT IN (1,2,3,4) AND image_id < 40647710"
+    # # WHERE = "mouth_gap < 2 AND age_id NOT IN (1,2,3,4) AND s.image_id < 40647710 AND k.keyword_text LIKE 'work%'"
+
+
+
+    SELECT = "*" 
+    FROM = SegmentTable_name
+    WHERE = "e.mouth_gap > 15"
+    # WHERE = "mouth_gap < 2 AND age_id NOT IN (1,2,3,4) AND image_id < 40647710 AND gender_id = 1"
+
+
+
+    '''
+    this is the old way, with a JOIN
     # don't need keywords if SegmentTable_name
     # this is for MM segment table
     SELECT = "DISTINCT(i.image_id), i.site_name_id, i.contentUrl, i.imagename, e.face_x, e.face_y, e.face_z, e.mouth_gap, e.face_landmarks, e.bbox, e.face_encodings68, i.site_image_id" 
     FROM =f"Images i LEFT JOIN Encodings e ON i.image_id = e.image_id INNER JOIN {SegmentTable_name} seg ON i.site_image_id = seg.site_image_id"
     if IS_CLUSTER is True or IS_ONE_CLUSTER is True:
         FROM += " JOIN ImagesClusters68 ic ON i.image_id = ic.image_id"
-    WHERE = "e.face_encodings68 IS NOT NULL AND i.site_name_id = 8 AND i.age_id NOT IN (1,2,3,4) AND e.mouth_gap > 10"
+    # WHERE = "e.face_encodings68 IS NOT NULL AND i.site_name_id = 8 AND i.age_id NOT IN (1,2,3,4) AND e.mouth_gap > 10"
     # WHERE = "e.face_encodings68 IS NOT NULL"
-    # WHERE = "e.mouth_gap > 15"
-
+    WHERE = "e.mouth_gap > 15 AND i.age_id NOT IN (1,2,3,4)"
+    '''
 
     # this is for gettytest3 table
     # SELECT = "DISTINCT(image_id), site_name_id, contentUrl, imagename, face_x, face_y, face_z, mouth_gap, face_landmarks, bbox, face_encodings, site_image_id"
@@ -142,7 +162,7 @@ elif IS_SEGONLY:
     # WHERE = "bbox IS NOT NULL"
     # AND i.site_name_id = 1 AND k.keyword_text LIKE 'smil%'"
 
-LIMIT = 110000
+LIMIT = 10000
 
 motion = {
     "side_to_side": False,
@@ -171,10 +191,11 @@ image_edge_multiplier = [1.2, 1.2, 1.6, 1.2]
 # construct my own objects
 sort = SortPose(motion, face_height_output, image_edge_multiplier,EXPAND)
 
-# start_img_name = "median"
-# start_site_image_id = None
-start_img_name = "start_site_image_id"
-start_site_image_id = "0/02/159079944-hopeful-happy-young-woman-looking-amazed-winning-prize-standing-white-background.jpg"
+start_img_name = "median"
+start_site_image_id = None
+# start_img_name = "start_site_image_id"
+# start_site_image_id = "3/3B/193146471-photo-portrait-of-funky-young-lady-fooling-show-fingers-claws-growl-tiger-wear-stylish-striped"
+# start_site_image_id = "0/02/159079944-hopeful-happy-young-woman-looking-amazed-winning-prize-standing-white-background.jpg"
 # start_site_image_id = "0/08/158083627-man-in-white-t-shirt-gesturing-with-his-hands-studio-cropped.jpg"
 
 # no gap
@@ -365,6 +386,10 @@ def sort_by_face_dist(df_enc, df_128_enc):
             face_landmarks=None
             bbox=None
             try:
+                print("dkey, df_enc.loc[closest_dict[dkey]]")
+                print(dkey)
+                print(closest_dict[dkey])
+                print(df_enc.loc[closest_dict[dkey]])
                 site_name_id = df_enc.loc[closest_dict[dkey]]['site_name_id']
                 face_landmarks = df_enc.loc[closest_dict[dkey]]['face_landmarks']
                 bbox = df_enc.loc[closest_dict[dkey]]['bbox']
@@ -793,7 +818,9 @@ def main():
             ### SEGMENT THE DATA ###
 
             # make the segment based on settings
+            print("going to segment")
             df_segment = sort.make_segment(df)
+            print("made segment")
 
 
             # this is to save files from a segment to the SSD
@@ -891,6 +918,7 @@ def main():
         print(f"resultsjson contains {len(resultsjson)} images")
         map_images(resultsjson, CLUSTER_NO)
     else:
+        print("doing regular linear")
         resultsjson = selectSQL() 
         map_images(resultsjson)
 

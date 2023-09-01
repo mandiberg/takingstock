@@ -6,6 +6,9 @@ import numpy as np
 from mp_db_io import DataIO
 
 
+
+# Conda minimal_ds or env37 but not base
+
 # I/O utils
 io = DataIO()
 db = io.db
@@ -14,14 +17,14 @@ db = io.db
 IS_CLUSTER = False
 
 # are we making videos or making merged stills?
-IS_VIDEO = True
+IS_VIDEO = False
 
 # MERGE
 # Provide the path to the folder containing the images
 ROOT_FOLDER_PATH = '/Users/michaelmandiberg/Documents/projects-active/facemap_production/'
 # if IS_CLUSTER this should be the folder holding all the cluster folders
 # if not, this should be the individual folder holding the images
-FOLDER_NAME ="smiling_women_2k_v3"
+FOLDER_NAME ="mouthgap_15_aug27_2023upsize"
 FOLDER_PATH = os.path.join(ROOT_FOLDER_PATH,FOLDER_NAME)
 
 # WRITE VIDEO
@@ -104,6 +107,9 @@ def save_merge(merged_image, count, cluster_no, FOLDER_PATH):
         savename = 'merged_image'+str(count)+'.jpg'
     output_path = os.path.join(FOLDER_PATH, savename)
     cv2.imwrite(output_path, merged_image)
+
+    print('Merged image/video saved successfully here', output_path)
+
 
 # def const_videowriter(subfolder_path, FRAMERATE=15):
 #     img_array = io.get_img_list(subfolder_path)
@@ -208,7 +214,6 @@ def main():
      
 
 
-    print('Merged image/video saved successfully.')
 
 
 
