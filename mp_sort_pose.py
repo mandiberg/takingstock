@@ -21,9 +21,9 @@ class SortPose:
         self.mp_drawing = mp.solutions.drawing_utils
 
         #maximum allowable distance between encodings
-        self.MAXDIST = 0.8
+        self.MAXDIST = 0.7
         self.MINDIST = .4
-        self.CUTOFF = 10000
+        self.CUTOFF = 1000
 
         # maximum allowable scale up
         self.resize_max = 1.99
@@ -65,8 +65,8 @@ class SortPose:
             # self.SORT = 'mouth_gap'
             self.ROUND = 0
         elif motion['forward_smile'] == True:
-            self.XLOW = -40
-            self.XHIGH = -24
+            self.XLOW = -15
+            self.XHIGH = -1
             self.YLOW = -2
             self.YHIGH = 2
             self.ZLOW = -2
@@ -416,12 +416,12 @@ class SortPose:
             img = new_file
             height, width, layers = img.shape
             size = (width, height)
-            print('loaded img 1')
+            # print('loaded img 1')
 
             last_img = last_file
             last_height, last_width, last_layers = last_img.shape
             last_size = (last_width, last_height)
-            print('loaded img 2')
+            # print('loaded img 2')
 
             # Check if dimensions match
             if size != last_size:
@@ -430,21 +430,21 @@ class SortPose:
 
             # code for face detection and blending
             if self.is_face(img):
-                print('new file is face')
+                # print('new file is face')
                 blend = cv2.addWeighted(img, 0.5, last_img, 0.5, 0.0)
                 # foopath = os.path.join("/Users/michaelmandiberg/Documents/projects-active/facemap_production/blends", "foobar_"+str(random.random())+".jpg")
                 # cv2.imwrite(foopath, blend)
                 # print('blended faces')
                 blended_face = self.is_face(blend)
-                print('blended is_face', blended_face)
+                # print('blended is_face', blended_face)
                 if blended_face:
-                    print('is a face! adding it')
+                    print('test_pair: is_face True! adding it')
                     return True
                 else:
-                    print('skipping this one')
+                    print('test_pair: skipping this one')
                     return False
             else:
-                print('new_file is not a face:', new_file)
+                print('test_pair: new_file is not a face:', new_file)
                 return False
 
         except Exception as e:
@@ -479,11 +479,13 @@ class SortPose:
 
         error, diff = mse(img1, img2)
         
-        print("Image matching Error between the two images:",error)
+        print("unique_face: similarity between the two images:",error)
         # i don't know what number to use
         if error == 0:
+            print("unique_face: Fail, images too similar")
             return False
         elif error < 15:
+            print("unique_face: Fail, images too similar")
             # preview_img(diff)
             # preview_img(img1)
             # preview_img(img2)
@@ -685,7 +687,7 @@ class SortPose:
             toobig = True
 
         if not toobig:
-            print("going to crop because too big is ", toobig)
+            print("crop_image: going to crop because too big is ", toobig)
             # print (self.padding_points)
             #set main points for drawing/cropping
 
@@ -716,6 +718,8 @@ class SortPose:
 
         else:
             cropped_image = None
+            print("crop_image: cropped_image is None because too big is ", toobig)
+
             # resize = None
         return cropped_image
 
@@ -806,6 +810,9 @@ class SortPose:
             print("WE HAVE A RUN!!!!! ---------- ", str(len(k)))
             last_d_in_run = max(k)
             self.counter_dict["last_image_enc"]=enc2_dict[last_d_in_run]
+            # adding the run to the good_count, minus the one added in compare_images
+            self.counter_dict["good_count"] += len(k)-1
+
             # switch to returning dist_run_dict
             return last_d_in_run, dist_run_dict, df_128_enc
         else:
@@ -813,18 +820,27 @@ class SortPose:
             print("length of dist -- how many enc are left in the mix")
             # print(dist)
             print(len(dist))
-            # if dist[0] > self.MAXDIST:
-            #     print("TOO GREAT A DISTANCE ---> going to break the loop and keep the last values")
-            #     dist_single_dict = {1: True}
-            #     return 1, dist_single_dict, df_128_enc
+            print(type(len(dist)))
+            if dist[0] > self.MAXDIST:
+                print("TOO GREAT A DISTANCE ---> going to break the loop and keep the last values")
+                dist_single_dict = {1: "null"}
+                return 1, dist_single_dict, df_128_enc
 
-            print ("the winner is: ", str(dist[0]), dist_dict[dist[0]])
-        #     print(len(dist))
-            self.counter_dict["last_image_enc"]=enc2_dict[dist[0]]
-            # make dict of one and to return it
-            # dist_single_dict[dist[0]] = dist_dict[dist[0]]
-            dist_single_dict = {dist[0]: dist_dict[dist[0]]}
-            return dist[0], dist_single_dict, df_128_enc
+            try:
+                print ("the winner is: ", str(dist[0]), dist_dict[dist[0]])
+            #     print(len(dist))
+                self.counter_dict["last_image_enc"]=enc2_dict[dist[0]]
+                # make dict of one and to return it
+                # dist_single_dict[dist[0]] = dist_dict[dist[0]]
+                dist_single_dict = {dist[0]: dist_dict[dist[0]]}
+                return dist[0], dist_single_dict, df_128_enc
+            except:
+                print("NOTHING HERE")
+                dist_single_dict = {1: "null"}
+                return 1, dist_single_dict, df_128_enc
+
+
+
 
 
 

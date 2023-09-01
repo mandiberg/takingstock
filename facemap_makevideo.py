@@ -43,14 +43,14 @@ CYCLECOUNT = 1
 # ROOT="/Users/michaelmandiberg/Documents/projects-active/facemap_production/"
 
 # keep this live, even if not SSD
-SegmentTable_name = 'May25segment123side_to_side'
-# SegmentTable_name = 'May25segment123updown_laugh'
+# SegmentTable_name = 'May25segment123side_to_side'
+SegmentTable_name = 'July15segment123straight'
 # SegmentTable_name = 'SegmentAug30Straightahead'  #actually straight ahead smile
 
 # SATYAM, this is MM specific
 # for when I'm using files on my SSD vs RAID
 IS_MOVE = False
-IS_SSD = False
+IS_SSD = True
 
 # This is for when you only have the segment table. RW SQL query
 IS_SEGONLY= True
@@ -136,7 +136,7 @@ elif IS_SEGONLY:
 
     SELECT = "*" 
     FROM = SegmentTable_name
-    WHERE = "e.mouth_gap > 15"
+    WHERE = "mouth_gap > 15"
     # WHERE = "mouth_gap < 2 AND age_id NOT IN (1,2,3,4) AND image_id < 40647710 AND gender_id = 1"
 
 
@@ -162,7 +162,7 @@ elif IS_SEGONLY:
     # WHERE = "bbox IS NOT NULL"
     # AND i.site_name_id = 1 AND k.keyword_text LIKE 'smil%'"
 
-LIMIT = 10000
+LIMIT = 1000
 
 motion = {
     "side_to_side": False,
@@ -363,14 +363,24 @@ def sort_by_face_dist(df_enc, df_128_enc):
             # closest_dict is now a dict with 1 or more items
             # this_start is a filepath, which serves as df index
             # it is now a dict of key=distance value=filepath
+            print("going to get closest")
             dist, closest_dict, df_128_enc = sort.get_closest_df(enc1,df_128_enc)
+            print("got closest")
+            print(closest_dict)
+
             # Break out of the loop if greater than MAXDIST
             # I think this will be graceful with cluster iteration
+            print("dist")
+            print(dist)
+            print("sort.MAXDIST")
+            print(sort.MAXDIST)
             if dist > sort.MAXDIST:
+                print("should breakout")
                 break
 
         except Exception as e:
             print(str(e))
+
 
      
         # Iterate through the results and append
@@ -533,10 +543,9 @@ def compare_images(last_image, img, face_landmarks, bbox):
     # next step is to test to see if mp can recognize a face in the image
     # if no face, a bad blend, try again with i+2, etc. 
     if cropped_image is not None:
-        print(cropped_image.shape)
-        print("have a cropped image trying to save")
+        print("have a cropped image trying to save", cropped_image.shape)
         try:
-            print(type(last_image))
+            print("last_image is ", type(last_image))
         except:
             print("couldn't test last_image")
         try:
@@ -544,9 +553,9 @@ def compare_images(last_image, img, face_landmarks, bbox):
                 print("testing is_face")
                 is_face = sort.test_pair(last_image, cropped_image)
                 if is_face:
-                    print("same person, testing mse")
+                    # print("same person, testing mse")
                     is_face = sort.unique_face(last_image,cropped_image)
-                    print ("mse ",mse)
+                    # print ("mse ",mse)
                 else:
                     print("failed is_face test")
             else:
@@ -615,7 +624,8 @@ def linear_test_df(df,cluster_no, itter=None):
                 cropped_image = compare_images(sort.counter_dict["last_image"], img, row['face_landmarks'], row['bbox'])
                 if cropped_image is not None:
                     img_list.append((outpath, cropped_image))
-                    sort.counter_dict["good_count"] += 1
+                    # this is done in compare function
+                    # sort.counter_dict["good_count"] += 1
                     good += 1
                     # print("row['filename']")
                     # print(row['filename'])
@@ -629,7 +639,7 @@ def linear_test_df(df,cluster_no, itter=None):
             if itter and good > itter:
                 print("breaking after this many itters,", str(good), str(itter))
                 continue
-        sort.counter_dict["last_image"] = img_list[-1][1]  #last pair in list, second item in pair
+            sort.counter_dict["last_image"] = img_list[-1][1]  #last pair in list, second item in pair
         # print("sort.counter_dict with last_image???")
         # print(sort.counter_dict)
 
