@@ -49,8 +49,8 @@ SegmentTable_name = 'July15segment123straight'
 
 # SATYAM, this is MM specific
 # for when I'm using files on my SSD vs RAID
-IS_MOVE = False
-IS_SSD = True
+IS_SSD = False
+#IS_MOVE is in move_toSSD_files.py
 
 # This is for when you only have the segment table. RW SQL query
 IS_SEGONLY= True
@@ -78,7 +78,7 @@ NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 #     io.ROOT = io.ROOT36
 
 
-if not IS_MOVE and IS_SEGONLY is not True:
+if IS_SEGONLY is not True:
     print("production run. IS_SSD is", IS_SSD)
 
     # # # # # # # # # # # #
@@ -97,27 +97,8 @@ if not IS_MOVE and IS_SEGONLY is not True:
     # this is for gettytest3 table
     FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings e ON i.image_id = e.image_id JOIN ImagesClusters ic ON i.image_id = ic.image_id"
     WHERE = "e.is_face IS TRUE AND e.bbox IS NOT NULL AND i.site_name_id = 1 AND k.keyword_text LIKE 'smil%'"
+    LIMIT = 100
 
-elif IS_MOVE and IS_SEGONLY is not True:
-    print("moving to SSD")
-
-    # # # # # # # # # # # #
-    # # for move to SSD # #
-    # # # # # # # # # # # #
-
-    SAVE_SEGMENT = True
-    SELECT = "DISTINCT(i.image_id), i.site_name_id, i.contentUrl, i.imagename, e.face_x, e.face_y, e.face_z, e.mouth_gap, e.face_landmarks, e.bbox, e.face_encodings, i.site_image_id"
-    FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings e ON i.image_id = e.image_id"
-    # # for smiling images
-    WHERE = "e.face_encodings68 IS NOT NULL AND i.site_name_id = 8  AND e.face_x > -15 AND e.face_x < 5 AND e.face_y > -4 AND e.face_y < 4     AND e.face_z > -3 AND e.face_z < 3"
-
-
-    # # for laugh images
-    # WHERE = "e.is_face IS TRUE AND e.face_encodings IS NOT NULL AND e.bbox IS NOT NULL AND i.site_name_id = 8 AND k.keyword_text LIKE 'laugh%'"
-    # SegmentTable_name = 'SegmentForward123laugh'
-
-    # yelling, screaming, shouting, yells, laugh; x is -4 to 30, y ~ 0, z ~ 0
-    # regular rotation left to right, which should include the straight ahead? 
 
 elif IS_SEGONLY:
 
@@ -138,6 +119,7 @@ elif IS_SEGONLY:
     FROM = SegmentTable_name
     WHERE = "mouth_gap > 15"
     # WHERE = "mouth_gap < 2 AND age_id NOT IN (1,2,3,4) AND image_id < 40647710 AND gender_id = 1"
+    LIMIT = 100
 
 
 
@@ -162,7 +144,6 @@ elif IS_SEGONLY:
     # WHERE = "bbox IS NOT NULL"
     # AND i.site_name_id = 1 AND k.keyword_text LIKE 'smil%'"
 
-LIMIT = 1000
 
 motion = {
     "side_to_side": False,
