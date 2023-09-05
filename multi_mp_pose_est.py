@@ -48,8 +48,11 @@ SLEEP_TIME=0
 # am I looking on SSD for a folder? If not, will pull directly from SQL
 # if so, also change the site_name_id etc around line 930
 IS_FOLDER = True
-# MAIN_FOLDER = "/Volumes/RAID54/adobeStockScraper_v3/images"
-MAIN_FOLDER = "/Volumes/SSD4/adobeStockScraper_v3/images"
+MAIN_FOLDER = "/Volumes/RAID54/images_adobe/"
+
+#temp hack to go 1 subfolder at a time
+THIS_FOLDER_PATH = "A/AA"
+# MAIN_FOLDER = "/Volumes/SSD4/adobeStockScraper_v3/images"
 # MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages"
 CSV_FOLDERCOUNT_PATH = os.path.join(MAIN_FOLDER, "folder_countout.csv")
 
@@ -903,7 +906,9 @@ def main():
         completed_folders = io.get_csv_aslist(CSV_FOLDERCOUNT_PATH)
         print(len(completed_folders))
         for folder_path in folder_paths:
-            if folder_path not in completed_folders:
+            
+            if folder_path == THIS_FOLDER_PATH:
+            # if folder_path not in completed_folders:
 
                 folder = os.path.join(MAIN_FOLDER,folder_path)
                 folder_count += 1

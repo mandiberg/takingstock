@@ -39,10 +39,23 @@ SEGMENTTABLE_NAME = 'SegmentAug30Straightahead'
 
 IMAGES_THREAD_COUNTER = 0
 
+'''
+1   getty
+2   shutterstock
+3   adobe
+4   istock
+5   pexels
+6   unsplash
+7   pond5
+8   123rf
+9   alamy
+10  visualchinagroup
+'''
+
 # right now this is only working for one site at a time
-SITE_NAME_ID = 8
-IMAGES_FOLDER_NAME = 'images_123rf'
-NEWIMAGES_FOLDER_NAME = 'images_123rf'
+SITE_NAME_ID = 3
+IMAGES_FOLDER_NAME = 'images_adobe'
+NEWIMAGES_FOLDER_NAME = 'images_adobe'
 NUMBER_OF_THREADS_IMAGES_DOWNLOAD =15
 OLDPATH = os.path.join(PATH, IMAGES_FOLDER_NAME)
 NEWPATH = os.path.join(PATH2, NEWIMAGES_FOLDER_NAME)
