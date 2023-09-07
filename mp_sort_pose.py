@@ -65,8 +65,8 @@ class SortPose:
             # self.SORT = 'mouth_gap'
             self.ROUND = 0
         elif motion['forward_smile'] == True:
-            self.XLOW = -15
-            self.XHIGH = -1
+            self.XLOW = -33
+            self.XHIGH = -27
             self.YLOW = -2
             self.YHIGH = 2
             self.ZLOW = -2
@@ -783,7 +783,7 @@ class SortPose:
                 print("couldn't drop the start_img")
         return enc1, df_128_enc
 
-    def get_closest_df(self, enc1, df_128_enc):
+    def get_closest_df(self, enc1, df_enc, df_128_enc, sorttype="128d"):
         print("get_closest_df")
         dist=[]
         dist_dict={}
@@ -793,18 +793,26 @@ class SortPose:
         for index, row in df_128_enc.iterrows():
     #         print(row['c1'], row['c2'])
     #     for img in img_list:
-            enc2 = row
-            # print("testing this", index, "against the start img",start_img)
-            if (enc1 is not None) and (enc2 is not None):
-                d = self.get_d(enc1, enc2)
-                if d > 0:
-                    print ("d is", str(d), "for", index)
-                    dist.append(d)
-                    dist_dict[d]=index
-                    enc2_dict[d]=enc2
-                    if d < self.MINDIST:
-                        dist_run_dict[d]=index
- 
+            if sorttype == "128d":
+                enc2 = row
+                # print("testing this", index, "against the start img",start_img)
+                if (enc1 is not None) and (enc2 is not None):
+                    d = self.get_d(enc1, enc2)
+                    if d > 0:
+                        print ("d is", str(d), "for", index)
+                        dist.append(d)
+                        dist_dict[d]=index
+                        enc2_dict[d]=enc2
+                        if d < self.MINDIST:
+                            dist_run_dict[d]=index
+                else:
+                    print("128d: missing enc1 or enc2")
+                    continue
+            elif sorttype == "planar":
+                print("planar: df_enc.loc[closest_dict[dkey]]")
+                print(df_enc.loc[closest_dict[dkey]])
+
+
         if len(dist_run_dict) > 2:
             k = list(dist_run_dict.keys())
             print("WE HAVE A RUN!!!!! ---------- ", str(len(k)))

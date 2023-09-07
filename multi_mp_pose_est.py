@@ -51,7 +51,9 @@ IS_FOLDER = True
 MAIN_FOLDER = "/Volumes/RAID54/images_adobe/"
 
 #temp hack to go 1 subfolder at a time
-THIS_FOLDER_PATH = "A/AA"
+THESE_FOLDER_PATHS = ["D/DA", "D/DB","D/DC", "D/DD", "D/DE", "D/DF", "D/D0", "D/D1", "D/D2", "D/D3", "D/D4", "D/D5", "D/D6", "D/D7", "D/D8", "D/D9"]
+# THESE_FOLDER_PATHS = ["E/EA", "E/EB","E/EC", "E/ED", "E/EE", "E/EF", "E/E0", "E/E1", "E/E2", "E/E3", "E/E4", "E/E5", "E/E6", "E/E7", "E/E8", "E/E9"]
+# THESE_FOLDER_PATHS = ["F/FA", "F/FB","F/FC", "F/FD", "F/FE", "F/FF", "F/F0", "F/F1", "F/F2", "F/F3", "F/F4", "F/F5", "F/F6", "F/F7", "F/F8", "F/F9"]
 # MAIN_FOLDER = "/Volumes/SSD4/adobeStockScraper_v3/images"
 # MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages"
 CSV_FOLDERCOUNT_PATH = os.path.join(MAIN_FOLDER, "folder_countout.csv")
@@ -907,7 +909,7 @@ def main():
         print(len(completed_folders))
         for folder_path in folder_paths:
             
-            if folder_path == THIS_FOLDER_PATH:
+            if folder_path in THESE_FOLDER_PATHS:
             # if folder_path not in completed_folders:
 
                 folder = os.path.join(MAIN_FOLDER,folder_path)
@@ -998,7 +1000,7 @@ def main():
                                 tasks_to_accomplish.put(task)
                                 this_count += 1
 
-                        else: print("not in results_dict")
+                        else: print("not in results_dict: ", site_image_id)
 
 
 

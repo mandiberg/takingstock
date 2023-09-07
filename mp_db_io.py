@@ -60,7 +60,7 @@ class DataIO:
                 # temp for testing
                 # os.path.join(self.ROOT54,"gettyimages/testimages"), #1, Getty
                 os.path.join(self.ROOT_PROD,""),
-                os.path.join(self.ROOT4,"needtomoveinto-images_adobe/images_29cats"), #3, Adobe
+                os.path.join(self.ROOT4,"images_adobe"), #3, Adobe
                 os.path.join(self.ROOT_PROD,""),
                 os.path.join(self.ROOT_PROD,"images_pexels"), #5, Pexels
                 os.path.join(self.ROOT_PROD,""),
@@ -75,7 +75,7 @@ class DataIO:
                 # temp for testing
                 # os.path.join(self.ROOT54,"gettyimages/testimages"), #1, Getty
                 os.path.join(self.ROOT54,""),
-                os.path.join(self.ROOT54,"adobeStockScraper_v3/images_all"), #3, Adobe
+                os.path.join(self.ROOT54,"images_adobe"), #3, Adobe
                 os.path.join(self.ROOT54,""),
                 os.path.join(self.ROOT54,"images_pexels"), #5, Pexels
                 os.path.join(self.ROOT54,""),
