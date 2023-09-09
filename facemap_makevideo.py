@@ -49,7 +49,7 @@ SegmentTable_name = 'SegmentAug30Straightahead'  #actually straight ahead smile
 
 # SATYAM, this is MM specific
 # for when I'm using files on my SSD vs RAID
-IS_SSD = False
+IS_SSD = True
 #IS_MOVE is in move_toSSD_files.py
 
 # This is for when you only have the segment table. RW SQL query
@@ -110,10 +110,10 @@ elif IS_SEGONLY:
         SELECT = "DISTINCT(i.image_id), i.site_name_id, i.contentUrl, i.imagename, e.face_x, e.face_y, e.face_z, e.mouth_gap, e.face_landmarks, e.bbox, e.face_encodings68, i.site_image_id"
         FROM =f"Images i LEFT JOIN Encodings e ON i.image_id = e.image_id INNER JOIN {SegmentTable_name} seg ON i.site_image_id = seg.site_image_id JOIN ImagesClusters68 ic ON i.image_id = ic.image_id"
         # WHERE = "e.is_face IS TRUE AND e.face_encodings IS NOT NULL AND e.bbox IS NOT NULL AND i.site_name_id = 8 AND i.age_id NOT IN (1,2,3,4)"
-        WHERE = "i.site_name_id = 8"
+        WHERE = "i.site_name_id != 6"
         # WHERE = "mouth_gap < 2 AND age_id NOT IN (1,2,3,4) AND image_id < 40647710"
         # WHERE = "mouth_gap < 2 AND age_id NOT IN (1,2,3,4) AND s.image_id < 40647710 AND k.keyword_text LIKE 'work%'"
-        LIMIT = 100
+        LIMIT = 10000
 
 
     else:
@@ -311,6 +311,7 @@ def sort_by_face_dist(df_enc, df_128_enc):
     print(df_enc.index)
     print(len(df_enc.index))
     print(sort.counter_dict)
+    FIRST_ROUND = True
     if sort.CUTOFF < len(df_enc.index):
         itters = sort.CUTOFF
     else: 
@@ -332,7 +333,7 @@ def sort_by_face_dist(df_enc, df_128_enc):
             print(enc1)
             print("set enc1 from pass through")
         else:
-            #this is the second round, set via df
+            #this is the first??? round, set via df
             print("trying get_start_enc()")
             enc1, df_128_enc = sort.get_start_enc(this_start, df_128_enc)
             # # test to see if get_start_enc was successful
@@ -350,8 +351,11 @@ def sort_by_face_dist(df_enc, df_128_enc):
 
             # TK
             # need to send the df_enc with the same two keys through to get_closest
-            # dist, closest_dict, df_128_enc = sort.get_closest_df(enc1,df_enc, df_128_enc, sorttype="128d")
-            dist, closest_dict, df_128_enc = sort.get_closest_df(enc1,df_enc, df_128_enc)
+            dist, closest_dict, df_128_enc = sort.get_closest_df(FIRST_ROUND, enc1,df_enc, df_128_enc, sorttype="128d")
+            # dist, closest_dict, df_128_enc = sort.get_closest_df(enc1,df_enc, df_128_enc)
+            FIRST_ROUND = False
+
+
             print("got closest")
             print(closest_dict)
 
@@ -632,14 +636,16 @@ def linear_test_df(df,cluster_no, itter=None):
                     sort.counter_dict["start_img_name"] = row['filename']
                     # print(sort.counter_dict["last_image"])
                     print("saved: ",outpath)
+                    sort.counter_dict["counter"] += 1
+                    if itter and good > itter:
+                        print("breaking after this many itters,", str(good), str(itter))
+                        continue
+                    sort.counter_dict["last_image"] = img_list[-1][1]  #last pair in list, second item in pair
+                else:
+                    print("cropped_image is None")
             else:
                 sort.counter_dict["failed_dist_count"] += 1
                 print("MAXDIST too big:" , str(sort.MAXDIST))
-            sort.counter_dict["counter"] += 1
-            if itter and good > itter:
-                print("breaking after this many itters,", str(good), str(itter))
-                continue
-            sort.counter_dict["last_image"] = img_list[-1][1]  #last pair in list, second item in pair
         # print("sort.counter_dict with last_image???")
         # print(sort.counter_dict)
 
@@ -819,8 +825,10 @@ def main():
             df['face_encodings68'] = df['face_encodings68'].apply(unpickle_array)
             df['face_landmarks'] = df['face_landmarks'].apply(unpickle_array)
             df['bbox'] = df['bbox'].apply(lambda x: unstring_json(x))
+
+            # this may be a big problem
             # turn URL into local hashpath (still needs local root folder)
-            df['imagename'] = df['contentUrl'].apply(newname)
+            # df['imagename'] = df['contentUrl'].apply(newname)
             # make decimals into float
             columns_to_convert = ['face_x', 'face_y', 'face_z', 'mouth_gap']
             df[columns_to_convert] = df[columns_to_convert].applymap(make_float)

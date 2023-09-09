@@ -62,10 +62,10 @@ class DataIO:
                 os.path.join(self.ROOT_PROD,""),
                 os.path.join(self.ROOT4,"images_adobe"), #3, Adobe
                 os.path.join(self.ROOT_PROD,""),
-                os.path.join(self.ROOT_PROD,"images_pexels"), #5, Pexels
+                os.path.join(self.ROOT4,"images_pexels"), #5, Pexels
                 os.path.join(self.ROOT_PROD,""),
                 os.path.join(self.ROOT_PROD,""),
-                os.path.join(self.ROOT_PROD,"images_123rf"), #8, images_123rf
+                os.path.join(self.ROOT4,"images_123rf"), #8, images_123rf
                 os.path.join(self.ROOT_PROD,""),
             ]
         else:
