@@ -24,7 +24,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
 # my ORM
-from my_declarative_base import Base, Clusters68, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON
+from my_declarative_base import Base, Clusters, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import create_engine, text, MetaData, Table, Column, Numeric, Integer, VARCHAR, update, Float
@@ -108,18 +108,19 @@ elif IS_SEGONLY:
 
     if IS_CLUSTER:
         SELECT = "DISTINCT(i.image_id), i.site_name_id, i.contentUrl, i.imagename, e.face_x, e.face_y, e.face_z, e.mouth_gap, e.face_landmarks, e.bbox, e.face_encodings68, i.site_image_id"
-        FROM =f"Images i LEFT JOIN Encodings e ON i.image_id = e.image_id INNER JOIN {SegmentTable_name} seg ON i.site_image_id = seg.site_image_id JOIN ImagesClusters68 ic ON i.image_id = ic.image_id"
+        FROM =f"Images i LEFT JOIN Encodings e ON i.image_id = e.image_id INNER JOIN {SegmentTable_name} seg ON i.site_image_id = seg.site_image_id JOIN ImagesClusters ic ON i.image_id = ic.image_id"
         # WHERE = "e.is_face IS TRUE AND e.face_encodings IS NOT NULL AND e.bbox IS NOT NULL AND i.site_name_id = 8 AND i.age_id NOT IN (1,2,3,4)"
-        WHERE = "i.site_name_id != 6"
+        WHERE = "i.site_name_id != 1"
         # WHERE = "mouth_gap < 2 AND age_id NOT IN (1,2,3,4) AND image_id < 40647710"
         # WHERE = "mouth_gap < 2 AND age_id NOT IN (1,2,3,4) AND s.image_id < 40647710 AND k.keyword_text LIKE 'work%'"
-        LIMIT = 10000
+        LIMIT = 100000
 
 
     else:
         SELECT = "*" 
         FROM = SegmentTable_name
-        WHERE = "bbox IS NOT NULL"
+        # WHERE = "bbox IS NOT NULL"
+        WHERE = "mouth_gap > 15 AND age_id NOT IN (1,2,3,4)"
         # WHERE = "mouth_gap < 2 AND age_id NOT IN (1,2,3,4) AND image_id < 40647710 AND gender_id = 1"
         LIMIT = 1000000
 
@@ -132,7 +133,7 @@ elif IS_SEGONLY:
     SELECT = "DISTINCT(i.image_id), i.site_name_id, i.contentUrl, i.imagename, e.face_x, e.face_y, e.face_z, e.mouth_gap, e.face_landmarks, e.bbox, e.face_encodings68, i.site_image_id" 
     FROM =f"Images i LEFT JOIN Encodings e ON i.image_id = e.image_id INNER JOIN {SegmentTable_name} seg ON i.site_image_id = seg.site_image_id"
     if IS_CLUSTER is True or IS_ONE_CLUSTER is True:
-        FROM += " JOIN ImagesClusters68 ic ON i.image_id = ic.image_id"
+        FROM += " JOIN ImagesClusters ic ON i.image_id = ic.image_id"
     # WHERE = "e.face_encodings68 IS NOT NULL AND i.site_name_id = 8 AND i.age_id NOT IN (1,2,3,4) AND e.mouth_gap > 10"
     # WHERE = "e.face_encodings68 IS NOT NULL"
     WHERE = "e.mouth_gap > 15 AND i.age_id NOT IN (1,2,3,4)"
@@ -260,12 +261,6 @@ def select_cluster_median(cluster_no):
     cluster_median = (resultsjson[0]['cluster_median'])
     return(cluster_median)
 
-def select_cluster68_median(cluster_no):
-    cluster_selectsql = f"SELECT c.cluster_median FROM Clusters68 c WHERE cluster_id={cluster_no};"
-    result = engine.connect().execute(text(cluster_selectsql))
-    resultsjson = ([dict(row) for row in result.mappings()])
-    cluster_median = (resultsjson[0]['cluster_median'])
-    return(cluster_median)
 
 
 
@@ -866,7 +861,7 @@ def main():
                 # image_id = insert_dict['image_id']
                 # can I filter this by site_id? would that make it faster or slower? 
 
-                results = session.query(Clusters68).filter(Clusters68.cluster_id==cluster_no).first()
+                results = session.query(Clusters).filter(Clusters.cluster_id==cluster_no).first()
 
 
                 # results = session.query(Clusters).filter(Clusters.cluster_id==cluster_no).first()
