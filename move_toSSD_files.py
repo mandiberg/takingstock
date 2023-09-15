@@ -21,29 +21,45 @@ from mp_db_io import DataIO
 
 sig = '''
      __ __ _  
-\\\ (_ (_ | \ 
+\\\\ (_ (_ | \\ 
 /// __)__)|_/  
 '''
 
 # testname = "https://images.pexels.com/photos/9304005/pexels-photo-9304005.jpeg?auto=compress&cs=tinysrgb&w=1440"
 # PATH= os.path.join(os.environ['HOME'], "Documents/projects-active/facemap_production/gettyimages") 
 
+# this script COPIES files from one PATH to PATH2 without deleting
+# for moving segment to SSD
+
 #where the images are:
 PATH = "/Volumes/RAID54/"
 #where the images are going:
-PATH2 = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/"
-SEGMENTTABLE_NAME = 'July15segment123straight'
+PATH2 = "/Volumes/SSD4/"
+SEGMENTTABLE_NAME = 'SegmentAug30Straightahead'
 
-COPY=True
 IMAGES_THREAD_COUNTER = 0
 
+'''
+1   getty
+2   shutterstock
+3   adobe
+4   istock
+5   pexels
+6   unsplash
+7   pond5
+8   123rf
+9   alamy
+10  visualchinagroup
+'''
+
 # right now this is only working for one site at a time
-IMAGES_FOLDER_NAME = 'images_123rf'
-NEWIMAGES_FOLDER_NAME = 'images_123rf'
+SITE_NAME_ID = 3
+IMAGES_FOLDER_NAME = 'images_adobe'
+NEWIMAGES_FOLDER_NAME = 'images_adobe'
 NUMBER_OF_THREADS_IMAGES_DOWNLOAD =15
 OLDPATH = os.path.join(PATH, IMAGES_FOLDER_NAME)
 NEWPATH = os.path.join(PATH2, NEWIMAGES_FOLDER_NAME)
-CSV_COUNTOUT_PATH = "/Volumes/RAID54/CSVs_to_ingest/123rfCSVs/countout2ssd.csv"
+CSV_COUNTOUT_PATH = os.path.join(PATH2,"countout2ssd.csv")
 
 # platform specific credentials
 io = DataIO()
@@ -62,8 +78,6 @@ engine = create_engine("mysql+pymysql://{user}:{pw}@/{db}?unix_socket={socket}".
 
 Session = sessionmaker(bind=engine)
 session = Session()
-Base = declarative_base()
-
 Base = declarative_base()
 
 class SegmentTable(Base):
@@ -140,7 +154,7 @@ def main():
     session = Session()
 
     query = session.query(SegmentTable.image_id, SegmentTable.imagename)\
-        .filter(SegmentTable.site_name_id==8)\
+        .filter(SegmentTable.site_name_id==SITE_NAME_ID)\
         # .limit(100)
 
     # Fetch the results

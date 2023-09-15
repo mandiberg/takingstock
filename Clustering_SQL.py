@@ -60,14 +60,14 @@ USE_SEGMENT = True
 GET_OPTIMAL_CLUSTERS=False
 
 # number of clusters produced. run GET_OPTIMAL_CLUSTERS and add that number here
-N_CLUSTERS = 113
+N_CLUSTERS = 128
 SAVE_FIG=False ##### option for saving the visualized data
 
 if USE_SEGMENT is True:
 
     # where the script is looking for files list
     # do not use this if you are using the regular Clusters and ImagesClusters tables
-    SegmentTable_name = 'July15segment123straight'
+    SegmentTable_name = 'SegmentAug30Straightahead'
 
     # join with SSD tables. Satyam, use the one below
     SELECT = "DISTINCT(e.image_id), e.face_encodings68"
@@ -75,7 +75,7 @@ if USE_SEGMENT is True:
     QUERY = "e.image_id IN"
     SUBQUERY = f"(SELECT seg1.image_id FROM {SegmentTable_name} seg1 )"
     WHERE = f"{QUERY} {SUBQUERY}"
-    LIMIT = 110000
+    LIMIT = 1100000
 
 else:
     # Basic Query, this works with gettytest3
@@ -226,33 +226,6 @@ def save_clusters_DB(df):
         session.rollback()
         print(f"Error occurred during data saving: {str(e)}")
 
-
-# could also use df drop tolist
-# unique_clusters = df['cluster_id'].drop_duplicates().tolist()
-# saving this here, because may need to roll back to this
-# when I have to calculate the median enc for each cluster. 
-# # that will require access to all the encodings in the df? 
-# def save_clusters_DB(df):
-#     #save the df to a table
-#     for _, row in df.iterrows():
-#         cluster_id = row['cluster_id']
-#         existing_record = session.query(Clusters).filter_by(cluster_id=cluster_id).first()
-
-#         if existing_record is None:
-#             instance = Clusters(
-#                 cluster_id=cluster_id,
-#                 cluster_median=None
-#             )
-#             session.add(instance)
-#         else:
-#             print(f"Skipping duplicate record with cluster_id {cluster_id}")
-
-#     try:
-#         session.commit()
-#         print("Data saved successfully.")
-#     except exc.IntegrityError as e:
-#         session.rollback()
-#         print(f"Error occurred during data saving: {str(e)}")
 
 def save_images_clusters_DB(df):
     #save the df to a table

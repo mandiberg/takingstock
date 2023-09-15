@@ -65,8 +65,8 @@ class SortPose:
             # self.SORT = 'mouth_gap'
             self.ROUND = 0
         elif motion['forward_smile'] == True:
-            self.XLOW = -15
-            self.XHIGH = -1
+            self.XLOW = -33
+            self.XHIGH = -27
             self.YLOW = -2
             self.YHIGH = 2
             self.ZLOW = -2
@@ -783,7 +783,26 @@ class SortPose:
                 print("couldn't drop the start_img")
         return enc1, df_128_enc
 
-    def get_closest_df(self, enc1, df_128_enc):
+
+    def get_face_2d_dict(self, faceLms):
+        face_2d = {}
+        for idx, lm in enumerate(faceLms.landmark):
+            if idx == 33 or idx == 263 or idx == 1 or idx == 61 or idx == 291 or idx == 199 or idx == 10 or idx == 152:
+                # x, y = int(lm.x * img_w), int(lm.y * img_h)
+                face_2d[idx] =([lm.x, lm.y])
+
+                # Get the 2D Coordinates
+                # face_2d.append([x, y])
+
+        # Convert it to the NumPy array
+        # image points
+        # self.face_2d = np.array(face_2d, dtype=np.float64)
+
+        return face_2d
+    def get_planar_d(last_dict,this_dict):
+        pass
+
+    def get_closest_df(self, FIRST_ROUND, enc1, df_enc, df_128_enc, sorttype="128d"):
         print("get_closest_df")
         dist=[]
         dist_dict={}
@@ -793,18 +812,45 @@ class SortPose:
         for index, row in df_128_enc.iterrows():
     #         print(row['c1'], row['c2'])
     #     for img in img_list:
-            enc2 = row
-            # print("testing this", index, "against the start img",start_img)
-            if (enc1 is not None) and (enc2 is not None):
-                d = self.get_d(enc1, enc2)
-                if d > 0:
-                    print ("d is", str(d), "for", index)
-                    dist.append(d)
-                    dist_dict[d]=index
-                    enc2_dict[d]=enc2
-                    if d < self.MINDIST:
-                        dist_run_dict[d]=index
- 
+            print("FIRST_ROUND", FIRST_ROUND)
+            if sorttype == "128d" or (sorttype == "planar" and FIRST_ROUND is True):
+            # if sorttype == "128d" or (sorttype == "planar" and self.counter_dict["start_img_name"] == "median" and self.counter_dict["last_image"] is None):
+                enc2 = row
+                # print("testing this", index, "against the start img",start_img)
+                if (enc1 is not None) and (enc2 is not None):
+                    d = self.get_d(enc1, enc2)
+                    if d > 0:
+                        print ("d is", str(d), "for", index)
+                        dist.append(d)
+                        dist_dict[d]=index
+                        enc2_dict[d]=enc2
+                        if d < self.MINDIST:
+                            dist_run_dict[d]=index
+                    
+                else:
+                    print("128d: missing enc1 or enc2")
+                    continue
+            elif sorttype == "planar":
+                print("self.counter_dict[]")
+                print(self.counter_dict["last_image"])
+
+                print("planar: index")
+                print(index)
+                print(df_enc.loc[index])
+                # print(df_enc.loc[index, "face_landmarks"])
+                last_face_2d_dict = self.get_face_2d_dict(df_enc.loc[self.counter_dict["last_image"], "face_landmarks"])
+                this_face_2d_dict = self.get_face_2d_dict(df_enc.loc[index, "face_landmarks"])
+
+                d = self.get_planar_d(last_face_2d_dict,this_face_2d_dict)
+                print ("planar d is", str(d), "for", index)
+                dist.append(d)
+                dist_dict[d]=index
+
+                print(face_2d_dict)
+        # FIRST_ROUND = False
+        # quit()
+
+        print("made it through iterrows")
         if len(dist_run_dict) > 2:
             k = list(dist_run_dict.keys())
             print("WE HAVE A RUN!!!!! ---------- ", str(len(k)))
@@ -815,6 +861,7 @@ class SortPose:
 
             # switch to returning dist_run_dict
             return last_d_in_run, dist_run_dict, df_128_enc
+        
         else:
             dist.sort()
             print("length of dist -- how many enc are left in the mix")
@@ -829,7 +876,11 @@ class SortPose:
             try:
                 print ("the winner is: ", str(dist[0]), dist_dict[dist[0]])
             #     print(len(dist))
-                self.counter_dict["last_image_enc"]=enc2_dict[dist[0]]
+                self.counter_dict["last_image"]=dist_dict[dist[0]]
+                if sorttype == "128d":
+                    self.counter_dict["last_image_enc"]=enc2_dict[dist[0]]
+                elif sorttype == "planar":
+                    pass
                 # make dict of one and to return it
                 # dist_single_dict[dist[0]] = dist_dict[dist[0]]
                 dist_single_dict = {dist[0]: dist_dict[dist[0]]}

@@ -44,22 +44,22 @@ CYCLECOUNT = 1
 
 # keep this live, even if not SSD
 # SegmentTable_name = 'May25segment123side_to_side'
-SegmentTable_name = 'July15segment123straight'
-# SegmentTable_name = 'SegmentAug30Straightahead'  #actually straight ahead smile
+# SegmentTable_name = 'July15segment123straight'
+SegmentTable_name = 'SegmentAug30Straightahead'  #actually straight ahead smile
 
 # SATYAM, this is MM specific
 # for when I'm using files on my SSD vs RAID
-IS_MOVE = False
 IS_SSD = True
+#IS_MOVE is in move_toSSD_files.py
 
 # This is for when you only have the segment table. RW SQL query
 IS_SEGONLY= True
 
 # this is for controlling if it is using
 # all clusters,
-IS_CLUSTER = False
+IS_CLUSTER = True
 # number of clusters to analyze -- this is also declared in Clustering_SQL. Move to IO?
-N_CLUSTERS = 113
+N_CLUSTERS = 128
 # this is for IS_ONE_CLUSTER to only run on a specific CLUSTER_NO
 IS_ONE_CLUSTER = False
 CLUSTER_NO = 77
@@ -78,7 +78,7 @@ NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 #     io.ROOT = io.ROOT36
 
 
-if not IS_MOVE and IS_SEGONLY is not True:
+if IS_SEGONLY is not True:
     print("production run. IS_SSD is", IS_SSD)
 
     # # # # # # # # # # # #
@@ -87,7 +87,7 @@ if not IS_MOVE and IS_SEGONLY is not True:
 
     # SAVE_SEGMENT controls whether the result will be saved to the db as a new table
     SAVE_SEGMENT = False
-    SELECT = "DISTINCT(i.image_id), i.site_name_id, i.contentUrl, i.imagename, e.face_x, e.face_y, e.face_z, e.mouth_gap, e.face_landmarks, e.bbox, e.face_encodings, i.site_image_id"
+    SELECT = "DISTINCT(i.image_id), i.site_name_id, i.contentUrl, i.imagename, e.face_x, e.face_y, e.face_z, e.mouth_gap, e.face_landmarks, e.bbox, e.face_encodings68, i.site_image_id"
 
     # don't need keywords if SegmentTable_name
     # this is for MM segment table
@@ -97,27 +97,8 @@ if not IS_MOVE and IS_SEGONLY is not True:
     # this is for gettytest3 table
     FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings e ON i.image_id = e.image_id JOIN ImagesClusters ic ON i.image_id = ic.image_id"
     WHERE = "e.is_face IS TRUE AND e.bbox IS NOT NULL AND i.site_name_id = 1 AND k.keyword_text LIKE 'smil%'"
+    LIMIT = 1000
 
-elif IS_MOVE and IS_SEGONLY is not True:
-    print("moving to SSD")
-
-    # # # # # # # # # # # #
-    # # for move to SSD # #
-    # # # # # # # # # # # #
-
-    SAVE_SEGMENT = True
-    SELECT = "DISTINCT(i.image_id), i.site_name_id, i.contentUrl, i.imagename, e.face_x, e.face_y, e.face_z, e.mouth_gap, e.face_landmarks, e.bbox, e.face_encodings, i.site_image_id"
-    FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings e ON i.image_id = e.image_id"
-    # # for smiling images
-    WHERE = "e.face_encodings68 IS NOT NULL AND i.site_name_id = 8  AND e.face_x > -15 AND e.face_x < 5 AND e.face_y > -4 AND e.face_y < 4     AND e.face_z > -3 AND e.face_z < 3"
-
-
-    # # for laugh images
-    # WHERE = "e.is_face IS TRUE AND e.face_encodings IS NOT NULL AND e.bbox IS NOT NULL AND i.site_name_id = 8 AND k.keyword_text LIKE 'laugh%'"
-    # SegmentTable_name = 'SegmentForward123laugh'
-
-    # yelling, screaming, shouting, yells, laugh; x is -4 to 30, y ~ 0, z ~ 0
-    # regular rotation left to right, which should include the straight ahead? 
 
 elif IS_SEGONLY:
 
@@ -125,19 +106,22 @@ elif IS_SEGONLY:
 
     # no JOIN just Segment table
 
-    # SELECT = "*" 
-    # FROM =f"Images i LEFT JOIN Encodings e ON i.image_id = e.image_id INNER JOIN {SegmentTable_name} seg ON i.site_image_id = seg.site_image_id"
-    # # WHERE = "e.is_face IS TRUE AND e.face_encodings IS NOT NULL AND e.bbox IS NOT NULL AND i.site_name_id = 8 AND i.age_id NOT IN (1,2,3,4)"
-    # WHERE = "e.mouth_gap < 1 AND i.age_id NOT IN (1,2,3,4) AND i.image_id < 40647710 AND i.gender_id = 1"
-    # # WHERE = "mouth_gap < 2 AND age_id NOT IN (1,2,3,4) AND image_id < 40647710"
-    # # WHERE = "mouth_gap < 2 AND age_id NOT IN (1,2,3,4) AND s.image_id < 40647710 AND k.keyword_text LIKE 'work%'"
+    if IS_CLUSTER:
+        SELECT = "DISTINCT(i.image_id), i.site_name_id, i.contentUrl, i.imagename, e.face_x, e.face_y, e.face_z, e.mouth_gap, e.face_landmarks, e.bbox, e.face_encodings68, i.site_image_id"
+        FROM =f"Images i LEFT JOIN Encodings e ON i.image_id = e.image_id INNER JOIN {SegmentTable_name} seg ON i.site_image_id = seg.site_image_id JOIN ImagesClusters68 ic ON i.image_id = ic.image_id"
+        # WHERE = "e.is_face IS TRUE AND e.face_encodings IS NOT NULL AND e.bbox IS NOT NULL AND i.site_name_id = 8 AND i.age_id NOT IN (1,2,3,4)"
+        WHERE = "i.site_name_id != 6"
+        # WHERE = "mouth_gap < 2 AND age_id NOT IN (1,2,3,4) AND image_id < 40647710"
+        # WHERE = "mouth_gap < 2 AND age_id NOT IN (1,2,3,4) AND s.image_id < 40647710 AND k.keyword_text LIKE 'work%'"
+        LIMIT = 10000
 
 
-
-    SELECT = "*" 
-    FROM = SegmentTable_name
-    WHERE = "mouth_gap > 15"
-    # WHERE = "mouth_gap < 2 AND age_id NOT IN (1,2,3,4) AND image_id < 40647710 AND gender_id = 1"
+    else:
+        SELECT = "*" 
+        FROM = SegmentTable_name
+        WHERE = "bbox IS NOT NULL"
+        # WHERE = "mouth_gap < 2 AND age_id NOT IN (1,2,3,4) AND image_id < 40647710 AND gender_id = 1"
+        LIMIT = 1000000
 
 
 
@@ -162,7 +146,6 @@ elif IS_SEGONLY:
     # WHERE = "bbox IS NOT NULL"
     # AND i.site_name_id = 1 AND k.keyword_text LIKE 'smil%'"
 
-LIMIT = 1000
 
 motion = {
     "side_to_side": False,
@@ -328,6 +311,7 @@ def sort_by_face_dist(df_enc, df_128_enc):
     print(df_enc.index)
     print(len(df_enc.index))
     print(sort.counter_dict)
+    FIRST_ROUND = True
     if sort.CUTOFF < len(df_enc.index):
         itters = sort.CUTOFF
     else: 
@@ -349,7 +333,7 @@ def sort_by_face_dist(df_enc, df_128_enc):
             print(enc1)
             print("set enc1 from pass through")
         else:
-            #this is the second round, set via df
+            #this is the first??? round, set via df
             print("trying get_start_enc()")
             enc1, df_128_enc = sort.get_start_enc(this_start, df_128_enc)
             # # test to see if get_start_enc was successful
@@ -364,7 +348,14 @@ def sort_by_face_dist(df_enc, df_128_enc):
             # this_start is a filepath, which serves as df index
             # it is now a dict of key=distance value=filepath
             print("going to get closest")
-            dist, closest_dict, df_128_enc = sort.get_closest_df(enc1,df_128_enc)
+
+            # TK
+            # need to send the df_enc with the same two keys through to get_closest
+            dist, closest_dict, df_128_enc = sort.get_closest_df(FIRST_ROUND, enc1,df_enc, df_128_enc, sorttype="128d")
+            # dist, closest_dict, df_128_enc = sort.get_closest_df(enc1,df_enc, df_128_enc)
+            FIRST_ROUND = False
+
+
             print("got closest")
             print(closest_dict)
 
@@ -395,6 +386,10 @@ def sort_by_face_dist(df_enc, df_128_enc):
             print("this_start assigned as ", this_start)
             face_landmarks=None
             bbox=None
+
+            print("THIS: closest_dict[dkey],")
+            print(closest_dict[dkey])
+
             try:
                 print("dkey, df_enc.loc[closest_dict[dkey]]")
                 print(dkey)
@@ -570,6 +565,11 @@ def compare_images(last_image, img, face_landmarks, bbox):
         else: 
             print("pair do not make a face, skipping")
             sort.counter_dict["isnot_face_count"] += 1
+    elif cropped_image is None and sort.counter_dict["first_run"]:
+        print("first run, but bad first image")
+        last_image = cropped_image
+        sort.counter_dict["cropfail_count"] += 1
+
     else:
         print("no image here, trying next")
         sort.counter_dict["cropfail_count"] += 1
@@ -612,12 +612,16 @@ def linear_test_df(df,cluster_no, itter=None):
     try:
         for index, row in df.iterrows():
             print('in loop, index is', str(index))
-            # print(row)
+            print(row)
             imgfilename = const_imgfilename(row['filename'], df, imgfileprefix)
             outpath = os.path.join(sort.counter_dict["outfolder"],imgfilename)
             open_path = os.path.join(io.ROOT,row['folder'],row['filename'])
             # print(outpath, open_path)
-            img = cv2.imread(open_path)
+            try:
+                img = cv2.imread(open_path)
+            except:
+                print("couldn't read image")
+                continue
             if row['dist'] < sort.MAXDIST:
                 # compare_images to make sure they are face and not the same
                 # last_image is cv2 np.array
@@ -632,14 +636,16 @@ def linear_test_df(df,cluster_no, itter=None):
                     sort.counter_dict["start_img_name"] = row['filename']
                     # print(sort.counter_dict["last_image"])
                     print("saved: ",outpath)
+                    sort.counter_dict["counter"] += 1
+                    if itter and good > itter:
+                        print("breaking after this many itters,", str(good), str(itter))
+                        continue
+                    sort.counter_dict["last_image"] = img_list[-1][1]  #last pair in list, second item in pair
+                else:
+                    print("cropped_image is None")
             else:
                 sort.counter_dict["failed_dist_count"] += 1
                 print("MAXDIST too big:" , str(sort.MAXDIST))
-            sort.counter_dict["counter"] += 1
-            if itter and good > itter:
-                print("breaking after this many itters,", str(good), str(itter))
-                continue
-            sort.counter_dict["last_image"] = img_list[-1][1]  #last pair in list, second item in pair
         # print("sort.counter_dict with last_image???")
         # print(sort.counter_dict)
 
@@ -819,8 +825,10 @@ def main():
             df['face_encodings68'] = df['face_encodings68'].apply(unpickle_array)
             df['face_landmarks'] = df['face_landmarks'].apply(unpickle_array)
             df['bbox'] = df['bbox'].apply(lambda x: unstring_json(x))
+
+            # this may be a big problem
             # turn URL into local hashpath (still needs local root folder)
-            df['imagename'] = df['contentUrl'].apply(newname)
+            # df['imagename'] = df['contentUrl'].apply(newname)
             # make decimals into float
             columns_to_convert = ['face_x', 'face_y', 'face_z', 'mouth_gap']
             df[columns_to_convert] = df[columns_to_convert].applymap(make_float)
