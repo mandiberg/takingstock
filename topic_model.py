@@ -57,7 +57,7 @@ NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 # Satyam, you want to set this to False
 USE_SEGMENT = False
 
-MODEL="BOW" ## OR TF  ## Bag of words or TF-IDF
+MODEL="TF" ## OR TF  ## Bag of words or TF-IDF
 NUM_TOPICS=48
 
 stemmer = SnowballStemmer('english')
@@ -79,9 +79,9 @@ if USE_SEGMENT is True:
 
 else:
     # Basic Query, this works with gettytest3
-    SELECT = "DISTINCT(image_id),description"
-    FROM ="images"
-    WHERE = "description IS NOT NULL"
+    SELECT = "DISTINCT(image_id),description,keyword_list"
+    FROM ="bagofkeywords"
+    WHERE = "keyword_list IS NOT NULL"
     LIMIT = 10000
     SegmentTable_name = ""
 
@@ -138,11 +138,11 @@ def main():
     txt = pd.DataFrame(index=range(len(resultsjson)),columns=["description","keywords","index","score"])
     for i,row in enumerate(resultsjson):
         # gets contentUrl
-        #print(row["description"])
         txt.at[i,"description"]=row["description"]
-        # txt[i,"keywords"]=row["keywords"]
+        #txt.at[i,"keyword_list"]=" ".join(pickle.loads(row["keyword_list"]))
     #print(txt.tail())
     processed_txt=txt['description'].map(preprocess)
+    #processed_txt=txt['keyword_list'].map(preprocess)
     lda_model=process(processed_txt,MODEL)
     for idx, topic in lda_model.print_topics(-1):
         print('Topic: {} \nWords: {}'.format(idx, topic))
