@@ -48,7 +48,8 @@ class DataIO:
                 "user":"root",
                 "pass":"SSJ2_mysql"
             }
-            self.ROOT= os.path.join("D:/"+"Documents/projects-active/facemap_production") ## SD CARD
+            #self.ROOT= os.path.join("D:/"+"Documents/projects-active/facemap_production") ## SD CARD
+            self.ROOT= os.path.join("E:/"+"work/face_map/Documents/projects-active/facemap_production") ## SSD
             self.ROOT54= self.ROOT
             self.ROOT_PROD= self.ROOT
             self.NUMBER_OF_PROCESSES = 4
