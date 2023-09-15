@@ -127,6 +127,16 @@ class ImagesClusters68(Base):
     image_id = Column(Integer, ForeignKey('images.image_id'), primary_key=True)
     cluster_id = Column(Integer, ForeignKey('Clusters68.cluster_id'))
 
+class BagOfKeywords(Base):
+    __tablename__ = 'BagOfKeywords'
+    image_id = Column(Integer, primary_key=True, autoincrement=True)
+    age_id = Column(Integer, ForeignKey('age.age_id'))
+    gender_id = Column(Integer, ForeignKey('gender.gender_id'))
+    location_id = Column(Integer, ForeignKey('location.location_id'))
+    description = Column(String(150))
+    keyword_list = Column(BLOB)  # Pickled list
+    ethnicity_list = Column(BLOB)  # Pickled list
+
 
 # these are for MM use for using segments
 # class Clusters(Base):
