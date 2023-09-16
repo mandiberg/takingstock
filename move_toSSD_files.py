@@ -53,9 +53,9 @@ IMAGES_THREAD_COUNTER = 0
 '''
 
 # right now this is only working for one site at a time
-SITE_NAME_ID = 3
-IMAGES_FOLDER_NAME = 'images_adobe'
-NEWIMAGES_FOLDER_NAME = 'images_adobe'
+SITE_NAME_ID = 1
+IMAGES_FOLDER_NAME = 'images_getty'
+NEWIMAGES_FOLDER_NAME = 'images_getty'
 NUMBER_OF_THREADS_IMAGES_DOWNLOAD =15
 OLDPATH = os.path.join(PATH, IMAGES_FOLDER_NAME)
 NEWPATH = os.path.join(PATH2, NEWIMAGES_FOLDER_NAME)
@@ -160,9 +160,10 @@ def main():
     # Fetch the results
     results = query.all()
 
-    print(len(results))
+    print(str(len(results)), "images")
     # Copy the files
     for result in results:
+        print(result)
         image_id, imagename = result
 
         if counter < start_counter:
@@ -176,8 +177,8 @@ def main():
         destination_file = os.path.join(NEWPATH,imagename)
 
         # Copy the file
-        # print(source_file, destination_file)
-        copy_files(source_file, destination_file)
+        print(source_file, destination_file)
+        # copy_files(source_file, destination_file)
 
         if counter % 1000 == 0:
             print(counter)
