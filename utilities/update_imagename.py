@@ -5,12 +5,13 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.pool import NullPool
 
+
 # importing from another folder
 import sys
 # caution: path[0] is reserved for script path (or '' in REPL)
 sys.path.insert(1, '/Users/michaelmandiberg/Documents/GitHub/facemap/')
 from mp_db_io import DataIO
-from my_declarative_base import Images
+from my_declarative_base import Images, Base, Clusters, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON
 
 ######## Michael's Credentials ########
 # platform specific credentials
@@ -32,6 +33,24 @@ Session = sessionmaker(bind=engine)
 session = Session()
 Base = declarative_base()
 
+SEGMENTTABLE_NAME = 'SegmentAug30Straightahead'
+
+class SegmentTable(Base):
+    __tablename__ = SEGMENTTABLE_NAME
+
+    image_id = Column(Integer, primary_key=True)
+    site_name_id = Column(Integer)
+    contentUrl = Column(String(300), nullable=False)
+    imagename = Column(String(200))
+    face_x = Column(DECIMAL(6, 3))
+    face_y = Column(DECIMAL(6, 3))
+    face_z = Column(DECIMAL(6, 3))
+    mouth_gap = Column(DECIMAL(6, 3))
+    face_landmarks = Column(BLOB)
+    bbox = Column(JSON)
+    face_encodings = Column(BLOB)
+    face_encodings68 = Column(BLOB)
+    site_image_id = Column(String(50), nullable=False)
 
 # Define the function for generating imagename
 def generate_local_unhashed_image_filepath(contentUrl):
@@ -51,24 +70,43 @@ def generate_local_unhashed_image_filepath(contentUrl):
     # print(os.path.join(hash_folder, hash_subfolder, file_name))
     return os.path.join(hash_folder, hash_subfolder, file_name), contentUrl
 
+
+# Define the batch size
+batch_size = 1000
+
+
+# currently set up for SegmentTable. need to change SegmentTable to Images if you want to use on main table
+
 try:
     # Query the Images table for image_id and contentUrl where site_name_id is 1
-    result = session.query(Images.image_id, Images.contentUrl).filter(Images.site_name_id == 1).all()
+    results = session.query(SegmentTable.image_id, SegmentTable.contentUrl).filter(SegmentTable.site_name_id == 1).all()
 
-    # Iterate through the results and update imagename
-    for image_id, contentUrl in result:
+    # Initialize counters
+    total_processed = 0
+    current_batch = []
+
+    for image_id, contentUrl in results:
         imagename, contentUrl = generate_local_unhashed_image_filepath(contentUrl)
         print(f"Updating Image ID: {image_id}, Imagename: {imagename}, contentUrl: {contentUrl}")
 
         # Update both imagename and contentUrl columns for the current image_id
-        # session.query(Images).filter(Images.image_id == image_id).update({
-        #     "imagename": imagename,
-        #     "contentUrl": contentUrl
-        # })
-    
-    # Commit the changes
-    session.commit()
-    print("Changes committed.")
+        current_batch.append((image_id, imagename, contentUrl))
+        total_processed += 1
+
+        # Check if the current batch is ready for commit
+        if len(current_batch) >= batch_size:
+            session.bulk_update_mappings(SegmentTable, [{"image_id": image_id, "imagename": imagename, "contentUrl": contentUrl} for image_id, imagename, contentUrl in current_batch])
+            session.commit()
+            print(f"{total_processed} Changes committed for {batch_size} rows.")
+            current_batch = []
+
+    # Commit any remaining changes
+    if current_batch:
+        session.bulk_update_mappings(SegmentTable, [{"image_id": image_id, "imagename": imagename, "contentUrl": contentUrl} for image_id, imagename, contentUrl in current_batch])
+        session.commit()
+        print(f"Changes committed for the remaining {len(current_batch)} rows.")
+
+    print("All changes committed.")
 
 except Exception as e:
     print(f"An error occurred: {e}")
