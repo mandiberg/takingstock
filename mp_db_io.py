@@ -57,7 +57,7 @@ class DataIO:
         if IS_SSD:
             self.folder_list = [
                 "", #0, Empty, there is no site #0 -- starts count at 1
-                os.path.join(self.ROOT_PROD,"gettyimages/newimages"), #1, Getty
+                os.path.join(self.ROOT4,"images_getty"), #1, Getty
                 # temp for testing
                 # os.path.join(self.ROOT54,"gettyimages/testimages"), #1, Getty
                 os.path.join(self.ROOT_PROD,""),
@@ -72,7 +72,7 @@ class DataIO:
         else:
             self.folder_list = [
                 "", #0, Empty, there is no site #0 -- starts count at 1
-                os.path.join(self.ROOT54,"gettyimages/newimages"), #1, Getty
+                os.path.join(self.ROOT54,"images_getty"), #1, Getty
                 # temp for testing
                 # os.path.join(self.ROOT54,"gettyimages/testimages"), #1, Getty
                 os.path.join(self.ROOT54,""),

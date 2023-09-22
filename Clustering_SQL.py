@@ -21,7 +21,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 # my ORM
-from my_declarative_base import Base, Images, Clusters68, ImagesClusters68, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON, ForeignKey
+from my_declarative_base import Base, Images, Clusters, ImagesClusters, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON, ForeignKey
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import create_engine, text, MetaData, Table, Column, Numeric, Integer, VARCHAR, update, Float
@@ -75,7 +75,7 @@ if USE_SEGMENT is True:
     QUERY = "e.image_id IN"
     SUBQUERY = f"(SELECT seg1.image_id FROM {SegmentTable_name} seg1 )"
     WHERE = f"{QUERY} {SUBQUERY}"
-    LIMIT = 1100000
+    LIMIT = 1000000
 
 else:
     # Basic Query, this works with gettytest3
@@ -208,10 +208,10 @@ def save_clusters_DB(df):
     for cluster_id in unique_clusters:
         cluster_df=df[df['cluster_id']==cluster_id]
         cluster_mean=np.array(df[col_list].mean())
-        existing_record = session.query(Clusters68).filter_by(cluster_id=cluster_id).first()
+        existing_record = session.query(Clusters).filter_by(cluster_id=cluster_id).first()
 
         if existing_record is None:
-            instance = Clusters68(
+            instance = Clusters(
                 cluster_id=cluster_id,
                 cluster_median=pickle.dumps(cluster_mean)
             )
@@ -232,10 +232,10 @@ def save_images_clusters_DB(df):
     for _, row in df.iterrows():
         image_id = row['image_id']
         cluster_id = row['cluster_id']
-        existing_record = session.query(ImagesClusters68).filter_by(image_id=image_id).first()
+        existing_record = session.query(ImagesClusters).filter_by(image_id=image_id).first()
 
         if existing_record is None:
-            instance = ImagesClusters68(
+            instance = ImagesClusters(
                 image_id=image_id,
                 cluster_id=cluster_id,
             )
@@ -254,6 +254,7 @@ def save_images_clusters_DB(df):
 
 def main():
     # create_my_engine(db)
+    global N_CLUSTERS
     print("about to SQL: ",SELECT,FROM,WHERE,LIMIT)
     resultsjson = selectSQL()
     print("got results, count is: ",len(resultsjson))
@@ -269,14 +270,12 @@ def main():
         OPTIMAL_CLUSTERS= best_score(enc_data.drop("image_id", axis=1))   #### Input ONLY encodings into clustering alhorithm
         print(OPTIMAL_CLUSTERS)
         N_CLUSTERS = OPTIMAL_CLUSTERS
-    else:
-        N_CLUSTERS = 113 # hard coding this temporarily b/c python isn't seeing it as variable above...
     enc_data["cluster_id"] = kmeans_cluster(enc_data.drop("image_id", axis=1),n_clusters=N_CLUSTERS)
     
     if SAVE_FIG: export_html_clusters(enc_data.drop("image_id", axis=1))
     print(enc_data)
     print(set(enc_data["cluster_id"].tolist()))
-    enc_data.to_csv('clusters68_clusterID_byImageID.csv')
+    enc_data.to_csv('clusters_clusterID_byImageID.csv')
 
     # if USE_SEGMENT:
     #     Base.metadata.create_all(engine)
