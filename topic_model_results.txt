@@ -1,503 +1,150 @@
-### MODEL = BOW ###
-
-## description ##
-
-10 TOPICS 
-
-Topic: 0
-Words: 0.065*"businesswoman" + 0.056*"offic" + 0.056*"hold" + 0.047*"businessman" + 0.025*"young" + 0.025*"phone" + 0.020*"laptop" + 0.019*"eat" + 0.018*"mobil" + 0.018*"stand"
+ 0
+Words: 0.505*"peopl" + 0.066*"beauti" + 0.060*"portrait" + 0.055*"women" + 0.036*"young" + 0.036*"adult" + 0.035*"girl" + 0.026*"size" + 0.019*"bodi" + 0.016*"blond"
 Topic: 1
-Words: 0.104*"woman" + 0.078*"portrait" + 0.042*"young" + 0.035*"smile" + 0.034*"sit" + 0.031*"view" + 0.022*"stand" + 0.019*"hold" + 0.019*"businessman" + 0.017*"beach"
+Words: 0.143*"christma" + 0.128*"gift" + 0.078*"year" + 0.075*"tree" + 0.055*"greet" + 0.031*"peopl" + 0.031*"small" + 0.029*"girl" + 0.022*"hold" + 0.022*"celebr"
 Topic: 2
-Words: 0.064*"male" + 0.063*"worker" + 0.060*"offic" + 0.039*"park" + 0.036*"coffe" + 0.033*"drink" + 0.032*"woman" + 0.020*"young" + 0.019*"cheer" + 0.018*"bridg"
+Words: 0.059*"perfect" + 0.059*"differ" + 0.051*"satisfi" + 0.051*"skin" + 0.047*"gorgeous" + 0.032*"sale" + 0.029*"peopl" + 0.027*"glad" + 0.027*"beauti" + 0.024*"isol"
 Topic: 3
-Words: 0.065*"woman" + 0.037*"portrait" + 0.032*"smile" + 0.031*"young" + 0.031*"phone" + 0.030*"enjoy" + 0.027*"travel" + 0.026*"scuba" + 0.026*"dive" + 0.024*"surf"
+Words: 0.195*"doctor" + 0.063*"femal" + 0.058*"stethoscop" + 0.048*"medic" + 0.035*"medicin" + 0.029*"uniform" + 0.028*"hospit" + 0.028*"clinic" + 0.025*"healthcar" + 0.023*"white"
 Topic: 4
-Words: 0.102*"look" + 0.067*"woman" + 0.024*"camera" + 0.022*"mindanao" + 0.022*"philippin" + 0.021*"businesswoman" + 0.021*"surf" + 0.018*"dune" + 0.017*"smile" + 0.015*"facial"
+Words: 0.120*"student" + 0.090*"school" + 0.057*"brush" + 0.044*"educ" + 0.042*"clock" + 0.028*"book" + 0.027*"suitcas" + 0.026*"manag" + 0.025*"peopl" + 0.024*"graduat"
 Topic: 5
-Words: 0.051*"femal" + 0.048*"woman" + 0.040*"girl" + 0.038*"portrait" + 0.036*"beach" + 0.032*"sit" + 0.032*"young" + 0.030*"laptop" + 0.026*"doctor" + 0.021*"look"
+Words: 0.249*"point" + 0.144*"finger" + 0.104*"middl" + 0.027*"happi" + 0.027*"peopl" + 0.026*"age" + 0.026*"hand" + 0.023*"self" + 0.023*"women" + 0.022*"background"
 Topic: 6
-Words: 0.114*"woman" + 0.048*"young" + 0.040*"portrait" + 0.033*"freelanc" + 0.032*"smile" + 0.029*"train" + 0.027*"women" + 0.025*"digit" + 0.023*"devic" + 0.021*"offic"
+Words: 0.092*"book" + 0.090*"play" + 0.066*"grass" + 0.064*"read" + 0.044*"sofa" + 0.044*"video" + 0.041*"game" + 0.030*"sit" + 0.028*"write" + 0.027*"peopl"
 Topic: 7
-Words: 0.149*"woman" + 0.095*"young" + 0.048*"stand" + 0.026*"beach" + 0.019*"portrait" + 0.016*"beauti" + 0.016*"rest" + 0.014*"wall" + 0.014*"sit" + 0.013*"home"
+Words: 0.136*"bright" + 0.057*"pictur" + 0.051*"bath" + 0.037*"shower" + 0.034*"headshot" + 0.034*"support" + 0.029*"cherri" + 0.025*"consult" + 0.024*"startup" + 0.021*"seduct"
 Topic: 8
-Words: 0.089*"woman" + 0.052*"close" + 0.024*"walk" + 0.024*"hiker" + 0.022*"girl" + 0.021*"take" + 0.019*"hike" + 0.018*"smile" + 0.014*"young" + 0.014*"trail"
+Words: 0.133*"busi" + 0.093*"tablet" + 0.071*"offic" + 0.068*"confus" + 0.054*"suit" + 0.045*"businessman" + 0.040*"work" + 0.039*"peopl" + 0.039*"women" + 0.034*"digit"
 Topic: 9
-Words: 0.121*"woman" + 0.120*"young" + 0.034*"citi" + 0.025*"portrait" + 0.025*"phone" + 0.021*"background" + 0.018*"beauti" + 0.017*"look" + 0.015*"laptop" + 0.015*"mobil"
-
-###################
-
-6 TOPICS 
-
-Topic: 0
-Words: 0.073*"woman" + 0.060*"portrait" + 0.027*"beach" + 0.024*"hold" + 0.020*"offic" + 0.019*"background" + 0.019*"male" + 0.018*"dive" + 0.018*"scuba" + 0.017*"businessman"
-Topic: 1
-Words: 0.163*"woman" + 0.115*"young" + 0.046*"smile" + 0.042*"portrait" + 0.017*"hold" + 0.017*"beauti" + 0.017*"close" + 0.014*"look" + 0.012*"take" + 0.012*"phone"
-Topic: 2
-Words: 0.048*"woman" + 0.040*"young" + 0.037*"stand" + 0.022*"women" + 0.021*"beauti" + 0.021*"femal" + 0.020*"look" + 0.019*"male" + 0.019*"digit" + 0.017*"ocean"
-Topic: 3
-Words: 0.051*"sit" + 0.051*"woman" + 0.050*"businesswoman" + 0.045*"laptop" + 0.040*"phone" + 0.032*"mobil" + 0.031*"offic" + 0.027*"young" + 0.027*"businessman" + 0.016*"text"
-Topic: 4
-Words: 0.064*"woman" + 0.048*"femal" + 0.031*"offic" + 0.030*"young" + 0.024*"doctor" + 0.023*"selfi" + 0.022*"home" + 0.022*"travel" + 0.021*"tourist" + 0.020*"philippin"
-Topic: 5
-Words: 0.061*"woman" + 0.045*"look" + 0.042*"view" + 0.037*"girl" + 0.037*"young" + 0.025*"beach" + 0.018*"enjoy" + 0.015*"citi" + 0.015*"stand" + 0.013*"teenag"
-
-
-########
-
-48 topics
-
-Topic: 0
-Words: 0.158*"woman" + 0.048*"young" + 0.032*"forest" + 0.031*"close" + 0.027*"morn" + 0.024*"smile" + 0.023*"sit" + 0.018*"stand" + 0.018*"bike" + 0.018*"beach"
-Topic: 1
-Words: 0.089*"woman" + 0.081*"portrait" + 0.051*"sit" + 0.039*"stand" + 0.035*"young" + 0.030*"smile" + 0.029*"kitchen" + 0.029*"chef" + 0.023*"hold" + 0.023*"look"
-Topic: 2
-Words: 0.183*"woman" + 0.035*"park" + 0.033*"smile" + 0.031*"portrait" + 0.031*"sit" + 0.031*"young" + 0.026*"attract" + 0.024*"year" + 0.020*"diabet" + 0.019*"sunni"
-Topic: 3
-Words: 0.097*"woman" + 0.073*"train" + 0.059*"young" + 0.049*"work" + 0.033*"cafe" + 0.030*"kitchen" + 0.030*"wait" + 0.030*"girl" + 0.029*"water" + 0.021*"subway"
-Topic: 4
-Words: 0.109*"portrait" + 0.047*"outdoor" + 0.041*"businessman" + 0.041*"fashion" + 0.039*"femal" + 0.039*"student" + 0.037*"woman" + 0.037*"design" + 0.029*"colleg" + 0.027*"cute"
-Topic: 5
-Words: 0.105*"woman" + 0.072*"hold" + 0.059*"businessman" + 0.051*"beach" + 0.043*"young" + 0.040*"smile" + 0.032*"offic" + 0.032*"summer" + 0.031*"portrait" + 0.026*"littl"
-Topic: 6
-Words: 0.122*"portrait" + 0.097*"woman" + 0.064*"background" + 0.042*"young" + 0.037*"stand" + 0.035*"black" + 0.032*"studio" + 0.025*"white" + 0.022*"skateboard" + 0.020*"smartphon"
-Topic: 7
-Words: 0.100*"woman" + 0.069*"mountain" + 0.042*"young" + 0.034*"walk" + 0.028*"life" + 0.024*"portrait" + 0.022*"relax" + 0.020*"trail" + 0.020*"carri" + 0.018*"femal"
-Topic: 8
-Words: 0.046*"portrait" + 0.045*"young" + 0.030*"girl" + 0.030*"woman" + 0.029*"stand" + 0.029*"phone" + 0.029*"face" + 0.025*"teenag" + 0.022*"sunset" + 0.022*"sportswoman"
-Topic: 9
-Words: 0.073*"woman" + 0.049*"have" + 0.041*"smile" + 0.033*"shoot" + 0.032*"live" + 0.030*"room" + 0.027*"enjoy" + 0.027*"matur" + 0.027*"head" + 0.024*"children"
+Words: 0.100*"rais" + 0.090*"excit" + 0.074*"scream" + 0.048*"cross" + 0.033*"arm" + 0.027*"luck" + 0.025*"bite" + 0.023*"hope" + 0.023*"eye" + 0.023*"watermelon"
 Topic: 10
-Words: 0.080*"woman" + 0.048*"young" + 0.046*"view" + 0.035*"busi" + 0.033*"look" + 0.032*"near" + 0.027*"smartphon" + 0.023*"district" + 0.023*"businesswoman" + 0.023*"central"
+Words: 0.163*"imag" + 0.151*"garden" + 0.098*"bride" + 0.062*"wed" + 0.061*"composit" + 0.045*"draw" + 0.030*"dress" + 0.029*"peopl" + 0.020*"beauti" + 0.019*"river"
 Topic: 11
-Words: 0.087*"woman" + 0.086*"portrait" + 0.050*"stand" + 0.047*"hold" + 0.045*"matur" + 0.039*"young" + 0.030*"field" + 0.030*"smile" + 0.026*"length" + 0.022*"rice"
+Words: 0.085*"fashion" + 0.080*"clean" + 0.072*"count" + 0.046*"workplac" + 0.044*"design" + 0.039*"skin" + 0.035*"tri" + 0.035*"peopl" + 0.028*"handshak" + 0.027*"beauti"
 Topic: 12
-Words: 0.124*"woman" + 0.074*"portrait" + 0.043*"smile" + 0.042*"pool" + 0.037*"beauti" + 0.029*"swim" + 0.029*"view" + 0.029*"young" + 0.026*"fish" + 0.024*"angl"
+Words: 0.126*"funni" + 0.077*"scienc" + 0.072*"friend" + 0.062*"famili" + 0.059*"bottl" + 0.049*"vintag" + 0.041*"ball" + 0.025*"child" + 0.022*"best" + 0.022*"laboratori"
 Topic: 13
-Words: 0.093*"woman" + 0.047*"athlet" + 0.045*"young" + 0.036*"glass" + 0.025*"work" + 0.024*"look" + 0.023*"outdoor" + 0.023*"listen" + 0.023*"player" + 0.020*"hair"
+Words: 0.149*"smartphon" + 0.132*"cover" + 0.072*"good" + 0.044*"isol" + 0.037*"turtleneck" + 0.032*"news" + 0.030*"technolog" + 0.023*"sweater" + 0.018*"social" + 0.017*"internet"
 Topic: 14
-Words: 0.113*"woman" + 0.110*"young" + 0.042*"girl" + 0.038*"shoot" + 0.035*"head" + 0.034*"hair" + 0.033*"mountain" + 0.032*"smile" + 0.030*"wood" + 0.024*"hike"
+Words: 0.084*"orang" + 0.050*"brown" + 0.048*"advertis" + 0.040*"braid" + 0.035*"sensual" + 0.028*"ethnic" + 0.028*"night" + 0.027*"peopl" + 0.021*"headscarf" + 0.021*"background"
 Topic: 15
-Words: 0.165*"phone" + 0.085*"mobil" + 0.072*"woman" + 0.067*"young" + 0.062*"talk" + 0.028*"smart" + 0.026*"businessman" + 0.021*"get" + 0.020*"smile" + 0.017*"cell"
+Words: 0.162*"gestur" + 0.072*"card" + 0.066*"show" + 0.053*"stop" + 0.052*"sign" + 0.043*"credit" + 0.035*"background" + 0.031*"peopl" + 0.027*"hand" + 0.027*"young"
 Topic: 16
-Words: 0.127*"woman" + 0.060*"young" + 0.052*"tabl" + 0.050*"think" + 0.043*"happi" + 0.034*"home" + 0.032*"close" + 0.031*"look" + 0.027*"garden" + 0.026*"wooden"
+Words: 0.118*"hair" + 0.079*"cur" + 0.065*"long" + 0.052*"redhead" + 0.037*"peopl" + 0.033*"model" + 0.033*"beauti" + 0.031*"short" + 0.027*"blond" + 0.024*"style"
 Topic: 17
-Words: 0.058*"hiker" + 0.053*"hike" + 0.053*"green" + 0.051*"track" + 0.045*"lush" + 0.036*"woman" + 0.025*"greec" + 0.024*"look" + 0.021*"young" + 0.021*"carri"
+Words: 0.129*"costum" + 0.094*"halloween" + 0.073*"like" + 0.049*"practic" + 0.045*"pumpkin" + 0.035*"child" + 0.032*"fight" + 0.029*"accessori" + 0.029*"intern" + 0.026*"celebr"
 Topic: 18
-Words: 0.140*"young" + 0.131*"woman" + 0.064*"smile" + 0.056*"portrait" + 0.032*"hold" + 0.024*"look" + 0.023*"mobil" + 0.018*"phone" + 0.018*"close" + 0.017*"text"
+Words: 0.099*"chin" + 0.078*"joy" + 0.069*"spring" + 0.043*"carefre" + 0.040*"hand" + 0.028*"peopl" + 0.026*"isol" + 0.023*"sing" + 0.022*"human" + 0.021*"look"
 Topic: 19
-Words: 0.079*"look" + 0.073*"camera" + 0.069*"surf" + 0.067*"woman" + 0.056*"express" + 0.053*"facial" + 0.050*"philippin" + 0.050*"mindanao" + 0.026*"go" + 0.023*"hold"
+Words: 0.113*"beach" + 0.108*"muslim" + 0.099*"floor" + 0.075*"hijab" + 0.045*"vacat" + 0.041*"holiday" + 0.038*"sit" + 0.037*"sunset" + 0.031*"peopl" + 0.030*"summer"
 Topic: 20
-Words: 0.092*"woman" + 0.082*"citi" + 0.080*"young" + 0.048*"stand" + 0.035*"night" + 0.029*"wall" + 0.026*"femal" + 0.025*"close" + 0.023*"beauti" + 0.021*"kong"
+Words: 0.097*"appl" + 0.094*"lip" + 0.061*"green" + 0.054*"forward" + 0.044*"trendi" + 0.034*"housewif" + 0.031*"dreami" + 0.028*"peopl" + 0.026*"stomach" + 0.025*"background"
 Topic: 21
-Words: 0.133*"offic" + 0.112*"worker" + 0.084*"male" + 0.072*"park" + 0.064*"businessman" + 0.050*"coffe" + 0.038*"drink" + 0.038*"young" + 0.036*"cheer" + 0.025*"woman"
+Words: 0.164*"interior" + 0.155*"home" + 0.049*"domest" + 0.047*"laptop" + 0.047*"room" + 0.038*"sit" + 0.032*"tabl" + 0.026*"peopl" + 0.023*"studi" + 0.022*"onlin"
 Topic: 22
-Words: 0.115*"scuba" + 0.108*"dive" + 0.094*"view" + 0.046*"walk" + 0.037*"rear" + 0.035*"look" + 0.033*"young" + 0.029*"woman" + 0.022*"girl" + 0.021*"bicycl"
+Words: 0.171*"brunett" + 0.119*"blank" + 0.111*"beig" + 0.061*"fist" + 0.040*"eyeglass" + 0.038*"peopl" + 0.027*"women" + 0.027*"beauti" + 0.027*"bench" + 0.025*"background"
 Topic: 23
-Words: 0.214*"woman" + 0.107*"young" + 0.072*"beauti" + 0.044*"stretch" + 0.036*"portrait" + 0.033*"beach" + 0.022*"rest" + 0.022*"sit" + 0.021*"home" + 0.021*"bridg"
+Words: 0.105*"mouth" + 0.089*"shock" + 0.054*"open" + 0.054*"hand" + 0.040*"surpris" + 0.031*"human" + 0.029*"peopl" + 0.027*"dumbbel" + 0.023*"suffer" + 0.023*"pain"
 Topic: 24
-Words: 0.089*"girl" + 0.071*"young" + 0.069*"laptop" + 0.045*"boardwalk" + 0.045*"teenag" + 0.033*"park" + 0.030*"woman" + 0.026*"room" + 0.025*"musician" + 0.025*"guitar"
+Words: 0.574*"isol" + 0.070*"photo" + 0.040*"white" + 0.031*"charm" + 0.028*"pajama" + 0.024*"color" + 0.020*"meet" + 0.017*"length" + 0.014*"peopl" + 0.014*"women"
 Topic: 25
-Words: 0.158*"woman" + 0.055*"beach" + 0.048*"walk" + 0.048*"young" + 0.047*"stand" + 0.043*"take" + 0.027*"wood" + 0.027*"beauti" + 0.021*"sunshin" + 0.020*"asian"
+Words: 0.079*"pink" + 0.070*"love" + 0.060*"symbol" + 0.037*"pastel" + 0.035*"color" + 0.034*"background" + 0.030*"emot" + 0.028*"peopl" + 0.028*"heart" + 0.025*"juic"
 Topic: 26
-Words: 0.125*"woman" + 0.088*"smile" + 0.087*"portrait" + 0.056*"young" + 0.035*"beauti" + 0.030*"travel" + 0.018*"phone" + 0.018*"citi" + 0.017*"mobil" + 0.017*"close"
+Words: 0.074*"teen" + 0.067*"time" + 0.050*"backpack" + 0.049*"outsid" + 0.047*"pool" + 0.043*"swim" + 0.039*"forest" + 0.033*"pleasant" + 0.029*"say" + 0.029*"girl"
 Topic: 27
-Words: 0.094*"look" + 0.077*"woman" + 0.057*"young" + 0.052*"sit" + 0.042*"businesswoman" + 0.031*"window" + 0.027*"wear" + 0.026*"citi" + 0.022*"portrait" + 0.022*"shirt"
+Words: 0.094*"studio" + 0.065*"shoot" + 0.046*"strip" + 0.040*"peopl" + 0.037*"dress" + 0.035*"portrait" + 0.031*"background" + 0.031*"pose" + 0.029*"isol" + 0.029*"beauti"
 Topic: 28
-Words: 0.067*"laptop" + 0.060*"woman" + 0.044*"trek" + 0.040*"selfi" + 0.040*"young" + 0.037*"make" + 0.037*"grassland" + 0.034*"wear" + 0.030*"take" + 0.029*"busi"
+Words: 0.123*"thumb" + 0.095*"gray" + 0.064*"laugh" + 0.049*"happi" + 0.041*"background" + 0.037*"peopl" + 0.030*"thought" + 0.030*"women" + 0.029*"young" + 0.029*"adult"
 Topic: 29
-Words: 0.068*"young" + 0.046*"lake" + 0.041*"woman" + 0.033*"iceland" + 0.028*"mountain" + 0.027*"glacier" + 0.025*"hiker" + 0.024*"tourist" + 0.023*"look" + 0.022*"norway"
+Words: 0.129*"flag" + 0.058*"creativ" + 0.042*"pensiv" + 0.042*"placard" + 0.039*"tulip" + 0.039*"freelanc" + 0.031*"entrepreneur" + 0.027*"floral" + 0.025*"bunch" + 0.025*"hold"
 Topic: 30
-Words: 0.128*"woman" + 0.058*"young" + 0.043*"travel" + 0.040*"phone" + 0.036*"busi" + 0.035*"austria" + 0.026*"rest" + 0.021*"senior" + 0.020*"near" + 0.019*"citi"
+Words: 0.118*"makeup" + 0.061*"healthi" + 0.053*"eat" + 0.039*"basket" + 0.036*"food" + 0.036*"fruit" + 0.034*"lifestyl" + 0.032*"salad" + 0.032*"fresh" + 0.031*"veget"
 Topic: 31
-Words: 0.162*"businesswoman" + 0.109*"offic" + 0.070*"laptop" + 0.063*"sit" + 0.048*"portrait" + 0.037*"businessman" + 0.037*"smile" + 0.036*"woman" + 0.035*"look" + 0.034*"corridor"
+Words: 0.127*"peac" + 0.081*"clipboard" + 0.062*"cooki" + 0.034*"cough" + 0.032*"diadem" + 0.029*"preteen" + 0.028*"stack" + 0.026*"foam" + 0.025*"stock" + 0.022*"angel"
 Topic: 32
-Words: 0.072*"young" + 0.042*"shop" + 0.040*"exercis" + 0.035*"store" + 0.035*"view" + 0.032*"male" + 0.029*"zero" + 0.029*"wast" + 0.029*"assist" + 0.027*"beach"
+Words: 0.148*"santa" + 0.082*"decor" + 0.068*"christma" + 0.035*"freckl" + 0.024*"peopl" + 0.024*"merri" + 0.024*"gift" + 0.021*"girl" + 0.019*"wear" + 0.015*"fair"
 Topic: 33
-Words: 0.144*"doctor" + 0.095*"femal" + 0.068*"portrait" + 0.062*"hold" + 0.059*"smile" + 0.044*"woman" + 0.039*"look" + 0.028*"offic" + 0.024*"young" + 0.022*"phone"
+Words: 0.085*"pray" + 0.064*"even" + 0.058*"pregnant" + 0.057*"notebook" + 0.042*"lean" + 0.038*"wait" + 0.030*"cultur" + 0.028*"homework" + 0.026*"religion" + 0.024*"poster"
 Topic: 34
-Words: 0.086*"woman" + 0.056*"young" + 0.047*"dune" + 0.043*"desert" + 0.042*"stand" + 0.039*"sand" + 0.036*"arm" + 0.035*"tree" + 0.030*"morocco" + 0.028*"sahara"
+Words: 0.243*"make" + 0.070*"heart" + 0.058*"hous" + 0.055*"frame" + 0.041*"focus" + 0.031*"templ" + 0.030*"human" + 0.025*"microphon" + 0.022*"hand" + 0.020*"concept"
 Topic: 35
-Words: 0.048*"girl" + 0.045*"woman" + 0.040*"littl" + 0.036*"engin" + 0.030*"look" + 0.029*"summit" + 0.028*"austria" + 0.026*"view" + 0.025*"young" + 0.023*"teen"
+Words: 0.062*"stretch" + 0.060*"knit" + 0.055*"rest" + 0.042*"plant" + 0.039*"mountain" + 0.038*"right" + 0.031*"cardboard" + 0.028*"farm" + 0.028*"mind" + 0.027*"farmer"
 Topic: 36
-Words: 0.163*"woman" + 0.063*"young" + 0.057*"home" + 0.046*"shop" + 0.037*"take" + 0.033*"senior" + 0.021*"beach" + 0.021*"hold" + 0.017*"smile" + 0.015*"wait"
+Words: 0.116*"bed" + 0.069*"paint" + 0.047*"lie" + 0.045*"easter" + 0.032*"small" + 0.029*"bedroom" + 0.028*"preschool" + 0.026*"peopl" + 0.024*"girl" + 0.024*"sheet"
 Topic: 37
-Words: 0.059*"babi" + 0.049*"outdoor" + 0.041*"male" + 0.037*"push" + 0.035*"look" + 0.035*"young" + 0.034*"women" + 0.029*"girl" + 0.027*"offic" + 0.020*"sunset"
+Words: 0.097*"feel" + 0.090*"success" + 0.084*"victori" + 0.057*"celebr" + 0.057*"proud" + 0.056*"latin" + 0.038*"winner" + 0.032*"isol" + 0.028*"peopl" + 0.028*"happi"
 Topic: 38
-Words: 0.105*"work" + 0.090*"offic" + 0.046*"femal" + 0.036*"doctor" + 0.035*"woman" + 0.030*"laptop" + 0.028*"austria" + 0.027*"hike" + 0.026*"hiker" + 0.023*"view"
+Words: 0.133*"dark" + 0.109*"cream" + 0.055*"strong" + 0.036*"festiv" + 0.033*"muscl" + 0.023*"peopl" + 0.023*"background" + 0.018*"gymnast" + 0.017*"show" + 0.017*"lawn"
 Topic: 39
-Words: 0.087*"beach" + 0.080*"woman" + 0.059*"drink" + 0.057*"portrait" + 0.049*"surfboard" + 0.043*"young" + 0.034*"sunset" + 0.031*"view" + 0.029*"countri" + 0.028*"look"
+Words: 0.121*"teeth" + 0.058*"chair" + 0.049*"care" + 0.032*"get" + 0.032*"luxuri" + 0.027*"peopl" + 0.026*"dental" + 0.026*"patient" + 0.026*"dentist" + 0.025*"show"
 Topic: 40
-Words: 0.072*"woman" + 0.050*"young" + 0.031*"student" + 0.030*"view" + 0.029*"enjoy" + 0.029*"high" + 0.022*"beauti" + 0.021*"male" + 0.021*"child" + 0.020*"citi"
+Words: 0.055*"tradit" + 0.055*"denim" + 0.052*"jean" + 0.051*"shirt" + 0.032*"peopl" + 0.032*"thai" + 0.028*"wear" + 0.026*"overal" + 0.024*"lollipop" + 0.022*"blue"
 Topic: 41
-Words: 0.068*"phone" + 0.065*"mobil" + 0.056*"take" + 0.042*"woman" + 0.040*"text" + 0.035*"messag" + 0.032*"carri" + 0.029*"dyke" + 0.028*"walk" + 0.027*"offa"
+Words: 0.129*"jacket" + 0.103*"closeup" + 0.056*"black" + 0.042*"leather" + 0.034*"peopl" + 0.028*"brother" + 0.025*"wine" + 0.025*"portrait" + 0.023*"joke" + 0.022*"women"
 Topic: 42
-Words: 0.109*"freelanc" + 0.083*"women" + 0.078*"digit" + 0.076*"devic" + 0.072*"woman" + 0.046*"offic" + 0.037*"bridg" + 0.029*"worker" + 0.028*"femal" + 0.025*"check"
+Words: 0.074*"facial" + 0.056*"face" + 0.055*"express" + 0.049*"human" + 0.044*"touch" + 0.036*"arm" + 0.032*"peopl" + 0.030*"cheek" + 0.029*"skin" + 0.029*"beauti"
 Topic: 43
-Words: 0.064*"island" + 0.056*"young" + 0.043*"woman" + 0.038*"mindanao" + 0.038*"philippin" + 0.037*"beach" + 0.037*"look" + 0.031*"dress" + 0.030*"surf" + 0.029*"candid"
+Words: 0.175*"shop" + 0.051*"store" + 0.048*"umbrella" + 0.038*"golden" + 0.035*"sleep" + 0.033*"rock" + 0.033*"peopl" + 0.025*"japanes" + 0.024*"women" + 0.022*"popcorn"
 Topic: 44
-Words: 0.088*"woman" + 0.063*"young" + 0.055*"music" + 0.045*"listen" + 0.042*"laptop" + 0.034*"road" + 0.034*"eat" + 0.026*"rid" + 0.026*"bike" + 0.022*"play"
+Words: 0.075*"screen" + 0.045*"cellphon" + 0.034*"optimist" + 0.033*"millenni" + 0.033*"sweatshirt" + 0.033*"hoodi" + 0.031*"object" + 0.030*"plain" + 0.029*"hairdo" + 0.027*"chat"
 Topic: 45
-Words: 0.081*"surf" + 0.079*"mauritania" + 0.079*"ocean" + 0.076*"atlant" + 0.071*"businessman" + 0.055*"young" + 0.034*"woman" + 0.020*"cheer" + 0.016*"alp" + 0.015*"hiker"
+Words: 0.139*"attract" + 0.133*"pose" + 0.082*"purpl" + 0.052*"give" + 0.048*"togeth" + 0.046*"nurs" + 0.040*"uniform" + 0.035*"peopl" + 0.025*"young" + 0.025*"adult"
 Topic: 46
-Words: 0.071*"femal" + 0.041*"portrait" + 0.039*"hiker" + 0.038*"close" + 0.037*"stand" + 0.036*"natur" + 0.025*"young" + 0.024*"wear" + 0.022*"runner" + 0.021*"take"
+Words: 0.186*"businesswoman" + 0.050*"matur" + 0.049*"brazilian" + 0.040*"offic" + 0.037*"peopl" + 0.027*"worri" + 0.026*"arab" + 0.024*"lingeri" + 0.022*"portrait" + 0.021*"attitud"
 Topic: 47
-Words: 0.108*"dive" + 0.099*"scuba" + 0.071*"woman" + 0.065*"young" + 0.028*"park" + 0.021*"color" + 0.021*"hair" + 0.017*"phone" + 0.016*"rest" + 0.016*"carefre"
-
-
-### keyword_list ###
-
-6 topics
-
-Topic: 0
-Words: 0.035*"woman" + 0.021*"color" + 0.020*"ethnic" + 0.018*"human" + 0.018*"beauti" + 0.017*"activ" + 0.016*"sport" + 0.015*"natur" + 0.013*"travel" + 0.012*"imag"
-Topic: 1
-Words: 0.028*"color" + 0.017*"cultur" + 0.016*"activ" + 0.016*"ethnic" + 0.015*"travel" + 0.015*"imag" + 0.013*"woman" + 0.013*"natur" + 0.012*"asia" + 0.012*"plant"
-Topic: 2
-Words: 0.031*"busi" + 0.026*"woman" + 0.021*"cultur" + 0.021*"citi" + 0.016*"beauti" + 0.014*"financ" + 0.013*"ethnic" + 0.013*"fashion" + 0.012*"color" + 0.012*"shop"
-Topic: 3
-Words: 0.039*"woman" + 0.030*"beauti" + 0.020*"activ" + 0.014*"ethnic" + 0.013*"femal" + 0.012*"citi" + 0.011*"happi" + 0.010*"fashion" + 0.010*"sport" + 0.010*"cultur"
-Topic: 4
-Words: 0.028*"phone" + 0.026*"citi" + 0.025*"technolog" + 0.015*"woman" + 0.012*"beauti" + 0.012*"smart" + 0.012*"wireless" + 0.012*"portabl" + 0.012*"devic" + 0.012*"ethnic"
-Topic: 5
-Words: 0.036*"water" + 0.031*"sport" + 0.029*"natur" + 0.024*"travel" + 0.022*"activ" + 0.019*"beauti" + 0.015*"woman" + 0.014*"color" + 0.012*"beach" + 0.012*"summer"
-
-48 topics
-
-Topic: 0
-Words: 0.049*"anim" + 0.030*"natur" + 0.025*"scene" + 0.023*"mountain" + 0.023*"woman" + 0.022*"travel" + 0.020*"retriev" + 0.020*"pursuit" + 0.016*"austria" + 0.016*"activ"
-Topic: 1
-Words: 0.023*"elementari" + 0.022*"human" + 0.020*"preschool" + 0.019*"babi" + 0.018*"childhood" + 0.018*"play" + 0.016*"life" + 0.015*"happi" + 0.014*"school" + 0.014*"color"
-Topic: 2
-Words: 0.055*"busi" + 0.032*"citi" + 0.022*"woman" + 0.021*"financ" + 0.021*"ethnic" + 0.017*"technolog" + 0.015*"laptop" + 0.014*"work" + 0.013*"occup" + 0.012*"industri"
-Topic: 3
-Words: 0.060*"travel" + 0.032*"vacat" + 0.031*"asia" + 0.031*"tourist" + 0.031*"beach" + 0.027*"destin" + 0.026*"tourism" + 0.025*"relax" + 0.024*"southeast" + 0.022*"philippin"
-Topic: 4
-Words: 0.030*"water" + 0.028*"sport" + 0.027*"beauti" + 0.022*"beach" + 0.021*"natur" + 0.020*"summer" + 0.020*"human" + 0.019*"portrait" + 0.017*"sunlight" + 0.017*"sunset"
-Topic: 5
-Words: 0.035*"sport" + 0.032*"water" + 0.021*"travel" + 0.018*"citi" + 0.015*"activ" + 0.014*"natur" + 0.014*"color" + 0.012*"imag" + 0.012*"pursuit" + 0.012*"ethnic"
-Topic: 6
-Words: 0.026*"woman" + 0.023*"color" + 0.020*"travel" + 0.018*"natur" + 0.017*"activ" + 0.016*"mountain" + 0.015*"beauti" + 0.013*"smile" + 0.011*"cloth" + 0.011*"vacat"
-Topic: 7
-Words: 0.070*"sport" + 0.067*"water" + 0.039*"wave" + 0.039*"ocean" + 0.039*"travel" + 0.039*"atlant" + 0.033*"pursuit" + 0.021*"motion" + 0.020*"adventur" + 0.020*"surf"
-Topic: 8
-Words: 0.020*"woman" + 0.019*"citi" + 0.017*"technolog" + 0.017*"activ" + 0.016*"beauti" + 0.015*"phone" + 0.012*"home" + 0.012*"busi" + 0.011*"ethnic" + 0.011*"life"
-Topic: 9
-Words: 0.074*"plant" + 0.041*"garden" + 0.033*"color" + 0.029*"hair" + 0.028*"decor" + 0.024*"activ" + 0.023*"flower" + 0.021*"ethnic" + 0.021*"natur" + 0.020*"pakistan"
-Topic: 10
-Words: 0.024*"woman" + 0.018*"mountain" + 0.018*"natur" + 0.015*"activ" + 0.015*"travel" + 0.015*"color" + 0.014*"beauti" + 0.014*"cultur" + 0.013*"imag" + 0.013*"citi"
-Topic: 11
-Words: 0.042*"natur" + 0.038*"water" + 0.030*"woman" + 0.029*"beauti" + 0.025*"color" + 0.024*"travel" + 0.020*"horizon" + 0.017*"vacat" + 0.014*"summer" + 0.013*"imag"
-Topic: 12
-Words: 0.034*"busi" + 0.027*"ethnic" + 0.026*"asia" + 0.021*"cultur" + 0.019*"asian" + 0.018*"woman" + 0.018*"imag" + 0.018*"citi" + 0.017*"travel" + 0.016*"east"
-Topic: 13
-Words: 0.042*"natur" + 0.035*"travel" + 0.023*"water" + 0.022*"beauti" + 0.017*"destin" + 0.017*"woman" + 0.016*"color" + 0.015*"landscap" + 0.015*"sand" + 0.014*"sceneri"
-Topic: 14
-Words: 0.050*"teenag" + 0.033*"african" + 0.031*"africa" + 0.029*"phone" + 0.028*"ethnic" + 0.026*"look" + 0.023*"girl" + 0.019*"student" + 0.018*"technolog" + 0.017*"school"
-Topic: 15
-Words: 0.034*"woman" + 0.022*"beauti" + 0.021*"color" + 0.017*"look" + 0.016*"technolog" + 0.015*"phone" + 0.014*"ethnic" + 0.014*"cultur" + 0.013*"portrait" + 0.012*"cloth"
-Topic: 16
-Words: 0.036*"color" + 0.024*"imag" + 0.023*"natur" + 0.022*"cloth" + 0.020*"woman" + 0.019*"view" + 0.017*"casual" + 0.017*"activ" + 0.016*"camera" + 0.015*"look"
-Topic: 17
-Words: 0.034*"anim" + 0.024*"human" + 0.021*"protect" + 0.020*"equip" + 0.019*"medic" + 0.019*"occup" + 0.018*"hospit" + 0.017*"medicin" + 0.017*"activ" + 0.016*"bodi"
-Topic: 18
-Words: 0.045*"woman" + 0.031*"ethnic" + 0.028*"beauti" + 0.020*"color" + 0.018*"human" + 0.014*"busi" + 0.014*"asia" + 0.013*"senior" + 0.012*"look" + 0.012*"smile"
-Topic: 19
-Words: 0.037*"activ" + 0.032*"sport" + 0.026*"woman" + 0.024*"beauti" + 0.023*"color" + 0.019*"leisur" + 0.019*"natur" + 0.018*"water" + 0.017*"imag" + 0.013*"healthi"
-Topic: 20
-Words: 0.039*"occup" + 0.026*"work" + 0.024*"industri" + 0.019*"equip" + 0.018*"color" + 0.016*"shirt" + 0.015*"indoor" + 0.015*"technolog" + 0.014*"engin" + 0.014*"profession"
-Topic: 21
-Words: 0.053*"woman" + 0.032*"beauti" + 0.031*"hair" + 0.026*"fashion" + 0.019*"human" + 0.017*"busi" + 0.015*"ethnic" + 0.014*"smile" + 0.013*"color" + 0.013*"portrait"
-Topic: 22
-Words: 0.084*"sport" + 0.028*"athlet" + 0.025*"exercis" + 0.024*"build" + 0.022*"run" + 0.021*"healthi" + 0.021*"muscular" + 0.021*"technolog" + 0.021*"sportsperson" + 0.020*"train"
-Topic: 23
-Words: 0.031*"sport" + 0.024*"activ" + 0.023*"teenag" + 0.021*"citi" + 0.020*"woman" + 0.019*"cultur" + 0.016*"street" + 0.014*"ethnic" + 0.014*"cloth" + 0.013*"beauti"
-Topic: 24
-Words: 0.055*"citi" + 0.054*"busi" + 0.049*"shop" + 0.030*"cultur" + 0.030*"technolog" + 0.027*"phone" + 0.022*"financ" + 0.020*"fashion" + 0.019*"communic" + 0.018*"life"
-Topic: 25
-Words: 0.033*"sport" + 0.032*"woman" + 0.028*"beauti" + 0.028*"activ" + 0.019*"relax" + 0.016*"natur" + 0.013*"exercis" + 0.013*"technolog" + 0.013*"water" + 0.012*"travel"
-Topic: 26
-Words: 0.051*"citi" + 0.028*"phone" + 0.027*"latin" + 0.027*"american" + 0.022*"technolog" + 0.022*"travel" + 0.017*"life" + 0.017*"ethnic" + 0.016*"activ" + 0.015*"leisur"
-Topic: 27
-Words: 0.029*"busi" + 0.022*"student" + 0.022*"shop" + 0.017*"cultur" + 0.015*"indoor" + 0.013*"woman" + 0.013*"europ" + 0.013*"choos" + 0.013*"industri" + 0.013*"interior"
-Topic: 28
-Words: 0.026*"human" + 0.022*"woman" + 0.022*"beauti" + 0.019*"technolog" + 0.016*"imag" + 0.015*"color" + 0.014*"activ" + 0.014*"happi" + 0.014*"bodi" + 0.012*"natur"
-Topic: 29
-Words: 0.038*"travel" + 0.027*"activ" + 0.025*"vacat" + 0.021*"tourist" + 0.019*"femal" + 0.018*"swim" + 0.017*"summer" + 0.017*"enjoy" + 0.017*"destin" + 0.017*"happi"
-Topic: 30
-Words: 0.053*"woman" + 0.036*"human" + 0.032*"beauti" + 0.031*"senior" + 0.028*"color" + 0.019*"portrait" + 0.019*"look" + 0.019*"fashion" + 0.018*"hair" + 0.016*"femal"
-Topic: 31
-Words: 0.040*"busi" + 0.029*"woman" + 0.020*"cultur" + 0.020*"ethnic" + 0.018*"work" + 0.017*"home" + 0.014*"financ" + 0.013*"offic" + 0.012*"color" + 0.012*"matur"
-Topic: 32
-Words: 0.038*"babi" + 0.028*"life" + 0.025*"ethnic" + 0.019*"human" + 0.018*"cloth" + 0.018*"girl" + 0.017*"color" + 0.016*"woman" + 0.013*"look" + 0.013*"happi"
-Topic: 33
-Words: 0.041*"water" + 0.039*"natur" + 0.026*"travel" + 0.026*"beauti" + 0.020*"sport" + 0.019*"color" + 0.017*"activ" + 0.017*"summer" + 0.015*"copi" + 0.015*"space"
-Topic: 34
-Words: 0.038*"woman" + 0.032*"color" + 0.025*"travel" + 0.025*"natur" + 0.020*"beauti" + 0.020*"cultur" + 0.016*"imag" + 0.014*"beach" + 0.013*"destin" + 0.013*"vacat"
-Topic: 35
-Words: 0.037*"activ" + 0.035*"senior" + 0.033*"sport" + 0.026*"natur" + 0.023*"water" + 0.020*"woman" + 0.016*"beauti" + 0.015*"human" + 0.015*"pursuit" + 0.014*"color"
-Topic: 36
-Words: 0.037*"color" + 0.029*"senior" + 0.025*"activ" + 0.018*"natur" + 0.018*"mountain" + 0.014*"plant" + 0.012*"imag" + 0.011*"sport" + 0.011*"healthi" + 0.009*"condit"
-Topic: 37
-Words: 0.060*"woman" + 0.057*"sport" + 0.038*"activ" + 0.028*"beauti" + 0.027*"senior" + 0.024*"exercis" + 0.018*"cloth" + 0.018*"natur" + 0.015*"travel" + 0.014*"bodi"
-Topic: 38
-Words: 0.051*"woman" + 0.029*"beauti" + 0.027*"ethnic" + 0.018*"hair" + 0.017*"sport" + 0.017*"latin" + 0.016*"activ" + 0.015*"bodi" + 0.015*"color" + 0.015*"portrait"
-Topic: 39
-Words: 0.079*"drink" + 0.048*"food" + 0.021*"human" + 0.017*"color" + 0.017*"coffe" + 0.016*"temperatur" + 0.015*"eat" + 0.015*"hand" + 0.014*"hold" + 0.014*"occup"
-Topic: 40
-Words: 0.044*"citi" + 0.031*"travel" + 0.022*"tourist" + 0.022*"cultur" + 0.020*"happi" + 0.020*"explor" + 0.019*"smile" + 0.018*"ethnic" + 0.016*"posit" + 0.015*"cloth"
-Topic: 41
-Words: 0.028*"color" + 0.028*"woman" + 0.022*"cultur" + 0.018*"ethnic" + 0.017*"natur" + 0.016*"activ" + 0.016*"african" + 0.015*"plant" + 0.014*"imag" + 0.013*"beauti"
-Topic: 42
-Words: 0.023*"hair" + 0.021*"water" + 0.019*"woman" + 0.016*"sport" + 0.014*"travel" + 0.013*"color" + 0.013*"view" + 0.011*"male" + 0.011*"wave" + 0.011*"beach"
-Topic: 43
-Words: 0.036*"woman" + 0.033*"ethnic" + 0.022*"asian" + 0.018*"asia" + 0.018*"look" + 0.017*"build" + 0.016*"human" + 0.015*"color" + 0.015*"view" + 0.014*"beauti"
-Topic: 44
-Words: 0.024*"woman" + 0.020*"hotel" + 0.019*"phone" + 0.019*"technolog" + 0.015*"citi" + 0.014*"busi" + 0.013*"travel" + 0.013*"beauti" + 0.013*"luggag" + 0.012*"summer"
-Topic: 45
-Words: 0.054*"citi" + 0.041*"cultur" + 0.031*"street" + 0.028*"phone" + 0.025*"technolog" + 0.023*"shop" + 0.022*"woman" + 0.022*"busi" + 0.022*"african" + 0.021*"financ"
-Topic: 46
-Words: 0.054*"dive" + 0.038*"anim" + 0.033*"water" + 0.026*"fish" + 0.026*"caribbean" + 0.023*"underwat" + 0.020*"tropic" + 0.019*"coral" + 0.019*"natur" + 0.019*"cultur"
-Topic: 47
-Words: 0.047*"beauti" + 0.037*"woman" + 0.024*"tourist" + 0.023*"busi" + 0.022*"travel" + 0.019*"ethnic" + 0.015*"drink" + 0.015*"happi" + 0.015*"smile" + 0.015*"fashion"
-
-### MODEL = TF ###
-
-## keyword_list ##
-
-# topic =6 #
-
-Topic: 0
-Words: 0.011*"sport" + 0.011*"natur" + 0.010*"water" + 0.008*"plant" + 0.008*"senior" + 0.007*"activ" + 0.007*"travel" + 0.007*"tranquil" + 0.007*"scene" + 0.007*"woman"
-Topic: 1
-Words: 0.009*"human" + 0.008*"babi" + 0.007*"busi" + 0.006*"woman" + 0.006*"anim" + 0.006*"medicin" + 0.006*"hair" + 0.006*"real" + 0.005*"look" + 0.005*"camera"
-Topic: 2
-Words: 0.012*"phone" + 0.012*"sport" + 0.010*"woman" + 0.009*"technolog" + 0.008*"senior" + 0.007*"citi" + 0.006*"beauti" + 0.006*"cloth" + 0.006*"exercis" + 0.006*"matur"
-Topic: 3
-Words: 0.012*"travel" + 0.008*"woman" + 0.008*"tourist" + 0.008*"asia" + 0.008*"human" + 0.008*"southeast" + 0.007*"tourism" + 0.007*"beach" + 0.007*"vacat" + 0.007*"water"
-Topic: 4
-Words: 0.018*"busi" + 0.014*"citi" + 0.012*"cultur" + 0.011*"shop" + 0.010*"financ" + 0.009*"street" + 0.008*"technolog" + 0.008*"woman" + 0.008*"phone" + 0.008*"drink"
-Topic: 5
-Words: 0.015*"sport" + 0.015*"water" + 0.014*"atlant" + 0.013*"wave" + 0.012*"ocean" + 0.009*"dive" + 0.008*"travel" + 0.008*"pursuit" + 0.008*"anim" + 0.007*"aquat"
-
-# topic = 48 #
-
-Topic: 0
-Words: 0.010*"human" + 0.009*"cultur" + 0.008*"teenag" + 0.008*"sport" + 0.007*"senior" + 0.007*"tabl" + 0.006*"woman" + 0.006*"educ" + 0.006*"latin" + 0.006*"univers"
-Topic: 1
-Words: 0.034*"senior" + 0.022*"snorkel" + 0.017*"underwat" + 0.015*"dive" + 0.011*"maldiv" + 0.011*"ocean" + 0.011*"mask" + 0.010*"matur" + 0.010*"water" + 0.010*"sport"
-Topic: 2
-Words: 0.026*"swim" + 0.025*"pool" + 0.020*"inflat" + 0.014*"play" + 0.014*"swimwear" + 0.013*"india" + 0.013*"weekend" + 0.012*"west" + 0.011*"travel" + 0.011*"water"
-Topic: 3
-Words: 0.020*"busi" + 0.017*"financ" + 0.015*"citi" + 0.014*"shop" + 0.011*"coffe" + 0.010*"district" + 0.009*"cultur" + 0.009*"drink" + 0.009*"wed" + 0.008*"laptop"
-Topic: 4
-Words: 0.030*"senior" + 0.013*"grass" + 0.012*"endur" + 0.011*"sport" + 0.011*"field" + 0.010*"track" + 0.010*"natur" + 0.010*"food" + 0.010*"run" + 0.009*"scene"
-Topic: 5
-Words: 0.023*"dive" + 0.018*"anim" + 0.012*"caribbean" + 0.011*"fish" + 0.011*"photograph" + 0.010*"underwat" + 0.009*"deep" + 0.009*"tropic" + 0.009*"water" + 0.009*"coral"
-Topic: 6
-Words: 0.020*"citi" + 0.017*"busi" + 0.012*"shop" + 0.012*"cultur" + 0.011*"laptop" + 0.011*"capit" + 0.010*"europ" + 0.010*"phone" + 0.010*"financ" + 0.010*"hipster"
-Topic: 7
-Words: 0.021*"sport" + 0.019*"paddleboard" + 0.013*"water" + 0.011*"pursuit" + 0.009*"woman" + 0.008*"wellb" + 0.008*"senior" + 0.008*"escap" + 0.008*"activ" + 0.007*"recreat"
-Topic: 8
-Words: 0.032*"senior" + 0.013*"paddleboard" + 0.012*"hair" + 0.012*"water" + 0.011*"sport" + 0.010*"woman" + 0.010*"look" + 0.009*"boomer" + 0.009*"camera" + 0.009*"pursuit"
-Topic: 9
-Words: 0.026*"mountain" + 0.018*"anim" + 0.013*"alp" + 0.012*"senior" + 0.012*"retriev" + 0.010*"natur" + 0.009*"rang" + 0.009*"sport" + 0.008*"winter" + 0.008*"european"
-Topic: 10
-Words: 0.047*"sport" + 0.030*"exercis" + 0.025*"pilat" + 0.025*"instructor" + 0.025*"train" + 0.024*"wellb" + 0.022*"mexican" + 0.019*"physic" + 0.018*"bodi" + 0.018*"stretch"
-Topic: 11
-Words: 0.021*"photograph" + 0.014*"camera" + 0.012*"fashion" + 0.012*"ethnic" + 0.012*"woman" + 0.011*"cultur" + 0.009*"asian" + 0.009*"east" + 0.009*"visit" + 0.009*"youth"
-Topic: 12
-Words: 0.012*"natur" + 0.012*"rock" + 0.011*"desert" + 0.011*"silhouett" + 0.009*"store" + 0.009*"water" + 0.008*"sand" + 0.008*"mall" + 0.008*"arid" + 0.008*"object"
-Topic: 13
-Words: 0.016*"phone" + 0.013*"citi" + 0.012*"latin" + 0.010*"technolog" + 0.010*"american" + 0.009*"discoveri" + 0.009*"masculin" + 0.009*"effortless" + 0.009*"travel" + 0.008*"determin"
-Topic: 14
-Words: 0.021*"model" + 0.019*"asia" + 0.019*"chines" + 0.018*"woman" + 0.018*"sensual" + 0.017*"taiwan" + 0.017*"america" + 0.015*"babi" + 0.015*"human" + 0.014*"ethnic"
-Topic: 15
-Words: 0.022*"vehicl" + 0.022*"transport" + 0.013*"len" + 0.012*"mode" + 0.012*"medicin" + 0.011*"mini" + 0.011*"land" + 0.011*"trip" + 0.011*"hood" + 0.011*"millenni"
-Topic: 16
-Words: 0.018*"girl" + 0.017*"scene" + 0.015*"play" + 0.014*"swim" + 0.014*"anim" + 0.012*"children" + 0.012*"agricultur" + 0.011*"child" + 0.011*"rural" + 0.010*"camp"
-Topic: 17
-Words: 0.018*"luggag" + 0.017*"bridg" + 0.014*"citi" + 0.012*"student" + 0.012*"explor" + 0.011*"visit" + 0.010*"wheel" + 0.010*"street" + 0.009*"exchang" + 0.009*"suitcas"
-Topic: 18
-Words: 0.018*"skateboard" + 0.014*"human" + 0.014*"teenag" + 0.012*"skate" + 0.012*"longboard" + 0.011*"sport" + 0.010*"cyprus" + 0.010*"bodi" + 0.009*"woman" + 0.009*"yoga"
-Topic: 19
-Words: 0.011*"focus" + 0.011*"sport" + 0.009*"eat" + 0.008*"foreground" + 0.007*"play" + 0.007*"food" + 0.007*"travel" + 0.007*"hold" + 0.006*"asia" + 0.006*"cloth"
-Topic: 20
-Words: 0.009*"woman" + 0.008*"babi" + 0.007*"home" + 0.007*"morn" + 0.007*"fashion" + 0.007*"anim" + 0.007*"hair" + 0.006*"phone" + 0.006*"flower" + 0.006*"explor"
-Topic: 21
-Words: 0.015*"sport" + 0.011*"window" + 0.009*"latin" + 0.009*"water" + 0.008*"american" + 0.007*"citi" + 0.007*"atlant" + 0.007*"hispan" + 0.007*"portug" + 0.006*"wave"
-Topic: 22
-Words: 0.038*"atlant" + 0.037*"sport" + 0.032*"wave" + 0.031*"ocean" + 0.030*"water" + 0.020*"pursuit" + 0.020*"wetsuit" + 0.019*"north" + 0.019*"mauritania" + 0.019*"splash"
-Topic: 23
-Words: 0.012*"drink" + 0.011*"view" + 0.011*"busi" + 0.011*"winter" + 0.011*"occup" + 0.011*"warm" + 0.010*"human" + 0.010*"hair" + 0.009*"foreground" + 0.009*"real"
-Topic: 24
-Words: 0.026*"africa" + 0.025*"phone" + 0.022*"african" + 0.016*"tanzania" + 0.016*"salaam" + 0.014*"technolog" + 0.014*"power" + 0.014*"citi" + 0.013*"tradit" + 0.013*"street"
-Topic: 25
-Words: 0.016*"doctor" + 0.012*"dawn" + 0.012*"phone" + 0.011*"technolog" + 0.010*"morn" + 0.009*"sunris" + 0.009*"asian" + 0.009*"trust" + 0.009*"asia" + 0.008*"dedic"
-Topic: 26
-Words: 0.013*"cultur" + 0.012*"landmark" + 0.012*"market" + 0.011*"citi" + 0.011*"street" + 0.009*"chines" + 0.009*"busi" + 0.009*"asia" + 0.009*"senior" + 0.008*"sport"
-Topic: 27
-Words: 0.026*"sport" + 0.013*"athlet" + 0.012*"run" + 0.011*"away" + 0.011*"sportsperson" + 0.010*"ponytail" + 0.010*"watch" + 0.010*"exercis" + 0.010*"singapor" + 0.009*"train"
-Topic: 28
-Words: 0.027*"food" + 0.020*"human" + 0.016*"drink" + 0.013*"eat" + 0.013*"tourist" + 0.012*"hand" + 0.012*"exclus" + 0.011*"cocktail" + 0.011*"refresh" + 0.011*"bikini"
-Topic: 29
-Words: 0.012*"vietnames" + 0.011*"latin" + 0.009*"matur" + 0.009*"indigen" + 0.009*"america" + 0.009*"ethnic" + 0.008*"american" + 0.008*"background" + 0.008*"cultur" + 0.008*"central"
-Topic: 30
-Words: 0.042*"plant" + 0.031*"garden" + 0.024*"decor" + 0.017*"flower" + 0.016*"hair" + 0.015*"pakistan" + 0.013*"organ" + 0.012*"fashion" + 0.012*"live" + 0.010*"babi"
-Topic: 31
-Words: 0.022*"sport" + 0.015*"run" + 0.014*"muscular" + 0.014*"athlet" + 0.012*"diet" + 0.011*"phone" + 0.011*"train" + 0.011*"sportsperson" + 0.011*"build" + 0.010*"technolog"
-Topic: 32
-Words: 0.028*"babi" + 0.012*"tree" + 0.010*"natur" + 0.009*"food" + 0.009*"long" + 0.008*"hair" + 0.008*"play" + 0.008*"human" + 0.008*"tranquil" + 0.008*"domest"
-Topic: 33
-Words: 0.018*"manufactur" + 0.017*"engin" + 0.017*"occup" + 0.013*"hardhat" + 0.011*"industri" + 0.011*"headwear" + 0.010*"slovakia" + 0.010*"manag" + 0.010*"safeti" + 0.010*"machineri"
-Topic: 34
-Words: 0.016*"water" + 0.015*"island" + 0.014*"skin" + 0.013*"natur" + 0.013*"turquois" + 0.012*"brazilian" + 0.012*"coastlin" + 0.011*"tropic" + 0.011*"seascap" + 0.010*"wonderlust"
-Topic: 35
-Words: 0.009*"anim" + 0.009*"human" + 0.008*"phone" + 0.007*"play" + 0.007*"mysteri" + 0.007*"citi" + 0.007*"cool" + 0.007*"attitud" + 0.006*"sand" + 0.006*"retriev"
-Topic: 36
-Words: 0.013*"school" + 0.013*"citi" + 0.013*"latin" + 0.012*"elementari" + 0.012*"sport" + 0.012*"children" + 0.011*"determin" + 0.011*"american" + 0.010*"masculin" + 0.010*"effortless"
-Topic: 37
-Words: 0.021*"iranian" + 0.018*"busi" + 0.013*"religi" + 0.013*"architectur" + 0.012*"provinc" + 0.012*"islam" + 0.011*"cultur" + 0.011*"hijab" + 0.011*"modest" + 0.011*"build"
-Topic: 38
-Words: 0.017*"human" + 0.013*"view" + 0.013*"hand" + 0.010*"teenag" + 0.010*"woman" + 0.010*"close" + 0.009*"headshot" + 0.009*"real" + 0.009*"look" + 0.009*"bodi"
-Topic: 39
-Words: 0.033*"busi" + 0.022*"work" + 0.015*"tablet" + 0.015*"digit" + 0.013*"media" + 0.013*"offic" + 0.012*"social" + 0.012*"laptop" + 0.011*"small" + 0.011*"creativ"
-Topic: 40
-Words: 0.016*"mountain" + 0.011*"asian" + 0.010*"natur" + 0.010*"myanmar" + 0.010*"sport" + 0.010*"dive" + 0.010*"travel" + 0.010*"ethnic" + 0.009*"agricultur" + 0.009*"cultur"
-Topic: 41
-Words: 0.027*"citi" + 0.024*"street" + 0.023*"shop" + 0.018*"phone" + 0.013*"busi" + 0.013*"technolog" + 0.012*"cultur" + 0.011*"african" + 0.010*"vienna" + 0.010*"woman"
-Topic: 42
-Words: 0.014*"hotel" + 0.014*"sport" + 0.013*"senior" + 0.012*"dive" + 0.011*"water" + 0.010*"dawn" + 0.009*"travel" + 0.009*"underwat" + 0.008*"luggag" + 0.008*"natur"
-Topic: 43
-Words: 0.021*"babi" + 0.011*"senior" + 0.010*"asian" + 0.010*"asia" + 0.010*"sit" + 0.009*"southeast" + 0.008*"play" + 0.008*"human" + 0.007*"indian" + 0.007*"sport"
-Topic: 44
-Words: 0.021*"citi" + 0.014*"cultur" + 0.012*"african" + 0.012*"arab" + 0.012*"busi" + 0.011*"emir" + 0.011*"sport" + 0.011*"cafe" + 0.011*"unit" + 0.011*"coffe"
-Topic: 45
-Words: 0.020*"home" + 0.014*"drink" + 0.014*"matur" + 0.013*"domest" + 0.013*"coffe" + 0.011*"room" + 0.009*"laptop" + 0.009*"indoor" + 0.009*"work" + 0.008*"plan"
-Topic: 46
-Words: 0.034*"palawan" + 0.034*"puerto" + 0.034*"princesa" + 0.033*"philippin" + 0.027*"southeast" + 0.024*"beach" + 0.024*"travel" + 0.019*"tourism" + 0.017*"asia" + 0.015*"tourist"
-Topic: 47
-Words: 0.016*"coffe" + 0.014*"mountain" + 0.014*"woman" + 0.011*"fashion" + 0.010*"hospit" + 0.010*"anim" + 0.010*"medic" + 0.010*"beauti" + 0.010*"railroad" + 0.009*"drink"
-
-## description ##
-
-# topic =6 #
-
-Topic: 0
-Words: 0.067*"fit" + 0.043*"center" + 0.043*"dive" + 0.042*"summer" + 0.039*"scuba" + 0.035*"woman" + 0.033*"morn" + 0.033*"year" + 0.025*"store" + 0.025*"optic"
-Topic: 1
-Words: 0.051*"girl" + 0.038*"femal" + 0.035*"young" + 0.034*"shop" + 0.033*"babi" + 0.032*"runner" + 0.025*"summer" + 0.024*"close" + 0.024*"portrait" + 0.024*"look"
-Topic: 2
-Words: 0.044*"beach" + 0.042*"home" + 0.042*"woman" + 0.039*"matur" + 0.033*"travel" + 0.027*"girl" + 0.026*"pool" + 0.024*"young" + 0.022*"trip" + 0.022*"pakistani"
-Topic: 3
-Words: 0.083*"woman" + 0.054*"young" + 0.047*"beauti" + 0.045*"stand" + 0.041*"mountain" + 0.041*"portrait" + 0.037*"smile" + 0.031*"sit" + 0.028*"look" + 0.021*"pregnant"
-Topic: 4
-Words: 0.050*"tourist" + 0.044*"woman" + 0.039*"young" + 0.039*"businessman" + 0.032*"citi" + 0.031*"portrait" + 0.028*"retir" + 0.025*"beach" + 0.025*"shopp" + 0.024*"europ"
-Topic: 5
-Words: 0.052*"mauritania" + 0.051*"ocean" + 0.050*"surf" + 0.050*"atlant" + 0.040*"citi" + 0.035*"young" + 0.034*"woman" + 0.034*"enjoy" + 0.030*"portrait" + 0.028*"dress"
-
-# topic =48 #
-
-Topic: 0
-Words: 0.077*"relax" + 0.064*"smartphon" + 0.057*"enjoy" + 0.056*"night" + 0.055*"outdoor" + 0.048*"winter" + 0.046*"young" + 0.042*"natur" + 0.032*"senior" + 0.030*"woman"
-Topic: 1
-Words: 0.112*"urban" + 0.077*"smartphon" + 0.056*"park" + 0.051*"busi" + 0.049*"coffe" + 0.044*"businesswoman" + 0.041*"night" + 0.040*"skateboard" + 0.040*"citi" + 0.039*"asian"
-Topic: 2
-Words: 0.151*"fashion" + 0.141*"design" + 0.140*"success" + 0.083*"portrait" + 0.023*"copi" + 0.023*"space" + 0.022*"senior" + 0.022*"laptop" + 0.017*"garden" + 0.017*"pakistani"
-Topic: 3
-Words: 0.154*"background" + 0.143*"climber" + 0.137*"white" + 0.086*"vietnam" + 0.082*"portrait" + 0.081*"senior" + 0.065*"woman" + 0.048*"mountain" + 0.020*"citi" + 0.018*"hold"
-Topic: 4
-Words: 0.216*"check" + 0.145*"board" + 0.087*"femal" + 0.063*"beach" + 0.037*"palawan" + 0.035*"athlet" + 0.034*"stand" + 0.027*"woman" + 0.024*"wear" + 0.023*"white"
-Topic: 5
-Words: 0.140*"attract" + 0.076*"year" + 0.038*"woman" + 0.032*"laptop" + 0.030*"home" + 0.026*"look" + 0.025*"garden" + 0.025*"pakistani" + 0.025*"plant" + 0.023*"femal"
-Topic: 6
-Words: 0.190*"shop" + 0.103*"pool" + 0.078*"summer" + 0.060*"swim" + 0.059*"matur" + 0.049*"home" + 0.048*"travel" + 0.035*"woman" + 0.033*"tradit" + 0.028*"warm"
-Topic: 7
-Words: 0.097*"rest" + 0.072*"asian" + 0.068*"busi" + 0.066*"winter" + 0.064*"room" + 0.049*"tablet" + 0.048*"tourist" + 0.047*"laptop" + 0.041*"enjoy" + 0.028*"beauti"
-Topic: 8
-Words: 0.157*"explor" + 0.135*"street" + 0.045*"night" + 0.044*"cute" + 0.042*"travel" + 0.041*"camera" + 0.035*"high" + 0.031*"asian" + 0.030*"look" + 0.029*"citi"
-Topic: 9
-Words: 0.155*"citi" + 0.121*"stockholm" + 0.090*"tourist" + 0.062*"beauti" + 0.058*"camera" + 0.054*"view" + 0.051*"enjoy" + 0.048*"young" + 0.035*"girl" + 0.032*"talk"
-Topic: 10
-Words: 0.175*"sand" + 0.164*"play" + 0.091*"beach" + 0.088*"femal" + 0.079*"run" + 0.051*"runner" + 0.043*"young" + 0.037*"girl" + 0.033*"palawan" + 0.021*"mountain"
-Topic: 11
-Words: 0.176*"beauti" + 0.171*"woman" + 0.093*"view" + 0.079*"enjoy" + 0.062*"portrait" + 0.055*"smile" + 0.048*"young" + 0.022*"talk" + 0.021*"girl" + 0.020*"african"
-Topic: 12
-Words: 0.253*"hold" + 0.061*"skateboard" + 0.060*"sit" + 0.040*"stand" + 0.039*"citi" + 0.038*"portrait" + 0.036*"woman" + 0.033*"coffe" + 0.033*"hand" + 0.031*"young"
-Topic: 13
-Words: 0.126*"stand" + 0.108*"beach" + 0.108*"shopp" + 0.107*"businessman" + 0.089*"coffe" + 0.073*"young" + 0.057*"pregnant" + 0.046*"woman" + 0.030*"blue" + 0.030*"hold"
-Topic: 14
-Words: 0.198*"travel" + 0.135*"beach" + 0.122*"europ" + 0.111*"backpack" + 0.104*"latino" + 0.081*"tropic" + 0.068*"male" + 0.021*"young" + 0.020*"boat" + 0.019*"woman"
-Topic: 15
-Words: 0.089*"girl" + 0.068*"smile" + 0.064*"babi" + 0.050*"portrait" + 0.046*"tourist" + 0.043*"close" + 0.030*"young" + 0.027*"take" + 0.027*"cheer" + 0.024*"asian"
-Topic: 16
-Words: 0.122*"pink" + 0.093*"park" + 0.084*"stand" + 0.078*"femal" + 0.053*"runner" + 0.045*"road" + 0.041*"woman" + 0.040*"young" + 0.036*"mountain" + 0.031*"plant"
-Topic: 17
-Words: 0.179*"dive" + 0.172*"citi" + 0.146*"scuba" + 0.121*"tourist" + 0.092*"young" + 0.046*"woman" + 0.041*"phone" + 0.013*"white" + 0.013*"stockholm" + 0.012*"europ"
-Topic: 18
-Words: 0.235*"book" + 0.098*"text" + 0.060*"read" + 0.054*"stand" + 0.036*"riviã" + 0.033*"mauritius" + 0.030*"district" + 0.026*"wall" + 0.022*"young" + 0.020*"forest"
-Topic: 19
-Words: 0.107*"matur" + 0.105*"cheer" + 0.083*"year" + 0.080*"pineappl" + 0.067*"hand" + 0.051*"hold" + 0.046*"busi" + 0.031*"background" + 0.031*"portrait" + 0.030*"woman"
-Topic: 20
-Words: 0.212*"mauritania" + 0.194*"ocean" + 0.184*"atlant" + 0.184*"surf" + 0.027*"male" + 0.026*"runner" + 0.010*"mountain" + 0.009*"girl" + 0.007*"young" + 0.006*"mobil"
-Topic: 21
-Words: 0.112*"water" + 0.052*"work" + 0.051*"mauritius" + 0.047*"clear" + 0.045*"blue" + 0.043*"cute" + 0.041*"board" + 0.037*"matur" + 0.036*"district" + 0.032*"home"
-Topic: 22
-Words: 0.127*"success" + 0.107*"design" + 0.106*"fashion" + 0.060*"portrait" + 0.034*"wear" + 0.028*"beauti" + 0.027*"talk" + 0.024*"look" + 0.022*"close" + 0.021*"smile"
-Topic: 23
-Words: 0.057*"morn" + 0.054*"work" + 0.046*"enjoy" + 0.036*"busi" + 0.034*"citi" + 0.033*"sunset" + 0.031*"look" + 0.030*"atlant" + 0.030*"surf" + 0.029*"ocean"
-Topic: 24
-Words: 0.140*"music" + 0.107*"listen" + 0.094*"length" + 0.044*"stand" + 0.043*"rest" + 0.042*"mountain" + 0.032*"phone" + 0.030*"woman" + 0.027*"tourist" + 0.027*"mobil"
-Topic: 25
-Words: 0.160*"businesswoman" + 0.146*"morn" + 0.086*"confid" + 0.075*"portrait" + 0.061*"drink" + 0.041*"young" + 0.037*"coffe" + 0.025*"stand" + 0.025*"talk" + 0.023*"woman"
-Topic: 26
-Words: 0.099*"relax" + 0.051*"explor" + 0.041*"summer" + 0.036*"skateboard" + 0.036*"length" + 0.028*"girl" + 0.024*"citi" + 0.022*"view" + 0.022*"listen" + 0.022*"street"
-Topic: 27
-Words: 0.116*"mobil" + 0.094*"phone" + 0.067*"african" + 0.064*"confid" + 0.061*"build" + 0.058*"beauti" + 0.040*"beach" + 0.037*"young" + 0.032*"palawan" + 0.028*"woman"
-Topic: 28
-Words: 0.127*"wear" + 0.120*"blue" + 0.082*"stand" + 0.057*"woman" + 0.046*"portrait" + 0.037*"tradit" + 0.031*"look" + 0.029*"wall" + 0.027*"smile" + 0.027*"young"
-Topic: 29
-Words: 0.192*"look" + 0.151*"pakistani" + 0.149*"garden" + 0.144*"home" + 0.142*"plant" + 0.067*"woman" + 0.012*"young" + 0.012*"close" + 0.008*"hijab" + 0.006*"girl"
-Topic: 30
-Words: 0.156*"littl" + 0.152*"doctor" + 0.124*"work" + 0.104*"run" + 0.103*"school" + 0.082*"athlet" + 0.055*"offic" + 0.039*"tablet" + 0.028*"outdoor" + 0.020*"woman"
-Topic: 31
-Words: 0.112*"walk" + 0.097*"mountain" + 0.074*"snorkel" + 0.067*"tropic" + 0.061*"clear" + 0.052*"woman" + 0.051*"island" + 0.042*"water" + 0.033*"white" + 0.033*"young"
-Topic: 32
-Words: 0.231*"mauritania" + 0.221*"ocean" + 0.207*"surf" + 0.206*"atlant" + 0.014*"businessman" + 0.011*"matur" + 0.006*"shopp" + 0.005*"coffe" + 0.004*"tradit" + 0.004*"view"
-Topic: 33
-Words: 0.198*"portrait" + 0.131*"close" + 0.084*"smile" + 0.071*"woman" + 0.054*"young" + 0.046*"background" + 0.040*"laptop" + 0.036*"stand" + 0.035*"vietnam" + 0.035*"black"
-Topic: 34
-Words: 0.166*"myanmar" + 0.137*"hijab" + 0.090*"happi" + 0.048*"girl" + 0.043*"asian" + 0.043*"woman" + 0.043*"young" + 0.043*"portrait" + 0.032*"chair" + 0.031*"babi"
-Topic: 35
-Words: 0.181*"sunset" + 0.047*"blue" + 0.045*"boat" + 0.037*"young" + 0.036*"close" + 0.033*"beach" + 0.032*"woman" + 0.031*"look" + 0.030*"beauti" + 0.026*"hold"
-Topic: 36
-Words: 0.160*"forest" + 0.111*"tropic" + 0.073*"riviã" + 0.068*"mauritius" + 0.063*"district" + 0.060*"backpack" + 0.058*"pregnant" + 0.044*"woman" + 0.036*"smile" + 0.031*"young"
-Topic: 37
-Words: 0.367*"summer" + 0.145*"wall" + 0.080*"hand" + 0.060*"phone" + 0.035*"woman" + 0.025*"attract" + 0.022*"coffe" + 0.021*"year" + 0.021*"street" + 0.019*"smile"
-Topic: 38
-Words: 0.233*"enjoy" + 0.190*"sit" + 0.146*"retir" + 0.114*"senior" + 0.043*"mountain" + 0.043*"woman" + 0.025*"wall" + 0.021*"mauritania" + 0.017*"atlant" + 0.017*"surf"
-Topic: 39
-Words: 0.161*"winter" + 0.130*"drink" + 0.052*"swim" + 0.046*"hold" + 0.040*"coffe" + 0.039*"woman" + 0.032*"pakistani" + 0.028*"smile" + 0.023*"young" + 0.020*"look"
-Topic: 40
-Words: 0.133*"room" + 0.124*"femal" + 0.067*"wear" + 0.062*"skateboard" + 0.054*"young" + 0.052*"black" + 0.042*"pregnant" + 0.032*"beauti" + 0.024*"babi" + 0.024*"blue"
-Topic: 41
-Words: 0.175*"young" + 0.162*"runner" + 0.091*"road" + 0.085*"trip" + 0.079*"away" + 0.068*"woman" + 0.054*"look" + 0.054*"smile" + 0.037*"sit" + 0.032*"close"
-Topic: 42
-Words: 0.286*"dress" + 0.059*"morn" + 0.056*"woman" + 0.046*"girl" + 0.042*"high" + 0.039*"pink" + 0.039*"black" + 0.037*"read" + 0.030*"white" + 0.028*"summer"
-Topic: 43
-Words: 0.130*"babi" + 0.122*"natur" + 0.049*"outdoor" + 0.047*"senior" + 0.046*"athlet" + 0.042*"train" + 0.036*"pregnant" + 0.035*"high" + 0.034*"morn" + 0.033*"space"
-Topic: 44
-Words: 0.178*"field" + 0.121*"businessman" + 0.090*"portrait" + 0.061*"stand" + 0.049*"young" + 0.045*"confid" + 0.030*"sunset" + 0.026*"view" + 0.026*"design" + 0.026*"woman"
-Topic: 45
-Words: 0.225*"girl" + 0.095*"road" + 0.089*"train" + 0.077*"trip" + 0.077*"young" + 0.050*"outdoor" + 0.031*"portrait" + 0.029*"summer" + 0.028*"stand" + 0.024*"winter"
-Topic: 46
-Words: 0.185*"take" + 0.143*"photo" + 0.054*"hispan" + 0.046*"young" + 0.043*"camera" + 0.040*"tourist" + 0.036*"water" + 0.035*"woman" + 0.028*"smile" + 0.025*"laptop"
-Topic: 47
-Words: 0.124*"smile" + 0.112*"african" + 0.084*"mobil" + 0.077*"phone" + 0.058*"portrait" + 0.046*"text" + 0.040*"young" + 0.037*"citi" + 0.037*"woman" + 0.036*"girl"
-
-
-
-
-
-
-
+Words: 0.197*"natur" + 0.134*"light" + 0.121*"phenomenon" + 0.031*"background" + 0.028*"anger" + 0.026*"peopl" + 0.022*"save" + 0.017*"insert" + 0.016*"beauti" + 0.014*"spray"
+Topic: 48
+Words: 0.108*"paper" + 0.092*"race" + 0.067*"take" + 0.050*"mother" + 0.048*"selfi" + 0.040*"photograph" + 0.040*"ribbon" + 0.034*"nose" + 0.031*"high" + 0.030*"wrap"
+Topic: 49
+Words: 0.075*"tongu" + 0.073*"stick" + 0.065*"russian" + 0.057*"witch" + 0.042*"test" + 0.041*"scientist" + 0.040*"valentin" + 0.031*"turquois" + 0.030*"rise" + 0.028*"pant"
+Topic: 50
+Words: 0.112*"headset" + 0.097*"violet" + 0.075*"cold" + 0.063*"pizza" + 0.054*"win" + 0.041*"queen" + 0.037*"swing" + 0.031*"passion" + 0.030*"rope" + 0.026*"virtual"
+Topic: 51
+Words: 0.108*"sunglass" + 0.078*"coat" + 0.058*"field" + 0.030*"peopl" + 0.029*"straight" + 0.028*"document" + 0.027*"travel" + 0.027*"folder" + 0.024*"glamor" + 0.022*"passport"
+Topic: 52
+Words: 0.173*"phone" + 0.104*"mobil" + 0.067*"talk" + 0.041*"smart" + 0.035*"messag" + 0.034*"balloon" + 0.032*"parti" + 0.031*"peopl" + 0.025*"danc" + 0.023*"text"
+Topic: 53
+Words: 0.142*"sport" + 0.063*"fit" + 0.054*"exercis" + 0.052*"yoga" + 0.033*"wink" + 0.030*"sportswear" + 0.029*"athlet" + 0.029*"train" + 0.027*"sporti" + 0.025*"shoulder"
+Topic: 54
+Words: 0.076*"window" + 0.072*"employe" + 0.072*"custom" + 0.057*"road" + 0.053*"servic" + 0.051*"market" + 0.047*"place" + 0.034*"simpl" + 0.028*"scale" + 0.026*"tomato"
+Topic: 55
+Words: 0.173*"surpris" + 0.104*"stylish" + 0.088*"present" + 0.033*"peopl" + 0.029*"bathrob" + 0.026*"background" + 0.026*"candi" + 0.022*"women" + 0.021*"young" + 0.021*"adult"
+Topic: 56
+Words: 0.131*"mask" + 0.061*"desk" + 0.050*"protect" + 0.039*"coronavirus" + 0.037*"covid" + 0.031*"cri" + 0.028*"medic" + 0.028*"face" + 0.025*"virus" + 0.025*"wear"
+Topic: 57
+Words: 0.111*"park" + 0.090*"winter" + 0.078*"autumn" + 0.037*"peopl" + 0.036*"warm" + 0.036*"leav" + 0.036*"wooden" + 0.033*"girl" + 0.030*"snow" + 0.026*"milk"
+Topic: 58
+Words: 0.180*"wall" + 0.063*"bouquet" + 0.061*"glove" + 0.050*"brick" + 0.038*"cosmet" + 0.030*"peopl" + 0.028*"tattoo" + 0.022*"earphon" + 0.019*"flower" + 0.019*"beauti"
+Topic: 59
+Words: 0.092*"small" + 0.089*"babi" + 0.076*"boy" + 0.062*"sweater" + 0.062*"cute" + 0.050*"human" + 0.048*"afro" + 0.041*"peopl" + 0.038*"girl" + 0.035*"child"
+Topic: 60
+Words: 0.047*"stress" + 0.041*"frustrat" + 0.036*"cool" + 0.035*"unhappi" + 0.034*"headach" + 0.034*"mistak" + 0.034*"negat" + 0.028*"peopl" + 0.027*"problem" + 0.025*"human"
+Topic: 61
+Words: 0.109*"citi" + 0.097*"street" + 0.077*"walk" + 0.053*"summer" + 0.041*"sunni" + 0.038*"outdoor" + 0.038*"peopl" + 0.034*"european" + 0.030*"girl" + 0.027*"park"
+Topic: 62
+Words: 0.161*"coffe" + 0.144*"drink" + 0.084*"glass" + 0.046*"water" + 0.037*"peopl" + 0.030*"pill" + 0.026*"women" + 0.021*"adult" + 0.021*"young" + 0.021*"beauti"
+Topic: 63
+Words: 0.093*"mix" + 0.071*"helmet" + 0.054*"build" + 0.039*"retro" + 0.036*"construct" + 0.036*"architect" + 0.031*"engin" + 0.030*"isol" + 0.029*"sick" + 0.024*"architectur"
+Topic: 64
+Words: 0.148*"senior" + 0.087*"activ" + 0.064*"leisur" + 0.056*"hobbi" + 0.048*"depress" + 0.044*"watch" + 0.041*"bike" + 0.038*"rid" + 0.031*"skirt" + 0.029*"bicycl"
+Topic: 65
+Words: 0.085*"head" + 0.060*"eye" + 0.059*"ear" + 0.048*"close" + 0.047*"money" + 0.034*"towel" + 0.032*"cover" + 0.030*"peopl" + 0.027*"human" + 0.026*"cosmetolog"
+Topic: 66
+Words: 0.063*"treatment" + 0.059*"product" + 0.056*"toddler" + 0.054*"swimsuit" + 0.046*"childhood" + 0.044*"sister" + 0.038*"deliveri" + 0.035*"appli" + 0.027*"jump" + 0.023*"packag"
+Topic: 67
+Words: 0.124*"flower" + 0.070*"birthday" + 0.058*"sweet" + 0.054*"cake" + 0.053*"kitchen" + 0.051*"scarf" + 0.030*"peopl" + 0.026*"girl" + 0.024*"small" + 0.021*"wish"
+Topic: 68
+Words: 0.112*"headphon" + 0.099*"music" + 0.087*"listen" + 0.059*"chef" + 0.046*"cook" + 0.042*"center" + 0.041*"board" + 0.036*"apron" + 0.023*"peopl" + 0.022*"pot"
+Topic: 69
+Words: 0.142*"space" + 0.124*"copi" + 0.108*"palm" + 0.042*"bank" + 0.030*"background" + 0.028*"couch" + 0.028*"show" + 0.025*"peopl" + 0.022*"hand" + 0.021*"hold"
+Topic: 70
+Words: 0.093*"think" + 0.085*"silenc" + 0.084*"idea" + 0.068*"amaz" + 0.032*"ask" + 0.032*"surpris" + 0.028*"finger" + 0.027*"peopl" + 0.022*"wear" + 0.022*"mouth"
+Topic: 71
+Words: 0.094*"health" + 0.086*"bikini" + 0.065*"straw" + 0.039*"plastic" + 0.039*"soft" + 0.032*"toothbrush" + 0.031*"hygien" + 0.028*"bathroom" + 0.028*"schoolboy" + 0.026*"volunt"
+Topic: 72
+Words: 0.109*"cafe" + 0.050*"owner" + 0.048*"restaur" + 0.034*"waitress" + 0.032*"coffe" + 0.032*"telephon" + 0.027*"barista" + 0.026*"spectacl" + 0.025*"machin" + 0.023*"peopl"
+Topic: 73
+Words: 0.077*"number" + 0.077*"show" + 0.067*"sign" + 0.065*"cloth" + 0.054*"finger" + 0.051*"casual" + 0.040*"wear" + 0.034*"peopl" + 0.027*"young" + 0.027*"adult"
+Topic: 74
+Words: 0.091*"banner" + 0.084*"worker" + 0.058*"playground" + 0.034*"cocktail" + 0.033*"industri" + 0.032*"tool" + 0.027*"takeaway" + 0.027*"leaf" + 0.025*"pencil" + 0.023*"metal"

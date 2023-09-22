@@ -58,7 +58,7 @@ NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 USE_SEGMENT = False
 
 MODEL="TF" ## OR TF  ## Bag of words or TF-IDF
-NUM_TOPICS=48
+NUM_TOPICS=75
 
 stemmer = SnowballStemmer('english')
 
@@ -82,7 +82,7 @@ else:
     SELECT = "DISTINCT(image_id),description,keyword_list"
     FROM ="bagofkeywords"
     WHERE = "keyword_list IS NOT NULL"
-    LIMIT = 10000
+    LIMIT = 328894
     SegmentTable_name = ""
 
 # if db['unix_socket']:
@@ -137,12 +137,11 @@ def main():
     print("got results, count is: ",len(resultsjson))
     txt = pd.DataFrame(index=range(len(resultsjson)),columns=["description","keywords","index","score"])
     for i,row in enumerate(resultsjson):
-        # gets contentUrl
-        txt.at[i,"description"]=row["description"]
-        #txt.at[i,"keyword_list"]=" ".join(pickle.loads(row["keyword_list"]))
+        #txt.at[i,"description"]=row["description"]
+        txt.at[i,"keyword_list"]=" ".join(pickle.loads(row["keyword_list"]))
     #print(txt.tail())
-    processed_txt=txt['description'].map(preprocess)
-    #processed_txt=txt['keyword_list'].map(preprocess)
+    #processed_txt=txt['description'].map(preprocess)
+    processed_txt=txt['keyword_list'].map(preprocess)
     lda_model=process(processed_txt,MODEL)
     for idx, topic in lda_model.print_topics(-1):
         print('Topic: {} \nWords: {}'.format(idx, topic))
