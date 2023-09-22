@@ -46,6 +46,7 @@ class DataIO:
                 "host":"localhost",
                 "name":"gettytest3",                 
                 "user":"root",
+                "unix_socket":"",
                 "pass":"SSJ2_mysql"
             }
             #self.ROOT= os.path.join("D:/"+"Documents/projects-active/facemap_production") ## SD CARD
