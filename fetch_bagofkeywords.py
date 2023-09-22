@@ -16,36 +16,38 @@ engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}".format(host=db[
 Session = sessionmaker(bind=engine)
 session = Session()
 
-# # Define the columns you want to retrieve from Images table
-# columns = [Images.image_id, Images.description, Images.gender_id, Images.age_id, Images.location_id]
+################## CREATE TABLE ###########
+# Define the columns you want to retrieve from Images table
+columns = [Images.image_id, Images.description, Images.gender_id, Images.age_id, Images.location_id]
 
-# # Build a select query for fetching data from Images table
-# select_query = select(columns).select_from(Images)
+# Build a select query for fetching data from Images table
+select_query = select(columns).select_from(Images)
 
-# # Fetch the data
-# result = session.execute(select_query).fetchall()
+# Fetch the data
+result = session.execute(select_query).fetchall()
 
-# # Iterate through the fetched data and insert it into BagOfKeywords table
-# for row in result:
-    # image_id, description, gender_id, age_id, location_id = row
+# Iterate through the fetched data and insert it into BagOfKeywords table
+for row in result:
+    image_id, description, gender_id, age_id, location_id = row
     
-    # # Create a BagOfKeywords object
-    # bag_of_keywords = BagOfKeywords(
-        # image_id=image_id,
-        # description=description,
-        # gender_id=gender_id,
-        # age_id=age_id,
-        # location_id=location_id,
-        # keyword_list=None,  # Set this to None or your desired value
-        # ethnicity_list=None  # Set this to None or your desired value
-    # )
+    # Create a BagOfKeywords object
+    bag_of_keywords = BagOfKeywords(
+        image_id=image_id,
+        description=description,
+        gender_id=gender_id,
+        age_id=age_id,
+        location_id=location_id,
+        keyword_list=None,  # Set this to None or your desired value
+        ethnicity_list=None  # Set this to None or your desired value
+    )
 
-    # # Add the BagOfKeywords object to the session
-    # session.add(bag_of_keywords)
+    # Add the BagOfKeywords object to the session
+    session.add(bag_of_keywords)
 
-# # Commit the changes to the database
-# session.commit()
-##############
+# Commit the changes to the database
+session.commit()
+#####################################################
+
 distinct_image_ids_query = select([Images.image_id.distinct()])
 
 distinct_image_ids = [row[0] for row in session.execute(distinct_image_ids_query).fetchall()]
