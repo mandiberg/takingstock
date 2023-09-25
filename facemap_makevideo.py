@@ -57,7 +57,7 @@ IS_SEGONLY= True
 
 # this is for controlling if it is using
 # all clusters,
-IS_CLUSTER = True
+IS_CLUSTER = False
 # number of clusters to analyze -- this is also declared in Clustering_SQL. Move to IO?
 N_CLUSTERS = 128
 # this is for IS_ONE_CLUSTER to only run on a specific CLUSTER_NO
@@ -118,11 +118,11 @@ elif IS_SEGONLY:
 
     else:
         SELECT = "*" 
-        FROM = SegmentTable_name
+        FROM = f"{SegmentTable_name} s JOIN ImagesKeywords ik ON s.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id"
         # WHERE = "bbox IS NOT NULL"
-        WHERE = "mouth_gap > 15 AND age_id NOT IN (1,2,3,4)"
+        WHERE = "age_id NOT IN (1,2,3,4) AND k.keyword_text LIKE 'happ%' "
         # WHERE = "mouth_gap < 2 AND age_id NOT IN (1,2,3,4) AND image_id < 40647710 AND gender_id = 1"
-        LIMIT = 1000000
+        LIMIT = 10000000
 
 
 

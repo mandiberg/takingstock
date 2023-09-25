@@ -26,14 +26,13 @@ testname = "woman-in-a-music-concert-picture-id505111652.jpg"
 # PATH = "/Volumes/RAID54/adobeStockScraper_v3/test1"
 # NEWPATH = "/Volumes/RAID54/adobeStockScraper_v3/dest1"
 
-PATH = "/Volumes/SSD4/adobe_moveable"
+PATH = "/Volumes/SSD4/shutterScraper_v7_has_images/images"
 # PATH = "/Volumes/RAID54/adobeStockScraper_v3/images_all"
-NEWPATH = "/Volumes/RAID54/adobeStockScraper_v3/images"
+NEWPATH = "/Volumes/SSD4/shutterScraper_v7_has_images/images_hashed"
 
-ALL_IN_ONE_FOLDER = False
+ALL_IN_ONE_FOLDER = True
 
 # folder ="5GB_testimages"
-COPY=True
 # CSV="/Users/michaelmandiberg/Dropbox/facemap_dropbox/test_data/Images_202302101516_30K.csv"
 
 def get_hash_folders(filename):
@@ -162,26 +161,31 @@ def threaded_processing():
     # Set the event to signal that threads are completed
     threads_completed.set()
 
+def add_queue(this_path):
+    meta_file_list = get_dir_files(this_path)
+    for newfile in meta_file_list:
+        a, b = get_hash_folders(newfile)
+        currentpathfile = os.path.join(this_path, newfile)
+        work_queue.put((currentpathfile, newfile, a, b))
+
+
 counter = 0
+num_threads = 8  
 
 if ALL_IN_ONE_FOLDER:
-    process_files_in_folder(PATH)
+    print("looking on only one folder")
+    add_queue(PATH)
 else:
-    num_threads = 8  
     print("going to walk folders")
     # Put work into the queue
     for root, dirs, files in os.walk(PATH):
         for folder in dirs:
             print("looking in ", folder)
-            meta_file_list = get_dir_files(os.path.join(root, folder))
-            for newfile in meta_file_list:
-                a, b = get_hash_folders(newfile)
-                currentpathfile = os.path.join(root, folder, newfile)
-                work_queue.put((currentpathfile, newfile, a, b))
+            this_path = os.path.join(root, folder)
+            add_queue(this_path)
 
-    print("going to start threading")
-
-    threaded_processing()
+print("going to start threading")
+threaded_processing()
 
 # Wait for threads to complete
 threads_completed.wait()

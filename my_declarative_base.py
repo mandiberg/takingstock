@@ -115,19 +115,6 @@ class ImagesClusters(Base):
     cluster_id = Column(Integer, ForeignKey('Clusters.cluster_id'))
 
 
-class Clusters68(Base):
-    __tablename__ = 'Clusters68'
-
-    cluster_id = Column(Integer, primary_key=True, autoincrement=True)
-    cluster_median = Column(BLOB)
-
-class ImagesClusters68(Base):
-    __tablename__ = 'ImagesClusters68'
-
-    image_id = Column(Integer, ForeignKey('images.image_id'), primary_key=True)
-    cluster_id = Column(Integer, ForeignKey('Clusters68.cluster_id'))
-
-
 # these are for MM use for using segments
 # class Clusters(Base):
 #     __tablename__ = 'Clusters_May25segment123straight_lessrange'

@@ -1,8 +1,8 @@
 import csv
 from collections import Counter
 
-input_file = '/Users/michaelmandiberg/Documents/projects-active/facemap_production/CSVs_to_ingest/shutterstockCSVs/CSV_NOKEYS.csv'
-output_file = '/Users/michaelmandiberg/Documents/projects-active/facemap_production/CSVs_to_ingest/shutterstockCSVs/CSV_NOKEYS_unique.csv'
+input_file = '/volumes/SSD4/CSVs_to_ingest/shutterstockCSVs/CSV_NOKEYS.csv'
+output_file = '/volumes/SSD4/CSVs_to_ingest/shutterstockCSVs/CSV_NOKEYS_unique.csv'
 
 # Read the CSV file and extract the second column
 keywords = []
