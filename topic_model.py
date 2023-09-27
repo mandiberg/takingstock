@@ -10,7 +10,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 # my ORM
-from my_declarative_base import Base, Images, Clusters68, ImagesClusters68, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON, ForeignKey
+from my_declarative_base import Base, Images, Topics,ImagesTopics,Clusters68, ImagesClusters68, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON, ForeignKey
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import create_engine, text, MetaData, Table, Column, Numeric, Integer, VARCHAR, update, Float
@@ -82,7 +82,8 @@ else:
     SELECT = "DISTINCT(image_id),description,keyword_list"
     FROM ="bagofkeywords"
     WHERE = "keyword_list IS NOT NULL"
-    LIMIT = 328894
+    #LIMIT = 328894
+    LIMIT=10000
     SegmentTable_name = ""
 
 # if db['unix_socket']:
@@ -119,6 +120,7 @@ def preprocess(text):
     return result
 
 def process(processed_txt,MODEL):
+    print("processing the model now")
     dictionary = gensim.corpora.Dictionary(processed_txt)
     dictionary.filter_extremes(no_below=15, no_above=0.5, keep_n=100000)
     bow_corpus = [dictionary.doc2bow(doc) for doc in processed_txt] ## BOW corpus
@@ -129,7 +131,24 @@ def process(processed_txt,MODEL):
         corpus=tfidf_corpus
     lda_model = gensim.models.LdaMulticore(corpus, num_topics=NUM_TOPICS, id2word=dictionary, passes=2, workers=2)
     return lda_model
-    
+
+def write_data(lda_model):
+    print("writing data to the topic table")
+    for idx, topic_list in lda_model.print_topics(-1):
+        print('Topic: {} \nWords: {}'.format(idx, topic_list))
+
+       # Create a BagOfKeywords object
+        topics_entry = Topics(
+        topic_id = idx,
+        topic = "".join(topic_list)
+        )
+
+    # Add the BagOfKeywords object to the session
+        session.add(topics_entry)
+        print("Updated topic_id {}".format(idx))
+    session.commit()
+    return
+
 def main():
     # create_my_engine(db)
     print("about to SQL: ",SELECT,FROM,WHERE,LIMIT)
@@ -143,8 +162,7 @@ def main():
     #processed_txt=txt['description'].map(preprocess)
     processed_txt=txt['keyword_list'].map(preprocess)
     lda_model=process(processed_txt,MODEL)
-    for idx, topic in lda_model.print_topics(-1):
-        print('Topic: {} \nWords: {}'.format(idx, topic))
+    write_data(lda_model)
     # for i in range(len(resultsjson)):
         # index,score=sorted(lda_model_tfidf[bow_corpus[i]], key=lambda tup: -1*tup[1])
         # txt[i,"index"]=index[0]

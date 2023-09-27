@@ -10,3 +10,13 @@ CREATE TABLE BagOfKeywords (
     FOREIGN KEY (gender_id) REFERENCES gender(gender_id),
     FOREIGN KEY (location_id) REFERENCES location(location_id)
 );
+
+CREATE TABLE Topics (
+	topic_id INT,
+	topic VARCHAR(250)
+);
+
+CREATE TABLE ImagesTopics (
+	image_id INT,
+    topic_id INT
+);

@@ -19,7 +19,7 @@ session = Session()
 ## I've created this is 3 sections , and they work perfectly seperately, but i can't overwrite data if the table is already created
 ## I haven't been able to add this "feature" but im leaving it as it is now, i'll try to fix it later
 
-################## CREATE TABLE ###########
+# ################# CREATE TABLE ###########
 # # Define the columns you want to retrieve from Images table
 # columns = [Images.image_id, Images.description, Images.gender_id, Images.age_id, Images.location_id]
 
@@ -51,7 +51,7 @@ session = Session()
 # session.commit()
 
 
-#################FETCHING KEYWORDS####################################
+# ################FETCHING KEYWORDS####################################
 
 # distinct_image_ids_query = select([Images.image_id.distinct()])
 

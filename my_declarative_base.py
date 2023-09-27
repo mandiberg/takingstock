@@ -137,6 +137,16 @@ class BagOfKeywords(Base):
     keyword_list = Column(BLOB)  # Pickled list
     ethnicity_list = Column(BLOB)  # Pickled list
 
+class Topics(Base):
+    __tablename__ = 'Topics' 
+    topic_id = Column(Integer, primary_key=True, autoincrement=True)
+    topic = Column(String(150))
+    
+class ImagesTopics(Base):
+    __tablename__ = 'ImagesTopics' 
+    image_id = Column(Integer, ForeignKey('images.image_id'), primary_key=True)
+    topic_id = Column(Integer, ForeignKey('topics.topic_id'))
+
 
 # these are for MM use for using segments
 # class Clusters(Base):
