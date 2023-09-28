@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON
+from sqlalchemy import Column, Integer,Float, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON
 from sqlalchemy.orm import relationship
 from sqlalchemy.ext.declarative import declarative_base
 
@@ -145,7 +145,8 @@ class Topics(Base):
 class ImagesTopics(Base):
     __tablename__ = 'ImagesTopics' 
     image_id = Column(Integer, ForeignKey('images.image_id'), primary_key=True)
-    topic_id = Column(Integer, ForeignKey('topics.topic_id'))
+    topic_id = Column(Integer, ForeignKey('Topics.topic_id'))
+    topic_score = Column(Float)
 
 
 # these are for MM use for using segments

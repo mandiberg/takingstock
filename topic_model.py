@@ -28,6 +28,7 @@ from sys import platform
 from mp_db_io import DataIO
 ###########
 import gensim
+from gensim.test.utils import get_tmpfile
 from gensim.utils import simple_preprocess
 from gensim.parsing.preprocessing import STOPWORDS
 from nltk.stem import WordNetLemmatizer, SnowballStemmer
@@ -53,7 +54,10 @@ start = time.time()
 io = DataIO()
 db = io.db
 NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
-
+MODEL_PATH=io.ROOT+"/model"
+BOW_CORPUS_PATH=io.ROOT+"/BOW_lda_corpus.mm"
+TFIDF_CORPUS_PATH=io.ROOT+"/TFIDF_lda_corpus.mm"
+MODE="index" ## "index or model"
 # Satyam, you want to set this to False
 USE_SEGMENT = False
 
@@ -81,7 +85,7 @@ else:
     # Basic Query, this works with gettytest3
     SELECT = "DISTINCT(image_id),description,keyword_list"
     FROM ="bagofkeywords"
-    WHERE = "keyword_list IS NOT NULL"
+    WHERE = "keyword_list IS NOT NULL AND image_id NOT IN (SELECT image_id FROM imagestopics)"
     #LIMIT = 328894
     LIMIT=10000
     SegmentTable_name = ""
@@ -119,6 +123,14 @@ def preprocess(text):
             result.append(lemmatize_stemming(token))
     return result
 
+def save_model(lda_model,tfidf_corpus,bow_corpus):
+    #CORPUS_PATH = get_tmpfile(CORPUS_PATH)
+    corpora.MmCorpus.serialize(TFIDF_CORPUS_PATH, tfidf_corpus)
+    corpora.MmCorpus.serialize(BOW_CORPUS_PATH, bow_corpus)
+    lda_model.save(MODEL_PATH)
+    print("model saved")
+    return
+
 def process(processed_txt,MODEL):
     print("processing the model now")
     dictionary = gensim.corpora.Dictionary(processed_txt)
@@ -130,9 +142,10 @@ def process(processed_txt,MODEL):
         tfidf_corpus = tfidf[bow_corpus]
         corpus=tfidf_corpus
     lda_model = gensim.models.LdaMulticore(corpus, num_topics=NUM_TOPICS, id2word=dictionary, passes=2, workers=2)
+    save_model(lda_model,tfidf_corpus,bow_corpus)
     return lda_model
 
-def write_data(lda_model):
+def write_topics(lda_model):
     print("writing data to the topic table")
     for idx, topic_list in lda_model.print_topics(-1):
         print('Topic: {} \nWords: {}'.format(idx, topic_list))
@@ -149,25 +162,48 @@ def write_data(lda_model):
     session.commit()
     return
 
+def write_imagetopics(resultsjson,lda_model_tfidf,bow_corpus):
+    print("writing data to the imagetopic table")
+    for i,row in enumerate(resultsjson):
+        index,score=sorted(lda_model_tfidf[bow_corpus[i]], key=lambda tup: -1*tup[1])[0]
+        imagestopics_entry=ImagesTopics(
+        image_id=row["image_id"],
+        topic_id=index,
+        topic_score=score
+        )
+        session.add(imagestopics_entry)
+        print("Updated image_id {}".format(row["image_id"]))
+
+
+    # Add the imagestopics object to the session
+    session.commit()
+    return
+
+
 def main():
+    
     # create_my_engine(db)
     print("about to SQL: ",SELECT,FROM,WHERE,LIMIT)
     resultsjson = selectSQL()
     print("got results, count is: ",len(resultsjson))
-    txt = pd.DataFrame(index=range(len(resultsjson)),columns=["description","keywords","index","score"])
-    for i,row in enumerate(resultsjson):
-        #txt.at[i,"description"]=row["description"]
-        txt.at[i,"keyword_list"]=" ".join(pickle.loads(row["keyword_list"]))
-    #print(txt.tail())
-    #processed_txt=txt['description'].map(preprocess)
-    processed_txt=txt['keyword_list'].map(preprocess)
-    lda_model=process(processed_txt,MODEL)
-    write_data(lda_model)
-    # for i in range(len(resultsjson)):
-        # index,score=sorted(lda_model_tfidf[bow_corpus[i]], key=lambda tup: -1*tup[1])
-        # txt[i,"index"]=index[0]
-        # txt[i,"score"]=score[0]
+    if MODE=="model":
+        #######TOPIC MODELING ############
+        txt = pd.DataFrame(index=range(len(resultsjson)),columns=["description","keywords","index","score"])
+        for i,row in enumerate(resultsjson):
+            #txt.at[i,"description"]=row["description"]
+            txt.at[i,"keyword_list"]=" ".join(pickle.loads(row["keyword_list"]))
+        #processed_txt=txt['description'].map(preprocess)
+        processed_txt=txt['keyword_list'].map(preprocess)
+        lda_model=process(processed_txt,MODEL)
+        write_topics(lda_model)
         
+    elif MODE=="index":
+        ###########TOPIC INDEXING#########################
+        bow_corpus = corpora.MmCorpus(BOW_CORPUS_PATH)
+        lda_model_tfidf = gensim.models.LdaModel.load(MODEL_PATH)
+        #lda_dict = corpora.Dictionary.load(MODEL_PATH+'.id2word')
+        print("model loaded successfully")
+        write_imagetopics(resultsjson,lda_model_tfidf,bow_corpus)
         
     # if USE_SEGMENT:
     #     Base.metadata.create_all(engine)
