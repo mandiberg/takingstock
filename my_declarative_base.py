@@ -102,19 +102,6 @@ class Encodings(Base):
     face_encodings68 = Column(BLOB)
     body_landmarks = Column(BLOB)
 
-class Clusters(Base):
-    __tablename__ = 'Clusters'
-
-    cluster_id = Column(Integer, primary_key=True, autoincrement=True)
-    cluster_median = Column(BLOB)
-
-class ImagesClusters(Base):
-    __tablename__ = 'ImagesClusters'
-
-    image_id = Column(Integer, ForeignKey('images.image_id'), primary_key=True)
-    cluster_id = Column(Integer, ForeignKey('Clusters.cluster_id'))
-
-
 class Clusters68(Base):
     __tablename__ = 'Clusters68'
 
@@ -147,7 +134,6 @@ class ImagesTopics(Base):
     image_id = Column(Integer, ForeignKey('images.image_id'), primary_key=True)
     topic_id = Column(Integer, ForeignKey('Topics.topic_id'))
     topic_score = Column(Float)
-
 
 # these are for MM use for using segments
 # class Clusters(Base):

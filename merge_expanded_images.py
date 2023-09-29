@@ -14,17 +14,17 @@ io = DataIO()
 db = io.db
 
 # iterate through folders? 
-IS_CLUSTER = True
+IS_CLUSTER = False
 
 # are we making videos or making merged stills?
-IS_VIDEO = False
+IS_VIDEO = True
 
 # MERGE
 # Provide the path to the folder containing the images
 ROOT_FOLDER_PATH = '/Users/michaelmandiberg/Documents/projects-active/facemap_production/'
 # if IS_CLUSTER this should be the folder holding all the cluster folders
 # if not, this should be the individual folder holding the images
-FOLDER_NAME ="face_forward_clusters_sept13"
+FOLDER_NAME ="fashion"
 FOLDER_PATH = os.path.join(ROOT_FOLDER_PATH,FOLDER_NAME)
 
 # WRITE VIDEO

@@ -36,25 +36,26 @@ import dlib
 import face_recognition_models
 
 
-
-sortfolder ="getty_test"
-http="https://media.gettyimages.com/photos/"
 # outputfolder = os.path.join(ROOT,folder+"_output_febmulti")
 SAVE_ORIG = False
 DRAW_BOX = False
 MINSIZE = 500
 SLEEP_TIME=0
 
-# am I looking on SSD for a folder? If not, will pull directly from SQL
+# only for triage
+sortfolder ="getty_test"
+
+#use in some clean up for getty
+http="https://media.gettyimages.com/photos/"
+
+# am I looking on RAID/SSD for a folder? If not, will pull directly from SQL
 # if so, also change the site_name_id etc around line 930
 IS_FOLDER = True
-MAIN_FOLDER = "/Volumes/RAID54/images_adobe/"
+MAIN_FOLDER = "/Volumes/RAID54/images_123rf/"
 
 #temp hack to go 1 subfolder at a time
-THESE_FOLDER_PATHS = ["6/6A", "6/6B","6/6C", "6/6D", "6/6E", "6/6F", "6/60", "6/61", "6/62", "6/63", "6/64", "6/65", "6/66", "6/67", "6/68", "6/69"]
-# THESE_FOLDER_PATHS = ["7/7A", "7/7B","7/7C", "7/7D", "7/7E", "7/7F", "7/70", "7/71", "7/72", "7/73", "7/74", "7/75", "7/76", "7/77", "7/78", "7/79"]
 # THESE_FOLDER_PATHS = ["8/8A", "8/8B","8/8C", "8/8D", "8/8E", "8/8F", "8/80", "8/81", "8/82", "8/83", "8/84", "8/85", "8/86", "8/87", "8/88", "8/89"]
-# THESE_FOLDER_PATHS = ["9/9A", "9/9B","9/9C", "9/9D", "9/9E", "9/9F", "9/90", "9/91", "9/92", "9/93", "9/94", "9/95", "9/96", "9/97", "9/98", "9/99"]
+THESE_FOLDER_PATHS = ["9/9C", "9/9D", "9/9E", "9/9F", "9/90", "9/91", "9/92", "9/93", "9/94", "9/95", "9/96", "9/97", "9/98", "9/99"]
 
 # MAIN_FOLDER = "/Volumes/SSD4/adobeStockScraper_v3/images"
 # MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages"
@@ -911,8 +912,8 @@ def main():
         print(len(completed_folders))
         for folder_path in folder_paths:
             
-            if folder_path in THESE_FOLDER_PATHS:
-            # if folder_path not in completed_folders:
+            # if folder_path in THESE_FOLDER_PATHS:
+            if folder_path not in completed_folders:
 
                 folder = os.path.join(MAIN_FOLDER,folder_path)
                 folder_count += 1
@@ -942,16 +943,18 @@ def main():
                     # Collect site_image_id values from the image filenames
                     
                     # 123rf
-                    # batch_site_image_ids = [img.split("-")[0] for img in batch_img_list]
-                    # site_name_id = 8
+                    batch_site_image_ids = [img.split("-")[0] for img in batch_img_list]
+                    site_name_id = 8
 
                     # gettyimages
                     # batch_site_image_ids = [img.split("-id")[-1].replace(".jpg", "") for img in batch_img_list]
                     # site_name_id = 1
 
-                    # Adobe
-                    batch_site_image_ids = [img.split(".")[0] for img in batch_img_list]
-                    site_name_id = 3
+                    # # Adobe and pexels
+                    # batch_site_image_ids = [img.split(".")[0] for img in batch_img_list]
+                    # site_name_id = 5
+
+
 
                     # query the database for the current batch and return image_id and encoding_id
                     for _ in range(io.max_retries):
@@ -982,13 +985,14 @@ def main():
                     for img in batch_img_list:
 
                         # extract site_image_id for 213rf
-                        # site_image_id = img.split("-")[0]
+                        site_image_id = img.split("-")[0]
 
                         # # extract site_image_id for getty images
                         # site_image_id = img.split("-id")[-1].replace(".jpg", "")
 
-                        # # # extract site_image_id for adobe
-                        site_image_id = img.split(".")[0]
+                        # # # extract site_image_id for adobe and pexels
+                        # site_image_id = img.split(".")[0]
+
 
                         if site_image_id in results_dict:
                             result = results_dict[site_image_id]
