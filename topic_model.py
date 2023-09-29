@@ -48,6 +48,7 @@ items, seconds
 47000, 240
 100000, 695
 '''
+MODE="index" ## "index or model"
 
 start = time.time()
 
@@ -57,7 +58,6 @@ NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 MODEL_PATH=io.ROOT+"/model"
 BOW_CORPUS_PATH=io.ROOT+"/BOW_lda_corpus.mm"
 TFIDF_CORPUS_PATH=io.ROOT+"/TFIDF_lda_corpus.mm"
-MODE="index" ## "index or model"
 # Satyam, you want to set this to False
 USE_SEGMENT = False
 
@@ -86,8 +86,8 @@ else:
     SELECT = "DISTINCT(image_id),description,keyword_list"
     FROM ="bagofkeywords"
     WHERE = "keyword_list IS NOT NULL AND image_id NOT IN (SELECT image_id FROM imagestopics)"
-    #LIMIT = 328894
-    LIMIT=10000
+    LIMIT = 328894
+    #LIMIT=10000
     SegmentTable_name = ""
 
 # if db['unix_socket']:
