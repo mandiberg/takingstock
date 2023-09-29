@@ -51,7 +51,7 @@ http="https://media.gettyimages.com/photos/"
 # am I looking on RAID/SSD for a folder? If not, will pull directly from SQL
 # if so, also change the site_name_id etc around line 930
 IS_FOLDER = True
-MAIN_FOLDER = "/Volumes/RAID54/images_123rf/"
+MAIN_FOLDER = "/Volumes/SSD4/TK/"
 
 #temp hack to go 1 subfolder at a time
 # THESE_FOLDER_PATHS = ["8/8A", "8/8B","8/8C", "8/8D", "8/8E", "8/8F", "8/80", "8/81", "8/82", "8/83", "8/84", "8/85", "8/86", "8/87", "8/88", "8/89"]
@@ -943,16 +943,16 @@ def main():
                     # Collect site_image_id values from the image filenames
                     
                     # 123rf
-                    batch_site_image_ids = [img.split("-")[0] for img in batch_img_list]
-                    site_name_id = 8
+                    # batch_site_image_ids = [img.split("-")[0] for img in batch_img_list]
+                    # site_name_id = 8
 
                     # gettyimages
                     # batch_site_image_ids = [img.split("-id")[-1].replace(".jpg", "") for img in batch_img_list]
                     # site_name_id = 1
 
-                    # # Adobe and pexels
-                    # batch_site_image_ids = [img.split(".")[0] for img in batch_img_list]
-                    # site_name_id = 5
+                    # # Adobe and pexels and shutterstock
+                    batch_site_image_ids = [img.split(".")[0] for img in batch_img_list]
+                    site_name_id = 2
 
 
 
@@ -984,14 +984,15 @@ def main():
                     # going back through the img_list, to use as key for the results_dict
                     for img in batch_img_list:
 
+                        # CHANGE FOR EACH SITE
                         # extract site_image_id for 213rf
-                        site_image_id = img.split("-")[0]
+                        # site_image_id = img.split("-")[0]
 
                         # # extract site_image_id for getty images
                         # site_image_id = img.split("-id")[-1].replace(".jpg", "")
 
-                        # # # extract site_image_id for adobe and pexels
-                        # site_image_id = img.split(".")[0]
+                        # # # extract site_image_id for adobe and pexels and shutterstock
+                        site_image_id = img.split(".")[0]
 
 
                         if site_image_id in results_dict:

@@ -100,6 +100,10 @@ class Encodings(Base):
     bbox = Column(JSON)
     face_encodings = Column(BLOB)
     face_encodings68 = Column(BLOB)
+    face_encodings_J3 = Column(BLOB)
+    face_encodings_J5 = Column(BLOB)
+    face_encodings68_J3 = Column(BLOB)
+    face_encodings68_J5 = Column(BLOB)
     body_landmarks = Column(BLOB)
 
 class Clusters(Base):
