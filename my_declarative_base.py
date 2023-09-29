@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON
+from sqlalchemy import Column, Integer,Float, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON
 from sqlalchemy.orm import relationship
 from sqlalchemy.ext.declarative import declarative_base
 
@@ -106,18 +106,38 @@ class Encodings(Base):
     face_encodings68_J5 = Column(BLOB)
     body_landmarks = Column(BLOB)
 
-class Clusters(Base):
-    __tablename__ = 'Clusters'
+class Clusters68(Base):
+    __tablename__ = 'Clusters68'
 
     cluster_id = Column(Integer, primary_key=True, autoincrement=True)
     cluster_median = Column(BLOB)
 
-class ImagesClusters(Base):
-    __tablename__ = 'ImagesClusters'
+class ImagesClusters68(Base):
+    __tablename__ = 'ImagesClusters68'
 
     image_id = Column(Integer, ForeignKey('images.image_id'), primary_key=True)
-    cluster_id = Column(Integer, ForeignKey('Clusters.cluster_id'))
+    cluster_id = Column(Integer, ForeignKey('Clusters68.cluster_id'))
 
+class BagOfKeywords(Base):
+    __tablename__ = 'BagOfKeywords'
+    image_id = Column(Integer, primary_key=True, autoincrement=True)
+    age_id = Column(Integer, ForeignKey('age.age_id'))
+    gender_id = Column(Integer, ForeignKey('gender.gender_id'))
+    location_id = Column(Integer, ForeignKey('location.location_id'))
+    description = Column(String(150))
+    keyword_list = Column(BLOB)  # Pickled list
+    ethnicity_list = Column(BLOB)  # Pickled list
+
+class Topics(Base):
+    __tablename__ = 'Topics' 
+    topic_id = Column(Integer, primary_key=True, autoincrement=True)
+    topic = Column(String(150))
+    
+class ImagesTopics(Base):
+    __tablename__ = 'ImagesTopics' 
+    image_id = Column(Integer, ForeignKey('images.image_id'), primary_key=True)
+    topic_id = Column(Integer, ForeignKey('Topics.topic_id'))
+    topic_score = Column(Float)
 
 # these are for MM use for using segments
 # class Clusters(Base):
