@@ -48,7 +48,7 @@ items, seconds
 47000, 240
 100000, 695
 '''
-MODE="index" ## "index or model"
+MODE="model" ## "index or model"
 
 start = time.time()
 
@@ -99,7 +99,10 @@ else:
     # engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}"
                                 # .format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']), poolclass=NullPool)
 
-engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}".format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']), poolclass=NullPool)
+# engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}".format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']), poolclass=NullPool)
+engine = create_engine("mysql+pymysql://{user}:{pw}@/{db}?unix_socket={socket}".format(
+    user=db['user'], pw=db['pass'], db=db['name'], socket=db['unix_socket']
+), poolclass=NullPool)
 
 
 # metadata = MetaData(engine)

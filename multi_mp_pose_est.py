@@ -51,7 +51,7 @@ http="https://media.gettyimages.com/photos/"
 # am I looking on RAID/SSD for a folder? If not, will pull directly from SQL
 # if so, also change the site_name_id etc around line 930
 IS_FOLDER = True
-MAIN_FOLDER = "/Volumes/SSD4/TK/"
+MAIN_FOLDER = "/Volumes/SSD4/shutterScraper_v7_has_images/images_hashed"
 
 #temp hack to go 1 subfolder at a time
 # THESE_FOLDER_PATHS = ["8/8A", "8/8B","8/8C", "8/8D", "8/8E", "8/8F", "8/80", "8/81", "8/82", "8/83", "8/84", "8/85", "8/86", "8/87", "8/88", "8/89"]

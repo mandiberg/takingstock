@@ -59,7 +59,7 @@ NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 # INGEST_FOLDER = os.path.join(INGEST_ROOT, "adobe_csv_4ingest/")
 # CSV_IN_PATH = os.path.join(INGEST_FOLDER, "unique_lines_B_nogender.csv")
 INGEST_FOLDER = "/Volumes/SSD4/CSVs_to_ingest/shutterstockCSVs"
-CSV_IN_PATH = os.path.join(INGEST_FOLDER, "shutttersock_UKRSPL.csv")
+CSV_IN_PATH = os.path.join(INGEST_FOLDER, "1M_redo/shutttersock_1M.output2.csv")
 KEYWORD_PATH = os.path.join(INGEST_FOLDER, "Keywords_202305150950.csv")
 LOCATION_PATH = os.path.join(INGEST_FOLDER, "Location_202308041952.csv")
 CSV_NOKEYS_PATH = os.path.join(INGEST_FOLDER, "CSV_NOKEYS.csv")
@@ -991,6 +991,8 @@ def ingest_csv():
 
 
     with open(CSV_IN_PATH) as file_obj:
+        # reader = csv.reader((row.replace('\0', '').replace('\x00', '') for row in in_file), delimiter=",")
+
         reader_obj = csv.reader(file_obj)
         next(reader_obj)  # Skip header row
         start_counter = get_counter()
