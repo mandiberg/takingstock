@@ -16,6 +16,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy import create_engine, text, MetaData, Table, Column, Numeric, Integer, VARCHAR, update, Float
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.pool import NullPool
+from pick import pick
 
 import numpy as np
 import pandas as pd
@@ -48,7 +49,11 @@ items, seconds
 47000, 240
 100000, 695
 '''
-MODE="index" ## "index or model"
+title = 'Please choose your operation: '
+options = ['Topic modelling', 'Topic indexing']
+OPTION, MODE = pick(options, title)
+
+
 
 start = time.time()
 
@@ -66,40 +71,26 @@ NUM_TOPICS=75
 
 stemmer = SnowballStemmer('english')
 
-if USE_SEGMENT is True:
-
-    # where the script is looking for files list
-    # do not use this if you are using the regular Clusters and ImagesClusters tables
-    SegmentTable_name = 'July15segment123straight'
-    
-
-    # join with SSD tables. Satyam, use the one below
-    SELECT = "DISTINCT(e.image_id), e.face_encodings68"
-    FROM = "Encodings e"
-    QUERY = "e.image_id IN"
-    SUBQUERY = f"(SELECT seg1.image_id FROM {SegmentTable_name} seg1 )"
-    WHERE = f"{QUERY} {SUBQUERY}"
-    LIMIT = 1100
-
-else:
-    # Basic Query, this works with gettytest3
-    SELECT = "DISTINCT(image_id),description,keyword_list"
-    FROM ="bagofkeywords"
-    WHERE = "keyword_list IS NOT NULL AND image_id NOT IN (SELECT image_id FROM imagestopics)"
+# Basic Query, this works with gettytest3
+SELECT = "DISTINCT(image_id),description,keyword_list"
+FROM ="bagofkeywords"
+if MODE==0:
+    WHERE = "keyword_list IS NOT NULL "
     LIMIT = 328894
-    #LIMIT=10000
-    SegmentTable_name = ""
+elif MODE==1:
+    WHERE = "keyword_list IS NOT NULL AND image_id NOT IN (SELECT image_id FROM imagestopics)"
+    LIMIT=1000
 
-# if db['unix_socket']:
-    # # for MM's MAMP config
-    # engine = create_engine("mysql+pymysql://{user}:{pw}@/{db}?unix_socket={socket}".format(
-        # user=db['user'], pw=db['pass'], db=db['name'], socket=db['unix_socket']
-    # ), poolclass=NullPool)
-# else:
-    # engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}"
-                                # .format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']), poolclass=NullPool)
+if db['unix_socket']:
+    # for MM's MAMP config
+    engine = create_engine("mysql+pymysql://{user}:{pw}@/{db}?unix_socket={socket}".format(
+        user=db['user'], pw=db['pass'], db=db['name'], socket=db['unix_socket']
+    ), poolclass=NullPool)
+else:
+    engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}"
+                                .format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']), poolclass=NullPool)
 
-engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}".format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']), poolclass=NullPool)
+#engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}".format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']), poolclass=NullPool)
 
 
 # metadata = MetaData(engine)
@@ -186,7 +177,7 @@ def main():
     print("about to SQL: ",SELECT,FROM,WHERE,LIMIT)
     resultsjson = selectSQL()
     print("got results, count is: ",len(resultsjson))
-    if MODE=="model":
+    if MODE==0:
         #######TOPIC MODELING ############
         txt = pd.DataFrame(index=range(len(resultsjson)),columns=["description","keywords","index","score"])
         for i,row in enumerate(resultsjson):
@@ -197,7 +188,7 @@ def main():
         lda_model=process(processed_txt,MODEL)
         write_topics(lda_model)
         
-    elif MODE=="index":
+    elif MODE==1:
         ###########TOPIC INDEXING#########################
         bow_corpus = corpora.MmCorpus(BOW_CORPUS_PATH)
         lda_model_tfidf = gensim.models.LdaModel.load(MODEL_PATH)
