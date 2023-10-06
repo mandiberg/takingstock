@@ -60,6 +60,9 @@ start = time.time()
 
 io = DataIO()
 db = io.db
+io.db["name"] = "ministock"
+
+
 NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 #MODEL_PATH=io.ROOT+"/model"
 MODEL_PATH=os.path.join(io.ROOT,"model")
@@ -209,7 +212,6 @@ def main():
 
 if __name__ == '__main__':
     main()
-
 
 
 

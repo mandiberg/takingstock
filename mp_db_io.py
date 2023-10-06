@@ -23,15 +23,27 @@ class DataIO:
             #     "pass":"XFZ5dPJq2"
             # }
 
+            # ####### Michael's MAMP Credentials ########
+            # self.db = {
+            #     "host":"localhost",
+            #     "name":"stock",            
+            #     "user":"root",
+            #     "pass":"root",
+            #     "unix_socket":"/Applications/MAMP/tmp/mysql/mysql.sock",
+            #     "raise_on_warnings": True
+            # }
+
             ####### Michael's MAMP Credentials ########
             self.db = {
-                "host":"localhost",
+                "host":"127.0.0.1",
                 "name":"stock",            
                 "user":"root",
-                "pass":"root",
-                "unix_socket":"/Applications/MAMP/tmp/mysql/mysql.sock",
+                "pass":"mypassword",
+                "unix_socket":"",
                 "raise_on_warnings": True
             }
+
+
 
             self.ROOT_PROD= os.path.join(os.environ['HOME'], "Documents/projects-active/facemap_production") ## only on Mac
             self.ROOT54= "/Volumes/RAID54" ## only on 

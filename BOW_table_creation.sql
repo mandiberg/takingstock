@@ -1,3 +1,5 @@
+USE minitest;
+
 CREATE TABLE BagOfKeywords (
     image_id INT AUTO_INCREMENT PRIMARY KEY,
     age_id INT,
@@ -21,3 +23,15 @@ CREATE TABLE ImagesTopics (
     topic_id INT,
     topic_score FLOAT
 );
+
+
+SELECT k.keyword_text  
+FROM ImagesKeywords ik
+JOIN Keywords k ON ik.keyword_id = k.keyword_id 
+WHERE ik.image_id = 51148251
+
+
+SELECT * 
+FROM BagOfKeywords bok 
+-- JOIN Images i ON ik.image_id = i.image_id 
+WHERE bok.image_id = 51148251
