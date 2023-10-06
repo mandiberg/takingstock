@@ -34,6 +34,7 @@ from gensim.utils import simple_preprocess
 from gensim.parsing.preprocessing import STOPWORDS
 from nltk.stem import WordNetLemmatizer, SnowballStemmer
 from nltk.stem.porter import *
+import os
 
 import nltk
 from gensim import corpora, models
@@ -60,9 +61,12 @@ start = time.time()
 io = DataIO()
 db = io.db
 NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
-MODEL_PATH=io.ROOT+"/model"
-BOW_CORPUS_PATH=io.ROOT+"/BOW_lda_corpus.mm"
-TFIDF_CORPUS_PATH=io.ROOT+"/TFIDF_lda_corpus.mm"
+#MODEL_PATH=io.ROOT+"/model"
+MODEL_PATH=os.path.join(io.ROOT,"model")
+#BOW_CORPUS_PATH=io.ROOT+"/BOW_lda_corpus.mm"
+BOW_CORPUS_PATH=os.path.join(io.ROOT,"BOW_lda_corpus.mm")
+#TFIDF_CORPUS_PATH=io.ROOT+"/TFIDF_lda_corpus.mm"
+TFIDF_CORPUS_PATH=os.path.join(io.ROOT,"TFIDF_lda_corpus.mm")
 # Satyam, you want to set this to False
 USE_SEGMENT = False
 
