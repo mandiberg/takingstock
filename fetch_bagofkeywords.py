@@ -9,6 +9,8 @@ from pick import pick
 
 io = DataIO()
 db = io.db
+io.db["name"] = "ministock"
+
 # Create a database engine
 engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}".format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']), poolclass=NullPool)
 
@@ -20,17 +22,21 @@ title = 'Please choose your operation: '
 options = ['Create table', 'Fetch keywords list', 'Fetch ethnicity list']
 option, index = pick(options, title)
 
-LIMIT= 100
+LIMIT= 100000
 
 ## I've created this is 3 sections , and they work perfectly seperately, but i can't overwrite data if the table is already created
 ## I haven't been able to add this "feature" but im leaving it as it is now, i'll try to fix it later
 if index == 0:
     ################# CREATE TABLE ###########
     # Define the columns you want to retrieve from Images table
-    columns = [Images.image_id, Images.description, Images.gender_id, Images.age_id, Images.location_id]
+    # columns = [Images.image_id, Images.description, Images.gender_id, Images.age_id, Images.location_id]
 
     # Build a select query for fetching data from Images table
-    select_query = select(columns).select_from(Images).outerjoin(BagOfKeywords, Images.image_id == BagOfKeywords.image_id).filter(BagOfKeywords.image_id == None).limit(LIMIT)
+    # select_query = select(Images.image_id, Images.description, Images.gender_id, Images.age_id, Images.location_id).select_from(Images).limit(LIMIT)
+    # quit()
+
+    # Build a select query for fetching data from Images table
+    select_query = select(Images.image_id, Images.description, Images.gender_id, Images.age_id, Images.location_id).select_from(Images).outerjoin(BagOfKeywords, Images.image_id == BagOfKeywords.image_id).filter(BagOfKeywords.image_id == None).limit(LIMIT)
 
     # Fetch the data
     result = session.execute(select_query).fetchall()
@@ -59,7 +65,7 @@ if index == 0:
 if index == 1:
     ################FETCHING KEYWORDS####################################
 
-    distinct_image_ids_query = select([BagOfKeywords.image_id.distinct()]).filter(BagOfKeywords.keyword_list == None).limit(LIMIT)
+    distinct_image_ids_query = select(BagOfKeywords.image_id.distinct()).filter(BagOfKeywords.keyword_list == None).limit(LIMIT)
 
     distinct_image_ids = [row[0] for row in session.execute(distinct_image_ids_query).fetchall()]
 
@@ -105,7 +111,7 @@ if index == 1:
             
             
 if index == 2:        
-    distinct_image_ids_query = select([BagOfKeywords.image_id.distinct()]).filter(BagOfKeywords.ethnicity_list == None).limit(LIMIT)
+    distinct_image_ids_query = select(BagOfKeywords.image_id.distinct()).filter(BagOfKeywords.ethnicity_list == None).limit(LIMIT)
 
     distinct_image_ids = [row[0] for row in session.execute(distinct_image_ids_query).fetchall()]
 
