@@ -6,10 +6,12 @@ from mp_db_io import DataIO
 import pickle
 import numpy as np
 from pick import pick
+import threading
+import queue
 
 io = DataIO()
 db = io.db
-io.db["name"] = "ministock"
+#io.db["name"] = "ministock"
 
 # Create a database engine
 engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}".format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']), poolclass=NullPool)
@@ -22,132 +24,174 @@ title = 'Please choose your operation: '
 options = ['Create table', 'Fetch keywords list', 'Fetch ethnicity list']
 option, index = pick(options, title)
 
-LIMIT= 100000
+LIMIT= 1000
 
-## I've created this is 3 sections , and they work perfectly seperately, but i can't overwrite data if the table is already created
-## I haven't been able to add this "feature" but im leaving it as it is now, i'll try to fix it later
+
+def create_table(row):
+    image_id, description, gender_id, age_id, location_id = row
+    
+    # Create a BagOfKeywords object
+    bag_of_keywords = BagOfKeywords(
+        image_id=image_id,
+        description=description,
+        gender_id=gender_id,
+        age_id=age_id,
+        location_id=location_id,
+        keyword_list=None,  # Set this to None or your desired value
+        ethnicity_list=None  # Set this to None or your desired value
+    )
+    print(f"Keyword list for image_id {image_id} updated successfully.")
+    # Add the BagOfKeywords object to the session
+    session.add(bag_of_keywords)
+
+    return 
+
+def fetch_keywords(target_image_id):
+
+    # Build a select query to retrieve keyword_ids for the specified image_id
+    select_keyword_ids_query = (
+        select(ImagesKeywords.keyword_id)
+        .filter(ImagesKeywords.image_id == target_image_id)
+    )
+
+    # Execute the query and fetch the result as a list of keyword_ids
+    result = session.execute(select_keyword_ids_query).fetchall()
+    keyword_ids = [row.keyword_id for row in result]
+
+    # Build a select query to retrieve keywords for the specified keyword_ids
+    select_keywords_query = (
+        select(Keywords.keyword_text)
+        .filter(Keywords.keyword_id.in_(keyword_ids))
+        .order_by(Keywords.keyword_id)
+    )
+
+    # Execute the query and fetch the results as a list of keyword_text
+    result = session.execute(select_keywords_query).fetchall()
+    keyword_list = [row.keyword_text for row in result]
+    # Pickle the keyword_list
+    keyword_list_pickle = pickle.dumps(keyword_list)
+
+    # Update the BagOfKeywords entry with the corresponding image_id
+    BOK_keywords_entry = (
+        session.query(BagOfKeywords)
+        .filter(BagOfKeywords.image_id == target_image_id)
+        .first()
+    )
+
+    if BOK_keywords_entry:
+        BOK_keywords_entry.keyword_list = keyword_list_pickle
+        #session.commit()
+        print(f"Keyword list for image_id {target_image_id} updated successfully.")
+    else:
+        print(f"Keywords entry for image_id {target_image_id} not found.")
+        
+    return
+
+def fetch_ethnicity(target_image_id):
+    select_ethnicity_ids_query = (
+        select(ImagesEthnicity.ethnicity_id)
+        .filter(ImagesEthnicity.image_id == target_image_id)
+    )
+
+    result = session.execute(select_ethnicity_ids_query).fetchall()
+    ethnicity_list = [row.ethnicity_id for row in result]
+
+    ethnicity_list_pickle = pickle.dumps(ethnicity_list)
+
+    # Update the BagOfKeywords entry with the corresponding image_id
+    BOK_ethnicity_entry = (
+        session.query(BagOfKeywords)
+        .filter(BagOfKeywords.image_id == target_image_id)
+        .first()
+    )
+
+    if BOK_ethnicity_entry:
+        BOK_ethnicity_entry.ethnicity_list = ethnicity_list_pickle
+        #session.commit()
+        print(f"Ethnicity list for image_id {target_image_id} updated successfully.")
+    else:
+        print(f"ethnicity entry for image_id {target_image_id} not found.")
+        
+    return
+
 if index == 0:
     ################# CREATE TABLE ###########
-    # Define the columns you want to retrieve from Images table
-    # columns = [Images.image_id, Images.description, Images.gender_id, Images.age_id, Images.location_id]
-
-    # Build a select query for fetching data from Images table
-    # select_query = select(Images.image_id, Images.description, Images.gender_id, Images.age_id, Images.location_id).select_from(Images).limit(LIMIT)
-    # quit()
-
-    # Build a select query for fetching data from Images table
     select_query = select(Images.image_id, Images.description, Images.gender_id, Images.age_id, Images.location_id).select_from(Images).outerjoin(BagOfKeywords, Images.image_id == BagOfKeywords.image_id).filter(BagOfKeywords.image_id == None).limit(LIMIT)
-
-    # Fetch the data
     result = session.execute(select_query).fetchall()
-
-    #Iterate through the fetched data and insert it into BagOfKeywords table
     for row in result:
-        image_id, description, gender_id, age_id, location_id = row
-        
-        # Create a BagOfKeywords object
-        bag_of_keywords = BagOfKeywords(
-            image_id=image_id,
-            description=description,
-            gender_id=gender_id,
-            age_id=age_id,
-            location_id=location_id,
-            keyword_list=None,  # Set this to None or your desired value
-            ethnicity_list=None  # Set this to None or your desired value
-        )
-        print(f"Keyword list for image_id {image_id} updated successfully.")
-        # Add the BagOfKeywords object to the session
-        session.add(bag_of_keywords)
-
-    # Commit the changes to the database
+        create_table(row)
     session.commit()
-
-if index == 1:
+elif index == 1:
     ################FETCHING KEYWORDS####################################
-
     distinct_image_ids_query = select(BagOfKeywords.image_id.distinct()).filter(BagOfKeywords.keyword_list == None).limit(LIMIT)
-
     distinct_image_ids = [row[0] for row in session.execute(distinct_image_ids_query).fetchall()]
-
-    # Iterate through each distinct image_id
     for target_image_id in distinct_image_ids:
-
-        # Build a select query to retrieve keyword_ids for the specified image_id
-        select_keyword_ids_query = (
-            select(ImagesKeywords.keyword_id)
-            .filter(ImagesKeywords.image_id == target_image_id)
-        )
-
-        # Execute the query and fetch the result as a list of keyword_ids
-        result = session.execute(select_keyword_ids_query).fetchall()
-        keyword_ids = [row.keyword_id for row in result]
-
-        # Build a select query to retrieve keywords for the specified keyword_ids
-        select_keywords_query = (
-            select(Keywords.keyword_text)
-            .filter(Keywords.keyword_id.in_(keyword_ids))
-            .order_by(Keywords.keyword_id)
-        )
-
-        # Execute the query and fetch the results as a list of keyword_text
-        result = session.execute(select_keywords_query).fetchall()
-        keyword_list = [row.keyword_text for row in result]
-        # Pickle the keyword_list
-        keyword_list_pickle = pickle.dumps(keyword_list)
-
-        # Update the BagOfKeywords entry with the corresponding image_id
-        BOK_keywords_entry = (
-            session.query(BagOfKeywords)
-            .filter(BagOfKeywords.image_id == target_image_id)
-            .first()
-        )
-
-        if BOK_keywords_entry:
-            BOK_keywords_entry.keyword_list = keyword_list_pickle
-            session.commit()
-            print(f"Keyword list for image_id {target_image_id} updated successfully.")
-        else:
-            print(f"Keywords entry for image_id {target_image_id} not found.")
-            
-            
-if index == 2:        
+        fetch_keywords(target_image_id)
+    session.commit()
+elif index == 2:
+    #################FETCHING ETHNICITY####################################
     distinct_image_ids_query = select(BagOfKeywords.image_id.distinct()).filter(BagOfKeywords.ethnicity_list == None).limit(LIMIT)
-
     distinct_image_ids = [row[0] for row in session.execute(distinct_image_ids_query).fetchall()]
-
-    # Iterate through each distinct image_id
     for target_image_id in distinct_image_ids:
-
-        #################FETCHING ETHNICITY####################################
-
-        select_ethnicity_ids_query = (
-            select(ImagesEthnicity.ethnicity_id)
-            .filter(ImagesEthnicity.image_id == target_image_id)
-        )
-
-        result = session.execute(select_ethnicity_ids_query).fetchall()
-        ethnicity_list = [row.ethnicity_id for row in result]
-
-        ethnicity_list_pickle = pickle.dumps(ethnicity_list)
-
-        # Update the BagOfKeywords entry with the corresponding image_id
-        BOK_ethnicity_entry = (
-            session.query(BagOfKeywords)
-            .filter(BagOfKeywords.image_id == target_image_id)
-            .first()
-        )
-
-        if BOK_ethnicity_entry:
-            BOK_ethnicity_entry.ethnicity_list = ethnicity_list_pickle
-            session.commit()
-            print(f"Ethnicity list for image_id {target_image_id} updated successfully.")
-        else:
-            print(f"ethnicity entry for image_id {target_image_id} not found.")
+        fetch_ethnicity(target_image_id)        
+    session.commit()
     
+# Mutex for thread synchronization
+lock = threading.Lock()
+
+# Event for signaling thread completion
+threads_completed = threading.Event()
+
+# Queue for distributing work among threads
+work_queue = queue.Queue()
+
+def threaded_process_files():
+    while not work_queue.empty():
+        currentpathfile, newfile, a, b = work_queue.get()
+        newpathfile = os.path.join(NEWPATH, a, b, newfile)
+
+        shutil.move(currentpathfile, newpathfile)
+
+        # print(newfile)
+        # print("moved from: ", currentpathfile)
+        print("moved to: ", newpathfile)
+
+        with lock:
+            global counter
+            counter += 1
+
+        work_queue.task_done()
 
 
+def threaded_processing():
+    thread_list = []
+    for _ in range(num_threads):
+        thread = threading.Thread(target=threaded_process_files)
+        thread_list.append(thread)
+        thread.start()
+
+    # Wait for all threads to complete
+    for thread in thread_list:
+        thread.join()
+
+    # Set the event to signal that threads are completed
+    threads_completed.set()
+
+def add_queue(this_path):
+    meta_file_list = get_dir_files(this_path)
+    for newfile in meta_file_list:
+        a, b = get_hash_folders(newfile)
+        currentpathfile = os.path.join(this_path, newfile)
+        work_queue.put((currentpathfile, newfile, a, b))
+
+print("going to start threading")
+threaded_processing()
+
+# Wait for threads to complete
+threads_completed.wait()
 
 
 print("done")
 # Close the session
 session.close()
+

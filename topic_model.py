@@ -60,7 +60,7 @@ start = time.time()
 
 io = DataIO()
 db = io.db
-io.db["name"] = "ministock"
+#io.db["name"] = "ministock"
 
 
 NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
@@ -141,6 +141,7 @@ def process(processed_txt,MODEL):
         corpus=tfidf_corpus
     lda_model = gensim.models.LdaMulticore(corpus, num_topics=NUM_TOPICS, id2word=dictionary, passes=2, workers=2)
     save_model(lda_model,tfidf_corpus,bow_corpus)
+    print("processed all")
     return lda_model
 
 def write_topics(lda_model):
@@ -177,34 +178,45 @@ def write_imagetopics(resultsjson,lda_model_tfidf,bow_corpus):
     session.commit()
     return
 
-
-def main():
-    
+def topic_model():
     # create_my_engine(db)
     print("about to SQL: ",SELECT,FROM,WHERE,LIMIT)
     resultsjson = selectSQL()
     print("got results, count is: ",len(resultsjson))
-    if MODE==0:
-        #######TOPIC MODELING ############
-        txt = pd.DataFrame(index=range(len(resultsjson)),columns=["description","keywords","index","score"])
-        for i,row in enumerate(resultsjson):
-            #txt.at[i,"description"]=row["description"]
-            txt.at[i,"keyword_list"]=" ".join(pickle.loads(row["keyword_list"]))
-        #processed_txt=txt['description'].map(preprocess)
-        processed_txt=txt['keyword_list'].map(preprocess)
-        lda_model=process(processed_txt,MODEL)
-        write_topics(lda_model)
-        
-    elif MODE==1:
+
+    #######TOPIC MODELING ############
+    txt = pd.DataFrame(index=range(len(resultsjson)),columns=["description","keywords","index","score"])
+    for i,row in enumerate(resultsjson):
+        #txt.at[i,"description"]=row["description"]
+        txt.at[i,"keyword_list"]=" ".join(pickle.loads(row["keyword_list"]))
+    #processed_txt=txt['description'].map(preprocess)
+    processed_txt=txt['keyword_list'].map(preprocess)
+    lda_model=process(processed_txt,MODEL)
+    write_topics(lda_model)
+    
+    return
+
+def topic_index():
+    # create_my_engine(db)
+    print("about to SQL: ",SELECT,FROM,WHERE,LIMIT)
+    resultsjson = selectSQL()
+    print("got results, count is: ",len(resultsjson))
+    while resultsjson:
         ###########TOPIC INDEXING#########################
         bow_corpus = corpora.MmCorpus(BOW_CORPUS_PATH)
         lda_model_tfidf = gensim.models.LdaModel.load(MODEL_PATH)
         #lda_dict = corpora.Dictionary.load(MODEL_PATH+'.id2word')
         print("model loaded successfully")
         write_imagetopics(resultsjson,lda_model_tfidf,bow_corpus)
-        
-    # if USE_SEGMENT:
-    #     Base.metadata.create_all(engine)
+        print("updated ",LIMIT,"cells")
+    print("DONE")
+
+    return
+    
+def main():
+    
+    if MODE==0:topic_model()
+    elif MODE==1:topic_index()
 
     end = time.time()
     print (end - start)
