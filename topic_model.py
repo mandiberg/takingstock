@@ -51,8 +51,8 @@ items, seconds
 '''
 title = 'Please choose your operation: '
 options = ['Topic modelling', 'Topic indexing']
-OPTION, MODE = pick(options, title)
-
+# OPTION, MODE = pick(options, title)
+MODE = 1
 
 
 start = time.time()
@@ -70,7 +70,7 @@ TFIDF_CORPUS_PATH=io.ROOT+"/TFIDF_lda_corpus.mm"
 USE_SEGMENT = False
 
 MODEL="TF" ## OR TF  ## Bag of words or TF-IDF
-NUM_TOPICS=75
+NUM_TOPICS=48
 
 stemmer = SnowballStemmer('english')
 
@@ -79,7 +79,7 @@ SELECT = "DISTINCT(image_id),description,keyword_list"
 FROM ="bagofkeywords"
 if MODE==0:
     WHERE = "keyword_list IS NOT NULL "
-    LIMIT = 328894
+    LIMIT = 10000000
 elif MODE==1:
     WHERE = "keyword_list IS NOT NULL AND image_id NOT IN (SELECT image_id FROM imagestopics)"
     LIMIT=1000
@@ -128,14 +128,15 @@ def save_model(lda_model,tfidf_corpus,bow_corpus):
 def process(processed_txt,MODEL):
     print("processing the model now")
     dictionary = gensim.corpora.Dictionary(processed_txt)
-    dictionary.filter_extremes(no_below=15, no_above=0.5, keep_n=100000)
+    # dictionary.filter_extremes(no_below=15, no_above=0.99, keep_n=100000)
+    dictionary.filter_extremes(no_below=100, keep_n=100000)
     bow_corpus = [dictionary.doc2bow(doc) for doc in processed_txt] ## BOW corpus
     corpus=bow_corpus
     if MODEL=="TF":   
         tfidf = models.TfidfModel(bow_corpus)  ## converting BOW to TDIDF corpus
         tfidf_corpus = tfidf[bow_corpus]
         corpus=tfidf_corpus
-    lda_model = gensim.models.LdaMulticore(corpus, num_topics=NUM_TOPICS, id2word=dictionary, passes=2, workers=2)
+    lda_model = gensim.models.LdaMulticore(corpus, num_topics=NUM_TOPICS, id2word=dictionary, passes=2, workers=io.NUMBER_OF_PROCESSES)
     save_model(lda_model,tfidf_corpus,bow_corpus)
     return lda_model
 
@@ -176,12 +177,14 @@ def write_imagetopics(resultsjson,lda_model_tfidf,bow_corpus):
 
 def main():
     
-    # create_my_engine(db)
-    print("about to SQL: ",SELECT,FROM,WHERE,LIMIT)
-    resultsjson = selectSQL()
-    print("got results, count is: ",len(resultsjson))
     if MODE==0:
         #######TOPIC MODELING ############
+        # create_my_engine(db)
+        print("about to SQL: ",SELECT,FROM,WHERE,LIMIT)
+        resultsjson = selectSQL()
+        print("got results, count is: ",len(resultsjson))
+
+        # build model from resultsjson
         txt = pd.DataFrame(index=range(len(resultsjson)),columns=["description","keywords","index","score"])
         for i,row in enumerate(resultsjson):
             #txt.at[i,"description"]=row["description"]
@@ -193,11 +196,23 @@ def main():
         
     elif MODE==1:
         ###########TOPIC INDEXING#########################
+        # load model
         bow_corpus = corpora.MmCorpus(BOW_CORPUS_PATH)
         lda_model_tfidf = gensim.models.LdaModel.load(MODEL_PATH)
         #lda_dict = corpora.Dictionary.load(MODEL_PATH+'.id2word')
         print("model loaded successfully")
-        write_imagetopics(resultsjson,lda_model_tfidf,bow_corpus)
+
+        while True:
+
+            # create_my_engine(db)
+            print("about to SQL: ",SELECT,FROM,WHERE,LIMIT)
+            resultsjson = selectSQL()
+            print("got results, count is: ",len(resultsjson))
+            if len(resultsjson) == 0:
+                break
+
+            # assign topics from these resultsjson
+            write_imagetopics(resultsjson,lda_model_tfidf,bow_corpus)
         
     # if USE_SEGMENT:
     #     Base.metadata.create_all(engine)

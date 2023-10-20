@@ -67,9 +67,16 @@ CLUSTER_NO = 77
 # this controls whether it is using the linear or angle process
 IS_ANGLE_SORT = False
 
+# this control whether sorting by topics
+IS_TOPICS = True
+N_TOPICS = 75
+
 # I/O utils
 io = DataIO(IS_SSD)
 db = io.db
+# overriding DB for testing
+io.db["name"] = "ministock"
+
 NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 
 # if IS_SSD:
@@ -116,13 +123,25 @@ elif IS_SEGONLY:
         LIMIT = 100000
 
 
+    if IS_TOPICS:
+        SELECT = "DISTINCT(s.image_id), s.site_name_id, s.contentUrl, s.imagename, s.face_x, s.face_y, s.face_z, s.mouth_gap, s.face_landmarks, s.bbox, s.face_encodings68, s.site_image_id"
+        FROM = f"{SegmentTable_name} s JOIN ImagesTopics it ON s.image_id = it.image_id"
+        # FROM =f"Images i LEFT JOIN Encodings e ON s.image_id = s.image_id INNER JOIN {SegmentTable_name} seg ON s.site_image_id = seg.site_image_id JOIN ImagesClusters68 ic ON s.image_id = ic.image_id"
+        # WHERE = "s.is_face IS TRUE AND s.face_encodings IS NOT NULL AND s.bbox IS NOT NULL AND s.site_name_id = 8 AND s.age_id NOT IN (1,2,3,4)"
+        WHERE = "s.site_name_id != 1 AND age_id NOT IN (1,2,3,4) "
+        # WHERE = "mouth_gap < 2 AND age_id NOT IN (1,2,3,4) AND image_id < 40647710"
+        # WHERE = "mouth_gap < 2 AND age_id NOT IN (1,2,3,4) AND s.image_id < 40647710 AND k.keyword_text LIKE 'work%'"
+        LIMIT = 10000
+
+
     else:
         SELECT = "*" 
-        FROM = f"{SegmentTable_name} s JOIN ImagesKeywords ik ON s.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id"
-        # WHERE = "bbox IS NOT NULL"
-        WHERE = "age_id NOT IN (1,2,3,4) AND k.keyword_text LIKE 'happ%' "
+        FROM = f"{SegmentTable_name}"
+        # FROM = f"{SegmentTable_name} s JOIN ImagesKeywords ik ON s.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id"
+        WHERE = "age_id NOT IN (1,2,3,4) and mouth_gap > 15"
+        # WHERE = "age_id NOT IN (1,2,3,4) AND k.keyword_text LIKE 'happ%' "
         # WHERE = "mouth_gap < 2 AND age_id NOT IN (1,2,3,4) AND image_id < 40647710 AND gender_id = 1"
-        LIMIT = 1000
+        LIMIT = 100000
 
 
 
@@ -243,7 +262,10 @@ def selectSQL(cluster_no=None):
     print(f"cluster_no is")
     print(cluster_no)
     if cluster_no is not None:
-        cluster =f"AND ic.cluster_id = {str(cluster_no)}"
+        if IS_CLUSTER:
+            cluster =f"AND ic.cluster_id = {str(cluster_no)}"
+        elif IS_TOPICS:
+            cluster =f"AND it.topic_id = {str(cluster_no)}"
     else:
         cluster=""
     print(f"cluster SELECT is {cluster}")
@@ -932,7 +954,14 @@ def main():
             resultsjson = selectSQL(cluster_no)
             print(f"resultsjson contains {len(resultsjson)} images")
             map_images(resultsjson, cluster_no)
-    if IS_ONE_CLUSTER:
+    elif IS_TOPICS:
+        print(f"IS_TOPICS is {IS_TOPICS} with {N_TOPICS}")
+        for cluster_no in range(N_TOPICS):
+            print(f"SELECTing cluster {cluster_no} of {N_TOPICS}")
+            resultsjson = selectSQL(cluster_no)
+            print(f"resultsjson contains {len(resultsjson)} images")
+            map_images(resultsjson, cluster_no)
+    elif IS_ONE_CLUSTER:
         print(f"SELECTing cluster {CLUSTER_NO}")
         resultsjson = selectSQL(CLUSTER_NO)
         print(f"resultsjson contains {len(resultsjson)} images")
