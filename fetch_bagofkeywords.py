@@ -25,9 +25,13 @@ options = ['Create table', 'Fetch keywords list', 'Fetch ethnicity list']
 option, index = pick(options, title)
 
 LIMIT= 1000
+# Initialize the counter
+counter = 0
 
+# Number of threads
+num_threads = 2
 
-def create_table(row):
+def create_table(row, lock, session):
     image_id, description, gender_id, age_id, location_id = row
     
     # Create a BagOfKeywords object
@@ -40,13 +44,19 @@ def create_table(row):
         keyword_list=None,  # Set this to None or your desired value
         ethnicity_list=None  # Set this to None or your desired value
     )
+    
+    # Print a message to confirm the update
     print(f"Keyword list for image_id {image_id} updated successfully.")
+    
     # Add the BagOfKeywords object to the session
     session.add(bag_of_keywords)
 
-    return 
+    with lock:
+        # Increment the counter using the lock to ensure thread safety
+        global counter
+        counter += 1
 
-def fetch_keywords(target_image_id):
+def fetch_keywords(target_image_id, lock, session):
 
     # Build a select query to retrieve keyword_ids for the specified image_id
     select_keyword_ids_query = (
@@ -85,9 +95,14 @@ def fetch_keywords(target_image_id):
     else:
         print(f"Keywords entry for image_id {target_image_id} not found.")
         
+    with lock:
+        # Increment the counter using the lock to ensure thread safety
+        global counter
+        counter += 1
+
     return
 
-def fetch_ethnicity(target_image_id):
+def fetch_ethnicity(target_image_id, lock, session):
     select_ethnicity_ids_query = (
         select(ImagesEthnicity.ethnicity_id)
         .filter(ImagesEthnicity.image_id == target_image_id)
@@ -111,87 +126,74 @@ def fetch_ethnicity(target_image_id):
         print(f"Ethnicity list for image_id {target_image_id} updated successfully.")
     else:
         print(f"ethnicity entry for image_id {target_image_id} not found.")
-        
+    
+    with lock:
+        # Increment the counter using the lock to ensure thread safety
+        global counter
+        counter += 1
+
     return
 
+
+
+#######MULTI THREADING##################
+# Create a lock for thread synchronization
+lock = threading.Lock()
+threads_completed = threading.Event()
+
+
+
+# Create a queue for distributing work among threads
+work_queue = queue.Queue()
+
 if index == 0:
+    function=create_table
     ################# CREATE TABLE ###########
     select_query = select(Images.image_id, Images.description, Images.gender_id, Images.age_id, Images.location_id).select_from(Images).outerjoin(BagOfKeywords, Images.image_id == BagOfKeywords.image_id).filter(BagOfKeywords.image_id == None).limit(LIMIT)
     result = session.execute(select_query).fetchall()
     for row in result:
-        create_table(row)
-    session.commit()
+        work_queue.put(row)
+
 elif index == 1:
+    function=fetch_keywords
     ################FETCHING KEYWORDS####################################
     distinct_image_ids_query = select(BagOfKeywords.image_id.distinct()).filter(BagOfKeywords.keyword_list == None).limit(LIMIT)
     distinct_image_ids = [row[0] for row in session.execute(distinct_image_ids_query).fetchall()]
     for target_image_id in distinct_image_ids:
-        fetch_keywords(target_image_id)
-    session.commit()
+        work_queue.put(target_image_id)
+        
 elif index == 2:
+    function=fetch_ethnicity
     #################FETCHING ETHNICITY####################################
     distinct_image_ids_query = select(BagOfKeywords.image_id.distinct()).filter(BagOfKeywords.ethnicity_list == None).limit(LIMIT)
     distinct_image_ids = [row[0] for row in session.execute(distinct_image_ids_query).fetchall()]
     for target_image_id in distinct_image_ids:
-        fetch_ethnicity(target_image_id)        
-    session.commit()
-    
-# Mutex for thread synchronization
-lock = threading.Lock()
+        work_queue.put(target_image_id)        
 
-# Event for signaling thread completion
-threads_completed = threading.Event()
-
-# Queue for distributing work among threads
-work_queue = queue.Queue()
-
-def threaded_process_files():
+def threaded_fetching():
     while not work_queue.empty():
-        currentpathfile, newfile, a, b = work_queue.get()
-        newpathfile = os.path.join(NEWPATH, a, b, newfile)
-
-        shutil.move(currentpathfile, newpathfile)
-
-        # print(newfile)
-        # print("moved from: ", currentpathfile)
-        print("moved to: ", newpathfile)
-
-        with lock:
-            global counter
-            counter += 1
-
+        param = work_queue.get()
+        function(param, lock, session)
+        #print(param)
         work_queue.task_done()
-
 
 def threaded_processing():
     thread_list = []
     for _ in range(num_threads):
-        thread = threading.Thread(target=threaded_process_files)
+        thread = threading.Thread(target=threaded_fetching)
         thread_list.append(thread)
         thread.start()
-
     # Wait for all threads to complete
     for thread in thread_list:
         thread.join()
-
     # Set the event to signal that threads are completed
     threads_completed.set()
-
-def add_queue(this_path):
-    meta_file_list = get_dir_files(this_path)
-    for newfile in meta_file_list:
-        a, b = get_hash_folders(newfile)
-        currentpathfile = os.path.join(this_path, newfile)
-        work_queue.put((currentpathfile, newfile, a, b))
-
-print("going to start threading")
+    
 threaded_processing()
-
-# Wait for threads to complete
+# Commit the changes to the database
 threads_completed.wait()
-
 
 print("done")
 # Close the session
+session.commit()
 session.close()
-
