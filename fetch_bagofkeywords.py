@@ -1,5 +1,5 @@
 from sqlalchemy import create_engine, select
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker,scoped_session
 from sqlalchemy.pool import NullPool
 from my_declarative_base import Images, BagOfKeywords,Keywords,ImagesKeywords,ImagesEthnicity  # Replace 'your_module' with the actual module where your SQLAlchemy models are defined
 from mp_db_io import DataIO
@@ -17,8 +17,8 @@ db = io.db
 engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}".format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']), poolclass=NullPool)
 
 # Create a session
-Session = sessionmaker(bind=engine)
-session = Session()
+session = scoped_session(sessionmaker(bind=engine))
+
 
 title = 'Please choose your operation: '
 options = ['Create table', 'Fetch keywords list', 'Fetch ethnicity list']
@@ -29,7 +29,7 @@ LIMIT= 1000
 counter = 0
 
 # Number of threads
-num_threads = 2
+num_threads = 4
 
 def create_table(row, lock, session):
     image_id, description, gender_id, age_id, location_id = row
@@ -56,8 +56,8 @@ def create_table(row, lock, session):
         global counter
         counter += 1
 
-def fetch_keywords(target_image_id, lock, session):
-
+def fetch_keywords(target_image_id, lock,session):
+    #global session
     # Build a select query to retrieve keyword_ids for the specified image_id
     select_keyword_ids_query = (
         select(ImagesKeywords.keyword_id)
@@ -174,7 +174,6 @@ def threaded_fetching():
     while not work_queue.empty():
         param = work_queue.get()
         function(param, lock, session)
-        #print(param)
         work_queue.task_done()
 
 def threaded_processing():
