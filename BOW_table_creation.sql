@@ -1,4 +1,4 @@
-USE stock;
+USE ministock1023;
 
 CREATE TABLE BagOfKeywords (
     image_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -65,4 +65,7 @@ FROM (SELECT DISTINCT image_id, keyword_id FROM imageskeywords) AS ik
 JOIN keywords AS k ON ik.keyword_id = k.keyword_id
 GROUP BY k.keyword_id, k.keyword_text
 ORDER BY keyword_count DESC;
+
+
+
 

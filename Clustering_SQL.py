@@ -51,9 +51,10 @@ start = time.time()
 
 io = DataIO()
 db = io.db
+io.db["name"] = "ministock1023"
 NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 
-# Satyam, you want to set this to False
+# this works for using segment in stock, and for ministock
 USE_SEGMENT = True
 
 # get the best fit for clusters
@@ -67,21 +68,27 @@ if USE_SEGMENT is True:
 
     # where the script is looking for files list
     # do not use this if you are using the regular Clusters and ImagesClusters tables
-    SegmentTable_name = 'SegmentAug30Straightahead'
+    SegmentTable_name = 'SegmentOct20'
 
-    # join with SSD tables. Satyam, use the one below
-    SELECT = "DISTINCT(e.image_id), e.face_encodings68"
-    FROM = "Encodings e"
-    QUERY = "e.image_id IN"
-    SUBQUERY = f"(SELECT seg1.image_id FROM {SegmentTable_name} seg1 )"
-    WHERE = f"{QUERY} {SUBQUERY}"
-    LIMIT = 1000000
+    # Basic Query, this works with gettytest3
+    SELECT = "DISTINCT(image_id),face_encodings68"
+    FROM = SegmentTable_name
+    WHERE = "face_encodings68 IS NOT NULL"
+    LIMIT = 10000000
+
+    # # join with SSD tables. Satyam, use the one below
+    # SELECT = "DISTINCT(e.image_id), e.face_encodings68"
+    # FROM = "Encodings e"
+    # QUERY = "e.image_id IN"
+    # SUBQUERY = f"(SELECT seg1.image_id FROM {SegmentTable_name} seg1 )"
+    # WHERE = f"{QUERY} {SUBQUERY}"
+    # LIMIT = 1000000
 
 else:
     # Basic Query, this works with gettytest3
-    SELECT = "DISTINCT(image_id),face_encodings"
+    SELECT = "DISTINCT(image_id),face_encodings68"
     FROM ="encodings"
-    WHERE = "face_encodings IS NOT NULL"
+    WHERE = "face_encodings68 IS NOT NULL"
     LIMIT = 1000
     SegmentTable_name = ""
 
@@ -270,12 +277,14 @@ def main():
         OPTIMAL_CLUSTERS= best_score(enc_data.drop("image_id", axis=1))   #### Input ONLY encodings into clustering alhorithm
         print(OPTIMAL_CLUSTERS)
         N_CLUSTERS = OPTIMAL_CLUSTERS
+    print(enc_data)
     enc_data["cluster_id"] = kmeans_cluster(enc_data.drop("image_id", axis=1),n_clusters=N_CLUSTERS)
     
     if SAVE_FIG: export_html_clusters(enc_data.drop("image_id", axis=1))
     print(enc_data)
     print(set(enc_data["cluster_id"].tolist()))
-    enc_data.to_csv('clusters_clusterID_byImageID.csv')
+    # don't need to write a CSV
+    # enc_data.to_csv('clusters_clusterID_byImageID.csv')
 
     # if USE_SEGMENT:
     #     Base.metadata.create_all(engine)

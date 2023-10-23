@@ -18,7 +18,7 @@ from mp_db_io import DataIO
 io = DataIO()
 db = io.db
 # overriding DB for testing
-io.db["name"] = "ministock"
+io.db["name"] = "ministock1023"
 ROOT = io.ROOT 
 NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 #######################################
@@ -34,17 +34,28 @@ session = Session()
 Base = declarative_base()
 
 # Define the batch size for deleting rows
-batch_size = 100000
+batch_size = 10000
 deleted = 0
 
 # Continue deleting rows until no rows are left to delete
 while True:
     # Execute the delete query in batches
+
+    # for ImagesKeywords
+    # delete_query = """
+    # DELETE FROM ImagesKeywords 
+    # WHERE image_id NOT IN (SELECT image_id FROM SegmentOct20)
+    # LIMIT :batch_size;
+    # """
+
+    # for ImagesKeywords
     delete_query = """
-    DELETE FROM ImagesKeywords 
-    WHERE image_id NOT IN (SELECT image_id FROM SegmentAug30Straightahead)
+    DELETE FROM Images
+    WHERE image_id NOT IN (SELECT image_id FROM SegmentOct20)
+    AND image_id IS NOT NULL
     LIMIT :batch_size;
     """
+
     
     result = session.execute(delete_query, {"batch_size": batch_size})
     session.commit()

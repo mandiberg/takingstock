@@ -1,7 +1,8 @@
-from sqlalchemy import create_engine, select
+from sqlalchemy import create_engine, text, MetaData, Table, Column, Numeric, Integer, VARCHAR, Boolean, DECIMAL, BLOB, JSON, String, Date, ForeignKey, update, func, select
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import NullPool
-from my_declarative_base import Images, Encodings, BagOfKeywords,Keywords,ImagesKeywords,ImagesEthnicity  # Replace 'your_module' with the actual module where your SQLAlchemy models are defined
+from sqlalchemy.ext.declarative import declarative_base
+from my_declarative_base import Base, Images, Encodings, BagOfKeywords,Keywords,ImagesKeywords,ImagesEthnicity  # Replace 'your_module' with the actual module where your SQLAlchemy models are defined
 from mp_db_io import DataIO
 import pickle
 import numpy as np
@@ -9,7 +10,8 @@ from pick import pick
 
 io = DataIO()
 db = io.db
-# io.db["name"] = "ministock"
+io.db["name"] = "ministock1023"
+SEGMENTTABLE_NAME = 'SegmentOct20'
 
 # Create a database engine
 engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}".format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']), poolclass=NullPool)
@@ -22,7 +24,27 @@ title = 'Please choose your operation: '
 options = ['Create table', 'Fetch keywords list', 'Fetch ethnicity list']
 option, index = pick(options, title)
 
-LIMIT= 100000
+Base = declarative_base()
+
+class SegmentTable(Base):
+    __tablename__ = SEGMENTTABLE_NAME
+
+    image_id = Column(Integer, primary_key=True)
+    site_name_id = Column(Integer)
+    contentUrl = Column(String(300), nullable=False)
+    imagename = Column(String(200))
+    face_x = Column(DECIMAL(6, 3))
+    face_y = Column(DECIMAL(6, 3))
+    face_z = Column(DECIMAL(6, 3))
+    mouth_gap = Column(DECIMAL(6, 3))
+    face_landmarks = Column(BLOB)
+    bbox = Column(JSON)
+    face_encodings = Column(BLOB)
+    face_encodings68 = Column(BLOB)
+    site_image_id = Column(String(50), nullable=False)
+
+
+LIMIT= 10000
 
 ## I've created this is 3 sections , and they work perfectly seperately, but i can't overwrite data if the table is already created
 ## I haven't been able to add this "feature" but im leaving it as it is now, i'll try to fix it later
@@ -36,11 +58,18 @@ if index == 0:
     # quit()
 
     # Build a select query for fetching data from Images table
-    select_query = select(Images.image_id, Images.description, Images.gender_id, Images.age_id, Images.location_id).\
-        select_from(Images).join(Encodings, Images.image_id == Encodings.image_id).\
-        outerjoin(BagOfKeywords, Images.image_id == BagOfKeywords.image_id).\
-        filter(BagOfKeywords.image_id == None, Images.site_name_id == 8).limit(LIMIT)
-    
+    if SEGMENTTABLE_NAME:
+        select_query = select(Images.image_id, Images.description, Images.gender_id, Images.age_id, Images.location_id).\
+            select_from(Images).join(SegmentTable, Images.image_id == SegmentTable.image_id).\
+            outerjoin(BagOfKeywords, Images.image_id == BagOfKeywords.image_id).\
+            filter(BagOfKeywords.image_id == None).limit(LIMIT)
+    else:
+        select_query = select(Images.image_id, Images.description, Images.gender_id, Images.age_id, Images.location_id).\
+            select_from(Images).join(Encodings, Images.image_id == Encodings.image_id).\
+            outerjoin(BagOfKeywords, Images.image_id == BagOfKeywords.image_id).\
+            filter(BagOfKeywords.image_id == None).limit(LIMIT)
+
+
     # batch_size = 1000
 
     while True:
