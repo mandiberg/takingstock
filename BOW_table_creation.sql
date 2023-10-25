@@ -1,4 +1,4 @@
-USE minitest;
+USE ministock1023;
 
 CREATE TABLE BagOfKeywords (
     image_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -25,13 +25,47 @@ CREATE TABLE ImagesTopics (
 );
 
 
+DELETE FROM BagOfKeywords;
+DELETE FROM Topics t ;
+DELETE FROM ImagesTopics;
+
+SELECT COUNT(bok.keyword_list) FROM BagOfKeywords bok ;
+
+SELECT COUNT(keyword_list) FROM BagOfKeywords bok ;
+
 SELECT k.keyword_text  
 FROM ImagesKeywords ik
 JOIN Keywords k ON ik.keyword_id = k.keyword_id 
 WHERE ik.image_id = 51148251
 
 
+
 SELECT * 
 FROM BagOfKeywords bok 
 -- JOIN Images i ON ik.image_id = i.image_id 
 WHERE bok.image_id = 51148251
+
+-- count of images by topic
+SELECT t.topic_id,
+       COUNT(it.image_id) AS total_images,
+       SUM(CASE WHEN i.gender_id = 8 THEN 1 ELSE 0 END) AS gender_8_count,
+       (SUM(CASE WHEN i.gender_id = 8 THEN 1 ELSE 0 END) / COUNT(it.image_id)) * 100 AS gender_8_percentage,
+       t.topic       
+FROM Topics t
+LEFT JOIN ImagesTopics it ON t.topic_id = it.topic_id
+LEFT JOIN Images i ON it.image_id = i.image_id
+GROUP BY t.topic_id, t.topic
+ORDER BY total_images DESC;
+
+
+-- count of keywords overall
+USE ministock;
+SELECT k.keyword_id, k.keyword_text, COUNT(*) as keyword_count
+FROM (SELECT DISTINCT image_id, keyword_id FROM imageskeywords) AS ik
+JOIN keywords AS k ON ik.keyword_id = k.keyword_id
+GROUP BY k.keyword_id, k.keyword_text
+ORDER BY keyword_count DESC;
+
+
+
+

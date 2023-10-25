@@ -45,7 +45,7 @@ class DataIO:
 
 
 
-            self.ROOT_PROD= os.path.join(os.environ['HOME'], "Documents/projects-active/facemap_production") ## only on Mac
+            self.ROOT_PROD= os.path.join(os.environ['HOME'], "Documents/projects-active/facemap_production/segment_images") ## only on Mac
             self.ROOT54= "/Volumes/RAID54" ## only on 
             # temp migration for
             # self.ROOT54= "/Volumes/6TB_mayday_2" ## only on 
@@ -70,16 +70,16 @@ class DataIO:
         if IS_SSD:
             self.folder_list = [
                 "", #0, Empty, there is no site #0 -- starts count at 1
-                os.path.join(self.ROOT4,"images_getty"), #1, Getty
+                os.path.join(self.ROOT_PROD,"images_getty"), #1, Getty
                 # temp for testing
                 # os.path.join(self.ROOT54,"gettyimages/testimages"), #1, Getty
                 os.path.join(self.ROOT_PROD,""),
-                os.path.join(self.ROOT4,"images_adobe"), #3, Adobe
+                os.path.join(self.ROOT_PROD,"images_adobe"), #3, Adobe
                 os.path.join(self.ROOT_PROD,""),
-                os.path.join(self.ROOT4,"images_pexels"), #5, Pexels
+                os.path.join(self.ROOT_PROD,"images_pexels"), #5, Pexels
                 os.path.join(self.ROOT_PROD,""),
                 os.path.join(self.ROOT_PROD,""),
-                os.path.join(self.ROOT4,"images_123rf"), #8, images_123rf
+                os.path.join(self.ROOT_PROD,"images_123rf"), #8, images_123rf
                 os.path.join(self.ROOT_PROD,""),
             ]
         else:

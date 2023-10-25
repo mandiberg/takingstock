@@ -34,9 +34,10 @@ sig = '''
 #where the images are:
 PATH = "/Volumes/RAID54/"
 #where the images are going:
-PATH2 = "/Volumes/SSD4/"
-SEGMENTTABLE_NAME = 'SegmentAug30Straightahead'
+PATH2 = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/segment_images"
+SEGMENTTABLE_NAME = 'SegmentOct20'
 
+# i don'tthink this does anything
 IMAGES_THREAD_COUNTER = 0
 
 '''
@@ -53,9 +54,9 @@ IMAGES_THREAD_COUNTER = 0
 '''
 
 # right now this is only working for one site at a time
-SITE_NAME_ID = 1
-IMAGES_FOLDER_NAME = 'images_getty'
-NEWIMAGES_FOLDER_NAME = 'images_getty'
+SITE_NAME_ID = 8
+IMAGES_FOLDER_NAME = 'images_123rf'
+NEWIMAGES_FOLDER_NAME = 'images_123rf'
 NUMBER_OF_THREADS_IMAGES_DOWNLOAD =15
 OLDPATH = os.path.join(PATH, IMAGES_FOLDER_NAME)
 NEWPATH = os.path.join(PATH2, NEWIMAGES_FOLDER_NAME)

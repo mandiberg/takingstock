@@ -106,17 +106,17 @@ class Encodings(Base):
     face_encodings68_J5 = Column(BLOB)
     body_landmarks = Column(BLOB)
 
-class Clusters68(Base):
-    __tablename__ = 'Clusters68'
+class Clusters(Base):
+    __tablename__ = 'Clusters'
 
     cluster_id = Column(Integer, primary_key=True, autoincrement=True)
     cluster_median = Column(BLOB)
 
-class ImagesClusters68(Base):
-    __tablename__ = 'ImagesClusters68'
+class ImagesClusters(Base):
+    __tablename__ = 'ImagesClusters'
 
     image_id = Column(Integer, ForeignKey('images.image_id'), primary_key=True)
-    cluster_id = Column(Integer, ForeignKey('Clusters68.cluster_id'))
+    cluster_id = Column(Integer, ForeignKey('Clusters.cluster_id'))
 
 class BagOfKeywords(Base):
     __tablename__ = 'BagOfKeywords'

@@ -123,13 +123,13 @@ drawing_spec = mp_drawing.DrawingSpec(thickness=1, circle_radius=1)
 mp_face_detection = mp.solutions.face_detection #### added face detection
 face_detection = mp_face_detection.FaceDetection(min_detection_confidence=0.7)
 
-predictor_path = "shape_predictor_68_face_landmarks.dat"
-sp = dlib.shape_predictor(predictor_path)
+# predictor_path = "shape_predictor_68_face_landmarks.dat"
+# sp = dlib.shape_predictor(predictor_path)
 
-# dlib hack
-face_rec_model_path = "dlib_face_recognition_resnet_model_v1.dat"
-facerec = dlib.face_recognition_model_v1(face_rec_model_path)
-detector = dlib.get_frontal_face_detector()
+# # dlib hack
+# face_rec_model_path = "dlib_face_recognition_resnet_model_v1.dat"
+# facerec = dlib.face_recognition_model_v1(face_rec_model_path)
+# detector = dlib.get_frontal_face_detector()
 
 face_recognition_model = face_recognition_models.face_recognition_model_location()
 face_encoder = dlib.face_recognition_model_v1(face_recognition_model)

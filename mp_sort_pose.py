@@ -23,7 +23,7 @@ class SortPose:
         #maximum allowable distance between encodings
         self.MAXDIST = 0.7
         self.MINDIST = .4
-        self.CUTOFF = 10000
+        self.CUTOFF = 1000
 
         # maximum allowable scale up
         self.resize_max = 1.99
@@ -799,8 +799,26 @@ class SortPose:
         # self.face_2d = np.array(face_2d, dtype=np.float64)
 
         return face_2d
-    def get_planar_d(last_dict,this_dict):
-        pass
+    def get_planar_d(self,last_dict,this_dict):
+        print("plaaaaaannnnnnaaaaaarrrrrrr")
+        d_list = []
+        for point in last_dict:
+            # d=np.linalg.norm(enc1 - enc2, axis=0)
+            # print(last_dict[point])
+            # print(type(last_dict[point]))
+            # this_d = np.linalg.norm(last_dict[point],this_dict[point])
+            enc1=np.array(last_dict[point])
+            enc2=np.array(this_dict[point])
+            d=np.linalg.norm(enc1 - enc2)
+
+            d_list.append(d)
+        print(d_list)
+        d = statistics.mean(d_list)
+        # print(last_dict[1][0])
+        # print(this_dict[1][0])
+        print(d)
+        return d
+        
 
     def get_closest_df(self, FIRST_ROUND, enc1, df_enc, df_128_enc, sorttype="128d"):
         print("get_closest_df")
