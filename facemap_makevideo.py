@@ -45,12 +45,13 @@ CYCLECOUNT = 1
 
 # keep this live, even if not SSD
 # SegmentTable_name = 'May25segment123side_to_side'
+
 SegmentTable_name = 'SegmentOct20'
 # SegmentTable_name = 'SegmentAug30Straightahead'  #actually straight ahead smile
 
 # SATYAM, this is MM specific
 # for when I'm using files on my SSD vs RAID
-IS_SSD = True
+IS_SSD = False
 #IS_MOVE is in move_toSSD_files.py
 
 # This is for when you only have the segment table. RW SQL query

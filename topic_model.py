@@ -10,7 +10,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 # my ORM
-from my_declarative_base import Base, Images, Topics,ImagesTopics, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON, ForeignKey
+from my_declarative_base import Base, Images, Topics,ImagesTopics,Clusters68, ImagesClusters68, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON, ForeignKey
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import create_engine, text, MetaData, Table, Column, Numeric, Integer, VARCHAR, update, Float
@@ -32,14 +32,16 @@ import gensim
 from gensim.test.utils import get_tmpfile
 from gensim.utils import simple_preprocess
 from gensim.parsing.preprocessing import STOPWORDS
+from gensim.models.coherencemodel import CoherenceModel
 from nltk.stem import WordNetLemmatizer, SnowballStemmer
 from nltk.stem.porter import *
+import os
 
 import nltk
 from gensim import corpora, models
 from pprint import pprint
 
-nltk.download('wordnet') ##only first time
+#nltk.download('wordnet') ##only first time
 
 # MM you need to use conda activate minimal_ds 
 
@@ -50,41 +52,29 @@ items, seconds
 100000, 695
 '''
 title = 'Please choose your operation: '
-options = ['Topic modelling', 'Topic indexing']
-# OPTION, MODE = pick(options, title)
-MODE = 1
-
-
-start = time.time()
-
+options = ['Topic modelling', 'Topic indexing','calculating optimum_topics']
 io = DataIO()
 db = io.db
-io.db["name"] = "ministock1023"
-MODFOLDER = io.ROOT
+#io.db["name"] = "ministock"
 
 NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
-MODEL_PATH=os.path.join(MODFOLDER, "model")
-BOW_CORPUS_PATH=os.path.join(MODFOLDER, "BOW_lda_corpus.mm")
-TFIDF_CORPUS_PATH=os.path.join(MODFOLDER, "TFIDF_lda_corpus.mm")
-
+MODEL_PATH=os.path.join(io.ROOT,"model")
+DICT_PATH=os.path.join(io.ROOT,"dictionary.dict")
+BOW_CORPUS_PATH=os.path.join(io.ROOT,"BOW_lda_corpus.mm")
+TFIDF_CORPUS_PATH=os.path.join(io.ROOT,"TFIDF_lda_corpus.mm")
 # Satyam, you want to set this to False
 USE_SEGMENT = False
 
 MODEL="TF" ## OR TF  ## Bag of words or TF-IDF
-NUM_TOPICS=48
+NUM_TOPICS=80
 
 stemmer = SnowballStemmer('english')
 
 # Basic Query, this works with gettytest3
 SELECT = "DISTINCT(image_id),description,keyword_list"
 FROM ="bagofkeywords"
-if MODE==0:
-    WHERE = "keyword_list IS NOT NULL "
-    LIMIT = 2000000
-elif MODE==1:
-    # WHERE = "keyword_list IS NOT NULL AND image_id NOT IN (SELECT image_id FROM imagestopics)"
-    WHERE = "image_id = 423638"
-    LIMIT=10000
+WHERE = "keyword_list IS NOT NULL "
+LIMIT = 10
 
 if db['unix_socket']:
     # for MM's MAMP config
@@ -96,6 +86,13 @@ else:
                                 .format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']), poolclass=NullPool)
 
 #engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}".format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']), poolclass=NullPool)
+# if MODE==0 or MODE==2:
+    # WHERE = "keyword_list IS NOT NULL "
+    # #LIMIT = 328894
+    # LIMIT=100000
+# elif MODE==1:
+    # WHERE = "keyword_list IS NOT NULL AND image_id NOT IN (SELECT image_id FROM imagestopics)"
+    # LIMIT=1000
 
 
 # metadata = MetaData(engine)
@@ -119,29 +116,35 @@ def preprocess(text):
             result.append(lemmatize_stemming(token))
     return result
 
-def save_model(lda_model,tfidf_corpus,bow_corpus):
-    #CORPUS_PATH = get_tmpfile(CORPUS_PATH)
-    corpora.MmCorpus.serialize(TFIDF_CORPUS_PATH, tfidf_corpus)
-    corpora.MmCorpus.serialize(BOW_CORPUS_PATH, bow_corpus)
-    lda_model.save(MODEL_PATH)
-    print("model saved")
-    return
+# def save_model(lda_model,tfidf_corpus,bow_corpus):
+    # CORPUS_PATH = get_tmpfile(CORPUS_PATH)
+    # lda_model.save(MODEL_PATH)
+    # print("model saved")
+    # return
 
-def process(processed_txt,MODEL):
-    print("processing the model now")
+def gen_corpus(processed_txt,MODEL):
     dictionary = gensim.corpora.Dictionary(processed_txt)
-    # dictionary.filter_extremes(no_below=15, no_above=0.99, keep_n=100000)
-    dictionary.filter_extremes(no_below=100, keep_n=100000)
+    dictionary.filter_extremes(no_below=15, no_above=0.5, keep_n=100000)
     bow_corpus = [dictionary.doc2bow(doc) for doc in processed_txt] ## BOW corpus
-    corpus=bow_corpus
     if MODEL=="TF":   
         tfidf = models.TfidfModel(bow_corpus)  ## converting BOW to TDIDF corpus
         tfidf_corpus = tfidf[bow_corpus]
-        corpus=tfidf_corpus
-    lda_model = gensim.models.LdaMulticore(corpus, num_topics=NUM_TOPICS, id2word=dictionary, passes=2, workers=io.NUMBER_OF_PROCESSES)
-    save_model(lda_model,tfidf_corpus,bow_corpus)
-    return lda_model
+    dictionary.save(DICT_PATH)
+    corpora.MmCorpus.serialize(TFIDF_CORPUS_PATH, tfidf_corpus)
+    corpora.MmCorpus.serialize(BOW_CORPUS_PATH, bow_corpus)
 
+    return 
+    
+def LDA_model(corpus,dictionary,num_topics):
+    print("loading corpus and dictionary")
+    loaded_dict = corpora.Dictionary.load(DICT_PATH)
+    loaded_corp = corpora.MmCorpus(TFIDF_CORPUS_PATH)
+    print("processing the model now")
+    lda_model = gensim.models.LdaMulticore(loaded_corp, num_topics=num_topics, id2word=loaded_dict, passes=2, workers=2)
+    lda_model.save(MODEL_PATH)
+    print("processed all")
+    return lda_model
+    
 def write_topics(lda_model):
     print("writing data to the topic table")
     for idx, topic_list in lda_model.print_topics(-1):
@@ -159,87 +162,91 @@ def write_topics(lda_model):
     session.commit()
     return
 
-def write_imagetopics(resultsjson,lda_model_tfidf,bow_corpus):
-    # print("writing data to the imagetopic table")
-    # for i,row in enumerate(resultsjson):
-    #     index,score=sorted(lda_model_tfidf[bow_corpus[i]], key=lambda tup: -1*tup[1])[0]
-    #     imagestopics_entry=ImagesTopics(
-    #     image_id=row["image_id"],
-    #     topic_id=index,
-    #     topic_score=score
-    #     )
-    #     session.add(imagestopics_entry)
-    #     if row["image_id"] % 1000 == 0:
-    #         print("Updated image_id {}".format(row["image_id"]))
-
-
-    print("writing data to the imagetopic table DO-OVER")
+def write_imagetopics(resultsjson,lda_model_tfidf,dictionary):
+    print("writing data to the imagetopic table")
+    idx_list, topic_list = zip(*lda_model_tfidf.print_topics(-1))
     for i,row in enumerate(resultsjson):
-        print(row)
-        print("bow_corpus", bow_corpus[i])
-        print("bow_corpus", bow_corpus[:10])
-        index,score=sorted(lda_model_tfidf[bow_corpus[i]], key=lambda tup: -1*tup[1])[0]
-        print(index)
-        print(score)
+        keyword_list=" ".join(pickle.loads(row["keyword_list"]))
+        bow_vector = dictionary.doc2bow(preprocess(keyword_list))
+
+        #index,score=sorted(lda_model_tfidf[bow_corpus[i]], key=lambda tup: -1*tup[1])[0]
+        index,score=sorted(lda_model_tfidf[bow_vector], key=lambda tup: -1*tup[1])[0]
+
         imagestopics_entry=ImagesTopics(
         image_id=row["image_id"],
         topic_id=index,
         topic_score=score
         )
         session.add(imagestopics_entry)
-        if row["image_id"] % 1000 == 0:
-            print("Updated image_id {}".format(row["image_id"]))
-
-
-
+        print("Updated image_id {}".format(row["image_id"]))
+        print("###keyword list =",keyword_list,"#####topic id=",index,"########topic =",topic_list[index])
 
     # Add the imagestopics object to the session
     session.commit()
     return
+def calc_optimum_topics(resultsjson):
 
+    #######TOPIC MODELING ############
+    txt = pd.DataFrame(index=range(len(resultsjson)),columns=["description","keywords","index","score"])
+    for i,row in enumerate(resultsjson):
+        #txt.at[i,"description"]=row["description"]
+        txt.at[i,"keyword_list"]=" ".join(pickle.loads(row["keyword_list"]))
+    #processed_txt=txt['description'].map(preprocess)
+    processed_txt=txt['keyword_list'].map(preprocess)
+    corpus,dictionary=gen_corpus(processed_txt,MODEL)
+    num_topics_list=[80,90,100,110,120]
+    #num_topics_list=[80]
+    coher_val_list=np.zeros(len(num_topics_list))
+    for i,num_topics in enumerate(num_topics_list):
+        lda_model = gensim.models.LdaMulticore(corpus, num_topics=num_topics, id2word=dictionary, passes=2, workers=2)
+        cm = CoherenceModel(model=lda_model, corpus=corpus, coherence='u_mass')
+        coher_val_list[i]=cm.get_coherence()
+    print(num_topics_list,coher_val_list)  # get coherence value
 
-def main():
+def topic_model(resultsjson):
+    #######TOPIC MODELING ############
+    txt = pd.DataFrame(index=range(len(resultsjson)),columns=["description","keywords","index","score"])
+    for i,row in enumerate(resultsjson):
+        #txt.at[i,"description"]=row["description"]
+        txt.at[i,"keyword_list"]=" ".join(pickle.loads(row["keyword_list"]))
+    #processed_txt=txt['description'].map(preprocess)
+    processed_txt=txt['keyword_list'].map(preprocess)
+    gen_corpus(processed_txt,MODEL)
     
-    if MODE==0:
-        #######TOPIC MODELING ############
-        # create_my_engine(db)
-        print("about to SQL: ",SELECT,FROM,WHERE,LIMIT)
-        resultsjson = selectSQL()
-        print("got results, count is: ",len(resultsjson))
+    lda_model=LDA_model(NUM_TOPICS)
 
-        # build model from resultsjson
-        txt = pd.DataFrame(index=range(len(resultsjson)),columns=["description","keywords","index","score"])
-        for i,row in enumerate(resultsjson):
-            #txt.at[i,"description"]=row["description"]
-            txt.at[i,"keyword_list"]=" ".join(pickle.loads(row["keyword_list"]))
-        #processed_txt=txt['description'].map(preprocess)
-        processed_txt=txt['keyword_list'].map(preprocess)
-        lda_model=process(processed_txt,MODEL)
-        write_topics(lda_model)
-        
-    elif MODE==1:
+    write_topics(lda_model)
+    
+    return
+
+def topic_index(resultsjson):
+    #while resultsjson:
+    for i in range(2):
         ###########TOPIC INDEXING#########################
-        # load model
         bow_corpus = corpora.MmCorpus(BOW_CORPUS_PATH)
+        #dictionary = corpora.Dictionary.load(DICT_PATH)
         lda_model_tfidf = gensim.models.LdaModel.load(MODEL_PATH)
-        #lda_dict = corpora.Dictionary.load(MODEL_PATH+'.id2word')
+        lda_dict = corpora.Dictionary.load(MODEL_PATH+'.id2word')
         print("model loaded successfully")
+        write_imagetopics(resultsjson,lda_model_tfidf,lda_dict)
+        print("updated ",LIMIT,"cells")
+    print("DONE")
 
-        while True:
+    return
+    
+def main():
+    OPTION, MODE = pick(options, title)
+    #MODE=2
 
-            # create_my_engine(db)
-            print("about to SQL: ",SELECT,FROM,WHERE,LIMIT)
-            resultsjson = selectSQL()
-            print("got results, count is: ",len(resultsjson))
-            if len(resultsjson) == 0:
-                break
+    start = time.time()
+    # create_my_engine(db)
+    print("about to SQL: ",SELECT,FROM,WHERE,LIMIT)
+    resultsjson = selectSQL()
+    print("got results, count is: ",len(resultsjson))
 
-            # assign topics from these resultsjson
-            write_imagetopics(resultsjson,lda_model_tfidf,bow_corpus)
-        
-    # if USE_SEGMENT:
-    #     Base.metadata.create_all(engine)
-
+    if MODE==0:topic_model(resultsjson)
+    elif MODE==1:topic_index(resultsjson)
+    elif MODE==2:calc_optimum_topics(resultsjson)
     end = time.time()
     print (end - start)
     return True
