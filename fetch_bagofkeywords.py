@@ -29,7 +29,7 @@ LIMIT= 1000
 counter = 0
 
 # Number of threads
-num_threads = 4
+num_threads = io.NUMBER_OF_PROCESSES
 
 def create_table(row, lock, session):
     image_id, description, gender_id, age_id, location_id = row

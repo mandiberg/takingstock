@@ -41,7 +41,7 @@ import nltk
 from gensim import corpora, models
 from pprint import pprint
 
-nltk.download('wordnet') ##only first time
+#nltk.download('wordnet') ##only first time
 
 # MM you need to use conda activate minimal_ds 
 
@@ -53,26 +53,20 @@ items, seconds
 '''
 title = 'Please choose your operation: '
 options = ['Topic modelling', 'Topic indexing','calculating optimum_topics']
-
-
-
 io = DataIO()
 db = io.db
 #io.db["name"] = "ministock"
 
-
 NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
-#MODEL_PATH=io.ROOT+"/model"
 MODEL_PATH=os.path.join(io.ROOT,"model")
-#BOW_CORPUS_PATH=io.ROOT+"/BOW_lda_corpus.mm"
+DICT_PATH=os.path.join(io.ROOT,"dictionary.dict")
 BOW_CORPUS_PATH=os.path.join(io.ROOT,"BOW_lda_corpus.mm")
-#TFIDF_CORPUS_PATH=io.ROOT+"/TFIDF_lda_corpus.mm"
 TFIDF_CORPUS_PATH=os.path.join(io.ROOT,"TFIDF_lda_corpus.mm")
 # Satyam, you want to set this to False
 USE_SEGMENT = False
 
 MODEL="TF" ## OR TF  ## Bag of words or TF-IDF
-NUM_TOPICS=121
+NUM_TOPICS=80
 
 stemmer = SnowballStemmer('english')
 
@@ -80,7 +74,7 @@ stemmer = SnowballStemmer('english')
 SELECT = "DISTINCT(image_id),description,keyword_list"
 FROM ="bagofkeywords"
 WHERE = "keyword_list IS NOT NULL "
-LIMIT = 328894
+LIMIT = 10
 
 if db['unix_socket']:
     # for MM's MAMP config
@@ -122,30 +116,32 @@ def preprocess(text):
             result.append(lemmatize_stemming(token))
     return result
 
-def save_model(lda_model,tfidf_corpus,bow_corpus):
-    #CORPUS_PATH = get_tmpfile(CORPUS_PATH)
-    corpora.MmCorpus.serialize(TFIDF_CORPUS_PATH, tfidf_corpus)
-    corpora.MmCorpus.serialize(BOW_CORPUS_PATH, bow_corpus)
-    lda_model.save(MODEL_PATH)
-    print("model saved")
-    return
+# def save_model(lda_model,tfidf_corpus,bow_corpus):
+    # CORPUS_PATH = get_tmpfile(CORPUS_PATH)
+    # lda_model.save(MODEL_PATH)
+    # print("model saved")
+    # return
 
 def gen_corpus(processed_txt,MODEL):
     dictionary = gensim.corpora.Dictionary(processed_txt)
     dictionary.filter_extremes(no_below=15, no_above=0.5, keep_n=100000)
     bow_corpus = [dictionary.doc2bow(doc) for doc in processed_txt] ## BOW corpus
-    corpus=bow_corpus
     if MODEL=="TF":   
         tfidf = models.TfidfModel(bow_corpus)  ## converting BOW to TDIDF corpus
         tfidf_corpus = tfidf[bow_corpus]
-        corpus=tfidf_corpus
-        
-    return corpus,dictionary
+    dictionary.save(DICT_PATH)
+    corpora.MmCorpus.serialize(TFIDF_CORPUS_PATH, tfidf_corpus)
+    corpora.MmCorpus.serialize(BOW_CORPUS_PATH, bow_corpus)
+
+    return 
     
 def LDA_model(corpus,dictionary,num_topics):
+    print("loading corpus and dictionary")
+    loaded_dict = corpora.Dictionary.load(DICT_PATH)
+    loaded_corp = corpora.MmCorpus(TFIDF_CORPUS_PATH)
     print("processing the model now")
-    lda_model = gensim.models.LdaMulticore(corpus, num_topics=num_topics, id2word=dictionary, passes=2, workers=2)
-    #save_model(lda_model,tfidf_corpus,bow_corpus)
+    lda_model = gensim.models.LdaMulticore(loaded_corp, num_topics=num_topics, id2word=loaded_dict, passes=2, workers=2)
+    lda_model.save(MODEL_PATH)
     print("processed all")
     return lda_model
     
@@ -166,10 +162,16 @@ def write_topics(lda_model):
     session.commit()
     return
 
-def write_imagetopics(resultsjson,lda_model_tfidf,bow_corpus):
+def write_imagetopics(resultsjson,lda_model_tfidf,dictionary):
     print("writing data to the imagetopic table")
+    idx_list, topic_list = zip(*lda_model_tfidf.print_topics(-1))
     for i,row in enumerate(resultsjson):
-        index,score=sorted(lda_model_tfidf[bow_corpus[i]], key=lambda tup: -1*tup[1])[0]
+        keyword_list=" ".join(pickle.loads(row["keyword_list"]))
+        bow_vector = dictionary.doc2bow(preprocess(keyword_list))
+
+        #index,score=sorted(lda_model_tfidf[bow_corpus[i]], key=lambda tup: -1*tup[1])[0]
+        index,score=sorted(lda_model_tfidf[bow_vector], key=lambda tup: -1*tup[1])[0]
+
         imagestopics_entry=ImagesTopics(
         image_id=row["image_id"],
         topic_id=index,
@@ -177,7 +179,7 @@ def write_imagetopics(resultsjson,lda_model_tfidf,bow_corpus):
         )
         session.add(imagestopics_entry)
         print("Updated image_id {}".format(row["image_id"]))
-
+        print("###keyword list =",keyword_list,"#####topic id=",index,"########topic =",topic_list[index])
 
     # Add the imagestopics object to the session
     session.commit()
@@ -209,21 +211,24 @@ def topic_model(resultsjson):
         txt.at[i,"keyword_list"]=" ".join(pickle.loads(row["keyword_list"]))
     #processed_txt=txt['description'].map(preprocess)
     processed_txt=txt['keyword_list'].map(preprocess)
-    corpus,dictionary=gen_corpus(processed_txt,MODEL)
-    lda_model=LDA_model(corpus,dictionary,NUM_TOPICS)
+    gen_corpus(processed_txt,MODEL)
+    
+    lda_model=LDA_model(NUM_TOPICS)
 
     write_topics(lda_model)
     
     return
 
 def topic_index(resultsjson):
-    while resultsjson:
+    #while resultsjson:
+    for i in range(2):
         ###########TOPIC INDEXING#########################
         bow_corpus = corpora.MmCorpus(BOW_CORPUS_PATH)
+        #dictionary = corpora.Dictionary.load(DICT_PATH)
         lda_model_tfidf = gensim.models.LdaModel.load(MODEL_PATH)
-        #lda_dict = corpora.Dictionary.load(MODEL_PATH+'.id2word')
+        lda_dict = corpora.Dictionary.load(MODEL_PATH+'.id2word')
         print("model loaded successfully")
-        write_imagetopics(resultsjson,lda_model_tfidf,bow_corpus)
+        write_imagetopics(resultsjson,lda_model_tfidf,lda_dict)
         print("updated ",LIMIT,"cells")
     print("DONE")
 
