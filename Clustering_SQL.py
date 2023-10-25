@@ -16,7 +16,7 @@ import plotly as py
 import plotly.graph_objs as go
 
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
@@ -42,9 +42,18 @@ from mp_db_io import DataIO
 
 '''
 tracking time based on items, for speed predictions
-items, seconds
+earlier
 47000, 240
 100000, 695
+
+Now
+items, seconds
+10000, 33
+50000, 280
+100000, 1030
+200000, 3202
+300000, 6275
+1340000, ???
 '''
 
 start = time.time()
@@ -53,6 +62,7 @@ io = DataIO()
 db = io.db
 io.db["name"] = "ministock1023"
 NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
+MODE = 0
 
 # this works for using segment in stock, and for ministock
 USE_SEGMENT = True
@@ -64,7 +74,7 @@ GET_OPTIMAL_CLUSTERS=False
 N_CLUSTERS = 128
 SAVE_FIG=False ##### option for saving the visualized data
 
-if USE_SEGMENT is True:
+if USE_SEGMENT is True and MODE == 0:
 
     # where the script is looking for files list
     # do not use this if you are using the regular Clusters and ImagesClusters tables
@@ -74,7 +84,7 @@ if USE_SEGMENT is True:
     SELECT = "DISTINCT(image_id),face_encodings68"
     FROM = SegmentTable_name
     WHERE = "face_encodings68 IS NOT NULL"
-    LIMIT = 10000000
+    LIMIT = 1500000
 
     # # join with SSD tables. Satyam, use the one below
     # SELECT = "DISTINCT(e.image_id), e.face_encodings68"
@@ -84,6 +94,14 @@ if USE_SEGMENT is True:
     # WHERE = f"{QUERY} {SUBQUERY}"
     # LIMIT = 1000000
 
+elif USE_SEGMENT is True and MODE == 1:
+    SegmentTable_name = 'SegmentOct20'
+    # Basic Query, this works with gettytest3
+    SELECT = "DISTINCT(s.image_id),s.face_encodings68"
+    FROM = f"{SegmentTable_name} s LEFT JOIN ImagesClusters ic ON s.image_id = ic.image_id"
+    WHERE = "ic.cluster_id IS NULL"
+    LIMIT = "100"
+ 
 else:
     # Basic Query, this works with gettytest3
     SELECT = "DISTINCT(image_id),face_encodings68"
@@ -210,6 +228,9 @@ def save_clusters_DB(df):
     col_list=[]
     for i in range(128):col_list.append(col+str(i))
 
+
+    # this isn't saving means for each cluster. all cluster_median are the same
+
     # Convert to set and Save the df to a table
     unique_clusters = set(df['cluster_id'])
     for cluster_id in unique_clusters:
@@ -258,6 +279,62 @@ def save_images_clusters_DB(df):
         session.rollback()
         print(f"Error occurred during data saving: {str(e)}")
 
+def get_cluster_medians():
+
+    # Create a SQLAlchemy select statement
+    select_query = select([Clusters.cluster_id, Clusters.cluster_median]).limit(1000)
+
+    # Execute the query using your SQLAlchemy session
+    results = session.execute(select_query)
+    median_dict = {}
+
+    # Process the results as needed
+    for row in results:
+        print(row)
+        cluster_id, cluster_median = row
+        median_dict[cluster_id] = pickle.loads(cluster_median, encoding='latin1')
+    return median_dict 
+
+
+def assign_images_clusters_DB(df):
+    #assign clusters to each image's encodings
+    for _, row in df.iterrows():
+        median_dict = get_cluster_medians()
+        print(median_dict)
+
+        image_id = row['image_id']
+        face_encodings68 = [row[f'encodings{i}'] for i in range(128)]
+        # print(existing_record)
+        # face_encodings68 = row['face_encodings68']
+        # existing_record = session.query(ImagesClusters).filter_by(image_id=image_id).first()
+
+        this_dist_dict = {}
+        for cluster_id in median_dict:
+            enc1=np.array(face_encodings68)
+            enc2=median_dict[cluster_id]
+            # enc2=np.array(median_dict[cluster_id])
+            this_dist_dict[cluster_id]=np.linalg.norm(enc1 - enc2, axis=0)
+        cluster_id = min(this_dist_dict, key=this_dist_dict.get)
+        print(this_dist_dict)
+        print(cluster_id)
+        quit()
+        if cluster_id:
+            instance = ImagesClusters(
+                image_id=image_id,
+                cluster_id=cluster_id,
+            )
+            session.add(instance)
+
+        else:
+            print(f"Something went wrong with image_id {image_id}")
+
+    try:
+        session.commit()
+        print("Data saved successfully.")
+    except IntegrityError as e:
+        session.rollback()
+        print(f"Error occurred during data saving: {str(e)}")
+
 
 def main():
     # create_my_engine(db)
@@ -273,24 +350,29 @@ def main():
         enc_data = pd.concat([enc_data,df],ignore_index=True) 
     
     # choose if you want optimal cluster size or custom cluster size using the parameter GET_OPTIMAL_CLUSTERS
-    if GET_OPTIMAL_CLUSTERS is True: 
-        OPTIMAL_CLUSTERS= best_score(enc_data.drop("image_id", axis=1))   #### Input ONLY encodings into clustering alhorithm
-        print(OPTIMAL_CLUSTERS)
-        N_CLUSTERS = OPTIMAL_CLUSTERS
-    print(enc_data)
-    enc_data["cluster_id"] = kmeans_cluster(enc_data.drop("image_id", axis=1),n_clusters=N_CLUSTERS)
-    
-    if SAVE_FIG: export_html_clusters(enc_data.drop("image_id", axis=1))
-    print(enc_data)
-    print(set(enc_data["cluster_id"].tolist()))
-    # don't need to write a CSV
-    # enc_data.to_csv('clusters_clusterID_byImageID.csv')
+    if MODE == 0:
+        if GET_OPTIMAL_CLUSTERS is True: 
+            OPTIMAL_CLUSTERS= best_score(enc_data.drop("image_id", axis=1))   #### Input ONLY encodings into clustering alhorithm
+            print(OPTIMAL_CLUSTERS)
+            N_CLUSTERS = OPTIMAL_CLUSTERS
+        print(enc_data)
+        enc_data["cluster_id"] = kmeans_cluster(enc_data.drop("image_id", axis=1),n_clusters=N_CLUSTERS)
+        
+        if SAVE_FIG: export_html_clusters(enc_data.drop("image_id", axis=1))
+        print(enc_data)
+        print(set(enc_data["cluster_id"].tolist()))
+        # don't need to write a CSV
+        # enc_data.to_csv('clusters_clusterID_byImageID.csv')
 
-    # if USE_SEGMENT:
-    #     Base.metadata.create_all(engine)
-    save_clusters_DB(enc_data)
-    save_images_clusters_DB(enc_data)
-    print("saved segment to clusters")
+        # if USE_SEGMENT:
+        #     Base.metadata.create_all(engine)
+        save_clusters_DB(enc_data)
+        save_images_clusters_DB(enc_data)
+        print("saved segment to clusters")
+    elif MODE == 1:
+        assign_images_clusters_DB(enc_data)
+        print("assigned and saved segment to clusters")
+
 
     end = time.time()
     print (end - start)

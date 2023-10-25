@@ -10,7 +10,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 # my ORM
-from my_declarative_base import Base, Images, Topics,ImagesTopics,Clusters68, ImagesClusters68, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON, ForeignKey
+from my_declarative_base import Base, Images, Topics,ImagesTopics, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON, ForeignKey
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import create_engine, text, MetaData, Table, Column, Numeric, Integer, VARCHAR, update, Float
@@ -59,12 +59,14 @@ start = time.time()
 
 io = DataIO()
 db = io.db
-io.db["name"] = "ministock"
+io.db["name"] = "ministock1023"
+MODFOLDER = io.ROOT
 
 NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
-MODEL_PATH=io.ROOT+"/model"
-BOW_CORPUS_PATH=io.ROOT+"/BOW_lda_corpus.mm"
-TFIDF_CORPUS_PATH=io.ROOT+"/TFIDF_lda_corpus.mm"
+MODEL_PATH=os.path.join(MODFOLDER, "model")
+BOW_CORPUS_PATH=os.path.join(MODFOLDER, "BOW_lda_corpus.mm")
+TFIDF_CORPUS_PATH=os.path.join(MODFOLDER, "TFIDF_lda_corpus.mm")
+
 # Satyam, you want to set this to False
 USE_SEGMENT = False
 
@@ -78,10 +80,11 @@ SELECT = "DISTINCT(image_id),description,keyword_list"
 FROM ="bagofkeywords"
 if MODE==0:
     WHERE = "keyword_list IS NOT NULL "
-    LIMIT = 10000000
+    LIMIT = 2000000
 elif MODE==1:
-    WHERE = "keyword_list IS NOT NULL AND image_id NOT IN (SELECT image_id FROM imagestopics)"
-    LIMIT=1000
+    # WHERE = "keyword_list IS NOT NULL AND image_id NOT IN (SELECT image_id FROM imagestopics)"
+    WHERE = "image_id = 423638"
+    LIMIT=10000
 
 if db['unix_socket']:
     # for MM's MAMP config
@@ -157,16 +160,37 @@ def write_topics(lda_model):
     return
 
 def write_imagetopics(resultsjson,lda_model_tfidf,bow_corpus):
-    print("writing data to the imagetopic table")
+    # print("writing data to the imagetopic table")
+    # for i,row in enumerate(resultsjson):
+    #     index,score=sorted(lda_model_tfidf[bow_corpus[i]], key=lambda tup: -1*tup[1])[0]
+    #     imagestopics_entry=ImagesTopics(
+    #     image_id=row["image_id"],
+    #     topic_id=index,
+    #     topic_score=score
+    #     )
+    #     session.add(imagestopics_entry)
+    #     if row["image_id"] % 1000 == 0:
+    #         print("Updated image_id {}".format(row["image_id"]))
+
+
+    print("writing data to the imagetopic table DO-OVER")
     for i,row in enumerate(resultsjson):
+        print(row)
+        print("bow_corpus", bow_corpus[i])
+        print("bow_corpus", bow_corpus[:10])
         index,score=sorted(lda_model_tfidf[bow_corpus[i]], key=lambda tup: -1*tup[1])[0]
+        print(index)
+        print(score)
         imagestopics_entry=ImagesTopics(
         image_id=row["image_id"],
         topic_id=index,
         topic_score=score
         )
         session.add(imagestopics_entry)
-        print("Updated image_id {}".format(row["image_id"]))
+        if row["image_id"] % 1000 == 0:
+            print("Updated image_id {}".format(row["image_id"]))
+
+
 
 
     # Add the imagestopics object to the session
