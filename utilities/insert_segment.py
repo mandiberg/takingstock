@@ -22,6 +22,9 @@ ROOT = io.ROOT
 NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 #######################################
 
+
+# THIS MAY BE DEPRECATED, AS I INSERT INTO SEGMENTS VIA SQL IN WORKBENCH
+
 SegmentTable_name = 'SegmentAug30Straightahead'  #actually straight ahead smile
 
 

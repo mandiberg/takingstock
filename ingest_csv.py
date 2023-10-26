@@ -48,7 +48,7 @@ _|_|  _|\__, |\___|____/\__| \___|____/  \_/
 io = DataIO()
 db = io.db
 # overriding DB for testing
-io.db["name"] = "stock"
+io.db["name"] = "ministock"
 ROOT = io.ROOT 
 NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 #######################################
@@ -573,7 +573,7 @@ def get_gender_age_row(gender_string, age_string, description, keys_list, site_i
                 gender_dict = gender_dict_secondary
                 age_dict = age_dict_secondary
         if not pd.isnull(this_string):
-            print(f"looking for {this_string} in dict")
+            # print(f"looking for {this_string} in dict")
             #convertkeys
             try:
                 gender = gender_dict[this_string.lower()]
@@ -599,7 +599,7 @@ def get_gender_age_row(gender_string, age_string, description, keys_list, site_i
                 except:
                     # this isn't relevant for iStock
                     # commenting out
-                    print('NEW KEY, NOT AGE OR GENDER -------------------------> ', this_string)
+                    # print('NEW KEY, NOT AGE OR GENDER -------------------------> ', this_string)
                     pass
             try:
                 age_detail = age_details_dict[this_string.lower()]

@@ -1,4 +1,4 @@
-USE stock;
+USE ministock1023;
 
 -- These remove repeated values and reduce repetition
 

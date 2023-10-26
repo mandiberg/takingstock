@@ -24,7 +24,8 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
 # my ORM
-from my_declarative_base import Base, Clusters68, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON
+# TK temp fix
+from my_declarative_base import Base, ClustersTemp, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import create_engine, text, MetaData, Table, Column, Numeric, Integer, VARCHAR, update, Float
@@ -44,9 +45,9 @@ CYCLECOUNT = 1
 
 # keep this live, even if not SSD
 # SegmentTable_name = 'May25segment123side_to_side'
-# SegmentTable_name = 'July15segment123straight'
-#SegmentTable_name = 'SegmentAug30Straightahead'  #actually straight ahead smile
+
 SegmentTable_name = 'SegmentOct20'
+# SegmentTable_name = 'SegmentAug30Straightahead'  #actually straight ahead smile
 
 # SATYAM, this is MM specific
 # for when I'm using files on my SSD vs RAID
@@ -63,14 +64,21 @@ IS_CLUSTER = False
 N_CLUSTERS = 128
 # this is for IS_ONE_CLUSTER to only run on a specific CLUSTER_NO
 IS_ONE_CLUSTER = False
-CLUSTER_NO = 77
+CLUSTER_NO = 117
 
 # this controls whether it is using the linear or angle process
 IS_ANGLE_SORT = False
 
+# this control whether sorting by topics
+IS_TOPICS = True
+N_TOPICS = 48
+
 # I/O utils
 io = DataIO(IS_SSD)
 db = io.db
+# overriding DB for testing
+io.db["name"] = "ministock1023"
+
 NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 
 # if IS_SSD:
@@ -96,7 +104,7 @@ if IS_SEGONLY is not True:
     # WHERE = "e.is_face IS TRUE AND e.face_encodings IS NOT NULL AND e.bbox IS NOT NULL AND i.site_name_id = 8 AND i.age_id NOT IN (1,2,3,4)"
 
     # this is for gettytest3 table
-    FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings e ON i.image_id = e.image_id JOIN ImagesClusters68 ic ON i.image_id = ic.image_id"
+    FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings e ON i.image_id = e.image_id JOIN ImagesClusters ic ON i.image_id = ic.image_id"
     WHERE = "e.is_face IS TRUE AND e.bbox IS NOT NULL AND i.site_name_id = 1 AND k.keyword_text LIKE 'smil%'"
     LIMIT = 1000
 
@@ -108,45 +116,46 @@ elif IS_SEGONLY:
     # no JOIN just Segment table
 
     if IS_CLUSTER:
-        SELECT = "DISTINCT(i.image_id), i.site_name_id, i.contentUrl, i.imagename, e.face_x, e.face_y, e.face_z, e.mouth_gap, e.face_landmarks, e.bbox, e.face_encodings68, i.site_image_id"
-        FROM =f"Images i LEFT JOIN Encodings e ON i.image_id = e.image_id INNER JOIN {SegmentTable_name} seg ON i.site_image_id = seg.site_image_id JOIN ImagesClusters68 ic ON i.image_id = ic.image_id"
-        # WHERE = "e.is_face IS TRUE AND e.face_encodings IS NOT NULL AND e.bbox IS NOT NULL AND i.site_name_id = 8 AND i.age_id NOT IN (1,2,3,4)"
-        WHERE = "i.site_name_id != 1"
+        # SELECT = "DISTINCT(i.image_id), i.site_name_id, i.contentUrl, i.imagename, seg.face_x, seg.face_y, seg.face_z, seg.mouth_gap, seg.face_landmarks, seg.bbox, seg.face_encodings68, i.site_image_id"
+        # # TK temp fix
+        # FROM =f"Images i INNER JOIN {SegmentTable_name} seg ON i.site_image_id = seg.site_image_id JOIN ImagesClustersTemp ic ON i.image_id = ic.image_id"
+        # # WHERE = "e.is_face IS TRUE AND e.face_encodings IS NOT NULL AND e.bbox IS NOT NULL AND i.site_name_id = 8 AND i.age_id NOT IN (1,2,3,4)"
+        # WHERE = "i.site_name_id != 1"
+        # # WHERE = "mouth_gap < 2 AND age_id NOT IN (1,2,3,4) AND image_id < 40647710"
+        # # WHERE = "mouth_gap < 2 AND age_id NOT IN (1,2,3,4) AND s.image_id < 40647710 AND k.keyword_text LIKE 'work%'"
+        # LIMIT = 100
+
+        SELECT = "DISTINCT(s.image_id), s.site_name_id, s.contentUrl, s.imagename, s.face_x, s.face_y, s.face_z, s.mouth_gap, s.face_landmarks, s.bbox, s.face_encodings68, s.site_image_id"
+        # TK temp fix
+        FROM =f"{SegmentTable_name} s JOIN ImagesClustersTemp ic ON s.image_id = ic.image_id"
+        WHERE = "s.site_name_id != 1"
+        LIMIT = 100
+
+
+    elif IS_TOPICS:
+        SELECT = "DISTINCT(s.image_id), s.site_name_id, s.contentUrl, s.imagename, s.face_x, s.face_y, s.face_z, s.mouth_gap, s.face_landmarks, s.bbox, s.face_encodings68, s.site_image_id"
+        FROM = f"{SegmentTable_name} s JOIN ImagesTopics it ON s.image_id = it.image_id"
+        # FROM =f"Images i LEFT JOIN Encodings e ON s.image_id = s.image_id INNER JOIN {SegmentTable_name} seg ON s.site_image_id = seg.site_image_id JOIN ImagesClusters ic ON s.image_id = ic.image_id"
+        # WHERE = "s.is_face IS TRUE AND s.face_encodings IS NOT NULL AND s.bbox IS NOT NULL AND s.site_name_id = 8 AND s.age_id NOT IN (1,2,3,4)"
+        WHERE = "s.site_name_id != 1"
         # WHERE = "mouth_gap < 2 AND age_id NOT IN (1,2,3,4) AND image_id < 40647710"
         # WHERE = "mouth_gap < 2 AND age_id NOT IN (1,2,3,4) AND s.image_id < 40647710 AND k.keyword_text LIKE 'work%'"
-        LIMIT = 100000
+        LIMIT = 1000
 
 
     else:
         SELECT = "*" 
-        FROM = f"{SegmentTable_name} s JOIN ImagesKeywords ik ON s.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id"
-        # WHERE = "bbox IS NOT NULL"
-        WHERE = "age_id NOT IN (1,2,3,4) AND k.keyword_text LIKE 'happ%' "
+        FROM = f"{SegmentTable_name} AS seg JOIN ImagesClusters AS ic ON seg.image_id = ic.image_id"
+        # FROM = f"{SegmentTable_name} AS seg"
+        # FROM = f"{SegmentTable_name} s JOIN ImagesKeywords ik ON s.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id"
+        # WHERE = "seg.age_id NOT IN (1,2,3,4) and seg.mouth_gap > 15"
+        WHERE = "seg.age_id NOT IN (1,2,3,4) and seg.site_name_id !=1"
+        # WHERE = "age_id NOT IN (1,2,3,4) AND k.keyword_text LIKE 'happ%' "
         # WHERE = "mouth_gap < 2 AND age_id NOT IN (1,2,3,4) AND image_id < 40647710 AND gender_id = 1"
-        LIMIT = 1000
+        LIMIT = 100
 
 
 
-    '''
-    this is the old way, with a JOIN
-    # don't need keywords if SegmentTable_name
-    # this is for MM segment table
-    SELECT = "DISTINCT(i.image_id), i.site_name_id, i.contentUrl, i.imagename, e.face_x, e.face_y, e.face_z, e.mouth_gap, e.face_landmarks, e.bbox, e.face_encodings68, i.site_image_id" 
-    FROM =f"Images i LEFT JOIN Encodings e ON i.image_id = e.image_id INNER JOIN {SegmentTable_name} seg ON i.site_image_id = seg.site_image_id"
-    if IS_CLUSTER is True or IS_ONE_CLUSTER is True:
-        FROM += " JOIN ImagesClusters68 ic ON i.image_id = ic.image_id"
-    # WHERE = "e.face_encodings68 IS NOT NULL AND i.site_name_id = 8 AND i.age_id NOT IN (1,2,3,4) AND e.mouth_gap > 10"
-    # WHERE = "e.face_encodings68 IS NOT NULL"
-    WHERE = "e.mouth_gap > 15 AND i.age_id NOT IN (1,2,3,4)"
-    '''
-
-    # this is for gettytest3 table
-    # SELECT = "DISTINCT(image_id), site_name_id, contentUrl, imagename, face_x, face_y, face_z, mouth_gap, face_landmarks, bbox, face_encodings, site_image_id"
-    # FROM = SegmentTable_name
-    # FROM = f"{SegmentTable_name} st JOIN ImagesClusters68 ic ON st.image_id = ic.image_id JOIN Clusters68 c ON ic.cluster_no = c.cluster_no"
-    # "Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings e ON i.image_id = e.image_id JOIN ImagesClusters68 ic ON i.image_id = ic.image_id"
-    # WHERE = "bbox IS NOT NULL"
-    # AND i.site_name_id = 1 AND k.keyword_text LIKE 'smil%'"
 
 
 motion = {
@@ -244,7 +253,10 @@ def selectSQL(cluster_no=None):
     print(f"cluster_no is")
     print(cluster_no)
     if cluster_no is not None:
-        cluster =f"AND ic.cluster_id = {str(cluster_no)}"
+        if IS_CLUSTER or IS_ONE_CLUSTER:
+            cluster =f"AND ic.cluster_id = {str(cluster_no)}"
+        elif IS_TOPICS:
+            cluster =f"AND it.topic_id = {str(cluster_no)}"
     else:
         cluster=""
     print(f"cluster SELECT is {cluster}")
@@ -256,7 +268,7 @@ def selectSQL(cluster_no=None):
 
 
 def select_cluster_median(cluster_no):
-    cluster_selectsql = f"SELECT c.cluster_median FROM Clusters68 c WHERE cluster_id={cluster_no};"
+    cluster_selectsql = f"SELECT c.cluster_median FROM Clusters c WHERE cluster_id={cluster_no};"
     result = engine.connect().execute(text(cluster_selectsql))
     resultsjson = ([dict(row) for row in result.mappings()])
     cluster_median = (resultsjson[0]['cluster_median'])
@@ -348,6 +360,7 @@ def sort_by_face_dist(df_enc, df_128_enc):
             # TK
             # need to send the df_enc with the same two keys through to get_closest
             dist, closest_dict, df_128_enc = sort.get_closest_df(FIRST_ROUND, enc1,df_enc, df_128_enc, sorttype="128d")
+            # dist, closest_dict, df_128_enc = sort.get_closest_df(FIRST_ROUND, enc1,df_enc, df_128_enc, sorttype="planar")
             # dist, closest_dict, df_128_enc = sort.get_closest_df(enc1,df_enc, df_128_enc)
             FIRST_ROUND = False
 
@@ -869,13 +882,12 @@ def main():
                 # image_id = insert_dict['image_id']
                 # can I filter this by site_id? would that make it faster or slower? 
 
-                results = session.query(Clusters68).filter(Clusters68.cluster_id==cluster_no).first()
+                # TK temp fix
+                results = session.query(ClustersTemp).filter(ClustersTemp.cluster_id==cluster_no).first()
 
 
-                # results = session.query(Clusters68).filter(Clusters68.cluster_id==cluster_no).first()
                 print(results)
                 cluster_median = unpickle_array(results.cluster_median)
-                # start_img_name = cluster_median
                 sort.counter_dict["last_image_enc"]=cluster_median
 
 
@@ -933,7 +945,14 @@ def main():
             resultsjson = selectSQL(cluster_no)
             print(f"resultsjson contains {len(resultsjson)} images")
             map_images(resultsjson, cluster_no)
-    if IS_ONE_CLUSTER:
+    elif IS_TOPICS:
+        print(f"IS_TOPICS is {IS_TOPICS} with {N_TOPICS}")
+        for cluster_no in range(N_TOPICS):
+            print(f"SELECTing cluster {cluster_no} of {N_TOPICS}")
+            resultsjson = selectSQL(cluster_no)
+            print(f"resultsjson contains {len(resultsjson)} images")
+            map_images(resultsjson, cluster_no)
+    elif IS_ONE_CLUSTER:
         print(f"SELECTing cluster {CLUSTER_NO}")
         resultsjson = selectSQL(CLUSTER_NO)
         print(f"resultsjson contains {len(resultsjson)} images")
