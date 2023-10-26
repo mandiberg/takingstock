@@ -70,6 +70,7 @@ NUM_TOPICS=80
 
 stemmer = SnowballStemmer('english')
 
+
 def set_query():
     # Basic Query, this works with gettytest3
     SELECT = "DISTINCT(image_id),description,keyword_list"
@@ -211,10 +212,12 @@ def calc_optimum_topics(resultsjson):
         txt.at[i,"keyword_list"]=" ".join(pickle.loads(row["keyword_list"]))
     #processed_txt=txt['description'].map(preprocess)
     processed_txt=txt['keyword_list'].map(preprocess)
-    corpus,dictionary=gen_corpus(processed_txt,MODEL)
-    # num_topics_list=[80,90,100,110,120]
-    num_topics_list=[40,60,80,100,120]
-    #num_topics_list=[80]
+    gen_corpus(processed_txt,MODEL)
+    corpus = corpora.MmCorpus(BOW_CORPUS_PATH)
+    dictionary = corpora.Dictionary.load(MODEL_PATH+'.id2word')
+
+    
+    num_topics_list=[80,90,100,110,120]
     coher_val_list=np.zeros(len(num_topics_list))
     for i,num_topics in enumerate(num_topics_list):
         lda_model = gensim.models.LdaMulticore(corpus, num_topics=num_topics, id2word=dictionary, passes=2, workers=NUMBER_OF_PROCESSES)
