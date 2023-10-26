@@ -74,13 +74,12 @@ def set_query():
     # Basic Query, this works with gettytest3
     SELECT = "DISTINCT(image_id),description,keyword_list"
     FROM ="bagofkeywords"
-    if MODE==0:
-        WHERE = "keyword_list IS NOT NULL "
-        LIMIT = 2000000
-    elif MODE==1:
+    WHERE = "keyword_list IS NOT NULL "
+    LIMIT = 2000000
+    if MODE==1:
         WHERE = "keyword_list IS NOT NULL AND image_id NOT IN (SELECT image_id FROM imagestopics)"
         # WHERE = "image_id = 423638"
-        LIMIT=10000
+        LIMIT=100000
     return SELECT, FROM, WHERE, LIMIT
 
 if db['unix_socket']:
@@ -143,12 +142,12 @@ def gen_corpus(processed_txt,MODEL):
 
     return 
     
-def LDA_model(corpus,dictionary,num_topics):
+def LDA_model(num_topics):
     print("loading corpus and dictionary")
     loaded_dict = corpora.Dictionary.load(DICT_PATH)
     loaded_corp = corpora.MmCorpus(TFIDF_CORPUS_PATH)
     print("processing the model now")
-    lda_model = gensim.models.LdaMulticore(loaded_corp, num_topics=num_topics, id2word=loaded_dict, passes=2, workers=2)
+    lda_model = gensim.models.LdaMulticore(loaded_corp, num_topics=num_topics, id2word=loaded_dict, passes=2, workers=NUMBER_OF_PROCESSES)
     lda_model.save(MODEL_PATH)
     print("processed all")
     return lda_model
@@ -213,11 +212,12 @@ def calc_optimum_topics(resultsjson):
     #processed_txt=txt['description'].map(preprocess)
     processed_txt=txt['keyword_list'].map(preprocess)
     corpus,dictionary=gen_corpus(processed_txt,MODEL)
-    num_topics_list=[80,90,100,110,120]
+    # num_topics_list=[80,90,100,110,120]
+    num_topics_list=[40,60,80,100,120]
     #num_topics_list=[80]
     coher_val_list=np.zeros(len(num_topics_list))
     for i,num_topics in enumerate(num_topics_list):
-        lda_model = gensim.models.LdaMulticore(corpus, num_topics=num_topics, id2word=dictionary, passes=2, workers=2)
+        lda_model = gensim.models.LdaMulticore(corpus, num_topics=num_topics, id2word=dictionary, passes=2, workers=NUMBER_OF_PROCESSES)
         cm = CoherenceModel(model=lda_model, corpus=corpus, coherence='u_mass')
         coher_val_list[i]=cm.get_coherence()
     print(num_topics_list,coher_val_list)  # get coherence value
