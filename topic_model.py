@@ -10,7 +10,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 # my ORM
-from my_declarative_base import Base, Images, Topics,ImagesTopics,Clusters68, ImagesClusters68, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON, ForeignKey
+from my_declarative_base import Base, Images, Topics,ImagesTopics, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON, ForeignKey
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import create_engine, text, MetaData, Table, Column, Numeric, Integer, VARCHAR, update, Float
@@ -74,7 +74,7 @@ stemmer = SnowballStemmer('english')
 SELECT = "DISTINCT(image_id),description,keyword_list"
 FROM ="bagofkeywords"
 WHERE = "keyword_list IS NOT NULL "
-LIMIT = 10
+LIMIT = 1000
 
 if db['unix_socket']:
     # for MM's MAMP config
