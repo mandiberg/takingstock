@@ -55,7 +55,7 @@ title = 'Please choose your operation: '
 options = ['Topic modelling', 'Topic indexing','calculating optimum_topics']
 io = DataIO()
 db = io.db
-#io.db["name"] = "ministock"
+io.db["name"] = "ministock1023"
 
 NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 MODEL_PATH=os.path.join(io.ROOT,"model")
@@ -70,11 +70,18 @@ NUM_TOPICS=80
 
 stemmer = SnowballStemmer('english')
 
-# Basic Query, this works with gettytest3
-SELECT = "DISTINCT(image_id),description,keyword_list"
-FROM ="bagofkeywords"
-WHERE = "keyword_list IS NOT NULL "
-LIMIT = 1000
+
+def set_query():
+    # Basic Query, this works with gettytest3
+    SELECT = "DISTINCT(image_id),description,keyword_list"
+    FROM ="bagofkeywords"
+    WHERE = "keyword_list IS NOT NULL "
+    LIMIT = 2000000
+    if MODE==1:
+        WHERE = "keyword_list IS NOT NULL AND image_id NOT IN (SELECT image_id FROM imagestopics)"
+        # WHERE = "image_id = 423638"
+        LIMIT=100000
+    return SELECT, FROM, WHERE, LIMIT
 
 if db['unix_socket']:
     # for MM's MAMP config
@@ -101,6 +108,7 @@ session = Session()
 Base = declarative_base()
 
 def selectSQL():
+    SELECT, FROM, WHERE, LIMIT = set_query()
     selectsql = f"SELECT {SELECT} FROM {FROM} WHERE {WHERE} LIMIT {str(LIMIT)};"
     print("actual SELECT is: ",selectsql)
     result = engine.connect().execute(text(selectsql))
@@ -135,12 +143,12 @@ def gen_corpus(processed_txt,MODEL):
 
     return 
     
-def LDA_model(corpus,dictionary,num_topics):
+def LDA_model(num_topics):
     print("loading corpus and dictionary")
     loaded_dict = corpora.Dictionary.load(DICT_PATH)
     loaded_corp = corpora.MmCorpus(TFIDF_CORPUS_PATH)
     print("processing the model now")
-    lda_model = gensim.models.LdaMulticore(loaded_corp, num_topics=num_topics, id2word=loaded_dict, passes=2, workers=2)
+    lda_model = gensim.models.LdaMulticore(loaded_corp, num_topics=num_topics, id2word=loaded_dict, passes=2, workers=NUMBER_OF_PROCESSES)
     lda_model.save(MODEL_PATH)
     print("processed all")
     return lda_model
@@ -166,20 +174,31 @@ def write_imagetopics(resultsjson,lda_model_tfidf,dictionary):
     print("writing data to the imagetopic table")
     idx_list, topic_list = zip(*lda_model_tfidf.print_topics(-1))
     for i,row in enumerate(resultsjson):
+        # print(row)
         keyword_list=" ".join(pickle.loads(row["keyword_list"]))
-        bow_vector = dictionary.doc2bow(preprocess(keyword_list))
+
+        # handles empty keyword_list
+        if keyword_list:
+            word_list = keyword_list
+        else:
+            word_list = row["description"]
+
+        bow_vector = dictionary.doc2bow(preprocess(word_list))
 
         #index,score=sorted(lda_model_tfidf[bow_corpus[i]], key=lambda tup: -1*tup[1])[0]
         index,score=sorted(lda_model_tfidf[bow_vector], key=lambda tup: -1*tup[1])[0]
-
         imagestopics_entry=ImagesTopics(
         image_id=row["image_id"],
         topic_id=index,
         topic_score=score
         )
         session.add(imagestopics_entry)
-        print("Updated image_id {}".format(row["image_id"]))
-        #print("###keyword list =",keyword_list,"#####topic id=",index,"########topic =",topic_list[index])
+        # print(f'image_id {row["image_id"]} -- topic_id {index} -- topic tokens {topic_list[index][:100]}')
+        # print(f"keyword list {keyword_list}")
+
+        if row["image_id"] % 1000 == 0:
+            print("Updated image_id {}".format(row["image_id"]))
+
 
     # Add the imagestopics object to the session
     session.commit()
@@ -199,10 +218,9 @@ def calc_optimum_topics(resultsjson):
 
     
     num_topics_list=[80,90,100,110,120]
-    #num_topics_list=[100]
     coher_val_list=np.zeros(len(num_topics_list))
     for i,num_topics in enumerate(num_topics_list):
-        lda_model = gensim.models.LdaMulticore(corpus, num_topics=num_topics, id2word=dictionary, passes=2, workers=2)
+        lda_model = gensim.models.LdaMulticore(corpus, num_topics=num_topics, id2word=dictionary, passes=2, workers=NUMBER_OF_PROCESSES)
         cm = CoherenceModel(model=lda_model, corpus=corpus, coherence='u_mass')
         coher_val_list[i]=cm.get_coherence()
     print(num_topics_list,coher_val_list)  # get coherence value
@@ -224,27 +242,32 @@ def topic_model(resultsjson):
     return
 
 def topic_index(resultsjson):
-    while resultsjson:
-    #for i in range(2):
-        ###########TOPIC INDEXING#########################
-        bow_corpus = corpora.MmCorpus(BOW_CORPUS_PATH)
-        #dictionary = corpora.Dictionary.load(DICT_PATH)
-        lda_model_tfidf = gensim.models.LdaModel.load(MODEL_PATH)
-        lda_dict = corpora.Dictionary.load(MODEL_PATH+'.id2word')
-        print("model loaded successfully")
+    ###########TOPIC INDEXING#########################
+    bow_corpus = corpora.MmCorpus(BOW_CORPUS_PATH)
+    #dictionary = corpora.Dictionary.load(DICT_PATH)
+    lda_model_tfidf = gensim.models.LdaModel.load(MODEL_PATH)
+    lda_dict = corpora.Dictionary.load(MODEL_PATH+'.id2word')
+    print("model loaded successfully")
+    while True:
+        # go get LIMIT number of items (will duplicate initial select)
+        print("about to SQL:")
+        resultsjson = selectSQL()
+        print("got results, count is: ",len(resultsjson))
+        if len(resultsjson) == 0:
+            break
+
         write_imagetopics(resultsjson,lda_model_tfidf,lda_dict)
-        print("updated ",LIMIT,"cells")
+        print("updated cells")
     print("DONE")
 
     return
     
 def main():
+    global MODE
     OPTION, MODE = pick(options, title)
-    #MODE=2
 
     start = time.time()
     # create_my_engine(db)
-    print("about to SQL: ",SELECT,FROM,WHERE,LIMIT)
     resultsjson = selectSQL()
     print("got results, count is: ",len(resultsjson))
 
