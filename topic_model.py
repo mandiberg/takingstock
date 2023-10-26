@@ -179,7 +179,7 @@ def write_imagetopics(resultsjson,lda_model_tfidf,dictionary):
         )
         session.add(imagestopics_entry)
         print("Updated image_id {}".format(row["image_id"]))
-        print("###keyword list =",keyword_list,"#####topic id=",index,"########topic =",topic_list[index])
+        #print("###keyword list =",keyword_list,"#####topic id=",index,"########topic =",topic_list[index])
 
     # Add the imagestopics object to the session
     session.commit()
@@ -193,9 +193,13 @@ def calc_optimum_topics(resultsjson):
         txt.at[i,"keyword_list"]=" ".join(pickle.loads(row["keyword_list"]))
     #processed_txt=txt['description'].map(preprocess)
     processed_txt=txt['keyword_list'].map(preprocess)
-    corpus,dictionary=gen_corpus(processed_txt,MODEL)
+    gen_corpus(processed_txt,MODEL)
+    corpus = corpora.MmCorpus(BOW_CORPUS_PATH)
+    dictionary = corpora.Dictionary.load(MODEL_PATH+'.id2word')
+
+    
     num_topics_list=[80,90,100,110,120]
-    #num_topics_list=[80]
+    #num_topics_list=[100]
     coher_val_list=np.zeros(len(num_topics_list))
     for i,num_topics in enumerate(num_topics_list):
         lda_model = gensim.models.LdaMulticore(corpus, num_topics=num_topics, id2word=dictionary, passes=2, workers=2)
@@ -220,8 +224,8 @@ def topic_model(resultsjson):
     return
 
 def topic_index(resultsjson):
-    #while resultsjson:
-    for i in range(2):
+    while resultsjson:
+    #for i in range(2):
         ###########TOPIC INDEXING#########################
         bow_corpus = corpora.MmCorpus(BOW_CORPUS_PATH)
         #dictionary = corpora.Dictionary.load(DICT_PATH)
