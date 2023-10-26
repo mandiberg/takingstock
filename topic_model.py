@@ -70,12 +70,18 @@ NUM_TOPICS=80
 
 stemmer = SnowballStemmer('english')
 
-# Basic Query, this works with gettytest3
-SELECT = "DISTINCT(image_id),description,keyword_list"
-FROM ="bagofkeywords"
-WHERE = "keyword_list IS NOT NULL AND image_id NOT IN (SELECT image_id FROM imagestopics)"
-# WHERE = "image_id = 423638"
-LIMIT = 10
+def set_query():
+    # Basic Query, this works with gettytest3
+    SELECT = "DISTINCT(image_id),description,keyword_list"
+    FROM ="bagofkeywords"
+    if MODE==0:
+        WHERE = "keyword_list IS NOT NULL "
+        LIMIT = 2000000
+    elif MODE==1:
+        WHERE = "keyword_list IS NOT NULL AND image_id NOT IN (SELECT image_id FROM imagestopics)"
+        # WHERE = "image_id = 423638"
+        LIMIT=10000
+    return SELECT, FROM, WHERE, LIMIT
 
 if db['unix_socket']:
     # for MM's MAMP config
@@ -102,6 +108,7 @@ session = Session()
 Base = declarative_base()
 
 def selectSQL():
+    SELECT, FROM, WHERE, LIMIT = set_query()
     selectsql = f"SELECT {SELECT} FROM {FROM} WHERE {WHERE} LIMIT {str(LIMIT)};"
     print("actual SELECT is: ",selectsql)
     result = engine.connect().execute(text(selectsql))
@@ -167,9 +174,16 @@ def write_imagetopics(resultsjson,lda_model_tfidf,dictionary):
     print("writing data to the imagetopic table")
     idx_list, topic_list = zip(*lda_model_tfidf.print_topics(-1))
     for i,row in enumerate(resultsjson):
-        print(row)
+        # print(row)
         keyword_list=" ".join(pickle.loads(row["keyword_list"]))
-        bow_vector = dictionary.doc2bow(preprocess(keyword_list))
+
+        # handles empty keyword_list
+        if keyword_list:
+            word_list = keyword_list
+        else:
+            word_list = row["description"]
+
+        bow_vector = dictionary.doc2bow(preprocess(word_list))
 
         #index,score=sorted(lda_model_tfidf[bow_corpus[i]], key=lambda tup: -1*tup[1])[0]
         index,score=sorted(lda_model_tfidf[bow_vector], key=lambda tup: -1*tup[1])[0]
@@ -179,8 +193,12 @@ def write_imagetopics(resultsjson,lda_model_tfidf,dictionary):
         topic_score=score
         )
         session.add(imagestopics_entry)
-        print(f'image_id {row["image_id"]} -- topic_id {index} -- topic tokens {topic_list[index][:100]}')
-        print(f"keyword list {keyword_list}")
+        # print(f'image_id {row["image_id"]} -- topic_id {index} -- topic tokens {topic_list[index][:100]}')
+        # print(f"keyword list {keyword_list}")
+
+        if row["image_id"] % 1000 == 0:
+            print("Updated image_id {}".format(row["image_id"]))
+
 
     # Add the imagestopics object to the session
     session.commit()
@@ -227,19 +245,26 @@ def topic_index(resultsjson):
     lda_model_tfidf = gensim.models.LdaModel.load(MODEL_PATH)
     lda_dict = corpora.Dictionary.load(MODEL_PATH+'.id2word')
     print("model loaded successfully")
-    write_imagetopics(resultsjson,lda_model_tfidf,lda_dict)
-    print("updated ",LIMIT,"cells")
+    while True:
+        # go get LIMIT number of items (will duplicate initial select)
+        print("about to SQL:")
+        resultsjson = selectSQL()
+        print("got results, count is: ",len(resultsjson))
+        if len(resultsjson) == 0:
+            break
+
+        write_imagetopics(resultsjson,lda_model_tfidf,lda_dict)
+        print("updated cells")
     print("DONE")
 
     return
     
 def main():
+    global MODE
     OPTION, MODE = pick(options, title)
-    #MODE=2
 
     start = time.time()
     # create_my_engine(db)
-    print("about to SQL: ",SELECT,FROM,WHERE,LIMIT)
     resultsjson = selectSQL()
     print("got results, count is: ",len(resultsjson))
 
