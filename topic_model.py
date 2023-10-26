@@ -10,7 +10,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 # my ORM
-from my_declarative_base import Base, Images, Topics,ImagesTopics,Clusters68, ImagesClusters68, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON, ForeignKey
+from my_declarative_base import Base, Images, Topics,ImagesTopics, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON, ForeignKey
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import create_engine, text, MetaData, Table, Column, Numeric, Integer, VARCHAR, update, Float
@@ -55,7 +55,7 @@ title = 'Please choose your operation: '
 options = ['Topic modelling', 'Topic indexing','calculating optimum_topics']
 io = DataIO()
 db = io.db
-#io.db["name"] = "ministock"
+io.db["name"] = "ministock1023"
 
 NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 MODEL_PATH=os.path.join(io.ROOT,"model")
@@ -73,7 +73,8 @@ stemmer = SnowballStemmer('english')
 # Basic Query, this works with gettytest3
 SELECT = "DISTINCT(image_id),description,keyword_list"
 FROM ="bagofkeywords"
-WHERE = "keyword_list IS NOT NULL "
+WHERE = "keyword_list IS NOT NULL AND image_id NOT IN (SELECT image_id FROM imagestopics)"
+# WHERE = "image_id = 423638"
 LIMIT = 10
 
 if db['unix_socket']:
@@ -166,20 +167,20 @@ def write_imagetopics(resultsjson,lda_model_tfidf,dictionary):
     print("writing data to the imagetopic table")
     idx_list, topic_list = zip(*lda_model_tfidf.print_topics(-1))
     for i,row in enumerate(resultsjson):
+        print(row)
         keyword_list=" ".join(pickle.loads(row["keyword_list"]))
         bow_vector = dictionary.doc2bow(preprocess(keyword_list))
 
         #index,score=sorted(lda_model_tfidf[bow_corpus[i]], key=lambda tup: -1*tup[1])[0]
         index,score=sorted(lda_model_tfidf[bow_vector], key=lambda tup: -1*tup[1])[0]
-
         imagestopics_entry=ImagesTopics(
         image_id=row["image_id"],
         topic_id=index,
         topic_score=score
         )
         session.add(imagestopics_entry)
-        print("Updated image_id {}".format(row["image_id"]))
-        print("###keyword list =",keyword_list,"#####topic id=",index,"########topic =",topic_list[index])
+        print(f'image_id {row["image_id"]} -- topic_id {index} -- topic tokens {topic_list[index][:100]}')
+        print(f"keyword list {keyword_list}")
 
     # Add the imagestopics object to the session
     session.commit()
@@ -220,16 +221,14 @@ def topic_model(resultsjson):
     return
 
 def topic_index(resultsjson):
-    #while resultsjson:
-    for i in range(2):
-        ###########TOPIC INDEXING#########################
-        bow_corpus = corpora.MmCorpus(BOW_CORPUS_PATH)
-        #dictionary = corpora.Dictionary.load(DICT_PATH)
-        lda_model_tfidf = gensim.models.LdaModel.load(MODEL_PATH)
-        lda_dict = corpora.Dictionary.load(MODEL_PATH+'.id2word')
-        print("model loaded successfully")
-        write_imagetopics(resultsjson,lda_model_tfidf,lda_dict)
-        print("updated ",LIMIT,"cells")
+    ###########TOPIC INDEXING#########################
+    bow_corpus = corpora.MmCorpus(BOW_CORPUS_PATH)
+    #dictionary = corpora.Dictionary.load(DICT_PATH)
+    lda_model_tfidf = gensim.models.LdaModel.load(MODEL_PATH)
+    lda_dict = corpora.Dictionary.load(MODEL_PATH+'.id2word')
+    print("model loaded successfully")
+    write_imagetopics(resultsjson,lda_model_tfidf,lda_dict)
+    print("updated ",LIMIT,"cells")
     print("DONE")
 
     return
