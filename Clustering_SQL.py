@@ -83,7 +83,7 @@ if USE_SEGMENT is True and MODE == 0:
     # Basic Query, this works with gettytest3
     SELECT = "DISTINCT(image_id),face_encodings68"
     FROM = SegmentTable_name
-    WHERE = "face_encodings68 IS NOT NULL"
+    WHERE = "face_encodings68 IS NOT NULL AND face_x > -33 AND face_x < -27 AND face_y > -2 AND face_y < 2 AND face_z > -2 AND face_z < 2"
     LIMIT = 1500000
 
     # # join with SSD tables. Satyam, use the one below
@@ -149,7 +149,7 @@ def selectSQL():
 
 
 def kmeans_cluster(df,n_clusters=32):
-    kmeans = KMeans(n_clusters,n_init=10, init = 'k-means++', random_state = 42, max_iter = 300)
+    kmeans = KMeans(n_clusters,n_init=10, init = 'k-means++', random_state = 42, max_iter = 300, verbose=1)
     kmeans.fit(df)
     clusters = kmeans.predict(df)
     return clusters

@@ -117,6 +117,18 @@ class ImagesClusters(Base):
 
     image_id = Column(Integer, ForeignKey('images.image_id'), primary_key=True)
     cluster_id = Column(Integer, ForeignKey('Clusters.cluster_id'))
+    
+class ClustersTemp(Base):
+    __tablename__ = 'ClustersTemp'
+
+    cluster_id = Column(Integer, primary_key=True, autoincrement=True)
+    cluster_median = Column(BLOB)
+
+class ImagesClustersTemp(Base):
+    __tablename__ = 'ImagesClustersTemp'
+
+    image_id = Column(Integer, ForeignKey('images.image_id'), primary_key=True)
+    cluster_id = Column(Integer, ForeignKey('ClustersTemp.cluster_id'))
 
 class BagOfKeywords(Base):
     __tablename__ = 'BagOfKeywords'

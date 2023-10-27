@@ -827,7 +827,10 @@ class SortPose:
         dist_run_dict={}
         enc2_dict={}
         
+        print("df_128_enc")
+        print(df_128_enc)
         for index, row in df_128_enc.iterrows():
+            print("row is", row)
     #         print(row['c1'], row['c2'])
     #     for img in img_list:
             print("FIRST_ROUND", FIRST_ROUND)
@@ -849,7 +852,7 @@ class SortPose:
                     print("128d: missing enc1 or enc2")
                     continue
             elif sorttype == "planar":
-                print("self.counter_dict[]")
+                print("self.counter_dict[] last_image")
                 print(self.counter_dict["last_image"])
 
                 print("planar: index")
