@@ -15,7 +15,7 @@ from collections import Counter
 class SortPose:
     # """Sort image files based on head pose"""
 
-    def __init__(self, motion, face_height_output, image_edge_multiplier, EXPAND):
+    def __init__(self, motion, face_height_output, image_edge_multiplier, EXPAND, ONE_SHOT):
 
         self.mp_face_detection = mp.solutions.face_detection
         self.mp_drawing = mp.solutions.drawing_utils
@@ -23,7 +23,7 @@ class SortPose:
         #maximum allowable distance between encodings
         self.MAXDIST = 0.7
         self.MINDIST = .4
-        self.CUTOFF = 100
+        self.CUTOFF = 200
 
         # maximum allowable scale up
         self.resize_max = 1.99
@@ -32,6 +32,7 @@ class SortPose:
         # takes base image size and multiplies by avg of multiplier
         self.output_dims = (int(face_height_output*(image_edge_multiplier[1]+image_edge_multiplier[3])/2),int(face_height_output*(image_edge_multiplier[0]+image_edge_multiplier[2])/2))
         self.EXPAND = EXPAND
+        self.ONE_SHOT = ONE_SHOT
 
         # set some defaults, looking forward
         self.XLOW = -20
@@ -874,6 +875,7 @@ class SortPose:
                 dist.append(d)
                 dist_dict[d]=index
 
+
         # FIRST_ROUND = False
         # quit()
 
@@ -881,6 +883,8 @@ class SortPose:
         if len(dist_run_dict) > 2:
             k = list(dist_run_dict.keys())
             print("WE HAVE A RUN!!!!! ---------- ", str(len(k)))
+            print(dist_run_dict)
+            print(k)
             last_d_in_run = max(k)
             self.counter_dict["last_image_enc"]=enc2_dict[last_d_in_run]
             # adding the run to the good_count, minus the one added in compare_images
@@ -899,6 +903,24 @@ class SortPose:
                 print("TOO GREAT A DISTANCE ---> going to break the loop and keep the last values")
                 dist_single_dict = {1: "null"}
                 return 1, dist_single_dict, df_128_enc
+            elif self.ONE_SHOT and FIRST_ROUND is False:
+                # for d in dist:
+                #     dist_run_dict[d]
+                # k = list(dist_dict.keys())
+                last_d_in_run = max(dist)
+
+                print("WE HAVE ONE_SHOT!!!!! ---------- ", str(len(dist)))
+                print(dist_dict)
+                if sorttype == "128d":
+                    self.counter_dict["last_image_enc"]=enc2_dict[last_d_in_run]
+                elif sorttype == "planar":
+                    pass
+
+                # adding the run to the good_count, minus the one added in compare_images
+                self.counter_dict["good_count"] += len(dist)-1
+
+                # switch to returning dist_run_dict
+                return last_d_in_run, dist_dict, df_128_enc
 
             try:
                 print ("the winner is: ", str(dist[0]), dist_dict[dist[0]])

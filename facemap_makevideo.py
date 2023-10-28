@@ -62,7 +62,7 @@ IS_CLUSTER = False
 # number of clusters to analyze -- this is also declared in Clustering_SQL. Move to IO?
 N_CLUSTERS = 128
 # this is for IS_ONE_CLUSTER to only run on a specific CLUSTER_NO
-IS_ONE_CLUSTER = True
+IS_ONE_CLUSTER = False
 CLUSTER_NO = 63
 
 # this controls whether it is using the linear or angle process
@@ -72,10 +72,11 @@ IS_ANGLE_SORT = False
 IS_TOPICS = False
 N_TOPICS = 80
 
-IS_ONE_TOPIC = False
-TOPIC_NO = 21
+IS_ONE_TOPIC = True
+TOPIC_NO = 50
 # SORT_TYPE = "128d"
 SORT_TYPE ="planar"
+ONE_SHOT = True
 
 # I/O utils
 io = DataIO(IS_SSD)
@@ -138,7 +139,7 @@ elif IS_SEGONLY:
     WHERE = "s.site_name_id != 1 AND face_encodings68 IS NOT NULL AND face_x > -33 AND face_x < -27 AND face_y > -2 AND face_y < 2 AND face_z > -2 AND face_z < 2"
 
     # WHERE = "s.site_name_id != 1"
-    LIMIT = 2000
+    LIMIT = 200
 
 
 
@@ -168,7 +169,7 @@ image_edge_multiplier = [1.2, 1.2, 1.6, 1.2]
 
 
 # construct my own objects
-sort = SortPose(motion, face_height_output, image_edge_multiplier,EXPAND)
+sort = SortPose(motion, face_height_output, image_edge_multiplier,EXPAND, ONE_SHOT)
 
 start_img_name = "median"
 start_site_image_id = None
@@ -242,7 +243,7 @@ def selectSQL(cluster_no=None, topic_no=None):
         if IS_CLUSTER or IS_ONE_CLUSTER:
             cluster +=f"AND ic.cluster_id = {str(cluster_no)} "
         if IS_TOPICS or IS_ONE_TOPIC:
-            cluster +=f"AND it.topic_id = {str(cluster_no)} "
+            cluster +=f"AND it.topic_id = {str(topic_no)} "
     else:
         cluster=""
     print(f"cluster SELECT is {cluster}")
@@ -428,6 +429,8 @@ def sort_by_face_dist(df_enc, df_128_enc):
         #debuggin
         print(f"sorted round {str(i)} which is actually round  {str(i+len(dkeys)-1)}")
         print(len(df_128_enc.index))
+        if len(df_128_enc.index) < 2:
+            break
         print(dist)
         print (start_img_name)
 
@@ -934,7 +937,7 @@ def main():
             resultsjson = selectSQL(cluster_no, None)
             print(f"resultsjson contains {len(resultsjson)} images")
             map_images(resultsjson, cluster_no)
-    if IS_CLUSTER and IS_ONE_TOPIC:
+    elif IS_CLUSTER and IS_ONE_TOPIC:
         print(f"IS_CLUSTER is {IS_CLUSTER} with {N_CLUSTERS}, and topic {TOPIC_NO}")
         for cluster_no in range(N_CLUSTERS):
             print(f"SELECTing cluster {cluster_no} of {N_CLUSTERS}")
@@ -953,6 +956,11 @@ def main():
         resultsjson = selectSQL(CLUSTER_NO, None)
         print(f"resultsjson contains {len(resultsjson)} images")
         map_images(resultsjson, CLUSTER_NO)
+    elif IS_ONE_TOPIC:
+        print(f"SELECTing topic {TOPIC_NO}")
+        resultsjson = selectSQL(None, TOPIC_NO)
+        print(f"resultsjson contains {len(resultsjson)} images")
+        map_images(resultsjson, None)
     else:
         print("doing regular linear")
         resultsjson = selectSQL() 
