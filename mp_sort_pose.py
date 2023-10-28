@@ -23,7 +23,7 @@ class SortPose:
         #maximum allowable distance between encodings
         self.MAXDIST = 0.7
         self.MINDIST = .4
-        self.CUTOFF = 1000
+        self.CUTOFF = 100
 
         # maximum allowable scale up
         self.resize_max = 1.99
@@ -311,7 +311,6 @@ class SortPose:
         # print(enc1[0])
         enc2=np.array(enc2)
         # print("enc2")
-        # print(enc2[0])
         d=np.linalg.norm(enc1 - enc2, axis=0)
         return d
 
@@ -807,8 +806,12 @@ class SortPose:
             # print(last_dict[point])
             # print(type(last_dict[point]))
             # this_d = np.linalg.norm(last_dict[point],this_dict[point])
+
             enc1=np.array(last_dict[point])
             enc2=np.array(this_dict[point])
+            # print("enc2.shape")
+            # print(enc2.shape)
+
             d=np.linalg.norm(enc1 - enc2)
 
             d_list.append(d)
@@ -830,7 +833,7 @@ class SortPose:
         print("df_128_enc")
         print(df_128_enc)
         for index, row in df_128_enc.iterrows():
-            print("row is", row)
+            # print("row is", row)
     #         print(row['c1'], row['c2'])
     #     for img in img_list:
             print("FIRST_ROUND", FIRST_ROUND)
@@ -845,12 +848,16 @@ class SortPose:
                         dist.append(d)
                         dist_dict[d]=index
                         enc2_dict[d]=enc2
-                        if d < self.MINDIST:
-                            dist_run_dict[d]=index
-                    
+
+                        if sorttype == "128d":
+                            if d < self.MINDIST:
+                                dist_run_dict[d]=index
+
                 else:
                     print("128d: missing enc1 or enc2")
                     continue
+                # FIRST_ROUND = False
+
             elif sorttype == "planar":
                 print("self.counter_dict[] last_image")
                 print(self.counter_dict["last_image"])
@@ -867,7 +874,6 @@ class SortPose:
                 dist.append(d)
                 dist_dict[d]=index
 
-                print(face_2d_dict)
         # FIRST_ROUND = False
         # quit()
 

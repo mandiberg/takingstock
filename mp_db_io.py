@@ -73,14 +73,15 @@ class DataIO:
                 os.path.join(self.ROOT_PROD,"images_getty"), #1, Getty
                 # temp for testing
                 # os.path.join(self.ROOT54,"gettyimages/testimages"), #1, Getty
-                os.path.join(self.ROOT_PROD,""),
+                os.path.join(self.ROOT_PROD,"images_shutterstock"), #2, Shutterstock
                 os.path.join(self.ROOT_PROD,"images_adobe"), #3, Adobe
-                os.path.join(self.ROOT_PROD,""),
+                os.path.join(self.ROOT_PROD,"images_istock"), #4, iStock
                 os.path.join(self.ROOT_PROD,"images_pexels"), #5, Pexels
-                os.path.join(self.ROOT_PROD,""),
-                os.path.join(self.ROOT_PROD,""),
+                os.path.join(self.ROOT_PROD,"images_unsplash"),
+                os.path.join(self.ROOT_PROD,"images_pond5"),
                 os.path.join(self.ROOT_PROD,"images_123rf"), #8, images_123rf
-                os.path.join(self.ROOT_PROD,""),
+                os.path.join(self.ROOT_PROD,"images_alamy"), #9 alamy
+                os.path.join(self.ROOT_PROD,"images_vcg") # visual china group
             ]
         else:
             self.folder_list = [
@@ -88,14 +89,15 @@ class DataIO:
                 os.path.join(self.ROOT54,"images_getty"), #1, Getty
                 # temp for testing
                 # os.path.join(self.ROOT54,"gettyimages/testimages"), #1, Getty
-                os.path.join(self.ROOT54,""),
+                os.path.join(self.ROOT54,"images_shutterstock"),
                 os.path.join(self.ROOT54,"images_adobe"), #3, Adobe
-                os.path.join(self.ROOT54,""),
+                os.path.join(self.ROOT54,"images_istock"), #4, iStock
                 os.path.join(self.ROOT54,"images_pexels"), #5, Pexels
-                os.path.join(self.ROOT54,""),
-                os.path.join(self.ROOT54,""),
+                os.path.join(self.ROOT54,"images_unsplash"),
+                os.path.join(self.ROOT54,"images_pond5"),
                 os.path.join(self.ROOT54,"images_123rf"), #8, images_123rf
-                os.path.join(self.ROOT54,""),
+                os.path.join(self.ROOT54,"images_alamy"), #9 alamy
+                os.path.join(self.ROOT54,"images_vcg") # visual china group
             ]
 
     def capitalize_directory(self,path):

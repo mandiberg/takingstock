@@ -50,7 +50,7 @@ SegmentTable_name = 'SegmentOct20'
 
 # SATYAM, this is MM specific
 # for when I'm using files on my SSD vs RAID
-IS_SSD = False
+IS_SSD = True
 #IS_MOVE is in move_toSSD_files.py
 
 # This is for when you only have the segment table. RW SQL query
@@ -62,7 +62,7 @@ IS_CLUSTER = False
 # number of clusters to analyze -- this is also declared in Clustering_SQL. Move to IO?
 N_CLUSTERS = 128
 # this is for IS_ONE_CLUSTER to only run on a specific CLUSTER_NO
-IS_ONE_CLUSTER = False
+IS_ONE_CLUSTER = True
 CLUSTER_NO = 63
 
 # this controls whether it is using the linear or angle process
@@ -138,7 +138,7 @@ elif IS_SEGONLY:
     WHERE = "s.site_name_id != 1 AND face_encodings68 IS NOT NULL AND face_x > -33 AND face_x < -27 AND face_y > -2 AND face_y < 2 AND face_z > -2 AND face_z < 2"
 
     # WHERE = "s.site_name_id != 1"
-    LIMIT = 20
+    LIMIT = 2000
 
 
 
@@ -621,7 +621,7 @@ def linear_test_df(df,cluster_no, itter=None):
             imgfilename = const_imgfilename(row['filename'], df, imgfileprefix)
             outpath = os.path.join(sort.counter_dict["outfolder"],imgfilename)
             open_path = os.path.join(io.ROOT,row['folder'],row['filename'])
-            # print(outpath, open_path)
+            print(outpath, open_path)
             try:
                 img = cv2.imread(open_path)
             except:
