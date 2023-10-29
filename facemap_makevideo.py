@@ -73,7 +73,7 @@ IS_TOPICS = False
 N_TOPICS = 80
 
 IS_ONE_TOPIC = True
-TOPIC_NO = 50
+TOPIC_NO = 37
 # SORT_TYPE = "128d"
 SORT_TYPE ="planar"
 ONE_SHOT = True
@@ -111,7 +111,7 @@ if IS_SEGONLY is not True:
     # this is for gettytest3 table
     FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings e ON i.image_id = e.image_id JOIN ImagesClusters ic ON i.image_id = ic.image_id"
     WHERE = "e.is_face IS TRUE AND e.bbox IS NOT NULL AND i.site_name_id = 1 AND k.keyword_text LIKE 'smil%'"
-    LIMIT = 1000
+    LIMIT = 100
 
 
 elif IS_SEGONLY:
@@ -121,12 +121,6 @@ elif IS_SEGONLY:
     SELECT = "DISTINCT(s.image_id), s.site_name_id, s.contentUrl, s.imagename, s.face_x, s.face_y, s.face_z, s.mouth_gap, s.face_landmarks, s.bbox, s.face_encodings68, s.site_image_id"
     
     FROM =f"{SegmentTable_name} s "
-    if IS_CLUSTER or IS_ONE_CLUSTER:
-        FROM += " JOIN ImagesClusters ic ON s.image_id = ic.image_id "
-    if IS_TOPICS or IS_ONE_TOPIC:
-        FROM += " JOIN ImagesTopics it ON s.image_id = it.image_id "
-
-
     # WHERE = "mouth_gap < 2 AND age_id NOT IN (1,2,3,4) AND image_id < 40647710"
     # WHERE = "mouth_gap < 2 AND age_id NOT IN (1,2,3,4) AND s.image_id < 40647710 AND k.keyword_text LIKE 'work%'"
     # WHERE = "seg.age_id NOT IN (1,2,3,4) and seg.mouth_gap > 15"
@@ -138,8 +132,15 @@ elif IS_SEGONLY:
     # WHERE = "mouth_gap < 2 AND age_id NOT IN (1,2,3,4) AND image_id < 40647710 AND gender_id = 1"
     WHERE = "s.site_name_id != 1 AND face_encodings68 IS NOT NULL AND face_x > -33 AND face_x < -27 AND face_y > -2 AND face_y < 2 AND face_z > -2 AND face_z < 2"
 
+    if IS_CLUSTER or IS_ONE_CLUSTER:
+        FROM += " JOIN ImagesClusters ic ON s.image_id = ic.image_id "
+    if IS_TOPICS or IS_ONE_TOPIC:
+        FROM += " JOIN ImagesTopics it ON s.image_id = it.image_id "
+        WHERE += " AND it.topic_score > .3"
+
+
     # WHERE = "s.site_name_id != 1"
-    LIMIT = 200
+    LIMIT = 5000
 
 
 
@@ -153,19 +154,19 @@ motion = {
     "simple": False,
 }
 
-EXPAND = False
+EXPAND = True
 
 # face_height_output is how large each face will be. default is 750
-face_height_output = 500
-# face_height_output = 256
+# face_height_output = 500
+face_height_output = 256
 
 # define ratios, in relationship to nose
 # units are ratio of faceheight
 # top, right, bottom, left
 # image_edge_multiplier = [1, 1, 1, 1]
-# image_edge_multiplier = [1.5,1.5,1.5,1.5]
+image_edge_multiplier = [1.5,1.5,2,1.5] # bigger portrait
 # image_edge_multiplier = [1.5, 2, 1.5, 2]
-image_edge_multiplier = [1.2, 1.2, 1.6, 1.2]
+# image_edge_multiplier = [1.2, 1.2, 1.6, 1.2] # standard portrait
 
 
 # construct my own objects
@@ -236,8 +237,8 @@ face_mesh = mp_face_mesh.FaceMesh(static_image_mode=True, max_num_faces=1,min_de
 ###################
 
 def selectSQL(cluster_no=None, topic_no=None):
-    print(f"cluster_no is")
-    print(cluster_no)
+    # print(f"cluster_no is")
+    # print(cluster_no)
     if cluster_no is not None or topic_no is not None:
         cluster = " "
         if IS_CLUSTER or IS_ONE_CLUSTER:
@@ -246,7 +247,7 @@ def selectSQL(cluster_no=None, topic_no=None):
             cluster +=f"AND it.topic_id = {str(topic_no)} "
     else:
         cluster=""
-    print(f"cluster SELECT is {cluster}")
+    # print(f"cluster SELECT is {cluster}")
     selectsql = f"SELECT {SELECT} FROM {FROM} WHERE {WHERE} {cluster} LIMIT {str(LIMIT)};"
     print("actual SELECT is: ",selectsql)
     result = engine.connect().execute(text(selectsql))
@@ -305,7 +306,7 @@ def sort_by_face_dist(df_enc, df_128_enc):
     print("df_enc.index")
     print(df_enc.index)
     print(len(df_enc.index))
-    print(sort.counter_dict)
+    # print(sort.counter_dict)
     FIRST_ROUND = True
     if sort.CUTOFF < len(df_enc.index):
         itters = sort.CUTOFF
@@ -313,7 +314,7 @@ def sort_by_face_dist(df_enc, df_128_enc):
         itters = len(df_enc.index)
     for i in range(itters):
         # find the image
-        print(df_enc)
+        # print(df_enc)
         # this is the site_name_id for this_start, needed to test mse
         print("this_start", this_start)
         print("starting sort round ",str(i))
@@ -357,10 +358,10 @@ def sort_by_face_dist(df_enc, df_128_enc):
 
             # Break out of the loop if greater than MAXDIST
             # I think this will be graceful with cluster iteration
-            print("dist")
-            print(dist)
-            print("sort.MAXDIST")
-            print(sort.MAXDIST)
+            # print("dist")
+            # print(dist)
+            # print("sort.MAXDIST")
+            # print(sort.MAXDIST)
             if dist > sort.MAXDIST:
                 print("should breakout")
                 break
@@ -383,18 +384,18 @@ def sort_by_face_dist(df_enc, df_128_enc):
             face_landmarks=None
             bbox=None
 
-            print("THIS: closest_dict[dkey],")
-            print(closest_dict[dkey])
+            # print("THIS: closest_dict[dkey],")
+            # print(closest_dict[dkey])
 
             try:
-                print("dkey, df_enc.loc[closest_dict[dkey]]")
-                print(dkey)
-                print(closest_dict[dkey])
-                print(df_enc.loc[closest_dict[dkey]])
+                # print("dkey, df_enc.loc[closest_dict[dkey]]")
+                # print(dkey)
+                # print(closest_dict[dkey])
+                # print(df_enc.loc[closest_dict[dkey]])
                 site_name_id = df_enc.loc[closest_dict[dkey]]['site_name_id']
                 face_landmarks = df_enc.loc[closest_dict[dkey]]['face_landmarks']
                 bbox = df_enc.loc[closest_dict[dkey]]['bbox']
-                print("assigned bbox", bbox)
+                # print("assigned bbox", bbox)
             except:
                 print("won't assign landmarks/bbox")
             print("site_name_id is the following")
@@ -402,8 +403,8 @@ def sort_by_face_dist(df_enc, df_128_enc):
             # for some reason, site_name_id is not an int. trying to test if int.
             # print(type(site_name_id))
             # if not pd.is_int(site_name_id): continue
-            print(site_name_id)
-            print("site_specific_root_folder", io.folder_list[site_name_id])
+            # print(site_name_id)
+            # print("site_specific_root_folder", io.folder_list[site_name_id])
             site_specific_root_folder = io.folder_list[site_name_id]
             print("site_specific_root_folder")
             print(site_specific_root_folder)
@@ -540,20 +541,20 @@ def compare_images(last_image, img, face_landmarks, bbox):
         cropped_image = sort.expand_image(img, face_landmarks, bbox)
     else:
         cropped_image = sort.crop_image(img, face_landmarks, bbox)
-    print("cropped_image type: ",type(cropped_image))
+    # print("cropped_image type: ",type(cropped_image))
 
     # this code takes image i, and blends it with the subsequent image
     # next step is to test to see if mp can recognize a face in the image
     # if no face, a bad blend, try again with i+2, etc. 
     if cropped_image is not None:
-        print("have a cropped image trying to save", cropped_image.shape)
-        try:
-            print("last_image is ", type(last_image))
-        except:
-            print("couldn't test last_image")
+        # print("have a cropped image trying to save", cropped_image.shape)
+        # try:
+        #     print("last_image is ", type(last_image))
+        # except:
+        #     print("couldn't test last_image")
         try:
             if not sort.counter_dict["first_run"]:
-                print("testing is_face")
+                # print("testing is_face")
                 is_face = sort.test_pair(last_image, cropped_image)
                 if is_face:
                     # print("same person, testing mse")
@@ -577,7 +578,6 @@ def compare_images(last_image, img, face_landmarks, bbox):
         print("first run, but bad first image")
         last_image = cropped_image
         sort.counter_dict["cropfail_count"] += 1
-
     else:
         print("no image here, trying next")
         sort.counter_dict["cropfail_count"] += 1
@@ -602,9 +602,9 @@ def print_counters():
 
 
 def const_imgfilename(filename, df, imgfileprefix):
-    print("filename", filename)
+    # print("filename", filename)
     UID = filename.split('-id')[-1].split("/")[-1].replace(".jpg","")
-    print("UID ",UID)
+    # print("UID ",UID)
     counter_str = str(sort.counter_dict["counter"]).zfill(len(str(df.size)))  # Add leading zeros to the counter
     imgfilename = imgfileprefix+"_"+str(counter_str)+"_"+UID+".jpg"
     print("imgfilename ",imgfilename)
@@ -617,14 +617,15 @@ def linear_test_df(df,cluster_no, itter=None):
     print(imgfileprefix)
     good = 0
     img_list = []
-    try:
-        for index, row in df.iterrows():
-            print('in loop, index is', str(index))
-            print(row)
+
+    for index, row in df.iterrows():
+        print('-- linear_test_df [-] in loop, index is', str(index))
+        # print(row)
+        try:
             imgfilename = const_imgfilename(row['filename'], df, imgfileprefix)
             outpath = os.path.join(sort.counter_dict["outfolder"],imgfilename)
             open_path = os.path.join(io.ROOT,row['folder'],row['filename'])
-            print(outpath, open_path)
+            # print(outpath, open_path)
             try:
                 img = cv2.imread(open_path)
             except:
@@ -657,8 +658,8 @@ def linear_test_df(df,cluster_no, itter=None):
         # print("sort.counter_dict with last_image???")
         # print(sort.counter_dict)
 
-    except Exception as e:
-        print(str(e))
+        except Exception as e:
+            print(str(e))
 
     return img_list
     
@@ -868,7 +869,7 @@ def main():
 
             ### Get cluster_median encodings for cluster_no ###
 
-            if cluster_no is not None and cluster_no !=0:
+            if cluster_no is not None and cluster_no !=0 and IS_CLUSTER:
                 # skips cluster 0 for pulling median because it was returning NULL
                 # cluster_median = select_cluster_median(cluster_no)
                 # image_id = insert_dict['image_id']
@@ -947,10 +948,10 @@ def main():
     elif IS_TOPICS:
         print(f"IS_TOPICS is {IS_TOPICS} with {N_TOPICS}")
         for topic_no in range(N_TOPICS):
-            print(f"SELECTing cluster {cluster_no} of {N_TOPICS}")
+            print(f"SELECTing cluster {topic_no} of {N_TOPICS}")
             resultsjson = selectSQL(None, topic_no)
             print(f"resultsjson contains {len(resultsjson)} images")
-            map_images(resultsjson, cluster_no)
+            map_images(resultsjson, topic_no)
     elif IS_ONE_CLUSTER:
         print(f"SELECTing cluster {CLUSTER_NO}")
         resultsjson = selectSQL(CLUSTER_NO, None)
@@ -960,7 +961,7 @@ def main():
         print(f"SELECTing topic {TOPIC_NO}")
         resultsjson = selectSQL(None, TOPIC_NO)
         print(f"resultsjson contains {len(resultsjson)} images")
-        map_images(resultsjson, None)
+        map_images(resultsjson, TOPIC_NO) # passing in TOPIC_NO to use in saving folder name
     else:
         print("doing regular linear")
         resultsjson = selectSQL() 

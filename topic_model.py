@@ -66,7 +66,7 @@ TFIDF_CORPUS_PATH=os.path.join(io.ROOT,"TFIDF_lda_corpus.mm")
 USE_SEGMENT = False
 
 MODEL="TF" ## OR TF  ## Bag of words or TF-IDF
-NUM_TOPICS=80
+NUM_TOPICS=88
 
 stemmer = SnowballStemmer('english')
 

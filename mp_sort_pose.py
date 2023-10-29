@@ -23,7 +23,7 @@ class SortPose:
         #maximum allowable distance between encodings
         self.MAXDIST = 0.7
         self.MINDIST = .4
-        self.CUTOFF = 200
+        self.CUTOFF = 20000
 
         # maximum allowable scale up
         self.resize_max = 1.99
@@ -32,6 +32,10 @@ class SortPose:
         # takes base image size and multiplies by avg of multiplier
         self.output_dims = (int(face_height_output*(image_edge_multiplier[1]+image_edge_multiplier[3])/2),int(face_height_output*(image_edge_multiplier[0]+image_edge_multiplier[2])/2))
         self.EXPAND = EXPAND
+        self.EXPAND_SIZE = (2000,2000)
+        # self.EXPAND_SIZE = (4000,3000)
+        self.BGCOLOR = [255,255,255]
+        # self.BGCOLOR = [0,0,0]
         self.ONE_SHOT = ONE_SHOT
 
         # set some defaults, looking forward
@@ -444,7 +448,7 @@ class SortPose:
                     print('test_pair: skipping this one')
                     return False
             else:
-                print('test_pair: new_file is not a face:', new_file)
+                print('test_pair: new_file is not a face:')
                 return False
 
         except Exception as e:
@@ -479,13 +483,12 @@ class SortPose:
 
         error, diff = mse(img1, img2)
         
-        print("unique_face: similarity between the two images:",error)
         # i don't know what number to use
         if error == 0:
-            print("unique_face: Fail, images too similar")
+            print(f"unique_face: {error} Fail, images too similar")
             return False
         elif error < 15:
-            print("unique_face: Fail, images too similar")
+            print(f"unique_face: {error} Fail, images too similar")
             # preview_img(diff)
             # preview_img(img1)
             # preview_img(img2)
@@ -541,7 +544,7 @@ class SortPose:
 
 
     def get_faceheight_data(self):
-        print("get_faceheight_data")
+        # print("get_faceheight_data")
         top_2d = self.get_face_2d_point(10)
         # print(top_2d)
         bottom_2d = self.get_face_2d_point(152)
@@ -552,8 +555,7 @@ class SortPose:
         # print(self.ptop)
         # print(self.pbot)
         self.face_height = self.dist(self.point(self.pbot), self.point(self.ptop))
-        print("got face_height")
-        print(self.face_height)
+        # print("face_height", str(self.face_height))
         # return ptop, pbot, face_height
 
 
@@ -595,8 +597,7 @@ class SortPose:
         self.faceLms = faceLms
         self.bbox = (bbox)
 
-        print("attempting cropped_image")
-        print(self.size)
+        print("get_image_face_data [-] size is", self.size)
         #I'm not sure the diff between nose_2d and p1. May be redundant.
         #it would prob be better to do this with a dict and a loop
         # Instead of hard-coding the index 1, you can use a variable or constant for the point index
@@ -615,27 +616,22 @@ class SortPose:
 
     def expand_image(self,image, faceLms, bbox, sinY=0):
         self.get_image_face_data(image, faceLms, bbox)    
-        print("going to expand now")
         try:
-            print(type(self.image))
+            # print(type(self.image))
             borderType = cv2.BORDER_CONSTANT
-            self.EXPAND_SIZE = (10000,10000)
-            value = [255,255,255]
-            # value = [0,0,0]
 
             # scale image to match face heights
             resize = self.face_height_output/self.face_height
             if resize < 15:
-                print("resize")
-                print(resize)
+                print("expand_image [-] resize", str(resize))
                 # image.shape is height[0] and width[1]
                 resize_dims = (int(self.image.shape[1]*resize),int(self.image.shape[0]*resize))
                 # resize_nose.shape is  width[0] and height[1]
                 resize_nose = (int(self.nose_2d[0]*resize),int(self.nose_2d[1]*resize))
-                print("resize_dims")
-                print(resize_dims)
-                print("resize_nose")
-                print(resize_nose)
+                # print("resize_dims")
+                # print(resize_dims)
+                # print("resize_nose")
+                # print(resize_nose)
                 # this wants width and height
                 resized_image = cv2.resize(self.image, resize_dims, interpolation=cv2.INTER_LINEAR)
                 # self.preview_img(resized_image)
@@ -648,17 +644,17 @@ class SortPose:
                 left_border = int(self.EXPAND_SIZE[0]/2 - resize_nose[0])
                 right_border = int(self.EXPAND_SIZE[0]/2 - (resize_dims[0]-resize_nose[0]))
 
-                print([top_border, bottom_border, left_border, right_border])
-                print([top_border, resize_dims[0]/2-right_border, resize_dims[1]/2-bottom_border, left_border])
-                print([top_border, self.EXPAND_SIZE[0]/2-right_border, self.EXPAND_SIZE[1]/2-bottom_border, left_border])
+                # print([top_border, bottom_border, left_border, right_border])
+                # print([top_border, resize_dims[0]/2-right_border, resize_dims[1]/2-bottom_border, left_border])
+                # print([top_border, self.EXPAND_SIZE[0]/2-right_border, self.EXPAND_SIZE[1]/2-bottom_border, left_border])
 
                 # expand image with borders
                 if top_border >= 0 and right_border >= 0 and self.EXPAND_SIZE[0]/2-right_border >= 0 and bottom_border >= 0 and self.EXPAND_SIZE [1]/2-bottom_border>= 0 and left_border>= 0:
                 # if topcrop >= 0 and self.w-rightcrop >= 0 and self.h-botcrop>= 0 and leftcrop>= 0:
-                    print("all positive")
-                    new_image = cv2.copyMakeBorder(resized_image, top_border, bottom_border, left_border, right_border, borderType, None, value)
+                    print("crop is good")
+                    new_image = cv2.copyMakeBorder(resized_image, top_border, bottom_border, left_border, right_border, borderType, None, self.BGCOLOR)
                 else:
-                    print("one is negative")
+                    print("crop failed")
                     new_image = None
                     self.negmargin_count += 1
                 # self.preview_img(new_image)
@@ -800,7 +796,6 @@ class SortPose:
 
         return face_2d
     def get_planar_d(self,last_dict,this_dict):
-        print("plaaaaaannnnnnaaaaaarrrrrrr")
         d_list = []
         for point in last_dict:
             # d=np.linalg.norm(enc1 - enc2, axis=0)
@@ -816,28 +811,27 @@ class SortPose:
             d=np.linalg.norm(enc1 - enc2)
 
             d_list.append(d)
-        print(d_list)
+        # print(d_list)
         d = statistics.mean(d_list)
         # print(last_dict[1][0])
         # print(this_dict[1][0])
-        print(d)
+        # print(d)
         return d
         
 
     def get_closest_df(self, FIRST_ROUND, enc1, df_enc, df_128_enc, sorttype="128d"):
-        print("get_closest_df")
         dist=[]
         dist_dict={}
         dist_run_dict={}
         enc2_dict={}
         
-        print("df_128_enc")
-        print(df_128_enc)
+        # print("df_128_enc")
+        # print(df_128_enc)
+        print("get_closest_df, FIRST_ROUND", FIRST_ROUND)
         for index, row in df_128_enc.iterrows():
             # print("row is", row)
     #         print(row['c1'], row['c2'])
     #     for img in img_list:
-            print("FIRST_ROUND", FIRST_ROUND)
             if sorttype == "128d" or (sorttype == "planar" and FIRST_ROUND is True):
             # if sorttype == "128d" or (sorttype == "planar" and self.counter_dict["start_img_name"] == "median" and self.counter_dict["last_image"] is None):
                 enc2 = row
@@ -860,12 +854,12 @@ class SortPose:
                 # FIRST_ROUND = False
 
             elif sorttype == "planar":
-                print("self.counter_dict[] last_image")
-                print(self.counter_dict["last_image"])
+                # print("self.counter_dict[] last_image")
+                # print(self.counter_dict["last_image"])
 
-                print("planar: index")
-                print(index)
-                print(df_enc.loc[index])
+                # print("planar: index")
+                # print(index)
+                # print(df_enc.loc[index])
                 # print(df_enc.loc[index, "face_landmarks"])
                 last_face_2d_dict = self.get_face_2d_dict(df_enc.loc[self.counter_dict["last_image"], "face_landmarks"])
                 this_face_2d_dict = self.get_face_2d_dict(df_enc.loc[index, "face_landmarks"])
@@ -879,7 +873,7 @@ class SortPose:
         # FIRST_ROUND = False
         # quit()
 
-        print("made it through iterrows")
+        # print("made it through iterrows")
         if len(dist_run_dict) > 2:
             k = list(dist_run_dict.keys())
             print("WE HAVE A RUN!!!!! ---------- ", str(len(k)))
@@ -910,14 +904,14 @@ class SortPose:
                 last_d_in_run = max(dist)
 
                 print("WE HAVE ONE_SHOT!!!!! ---------- ", str(len(dist)))
-                print(dist_dict)
+                # print(dist_dict)
                 if sorttype == "128d":
                     self.counter_dict["last_image_enc"]=enc2_dict[last_d_in_run]
                 elif sorttype == "planar":
                     pass
 
                 # adding the run to the good_count, minus the one added in compare_images
-                self.counter_dict["good_count"] += len(dist)-1
+                # self.counter_dict["good_count"] += len(dist)-1
 
                 # switch to returning dist_run_dict
                 return last_d_in_run, dist_dict, df_128_enc

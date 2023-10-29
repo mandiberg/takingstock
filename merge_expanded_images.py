@@ -17,14 +17,14 @@ db = io.db
 IS_CLUSTER = False
 
 # are we making videos or making merged stills?
-IS_VIDEO = True
+IS_VIDEO = False
 
 # MERGE
 # Provide the path to the folder containing the images
 ROOT_FOLDER_PATH = '/Users/michaelmandiberg/Documents/projects-active/facemap_production/segment_images'
 # if IS_CLUSTER this should be the folder holding all the cluster folders
 # if not, this should be the individual folder holding the images
-FOLDER_NAME ="Oct26_80topics/cluster68_1698298646.045076"
+FOLDER_NAME ="Oct28_topics_planarexpand/cluster70_1698507946.525863-meditate"
 FOLDER_PATH = os.path.join(ROOT_FOLDER_PATH,FOLDER_NAME)
 
 # WRITE VIDEO
