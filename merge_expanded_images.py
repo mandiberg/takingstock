@@ -14,17 +14,18 @@ io = DataIO()
 db = io.db
 
 # iterate through folders? 
-IS_CLUSTER = False
+IS_CLUSTER = True
 
 # are we making videos or making merged stills?
-IS_VIDEO = False
+IS_VIDEO = True
+ALL_ONE_VIDEO = False
 
 # MERGE
 # Provide the path to the folder containing the images
 ROOT_FOLDER_PATH = '/Users/michaelmandiberg/Documents/projects-active/facemap_production/segment_images'
 # if IS_CLUSTER this should be the folder holding all the cluster folders
 # if not, this should be the individual folder holding the images
-FOLDER_NAME ="Oct28_topics_planarexpand/cluster70_1698507946.525863-meditate"
+FOLDER_NAME ="88_clusters_Nov12_45_5max"
 FOLDER_PATH = os.path.join(ROOT_FOLDER_PATH,FOLDER_NAME)
 
 # WRITE VIDEO
@@ -182,13 +183,18 @@ def main():
     if IS_CLUSTER is True:
         subfolders = io.get_folders(FOLDER_PATH)
         # print(subfolders)
-        if IS_VIDEO is True:
+        if IS_VIDEO is True and ALL_ONE_VIDEO is True:
             all_img_path_list = get_img_list_subfolders(subfolders)
             write_video(all_img_path_list, FRAMERATE)
 
             # # const_videowriter(subfolder_path, FRAMERATE)
             # for subfolder_path in subfolders:
             #     write_video(subfolder_path, FRAMERATE)
+        elif IS_VIDEO is True and ALL_ONE_VIDEO is False:
+            for subfolder_path in subfolders:
+                all_img_path_list = io.get_img_list(subfolder_path)
+                write_video(all_img_path_list, FRAMERATE, subfolder_path)
+
         else:
             for subfolder_path in subfolders:
                 # print(subfolder_path)

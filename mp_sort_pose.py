@@ -15,15 +15,15 @@ from collections import Counter
 class SortPose:
     # """Sort image files based on head pose"""
 
-    def __init__(self, motion, face_height_output, image_edge_multiplier, EXPAND, ONE_SHOT):
+    def __init__(self, motion, face_height_output, image_edge_multiplier, EXPAND, ONE_SHOT, JUMP_SHOT):
 
         self.mp_face_detection = mp.solutions.face_detection
         self.mp_drawing = mp.solutions.drawing_utils
 
         #maximum allowable distance between encodings
         self.MAXDIST = 0.7
-        self.MINDIST = .4
-        self.CUTOFF = 20000
+        self.MINDIST = .45
+        self.CUTOFF = 10000
 
         # maximum allowable scale up
         self.resize_max = 1.99
@@ -37,6 +37,9 @@ class SortPose:
         self.BGCOLOR = [255,255,255]
         # self.BGCOLOR = [0,0,0]
         self.ONE_SHOT = ONE_SHOT
+        self.JUMP_SHOT = JUMP_SHOT
+        self.SHOT_CLOCK = 0 
+        self.BODY_LMS = [0, 20, 19]
 
         # set some defaults, looking forward
         self.XLOW = -20
@@ -311,11 +314,12 @@ class SortPose:
     def get_d(self, enc1, enc2):
         enc1=np.array(enc1)
         # print("enc1")
-        # # print(enc1)
+        # print(enc1)
         # # this is currently an np.array, not 128d list
         # print(enc1[0])
         enc2=np.array(enc2)
         # print("enc2")
+        # print(enc2)
         d=np.linalg.norm(enc1 - enc2, axis=0)
         return d
 
@@ -795,6 +799,23 @@ class SortPose:
         # self.face_2d = np.array(face_2d, dtype=np.float64)
 
         return face_2d
+
+    def get_landmarks_2d_dict(self, Lms, selected_Lms):
+        Lms2d = {}
+        for idx, lm in enumerate(Lms.landmark):
+            if idx in selected_Lms:
+                # x, y = int(lm.x * img_w), int(lm.y * img_h)
+                Lms2d[idx] =([lm.x, lm.y])
+
+                # Get the 2D Coordinates
+                # body_2d.append([x, y])
+
+        # Convert it to the NumPy array
+        # image points
+        # self.body_2d = np.array(body_2d, dtype=np.float64)
+
+        return Lms2d
+
     def get_planar_d(self,last_dict,this_dict):
         d_list = []
         for point in last_dict:
@@ -826,7 +847,7 @@ class SortPose:
         enc2_dict={}
         
         # print("df_128_enc")
-        # print(df_128_enc)
+        # print("enc1 right before index row itter", enc1)
         print("get_closest_df, FIRST_ROUND", FIRST_ROUND)
         for index, row in df_128_enc.iterrows():
             # print("row is", row)
@@ -837,6 +858,8 @@ class SortPose:
                 enc2 = row
                 # print("testing this", index, "against the start img",start_img)
                 if (enc1 is not None) and (enc2 is not None):
+                    # print("getting d with enc1", enc1)
+                    # print("getting d with enc2", enc1)
                     d = self.get_d(enc1, enc2)
                     if d > 0:
                         print ("d is", str(d), "for", index)
@@ -870,6 +893,27 @@ class SortPose:
                 dist_dict[d]=index
 
 
+            elif sorttype == "planar_body":
+                print("planar_body [-] getting 2D")
+                # print(self.counter_dict["last_image"])
+
+                # print("planar: index")
+                # print(index)
+                # print(df_enc.loc[index])
+                # print(df_enc.loc[index, "face_landmarks"])
+                print(df_enc)
+                print(df_enc.loc[self.counter_dict["last_image"], "body_landmarks"])
+                print(df_enc.loc[index, "body_landmarks"])
+                last_body_2d_dict = self.get_landmarks_2d_dict(df_enc.loc[self.counter_dict["last_image"], "body_landmarks"], self.BODY_LMS)
+                this_body_2d_dict = self.get_landmarks_2d_dict(df_enc.loc[index, "body_landmarks"], self.BODY_LMS)
+                print("planar_body [-] got last_body_2d_dict and this_body_2d_dict")
+
+                d = self.get_planar_d(last_body_2d_dict,this_body_2d_dict)
+                print ("body planar d is", str(d), "for", index)
+                dist.append(d)
+                dist_dict[d]=index
+
+
         # FIRST_ROUND = False
         # quit()
 
@@ -879,6 +923,8 @@ class SortPose:
             print("WE HAVE A RUN!!!!! ---------- ", str(len(k)))
             print(dist_run_dict)
             print(k)
+            self.SHOT_CLOCK = 0 # reset the shot clock
+
             last_d_in_run = max(k)
             self.counter_dict["last_image_enc"]=enc2_dict[last_d_in_run]
             # adding the run to the good_count, minus the one added in compare_images
@@ -893,10 +939,23 @@ class SortPose:
             # print(dist)
             print(len(dist))
             print(type(len(dist)))
+            self.SHOT_CLOCK += 1 # reset the shot clock
+            print(f"self.SHOT_CLOCK is {self.SHOT_CLOCK}")
             if dist[0] > self.MAXDIST:
                 print("TOO GREAT A DISTANCE ---> going to break the loop and keep the last values")
                 dist_single_dict = {1: "null"}
                 return 1, dist_single_dict, df_128_enc
+            elif self.SHOT_CLOCK > 5:
+                print("SHOT_CLOCK IS UP ---> going to pick a random new start")
+
+                random_d = int(len(dist)*random.random())
+                random_d_in_run = dist[random_d]
+
+                dist_single_dict = {random_d: dist_dict[random_d_in_run]}
+                self.SHOT_CLOCK = 0 # reset the shot clock
+
+                return random_d_in_run, dist_single_dict, df_128_enc
+
             elif self.ONE_SHOT and FIRST_ROUND is False:
                 # for d in dist:
                 #     dist_run_dict[d]

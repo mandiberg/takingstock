@@ -50,8 +50,8 @@ http="https://media.gettyimages.com/photos/"
 
 # am I looking on RAID/SSD for a folder? If not, will pull directly from SQL
 # if so, also change the site_name_id etc around line 930
-IS_FOLDER = True
-MAIN_FOLDER = "/Volumes/RAID54/images_shutterstock"
+IS_FOLDER = False
+MAIN_FOLDER = "/Volumes/SSD4/images_istock"
 
 #temp hack to go 1 subfolder at a time
 # THESE_FOLDER_PATHS = ["8/8A", "8/8B","8/8C", "8/8D", "8/8E", "8/8F", "8/80", "8/81", "8/82", "8/83", "8/84", "8/85", "8/86", "8/87", "8/88", "8/89"]
@@ -62,32 +62,36 @@ THESE_FOLDER_PATHS = ["9/9C", "9/9D", "9/9E", "9/9F", "9/90", "9/91", "9/92", "9
 CSV_FOLDERCOUNT_PATH = os.path.join(MAIN_FOLDER, "folder_countout.csv")
 
 
-SELECT = "DISTINCT i.image_id, i.site_name_id, i.contentUrl, i.imagename, e.encoding_id, i.site_image_id, e.face_landmarks, e.bbox"
 
 ############# KEYWORD SELECT #############
-FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings e ON i.image_id = e.image_id"
-# gettytest3
-# WHERE = "e.face_encodings68 IS NULL AND e.face_encodings IS NOT NULL"
-# production
-# WHERE = "e.is_face IS TRUE AND e.face_encodings68 IS NULL"
-WHERE = "e.encoding_id IS NULL AND i.site_name_id = 3 AND k.keyword_text LIKE 'working%' AND i.image_id < 33160214"
-# AND i.age_id NOT IN (1,2,3,4)
-IS_SSD=True
+# SELECT = "DISTINCT i.image_id, i.site_name_id, i.contentUrl, i.imagename, e.encoding_id, i.site_image_id, e.face_landmarks, e.bbox"
+# FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings e ON i.image_id = e.image_id"
+# # gettytest3
+# # WHERE = "e.face_encodings68 IS NULL AND e.face_encodings IS NOT NULL"
+# # production
+# # WHERE = "e.is_face IS TRUE AND e.face_encodings68 IS NULL"
+# WHERE = "e.encoding_id IS NULL AND i.site_name_id = 3 AND k.keyword_text LIKE 'working%' AND i.image_id < 33160214"
+# # AND i.age_id NOT IN (1,2,3,4)
+# IS_SSD=True
 ##########################################
 
 ############# Reencodings #############
-# SegmentTable_name = 'May25segment123straight_lessrange'
-# SegmentTable_name = 'June20segment123straight'
-# FROM ="Images i LEFT JOIN Encodings e ON i.image_id = e.image_id"
-# WHERE = "e.face_encodings68 IS NULL AND e.face_encodings IS NOT NULL AND i.site_name_id = 8"
-# QUERY = "e.face_encodings IS NULL AND e.image_id IN"
-# SUBQUERY = f"(SELECT seg1.image_id FROM {SegmentTable_name} seg1 )"
-# WHERE = f"{QUERY} {SUBQUERY}"
+SELECT = "DISTINCT seg1.image_id, seg1.site_name_id, seg1.contentUrl, seg1.imagename, e.encoding_id, seg1.site_image_id, e.face_landmarks, e.bbox"
+
+SegmentTable_name = 'SegmentOct20'
+FROM =f"{SegmentTable_name} seg1 LEFT JOIN Encodings e ON seg1.image_id = e.image_id"
+# FROM ="Encodings e"
+QUERY = "e.body_landmarks IS NULL AND e.image_id IN"
+SUBQUERY = f"(SELECT seg1.image_id FROM {SegmentTable_name} seg1 WHERE face_x > -33 AND face_x < -27 AND face_y > -2 AND face_y < 2 AND face_z > -2 AND face_z < 2 AND seg1.site_name_id !=1)"
+WHERE = f"{QUERY} {SUBQUERY}"
+
+
+
 
 ## Gettytest3
 # WHERE = "e.face_encodings IS NULL AND e.bbox IS NOT NULL"
 
-# IS_SSD=False
+IS_SSD=True
 ##########################################
 
 
@@ -276,7 +280,7 @@ def selectORM(session, FILTER, LIMIT):
 def selectSQL():
     init_session()
     selectsql = f"SELECT {SELECT} FROM {FROM} WHERE {WHERE} LIMIT {str(LIMIT)};"
-    # print("actual SELECT is: ",selectsql)
+    print("actual SELECT is: ",selectsql)
     result = engine.connect().execute(text(selectsql))
     resultsjson = ([dict(row) for row in result.mappings()])
     close_session()
@@ -560,7 +564,7 @@ def calc_encodings(image, faceLms,bbox):## changed parameters and rebuilt
     # print(len(encodings))
     return np.array(encodings).tolist()
 
-def find_body(image,df):
+def find_body(image):
     #print("find_body")
     with mp_pose.Pose(
         static_image_mode=True, min_detection_confidence=0.5) as pose:
@@ -574,14 +578,15 @@ def find_body(image,df):
             # bodyLms = results.pose_landmarks.landmark
             if not bodyLms.pose_landmarks:
                 is_body = False
+                body_landmarks = None
             else: 
                 is_body = True
-                df.at['1', 'body_landmarks'] = pickle.dumps(bodyLms.pose_landmarks)
+                body_landmarks = pickle.dumps(bodyLms.pose_landmarks)
 
-            df.at['1', 'is_body'] = is_body
+            
         except:
             print(f"[find_body]this item failed: {image}")
-        return df
+        return is_body, body_landmarks
 
 def capitalize_directory(path):
     dirname, filename = os.path.split(path)
@@ -717,8 +722,74 @@ def process_image_enc_only(task):
     except OperationalError as e:
         print(e)
 
+def process_image_bodylms(task):
+    # df = pd.DataFrame(columns=['image_id','bbox'])
+    # print("task is: ",task)
+    encoding_id = task[0] ### is it enc or image_id
+    cap_path = capitalize_directory(task[1])
+    init_session()
+
+    # df = pd.DataFrame(columns=['image_id','is_face','is_body','is_face_distant','face_x','face_y','face_z','mouth_gap','face_landmarks','bbox','face_encodings','face_encodings68_J','body_landmarks'])
+    # df.at['1', 'image_id'] = encoding_id
+
+    try:
+        image = cv2.imread(cap_path)        
+        # this is for when you need to move images into a testing folder structure
+        # save_image_elsewhere(image, task)
+    except Exception as e:
+        print('Error:', str(e))
+        print(f"[process_image]this imread failed, even after uppercasing: {task}")
+    # print("processing: ")
+    # print(encoding_id)
+    if image is not None and image.shape[0]>MINSIZE and image.shape[1]>MINSIZE:
+        # Do findbody
+        is_body, body_landmarks = find_body(image)
+
+        # bbox_json = retro_bbox(image)
+        # print(bbox_json)
+        # if bbox_json: 
+
+        pass
+        for _ in range(io.max_retries):
+            try:
+                # new_entry = Encodings(**insert_dict)
+                # session.add(new_entry)
+                # session.commit()
+
+                session.query(Encodings).filter(Encodings.encoding_id == encoding_id).update({
+                    Encodings.is_body: is_body,
+                    Encodings.body_landmarks: body_landmarks
+                })
+
+                # total_processed += 1
+
+                # Check if the current batch is ready for commit
+                # if total_processed % batch_size == 0:
+                session.commit()
+                # update_sql = f"UPDATE Encodings SET is_body = '{is_body}' AND SET body_landmarks = '{body_landmarks}' WHERE encoding_id = {encoding_id};"
+                # engine.connect().execute(text(update_sql))
+                print("bbbbody:")
+                print(encoding_id)
+                break  # Transaction succeeded, exit the loop
+            except OperationalError as e:
+                print(e)
+                print(f"[process_image]session.query failed: {task}")
+                time.sleep(io.retry_delay)
+        else:
+            print("no bbox")
+
+    else:
+        print('no image or toooooo smallllll')
+        # I should probably assign no_good here...?
+    # Close the session and dispose of the engine before the worker process exits
+    close_session()
+
+    # store data
+
+
+
 def process_image(task):
-    #print("process_image")
+    #print("process_image this is where the action is")
     pr_split = time.time()
     def save_image_triage(image,df):
         #saves a CV2 image elsewhere -- used in setting up test segment of images
@@ -761,6 +832,7 @@ def process_image(task):
 
         # Do Body Pose
         # temporarily commenting this out
+        # to reactivate, will have to accept return of is_body, body_landmarks
         # df = find_body(image, df)
 
         # print(">> SPLIT >> done find_body")
@@ -812,6 +884,7 @@ def process_image(task):
 
         # print("dict_df", insert_dict)
         # quit()
+        image_id = insert_dict['image_id']
 
         if IS_FOLDER is not True:
             # Check if the entry exists in the Encodings table
@@ -826,10 +899,10 @@ def process_image(task):
         if IS_FOLDER is True or existing_entry is None:
             for _ in range(io.max_retries):
                 try:
+                    # print(insert_dict)
+                    print(f"trying to store {image_id}")
                     # update_sql = f"UPDATE Encodings SET bbox = '{bbox_json}' WHERE encoding_id = {encoding_id};"
                     # engine.connect().execute(text(update_sql))
-                    # print("bboxxin:")
-                    # print(encoding_id)
                     # Entry does not exist, insert insert_dict into the table
                     new_entry = Encodings(**insert_dict)
                     session.add(new_entry)
@@ -858,6 +931,7 @@ def process_image(task):
 
     # Close the session and dispose of the engine before the worker process exits
     close_session()
+    print(f"finished session {image_id}")
 
         # save image based on is_face
 def do_job(tasks_to_accomplish, tasks_that_are_done):
@@ -871,7 +945,7 @@ def do_job(tasks_to_accomplish, tasks_that_are_done):
             '''
             task = tasks_to_accomplish.get_nowait()
         except queue.Empty:
-
+            # print("queue.Empty")
             break
         else:
             '''
@@ -880,11 +954,16 @@ def do_job(tasks_to_accomplish, tasks_that_are_done):
             '''
             if len(task) > 2:
                 # landmarks and bbox, so this is an encodings only
-                process_image_enc_only(task)
-                print("process_image_enc_only")
+                # process_image_enc_only(task)
+                # print("process_image_enc_only")
+
+                print("do_job via process_image_bodylms:")
+                process_image_bodylms(task)
+
             else:
-                print("do_job via regular process_image:")
-                process_image(task)
+                # print("do_job via regular process_image:")
+                # process_image(task)
+                print(f"done process_image for {task}")
             # tasks_that_are_done.put(task + ' is done by ' + current_process().name)
             time.sleep(SLEEP_TIME)
     return True
@@ -950,9 +1029,9 @@ def main():
                     # batch_site_image_ids = [img.split("-id")[-1].replace(".jpg", "") for img in batch_img_list]
                     # site_name_id = 1
 
-                    # # Adobe and pexels and shutterstock
+                    # # Adobe and pexels and shutterstock and istock
                     batch_site_image_ids = [img.split(".")[0] for img in batch_img_list]
-                    site_name_id = 2
+                    site_name_id = 4
 
 
 
@@ -991,7 +1070,7 @@ def main():
                         # # extract site_image_id for getty images
                         # site_image_id = img.split("-id")[-1].replace(".jpg", "")
 
-                        # # # extract site_image_id for adobe and pexels and shutterstock
+                        # # # extract site_image_id for adobe and pexels and shutterstock and istock
                         site_image_id = img.split(".")[0]
 
 
@@ -1044,7 +1123,7 @@ def main():
         while True:
             init_session()
 
-            print("about to SQL: ",SELECT,FROM,WHERE,LIMIT)
+            # print("about to SQL: ",SELECT,FROM,WHERE,LIMIT)
             resultsjson = selectSQL()    
             print("got results, count is: ",len(resultsjson))
             # print(resultsjson)

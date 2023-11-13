@@ -69,14 +69,18 @@ CLUSTER_NO = 63
 IS_ANGLE_SORT = False
 
 # this control whether sorting by topics
-IS_TOPICS = False
-N_TOPICS = 80
+IS_TOPICS = True
+N_TOPICS = 88
 
-IS_ONE_TOPIC = True
-TOPIC_NO = 37
-# SORT_TYPE = "128d"
-SORT_TYPE ="planar"
-ONE_SHOT = True
+IS_ONE_TOPIC = False
+TOPIC_NO = 84
+# 7 is isolated, 84 is business, 27 babies, 16 pointing
+SORT_TYPE = "128d"
+# SORT_TYPE ="planar"
+# SORT_TYPE = "planar_body"
+
+ONE_SHOT = False # take all files, based off the very first sort order.
+JUMP_SHOT = True # jump to random file if can't find a run
 
 # I/O utils
 io = DataIO(IS_SSD)
@@ -121,6 +125,7 @@ elif IS_SEGONLY:
     SELECT = "DISTINCT(s.image_id), s.site_name_id, s.contentUrl, s.imagename, s.face_x, s.face_y, s.face_z, s.mouth_gap, s.face_landmarks, s.bbox, s.face_encodings68, s.site_image_id"
     
     FROM =f"{SegmentTable_name} s "
+
     # WHERE = "mouth_gap < 2 AND age_id NOT IN (1,2,3,4) AND image_id < 40647710"
     # WHERE = "mouth_gap < 2 AND age_id NOT IN (1,2,3,4) AND s.image_id < 40647710 AND k.keyword_text LIKE 'work%'"
     # WHERE = "seg.age_id NOT IN (1,2,3,4) and seg.mouth_gap > 15"
@@ -138,9 +143,12 @@ elif IS_SEGONLY:
         FROM += " JOIN ImagesTopics it ON s.image_id = it.image_id "
         WHERE += " AND it.topic_score > .3"
 
+    # # join to keywords
+    # FROM += " JOIN ImagesKeywords ik ON s.image_id = ik.image_id JOIN Keywords k ON ik.keyword_id = k.keyword_id "
+    # WHERE += " AND k.keyword_text LIKE 'surpris%' "
 
     # WHERE = "s.site_name_id != 1"
-    LIMIT = 5000
+    LIMIT = 100000
 
 
 
@@ -154,7 +162,7 @@ motion = {
     "simple": False,
 }
 
-EXPAND = True
+EXPAND = False
 
 # face_height_output is how large each face will be. default is 750
 # face_height_output = 500
@@ -170,7 +178,7 @@ image_edge_multiplier = [1.5,1.5,2,1.5] # bigger portrait
 
 
 # construct my own objects
-sort = SortPose(motion, face_height_output, image_edge_multiplier,EXPAND, ONE_SHOT)
+sort = SortPose(motion, face_height_output, image_edge_multiplier,EXPAND, ONE_SHOT, JUMP_SHOT)
 
 start_img_name = "median"
 start_site_image_id = None
@@ -326,7 +334,7 @@ def sort_by_face_dist(df_enc, df_128_enc):
             print("attempting set enc1 from pass through")
             enc1 = sort.counter_dict["last_image_enc"]
             # enc1 = df_enc.loc[this_start]['face_encodings']
-            print(enc1)
+            # print(enc1)
             print("set enc1 from pass through")
         else:
             #this is the first??? round, set via df
@@ -336,7 +344,7 @@ def sort_by_face_dist(df_enc, df_128_enc):
             # # if not, retain previous enc1. or shoudl it reassign median? 
             # if enc1_temp is not None:
             #     enc1 = enc1_temp
-            print("set enc1 from get_start_enc()")
+            print("set enc1 from get_start_enc() ")
 
         ## Find closest
         try:
@@ -362,7 +370,7 @@ def sort_by_face_dist(df_enc, df_128_enc):
             # print(dist)
             # print("sort.MAXDIST")
             # print(sort.MAXDIST)
-            if dist > sort.MAXDIST:
+            if dist > sort.MAXDIST and sort.SHOT_CLOCK != 0:
                 print("should breakout")
                 break
 
@@ -513,9 +521,12 @@ def prep_encodings(df_segment):
     col3="site_name_id"
     col4="face_landmarks"
     col5="bbox"
+    # col6="body_landmarks"
     df_enc=pd.DataFrame(columns=[col1, col2, col3, col4, col5])
+    # df_enc=pd.DataFrame(columns=[col1, col2, col3, col4, col5, col6])
     df_enc = pd.DataFrame({col1: df_segment['imagename'], col2: df_segment['face_encodings68'].apply(lambda x: np.array(x)), 
-                col3: df_segment['site_name_id'], col4: df_segment['face_landmarks'], col5: df_segment['bbox'] })
+                col3: df_segment['site_name_id'], col4: df_segment['face_landmarks'], col5: df_segment['bbox']})
+                # col3: df_segment['site_name_id'], col4: df_segment['face_landmarks'], col5: df_segment['bbox'], col6: df_segment['body_landmarks'] })
     df_enc.set_index(col1, inplace=True)
 
     # Create column names for the 128 encoding columns
