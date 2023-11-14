@@ -23,7 +23,7 @@ class SortPose:
         #maximum allowable distance between encodings
         self.MAXDIST = 0.7
         self.MINDIST = .45
-        self.CUTOFF = 10
+        self.CUTOFF = 100000
 
         # maximum allowable scale up
         self.resize_max = 1.99
@@ -39,7 +39,7 @@ class SortPose:
         self.ONE_SHOT = ONE_SHOT
         self.JUMP_SHOT = JUMP_SHOT
         self.SHOT_CLOCK = 0 
-        self.BODY_LMS = [0, 20, 19]
+        self.BODY_LMS = [0, 14, 13, 20, 19]
 
         # set some defaults, looking forward
         self.XLOW = -20
@@ -764,11 +764,14 @@ class SortPose:
             print(self.counter_dict["start_site_image_id"])
             enc1 = df_128_enc.loc[self.counter_dict["start_site_image_id"]].to_list()
         elif SORT_TYPE == "planar_body":
-            print("get_start_enc planar_body start_img key is (this is what we are comparing to):")
-            print(start_img)
+            # print("get_start_enc planar_body start_img key is (this is what we are comparing to):")
+            # print(start_img)
             try:
-                enc1 = df_33_lms.loc[start_img].to_list()
-                print(enc1)
+                # enc1 = df_33_lms.loc[start_img].to_list()
+                # TK 
+                enc1 = self.get_landmarks_2d_dict(df_33_lms.loc[start_img, "body_landmarks"], self.BODY_LMS)
+
+                # print("get_start_enc planar_body", enc1)
             except:
                 print("Returning enc1 = median << KeyError for ", start_img)
                 # enc1 = None
@@ -861,8 +864,8 @@ class SortPose:
         # print("df_128_enc")
         # print("enc1 right before index row itter", enc1)
         print(f"get_closest_df, sorttype is {sorttype} FIRST_ROUND is {FIRST_ROUND}")
-        for index, row in df_128_enc.iterrows():
-            if sorttype == "128d" or (sorttype == "planar" and FIRST_ROUND is True) or (sorttype == "planar_body" and FIRST_ROUND is True):
+        if sorttype == "128d" or (sorttype == "planar" and FIRST_ROUND is True) or (sorttype == "planar_body" and FIRST_ROUND is True):
+            for index, row in df_128_enc.iterrows():
             # if sorttype == "128d" or (sorttype == "planar" and self.counter_dict["start_img_name"] == "median" and self.counter_dict["last_image"] is None):
                 enc2 = row
                 # print("testing this", index, "against the start img",start_img)
@@ -885,46 +888,39 @@ class SortPose:
                     continue
                 # FIRST_ROUND = False
 
-            elif sorttype == "planar":
-                # print("self.counter_dict[] last_image")
-                # print(self.counter_dict["last_image"])
-
+        elif sorttype == "planar":
+            for index, row in df_128_enc.iterrows():
                 # print("planar: index")
-                # print(index)
-                # print(df_enc.loc[index])
-                # print(df_enc.loc[index, "face_landmarks"])
                 last_face_2d_dict = self.get_face_2d_dict(df_enc.loc[self.counter_dict["last_image"], "face_landmarks"])
                 this_face_2d_dict = self.get_face_2d_dict(df_enc.loc[index, "face_landmarks"])
-
                 d = self.get_planar_d(last_face_2d_dict,this_face_2d_dict)
                 print ("planar d is", str(d), "for", index)
                 dist.append(d)
                 dist_dict[d]=index
 
 
-            elif sorttype == "planar_body":
+        elif sorttype == "planar_body":
+            df_128_enc=df_128_enc.drop(self.counter_dict["last_image"])
+            
+            for index, row in df_128_enc.iterrows():
                 # print("planar_body [-] getting 2D")
-                # print(self.counter_dict["last_image"])
-
-                # print("planar: index")
                 # print(index)
-                # print(df_enc.loc[index])
-                # print(df_enc.loc[index, "face_landmarks"])
-                # print(df_enc)
-                # print(df_enc.loc[self.counter_dict["last_image"], "body_landmarks"])
-                # print(df_enc.loc[index, "body_landmarks"])
-                last_body_2d_dict = self.get_landmarks_2d_dict(df_enc.loc[self.counter_dict["last_image"], "body_landmarks"], self.BODY_LMS)
-                this_body_2d_dict = self.get_landmarks_2d_dict(df_enc.loc[index, "body_landmarks"], self.BODY_LMS)
-                # print("planar_body [-] got last_body_2d_dict and this_body_2d_dict")
+                if df_enc.loc[index, "body_landmarks"] is not None:
+                    last_body_2d_dict = self.get_landmarks_2d_dict(df_enc.loc[self.counter_dict["last_image"], "body_landmarks"], self.BODY_LMS)
+                    this_body_2d_dict = self.get_landmarks_2d_dict(df_enc.loc[index, "body_landmarks"], self.BODY_LMS)
+                    # print("planar_body [-] got last_body_2d_dict and this_body_2d_dict")
+                    print(last_body_2d_dict,this_body_2d_dict)
+                    d = self.get_planar_d(last_body_2d_dict,this_body_2d_dict)
+                    print ("planar_body d is", str(d), "for", index)
+                    dist.append(d)
+                    dist_dict[d]=index
+                else:
+                    try:
+                        df_128_enc=df_128_enc.drop(index)
+                        print("dropped: ", index)
+                    except Exception as e:
+                        print(str(e))
 
-                d = self.get_planar_d(last_body_2d_dict,this_body_2d_dict)
-                print ("planar_body d is", str(d), "for", index)
-                dist.append(d)
-                dist_dict[d]=index
-
-
-        # FIRST_ROUND = False
-        # quit()
 
         # print("made it through iterrows")
         if len(dist_run_dict) > 2:
@@ -943,6 +939,7 @@ class SortPose:
             return last_d_in_run, dist_run_dict, df_128_enc
         
         else:
+            # print("going to find a winner")
             dist.sort()
             print("length of dist -- how many enc are left in the mix")
             # print(dist)
@@ -991,18 +988,17 @@ class SortPose:
                 if sorttype == "128d":
                     self.counter_dict["last_image_enc"]=enc2_dict[dist[0]]
                 elif sorttype == "planar":
-                    pass
+                    print("not setting enc2_dict")
                 elif sorttype == "planar_body":
-                    self.counter_dict["last_image_enc"]=enc2_dict[dist[0]]
-
+                    print("not setting enc2_dict")
                 # make dict of one and to return it
                 # dist_single_dict[dist[0]] = dist_dict[dist[0]]
                 dist_single_dict = {dist[0]: dist_dict[dist[0]]}
-                return dist[0], dist_single_dict, df_128_enc
+                return dist[0], dist_single_dict, df_128_enc, df_33_lms
             except:
                 print("NOTHING HERE")
                 dist_single_dict = {1: "null"}
-                return 1, dist_single_dict, df_128_enc
+                return 1, dist_single_dict, df_128_enc, df_33_lms
 
 
 

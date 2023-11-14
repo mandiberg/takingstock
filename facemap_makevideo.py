@@ -115,7 +115,7 @@ if IS_SEGONLY is not True:
     # this is for gettytest3 table
     FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings e ON i.image_id = e.image_id JOIN ImagesClusters ic ON i.image_id = ic.image_id"
     WHERE = "e.is_face IS TRUE AND e.bbox IS NOT NULL AND i.site_name_id = 1 AND k.keyword_text LIKE 'smil%'"
-    LIMIT = 100
+    LIMIT = 100000
 
 
 elif IS_SEGONLY:
@@ -355,7 +355,7 @@ def sort_by_face_dist(df_enc, df_128_enc, df_33_lms):
             print("going to get closest")
 
             # TK
-            # NEED TO GET IT TO DROP FROM get_closest_df
+            # NEED TO GET IT TO DROP FROM df_33_lms in get_closest_df
             # need to send the df_enc with the same two keys through to get_closest
             dist, closest_dict, df_128_enc, df_33_lms = sort.get_closest_df(FIRST_ROUND, enc1,df_enc, df_128_enc, df_33_lms, sorttype=SORT_TYPE)
             # dist, closest_dict, df_128_enc = sort.get_closest_df(FIRST_ROUND, enc1,df_enc, df_128_enc, sorttype="planar")
@@ -537,17 +537,18 @@ def prep_encodings(df_segment):
 
     # Create a new DataFrame with the expanded encoding columns
     enc_expanded = df_enc.apply(lambda row: pd.Series(row[col2], index=encoding_cols), axis=1)
-    lms_expanded = df_enc.apply(lambda row: pd.Series(row[col6], index=lms_cols), axis=1)
+    # lms_expanded = df_enc.apply(lambda row: pd.Series(row[col6], index=lms_cols), axis=1)
 
     # Concatenate the expanded DataFrame with the original DataFrame
     enc_concat = pd.concat([df_enc, enc_expanded], axis=1)
-    lms_concat = pd.concat([df_enc, lms_expanded], axis=1)
+    # lms_concat = pd.concat([df_enc, lms_expanded], axis=1)
 
     # make a separate df that just has the encodings
     df_128_enc = enc_concat.drop([col2, col3, col4, col5, col6], axis=1)
-    df_33_lms = lms_concat.drop([col2, col3, col4, col5, col6], axis=1)
+    # df_33_lms = lms_concat.drop([col2, col3, col4, col5, col6], axis=1)
+    df_33_lms = df_enc.drop([col2, col3, col4, col5], axis=1)
 
-    print(df_128_enc)
+    print("df_33_lms", df_33_lms)
     return df_enc, df_128_enc, df_33_lms
 
 def compare_images(last_image, img, face_landmarks, bbox):
