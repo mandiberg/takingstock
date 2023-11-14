@@ -23,7 +23,7 @@ class SortPose:
         #maximum allowable distance between encodings
         self.MAXDIST = 0.7
         self.MINDIST = .45
-        self.CUTOFF = 10000
+        self.CUTOFF = 10
 
         # maximum allowable scale up
         self.resize_max = 1.99
@@ -724,7 +724,7 @@ class SortPose:
         return cropped_image
 
 
-    def get_start_enc(self, start_img, df_128_enc):
+    def get_start_enc(self, start_img, df_128_enc, df_33_lms, SORT_TYPE):
         print("get_start_enc")
         '''
         if start_img == "median" and not self.CLNO:
@@ -763,6 +763,18 @@ class SortPose:
             # print(start_site_image_id)
             print(self.counter_dict["start_site_image_id"])
             enc1 = df_128_enc.loc[self.counter_dict["start_site_image_id"]].to_list()
+        elif SORT_TYPE == "planar_body":
+            print("get_start_enc planar_body start_img key is (this is what we are comparing to):")
+            print(start_img)
+            try:
+                enc1 = df_33_lms.loc[start_img].to_list()
+                print(enc1)
+            except:
+                print("Returning enc1 = median << KeyError for ", start_img)
+                # enc1 = None
+                enc1 = df_33_lms.median().to_list()
+                print(enc1)
+
         else:
             # enc1 = get 2-129 from df via string key
             print("start_img key is (this is what we are comparing to):")
@@ -781,7 +793,7 @@ class SortPose:
                 print("dropped ",start_img)
             except:
                 print("couldn't drop the start_img")
-        return enc1, df_128_enc
+        return enc1, df_128_enc, df_33_lms
 
 
     def get_face_2d_dict(self, faceLms):
@@ -840,7 +852,7 @@ class SortPose:
         return d
         
 
-    def get_closest_df(self, FIRST_ROUND, enc1, df_enc, df_128_enc, sorttype="128d"):
+    def get_closest_df(self, FIRST_ROUND, enc1, df_enc, df_128_enc, df_33_lms, sorttype="128d"):
         dist=[]
         dist_dict={}
         dist_run_dict={}
@@ -848,12 +860,9 @@ class SortPose:
         
         # print("df_128_enc")
         # print("enc1 right before index row itter", enc1)
-        print("get_closest_df, FIRST_ROUND", FIRST_ROUND)
+        print(f"get_closest_df, sorttype is {sorttype} FIRST_ROUND is {FIRST_ROUND}")
         for index, row in df_128_enc.iterrows():
-            # print("row is", row)
-    #         print(row['c1'], row['c2'])
-    #     for img in img_list:
-            if sorttype == "128d" or (sorttype == "planar" and FIRST_ROUND is True):
+            if sorttype == "128d" or (sorttype == "planar" and FIRST_ROUND is True) or (sorttype == "planar_body" and FIRST_ROUND is True):
             # if sorttype == "128d" or (sorttype == "planar" and self.counter_dict["start_img_name"] == "median" and self.counter_dict["last_image"] is None):
                 enc2 = row
                 # print("testing this", index, "against the start img",start_img)
@@ -894,22 +903,22 @@ class SortPose:
 
 
             elif sorttype == "planar_body":
-                print("planar_body [-] getting 2D")
+                # print("planar_body [-] getting 2D")
                 # print(self.counter_dict["last_image"])
 
                 # print("planar: index")
                 # print(index)
                 # print(df_enc.loc[index])
                 # print(df_enc.loc[index, "face_landmarks"])
-                print(df_enc)
-                print(df_enc.loc[self.counter_dict["last_image"], "body_landmarks"])
-                print(df_enc.loc[index, "body_landmarks"])
+                # print(df_enc)
+                # print(df_enc.loc[self.counter_dict["last_image"], "body_landmarks"])
+                # print(df_enc.loc[index, "body_landmarks"])
                 last_body_2d_dict = self.get_landmarks_2d_dict(df_enc.loc[self.counter_dict["last_image"], "body_landmarks"], self.BODY_LMS)
                 this_body_2d_dict = self.get_landmarks_2d_dict(df_enc.loc[index, "body_landmarks"], self.BODY_LMS)
-                print("planar_body [-] got last_body_2d_dict and this_body_2d_dict")
+                # print("planar_body [-] got last_body_2d_dict and this_body_2d_dict")
 
                 d = self.get_planar_d(last_body_2d_dict,this_body_2d_dict)
-                print ("body planar d is", str(d), "for", index)
+                print ("planar_body d is", str(d), "for", index)
                 dist.append(d)
                 dist_dict[d]=index
 
@@ -983,6 +992,9 @@ class SortPose:
                     self.counter_dict["last_image_enc"]=enc2_dict[dist[0]]
                 elif sorttype == "planar":
                     pass
+                elif sorttype == "planar_body":
+                    self.counter_dict["last_image_enc"]=enc2_dict[dist[0]]
+
                 # make dict of one and to return it
                 # dist_single_dict[dist[0]] = dist_dict[dist[0]]
                 dist_single_dict = {dist[0]: dist_dict[dist[0]]}

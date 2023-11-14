@@ -50,7 +50,7 @@ http="https://media.gettyimages.com/photos/"
 
 # am I looking on RAID/SSD for a folder? If not, will pull directly from SQL
 # if so, also change the site_name_id etc around line 930
-IS_FOLDER = False
+IS_FOLDER = True
 MAIN_FOLDER = "/Volumes/SSD4/images_istock"
 
 #temp hack to go 1 subfolder at a time
@@ -61,29 +61,33 @@ THESE_FOLDER_PATHS = ["9/9C", "9/9D", "9/9E", "9/9F", "9/90", "9/91", "9/92", "9
 # MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages"
 CSV_FOLDERCOUNT_PATH = os.path.join(MAIN_FOLDER, "folder_countout.csv")
 
+BODYLMS = True
 
+if BODYLMS is True:
 
-############# KEYWORD SELECT #############
-# SELECT = "DISTINCT i.image_id, i.site_name_id, i.contentUrl, i.imagename, e.encoding_id, i.site_image_id, e.face_landmarks, e.bbox"
-# FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings e ON i.image_id = e.image_id"
-# # gettytest3
-# # WHERE = "e.face_encodings68 IS NULL AND e.face_encodings IS NOT NULL"
-# # production
-# # WHERE = "e.is_face IS TRUE AND e.face_encodings68 IS NULL"
-# WHERE = "e.encoding_id IS NULL AND i.site_name_id = 3 AND k.keyword_text LIKE 'working%' AND i.image_id < 33160214"
-# # AND i.age_id NOT IN (1,2,3,4)
-# IS_SSD=True
-##########################################
+    ############# Reencodings #############
+    SELECT = "DISTINCT seg1.image_id, seg1.site_name_id, seg1.contentUrl, seg1.imagename, e.encoding_id, seg1.site_image_id, e.face_landmarks, e.bbox"
 
-############# Reencodings #############
-SELECT = "DISTINCT seg1.image_id, seg1.site_name_id, seg1.contentUrl, seg1.imagename, e.encoding_id, seg1.site_image_id, e.face_landmarks, e.bbox"
+    SegmentTable_name = 'SegmentOct20'
+    FROM =f"{SegmentTable_name} seg1 LEFT JOIN Encodings e ON seg1.image_id = e.image_id"
+    # FROM ="Encodings e"
+    QUERY = "e.body_landmarks IS NULL AND e.image_id IN"
+    SUBQUERY = f"(SELECT seg1.image_id FROM {SegmentTable_name} seg1 WHERE face_x > -33 AND face_x < -27 AND face_y > -2 AND face_y < 2 AND face_z > -2 AND face_z < 2 AND seg1.site_name_id !=1)"
+    WHERE = f"{QUERY} {SUBQUERY}"
 
-SegmentTable_name = 'SegmentOct20'
-FROM =f"{SegmentTable_name} seg1 LEFT JOIN Encodings e ON seg1.image_id = e.image_id"
-# FROM ="Encodings e"
-QUERY = "e.body_landmarks IS NULL AND e.image_id IN"
-SUBQUERY = f"(SELECT seg1.image_id FROM {SegmentTable_name} seg1 WHERE face_x > -33 AND face_x < -27 AND face_y > -2 AND face_y < 2 AND face_z > -2 AND face_z < 2 AND seg1.site_name_id !=1)"
-WHERE = f"{QUERY} {SUBQUERY}"
+else:
+    ############ KEYWORD SELECT #############
+    SELECT = "DISTINCT i.image_id, i.site_name_id, i.contentUrl, i.imagename, e.encoding_id, i.site_image_id, e.face_landmarks, e.bbox"
+    FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings e ON i.image_id = e.image_id"
+    # gettytest3
+    # WHERE = "e.face_encodings68 IS NULL AND e.face_encodings IS NOT NULL"
+    # production
+    # WHERE = "e.is_face IS TRUE AND e.face_encodings68 IS NULL"
+    WHERE = "e.encoding_id IS NULL AND i.site_name_id = 3 AND k.keyword_text LIKE 'working%' AND i.image_id < 33160214"
+    # AND i.age_id NOT IN (1,2,3,4)
+    IS_SSD=True
+    #########################################
+
 
 
 
@@ -92,6 +96,7 @@ WHERE = f"{QUERY} {SUBQUERY}"
 # WHERE = "e.face_encodings IS NULL AND e.bbox IS NOT NULL"
 
 IS_SSD=True
+
 ##########################################
 
 
@@ -953,16 +958,19 @@ def do_job(tasks_to_accomplish, tasks_that_are_done):
                 message to task_that_are_done queue
             '''
             if len(task) > 2:
-                # landmarks and bbox, so this is an encodings only
-                # process_image_enc_only(task)
-                # print("process_image_enc_only")
+                
+                if BODYLMS is True:
+                    print("do_job via process_image_bodylms:")
+                    process_image_bodylms(task)
+                else:
+                    # landmarks and bbox, so this is an encodings only
+                    process_image_enc_only(task)
+                    print("process_image_enc_only")
 
-                print("do_job via process_image_bodylms:")
-                process_image_bodylms(task)
 
             else:
-                # print("do_job via regular process_image:")
-                # process_image(task)
+                print("do_job via regular process_image:")
+                process_image(task)
                 print(f"done process_image for {task}")
             # tasks_that_are_done.put(task + ' is done by ' + current_process().name)
             time.sleep(SLEEP_TIME)

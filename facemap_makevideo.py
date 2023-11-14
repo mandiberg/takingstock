@@ -69,15 +69,15 @@ CLUSTER_NO = 63
 IS_ANGLE_SORT = False
 
 # this control whether sorting by topics
-IS_TOPICS = True
+IS_TOPICS = False
 N_TOPICS = 88
 
-IS_ONE_TOPIC = False
-TOPIC_NO = 84
+IS_ONE_TOPIC = True
+TOPIC_NO = 16
 # 7 is isolated, 84 is business, 27 babies, 16 pointing
-SORT_TYPE = "128d"
+# SORT_TYPE = "128d"
 # SORT_TYPE ="planar"
-# SORT_TYPE = "planar_body"
+SORT_TYPE = "planar_body"
 
 ONE_SHOT = False # take all files, based off the very first sort order.
 JUMP_SHOT = True # jump to random file if can't find a run
@@ -122,7 +122,7 @@ elif IS_SEGONLY:
 
     SAVE_SEGMENT = False
     # no JOIN just Segment table
-    SELECT = "DISTINCT(s.image_id), s.site_name_id, s.contentUrl, s.imagename, s.face_x, s.face_y, s.face_z, s.mouth_gap, s.face_landmarks, s.bbox, s.face_encodings68, s.site_image_id"
+    SELECT = "DISTINCT(s.image_id), s.site_name_id, s.contentUrl, s.imagename, s.face_x, s.face_y, s.face_z, s.mouth_gap, s.face_landmarks, s.bbox, s.face_encodings68, s.site_image_id, s.body_landmarks"
     
     FROM =f"{SegmentTable_name} s "
 
@@ -148,7 +148,7 @@ elif IS_SEGONLY:
     # WHERE += " AND k.keyword_text LIKE 'surpris%' "
 
     # WHERE = "s.site_name_id != 1"
-    LIMIT = 100000
+    LIMIT = 1000
 
 
 
@@ -173,6 +173,7 @@ face_height_output = 256
 # top, right, bottom, left
 # image_edge_multiplier = [1, 1, 1, 1]
 image_edge_multiplier = [1.5,1.5,2,1.5] # bigger portrait
+image_edge_multiplier = [1.5,2,2,2] # wider for hands
 # image_edge_multiplier = [1.5, 2, 1.5, 2]
 # image_edge_multiplier = [1.2, 1.2, 1.6, 1.2] # standard portrait
 
@@ -304,7 +305,7 @@ def save_segment_DB(df_segment):
 # need to pass through start_img_enc rather than start_img_name
 # for linear it is in the df_enc, but for itter, the start_img_name is in prev df_enc
 # takes a dataframe of images and encodings and returns a df sorted by distance
-def sort_by_face_dist(df_enc, df_128_enc):
+def sort_by_face_dist(df_enc, df_128_enc, df_33_lms):
     
 
     this_start = sort.counter_dict["start_img_name"]
@@ -339,7 +340,7 @@ def sort_by_face_dist(df_enc, df_128_enc):
         else:
             #this is the first??? round, set via df
             print("trying get_start_enc()")
-            enc1, df_128_enc = sort.get_start_enc(this_start, df_128_enc)
+            enc1, df_128_enc, df_33_lms = sort.get_start_enc(this_start, df_128_enc, df_33_lms, SORT_TYPE)
             # # test to see if get_start_enc was successful
             # # if not, retain previous enc1. or shoudl it reassign median? 
             # if enc1_temp is not None:
@@ -354,8 +355,9 @@ def sort_by_face_dist(df_enc, df_128_enc):
             print("going to get closest")
 
             # TK
+            # NEED TO GET IT TO DROP FROM get_closest_df
             # need to send the df_enc with the same two keys through to get_closest
-            dist, closest_dict, df_128_enc = sort.get_closest_df(FIRST_ROUND, enc1,df_enc, df_128_enc, sorttype=SORT_TYPE)
+            dist, closest_dict, df_128_enc, df_33_lms = sort.get_closest_df(FIRST_ROUND, enc1,df_enc, df_128_enc, df_33_lms, sorttype=SORT_TYPE)
             # dist, closest_dict, df_128_enc = sort.get_closest_df(FIRST_ROUND, enc1,df_enc, df_128_enc, sorttype="planar")
             # dist, closest_dict, df_128_enc = sort.get_closest_df(enc1,df_enc, df_128_enc)
             FIRST_ROUND = False
@@ -521,28 +523,32 @@ def prep_encodings(df_segment):
     col3="site_name_id"
     col4="face_landmarks"
     col5="bbox"
-    # col6="body_landmarks"
-    df_enc=pd.DataFrame(columns=[col1, col2, col3, col4, col5])
-    # df_enc=pd.DataFrame(columns=[col1, col2, col3, col4, col5, col6])
+    col6="body_landmarks"
+    # df_enc=pd.DataFrame(columns=[col1, col2, col3, col4, col5])
+    df_enc=pd.DataFrame(columns=[col1, col2, col3, col4, col5, col6])
     df_enc = pd.DataFrame({col1: df_segment['imagename'], col2: df_segment['face_encodings68'].apply(lambda x: np.array(x)), 
-                col3: df_segment['site_name_id'], col4: df_segment['face_landmarks'], col5: df_segment['bbox']})
-                # col3: df_segment['site_name_id'], col4: df_segment['face_landmarks'], col5: df_segment['bbox'], col6: df_segment['body_landmarks'] })
+                # col3: df_segment['site_name_id'], col4: df_segment['face_landmarks'], col5: df_segment['bbox']})
+                col3: df_segment['site_name_id'], col4: df_segment['face_landmarks'], col5: df_segment['bbox'], col6: df_segment['body_landmarks'] })
     df_enc.set_index(col1, inplace=True)
 
     # Create column names for the 128 encoding columns
     encoding_cols = [f"encoding{i}" for i in range(128)]
+    lms_cols = [f"lm{i}" for i in range(33)]
 
     # Create a new DataFrame with the expanded encoding columns
-    df_expanded = df_enc.apply(lambda row: pd.Series(row[col2], index=encoding_cols), axis=1)
+    enc_expanded = df_enc.apply(lambda row: pd.Series(row[col2], index=encoding_cols), axis=1)
+    lms_expanded = df_enc.apply(lambda row: pd.Series(row[col6], index=lms_cols), axis=1)
 
     # Concatenate the expanded DataFrame with the original DataFrame
-    df_final = pd.concat([df_enc, df_expanded], axis=1)
+    enc_concat = pd.concat([df_enc, enc_expanded], axis=1)
+    lms_concat = pd.concat([df_enc, lms_expanded], axis=1)
 
     # make a separate df that just has the encodings
-    df_128_enc = df_final.drop([col2, col3, col4, col5], axis=1)
+    df_128_enc = enc_concat.drop([col2, col3, col4, col5, col6], axis=1)
+    df_33_lms = lms_concat.drop([col2, col3, col4, col5, col6], axis=1)
 
     print(df_128_enc)
-    return df_enc, df_128_enc
+    return df_enc, df_128_enc, df_33_lms
 
 def compare_images(last_image, img, face_landmarks, bbox):
     is_face = None
@@ -760,10 +766,10 @@ def process_linear(start_img_name, df_segment, cluster_no, sort):
     # preps the encodings for sort
     # sort.set_counters(io.ROOT,cluster_no, start_img_name)  
 
-    df_enc, df_128_enc = prep_encodings(df_segment)
+    df_enc, df_128_enc, df_33_lms = prep_encodings(df_segment)
 
     # # get dataframe sorted by distance
-    df_sorted = sort_by_face_dist(df_enc, df_128_enc)
+    df_sorted = sort_by_face_dist(df_enc, df_128_enc, df_33_lms)
 
     # test to see if they make good faces
     img_list = linear_test_df(df_sorted,cluster_no)
@@ -778,19 +784,23 @@ def process_linear(start_img_name, df_segment, cluster_no, sort):
 def main():
     # these are used in cleaning up fresh df from SQL
     def unpickle_array(pickled_array):
-        try:
-            # Attempt to unpickle using Protocol 3 in v3.7
-            return pickle.loads(pickled_array, encoding='latin1')
-        except TypeError:
-            # If TypeError occurs, unpickle using specific protocl 3 in v3.11
-            # return pickle.loads(pickled_array, encoding='latin1', fix_imports=True)
+        if pickled_array:
             try:
-                # Set the encoding argument to 'latin1' and protocol argument to 3
-                obj = pickle.loads(pickled_array, encoding='latin1', fix_imports=True, errors='strict', protocol=3)
-                return obj
-            except pickle.UnpicklingError as e:
-                print(f"Error loading pickle data: {e}")
-                return None
+                # Attempt to unpickle using Protocol 3 in v3.7
+                return pickle.loads(pickled_array, encoding='latin1')
+            except TypeError:
+                # If TypeError occurs, unpickle using specific protocl 3 in v3.11
+                # return pickle.loads(pickled_array, encoding='latin1', fix_imports=True)
+                try:
+                    # Set the encoding argument to 'latin1' and protocol argument to 3
+                    obj = pickle.loads(pickled_array, encoding='latin1', fix_imports=True, errors='strict', protocol=3)
+                    return obj
+                except pickle.UnpicklingError as e:
+                    print(f"Error loading pickle data: {e}")
+                    return None
+        else:
+            return None
+
     def unstring_json(json_string):
         eval_string = ast.literal_eval(json_string)
         if isinstance(eval_string, dict):
@@ -844,6 +854,7 @@ def main():
             # TK this is where I will change face_encodings to the variations
             df['face_encodings68'] = df['face_encodings68'].apply(unpickle_array)
             df['face_landmarks'] = df['face_landmarks'].apply(unpickle_array)
+            df['body_landmarks'] = df['body_landmarks'].apply(unpickle_array)
             df['bbox'] = df['bbox'].apply(lambda x: unstring_json(x))
 
             # this may be a big problem

@@ -113,6 +113,7 @@ try:
         .filter(Encodings.body_landmarks.is_not(None))
     )
 
+    print("going to get this query:", query)
     # Execute the query and fetch the results
     # results = session.execute(query).limit(100).all()
     results = session.execute(query).fetchall()
