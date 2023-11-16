@@ -23,7 +23,8 @@ class SortPose:
         #maximum allowable distance between encodings
         self.MAXDIST = 0.7
         self.MINDIST = .45
-        self.CUTOFF = 100000
+        self.MINBODYDIST = .04
+        self.CUTOFF = 10000
 
         # maximum allowable scale up
         self.resize_max = 1.99
@@ -39,7 +40,7 @@ class SortPose:
         self.ONE_SHOT = ONE_SHOT
         self.JUMP_SHOT = JUMP_SHOT
         self.SHOT_CLOCK = 0 
-        self.BODY_LMS = [0, 14, 13, 20, 19]
+        self.BODY_LMS = [0, 13, 14, 15, 16, 19, 20]
 
         # set some defaults, looking forward
         self.XLOW = -20
@@ -489,13 +490,19 @@ class SortPose:
         
         # i don't know what number to use
         if error == 0:
-            print(f"unique_face: {error} Fail, images too similar")
+            print(f"unique_face: {error} Fail, images identical")
             return False
         elif error < 15:
-            print(f"unique_face: {error} Fail, images too similar")
+            print(f"unique_face: {error} Fail, images less than 15 diff")
             # preview_img(diff)
             # preview_img(img1)
             # preview_img(img2)
+            return False
+        elif error < 25:
+            print(f"unique_face: {error} Fail, images 15-25 diff")
+            preview_img(diff)
+            preview_img(img1)
+            preview_img(img2)
             return False
         else:
             return True
@@ -874,7 +881,7 @@ class SortPose:
                     # print("getting d with enc2", enc1)
                     d = self.get_d(enc1, enc2)
                     if d > 0:
-                        print ("d is", str(d), "for", index)
+                        # print ("d is", str(d), "for", index)
                         dist.append(d)
                         dist_dict[d]=index
                         enc2_dict[d]=enc2
@@ -900,8 +907,11 @@ class SortPose:
 
 
         elif sorttype == "planar_body":
-            df_128_enc=df_128_enc.drop(self.counter_dict["last_image"])
-            
+            try:
+                df_128_enc=df_128_enc.drop(self.counter_dict["last_image"])
+            except:
+                print("last_image already dropped")
+
             for index, row in df_128_enc.iterrows():
                 # print("planar_body [-] getting 2D")
                 # print(index)
@@ -909,11 +919,16 @@ class SortPose:
                     last_body_2d_dict = self.get_landmarks_2d_dict(df_enc.loc[self.counter_dict["last_image"], "body_landmarks"], self.BODY_LMS)
                     this_body_2d_dict = self.get_landmarks_2d_dict(df_enc.loc[index, "body_landmarks"], self.BODY_LMS)
                     # print("planar_body [-] got last_body_2d_dict and this_body_2d_dict")
-                    print(last_body_2d_dict,this_body_2d_dict)
+                    # print(last_body_2d_dict,this_body_2d_dict)
                     d = self.get_planar_d(last_body_2d_dict,this_body_2d_dict)
                     print ("planar_body d is", str(d), "for", index)
-                    dist.append(d)
+                    dist.append(d) 
                     dist_dict[d]=index
+
+                    # TK this isn't working. needs debugging.
+                    if d < self.MINBODYDIST:
+                        dist_run_dict[d]=index
+
                 else:
                     try:
                         df_128_enc=df_128_enc.drop(index)
@@ -926,17 +941,21 @@ class SortPose:
         if len(dist_run_dict) > 2:
             k = list(dist_run_dict.keys())
             print("WE HAVE A RUN!!!!! ---------- ", str(len(k)))
-            print(dist_run_dict)
-            print(k)
+            # print(dist_run_dict)
+            # print(k)
             self.SHOT_CLOCK = 0 # reset the shot clock
 
             last_d_in_run = max(k)
-            self.counter_dict["last_image_enc"]=enc2_dict[last_d_in_run]
+            print("last_d_in_run", str(last_d_in_run))
+            # print(enc2_dict[last_d_in_run])
+            if sorttype == "planar":
+                self.counter_dict["last_image_enc"]=enc2_dict[last_d_in_run]
             # adding the run to the good_count, minus the one added in compare_images
             self.counter_dict["good_count"] += len(k)-1
 
             # switch to returning dist_run_dict
-            return last_d_in_run, dist_run_dict, df_128_enc
+            print("dist_run_dict", dist_run_dict)
+            return last_d_in_run, dist_run_dict, df_128_enc, df_33_lms
         
         else:
             # print("going to find a winner")
@@ -950,8 +969,8 @@ class SortPose:
             if dist[0] > self.MAXDIST:
                 print("TOO GREAT A DISTANCE ---> going to break the loop and keep the last values")
                 dist_single_dict = {1: "null"}
-                return 1, dist_single_dict, df_128_enc
-            elif self.SHOT_CLOCK > 5:
+                return 1, dist_single_dict, df_128_enc, df_33_lms
+            elif self.JUMP_SHOT and self.SHOT_CLOCK > 5:
                 print("SHOT_CLOCK IS UP ---> going to pick a random new start")
 
                 random_d = int(len(dist)*random.random())
@@ -960,7 +979,7 @@ class SortPose:
                 dist_single_dict = {random_d: dist_dict[random_d_in_run]}
                 self.SHOT_CLOCK = 0 # reset the shot clock
 
-                return random_d_in_run, dist_single_dict, df_128_enc
+                return random_d_in_run, dist_single_dict, df_128_enc, df_33_lms
 
             elif self.ONE_SHOT and FIRST_ROUND is False:
                 # for d in dist:
@@ -979,7 +998,7 @@ class SortPose:
                 # self.counter_dict["good_count"] += len(dist)-1
 
                 # switch to returning dist_run_dict
-                return last_d_in_run, dist_dict, df_128_enc
+                return last_d_in_run, dist_dict, df_128_enc, df_33_lms
 
             try:
                 print ("the winner is: ", str(dist[0]), dist_dict[dist[0]])

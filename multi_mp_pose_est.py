@@ -811,7 +811,7 @@ def process_image(task):
     
 
     df = pd.DataFrame(columns=['image_id','is_face','is_body','is_face_distant','face_x','face_y','face_z','mouth_gap','face_landmarks','bbox','face_encodings','face_encodings68_J','body_landmarks'])
-    print(task)
+    # print(task)
     df.at['1', 'image_id'] = task[0]
     cap_path = capitalize_directory(task[1])
     # print(">> SPLIT >> made DF, about to imread")
@@ -905,7 +905,7 @@ def process_image(task):
             for _ in range(io.max_retries):
                 try:
                     # print(insert_dict)
-                    print(f"trying to store {image_id}")
+                    # print(f"trying to store {image_id}")
                     # update_sql = f"UPDATE Encodings SET bbox = '{bbox_json}' WHERE encoding_id = {encoding_id};"
                     # engine.connect().execute(text(update_sql))
                     # Entry does not exist, insert insert_dict into the table
@@ -936,7 +936,7 @@ def process_image(task):
 
     # Close the session and dispose of the engine before the worker process exits
     close_session()
-    print(f"finished session {image_id}")
+    # print(f"finished session {image_id}")
 
         # save image based on is_face
 def do_job(tasks_to_accomplish, tasks_that_are_done):
@@ -969,9 +969,9 @@ def do_job(tasks_to_accomplish, tasks_that_are_done):
 
 
             else:
-                print("do_job via regular process_image:")
+                print("do_job via regular process_image:", task)
                 process_image(task)
-                print(f"done process_image for {task}")
+                # print(f"done process_image for {task}")
             # tasks_that_are_done.put(task + ' is done by ' + current_process().name)
             time.sleep(SLEEP_TIME)
     return True

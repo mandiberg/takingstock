@@ -73,14 +73,19 @@ IS_TOPICS = False
 N_TOPICS = 88
 
 IS_ONE_TOPIC = True
-TOPIC_NO = 16
+TOPIC_NO = 85
 # 7 is isolated, 84 is business, 27 babies, 16 pointing
+# 37 is doctor
+# 85 is hands to face
+# 71 shout
+# 10 is surprise
+
 # SORT_TYPE = "128d"
 # SORT_TYPE ="planar"
 SORT_TYPE = "planar_body"
 
 ONE_SHOT = False # take all files, based off the very first sort order.
-JUMP_SHOT = True # jump to random file if can't find a run
+JUMP_SHOT = False # jump to random file if can't find a run
 
 # I/O utils
 io = DataIO(IS_SSD)
@@ -115,7 +120,7 @@ if IS_SEGONLY is not True:
     # this is for gettytest3 table
     FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings e ON i.image_id = e.image_id JOIN ImagesClusters ic ON i.image_id = ic.image_id"
     WHERE = "e.is_face IS TRUE AND e.bbox IS NOT NULL AND i.site_name_id = 1 AND k.keyword_text LIKE 'smil%'"
-    LIMIT = 100000
+    LIMIT = 1000
 
 
 elif IS_SEGONLY:
@@ -148,7 +153,7 @@ elif IS_SEGONLY:
     # WHERE += " AND k.keyword_text LIKE 'surpris%' "
 
     # WHERE = "s.site_name_id != 1"
-    LIMIT = 1000
+    LIMIT = 1000000
 
 
 
@@ -165,16 +170,15 @@ motion = {
 EXPAND = False
 
 # face_height_output is how large each face will be. default is 750
-# face_height_output = 500
-face_height_output = 256
+face_height_output = 500
+# face_height_output = 256
 
 # define ratios, in relationship to nose
 # units are ratio of faceheight
 # top, right, bottom, left
-# image_edge_multiplier = [1, 1, 1, 1]
+# image_edge_multiplier = [1, 1, 1, 1] # just face
 image_edge_multiplier = [1.5,1.5,2,1.5] # bigger portrait
-image_edge_multiplier = [1.5,2,2,2] # wider for hands
-# image_edge_multiplier = [1.5, 2, 1.5, 2]
+# image_edge_multiplier = [1.4,2.6,1.9,2.6] # wider for hands
 # image_edge_multiplier = [1.2, 1.2, 1.6, 1.2] # standard portrait
 
 
@@ -364,19 +368,18 @@ def sort_by_face_dist(df_enc, df_128_enc, df_33_lms):
 
 
             print("got closest")
-            print(closest_dict)
+            # print(closest_dict)
 
             # Break out of the loop if greater than MAXDIST
             # I think this will be graceful with cluster iteration
-            # print("dist")
+            print("dist")
             # print(dist)
-            # print("sort.MAXDIST")
-            # print(sort.MAXDIST)
             if dist > sort.MAXDIST and sort.SHOT_CLOCK != 0:
                 print("should breakout")
                 break
 
         except Exception as e:
+            print("exception on going to get closest")
             print(str(e))
 
 
@@ -385,6 +388,7 @@ def sort_by_face_dist(df_enc, df_128_enc, df_33_lms):
         dkeys = list(closest_dict.keys())
         dkeys.sort()
         images_to_drop =[]
+        print("length of dkeys for closest_dict is ", len(dkeys))
         for dkey in dkeys:
 
 
@@ -408,7 +412,7 @@ def sort_by_face_dist(df_enc, df_128_enc, df_33_lms):
                 # print("assigned bbox", bbox)
             except:
                 print("won't assign landmarks/bbox")
-            print("site_name_id is the following")
+            # print("site_name_id is the following")
 
             # for some reason, site_name_id is not an int. trying to test if int.
             # print(type(site_name_id))
@@ -416,8 +420,8 @@ def sort_by_face_dist(df_enc, df_128_enc, df_33_lms):
             # print(site_name_id)
             # print("site_specific_root_folder", io.folder_list[site_name_id])
             site_specific_root_folder = io.folder_list[site_name_id]
-            print("site_specific_root_folder")
-            print(site_specific_root_folder)
+            # print("site_specific_root_folder")
+            # print(site_specific_root_folder)
             # save the image -- this prob will be to append to list, and return list? 
             # save_sorted(i, folder, start_img_name, dist)
             this_dist=[dkey, site_specific_root_folder, this_start, site_name_id, face_landmarks, bbox]
@@ -592,6 +596,7 @@ def compare_images(last_image, img, face_landmarks, bbox):
         else: 
             print("pair do not make a face, skipping")
             sort.counter_dict["isnot_face_count"] += 1
+            return None
     elif cropped_image is None and sort.counter_dict["first_run"]:
         print("first run, but bad first image")
         last_image = cropped_image
@@ -638,7 +643,7 @@ def linear_test_df(df,cluster_no, itter=None):
 
     for index, row in df.iterrows():
         print('-- linear_test_df [-] in loop, index is', str(index))
-        # print(row)
+        print(row)
         try:
             imgfilename = const_imgfilename(row['filename'], df, imgfileprefix)
             outpath = os.path.join(sort.counter_dict["outfolder"],imgfilename)
