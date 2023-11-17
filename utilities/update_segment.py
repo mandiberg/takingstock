@@ -106,33 +106,49 @@ class SegmentTable2(Base2):
     body_landmarks = Column(BLOB)
 
 try:
-    # Query to select image_id and body_encodings from Encodings where image_id is in SegmentOct20
+    # # Query to select image_id and body_encodings from Encodings where image_id is in SegmentOct20
+    # query = (
+    #     select([Encodings.image_id, Encodings.body_landmarks])
+    #     .join(SegmentTable, Encodings.image_id == SegmentTable.image_id)\
+    #     .filter(Encodings.body_landmarks.is_not(None))
+    # )
+
+    # Query to select image_id and age_id from Images where image_id is in SegmentOct20
     query = (
-        select([Encodings.image_id, Encodings.body_landmarks])
-        .join(SegmentTable, Encodings.image_id == SegmentTable.image_id)\
-        .filter(Encodings.body_landmarks.is_not(None))
+        select([Images.image_id, Images.age_id])
+        .join(SegmentTable, Images.image_id == SegmentTable.image_id)\
+        .filter(Images.age_id.is_not(None))
     )
 
     print("going to get this query:", query)
     # Execute the query and fetch the results
-    # results = session.execute(query).limit(100).all()
+    # results = session.execute(query).limit(10).all()
     results = session.execute(query).fetchall()
-
+    print("got results")
     # Process the results
     for result in results:
-        image_id, body_landmarks = result
+        # print(result)
+       # # Query to Update image_id and body_encodings in SegmentTable2
+       #  image_id, body_landmarks = result
 
-        # make this query SegmentTable2.image_id == image_id and 
-        # check if SegmentTable2.body_landmarks exists (is none). If None, update
-        # or just do an update ignore? 
+       #  # Update the SegmentTable in the second database
+       #  session2.query(SegmentTable2).filter(SegmentTable2.image_id == image_id).update(
+       #      {SegmentTable2.body_landmarks: body_landmarks}
+       #  )
+
+       # Query to Update image_id and age_id in SegmentTable2
+        image_id, age_id = result
+
         # Update the SegmentTable in the second database
         session2.query(SegmentTable2).filter(SegmentTable2.image_id == image_id).update(
-            {SegmentTable2.body_landmarks: body_landmarks}
+            {SegmentTable2.age_id: age_id}
         )
 
-        # print(f"Updated Image ID: {image_id}, Body Landmarks: {body_landmarks}")
-        print(f"Updated Image ID: {image_id}, Body Landmarks type:", type(body_landmarks))
 
+        # print(f"Updated Image ID: {image_id}, Body Landmarks: {body_landmarks}")
+        print(f"Updated Image ID: {image_id} to {age_id}")
+
+    # ONCE ALL DATA PROCESSED:
     # Commit the changes to the second database
     session2.commit()
 except Exception as e:

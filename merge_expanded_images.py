@@ -25,7 +25,8 @@ ALL_ONE_VIDEO = False
 ROOT_FOLDER_PATH = '/Users/michaelmandiberg/Documents/projects-active/facemap_production/segment_images'
 # if IS_CLUSTER this should be the folder holding all the cluster folders
 # if not, this should be the individual folder holding the images
-FOLDER_NAME ="cluster84_1700134148.3707688_128_Nov16"
+# will not accept clusterNone -- change to cluster00
+FOLDER_NAME ="cluster16_1700213233.101223_pointing_body"
 FOLDER_PATH = os.path.join(ROOT_FOLDER_PATH,FOLDER_NAME)
 
 # WRITE VIDEO

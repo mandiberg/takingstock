@@ -23,7 +23,7 @@ class SortPose:
         #maximum allowable distance between encodings
         self.MAXDIST = 0.7
         self.MINDIST = .45
-        self.MINBODYDIST = .04
+        self.MINBODYDIST = .1
         self.CUTOFF = 10000
 
         # maximum allowable scale up
@@ -921,7 +921,7 @@ class SortPose:
                     # print("planar_body [-] got last_body_2d_dict and this_body_2d_dict")
                     # print(last_body_2d_dict,this_body_2d_dict)
                     d = self.get_planar_d(last_body_2d_dict,this_body_2d_dict)
-                    print ("planar_body d is", str(d), "for", index)
+                    # print ("planar_body d is", str(d), "for", index)
                     dist.append(d) 
                     dist_dict[d]=index
 

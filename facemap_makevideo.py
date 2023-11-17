@@ -73,9 +73,12 @@ IS_TOPICS = False
 N_TOPICS = 88
 
 IS_ONE_TOPIC = True
-TOPIC_NO = 85
+TOPIC_NO = 16
 # 7 is isolated, 84 is business, 27 babies, 16 pointing
 # 37 is doctor
+# 45 is hands
+# 34 holding tablet
+# 63 feeling frustrated
 # 85 is hands to face
 # 71 shout
 # 10 is surprise
@@ -131,16 +134,19 @@ elif IS_SEGONLY:
     
     FROM =f"{SegmentTable_name} s "
 
-    # WHERE = "mouth_gap < 2 AND age_id NOT IN (1,2,3,4) AND image_id < 40647710"
-    # WHERE = "mouth_gap < 2 AND age_id NOT IN (1,2,3,4) AND s.image_id < 40647710 AND k.keyword_text LIKE 'work%'"
-    # WHERE = "seg.age_id NOT IN (1,2,3,4) and seg.mouth_gap > 15"
-    # WHERE = "seg.age_id NOT IN (1,2,3,4) and seg.site_name_id !=1"
-    # WHERE = "i.site_name_id != 1"
-    # WHERE = "mouth_gap < 2 AND age_id NOT IN (1,2,3,4) AND image_id < 40647710"
-    # WHERE = "mouth_gap < 2 AND age_id NOT IN (1,2,3,4) AND s.image_id < 40647710 AND k.keyword_text LIKE 'work%'"
-    # WHERE = "age_id NOT IN (1,2,3,4) AND k.keyword_text LIKE 'happ%' "
-    # WHERE = "mouth_gap < 2 AND age_id NOT IN (1,2,3,4) AND image_id < 40647710 AND gender_id = 1"
+    # this is the standard segment topics/clusters query for November 2023
     WHERE = "s.site_name_id != 1 AND face_encodings68 IS NOT NULL AND face_x > -33 AND face_x < -27 AND face_y > -2 AND face_y < 2 AND face_z > -2 AND face_z < 2"
+
+    # HIGHER
+    # WHERE = "s.site_name_id != 1 AND face_encodings68 IS NOT NULL AND face_x > -27 AND face_x < -23 AND face_y > -2 AND face_y < 2 AND face_z > -2 AND face_z < 2"
+
+    # WHERE += " AND mouth_gap > 15 "
+    # WHERE += " AND s.age_id NOT IN (1,2,3,4) "
+    # WHERE += " AND s.age_id > 4 "
+
+    ## To add keywords to search
+    # FROM += " JOIN ImagesKeywords ik ON s.image_id = ik.image_id JOIN Keywords k ON ik.keyword_id = k.keyword_id "
+    # WHERE += " AND k.keyword_text LIKE 'shout%' "
 
     if IS_CLUSTER or IS_ONE_CLUSTER:
         FROM += " JOIN ImagesClusters ic ON s.image_id = ic.image_id "
@@ -177,8 +183,8 @@ face_height_output = 500
 # units are ratio of faceheight
 # top, right, bottom, left
 # image_edge_multiplier = [1, 1, 1, 1] # just face
-image_edge_multiplier = [1.5,1.5,2,1.5] # bigger portrait
-# image_edge_multiplier = [1.4,2.6,1.9,2.6] # wider for hands
+# image_edge_multiplier = [1.5,1.5,2,1.5] # bigger portrait
+image_edge_multiplier = [1.4,2.6,1.9,2.6] # wider for hands
 # image_edge_multiplier = [1.2, 1.2, 1.6, 1.2] # standard portrait
 
 
@@ -577,13 +583,17 @@ def compare_images(last_image, img, face_landmarks, bbox):
         try:
             if not sort.counter_dict["first_run"]:
                 # print("testing is_face")
-                is_face = sort.test_pair(last_image, cropped_image)
-                if is_face:
-                    # print("same person, testing mse")
-                    is_face = sort.unique_face(last_image,cropped_image)
-                    # print ("mse ",mse)
+                if SORT_TYPE == "planar_body":
+                    # skipping test_pair for body, b/c it is meant for face
+                    is_face = True
                 else:
-                    print("failed is_face test")
+                    is_face = sort.test_pair(last_image, cropped_image)
+                    if is_face:
+                        # print("same person, testing mse")
+                        is_face = sort.unique_face(last_image,cropped_image)
+                        # print ("mse ",mse)
+                    else:
+                        print("failed is_face test")
             else:
                 print("first round, skipping the pair test")
         except:
