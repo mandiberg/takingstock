@@ -32,10 +32,10 @@ sig = '''
 # for moving segment to SSD
 
 #where the images are:
-PATH = "/Volumes/RAID54/"
+PATH = "/Volumes/SSD4/"
 #where the images are going:
 PATH2 = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/segment_images"
-SEGMENTTABLE_NAME = 'SegmentOct20'
+SEGMENTTABLE_NAME = 'SegmentNov19'
 
 # i don'tthink this does anything
 IMAGES_THREAD_COUNTER = 0
@@ -54,9 +54,9 @@ IMAGES_THREAD_COUNTER = 0
 '''
 
 # right now this is only working for one site at a time
-SITE_NAME_ID = 8
-IMAGES_FOLDER_NAME = 'images_123rf'
-NEWIMAGES_FOLDER_NAME = 'images_123rf'
+SITE_NAME_ID = 4
+IMAGES_FOLDER_NAME = 'images_istock'
+NEWIMAGES_FOLDER_NAME = 'images_istock'
 NUMBER_OF_THREADS_IMAGES_DOWNLOAD =15
 OLDPATH = os.path.join(PATH, IMAGES_FOLDER_NAME)
 NEWPATH = os.path.join(PATH2, NEWIMAGES_FOLDER_NAME)
@@ -96,6 +96,7 @@ class SegmentTable(Base):
     bbox = Column(JSON)
     face_encodings = Column(BLOB)
     face_encodings68 = Column(BLOB)
+    body_landmarks = Column(BLOB)
     site_image_id = Column(String(50), nullable=False)
 
 
@@ -103,10 +104,11 @@ class SegmentTable(Base):
 
 def copy_files(source, destination):
     isExist = os.path.exists(destination)
-    if not isExist: 
-        shutil.copy(source, destination)
-
-
+    try:
+        if not isExist: 
+            shutil.copy(source, destination)
+    except Exception as e:
+        print(e)
 
 def main():
 
