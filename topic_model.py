@@ -55,7 +55,7 @@ title = 'Please choose your operation: '
 options = ['Topic modelling', 'Topic indexing','calculating optimum_topics']
 io = DataIO()
 db = io.db
-io.db["name"] = "ministock1023"
+io.db["name"] = "ministock"
 
 NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 MODEL_PATH=os.path.join(io.ROOT,"model")
@@ -107,6 +107,52 @@ Session = sessionmaker(bind=engine)
 session = Session()
 Base = declarative_base()
 
+ambig_key_dict = {
+	"black-and-white": "black_and_white",
+	"black and white background": "black_and_white background",
+	"black and white portrait": "black_and_white portrait",
+	"black amp white": "black_and_white",
+	"white and black": "black_and_white",
+	"black and white film": "black_and_white film",
+	"black and white wallpaper": "black_and_white wallpaper",
+	"black and white cover photos": "black_and_white cover photos",
+	"black and white outfit": "black_and_white outfit",
+	"black and white city": "black_and_white city",
+	"blackandwhite": "black_and_white",
+	"black white": "black_and_white",
+	"black friday": "black_friday",
+	"black magic": "black_magic",
+	"black lives matter": "black_lives_matter black_ethnicity",
+	"black out tuesday": "black_out_tuesday black_ethnicity",
+	"black girl magic": "black_girl_magic black_ethnicity",
+	"beautiful black women": "beautiful black_ethnicity women",
+	"black model": "black_ethnicity model",
+	"black santa": "black_ethnicity santa",
+	"black children": "black_ethnicity children",
+	"black history": "black_ethnicity history",
+	"black family": "black_ethnicity family",
+	"black community": "black_ethnicity community",
+	"black owned business": "black_ethnicity owned business",
+	"black holidays": "black_ethnicity holidays",
+	"black models": "black_ethnicity models",
+	"black girl bullying": "black_ethnicity girl bullying",
+	"black santa claus": "black_ethnicity santa claus",
+	"black hands": "black_ethnicity hands",
+	"black christmas": "black_ethnicity christmas",
+	"white and black girl": "white_ethnicity and black_ethnicity girl",
+	"white woman": "white_ethnicity woman",
+	"white girl": "white_ethnicity girl",
+	"white people": "white_ethnicity",
+	"red white and blue": "red_white_and_blue"
+}
+def clarify_keywords(text):
+    # // if text contains either of the strings "black" or "white", replace with "black_and_white"
+    if "black" in text or "white" in text:
+        for key, value in ambig_key_dict.items():
+            text = text.replace(key, value)
+        # print("clarified text: ",text)
+    return text
+
 def selectSQL():
     SELECT, FROM, WHERE, LIMIT = set_query()
     selectsql = f"SELECT {SELECT} FROM {FROM} WHERE {WHERE} LIMIT {str(LIMIT)};"
@@ -119,6 +165,9 @@ def lemmatize_stemming(text):
     return stemmer.stem(WordNetLemmatizer().lemmatize(text, pos='v'))
 def preprocess(text):
     result = []
+    # print("text: ",text)
+    text = clarify_keywords(text.lower())
+
     for token in gensim.utils.simple_preprocess(text):
         if token not in gensim.parsing.preprocessing.STOPWORDS and len(token) > 3:
             result.append(lemmatize_stemming(token))

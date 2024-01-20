@@ -51,7 +51,11 @@ http="https://media.gettyimages.com/photos/"
 # am I looking on RAID/SSD for a folder? If not, will pull directly from SQL
 # if so, also change the site_name_id etc around line 930
 IS_FOLDER = True
-MAIN_FOLDER = "/Volumes/SSD4/images_istock"
+SITE_NAME_ID = 2
+# 2, shutter. 4, istock
+# MAIN_FOLDER = "/Volumes/SSD4green/images_istock"
+MAIN_FOLDER = "/Volumes/RAID54/images_shutterstock"
+BATCH_SIZE = 25000 # Define how many from each folder in each batch
 
 #temp hack to go 1 subfolder at a time
 # THESE_FOLDER_PATHS = ["8/8A", "8/8B","8/8C", "8/8D", "8/8E", "8/8F", "8/80", "8/81", "8/82", "8/83", "8/84", "8/85", "8/86", "8/87", "8/88", "8/89"]
@@ -61,6 +65,7 @@ THESE_FOLDER_PATHS = ["9/9C", "9/9D", "9/9E", "9/9F", "9/90", "9/91", "9/92", "9
 # MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages"
 CSV_FOLDERCOUNT_PATH = os.path.join(MAIN_FOLDER, "folder_countout.csv")
 
+IS_SSD=False
 BODYLMS = False
 
 if BODYLMS is True:
@@ -78,14 +83,15 @@ if BODYLMS is True:
 else:
     ############ KEYWORD SELECT #############
     SELECT = "DISTINCT i.image_id, i.site_name_id, i.contentUrl, i.imagename, e.encoding_id, i.site_image_id, e.face_landmarks, e.bbox"
-    FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings e ON i.image_id = e.image_id"
+    # FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings e ON i.image_id = e.image_id"
+    FROM ="Images i LEFT JOIN Encodings e ON i.image_id = e.image_id"
     # gettytest3
     # WHERE = "e.face_encodings68 IS NULL AND e.face_encodings IS NOT NULL"
     # production
     # WHERE = "e.is_face IS TRUE AND e.face_encodings68 IS NULL"
-    WHERE = "e.encoding_id IS NULL AND i.site_name_id = 3 AND k.keyword_text LIKE 'working%' AND i.image_id < 33160214"
+    WHERE = "e.encoding_id IS NULL AND i.site_name_id = 2"
     # AND i.age_id NOT IN (1,2,3,4)
-    IS_SSD=True
+    IS_SSD=False
     #########################################
 
 
@@ -95,7 +101,6 @@ else:
 ## Gettytest3
 # WHERE = "e.face_encodings IS NULL AND e.bbox IS NOT NULL"
 
-IS_SSD=True
 
 ##########################################
 
@@ -110,7 +115,7 @@ IS_SSD=True
 # IS_SSD=True
 ##########################################
 
-LIMIT = 10000
+LIMIT = 25000
 
 # platform specific credentials
 io = DataIO(IS_SSD)
@@ -769,7 +774,7 @@ def process_image_bodylms(task):
                 # total_processed += 1
 
                 # Check if the current batch is ready for commit
-                # if total_processed % batch_size == 0:
+                # if total_processed % BATCH_SIZE == 0:
                 session.commit()
                 # update_sql = f"UPDATE Encodings SET is_body = '{is_body}' AND SET body_landmarks = '{body_landmarks}' WHERE encoding_id = {encoding_id};"
                 # engine.connect().execute(text(update_sql))
@@ -1014,17 +1019,17 @@ def main():
                 print("len(img_list)")
                 print(len(img_list))
 
-                # Define the batch size
-                batch_size = 5000
 
                 # Initialize an empty list to store all the results
                 all_results = []
 
                 # Split the img_list into smaller batches and process them one by one
-                for i in range(0, len(img_list), batch_size):
+                for i in range(0, len(img_list), BATCH_SIZE):
 
-                    batch_img_list = img_list[i : i + batch_size]
+                    batch_img_list = img_list[i : i + BATCH_SIZE]
 
+                    print(f"total img_list: {len(img_list)} no. processed: {i} no. left: {len(img_list)-i}")
+                    if len(img_list)-i<BATCH_SIZE: print("last_round for img_list")
                     # CHANGE FOR EACH SITE
                     # ALSO site_image_id DOWN BELOW 
                     # Collect site_image_id values from the image filenames
@@ -1039,7 +1044,8 @@ def main():
 
                     # # Adobe and pexels and shutterstock and istock
                     batch_site_image_ids = [img.split(".")[0] for img in batch_img_list]
-                    site_name_id = 4
+                    site_name_id = SITE_NAME_ID
+
 
 
 
@@ -1047,7 +1053,7 @@ def main():
                     for _ in range(io.max_retries):
 
                         try:
-                            print(f"Processing batch {i//batch_size + 1}...")
+                            print(f"Processing batch {i//BATCH_SIZE + 1}...")
                             init_session()
                             batch_results = session.query(Images.image_id, Images.site_image_id, Encodings.encoding_id) \
                                 .outerjoin(Encodings, Images.image_id == Encodings.image_id) \
@@ -1063,12 +1069,14 @@ def main():
                             print("error getting batch results")
                             print(e)
                             time.sleep(io.retry_delay)
-                    print(len(all_results))
+                    print(f"no. all_results: {len(all_results)}")
 
 
                     results_dict = {result.site_image_id: result for result in batch_results}
 
                     # going back through the img_list, to use as key for the results_dict
+
+                    images_left_to_process = len(batch_img_list)
                     for img in batch_img_list:
 
                         # CHANGE FOR EACH SITE
@@ -1095,6 +1103,8 @@ def main():
                                 this_count += 1
 
                         else: print("not in results_dict: ", site_image_id)
+                        images_left_to_process = images_left_to_process -1 
+                        print(f"no. images_left_to_process: {images_left_to_process}")
 
 
 
@@ -1107,7 +1117,7 @@ def main():
                     for p in processes:
                         # print("completing process")
                         p.join()
-                    print(">> SPLIT >> p.join, done with this folder")
+                    print(">> SPLIT >> p.join,  this folder")
                     split = print_get_split(jsonsplit)
 
 

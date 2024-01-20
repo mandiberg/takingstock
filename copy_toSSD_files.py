@@ -35,7 +35,7 @@ sig = '''
 PATH = "/Volumes/SSD4/"
 #where the images are going:
 PATH2 = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/segment_images"
-SEGMENTTABLE_NAME = 'SegmentNov19'
+SEGMENTTABLE_NAME = 'SegmentNov25'
 
 # i don'tthink this does anything
 IMAGES_THREAD_COUNTER = 0

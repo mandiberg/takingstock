@@ -2,6 +2,7 @@ from multiprocessing import Lock, Process, Queue, current_process
 import time
 import queue # imported for using queue.Empty exception
 import csv
+import json
 import os
 import hashlib
 import cv2
@@ -55,13 +56,13 @@ NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 
 # starting shutter here: 52344682
 
-# INGEST_ROOT = "/Users/michaelmandiberg/Documents/projects-active/facemap_production"
-# INGEST_FOLDER = os.path.join(INGEST_ROOT, "adobe_csv_4ingest/")
+INGEST_ROOT = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/getty_scrape/done"
+INGEST_FOLDER = os.path.join(INGEST_ROOT, "getty_55555_italy")
 # CSV_IN_PATH = os.path.join(INGEST_FOLDER, "unique_lines_B_nogender.csv")
-INGEST_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/unsplashCSVs"
-CSV_IN_PATH = os.path.join(INGEST_FOLDER, "unsplash_FORMAT.output.csv")
-KEYWORD_PATH = os.path.join(INGEST_FOLDER, "Keywords_202305150950.csv")
-LOCATION_PATH = os.path.join(INGEST_FOLDER, "Location_202308041952.csv")
+# INGEST_FOLDER = "/Users/michaelmandiberg/Downloads/getty_rebuild/"
+CSV_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache.jsonl")
+KEYWORD_PATH = os.path.join(INGEST_ROOT, "Keywords_202305150950.csv")
+LOCATION_PATH = os.path.join(INGEST_ROOT, "Location_202308041952.csv")
 CSV_NOKEYS_PATH = os.path.join(INGEST_FOLDER, "CSV_NOKEYS.csv")
 CSV_IMAGEKEYS_PATH = os.path.join(INGEST_FOLDER, "CSV_IMAGEKEYS.csv")
 # NEWIMAGES_FOLDER_NAME = 'images_pexels'
@@ -242,6 +243,14 @@ def make_key_dict_col3(filepath):
     keys_dict = {}
     for row in keys:
         keys_dict[row[2].lower()] = row[0]
+
+def make_key_dict_getty(filepath):
+    keys = read_csv(filepath)
+    keys_dict = {}
+    for row in keys:
+        keys_dict[row[1].lower()] = row[0]
+
+
 
     # do I need to pop header? or can I just leave it. 
     return keys_dict
@@ -948,6 +957,34 @@ def structure_row_shutterstock(row, ind, keys_list):
     return nan2none(image_row)
 
 
+def structure_row_getty(item, ind, keys_list):
+    site_id = 1
+    # gender = item[7]
+    age = None
+    description = item["title"]
+    # gender_key, age_key, age_detail_key = get_gender_age_item(gender, age, description, keys_list, site_id)
+    country_key = unlock_key_dict(item["location_id"],locations_dict_getty, loc2loc)
+
+    image_row = {
+        "site_image_id": item["id"],
+        "site_name_id": site_id,
+        "description": description[:140],
+        "caption": item["caption"],
+        "age_id": item["age_id"],
+        "gender_id": item["gender_id"],
+        "age_detail_id": None,
+        "contentUrl": item["contentUrl"],
+        "imagename": item["imagename"],
+        "location_id": country_key,        
+        "author": item["author"],        
+        "uploadDate": item["uploadDate"],        
+
+        # "imagename": generate_local_unhashed_image_filepath(item[9].replace("images/",""))  # need to refactor this from the contentURL using the hash function
+    }
+
+    return nan2none(image_row)
+
+
 # Define a custom retry decorator
 def custom_retry(func):
     @retry(
@@ -972,7 +1009,7 @@ def execute_query_with_retry(conn, query, parameters=None):
         print(f"OperationalError occurred: {e}")
         raise e
 
-def ingest_csv():
+def ingest_json():
 
     # change this for each site ingested #
     # adobe
@@ -990,18 +1027,23 @@ def ingest_csv():
     search_desc_for_keys = False
 
 
-    with open(CSV_IN_PATH) as file_obj:
-        # reader = csv.reader((row.replace('\0', '').replace('\x00', '') for row in in_file), delimiter=",")
+    # with open(CSV_IN_PATH) as file_obj:
+    #     # reader = csv.reader((row.replace('\0', '').replace('\x00', '') for row in in_file), delimiter=",")
 
-        reader_obj = csv.reader(file_obj)
-        next(reader_obj)  # Skip header row
+    with open(CSV_IN_PATH, 'r') as cache_file:
+        # reader_obj = csv.reader(file_obj)
+        # next(reader_obj)  # Skip header row
         start_counter = get_counter()
         print("start_counter: ", start_counter)
         # start_counter = 0 #temporary for testing, while adobe is ongoing
         counter = 0
         ind = 0
+
+        for item in cache_file.readlines():
+            item = json.loads(item)
+
         
-        for row in reader_obj:
+        # for row in reader_obj:
             # print(row[1])
             
             if counter < start_counter:
@@ -1010,7 +1052,8 @@ def ingest_csv():
             
             # splitting keys. try is for getty, except is currently set for pexels.
             try:
-                keys_list = row[column_keys].lower().split(separator_keys)
+                # keys_list = row[column_keys].lower().split(separator_keys)
+                keys_list = [x.lower() for x in item["keywords"]]
 
                 # # adobe specific. remove for future sites
                 # desc_list = row[3].replace(",","").lower().split("-")
@@ -1023,7 +1066,7 @@ def ingest_csv():
 
 
             # image_row = structure_row_adobe(row, ind, keys_list)
-            image_row = structure_row_shutterstock(row, ind, keys_list)
+            image_row = structure_row_getty(item, ind, keys_list)
 
             # if the image row has problems, skip it (structure_row saved it to csv)
             if not image_row:
@@ -1038,11 +1081,11 @@ def ingest_csv():
                 desc_key_nos_list = description_to_keys(image_row['description'], image_row['site_image_id'])
                 key_nos_list = set(key_nos_list + desc_key_nos_list)
             
-
+                # >> need to revisit this for row/item <<
             # this isn't working. not catching nulls. 
-            if not pd.isnull(row[column_eth]) and len(row[column_eth])>0:
-                print("have eth", row[column_eth].lower(), "type is", type(row[column_eth].lower()))
-                eth_no_list = get_key_no_dictonly(row[column_eth].lower(), keys_list, eth_dict)
+            if not pd.isnull(item["ethnicity"]) and len(item["ethnicity"])>0:
+                print("have eth", item["ethnicity"].lower(), "type is", type(item["ethnicity"].lower()))
+                eth_no_list = get_key_no_dictonly(item["ethnicity"].lower(), keys_list, eth_dict)
             else:
                 # get eth from keywords, using keys_list and eth_keys_dict
                 print("UNLOCKING KEYS FOR eth_keys_dict <><><><><><><><>")
@@ -1060,6 +1103,9 @@ def ingest_csv():
 
             # STORE THE DATA
             print("connecting to DB")
+            print(image_row)
+            print(key_nos_list)
+            print(eth_no_list)
 
             try:
                 with engine.connect() as conn:
@@ -1283,11 +1329,12 @@ if __name__ == '__main__':
         print("this many keys", len(keys_dict))
         locations_dict = make_key_dict(LOCATION_PATH)
         locations_dict_alt = make_key_dict_col3(LOCATION_PATH)
+        locations_dict_getty = make_key_dict_getty(LOCATION_PATH)
         locations_dict_AA = make_key_dict_col7(LOCATION_PATH)
         print(locations_dict_AA)
         print("this many locations", len(locations_dict))
 
-        ingest_csv()
+        ingest_json()
     except KeyboardInterrupt as _:
         print('[-] User cancelled.\n', flush=True)
     except Exception as e:

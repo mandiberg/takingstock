@@ -1,4 +1,6 @@
-USE ministock1023;
+USE ministock;
+
+-- create the three tables used by fetch_bagofkeywords.py
 
 CREATE TABLE BagOfKeywords (
     image_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -25,13 +27,22 @@ CREATE TABLE ImagesTopics (
 );
 
 
+
+
+-- this is meta stuff
+
+
 DELETE FROM BagOfKeywords;
 DELETE FROM Topics t ;
 DELETE FROM ImagesTopics;
 
+SELECT * FROM BagOfKeywords bok 
+LIMIT 1000;
+
+SELECT COUNT(bok.image_id) FROM BagOfKeywords bok ;
 SELECT COUNT(bok.keyword_list) FROM BagOfKeywords bok ;
 
-SELECT COUNT(keyword_list) FROM BagOfKeywords bok ;
+SELECT COUNT(it.image_id) FROM ImagesTopics it  ;
 
 SELECT k.keyword_text  
 FROM ImagesKeywords ik
@@ -66,6 +77,16 @@ JOIN keywords AS k ON ik.keyword_id = k.keyword_id
 GROUP BY k.keyword_id, k.keyword_text
 ORDER BY keyword_count DESC;
 
+using the base above, write an SQL query that will return:
+count of keyword_id 
+the corresponding keywords.keyword_text
+for all rows in imageskeywords
+
+SELECT k.keyword_id, k.keyword_text, COUNT(ik.keyword_id) AS keyword_count
+FROM imageskeywords AS ik
+JOIN keywords AS k ON ik.keyword_id = k.keyword_id
+GROUP BY k.keyword_id, k.keyword_text
+ORDER BY keyword_count DESC;
 
 
 

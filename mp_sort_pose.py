@@ -23,11 +23,11 @@ class SortPose:
         #maximum allowable distance between encodings
         self.MAXDIST = 0.7
         self.MINDIST = .45
-        self.MINBODYDIST = .1
-        self.CUTOFF = 10000
+        self.MINBODYDIST = .05
+        self.CUTOFF = 100000
 
         # maximum allowable scale up
-        self.resize_max = 1.99
+        self.resize_max = 2.99
         self.image_edge_multiplier = image_edge_multiplier
         self.face_height_output = face_height_output
         # takes base image size and multiplies by avg of multiplier
@@ -787,11 +787,11 @@ class SortPose:
 
         else:
             # enc1 = get 2-129 from df via string key
-            print("start_img key is (this is what we are comparing to):")
-            print(start_img)
+            # print("start_img key is (this is what we are comparing to):")
+            # print(start_img)
             try:
                 enc1 = df_128_enc.loc[start_img].to_list()
-                print(enc1)
+                # print(enc1)
             except:
                 print("Returning enc1 = median << KeyError for ", start_img)
                 # enc1 = None

@@ -11,7 +11,7 @@ import queue
 
 io = DataIO()
 db = io.db
-#io.db["name"] = "ministock"
+io.db["name"] = "ministock"
 
 # Create a database engine
 engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}".format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']), poolclass=NullPool)
