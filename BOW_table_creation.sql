@@ -1,4 +1,4 @@
-USE ministock;
+USE stock;
 
 -- create the three tables used by fetch_bagofkeywords.py
 
@@ -7,12 +7,14 @@ CREATE TABLE BagOfKeywords (
     age_id INT,
     gender_id INT,
     location_id INT,
+--    site_name_id INT,
     description VARCHAR(150),
     keyword_list BLOB,
     ethnicity_list BLOB,
     FOREIGN KEY (age_id) REFERENCES age(age_id),
     FOREIGN KEY (gender_id) REFERENCES gender(gender_id),
     FOREIGN KEY (location_id) REFERENCES location(location_id)
+--     FOREIGN KEY (site_name_id) REFERENCES site(site_name_id)
 );
 
 CREATE TABLE Topics (
