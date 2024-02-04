@@ -19,15 +19,16 @@ sig = '''
 # PATH= os.path.join(os.environ['HOME'], "Documents/projects-active/facemap_production/gettyimages") 
 
 #where the images are:
-PATH = "/Volumes/Test36/"
+PATH = "/Volumes/SSD4green/Pond5"
 #where the images are going:
-PATH2 = "/Volumes/Test36/"
+PATH2 = "/Volumes/SSD4green/Pond5/"
 
 COPY=True
-UNIQUE_FILES_PATH="/Volumes/Test36/scraping phase 2/CSVs_to_ingest/unsplashCSVs/unique_images.csv"
+UNIQUE_FILES_PATH="/Volumes/SSD4green/Pond5/output.csv"
+NEW_UNIQUE_FILES_PATH="/Volumes/SSD4green/Pond5/output_new.csv"
 IMAGES_THREAD_COUNTER = 0
-IMAGES_FOLDER_NAME = 'images_unsplash'
-NEWIMAGES_FOLDER_NAME = 'new_images_unsplash'
+IMAGES_FOLDER_NAME = 'images'
+NEWIMAGES_FOLDER_NAME = 'new_images'
 NUMBER_OF_THREADS_IMAGES_DOWNLOAD =15
 OLDPATH = os.path.join(PATH, IMAGES_FOLDER_NAME)
 NEWPATH = os.path.join(PATH2, NEWIMAGES_FOLDER_NAME)
@@ -100,7 +101,7 @@ def unhash_files():
         global IMAGES_THREAD_COUNTER
         try:
             #THIS IS WHERE I WILL MOVE THE STUFF
-            # move(src,dest)
+            move(image_hashpath, image_unhashed_path)
             print(image_hashpath, image_unhashed_path)
             print("moved")
         except:
@@ -150,67 +151,103 @@ def unhash_files():
         print('[-] cache `%s` not found.')
         exit(0)
 
-    with open(UNIQUE_FILES_PATH, 'r') as csvfile:
-        reader = csv.reader(csvfile)
-        # Loop over each row in the file
-        start_counter = 0
-        counter = start_counter
-        alreadyDL = 0
-        print("starting from start_counter: ",start_counter)
+    # with open(CSV_OUTPUT_PATH, 'w', newline='', encoding="utf-8") as f:
+    #     writer = csv.DictWriter(
+    #         f, fieldnames=headers, delimiter=',', quoting=csv.QUOTE_ALL, doublequote=False)
+    #     writer.writeheader()
 
-        for i in range(start_counter):
-            next(reader)  # skip the line
+    # with open(CSV_OUTPUT_PATH, 'a', encoding="utf-8", newline='') as output:
+    #     with open(QUERIES_CACHE_PATH, 'r') as cache_file:
+    #         writer = csv.writer(
+    #             output, delimiter=',', quoting=csv.QUOTE_ALL, doublequote=False)
+    #         for item in cache_file.readlines():
+    #             parsed_obj = parser_item(item)
+    #             writer.writerow(parsed_obj)
 
-        # print('starting to traverse the file, starting from: ',str(start_counter))
-        for row in reader:
-            # obj = json.loads(item)
-            # print(counter)
-            # while start_counter > counter:counter is:  
-            #     # print("in while")
-            #     counter += 1
-            #     print("skipping, ",counter)
-            #     continue
+    ## this is restructured to write a fresh csv file with the updated filename, configd for pond5
+    headers = ["id", "title", "keywords", "number_of_people", "orientation", "age",
+               "gender", "ethnicity", "mood", "image_url", "image_filename"]
+    with open(NEW_UNIQUE_FILES_PATH, 'w', newline='', encoding="utf-8") as f:
+        writer = csv.DictWriter(
+            f, fieldnames=headers, delimiter=',', quoting=csv.QUOTE_ALL, doublequote=False)
+        writer.writeheader()
 
-            if row[0] is None:
-                continue
-            # if startpoint > 0 and startpoint > counter:
-            #     continue
 
-            # this stores images in hashed folders, to ensure reasonable
-            # number of files per folder
-            image_url = row[0]
-            # where the old images is (PATH)
-            image_hashpath = os.path.join(PATH,generate_local_image_filepath(image_url))
-            # where the new images goes (PATH2)
-            image_unhashed_path = os.path.join(PATH2,generate_local_unhashed_image_filepath(image_url.replace('.jpeg','.jpg')))
-            # print out to countout every 1000 batches
-            # print(image_hashpath, image_unhashed_path)
-            # continue
-            if start_counter % 10 == 0:
-                print("start_counter is: ",start_counter)
-            start_counter += 1
-            counter += 1
+    with open(NEW_UNIQUE_FILES_PATH, 'a', encoding="utf-8", newline='') as output:
+        with open(UNIQUE_FILES_PATH, 'r') as csvfile:
+            reader = csv.reader(csvfile)
+            writer = csv.writer(output, delimiter=',', quoting=csv.QUOTE_ALL, doublequote=False)
 
-            if counter % 1000 == 0 and counter > start_counter:
-                print("counter is: ",counter)
-                # write_log_csv(CSV_COUNTOUT_PATH,counter)
+            # Loop over each row in the file
+            start_counter = 0
+            counter = start_counter
+            alreadyDL = 0
+            print("starting from start_counter: ",start_counter)
 
-            if os.path.isfile(image_hashpath):
-                print("this file will be moved", str(counter), image_hashpath)
-            else:
-                alreadyDL += 1
-                print("nobody there", str(alreadyDL), image_hashpath)
-                continue
-            if IMAGES_THREAD_COUNTER < NUMBER_OF_THREADS_IMAGES_DOWNLOAD:
-                Thread(target=thread, args=[
-                       image_hashpath, image_unhashed_path], daemon=True).start()
-                IMAGES_THREAD_COUNTER += 1
-            # print("IMAGES_THREAD_COUNTER ",str(IMAGES_THREAD_COUNTER))
-            while IMAGES_THREAD_COUNTER >= NUMBER_OF_THREADS_IMAGES_DOWNLOAD:
-                sleep(.1)
-                print('[-] Processing batch #%s' %
-                      (int(counter / NUMBER_OF_THREADS_IMAGES_DOWNLOAD)), end='\r')
-                      # (int(counter / NUMBER_OF_THREADS_IMAGES_DOWNLOAD)),  (int(total_count / NUMBER_OF_THREADS_IMAGES_DOWNLOAD)), end='\r')
+            for i in range(start_counter):
+                next(reader)  # skip the line
+
+            # print('starting to traverse the file, starting from: ',str(start_counter))
+            for row in reader:
+                # obj = json.loads(item)
+                # print(counter)
+                # while start_counter > counter:counter is:  
+                #     # print("in while")
+                #     counter += 1
+                #     print("skipping, ",counter)
+                #     continue
+
+                if row[0] is None:
+                    continue
+                # if startpoint > 0 and startpoint > counter:
+                #     continue
+
+                # this stores images in hashed folders, to ensure reasonable
+                # number of files per folder
+                image_name = row[0]
+                # if pulling an image_id, it needs a .jpg suffix:
+                image_name = image_name+".jpg"
+                # where the old images is (PATH)
+                image_hashpath = os.path.join(PATH, row[10])
+                # image_hashpath = os.path.join(PATH,generate_local_image_filepath(image_name))
+                # where the new images goes (PATH2)
+                # this pulls an image_name created from image_id and gets hash folders from it.
+                f1, f2 = get_hash_folders(image_name)
+                image_filename = os.path.join(f1,f2,image_name)
+                image_unhashed_path = os.path.join(PATH2,NEWIMAGES_FOLDER_NAME, image_filename)
+
+                # image_unhashed_path = os.path.join(PATH2,generate_local_unhashed_image_filepath(image_name.replace('.jpeg','.jpg')))
+                # print out to countout every 1000 batches
+                # print(image_hashpath, image_unhashed_path)
+                # continue
+                if start_counter % 10 == 0:
+                    print("start_counter is: ",start_counter)
+                start_counter += 1
+                counter += 1
+
+                if counter % 1000 == 0 and counter > start_counter:
+                    print("counter is: ",counter)
+                    # write_log_csv(CSV_COUNTOUT_PATH,counter)
+
+                if os.path.isfile(image_hashpath):
+                    row[10]=image_filename
+                    writer.writerow(row)
+                    print("this file will be moved", str(counter), image_hashpath, image_unhashed_path)
+                else:
+                    alreadyDL += 1
+                    print("nobody there", str(alreadyDL), image_hashpath)
+                    continue
+                # continue # for testing
+                if IMAGES_THREAD_COUNTER < NUMBER_OF_THREADS_IMAGES_DOWNLOAD:
+                    Thread(target=thread, args=[
+                           image_hashpath, image_unhashed_path], daemon=True).start()
+                    IMAGES_THREAD_COUNTER += 1
+                # print("IMAGES_THREAD_COUNTER ",str(IMAGES_THREAD_COUNTER))
+                while IMAGES_THREAD_COUNTER >= NUMBER_OF_THREADS_IMAGES_DOWNLOAD:
+                    sleep(.1)
+                    print('[-] Processing batch #%s' %
+                          (int(counter / NUMBER_OF_THREADS_IMAGES_DOWNLOAD)), end='\r')
+                          # (int(counter / NUMBER_OF_THREADS_IMAGES_DOWNLOAD)),  (int(total_count / NUMBER_OF_THREADS_IMAGES_DOWNLOAD)), end='\r')
     print('[-] All images have been downloaded successfully\n')
 
 

@@ -55,6 +55,7 @@ def create_table(row, lock, session):
         # Increment the counter using the lock to ensure thread safety
         global counter
         counter += 1
+        session.commit()
 
 def fetch_keywords(target_image_id, lock,session):
     #global session
@@ -99,6 +100,7 @@ def fetch_keywords(target_image_id, lock,session):
         # Increment the counter using the lock to ensure thread safety
         global counter
         counter += 1
+        session.commit()
 
     return
 
@@ -131,6 +133,7 @@ def fetch_ethnicity(target_image_id, lock, session):
         # Increment the counter using the lock to ensure thread safety
         global counter
         counter += 1
+        session.commit()
 
     return
 
