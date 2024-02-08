@@ -11,7 +11,7 @@ import queue
 
 io = DataIO()
 db = io.db
-io.db["name"] = "ministock"
+# io.db["name"] = "ministock"
 
 # Create a database engine
 engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}".format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']), poolclass=NullPool)
@@ -24,7 +24,7 @@ title = 'Please choose your operation: '
 options = ['Create table', 'Fetch keywords list', 'Fetch ethnicity list']
 option, index = pick(options, title)
 
-LIMIT= 1000
+LIMIT= 15000000
 # Initialize the counter
 counter = 0
 
@@ -45,9 +45,6 @@ def create_table(row, lock, session):
         ethnicity_list=None  # Set this to None or your desired value
     )
     
-    # Print a message to confirm the update
-    print(f"Keyword list for image_id {image_id} updated successfully.")
-    
     # Add the BagOfKeywords object to the session
     session.add(bag_of_keywords)
 
@@ -56,6 +53,13 @@ def create_table(row, lock, session):
         global counter
         counter += 1
         session.commit()
+
+    # Print a message to confirm the update
+    # print(f"Keyword list for image_id {image_id} updated successfully.")
+    if counter % 1000 == 0:
+        print(f"Created BagOfKeywords number: {counter}")
+
+
 
 def fetch_keywords(target_image_id, lock,session):
     #global session
@@ -92,7 +96,8 @@ def fetch_keywords(target_image_id, lock,session):
     if BOK_keywords_entry:
         BOK_keywords_entry.keyword_list = keyword_list_pickle
         #session.commit()
-        print(f"Keyword list for image_id {target_image_id} updated successfully.")
+        # print(f"Keyword list for image_id {target_image_id} updated successfully.")
+
     else:
         print(f"Keywords entry for image_id {target_image_id} not found.")
         
@@ -101,6 +106,9 @@ def fetch_keywords(target_image_id, lock,session):
         global counter
         counter += 1
         session.commit()
+
+    if counter % 1000 == 0:
+        print(f"Keyword list updated: {counter}")
 
     return
 
@@ -152,7 +160,8 @@ work_queue = queue.Queue()
 if index == 0:
     function=create_table
     ################# CREATE TABLE ###########
-    select_query = select(Images.image_id, Images.description, Images.gender_id, Images.age_id, Images.location_id).select_from(Images).outerjoin(BagOfKeywords, Images.image_id == BagOfKeywords.image_id).filter(BagOfKeywords.image_id == None).limit(LIMIT)
+    select_query = select(Images.image_id, Images.description, Images.gender_id, Images.age_id, Images.location_id).\
+        select_from(Images).outerjoin(BagOfKeywords, Images.image_id == BagOfKeywords.image_id).filter(BagOfKeywords.image_id == None, Images.site_name_id.in_([2,4])).limit(LIMIT)
     result = session.execute(select_query).fetchall()
     for row in result:
         work_queue.put(row)

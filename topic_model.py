@@ -43,19 +43,23 @@ from pprint import pprint
 
 #nltk.download('wordnet') ##only first time
 
-# MM you need to use conda activate minimal_ds 
+# MM you need to use conda activate gensim311 
 
 '''
-tracking time based on items, for speed predictions
+tracking time based on items, for speed predictions, 88topics
 items, seconds
-47000, 240
-100000, 695
+100000, 61
+500000, 1015
+1000000, 486
+2000000, 4503
+4000000, 
 '''
 title = 'Please choose your operation: '
 options = ['Topic modelling', 'Topic indexing','calculating optimum_topics']
 io = DataIO()
 db = io.db
-io.db["name"] = "ministock"
+# io.db["name"] = "ministock"
+io.ROOT = "/Users/michaelmandiberg/Documents/GitHub/facemap/topic_model"
 
 NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 MODEL_PATH=os.path.join(io.ROOT,"model")
@@ -70,18 +74,30 @@ NUM_TOPICS=88
 
 stemmer = SnowballStemmer('english')
 
-
 def set_query():
     # Basic Query, this works with gettytest3
     SELECT = "DISTINCT(image_id),description,keyword_list"
     FROM ="bagofkeywords"
     WHERE = "keyword_list IS NOT NULL "
-    LIMIT = 2000000
+    LIMIT = 4000000
     if MODE==1:
         WHERE = "keyword_list IS NOT NULL AND image_id NOT IN (SELECT image_id FROM imagestopics)"
         # WHERE = "image_id = 423638"
         LIMIT=100000
     return SELECT, FROM, WHERE, LIMIT
+
+
+# open and read a csv file, and assign each row as an element in a list
+def read_csv(file_path):
+    with open(file_path, 'r') as file:
+        data = file.read().replace('\n', '')
+    return data
+
+# removing all keywords that are stored in gender, ethnicity, and age tables
+GENDER_LIST = read_csv(os.path.join(io.ROOT, "stopwords_gender.csv"))
+ETH_LIST = read_csv(os.path.join(io.ROOT, "stopwords_ethnicity.csv"))
+AGE_LIST = read_csv(os.path.join(io.ROOT, "stopwords_age.csv"))                       
+MY_STOPWORDS = gensim.parsing.preprocessing.STOPWORDS.union(set(GENDER_LIST+ETH_LIST+AGE_LIST))
 
 if db['unix_socket']:
     # for MM's MAMP config
@@ -169,7 +185,7 @@ def preprocess(text):
     text = clarify_keywords(text.lower())
 
     for token in gensim.utils.simple_preprocess(text):
-        if token not in gensim.parsing.preprocessing.STOPWORDS and len(token) > 3:
+        if token not in MY_STOPWORDS and len(token) > 3:
             result.append(lemmatize_stemming(token))
     return result
 

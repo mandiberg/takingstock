@@ -58,9 +58,9 @@ NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 # INGEST_ROOT = "/Users/michaelmandiberg/Documents/projects-active/facemap_production"
 # INGEST_FOLDER = os.path.join(INGEST_ROOT, "adobe_csv_4ingest/")
 # CSV_IN_PATH = os.path.join(INGEST_FOLDER, "unique_lines_B_nogender.csv")
-INGEST_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/unsplashCSVs"
-CSV_IN_PATH = os.path.join(INGEST_FOLDER, "unsplash_FORMAT.output.csv")
-KEYWORD_PATH = os.path.join(INGEST_FOLDER, "Keywords_202305150950.csv")
+INGEST_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/Pond5/"
+CSV_IN_PATH = os.path.join(INGEST_FOLDER, "output.csv")
+KEYWORD_PATH = os.path.join(INGEST_FOLDER, "Keywords_202402071139.csv")
 LOCATION_PATH = os.path.join(INGEST_FOLDER, "Location_202308041952.csv")
 CSV_NOKEYS_PATH = os.path.join(INGEST_FOLDER, "CSV_NOKEYS.csv")
 CSV_IMAGEKEYS_PATH = os.path.join(INGEST_FOLDER, "CSV_IMAGEKEYS.csv")
@@ -74,7 +74,8 @@ SEARCH_KEYS_FOR_LOC = True
 
 # key2key = {"person":"people", "kid":"child","affection":"Affectionate", "baby":"Baby - Human Age", "beautiful":"Beautiful People", "pretty":"Beautiful People", "blur":"Blurred Motion", "casual":"Casual Clothing", "children":"Child", "kids":"Child", "couple":"Couple - Relationship", "adorable":"Cute", "room":"Domestic Room", "focus":"Focus - Concept", "happy":"Happiness", "at home":"Home Interior", "home":"Home Interior", "face":"Human Face", "hands":"Human Hand", "landscape":"Landscape - Scenery", "outfit":"Landscape - Scenery", "leisure":"Leisure Activity", "love":"Love - Emotion", "guy":"Men", "motherhood":"Mother", "parenthood":"Parent", "positive":"Positive Emotion", "recreation":"Recreational Pursuit", "little":"Small", "studio shoot":"Studio Shot", "together":"Togetherness", "vertical shot":"Vertical", "lady":"women", "young":"Young Adult"}
 loc2loc = {"niue":"Niue Island", "east timor":"timor-leste"}
-key2key = {"person":"people", "isolated on white":"plain white background", "kid":"child","affection":"affectionate", "baby":"baby - human age", "beautiful":"beautiful people", "pretty":"beautiful people", "blur":"blurred motion", "casual":"casual clothing", "children":"child", "kids":"child", "couple":"couple - relationship", "adorable":"cute", "room":"domestic room", "focus":"focus - concept", "happy":"happiness", "at home":"home interior", "home":"home interior", "face":"human face", "hands":"human hand", "landscape":"landscape - scenery", "outfit":"landscape - scenery", "leisure":"leisure activity", "love":"love - emotion", "guy":"men", "motherhood":"mother", "parenthood":"parent", "positive":"positive emotion", "recreation":"recreational pursuit", "little":"small", "studio shoot":"studio shot", "together":"togetherness", "vertical shot":"vertical", "lady":"women", "young":"young adult", "light":"light - natural phenomenon", "trees":"tree", "disabled":"disability", "landline":"phone", "tradesman":"worker", "apprentice":"work", "arbeit":"work", "wheel-chair":"wheelchair", "treatments":"treatment", "transports":"transportation", "thoughtfully":"thoughtful", "technologies":"technology", "piscine":"swim", "astonished":"surprise", "surgeons":"surgeon", "sommer":"summer", "suffering":"suffer", "studentin":"student", "stressful":"stressed", "smoothies":"smoothie", "smilling":"smiling", "kleines":"small", "sleeps":"sleeping", "dealership":"sales", "salads":"salad", "ressources":"resources", "relaxes":"relaxed", "presentations":"presentation", "phones":"phone", "telefon":"phone", "telefoniert":"phone", "patients":"patient", "papier":"paper", "painful":"pain", "offended":"offend", "occupations":"occupation", "muscled":"muscles", "motivated":"motivation", "pinup":"model", "pin-up":"model", "meetings":"meeting", "massages":"massage", "kleiner":"little", "(lawyer)":"lawyer", "kitchens":"kitchen", "injections":"injection", "hospitals":"hospital", "zuhause":"home", "happily":"happy", "joyfully":"happy", "overjoyed":"happiness", "rejoices":"happiness", "handshaking":"handshake", "groups":"group", "full-length":"Full Length", "blumen":"flowers", "florists":"florist", "panic":"fear", "fell":"fall", "equipements":"equipement", "enthusiastic":"enthusiasm", "osteopathy":"doctor", "disgusted":"disgust", "schreibtisch":"desk", "dances":"dancing", "crowds":"crowd", "robber":"criminal", "copyspace":"Copy Space", "misunderstandings":"confusion", "confidently":"confidence", "concerts":"concert", "climbs":"climb", "celebrations":"celebration", "caught":"catch", "casually":"casual", "motorsports":"car", "banker":"Business Person", "supervisor":"boss", "executives":"boss", "bedrooms":"bedroom", "beautifull":"beautiful", "beaches":"beach", "bathrooms":"bathroom", "backgroud":"background", "attraktive":"attractive", "sportwear":"athletic", "sportliche":"athletic", "addicted":"addiction", "alcoholism":"addiction", "enjoy":"enjoyment"}
+key2key = {"person":"people", "isolated on white":"plain white background", "kid":"child","affection":"affectionate", "baby":"baby - human age", "beautiful":"beautiful people", "pretty":"beautiful people", "blur":"blurred motion", "casual":"casual clothing", "children":"child", "kids":"child", "couple":"couple - relationship", "adorable":"cute", "room":"domestic room", "focus":"focus - concept", "happy":"happiness", "at home":"home interior", "home":"home interior", "face":"human face", "hands":"human hand", "landscape":"landscape - scenery", "outfit":"landscape - scenery", "leisure":"leisure activity", "love":"love - emotion", "guy":"men", "motherhood":"mother", "parenthood":"parent", "positive":"positive emotion", "recreation":"recreational pursuit", "little":"small", "studio shoot":"studio shot", "together":"togetherness", "vertical shot":"vertical", "lady":"women", "young":"young adult", "light":"light - natural phenomenon", "trees":"tree", "disabled":"disability", "landline":"phone", "tradesman":"worker", "apprentice":"work", "arbeit":"work", "wheel-chair":"wheelchair", "treatments":"treatment", "transports":"transportation", "thoughtfully":"thoughtful", "technologies":"technology", "piscine":"swim", "astonished":"surprise", "surgeons":"surgeon", "sommer":"summer", "suffering":"suffer", "studentin":"student", "stressful":"stressed", "smoothies":"smoothie", "smilling":"smiling", "kleines":"small", "sleeps":"sleeping", "dealership":"sales", "salads":"salad", "ressources":"resources", "relaxes":"relaxed", "presentations":"presentation", "phones":"phone", "telefon":"phone", "telefoniert":"phone", "patients":"patient", "papier":"paper", "painful":"pain", "offended":"offend", "occupations":"occupation", "muscled":"muscles", "motivated":"motivation", "pinup":"model", "pin-up":"model", "meetings":"meeting", "massages":"massage", "kleiner":"little", "(lawyer)":"lawyer", "kitchens":"kitchen", "injections":"injection", "hospitals":"hospital", "zuhause":"home", "happily":"happy", "joyfully":"happy", "overjoyed":"happiness", "rejoices":"happiness", "handshaking":"handshake", "groups":"group", "full-length":"full length", "blumen":"flowers", "florists":"florist", "panic":"fear", "fell":"fall", "equipements":"equipement", "enthusiastic":"enthusiasm", "osteopathy":"doctor", "disgusted":"disgust", "schreibtisch":"desk", "dances":"dancing", "crowds":"crowd", "robber":"criminal", "copyspace":"copy space", "misunderstandings":"confusion", "confidently":"confidence", "concerts":"concert", "climbs":"climb", "celebrations":"celebration", "caught":"catch", "casually":"casual", "motorsports":"car", "banker":"business person", "supervisor":"boss", "executives":"boss", "bedrooms":"bedroom", "beautifull":"beautiful", "beaches":"beach", "bathrooms":"bathroom", "backgroud":"background", "attraktive":"attractive", "sportwear":"athletic", "sportliche":"athletic", "addicted":"addiction", "alcoholism":"addiction", "enjoy":"enjoyment", "cleaning supplies": "cleaning products", "cnc machining": "cnc machine", "desktop computer": "desktop pc", "downs syndrome": "down syndrome", "film noir": "film noir style", "flu shot": "flu vaccine", "fly fishing": "fly-fishing", "back pain": "lower back pain", "nyc ny": "new york city", "surgery room": "operating room", "paris france": "paris - france", "cosmetic surgery": "plastic surgery", "portland oregon": "portland - oregon", "belly fat": "pot belly - human body", "tv remote": "remote control", "security officer": "security guard", "semi truck": "semi-truck", "super hero": "superhero", "tablet pc": "tablet computer", "teeth whitening": "tooth whitening", "varicose veins": "varicose vein", "venice italy": "venice - italy", "victoria falls": "victoria falls national park", "wheel chair": "wheelchair", "white male": "white people", "abused woman": "women abuse", "1960s": "1960-1969", "advisor": "advisor", "americana": "american", "antibiotics": "antibiotic", "arabic": "arabic", "asian": "asian", "inhaler": "asthma inhaler", "asthma": "asthmatic", "boomer": "baby boomer", "backdrops": "backdrop", "fired": "being fired", "bullets": "bullet", "camo": "camouflage", "daycare": "childcare", "hvac": "chiller - hvac equipment", "chinese": "chinese", "cigars": "cigar", "cd": "compact disc", "malware": "computer virus", "convict": "criminal", "datacenter": "data center", "deli": "delicatessen", "satan": "devil", "handicapped": "disable", "foyer": "entrance", "fail": "failure", "fees": "fee", "roulette": "gambling", "haunted": "ghost", "cardiac": "heart", "hispanic": "hispanic", "hobo": "homeless", "jobs": "job", "latino": "latino", "litigation": "law", "liar": "lie", "lightening": "lightning", "locksmith": "lock", "lockers": "locker", "loser": "loss", "lungs": "lung", "butler": "maid", "midwest": "midwest", "error": "mistake", "oops": "mistake", "assassin": "murder", "burma": "myanmar", "obstacles": "obstacle", "cubicle": "office cubicle", "olympics": "olympic", "forms": "paperwork", "sinus": "paranasal sinus", "facelift": "plastic surgery", "swat": "police", "broke": "poor", "confidential": "private", "shh": "quiet", "shhh": "quiet", "refugees": "refugee", "roofing": "roof", "genetics": "science", "easy": "simple", "slave": "slavery", "hearing": "sound", "espionage": "spy", "sweating": "sweat", "telecommunications": "telecommunication", "robbery": "theft", "toolbelt": "tools", "trends": "trend", "walker": "walking", "wifi": "wireless technology", "1940s": "1940-1949", "apocalyptic": "apocalypse", "applause": "applauding", "approved": "approve", "barbells": "barbell", "beakers": "beaker", "carbohydrates": "carbohydrate - food type", "consciousness": "conscious", "consumers": "consumerism", "crutches": "crutch", "demons": "demon - fictional character", "diapers": "diaper", "greedy": "greed", "immigration": "immigrant", "messenger": "messaging", "plumbing": "plumber", "podiatry": "podiatrist", "preteens": "preteen", "publishing": "publisher", "regulations": "regulation", "results": "result", "seo": "search engine", "seatbelt": "seat belt", "sorry": "sorrow", "swearing": "swear word", "terrorist": "terrorism", "tiredness": "tired", "toolkit": "toolbox", "ugly": "ugliness", "veterinary": "veterinarian", "shame": "shame - negative emotion", "sunbather": "sunbathing", "alzheimer": "alzheimer's disease", "deaf": "deafness", "rehab": "rehabilitation", "tango": "tango - dance", "vegas": "las vegas", "sprinter": "sprinting", "hired": "hiring", "wipes": "wiping", "stealing": "stealing - crime", "maya": "mayan", "compare": "comparison", "telecom": "telecommunication", "digestion": "digestive system", "mime": "mime artist", "pruning": "pruning - gardening", "printer": "printer - occupation", "thug": "bullying", "virginia": "virginia - us state", "hula": "hula dancer", "biohazard": "biohazard symbol", "nuclear": "nuclear bomb", "hypertension": "hypertensive", "rio": "rio de janeiro", "shoppers": "shopping", "mri": "mri scan", "trampoline": "trampoline - equipment", "phoenix": "phoenix - arizona", "eiffel": "eiffel tower", "cnc": "cnc machine", "superman": "superman - superhero", "sunburn": "sunburned", "provence": "provence-alpes-cote d'azur", "yorkshire": "yorkshire - england", "liver": "liver - offal", "limo": "limousine", "irrigation": "irrigation equipment", "gluten": "gluten free", "softball": "softball - sport"}
+pond5_spacedkeys = ['flowers isolated', 'woman smiling', 'asian woman', 'man smiling', 'black woman', 'asian man', 'indian man', 'african man', 'woman standing', 'african woman', 'black man', 'teen girl', 'child girl', 'indian woman', 'young brunette', 'young business', 'sad woman', 'hispanic woman', 'closeup portrait', 'businessman smiling', 'hispanic man', 'mature businessman', 'man thinking', 'happy man', 'man portrait', 'young professional', 'woman doctor', 'happy children', 'woman reading', 'woman shopping', 'woman eating', 'smiling child', 'Business Person', 'young student', 'black girl', 'woman laptop', 'senior male', 'muscular man', 'smiling face', 'man in suit', 'man in suit', 'happy baby', 'toddler girl', 'smiling baby', 'older woman', 'attractive man', 'native american', 'chinese man', 'asian baby', 'baby sleeping', 'successful businessman', 'sad teenager', 'man face', 'crying woman', 'woman beach', 'crying baby', 'business executive', 'depressed woman', 'older man', 'summer park', 'confident woman', 'computer desk', 'girl crying', 'senior doctor', 'sad child', 'asian boy', 'girl face', 'shirtless man', 'baby hands', 'depressed man', 'teenager portrait', 'neck pain', 'laptop isolated', 'bikini model', 'funny man', 'man running', 'angry man', 'women working', 'man shopping', 'businessman phone', 'latino man', 'sad senior', 'dentist office', 'tired woman', 'stressed woman', 'thoughtful man', 'black boy', 'female legs', 'selfie photo', 'man tablet', 'happy business', 'woman praying', 'male fashion', 'angry woman', 'sad lonely', 'shop owner', 'empty room', 'woman gym', 'man shaving', 'cute toddler', 'african child', 'tropical beach', 'woman driving', 'female teacher', 'homeless man', 'drinking beer', 'man praying', 'female smiling', 'excited woman', 'new car', 'funny woman', 'woman screaming', 'men fashion', 'stomach pain', 'pregnant mother', 'restaurant kitchen', 'baby crawling', 'beautiful model', 'factory workers', 'japanese man', 'yoga poses', 'sick child', 'professional kitchen', 'sad teen', 'office window', 'surprised woman', 'laptop outdoors', 'hispanic business', 'retro woman', 'working online', 'laser hair', 'hair cut', 'overweight woman', 'car keys', 'fat woman', 'empty office', 'boy face', 'successful man', 'white room', 'sad kid', 'african business', 'man silhouette', 'african boy', 'medical office', 'stomach ache', 'strong man', 'frustrated man', 'doctors office', 'female face', 'artist painting', 'hand pointing', 'sad baby', 'hospital room', 'empty warehouse', 'office lobby', 'beautiful hair', 'small dog', 'male teacher', 'modern kitchen', 'halloween party', 'obese woman', 'office background', 'portrait model', 'overweight man', 'laughing baby', 'retirement home', 'dental office', 'fat man', 'eating sandwich', 'male patient', 'old telephone', 'student portrait', 'business team', 'denver colorado', 'female singer', 'black baby', 'store owner', 'woman teacher', 'business asian', 'guitar player', 'young person', 'empty pockets', 'happy kids', 'portrait overweight', 'scared woman', 'crazy man', 'young corporate', 'baby crib', 'hair styling', 'business office', 'drug addict', 'mother baby', 'great wall', 'male face', 'business success', 'desert landscape', 'examination room', 'paying bills', 'car crash', 'office room', 'woman forest', 'grocery shopping', 'man on computer', 'man on computer', 'angry child', 'black student', 'knee pain', 'yoga beach', 'construction building', 'torn paper', 'sports arena', 'summer beach', 'adult education', 'confused man', 'lonely girl', 'girl snow', 'modern home', 'healthy hair', 'smiley face', 'fitness training', 'baby room', 'teacher classroom', 'old phone', 'pine forest', 'wrist pain', 'soccer stadium', 'beer pub', 'interior wall', 'school teacher', 'american soldier', 'mobile devices', 'chewing gum', 'computer class', 'people at work', 'people at work', 'healthy man', 'asian toddler', 'basketball game', 'doctor patient', 'hammock beach', 'business handshake', 'corporate office', 'hotel lobby', 'poppy field', 'red bow', 'swimsuit model', 'fitness club', 'aging skin', 'laundry room', 'coffee business', 'pool water', 'puzzle pieces', 'sleeping woman', 'business technology', 'gold jewelry', 'grunge wall', 'men talking', 'sad portrait', 'sold sign', 'woman gun', 'christmas shopping', 'fit body', 'scared girl', 'selfie stick', 'woman mirror', 'chinese doctor', 'decision making', 'football coach', 'lab technician', 'beautiful skin', 'clean water', 'problem solving', 'pull ups', 'white wedding', 'helping hand', 'reading bible', 'angry kid', 'healthcare medical', 'house construction', 'middle school', 'driving school', 'dirty hands', 'angry boss', 'smile business', 'old hands', 'child alone', 'office cleaning', 'students computer', 'summer sun', 'teen depression', 'women talking', 'business phone', 'computer business', 'girl smoking', 'popcorn isolated', 'restaurant table', 'road bicycle', 'medical students', 'college campus', 'soccer goalie', 'white kitchen', 'creative team', 'money cash', 'old widow', 'small house', 'child business', 'dollar bill', 'horse farm', 'save money', 'cusco peru', 'food plate', 'joint pain', 'muscle man', 'office phone', 'sleeping man', 'house keys', 'business building', 'doctor on phone', 'doctor on phone', 'eye doctor', 'fitness class', 'milan italy', 'office staff', 'people standing', 'power tools', 'reading tablet', 'child praying', 'dirty clothes', 'homeless child', 'old wall', 'school students', 'woman in bikini', 'woman in bikini', 'assault rifle', 'baseball pitcher', 'car woman', 'exam room', 'fitness men', 'medical records', 'plank exercise', 'happy shopper', 'healthy snack', 'kid pointing', 'lake sunset', 'law books', 'leg pain', 'rock concert', 'starting blocks', 'video editor', 'work stress', 'candid portrait', 'car tire', 'computer server', 'loud noise', 'online training', 'outdoor sports', 'ripped paper', 'smart home', 'background texture', 'business deal', 'female pilot', 'forest road', 'new baby', 'sad clown', 'sky clouds', 'business training', 'running stairs', 'stop smoking', 'child birthday', 'girl selfie', 'happy customer', 'home construction', 'medical instruments', 'father daughter', 'hospital hallway', 'kids room', 'software developer', 'using ipad', 'vintage telephone', 'airport security', 'audio book', 'beautiful house', 'business tablet', 'cctv camera', 'doctor computer', 'girl computer', 'girl friends', 'home renovation', 'human trafficking', 'retro phone', 'sniper rifle', 'tropical island', 'baby play', 'kids hands', 'medical team', 'mysterious woman', 'package delivery', 'patient smiling', 'retail store', 'snow storm', 'dog grooming', 'manufacturing plant', 'modern dance', 'snow falling', 'snow forest', 'children hospital', 'green smoothie', 'hooded man', 'server farm', 'business growth', 'monument valley', 'pet store', 'science lab', 'angry teacher', 'asian sad', 'family portrait', 'female boxers', 'flamenco dancer', 'garage sale', 'happy dog', 'lose weight', 'pressure washing', 'punk woman', 'radio studio', 'single man', 'doctor and child', 'doctor and child', 'garage door', 'holiday shopping', 'holy communion', 'hospital patient', 'hotel manager', 'house sold', 'internet connection', 'make money', 'smiling kids', 'business hand', 'business laptop', 'business stress', 'holding iphone', 'kid gift', 'office asian', 'baby book', 'business presentation', 'colored balls', 'electric stove', 'family playing', 'floor cleaning', 'futuristic city', 'green juice', 'happy laptop', 'home health care', 'home health care', 'neck injury', 'old boat', 'restaurant bar', 'roulette table', 'sales person', 'sick people', 'empty classroom', 'eyes makeup', 'fashion hair', 'future technology', 'green business', 'home for sale', 'home for sale', 'home security', 'job application', 'marathon runner', 'music notes', 'rock band', 'sad dog', 'silver jewelry', 'snow tree', 'angry wife', 'business seminar', 'christmas candle', 'elderly sad', 'evil man', 'family house', 'hands picking', 'hands sky', 'iced tea', 'kids reading', 'kitchen coffee', 'manicure girl', 'metal sheet', 'money problems', 'money tree', 'mountain sunset', 'neighborhood street', 'people collage', 'red tape', 'restaurant menu', 'college graduate', 'family photo', 'family smiling', 'hospital building', 'mowing lawn', 'party lights', 'prescription drugs', 'running outside', 'smile asian', 'college building', 'family vacation', 'happy car', 'happy dentist', 'heart health', 'kids soccer', 'lazy man', 'lonely teen', 'modern bathroom', 'movie theatre', 'music lessons', 'office unhappy', 'old tv', 'business assistant', 'business interview', 'christmas room', 'computer learning', 'computer repair', 'dentist tools', 'elderly care', 'future city', 'garden fence', 'home care', 'international business', 'medical science', 'mobile tablet', 'mona lisa', 'muslim prayer', 'office door', 'old clock', 'old typewriter', 'open bible', 'profile pictures', 'scales of justice', 'scales of justice', 'business credit', 'business negotiation', 'college classroom', 'dog teeth', 'green blur', 'hispanic family', 'hispanic toddler', 'holding ipad', 'hospital emergency', 'house windows', 'job loss', 'kids jumping', 'movie screen', 'new construction', 'one dollar', 'person computer', 'red peppers', 'relax time', 'sad people', 'senior sick', 'smartphone search', 'angry person', 'baby picture', 'business headshot', 'computer code', 'dark street', 'dog costume', 'house building', 'jump beach', 'lady bug', 'laughing toddler', 'man diet', 'metal door', 'mouth tape', 'open kitchen', 'paint cans', 'prescription pad', 'public toilet', 'radio black', 'school hallway', 'sick patient', 'sold home', 'asian athlete', 'baby toys', 'business communications', 'children reading', 'christmas snow', 'computer industry', 'delivery truck', 'dog bath', 'dog snow', 'dog tags', 'doll house', 'elevator panel', 'empty bed', 'expensive house', 'eye cream', 'fat people', 'futuristic building', 'grass mountain', 'human organ', 'jail cell', 'kids swimming', 'lake tahoe', 'luxury villas', 'mens shoes', 'mount everest', 'oil barrel', 'old paper', 'old train', 'online survey', 'open house', 'outdoor party', 'party people', 'pet love', 'pirate ship', 'police arrest', 'police man', 'poor children', 'puppy playing', 'quit smoking', 'sad couple', 'santa sitting', 'server rack', 'soccer girl', 'angry driver', 'black couple', 'business group', 'children books', 'college football', 'computer security', 'dark forest', 'data analysis', 'dead body', 'dog running', 'dogs playing', 'empty loft', 'fishing stream', 'fitness african', 'funny business', 'girl cheeky', 'giving hands', 'golf green', 'golf hole', 'halloween decorations', 'helping people', 'homeless shelters', 'house inspection', 'judge gavel', 'kitchen faucet', 'lake fishing', 'london night', 'marketing ideas', 'medical technology', 'messy bed', 'mexico flag', 'mixing board', 'money falling', 'movie set', 'moving truck', 'oil rig', 'old bicycle', 'paris cafe', 'personal training', 'pool deck', 'production studio', 'protein powder', 'room wall', 'sad puppy', 'scared face', 'science fiction', 'business branding', 'business celebration', 'business charts', 'business development', 'children eating', 'children laughing', 'children running', 'christmas food', 'christmas packages', 'concert stage', 'concrete room', 'dark alley', 'data security', 'dead girl', 'dog paw', 'dog shelter', 'dog training', 'empty hall', 'face transparent', 'family beach', 'family fun', 'family room', 'family travel', 'farm family', 'fat guy', 'female headshot', 'film production', 'funny couple', 'funny dog', 'funny selfie', 'futuristic room', 'gift card', 'gift tag', 'global network', 'hands love', 'heart monitor', 'hispanic couple', 'home building', 'home library', 'hot sun', 'house fire', 'insurance policy', 'interest rates', 'internet marketing', 'iphone 6', 'isolated teen', 'japan traditional', 'kids running', 'kids sports', 'large group', 'long road', 'luxury kitchen', 'manager face', 'money stack', 'motorcycle gear', 'murder scene', 'old castle', 'old factory', 'old wallpaper', 'paint splatter', 'painter professional', 'party mask', 'people arguing', 'people gardening', 'people shopping', 'physical rehabilitation', 'plants growing', 'pool cleaning', 'pyramids giza', 'restaurant interior', 'retired people', 'rich people', 'scary woman', 'school backpacks', 'seniors exercising', 'shooting star', 'sick dog', 'silhouette head', 'snowy christmas', 'baby jesus', 'baby tiger', 'business hotel', 'business marketing', 'children beach', 'chinese smile', 'christmas banner', 'computer consulting', 'dark wood', 'demon man', 'dog christmas', 'dog hug', 'elderly smile', 'elevator doors', 'estate planning', 'female portraits', 'flash drive', 'future fashion', 'gay marriage', 'geiger counter', 'giant panda', 'gold bracelet', 'green energy', 'grizzly bear', 'guitar amp', 'happy employees', 'happy seniors', 'home remodeling', 'horror ghost', 'house front', 'internet security', 'ipad business', 'key hole', 'lake louise', 'late summer', 'laughing laptop', 'lcd tv', 'lesbian couple', 'lion roaring', 'london bus', 'love triangle', 'luxury bathroom', 'macro flower', 'men outside', 'men portraits', 'mission goals', 'models eyes', 'movie production', 'movie studio', 'old dog', 'old radio', 'older people', 'overweight sad', 'palm sunday', 'passport photo', 'pig farm', 'plastic recycling', 'public relations', 'radio microphone', 'rainy sky', 'red smoke', 'retail shopping', 'road closed', 'rocket launch', 'rome skyline', 'roof repair', 'snow landscape', 'snowman outdoors', 'soccer fans', 'solar farm', 'woman thinking', 'wearing glasses', 'new job', 'unhappy person', 'suburban street', 'white van', 'cake candles', 'woman sword', 'women smart phones', 'women smart phones', 'despair woman', 'women models', 'women patient', 'vietnam woman', 'disabled senior', 'web site', 'wrinkled skin', 'writing check', 'chicken farm', 'trail running', 'tv studio', 'american portrait', 'apartment interior', 'beauty treatments', 'bored students', 'cape cod', 'chemistry lab', 'crazy woman', 'foot pain', 'friendly face', 'notre dame', 'aquarium fish', 'car wreck', 'drug store', 'health insurance', 'houston texas', 'special offer', 'coming soon', 'stadium lights', 'tree planting', 'vintage room', 'ballot box', 'creative people', 'sports injury', 'baseball game', 'dairy products', 'florence italy', 'head injury', 'pearl harbor', 'sun beach', 'winter house', 'couple smiling', 'court room', 'football game', 'lima peru', 'stage curtains', 'sunrise mountain', 'watching football', 'world cup', 'australian flag', 'bikini girl', 'blank signs', 'container ships', 'dietary supplements', 'e cig', 'night forest', 'route 66', 'ski jump', 'tile floor', 'alarm system', 'blue smoke', 'city bus', 'cosmetic beauty', 'diamond necklace', 'digital future', 'fortune cookie', 'la jolla', 'spa resort', 'spring forest', 'teenager headache', 'vintage radio', 'winning attitude', 'anxiety woman', 'bathroom interior', 'desert sunset', 'digital video', 'dirty dishes', 'stir fry', 'sunset field', 'technology background', 'unhappy overweight', 'water well', 'barrier reef', 'building engineer', 'caution tape', 'checkered flag', 'clothes closet', 'cooling towers', 'cowboy boots', 'cute rabbit', 'flowers blooming', 'football helmet', 'friends hugging', 'santa barbara', 'suburban home', 'suburban house', 'training class', 'underwear model', 'video editing', 'vintage microphone', 'window cleaning', 'wood fence', 'wood floor', 'bavarian girl', 'beer glasses', 'car isolated', 'headshot man', 'phoenix arizona', 'skin disease', 'stormy sky', 'telephone operator', 'vintage tv', 'abandoned warehouse', 'anniversary party', 'background pattern', 'blind person', 'blood transfusion', 'blow kisses', 'body waxing', 'boxer dog', 'boy cooking', 'california beach', 'coffee espresso', 'columbus ohio', 'dancing ocean', 'diet food', 'dirty water', 'ear infection', 'friends talking', 'new guinea', 'squat exercise', 'successful people', 'tattoo girl', 'thai massage', 'tropical forest', 'university classroom', 'water heater', 'website design', 'wine barrels', 'airport gate', 'autumn path', 'basketball girl', 'boring party', 'breaking news', 'carpet cleaning', 'client meeting', 'company logo', 'content marketing', 'country music', 'country western', 'depressed people', 'free shipping', 'fried fish', 'hurt child', 'puerto vallarta', 'sound wave', 'strategic planning', 'task list', 'tax time', 'tokyo city', 'top secret', 'truck cargo', 'unconditional love', 'watching sport', 'water tank', 'wheat grain', 'work injury', 'workplace diversity', 'abstract blue', 'aching back', 'african family', 'african village', 'aggressive driving', 'ancient egypt', 'architectural drawings', 'bad credit', 'bamboo forest', 'birmingham alabama', 'black bear', 'bloody knife', 'broken toy', 'broken window', 'buckingham palace', 'butcher block', 'camera viewfinder', 'candy corn', 'cheating man', 'chicken wings', 'cloud software', 'construction crane', 'cyber crime', 'dinosaur skeleton', 'dna helix', 'flying saucer', 'food packaging', 'mail box', 'news reporter', 'notebook paper', 'nuclear power', 'san antonio', 'seattle washington', 'skyline night', 'space stars', 'spinal cord', 'steak dinner', 'stop watch', 'storm clouds', 'stylish room', 'suburban neighborhood', 'table set', 'technology innovation', 'teen computer', 'temple door', 'tiger cub', 'troubled teen', 'tv room', 'video interview', 'washington monument', 'website traffic', 'white dove', 'winter lake', 'wood sign', 'worried bills', 'wounded soldier', 'yankee stadium', 'animal baby', 'animal rescue', 'apartment complex', 'assembly line', 'auto insurance', 'baking utensils', 'bank building', 'baseball dugout', 'birds eating', 'brain scan', 'car lot', 'car radio', 'carnival ride', 'cat portrait', 'cat snow', 'catholic mass', 'cityscape night', 'club lights', 'club party', 'coloured pencils', 'contact center', 'corn farm', 'couple love', 'couple talking', 'couples feet', 'cracked glass', 'crazy people', 'crosswalk sign', 'disabled adult', 'elder care', 'friends eating', 'fruit basket', 'health information', 'night room', 'silicon valley', 'sonoma valley', 'sports action', 'straight road', 'tablet family', 'theater stage', 'turning page', 'unhappy couples', 'veiled chameleon', 'vintage map', 'warehouse interior', 'washing feet', 'wedding black', 'welcome home', 'witch broom']
 skip_keys = ["other"]
 
 gender_dict = {"men":1,"man":1,"male":1,"males":1,"his":1,"him":1,"businessman":1,"businessmen":1,"father":1, "men's":1, "himself":1, "homme":1, "hombre":1, "(man)":1, "-women men -children":1, "-women -men -children":2, "none":2, "oldmen":3, "grandfather":3,"oldwomen":4, "grandmother":4, "nonbinary":5, "other":6, "trans":7, 
@@ -317,22 +318,31 @@ def unlock_key_list(site_image_id, keys_list, keys_dict):
 def unlock_key_plurals_etc(site_id,key, this_dict):
     key_no = None
     key = key.lower()
+
+    # print("key Shame - Negative Emotion unlocks:", this_dict["Shame - Negative Emotion"])
+    # print("key shame - negative emotion unlocks:", this_dict["shame - negative emotion"])
+    
     try:
         # print("trying basic keys_dict for this key:")
         # print(key)
         # print("from dict this long")
         # print(len(this_dict))
-        # # print(this_dict)
+        # print(this_dict)
 
-        # print(this_dict["office"])
+
         key_no = this_dict[key]
-        # print("this is the key_no")
+        # print("this is the key_no for key:", key)
         # print(key_no)
         return(key_no)
     except:
+        # print("failed to find key:", key)
         try:
             key = key2key[key]
+            # print("this is the key2key key:", key)
             key_no = this_dict[key]
+            # print("this is the key2key key_no for key:", key)
+            # print(key_no)
+            
             return(key_no)
         except:
             # try:
@@ -348,7 +358,7 @@ def unlock_key_plurals_etc(site_id,key, this_dict):
                 try:
                     key_no = this_dict[plur_key[0]]
                     # key = plur_key
-                    print(key_no)
+                    # print(key_no)
                 except:
                     pass# print(key)
             elif sing_key and key != sing_key:
@@ -479,7 +489,7 @@ def get_key_no_dictonly(eth_name, keys_list, this_dict, do_write_csv=False):
         key_no_list.append(key_no)
     else:
         key_no_list = search_keys(keys_list, this_dict, do_write_csv, True)
-        print("searched keys and found key_no: ", key_no_list)
+        # print("searched keys and found key_no: ", key_no_list)
     return(key_no_list)
 
 def unlock_key_dict(key,this_dict,this_key2key=None):
@@ -488,12 +498,12 @@ def unlock_key_dict(key,this_dict,this_key2key=None):
     try:
         try:
             key_no = this_dict[key]
-            print(f"unlock_key_dict yields key_no {str(key_no)} for {key}")
+            # print(f"unlock_key_dict yields key_no {str(key_no)} for {key}")
             return(key_no)
         except:
             # try again without underscores
             key_no = this_dict[key.replace("_"," ")]
-            print(f"unlock_key_dict without underscores yields key_no {str(key_no)} for {key}")
+            # print(f"unlock_key_dict without underscores yields key_no {str(key_no)} for {key}")
             return(key_no)            
     except:
         if this_key2key:
@@ -589,12 +599,12 @@ def get_gender_age_row(gender_string, age_string, description, keys_list, site_i
                 elif gender == 10:
                     gender = 8
                     age = 5
-                print(f"first try, gender is {str(gender)} and age is {str(age)}")
+                # print(f"first try, gender is {str(gender)} and age is {str(age)}")
                 # gender_dict={"men":1, "none":2, "oldmen":3, "oldwomen":4, "nonbinary":5, "other":6, "trans":7, "women":8, "youngmen":9, "youngwomen":10}
             except:
                 try:
                     age = age_dict[this_string.lower()]
-                    print(f"second try age is {str(age)}")
+                    # print(f"second try age is {str(age)}")
 
                 except:
                     # this isn't relevant for iStock
@@ -658,7 +668,7 @@ def get_gender_age_row(gender_string, age_string, description, keys_list, site_i
         age_detail = get_mode(age_detail_list)
         return gender, age, age_detail
 
-    print("get_gender_age_row starting")
+    # print("get_gender_age_row starting")
     global gender_dict
     gender = None
     age= None
@@ -675,9 +685,9 @@ def get_gender_age_row(gender_string, age_string, description, keys_list, site_i
     if gender_string != "":
         print("trying try_gender_age_key for", gender_string, age_string)
         gender, age, age_detail = try_gender_age_key(gender, age, age_detail, gender_string)
-        print(gender)
-        print(age)
-        print(age_detail)
+        # print(gender)
+        # print(age)
+        # print(age_detail)
 
     else:
         print("trying get_gender_age_keywords for", gender_string, age_string)
@@ -868,10 +878,10 @@ def structure_row_istock(row, ind, keys_list):
     if not country or country == "":
         #tk search keys
         # get eth from keywords, using keys_list and eth_keys_dict
-        print("UNLOCKING SEARCH_KEYS_FOR_LOC <><><><><><><><>")
+        # print("UNLOCKING SEARCH_KEYS_FOR_LOC <><><><><><><><>")
         # absence of search string ("None") triggers search_keys function
         loc_no_list = get_key_no_dictonly(None, keys_list, locations_dict, True)
-        print(loc_no_list)
+        # print(loc_no_list)
         country_key = get_mode(loc_no_list)
         # if not loc_no_list:
         #     loc_no_list = get_key_no_dictonly(None, keys_list, locations_dict_alt, True)
@@ -947,6 +957,57 @@ def structure_row_shutterstock(row, ind, keys_list):
     # print(image_row)
     return nan2none(image_row)
 
+def structure_row_pond5(row, ind, keys_list):
+    #  4435259 items_cache.jsonl
+    # 21409581 output.csv
+    # 114357130 in ministock
+
+    site_id = 7 #id for the site, not the image
+    gender = row[6].replace("_"," ")
+    age = row[5].replace("_"," ")
+    country = None
+    description = row[1]
+    gender_key, age_key, age_detail_key = get_gender_age_row(gender, age, description, keys_list, site_id)
+    country_key = None
+    # print("row 3 is", type(country))
+    if country and country != "":
+        country_key = unlock_key_dict(country,locations_dict_AA, loc2loc)
+        # print("country_key", str(country_key))
+        if country_key == 999999999:
+            write_csv(CSV_BLANKLOC_PATH,row)
+            return(None)
+    elif not country or country == "":
+        #tk search keys
+        # get eth from keywords, using keys_list and eth_keys_dict
+        # print("UNLOCKING SEARCH_KEYS_FOR_LOC <><><><><><><><>")
+        # absence of search string ("None") triggers search_keys function
+        loc_no_list = get_key_no_dictonly(None, keys_list, locations_dict, True)
+        # print(loc_no_list)
+        country_key = get_mode(loc_no_list)
+        # if not loc_no_list:
+        #     loc_no_list = get_key_no_dictonly(None, keys_list, locations_dict_alt, True)
+        #     if loc_no_list: 
+        print(f"SEARCH_KEYS_FOR_LOC found for {country_key}")
+    else:
+        country_key = None
+
+    # handle long URLs
+    if len(row[8])>300: contentUrl = "contentUrl was greater than 300 characters search for site_image_id"
+    else: contentUrl = row[8]
+
+    image_row = {
+        "location_id": country_key,        
+        "site_image_id": row[0],
+        "site_name_id": site_id,
+        "description": description[:140],
+        "age_id": age_key,
+        "gender_id": gender_key,
+        "age_detail_id": age_detail_key,
+        "contentUrl": contentUrl,
+        "imagename": row[9].replace("/Volumes/SSD4green/Pond5/new_images/","")  # need to refactor this from the contentURL using the hash function
+    }
+    # print(image_row)
+    return nan2none(image_row)
 
 # Define a custom retry decorator
 def custom_retry(func):
@@ -973,7 +1034,33 @@ def execute_query_with_retry(conn, query, parameters=None):
         raise e
 
 def ingest_csv():
-
+    def split_pond5_keys(keys_list, separator):
+        # for key in keys_list, try to split on "\n" and take the second part
+        return [key.split(separator)[1] if separator in key else key for key in keys_list]
+    
+    def split_pond5_keys_bylist(keys_list, pond5_spacedkeys_set):
+        split_keys = []
+        for key in keys_list:
+            if key in pond5_spacedkeys_set:
+                split_keys.extend(key.split(" "))
+        return keys_list + split_keys
+    
+    def split_pond5_spacekeys(keys_list, pond5_spacedkeys_set):
+        split_keys = []
+        keys_with_spaces = [key for key in keys_list if ' ' in key]
+        
+        for key in keys_with_spaces:
+            if key in pond5_spacedkeys_set:
+                print("splitting key: ", key)
+                split_keys.extend(key.split(" "))
+                keys_list.remove(key)
+        
+        # Remove keys without spaces from original list
+        # keys_list = [key for key in keys_list if key not in keys_with_spaces]
+        
+        keys_list.extend(split_keys)
+        return keys_list
+        
     # change this for each site ingested #
     # adobe
     # column_keys = 6 #where the keywords are
@@ -1000,6 +1087,7 @@ def ingest_csv():
         # start_counter = 0 #temporary for testing, while adobe is ongoing
         counter = 0
         ind = 0
+        pond5_spacedkeys_set = set(pond5_spacedkeys)
         
         for row in reader_obj:
             # print(row[1])
@@ -1011,6 +1099,9 @@ def ingest_csv():
             # splitting keys. try is for getty, except is currently set for pexels.
             try:
                 keys_list = row[column_keys].lower().split(separator_keys)
+                keys_list = split_pond5_keys(keys_list, "\n")
+                keys_list = split_pond5_spacekeys(keys_list, pond5_spacedkeys_set)            
+
 
                 # # adobe specific. remove for future sites
                 # desc_list = row[3].replace(",","").lower().split("-")
@@ -1018,12 +1109,11 @@ def ingest_csv():
 
             except IndexError:
                 print("keys failed")
-            print("keys_list")
+            # print("keys_list")
             print(keys_list)
 
 
-            # image_row = structure_row_adobe(row, ind, keys_list)
-            image_row = structure_row_shutterstock(row, ind, keys_list)
+            image_row = structure_row_pond5(row, ind, keys_list)
 
             # if the image row has problems, skip it (structure_row saved it to csv)
             if not image_row:
@@ -1059,7 +1149,7 @@ def ingest_csv():
 
 
             # STORE THE DATA
-            print("connecting to DB")
+            # print("connecting to DB")
 
             try:
                 with engine.connect() as conn:
