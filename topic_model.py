@@ -55,7 +55,7 @@ items, seconds
 4000000, 
 '''
 title = 'Please choose your operation: '
-options = ['Topic modelling', 'Topic indexing','calculating optimum_topics']
+options = ['Preprocess corpus','Model topics', 'Index topics','calculate optimum_topics']
 io = DataIO()
 db = io.db
 # io.db["name"] = "ministock"
@@ -79,8 +79,9 @@ def set_query():
     SELECT = "DISTINCT(image_id),description,keyword_list"
     FROM ="bagofkeywords"
     WHERE = "keyword_list IS NOT NULL "
-    LIMIT = 4000000
+    LIMIT = 40000
     if MODE==1:
+        # assigning topics
         WHERE = "keyword_list IS NOT NULL AND image_id NOT IN (SELECT image_id FROM imagestopics)"
         # WHERE = "image_id = 423638"
         LIMIT=100000
@@ -123,44 +124,7 @@ Session = sessionmaker(bind=engine)
 session = Session()
 Base = declarative_base()
 
-ambig_key_dict = {
-	"black-and-white": "black_and_white",
-	"black and white background": "black_and_white background",
-	"black and white portrait": "black_and_white portrait",
-	"black amp white": "black_and_white",
-	"white and black": "black_and_white",
-	"black and white film": "black_and_white film",
-	"black and white wallpaper": "black_and_white wallpaper",
-	"black and white cover photos": "black_and_white cover photos",
-	"black and white outfit": "black_and_white outfit",
-	"black and white city": "black_and_white city",
-	"blackandwhite": "black_and_white",
-	"black white": "black_and_white",
-	"black friday": "black_friday",
-	"black magic": "black_magic",
-	"black lives matter": "black_lives_matter black_ethnicity",
-	"black out tuesday": "black_out_tuesday black_ethnicity",
-	"black girl magic": "black_girl_magic black_ethnicity",
-	"beautiful black women": "beautiful black_ethnicity women",
-	"black model": "black_ethnicity model",
-	"black santa": "black_ethnicity santa",
-	"black children": "black_ethnicity children",
-	"black history": "black_ethnicity history",
-	"black family": "black_ethnicity family",
-	"black community": "black_ethnicity community",
-	"black owned business": "black_ethnicity owned business",
-	"black holidays": "black_ethnicity holidays",
-	"black models": "black_ethnicity models",
-	"black girl bullying": "black_ethnicity girl bullying",
-	"black santa claus": "black_ethnicity santa claus",
-	"black hands": "black_ethnicity hands",
-	"black christmas": "black_ethnicity christmas",
-	"white and black girl": "white_ethnicity and black_ethnicity girl",
-	"white woman": "white_ethnicity woman",
-	"white girl": "white_ethnicity girl",
-	"white people": "white_ethnicity",
-	"red white and blue": "red_white_and_blue"
-}
+ambig_key_dict = { "black-and-white": "black_and_white", "black and white background": "black_and_white background", "black and white portrait": "black_and_white portrait", "black amp white": "black_and_white", "white and black": "black_and_white", "black and white film": "black_and_white film", "black and white wallpaper": "black_and_white wallpaper", "black and white cover photos": "black_and_white cover photos", "black and white outfit": "black_and_white outfit", "black and white city": "black_and_white city", "blackandwhite": "black_and_white", "black white": "black_and_white", "black friday": "black_friday", "black magic": "black_magic", "black lives matter": "black_lives_matter black_ethnicity", "black out tuesday": "black_out_tuesday black_ethnicity", "black girl magic": "black_girl_magic black_ethnicity", "beautiful black women": "beautiful black_ethnicity women", "black model": "black_ethnicity model", "black santa": "black_ethnicity santa", "black children": "black_ethnicity children", "black history": "black_ethnicity history", "black family": "black_ethnicity family", "black community": "black_ethnicity community", "black owned business": "black_ethnicity owned business", "black holidays": "black_ethnicity holidays", "black models": "black_ethnicity models", "black girl bullying": "black_ethnicity girl bullying", "black santa claus": "black_ethnicity santa claus", "black hands": "black_ethnicity hands", "black christmas": "black_ethnicity christmas", "white and black girl": "white_ethnicity and black_ethnicity girl", "white woman": "white_ethnicity woman", "white girl": "white_ethnicity girl", "white people": "white_ethnicity", "red white and blue": "red_white_and_blue"}
 def clarify_keywords(text):
     # // if text contains either of the strings "black" or "white", replace with "black_and_white"
     if "black" in text or "white" in text:
@@ -207,13 +171,18 @@ def gen_corpus(processed_txt,MODEL):
     corpora.MmCorpus.serialize(BOW_CORPUS_PATH, bow_corpus)
 
     return 
+
+def load_corpus():
+    print("loading corpus and dictionary")
+    dictionary = corpora.Dictionary.load(DICT_PATH)
+    corpus = corpora.MmCorpus(TFIDF_CORPUS_PATH)
+    return dictionary, corpus 
+
     
 def LDA_model(num_topics):
-    print("loading corpus and dictionary")
-    loaded_dict = corpora.Dictionary.load(DICT_PATH)
-    loaded_corp = corpora.MmCorpus(TFIDF_CORPUS_PATH)
+    dictionary, corpus = load_corpus()
     print("processing the model now")
-    lda_model = gensim.models.LdaMulticore(loaded_corp, num_topics=num_topics, id2word=loaded_dict, passes=2, workers=NUMBER_OF_PROCESSES)
+    lda_model = gensim.models.LdaMulticore(corpus, num_topics=num_topics, id2word=dictionary, passes=2, workers=NUMBER_OF_PROCESSES)
     lda_model.save(MODEL_PATH)
     print("processed all")
     return lda_model
@@ -268,22 +237,25 @@ def write_imagetopics(resultsjson,lda_model_tfidf,dictionary):
     # Add the imagestopics object to the session
     session.commit()
     return
-def calc_optimum_topics(resultsjson):
+def calc_optimum_topics():
 
-    #######TOPIC MODELING ############
-    txt = pd.DataFrame(index=range(len(resultsjson)),columns=["description","keywords","index","score"])
-    for i,row in enumerate(resultsjson):
-        #txt.at[i,"description"]=row["description"]
-        txt.at[i,"keyword_list"]=" ".join(pickle.loads(row["keyword_list"]))
-    #processed_txt=txt['description'].map(preprocess)
-    processed_txt=txt['keyword_list'].map(preprocess)
+    dictionary, corpus = load_corpus()
 
-    gen_corpus(processed_txt,MODEL)
-    corpus = corpora.MmCorpus(BOW_CORPUS_PATH)
-    dictionary = corpora.Dictionary.load(MODEL_PATH+'.id2word')
+    # #######TOPIC MODELING ############
+    # txt = pd.DataFrame(index=range(len(resultsjson)),columns=["description","keywords","index","score"])
+    # for i,row in enumerate(resultsjson):
+    #     #txt.at[i,"description"]=row["description"]
+    #     txt.at[i,"keyword_list"]=" ".join(pickle.loads(row["keyword_list"]))
+    # #processed_txt=txt['description'].map(preprocess)
+    # processed_txt=txt['keyword_list'].map(preprocess)
+
+    # gen_corpus(processed_txt,MODEL)
+    # corpus = corpora.MmCorpus(BOW_CORPUS_PATH)
+    # dictionary = corpora.Dictionary.load(MODEL_PATH+'.id2word')
 
     
-    num_topics_list=[80,90,100,110,120]
+    # num_topics_list=[80,90,100,110,120]
+    num_topics_list=[40,80,120]
     coher_val_list=np.zeros(len(num_topics_list))
     for i,num_topics in enumerate(num_topics_list):
         lda_model = gensim.models.LdaMulticore(corpus, num_topics=num_topics, id2word=dictionary, passes=2, workers=NUMBER_OF_PROCESSES)
@@ -291,7 +263,7 @@ def calc_optimum_topics(resultsjson):
         coher_val_list[i]=cm.get_coherence()
     print(num_topics_list,coher_val_list)  # get coherence value
 
-def topic_model(resultsjson):
+def preprocess_corpus(resultsjson):
     #######TOPIC MODELING ############
     txt = pd.DataFrame(index=range(len(resultsjson)),columns=["description","keywords","index","score"])
     for i,row in enumerate(resultsjson):
@@ -301,11 +273,28 @@ def topic_model(resultsjson):
     processed_txt=txt['keyword_list'].map(preprocess)
     gen_corpus(processed_txt,MODEL)
     
+    # lda_model=LDA_model(NUM_TOPICS)
+
+    # write_topics(lda_model)
+    
+    return
+
+def topic_model():
+    # #######TOPIC MODELING ############
+    # txt = pd.DataFrame(index=range(len(resultsjson)),columns=["description","keywords","index","score"])
+    # for i,row in enumerate(resultsjson):
+    #     #txt.at[i,"description"]=row["description"]
+    #     txt.at[i,"keyword_list"]=" ".join(pickle.loads(row["keyword_list"]))
+    # #processed_txt=txt['description'].map(preprocess)
+    # processed_txt=txt['keyword_list'].map(preprocess)
+    # gen_corpus(processed_txt,MODEL)
+    
     lda_model=LDA_model(NUM_TOPICS)
 
     write_topics(lda_model)
     
     return
+
 
 def topic_index(resultsjson):
     ###########TOPIC INDEXING#########################
@@ -334,12 +323,16 @@ def main():
 
     start = time.time()
     # create_my_engine(db)
-    resultsjson = selectSQL()
-    print("got results, count is: ",len(resultsjson))
 
-    if MODE==0:topic_model(resultsjson)
-    elif MODE==1:topic_index(resultsjson)
-    elif MODE==2:calc_optimum_topics(resultsjson)
+    # 
+    if MODE==0 or MODE==2:
+        resultsjson = selectSQL()
+        print("got results, count is: ",len(resultsjson))
+
+    if MODE==0:preprocess_corpus(resultsjson)
+    elif MODE==1:topic_model()
+    elif MODE==2:topic_index(resultsjson)
+    elif MODE==3:calc_optimum_topics()
     end = time.time()
     print (end - start)
     return True
