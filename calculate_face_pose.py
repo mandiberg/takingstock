@@ -53,8 +53,8 @@ http="https://media.gettyimages.com/photos/"
 IS_FOLDER = True
 SITE_NAME_ID = 2
 # 2, shutter. 4, istock
-# MAIN_FOLDER = "/Volumes/SSD4green/images_istock"
-MAIN_FOLDER = "/Volumes/RAID54/images_shutterstock"
+MAIN_FOLDER = "/Volumes/SSD4green/images_shutterstock"
+# MAIN_FOLDER = "/Volumes/RAID54/images_shutterstock"
 BATCH_SIZE = 25000 # Define how many from each folder in each batch
 
 #temp hack to go 1 subfolder at a time
