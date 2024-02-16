@@ -24,7 +24,8 @@ class SortPose:
         self.MAXDIST = 0.7
         self.MINDIST = .45
         self.MINBODYDIST = .05
-        self.CUTOFF = 100000
+        self.CUTOFF = 1000
+        self.FACE_DIST = 15
 
         # maximum allowable scale up
         self.resize_max = 2.99
@@ -162,6 +163,7 @@ class SortPose:
             "start_img_name":start_img_name,
             "start_site_image_id":start_site_image_id,
             "last_image":None,
+            "last_description":None,
             "last_image_enc":None
 
         }
@@ -467,8 +469,6 @@ class SortPose:
         cv2.destroyAllWindows()
 
     def unique_face(self,img1,img2):
-
-
         # convert the images to grayscale
         img1 = cv2.cvtColor(img1, cv2.COLOR_BGR2GRAY)
         img2 = cv2.cvtColor(img2, cv2.COLOR_BGR2GRAY)
@@ -488,26 +488,26 @@ class SortPose:
 
         error, diff = mse(img1, img2)
         
-        # i don't know what number to use
-        if error == 0:
-            print(f"unique_face: {error} Fail, images identical")
-            return False
-        elif error < 15:
-            print(f"unique_face: {error} Fail, images less than 15 diff")
-            # preview_img(diff)
-            # preview_img(img1)
-            # preview_img(img2)
-            return False
-        elif error < 25:
-            print(f"unique_face: {error} Fail, images 15-25 diff")
-            preview_img(diff)
-            preview_img(img1)
-            preview_img(img2)
-            return False
-        else:
-            return True
+        # # i don't know what number to use
+        # if error == 0:
+        #     print(f"unique_face: {error} Fail, images identical")
+        #     return False
+        # elif error < 15:
+        #     print(f"unique_face: {error} Fail, images less than 15 diff")
+        #     # preview_img(diff)
+        #     # preview_img(img1)
+        #     # preview_img(img2)
+        #     return False
+        # elif error < 25:
+        #     print(f"unique_face: {error} Fail, images 15-25 diff")
+        #     preview_img(diff)
+        #     preview_img(img1)
+        #     preview_img(img2)
+        #     return False
+        # else:
+        #     return True
 
-
+        return error
 
 
 

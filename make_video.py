@@ -24,7 +24,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
 # my ORM
-from my_declarative_base import Base, Clusters, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON
+from my_declarative_base import Base, Clusters, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON, Images
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import create_engine, text, MetaData, Table, Column, Numeric, Integer, VARCHAR, update, Float
@@ -73,7 +73,7 @@ IS_TOPICS = False
 N_TOPICS = 88
 
 IS_ONE_TOPIC = True
-TOPIC_NO = 25
+TOPIC_NO = 10
 # 7 is isolated, 84 is business, 27 babies, 16 pointing
 # 37 is doctor << 35 covid
 # 45 is hands
@@ -84,9 +84,9 @@ TOPIC_NO = 25
 # 10 is surprise
 # 25 is yoga << planar, 85 planar, 77 fingers crossed
 
-# SORT_TYPE = "128d"
+SORT_TYPE = "128d"
 # SORT_TYPE ="planar"
-SORT_TYPE = "planar_body"
+# SORT_TYPE = "planar_body"
 
 ONE_SHOT = False # take all files, based off the very first sort order.
 JUMP_SHOT = False # jump to random file if can't find a run
@@ -96,6 +96,7 @@ io = DataIO(IS_SSD)
 db = io.db
 # overriding DB for testing
 io.db["name"] = "ministock1023"
+METAS_FILE = "metas.csv"
 
 NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 
@@ -154,13 +155,14 @@ elif IS_SEGONLY:
     if IS_TOPICS or IS_ONE_TOPIC:
         FROM += " JOIN ImagesTopics it ON s.image_id = it.image_id "
         WHERE += " AND it.topic_score > .3"
+        SELECT += ", it.topic_score" # add description here, after resegmenting
 
     # # join to keywords
     # FROM += " JOIN ImagesKeywords ik ON s.image_id = ik.image_id JOIN Keywords k ON ik.keyword_id = k.keyword_id "
     # WHERE += " AND k.keyword_text LIKE 'surpris%' "
 
     # WHERE = "s.site_name_id != 1"
-    LIMIT = 100000
+    LIMIT = 1000000
 
 
 
@@ -184,8 +186,8 @@ face_height_output = 500
 # units are ratio of faceheight
 # top, right, bottom, left
 # image_edge_multiplier = [1, 1, 1, 1] # just face
-# image_edge_multiplier = [1.5,1.5,2,1.5] # bigger portrait
-image_edge_multiplier = [1.4,2.6,1.9,2.6] # wider for hands
+image_edge_multiplier = [1.5,1.5,2,1.5] # bigger portrait
+# image_edge_multiplier = [1.4,2.6,1.9,2.6] # wider for hands
 # image_edge_multiplier = [1.2,2.3,1.7,2.3] # medium for hands
 # image_edge_multiplier = [1.2, 1.2, 1.6, 1.2] # standard portrait
 
@@ -565,7 +567,7 @@ def prep_encodings(df_segment):
 
 def compare_images(last_image, img, face_landmarks, bbox):
     is_face = None
-
+    face_diff = 100 # declaring full value, for first round
     #crop image here:
     if sort.EXPAND:
         cropped_image = sort.expand_image(img, face_landmarks, bbox)
@@ -592,7 +594,7 @@ def compare_images(last_image, img, face_landmarks, bbox):
                     is_face = sort.test_pair(last_image, cropped_image)
                     if is_face:
                         # print("same person, testing mse")
-                        is_face = sort.unique_face(last_image,cropped_image)
+                        face_diff = sort.unique_face(last_image,cropped_image)
                         # print ("mse ",mse)
                     else:
                         print("failed is_face test")
@@ -601,7 +603,7 @@ def compare_images(last_image, img, face_landmarks, bbox):
         except:
             print("last_image try failed")
         # if is_face or first_run and sort.resize_factor < sort.resize_max:
-        if is_face or sort.counter_dict["first_run"]:
+        if face_diff > sort.FACE_DIST or sort.counter_dict["first_run"]:
             sort.counter_dict["first_run"] = False
             last_image = cropped_image
             sort.counter_dict["good_count"] += 1
@@ -616,7 +618,7 @@ def compare_images(last_image, img, face_landmarks, bbox):
     else:
         print("no image here, trying next")
         sort.counter_dict["cropfail_count"] += 1
-    return cropped_image
+    return cropped_image, face_diff
 
 
 def print_counters():
@@ -645,19 +647,42 @@ def const_imgfilename(filename, df, imgfileprefix):
     print("imgfilename ",imgfilename)
     return imgfilename
 
-def linear_test_df(df,cluster_no, itter=None):
+def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
+    def save_image_metas(row):
+        # print("row")
+        print("save_image_metas")
+        parent_row = df_segment[df_segment['imagename'] == row['filename']]
+        image_id = parent_row['image_id'].values[0]
+        # use image_id to retrieve description from mysql database 
+        # this is temporary until I resegment the images with description in the segment
+        try:
+            description = session.query(Images.description).filter(Images.image_id == image_id).first()
+        except Exception as e:
+            print(str(e))
+        # description = parent_row['description'].values[0]
+        topic_score = parent_row['topic_score'].values[0]
+        metas = [image_id, description[0], topic_score]
+        metas_path = os.path.join(sort.counter_dict["outfolder"],METAS_FILE)
+        io.write_csv(metas_path, metas)
+        # print(image_id, description[0], topic_score)
+        # return([image_id, description[0], topic_score])
     #itter is a cap, to stop the process after a certain number of rounds
     print('writing images')
-    imgfileprefix = f"X{str(sort.XLOW)}-{str(sort.XHIGH)}_Y{str(sort.YLOW)}-{str(sort.YHIGH)}_Z{str(sort.ZLOW)}-{str(sort.ZHIGH)}_ct{str(df.size)}"
+    imgfileprefix = f"X{str(sort.XLOW)}-{str(sort.XHIGH)}_Y{str(sort.YLOW)}-{str(sort.YHIGH)}_Z{str(sort.ZLOW)}-{str(sort.ZHIGH)}_ct{str(df_sorted.size)}"
     print(imgfileprefix)
     good = 0
     img_list = []
+    metas_list = []
+    for index, row in df_sorted.iterrows():
+        # parent_row = df_segment[df_segment['imagename'] == row['filename']]
+        # print("parent_row")
+        # print(parent_row)
 
-    for index, row in df.iterrows():
         print('-- linear_test_df [-] in loop, index is', str(index))
         print(row)
+        # select the row in df_segment where the imagename == row['filename']
         try:
-            imgfilename = const_imgfilename(row['filename'], df, imgfileprefix)
+            imgfilename = const_imgfilename(row['filename'], df_sorted, imgfileprefix)
             outpath = os.path.join(sort.counter_dict["outfolder"],imgfilename)
             open_path = os.path.join(io.ROOT,row['folder'],row['filename'])
             # print(outpath, open_path)
@@ -669,12 +694,48 @@ def linear_test_df(df,cluster_no, itter=None):
             if row['dist'] < sort.MAXDIST:
                 # compare_images to make sure they are face and not the same
                 # last_image is cv2 np.array
-                cropped_image = compare_images(sort.counter_dict["last_image"], img, row['face_landmarks'], row['bbox'])
+                cropped_image, face_diff = compare_images(sort.counter_dict["last_image"], img, row['face_landmarks'], row['bbox'])
+
+
+                ###
+                # I'm trying to compare descriptions here but it isn't working
+                # first_run isn't working. 
+                ###
+
+                try:
+                    parent_row = df_segment[df_segment['imagename'] == row['filename']]
+                    image_id = parent_row['image_id'].values[0]                        
+                    description = session.query(Images.description).filter(Images.image_id == image_id).first()
+                except Exception as e:
+                    print(str(e))
+                temp_first_run = sort.counter_dict["first_run"]
+                print("temp_first_run")
+                print(temp_first_run)
+                if sort.counter_dict["first_run"]:
+                    sort.counter_dict["last_description"] = description
+                    print("first run, setting last_description")
+                elif face_diff < 30:
+                    print("face_diff too small")
+                    # temp, until resegmenting
+                    print(description[0])
+                    print(sort.counter_dict["last_description"])
+                    if description[0] == sort.counter_dict["last_description"]:
+                        print("same description!!!")
+
+
                 if cropped_image is not None:
                     img_list.append((outpath, cropped_image))
                     # this is done in compare function
                     # sort.counter_dict["good_count"] += 1
                     good += 1
+                    # print("going to save image metas")
+                    save_image_metas(row)
+                    # metas_list.append(save_image_metas(row))
+                    # parent_row = df_segment[df_segment['imagename'] == row['filename']]
+                    # print("parent_row")
+                    # print(parent_row)
+
+                    
                     # print("row['filename']")
                     # print(row['filename'])
                     sort.counter_dict["start_img_name"] = row['filename']
@@ -695,7 +756,8 @@ def linear_test_df(df,cluster_no, itter=None):
 
         except Exception as e:
             print(str(e))
-
+        print("metas_list")
+        print(metas_list)
     return img_list
     
 def write_images(img_list):
@@ -790,7 +852,7 @@ def process_linear(start_img_name, df_segment, cluster_no, sort):
     df_sorted = sort_by_face_dist(df_enc, df_128_enc, df_33_lms)
 
     # test to see if they make good faces
-    img_list = linear_test_df(df_sorted,cluster_no)
+    img_list = linear_test_df(df_sorted,df_segment,cluster_no)
     write_images(img_list)
     print_counters()
 
