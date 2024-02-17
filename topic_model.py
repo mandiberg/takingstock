@@ -68,6 +68,9 @@ BOW_CORPUS_PATH=os.path.join(io.ROOT,"BOW_lda_corpus.mm")
 TFIDF_CORPUS_PATH=os.path.join(io.ROOT,"TFIDF_lda_corpus.mm")
 # Satyam, you want to set this to False
 USE_SEGMENT = False
+VERBOSE = True
+RANDOM = False
+global_counter = 0
 
 MODEL="TF" ## OR TF  ## Bag of words or TF-IDF
 NUM_TOPICS=88
@@ -79,7 +82,9 @@ def set_query():
     SELECT = "DISTINCT(image_id),description,keyword_list"
     FROM ="bagofkeywords"
     WHERE = "keyword_list IS NOT NULL "
-    LIMIT = 40000
+    if RANDOM: 
+        WHERE += "AND image_id >= (SELECT FLOOR(MAX(image_id) * RAND()) FROM bagofkeywords)"
+    LIMIT = 100000
     if MODE==1:
         # assigning topics
         WHERE = "keyword_list IS NOT NULL AND image_id NOT IN (SELECT image_id FROM imagestopics)"
@@ -144,9 +149,12 @@ def selectSQL():
 def lemmatize_stemming(text):
     return stemmer.stem(WordNetLemmatizer().lemmatize(text, pos='v'))
 def preprocess(text):
+    global global_counter
     result = []
-    # print("text: ",text)
+    if global_counter % 10000 == 0:
+        print("preprocessed: ",global_counter)
     text = clarify_keywords(text.lower())
+    global_counter += 1
 
     for token in gensim.utils.simple_preprocess(text):
         if token not in MY_STOPWORDS and len(token) > 3:
@@ -159,18 +167,6 @@ def preprocess(text):
     # print("model saved")
     # return
 
-def gen_corpus(processed_txt,MODEL):
-    dictionary = gensim.corpora.Dictionary(processed_txt)
-    dictionary.filter_extremes(no_below=15, no_above=0.5, keep_n=100000)
-    bow_corpus = [dictionary.doc2bow(doc) for doc in processed_txt] ## BOW corpus
-    if MODEL=="TF":   
-        tfidf = models.TfidfModel(bow_corpus)  ## converting BOW to TDIDF corpus
-        tfidf_corpus = tfidf[bow_corpus]
-    dictionary.save(DICT_PATH)
-    corpora.MmCorpus.serialize(TFIDF_CORPUS_PATH, tfidf_corpus)
-    corpora.MmCorpus.serialize(BOW_CORPUS_PATH, bow_corpus)
-
-    return 
 
 def load_corpus():
     print("loading corpus and dictionary")
@@ -263,6 +259,25 @@ def calc_optimum_topics():
         coher_val_list[i]=cm.get_coherence()
     print(num_topics_list,coher_val_list)  # get coherence value
 
+def gen_corpus(processed_txt,MODEL):
+    dictionary = gensim.corpora.Dictionary(processed_txt)
+    if VERBOSE: print("gen_corpus: created dictionary")
+    dictionary.filter_extremes(no_below=15, no_above=0.5, keep_n=100000)
+    if VERBOSE: print("gen_corpus: filtered extremes")
+    bow_corpus = [dictionary.doc2bow(doc) for doc in processed_txt] ## BOW corpus
+    if VERBOSE: print("gen_corpus: created bow_corpus")
+    if MODEL=="TF":   
+        tfidf = models.TfidfModel(bow_corpus)  ## converting BOW to TDIDF corpus
+        tfidf_corpus = tfidf[bow_corpus]
+        if VERBOSE: print("gen_corpus: created tfidf_corpus")
+    dictionary.save(DICT_PATH)
+    if VERBOSE: print("gen_corpus: saved dictionary")
+    corpora.MmCorpus.serialize(TFIDF_CORPUS_PATH, tfidf_corpus)
+    if VERBOSE: print("gen_corpus: saved tfidf_corpus")
+    corpora.MmCorpus.serialize(BOW_CORPUS_PATH, bow_corpus)
+    if VERBOSE: print("gen_corpus: saved bow_corpus")
+    return 
+
 def preprocess_corpus(resultsjson):
     #######TOPIC MODELING ############
     txt = pd.DataFrame(index=range(len(resultsjson)),columns=["description","keywords","index","score"])
@@ -270,8 +285,12 @@ def preprocess_corpus(resultsjson):
         #txt.at[i,"description"]=row["description"]
         txt.at[i,"keyword_list"]=" ".join(pickle.loads(row["keyword_list"]))
     #processed_txt=txt['description'].map(preprocess)
+    print("this many rows to preprocess: ",len(txt))
+    if VERBOSE: print("preprocessing: loaded keyword_list into dataframe")
     processed_txt=txt['keyword_list'].map(preprocess)
+    if VERBOSE: print("preprocessing: processed keyword_list")
     gen_corpus(processed_txt,MODEL)
+    if VERBOSE: print("preprocessing: generated corpus")
     
     # lda_model=LDA_model(NUM_TOPICS)
 

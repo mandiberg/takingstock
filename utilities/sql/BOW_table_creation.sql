@@ -71,6 +71,35 @@ GROUP BY t.topic_id, t.topic
 ORDER BY total_images DESC;
 
 
+ALTER TABLE BagOfKeywords DROP  bag_id;
+
+-- adding new autoinc pkey for random index
+
+use ministock1023
+
+-- Step 1: Drop the AUTO_INCREMENT attribute from the image_id column
+ALTER TABLE BagOfKeywords MODIFY COLUMN image_id INT;
+
+-- Step 2: Add a new column for the primary key
+ALTER TABLE BagOfKeywords
+ADD COLUMN bag_id INT NOT NULL DEFAULT 0;
+
+-- Step 3: Populate the new column with unique values
+SET @counter:= 0;
+-- UPDATE BagOfKeywords SET bag_id=bag_id + @counter + 1;
+UPDATE BagOfKeywords SET bag_id = @counter := @counter + 1;
+
+-- 3.5 -- doesn't work, but also maybe not necessary...
+ALTER TABLE BagOfKeywords
+DROP PRIMARY KEY,
+ADD PRIMARY KEY (bag_id);
+
+-- Step 4: Create an index on the existing bag_id column
+CREATE INDEX idx_bag_id ON BagOfKeywords (bag_id);
+
+
+
+
 -- count of keywords overall
 USE ministock;
 SELECT k.keyword_id, k.keyword_text, COUNT(*) as keyword_count
