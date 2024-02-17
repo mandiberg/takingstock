@@ -65,6 +65,7 @@ NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 MODEL_PATH=os.path.join(io.ROOT,"model")
 DICT_PATH=os.path.join(io.ROOT,"dictionary.dict")
 BOW_CORPUS_PATH=os.path.join(io.ROOT,"BOW_lda_corpus.mm")
+TOKEN_PATH=os.path.join(io.ROOT,"tokenized_keyword_list.csv")
 TFIDF_CORPUS_PATH=os.path.join(io.ROOT,"TFIDF_lda_corpus.mm")
 # Satyam, you want to set this to False
 USE_SEGMENT = False
@@ -287,7 +288,6 @@ def gen_corpus(processed_txt,MODEL):
 
 def tokenize_corpus():
     batch_size = 10  # Adjust the batch size as needed
-
     # Step 1: Query rows where tokenized_keyword_list is NULL
     query = session.query(BagOfKeywords).filter(BagOfKeywords.tokenized_keyword_list.is_(None)).limit(1000)
     total_rows = query.count()
@@ -310,53 +310,11 @@ def tokenize_corpus():
         txt['keyword_list']=txt['keyword_list'].map(preprocess)
         print("preprocessed: ", txt)
 
-        # Iterate over the DataFrame and update corresponding rows in the database
-        for i, row in txt.iterrows():
-            image_id = row['image_id']
-            keyword_list = row['keyword_list']
+        # Write the processed batch to a CSV file
+        txt.to_csv(TOKEN_PATH, mode='a', header=False)
 
-            # Query the database to get the corresponding row
-            bag_of_keywords = session.query(BagOfKeywords).filter_by(image_id=image_id).first()
-
-            # Update the tokenized_keyword_list column with the preprocessed keyword_list
-            bag_of_keywords.tokenized_keyword_list = pickle.dumps(keyword_list)
-            print(f"bagged image_id {image_id}")
-
-        # Commit the changes to the database
-        session.commit()
-
-
-        # for row in rows:
-
-        #     # Your preprocessing steps to tokenize the keyword_list here
-        #     processed_data = pickle.dumps(tokenized_data)  # Replace tokenized_data with your processed data
-        #     row.tokenized_keyword_list = processed_data
-
-        # Commit the changes for each batch
-        # session.commit()
-
-    # Close the session
-    # session.close()
-
-    # #######TOPIC MODELING ############
-    # txt = pd.DataFrame(index=range(len(resultsjson)),columns=["description","keywords","index","score"])
-    # for i,row in enumerate(resultsjson):
-    #     #txt.at[i,"description"]=row["description"]
-    #     txt.at[i,"keyword_list"]=" ".join(pickle.loads(row["keyword_list"]))
-    # #processed_txt=txt['description'].map(preprocess)
-    # print("this many rows to preprocess: ",len(txt))
-
-    # if VERBOSE: print("preprocessing: loaded keyword_list into dataframe")
-    # processed_txt=txt['keyword_list'].map(preprocess)
-    # print("preprocessed: ",processed_txt)
-    # quit()
-    # if VERBOSE: print("preprocessing: processed keyword_list")
+    # still need to add back in:
     # gen_corpus(processed_txt,MODEL)
-    # if VERBOSE: print("preprocessing: generated corpus")
-    
-    # # lda_model=LDA_model(NUM_TOPICS)
-
-    # write_topics(lda_model)
     
     return
 
