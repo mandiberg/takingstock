@@ -13,7 +13,7 @@ from sqlalchemy.orm import relationship
 from my_declarative_base import Base, Images, Topics,ImagesTopics, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON, ForeignKey
 
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy import create_engine, text, MetaData, Table, Column, Numeric, Integer, VARCHAR, update, Float
+from sqlalchemy import create_engine, text, MetaData, Table, Column, Numeric, Integer, VARCHAR, update, Float, LargeBinary
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.pool import NullPool
 from pick import pick
@@ -58,7 +58,7 @@ title = 'Please choose your operation: '
 options = ['Preprocess corpus','Model topics', 'Index topics','calculate optimum_topics']
 io = DataIO()
 db = io.db
-# io.db["name"] = "ministock"
+io.db["name"] = "ministock1023"
 io.ROOT = "/Users/michaelmandiberg/Documents/GitHub/facemap/topic_model"
 
 NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
@@ -128,6 +128,13 @@ else:
 Session = sessionmaker(bind=engine)
 session = Session()
 Base = declarative_base()
+
+class BagOfKeywords(Base):
+    __tablename__ = 'BagOfKeywords'
+
+    image_id = Column(Integer, primary_key=True)
+    keyword_list = Column(LargeBinary)
+    tokenized_keyword_list = Column(LargeBinary)
 
 ambig_key_dict = { "black-and-white": "black_and_white", "black and white background": "black_and_white background", "black and white portrait": "black_and_white portrait", "black amp white": "black_and_white", "white and black": "black_and_white", "black and white film": "black_and_white film", "black and white wallpaper": "black_and_white wallpaper", "black and white cover photos": "black_and_white cover photos", "black and white outfit": "black_and_white outfit", "black and white city": "black_and_white city", "blackandwhite": "black_and_white", "black white": "black_and_white", "black friday": "black_friday", "black magic": "black_magic", "black lives matter": "black_lives_matter black_ethnicity", "black out tuesday": "black_out_tuesday black_ethnicity", "black girl magic": "black_girl_magic black_ethnicity", "beautiful black women": "beautiful black_ethnicity women", "black model": "black_ethnicity model", "black santa": "black_ethnicity santa", "black children": "black_ethnicity children", "black history": "black_ethnicity history", "black family": "black_ethnicity family", "black community": "black_ethnicity community", "black owned business": "black_ethnicity owned business", "black holidays": "black_ethnicity holidays", "black models": "black_ethnicity models", "black girl bullying": "black_ethnicity girl bullying", "black santa claus": "black_ethnicity santa claus", "black hands": "black_ethnicity hands", "black christmas": "black_ethnicity christmas", "white and black girl": "white_ethnicity and black_ethnicity girl", "white woman": "white_ethnicity woman", "white girl": "white_ethnicity girl", "white people": "white_ethnicity", "red white and blue": "red_white_and_blue"}
 def clarify_keywords(text):
@@ -278,21 +285,76 @@ def gen_corpus(processed_txt,MODEL):
     if VERBOSE: print("gen_corpus: saved bow_corpus")
     return 
 
-def preprocess_corpus(resultsjson):
-    #######TOPIC MODELING ############
-    txt = pd.DataFrame(index=range(len(resultsjson)),columns=["description","keywords","index","score"])
-    for i,row in enumerate(resultsjson):
-        #txt.at[i,"description"]=row["description"]
-        txt.at[i,"keyword_list"]=" ".join(pickle.loads(row["keyword_list"]))
-    #processed_txt=txt['description'].map(preprocess)
-    print("this many rows to preprocess: ",len(txt))
-    if VERBOSE: print("preprocessing: loaded keyword_list into dataframe")
-    processed_txt=txt['keyword_list'].map(preprocess)
-    if VERBOSE: print("preprocessing: processed keyword_list")
-    gen_corpus(processed_txt,MODEL)
-    if VERBOSE: print("preprocessing: generated corpus")
+def tokenize_corpus():
+    batch_size = 10  # Adjust the batch size as needed
+
+    # Step 1: Query rows where tokenized_keyword_list is NULL
+    query = session.query(BagOfKeywords).filter(BagOfKeywords.tokenized_keyword_list.is_(None)).limit(1000)
+    total_rows = query.count()
+
+    # Process rows in batches
+    for offset in range(0, total_rows, batch_size):
+        batch_query = query.offset(offset).limit(batch_size)
+        resultsjson = []
+        for row in batch_query:
+            resultsjson.append({column: getattr(row, column) for column in row.__table__.columns.keys()})
+
+        txt = pd.DataFrame(index=range(len(resultsjson)), columns=["image_id", "keyword_list"])
+        print(txt)
+        for i, row in enumerate(resultsjson):
+            txt.at[i, "image_id"] = row["image_id"]            
+            txt.at[i, "keyword_list"] = " ".join(pickle.loads(row["keyword_list"]))
+        # processed_txt=txt['description'].map(preprocess)
+        print("this many rows to preprocess: ", len(txt))
+        print(txt)
+        txt['keyword_list']=txt['keyword_list'].map(preprocess)
+        print("preprocessed: ", txt)
+
+        # Iterate over the DataFrame and update corresponding rows in the database
+        for i, row in txt.iterrows():
+            image_id = row['image_id']
+            keyword_list = row['keyword_list']
+
+            # Query the database to get the corresponding row
+            bag_of_keywords = session.query(BagOfKeywords).filter_by(image_id=image_id).first()
+
+            # Update the tokenized_keyword_list column with the preprocessed keyword_list
+            bag_of_keywords.tokenized_keyword_list = pickle.dumps(keyword_list)
+            print(f"bagged image_id {image_id}")
+
+        # Commit the changes to the database
+        session.commit()
+
+
+        # for row in rows:
+
+        #     # Your preprocessing steps to tokenize the keyword_list here
+        #     processed_data = pickle.dumps(tokenized_data)  # Replace tokenized_data with your processed data
+        #     row.tokenized_keyword_list = processed_data
+
+        # Commit the changes for each batch
+        # session.commit()
+
+    # Close the session
+    # session.close()
+
+    # #######TOPIC MODELING ############
+    # txt = pd.DataFrame(index=range(len(resultsjson)),columns=["description","keywords","index","score"])
+    # for i,row in enumerate(resultsjson):
+    #     #txt.at[i,"description"]=row["description"]
+    #     txt.at[i,"keyword_list"]=" ".join(pickle.loads(row["keyword_list"]))
+    # #processed_txt=txt['description'].map(preprocess)
+    # print("this many rows to preprocess: ",len(txt))
+
+    # if VERBOSE: print("preprocessing: loaded keyword_list into dataframe")
+    # processed_txt=txt['keyword_list'].map(preprocess)
+    # print("preprocessed: ",processed_txt)
+    # quit()
+    # if VERBOSE: print("preprocessing: processed keyword_list")
+    # gen_corpus(processed_txt,MODEL)
+    # if VERBOSE: print("preprocessing: generated corpus")
     
-    # lda_model=LDA_model(NUM_TOPICS)
+    # # lda_model=LDA_model(NUM_TOPICS)
 
     # write_topics(lda_model)
     
@@ -344,11 +406,11 @@ def main():
     # create_my_engine(db)
 
     # 
-    if MODE==0 or MODE==2:
+    if MODE==2:
         resultsjson = selectSQL()
         print("got results, count is: ",len(resultsjson))
 
-    if MODE==0:preprocess_corpus(resultsjson)
+    if MODE==0:tokenize_corpus()
     elif MODE==1:topic_model()
     elif MODE==2:topic_index(resultsjson)
     elif MODE==3:calc_optimum_topics()
