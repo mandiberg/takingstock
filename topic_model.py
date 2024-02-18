@@ -24,6 +24,8 @@ import os
 import time
 import pickle
 from sys import platform
+import ast
+import csv
 
 #mine
 from mp_db_io import DataIO
@@ -55,7 +57,7 @@ items, seconds
 4000000, 
 '''
 title = 'Please choose your operation: '
-options = ['Preprocess corpus','Model topics', 'Index topics','calculate optimum_topics']
+options = ['Preprocess tokens','Make Dictionary and BoW Corpus','Model topics', 'Index topics','calculate optimum_topics']
 io = DataIO()
 db = io.db
 io.db["name"] = "stock"
@@ -271,11 +273,23 @@ def calc_optimum_topics():
 
 def gen_corpus():
     print("generating corpus")
+    
     # open headerless csv file at TOKEN_PATH and create a list of third column. the third column is the keyword_list.
     txt = pd.read_csv(TOKEN_PATH, header=None, usecols=[2], names=["keyword_list"])
-    print(txt)
-    print(type(txt))
-    # gen_corpus(processed_txt,MODEL)
+
+    # Convert string representations of lists into actual lists of strings
+    txt['keyword_list'] = txt['keyword_list'].apply(ast.literal_eval)
+    
+    # Create a list of lists of strings
+    processed_txt = txt['keyword_list'].tolist()
+    # processed_txt = []
+    # with open(TOKEN_PATH, 'r') as csvfile:
+    #     csvreader = csv.reader(csvfile)
+    #     for row in csvreader:
+    #         # Extract the third column (index 2) and convert the string representation of list into an actual list
+    #         keyword_list = ast.literal_eval(row[2])
+    #         processed_txt.append(keyword_list)
+    # print(processed_txt[:10])  # Just to verify the format    
 
     dictionary = gensim.corpora.Dictionary(processed_txt)
     if VERBOSE: print("gen_corpus: created dictionary")
@@ -309,7 +323,6 @@ def tokenize_corpus():
     # query = session.query(BagOfKeywords).filter(BagOfKeywords.tokenized_keyword_list.is_(None)).offset(existing_rows).limit(QUERY_LIMIT+existing_rows)
     # not currenlty using tokenized_keyword_list, so no filter
     query = session.query(BagOfKeywords).offset(existing_rows).limit(QUERY_LIMIT+existing_rows)
-    print(query.statement.compile(compile_kwargs={"literal_binds": True}))  # Print the SQL query
     total_rows = query.count()
     print("starting at :", existing_rows)
     for offset in range(existing_rows, total_rows, BATCH_SIZE):
@@ -328,9 +341,6 @@ def tokenize_corpus():
         txt['keyword_list']=txt['keyword_list'].map(preprocess)
         txt.to_csv(TOKEN_PATH, mode='a', header=False)
         # print("wrote to csv, offset: ",offset)
-
-    # still need to add back in:
-    # gen_corpus(processed_txt,MODEL)
     print("ended at:", existing_rows + total_rows)    
     return
 
