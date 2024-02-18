@@ -58,7 +58,7 @@ title = 'Please choose your operation: '
 options = ['Preprocess corpus','Model topics', 'Index topics','calculate optimum_topics']
 io = DataIO()
 db = io.db
-io.db["name"] = "ministock1023"
+io.db["name"] = "stock"
 io.ROOT = "/Users/michaelmandiberg/Documents/GitHub/facemap/topic_model"
 
 NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
@@ -72,6 +72,8 @@ USE_SEGMENT = False
 VERBOSE = True
 RANDOM = False
 global_counter = 0
+QUERY_LIMIT = 100
+BATCH_SIZE = 10
 
 MODEL="TF" ## OR TF  ## Bag of words or TF-IDF
 NUM_TOPICS=88
@@ -85,7 +87,7 @@ def set_query():
     WHERE = "keyword_list IS NOT NULL "
     if RANDOM: 
         WHERE += "AND image_id >= (SELECT FLOOR(MAX(image_id) * RAND()) FROM bagofkeywords)"
-    LIMIT = 100000
+    LIMIT = QUERY_LIMIT
     if MODE==1:
         # assigning topics
         WHERE = "keyword_list IS NOT NULL AND image_id NOT IN (SELECT image_id FROM imagestopics)"
@@ -135,7 +137,7 @@ class BagOfKeywords(Base):
 
     image_id = Column(Integer, primary_key=True)
     keyword_list = Column(LargeBinary)
-    tokenized_keyword_list = Column(LargeBinary)
+    # tokenized_keyword_list = Column(LargeBinary)
 
 ambig_key_dict = { "black-and-white": "black_and_white", "black and white background": "black_and_white background", "black and white portrait": "black_and_white portrait", "black amp white": "black_and_white", "white and black": "black_and_white", "black and white film": "black_and_white film", "black and white wallpaper": "black_and_white wallpaper", "black and white cover photos": "black_and_white cover photos", "black and white outfit": "black_and_white outfit", "black and white city": "black_and_white city", "blackandwhite": "black_and_white", "black white": "black_and_white", "black friday": "black_friday", "black magic": "black_magic", "black lives matter": "black_lives_matter black_ethnicity", "black out tuesday": "black_out_tuesday black_ethnicity", "black girl magic": "black_girl_magic black_ethnicity", "beautiful black women": "beautiful black_ethnicity women", "black model": "black_ethnicity model", "black santa": "black_ethnicity santa", "black children": "black_ethnicity children", "black history": "black_ethnicity history", "black family": "black_ethnicity family", "black community": "black_ethnicity community", "black owned business": "black_ethnicity owned business", "black holidays": "black_ethnicity holidays", "black models": "black_ethnicity models", "black girl bullying": "black_ethnicity girl bullying", "black santa claus": "black_ethnicity santa claus", "black hands": "black_ethnicity hands", "black christmas": "black_ethnicity christmas", "white and black girl": "white_ethnicity and black_ethnicity girl", "white woman": "white_ethnicity woman", "white girl": "white_ethnicity girl", "white people": "white_ethnicity", "red white and blue": "red_white_and_blue"}
 def clarify_keywords(text):
@@ -287,31 +289,60 @@ def gen_corpus(processed_txt,MODEL):
     return 
 
 def tokenize_corpus():
-    batch_size = 10  # Adjust the batch size as needed
+    def chunker(seq, size):
+        return (seq[pos:pos + size] for pos in range(0, len(seq), size))
+    
+    print("tokenizing corpus")
+    # Get the length of the existing CSV file
+    if os.path.exists(TOKEN_PATH):
+        print("token file exists, starting at the end")
+        existing_rows = sum(1 for line in open(TOKEN_PATH))
+    else:
+        print("no token file, starting at 0")
+        existing_rows = 0
+    
     # Step 1: Query rows where tokenized_keyword_list is NULL
-    query = session.query(BagOfKeywords).filter(BagOfKeywords.tokenized_keyword_list.is_(None)).limit(1000)
+    # query = session.query(BagOfKeywords).filter(BagOfKeywords.tokenized_keyword_list.is_(None)).offset(existing_rows).limit(QUERY_LIMIT+existing_rows)
+    # not currenlty using tokenized_keyword_list, so no filter
+    query = session.query(BagOfKeywords).offset(existing_rows).limit(QUERY_LIMIT+existing_rows)
+    print(query.statement.compile(compile_kwargs={"literal_binds": True}))  # Print the SQL query
     total_rows = query.count()
+    print("total_rows: ",total_rows)
+    # Execute the query and print the results
+    results = query.all()
+    batches = chunker(results, BATCH_SIZE)  
+    for batch in batches:
+        for item in batch:
+            print("result itter item:" ,item.image_id)
+
+
+
+
+
 
     # Process rows in batches
-    for offset in range(0, total_rows, batch_size):
-        batch_query = query.offset(offset).limit(batch_size)
+    # offset = existing_rows
+    for offset in range(existing_rows, total_rows, BATCH_SIZE):
+        print("offset: ",offset)
+        batch_query = query.offset(offset).limit(BATCH_SIZE)
         resultsjson = []
         for row in batch_query:
+            print("offset row: ",row.image_id)
+            # print(row.image_id)
             resultsjson.append({column: getattr(row, column) for column in row.__table__.columns.keys()})
 
         txt = pd.DataFrame(index=range(len(resultsjson)), columns=["image_id", "keyword_list"])
-        print(txt)
         for i, row in enumerate(resultsjson):
             txt.at[i, "image_id"] = row["image_id"]            
             txt.at[i, "keyword_list"] = " ".join(pickle.loads(row["keyword_list"]))
         # processed_txt=txt['description'].map(preprocess)
         print("this many rows to preprocess: ", len(txt))
-        print(txt)
         txt['keyword_list']=txt['keyword_list'].map(preprocess)
-        print("preprocessed: ", txt)
-
+        print("about to write to csv")
         # Write the processed batch to a CSV file
+        print(txt)
         txt.to_csv(TOKEN_PATH, mode='a', header=False)
+        print("wrote to csv")
 
     # still need to add back in:
     # gen_corpus(processed_txt,MODEL)
