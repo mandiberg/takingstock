@@ -72,8 +72,8 @@ USE_SEGMENT = False
 VERBOSE = True
 RANDOM = False
 global_counter = 0
-QUERY_LIMIT = 100
-BATCH_SIZE = 10
+QUERY_LIMIT = 1000000
+BATCH_SIZE = 1000
 
 MODEL="TF" ## OR TF  ## Bag of words or TF-IDF
 NUM_TOPICS=88
@@ -269,7 +269,14 @@ def calc_optimum_topics():
         coher_val_list[i]=cm.get_coherence()
     print(num_topics_list,coher_val_list)  # get coherence value
 
-def gen_corpus(processed_txt,MODEL):
+def gen_corpus():
+    print("generating corpus")
+    # open headerless csv file at TOKEN_PATH and create a list of third column. the third column is the keyword_list.
+    txt = pd.read_csv(TOKEN_PATH, header=None, usecols=[2], names=["keyword_list"])
+    print(txt)
+    print(type(txt))
+    # gen_corpus(processed_txt,MODEL)
+
     dictionary = gensim.corpora.Dictionary(processed_txt)
     if VERBOSE: print("gen_corpus: created dictionary")
     dictionary.filter_extremes(no_below=15, no_above=0.5, keep_n=100000)
@@ -289,45 +296,28 @@ def gen_corpus(processed_txt,MODEL):
     return 
 
 def tokenize_corpus():
-    def chunker(seq, size):
-        return (seq[pos:pos + size] for pos in range(0, len(seq), size))
-    
     print("tokenizing corpus")
+
     # Get the length of the existing CSV file
     if os.path.exists(TOKEN_PATH):
-        print("token file exists, starting at the end")
         existing_rows = sum(1 for line in open(TOKEN_PATH))
+        print("token file exists, starting at the end:" ,existing_rows)
     else:
         print("no token file, starting at 0")
         existing_rows = 0
     
-    # Step 1: Query rows where tokenized_keyword_list is NULL
     # query = session.query(BagOfKeywords).filter(BagOfKeywords.tokenized_keyword_list.is_(None)).offset(existing_rows).limit(QUERY_LIMIT+existing_rows)
     # not currenlty using tokenized_keyword_list, so no filter
     query = session.query(BagOfKeywords).offset(existing_rows).limit(QUERY_LIMIT+existing_rows)
     print(query.statement.compile(compile_kwargs={"literal_binds": True}))  # Print the SQL query
     total_rows = query.count()
-    print("total_rows: ",total_rows)
-    # Execute the query and print the results
-    results = query.all()
-    batches = chunker(results, BATCH_SIZE)  
-    for batch in batches:
-        for item in batch:
-            print("result itter item:" ,item.image_id)
-
-
-
-
-
-
-    # Process rows in batches
-    # offset = existing_rows
+    print("starting at :", existing_rows)
     for offset in range(existing_rows, total_rows, BATCH_SIZE):
-        print("offset: ",offset)
+        # print("offset: ",offset)
         batch_query = query.offset(offset).limit(BATCH_SIZE)
         resultsjson = []
         for row in batch_query:
-            print("offset row: ",row.image_id)
+            # print("offset row: ",row.image_id)
             # print(row.image_id)
             resultsjson.append({column: getattr(row, column) for column in row.__table__.columns.keys()})
 
@@ -335,18 +325,13 @@ def tokenize_corpus():
         for i, row in enumerate(resultsjson):
             txt.at[i, "image_id"] = row["image_id"]            
             txt.at[i, "keyword_list"] = " ".join(pickle.loads(row["keyword_list"]))
-        # processed_txt=txt['description'].map(preprocess)
-        print("this many rows to preprocess: ", len(txt))
         txt['keyword_list']=txt['keyword_list'].map(preprocess)
-        print("about to write to csv")
-        # Write the processed batch to a CSV file
-        print(txt)
         txt.to_csv(TOKEN_PATH, mode='a', header=False)
-        print("wrote to csv")
+        # print("wrote to csv, offset: ",offset)
 
     # still need to add back in:
     # gen_corpus(processed_txt,MODEL)
-    
+    print("ended at:", existing_rows + total_rows)    
     return
 
 def topic_model():
@@ -400,9 +385,10 @@ def main():
         print("got results, count is: ",len(resultsjson))
 
     if MODE==0:tokenize_corpus()
-    elif MODE==1:topic_model()
-    elif MODE==2:topic_index(resultsjson)
-    elif MODE==3:calc_optimum_topics()
+    elif MODE==1:gen_corpus()
+    elif MODE==2:topic_model()
+    elif MODE==3:topic_index(resultsjson)
+    elif MODE==4:calc_optimum_topics()
     end = time.time()
     print (end - start)
     return True
