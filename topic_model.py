@@ -74,8 +74,9 @@ USE_SEGMENT = False
 VERBOSE = True
 RANDOM = False
 global_counter = 0
-QUERY_LIMIT = 1000000
-BATCH_SIZE = 1000
+QUERY_LIMIT = 45000000
+# started at 9:45PM, Feb 17
+BATCH_SIZE = 100000
 
 MODEL="TF" ## OR TF  ## Bag of words or TF-IDF
 NUM_TOPICS=88
@@ -341,7 +342,7 @@ def tokenize_corpus():
         txt['keyword_list']=txt['keyword_list'].map(preprocess)
         txt.to_csv(TOKEN_PATH, mode='a', header=False)
         # print("wrote to csv, offset: ",offset)
-    print("ended at:", existing_rows + total_rows)    
+    print("ended at:", existing_rows + QUERY_LIMIT)    
     return
 
 def topic_model():
