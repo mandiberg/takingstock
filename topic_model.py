@@ -74,7 +74,7 @@ USE_SEGMENT = False
 VERBOSE = True
 RANDOM = False
 global_counter = 0
-QUERY_LIMIT = 45000000
+QUERY_LIMIT = 25000000
 # started at 9:45PM, Feb 17
 BATCH_SIZE = 100000
 
@@ -277,12 +277,13 @@ def gen_corpus():
     
     # open headerless csv file at TOKEN_PATH and create a list of third column. the third column is the keyword_list.
     txt = pd.read_csv(TOKEN_PATH, header=None, usecols=[2], names=["keyword_list"])
-
+    print("read csv")
     # Convert string representations of lists into actual lists of strings
     txt['keyword_list'] = txt['keyword_list'].apply(ast.literal_eval)
-    
+    print("converted via literal_eval")
     # Create a list of lists of strings
     processed_txt = txt['keyword_list'].tolist()
+    print("converted to list")
     # processed_txt = []
     # with open(TOKEN_PATH, 'r') as csvfile:
     #     csvreader = csv.reader(csvfile)
@@ -323,15 +324,25 @@ def tokenize_corpus():
     
     # query = session.query(BagOfKeywords).filter(BagOfKeywords.tokenized_keyword_list.is_(None)).offset(existing_rows).limit(QUERY_LIMIT+existing_rows)
     # not currenlty using tokenized_keyword_list, so no filter
-    query = session.query(BagOfKeywords).offset(existing_rows).limit(QUERY_LIMIT+existing_rows)
+    query = session.query(BagOfKeywords).offset(existing_rows).limit(QUERY_LIMIT) # removing existing_rows
     total_rows = query.count()
-    print("starting at :", existing_rows)
-    for offset in range(existing_rows, total_rows, BATCH_SIZE):
-        # print("offset: ",offset)
+    results = query.all()
+    if VERBOSE: 
+        print(query.statement.compile(compile_kwargs={"literal_binds": True}))  # Print the SQL query
+        print("total_rows in query: ",total_rows)
+        print("results length: ",len(results))
+        for row in results: print("row: ",row.image_id)
+    print("starting at existing_rows:", existing_rows)
+
+    # for offset in range(existing_rows, total_rows+existing_rows, BATCH_SIZE):
+    #     print("testing offset existing_rows", offset)
+    for offset in range(existing_rows, total_rows+existing_rows, BATCH_SIZE):
+        print("offset starts at: ",offset)
         batch_query = query.offset(offset).limit(BATCH_SIZE)
+        # if VERBOSE: print("inside offset, first id is: ",batch_query[0].image_id)
         resultsjson = []
         for row in batch_query:
-            # print("offset row: ",row.image_id)
+            if VERBOSE: print("offset row: ",row.image_id)
             # print(row.image_id)
             resultsjson.append({column: getattr(row, column) for column in row.__table__.columns.keys()})
 
@@ -341,8 +352,8 @@ def tokenize_corpus():
             txt.at[i, "keyword_list"] = " ".join(pickle.loads(row["keyword_list"]))
         txt['keyword_list']=txt['keyword_list'].map(preprocess)
         txt.to_csv(TOKEN_PATH, mode='a', header=False)
-        # print("wrote to csv, offset: ",offset)
-    print("ended at:", existing_rows + QUERY_LIMIT)    
+        if VERBOSE: print("wrote to csv, offset: ",offset)
+    print("if completed everything, got to:", total_rows)    
     return
 
 def topic_model():
