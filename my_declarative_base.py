@@ -138,6 +138,7 @@ class BagOfKeywords(Base):
     location_id = Column(Integer, ForeignKey('location.location_id'))
     description = Column(String(150))
     keyword_list = Column(BLOB)  # Pickled list
+    tokenized_keyword_list = Column(BLOB)  # Pickled list
     ethnicity_list = Column(BLOB)  # Pickled list
 
 class Topics(Base):
