@@ -42,7 +42,6 @@ GENDER_LIST = read_csv(os.path.join(io.ROOT, "stopwords_gender.csv"))
 ETH_LIST = read_csv(os.path.join(io.ROOT, "stopwords_ethnicity.csv"))
 AGE_LIST = read_csv(os.path.join(io.ROOT, "stopwords_age.csv"))                       
 MY_STOPWORDS = gensim.parsing.preprocessing.STOPWORDS.union(set(GENDER_LIST+ETH_LIST+AGE_LIST))
-global_counter = 0
 
 def make_key_dict(filepath):
     keys_dict = {}
@@ -60,7 +59,7 @@ title = 'Please choose your operation: '
 options = ['Create table', 'Fetch keywords list', 'Fetch ethnicity list']
 option, index = pick(options, title)
 
-LIMIT= 1000000
+LIMIT= 10000000
 # Initialize the counter
 counter = 0
 
@@ -110,13 +109,8 @@ def fetch_keywords(target_image_id, lock,session):
     def lemmatize_stemming(text):
         return stemmer.stem(lemmatizer.lemmatize(text, pos='v'))
     def preprocess_list(keyword_list):
-        global global_counter
         result = []
-        if global_counter % 10000 == 0:
-            print("preprocessed: ",global_counter)
         # text = clarify_keywords(text.lower())
-        global_counter += 1
-
         for token in keyword_list:
             token = clarify_keyword(token.lower())
             if token not in MY_STOPWORDS and len(token) > 3:
@@ -185,7 +179,7 @@ def fetch_keywords(target_image_id, lock,session):
         counter += 1
         session.commit()
 
-    if counter % 1000 == 0:
+    if counter % 10000 == 0:
         print(f"Keyword list updated: {counter}")
 
     return

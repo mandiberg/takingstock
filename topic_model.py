@@ -74,9 +74,9 @@ USE_SEGMENT = False
 VERBOSE = True
 RANDOM = False
 global_counter = 0
-QUERY_LIMIT = 25000000
+QUERY_LIMIT = 1000000
 # started at 9:45PM, Feb 17
-BATCH_SIZE = 100000
+BATCH_SIZE = 100
 
 MODEL="TF" ## OR TF  ## Bag of words or TF-IDF
 NUM_TOPICS=88
@@ -140,7 +140,7 @@ class BagOfKeywords(Base):
 
     image_id = Column(Integer, primary_key=True)
     keyword_list = Column(LargeBinary)
-    # tokenized_keyword_list = Column(LargeBinary)
+    tokenized_keyword_list = Column(LargeBinary)
 
 ambig_key_dict = { "black-and-white": "black_and_white", "black and white background": "black_and_white background", "black and white portrait": "black_and_white portrait", "black amp white": "black_and_white", "white and black": "black_and_white", "black and white film": "black_and_white film", "black and white wallpaper": "black_and_white wallpaper", "black and white cover photos": "black_and_white cover photos", "black and white outfit": "black_and_white outfit", "black and white city": "black_and_white city", "blackandwhite": "black_and_white", "black white": "black_and_white", "black friday": "black_friday", "black magic": "black_magic", "black lives matter": "black_lives_matter black_ethnicity", "black out tuesday": "black_out_tuesday black_ethnicity", "black girl magic": "black_girl_magic black_ethnicity", "beautiful black women": "beautiful black_ethnicity women", "black model": "black_ethnicity model", "black santa": "black_ethnicity santa", "black children": "black_ethnicity children", "black history": "black_ethnicity history", "black family": "black_ethnicity family", "black community": "black_ethnicity community", "black owned business": "black_ethnicity owned business", "black holidays": "black_ethnicity holidays", "black models": "black_ethnicity models", "black girl bullying": "black_ethnicity girl bullying", "black santa claus": "black_ethnicity santa claus", "black hands": "black_ethnicity hands", "black christmas": "black_ethnicity christmas", "white and black girl": "white_ethnicity and black_ethnicity girl", "white woman": "white_ethnicity woman", "white girl": "white_ethnicity girl", "white people": "white_ethnicity", "red white and blue": "red_white_and_blue"}
 def clarify_keywords(text):
@@ -274,30 +274,42 @@ def calc_optimum_topics():
 
 def gen_corpus():
     print("generating corpus")
-    
-    # open headerless csv file at TOKEN_PATH and create a list of third column. the third column is the keyword_list.
-    txt = pd.read_csv(TOKEN_PATH, header=None, usecols=[2], names=["keyword_list"])
-    print("read csv")
-    # Convert string representations of lists into actual lists of strings
-    txt['keyword_list'] = txt['keyword_list'].apply(ast.literal_eval)
-    print("converted via literal_eval")
-    # Create a list of lists of strings
-    processed_txt = txt['keyword_list'].tolist()
-    print("converted to list")
-    # processed_txt = []
-    # with open(TOKEN_PATH, 'r') as csvfile:
-    #     csvreader = csv.reader(csvfile)
-    #     for row in csvreader:
-    #         # Extract the third column (index 2) and convert the string representation of list into an actual list
-    #         keyword_list = ast.literal_eval(row[2])
-    #         processed_txt.append(keyword_list)
-    # print(processed_txt[:10])  # Just to verify the format    
 
-    dictionary = gensim.corpora.Dictionary(processed_txt)
+    query = session.query(BagOfKeywords.tokenized_keyword_list).filter(BagOfKeywords.tokenized_keyword_list.isnot(None)).limit(QUERY_LIMIT)
+    results = query.all()
+    total_rows = query.count()
+    if VERBOSE: 
+        print(query.statement.compile(compile_kwargs={"literal_binds": True}))  # Print the SQL query
+        print("total_rows in query: ",total_rows)
+        print("results length: ",len(results))
+        # for row in results: print("row: ",row.tokenized_keyword_list)
+    
+    token_lists = [pickle.loads(row.tokenized_keyword_list) for row in results]
+    if VERBOSE: print("token_lists: ",token_lists[:1])
+    # # open headerless csv file at TOKEN_PATH and create a list of third column. the third column is the keyword_list.
+    # txt = pd.read_csv(TOKEN_PATH, header=None, usecols=[2], names=["keyword_list"])
+    # print("read csv")
+    # # Convert string representations of lists into actual lists of strings
+    # txt['keyword_list'] = txt['keyword_list'].apply(ast.literal_eval)
+    # print("converted via literal_eval")
+    # # Create a list of lists of strings
+    # processed_txt = txt['keyword_list'].tolist()
+    # print("converted to list")
+    # # processed_txt = []
+    # # with open(TOKEN_PATH, 'r') as csvfile:
+    # #     csvreader = csv.reader(csvfile)
+    # #     for row in csvreader:
+    # #         # Extract the third column (index 2) and convert the string representation of list into an actual list
+    # #         keyword_list = ast.literal_eval(row[2])
+    # #         processed_txt.append(keyword_list)
+    # # print(processed_txt[:10])  # Just to verify the format    
+
+    # # processed_txt is a list of lists.
+    dictionary = gensim.corpora.Dictionary(token_lists)
     if VERBOSE: print("gen_corpus: created dictionary")
     dictionary.filter_extremes(no_below=15, no_above=0.5, keep_n=100000)
     if VERBOSE: print("gen_corpus: filtered extremes")
-    bow_corpus = [dictionary.doc2bow(doc) for doc in processed_txt] ## BOW corpus
+    bow_corpus = [dictionary.doc2bow(doc) for doc in token_lists] ## BOW corpus
     if VERBOSE: print("gen_corpus: created bow_corpus")
     if MODEL=="TF":   
         tfidf = models.TfidfModel(bow_corpus)  ## converting BOW to TDIDF corpus
@@ -331,7 +343,7 @@ def tokenize_corpus():
         print(query.statement.compile(compile_kwargs={"literal_binds": True}))  # Print the SQL query
         print("total_rows in query: ",total_rows)
         print("results length: ",len(results))
-        for row in results: print("row: ",row.image_id)
+        # for row in results: print("row: ",row.image_id)
     print("starting at existing_rows:", existing_rows)
 
     # for offset in range(existing_rows, total_rows+existing_rows, BATCH_SIZE):
@@ -342,7 +354,7 @@ def tokenize_corpus():
         # if VERBOSE: print("inside offset, first id is: ",batch_query[0].image_id)
         resultsjson = []
         for row in batch_query:
-            if VERBOSE: print("offset row: ",row.image_id)
+            # if VERBOSE: print("offset row: ",row.image_id)
             # print(row.image_id)
             resultsjson.append({column: getattr(row, column) for column in row.__table__.columns.keys()})
 
