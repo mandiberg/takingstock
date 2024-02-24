@@ -56,8 +56,17 @@ items, seconds
 2000000, 4503
 4000000, 
 '''
+
+'''
+Gen_corpus, Feb24
+1M, 145s
+2M, 360s
+4M, 
+'''
+
+
 title = 'Please choose your operation: '
-options = ['Preprocess tokens','Make Dictionary and BoW Corpus','Model topics', 'Index topics','calculate optimum_topics']
+options = ['Make Dictionary and BoW Corpus','Model topics', 'Index topics','calculate optimum_topics']
 io = DataIO()
 db = io.db
 io.db["name"] = "stock"
@@ -74,7 +83,7 @@ USE_SEGMENT = False
 VERBOSE = True
 RANDOM = False
 global_counter = 0
-QUERY_LIMIT = 1000000
+QUERY_LIMIT = 4000000
 # started at 9:45PM, Feb 17
 BATCH_SIZE = 100
 
@@ -120,15 +129,6 @@ else:
     engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}"
                                 .format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']), poolclass=NullPool)
 
-#engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}".format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']), poolclass=NullPool)
-# if MODE==0 or MODE==2:
-    # WHERE = "keyword_list IS NOT NULL "
-    # #LIMIT = 328894
-    # LIMIT=100000
-# elif MODE==1:
-    # WHERE = "keyword_list IS NOT NULL AND image_id NOT IN (SELECT image_id FROM imagestopics)"
-    # LIMIT=1000
-
 
 # metadata = MetaData(engine)
 Session = sessionmaker(bind=engine)
@@ -173,13 +173,6 @@ def preprocess(text):
         if token not in MY_STOPWORDS and len(token) > 3:
             result.append(lemmatize_stemming(token))
     return result
-
-# def save_model(lda_model,tfidf_corpus,bow_corpus):
-    # CORPUS_PATH = get_tmpfile(CORPUS_PATH)
-    # lda_model.save(MODEL_PATH)
-    # print("model saved")
-    # return
-
 
 def load_corpus():
     print("loading corpus and dictionary")
@@ -274,7 +267,6 @@ def calc_optimum_topics():
 
 def gen_corpus():
     print("generating corpus")
-
     query = session.query(BagOfKeywords.tokenized_keyword_list).filter(BagOfKeywords.tokenized_keyword_list.isnot(None)).limit(QUERY_LIMIT)
     results = query.all()
     total_rows = query.count()
@@ -286,25 +278,7 @@ def gen_corpus():
     
     token_lists = [pickle.loads(row.tokenized_keyword_list) for row in results]
     if VERBOSE: print("token_lists: ",token_lists[:1])
-    # # open headerless csv file at TOKEN_PATH and create a list of third column. the third column is the keyword_list.
-    # txt = pd.read_csv(TOKEN_PATH, header=None, usecols=[2], names=["keyword_list"])
-    # print("read csv")
-    # # Convert string representations of lists into actual lists of strings
-    # txt['keyword_list'] = txt['keyword_list'].apply(ast.literal_eval)
-    # print("converted via literal_eval")
-    # # Create a list of lists of strings
-    # processed_txt = txt['keyword_list'].tolist()
-    # print("converted to list")
-    # # processed_txt = []
-    # # with open(TOKEN_PATH, 'r') as csvfile:
-    # #     csvreader = csv.reader(csvfile)
-    # #     for row in csvreader:
-    # #         # Extract the third column (index 2) and convert the string representation of list into an actual list
-    # #         keyword_list = ast.literal_eval(row[2])
-    # #         processed_txt.append(keyword_list)
-    # # print(processed_txt[:10])  # Just to verify the format    
 
-    # # processed_txt is a list of lists.
     dictionary = gensim.corpora.Dictionary(token_lists)
     if VERBOSE: print("gen_corpus: created dictionary")
     dictionary.filter_extremes(no_below=15, no_above=0.5, keep_n=100000)
@@ -323,50 +297,6 @@ def gen_corpus():
     if VERBOSE: print("gen_corpus: saved bow_corpus")
     return 
 
-def tokenize_corpus():
-    print("tokenizing corpus")
-
-    # Get the length of the existing CSV file
-    if os.path.exists(TOKEN_PATH):
-        existing_rows = sum(1 for line in open(TOKEN_PATH))
-        print("token file exists, starting at the end:" ,existing_rows)
-    else:
-        print("no token file, starting at 0")
-        existing_rows = 0
-    
-    # query = session.query(BagOfKeywords).filter(BagOfKeywords.tokenized_keyword_list.is_(None)).offset(existing_rows).limit(QUERY_LIMIT+existing_rows)
-    # not currenlty using tokenized_keyword_list, so no filter
-    query = session.query(BagOfKeywords).offset(existing_rows).limit(QUERY_LIMIT) # removing existing_rows
-    total_rows = query.count()
-    results = query.all()
-    if VERBOSE: 
-        print(query.statement.compile(compile_kwargs={"literal_binds": True}))  # Print the SQL query
-        print("total_rows in query: ",total_rows)
-        print("results length: ",len(results))
-        # for row in results: print("row: ",row.image_id)
-    print("starting at existing_rows:", existing_rows)
-
-    # for offset in range(existing_rows, total_rows+existing_rows, BATCH_SIZE):
-    #     print("testing offset existing_rows", offset)
-    for offset in range(existing_rows, total_rows+existing_rows, BATCH_SIZE):
-        print("offset starts at: ",offset)
-        batch_query = query.offset(offset).limit(BATCH_SIZE)
-        # if VERBOSE: print("inside offset, first id is: ",batch_query[0].image_id)
-        resultsjson = []
-        for row in batch_query:
-            # if VERBOSE: print("offset row: ",row.image_id)
-            # print(row.image_id)
-            resultsjson.append({column: getattr(row, column) for column in row.__table__.columns.keys()})
-
-        txt = pd.DataFrame(index=range(len(resultsjson)), columns=["image_id", "keyword_list"])
-        for i, row in enumerate(resultsjson):
-            txt.at[i, "image_id"] = row["image_id"]            
-            txt.at[i, "keyword_list"] = " ".join(pickle.loads(row["keyword_list"]))
-        txt['keyword_list']=txt['keyword_list'].map(preprocess)
-        txt.to_csv(TOKEN_PATH, mode='a', header=False)
-        if VERBOSE: print("wrote to csv, offset: ",offset)
-    print("if completed everything, got to:", total_rows)    
-    return
 
 def topic_model():
     # #######TOPIC MODELING ############
@@ -418,11 +348,10 @@ def main():
         resultsjson = selectSQL()
         print("got results, count is: ",len(resultsjson))
 
-    if MODE==0:tokenize_corpus()
-    elif MODE==1:gen_corpus()
-    elif MODE==2:topic_model()
-    elif MODE==3:topic_index(resultsjson)
-    elif MODE==4:calc_optimum_topics()
+    if MODE==0:gen_corpus()
+    elif MODE==1:topic_model()
+    elif MODE==2:topic_index(resultsjson)
+    elif MODE==3:calc_optimum_topics()
     end = time.time()
     print (end - start)
     return True
