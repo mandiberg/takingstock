@@ -1,7 +1,7 @@
-from sqlalchemy import create_engine, select
+from sqlalchemy import create_engine, select, delete
 from sqlalchemy.orm import sessionmaker,scoped_session
 from sqlalchemy.pool import NullPool
-from my_declarative_base import Images, BagOfKeywords,Keywords,ImagesKeywords,ImagesEthnicity  # Replace 'your_module' with the actual module where your SQLAlchemy models are defined
+from my_declarative_base import Images, BagOfKeywords,Keywords,ImagesKeywords,ImagesEthnicity, Encodings  # Replace 'your_module' with the actual module where your SQLAlchemy models are defined
 from mp_db_io import DataIO
 import pickle
 import numpy as np
@@ -56,7 +56,7 @@ keys_dict = make_key_dict(os.path.join(io.ROOT, "Keywords_202402071139.csv"))
 
 
 title = 'Please choose your operation: '
-options = ['Create table', 'Fetch keywords list', 'Fetch ethnicity list']
+options = ['Create table', 'Fetch keywords list', 'Fetch ethnicity list', 'Prune Table where is_face == None']
 option, index = pick(options, title)
 
 LIMIT= 10000000
@@ -95,7 +95,24 @@ def create_table(row, lock, session):
     if counter % 1000 == 0:
         print(f"Created BagOfKeywords number: {counter}")
 
+def prune_table(image_id, lock, session):
+    # Acquire the lock to ensure thread safety
+    with lock:
+        # Delete rows from BagOfKeywords where image_id matches the provided image_id
+        delete_stmt = delete(BagOfKeywords).where(BagOfKeywords.image_id == image_id)        
+        session.execute(delete_stmt)        
+        session.commit()
 
+        # Increment the counter using the lock to ensure thread safety
+        global counter
+        counter += 1
+        session.commit()
+
+    # Print a message to confirm the update
+    # print(f"Keyword list for image_id {image_id} updated successfully.")
+    if counter % 10 == 0:
+        print(f"Created BagOfKeywords number: {counter} for image_id {image_id}")
+    print("processed: ",image_id)
 
 def fetch_keywords(target_image_id, lock,session):
     ambig_key_dict = { "black-and-white": "black_and_white", "black and white background": "black_and_white background", "black and white portrait": "black_and_white portrait", "black amp white": "black_and_white", "white and black": "black_and_white", "black and white film": "black_and_white film", "black and white wallpaper": "black_and_white wallpaper", "black and white cover photos": "black_and_white cover photos", "black and white outfit": "black_and_white outfit", "black and white city": "black_and_white city", "blackandwhite": "black_and_white", "black white": "black_and_white", "black friday": "black_friday", "black magic": "black_magic", "black lives matter": "black_lives_matter black_ethnicity", "black out tuesday": "black_out_tuesday black_ethnicity", "black girl magic": "black_girl_magic black_ethnicity", "beautiful black women": "beautiful black_ethnicity women", "black model": "black_ethnicity model", "black santa": "black_ethnicity santa", "black children": "black_ethnicity children", "black history": "black_ethnicity history", "black family": "black_ethnicity family", "black community": "black_ethnicity community", "black owned business": "black_ethnicity owned business", "black holidays": "black_ethnicity holidays", "black models": "black_ethnicity models", "black girl bullying": "black_ethnicity girl bullying", "black santa claus": "black_ethnicity santa claus", "black hands": "black_ethnicity hands", "black christmas": "black_ethnicity christmas", "white and black girl": "white_ethnicity and black_ethnicity girl", "white woman": "white_ethnicity woman", "white girl": "white_ethnicity girl", "white people": "white_ethnicity", "red white and blue": "red_white_and_blue"}
@@ -243,33 +260,7 @@ if index == 0:
 
 elif index == 1:
     function=fetch_keywords
-    ################FETCHING KEYWORDS####################################
-#  hiding for temp doover
-    # distinct_image_ids_query = select(BagOfKeywords.image_id.distinct()).filter(BagOfKeywords.keyword_list == None).limit(LIMIT)
-    # distinct_image_ids = [row[0] for row in session.execute(distinct_image_ids_query).fetchall()]
-
-
-# # Construct the SQLAlchemy query
-# distinct_image_ids_query = select([BagOfKeywords.image_id, BagOfKeywords.keyword_list]).where(BagOfKeywords.tokenized_keyword_list.is_(None)).limit(LIMIT)
-
-# # Execute the query and fetch the results
-# distinct_image_ids = session.execute(distinct_image_ids_query).fetchall()
-
-# # Extract image_id and keyword_list from the results
-# image_ids_and_keyword_lists = [(row.image_id, row.keyword_list) for row in distinct_image_ids]
-
-# doover mode
-
-
-    # # Construct the SQLAlchemy query with column alias
-    # distinct_image_ids_query = select([BagOfKeywords.image_id, BagOfKeywords.keyword_list]).where(BagOfKeywords.tokenized_keyword_list.is_(None)).limit(LIMIT)
-
-    # # Execute the query and fetch the results
-    # distinct_image_ids = [(row[0], row[1]) for row in session.execute(distinct_image_ids_query).fetchall()]
-
-    # distinct_image_ids_query = select([BagOfKeywords.image_id, BagOfKeywords.keyword_list]).where(BagOfKeywords.tokenized_keyword_list.is_(None)).limit(LIMIT)
-    # distinct_image_ids = [(row.image_id, row.keyword_list) for row in session.execute(distinct_image_ids_query).fetchall()]
- 
+    ################FETCHING KEYWORDS AND CREATING TOKENS #################
     distinct_image_ids_query = select(BagOfKeywords.image_id.distinct()).filter(BagOfKeywords.tokenized_keyword_list == None).limit(LIMIT)
     distinct_image_ids = [row[0] for row in session.execute(distinct_image_ids_query).fetchall()]
 
@@ -286,6 +277,19 @@ elif index == 2:
     distinct_image_ids = [row[0] for row in session.execute(distinct_image_ids_query).fetchall()]
     for target_image_id in distinct_image_ids:
         work_queue.put(target_image_id)        
+
+elif index == 3:
+    function=prune_table
+    #################PRUNE THE TABLE#######################################
+
+    # Construct the query to select distinct image_ids where Encodings.is_face is None
+    distinct_image_ids_query = select(Encodings.image_id.distinct()).filter(Encodings.is_face == None).limit(LIMIT)
+
+    # Execute the query and fetch the results
+    distinct_image_ids = [row[0] for row in session.execute(distinct_image_ids_query).fetchall()]
+    print(len(distinct_image_ids), "rows")    
+    for target_image_id in distinct_image_ids:
+        work_queue.put(target_image_id)
 
 def threaded_fetching():
     while not work_queue.empty():

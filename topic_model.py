@@ -5,7 +5,6 @@
 # import plotly as py
 # import plotly.graph_objs as go
 
-from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
@@ -61,7 +60,7 @@ items, seconds
 Gen_corpus, Feb24
 1M, 145s
 2M, 360s
-4M, 
+4M, 882s
 '''
 
 
