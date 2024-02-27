@@ -30,6 +30,7 @@ import csv
 from mp_db_io import DataIO
 ###########
 import gensim
+from gensim import corpora
 from gensim.test.utils import get_tmpfile
 from gensim.utils import simple_preprocess
 from gensim.parsing.preprocessing import STOPWORDS
@@ -61,11 +62,14 @@ Gen_corpus, Feb24
 1M, 145s
 2M, 360s
 4M, 882s
+8M, 1782
+16M, 4600, 2321
+24M, 8633,
 '''
 
 
 title = 'Please choose your operation: '
-options = ['Make Dictionary and BoW Corpus','Model topics', 'Index topics','calculate optimum_topics']
+options = ['Make Dictionary and BoW Corpus','Model topics', 'Index topics','calculate optimum_topics', 'Make Dict & BoW in batches', 'Merge corpus batches']
 io = DataIO()
 db = io.db
 io.db["name"] = "stock"
@@ -82,7 +86,7 @@ USE_SEGMENT = False
 VERBOSE = True
 RANDOM = False
 global_counter = 0
-QUERY_LIMIT = 4000000
+QUERY_LIMIT = 1000000
 # started at 9:45PM, Feb 17
 BATCH_SIZE = 100
 
@@ -297,6 +301,106 @@ def gen_corpus():
     return 
 
 
+def gen_corpus_in_batches():
+    print("generating corpus")
+    offset = 0
+    batch_size = 10000  # Adjust the batch size as needed
+    batch_number = 1
+    
+    while True:
+        query = session.query(BagOfKeywords.tokenized_keyword_list).filter(BagOfKeywords.tokenized_keyword_list.isnot(None)).offset(offset).limit(batch_size)
+        results = query.all()
+        total_rows = len(results)
+        if total_rows == 0:
+            break  # No more rows to process
+        
+        if VERBOSE: 
+            print("Processing rows {} to {} (Batch {})".format(offset, offset + total_rows - 1, batch_number))
+        
+        token_lists = [pickle.loads(row.tokenized_keyword_list) for row in results]
+
+        dictionary = gensim.corpora.Dictionary(token_lists)
+        dictionary.filter_extremes(no_below=15, no_above=0.5, keep_n=100000)
+        if VERBOSE: 
+            print("gen_corpus: created dictionary")
+        
+        bow_corpus = [dictionary.doc2bow(doc) for doc in token_lists]  # BoW corpus
+
+        # Create TF-IDF model
+        tfidf_model = models.TfidfModel(bow_corpus)
+        tfidf_corpus = tfidf_model[bow_corpus]  # TF-IDF corpus
+
+        # Modify file names to include batch number
+        dict_path = os.path.join(io.ROOT, "batches", "dictionary_batch{}.dict".format(batch_number))
+        bow_corpus_path = os.path.join(io.ROOT, "batches", "bow_corpus_batch{}.mm".format(batch_number))
+        tfidf_corpus_path = os.path.join(io.ROOT, "batches", "tfidf_corpus_batch{}.mm".format(batch_number))
+
+        dictionary.save(dict_path)
+        if VERBOSE: 
+            print("gen_corpus: saved dictionary")
+        
+        corpora.MmCorpus.serialize(bow_corpus_path, bow_corpus)
+        if VERBOSE: 
+            print("gen_corpus: saved bow_corpus")
+        
+        corpora.MmCorpus.serialize(tfidf_corpus_path, tfidf_corpus)
+        if VERBOSE: 
+            print("gen_corpus: saved tfidf_corpus")
+        
+        offset += total_rows
+        batch_number += 1
+
+    return
+
+
+def merge_corpus_batches():
+    # Merge all batches of dictionaries, BoW corpora, and TF-IDF corpora
+    all_dicts = []
+    all_bow_corpora = []
+    all_tfidf_corpora = []
+
+    # Determine MAX_BATCH_NUMBER dynamically
+    batch_files = os.listdir(os.path.join(io.ROOT, "batches"))
+    batch_numbers = [int(re.findall(r'\d+', filename)[0]) for filename in batch_files if 'batch' in filename]
+    if batch_numbers:
+        MAX_BATCH_NUMBER = max(batch_numbers)
+    else:
+        print("No batch files found in the specified directory.")
+        return
+
+    for batch_number in range(1, MAX_BATCH_NUMBER + 1):
+        dict_path = os.path.join(io.ROOT, "batches", "dictionary_batch{}.dict".format(batch_number))
+        bow_corpus_path = os.path.join(io.ROOT, "batches", "bow_corpus_batch{}.mm".format(batch_number))
+        tfidf_corpus_path = os.path.join(io.ROOT, "batches", "tfidf_corpus_batch{}.mm".format(batch_number))
+
+        if os.path.exists(dict_path) and os.path.exists(bow_corpus_path) and os.path.exists(tfidf_corpus_path):
+            dictionary = gensim.corpora.Dictionary.load(dict_path)
+            bow_corpus = corpora.MmCorpus(bow_corpus_path)
+            tfidf_corpus = corpora.MmCorpus(tfidf_corpus_path)
+
+            all_dicts.append(dictionary)
+            all_bow_corpora.append(bow_corpus)
+            all_tfidf_corpora.append(tfidf_corpus)
+
+    # Merge dictionaries
+    merged_dict = gensim.corpora.Dictionary()
+    for dictionary in all_dicts:
+        merged_dict.merge_with(dictionary)
+
+    # Concatenate BoW corpora
+    merged_bow_corpus = [doc for corpus in all_bow_corpora for doc in corpus]
+
+    # Concatenate TF-IDF corpora
+    merged_tfidf_corpus = [doc for corpus in all_tfidf_corpora for doc in corpus]
+
+    # Save merged dictionary, BoW corpus, and TF-IDF corpus
+    merged_dict.save(DICT_PATH)
+    corpora.MmCorpus.serialize(BOW_CORPUS_PATH, merged_bow_corpus)
+    corpora.MmCorpus.serialize(TFIDF_CORPUS_PATH, merged_tfidf_corpus)
+
+    return
+
+
 def topic_model():
     # #######TOPIC MODELING ############
     # txt = pd.DataFrame(index=range(len(resultsjson)),columns=["description","keywords","index","score"])
@@ -351,6 +455,9 @@ def main():
     elif MODE==1:topic_model()
     elif MODE==2:topic_index(resultsjson)
     elif MODE==3:calc_optimum_topics()
+    elif MODE==4:gen_corpus_in_batches()
+    elif MODE==5:merge_corpus_batches()
+
     end = time.time()
     print (end - start)
     return True
