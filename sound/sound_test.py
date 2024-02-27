@@ -22,6 +22,7 @@ VOLUME_MAX = .8
 FIT_VOL_MIN = .3
 FIT_VOL_MAX = 1
 FADEOUT = 4
+
 def apply_fadeout(audio, sample_rate, duration=3.0):
     # convert to audio indices (samples)
     length = int(duration*sample_rate)
@@ -31,8 +32,6 @@ def apply_fadeout(audio, sample_rate, duration=3.0):
     # compute fade out curve
     # linear fade
     fade_curve = np.linspace(1.0, 0.0, length)
-    print(fade_curve.shape)
-    print(audio[start:end].shape)
     # apply the curve
     audio[start:end] = audio[start:end] * fade_curve
 
@@ -44,14 +43,14 @@ for _, row in df.iterrows():
     audio_data, sample_rate = sf.read(input_path)
 
     # Adjusting volume level and applying panning
+    EXP = 2.5
     volume_fit = float(row['topic_fit'])  # Using topic_fit as the volume level
     linear_scaled_vol = (volume_fit - FIT_VOL_MIN) / (FIT_VOL_MAX  - FIT_VOL_MIN) * (VOLUME_MAX - VOLUME_MIN) + VOLUME_MIN
-    clip_scaled_vol = (volume_fit - FIT_VOL_MIN) / (FIT_VOL_MAX  - FIT_VOL_MIN) * (VOLUME_MAX - VOLUME_MIN) + VOLUME_MIN
+    exp_scaled_vol = (volume_fit - FIT_VOL_MIN)**EXP / (FIT_VOL_MAX  - FIT_VOL_MIN)**EXP * (VOLUME_MAX - VOLUME_MIN) + VOLUME_MIN
               
     pan = float(row['pan'])  # Using pan as the panning level
-    audio_data_adjusted = audio_data * linear_scaled_vol
-    # print("volume_fit:", volume_fit, "scaled_vol" ,scaled_vol, "Pan:", pan)
-
+    audio_data_adjusted = audio_data * exp_scaled_vol
+    print("volume_fit:", volume_fit, "scaled_vol" ,exp_scaled_vol, "Pan:", pan)
 
     if (FADEOUT * sample_rate) > len(audio_data_adjusted):
         FADEOUT = len(audio_data_adjusted) / sample_rate
