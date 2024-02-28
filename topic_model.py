@@ -284,7 +284,7 @@ def gen_corpus():
 
     dictionary = gensim.corpora.Dictionary(token_lists)
     if VERBOSE: print("gen_corpus: created dictionary")
-    dictionary.filter_extremes(no_below=15, no_above=0.5, keep_n=100000)
+    dictionary.filter_extremes(no_below=100, no_above=0.5, keep_n=100000)
     if VERBOSE: print("gen_corpus: filtered extremes")
     bow_corpus = [dictionary.doc2bow(doc) for doc in token_lists] ## BOW corpus
     if VERBOSE: print("gen_corpus: created bow_corpus")
@@ -304,25 +304,40 @@ def gen_corpus():
 def gen_corpus_in_batches():
     print("generating corpus")
     offset = 0
-    batch_size = 10000  # Adjust the batch size as needed
+    batch_size = 500000  # Adjust the batch size as needed
     batch_number = 1
+    try:
+        dictionary = corpora.Dictionary.load(DICT_PATH)
+        print("loaded dictionary")
+    except:
+        dictionary = gensim.corpora.Dictionary()  # Initialize an empty dictionary
     
     while True:
         query = session.query(BagOfKeywords.tokenized_keyword_list).filter(BagOfKeywords.tokenized_keyword_list.isnot(None)).offset(offset).limit(batch_size)
         results = query.all()
         total_rows = len(results)
-        if total_rows == 0:
+        if total_rows == 0 or batch_number > 2: # temp fix for 1M
             break  # No more rows to process
         
         if VERBOSE: 
             print("Processing rows {} to {} (Batch {})".format(offset, offset + total_rows - 1, batch_number))
-        
+        # if dictionary is empty, create it
+
         token_lists = [pickle.loads(row.tokenized_keyword_list) for row in results]
 
-        dictionary = gensim.corpora.Dictionary(token_lists)
-        dictionary.filter_extremes(no_below=15, no_above=0.5, keep_n=100000)
+        if not dictionary:
+            print("first run, making dictionary")
+            token_lists = [pickle.loads(row.tokenized_keyword_list) for row in results]
+            dictionary = gensim.corpora.Dictionary(token_lists)
+            dictionary.filter_extremes(no_below=100, no_above=0.5, keep_n=100000)
+        else:
+            print("updating dictionary - except not...")
+            # for doc in token_lists:
+            #     dictionary.add_documents([doc])  # Update the dictionary with tokens from the current batch
+            # dictionary.filter_extremes(no_below=15, no_above=0.5, keep_n=100000)
+
         if VERBOSE: 
-            print("gen_corpus: created dictionary")
+            print("gen_corpus: updated dictionary")
         
         bow_corpus = [dictionary.doc2bow(doc) for doc in token_lists]  # BoW corpus
 
@@ -331,13 +346,9 @@ def gen_corpus_in_batches():
         tfidf_corpus = tfidf_model[bow_corpus]  # TF-IDF corpus
 
         # Modify file names to include batch number
-        dict_path = os.path.join(io.ROOT, "batches", "dictionary_batch{}.dict".format(batch_number))
+        # dict_path = os.path.join(io.ROOT, "batches", "dictionary_batch{}.dict".format(batch_number))
         bow_corpus_path = os.path.join(io.ROOT, "batches", "bow_corpus_batch{}.mm".format(batch_number))
         tfidf_corpus_path = os.path.join(io.ROOT, "batches", "tfidf_corpus_batch{}.mm".format(batch_number))
-
-        dictionary.save(dict_path)
-        if VERBOSE: 
-            print("gen_corpus: saved dictionary")
         
         corpora.MmCorpus.serialize(bow_corpus_path, bow_corpus)
         if VERBOSE: 
@@ -350,12 +361,16 @@ def gen_corpus_in_batches():
         offset += total_rows
         batch_number += 1
 
+    dictionary.save(DICT_PATH)
+    if VERBOSE: 
+        print("gen_corpus: saved dictionary")
+
     return
 
 
 def merge_corpus_batches():
     # Merge all batches of dictionaries, BoW corpora, and TF-IDF corpora
-    all_dicts = []
+    # all_dicts = []
     all_bow_corpora = []
     all_tfidf_corpora = []
 
@@ -369,23 +384,23 @@ def merge_corpus_batches():
         return
 
     for batch_number in range(1, MAX_BATCH_NUMBER + 1):
-        dict_path = os.path.join(io.ROOT, "batches", "dictionary_batch{}.dict".format(batch_number))
+        # dict_path = os.path.join(io.ROOT, "batches", "dictionary_batch{}.dict".format(batch_number))
         bow_corpus_path = os.path.join(io.ROOT, "batches", "bow_corpus_batch{}.mm".format(batch_number))
         tfidf_corpus_path = os.path.join(io.ROOT, "batches", "tfidf_corpus_batch{}.mm".format(batch_number))
 
-        if os.path.exists(dict_path) and os.path.exists(bow_corpus_path) and os.path.exists(tfidf_corpus_path):
-            dictionary = gensim.corpora.Dictionary.load(dict_path)
+        if os.path.exists(bow_corpus_path) and os.path.exists(tfidf_corpus_path):
+            # dictionary = gensim.corpora.Dictionary.load(dict_path)
             bow_corpus = corpora.MmCorpus(bow_corpus_path)
             tfidf_corpus = corpora.MmCorpus(tfidf_corpus_path)
 
-            all_dicts.append(dictionary)
+            # all_dicts.append(dictionary)
             all_bow_corpora.append(bow_corpus)
             all_tfidf_corpora.append(tfidf_corpus)
 
-    # Merge dictionaries
-    merged_dict = gensim.corpora.Dictionary()
-    for dictionary in all_dicts:
-        merged_dict.merge_with(dictionary)
+    # # Merge dictionaries
+    # merged_dict = gensim.corpora.Dictionary()
+    # for dictionary in all_dicts:
+    #     merged_dict.merge_with(dictionary)
 
     # Concatenate BoW corpora
     merged_bow_corpus = [doc for corpus in all_bow_corpora for doc in corpus]
@@ -394,7 +409,7 @@ def merge_corpus_batches():
     merged_tfidf_corpus = [doc for corpus in all_tfidf_corpora for doc in corpus]
 
     # Save merged dictionary, BoW corpus, and TF-IDF corpus
-    merged_dict.save(DICT_PATH)
+    # merged_dict.save(DICT_PATH)
     corpora.MmCorpus.serialize(BOW_CORPUS_PATH, merged_bow_corpus)
     corpora.MmCorpus.serialize(TFIDF_CORPUS_PATH, merged_tfidf_corpus)
 
