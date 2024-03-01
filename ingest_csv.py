@@ -60,7 +60,7 @@ NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 # CSV_IN_PATH = os.path.join(INGEST_FOLDER, "unique_lines_B_nogender.csv")
 SITE_ID = 7
 INGEST_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/Pond5/"
-CSV_IN_PATH = os.path.join(INGEST_FOLDER, "output.csv")
+CSV_IN_PATH = os.path.join(INGEST_FOLDER, "output.binary.csv")
 KEYWORD_PATH = os.path.join(INGEST_FOLDER, "Keywords_202402071139.csv")
 LOCATION_PATH = os.path.join(INGEST_FOLDER, "Location_202308041952.csv")
 CSV_NOKEYS_PATH = os.path.join(INGEST_FOLDER, "CSV_NOKEYS.csv")
@@ -676,19 +676,59 @@ def get_gender_age_row(gender_string, age_string, description, keys_list, site_i
         age_detail = get_mode(age_detail_list)
         return gender, age, age_detail
 
-    def test_TNB(description)
-        TNB_list = ["nonbinary", "binary", "bin-binary", "non binary"]
-        Code_list = ["computer", "code", "coding", "program", "programming", "developer", "development", "software", "engineer", "engineering", "tech", "technology", "digital", "internet", "web", "online", "cyber"]
+    def get_TNB(description.lower()):
+        global is_code
+        global gender_TNB
+        global TNB_list
+        global binary
+        global Code_list 
+        is_code = False
+        gender_TNB = None
+        TNB_list = ["nonbinary", "non-binary", "non binary", "trans " "transgender", "transsexual", "genderfluid",  "gender fluid", "genderqueer", "gender queer","gender nonconforming", "intersex"]
+        binary = "binary"
+        trans = "trans"
+        Code_list = ["number", "screen", "computer", "code", "coding", "program", "programming", "developer", "development", "software", "engineer", "engineering", "digital", "internet", "web", "online", "cyber"]
+        def binary_code_in_desc(description):
+            global is_code
+            if any(word in description for word in Code_list):
+                print("Binary Code Desc:", description)
+                is_code = True
+            elif any(word in keys_list for word in Code_list):
+                print("Binary Code Keys:", description)
+                is_code = True                
+            else:
+                is_code = False
+            return is_code
+        
+        def get_TNB(description):
+            global gender_TNB
+            for word in TNB_list:
+                    if word in description:
+                        # print the word that is in TNB_list
+                        gender_TNB = word
+            return gender_TNB
 
+        if any(word in description for word in TNB_list):
+            gender_TNB = get_TNB(description)
+            print("Binary TNB_list:", gender_TNB, description)
+        elif binary in description:
+            if binary_code_in_desc(description):
+                print("Binary in description:", gender_TNB, description)
+            else:
+                gender_TNB = get_TNB(description)
+                print("Binary not Code:", gender_TNB, description)
+        return gender_TNB
     # print("get_gender_age_row starting")
     global gender_dict
     gender = None
+    
     age= None
     age_detail= None
+    desc_age = None
 
     description = description.replace(",","").replace("'s","").replace(".","")
 
-
+    gender_TNB = get_TNB(description)
     # print("gender_string, age_string",gender_string, age_string)
     # print("types",type(gender_string), type(age_string))
 
