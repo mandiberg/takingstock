@@ -60,7 +60,7 @@ NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 # CSV_IN_PATH = os.path.join(INGEST_FOLDER, "unique_lines_B_nogender.csv")
 SITE_ID = 7
 INGEST_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/Pond5/"
-CSV_IN_PATH = os.path.join(INGEST_FOLDER, "output.binary.csv")
+CSV_IN_PATH = os.path.join(INGEST_FOLDER, "output.csv")
 KEYWORD_PATH = os.path.join(INGEST_FOLDER, "Keywords_202402071139.csv")
 LOCATION_PATH = os.path.join(INGEST_FOLDER, "Location_202308041952.csv")
 CSV_NOKEYS_PATH = os.path.join(INGEST_FOLDER, "CSV_NOKEYS.csv")
@@ -580,6 +580,7 @@ def description_to_keys(description, site_id, this_dict="keys_dict"):
 
 # sorts out binary code from trans and non binary gender
 # returns False if binary code, else returns gender_id
+TNB_list = ["nonbinary", "non-binary", "non binary", "androgynous","androgyn", "transgender", "transsexual", "genderfluid",  "gender fluid", "genderqueer", "gender queer","gender nonconforming", "intersex"]
 def get_TNB(description, keys_list):
     global is_code
     global gender_TNB
@@ -588,7 +589,6 @@ def get_TNB(description, keys_list):
     global Code_list 
     is_code = False
     gender_TNB = None
-    TNB_list = ["nonbinary", "non-binary", "non binary", "androgynous","androgyn", "transgender", "transsexual", "genderfluid",  "gender fluid", "genderqueer", "gender queer","gender nonconforming", "intersex"]
     binary = "binary"
     transpattern = r'\btrans\b'
     Code_list = ["number", "screen", "computer", "code", "coding", "program", "programming", "developer", "development", "software", "engineer", "engineering", "digital", "internet", "web", "online", "cyber"]
@@ -1141,33 +1141,29 @@ def ingest_csv():
                         keys_list.append("transgender")
                     elif is_TNB == 5:
                         print("swapping binary is_TNB", is_TNB)
-                        keys_list.append("non-binary")
+                        keys_list.append("non-binary")      
                     else:
-                        print("neither 5 nor 7")
-                        is_TNB2 = get_TNB(key_string.replace(key,""), keys_list)
-                        # print("2 is TNB2", is_TNB2, )
-                        if not is_TNB2:                        
-                            for otherkey in otherbinary_list:
-                                if otherkey in word_soup:
-                                    print("something else:", description, keys_list)
-                                    try:
-                                        keys_list.remove("binary")
-                                    except:
-                                        print("wrong key no removal")
-                                    return keys_list                
-                            print("decompile_binary is code:", key, description, keys_list)
-                            keys_list.append("code")
+                        print("neither 5 nor 7, checking if racism/sexism")
+                        for otherkey in otherbinary_list:
+                            if otherkey in word_soup:
+                                print("something else:", description, keys_list)
+                                try:
+                                    keys_list.remove("binary")
+                                except:
+                                    print("wrong key no removal")
+                                return keys_list                
                     keys_list.remove(key) 
                     return keys_list
-                elif "binary" in description:
-                    print("binary in description:", description)
-                    keys_list.append("code")
-                    try:
-                        keys_list.remove("binary")
-                    except:
-                        print("wrong key no removal")
-
-                    return keys_list                   
+            # if you searched the keys, and cross referenced against otherbbinary list, then in desc AND CODE!
+            if "binary" in description:
+                for tnbkey in TNB_list:
+                    if tnbkey in description:
+                        print("GENDER in description:", description)
+                        keys_list.append(tnbkey)
+                        return keys_list
+                print("CODE in description:", description)
+                keys_list.append("code")
+                return keys_list                   
     
         return keys_list                   
         
