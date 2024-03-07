@@ -152,6 +152,13 @@ class ImagesTopics(Base):
     topic_id = Column(Integer, ForeignKey('Topics.topic_id'))
     topic_score = Column(Float)
 
+class ImagesBG(Base):
+    __tablename__ = 'ImagesBG' 
+    image_id = Column(Integer, ForeignKey('images.image_id'), primary_key=True)
+    imagename = Column(String(200), ForeignKey('Images.imagename'))
+    hue = Column(Float)
+    lum = Column(Float)
+
 # these are for MM use for using segments
 # class Clusters(Base):
 #     __tablename__ = 'Clusters_May25segment123straight_lessrange'
