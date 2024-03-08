@@ -67,7 +67,7 @@
 from sqlalchemy import create_engine, select, delete
 from sqlalchemy.orm import sessionmaker,scoped_session
 from sqlalchemy.pool import NullPool
-from my_declarative_base import Images,ImagesBG  # Replace 'your_module' with the actual module where your SQLAlchemy models are defined
+from my_declarative_base import Images,ImagesBG,Site  # Replace 'your_module' with the actual module where your SQLAlchemy models are defined
 from mp_db_io import DataIO
 import pickle
 import numpy as np
@@ -76,7 +76,8 @@ import threading
 import queue
 import csv
 import os
-
+import cv2
+import mediapipe as mp
 
 io = DataIO()
 db = io.db
@@ -85,41 +86,54 @@ io.db["name"] = "ministock"
 # Create a database engine
 engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}".format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']), poolclass=NullPool)
 
+get_background_mp = mp.solutions.selfie_segmentation
+get_bg_segment = get_background_mp.SelfieSegmentation()
+
+
+
 # Create a session
 session = scoped_session(sessionmaker(bind=engine))
+
+# i was checking which port am i pointing to
+# # Execute a query to retrieve database names
+# result = session.execute(text("SHOW DATABASES"))
+
+# # Iterate through the result set and print database names
+# for row in result:
+    # print(row[0])
 
 title = 'Please choose your operation: '
 options = ['Create table', 'Fetch BG color stats']
 option, index = pick(options, title)
 
-LIMIT= 100
+LIMIT= 10
 # Initialize the counter
 counter = 0
 
 # Number of threads
-num_threads = io.NUMBER_OF_PROCESSES
+#num_threads = io.NUMBER_OF_PROCESSES
+num_threads = 1
 
-# def get_bg_hue_lum(file):
-    # sample_img = cv2.imread(file)
-    # result = get_bg_segment.process(sample_img[:,:,::-1])
-    # mask=np.repeat((1-result.segmentation_mask)[:, :, np.newaxis], 3, axis=2)
-    # masked_img=mask*sample_img[:,:,::-1]/255 ##RGB format
-    # # Identify black pixels where R=0, G=0, B=0
-    # black_pixels_mask = np.all(masked_img == [0, 0, 0], axis=-1)
-    # # Filter out black pixels and compute the mean color of the remaining pixels
-    # mean_color = np.mean(masked_img[~black_pixels_mask], axis=0)[np.newaxis,np.newaxis,:] # ~ is negate
-    # hue=cv2.cvtColor(mean_color, cv2.COLOR_RGB2HSV)[0,0,0]
-    # lum=cv2.cvtColor(mean_color, cv2.COLOR_RGB2LAB)[0,0,0]
-    # return hue,lum
+def get_bg_hue_lum(file):
+    sample_img = cv2.imread(file)
+    result = get_bg_segment.process(sample_img[:,:,::-1])
+    mask=np.repeat((1-result.segmentation_mask)[:, :, np.newaxis], 3, axis=2)
+    masked_img=mask*sample_img[:,:,::-1]/255 ##RGB format
+    # Identify black pixels where R=0, G=0, B=0
+    black_pixels_mask = np.all(masked_img == [0, 0, 0], axis=-1)
+    # Filter out black pixels and compute the mean color of the remaining pixels
+    mean_color = np.mean(masked_img[~black_pixels_mask], axis=0)[np.newaxis,np.newaxis,:] # ~ is negate
+    hue=cv2.cvtColor(mean_color, cv2.COLOR_RGB2HSV)[0,0,0]
+    lum=cv2.cvtColor(mean_color, cv2.COLOR_RGB2LAB)[0,0,0]
+    return hue,lum
 
 
 def create_table(row, lock, session):
-    image_id,imagename = row
+    image_id,imagename,site_name_id = row
     
     # Create a BagOfKeywords object
     images_bg = ImagesBG(
         image_id=image_id,
-        imagename=imagename,
         hue=None,  # Set this to None or your desired value
         lum=None,  # Set this to None or your desired value
     )
@@ -135,17 +149,30 @@ def create_table(row, lock, session):
 
     # Print a message to confirm the update
     # print(f"BG list list for image_id {image_id} updated successfully.")
-    if counter % 1000 == 0:
+    if counter % 100 == 0:
         print(f"Created Images_BG number: {counter}")
 
 
-def get_filename(imagename):
+def get_filename(target_image_id):
     ## get the image somehow
-    return filename
+    select_image_ids_query = (
+        select(Images.site_name_id,Images.imagename)
+        .filter(Images.image_id == target_image_id)
+    )
+
+    result = session.execute(select_image_ids_query).fetchall()
+    site_name_id,imagename=result[0]
+    site_specific_root_folder = io.folder_list[site_name_id]
+    file=site_specific_root_folder+"/"+imagename  ###os.path.join was acting wierd so had to do this
+
+    return file
 
 def fetch_BG_stat(target_image_id, lock, session):
-    filename=get_filename(imagename)
+
+    file=get_filename(target_image_id)
+    #filename=get_filename(imagename)
     hue,lum=get_bg_hue_lum(file)
+    
     # Update the BagOfKeywords entry with the corresponding image_id
     ImagesBG_entry = (
         session.query(ImagesBG)
@@ -169,11 +196,20 @@ def fetch_BG_stat(target_image_id, lock, session):
 
     return
 
+#######MULTI THREADING##################
+# Create a lock for thread synchronization
+lock = threading.Lock()
+threads_completed = threading.Event()
+
+
+
+# Create a queue for distributing work among threads
+work_queue = queue.Queue()
 
 if index == 0:
     function=create_table
     ################# CREATE TABLE ###########
-    select_query = select(Images.image_id,Images.imagename).\
+    select_query = select(Images.image_id,Images.imagename,Images.site_name_id).\
         select_from(Images).outerjoin(ImagesBG,Images.image_id == ImagesBG.image_id).filter(ImagesBG.image_id == None).limit(LIMIT)
     result = session.execute(select_query).fetchall()
     # print the length of the result
@@ -181,7 +217,7 @@ if index == 0:
     for row in result:
         work_queue.put(row)
         
-elif index == 2:
+elif index == 1:
     function=fetch_BG_stat
     #################FETCHING BG stat####################################
     distinct_image_ids_query = select(ImagesBG.image_id.distinct()).filter(ImagesBG.hue == None).limit(LIMIT)
