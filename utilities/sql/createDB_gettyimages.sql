@@ -124,3 +124,11 @@ CREATE TABLE ImagesClusters (
     cluster_id INTEGER REFERENCES Clusters (cluster_id),
     PRIMARY KEY (image_id)
 );
+
+
+CREATE TABLE ImagesBG (
+    image_id INT PRIMARY KEY,
+    hue FLOAT,
+    lum FLOAT,
+    FOREIGN KEY (image_id) REFERENCES images(image_id)
+);
