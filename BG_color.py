@@ -3,14 +3,10 @@
 # import mediapipe as mp
 # import matplotlib.pyplot as plt
 # import os
-# import pandas as pd
 # import shutil
 
 # FOLDER_PATH = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/bg_color/0900"
 # results = []
-# SORTTYPE = "luminosity"  # "hue" or "luminosity"
-# output_folder = os.path.join(FOLDER_PATH, SORTTYPE)
-# os.makedirs(output_folder, exist_ok=True)
 
 # get_background_mp = mp.solutions.selfie_segmentation
 # get_bg_segment = get_background_mp.SelfieSegmentation()
@@ -31,36 +27,6 @@
 # '''
 
 
-# def get_bg_folder(folder_path):
-    # for filename in os.listdir(folder_path):
-        # if filename.endswith(".jpg") or filename.endswith(".jpeg") or filename.endswith(".png"):
-            # file_path = os.path.join(folder_path, filename)
-            # hue, lum = get_bg_hue_lum(file_path)
-            # results.append({"file": filename, "hue": hue, "luminosity": lum})
-
-    # # Create DataFrame from results and sort by SORTYPE
-    # df = pd.DataFrame(results)
-    # df_sorted = df.sort_values(by=SORTTYPE)
-
-    # print(df_sorted)
-
-    # # Iterate over sorted DataFrame and save copies of each file to output folder
-    # counter = 0
-    # total = len(df_sorted)
-
-    # for index, row in df_sorted.iterrows():
-        # old_file_path = os.path.join(folder_path, row["file"])
-        # filename = f"{str(counter)}_{int(row[SORTTYPE])}_{row['file']}"
-        # print(filename)
-        # new_file_path = os.path.join(output_folder, filename)
-        # shutil.copyfile(old_file_path, new_file_path)
-        # print(f"File '{row['file']}' copied to '{filename}'")
-        # counter += 1
-
-    # print("Files saved to", output_folder)
-
-
-# get_bg_folder(FOLDER_PATH)
 
 #################################
 
@@ -78,6 +44,8 @@ import csv
 import os
 import cv2
 import mediapipe as mp
+import shutil
+import pandas as pd
 
 io = DataIO()
 db = io.db
@@ -89,30 +57,90 @@ engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}".format(host=db[
 get_background_mp = mp.solutions.selfie_segmentation
 get_bg_segment = get_background_mp.SelfieSegmentation()
 
+FOLDER_PATH = "E:/"+"work/face_map/Documents/projects-active/facemap_production/bg_color/0900"
+SORTTYPE = "luminosity"  # "hue" or "luminosity"
+output_folder = os.path.join(FOLDER_PATH, SORTTYPE)
+print(output_folder)
+os.makedirs(output_folder, exist_ok=True)
 
 
 # Create a session
 session = scoped_session(sessionmaker(bind=engine))
 
-# i was checking which port am i pointing to
-# # Execute a query to retrieve database names
-# result = session.execute(text("SHOW DATABASES"))
-
-# # Iterate through the result set and print database names
-# for row in result:
-    # print(row[0])
-
 title = 'Please choose your operation: '
-options = ['Create table', 'Fetch BG color stats']
+options = ['Create table', 'Fetch BG color stats',"test sorting"]
 option, index = pick(options, title)
 
-LIMIT= 10
+LIMIT= 100
 # Initialize the counter
 counter = 0
 
 # Number of threads
 #num_threads = io.NUMBER_OF_PROCESSES
 num_threads = 1
+
+def get_bg_folder(folder_path):
+    for filename in os.listdir(folder_path):
+        if filename.endswith(".jpg") or filename.endswith(".jpeg") or filename.endswith(".png"):
+            file_path = os.path.join(folder_path, filename)
+            hue, lum = get_bg_hue_lum(file_path)
+            results.append({"file": filename, "hue": hue, "luminosity": lum})
+
+    # Create DataFrame from results and sort by SORTYPE
+    df = pd.DataFrame(results)
+    df_sorted = df.sort_values(by=SORTTYPE)
+
+    print(df_sorted)
+
+    # Iterate over sorted DataFrame and save copies of each file to output folder
+    counter = 0
+    total = len(df_sorted)
+
+    for index, row in df_sorted.iterrows():
+        old_file_path = os.path.join(folder_path, row["file"])
+        filename = f"{str(counter)}_{int(row[SORTTYPE])}_{row['file']}"
+        print(filename)
+        new_file_path = os.path.join(output_folder, filename)
+        shutil.copyfile(old_file_path, new_file_path)
+        print(f"File '{row['file']}' copied to '{filename}'")
+        counter += 1
+
+    print("Files saved to", output_folder)
+
+def get_bg_database():
+    results=[]
+    distinct_image_ids_query = select(ImagesBG.image_id,ImagesBG.hue,ImagesBG.lum).filter(ImagesBG.hue != None).limit(LIMIT)
+    result=session.execute(distinct_image_ids_query).fetchall()
+    for row in result:
+        image_id,hue,lum = row
+        filename=get_filename(image_id)
+        results.append({"file": filename, "hue": hue, "luminosity": lum})
+
+    # Create DataFrame from results and sort by SORTYPE
+    df = pd.DataFrame(results)
+    df_sorted = df.sort_values(by=SORTTYPE)
+
+    print(df_sorted)
+
+    # Iterate over sorted DataFrame and save copies of each file to output folder
+    counter = 0
+    total = len(df_sorted)
+
+    for index, row in df_sorted.iterrows():
+        #old_file_path = os.path.join(folder_path, row["file"])
+        old_file_path=row['file']
+
+        filename = f"{str(counter)}_{int(row[SORTTYPE])}_{row['file'].split('/')[-1]}"
+        new_file_path = os.path.join(output_folder,filename)
+        print(old_file_path, new_file_path)
+        shutil.copyfile(old_file_path, new_file_path)
+        print(f"File '{row['file']}' copied to '{filename}'")
+        counter += 1
+
+    print("Files saved to", output_folder)
+
+# get_bg_folder(FOLDER_PATH)
+
 
 def get_bg_hue_lum(file):
     sample_img = cv2.imread(file)
@@ -153,7 +181,7 @@ def create_table(row, lock, session):
         print(f"Created Images_BG number: {counter}")
 
 
-def get_filename(target_image_id):
+def get_filename(target_image_id, return_endfile=False):
     ## get the image somehow
     select_image_ids_query = (
         select(Images.site_name_id,Images.imagename)
@@ -164,8 +192,10 @@ def get_filename(target_image_id):
     site_name_id,imagename=result[0]
     site_specific_root_folder = io.folder_list[site_name_id]
     file=site_specific_root_folder+"/"+imagename  ###os.path.join was acting wierd so had to do this
-
+    end_file=imagename.split('/')[2]
+    if return_endfile: return file,endfile
     return file
+    
 
 def fetch_BG_stat(target_image_id, lock, session):
 
@@ -225,6 +255,8 @@ elif index == 1:
     for target_image_id in distinct_image_ids:
         work_queue.put(target_image_id)        
 
+elif index == 2:
+    get_bg_database()
         
 def threaded_fetching():
     while not work_queue.empty():
@@ -243,10 +275,10 @@ def threaded_processing():
         thread.join()
     # Set the event to signal that threads are completed
     threads_completed.set()
-    
-threaded_processing()
-# Commit the changes to the database
-threads_completed.wait()
+if index!=2:
+    threaded_processing()
+    # Commit the changes to the database
+    threads_completed.wait()
 
 print("done")
 # Close the session
