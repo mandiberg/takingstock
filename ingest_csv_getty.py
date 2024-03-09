@@ -49,7 +49,7 @@ _|_|  _|\__, |\___|____/\__| \___|____/  \_/
 io = DataIO()
 db = io.db
 # overriding DB for testing
-io.db["name"] = "ministock"
+io.db["name"] = "ministock1023"
 ROOT = io.ROOT 
 NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 #######################################
@@ -60,8 +60,8 @@ INGEST_ROOT = "/Users/michaelmandiberg/Documents/projects-active/facemap_product
 INGEST_FOLDER = os.path.join(INGEST_ROOT, "getty_55555_italy")
 # CSV_IN_PATH = os.path.join(INGEST_FOLDER, "unique_lines_B_nogender.csv")
 # INGEST_FOLDER = "/Users/michaelmandiberg/Downloads/getty_rebuild/"
-CSV_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache.jsonl")
-KEYWORD_PATH = os.path.join(INGEST_ROOT, "Keywords_202305150950.csv")
+CSV_IN_PATH = os.path.join(INGEST_FOLDER, "mixed.usa6.jsonl")
+KEYWORD_PATH = os.path.join(INGEST_ROOT, "Keywords_202402071139.csv")
 LOCATION_PATH = os.path.join(INGEST_ROOT, "Location_202308041952.csv")
 CSV_NOKEYS_PATH = os.path.join(INGEST_FOLDER, "CSV_NOKEYS.csv")
 CSV_IMAGEKEYS_PATH = os.path.join(INGEST_FOLDER, "CSV_IMAGEKEYS.csv")
@@ -91,7 +91,7 @@ eth_dict = {"black":1, "african-american":1, "afro-american":1, "africanamerican
 eth_dict_istock = {"Northern European Descent":2, "Scandinavian Descent":2, "Southern European Descent":2, "East Asian Ethnicity":3, "Japanese Ethnicity":3, "Chinese Ethnicity":3, "Southeast Asian Ethnicity":10, "South Asian Ethnicity":9, "West Asian Ethnicity":5, "North African Ethnicity":5, "African-American Ethnicity":1, "Latin American and Hispanic Ethnicity":4, "Cuban Ethnicity":4, "Puerto Rican Ethnicity":4, "Mexican Ethnicity":4, "Multiracial Group":6, "Multiracial Person":6, "Russian Ethnicity":2, "Eastern European Descent":2, "Korean Ethnicity":3,  "Filipino Ethnicity":10, "Vietnamese Ethnicity":10, "Thai Ethnicity":10, "Cambodian Ethnicity":10, "Indian Ethnicity":9, "Sri Lankan Ethnicity":9,  "Italian Ethnicity":2, "East Slavs":2, "Polish Ethnicity":2, "Ukrainian Ethnicity":2, "Spanish and Portuguese Ethnicity":2,  "Chinese Han":3,  "Nepalese Ethnicity":3, "Taiwanese Ethnicity":3, "Only Japanese":3, "Tibetan Ethnicity":3, "Malaysian Ethnicity":10,}
 eth_dict_istock_secondary = {"Ethiopian Ethnicity":1, "Southern African Tribe":1, "Maasai People":1, "East African Ethnicity":1, "Western African Peoples":1, "Haitian Ethnicity":1, "Afro-Caribbean Ethnicity":1, "Trinidadian Ethnicity":1, "Creole Ethnicity":1, "Jamaican Ethnicity":1, "Karo Tribe":1, "Nilotic Peoples":1, "Turkana Tribe":1, "Hamer Tribe":1, "Mursi People":1, "Arbore People":1, "Borana Oromo People":1, "Konso - Tribe":1, "Lobi Tribe":1, "Samburu Tribe":1, "Malagasy People":1, "Himba":1, "Herero Tribe":1, "Zulu Tribe":1, "Nuer People":1, "San Peoples":1, "Hadza People":1, "Wodaabe Tribe":1, "Fula People":1, "Indigenous Peoples of Africa":1, "Betsileo Tribe":1, "Tuareg Tribe":1, "Kazakh Ethnicity":3, "Sherpa":3, "Dong Tribe":3, "Dong Tribe":3, "Meo":3, "Hani Tribe":3, "Miao Minority":3, "Monguor":3, "Sherpa":3, "Central Asian Ethnicity":3, "Kyrgiz":3, "Romani People":2,  "Albanian Ethnicity":2, "Israeli Ethnicity":2, "Indigenous Peoples of the Americas":7, "Inuit":7, "Sami People":2, "Métis Ethnicity":7, "Quechua People":7, "Indigenous Peoples of South America":7, "Uros":7, "Argentinian Ethnicity":4, "Ecuadorian Ethnicity":4, "Peruvian Ethnicity":4, "Brazilian Ethnicity":4, "Bolivian Ethnicity":4, "Chilean Ethnicity":4, "Colombian Ethnicity":4, "Venezuelan Ethnicity":4, "South American Ethnicity":4, "Berbers":5, "Egyptian Ethnicity":5, "Armenian Ethnicity":2, "Dominican Ethnicity":6, "Eurasian Ethnicity":6, "Garifuna Ethnicity":6, "Pardo Brazilian":6, "Māori People":7, "Pacific Islanders":7, "Hawaiian Ethnicity":7, "Polynesian Ethnicity":7, "Samoan Ethnicity":7, "Melanesian Ethnicity":7, "Kanak People":7, "Asaro People":7,  "Sinhalese People":9, "Bengali People":9, "Maldivian Ethnicity":9, "Kubu Tribe":10, "Khmer People":10,  "Mongolian Ethnicity":10, "Palaung Tribe":10, "Padaung Tribe":10, "Rawang":10, "Burmese Ethnicity":10, "Akha Tribe":10, "Sea Gypsy":10, "Moken Tribespeople":10, "Malay People":10, "Hill Tribes":10, "Red Zao":10, "Indonesian Ethnicity":10, "Kubu Tribe":10, "Kurdish Ethnicity":5, "Lebanese Ethnicity":5, "Middle Eastern Ethnicity":5, "Bedouin":5, "Pakistani Ethnicity":5, "Iranian Ethnicity":5, "Turkish Ethnicity":5, "Afghan Ethnicity":5, "Pashtuns":5, "Hazara":5, "Baloch":5, "Tajiks Ethnicity":5, "Kalash People":5}
 eth_dict_shutter_secondary = {"african american girl":1, "african girl":1, "black girl":1, "black girls":1, "black executive":1, "black leaders":1, "black professional woman":1, "black woman beauty":1, "caucasian girl":2, "eastern european girl":2, "english girl":2, "greek girl":2, "lithuanian girl":2, "polish girl":2, "polish girl in uk":2, "russian girl":2, "swedish girl":2, "white dress girl":2, "asian baby girl":3, "oriental school girl":3, "asian girl":3, "asian girl face":3, "asian girl isolated":3, "asian girls":3, "asian hijab girl":3, "chinese baby girl":3, "chinese girl":3, "east asian girl":3, "girlchinese":3, "japanese baby girl":3, "korean girl":3, "pretty asian girl":3, "brazilian girl":4, "latin girl":4, "latina girl":4, "moroccan girl":5, "biracial girl":6, "mixed race girl":6, "indian girl":9, "indian girl child":9, "indian girl with long hair":9, "pakistani girl":9, "indonesia girl":10, "indonesian girl":10, "malaysia girls":10, "malaysian girl":10, "malaysian girls":10, "thailand girls":10, "young afro woman":1, "african american woman":1, "african american woman smiling":1, "african american woman swimming":1, "african woman":1, "african woman isolated":1, "afro american woman":1, "afro woman":1, "black professional woman":1, "black woman":1, "black woman beauty":1, "black woman face":1, "black woman smiling":1, "stylish african woman":1, "a young white woman":2, "british woman":2, "caucasian woman":2, "caucasian woman beach":2, "caucasian woman on sandy beach":2, "caucasian woman smiling":2, "caucasian-woman":2, "eastern european woman":2, "greek woman":2, "italian woman":2, "lithuanian woman":2, "scandinavian woman":2, "swedish woman":2, "ukrainian woman":2, "asian young woman":3, "asian business woman":3, "asian businesswoman":3, "asian businesswoman with documents":3, "asian businesswoman with globe":3, "asian businesswoman with mobile":3, "asian businesswoman with santa hat":3, "asian businesswoman with tablet":3, "asian businesswoman writing":3, "asian woman":3, "asian woman doctor":3, "asian woman face":3, "asian woman smiling":3, "cute asian woman":3, "japanese woman":3, "nepalese woman":3, "pretty asian woman":3, "telephone asian woman":3, "young hispanic woman nude":4, "latin woman":4, "latino woman":4, "middle eastern woman":4, "biracial woman":6, "trans woman":7, "indian woman":9, "indian woman doctor":9, "indian woman driving":9, "pretty indian woman":9, "south asian woman":9, "indonesian woman":10, "southeast asian woman":10, "black female model":1, "caucasian female":2, "white female":2, "asian female driver":2, "female caucasian":2, "female caucasian color colour":2, "female white":2, "large busted asian female model":3, "hijab female":5, "caucasian baby boy":2, "caucasian boy":2, "english boy":2, "european boy":2, "white boy":2, "asian boy":3, "asian boy face":3, "chinese boy":3, "muslim boy":5, "mix race boy":6, "mixed race boy":6, "african american man":1, "african man":1, "black man":1, "black man face":1, "nigerian man":1, "angry white man":2, "british man":2, "caucasian man":2, "caucasian young man":2, "european man":2, "italian man":2, "white man":2, "white man 3d":2, "white man.":2, "asian man":3, "chinese man":3, "japanese man":3, "brazilian man":4, "hispanic man":4, "latin man":4, "arabian man":5, "muslim man":5, "turkish man":5, "mix race man":6, "mixed race man":6, "indian man":9, "sikh man":9, "south asian man":9, "filipino man":10, "old caucasian male":2, "british male":2, "caucasian male":2, "italian male":2, "male caucasian":2, "white male":2, "white male baby":2, "young white male model":2, "asian male":3, "mixed race male":6}
-
+multi_dict = {"mixedraceperson":6, "mixedrace":6, "mixed-race":6, "mixed race":6, "mixed ethnicity":6, "multiethnic":6, "multi ethnic":6, "multi-ethnic":6, "biracial":6}
 
 
 # load Keywords_202304300930.csv as df, drop all but keytype Locations, create two dicts: string->ID & GettyID->ID  
@@ -181,7 +181,7 @@ eth_dict_secondary = lower_dict({**eth_dict_istock_secondary, **eth_dict_shutter
 
 # for searching descrption for eth keywords, get rid of ambiguous/polyvalent terms
 eth_keys_dict = eth_dict
-for k in ['black', 'african']: eth_keys_dict.pop(k)
+# for k in ['black', 'african']: eth_keys_dict.pop(k)
 
 # table_search ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id"
 SELECT = "DISTINCT(i.image_id), i.gender_id, author, caption, contentUrl, description, imagename"
@@ -969,7 +969,7 @@ def structure_row_getty(item, ind, keys_list):
         "site_image_id": item["id"],
         "site_name_id": site_id,
         "description": description[:140],
-        "caption": item["caption"],
+        "caption": item["caption"][:140],
         "age_id": item["age_id"],
         "gender_id": item["gender_id"],
         "age_detail_id": None,
@@ -1086,6 +1086,7 @@ def ingest_json():
             if not pd.isnull(item["ethnicity"]) and len(item["ethnicity"])>0:
                 print("have eth", item["ethnicity"].lower(), "type is", type(item["ethnicity"].lower()))
                 eth_no_list = get_key_no_dictonly(item["ethnicity"].lower(), keys_list, eth_dict)
+                print("eth_no_list after get_key_no_dictonly", eth_no_list)
             else:
                 # get eth from keywords, using keys_list and eth_keys_dict
                 print("UNLOCKING KEYS FOR eth_keys_dict <><><><><><><><>")
@@ -1098,15 +1099,36 @@ def ingest_json():
                         print(f"eth_dict_istock_secondary found for {eth_no_list}")
                     elif "descent" in keys_list:
                         print(f"descent in keys_list {keys_list}")
+                        
+            # look for multi_dict, and add to eth_no_list
+            if not 6 in eth_no_list:
+                key_soup = " ".join(keys_list)+" "+image_row['description']
+                for multi in multi_dict:
+                    if multi in key_soup:
+                        print("multi found", multi)
+                        is_multi = True
+                if is_multi: eth_no_list.append(6)
+
+            if 6 in eth_no_list: 
+                multi_eth_no_list = get_key_no_dictonly(None, keys_list, eth_keys_dict)
+                print("multi_eth_no_list", multi_eth_no_list)
+                #if there are any new values in multi_eth_no_list, add them to eth_no_list
+                for eth in multi_eth_no_list:
+                    if eth not in eth_no_list:
+                        eth_no_list.append(eth)
+            print("finally, eth_no_list", eth_no_list)
+
+
 
 
 
             # STORE THE DATA
             print("connecting to DB")
             print(image_row)
-            print(key_nos_list)
-            print(eth_no_list)
+            print("key_nos_list", key_nos_list)
+            print("eth_no_list", eth_no_list)
 
+    
             try:
                 with engine.connect() as conn:
                     select_stmt = select([Images]).where(
@@ -1139,8 +1161,46 @@ def ingest_json():
                                     execute_query_with_retry(conn, imagesethnicity_insert_stmt)  # Retry on OperationalError
 
                         print("last_inserted_id:", result.lastrowid)
+                        print(" ")
                     else:
                         print('Row already exists:', ind)
+                        print('row:', row[0])
+                        with engine.connect() as conn:
+                            select_stmt = select([ImagesEthnicity]).where(
+                                (ImagesEthnicity.image_id == row[0]) 
+                            )
+                            eth_already = conn.execute(select_stmt).fetchall()
+                            print(eth_already)
+                            if eth_already:
+                                for eth in eth_already:
+                                    if eth[1] in eth_no_list:
+                                        print("removing this eth", eth[1])
+                                        #remove eth_already from eth_no_list
+                                        eth_no_list.remove(eth[1])
+                            else:
+                                print("eth_already is None")
+                                print(eth_already)
+                                print(eth_no_list)
+                                print(" ")
+
+                            # if we still have any values in eth_no_list, insert them
+                            if eth_no_list:
+                                ethrows = [{'image_id': row[0], 'ethnicity_id': ethnicity_id} for ethnicity_id in eth_no_list if ethnicity_id is not None]
+                                if ethrows:
+                                    print("going to insert ", ethrows)
+                                    with engine.connect() as conn:
+                                        imagesethnicity_insert_stmt = insert(ImagesEthnicity).values(ethrows)
+                                        imagesethnicity_insert_stmt = imagesethnicity_insert_stmt.on_duplicate_key_update(
+                                            ethnicity_id=imagesethnicity_insert_stmt.inserted.ethnicity_id
+                                        )
+                                        execute_query_with_retry(conn, imagesethnicity_insert_stmt)  # Retry on OperationalError
+                            else:
+                                print("eth_no_list is empty, nothing to insert")
+                                print(eth_already)
+                                print(eth_no_list)
+                                print(" ")
+
+
 
             except Exception as e:
                 print(f"An error occurred while connecting to DB: {e}")
@@ -1149,44 +1209,6 @@ def ingest_json():
                 # Close the session
                 session.close()
 
-            # with engine.connect() as conn:
-            #     select_stmt = select([Images]).where(
-            #         (Images.site_name_id == image_row['site_name_id']) &
-            #         (Images.site_image_id == image_row['site_image_id'])
-            #     )
-            #     row = conn.execute(select_stmt).fetchone()
-                
-            #     if row is None:
-            #         insert_stmt = insert(Images).values(image_row)
-            #         result = conn.execute(insert_stmt)
-            #         last_inserted_id = result.lastrowid
-
-            #         if key_nos_list and last_inserted_id:
-            #             keyrows = [{'image_id': last_inserted_id, 'keyword_id': keyword_id} for keyword_id in key_nos_list]
-            #             with engine.connect() as conn:
-            #                 imageskeywords_insert_stmt = insert(ImagesKeywords).values(keyrows)
-            #                 imageskeywords_insert_stmt = imageskeywords_insert_stmt.on_duplicate_key_update(
-            #                     keyword_id=imageskeywords_insert_stmt.inserted.keyword_id
-            #                 )
-            #                 conn.execute(imageskeywords_insert_stmt)
-                    
-            #         if eth_no_list and last_inserted_id:
-            #             ethrows = [{'image_id': last_inserted_id, 'ethnicity_id': ethnicity_id} for ethnicity_id in eth_no_list if ethnicity_id is not None]
-            #             if ethrows:
-            #                 with engine.connect() as conn:
-            #                     imagesethnicity_insert_stmt = insert(ImagesEthnicity).values(ethrows)
-            #                     imagesethnicity_insert_stmt = imagesethnicity_insert_stmt.on_duplicate_key_update(
-            #                         ethnicity_id=imagesethnicity_insert_stmt.inserted.ethnicity_id
-            #                     )
-            #                     conn.execute(imagesethnicity_insert_stmt)
-                    
-            #         print("last_inserted_id:", last_inserted_id)
-            #     else:
-            #         print('Row already exists:', ind)
-            
-
-
-
             if counter % 1000 == 0:
                 save_counter = [counter]
                 write_csv(CSV_COUNTOUT_PATH, save_counter)
@@ -1194,131 +1216,6 @@ def ingest_json():
             counter += 1
             ind += 1
 
-'''
-# I don't think this is doing anything right now, and I don't know how it is different from ingest_csv
-def update_csv():
-
-    # change this for each site ingested
-    column_keys = 5
-    separator_keys = " "
-    # column_site = 8
-    column_eth = None
-    search_desc_for_keys = True
-
-
-    with open(CSV_IN_PATH) as file_obj:
-        reader_obj = csv.reader(file_obj)
-        next(reader_obj)  # Skip header row
-        start_counter = get_counter()
-        counter = 0
-        ind = 0
-        
-        for row in reader_obj:
-            # print(row[1])
-            
-            if counter < start_counter:
-                counter += 1
-                continue
-            if counter >4001000:
-                quit()
-            # splitting keys. try is for getty, except is currently set for pexels.
-            try:
-                keys_list = row[column_keys].lower().split(separator_keys)
-            except IndexError:
-                print("keys failed")
-            # print(keys_list)
-
-            image_row = structure_row_123_asrow(row, ind, keys_list)
-            key_nos_list = []
-            
-            for key in keys_list:
-                key_no = unlock_key_plurals_etc(image_row['site_image_id'].lower(), key, keys_dict)
-                # print(key_no)
-                if key_no:
-                    key_nos_list.append(key_no)
-            
-            # print(key_nos_list)
-
-            if search_desc_for_keys == True:
-                desc_key_nos_list = description_to_keys(image_row['description'], image_row['site_image_id'])
-                key_nos_list = set(key_nos_list + desc_key_nos_list)
-            
-            if column_eth:
-                # print(key_nos_list)
-                eth_no_list = get_eth(row[column_eth].lower(), keys_list)
-                print("eth_no_list " , eth_no_list)
-            else:
-                eth_no_list = None
-
-
-            # Define the maximum number of retries and the delay between retries
-            max_retries = 3
-            retry_delay = 20  # in seconds
-
-            # Retry loop
-            for retry in range(max_retries):
-                try:
-                    with engine.connect() as conn:
-                        select_stmt = select([images_table]).where(
-                            (images_table.c.site_name_id == image_row['site_name_id']) &
-                            (images_table.c.site_image_id == image_row['site_image_id'])
-                        )
-                        row = conn.execute(select_stmt).fetchone()
-                        
-                        if row is None:
-
-                            print("will insert")
-                            # insert_stmt = insert(images_table).values(image_row)
-                            # result = conn.execute(insert_stmt)
-                            # last_inserted_id = result.lastrowid
-
-                            # if key_nos_list and last_inserted_id:
-                            #     keyrows = [{'image_id': last_inserted_id, 'keyword_id': keyword_id} for keyword_id in key_nos_list]
-                            #     with engine.connect() as conn:
-                            #         imageskeywords_insert_stmt = insert(imageskeywords_table).values(keyrows)
-                            #         imageskeywords_insert_stmt = imageskeywords_insert_stmt.on_duplicate_key_update(
-                            #             keyword_id=imageskeywords_insert_stmt.inserted.keyword_id
-                            #         )
-                            #         conn.execute(imageskeywords_insert_stmt)
-                            
-                            # if eth_no_list and last_inserted_id:
-                            #     ethrows = [{'image_id': last_inserted_id, 'ethnicity_id': ethnicity_id} for ethnicity_id in eth_no_list if ethnicity_id is not None]
-                            #     if ethrows:
-                            #         with engine.connect() as conn:
-                            #             imagesethnicity_insert_stmt = insert(imagesethnicity_table).values(ethrows)
-                            #             imagesethnicity_insert_stmt = imagesethnicity_insert_stmt.on_duplicate_key_update(
-                            #                 ethnicity_id=imagesethnicity_insert_stmt.inserted.ethnicity_id
-                            #             )
-                            #             conn.execute(imagesethnicity_insert_stmt)
-                            
-                            # print("last_inserted_id:", last_inserted_id)
-                        else:
-                            print('Row already exists:', ind)
-            
-                        break  # If the execution reaches here without exceptions, exit the loop
-
-                except OperationalError as e:
-                    print(f"Database connection error: {e}")
-
-                    # Retry after a delay
-                    print(f"Retrying in {retry_delay} seconds...")
-                    time.sleep(retry_delay)
-                    continue
-
-            else:
-                # If the loop completes without a successful connection, handle the error
-                print(f"Failed to connect to the database after {max_retries} attempts.")
-
-            if counter % 1000 == 0:
-                save_counter = [counter]
-                write_csv(CSV_COUNTOUT_PATH, save_counter)
-            
-            counter += 1
-            ind += 1
-
-
-    # print("inserted")
-'''
 
 if __name__ == '__main__':
     print(sig)
