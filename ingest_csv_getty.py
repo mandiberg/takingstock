@@ -57,12 +57,13 @@ NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 # starting shutter here: 52344682
 
 INGEST_ROOT = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/getty_scrape/done"
-INGEST_FOLDER = os.path.join(INGEST_ROOT, "getty_55555_italy")
+INGEST_FOLDER = os.path.join(INGEST_ROOT, "getty_55555")
 # CSV_IN_PATH = os.path.join(INGEST_FOLDER, "unique_lines_B_nogender.csv")
 # INGEST_FOLDER = "/Users/michaelmandiberg/Downloads/getty_rebuild/"
-CSV_IN_PATH = os.path.join(INGEST_FOLDER, "mixed.usa6.jsonl")
+CSV_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache.jsonl")
 KEYWORD_PATH = os.path.join(INGEST_ROOT, "Keywords_202402071139.csv")
 LOCATION_PATH = os.path.join(INGEST_ROOT, "Location_202308041952.csv")
+CSV_KEY2LOC_PATH = os.path.join(INGEST_ROOT, "CSV_KEY2LOC.csv")
 CSV_NOKEYS_PATH = os.path.join(INGEST_FOLDER, "CSV_NOKEYS.csv")
 CSV_IMAGEKEYS_PATH = os.path.join(INGEST_FOLDER, "CSV_IMAGEKEYS.csv")
 # NEWIMAGES_FOLDER_NAME = 'images_pexels'
@@ -71,12 +72,29 @@ CSV_NOLOC_PATH = os.path.join(INGEST_FOLDER, "CSV_NOLOC.csv")
 CSV_BLANKLOC_PATH = os.path.join(INGEST_FOLDER, "CSV_BLANKLOC_PATH.csv")
 CSV_ETH2_PATH = os.path.join(INGEST_FOLDER, "CSV_ETH2.csv")
 
+# open and read a csv file, and assign each row as an element in a list
+def dict_from_csv(file_path):
+    this_dict = {}
+    with open(file_path, newline='') as csvfile:
+        reader = csv.reader(csvfile)
+        for row in reader:
+            # CSV has two columns: key and int value
+            key = row[0].strip()
+            value = int(row[1].strip())
+            this_dict[key] = value
+    return this_dict
+
+# removing all keywords that are stored in gender, ethnicity, and age tables
+GENDER_LIST = read_csv(os.path.join(io.ROOT, "stopwords_gender.csv"))
+
 SEARCH_KEYS_FOR_LOC = True
 
 # key2key = {"person":"people", "kid":"child","affection":"Affectionate", "baby":"Baby - Human Age", "beautiful":"Beautiful People", "pretty":"Beautiful People", "blur":"Blurred Motion", "casual":"Casual Clothing", "children":"Child", "kids":"Child", "couple":"Couple - Relationship", "adorable":"Cute", "room":"Domestic Room", "focus":"Focus - Concept", "happy":"Happiness", "at home":"Home Interior", "home":"Home Interior", "face":"Human Face", "hands":"Human Hand", "landscape":"Landscape - Scenery", "outfit":"Landscape - Scenery", "leisure":"Leisure Activity", "love":"Love - Emotion", "guy":"Men", "motherhood":"Mother", "parenthood":"Parent", "positive":"Positive Emotion", "recreation":"Recreational Pursuit", "little":"Small", "studio shoot":"Studio Shot", "together":"Togetherness", "vertical shot":"Vertical", "lady":"women", "young":"Young Adult"}
 loc2loc = {"niue":"Niue Island", "east timor":"timor-leste"}
 key2key = {"person":"people", "isolated on white":"plain white background", "kid":"child","affection":"affectionate", "baby":"baby - human age", "beautiful":"beautiful people", "pretty":"beautiful people", "blur":"blurred motion", "casual":"casual clothing", "children":"child", "kids":"child", "couple":"couple - relationship", "adorable":"cute", "room":"domestic room", "focus":"focus - concept", "happy":"happiness", "at home":"home interior", "home":"home interior", "face":"human face", "hands":"human hand", "landscape":"landscape - scenery", "outfit":"landscape - scenery", "leisure":"leisure activity", "love":"love - emotion", "guy":"men", "motherhood":"mother", "parenthood":"parent", "positive":"positive emotion", "recreation":"recreational pursuit", "little":"small", "studio shoot":"studio shot", "together":"togetherness", "vertical shot":"vertical", "lady":"women", "young":"young adult", "light":"light - natural phenomenon", "trees":"tree", "disabled":"disability", "landline":"phone", "tradesman":"worker", "apprentice":"work", "arbeit":"work", "wheel-chair":"wheelchair", "treatments":"treatment", "transports":"transportation", "thoughtfully":"thoughtful", "technologies":"technology", "piscine":"swim", "astonished":"surprise", "surgeons":"surgeon", "sommer":"summer", "suffering":"suffer", "studentin":"student", "stressful":"stressed", "smoothies":"smoothie", "smilling":"smiling", "kleines":"small", "sleeps":"sleeping", "dealership":"sales", "salads":"salad", "ressources":"resources", "relaxes":"relaxed", "presentations":"presentation", "phones":"phone", "telefon":"phone", "telefoniert":"phone", "patients":"patient", "papier":"paper", "painful":"pain", "offended":"offend", "occupations":"occupation", "muscled":"muscles", "motivated":"motivation", "pinup":"model", "pin-up":"model", "meetings":"meeting", "massages":"massage", "kleiner":"little", "(lawyer)":"lawyer", "kitchens":"kitchen", "injections":"injection", "hospitals":"hospital", "zuhause":"home", "happily":"happy", "joyfully":"happy", "overjoyed":"happiness", "rejoices":"happiness", "handshaking":"handshake", "groups":"group", "full-length":"Full Length", "blumen":"flowers", "florists":"florist", "panic":"fear", "fell":"fall", "equipements":"equipement", "enthusiastic":"enthusiasm", "osteopathy":"doctor", "disgusted":"disgust", "schreibtisch":"desk", "dances":"dancing", "crowds":"crowd", "robber":"criminal", "copyspace":"Copy Space", "misunderstandings":"confusion", "confidently":"confidence", "concerts":"concert", "climbs":"climb", "celebrations":"celebration", "caught":"catch", "casually":"casual", "motorsports":"car", "banker":"Business Person", "supervisor":"boss", "executives":"boss", "bedrooms":"bedroom", "beautifull":"beautiful", "beaches":"beach", "bathrooms":"bathroom", "backgroud":"background", "attraktive":"attractive", "sportwear":"athletic", "sportliche":"athletic", "addicted":"addiction", "alcoholism":"addiction", "enjoy":"enjoyment"}
+key2loc = dict_from_csv(CSV_KEY2LOC_PATH)
 skip_keys = ["other"]
+key2key_getty = {"independence - concept":"independent", "brand name online messaging platform":"text messaging", "anaerobic exercise":"exercising", "colour image":"color image", "wanderlust - concept":"wanderlust", "brand name video game":"video game", "photographic print":"photograph", "person of colour":"person of color", "gold coast - queensland":"", "brand name mobile payment":"mobile payment", "the internet":"internet", "generation gap":"age", "the ageing process":"ageing", "antique dealer":"antiques", "general aviation":"aviation", "sac":"bag", "proofing - baking technique":"baking", "calidrid":"bird hatchery", "overhead view":"bird's eye view", "elevated view":"Birds eye view", "heavy bag":"boxing", "prefabricated building":"building", "managing director":"businessperson", "carcinoma":"cancer", "catering building":"catering", "catering occupation":"catering", "notre dame de paris":"cathedral", "public celebratory event":"celebration", "pizzaiolo":"chef", "primary age child":"child", "primary school child":"child", "nursery school child":"child", "clockworks":"clock", "contracting":"contract", "la calavera catrina":"day of the dead", "differential focus":"Diffrential Focus", "emergencies and disasters":"disaster", "bichon":"dog", "staffordshire bull terrier":"dog", "dry cleaned":"dry cleaning", "dry cleaning bag":"dry cleaning", "event manager":"event", "chief executive officer":"executive", "shaved eyebrow":"eyebrow", "festa junina":"festival", "bihu":"festival", "ganesh chaturthi":"festival", "wisteria":"flowering plant", "superfood":"food", "football - sport":"football", "border - frame":"Frame - Border", "upholstered furniture":"furniture", "back garden":"garden centre", "garden trowel":"gardening", "soccer goalkeeper":"goalkeeper", "national rifle association":"gun", "piebaldism":"hair", "secondary school":"high school", "domestic garden":"home gardening", "hyperglycemia":"illness", "shareholder":"investor", "kitchen worktop":"kitchen", "laddoo":"laddu", "linguistics":"language", "financial loan":"loan", "support local business":"local business", "systemic lupus erythematosus":"lupus", "manual worker":"manual labor", "market hall":"market", "mixed martial arts event":"martial arts", "retinal scan":"medical", "medical laboratory":"medicine", "motorsport event":"motorsports", "ghungroos":"musical instrument", "neuroscience":"neurology", "eén persoon":"one person", "orchideae":"orchid", "organisation":"organization", "houses of parliament - london":"parliament building", "fotografie":"photography", "back to work":"place of work", "bouvardia":"plant", "messing about":"playful", "inflatable swim ring":"pool raft", "practising":"practicing", "punching fists":"punching", "teleworking":"remote work", "gated community":"residential area", "rice paddy art":"rice paddy", "rugby league":"rugby", "rugby competition":"rugby", "mud run":"running", "russian language":"russian", "brazilian samba":"Samba Dancing", "samba school":"Samba Dancing", "alto saxophone":"saxophone", "scoreboard":"score", "all shirts":"shirt", "shiva - hindu god":"shiva", "high street":"shopping center", "extreme skateboarding":"skateboarding", "skiing point of view":"skiing", "soccer court":"soccer", "drill instructor":"soldier", "military recruit":"soldier", "major - military rank":"soldier", "spanish language":"spanish", "defense player":"sports", "staan":"standing", "post-traumatic stress disorder":"stress", "female superhero":"superhero", "icon symbol":"symbol", "high school senior":"teenager", "wta tour":"tennis", "atelier tent":"tent", "world trade organization":"trade", "tgv":"train", "smoke bush":"tree", "virus organism":"virus", "trench warfare":"warfare", "clean and jerk":"weightlifting", "wine rack":"wine"}
 
 gender_dict = {"men":1,"man":1,"male":1,"males":1,"his":1,"him":1,"businessman":1,"businessmen":1,"father":1, "men's":1, "himself":1, "homme":1, "hombre":1, "(man)":1, "-women men -children":1, "-women -men -children":2, "none":2, "oldmen":3, "grandfather":3,"oldwomen":4, "grandmother":4, "nonbinary":5, "other":6, "trans":7, 
         "women":8,"woman":8,"female":8,"females":8, "hers":8, "her":8, "businesswoman":8, "businesswomen":8, "mother":8, "frauen":8, "mujer":8, "haaren":8, "frau":8, "woman-doctor":8, "maiden":8, "hausfrau":8, "women -men -children":8, "youngmen":9, "boy":9, "boys":9, "jungen":9, "youngwomen":10,"girl":10, "girls":10, "ragazza":10, "schoolgirls":8,}
@@ -178,6 +196,7 @@ age_dict = lower_dict({**age_dict, **age_dict_istock, **age_dict_shutterstock})
 age_dict_secondary = lower_dict({**age_dict, **age_dict_shutter_secondary})
 age_details_dict = lower_dict({**age_details_dict, **age_detail_dict_istock, **age_details_dict_shutterstock, **age_dict_shutter_secondary})
 eth_dict_secondary = lower_dict({**eth_dict_istock_secondary, **eth_dict_shutter_secondary})
+key2key = lower_dict({**key2key, **key2key_getty})
 
 # for searching descrption for eth keywords, get rid of ambiguous/polyvalent terms
 eth_keys_dict = eth_dict
@@ -339,6 +358,42 @@ def unlock_key_plurals_etc(site_id,key, this_dict):
         # print(key_no)
         return(key_no)
     except:
+        key2keyGB = {"colour":"color", "centre":"center", "organisation":"organization", "recognise":"recognize", "realise":"realize", "favour":"favor", "labour":"labor", "neighbour":"neighbor", "theatre":"theater", "cheque":"check", "defence":"defense", "licence":"license", "offence":"offense", "ogue":"og", "programme":"program", "dialogue":"dialog", "catalogue":"catalog", "humour":"humor"}
+        # catching british spellings
+        for gbkey in key2keyGB.keys():
+            if gbkey in key:
+                uskey = key.replace(gbkey,key2keyGB[gbkey])
+                try:
+                    key_no = this_dict[uskey]
+                    return(key_no)
+                except:
+                    pass
+        # if "our" in key:
+        #     ourkey = key.replace("our","or")
+        #     try:
+        #         key_no = this_dict[ourkey]
+        #         return(key_no)
+        #     except:
+        #         pass
+        # getting rid of getty dash specifier categories
+        if " - " in key:
+            dashlesskey = key.replace(" - "," ")
+            try:
+                key_no = this_dict[dashlesskey]
+                return(key_no)
+            except:
+                dashcommakey = key.replace(" - ",", "):
+                try:
+                    key_no = this_dict[dashcommakey]
+                    return(key_no)
+                except:
+                    dashsplitkey = key.split(" - ")
+                    try:
+                        key_no = this_dict[dashsplitkey[0]]
+                        return(key_no)
+                    except:
+                        pass
+                
         try:
             key = key2key[key]
             key_no = this_dict[key]
@@ -381,7 +436,8 @@ def unlock_key_plurals_etc(site_id,key, this_dict):
             if pd.isnull(key_no):
                 # if nothing worked, save key, but only if site_id > 10
                 # for gender/age, it passes in site_name_id, not site_image_id
-                if not isinstance(site_id, int) and not key.startswith('-'):
+                # doesn't write if key is in key2loc -- already captured locations
+                if not isinstance(site_id, int) and not key.startswith('-') and not key in key2loc.keys():
                     # print(type(site_id))
                     # print(site_id)
                     value_list = [site_id,key]
@@ -964,6 +1020,9 @@ def structure_row_getty(item, ind, keys_list):
     description = item["title"]
     # gender_key, age_key, age_detail_key = get_gender_age_item(gender, age, description, keys_list, site_id)
     country_key = unlock_key_dict(item["location_id"],locations_dict_getty, loc2loc)
+    if not country_key:
+        country_key = search_keys(keys_list, key2loc, True)
+        print("search_keys key2loc for location found: ", country_key)
 
     image_row = {
         "site_image_id": item["id"],
@@ -1102,6 +1161,7 @@ def ingest_json():
                         
             # look for multi_dict, and add to eth_no_list
             if not 6 in eth_no_list:
+                is_multi = False
                 key_soup = " ".join(keys_list)+" "+image_row['description']
                 for multi in multi_dict:
                     if multi in key_soup:
