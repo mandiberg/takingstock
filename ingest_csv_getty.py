@@ -49,18 +49,21 @@ _|_|  _|\__, |\___|____/\__| \___|____/  \_/
 io = DataIO()
 db = io.db
 # overriding DB for testing
-io.db["name"] = "ministock1023"
+io.db["name"] = "stock"
 ROOT = io.ROOT 
 NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 #######################################
 
 # starting shutter here: 52344682
 
+SEARCH_KEYS_FOR_LOC = True
+VERBOSE = False
+
 INGEST_ROOT = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/getty_scrape/done"
 INGEST_FOLDER = os.path.join(INGEST_ROOT, "getty_55555")
 # CSV_IN_PATH = os.path.join(INGEST_FOLDER, "unique_lines_B_nogender.csv")
 # INGEST_FOLDER = "/Users/michaelmandiberg/Downloads/getty_rebuild/"
-CSV_IN_PATH = os.path.join(INGEST_FOLDER, "triotest.jsonl")
+CSV_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache.jsonl")
 KEYWORD_PATH = os.path.join(INGEST_ROOT, "Keywords_202402071139.csv")
 LOCATION_PATH = os.path.join(INGEST_ROOT, "Location_202308041952.csv")
 CSV_KEY2LOC_PATH = os.path.join(INGEST_ROOT, "CSV_KEY2LOC.csv")
@@ -89,7 +92,6 @@ def dict_from_csv(file_path):
             this_dict[key] = value
     return this_dict
 
-SEARCH_KEYS_FOR_LOC = True
 
 # key2key = {"person":"people", "kid":"child","affection":"Affectionate", "baby":"Baby - Human Age", "beautiful":"Beautiful People", "pretty":"Beautiful People", "blur":"Blurred Motion", "casual":"Casual Clothing", "children":"Child", "kids":"Child", "couple":"Couple - Relationship", "adorable":"Cute", "room":"Domestic Room", "focus":"Focus - Concept", "happy":"Happiness", "at home":"Home Interior", "home":"Home Interior", "face":"Human Face", "hands":"Human Hand", "landscape":"Landscape - Scenery", "outfit":"Landscape - Scenery", "leisure":"Leisure Activity", "love":"Love - Emotion", "guy":"Men", "motherhood":"Mother", "parenthood":"Parent", "positive":"Positive Emotion", "recreation":"Recreational Pursuit", "little":"Small", "studio shoot":"Studio Shot", "together":"Togetherness", "vertical shot":"Vertical", "lady":"women", "young":"Young Adult"}
 loc2loc = {"niue":"Niue Island", "east timor":"timor-leste"}
@@ -357,8 +359,8 @@ def unlock_key_plurals_etc(site_id,key, this_dict):
     key_no = None
     key = key.lower()
     try:
-        print("trying basic keys_dict for this key:")
-        print(key)
+        # print("trying basic keys_dict for this key:")
+        # print(key)
         # print("from dict this long")
         # print(len(this_dict))
         # # print(this_dict)
@@ -448,7 +450,7 @@ def unlock_key_plurals_etc(site_id,key, this_dict):
                 # if nothing worked, save key, but only if site_id > 10
                 # for gender/age, it passes in site_name_id, not site_image_id
                 # doesn't write if key is in key2loc -- already captured locations
-                print("key_no is null", key)
+                if VERBOSE: print("key_no is null", key)
                 if not isinstance(site_id, int) and not key.startswith('-') and not key in key2loc.keys():
                     # print(type(site_id))
                     # print(site_id)
@@ -498,7 +500,7 @@ def search_keys(keys_list, this_dict, do_write_csv, multi=False):
         if found is not None:
             found_eth2 = True
             results.append(found)
-            print('search_keys found:', found,"from key:", key)
+            if VERBOSE: print('search_keys found:', found,"from key:", key)
             if do_write_csv:
                 write_csv(CSV_ETH2_PATH,[key,found])
     if found_eth2 and do_write_csv: 
@@ -564,12 +566,12 @@ def unlock_key_dict(key,this_dict,this_key2key=None):
     try:
         try:
             key_no = this_dict[key]
-            print(f"unlock_key_dict yields key_no {str(key_no)} for {key}")
+            if VERBOSE: print(f"unlock_key_dict yields key_no {str(key_no)} for {key}")
             return(key_no)
         except:
             # try again without underscores
             key_no = this_dict[key.replace("_"," ")]
-            print(f"unlock_key_dict without underscores yields key_no {str(key_no)} for {key}")
+            if VERBOSE: print(f"unlock_key_dict without underscores yields key_no {str(key_no)} for {key}")
             return(key_no)            
     except:
         if this_key2key:
@@ -702,12 +704,12 @@ def get_gender_age_row(gender_string, age_string, description, keys_list, site_i
                 elif gender == 10:
                     gender = 8
                     age = 5
-                print(f"first try, gender is {str(gender)} and age is {str(age)}")
+                if VERBOSE: print(f"first try, gender is {str(gender)} and age is {str(age)}")
                 # gender_dict={"men":1, "none":2, "oldmen":3, "oldwomen":4, "nonbinary":5, "other":6, "trans":7, "women":8, "youngmen":9, "youngwomen":10}
             except:
                 try:
                     age = age_dict[this_string.lower()]
-                    print(f"second try age is {str(age)}")
+                    if VERBOSE: print(f"second try age is {str(age)}")
 
                 except:
                     # this isn't relevant for iStock
@@ -725,7 +727,7 @@ def get_gender_age_row(gender_string, age_string, description, keys_list, site_i
         return gender, age, age_detail
 
     def prioritize_age_gender(gender_list,age_list):
-        print(f"prioritize_age_gender gender_list is {gender_list}")
+        if VERBOSE: print(f"prioritize_age_gender gender_list is {gender_list}")
         if (1 in gender_list and 8 in gender_list) or (3 in gender_list and 4 in gender_list) or (9 in gender_list and 10 in gender_list):
             gender = 11
             age = get_mode(age_list)
@@ -867,7 +869,8 @@ def get_gender_age_row(gender_string, age_string, description, keys_list, site_i
     print(age)
 
     if not age or not gender:
-        print("MISSING AGE OR GENDER, IS IT IN THE KEYS?", keys_list)
+        print("MISSING AGE OR GENDER, IS IT IN THE KEYS?")
+        if VERBOSE: print(keys_list)
 
     return gender, age, age_detail
 
@@ -1126,7 +1129,6 @@ def execute_query_with_retry(conn, query, parameters=None):
 
 def ingest_json():
     def construct_keys_list(raw_keys):
-        print(key2key.keys())
         keys_list = []
         # splitting keys. try is for getty, except is currently set for pexels.
         try:
@@ -1203,7 +1205,7 @@ def ingest_json():
             
             site_image_id = image_row['site_image_id']
 
-            print("getting key_list", keys_list)
+            if VERBOSE: print("getting key_list", keys_list)
             # get keywords
             key_nos_list = unlock_key_list(site_image_id, keys_list, keys_dict)
 
@@ -1256,9 +1258,10 @@ def ingest_json():
 
             # STORE THE DATA
             print("connecting to DB")
-            print(image_row)
-            print("key_nos_list", key_nos_list)
-            print("eth_no_list", eth_no_list)
+            if VERBOSE: 
+                print(image_row)
+                print("key_nos_list", key_nos_list)
+                print("eth_no_list", eth_no_list)
 
     
             try:
@@ -1295,31 +1298,30 @@ def ingest_json():
                         print("last_inserted_id:", result.lastrowid)
                         print(" ")
                     else:
-                        print('Row already exists:', ind)
-                        print('row:', row[0])
+                        print('Row already exists:', ind, row[0])
                         with engine.connect() as conn:
                             select_stmt = select([ImagesEthnicity]).where(
                                 (ImagesEthnicity.image_id == row[0]) 
                             )
                             eth_already = conn.execute(select_stmt).fetchall()
-                            print(eth_already)
+                            # print(eth_already)
                             if eth_already:
                                 for eth in eth_already:
                                     if eth[1] in eth_no_list:
-                                        print("removing this eth", eth[1])
+                                        # print("removing this eth", eth[1])
                                         #remove eth_already from eth_no_list
                                         eth_no_list.remove(eth[1])
                             else:
                                 print("eth_already is None")
-                                print(eth_already)
-                                print(eth_no_list)
+                                # print(eth_already)
+                                # print(eth_no_list)
                                 print(" ")
 
                             # if we still have any values in eth_no_list, insert them
                             if eth_no_list:
                                 ethrows = [{'image_id': row[0], 'ethnicity_id': ethnicity_id} for ethnicity_id in eth_no_list if ethnicity_id is not None]
                                 if ethrows:
-                                    print("going to insert ", ethrows)
+                                    if VERBOSE: print("going to insert ", ethrows)
                                     with engine.connect() as conn:
                                         imagesethnicity_insert_stmt = insert(ImagesEthnicity).values(ethrows)
                                         imagesethnicity_insert_stmt = imagesethnicity_insert_stmt.on_duplicate_key_update(
@@ -1327,9 +1329,9 @@ def ingest_json():
                                         )
                                         execute_query_with_retry(conn, imagesethnicity_insert_stmt)  # Retry on OperationalError
                             else:
-                                print("eth_no_list is empty, nothing to insert")
-                                print(eth_already)
-                                print(eth_no_list)
+                                if VERBOSE: print("eth_no_list is empty, nothing to insert")
+                                # print(eth_already)
+                                # print(eth_no_list)
                                 print(" ")
 
 
