@@ -46,18 +46,25 @@ import cv2
 import mediapipe as mp
 import shutil
 import pandas as pd
+from my_declarative_base import Base, Clusters, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON, Images
+from sqlalchemy.ext.declarative import declarative_base
+
+Base = declarative_base()
+
 
 io = DataIO()
 db = io.db
 io.db["name"] = "ministock"
 
+USE_BBOX=True
 # Create a database engine
 engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}".format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']), poolclass=NullPool)
 
 get_background_mp = mp.solutions.selfie_segmentation
 get_bg_segment = get_background_mp.SelfieSegmentation()
 
-FOLDER_PATH = "E:/"+"work/face_map/Documents/projects-active/facemap_production/bg_color/0900"
+if USE_BBOX:FOLDER_PATH = "E:/"+"work/face_map/Documents/projects-active/facemap_production/bg_color/0900_bb"
+else:FOLDER_PATH = "E:/"+"work/face_map/Documents/projects-active/facemap_production/bg_color/0900"
 SORTTYPE = "luminosity"  # "hue" or "luminosity"
 output_folder = os.path.join(FOLDER_PATH, SORTTYPE)
 print(output_folder)
@@ -78,6 +85,29 @@ counter = 0
 # Number of threads
 #num_threads = io.NUMBER_OF_PROCESSES
 num_threads = 1
+
+class SegmentOct20(Base):
+    __tablename__ = 'SegmentOct20'
+    seg_image_id=Column(Integer,primary_key=True, autoincrement=True)
+    image_id = Column(Integer)
+    site_name_id = Column(Integer)
+    site_image_id = Column(String(50),nullable=False)
+    contentUrl = Column(String(300), nullable=False)
+    imagename = Column(String(200))
+    age_id = Column(Integer)
+    age_detail_id = Column(Integer)
+    gender_id = Column(Integer)
+    location_id = Column(Integer)
+    face_x = Column(DECIMAL(6, 3))
+    face_y = Column(DECIMAL(6, 3))
+    face_z = Column(DECIMAL(6, 3))
+    mouth_gap = Column(DECIMAL(6, 3))
+    face_landmarks = Column(BLOB)
+    bbox = Column(JSON)
+    face_encodings = Column(BLOB)
+    face_encodings68 = Column(BLOB)
+    body_landmarks = Column(BLOB)
+
 
 def get_bg_folder(folder_path):
     for filename in os.listdir(folder_path):
@@ -109,7 +139,9 @@ def get_bg_folder(folder_path):
 
 def get_bg_database():
     results=[]
-    distinct_image_ids_query = select(ImagesBG.image_id,ImagesBG.hue,ImagesBG.lum).filter(ImagesBG.hue != None).limit(LIMIT)
+    if USE_BBOX:distinct_image_ids_query = select(ImagesBG.image_id,ImagesBG.hue_bb,ImagesBG.lum_bb).filter(ImagesBG.hue != None).limit(LIMIT)
+    else:distinct_image_ids_query = select(ImagesBG.image_id,ImagesBG.hue,ImagesBG.lum).filter(ImagesBG.hue != None).limit(LIMIT)
+    
     result=session.execute(distinct_image_ids_query).fetchall()
     for row in result:
         image_id,hue,lum = row
@@ -142,8 +174,9 @@ def get_bg_database():
 # get_bg_folder(FOLDER_PATH)
 
 
-def get_bg_hue_lum(file):
+def get_bg_hue_lum(file,bbox=None):
     sample_img = cv2.imread(file)
+    if bbox:sample_img=sample_img[bbox['top']:bbox['bottom'],bbox['left']:bbox['right'],:]
     result = get_bg_segment.process(sample_img[:,:,::-1])
     mask=np.repeat((1-result.segmentation_mask)[:, :, np.newaxis], 3, axis=2)
     masked_img=mask*sample_img[:,:,::-1]/255 ##RGB format
@@ -196,12 +229,23 @@ def get_filename(target_image_id, return_endfile=False):
     if return_endfile: return file,endfile
     return file
     
+def get_bbox(target_image_id):
+    select_image_ids_query = (
+        select(SegmentOct20.bbox)
+        .filter(SegmentOct20.image_id == target_image_id)
+    )
+    result = session.execute(select_image_ids_query).fetchall()
+    bbox=result[0][0]
 
+    return bbox
+    
 def fetch_BG_stat(target_image_id, lock, session):
 
     file=get_filename(target_image_id)
     #filename=get_filename(imagename)
-    hue,lum=get_bg_hue_lum(file)
+    bbox=None
+    if USE_BBOX:bbox=get_bbox(target_image_id)
+    hue,lum=get_bg_hue_lum(file,bbox)
     
     # Update the BagOfKeywords entry with the corresponding image_id
     ImagesBG_entry = (
@@ -211,8 +255,13 @@ def fetch_BG_stat(target_image_id, lock, session):
     )
 
     if ImagesBG_entry:
-        ImagesBG_entry.hue = hue
-        ImagesBG_entry.lum = lum
+        if USE_BBOX:
+            ImagesBG_entry.hue_bb = hue
+            ImagesBG_entry.lum_bb = lum
+        else:
+            ImagesBG_entry.hue = hue
+            ImagesBG_entry.lum = lum
+
         #session.commit()
         print(f"BG stat for image_id {target_image_id} updated successfully.")
     else:
@@ -250,7 +299,8 @@ if index == 0:
 elif index == 1:
     function=fetch_BG_stat
     #################FETCHING BG stat####################################
-    distinct_image_ids_query = select(ImagesBG.image_id.distinct()).filter(ImagesBG.hue == None).limit(LIMIT)
+    if USE_BBOX:distinct_image_ids_query = select(ImagesBG.image_id.distinct()).filter(ImagesBG.hue_bb == None).limit(LIMIT)
+    else:distinct_image_ids_query = select(ImagesBG.image_id.distinct()).filter(ImagesBG.hue == None).limit(LIMIT)
     distinct_image_ids = [row[0] for row in session.execute(distinct_image_ids_query).fetchall()]
     for target_image_id in distinct_image_ids:
         work_queue.put(target_image_id)        

@@ -159,6 +159,9 @@ class ImagesBG(Base):
     #site_name_id = Column(Integer, ForeignKey('site.site_name_id'))
     hue = Column(Float)
     lum = Column(Float)
+    hue_bb = Column(Float)
+    lum_bb = Column(Float)
+    
 
 # these are for MM use for using segments
 # class Clusters(Base):
