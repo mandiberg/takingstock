@@ -63,8 +63,8 @@ engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}".format(host=db[
 get_background_mp = mp.solutions.selfie_segmentation
 get_bg_segment = get_background_mp.SelfieSegmentation()
 
-if USE_BBOX:FOLDER_PATH = "E:/"+"work/face_map/Documents/projects-active/facemap_production/bg_color/0900_bb"
-else:FOLDER_PATH = "E:/"+"work/face_map/Documents/projects-active/facemap_production/bg_color/0900"
+if USE_BBOX:FOLDER_PATH = os.path.join(io.ROOT_PROD, "bg_color/0900_bb")
+else:FOLDER_PATH = os.path.join(io.ROOT_PROD, "bg_color/0900")
 SORTTYPE = "luminosity"  # "hue" or "luminosity"
 output_folder = os.path.join(FOLDER_PATH, SORTTYPE)
 print(output_folder)
@@ -143,6 +143,7 @@ def get_bg_database():
     else:distinct_image_ids_query = select(ImagesBG.image_id,ImagesBG.hue,ImagesBG.lum).filter(ImagesBG.hue != None).limit(LIMIT)
     
     result=session.execute(distinct_image_ids_query).fetchall()
+    print(len(result))
     for row in result:
         image_id,hue,lum = row
         filename=get_filename(image_id)
@@ -150,6 +151,7 @@ def get_bg_database():
 
     # Create DataFrame from results and sort by SORTYPE
     df = pd.DataFrame(results)
+    print(df)
     df_sorted = df.sort_values(by=SORTTYPE)
 
     print(df_sorted)
