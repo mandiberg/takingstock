@@ -15,6 +15,8 @@ from mp_db_io import DataIO
 
 io = DataIO()
 
+### THIS IS THE MAIN FILE MOVING UTILITY - USE THIS TO MOVE FROM SSD TO RAID ###
+
 # moves files from folder located at PATH to hash folders created at NEWPATH
 # uses get_hash_folders to determine which folder to put in
 # if ALL_IN_ONE_FOLDER = True it will look only in the PATH folder 
@@ -23,14 +25,14 @@ io = DataIO()
 
 testname = "woman-in-a-music-concert-picture-id505111652.jpg"
 # PATH= os.path.join(os.environ['HOME'], "Documents/projects-active/facemap_production/gettyimages") 
-# PATH = "/Volumes/RAID54/adobeStockScraper_v3/test1"
-# NEWPATH = "/Volumes/RAID54/adobeStockScraper_v3/dest1"
+PATH = "/Volumes/SSD4green/images_shutterstock"
+NEWPATH = "/Volumes/RAID54/images_shutterstock"
 
-PATH = "/Volumes/SSD4/shutterScraper_v7_has_images/images"
-# PATH = "/Volumes/RAID54/adobeStockScraper_v3/images_all"
-NEWPATH = "/Volumes/SSD4/shutterScraper_v7_has_images/images_hashed"
+# PATH = "/Volumes/SSD4/shutterScraper_v7_has_images/images"
+# # PATH = "/Volumes/RAID54/adobeStockScraper_v3/images_all"
+# NEWPATH = "/Volumes/SSD4/shutterScraper_v7_has_images/images_hashed"
 
-ALL_IN_ONE_FOLDER = True
+ALL_IN_ONE_FOLDER = False
 
 # folder ="5GB_testimages"
 # CSV="/Users/michaelmandiberg/Dropbox/facemap_dropbox/test_data/Images_202302101516_30K.csv"
@@ -136,6 +138,7 @@ def threaded_process_files():
         newpathfile = os.path.join(NEWPATH, a, b, newfile)
 
         shutil.move(currentpathfile, newpathfile)
+        # print(currentpathfile, newpathfile)
 
         # print(newfile)
         # print("moved from: ", currentpathfile)
@@ -163,7 +166,7 @@ def threaded_processing():
 
 def add_queue(this_path):
     meta_file_list = get_dir_files(this_path)
-    for newfile in meta_file_list:
+    for newfile in sorted(meta_file_list):
         a, b = get_hash_folders(newfile)
         currentpathfile = os.path.join(this_path, newfile)
         work_queue.put((currentpathfile, newfile, a, b))
@@ -179,7 +182,7 @@ else:
     print("going to walk folders")
     # Put work into the queue
     for root, dirs, files in os.walk(PATH):
-        for folder in dirs:
+        for folder in sorted(dirs):
             print("looking in ", folder)
             this_path = os.path.join(root, folder)
             add_queue(this_path)

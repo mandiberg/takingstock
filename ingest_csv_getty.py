@@ -60,11 +60,11 @@ SEARCH_KEYS_FOR_LOC = True
 VERBOSE = False
 
 INGEST_ROOT = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/getty_scrape/done"
-INGEST_FOLDER = os.path.join(INGEST_ROOT, "getty_55555")
+INGEST_FOLDER = os.path.join(INGEST_ROOT, "getty_33333_china")
 # CSV_IN_PATH = os.path.join(INGEST_FOLDER, "unique_lines_B_nogender.csv")
 # INGEST_FOLDER = "/Users/michaelmandiberg/Downloads/getty_rebuild/"
-CSV_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache.jsonl")
-KEYWORD_PATH = os.path.join(INGEST_ROOT, "Keywords_202402071139.csv")
+CSV_IN_PATH = os.path.join(INGEST_FOLDER, "ITCNRUUS.jsonl")
+KEYWORD_PATH = os.path.join(INGEST_ROOT, "Keywords_202403132011.csv")
 LOCATION_PATH = os.path.join(INGEST_ROOT, "Location_202308041952.csv")
 CSV_KEY2LOC_PATH = os.path.join(INGEST_ROOT, "CSV_KEY2LOC.csv")
 CSV_KEY2KEY_GETTY_PATH = os.path.join(INGEST_ROOT, "CSV_KEY2KEY_GETTY.csv")
@@ -97,7 +97,7 @@ def dict_from_csv(file_path):
 loc2loc = {"niue":"Niue Island", "east timor":"timor-leste"}
 key2key = {"person":"people", "isolated on white":"plain white background", "kid":"child","affection":"affectionate", "baby":"baby - human age", "beautiful":"beautiful people", "pretty":"beautiful people", "blur":"blurred motion", "casual":"casual clothing", "children":"child", "kids":"child", "couple":"couple - relationship", "adorable":"cute", "room":"domestic room", "focus":"focus - concept", "happy":"happiness", "at home":"home interior", "home":"home interior", "face":"human face", "hands":"human hand", "landscape":"landscape - scenery", "outfit":"landscape - scenery", "leisure":"leisure activity", "love":"love - emotion", "guy":"men", "motherhood":"mother", "parenthood":"parent", "positive":"positive emotion", "recreation":"recreational pursuit", "little":"small", "studio shoot":"studio shot", "together":"togetherness", "vertical shot":"vertical", "lady":"women", "young":"young adult", "light":"light - natural phenomenon", "trees":"tree", "disabled":"disability", "landline":"phone", "tradesman":"worker", "apprentice":"work", "arbeit":"work", "wheel-chair":"wheelchair", "treatments":"treatment", "transports":"transportation", "thoughtfully":"thoughtful", "technologies":"technology", "piscine":"swim", "astonished":"surprise", "surgeons":"surgeon", "sommer":"summer", "suffering":"suffer", "studentin":"student", "stressful":"stressed", "smoothies":"smoothie", "smilling":"smiling", "kleines":"small", "sleeps":"sleeping", "dealership":"sales", "salads":"salad", "ressources":"resources", "relaxes":"relaxed", "presentations":"presentation", "phones":"phone", "telefon":"phone", "telefoniert":"phone", "patients":"patient", "papier":"paper", "painful":"pain", "offended":"offend", "occupations":"occupation", "muscled":"muscles", "motivated":"motivation", "pinup":"model", "pin-up":"model", "meetings":"meeting", "massages":"massage", "kleiner":"little", "(lawyer)":"lawyer", "kitchens":"kitchen", "injections":"injection", "hospitals":"hospital", "zuhause":"home", "happily":"happy", "joyfully":"happy", "overjoyed":"happiness", "rejoices":"happiness", "handshaking":"handshake", "groups":"group", "full-length":"Full Length", "blumen":"flowers", "florists":"florist", "panic":"fear", "fell":"fall", "equipements":"equipement", "enthusiastic":"enthusiasm", "osteopathy":"doctor", "disgusted":"disgust", "schreibtisch":"desk", "dances":"dancing", "crowds":"crowd", "robber":"criminal", "copyspace":"Copy Space", "misunderstandings":"confusion", "confidently":"confidence", "concerts":"concert", "climbs":"climb", "celebrations":"celebration", "caught":"catch", "casually":"casual", "motorsports":"car", "banker":"Business Person", "supervisor":"boss", "executives":"boss", "bedrooms":"bedroom", "beautifull":"beautiful", "beaches":"beach", "bathrooms":"bathroom", "backgroud":"background", "attraktive":"attractive", "sportwear":"athletic", "sportliche":"athletic", "addicted":"addiction", "alcoholism":"addiction", "enjoy":"enjoyment"}
 key2loc = dict_from_csv(CSV_KEY2LOC_PATH)
-skip_keys = ["other", "easy resource", "suggestive filter", "unspecified", "diffrential focus", "internal term 1", "birds eye view", "bird's eye view"]
+skip_keys = ["other", "easy resource", "suggestive filter", "unspecified", "diffrential focus", "internal term 1", "birds eye view", "bird's eye view", "los banos", "scoot", "angel fire"]
 key2key_getty = dict_from_csv(CSV_KEY2KEY_GETTY_PATH)
 
 gender_dict = {"men":1,"man":1,"male":1,"males":1,"his":1,"him":1,"businessman":1,"businessmen":1,"father":1, "men's":1, "himself":1, "homme":1, "hombre":1, "(man)":1, "-women men -children":1, "-women -men -children":2, "none":2, "oldmen":3, "grandfather":3,"oldwomen":4, "grandmother":4, "nonbinary":5, "other":6, "trans":7, 
@@ -1142,7 +1142,7 @@ def ingest_json():
                         xkey = key2key[x.lower()]
                     else:
                         xkey = x.lower()
-                keys_list.append(xkey)
+                    keys_list.append(xkey)
             # # adobe specific. remove for future sites
             # desc_list = row[3].replace(",","").lower().split("-")
             # keys_list = list(filter(None, keys_list + desc_list))

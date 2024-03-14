@@ -22,11 +22,11 @@ ALL_ONE_VIDEO = False
 
 # MERGE
 # Provide the path to the folder containing the images
-ROOT_FOLDER_PATH = '/Users/michaelmandiberg/Documents/projects-active/facemap_production/segment_images'
+ROOT_FOLDER_PATH = '/Users/michaelmandiberg/Library/CloudStorage/Dropbox/takingstock_dropbox/'
 # if IS_CLUSTER this should be the folder holding all the cluster folders
 # if not, this should be the individual folder holding the images
 # will not accept clusterNone -- change to cluster00
-FOLDER_NAME ="cluster25_yoga05"
+FOLDER_NAME ="topic10_feb15_withMetas"
 FOLDER_PATH = os.path.join(ROOT_FOLDER_PATH,FOLDER_NAME)
 
 # WRITE VIDEO

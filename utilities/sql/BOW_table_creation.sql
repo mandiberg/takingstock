@@ -10,6 +10,7 @@ CREATE TABLE BagOfKeywords (
 --    site_name_id INT,
     description VARCHAR(150),
     keyword_list BLOB,
+    tokenized_keyword_list BLOB,
     ethnicity_list BLOB,
     FOREIGN KEY (age_id) REFERENCES age(age_id),
     FOREIGN KEY (gender_id) REFERENCES gender(gender_id),
@@ -27,6 +28,7 @@ CREATE TABLE ImagesTopics (
     topic_id INT,
     topic_score FLOAT
 );
+
 
 
 
@@ -71,11 +73,26 @@ GROUP BY t.topic_id, t.topic
 ORDER BY total_images DESC;
 
 
-ALTER TABLE BagOfKeywords DROP  bag_id;
+
+-- select tests, can delete later
+
+SELECT * 
+FROM BagOfKeywords 
+LIMIT 100 OFFSET 100;
+
+
+-- tokenized column
+ALTER TABLE BagOfKeywords
+ADD COLUMN tokenized_keyword_list BLOB;
+
+SELECT * 
+FROM BagOfKeywords bok 
+WHERE bok.image_id = 58154422;
+
 
 -- adding new autoinc pkey for random index
 
-use ministock1023
+use ministock1023;
 
 -- Step 1: Drop the AUTO_INCREMENT attribute from the image_id column
 ALTER TABLE BagOfKeywords MODIFY COLUMN image_id INT;

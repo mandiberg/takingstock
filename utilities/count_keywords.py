@@ -1,8 +1,9 @@
 import csv
+import re
 from collections import Counter
 
-input_file = '/volumes/SSD4/CSVs_to_ingest/shutterstockCSVs/CSV_NOKEYS.csv'
-output_file = '/volumes/SSD4/CSVs_to_ingest/shutterstockCSVs/CSV_NOKEYS_unique.csv'
+input_file = '/Users/michaelmandiberg/Documents/projects-active/facemap_production/getty_scrape/done/getty_33333_china/CSV_NOKEYS_mar13combo.csv'
+output_file = '/Users/michaelmandiberg/Documents/projects-active/facemap_production/getty_scrape/done/getty_33333_china/CSV_NOKEYS_unique_sorted_mar13.csv'
 
 # Read the CSV file and extract the second column
 keywords = []
@@ -10,14 +11,20 @@ with open(input_file, 'r', newline='', encoding='utf-8') as f:
     reader = csv.reader(f)
     for row in reader:
         if len(row) >= 2:  # Make sure the row has at least two columns
-            keywords.append(row[1])
+            keyword = row[1].strip()  # Remove leading/trailing whitespaces
+            # Exclude keywords that are only numbers or start with "y\d"
+            if not (keyword.isdigit() or re.match(r'^y\d', keyword)):
+                keywords.append(keyword)
 
-# Count the occurrences of each keyword
+# Count the occurrences of each valid keyword
 keyword_counts = Counter(keywords)
 
-# Write the results to a new CSV file
+# Sort the keyword counts in descending order
+sorted_keyword_counts = sorted(keyword_counts.items(), key=lambda x: x[1], reverse=True)
+
+# Write the sorted results to a new CSV file
 with open(output_file, 'w', newline='', encoding='utf-8') as f:
     writer = csv.writer(f)
     writer.writerow(['Count', 'Keyword'])  # Write the header row
-    for keyword, count in keyword_counts.items():
+    for keyword, count in sorted_keyword_counts:
         writer.writerow([count, keyword])

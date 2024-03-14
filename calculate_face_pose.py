@@ -16,7 +16,7 @@ import numpy as np
 import mediapipe as mp
 import pandas as pd
 
-from sqlalchemy import create_engine, text, MetaData, Table, Column, Numeric, Integer, VARCHAR, Boolean, DECIMAL, BLOB, JSON, String, Date, ForeignKey, update
+from sqlalchemy import create_engine, text, MetaData, Table, Column, Numeric, Integer, VARCHAR, Boolean, DECIMAL, BLOB, JSON, String, Date, ForeignKey, update, select
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.orm import relationship
 from sqlalchemy.ext.declarative import declarative_base
@@ -51,10 +51,25 @@ http="https://media.gettyimages.com/photos/"
 # am I looking on RAID/SSD for a folder? If not, will pull directly from SQL
 # if so, also change the site_name_id etc around line 930
 IS_FOLDER = True
-SITE_NAME_ID = 2
+SITE_NAME_ID = 1
 # 2, shutter. 4, istock
-MAIN_FOLDER = "/Volumes/SSD4green/images_shutterstock"
-# MAIN_FOLDER = "/Volumes/RAID54/images_shutterstock"
+# 7 pond5
+'''
+1   getty
+2   shutterstock
+3   adobe
+4   istock
+5   pexels
+6   unsplash
+7   pond5
+8   123rf
+9   alamy
+10  visualchinagroup
+'''
+
+# MAIN_FOLDER = "/Volumes/SSD4green/images_shutterstock"
+# MAIN_FOLDER = "/Volumes/RAID54/images_pond5"
+MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/getty_scrape/done/getty_33333_china/images_china_lastset"
 BATCH_SIZE = 25000 # Define how many from each folder in each batch
 
 #temp hack to go 1 subfolder at a time
@@ -89,7 +104,7 @@ else:
     # WHERE = "e.face_encodings68 IS NULL AND e.face_encodings IS NOT NULL"
     # production
     # WHERE = "e.is_face IS TRUE AND e.face_encodings68 IS NULL"
-    WHERE = "e.encoding_id IS NULL AND i.site_name_id = 2"
+    WHERE = f"e.encoding_id IS NULL AND i.site_name_id = {SITE_NAME_ID}"
     # AND i.age_id NOT IN (1,2,3,4)
     IS_SSD=False
     #########################################
@@ -115,7 +130,7 @@ else:
 # IS_SSD=True
 ##########################################
 
-LIMIT = 25000
+LIMIT = 100
 
 # platform specific credentials
 io = DataIO(IS_SSD)
@@ -1086,7 +1101,7 @@ def main():
                         # # extract site_image_id for getty images
                         # site_image_id = img.split("-id")[-1].replace(".jpg", "")
 
-                        # # # extract site_image_id for adobe and pexels and shutterstock and istock
+                        # # # extract site_image_id for adobe and pexels and shutterstock and istock and pond5
                         site_image_id = img.split(".")[0]
 
 

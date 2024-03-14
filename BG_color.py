@@ -54,7 +54,7 @@ Base = declarative_base()
 
 io = DataIO()
 db = io.db
-io.db["name"] = "ministock"
+io.db["name"] = "ministock1023"
 
 USE_BBOX=True
 # Create a database engine
