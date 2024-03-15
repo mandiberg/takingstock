@@ -49,7 +49,7 @@ _|_|  _|\__, |\___|____/\__| \___|____/  \_/
 io = DataIO()
 db = io.db
 # overriding DB for testing
-io.db["name"] = "stock"
+io.db["name"] = "ministock1023"
 ROOT = io.ROOT 
 NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 #######################################
@@ -60,10 +60,10 @@ SEARCH_KEYS_FOR_LOC = True
 VERBOSE = False
 
 INGEST_ROOT = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/getty_scrape/done"
-INGEST_FOLDER = os.path.join(INGEST_ROOT, "getty_33333_china")
+INGEST_FOLDER = os.path.join(INGEST_ROOT, "getty_nocountry")
 # CSV_IN_PATH = os.path.join(INGEST_FOLDER, "unique_lines_B_nogender.csv")
 # INGEST_FOLDER = "/Users/michaelmandiberg/Downloads/getty_rebuild/"
-CSV_IN_PATH = os.path.join(INGEST_FOLDER, "ITCNRUUS.jsonl")
+CSV_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache.jsonl")
 KEYWORD_PATH = os.path.join(INGEST_ROOT, "Keywords_202403132011.csv")
 LOCATION_PATH = os.path.join(INGEST_ROOT, "Location_202308041952.csv")
 CSV_KEY2LOC_PATH = os.path.join(INGEST_ROOT, "CSV_KEY2LOC.csv")
@@ -526,7 +526,7 @@ def search_keys(keys_list, this_dict, do_write_csv, multi=False):
         one_result = int(results[0])
         # print("found a GOOD result: ", one_result)
     else:
-        one_result = 0
+        one_result = None
         # print("failed search: ", one_result)
 
     # returns one or many, in a list
@@ -1078,8 +1078,12 @@ def structure_row_getty(item, ind, keys_list):
     age = item["age_id"]
     description = item["title"]
     gender_key, age_key, age_detail_key = get_gender_age_row(gender, age, description, keys_list, site_id)
-    country_key = unlock_key_dict(item["location_id"],locations_dict_getty, loc2loc)
-    if not country_key:
+    country_key = None
+    if item["location_id"]:
+        if VERBOSE: print("we gotta location: ", item["location_id"])
+        country_key = unlock_key_dict(item["location_id"],locations_dict_getty, loc2loc)
+    if not item["location_id"] or not country_key:
+        if VERBOSE: print("nada location: ", item["location_id"])
         country_key = search_keys(keys_list, key2loc, True)
         print("search_keys key2loc for location found: ", country_key)
 
