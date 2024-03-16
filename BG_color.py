@@ -19,7 +19,7 @@
 
 #################################
 
-from sqlalchemy import create_engine, select, delete
+from sqlalchemy import create_engine, select, delete, and_
 from sqlalchemy.orm import sessionmaker,scoped_session
 from sqlalchemy.pool import NullPool
 from my_declarative_base import Images,ImagesBG,Site  # Replace 'your_module' with the actual module where your SQLAlchemy models are defined
@@ -92,7 +92,7 @@ title = 'Please choose your operation: '
 options = ['Create table', 'Fetch BG color stats',"test sorting"]
 option, index = pick(options, title)
 
-LIMIT= 1000
+LIMIT= 20000
 # Initialize the counter
 counter = 0
 
@@ -338,8 +338,26 @@ work_queue = queue.Queue()
 if index == 0:
     function=create_table
     ################# CREATE TABLE ###########
-    select_query = select(Images.image_id,Images.imagename,Images.site_name_id).\
-        select_from(Images).outerjoin(ImagesBG,Images.image_id == ImagesBG.image_id).filter(ImagesBG.image_id == None).limit(LIMIT)
+    # select_query = select(Images.image_id,Images.imagename,Images.site_name_id).\
+    #     select_from(Images).outerjoin(ImagesBG,Images.image_id == ImagesBG.image_id).filter(ImagesBG.image_id == None).limit(LIMIT)
+    # pulling directly frmo segment, to filter on face_x etc
+    # select_query = select(SegmentOct20.image_id,SegmentOct20.imagename,SegmentOct20.site_name_id).\
+    #     select_from(SegmentOct20).outerjoin(ImagesBG,SegmentOct20.image_id == ImagesBG.image_id).filter(ImagesBG.image_id == None).limit(LIMIT)
+    select_query = select([SegmentOct20.image_id, SegmentOct20.imagename, SegmentOct20.site_name_id]). \
+    select_from(SegmentOct20). \
+    outerjoin(ImagesBG, SegmentOct20.image_id == ImagesBG.image_id). \
+    filter(ImagesBG.image_id == None). \
+    filter(and_(
+        SegmentOct20.face_x >= -33,
+        SegmentOct20.face_x <= -27,
+        SegmentOct20.face_y >= -2,
+        SegmentOct20.face_y <= 2,
+        SegmentOct20.face_z >= -2,
+        SegmentOct20.face_z <= 2
+    )). \
+    limit(LIMIT)
+
+
     result = session.execute(select_query).fetchall()
     # print the length of the result
     print(len(result), "rows")
