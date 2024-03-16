@@ -43,10 +43,14 @@ Base = declarative_base()
 USE_BBOX=True
 
 
-io = DataIO()
+# MM controlling which folder to use
+IS_SSD = True
+
+io = DataIO(IS_SSD)
 db = io.db
-#io.db["name"] = "ministock1023"
-io.db["name"] = "ministock"
+io.db["name"] = "ministock1023"
+# io.db["name"] = "ministock"
+
 
 # Create a database engine
 engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}".format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']), poolclass=NullPool)
@@ -72,8 +76,9 @@ JUMP_SHOT = False # jump to random file if can't find a run
 sort = SortPose(motion, face_height_output, image_edge_multiplier,EXPAND, ONE_SHOT, JUMP_SHOT)
 
 
-if USE_BBOX:FOLDER_PATH = os.path.join(io.ROOT_PROD, "bg_color/0900_bb")
-else:FOLDER_PATH = os.path.join(io.ROOT_PROD, "bg_color/0900")
+# if USE_BBOX:FOLDER_PATH = os.path.join(io.ROOT_PROD, "bg_color/0900_bb")
+# else:FOLDER_PATH = os.path.join(io.ROOT_PROD, "bg_color/0900")
+FOLDER_PATH = os.path.join(io.ROOT_PROD, "bg_color")
 SORTTYPE = "luminosity"  # "hue" or "luminosity"
 output_folder = os.path.join(FOLDER_PATH, SORTTYPE)
 print(output_folder)
@@ -87,7 +92,7 @@ title = 'Please choose your operation: '
 options = ['Create table', 'Fetch BG color stats',"test sorting"]
 option, index = pick(options, title)
 
-LIMIT= 200
+LIMIT= 1000
 # Initialize the counter
 counter = 0
 
@@ -146,78 +151,74 @@ def get_bg_folder(folder_path):
 
     print("Files saved to", output_folder)
 
-def get_bg_database():
-    results=[]
-    if USE_BBOX:
-        print("BBOX used")
-        distinct_image_ids_query = select(ImagesBG.image_id,ImagesBG.hue_bb,ImagesBG.lum_bb).filter(ImagesBG.hue_bb != None, ImagesBG.hue_bb !=-1).limit(LIMIT)
-    else:
-        distinct_image_ids_query = select(ImagesBG.image_id,ImagesBG.hue,ImagesBG.lum).filter(ImagesBG.hue != None).limit(LIMIT)
-    
-    result=session.execute(distinct_image_ids_query).fetchall()
-    #print(len(result))
-    bbox=None
-    face_landmarks=None
-    for row in result:
-        image_id,hue,lum = row
-        print(hue,lum)
-        if USE_BBOX:bbox,face_landmarks=get_bbox(image_id)
-        filename=get_filename(image_id)
-        results.append({"file": filename, "hue": hue, "luminosity": lum,"bbox":bbox,"face_landmarks":face_landmarks})
+def sort_files_onBG():
+    # Define the select statement to fetch all columns from the table
+    images_bg = ImagesBG.__table__
 
+    # Construct the select query
+    query = select([images_bg])
+
+    # Optionally limit the number of rows fetched
+    if LIMIT:
+        query = query.limit(LIMIT)
+
+    # Execute the query and fetch all results
+    result = session.execute(query).fetchall()
+
+    # Convert the result to a DataFrame
+    # df = pd.DataFrame(result, columns=result[0].keys()) if result else pd.DataFrame()
+    # print(df)
+    # return df
+
+    results=[]
+    counter = 0
+
+    for row in result:
+        image_id =row[0]
+        if row[3] > 0:
+            hue = row[3]
+            lum = row[4]
+        else:
+            hue = row[1]
+            lum = row[2]
+        print(hue,lum)
+        filename=get_filename(image_id)
+        results.append({"file": filename, "hue": hue, "luminosity": lum})
+
+    # if there are positive values for hub_bb and lum_bb (not -1), use those
+    # if not, use hue and lum
+    
     # Create DataFrame from results and sort by SORTYPE
     df = pd.DataFrame(results)
     print(df)
     df_sorted = df.sort_values(by=SORTTYPE)
 
     print(df_sorted)
+    for index, row in df_sorted.iterrows():
+        #old_file_path = os.path.join(folder_path, row["file"])
+        old_file_path=row['file']
 
-    # Iterate over sorted DataFrame and save copies of each file to output folder
-    counter = 0
-    total = len(df_sorted)
-    if USE_BBOX:
-        for index, row in df_sorted.iterrows():
-            old_file_path=row['file']
-            filename = f"{str(counter)}_{int(row[SORTTYPE])}_{row['file'].split('/')[-1]}"
-            new_file_path = os.path.join(output_folder,filename)
-            
-            bbox=row['bbox']
-            img=cv2.imread(old_file_path)
-            crop_img = sort.crop_image(img, row['face_landmarks'], row['bbox'])
-            #crop_img=img[bbox['top']:bbox['bottom'],bbox['left']:bbox['right'],:]
-            #if crop_img is not None : 
-                #print(old_file_path)
-            cv2.imwrite(new_file_path,crop_img)
-            print(f"File '{row['file']}' copied to '{filename}'")
-            counter+=1
-    else:
-        for index, row in df_sorted.iterrows():
-            #old_file_path = os.path.join(folder_path, row["file"])
-            old_file_path=row['file']
-
-            filename = f"{str(counter)}_{int(row[SORTTYPE])}_{row['file'].split('/')[-1]}"
-            new_file_path = os.path.join(output_folder,filename)
-            print(old_file_path, new_file_path)
-            shutil.copyfile(old_file_path, new_file_path)
-            print(f"File '{row['file']}' copied to '{filename}'")
-            counter += 1
+        filename = f"{str(counter)}_{int(row[SORTTYPE])}_{row['file'].split('/')[-1]}"
+        new_file_path = os.path.join(output_folder,filename)
+        print(old_file_path, new_file_path)
+        shutil.copyfile(old_file_path, new_file_path)
+        print(f"File '{row['file']}' copied to '{filename}'")
+        counter += 1
 
     print("Files saved to", output_folder)
 
-# get_bg_folder(FOLDER_PATH)
 
 
-def get_bg_hue_lum(file,bbox=None,face_landmarks=None):
-    sample_img = cv2.imread(file)
+def get_bg_hue_lum(img,bbox=None,face_landmarks=None):
     if bbox:
         #sample_img=sample_img[bbox['top']:bbox['bottom'],bbox['left']:bbox['right'],:]
-        sample_img = sort.crop_image(sample_img, face_landmarks, bbox)
+        img = sort.crop_image(img, face_landmarks, bbox)
         #print(type(sample_img),"@@@@@@@@@@@@")
-        if sample_img is None: return -1,-1 ## if TOO_BIG==true, checking if cropped image is empty
+        if img is None: return -1,-1 ## if TOO_BIG==true, checking if cropped image is empty
         
-    result = get_bg_segment.process(sample_img[:,:,::-1])
+    result = get_bg_segment.process(img[:,:,::-1])
     mask=np.repeat((1-result.segmentation_mask)[:, :, np.newaxis], 3, axis=2)
-    masked_img=mask*sample_img[:,:,::-1]/255 ##RGB format
+    masked_img=mask*img[:,:,::-1]/255 ##RGB format
     # Identify black pixels where R=0, G=0, B=0
     black_pixels_mask = np.all(masked_img == [0, 0, 0], axis=-1)
     # Filter out black pixels and compute the mean color of the remaining pixels
@@ -286,10 +287,15 @@ def fetch_BG_stat(target_image_id, lock, session):
 
     file=get_filename(target_image_id)
     #filename=get_filename(imagename)
+    img = cv2.imread(file)    
     bbox=None
     facelandmark=None
-    if USE_BBOX:bbox,facelandmark=get_bbox(target_image_id)
-    hue,lum=get_bg_hue_lum(file,bbox,facelandmark)
+
+    hue,lum=get_bg_hue_lum(img,bbox,facelandmark)    
+    if USE_BBOX:
+        #will do a second round for bbox with same cv2 image
+        bbox,facelandmark=get_bbox(target_image_id)
+        hue_bb,lum_bb=get_bg_hue_lum(img,bbox,facelandmark)
     
     # Update the BagOfKeywords entry with the corresponding image_id
     ImagesBG_entry = (
@@ -300,11 +306,11 @@ def fetch_BG_stat(target_image_id, lock, session):
 
     if ImagesBG_entry:
         if USE_BBOX:
-            ImagesBG_entry.hue_bb = hue
-            ImagesBG_entry.lum_bb = lum
-        else:
-            ImagesBG_entry.hue = hue
-            ImagesBG_entry.lum = lum
+            ImagesBG_entry.hue_bb = hue_bb
+            ImagesBG_entry.lum_bb = lum_bb
+
+        ImagesBG_entry.hue = hue
+        ImagesBG_entry.lum = lum
 
         #session.commit()
         print(f"BG stat for image_id {target_image_id} updated successfully.")
@@ -350,7 +356,8 @@ elif index == 1:
         work_queue.put(target_image_id)        
 
 elif index == 2:
-    get_bg_database()
+    # get_bg_database()
+    sort_files_onBG()
         
 def threaded_fetching():
     while not work_queue.empty():

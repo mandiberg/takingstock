@@ -155,8 +155,6 @@ class ImagesTopics(Base):
 class ImagesBG(Base):
     __tablename__ = 'ImagesBG' 
     image_id = Column(Integer, ForeignKey('images.image_id'), primary_key=True)
-    #imagename = Column(String(200), ForeignKey('images.imagename'))
-    #site_name_id = Column(Integer, ForeignKey('site.site_name_id'))
     hue = Column(Float)
     lum = Column(Float)
     hue_bb = Column(Float)
