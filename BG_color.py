@@ -92,7 +92,7 @@ title = 'Please choose your operation: '
 options = ['Create table', 'Fetch BG color stats',"test sorting"]
 option, index = pick(options, title)
 
-LIMIT= 20000
+LIMIT= 200000
 # Initialize the counter
 counter = 0
 
@@ -211,10 +211,15 @@ def sort_files_onBG():
 
 def get_bg_hue_lum(img,bbox=None,face_landmarks=None):
     if bbox:
-        #sample_img=sample_img[bbox['top']:bbox['bottom'],bbox['left']:bbox['right'],:]
-        img = sort.crop_image(img, face_landmarks, bbox)
-        #print(type(sample_img),"@@@@@@@@@@@@")
-        if img is None: return -1,-1 ## if TOO_BIG==true, checking if cropped image is empty
+        try:
+            #sample_img=sample_img[bbox['top']:bbox['bottom'],bbox['left']:bbox['right'],:]
+            # passing in bbox as a str
+            img = sort.crop_image(img, face_landmarks, bbox)
+            #print(type(sample_img),"@@@@@@@@@@@@")
+            if img is None: return -1,-1 ## if TOO_BIG==true, checking if cropped image is empty
+        except:
+            print("FAILED CROPPING, bad bbox",bbox)
+            return -2,-2
         
     result = get_bg_segment.process(img[:,:,::-1])
     mask=np.repeat((1-result.segmentation_mask)[:, :, np.newaxis], 3, axis=2)
