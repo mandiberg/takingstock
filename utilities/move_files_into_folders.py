@@ -19,18 +19,18 @@ io = DataIO()
 
 # moves files from folder located at PATH to hash folders created at NEWPATH
 # uses get_hash_folders to determine which folder to put in
-# if ALL_IN_ONE_FOLDER = True it will look only in the PATH folder 
+# if ALL_IN_ONE_FOLDER = True it will look only in the PATH folder (for when all files are in one folder)
 # if ALL_IN_ONE_FOLDER = False it will look inside all the folders recursively inside of PATH
 # (does not leave original file in place)
 
-testname = "woman-in-a-music-concert-picture-id505111652.jpg"
-# PATH= os.path.join(os.environ['HOME'], "Documents/projects-active/facemap_production/gettyimages") 
-PATH = "/Volumes/SSD4green/images_shutterstock"
-NEWPATH = "/Volumes/RAID54/images_shutterstock"
+# testname = "woman-in-a-music-concert-picture-id505111652.jpg"
+# # PATH= os.path.join(os.environ['HOME'], "Documents/projects-active/facemap_production/gettyimages") 
 
-# PATH = "/Volumes/SSD4/shutterScraper_v7_has_images/images"
-# # PATH = "/Volumes/RAID54/adobeStockScraper_v3/images_all"
-# NEWPATH = "/Volumes/SSD4/shutterScraper_v7_has_images/images_hashed"
+# PATH = "/Volumes/SSD4green/images_shutterstock"
+# NEWPATH = "/Volumes/RAID54/images_shutterstock"
+
+PATH = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/getty_scrape/ingested_processed/getty_55555/images"
+NEWPATH = "/Volumes/SSD4/images_getty_reDL"
 
 ALL_IN_ONE_FOLDER = False
 
@@ -137,12 +137,18 @@ def threaded_process_files():
         currentpathfile, newfile, a, b = work_queue.get()
         newpathfile = os.path.join(NEWPATH, a, b, newfile)
 
-        shutil.move(currentpathfile, newpathfile)
-        # print(currentpathfile, newpathfile)
+        if os.path.exists(newpathfile):
+            print("file exists, skipping: ", newpathfile)
+            # remove newpathfile from hard drive
+            # os.remove(newpathfile)
+            print("could remove: ", currentpathfile)
+        else:
+            shutil.move(currentpathfile, newpathfile)
+            # print(currentpathfile, newpathfile)
 
-        # print(newfile)
-        # print("moved from: ", currentpathfile)
-        print("moved to: ", newpathfile)
+            # print(newfile)
+            # print("moved from: ", currentpathfile)
+            print("moved to: ", newpathfile)
 
         with lock:
             global counter
