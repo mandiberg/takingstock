@@ -49,7 +49,7 @@ _|_|  _|\__, |\___|____/\__| \___|____/  \_/
 io = DataIO()
 db = io.db
 # overriding DB for testing
-io.db["name"] = "stock"
+io.db["name"] = "ministock1023"
 ROOT = io.ROOT 
 NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 #######################################
@@ -60,10 +60,10 @@ SEARCH_KEYS_FOR_LOC = True
 VERBOSE = False
 
 INGEST_ROOT = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/getty_scrape/done"
-INGEST_FOLDER = os.path.join(INGEST_ROOT, "2233")
+INGEST_FOLDER = os.path.join(INGEST_ROOT, "getty_nocountry")
 # CSV_IN_PATH = os.path.join(INGEST_FOLDER, "unique_lines_B_nogender.csv")
 # INGEST_FOLDER = "/Users/michaelmandiberg/Downloads/getty_rebuild/"
-CSV_IN_PATH = os.path.join(INGEST_FOLDER, "2233mar15v2.jsonl")
+CSV_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache.jsonl")
 KEYWORD_PATH = os.path.join(INGEST_ROOT, "Keywords_202403152036.csv")
 LOCATION_PATH = os.path.join(INGEST_ROOT, "Location_202308041952.csv")
 CSV_KEY2LOC_PATH = os.path.join(INGEST_ROOT, "CSV_KEY2LOC.csv")
@@ -492,8 +492,9 @@ def findall_dict(my_dict,description):
             # print(f'The color of {match} is {value}')
 
 # only searches through keys with dict
-# called in by the get_eth_dictonly
+# called in by the get_eth_dictonly << as of Mar 2024 this is not longer true, I believe
 def search_keys(keys_list, this_dict, do_write_csv, multi=False):
+    if VERBOSE: print("[search_keys]")
     results = []
     found_eth2 = False
     for key in keys_list:
@@ -502,6 +503,8 @@ def search_keys(keys_list, this_dict, do_write_csv, multi=False):
             found = unlock_key_dict(key, this_dict)
         except:
             found = None
+        # catches empty strings, and converts to None (was breaking the loop)
+        if found == "": found = None
         if found is not None:
             found_eth2 = True
             results.append(found)

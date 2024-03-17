@@ -292,10 +292,14 @@ def fetch_BG_stat(target_image_id, lock, session):
 
     file=get_filename(target_image_id)
     #filename=get_filename(imagename)
-    img = cv2.imread(file)    
+    if os.path.exists(file):
+        img = cv2.imread(file)    
+    else:
+        print(f"image not found {file}")
+        return
     bbox=None
     facelandmark=None
-
+    
     hue,lum=get_bg_hue_lum(img,bbox,facelandmark)    
     if USE_BBOX:
         #will do a second round for bbox with same cv2 image
