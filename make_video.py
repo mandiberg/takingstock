@@ -56,6 +56,11 @@ IS_SSD = True
 # This is for when you only have the segment table. RW SQL query
 IS_SEGONLY= True
 
+# This tells it to pull luminosity 
+IS_LUMINOSITY = True
+if IS_LUMINOSITY: TARGET_LUM = 85
+else: TARGET_LUM = None
+
 # this is for controlling if it is using
 # all clusters,
 IS_CLUSTER = False
@@ -156,13 +161,17 @@ elif IS_SEGONLY:
         FROM += " JOIN ImagesTopics it ON s.image_id = it.image_id "
         WHERE += " AND it.topic_score > .3"
         SELECT += ", it.topic_score" # add description here, after resegmenting
-
+    if IS_LUMINOSITY:
+        FROM += " JOIN ImagesBG ibg ON s.image_id = ibg.image_id "
+        # WHERE += " AND ibg.lum > .3"
+        SELECT += ", ibg.lum, ibg.lum_bb " # add description here, after resegmenting
+        
     # # join to keywords
     # FROM += " JOIN ImagesKeywords ik ON s.image_id = ik.image_id JOIN Keywords k ON ik.keyword_id = k.keyword_id "
     # WHERE += " AND k.keyword_text LIKE 'surpris%' "
 
     # WHERE = "s.site_name_id != 1"
-    LIMIT = 1000000
+    LIMIT = 1000
 
 
 
@@ -193,7 +202,7 @@ image_edge_multiplier = [1.5,1.5,2,1.5] # bigger portrait
 
 
 # construct my own objects
-sort = SortPose(motion, face_height_output, image_edge_multiplier,EXPAND, ONE_SHOT, JUMP_SHOT)
+sort = SortPose(motion, face_height_output, image_edge_multiplier,EXPAND, ONE_SHOT, JUMP_SHOT, TARGET_LUM)
 
 start_img_name = "median"
 start_site_image_id = None

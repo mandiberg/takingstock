@@ -130,5 +130,11 @@ CREATE TABLE ImagesBG (
     image_id INT PRIMARY KEY,
     hue FLOAT,
     lum FLOAT,
+    sat FLOAT,
+    hue_bb FLOAT,
+    lum_bb FLOAT,
+    sat_bb FLOAT,
     FOREIGN KEY (image_id) REFERENCES images(image_id)
 );
+
+
