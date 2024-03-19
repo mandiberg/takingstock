@@ -92,7 +92,7 @@ title = 'Please choose your operation: '
 options = ['Create table', 'Fetch BG color stats',"test sorting"]
 option, index = pick(options, title)
 
-LIMIT= 200000
+LIMIT= 200
 # Initialize the counter
 counter = 0
 
@@ -216,11 +216,11 @@ def get_bg_hue_lum(img,bbox=None,face_landmarks=None):
             # passing in bbox as a str
             img = sort.crop_image(img, face_landmarks, bbox)
             #print(type(sample_img),"@@@@@@@@@@@@")
-            if img is None: return -1,-1 ## if TOO_BIG==true, checking if cropped image is empty
+            if img is None: return -1,-1,-1 ## if TOO_BIG==true, checking if cropped image is empty
         except:
             print("FAILED CROPPING, bad bbox",bbox)
-            return -2,-2
-        
+            return -2,-2,-2
+        print("bbox['bottom'], ", bbox['bottom'])
     result = get_bg_segment.process(img[:,:,::-1])
     mask=np.repeat((1-result.segmentation_mask)[:, :, np.newaxis], 3, axis=2)
     masked_img=mask*img[:,:,::-1]/255 ##RGB format
@@ -229,8 +229,11 @@ def get_bg_hue_lum(img,bbox=None,face_landmarks=None):
     # Filter out black pixels and compute the mean color of the remaining pixels
     mean_color = np.mean(masked_img[~black_pixels_mask], axis=0)[np.newaxis,np.newaxis,:] # ~ is negate
     hue=cv2.cvtColor(mean_color, cv2.COLOR_RGB2HSV)[0,0,0]
+    sat = cv2.cvtColor(mean_color, cv2.COLOR_RGB2HSV)[0, 0, 1]
+    # print("saturation is", sat)
     lum=cv2.cvtColor(mean_color, cv2.COLOR_RGB2LAB)[0,0,0]
-    return hue,lum
+    print("hue,lum,sat", hue,lum,sat)
+    return hue,lum,sat
 
 
 def create_table(row, lock, session):
@@ -300,13 +303,14 @@ def fetch_BG_stat(target_image_id, lock, session):
     bbox=None
     facelandmark=None
     
-    hue,lum=get_bg_hue_lum(img,bbox,facelandmark)    
+    hue,lum,sat=get_bg_hue_lum(img,bbox,facelandmark)    
     if USE_BBOX:
         #will do a second round for bbox with same cv2 image
         bbox,facelandmark=get_bbox(target_image_id)
-        hue_bb,lum_bb=get_bg_hue_lum(img,bbox,facelandmark)
+        hue_bb,lum_bb,sat_bb=get_bg_hue_lum(img,bbox,facelandmark)
     
-    # Update the BagOfKeywords entry with the corresponding image_id
+    print("sat values before insert", sat, sat_bb)
+    # Update the BG entry with the corresponding image_id
     ImagesBG_entry = (
         session.query(ImagesBG)
         .filter(ImagesBG.image_id == target_image_id)
@@ -317,9 +321,20 @@ def fetch_BG_stat(target_image_id, lock, session):
         if USE_BBOX:
             ImagesBG_entry.hue_bb = hue_bb
             ImagesBG_entry.lum_bb = lum_bb
+            ImagesBG_entry.sat_bb = sat_bb
 
         ImagesBG_entry.hue = hue
         ImagesBG_entry.lum = lum
+        ImagesBG_entry.sat = sat
+
+        
+        print("image_id:", ImagesBG_entry.image_id)
+        print("hue_bb:", ImagesBG_entry.hue_bb)
+        print("lum_bb:", ImagesBG_entry.lum_bb)
+        print("sat_bb:", ImagesBG_entry.sat_bb)
+        print("hue:", ImagesBG_entry.hue)
+        print("lum:", ImagesBG_entry.lum)
+        print("sat:", ImagesBG_entry.sat)
 
         #session.commit()
         print(f"BG stat for image_id {target_image_id} updated successfully.")
@@ -358,7 +373,7 @@ if index == 0:
     filter(ImagesBG.image_id == None). \
     filter(and_(
         SegmentOct20.face_x >= -33,
-        SegmentOct20.face_x <= -27,
+        SegmentOct20.face_x <= -26,
         SegmentOct20.face_y >= -2,
         SegmentOct20.face_y <= 2,
         SegmentOct20.face_z >= -2,
