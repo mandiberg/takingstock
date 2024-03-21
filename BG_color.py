@@ -156,7 +156,8 @@ def sort_files_onBG():
     images_bg = ImagesBG.__table__
 
     # Construct the select query
-    query = select([images_bg])
+    #query = select([images_bg]) ## this DOESNT work on windows somehow
+    query = select(images_bg)
 
     # Optionally limit the number of rows fetched
     if LIMIT:
