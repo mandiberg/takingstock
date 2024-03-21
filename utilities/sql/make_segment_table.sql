@@ -1,12 +1,12 @@
 
-USE ministock1023;
+USE stock;
 
 -- cleanup
 -- DROP TABLE SegmentAug30Straightahead ;
-DELETE FROM SegmentFeb15;
+DELETE FROM SegmentMar21;
 
 -- create segment table
-CREATE TABLE SegmentFeb15Temp (
+CREATE TABLE SegmentMar21 (
     seg_image_id int NOT NULL AUTO_INCREMENT PRIMARY KEY,
     image_id INTEGER,
     FOREIGN KEY (image_id) REFERENCES Images(image_id),
@@ -30,29 +30,78 @@ CREATE TABLE SegmentFeb15Temp (
     mouth_gap DECIMAL (6,3),
     face_landmarks BLOB,
     bbox JSON,
-    face_encodings BLOB,
     face_encodings68 BLOB,
-    body_encodings68 BLOB    
+    body_landmarks BLOB,  
+    keyword_list BLOB,
+    tokenized_keyword_list BLOB,
+    ethnicity_list BLOB
+
 
 );
 
 
 -- insert data into segment table with join to ensure not selecting dupes
 -- I think this is the most current and up to date??
-SET GLOBAL innodb_buffer_pool_size=4294967296;
+SET GLOBAL innodb_buffer_pool_size=8294967296;
 
-INSERT INTO SegmentFeb15Temp (image_id, site_name_id, site_image_id, contentUrl, imagename, description, face_x, face_y, face_z, mouth_gap, face_landmarks, bbox, face_encodings68,body_encodings68)
+INSERT INTO SegmentOct20 (image_id, site_name_id, site_image_id, contentUrl, imagename, description, face_x, face_y, face_z, mouth_gap, face_landmarks, bbox, face_encodings68,body_encodings68)
 SELECT DISTINCT i.image_id, i.site_name_id, i.site_image_id, i.contentUrl, i.imagename, i.description, e.face_x, e.face_y, e.face_z, e.mouth_gap, e.face_landmarks, e.bbox, e.face_encodings68, body_encodings68
 FROM Images i
 LEFT JOIN Encodings e ON i.image_id = e.image_id
-LEFT JOIN SegmentFeb15Temp j ON i.image_id = j.image_id
+LEFT JOIN SegmentOct20 j ON i.image_id = j.image_id
 WHERE e.face_encodings68 IS NOT NULL 
 	AND e.face_x > -40 AND e.face_x < -24 
     AND e.face_y > -2 AND e.face_y < 2
     AND e.face_z > -2 AND e.face_z < 2
     AND j.image_id IS NULL
-    AND i.site_name_id = 4
+    AND i.site_name_id = 2
 LIMIT 2000; -- Adjust the batch size as needed
+
+
+-- modifying to only do image_id etc, and from e
+INSERT INTO SegmentMar20  (image_id)
+SELECT DISTINCT e.image_id
+FROM Encodings e
+WHERE e.face_encodings68 IS NOT NULL 
+	AND e.face_x > -33 AND e.face_x < -27
+    AND e.face_y > -2 AND e.face_y < 2
+    AND e.face_z > -2 AND e.face_z < 2
+LIMIT 50000; -- Adjust the batch size as needed
+
+
+-- modifying to only do image_id etc, and from e
+INSERT INTO SegmentMar21  (image_id)
+SELECT DISTINCT e.image_id
+FROM Encodings e
+WHERE e.face_encodings68 IS NOT NULL 
+	AND e.face_x > -33 AND e.face_x < -27
+    AND e.face_y > -2 AND e.face_y < 2
+    AND e.face_z > -2 AND e.face_z < 2
+LIMIT 50000; -- Adjust the batch size as needed
+
+
+-- modifying to only do image_id etc, and from e
+INSERT INTO SegmentMar20  (image_id, face_x, face_y, face_z, mouth_gap, face_landmarks, bbox, face_encodings68,body_landmarks)
+SELECT DISTINCT e.image_id, e.face_x, e.face_y, e.face_z, e.mouth_gap, e.face_landmarks, e.bbox, e.face_encodings68, e.body_landmarks
+FROM Encodings e
+LEFT JOIN SegmentMar20 j ON e.image_id = j.image_id
+WHERE e.face_encodings68 IS NOT NULL 
+	AND e.face_x > -33 AND e.face_x < -27
+    AND e.face_y > -2 AND e.face_y < 2
+    AND e.face_z > -2 AND e.face_z < 2
+    AND j.image_id IS NULL
+LIMIT 2000; -- Adjust the batch size as needed
+
+
+-- adding description column
+ALTER TABLE SegmentOct20 RENAME COLUMN  body_encodings68 TO  body_landmarks ;
+
+ALTER TABLE SegmentOct20 
+ADD COLUMN   ethnicity_list BLOB;
+
+ADD COLUMN   tokenized_keyword_list BLOB;
+ADD COLUMN keyword_list BLOB;
+
 
 
 
@@ -94,15 +143,17 @@ AND e.face_y > -4 AND e.face_y < 4
 AND e.face_z > -3 AND e.face_z < 3 
 ;
 
+USE Stock;
 -- get count of data for segment table JUST Encodings
 -- SELECT DISTINCT i.image_id, i.site_name_id, i.site_image_id, i.contentUrl, i.imagename, e.face_x, e.face_y, e.face_z, e.mouth_gap, e.face_landmarks, e.bbox, e.face_encodings68
-SELECT COUNT(e.image_id)
+SELECT e.image_id
 FROM Encodings e
 -- WHERE e.face_encodings68 IS NOT NULL
 WHERE e.is_face IS TRUE AND e.face_encodings68 IS NOT NULL 
 AND e.face_x > -40 AND e.face_x < -24 
 AND e.face_y > -4 AND e.face_y < 4 
 AND e.face_z > -3 AND e.face_z < 3 
+LIMIT 100
 ;
 
 
