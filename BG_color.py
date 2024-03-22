@@ -212,6 +212,12 @@ def sort_files_onBG():
 def get_bg_hue_lum(img,bbox=None,face_landmarks=None):
     if bbox:
         try:
+            # SJ: sort out the bbox string/dict/object issue
+            if type(bbox)==str:
+                bbox=json.loads(bbox)
+                print("bbox type", type(bbox))
+            print("bbox['top'], ", bbox['top'])
+            
             #sample_img=sample_img[bbox['top']:bbox['bottom'],bbox['left']:bbox['right'],:]
             # passing in bbox as a str
             img = sort.crop_image(img, face_landmarks, bbox)
@@ -226,9 +232,18 @@ def get_bg_hue_lum(img,bbox=None,face_landmarks=None):
     masked_img=mask*img[:,:,::-1]/255 ##RGB format
     # Identify black pixels where R=0, G=0, B=0
     black_pixels_mask = np.all(masked_img == [0, 0, 0], axis=-1)
+
+    if face_landmarks:
+        face_2d_dict = sort.get_face_2d_dict(face_landmarks)
+        print("face_2d_dict chin", face_2d_dict[152])
+    else: 
+        print("no face landmarks")
+
     # Filter out black pixels and compute the mean color of the remaining pixels
     mean_color = np.mean(masked_img[~black_pixels_mask], axis=0)[np.newaxis,np.newaxis,:] # ~ is negate
     hue=cv2.cvtColor(mean_color, cv2.COLOR_RGB2HSV)[0,0,0]
+
+    # SJ: why isn't sat being stored in the database
     sat = cv2.cvtColor(mean_color, cv2.COLOR_RGB2HSV)[0, 0, 1]
     # print("saturation is", sat)
     lum=cv2.cvtColor(mean_color, cv2.COLOR_RGB2LAB)[0,0,0]
