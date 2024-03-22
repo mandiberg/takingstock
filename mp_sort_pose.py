@@ -15,7 +15,7 @@ from collections import Counter
 class SortPose:
     # """Sort image files based on head pose"""
 
-    def __init__(self, motion, face_height_output, image_edge_multiplier, EXPAND, ONE_SHOT, JUMP_SHOT):
+    def __init__(self, motion, face_height_output, image_edge_multiplier, EXPAND, ONE_SHOT, JUMP_SHOT, TARGET_LUM=None):
 
         self.mp_face_detection = mp.solutions.face_detection
         self.mp_drawing = mp.solutions.drawing_utils
@@ -43,6 +43,8 @@ class SortPose:
         self.SHOT_CLOCK = 0 
         self.BODY_LMS = [0, 13, 14, 15, 16, 19, 20]
 
+        # luminosity parameters
+        self.TARGET_LUM = TARGET_LUM
         # set some defaults, looking forward
         self.XLOW = -20
         self.XHIGH = 1
@@ -177,6 +179,9 @@ class SortPose:
         print(segment.size)
         segment = segment.loc[((segment['face_z'] < self.ZHIGH) & (segment['face_z'] > self.ZLOW))]
         print(segment.size)
+        segment = segment.loc[((segment['lum'] < self.TARGET_LUM+5) & (segment['lum'] > self.TARGET_LUM-5))]
+
+        
         # removing cropX for now. Need to add that back into the data
         # segment = segment.loc[segment['cropX'] >= self.MINCROP]
         # print(segment.size)
