@@ -81,17 +81,19 @@ DICT_PATH=os.path.join(io.ROOT,"dictionary.dict")
 BOW_CORPUS_PATH=os.path.join(io.ROOT,"BOW_lda_corpus.mm")
 TOKEN_PATH=os.path.join(io.ROOT,"tokenized_keyword_list.csv")
 TFIDF_CORPUS_PATH=os.path.join(io.ROOT,"TFIDF_lda_corpus.mm")
+SegmentTable_name = 'SegmentOct20'
 # Satyam, you want to set this to False
-USE_SEGMENT = False
+USE_SEGMENT = True
 VERBOSE = True
 RANDOM = False
 global_counter = 0
-QUERY_LIMIT = 1000000
+QUERY_LIMIT = 5000000
 # started at 9:45PM, Feb 17
 BATCH_SIZE = 100
 
+
 MODEL="TF" ## OR TF  ## Bag of words or TF-IDF
-NUM_TOPICS=88
+NUM_TOPICS=36
 
 stemmer = SnowballStemmer('english')
 
@@ -138,12 +140,29 @@ Session = sessionmaker(bind=engine)
 session = Session()
 Base = declarative_base()
 
-class BagOfKeywords(Base):
-    __tablename__ = 'BagOfKeywords'
+# to create new SegmentTable with variable as name
+class SegmentTable(Base):
+    __tablename__ = SegmentTable_name
 
     image_id = Column(Integer, primary_key=True)
-    keyword_list = Column(LargeBinary)
-    tokenized_keyword_list = Column(LargeBinary)
+    site_name_id = Column(Integer)
+    site_image_id = Column(String(50))
+    contentUrl = Column(String(300), nullable=False)
+    imagename = Column(String(200))
+    description = Column(String(150))
+    face_x = Column(DECIMAL(6, 3))
+    face_y = Column(DECIMAL(6, 3))
+    face_z = Column(DECIMAL(6, 3))
+    mouth_gap = Column(DECIMAL(6, 3))
+    face_landmarks = Column(BLOB)
+    bbox = Column(JSON)
+    face_encodings = Column(BLOB)
+    face_encodings68 = Column(BLOB)
+    site_image_id = Column(String(50), nullable=False)
+    keyword_list = Column(BLOB)  # Pickled list
+    tokenized_keyword_list = Column(BLOB)  # Pickled list
+    ethnicity_list = Column(BLOB)  # Pickled list
+
 
 ambig_key_dict = { "black-and-white": "black_and_white", "black and white background": "black_and_white background", "black and white portrait": "black_and_white portrait", "black amp white": "black_and_white", "white and black": "black_and_white", "black and white film": "black_and_white film", "black and white wallpaper": "black_and_white wallpaper", "black and white cover photos": "black_and_white cover photos", "black and white outfit": "black_and_white outfit", "black and white city": "black_and_white city", "blackandwhite": "black_and_white", "black white": "black_and_white", "black friday": "black_friday", "black magic": "black_magic", "black lives matter": "black_lives_matter black_ethnicity", "black out tuesday": "black_out_tuesday black_ethnicity", "black girl magic": "black_girl_magic black_ethnicity", "beautiful black women": "beautiful black_ethnicity women", "black model": "black_ethnicity model", "black santa": "black_ethnicity santa", "black children": "black_ethnicity children", "black history": "black_ethnicity history", "black family": "black_ethnicity family", "black community": "black_ethnicity community", "black owned business": "black_ethnicity owned business", "black holidays": "black_ethnicity holidays", "black models": "black_ethnicity models", "black girl bullying": "black_ethnicity girl bullying", "black santa claus": "black_ethnicity santa claus", "black hands": "black_ethnicity hands", "black christmas": "black_ethnicity christmas", "white and black girl": "white_ethnicity and black_ethnicity girl", "white woman": "white_ethnicity woman", "white girl": "white_ethnicity girl", "white people": "white_ethnicity", "red white and blue": "red_white_and_blue"}
 def clarify_keywords(text):
@@ -197,13 +216,13 @@ def write_topics(lda_model):
     for idx, topic_list in lda_model.print_topics(-1):
         print('Topic: {} \nWords: {}'.format(idx, topic_list))
 
-       # Create a BagOfKeywords object
+       # Create a Topics object
         topics_entry = Topics(
         topic_id = idx,
         topic = "".join(topic_list)
         )
 
-    # Add the BagOfKeywords object to the session
+    # Add the Topics object to the session
         session.add(topics_entry)
         print("Updated topic_id {}".format(idx))
     session.commit()
@@ -269,8 +288,9 @@ def calc_optimum_topics():
     print(num_topics_list,coher_val_list)  # get coherence value
 
 def gen_corpus():
+    # this takes the tokenized keyword list and generates a corpus saved to disk
     print("generating corpus")
-    query = session.query(BagOfKeywords.tokenized_keyword_list).filter(BagOfKeywords.tokenized_keyword_list.isnot(None)).limit(QUERY_LIMIT)
+    query = session.query(SegmentTable.tokenized_keyword_list).filter(SegmentTable.tokenized_keyword_list.isnot(None)).limit(QUERY_LIMIT)
     results = query.all()
     total_rows = query.count()
     if VERBOSE: 
@@ -280,7 +300,7 @@ def gen_corpus():
         # for row in results: print("row: ",row.tokenized_keyword_list)
     
     token_lists = [pickle.loads(row.tokenized_keyword_list) for row in results]
-    if VERBOSE: print("token_lists: ",token_lists[:1])
+    if VERBOSE: print("token_lists first entry: ",token_lists[:1])
 
     dictionary = gensim.corpora.Dictionary(token_lists)
     if VERBOSE: print("gen_corpus: created dictionary")
@@ -302,6 +322,8 @@ def gen_corpus():
 
 
 def gen_corpus_in_batches():
+    # I think this was an attempt to batch the corpuse generation but you can't quite add them back together
+    # so probably not useful
     print("generating corpus")
     offset = 0
     batch_size = 500000  # Adjust the batch size as needed
@@ -313,7 +335,7 @@ def gen_corpus_in_batches():
         dictionary = gensim.corpora.Dictionary()  # Initialize an empty dictionary
     
     while True:
-        query = session.query(BagOfKeywords.tokenized_keyword_list).filter(BagOfKeywords.tokenized_keyword_list.isnot(None)).offset(offset).limit(batch_size)
+        query = session.query(SegmentTable.tokenized_keyword_list).filter(SegmentTable.tokenized_keyword_list.isnot(None)).offset(offset).limit(batch_size)
         results = query.all()
         total_rows = len(results)
         if total_rows == 0 or batch_number > 2: # temp fix for 1M
