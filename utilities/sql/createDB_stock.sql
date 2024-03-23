@@ -126,7 +126,7 @@ CREATE TABLE ImagesClusters (
 );
 
 
-CREATE TABLE ImagesBG (
+CREATE TABLE ImagesBackground (
     image_id INT PRIMARY KEY,
     hue FLOAT,
     lum FLOAT,
