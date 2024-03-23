@@ -1,7 +1,7 @@
 from sqlalchemy import create_engine, select, delete
 from sqlalchemy.orm import sessionmaker,scoped_session
 from sqlalchemy.pool import NullPool
-from sqlalchemy import and_
+from sqlalchemy import and_, or_
 
 from sqlalchemy.ext.declarative import declarative_base
 # my ORM
@@ -27,8 +27,8 @@ io = DataIO()
 db = io.db
 # io.db["name"] = "ministock"
 
+VERBOSE = False
 SegmentTable_name = 'SegmentOct20'
-
 NewSegment_name = 'SegmentMar21'
 
 # Create a database engine
@@ -62,14 +62,14 @@ def make_key_dict(filepath):
             # print(row)
             keys_dict[int(row[0])] = row[2]
         return keys_dict
-keys_dict = make_key_dict(os.path.join(io.ROOT, "Keywords_202402071139.csv"))
+keys_dict = make_key_dict(os.path.join(io.ROOT, "Keywords_202403172226.csv"))
 
 
 title = 'Please choose your operation: '
-options = ['Create table', 'Fetch keywords list and make tokens', 'Fetch ethnicity list', 'Prune Table where is_face == None', 'move new segment image_ids to existing segment','fetch description where description is None']
+options = ['Create helper table', 'Fetch keywords list and make tokens', 'Fetch ethnicity list', 'Prune Table where is_face == None', 'move new segment image_ids to existing segment','fetch description/Image metas if None']
 option, index = pick(options, title)
 
-LIMIT= 5
+LIMIT= 5000000
 # Initialize the counter
 counter = 0
 
@@ -81,6 +81,7 @@ class NewSegmentTable(Base):
 
     image_id = Column(Integer, primary_key=True)
     site_name_id = Column(Integer)
+    site_image_id = Column(String(50))
     contentUrl = Column(String(300), nullable=False)
     imagename = Column(String(200))
     description = Column(String(150))
@@ -105,6 +106,7 @@ class SegmentTable(Base):
 
     image_id = Column(Integer, primary_key=True)
     site_name_id = Column(Integer)
+    site_image_id = Column(String(50))
     contentUrl = Column(String(300), nullable=False)
     imagename = Column(String(200))
     description = Column(String(150))
@@ -214,11 +216,20 @@ def fetch_description(image_id_with_no_description, lock, session):
     description = result[0][0]
     print(description)
 
-    segment_table = SegmentTable(
-        description=description
+    existing_segment_entry = (
+        session.query(SegmentTable)
+        .filter(SegmentTable.image_id == image_id_with_no_description)
+        .first()
     )
 
-    session.add(segment_table)
+    if existing_segment_entry:
+        # print(f"image_id {image_id_with_no_description} will be added .")
+        existing_segment_entry.description=description        
+        # Add the Segment object to the session
+        # session.add(segment_table)
+    else:
+        print(f"NO ACTION image_id {image_id_with_no_description} already exists.")
+        return
 
     with lock:
         # Increment the counter using the lock to ensure thread safety
@@ -233,27 +244,130 @@ def fetch_description(image_id_with_no_description, lock, session):
         print(f"Added description: {counter}")
     
 
-def move_segment_to_segment(row, lock, session):
-    image_id = row[0]
-
-    # Create a SegmentTable object
-    segment_table = SegmentTable(
-        image_id=image_id
+def fetch_images_metadata(image_id_with_no_meta, lock, session):
+    # image_id_with_no_meta = row[0]
+    select_Images_metas_query = (
+        select(
+        Images.site_name_id, 
+        Images.site_image_id, 
+        Images.contentUrl, 
+        Images.imagename, 
+        Images.description, 
+        Images.age_id, 
+        Images.gender_id, 
+        Images.location_id)
+        .filter(Images.image_id == image_id_with_no_meta)
     )
 
-    # Add the BagOfKeywords object to the session
-    session.add(segment_table)
+    select_Encodings_metas_query = (
+        select( 
+        Encodings.face_x, 
+        Encodings.face_y, 
+        Encodings.face_z, 
+        Encodings.mouth_gap, 
+        Encodings.face_landmarks, 
+        Encodings.bbox, 
+        Encodings.face_encodings68, 
+        Encodings.body_landmarks)
+        .filter(Images.image_id == image_id_with_no_meta)
+    )
+
+
+    existing_segment_entry = (
+        session.query(SegmentTable)
+        .filter(SegmentTable.image_id == image_id_with_no_meta)
+        .first()
+    )
+
+    if not existing_segment_entry.description:
+        # Execute the query and fetch the result as a list of keyword_ids
+        result_Images = session.execute(select_Images_metas_query).fetchall()
+        # print(result_Images)
+        existing_segment_entry.description= result_Images[0][4]
+        print(f"image_id {image_id_with_no_meta} Description will be added.")
+        if not existing_segment_entry.site_image_id:
+            print(f"image_id {image_id_with_no_meta} Image Metas will be added.")
+            existing_segment_entry.site_name_id= result_Images[0][0]
+            existing_segment_entry.site_image_id= result_Images[0][1]
+            existing_segment_entry.contentUrl= result_Images[0][2]
+            existing_segment_entry.imagename= result_Images[0][3]
+            existing_segment_entry.age_id= result_Images[0][5]
+            existing_segment_entry.gender_id=result_Images[0][6]
+            existing_segment_entry.location_id=result_Images[0][7]
+    else:
+        if VERBOSE: print(f"NO ACTION image_id {image_id_with_no_meta} Metas already exists completely.")
+
+    if not existing_segment_entry.bbox:
+        # Execute the query and fetch the result as a list of keyword_ids
+        result_Encodings = session.execute(select_Encodings_metas_query).fetchall()
+        # print(result_Encodings)
+        existing_segment_entry.face_x= result_Encodings[0][0]
+        existing_segment_entry.face_y= result_Encodings[0][1]
+        existing_segment_entry.face_z= result_Encodings[0][2]
+        existing_segment_entry.mouth_gap= result_Encodings[0][3]
+        existing_segment_entry.face_landmarks= result_Encodings[0][4]
+        existing_segment_entry.bbox= result_Encodings[0][5]
+        existing_segment_entry.face_encodings68= result_Encodings[0][6]
+        existing_segment_entry.body_landmarks= result_Encodings[0][7]
+        print(f"image_id {image_id_with_no_meta} Encodings will be added.")
+
+    else:
+        if VERBOSE: print(f"NO ACTION image_id {image_id_with_no_meta} Encodings already exists.")
+
+    if not existing_segment_entry.description and not existing_segment_entry.bbox:
+        if VERBOSE: print(f"NO ACTION image_id {image_id_with_no_meta} hard stop return.")
+        return
 
     with lock:
         # Increment the counter using the lock to ensure thread safety
         global counter
         counter += 1
         session.commit()
+        if VERBOSE: print("added metas/encodings: ", image_id_with_no_meta)
 
     # Print a message to confirm the update
     # print(f"Keyword list for image_id {image_id} updated successfully.")
     if counter % 1000 == 0:
-        print(f"Created SegmentTable number: {counter}")
+        print(f"Added description: {counter}")
+    
+
+
+def move_segment_to_segment(image_id_to_move, lock, session):
+    # image_id_to_move = row[0]
+
+    existing_segment_entry = (
+        session.query(SegmentTable)
+        .filter(SegmentTable.image_id == image_id_to_move)
+        .first()
+    )
+
+    if not existing_segment_entry:
+        print(f"image_id {image_id_to_move} will be added .")
+
+        # Create a SegmentTable object
+        segment_table = SegmentTable(
+            image_id=image_id_to_move
+        )
+
+        # Add the BagOfKeywords object to the session
+        session.add(segment_table)
+
+    else:
+        print(f"NO ACTION image_id {image_id_to_move} already exists.")
+        return
+
+    
+    with lock:
+        # Increment the counter using the lock to ensure thread safety
+        global counter
+        counter += 1
+        session.commit()
+        print("moved: ",image_id_to_move)
+
+    # Print a message to confirm the update
+    # print(f"Keyword list for image_id {image_id} updated successfully.")
+    if counter % 1000 == 0:
+        print(f"Added to SegmentTable number: {counter}")
 
 
 
@@ -334,7 +448,7 @@ def preprocess_keywords(target_image_id, lock,session):
         token_list = preprocess_list(keyword_list)
 
     # Pickle the keyword_list
-    print(token_list)
+    # print(token_list)
     keyword_list_pickle = pickle.dumps(token_list)
 
     # Update the BagOfKeywords entry with the corresponding image_id
@@ -425,12 +539,12 @@ if index == 0:
         .outerjoin(NewSegmentTable, Encodings.image_id == NewSegmentTable.image_id)
         .filter(NewSegmentTable.image_id == None)
         .filter(and_(
-            Encodings.face_x > -36,
-            Encodings.face_x < -24,
-            Encodings.face_y > -2,
-            Encodings.face_y < 2,
-            Encodings.face_z > -2,
-            Encodings.face_z < 2
+            Encodings.face_x > -40,
+            Encodings.face_x < -2,
+            Encodings.face_y > -4,
+            Encodings.face_y < 4,
+            Encodings.face_z > -4,
+            Encodings.face_z < 4
         ))
         .limit(LIMIT)
     )
@@ -482,9 +596,9 @@ elif index == 4:
     existing_image_ids = [row[0] for row in session.execute(existing_image_ids_query).fetchall()]
     print(len(existing_image_ids), "existing rows")   
 
-    new_image_ids_query = select(SegmentTable.image_id.distinct()).limit(LIMIT)
+    new_image_ids_query = select(NewSegmentTable.image_id.distinct()).limit(LIMIT)
     new_image_ids = [row[0] for row in session.execute(new_image_ids_query).fetchall()]
-    print(len(existing_image_ids), "new rows")   
+    print(len(new_image_ids), "new rows")   
 
     # Convert the lists to sets
     existing_image_ids_set = set(existing_image_ids)
@@ -503,15 +617,21 @@ elif index == 4:
         work_queue.put(target_image_id)
 
 elif index == 5:
-    function=fetch_description
+    # function=fetch_description
+    function=fetch_images_metadata
     #################PRUNE THE TABLE#######################################
 
-    # Construct the query to select distinct image_ids where Encodings.is_face is None
-    distinct_image_ids_query = select(SegmentTable.image_id.distinct()).filter(SegmentTable.description == None).limit(LIMIT)
+    # No Description
+    # distinct_image_ids_query = select(SegmentTable.image_id.distinct()).filter(SegmentTable.description == None).limit(LIMIT)
+
+    # No Metas or description
+    distinct_image_ids_query = select(SegmentTable.image_id.distinct())\
+        .filter(or_(SegmentTable.description == None, SegmentTable.bbox == None))\
+        .limit(LIMIT)
 
     # Execute the query and fetch the results
     distinct_image_ids = [row[0] for row in session.execute(distinct_image_ids_query).fetchall()]
-    print(len(distinct_image_ids), "rows without description")    
+    print(len(distinct_image_ids), "rows without description or bbox")    
     for target_image_id in distinct_image_ids:
         work_queue.put(target_image_id)
 

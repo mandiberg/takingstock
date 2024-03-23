@@ -49,7 +49,7 @@ _|_|  _|\__, |\___|____/\__| \___|____/  \_/
 io = DataIO()
 db = io.db
 # overriding DB for testing
-io.db["name"] = "ministock1023"
+io.db["name"] = "stock"
 ROOT = io.ROOT 
 NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 #######################################
@@ -60,11 +60,11 @@ SEARCH_KEYS_FOR_LOC = True
 VERBOSE = False
 
 INGEST_ROOT = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/getty_scrape/done"
-INGEST_FOLDER = os.path.join(INGEST_ROOT, "getty_nocountry")
+INGEST_FOLDER = os.path.join(INGEST_ROOT, "nonosPlus")
 # CSV_IN_PATH = os.path.join(INGEST_FOLDER, "unique_lines_B_nogender.csv")
 # INGEST_FOLDER = "/Users/michaelmandiberg/Downloads/getty_rebuild/"
-CSV_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache.jsonl")
-KEYWORD_PATH = os.path.join(INGEST_ROOT, "Keywords_202403152036.csv")
+CSV_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache_errALL.jsonl")
+KEYWORD_PATH = os.path.join(INGEST_ROOT, "Keywords_202403172226.csv")
 LOCATION_PATH = os.path.join(INGEST_ROOT, "Location_202308041952.csv")
 CSV_KEY2LOC_PATH = os.path.join(INGEST_ROOT, "CSV_KEY2LOC.csv")
 CSV_KEY2KEY_GETTY_PATH = os.path.join(INGEST_ROOT, "CSV_KEY2KEY_GETTY.csv")
@@ -425,7 +425,7 @@ def unlock_key_plurals_etc(site_id,key, this_dict):
                 try:
                     key_no = this_dict[plur_key[0]]
                     # key = plur_key
-                    print(key_no)
+                    if VERBOSE: print(key_no)
                 except:
                     pass# print(key)
             elif sing_key and key != sing_key:
@@ -561,11 +561,11 @@ def get_key_no_dictonly(eth_name, keys_list, this_dict, do_write_csv=False):
             # print("eth_name ",eth_name)
         except:
             key_no = None
-            print("eth_dict failed with this key: ", eth_name)
+            if VERBOSE: print("eth_dict failed with this key: ", eth_name)
         key_no_list.append(key_no)
     else:
         key_no_list = search_keys(keys_list, this_dict, do_write_csv, True)
-        print("searched keys and found key_no: ", key_no_list)
+        if VERBOSE: print("searched keys and found key_no: ", key_no_list)
     return(key_no_list)
 
 def unlock_key_dict(key,this_dict,this_key2key=None):
@@ -585,11 +585,9 @@ def unlock_key_dict(key,this_dict,this_key2key=None):
         if this_key2key:
             try:
                 altkey = this_key2key[key.lower()]
-                print("altkey")
-                print(altkey)
+                if VERBOSE: print("altkey", altkey)
                 key_no = this_dict[altkey.lower()]
-                print("this is the key_no via loc2loc")
-                print(key_no)
+                if VERBOSE: print("this is the key_no via loc2loc", key_no)
                 return(key_no)
             except:
                 try:
@@ -659,10 +657,10 @@ def get_TNB(description, keys_list):
     def binary_code_in_desc(description):
         global is_code
         if any(word in description for word in Code_list):
-            print("Binary Code Desc:", description)
+            if VERBOSE: print("Binary Code Desc:", description)
             is_code = True
         elif any(word in keys_list for word in Code_list):
-            print("Binary Code Keys:", description)
+            if VERBOSE: print("Binary Code Keys:", description)
             is_code = True                
         else:
             is_code = False
@@ -671,14 +669,14 @@ def get_TNB(description, keys_list):
     if any(word in description for word in TNB_list):
         gender_TNB = findall_dict(gender_dict_TNB,description)
         # gender_TNB = get_TNB(description)
-        print("Binary TNB_list:", gender_TNB, description)
+        if VERBOSE: print("Binary TNB_list:", gender_TNB, description)
     elif re.search(transpattern, description):
         gender_TNB = 7
-        print("Binary transpattern:", gender_TNB, description)
+        if VERBOSE: print("Binary transpattern:", gender_TNB, description)
     elif binary in description:
         if not binary_code_in_desc(description):
             gender_TNB = findall_dict(gender_dict_TNB,description)
-            print("Binary not Code:", gender_TNB, description)
+            if VERBOSE: print("Binary not Code:", gender_TNB, description)
     return gender_TNB
 
 
@@ -765,7 +763,7 @@ def get_gender_age_row(gender_string, age_string, description, keys_list, site_i
             # print("key is ", key)
             # reset variables
             if key in skip_keys:
-                print("skip_keys for other")
+                if VERBOSE: ("skip_keys for other")
                 continue
             gender = None
             age= None
@@ -790,8 +788,9 @@ def get_gender_age_row(gender_string, age_string, description, keys_list, site_i
 
     description = description.replace(",","").replace("'s","").replace(".","")
 
-    print("gender_string, age_string",gender_string, age_string)
-    print("types",type(gender_string), type(age_string))
+    if VERBOSE: 
+        print("gender_string, age_string",gender_string, age_string)
+        print("types",type(gender_string), type(age_string))
 
     # this if/if structure is necessary because "" and isnull were not compatible
     # Get gender
@@ -799,16 +798,18 @@ def get_gender_age_row(gender_string, age_string, description, keys_list, site_i
     if gender_string != "":
         print("trying try_gender_age_key for", gender_string, age_string)
         gender, age, age_detail = try_gender_age_key(gender, age, age_detail, gender_string)
-        print(gender)
-        print(age)
-        print(age_detail)
+        if VERBOSE:
+            print(gender)
+            print(age)
+            print(age_detail)
 
     else:
         print("trying get_gender_age_keywords for", gender_string, age_string)
         gender, age, age_detail = get_gender_age_keywords(gender, age, age_detail, keys_list)
-        print(gender)
-        print(age)
-        print(age_detail)
+        if VERBOSE:
+            print(gender)
+            print(age)
+            print(age_detail)
 
 
         #try keys for gender
@@ -816,7 +817,7 @@ def get_gender_age_row(gender_string, age_string, description, keys_list, site_i
     # print(gender)
     # print(age)
     if pd.isnull(gender): 
-        print("gender is null")
+        if VERBOSE: print("gender is null")
         gender_results = description_to_keys(description, site_id, gender_dict)
         if gender_results and len(set(gender_results)) == 1:
             gender = gender_results[0]
@@ -856,9 +857,10 @@ def get_gender_age_row(gender_string, age_string, description, keys_list, site_i
     elif pd.isnull(age):
         print("age is still null, trying keywordsa again, but not for gender")
         _, age, age_detail = get_gender_age_keywords(gender, age, age_detail, keys_list)
-        print(gender)
-        print(age)
-        print(age_detail)
+        if VERBOSE:
+            print(gender)
+            print(age)
+            print(age_detail)
         if pd.isnull(age):
             print("age is really still null, trying description")
 
@@ -868,13 +870,14 @@ def get_gender_age_row(gender_string, age_string, description, keys_list, site_i
 
     # after everything, get gender for TNB from description and supercede existing gender string
     gender_TNB = get_TNB(description.lower(), keys_list)    
-    print("gender_TNB", gender_TNB)
+    if VERBOSE: print("gender_TNB", gender_TNB)
     if gender_TNB: 
         gender = gender_TNB
 
-    print("gender, age, after everything")
-    print(gender)
-    print(age)
+    if VERBOSE:
+        print("gender, age, after everything")
+        print(gender)
+        print(age)
 
     if not age or not gender:
         print("MISSING AGE OR GENDER, IS IT IN THE KEYS?")
@@ -911,7 +914,7 @@ def generate_local_unhashed_image_filepath(image_name):
     hash_folder, hash_subfolder = get_hash_folders(file_name)
     # print("hash_folder: ",hash_folder)
     # print("hash_subfolder: ", hash_subfolder)
-    print (os.path.join(hash_folder, hash_subfolder,file_name))
+    if VERBOSE: print (os.path.join(hash_folder, hash_subfolder,file_name))
     return os.path.join(hash_folder, hash_subfolder,file_name)
         # IMAGES_FOLDER_NAME, hash_folder, '{}.{}'.format(file_name, extension))
 
@@ -1093,7 +1096,7 @@ def structure_row_getty(item, ind, keys_list):
     if not item["location_id"] or not country_key:
         if VERBOSE: print("nada location: ", item["location_id"])
         country_key = search_keys(keys_list, key2loc, True)
-        print("search_keys key2loc for location found: ", country_key)
+        if VERBOSE: ("search_keys key2loc for location found: ", country_key)
 
     image_row = {
         "site_image_id": item["id"],
@@ -1161,8 +1164,7 @@ def ingest_json():
 
         except IndexError:
             print("keys failed")
-        print("keys_list")
-        print(keys_list)
+        if VERBOSE: print("keys_list", keys_list)
         return keys_list
 
     # change this for each site ingested #

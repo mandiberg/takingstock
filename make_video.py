@@ -57,7 +57,7 @@ IS_SSD = True
 IS_SEGONLY= True
 
 # This tells it to pull luminosity 
-IS_LUMINOSITY = True
+IS_LUMINOSITY = False
 if IS_LUMINOSITY: TARGET_LUM = 85
 else: TARGET_LUM = None
 
@@ -78,7 +78,7 @@ IS_TOPICS = False
 N_TOPICS = 88
 
 IS_ONE_TOPIC = True
-TOPIC_NO = 10
+TOPIC_NO = 7
 # 7 is isolated, 84 is business, 27 babies, 16 pointing
 # 37 is doctor << 35 covid
 # 45 is hands
@@ -171,7 +171,7 @@ elif IS_SEGONLY:
     # WHERE += " AND k.keyword_text LIKE 'surpris%' "
 
     # WHERE = "s.site_name_id != 1"
-    LIMIT = 1000
+    LIMIT = 200000
 
 
 

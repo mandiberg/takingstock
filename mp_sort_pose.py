@@ -179,7 +179,8 @@ class SortPose:
         print(segment.size)
         segment = segment.loc[((segment['face_z'] < self.ZHIGH) & (segment['face_z'] > self.ZLOW))]
         print(segment.size)
-        segment = segment.loc[((segment['lum'] < self.TARGET_LUM+5) & (segment['lum'] > self.TARGET_LUM-5))]
+        if self.TARGET_LUM:
+            segment = segment.loc[((segment['lum'] < self.TARGET_LUM+5) & (segment['lum'] > self.TARGET_LUM-5))]
 
         
         # removing cropX for now. Need to add that back into the data
