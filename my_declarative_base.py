@@ -152,8 +152,8 @@ class ImagesTopics(Base):
     topic_id = Column(Integer, ForeignKey('Topics.topic_id'))
     topic_score = Column(Float)
 
-class ImagesBG(Base):
-    __tablename__ = 'ImagesBG' 
+class ImagesBackground(Base):
+    __tablename__ = 'ImagesBackground' 
     image_id = Column(Integer, ForeignKey('images.image_id'), primary_key=True)
     hue = Column(Float)
     lum = Column(Float)

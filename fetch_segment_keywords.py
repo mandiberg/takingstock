@@ -69,7 +69,7 @@ title = 'Please choose your operation: '
 options = ['Create helper table', 'Fetch keywords list and make tokens', 'Fetch ethnicity list', 'Prune Table where is_face == None', 'move new segment image_ids to existing segment','fetch description/Image metas if None']
 option, index = pick(options, title)
 
-LIMIT= 5000000
+LIMIT= 1000000
 # Initialize the counter
 counter = 0
 
@@ -269,9 +269,9 @@ def fetch_images_metadata(image_id_with_no_meta, lock, session):
         Encodings.bbox, 
         Encodings.face_encodings68, 
         Encodings.body_landmarks)
+        .join(Images, Encodings.image_id == Images.image_id)
         .filter(Images.image_id == image_id_with_no_meta)
     )
-
 
     existing_segment_entry = (
         session.query(SegmentTable)

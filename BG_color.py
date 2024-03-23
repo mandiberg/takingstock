@@ -22,7 +22,7 @@
 from sqlalchemy import create_engine, select, delete, and_
 from sqlalchemy.orm import sessionmaker,scoped_session, declarative_base
 from sqlalchemy.pool import NullPool
-from my_declarative_base import Images,ImagesBG,Site  # Replace 'your_module' with the actual module where your SQLAlchemy models are defined
+from my_declarative_base import Images,ImagesBackground,Site  # Replace 'your_module' with the actual module where your SQLAlchemy models are defined
 from mp_db_io import DataIO
 import pickle
 import numpy as np
@@ -49,8 +49,8 @@ IS_SSD = True
 
 io = DataIO(IS_SSD)
 db = io.db
-#io.db["name"] = "ministock1023"
-io.db["name"] = "ministock"
+io.db["name"] = "stock"
+# io.db["name"] = "ministock"
 
 
 # Create a database engine
@@ -93,7 +93,7 @@ title = 'Please choose your operation: '
 options = ['Create table', 'Fetch BG color stats',"test sorting"]
 option, index = pick(options, title)
 
-LIMIT= 200
+LIMIT= 10
 # Initialize the counter
 counter = 0
 
@@ -154,7 +154,7 @@ def get_bg_folder(folder_path):
 
 def sort_files_onBG():
     # Define the select statement to fetch all columns from the table
-    images_bg = ImagesBG.__table__
+    images_bg = ImagesBackground.__table__
 
     # Construct the select query
     #query = select([images_bg]) ## this DOESNT work on windows somehow
@@ -262,7 +262,7 @@ def create_table(row, lock, session):
     image_id,imagename,site_name_id = row
     
     # Create a BagOfKeywords object
-    images_bg = ImagesBG(
+    images_bg = ImagesBackground(
         image_id=image_id,
         hue=None,  # Set this to None or your desired value
         lum=None,  # Set this to None or your desired value
@@ -337,8 +337,8 @@ def fetch_BG_stat(target_image_id, lock, session):
     print("sat values before insert", sat, sat_bb)
     # Update the BG entry with the corresponding image_id
     ImagesBG_entry = (
-        session.query(ImagesBG)
-        .filter(ImagesBG.image_id == target_image_id)
+        session.query(ImagesBackground)
+        .filter(ImagesBackground.image_id == target_image_id)
         .first()
     )
 
@@ -388,10 +388,10 @@ if index == 0:
     function=create_table
     ################# CREATE TABLE ###########
     # select_query = select(Images.image_id,Images.imagename,Images.site_name_id).\
-    #     select_from(Images).outerjoin(ImagesBG,Images.image_id == ImagesBG.image_id).filter(ImagesBG.image_id == None).limit(LIMIT)
+    #     select_from(Images).outerjoin(ImagesBackground,Images.image_id == ImagesBackground.image_id).filter(ImagesBackground.image_id == None).limit(LIMIT)
     # pulling directly frmo segment, to filter on face_x etc
     select_query = select(SegmentOct20.image_id,SegmentOct20.imagename,SegmentOct20.site_name_id).\
-        select_from(SegmentOct20).outerjoin(ImagesBG,SegmentOct20.image_id == ImagesBG.image_id).filter(ImagesBG.image_id == None).limit(LIMIT)
+        select_from(SegmentOct20).outerjoin(ImagesBackground,SegmentOct20.image_id == ImagesBackground.image_id).filter(ImagesBackground.image_id == None).limit(LIMIT)
     #####################
     #for some reason ''' select ([xyx])''' produces error
     #but ''' select(xyz)''' doesn't, atleast on windows
@@ -399,8 +399,8 @@ if index == 0:
     
     # select_query = select([SegmentOct20.image_id, SegmentOct20.imagename, SegmentOct20.site_name_id]). \
     # select_from(SegmentOct20). \
-    # outerjoin(ImagesBG, SegmentOct20.image_id == ImagesBG.image_id). \
-    # filter(ImagesBG.image_id == None). \
+    # outerjoin(ImagesBackground, SegmentOct20.image_id == ImagesBackground.image_id). \
+    # filter(ImagesBackground.image_id == None). \
     # filter(and_(
         # SegmentOct20.face_x >= -33,
         # SegmentOct20.face_x <= -26,
@@ -421,8 +421,8 @@ if index == 0:
 elif index == 1:
     function=fetch_BG_stat
     #################FETCHING BG stat####################################
-    if USE_BBOX:distinct_image_ids_query = select(ImagesBG.image_id.distinct()).filter(ImagesBG.hue_bb == None).limit(LIMIT)
-    else:distinct_image_ids_query = select(ImagesBG.image_id.distinct()).filter(ImagesBG.hue == None).limit(LIMIT)
+    if USE_BBOX:distinct_image_ids_query = select(ImagesBackground.image_id.distinct()).filter(ImagesBackground.hue_bb == None).limit(LIMIT)
+    else:distinct_image_ids_query = select(ImagesBackground.image_id.distinct()).filter(ImagesBackground.hue == None).limit(LIMIT)
     distinct_image_ids = [row[0] for row in session.execute(distinct_image_ids_query).fetchall()]
     for counter,target_image_id in enumerate(distinct_image_ids):
         #if counter%100==0:print("###########"+str(counter)+"images processed ##########")
