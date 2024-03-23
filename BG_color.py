@@ -20,7 +20,7 @@
 #################################
 
 from sqlalchemy import create_engine, select, delete, and_
-from sqlalchemy.orm import sessionmaker,scoped_session
+from sqlalchemy.orm import sessionmaker,scoped_session, declarative_base
 from sqlalchemy.pool import NullPool
 from my_declarative_base import Images,ImagesBG,Site  # Replace 'your_module' with the actual module where your SQLAlchemy models are defined
 from mp_db_io import DataIO
@@ -35,8 +35,9 @@ import cv2
 import mediapipe as mp
 import shutil
 import pandas as pd
+import json
 from my_declarative_base import Base, Clusters, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON, Images
-from sqlalchemy.ext.declarative import declarative_base
+#from sqlalchemy.ext.declarative import declarative_base
 from mp_sort_pose import SortPose
 
 Base = declarative_base()
@@ -48,8 +49,8 @@ IS_SSD = True
 
 io = DataIO(IS_SSD)
 db = io.db
-io.db["name"] = "ministock1023"
-# io.db["name"] = "ministock"
+#io.db["name"] = "ministock1023"
+io.db["name"] = "ministock"
 
 
 # Create a database engine
@@ -156,7 +157,8 @@ def sort_files_onBG():
     images_bg = ImagesBG.__table__
 
     # Construct the select query
-    query = select([images_bg])
+    #query = select([images_bg]) ## this DOESNT work on windows somehow
+    query = select(images_bg)
 
     # Optionally limit the number of rows fetched
     if LIMIT:
@@ -172,12 +174,18 @@ def sort_files_onBG():
 
     results=[]
     counter = 0
-
+    #####################
+    #make sure that in my_declarative_base and in database both the sequence is
+    #hue,lum,sat,hue_bb,lum_bb,sat_bb
+    # and NOT
+    #hue,lum,hue_bb,lum_bb,sat,sat_bb
+    #####################
+    
     for row in result:
         image_id =row[0]
-        if row[3] > 0:
-            hue = row[3]
-            lum = row[4]
+        if row[4] > 0:
+            hue = row[4]
+            lum = row[5]
         else:
             hue = row[1]
             lum = row[2]
@@ -212,12 +220,10 @@ def sort_files_onBG():
 def get_bg_hue_lum(img,bbox=None,face_landmarks=None):
     if bbox:
         try:
-            # SJ: sort out the bbox string/dict/object issue
+            # SSJ: sort out the bbox string/dict/object issue
             if type(bbox)==str:
                 bbox=json.loads(bbox)
                 print("bbox type", type(bbox))
-            print("bbox['top'], ", bbox['top'])
-            
             #sample_img=sample_img[bbox['top']:bbox['bottom'],bbox['left']:bbox['right'],:]
             # passing in bbox as a str
             img = sort.crop_image(img, face_landmarks, bbox)
@@ -227,6 +233,7 @@ def get_bg_hue_lum(img,bbox=None,face_landmarks=None):
             print("FAILED CROPPING, bad bbox",bbox)
             return -2,-2,-2
         print("bbox['bottom'], ", bbox['bottom'])
+
     result = get_bg_segment.process(img[:,:,::-1])
     mask=np.repeat((1-result.segmentation_mask)[:, :, np.newaxis], 3, axis=2)
     masked_img=mask*img[:,:,::-1]/255 ##RGB format
@@ -301,7 +308,6 @@ def get_bbox(target_image_id):
     result = session.execute(select_image_ids_query).fetchall()
     bbox=result[0][0]
     
-    #face_landmarks=faceLms(pickle.loads(result[0][1]))
     face_landmarks=pickle.loads(result[0][1])
 
     return bbox,face_landmarks
@@ -317,7 +323,11 @@ def fetch_BG_stat(target_image_id, lock, session):
         return
     bbox=None
     facelandmark=None
-    
+    ########This specific case is for image with apostrophe in their name like "hand's"#############
+    ########It messes with reading/writing somehow, os.exists says it exists
+    ########cv.imread reads it and produces None, because it reads "hands" not "hand's"
+    if img is None:return
+    #####################
     hue,lum,sat=get_bg_hue_lum(img,bbox,facelandmark)    
     if USE_BBOX:
         #will do a second round for bbox with same cv2 image
@@ -380,21 +390,26 @@ if index == 0:
     # select_query = select(Images.image_id,Images.imagename,Images.site_name_id).\
     #     select_from(Images).outerjoin(ImagesBG,Images.image_id == ImagesBG.image_id).filter(ImagesBG.image_id == None).limit(LIMIT)
     # pulling directly frmo segment, to filter on face_x etc
-    # select_query = select(SegmentOct20.image_id,SegmentOct20.imagename,SegmentOct20.site_name_id).\
-    #     select_from(SegmentOct20).outerjoin(ImagesBG,SegmentOct20.image_id == ImagesBG.image_id).filter(ImagesBG.image_id == None).limit(LIMIT)
-    select_query = select([SegmentOct20.image_id, SegmentOct20.imagename, SegmentOct20.site_name_id]). \
-    select_from(SegmentOct20). \
-    outerjoin(ImagesBG, SegmentOct20.image_id == ImagesBG.image_id). \
-    filter(ImagesBG.image_id == None). \
-    filter(and_(
-        SegmentOct20.face_x >= -33,
-        SegmentOct20.face_x <= -26,
-        SegmentOct20.face_y >= -2,
-        SegmentOct20.face_y <= 2,
-        SegmentOct20.face_z >= -2,
-        SegmentOct20.face_z <= 2
-    )). \
-    limit(LIMIT)
+    select_query = select(SegmentOct20.image_id,SegmentOct20.imagename,SegmentOct20.site_name_id).\
+        select_from(SegmentOct20).outerjoin(ImagesBG,SegmentOct20.image_id == ImagesBG.image_id).filter(ImagesBG.image_id == None).limit(LIMIT)
+    #####################
+    #for some reason ''' select ([xyx])''' produces error
+    #but ''' select(xyz)''' doesn't, atleast on windows
+    ############################
+    
+    # select_query = select([SegmentOct20.image_id, SegmentOct20.imagename, SegmentOct20.site_name_id]). \
+    # select_from(SegmentOct20). \
+    # outerjoin(ImagesBG, SegmentOct20.image_id == ImagesBG.image_id). \
+    # filter(ImagesBG.image_id == None). \
+    # filter(and_(
+        # SegmentOct20.face_x >= -33,
+        # SegmentOct20.face_x <= -26,
+        # SegmentOct20.face_y >= -2,
+        # SegmentOct20.face_y <= 2,
+        # SegmentOct20.face_z >= -2,
+        # SegmentOct20.face_z <= 2
+    # )). \
+    # limit(LIMIT)
 
 
     result = session.execute(select_query).fetchall()
@@ -409,7 +424,8 @@ elif index == 1:
     if USE_BBOX:distinct_image_ids_query = select(ImagesBG.image_id.distinct()).filter(ImagesBG.hue_bb == None).limit(LIMIT)
     else:distinct_image_ids_query = select(ImagesBG.image_id.distinct()).filter(ImagesBG.hue == None).limit(LIMIT)
     distinct_image_ids = [row[0] for row in session.execute(distinct_image_ids_query).fetchall()]
-    for target_image_id in distinct_image_ids:
+    for counter,target_image_id in enumerate(distinct_image_ids):
+        #if counter%100==0:print("###########"+str(counter)+"images processed ##########")
         work_queue.put(target_image_id)        
 
 elif index == 2:

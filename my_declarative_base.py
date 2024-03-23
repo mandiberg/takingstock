@@ -1,6 +1,6 @@
 from sqlalchemy import Column, Integer,Float, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON
-from sqlalchemy.orm import relationship
-from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import relationship, declarative_base
+#from sqlalchemy.ext.declarative import declarative_base
 
 Base = declarative_base()
 
@@ -157,8 +157,10 @@ class ImagesBG(Base):
     image_id = Column(Integer, ForeignKey('images.image_id'), primary_key=True)
     hue = Column(Float)
     lum = Column(Float)
+    sat = Column(Float)
     hue_bb = Column(Float)
     lum_bb = Column(Float)
+    sat_bb = Column(Float)
     
 
 # these are for MM use for using segments
