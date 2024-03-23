@@ -71,9 +71,9 @@ def create_BG_df():
 
     for row in result:
         image_id =row[0]
-        if row[3] > 0:
-            hue = row[3]
-            lum = row[4]
+        if row[4] >0:
+            hue = row[4]
+            lum = row[5]
         else:
             hue = row[1]
             lum = row[2]
@@ -84,7 +84,7 @@ def create_BG_df():
     return df
 
 def save_hist(df,column):
-    folder_path = os.path.join(os.getcwd(), 'plots')
+    folder_path = os.path.join(os.getcwd(), 'analysis/plots')
     file_path= os .path.join(folder_path,'hist_'+column+'.png')
 
     # Plot histogram
@@ -101,11 +101,11 @@ def save_hist(df,column):
     return 
 
 def save_scatter(df,column1,column2):
-    folder_path = os.path.join(os.getcwd(), 'plots')
+    folder_path = os.path.join(os.getcwd(), 'analysis/plots')
     file_path= os.path.join(folder_path,'Scatter_'+column1+column2+'.png')
 
     # Plot histogram
-    plt.scatter(df[column1],df[column2])
+    plt.scatter(df[column1],df[column2],alpha=0.1)
     plt.xlabel(column1)
     plt.ylabel(column2)
     plt.title('Scatter plot of '+column1+column2)

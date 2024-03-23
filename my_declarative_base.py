@@ -157,8 +157,10 @@ class ImagesBG(Base):
     image_id = Column(Integer, ForeignKey('images.image_id'), primary_key=True)
     hue = Column(Float)
     lum = Column(Float)
+    sat = Column(Float)
     hue_bb = Column(Float)
     lum_bb = Column(Float)
+    sat_bb = Column(Float)
     
 
 # these are for MM use for using segments
