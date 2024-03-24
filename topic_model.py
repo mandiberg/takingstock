@@ -87,7 +87,7 @@ USE_SEGMENT = True
 VERBOSE = True
 RANDOM = False
 global_counter = 0
-QUERY_LIMIT = 100000
+QUERY_LIMIT = 10000000
 # started at 9:45PM, Feb 17
 BATCH_SIZE = 100
 
@@ -124,7 +124,10 @@ def read_csv(file_path):
 GENDER_LIST = read_csv(os.path.join(io.ROOT, "stopwords_gender.csv"))
 ETH_LIST = read_csv(os.path.join(io.ROOT, "stopwords_ethnicity.csv"))
 AGE_LIST = read_csv(os.path.join(io.ROOT, "stopwords_age.csv"))                       
+SKIP_TOKEN_LIST = read_csv(os.path.join(io.ROOT, "skip_tokens.csv"))                       
+
 MY_STOPWORDS = gensim.parsing.preprocessing.STOPWORDS.union(set(GENDER_LIST+ETH_LIST+AGE_LIST))
+
 
 if db['unix_socket']:
     # for MM's MAMP config
@@ -321,6 +324,8 @@ def gen_corpus():
         # for row in results: print("row: ",row.tokenized_keyword_list)
     
     token_lists = [pickle.loads(row.tokenized_keyword_list) for row in results]
+    token_lists = [[token for token in doc if token not in SKIP_TOKEN_LIST] for doc in token_lists]
+
     if VERBOSE: print("token_lists first entry: ",token_lists[:1])
 
     dictionary = gensim.corpora.Dictionary(token_lists)
