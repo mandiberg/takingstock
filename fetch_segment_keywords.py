@@ -17,6 +17,7 @@ import queue
 import csv
 import os
 import gensim
+from collections import Counter
 
 # nltk stuff
 from nltk.stem import WordNetLemmatizer, SnowballStemmer
@@ -30,6 +31,7 @@ db = io.db
 VERBOSE = False
 SegmentTable_name = 'SegmentOct20'
 NewSegment_name = 'SegmentMar21'
+TOKEN_COUNT_PATH = "token_counts.csv"
 
 # Create a database engine
 engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}".format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']), poolclass=NullPool)
@@ -66,7 +68,7 @@ keys_dict = make_key_dict(os.path.join(io.ROOT, "Keywords_202403172226.csv"))
 
 
 title = 'Please choose your operation: '
-options = ['Create helper table', 'Fetch keywords list and make tokens', 'Fetch ethnicity list', 'Prune Table where is_face == None', 'move new segment image_ids to existing segment','fetch description/Image metas if None']
+options = ['Create helper table', 'Fetch keywords list and make tokens', 'Fetch ethnicity list', 'Prune Table where is_face == None', 'move new segment image_ids to existing segment','fetch description/Image metas if None','count tokens']
 option, index = pick(options, title)
 
 LIMIT= 100
@@ -649,6 +651,34 @@ elif index == 5:
     print(len(distinct_image_ids), "rows without description or bbox")    
     for target_image_id in distinct_image_ids:
         work_queue.put(target_image_id)
+
+elif index == 6:
+    #################COUNT ALL TOKENS IN PICKLED LIST#######################################
+    # this is not threaded
+
+    # Query all rows from the SegmentTable
+    # rows = session.query(SegmentTable).all()
+    rows = session.query(SegmentTable.tokenized_keyword_list).all()
+
+    # Initialize a Counter to count the occurrences of each string
+    string_counter = Counter()
+
+    # Iterate over each row
+    for row in rows:
+        try:
+            tokenized_keywords = pickle.loads(row.tokenized_keyword_list)
+            # Update the counter with these token keywords
+            string_counter.update(tokenized_keywords)
+        except:
+            print("error, probably NULL")
+    # Write the counts to a CSV file
+    with open(TOKEN_COUNT_PATH, 'w', newline='') as csvfile:
+        writer = csv.writer(csvfile)
+        # Write the header row
+        writer.writerow(['count', 'string'])
+        # Write the counts
+        for string, count in string_counter.items():
+            writer.writerow([count, string])
 
 
 def threaded_fetching():

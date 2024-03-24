@@ -33,7 +33,7 @@ Session = sessionmaker(bind=engine)
 session = Session()
 Base = declarative_base()
 
-SEGMENTTABLE_NAME = 'SegmentAug30Straightahead'
+SEGMENTTABLE_NAME = 'SegmentOct20'
 
 class SegmentTable(Base):
     __tablename__ = SEGMENTTABLE_NAME
@@ -70,6 +70,22 @@ def generate_local_unhashed_image_filepath(contentUrl):
     # print(os.path.join(hash_folder, hash_subfolder, file_name))
     return os.path.join(hash_folder, hash_subfolder, file_name), contentUrl
 
+# Define the function for generating imagename
+def generate_proper_getty_path(imagename):
+    # print("imagename: ", imagename)
+    # print("imagename type: ", type(imagename))
+
+    new_imagename = imagename.replace("/Volumes/SSD4/images_getty_reDL","")
+    new_imagename = new_imagename.replace("/Users/michaelmandiberg/Documents/projects-active/facemap_production/getty_scrape/getty_33333_china/images_china_lastset","")
+    new_imagename = new_imagename.replace("/Users/michaelmandiberg/Documents/projects-active/facemap_production/getty_scrape/getty_22222_us/images_usa_lastset","")
+    new_imagename = new_imagename.replace("/Users/michaelmandiberg/Documents/projects-active/facemap_production/getty_scrape/getty_22222_serbia/images_serbia_lastset","")
+    new_imagename = new_imagename.replace("/images","")
+        
+    if new_imagename.startswith("/"):
+        # Replace "/" with empty string for first character, do only once
+        # I had the "//" in the replace above, but it was treating it as an escape character
+        new_imagename = new_imagename[0:].replace("/", "", 1)        
+    return new_imagename
 
 # Define the batch size
 batch_size = 1000
@@ -79,30 +95,38 @@ batch_size = 1000
 
 try:
     # Query the Images table for image_id and contentUrl where site_name_id is 1
-    results = session.query(SegmentTable.image_id, SegmentTable.contentUrl).filter(SegmentTable.site_name_id == 1).all()
+    results = session.query(SegmentTable.image_id, SegmentTable.imagename, SegmentTable.contentUrl).filter(SegmentTable.site_name_id == 1).all()
 
     # Initialize counters
     total_processed = 0
     current_batch = []
 
-    for image_id, contentUrl in results:
-        imagename, contentUrl = generate_local_unhashed_image_filepath(contentUrl)
-        print(f"Updating Image ID: {image_id}, Imagename: {imagename}, contentUrl: {contentUrl}")
+    for image_id, imagename, contentUrl in results:
+        # for unhashpath
+        # new_imagename, contentUrl = generate_local_unhashed_image_filepath(contentUrl)
 
-        # Update both imagename and contentUrl columns for the current image_id
-        current_batch.append((image_id, imagename, contentUrl))
+        # for getty SNAFU
+        print("imagename: ", imagename)
+        new_imagename = generate_proper_getty_path(imagename)
+        print("new_imagename: ", new_imagename)
+        if new_imagename != imagename:
+            print(f"Updating Image ID: {image_id}, Imagename: {new_imagename}, contentUrl: {contentUrl}")
+
+            # Update both imagename and contentUrl columns for the current image_id
+            current_batch.append((image_id, imagename, contentUrl))
+        else:
+            print(f"-- NO CHANGES Image ID: {image_id}, Imagename: {imagename}, contentUrl: {contentUrl}")
         total_processed += 1
 
         # Check if the current batch is ready for commit
         if len(current_batch) >= batch_size:
-            session.bulk_update_mappings(SegmentTable, [{"image_id": image_id, "imagename": imagename, "contentUrl": contentUrl} for image_id, imagename, contentUrl in current_batch])
+            session.bulk_update_mappings(SegmentTable, [{"image_id": image_id, "imagename": new_imagename, "contentUrl": contentUrl} for image_id, new_imagename, contentUrl in current_batch])
             session.commit()
             print(f"{total_processed} Changes committed for {batch_size} rows.")
             current_batch = []
-
     # Commit any remaining changes
     if current_batch:
-        session.bulk_update_mappings(SegmentTable, [{"image_id": image_id, "imagename": imagename, "contentUrl": contentUrl} for image_id, imagename, contentUrl in current_batch])
+        session.bulk_update_mappings(SegmentTable, [{"image_id": image_id, "imagename": new_imagename, "contentUrl": contentUrl} for image_id, new_imagename, contentUrl in current_batch])
         session.commit()
         print(f"Changes committed for the remaining {len(current_batch)} rows.")
 
