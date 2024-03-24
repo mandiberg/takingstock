@@ -1,0 +1,2 @@
+for parsing the topic model output
+"? ?\+? ?\d+.\d+\*"

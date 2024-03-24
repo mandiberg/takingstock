@@ -69,7 +69,7 @@ title = 'Please choose your operation: '
 options = ['Create helper table', 'Fetch keywords list and make tokens', 'Fetch ethnicity list', 'Prune Table where is_face == None', 'move new segment image_ids to existing segment','fetch description/Image metas if None']
 option, index = pick(options, title)
 
-LIMIT= 1000000
+LIMIT= 100
 # Initialize the counter
 counter = 0
 
@@ -428,7 +428,22 @@ def preprocess_keywords(target_image_id, lock,session):
     # print(keys_dict)
     # for row in result:
     #     print(row.keyword_id) 
-    keyword_list = [keys_dict[row.keyword_id] for row in result]
+    if result:
+        keyword_list = [keys_dict[row.keyword_id] for row in result]
+    else:
+        print(f"Keywords entry for image_id {target_image_id} not found.")
+
+        select_description_query = (
+            select(SegmentTable.description)
+            .filter(SegmentTable.image_id == target_image_id)
+        )
+
+        # Execute the query and fetch the result as a list of keyword_ids
+        result = session.execute(select_description_query).fetchone()
+        keyword_list = result[0].replace(".","").split()
+        print(keyword_list)
+        
+
     # print(keyword_list)
 
     # # this pulls each key text from db - refactoring

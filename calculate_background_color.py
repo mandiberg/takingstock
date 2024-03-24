@@ -93,7 +93,7 @@ title = 'Please choose your operation: '
 options = ['Create table', 'Fetch BG color stats',"test sorting"]
 option, index = pick(options, title)
 
-LIMIT= 10
+LIMIT= 1000000
 # Initialize the counter
 counter = 0
 
@@ -123,6 +123,10 @@ class SegmentOct20(Base):
     face_encodings68 = Column(BLOB)
     body_landmarks = Column(BLOB)
 
+class HelperTable(Base):
+    __tablename__ = 'SegmentHelperMar23_headon'
+    seg_image_id=Column(Integer,primary_key=True, autoincrement=True)
+    image_id = Column(Integer, primary_key=True, autoincrement=True)
 
 def get_bg_folder(folder_path):
     for filename in os.listdir(folder_path):
@@ -389,9 +393,24 @@ if index == 0:
     ################# CREATE TABLE ###########
     # select_query = select(Images.image_id,Images.imagename,Images.site_name_id).\
     #     select_from(Images).outerjoin(ImagesBackground,Images.image_id == ImagesBackground.image_id).filter(ImagesBackground.image_id == None).limit(LIMIT)
+    
     # pulling directly frmo segment, to filter on face_x etc
-    select_query = select(SegmentOct20.image_id,SegmentOct20.imagename,SegmentOct20.site_name_id).\
-        select_from(SegmentOct20).outerjoin(ImagesBackground,SegmentOct20.image_id == ImagesBackground.image_id).filter(ImagesBackground.image_id == None).limit(LIMIT)
+    # select_query = select(SegmentOct20.image_id,SegmentOct20.imagename,SegmentOct20.site_name_id).\
+    #     select_from(SegmentOct20).outerjoin(ImagesBackground,SegmentOct20.image_id == ImagesBackground.image_id).filter(ImagesBackground.image_id == None).limit(LIMIT)
+    
+    # pulling from segment with a join to the helper table
+    select_query = select(
+        SegmentOct20.image_id,
+        SegmentOct20.imagename,
+        SegmentOct20.site_name_id
+    ).\
+    select_from(SegmentOct20).\
+    outerjoin(ImagesBackground, SegmentOct20.image_id == ImagesBackground.image_id).\
+    outerjoin(HelperTable, SegmentOct20.image_id == HelperTable.image_id).\
+    filter(ImagesBackground.image_id == None).\
+    filter(HelperTable.image_id != None).\
+    limit(LIMIT)
+    
     #####################
     #for some reason ''' select ([xyx])''' produces error
     #but ''' select(xyz)''' doesn't, atleast on windows

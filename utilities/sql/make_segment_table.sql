@@ -3,10 +3,18 @@ USE stock;
 
 -- cleanup
 -- DROP TABLE SegmentAug30Straightahead ;
-DELETE FROM SegmentMar21;
+DELETE FROM SegmentHelperMar23_headon;
+
+-- create helper segment table
+CREATE TABLE SegmentHelperMar23_headon (
+    seg_image_id int NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    image_id INTEGER,
+    FOREIGN KEY (image_id) REFERENCES Images(image_id)
+);
+
 
 -- create segment table
-CREATE TABLE SegmentMar21 (
+CREATE TABLE SegmentHelperMar23_headon (
     seg_image_id int NOT NULL AUTO_INCREMENT PRIMARY KEY,
     image_id INTEGER,
     FOREIGN KEY (image_id) REFERENCES Images(image_id),
@@ -40,6 +48,20 @@ CREATE TABLE SegmentMar21 (
 );
 
 
+-- segment the segment table and add to helpersegment
+INSERT INTO SegmentHelperMar23_headon (image_id)
+SELECT DISTINCT so.image_id
+FROM SegmentOct20 so 
+LEFT JOIN SegmentHelperMar23_headon sh ON so.image_id = sh.image_id
+WHERE 
+    so.face_x > -33 AND so.face_x < -27 
+    AND so.face_y > -2 AND so.face_y < 2
+    AND so.face_z > -2 AND so.face_z < 2
+    AND sh.image_id IS NULL
+LIMIT 100000; -- Adjust the batch size as needed
+
+
+
 -- insert data into segment table with join to ensure not selecting dupes
 -- I think this is the most current and up to date??
 SET GLOBAL innodb_buffer_pool_size=8294967296;
@@ -66,7 +88,18 @@ WHERE e.face_encodings68 IS NOT NULL
 	AND e.face_x > -33 AND e.face_x < -27
     AND e.face_y > -2 AND e.face_y < 2
     AND e.face_z > -2 AND e.face_z < 2
-LIMIT 50000; -- Adjust the batch size as needed
+LIMIT 100000; -- Adjust the batch size as needed
+
+
+-- insert into new temp segment
+INSERT INTO SegmentMar21  (image_id)
+SELECT DISTINCT e.image_id
+FROM Encodings e
+WHERE e.face_encodings68 IS NOT NULL 
+	AND e.face_x > -40 AND e.face_x < -24
+    AND e.face_y > -2 AND e.face_y < 2
+    AND e.face_z > -2 AND e.face_z < 2
+; -- Adjust the batch size as needed
 
 
 -- modifying to only do image_id etc, and from e

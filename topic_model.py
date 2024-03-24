@@ -12,7 +12,7 @@ from sqlalchemy.orm import relationship
 from my_declarative_base import Base, Images, Topics,ImagesTopics, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON, ForeignKey
 
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy import create_engine, text, MetaData, Table, Column, Numeric, Integer, VARCHAR, update, Float, LargeBinary
+from sqlalchemy import create_engine, text, MetaData, Table, Column, Numeric, Integer, VARCHAR, update, Float, LargeBinary, select, and_
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.pool import NullPool
 from pick import pick
@@ -87,29 +87,30 @@ USE_SEGMENT = True
 VERBOSE = True
 RANDOM = False
 global_counter = 0
-QUERY_LIMIT = 5000000
+QUERY_LIMIT = 100000
 # started at 9:45PM, Feb 17
 BATCH_SIZE = 100
 
 
 MODEL="TF" ## OR TF  ## Bag of words or TF-IDF
-NUM_TOPICS=36
+NUM_TOPICS=70
 
 stemmer = SnowballStemmer('english')
 
 def set_query():
     # Basic Query, this works with gettytest3
-    SELECT = "DISTINCT(image_id),description,keyword_list"
-    FROM ="bagofkeywords"
-    WHERE = "keyword_list IS NOT NULL "
+    # currently only used for indexing
+    SELECT = "DISTINCT(image_id),description,tokenized_keyword_list"
+    FROM ="SegmentOct20"
+    WHERE = "tokenized_keyword_list IS NOT NULL "
     if RANDOM: 
         WHERE += "AND image_id >= (SELECT FLOOR(MAX(image_id) * RAND()) FROM bagofkeywords)"
     LIMIT = QUERY_LIMIT
-    if MODE==1:
+    if MODE==2:
         # assigning topics
-        WHERE = "keyword_list IS NOT NULL AND image_id NOT IN (SELECT image_id FROM imagestopics)"
+        WHERE = "tokenized_keyword_list IS NOT NULL AND image_id NOT IN (SELECT image_id FROM imagestopics)"
         # WHERE = "image_id = 423638"
-        LIMIT=100000
+        LIMIT=QUERY_LIMIT
     return SELECT, FROM, WHERE, LIMIT
 
 
@@ -174,10 +175,29 @@ def clarify_keywords(text):
     return text
 
 def selectSQL():
+    # currently only used for indexing
     SELECT, FROM, WHERE, LIMIT = set_query()
     selectsql = f"SELECT {SELECT} FROM {FROM} WHERE {WHERE} LIMIT {str(LIMIT)};"
     print("actual SELECT is: ",selectsql)
     result = engine.connect().execute(text(selectsql))
+
+    # image_id_col = Column('image_id', Integer, primary_key=True, nullable=False)
+    # description_col = Column('description', String(150))
+    # tokenized_keyword_list_col = Column('tokenized_keyword_list', BLOB)
+
+    # # Define your select query using the columns
+    # select_query = (
+    #     select(image_id_col, description_col, tokenized_keyword_list_col)
+    #     .select_from(SegmentTable)
+    #     .where(
+    #         and_(
+    #             tokenized_keyword_list_col != None,  # Check for non-null tokenized_keyword_list
+    #             ~image_id_col.in_(select([ImagesTopics.c.image_id]))  # Subquery to exclude image_id in ImagesTopics
+    #         )
+    #     )
+    #     .limit(QUERY_LIMIT)
+    # )
+
     resultsjson = ([dict(row) for row in result.mappings()])
     return(resultsjson)
 
@@ -233,7 +253,7 @@ def write_imagetopics(resultsjson,lda_model_tfidf,dictionary):
     idx_list, topic_list = zip(*lda_model_tfidf.print_topics(-1))
     for i,row in enumerate(resultsjson):
         # print(row)
-        keyword_list=" ".join(pickle.loads(row["keyword_list"]))
+        keyword_list=" ".join(pickle.loads(row["tokenized_keyword_list"]))
 
         # handles empty keyword_list
         if keyword_list:
@@ -279,7 +299,8 @@ def calc_optimum_topics():
 
     
     # num_topics_list=[80,90,100,110,120]
-    num_topics_list=[40,80,120]
+    # num_topics_list=[40,80,120]
+    num_topics_list=[30,40,50]
     coher_val_list=np.zeros(len(num_topics_list))
     for i,num_topics in enumerate(num_topics_list):
         lda_model = gensim.models.LdaMulticore(corpus, num_topics=num_topics, id2word=dictionary, passes=2, workers=NUMBER_OF_PROCESSES)
