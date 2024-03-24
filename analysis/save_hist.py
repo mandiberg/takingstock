@@ -6,6 +6,8 @@ from sqlalchemy.orm import sessionmaker,scoped_session,declarative_base
 from sqlalchemy.pool import NullPool
 import pandas as pd
 import matplotlib.pyplot as plt
+import colorsys
+
 import numpy as np
 # importing from another folder
 import sys
@@ -13,39 +15,40 @@ from matplotlib.patches import Rectangle
 import pickle
 import json
 
-Repo_path='/Users/jhash/Documents/GitHub/facemap2/'
-#Repo_path='/Users/michaelmandiberg/Documents/GitHub/facemap/'
+# Repo_path='/Users/jhash/Documents/GitHub/facemap2/'
+Repo_path='/Users/michaelmandiberg/Documents/GitHub/facemap/'
 # caution: path[0] is reserved for script path (or '' in REPL)
 sys.path.insert(1,Repo_path )
 
 from mp_db_io import DataIO
 from my_declarative_base import Images, Encodings, Base, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON, Float
-from my_declarative_base import ImagesBG  # Replace 'your_module' with the actual module where your SQLAlchemy models are defined
+from my_declarative_base import ImagesBackground  # Replace 'your_module' with the actual module where your SQLAlchemy models are defined
 
 
 ######## Michael's Credentials ########
-# platform specific credentials
-# io = DataIO()
-# db = io.db
-# # overriding DB for testing
-# io.db["name"] = "stock"
-# ROOT = io.ROOT 
-# NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
-
-#######################################
-
-######## Satyam's Credentials ########
 # platform specific credentials
 IS_SSD = True
 io = DataIO(IS_SSD)
 db = io.db
 # overriding DB for testing
-io.db["name"] = "ministock"
+io.db["name"] = "stock"
 ROOT = io.ROOT 
 NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
+
 #######################################
 
-LIMIT= 20000
+# ######## Satyam's Credentials ########
+# # platform specific credentials
+# IS_SSD = True
+# io = DataIO(IS_SSD)
+# db = io.db
+# # overriding DB for testing
+# io.db["name"] = "ministock"
+# ROOT = io.ROOT 
+# NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
+# #######################################
+
+LIMIT= 250000
 
 engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}".format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']), poolclass=NullPool)
 
@@ -81,11 +84,11 @@ class SegmentOct20(Base):
 # Define the function for generating imagename
 def create_BG_df():
     # Define the select statement to fetch all columns from the table
-    images_bg = ImagesBG.__table__
+    images_bg = ImagesBackground.__table__
 
     # Construct the select query
     #query = select([images_bg]) ## this DOESNT work on windows somehow
-    query = select(images_bg).filter(ImagesBG.hue != None)
+    query = select(images_bg).filter(ImagesBackground.hue != None)
 
     # Optionally limit the number of rows fetched
     if LIMIT:
@@ -107,7 +110,7 @@ def create_BG_df():
             hue = row[1]
             lum = row[2]
             sat = row[3]
-        #print(hue,lum)
+        print(hue,lum,sat)
         results.append({"image_id": image_id, "hue": hue, "luminosity": lum,"sat":sat})
     
     df = pd.DataFrame(results)
@@ -185,8 +188,30 @@ def save_scatter(df,column1,column2,column3):
     folder_path = os.path.join(os.getcwd(), 'analysis/plots')
     file_path= os.path.join(folder_path,'Scatter_'+column1+column2+'.png')
 
+    # print the columsn in the df
+    print(df.columns)
+
+
+    def rgb_to_hex(rgb):
+        """Convert RGB tuple to hex color code."""
+        return '#{:02x}{:02x}{:02x}'.format(*rgb)
+
+    def hls_to_hex(hls):
+        """Convert HLS tuple to hex color code."""
+        rgb = colorsys.hls_to_rgb(*hls)
+        return rgb_to_hex(tuple(int(255 * x) for x in rgb))
+
+    # Convert hue, luminosity, and saturation to hex color code
+    df['hex_color'] = df.apply(lambda row: hls_to_hex((row['hue'] / 360, row['luminosity'] / 100, row['sat'])), axis=1)
+
+    # Display the DataFrame with the new hex color column
+    print(df)
+    
+
+    # Plot scatter with combined color
+    plt.scatter(df[column1], df[column2], c=df['hex_color'], alpha=0.005, cmap='hsv')
     # Plot histogram
-    plt.scatter(df[column1],df[column2],c=df[column3],alpha=0.1,cmap='hsv')
+    # plt.scatter(df[column1],df[column2],c=df[column3],alpha=0.005,cmap='hsv')
     plt.xlabel(column1)
     plt.ylabel(column2)
     plt.title('Scatter plot of '+column1+column2 +"with color from"+column3+"with dtapoints" +str(len(df[column1])))
@@ -199,18 +224,19 @@ def save_scatter(df,column1,column2,column3):
     return
 
 
-#df=create_BG_df()
-df=create_segment_df()
+df=create_BG_df()
+# df=create_segment_df()
 print(f"dataframe created.")
 print(df)
-#save_hist(df,"luminosity")
-#save_hist(df,"hue")
-#save_hist(df,"sat")
-#print("histogram saved")
-#save_scatter(df,"luminosity","sat","hue")
-#print("scatter plot created")
-plot_bbox(df)
-print("bbox plot created")
+# save_hist(df,"luminosity")
+# save_hist(df,"hue")
+# save_hist(df,"sat")
+# print("histogram saved")
+# save_scatter(df,"sat","hue","hue")
+save_scatter(df,"luminosity","sat","hue")
+# print("scatter plot created")
+# plot_bbox(df)
+# print("bbox plot created")
    
 #print(f"An error occurred: {e}")
 
