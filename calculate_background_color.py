@@ -290,8 +290,8 @@ def create_table(row, lock, session):
 def get_filename(target_image_id, return_endfile=False):
     ## get the image somehow
     select_image_ids_query = (
-        select(Images.site_name_id,Images.imagename)
-        .filter(Images.image_id == target_image_id)
+        select(SegmentOct20.site_name_id,SegmentOct20.imagename)
+        .filter(SegmentOct20.image_id == target_image_id)
     )
 
     result = session.execute(select_image_ids_query).fetchall()

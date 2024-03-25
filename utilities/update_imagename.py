@@ -113,7 +113,7 @@ try:
             print(f"Updating Image ID: {image_id}, Imagename: {new_imagename}, contentUrl: {contentUrl}")
 
             # Update both imagename and contentUrl columns for the current image_id
-            current_batch.append((image_id, imagename, contentUrl))
+            current_batch.append((image_id, new_imagename, contentUrl))
         else:
             print(f"-- NO CHANGES Image ID: {image_id}, Imagename: {imagename}, contentUrl: {contentUrl}")
         total_processed += 1
