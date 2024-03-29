@@ -56,10 +56,17 @@ IS_SSD = True
 # This is for when you only have the segment table. RW SQL query
 IS_SEGONLY= True
 
-# This tells it to pull luminosity 
-IS_LUMINOSITY = False
-if IS_LUMINOSITY: TARGET_LUM = 85
-else: TARGET_LUM = None
+# This tells it to pull luminosity. Comment out if not using
+HSV_CONTROL = None # defining so it doesn't break below, if commented out
+HSV_CONTROL = {
+    "LUM_MIN": 75,
+    "LUM_MAX": 95,
+    "SAT_MIN": 0,
+    "SAT_MAX": 1000,
+    "HUE_MIN": 0,
+    "HUE_MAX": 360
+}
+
 
 # this is for controlling if it is using
 # all clusters,
@@ -70,15 +77,18 @@ N_CLUSTERS = 128
 IS_ONE_CLUSTER = False
 CLUSTER_NO = 63
 
+# cut the kids
+NO_KIDS = True
+
 # this controls whether it is using the linear or angle process
 IS_ANGLE_SORT = False
 
 # this control whether sorting by topics
 IS_TOPICS = False
-N_TOPICS = 88
+N_TOPICS = 30
 
 IS_ONE_TOPIC = True
-TOPIC_NO = 7
+TOPIC_NO = 2
 # 7 is isolated, 84 is business, 27 babies, 16 pointing
 # 37 is doctor << 35 covid
 # 45 is hands
@@ -100,7 +110,7 @@ JUMP_SHOT = False # jump to random file if can't find a run
 io = DataIO(IS_SSD)
 db = io.db
 # overriding DB for testing
-io.db["name"] = "ministock1023"
+io.db["name"] = "stock"
 METAS_FILE = "metas.csv"
 
 NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
@@ -161,10 +171,12 @@ elif IS_SEGONLY:
         FROM += " JOIN ImagesTopics it ON s.image_id = it.image_id "
         WHERE += " AND it.topic_score > .3"
         SELECT += ", it.topic_score" # add description here, after resegmenting
-    if IS_LUMINOSITY:
-        FROM += " JOIN ImagesBG ibg ON s.image_id = ibg.image_id "
+    if NO_KIDS:
+        WHERE += " AND s.age_id NOT IN (1,2,3) "
+    if HSV_CONTROL:
+        FROM += " JOIN ImagesBackground ibg ON s.image_id = ibg.image_id "
         # WHERE += " AND ibg.lum > .3"
-        SELECT += ", ibg.lum, ibg.lum_bb " # add description here, after resegmenting
+        SELECT += ", ibg.lum, ibg.lum_bb, ibg.hue, ibg.hue_bb, ibg.sat, ibg.sat_bb " # add description here, after resegmenting
         
     # # join to keywords
     # FROM += " JOIN ImagesKeywords ik ON s.image_id = ik.image_id JOIN Keywords k ON ik.keyword_id = k.keyword_id "
@@ -202,7 +214,7 @@ image_edge_multiplier = [1.5,1.5,2,1.5] # bigger portrait
 
 
 # construct my own objects
-sort = SortPose(motion, face_height_output, image_edge_multiplier,EXPAND, ONE_SHOT, JUMP_SHOT, TARGET_LUM)
+sort = SortPose(motion, face_height_output, image_edge_multiplier,EXPAND, ONE_SHOT, JUMP_SHOT, HSV_CONTROL)
 
 start_img_name = "median"
 start_site_image_id = None

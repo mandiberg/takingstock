@@ -15,7 +15,7 @@ from collections import Counter
 class SortPose:
     # """Sort image files based on head pose"""
 
-    def __init__(self, motion, face_height_output, image_edge_multiplier, EXPAND, ONE_SHOT, JUMP_SHOT, TARGET_LUM=None):
+    def __init__(self, motion, face_height_output, image_edge_multiplier, EXPAND, ONE_SHOT, JUMP_SHOT, HSV_CONTROL=None):
 
         self.mp_face_detection = mp.solutions.face_detection
         self.mp_drawing = mp.solutions.drawing_utils
@@ -44,7 +44,13 @@ class SortPose:
         self.BODY_LMS = [0, 13, 14, 15, 16, 19, 20]
 
         # luminosity parameters
-        self.TARGET_LUM = TARGET_LUM
+        if HSV_CONTROL:
+            self.LUM_MIN = HSV_CONTROL['LUM_MIN']
+            self.LUM_MAX = HSV_CONTROL['LUM_MAX']
+            self.SAT_MIN = HSV_CONTROL['SAT_MIN']
+            self.SAT_MAX = HSV_CONTROL['SAT_MAX']
+            self.HUE_MIN = HSV_CONTROL['HUE_MIN']
+            self.HUE_MAX = HSV_CONTROL['HUE_MAX']
         # set some defaults, looking forward
         self.XLOW = -20
         self.XHIGH = 1
@@ -179,8 +185,12 @@ class SortPose:
         print(segment.size)
         segment = segment.loc[((segment['face_z'] < self.ZHIGH) & (segment['face_z'] > self.ZLOW))]
         print(segment.size)
-        if self.TARGET_LUM:
-            segment = segment.loc[((segment['lum'] < self.TARGET_LUM+5) & (segment['lum'] > self.TARGET_LUM-5))]
+        if self.LUM_MIN:
+            segment = segment.loc[((segment['lum'] < self.LUM_MAX) & (segment['lum'] > self.LUM_MIN))]
+        if self.SAT_MIN:
+            segment = segment.loc[((segment['sat'] < self.SAT_MAX) & (segment['sat'] > self.SAT_MIN))]
+        if self.HUE_MIN:
+            segment = segment.loc[((segment['hue'] < self.HUE_MAX) & (segment['hue'] > self.HUE_MIN))]
 
         
         # removing cropX for now. Need to add that back into the data
