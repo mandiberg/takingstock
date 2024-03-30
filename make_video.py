@@ -24,7 +24,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
 # my ORM
-from my_declarative_base import Base, Clusters, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON, Images
+from my_declarative_base import Base, SegmentTable, Clusters, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON, Images
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import create_engine, text, MetaData, Table, Column, Numeric, Integer, VARCHAR, update, Float
@@ -43,10 +43,7 @@ CYCLECOUNT = 1
 # ROOT="/Users/michaelmandiberg/Documents/projects-active/facemap_production/"
 
 # keep this live, even if not SSD
-# SegmentTable_name = 'May25segment123side_to_side'
-
 SegmentTable_name = 'SegmentOct20'
-# SegmentTable_name = 'SegmentAug30Straightahead'  #actually straight ahead smile
 
 # SATYAM, this is MM specific
 # for when I'm using files on my SSD vs RAID
@@ -132,7 +129,7 @@ if IS_SEGONLY is not True:
     SAVE_SEGMENT = False
     SELECT = "DISTINCT(i.image_id), i.site_name_id, i.contentUrl, i.imagename, e.face_x, e.face_y, e.face_z, e.mouth_gap, e.face_landmarks, e.bbox, e.face_encodings68, i.site_image_id"
 
-    # don't need keywords if SegmentTable_name
+    # don't need keywords if SegmentTable
     # this is for MM segment table
     # FROM =f"Images i LEFT JOIN Encodings e ON i.image_id = e.image_id INNER JOIN {SegmentTable_name} seg ON i.site_image_id = seg.site_image_id"
     # WHERE = "e.is_face IS TRUE AND e.face_encodings IS NOT NULL AND e.bbox IS NOT NULL AND i.site_name_id = 8 AND i.age_id NOT IN (1,2,3,4)"
@@ -247,24 +244,6 @@ else:
 Session = sessionmaker(bind=engine)
 session = Session()
 Base = declarative_base()
-
-# to create new SegmentTable with variable as name
-class SegmentTable(Base):
-    __tablename__ = SegmentTable_name
-
-    image_id = Column(Integer, primary_key=True)
-    site_name_id = Column(Integer)
-    contentUrl = Column(String(300), nullable=False)
-    imagename = Column(String(200))
-    face_x = Column(DECIMAL(6, 3))
-    face_y = Column(DECIMAL(6, 3))
-    face_z = Column(DECIMAL(6, 3))
-    mouth_gap = Column(DECIMAL(6, 3))
-    face_landmarks = Column(BLOB)
-    bbox = Column(JSON)
-    face_encodings = Column(BLOB)
-    face_encodings68 = Column(BLOB)
-    site_image_id = Column(String(50), nullable=False)
 
 # construct mediapipe objects
 mp_drawing = mp.solutions.drawing_utils
@@ -979,7 +958,7 @@ def main():
                 Base.metadata.create_all(engine)
                 print(df_segment.size)
                 save_segment_DB(df_segment)
-                print("saved segment to ", SegmentTable_name)
+                print("saved segment to segmentTable")
                 quit()
 
             ### Set counter_dict ###
