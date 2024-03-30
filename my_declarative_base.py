@@ -162,6 +162,35 @@ class ImagesBackground(Base):
     lum_bb = Column(Float)
     sat_bb = Column(Float)
     
+class SegmentTable(Base):
+    __tablename__ = 'SegmentOct20'
+    
+    image_id = Column(Integer, primary_key=True)
+    site_name_id = Column(Integer, ForeignKey('site.site_name_id'))
+    site_image_id = Column(String(50))
+    contentUrl = Column(String(300), nullable=False)
+    imagename = Column(String(200))
+    description = Column(String(150))
+    age_id = Column(Integer, ForeignKey('age.age_id'))
+    gender_id = Column(Integer, ForeignKey('gender.gender_id'))
+    location_id = Column(Integer, ForeignKey('location.location_id'))
+    face_x = Column(DECIMAL(6, 3))
+    face_y = Column(DECIMAL(6, 3))
+    face_z = Column(DECIMAL(6, 3))
+    mouth_gap = Column(DECIMAL(6, 3))
+    face_landmarks = Column(BLOB)
+    bbox = Column(JSON)
+    face_encodings = Column(BLOB)
+    face_encodings68 = Column(BLOB)
+    site_image_id = Column(String(50), nullable=False)
+    keyword_list = Column(BLOB)  # Pickled list
+    tokenized_keyword_list = Column(BLOB)  # Pickled list
+    ethnicity_list = Column(BLOB)  # Pickled list
+
+    site = relationship("Site")
+    age = relationship("Age")
+    gender = relationship("Gender")
+    location = relationship("Location")
 
 # these are for MM use for using segments
 # class Clusters(Base):

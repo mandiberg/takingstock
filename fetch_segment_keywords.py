@@ -7,7 +7,7 @@ from sqlalchemy.ext.declarative import declarative_base
 # my ORM
 # from my_declarative_base import Base, Clusters, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON, Images
 
-from my_declarative_base import Base,Images, BagOfKeywords,Keywords,ImagesKeywords,ImagesEthnicity, Encodings, Column, Integer, String, DECIMAL, BLOB, ForeignKey, JSON  # Replace 'your_module' with the actual module where your SQLAlchemy models are defined
+from my_declarative_base import Base,Images, SegmentTable, BagOfKeywords,Keywords,ImagesKeywords,ImagesEthnicity, Encodings, Column, Integer, String, DECIMAL, BLOB, ForeignKey, JSON  # Replace 'your_module' with the actual module where your SQLAlchemy models are defined
 from mp_db_io import DataIO
 import pickle
 import numpy as np
@@ -29,8 +29,7 @@ db = io.db
 # io.db["name"] = "ministock"
 
 VERBOSE = False
-SegmentTable_name = 'SegmentOct20'
-NewSegment_name = 'SegmentMar21'
+SegmentHelper_name = 'SegmentMar21'
 TOKEN_COUNT_PATH = "token_counts.csv"
 
 # Create a database engine
@@ -71,59 +70,59 @@ title = 'Please choose your operation: '
 options = ['Create helper table', 'Fetch keywords list and make tokens', 'Fetch ethnicity list', 'Prune Table where is_face == None', 'move new segment image_ids to existing segment','fetch description/Image metas if None','count tokens']
 option, index = pick(options, title)
 
-LIMIT= 100
+LIMIT= 10000000
 # Initialize the counter
 counter = 0
 
 # Number of thread
 num_threads = io.NUMBER_OF_PROCESSES
 
-class NewSegmentTable(Base):
-    __tablename__ = NewSegment_name
+class SegmentHelper(Base):
+    __tablename__ = SegmentHelper_name
 
     image_id = Column(Integer, primary_key=True)
-    site_name_id = Column(Integer)
-    site_image_id = Column(String(50))
-    contentUrl = Column(String(300), nullable=False)
-    imagename = Column(String(200))
-    description = Column(String(150))
-    face_x = Column(DECIMAL(6, 3))
-    face_y = Column(DECIMAL(6, 3))
-    face_z = Column(DECIMAL(6, 3))
-    mouth_gap = Column(DECIMAL(6, 3))
-    face_landmarks = Column(BLOB)
-    bbox = Column(JSON)
-    face_encodings68 = Column(BLOB)
-    body_landmarks = Column(BLOB)    
-    site_image_id = Column(String(50), nullable=False)
-    keyword_list = Column(BLOB)  # Pickled list
-    tokenized_keyword_list = Column(BLOB)  # Pickled list
-    ethnicity_list = Column(BLOB)  # Pickled list
+    # site_name_id = Column(Integer)
+    # site_image_id = Column(String(50))
+    # contentUrl = Column(String(300), nullable=False)
+    # imagename = Column(String(200))
+    # description = Column(String(150))
+    # face_x = Column(DECIMAL(6, 3))
+    # face_y = Column(DECIMAL(6, 3))
+    # face_z = Column(DECIMAL(6, 3))
+    # mouth_gap = Column(DECIMAL(6, 3))
+    # face_landmarks = Column(BLOB)
+    # bbox = Column(JSON)
+    # face_encodings68 = Column(BLOB)
+    # body_landmarks = Column(BLOB)    
+    # site_image_id = Column(String(50), nullable=False)
+    # keyword_list = Column(BLOB)  # Pickled list
+    # tokenized_keyword_list = Column(BLOB)  # Pickled list
+    # ethnicity_list = Column(BLOB)  # Pickled list
 
 
 
-# to create new SegmentTable with variable as name
-class SegmentTable(Base):
-    __tablename__ = SegmentTable_name
+# # to create new SegmentTable with variable as name
+# class SegmentTable(Base):
+#     __tablename__ = SegmentTable_name
 
-    image_id = Column(Integer, primary_key=True)
-    site_name_id = Column(Integer)
-    site_image_id = Column(String(50))
-    contentUrl = Column(String(300), nullable=False)
-    imagename = Column(String(200))
-    description = Column(String(150))
-    face_x = Column(DECIMAL(6, 3))
-    face_y = Column(DECIMAL(6, 3))
-    face_z = Column(DECIMAL(6, 3))
-    mouth_gap = Column(DECIMAL(6, 3))
-    face_landmarks = Column(BLOB)
-    bbox = Column(JSON)
-    face_encodings = Column(BLOB)
-    face_encodings68 = Column(BLOB)
-    site_image_id = Column(String(50), nullable=False)
-    keyword_list = Column(BLOB)  # Pickled list
-    tokenized_keyword_list = Column(BLOB)  # Pickled list
-    ethnicity_list = Column(BLOB)  # Pickled list
+#     image_id = Column(Integer, primary_key=True)
+#     site_name_id = Column(Integer)
+#     site_image_id = Column(String(50))
+#     contentUrl = Column(String(300), nullable=False)
+#     imagename = Column(String(200))
+#     description = Column(String(150))
+#     face_x = Column(DECIMAL(6, 3))
+#     face_y = Column(DECIMAL(6, 3))
+#     face_z = Column(DECIMAL(6, 3))
+#     mouth_gap = Column(DECIMAL(6, 3))
+#     face_landmarks = Column(BLOB)
+#     bbox = Column(JSON)
+#     face_encodings = Column(BLOB)
+#     face_encodings68 = Column(BLOB)
+#     site_image_id = Column(String(50), nullable=False)
+#     keyword_list = Column(BLOB)  # Pickled list
+#     tokenized_keyword_list = Column(BLOB)  # Pickled list
+#     ethnicity_list = Column(BLOB)  # Pickled list
 
 def create_TempTable(row, lock, session):
     # image_id, bbox, face_x, face_y, face_z, mouth_gap, face_landmarks, face_encodings68, body_landmarks = row
@@ -131,13 +130,13 @@ def create_TempTable(row, lock, session):
     image_id = row[0]
 
     # Create a SegmentTable object
-    segment_table = NewSegmentTable(
+    segment_table = SegmentHelper(
         image_id=image_id
     )
 
 
     # # Create a SegmentTable object
-    # segment_table = NewSegmentTable(
+    # segment_table = SegmentHelper(
     #     image_id=image_id,
     #     bbox=bbox,
     #     face_x=face_x,
@@ -280,7 +279,7 @@ def fetch_images_metadata(image_id_with_no_meta, lock, session):
         .filter(SegmentTable.image_id == image_id_with_no_meta)
         .first()
     )
-
+    # if no description, add description, and also check for all metas
     if not existing_segment_entry.description:
         # Execute the query and fetch the result as a list of keyword_ids
         result_Images = session.execute(select_Images_metas_query).fetchall()
@@ -298,6 +297,20 @@ def fetch_images_metadata(image_id_with_no_meta, lock, session):
             existing_segment_entry.location_id=result_Images[0][7]
     else:
         if VERBOSE: print(f"NO ACTION image_id {image_id_with_no_meta} Metas already exists completely.")
+
+    if not existing_segment_entry.gender_id:
+        # Execute the query and fetch the result as a list of keyword_ids
+        result_Images = session.execute(select_Images_metas_query).fetchall()
+        # print(result_Images)
+        print(f"image_id {image_id_with_no_meta} Image Metas will be added.")
+        print(result_Images[0][5], result_Images[0][6], result_Images[0][7])
+        existing_segment_entry.age_id= result_Images[0][5]
+        existing_segment_entry.gender_id=result_Images[0][6]
+        existing_segment_entry.location_id=result_Images[0][7]
+        
+    else:
+        if VERBOSE: print(f"NO ACTION image_id {image_id_with_no_meta} Metas gender age location already exists completely.")
+
 
     if not existing_segment_entry.bbox:
         # Execute the query and fetch the result as a list of keyword_ids
@@ -553,8 +566,8 @@ if index == 0:
         # select(Encodings.image_id, Encodings.bbox, Encodings.face_x, Encodings.face_y, Encodings.face_z, Encodings.mouth_gap, Encodings.face_landmarks, Encodings.face_encodings68, Encodings.body_landmarks)
         select(Encodings.image_id)
         .select_from(Encodings)
-        .outerjoin(NewSegmentTable, Encodings.image_id == NewSegmentTable.image_id)
-        .filter(NewSegmentTable.image_id == None)
+        .outerjoin(SegmentHelper, Encodings.image_id == SegmentHelper.image_id)
+        .filter(SegmentHelper.image_id == None)
         .filter(and_(
             Encodings.face_x > -40,
             Encodings.face_x < -2,
@@ -613,7 +626,7 @@ elif index == 4:
     existing_image_ids = [row[0] for row in session.execute(existing_image_ids_query).fetchall()]
     print(len(existing_image_ids), "existing rows")   
 
-    new_image_ids_query = select(NewSegmentTable.image_id.distinct()).limit(LIMIT)
+    new_image_ids_query = select(SegmentHelper.image_id.distinct()).limit(LIMIT)
     new_image_ids = [row[0] for row in session.execute(new_image_ids_query).fetchall()]
     print(len(new_image_ids), "new rows")   
 
@@ -643,7 +656,7 @@ elif index == 5:
 
     # No Metas or description
     distinct_image_ids_query = select(SegmentTable.image_id.distinct())\
-        .filter(or_(SegmentTable.description == None, SegmentTable.bbox == None))\
+        .filter(or_(SegmentTable.description == None, SegmentTable.bbox == None, SegmentTable.gender_id == None))\
         .limit(LIMIT)
 
     # Execute the query and fetch the results
