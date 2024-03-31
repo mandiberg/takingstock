@@ -53,7 +53,7 @@ IS_SSD = True
 # This is for when you only have the segment table. RW SQL query
 IS_SEGONLY= True
 
-HSV_CONTROL = True # defining so it doesn't break below, if commented out
+HSV_CONTROL = False # defining so it doesn't break below, if commented out
 # This tells it to pull luminosity. Comment out if not using
 if HSV_CONTROL:
     HSV_BOUNDS = {
@@ -185,7 +185,7 @@ elif IS_SEGONLY:
         SELECT += ", it.topic_score" # add description here, after resegmenting
     if NO_KIDS:
         WHERE += " AND s.age_id NOT IN (1,2,3) "
-    if HSV_CONTROL:
+    if HSV_BOUNDS:
         FROM += " JOIN ImagesBackground ibg ON s.image_id = ibg.image_id "
         # WHERE += " AND ibg.lum > .3"
         SELECT += ", ibg.lum, ibg.lum_bb, ibg.hue, ibg.hue_bb, ibg.sat, ibg.sat_bb " # add description here, after resegmenting
@@ -195,7 +195,7 @@ elif IS_SEGONLY:
     # WHERE += " AND k.keyword_text LIKE 'surpris%' "
 
     # WHERE = "s.site_name_id != 1"
-    LIMIT = 2000
+    LIMIT = 200000
 
 
 

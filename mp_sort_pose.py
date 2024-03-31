@@ -1006,7 +1006,13 @@ class SortPose:
             # print(k)
             self.SHOT_CLOCK = 0 # reset the shot clock
 
-            # I need to do sort_dHSV here
+            # sort_dHSV returns a list of 128d dists sorted by the sum of 128d and HSVd
+            # this code uses that list to sort the dist_run_dict
+            dist = self.sort_dHSV(dist_run_dict, df_enc)
+            dist_run_dict_temp = {}
+            for d in dist:
+                dist_run_dict_temp[d] = dist_run_dict[d]
+            dist_run_dict = dist_run_dict_temp
 
             last_d_in_run = max(k)
             print("last_d_in_run", str(last_d_in_run))
