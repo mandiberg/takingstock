@@ -53,16 +53,26 @@ IS_SSD = True
 # This is for when you only have the segment table. RW SQL query
 IS_SEGONLY= True
 
+HSV_CONTROL = True # defining so it doesn't break below, if commented out
 # This tells it to pull luminosity. Comment out if not using
-HSV_CONTROL = None # defining so it doesn't break below, if commented out
-HSV_CONTROL = {
-    "LUM_MIN": 75,
-    "LUM_MAX": 95,
-    "SAT_MIN": 0,
-    "SAT_MAX": 1000,
-    "HUE_MIN": 0,
-    "HUE_MAX": 360
-}
+if HSV_CONTROL:
+    HSV_BOUNDS = {
+        "LUM_MIN": 0,
+        "LUM_MAX": 40,
+        "SAT_MIN": 0,
+        "SAT_MAX": 1000,
+        "HUE_MIN": 0,
+        "HUE_MAX": 360
+    }
+else:
+    HSV_BOUNDS = {
+        "LUM_MIN": 0,
+        "LUM_MAX": 100,
+        "SAT_MIN": 0,
+        "SAT_MAX": 1000,
+        "HUE_MIN": 0,
+        "HUE_MAX": 360
+    }
 
 
 # this is for controlling if it is using
@@ -76,7 +86,7 @@ CLUSTER_NO = 63
 
 # cut the kids
 NO_KIDS = True
-
+VERBOSE = True
 # this controls whether it is using the linear or angle process
 IS_ANGLE_SORT = False
 
@@ -85,7 +95,7 @@ IS_TOPICS = False
 N_TOPICS = 30
 
 IS_ONE_TOPIC = True
-TOPIC_NO = 2
+TOPIC_NO = [7]
 # 7 is isolated, 84 is business, 27 babies, 16 pointing
 # 37 is doctor << 35 covid
 # 45 is hands
@@ -101,7 +111,7 @@ SORT_TYPE = "128d"
 # SORT_TYPE = "planar_body"
 
 ONE_SHOT = False # take all files, based off the very first sort order.
-JUMP_SHOT = False # jump to random file if can't find a run
+JUMP_SHOT = True # jump to random file if can't find a run
 
 # I/O utils
 io = DataIO(IS_SSD)
@@ -180,7 +190,7 @@ elif IS_SEGONLY:
     # WHERE += " AND k.keyword_text LIKE 'surpris%' "
 
     # WHERE = "s.site_name_id != 1"
-    LIMIT = 200000
+    LIMIT = 2000
 
 
 
@@ -204,14 +214,14 @@ face_height_output = 500
 # units are ratio of faceheight
 # top, right, bottom, left
 # image_edge_multiplier = [1, 1, 1, 1] # just face
-image_edge_multiplier = [1.5,1.5,2,1.5] # bigger portrait
+# image_edge_multiplier = [1.5,1.5,2,1.5] # bigger portrait
 # image_edge_multiplier = [1.4,2.6,1.9,2.6] # wider for hands
 # image_edge_multiplier = [1.2,2.3,1.7,2.3] # medium for hands
-# image_edge_multiplier = [1.2, 1.2, 1.6, 1.2] # standard portrait
+image_edge_multiplier = [1.2, 1.2, 1.6, 1.2] # standard portrait
 
 
 # construct my own objects
-sort = SortPose(motion, face_height_output, image_edge_multiplier,EXPAND, ONE_SHOT, JUMP_SHOT, HSV_CONTROL)
+sort = SortPose(motion, face_height_output, image_edge_multiplier,EXPAND, ONE_SHOT, JUMP_SHOT, HSV_BOUNDS, VERBOSE)
 
 start_img_name = "median"
 start_site_image_id = None
@@ -267,7 +277,15 @@ def selectSQL(cluster_no=None, topic_no=None):
         if IS_CLUSTER or IS_ONE_CLUSTER:
             cluster +=f"AND ic.cluster_id = {str(cluster_no)} "
         if IS_TOPICS or IS_ONE_TOPIC:
-            cluster +=f"AND it.topic_id = {str(topic_no)} "
+            # cluster +=f"AND it.topic_id = {str(topic_no)} "
+            if isinstance(topic_no, list):
+                # Convert the list into a comma-separated string
+                topic_ids = ', '.join(map(str, topic_no))
+                # Use the IN operator to check if topic_id is in the list of values
+                cluster += f"AND it.topic_id IN ({topic_ids}) "
+            else:
+                # If topic_no is not a list, simply check for equality
+                cluster += f"AND it.topic_id = {str(topic_no)} "            
     else:
         cluster=""
     # print(f"cluster SELECT is {cluster}")
@@ -368,7 +386,6 @@ def sort_by_face_dist(df_enc, df_128_enc, df_33_lms):
             # it is now a dict of key=distance value=filepath
             print("going to get closest")
 
-            # TK
             # NEED TO GET IT TO DROP FROM df_33_lms in get_closest_df
             # need to send the df_enc with the same two keys through to get_closest
             dist, closest_dict, df_128_enc, df_33_lms = sort.get_closest_df(FIRST_ROUND, enc1,df_enc, df_128_enc, df_33_lms, sorttype=SORT_TYPE)
@@ -528,6 +545,12 @@ def cycling_order(CYCLECOUNT, sort):
 
 
 def prep_encodings(df_segment):
+    def create_hsv_list(row):
+        if row['hue_bb'] >= 0:
+            print("create_hsv_list bb", [row['hue_bb'], row['sat_bb'], row['lum_bb']])
+            return [row['hue_bb'], row['sat_bb'], row['lum_bb']]
+        else:
+            return [row['hue'], row['sat'], row['lum']]    
     # format the encodings for sorting by distance
     # df_enc will be the df with bbox, site_name_id, etc, keyed to filename
     # df_128_enc will be 128 colums of encodings, keyed to filename
@@ -538,13 +561,17 @@ def prep_encodings(df_segment):
     col4="face_landmarks"
     col5="bbox"
     col6="body_landmarks"
+    col7="hsv"
     # df_enc=pd.DataFrame(columns=[col1, col2, col3, col4, col5])
-    df_enc=pd.DataFrame(columns=[col1, col2, col3, col4, col5, col6])
-    df_enc = pd.DataFrame({col1: df_segment['imagename'], col2: df_segment['face_encodings68'].apply(lambda x: np.array(x)), 
+    df_enc=pd.DataFrame(columns=[col1, col2, col3, col4, col5, col6, col7])
+    df_enc = pd.DataFrame({
+                col1: df_segment['imagename'], col2: df_segment['face_encodings68'].apply(lambda x: np.array(x)), 
                 # col3: df_segment['site_name_id'], col4: df_segment['face_landmarks'], col5: df_segment['bbox']})
-                col3: df_segment['site_name_id'], col4: df_segment['face_landmarks'], col5: df_segment['bbox'], col6: df_segment['body_landmarks'] })
+                col3: df_segment['site_name_id'], col4: df_segment['face_landmarks'], col5: df_segment['bbox'], col6: df_segment['body_landmarks'], 
+                col7: df_segment.apply(lambda row: create_hsv_list(row), axis=1),
+                })
     df_enc.set_index(col1, inplace=True)
-
+    if VERBOSE: print(df_enc)
     # Create column names for the 128 encoding columns
     encoding_cols = [f"encoding{i}" for i in range(128)]
     lms_cols = [f"lm{i}" for i in range(33)]
@@ -558,11 +585,11 @@ def prep_encodings(df_segment):
     # lms_concat = pd.concat([df_enc, lms_expanded], axis=1)
 
     # make a separate df that just has the encodings
-    df_128_enc = enc_concat.drop([col2, col3, col4, col5, col6], axis=1)
+    df_128_enc = enc_concat.drop([col2, col3, col4, col5, col6, col7], axis=1)
     # df_33_lms = lms_concat.drop([col2, col3, col4, col5, col6], axis=1)
-    df_33_lms = df_enc.drop([col2, col3, col4, col5], axis=1)
+    df_33_lms = df_enc.drop([col2, col3, col4, col5, col7], axis=1)
 
-    print("df_33_lms", df_33_lms)
+    if VERBOSE: print("df_33_lms", df_33_lms)
     return df_enc, df_128_enc, df_33_lms
 
 def compare_images(last_image, img, face_landmarks, bbox):
@@ -579,25 +606,38 @@ def compare_images(last_image, img, face_landmarks, bbox):
     # next step is to test to see if mp can recognize a face in the image
     # if no face, a bad blend, try again with i+2, etc. 
     if cropped_image is not None:
-        # print("have a cropped image trying to save", cropped_image.shape)
+        if VERBOSE: print("have a cropped image trying to save", cropped_image.shape)
         # try:
         #     print("last_image is ", type(last_image))
         # except:
         #     print("couldn't test last_image")
         try:
             if not sort.counter_dict["first_run"]:
-                # print("testing is_face")
+                if VERBOSE:  print("testing is_face")
                 if SORT_TYPE == "planar_body":
                     # skipping test_pair for body, b/c it is meant for face
                     is_face = True
                 else:
                     is_face = sort.test_pair(last_image, cropped_image)
                     if is_face:
-                        # print("same person, testing mse")
+                        if VERBOSE: print("testing mse to see if same image")
                         face_diff = sort.unique_face(last_image,cropped_image)
-                        # print ("mse ",mse)
+                        if VERBOSE: print ("mse ", mse)
                     else:
                         print("failed is_face test")
+                        # use cv2 to place last_image and cropped_image side by side in a new image
+
+
+                        height = max(last_image.shape[0], cropped_image.shape[0])
+                        last_image = cv2.resize(last_image, (last_image.shape[1], height))
+                        cropped_image = cv2.resize(cropped_image, (cropped_image.shape[1], height))
+
+                        # Concatenate images horizontally
+                        combined_image = cv2.hconcat([last_image, cropped_image])
+                        outpath_notface = os.path.join(sort.counter_dict["outfolder"],"notface",sort.counter_dict['last_description'][:30]+".jpg")
+                        sort.not_make_face.append(outpath_notfacecombined_image)
+                        # Save the new image
+
             else:
                 print("first round, skipping the pair test")
         except:
@@ -854,6 +894,7 @@ def process_linear(start_img_name, df_segment, cluster_no, sort):
     # test to see if they make good faces
     img_list = linear_test_df(df_sorted,df_segment,cluster_no)
     write_images(img_list)
+    write_images(sort.not_make_face)
     print_counters()
 
 
@@ -931,7 +972,6 @@ def main():
         if not df.empty:
 
             # Apply the unpickling function to the 'face_encodings' column
-            # TK this is where I will change face_encodings to the variations
             df['face_encodings68'] = df['face_encodings68'].apply(unpickle_array)
             df['face_landmarks'] = df['face_landmarks'].apply(unpickle_array)
             df['body_landmarks'] = df['body_landmarks'].apply(unpickle_array)
@@ -948,6 +988,7 @@ def main():
 
             # make the segment based on settings
             print("going to segment")
+            # need to make sure has HSV here
             df_segment = sort.make_segment(df)
             print("made segment")
 
@@ -977,7 +1018,7 @@ def main():
                 # image_id = insert_dict['image_id']
                 # can I filter this by site_id? would that make it faster or slower? 
 
-                # TK temp fix
+                # temp fix
                 results = session.query(Clusters).filter(Clusters.cluster_id==cluster_no).first()
 
 

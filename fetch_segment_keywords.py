@@ -570,7 +570,7 @@ if index == 0:
         .filter(SegmentHelper.image_id == None)
         .filter(and_(
             Encodings.face_x > -40,
-            Encodings.face_x < -2,
+            Encodings.face_x < -27,
             Encodings.face_y > -4,
             Encodings.face_y < 4,
             Encodings.face_z > -4,

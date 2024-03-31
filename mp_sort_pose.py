@@ -15,7 +15,7 @@ from collections import Counter
 class SortPose:
     # """Sort image files based on head pose"""
 
-    def __init__(self, motion, face_height_output, image_edge_multiplier, EXPAND, ONE_SHOT, JUMP_SHOT, HSV_CONTROL=None):
+    def __init__(self, motion, face_height_output, image_edge_multiplier, EXPAND, ONE_SHOT, JUMP_SHOT, HSV_CONTROL=None, VERBOSE=True):
 
         self.mp_face_detection = mp.solutions.face_detection
         self.mp_drawing = mp.solutions.drawing_utils
@@ -24,11 +24,11 @@ class SortPose:
         self.MAXDIST = 0.7
         self.MINDIST = .45
         self.MINBODYDIST = .05
-        self.CUTOFF = 1000
+        self.CUTOFF = 100000
         self.FACE_DIST = 15
 
         # maximum allowable scale up
-        self.resize_max = 2.99
+        self.resize_max = 5.99
         self.image_edge_multiplier = image_edge_multiplier
         self.face_height_output = face_height_output
         # takes base image size and multiplies by avg of multiplier
@@ -42,7 +42,12 @@ class SortPose:
         self.JUMP_SHOT = JUMP_SHOT
         self.SHOT_CLOCK = 0 
         self.BODY_LMS = [0, 13, 14, 15, 16, 19, 20]
+        self.VERBOSE = VERBOSE
 
+        # place to save bad images
+        self.not_make_face = []
+        self.same_img = []
+        
         # luminosity parameters
         if HSV_CONTROL:
             self.LUM_MIN = HSV_CONTROL['LUM_MIN']
@@ -83,6 +88,8 @@ class SortPose:
             # self.SORT = 'mouth_gap'
             self.ROUND = 0
         elif motion['forward_smile'] == True:
+            # self.XLOW = -33
+            # self.XHIGH = -27
             self.XLOW = -33
             self.XHIGH = -27
             self.YLOW = -2
@@ -185,6 +192,7 @@ class SortPose:
         print(segment.size)
         segment = segment.loc[((segment['face_z'] < self.ZHIGH) & (segment['face_z'] > self.ZLOW))]
         print(segment.size)
+
         if self.LUM_MIN:
             segment = segment.loc[((segment['lum'] < self.LUM_MAX) & (segment['lum'] > self.LUM_MIN))]
         if self.SAT_MIN:
@@ -465,7 +473,7 @@ class SortPose:
                 blended_face = self.is_face(blend)
                 # print('blended is_face', blended_face)
                 if blended_face:
-                    print('test_pair: is_face True! adding it')
+                    if self.VERBOSE: print('test_pair: is_face True! adding it')
                     return True
                 else:
                     print('test_pair: skipping this one')
@@ -710,34 +718,31 @@ class SortPose:
             toobig = True
 
         if not toobig:
-            print("crop_image: going to crop because too big is ", toobig)
+            if self.VERBOSE: print("crop_image: going to crop because too big is ", toobig)
             # print (self.padding_points)
             #set main points for drawing/cropping
 
             #moved this back up so it would NOT     draw map on both sets of images
             try:
-                print(type(self.image))
+                if self.VERBOSE: print(type(self.image))
                 # image_arr = numpy.array(self.image)
                 # print(type(image_arr))
                 cropped_actualsize_image = self.image[self.simple_crop[0]:self.simple_crop[2], self.simple_crop[3]:self.simple_crop[1]]
-                print("cropped_actualsize_image.shape")
-                print(cropped_actualsize_image.shape)
+                if self.VERBOSE: print("cropped_actualsize_image.shape", cropped_actualsize_image.shape)
                 resize = self.output_dims[0]/cropped_actualsize_image.shape[0] 
-                print(resize)
+                if self.VERBOSE: print("resize", resize)
                 if resize > self.resize_max:
-                    print("toosmall")
+                    if self.VERBOSE: print("toosmall")
                     self.toosmall_count += 1
                     return None
-                print("about to resize")
+                if self.VERBOSE: print("about to resize")
                 # crop[0] is top, and clockwise from there. Right is 1, Bottom is 2, Left is 3. 
-                print(self.output_dims)
+                if self.VERBOSE: print("output dims", self.output_dims)
                 cropped_image = cv2.resize(cropped_actualsize_image, (self.output_dims), interpolation=cv2.INTER_LINEAR)
-                print("image actually cropped")
+                if self.VERBOSE: print("image actually cropped")
             except:
                 cropped_image = None
-                print("not cropped_image loop")
-
-                print(self.h, self.w)
+                print("not cropped_image loop", self.h, self.w)
 
         else:
             cropped_image = None
@@ -876,7 +881,29 @@ class SortPose:
         # print(this_dict[1][0])
         # print(d)
         return d
-        
+
+    def sort_dHSV(self, dist_dict, df_enc):
+        # for a in dist_dict:
+        #     print(a)
+        print(dist_dict)
+        print(df_enc.columns)
+        print(df_enc)
+        quit()
+        #     hue = df_enc.loc[index, "hue"]       
+        #     print ("the winner is: ", str(dist[0]), dist_dict[dist[0]])
+        # #     print(len(dist))
+        #     self.counter_dict["last_image"]=dist_dict[dist[0]]
+        #     if sorttype == "128d":
+        #         self.counter_dict["last_image_enc"]=enc2_dict[dist[0]]
+        #     elif sorttype == "planar":
+        #         print("not setting enc2_dict")
+        #     elif sorttype == "planar_body":
+        #         print("not setting enc2_dict")
+        #     # make dict of one and to return it
+        #     # dist_single_dict[dist[0]] = dist_dict[dist[0]]
+        #     dist_single_dict = {dist[0]: dist_dict[dist[0]]}
+        #     return dist[0], dist_single_dict, df_128_enc, df_33_lms
+
 
     def get_closest_df(self, FIRST_ROUND, enc1, df_enc, df_128_enc, df_33_lms, sorttype="128d"):
         dist=[]
@@ -961,6 +988,8 @@ class SortPose:
             # print(k)
             self.SHOT_CLOCK = 0 # reset the shot clock
 
+            # I need to do sort_dHSV here
+
             last_d_in_run = max(k)
             print("last_d_in_run", str(last_d_in_run))
             # print(enc2_dict[last_d_in_run])
@@ -976,6 +1005,10 @@ class SortPose:
         else:
             # print("going to find a winner")
             dist.sort()
+            
+            # I need to do sort_dHSV here
+            dist = self.sort_dHSV(dist_dict, df_enc)
+
             print("length of dist -- how many enc are left in the mix")
             # print(dist)
             print(len(dist))
