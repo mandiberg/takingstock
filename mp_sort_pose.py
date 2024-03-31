@@ -179,7 +179,8 @@ class SortPose:
             "start_site_image_id":start_site_image_id,
             "last_image":None,
             "last_description":None,
-            "last_image_enc":None
+            "last_image_enc":None,
+            "last_image_hsv":None
 
         }
 
@@ -882,27 +883,44 @@ class SortPose:
         # print(d)
         return d
 
+    def calc_hue_with_circle(self, hsv1, hsv2):
+        # print("- calc_hue_with_circle -")
+        # hue is between 0-360 degrees (which is scaled to 0-1 here)
+        # hue is a circle, so we need to go both ways around the circle and pick the smaller one
+        dist_reg = abs(hsv1[0] - hsv2[0])
+        dist_offset = abs((hsv1[0]) + (1-hsv2[0]))
+        # print(dist_reg, dist_offset)
+
+        circle_hue_dist = min(dist_reg, dist_offset)
+        # print("circle_hue", circle_hue_dist)
+        hsv2[0] = circle_hue_dist
+        # print("hsv2", hsv2)
+        return hsv2
+
     def sort_dHSV(self, dist_dict, df_enc):
-        # for a in dist_dict:
-        #     print(a)
-        print(dist_dict)
-        print(df_enc.columns)
-        print(df_enc)
-        quit()
-        #     hue = df_enc.loc[index, "hue"]       
-        #     print ("the winner is: ", str(dist[0]), dist_dict[dist[0]])
-        # #     print(len(dist))
-        #     self.counter_dict["last_image"]=dist_dict[dist[0]]
-        #     if sorttype == "128d":
-        #         self.counter_dict["last_image_enc"]=enc2_dict[dist[0]]
-        #     elif sorttype == "planar":
-        #         print("not setting enc2_dict")
-        #     elif sorttype == "planar_body":
-        #         print("not setting enc2_dict")
-        #     # make dict of one and to return it
-        #     # dist_single_dict[dist[0]] = dist_dict[dist[0]]
-        #     dist_single_dict = {dist[0]: dist_dict[dist[0]]}
-        #     return dist[0], dist_single_dict, df_128_enc, df_33_lms
+        hsv_dist_dict = {}
+        for item in dist_dict:
+            # print("item", item)
+            # for testing
+            # if not self.counter_dict["last_image_hsv"]:
+            #     self.counter_dict["last_image_hsv"] = [.1,.1,.85]
+            if not self.counter_dict["last_image_hsv"]:
+                # this would be for first run
+                print("assigned first run hsv_dist values", item)
+                hsv_dist = item
+            else:
+                # print("in circle else")
+                hsv_converted = self.calc_hue_with_circle(self.counter_dict["last_image_hsv"], df_enc.loc[dist_dict[item], "hsv"])
+                hsv_dist = self.get_d(self.counter_dict["last_image_hsv"], hsv_converted)
+            self.counter_dict["last_image_hsv"] =df_enc.loc[dist_dict[item], "hsv"]
+            # print(hsv_dist)
+            hsv_dist_dict[item] = hsv_dist
+        # print(hsv_dist_dict)
+
+        # Sort the dictionary based on the sum of the key and value
+        sorted_keys_dHSV = [k for k, v in sorted(hsv_dist_dict.items(), key=lambda item: item[0] + item[1])]
+
+        return sorted_keys_dHSV
 
 
     def get_closest_df(self, FIRST_ROUND, enc1, df_enc, df_128_enc, df_33_lms, sorttype="128d"):
@@ -1004,9 +1022,9 @@ class SortPose:
         
         else:
             # print("going to find a winner")
-            dist.sort()
+            # dist.sort()
             
-            # I need to do sort_dHSV here
+            # sort_dHSV returns a list of 128d dists sorted by the sum of 128d and HSVd
             dist = self.sort_dHSV(dist_dict, df_enc)
 
             print("length of dist -- how many enc are left in the mix")

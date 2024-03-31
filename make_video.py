@@ -73,7 +73,12 @@ else:
         "HUE_MIN": 0,
         "HUE_MAX": 360
     }
-
+HSV_WEIGHTS = {
+    # converts everything to a 0-1 scale
+    "LUM": .01,
+    "SAT": 1,
+    "HUE": 0.002777777778
+}
 
 # this is for controlling if it is using
 # all clusters,
@@ -547,10 +552,10 @@ def cycling_order(CYCLECOUNT, sort):
 def prep_encodings(df_segment):
     def create_hsv_list(row):
         if row['hue_bb'] >= 0:
-            print("create_hsv_list bb", [row['hue_bb'], row['sat_bb'], row['lum_bb']])
-            return [row['hue_bb'], row['sat_bb'], row['lum_bb']]
+            # print("create_hsv_list bb", [row['hue_bb'], row['sat_bb'], row['lum_bb']])
+            return [row['hue_bb']*HSV_WEIGHTS["HUE"], row['sat_bb']*HSV_WEIGHTS["SAT"], row['lum_bb']*HSV_WEIGHTS["LUM"]]
         else:
-            return [row['hue'], row['sat'], row['lum']]    
+            return [row['hue']*HSV_WEIGHTS["HUE"], row['sat']*HSV_WEIGHTS["SAT"], row['lum']*HSV_WEIGHTS["LUM"]]    
     # format the encodings for sorting by distance
     # df_enc will be the df with bbox, site_name_id, etc, keyed to filename
     # df_128_enc will be 128 colums of encodings, keyed to filename
