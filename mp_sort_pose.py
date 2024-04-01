@@ -883,18 +883,21 @@ class SortPose:
         # print(d)
         return d
 
-    def calc_hue_with_circle(self, hsv1, hsv2):
-        # print("- calc_hue_with_circle -")
+    def normalize_hsv(self, hsv1, hsv2):
+        # print("- normalize_hsv -")
+
         # hue is between 0-360 degrees (which is scaled to 0-1 here)
         # hue is a circle, so we need to go both ways around the circle and pick the smaller one
         dist_reg = abs(hsv1[0] - hsv2[0])
         dist_offset = abs((hsv1[0]) + (1-hsv2[0]))
-        # print(dist_reg, dist_offset)
-
         circle_hue_dist = min(dist_reg, dist_offset)
-        # print("circle_hue", circle_hue_dist)
-        hsv2[0] = circle_hue_dist
-        # print("hsv2", hsv2)
+
+        # hue is only relevant if saturation is high
+        hsv2[0] = circle_hue_dist * hsv2[1]
+
+        # saturation is only relevant if value is middle or low
+        hsv2[1] =  hsv2[1] * (1 - hsv2[2])
+
         return hsv2
 
     def sort_dHSV(self, dist_dict, df_enc):
@@ -910,7 +913,7 @@ class SortPose:
                 hsv_dist = item
             else:
                 # print("in circle else")
-                hsv_converted = self.calc_hue_with_circle(self.counter_dict["last_image_hsv"], df_enc.loc[dist_dict[item], "hsv"])
+                hsv_converted = self.normalize_hsv(self.counter_dict["last_image_hsv"], df_enc.loc[dist_dict[item], "hsv"])
                 hsv_dist = self.get_d(self.counter_dict["last_image_hsv"], hsv_converted)
             self.counter_dict["last_image_hsv"] =df_enc.loc[dist_dict[item], "hsv"]
             # print(hsv_dist)
