@@ -22,7 +22,7 @@
 from sqlalchemy import create_engine, select, delete, and_
 from sqlalchemy.orm import sessionmaker,scoped_session, declarative_base
 from sqlalchemy.pool import NullPool
-from my_declarative_base import Images,ImagesBackground,Site  # Replace 'your_module' with the actual module where your SQLAlchemy models are defined
+# from my_declarative_base import Images,ImagesBackground, SegmentTable, Site 
 from mp_db_io import DataIO
 import pickle
 import numpy as np
@@ -36,13 +36,13 @@ import mediapipe as mp
 import shutil
 import pandas as pd
 import json
-from my_declarative_base import Base, Clusters, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON, Images
+from my_declarative_base import Base, Clusters, Images,ImagesBackground, SegmentTable, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON, Images
 #from sqlalchemy.ext.declarative import declarative_base
 from mp_sort_pose import SortPose
 
 Base = declarative_base()
 USE_BBOX=True
-
+VERBOSE = True
 
 # MM controlling which folder to use
 IS_SSD = True
@@ -60,6 +60,7 @@ get_background_mp = mp.solutions.selfie_segmentation
 get_bg_segment = get_background_mp.SelfieSegmentation()
 
 image_edge_multiplier = [1.5,1.5,2,1.5] # bigger portrait
+image_edge_multiplier_sm = [1.2, 1.2, 1.6, 1.2] # standard portrait
 face_height_output = 500
 motion = {
     "side_to_side": False,
@@ -74,7 +75,7 @@ EXPAND = False
 ONE_SHOT = False # take all files, based off the very first sort order.
 JUMP_SHOT = False # jump to random file if can't find a run
 
-sort = SortPose(motion, face_height_output, image_edge_multiplier,EXPAND, ONE_SHOT, JUMP_SHOT)
+sort = SortPose(motion, face_height_output, image_edge_multiplier_sm,EXPAND, ONE_SHOT, JUMP_SHOT)
 
 
 # if USE_BBOX:FOLDER_PATH = os.path.join(io.ROOT_PROD, "bg_color/0900_bb")
@@ -93,7 +94,7 @@ title = 'Please choose your operation: '
 options = ['Create table', 'Fetch BG color stats',"test sorting"]
 option, index = pick(options, title)
 
-LIMIT= 1000000
+LIMIT= 10
 # Initialize the counter
 counter = 0
 
@@ -101,60 +102,60 @@ counter = 0
 #num_threads = io.NUMBER_OF_PROCESSES
 num_threads = 1
 
-class SegmentOct20(Base):
-    __tablename__ = 'SegmentOct20'
-    seg_image_id=Column(Integer,primary_key=True, autoincrement=True)
-    image_id = Column(Integer)
-    site_name_id = Column(Integer)
-    site_image_id = Column(String(50),nullable=False)
-    contentUrl = Column(String(300), nullable=False)
-    imagename = Column(String(200))
-    age_id = Column(Integer)
-    age_detail_id = Column(Integer)
-    gender_id = Column(Integer)
-    location_id = Column(Integer)
-    face_x = Column(DECIMAL(6, 3))
-    face_y = Column(DECIMAL(6, 3))
-    face_z = Column(DECIMAL(6, 3))
-    mouth_gap = Column(DECIMAL(6, 3))
-    face_landmarks = Column(BLOB)
-    bbox = Column(JSON)
-    face_encodings = Column(BLOB)
-    face_encodings68 = Column(BLOB)
-    body_landmarks = Column(BLOB)
+# class SegmentTable(Base):
+#     __tablename__ = 'SegmentTable'
+#     seg_image_id=Column(Integer,primary_key=True, autoincrement=True)
+#     image_id = Column(Integer)
+#     site_name_id = Column(Integer)
+#     site_image_id = Column(String(50),nullable=False)
+#     contentUrl = Column(String(300), nullable=False)
+#     imagename = Column(String(200))
+#     age_id = Column(Integer)
+#     age_detail_id = Column(Integer)
+#     gender_id = Column(Integer)
+#     location_id = Column(Integer)
+#     face_x = Column(DECIMAL(6, 3))
+#     face_y = Column(DECIMAL(6, 3))
+#     face_z = Column(DECIMAL(6, 3))
+#     mouth_gap = Column(DECIMAL(6, 3))
+#     face_landmarks = Column(BLOB)
+#     bbox = Column(JSON)
+#     face_encodings = Column(BLOB)
+#     face_encodings68 = Column(BLOB)
+#     body_landmarks = Column(BLOB)
 
 class HelperTable(Base):
     __tablename__ = 'SegmentHelperMar23_headon'
     seg_image_id=Column(Integer,primary_key=True, autoincrement=True)
     image_id = Column(Integer, primary_key=True, autoincrement=True)
 
-def get_bg_folder(folder_path):
-    for filename in os.listdir(folder_path):
-        if filename.endswith(".jpg") or filename.endswith(".jpeg") or filename.endswith(".png"):
-            file_path = os.path.join(folder_path, filename)
-            hue, lum = get_bg_hue_lum(file_path)
-            results.append({"file": filename, "hue": hue, "luminosity": lum})
+# def get_bg_folder(folder_path):
+#     for filename in os.listdir(folder_path):
+#         if filename.endswith(".jpg") or filename.endswith(".jpeg") or filename.endswith(".png"):
+#             file_path = os.path.join(folder_path, filename)
+#             hue, lum = get_bg_hue_lum(file_path)
+#             results.append({"file": filename, "hue": hue, "luminosity": lum})
 
-    # Create DataFrame from results and sort by SORTYPE
-    df = pd.DataFrame(results)
-    df_sorted = df.sort_values(by=SORTTYPE)
+#     # Create DataFrame from results and sort by SORTYPE
+#     df = pd.DataFrame(results)
+#     df_sorted = df.sort_values(by=SORTTYPE)
 
-    print(df_sorted)
+#     print(df_sorted)
 
-    # Iterate over sorted DataFrame and save copies of each file to output folder
-    counter = 0
-    total = len(df_sorted)
+#     # Iterate over sorted DataFrame and save copies of each file to output folder
+#     counter = 0
+#     total = len(df_sorted)
 
-    for index, row in df_sorted.iterrows():
-        old_file_path = os.path.join(folder_path, row["file"])
-        filename = f"{str(counter)}_{int(row[SORTTYPE])}_{row['file']}"
-        print(filename)
-        new_file_path = os.path.join(output_folder, filename)
-        shutil.copyfile(old_file_path, new_file_path)
-        print(f"File '{row['file']}' copied to '{filename}'")
-        counter += 1
+#     for index, row in df_sorted.iterrows():
+#         old_file_path = os.path.join(folder_path, row["file"])
+#         filename = f"{str(counter)}_{int(row[SORTTYPE])}_{row['file']}"
+#         print(filename)
+#         new_file_path = os.path.join(output_folder, filename)
+#         shutil.copyfile(old_file_path, new_file_path)
+#         print(f"File '{row['file']}' copied to '{filename}'")
+#         counter += 1
 
-    print("Files saved to", output_folder)
+#     print("Files saved to", output_folder)
 
 def sort_files_onBG():
     # Define the select statement to fetch all columns from the table
@@ -222,44 +223,51 @@ def sort_files_onBG():
 
 
 def get_bg_hue_lum(img,bbox=None,face_landmarks=None):
+    hue = sat = val = lum = lum_torso = None
     if bbox:
         try:
-            # SSJ: sort out the bbox string/dict/object issue
             if type(bbox)==str:
                 bbox=json.loads(bbox)
-                print("bbox type", type(bbox))
+                if VERBOSE: print("bbox type", type(bbox))
             #sample_img=sample_img[bbox['top']:bbox['bottom'],bbox['left']:bbox['right'],:]
             # passing in bbox as a str
             img = sort.crop_image(img, face_landmarks, bbox)
             #print(type(sample_img),"@@@@@@@@@@@@")
-            if img is None: return -1,-1,-1 ## if TOO_BIG==true, checking if cropped image is empty
+            if img is None: return -1,-1,-1,-1,-1 ## if TOO_BIG==true, checking if cropped image is empty
         except:
-            print("FAILED CROPPING, bad bbox",bbox)
-            return -2,-2,-2
+            if VERBOSE: print("FAILED CROPPING, bad bbox",bbox)
+            return -2,-2,-2,-2,-2
         print("bbox['bottom'], ", bbox['bottom'])
 
-    result = get_bg_segment.process(img[:,:,::-1])
-    mask=np.repeat((1-result.segmentation_mask)[:, :, np.newaxis], 3, axis=2)
+    result = get_bg_segment.process(img[:,:,::-1]) #convert RBG to BGR then process with mp
+    mask=np.repeat((1-result.segmentation_mask)[:, :, np.newaxis], 3, axis=2) 
+    mask_torso=np.repeat((result.segmentation_mask)[:, :, np.newaxis], 3, axis=2) 
+
     masked_img=mask*img[:,:,::-1]/255 ##RGB format
+    masked_img_torso=mask_torso*img[:,:,::-1]/255 ##RGB format
+
     # Identify black pixels where R=0, G=0, B=0
     black_pixels_mask = np.all(masked_img == [0, 0, 0], axis=-1)
-
-    if face_landmarks:
-        face_2d_dict = sort.get_face_2d_dict(face_landmarks)
-        print("face_2d_dict chin", face_2d_dict[152])
-    else: 
-        print("no face landmarks")
+    black_pixels_mask_torso = np.all(masked_img_torso == [0, 0, 0], axis=-1)
 
     # Filter out black pixels and compute the mean color of the remaining pixels
-    mean_color = np.mean(masked_img[~black_pixels_mask], axis=0)[np.newaxis,np.newaxis,:] # ~ is negate
+    mean_color = np.mean(masked_img[~black_pixels_mask], axis=0)[np.newaxis,np.newaxis,:] # ~ means negate/remove
     hue=cv2.cvtColor(mean_color, cv2.COLOR_RGB2HSV)[0,0,0]
-
-    # SJ: why isn't sat being stored in the database
     sat = cv2.cvtColor(mean_color, cv2.COLOR_RGB2HSV)[0, 0, 1]
-    # print("saturation is", sat)
+    val = cv2.cvtColor(mean_color, cv2.COLOR_RGB2HSV)[0, 0, 2]
     lum=cv2.cvtColor(mean_color, cv2.COLOR_RGB2LAB)[0,0,0]
-    print("hue,lum,sat", hue,lum,sat)
-    return hue,lum,sat
+
+    if VERBOSE: print("NOTmasked_img_torso size", masked_img_torso.shape, black_pixels_mask_torso.shape)
+    if bbox:
+        # crop black_pixels_mask_torso to include only the pixels from bbox['bottom'] down
+        masked_img_torso = masked_img_torso[bbox['bottom']:]
+        black_pixels_mask_torso = black_pixels_mask_torso[bbox['bottom']:]
+    if VERBOSE: print("masked_img_torso size", masked_img_torso.shape, black_pixels_mask_torso.shape)
+    mean_color = np.mean(masked_img_torso[~black_pixels_mask_torso], axis=0)[np.newaxis,np.newaxis,:] # ~ is negate
+    lum_torso=cv2.cvtColor(mean_color, cv2.COLOR_RGB2LAB)[0,0,0]
+
+    if VERBOSE: print("HSV, lum", hue,sat,val,lum, lum_torso)
+    return hue,sat,val,lum,lum_torso
 
 
 def create_table(row, lock, session):
@@ -290,8 +298,8 @@ def create_table(row, lock, session):
 def get_filename(target_image_id, return_endfile=False):
     ## get the image somehow
     select_image_ids_query = (
-        select(SegmentOct20.site_name_id,SegmentOct20.imagename)
-        .filter(SegmentOct20.image_id == target_image_id)
+        select(SegmentTable.site_name_id,SegmentTable.imagename)
+        .filter(SegmentTable.image_id == target_image_id)
     )
 
     result = session.execute(select_image_ids_query).fetchall()
@@ -306,8 +314,8 @@ def get_filename(target_image_id, return_endfile=False):
 
 def get_bbox(target_image_id):
     select_image_ids_query = (
-        select(SegmentOct20.bbox,SegmentOct20.face_landmarks)
-        .filter(SegmentOct20.image_id == target_image_id)
+        select(SegmentTable.bbox,SegmentTable.face_landmarks)
+        .filter(SegmentTable.image_id == target_image_id)
     )
     result = session.execute(select_image_ids_query).fetchall()
     bbox=result[0][0]
@@ -332,11 +340,11 @@ def fetch_BG_stat(target_image_id, lock, session):
     ########cv.imread reads it and produces None, because it reads "hands" not "hand's"
     if img is None:return
     #####################
-    hue,lum,sat=get_bg_hue_lum(img,bbox,facelandmark)    
+    hue,sat,val,lum, lum_torso=get_bg_hue_lum(img,bbox,facelandmark)    
     if USE_BBOX:
         #will do a second round for bbox with same cv2 image
         bbox,facelandmark=get_bbox(target_image_id)
-        hue_bb,lum_bb,sat_bb=get_bg_hue_lum(img,bbox,facelandmark)
+        hue_bb,sat_bb, val_bb, lum_bb, lum_torso_bb =get_bg_hue_lum(img,bbox,facelandmark)
     
     print("sat values before insert", sat, sat_bb)
     # Update the BG entry with the corresponding image_id
@@ -351,25 +359,34 @@ def fetch_BG_stat(target_image_id, lock, session):
             ImagesBG_entry.hue_bb = hue_bb
             ImagesBG_entry.lum_bb = lum_bb
             ImagesBG_entry.sat_bb = sat_bb
+            ImagesBG_entry.val_bb = val_bb
+            ImagesBG_entry.lum_torso_bb = lum_torso_bb
 
         ImagesBG_entry.hue = hue
         ImagesBG_entry.lum = lum
         ImagesBG_entry.sat = sat
+        ImagesBG_entry.val = val
+        ImagesBG_entry.lum_torso = lum_torso
 
-        
-        print("image_id:", ImagesBG_entry.image_id)
-        print("hue_bb:", ImagesBG_entry.hue_bb)
-        print("lum_bb:", ImagesBG_entry.lum_bb)
-        print("sat_bb:", ImagesBG_entry.sat_bb)
-        print("hue:", ImagesBG_entry.hue)
-        print("lum:", ImagesBG_entry.lum)
-        print("sat:", ImagesBG_entry.sat)
+
+        if VERBOSE:
+            print("image_id:", ImagesBG_entry.image_id)
+            print("hue_bb:", ImagesBG_entry.hue_bb)
+            print("lum_bb:", ImagesBG_entry.lum_bb)
+            print("sat_bb:", ImagesBG_entry.sat_bb)
+            print("val_bb:", ImagesBG_entry.val_bb)
+            print("lum_torso_bb:", ImagesBG_entry.lum_torso_bb)
+            print("hue:", ImagesBG_entry.hue)
+            print("lum:", ImagesBG_entry.lum)
+            print("sat:", ImagesBG_entry.sat)
+            print("val:", ImagesBG_entry.val)
+            print("lum_torso:", ImagesBG_entry.lum_torso)
 
         #session.commit()
         print(f"BG stat for image_id {target_image_id} updated successfully.")
     else:
         print(f"BG stat entry for image_id {target_image_id} not found.")
-    
+    return
     with lock:
         # Increment the counter using the lock to ensure thread safety
         global counter
@@ -395,18 +412,18 @@ if index == 0:
     #     select_from(Images).outerjoin(ImagesBackground,Images.image_id == ImagesBackground.image_id).filter(ImagesBackground.image_id == None).limit(LIMIT)
     
     # pulling directly frmo segment, to filter on face_x etc
-    # select_query = select(SegmentOct20.image_id,SegmentOct20.imagename,SegmentOct20.site_name_id).\
-    #     select_from(SegmentOct20).outerjoin(ImagesBackground,SegmentOct20.image_id == ImagesBackground.image_id).filter(ImagesBackground.image_id == None).limit(LIMIT)
+    # select_query = select(SegmentTable.image_id,SegmentTable.imagename,SegmentTable.site_name_id).\
+    #     select_from(SegmentTable).outerjoin(ImagesBackground,SegmentTable.image_id == ImagesBackground.image_id).filter(ImagesBackground.image_id == None).limit(LIMIT)
     
     # pulling from segment with a join to the helper table
     select_query = select(
-        SegmentOct20.image_id,
-        SegmentOct20.imagename,
-        SegmentOct20.site_name_id
+        SegmentTable.image_id,
+        SegmentTable.imagename,
+        SegmentTable.site_name_id
     ).\
-    select_from(SegmentOct20).\
-    outerjoin(ImagesBackground, SegmentOct20.image_id == ImagesBackground.image_id).\
-    outerjoin(HelperTable, SegmentOct20.image_id == HelperTable.image_id).\
+    select_from(SegmentTable).\
+    outerjoin(ImagesBackground, SegmentTable.image_id == ImagesBackground.image_id).\
+    outerjoin(HelperTable, SegmentTable.image_id == HelperTable.image_id).\
     filter(ImagesBackground.image_id == None).\
     filter(HelperTable.image_id != None).\
     limit(LIMIT)
@@ -416,17 +433,17 @@ if index == 0:
     #but ''' select(xyz)''' doesn't, atleast on windows
     ############################
     
-    # select_query = select([SegmentOct20.image_id, SegmentOct20.imagename, SegmentOct20.site_name_id]). \
-    # select_from(SegmentOct20). \
-    # outerjoin(ImagesBackground, SegmentOct20.image_id == ImagesBackground.image_id). \
+    # select_query = select([SegmentTable.image_id, SegmentTable.imagename, SegmentTable.site_name_id]). \
+    # select_from(SegmentTable). \
+    # outerjoin(ImagesBackground, SegmentTable.image_id == ImagesBackground.image_id). \
     # filter(ImagesBackground.image_id == None). \
     # filter(and_(
-        # SegmentOct20.face_x >= -33,
-        # SegmentOct20.face_x <= -26,
-        # SegmentOct20.face_y >= -2,
-        # SegmentOct20.face_y <= 2,
-        # SegmentOct20.face_z >= -2,
-        # SegmentOct20.face_z <= 2
+        # SegmentTable.face_x >= -33,
+        # SegmentTable.face_x <= -26,
+        # SegmentTable.face_y >= -2,
+        # SegmentTable.face_y <= 2,
+        # SegmentTable.face_z >= -2,
+        # SegmentTable.face_z <= 2
     # )). \
     # limit(LIMIT)
 
@@ -440,7 +457,14 @@ if index == 0:
 elif index == 1:
     function=fetch_BG_stat
     #################FETCHING BG stat####################################
-    if USE_BBOX:distinct_image_ids_query = select(ImagesBackground.image_id.distinct()).filter(ImagesBackground.hue_bb == None).limit(LIMIT)
+    # for reprocessing bad bboxes with sm portrait, joined to helper table
+    if USE_BBOX:distinct_image_ids_query = select(ImagesBackground.image_id.distinct()).\
+        outerjoin(HelperTable, ImagesBackground.image_id == HelperTable.image_id).\
+        filter(HelperTable.image_id != None).\
+        filter(ImagesBackground.hue_bb == -1).limit(LIMIT).offset(3000)
+
+
+    # if USE_BBOX:distinct_image_ids_query = select(ImagesBackground.image_id.distinct()).filter(ImagesBackground.hue_bb == None).limit(LIMIT)
     else:distinct_image_ids_query = select(ImagesBackground.image_id.distinct()).filter(ImagesBackground.hue == None).limit(LIMIT)
     distinct_image_ids = [row[0] for row in session.execute(distinct_image_ids_query).fetchall()]
     for counter,target_image_id in enumerate(distinct_image_ids):
