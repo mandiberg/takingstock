@@ -158,9 +158,13 @@ class ImagesBackground(Base):
     hue = Column(Float)
     lum = Column(Float)
     sat = Column(Float)
+    val = Column(Float)
+    lum_torso = Column(Float)
     hue_bb = Column(Float)
     lum_bb = Column(Float)
     sat_bb = Column(Float)
+    val_bb = Column(Float)
+    lum_torso_bb = Column(Float)
     
 class SegmentTable(Base):
     __tablename__ = 'SegmentOct20'

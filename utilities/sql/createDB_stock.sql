@@ -131,10 +131,14 @@ CREATE TABLE ImagesBackground (
     hue FLOAT,
     lum FLOAT,
     sat FLOAT,
+    val FLOAT,
+    torso_lum FLOAT,
     hue_bb FLOAT,
     lum_bb FLOAT,
     sat_bb FLOAT,
+    val_bb FLOAT,
+    torso_lum_bb FLOAT,
+    
     FOREIGN KEY (image_id) REFERENCES images(image_id)
 );
-
 

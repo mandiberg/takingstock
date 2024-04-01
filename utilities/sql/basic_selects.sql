@@ -1,6 +1,13 @@
 
 USE stock;
 
+ALTER TABLE ImagesBackground 
+ADD val FLOAT,
+ADD torso_lum FLOAT,
+ADD val_bb FLOAT,
+ADD torso_lum_bb FLOAT
+;
+
 SELECT MAX(so.seg_image_id)
 FROM SegmentOct20 so ;
 
@@ -13,8 +20,24 @@ LIMIT 1000
 
 SELECT *
 FROM SegmentOct20 so  
-WHERE so.image_id = 118612580
+WHERE so.image_id = 278
 ;
+
+SELECT DISTINCT ImagesBackground.image_id
+FROM ImagesBackground
+LEFT JOIN SegmentHelperApril1_topic7 ON ImagesBackground.image_id = SegmentHelperApril1_topic7.image_id
+WHERE SegmentHelperApril1_topic7.image_id IS NOT NULL
+  AND ImagesBackground.lum_torso IS NULL
+LIMIT 10;
+
+SELECT COUNT(ib.image_id) 
+FROM ImagesBackground ib 
+WHERE ib.lum_torso IS NOT NULL 
+;
+
+ALTER TABLE ImagesBackground 
+RENAME COLUMN torso_lum to lum_torso;
+
 
 SELECT *
 FROM Images i 
@@ -24,14 +47,14 @@ AND i.site_image_id = 499757170
 ;
 
 DELETE 
-FROM ImagesTopics;
+FROM SegmentHelperApril1_topic7;
 
 WHERE ibg.lum_bb = -2
 LIMIT 1000;
 
 SELECT *
 FROM SegmentOct20 so 
-WHERE so.image_id = 83888648
+WHERE so.image_id = 2819946
 ;
 
 SELECT COUNT(it.image_id)

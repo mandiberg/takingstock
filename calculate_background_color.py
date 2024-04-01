@@ -42,7 +42,13 @@ from mp_sort_pose import SortPose
 
 Base = declarative_base()
 USE_BBOX=True
-VERBOSE = True
+VERBOSE = False
+
+# 3.8 M large table (for Topic Model)
+# HelperTable_name = "SegmentHelperMar23_headon"
+
+# 7K for topic 7
+HelperTable_name = "SegmentHelperApril1_topic7"
 
 # MM controlling which folder to use
 IS_SSD = True
@@ -94,7 +100,7 @@ title = 'Please choose your operation: '
 options = ['Create table', 'Fetch BG color stats',"test sorting"]
 option, index = pick(options, title)
 
-LIMIT= 10
+LIMIT= 10000
 # Initialize the counter
 counter = 0
 
@@ -125,7 +131,7 @@ num_threads = 1
 #     body_landmarks = Column(BLOB)
 
 class HelperTable(Base):
-    __tablename__ = 'SegmentHelperMar23_headon'
+    __tablename__ = HelperTable_name
     seg_image_id=Column(Integer,primary_key=True, autoincrement=True)
     image_id = Column(Integer, primary_key=True, autoincrement=True)
 
@@ -259,9 +265,15 @@ def get_bg_hue_lum(img,bbox=None,face_landmarks=None):
 
     if VERBOSE: print("NOTmasked_img_torso size", masked_img_torso.shape, black_pixels_mask_torso.shape)
     if bbox:
-        # crop black_pixels_mask_torso to include only the pixels from bbox['bottom'] down
+        # SJ something is broken in here. It returns an all black image which produces a lum of 100
         masked_img_torso = masked_img_torso[bbox['bottom']:]
         black_pixels_mask_torso = black_pixels_mask_torso[bbox['bottom']:]
+    # else:
+    #     print("YIKES! no bbox. Here's a hacky hack to crop to the bottom 20%")
+    #     bottom_fraction = masked_img_torso.shape[0] // 5
+    #     masked_img_torso = masked_img_torso[-bottom_fraction:]
+    #     black_pixels_mask_torso = black_pixels_mask_torso[-bottom_fraction:]
+
     if VERBOSE: print("masked_img_torso size", masked_img_torso.shape, black_pixels_mask_torso.shape)
     mean_color = np.mean(masked_img_torso[~black_pixels_mask_torso], axis=0)[np.newaxis,np.newaxis,:] # ~ is negate
     lum_torso=cv2.cvtColor(mean_color, cv2.COLOR_RGB2LAB)[0,0,0]
@@ -346,7 +358,7 @@ def fetch_BG_stat(target_image_id, lock, session):
         bbox,facelandmark=get_bbox(target_image_id)
         hue_bb,sat_bb, val_bb, lum_bb, lum_torso_bb =get_bg_hue_lum(img,bbox,facelandmark)
     
-    print("sat values before insert", sat, sat_bb)
+    print("sat values before insert", hue_bb,sat_bb, val_bb, lum_bb, lum_torso_bb)
     # Update the BG entry with the corresponding image_id
     ImagesBG_entry = (
         session.query(ImagesBackground)
@@ -386,7 +398,7 @@ def fetch_BG_stat(target_image_id, lock, session):
         print(f"BG stat for image_id {target_image_id} updated successfully.")
     else:
         print(f"BG stat entry for image_id {target_image_id} not found.")
-    return
+    
     with lock:
         # Increment the counter using the lock to ensure thread safety
         global counter
@@ -457,11 +469,17 @@ if index == 0:
 elif index == 1:
     function=fetch_BG_stat
     #################FETCHING BG stat####################################
-    # for reprocessing bad bboxes with sm portrait, joined to helper table
+    # # for reprocessing bad bboxes with sm portrait, joined to helper table (note the offset)
+    # if USE_BBOX:distinct_image_ids_query = select(ImagesBackground.image_id.distinct()).\
+    #     outerjoin(HelperTable, ImagesBackground.image_id == HelperTable.image_id).\
+    #     filter(HelperTable.image_id != None).\
+    #     filter(ImagesBackground.hue_bb == -1).limit(LIMIT).offset(3000)
+
+    # for reprocessing torso+row only for subsegment through join to helper table
     if USE_BBOX:distinct_image_ids_query = select(ImagesBackground.image_id.distinct()).\
         outerjoin(HelperTable, ImagesBackground.image_id == HelperTable.image_id).\
         filter(HelperTable.image_id != None).\
-        filter(ImagesBackground.hue_bb == -1).limit(LIMIT).offset(3000)
+        filter(ImagesBackground.lum_torso == None).limit(LIMIT)
 
 
     # if USE_BBOX:distinct_image_ids_query = select(ImagesBackground.image_id.distinct()).filter(ImagesBackground.hue_bb == None).limit(LIMIT)
