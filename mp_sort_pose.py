@@ -21,7 +21,7 @@ class SortPose:
         self.mp_drawing = mp.solutions.drawing_utils
 
         #maximum allowable distance between encodings
-        self.MAXDIST = 0.7
+        self.MAXDIST = 1.4
         self.MINDIST = .45
         self.MINBODYDIST = .05
         self.CUTOFF = 100000
@@ -40,7 +40,8 @@ class SortPose:
         # self.BGCOLOR = [0,0,0]
         self.ONE_SHOT = ONE_SHOT
         self.JUMP_SHOT = JUMP_SHOT
-        self.SHOT_CLOCK = 0 
+        self.SHOT_CLOCK = 0
+        self.SHOT_CLOCK_MAX = 15
         self.BODY_LMS = [0, 13, 14, 15, 16, 19, 20]
         self.VERBOSE = VERBOSE
 
@@ -49,6 +50,7 @@ class SortPose:
         self.same_img = []
         
         # luminosity parameters
+        self.HSV_DELTA_MAX = .5
         if HSV_CONTROL:
             self.LUM_MIN = HSV_CONTROL['LUM_MIN']
             self.LUM_MAX = HSV_CONTROL['LUM_MAX']
@@ -893,10 +895,10 @@ class SortPose:
         circle_hue_dist = min(dist_reg, dist_offset)
 
         # hue is only relevant if saturation is high
-        hsv2[0] = circle_hue_dist * hsv2[1]
+        # hsv2[0] = circle_hue_dist * hsv2[1]
 
         # saturation is only relevant if value is middle or low
-        hsv2[1] =  hsv2[1] * (1 - hsv2[2])
+        # hsv2[1] =  hsv2[1] * (1 - hsv2[2])
 
         return hsv2
 
@@ -911,6 +913,9 @@ class SortPose:
                 # this would be for first run
                 print("assigned first run hsv_dist values", item)
                 hsv_dist = item
+            elif abs(self.counter_dict["last_image_hsv"][2] - df_enc.loc[dist_dict[item], "hsv"][2]) > self.HSV_DELTA_MAX:
+                # skipping this one, too great a value shift, will produce flicker
+                continue
             else:
                 # print("in circle else")
                 hsv_converted = self.normalize_hsv(self.counter_dict["last_image_hsv"], df_enc.loc[dist_dict[item], "hsv"])
@@ -1046,7 +1051,7 @@ class SortPose:
                 print("TOO GREAT A DISTANCE ---> going to break the loop and keep the last values")
                 dist_single_dict = {1: "null"}
                 return 1, dist_single_dict, df_128_enc, df_33_lms
-            elif self.JUMP_SHOT and self.SHOT_CLOCK > 5:
+            elif self.JUMP_SHOT and self.SHOT_CLOCK > self.SHOT_CLOCK_MAX:
                 print("SHOT_CLOCK IS UP ---> going to pick a random new start")
 
                 random_d = int(len(dist)*random.random())

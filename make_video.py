@@ -464,7 +464,10 @@ def sort_by_face_dist(df_enc, df_128_enc, df_33_lms):
         # the this_start will be dropped in the get_start_enc method
         print("lenght of images to drop before and after removing this_start")
         print(len(images_to_drop))
-        images_to_drop.remove(this_start)
+        try:
+            images_to_drop.remove(this_start)
+        except Exception as e:
+            print("images_to_drop.remove failed because was too great a lum diff", str(e))
         print(len(images_to_drop))
         for dropimage in images_to_drop:
             print("going to remove this image enc", dropimage)
