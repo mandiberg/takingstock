@@ -7,7 +7,7 @@ from sqlalchemy.ext.declarative import declarative_base
 # my ORM
 # from my_declarative_base import Base, Clusters, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON, Images
 
-from my_declarative_base import Base,Images, SegmentTable, BagOfKeywords,Keywords,ImagesKeywords,ImagesEthnicity, Encodings, Column, Integer, String, DECIMAL, BLOB, ForeignKey, JSON  # Replace 'your_module' with the actual module where your SQLAlchemy models are defined
+from my_declarative_base import Base,Images, ImagesTopics, SegmentTable, BagOfKeywords,Keywords,ImagesKeywords,ImagesEthnicity, Encodings, Column, Integer, String, DECIMAL, BLOB, ForeignKey, JSON  # Replace 'your_module' with the actual module where your SQLAlchemy models are defined
 from mp_db_io import DataIO
 import pickle
 import numpy as np
@@ -29,7 +29,7 @@ db = io.db
 # io.db["name"] = "ministock"
 
 VERBOSE = False
-SegmentHelper_name = 'SegmentMar21'
+SegmentHelper_name = 'SegmentHelperApril1_topic7'
 TOKEN_COUNT_PATH = "token_counts.csv"
 
 # Create a database engine
@@ -70,7 +70,7 @@ title = 'Please choose your operation: '
 options = ['Create helper table', 'Fetch keywords list and make tokens', 'Fetch ethnicity list', 'Prune Table where is_face == None', 'move new segment image_ids to existing segment','fetch description/Image metas if None','count tokens']
 option, index = pick(options, title)
 
-LIMIT= 10000000
+LIMIT= 50000
 # Initialize the counter
 counter = 0
 
@@ -562,22 +562,44 @@ if index == 0:
     # select_query = select(Images.image_id, Images.description, Images.gender_id, Images.age_id, Images.location_id).\
     #     select_from(Images).outerjoin(BagOfKeywords, Images.image_id == BagOfKeywords.image_id).filter(BagOfKeywords.image_id == None, Images.site_name_id.in_([2,4])).limit(LIMIT)
 
+    # this is the regular one to use
+    # select_query = (
+    #     # select(Encodings.image_id, Encodings.bbox, Encodings.face_x, Encodings.face_y, Encodings.face_z, Encodings.mouth_gap, Encodings.face_landmarks, Encodings.face_encodings68, Encodings.body_landmarks)
+    #     select(Encodings.image_id)
+    #     .select_from(Encodings)
+    #     .outerjoin(SegmentHelper, Encodings.image_id == SegmentHelper.image_id)
+    #     .filter(SegmentHelper.image_id == None)
+    #     .filter(and_(
+    #         Encodings.face_x > -40,
+    #         Encodings.face_x < -27,
+    #         Encodings.face_y > -4,
+    #         Encodings.face_y < 4,
+    #         Encodings.face_z > -4,
+    #         Encodings.face_z < 4
+    #     ))
+    #     .limit(LIMIT)
+    # )
+
+    # this is for one specific topic
     select_query = (
         # select(Encodings.image_id, Encodings.bbox, Encodings.face_x, Encodings.face_y, Encodings.face_z, Encodings.mouth_gap, Encodings.face_landmarks, Encodings.face_encodings68, Encodings.body_landmarks)
         select(Encodings.image_id)
         .select_from(Encodings)
+        .join(ImagesTopics, Encodings.image_id == ImagesTopics.image_id)
         .outerjoin(SegmentHelper, Encodings.image_id == SegmentHelper.image_id)
         .filter(SegmentHelper.image_id == None)
         .filter(and_(
-            Encodings.face_x > -40,
+            Encodings.face_x > -33,
             Encodings.face_x < -27,
-            Encodings.face_y > -4,
-            Encodings.face_y < 4,
-            Encodings.face_z > -4,
-            Encodings.face_z < 4
+            Encodings.face_y > -2,
+            Encodings.face_y < 2,
+            Encodings.face_z > -2,
+            Encodings.face_z < 2,
+            ImagesTopics.topic_id == 7
         ))
         .limit(LIMIT)
     )
+
 
     result = session.execute(select_query).fetchall()
     # print the length of the result

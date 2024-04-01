@@ -5,7 +5,9 @@ SELECT COUNT(s.image_id)
 FROM SegmentOct20 s  JOIN ImagesTopics it ON s.image_id = it.image_id  JOIN ImagesBackground ibg ON s.image_id = ibg.image_id  
 WHERE s.site_name_id != 1 AND face_encodings68 IS NOT NULL 
 AND face_x > -33 AND face_x < -27 AND face_y > -2 AND face_y < 2 AND face_z > -2 AND face_z < 2 
-AND it.topic_score > .5
+AND it.topic_score > .3
 AND s.age_id NOT IN (1,2,3)   
 AND it.topic_id IN (7)  
 LIMIT 200000
+
+
