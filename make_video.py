@@ -77,7 +77,8 @@ HSV_NORMS = {
     # converts everything to a 0-1 scale
     "LUM": .01,
     "SAT": 1,
-    "HUE": 0.002777777778
+    "HUE": 0.002777777778,
+    "VAL": 1
 }
 
 # this is for controlling if it is using
@@ -152,7 +153,7 @@ if IS_SEGONLY is not True:
     # this is for gettytest3 table
     FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings e ON i.image_id = e.image_id JOIN ImagesClusters ic ON i.image_id = ic.image_id"
     WHERE = "e.is_face IS TRUE AND e.bbox IS NOT NULL AND i.site_name_id = 1 AND k.keyword_text LIKE 'smil%'"
-    LIMIT = 1000
+    LIMIT = 500
 
 
 elif IS_SEGONLY:
@@ -188,14 +189,14 @@ elif IS_SEGONLY:
     if HSV_BOUNDS:
         FROM += " JOIN ImagesBackground ibg ON s.image_id = ibg.image_id "
         # WHERE += " AND ibg.lum > .3"
-        SELECT += ", ibg.lum, ibg.lum_bb, ibg.hue, ibg.hue_bb, ibg.sat, ibg.sat_bb " # add description here, after resegmenting
+        SELECT += ", ibg.lum, ibg.lum_bb, ibg.hue, ibg.hue_bb, ibg.sat, ibg.sat_bb, ibg.val, ibg.val_bb, ibg.lum_torso, ibg.lum_torso_bb " # add description here, after resegmenting
         
     # # join to keywords
     # FROM += " JOIN ImagesKeywords ik ON s.image_id = ik.image_id JOIN Keywords k ON ik.keyword_id = k.keyword_id "
     # WHERE += " AND k.keyword_text LIKE 'surpris%' "
 
     # WHERE = "s.site_name_id != 1"
-    LIMIT = 200000
+    LIMIT = 200
 
 
 
@@ -556,9 +557,15 @@ def prep_encodings(df_segment):
     def create_hsv_list(row):
         if row['hue_bb'] >= 0:
             # print("create_hsv_list bb", [row['hue_bb'], row['sat_bb'], row['lum_bb']])
-            return [row['hue_bb']*HSV_NORMS["HUE"], row['sat_bb']*HSV_NORMS["SAT"], row['lum_bb']*HSV_NORMS["LUM"]]
+            return [row['hue_bb']*HSV_NORMS["HUE"], row['sat_bb']*HSV_NORMS["SAT"], row['val_bb']*HSV_NORMS["VAL"]]
         else:
-            return [row['hue']*HSV_NORMS["HUE"], row['sat']*HSV_NORMS["SAT"], row['lum']*HSV_NORMS["LUM"]]    
+            return [row['hue']*HSV_NORMS["HUE"], row['sat']*HSV_NORMS["SAT"], row['val']*HSV_NORMS["VAL"]]    
+    def create_lum_list(row):
+        if row['lum_torso_bb'] >= 0 and row['lum_torso_bb'] != 1:
+            # print("create_hsv_list bb", [row['hue_bb'], row['sat_bb'], row['lum_bb']])
+            return [row['lum']*HSV_NORMS["LUM"], row['lum_torso_bb']*HSV_NORMS["LUM"]]
+        else:
+            return [row['lum']*HSV_NORMS["LUM"], row['lum_torso']*HSV_NORMS["LUM"]]    
     # format the encodings for sorting by distance
     # df_enc will be the df with bbox, site_name_id, etc, keyed to filename
     # df_128_enc will be 128 colums of encodings, keyed to filename
@@ -570,16 +577,19 @@ def prep_encodings(df_segment):
     col5="bbox"
     col6="body_landmarks"
     col7="hsv"
+    col8="lum"
     # df_enc=pd.DataFrame(columns=[col1, col2, col3, col4, col5])
     df_enc=pd.DataFrame(columns=[col1, col2, col3, col4, col5, col6, col7])
     df_enc = pd.DataFrame({
                 col1: df_segment['imagename'], col2: df_segment['face_encodings68'].apply(lambda x: np.array(x)), 
                 # col3: df_segment['site_name_id'], col4: df_segment['face_landmarks'], col5: df_segment['bbox']})
-                col3: df_segment['site_name_id'], col4: df_segment['face_landmarks'], col5: df_segment['bbox'], col6: df_segment['body_landmarks'], 
+                col3: df_segment['site_name_id'], col4: df_segment['face_landmarks'], 
+                col5: df_segment['bbox'], col6: df_segment['body_landmarks'], 
                 col7: df_segment.apply(lambda row: create_hsv_list(row), axis=1),
+                col8: df_segment.apply(lambda row: create_lum_list(row), axis=1),
                 })
     df_enc.set_index(col1, inplace=True)
-    if VERBOSE: print(df_enc)
+    if VERBOSE: print("df_enc", df_enc)
     # Create column names for the 128 encoding columns
     encoding_cols = [f"encoding{i}" for i in range(128)]
     lms_cols = [f"lm{i}" for i in range(33)]
@@ -593,9 +603,9 @@ def prep_encodings(df_segment):
     # lms_concat = pd.concat([df_enc, lms_expanded], axis=1)
 
     # make a separate df that just has the encodings
-    df_128_enc = enc_concat.drop([col2, col3, col4, col5, col6, col7], axis=1)
+    df_128_enc = enc_concat.drop([col2, col3, col4, col5, col6, col7, col8], axis=1)
     # df_33_lms = lms_concat.drop([col2, col3, col4, col5, col6], axis=1)
-    df_33_lms = df_enc.drop([col2, col3, col4, col5, col7], axis=1)
+    df_33_lms = df_enc.drop([col2, col3, col4, col5, col7, col8], axis=1)
 
     if VERBOSE: print("df_33_lms", df_33_lms)
     return df_enc, df_128_enc, df_33_lms

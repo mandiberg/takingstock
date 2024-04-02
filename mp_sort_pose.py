@@ -182,7 +182,8 @@ class SortPose:
             "last_image":None,
             "last_description":None,
             "last_image_enc":None,
-            "last_image_hsv":None
+            "last_image_hsv":None,
+            "last_image_lum":None
 
         }
 
@@ -892,13 +893,9 @@ class SortPose:
         # hue is a circle, so we need to go both ways around the circle and pick the smaller one
         dist_reg = abs(hsv1[0] - hsv2[0])
         dist_offset = abs((hsv1[0]) + (1-hsv2[0]))
-        circle_hue_dist = min(dist_reg, dist_offset)
+        hsv2[0] = min(dist_reg, dist_offset)
 
-        # hue is only relevant if saturation is high
-        # hsv2[0] = circle_hue_dist * hsv2[1]
-
-        # saturation is only relevant if value is middle or low
-        # hsv2[1] =  hsv2[1] * (1 - hsv2[2])
+        # this is where I will curve the sat data
 
         return hsv2
 
@@ -910,23 +907,38 @@ class SortPose:
             # if not self.counter_dict["last_image_hsv"]:
             #     self.counter_dict["last_image_hsv"] = [.1,.1,.85]
             if not self.counter_dict["last_image_hsv"]:
-                # this would be for first run
+                # assign 128d to all vars for first run, ignoring hsv and lum, and just sort on 128d
                 print("assigned first run hsv_dist values", item)
                 hsv_dist = item
+                lum_dist = item
             elif abs(self.counter_dict["last_image_hsv"][2] - df_enc.loc[dist_dict[item], "hsv"][2]) > self.HSV_DELTA_MAX:
+                # skipping this one, too great a value shift, will produce flicker
+                continue
+            elif abs(self.counter_dict["last_image_lum"][1] - df_enc.loc[dist_dict[item], "lum"][1]) > self.HSV_DELTA_MAX:
                 # skipping this one, too great a value shift, will produce flicker
                 continue
             else:
                 # print("in circle else")
                 hsv_converted = self.normalize_hsv(self.counter_dict["last_image_hsv"], df_enc.loc[dist_dict[item], "hsv"])
                 hsv_dist = self.get_d(self.counter_dict["last_image_hsv"], hsv_converted)
-            self.counter_dict["last_image_hsv"] =df_enc.loc[dist_dict[item], "hsv"]
-            # print(hsv_dist)
-            hsv_dist_dict[item] = hsv_dist
-        # print(hsv_dist_dict)
+                lum_dist = self.get_d(self.counter_dict["last_image_lum"], df_enc.loc[dist_dict[item], "lum"])
+            print(type(hsv_dist), type(lum_dist), type(item))
+            print("hsv, lum dist, item", hsv_dist, lum_dist, item)
+            hsv_dist_dict[item] = [item,hsv_dist,lum_dist]
 
+        # sort the hsv_dist_dict dictionary based on the sum of all three values in the list
+        sorted_keys_dHSV = [k for k, v in sorted(hsv_dist_dict.items(), key=lambda item: item[1][0] + item[1][1] + item[1][2])]
         # Sort the dictionary based on the sum of the key and value
-        sorted_keys_dHSV = [k for k, v in sorted(hsv_dist_dict.items(), key=lambda item: item[0] + item[1])]
+        # sorted_keys_dHSV = [k for k, v in sorted(hsv_dist_dict.items(), key=lambda item: item[0] + item[1])]
+        # Sort the dictionary based on the sum of hsv_dist, lum_dist, and item
+        # sorted_keys_dHSV = [k for k, v in sorted(hsv_dist_dict.items(), key=lambda item: item[1][0] + item[1][1] + item)]
+        # sorted_keys_dHSV = [k for k, v in sorted(hsv_dist_dict.items(), key=lambda item: v[0] + v[1] + k)]
+        # sorted_keys_dHSV = [k for k, v in sorted(hsv_dist_dict.items(), key=lambda item: item[1][0] + item[1][1] + item[0])]
+
+        print("sorted_keys_dHSV", sorted_keys_dHSV)
+        self.counter_dict["last_image_hsv"] =df_enc.loc[dist_dict[sorted_keys_dHSV[0]], "hsv"]
+        self.counter_dict["last_image_lum"] =df_enc.loc[dist_dict[sorted_keys_dHSV[0]], "lum"]
+        # print(hsv_dist_dict)
 
         return sorted_keys_dHSV
 
