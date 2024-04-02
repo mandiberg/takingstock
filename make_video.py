@@ -74,8 +74,8 @@ else:
         "HUE_MAX": 360
     }
 HSV_BOUNDS["d128_WEIGHT"] = 1
-HSV_BOUNDS["HSV_WEIGHT"] = .5
-HSV_BOUNDS["LUM_WEIGHT"] = .5
+HSV_BOUNDS["HSV_WEIGHT"] = 1
+HSV_BOUNDS["LUM_WEIGHT"] = 1
 
 HSV_NORMS = {
     # converts everything to a 0-1 scale

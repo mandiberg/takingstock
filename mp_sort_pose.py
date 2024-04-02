@@ -24,7 +24,7 @@ class SortPose:
         self.MAXDIST = 1.4
         self.MINDIST = .45
         self.MINBODYDIST = .05
-        self.CUTOFF = 100000
+        self.CUTOFF = 100
         self.FACE_DIST = 15
 
         # maximum allowable scale up
@@ -890,19 +890,16 @@ class SortPose:
         return d
 
     def normalize_hsv(self, hsv1, hsv2):
-        # print("- normalize_hsv -")
-
         # hue is between 0-360 degrees (which is scaled to 0-1 here)
         # hue is a circle, so we need to go both ways around the circle and pick the smaller one
         dist_reg = abs(hsv1[0] - hsv2[0])
         dist_offset = abs((hsv1[0]) + (1-hsv2[0]))
         hsv2[0] = min(dist_reg, dist_offset)
-
         # this is where I will curve the sat data
-
         return hsv2
 
-    def sort_dHSV(self, dist_dict, df_enc):
+    def sort_dHSV(self, dist_dict, df_enc, HSVonly=False):
+        # print("sort_dHSV, HSVonly is", HSVonly)
         hsv_dist_dict = {}
         for item in dist_dict:
             # print("item", item)
@@ -911,13 +908,15 @@ class SortPose:
             #     self.counter_dict["last_image_hsv"] = [.1,.1,.85]
             if not self.counter_dict["last_image_hsv"]:
                 # assign 128d to all vars for first run, ignoring hsv and lum, and just sort on 128d
-                print("assigned first run hsv_dist values", item)
+                # if self.VERBOSE: print("assigned first run hsv_dist values", item)
                 hsv_dist = item
                 lum_dist = item
             elif abs(self.counter_dict["last_image_hsv"][2] - df_enc.loc[dist_dict[item], "hsv"][2]) > self.HSV_DELTA_MAX:
                 # skipping this one, too great a value shift, will produce flicker
+                # if self.VERBOSE: print("skipping this one, too great a color shift:", dist_dict[item])
                 continue
             elif abs(self.counter_dict["last_image_lum"][1] - df_enc.loc[dist_dict[item], "lum"][1]) > self.HSV_DELTA_MAX:
+                # if self.VERBOSE: print("skipping this one, too great a value shift:", dist_dict[item])
                 # skipping this one, too great a value shift, will produce flicker
                 continue
             else:
@@ -926,10 +925,20 @@ class SortPose:
                 hsv_dist = self.get_d(self.counter_dict["last_image_hsv"], hsv_converted)
                 lum_dist = self.get_d(self.counter_dict["last_image_lum"], df_enc.loc[dist_dict[item], "lum"])
             # if self.VERBOSE: print("hsv, lum dist, item", hsv_dist, lum_dist, item)
-            hsv_dist_dict[item] = [item*self.d128_WEIGHT,hsv_dist*self.HSV_WEIGHT,lum_dist*self.LUM_WEIGHT]
+            if HSVonly:
+                # print("HSVonly, sorting results")
+                # finds closest hsv distance bg and torso
+                hsv_dist_dict[item] = [hsv_dist*self.HSV_WEIGHT,lum_dist*self.LUM_WEIGHT]
 
-        # sort the hsv_dist_dict dictionary based on the sum of all three values in the list
-        sorted_keys_dHSV = [k for k, v in sorted(hsv_dist_dict.items(), key=lambda item: item[1][0] + item[1][1] + item[1][2])]
+                # sort the hsv_dist_dict dictionary based on the sum of both values in the list
+                sorted_keys_dHSV = [k for k, v in sorted(hsv_dist_dict.items(), key=lambda item: item[1][0] + item[1][1])]
+
+            else:
+                # finds closest 3D distanct for 128d, hsv, and lum
+                hsv_dist_dict[item] = [item*self.d128_WEIGHT,hsv_dist*self.HSV_WEIGHT,lum_dist*self.LUM_WEIGHT]
+
+                # sort the hsv_dist_dict dictionary based on the sum of all three values in the list
+                sorted_keys_dHSV = [k for k, v in sorted(hsv_dist_dict.items(), key=lambda item: item[1][0] + item[1][1] + item[1][2])]
 
         # if self.VERBOSE: print("sorted_keys_dHSV", sorted_keys_dHSV)
         self.counter_dict["last_image_hsv"] =df_enc.loc[dist_dict[sorted_keys_dHSV[0]], "hsv"]
@@ -938,13 +947,30 @@ class SortPose:
 
         return sorted_keys_dHSV
 
+    # def jump(self, dist, dist_dict):
+    #     if self.VERBOSE: print("jumping!")
+    #     print("dist", len(dist), type(dist))
+    #     print("dist_dict", len(dist_dict), type(dist_dict)) 
+    #     random_d = int(len(dist)*random.random())
+    #     print("random_d", random_d)
+    #     random_d_in_run = dist[random_d]
+    #     print("random_d_in_run", random_d_in_run)
+    #     # create a dict with dist_dict[random_d_in_run] as the value for key random_d_in_run
+    #     random_imagename = dist_dict[random_d_in_run]
+    #     print("random_imagename", random_imagename)
+
+    #     dist_single_dict = {random_d: dist_dict[random_d_in_run]}
+    #     print("dist_single_dict", dist_single_dict)
+    #     self.SHOT_CLOCK = 0 # reset the shot clock
+    #     return random_d_in_run, dist_single_dict
 
     def get_closest_df(self, FIRST_ROUND, enc1, df_enc, df_128_enc, df_33_lms, sorttype="128d"):
+
+        
         dist=[]
         dist_dict={}
         dist_run_dict={}
         enc2_dict={}
-        
         # print("df_128_enc")
         # print("enc1 right before index row itter", enc1)
         print(f"get_closest_df, sorttype is {sorttype} FIRST_ROUND is {FIRST_ROUND}")
@@ -1024,24 +1050,103 @@ class SortPose:
 
             # sort_dHSV returns a list of 128d dists sorted by the sum of 128d and HSVd
             # this code uses that list to sort the dist_run_dict
-            dist = self.sort_dHSV(dist_run_dict, df_enc)
+            # making a new dist_run which is a small subset of dist
+            if self.VERBOSE: print("dist_run_dict", dist_run_dict, len(dist_run_dict))
+            dist_run = self.sort_dHSV(dist_run_dict, df_enc)
             dist_run_dict_temp = {}
-            for d in dist:
+            for d in dist_run:
                 dist_run_dict_temp[d] = dist_run_dict[d]
             dist_run_dict = dist_run_dict_temp
 
-            last_d_in_run = max(k)
-            print("last_d_in_run", str(last_d_in_run))
+            possible_last_d_dict = {}
+            for _ in range(100):
+                # random_d in second half of ALL results, further away from the start
+                half_dist = len(dist)//2
+                random_d = half_dist+int(half_dist*random.random())
+                random_d_in_run = dist[random_d]
+                possible_last_d_dict[random_d_in_run] = dist_dict[random_d_in_run]
+
+            # print("possible_last_d_dict", possible_last_d_dict, len(possible_last_d_dict))
+            sorted_last_d_list = self.sort_dHSV(possible_last_d_dict, df_enc, HSVonly=True)
+            # print("sorted_last_d_dict", sorted_last_d_dict)
+            
+            # add on the last d in the run + imagename
+            last_d_in_run = sorted_last_d_list[0]
+            dist_run_dict[last_d_in_run] = possible_last_d_dict[last_d_in_run]
+
+            dist_single_dict = {random_d: dist_dict[random_d_in_run]}
+            self.SHOT_CLOCK = 0 # reset the shot clock
+
+            # last_d_in_run = max(k)
+            # print("last_d_in_run", str(last_d_in_run))
             # print(enc2_dict[last_d_in_run])
+
+            # TK this will need refactoring for planar_body
             if sorttype == "planar":
                 self.counter_dict["last_image_enc"]=enc2_dict[last_d_in_run]
+
             # adding the run to the good_count, minus the one added in compare_images
-            self.counter_dict["good_count"] += len(k)-1
+            self.counter_dict["good_count"] += len(dist_run_dict)-1
 
             # switch to returning dist_run_dict
-            print("dist_run_dict", dist_run_dict)
+            if self.VERBOSE: print("dist_run_dict", dist_run_dict, len(dist_run_dict))
             return last_d_in_run, dist_run_dict, df_128_enc, df_33_lms
-        
+
+        # '''
+        #     # print(dist_run_dict)
+        #     # print(k)
+        #     self.SHOT_CLOCK = 0 # reset the shot clock
+
+        #     # sort_dHSV returns a list of 128d dists sorted by the sum of 128d and HSVd
+        #     # this code uses that list to sort the dist_run_dict
+        #     dist = self.sort_dHSV(dist_run_dict, df_enc)
+        #     dist_run_dict_temp = {}
+        #     for d in dist:
+        #         dist_run_dict_temp[d] = dist_run_dict[d]
+        #     dist_run_dict = dist_run_dict_temp
+
+        #     # moving k here, as this is after items > HSV_DELTA_MAX are dropped 
+        #     k = list(dist_run_dict.keys())
+        #     print("WE HAVE A RUN!!!!! ---------- ", str(len(k)))
+        #     last_d_in_run = max(k)
+
+        #     # print("last_d_in_run", str(last_d_in_run))
+        #     # print(enc2_dict[last_d_in_run])
+        #     if sorttype == "planar":
+        #         self.counter_dict["last_image_enc"]=enc2_dict[last_d_in_run]
+        #     # adding the run to the good_count, minus the one added in compare_images
+        #     self.counter_dict["good_count"] += len(k)-1
+        #     # switch to returning dist_run_dict
+        #     # if VERBOSE: print("dist_run_dict", dist_run_dict)            
+            
+        #     # at the end of the run, jump somewhere random to break it up
+        #     # remove items in dist_run_dict from dist_dict
+        #     print("dist_run_dict", len(dist_run_dict), type(dist_run_dict))
+        #     print("dist_dict", len(dist_dict), type(dist_dict))
+
+        #     dist_dict_trim = {k: v for k, v in dist_dict.items() if k not in dist_run_dict}
+        #     print("dist_dict_trim", len(dist_dict_trim), type(dist_dict_trim))
+
+        #     # for d in dist_run_dict:
+        #     #     del dist_dict[d]
+            
+        #     # make a random jump
+        #     # last_d_in_run, dist_single_dict = self.jump(dist, dist_dict_trim)
+        #     print(last_d_in_run, dist_single_dict)
+
+            
+        #     # random_d = int(len(dist)*random.random())
+        #     # random_d_in_run = dist[random_d]
+
+        #     # dist_single_dict = {random_d: dist_dict[random_d_in_run]}
+        #     # self.SHOT_CLOCK = 0 # reset the shot clock
+
+        #     # add dist_single_dict to dist_run_dict at the end
+        #     print("jumping to random_d_in_run", dist_single_dict)
+        #     dist_run_dict[last_d_in_run] = dist_single_dict[random_d_in_run]
+
+        #     return last_d_in_run, dist_run_dict, df_128_enc, df_33_lms
+        # '''
         else:
             # print("going to find a winner")
             # dist.sort()
@@ -1061,13 +1166,12 @@ class SortPose:
                 return 1, dist_single_dict, df_128_enc, df_33_lms
             elif self.JUMP_SHOT and self.SHOT_CLOCK > self.SHOT_CLOCK_MAX:
                 print("SHOT_CLOCK IS UP ---> going to pick a random new start")
-
+                # random_d_in_run, dist_single_dict = self.jump(dist, dist_dict)
                 random_d = int(len(dist)*random.random())
                 random_d_in_run = dist[random_d]
 
                 dist_single_dict = {random_d: dist_dict[random_d_in_run]}
                 self.SHOT_CLOCK = 0 # reset the shot clock
-
                 return random_d_in_run, dist_single_dict, df_128_enc, df_33_lms
 
             elif self.ONE_SHOT and FIRST_ROUND is False:
