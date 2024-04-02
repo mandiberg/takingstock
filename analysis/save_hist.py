@@ -15,37 +15,37 @@ from matplotlib.patches import Rectangle
 import pickle
 import json
 
-# Repo_path='/Users/jhash/Documents/GitHub/facemap2/'
-Repo_path='/Users/michaelmandiberg/Documents/GitHub/facemap/'
+Repo_path='/Users/jhash/Documents/GitHub/facemap2/'
+#Repo_path='/Users/michaelmandiberg/Documents/GitHub/facemap/'
 # caution: path[0] is reserved for script path (or '' in REPL)
 sys.path.insert(1,Repo_path )
 
 from mp_db_io import DataIO
 from my_declarative_base import Images, Encodings, Base, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON, Float
-from my_declarative_base import ImagesBackground  # Replace 'your_module' with the actual module where your SQLAlchemy models are defined
+from my_declarative_base import ImagesBackground,ImagesTopics  # Replace 'your_module' with the actual module where your SQLAlchemy models are defined
 
 
 ######## Michael's Credentials ########
-# platform specific credentials
-IS_SSD = True
-io = DataIO(IS_SSD)
-db = io.db
-# overriding DB for testing
-io.db["name"] = "stock"
-ROOT = io.ROOT 
-NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
-
-#######################################
-
-# ######## Satyam's Credentials ########
 # # platform specific credentials
 # IS_SSD = True
 # io = DataIO(IS_SSD)
 # db = io.db
 # # overriding DB for testing
-# io.db["name"] = "ministock"
+# io.db["name"] = "stock"
 # ROOT = io.ROOT 
 # NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
+
+#######################################
+
+# ######## Satyam's Credentials ########
+# platform specific credentials
+IS_SSD = True
+io = DataIO(IS_SSD)
+db = io.db
+# overriding DB for testing
+io.db["name"] = "ministock"
+ROOT = io.ROOT 
+NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 # #######################################
 
 LIMIT= 250000
@@ -80,6 +80,37 @@ class SegmentOct20(Base):
     body_landmarks = Column(BLOB)
 
 
+def create_topic_df():
+    # Define the select statement to fetch all columns from the table
+    images_topics = ImagesTopics.__table__
+
+    # Construct the select query
+    #query = select([images_bg]) ## this DOESNT work on windows somehow
+    query = select(images_topics)
+
+    # Optionally limit the number of rows fetched
+    if LIMIT:
+        query = query.limit(LIMIT)
+
+    # Execute the query and fetch all results
+    result = session.execute(query).fetchall()
+
+    results=[]
+    counter = 0
+
+    for counter,row in enumerate(result):
+        if counter%1000==0:print(counter,"rows made")
+        image_id =row[0]
+        topic_id=row[1]
+        topic_score=row[2]
+
+        results.append({"image_id": image_id, "topic_id": topic_id, "topic_score": topic_score})
+    
+    df = pd.DataFrame(results)
+    print("Topics dataframe created")
+    print(df)
+
+    return df
 
 # Define the function for generating imagename
 def create_BG_df():
@@ -114,6 +145,9 @@ def create_BG_df():
         results.append({"image_id": image_id, "hue": hue, "luminosity": lum,"sat":sat})
     
     df = pd.DataFrame(results)
+    print("Images Background dataframe created")
+    print(df)
+
     return df
 
 def create_segment_df():
@@ -149,7 +183,32 @@ def create_segment_df():
         results.append({"image_id": image_id, "sitename_id": sitename_id, "face_x": face_x,"face_y":face_y,"face_z":face_z,"mouth_gap":mouth_gap,"bbox":bbox,"face_encodings":face_encodings})
     
     df = pd.DataFrame(results)
+    print("Segment dataframe created")
+    print(df)
+
     return df
+
+def plot_topics(df):
+    file_path= os .path.join(folder_path,'topic_hist.png')
+    topic_id=df["topic_id"]
+    num_topic=np.max(topic_id)
+    for i in range(num_topic):
+        filtered_df = df[df['topic_id'] == i+1]
+        sel_topic_score=filtered_df["topic_score"]
+        # Calculate histogram data
+        hist, bins = np.histogram(sel_topic_score, bins=100)
+        bin_centers = (bins[:-1] + bins[1:]) / 2
+        # Plot the histogram as a line graph
+        plt.plot(bin_centers, hist)
+        
+    plt.xlabel('Value')
+    plt.ylabel('Frequency')
+    plt.title('topic score histogram for '+str(num_topic)+' topics')
+    #plt.grid(True)
+    plt.savefig(file_path)
+    plt.close()
+    print("topics plot saved")
+    return
 
 def plot_bbox(df):
     file_path= os .path.join(folder_path,'bbox.png')
@@ -166,12 +225,18 @@ def plot_bbox(df):
  
     plt.savefig(file_path)
     plt.close()
+    print("BBOX plot saved")
+
     return
 
 def save_hist(df,column):
     file_path= os .path.join(folder_path,'hist_'+column+'.png')
     if column=="sat":df[column]*=1000
+    if column[0:4]=="face":df[column]*=10
     # Plot histogram
+    #hist, bins = np.histogram(np.array(df[column]), bins=100)
+    #plt.stairs(hist, bins)
+
     bin_edges=np.arange(min(df[column])//1,max(df[column])//1 + 1)
     plt.hist(df[column], bins=bin_edges, edgecolor='black')
     plt.xlabel(column)
@@ -182,9 +247,11 @@ def save_hist(df,column):
     # Save the histogram as a PNG file
     plt.savefig(file_path)
     plt.close()
+    print(column+"histogram saved")
+
     return 
 
-def save_scatter(df,column1,column2,column3):
+def save_scatter_color(df,column1,column2,column3):
     folder_path = os.path.join(os.getcwd(), 'analysis/plots')
     file_path= os.path.join(folder_path,'Scatter_'+column1+column2+'.png')
 
@@ -220,26 +287,50 @@ def save_scatter(df,column1,column2,column3):
     # Save the histogram as a PNG file
     plt.savefig(file_path)
     plt.close()
+    print("background color scatter plot saved")
+
+    return
+    
+def scatter_face(df,column1,column2,column3):
+    folder_path = os.path.join(os.getcwd(), 'analysis/plots')
+    file_path= os.path.join(folder_path,'Scatter_'+column1+column2+'.png')
+
+    # print the columsn in the df
+    print(df.columns)    
+
+    # Plot scatter with combined color
+    plt.scatter(df[column1], df[column2], c=df[column3], alpha=0.01, cmap='coolwarm')
+    # Plot histogram
+    # plt.scatter(df[column1],df[column2],c=df[column3],alpha=0.005,cmap='hsv')
+    plt.xlabel(column1)
+    plt.ylabel(column2)
+    plt.title('Scatter plot of '+column1+column2 +"with color from"+column3+"with dtapoints" +str(len(df[column1])))
+    plt.grid(True)
+
+    # Save the histogram as a PNG file
+    plt.savefig(file_path)
+    plt.close()
+    print("face scatter plot saved")
 
     return
 
 
-df=create_BG_df()
-# df=create_segment_df()
-print(f"dataframe created.")
-print(df)
-# save_hist(df,"luminosity")
-# save_hist(df,"hue")
-# save_hist(df,"sat")
-# print("histogram saved")
-# save_scatter(df,"sat","hue","hue")
-save_scatter(df,"luminosity","sat","hue")
-# print("scatter plot created")
-# plot_bbox(df)
-# print("bbox plot created")
-   
-#print(f"An error occurred: {e}")
 
-#finally:
-    # Close the session
+#df_BG=create_BG_df()
+
+# save_hist(df_BG,"luminosity")
+# save_hist(df_BG,"hue")
+# save_hist(df_BG,"sat")
+# save_scatter(df_BG,"sat","hue","hue")
+#save_scatter_color(df_BG,"luminosity","sat","hue")
+
+df_seg=create_segment_df()
+scatter_face(df_seg,"face_x","face_y","face_z")
+save_hist(df_seg,"face_x")
+save_hist(df_seg,"face_y")
+save_hist(df_seg,"face_z")
+#plot_bbox(df_seg)
+
+#df_topic=create_topic_df()
+#plot_topics(df_topic)
 session.close()
