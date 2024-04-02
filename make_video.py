@@ -73,6 +73,10 @@ else:
         "HUE_MIN": 0,
         "HUE_MAX": 360
     }
+HSV_BOUNDS["d128_WEIGHT"] = 1
+HSV_BOUNDS["HSV_WEIGHT"] = .5
+HSV_BOUNDS["LUM_WEIGHT"] = .5
+
 HSV_NORMS = {
     # converts everything to a 0-1 scale
     "LUM": .01,
@@ -196,7 +200,7 @@ elif IS_SEGONLY:
     # WHERE += " AND k.keyword_text LIKE 'surpris%' "
 
     # WHERE = "s.site_name_id != 1"
-    LIMIT = 200
+    LIMIT = 20000
 
 
 

@@ -58,6 +58,9 @@ class SortPose:
             self.SAT_MAX = HSV_CONTROL['SAT_MAX']
             self.HUE_MIN = HSV_CONTROL['HUE_MIN']
             self.HUE_MAX = HSV_CONTROL['HUE_MAX']
+            self.HSV_WEIGHT = HSV_CONTROL['HSV_WEIGHT']
+            self.d128_WEIGHT = HSV_CONTROL['d128_WEIGHT']
+            self.LUM_WEIGHT = HSV_CONTROL['LUM_WEIGHT']
         # set some defaults, looking forward
         self.XLOW = -20
         self.XHIGH = 1
@@ -922,23 +925,16 @@ class SortPose:
                 hsv_converted = self.normalize_hsv(self.counter_dict["last_image_hsv"], df_enc.loc[dist_dict[item], "hsv"])
                 hsv_dist = self.get_d(self.counter_dict["last_image_hsv"], hsv_converted)
                 lum_dist = self.get_d(self.counter_dict["last_image_lum"], df_enc.loc[dist_dict[item], "lum"])
-            print(type(hsv_dist), type(lum_dist), type(item))
-            print("hsv, lum dist, item", hsv_dist, lum_dist, item)
-            hsv_dist_dict[item] = [item,hsv_dist,lum_dist]
+            # if self.VERBOSE: print("hsv, lum dist, item", hsv_dist, lum_dist, item)
+            hsv_dist_dict[item] = [item*self.d128_WEIGHT,hsv_dist*self.HSV_WEIGHT,lum_dist*self.LUM_WEIGHT]
 
         # sort the hsv_dist_dict dictionary based on the sum of all three values in the list
         sorted_keys_dHSV = [k for k, v in sorted(hsv_dist_dict.items(), key=lambda item: item[1][0] + item[1][1] + item[1][2])]
-        # Sort the dictionary based on the sum of the key and value
-        # sorted_keys_dHSV = [k for k, v in sorted(hsv_dist_dict.items(), key=lambda item: item[0] + item[1])]
-        # Sort the dictionary based on the sum of hsv_dist, lum_dist, and item
-        # sorted_keys_dHSV = [k for k, v in sorted(hsv_dist_dict.items(), key=lambda item: item[1][0] + item[1][1] + item)]
-        # sorted_keys_dHSV = [k for k, v in sorted(hsv_dist_dict.items(), key=lambda item: v[0] + v[1] + k)]
-        # sorted_keys_dHSV = [k for k, v in sorted(hsv_dist_dict.items(), key=lambda item: item[1][0] + item[1][1] + item[0])]
 
-        print("sorted_keys_dHSV", sorted_keys_dHSV)
+        # if self.VERBOSE: print("sorted_keys_dHSV", sorted_keys_dHSV)
         self.counter_dict["last_image_hsv"] =df_enc.loc[dist_dict[sorted_keys_dHSV[0]], "hsv"]
         self.counter_dict["last_image_lum"] =df_enc.loc[dist_dict[sorted_keys_dHSV[0]], "lum"]
-        # print(hsv_dist_dict)
+        # TK this needs to be handled separately for RUNS and for planar
 
         return sorted_keys_dHSV
 
