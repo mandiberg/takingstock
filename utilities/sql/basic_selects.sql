@@ -19,8 +19,8 @@ LIMIT 1000
 ;
 
 SELECT *
-FROM SegmentOct20 so  
-WHERE so.image_id = 278
+FROM SegmentOct20 so 
+WHERE so.image_id = 2082968
 ;
 
 SELECT DISTINCT ImagesBackground.image_id
@@ -33,6 +33,11 @@ LIMIT 10;
 SELECT COUNT(ib.image_id) 
 FROM ImagesBackground ib 
 WHERE ib.lum_torso IS NOT NULL 
+;
+
+SELECT *
+FROM ImagesBackground ib 
+WHERE ib.image_id = 2082968
 ;
 
 ALTER TABLE ImagesBackground 

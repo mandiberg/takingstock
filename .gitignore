@@ -135,3 +135,5 @@ db_backup_stock_june18.sql
 performance_notes.txt
 *.wav
 utilities/sql/Scripts alias
+sound/barks/output_file.csv
+sound/barks/output_file.csv

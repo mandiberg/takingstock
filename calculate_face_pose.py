@@ -68,8 +68,8 @@ SITE_NAME_ID = 1
 '''
 
 # MAIN_FOLDER = "/Volumes/SSD4green/images_shutterstock"
-# MAIN_FOLDER = "/Volumes/RAID54/images_pond5"
-MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/getty_scrape/done/getty_33333_china/images_china_lastset"
+# MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/getty_scrape/getty_22222_serbia/images_serbia_lastset"
+MAIN_FOLDER = "/Volumes/SSD4/images_getty_reDL"
 BATCH_SIZE = 25000 # Define how many from each folder in each batch
 
 #temp hack to go 1 subfolder at a time

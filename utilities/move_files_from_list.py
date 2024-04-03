@@ -7,7 +7,7 @@ import shutil
 # this script will copy the files from the original path to the destination path
 
 # Define the path to the CSV file
-csv_file = '/Users/michaelmandiberg/Documents/projects-active/facemap_production/process_documentation/process_2024_march/background_run_missing_images.csv'
+csv_file = '/Users/michaelmandiberg/Documents/projects-active/facemap_production/process_documentation/process_2024_march/getty_snafu.csv'
 
 # Open the CSV file in read mode
 with open(csv_file, mode='r', newline='') as file:

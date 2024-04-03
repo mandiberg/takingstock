@@ -22,11 +22,11 @@ ALL_ONE_VIDEO = False
 
 # MERGE
 # Provide the path to the folder containing the images
-ROOT_FOLDER_PATH = '/Users/michaelmandiberg/Library/CloudStorage/Dropbox/takingstock_dropbox/'
+ROOT_FOLDER_PATH = '/Users/michaelmandiberg/Documents/projects-active/facemap_production/segment_images/'
 # if IS_CLUSTER this should be the folder holding all the cluster folders
 # if not, this should be the individual folder holding the images
 # will not accept clusterNone -- change to cluster00
-FOLDER_NAME ="topic10_feb15_withMetas"
+FOLDER_NAME ="excite_small_portrait_jumpshot15after_3D_wgt1_max1.4_delta.5_min..45"
 FOLDER_PATH = os.path.join(ROOT_FOLDER_PATH,FOLDER_NAME)
 
 # WRITE VIDEO
@@ -181,6 +181,7 @@ def write_video(img_array, FRAMERATE=15, subfolder_path=None):
 
 
 def main():
+    print("starting merge_expanded_images.py")
     if IS_CLUSTER is True:
         subfolders = io.get_folders(FOLDER_PATH)
         # print(subfolders)
@@ -207,6 +208,7 @@ def main():
                     save_merge(merged_image, count, cluster_no, FOLDER_PATH)
     else:
         if IS_VIDEO is True:
+            print("going to get folder ls")
             all_img_path_list = io.get_img_list(FOLDER_PATH)
             print(all_img_path_list)
             write_video(all_img_path_list, FRAMERATE, FOLDER_PATH)

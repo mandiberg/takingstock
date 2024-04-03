@@ -29,8 +29,8 @@ io = DataIO()
 # PATH = "/Volumes/SSD4green/images_shutterstock"
 # NEWPATH = "/Volumes/RAID54/images_shutterstock"
 
-PATH = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/getty_scrape/ingested_processed/getty_55555/images"
-NEWPATH = "/Volumes/SSD4/images_getty_reDL"
+PATH = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/ImagesBazzar/images"
+NEWPATH = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/images_bazzar"
 
 ALL_IN_ONE_FOLDER = False
 

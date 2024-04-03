@@ -93,7 +93,7 @@ BATCH_SIZE = 100
 
 
 MODEL="TF" ## OR TF  ## Bag of words or TF-IDF
-NUM_TOPICS=70
+NUM_TOPICS=30
 
 stemmer = SnowballStemmer('english')
 
