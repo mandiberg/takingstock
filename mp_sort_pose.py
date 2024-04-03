@@ -24,7 +24,7 @@ class SortPose:
         self.MAXDIST = 1.4
         self.MINDIST = .45
         self.MINBODYDIST = .05
-        self.CUTOFF = 100
+        self.CUTOFF = 100000
         self.FACE_DIST = 15
 
         # maximum allowable scale up
@@ -41,7 +41,7 @@ class SortPose:
         self.ONE_SHOT = ONE_SHOT
         self.JUMP_SHOT = JUMP_SHOT
         self.SHOT_CLOCK = 0
-        self.SHOT_CLOCK_MAX = 15
+        self.SHOT_CLOCK_MAX = 10
         self.BODY_LMS = [0, 13, 14, 15, 16, 19, 20]
         self.VERBOSE = VERBOSE
 
@@ -897,6 +897,24 @@ class SortPose:
         hsv2[0] = min(dist_reg, dist_offset)
         # this is where I will curve the sat data
         return hsv2
+
+    def weight_hue(self, hsv):        
+        def min_max_scale(h):
+            if h <= 0.3:
+                return 0
+            else:
+                return (h - 0.3) / (1 - 0.3)
+
+        h, s, v = hsv
+        s = min_max_scale(s)
+        v = min_max_scale(v)
+        return h, s, v
+
+        # cube root, not using for now    
+        # if h>0:
+        #     w_s = s**(1./3.)
+        # else:
+        #     w_s = -((-s)**(1./3.))
 
     def sort_dHSV(self, dist_dict, df_enc, HSVonly=False):
         # print("sort_dHSV, HSVonly is", HSVonly)
