@@ -48,7 +48,7 @@ VERBOSE = False
 # HelperTable_name = "SegmentHelperMar23_headon"
 
 # 7K for topic 7
-HelperTable_name = "SegmentHelperApril1_topic7"
+HelperTable_name = "SegmentHelperMar23_headon"
 
 # MM controlling which folder to use
 IS_SSD = True
@@ -100,7 +100,7 @@ title = 'Please choose your operation: '
 options = ['Create table', 'Fetch BG color stats',"test sorting"]
 option, index = pick(options, title)
 
-LIMIT= 10000
+LIMIT= 1000000
 # Initialize the counter
 counter = 0
 

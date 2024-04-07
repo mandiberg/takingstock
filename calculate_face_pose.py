@@ -50,7 +50,7 @@ http="https://media.gettyimages.com/photos/"
 
 # am I looking on RAID/SSD for a folder? If not, will pull directly from SQL
 # if so, also change the site_name_id etc around line 930
-IS_FOLDER = True
+IS_FOLDER = False
 SITE_NAME_ID = 1
 # 2, shutter. 4, istock
 # 7 pond5
@@ -81,7 +81,10 @@ THESE_FOLDER_PATHS = ["9/9C", "9/9D", "9/9E", "9/9F", "9/90", "9/91", "9/92", "9
 CSV_FOLDERCOUNT_PATH = os.path.join(MAIN_FOLDER, "folder_countout.csv")
 
 IS_SSD=False
-BODYLMS = False
+BODYLMS = True
+SEGMENT = 0 # set to 0 or False if using HelperTable or not using a segment
+HelperTable_name = "SegmentHelperApril4_topic17" # set to False if not using a HelperTable
+
 
 if BODYLMS is True:
 
@@ -92,7 +95,14 @@ if BODYLMS is True:
     FROM =f"{SegmentTable_name} seg1 LEFT JOIN Encodings e ON seg1.image_id = e.image_id"
     # FROM ="Encodings e"
     QUERY = "e.body_landmarks IS NULL AND e.image_id IN"
-    SUBQUERY = f"(SELECT seg1.image_id FROM {SegmentTable_name} seg1 WHERE face_x > -33 AND face_x < -27 AND face_y > -2 AND face_y < 2 AND face_z > -2 AND face_z < 2 AND seg1.site_name_id !=1)"
+    SUBQUERY = f"(SELECT seg1.image_id FROM {SegmentTable_name} seg1 WHERE face_x > -33 AND face_x < -27 AND face_y > -2 AND face_y < 2 AND face_z > -2 AND face_z < 2)"
+    if SEGMENT:
+        FROM = f"{SegmentTable_name} seg1 LEFT JOIN ImagesTopics it ON seg1.image_id = it.image_id"
+        SUBQUERY = f"(SELECT seg1.image_id FROM {SegmentTable_name} seg1 WHERE face_x > -33 AND face_x < -27 AND face_y > -2 AND face_y < 2 AND face_z > -2 AND face_z < 2 AND it.topic_id = {SEGMENT})"
+    if HelperTable_name:
+        FROM += f" INNER JOIN {HelperTable_name} ht ON seg1.image_id = ht.image_id LEFT JOIN ImagesTopics it ON seg1.image_id = it.image_id"
+        QUERY = "e.body_landmarks IS NULL"
+        SUBQUERY = ""
     WHERE = f"{QUERY} {SUBQUERY}"
 
 else:
@@ -130,7 +140,7 @@ else:
 # IS_SSD=True
 ##########################################
 
-LIMIT = 100
+LIMIT = 10000
 
 # platform specific credentials
 io = DataIO(IS_SSD)

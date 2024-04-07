@@ -6,7 +6,7 @@ USE stock;
 DELETE FROM SegmentHelperMar23_headon;
 
 -- create helper segment table
-CREATE TABLE SegmentHelperApril1_topic17 (
+CREATE TABLE SegmentHelperApril4_topic17 (
     seg_image_id int NOT NULL AUTO_INCREMENT PRIMARY KEY,
     image_id INTEGER,
     FOREIGN KEY (image_id) REFERENCES Images(image_id)

@@ -47,7 +47,7 @@ SegmentTable_name = 'SegmentOct20'
 
 # SATYAM, this is MM specific
 # for when I'm using files on my SSD vs RAID
-IS_SSD = True
+IS_SSD = False
 #IS_MOVE is in move_toSSD_files.py
 
 # This is for when you only have the segment table. RW SQL query
@@ -104,24 +104,25 @@ IS_ANGLE_SORT = False
 IS_TOPICS = False
 N_TOPICS = 30
 
+# is an array. it can handle multiple topics together.
 IS_ONE_TOPIC = True
-TOPIC_NO = [7]
-# 7 is isolated, 84 is business, 27 babies, 16 pointing
-# 37 is doctor << 35 covid
-# 45 is hands
-# 34 holding tablet
-# 63 feeling frustrated
-# 85 is hands to face
-# 71 shout
-# 10 is surprise
-# 25 is yoga << planar, 85 planar, 77 fingers crossed
+TOPIC_NO = [17]
+#  is isolated,  is business,  babies, 17 pointing
+#  is doctor <<  covid
+#  is hands
+#  holding tablet
+#  feeling frustrated
+#  is hands to face
+#  shout
+# 7 is surprise
+#  is yoga << planar,  planar,  fingers crossed
 
-SORT_TYPE = "128d"
+# SORT_TYPE = "128d"
 # SORT_TYPE ="planar"
-# SORT_TYPE = "planar_body"
+SORT_TYPE = "planar_body"
 
 ONE_SHOT = False # take all files, based off the very first sort order.
-JUMP_SHOT = True # jump to random file if can't find a run
+JUMP_SHOT = True # jump to random file if can't find a run (I don't think this applies to planar?)
 
 # I/O utils
 io = DataIO(IS_SSD)
@@ -168,8 +169,8 @@ elif IS_SEGONLY:
     
     FROM =f"{SegmentTable_name} s "
 
-    # this is the standard segment topics/clusters query for November 2023
-    WHERE = "s.site_name_id != 1 AND face_encodings68 IS NOT NULL AND face_x > -33 AND face_x < -27 AND face_y > -2 AND face_y < 2 AND face_z > -2 AND face_z < 2"
+    # this is the standard segment topics/clusters query for April 2024
+    WHERE = " face_encodings68 IS NOT NULL AND face_x > -33 AND face_x < -27 AND face_y > -2 AND face_y < 2 AND face_z > -2 AND face_z < 2"
 
     # HIGHER
     # WHERE = "s.site_name_id != 1 AND face_encodings68 IS NOT NULL AND face_x > -27 AND face_x < -23 AND face_y > -2 AND face_y < 2 AND face_z > -2 AND face_z < 2"
@@ -200,7 +201,7 @@ elif IS_SEGONLY:
     # WHERE += " AND k.keyword_text LIKE 'surpris%' "
 
     # WHERE = "s.site_name_id != 1"
-    LIMIT = 20000
+    LIMIT = 800
 
 
 
@@ -217,8 +218,8 @@ motion = {
 EXPAND = False
 
 # face_height_output is how large each face will be. default is 750
-face_height_output = 500
-# face_height_output = 256
+# face_height_output = 500
+face_height_output = 256
 
 # define ratios, in relationship to nose
 # units are ratio of faceheight
@@ -226,8 +227,8 @@ face_height_output = 500
 # image_edge_multiplier = [1, 1, 1, 1] # just face
 # image_edge_multiplier = [1.5,1.5,2,1.5] # bigger portrait
 # image_edge_multiplier = [1.4,2.6,1.9,2.6] # wider for hands
-# image_edge_multiplier = [1.2,2.3,1.7,2.3] # medium for hands
-image_edge_multiplier = [1.2, 1.2, 1.6, 1.2] # standard portrait
+image_edge_multiplier = [1.2,2.3,1.7,2.3] # medium for hands
+# image_edge_multiplier = [1.2, 1.2, 1.6, 1.2] # standard portrait
 
 
 # construct my own objects
@@ -483,7 +484,7 @@ def sort_by_face_dist(df_enc, df_128_enc, df_33_lms):
 
         #debuggin
         print(f"sorted round {str(i)} which is actually round  {str(i+len(dkeys)-1)}")
-        print(len(df_128_enc.index))
+        print(f"{len(df_128_enc.index)} images remain in df_128_enc")
         if len(df_128_enc.index) < 2:
             break
         print(dist)

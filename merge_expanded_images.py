@@ -29,6 +29,9 @@ ROOT_FOLDER_PATH = '/Users/michaelmandiberg/Documents/projects-active/facemap_pr
 FOLDER_NAME ="excite_small_portrait_jumpshot15after_3D_wgt1_max1.4_delta.5_min..45"
 FOLDER_PATH = os.path.join(ROOT_FOLDER_PATH,FOLDER_NAME)
 
+#temporary
+FOLDER_PATH = "/Users/michaelmandiberg/Library/CloudStorage/Dropbox/takingstock_dropbox/excite_small_portrait_jumpshot15after_3D_wgt1_max1.4_delta.5"
+
 # WRITE VIDEO
 # img_array = ['image1.jpg', 'image2.jpg', 'image3.jpg']
 # HOLDER = '/Users/michaelmandiberg/Dropbox/facemap_dropbox/June_tests/'

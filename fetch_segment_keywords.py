@@ -28,8 +28,8 @@ io = DataIO()
 db = io.db
 # io.db["name"] = "ministock"
 
-VERBOSE = False
-SegmentHelper_name = 'SegmentHelperApril1_topic7'
+VERBOSE = True
+SegmentHelper_name = 'SegmentHelperApril4_topic17'
 TOKEN_COUNT_PATH = "token_counts.csv"
 
 # Create a database engine
@@ -67,10 +67,13 @@ keys_dict = make_key_dict(os.path.join(io.ROOT, "Keywords_202403172226.csv"))
 
 
 title = 'Please choose your operation: '
-options = ['Create helper table', 'Fetch keywords list and make tokens', 'Fetch ethnicity list', 'Prune Table where is_face == None', 'move new segment image_ids to existing segment','fetch description/Image metas if None','count tokens']
+options = ['Create helper table', 'Fetch keywords list and make tokens', 'Fetch ethnicity list', 'Prune Table where is_face == None', 
+           'move new segment image_ids to existing segment','fetch description/Image metas if None','count tokens',
+           'fetch body_landmarks'
+           ]
 option, index = pick(options, title)
 
-LIMIT= 50000
+LIMIT= 100000
 # Initialize the counter
 counter = 0
 
@@ -346,6 +349,57 @@ def fetch_images_metadata(image_id_with_no_meta, lock, session):
         print(f"Added description: {counter}")
     
 
+def fetch_encodings_bodylandmarks(image_id_with_no_meta, lock, session):
+
+    select_Encodings_metas_query = (
+        select( 
+        Encodings.face_x, 
+        Encodings.face_y, 
+        Encodings.face_z, 
+        Encodings.mouth_gap, 
+        Encodings.face_landmarks, 
+        Encodings.bbox, 
+        Encodings.face_encodings68, 
+        Encodings.body_landmarks)
+        .join(Images, Encodings.image_id == Images.image_id)
+        .filter(Images.image_id == image_id_with_no_meta)
+    )
+
+    existing_segment_entry = (
+        session.query(SegmentTable)
+        .filter(SegmentTable.image_id == image_id_with_no_meta)
+        .first()
+    )
+
+    if not existing_segment_entry.body_landmarks:
+        # Execute the query and fetch the result as a list of keyword_ids
+        result_Encodings = session.execute(select_Encodings_metas_query).fetchall()
+        # print(result_Encodings)
+        existing_segment_entry.face_x= result_Encodings[0][0]
+        existing_segment_entry.face_y= result_Encodings[0][1]
+        existing_segment_entry.face_z= result_Encodings[0][2]
+        existing_segment_entry.mouth_gap= result_Encodings[0][3]
+        existing_segment_entry.face_landmarks= result_Encodings[0][4]
+        existing_segment_entry.bbox= result_Encodings[0][5]
+        existing_segment_entry.face_encodings68= result_Encodings[0][6]
+        existing_segment_entry.body_landmarks= result_Encodings[0][7]
+        print(f"image_id {image_id_with_no_meta} Encodings will be added.")
+
+    else:
+        if VERBOSE: print(f"NO ACTION image_id {image_id_with_no_meta} Encodings already exists.")
+
+    with lock:
+        # Increment the counter using the lock to ensure thread safety
+        global counter
+        counter += 1
+        session.commit()
+        if VERBOSE: print("added metas/encodings: ", image_id_with_no_meta)
+
+    # Print a message to confirm the update
+    # print(f"Keyword list for image_id {image_id} updated successfully.")
+    if counter % 1000 == 0:
+        print(f"Added description: {counter}")
+
 
 def move_segment_to_segment(image_id_to_move, lock, session):
     # image_id_to_move = row[0]
@@ -588,15 +642,27 @@ if index == 0:
         .join(ImagesTopics, Encodings.image_id == ImagesTopics.image_id)
         .outerjoin(SegmentHelper, Encodings.image_id == SegmentHelper.image_id)
         .filter(SegmentHelper.image_id == None)
+
         .filter(and_(
-            Encodings.face_x > -33,
-            Encodings.face_x < -27,
-            Encodings.face_y > -2,
-            Encodings.face_y < 2,
-            Encodings.face_z > -2,
-            Encodings.face_z < 2,
-            ImagesTopics.topic_id == 7
+            Encodings.face_x > -40,
+            Encodings.face_x < -25,
+            Encodings.face_y > -4,
+            Encodings.face_y < 4,
+            Encodings.face_z > -4,
+            Encodings.face_z < 4,
+            ImagesTopics.topic_id == 17
         ))
+
+        # .filter(and_(
+        #     Encodings.face_x > -33,
+        #     Encodings.face_x < -27,
+        #     Encodings.face_y > -2,
+        #     Encodings.face_y < 2,
+        #     Encodings.face_z > -2,
+        #     Encodings.face_z < 2,
+        #     ImagesTopics.topic_id == 7
+        # ))
+
         .limit(LIMIT)
     )
 
@@ -714,6 +780,24 @@ elif index == 6:
         # Write the counts
         for string, count in string_counter.items():
             writer.writerow([count, string])
+
+elif index == 7:
+    # function=fetch_description
+    function=fetch_encodings_bodylandmarks
+    #################PRUNE THE TABLE#######################################
+
+    # No bodylandmarks and in specific topic
+    distinct_image_ids_query = select(SegmentTable.image_id.distinct())\
+        .join(SegmentHelper, SegmentTable.image_id == SegmentHelper.image_id)\
+        .filter(SegmentTable.body_landmarks == None)\
+        .limit(LIMIT)
+
+
+    # Execute the query and fetch the results
+    distinct_image_ids = [row[0] for row in session.execute(distinct_image_ids_query).fetchall()]
+    print(len(distinct_image_ids), "rows without body_landmarks in topic: ", SegmentHelper_name)    
+    for target_image_id in distinct_image_ids:
+        work_queue.put(target_image_id)
 
 
 def threaded_fetching():

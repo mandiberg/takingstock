@@ -186,6 +186,7 @@ class SegmentTable(Base):
     bbox = Column(JSON)
     face_encodings = Column(BLOB)
     face_encodings68 = Column(BLOB)
+    body_landmarks = Column(BLOB)
     site_image_id = Column(String(50), nullable=False)
     keyword_list = Column(BLOB)  # Pickled list
     tokenized_keyword_list = Column(BLOB)  # Pickled list
