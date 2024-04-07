@@ -8,16 +8,17 @@ start = time.time()
 
 # conda activate bark
 
-INPUT = "/Users/michaelmandiberg/Library/CloudStorage/Dropbox/takingstock_dropbox/April2_audioproduction"
-OUTPUT = "/Users/michaelmandiberg/Documents/GitHub/facemap/sound/barks"
-sourcefile = "metas_bark.csv"
+INPUT = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/segment_images/audioproduction/bark"
+OUTPUT = INPUT
+# OUTPUT = "/Users/michaelmandiberg/Documents/GitHub/facemap/sound/barks"
+sourcefile = "metas.csv"
 output_csv = "output_file.csv"
 processor = AutoProcessor.from_pretrained("suno/bark")
 model = BarkModel.from_pretrained("suno/bark")
 preset_list = [f"v2/en_speaker_{i}" for i in range(10)]
 STOP_AFTER = 200
 counter = 1
-start_at = 1 # next to complete
+start_at = 0 # next to complete
 
 with open(os.path.join(INPUT, sourcefile), mode='r',encoding='utf-8-sig', newline='') as csvfile:
     reader = csv.DictReader(csvfile)
