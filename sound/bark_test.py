@@ -34,11 +34,11 @@ output_csv = "output_file.csv"
 
 STOP_AFTER = 2000
 counter = 1
-start_at = 200
+start_at = 425
 
 def get_existing_image_ids():
     existing_files = io.get_img_list(OUTPUT)
-    existing_image_ids = [int(f.split("_")[0]) for f in existing_files]
+    existing_image_ids = [int(f.split("_")[0]) for f in existing_files if f.endswith(".wav")]
     return existing_image_ids
 
 def write_TTS_bark(input_text,file_name):
@@ -112,14 +112,17 @@ with open(os.path.join(INPUT, sourcefile), mode='r',encoding='utf-8-sig', newlin
 
         # Iterate through each row
         for row in reader:
-            image_id = row['image_id']
-            if counter%10==0: print(counter,"sounds generated")
-            # skip row until counter is greater than start_at
-            if counter < start_at or image_id in existing_image_ids:
-                if image_id in existing_image_ids:
-                    print(f"Skipping image_id {image_id} because it already exists")
+            image_id = int(row['image_id'])
+            if image_id in existing_image_ids:
+                print(f"Skipping image_id {image_id} because it already exists {counter}")
                 counter += 1
                 continue
+            # skip row until counter is greater than start_at
+            elif counter < start_at:
+                counter += 1
+                continue
+            if counter%10==0: print(counter,"sounds generated")
+                
             print(row)
             input_text = row['description']
             voice_preset = random.choice(preset_list)
