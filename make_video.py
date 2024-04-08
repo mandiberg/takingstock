@@ -106,7 +106,7 @@ N_TOPICS = 30
 
 # is an array. it can handle multiple topics together.
 IS_ONE_TOPIC = True
-TOPIC_NO = [17]
+TOPIC_NO = [0]
 #  is isolated,  is business,  babies, 17 pointing
 #  is doctor <<  covid
 #  is hands
@@ -117,9 +117,9 @@ TOPIC_NO = [17]
 # 7 is surprise
 #  is yoga << planar,  planar,  fingers crossed
 
-# SORT_TYPE = "128d"
+SORT_TYPE = "128d"
 # SORT_TYPE ="planar"
-SORT_TYPE = "planar_body"
+# SORT_TYPE = "planar_body"
 
 ONE_SHOT = False # take all files, based off the very first sort order.
 JUMP_SHOT = True # jump to random file if can't find a run (I don't think this applies to planar?)
@@ -201,7 +201,7 @@ elif IS_SEGONLY:
     # WHERE += " AND k.keyword_text LIKE 'surpris%' "
 
     # WHERE = "s.site_name_id != 1"
-    LIMIT = 800
+    LIMIT = 500000
 
 
 
@@ -218,8 +218,8 @@ motion = {
 EXPAND = False
 
 # face_height_output is how large each face will be. default is 750
-# face_height_output = 500
-face_height_output = 256
+face_height_output = 500
+# face_height_output = 256
 
 # define ratios, in relationship to nose
 # units are ratio of faceheight
@@ -227,8 +227,8 @@ face_height_output = 256
 # image_edge_multiplier = [1, 1, 1, 1] # just face
 # image_edge_multiplier = [1.5,1.5,2,1.5] # bigger portrait
 # image_edge_multiplier = [1.4,2.6,1.9,2.6] # wider for hands
-image_edge_multiplier = [1.2,2.3,1.7,2.3] # medium for hands
-# image_edge_multiplier = [1.2, 1.2, 1.6, 1.2] # standard portrait
+# image_edge_multiplier = [1.2,2.3,1.7,2.3] # medium for hands
+image_edge_multiplier = [1.2, 1.2, 1.6, 1.2] # standard portrait
 
 
 # construct my own objects
@@ -245,8 +245,6 @@ start_site_image_id = None
 # start_site_image_id = "5/58/95516714-happy-well-dressed-man-holding-a-gift-on-white-background.jpg"
 
 
-# start_site_image_id = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/images_123rf/E/E8/95447708-portrait-of-happy-smiling-beautiful-young-woman-touching-skin-or-applying-cream-isolated-over-white.jpg"
-# 274243    Portrait of funny afro guy  76865   {"top": 380, "left": 749, "right": 1204, "bottom": 835}
 d = None
 
 
@@ -371,9 +369,10 @@ def sort_by_face_dist(df_enc, df_128_enc, df_33_lms):
         print("this_start", this_start)
         print("starting sort round ",str(i))
         
-        ## Get the starting encodings 
+        ## Get the starting encodings (if not passed through)
         if this_start != "median" and this_start != "start_site_image_id" and i == 0:
-            # this is the first round. set encodings to the passed through encodings
+            # this is the first round for clusters/itter where last_image_enc is true
+            # set encodings to the passed through encodings
             # IF NO START IMAGE SPECIFIED (this line works for no clusters)
             print("attempting set enc1 from pass through")
             enc1 = sort.counter_dict["last_image_enc"]
@@ -382,13 +381,13 @@ def sort_by_face_dist(df_enc, df_128_enc, df_33_lms):
             print("set enc1 from pass through")
         else:
             #this is the first??? round, set via df
-            print("trying get_start_enc()")
+            print(f"trying get_start_enc() from {this_start}")
             enc1, df_128_enc, df_33_lms = sort.get_start_enc(this_start, df_128_enc, df_33_lms, SORT_TYPE)
             # # test to see if get_start_enc was successful
             # # if not, retain previous enc1. or shoudl it reassign median? 
             # if enc1_temp is not None:
             #     enc1 = enc1_temp
-            print("set enc1 from get_start_enc() ")
+            print(f"set enc1 from get_start_enc() to {enc1}")
 
         ## Find closest
         try:
@@ -432,7 +431,7 @@ def sort_by_face_dist(df_enc, df_128_enc, df_33_lms):
 
             ## Collect values and append to face_distances
             this_start = closest_dict[dkey]
-            print("this_start assigned as ", this_start)
+            if VERBOSE: print("this_start assigned as ", this_start)
             face_landmarks=None
             bbox=None
 
@@ -476,7 +475,7 @@ def sort_by_face_dist(df_enc, df_128_enc, df_33_lms):
             print("images_to_drop.remove failed because was too great a lum diff", str(e))
         print(len(images_to_drop))
         for dropimage in images_to_drop:
-            print("going to remove this image enc", dropimage)
+            if VERBOSE: print("going to remove this image enc", dropimage)
             try:
                 df_128_enc=df_128_enc.drop(dropimage)
             except Exception as e:
@@ -487,8 +486,7 @@ def sort_by_face_dist(df_enc, df_128_enc, df_33_lms):
         print(f"{len(df_128_enc.index)} images remain in df_128_enc")
         if len(df_128_enc.index) < 2:
             break
-        print(dist)
-        print (start_img_name)
+        print(f"last distance was {dist}, next image is {start_img_name}")
 
     ## When loop is complete, create df
     df = pd.DataFrame(face_distances, columns =['dist', 'folder', 'filename','site_name_id','face_landmarks', 'bbox'])
