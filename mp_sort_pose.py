@@ -921,8 +921,28 @@ class SortPose:
 
     def sort_dHSV(self, dist_dict, df_enc, HSVonly=False):
         if self.VERBOSE: print(f"in sort_dHSV, HSVonly is {HSVonly} counter_dict is {self.counter_dict}")
+
+        # Sort the dictionary by keys
+        sorted_dist_dict = dict(sorted(dist_dict.items()))
+
+        # Move items beyond the first 200 into a new dictionary
+        extra_dist_dict = {k: v for i, (k, v) in enumerate(sorted_dist_dict.items()) if i >= 200}
+
+        # Remove the items beyond the first 200 from the original dictionary
+        dist_dict_200 = {k: v for i, (k, v) in enumerate(sorted_dist_dict.items()) if i < 200}
+
+        print("Sorted Dictionary (first 200 items):")
+        print(len(dist_dict_200))
+
+        print("\nExtra Dictionary (beyond first 200 items):")
+        print(len(extra_dist_dict))
+
         hsv_dist_dict = {}
-        for item in dist_dict:
+        # if dist_dict is greater than 200
+
+
+        # only going through dist_dict_200, but leaving dist_dict as the ref below
+        for item in dist_dict_200:
             print("item", item)
             # for testing
             # if not self.counter_dict["last_image_hsv"]:
@@ -972,8 +992,9 @@ class SortPose:
         self.counter_dict["last_image_hsv"] =df_enc.loc[dist_dict[sorted_keys_dHSV[0]], "hsv"]
         self.counter_dict["last_image_lum"] =df_enc.loc[dist_dict[sorted_keys_dHSV[0]], "lum"]
         # TK this needs to be handled separately for RUNS and for planar
-
-        return sorted_keys_dHSV
+        sorted_keys_dHSV_to_return = sorted_keys_dHSV+list(extra_dist_dict.keys())
+        print("len(sorted_keys_dHSV_to_return)", len(sorted_keys_dHSV_to_return))
+        return sorted_keys_dHSV_to_return
 
     # def jump(self, dist, dist_dict):
     #     if self.VERBOSE: print("jumping!")

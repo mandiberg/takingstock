@@ -201,7 +201,7 @@ elif IS_SEGONLY:
     # WHERE += " AND k.keyword_text LIKE 'surpris%' "
 
     # WHERE = "s.site_name_id != 1"
-    LIMIT = 500000
+    LIMIT = 500
 
 
 
