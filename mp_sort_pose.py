@@ -19,6 +19,7 @@ class SortPose:
 
         self.mp_face_detection = mp.solutions.face_detection
         self.mp_drawing = mp.solutions.drawing_utils
+        self.get_bg_segment=mp.solutions.selfie_segmentation.SelfieSegmentation()
 
         #maximum allowable distance between encodings
         self.MAXDIST = 1.4
@@ -758,6 +759,58 @@ class SortPose:
             # resize = None
         return cropped_image
 
+    def get_bg_hue_lum(self,image,bbox=None,faceLms=None):
+        hue = sat = val = lum = lum_torso = None
+        if bbox:
+            try:
+                if type(bbox)==str:
+                    bbox=json.loads(bbox)
+                    if self.VERBOSE: print("bbox type", type(bbox))
+                #sample_img=sample_img[bbox['top']:bbox['bottom'],bbox['left']:bbox['right'],:]
+                # passing in bbox as a str
+                image = self.crop_image(image, faceLms, bbox)
+                #print(type(sample_img),"@@@@@@@@@@@@")
+                if image is None: return -1,-1,-1,-1,-1 ## if TOO_BIG==true, checking if cropped image is empty
+            except:
+                if self.VERBOSE: print("FAILED CROPPING, bad bbox",bbox)
+                return -2,-2,-2,-2,-2
+            print("bbox['bottom'], ", bbox['bottom'])
+
+        result = self.get_bg_segment.process(image[:,:,::-1]) #convert RBG to BGR then process with mp
+        mask=np.repeat((1-result.segmentation_mask)[:, :, np.newaxis], 3, axis=2) 
+        mask_torso=np.repeat((result.segmentation_mask)[:, :, np.newaxis], 3, axis=2) 
+
+        masked_img=mask*image[:,:,::-1]/255 ##RGB format
+        masked_img_torso=mask_torso*image[:,:,::-1]/255 ##RGB format
+
+        # Identify black pixels where R=0, G=0, B=0
+        black_pixels_mask = np.all(masked_img == [0, 0, 0], axis=-1)
+        black_pixels_mask_torso = np.all(masked_img_torso == [0, 0, 0], axis=-1)
+
+        # Filter out black pixels and compute the mean color of the remaining pixels
+        mean_color = np.mean(masked_img[~black_pixels_mask], axis=0)[np.newaxis,np.newaxis,:] # ~ means negate/remove
+        self.hue = cv2.cvtColor(mean_color, cv2.COLOR_RGB2HSV)[0,0,0]
+        self.sat = cv2.cvtColor(mean_color, cv2.COLOR_RGB2HSV)[0,0,1]
+        self.val = cv2.cvtColor(mean_color, cv2.COLOR_RGB2HSV)[0,0,2]
+        self.lum = cv2.cvtColor(mean_color, cv2.COLOR_RGB2LAB)[0,0,0]
+
+        if self.VERBOSE: print("NOTmasked_img_torso size", masked_img_torso.shape, black_pixels_mask_torso.shape)
+        if bbox:
+            # SJ something is broken in here. It returns an all black image which produces a lum of 100
+            masked_img_torso = masked_img_torso[bbox['bottom']:]
+            black_pixels_mask_torso = black_pixels_mask_torso[bbox['bottom']:]
+        # else:
+        #     print("YIKES! no bbox. Here's a hacky hack to crop to the bottom 20%")
+        #     bottom_fraction = masked_img_torso.shape[0] // 5
+        #     masked_img_torso = masked_img_torso[-bottom_fraction:]
+        #     black_pixels_mask_torso = black_pixels_mask_torso[-bottom_fraction:]
+
+        if self.VERBOSE: print("masked_img_torso size", masked_img_torso.shape, black_pixels_mask_torso.shape)
+        mean_color = np.mean(masked_img_torso[~black_pixels_mask_torso], axis=0)[np.newaxis,np.newaxis,:] # ~ is negate
+        self.lum_torso=cv2.cvtColor(mean_color, cv2.COLOR_RGB2LAB)[0,0,0]
+
+        if self.VERBOSE: print("HSV, lum", hue,sat,val,lum, lum_torso)
+        return self.hue,self.sat,self.val,self.lum,self.lum_torso
 
     def get_start_enc(self, start_img, df_128_enc, df_33_lms, SORT_TYPE):
         print("get_start_enc")
