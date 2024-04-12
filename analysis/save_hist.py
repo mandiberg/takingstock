@@ -22,7 +22,7 @@ sys.path.insert(1,Repo_path )
 
 from mp_db_io import DataIO
 from my_declarative_base import Images, Encodings, Base, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON, Float
-from my_declarative_base import ImagesBackground,ImagesTopics  # Replace 'your_module' with the actual module where your SQLAlchemy models are defined
+from my_declarative_base import ImagesBackground,ImagesTopics, ImagesClusters  # Replace 'your_module' with the actual module where your SQLAlchemy models are defined
 
 
 ######## Michael's Credentials ########
@@ -48,7 +48,7 @@ ROOT = io.ROOT
 NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 # #######################################
 
-LIMIT= 250000
+LIMIT= 2500000
 
 engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}".format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']), poolclass=NullPool)
 
@@ -188,6 +188,30 @@ def create_segment_df():
 
     return df
 
+def create_corr_df():
+    query = session.query(ImagesClusters, ImagesTopics).filter(ImagesClusters.image_id == ImagesTopics.image_id)
+    if LIMIT:
+        query = query.limit(LIMIT)
+    # Execute the query and fetch all results
+    result = session.execute(query).fetchall()
+
+    results=[]
+    counter=0
+    for row_clusters,row_topics in result:
+        if counter%1000==0:print(counter,"rows made")
+        image_id=row_clusters.image_id
+        cluster_id=row_clusters.cluster_id
+        topic_id=row_topics.topic_id
+        topic_score=row_topics.topic_score
+        # print(row_clusters.image_id,row_topics.image_id,"$$$$$$$$$$")
+        results.append({"image_id": image_id, "cluster_id": cluster_id, "topic_id": topic_id,"topic_score":topic_score})
+        counter+=1
+    df = pd.DataFrame(results)
+    print("Correlation dataframe created")
+    print(df)
+
+    return df
+
 def plot_topics(df):
     file_path= os .path.join(folder_path,'topic_hist.png')
     topic_id=df["topic_id"]
@@ -291,7 +315,7 @@ def save_scatter_color(df,column1,column2,column3):
 
     return
     
-def scatter_face(df,column1,column2,column3):
+def save_scatter(df,column1,column2,column3,cmap='coolwarm'):
     folder_path = os.path.join(os.getcwd(), 'analysis/plots')
     file_path= os.path.join(folder_path,'Scatter_'+column1+column2+'.png')
 
@@ -299,12 +323,14 @@ def scatter_face(df,column1,column2,column3):
     print(df.columns)    
 
     # Plot scatter with combined color
-    plt.scatter(df[column1], df[column2], c=df[column3], alpha=0.01, cmap='coolwarm')
+    # plt.scatter(df[column1], df[column2], c=df[column3], alpha=0.01, cmap=cmap )
+    plt.scatter(df[column1], df[column2], alpha=0.001 )
     # Plot histogram
     # plt.scatter(df[column1],df[column2],c=df[column3],alpha=0.005,cmap='hsv')
     plt.xlabel(column1)
     plt.ylabel(column2)
-    plt.title('Scatter plot of '+column1+column2 +"with color from"+column3+"with dtapoints" +str(len(df[column1])))
+    # plt.title('Scatter plot of '+column1+column2 +"with color from"+column3+"with dtapoints" +str(len(df[column1])))
+    plt.title('Scatter plot of '+column1+column2+"with dtapoints" +str(len(df[column1])))
     plt.grid(True)
 
     # Save the histogram as a PNG file
@@ -314,7 +340,8 @@ def scatter_face(df,column1,column2,column3):
 
     return
 
-
+corr_df=create_corr_df()
+save_scatter(corr_df, "cluster_id", "topic_id","topic_score")
 
 #df_BG=create_BG_df()
 
@@ -324,11 +351,11 @@ def scatter_face(df,column1,column2,column3):
 # save_scatter(df_BG,"sat","hue","hue")
 #save_scatter_color(df_BG,"luminosity","sat","hue")
 
-df_seg=create_segment_df()
-scatter_face(df_seg,"face_x","face_y","face_z")
-save_hist(df_seg,"face_x")
-save_hist(df_seg,"face_y")
-save_hist(df_seg,"face_z")
+# df_seg=create_segment_df()
+# scatter_face(df_seg,"face_x","face_y","face_z")
+# save_hist(df_seg,"face_x")
+# save_hist(df_seg,"face_y")
+# save_hist(df_seg,"face_z")
 #plot_bbox(df_seg)
 
 #df_topic=create_topic_df()
