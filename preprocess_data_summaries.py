@@ -1,5 +1,5 @@
-from sqlalchemy import create_engine, select, delete, and_, func, insert
-from sqlalchemy.orm import sessionmaker,scoped_session, declarative_base, relationship
+from sqlalchemy import create_engine, select, delete, and_, func, insert, count
+from sqlalchemy.orm import sessionmaker,scoped_session, declarative_base, relationship, join
 from sqlalchemy.pool import NullPool
 # from sqlalchemy.ext.declarative import declarative_base
 
@@ -17,7 +17,7 @@ import cv2
 import shutil
 import pandas as pd
 import json
-from my_declarative_base import Base, Clusters, Location, Gender, Images,ImagesTopics, SegmentTable, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON, Images
+from my_declarative_base import Base, Clusters, Location, Ethnicity, ImagesEthnicity, Gender, Images,ImagesTopics, SegmentTable, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON, Images
 #from sqlalchemy.ext.declarative import declarative_base
 from mp_sort_pose import SortPose
 
@@ -45,17 +45,20 @@ engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}".format(host=db[
 
 
 title = 'Please choose your operation: '
-options = ["CountGender_Location_so", "CountGender_Topic_so", "CountGender_Location", "CountGender_Topic"]
+options = ["CountGender_Location_so", "CountGender_Topic_so", "CountEthnicity_Location_so", "CountEthnicity_Topic_so", "CountGender_Location", "CountEthnicity_Location"]
 option, index = pick(options, title)
-
-if index in [0,1]: 
+print(f"Selected option: {option}")
+if index in range(0,3): 
     gender_location = "CountGender_Location_so"
     gender_topic = "CountGender_Topics_so"
-elif index in [2,3]: 
+    ethnicity_location = "CountEthnicity_Location_so"
+    ethnicity_topic = "CountEthnicity_Topics_so"
+elif index in range(4,5): 
     gender_location = "CountGender_Location"
-    gender_topic = "CountGender_Topics"
+    gender_topic = None
+    ethnicity_location = "CountEthnicity_Location"
+    ethnicity_topic = None
 
-LIMIT= 500000
 # Initialize the counter
 counter = 0
 
@@ -72,6 +75,8 @@ class Location(Base):
     nation_name = Column(String)
     # Define the relationship with CountGender_Location_so, etc
     gender_location_counts = relationship("CountGender_Location_so", back_populates="location")
+    # Define the relationship with CountEthnicity_Location_so
+    ethnicity_location_counts = relationship("CountEthnicity_Location_so", back_populates="location")
 
 class CountGender_Location_so(Base):
     __tablename__ = gender_location
@@ -94,10 +99,33 @@ class CountGender_Location_so(Base):
     # Define a relationship with the Location table
     location = relationship("Location", back_populates="gender_location_counts")
 
+class CountEthnicity_Location_so(Base):
+    __tablename__ = ethnicity_location
+
+    location_id = Column(Integer, ForeignKey('Location.location_id'), primary_key=True)
+    POC = Column(Integer, default=0)
+    Black = Column(Integer, default=0)
+    caucasian = Column(Integer, default=0)
+    eastasian = Column(Integer, default=0)
+    hispaniclatino = Column(Integer, default=0)
+    middleeastern = Column(Integer, default=0)
+    mixedraceperson = Column(Integer, default=0)
+    nativeamericanfirstnations = Column(Integer, default=0)
+    pacificislander = Column(Integer, default=0)
+    southasian = Column(Integer, default=0)
+    southeastasian = Column(Integer, default=0)
+    afrolatinx = Column(Integer, default=0)
+    personofcolor = Column(Integer, default=0)
+
+    # Define a relationship with the Location table
+    location = relationship("Location", back_populates="ethnicity_location_counts")
+
+
 class Topics(Base):
     __tablename__ = 'Topics'
     topic_id = Column(Integer, primary_key=True)
     gender_topics_counts = relationship("CountGender_Topics", back_populates="topics")
+    ethnicity_topic_counts = relationship("CountEthnicity_Topics_so", back_populates="topics")
 
 class CountGender_Topics(Base):
     __tablename__ = gender_topic
@@ -120,6 +148,27 @@ class CountGender_Topics(Base):
     # Define a relationship with the Location table
     topics = relationship("Topics", back_populates="gender_topics_counts")
 
+class CountEthnicity_Topic_so(Base):
+    __tablename__ = ethnicity_topic
+
+    location_id = Column(Integer, ForeignKey('Location.location_id'), primary_key=True)
+    POC = Column(Integer, default=0)
+    Black = Column(Integer, default=0)
+    caucasian = Column(Integer, default=0)
+    eastasian = Column(Integer, default=0)
+    hispaniclatino = Column(Integer, default=0)
+    middleeastern = Column(Integer, default=0)
+    mixedraceperson = Column(Integer, default=0)
+    nativeamericanfirstnations = Column(Integer, default=0)
+    pacificislander = Column(Integer, default=0)
+    southasian = Column(Integer, default=0)
+    southeastasian = Column(Integer, default=0)
+    afrolatinx = Column(Integer, default=0)
+    personofcolor = Column(Integer, default=0)
+
+    # Define a relationship with the Location table
+    location = relationship("Topics", back_populates="ethnicity_topic_counts")
+
 # Define a relationship with the CountGender_Location_so table
 Location.gender_location_counts = relationship("CountGender_Location_so", back_populates="location")
 Topics.gender_topics_counts = relationship("CountGender_Topics", back_populates="topics")
@@ -134,54 +183,55 @@ class HelperTable(Base):
 session = scoped_session(sessionmaker(bind=engine))
 
 def pivot_table(result):
-
-    # Define a dictionary to store the counts for each location_id
-    location_dimension_counts = {}
+    print(result)
+    quit()
+    # Define a dictionary to store the counts for each id
+    id_dimension_counts = {}
 
     # Iterate through the query result
     for row in result:
-        location_id, dimension, count = row
+        this_id, dimension, count = row
 
-        # Check if the location_id exists in the dictionary
-        if location_id not in location_dimension_counts:
-            # If not, initialize a dictionary for the location_id
-            location_dimension_counts[location_id] = {}
+        # Check if the this_id exists in the dictionary
+        if this_id not in id_dimension_counts:
+            # If not, initialize a dictionary for the this_id
+            id_dimension_counts[this_id] = {}
 
-        # Store the count for the dimension category under the location_id
-        location_dimension_counts[location_id][dimension] = count
+        # Store the count for the dimension category under the this_id
+        id_dimension_counts[this_id][dimension] = count
 
-    # Now, location_dimension_counts dictionary contains the counts organized by location_id and dimension category
-    return(location_dimension_counts)
+    # Now, id_dimension_counts dictionary contains the counts organized by this_id and dimension category
+    return(id_dimension_counts)
 
-def save_gender(location_gender_counts, id_type):
-    # Iterate through the location_gender_counts dictionary
-    for this_id, gender_counts in location_gender_counts.items():
+def save_gender(id_dimension_counts, id_type):
+    # Iterate through the id_dimension_counts dictionary
+    for this_id, dimension_counts in id_dimension_counts.items():
         # Construct the INSERT query
         if id_type == "location_id":
             insert_query = insert(CountGender_Location_so).values(
                 location_id=this_id,
-                men=(gender_counts.get('men', 0)+gender_counts.get('oldmen', 0)+gender_counts.get('youngmen', 0)),
-                nogender=gender_counts.get('nogender', 0),
-                nonbinary=gender_counts.get('nonbinary', 0),
-                other=gender_counts.get('other', 0),
-                trans=gender_counts.get('trans', 0),
-                women=(gender_counts.get('women', 0)+gender_counts.get('youngwomen', 0)+gender_counts.get('oldwomen', 0)),
-                manandwoman=gender_counts.get('manandwoman', 0),
-                intersex=gender_counts.get('intersex', 0),
-                androgynous=gender_counts.get('androgynous', 0)
+                men=(dimension_counts.get('men', 0)+dimension_counts.get('oldmen', 0)+dimension_counts.get('youngmen', 0)),
+                nogender=dimension_counts.get('nogender', 0),
+                nonbinary=dimension_counts.get('nonbinary', 0),
+                other=dimension_counts.get('other', 0),
+                trans=dimension_counts.get('trans', 0),
+                women=(dimension_counts.get('women', 0)+dimension_counts.get('youngwomen', 0)+dimension_counts.get('oldwomen', 0)),
+                manandwoman=dimension_counts.get('manandwoman', 0),
+                intersex=dimension_counts.get('intersex', 0),
+                androgynous=dimension_counts.get('androgynous', 0)
             )
         elif id_type == "topic_id":
             insert_query = insert(CountGender_Topics).values(
                 topic_id=this_id,
-                men=(gender_counts.get('men', 0)+gender_counts.get('oldmen', 0)+gender_counts.get('youngmen', 0)),
-                nogender=gender_counts.get('nogender', 0),
-                nonbinary=gender_counts.get('nonbinary', 0),
-                other=gender_counts.get('other', 0),
-                trans=gender_counts.get('trans', 0),
-                women=(gender_counts.get('women', 0)+gender_counts.get('youngwomen', 0)+gender_counts.get('oldwomen', 0)),
-                manandwoman=gender_counts.get('manandwoman', 0),
-                intersex=gender_counts.get('intersex', 0),
-                androgynous=gender_counts.get('androgynous', 0)
+                men=(dimension_counts.get('men', 0)+dimension_counts.get('oldmen', 0)+dimension_counts.get('youngmen', 0)),
+                nogender=dimension_counts.get('nogender', 0),
+                nonbinary=dimension_counts.get('nonbinary', 0),
+                other=dimension_counts.get('other', 0),
+                trans=dimension_counts.get('trans', 0),
+                women=(dimension_counts.get('women', 0)+dimension_counts.get('youngwomen', 0)+dimension_counts.get('oldwomen', 0)),
+                manandwoman=dimension_counts.get('manandwoman', 0),
+                intersex=dimension_counts.get('intersex', 0),
+                androgynous=dimension_counts.get('androgynous', 0)
             )
 
         # Execute the INSERT query
@@ -190,12 +240,56 @@ def save_gender(location_gender_counts, id_type):
     # Commit the changes
     session.commit()
 
-def query_save(select_query, id_type):
-    result = session.execute(select_query).fetchall()
-    location_gender_counts = pivot_table(result)
+def save_ethnicity(id_dimension_counts, id_type):
+    # Iterate through the id_dimension_counts dictionary
+    for this_id, dimension_counts in id_dimension_counts.items():
+        # Construct the INSERT query
+        if id_type == "location_id":
 
-    # this is going to have to be mod to handle eth
-    save_gender(location_gender_counts, id_type)
+            insert_query = insert(CountEthnicity_Location_so).values(
+                location_id=this_id,
+                Black=dimension_counts.get(1, 0),
+                caucasian=dimension_counts.get(2, 0),
+                eastasian=dimension_counts.get(3, 0),
+                hispaniclatino=dimension_counts.get(4, 0),
+                middleeastern=dimension_counts.get(5, 0),
+                mixedraceperson=dimension_counts.get(6, 0),
+                nativeamericanfirstnations=dimension_counts.get(7, 0),
+                pacificislander=dimension_counts.get(8, 0),
+                southasian=dimension_counts.get(9, 0),
+                southeastasian=dimension_counts.get(10, 0),
+                afrolatinx=dimension_counts.get(12, 0),
+                personofcolor=dimension_counts.get(13, 0)
+            )
+        elif id_type == "topic_id":
+            insert_query = insert(CountEthnicity_Topic_so).values(
+                topic_id=this_id,
+                Black=dimension_counts.get(1, 0),
+                caucasian=dimension_counts.get(2, 0),
+                eastasian=dimension_counts.get(3, 0),
+                hispaniclatino=dimension_counts.get(4, 0),
+                middleeastern=dimension_counts.get(5, 0),
+                mixedraceperson=dimension_counts.get(6, 0),
+                nativeamericanfirstnations=dimension_counts.get(7, 0),
+                pacificislander=dimension_counts.get(8, 0),
+                southasian=dimension_counts.get(9, 0),
+                southeastasian=dimension_counts.get(10, 0),
+                afrolatinx=dimension_counts.get(12, 0),
+                personofcolor=dimension_counts.get(13, 0)
+            )
+
+        # Execute the INSERT query
+        session.execute(insert_query)
+        print(f"executed {this_id} successfully.")
+    # Commit the changes
+    session.commit()
+
+
+def query(select_query):
+    result = session.execute(select_query).fetchall()
+    id_dimension_counts = pivot_table(result)
+    return id_dimension_counts
+
 
 
 def count_gender_location(this_table):
@@ -208,7 +302,8 @@ def count_gender_location(this_table):
     join(Gender, this_table.gender_id == Gender.gender_id).\
     group_by(Location.location_id, Gender.gender)
 
-    query_save(select_query, "location_id")
+    id_dimension_counts = query(select_query)
+    save_gender(id_dimension_counts, "location_id")
 
 def count_gender_topic(this_table):
 
@@ -222,7 +317,27 @@ def count_gender_topic(this_table):
     join(Gender, this_table.gender_id == Gender.gender_id).\
     group_by(Topics.topic_id, Gender.gender)
 
-    query_save(select_query, "topic_id")
+    id_dimension_counts = query(select_query)
+    save_gender(id_dimension_counts, "topic_id")
+
+def count_ethnicity_location(this_table):
+    select_query = select(
+        Location.location_id,
+        Ethnicity.ethnicity_id,
+        func.count().label('ethnicity_count')
+    ).\
+    join(this_table, Location.location_id == this_table.location_id).\
+    join(ImagesEthnicity, this_table.image_id == ImagesEthnicity.image_id).\
+    join(Ethnicity, ImagesEthnicity.ethnicity_id == Ethnicity.ethnicity_id).\
+    group_by(Location.location_id, Ethnicity.ethnicity_id)
+
+    id_dimension_counts = query(select_query)
+    print(len(id_dimension_counts))
+    print(id_dimension_counts)
+    save_ethnicity(id_dimension_counts, "location_id")
+
+def count_ethnicity_topic(this_table):
+    pass
 
 #######MULTI THREADING##################
 # Create a lock for thread synchronization
@@ -240,12 +355,17 @@ if index == 0:
 elif index == 1:
     count_gender_topic(SegmentTable)
 
-# full Images table queries
 elif index == 2:
-    count_gender_location(Images)
+    count_ethnicity_location(SegmentTable)
 elif index == 3:
+    count_ethnicity_topic(SegmentTable)
+
+# full Images table queries
+elif index == 4:
+    count_gender_location(Images)
+elif index == 5:
     # get_bg_database()
-    count_gender_topic(Images)
+    count_ethnicity_location(Images)
         
 def threaded_fetching():
     while not work_queue.empty():
