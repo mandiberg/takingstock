@@ -33,7 +33,7 @@ LIMIT 10;
 SELECT COUNT(ib.image_id) 
 FROM ImagesBackground ib 
 JOIN SegmentOct20 so ON ib.image_id = so.image_id 
-WHERE ib.lum_torso IS  NULL 
+WHERE ib.lum_torso IS NULL 
 AND so.image_id NOT IN (1,2,3)
 ;
 

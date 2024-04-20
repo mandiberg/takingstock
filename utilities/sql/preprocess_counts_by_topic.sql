@@ -43,7 +43,7 @@ CREATE TABLE CountGender_Topics (
 
 
 
-CREATE TABLE CountEthnicity_Location_so (
+CREATE TABLE CountEthnicity_Location (
     location_id INT,
 	POC INT DEFAULT 0,
 	Black INT DEFAULT 0,
@@ -92,8 +92,9 @@ WHERE Location.location_id = 139
 GROUP BY 
     Location.location_id, Ethnicity.ethnicity_id;
 
-	SUM(CASE WHEN Ethnicity.ethnicity_id != 2 THEN 1 ELSE 0 END) AS ethnicity_count_not_2
 
+   
+   
 SELECT 
 	Location.location_id,
     COUNT(DISTINCT SegmentOct20.image_id) as distinct_POC_count
@@ -105,33 +106,27 @@ JOIN
     ImagesEthnicity ON SegmentOct20.image_id = ImagesEthnicity.image_id
 JOIN 
     Ethnicity ON ImagesEthnicity.ethnicity_id = Ethnicity.ethnicity_id
-AND Ethnicity.ethnicity_id != 2
+WHERE Location.location_id = 139
+-- AND Ethnicity.ethnicity_id != 2
 GROUP BY 
     Location.location_id
 ;
 
 
-
-GROUP BY 
-    Location.location_id, Ethnicity.ethnicity_id;
-
-	SUM(CASE WHEN Ethnicity.ethnicity_id != 2 THEN 1 ELSE 0 END) AS ethnicity_count_not_2
-
-	
 SELECT 
-    Location.location_id,
-	SUM(CASE WHEN Ethnicity.ethnicity_id != 2 THEN 1 ELSE 0 END) AS ethnicity_count_not_2
+	Location.location_id,
+    COUNT(DISTINCT SegmentOct20.image_id) as total_count_inc_noeth
 FROM 
-    Location
+    SegmentOct20
 JOIN 
-    SegmentOct20 ON Location.location_id = SegmentOct20.location_id
-JOIN 
-    ImagesEthnicity ON SegmentOct20.image_id = ImagesEthnicity.image_id
-JOIN 
-    Ethnicity ON ImagesEthnicity.ethnicity_id = Ethnicity.ethnicity_id
+    Location ON Location.location_id = SegmentOct20.location_id
 WHERE Location.location_id = 139
+-- AND Ethnicity.ethnicity_id != 2
 GROUP BY 
-    Location.location_id;
+    Location.location_id
+;
+
+
 
 
 

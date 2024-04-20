@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, select, delete, and_, func, insert, count
+from sqlalchemy import create_engine, select, delete, and_, func, insert
 from sqlalchemy.orm import sessionmaker,scoped_session, declarative_base, relationship, join
 from sqlalchemy.pool import NullPool
 # from sqlalchemy.ext.declarative import declarative_base
@@ -47,17 +47,18 @@ engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}".format(host=db[
 title = 'Please choose your operation: '
 options = ["CountGender_Location_so", "CountGender_Topic_so", "CountEthnicity_Location_so", "CountEthnicity_Topic_so", "CountGender_Location", "CountEthnicity_Location"]
 option, index = pick(options, title)
-print(f"Selected option: {option}")
-if index in range(0,3): 
+print(f"Selected option: {option}, index: {index}")
+if index <= 3: 
     gender_location = "CountGender_Location_so"
     gender_topic = "CountGender_Topics_so"
     ethnicity_location = "CountEthnicity_Location_so"
     ethnicity_topic = "CountEthnicity_Topics_so"
-elif index in range(4,5): 
+else: 
+    print(f"setting tables for option: {option}, index: {index}")
     gender_location = "CountGender_Location"
-    gender_topic = None
+    gender_topic = "CountGender_Topics_so" # placeholder, not functional
     ethnicity_location = "CountEthnicity_Location"
-    ethnicity_topic = None
+    ethnicity_topic = "CountEthnicity_Topics_so" # placeholder, not functional
 
 # Initialize the counter
 counter = 0
@@ -125,7 +126,7 @@ class Topics(Base):
     __tablename__ = 'Topics'
     topic_id = Column(Integer, primary_key=True)
     gender_topics_counts = relationship("CountGender_Topics", back_populates="topics")
-    ethnicity_topic_counts = relationship("CountEthnicity_Topics_so", back_populates="topics")
+    # ethnicity_topic_counts = relationship("CountEthnicity_Topics_so", back_populates="topics")
 
 class CountGender_Topics(Base):
     __tablename__ = gender_topic
@@ -148,26 +149,26 @@ class CountGender_Topics(Base):
     # Define a relationship with the Location table
     topics = relationship("Topics", back_populates="gender_topics_counts")
 
-class CountEthnicity_Topic_so(Base):
-    __tablename__ = ethnicity_topic
+# class CountEthnicity_Topic_so(Base):
+#     __tablename__ = ethnicity_topic
 
-    location_id = Column(Integer, ForeignKey('Location.location_id'), primary_key=True)
-    POC = Column(Integer, default=0)
-    Black = Column(Integer, default=0)
-    caucasian = Column(Integer, default=0)
-    eastasian = Column(Integer, default=0)
-    hispaniclatino = Column(Integer, default=0)
-    middleeastern = Column(Integer, default=0)
-    mixedraceperson = Column(Integer, default=0)
-    nativeamericanfirstnations = Column(Integer, default=0)
-    pacificislander = Column(Integer, default=0)
-    southasian = Column(Integer, default=0)
-    southeastasian = Column(Integer, default=0)
-    afrolatinx = Column(Integer, default=0)
-    personofcolor = Column(Integer, default=0)
+#     location_id = Column(Integer, ForeignKey('Location.location_id'), primary_key=True)
+#     POC = Column(Integer, default=0)
+#     Black = Column(Integer, default=0)
+#     caucasian = Column(Integer, default=0)
+#     eastasian = Column(Integer, default=0)
+#     hispaniclatino = Column(Integer, default=0)
+#     middleeastern = Column(Integer, default=0)
+#     mixedraceperson = Column(Integer, default=0)
+#     nativeamericanfirstnations = Column(Integer, default=0)
+#     pacificislander = Column(Integer, default=0)
+#     southasian = Column(Integer, default=0)
+#     southeastasian = Column(Integer, default=0)
+#     afrolatinx = Column(Integer, default=0)
+#     personofcolor = Column(Integer, default=0)
 
-    # Define a relationship with the Location table
-    location = relationship("Topics", back_populates="ethnicity_topic_counts")
+#     # Define a relationship with the Location table
+#     location = relationship("Topics", back_populates="ethnicity_topic_counts")
 
 # Define a relationship with the CountGender_Location_so table
 Location.gender_location_counts = relationship("CountGender_Location_so", back_populates="location")
@@ -183,8 +184,6 @@ class HelperTable(Base):
 session = scoped_session(sessionmaker(bind=engine))
 
 def pivot_table(result):
-    print(result)
-    quit()
     # Define a dictionary to store the counts for each id
     id_dimension_counts = {}
 
@@ -248,6 +247,7 @@ def save_ethnicity(id_dimension_counts, id_type):
 
             insert_query = insert(CountEthnicity_Location_so).values(
                 location_id=this_id,
+                POC = dimension_counts.get(99, 0),
                 Black=dimension_counts.get(1, 0),
                 caucasian=dimension_counts.get(2, 0),
                 eastasian=dimension_counts.get(3, 0),
@@ -264,6 +264,7 @@ def save_ethnicity(id_dimension_counts, id_type):
         elif id_type == "topic_id":
             insert_query = insert(CountEthnicity_Topic_so).values(
                 topic_id=this_id,
+                POC = dimension_counts.get(99, 0),
                 Black=dimension_counts.get(1, 0),
                 caucasian=dimension_counts.get(2, 0),
                 eastasian=dimension_counts.get(3, 0),
@@ -285,8 +286,22 @@ def save_ethnicity(id_dimension_counts, id_type):
     session.commit()
 
 
-def query(select_query):
+def query(select_query, select_POC_query=None):
+    print(select_query)
+    print(select_POC_query)
+    
+
     result = session.execute(select_query).fetchall()
+    try:
+        print("POC query")
+        result_POC = session.execute(select_POC_query).fetchall()
+        print(result_POC)
+        for row in result_POC:
+            this_id, POC_count = row
+            new_row = (this_id, 99, POC_count)
+            result.append(new_row)
+    except:
+        print("probably no select_POC_query")
     id_dimension_counts = pivot_table(result)
     return id_dimension_counts
 
@@ -331,7 +346,19 @@ def count_ethnicity_location(this_table):
     join(Ethnicity, ImagesEthnicity.ethnicity_id == Ethnicity.ethnicity_id).\
     group_by(Location.location_id, Ethnicity.ethnicity_id)
 
-    id_dimension_counts = query(select_query)
+
+    select_POC_query = select(
+        Location.location_id,
+        func.count(func.distinct(ImagesEthnicity.image_id)).label('distinct_POC_count')
+    ).\
+    join(this_table, Location.location_id == this_table.location_id).\
+    join(ImagesEthnicity, this_table.image_id == ImagesEthnicity.image_id).\
+    join(Ethnicity, ImagesEthnicity.ethnicity_id == Ethnicity.ethnicity_id).\
+    filter(Ethnicity.ethnicity_id != 2).\
+    group_by(Location.location_id)
+
+
+    id_dimension_counts = query(select_query, select_POC_query)
     print(len(id_dimension_counts))
     print(id_dimension_counts)
     save_ethnicity(id_dimension_counts, "location_id")
