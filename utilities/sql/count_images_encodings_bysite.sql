@@ -1,7 +1,8 @@
 -- attempted to run Mar23, and quit after 300s
 
+-- ran successfully on april 14. 
 
-USE stock;
+Use Stock;
 
 SELECT
     i.site_name_id,
