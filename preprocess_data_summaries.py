@@ -45,7 +45,7 @@ engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}".format(host=db[
 
 
 title = 'Please choose your operation: '
-options = ["CountGender_Location_so", "CountGender_Topic_so", "CountEthnicity_Location_so", "CountEthnicity_Topic_so", "CountGender_Location", "CountEthnicity_Location"]
+options = ["CountGender_Location_so", "CountGender_Topic_so", "CountEthnicity_Location_so", "CountEthnicity_Topics_so", "CountGender_Location", "CountEthnicity_Location"]
 option, index = pick(options, title)
 print(f"Selected option: {option}, index: {index}")
 if index <= 3: 
@@ -125,8 +125,8 @@ class CountEthnicity_Location_so(Base):
 class Topics(Base):
     __tablename__ = 'Topics'
     topic_id = Column(Integer, primary_key=True)
-    gender_topics_counts = relationship("CountGender_Topics", back_populates="topics")
-    # ethnicity_topic_counts = relationship("CountEthnicity_Topics_so", back_populates="topics")
+    # Relationships
+    ethnicity_topic_counts = relationship("CountEthnicity_Topics_so", back_populates="topics")
 
 class CountGender_Topics(Base):
     __tablename__ = gender_topic
@@ -149,26 +149,26 @@ class CountGender_Topics(Base):
     # Define a relationship with the Location table
     topics = relationship("Topics", back_populates="gender_topics_counts")
 
-# class CountEthnicity_Topic_so(Base):
-#     __tablename__ = ethnicity_topic
 
-#     location_id = Column(Integer, ForeignKey('Location.location_id'), primary_key=True)
-#     POC = Column(Integer, default=0)
-#     Black = Column(Integer, default=0)
-#     caucasian = Column(Integer, default=0)
-#     eastasian = Column(Integer, default=0)
-#     hispaniclatino = Column(Integer, default=0)
-#     middleeastern = Column(Integer, default=0)
-#     mixedraceperson = Column(Integer, default=0)
-#     nativeamericanfirstnations = Column(Integer, default=0)
-#     pacificislander = Column(Integer, default=0)
-#     southasian = Column(Integer, default=0)
-#     southeastasian = Column(Integer, default=0)
-#     afrolatinx = Column(Integer, default=0)
-#     personofcolor = Column(Integer, default=0)
-
-#     # Define a relationship with the Location table
-#     location = relationship("Topics", back_populates="ethnicity_topic_counts")
+class CountEthnicity_Topics_so(Base):
+    __tablename__ = 'CountEthnicity_Topics_so'
+    topic_id = Column(Integer, ForeignKey('Topics.topic_id'), primary_key=True)
+    # Ethnicity columns
+    POC = Column(Integer, default=0)
+    Black = Column(Integer, default=0)
+    caucasian = Column(Integer, default=0)
+    eastasian = Column(Integer, default=0)
+    hispaniclatino = Column(Integer, default=0)
+    middleeastern = Column(Integer, default=0)
+    mixedraceperson = Column(Integer, default=0)
+    nativeamericanfirstnations = Column(Integer, default=0)
+    pacificislander = Column(Integer, default=0)
+    southasian = Column(Integer, default=0)
+    southeastasian = Column(Integer, default=0)
+    afrolatinx = Column(Integer, default=0)
+    personofcolor = Column(Integer, default=0)
+    # Define a relationship back to Topics
+    topics = relationship("Topics", back_populates="ethnicity_topic_counts")
 
 # Define a relationship with the CountGender_Location_so table
 Location.gender_location_counts = relationship("CountGender_Location_so", back_populates="location")
@@ -262,7 +262,7 @@ def save_ethnicity(id_dimension_counts, id_type):
                 personofcolor=dimension_counts.get(13, 0)
             )
         elif id_type == "topic_id":
-            insert_query = insert(CountEthnicity_Topic_so).values(
+            insert_query = insert(CountEthnicity_Topics_so).values(
                 topic_id=this_id,
                 POC = dimension_counts.get(99, 0),
                 Black=dimension_counts.get(1, 0),
@@ -364,7 +364,36 @@ def count_ethnicity_location(this_table):
     save_ethnicity(id_dimension_counts, "location_id")
 
 def count_ethnicity_topic(this_table):
-    pass
+    
+    select_query = select(
+        Topics.topic_id,
+        Ethnicity.ethnicity_id,
+        func.count().label('ethnicity_count')
+    ).\
+    join(ImagesTopics, Topics.topic_id == ImagesTopics.topic_id).\
+    join(this_table, ImagesTopics.image_id == this_table.image_id).\
+    join(ImagesEthnicity, this_table.image_id == ImagesEthnicity.image_id).\
+    join(Ethnicity, ImagesEthnicity.ethnicity_id == Ethnicity.ethnicity_id).\
+    group_by(Topics.topic_id, Ethnicity.ethnicity_id)
+
+
+    select_POC_query = select(
+        Topics.topic_id,
+        func.count(func.distinct(this_table.image_id)).label('distinct_POC_count')
+    ).\
+    join(ImagesTopics, Topics.topic_id == ImagesTopics.topic_id).\
+    join(this_table, ImagesTopics.image_id == this_table.image_id).\
+    join(ImagesEthnicity, this_table.image_id == ImagesEthnicity.image_id).\
+    join(Ethnicity, ImagesEthnicity.ethnicity_id == Ethnicity.ethnicity_id).\
+    filter(Ethnicity.ethnicity_id != 2).\
+    group_by(Topics.topic_id)
+
+
+    id_dimension_counts = query(select_query, select_POC_query)
+    # id_dimension_counts = query(select_query)
+    print(len(id_dimension_counts))
+    print(id_dimension_counts)
+    save_ethnicity(id_dimension_counts, "topic_id")
 
 #######MULTI THREADING##################
 # Create a lock for thread synchronization
