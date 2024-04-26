@@ -60,9 +60,9 @@ start = time.time()
 
 io = DataIO()
 db = io.db
-io.db["name"] = "ministock1023"
+io.db["name"] = "stock"
 NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
-MODE = 0
+MODE = 1
 
 # this works for using segment in stock, and for ministock
 USE_SEGMENT = True
@@ -80,11 +80,16 @@ if USE_SEGMENT is True and MODE == 0:
     # do not use this if you are using the regular Clusters and ImagesClusters tables
     SegmentTable_name = 'SegmentOct20'
 
+    # 3.8 M large table (for Topic Model)
+    HelperTable_name = "SegmentHelperMar23_headon"
+
     # Basic Query, this works with gettytest3
-    SELECT = "DISTINCT(image_id),face_encodings68"
-    FROM = SegmentTable_name
-    WHERE = "face_encodings68 IS NOT NULL AND face_x > -33 AND face_x < -27 AND face_y > -2 AND face_y < 2 AND face_z > -2 AND face_z < 2"
-    LIMIT = 1500000
+    SELECT = "DISTINCT(s.image_id),face_encodings68"
+    FROM = f"{SegmentTable_name} s"
+    FROM += f" INNER JOIN {HelperTable_name} h ON h.image_id = s.image_id " 
+    WHERE = "face_encodings68 IS NOT NULL"
+    # WHERE = "face_encodings68 IS NOT NULL AND face_x > -33 AND face_x < -27 AND face_y > -2 AND face_y < 2 AND face_z > -2 AND face_z < 2"
+    LIMIT = 5000000
 
     # # join with SSD tables. Satyam, use the one below
     # SELECT = "DISTINCT(e.image_id), e.face_encodings68"

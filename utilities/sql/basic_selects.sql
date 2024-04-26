@@ -55,6 +55,7 @@ FROM SegmentOct20 so
 WHERE face_x > -33 AND face_x < -27 AND face_y > -2 AND face_y < 2 AND face_z > -2 AND face_z < 2 AND age_id NOT IN (1,2,3)   
 ;
 
+<<<<<<< Updated upstream
 
 SELECT COUNT(so.image_id)  
 FROM SegmentOct20 so 
@@ -74,6 +75,30 @@ FROM SegmentOct20 so
 WHERE face_x > -33 AND face_x < -27 AND face_y > -2 AND face_y < 2 AND face_z > -2 AND face_z < 2  AND age_id NOT IN (1,2,3)   
 ;
 
+=======
+DELETE 
+FROM ImagesClusters  
+;
+
+SELECT s.image_id, s.description, it.topic_score 
+FROM SegmentOct20 s  JOIN ImagesTopics it ON s.image_id = it.image_id  
+-- WHERE s.body_landmarks IS NOT NULL 
+WHERE face_x > -33 AND face_x < -27 AND face_y > -2 AND face_y < 2 AND face_z > -2 AND face_z < 2 AND it.topic_score > .3 AND s.age_id NOT IN (1,2,3)   
+AND it.topic_id IN (17)
+;
+
+
+SELECT COUNT(ht.image_id)  
+FROM SegmentHelperApril4_topic17 ht
+JOIN Encodings e ON ht.image_id = e.image_id 
+WHERE e.body_landmarks  IS NOT NULL
+;
+
+SELECT COUNT(s.image_id)  
+FROM SegmentOct20 s   
+WHERE s.body_landmarks IS NOT NULL;
+
+>>>>>>> Stashed changes
 
 AND face_x > -33 AND face_x < -27 AND face_y > -2 AND face_y < 2 AND face_z > -2 AND face_z < 2 AND it.topic_score > .3 AND s.age_id NOT IN (1,2,3)   
 AND it.topic_id IN (17);
