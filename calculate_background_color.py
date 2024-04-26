@@ -48,15 +48,15 @@ VERBOSE = False
 # HelperTable_name = "SegmentHelperMar23_headon"
 
 # 7K for topic 7
-HelperTable_name = "SegmentHelperMar23_headon"
+HelperTable_name = "SegmentHelperApril12_2x2x33x27"
 
 # MM controlling which folder to use
-IS_SSD = True
+IS_SSD = False
 
 io = DataIO(IS_SSD)
 db = io.db
-# io.db["name"] = "stock"
-io.db["name"] = "ministock"
+io.db["name"] = "stock"
+# io.db["name"] = "ministock"
 
 
 # Create a database engine
@@ -100,7 +100,7 @@ title = 'Please choose your operation: '
 options = ['Create table', 'Fetch BG color stats',"test sorting"]
 option, index = pick(options, title)
 
-LIMIT= 1000
+LIMIT= 500000
 # Initialize the counter
 counter = 0
 
@@ -436,8 +436,8 @@ if index == 0:
     #     select_from(Images).outerjoin(ImagesBackground,Images.image_id == ImagesBackground.image_id).filter(ImagesBackground.image_id == None).limit(LIMIT)
     
     # pulling directly frmo segment, to filter on face_x etc
-    # select_query = select(SegmentTable.image_id,SegmentTable.imagename,SegmentTable.site_name_id).\
-    #     select_from(SegmentTable).outerjoin(ImagesBackground,SegmentTable.image_id == ImagesBackground.image_id).filter(ImagesBackground.image_id == None).limit(LIMIT)
+    select_query = select(SegmentTable.image_id,SegmentTable.imagename,SegmentTable.site_name_id).\
+        select_from(SegmentTable).outerjoin(ImagesBackground,SegmentTable.image_id == ImagesBackground.image_id).filter(ImagesBackground.image_id == None).limit(LIMIT)
     
     # pulling from segment with a join to the helper table
     # select_query = select(
@@ -460,6 +460,7 @@ if index == 0:
     select_from(SegmentTable).\
     outerjoin(ImagesBackground, SegmentTable.image_id == ImagesBackground.image_id).\
     filter(ImagesBackground.image_id == None).\
+    filter(not_(SegmentTable.age_id.in_([1, 2, 3]))).\
     limit(LIMIT)
 
     #####################
@@ -502,6 +503,12 @@ elif index == 1:
     #     outerjoin(HelperTable, ImagesBackground.image_id == HelperTable.image_id).\
     #     filter(HelperTable.image_id != None).\
     #     filter(ImagesBackground.lum_torso == None).limit(LIMIT)
+
+    # # for helpertable
+    # if USE_BBOX:distinct_image_ids_query = select(HelperTable.image_id.distinct()).\
+    #     join(ImagesBackground, ImagesBackground.image_id == HelperTable.image_id).\
+    #     filter(ImagesBackground.lum_torso == None).limit(LIMIT)
+
     if USE_BBOX:distinct_image_ids_query = select(ImagesBackground.image_id.distinct()).\
         filter(ImagesBackground.lum_torso == None).limit(LIMIT)
 
@@ -509,7 +516,7 @@ elif index == 1:
     else:distinct_image_ids_query = select(ImagesBackground.image_id.distinct()).filter(ImagesBackground.hue == None).limit(LIMIT)
     distinct_image_ids = [row[0] for row in session.execute(distinct_image_ids_query).fetchall()]
     for counter,target_image_id in enumerate(distinct_image_ids):
-        if counter%100==0:print("###########"+str(counter)+"images processed ##########")
+        if counter%10000==0:print("###########"+str(counter)+"images processed ##########")
         work_queue.put(target_image_id)        
 
 elif index == 2:

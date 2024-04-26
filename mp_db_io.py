@@ -50,6 +50,7 @@ class DataIO:
             # self.ROOT54= "/Volumes/6TB_mayday_2" ## only on 
             self.ROOT= self.ROOT_PROD ## defining ROOT though may be redefinied in main()
             self.ROOT4 = "/Volumes/SSD4"
+            self.ROOT18 = "/Volumes/RAID18"
             self.NUMBER_OF_PROCESSES = 8
         elif platform == "win32":
             ######## Satyam's WIN Credentials #########
@@ -86,7 +87,7 @@ class DataIO:
         else:
             self.folder_list = [
                 "", #0, Empty, there is no site #0 -- starts count at 1
-                os.path.join(self.ROOT54,"images_getty"), #1, Getty
+                os.path.join(self.ROOT18,"images_getty"), #1, Getty
                 # temp for testing
                 # os.path.join(self.ROOT54,"gettyimages/testimages"), #1, Getty
                 os.path.join(self.ROOT54,"images_shutterstock"),
