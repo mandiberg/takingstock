@@ -104,9 +104,8 @@ IS_ANGLE_SORT = False
 IS_TOPICS = False
 N_TOPICS = 30
 
-# is an array. it can handle multiple topics together.
 IS_ONE_TOPIC = True
-TOPIC_NO = [0]
+TOPIC_NO = [7]
 #  is isolated,  is business,  babies, 17 pointing
 #  is doctor <<  covid
 #  is hands
@@ -388,7 +387,7 @@ def sort_by_face_dist(df_enc, df_128_enc, df_33_lms):
             # if enc1_temp is not None:
             #     enc1 = enc1_temp
             print(f"set enc1 from get_start_enc() to {enc1}")
-
+            
         ## Find closest
         try:
             # closest_dict is now a dict with 1 or more items
@@ -487,7 +486,7 @@ def sort_by_face_dist(df_enc, df_128_enc, df_33_lms):
         if len(df_128_enc.index) < 2:
             break
         print(f"last distance was {dist}, next image is {start_img_name}")
-
+        
     ## When loop is complete, create df
     df = pd.DataFrame(face_distances, columns =['dist', 'folder', 'filename','site_name_id','face_landmarks', 'bbox'])
     print(df)
