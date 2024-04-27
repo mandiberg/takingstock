@@ -31,6 +31,8 @@ class SortPose:
 
         self.INPAINT=INPAINT
         if self.INPAINT:self.INPAINT_MODEL=SimpleLama()
+        self.MAX_IMAGE_EDGE_MULTIPLIER=[1.5,2.6,2,2.6] #maximum of the elements
+
         # if edge_multiplier_name:self.edge_multiplier_name=edge_multiplier_name
         # maximum allowable scale up
         self.resize_max = 5.99
@@ -707,12 +709,11 @@ class SortPose:
 
     def get_extension_pixels(self,image):
         if self.VERBOSE: print("calculating extension pixels")
-        max_image_edge_multiplier=[1.5,2.6,2,2.6] #maximum of the elements
         p1 = (int(self.nose_2d[0]), int(self.nose_2d[1]))
-        topcrop = int(p1[1]-self.face_height*max_image_edge_multiplier[0])
-        rightcrop = int(p1[0]+self.face_height*max_image_edge_multiplier[1])
-        botcrop = int(p1[1]+self.face_height*max_image_edge_multiplier[2])
-        leftcrop = int(p1[0]-self.face_height*max_image_edge_multiplier[3])
+        topcrop = int(p1[1]-self.face_height*self.MAX_IMAGE_EDGE_MULTIPLIER[0])
+        rightcrop = int(p1[0]+self.face_height*self.MAX_IMAGE_EDGE_MULTIPLIER[1])
+        botcrop = int(p1[1]+self.face_height*self.MAX_IMAGE_EDGE_MULTIPLIER[2])
+        leftcrop = int(p1[0]-self.face_height*self.MAX_IMAGE_EDGE_MULTIPLIER[3])
         ext_crop = np.array([topcrop, self.w-rightcrop, self.h-botcrop, leftcrop])
         ext_crop=np.abs(np.minimum(np.zeros(4),ext_crop)).astype(int)
         # simple_crop=np.array([np.maximum(0,topcrop),np.minimum(self.w,rightcrop),np.minimum(self.h,botcrop),np.maximum(0,leftcrop)]).astype(int)
@@ -739,7 +740,7 @@ class SortPose:
         if self.VERBOSE:print("mask preparation done")
         return extended_img,mask
     
-    def extend_lama(self,extended_img, mask,downsampling_scale=4):
+    def extend_lama(self,extended_img, mask,downsampling_scale=1):
         if self.VERBOSE: print("doing lama generative fill")
         n_height,n_width=extended_img.shape[:2]
         extended_img = cv2.resize(extended_img, (n_width//downsampling_scale, n_height//downsampling_scale), interpolation = cv2.INTER_AREA)

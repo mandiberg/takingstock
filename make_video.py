@@ -128,8 +128,8 @@ JUMP_SHOT = True # jump to random file if can't find a run (I don't think this a
 io = DataIO(IS_SSD)
 db = io.db
 # overriding DB for testing
-# io.db["name"] = "stock"
-io.db["name"] = "ministock"
+io.db["name"] = "stock"
+# io.db["name"] = "ministock"
 
 METAS_FILE = "metas.csv"
 
@@ -203,7 +203,7 @@ elif IS_SEGONLY:
     # WHERE += " AND k.keyword_text LIKE 'surpris%' "
 
     # WHERE = "s.site_name_id != 1"
-    LIMIT = 10000
+    LIMIT = 100
 
 
 
@@ -231,7 +231,7 @@ face_height_output = 500
 # image_edge_multiplier = [1.4,2.6,1.9,2.6] # wider for hands
 # image_edge_multiplier = [1.2,2.3,1.7,2.3] # medium for hands
 image_edge_multiplier = [1.2, 1.2, 1.6, 1.2] # standard portrait
-# max_image_edge_multiplier=[1.5,2.6,2,2.6] #maximum of the elements
+# sort.max_image_edge_multiplier is the maximum of the elements
 
 # construct my own objects
 sort = SortPose(motion, face_height_output, image_edge_multiplier,EXPAND, ONE_SHOT, JUMP_SHOT, HSV_BOUNDS, VERBOSE,INPAINT)
@@ -798,7 +798,9 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
                     print("gotta inpaint that shizzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz")
                     extension_pixels=sort.get_extension_pixels(img)
                     if sort.VERBOSE:print("extension_pixels",extension_pixels)
-                    inpaint_file=os.path.join(os.path.join(os.path.dirname(row['folder']), "inpaint", os.path.basename(row['folder'])),row['filename'])
+                    # inpaint_file=os.path.join(os.path.join(os.path.dirname(row['folder']), "inpaint", os.path.basename(row['folder'])),row['filename'])
+                    inpaint_file=os.path.join(os.path.dirname(row['folder']), os.path.basename(row['folder'])+"_inpaint",row['filename'])
+                    print("inpaint_file", inpaint_file)
                     if os.path.exists(inpaint_file):
                         if sort.VERBOSE: print("path exists, loading image",inpaint_file)
                         inpaint_image=cv2.imread(inpaint_file)
@@ -809,7 +811,7 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
                         if not os.path.exists(directory):
                             os.makedirs(directory)
                         extended_img,mask=sort.prepare_mask(img,extension_pixels)
-                        inpaint_image=sort.extend_lama(extended_img, mask,scale=4)
+                        inpaint_image=sort.extend_lama(extended_img, mask)
                         cv2.imwrite(inpaint_file,inpaint_image)
                     face_landmarks=shift_landmarks(row['face_landmarks'],extension_pixels,img)
                     bbox=shift_bbox(row['bbox'],extension_pixels)
