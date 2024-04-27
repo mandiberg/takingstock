@@ -28,8 +28,8 @@ IS_SSD = True
 VERBOSE = True
 io = DataIO(IS_SSD)
 db = io.db
-# io.db["name"] = "stock"
-io.db["name"] = "ministock"
+io.db["name"] = "stock"
+# io.db["name"] = "ministock"
 # Create a database engine
 engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}".format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']), poolclass=NullPool)
 
@@ -42,7 +42,8 @@ LIMIT= 1000
 # Initialize the counter
 counter = 0
 OBJ_CLS_ID=67 ## 67 for "cell phone"
-TOPIC_ID=26 ## '0.129*"phone" + 0.091*"mobil" + 0.043*"stop" + 0.043*"talk" + 0.038*"text" + 0.038*"messag" + 0.035*"smart" + 0.033*"communic" + 0.032*"technolog" + 0.029*"telephon"'
+TOPIC_ID=15 ## '0.129*"phone" + 0.091*"mobil" + 0.043*"stop" + 0.043*"talk" + 0.038*"text" + 0.038*"messag" + 0.035*"smart" + 0.033*"communic" + 0.032*"technolog" + 0.029*"telephon"'
+#SJ topic 26 is "phone" and MM is 15
 # Number of threads
 #num_threads = io.NUMBER_OF_PROCESSES
 num_threads = 1
@@ -120,6 +121,13 @@ def write_bbox(target_image_id, lock, session):
     if img is None:return
     #####################
     bbox,conf=return_bbox(img)
+    if VERBOSE:
+        if conf==-1:
+            folder = "no_phone"
+        else:
+            folder = "phone"
+        cv2.imwrite(os.path.join(io.ROOT_PROD, folder, str(target_image_id)+".jpg"), img)
+
     # print(bbox,conf)
     PhoneBbox_entry = (
         session.query(PhoneBbox)
@@ -160,8 +168,9 @@ work_queue = queue.Queue()
 if index == 0:
     function=create_table
     # Query to retrieve entries where topic_id is equal to 26 and image_id is not present in PhoneBbox table
-    select_query = select(ImagesTopics.image_id).select_from(ImagesTopics).filter(ImagesTopics.topic_id == 26).\
-        outerjoin(PhoneBbox, ImagesTopics.image_id == PhoneBbox.image_id).filter(PhoneBbox.image_id == None).limit(LIMIT)
+    select_query = select(ImagesTopics.image_id).select_from(ImagesTopics).filter(ImagesTopics.topic_id == TOPIC_ID).\
+        outerjoin(PhoneBbox, ImagesTopics.image_id == PhoneBbox.image_id).filter(PhoneBbox.image_id == None).\
+        outerjoin(SegmentTable, ImagesTopics.image_id == SegmentTable.image_id).filter(SegmentTable.site_name_id != 1).limit(LIMIT)
     
     result = session.execute(select_query).fetchall()
     # print the length of the result
@@ -178,6 +187,11 @@ elif index == 1:
         model = YOLO("yolov8m.pt")   #MEDIUM
 
     function=write_bbox
+    if VERBOSE:
+        # making folders for testing
+        if not os.path.exists(os.path.join(io.ROOT_PROD, "phone")): 
+            os.makedirs(os.path.join(io.ROOT_PROD, "phone"))
+            os.makedirs(os.path.join(io.ROOT_PROD, "no_phone"))
     distinct_image_ids_query = select(PhoneBbox.image_id.distinct()).select_from(PhoneBbox).filter(PhoneBbox.conf == None).limit(LIMIT)
     distinct_image_ids = [row[0] for row in session.execute(distinct_image_ids_query).fetchall()]
     for counter,target_image_id in enumerate(distinct_image_ids):
