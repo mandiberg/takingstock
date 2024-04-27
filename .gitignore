@@ -3,6 +3,9 @@ __pycache__/
 *.py[cod]
 *$py.class
 API.py
+
+# ML models , it downloads automiatically anyway
+yolov8*
 # C extensions
 *.so
 

@@ -197,6 +197,12 @@ class SegmentTable(Base):
     gender = relationship("Gender")
     location = relationship("Location")
 
+class PhoneBbox(Base):
+    __tablename__ = 'PhoneBbox' 
+    image_id = Column(Integer, ForeignKey('images.image_id'), primary_key=True)
+    bbox = Column(JSON)
+    conf = Column(Float)
+
 # these are for MM use for using segments
 # class Clusters(Base):
 #     __tablename__ = 'Clusters_May25segment123straight_lessrange'

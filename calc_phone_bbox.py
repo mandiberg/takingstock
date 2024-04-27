@@ -1,0 +1,211 @@
+from ultralytics import YOLO
+import os
+import cv2
+import numpy as np
+
+from sqlalchemy import create_engine, select, delete, and_
+from sqlalchemy.orm import sessionmaker,scoped_session, declarative_base
+from sqlalchemy.pool import NullPool
+# from my_declarative_base import Images,ImagesBackground, SegmentTable, Site 
+from mp_db_io import DataIO
+import pickle
+from pick import pick
+import threading
+import queue
+import json
+import shutil
+import json
+from my_declarative_base import Base, Clusters, ImagesTopics,PhoneBbox, SegmentTable, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON, Images
+
+
+title = 'Please choose your operation: '
+options = ['Create table', 'Object detection']
+option, index = pick(options, title)
+
+Base = declarative_base()
+# MM controlling which folder to use
+IS_SSD = True
+VERBOSE = True
+io = DataIO(IS_SSD)
+db = io.db
+# io.db["name"] = "stock"
+io.db["name"] = "ministock"
+# Create a database engine
+engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}".format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']), poolclass=NullPool)
+
+# Create a session
+session = scoped_session(sessionmaker(bind=engine))
+
+
+
+LIMIT= 1000
+# Initialize the counter
+counter = 0
+OBJ_CLS_ID=67 ## 67 for "cell phone"
+TOPIC_ID=26 ## '0.129*"phone" + 0.091*"mobil" + 0.043*"stop" + 0.043*"talk" + 0.038*"text" + 0.038*"messag" + 0.035*"smart" + 0.033*"communic" + 0.032*"technolog" + 0.029*"telephon"'
+# Number of threads
+#num_threads = io.NUMBER_OF_PROCESSES
+num_threads = 1
+
+MODEL_SIZE="MEDIUM"
+# DETAILS : https://b2633864.smushcdn.com/2633864/wp-content/uploads/2023/05/yolov8-model-comparison-1024x360.png?lossy=2&strip=1&webp=1
+
+def create_table(image_id, lock, session):
+    # Create a BagOfKeywords object
+    PhoneBbox_entry = PhoneBbox(
+        image_id=image_id,
+        bbox=None,  # Set this to None or your desired value
+        conf=None,  # Set this to None or your desired value
+    )
+    
+    # Add the BagOfKeywords object to the session
+    session.add(PhoneBbox_entry)
+
+    with lock:
+        # Increment the counter using the lock to ensure thread safety
+        global counter
+        counter += 1
+        session.commit()
+
+    # Print a message to confirm the update
+    # print(f"BG list list for image_id {image_id} updated successfully.")
+    if counter % 100 == 0:
+        print(f"Created Phone_bbox number: {counter}")
+
+    return
+
+def get_filename(target_image_id, return_endfile=False):
+    ## get the image somehow
+    select_image_ids_query = (
+        select(SegmentTable.site_name_id,SegmentTable.imagename)
+        .filter(SegmentTable.image_id == target_image_id)
+    )
+
+    result = session.execute(select_image_ids_query).fetchall()
+    site_name_id,imagename=result[0]
+    site_specific_root_folder = io.folder_list[site_name_id]
+    file=site_specific_root_folder+"/"+imagename  ###os.path.join was acting wierd so had to do this
+    end_file=imagename.split('/')[2]
+    if return_endfile: return file,end_file
+    return file
+
+def return_bbox(image):
+    result = model(image,classes=[OBJ_CLS_ID])[0]
+    # plot=np.array(result.plot(),dtype=np.uint8) # Image with bbox added
+    bbox,conf=None,-1
+    if len(result.boxes)==1:
+        # print(result.boxes)
+        for box in result.boxes:
+            bbox = box.xyxy[0].tolist()    #the coordinates of the box as an array [x1,y1,x2,y2]
+            bbox = {"left":round(bbox[0]),"top":round(bbox[1]),"right":round(bbox[2]),"bottom":round(bbox[3])}
+            conf = round(box.conf[0].item(), 2)
+    elif len(result.boxes)>1:
+        print("multiple phones detected so ignoring")
+    else:
+        print("no phones detected")
+    
+    return bbox,conf
+
+def write_bbox(target_image_id, lock, session):
+    file=get_filename(target_image_id)
+    if os.path.exists(file):
+        img = cv2.imread(file)    
+    else:
+        print(f"image not found {file}")
+        return
+    
+    ########This specific case is for image with apostrophe in their name like "hand's"#############
+    ########It messes with reading/writing somehow, os.exists says it exists
+    ########cv.imread reads it and produces None, because it reads "hands" not "hand's"
+    if img is None:return
+    #####################
+    bbox,conf=return_bbox(img)
+    # print(bbox,conf)
+    PhoneBbox_entry = (
+        session.query(PhoneBbox)
+        .filter(PhoneBbox.image_id == target_image_id)
+        .first()
+    )
+
+    if PhoneBbox_entry:
+        PhoneBbox_entry.bbox = json.dumps(bbox, indent = 4) 
+        PhoneBbox_entry.conf = conf
+        if VERBOSE:
+            print("image_id:", PhoneBbox_entry.image_id)
+            print("bbox:", PhoneBbox_entry.bbox)
+            print("conf:", PhoneBbox_entry.conf)
+
+        #session.commit()
+        print(f"Bbox for image_id {target_image_id} updated successfully.")
+    else:
+        print(f"Bbox for image_id {target_image_id} not found.")
+    
+    with lock:
+        # Increment the counter using the lock to ensure thread safety
+        global counter
+        counter += 1
+        session.commit()
+    if counter%100==0:print("###########"+str(counter)+"images processed ##########")
+
+    return
+
+#######MULTI THREADING##################
+# Create a lock for thread synchronization
+lock = threading.Lock()
+threads_completed = threading.Event()
+
+# Create a queue for distributing work among threads
+work_queue = queue.Queue()
+
+if index == 0:
+    function=create_table
+    # Query to retrieve entries where topic_id is equal to 26 and image_id is not present in PhoneBbox table
+    select_query = select(ImagesTopics.image_id).select_from(ImagesTopics).filter(ImagesTopics.topic_id == 26).\
+        outerjoin(PhoneBbox, ImagesTopics.image_id == PhoneBbox.image_id).filter(PhoneBbox.image_id == None).limit(LIMIT)
+    
+    result = session.execute(select_query).fetchall()
+    # print the length of the result
+    print(len(result), "rows")
+    for image_id in result:
+        work_queue.put(image_id[0])
+        
+elif index == 1:
+    if MODEL_SIZE=="NANO":
+        model = YOLO("yolov8n.pt")   #NANO
+    elif MODEL_SIZE=="SMALL":
+        model = YOLO("yolov8s.pt")   #SMALL
+    elif MODEL_SIZE=="MEDIUM":
+        model = YOLO("yolov8m.pt")   #MEDIUM
+
+    function=write_bbox
+    distinct_image_ids_query = select(PhoneBbox.image_id.distinct()).select_from(PhoneBbox).filter(PhoneBbox.conf == None).limit(LIMIT)
+    distinct_image_ids = [row[0] for row in session.execute(distinct_image_ids_query).fetchall()]
+    for counter,target_image_id in enumerate(distinct_image_ids):
+        work_queue.put(target_image_id)        
+
+        
+def threaded_fetching():
+    while not work_queue.empty():
+        param = work_queue.get()
+        function(param, lock, session)
+        work_queue.task_done()
+
+def threaded_processing():
+    thread_list = []
+    for _ in range(num_threads):
+        thread = threading.Thread(target=threaded_fetching)
+        thread_list.append(thread)
+        thread.start()
+    # Wait for all threads to complete
+    for thread in thread_list:
+        thread.join()
+    # Set the event to signal that threads are completed
+    threads_completed.set()
+
+threaded_processing()
+# Commit the changes to the database
+threads_completed.wait()
+print("done")
+# Close the session
+session.commit()
+session.close()
