@@ -10,12 +10,13 @@ import random
 import numpy as np
 import sys
 from collections import Counter
+from simple_lama_inpainting import SimpleLama
 
 
 class SortPose:
     # """Sort image files based on head pose"""
 
-    def __init__(self, motion, face_height_output, image_edge_multiplier, EXPAND, ONE_SHOT, JUMP_SHOT, HSV_CONTROL=None, VERBOSE=True):
+    def __init__(self, motion, face_height_output, image_edge_multiplier, EXPAND, ONE_SHOT, JUMP_SHOT, HSV_CONTROL=None, VERBOSE=True,INPAINT=False):
 
         self.mp_face_detection = mp.solutions.face_detection
         self.mp_drawing = mp.solutions.drawing_utils
@@ -28,6 +29,9 @@ class SortPose:
         self.CUTOFF = 100000
         self.FACE_DIST = 15
 
+        self.INPAINT=INPAINT
+        if self.INPAINT:self.INPAINT_MODEL=SimpleLama()
+        # if edge_multiplier_name:self.edge_multiplier_name=edge_multiplier_name
         # maximum allowable scale up
         self.resize_max = 5.99
         self.image_edge_multiplier = image_edge_multiplier
@@ -179,6 +183,7 @@ class SortPose:
             "isnot_face_count": 0,
             "cropfail_count":  0,
             "failed_dist_count": 0,
+            "inpaint_count":0,
             "outfolder":  self.outfolder,
             "first_run":  True,
             "start_img_name":start_img_name,
@@ -288,9 +293,6 @@ class SortPose:
             median = None
 
         return median
-
-
-
         print("starting from this median: ",median)
 
     def get_metamedian(self):
@@ -336,8 +338,6 @@ class SortPose:
     #     blended_face = sort.is_face(blend)
     #     return blended_face
 
-
-
     # def get_hash_folders(self,filename):
     #     m = hashlib.md5()
     #     m.update(filename.encode('utf-8'))
@@ -357,7 +357,6 @@ class SortPose:
         # print(enc2)
         d=np.linalg.norm(enc1 - enc2, axis=0)
         return d
-
 
 
     def simplest_order(self, segment):
@@ -390,12 +389,6 @@ class SortPose:
         return img_array, size        
 
 
-
-
-
-
-
-
     def get_cv2size(self, site_specific_root_folder, filename_or_imagedata):
         #IF filename_or_imagedata IS STRING:
         img = cv2.imread(os.path.join(site_specific_root_folder,filename_or_imagedata))
@@ -403,8 +396,6 @@ class SortPose:
         #img = filename_or_imagedata
         size = (img.shape[0], img.shape[1])
         return size
-
-
 
     # this doesn't seem to work
     # but it might be relevant later
@@ -455,6 +446,8 @@ class SortPose:
 
     # test if new and old make a face, calls is_face
     def test_pair(self, last_file, new_file):
+        print(img.shape,"@@@@@@@@@@@@@@@@@@@@")
+        print(last_img.shape,"^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^")
         try:
             img = new_file
             height, width, layers = img.shape
@@ -622,7 +615,6 @@ class SortPose:
         self.simple_crop = [topcrop, rightcrop, botcrop, leftcrop]
         print("crop top, right, bot, left")
         print(self.simple_crop)
-
         if topcrop >= 0 and self.w-rightcrop >= 0 and self.h-botcrop>= 0 and leftcrop>= 0:
             print("all positive")
             toobig = False
@@ -655,7 +647,6 @@ class SortPose:
 
             # this is the in progress neck rotation stuff
             # self.get_crop_data(sinY)
-
 
     def expand_image(self,image, faceLms, bbox, sinY=0):
         self.get_image_face_data(image, faceLms, bbox)    
@@ -714,7 +705,59 @@ class SortPose:
         # quit() 
         return new_image  
 
-    def crop_image(self,image, faceLms, bbox, sinY=0):
+    def get_extension_pixels(self,image):
+        if self.VERBOSE: print("calculating extension pixels")
+        max_image_edge_multiplier=[1.5,2.6,2,2.6] #maximum of the elements
+        p1 = (int(self.nose_2d[0]), int(self.nose_2d[1]))
+        topcrop = int(p1[1]-self.face_height*max_image_edge_multiplier[0])
+        rightcrop = int(p1[0]+self.face_height*max_image_edge_multiplier[1])
+        botcrop = int(p1[1]+self.face_height*max_image_edge_multiplier[2])
+        leftcrop = int(p1[0]-self.face_height*max_image_edge_multiplier[3])
+        ext_crop = np.array([topcrop, self.w-rightcrop, self.h-botcrop, leftcrop])
+        ext_crop=np.abs(np.minimum(np.zeros(4),ext_crop)).astype(int)
+        # simple_crop=np.array([np.maximum(0,topcrop),np.minimum(self.w,rightcrop),np.minimum(self.h,botcrop),np.maximum(0,leftcrop)]).astype(int)
+        # simple_crop={"top":simple_crop[0],"right":simple_crop[1],"bottom":simple_crop[2],"left":simple_crop[3]}
+        extension_pixels={"top":ext_crop[0],"right":ext_crop[1],"bottom":ext_crop[2],"left":ext_crop[3]}
+        if self.VERBOSE:
+            print("extension pixels",extension_pixels)
+        #     print("simple crop",simple_crop)
+        # simple_crop_image=image[simple_crop["top"]:simple_crop["bottom"],simple_crop["left"]:simple_crop["right"],:]
+        if self.VERBOSE: print("extension pixels calculated")
+        return extension_pixels
+
+    def prepare_mask(self,image,extension_pixels):
+        if self.VERBOSE:print("starting mask preparation")
+        height, width = image.shape[:2]
+        top, bottom, left, right = extension_pixels["top"], extension_pixels["bottom"], extension_pixels["left"],extension_pixels["right"] 
+        extended_img = np.zeros((height + top+bottom, width+left+right, 3), dtype=np.uint8)
+        extended_img[top:height+top, left:width+left,:] = image
+        mask = np.zeros_like(extended_img[:, :, 0])
+        mask[:top,:] = 255
+        mask[:,:left] = 255
+        mask[(height+top):,:] = 255
+        mask[:,(width+left):] = 255
+        if self.VERBOSE:print("mask preparation done")
+        return extended_img,mask
+    
+    def extend_lama(self,extended_img, mask,downsampling_scale=4):
+        if self.VERBOSE: print("doing lama generative fill")
+        n_height,n_width=extended_img.shape[:2]
+        extended_img = cv2.resize(extended_img, (n_width//downsampling_scale, n_height//downsampling_scale), interpolation = cv2.INTER_AREA)
+        mask = cv2.resize(mask, (n_width//downsampling_scale, n_height//downsampling_scale), interpolation = cv2.INTER_AREA)
+        inpaint = self.INPAINT_MODEL(extended_img, mask)
+        inpaint=np.array(inpaint,dtype=np.uint8)
+        inpaint = cv2.resize(inpaint, (n_width,n_height), interpolation = cv2.INTER_LANCZOS4)
+        if self.VERBOSE: print("generative fill done")
+
+        return inpaint
+
+    # def inpaint(self,image):
+    #     extension_pixels=self.get_extension_pixels(image)
+    #     extended_img,mask=self.prepare_mask(image,extension_pixels)
+    #     inpaint_image=self.extend_lama(extended_img, mask,scale=4)
+    #     return inpaint_image
+
+    def crop_image(self,image, faceLms, bbox, sinY=0,SAVE=False):
 
         self.get_image_face_data(image, faceLms, bbox)    
         # check for crop, and if not exist, then get
@@ -724,6 +767,7 @@ class SortPose:
         except:
             print("couldn't get crop data")
             toobig = True
+
 
         if not toobig:
             if self.VERBOSE: print("crop_image: going to crop because too big is ", toobig)
@@ -751,11 +795,9 @@ class SortPose:
             except:
                 cropped_image = None
                 print("not cropped_image loop", self.h, self.w)
-
         else:
-            cropped_image = None
+            cropped_image = np.array([-1])
             print("crop_image: cropped_image is None because too big is ", toobig)
-
             # resize = None
         return cropped_image
 

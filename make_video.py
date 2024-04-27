@@ -11,13 +11,14 @@ import ast
 
 #linear sort imports non-class
 import numpy as np
-import mediapipe as mp
-from mediapipe.python.solutions.drawing_utils import _normalized_to_pixel_coordinates
-import matplotlib.pyplot as plt
-import imutils
-from imutils import face_utils
-import shutil
-from sys import platform
+# import mediapipe as mp
+# from mediapipe.python.solutions.drawing_utils import _normalized_to_pixel_coordinates
+from mediapipe.framework.formats import landmark_pb2
+# import matplotlib.pyplot as plt
+# import imutils
+# from imutils import face_utils
+# import shutil
+# from sys import platform
 from pathlib import Path
 
 from sqlalchemy import create_engine
@@ -105,7 +106,7 @@ IS_TOPICS = False
 N_TOPICS = 30
 
 # is an array. it can handle multiple topics together.
-IS_ONE_TOPIC = True
+IS_ONE_TOPIC = False
 TOPIC_NO = [0]
 #  is isolated,  is business,  babies, 17 pointing
 #  is doctor <<  covid
@@ -128,7 +129,9 @@ JUMP_SHOT = True # jump to random file if can't find a run (I don't think this a
 io = DataIO(IS_SSD)
 db = io.db
 # overriding DB for testing
-io.db["name"] = "stock"
+# io.db["name"] = "stock"
+io.db["name"] = "ministock"
+
 METAS_FILE = "metas.csv"
 
 NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
@@ -201,7 +204,7 @@ elif IS_SEGONLY:
     # WHERE += " AND k.keyword_text LIKE 'surpris%' "
 
     # WHERE = "s.site_name_id != 1"
-    LIMIT = 500
+    LIMIT = 10000
 
 
 
@@ -216,7 +219,7 @@ motion = {
 }
 
 EXPAND = False
-
+INPAINT=True
 # face_height_output is how large each face will be. default is 750
 face_height_output = 500
 # face_height_output = 256
@@ -229,10 +232,10 @@ face_height_output = 500
 # image_edge_multiplier = [1.4,2.6,1.9,2.6] # wider for hands
 # image_edge_multiplier = [1.2,2.3,1.7,2.3] # medium for hands
 image_edge_multiplier = [1.2, 1.2, 1.6, 1.2] # standard portrait
-
+# max_image_edge_multiplier=[1.5,2.6,2,2.6] #maximum of the elements
 
 # construct my own objects
-sort = SortPose(motion, face_height_output, image_edge_multiplier,EXPAND, ONE_SHOT, JUMP_SHOT, HSV_BOUNDS, VERBOSE)
+sort = SortPose(motion, face_height_output, image_edge_multiplier,EXPAND, ONE_SHOT, JUMP_SHOT, HSV_BOUNDS, VERBOSE,INPAINT)
 
 start_img_name = "median"
 start_site_image_id = None
@@ -265,13 +268,13 @@ session = Session()
 Base = declarative_base()
 
 # construct mediapipe objects
-mp_drawing = mp.solutions.drawing_utils
+# mp_drawing = mp.solutions.drawing_utils
 
-mp_face_detection = mp.solutions.face_detection
-face_detection = mp_face_detection.FaceDetection(min_detection_confidence=0.7)
+# mp_face_detection = mp.solutions.face_detection
+# face_detection = mp_face_detection.FaceDetection(min_detection_confidence=0.7)
 
-mp_face_mesh = mp.solutions.face_mesh
-face_mesh = mp_face_mesh.FaceMesh(static_image_mode=True, max_num_faces=1,min_detection_confidence=0.5)
+# mp_face_mesh = mp.solutions.face_mesh
+# face_mesh = mp_face_mesh.FaceMesh(static_image_mode=True, max_num_faces=1,min_detection_confidence=0.5)
 
 
 ###################
@@ -626,7 +629,7 @@ def compare_images(last_image, img, face_landmarks, bbox):
     # this code takes image i, and blends it with the subsequent image
     # next step is to test to see if mp can recognize a face in the image
     # if no face, a bad blend, try again with i+2, etc. 
-    if cropped_image is not None:
+    if cropped_image is not None and len(cropped_image)>1 :
         if VERBOSE: print("have a cropped image trying to save", cropped_image.shape)
         # try:
         #     print("last_image is ", type(last_image))
@@ -643,7 +646,7 @@ def compare_images(last_image, img, face_landmarks, bbox):
                     if is_face:
                         if VERBOSE: print("testing mse to see if same image")
                         face_diff = sort.unique_face(last_image,cropped_image)
-                        if VERBOSE: print ("mse ", mse)
+                        # if VERBOSE: print ("mse ", mse) ########## mse not a variable
                     else:
                         print("failed is_face test")
                         # use cv2 to place last_image and cropped_image side by side in a new image
@@ -652,12 +655,13 @@ def compare_images(last_image, img, face_landmarks, bbox):
                         height = max(last_image.shape[0], cropped_image.shape[0])
                         last_image = cv2.resize(last_image, (last_image.shape[1], height))
                         cropped_image = cv2.resize(cropped_image, (cropped_image.shape[1], height))
-
+                        #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@#
                         # Concatenate images horizontally
                         combined_image = cv2.hconcat([last_image, cropped_image])
                         outpath_notface = os.path.join(sort.counter_dict["outfolder"],"notface",sort.counter_dict['last_description'][:30]+".jpg")
-                        sort.not_make_face.append(outpath_notfacecombined_image)
+                        # sort.not_make_face.append(outpath_notfacecombined_image) ########## variable name error
                         # Save the new image
+                        #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@#
 
             else:
                 print("first round, skipping the pair test")
@@ -672,13 +676,19 @@ def compare_images(last_image, img, face_landmarks, bbox):
             print("pair do not make a face, skipping")
             sort.counter_dict["isnot_face_count"] += 1
             return None
+        
     elif cropped_image is None and sort.counter_dict["first_run"]:
         print("first run, but bad first image")
         last_image = cropped_image
         sort.counter_dict["cropfail_count"] += 1
+    elif len(cropped_image)==1:
+        print("bad crop, will try inpainting and try again")
+        sort.counter_dict["inpaint_count"] += 1
     else:
         print("no image here, trying next")
         sort.counter_dict["cropfail_count"] += 1
+    # print(type(cropped_image),"$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$")
+
     return cropped_image, face_diff
 
 
@@ -697,6 +707,8 @@ def print_counters():
     print(sort.counter_dict["failed_dist_count"])
     print("total count")
     print(sort.counter_dict["counter"])
+    print("inpaint count")
+    print(sort.counter_dict["inpaint_count"])
 
 
 def const_imgfilename(filename, df, imgfileprefix):
@@ -707,6 +719,33 @@ def const_imgfilename(filename, df, imgfileprefix):
     imgfilename = imgfileprefix+"_"+str(counter_str)+"_"+UID+".jpg"
     print("imgfilename ",imgfilename)
     return imgfilename
+
+def shift_landmarks(landmarks,extension_pixels,img):
+    height,width = img.shape[:2]
+    new_height=extension_pixels["top"]+extension_pixels["bottom"]+height
+    new_width=extension_pixels["left"]+extension_pixels["right"]+width
+    translated_landmarks = landmark_pb2.NormalizedLandmarkList()
+    i=0
+    for landmark in landmarks.landmark:
+        translated_landmark = landmark_pb2.NormalizedLandmark()
+        translated_landmark.x = (landmark.x*width + extension_pixels["left"])/new_width
+        translated_landmark.y = (landmark.y*height + extension_pixels["top"])/new_height
+        translated_landmarks.landmark.append(translated_landmark)
+        if sort.VERBOSE:
+            if i==0:
+                print("before shifting landmark:",(landmark.x*width)//1,(landmark.y*height)//1,"after shifting landmark:",(translated_landmark.x*new_width)//1,(translated_landmark.y*new_height)//1)
+        i+=1
+    return translated_landmarks
+
+def shift_bbox(bbox, extension_pixels):
+    x0,y0=extension_pixels["left"],extension_pixels["top"]
+    print("before shifting",bbox)
+    bbox['left']   = bbox['left'] +   x0
+    bbox['right']  = bbox['right'] +  x0
+    bbox['top']    = bbox['top'] +    y0
+    bbox['bottom'] = bbox['bottom'] + y0
+    if sort.VERBOSE:print("after shifting",bbox)
+    return bbox
 
 def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
     def save_image_metas(row):
@@ -756,6 +795,29 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
                 # compare_images to make sure they are face and not the same
                 # last_image is cv2 np.array
                 cropped_image, face_diff = compare_images(sort.counter_dict["last_image"], img, row['face_landmarks'], row['bbox'])
+                if len(cropped_image)==1:
+                    print("gotta inpaint that shizzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz")
+                    extension_pixels=sort.get_extension_pixels(img)
+                    if sort.VERBOSE:print("extension_pixels",extension_pixels)
+                    inpaint_file=os.path.join(os.path.join(os.path.dirname(row['folder']), "inpaint", os.path.basename(row['folder'])),row['filename'])
+                    if os.path.exists(inpaint_file):
+                        if sort.VERBOSE: print("path exists, loading image",inpaint_file)
+                        inpaint_image=cv2.imread(inpaint_file)
+                    else:
+                        if sort.VERBOSE: print("path doesnt exist, inpainting now")
+                        directory = os.path.dirname(inpaint_file)
+                        # Create the directory if it doesn't exist
+                        if not os.path.exists(directory):
+                            os.makedirs(directory)
+                        extended_img,mask=sort.prepare_mask(img,extension_pixels)
+                        inpaint_image=sort.extend_lama(extended_img, mask,scale=4)
+                        cv2.imwrite(inpaint_file,inpaint_image)
+                    face_landmarks=shift_landmarks(row['face_landmarks'],extension_pixels,img)
+                    bbox=shift_bbox(row['bbox'],extension_pixels)
+                    cropped_image, face_diff = compare_images(sort.counter_dict["last_image"], inpaint_image, face_landmarks, bbox)
+                    if sort.VERBOSE:print("inpainting done","shape:",np.shape(cropped_image))
+                    if len(cropped_image)==1:print("still 1x1 image idk whats happening")
+
 
 
                 ###
