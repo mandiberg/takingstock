@@ -29,7 +29,7 @@ db = io.db
 # io.db["name"] = "ministock"
 
 VERBOSE = True
-SegmentHelper_name = 'SegmentHelperApril4_topic17'
+SegmentHelper_name = 'SegmentHelperApril12_2x2x33x27'
 TOKEN_COUNT_PATH = "token_counts.csv"
 
 # Create a database engine
@@ -73,7 +73,7 @@ options = ['Create helper table', 'Fetch keywords list and make tokens', 'Fetch 
            ]
 option, index = pick(options, title)
 
-LIMIT= 100000
+LIMIT= 4000000
 # Initialize the counter
 counter = 0
 
@@ -634,38 +634,56 @@ if index == 0:
     #     .limit(LIMIT)
     # )
 
-    # this is for one specific topic
+    # # this is for one specific topic
+    # select_query = (
+    #     # select(Encodings.image_id, Encodings.bbox, Encodings.face_x, Encodings.face_y, Encodings.face_z, Encodings.mouth_gap, Encodings.face_landmarks, Encodings.face_encodings68, Encodings.body_landmarks)
+    #     select(Encodings.image_id)
+    #     .select_from(Encodings)
+    #     .join(ImagesTopics, Encodings.image_id == ImagesTopics.image_id)
+    #     .outerjoin(SegmentHelper, Encodings.image_id == SegmentHelper.image_id)
+    #     .filter(SegmentHelper.image_id == None)
+
+    #     # .filter(and_(
+    #     #     Encodings.face_x > -40,
+    #     #     Encodings.face_x < -25,
+    #     #     Encodings.face_y > -4,
+    #     #     Encodings.face_y < 4,
+    #     #     Encodings.face_z > -4,
+    #     #     Encodings.face_z < 4,
+    #     #     ImagesTopics.topic_id == 17
+    #     # ))
+
+    #     .filter(and_(
+    #         Encodings.face_x > -33,
+    #         Encodings.face_x < -27,
+    #         Encodings.face_y > -2,
+    #         Encodings.face_y < 2,
+    #         Encodings.face_z > -2,
+    #         Encodings.face_z < 2
+    #     ))
+
+    #     .limit(LIMIT)
+    # )
+
+
+    # this is for subselecting the segment table
     select_query = (
         # select(Encodings.image_id, Encodings.bbox, Encodings.face_x, Encodings.face_y, Encodings.face_z, Encodings.mouth_gap, Encodings.face_landmarks, Encodings.face_encodings68, Encodings.body_landmarks)
-        select(Encodings.image_id)
-        .select_from(Encodings)
-        .join(ImagesTopics, Encodings.image_id == ImagesTopics.image_id)
-        .outerjoin(SegmentHelper, Encodings.image_id == SegmentHelper.image_id)
+        select(SegmentTable.image_id)
+        .select_from(SegmentTable)
+        .outerjoin(SegmentHelper, SegmentTable.image_id == SegmentHelper.image_id)
         .filter(SegmentHelper.image_id == None)
-
         .filter(and_(
-            Encodings.face_x > -40,
-            Encodings.face_x < -25,
-            Encodings.face_y > -4,
-            Encodings.face_y < 4,
-            Encodings.face_z > -4,
-            Encodings.face_z < 4,
-            ImagesTopics.topic_id == 17
+            SegmentTable.face_x > -33,
+            SegmentTable.face_x < -27,
+            SegmentTable.face_y > -2,
+            SegmentTable.face_y < 2,
+            SegmentTable.face_z > -2,
+            SegmentTable.face_z < 2
         ))
-
-        # .filter(and_(
-        #     Encodings.face_x > -33,
-        #     Encodings.face_x < -27,
-        #     Encodings.face_y > -2,
-        #     Encodings.face_y < 2,
-        #     Encodings.face_z > -2,
-        #     Encodings.face_z < 2,
-        #     ImagesTopics.topic_id == 7
-        # ))
 
         .limit(LIMIT)
     )
-
 
     result = session.execute(select_query).fetchall()
     # print the length of the result

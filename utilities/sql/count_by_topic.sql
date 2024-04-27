@@ -1,5 +1,6 @@
 USE Stock;
 
+-- this works, and is pretty quick
 -- count by topic
 SELECT COUNT(image_id) AS count,
        it.topic_id,
@@ -19,18 +20,10 @@ JOIN SegmentOct20 sh ON ik.image_id = sh.image_id
 GROUP BY ik.keyword_id, k.keyword_text;
 
 
--- county by topic with age and gender
-
--- count by topic
-SELECT COUNT(image_id) AS topic_count,
-       it.topic_id,
-       t.topic
-FROM ImagesTopics it
-JOIN Topics t ON it.topic_id = t.topic_id
-GROUP BY it.topic_id, t.topic
-;
 
 
+<<<<<<< Updated upstream
+=======
 -- take two
 SELECT 
     COALESCE(topic_count, 0) AS topic_count,
@@ -101,3 +94,8 @@ LEFT JOIN
 GROUP BY 
     topic_count.topic_id, topic_count.topic;
 
+   
+USE stock;   
+   SELECT DISTINCT seg1.image_id, seg1.site_name_id, seg1.contentUrl, seg1.imagename, e.encoding_id, seg1.site_image_id, e.face_landmarks, e.bbox FROM SegmentOct20 seg1 INNER JOIN SegmentHelperApril4_topic17 ht ON seg1.image_id = ht.image_id LEFT JOIN ImagesTopics it ON seg1.image_id = it.image_id WHERE e.body_landmarks IS NULL  LIMIT 100;
+
+>>>>>>> Stashed changes

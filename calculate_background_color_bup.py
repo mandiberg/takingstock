@@ -45,13 +45,13 @@ USE_BBOX=True
 VERBOSE = False
 
 # 3.8 M large table (for Topic Model)
-# HelperTable_name = "SegmentHelperMar23_headon"
+HelperTable_name = "SegmentHelperMar23_headon"
 
 # 7K for topic 7
-HelperTable_name = "SegmentHelperApril12_2x2x33x27"
+# HelperTable_name = ""
 
 # MM controlling which folder to use
-IS_SSD = False
+IS_SSD = True
 
 io = DataIO(IS_SSD)
 db = io.db
@@ -100,7 +100,7 @@ title = 'Please choose your operation: '
 options = ['Create table', 'Fetch BG color stats',"test sorting"]
 option, index = pick(options, title)
 
-LIMIT= 500000
+LIMIT= 1000000
 # Initialize the counter
 counter = 0
 
@@ -108,28 +108,27 @@ counter = 0
 #num_threads = io.NUMBER_OF_PROCESSES
 num_threads = 1
 
-class SegmentTable(Base):
-    # __tablename__ = 'SegmentTable'
-    __tablename__ = 'SegmentOct20'
-    seg_image_id=Column(Integer,primary_key=True, autoincrement=True)
-    image_id = Column(Integer)
-    site_name_id = Column(Integer)
-    site_image_id = Column(String(50),nullable=False)
-    contentUrl = Column(String(300), nullable=False)
-    imagename = Column(String(200))
-    age_id = Column(Integer)
-    age_detail_id = Column(Integer)
-    gender_id = Column(Integer)
-    location_id = Column(Integer)
-    face_x = Column(DECIMAL(6, 3))
-    face_y = Column(DECIMAL(6, 3))
-    face_z = Column(DECIMAL(6, 3))
-    mouth_gap = Column(DECIMAL(6, 3))
-    face_landmarks = Column(BLOB)
-    bbox = Column(JSON)
-    face_encodings = Column(BLOB)
-    face_encodings68 = Column(BLOB)
-    body_landmarks = Column(BLOB)
+# class SegmentTable(Base):
+#     __tablename__ = 'SegmentTable'
+#     seg_image_id=Column(Integer,primary_key=True, autoincrement=True)
+#     image_id = Column(Integer)
+#     site_name_id = Column(Integer)
+#     site_image_id = Column(String(50),nullable=False)
+#     contentUrl = Column(String(300), nullable=False)
+#     imagename = Column(String(200))
+#     age_id = Column(Integer)
+#     age_detail_id = Column(Integer)
+#     gender_id = Column(Integer)
+#     location_id = Column(Integer)
+#     face_x = Column(DECIMAL(6, 3))
+#     face_y = Column(DECIMAL(6, 3))
+#     face_z = Column(DECIMAL(6, 3))
+#     mouth_gap = Column(DECIMAL(6, 3))
+#     face_landmarks = Column(BLOB)
+#     bbox = Column(JSON)
+#     face_encodings = Column(BLOB)
+#     face_encodings68 = Column(BLOB)
+#     body_landmarks = Column(BLOB)
 
 class HelperTable(Base):
     __tablename__ = HelperTable_name
@@ -291,14 +290,6 @@ def create_table(row, lock, session):
         image_id=image_id,
         hue=None,  # Set this to None or your desired value
         lum=None,  # Set this to None or your desired value
-        sat = None,
-        val = None,
-        lum_torso = None,
-        hue_bb = None,
-        lum_bb = None,
-        sat_bb = None,
-        val_bb = None,
-        lum_torso_bb = None
     )
     
     # Add the BagOfKeywords object to the session
@@ -328,7 +319,7 @@ def get_filename(target_image_id, return_endfile=False):
     site_specific_root_folder = io.folder_list[site_name_id]
     file=site_specific_root_folder+"/"+imagename  ###os.path.join was acting wierd so had to do this
     end_file=imagename.split('/')[2]
-    if return_endfile: return file,end_file
+    if return_endfile: return file,endfile
     return file
  
 
@@ -361,14 +352,11 @@ def fetch_BG_stat(target_image_id, lock, session):
     ########cv.imread reads it and produces None, because it reads "hands" not "hand's"
     if img is None:return
     #####################
-    # hue,sat,val,lum, lum_torso=get_bg_hue_lum(img,bbox,facelandmark)
-    hue,sat,val,lum, lum_torso=sort.get_bg_hue_lum(img,bbox,facelandmark)    
+    hue,sat,val,lum, lum_torso=get_bg_hue_lum(img,bbox,facelandmark)    
     if USE_BBOX:
         #will do a second round for bbox with same cv2 image
         bbox,facelandmark=get_bbox(target_image_id)
-        hue_bb,sat_bb, val_bb, lum_bb, lum_torso_bb =sort.get_bg_hue_lum(img,bbox,facelandmark)
-        # hue_bb,sat_bb, val_bb, lum_bb, lum_torso_bb =get_bg_hue_lum(img,bbox,facelandmark)
-
+        hue_bb,sat_bb, val_bb, lum_bb, lum_torso_bb =get_bg_hue_lum(img,bbox,facelandmark)
     
     print("sat values before insert", hue_bb,sat_bb, val_bb, lum_bb, lum_torso_bb)
     # Update the BG entry with the corresponding image_id
@@ -433,13 +421,17 @@ if index == 0:
     function=create_table
     ################# CREATE TABLE ###########
     # select_query = select(Images.image_id,Images.imagename,Images.site_name_id).\
-    #     select_from(Images).outerjoin(ImagesBackground,Images.image_id == ImagesBackground.image_id).filter(ImagesBackground.image_id == None).limit(LIMIT)
+    #     select_from(Images).\
+    #         outerjoin(ImagesBackground,Images.image_id == ImagesBackground.image_id).\
+    #             filter(ImagesBackground.image_id == None).limit(LIMIT)
     
     # pulling directly frmo segment, to filter on face_x etc
     select_query = select(SegmentTable.image_id,SegmentTable.imagename,SegmentTable.site_name_id).\
-        select_from(SegmentTable).outerjoin(ImagesBackground,SegmentTable.image_id == ImagesBackground.image_id).filter(ImagesBackground.image_id == None).limit(LIMIT)
+        select_from(SegmentTable).\
+            outerjoin(ImagesBackground,SegmentTable.image_id == ImagesBackground.image_id).\
+                filter(ImagesBackground.image_id == None).limit(LIMIT)
     
-    # pulling from segment with a join to the helper table
+    # # pulling from segment with a join to the helper table
     # select_query = select(
     #     SegmentTable.image_id,
     #     SegmentTable.imagename,
@@ -452,17 +444,6 @@ if index == 0:
     # filter(HelperTable.image_id != None).\
     # limit(LIMIT)
     
-    select_query = select(
-        SegmentTable.image_id,
-        SegmentTable.imagename,
-        SegmentTable.site_name_id
-    ).\
-    select_from(SegmentTable).\
-    outerjoin(ImagesBackground, SegmentTable.image_id == ImagesBackground.image_id).\
-    filter(ImagesBackground.image_id == None).\
-    filter(not_(SegmentTable.age_id.in_([1, 2, 3]))).\
-    limit(LIMIT)
-
     #####################
     #for some reason ''' select ([xyx])''' produces error
     #but ''' select(xyz)''' doesn't, atleast on windows
@@ -499,24 +480,17 @@ elif index == 1:
     #     filter(ImagesBackground.hue_bb == -1).limit(LIMIT).offset(3000)
 
     # for reprocessing torso+row only for subsegment through join to helper table
-    # if USE_BBOX:distinct_image_ids_query = select(ImagesBackground.image_id.distinct()).\
-    #     outerjoin(HelperTable, ImagesBackground.image_id == HelperTable.image_id).\
-    #     filter(HelperTable.image_id != None).\
-    #     filter(ImagesBackground.lum_torso == None).limit(LIMIT)
-
-    # # for helpertable
-    # if USE_BBOX:distinct_image_ids_query = select(HelperTable.image_id.distinct()).\
-    #     join(ImagesBackground, ImagesBackground.image_id == HelperTable.image_id).\
-    #     filter(ImagesBackground.lum_torso == None).limit(LIMIT)
-
     if USE_BBOX:distinct_image_ids_query = select(ImagesBackground.image_id.distinct()).\
+        outerjoin(HelperTable, ImagesBackground.image_id == HelperTable.image_id).\
+        filter(HelperTable.image_id != None).\
         filter(ImagesBackground.lum_torso == None).limit(LIMIT)
+
 
     # if USE_BBOX:distinct_image_ids_query = select(ImagesBackground.image_id.distinct()).filter(ImagesBackground.hue_bb == None).limit(LIMIT)
     else:distinct_image_ids_query = select(ImagesBackground.image_id.distinct()).filter(ImagesBackground.hue == None).limit(LIMIT)
     distinct_image_ids = [row[0] for row in session.execute(distinct_image_ids_query).fetchall()]
     for counter,target_image_id in enumerate(distinct_image_ids):
-        if counter%10000==0:print("###########"+str(counter)+"images processed ##########")
+        #if counter%100==0:print("###########"+str(counter)+"images processed ##########")
         work_queue.put(target_image_id)        
 
 elif index == 2:

@@ -8,8 +8,8 @@ ADD val_bb FLOAT,
 ADD torso_lum_bb FLOAT
 ;
 
-SELECT MAX(so.seg_image_id)
-FROM SegmentOct20 so ;
+SELECT MAX(i.image_id)
+FROM Images i  ;
 
 SELECT ie.ethnicity_id 
 FROM ImagesEthnicity ie 
@@ -32,39 +32,78 @@ LIMIT 10;
 
 SELECT COUNT(ib.image_id) 
 FROM ImagesBackground ib 
-WHERE ib.lum_torso IS NOT NULL 
+JOIN SegmentOct20 so ON ib.image_id = so.image_id 
+WHERE ib.lum_torso IS NULL 
+AND so.image_id NOT IN (1,2,3)
+;
+
+
+SELECT s.image_id, s.description, it.topic_score 
+FROM SegmentOct20 s  JOIN ImagesTopics it ON s.image_id = it.image_id  
+-- WHERE s.body_landmarks IS NOT NULL 
+WHERE face_x > -33 AND face_x < -27 AND face_y > -2 AND face_y < 2 AND face_z > -2 AND face_z < 2 AND it.topic_score > .3 AND s.age_id NOT IN (1,2,3)   
+AND it.topic_id IN (17)
 ;
 
 SELECT *
-FROM ImagesBackground ib 
-WHERE ib.image_id = 2082968
+FROM Images ib 
+WHERE ib.image_id = 4583306
 ;
 
-ALTER TABLE ImagesBackground 
-RENAME COLUMN torso_lum to lum_torso;
-
-
-SELECT *
-FROM Images i 
-WHERE i.image_id > 100000000
-AND i.site_name_id = 1
-AND i.site_image_id = 499757170
-;
-
-DELETE 
-FROM SegmentHelperApril1_topic7;
-
-WHERE ibg.lum_bb = -2
-LIMIT 1000;
-
-SELECT *
+SELECT COUNT(so.image_id) 
 FROM SegmentOct20 so 
-WHERE so.image_id = 2819946
+WHERE face_x > -33 AND face_x < -27 AND face_y > -2 AND face_y < 2 AND face_z > -2 AND face_z < 2 AND age_id NOT IN (1,2,3)   
 ;
 
-SELECT COUNT(it.image_id)
-FROM ImagesTopics it  
+<<<<<<< Updated upstream
+
+SELECT COUNT(so.image_id)  
+FROM SegmentOct20 so 
+JOIN ImagesBackground ib ON ib.image_id = so.image_id 
+WHERE ib.hue IS NOT NULL;
+
+
+SELECT COUNT(so.image_id)  
+FROM SegmentHelperApril12_2x2x33x27 so 
+JOIN ImagesBackground ib ON ib.image_id = so.image_id 
+WHERE ib.hue IS NULL;
+
+
+
+SELECT COUNT(so.image_id)  
+FROM SegmentOct20 so 
+WHERE face_x > -33 AND face_x < -27 AND face_y > -2 AND face_y < 2 AND face_z > -2 AND face_z < 2  AND age_id NOT IN (1,2,3)   
 ;
+
+=======
+DELETE 
+FROM ImagesClusters  
+;
+
+SELECT s.image_id, s.description, it.topic_score 
+FROM SegmentOct20 s  JOIN ImagesTopics it ON s.image_id = it.image_id  
+-- WHERE s.body_landmarks IS NOT NULL 
+WHERE face_x > -33 AND face_x < -27 AND face_y > -2 AND face_y < 2 AND face_z > -2 AND face_z < 2 AND it.topic_score > .3 AND s.age_id NOT IN (1,2,3)   
+AND it.topic_id IN (17)
+;
+
+
+SELECT COUNT(ht.image_id)  
+FROM SegmentHelperApril4_topic17 ht
+JOIN Encodings e ON ht.image_id = e.image_id 
+WHERE e.body_landmarks  IS NOT NULL
+;
+
+SELECT COUNT(s.image_id)  
+FROM SegmentOct20 s   
+WHERE s.body_landmarks IS NOT NULL;
+
+>>>>>>> Stashed changes
+
+AND face_x > -33 AND face_x < -27 AND face_y > -2 AND face_y < 2 AND face_z > -2 AND face_z < 2 AND it.topic_score > .3 AND s.age_id NOT IN (1,2,3)   
+AND it.topic_id IN (17);
+
+
 
 SELECT *
 FROM Images i 

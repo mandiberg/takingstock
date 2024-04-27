@@ -20,7 +20,7 @@ class SortPose:
 
         self.mp_face_detection = mp.solutions.face_detection
         self.mp_drawing = mp.solutions.drawing_utils
-        self.get_bg_segment=mp.solutions.selfie_segmentation.SelfieSegmentation()
+        self.get_bg_segment=mp.solutions.selfie_segmentation.SelfieSegmentation()        
 
         #maximum allowable distance between encodings
         self.MAXDIST = 1.4
@@ -853,7 +853,7 @@ class SortPose:
 
         if self.VERBOSE: print("HSV, lum", hue,sat,val,lum, lum_torso)
         return self.hue,self.sat,self.val,self.lum,self.lum_torso
-
+    
     def get_start_enc(self, start_img, df_128_enc, df_33_lms, SORT_TYPE):
         print("get_start_enc")
         '''
@@ -915,7 +915,7 @@ class SortPose:
             try:
                 print("buggggggggy start_img", start_img)
                 print(df_128_enc)
-                print(df_128_enc.loc[start_img])
+                print(df_128_enc.loc[start_img])                
                 enc1 = df_128_enc.loc[start_img].to_list()
                 # print(enc1)
             except:
@@ -1014,6 +1014,58 @@ class SortPose:
         # else:
         #     w_s = -((-s)**(1./3.))
 
+
+    # def sort_dHSV(self, dist_dict, df_enc, HSVonly=False):
+    #     # print("sort_dHSV, HSVonly is", HSVonly)
+    #     hsv_dist_dict = {}
+    #     for item in dist_dict:
+    #         # print("item", item)
+    #         # for testing
+    #         # if not self.counter_dict["last_image_hsv"]:
+    #         #     self.counter_dict["last_image_hsv"] = [.1,.1,.85]
+    #         if not self.counter_dict["last_image_hsv"]:
+    #             # assign 128d to all vars for first run, ignoring hsv and lum, and just sort on 128d
+    #             # if self.VERBOSE: print("assigned first run hsv_dist values", item)
+    #             hsv_dist = item
+    #             lum_dist = item
+    #         elif abs(self.counter_dict["last_image_hsv"][2] - df_enc.loc[dist_dict[item], "hsv"][2]) > self.HSV_DELTA_MAX:
+    #             # skipping this one, too great a value shift, will produce flicker
+    #             # if self.VERBOSE: print("skipping this one, too great a color shift:", dist_dict[item])
+    #             continue
+    #         elif abs(self.counter_dict["last_image_lum"][1] - df_enc.loc[dist_dict[item], "lum"][1]) > self.HSV_DELTA_MAX:
+    #             # if self.VERBOSE: print("skipping this one, too great a value shift:", dist_dict[item])
+    #             # skipping this one, too great a value shift, will produce flicker
+    #             continue
+    #         else:
+    #             # print("in circle else")
+    #             hsv_converted = self.normalize_hsv(self.counter_dict["last_image_hsv"], df_enc.loc[dist_dict[item], "hsv"])
+    #             hsv_dist = self.get_d(self.counter_dict["last_image_hsv"], hsv_converted)
+    #             lum_dist = self.get_d(self.counter_dict["last_image_lum"], df_enc.loc[dist_dict[item], "lum"])
+    #         # if self.VERBOSE: print("hsv, lum dist, item", hsv_dist, lum_dist, item)
+    #         if HSVonly:
+    #             # print("HSVonly, sorting results")
+    #             # finds closest hsv distance bg and torso
+    #             hsv_dist_dict[item] = [hsv_dist*self.HSV_WEIGHT,lum_dist*self.LUM_WEIGHT]
+
+    #             # sort the hsv_dist_dict dictionary based on the sum of both values in the list
+    #             sorted_keys_dHSV = [k for k, v in sorted(hsv_dist_dict.items(), key=lambda item: item[1][0] + item[1][1])]
+
+    #         else:
+    #             # finds closest 3D distanct for 128d, hsv, and lum
+    #             hsv_dist_dict[item] = [item*self.d128_WEIGHT,hsv_dist*self.HSV_WEIGHT,lum_dist*self.LUM_WEIGHT]
+
+    #             # sort the hsv_dist_dict dictionary based on the sum of all three values in the list
+    #             sorted_keys_dHSV = [k for k, v in sorted(hsv_dist_dict.items(), key=lambda item: item[1][0] + item[1][1] + item[1][2])]
+
+    #     # if self.VERBOSE: print("sorted_keys_dHSV", sorted_keys_dHSV)
+    #     self.counter_dict["last_image_hsv"] =df_enc.loc[dist_dict[sorted_keys_dHSV[0]], "hsv"]
+    #     self.counter_dict["last_image_lum"] =df_enc.loc[dist_dict[sorted_keys_dHSV[0]], "lum"]
+    #     # TK this needs to be handled separately for RUNS and for planar
+
+    #     return sorted_keys_dHSV
+
+
+    # April 20 something version, may contain bugs
     def sort_dHSV(self, dist_dict, df_enc, HSVonly=False):
         if self.VERBOSE: print(f"in sort_dHSV, HSVonly is {HSVonly} counter_dict is {self.counter_dict}")
 
@@ -1091,6 +1143,10 @@ class SortPose:
         print("len(sorted_keys_dHSV_to_return)", len(sorted_keys_dHSV_to_return))
         return sorted_keys_dHSV_to_return
 
+
+
+
+
     # def jump(self, dist, dist_dict):
     #     if self.VERBOSE: print("jumping!")
     #     print("dist", len(dist), type(dist))
@@ -1120,13 +1176,12 @@ class SortPose:
         print(f"get_closest_df, sorttype is {sorttype} FIRST_ROUND is {FIRST_ROUND}")
         if sorttype == "128d" or (sorttype == "planar" and FIRST_ROUND is True) or (sorttype == "planar_body" and FIRST_ROUND is True):
             for index, row in df_128_enc.iterrows():
-                # print("128d: index", index, "row", row)
             # if sorttype == "128d" or (sorttype == "planar" and self.counter_dict["start_img_name"] == "median" and self.counter_dict["last_image"] is None):
                 enc2 = row
-                # if self.VERBOSE: print("testing this", index)
+                # print("testing this", index, "against the start img",start_img)
                 if (enc1 is not None) and (enc2 is not None):
                     # print("getting d with enc1", enc1)
-                    # print("getting d with enc2", enc2)
+                    # print("getting d with enc2", enc1)
                     d = self.get_d(enc1, enc2)
                     if d > 0:
                         # print ("d is", str(d), "for", index)
@@ -1142,7 +1197,7 @@ class SortPose:
                     print("128d: missing enc1 or enc2")
                     continue
                 # FIRST_ROUND = False
-                # if self.VERBOSE: print(f"d for {index} is {d}")
+
         elif sorttype == "planar":
             for index, row in df_128_enc.iterrows():
                 # print("planar: index")
@@ -1185,8 +1240,7 @@ class SortPose:
                         print(str(e))
 
 
-        if self.VERBOSE: print("made it through iterrows")
-        if self.VERBOSE: print(f"len of distrundict is {len(dist_run_dict)}")
+        # print("made it through iterrows")
         if len(dist_run_dict) > 2:
             k = list(dist_run_dict.keys())
             print("WE HAVE A RUN!!!!! ---------- ", str(len(k)))
@@ -1294,7 +1348,7 @@ class SortPose:
         #     return last_d_in_run, dist_run_dict, df_128_enc, df_33_lms
         # '''
         else:
-            print("going to find a winner")
+            # print("going to find a winner")
             # dist.sort()
             
             # sort_dHSV returns a list of 128d dists sorted by the sum of 128d and HSVd

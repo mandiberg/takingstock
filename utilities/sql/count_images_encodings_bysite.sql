@@ -1,7 +1,8 @@
 -- attempted to run Mar23, and quit after 300s
 
+-- ran successfully on april 14. 
 
-USE stock;
+Use Stock;
 
 SELECT
     i.site_name_id,
@@ -17,3 +18,23 @@ GROUP BY
     i.site_name_id
 ORDER BY
     i.site_name_id;
+
+   
+   
+   
+   
+-- segment only
+   
+SELECT
+    so.site_name_id,
+    COUNT(so.image_id) AS image_count,
+    SUM(CASE WHEN so.face_encodings68 IS NOT NULL THEN 1 ELSE 0 END) AS face_encodings68_not_null_count,
+    SUM(CASE WHEN so.body_landmarks IS NOT NULL THEN 1 ELSE 0 END) AS body_landmarks_not_null_count
+FROM
+    SegmentOct20 so 
+INNER JOIN
+SegmentHelperApril4_topic17 shat ON so.image_id = shat.image_id 
+GROUP BY
+    so.site_name_id
+ORDER BY
+    so.site_name_id;
