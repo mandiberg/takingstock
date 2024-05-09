@@ -813,7 +813,7 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
                         extended_img,mask=sort.prepare_mask(img,extension_pixels)
                         inpaint_image=sort.extend_lama(extended_img, mask)
                         #### use inpainting for the extended part, but use original for non extend to keep image sharp ###
-                        # inpaint_image[extension_pixels["top"]:extension_pixels["top"]+np.shape(img)[0],extension_pixels["left"]:extension_pixels["left"]+np.shape(img)[1]]=img
+                        inpaint_image[extension_pixels["top"]:extension_pixels["top"]+np.shape(img)[0],extension_pixels["left"]:extension_pixels["left"]+np.shape(img)[1]]=img
                         ###################
                         cv2.imwrite(inpaint_file,inpaint_image)
                     face_landmarks=shift_landmarks(row['face_landmarks'],extension_pixels,img)

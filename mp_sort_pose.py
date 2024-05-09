@@ -740,7 +740,7 @@ class SortPose:
         if self.VERBOSE:print("mask preparation done")
         return extended_img,mask
     
-    def extend_lama(self,extended_img, mask,downsampling_scale=1):
+    def extend_lama(self,extended_img, mask,downsampling_scale=4):
         if self.VERBOSE: print("doing lama generative fill")
         n_height,n_width=extended_img.shape[:2]
         extended_img = cv2.resize(extended_img, (n_width//downsampling_scale, n_height//downsampling_scale), interpolation = cv2.INTER_AREA)
