@@ -105,7 +105,7 @@ IS_ANGLE_SORT = False
 IS_TOPICS = False
 N_TOPICS = 30
 
-IS_ONE_TOPIC = True
+IS_ONE_TOPIC = False
 TOPIC_NO = [7]
 #  is isolated,  is business,  babies, 17 pointing
 #  is doctor <<  covid
@@ -128,8 +128,8 @@ JUMP_SHOT = True # jump to random file if can't find a run (I don't think this a
 io = DataIO(IS_SSD)
 db = io.db
 # overriding DB for testing
-io.db["name"] = "stock"
-# io.db["name"] = "ministock"
+# io.db["name"] = "stock"
+io.db["name"] = "ministock"
 
 METAS_FILE = "metas.csv"
 
@@ -203,7 +203,7 @@ elif IS_SEGONLY:
     # WHERE += " AND k.keyword_text LIKE 'surpris%' "
 
     # WHERE = "s.site_name_id != 1"
-    LIMIT = 100
+    LIMIT = 1000
 
 
 
@@ -812,6 +812,9 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
                             os.makedirs(directory)
                         extended_img,mask=sort.prepare_mask(img,extension_pixels)
                         inpaint_image=sort.extend_lama(extended_img, mask)
+                        #### use inpainting for the extended part, but use original for non extend to keep image sharp ###
+                        # inpaint_image[extension_pixels["top"]:extension_pixels["top"]+np.shape(img)[0],extension_pixels["left"]:extension_pixels["left"]+np.shape(img)[1]]=img
+                        ###################
                         cv2.imwrite(inpaint_file,inpaint_image)
                     face_landmarks=shift_landmarks(row['face_landmarks'],extension_pixels,img)
                     bbox=shift_bbox(row['bbox'],extension_pixels)
