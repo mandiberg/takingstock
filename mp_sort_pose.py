@@ -20,7 +20,8 @@ class SortPose:
 
         self.mp_face_detection = mp.solutions.face_detection
         self.mp_drawing = mp.solutions.drawing_utils
-        self.get_bg_segment=mp.solutions.selfie_segmentation.SelfieSegmentation()        
+        self.get_bg_segment=mp.solutions.selfie_segmentation.SelfieSegmentation()  
+              
 
         #maximum allowable distance between encodings
         self.MAXDIST = 1.4
@@ -31,7 +32,8 @@ class SortPose:
 
         self.INPAINT=INPAINT
         if self.INPAINT:self.INPAINT_MODEL=SimpleLama()
-        self.MAX_IMAGE_EDGE_MULTIPLIER=[1.5,2.6,2,2.6] #maximum of the elements
+        # self.MAX_IMAGE_EDGE_MULTIPLIER=[1.5,2.6,2,2.6] #maximum of the elements
+        self.MAX_IMAGE_EDGE_MULTIPLIER = image_edge_multiplier #testing
 
         # if edge_multiplier_name:self.edge_multiplier_name=edge_multiplier_name
         # maximum allowable scale up
@@ -803,6 +805,8 @@ class SortPose:
         return cropped_image
 
     def get_bg_hue_lum(self,image,bbox=None,faceLms=None):
+        # expects image in RGB format
+        print("in get_bg_hue_lum")
         hue = sat = val = lum = lum_torso = None
         if bbox:
             try:
@@ -812,20 +816,25 @@ class SortPose:
                 #sample_img=sample_img[bbox['top']:bbox['bottom'],bbox['left']:bbox['right'],:]
                 # passing in bbox as a str
                 image = self.crop_image(image, faceLms, bbox)
-                #print(type(sample_img),"@@@@@@@@@@@@")
+                print(type(sample_img),"@@@@@@@@@@@@")
                 if image is None: return -1,-1,-1,-1,-1 ## if TOO_BIG==true, checking if cropped image is empty
             except:
                 if self.VERBOSE: print("FAILED CROPPING, bad bbox",bbox)
                 return -2,-2,-2,-2,-2
             print("bbox['bottom'], ", bbox['bottom'])
-
+        print("[get_bg_hue_lum] about to go for segemntation")
         result = self.get_bg_segment.process(image[:,:,::-1]) #convert RBG to BGR then process with mp
+        print("[get_bg_hue_lum] got result")
         mask=np.repeat((1-result.segmentation_mask)[:, :, np.newaxis], 3, axis=2) 
+        print("[get_bg_hue_lum] made mask")
         mask_torso=np.repeat((result.segmentation_mask)[:, :, np.newaxis], 3, axis=2) 
+        print("[get_bg_hue_lum] made torso mask")
 
+        print("[get_bg_hue_lum] doing some stuff")
         masked_img=mask*image[:,:,::-1]/255 ##RGB format
         masked_img_torso=mask_torso*image[:,:,::-1]/255 ##RGB format
 
+        print("[get_bg_hue_lum] about to make bk px mask")
         # Identify black pixels where R=0, G=0, B=0
         black_pixels_mask = np.all(masked_img == [0, 0, 0], axis=-1)
         black_pixels_mask_torso = np.all(masked_img_torso == [0, 0, 0], axis=-1)
@@ -836,7 +845,7 @@ class SortPose:
         self.sat = cv2.cvtColor(mean_color, cv2.COLOR_RGB2HSV)[0,0,1]
         self.val = cv2.cvtColor(mean_color, cv2.COLOR_RGB2HSV)[0,0,2]
         self.lum = cv2.cvtColor(mean_color, cv2.COLOR_RGB2LAB)[0,0,0]
-
+        print("hue, sat, val, lum", self.hue, self.sat, self.val, self.lum)
         if self.VERBOSE: print("NOTmasked_img_torso size", masked_img_torso.shape, black_pixels_mask_torso.shape)
         if bbox:
             # SJ something is broken in here. It returns an all black image which produces a lum of 100

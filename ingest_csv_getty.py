@@ -49,7 +49,7 @@ _|_|  _|\__, |\___|____/\__| \___|____/  \_/
 io = DataIO()
 db = io.db
 # overriding DB for testing
-io.db["name"] = "stock"
+io.db["name"] = "ministock1023"
 ROOT = io.ROOT 
 NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 #######################################
@@ -57,14 +57,14 @@ NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 # starting shutter here: 52344682
 
 SEARCH_KEYS_FOR_LOC = True
-VERBOSE = False
+VERBOSE = True
 
 INGEST_ROOT = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/getty_scrape/done"
-INGEST_FOLDER = os.path.join(INGEST_ROOT, "nonosPlus")
+INGEST_FOLDER = os.path.join(INGEST_ROOT, "getty_noeth_toobig")
 # CSV_IN_PATH = os.path.join(INGEST_FOLDER, "unique_lines_B_nogender.csv")
 # INGEST_FOLDER = "/Users/michaelmandiberg/Downloads/getty_rebuild/"
-CSV_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache_errALL.jsonl")
-KEYWORD_PATH = os.path.join(INGEST_ROOT, "Keywords_202403172226.csv")
+CSV_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache_noNoNOs_Silver.jsonl")
+KEYWORD_PATH = os.path.join(INGEST_ROOT, "Keywords_202405151718m.csv")
 LOCATION_PATH = os.path.join(INGEST_ROOT, "Location_202308041952.csv")
 CSV_KEY2LOC_PATH = os.path.join(INGEST_ROOT, "CSV_KEY2LOC.csv")
 CSV_KEY2KEY_GETTY_PATH = os.path.join(INGEST_ROOT, "CSV_KEY2KEY_GETTY.csv")
@@ -1118,6 +1118,40 @@ def structure_row_getty(item, ind, keys_list):
     return nan2none(image_row)
 
 
+
+def structure_row_unsplash(item, ind, keys_list):
+    # I am tossing the unsplash gender age and ethnicity data, as it is garbage. Noise. 
+    # unsplash is generaly garbage, and I should exclude it from the data analysis. 
+    site_id = 6
+    gender = None
+    age = None
+    description = item["title"]
+    gender_key, age_key, age_detail_key = get_gender_age_row(gender, age, description, keys_list, site_id)
+    country_key = None
+    # if item["location_id"]:
+    #     if VERBOSE: print("we gotta location: ", item["location_id"])
+    #     country_key = unlock_key_dict(item["location_id"],locations_dict_getty, loc2loc)
+    # if not item["location_id"] or not country_key:
+    #     if VERBOSE: print("nada location: ", item["location_id"])
+    #     country_key = search_keys(keys_list, key2loc, True)
+    #     if VERBOSE: ("search_keys key2loc for location found: ", country_key)
+
+    image_row = {
+        "site_image_id": item["id"],
+        "site_name_id": site_id,
+        "description": description[:140],
+        "caption": None,
+        "age_id": age_key,
+        "gender_id": gender_key,
+        "age_detail_id": age_detail_key,
+        "contentUrl": item["img"],
+        "imagename": os.path.join(get_hash_folders(file_name),item["id"]+".jpg"),  # hash filename from id+jpg
+        # "imagename": generate_local_unhashed_image_filepath(item[9].replace("images/",""))  # need to refactor this from the contentURL using the hash function
+    }
+
+    return nan2none(image_row)
+
+
 # Define a custom retry decorator
 def custom_retry(func):
     @retry(
@@ -1212,6 +1246,8 @@ def ingest_json():
 
             # image_row = structure_row_adobe(row, ind, keys_list)
             image_row = structure_row_getty(item, ind, keys_list)
+            # image_row = structure_row_unsplash(item, ind, keys_list)
+
 
             # if the image row has problems, skip it (structure_row saved it to csv)
             if not image_row:
@@ -1280,7 +1316,7 @@ def ingest_json():
     
             try:
                 with engine.connect() as conn:
-                    select_stmt = select([Images]).where(
+                    select_stmt = select(Images).where(
                         (Images.site_name_id == image_row['site_name_id']) &
                         (Images.site_image_id == image_row['site_image_id'])
                     )
@@ -1314,7 +1350,7 @@ def ingest_json():
                     else:
                         print('Row already exists:', ind, row[0])
                         with engine.connect() as conn:
-                            select_stmt = select([ImagesEthnicity]).where(
+                            select_stmt = select(ImagesEthnicity).where(
                                 (ImagesEthnicity.image_id == row[0]) 
                             )
                             eth_already = conn.execute(select_stmt).fetchall()

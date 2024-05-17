@@ -26,16 +26,16 @@ ROOT_FOLDER_PATH = '/Users/michaelmandiberg/Documents/projects-active/facemap_pr
 # if IS_CLUSTER this should be the folder holding all the cluster folders
 # if not, this should be the individual folder holding the images
 # will not accept clusterNone -- change to cluster00
-FOLDER_NAME ="excite_small_portrait_jumpshot15after_3D_wgt1_max1.4_delta.5_min..45"
+FOLDER_NAME ="excite_small_portrait_jumpshot15after_3D_wgt1_max1.4_delta.5"
 FOLDER_PATH = os.path.join(ROOT_FOLDER_PATH,FOLDER_NAME)
 
 #temporary
-FOLDER_PATH = "/Users/michaelmandiberg/Library/CloudStorage/Dropbox/takingstock_dropbox/excite_small_portrait_jumpshot15after_3D_wgt1_max1.4_delta.5"
+# FOLDER_PATH = "/Users/michaelmandiberg/Library/CloudStorage/Dropbox/takingstock_dropbox/excite_small_portrait_jumpshot15after_3D_wgt1_max1.4_delta.5"
 
 # WRITE VIDEO
 # img_array = ['image1.jpg', 'image2.jpg', 'image3.jpg']
 # HOLDER = '/Users/michaelmandiberg/Dropbox/facemap_dropbox/June_tests/'
-FRAMERATE = 15
+FRAMERATE = 12
 # FOLDER = "June4_smilescream_itter_25Ksegment"
 # ROOT = os.path.join(HOLDER,FOLDER)
 # list_of_files= io.get_img_list(ROOT)

@@ -25,10 +25,11 @@ from my_declarative_base import Base, Images, Keywords, ImagesKeywords, Encoding
 
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.pool import NullPool
-
+from sqlalchemy.dialects import mysql
 
 from mp_pose_est import SelectPose
 from mp_db_io import DataIO
+from mp_sort_pose import SortPose
 
 #####new imports #####
 from mediapipe.python.solutions.drawing_utils import _normalized_to_pixel_coordinates
@@ -50,8 +51,8 @@ http="https://media.gettyimages.com/photos/"
 
 # am I looking on RAID/SSD for a folder? If not, will pull directly from SQL
 # if so, also change the site_name_id etc around line 930
-IS_FOLDER = False
-SITE_NAME_ID = 1
+IS_FOLDER = True
+SITE_NAME_ID = 2
 # 2, shutter. 4, istock
 # 7 pond5
 '''
@@ -67,9 +68,9 @@ SITE_NAME_ID = 1
 10  visualchinagroup
 '''
 
-# MAIN_FOLDER = "/Volumes/SSD4green/images_shutterstock"
+MAIN_FOLDER = "/Volumes/SSD4green/images_shutterstock2"
 # MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/getty_scrape/getty_22222_serbia/images_serbia_lastset"
-MAIN_FOLDER = "/Volumes/SSD4/images_getty_reDL"
+# MAIN_FOLDER = "/Volumes/SSD4/images_getty_reDL"
 BATCH_SIZE = 25000 # Define how many from each folder in each batch
 
 #temp hack to go 1 subfolder at a time
@@ -81,9 +82,9 @@ THESE_FOLDER_PATHS = ["9/9C", "9/9D", "9/9E", "9/9F", "9/90", "9/91", "9/92", "9
 CSV_FOLDERCOUNT_PATH = os.path.join(MAIN_FOLDER, "folder_countout.csv")
 
 IS_SSD=False
-BODYLMS = True
+BODYLMS = False # only matters if IS_FOLDER is False
 SEGMENT = 0 # set to 0 or False if using HelperTable or not using a segment
-HelperTable_name = "SegmentHelperApril4_topic17" # set to False if not using a HelperTable
+HelperTable_name = "SegmentHelperMay7_fingerpoint" # set to False if not using a HelperTable
 
 
 if BODYLMS is True:
@@ -101,7 +102,7 @@ if BODYLMS is True:
         SUBQUERY = f"(SELECT seg1.image_id FROM {SegmentTable_name} seg1 WHERE face_x > -33 AND face_x < -27 AND face_y > -2 AND face_y < 2 AND face_z > -2 AND face_z < 2 AND it.topic_id = {SEGMENT})"
     if HelperTable_name:
         FROM += f" INNER JOIN {HelperTable_name} ht ON seg1.image_id = ht.image_id LEFT JOIN ImagesTopics it ON seg1.image_id = it.image_id"
-        QUERY = "e.body_landmarks IS NULL"
+        QUERY = "e.body_landmarks IS NULL AND seg1.site_name_id NOT IN (1,4)"
         SUBQUERY = ""
     WHERE = f"{QUERY} {SUBQUERY}"
 
@@ -177,6 +178,19 @@ SMALL_MODEL = False
 NUM_JITTERS = 1
 ###############
 
+## CREATING POSE OBJECT FOR SELFIE SEGMENTATION
+## none of these are used in this script ##
+## just to initialize the object ## 
+image_edge_multiplier = [1.5,1.5,2,1.5] # bigger portrait
+image_edge_multiplier_sm = [1.2, 1.2, 1.6, 1.2] # standard portrait
+face_height_output = 500
+motion = {"side_to_side": False, "forward_smile": True, "laugh": False, "forward_nosmile":  False, "static_pose":  False, "simple": False}
+EXPAND = False
+ONE_SHOT = False # take all files, based off the very first sort order.
+JUMP_SHOT = False # jump to random file if can't find a run
+
+sort = SortPose(motion, face_height_output, image_edge_multiplier_sm,EXPAND, ONE_SHOT, JUMP_SHOT)
+
 
 start = time.time()
 
@@ -190,7 +204,8 @@ def init_session():
         user=db['user'], pw=db['pass'], db=db['name'], socket=db['unix_socket']
     ), poolclass=NullPool)
 
-    metadata = MetaData(engine)
+    # metadata = MetaData(engine)
+    metadata = MetaData() # apparently don't pass engine
     Session = sessionmaker(bind=engine)
     session = Session()
     Base = declarative_base()
@@ -354,6 +369,7 @@ def retro_bbox(image):
 
 
 def find_face(image, df):
+    # image is RGB
     find_face_start = time.time()
     height, width, _ = image.shape
     with mp.solutions.face_detection.FaceDetection(model_selection=1, min_detection_confidence=0.7) as face_det: 
@@ -431,9 +447,20 @@ def find_face(image, df):
                     # print("in encodings conditional")
                     # turning off to debug
                     encodings = calc_encodings(image, faceLms,bbox) ## changed parameters
-                    # print(">> find_face SPLIT >> calc_encodings")
+                    print(">> find_face SPLIT >> calc_encodings")
                     # ff_split = print_get_split(ff_split)
 
+                    # # image is currently BGR so converting back to RGB
+                    # image_rgb = cv2.cvtColor(image, cv2.COLOR_RGB2BGR) 
+                    
+                    # # gets bg hue and lum without bbox
+                    # hue,sat,val,lum, lum_torso=sort.get_bg_hue_lum(image_rgb)
+                    # print("HSV", hue, sat, val)
+
+                    # gets bg hue and lum with bbox
+                    # hue_bb,sat_bb, val_bb, lum_bb, lum_torso_bb =sort.get_bg_hue_lum(image,bbox,faceLms)
+                    # print("HSV", hue_bb,sat_bb, val_bb)
+                    # quit()
                 #     print(encodings)
                 #     exit()
                 # #df.at['1', 'is_face'] = is_face
@@ -825,6 +852,7 @@ def process_image_bodylms(task):
 
 def process_image(task):
     #print("process_image this is where the action is")
+    # print("processing task:", task)
     pr_split = time.time()
     def save_image_triage(image,df):
         #saves a CV2 image elsewhere -- used in setting up test segment of images
@@ -850,7 +878,8 @@ def process_image(task):
     try:
         # i think i'm doing this twice. I should just do it here. 
         image = cv2.imread(cap_path)
-        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)    
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)   
+        # image is RGB now 
         # this is for when you need to move images into a testing folder structure
         # save_image_elsewhere(image, task)
     except:
@@ -1071,7 +1100,8 @@ def main():
                     batch_site_image_ids = [img.split(".")[0] for img in batch_img_list]
                     site_name_id = SITE_NAME_ID
 
-
+                    print("batch_site_image_ids", len(batch_site_image_ids))
+                    print("batch_site_image_ids", batch_site_image_ids[:5])
 
 
                     # query the database for the current batch and return image_id and encoding_id
@@ -1080,10 +1110,10 @@ def main():
                         try:
                             print(f"Processing batch {i//BATCH_SIZE + 1}...")
                             init_session()
-                            batch_results = session.query(Images.image_id, Images.site_image_id, Encodings.encoding_id) \
-                                .outerjoin(Encodings, Images.image_id == Encodings.image_id) \
-                                .filter(Images.site_image_id.in_(batch_site_image_ids), Images.site_name_id==site_name_id) \
-                                .all()
+                            batch_query = session.query(Images.image_id, Images.site_image_id, Encodings.encoding_id) \
+                                                .outerjoin(Encodings, Images.image_id == Encodings.image_id) \
+                                                .filter(Images.site_image_id.in_(batch_site_image_ids), Images.site_name_id == site_name_id)
+                            batch_results = batch_query.all()
 
                             all_results.extend(batch_results)
                             print("about to close_session()")
@@ -1096,7 +1126,7 @@ def main():
                             time.sleep(io.retry_delay)
                     print(f"no. all_results: {len(all_results)}")
 
-
+                    print("results:", all_results)
                     results_dict = {result.site_image_id: result for result in batch_results}
 
                     # going back through the img_list, to use as key for the results_dict
@@ -1114,11 +1144,11 @@ def main():
                         # # # extract site_image_id for adobe and pexels and shutterstock and istock and pond5
                         site_image_id = img.split(".")[0]
 
-
+                        print("site_image_id", site_image_id)
                         if site_image_id in results_dict:
                             result = results_dict[site_image_id]
-                            # print(result)
-                            # print(result.encoding_id)
+                            # print("in results", result)
+                            # print("in results encoding_id", result.encoding_id)
                             if not result.encoding_id:
                                 # if it hasn't been encoded yet, add it to the tasks
                                 imagepath = os.path.join(folder, img)
@@ -1127,9 +1157,10 @@ def main():
                                 tasks_to_accomplish.put(task)
                                 this_count += 1
 
-                        else: print("not in results_dict: ", site_image_id)
+                        else: 
+                            print("not in results_dict, will process: ", site_image_id)
                         images_left_to_process = images_left_to_process -1 
-                        print(f"no. images_left_to_process: {images_left_to_process}")
+                        if images_left_to_process < 500: print(f"no. images_left_to_process: {images_left_to_process}")
 
 
 

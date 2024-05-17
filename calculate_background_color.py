@@ -62,8 +62,8 @@ io.db["name"] = "stock"
 # Create a database engine
 engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}".format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']), poolclass=NullPool)
 
-get_background_mp = mp.solutions.selfie_segmentation
-get_bg_segment = get_background_mp.SelfieSegmentation()
+# get_background_mp = mp.solutions.selfie_segmentation
+# get_bg_segment = get_background_mp.SelfieSegmentation()
 
 image_edge_multiplier = [1.5,1.5,2,1.5] # bigger portrait
 image_edge_multiplier_sm = [1.2, 1.2, 1.6, 1.2] # standard portrait
