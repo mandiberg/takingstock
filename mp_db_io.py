@@ -88,18 +88,19 @@ class DataIO:
         else:
             self.folder_list = [
                 "", #0, Empty, there is no site #0 -- starts count at 1
-                os.path.join(self.ROOT18,"images_getty"), #1, Getty
+                # os.path.join(self.ROOT18,"images_getty"), #1, Getty
+                "/Volumes/SSD4/images_getty_reDL", #1, Getty TEMP
                 # temp for testing
                 # os.path.join(self.ROOT54,"gettyimages/testimages"), #1, Getty
                 os.path.join(self.ROOT54,"images_shutterstock"),
                 os.path.join(self.ROOT54,"images_adobe"), #3, Adobe
-                os.path.join(self.ROOT54,"images_istock"), #4, iStock
-                os.path.join(self.ROOT54,"images_pexels"), #5, Pexels
-                os.path.join(self.ROOT54,"images_unsplash"),
-                os.path.join(self.ROOT54,"images_pond5"),
+                os.path.join(self.ROOT18,"images_istock"), #4, iStock
+                os.path.join(self.ROOT18,"images_pexels"), #5, Pexels
+                os.path.join(self.ROOT18,"images_unsplash"),
+                os.path.join(self.ROOT18,"images_pond5"),
                 os.path.join(self.ROOT54,"images_123rf"), #8, images_123rf
-                os.path.join(self.ROOT54,"images_alamy"), #9 alamy
-                os.path.join(self.ROOT54,"images_vcg") # visual china group
+                os.path.join(self.ROOT18,"images_alamy"), #9 alamy
+                os.path.join(self.ROOT18,"images_vcg") # visual china group
             ]
 
     def capitalize_directory(self,path):
