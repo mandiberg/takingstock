@@ -8,6 +8,7 @@ import hashlib
 import base64
 import json
 import ast
+import traceback
 
 #linear sort imports non-class
 import numpy as np
@@ -105,7 +106,7 @@ IS_ANGLE_SORT = False
 IS_TOPICS = False
 N_TOPICS = 30
 
-IS_ONE_TOPIC = True
+IS_ONE_TOPIC = False
 TOPIC_NO = [7]
 #  is isolated,  is business,  babies, 17 pointing
 #  is doctor <<  covid
@@ -128,8 +129,8 @@ JUMP_SHOT = True # jump to random file if can't find a run (I don't think this a
 io = DataIO(IS_SSD)
 db = io.db
 # overriding DB for testing
-io.db["name"] = "stock"
-# io.db["name"] = "ministock"
+# io.db["name"] = "stock"
+io.db["name"] = "ministock"
 
 METAS_FILE = "metas.csv"
 
@@ -203,7 +204,7 @@ elif IS_SEGONLY:
     # WHERE += " AND k.keyword_text LIKE 'surpris%' "
 
     # WHERE = "s.site_name_id != 1"
-    LIMIT = 100
+    LIMIT = 1000
 
 
 
@@ -420,6 +421,7 @@ def sort_by_face_dist(df_enc, df_128_enc, df_33_lms):
         except Exception as e:
             print("exception on going to get closest")
             print(str(e))
+            traceback.print_exc()
 
 
      
@@ -474,6 +476,7 @@ def sort_by_face_dist(df_enc, df_128_enc, df_33_lms):
         try:
             images_to_drop.remove(this_start)
         except Exception as e:
+            traceback.print_exc()
             print("images_to_drop.remove failed because was too great a lum diff", str(e))
         print(len(images_to_drop))
         for dropimage in images_to_drop:
@@ -481,6 +484,7 @@ def sort_by_face_dist(df_enc, df_128_enc, df_33_lms):
             try:
                 df_128_enc=df_128_enc.drop(dropimage)
             except Exception as e:
+                traceback.print_exc()
                 print(str(e))
 
         #debuggin
@@ -757,6 +761,7 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
         try:
             description = session.query(Images.description).filter(Images.image_id == image_id).first()
         except Exception as e:
+            traceback.print_exc()
             print(str(e))
         # description = parent_row['description'].values[0]
         topic_score = parent_row['topic_score'].values[0]
@@ -812,6 +817,9 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
                             os.makedirs(directory)
                         extended_img,mask=sort.prepare_mask(img,extension_pixels)
                         inpaint_image=sort.extend_lama(extended_img, mask)
+                        #### use inpainting for the extended part, but use original for non extend to keep image sharp ###
+                        inpaint_image[extension_pixels["top"]:extension_pixels["top"]+np.shape(img)[0],extension_pixels["left"]:extension_pixels["left"]+np.shape(img)[1]]=img
+                        ###################
                         cv2.imwrite(inpaint_file,inpaint_image)
                     face_landmarks=shift_landmarks(row['face_landmarks'],extension_pixels,img)
                     bbox=shift_bbox(row['bbox'],extension_pixels)
@@ -831,6 +839,7 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
                     image_id = parent_row['image_id'].values[0]                        
                     description = session.query(Images.description).filter(Images.image_id == image_id).first()
                 except Exception as e:
+                    traceback.print_exc()
                     print(str(e))
                 temp_first_run = sort.counter_dict["first_run"]
                 print("temp_first_run")
@@ -879,6 +888,7 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
         # print(sort.counter_dict)
 
         except Exception as e:
+            traceback.print_exc()
             print(str(e))
         print("metas_list")
         print(metas_list)
@@ -912,6 +922,7 @@ def process_iterr_angles(start_img_name, df_segment, cluster_no, sort):
                             print("last_row")
                             print(last_row)
                         except Exception as e:
+                            traceback.print_exc()
                             print(str(e))
                     df_enc, df_128_enc = prep_encodings(d[angle])
                     # # get dataframe sorted by distance

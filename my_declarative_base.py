@@ -7,201 +7,209 @@ Base = declarative_base()
 class Ethnicity(Base):
     __tablename__ = 'ethnicity'
     ethnicity_id = Column(Integer, primary_key=True, autoincrement=True)
-    ethnicity = Column(String(40))
+    ethnicity    = Column(String(40))
 
 class Gender(Base):
     __tablename__ = 'gender'
     gender_id = Column(Integer, primary_key=True, autoincrement=True)
-    gender = Column(String(20))
+    gender    = Column(String(20))
 
 class Age(Base):
     __tablename__ = 'age'
     age_id = Column(Integer, primary_key=True, autoincrement=True)
-    age = Column(String(20))
+    age    = Column(String(20))
 
 class AgeDetail(Base):
     __tablename__ = 'agedetail'
     age_detail_id = Column(Integer, primary_key=True, autoincrement=True)
-    age_detail = Column(String(20))
+    age_detail    = Column(String(20))
 
 class Site(Base):
     __tablename__ = 'site'
     site_name_id = Column(Integer, primary_key=True, autoincrement=True)
-    site_name = Column(String(20))
+    site_name    = Column(String(20))
 
 class Location(Base):
     __tablename__ = 'location'
-    location_id = Column(Integer, primary_key=True, autoincrement=True)
+    location_id           = Column(Integer, primary_key=True, autoincrement=True)
     location_number_getty = Column(Integer)
-    getty_name = Column(String(70))
-    nation_name = Column(String(70))
-    nation_name_alpha = Column(String(70))
-    official_nation_name = Column(String(150))
-    sovereignty = Column(String(70))
-    code_alpha2 = Column(String(70))
-    code_alpha3 = Column(String(70))
-    code_numeric = Column(Integer)
-    code_iso = Column(String(70))
+    getty_name            = Column(String(70))
+    nation_name           = Column(String(70))
+    nation_name_alpha     = Column(String(70))
+    official_nation_name  = Column(String(150))
+    sovereignty           = Column(String(70))
+    code_alpha2           = Column(String(70))
+    code_alpha3           = Column(String(70))
+    code_numeric          = Column(Integer)
+    code_iso              = Column(String(70))
     
 class Images(Base):
     __tablename__ = 'images'
-    image_id = Column(Integer, primary_key=True, autoincrement=True)
-    site_name_id = Column(Integer, ForeignKey('site.site_name_id'))
+    image_id      = Column(Integer, primary_key=True, autoincrement=True)
+    site_name_id  = Column(Integer, ForeignKey('site.site_name_id'))
     site_image_id = Column(String(50), nullable=False)
-    age_id = Column(Integer, ForeignKey('age.age_id'))
+    age_id        = Column(Integer, ForeignKey('age.age_id'))
     age_detail_id = Column(Integer, ForeignKey('agedetail.age_detail_id'))
-    gender_id = Column(Integer, ForeignKey('gender.gender_id'))
-    location_id = Column(Integer, ForeignKey('location.location_id'))
-    author = Column(String(100))
-    caption = Column(String(150))
-    contentUrl = Column(String(300), nullable=False)
-    description = Column(String(150))
-    imagename = Column(String(200))
-    uploadDate = Column(Date)
+    gender_id     = Column(Integer, ForeignKey('gender.gender_id'))
+    location_id   = Column(Integer, ForeignKey('location.location_id'))
+    author        = Column(String(100))
+    caption       = Column(String(150))
+    contentUrl    = Column(String(300), nullable=False)
+    description   = Column(String(150))
+    imagename     = Column(String(200))
+    uploadDate    = Column(Date)
 
-    site = relationship("Site")
-    age = relationship("Age")
+    site      = relationship("Site")
+    age       = relationship("Age")
     agedetail = relationship("AgeDetail")
-    gender = relationship("Gender")
-    location = relationship("Location")
+    gender    = relationship("Gender")
+    location  = relationship("Location")
 
 class Keywords(Base):
     __tablename__ = 'keywords'
-    keyword_id = Column(Integer, primary_key=True, autoincrement=True)
-    keyword_number = Column(Integer)
-    keyword_text = Column(String(50), nullable=False)
-    keytype = Column(String(50))
-    weight = Column(Integer)
-    parent_keyword_id = Column(String(50))
+    keyword_id          = Column(Integer, primary_key=True, autoincrement=True)
+    keyword_number      = Column(Integer)
+    keyword_text        = Column(String(50), nullable=False)
+    keytype             = Column(String(50))
+    weight              = Column(Integer)
+    parent_keyword_id   = Column(String(50))
     parent_keyword_text = Column(String(50))
 
 class ImagesKeywords(Base):
     __tablename__ = 'imageskeywords'
-    image_id = Column(Integer, ForeignKey('images.image_id'), primary_key=True)
+    image_id   = Column(Integer, ForeignKey('images.image_id'), primary_key=True)
     keyword_id = Column(Integer, ForeignKey('keywords.keyword_id'), primary_key=True)
 
 class ImagesEthnicity(Base):
     __tablename__ = 'imagesethnicity'
-    image_id = Column(Integer, ForeignKey('images.image_id'), primary_key=True)
+    image_id     = Column(Integer, ForeignKey('images.image_id'), primary_key=True)
     ethnicity_id = Column(Integer, ForeignKey('ethnicity.ethnicity_id'), primary_key=True)
 
 class Encodings(Base):
     __tablename__ = 'encodings'
-    encoding_id = Column(Integer, primary_key=True, autoincrement=True)
-    image_id = Column(Integer, ForeignKey('images.image_id'))
-    is_face = Column(Boolean)
-    is_body = Column(Boolean)
-    is_face_distant = Column(Boolean)
-    face_x = Column(DECIMAL(6, 3))
-    face_y = Column(DECIMAL(6, 3))
-    face_z = Column(DECIMAL(6, 3))
-    mouth_gap = Column(DECIMAL(6, 3))
-    face_landmarks = Column(BLOB)
-    bbox = Column(JSON)
-    face_encodings = Column(BLOB)
-    face_encodings68 = Column(BLOB)
-    face_encodings_J3 = Column(BLOB)
-    face_encodings_J5 = Column(BLOB)
+    encoding_id         = Column(Integer, primary_key=True, autoincrement=True)
+    image_id            = Column(Integer, ForeignKey('images.image_id'))
+    is_face             = Column(Boolean)
+    is_body             = Column(Boolean)
+    is_face_distant     = Column(Boolean)
+    face_x              = Column(DECIMAL(6, 3))
+    face_y              = Column(DECIMAL(6, 3))
+    face_z              = Column(DECIMAL(6, 3))
+    mouth_gap           = Column(DECIMAL(6, 3))
+    face_landmarks      = Column(BLOB)
+    bbox                = Column(JSON)
+    face_encodings      = Column(BLOB)
+    face_encodings68    = Column(BLOB)
+    face_encodings_J3   = Column(BLOB)
+    face_encodings_J5   = Column(BLOB)
     face_encodings68_J3 = Column(BLOB)
     face_encodings68_J5 = Column(BLOB)
-    body_landmarks = Column(BLOB)
+    body_landmarks      = Column(BLOB)
 
 class Clusters(Base):
     __tablename__ = 'Clusters'
 
-    cluster_id = Column(Integer, primary_key=True, autoincrement=True)
+    cluster_id     = Column(Integer, primary_key=True, autoincrement=True)
     cluster_median = Column(BLOB)
 
 class ImagesClusters(Base):
     __tablename__ = 'ImagesClusters'
 
-    image_id = Column(Integer, ForeignKey('images.image_id'), primary_key=True)
+    image_id   = Column(Integer, ForeignKey('images.image_id'), primary_key=True)
     cluster_id = Column(Integer, ForeignKey('Clusters.cluster_id'))
     
 class ClustersTemp(Base):
     __tablename__ = 'ClustersTemp'
 
-    cluster_id = Column(Integer, primary_key=True, autoincrement=True)
+    cluster_id     = Column(Integer, primary_key=True, autoincrement=True)
     cluster_median = Column(BLOB)
 
 class ImagesClustersTemp(Base):
     __tablename__ = 'ImagesClustersTemp'
 
-    image_id = Column(Integer, ForeignKey('images.image_id'), primary_key=True)
+    image_id   = Column(Integer, ForeignKey('images.image_id'), primary_key=True)
     cluster_id = Column(Integer, ForeignKey('ClustersTemp.cluster_id'))
 
 class BagOfKeywords(Base):
     __tablename__ = 'BagOfKeywords'
-    image_id = Column(Integer, primary_key=True, autoincrement=True)
-    age_id = Column(Integer, ForeignKey('age.age_id'))
-    gender_id = Column(Integer, ForeignKey('gender.gender_id'))
-    location_id = Column(Integer, ForeignKey('location.location_id'))
-    description = Column(String(150))
-    keyword_list = Column(BLOB)  # Pickled list
+    image_id               = Column(Integer, primary_key=True, autoincrement=True)
+    age_id                 = Column(Integer, ForeignKey('age.age_id'))
+    gender_id              = Column(Integer, ForeignKey('gender.gender_id'))
+    location_id            = Column(Integer, ForeignKey('location.location_id'))
+    description            = Column(String(150))
+    keyword_list           = Column(BLOB)  # Pickled list
     tokenized_keyword_list = Column(BLOB)  # Pickled list
-    ethnicity_list = Column(BLOB)  # Pickled list
+    ethnicity_list         = Column(BLOB)  # Pickled list
 
 class Topics(Base):
     __tablename__ = 'Topics' 
     topic_id = Column(Integer, primary_key=True, autoincrement=True)
-    topic = Column(String(150))
+    topic    = Column(String(150))
     
 class ImagesTopics(Base):
     __tablename__ = 'ImagesTopics' 
-    image_id = Column(Integer, ForeignKey('images.image_id'), primary_key=True)
-    topic_id = Column(Integer, ForeignKey('Topics.topic_id'))
+    image_id    = Column(Integer, ForeignKey('images.image_id'), primary_key=True)
+    topic_id    = Column(Integer, ForeignKey('Topics.topic_id'))
     topic_score = Column(Float)
 
 class ImagesBackground(Base):
     __tablename__ = 'ImagesBackground' 
-    image_id = Column(Integer, ForeignKey('images.image_id'), primary_key=True)
-    hue = Column(Float)
-    lum = Column(Float)
-    sat = Column(Float)
-    val = Column(Float)
-    lum_torso = Column(Float)
-    hue_bb = Column(Float)
-    lum_bb = Column(Float)
-    sat_bb = Column(Float)
-    val_bb = Column(Float)
+    image_id     = Column(Integer, ForeignKey('images.image_id'), primary_key=True)
+    hue          = Column(Float)
+    lum          = Column(Float)
+    sat          = Column(Float)
+    val          = Column(Float)
+    lum_torso    = Column(Float)
+    hue_bb       = Column(Float)
+    lum_bb       = Column(Float)
+    sat_bb       = Column(Float)
+    val_bb       = Column(Float)
     lum_torso_bb = Column(Float)
     
 class SegmentTable(Base):
     __tablename__ = 'SegmentOct20'
     
     image_id = Column(Integer, primary_key=True)
-    site_name_id = Column(Integer, ForeignKey('site.site_name_id'))
-    site_image_id = Column(String(50))
-    contentUrl = Column(String(300), nullable=False)
-    imagename = Column(String(200))
-    description = Column(String(150))
-    age_id = Column(Integer, ForeignKey('age.age_id'))
-    gender_id = Column(Integer, ForeignKey('gender.gender_id'))
-    location_id = Column(Integer, ForeignKey('location.location_id'))
-    face_x = Column(DECIMAL(6, 3))
-    face_y = Column(DECIMAL(6, 3))
-    face_z = Column(DECIMAL(6, 3))
-    mouth_gap = Column(DECIMAL(6, 3))
-    face_landmarks = Column(BLOB)
-    bbox = Column(JSON)
-    face_encodings = Column(BLOB)
-    face_encodings68 = Column(BLOB)
-    body_landmarks = Column(BLOB)
-    site_image_id = Column(String(50), nullable=False)
-    keyword_list = Column(BLOB)  # Pickled list
+    site_name_id           = Column(Integer, ForeignKey('site.site_name_id'))
+    site_image_id          = Column(String(50))
+    contentUrl             = Column(String(300), nullable=False)
+    imagename              = Column(String(200))
+    description            = Column(String(150))
+    age_id                 = Column(Integer, ForeignKey('age.age_id'))
+    gender_id              = Column(Integer, ForeignKey('gender.gender_id'))
+    location_id            = Column(Integer, ForeignKey('location.location_id'))
+    face_x                 = Column(DECIMAL(6, 3))
+    face_y                 = Column(DECIMAL(6, 3))
+    face_z                 = Column(DECIMAL(6, 3))
+    mouth_gap              = Column(DECIMAL(6, 3))
+    face_landmarks         = Column(BLOB)
+    bbox                   = Column(JSON)
+    face_encodings         = Column(BLOB)
+    face_encodings68       = Column(BLOB)
+    body_landmarks         = Column(BLOB)
+    site_image_id          = Column(String(50), nullable=False)
+    keyword_list           = Column(BLOB)  # Pickled list
     tokenized_keyword_list = Column(BLOB)  # Pickled list
-    ethnicity_list = Column(BLOB)  # Pickled list
+    ethnicity_list         = Column(BLOB)  # Pickled list
 
-    site = relationship("Site")
-    age = relationship("Age")
-    gender = relationship("Gender")
+    site     = relationship("Site")
+    age      = relationship("Age")
+    gender   = relationship("Gender")
     location = relationship("Location")
 
 class PhoneBbox(Base):
     __tablename__ = 'PhoneBbox' 
     image_id = Column(Integer, ForeignKey('images.image_id'), primary_key=True)
-    bbox = Column(JSON)
-    conf = Column(Float)
+    bbox_67     = Column(JSON(none_as_null=True))
+    conf_67     = Column(Float)
+    bbox_63     = Column(JSON(none_as_null=True))
+    conf_63     = Column(Float)
+    bbox_26     = Column(JSON(none_as_null=True))
+    conf_26     = Column(Float)
+    bbox_27     = Column(JSON(none_as_null=True))
+    conf_27     = Column(Float)
+    bbox_32     = Column(JSON(none_as_null=True))
+    conf_32     = Column(Float)
 
 # these are for MM use for using segments
 # class Clusters(Base):
