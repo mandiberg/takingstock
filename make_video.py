@@ -106,31 +106,37 @@ IS_ANGLE_SORT = False
 IS_TOPICS = False
 N_TOPICS = 30
 
-IS_ONE_TOPIC = False
-TOPIC_NO = [7]
+IS_ONE_TOPIC = True
+TOPIC_NO = [15]
 #  is isolated,  is business,  babies, 17 pointing
 #  is doctor <<  covid
 #  is hands
-#  holding tablet
+#  phone = 15
 #  feeling frustrated
 #  is hands to face
 #  shout
 # 7 is surprise
 #  is yoga << planar,  planar,  fingers crossed
 
-SORT_TYPE = "128d"
+# SORT_TYPE = "128d"
 # SORT_TYPE ="planar"
-# SORT_TYPE = "planar_body"
+SORT_TYPE = "planar_body"
+
+# if planar_body set OBJ_CLS_ID for each object type
+# 67 is phone, 63 is laptop, 26: 'handbag', 27: 'tie', 32: 'sports ball'
+if SORT_TYPE == "planar_body": OBJ_CLS_ID = 67
+else: OBJ_CLS_ID = 0
 
 ONE_SHOT = False # take all files, based off the very first sort order.
 JUMP_SHOT = True # jump to random file if can't find a run (I don't think this applies to planar?)
+
 
 # I/O utils
 io = DataIO(IS_SSD)
 db = io.db
 # overriding DB for testing
 # io.db["name"] = "stock"
-io.db["name"] = "ministock"
+# io.db["name"] = "ministock"
 
 METAS_FILE = "metas.csv"
 
@@ -198,7 +204,9 @@ elif IS_SEGONLY:
         FROM += " JOIN ImagesBackground ibg ON s.image_id = ibg.image_id "
         # WHERE += " AND ibg.lum > .3"
         SELECT += ", ibg.lum, ibg.lum_bb, ibg.hue, ibg.hue_bb, ibg.sat, ibg.sat_bb, ibg.val, ibg.val_bb, ibg.lum_torso, ibg.lum_torso_bb " # add description here, after resegmenting
-        
+    if OBJ_CLS_ID:
+        FROM += " JOIN PhoneBbox pb ON s.image_id = pb.image_id "
+        SELECT += ", pb.bbox_67, pb.conf_67, pb.bbox_63, pb.conf_63, pb.bbox_26, pb.conf_26, pb.bbox_27, pb.conf_27, pb.bbox_32, pb.conf_32 "
     # # join to keywords
     # FROM += " JOIN ImagesKeywords ik ON s.image_id = ik.image_id JOIN Keywords k ON ik.keyword_id = k.keyword_id "
     # WHERE += " AND k.keyword_text LIKE 'surpris%' "

@@ -1,3 +1,5 @@
+from pipeline_stable_diffusion_xl_differential_img2img import StableDiffusionXLDifferentialImg2ImgPipeline
+
 import random
 import urllib.request
 
@@ -9,6 +11,23 @@ torch.set_default_device("mps")
 
 # from diffusers import DPMSolverMultistepScheduler, StableDiffusionXLPipeline
 from diffusers import DPMSolverMultistepScheduler, StableDiffusionXLPipeline, StableDiffusionXLImg2ImgPipeline
+
+
+model_id="SG161222/RealVisXL_V4.0"
+custom_pipeline_path = "pipeline_stable_diffusion_xl_differential_img2img"
+pipeline = StableDiffusionXLDifferentialImg2ImgPipeline.from_pretrained(
+    model_id,
+    torch_dtype=torch.float16,
+    variant="fp16",
+).to("mps")
+
+
+# pipeline = StableDiffusionXLImg2ImgPipeline.from_pretrained(
+#     "SG161222/RealVisXL_V4.0",
+#     torch_dtype=torch.float16,
+#     variant="fp16",
+# ).to("mps")
+pipeline.scheduler = DPMSolverMultistepScheduler.from_config(pipeline.scheduler.config, use_karras_sigmas=True)
 
 def merge_images(original, new_image, offset, direction):
     if direction in ["left", "right"]:
@@ -155,12 +174,7 @@ def image_resize(image, new_size=1024):
 
     return image
 
-pipeline = StableDiffusionXLImg2ImgPipeline.from_pretrained(
-    "SG161222/RealVisXL_V4.0",
-    torch_dtype=torch.float16,
-    variant="fp16",
-).to("mps")
-pipeline.scheduler = DPMSolverMultistepScheduler.from_config(pipeline.scheduler.config, use_karras_sigmas=True)
+
 
 # pipeline = StableDiffusionXLPipeline.from_pretrained(
 #     "SG161222/RealVisXL_V4.0",
@@ -184,6 +198,11 @@ pipeline.set_ip_adapter_scale(0.1)
 def generate_image(prompt, negative_prompt, image, mask, ip_adapter_image, seed: int = None):
     if seed is None:
         seed = random.randint(0, 2**32 - 1)
+
+    print(type(image))
+    print(type(mask))
+    print(type(ip_adapter_image))
+
 
     # generator = torch.Generator(device="mps").manual_seed(seed)
     generator = torch.Generator(device="cpu").manual_seed(seed)
