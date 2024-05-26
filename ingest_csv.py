@@ -53,6 +53,20 @@ ROOT = io.ROOT
 NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 #######################################
 
+
+'''
+1   getty
+2   shutterstock
+3   adobe
+4   istock
+5   pexels
+6   unsplash
+7   pond5
+8   123rf
+9   alamy
+10  visualchinagroup
+'''
+
 # starting shutter here: 52344682
 
 # INGEST_ROOT = "/Users/michaelmandiberg/Documents/projects-active/facemap_production"

@@ -30,6 +30,8 @@ from sqlalchemy import create_engine, text, MetaData, Table, Column, Numeric, In
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.pool import NullPool
 from sqlalchemy.dialects.mysql import insert
+from sqlalchemy.sql import compiler
+from sqlalchemy.dialects import mysql
 
 #mine
 from mp_db_io import DataIO
@@ -49,7 +51,7 @@ _|_|  _|\__, |\___|____/\__| \___|____/  \_/
 io = DataIO()
 db = io.db
 # overriding DB for testing
-io.db["name"] = "ministock1023"
+io.db["name"] = "stocktest"
 ROOT = io.ROOT 
 NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 #######################################
@@ -216,10 +218,10 @@ eth_keys_dict = eth_dict
 # for k in ['black', 'african']: eth_keys_dict.pop(k)
 
 # table_search ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id"
-SELECT = "DISTINCT(i.image_id), i.gender_id, author, caption, contentUrl, description, imagename"
-FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings e ON i.image_id = e.image_id "
-WHERE = "e.image_id IS NULL"
-LIMIT = 10
+# SELECT = "DISTINCT(i.image_id), i.gender_id, author, caption, contentUrl, description, imagename"
+# FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings e ON i.image_id = e.image_id "
+# WHERE = "e.image_id IS NULL"
+# LIMIT = 10
 
 
 # engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}"
@@ -1171,6 +1173,7 @@ def execute_query_with_retry(conn, query, parameters=None):
             result = conn.execute(query, parameters)
         else:
             result = conn.execute(query)
+        conn.commit()  # Commit the transaction
         return result
     except OperationalError as e:
         print(f"OperationalError occurred: {e}")
@@ -1307,7 +1310,7 @@ def ingest_json():
 
 
             # STORE THE DATA
-            print("connecting to DB")
+            print("connecting to DB", io.db)
             if VERBOSE: 
                 print(image_row)
                 print("key_nos_list", key_nos_list)
@@ -1321,10 +1324,18 @@ def ingest_json():
                         (Images.site_image_id == image_row['site_image_id'])
                     )
                     row = conn.execute(select_stmt).fetchone()
-
                     if row is None:
                         insert_stmt = insert(Images).values(image_row)
-                        result = execute_query_with_retry(conn, insert_stmt)  # Retry on OperationalError
+                        print(str(insert_stmt))
+                        dialect = mysql.dialect()
+                        statement = str(insert_stmt.compile(dialect=dialect))
+                        print(statement)
+                                                
+                        try:
+                            result = execute_query_with_retry(conn, insert_stmt)  # Retry on OperationalError
+                        except Exception as e:
+                            print(f"Exception occurred: {e}")
+                        # result = execute_query_with_retry(conn, insert_stmt)  # Retry on OperationalError
 
                         if key_nos_list and result.lastrowid:
                             keyrows = [{'image_id': result.lastrowid, 'keyword_id': keyword_id} for keyword_id in key_nos_list]
@@ -1347,6 +1358,16 @@ def ingest_json():
 
                         print("last_inserted_id:", result.lastrowid)
                         print(" ")
+                        with engine.connect() as conn:
+
+                            select_stmt = select(Images).where(
+                                (Images.image_id == result.lastrowid)
+                            )
+                            row = conn.execute(select_stmt).fetchone()
+                            print(result.lastrowid, "row:", row)
+                            print(" ")
+
+                        
                     else:
                         print('Row already exists:', ind, row[0])
                         with engine.connect() as conn:

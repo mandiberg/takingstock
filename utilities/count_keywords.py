@@ -2,8 +2,8 @@ import csv
 import re
 from collections import Counter
 
-input_file = '/Users/michaelmandiberg/Documents/projects-active/facemap_production/getty_scrape/done/unfinished_serbia/CSV_NOKEYS.csv'
-output_file = '/Users/michaelmandiberg/Documents/projects-active/facemap_production/getty_scrape/done/unfinished_serbia/CSV_NOKEYSunique.csv'
+input_file = '/Users/michaelmandiberg/Documents/projects-active/facemap_production/getty_scrape/done/getty_noeth_toobig/CSV_NOKEYS.csv'
+output_file = '/Users/michaelmandiberg/Documents/projects-active/facemap_production/getty_scrape/done/getty_noeth_toobig/CSV_NOKEYSunique.csv'
 
 # Read the CSV file and extract the second column
 keywords = []
