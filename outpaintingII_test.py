@@ -29,6 +29,25 @@ pipeline = StableDiffusionXLDifferentialImg2ImgPipeline.from_pretrained(
 # ).to("mps")
 pipeline.scheduler = DPMSolverMultistepScheduler.from_config(pipeline.scheduler.config, use_karras_sigmas=True)
 
+# pipeline = StableDiffusionXLPipeline.from_pretrained(
+#     "SG161222/RealVisXL_V4.0",
+#     torch_dtype=torch.float16,
+#     variant="fp16",
+#     custom_pipeline="pipeline_stable_diffusion_xl_differential_img2img",
+# ).to("cuda")
+# pipeline.scheduler = DPMSolverMultistepScheduler.from_config(pipeline.scheduler.config, use_karras_sigmas=True)
+
+pipeline.load_ip_adapter(
+    "h94/IP-Adapter",
+    subfolder="sdxl_models",
+    weight_name=[
+        "ip-adapter-plus_sdxl_vit-h.safetensors",
+    ],
+    image_encoder_folder="models/image_encoder",
+)
+pipeline.set_ip_adapter_scale(0.1)
+
+
 def merge_images(original, new_image, offset, direction):
     if direction in ["left", "right"]:
         merged_image = np.zeros((original.shape[0], original.shape[1] + offset, 3), dtype=np.uint8)
@@ -176,24 +195,6 @@ def image_resize(image, new_size=1024):
 
 
 
-# pipeline = StableDiffusionXLPipeline.from_pretrained(
-#     "SG161222/RealVisXL_V4.0",
-#     torch_dtype=torch.float16,
-#     variant="fp16",
-#     custom_pipeline="pipeline_stable_diffusion_xl_differential_img2img",
-# ).to("cuda")
-# pipeline.scheduler = DPMSolverMultistepScheduler.from_config(pipeline.scheduler.config, use_karras_sigmas=True)
-
-pipeline.load_ip_adapter(
-    "h94/IP-Adapter",
-    subfolder="sdxl_models",
-    weight_name=[
-        "ip-adapter-plus_sdxl_vit-h.safetensors",
-    ],
-    image_encoder_folder="models/image_encoder",
-)
-pipeline.set_ip_adapter_scale(0.1)
-
 
 def generate_image(prompt, negative_prompt, image, mask, ip_adapter_image, seed: int = None):
     if seed is None:
@@ -231,19 +232,27 @@ def generate_image(prompt, negative_prompt, image, mask, ip_adapter_image, seed:
     return image
 
 
-prompt = ""
+prompt = "Beauty fashion portrait of young blond woman model with natural makeup and perfect skin with bright Crimson chrysanthemum flower posing in s"
 negative_prompt = ""
-direction = "right"  # left, right, top, bottom
+direction = "top"  # left, right, top, bottom
 inpaint_mask_color = 50  # lighter use more of the Telea inpainting
 expand_pixels = 256  # I recommend to don't go more than half of the picture so it has context
-times_to_expand = 4
+times_to_expand = 1 # this was set to 4. dropping to 1 reduced time to 40% of original because only 2 rounds, not 5.
 
-url = "https://huggingface.co/datasets/OzzyGT/testing-resources/resolve/main/differential/photo-1711580377289-eecd23d00370.jpeg?download=true"
+# url = "https://huggingface.co/datasets/OzzyGT/testing-resources/resolve/main/differential/photo-1711580377289-eecd23d00370.jpeg?download=true"
+# with urllib.request.urlopen(url) as url_response:
+#     img_array = np.array(bytearray(url_response.read()), dtype=np.uint8)
+# original = cv2.imdecode(img_array, -1)
 
-with urllib.request.urlopen(url) as url_response:
-    img_array = np.array(bytearray(url_response.read()), dtype=np.uint8)
+path = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/segment_images/images_shutterstock/C/CC/1046510584.jpg"
+# path = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/segment_images/images_getty/D/D6/peruvian-woman-weaving-carpet-sacred-valley-picture-id516136941.jpg"
+# path = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/segment_images/images_adobe/0/01/191746182.jpg"
 
-original = cv2.imdecode(img_array, -1)
+img_array = cv2.imread(path)
+# If you want to ensure the array is of type np.uint8, you can use astype
+img_array = img_array.astype(np.uint8)
+original = img_array
+
 image = image_resize(original)
 expand_pixels_to_square = 1024 - image.shape[1]  # image.shape[1] for horizontal, image.shape[0] for vertical
 image, mask = process_image(
