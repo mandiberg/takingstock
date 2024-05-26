@@ -88,8 +88,8 @@ class DataIO:
         else:
             self.folder_list = [
                 "", #0, Empty, there is no site #0 -- starts count at 1
-                # os.path.join(self.ROOT18,"images_getty"), #1, Getty
-                "/Volumes/SSD4/images_getty_reDL", #1, Getty TEMP
+                os.path.join(self.ROOT18,"images_getty"), #1, Getty
+                # "/Volumes/SSD4/images_getty_reDL", #1, Getty TEMP
                 # temp for testing
                 # os.path.join(self.ROOT54,"gettyimages/testimages"), #1, Getty
                 os.path.join(self.ROOT54,"images_shutterstock"),

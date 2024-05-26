@@ -1,4 +1,4 @@
-USE ministock1023;
+USE stocktest;
 
 -- These remove repeated values and reduce repetition
 
@@ -31,11 +31,25 @@ CREATE TABLE Site (
 
 CREATE TABLE Location (
     location_id int NOT NULL AUTO_INCREMENT PRIMARY KEY,
-    location_text varchar(50),
-    location_number varchar(50),
-    location_code varchar(50)
+    location_number_getty INTEGER,
+    getty_name varchar(70),
+    nation_name varchar(70),
+    nation_name_alpha varchar(70),
+    official_nation_name varchar(150),
+    sovereignty varchar(70),
+    code_alpha2 varchar(70),
+    code_alpha3 varchar(70),
+    code_numeric INTEGER,
+    code_iso varchar(70),
+    population INTEGER,
+    region varchar(50),
+    subregion varchar(50),
+    intermediateregion varchar(50),
+    WarsawPact varchar(50)
 ); 
 
+
+location_number_getty,getty_name,nation_name,nation_name_alpha,official_nation_name,sovereignty,code_alpha2,code_alpha3,code_numeric,code_iso,population,region,subregion,intermediateregion,WarsawPact
 CREATE TABLE Images (
     image_id int NOT NULL AUTO_INCREMENT PRIMARY KEY,
     site_name_id INTEGER,
@@ -74,7 +88,7 @@ CREATE TABLE Keywords (
     keytype varchar(50), 
     weight INT,
     parent_keyword_id varchar(50), 
-    parent_keyword_text varchar(50)
+    parent_keyword_text varchar(50),
     INDEX idx_keyword_text (keyword_text)
     
 
@@ -109,8 +123,10 @@ CREATE TABLE Encodings (
     face_landmarks BLOB,
     bbox JSON,
     face_encodings BLOB,
-    body_landmarks BLOB
+    body_landmarks BLOB,
+    UNIQUE (image_id)
 ); 
+
 
 -- calculations that will come later
 CREATE TABLE Clusters (
@@ -142,3 +158,18 @@ CREATE TABLE ImagesBackground (
     FOREIGN KEY (image_id) REFERENCES images(image_id)
 );
 
+CREATE TABLE PhoneBbox (
+    image_id INT,
+    bbox_67 JSON,
+    conf_67 Float,
+    bbox_63 JSON,
+    conf_63 Float,
+    bbox_26 JSON,
+    conf_26 Float,
+    bbox_27 JSON,
+    conf_27 Float,
+    bbox_32 JSON,
+    conf_32 Float,
+    PRIMARY KEY (image_id),
+    FOREIGN KEY (image_id) REFERENCES images(image_id)
+);

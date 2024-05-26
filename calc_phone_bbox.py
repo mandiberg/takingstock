@@ -21,21 +21,21 @@ option, index = pick(options, title)
 
 Base = declarative_base()
 # MM controlling which folder to use
-IS_SSD = True
+IS_SSD = False
 VERBOSE = True
 io = DataIO(IS_SSD)
 db = io.db
-# io.db["name"] = "stock"
-io.db["name"] = "ministock"
+io.db["name"] = "stock"
+# io.db["name"] = "ministock"
 # Create a database engine
 engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}".format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']), poolclass=NullPool)
 
 # Create a session
 session = scoped_session(sessionmaker(bind=engine))
+    
 
 
-
-LIMIT= 100
+LIMIT= 200000
 # Initialize the counter
 counter = 0
 OBJ_CLS_ID=67 ## 67 for "cell phone"
@@ -51,7 +51,7 @@ OBJ_CLS_NAME={0: 'person', 1: 'bicycle', 2: 'car', 3: 'motorcycle', 4: 'airplane
     , 62: 'tv', 63: 'laptop', 64: 'mouse', 65: 'remote', 66: 'keyboard', 67: 'cell phone', 68: 'microwave', 69: 'oven', 70: 'toaster'\
     , 71: 'sink', 72: 'refrigerator', 73: 'book', 74: 'clock', 75: 'vase', 76: 'scissors', 77: 'teddy bear', 78: 'hair drier'\
     , 79: 'toothbrush'}
-TOPIC_ID=15 ## '0.129*"phone" + 0.091*"mobil" + 0.043*"stop" + 0.043*"talk" + 0.038*"text" + 0.038*"messag" + 0.035*"smart" + 0.033*"communic" + 0.032*"technolog" + 0.029*"telephon"'
+TOPIC_ID=17 ## '0.129*"phone" + 0.091*"mobil" + 0.043*"stop" + 0.043*"talk" + 0.038*"text" + 0.038*"messag" + 0.035*"smart" + 0.033*"communic" + 0.032*"technolog" + 0.029*"telephon"'
 #SJ topic 26 is "phone" and MM is 15
 # Number of threads
 #num_threads = io.NUMBER_OF_PROCESSES
@@ -260,9 +260,9 @@ def write_bbox(target_image_id, lock, session):
                 print("bbox:", OBJ_CLS_NAME[OBJ_CLS_ID],getattr(PhoneBbox_entry, "bbox_{0}".format(OBJ_CLS_ID)))
                 print("conf:", OBJ_CLS_NAME[OBJ_CLS_ID],getattr(PhoneBbox_entry, "conf_{0}".format(OBJ_CLS_ID)))
             #session.commit()
-            print(f"Bbox for image_id {target_image_id} updated successfully.")
+            print(f"Bbox {OBJ_CLS_ID} for image_id {target_image_id} updated successfully.")
         else:
-            print(f"Bbox for image_id {target_image_id} not found.")
+            print(f"Bbox {OBJ_CLS_ID} for image_id {target_image_id} not found.")
     
     with lock:
         # Increment the counter using the lock to ensure thread safety

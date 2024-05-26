@@ -19,13 +19,13 @@ sig = '''
 # PATH= os.path.join(os.environ['HOME'], "Documents/projects-active/facemap_production/gettyimages") 
 
 #where the images are:
-PATH = "/Volumes/SSD4green/Pond5"
+PATH = "/Volumes/RAID18/images_unsplash"
 #where the images are going:
-PATH2 = "/Volumes/SSD4green/Pond5/"
+PATH2 = "/Volumes/RAID18/images_unsplash_un/"
 
 COPY=True
-UNIQUE_FILES_PATH="/Volumes/SSD4green/Pond5/output.csv"
-NEW_UNIQUE_FILES_PATH="/Volumes/SSD4green/Pond5/output_new.csv"
+UNIQUE_FILES_PATH="/Volumes/RAID54/process_CSVs_to_ingest/unsplashCSVs/unsplash.output.csv"
+NEW_UNIQUE_FILES_PATH="/Volumes/RAID54/process_CSVs_to_ingest/unsplashCSVs/unsplash.output_new.csv"
 IMAGES_THREAD_COUNTER = 0
 IMAGES_FOLDER_NAME = 'images'
 NEWIMAGES_FOLDER_NAME = 'new_images'
@@ -34,7 +34,7 @@ OLDPATH = os.path.join(PATH, IMAGES_FOLDER_NAME)
 NEWPATH = os.path.join(PATH2, NEWIMAGES_FOLDER_NAME)
 
 
-# startpoint = 622000
+startpoint = 340000
 
 #setup alphabet list
 #long to crate full directory structure
@@ -102,8 +102,8 @@ def unhash_files():
         try:
             #THIS IS WHERE I WILL MOVE THE STUFF
             move(image_hashpath, image_unhashed_path)
-            print(image_hashpath, image_unhashed_path)
-            print("moved")
+            # print(image_hashpath, image_unhashed_path)
+            # print("moved")
         except:
             if retry < 5:
                 thread(image_hashpath, image_unhashed_path, retry+1)
@@ -184,8 +184,8 @@ def unhash_files():
             alreadyDL = 0
             print("starting from start_counter: ",start_counter)
 
-            for i in range(start_counter):
-                next(reader)  # skip the line
+            # for i in range(start_counter):
+            #     next(reader)  # skip the line
 
             # print('starting to traverse the file, starting from: ',str(start_counter))
             for row in reader:
@@ -197,9 +197,10 @@ def unhash_files():
                 #     print("skipping, ",counter)
                 #     continue
 
-                if row[0] is None:
+                if row[0] is None or startpoint > start_counter:
+                    start_counter += 1
                     continue
-                # if startpoint > 0 and startpoint > counter:
+                # if startpoint > 0 and startpoint > start_counter:
                 #     continue
 
                 # this stores images in hashed folders, to ensure reasonable
@@ -208,7 +209,7 @@ def unhash_files():
                 # if pulling an image_id, it needs a .jpg suffix:
                 image_name = image_name+".jpg"
                 # where the old images is (PATH)
-                image_hashpath = os.path.join(PATH, row[10])
+                image_hashpath = os.path.join(PATH, row[11].replace('images/',''))
                 # image_hashpath = os.path.join(PATH,generate_local_image_filepath(image_name))
                 # where the new images goes (PATH2)
                 # this pulls an image_name created from image_id and gets hash folders from it.
@@ -220,7 +221,7 @@ def unhash_files():
                 # print out to countout every 1000 batches
                 # print(image_hashpath, image_unhashed_path)
                 # continue
-                if start_counter % 10 == 0:
+                if start_counter % 200 == 0:
                     print("start_counter is: ",start_counter)
                 start_counter += 1
                 counter += 1
@@ -232,10 +233,10 @@ def unhash_files():
                 if os.path.isfile(image_hashpath):
                     row[10]=image_filename
                     writer.writerow(row)
-                    print("this file will be moved", str(counter), image_hashpath, image_unhashed_path)
+                    # print("this file will be moved", str(counter), image_hashpath, image_unhashed_path)
                 else:
                     alreadyDL += 1
-                    print("nobody there", str(alreadyDL), image_hashpath)
+                    print("nobody there", str(alreadyDL), row[10])
                     continue
                 # continue # for testing
                 if IMAGES_THREAD_COUNTER < NUMBER_OF_THREADS_IMAGES_DOWNLOAD:

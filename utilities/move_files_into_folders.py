@@ -21,16 +21,19 @@ io = DataIO()
 # uses get_hash_folders to determine which folder to put in
 # if ALL_IN_ONE_FOLDER = True it will look only in the PATH folder (for when all files are in one folder)
 # if ALL_IN_ONE_FOLDER = False it will look inside all the folders recursively inside of PATH
+
 # (does not leave original file in place)
+# if False it will not delete the original file
+MOVE_DELETE_ORIGINAL = False
 
 # testname = "woman-in-a-music-concert-picture-id505111652.jpg"
 # # PATH= os.path.join(os.environ['HOME'], "Documents/projects-active/facemap_production/gettyimages") 
 
-# PATH = "/Volumes/SSD4green/images_shutterstock"
+# PATH = "/Volumes/SSD4green/images_shutterstock2"
 # NEWPATH = "/Volumes/RAID54/images_shutterstock"
 
-PATH = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/ImagesBazzar/images"
-NEWPATH = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/images_bazzar"
+PATH = "/Volumes/SSD4/images_getty_reDL"
+NEWPATH = "/Volumes/RAID18/images_getty"
 
 ALL_IN_ONE_FOLDER = False
 
@@ -141,14 +144,15 @@ def threaded_process_files():
             print("file exists, skipping: ", newpathfile)
             # remove newpathfile from hard drive
             # os.remove(newpathfile)
-            print("could remove: ", currentpathfile)
+            # print("could remove: ", currentpathfile)
         else:
-            shutil.move(currentpathfile, newpathfile)
-            # print(currentpathfile, newpathfile)
+            if MOVE_DELETE_ORIGINAL:
+                shutil.move(currentpathfile, newpathfile)
+                print("moved to: ", newpathfile)
+            else:
+                shutil.copy(currentpathfile, newpathfile)
+                print("copied (w/o deleting) to: ", newpathfile)
 
-            # print(newfile)
-            # print("moved from: ", currentpathfile)
-            print("moved to: ", newpathfile)
 
         with lock:
             global counter

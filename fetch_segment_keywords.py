@@ -7,7 +7,7 @@ from sqlalchemy.ext.declarative import declarative_base
 # my ORM
 # from my_declarative_base import Base, Clusters, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON, Images
 
-from my_declarative_base import Base,Images, ImagesTopics, SegmentTable, BagOfKeywords,Keywords,ImagesKeywords,ImagesEthnicity, Encodings, Column, Integer, String, DECIMAL, BLOB, ForeignKey, JSON  # Replace 'your_module' with the actual module where your SQLAlchemy models are defined
+from my_declarative_base import Base,Images, ImagesTopics, SegmentBig, SegmentTable, BagOfKeywords,Keywords,ImagesKeywords,ImagesEthnicity, Encodings, Column, Integer, String, DECIMAL, BLOB, ForeignKey, JSON  # Replace 'your_module' with the actual module where your SQLAlchemy models are defined
 from mp_db_io import DataIO
 import pickle
 import numpy as np
@@ -63,7 +63,7 @@ def make_key_dict(filepath):
             # print(row)
             keys_dict[int(row[0])] = row[2]
         return keys_dict
-keys_dict = make_key_dict(os.path.join(io.ROOT, "Keywords_202403172226.csv"))
+keys_dict = make_key_dict(os.path.join(io.ROOT, "Keywords_202405151718.csv"))
 
 
 title = 'Please choose your operation: '
@@ -73,7 +73,7 @@ options = ['Create helper table', 'Fetch keywords list and make tokens', 'Fetch 
            ]
 option, index = pick(options, title)
 
-LIMIT= 4000000
+LIMIT= 4000
 # Initialize the counter
 counter = 0
 
@@ -84,48 +84,6 @@ class SegmentHelper(Base):
     __tablename__ = SegmentHelper_name
 
     image_id = Column(Integer, primary_key=True)
-    # site_name_id = Column(Integer)
-    # site_image_id = Column(String(50))
-    # contentUrl = Column(String(300), nullable=False)
-    # imagename = Column(String(200))
-    # description = Column(String(150))
-    # face_x = Column(DECIMAL(6, 3))
-    # face_y = Column(DECIMAL(6, 3))
-    # face_z = Column(DECIMAL(6, 3))
-    # mouth_gap = Column(DECIMAL(6, 3))
-    # face_landmarks = Column(BLOB)
-    # bbox = Column(JSON)
-    # face_encodings68 = Column(BLOB)
-    # body_landmarks = Column(BLOB)    
-    # site_image_id = Column(String(50), nullable=False)
-    # keyword_list = Column(BLOB)  # Pickled list
-    # tokenized_keyword_list = Column(BLOB)  # Pickled list
-    # ethnicity_list = Column(BLOB)  # Pickled list
-
-
-
-# # to create new SegmentTable with variable as name
-# class SegmentTable(Base):
-#     __tablename__ = SegmentTable_name
-
-#     image_id = Column(Integer, primary_key=True)
-#     site_name_id = Column(Integer)
-#     site_image_id = Column(String(50))
-#     contentUrl = Column(String(300), nullable=False)
-#     imagename = Column(String(200))
-#     description = Column(String(150))
-#     face_x = Column(DECIMAL(6, 3))
-#     face_y = Column(DECIMAL(6, 3))
-#     face_z = Column(DECIMAL(6, 3))
-#     mouth_gap = Column(DECIMAL(6, 3))
-#     face_landmarks = Column(BLOB)
-#     bbox = Column(JSON)
-#     face_encodings = Column(BLOB)
-#     face_encodings68 = Column(BLOB)
-#     site_image_id = Column(String(50), nullable=False)
-#     keyword_list = Column(BLOB)  # Pickled list
-#     tokenized_keyword_list = Column(BLOB)  # Pickled list
-#     ethnicity_list = Column(BLOB)  # Pickled list
 
 def create_TempTable(row, lock, session):
     # image_id, bbox, face_x, face_y, face_z, mouth_gap, face_landmarks, face_encodings68, body_landmarks = row
@@ -196,6 +154,44 @@ def create_table(row, lock, session):
     
     # Add the BagOfKeywords object to the session
     session.add(bag_of_keywords)
+
+    with lock:
+        # Increment the counter using the lock to ensure thread safety
+        global counter
+        counter += 1
+        session.commit()
+
+    # Print a message to confirm the update
+    # print(f"Keyword list for image_id {image_id} updated successfully.")
+    if counter % 1000 == 0:
+        print(f"Created BagOfKeywords number: {counter}")
+
+def create_table_from_encodings(row, lock, session):
+    image_id, bbox, face_x, face_y, face_z, mouth_gap, face_landmarks, face_encodings68, body_landmarks = row
+    
+    # Create a BagOfKeywords object
+    segment_big = SegmentBig(
+        image_id=image_id,
+        # description=None,
+        # gender_id=None,
+        # age_id=None,
+        # location_id=None,
+        # keyword_list=None,  # Set this to None or your desired value
+        # tokenized_keyword_list=None,  # Set this to None or your desired value
+        # ethnicity_list=None,  # Set this to None or your desired value
+        face_x = face_x, 
+        face_y = face_y, 
+        face_z = face_z, 
+        mouth_gap = mouth_gap, 
+        face_landmarks = face_landmarks, 
+        bbox = bbox, 
+        face_encodings68 = face_encodings68, 
+        body_landmarks = body_landmarks
+    )
+    
+
+    # Add the BagOfKeywords object to the session
+    session.add(segment_big)
 
     with lock:
         # Increment the counter using the lock to ensure thread safety
@@ -609,7 +605,9 @@ threads_completed = threading.Event()
 work_queue = queue.Queue()
 
 if index == 0:
-    function=create_TempTable
+    function=create_table_from_encodings
+    # function=create_TempTable
+    
     ################# CREATE TABLE From ENCODINGS ###########
     # creates a table with every image_id from encodings within the x,y,z range
 
@@ -617,22 +615,22 @@ if index == 0:
     #     select_from(Images).outerjoin(BagOfKeywords, Images.image_id == BagOfKeywords.image_id).filter(BagOfKeywords.image_id == None, Images.site_name_id.in_([2,4])).limit(LIMIT)
 
     # this is the regular one to use
-    # select_query = (
-    #     # select(Encodings.image_id, Encodings.bbox, Encodings.face_x, Encodings.face_y, Encodings.face_z, Encodings.mouth_gap, Encodings.face_landmarks, Encodings.face_encodings68, Encodings.body_landmarks)
-    #     select(Encodings.image_id)
-    #     .select_from(Encodings)
-    #     .outerjoin(SegmentHelper, Encodings.image_id == SegmentHelper.image_id)
-    #     .filter(SegmentHelper.image_id == None)
-    #     .filter(and_(
-    #         Encodings.face_x > -40,
-    #         Encodings.face_x < -27,
-    #         Encodings.face_y > -4,
-    #         Encodings.face_y < 4,
-    #         Encodings.face_z > -4,
-    #         Encodings.face_z < 4
-    #     ))
-    #     .limit(LIMIT)
-    # )
+    select_query = (
+        select(Encodings.image_id, Encodings.bbox, Encodings.face_x, Encodings.face_y, Encodings.face_z, Encodings.mouth_gap, Encodings.face_landmarks, Encodings.face_encodings68, Encodings.body_landmarks)
+        # select(Encodings.image_id)
+        .select_from(Encodings)
+        .outerjoin(SegmentBig, Encodings.image_id == SegmentBig.image_id)
+        .filter(SegmentBig.image_id == None)
+        .filter(and_(
+            Encodings.face_x > -45,
+            Encodings.face_x < -20,
+            Encodings.face_y > -10,
+            Encodings.face_y < 10,
+            Encodings.face_z > -10,
+            Encodings.face_z < 10
+        ))
+        .limit(LIMIT)
+    )
 
     # # this is for one specific topic
     # select_query = (
@@ -667,23 +665,23 @@ if index == 0:
 
 
     # this is for subselecting the segment table
-    select_query = (
-        # select(Encodings.image_id, Encodings.bbox, Encodings.face_x, Encodings.face_y, Encodings.face_z, Encodings.mouth_gap, Encodings.face_landmarks, Encodings.face_encodings68, Encodings.body_landmarks)
-        select(SegmentTable.image_id)
-        .select_from(SegmentTable)
-        .outerjoin(SegmentHelper, SegmentTable.image_id == SegmentHelper.image_id)
-        .filter(SegmentHelper.image_id == None)
-        .filter(and_(
-            SegmentTable.face_x > -33,
-            SegmentTable.face_x < -27,
-            SegmentTable.face_y > -2,
-            SegmentTable.face_y < 2,
-            SegmentTable.face_z > -2,
-            SegmentTable.face_z < 2
-        ))
+    # select_query = (
+    #     # select(Encodings.image_id, Encodings.bbox, Encodings.face_x, Encodings.face_y, Encodings.face_z, Encodings.mouth_gap, Encodings.face_landmarks, Encodings.face_encodings68, Encodings.body_landmarks)
+    #     select(SegmentTable.image_id)
+    #     .select_from(SegmentTable)
+    #     .outerjoin(SegmentHelper, SegmentTable.image_id == SegmentHelper.image_id)
+    #     .filter(SegmentHelper.image_id == None)
+    #     .filter(and_(
+    #         SegmentTable.face_x > -33,
+    #         SegmentTable.face_x < -27,
+    #         SegmentTable.face_y > -2,
+    #         SegmentTable.face_y < 2,
+    #         SegmentTable.face_z > -2,
+    #         SegmentTable.face_z < 2
+    #     ))
 
-        .limit(LIMIT)
-    )
+    #     .limit(LIMIT)
+    # )
 
     result = session.execute(select_query).fetchall()
     # print the length of the result

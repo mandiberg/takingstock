@@ -48,8 +48,10 @@ VERBOSE = False
 # HelperTable_name = "SegmentHelperMar23_headon"
 
 # 7K for topic 7
-HelperTable_name = "SegmentHelperApril12_2x2x33x27"
+# HelperTable_name = "SegmentHelperApril12_2x2x33x27"
 
+# for fingerpoint
+HelperTable_name = "SegmentHelperMay7_fingerpoint"
 # MM controlling which folder to use
 IS_SSD = False
 
@@ -100,7 +102,7 @@ title = 'Please choose your operation: '
 options = ['Create table', 'Fetch BG color stats',"test sorting"]
 option, index = pick(options, title)
 
-LIMIT= 500000
+LIMIT= 50000
 # Initialize the counter
 counter = 0
 
@@ -352,7 +354,7 @@ def fetch_BG_stat(target_image_id, lock, session):
     if os.path.exists(file):
         img = cv2.imread(file)    
     else:
-        print(f"image not found {file}")
+        print(f"image not found {target_image_id} {file}")
         return
     bbox=None
     facelandmark=None

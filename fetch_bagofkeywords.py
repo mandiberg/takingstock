@@ -1,7 +1,7 @@
-from sqlalchemy import create_engine, select, delete
+from sqlalchemy import create_engine, select, delete, distinct, func
 from sqlalchemy.orm import sessionmaker,scoped_session
 from sqlalchemy.pool import NullPool
-from my_declarative_base import Images, BagOfKeywords,Keywords,ImagesKeywords,ImagesEthnicity, Encodings  # Replace 'your_module' with the actual module where your SQLAlchemy models are defined
+from my_declarative_base import Images, BagOfKeywords,Keywords, SegmentTable, SegmentBig, ImagesKeywords,ImagesEthnicity, Encodings  # Replace 'your_module' with the actual module where your SQLAlchemy models are defined
 from mp_db_io import DataIO
 import pickle
 import numpy as np
@@ -52,14 +52,14 @@ def make_key_dict(filepath):
             # print(row)
             keys_dict[int(row[0])] = row[2]
         return keys_dict
-keys_dict = make_key_dict(os.path.join(io.ROOT, "Keywords_202402071139.csv"))
+keys_dict = make_key_dict(os.path.join(io.ROOT, "Keywords_202405151718.csv"))
 
 
 title = 'Please choose your operation: '
-options = ['Create table', 'Fetch keywords list and make tokens', 'Fetch ethnicity list', 'Prune Table where is_face == None']
+options = ['Create table', 'Fetch keywords list and make tokens', 'Fetch ethnicity list', 'Prune Table where is_face == None','Insert from segment']
 option, index = pick(options, title)
 
-LIMIT= 30000000
+LIMIT= 10000
 # Initialize the counter
 counter = 0
 
@@ -94,6 +94,49 @@ def create_table(row, lock, session):
     # print(f"Keyword list for image_id {image_id} updated successfully.")
     if counter % 1000 == 0:
         print(f"Created BagOfKeywords number: {counter}")
+
+
+def create_seg_table(row, lock, session):
+    image_id, site_name_id, site_image_id, contentUrl, imagename, description, age_id, gender_id, location_id, face_x, face_y, face_z, mouth_gap, face_landmarks, bbox, face_encodings68, body_landmarks = row
+    
+    # Create a BagOfKeywords object
+    segment_big = SegmentBig(
+        image_id = image_id,
+        site_name_id = site_name_id,
+        site_image_id = site_image_id,
+        contentUrl = contentUrl,
+        imagename = imagename,
+        description = description,
+        age_id = age_id,
+        gender_id = gender_id,
+        location_id = location_id,
+        face_x = face_x,
+        face_y = face_y,
+        face_z = face_z,
+        mouth_gap = mouth_gap,
+        face_landmarks = face_landmarks,
+        bbox = bbox,
+        face_encodings68 = face_encodings68,
+        body_landmarks = body_landmarks,
+        keyword_list=None,  # Set this to None or your desired value
+        tokenized_keyword_list=None,  # Set this to None or your desired value
+        ethnicity_list=None  # Set this to None or your desired value
+    )
+    
+    # Add the BagOfKeywords object to the session
+    session.add(segment_big)
+
+    with lock:
+        # Increment the counter using the lock to ensure thread safety
+        global counter
+        counter += 1
+        session.commit()
+
+    # Print a message to confirm the update
+    # print(f"Keyword list for image_id {image_id} updated successfully.")
+    if counter % 1000 == 0:
+        print(f"Created BagOfKeywords number: {counter}")
+
 
 def prune_table(image_id, lock, session):
     # Acquire the lock to ensure thread safety
@@ -247,10 +290,50 @@ threads_completed = threading.Event()
 work_queue = queue.Queue()
 
 if index == 0:
-    function=create_table
     ################# CREATE TABLE ###########
-    select_query = select(Images.image_id, Images.description, Images.gender_id, Images.age_id, Images.location_id).\
-        select_from(Images).outerjoin(BagOfKeywords, Images.image_id == BagOfKeywords.image_id).filter(BagOfKeywords.image_id == None, Images.site_name_id.in_([2,4])).limit(LIMIT)
+    
+
+    # create_seg_table for whole shebang
+    # 5/26/2024 this ishow i making SegmentBig_isface 
+    # with all the data for bbox/is_face is not None 
+    function=create_seg_table
+
+    max_image_id_query = select(func.max(SegmentBig.image_id))
+    max_image_id = session.execute(max_image_id_query).fetchone()[0]
+    if max_image_id is None: max_image_id = 0  
+
+    select_query = select(
+        distinct(Images.image_id), Images.site_name_id, Images.site_image_id, 
+            Images.contentUrl, Images.imagename, Images.description, Images.age_id, Images.gender_id, Images.location_id, 
+            Encodings.face_x, Encodings.face_y, Encodings.face_z, Encodings.mouth_gap, 
+            Encodings.face_landmarks, Encodings.bbox, Encodings.face_encodings68, Encodings.body_landmarks).\
+        select_from(Images).\
+        outerjoin(Encodings, Images.image_id == Encodings.image_id).\
+            filter(Images.image_id > max_image_id, Encodings.bbox.is_(None)).\
+        limit(LIMIT)
+
+
+            # filter(Images.image_id > max_image_id, Encodings.is_face.is_not(None)).\
+
+    
+    # # create_table for just BOW
+    # function=create_table
+    
+    # max_image_id_query = select(func.max(BagOfKeywords.image_id))
+    # max_image_id = session.execute(max_image_id_query).fetchone()[0]
+    # if max_image_id is None: max_image_id = 0  
+
+    # # select_query = select(distinct(Images.image_id), Images.description, Images.gender_id, Images.age_id, Images.location_id).\
+    # #     select_from(Images).outerjoin(BagOfKeywords, Images.image_id == BagOfKeywords.image_id).\
+    # #     outerjoin(Encodings, Images.image_id == Encodings.image_id).\
+    # #         filter(BagOfKeywords.image_id == None, Encodings.is_face.is_not(None)).limit(LIMIT)
+
+    # select_query = select(distinct(Images.image_id), Images.description, Images.gender_id, Images.age_id, Images.location_id).\
+    #     select_from(Images).\
+    #     outerjoin(Encodings, Images.image_id == Encodings.image_id).\
+    #         filter(Images.image_id > max_image_id, Encodings.is_face.is_not(None)).limit(LIMIT)
+    
+    # Execute the query and fetch the results
     result = session.execute(select_query).fetchall()
     # print the length of the result
     print(len(result), "rows")
@@ -290,6 +373,18 @@ elif index == 3:
     print(len(distinct_image_ids), "rows to prune")    
     for target_image_id in distinct_image_ids:
         work_queue.put(target_image_id)
+
+elif index == 4:
+    function=create_table 
+
+    select_query = select(distinct(SegmentTable.image_id), SegmentTable.description, SegmentTable.gender_id, SegmentTable.age_id, SegmentTable.location_id).\
+        select_from(SegmentTable).outerjoin(BagOfKeywords, SegmentTable.image_id == BagOfKeywords.image_id).\
+            filter(BagOfKeywords.image_id == None).limit(LIMIT)
+    result = session.execute(select_query).fetchall()
+    # print the length of the result
+    print(len(result), "rows")
+    for row in result:
+        work_queue.put(row)
 
 def threaded_fetching():
     while not work_queue.empty():
