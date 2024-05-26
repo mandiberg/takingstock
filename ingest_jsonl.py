@@ -56,21 +56,82 @@ ROOT = io.ROOT
 NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 #######################################
 
-# starting shutter here: 52344682
+'''
+1   getty
+2   shutterstock
+3   adobe
+4   istock
+5   pexels
+6   unsplash
+7   pond5
+8   123rf
+9   alamy
+10  visualchinagroup
+11	picxy
+12	pixerf
+13	imagesbazaar
+14	indiapicturebudget
+15	iwaria
+16	nappy
+17	picha
+18	afripics
+'''
+
+THIS_SITE = 11
 
 SEARCH_KEYS_FOR_LOC = True
-VERBOSE = True
+VERBOSE = False
 
+# where key, etc csvs stored
 INGEST_ROOT = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/getty_scrape/done"
-INGEST_FOLDER = os.path.join(INGEST_ROOT, "getty_noeth_toobig")
-# CSV_IN_PATH = os.path.join(INGEST_FOLDER, "unique_lines_B_nogender.csv")
-# INGEST_FOLDER = "/Users/michaelmandiberg/Downloads/getty_rebuild/"
-CSV_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache_noNoNOs_Silver.jsonl")
+
+if THIS_SITE == 1:
+    INGEST_ROOT = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/getty_scrape/done"
+    INGEST_FOLDER = os.path.join(INGEST_ROOT, "getty_noeth_toobig")
+    JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache_noNoNOs_Silver.jsonl")
+elif THIS_SITE == 6:
+    INGEST_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/unsplashCSVs"
+    JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache.jsonl")
+elif THIS_SITE == 9:
+    INGEST_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/alamyCSVs"
+    JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache.jsonl")
+elif THIS_SITE == 10:
+    INGEST_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/VCG2"
+    JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache.jsonl")
+elif THIS_SITE == 11:
+    INGEST_FOLDER = "/Users/michaelmandiberg/Downloads/pixcy_v2"
+    JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache_filtered.jsonl")
+elif THIS_SITE == 12:
+    INGEST_FOLDER = "/Users/michaelmandiberg/Library/CloudStorage/Dropbox/takingstock_dropbox/PIXERF"
+    JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache.jsonl")
+elif THIS_SITE == 13:
+    INGEST_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/ImagesBazzar"
+    JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache.jsonl")
+elif THIS_SITE == 14:
+    INGEST_FOLDER = "/Users/michaelmandiberg/Library/CloudStorage/Dropbox/takingstock_dropbox/INDIA-PB"
+    JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache.jsonl")
+elif THIS_SITE == 15:
+    INGEST_FOLDER = "/Users/michaelmandiberg/Library/CloudStorage/Dropbox/takingstock_dropbox/iwaria"
+    JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache.jsonl")
+elif THIS_SITE == 16:
+    INGEST_FOLDER = "/Users/michaelmandiberg/Downloads/nappy_v2"
+    JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache.jsonl")
+elif THIS_SITE == 17:
+    INGEST_FOLDER = "/Users/michaelmandiberg/Library/CloudStorage/Dropbox/takingstock_dropbox/PICHA-STOCK"
+    JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache.jsonl")
+elif THIS_SITE == 18:
+    INGEST_FOLDER = "/Users/michaelmandiberg/Library/CloudStorage/Dropbox/takingstock_dropbox/AFRIPICS"
+    JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache.jsonl")
+
+
+# key, etc csvs
 KEYWORD_PATH = os.path.join(INGEST_ROOT, "Keywords_202405151718m.csv")
 LOCATION_PATH = os.path.join(INGEST_ROOT, "Location_202308041952.csv")
 CSV_KEY2LOC_PATH = os.path.join(INGEST_ROOT, "CSV_KEY2LOC.csv")
 CSV_KEY2KEY_GETTY_PATH = os.path.join(INGEST_ROOT, "CSV_KEY2KEY_GETTY.csv")
 CSV_ETH2_GETTY = os.path.join(INGEST_ROOT, "CSV_ETH_GETTY.csv")
+
+# output csvs
 CSV_NOKEYS_PATH = os.path.join(INGEST_FOLDER, "CSV_NOKEYS.csv")
 CSV_IMAGEKEYS_PATH = os.path.join(INGEST_FOLDER, "CSV_IMAGEKEYS.csv")
 # NEWIMAGES_FOLDER_NAME = 'images_pexels'
@@ -1128,6 +1189,7 @@ def structure_row_unsplash(item, ind, keys_list):
     gender = None
     age = None
     description = item["title"]
+    hashed_filename = item["id"]
     gender_key, age_key, age_detail_key = get_gender_age_row(gender, age, description, keys_list, site_id)
     country_key = None
     # if item["location_id"]:
@@ -1147,7 +1209,7 @@ def structure_row_unsplash(item, ind, keys_list):
         "gender_id": gender_key,
         "age_detail_id": age_detail_key,
         "contentUrl": item["img"],
-        "imagename": os.path.join(get_hash_folders(file_name),item["id"]+".jpg"),  # hash filename from id+jpg
+        "imagename": os.path.join(get_hash_folders(hashed_filename)[0],get_hash_folders(hashed_filename)[1],hashed_filename+".jpg"),  # hash filename from id+jpg
         # "imagename": generate_local_unhashed_image_filepath(item[9].replace("images/",""))  # need to refactor this from the contentURL using the hash function
     }
 
@@ -1212,18 +1274,20 @@ def ingest_json():
     # column_eth = None #ethnicity
     # search_desc_for_keys = True
 
-    # # istock
-    column_keys = 2 #where the keywords are
-    separator_keys = "|" #for keywords, in the column listed above
-    # column_site = 8 #not sure this is used
-    column_eth = 7 #ethnicity
+    # csv only
+    # # # istock
+    # column_keys = 2 #where the keywords are
+    # separator_keys = "|" #for keywords, in the column listed above
+    # # column_site = 8 #not sure this is used
+    # column_eth = 7 #ethnicity
+
     search_desc_for_keys = False
     
 
-    # with open(CSV_IN_PATH) as file_obj:
+    # with open(JSONL_IN_PATH) as file_obj:
     #     # reader = csv.reader((row.replace('\0', '').replace('\x00', '') for row in in_file), delimiter=",")
 
-    with open(CSV_IN_PATH, 'r') as cache_file:
+    with open(JSONL_IN_PATH, 'r') as cache_file:
         # reader_obj = csv.reader(file_obj)
         # next(reader_obj)  # Skip header row
         start_counter = get_counter()
@@ -1247,9 +1311,13 @@ def ingest_json():
             # construct and clean keys_list (skip_keys, key2key)
             keys_list = construct_keys_list(item["keywords"])
 
+            if THIS_SITE == 1:
             # image_row = structure_row_adobe(row, ind, keys_list)
-            image_row = structure_row_getty(item, ind, keys_list)
-            # image_row = structure_row_unsplash(item, ind, keys_list)
+                image_row = structure_row_getty(item, ind, keys_list)
+            elif THIS_SITE == 6:
+                image_row = structure_row_unsplash(item, ind, keys_list)
+                search_desc_for_keys = True
+                item["ethnicity"] = None
 
 
             # if the image row has problems, skip it (structure_row saved it to csv)
@@ -1310,7 +1378,7 @@ def ingest_json():
 
 
             # STORE THE DATA
-            print("connecting to DB", io.db)
+            if VERBOSE: print("connecting to DB", io.db)
             if VERBOSE: 
                 print(image_row)
                 print("key_nos_list", key_nos_list)
@@ -1326,11 +1394,11 @@ def ingest_json():
                     row = conn.execute(select_stmt).fetchone()
                     if row is None:
                         insert_stmt = insert(Images).values(image_row)
-                        print(str(insert_stmt))
+                        if VERBOSE: print(str(insert_stmt))
                         dialect = mysql.dialect()
                         statement = str(insert_stmt.compile(dialect=dialect))
-                        print(statement)
-                                                
+                        if VERBOSE: print(statement)
+
                         try:
                             result = execute_query_with_retry(conn, insert_stmt)  # Retry on OperationalError
                         except Exception as e:
@@ -1358,14 +1426,14 @@ def ingest_json():
 
                         print("last_inserted_id:", result.lastrowid)
                         print(" ")
-                        with engine.connect() as conn:
-
-                            select_stmt = select(Images).where(
-                                (Images.image_id == result.lastrowid)
-                            )
-                            row = conn.execute(select_stmt).fetchone()
-                            print(result.lastrowid, "row:", row)
-                            print(" ")
+                        if VERBOSE:
+                            with engine.connect() as conn:
+                                select_stmt = select(Images).where(
+                                    (Images.image_id == result.lastrowid)
+                                )
+                                row = conn.execute(select_stmt).fetchone()
+                                print(result.lastrowid, "row:", row)
+                                print(" ")
 
                         
                     else:
