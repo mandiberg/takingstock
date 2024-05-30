@@ -77,7 +77,7 @@ NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 18	afripics
 '''
 
-THIS_SITE = 11
+THIS_SITE = 10
 
 SEARCH_KEYS_FOR_LOC = True
 VERBOSE = False
@@ -93,7 +93,7 @@ elif THIS_SITE == 6:
     INGEST_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/unsplashCSVs"
     JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache.jsonl")
 elif THIS_SITE == 9:
-    INGEST_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/alamyCSVs"
+    INGEST_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/alamyCSV"
     JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache.jsonl")
 elif THIS_SITE == 10:
     INGEST_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/VCG2"
@@ -111,10 +111,11 @@ elif THIS_SITE == 14:
     INGEST_FOLDER = "/Users/michaelmandiberg/Library/CloudStorage/Dropbox/takingstock_dropbox/INDIA-PB"
     JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache.jsonl")
 elif THIS_SITE == 15:
+    # not saving csv files... to db also?
     INGEST_FOLDER = "/Users/michaelmandiberg/Library/CloudStorage/Dropbox/takingstock_dropbox/iwaria"
     JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache.jsonl")
 elif THIS_SITE == 16:
-    INGEST_FOLDER = "/Users/michaelmandiberg/Downloads/nappy_v2"
+    INGEST_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/nappy_v3_w-data"
     JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache.jsonl")
 elif THIS_SITE == 17:
     INGEST_FOLDER = "/Users/michaelmandiberg/Library/CloudStorage/Dropbox/takingstock_dropbox/PICHA-STOCK"
@@ -129,6 +130,7 @@ KEYWORD_PATH = os.path.join(INGEST_ROOT, "Keywords_202405151718m.csv")
 LOCATION_PATH = os.path.join(INGEST_ROOT, "Location_202308041952.csv")
 CSV_KEY2LOC_PATH = os.path.join(INGEST_ROOT, "CSV_KEY2LOC.csv")
 CSV_KEY2KEY_GETTY_PATH = os.path.join(INGEST_ROOT, "CSV_KEY2KEY_GETTY.csv")
+CSV_KEY2KEY_VCG_PATH = os.path.join(INGEST_ROOT, "CSV_KEY2KEY_GETTY.csv")
 CSV_ETH2_GETTY = os.path.join(INGEST_ROOT, "CSV_ETH_GETTY.csv")
 
 # output csvs
@@ -162,6 +164,7 @@ key2key = {"person":"people", "isolated on white":"plain white background", "kid
 key2loc = dict_from_csv(CSV_KEY2LOC_PATH)
 skip_keys = ["other", "easy resource", "suggestive filter", "unspecified", "diffrential focus", "internal term 1", "birds eye view", "bird's eye view", "los banos", "scoot", "angel fire"]
 key2key_getty = dict_from_csv(CSV_KEY2KEY_GETTY_PATH)
+key2key_vcg = dict_from_csv(CSV_KEY2KEY_VCG_PATH)
 
 gender_dict = {"men":1,"man":1,"male":1,"males":1,"his":1,"him":1,"businessman":1,"businessmen":1,"father":1, "men's":1, "himself":1, "homme":1, "hombre":1, "(man)":1, "-women men -children":1, "-women -men -children":2, "none":2, "oldmen":3, "grandfather":3,"oldwomen":4, "grandmother":4, "nonbinary":5, "other":6, "trans":7, 
         "women":8,"woman":8,"female":8,"females":8, "hers":8, "her":8, "businesswoman":8, "businesswomen":8, "mother":8, "frauen":8, "mujer":8, "haaren":8, "frau":8, "woman-doctor":8, "maiden":8, "hausfrau":8, "women -men -children":8, "youngmen":9, "boy":9, "boys":9, "jungen":9, "youngwomen":10,"girl":10, "girls":10, "ragazza":10, "schoolgirls":8,}
@@ -313,11 +316,8 @@ def read_csv(csv_file):
             yield row
 
 def write_csv(path,value_list):
-
     # headers = header_list
-
     with open(path, 'a') as csvfile: 
-    # with open('lat_lon', 'w') as csvfile:
         writer=csv.writer(csvfile, delimiter=',')
         writer.writerow(value_list)
 
@@ -410,7 +410,7 @@ def unlock_key_list(site_image_id, keys_list, keys_dict):
     key_nos_list = []
     
     for key in keys_list:
-        key_no = unlock_key_plurals_etc(site_image_id.lower(), key, keys_dict)
+        key_no = unlock_key_plurals_etc(site_image_id, key, keys_dict)
         # print(key_no)
         if key_no:
             key_nos_list.append(key_no)
@@ -684,7 +684,8 @@ def description_to_keys(description, site_id, this_dict="keys_dict"):
     if this_dict=="keys_dict":
         this_dict = keys_dict
 
-    description = description.replace(",","").replace("'s","").replace(".","")
+    if description: description = description.replace(",","").replace("'s","").replace(".","")
+    else: return None
 
     # print("description_to_keys")    
     key_nos_list =[]
@@ -849,7 +850,7 @@ def get_gender_age_row(gender_string, age_string, description, keys_list, site_i
     age_detail= None
     desc_age = None
 
-    description = description.replace(",","").replace("'s","").replace(".","")
+    if description: description = description.replace(",","").replace("'s","").replace(".","")
 
     if VERBOSE: 
         print("gender_string, age_string",gender_string, age_string)
@@ -879,7 +880,7 @@ def get_gender_age_row(gender_string, age_string, description, keys_list, site_i
     # print("gender, age, after try key gender_string")
     # print(gender)
     # print(age)
-    if pd.isnull(gender): 
+    if pd.isnull(gender) and description: 
         if VERBOSE: print("gender is null")
         gender_results = description_to_keys(description, site_id, gender_dict)
         if gender_results and len(set(gender_results)) == 1:
@@ -924,7 +925,7 @@ def get_gender_age_row(gender_string, age_string, description, keys_list, site_i
             print(gender)
             print(age)
             print(age_detail)
-        if pd.isnull(age):
+        if pd.isnull(age) and description:
             print("age is really still null, trying description")
 
             age_results = description_to_keys(description, site_id, age_dict)
@@ -932,10 +933,11 @@ def get_gender_age_row(gender_string, age_string, description, keys_list, site_i
                 age = age_results[0]
 
     # after everything, get gender for TNB from description and supercede existing gender string
-    gender_TNB = get_TNB(description.lower(), keys_list)    
-    if VERBOSE: print("gender_TNB", gender_TNB)
-    if gender_TNB: 
-        gender = gender_TNB
+    if description:
+        gender_TNB = get_TNB(description.lower(), keys_list)    
+        if VERBOSE: print("gender_TNB", gender_TNB)
+        if gender_TNB: 
+            gender = gender_TNB
 
     if VERBOSE:
         print("gender, age, after everything")
@@ -1182,6 +1184,8 @@ def structure_row_getty(item, ind, keys_list):
 
 
 
+
+
 def structure_row_unsplash(item, ind, keys_list):
     # I am tossing the unsplash gender age and ethnicity data, as it is garbage. Noise. 
     # unsplash is generaly garbage, and I should exclude it from the data analysis. 
@@ -1189,7 +1193,7 @@ def structure_row_unsplash(item, ind, keys_list):
     gender = None
     age = None
     description = item["title"]
-    hashed_filename = item["id"]
+    filename = item["id"]+".jpg"
     gender_key, age_key, age_detail_key = get_gender_age_row(gender, age, description, keys_list, site_id)
     country_key = None
     # if item["location_id"]:
@@ -1209,11 +1213,380 @@ def structure_row_unsplash(item, ind, keys_list):
         "gender_id": gender_key,
         "age_detail_id": age_detail_key,
         "contentUrl": item["img"],
-        "imagename": os.path.join(get_hash_folders(hashed_filename)[0],get_hash_folders(hashed_filename)[1],hashed_filename+".jpg"),  # hash filename from id+jpg
+        "imagename": os.path.join(get_hash_folders(filename)[0],get_hash_folders(filename)[1],filename),  # hash filename from id+jpg
         # "imagename": generate_local_unhashed_image_filepath(item[9].replace("images/",""))  # need to refactor this from the contentURL using the hash function
     }
 
     return nan2none(image_row)
+
+# def get_location(location, keys_list):
+    
+#     country_key = None
+#     if location:
+#         if VERBOSE: print("we gotta location: ", location)
+#         country_key = unlock_key_dict(location,locations_dict_getty, loc2loc)
+#     if not location or not country_key:
+#         if VERBOSE: print("nada location: ", location)
+#         country_key = search_keys(keys_list, key2loc, True)
+#         if VERBOSE: ("search_keys key2loc for location found: ", country_key)
+#     return country_key
+
+def itter_location(country, keys_list):
+    country_key = None
+    country = country.lstrip().rstrip()
+    if country and country != "" and len(country) == 2:
+        if country == "uk": country = "gb"
+        country_key = unlock_key_dict(country,locations_dict_AA, loc2loc)
+        # print("country_key", str(country_key))
+        if country_key == 999999999:
+            return(None)
+    elif country and country != "":
+        country_key = unlock_key_dict(country,locations_dict, loc2loc)
+        if not country_key:
+            country_key = unlock_key_dict(country,locations_dict_alt, loc2loc)
+            if not country_key:
+                print("country not found after AA reg and alt-------------> ", country)
+    elif not country or country == "":
+        #tk search keys
+        # get eth from keywords, using keys_list and eth_keys_dict
+        print("UNLOCKING SEARCH_KEYS_FOR_LOC <><><><><><><><>")
+        # absence of search string ("None") triggers search_keys function
+        loc_no_list = get_key_no_dictonly(None, keys_list, locations_dict, True)
+        print(loc_no_list)
+        if not loc_no_list:
+            loc_no_list = get_key_no_dictonly(None, keys_list, locations_dict_alt, True)
+        #     if loc_no_list: 
+        country_key = get_mode(loc_no_list)
+        print(f"SEARCH_KEYS_FOR_LOC found for {country_key}")
+    return country_key
+
+def get_location(country, keys_list):
+    country_key = None
+    location_info = []
+    if country:
+        location_info = country.split(",") if "," in country else []
+    else:
+        return None
+    if len(location_info) > 1: 
+        print(location_info)
+        country_key = itter_location(location_info[-1], keys_list)
+    if not country_key and len(location_info) > 1:
+        for loc in location_info:
+            country_key = itter_location(loc, keys_list)
+            if country_key:
+                break
+    if not country_key:
+        country_key = itter_location(country, keys_list)
+    if not country_key and len(location_info) > 1:
+        for loc in location_info:
+            try:
+                country_key = loc2loc[loc.lstrip().rstrip()]
+                if country_key:
+                    return(country_key)
+            except:
+                print("failed loc2loc, onto next")
+    if not country_key:
+        try:
+            country_key = loc2loc[loc.lstrip().rstrip()]
+        except:
+            print("failed final loc2loc")
+    return country_key
+
+def structure_row_pixcy(item, ind, keys_list):
+    gender = item.get("gender", None)
+    age = item.get("age", None)
+    description = item.get("title", None)
+    gender_key, age_key, age_detail_key = get_gender_age_row(gender, age, description, keys_list, THIS_SITE)
+    location = item.get("location", None)
+
+    if item["location"]:
+        if VERBOSE: print("we gotta location: ", item["location"])
+        country_key = unlock_key_dict(item["location"],locations_dict_getty, loc2loc)
+    if not item["location"] or not country_key:
+        if VERBOSE: print("nada location: ", item["location"])
+        country_key = search_keys(keys_list, key2loc, True)
+        if VERBOSE: ("search_keys key2loc for location found: ", country_key)
+
+    image_row = {
+        "site_image_id": item["id"],
+        "site_name_id": THIS_SITE,
+        "description": description[:140],
+        "age_id": age_key,
+        "gender_id": gender_key,
+        "age_detail_id": age_detail_key,
+        "contentUrl": item["img"],
+        "imagename": os.path.join(get_hash_folders(filename)[0],get_hash_folders(filename)[1],filename),  # hash filename from id+jpg
+        "location_id": get_location(location, keys_list),        
+        "author": item["author"],        
+        
+        ## TK
+        "model_release": item["model_release"],        
+
+        # "imagename": generate_local_unhashed_image_filepath(item[9].replace("images/",""))  # need to refactor this from the contentURL using the hash function
+    }
+
+    return nan2none(image_row)
+
+
+def structure_row_PIXERF(item, ind, keys_list):
+    if VERBOSE: print(item)
+    gender = item.get("gender", None)
+    age = item.get("age", None)
+    description = item.get("title", None)
+    gender_key, age_key, age_detail_key = get_gender_age_row(gender, age, description, keys_list, THIS_SITE)
+    filename = item["id"]+".jpg"
+    location = item.get("location", None)
+    image_row = {
+        "site_image_id": item["id"],
+        "site_name_id": THIS_SITE,
+        "description": description[:140],
+        "age_id": age_key,
+        "gender_id": gender_key,
+        "age_detail_id": age_detail_key,
+        "contentUrl": item["img"],
+        "imagename": os.path.join(get_hash_folders(filename)[0],get_hash_folders(filename)[1],filename),  # hash filename from id+jpg
+        "location_id": get_location(location, keys_list),        
+        "author": item.get("author", None)     
+
+        # "imagename": generate_local_unhashed_image_filepath(item[9].replace("images/",""))  # need to refactor this from the contentURL using the hash function
+    }
+
+    return nan2none(image_row)
+
+def structure_row_ImagesBazzar(item, ind, keys_list):
+    if VERBOSE: print(item)
+    gender = item.get("filters", {}).get("gender", None)
+    age = item.get("filters", {}).get("age", None)
+    shoot_location = item.get("filters", {}).get("location", None)
+    description = item.get("title", None)
+    gender_key, age_key, age_detail_key = get_gender_age_row(gender, age, description, keys_list, THIS_SITE)
+    filename = item["id"]+".jpg"
+    location = item.get("location", None)
+    image_row = {
+        "site_image_id": item["id"],
+        "site_name_id": THIS_SITE,
+        "description": description[:140],
+        "age_id": age_key,
+        "gender_id": gender_key,
+        "age_detail_id": age_detail_key,
+        "contentUrl": item["img"],
+        "imagename": os.path.join(get_hash_folders(filename)[0],get_hash_folders(filename)[1],filename),  # hash filename from id+jpg
+        "location_id": get_location(location, keys_list),        
+        "author": item.get("author", None),     
+
+        ## TK
+        "shoot_location": shoot_location,
+        # "imagename": generate_local_unhashed_image_filepath(item[9].replace("images/",""))  # need to refactor this from the contentURL using the hash function
+    }
+
+    print("shoot_location", shoot_location)
+
+    return nan2none(image_row)
+
+def structure_row_INDIAPB(item, ind, keys_list):
+    if VERBOSE: print(item)
+    gender = item.get("filters", {}).get("gender", None)
+    age = item.get("filters", {}).get("age", None)
+    # shoot_location = item.get("filters", {}).get("location", None)
+    description = item.get("title", None)
+    gender_key, age_key, age_detail_key = get_gender_age_row(gender, age, description, keys_list, THIS_SITE)
+    filename = item["id"]+".jpg"
+    location = item.get("location", None)
+    image_row = {
+        "site_image_id": item["id"],
+        "site_name_id": THIS_SITE,
+        "description": description[:140],
+        "age_id": age_key,
+        "gender_id": gender_key,
+        "age_detail_id": age_detail_key,
+        "contentUrl": item["img"],
+        "imagename": os.path.join(get_hash_folders(filename)[0],get_hash_folders(filename)[1],filename),  # hash filename from id+jpg
+        "location_id": get_location(location, keys_list),        
+        "author": item.get("author", None),     
+
+        ## TK
+        "model_release": item.get("model_release", None),        
+        # "imagename": generate_local_unhashed_image_filepath(item[9].replace("images/",""))  # need to refactor this from the contentURL using the hash function
+    }
+
+
+    return nan2none(image_row)
+
+def structure_row_iwaria(item, ind, keys_list):
+    if VERBOSE: print(item)
+    gender = item.get("filters", {}).get("gender", None)
+    age = item.get("filters", {}).get("age", None)
+    # shoot_location = item.get("filters", {}).get("location", None)
+    description = item.get("title", None)
+    gender_key, age_key, age_detail_key = get_gender_age_row(gender, age, description, keys_list, THIS_SITE)
+    filename = item["id"]+".jpg"
+    location = item.get("location", None)
+    if description: description = description[:140]
+    image_row = {
+        "site_image_id": item["id"],
+        "site_name_id": THIS_SITE,
+        "description": description,
+        "age_id": age_key,
+        "gender_id": gender_key,
+        "age_detail_id": age_detail_key,
+        "contentUrl": item["img"],
+        "imagename": os.path.join(get_hash_folders(filename)[0],get_hash_folders(filename)[1],filename),  # hash filename from id+jpg
+        "location_id": get_location(location, keys_list),        
+        "author": item.get("author", None),     
+        "uploadDate": item.get("uploadDate"),        
+
+        ## TK
+        "model_release": item.get("model_release", None),        
+        # "imagename": generate_local_unhashed_image_filepath(item[9].replace("images/",""))  # need to refactor this from the contentURL using the hash function
+    }
+    return nan2none(image_row)
+
+def structure_row_nappy(item, ind, keys_list):
+    if VERBOSE: print(item)
+    gender = item.get("filters", {}).get("gender", None)
+    age = item.get("filters", {}).get("age", None)
+    # shoot_location = item.get("filters", {}).get("location", None)
+    description = item.get("title", None)
+    gender_key, age_key, age_detail_key = get_gender_age_row(gender, age, description, keys_list, THIS_SITE)
+    filename = item["id"]+".jpg"
+    location = item.get("location", None)
+    image_row = {
+        "site_image_id": item["id"],
+        "site_name_id": THIS_SITE,
+        "description": description[:140],
+        "age_id": age_key,
+        "gender_id": gender_key,
+        "age_detail_id": age_detail_key,
+        "contentUrl": item["img"],
+        "imagename": os.path.join(get_hash_folders(filename)[0],get_hash_folders(filename)[1],filename),  # hash filename from id+jpg
+        "location_id": get_location(location, keys_list),        
+        "author": item.get("author", None),     
+        "uploadDate": item.get("uploadDate"),        
+
+        ## TK
+        # "imagename": generate_local_unhashed_image_filepath(item[9].replace("images/",""))  # need to refactor this from the contentURL using the hash function
+    }
+    return nan2none(image_row)
+
+def structure_row_PICHA(item, ind, keys_list):
+    if VERBOSE: print(item)
+    gender = item.get("filters", {}).get("gender", None)
+    age = item.get("filters", {}).get("age", None)
+    # shoot_location = item.get("filters", {}).get("location", None)
+    description = item.get("title", None)
+    gender_key, age_key, age_detail_key = get_gender_age_row(gender, age, description, keys_list, THIS_SITE)
+    filename = item["id"]+".jpg"
+    location = item.get("location", None)
+    image_row = {
+        "site_image_id": item["id"],
+        "site_name_id": THIS_SITE,
+        "description": description[:140],
+        "age_id": age_key,
+        "gender_id": gender_key,
+        "age_detail_id": age_detail_key,
+        "contentUrl": item["img"],
+        "imagename": os.path.join(get_hash_folders(filename)[0],get_hash_folders(filename)[1],filename),  # hash filename from id+jpg
+        "location_id": get_location(location, keys_list),        
+        "author": item.get("author", None),     
+        "uploadDate": item.get("uploadDate"),        
+
+        ## TK
+        # "imagename": generate_local_unhashed_image_filepath(item[9].replace("images/",""))  # need to refactor this from the contentURL using the hash function
+    }
+    return nan2none(image_row)
+def structure_row_AFRIPICS(item, ind, keys_list):
+    if VERBOSE: print(item)
+    gender = item.get("filters", {}).get("gender", None)
+    age = item.get("filters", {}).get("age", None)
+    # shoot_location = item.get("filters", {}).get("location", None)
+    description = item.get("title", None)
+    gender_key, age_key, age_detail_key = get_gender_age_row(gender, age, description, keys_list, THIS_SITE)
+    filename = item["id"]+".jpg"
+    location = item.get("location", None)
+    image_row = {
+        "site_image_id": item["id"],
+        "site_name_id": THIS_SITE,
+        "description": description[:140],
+        "age_id": age_key,
+        "gender_id": gender_key,
+        "age_detail_id": age_detail_key,
+        "contentUrl": item["img"],
+        "imagename": os.path.join(get_hash_folders(filename)[0],get_hash_folders(filename)[1],filename),  # hash filename from id+jpg
+        "location_id": get_location(location, keys_list),        
+        "author": item.get("author", None),     
+        "uploadDate": item.get("uploadDate"),        
+
+        ## TK
+        "model_release": item.get("model_release", None),        
+        # "imagename": generate_local_unhashed_image_filepath(item[9].replace("images/",""))  # need to refactor this from the contentURL using the hash function
+    }
+    return nan2none(image_row)
+
+
+def structure_row_alamy(item, ind, keys_list):
+    if VERBOSE: print(item)
+    gender = item.get("filters", {}).get("gender", None)
+    if not gender: gender = item.get("gender", None)
+    age = item.get("filters", {}).get("age", None)
+    shoot_location = item.get("filters", {}).get("location", None)
+    description = item.get("title", None)
+    gender_key, age_key, age_detail_key = get_gender_age_row(gender, age, description, keys_list, THIS_SITE)
+    filename = item["id"]+".jpg"
+    location = item.get("location", None)
+
+    
+    image_row = {
+        "site_image_id": item["id"],
+        "site_name_id": THIS_SITE,
+        "description": description[:140],
+        "age_id": age_key,
+        "gender_id": gender_key,
+        "age_detail_id": age_detail_key,
+        "contentUrl": item["img"],
+        "imagename": os.path.join(get_hash_folders(filename)[0],get_hash_folders(filename)[1],filename),  # hash filename from id+jpg
+        "location_id": get_location(location, keys_list),        
+        "author": item.get("author", None),     
+        "uploadDate": item.get("date_taken", None),    
+        "shoot_location": shoot_location,
+
+        ## TK
+        "model_release": item.get("model_release", None),        
+        # "imagename": generate_local_unhashed_image_filepath(item[9].replace("images/",""))  # need to refactor this from the contentURL using the hash function
+    }
+    return nan2none(image_row)
+
+def structure_row_VCG(item, ind, keys_list):
+    if VERBOSE: print(item)
+    gender = item.get("filters", {}).get("gender", None)
+    if not gender: gender = item.get("gender", None)
+    age = item.get("filters", {}).get("age", None)
+    shoot_location = item.get("filters", {}).get("location", None)
+    description = item.get("title", None)
+    gender_key, age_key, age_detail_key = get_gender_age_row(gender, age, description, keys_list, THIS_SITE)
+    filename = item["id"]+".jpg"
+    location = item.get("location", None)
+
+    
+    image_row = {
+        "site_image_id": item["id"],
+        "site_name_id": THIS_SITE,
+        "description": description[:140],
+        "age_id": age_key,
+        "gender_id": gender_key,
+        "age_detail_id": age_detail_key,
+        "contentUrl": item["img"],
+        "imagename": os.path.join(get_hash_folders(filename)[0],get_hash_folders(filename)[1],filename),  # hash filename from id+jpg
+        "location_id": get_location(location, keys_list),        
+        "author": item.get("author", None),     
+        "uploadDate": item.get("date_taken", None),    
+        "shoot_location": shoot_location,
+
+        ## TK
+        "model_release": item.get("model_release", None),        
+        # "imagename": generate_local_unhashed_image_filepath(item[9].replace("images/",""))  # need to refactor this from the contentURL using the hash function
+    }
+    return nan2none(image_row)
+
 
 
 # Define a custom retry decorator
@@ -1244,6 +1617,10 @@ def execute_query_with_retry(conn, query, parameters=None):
 def ingest_json():
     def construct_keys_list(raw_keys):
         keys_list = []
+        # test raw_keys to see if it is a list
+        if type(raw_keys) is not list:
+            raw_keys = raw_keys.split("|")
+
         # splitting keys. try is for getty, except is currently set for pexels.
         try:
             # keys_list = row[column_keys].lower().split(separator_keys)
@@ -1292,7 +1669,7 @@ def ingest_json():
         # next(reader_obj)  # Skip header row
         start_counter = get_counter()
         print("start_counter: ", start_counter)
-        # start_counter = 0 #temporary for testing, while adobe is ongoing
+        # start_counter = 358430 #temporary for testing, while adobe is ongoing
         counter = 0
         ind = 0
 
@@ -1307,9 +1684,16 @@ def ingest_json():
                 counter += 1
                 continue
             
-
+            key_nos_list = []
+            keys_list = []
+            if VERBOSE: print("getting keys from item[keywords]", item["keywords"])
             # construct and clean keys_list (skip_keys, key2key)
-            keys_list = construct_keys_list(item["keywords"])
+            keywords = item.get("keywords", None)
+            ethnicity = item.get("ethnicity", None)
+            if keywords:
+                keys_list = construct_keys_list(item["keywords"])
+                # get keywords
+                key_nos_list = unlock_key_list(THIS_SITE, keys_list, keys_dict)
 
             if THIS_SITE == 1:
             # image_row = structure_row_adobe(row, ind, keys_list)
@@ -1317,28 +1701,65 @@ def ingest_json():
             elif THIS_SITE == 6:
                 image_row = structure_row_unsplash(item, ind, keys_list)
                 search_desc_for_keys = True
-                item["ethnicity"] = None
+                # item["ethnicity"] = None
+            elif THIS_SITE == 9:
+                image_row = structure_row_alamy(item, ind, keys_list)
+                ethnicity = item.get("filters", {}).get("ethnicity", None)
 
+            elif THIS_SITE == 10:
+                en_keys = []
+                for key in keys_list:
+                    try: 
+                        en_key = key2key_vcg[key]
+                        en_keys.append(en_key)
+                    except:
+                        print("no key2key for", key)
+                keys_list = en_keys
+                print(keys_list)
+                image_row = structure_row_VCG(item, ind, keys_list)
+            elif THIS_SITE == 11:
+                image_row = structure_row_pixcy(item, ind, keys_list)
+                search_desc_for_keys = True
+                # item["ethnicity"] = None
+            elif THIS_SITE == 12:
+                image_row = structure_row_PIXERF(item, ind, keys_list)
+                # item["ethnicity"] = None
+            elif THIS_SITE == 13:
+                # filters = item.get("filters", None) 
+                people = item.get("filters", {}).get("people", None)
+                if people == "Groups Or Crowd": 
+                    print("skipping groups or crowd")
+                    continue
+                image_row = structure_row_ImagesBazzar(item, ind, keys_list)
+            elif THIS_SITE == 14:
+                image_row = structure_row_INDIAPB(item, ind, keys_list)
+            elif THIS_SITE == 15:
+                author = item.get("author", None)
+                if " via " in author:
+                    print("skipping unsplash or pixabay")
+                    continue
+                image_row = structure_row_iwaria(item, ind, keys_list)
+            elif THIS_SITE == 16:
+                image_row = structure_row_nappy(item, ind, keys_list)
+            elif THIS_SITE == 17:
+                image_row = structure_row_PICHA(item, ind, keys_list)
+            elif THIS_SITE == 18:
+                image_row = structure_row_AFRIPICS(item, ind, keys_list)
 
             # if the image row has problems, skip it (structure_row saved it to csv)
             if not image_row:
                 continue
             
-            site_image_id = image_row['site_image_id']
-
-            if VERBOSE: print("getting key_list", keys_list)
-            # get keywords
-            key_nos_list = unlock_key_list(site_image_id, keys_list, keys_dict)
-
-            if search_desc_for_keys == True:
+            if not keys_list or search_desc_for_keys == True:
                 desc_key_nos_list = description_to_keys(image_row['description'], image_row['site_image_id'])
                 key_nos_list = set(key_nos_list + desc_key_nos_list)
+
             
                 # >> need to revisit this for row/item <<
             # this isn't working. not catching nulls. 
-            if not pd.isnull(item["ethnicity"]) and len(item["ethnicity"])>0:
-                print("have eth", item["ethnicity"].lower(), "type is", type(item["ethnicity"].lower()))
-                eth_no_list = get_key_no_dictonly(item["ethnicity"].lower(), keys_list, eth_dict)
+            if not pd.isnull(ethnicity) and len(ethnicity)>0:
+                print("have eth", ethnicity.lower(), "type is", type(ethnicity.lower()))
+                eth_no_list = get_key_no_dictonly(ethnicity.lower(), keys_list, eth_dict)
                 print("eth_no_list after get_key_no_dictonly", eth_no_list)
             else:
                 # get eth from keywords, using keys_list and eth_keys_dict
@@ -1354,7 +1775,7 @@ def ingest_json():
                         print(f"descent in keys_list {keys_list}")
                         
             # look for multi_dict, and add to eth_no_list
-            if not 6 in eth_no_list:
+            if not 6 in eth_no_list and image_row['description']:
                 is_multi = False
                 key_soup = " ".join(keys_list)+" "+image_row['description']
 
@@ -1398,6 +1819,7 @@ def ingest_json():
                         dialect = mysql.dialect()
                         statement = str(insert_stmt.compile(dialect=dialect))
                         if VERBOSE: print(statement)
+                        continue
 
                         try:
                             result = execute_query_with_retry(conn, insert_stmt)  # Retry on OperationalError
@@ -1501,6 +1923,8 @@ if __name__ == '__main__':
         locations_dict_alt = make_key_dict_col3(LOCATION_PATH)
         locations_dict_getty = make_key_dict_getty(LOCATION_PATH)
         locations_dict_AA = make_key_dict_col7(LOCATION_PATH)
+        print(locations_dict)
+        print(locations_dict_alt)
         print(locations_dict_AA)
         print("this many locations", len(locations_dict))
 
