@@ -816,7 +816,6 @@ class SortPose:
                 #sample_img=sample_img[bbox['top']:bbox['bottom'],bbox['left']:bbox['right'],:]
                 # passing in bbox as a str
                 image = self.crop_image(image, faceLms, bbox)
-                print(type(sample_img),"@@@@@@@@@@@@")
                 if image is None: return -1,-1,-1,-1,-1 ## if TOO_BIG==true, checking if cropped image is empty
             except:
                 if self.VERBOSE: print("FAILED CROPPING, bad bbox",bbox)
