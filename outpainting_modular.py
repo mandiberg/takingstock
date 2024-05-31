@@ -88,7 +88,7 @@ def np_to_tensor(inpaint, mask):
 
 def merge_image(img,outpaint,extension_pixels,offset=50):
     #### use inpainting for the extended part, but use original for non extend to keep image sharp ###
-    outpaint[extension_pixels["top"]+offset:extension_pixels["top"]-offset+np.shape(img)[0],extension_pixels["left"]+offset:extension_pixels["left"]-offset+np.shape(img)[1]]=img
+    outpaint[extension_pixels["top"]+offset:extension_pixels["top"]-offset+np.shape(img)[0],extension_pixels["left"]+offset:extension_pixels["left"]-offset+np.shape(img)[1]]=img[offset:-offset,offset:-offset,:]
     return outpaint
 
 def slice_image(image):
@@ -174,25 +174,25 @@ pipeline.load_ip_adapter(
 )
 pipeline.set_ip_adapter_scale(0.1)
 
-def main():
-    torch.cuda.empty_cache()
-    prompt = ""
-    negative_prompt = ""
-    times_to_expand = 2
-    extension_pixels={"top":200,"right":200,"bottom":200,"left":200}
+# def main():
+#     torch.cuda.empty_cache()
+#     prompt = ""
+#     negative_prompt = ""
+#     times_to_expand = 2
+#     extension_pixels={"top":200,"right":200,"bottom":200,"left":200}
 
-    url = "https://huggingface.co/datasets/OzzyGT/testing-resources/resolve/main/differential/photo-1711580377289-eecd23d00370.jpeg?download=true"
+#     url = "https://huggingface.co/datasets/OzzyGT/testing-resources/resolve/main/differential/photo-1711580377289-eecd23d00370.jpeg?download=true"
 
-    with urllib.request.urlopen(url) as url_response:
-        img_array = np.array(bytearray(url_response.read()), dtype=np.uint8)
+#     with urllib.request.urlopen(url) as url_response:
+#         img_array = np.array(bytearray(url_response.read()), dtype=np.uint8)
 
-    original = cv2.imdecode(img_array, -1)
-    final_image=image_resize(original)
-    for i in range(times_to_expand):
-        final_image=outpaint(final_image,extension_pixels,downsampling_scale=1,prompt="",negative_prompt="")
+#     original = cv2.imdecode(img_array, -1)
+#     final_image=image_resize(original)
+#     for i in range(times_to_expand):
+#         final_image=outpaint(final_image,extension_pixels,downsampling_scale=1,prompt="",negative_prompt="")
 
-    cv2.imwrite("result.png", final_image)    
+#     cv2.imwrite("result.png", final_image)    
 
 
-if __name__=="__main__": 
-    main()
+# if __name__=="__main__": 
+#     main()
