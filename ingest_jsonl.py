@@ -77,7 +77,7 @@ NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 18	afripics
 '''
 
-THIS_SITE = 10
+THIS_SITE = 9
 
 SEARCH_KEYS_FOR_LOC = True
 VERBOSE = False
@@ -130,7 +130,7 @@ KEYWORD_PATH = os.path.join(INGEST_ROOT, "Keywords_202405151718m.csv")
 LOCATION_PATH = os.path.join(INGEST_ROOT, "Location_202308041952.csv")
 CSV_KEY2LOC_PATH = os.path.join(INGEST_ROOT, "CSV_KEY2LOC.csv")
 CSV_KEY2KEY_GETTY_PATH = os.path.join(INGEST_ROOT, "CSV_KEY2KEY_GETTY.csv")
-CSV_KEY2KEY_VCG_PATH = os.path.join(INGEST_ROOT, "CSV_KEY2KEY_GETTY.csv")
+CSV_KEY2KEY_VCG_PATH = os.path.join(INGEST_ROOT, "CSV_KEY2KEY_VCG.csv")
 CSV_ETH2_GETTY = os.path.join(INGEST_ROOT, "CSV_ETH_GETTY.csv")
 
 # output csvs
@@ -1709,7 +1709,7 @@ def ingest_json():
             elif THIS_SITE == 10:
                 en_keys = []
                 for key in keys_list:
-                    try: 
+                    try:
                         en_key = key2key_vcg[key]
                         en_keys.append(en_key)
                     except:
@@ -1750,9 +1750,10 @@ def ingest_json():
             if not image_row:
                 continue
             
-            if not keys_list or search_desc_for_keys == True:
+            if not keys_list or search_desc_for_keys == True and image_row['description']:
                 desc_key_nos_list = description_to_keys(image_row['description'], image_row['site_image_id'])
-                key_nos_list = set(key_nos_list + desc_key_nos_list)
+                if key_nos_list: key_nos_list = set(key_nos_list + desc_key_nos_list)
+                else: key_nos_list = desc_key_nos_list
 
             
                 # >> need to revisit this for row/item <<
@@ -1775,7 +1776,7 @@ def ingest_json():
                         print(f"descent in keys_list {keys_list}")
                         
             # look for multi_dict, and add to eth_no_list
-            if not 6 in eth_no_list and image_row['description']:
+            if not 6 in eth_no_list and image_row['description'] and THIS_SITE != 10:
                 is_multi = False
                 key_soup = " ".join(keys_list)+" "+image_row['description']
 
