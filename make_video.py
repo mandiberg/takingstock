@@ -9,7 +9,6 @@ import base64
 import json
 import ast
 import traceback
-from outpainting_modular import outpaint, image_resize
 import torch
 
 #linear sort imports non-class
@@ -100,6 +99,8 @@ CLUSTER_NO = 63
 
 # cut the kids
 NO_KIDS = True
+OUTPAINT = False
+if OUTPAINT: from outpainting_modular import outpaint, image_resize
 VERBOSE = True
 # this controls whether it is using the linear or angle process
 IS_ANGLE_SORT = False
@@ -109,7 +110,7 @@ IS_TOPICS = False
 N_TOPICS = 30
 
 IS_ONE_TOPIC = True
-TOPIC_NO = [21]
+TOPIC_NO = [7]
 #  is isolated,  is business,  babies, 17 pointing
 #  is doctor <<  covid
 #  is hands
@@ -214,9 +215,11 @@ elif IS_SEGONLY:
     # WHERE += " AND k.keyword_text LIKE 'surpris%' "
 
     # WHERE = "s.site_name_id != 1"
-    LIMIT = 100
+    LIMIT = 100000
 
-
+    # TEMP TK TESTING
+    # WHERE += " AND s.site_name_id = 8"
+    
 
 
 motion = {
@@ -239,9 +242,9 @@ face_height_output = 500
 # top, right, bottom, left
 # image_edge_multiplier = [1, 1, 1, 1] # just face
 # image_edge_multiplier = [1.5,1.5,2,1.5] # bigger portrait
-image_edge_multiplier = [1.4,2.6,1.9,2.6] # wider for hands
+# image_edge_multiplier = [1.4,2.6,1.9,2.6] # wider for hands
 # image_edge_multiplier = [1.2,2.3,1.7,2.3] # medium for hands
-# image_edge_multiplier = [1.2, 1.2, 1.6, 1.2] # standard portrait
+image_edge_multiplier = [1.2, 1.2, 1.6, 1.2] # standard portrait
 # sort.max_image_edge_multiplier is the maximum of the elements
 
 # construct my own objects
@@ -409,6 +412,180 @@ def sort_by_face_dist(df_enc, df_128_enc, df_33_lms):
             # it is now a dict of key=distance value=filepath
             print("going to get closest")
 
+            # NEED TO GET IT TO DROP FROM df_33_lms in get_closest_df
+            # need to send the df_enc with the same two keys through to get_closest
+            dist, closest_dict, df_128_enc, df_33_lms = sort.get_closest_df(FIRST_ROUND, enc1,df_enc, df_128_enc, df_33_lms, sorttype=SORT_TYPE)
+            # dist, closest_dict, df_128_enc = sort.get_closest_df(FIRST_ROUND, enc1,df_enc, df_128_enc, sorttype="planar")
+            # dist, closest_dict, df_128_enc = sort.get_closest_df(enc1,df_enc, df_128_enc)
+            FIRST_ROUND = False
+
+
+            print("got closest")
+            # print(closest_dict)
+
+            # Break out of the loop if greater than MAXDIST
+            # I think this will be graceful with cluster iteration
+            print("dist")
+            # print(dist)
+            if dist > sort.MAXDIST and sort.SHOT_CLOCK != 0:
+                print("should breakout")
+                break
+
+        except Exception as e:
+            print("exception on going to get closest")
+            print(str(e))
+            traceback.print_exc()
+
+
+     
+        # Iterate through the results and append
+        dkeys = list(closest_dict.keys())
+        dkeys.sort()
+        images_to_drop =[]
+        print("length of dkeys for closest_dict is ", len(dkeys))
+        for dkey in dkeys:
+
+
+            ## Collect values and append to face_distances
+            this_start = closest_dict[dkey]
+            if VERBOSE: print("this_start assigned as ", this_start)
+            face_landmarks=None
+            bbox=None
+
+            # print("THIS: closest_dict[dkey],")
+            # print(closest_dict[dkey])
+
+            try:
+                # print("dkey, df_enc.loc[closest_dict[dkey]]")
+                # print(dkey)
+                # print(closest_dict[dkey])
+                # print(df_enc.loc[closest_dict[dkey]])
+                site_name_id = df_enc.loc[closest_dict[dkey]]['site_name_id']
+                face_landmarks = df_enc.loc[closest_dict[dkey]]['face_landmarks']
+                bbox = df_enc.loc[closest_dict[dkey]]['bbox']
+                # print("assigned bbox", bbox)
+            except:
+                print("won't assign landmarks/bbox")
+            # print("site_name_id is the following")
+
+            # for some reason, site_name_id is not an int. trying to test if int.
+            # print(type(site_name_id))
+            # if not pd.is_int(site_name_id): continue
+            # print(site_name_id)
+            # print("site_specific_root_folder", io.folder_list[site_name_id])
+            site_specific_root_folder = io.folder_list[site_name_id]
+            # print("site_specific_root_folder")
+            # print(site_specific_root_folder)
+            # save the image -- this prob will be to append to list, and return list? 
+            # save_sorted(i, folder, start_img_name, dist)
+            this_dist=[dkey, site_specific_root_folder, this_start, site_name_id, face_landmarks, bbox]
+            face_distances.append(this_dist)
+            images_to_drop.append(this_start)
+
+        # remove the last image this_start, then drop them from df_128_enc
+        # the this_start will be dropped in the get_start_enc method
+        print("lenght of images to drop before and after removing this_start")
+        print(len(images_to_drop))
+        try:
+            images_to_drop.remove(this_start)
+        except Exception as e:
+            traceback.print_exc()
+            print("images_to_drop.remove failed because was too great a lum diff", str(e))
+        print(len(images_to_drop))
+        for dropimage in images_to_drop:
+            if VERBOSE: print("going to remove this image enc", dropimage)
+            try:
+                df_128_enc=df_128_enc.drop(dropimage)
+            except Exception as e:
+                traceback.print_exc()
+                print(str(e))
+
+        #debuggin
+        print(f"sorted round {str(i)} which is actually round  {str(i+len(dkeys)-1)}")
+        print(f"{len(df_128_enc.index)} images remain in df_128_enc")
+        if len(df_128_enc.index) < 2:
+            break
+        print(f"last distance was {dist}, next image is {start_img_name}")
+        
+    ## When loop is complete, create df
+    df = pd.DataFrame(face_distances, columns =['dist', 'folder', 'filename','site_name_id','face_landmarks', 'bbox'])
+    print(df)
+
+    ## Set a start_img_name for next round --> for clusters
+    try:
+        last_file = face_distances[-1][2]
+        print("last_file ",last_file)
+    except:
+        last_file = this_start
+        print("last_file is this_start",last_file)
+    sort.counter_dict["start_img_name"] = last_file
+
+    # df = df.sort_values(by=['dist']) # this was sorting based on delta distance, not sequential distance
+    # print(df)
+    return df
+
+
+# need to pass through start_img_enc rather than start_img_name
+# for linear it is in the df_enc, but for itter, the start_img_name is in prev df_enc
+# takes a dataframe of images and encodings and returns a df sorted by distance
+def sort_by_face_dist_NN(df_enc, df_128_enc, df_33_lms):
+    
+    def get_enc1(this_start, df_128_enc, df_33_lms, i):
+        print("getting start for sort round ",str(i))
+        ## Get the starting encodings (if not passed through)
+        if this_start != "median" and this_start != "start_site_image_id" and i == 0:
+            # this is the first round for clusters/itter where last_image_enc is true
+            # set encodings to the passed through encodings
+            # IF NO START IMAGE SPECIFIED (this line works for no clusters)
+            print("attempting set enc1 from pass through")
+            enc1 = sort.counter_dict["last_image_enc"]
+            # enc1 = df_enc.loc[this_start]['face_encodings']
+            # print(enc1)
+            print("set enc1 from pass through")
+        else:
+            #this is the first??? round, set via df
+            print(f"trying get_start_enc() from {this_start}")
+            enc1, df_128_enc, df_33_lms = sort.get_start_enc(this_start, df_128_enc, df_33_lms, SORT_TYPE)
+            # # test to see if get_start_enc was successful
+            # # if not, retain previous enc1. or shoudl it reassign median? 
+            # if enc1_temp is not None:
+            #     enc1 = enc1_temp
+            print(f"set enc1 from get_start_enc() to {enc1}")
+        return enc1, df_128_enc, df_33_lms
+
+    this_start = sort.counter_dict["start_img_name"]
+    face_distances=[]
+
+    # this prob should be a df.iterrows
+    print("df_enc.index")
+    print(df_enc.index)
+    print(len(df_enc.index))
+    # print(sort.counter_dict)
+    FIRST_ROUND = True
+    if sort.CUTOFF < len(df_enc.index):
+        itters = sort.CUTOFF
+    else: 
+        itters = len(df_enc.index)
+    
+
+    # input enc1, df_128_enc, df_33_lms
+    # df = pd.DataFrame(face_distances, columns =['dist', 'folder', 'filename','site_name_id','face_landmarks', 'bbox'])
+
+    for i in range(itters):
+        # find the image
+        # print(df_enc)
+        # this is the site_name_id for this_start, needed to test mse
+
+        ## Find closest
+        try:
+            # closest_dict is now a dict with 1 or more items
+            # this_start is a filepath, which serves as df index
+            # it is now a dict of key=distance value=filepath
+            print("going to get closest")
+            print("this_start", this_start)
+            print("SORT_TYPE", SORT_TYPE)
+            enc1, df_128_enc, df_33_lms = get_enc1(this_start, df_128_enc, df_33_lms, i)
+            print("got start enc1")
             # NEED TO GET IT TO DROP FROM df_33_lms in get_closest_df
             # need to send the df_enc with the same two keys through to get_closest
             dist, closest_dict, df_128_enc, df_33_lms = sort.get_closest_df(FIRST_ROUND, enc1,df_enc, df_128_enc, df_33_lms, sorttype=SORT_TYPE)
@@ -763,7 +940,7 @@ def shift_bbox(bbox, extension_pixels):
 def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
     def save_image_metas(row):
         # print("row")
-        print("save_image_metas")
+        print("save_image_metas for use in TTS")
         parent_row = df_segment[df_segment['imagename'] == row['filename']]
         image_id = parent_row['image_id'].values[0]
         # use image_id to retrieve description from mysql database 
@@ -780,8 +957,50 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
         io.write_csv(metas_path, metas)
         # print(image_id, description[0], topic_score)
         # return([image_id, description[0], topic_score])
+
+    def in_out_paint(img, row):
+        extension_pixels=sort.get_extension_pixels(img)
+        if sort.VERBOSE:print("extension_pixels",extension_pixels)
+        # inpaint_file=os.path.join(os.path.join(os.path.dirname(row['folder']), "inpaint", os.path.basename(row['folder'])),row['filename'])
+        inpaint_file=os.path.join(os.path.dirname(row['folder']), os.path.basename(row['folder'])+"_inpaint",row['filename'])
+        print("inpaint_file", inpaint_file)
+        if os.path.exists(inpaint_file):
+            if sort.VERBOSE: print("path exists, loading image",inpaint_file)
+            inpaint_image=cv2.imread(inpaint_file)
+        else:
+            if sort.VERBOSE: print("path doesnt exist, in_out_painting now")
+            directory = os.path.dirname(inpaint_file)
+            # Create the directory if it doesn't exist (creates directories even if skips below because extension too large)
+            if not os.path.exists(directory):
+                os.makedirs(directory)
+            maxkey = max(extension_pixels, key=lambda y: abs(extension_pixels[y]))
+            print("maxkey", maxkey)
+            print("extension_pixels[maxkey]", extension_pixels[maxkey])
+            if extension_pixels[maxkey] <= 50:
+                print("inpainting small extension")
+                extended_img,mask=sort.prepare_mask(img,extension_pixels)
+                inpaint_image=sort.extend_lama(extended_img, mask)
+                ### use inpainting for the extended part, but use original for non extend to keep image sharp ###
+                inpaint_image[extension_pixels["top"]:extension_pixels["top"]+np.shape(img)[0],extension_pixels["left"]:extension_pixels["left"]+np.shape(img)[1]]=img
+                cv2.imwrite(inpaint_file,inpaint_image)
+            elif extension_pixels[maxkey] < 200:
+                print("outpainting medium extension")
+                inpaint_image=outpaint(img,extension_pixels,downsampling_scale=1,prompt="",negative_prompt="")
+                cv2.imwrite(inpaint_file,inpaint_image)
+            else:
+                print("too big to inpaint -- attempting to bailout")
+                inpaint_image=0
+            
+        face_landmarks=shift_landmarks(row['face_landmarks'],extension_pixels,img)
+        bbox=shift_bbox(row['bbox'],extension_pixels)
+        cropped_image, face_diff = compare_images(sort.counter_dict["last_image"], inpaint_image, face_landmarks, bbox)
+        if sort.VERBOSE:print("inpainting done","shape:",np.shape(cropped_image))
+        if len(cropped_image)==1:print("still 1x1 image idk whats happening")
+
+        return cropped_image, face_diff
+
     #itter is a cap, to stop the process after a certain number of rounds
-    print('writing images')
+    print('linear_test_df writing images')
     imgfileprefix = f"X{str(sort.XLOW)}-{str(sort.XHIGH)}_Y{str(sort.YLOW)}-{str(sort.YHIGH)}_Z{str(sort.ZLOW)}-{str(sort.ZHIGH)}_ct{str(df_sorted.size)}"
     print(imgfileprefix)
     good = 0
@@ -809,56 +1028,15 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
                 # compare_images to make sure they are face and not the same
                 # last_image is cv2 np.array
                 cropped_image, face_diff = compare_images(sort.counter_dict["last_image"], img, row['face_landmarks'], row['bbox'])
-                if len(cropped_image)==1:
-                    print("gotta inpaint that shizzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz")
-                    extension_pixels=sort.get_extension_pixels(img)
-                    if sort.VERBOSE:print("extension_pixels",extension_pixels)
-                    # inpaint_file=os.path.join(os.path.join(os.path.dirname(row['folder']), "inpaint", os.path.basename(row['folder'])),row['filename'])
-                    inpaint_file=os.path.join(os.path.dirname(row['folder']), os.path.basename(row['folder'])+"_inpaint",row['filename'])
-                    print("inpaint_file", inpaint_file)
-                    if os.path.exists(inpaint_file):
-                        if sort.VERBOSE: print("path exists, loading image",inpaint_file)
-                        inpaint_image=cv2.imread(inpaint_file)
-                    else:
-                        if sort.VERBOSE: print("path doesnt exist, inpainting now")
-                        directory = os.path.dirname(inpaint_file)
-                        # Create the directory if it doesn't exist
-                        if not os.path.exists(directory):
-                            os.makedirs(directory)
-                        maxkey = max(extension_pixels, key=lambda y: abs(extension_pixels[y]))
-                        print("maxkey", maxkey)
-                        print("extension_pixels[maxkey]", extension_pixels[maxkey])
-                        if extension_pixels[maxkey] <= 50:
-                            print("inpainting small extension")
-                            extended_img,mask=sort.prepare_mask(img,extension_pixels)
-                            inpaint_image=sort.extend_lama(extended_img, mask)
-                            ### use inpainting for the extended part, but use original for non extend to keep image sharp ###
-                            inpaint_image[extension_pixels["top"]:extension_pixels["top"]+np.shape(img)[0],extension_pixels["left"]:extension_pixels["left"]+np.shape(img)[1]]=img
-                            cv2.imwrite(inpaint_file,inpaint_image)
-                        elif extension_pixels[maxkey] < 200:
-                            print("outpainting medium extension")
-                            inpaint_image=outpaint(img,extension_pixels,downsampling_scale=1,prompt="",negative_prompt="")
-                            cv2.imwrite(inpaint_file,inpaint_image)
-                        else:
-                            print("too big to inpaint -- attempting to bailout?")
-                            inpaint_image=0
-                            continue
-                        ###################
-
-                        
-                    face_landmarks=shift_landmarks(row['face_landmarks'],extension_pixels,img)
-                    bbox=shift_bbox(row['bbox'],extension_pixels)
-                    cropped_image, face_diff = compare_images(sort.counter_dict["last_image"], inpaint_image, face_landmarks, bbox)
-                    if sort.VERBOSE:print("inpainting done","shape:",np.shape(cropped_image))
-                    if len(cropped_image)==1:print("still 1x1 image idk whats happening")
-
-
-
+                if len(cropped_image)==1 and OUTPAINT:
+                    print("gotta paint that shizzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz")
+                    cropped_image, face_diff = in_out_paint(img, row)
+                else:
+                    cropped_image = None
                 ###
                 # I'm trying to compare descriptions here but it isn't working
                 # first_run isn't working. 
                 ###
-
                 try:
                     parent_row = df_segment[df_segment['imagename'] == row['filename']]
                     image_id = parent_row['image_id'].values[0]                        
@@ -939,7 +1117,7 @@ def process_iterr_angles(start_img_name, df_segment, cluster_no, sort):
             # print(d[angle].iloc[(d[angle][sort.SECOND_SORT]-metamedian).abs().argsort()[:2]])
             if(d[angle].size) != 0:
                 try:
-                    print("sort.counter_dict[start_img_name] before sort_by_face_dist")
+                    print("sort.counter_dict[start_img_name] before sort_by_face_dist_NN")
                     print(sort.counter_dict["start_img_name"] )
                     if sort.counter_dict["start_img_name"] != "median":
                         try:
@@ -951,7 +1129,7 @@ def process_iterr_angles(start_img_name, df_segment, cluster_no, sort):
                             print(str(e))
                     df_enc, df_128_enc = prep_encodings(d[angle])
                     # # get dataframe sorted by distance
-                    df_sorted = sort_by_face_dist(df_enc, df_128_enc)
+                    df_sorted = sort_by_face_dist_NN(df_enc, df_128_enc)
                     # print("df_sorted")
                     # print(df_sorted)
                     # print("sort.counter_dict before linear_test_df")
@@ -1009,7 +1187,7 @@ def process_linear(start_img_name, df_segment, cluster_no, sort):
     df_enc, df_128_enc, df_33_lms = prep_encodings(df_segment)
 
     # # get dataframe sorted by distance
-    df_sorted = sort_by_face_dist(df_enc, df_128_enc, df_33_lms)
+    df_sorted = sort_by_face_dist_NN(df_enc, df_128_enc, df_33_lms)
 
     # test to see if they make good faces
     img_list = linear_test_df(df_sorted,df_segment,cluster_no)
