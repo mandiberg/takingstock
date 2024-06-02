@@ -99,7 +99,7 @@ CLUSTER_NO = 63
 
 # cut the kids
 NO_KIDS = True
-OUTPAINT = False
+OUTPAINT = True
 if OUTPAINT: from outpainting_modular import outpaint, image_resize
 VERBOSE = True
 # this controls whether it is using the linear or angle process
@@ -979,10 +979,11 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
             if extension_pixels[maxkey] <= 50:
                 print("inpainting small extension")
                 extended_img,mask=sort.prepare_mask(img,extension_pixels)
-                inpaint_image=sort.extend_lama(extended_img, mask)
+                inpaint_image=sort.extend_lama(extended_img, mask, downsampling_scale = 8)
                 ### use inpainting for the extended part, but use original for non extend to keep image sharp ###
                 inpaint_image[extension_pixels["top"]:extension_pixels["top"]+np.shape(img)[0],extension_pixels["left"]:extension_pixels["left"]+np.shape(img)[1]]=img
                 cv2.imwrite(inpaint_file,inpaint_image)
+                print("inpainting done", inpaint_file)
             elif extension_pixels[maxkey] < 200:
                 print("outpainting medium extension")
                 inpaint_image=outpaint(img,extension_pixels,downsampling_scale=1,prompt="",negative_prompt="")

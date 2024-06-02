@@ -30,7 +30,7 @@ class SortPose:
         self.MAXDIST = 1.4
         self.MINDIST = .45
         self.MINBODYDIST = .05
-        self.CUTOFF = 10
+        self.CUTOFF = 100
         self.FACE_DIST = 15
 
         self.INPAINT=INPAINT
@@ -1397,10 +1397,10 @@ class SortPose:
 
         start_time = time.time()            
         # Extract the face encodings from the dataframe
-        encodings = df_enc[sortcol].tolist()
+        encodings_array = df_enc[sortcol].to_numpy().tolist()
 
         # Convert to numpy array
-        encodings_array = np.array(encodings)
+        # encodings_array = np.array(encodings)
 
         print("time to convert to numpy array", time.time() - start_time)
         start_time = time.time()            
