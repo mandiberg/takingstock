@@ -4,46 +4,26 @@ import os
 import time
 import sys
 import pickle
-import hashlib
 import base64
 import json
 import ast
 import traceback
-import torch
-
-#linear sort imports non-class
 import numpy as np
-# import mediapipe as mp
-# from mediapipe.python.solutions.drawing_utils import _normalized_to_pixel_coordinates
 from mediapipe.framework.formats import landmark_pb2
-# import matplotlib.pyplot as plt
-# import imutils
-# from imutils import face_utils
-# import shutil
-# from sys import platform
-from pathlib import Path
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text, MetaData, Table, Column, Numeric, Integer, VARCHAR, update, Float
+from sqlalchemy.pool import NullPool
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
 # my ORM
 from my_declarative_base import Base, SegmentTable, Clusters, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON, Images
 
-from sqlalchemy.exc import IntegrityError
-from sqlalchemy import create_engine, text, MetaData, Table, Column, Numeric, Integer, VARCHAR, update, Float
-from sqlalchemy.exc import OperationalError
-from sqlalchemy.pool import NullPool
-
-
 #mine
-from mp_pose_est import SelectPose
 from mp_sort_pose import SortPose
 from mp_db_io import DataIO
 
-
 VIDEO = False
 CYCLECOUNT = 1
-# ROOT="/Users/michaelmandiberg/Documents/projects-active/facemap_production/"
 
 # keep this live, even if not SSD
 SegmentTable_name = 'SegmentOct20'
@@ -99,7 +79,10 @@ CLUSTER_NO = 63
 
 # cut the kids
 NO_KIDS = True
-OUTPAINT = False
+OUTPAINT = True
+INPAINT= True
+INPAINT_MAX = 5000
+OUTPAINT_MAX = 5001
 if OUTPAINT: from outpainting_modular import outpaint, image_resize
 VERBOSE = True
 # this controls whether it is using the linear or angle process
@@ -110,7 +93,7 @@ IS_TOPICS = False
 N_TOPICS = 30
 
 IS_ONE_TOPIC = True
-TOPIC_NO = [17]
+TOPIC_NO = [7]
 #  is isolated,  is business,  babies, 17 pointing
 #  is doctor <<  covid
 #  is hands
@@ -121,9 +104,9 @@ TOPIC_NO = [17]
 # 7 is surprise
 #  is yoga << planar,  planar,  fingers crossed
 
-# SORT_TYPE = "128d"
+SORT_TYPE = "128d"
 # SORT_TYPE ="planar"
-SORT_TYPE = "planar_body"
+# SORT_TYPE = "planar_body"
 
 # if planar_body set OBJ_CLS_ID for each object type
 # 67 is phone, 63 is laptop, 26: 'handbag', 27: 'tie', 32: 'sports ball'
@@ -232,7 +215,6 @@ motion = {
 }
 
 EXPAND = False
-INPAINT=False
 # face_height_output is how large each face will be. default is 750
 face_height_output = 500
 # face_height_output = 256
@@ -243,8 +225,9 @@ face_height_output = 500
 # image_edge_multiplier = [1, 1, 1, 1] # just face
 # image_edge_multiplier = [1.5,1.5,2,1.5] # bigger portrait
 # image_edge_multiplier = [1.4,2.6,1.9,2.6] # wider for hands
-image_edge_multiplier = [1.2,2.3,1.7,2.3] # medium for hands
-# image_edge_multiplier = [1.2, 1.2, 1.6, 1.2] # standard portrait
+# image_edge_multiplier = [1.6,3.5,3,3.5] # wiiiiiiiidest for hands
+# image_edge_multiplier = [1.2,2.3,1.7,2.3] # medium for hands
+image_edge_multiplier = [1.2, 1.2, 1.6, 1.2] # standard portrait
 # sort.max_image_edge_multiplier is the maximum of the elements
 
 # construct my own objects
@@ -959,6 +942,8 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
         # return([image_id, description[0], topic_score])
 
     def in_out_paint(img, row):
+        # cropped_image = None
+        bailout=False
         extension_pixels=sort.get_extension_pixels(img)
         if sort.VERBOSE:print("extension_pixels",extension_pixels)
         # inpaint_file=os.path.join(os.path.join(os.path.dirname(row['folder']), "inpaint", os.path.basename(row['folder'])),row['filename'])
@@ -976,7 +961,7 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
             maxkey = max(extension_pixels, key=lambda y: abs(extension_pixels[y]))
             print("maxkey", maxkey)
             print("extension_pixels[maxkey]", extension_pixels[maxkey])
-            if extension_pixels[maxkey] <= 50:
+            if extension_pixels[maxkey] <= INPAINT_MAX:
                 print("inpainting small extension")
                 extended_img,mask=sort.prepare_mask(img,extension_pixels)
                 inpaint_image=sort.extend_lama(extended_img, mask, downsampling_scale = 8)
@@ -984,19 +969,25 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
                 inpaint_image[extension_pixels["top"]:extension_pixels["top"]+np.shape(img)[0],extension_pixels["left"]:extension_pixels["left"]+np.shape(img)[1]]=img
                 cv2.imwrite(inpaint_file,inpaint_image)
                 print("inpainting done", inpaint_file)
-            elif extension_pixels[maxkey] < 200:
+            elif extension_pixels[maxkey] < OUTPAINT_MAX:
                 print("outpainting medium extension")
                 inpaint_image=outpaint(img,extension_pixels,downsampling_scale=1,prompt="",negative_prompt="")
                 cv2.imwrite(inpaint_file,inpaint_image)
             else:
                 print("too big to inpaint -- attempting to bailout")
-                inpaint_image=0
-            
-        face_landmarks=shift_landmarks(row['face_landmarks'],extension_pixels,img)
-        bbox=shift_bbox(row['bbox'],extension_pixels)
-        cropped_image, face_diff = compare_images(sort.counter_dict["last_image"], inpaint_image, face_landmarks, bbox)
-        if sort.VERBOSE:print("inpainting done","shape:",np.shape(cropped_image))
-        if len(cropped_image)==1:print("still 1x1 image idk whats happening")
+                # inpaint_image=0
+                bailout=True
+        if not bailout:
+            print("inpainting done","shape:",np.shape(inpaint_image))
+            # print("face_landmarks",row['face_landmarks'])
+            face_landmarks=shift_landmarks(row['face_landmarks'],extension_pixels,img)
+            # print("shifted face_landmarks",face_landmarks)
+            print("bbox",row['bbox'])
+            bbox=shift_bbox(row['bbox'],extension_pixels)
+            print("shifted bbox",bbox)
+            cropped_image, face_diff = compare_images(sort.counter_dict["last_image"], inpaint_image, face_landmarks, bbox)
+            if sort.VERBOSE:print("inpainting done","shape:",np.shape(cropped_image))
+            if len(cropped_image)==1:print("still 1x1 image idk whats happening")
 
         return cropped_image, face_diff
 
@@ -1029,11 +1020,10 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
                 # compare_images to make sure they are face and not the same
                 # last_image is cv2 np.array
                 cropped_image, face_diff = compare_images(sort.counter_dict["last_image"], img, row['face_landmarks'], row['bbox'])
+                print("len cropped_image", len(cropped_image))
                 if len(cropped_image)==1 and OUTPAINT:
                     print("gotta paint that shizzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz")
                     cropped_image, face_diff = in_out_paint(img, row)
-                else:
-                    cropped_image = None
                 ###
                 # I'm trying to compare descriptions here but it isn't working
                 # first_run isn't working. 
@@ -1046,8 +1036,7 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
                     traceback.print_exc()
                     print(str(e))
                 temp_first_run = sort.counter_dict["first_run"]
-                print("temp_first_run")
-                print(temp_first_run)
+                print("temp_first_run", temp_first_run)
                 if sort.counter_dict["first_run"]:
                     sort.counter_dict["last_description"] = description
                     print("first run, setting last_description")

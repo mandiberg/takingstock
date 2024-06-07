@@ -1092,11 +1092,9 @@ class SortPose:
         # Remove the items beyond the first 200 from the original dictionary
         dist_dict_200 = {k: v for i, (k, v) in enumerate(sorted_dist_dict.items()) if i < 200}
 
-        print("Sorted Dictionary (first 200 items):")
-        print(len(dist_dict_200))
+        # print("Sorted Dictionary (first 200 items):", len(dist_dict_200))
 
-        print("\nExtra Dictionary (beyond first 200 items):")
-        print(len(extra_dist_dict))
+        print("\nExtra Dictionary (beyond first 200 items):", len(extra_dist_dict))
 
         hsv_dist_dict = {}
         # if dist_dict is greater than 200
@@ -1130,7 +1128,7 @@ class SortPose:
             except:
                 print(f"error in sort_dHSV, skipping {dist_dict[item]}")
                 continue
-            if self.VERBOSE: print("hsv, lum dist, item", hsv_dist, lum_dist, item)
+            # if self.VERBOSE: print("hsv, lum dist, item", hsv_dist, lum_dist, item)
             if HSVonly:
                 print("HSVonly, sorting results")
                 # finds closest hsv distance bg and torso
