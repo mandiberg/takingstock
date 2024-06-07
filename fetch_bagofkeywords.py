@@ -59,7 +59,7 @@ title = 'Please choose your operation: '
 options = ['Create table', 'Fetch keywords list and make tokens', 'Fetch ethnicity list', 'Prune Table where is_face == None','Insert from segment']
 option, index = pick(options, title)
 
-LIMIT= 10000
+LIMIT= 2000000
 # Initialize the counter
 counter = 0
 
@@ -97,7 +97,8 @@ def create_table(row, lock, session):
 
 
 def create_seg_table(row, lock, session):
-    image_id, site_name_id, site_image_id, contentUrl, imagename, description, age_id, gender_id, location_id, face_x, face_y, face_z, mouth_gap, face_landmarks, bbox, face_encodings68, body_landmarks = row
+    # image_id, site_name_id, site_image_id, contentUrl, imagename, description, age_id, gender_id, location_id, face_x, face_y, face_z, mouth_gap, face_landmarks, bbox, face_encodings68, body_landmarks = row
+    image_id, site_name_id, site_image_id, contentUrl, imagename, description, age_id, gender_id, location_id, face_x, face_y, face_z, mouth_gap, bbox = row
     
     # Create a BagOfKeywords object
     segment_big = SegmentBig(
@@ -114,10 +115,10 @@ def create_seg_table(row, lock, session):
         face_y = face_y,
         face_z = face_z,
         mouth_gap = mouth_gap,
-        face_landmarks = face_landmarks,
+        # face_landmarks = face_landmarks,
         bbox = bbox,
-        face_encodings68 = face_encodings68,
-        body_landmarks = body_landmarks,
+        # face_encodings68 = face_encodings68,
+        # body_landmarks = body_landmarks,
         keyword_list=None,  # Set this to None or your desired value
         tokenized_keyword_list=None,  # Set this to None or your desired value
         ethnicity_list=None  # Set this to None or your desired value
@@ -135,7 +136,7 @@ def create_seg_table(row, lock, session):
     # Print a message to confirm the update
     # print(f"Keyword list for image_id {image_id} updated successfully.")
     if counter % 1000 == 0:
-        print(f"Created BagOfKeywords number: {counter}")
+        print(f"Created SegmentBig number: {counter}")
 
 
 def prune_table(image_id, lock, session):
@@ -187,14 +188,19 @@ def fetch_keywords(target_image_id, lock,session):
         select(ImagesKeywords.keyword_id)
         .filter(ImagesKeywords.image_id == target_image_id)
     )
-
+    # print(target_image_id)
     # Execute the query and fetch the result as a list of keyword_ids
     result = session.execute(select_keyword_ids_query).fetchall()
     # keyword_ids = [row.keyword_id for row in result]
     # print(keys_dict)
     # for row in result:
     #     print(row.keyword_id) 
-    keyword_list = [keys_dict[row.keyword_id] for row in result]
+    if result:
+        # only process if there are keywords, otherwise, skip. 
+        keyword_list = [keys_dict[row.keyword_id] for row in result]
+    else:
+        # print("no keywords for image_id: ",target_image_id)
+        return
     # print(keyword_list)
 
     # # this pulls each key text from db - refactoring
@@ -216,10 +222,17 @@ def fetch_keywords(target_image_id, lock,session):
     # Pickle the keyword_list
     keyword_list_pickle = pickle.dumps(token_list)
 
-    # Update the BagOfKeywords entry with the corresponding image_id
+    # # Update the BagOfKeywords entry with the corresponding image_id
+    # BOK_keywords_entry = (
+    #     session.query(BagOfKeywords)
+    #     .filter(BagOfKeywords.image_id == target_image_id)
+    #     .first()
+    # )
+
+    # Update the SegmentBig entry with the corresponding image_id
     BOK_keywords_entry = (
-        session.query(BagOfKeywords)
-        .filter(BagOfKeywords.image_id == target_image_id)
+        session.query(SegmentBig)
+        .filter(SegmentBig.image_id == target_image_id)
         .first()
     )
 
@@ -294,11 +307,13 @@ if index == 0:
     
 
     # create_seg_table for whole shebang
-    # 5/26/2024 this ishow i making SegmentBig_isface 
+    # 5/26/2024 this is how i making SegmentBig_isface 
     # with all the data for bbox/is_face is not None 
     function=create_seg_table
 
     max_image_id_query = select(func.max(SegmentBig.image_id))
+    
+    # handles first run
     max_image_id = session.execute(max_image_id_query).fetchone()[0]
     if max_image_id is None: max_image_id = 0  
 
@@ -306,14 +321,17 @@ if index == 0:
         distinct(Images.image_id), Images.site_name_id, Images.site_image_id, 
             Images.contentUrl, Images.imagename, Images.description, Images.age_id, Images.gender_id, Images.location_id, 
             Encodings.face_x, Encodings.face_y, Encodings.face_z, Encodings.mouth_gap, 
-            Encodings.face_landmarks, Encodings.bbox, Encodings.face_encodings68, Encodings.body_landmarks).\
+            Encodings.bbox).\
         select_from(Images).\
         outerjoin(Encodings, Images.image_id == Encodings.image_id).\
-            filter(Images.image_id > max_image_id, Encodings.bbox.is_(None)).\
+        filter(Images.image_id > max_image_id, Encodings.face_x.is_not(None)).\
         limit(LIMIT)
 
+            # removed this from the filter, as I will be moving emb to noSQL
+            # Encodings.face_landmarks, Encodings.bbox, Encodings.face_encodings68, Encodings.body_landmarks).\
 
-            # filter(Images.image_id > max_image_id, Encodings.is_face.is_not(None)).\
+        # filter(Images.image_id > max_image_id, Encodings.face_x.is_not(None)).\
+            # filter(Images.image_id > max_image_id, Encodings.bbox.is_(None)).\
 
     
     # # create_table for just BOW
@@ -338,13 +356,15 @@ if index == 0:
     # print the length of the result
     print(len(result), "rows")
     for row in result:
+        # print(row)
         work_queue.put(row)
 
 
 elif index == 1:
     function=fetch_keywords
     ################FETCHING KEYWORDS AND CREATING TOKENS #################
-    distinct_image_ids_query = select(BagOfKeywords.image_id.distinct()).filter(BagOfKeywords.tokenized_keyword_list == None).limit(LIMIT)
+    # distinct_image_ids_query = select(BagOfKeywords.image_id.distinct()).filter(BagOfKeywords.tokenized_keyword_list == None).limit(LIMIT)
+    distinct_image_ids_query = select(SegmentBig.image_id.distinct()).filter(SegmentBig.tokenized_keyword_list == None).limit(LIMIT)
     distinct_image_ids = [row[0] for row in session.execute(distinct_image_ids_query).fetchall()]
 
     # print the length of the result

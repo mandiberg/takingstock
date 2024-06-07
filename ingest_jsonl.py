@@ -77,7 +77,7 @@ NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 18	afripics
 '''
 
-THIS_SITE = 9
+THIS_SITE = 6
 
 SEARCH_KEYS_FOR_LOC = True
 VERBOSE = False
@@ -88,7 +88,7 @@ INGEST_ROOT = "/Users/michaelmandiberg/Documents/projects-active/facemap_product
 if THIS_SITE == 1:
     INGEST_ROOT = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/getty_scrape/done"
     INGEST_FOLDER = os.path.join(INGEST_ROOT, "getty_noeth_toobig")
-    JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache_noNoNOs_Silver.jsonl")
+    JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache_noNoNOs_noSilver.jsonl")
 elif THIS_SITE == 6:
     INGEST_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/unsplashCSVs"
     JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache.jsonl")
@@ -1616,7 +1616,15 @@ def execute_query_with_retry(conn, query, parameters=None):
 
 def ingest_json():
     def construct_keys_list(raw_keys):
+        def rlstrip(x):
+            strip_patterns =[":", ";", "'", " ", "(", ")", "/", "#", ".", "{", "}", "@", "&", "!", "***_***"]
+            for ptn in strip_patterns:
+                x = x.rstrip(ptn).lstrip(ptn)
+            # dealing with " and '
+            x = x.rstrip('"').lstrip('"')
+                
         keys_list = []
+        split_patterns = ["|", ";", "#", ]
         # test raw_keys to see if it is a list
         if type(raw_keys) is not list:
             raw_keys = raw_keys.split("|")
@@ -1627,6 +1635,7 @@ def ingest_json():
             # keys_list = [x.lower() for x in item["keywords"]]
             for x in raw_keys:
                 x = x.lower()
+
                 # print(skip_keys)
                 if x not in skip_keys:
                     if x in key2key.keys():
@@ -1820,7 +1829,7 @@ def ingest_json():
                         dialect = mysql.dialect()
                         statement = str(insert_stmt.compile(dialect=dialect))
                         if VERBOSE: print(statement)
-                        continue
+                        # continue
 
                         try:
                             result = execute_query_with_retry(conn, insert_stmt)  # Retry on OperationalError

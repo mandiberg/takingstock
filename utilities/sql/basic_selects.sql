@@ -3,12 +3,18 @@ USE stock
 ;
 
 
+SELECT *
+FROM Images i
+WHERE i.image_id  = 121239232
+AND i.site_name_id = 1
+;
+
 
 
 SELECT *
 FROM Images i
-WHERE i.site_image_id  = 1000006994
-AND i.site_name_id = 1
+WHERE i.site_image_id  = 10133878
+AND i.site_name_id = 5
 ;
 
 SELECT COUNT(i.image_id) as ccount
@@ -66,13 +72,13 @@ AND it.topic_id IN (17)
 
 SELECT *
 FROM Images i
-WHERE i.site_image_id  = 2031693806
-AND i.site_name_id = 2
+WHERE i.site_image_id  = 5778
+AND i.site_name_id = 5
 ;
 
 SELECT *
 FROM Encodings e 
-WHERE e.image_id = 84150700
+WHERE e.image_id = 423851
 ;
 
 SELECT MAX(s.face_y) 
@@ -149,7 +155,21 @@ AND i.image_id > 100887900
 
 
 
+SELECT COUNT(e.encoding_id)
+FROM Images i 
+JOIN Encodings e on i.image_id = e.image_id 
+WHERE i.site_name_id = 2
+;
 
+
+-- missing encodings
+SELECT i.image_id, i.site_name_id, i.imagename 
+FROM Images i 
+LEFT JOIN Encodings e on i.image_id = e.image_id 
+WHERE e.encoding_id is NULL
+AND i.site_name_id not in (1)
+LIMIT 10
+;
 
 
 

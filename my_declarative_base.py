@@ -198,7 +198,7 @@ class SegmentTable(Base):
     location = relationship("Location")
 
 class SegmentBig(Base):
-    __tablename__ = 'SegmentBig_isnotface'
+    __tablename__ = 'SegmentBig_isface'
     
     image_id = Column(Integer, primary_key=True)
     site_name_id           = Column(Integer, ForeignKey('site.site_name_id'))

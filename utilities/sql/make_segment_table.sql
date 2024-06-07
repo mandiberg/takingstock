@@ -14,7 +14,7 @@ CREATE TABLE SegmentHelperMay24_allfingers (
 
 
 -- create segment table
-CREATE TABLE SegmentBig_isnotface (
+CREATE TABLE SegmentBig_isface (
     seg_image_id int NOT NULL AUTO_INCREMENT PRIMARY KEY,
     image_id INTEGER,
     FOREIGN KEY (image_id) REFERENCES Images(image_id),

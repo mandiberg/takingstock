@@ -29,6 +29,11 @@ CREATE TABLE Site (
     site_name varchar(20)
 ); 
 
+CREATE TABLE Release (
+    release_name_id int NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    release_name varchar(20)
+); 
+
 CREATE TABLE Location (
     location_id int NOT NULL AUTO_INCREMENT PRIMARY KEY,
     location_number_getty INTEGER,
@@ -69,6 +74,8 @@ CREATE TABLE Images (
     description varchar(150),
     imagename varchar(200),
     uploadDate DATE
+    release_name_id INTEGER,
+    FOREIGN KEY (release_name_id) REFERENCES Release (release_name_id)
 );
 
 

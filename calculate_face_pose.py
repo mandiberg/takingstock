@@ -51,7 +51,7 @@ http="https://media.gettyimages.com/photos/"
 
 # am I looking on RAID/SSD for a folder? If not, will pull directly from SQL
 # if so, also change the site_name_id etc around line 930
-IS_FOLDER = True
+IS_FOLDER = False
 SITE_NAME_ID = 2
 # 2, shutter. 4, istock
 # 7 pond5
@@ -68,8 +68,8 @@ SITE_NAME_ID = 2
 10  visualchinagroup
 '''
 
-MAIN_FOLDER = "/Volumes/SSD4green/images_shutterstock2"
-# MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/getty_scrape/getty_22222_serbia/images_serbia_lastset"
+# MAIN_FOLDER = "/Volumes/RAID54/images_shutterstock"
+MAIN_FOLDER = "/Volumes/RAID18/images_pexels"
 # MAIN_FOLDER = "/Volumes/SSD4/images_getty_reDL"
 BATCH_SIZE = 25000 # Define how many from each folder in each batch
 
@@ -141,7 +141,7 @@ else:
 # IS_SSD=True
 ##########################################
 
-LIMIT = 10000
+LIMIT = 20000
 
 # platform specific credentials
 io = DataIO(IS_SSD)
@@ -1087,17 +1087,19 @@ def main():
                     # CHANGE FOR EACH SITE
                     # ALSO site_image_id DOWN BELOW 
                     # Collect site_image_id values from the image filenames
+                    if SITE_NAME_ID == 8:
                     
                     # 123rf
-                    # batch_site_image_ids = [img.split("-")[0] for img in batch_img_list]
-                    # site_name_id = 8
-
+                        batch_site_image_ids = [img.split("-")[0] for img in batch_img_list]
+                    elif SITE_NAME_ID == 5:
+                        batch_site_image_ids = [img.split("-")[-1].replace(".jpg","") for img in batch_img_list]
+                    elif SITE_NAME_ID == 1:
                     # gettyimages
-                    # batch_site_image_ids = [img.split("-id")[-1].replace(".jpg", "") for img in batch_img_list]
+                        batch_site_image_ids = [img.split("-id")[-1].replace(".jpg", "") for img in batch_img_list]
                     # site_name_id = 1
-
+                    else:
                     # # Adobe and pexels and shutterstock and istock
-                    batch_site_image_ids = [img.split(".")[0] for img in batch_img_list]
+                        batch_site_image_ids = [img.split(".")[0] for img in batch_img_list]
                     site_name_id = SITE_NAME_ID
 
                     print("batch_site_image_ids", len(batch_site_image_ids))
@@ -1126,7 +1128,7 @@ def main():
                             time.sleep(io.retry_delay)
                     print(f"no. all_results: {len(all_results)}")
 
-                    print("results:", all_results)
+                    # print("results:", all_results)
                     results_dict = {result.site_image_id: result for result in batch_results}
 
                     # going back through the img_list, to use as key for the results_dict
@@ -1135,14 +1137,17 @@ def main():
                     for img in batch_img_list:
 
                         # CHANGE FOR EACH SITE
-                        # extract site_image_id for 213rf
-                        # site_image_id = img.split("-")[0]
+                        if SITE_NAME_ID == 8:
+                            # extract site_image_id for 213rf
+                            site_image_id = img.split("-")[0]
 
                         # # extract site_image_id for getty images
-                        # site_image_id = img.split("-id")[-1].replace(".jpg", "")
+                        # elif SITE_NAME_ID == 1:
+                            # site_image_id = img.split("-id")[-1].replace(".jpg", "")
 
+                        else:
                         # # # extract site_image_id for adobe and pexels and shutterstock and istock and pond5
-                        site_image_id = img.split(".")[0]
+                            site_image_id = img.split(".")[0]
 
                         print("site_image_id", site_image_id)
                         if site_image_id in results_dict:
@@ -1221,6 +1226,7 @@ def main():
                 if site_id == 1:
                     # print("fixing gettyimages hash")
                     orig_filename = item.replace(http, "")+".jpg"
+                    orig_filename = orig_filename.replace(".jpg.jpg", ".jpg")
                     d0, d02 = get_hash_folders(orig_filename)
                     hashed_path = os.path.join(d0, d02, orig_filename)
                 

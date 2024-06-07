@@ -99,7 +99,7 @@ CLUSTER_NO = 63
 
 # cut the kids
 NO_KIDS = True
-OUTPAINT = True
+OUTPAINT = False
 if OUTPAINT: from outpainting_modular import outpaint, image_resize
 VERBOSE = True
 # this controls whether it is using the linear or angle process
@@ -110,7 +110,7 @@ IS_TOPICS = False
 N_TOPICS = 30
 
 IS_ONE_TOPIC = True
-TOPIC_NO = [7]
+TOPIC_NO = [17]
 #  is isolated,  is business,  babies, 17 pointing
 #  is doctor <<  covid
 #  is hands
@@ -121,9 +121,9 @@ TOPIC_NO = [7]
 # 7 is surprise
 #  is yoga << planar,  planar,  fingers crossed
 
-SORT_TYPE = "128d"
+# SORT_TYPE = "128d"
 # SORT_TYPE ="planar"
-# SORT_TYPE = "planar_body"
+SORT_TYPE = "planar_body"
 
 # if planar_body set OBJ_CLS_ID for each object type
 # 67 is phone, 63 is laptop, 26: 'handbag', 27: 'tie', 32: 'sports ball'
@@ -215,7 +215,7 @@ elif IS_SEGONLY:
     # WHERE += " AND k.keyword_text LIKE 'surpris%' "
 
     # WHERE = "s.site_name_id != 1"
-    LIMIT = 100000
+    LIMIT = 100
 
     # TEMP TK TESTING
     # WHERE += " AND s.site_name_id = 8"
@@ -232,7 +232,7 @@ motion = {
 }
 
 EXPAND = False
-INPAINT=True
+INPAINT=False
 # face_height_output is how large each face will be. default is 750
 face_height_output = 500
 # face_height_output = 256
@@ -243,8 +243,8 @@ face_height_output = 500
 # image_edge_multiplier = [1, 1, 1, 1] # just face
 # image_edge_multiplier = [1.5,1.5,2,1.5] # bigger portrait
 # image_edge_multiplier = [1.4,2.6,1.9,2.6] # wider for hands
-# image_edge_multiplier = [1.2,2.3,1.7,2.3] # medium for hands
-image_edge_multiplier = [1.2, 1.2, 1.6, 1.2] # standard portrait
+image_edge_multiplier = [1.2,2.3,1.7,2.3] # medium for hands
+# image_edge_multiplier = [1.2, 1.2, 1.6, 1.2] # standard portrait
 # sort.max_image_edge_multiplier is the maximum of the elements
 
 # construct my own objects

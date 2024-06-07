@@ -1,6 +1,6 @@
 
 
-USE ministock1023;
+USE stock;
 
 SELECT e.image_id, i.imagename
 FROM Encodings e 
@@ -23,9 +23,25 @@ GROUP BY site_image_id
 HAVING COUNT(*) > 1;
 
 
+
+
+-- fix bad imagename paths
+
+SET @batch_size = 1000;
+
+WHILE (SELECT COUNT(*) FROM Images WHERE site_name_id = 1 AND imagename LIKE 'images/%') > 0 DO
+    UPDATE Images
+    SET imagename = REPLACE(imagename, 'images/', '')
+    WHERE site_name_id = 1
+    AND imagename LIKE 'images/%'
+    LIMIT @batch_size;
+END WHILE;
+
+
 SELECT MAX(i.image_id) 
 FROM Images i 
 ;
+-- 121943655 stock may 31
 
 -- 126887888 pnd5
 
