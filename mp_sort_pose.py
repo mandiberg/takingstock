@@ -733,7 +733,7 @@ class SortPose:
         if self.VERBOSE: print("extension pixels calculated")
         return extension_pixels
 
-    def prepare_mask(self,image,extension_pixels,blur_radius=100):
+    def prepare_mask(self,image,extension_pixels):
         if self.VERBOSE:print("starting mask preparation")
         height, width = image.shape[:2]
         top, bottom, left, right = extension_pixels["top"], extension_pixels["bottom"], extension_pixels["left"],extension_pixels["right"] 
@@ -744,10 +744,6 @@ class SortPose:
         mask[:,:left] = 255
         mask[(height+top):,:] = 255
         mask[:,(width+left):] = 255
-
-        # mask blur
-        if blur_radius % 2 == 0:blur_radius += 1
-        mask = cv2.GaussianBlur(mask, (blur_radius, blur_radius), 0)
         if self.VERBOSE:print("mask preparation done")
         return extended_img,mask
     

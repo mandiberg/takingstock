@@ -920,11 +920,6 @@ def shift_bbox(bbox, extension_pixels):
     if sort.VERBOSE:print("after shifting",bbox)
     return bbox
 
-def merge_image(img,final_img,extension_pixels,offset=100):
-    #### use inpainting for the extended part, but use original for non extend to keep image sharp ###
-    final_img[extension_pixels["top"]+offset:extension_pixels["top"]-offset+np.shape(img)[0],extension_pixels["left"]+offset:extension_pixels["left"]-offset+np.shape(img)[1]]=img[offset:-offset,offset:-offset,:]
-    return final_img
-
 def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
     def save_image_metas(row):
         # print("row")
@@ -971,8 +966,7 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
                 extended_img,mask=sort.prepare_mask(img,extension_pixels)
                 inpaint_image=sort.extend_lama(extended_img, mask, downsampling_scale = 8)
                 ### use inpainting for the extended part, but use original for non extend to keep image sharp ###
-                # inpaint_image[extension_pixels["top"]:extension_pixels["top"]+np.shape(img)[0],extension_pixels["left"]:extension_pixels["left"]+np.shape(img)[1]]=img
-                inpaint_image=merge_image(img,inpaint_image,extension_pixels,offset=100)
+                inpaint_image[extension_pixels["top"]:extension_pixels["top"]+np.shape(img)[0],extension_pixels["left"]:extension_pixels["left"]+np.shape(img)[1]]=img
                 cv2.imwrite(inpaint_file,inpaint_image)
                 print("inpainting done", inpaint_file)
             elif extension_pixels[maxkey] < OUTPAINT_MAX:
