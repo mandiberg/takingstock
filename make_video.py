@@ -144,7 +144,7 @@ if IS_SEGONLY is not True:
 
     # SAVE_SEGMENT controls whether the result will be saved to the db as a new table
     SAVE_SEGMENT = False
-    SELECT = "DISTINCT(i.image_id), i.site_name_id, i.contentUrl, i.imagename, e.face_x, e.face_y, e.face_z, e.mouth_gap, e.face_landmarks, e.bbox, e.face_encodings68, i.site_image_id"
+    SELECT = "DISTINCT(i.image_id), i.site_name_id, i.contentUrl, i.imagename, i.description e.face_x, e.face_y, e.face_z, e.mouth_gap, e.face_landmarks, e.bbox, e.face_encodings68, i.site_image_id"
 
     # don't need keywords if SegmentTable
     # this is for MM segment table
@@ -161,7 +161,7 @@ elif IS_SEGONLY:
 
     SAVE_SEGMENT = False
     # no JOIN just Segment table
-    SELECT = "DISTINCT(s.image_id), s.site_name_id, s.contentUrl, s.imagename, s.face_x, s.face_y, s.face_z, s.mouth_gap, s.face_landmarks, s.bbox, s.face_encodings68, s.site_image_id, s.body_landmarks"
+    SELECT = "DISTINCT(s.image_id), s.site_name_id, s.contentUrl, s.imagename, s.description, s.face_x, s.face_y, s.face_z, s.mouth_gap, s.face_landmarks, s.bbox, s.face_encodings68, s.site_image_id, s.body_landmarks"
     
     FROM =f"{SegmentTable_name} s "
 
@@ -978,19 +978,22 @@ def shift_bbox(bbox, extension_pixels):
 
 def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
     def save_image_metas(row):
-        # print("row")
+        print("row", row)
         print("save_image_metas for use in TTS")
-        parent_row = df_segment[df_segment['imagename'] == row['filename']]
-        image_id = parent_row['image_id'].values[0]
+        # parent_row = df_segment[df_segment['image_id'] == row['image_id']]
+        # image_id = parent_row['image_id'].values[0] #NON NN
+        image_id = row['image_id']
+        description = row['description']
+        topic_score = row['topic_score']
         # use image_id to retrieve description from mysql database 
         # this is temporary until I resegment the images with description in the segment
-        try:
-            description = session.query(Images.description).filter(Images.image_id == image_id).first()
-        except Exception as e:
-            traceback.print_exc()
-            print(str(e))
+        # try:
+        #     description = session.query(Images.description).filter(Images.image_id == image_id).first()
+        # except Exception as e:
+        #     traceback.print_exc()
+        #     print(str(e))
         # description = parent_row['description'].values[0]
-        topic_score = parent_row['topic_score'].values[0]
+        # topic_score = parent_row['topic_score'].values[0]
         metas = [image_id, description[0], topic_score]
         metas_path = os.path.join(sort.counter_dict["outfolder"],METAS_FILE)
         io.write_csv(metas_path, metas)
@@ -1084,13 +1087,13 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
                 # I'm trying to compare descriptions here but it isn't working
                 # first_run isn't working. Failing gracefully with exception
                 ###
-                try:
-                    parent_row = df_segment[df_segment['imagename'] == row['filename']]
-                    image_id = parent_row['image_id'].values[0]                        
-                    description = session.query(Images.description).filter(Images.image_id == image_id).first()
-                except Exception as e:
-                    traceback.print_exc()
-                    print(str(e))
+                # try:
+                #     parent_row = df_segment[df_segment['imagename'] == row['filename']]
+                #     image_id = parent_row['image_id'].values[0]                        
+                #     description = session.query(Images.description).filter(Images.image_id == image_id).first()
+                # except Exception as e:
+                #     traceback.print_exc()
+                #     print(str(e))
                 temp_first_run = sort.counter_dict["first_run"]
                 print("temp_first_run", temp_first_run)
                 if sort.counter_dict["first_run"]:
@@ -1120,7 +1123,7 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
                     
                     # print("row['filename']")
                     # print(row['filename'])
-                    sort.counter_dict["start_img_name"] = row['filename']
+                    sort.counter_dict["start_img_name"] = row['imagename']
                     # print(sort.counter_dict["last_image"])
                     print("saved: ",outpath)
                     sort.counter_dict["counter"] += 1
