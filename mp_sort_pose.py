@@ -26,7 +26,7 @@ class SortPose:
         self.get_bg_segment=mp.solutions.selfie_segmentation.SelfieSegmentation()  
               
 
-        #maximum allowable distance between encodings
+        #maximum allowable distance between encodings (this accounts for dHSV)
         self.MAXDIST = 1.4
         self.MINDIST = .45
         self.MINBODYDIST = .05
@@ -868,6 +868,86 @@ class SortPose:
         if self.VERBOSE: print("HSV, lum", hue,sat,val,lum, lum_torso)
         return self.hue,self.sat,self.val,self.lum,self.lum_torso
     
+
+    def get_start_enc_NN(self, start_img, df_enc, SORT_TYPE):
+        print("get_start_enc")
+
+        if start_img == "median":
+
+            # Round each value in the face_encodings68 column to 2 decimal places
+            df_enc['face_encodings68'] = df_enc['face_encodings68'].apply(lambda x: np.round(x, 1))
+
+            # Convert the face_encodings68 column to a list of lists
+            flattened_array = df_enc['face_encodings68'].tolist()            
+            
+            # # Step 1: Round all values to 2 decimal points
+            # df_rounded = df_128_enc.round(3)
+
+            # # Step 2: Flatten the DataFrame into a single array
+            # flattened_array = df_rounded.values
+
+            # Step 3: Convert the flattened array into tuples for hashing
+            hashable_rows = [tuple(row) for row in flattened_array]
+
+            # Step 4: Find the mode using the most_common function from the collections module
+            counter = Counter(hashable_rows)
+            most_common_row = counter.most_common(1)[0][0]
+
+            print("Most common face embedding:")
+            print(most_common_row)
+            enc1 = most_common_row
+            # print(dfmode)
+            # enc1 = dfmode.iloc[0].to_list()
+            # enc1 = df_128_enc.median().to_list()
+            print("in median")
+
+# TK needs to be refactored NN June 8
+
+        elif start_img == "start_site_image_id":
+            print("start_site_image_id (this is what we are comparing to)")
+            # print(start_site_image_id)
+            print(self.counter_dict["start_site_image_id"])
+            enc1 = df_128_enc.loc[self.counter_dict["start_site_image_id"]].to_list()
+        elif SORT_TYPE == "planar_body":
+            # print("get_start_enc planar_body start_img key is (this is what we are comparing to):")
+            # print(start_img)
+            try:
+                # enc1 = df_33_lms.loc[start_img].to_list()
+                # TK 
+                enc1 = self.get_landmarks_2d_dict(df_33_lms.loc[start_img, "body_landmarks"], self.BODY_LMS)
+
+                # print("get_start_enc planar_body", enc1)
+            except:
+                print("Returning enc1 = median << KeyError for ", start_img)
+                # enc1 = None
+                enc1 = df_33_lms.median().to_list()
+                print(enc1)
+
+        else:
+            # enc1 = get 2-129 from df via string key
+            # print("start_img key is (this is what we are comparing to):")
+            # print(start_img)
+            try:
+                print("buggggggggy start_img", start_img)
+                print(df_128_enc)
+                print(df_128_enc.loc[start_img])                
+                enc1 = df_128_enc.loc[start_img].to_list()
+                # print(enc1)
+            except:
+                print("Returning enc1 = median << KeyError for ", start_img)
+                # enc1 = None
+                enc1 = df_128_enc.median().to_list()
+                print(enc1)
+
+            try:
+                df_128_enc=df_128_enc.drop(start_img)
+                print("dropped ",start_img)
+            except:
+                print("couldn't drop the start_img")
+        return enc1
+
+
+
     def get_start_enc(self, start_img, df_128_enc, df_33_lms, SORT_TYPE):
         print("get_start_enc")
         '''
@@ -1176,24 +1256,110 @@ class SortPose:
     #     self.SHOT_CLOCK = 0 # reset the shot clock
     #     return random_d_in_run, dist_single_dict
 
-    def get_closest_df_NN(self, enc1, df_enc, df_128_enc, df_33_lms, sorttype="128d"):
+    def get_closest_df_NN(self, df_enc, df_sorted, sorttype="128d"):
+        def get_enc1(df_enc, sorttype):
+            this_start = self.counter_dict["start_img_name"]
+            ## Get the starting encodings (if not passed through)
+            if this_start != "median" and this_start != "start_site_image_id":
+                # this is the first round for clusters/itter where last_image_enc is true
+                # set encodings to the passed through encodings
+                # IF NO START IMAGE SPECIFIED (this line works for no clusters)
+                print("attempting set enc1 from pass through")
+                enc1 = sort.counter_dict["last_image_enc"]
+                # enc1 = df_enc.loc[this_start]['face_encodings']
+                # print(enc1)
+                print("set enc1 from pass through")
+            else:
+                #this is the first??? round, set via df
+                print(f"trying get_start_enc() from {this_start}")
+                enc1 = self.get_start_enc_NN(this_start, df_enc, sorttype)
+                # # test to see if get_start_enc was successful
+                # # if not, retain previous enc1. or shoudl it reassign median? 
+                # if enc1_temp is not None:
+                #     enc1 = enc1_temp
+                print(f"set enc1 from get_start_enc() to {enc1}")
+            return enc1
         dist=[]
         dist_dict={}
         dist_run_dict={}
         enc2_dict={}
-        print("sorttype", sorttype)
+
+        if len(df_sorted) == 0: 
+            FIRST_ROUND = True
+            enc1 = get_enc1(df_enc, sorttype)
+        else: 
+            FIRST_ROUND = False
+            enc1 = df_sorted.iloc[-1]["face_encodings68"]
+
+        # print("get_closest_df_NN")
         # print("enc1 right before index row itter", enc1)
-        print(f"get_closest_df, sorttype is {sorttype} FIRST_ROUND is {FIRST_ROUND}")
-        if sorttype == "128d" or (sorttype == "planar" and FIRST_ROUND is True) or (sorttype == "planar_body" and FIRST_ROUND is True):
+        print(f"get_closest_df_NN, sorttype is {sorttype} FIRST_ROUND is {FIRST_ROUND}")
+        if sorttype == "128d" or (sorttype == "planar" and FIRST_ROUND is True) or (sorttype == "planar_body" and FIRST_ROUND is True):           
+            # sort the df by 128d distance
+            df_shuffled = self.sort_df_KNN(df_enc, enc1, "128d")
+        elif sorttype == "planar":
+            df_shuffled = self.sort_df_KNN(df_enc, enc1, "planar")
+        elif sorttype == "planar_body":
+            df_shuffled = self.sort_df_KNN(df_enc, enc1, "planar_body")
+
+        # create a new dataframe with the rows where the 128d distance is less than MINDIST
+        # df_run = df_sorted[df_sorted["distance_to_enc1"] < self.MINDIST]
+
+        # if the length of the df_run is greater than 2, we have a run
+        # if len(df_run) > 2:
+        #     print("WE HAVE A RUN!!!!! ---------- ", str(len(df_run)))
+        #     self.SHOT_CLOCK = 0
+
+        # else:
+        
+        # move the first row of df_shuffled to df_sorted
+
+        if len(df_shuffled) > 0:
+            print("df_shuffled is not empty", df_shuffled.head())
+
+            # Filter rows based on the condition
+            mask = df_shuffled['distance_to_enc1'] < self.MINDIST
+            print("mask", mask)
+            if mask.any():
+                # if there is a run < MINDIST
+                df_run = df_shuffled[mask]
+                df_enc = df_enc[~mask]
+            else:
+                # df_run = first row of df_shuffled
+                df_run = df_shuffled.iloc[[0]]  # Wrap in list to keep it as DataFrame
+                df_enc = df_enc.drop(df_run.index)
+
+            print("df_run", df_run)
+
+            df_sorted = pd.concat([df_sorted, df_run])  
+            # Remove filtered rows from df_shuffled
+            # df_shuffled = df_shuffled[~mask]
             
-            print(df_128_enc)
-            # NN sort df_128_enc for closest to enc1
-            # with distance saved somewhere
-            # need to be able to cut it off at MINDIST and return that in some form.
+            # first_row = df_shuffled.iloc[0]
+            # print("first_row", first_row)
+            # df_sorted = df_sorted.append(first_row)
+            # df_sorted = pd.concat([df_sorted, pd.DataFrame([first_row])], ignore_index=True)
+            print("df_sorted containing all good items", len(df_sorted))
+            
+            # df_enc = df_enc.drop(first_row.index[0])
+            # dist = df_shuffled["distance_to_enc1"].iloc[0]
+            print("df_enc", len(df_enc))
+        else:
+            print("df_shuffled is empty")
+
+        return df_enc, df_sorted
+
+    def nothing_here(self):   
+        if sorttype == "128d":
+            # print(df_enc['face_encodings68'].tolist())
+            # df_enc.to_csv("df_enc.csv")
+            print("starting regular brute force")
+            #start timer
+            start_time = time.time()
 
             for index, row in df_128_enc.iterrows():
                 enc2 = row
-                # print("testing this", index, "against the start img",start_img)
+                # print("testing this round ", index)
                 if (enc1 is not None) and (enc2 is not None):
                     # print("getting d with enc1", enc1)
                     # print("getting d with enc2", enc1)
@@ -1212,47 +1378,55 @@ class SortPose:
                     print("128d: missing enc1 or enc2")
                     continue
                 # FIRST_ROUND = False
+            print("--- %s seconds ---" % (time.time() - start_time))
+            print("about to do it KNN style")
+            start_time = time.time()            
+            # df_enc = self.eval_df_128_enc(df_enc)
+            # force 128d on first round, (for planar and planar_body)
+            df_sorted = self.sort_df_KNN(df_enc, enc1, "128d")
+            print(df_sorted)
+            print("--- %s seconds ---" % (time.time() - start_time))
+            # quit()
+        elif sorttype == "planar":
+            for index, row in df_128_enc.iterrows():
+                # print("planar: index")
+                last_face_2d_dict = self.get_face_2d_dict(df_enc.loc[self.counter_dict["last_image"], "face_landmarks"])
+                this_face_2d_dict = self.get_face_2d_dict(df_enc.loc[index, "face_landmarks"])
+                d = self.get_planar_d(last_face_2d_dict,this_face_2d_dict)
+                print ("planar d is", str(d), "for", index)
+                dist.append(d)
+                dist_dict[d]=index
 
-        # elif sorttype == "planar":
-        #     for index, row in df_128_enc.iterrows():
-        #         # print("planar: index")
-        #         last_face_2d_dict = self.get_face_2d_dict(df_enc.loc[self.counter_dict["last_image"], "face_landmarks"])
-        #         this_face_2d_dict = self.get_face_2d_dict(df_enc.loc[index, "face_landmarks"])
-        #         d = self.get_planar_d(last_face_2d_dict,this_face_2d_dict)
-        #         print ("planar d is", str(d), "for", index)
-        #         dist.append(d)
-        #         dist_dict[d]=index
 
+        elif sorttype == "planar_body":
+            try:
+                df_128_enc=df_128_enc.drop(self.counter_dict["last_image"])
+            except:
+                print("last_image already dropped")
 
-        # elif sorttype == "planar_body":
-        #     try:
-        #         df_128_enc=df_128_enc.drop(self.counter_dict["last_image"])
-        #     except:
-        #         print("last_image already dropped")
+            for index, row in df_128_enc.iterrows():
+                # print("planar_body [-] getting 2D")
+                # print(index)
+                if df_enc.loc[index, "body_landmarks"] is not None:
+                    last_body_2d_dict = self.get_landmarks_2d_dict(df_enc.loc[self.counter_dict["last_image"], "body_landmarks"], self.BODY_LMS)
+                    this_body_2d_dict = self.get_landmarks_2d_dict(df_enc.loc[index, "body_landmarks"], self.BODY_LMS)
+                    # print("planar_body [-] got last_body_2d_dict and this_body_2d_dict")
+                    # print(last_body_2d_dict,this_body_2d_dict)
+                    d = self.get_planar_d(last_body_2d_dict,this_body_2d_dict)
+                    # print ("planar_body d is", str(d), "for", index)
+                    dist.append(d) 
+                    dist_dict[d]=index
 
-        #     for index, row in df_128_enc.iterrows():
-        #         # print("planar_body [-] getting 2D")
-        #         # print(index)
-        #         if df_enc.loc[index, "body_landmarks"] is not None:
-        #             last_body_2d_dict = self.get_landmarks_2d_dict(df_enc.loc[self.counter_dict["last_image"], "body_landmarks"], self.BODY_LMS)
-        #             this_body_2d_dict = self.get_landmarks_2d_dict(df_enc.loc[index, "body_landmarks"], self.BODY_LMS)
-        #             # print("planar_body [-] got last_body_2d_dict and this_body_2d_dict")
-        #             # print(last_body_2d_dict,this_body_2d_dict)
-        #             d = self.get_planar_d(last_body_2d_dict,this_body_2d_dict)
-        #             # print ("planar_body d is", str(d), "for", index)
-        #             dist.append(d) 
-        #             dist_dict[d]=index
+                    # TK this isn't working. needs debugging.
+                    if d < self.MINBODYDIST:
+                        dist_run_dict[d]=index
 
-        #             # TK this isn't working. needs debugging.
-        #             if d < self.MINBODYDIST:
-        #                 dist_run_dict[d]=index
-
-        #         else:
-        #             try:
-        #                 df_128_enc=df_128_enc.drop(index)
-        #                 print("dropped: ", index)
-        #             except Exception as e:
-        #                 print(str(e))
+                else:
+                    try:
+                        df_128_enc=df_128_enc.drop(index)
+                        print("dropped: ", index)
+                    except Exception as e:
+                        print(str(e))
 
 
         # print("made it through iterrows")
@@ -1307,8 +1481,6 @@ class SortPose:
             if self.VERBOSE: print("dist_run_dict", dist_run_dict, len(dist_run_dict))
             return last_d_in_run, dist_run_dict, df_128_enc, df_33_lms
 
-   
-        # '''
         else:
             # print("going to find a winner")
             # dist.sort()
@@ -1374,6 +1546,8 @@ class SortPose:
                 dist_single_dict = {1: "null"}
                 return 1, dist_single_dict, df_128_enc, df_33_lms
 
+
+
     def fix_128_string(self, encoding_str):
         # Use regex to replace one or more spaces with a single comma
         fixed_str = re.sub(r'\s+', ',', encoding_str)
@@ -1388,6 +1562,8 @@ class SortPose:
     #     df_enc['face_encodings68'] = df_enc['face_encodings68'].apply(ast.literal_eval)
     #     return df_enc
     
+
+
     def sort_df_KNN(self, df_enc, enc1, sorttype="128d"):
         if sorttype == "128d": sortcol = 'face_encodings68'
         elif sorttype == "planar": sortcol = 'face_landmarks'
@@ -1400,12 +1576,12 @@ class SortPose:
         # Convert to numpy array
         # encodings_array = np.array(encodings)
 
-        print("time to convert to numpy array", time.time() - start_time)
-        start_time = time.time()            
+        # print("time to convert to numpy array", time.time() - start_time)
+        # start_time = time.time()            
 
         self.knn.fit(encodings_array)
-        print("time to fit array", time.time() - start_time)
-        start_time = time.time()            
+        # print("time to fit array", time.time() - start_time)
+        # start_time = time.time()            
 
         # Find the distances and indices of the neighbors
         distances, indices = self.knn.kneighbors([enc1], n_neighbors=len(df_enc))
@@ -1415,7 +1591,7 @@ class SortPose:
         distances = distances.flatten()
 
         # Add distances to the dataframe
-        df_enc['distance_to_enc1'] = distances
+        df_enc.loc[:, 'distance_to_enc1'] = distances
         print("time to find indices and flatten", time.time() - start_time)
         start_time = time.time()            
 
