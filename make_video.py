@@ -57,8 +57,8 @@ CLUSTER_NO = 63
 
 # cut the kids
 NO_KIDS = True
-USE_PAINTED = False
-OUTPAINT = False
+USE_PAINTED = True
+OUTPAINT = True
 INPAINT= True
 INPAINT_MAX = 5000
 OUTPAINT_MAX = 5001
@@ -83,9 +83,9 @@ TOPIC_NO = [17]
 # 7 is surprise
 #  is yoga << planar,  planar,  fingers crossed
 
-SORT_TYPE = "128d"
+# SORT_TYPE = "128d"
 # SORT_TYPE ="planar"
-# SORT_TYPE = "planar_body"
+SORT_TYPE = "planar_body"
 
 # if planar_body set OBJ_CLS_ID for each object type
 # 67 is phone, 63 is laptop, 26: 'handbag', 27: 'tie', 32: 'sports ball'
@@ -172,12 +172,14 @@ elif IS_SEGONLY:
     if OBJ_CLS_ID:
         FROM += " JOIN PhoneBbox pb ON s.image_id = pb.image_id "
         SELECT += ", pb.bbox_67, pb.conf_67, pb.bbox_63, pb.conf_63, pb.bbox_26, pb.conf_26, pb.bbox_27, pb.conf_27, pb.bbox_32, pb.conf_32 "
+    if SORT_TYPE == "planar_body":
+        WHERE += " AND s.body_landmarks IS NOT NULL "
     # # join to keywords
     # FROM += " JOIN ImagesKeywords ik ON s.image_id = ik.image_id JOIN Keywords k ON ik.keyword_id = k.keyword_id "
     # WHERE += " AND k.keyword_text LIKE 'surpris%' "
 
     # WHERE = "s.site_name_id != 1"
-    LIMIT = 100
+    LIMIT = 1000
 
     # TEMP TK TESTING
     # WHERE += " AND s.site_name_id = 8"
@@ -204,9 +206,9 @@ face_height_output = 500
 # image_edge_multiplier = [1, 1, 1, 1] # just face
 # image_edge_multiplier = [1.5,1.5,2,1.5] # bigger portrait
 # image_edge_multiplier = [1.4,2.6,1.9,2.6] # wider for hands
-# image_edge_multiplier = [1.6,3.5,3,3.5] # wiiiiiiiidest for hands
+image_edge_multiplier = [1.6,3.5,3,3.5] # wiiiiiiiidest for hands
 # image_edge_multiplier = [1.2,2.3,1.7,2.3] # medium for hands
-image_edge_multiplier = [1.2, 1.2, 1.6, 1.2] # standard portrait
+# image_edge_multiplier = [1.2, 1.2, 1.6, 1.2] # standard portrait
 # sort.max_image_edge_multiplier is the maximum of the elements
 
 # construct my own objects
@@ -610,10 +612,36 @@ def prep_encodings_NN(df_segment):
             return [row['lum']*HSV_NORMS["LUM"], row['lum_torso_bb']*HSV_NORMS["LUM"]]
         else:
             return [row['lum']*HSV_NORMS["LUM"], row['lum_torso']*HSV_NORMS["LUM"]]    
+    def test_landmarks_vis(row):
+        left_hand = [15,17,19,21]
+        right_hand = [16,18,20,22]
+        # lms = ast.literal_eval(row['body_landmarks'])
+        lms = row['body_landmarks']
+
+        # print("lms", lms)
+        for idx, lm in enumerate(lms.landmark):
+            if idx in left_hand:
+                if lm.visibility > .5:
+                    return True
+            elif idx in right_hand:
+                if lm.visibility > .5:
+                    return True
+        # print("returning false, no hands from this row", row)
+        return False
 
     # create a column for the hsv values using df_segment.apply(lambda row: create_hsv_list(row), axis=1)
     df_segment['hsv'] = df_segment.apply(lambda row: create_hsv_list(row), axis=1)
     df_segment['lum'] = df_segment.apply(lambda row: create_lum_list(row), axis=1)
+
+    print("df_segment length", len(df_segment.index))
+    if SORT_TYPE == "planar_body":
+        # if planar_body drop rows where self.BODY_LMS are low visibility
+        df_segment['hand_visible'] = df_segment.apply(lambda row: test_landmarks_vis(row), axis=1)
+
+        # delete rows where hand_visible is false
+        df_segment = df_segment[df_segment['hand_visible'] == True].reset_index(drop=True)
+        # df_segment = df_segment[df_segment['hand_visible'] == True]
+        print("df_segment length visible hands", len(df_segment.index))
 
     return df_segment
 
@@ -844,7 +872,7 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
         extension_pixels=sort.get_extension_pixels(img)
         if sort.VERBOSE:print("extension_pixels",extension_pixels)
         # inpaint_file=os.path.join(os.path.join(os.path.dirname(row['folder']), "inpaint", os.path.basename(row['folder'])),row['filename'])
-        inpaint_file=os.path.join(os.path.dirname(row['folder']), os.path.basename(row['folder'])+"_inpaint",row['filename'])
+        inpaint_file=os.path.join(os.path.dirname(row['folder']), os.path.basename(row['folder'])+"_inpaint",row['imagename'])
         print("inpaint_file", inpaint_file)
         if USE_PAINTED and os.path.exists(inpaint_file):
             if sort.VERBOSE: print("path exists, loading image",inpaint_file)
