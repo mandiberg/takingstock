@@ -79,6 +79,7 @@ CLUSTER_NO = 63
 
 # cut the kids
 NO_KIDS = True
+USE_PAINTED = False
 OUTPAINT = False
 INPAINT= True
 OVERWRITE_INPAINT=True
@@ -198,20 +199,6 @@ elif IS_SEGONLY:
     # WHERE += " AND k.keyword_text LIKE 'surpris%' "
 
     # WHERE = "s.site_name_id != 1"
-    #########################################
-    ##########SATYAM###############################
-    if IS_CLUSTER or IS_ONE_CLUSTER:
-        FROM += " JOIN ImagesClusters ic ON s.image_id = ic.image_id "
-    if IS_TOPICS or IS_ONE_TOPIC:
-        FROM += " JOIN ImagesTopics it ON s.image_id = it.image_id "
-        WHERE += " AND it.topic_score > .3"
-        SELECT += ", it.topic_score" # add description here, after resegmenting 
-    if HSV_BOUNDS:
-        FROM += " JOIN ImagesBackground ibg ON s.image_id = ibg.image_id "
-        # WHERE += " AND ibg.lum > .3"
-        SELECT += ", ibg.lum, ibg.lum_bb, ibg.hue, ibg.hue_bb, ibg.sat, ibg.sat_bb, ibg.val, ibg.val_bb, ibg.lum_torso, ibg.lum_torso_bb " # add description here, after resegmenting
-  
-    #########################################
     LIMIT = 1000
 
     # TEMP TK TESTING
@@ -525,47 +512,50 @@ def sort_by_face_dist(df_enc, df_128_enc, df_33_lms):
 # need to pass through start_img_enc rather than start_img_name
 # for linear it is in the df_enc, but for itter, the start_img_name is in prev df_enc
 # takes a dataframe of images and encodings and returns a df sorted by distance
-def sort_by_face_dist_NN(df_enc, df_128_enc, df_33_lms):
+def sort_by_face_dist_NN(df_enc):
     
-    def get_enc1(this_start, df_128_enc, df_33_lms, i):
-        print("getting start for sort round ",str(i))
-        ## Get the starting encodings (if not passed through)
-        if this_start != "median" and this_start != "start_site_image_id" and i == 0:
-            # this is the first round for clusters/itter where last_image_enc is true
-            # set encodings to the passed through encodings
-            # IF NO START IMAGE SPECIFIED (this line works for no clusters)
-            print("attempting set enc1 from pass through")
-            enc1 = sort.counter_dict["last_image_enc"]
-            # enc1 = df_enc.loc[this_start]['face_encodings']
-            # print(enc1)
-            print("set enc1 from pass through")
-        else:
-            #this is the first??? round, set via df
-            print(f"trying get_start_enc() from {this_start}")
-            enc1, df_128_enc, df_33_lms = sort.get_start_enc(this_start, df_128_enc, df_33_lms, SORT_TYPE)
-            # # test to see if get_start_enc was successful
-            # # if not, retain previous enc1. or shoudl it reassign median? 
-            # if enc1_temp is not None:
-            #     enc1 = enc1_temp
-            print(f"set enc1 from get_start_enc() to {enc1}")
-        return enc1, df_128_enc, df_33_lms
+    # create emtpy df_sorted with the same columns as df_enc
+    df_sorted = pd.DataFrame(columns = df_enc.columns)
 
-    this_start = sort.counter_dict["start_img_name"]
-    face_distances=[]
+    # def get_enc1(this_start, df_128_enc, df_33_lms, i):
+    #     print("getting start for sort round ",str(i))
+    #     ## Get the starting encodings (if not passed through)
+    #     if this_start != "median" and this_start != "start_site_image_id" and i == 0:
+    #         # this is the first round for clusters/itter where last_image_enc is true
+    #         # set encodings to the passed through encodings
+    #         # IF NO START IMAGE SPECIFIED (this line works for no clusters)
+    #         print("attempting set enc1 from pass through")
+    #         enc1 = sort.counter_dict["last_image_enc"]
+    #         # enc1 = df_enc.loc[this_start]['face_encodings']
+    #         # print(enc1)
+    #         print("set enc1 from pass through")
+    #     else:
+    #         #this is the first??? round, set via df
+    #         print(f"trying get_start_enc() from {this_start}")
+    #         enc1, df_128_enc, df_33_lms = sort.get_start_enc(this_start, df_128_enc, df_33_lms, SORT_TYPE)
+    #         # # test to see if get_start_enc was successful
+    #         # # if not, retain previous enc1. or shoudl it reassign median? 
+    #         # if enc1_temp is not None:
+    #         #     enc1 = enc1_temp
+    #         print(f"set enc1 from get_start_enc() to {enc1}")
+    #     return enc1, df_128_enc, df_33_lms
+
+    # this_start = sort.counter_dict["start_img_name"]
+    # face_distances=[]
 
     # this prob should be a df.iterrows
-    print("df_enc.index")
-    print(df_enc.index)
-    print(len(df_enc.index))
+    # print("df_enc.index")
+    # print(df_enc.index)
+    # print(len(df_enc.index))
     # print(sort.counter_dict)
-    FIRST_ROUND = True
+    # FIRST_ROUND = True
     if sort.CUTOFF < len(df_enc.index):
         itters = sort.CUTOFF
     else: 
         itters = len(df_enc.index)
     
 
-    # input enc1, df_128_enc, df_33_lms
+    # input enc1, df_128_enc, df_33_lmsNN
     # df = pd.DataFrame(face_distances, columns =['dist', 'folder', 'filename','site_name_id','face_landmarks', 'bbox'])
 
     for i in range(itters):
@@ -578,25 +568,27 @@ def sort_by_face_dist_NN(df_enc, df_128_enc, df_33_lms):
             # closest_dict is now a dict with 1 or more items
             # this_start is a filepath, which serves as df index
             # it is now a dict of key=distance value=filepath
-            print("going to get closest")
-            print("this_start", this_start)
-            print("SORT_TYPE", SORT_TYPE)
-            enc1, df_128_enc, df_33_lms = get_enc1(this_start, df_128_enc, df_33_lms, i)
-            print("got start enc1")
+            # print("going to get closest")
+            # print("this_start", this_start)
+            # print("SORT_TYPE", SORT_TYPE)
+            # this probbly only needs to be done once, but it isn't hurting to do it each time
+            # enc1, df_128_enc, df_33_lms = get_enc1(, df_128_enc, df_33_lms, i)
+            # print("got start enc1")
             # NEED TO GET IT TO DROP FROM df_33_lms in get_closest_df
             # need to send the df_enc with the same two keys through to get_closest
-            dist, closest_dict, df_128_enc, df_33_lms = sort.get_closest_df(FIRST_ROUND, enc1,df_enc, df_128_enc, df_33_lms, sorttype=SORT_TYPE)
+            df_enc, df_sorted = sort.get_closest_df_NN(df_enc, df_sorted, sorttype=SORT_TYPE)
             # dist, closest_dict, df_128_enc = sort.get_closest_df(FIRST_ROUND, enc1,df_enc, df_128_enc, sorttype="planar")
             # dist, closest_dict, df_128_enc = sort.get_closest_df(enc1,df_enc, df_128_enc)
             FIRST_ROUND = False
 
-
             print("got closest")
             # print(closest_dict)
+            dist = df_sorted.iloc[-1]['distance_to_enc1']
+            print(dist)
 
             # Break out of the loop if greater than MAXDIST
             # I think this will be graceful with cluster iteration
-            print("dist")
+            # print("dist")
             # print(dist)
             if dist > sort.MAXDIST and sort.SHOT_CLOCK != 0:
                 print("should breakout")
@@ -609,82 +601,104 @@ def sort_by_face_dist_NN(df_enc, df_128_enc, df_33_lms):
 
 
      
-        # Iterate through the results and append
-        dkeys = list(closest_dict.keys())
-        dkeys.sort()
-        images_to_drop =[]
-        print("length of dkeys for closest_dict is ", len(dkeys))
-        for dkey in dkeys:
+        # # Iterate through the results and append
+        # dkeys = list(closest_dict.keys())
+        # dkeys.sort()
+        # images_to_drop =[]
+        # print("length of dkeys for closest_dict is ", len(dkeys))
+        # for dkey in dkeys:
 
 
-            ## Collect values and append to face_distances
-            this_start = closest_dict[dkey]
-            if VERBOSE: print("this_start assigned as ", this_start)
-            face_landmarks=None
-            bbox=None
+        #     ## Collect values and append to face_distances
+        #     this_start = closest_dict[dkey]
+        #     if VERBOSE: print("this_start assigned as ", this_start)
+        #     face_landmarks=None
+        #     bbox=None
 
-            # print("THIS: closest_dict[dkey],")
-            # print(closest_dict[dkey])
+        #     # print("THIS: closest_dict[dkey],")
+        #     # print(closest_dict[dkey])
 
-            try:
-                # print("dkey, df_enc.loc[closest_dict[dkey]]")
-                # print(dkey)
-                # print(closest_dict[dkey])
-                # print(df_enc.loc[closest_dict[dkey]])
-                site_name_id = df_enc.loc[closest_dict[dkey]]['site_name_id']
-                face_landmarks = df_enc.loc[closest_dict[dkey]]['face_landmarks']
-                bbox = df_enc.loc[closest_dict[dkey]]['bbox']
-                # print("assigned bbox", bbox)
-            except:
-                print("won't assign landmarks/bbox")
-            # print("site_name_id is the following")
+        #     try:
+        #         # print("dkey, df_enc.loc[closest_dict[dkey]]")
+        #         # print(dkey)
+        #         # print(closest_dict[dkey])
+        #         # print(df_enc.loc[closest_dict[dkey]])
+        #         site_name_id = df_enc.loc[closest_dict[dkey]]['site_name_id']
+        #         face_landmarks = df_enc.loc[closest_dict[dkey]]['face_landmarks']
+        #         bbox = df_enc.loc[closest_dict[dkey]]['bbox']
+        #         # print("assigned bbox", bbox)
+        #     except:
+        #         print("won't assign landmarks/bbox")
+        #     # print("site_name_id is the following")
 
-            # for some reason, site_name_id is not an int. trying to test if int.
-            # print(type(site_name_id))
-            # if not pd.is_int(site_name_id): continue
-            # print(site_name_id)
-            # print("site_specific_root_folder", io.folder_list[site_name_id])
-            site_specific_root_folder = io.folder_list[site_name_id]
-            # print("site_specific_root_folder")
-            # print(site_specific_root_folder)
-            # save the image -- this prob will be to append to list, and return list? 
-            # save_sorted(i, folder, start_img_name, dist)
-            this_dist=[dkey, site_specific_root_folder, this_start, site_name_id, face_landmarks, bbox]
-            face_distances.append(this_dist)
-            images_to_drop.append(this_start)
+        #     # for some reason, site_name_id is not an int. trying to test if int.
+        #     # print(type(site_name_id))
+        #     # if not pd.is_int(site_name_id): continue
+        #     # print(site_name_id)
+        #     # print("site_specific_root_folder", io.folder_list[site_name_id])
+        #     site_specific_root_folder = io.folder_list[site_name_id]
+        #     # print("site_specific_root_folder")
+        #     # print(site_specific_root_folder)
+        #     # save the image -- this prob will be to append to list, and return list? 
+        #     # save_sorted(i, folder, start_img_name, dist)
+        #     this_dist=[dkey, site_specific_root_folder, this_start, site_name_id, face_landmarks, bbox]
+        #     face_distances.append(this_dist)
+        #     images_to_drop.append(this_start)
 
-        # remove the last image this_start, then drop them from df_128_enc
-        # the this_start will be dropped in the get_start_enc method
-        print("lenght of images to drop before and after removing this_start")
-        print(len(images_to_drop))
-        try:
-            images_to_drop.remove(this_start)
-        except Exception as e:
-            traceback.print_exc()
-            print("images_to_drop.remove failed because was too great a lum diff", str(e))
-        print(len(images_to_drop))
-        for dropimage in images_to_drop:
-            if VERBOSE: print("going to remove this image enc", dropimage)
-            try:
-                df_128_enc=df_128_enc.drop(dropimage)
-            except Exception as e:
-                traceback.print_exc()
-                print(str(e))
+        # # remove the last image this_start, then drop them from df_128_enc
+        # # the this_start will be dropped in the get_start_enc method
+        # print("lenght of images to drop before and after removing this_start")
+        # print(len(images_to_drop))
+        # try:
+        #     images_to_drop.remove(this_start)
+        # except Exception as e:
+        #     traceback.print_exc()
+        #     print("images_to_drop.remove failed because was too great a lum diff", str(e))
+        # print(len(images_to_drop))
+        # for dropimage in images_to_drop:
+        #     if VERBOSE: print("going to remove this image enc", dropimage)
+        #     try:
+        #         df_128_enc=df_128_enc.drop(dropimage)
+        #     except Exception as e:
+        #         traceback.print_exc()
+        #         print(str(e))
 
-        #debuggin
-        print(f"sorted round {str(i)} which is actually round  {str(i+len(dkeys)-1)}")
-        print(f"{len(df_128_enc.index)} images remain in df_128_enc")
-        if len(df_128_enc.index) < 2:
-            break
-        print(f"last distance was {dist}, next image is {start_img_name}")
+        # #debuggin
+        # print(f"sorted round {str(i)} which is actually round  {str(i+len(dkeys)-1)}")
+        # print(f"{len(df_128_enc.index)} images remain in df_128_enc")
+        # if len(df_128_enc.index) < 2:
+        #     break
+        # print(f"last distance was {dist}, next image is {start_img_name}")
         
-    ## When loop is complete, create df
-    df = pd.DataFrame(face_distances, columns =['dist', 'folder', 'filename','site_name_id','face_landmarks', 'bbox'])
-    print(df)
+    # ## When loop is complete, create df
+    # df = pd.DataFrame(face_distances, columns =['dist', 'folder', 'filename','site_name_id','face_landmarks', 'bbox'])
+    # print(df)
+
+    # site_specific_root_folder = io.folder_list[site_name_id]
+    # use the colum site_name_id to asign the value of io.folder_list[site_name_id] to the folder column
+    df_sorted['folder'] = df_sorted['site_name_id'].apply(lambda x: io.folder_list[x])
+    
+    # rename the distance column to dist
+    df_sorted.rename(columns={'distance_to_enc1': 'dist'}, inplace=True)
+
+
+    
+
+    print(df_sorted)
+
+    # print all columns in df_sorted
+    print(df_sorted.columns)
+    
+    # ## When loop is complete, create df
+    # df = pd.DataFrame(df_sorted, columns =['dist', 'folder', 'filename','site_name_id','face_landmarks', 'bbox'])
+    # print(df)
+
 
     ## Set a start_img_name for next round --> for clusters
+    ## TK refactor this for df_sorted // needs to be done June 8
     try:
-        last_file = face_distances[-1][2]
+        #last_file = imagename from last row in df_sorted
+        last_file = df_sorted.iloc[-1]['imagename']
         print("last_file ",last_file)
     except:
         last_file = this_start
@@ -693,7 +707,7 @@ def sort_by_face_dist_NN(df_enc, df_128_enc, df_33_lms):
 
     # df = df.sort_values(by=['dist']) # this was sorting based on delta distance, not sequential distance
     # print(df)
-    return df
+    return df_sorted
 
 
 
@@ -745,6 +759,25 @@ def cycling_order(CYCLECOUNT, sort):
         # print(angle_list)
     return img_array, size
 
+def prep_encodings_NN(df_segment):
+    def create_hsv_list(row):
+        if row['hue_bb'] >= 0:
+            # print("create_hsv_list bb", [row['hue_bb'], row['sat_bb'], row['lum_bb']])
+            return [row['hue_bb']*HSV_NORMS["HUE"], row['sat_bb']*HSV_NORMS["SAT"], row['val_bb']*HSV_NORMS["VAL"]]
+        else:
+            return [row['hue']*HSV_NORMS["HUE"], row['sat']*HSV_NORMS["SAT"], row['val']*HSV_NORMS["VAL"]]    
+    def create_lum_list(row):
+        if row['lum_torso_bb'] >= 0 and row['lum_torso_bb'] != 1:
+            # print("create_hsv_list bb", [row['hue_bb'], row['sat_bb'], row['lum_bb']])
+            return [row['lum']*HSV_NORMS["LUM"], row['lum_torso_bb']*HSV_NORMS["LUM"]]
+        else:
+            return [row['lum']*HSV_NORMS["LUM"], row['lum_torso']*HSV_NORMS["LUM"]]    
+
+    # create a column for the hsv values using df_segment.apply(lambda row: create_hsv_list(row), axis=1)
+    df_segment['hsv'] = df_segment.apply(lambda row: create_hsv_list(row), axis=1)
+    df_segment['lum'] = df_segment.apply(lambda row: create_lum_list(row), axis=1)
+
+    return df_segment
 
 def prep_encodings(df_segment):
     def create_hsv_list(row):
@@ -899,6 +932,15 @@ def print_counters():
     print(sort.counter_dict["inpaint_count"])
 
 
+def const_imgfilename_NN(UID, df, imgfileprefix):
+    # print("filename", filename)
+    # UID = filename.split('-id')[-1].split("/")[-1].replace(".jpg","")
+    # print("UID ",UID)
+    counter_str = str(sort.counter_dict["counter"]).zfill(len(str(df.size)))  # Add leading zeros to the counter
+    imgfilename = imgfileprefix+"_"+str(counter_str)+"_"+str(UID)+".jpg"
+    print("imgfilename ",imgfilename)
+    return imgfilename
+
 def const_imgfilename(filename, df, imgfileprefix):
     # print("filename", filename)
     UID = filename.split('-id')[-1].split("/")[-1].replace(".jpg","")
@@ -994,7 +1036,7 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
         # inpaint_file=os.path.join(os.path.join(os.path.dirname(row['folder']), "inpaint", os.path.basename(row['folder'])),row['filename'])
         inpaint_file=os.path.join(os.path.dirname(row['folder']), os.path.basename(row['folder'])+"_inpaint",row['filename'])
         print("inpaint_file", inpaint_file)
-        if os.path.exists(inpaint_file) and not OVERWRITE_INPAINT:
+        if USE_PAINTED and os.path.exists(inpaint_file):
             if sort.VERBOSE: print("path exists, loading image",inpaint_file)
             inpaint_image=cv2.imread(inpaint_file)
         else:
@@ -1047,9 +1089,9 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
         print(row)
         # select the row in df_segment where the imagename == row['filename']
         try:
-            imgfilename = const_imgfilename(row['filename'], df_sorted, imgfileprefix)
+            imgfilename = const_imgfilename_NN(row['image_id'], df_sorted, imgfileprefix)
             outpath = os.path.join(sort.counter_dict["outfolder"],imgfilename)
-            open_path = os.path.join(io.ROOT,row['folder'],row['filename'])
+            open_path = os.path.join(io.ROOT,row['folder'],row['imagename'])
             # print(outpath, open_path)
             try:
                 img = cv2.imread(open_path)
@@ -1066,7 +1108,7 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
                     cropped_image, face_diff = in_out_paint(img, row)
                 ###
                 # I'm trying to compare descriptions here but it isn't working
-                # first_run isn't working. 
+                # first_run isn't working. Failing gracefully with exception
                 ###
                 try:
                     parent_row = df_segment[df_segment['imagename'] == row['filename']]
@@ -1214,10 +1256,12 @@ def process_linear(start_img_name, df_segment, cluster_no, sort):
     # preps the encodings for sort
     # sort.set_counters(io.ROOT,cluster_no, start_img_name)  
 
-    df_enc, df_128_enc, df_33_lms = prep_encodings(df_segment)
+    # df_enc, df_128_enc, df_33_lms = prep_encodings(df_segment)
+    df_enc = prep_encodings_NN(df_segment)
 
     # # get dataframe sorted by distance
-    df_sorted = sort_by_face_dist_NN(df_enc, df_128_enc, df_33_lms)
+    df_sorted = sort_by_face_dist_NN(df_enc)
+    # df_sorted = sort_by_face_dist(df_enc, df_128_enc, df_33_lms)
 
     # test to see if they make good faces
     img_list = linear_test_df(df_sorted,df_segment,cluster_no)
