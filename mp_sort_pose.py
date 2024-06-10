@@ -571,18 +571,20 @@ class SortPose:
         # print(type(self.bbox))
         # print(self.bbox['left'])
         # set bbox dimensions
-        img_h = self.h
-        img_w = self.w
+        # img_h = self.h
+        # img_w = self.w
         bbox_x = self.bbox['left']
         bbox_y = self.bbox['top']
         bbox_w = self.bbox['right'] - self.bbox['left']
         bbox_h = self.bbox['bottom'] - self.bbox['top']
+        # print("bboxxxxxxxxxxxxxxxxx",bbox_x,bbox_y,bbox_w,bbox_h)
         for idx, lm in enumerate(self.faceLms.landmark):
             if idx == point:
                 # print("found point:")
                 # print(idx)
                 # pointXY = (lm.x * img_w, lm.y * img_h)
                 pointXY = (lm.x * bbox_w + bbox_x, lm.y * bbox_h + bbox_y)
+                # print("landmarkkkkkkkkkkkkkkkkkk",lm.x,lm.y,point)
                 # print(pointXY)
                 # pointXYonly = (lm.x, lm.y)
                 # print(pointXYonly)
@@ -598,7 +600,7 @@ class SortPose:
         self.ptop = (int(top_2d[0]), int(top_2d[1]))
         self.pbot = (int(bottom_2d[0]), int(bottom_2d[1]))
         # height = int(pbot[1]-ptop[1])
-        # print(self.ptop)
+        # print("face_top",self.ptop,"face_bottom",self.pbot)
         # print(self.pbot)
         self.face_height = self.dist(self.point(self.pbot), self.point(self.ptop))
         # print("face_height", str(self.face_height))
@@ -610,13 +612,13 @@ class SortPose:
 
         # p1 is tip of nose
         p1 = (int(self.nose_2d[0]), int(self.nose_2d[1]))
-
+        
         toobig = False  # Default value
-
+        width,height=self.w,self.h
         print("checkig boundaries")
-        print(self.w, self.h)
-        print(p1)
-        print(self.face_height)
+        print("width",width,"height", height)
+        print("nose_2d",p1)
+        print("face_height",self.face_height)
 
         topcrop = int(p1[1]-self.face_height*self.image_edge_multiplier[0])
         rightcrop = int(p1[0]+self.face_height*self.image_edge_multiplier[1])
@@ -625,7 +627,9 @@ class SortPose:
         self.simple_crop = [topcrop, rightcrop, botcrop, leftcrop]
         print("crop top, right, bot, left")
         print(self.simple_crop)
-        if topcrop >= 0 and self.w-rightcrop >= 0 and self.h-botcrop>= 0 and leftcrop>= 0:
+
+
+        if topcrop >= 0 and width-rightcrop >= 0 and height-botcrop>= 0 and leftcrop>= 0:
             print("all positive")
             toobig = False
         else:
@@ -635,10 +639,12 @@ class SortPose:
         return toobig
 
     def get_image_face_data(self,image, faceLms, bbox):
+        
         self.image = image
-        self.size = (self.image.shape[0], self.image.shape[1])
         self.h = self.image.shape[0]
         self.w = self.image.shape[1]
+
+        self.size = (self.image.shape[0], self.image.shape[1])        # if shape is not None:
         self.faceLms = faceLms
         self.bbox = (bbox)
 
@@ -716,6 +722,7 @@ class SortPose:
         return new_image  
 
     def get_extension_pixels(self,image):
+        
         if self.VERBOSE: print("calculating extension pixels")
         p1 = (int(self.nose_2d[0]), int(self.nose_2d[1]))
         topcrop = int(p1[1]-self.face_height*self.MAX_IMAGE_EDGE_MULTIPLIER[0])
@@ -767,8 +774,8 @@ class SortPose:
     #     return inpaint_image
 
     def crop_image(self,image, faceLms, bbox, sinY=0,SAVE=False):
-
-        self.get_image_face_data(image, faceLms, bbox)    
+        self.get_image_face_data(image, faceLms, bbox) 
+ 
         # check for crop, and if not exist, then get
         # if not hasattr(self, 'crop'): 
         try:

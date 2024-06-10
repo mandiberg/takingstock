@@ -60,6 +60,7 @@ NO_KIDS = True
 USE_PAINTED = True
 OUTPAINT = True
 INPAINT= True
+OVERWRITE_INPAINT=True
 INPAINT_MAX = 5000
 OUTPAINT_MAX = 5001
 if OUTPAINT: from outpainting_modular import outpaint, image_resize
@@ -70,9 +71,9 @@ IS_ANGLE_SORT = False
 # this control whether sorting by topics
 IS_TOPICS = False
 N_TOPICS = 30
+IS_ONE_TOPIC = False
+TOPIC_NO = [7]
 
-IS_ONE_TOPIC = True
-TOPIC_NO = [17]
 #  is isolated,  is business,  babies, 17 pointing
 #  is doctor <<  covid
 #  is hands
@@ -101,7 +102,7 @@ io = DataIO(IS_SSD)
 db = io.db
 # overriding DB for testing
 # io.db["name"] = "stock"
-# io.db["name"] = "ministock"
+io.db["name"] = "ministock"
 
 METAS_FILE = "metas.csv"
 
@@ -276,7 +277,7 @@ def selectSQL(cluster_no=None, topic_no=None):
                 cluster += f"AND it.topic_id IN ({topic_ids}) "
             else:
                 # If topic_no is not a list, simply check for equality
-                cluster += f"AND it.topic_id = {str(topic_no)} "            
+                if IS_ONE_TOPIC: cluster += f"AND it.topic_id = {str(topic_no)} "            
     else:
         cluster=""
     # print(f"cluster SELECT is {cluster}")
@@ -678,6 +679,7 @@ def prep_encodings(df_segment):
     col8="lum"
     # df_enc=pd.DataFrame(columns=[col1, col2, col3, col4, col5])
     df_enc=pd.DataFrame(columns=[col1, col2, col3, col4, col5, col6, col7])
+    print(df_segment.columns)
     df_enc = pd.DataFrame({
                 col1: df_segment['imagename'], col2: df_segment['face_encodings68'].apply(lambda x: np.array(x)), 
                 # col3: df_segment['site_name_id'], col4: df_segment['face_landmarks'], col5: df_segment['bbox']})
@@ -821,29 +823,55 @@ def const_imgfilename(filename, df, imgfileprefix):
     print("imgfilename ",imgfilename)
     return imgfilename
 
-def shift_landmarks(landmarks,extension_pixels,img):
-    height,width = img.shape[:2]
-    new_height=extension_pixels["top"]+extension_pixels["bottom"]+height
-    new_width=extension_pixels["left"]+extension_pixels["right"]+width
-    translated_landmarks = landmark_pb2.NormalizedLandmarkList()
-    i=0
-    for landmark in landmarks.landmark:
-        translated_landmark = landmark_pb2.NormalizedLandmark()
-        translated_landmark.x = (landmark.x*width + extension_pixels["left"])/new_width
-        translated_landmark.y = (landmark.y*height + extension_pixels["top"])/new_height
-        translated_landmarks.landmark.append(translated_landmark)
-        if sort.VERBOSE:
-            if i==0:
-                print("before shifting landmark:",(landmark.x*width)//1,(landmark.y*height)//1,"after shifting landmark:",(translated_landmark.x*new_width)//1,(translated_landmark.y*new_height)//1)
-        i+=1
-    return translated_landmarks
+# def shift_landmarks(landmarks,extension_pixels,img):
+#     height,width = img.shape[:2]
+#     new_height=extension_pixels["top"]+extension_pixels["bottom"]+height
+#     new_width=extension_pixels["left"]+extension_pixels["right"]+width
+#     translated_landmarks = landmark_pb2.NormalizedLandmarkList()
+#     i=0
+#     for landmark in landmarks.landmark:
+#         translated_landmark = landmark_pb2.NormalizedLandmark()
+#         translated_landmark.x = (landmark.x*width + extension_pixels["left"])/new_width
+#         translated_landmark.y = (landmark.y*height + extension_pixels["top"])/new_height
+#         translated_landmarks.landmark.append(translated_landmark)
+#         if sort.VERBOSE:
+#             if i==0:
+#                 print("before shifting landmark:",(landmark.x*width)//1,(landmark.y*height)//1,"after shifting landmark:",(translated_landmark.x*new_width)//1,(translated_landmark.y*new_height)//1)
+#             # if i>0:
+#                 # print("change:",(landmark.x*width)//1-(translated_landmark.x*new_width)//1,(landmark.y*height)//1-(translated_landmark.y*new_height)//1)
+#         i+=1
+#     return translated_landmarks
+
+def merge_inpaint(inpaint_image,img,mask,extension_pixels,blur_radius=1000,offset=0):
+    height, width = img.shape[:2]
+    # top, bottom, left, right = extension_pixels["top"], extension_pixels["bottom"], extension_pixels["left"],extension_pixels["right"] 
+    top, bottom, left, right = extension_pixels["top"]+offset, extension_pixels["top"]-offset+height, extension_pixels["left"]+offset,extension_pixels["left"]-offset+width
+
+    mask = np.zeros_like(inpaint_image[:, :, 0])
+    mask[:top,:] = 1
+    mask[:,:left] = 1
+    mask[bottom:,:] = 1
+    mask[:,right:] = 1
+    # mask blur
+    
+    if blur_radius % 2 == 0:blur_radius += 1
+    mask = cv2.GaussianBlur(mask, (blur_radius, blur_radius), 0)
+    # Expand the mask dimensions to match the image
+    mask = np.expand_dims(mask, axis=-1)
+    mask=mask[top:bottom,left:right]
+    # inpaint_image[extension_pixels["top"]:extension_pixels["top"]+np.shape(img)[0],extension_pixels["left"]:extension_pixels["left"]+np.shape(img)[1]]=img
+    inpaint_image[top:bottom,left:right]=img[offset:height-offset,offset:width-offset]*(1-mask)+(mask)*inpaint_image[top:bottom,left:right]
+    
+    return inpaint_image
+
 
 def shift_bbox(bbox, extension_pixels):
+    # if sort.VERBOSE:print("extension_pixelssssssssssssssssssssssssss",extension_pixels)
     x0,y0=extension_pixels["left"],extension_pixels["top"]
     print("before shifting",bbox)
-    bbox['left']   = bbox['left'] +   x0
-    bbox['right']  = bbox['right'] +  x0
-    bbox['top']    = bbox['top'] +    y0
+    bbox['left']   = bbox['left']   + x0
+    bbox['right']  = bbox['right']  + x0
+    bbox['top']    = bbox['top']    + y0
     bbox['bottom'] = bbox['bottom'] + y0
     if sort.VERBOSE:print("after shifting",bbox)
     return bbox
@@ -865,15 +893,16 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
         #     traceback.print_exc()
         #     print(str(e))
         # description = parent_row['description'].values[0]
-        # topic_score = parent_row['topic_score'].values[0]
-        metas = [image_id, description[0], topic_score]
-        metas_path = os.path.join(sort.counter_dict["outfolder"],METAS_FILE)
-        io.write_csv(metas_path, metas)
+        if IS_TOPICS or IS_ONE_TOPIC:
+            metas = [image_id, description[0], topic_score]
+            metas_path = os.path.join(sort.counter_dict["outfolder"],METAS_FILE)
+            io.write_csv(metas_path, metas)
         # print(image_id, description[0], topic_score)
         # return([image_id, description[0], topic_score])
 
     def in_out_paint(img, row):
-        # cropped_image = None
+        cropped_image = None
+        face_diff=None
         bailout=False
         extension_pixels=sort.get_extension_pixels(img)
         if sort.VERBOSE:print("extension_pixels",extension_pixels)
@@ -895,11 +924,12 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
             if extension_pixels[maxkey] <= INPAINT_MAX:
                 print("inpainting small extension")
                 extended_img,mask=sort.prepare_mask(img,extension_pixels)
-                inpaint_image=sort.extend_lama(extended_img, mask, downsampling_scale = 8)
+                inpaint_image=sort.extend_lama(extended_img, mask, downsampling_scale = 4)
                 ### use inpainting for the extended part, but use original for non extend to keep image sharp ###
-                inpaint_image[extension_pixels["top"]:extension_pixels["top"]+np.shape(img)[0],extension_pixels["left"]:extension_pixels["left"]+np.shape(img)[1]]=img
+                # inpaint_image[extension_pixels["top"]:extension_pixels["top"]+np.shape(img)[0],extension_pixels["left"]:extension_pixels["left"]+np.shape(img)[1]]=img
+                inpaint_image=merge_inpaint(inpaint_image,img,mask,extension_pixels)
                 cv2.imwrite(inpaint_file,inpaint_image)
-                print("inpainting done", inpaint_file)
+                print("inpainting done", inpaint_file,"shape",np.shape(inpaint_image))
             elif extension_pixels[maxkey] < OUTPAINT_MAX:
                 print("outpainting medium extension")
                 inpaint_image=outpaint(img,extension_pixels,downsampling_scale=1,prompt="",negative_prompt="")
@@ -909,16 +939,10 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
                 # inpaint_image=0
                 bailout=True
         if not bailout:
-            print("inpainting done","shape:",np.shape(inpaint_image))
-            # print("face_landmarks",row['face_landmarks'])
-            face_landmarks=shift_landmarks(row['face_landmarks'],extension_pixels,img)
-            # print("shifted face_landmarks",face_landmarks)
-            print("bbox",row['bbox'])
             bbox=shift_bbox(row['bbox'],extension_pixels)
-            print("shifted bbox",bbox)
-            cropped_image, face_diff = compare_images(sort.counter_dict["last_image"], inpaint_image, face_landmarks, bbox)
+            cropped_image, face_diff = compare_images(sort.counter_dict["last_image"], inpaint_image,row['face_landmarks'], bbox)
             if sort.VERBOSE:print("inpainting done","shape:",np.shape(cropped_image))
-            if len(cropped_image)==1:print("still 1x1 image idk whats happening")
+            if len(cropped_image)==1:print("still 1x1 image , you're probably shifting both landmarks and bbox, only bbox needs to be shifted")
 
         return cropped_image, face_diff
 
@@ -952,7 +976,7 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
                 # last_image is cv2 np.array
                 cropped_image, face_diff = compare_images(sort.counter_dict["last_image"], img, row['face_landmarks'], row['bbox'])
                 print("len cropped_image", len(cropped_image))
-                if len(cropped_image)==1 and OUTPAINT:
+                if len(cropped_image)==1 and (OUTPAINT or INPAINT):
                     print("gotta paint that shizzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz")
                     cropped_image, face_diff = in_out_paint(img, row)
                 ###
