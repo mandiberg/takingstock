@@ -179,7 +179,7 @@ elif IS_SEGONLY:
     # WHERE += " AND k.keyword_text LIKE 'surpris%' "
 
     # WHERE = "s.site_name_id != 1"
-    LIMIT = 1000
+    LIMIT = 1000000
 
     # TEMP TK TESTING
     # WHERE += " AND s.site_name_id = 8"
@@ -206,7 +206,9 @@ face_height_output = 500
 # image_edge_multiplier = [1, 1, 1, 1] # just face
 # image_edge_multiplier = [1.5,1.5,2,1.5] # bigger portrait
 # image_edge_multiplier = [1.4,2.6,1.9,2.6] # wider for hands
-image_edge_multiplier = [1.6,3.5,3,3.5] # wiiiiiiiidest for hands
+image_edge_multiplier = [1.4,3.3,3,3.3] # wiiiiiiiidest 16:10 for hands
+# image_edge_multiplier = [1.6,3.84,3.2,3.84] # wiiiiiiiidest 16:10 for hands
+# image_edge_multiplier = [1.45,3.84,2.87,3.84] # wiiiiiiiidest 16:9 for hands
 # image_edge_multiplier = [1.2,2.3,1.7,2.3] # medium for hands
 # image_edge_multiplier = [1.2, 1.2, 1.6, 1.2] # standard portrait
 # sort.max_image_edge_multiplier is the maximum of the elements
@@ -534,6 +536,10 @@ def sort_by_face_dist_NN(df_enc):
 
     print("df_sorted", df_sorted)
 
+    # make a list of df_sorted dist
+    dist_list = df_sorted['dist'].tolist()
+    print("dist_list", dist_list)
+    
     # print all columns in df_sorted
     print("df_sorted.columns", df_sorted.columns)
     

@@ -27,8 +27,10 @@ class SortPose:
         #maximum allowable distance between encodings (this accounts for dHSV)
         self.MAXDIST = 1.4
         self.MINDIST = .45 #TK
-        self.MINBODYDIST = .0001
-        self.CUTOFF = 100
+        self.MINBODYDIST = .09
+        self.BODY_DUPE_DIST = .03
+
+        self.CUTOFF = 10000
         self.FACE_DIST = 15
 
         self.INPAINT=INPAINT
@@ -1306,13 +1308,21 @@ class SortPose:
             df_shuffled = self.sort_df_KNN(df_enc, enc1, "planar_body")
 
         if len(df_shuffled) > 0:
-            print("df_shuffled is not empty", df_shuffled.head())
+            # print("df_shuffled is not empty", df_shuffled.head())
 
             # Filter rows based on the condition
             if sorttype == "128d": min_dist = self.MINDIST
             elif sorttype == "planar_body": min_dist = self.MINBODYDIST
+
+            if not FIRST_ROUND:
+                # remove duplicates (where dist is less than BODY_DUPE_DIST)
+                dupemask = df_shuffled['distance_to_enc1'] < self.BODY_DUPE_DIST
+                print("dupemask", dupemask)
+                df_enc = df_enc[~dupemask].reset_index(drop=True)
+                df_shuffled = df_shuffled[~dupemask].reset_index(drop=True)
+
             mask = df_shuffled['distance_to_enc1'] < min_dist
-            print("mask", mask)
+            # print("mask", mask)
             if mask.any():
                 # if there is a run < MINDIST
                 df_run = df_shuffled[mask]
@@ -1323,6 +1333,7 @@ class SortPose:
                 df_enc = df_enc.drop(df_run.index).reset_index(drop=True)
 
             print("df_run", df_run)
+
 
             df_sorted = pd.concat([df_sorted, df_run])  
             print("df_sorted containing all good items", len(df_sorted))
@@ -1564,11 +1575,11 @@ class SortPose:
                 enc1 = np.array(enc1_list)
                 # enc1 = [v for k, v in enc1_dict.items()]
                 # print("enc1_dict", enc1_dict)
-                print("enc1_values", enc1)
-                print("df_enc[sortcol] preconvert", df_enc[sortcol])
+                # print("enc1_values", enc1)
+                # print("df_enc[sortcol] preconvert", df_enc[sortcol])
                 # Convert body_landmarks to a 2D array
                 df_enc[sortcol] = df_enc[sortcol].apply(lambda x: np.concatenate([v for k, v in self.get_landmarks_2d(x, self.BODY_LMS).items()]))
-                print("df_enc[sortcol] postconvert", df_enc[sortcol])
+                # print("df_enc[sortcol] postconvert", df_enc[sortcol])
         # Extract the face encodings from the dataframe
         encodings_array = df_enc[sortcol].to_numpy().tolist()
 
@@ -1583,19 +1594,7 @@ class SortPose:
         # print("indices", indices)
         # print("distances", distances)
 
-        print("df_enc before adding distance", df_enc)
-        # Add distances to the dataframe
-        # df_enc.loc[:, 'distance_to_enc1'] = distances
-        # df_enc.loc[indices, 'distance_to_enc1'] = distances
-
-
-        # IDList= [['453164259','453106168','453163869','453164463'] # [ID] 
-        # SellList=[120,270,350,410]
-        # print("df_enc incex", df_enc.index)
-        # print("Length of df_enc:", len(df_enc))
-        # print("Maximum index value in df_enc:", max(df_enc.index))
-        # id_dict={x:y for x,y in zip(indices,distances)}
-        # print("id_dict", id_dict)
+        # print("df_enc before adding distance", df_enc)
 
         # Create a dictionary with valid indices as keys
         id_dict = {idx: dist for idx, dist in zip(indices, distances)}
@@ -1603,29 +1602,13 @@ class SortPose:
         # Update the 'distance_to_enc1' column with the distances for valid indices
         for idx in indices:
             df_enc.loc[idx, 'distance_to_enc1'] = id_dict[idx]
-
-
-        # for index,row in df_enc.iterrows():
-        #     print("index", index)
-        #     print("index type", type(index))
-        #     if index in indices:
-        #         df_enc.iloc[index,'distance_to_enc1']=id_dict[index]
                         
-        print("df_enc after adding distance", df_enc)
-        # print("df_enc after adding distance",df_enc.to_string())
-        # Sort the dataframe based on the distances
+        # print("df_enc after adding distance", df_enc)
         df_enc = df_enc.sort_values(by='distance_to_enc1')
 
-        # # Create a new column 'sorted_indices' with the sorted row indices
-        # df_enc['sorted_indices'] = df_enc.index
-
-        # # Apply the distances to the DataFrame using the sorted indices
-        # df_enc.loc[df_enc['sorted_indices'], 'distance_to_enc1'] = distances
-
-        print("df_enc after sorting", df_enc)
-
-        # Display the sorted dataframe
-        print("sort_df_KNN results:", df_enc.head())
+        # print("df_enc after sorting", df_enc)
+        # # Display the sorted dataframe
+        # print("sort_df results:", df_enc.head())
 
         return df_enc
 
@@ -1670,7 +1653,7 @@ class SortPose:
             start_time = time.time()            
             # df_enc = self.eval_df_128_enc(df_enc)
             # force 128d on first round, (for planar and planar_body)
-            df_sorted = self.sort_df_KNN(df_enc, enc1, "128d")
+            df_sorted = self.sort_df(df_enc, enc1, "128d")
             print(df_sorted)
             print("--- %s seconds ---" % (time.time() - start_time))
             # quit()
