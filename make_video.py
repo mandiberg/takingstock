@@ -38,35 +38,13 @@ IS_SEGONLY= True
 
 HSV_CONTROL = False # defining so it doesn't break below, if commented out
 # This tells it to pull luminosity. Comment out if not using
-if HSV_CONTROL:
-    HSV_BOUNDS = {
-        "LUM_MIN": 0,
-        "LUM_MAX": 40,
-        "SAT_MIN": 0,
-        "SAT_MAX": 1000,
-        "HUE_MIN": 0,
-        "HUE_MAX": 360
-    }
-else:
-    HSV_BOUNDS = {
-        "LUM_MIN": 0,
-        "LUM_MAX": 100,
-        "SAT_MIN": 0,
-        "SAT_MAX": 1000,
-        "HUE_MIN": 0,
-        "HUE_MAX": 360
-    }
+if HSV_CONTROL: HSV_BOUNDS = {"LUM_MIN": 0, "LUM_MAX": 40, "SAT_MIN": 0, "SAT_MAX": 1000, "HUE_MIN": 0, "HUE_MAX": 360}
+else: HSV_BOUNDS = {"LUM_MIN": 0, "LUM_MAX": 100, "SAT_MIN": 0, "SAT_MAX": 1000, "HUE_MIN": 0, "HUE_MAX": 360}
 HSV_BOUNDS["d128_WEIGHT"] = 1
 HSV_BOUNDS["HSV_WEIGHT"] = 1
 HSV_BOUNDS["LUM_WEIGHT"] = 1
-
-HSV_NORMS = {
-    # converts everything to a 0-1 scale
-    "LUM": .01,
-    "SAT": 1,
-    "HUE": 0.002777777778,
-    "VAL": 1
-}
+# converts everything to a 0-1 scale
+HSV_NORMS = {"LUM": .01, "SAT": 1,  "HUE": 0.002777777778, "VAL": 1}
 
 # this is for controlling if it is using
 # all clusters,
@@ -79,8 +57,8 @@ CLUSTER_NO = 63
 
 # cut the kids
 NO_KIDS = True
-USE_PAINTED = False
-OUTPAINT = False
+USE_PAINTED = True
+OUTPAINT = True
 INPAINT= True
 OVERWRITE_INPAINT=True
 INPAINT_MAX = 5000
@@ -95,6 +73,7 @@ IS_TOPICS = False
 N_TOPICS = 30
 IS_ONE_TOPIC = False
 TOPIC_NO = [7]
+
 #  is isolated,  is business,  babies, 17 pointing
 #  is doctor <<  covid
 #  is hands
@@ -105,9 +84,9 @@ TOPIC_NO = [7]
 # 7 is surprise
 #  is yoga << planar,  planar,  fingers crossed
 
-SORT_TYPE = "128d"
+# SORT_TYPE = "128d"
 # SORT_TYPE ="planar"
-# SORT_TYPE = "planar_body"
+SORT_TYPE = "planar_body"
 
 # if planar_body set OBJ_CLS_ID for each object type
 # 67 is phone, 63 is laptop, 26: 'handbag', 27: 'tie', 32: 'sports ball'
@@ -144,7 +123,7 @@ if IS_SEGONLY is not True:
 
     # SAVE_SEGMENT controls whether the result will be saved to the db as a new table
     SAVE_SEGMENT = False
-    SELECT = "DISTINCT(i.image_id), i.site_name_id, i.contentUrl, i.imagename, e.face_x, e.face_y, e.face_z, e.mouth_gap, e.face_landmarks, e.bbox, e.face_encodings68, i.site_image_id"
+    SELECT = "DISTINCT(i.image_id), i.site_name_id, i.contentUrl, i.imagename, i.description e.face_x, e.face_y, e.face_z, e.mouth_gap, e.face_landmarks, e.bbox, e.face_encodings68, i.site_image_id"
 
     # don't need keywords if SegmentTable
     # this is for MM segment table
@@ -161,7 +140,7 @@ elif IS_SEGONLY:
 
     SAVE_SEGMENT = False
     # no JOIN just Segment table
-    SELECT = "DISTINCT(s.image_id), s.site_name_id, s.contentUrl, s.imagename, s.face_x, s.face_y, s.face_z, s.mouth_gap, s.face_landmarks, s.bbox, s.face_encodings68, s.site_image_id, s.body_landmarks"
+    SELECT = "DISTINCT(s.image_id), s.site_name_id, s.contentUrl, s.imagename, s.description, s.face_x, s.face_y, s.face_z, s.mouth_gap, s.face_landmarks, s.bbox, s.face_encodings68, s.site_image_id, s.body_landmarks"
     
     FROM =f"{SegmentTable_name} s "
 
@@ -178,28 +157,30 @@ elif IS_SEGONLY:
     ## To add keywords to search
     # FROM += " JOIN ImagesKeywords ik ON s.image_id = ik.image_id JOIN Keywords k ON ik.keyword_id = k.keyword_id "
     # WHERE += " AND k.keyword_text LIKE 'shout%' "
-    ##########MICHAEL#########################
-    # if IS_CLUSTER or IS_ONE_CLUSTER:
-    #     FROM += " JOIN ImagesClusters ic ON s.image_id = ic.image_id "
-    # if IS_TOPICS or IS_ONE_TOPIC:
-    #     FROM += " JOIN ImagesTopics it ON s.image_id = it.image_id "
-    #     WHERE += " AND it.topic_score > .3"
-    #     SELECT += ", it.topic_score" # add description here, after resegmenting
-    # if NO_KIDS:
-    #     WHERE += " AND s.age_id NOT IN (1,2,3) "
-    # if HSV_BOUNDS:
-    #     FROM += " JOIN ImagesBackground ibg ON s.image_id = ibg.image_id "
-    #     # WHERE += " AND ibg.lum > .3"
-    #     SELECT += ", ibg.lum, ibg.lum_bb, ibg.hue, ibg.hue_bb, ibg.sat, ibg.sat_bb, ibg.val, ibg.val_bb, ibg.lum_torso, ibg.lum_torso_bb " # add description here, after resegmenting
-    # if OBJ_CLS_ID:
-    #     FROM += " JOIN PhoneBbox pb ON s.image_id = pb.image_id "
-    #     SELECT += ", pb.bbox_67, pb.conf_67, pb.bbox_63, pb.conf_63, pb.bbox_26, pb.conf_26, pb.bbox_27, pb.conf_27, pb.bbox_32, pb.conf_32 "
+
+    if IS_CLUSTER or IS_ONE_CLUSTER:
+        FROM += " JOIN ImagesClusters ic ON s.image_id = ic.image_id "
+    if IS_TOPICS or IS_ONE_TOPIC:
+        FROM += " JOIN ImagesTopics it ON s.image_id = it.image_id "
+        WHERE += " AND it.topic_score > .3"
+        SELECT += ", it.topic_score" # add description here, after resegmenting
+    if NO_KIDS:
+        WHERE += " AND s.age_id NOT IN (1,2,3) "
+    if HSV_BOUNDS:
+        FROM += " JOIN ImagesBackground ibg ON s.image_id = ibg.image_id "
+        # WHERE += " AND ibg.lum > .3"
+        SELECT += ", ibg.lum, ibg.lum_bb, ibg.hue, ibg.hue_bb, ibg.sat, ibg.sat_bb, ibg.val, ibg.val_bb, ibg.lum_torso, ibg.lum_torso_bb " # add description here, after resegmenting
+    if OBJ_CLS_ID:
+        FROM += " JOIN PhoneBbox pb ON s.image_id = pb.image_id "
+        SELECT += ", pb.bbox_67, pb.conf_67, pb.bbox_63, pb.conf_63, pb.bbox_26, pb.conf_26, pb.bbox_27, pb.conf_27, pb.bbox_32, pb.conf_32 "
+    if SORT_TYPE == "planar_body":
+        WHERE += " AND s.body_landmarks IS NOT NULL "
     # # join to keywords
     # FROM += " JOIN ImagesKeywords ik ON s.image_id = ik.image_id JOIN Keywords k ON ik.keyword_id = k.keyword_id "
     # WHERE += " AND k.keyword_text LIKE 'surpris%' "
 
     # WHERE = "s.site_name_id != 1"
-    LIMIT = 1000
+    LIMIT = 1000000
 
     # TEMP TK TESTING
     # WHERE += " AND s.site_name_id = 8"
@@ -226,9 +207,11 @@ face_height_output = 500
 # image_edge_multiplier = [1, 1, 1, 1] # just face
 # image_edge_multiplier = [1.5,1.5,2,1.5] # bigger portrait
 # image_edge_multiplier = [1.4,2.6,1.9,2.6] # wider for hands
-# image_edge_multiplier = [1.6,3.5,3,3.5] # wiiiiiiiidest for hands
+image_edge_multiplier = [1.4,3.3,3,3.3] # wiiiiiiiidest 16:10 for hands
+# image_edge_multiplier = [1.6,3.84,3.2,3.84] # wiiiiiiiidest 16:10 for hands
+# image_edge_multiplier = [1.45,3.84,2.87,3.84] # wiiiiiiiidest 16:9 for hands
 # image_edge_multiplier = [1.2,2.3,1.7,2.3] # medium for hands
-image_edge_multiplier = [1.2, 1.2, 1.6, 1.2] # standard portrait
+# image_edge_multiplier = [1.2, 1.2, 1.6, 1.2] # standard portrait
 # sort.max_image_edge_multiplier is the maximum of the elements
 
 # construct my own objects
@@ -517,38 +500,6 @@ def sort_by_face_dist_NN(df_enc):
     # create emtpy df_sorted with the same columns as df_enc
     df_sorted = pd.DataFrame(columns = df_enc.columns)
 
-    # def get_enc1(this_start, df_128_enc, df_33_lms, i):
-    #     print("getting start for sort round ",str(i))
-    #     ## Get the starting encodings (if not passed through)
-    #     if this_start != "median" and this_start != "start_site_image_id" and i == 0:
-    #         # this is the first round for clusters/itter where last_image_enc is true
-    #         # set encodings to the passed through encodings
-    #         # IF NO START IMAGE SPECIFIED (this line works for no clusters)
-    #         print("attempting set enc1 from pass through")
-    #         enc1 = sort.counter_dict["last_image_enc"]
-    #         # enc1 = df_enc.loc[this_start]['face_encodings']
-    #         # print(enc1)
-    #         print("set enc1 from pass through")
-    #     else:
-    #         #this is the first??? round, set via df
-    #         print(f"trying get_start_enc() from {this_start}")
-    #         enc1, df_128_enc, df_33_lms = sort.get_start_enc(this_start, df_128_enc, df_33_lms, SORT_TYPE)
-    #         # # test to see if get_start_enc was successful
-    #         # # if not, retain previous enc1. or shoudl it reassign median? 
-    #         # if enc1_temp is not None:
-    #         #     enc1 = enc1_temp
-    #         print(f"set enc1 from get_start_enc() to {enc1}")
-    #     return enc1, df_128_enc, df_33_lms
-
-    # this_start = sort.counter_dict["start_img_name"]
-    # face_distances=[]
-
-    # this prob should be a df.iterrows
-    # print("df_enc.index")
-    # print(df_enc.index)
-    # print(len(df_enc.index))
-    # print(sort.counter_dict)
-    # FIRST_ROUND = True
     if sort.CUTOFF < len(df_enc.index):
         itters = sort.CUTOFF
     else: 
@@ -559,39 +510,18 @@ def sort_by_face_dist_NN(df_enc):
     # df = pd.DataFrame(face_distances, columns =['dist', 'folder', 'filename','site_name_id','face_landmarks', 'bbox'])
 
     for i in range(itters):
-        # find the image
-        # print(df_enc)
-        # this is the site_name_id for this_start, needed to test mse
 
         ## Find closest
         try:
-            # closest_dict is now a dict with 1 or more items
-            # this_start is a filepath, which serves as df index
-            # it is now a dict of key=distance value=filepath
-            # print("going to get closest")
-            # print("this_start", this_start)
-            # print("SORT_TYPE", SORT_TYPE)
-            # this probbly only needs to be done once, but it isn't hurting to do it each time
-            # enc1, df_128_enc, df_33_lms = get_enc1(, df_128_enc, df_33_lms, i)
-            # print("got start enc1")
-            # NEED TO GET IT TO DROP FROM df_33_lms in get_closest_df
-            # need to send the df_enc with the same two keys through to get_closest
+            # send in both dfs, and return same dfs with 1+ rows sorted
             df_enc, df_sorted = sort.get_closest_df_NN(df_enc, df_sorted, sorttype=SORT_TYPE)
-            # dist, closest_dict, df_128_enc = sort.get_closest_df(FIRST_ROUND, enc1,df_enc, df_128_enc, sorttype="planar")
-            # dist, closest_dict, df_128_enc = sort.get_closest_df(enc1,df_enc, df_128_enc)
-            FIRST_ROUND = False
 
-            print("got closest")
-            # print(closest_dict)
             dist = df_sorted.iloc[-1]['distance_to_enc1']
-            print(dist)
+            # print(dist)
 
             # Break out of the loop if greater than MAXDIST
-            # I think this will be graceful with cluster iteration
-            # print("dist")
-            # print(dist)
             if dist > sort.MAXDIST and sort.SHOT_CLOCK != 0:
-                print("should breakout")
+                print("should breakout, dist is", dist)
                 break
 
         except Exception as e:
@@ -599,103 +529,22 @@ def sort_by_face_dist_NN(df_enc):
             print(str(e))
             traceback.print_exc()
 
-
-     
-        # # Iterate through the results and append
-        # dkeys = list(closest_dict.keys())
-        # dkeys.sort()
-        # images_to_drop =[]
-        # print("length of dkeys for closest_dict is ", len(dkeys))
-        # for dkey in dkeys:
-
-
-        #     ## Collect values and append to face_distances
-        #     this_start = closest_dict[dkey]
-        #     if VERBOSE: print("this_start assigned as ", this_start)
-        #     face_landmarks=None
-        #     bbox=None
-
-        #     # print("THIS: closest_dict[dkey],")
-        #     # print(closest_dict[dkey])
-
-        #     try:
-        #         # print("dkey, df_enc.loc[closest_dict[dkey]]")
-        #         # print(dkey)
-        #         # print(closest_dict[dkey])
-        #         # print(df_enc.loc[closest_dict[dkey]])
-        #         site_name_id = df_enc.loc[closest_dict[dkey]]['site_name_id']
-        #         face_landmarks = df_enc.loc[closest_dict[dkey]]['face_landmarks']
-        #         bbox = df_enc.loc[closest_dict[dkey]]['bbox']
-        #         # print("assigned bbox", bbox)
-        #     except:
-        #         print("won't assign landmarks/bbox")
-        #     # print("site_name_id is the following")
-
-        #     # for some reason, site_name_id is not an int. trying to test if int.
-        #     # print(type(site_name_id))
-        #     # if not pd.is_int(site_name_id): continue
-        #     # print(site_name_id)
-        #     # print("site_specific_root_folder", io.folder_list[site_name_id])
-        #     site_specific_root_folder = io.folder_list[site_name_id]
-        #     # print("site_specific_root_folder")
-        #     # print(site_specific_root_folder)
-        #     # save the image -- this prob will be to append to list, and return list? 
-        #     # save_sorted(i, folder, start_img_name, dist)
-        #     this_dist=[dkey, site_specific_root_folder, this_start, site_name_id, face_landmarks, bbox]
-        #     face_distances.append(this_dist)
-        #     images_to_drop.append(this_start)
-
-        # # remove the last image this_start, then drop them from df_128_enc
-        # # the this_start will be dropped in the get_start_enc method
-        # print("lenght of images to drop before and after removing this_start")
-        # print(len(images_to_drop))
-        # try:
-        #     images_to_drop.remove(this_start)
-        # except Exception as e:
-        #     traceback.print_exc()
-        #     print("images_to_drop.remove failed because was too great a lum diff", str(e))
-        # print(len(images_to_drop))
-        # for dropimage in images_to_drop:
-        #     if VERBOSE: print("going to remove this image enc", dropimage)
-        #     try:
-        #         df_128_enc=df_128_enc.drop(dropimage)
-        #     except Exception as e:
-        #         traceback.print_exc()
-        #         print(str(e))
-
-        # #debuggin
-        # print(f"sorted round {str(i)} which is actually round  {str(i+len(dkeys)-1)}")
-        # print(f"{len(df_128_enc.index)} images remain in df_128_enc")
-        # if len(df_128_enc.index) < 2:
-        #     break
-        # print(f"last distance was {dist}, next image is {start_img_name}")
-        
-    # ## When loop is complete, create df
-    # df = pd.DataFrame(face_distances, columns =['dist', 'folder', 'filename','site_name_id','face_landmarks', 'bbox'])
-    # print(df)
-
-    # site_specific_root_folder = io.folder_list[site_name_id]
     # use the colum site_name_id to asign the value of io.folder_list[site_name_id] to the folder column
     df_sorted['folder'] = df_sorted['site_name_id'].apply(lambda x: io.folder_list[x])
     
     # rename the distance column to dist
     df_sorted.rename(columns={'distance_to_enc1': 'dist'}, inplace=True)
 
+    print("df_sorted", df_sorted)
 
+    # make a list of df_sorted dist
+    dist_list = df_sorted['dist'].tolist()
+    print("dist_list", dist_list)
     
-
-    print(df_sorted)
-
     # print all columns in df_sorted
-    print(df_sorted.columns)
+    print("df_sorted.columns", df_sorted.columns)
     
-    # ## When loop is complete, create df
-    # df = pd.DataFrame(df_sorted, columns =['dist', 'folder', 'filename','site_name_id','face_landmarks', 'bbox'])
-    # print(df)
-
-
     ## Set a start_img_name for next round --> for clusters
-    ## TK refactor this for df_sorted // needs to be done June 8
     try:
         #last_file = imagename from last row in df_sorted
         last_file = df_sorted.iloc[-1]['imagename']
@@ -705,8 +554,6 @@ def sort_by_face_dist_NN(df_enc):
         print("last_file is this_start",last_file)
     sort.counter_dict["start_img_name"] = last_file
 
-    # df = df.sort_values(by=['dist']) # this was sorting based on delta distance, not sequential distance
-    # print(df)
     return df_sorted
 
 
@@ -772,10 +619,36 @@ def prep_encodings_NN(df_segment):
             return [row['lum']*HSV_NORMS["LUM"], row['lum_torso_bb']*HSV_NORMS["LUM"]]
         else:
             return [row['lum']*HSV_NORMS["LUM"], row['lum_torso']*HSV_NORMS["LUM"]]    
+    def test_landmarks_vis(row):
+        left_hand = [15,17,19,21]
+        right_hand = [16,18,20,22]
+        # lms = ast.literal_eval(row['body_landmarks'])
+        lms = row['body_landmarks']
+
+        # print("lms", lms)
+        for idx, lm in enumerate(lms.landmark):
+            if idx in left_hand:
+                if lm.visibility > .5:
+                    return True
+            elif idx in right_hand:
+                if lm.visibility > .5:
+                    return True
+        # print("returning false, no hands from this row", row)
+        return False
 
     # create a column for the hsv values using df_segment.apply(lambda row: create_hsv_list(row), axis=1)
     df_segment['hsv'] = df_segment.apply(lambda row: create_hsv_list(row), axis=1)
     df_segment['lum'] = df_segment.apply(lambda row: create_lum_list(row), axis=1)
+
+    print("df_segment length", len(df_segment.index))
+    if SORT_TYPE == "planar_body":
+        # if planar_body drop rows where self.BODY_LMS are low visibility
+        df_segment['hand_visible'] = df_segment.apply(lambda row: test_landmarks_vis(row), axis=1)
+
+        # delete rows where hand_visible is false
+        df_segment = df_segment[df_segment['hand_visible'] == True].reset_index(drop=True)
+        # df_segment = df_segment[df_segment['hand_visible'] == True]
+        print("df_segment length visible hands", len(df_segment.index))
 
     return df_segment
 
@@ -1005,25 +878,25 @@ def shift_bbox(bbox, extension_pixels):
 
 def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
     def save_image_metas(row):
-        # print("row")
+        print("row", row)
         print("save_image_metas for use in TTS")
-        parent_row = df_segment[df_segment['imagename'] == row['filename']]
-        image_id = parent_row['image_id'].values[0]
+        # parent_row = df_segment[df_segment['image_id'] == row['image_id']]
+        # image_id = parent_row['image_id'].values[0] #NON NN
+        image_id = row['image_id']
+        description = row['description']
+        topic_score = row['topic_score']
         # use image_id to retrieve description from mysql database 
         # this is temporary until I resegment the images with description in the segment
-        try:
-            description = session.query(Images.description).filter(Images.image_id == image_id).first()
-        except Exception as e:
-            traceback.print_exc()
-            print(str(e))
+        # try:
+        #     description = session.query(Images.description).filter(Images.image_id == image_id).first()
+        # except Exception as e:
+        #     traceback.print_exc()
+        #     print(str(e))
         # description = parent_row['description'].values[0]
-        metas = [image_id, description[0]]
         if IS_TOPICS or IS_ONE_TOPIC:
-            topic_score = parent_row['topic_score'].values[0]
-            metas.append(topic_score)
-        # metas = [image_id, description[0], topic_score]
-        metas_path = os.path.join(sort.counter_dict["outfolder"],METAS_FILE)
-        io.write_csv(metas_path, metas)
+            metas = [image_id, description[0], topic_score]
+            metas_path = os.path.join(sort.counter_dict["outfolder"],METAS_FILE)
+            io.write_csv(metas_path, metas)
         # print(image_id, description[0], topic_score)
         # return([image_id, description[0], topic_score])
 
@@ -1034,7 +907,7 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
         extension_pixels=sort.get_extension_pixels(img)
         if sort.VERBOSE:print("extension_pixels",extension_pixels)
         # inpaint_file=os.path.join(os.path.join(os.path.dirname(row['folder']), "inpaint", os.path.basename(row['folder'])),row['filename'])
-        inpaint_file=os.path.join(os.path.dirname(row['folder']), os.path.basename(row['folder'])+"_inpaint",row['filename'])
+        inpaint_file=os.path.join(os.path.dirname(row['folder']), os.path.basename(row['folder'])+"_inpaint",row['imagename'])
         print("inpaint_file", inpaint_file)
         if USE_PAINTED and os.path.exists(inpaint_file):
             if sort.VERBOSE: print("path exists, loading image",inpaint_file)
@@ -1110,13 +983,13 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
                 # I'm trying to compare descriptions here but it isn't working
                 # first_run isn't working. Failing gracefully with exception
                 ###
-                try:
-                    parent_row = df_segment[df_segment['imagename'] == row['filename']]
-                    image_id = parent_row['image_id'].values[0]                        
-                    description = session.query(Images.description).filter(Images.image_id == image_id).first()
-                except Exception as e:
-                    traceback.print_exc()
-                    print(str(e))
+                # try:
+                #     parent_row = df_segment[df_segment['imagename'] == row['filename']]
+                #     image_id = parent_row['image_id'].values[0]                        
+                #     description = session.query(Images.description).filter(Images.image_id == image_id).first()
+                # except Exception as e:
+                #     traceback.print_exc()
+                #     print(str(e))
                 temp_first_run = sort.counter_dict["first_run"]
                 print("temp_first_run", temp_first_run)
                 if sort.counter_dict["first_run"]:
@@ -1146,7 +1019,7 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
                     
                     # print("row['filename']")
                     # print(row['filename'])
-                    sort.counter_dict["start_img_name"] = row['filename']
+                    sort.counter_dict["start_img_name"] = row['imagename']
                     # print(sort.counter_dict["last_image"])
                     print("saved: ",outpath)
                     sort.counter_dict["counter"] += 1

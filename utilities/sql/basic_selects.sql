@@ -81,9 +81,9 @@ FROM Encodings e
 WHERE e.image_id = 423851
 ;
 
-SELECT MAX(s.face_y) 
-FROM SegmentOct20 s;
-
+SELECT MAX(sbi.seg_image_id) 
+FROM SegmentBig_isface sbi 
+;
 
 
 
@@ -155,10 +155,13 @@ AND i.image_id > 100887900
 
 
 
-SELECT COUNT(e.encoding_id)
+SELECT COUNT(i.image_id) as ccount, i.site_name_id 
 FROM Images i 
-JOIN Encodings e on i.image_id = e.image_id 
-WHERE i.site_name_id = 2
+LEFT JOIN Encodings e on i.image_id = e.image_id 
+-- WHERE i.site_name_id = 2
+WHERE e.encoding_id is NULL
+AND i.image_id < 88000000
+GROUP BY i.site_name_id 
 ;
 
 
@@ -167,7 +170,7 @@ SELECT i.image_id, i.site_name_id, i.imagename
 FROM Images i 
 LEFT JOIN Encodings e on i.image_id = e.image_id 
 WHERE e.encoding_id is NULL
-AND i.site_name_id not in (1)
+-- AND i.site_name_id not in (1)
 LIMIT 10
 ;
 

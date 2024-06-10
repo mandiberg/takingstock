@@ -12,7 +12,6 @@ import sys
 from collections import Counter
 from simple_lama_inpainting import SimpleLama
 from sklearn.neighbors import NearestNeighbors
-import ast
 import re
 
 
@@ -25,12 +24,13 @@ class SortPose:
         self.mp_drawing = mp.solutions.drawing_utils
         self.get_bg_segment=mp.solutions.selfie_segmentation.SelfieSegmentation()  
               
-
         #maximum allowable distance between encodings (this accounts for dHSV)
         self.MAXDIST = 1.4
-        self.MINDIST = .45
-        self.MINBODYDIST = .05
-        self.CUTOFF = 100
+        self.MINDIST = .45 #TK
+        self.MINBODYDIST = .09
+        self.BODY_DUPE_DIST = .03
+
+        self.CUTOFF = 10000
         self.FACE_DIST = 15
 
         self.INPAINT=INPAINT
@@ -57,6 +57,7 @@ class SortPose:
         self.SHOT_CLOCK = 0
         self.SHOT_CLOCK_MAX = 10
         self.BODY_LMS = [0, 13, 14, 15, 16, 19, 20]
+        # self.BODY_LMS = [15]
         self.VERBOSE = VERBOSE
 
         # place to save bad images
@@ -921,7 +922,7 @@ class SortPose:
             try:
                 # enc1 = df_33_lms.loc[start_img].to_list()
                 # TK 
-                enc1 = self.get_landmarks_2d_dict(df_33_lms.loc[start_img, "body_landmarks"], self.BODY_LMS)
+                enc1 = self.get_landmarks_2d(df_33_lms.loc[start_img, "body_landmarks"], self.BODY_LMS)
 
                 # print("get_start_enc planar_body", enc1)
             except:
@@ -1000,7 +1001,7 @@ class SortPose:
             try:
                 # enc1 = df_33_lms.loc[start_img].to_list()
                 # TK 
-                enc1 = self.get_landmarks_2d_dict(df_33_lms.loc[start_img, "body_landmarks"], self.BODY_LMS)
+                enc1 = self.get_landmarks_2d(df_33_lms.loc[start_img, "body_landmarks"], self.BODY_LMS)
 
                 # print("get_start_enc planar_body", enc1)
             except:
@@ -1049,12 +1050,18 @@ class SortPose:
 
         return face_2d
 
-    def get_landmarks_2d_dict(self, Lms, selected_Lms):
+
+    def get_landmarks_2d(self, Lms, selected_Lms, structure="dict"):
         Lms2d = {}
+        Lms1d = []
         for idx, lm in enumerate(Lms.landmark):
             if idx in selected_Lms:
                 # x, y = int(lm.x * img_w), int(lm.y * img_h)
-                Lms2d[idx] =([lm.x, lm.y])
+                if structure == "dict":
+                    Lms2d[idx] =([lm.x, lm.y])
+                elif structure == "list":
+                    Lms1d.append(lm.x)
+                    Lms1d.append(lm.y)
 
                 # Get the 2D Coordinates
                 # body_2d.append([x, y])
@@ -1062,8 +1069,10 @@ class SortPose:
         # Convert it to the NumPy array
         # image points
         # self.body_2d = np.array(body_2d, dtype=np.float64)
-
-        return Lms2d
+        if Lms1d:
+            return Lms1d
+        else:
+            return Lms2d
 
     def get_planar_d(self,last_dict,this_dict):
         d_list = []
@@ -1286,20 +1295,16 @@ class SortPose:
                 #     enc1 = enc1_temp
                 print(f"set enc1 from get_start_enc() to {enc1}")
             return enc1
-        dist=[]
-        dist_dict={}
-        dist_run_dict={}
-        enc2_dict={}
 
         if len(df_sorted) == 0: 
             FIRST_ROUND = True
             enc1 = get_enc1(df_enc, sorttype)
         else: 
             FIRST_ROUND = False
-            enc1 = df_sorted.iloc[-1]["face_encodings68"]
+            if sorttype == "128d": enc1 = df_sorted.iloc[-1]["face_encodings68"]
+            elif sorttype == "planar": enc1 = df_sorted.iloc[-1]["face_landmarks"]
+            elif sorttype == "planar_body": enc1 = df_sorted.iloc[-1]["body_landmarks"]
 
-        # print("get_closest_df_NN")
-        # print("enc1 right before index row itter", enc1)
         print(f"get_closest_df_NN, sorttype is {sorttype} FIRST_ROUND is {FIRST_ROUND}")
         if sorttype == "128d" or (sorttype == "planar" and FIRST_ROUND is True) or (sorttype == "planar_body" and FIRST_ROUND is True):           
             # sort the df by 128d distance
@@ -1309,47 +1314,37 @@ class SortPose:
         elif sorttype == "planar_body":
             df_shuffled = self.sort_df_KNN(df_enc, enc1, "planar_body")
 
-        # create a new dataframe with the rows where the 128d distance is less than MINDIST
-        # df_run = df_sorted[df_sorted["distance_to_enc1"] < self.MINDIST]
-
-        # if the length of the df_run is greater than 2, we have a run
-        # if len(df_run) > 2:
-        #     print("WE HAVE A RUN!!!!! ---------- ", str(len(df_run)))
-        #     self.SHOT_CLOCK = 0
-
-        # else:
-        
-        # move the first row of df_shuffled to df_sorted
-
         if len(df_shuffled) > 0:
-            print("df_shuffled is not empty", df_shuffled.head())
+            # print("df_shuffled is not empty", df_shuffled.head())
 
             # Filter rows based on the condition
-            mask = df_shuffled['distance_to_enc1'] < self.MINDIST
-            print("mask", mask)
+            if sorttype == "128d": min_dist = self.MINDIST
+            elif sorttype == "planar_body": min_dist = self.MINBODYDIST
+
+            if not FIRST_ROUND:
+                # remove duplicates (where dist is less than BODY_DUPE_DIST)
+                dupemask = df_shuffled['distance_to_enc1'] < self.BODY_DUPE_DIST
+                print("dupemask", dupemask)
+                df_enc = df_enc[~dupemask].reset_index(drop=True)
+                df_shuffled = df_shuffled[~dupemask].reset_index(drop=True)
+
+            mask = df_shuffled['distance_to_enc1'] < min_dist
+            # print("mask", mask)
             if mask.any():
                 # if there is a run < MINDIST
                 df_run = df_shuffled[mask]
-                df_enc = df_enc[~mask]
+                df_enc = df_enc[~mask].reset_index(drop=True)
             else:
                 # df_run = first row of df_shuffled
                 df_run = df_shuffled.iloc[[0]]  # Wrap in list to keep it as DataFrame
-                df_enc = df_enc.drop(df_run.index)
+                df_enc = df_enc.drop(df_run.index).reset_index(drop=True)
 
             print("df_run", df_run)
 
+
             df_sorted = pd.concat([df_sorted, df_run])  
-            # Remove filtered rows from df_shuffled
-            # df_shuffled = df_shuffled[~mask]
-            
-            # first_row = df_shuffled.iloc[0]
-            # print("first_row", first_row)
-            # df_sorted = df_sorted.append(first_row)
-            # df_sorted = pd.concat([df_sorted, pd.DataFrame([first_row])], ignore_index=True)
             print("df_sorted containing all good items", len(df_sorted))
             
-            # df_enc = df_enc.drop(first_row.index[0])
-            # dist = df_shuffled["distance_to_enc1"].iloc[0]
             print("df_enc", len(df_enc))
         else:
             print("df_shuffled is empty")
@@ -1415,8 +1410,8 @@ class SortPose:
                 # print("planar_body [-] getting 2D")
                 # print(index)
                 if df_enc.loc[index, "body_landmarks"] is not None:
-                    last_body_2d_dict = self.get_landmarks_2d_dict(df_enc.loc[self.counter_dict["last_image"], "body_landmarks"], self.BODY_LMS)
-                    this_body_2d_dict = self.get_landmarks_2d_dict(df_enc.loc[index, "body_landmarks"], self.BODY_LMS)
+                    last_body_2d_dict = self.get_landmarks_2d(df_enc.loc[self.counter_dict["last_image"], "body_landmarks"], self.BODY_LMS)
+                    this_body_2d_dict = self.get_landmarks_2d(df_enc.loc[index, "body_landmarks"], self.BODY_LMS)
                     # print("planar_body [-] got last_body_2d_dict and this_body_2d_dict")
                     # print(last_body_2d_dict,this_body_2d_dict)
                     d = self.get_planar_d(last_body_2d_dict,this_body_2d_dict)
@@ -1572,23 +1567,30 @@ class SortPose:
 
 
     def sort_df_KNN(self, df_enc, enc1, sorttype="128d"):
-        if sorttype == "128d": sortcol = 'face_encodings68'
-        elif sorttype == "planar": sortcol = 'face_landmarks'
-        elif sorttype == "planar_body": sortcol = 'body_landmarks'
-
-        start_time = time.time()            
+        if sorttype == "128d":
+            sortcol = 'face_encodings68'
+        elif sorttype == "planar":
+            sortcol = 'face_landmarks'
+        elif sorttype == "planar_body":
+            sortcol = 'body_landmarks'
+            # print("enc1", enc1)
+            # print(type(enc1))
+            # if enc1 is not a numpy array, convert it to a list
+            if not isinstance(enc1,np.ndarray):
+                # I think I only need to do this once? 
+                enc1_list = self.get_landmarks_2d(enc1, self.BODY_LMS, structure="list")
+                enc1 = np.array(enc1_list)
+                # enc1 = [v for k, v in enc1_dict.items()]
+                # print("enc1_dict", enc1_dict)
+                # print("enc1_values", enc1)
+                # print("df_enc[sortcol] preconvert", df_enc[sortcol])
+                # Convert body_landmarks to a 2D array
+                df_enc[sortcol] = df_enc[sortcol].apply(lambda x: np.concatenate([v for k, v in self.get_landmarks_2d(x, self.BODY_LMS).items()]))
+                # print("df_enc[sortcol] postconvert", df_enc[sortcol])
         # Extract the face encodings from the dataframe
         encodings_array = df_enc[sortcol].to_numpy().tolist()
 
-        # Convert to numpy array
-        # encodings_array = np.array(encodings)
-
-        # print("time to convert to numpy array", time.time() - start_time)
-        # start_time = time.time()            
-
         self.knn.fit(encodings_array)
-        # print("time to fit array", time.time() - start_time)
-        # start_time = time.time()            
 
         # Find the distances and indices of the neighbors
         distances, indices = self.knn.kneighbors([enc1], n_neighbors=len(df_enc))
@@ -1596,17 +1598,24 @@ class SortPose:
         # Flatten the indices and distances
         indices = indices.flatten()
         distances = distances.flatten()
+        # print("indices", indices)
+        # print("distances", distances)
 
-        # Add distances to the dataframe
-        df_enc.loc[:, 'distance_to_enc1'] = distances
-        print("time to find indices and flatten", time.time() - start_time)
-        start_time = time.time()            
+        # print("df_enc before adding distance", df_enc)
 
-        # Sort the dataframe based on the distances
+        # Create a dictionary with valid indices as keys
+        id_dict = {idx: dist for idx, dist in zip(indices, distances)}
+
+        # Update the 'distance_to_enc1' column with the distances for valid indices
+        for idx in indices:
+            df_enc.loc[idx, 'distance_to_enc1'] = id_dict[idx]
+                        
+        # print("df_enc after adding distance", df_enc)
         df_enc = df_enc.sort_values(by='distance_to_enc1')
 
-        # Display the sorted dataframe
-        print(df_enc.head())
+        # print("df_enc after sorting", df_enc)
+        # # Display the sorted dataframe
+        # print("sort_df results:", df_enc.head())
 
         return df_enc
 
@@ -1651,7 +1660,7 @@ class SortPose:
             start_time = time.time()            
             # df_enc = self.eval_df_128_enc(df_enc)
             # force 128d on first round, (for planar and planar_body)
-            df_sorted = self.sort_df_KNN(df_enc, enc1, "128d")
+            df_sorted = self.sort_df(df_enc, enc1, "128d")
             print(df_sorted)
             print("--- %s seconds ---" % (time.time() - start_time))
             # quit()
@@ -1676,8 +1685,8 @@ class SortPose:
                 # print("planar_body [-] getting 2D")
                 # print(index)
                 if df_enc.loc[index, "body_landmarks"] is not None:
-                    last_body_2d_dict = self.get_landmarks_2d_dict(df_enc.loc[self.counter_dict["last_image"], "body_landmarks"], self.BODY_LMS)
-                    this_body_2d_dict = self.get_landmarks_2d_dict(df_enc.loc[index, "body_landmarks"], self.BODY_LMS)
+                    last_body_2d_dict = self.get_landmarks_2d(df_enc.loc[self.counter_dict["last_image"], "body_landmarks"], self.BODY_LMS)
+                    this_body_2d_dict = self.get_landmarks_2d(df_enc.loc[index, "body_landmarks"], self.BODY_LMS)
                     # print("planar_body [-] got last_body_2d_dict and this_body_2d_dict")
                     # print(last_body_2d_dict,this_body_2d_dict)
                     d = self.get_planar_d(last_body_2d_dict,this_body_2d_dict)
