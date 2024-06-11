@@ -26,11 +26,12 @@ class SortPose:
               
         #maximum allowable distance between encodings (this accounts for dHSV)
         self.MAXDIST = 1.4
+        self.MAXFACEDIST = .7
         self.MINDIST = .45 #TK
         self.MINBODYDIST = .09
         self.BODY_DUPE_DIST = .03
 
-        self.CUTOFF = 10000
+        self.CUTOFF = 10
         self.FACE_DIST = 15
 
         self.INPAINT=INPAINT
@@ -1176,8 +1177,10 @@ class SortPose:
 
 
     # April 20 something version, may contain bugs
-    def sort_dHSV(self, dist_dict, df_enc, HSVonly=False):
+    def sort_dHSV(self, df_enc):
         if self.VERBOSE: print(f"in sort_dHSV, HSVonly is {HSVonly} counter_dict is {self.counter_dict}")
+
+
 
         # Sort the dictionary by keys
         sorted_dist_dict = dict(sorted(dist_dict.items()))
@@ -1254,24 +1257,6 @@ class SortPose:
 
 
 
-
-    # def jump(self, dist, dist_dict):
-    #     if self.VERBOSE: print("jumping!")
-    #     print("dist", len(dist), type(dist))
-    #     print("dist_dict", len(dist_dict), type(dist_dict)) 
-    #     random_d = int(len(dist)*random.random())
-    #     print("random_d", random_d)
-    #     random_d_in_run = dist[random_d]
-    #     print("random_d_in_run", random_d_in_run)
-    #     # create a dict with dist_dict[random_d_in_run] as the value for key random_d_in_run
-    #     random_imagename = dist_dict[random_d_in_run]
-    #     print("random_imagename", random_imagename)
-
-    #     dist_single_dict = {random_d: dist_dict[random_d_in_run]}
-    #     print("dist_single_dict", dist_single_dict)
-    #     self.SHOT_CLOCK = 0 # reset the shot clock
-    #     return random_d_in_run, dist_single_dict
-
     def get_closest_df_NN(self, df_enc, df_sorted, sorttype="128d"):
         def get_enc1(df_enc, sorttype):
             this_start = self.counter_dict["start_img_name"]
@@ -1285,6 +1270,10 @@ class SortPose:
                 # enc1 = df_enc.loc[this_start]['face_encodings']
                 # print(enc1)
                 print("set enc1 from pass through")
+            elif sorttype == "HSV":
+                print("setting enc1 to HSV")
+                # set enc1 to median
+                enc1 = [0.9,0.9]
             else:
                 #this is the first??? round, set via df
                 print(f"trying get_start_enc() from {this_start}")
@@ -1295,7 +1284,18 @@ class SortPose:
                 #     enc1 = enc1_temp
                 print(f"set enc1 from get_start_enc() to {enc1}")
             return enc1
-
+        def mask_df(df, column, limit, type="lessthan"):
+            # removes rows where the value in the column is greater than the limit
+            if type == "lessthan":
+                flashmask = df[column] < limit
+            elif type == "greaterthan":
+                flashmask = df[column] > limit
+            # flashmask = df[column] > limit
+            print("mask", column, flashmask)
+            df = df[flashmask].reset_index(drop=True)
+            print("df_", column, len(df))
+            return df
+        
         if len(df_sorted) == 0: 
             FIRST_ROUND = True
             enc1 = get_enc1(df_enc, sorttype)
@@ -1308,41 +1308,81 @@ class SortPose:
         print(f"get_closest_df_NN, sorttype is {sorttype} FIRST_ROUND is {FIRST_ROUND}")
         if sorttype == "128d" or (sorttype == "planar" and FIRST_ROUND is True) or (sorttype == "planar_body" and FIRST_ROUND is True):           
             # sort the df by 128d distance
-            df_shuffled = self.sort_df_KNN(df_enc, enc1, "128d")
+            df_dist_enc = self.sort_df_KNN(df_enc, enc1, "128d")
         elif sorttype == "planar":
-            df_shuffled = self.sort_df_KNN(df_enc, enc1, "planar")
+            df_dist_enc = self.sort_df_KNN(df_enc, enc1, "planar")
         elif sorttype == "planar_body":
-            df_shuffled = self.sort_df_KNN(df_enc, enc1, "planar_body")
+            df_dist_enc = self.sort_df_KNN(df_enc, enc1, "planar_body")
+        print("df_shuffled 128d", df_dist_enc[['image_id','distance_to_enc1']])
+        
+        # add HSV dist
+        if not 'distance_to_HSV' in df_sorted.columns:
+            print("no HSV column")
+            enc1 = get_enc1(df_enc, 'HSV')
+        else: 
+            print("yes HSV column")
+            enc1 = df_sorted.iloc[-1]["lum"]
+        df_dist_hsv = self.sort_df_KNN(df_dist_enc, enc1, "HSV")
+        print("df_shuffled HSV", df_dist_hsv[['image_id','distance_to_enc1','distance_to_HSV']].head())
 
-        if len(df_shuffled) > 0:
+        if len(df_dist_hsv) > 0:
             # print("df_shuffled is not empty", df_shuffled.head())
 
             # Filter rows based on the condition
             if sorttype == "128d": min_dist = self.MINDIST
             elif sorttype == "planar_body": min_dist = self.MINBODYDIST
-
+            
             if not FIRST_ROUND:
                 # remove duplicates (where dist is less than BODY_DUPE_DIST)
-                dupemask = df_shuffled['distance_to_enc1'] < self.BODY_DUPE_DIST
+                dupemask = df_dist_hsv['distance_to_enc1'] < self.BODY_DUPE_DIST
                 print("dupemask", dupemask)
                 df_enc = df_enc[~dupemask].reset_index(drop=True)
-                df_shuffled = df_shuffled[~dupemask].reset_index(drop=True)
+                df_dist_hsv = df_dist_hsv[~dupemask].reset_index(drop=True)
+            
+            # temporarily removes items that will flash for this round
 
-            mask = df_shuffled['distance_to_enc1'] < min_dist
-            # print("mask", mask)
-            if mask.any():
+            # flashmask = df_dist_hsv['distance_to_HSV'] > self.HSV_DELTA_MAX
+            # print("flashmask", flashmask)
+            df_dist_noflash = mask_df(df_dist_hsv, 'distance_to_HSV', self.HSV_DELTA_MAX, "lessthan")
+            # df_dist_hsv[~flashmask].reset_index(drop=True)
+            # print("df_dist_noflash", len(df_dist_noflash))
+            # df_dist_noflash = df_dist_hsv
+
+            # df_dist_close = mask_df(df_dist_noflash, 'distance_to_HSV', self.MAXFACEDIST, "lessthan")
+
+            df_shuffled = df_dist_noflash
+
+            # sort df_shuffled by the sum of distance_to_enc1 and distance_to_HSV
+            df_shuffled['sum_dist'] = df_dist_noflash['distance_to_enc1'] + 5*df_shuffled['distance_to_HSV']
+            df_shuffled = df_shuffled.sort_values(by='sum_dist').reset_index(drop=True)
+            print("df_shuffled", df_shuffled[['image_id','distance_to_enc1','distance_to_HSV','sum_dist']])
+
+            runmask = df_shuffled['distance_to_enc1'] < min_dist
+            print("runmask", runmask)
+            if runmask.any():
                 # if there is a run < MINDIST
-                df_run = df_shuffled[mask]
-                df_enc = df_enc[~mask].reset_index(drop=True)
+                df_run = df_shuffled[runmask]
+
+                # locate the index of df_enc where image_id = image_id in df_run
+                index_names = df_enc[df_enc['image_id'].isin(df_run['image_id'])].index
+
+
+                # remove the run from df_enc where image_id = image_id in df_run
+                df_enc = df_enc.drop(index_names).reset_index(drop=True)
+                
+
+
             else:
                 # df_run = first row of df_shuffled
-                df_run = df_shuffled.iloc[[0]]  # Wrap in list to keep it as DataFrame
+                df_run = df_dist_noflash.iloc[[0]]  # Wrap in list to keep it as DataFrame
+
+                # I have qeustions if this is actually rm the right one
                 df_enc = df_enc.drop(df_run.index).reset_index(drop=True)
 
-            print("df_run", df_run)
+            print("df_run", df_run[['image_id','distance_to_enc1','distance_to_HSV','sum_dist']])
 
 
-            df_sorted = pd.concat([df_sorted, df_run])  
+            df_sorted = pd.concat([df_sorted, df_run])
             print("df_sorted containing all good items", len(df_sorted))
             
             print("df_enc", len(df_enc))
@@ -1567,29 +1607,31 @@ class SortPose:
 
 
     def sort_df_KNN(self, df_enc, enc1, sorttype="128d"):
+        output_cols = ['distance_to_enc1']
         if sorttype == "128d":
             sortcol = 'face_encodings68'
         elif sorttype == "planar":
             sortcol = 'face_landmarks'
         elif sorttype == "planar_body":
             sortcol = 'body_landmarks'
-            # print("enc1", enc1)
-            # print(type(enc1))
             # if enc1 is not a numpy array, convert it to a list
             if not isinstance(enc1,np.ndarray):
-                # I think I only need to do this once? 
                 enc1_list = self.get_landmarks_2d(enc1, self.BODY_LMS, structure="list")
                 enc1 = np.array(enc1_list)
-                # enc1 = [v for k, v in enc1_dict.items()]
-                # print("enc1_dict", enc1_dict)
-                # print("enc1_values", enc1)
-                # print("df_enc[sortcol] preconvert", df_enc[sortcol])
                 # Convert body_landmarks to a 2D array
                 df_enc[sortcol] = df_enc[sortcol].apply(lambda x: np.concatenate([v for k, v in self.get_landmarks_2d(x, self.BODY_LMS).items()]))
-                # print("df_enc[sortcol] postconvert", df_enc[sortcol])
+        elif sorttype == "HSV":
+            print("sorttype is HSV")
+            sortcol = 'lum'
+            output_cols = ['distance_to_HSV']
+            print(type(enc1))
+            print(enc1)
+            # print(df_enc.loc[0])
+            print(type(df_enc.loc[0, 'lum']))
+            print(df_enc.loc[0, 'lum'])
+
         # Extract the face encodings from the dataframe
         encodings_array = df_enc[sortcol].to_numpy().tolist()
-
         self.knn.fit(encodings_array)
 
         # Find the distances and indices of the neighbors
@@ -1598,24 +1640,16 @@ class SortPose:
         # Flatten the indices and distances
         indices = indices.flatten()
         distances = distances.flatten()
-        # print("indices", indices)
-        # print("distances", distances)
-
-        # print("df_enc before adding distance", df_enc)
 
         # Create a dictionary with valid indices as keys
         id_dict = {idx: dist for idx, dist in zip(indices, distances)}
 
         # Update the 'distance_to_enc1' column with the distances for valid indices
         for idx in indices:
-            df_enc.loc[idx, 'distance_to_enc1'] = id_dict[idx]
+            df_enc.loc[idx, output_cols] = id_dict[idx]
                         
         # print("df_enc after adding distance", df_enc)
-        df_enc = df_enc.sort_values(by='distance_to_enc1')
-
-        # print("df_enc after sorting", df_enc)
-        # # Display the sorted dataframe
-        # print("sort_df results:", df_enc.head())
+        df_enc = df_enc.sort_values(by=output_cols)
 
         return df_enc
 

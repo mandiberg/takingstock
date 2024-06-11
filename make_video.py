@@ -60,9 +60,10 @@ NO_KIDS = True
 USE_PAINTED = True
 OUTPAINT = True
 INPAINT= True
-OVERWRITE_INPAINT=True
+# OVERWRITE_INPAINT=False I don't think this is called anywhere. use USE_PAINTED
 INPAINT_MAX = 5000
 OUTPAINT_MAX = 5001
+BLUR_RADIUS = 1000
 if OUTPAINT: from outpainting_modular import outpaint, image_resize
 VERBOSE = True
 # this controls whether it is using the linear or angle process
@@ -71,7 +72,7 @@ IS_ANGLE_SORT = False
 # this control whether sorting by topics
 IS_TOPICS = False
 N_TOPICS = 30
-IS_ONE_TOPIC = False
+IS_ONE_TOPIC = True
 TOPIC_NO = [7]
 
 #  is isolated,  is business,  babies, 17 pointing
@@ -84,9 +85,9 @@ TOPIC_NO = [7]
 # 7 is surprise
 #  is yoga << planar,  planar,  fingers crossed
 
-# SORT_TYPE = "128d"
+SORT_TYPE = "128d"
 # SORT_TYPE ="planar"
-SORT_TYPE = "planar_body"
+# SORT_TYPE = "planar_body"
 
 # if planar_body set OBJ_CLS_ID for each object type
 # 67 is phone, 63 is laptop, 26: 'handbag', 27: 'tie', 32: 'sports ball'
@@ -102,7 +103,7 @@ io = DataIO(IS_SSD)
 db = io.db
 # overriding DB for testing
 # io.db["name"] = "stock"
-io.db["name"] = "ministock"
+# io.db["name"] = "ministock"
 
 METAS_FILE = "metas.csv"
 
@@ -180,7 +181,7 @@ elif IS_SEGONLY:
     # WHERE += " AND k.keyword_text LIKE 'surpris%' "
 
     # WHERE = "s.site_name_id != 1"
-    LIMIT = 1000000
+    LIMIT = 100
 
     # TEMP TK TESTING
     # WHERE += " AND s.site_name_id = 8"
@@ -206,8 +207,9 @@ face_height_output = 500
 # top, right, bottom, left
 # image_edge_multiplier = [1, 1, 1, 1] # just face
 # image_edge_multiplier = [1.5,1.5,2,1.5] # bigger portrait
+image_edge_multiplier = [1.5,1.75,2.75,1.5] # bigger 2x3 portrait
 # image_edge_multiplier = [1.4,2.6,1.9,2.6] # wider for hands
-image_edge_multiplier = [1.4,3.3,3,3.3] # wiiiiiiiidest 16:10 for hands
+# image_edge_multiplier = [1.4,3.3,3,3.3] # widerest 16:10 for hands
 # image_edge_multiplier = [1.6,3.84,3.2,3.84] # wiiiiiiiidest 16:10 for hands
 # image_edge_multiplier = [1.45,3.84,2.87,3.84] # wiiiiiiiidest 16:9 for hands
 # image_edge_multiplier = [1.2,2.3,1.7,2.3] # medium for hands
@@ -842,7 +844,7 @@ def const_imgfilename(filename, df, imgfileprefix):
 #         i+=1
 #     return translated_landmarks
 
-def merge_inpaint(inpaint_image,img,mask,extension_pixels,blur_radius=1000,offset=0):
+def merge_inpaint(inpaint_image,img,mask,extension_pixels,blur_radius=BLUR_RADIUS,offset=0):
     height, width = img.shape[:2]
     # top, bottom, left, right = extension_pixels["top"], extension_pixels["bottom"], extension_pixels["left"],extension_pixels["right"] 
     top, bottom, left, right = extension_pixels["top"]+offset, extension_pixels["top"]-offset+height, extension_pixels["left"]+offset,extension_pixels["left"]-offset+width
