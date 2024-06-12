@@ -63,7 +63,7 @@ INPAINT= True
 # OVERWRITE_INPAINT=False I don't think this is called anywhere. use USE_PAINTED
 INPAINT_MAX = 5000
 OUTPAINT_MAX = 5001
-BLUR_RADIUS = 1000
+BLUR_RADIUS = 100
 if OUTPAINT: from outpainting_modular import outpaint, image_resize
 VERBOSE = True
 # this controls whether it is using the linear or angle process
@@ -181,7 +181,7 @@ elif IS_SEGONLY:
     # WHERE += " AND k.keyword_text LIKE 'surpris%' "
 
     # WHERE = "s.site_name_id != 1"
-    LIMIT = 100
+    LIMIT = 100000
 
     # TEMP TK TESTING
     # WHERE += " AND s.site_name_id = 8"
@@ -518,7 +518,7 @@ def sort_by_face_dist_NN(df_enc):
             # send in both dfs, and return same dfs with 1+ rows sorted
             df_enc, df_sorted = sort.get_closest_df_NN(df_enc, df_sorted, sorttype=SORT_TYPE)
 
-            dist = df_sorted.iloc[-1]['distance_to_enc1']
+            dist = df_sorted.iloc[-1]['dist_enc1']
             # print(dist)
 
             # Break out of the loop if greater than MAXDIST
@@ -535,7 +535,7 @@ def sort_by_face_dist_NN(df_enc):
     df_sorted['folder'] = df_sorted['site_name_id'].apply(lambda x: io.folder_list[x])
     
     # rename the distance column to dist
-    df_sorted.rename(columns={'distance_to_enc1': 'dist'}, inplace=True)
+    df_sorted.rename(columns={'dist_enc1': 'dist'}, inplace=True)
 
     print("df_sorted", df_sorted)
 
