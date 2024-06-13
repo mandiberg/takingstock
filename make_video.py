@@ -73,7 +73,7 @@ IS_ANGLE_SORT = False
 IS_TOPICS = False
 N_TOPICS = 30
 IS_ONE_TOPIC = True
-TOPIC_NO = [7]
+TOPIC_NO = [17]
 
 #  is isolated,  is business,  babies, 17 pointing
 #  is doctor <<  covid
@@ -85,9 +85,9 @@ TOPIC_NO = [7]
 # 7 is surprise
 #  is yoga << planar,  planar,  fingers crossed
 
-SORT_TYPE = "128d"
+# SORT_TYPE = "128d"
 # SORT_TYPE ="planar"
-# SORT_TYPE = "planar_body"
+SORT_TYPE = "planar_body"
 
 # if planar_body set OBJ_CLS_ID for each object type
 # 67 is phone, 63 is laptop, 26: 'handbag', 27: 'tie', 32: 'sports ball'
@@ -207,9 +207,9 @@ face_height_output = 500
 # top, right, bottom, left
 # image_edge_multiplier = [1, 1, 1, 1] # just face
 # image_edge_multiplier = [1.5,1.5,2,1.5] # bigger portrait
-image_edge_multiplier = [1.5,1.75,2.75,1.5] # bigger 2x3 portrait
+# image_edge_multiplier = [1.5,1.75,2.75,1.5] # bigger 2x3 portrait
 # image_edge_multiplier = [1.4,2.6,1.9,2.6] # wider for hands
-# image_edge_multiplier = [1.4,3.3,3,3.3] # widerest 16:10 for hands
+image_edge_multiplier = [1.4,3.3,3,3.3] # widerest 16:10 for hands
 # image_edge_multiplier = [1.6,3.84,3.2,3.84] # wiiiiiiiidest 16:10 for hands
 # image_edge_multiplier = [1.45,3.84,2.87,3.84] # wiiiiiiiidest 16:9 for hands
 # image_edge_multiplier = [1.2,2.3,1.7,2.3] # medium for hands

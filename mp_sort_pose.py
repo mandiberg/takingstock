@@ -1147,6 +1147,33 @@ class SortPose:
             FIRST_ROUND = False
             enc1 = self.get_enc1(df_sorted, sorttype, FIRST_ROUND)
 
+        def de_dupe(df_dist_hsv, df_sorted, column):
+            # remove duplicates (where dist is less than BODY_DUPE_DIST)
+            df_dist_hsv = mask_df(df_dist_hsv, column, self.BODY_DUPE_DIST, "greaterthan")
+
+            df_close_ones = mask_df(df_dist_hsv, column, .15, "lessthan")
+            last_image = df_sorted.iloc[-1].to_dict()
+            dupe_score = 0
+            hsvll_dist = face_dist = bbox_dist = 1 # so it doesn't trigger the dupe_score
+            # print("de_duping from", last_image['image_id'], last_image['dist_enc1'], last_image['description'], last_image['bbox'])
+            # for index, row in df_close_ones.iterrows():
+            #     print("de_duping aginst", row['image_id'], row['dist_enc1'], row['description'], last_image['bbox'])
+            #     print(last_image['bbox'].items(), row['bbox'].items())
+            #     hsvll_dist = self.get_d(last_image['hsvll'], row['hsvll'])
+            #     # face_dist = self.brute_force(last_image['face_encodings68'], row)
+            #     face_dist = self.get_d(last_image['face_encodings68'], row['face_encodings68'])
+            #     # bbox_dist = self.get_d(last_image['bbox'].items(), row['bbox'].items())
+            #     print("hsvll_dist", hsvll_dist, "face_dist", face_dist, "bbox_dist", bbox_dist)
+            #     if row['description'] == last_image['description']:
+            #         print("de_duping", row['image_id'], "is a duplicate of", last_image['image_id'])
+            #         dupe_score += 1
+            #     if hsvll_dist < .1 :  dupe_score += 1
+            #     if face_dist < .1 : dupe_score += 1
+            #     if bbox_dist < .1 : dupe_score += 1
+            #     print("dupe_score", dupe_score)
+
+            return df_dist_hsv
+        
         print(f"get_closest_df_NN, sorttype is {sorttype} FIRST_ROUND is {FIRST_ROUND}")
         # define sorttype for KNN
         if sorttype == "128d" or (sorttype == "planar" and FIRST_ROUND) or (sorttype == "planar_body" and FIRST_ROUND): 
@@ -1178,7 +1205,7 @@ class SortPose:
         if len(df_dist_hsv) > 0:
             if not FIRST_ROUND:
                 # remove duplicates (where dist is less than BODY_DUPE_DIST)
-                df_dist_hsv = mask_df(df_dist_hsv, 'dist_enc1', self.BODY_DUPE_DIST, "greaterthan")
+                df_dist_hsv = de_dupe(df_dist_hsv, df_sorted, 'dist_enc1')
 
                 # assign backto main df_enc to permanently rm dupes. 
                 df_enc = df_dist_hsv
