@@ -57,16 +57,16 @@ CLUSTER_NO = 63
 
 # cut the kids
 NO_KIDS = True
-USE_PAINTED = False
+USE_PAINTED = True
 OUTPAINT = True
 INPAINT= True
-INPAINT_MAX = 5000
-OUTPAINT_MAX = 5001
+INPAINT_MAX = 500
+OUTPAINT_MAX = 501
 
 # BLUR_RADIUS = 200
 # SIGMAX=1000
 BLUR_RADIUS = 1000  ##computationally more expensive
-SIGMAX=50
+SIGMAX=100
 if BLUR_RADIUS % 2 == 0:BLUR_RADIUS += 1 ## Kernel size should ONLY be an odd number
 MASK_OFFSET = [50,50,50,50]
 if OUTPAINT: from outpainting_modular import outpaint, image_resize
@@ -189,7 +189,7 @@ elif IS_SEGONLY and io.db["name"] == "stock":
     # WHERE += " AND k.keyword_text LIKE 'surpris%' "
 
     # WHERE = "s.site_name_id != 1"
-    LIMIT = 1000
+    LIMIT = 100000
 
     # TEMP TK TESTING
     # WHERE += " AND s.site_name_id = 8"

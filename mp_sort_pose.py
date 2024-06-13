@@ -32,7 +32,7 @@ class SortPose:
         self.BODY_DUPE_DIST = .04
         self.HSVMULTIPLIER = 5
         self.BRUTEFORCE = True
-        self.CUTOFF = 30
+        self.CUTOFF = 2000
         self.FACE_DIST = 15
 
         self.INPAINT=INPAINT
@@ -1145,30 +1145,43 @@ class SortPose:
             FIRST_ROUND = False
             enc1 = self.get_enc1(df_sorted, sorttype, FIRST_ROUND)
 
-        def de_dupe(df_dist_hsv, df_sorted, column):
+        def de_dupe(df_dist_hsv, df_sorted, column, is_run = False):
             # remove duplicates (where dist is less than BODY_DUPE_DIST)
+            def json_to_list(json):
+                return [v for k, v in json.items()]
             df_dist_hsv = mask_df(df_dist_hsv, column, self.BODY_DUPE_DIST, "greaterthan")
 
             df_close_ones = mask_df(df_dist_hsv, column, .15, "lessthan")
             last_image = df_sorted.iloc[-1].to_dict()
-            dupe_score = 0
+            dupe_index = []
             hsvll_dist = face_dist = bbox_dist = 1 # so it doesn't trigger the dupe_score
-            # print("de_duping from", last_image['image_id'], last_image['dist_enc1'], last_image['description'], last_image['bbox'])
-            # for index, row in df_close_ones.iterrows():
-            #     print("de_duping aginst", row['image_id'], row['dist_enc1'], row['description'], last_image['bbox'])
-            #     print(last_image['bbox'].items(), row['bbox'].items())
-            #     hsvll_dist = self.get_d(last_image['hsvll'], row['hsvll'])
-            #     # face_dist = self.brute_force(last_image['face_encodings68'], row)
-            #     face_dist = self.get_d(last_image['face_encodings68'], row['face_encodings68'])
-            #     # bbox_dist = self.get_d(last_image['bbox'].items(), row['bbox'].items())
-            #     print("hsvll_dist", hsvll_dist, "face_dist", face_dist, "bbox_dist", bbox_dist)
-            #     if row['description'] == last_image['description']:
-            #         print("de_duping", row['image_id'], "is a duplicate of", last_image['image_id'])
-            #         dupe_score += 1
-            #     if hsvll_dist < .1 :  dupe_score += 1
-            #     if face_dist < .1 : dupe_score += 1
-            #     if bbox_dist < .1 : dupe_score += 1
-            #     print("dupe_score", dupe_score)
+            print("de_duping from", last_image['image_id'], last_image['dist_enc1'], last_image['description'], last_image['bbox'])
+            for index, row in df_close_ones.iterrows():
+                
+                # print("de_duping aginst", row['image_id'], row['dist_enc1'], row['description'], last_image['bbox'])
+                # print(last_image['bbox'].items(), row['bbox'].items())
+                hsvll_dist = self.get_d(last_image['hsvll'], row['hsvll'])
+                face_dist = self.get_d(last_image['face_encodings68'], row['face_encodings68'])
+                # should also test body_landmarks, (for 128d sort), and then bump dupe_score threshold to 3
+                bbox_dist = self.get_d(json_to_list(last_image['bbox']), json_to_list(row['bbox']))
+                print("hsvll_dist", hsvll_dist, "face_dist", face_dist, "bbox_dist", bbox_dist)
+
+                # tally up the dupe_score
+                dupe_score = 0
+                if row['description'] == last_image['description']: dupe_score += 1
+                if hsvll_dist < .1 :  dupe_score += 1
+                if face_dist < .4 : dupe_score += 1
+                if bbox_dist < 5 : dupe_score += 1
+                print("dupe_score", dupe_score)
+
+                if dupe_score > 2:
+                    print("de_duping score", dupe_score, last_image['image_id'], "is a duplicate of", row['image_id'])
+                    # add the index of the duplicate to the list of indexes to drop
+                    dupe_index.append(index)
+                if is_run:
+                    last_image = row
+
+            df_dist_hsv = df_dist_hsv.drop(dupe_index).reset_index(drop=True)
 
             return df_dist_hsv
         
@@ -1229,6 +1242,9 @@ class SortPose:
                 print("we have a run ---->>>>", num_true_values)
                 # if there is a run < MINDIST
                 df_run = df_shuffled[runmask]
+
+                # need to dedupe run if not firt round
+                if not FIRST_ROUND: df_run = de_dupe(df_run, df_sorted, 'dist_enc1', is_run=True)
 
                 # locate the index of df_enc where image_id = image_id in df_run
                 index_names = df_enc[df_enc['image_id'].isin(df_run['image_id'])].index
