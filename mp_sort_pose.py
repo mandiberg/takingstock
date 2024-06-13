@@ -25,11 +25,12 @@ class SortPose:
         self.get_bg_segment=mp.solutions.selfie_segmentation.SelfieSegmentation()  
               
         #maximum allowable distance between encodings (this accounts for dHSV)
-        self.MAXDIST = 1.4
-        self.MAXFACEDIST = .7
-        self.MINDIST = .45 #TK
-        self.MINBODYDIST = .09
-        self.BODY_DUPE_DIST = .03
+        self.MAXDIST = 1.8
+        self.MAXFACEDIST = .9
+        self.MINDIST = .5 #TK
+        self.MINBODYDIST = .15
+        self.BODY_DUPE_DIST = .04
+        self.HSVMULTIPLIER = 5
         self.BRUTEFORCE = True
         self.CUTOFF = 100
         self.FACE_DIST = 15
@@ -998,14 +999,22 @@ class SortPose:
         else:
             return Lms2d
 
-    def normalize_hsv(self, hsv1, hsv2):
-        # hue is between 0-360 degrees (which is scaled to 0-1 here)
-        # hue is a circle, so we need to go both ways around the circle and pick the smaller one
-        dist_reg = abs(hsv1[0] - hsv2[0])
-        dist_offset = abs((hsv1[0]) + (1-hsv2[0]))
-        hsv2[0] = min(dist_reg, dist_offset)
-        # this is where I will curve the sat data
-        return hsv2
+    def normalize_hsv(self, hsv1, df):
+        def scale_hue(hsv1,hsv2):
+            # hue is between 0-360 degrees (which is scaled to 0-1 here)
+            # hue is a circle, so we need to go both ways around the circle and pick the smaller one
+            dist_reg = abs(hsv1[0] - hsv2[0])
+            dist_offset = abs((hsv1[0]) + (1-hsv2[0]))
+            hsv2[0] = min(dist_reg, dist_offset)
+            # this is where I will curve the sat data
+
+            return hsv2
+        
+        # scale hue for each row in the hsv column and assign to a new hsvv column
+        # combine the HSV values with the lum and lum_torso values 
+        df["hsvll"] = df["hsv"].apply(lambda x: scale_hue(hsv1, x)) + df["lum"]
+
+        return df
 
     def weight_hue(self, hsv):        
         def min_max_scale(h):
@@ -1027,86 +1036,6 @@ class SortPose:
 
 
 
-
-    # April 20 something version, may contain bugs
-    def sort_dHSV(self, df_enc):
-        if self.VERBOSE: print(f"in sort_dHSV, HSVonly is {HSVonly} counter_dict is {self.counter_dict}")
-
-
-
-        # Sort the dictionary by keys
-        sorted_dist_dict = dict(sorted(dist_dict.items()))
-
-        # Move items beyond the first 200 into a new dictionary
-        extra_dist_dict = {k: v for i, (k, v) in enumerate(sorted_dist_dict.items()) if i >= 200}
-
-        # Remove the items beyond the first 200 from the original dictionary
-        dist_dict_200 = {k: v for i, (k, v) in enumerate(sorted_dist_dict.items()) if i < 200}
-
-        # print("Sorted Dictionary (first 200 items):", len(dist_dict_200))
-
-        print("\nExtra Dictionary (beyond first 200 items):", len(extra_dist_dict))
-
-        hsv_dist_dict = {}
-        # if dist_dict is greater than 200
-
-
-        # only going through dist_dict_200, but leaving dist_dict as the ref below
-        for item in dist_dict_200:
-            print("item", item)
-            # for testing
-            # if not self.counter_dict["last_image_hsv"]:
-            #     self.counter_dict["last_image_hsv"] = [.1,.1,.85]
-            try:
-                if not self.counter_dict["last_image_hsv"]:
-                    # assign 128d to all vars for first run, ignoring hsv and lum, and just sort on 128d
-                    # if self.VERBOSE: print("assigned first run hsv_dist values", item)
-                    hsv_dist = item
-                    lum_dist = item
-                elif abs(self.counter_dict["last_image_hsv"][2] - df_enc.loc[dist_dict[item], "hsv"][2]) > self.HSV_DELTA_MAX:
-                    # skipping this one, too great a value shift, will produce flicker
-                    # if self.VERBOSE: print("skipping this one, too great a color shift:", dist_dict[item])
-                    continue
-                elif abs(self.counter_dict["last_image_lum"][1] - df_enc.loc[dist_dict[item], "lum"][1]) > self.HSV_DELTA_MAX:
-                    # if self.VERBOSE: print("skipping this one, too great a value shift:", dist_dict[item])
-                    # skipping this one, too great a value shift, will produce flicker
-                    continue
-                else:
-                    # if self.VERBOSE: print("in circle else")
-                    hsv_converted = self.normalize_hsv(self.counter_dict["last_image_hsv"], df_enc.loc[dist_dict[item], "hsv"])
-                    hsv_dist = self.get_d(self.counter_dict["last_image_hsv"], hsv_converted)
-                    lum_dist = self.get_d(self.counter_dict["last_image_lum"], df_enc.loc[dist_dict[item], "lum"])
-            except:
-                print(f"error in sort_dHSV, skipping {dist_dict[item]}")
-                continue
-            # if self.VERBOSE: print("hsv, lum dist, item", hsv_dist, lum_dist, item)
-            if HSVonly:
-                print("HSVonly, sorting results")
-                # finds closest hsv distance bg and torso
-                hsv_dist_dict[item] = [hsv_dist*self.HSV_WEIGHT,lum_dist*self.LUM_WEIGHT]
-
-                # sort the hsv_dist_dict dictionary based on the sum of both values in the list
-                sorted_keys_dHSV = [k for k, v in sorted(hsv_dist_dict.items(), key=lambda item: item[1][0] + item[1][1])]
-
-            else:
-                # finds closest 3D distanct for 128d, hsv, and lum
-                hsv_dist_dict[item] = [item*self.d128_WEIGHT,hsv_dist*self.HSV_WEIGHT,lum_dist*self.LUM_WEIGHT]
-                # if self.VERBOSE: print("hsv_dist_dict[item]", hsv_dist_dict[item], "item", item)    
-                # sort the hsv_dist_dict dictionary based on the sum of all three values in the list
-                sorted_keys_dHSV = [k for k, v in sorted(hsv_dist_dict.items(), key=lambda item: item[1][0] + item[1][1] + item[1][2])]
-                # print(f"len(sorted_keys_dHSV) {len(sorted_keys_dHSV)} out of {len(dist_dict)}")
-
-        if self.VERBOSE: 
-            print("done with dHSV sort loop, going to store keys")
-            # print("sorted_keys_dHSV", sorted_keys_dHSV)
-        self.counter_dict["last_image_hsv"] =df_enc.loc[dist_dict[sorted_keys_dHSV[0]], "hsv"]
-        self.counter_dict["last_image_lum"] =df_enc.loc[dist_dict[sorted_keys_dHSV[0]], "lum"]
-        # TK this needs to be handled separately for RUNS and for planar
-        sorted_keys_dHSV_to_return = sorted_keys_dHSV+list(extra_dist_dict.keys())
-        print("len(sorted_keys_dHSV_to_return)", len(sorted_keys_dHSV_to_return))
-        return sorted_keys_dHSV_to_return
-
-
     def get_enc1(self, df, sorttype, FIRST_ROUND=False):
         if FIRST_ROUND:
             this_start = self.counter_dict["start_img_name"]
@@ -1121,7 +1050,7 @@ class SortPose:
             elif sorttype == "HSV":
                 print("setting enc1 to HSV")
                 # set enc1 to median
-                enc1 = [0.9,0.9]
+                enc1 = [0,0,1,1,.5]
             else:
                 #this is the first??? round, set via df
                 print(f"trying get_start_enc() from {this_start}")
@@ -1165,7 +1094,7 @@ class SortPose:
                 df_enc[sortcol] = df_enc[sortcol].apply(lambda x: np.concatenate([v for k, v in self.get_landmarks_2d(x, self.BODY_LMS).items()]))
         elif sorttype == "HSV":
             print("sorttype is HSV")
-            sortcol = 'lum'
+            sortcol = 'hsvll'
             output_cols = ['dist_HSV']
             print(type(enc1))
             print(enc1)
@@ -1241,37 +1170,30 @@ class SortPose:
             enc1 = self.get_enc1(df_enc, 'HSV', FIRST_ROUND=True)
         else: 
             print("yes HSV column")
-            enc1 = df_sorted.iloc[-1]["lum"]
-        df_dist_hsv = self.sort_df_KNN(df_dist_enc, enc1, "HSV")
+            enc1 = df_sorted.iloc[-1]["hsvll"]
+        df_dist_hsv = self.normalize_hsv(enc1, df_dist_enc)
+        df_dist_hsv = self.sort_df_KNN(df_dist_hsv, enc1, "HSV")
         print("df_shuffled HSV", df_dist_hsv[['image_id','dist_enc1','dist_HSV']].head())
 
         if len(df_dist_hsv) > 0:
             if not FIRST_ROUND:
                 # remove duplicates (where dist is less than BODY_DUPE_DIST)
-                pass
-            
-                # dupemask = df_dist_hsv['dist_enc1'] < self.BODY_DUPE_DIST
-                # print("dupemask", dupemask)
-                # df_enc = df_enc[~dupemask].reset_index(drop=True)
-                # df_dist_hsv = df_dist_hsv[~dupemask].reset_index(drop=True)
-
-                # # i think this is correct, but need to test
                 df_dist_hsv = mask_df(df_dist_hsv, 'dist_enc1', self.BODY_DUPE_DIST, "greaterthan")
 
-                # assign backto main df_enc to permanently rm dupes. Will it mess up index?
+                # assign backto main df_enc to permanently rm dupes. 
                 df_enc = df_dist_hsv
             
             # temporarily removes items for this round
             df_dist_noflash = mask_df(df_dist_hsv, 'dist_HSV', self.HSV_DELTA_MAX, "lessthan")
             df_dist_close = mask_df(df_dist_noflash, 'dist_HSV', self.MAXFACEDIST, "lessthan")
 
-            # skipping these masks for now
-            df_shuffled = df_dist_hsv
+            # implementing these masks for now
+            df_shuffled = df_dist_close
 
             # sort df_shuffled by the sum of dist_enc1 and dist_HSV
-            df_shuffled['sum_dist'] = df_shuffled['dist_enc1']
+            # df_shuffled['sum_dist'] = df_shuffled['dist_enc1']
             # temp disable sum_dist
-            # df_shuffled['sum_dist'] = df_dist_noflash['dist_enc1'] + 5*df_shuffled['dist_HSV']
+            df_shuffled['sum_dist'] = df_dist_noflash['dist_enc1'] + self.HSVMULTIPLIER * df_shuffled['dist_HSV']
             df_shuffled = df_shuffled.sort_values(by='sum_dist').reset_index(drop=True)
             print("df_shuffled pre_run", df_shuffled[['image_id','dist_enc1','dist_HSV','sum_dist']])
 
