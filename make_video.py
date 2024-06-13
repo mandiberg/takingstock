@@ -57,13 +57,19 @@ CLUSTER_NO = 63
 
 # cut the kids
 NO_KIDS = True
-USE_PAINTED = True
-OUTPAINT = True
+USE_PAINTED = False
+OUTPAINT = False
 INPAINT= True
 # OVERWRITE_INPAINT=False I don't think this is called anywhere. use USE_PAINTED
 INPAINT_MAX = 5000
 OUTPAINT_MAX = 5001
-BLUR_RADIUS = 100
+
+BLUR_RADIUS = 200
+SIGMAX=1000
+# BLUR_RADIUS = 1000  ##computationally more expensive
+# SIGMAX=100
+if BLUR_RADIUS % 2 == 0:BLUR_RADIUS += 1 ## Kernel size should ONLY be an odd number
+
 if OUTPAINT: from outpainting_modular import outpaint, image_resize
 VERBOSE = True
 # this controls whether it is using the linear or angle process
@@ -72,6 +78,7 @@ IS_ANGLE_SORT = False
 # this control whether sorting by topics
 IS_TOPICS = False
 N_TOPICS = 30
+
 IS_ONE_TOPIC = True
 TOPIC_NO = [17]
 
@@ -103,7 +110,7 @@ io = DataIO(IS_SSD)
 db = io.db
 # overriding DB for testing
 # io.db["name"] = "stock"
-# io.db["name"] = "ministock"
+io.db["name"] = "ministock"
 
 METAS_FILE = "metas.csv"
 
@@ -136,13 +143,66 @@ if IS_SEGONLY is not True:
     WHERE = "e.is_face IS TRUE AND e.bbox IS NOT NULL AND i.site_name_id = 1 AND k.keyword_text LIKE 'smil%'"
     LIMIT = 500
 
+##################MICHAEL#####################
+# elif IS_SEGONLY:
 
+#     SAVE_SEGMENT = False
+#     # no JOIN just Segment table
+#     SELECT = "DISTINCT(s.image_id), s.site_name_id, s.contentUrl, s.imagename, s.description, s.face_x, s.face_y, s.face_z, s.mouth_gap, s.face_landmarks, s.bbox, s.face_encodings68, s.site_image_id, s.body_landmarks"
+
+#     FROM =f"{SegmentTable_name} s "
+
+#     # this is the standard segment topics/clusters query for April 2024
+#     WHERE = " face_encodings68 IS NOT NULL AND face_x > -33 AND face_x < -27 AND face_y > -2 AND face_y < 2 AND face_z > -2 AND face_z < 2"
+
+#     # HIGHER
+#     # WHERE = "s.site_name_id != 1 AND face_encodings68 IS NOT NULL AND face_x > -27 AND face_x < -23 AND face_y > -2 AND face_y < 2 AND face_z > -2 AND face_z < 2"
+
+#     # WHERE += " AND mouth_gap > 15 "
+#     # WHERE += " AND s.age_id NOT IN (1,2,3,4) "
+#     # WHERE += " AND s.age_id > 4 "
+
+#     ## To add keywords to search
+#     # FROM += " JOIN ImagesKeywords ik ON s.image_id = ik.image_id JOIN Keywords k ON ik.keyword_id = k.keyword_id "
+#     # WHERE += " AND k.keyword_text LIKE 'shout%' "
+
+#     if IS_CLUSTER or IS_ONE_CLUSTER:
+#         FROM += " JOIN ImagesClusters ic ON s.image_id = ic.image_id "
+#     if IS_TOPICS or IS_ONE_TOPIC:
+#         FROM += " JOIN ImagesTopics it ON s.image_id = it.image_id "
+#         WHERE += " AND it.topic_score > .3"
+#         SELECT += ", it.topic_score" # add description here, after resegmenting
+#     if NO_KIDS:
+#         WHERE += " AND s.age_id NOT IN (1,2,3) "
+#     if HSV_BOUNDS:
+#         FROM += " JOIN ImagesBackground ibg ON s.image_id = ibg.image_id "
+#         # WHERE += " AND ibg.lum > .3"
+#         SELECT += ", ibg.lum, ibg.lum_bb, ibg.hue, ibg.hue_bb, ibg.sat, ibg.sat_bb, ibg.val, ibg.val_bb, ibg.lum_torso, ibg.lum_torso_bb " # add description here, after resegmenting
+#     ###############
+#     if OBJ_CLS_ID:
+#         FROM += " JOIN PhoneBbox pb ON s.image_id = pb.image_id "
+#         SELECT += ", pb.bbox_67, pb.conf_67, pb.bbox_63, pb.conf_63, pb.bbox_26, pb.conf_26, pb.bbox_27, pb.conf_27, pb.bbox_32, pb.conf_32 "
+#     if SORT_TYPE == "planar_body":
+#         WHERE += " AND s.body_landmarks IS NOT NULL "
+#     ###############
+#     # # join to keywords
+#     # FROM += " JOIN ImagesKeywords ik ON s.image_id = ik.image_id JOIN Keywords k ON ik.keyword_id = k.keyword_id "
+#     # WHERE += " AND k.keyword_text LIKE 'surpris%' "
+
+#     # WHERE = "s.site_name_id != 1"
+#     LIMIT = 1000
+
+#     # TEMP TK TESTING
+#     # WHERE += " AND s.site_name_id = 8"
+######################################
+############SATYAM##################
 elif IS_SEGONLY:
 
     SAVE_SEGMENT = False
     # no JOIN just Segment table
-    SELECT = "DISTINCT(s.image_id), s.site_name_id, s.contentUrl, s.imagename, s.description, s.face_x, s.face_y, s.face_z, s.mouth_gap, s.face_landmarks, s.bbox, s.face_encodings68, s.site_image_id, s.body_landmarks"
-    
+    # SELECT = "DISTINCT(s.image_id), s.site_name_id, s.contentUrl, s.imagename, s.description, s.face_x, s.face_y, s.face_z, s.mouth_gap, s.face_landmarks, s.bbox, s.face_encodings68, s.site_image_id, s.body_landmarks"
+    SELECT = "DISTINCT(s.image_id), s.site_name_id, s.contentUrl, s.imagename,s.face_x, s.face_y, s.face_z, s.mouth_gap, s.face_landmarks, s.bbox, s.face_encodings68, s.site_image_id, s.body_landmarks"
+
     FROM =f"{SegmentTable_name} s "
 
     # this is the standard segment topics/clusters query for April 2024
@@ -165,17 +225,19 @@ elif IS_SEGONLY:
         FROM += " JOIN ImagesTopics it ON s.image_id = it.image_id "
         WHERE += " AND it.topic_score > .3"
         SELECT += ", it.topic_score" # add description here, after resegmenting
-    if NO_KIDS:
-        WHERE += " AND s.age_id NOT IN (1,2,3) "
+    # if NO_KIDS:
+    #     WHERE += " AND s.age_id NOT IN (1,2,3) "
     if HSV_BOUNDS:
         FROM += " JOIN ImagesBackground ibg ON s.image_id = ibg.image_id "
         # WHERE += " AND ibg.lum > .3"
         SELECT += ", ibg.lum, ibg.lum_bb, ibg.hue, ibg.hue_bb, ibg.sat, ibg.sat_bb, ibg.val, ibg.val_bb, ibg.lum_torso, ibg.lum_torso_bb " # add description here, after resegmenting
-    if OBJ_CLS_ID:
-        FROM += " JOIN PhoneBbox pb ON s.image_id = pb.image_id "
-        SELECT += ", pb.bbox_67, pb.conf_67, pb.bbox_63, pb.conf_63, pb.bbox_26, pb.conf_26, pb.bbox_27, pb.conf_27, pb.bbox_32, pb.conf_32 "
-    if SORT_TYPE == "planar_body":
-        WHERE += " AND s.body_landmarks IS NOT NULL "
+    ###############
+    # if OBJ_CLS_ID:
+    #     FROM += " JOIN PhoneBbox pb ON s.image_id = pb.image_id "
+    #     SELECT += ", pb.bbox_67, pb.conf_67, pb.bbox_63, pb.conf_63, pb.bbox_26, pb.conf_26, pb.bbox_27, pb.conf_27, pb.bbox_32, pb.conf_32 "
+    # if SORT_TYPE == "planar_body":
+    #     WHERE += " AND s.body_landmarks IS NOT NULL "
+    ###############
     # # join to keywords
     # FROM += " JOIN ImagesKeywords ik ON s.image_id = ik.image_id JOIN Keywords k ON ik.keyword_id = k.keyword_id "
     # WHERE += " AND k.keyword_text LIKE 'surpris%' "
@@ -185,8 +247,7 @@ elif IS_SEGONLY:
 
     # TEMP TK TESTING
     # WHERE += " AND s.site_name_id = 8"
-    
-
+######################################
 
 motion = {
     "side_to_side": False,
@@ -844,28 +905,39 @@ def const_imgfilename(filename, df, imgfileprefix):
 #         i+=1
 #     return translated_landmarks
 
-def merge_inpaint(inpaint_image,img,mask,extension_pixels,blur_radius=BLUR_RADIUS,offset=0):
+def merge_inpaint(inpaint_image,img,extended_img,extension_pixels,blur_radius=BLUR_RADIUS):
     height, width = img.shape[:2]
     # top, bottom, left, right = extension_pixels["top"], extension_pixels["bottom"], extension_pixels["left"],extension_pixels["right"] 
-    top, bottom, left, right = extension_pixels["top"]+offset, extension_pixels["top"]-offset+height, extension_pixels["left"]+offset,extension_pixels["left"]-offset+width
+    top, bottom, left, right = extension_pixels["top"], extension_pixels["top"]+height, extension_pixels["left"],extension_pixels["left"]+width
+    # top, bottom, left, right = extension_pixels["top"]+offset, extension_pixels["top"]-offset+height, extension_pixels["left"]+offset,extension_pixels["left"]-offset+width
 
-    mask = np.zeros_like(inpaint_image[:, :, 0])
-    mask[:top,:] = 1
-    mask[:,:left] = 1
-    mask[bottom:,:] = 1
-    mask[:,right:] = 1
+    # mask = np.zeros_like(inpaint_image[:, :, 0])
+    mask = np.zeros(np.shape(inpaint_image))
+
+    mask[:top,:] = [255,255,255]
+    mask[:,:left] = [255,255,255]
+    mask[bottom:,:] = [255,255,255]
+    mask[:,right:] = [255,255,255]
     # mask blur
     
-    if blur_radius % 2 == 0:blur_radius += 1
-    mask = cv2.GaussianBlur(mask, (blur_radius, blur_radius), 0)
+    mask = cv2.GaussianBlur(mask, (blur_radius, blur_radius), sigmaX=SIGMAX)
     # Expand the mask dimensions to match the image
-    mask = np.expand_dims(mask, axis=-1)
-    mask=mask[top:bottom,left:right]
+    # mask = np.expand_dims(mask, axis=-1)
+    # mask=mask[top:bottom,left:right]
     # inpaint_image[extension_pixels["top"]:extension_pixels["top"]+np.shape(img)[0],extension_pixels["left"]:extension_pixels["left"]+np.shape(img)[1]]=img
-    inpaint_image[top:bottom,left:right]=img[offset:height-offset,offset:width-offset]*(1-mask)+(mask)*inpaint_image[top:bottom,left:right]
-    
+    # inpaint_image[top:bottom,left:right]=img[offset:height-offset,offset:width-offset]*(1-mask)+(mask)*inpaint_image[top:bottom,left:right]
+    inpaint_merge_2=extended_img*(1-mask/255)+(mask/255)*inpaint_image
+    inpaint_merge_2=np.array(inpaint_merge_2,dtype=np.uint8)
     return inpaint_image
 
+def extend_cv2(extended_img,mask,iR=3,method="NS"):
+    if method=="NS":
+        flags=cv2.INPAINT_NS
+    elif method=="TELEA":
+        flags=cv2.INPAINT_TELEA
+    else:print("BRO!!! chose either NS or TELEA ")
+    inpaint = cv2.inpaint(extended_img, mask, flags=flags, inpaintRadius=iR)
+    return inpaint
 
 def shift_bbox(bbox, extension_pixels):
     # if sort.VERBOSE:print("extension_pixelssssssssssssssssssssssssss",extension_pixels)
@@ -926,10 +998,12 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
             if extension_pixels[maxkey] <= INPAINT_MAX:
                 print("inpainting small extension")
                 extended_img,mask=sort.prepare_mask(img,extension_pixels)
-                inpaint_image=sort.extend_lama(extended_img, mask, downsampling_scale = 4)
+                extended_img=extend_cv2(extended_img,mask,iR=3,method="NS")
+                inpaint_image=sort.extend_lama(extended_img, mask, downsampling_scale = 8)
+                
                 ### use inpainting for the extended part, but use original for non extend to keep image sharp ###
                 # inpaint_image[extension_pixels["top"]:extension_pixels["top"]+np.shape(img)[0],extension_pixels["left"]:extension_pixels["left"]+np.shape(img)[1]]=img
-                inpaint_image=merge_inpaint(inpaint_image,img,mask,extension_pixels)
+                inpaint_image=merge_inpaint(inpaint_image,img,extended_img,extension_pixels)
                 cv2.imwrite(inpaint_file,inpaint_image)
                 print("inpainting done", inpaint_file,"shape",np.shape(inpaint_image))
             elif extension_pixels[maxkey] < OUTPAINT_MAX:
