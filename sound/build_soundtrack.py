@@ -9,14 +9,14 @@ import sys
 sys.path.insert(1, '/Users/michaelmandiberg/Documents/GitHub/facemap/')
 from mp_db_io import DataIO
 
-TOPIC="topic7" # what folder are the files in?
-
+TOPIC=17 # what folder are the files in?
+TOPICFOLDER = "topic" + str(TOPIC)
 
 # start = time.time()
 ######Michael's folders##########
 io = DataIO()
-INPUT = os.path.join(io.ROOT, "audioproduction", TOPIC)
-OUTPUT = os.path.join(io.ROOT, "audioproduction", TOPIC)
+INPUT = os.path.join(io.ROOT, "audioproduction", TOPICFOLDER)
+OUTPUT = os.path.join(io.ROOT, "audioproduction", TOPICFOLDER)
 #################################
 
 ######Satyam's folders###########
@@ -45,7 +45,11 @@ FIT_VOL_MIN = .3
 FIT_VOL_MAX = 1
 FADEOUT = 7
 QUIET =.5
-KEYS = ["scream", "excit", "rais", "celebr", "amaz", "success", "victori", "crazi", "surpris", "mouth"]
+KEYS = {
+    7: ["scream", "excit", "rais", "celebr", "amaz", "success", "victori", "crazi", "surpris", "mouth"],
+    17: ["point", "finger", "show", "number", "pictur", "smile", "confid", "idea", "clock", "hold"]
+}
+good_files = []
 
 def apply_fadeout(audio, sample_rate, duration=3.0):
     # convert to audio indices (samples)
@@ -90,7 +94,7 @@ def search_for_keys(row):
     # if not, set the volume to 0.5
     
     found = False
-    for key in KEYS:
+    for key in KEYS[TOPIC]:
         for word in row['description'].lower().split(" ")[:5]:
             if key in word:
                 print(" ---- ", key, "found in", word, row['description'])
@@ -100,6 +104,12 @@ def search_for_keys(row):
         print("No keys found in", row['description'])
     return found
 
+existing_files = io.get_img_list(INPUT)
+# make a dict of existing files using the first part of filename (split on _) as the key
+existing_files = {os.path.basename(f).split("_")[0]:f for f in existing_files}
+
+print("Existing files:", len(existing_files))
+print("Existing file 1:", existing_files.keys())
 # Iterate through each row in the CSV file
 for i, row in df.iterrows():
     # use i to create a sine wave
@@ -110,15 +120,35 @@ for i, row in df.iterrows():
     input_path = os.path.join(INPUT, row['out_name'])
     # input_path = row['out_name']
 
+    if os.path.exists(input_path):
+        good_files.append(input_path)
+    elif existing_files:
+        input_file = existing_files.get(row['image_id'])
+        if input_file:
+            print("Using existing file:", input_file)
+            input_path = os.path.join(INPUT,input_file)
+        elif good_files:
+            input_path = good_files[np.random.randint(0,len(good_files))]
+        else:
+            print("No good files found")
+            continue
+    else:
+        print("No good files found")
+        continue
+
     # Read the audio file
     audio_data, sample_rate = sf.read(input_path)
 
     # search for keys in the description
     # found = search_for_keys(row)
 
-    # pull data from topic fit
-    volume_fit = float(row['topic_fit'])  # Using topic_fit as the volume level
-
+    try:
+        # pull data from topic fit
+        volume_fit = float(row['topic_fit'])  # Using topic_fit as the volume level
+    except Exception as e:
+        print("Error getting volume fit:", e)
+        if type(row['topic_fit']) == str: continue
+        else: volume_fit = 0.5
     # # Adjusting volume level and applying panning
 
     # pan = float(row['pan'])  # Using pan as the panning level
@@ -190,7 +220,7 @@ for left_channel, right_channel in zip(left_channel_data, right_channel_data):
 # mixed_audio /= max_amplitude
 
 # Define the output path for the mixdown audio file
-output_path = "multitrack_mixdown_offset.wav"
+output_path = "multitrack_mixdown_offset_"+str(TOPIC)+".wav"
 
 # Write the multitrack mixdown audio to the output file
 sf.write(output_path, mixed_audio, sample_rate, format='wav')
