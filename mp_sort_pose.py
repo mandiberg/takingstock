@@ -32,7 +32,7 @@ class SortPose:
         self.BODY_DUPE_DIST = .04
         self.HSVMULTIPLIER = 5
         self.BRUTEFORCE = True
-        self.CUTOFF = 100
+        self.CUTOFF = 30
         self.FACE_DIST = 15
 
         self.INPAINT=INPAINT

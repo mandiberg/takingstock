@@ -57,7 +57,7 @@ class DataIO:
             self.db = {
                 #"host":"localhost",
                 "host":"127.0.0.1:3333",
-                "name":"gettytest3",                 
+                "name":"ministock",                 
                 "user":"root",
                 "unix_socket":"",
                 "pass":"SSJ2_mysql"

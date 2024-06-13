@@ -58,18 +58,17 @@ CLUSTER_NO = 63
 # cut the kids
 NO_KIDS = True
 USE_PAINTED = False
-OUTPAINT = False
+OUTPAINT = True
 INPAINT= True
-# OVERWRITE_INPAINT=False I don't think this is called anywhere. use USE_PAINTED
 INPAINT_MAX = 5000
 OUTPAINT_MAX = 5001
 
-BLUR_RADIUS = 200
-SIGMAX=1000
-# BLUR_RADIUS = 1000  ##computationally more expensive
-# SIGMAX=100
+# BLUR_RADIUS = 200
+# SIGMAX=1000
+BLUR_RADIUS = 1000  ##computationally more expensive
+SIGMAX=50
 if BLUR_RADIUS % 2 == 0:BLUR_RADIUS += 1 ## Kernel size should ONLY be an odd number
-
+MASK_OFFSET = [50,50,50,50]
 if OUTPAINT: from outpainting_modular import outpaint, image_resize
 VERBOSE = True
 # this controls whether it is using the linear or angle process
@@ -110,7 +109,7 @@ io = DataIO(IS_SSD)
 db = io.db
 # overriding DB for testing
 # io.db["name"] = "stock"
-io.db["name"] = "ministock"
+# io.db["name"] = "ministock"
 
 METAS_FILE = "metas.csv"
 
@@ -144,59 +143,59 @@ if IS_SEGONLY is not True:
     LIMIT = 500
 
 ##################MICHAEL#####################
-# elif IS_SEGONLY:
+elif IS_SEGONLY and io.db["name"] == "stock":
 
-#     SAVE_SEGMENT = False
-#     # no JOIN just Segment table
-#     SELECT = "DISTINCT(s.image_id), s.site_name_id, s.contentUrl, s.imagename, s.description, s.face_x, s.face_y, s.face_z, s.mouth_gap, s.face_landmarks, s.bbox, s.face_encodings68, s.site_image_id, s.body_landmarks"
+    SAVE_SEGMENT = False
+    # no JOIN just Segment table
+    SELECT = "DISTINCT(s.image_id), s.site_name_id, s.contentUrl, s.imagename, s.description, s.face_x, s.face_y, s.face_z, s.mouth_gap, s.face_landmarks, s.bbox, s.face_encodings68, s.site_image_id, s.body_landmarks"
 
-#     FROM =f"{SegmentTable_name} s "
+    FROM =f"{SegmentTable_name} s "
 
-#     # this is the standard segment topics/clusters query for April 2024
-#     WHERE = " face_encodings68 IS NOT NULL AND face_x > -33 AND face_x < -27 AND face_y > -2 AND face_y < 2 AND face_z > -2 AND face_z < 2"
+    # this is the standard segment topics/clusters query for April 2024
+    WHERE = " face_encodings68 IS NOT NULL AND face_x > -33 AND face_x < -27 AND face_y > -2 AND face_y < 2 AND face_z > -2 AND face_z < 2"
 
-#     # HIGHER
-#     # WHERE = "s.site_name_id != 1 AND face_encodings68 IS NOT NULL AND face_x > -27 AND face_x < -23 AND face_y > -2 AND face_y < 2 AND face_z > -2 AND face_z < 2"
+    # HIGHER
+    # WHERE = "s.site_name_id != 1 AND face_encodings68 IS NOT NULL AND face_x > -27 AND face_x < -23 AND face_y > -2 AND face_y < 2 AND face_z > -2 AND face_z < 2"
 
-#     # WHERE += " AND mouth_gap > 15 "
-#     # WHERE += " AND s.age_id NOT IN (1,2,3,4) "
-#     # WHERE += " AND s.age_id > 4 "
+    # WHERE += " AND mouth_gap > 15 "
+    # WHERE += " AND s.age_id NOT IN (1,2,3,4) "
+    # WHERE += " AND s.age_id > 4 "
 
-#     ## To add keywords to search
-#     # FROM += " JOIN ImagesKeywords ik ON s.image_id = ik.image_id JOIN Keywords k ON ik.keyword_id = k.keyword_id "
-#     # WHERE += " AND k.keyword_text LIKE 'shout%' "
+    ## To add keywords to search
+    # FROM += " JOIN ImagesKeywords ik ON s.image_id = ik.image_id JOIN Keywords k ON ik.keyword_id = k.keyword_id "
+    # WHERE += " AND k.keyword_text LIKE 'shout%' "
 
-#     if IS_CLUSTER or IS_ONE_CLUSTER:
-#         FROM += " JOIN ImagesClusters ic ON s.image_id = ic.image_id "
-#     if IS_TOPICS or IS_ONE_TOPIC:
-#         FROM += " JOIN ImagesTopics it ON s.image_id = it.image_id "
-#         WHERE += " AND it.topic_score > .3"
-#         SELECT += ", it.topic_score" # add description here, after resegmenting
-#     if NO_KIDS:
-#         WHERE += " AND s.age_id NOT IN (1,2,3) "
-#     if HSV_BOUNDS:
-#         FROM += " JOIN ImagesBackground ibg ON s.image_id = ibg.image_id "
-#         # WHERE += " AND ibg.lum > .3"
-#         SELECT += ", ibg.lum, ibg.lum_bb, ibg.hue, ibg.hue_bb, ibg.sat, ibg.sat_bb, ibg.val, ibg.val_bb, ibg.lum_torso, ibg.lum_torso_bb " # add description here, after resegmenting
-#     ###############
-#     if OBJ_CLS_ID:
-#         FROM += " JOIN PhoneBbox pb ON s.image_id = pb.image_id "
-#         SELECT += ", pb.bbox_67, pb.conf_67, pb.bbox_63, pb.conf_63, pb.bbox_26, pb.conf_26, pb.bbox_27, pb.conf_27, pb.bbox_32, pb.conf_32 "
-#     if SORT_TYPE == "planar_body":
-#         WHERE += " AND s.body_landmarks IS NOT NULL "
-#     ###############
-#     # # join to keywords
-#     # FROM += " JOIN ImagesKeywords ik ON s.image_id = ik.image_id JOIN Keywords k ON ik.keyword_id = k.keyword_id "
-#     # WHERE += " AND k.keyword_text LIKE 'surpris%' "
+    if IS_CLUSTER or IS_ONE_CLUSTER:
+        FROM += " JOIN ImagesClusters ic ON s.image_id = ic.image_id "
+    if IS_TOPICS or IS_ONE_TOPIC:
+        FROM += " JOIN ImagesTopics it ON s.image_id = it.image_id "
+        WHERE += " AND it.topic_score > .3"
+        SELECT += ", it.topic_score" # add description here, after resegmenting
+    if NO_KIDS:
+        WHERE += " AND s.age_id NOT IN (1,2,3) "
+    if HSV_BOUNDS:
+        FROM += " JOIN ImagesBackground ibg ON s.image_id = ibg.image_id "
+        # WHERE += " AND ibg.lum > .3"
+        SELECT += ", ibg.lum, ibg.lum_bb, ibg.hue, ibg.hue_bb, ibg.sat, ibg.sat_bb, ibg.val, ibg.val_bb, ibg.lum_torso, ibg.lum_torso_bb " # add description here, after resegmenting
+    ###############
+    if OBJ_CLS_ID:
+        FROM += " JOIN PhoneBbox pb ON s.image_id = pb.image_id "
+        SELECT += ", pb.bbox_67, pb.conf_67, pb.bbox_63, pb.conf_63, pb.bbox_26, pb.conf_26, pb.bbox_27, pb.conf_27, pb.bbox_32, pb.conf_32 "
+    if SORT_TYPE == "planar_body":
+        WHERE += " AND s.body_landmarks IS NOT NULL "
+    ###############
+    # # join to keywords
+    # FROM += " JOIN ImagesKeywords ik ON s.image_id = ik.image_id JOIN Keywords k ON ik.keyword_id = k.keyword_id "
+    # WHERE += " AND k.keyword_text LIKE 'surpris%' "
 
-#     # WHERE = "s.site_name_id != 1"
-#     LIMIT = 1000
+    # WHERE = "s.site_name_id != 1"
+    LIMIT = 1000
 
-#     # TEMP TK TESTING
-#     # WHERE += " AND s.site_name_id = 8"
+    # TEMP TK TESTING
+    # WHERE += " AND s.site_name_id = 8"
 ######################################
 ############SATYAM##################
-elif IS_SEGONLY:
+elif IS_SEGONLY and io.db["name"] == "ministock":
 
     SAVE_SEGMENT = False
     # no JOIN just Segment table
@@ -928,7 +927,7 @@ def merge_inpaint(inpaint_image,img,extended_img,extension_pixels,blur_radius=BL
     # inpaint_image[top:bottom,left:right]=img[offset:height-offset,offset:width-offset]*(1-mask)+(mask)*inpaint_image[top:bottom,left:right]
     inpaint_merge_2=extended_img*(1-mask/255)+(mask/255)*inpaint_image
     inpaint_merge_2=np.array(inpaint_merge_2,dtype=np.uint8)
-    return inpaint_image
+    return inpaint_merge_2
 
 def extend_cv2(extended_img,mask,iR=3,method="NS"):
     if method=="NS":
@@ -997,19 +996,22 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
             print("extension_pixels[maxkey]", extension_pixels[maxkey])
             if extension_pixels[maxkey] <= INPAINT_MAX:
                 print("inpainting small extension")
+                # extimg is 50px smaller and mask is 10px bigger
                 extended_img,mask=sort.prepare_mask(img,extension_pixels)
                 extended_img=extend_cv2(extended_img,mask,iR=3,method="NS")
+                
                 inpaint_image=sort.extend_lama(extended_img, mask, downsampling_scale = 8)
                 
                 ### use inpainting for the extended part, but use original for non extend to keep image sharp ###
                 # inpaint_image[extension_pixels["top"]:extension_pixels["top"]+np.shape(img)[0],extension_pixels["left"]:extension_pixels["left"]+np.shape(img)[1]]=img
+                # move the boundary of the blur in 50px
                 inpaint_image=merge_inpaint(inpaint_image,img,extended_img,extension_pixels)
-                cv2.imwrite(inpaint_file,inpaint_image)
+                cv2.imwrite(inpaint_file,inpaint_image) #temp comment out
                 print("inpainting done", inpaint_file,"shape",np.shape(inpaint_image))
             elif extension_pixels[maxkey] < OUTPAINT_MAX:
                 print("outpainting medium extension")
                 inpaint_image=outpaint(img,extension_pixels,downsampling_scale=1,prompt="",negative_prompt="")
-                cv2.imwrite(inpaint_file,inpaint_image)
+                cv2.imwrite(inpaint_file,inpaint_image) 
             else:
                 print("too big to inpaint -- attempting to bailout")
                 # inpaint_image=0
