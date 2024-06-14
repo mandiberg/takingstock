@@ -13,27 +13,49 @@ from collections import Counter
 from simple_lama_inpainting import SimpleLama
 from sklearn.neighbors import NearestNeighbors
 import re
+import random
 
 
 class SortPose:
     # """Sort image files based on head pose"""
 
-    def __init__(self, motion, face_height_output, image_edge_multiplier, EXPAND, ONE_SHOT, JUMP_SHOT, HSV_CONTROL=None, VERBOSE=True,INPAINT=False):
+    def __init__(self, motion, face_height_output, image_edge_multiplier, EXPAND, ONE_SHOT, JUMP_SHOT, HSV_CONTROL=None, VERBOSE=True,INPAINT=False, SORT_TYPE="128d", OBJ_CLS_ID = None):
 
         self.mp_face_detection = mp.solutions.face_detection
         self.mp_drawing = mp.solutions.drawing_utils
         self.get_bg_segment=mp.solutions.selfie_segmentation.SelfieSegmentation()  
               
+
         #maximum allowable distance between encodings (this accounts for dHSV)
         self.MAXDIST = 1.8
-        self.MAXFACEDIST = .9
-        self.MINDIST = .5 #TK
+        self.MAXFACEDIST = .8
+        self.MINFACEDIST = .5 #TK
+        self.MAXBODYDIST = .5
         self.MINBODYDIST = .15
+        self.FACE_DUPE_DIST = .06
         self.BODY_DUPE_DIST = .04
+        self.HSV_DELTA_MAX = .25
         self.HSVMULTIPLIER = 5
         self.BRUTEFORCE = True
-        self.CUTOFF = 2000
-        self.FACE_DIST = 15
+        self.CUTOFF = 100
+
+        self.SORT_TYPE = SORT_TYPE
+        if self.SORT_TYPE == "128d":
+            self.MIND = self.MINFACEDIST * 2
+            self.MAXD = self.MAXFACEDIST
+            self.MULTIPLIER = self.HSVMULTIPLIER
+            self.DUPED = self.FACE_DUPE_DIST
+        elif self.SORT_TYPE == "planar": 
+            self.MIND = self.MINBODYDIST * 2
+            self.MAXD = self.MAXBODYDIST
+            self.MULTIPLIER = self.HSVMULTIPLIER * (self.MINBODYDIST / self.MINFACEDIST)
+            self.DUPED = self.BODY_DUPE_DIST
+        elif self.SORT_TYPE == "planar_body": 
+            self.MIND = self.MINBODYDIST
+            self.MAXD = self.MAXBODYDIST
+            self.MULTIPLIER = self.HSVMULTIPLIER * (self.MINBODYDIST / self.MINFACEDIST)
+            self.DUPED = self.BODY_DUPE_DIST
+
 
         self.INPAINT=INPAINT
         if self.INPAINT:self.INPAINT_MODEL=SimpleLama()
@@ -58,7 +80,8 @@ class SortPose:
         self.JUMP_SHOT = JUMP_SHOT
         self.SHOT_CLOCK = 0
         self.SHOT_CLOCK_MAX = 10
-        self.BODY_LMS = [0, 13, 14, 15, 16, 19, 20]
+        self.BODY_LMS = [0] + list(range(13, 23)) # 0 is nose, 13-22 are left and right hands and elbows
+        
         # self.BODY_LMS = [15]
         self.VERBOSE = VERBOSE
 
@@ -67,7 +90,6 @@ class SortPose:
         self.same_img = []
         
         # luminosity parameters
-        self.HSV_DELTA_MAX = .5
         if HSV_CONTROL:
             self.LUM_MIN = HSV_CONTROL['LUM_MIN']
             self.LUM_MAX = HSV_CONTROL['LUM_MAX']
@@ -877,7 +899,7 @@ class SortPose:
         return self.hue,self.sat,self.val,self.lum,self.lum_torso
     
 
-    def get_start_enc_NN(self, start_img, df_enc, SORT_TYPE):
+    def get_start_enc_NN(self, start_img, df_enc):
         print("get_start_enc")
 
         if start_img == "median":
@@ -916,7 +938,7 @@ class SortPose:
             # print(start_site_image_id)
             print(self.counter_dict["start_site_image_id"])
             enc1 = df_128_enc.loc[self.counter_dict["start_site_image_id"]].to_list()
-        elif SORT_TYPE == "planar_body":
+        elif self.SORT_TYPE == "planar_body":
             # print("get_start_enc planar_body start_img key is (this is what we are comparing to):")
             # print(start_img)
             try:
@@ -1034,7 +1056,7 @@ class SortPose:
 
 
 
-    def get_enc1(self, df, sorttype, FIRST_ROUND=False):
+    def get_enc1(self, df, FIRST_ROUND=False, hsv_sort = False):
         if FIRST_ROUND:
             this_start = self.counter_dict["start_img_name"]
             ## Get the starting encodings (if not passed through)
@@ -1045,22 +1067,23 @@ class SortPose:
                 print("attempting set enc1 from pass through")
                 enc1 = sort.counter_dict["last_image_enc"]
                 print("set enc1 from pass through")
-            elif sorttype == "HSV":
+            elif hsv_sort == True:
                 print("setting enc1 to HSV")
                 # set enc1 to median
                 enc1 = [0,0,1,1,.5]
             else:
                 #this is the first??? round, set via df
                 print(f"trying get_start_enc() from {this_start}")
-                enc1 = self.get_start_enc_NN(this_start, df, sorttype)
+                enc1 = self.get_start_enc_NN(this_start, df)
                 print(f"set enc1 from get_start_enc() to {enc1}")
         else: 
-            if sorttype == "128d": enc1 = df.iloc[-1]["face_encodings68"]
-            elif sorttype == "planar": enc1 = df.iloc[-1]["face_landmarks"]
-            elif sorttype == "planar_body": enc1 = df.iloc[-1]["body_landmarks"]
+            if hsv_sort == True: enc1 = df.iloc[-1]["hsvll"]
+            elif self.SORT_TYPE == "128d": enc1 = df.iloc[-1]["face_encodings68"]
+            elif self.SORT_TYPE == "planar": enc1 = df.iloc[-1]["face_landmarks"]
+            elif self.SORT_TYPE == "planar_body": enc1 = df.iloc[-1]["body_landmarks"]
         return enc1
 
-    def brute_force(self, df_enc, enc1, sorttype="128d"):
+    def brute_force(self, df_enc, enc1):
         print("starting regular brute_force")
         for index, row in df_enc.iterrows():
             enc2 = row['face_encodings68']
@@ -1076,13 +1099,13 @@ class SortPose:
     
 
 
-    def sort_df_KNN(self, df_enc, enc1, sorttype="128d"):
+    def sort_df_KNN(self, df_enc, enc1, knn_sort="128d"):
         output_cols = ['dist_enc1']
-        if sorttype == "128d":
+        if knn_sort == "128d":
             sortcol = 'face_encodings68'
-        elif sorttype == "planar":
+        elif knn_sort == "planar":
             sortcol = 'face_landmarks'
-        elif sorttype == "planar_body":
+        elif knn_sort == "planar_body":
             sortcol = 'body_landmarks'
             # if enc1 is not a numpy array, convert it to a list
             if not isinstance(enc1,np.ndarray):
@@ -1090,8 +1113,8 @@ class SortPose:
                 enc1 = np.array(enc1_list)
                 # Convert body_landmarks to a 2D array
                 df_enc[sortcol] = df_enc[sortcol].apply(lambda x: np.concatenate([v for k, v in self.get_landmarks_2d(x, self.BODY_LMS).items()]))
-        elif sorttype == "HSV":
-            print("sorttype is HSV")
+        elif knn_sort == "HSV":
+            print("knn_sort is HSV")
             sortcol = 'hsvll'
             output_cols = ['dist_HSV']
             print(type(enc1))
@@ -1100,7 +1123,7 @@ class SortPose:
             print(type(df_enc.loc[0, 'lum']))
             print(df_enc.loc[0, 'lum'])
 
-        print("sort_df_KNN, sorttype is", sorttype)
+        print("sort_df_KNN, knn_sort is", knn_sort)
         # Extract the face encodings from the dataframe
         encodings_array = df_enc[sortcol].to_numpy().tolist()
         self.knn.fit(encodings_array)
@@ -1125,33 +1148,25 @@ class SortPose:
         return df_enc
 
 
-    def get_closest_df_NN(self, df_enc, df_sorted, sorttype="128d"):
+    def get_closest_df_NN(self, df_enc, df_sorted):
         def mask_df(df, column, limit, type="lessthan"):
             # removes rows where the value in the column is greater than the limit
             if type == "lessthan":
                 flashmask = df[column] < limit
             elif type == "greaterthan":
                 flashmask = df[column] > limit
-            # flashmask = df[column] > limit
-            print("mask", column, flashmask)
+            # print("mask", column, flashmask)
             df = df[flashmask].reset_index(drop=True)
-            print("df_", column, len(df))
+            # print("df_", column, len(df))
             return df
         
-        if len(df_sorted) == 0: 
-            FIRST_ROUND = True
-            enc1 = self.get_enc1(df_enc, sorttype, FIRST_ROUND)
-        else: 
-            FIRST_ROUND = False
-            enc1 = self.get_enc1(df_sorted, sorttype, FIRST_ROUND)
-
         def de_dupe(df_dist_hsv, df_sorted, column, is_run = False):
             # remove duplicates (where dist is less than BODY_DUPE_DIST)
             def json_to_list(json):
                 return [v for k, v in json.items()]
-            df_dist_hsv = mask_df(df_dist_hsv, column, self.BODY_DUPE_DIST, "greaterthan")
-
-            df_close_ones = mask_df(df_dist_hsv, column, .15, "lessthan")
+            
+            df_dist_hsv = mask_df(df_dist_hsv, column, self.DUPED, "greaterthan")
+            df_close_ones = mask_df(df_dist_hsv, column, self.MIND, "lessthan")
             last_image = df_sorted.iloc[-1].to_dict()
             dupe_index = []
             hsvll_dist = face_dist = bbox_dist = 1 # so it doesn't trigger the dupe_score
@@ -1184,31 +1199,32 @@ class SortPose:
             df_dist_hsv = df_dist_hsv.drop(dupe_index).reset_index(drop=True)
 
             return df_dist_hsv
-        
-        print(f"get_closest_df_NN, sorttype is {sorttype} FIRST_ROUND is {FIRST_ROUND}")
-        # define sorttype for KNN
-        if sorttype == "128d" or (sorttype == "planar" and FIRST_ROUND) or (sorttype == "planar_body" and FIRST_ROUND): 
+
+        if len(df_sorted) == 0: 
+            FIRST_ROUND = True
+            enc1 = self.get_enc1(df_enc, FIRST_ROUND)
+        else: 
+            FIRST_ROUND = False
+            enc1 = self.get_enc1(df_sorted, FIRST_ROUND)
+
+        print(f"get_closest_df_NN, self.SORT_TYPE is {self.SORT_TYPE} FIRST_ROUND is {FIRST_ROUND}")
+        # define self.SORT_TYPE for KNN
+        if self.SORT_TYPE == "128d" or (self.SORT_TYPE == "planar" and FIRST_ROUND) or (self.SORT_TYPE == "planar_body" and FIRST_ROUND): 
             knn_sort = "128d"      
-            min_dist = self.MINDIST
-        elif sorttype == "planar": 
+        elif self.SORT_TYPE == "planar": 
             knn_sort = "planar"
-            min_dist = self.MINBODYDIST # TK this is a placeholder
-        elif sorttype == "planar_body": 
+        elif self.SORT_TYPE == "planar_body": 
             knn_sort = "planar_body"
-            min_dist = self.MINBODYDIST
         
         # sort KNN (always for planar) or BRUTEFORCE (optional only for 128d)
-        if self.BRUTEFORCE and knn_sort == "128d": df_dist_enc = self.brute_force(df_enc, enc1, knn_sort)
+        if self.BRUTEFORCE and knn_sort == "128d": df_dist_enc = self.brute_force(df_enc, enc1)
         else: df_dist_enc = self.sort_df_KNN(df_enc, enc1, knn_sort)
         print("df_shuffled 128d", df_dist_enc[['image_id','dist_enc1']].sort_values(by='dist_enc1'))
         
-        # add HSV dist
-        if not 'dist_HSV' in df_sorted.columns:
-            print("no HSV column")
-            enc1 = self.get_enc1(df_enc, 'HSV', FIRST_ROUND=True)
-        else: 
-            print("yes HSV column")
-            enc1 = df_sorted.iloc[-1]["hsvll"]
+        # set HSV start enc and add HSV dist
+        if not 'dist_HSV' in df_sorted.columns:  enc1 = self.get_enc1(df_enc, FIRST_ROUND=True, hsv_sort=True)
+        else:  enc1 = self.get_enc1(df_sorted, FIRST_ROUND=False, hsv_sort=True)
+        print("enc1", enc1)
         df_dist_hsv = self.normalize_hsv(enc1, df_dist_enc)
         df_dist_hsv = self.sort_df_KNN(df_dist_hsv, enc1, "HSV")
         print("df_shuffled HSV", df_dist_hsv[['image_id','dist_enc1','dist_HSV']].head())
@@ -1223,24 +1239,22 @@ class SortPose:
             
             # temporarily removes items for this round
             df_dist_noflash = mask_df(df_dist_hsv, 'dist_HSV', self.HSV_DELTA_MAX, "lessthan")
-            df_dist_close = mask_df(df_dist_noflash, 'dist_HSV', self.MAXFACEDIST, "lessthan")
+            df_dist_close = mask_df(df_dist_noflash, 'dist_HSV', self.MAXD, "lessthan")
 
             # implementing these masks for now
             df_shuffled = df_dist_close
 
             # sort df_shuffled by the sum of dist_enc1 and dist_HSV
-            # df_shuffled['sum_dist'] = df_shuffled['dist_enc1']
-            # temp disable sum_dist
-            df_shuffled['sum_dist'] = df_dist_noflash['dist_enc1'] + self.HSVMULTIPLIER * df_shuffled['dist_HSV']
+            df_shuffled['sum_dist'] = df_dist_noflash['dist_enc1'] + self.MULTIPLIER * df_shuffled['dist_HSV']
             df_shuffled = df_shuffled.sort_values(by='sum_dist').reset_index(drop=True)
             print("df_shuffled pre_run", df_shuffled[['image_id','dist_enc1','dist_HSV','sum_dist']])
 
-            runmask = df_shuffled['dist_enc1'] < min_dist
+            runmask = df_shuffled['sum_dist'] < self.MIND
             print("runmask", runmask)
             if runmask.any():
                 num_true_values = runmask.sum()
                 print("we have a run ---->>>>", num_true_values)
-                # if there is a run < MINDIST
+                # if there is a run < MINFACEDIST
                 df_run = df_shuffled[runmask]
 
                 # need to dedupe run if not firt round
@@ -1255,13 +1269,21 @@ class SortPose:
                 
 
 
-            else:                
+            elif df_shuffled.iloc:
 
                 # df_run = first row of df_shuffled
                 df_run = df_shuffled.iloc[[0]]  # Wrap in list to keep it as DataFrame
                 print("NO run <<<< ", df_run)
 
-                # I have qeustions if this is actually rm the right one
+                df_enc = df_enc.drop(df_run.index).reset_index(drop=True)
+
+
+            else:
+                #jump somewhere else
+                random_index = random.randint(0, len(df_shuffled) - 1)                
+                print("JUMPING AROUND ^^^^ ", df_run)
+                df_run = df_shuffled.iloc[[random_index]]
+
                 df_enc = df_enc.drop(df_run.index).reset_index(drop=True)
 
             print("df_run", df_run)

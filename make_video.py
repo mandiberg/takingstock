@@ -189,7 +189,7 @@ elif IS_SEGONLY and io.db["name"] == "stock":
     # WHERE += " AND k.keyword_text LIKE 'surpris%' "
 
     # WHERE = "s.site_name_id != 1"
-    LIMIT = 100000
+    LIMIT = 10000
 
     # TEMP TK TESTING
     # WHERE += " AND s.site_name_id = 8"
@@ -277,7 +277,7 @@ image_edge_multiplier = [1.4,3.3,3,3.3] # widerest 16:10 for hands
 # sort.max_image_edge_multiplier is the maximum of the elements
 
 # construct my own objects
-sort = SortPose(motion, face_height_output, image_edge_multiplier,EXPAND, ONE_SHOT, JUMP_SHOT, HSV_BOUNDS, VERBOSE,INPAINT)
+sort = SortPose(motion, face_height_output, image_edge_multiplier,EXPAND, ONE_SHOT, JUMP_SHOT, HSV_BOUNDS, VERBOSE,INPAINT, SORT_TYPE, OBJ_CLS_ID)
 
 start_img_name = "median"
 start_site_image_id = None
@@ -456,7 +456,7 @@ def sort_by_face_dist(df_enc, df_128_enc, df_33_lms):
             # I think this will be graceful with cluster iteration
             print("dist")
             # print(dist)
-            if dist > sort.MAXDIST and sort.SHOT_CLOCK != 0:
+            if dist > sort.MAXD and sort.SHOT_CLOCK != 0:
                 print("should breakout")
                 break
 
@@ -576,13 +576,13 @@ def sort_by_face_dist_NN(df_enc):
         ## Find closest
         try:
             # send in both dfs, and return same dfs with 1+ rows sorted
-            df_enc, df_sorted = sort.get_closest_df_NN(df_enc, df_sorted, sorttype=SORT_TYPE)
+            df_enc, df_sorted = sort.get_closest_df_NN(df_enc, df_sorted)
 
             dist = df_sorted.iloc[-1]['dist_enc1']
             # print(dist)
 
             # Break out of the loop if greater than MAXDIST
-            if dist > sort.MAXDIST and sort.SHOT_CLOCK != 0:
+            if dist > sort.MAXD and sort.SHOT_CLOCK != 0:
                 print("should breakout, dist is", dist)
                 break
 
@@ -824,7 +824,7 @@ def compare_images(last_image, img, face_landmarks, bbox):
         except:
             print("last_image try failed")
         # if is_face or first_run and sort.resize_factor < sort.resize_max:
-        if face_diff > sort.FACE_DIST or sort.counter_dict["first_run"]:
+        if face_diff > sort.FACE_DUPE_DIST or sort.counter_dict["first_run"]:
             sort.counter_dict["first_run"] = False
             last_image = cropped_image
             sort.counter_dict["good_count"] += 1
@@ -1049,7 +1049,7 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
             except:
                 print("couldn't read image")
                 continue
-            if row['dist'] < sort.MAXDIST:
+            if row['dist'] < sort.MAXD:
                 # compare_images to make sure they are face and not the same
                 # last_image is cv2 np.array
                 cropped_image, face_diff = compare_images(sort.counter_dict["last_image"], img, row['face_landmarks'], row['bbox'])
@@ -1109,7 +1109,7 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
                     print("cropped_image is None")
             else:
                 sort.counter_dict["failed_dist_count"] += 1
-                print("MAXDIST too big:" , str(sort.MAXDIST))
+                print("MAXDIST too big:" , str(sort.MAXD))
         # print("sort.counter_dict with last_image???")
         # print(sort.counter_dict)
 
