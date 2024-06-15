@@ -30,14 +30,14 @@ class SortPose:
         self.MAXDIST = 1.8
         self.MAXFACEDIST = .8
         self.MINFACEDIST = .5 #TK
-        self.MAXBODYDIST = .5
+        self.MAXBODYDIST = 1.5
         self.MINBODYDIST = .15
         self.FACE_DUPE_DIST = .06
         self.BODY_DUPE_DIST = .04
         self.HSV_DELTA_MAX = .25
         self.HSVMULTIPLIER = 5
         self.BRUTEFORCE = True
-        self.CUTOFF = 100
+        self.CUTOFF = 10
 
         self.SORT_TYPE = SORT_TYPE
         if self.SORT_TYPE == "128d":
@@ -80,8 +80,10 @@ class SortPose:
         self.JUMP_SHOT = JUMP_SHOT
         self.SHOT_CLOCK = 0
         self.SHOT_CLOCK_MAX = 10
-        self.BODY_LMS = [0] + list(range(13, 23)) # 0 is nose, 13-22 are left and right hands and elbows
-        
+        # self.BODY_LMS = [0] + list(range(13, 23)) # 0 is nose, 13-22 are left and right hands and elbows
+        # self.BODY_LMS = [0,15,16,19,20,21,22] # 0 is nose, 13-22 are left and right hands and elbows
+        self.BODY_LMS = [16,20,15,19] # 0 is nose, 13-22 are left and right hands and elbows
+    
         # self.BODY_LMS = [15]
         self.VERBOSE = VERBOSE
 
@@ -1100,6 +1102,12 @@ class SortPose:
 
 
     def sort_df_KNN(self, df_enc, enc1, knn_sort="128d"):
+        def get_hand_angles(enc1):
+            # calculate the angle of the vector between landmarks 16 and 20
+            angle_LH = np.arctan2(enc1[3] - enc1[1], enc1[2] - enc1[0])
+            angle_RH = np.arctan2(enc1[7] - enc1[5], enc1[6] - enc1[4])
+            return angle_LH, angle_RH
+        
         output_cols = ['dist_enc1']
         if knn_sort == "128d":
             sortcol = 'face_encodings68'
@@ -1111,8 +1119,17 @@ class SortPose:
             if not isinstance(enc1,np.ndarray):
                 enc1_list = self.get_landmarks_2d(enc1, self.BODY_LMS, structure="list")
                 enc1 = np.array(enc1_list)
+                print("enc1", enc1)
+                # calculate the angle of the vector between landmarks 16 and 20
+                angle_LH, angle_RH = get_hand_angles(enc1)
+                print("angle enc1", angle_LH, angle_RH)
+                enc1 = np.concatenate([enc1, [angle_LH, angle_RH]])
+
                 # Convert body_landmarks to a 2D array
                 df_enc[sortcol] = df_enc[sortcol].apply(lambda x: np.concatenate([v for k, v in self.get_landmarks_2d(x, self.BODY_LMS).items()]))
+                # apply get_hand_angles to each row in the sortcol column and add that to the list in sortcol
+                df_enc[sortcol] = df_enc[sortcol].apply(lambda x: np.concatenate([x, get_hand_angles(x)]))
+                
         elif knn_sort == "HSV":
             print("knn_sort is HSV")
             sortcol = 'hsvll'
@@ -1193,7 +1210,7 @@ class SortPose:
                     print("de_duping score", dupe_score, last_image['image_id'], "is a duplicate of", row['image_id'])
                     # add the index of the duplicate to the list of indexes to drop
                     dupe_index.append(index)
-                if is_run:
+                elif is_run:
                     last_image = row
 
             df_dist_hsv = df_dist_hsv.drop(dupe_index).reset_index(drop=True)
@@ -1269,7 +1286,7 @@ class SortPose:
                 
 
 
-            elif df_shuffled.iloc:
+            elif len(df_shuffled) > 0:
 
                 # df_run = first row of df_shuffled
                 df_run = df_shuffled.iloc[[0]]  # Wrap in list to keep it as DataFrame
