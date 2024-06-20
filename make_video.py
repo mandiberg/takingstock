@@ -30,7 +30,7 @@ SegmentTable_name = 'SegmentOct20'
 
 # SATYAM, this is MM specific
 # for when I'm using files on my SSD vs RAID
-IS_SSD = False
+IS_SSD = True
 #IS_MOVE is in move_toSSD_files.py
 
 # This is for when you only have the segment table. RW SQL query
@@ -1001,9 +1001,10 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
                     print("gotta paint that shizzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz")
                     cropped_image, face_diff = in_out_paint(img, row)
 
-                landmarks_2d = sort.get_landmarks_2d(row['face_landmarks'], list(range(33)), "list")
-                print("landmarks_2d before drawing", landmarks_2d)
-                cropped_image = sort.draw_point(cropped_image, landmarks_2d, index = 0)                    
+                # for drawing landmarks on test image
+                # landmarks_2d = sort.get_landmarks_2d(row['face_landmarks'], list(range(33)), "list")
+                # print("landmarks_2d before drawing", landmarks_2d)
+                # cropped_image = sort.draw_point(cropped_image, landmarks_2d, index = 0)                    
 
                 # landmarks_2d = sort.get_landmarks_2d(row['face_landmarks'], list(range(420)), "list")
                 # cropped_image = sort.draw_point(cropped_image, landmarks_2d, index = 0)                    

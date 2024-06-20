@@ -35,7 +35,7 @@ class SortPose:
         self.MINBODYDIST = .15
         self.FACE_DUPE_DIST = .06
         self.BODY_DUPE_DIST = .04
-        self.HSV_DELTA_MAX = .25
+        self.HSV_DELTA_MAX = 1
         self.HSVMULTIPLIER = 5
         self.BRUTEFORCE = True
         self.CUTOFF = 10
@@ -1046,6 +1046,7 @@ class SortPose:
         return face_2d
 
 
+                
     def get_landmarks_2d(self, Lms, selected_Lms, structure="dict"):
         Lms2d = {}
         Lms1d = []
@@ -1124,7 +1125,7 @@ class SortPose:
                 # set enc1 to median
                 enc1 = [0,0,1,1,.5]
             else:
-                #this is the first??? round, set via df
+                #this is the first??? round, set via df, defaults to face_encodings68
                 print(f"trying get_start_enc() from {this_start}")
                 enc1 = self.get_start_enc_NN(this_start, df)
                 print(f"set enc1 from get_start_enc() to {enc1}")
@@ -1132,8 +1133,19 @@ class SortPose:
             if hsv_sort == True: enc1 = df.iloc[-1]["hsvll"]
             elif self.SORT_TYPE == "128d": enc1 = df.iloc[-1]["face_encodings68"]
             elif self.SORT_TYPE == "planar": enc1 = df.iloc[-1]["face_landmarks"]
+            elif self.SORT_TYPE == "planar_body" and "body_landmarks_array" in df.columns: enc1 = df.iloc[-1]["body_landmarks_array"]
             elif self.SORT_TYPE == "planar_body": enc1 = df.iloc[-1]["body_landmarks"]
         return enc1
+
+
+            # sortcol = 'body_landmarks_array'
+            # sourcecol = 'body_landmarks'
+            # print("body_landmarks elif")
+
+            # # test to see if df_enc contains the sortcol column
+            # if sortcol not in df_enc.columns:
+
+
 
     def brute_force(self, df_enc, enc1):
         print("starting regular brute_force")
@@ -1224,17 +1236,18 @@ class SortPose:
         # enc1_np = np.array(enc1_list)
 
         # calculate the angle of the vector between landmarks 16 and 20
-        # angles_pointers = self.get_hand_angles(np.array(pointers))
-        # angles_thumbs = self.get_hand_angles(np.array(thumbs))
+        angles_pointers = self.get_hand_angles(np.array(pointers))
+        angles_thumbs = self.get_hand_angles(np.array(thumbs))
 
-        # # check if hands are visible
-        # visibility = self.test_landmarks_vis(pointers)
+        # check if hands are visible
+        visibility = self.test_landmarks_vis(pointers)
 
-        # print("types", type(angles_pointers), type(angles_thumbs), type(body), type(visibility))
+        print("types", type(angles_pointers), type(angles_thumbs), type(body), type(visibility))
+        print("enc1++ angles", angles_pointers, angles_thumbs, body, visibility)
 
         # print("enc1++ pointers", pointers, angles_pointers)
         # enc_angles_list = angles_pointers + angles_thumbs + body + visibility
-        enc_angles_list =  body 
+        enc_angles_list =  pointers 
         enc1 = np.array(enc_angles_list)
         print("enc1++ final np array", enc1)
         return enc1
@@ -1248,11 +1261,11 @@ class SortPose:
         elif knn_sort == "planar_body":
             sortcol = 'body_landmarks_array'
             sourcecol = 'body_landmarks'
-
+            print("body_landmarks elif")
 
             # test to see if df_enc contains the sortcol column
             if sortcol not in df_enc.columns:
-
+                # print("body_landmarks pre prep_enc")
             # if enc1 is not a numpy array, convert it to a list
             # if not isinstance(enc1,np.ndarray):
                 # create enc list with x/y position and angles and visibility
@@ -1260,10 +1273,15 @@ class SortPose:
 
                 # apply prep_enc to the sortcol column 
                 df_enc[sortcol] = df_enc[sourcecol].apply(lambda x: self.prep_enc(x, structure="list"))
-            print("body_landmarks post_sort")
-            test_row = df_enc.loc[df_enc['image_id'] == 10498233]
-            print(test_row['body_landmarks'])
-            print(test_row['body_landmarks_array'])
+                print("body_landmarks post prep_enc - should be 33")
+                print(df_enc[sortcol].to_list())
+
+            # print("body_landmarks post_sort")
+            # print(df_enc[sortcol])
+
+            # test_row = df_enc.loc[df_enc['image_id'] == 10498233]
+            # print(test_row['body_landmarks'])
+            # print(test_row['body_landmarks_array'])
         elif knn_sort == "HSV":
             print("knn_sort is HSV")
             sortcol = 'hsvll'
@@ -1277,6 +1295,9 @@ class SortPose:
         print("sort_df_KNN, knn_sort is", knn_sort)
         # Extract the face encodings from the dataframe
         encodings_array = df_enc[sortcol].to_numpy().tolist()
+        # print("df_enc", df_enc)
+        # print("encodings_array", encodings_array)
+        print("enc1", enc1)
         self.knn.fit(encodings_array)
 
         # Find the distances and indices of the neighbors
