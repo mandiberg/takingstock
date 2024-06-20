@@ -42,7 +42,7 @@ from mp_sort_pose import SortPose
 
 Base = declarative_base()
 USE_BBOX=True
-VERBOSE = False
+VERBOSE = True
 
 # 3.8 M large table (for Topic Model)
 # HelperTable_name = "SegmentHelperMar23_headon"
@@ -57,15 +57,15 @@ IS_SSD = False
 
 io = DataIO(IS_SSD)
 db = io.db
-io.db["name"] = "stock"
+# io.db["name"] = "stock"
 # io.db["name"] = "ministock"
 
 
 # Create a database engine
 engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}".format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']), poolclass=NullPool)
 
-# get_background_mp = mp.solutions.selfie_segmentation
-# get_bg_segment = get_background_mp.SelfieSegmentation()
+get_background_mp = mp.solutions.selfie_segmentation
+get_bg_segment = get_background_mp.SelfieSegmentation()
 
 image_edge_multiplier = [1.5,1.5,2,1.5] # bigger portrait
 image_edge_multiplier_sm = [1.2, 1.2, 1.6, 1.2] # standard portrait
@@ -102,7 +102,7 @@ title = 'Please choose your operation: '
 options = ['Create table', 'Fetch BG color stats',"test sorting"]
 option, index = pick(options, title)
 
-LIMIT= 50000
+LIMIT= 10
 # Initialize the counter
 counter = 0
 
@@ -229,10 +229,30 @@ def sort_files_onBG():
 
     print("Files saved to", output_folder)
 
+def get_selfie_bbox(segmentation_mask):
+    bbox=None
+    scaled_mask = (segmentation_mask * 255).astype(np.uint8)
+    # Apply a binary threshold to get a binary image
+    _, binary = cv2.threshold(scaled_mask, 127, 255, cv2.THRESH_BINARY)
+    # Find contours in the binary image
+    contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    if contours:
+        # Assume the largest contour is the shape
+        contour = max(contours, key=cv2.contourArea)
+        # Get the bounding box of the shape
+        x, y, w, h = cv2.boundingRect(contour)
+        # Draw the bounding box for visualization
+        bbox={"top":y,"right":scaled_mask.shape[1] - (x + w),"bottom":scaled_mask.shape[0] - (y + h),"left":x}
+    else:
+        print("No contours were found")
+    if bbox is None: print("bbox is empty, figure out what happened")
+    else:
+        if VERBOSE:print("bbox=",bbox)
+    return bbox
 
+def get_segmentation_mask(img,bbox=None,face_landmarks=None):
+    print("[get_bg_hue_lum] about to go for segemntation")
 
-def get_bg_hue_lum(img,bbox=None,face_landmarks=None):
-    hue = sat = val = lum = lum_torso = None
     if bbox:
         try:
             if type(bbox)==str:
@@ -241,7 +261,6 @@ def get_bg_hue_lum(img,bbox=None,face_landmarks=None):
             #sample_img=sample_img[bbox['top']:bbox['bottom'],bbox['left']:bbox['right'],:]
             # passing in bbox as a str
             img = sort.crop_image(img, face_landmarks, bbox)
-            #print(type(sample_img),"@@@@@@@@@@@@")
             if img is None: return -1,-1,-1,-1,-1 ## if TOO_BIG==true, checking if cropped image is empty
         except:
             if VERBOSE: print("FAILED CROPPING, bad bbox",bbox)
@@ -249,40 +268,48 @@ def get_bg_hue_lum(img,bbox=None,face_landmarks=None):
         print("bbox['bottom'], ", bbox['bottom'])
 
     result = get_bg_segment.process(img[:,:,::-1]) #convert RBG to BGR then process with mp
-    mask=np.repeat((1-result.segmentation_mask)[:, :, np.newaxis], 3, axis=2) 
-    mask_torso=np.repeat((result.segmentation_mask)[:, :, np.newaxis], 3, axis=2) 
+    print("[get_bg_hue_lum] got result")
+    return result.segmentation_mask
 
-    masked_img=mask*img[:,:,::-1]/255 ##RGB format
-    masked_img_torso=mask_torso*img[:,:,::-1]/255 ##RGB format
 
-    # Identify black pixels where R=0, G=0, B=0
-    black_pixels_mask = np.all(masked_img == [0, 0, 0], axis=-1)
-    black_pixels_mask_torso = np.all(masked_img_torso == [0, 0, 0], axis=-1)
+# def get_bg_hue_lum(img,segmentation_mask,bbox):
+#     hue = sat = val = lum = lum_torso = None
+    
+#     mask      =np.repeat((1-segmentation_mask)[:, :, np.newaxis], 3, axis=2) 
+#     mask_torso=np.repeat((segmentation_mask)[:, :, np.newaxis], 3, axis=2) 
 
-    # Filter out black pixels and compute the mean color of the remaining pixels
-    mean_color = np.mean(masked_img[~black_pixels_mask], axis=0)[np.newaxis,np.newaxis,:] # ~ means negate/remove
-    hue=cv2.cvtColor(mean_color, cv2.COLOR_RGB2HSV)[0,0,0]
-    sat = cv2.cvtColor(mean_color, cv2.COLOR_RGB2HSV)[0, 0, 1]
-    val = cv2.cvtColor(mean_color, cv2.COLOR_RGB2HSV)[0, 0, 2]
-    lum=cv2.cvtColor(mean_color, cv2.COLOR_RGB2LAB)[0,0,0]
+#     masked_img=mask*img[:,:,::-1]/255 ##RGB format
+#     masked_img_torso=mask_torso*img[:,:,::-1]/255 ##RGB format
 
-    if VERBOSE: print("NOTmasked_img_torso size", masked_img_torso.shape, black_pixels_mask_torso.shape)
-    if bbox:
-        # SJ something is broken in here. It returns an all black image which produces a lum of 100
-        masked_img_torso = masked_img_torso[bbox['bottom']:]
-        black_pixels_mask_torso = black_pixels_mask_torso[bbox['bottom']:]
-    # else:
-    #     print("YIKES! no bbox. Here's a hacky hack to crop to the bottom 20%")
-    #     bottom_fraction = masked_img_torso.shape[0] // 5
-    #     masked_img_torso = masked_img_torso[-bottom_fraction:]
-    #     black_pixels_mask_torso = black_pixels_mask_torso[-bottom_fraction:]
+#     # Identify black pixels where R=0, G=0, B=0
+#     black_pixels_mask = np.all(masked_img == [0, 0, 0], axis=-1)
+#     black_pixels_mask_torso = np.all(masked_img_torso == [0, 0, 0], axis=-1)
 
-    if VERBOSE: print("masked_img_torso size", masked_img_torso.shape, black_pixels_mask_torso.shape)
-    mean_color = np.mean(masked_img_torso[~black_pixels_mask_torso], axis=0)[np.newaxis,np.newaxis,:] # ~ is negate
-    lum_torso=cv2.cvtColor(mean_color, cv2.COLOR_RGB2LAB)[0,0,0]
+#     # Filter out black pixels and compute the mean color of the remaining pixels
+#     mean_color = np.mean(masked_img[~black_pixels_mask], axis=0)[np.newaxis,np.newaxis,:] # ~ means negate/remove
+#     hue=cv2.cvtColor(mean_color, cv2.COLOR_RGB2HSV)[0,0,0]
+#     sat = cv2.cvtColor(mean_color, cv2.COLOR_RGB2HSV)[0, 0, 1]
+#     val = cv2.cvtColor(mean_color, cv2.COLOR_RGB2HSV)[0, 0, 2]
+#     lum=cv2.cvtColor(mean_color, cv2.COLOR_RGB2LAB)[0,0,0]
 
-    if VERBOSE: print("HSV, lum", hue,sat,val,lum, lum_torso)
-    return hue,sat,val,lum,lum_torso
+#     if VERBOSE: print("NOTmasked_img_torso size", masked_img_torso.shape, black_pixels_mask_torso.shape)
+#     if bbox:
+#         # SJ something is broken in here. It returns an all black image which produces a lum of 100
+#         masked_img_torso = masked_img_torso[bbox['bottom']:]
+#         black_pixels_mask_torso = black_pixels_mask_torso[bbox['bottom']:]
+#     # else:
+#     #     print("YIKES! no bbox. Here's a hacky hack to crop to the bottom 20%")
+#     #     bottom_fraction = masked_img_torso.shape[0] // 5
+#     #     masked_img_torso = masked_img_torso[-bottom_fraction:]
+#     #     black_pixels_mask_torso = black_pixels_mask_torso[-bottom_fraction:]
+
+#     if VERBOSE: print("masked_img_torso size", masked_img_torso.shape, black_pixels_mask_torso.shape)
+#     mean_color = np.mean(masked_img_torso[~black_pixels_mask_torso], axis=0)[np.newaxis,np.newaxis,:] # ~ is negate
+#     lum_torso=cv2.cvtColor(mean_color, cv2.COLOR_RGB2LAB)[0,0,0]
+
+#     if VERBOSE: 
+#         print("HSV, lum", hue,sat,val,lum, lum_torso)
+#     return hue,sat,val,lum,lum_torso
 
 
 def create_table(row, lock, session):
@@ -330,6 +357,7 @@ def get_filename(target_image_id, return_endfile=False):
     site_specific_root_folder = io.folder_list[site_name_id]
     file=site_specific_root_folder+"/"+imagename  ###os.path.join was acting wierd so had to do this
     end_file=imagename.split('/')[2]
+    if VERBOSE:print("file name:",file)
     if return_endfile: return file,end_file
     return file
  
@@ -348,6 +376,19 @@ def get_bbox(target_image_id):
     return bbox,face_landmarks
     
 def fetch_BG_stat(target_image_id, lock, session):
+    ImagesBG_entry = (
+        session.query(ImagesBackground)
+        .filter(ImagesBackground.image_id == target_image_id)
+        .first()
+    )
+
+    if ImagesBG_entry.hue :
+        FULL_ANALYSIS=False
+        if VERBOSE:print("color data already present, will only add selfie bbox")
+    else:
+        FULL_ANALYSIS=True
+        if VERBOSE:print("doing full analysis")
+
 
     file=get_filename(target_image_id)
     #filename=get_filename(imagename)
@@ -357,43 +398,44 @@ def fetch_BG_stat(target_image_id, lock, session):
         print(f"image not found {target_image_id} {file}")
         return
     bbox=None
-    facelandmark=None
+    face_landmarks=None
     ########This specific case is for image with apostrophe in their name like "hand's"#############
     ########It messes with reading/writing somehow, os.exists says it exists
     ########cv.imread reads it and produces None, because it reads "hands" not "hand's"
     if img is None:return
     #####################
     # hue,sat,val,lum, lum_torso=get_bg_hue_lum(img,bbox,facelandmark)
-    hue,sat,val,lum, lum_torso=sort.get_bg_hue_lum(img,bbox,facelandmark)    
-    if USE_BBOX:
-        #will do a second round for bbox with same cv2 image
-        bbox,facelandmark=get_bbox(target_image_id)
-        hue_bb,sat_bb, val_bb, lum_bb, lum_torso_bb =sort.get_bg_hue_lum(img,bbox,facelandmark)
-        # hue_bb,sat_bb, val_bb, lum_bb, lum_torso_bb =get_bg_hue_lum(img,bbox,facelandmark)
+    segmentation_mask=get_segmentation_mask(img,bbox,face_landmarks)
+    if FULL_ANALYSIS:
+        hue,sat,val,lum, lum_torso=sort.get_bg_hue_lum(img,segmentation_mask,bbox)  
+        if USE_BBOX:
+            #will do a second round for bbox with same cv2 image
+            bbox,face_landmarks=get_bbox(target_image_id)
+            hue_bb,sat_bb, val_bb, lum_bb, lum_torso_bb =sort.get_bg_hue_lum(img,segmentation_mask,bbox)  
+            print("sat values before insert", hue_bb,sat_bb, val_bb, lum_bb, lum_torso_bb)
+            # hue_bb,sat_bb, val_bb, lum_bb, lum_torso_bb =get_bg_hue_lum(img,bbox,facelandmark)
 
+    selfie_bbox=get_selfie_bbox(segmentation_mask)
     
-    print("sat values before insert", hue_bb,sat_bb, val_bb, lum_bb, lum_torso_bb)
     # Update the BG entry with the corresponding image_id
-    ImagesBG_entry = (
-        session.query(ImagesBackground)
-        .filter(ImagesBackground.image_id == target_image_id)
-        .first()
-    )
+
 
     if ImagesBG_entry:
-        if USE_BBOX:
-            ImagesBG_entry.hue_bb = hue_bb
-            ImagesBG_entry.lum_bb = lum_bb
-            ImagesBG_entry.sat_bb = sat_bb
-            ImagesBG_entry.val_bb = val_bb
-            ImagesBG_entry.lum_torso_bb = lum_torso_bb
+        if FULL_ANALYSIS:
+            if USE_BBOX:
+                ImagesBG_entry.hue_bb = hue_bb
+                ImagesBG_entry.lum_bb = lum_bb
+                ImagesBG_entry.sat_bb = sat_bb
+                ImagesBG_entry.val_bb = val_bb
+                ImagesBG_entry.lum_torso_bb = lum_torso_bb
 
-        ImagesBG_entry.hue = hue
-        ImagesBG_entry.lum = lum
-        ImagesBG_entry.sat = sat
-        ImagesBG_entry.val = val
-        ImagesBG_entry.lum_torso = lum_torso
+            ImagesBG_entry.hue = hue
+            ImagesBG_entry.lum = lum
+            ImagesBG_entry.sat = sat
+            ImagesBG_entry.val = val
+            ImagesBG_entry.lum_torso = lum_torso   
 
+        ImagesBG_entry.selfie_bbox=selfie_bbox
 
         if VERBOSE:
             print("image_id:", ImagesBG_entry.image_id)
@@ -407,6 +449,7 @@ def fetch_BG_stat(target_image_id, lock, session):
             print("sat:", ImagesBG_entry.sat)
             print("val:", ImagesBG_entry.val)
             print("lum_torso:", ImagesBG_entry.lum_torso)
+            print("selfie bbox",selfie_bbox)
 
         #session.commit()
         print(f"BG stat for image_id {target_image_id} updated successfully.")
@@ -418,7 +461,8 @@ def fetch_BG_stat(target_image_id, lock, session):
         global counter
         counter += 1
         session.commit()
-
+    if counter % 100 == 0:
+        print(f"Updated Images_BG number: {counter}")
     return
 
 #######MULTI THREADING##################
@@ -453,7 +497,19 @@ if index == 0:
     # filter(ImagesBackground.image_id == None).\
     # filter(HelperTable.image_id != None).\
     # limit(LIMIT)
-    
+    ######################
+    # select_query = select(
+    #     SegmentTable.image_id,
+    #     SegmentTable.imagename,
+    #     SegmentTable.site_name_id
+    # ).\
+    # select_from(SegmentTable).\
+    # outerjoin(ImagesBackground, SegmentTable.image_id == ImagesBackground.image_id).\
+    # filter(ImagesBackground.image_id == None).\
+    # filter(not_(SegmentTable.age_id.in_([1, 2, 3]))).\
+    # limit(LIMIT)
+    #####################
+    ####################
     select_query = select(
         SegmentTable.image_id,
         SegmentTable.imagename,
@@ -462,9 +518,8 @@ if index == 0:
     select_from(SegmentTable).\
     outerjoin(ImagesBackground, SegmentTable.image_id == ImagesBackground.image_id).\
     filter(ImagesBackground.image_id == None).\
-    filter(not_(SegmentTable.age_id.in_([1, 2, 3]))).\
-    limit(LIMIT)
-
+    limit(LIMIT)    
+    ####################
     #####################
     #for some reason ''' select ([xyx])''' produces error
     #but ''' select(xyz)''' doesn't, atleast on windows
@@ -511,8 +566,11 @@ elif index == 1:
     #     join(ImagesBackground, ImagesBackground.image_id == HelperTable.image_id).\
     #     filter(ImagesBackground.lum_torso == None).limit(LIMIT)
 
+    # if USE_BBOX:distinct_image_ids_query = select(ImagesBackground.image_id.distinct()).\
+    #     filter(ImagesBackground.lum_torso == None).limit(LIMIT)
+    # FOR SELFIE BBOX
     if USE_BBOX:distinct_image_ids_query = select(ImagesBackground.image_id.distinct()).\
-        filter(ImagesBackground.lum_torso == None).limit(LIMIT)
+        filter(ImagesBackground.selfie_bbox == None).limit(LIMIT)
 
     # if USE_BBOX:distinct_image_ids_query = select(ImagesBackground.image_id.distinct()).filter(ImagesBackground.hue_bb == None).limit(LIMIT)
     else:distinct_image_ids_query = select(ImagesBackground.image_id.distinct()).filter(ImagesBackground.hue == None).limit(LIMIT)
