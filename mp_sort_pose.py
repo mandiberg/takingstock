@@ -3,6 +3,7 @@ import os
 import cv2
 import pandas as pd
 import mediapipe as mp
+from mediapipe.framework.formats import landmark_pb2
 import hashlib
 import time
 import json
@@ -80,9 +81,11 @@ class SortPose:
         self.JUMP_SHOT = JUMP_SHOT
         self.SHOT_CLOCK = 0
         self.SHOT_CLOCK_MAX = 10
-        # self.BODY_LMS = [0] + list(range(13, 23)) # 0 is nose, 13-22 are left and right hands and elbows
+        self.BODY_LMS = list(range(13, 23)) # 0 is nose, 13-22 are left and right hands and elbows
         # self.BODY_LMS = [0,15,16,19,20,21,22] # 0 is nose, 13-22 are left and right hands and elbows
-        self.BODY_LMS = [16,20,15,19] # 0 is nose, 13-22 are left and right hands and elbows
+        self.POINTERS = [16,20,15,19] # 0 is nose, 13-22 are left and right hands and elbows
+        self.THUMBS = [16,22,15,21] # 0 is nose, 13-22 are left and right hands and elbows
+        # self.BODY_LMS = [20,19] # 0 is nose, 13-22 are left and right hands and elbows
     
         # self.BODY_LMS = [15]
         self.VERBOSE = VERBOSE
@@ -1004,12 +1007,14 @@ class SortPose:
         for idx, lm in enumerate(Lms.landmark):
             if idx in selected_Lms:
                 # x, y = int(lm.x * img_w), int(lm.y * img_h)
+                # print("lm.x, lm.y", lm.x, lm.y)
                 if structure == "dict":
                     Lms2d[idx] =([lm.x, lm.y])
                 elif structure == "list":
                     Lms1d.append(lm.x)
                     Lms1d.append(lm.y)
-
+        print("Lms2d", Lms2d)
+        print("Lms1d", Lms1d)
                 # Get the 2D Coordinates
                 # body_2d.append([x, y])
 
@@ -1100,36 +1105,120 @@ class SortPose:
         return df_enc
     
 
+    def test_landmarks_vis(self, row):
+        visible_LH = False
+        visible_RH = False
+        BOOL = False
+        if isinstance(row, pd.Series):
+            # If the input is a DataFrame row (pd.Series)
+            lms = row['body_landmarks']
+        else:
+            # If the input is the landmarks object itself
+            lms = row
+            BOOL = True
+        if isinstance(lms, landmark_pb2.NormalizedLandmarkList):
+            # If the input is a NormalizedLandmarkList object
+            
+            left_hand = [15, 17, 19, 21]
+            right_hand = [16, 18, 20, 22]
+            for idx, lm in enumerate(lms.landmark):
+                if idx in left_hand:
+                    if lm.visibility > 0.5:
+                        visible_LH = True
+                elif idx in right_hand:
+                    if lm.visibility > 0.5:
+                        visible_RH = True
+        elif isinstance(lms, np.ndarray):
+            # TK prob not working correctly lms order
+            left_hand = list(range(4))
+            right_hand = list(range(4,8))
+            print("left_hand, right_hand", left_hand, right_hand)
+            # If the input is a NumPy array
+            # print("lms is a numpy array,", lms)
+            for idx in left_hand:
+                if lms[idx] > 0.5:
+                    visible_LH = True
+            for idx in right_hand:
+                if lms[idx] > 0.5:
+                    visible_RH = True
+        if BOOL:
+            return [int(visible_LH), int(visible_RH)]
+        # print("returning false, no hands from this row", row)
+        else:
+            return visible_LH, visible_RH
 
-    def sort_df_KNN(self, df_enc, enc1, knn_sort="128d"):
-        def get_hand_angles(enc1):
-            # calculate the angle of the vector between landmarks 16 and 20
-            angle_LH = np.arctan2(enc1[3] - enc1[1], enc1[2] - enc1[0])
-            angle_RH = np.arctan2(enc1[7] - enc1[5], enc1[6] - enc1[4])
-            return angle_LH, angle_RH
+    def get_hand_angles(self, enc1):
+        # calculate the angle of the vector between landmarks 16 and 20
+        LW = np.array([enc1[0], enc1[1]])
+        LF = np.array([enc1[2], enc1[3]])
+        RW = np.array([enc1[4], enc1[5]])
+        RF = np.array([enc1[6], enc1[7]])
+        # LW = enc1[0,1]
+        # LF = enc1[2,3]
+        # RW = enc1[4,5]
+        # RF = enc1[6,7]
         
+        def get_angle(p1, p2):
+            vector = p1 - p2
+            angle_radians = np.arctan2(vector[1], vector[0])
+            # angle_degrees = np.degrees(angle_radians)
+            return angle_radians
+
+        angle_LH = get_angle(LW, LF)
+        angle_RH = get_angle(RW, RF)
+        return [angle_LH, angle_RH]
+    
+    def prep_enc(self, enc1, structure="dict"):
+        
+        print("prep_enc enc before get_landmarks_2d", enc1)
+        pointers = self.get_landmarks_2d(enc1, self.POINTERS, structure)
+        thumbs = self.get_landmarks_2d(enc1, self.THUMBS, structure)
+        # body = self.get_landmarks_2d(enc1, self.BODY_LMS, structure)
+        body = self.get_landmarks_2d(enc1, list(range(33)), structure)
+        print("prep_enc enc after get_landmarks_2d", pointers, thumbs, body)
+        # enc1_np = np.array(enc1_list)
+
+        # calculate the angle of the vector between landmarks 16 and 20
+        # angles_pointers = self.get_hand_angles(np.array(pointers))
+        # angles_thumbs = self.get_hand_angles(np.array(thumbs))
+
+        # # check if hands are visible
+        # visibility = self.test_landmarks_vis(pointers)
+
+        # print("types", type(angles_pointers), type(angles_thumbs), type(body), type(visibility))
+
+        # print("enc1++ pointers", pointers, angles_pointers)
+        # enc_angles_list = angles_pointers + angles_thumbs + body + visibility
+        enc_angles_list =  body 
+        enc1 = np.array(enc_angles_list)
+        print("enc1++ final np array", enc1)
+        return enc1
+    
+    def sort_df_KNN(self, df_enc, enc1, knn_sort="128d"):
         output_cols = ['dist_enc1']
         if knn_sort == "128d":
             sortcol = 'face_encodings68'
         elif knn_sort == "planar":
             sortcol = 'face_landmarks'
         elif knn_sort == "planar_body":
-            sortcol = 'body_landmarks'
-            # if enc1 is not a numpy array, convert it to a list
-            if not isinstance(enc1,np.ndarray):
-                enc1_list = self.get_landmarks_2d(enc1, self.BODY_LMS, structure="list")
-                enc1 = np.array(enc1_list)
-                print("enc1", enc1)
-                # calculate the angle of the vector between landmarks 16 and 20
-                angle_LH, angle_RH = get_hand_angles(enc1)
-                print("angle enc1", angle_LH, angle_RH)
-                enc1 = np.concatenate([enc1, [angle_LH, angle_RH]])
+            sortcol = 'body_landmarks_array'
+            sourcecol = 'body_landmarks'
 
-                # Convert body_landmarks to a 2D array
-                df_enc[sortcol] = df_enc[sortcol].apply(lambda x: np.concatenate([v for k, v in self.get_landmarks_2d(x, self.BODY_LMS).items()]))
-                # apply get_hand_angles to each row in the sortcol column and add that to the list in sortcol
-                df_enc[sortcol] = df_enc[sortcol].apply(lambda x: np.concatenate([x, get_hand_angles(x)]))
-                
+
+            # test to see if df_enc contains the sortcol column
+            if sortcol not in df_enc.columns:
+
+            # if enc1 is not a numpy array, convert it to a list
+            # if not isinstance(enc1,np.ndarray):
+                # create enc list with x/y position and angles and visibility
+                enc1 = self.prep_enc(enc1, structure="list")
+
+                # apply prep_enc to the sortcol column 
+                df_enc[sortcol] = df_enc[sourcecol].apply(lambda x: self.prep_enc(x, structure="list"))
+            print("body_landmarks post_sort")
+            test_row = df_enc.loc[df_enc['image_id'] == 10498233]
+            print(test_row['body_landmarks'])
+            print(test_row['body_landmarks_array'])
         elif knn_sort == "HSV":
             print("knn_sort is HSV")
             sortcol = 'hsvll'
@@ -1164,7 +1253,18 @@ class SortPose:
 
         return df_enc
 
+    def draw_point(self,image,landmarks_2d,index):
+        #it would prob be better to do this with a dict and a loop
+        # nose_2d = self.get_face_2d_point(faceLms,1)
+        print("landmarks_2d", landmarks_2d)
+        img_h, img_w = image.shape[:2]
+        points = zip(landmarks_2d[1::2],landmarks_2d[::2])
 
+        for point in points:
+            x, y = int(point[0]*(img_w-300)), int(point[1]*(img_h-300))
+            cv2.circle(image,(y,x),4,(255,0,0),-1)
+        return image
+    
     def get_closest_df_NN(self, df_enc, df_sorted):
         def mask_df(df, column, limit, type="lessthan"):
             # removes rows where the value in the column is greater than the limit
@@ -1262,7 +1362,8 @@ class SortPose:
             df_shuffled = df_dist_close
 
             # sort df_shuffled by the sum of dist_enc1 and dist_HSV
-            df_shuffled['sum_dist'] = df_dist_noflash['dist_enc1'] + self.MULTIPLIER * df_shuffled['dist_HSV']
+            # df_shuffled['sum_dist'] = df_dist_noflash['dist_enc1'] + self.MULTIPLIER * df_shuffled['dist_HSV']
+            df_shuffled['sum_dist'] = df_dist_noflash['dist_enc1'] 
             df_shuffled = df_shuffled.sort_values(by='sum_dist').reset_index(drop=True)
             print("df_shuffled pre_run", df_shuffled[['image_id','dist_enc1','dist_HSV','sum_dist']])
 

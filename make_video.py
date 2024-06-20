@@ -189,7 +189,7 @@ elif IS_SEGONLY and io.db["name"] == "stock":
     # WHERE += " AND k.keyword_text LIKE 'surpris%' "
 
     # WHERE = "s.site_name_id != 1"
-    LIMIT = 10000
+    LIMIT = 1000
 
     # TEMP TK TESTING
     # WHERE += " AND s.site_name_id = 8"
@@ -571,12 +571,28 @@ def sort_by_face_dist_NN(df_enc):
     # input enc1, df_128_enc, df_33_lmsNN
     # df = pd.DataFrame(face_distances, columns =['dist', 'folder', 'filename','site_name_id','face_landmarks', 'bbox'])
 
+
+    # find the df_enc row with image_id = 10498233
+    test_row = df_enc.loc[df_enc['image_id'] == 10498233]
+    # print body_landmarks for this row
+    print("body_landmarks for test_row")
+    test_lms = test_row['body_landmarks']
+    print(test_lms)
+
     for i in range(itters):
 
         ## Find closest
         try:
             # send in both dfs, and return same dfs with 1+ rows sorted
             df_enc, df_sorted = sort.get_closest_df_NN(df_enc, df_sorted)
+
+            # test to see if body_landmarks for row with image_id = 5251199 still is the same as test_lms
+            retest_row = df_enc.loc[df_enc['image_id'] == 10498233]
+            print("body_landmarks for retest_row")
+            retest_lms = retest_row['body_landmarks']
+            print(retest_lms)
+            # calculate any different between test_lms to retest_lms
+
 
             dist = df_sorted.iloc[-1]['dist_enc1']
             # print(dist)
@@ -681,22 +697,6 @@ def prep_encodings_NN(df_segment):
             return [row['lum']*HSV_NORMS["LUM"], row['lum_torso_bb']*HSV_NORMS["LUM"]]
         else:
             return [row['lum']*HSV_NORMS["LUM"], row['lum_torso']*HSV_NORMS["LUM"]]    
-    def test_landmarks_vis(row):
-        left_hand = [15,17,19,21]
-        right_hand = [16,18,20,22]
-        # lms = ast.literal_eval(row['body_landmarks'])
-        lms = row['body_landmarks']
-
-        # print("lms", lms)
-        for idx, lm in enumerate(lms.landmark):
-            if idx in left_hand:
-                if lm.visibility > .5:
-                    return True
-            elif idx in right_hand:
-                if lm.visibility > .5:
-                    return True
-        # print("returning false, no hands from this row", row)
-        return False
 
     # create a column for the hsv values using df_segment.apply(lambda row: create_hsv_list(row), axis=1)
     df_segment['hsv'] = df_segment.apply(lambda row: create_hsv_list(row), axis=1)
@@ -705,7 +705,7 @@ def prep_encodings_NN(df_segment):
     print("df_segment length", len(df_segment.index))
     if SORT_TYPE == "planar_body":
         # if planar_body drop rows where self.BODY_LMS are low visibility
-        df_segment['hand_visible'] = df_segment.apply(lambda row: test_landmarks_vis(row), axis=1)
+        df_segment['hand_visible'] = df_segment.apply(lambda row: any(sort.test_landmarks_vis(row)), axis=1)
 
         # delete rows where hand_visible is false
         df_segment = df_segment[df_segment['hand_visible'] == True].reset_index(drop=True)
@@ -714,63 +714,6 @@ def prep_encodings_NN(df_segment):
 
     return df_segment
 
-def prep_encodings(df_segment):
-    def create_hsv_list(row):
-        if row['hue_bb'] >= 0:
-            # print("create_hsv_list bb", [row['hue_bb'], row['sat_bb'], row['lum_bb']])
-            return [row['hue_bb']*HSV_NORMS["HUE"], row['sat_bb']*HSV_NORMS["SAT"], row['val_bb']*HSV_NORMS["VAL"]]
-        else:
-            return [row['hue']*HSV_NORMS["HUE"], row['sat']*HSV_NORMS["SAT"], row['val']*HSV_NORMS["VAL"]]    
-    def create_lum_list(row):
-        if row['lum_torso_bb'] >= 0 and row['lum_torso_bb'] != 1:
-            # print("create_hsv_list bb", [row['hue_bb'], row['sat_bb'], row['lum_bb']])
-            return [row['lum']*HSV_NORMS["LUM"], row['lum_torso_bb']*HSV_NORMS["LUM"]]
-        else:
-            return [row['lum']*HSV_NORMS["LUM"], row['lum_torso']*HSV_NORMS["LUM"]]    
-    # format the encodings for sorting by distance
-    # df_enc will be the df with bbox, site_name_id, etc, keyed to filename
-    # df_128_enc will be 128 colums of encodings, keyed to filename
-    # print("prep_encodings df_segment", df_segment)
-    col1="imagename"
-    col2="face_encodings68"
-    col3="site_name_id"
-    col4="face_landmarks"
-    col5="bbox"
-    col6="body_landmarks"
-    col7="hsv"
-    col8="lum"
-    # df_enc=pd.DataFrame(columns=[col1, col2, col3, col4, col5])
-    df_enc=pd.DataFrame(columns=[col1, col2, col3, col4, col5, col6, col7])
-    print(df_segment.columns)
-    df_enc = pd.DataFrame({
-                col1: df_segment['imagename'], col2: df_segment['face_encodings68'].apply(lambda x: np.array(x)), 
-                # col3: df_segment['site_name_id'], col4: df_segment['face_landmarks'], col5: df_segment['bbox']})
-                col3: df_segment['site_name_id'], col4: df_segment['face_landmarks'], 
-                col5: df_segment['bbox'], col6: df_segment['body_landmarks'], 
-                col7: df_segment.apply(lambda row: create_hsv_list(row), axis=1),
-                col8: df_segment.apply(lambda row: create_lum_list(row), axis=1),
-                })
-    df_enc.set_index(col1, inplace=True)
-    if VERBOSE: print("df_enc", df_enc)
-    # Create column names for the 128 encoding columns
-    encoding_cols = [f"encoding{i}" for i in range(128)]
-    lms_cols = [f"lm{i}" for i in range(33)]
-
-    # Create a new DataFrame with the expanded encoding columns
-    enc_expanded = df_enc.apply(lambda row: pd.Series(row[col2], index=encoding_cols), axis=1)
-    # lms_expanded = df_enc.apply(lambda row: pd.Series(row[col6], index=lms_cols), axis=1)
-
-    # Concatenate the expanded DataFrame with the original DataFrame
-    enc_concat = pd.concat([df_enc, enc_expanded], axis=1)
-    # lms_concat = pd.concat([df_enc, lms_expanded], axis=1)
-
-    # make a separate df that just has the encodings
-    df_128_enc = enc_concat.drop([col2, col3, col4, col5, col6, col7, col8], axis=1)
-    # df_33_lms = lms_concat.drop([col2, col3, col4, col5, col6], axis=1)
-    df_33_lms = df_enc.drop([col2, col3, col4, col5, col7, col8], axis=1)
-
-    if VERBOSE: print("df_33_lms", df_33_lms)
-    return df_enc, df_128_enc, df_33_lms
 
 def compare_images(last_image, img, face_landmarks, bbox):
     is_face = None
@@ -1057,17 +1000,14 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
                 if len(cropped_image)==1 and (OUTPAINT or INPAINT):
                     print("gotta paint that shizzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz")
                     cropped_image, face_diff = in_out_paint(img, row)
-                ###
-                # I'm trying to compare descriptions here but it isn't working
-                # first_run isn't working. Failing gracefully with exception
-                ###
-                # try:
-                #     parent_row = df_segment[df_segment['imagename'] == row['filename']]
-                #     image_id = parent_row['image_id'].values[0]                        
-                #     description = session.query(Images.description).filter(Images.image_id == image_id).first()
-                # except Exception as e:
-                #     traceback.print_exc()
-                #     print(str(e))
+
+                landmarks_2d = sort.get_landmarks_2d(row['face_landmarks'], list(range(33)), "list")
+                print("landmarks_2d before drawing", landmarks_2d)
+                cropped_image = sort.draw_point(cropped_image, landmarks_2d, index = 0)                    
+
+                # landmarks_2d = sort.get_landmarks_2d(row['face_landmarks'], list(range(420)), "list")
+                # cropped_image = sort.draw_point(cropped_image, landmarks_2d, index = 0)                    
+
                 temp_first_run = sort.counter_dict["first_run"]
                 print("temp_first_run", temp_first_run)
                 if sort.counter_dict["first_run"]:
