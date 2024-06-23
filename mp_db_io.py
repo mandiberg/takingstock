@@ -42,7 +42,11 @@ class DataIO:
                 "raise_on_warnings": True
             }
 
-
+            self.dbmongo = {
+                "host":"mongodb://localhost:27017/",
+                "name":"stock",
+                "collection":"encodings"
+            }
 
             self.ROOT_PROD= os.path.join(os.environ['HOME'], "Documents/projects-active/facemap_production/segment_images") ## only on Mac
             self.ROOT54= "/Volumes/RAID54" ## only on 
@@ -62,6 +66,13 @@ class DataIO:
                 "unix_socket":"",
                 "pass":"SSJ2_mysql"
             }
+
+            self.dbmongo = {
+                "host":"mongodb://localhost:27017/",
+                "name":"test2",
+                "collection":"encodings3"
+            }
+
             # self.ROOT= "E:\\"+"work\\face_map\\Documents\\projects-active\\facemap_production\\" ## SSD
             self.ROOT= "E:/"+"work/face_map/Documents/projects-active/facemap_production/" ## SSD
             self.ROOT54= self.ROOT

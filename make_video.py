@@ -17,6 +17,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
 # my ORM
 from my_declarative_base import Base, SegmentTable, Clusters, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON, Images
+import pymongo
 
 #mine
 from mp_sort_pose import SortPose
@@ -79,7 +80,7 @@ IS_TOPICS = False
 N_TOPICS = 30
 
 IS_ONE_TOPIC = True
-TOPIC_NO = [17]
+TOPIC_NO = [7]
 
 #  is isolated,  is business,  babies, 17 pointing
 #  is doctor <<  covid
@@ -91,9 +92,9 @@ TOPIC_NO = [17]
 # 7 is surprise
 #  is yoga << planar,  planar,  fingers crossed
 
-# SORT_TYPE = "128d"
+SORT_TYPE = "128d"
 # SORT_TYPE ="planar"
-SORT_TYPE = "planar_body"
+# SORT_TYPE = "planar_body"
 
 # if planar_body set OBJ_CLS_ID for each object type
 # 67 is phone, 63 is laptop, 26: 'handbag', 27: 'tie', 32: 'sports ball'
@@ -110,6 +111,7 @@ db = io.db
 # overriding DB for testing
 # io.db["name"] = "stock"
 # io.db["name"] = "ministock"
+
 
 METAS_FILE = "metas.csv"
 
@@ -147,12 +149,12 @@ elif IS_SEGONLY and io.db["name"] == "stock":
 
     SAVE_SEGMENT = False
     # no JOIN just Segment table
-    SELECT = "DISTINCT(s.image_id), s.site_name_id, s.contentUrl, s.imagename, s.description, s.face_x, s.face_y, s.face_z, s.mouth_gap, s.face_landmarks, s.bbox, s.face_encodings68, s.site_image_id, s.body_landmarks"
+    SELECT = "DISTINCT(s.image_id), s.site_name_id, s.contentUrl, s.imagename, s.description, s.face_x, s.face_y, s.face_z, s.mouth_gap, s.bbox, s.site_image_id"
 
     FROM =f"{SegmentTable_name} s "
 
     # this is the standard segment topics/clusters query for April 2024
-    WHERE = " face_encodings68 IS NOT NULL AND face_x > -33 AND face_x < -27 AND face_y > -2 AND face_y < 2 AND face_z > -2 AND face_z < 2"
+    WHERE = " s.face_encodings68 IS NOT NULL AND s.face_x > -33 AND s.face_x < -27 AND s.face_y > -2 AND s.face_y < 2 AND s.face_z > -2 AND s.face_z < 2"
 
     # HIGHER
     # WHERE = "s.site_name_id != 1 AND face_encodings68 IS NOT NULL AND face_x > -27 AND face_x < -23 AND face_y > -2 AND face_y < 2 AND face_z > -2 AND face_z < 2"
@@ -187,6 +189,10 @@ elif IS_SEGONLY and io.db["name"] == "stock":
     # # join to keywords
     # FROM += " JOIN ImagesKeywords ik ON s.image_id = ik.image_id JOIN Keywords k ON ik.keyword_id = k.keyword_id "
     # WHERE += " AND k.keyword_text LIKE 'surpris%' "
+
+    # testing mongo
+    FROM += " JOIN Encodings e ON s.image_id = e.image_id "
+    WHERE += " AND e.encoding_id > 2612275"
 
     # WHERE = "s.site_name_id != 1"
     LIMIT = 1000
@@ -267,9 +273,9 @@ face_height_output = 500
 # top, right, bottom, left
 # image_edge_multiplier = [1, 1, 1, 1] # just face
 # image_edge_multiplier = [1.5,1.5,2,1.5] # bigger portrait
-# image_edge_multiplier = [1.5,1.75,2.75,1.5] # bigger 2x3 portrait
+image_edge_multiplier = [1.5,1.33, 2.5,1.33] # bigger 2x3 portrait
 # image_edge_multiplier = [1.4,2.6,1.9,2.6] # wider for hands
-image_edge_multiplier = [1.4,3.3,3,3.3] # widerest 16:10 for hands
+# image_edge_multiplier = [1.4,3.3,3,3.3] # widerest 16:10 for hands
 # image_edge_multiplier = [1.6,3.84,3.2,3.84] # wiiiiiiiidest 16:10 for hands
 # image_edge_multiplier = [1.45,3.84,2.87,3.84] # wiiiiiiiidest 16:9 for hands
 # image_edge_multiplier = [1.2,2.3,1.7,2.3] # medium for hands
@@ -308,6 +314,11 @@ else:
 Session = sessionmaker(bind=engine)
 session = Session()
 Base = declarative_base()
+
+mongo_client = pymongo.MongoClient(io.dbmongo['host'])
+mongo_db = mongo_client[io.dbmongo['name']]
+mongo_collection = mongo_db[io.dbmongo['collection']]
+
 
 # construct mediapipe objects
 # mp_drawing = mp.solutions.drawing_utils
@@ -1186,6 +1197,21 @@ def main():
         else:
             return None
 
+    def get_encodings_mongo(image_id):
+        if image_id:
+            results = mongo_collection.find_one({"image_id": image_id})
+            if results:
+                face_encodings68 = results['face_encodings68']
+                face_landmarks = results['face_landmarks']
+                body_landmarks = results['body_landmarks']
+                print("got encodings from mongo, types are: ", type(face_encodings68), type(face_landmarks), type(body_landmarks))
+                return pd.Series([face_encodings68, face_landmarks, body_landmarks])
+            else:
+                return pd.Series([None, None, None])
+        else:
+            return pd.Series([None, None, None])
+
+
     def unstring_json(json_string):
         eval_string = ast.literal_eval(json_string)
         if isinstance(eval_string, dict):
@@ -1234,6 +1260,16 @@ def main():
         except:
             print('you forgot to change the filename DUH')
         if not df.empty:
+
+            # use the image_id to query the mongoDB for face_encodings68, face_landmarks, body_landmarks
+            df[['face_encodings68', 'face_landmarks', 'body_landmarks']] = df['image_id'].apply(get_encodings_mongo)
+
+            # drop all rows where face_encodings68 is None TK revist this after migration to mongo
+            df = df.dropna(subset=['face_encodings68'])
+
+            # print the first row value for 'face_encodings68' column
+            print("face_encodings68")
+            print(df['face_encodings68'][0])
 
             # Apply the unpickling function to the 'face_encodings' column
             df['face_encodings68'] = df['face_encodings68'].apply(unpickle_array)

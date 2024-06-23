@@ -35,19 +35,19 @@ class SortPose:
         self.MINBODYDIST = .15
         self.FACE_DUPE_DIST = .06
         self.BODY_DUPE_DIST = .04
-        self.HSV_DELTA_MAX = 1
-        self.HSVMULTIPLIER = 5
+        self.HSV_DELTA_MAX = .5
+        self.HSVMULTIPLIER = 3
         self.BRUTEFORCE = True
-        self.CUTOFF = 10
+        self.CUTOFF = 100
 
         self.SORT_TYPE = SORT_TYPE
         if self.SORT_TYPE == "128d":
-            self.MIND = self.MINFACEDIST * 2
+            self.MIND = self.MINFACEDIST * 1.5
             self.MAXD = self.MAXFACEDIST
             self.MULTIPLIER = self.HSVMULTIPLIER
             self.DUPED = self.FACE_DUPE_DIST
         elif self.SORT_TYPE == "planar": 
-            self.MIND = self.MINBODYDIST * 2
+            self.MIND = self.MINBODYDIST * 1.5
             self.MAXD = self.MAXBODYDIST
             self.MULTIPLIER = self.HSVMULTIPLIER * (self.MINBODYDIST / self.MINFACEDIST)
             self.DUPED = self.BODY_DUPE_DIST
@@ -237,6 +237,7 @@ class SortPose:
 
 
     def make_segment(self, df):
+
 
         segment = df.loc[((df['face_y'] < self.YHIGH) & (df['face_y'] > self.YLOW))]
         print(segment.size)
@@ -950,12 +951,23 @@ class SortPose:
 
 
     def get_start_enc_NN(self, start_img, df_enc):
+
+        def safe_round(x):
+            if x is None:
+                return None
+            try:
+                return np.round(x, 1)
+            except:
+                return None
+
+
         print("get_start_enc")
 
         if start_img == "median":
 
-            # Round each value in the face_encodings68 column to 2 decimal places
-            df_enc['face_encodings68'] = df_enc['face_encodings68'].apply(lambda x: np.round(x, 1))
+            # Round each value in the face_encodings68 column to 2 decimal places            
+            df_enc['face_encodings68'] = df_enc['face_encodings68'].apply(safe_round)
+            # df_enc['face_encodings68'] = df_enc['face_encodings68'].apply(lambda x: np.round(x, 1))
 
             # Convert the face_encodings68 column to a list of lists
             flattened_array = df_enc['face_encodings68'].tolist()            
@@ -1428,8 +1440,8 @@ class SortPose:
             df_shuffled = df_dist_close
 
             # sort df_shuffled by the sum of dist_enc1 and dist_HSV
-            # df_shuffled['sum_dist'] = df_dist_noflash['dist_enc1'] + self.MULTIPLIER * df_shuffled['dist_HSV']
-            df_shuffled['sum_dist'] = df_dist_noflash['dist_enc1'] 
+            df_shuffled['sum_dist'] = df_dist_noflash['dist_enc1'] + self.MULTIPLIER * df_shuffled['dist_HSV']
+            # df_shuffled['sum_dist'] = df_dist_noflash['dist_enc1'] 
             df_shuffled = df_shuffled.sort_values(by='sum_dist').reset_index(drop=True)
             print("df_shuffled pre_run", df_shuffled[['image_id','dist_enc1','dist_HSV','sum_dist']])
 
