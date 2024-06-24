@@ -302,7 +302,7 @@ def write_imagetopics(resultsjson,lda_model_tfidf,dictionary):
         # else:
         #     word_list = row["description"]
 
-        bow_vector = dictionary.doc2bow(preprocess(word_list))
+        bow_vector = dictionary.doc2bow(preprocess(keyword_list))
 
         #index,score=sorted(lda_model_tfidf[bow_corpus[i]], key=lambda tup: -1*tup[1])[0]
         index,score=sorted(lda_model_tfidf[bow_vector], key=lambda tup: -1*tup[1])[0]
@@ -320,7 +320,7 @@ def write_imagetopics(resultsjson,lda_model_tfidf,dictionary):
 
 
     # Add the imagestopics object to the session
-    # session.commit()
+    session.commit()
     return
 def calc_optimum_topics():
 
