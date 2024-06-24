@@ -9,7 +9,8 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 # my ORM
-from my_declarative_base import Base, Images, Topics,ImagesTopics, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON, ForeignKey
+from my_declarative_base import Base, Images, SegmentBig, Topics,ImagesTopics, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON, ForeignKey
+import pymongo
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import create_engine, text, MetaData, Table, Column, Numeric, Integer, VARCHAR, update, Float, LargeBinary, select, and_
@@ -81,13 +82,14 @@ DICT_PATH=os.path.join(io.ROOT,"dictionary.dict")
 BOW_CORPUS_PATH=os.path.join(io.ROOT,"BOW_lda_corpus.mm")
 TOKEN_PATH=os.path.join(io.ROOT,"tokenized_keyword_list.csv")
 TFIDF_CORPUS_PATH=os.path.join(io.ROOT,"TFIDF_lda_corpus.mm")
-SegmentTable_name = 'SegmentOct20'
+
 # Satyam, you want to set this to False
 USE_SEGMENT = True
+USE_BIGSEGMENT = True
 VERBOSE = True
 RANDOM = False
 global_counter = 0
-QUERY_LIMIT = 10000000
+QUERY_LIMIT = 100
 # started at 9:45PM, Feb 17
 BATCH_SIZE = 100
 
@@ -96,22 +98,6 @@ MODEL="TF" ## OR TF  ## Bag of words or TF-IDF
 NUM_TOPICS=30
 
 stemmer = SnowballStemmer('english')
-
-def set_query():
-    # Basic Query, this works with gettytest3
-    # currently only used for indexing
-    SELECT = "DISTINCT(image_id),description,tokenized_keyword_list"
-    FROM ="SegmentOct20"
-    WHERE = "tokenized_keyword_list IS NOT NULL "
-    if RANDOM: 
-        WHERE += "AND image_id >= (SELECT FLOOR(MAX(image_id) * RAND()) FROM bagofkeywords)"
-    LIMIT = QUERY_LIMIT
-    if MODE==2:
-        # assigning topics
-        WHERE = "tokenized_keyword_list IS NOT NULL AND image_id NOT IN (SELECT image_id FROM imagestopics)"
-        # WHERE = "image_id = 423638"
-        LIMIT=QUERY_LIMIT
-    return SELECT, FROM, WHERE, LIMIT
 
 
 # open and read a csv file, and assign each row as an element in a list
@@ -144,28 +130,39 @@ Session = sessionmaker(bind=engine)
 session = Session()
 Base = declarative_base()
 
-# to create new SegmentTable with variable as name
-class SegmentTable(Base):
-    __tablename__ = SegmentTable_name
+mongo_client = pymongo.MongoClient(io.dbmongo['host'])
+mongo_db = mongo_client[io.dbmongo['name']]
+mongo_collection = mongo_db['tokens']
 
-    image_id = Column(Integer, primary_key=True)
-    site_name_id = Column(Integer)
-    site_image_id = Column(String(50))
-    contentUrl = Column(String(300), nullable=False)
-    imagename = Column(String(200))
-    description = Column(String(150))
-    face_x = Column(DECIMAL(6, 3))
-    face_y = Column(DECIMAL(6, 3))
-    face_z = Column(DECIMAL(6, 3))
-    mouth_gap = Column(DECIMAL(6, 3))
-    face_landmarks = Column(BLOB)
-    bbox = Column(JSON)
-    face_encodings = Column(BLOB)
-    face_encodings68 = Column(BLOB)
-    site_image_id = Column(String(50), nullable=False)
-    keyword_list = Column(BLOB)  # Pickled list
-    tokenized_keyword_list = Column(BLOB)  # Pickled list
-    ethnicity_list = Column(BLOB)  # Pickled list
+if USE_BIGSEGMENT:
+    SegmentTable = SegmentBig
+    SegmentTable_name = 'SegmentBig_isface'
+else:
+    # this is prob redundant, and could be replaced by calling the SegmentTable object from Base
+    SegmentTable_name = 'SegmentOct20'
+
+    # to create new SegmentTable with variable as name
+    class SegmentTable(Base):
+        __tablename__ = SegmentTable_name
+
+        image_id = Column(Integer, primary_key=True)
+        site_name_id = Column(Integer)
+        site_image_id = Column(String(50))
+        contentUrl = Column(String(300), nullable=False)
+        imagename = Column(String(200))
+        description = Column(String(150))
+        face_x = Column(DECIMAL(6, 3))
+        face_y = Column(DECIMAL(6, 3))
+        face_z = Column(DECIMAL(6, 3))
+        mouth_gap = Column(DECIMAL(6, 3))
+        face_landmarks = Column(BLOB)
+        bbox = Column(JSON)
+        face_encodings = Column(BLOB)
+        face_encodings68 = Column(BLOB)
+        site_image_id = Column(String(50), nullable=False)
+        keyword_list = Column(BLOB)  # Pickled list
+        tokenized_keyword_list = Column(BLOB)  # Pickled list
+        ethnicity_list = Column(BLOB)  # Pickled list
 
 
 ambig_key_dict = { "black-and-white": "black_and_white", "black and white background": "black_and_white background", "black and white portrait": "black_and_white portrait", "black amp white": "black_and_white", "white and black": "black_and_white", "black and white film": "black_and_white film", "black and white wallpaper": "black_and_white wallpaper", "black and white cover photos": "black_and_white cover photos", "black and white outfit": "black_and_white outfit", "black and white city": "black_and_white city", "blackandwhite": "black_and_white", "black white": "black_and_white", "black friday": "black_friday", "black magic": "black_magic", "black lives matter": "black_lives_matter black_ethnicity", "black out tuesday": "black_out_tuesday black_ethnicity", "black girl magic": "black_girl_magic black_ethnicity", "beautiful black women": "beautiful black_ethnicity women", "black model": "black_ethnicity model", "black santa": "black_ethnicity santa", "black children": "black_ethnicity children", "black history": "black_ethnicity history", "black family": "black_ethnicity family", "black community": "black_ethnicity community", "black owned business": "black_ethnicity owned business", "black holidays": "black_ethnicity holidays", "black models": "black_ethnicity models", "black girl bullying": "black_ethnicity girl bullying", "black santa claus": "black_ethnicity santa claus", "black hands": "black_ethnicity hands", "black christmas": "black_ethnicity christmas", "white and black girl": "white_ethnicity and black_ethnicity girl", "white woman": "white_ethnicity woman", "white girl": "white_ethnicity girl", "white people": "white_ethnicity", "red white and blue": "red_white_and_blue"}
@@ -176,6 +173,37 @@ def clarify_keywords(text):
             text = text.replace(key, value)
         # print("clarified text: ",text)
     return text
+
+def set_query():
+    # # Basic Query, this works with gettytest3
+    # # currently only used for indexing
+    # SELECT = "DISTINCT(image_id),description,tokenized_keyword_list"
+    # FROM ="SegmentOct20"
+    # WHERE = "tokenized_keyword_list IS NOT NULL "
+    # if RANDOM: 
+    #     WHERE += "AND image_id >= (SELECT FLOOR(MAX(image_id) * RAND()) FROM bagofkeywords)"
+    # LIMIT = QUERY_LIMIT
+    # if MODE==2:
+    #     # assigning topics
+    #     WHERE = "tokenized_keyword_list IS NOT NULL AND image_id NOT IN (SELECT image_id FROM imagestopics)"
+    #     # WHERE = "image_id = 423638"
+    #     LIMIT=QUERY_LIMIT
+
+    # mongofy, for indexing:
+    SELECT = "DISTINCT(image_id),description"
+    FROM = SegmentTable_name
+    WHERE = "tokenized_keyword_list IS NOT NULL "
+    if RANDOM: 
+        WHERE += "AND image_id >= (SELECT FLOOR(MAX(image_id) * RAND()) FROM bagofkeywords)"
+    LIMIT = QUERY_LIMIT
+    if MODE==2 and USE_BIGSEGMENT:
+        # assigning topics
+        WHERE = " image_id NOT IN (SELECT image_id FROM imagestopics)"
+    elif MODE==2:
+        # assigning topics
+        WHERE = "tokenized_keyword_list IS NOT NULL AND image_id NOT IN (SELECT image_id FROM imagestopics)"
+
+    return SELECT, FROM, WHERE, LIMIT
 
 def selectSQL():
     # currently only used for indexing
@@ -255,14 +283,24 @@ def write_imagetopics(resultsjson,lda_model_tfidf,dictionary):
     print("writing data to the imagetopic table")
     idx_list, topic_list = zip(*lda_model_tfidf.print_topics(-1))
     for i,row in enumerate(resultsjson):
-        # print(row)
-        keyword_list=" ".join(pickle.loads(row["tokenized_keyword_list"]))
-
-        # handles empty keyword_list
-        if keyword_list:
-            word_list = keyword_list
+        print("row: ",row)
+        # mongofy:
+        results = mongo_collection.find_one({"image_id": row["image_id"]})
+        if results:
+            print("results: ",results)
+            keyword_list=" ".join(pickle.loads(results['tokenized_keyword_list']))
         else:
-            word_list = row["description"]
+            print("mongo results are empty, using description instead")
+            keyword_list = row["description"]
+        print(keyword_list)
+        # keyword_list=" ".join(pickle.loads(row["tokenized_keyword_list"]))
+
+
+        # # handles empty keyword_list
+        # if keyword_list:
+        #     word_list = keyword_list
+        # else:
+        #     word_list = row["description"]
 
         bow_vector = dictionary.doc2bow(preprocess(word_list))
 
@@ -282,7 +320,7 @@ def write_imagetopics(resultsjson,lda_model_tfidf,dictionary):
 
 
     # Add the imagestopics object to the session
-    session.commit()
+    # session.commit()
     return
 def calc_optimum_topics():
 
@@ -489,7 +527,7 @@ def topic_index(resultsjson):
     lda_dict = corpora.Dictionary.load(MODEL_PATH+'.id2word')
     print("model loaded successfully")
     while True:
-        # go get LIMIT number of items (will duplicate initial select)
+        # go get LIMIT number of items (will duplicate initial select, but only the initial one)
         print("about to SQL:")
         resultsjson = selectSQL()
         print("got results, count is: ",len(resultsjson))
