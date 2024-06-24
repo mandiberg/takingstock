@@ -201,7 +201,8 @@ class SegmentTable(Base):
 class SegmentBig(Base):
     __tablename__ = 'SegmentBig_isface'
     
-    image_id = Column(Integer, primary_key=True)
+    seg_image_id           = Column(Integer, primary_key=True, autoincrement=True)
+    image_id               = Column(Integer, primary_key=True)
     site_name_id           = Column(Integer, ForeignKey('site.site_name_id'))
     site_image_id          = Column(String(50))
     contentUrl             = Column(String(300), nullable=False)
@@ -221,6 +222,7 @@ class SegmentBig(Base):
     keyword_list           = Column(BLOB)  # Pickled list
     tokenized_keyword_list = Column(BLOB)  # Pickled list
     ethnicity_list         = Column(BLOB)  # Pickled list
+    mongo_tokens           = Column(Boolean)
 
     site     = relationship("Site")
     age      = relationship("Age")
