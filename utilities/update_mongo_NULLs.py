@@ -36,6 +36,8 @@ Base = declarative_base()
 # Define the batch size
 batch_size = 5
 last_id = 0
+TARGET = "tokens"
+TARGET = "encodings"
 # currently set up for SegmentTable. need to change SegmentTable to Images if you want to use on main table
 
 while True:
@@ -52,19 +54,33 @@ while True:
         # Query the Images table for image_id and contentUrl where site_name_id is 1
         # results = session.query(SegmentBig.seg_image_id).filter(SegmentBig.tokenized_keyword_list is not None, SegmentBig.seg_image_id > last_id).limit(batch_size).all()
         # SegmentBig.mongo_tokens is None,
-        results = session.query(SegmentBig.seg_image_id, SegmentBig.image_id).\
-            filter(SegmentBig.tokenized_keyword_list.isnot(None), SegmentBig.mongo_tokens.is_(None), SegmentBig.seg_image_id > last_id).\
-            limit(batch_size).all()
+        if TARGET == "tokens":
+            results = session.query(SegmentBig.seg_image_id, SegmentBig.image_id).\
+                filter(SegmentBig.tokenized_keyword_list.isnot(None), SegmentBig.mongo_tokens.is_(None), SegmentBig.seg_image_id > last_id).\
+                limit(batch_size).all()
+        elif TARGET == "encodings":
+            results = session.query(Encodings.encoding_id, Encodings.image_id).\
+                filter(
+                    sqlalchemy.or_(
+                        Encodings.face_landmarks.isnot(None),
+                        Encodings.body_landmarks.isnot(None),
+                        Encodings.face_encodings68.isnot(None)
+                    ),
+                    Encodings.mongo_encodings.is_(None),
+                    Encodings.encoding_id > last_id
+                ).\
+                limit(batch_size).all()
+
         if len(results) == 0:
             print("No more results found.")
             break
 
         # Initialize counters
-        total_processed = 0
-        current_batch = []
+        # total_processed = 0
+        # current_batch = []
 
         for result in results:
-            print("seg_image_id: ", result[0], "image_id: ", result[1])
+            print("result", result)
         #     # for unhashpath
         #     # new_imagename, contentUrl = generate_local_unhashed_image_filepath(contentUrl)
         #     seg_image_id, image_id = result
@@ -74,11 +90,13 @@ while True:
         #     total_processed += 1
         #     last_id = seg_image_id
 
-        session.bulk_update_mappings(SegmentBig, [{"seg_image_id": seg_image_id, "image_id": image_id, "tokenized_keyword_list": None, "mongo_tokens": True} for seg_image_id, image_id in results])
+        if TARGET == "tokens":
+            session.bulk_update_mappings(SegmentBig, [{"seg_image_id": seg_image_id, "image_id": image_id, "tokenized_keyword_list": None, "mongo_tokens": True} for seg_image_id, image_id in results])
+        elif TARGET == "encodings":
+            session.bulk_update_mappings(Encodings, [{"encoding_id": encoding_id, "image_id": image_id, "face_landmarks": None, "body_landmarks": None,"face_encodings68": None,  "mongo_encodings": True} for encoding_id, image_id in results])
+
         # session.commit()
-        print(session.query(SegmentBig).filter(SegmentBig.seg_image_id.in_(current_batch)).update({"tokenized_keyword_list": None, "mongo_tokens": True}, synchronize_session=False))
-        # print(f"{total_processed} Changes committed for {batch_size} rows.")
-        current_batch = []
+        # current_batch = []
         last_id = results[-1][0]
         print("last_id: ", last_id)
         break

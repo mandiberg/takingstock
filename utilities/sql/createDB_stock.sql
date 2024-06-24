@@ -129,8 +129,9 @@ CREATE TABLE Encodings (
     mouth_gap DECIMAL (6,3),
     face_landmarks BLOB,
     bbox JSON,
-    face_encodings BLOB,
+    face_encodings68 BLOB,
     body_landmarks BLOB,
+    mongo_encodings boolean,
     UNIQUE (image_id)
 ); 
 

@@ -43,6 +43,7 @@ CREATE TABLE SegmentBig_isface (
     keyword_list BLOB,
     tokenized_keyword_list BLOB,
     ethnicity_list BLOB,
+    mongo_tokens boolean,
     UNIQUE (image_id)
 
 
