@@ -2,8 +2,8 @@ import json
 import csv
 
 # Specify the path to your jsonl file and CSV output file
-jsonl_file_path = '/Users/michaelmandiberg/Downloads/Alamy production/items_cache.jsonl'
-csv_output_file_path = '/Users/michaelmandiberg/Downloads/Alamy production/keys_by_count.csv'
+jsonl_file_path = '/Users/michaelmandiberg/Documents/projects-active/facemap_production/VCG2/items_cache.jsonl'
+csv_output_file_path = '/Users/michaelmandiberg/Documents/projects-active/facemap_production/VCG2/keys_by_count.csv'
 
 # Create an empty dictionary to store keyword counts
 keyword_counts = {}

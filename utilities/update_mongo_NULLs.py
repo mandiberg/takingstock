@@ -11,7 +11,9 @@ import sys
 # caution: path[0] is reserved for script path (or '' in REPL)
 sys.path.insert(1, '/Users/michaelmandiberg/Documents/GitHub/facemap/')
 from mp_db_io import DataIO
-from my_declarative_base import Images, Encodings, SegmentBig, Base, Clusters, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON
+from my_declarative_base import Images, SegmentTable, Encodings, SegmentBig, Base, Clusters, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON
+import pymongo
+from pymongo.errors import DuplicateKeyError
 
 ######## Michael's Credentials ########
 # platform specific credentials
@@ -33,11 +35,17 @@ Session = sessionmaker(bind=engine)
 session = Session()
 Base = declarative_base()
 
+# Connect to MongoDB
+mongo_client = pymongo.MongoClient("mongodb://localhost:27017/")
+mongo_db = mongo_client["stock"]
+mongo_collection = mongo_db["encodings"]
+
 # Define the batch size
-batch_size = 5
+batch_size = 1000
 last_id = 0
-TARGET = "tokens"
-TARGET = "encodings"
+# TARGET = "tokens"
+# TARGET = "encodings"
+TARGET = "segment"
 # currently set up for SegmentTable. need to change SegmentTable to Images if you want to use on main table
 
 while True:
@@ -70,6 +78,28 @@ while True:
                     Encodings.encoding_id > last_id
                 ).\
                 limit(batch_size).all()
+        elif TARGET == "segment":
+            # results = session.query(SegmentTable.seg_image_id, SegmentTable.image_id).\
+            #     filter(
+            #         sqlalchemy.or_(
+            #             SegmentTable.face_landmarks.isnot(None),
+            #             SegmentTable.body_landmarks.isnot(None),
+            #             SegmentTable.face_encodings68.isnot(None),
+            #             SegmentTable.keyword_list.isnot(None),
+            #             SegmentTable.tokenized_keyword_list.isnot(None)
+            #         ),
+            #         SegmentTable.mongo_tokens.is_(None),
+            #         SegmentTable.seg_image_id > last_id
+            #     ).\
+            #     limit(batch_size).all()
+            results = session.query(SegmentTable.seg_image_id, SegmentTable.image_id).\
+                filter(
+                    SegmentTable.mongo_tokens == 1,
+                    SegmentTable.mongo_body_landmarks.is_(None),
+                    SegmentTable.mongo_face_landmarks.is_(None),
+                    SegmentTable.seg_image_id > last_id
+                ).\
+                limit(batch_size).all()
 
         if len(results) == 0:
             print("No more results found.")
@@ -79,27 +109,35 @@ while True:
         # total_processed = 0
         # current_batch = []
 
-        for result in results:
-            print("result", result)
-        #     # for unhashpath
-        #     # new_imagename, contentUrl = generate_local_unhashed_image_filepath(contentUrl)
-        #     seg_image_id, image_id = result
-        #     # for getty SNAFU
-        #     print("seg_image_id: ", seg_image_id, "image_id: ", image_id)
-        #     current_batch.append(image_id)
-        #     total_processed += 1
-        #     last_id = seg_image_id
+        # for result in results:
+        #     print("result", result)
+
+
 
         if TARGET == "tokens":
             session.bulk_update_mappings(SegmentBig, [{"seg_image_id": seg_image_id, "image_id": image_id, "tokenized_keyword_list": None, "mongo_tokens": True} for seg_image_id, image_id in results])
         elif TARGET == "encodings":
             session.bulk_update_mappings(Encodings, [{"encoding_id": encoding_id, "image_id": image_id, "face_landmarks": None, "body_landmarks": None,"face_encodings68": None,  "mongo_encodings": True} for encoding_id, image_id in results])
+        elif TARGET == "segment":
+            # session.bulk_update_mappings(SegmentTable, [{"seg_image_id": seg_image_id, "image_id": image_id, "face_landmarks": None, "body_landmarks": None,"face_encodings68": None, "tokenized_keyword_list": None, "keyword_list": None, "mongo_tokens": True} for seg_image_id, image_id in results])
+            image_ids = [image_id for seg_image_id, image_id in results]
+            mongo_results = mongo_collection.find({"image_id": {"$in": image_ids}})
 
-        # session.commit()
+            # can't do a bulk update because I don't have the seg_image_id
+            for mongo_result in mongo_results:
+                # for each mongo_result, update the corresponding row in the mysql database
+                session.query(SegmentTable).filter(SegmentTable.image_id == mongo_result["image_id"]).update({
+                    "mongo_face_landmarks": 1 if mongo_result["face_landmarks"] is not None else SegmentTable.mongo_face_landmarks,
+                    "mongo_body_landmarks": 1 if mongo_result["body_landmarks"] is not None else SegmentTable.mongo_body_landmarks
+                })
+                # print the values inserted
+
+
+                # print("mongo_result", mongo_result)
+        session.commit()
         # current_batch = []
         last_id = results[-1][0]
         print("last_id: ", last_id)
-        break
     except Exception as e:
         print(f"An error occurred: {e}")
 

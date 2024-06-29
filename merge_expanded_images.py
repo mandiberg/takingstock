@@ -26,8 +26,9 @@ ROOT_FOLDER_PATH = '/Users/michaelmandiberg/Documents/projects-active/facemap_pr
 # if IS_CLUSTER this should be the folder holding all the cluster folders
 # if not, this should be the individual folder holding the images
 # will not accept clusterNone -- change to cluster00
-FOLDER_NAME ="excite_small_portrait_jumpshot15after_3D_wgt1_max1.4_delta.5"
+FOLDER_NAME ="June21_topic7"
 FOLDER_PATH = os.path.join(ROOT_FOLDER_PATH,FOLDER_NAME)
+DIRS = ["1x1", "4x3", "16x10"]
 
 #temporary
 # FOLDER_PATH = "/Users/michaelmandiberg/Library/CloudStorage/Dropbox/takingstock_dropbox/excite_small_portrait_jumpshot15after_3D_wgt1_max1.4_delta.5"
@@ -144,6 +145,53 @@ def get_img_list_subfolders(subfolders):
     # print(all_img_path_list)
     return all_img_path_list
 
+def get_path(subfolder_path, img_array):
+    if subfolder_path:
+        cluster_no = subfolder_path.split("/")[-1]
+        image_path = os.path.join(subfolder_path, img_array[0])
+    else:
+        cluster_no = img_array[0].replace(FOLDER_PATH,"").split("/")[0]
+        image_path = img_array[0]
+    return cluster_no, image_path
+
+def crop_images(img_array, subfolder_path=None):
+    cluster_no, image_path = get_path(subfolder_path, img_array)
+    img = cv2.imread(image_path)
+    height, width, _ = img.shape
+    cropfset = 70
+    if height > width:
+        crop_dict = {
+            "1x1": [0,width, cropfset,width+cropfset],
+            "4x3": [0,width, int(cropfset/2),int(width*4/3+cropfset/2)],
+            "4x2": [0,width, 0,height],
+            "16x10": [0,int(height*10/16) , 0,height]
+        }
+    for dir in DIRS:
+        if subfolder_path:
+            dir_path = os.path.join(subfolder_path, dir)
+        else:
+            dir_path = os.path.join(FOLDER_PATH, dir)
+        if not os.path.exists(dir_path):
+            os.makedirs(dir_path)
+        for filename in img_array:
+            if subfolder_path:
+                image_path = os.path.join(subfolder_path, filename)
+            else:
+                image_path = filename
+            print(image_path)
+            img = cv2.imread(image_path)
+            # check if img is not None
+            if img is not None:
+                crop_img = img[crop_dict[dir][2]:crop_dict[dir][3], crop_dict[dir][0]:crop_dict[dir][1]]
+                # crop_img = img[0:crop_dict[dir][1], 0:crop_dict[dir][0]]
+                cv2.imwrite(os.path.join(dir_path, filename), crop_img)
+            else:
+                print("no image found at", image_path)
+        write_video(io.get_img_list(dir_path), FRAMERATE, dir_path)
+
+        
+
+
 def write_video(img_array, FRAMERATE=15, subfolder_path=None):
     # Check if the ROOT folder exists, create it if not
     # print("subfolder_path")
@@ -152,12 +200,7 @@ def write_video(img_array, FRAMERATE=15, subfolder_path=None):
     # print(img_array)
 
     # Get the dimensions of the first image in the array
-    if subfolder_path:
-        cluster_no = subfolder_path.split("/")[-1]
-        image_path = os.path.join(subfolder_path, img_array[0])
-    else:
-        cluster_no = img_array[0].replace(FOLDER_PATH,"").split("/")[0]
-        image_path = img_array[0]
+    cluster_no, image_path = get_path(subfolder_path, img_array)
     img = cv2.imread(image_path)
     height, width, _ = img.shape
 
@@ -167,6 +210,8 @@ def write_video(img_array, FRAMERATE=15, subfolder_path=None):
     video_writer = cv2.VideoWriter(video_path, fourcc, FRAMERATE, (width, height))
 
     # Iterate over the image array and write frames to the video
+
+
     for filename in img_array:
         if subfolder_path:
             image_path = os.path.join(subfolder_path, filename)
@@ -213,7 +258,8 @@ def main():
         if IS_VIDEO is True:
             print("going to get folder ls")
             all_img_path_list = io.get_img_list(FOLDER_PATH)
-            print(all_img_path_list)
+            # print(all_img_path_list)
+            crop_images(all_img_path_list, FOLDER_PATH)
             write_video(all_img_path_list, FRAMERATE, FOLDER_PATH)
 
             # # const_videowriter(subfolder_path, FRAMERATE)

@@ -171,6 +171,7 @@ class ImagesBackground(Base):
 class SegmentTable(Base):
     __tablename__ = 'SegmentOct20'
     
+    seg_image_id           = Column(Integer, primary_key=True, autoincrement=True)
     image_id = Column(Integer, primary_key=True)
     site_name_id           = Column(Integer, ForeignKey('site.site_name_id'))
     site_image_id          = Column(String(50))
@@ -193,6 +194,9 @@ class SegmentTable(Base):
     keyword_list           = Column(BLOB)  # Pickled list
     tokenized_keyword_list = Column(BLOB)  # Pickled list
     ethnicity_list         = Column(BLOB)  # Pickled list
+    mongo_tokens           = Column(Boolean)
+    mongo_body_landmarks   = Column(Boolean)
+    mongo_face_landmarks   = Column(Boolean)
 
     site     = relationship("Site")
     age      = relationship("Age")

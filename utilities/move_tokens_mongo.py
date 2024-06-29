@@ -50,7 +50,9 @@ while True:
         print(f"An error occurred: {e}")
     print("start_enc_id: ", start_id)
     # Query the Images table for image_id and contentUrl where site_name_id is 1
-    results = session.query(SegmentBig.image_id, SegmentBig.tokenized_keyword_list).filter(SegmentBig.image_id > start_id, SegmentBig.tokenized_keyword_list != None).limit(batch_size).all()
+    results = session.query(SegmentBig.image_id, SegmentBig.tokenized_keyword_list).\
+        filter(SegmentBig.image_id > start_id, SegmentBig.tokenized_keyword_list != None).\
+        limit(batch_size).all()
     if len(results) == 0:
         break
 

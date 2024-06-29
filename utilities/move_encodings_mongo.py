@@ -40,23 +40,33 @@ mongo_db = mongo_client["stock"]
 mongo_collection = mongo_db["encodings"]
 
 # Define the batch size
-batch_size = 100000
-start_enc_id = 0
-
+batch_size = 10
+start_enc_id = mongo_collection.find_one(sort=[("encoding_id", -1)])["encoding_id"]
+last_id = 4262137
+final_id = 4287381
+# this last configuration is for a set of getty where I had body but not face. 
+# i did this after doign a full run of face, so I had to cludge some limits in if/else start_enc_id
+print("start_enc_id: ", start_enc_id)
 while True:
     try:
-        start_enc_id = mongo_collection.find_one(sort=[("encoding_id", -1)])["encoding_id"]
+        if last_id == 0 and start_enc_id < 10000:
+            start_enc_id = 0
+        else:
+            start_enc_id = last_id
     except Exception as e:
         print(f"An error occurred: {e}")
     print("start_enc_id: ", start_enc_id)
-    # Query the Images table for image_id and contentUrl where site_name_id is 1
-    results = session.query(Encodings.encoding_id, Encodings.image_id, Encodings.face_landmarks, Encodings.face_encodings68, Encodings.body_landmarks).filter(Encodings.encoding_id > start_enc_id, Encodings.is_face == True).limit(batch_size).all()
+    results = session.query(Encodings.encoding_id, Encodings.image_id, Encodings.face_landmarks, Encodings.face_encodings68, Encodings.body_landmarks).\
+        filter(Encodings.encoding_id > start_enc_id, Encodings.encoding_id <= final_id, Encodings.is_face == 0, Encodings.is_body == 1).\
+        limit(batch_size).all()
     if len(results) == 0:
         break
 
     for encoding_id, image_id, face_landmarks, face_encodings68, body_landmarks in results:
+        last_id = encoding_id
+        # print(encoding_id, image_id, face_landmarks, face_encodings68, body_landmarks)
         # Store data in MongoDB
-        if encoding_id and image_id:
+        if encoding_id and image_id and body_landmarks:
             try:
                 mongo_collection.insert_one({
                     "encoding_id": encoding_id,

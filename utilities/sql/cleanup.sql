@@ -9,11 +9,17 @@ WHERE i.site_name_id = 9 and e.is_face IS NULL
 ;
 
 
-SELECT COUNT(e.image_id) 
+SELECT e.encoding_id 
 FROM Encodings e 
-WHERE e.is_face IS NULL
+WHERE e.is_face = 0
+and e.is_body  = 1
+and e.encoding_id > 50000000
+and e.encoding_id < 100000000
+LIMIT 1
 ;
+ 
 
+-- 4287381
 
 -- Identify duplicate image_id entries in the Encodings table
 SELECT site_image_id, COUNT(*)
@@ -51,8 +57,8 @@ WHERE i.image_id  = 126887888
 ;
 
 
-SELECT MAX(e.encoding_id) 
-FROM Encodings e 
+SELECT MAX(image_id) 
+FROM Images i 
 ;
 
 

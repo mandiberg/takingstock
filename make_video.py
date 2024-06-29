@@ -153,8 +153,8 @@ elif IS_SEGONLY and io.db["name"] == "stock":
 
     FROM =f"{SegmentTable_name} s "
 
-    # this is the standard segment topics/clusters query for April 2024
-    WHERE = " s.face_encodings68 IS NOT NULL AND s.face_x > -33 AND s.face_x < -27 AND s.face_y > -2 AND s.face_y < 2 AND s.face_z > -2 AND s.face_z < 2"
+    # this is the standard segment topics/clusters query for June 2024
+    WHERE = "  s.face_x > -33 AND s.face_x < -27 AND s.face_y > -2 AND s.face_y < 2 AND s.face_z > -2 AND s.face_z < 2"
 
     # HIGHER
     # WHERE = "s.site_name_id != 1 AND face_encodings68 IS NOT NULL AND face_x > -27 AND face_x < -23 AND face_y > -2 AND face_y < 2 AND face_z > -2 AND face_z < 2"
@@ -190,9 +190,9 @@ elif IS_SEGONLY and io.db["name"] == "stock":
     # FROM += " JOIN ImagesKeywords ik ON s.image_id = ik.image_id JOIN Keywords k ON ik.keyword_id = k.keyword_id "
     # WHERE += " AND k.keyword_text LIKE 'surpris%' "
 
-    # testing mongo
-    FROM += " JOIN Encodings e ON s.image_id = e.image_id "
-    WHERE += " AND e.encoding_id > 2612275"
+    # # testing mongo
+    # FROM += " JOIN Encodings e ON s.image_id = e.image_id "
+    # WHERE += " AND e.encoding_id > 2612275"
 
     # WHERE = "s.site_name_id != 1"
     LIMIT = 1000

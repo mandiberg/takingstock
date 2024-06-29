@@ -1,12 +1,22 @@
+-- 86.3gb, 2.46tb
+
+
 
 USE stock
 ;
 
 
+SELECT COUNT(so.seg_image_id) as ccount, COUNT(so.mongo_face_landmarks) as fcount, COUNT(so.mongo_body_landmarks) as bcount
+FROM SegmentOct20 so 
+JOIN ImagesTopics it ON so.image_id = it.image_id 
+WHERE it.topic_id = 17
+;
+
+
 SELECT *
 FROM Images i
-WHERE i.image_id  = 121239232
-AND i.site_name_id = 1
+WHERE i.image_id  = 9923454
+-- AND i.site_name_id = 1
 ;
 
 
@@ -145,6 +155,7 @@ FROM ImagesKeywords ik
 WHERE ik.keyword_id = 12021;
 
 USE Stock; 
+
 SELECT COUNT(i.image_id)
 FROM Images i 
 -- RIGHT JOIN Encodings e ON i.image_id = e.image_id 
@@ -153,14 +164,17 @@ AND i.image_id > 100887900
 ;
 
 
-
+SELECT *
+FROM Images i 
+WHERE i.image_id in (9924753, 9924032)
+;
 
 SELECT COUNT(i.image_id) as ccount, i.site_name_id 
 FROM Images i 
 LEFT JOIN Encodings e on i.image_id = e.image_id 
 -- WHERE i.site_name_id = 2
 WHERE e.encoding_id is NULL
-AND i.image_id < 88000000
+AND i.image_id > 100000000
 GROUP BY i.site_name_id 
 ;
 
