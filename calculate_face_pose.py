@@ -21,11 +21,13 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.orm import relationship
 from sqlalchemy.ext.declarative import declarative_base
 # my ORM
-from my_declarative_base import Base, Images, Keywords, ImagesKeywords, Encodings, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON
+from my_declarative_base import Base, Images, Keywords, SegmentTable, ImagesKeywords, Encodings, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON
 
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.pool import NullPool
 from sqlalchemy.dialects import mysql
+import pymongo
+from pymongo.errors import DuplicateKeyError
 
 from mp_pose_est import SelectPose
 from mp_db_io import DataIO
@@ -83,7 +85,7 @@ CSV_FOLDERCOUNT_PATH = os.path.join(MAIN_FOLDER, "folder_countout.csv")
 
 IS_SSD=False
 BODYLMS = True # only matters if IS_FOLDER is False
-SEGMENT = 17 # topic_id set to 0 or False if using HelperTable or not using a segment
+SEGMENT = 15 # topic_id set to 0 or False if using HelperTable or not using a segment
 HelperTable_name = False #"SegmentHelperMay7_fingerpoint" # set to False if not using a HelperTable
 
 
@@ -143,7 +145,7 @@ else:
 # IS_SSD=True
 ##########################################
 
-LIMIT = 20
+LIMIT = 2000
 
 # platform specific credentials
 io = DataIO(IS_SSD)
@@ -215,6 +217,31 @@ def init_session():
 def close_session():
     session.close()
     engine.dispose()
+
+def init_mongo():
+    # init session
+    # global engine, Session, session
+    global mongo_client, mongo_db, mongo_collection
+    # engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}"
+    #                                 .format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']), poolclass=NullPool)
+    
+    # engine = create_engine("mysql+pymysql://{user}:{pw}@/{db}?unix_socket={socket}".format(
+    #     user=db['user'], pw=db['pass'], db=db['name'], socket=db['unix_socket']
+    # ), poolclass=NullPool)
+
+    # # metadata = MetaData(engine)
+    # metadata = MetaData() # apparently don't pass engine
+    # Session = sessionmaker(bind=engine)
+    # session = Session()
+    # Base = declarative_base()
+
+    mongo_client = pymongo.MongoClient("mongodb://localhost:27017/")
+    mongo_db = mongo_client["stock"]
+    mongo_collection = mongo_db["encodings"]
+
+def close_mongo():
+    mongo_client.close()    
+
 
 # not sure if I'm using this
 class Object:
@@ -789,12 +816,13 @@ def process_image_enc_only(task):
 def process_image_bodylms(task):
     # df = pd.DataFrame(columns=['image_id','bbox'])
     # print("task is: ",task)
-    encoding_id = task[0] ### is it enc or image_id
+    image_id = task[0] ### is it enc or image_id
     cap_path = capitalize_directory(task[1])
     init_session()
+    init_mongo()
 
     # df = pd.DataFrame(columns=['image_id','is_face','is_body','is_face_distant','face_x','face_y','face_z','mouth_gap','face_landmarks','bbox','face_encodings','face_encodings68_J','body_landmarks'])
-    # df.at['1', 'image_id'] = encoding_id
+    # df.at['1', 'image_id'] = image_id
 
     try:
         image = cv2.imread(cap_path)        
@@ -804,7 +832,7 @@ def process_image_bodylms(task):
         print('Error:', str(e))
         print(f"[process_image]this imread failed, even after uppercasing: {task}")
     # print("processing: ")
-    # print(encoding_id)
+    # print(image_id)
     if image is not None and image.shape[0]>MINSIZE and image.shape[1]>MINSIZE:
         # Do findbody
         is_body, body_landmarks = find_body(image)
@@ -813,27 +841,39 @@ def process_image_bodylms(task):
         # print(bbox_json)
         # if bbox_json: 
 
-        pass
+        print("is_body", is_body)
         for _ in range(io.max_retries):
             try:
                 # new_entry = Encodings(**insert_dict)
                 # session.add(new_entry)
                 # session.commit()
 
-                session.query(Encodings).filter(Encodings.encoding_id == encoding_id).update({
+                session.query(Encodings).filter(Encodings.image_id == image_id).update({
                     Encodings.is_body: is_body,
-                    Encodings.body_landmarks: body_landmarks
+                    # Encodings.body_landmarks: body_landmarks
+                    Encodings.mongo_body_landmarks: is_body
+                })
+
+                session.query(SegmentTable).filter(SegmentTable.image_id == image_id).update({
+                    SegmentTable.mongo_body_landmarks: is_body
                 })
 
                 # total_processed += 1
 
+                if body_landmarks:
+                    mongo_collection.update_one(
+                        {"image_id": image_id},
+                        {"$set": {"body_landmarks": body_landmarks}}
+                    )
+                    print("----------- >>>>>>>>   mongo body_landmarks updated:", image_id)
+                
                 # Check if the current batch is ready for commit
                 # if total_processed % BATCH_SIZE == 0:
+
                 session.commit()
-                # update_sql = f"UPDATE Encodings SET is_body = '{is_body}' AND SET body_landmarks = '{body_landmarks}' WHERE encoding_id = {encoding_id};"
-                # engine.connect().execute(text(update_sql))
+                
                 print("bbbbody:")
-                print(encoding_id)
+                print(image_id)
                 break  # Transaction succeeded, exit the loop
             except OperationalError as e:
                 print(e)
@@ -846,6 +886,7 @@ def process_image_bodylms(task):
         print('no image or toooooo smallllll')
         # I should probably assign no_good here...?
     # Close the session and dispose of the engine before the worker process exits
+    close_mongo()
     close_session()
 
     # store data
@@ -1207,8 +1248,7 @@ def main():
             # print("about to SQL: ",SELECT,FROM,WHERE,LIMIT)
             resultsjson = selectSQL()    
             print("got results, count is: ",len(resultsjson))
-            print(resultsjson)
-            quit()
+            # print(resultsjson)
             print(">> SPLIT >> jsonsplit")
             split = print_get_split(jsonsplit)
             #catches the last round, where it returns less than full results
@@ -1221,7 +1261,7 @@ def main():
             # process resultsjson
             for row in resultsjson:
                 # print(row)
-                encoding_id = row["encoding_id"]
+                # encoding_id = row["encoding_id"]
                 image_id = row["image_id"]
                 item = row["contentUrl"]
                 hashed_path = row["imagename"]
@@ -1236,10 +1276,10 @@ def main():
                 # gets folder via the folder list, keyed with site_id integer
                 imagepath=os.path.join(io.folder_list[site_id], hashed_path)
 
-                if row["face_landmarks"] is not None:
+                if row["mongo_face_landmarks"] is not None:
                     # this is a reprocessing, so don't need to test isExist
                     print("reprocessing")
-                    task = (encoding_id,imagepath,pickle.loads(row["face_landmarks"]),row["bbox"])
+                    task = (image_id,imagepath,row["mongo_face_landmarks"],row["bbox"])
                 else:
                     task = (image_id,imagepath)
 

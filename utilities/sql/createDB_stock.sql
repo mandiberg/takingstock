@@ -132,6 +132,8 @@ CREATE TABLE Encodings (
     face_encodings68 BLOB,
     body_landmarks BLOB,
     mongo_encodings boolean,
+    mongo_body_landmarks boolean,
+    mongo_face_landmarks boolean,
     UNIQUE (image_id)
 ); 
 

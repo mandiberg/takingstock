@@ -106,6 +106,8 @@ class Encodings(Base):
     face_encodings68_J5 = Column(BLOB)
     body_landmarks      = Column(BLOB)
     mongo_encodings     = Column(Boolean)
+    mongo_body_landmarks   = Column(Boolean)
+    mongo_face_landmarks   = Column(Boolean)
 
 class Clusters(Base):
     __tablename__ = 'Clusters'
