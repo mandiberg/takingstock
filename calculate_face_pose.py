@@ -85,7 +85,7 @@ CSV_FOLDERCOUNT_PATH = os.path.join(MAIN_FOLDER, "folder_countout.csv")
 
 IS_SSD=False
 BODYLMS = True # only matters if IS_FOLDER is False
-SEGMENT = 15 # topic_id set to 0 or False if using HelperTable or not using a segment
+SEGMENT = 0 # topic_id set to 0 or False if using HelperTable or not using a segment
 HelperTable_name = False #"SegmentHelperMay7_fingerpoint" # set to False if not using a HelperTable
 
 
@@ -95,14 +95,18 @@ if BODYLMS is True:
     SELECT = "DISTINCT seg1.image_id, seg1.site_name_id, seg1.contentUrl, seg1.imagename, seg1.site_image_id, seg1.mongo_body_landmarks, seg1.mongo_face_landmarks, seg1.bbox"
 
     SegmentTable_name = 'SegmentOct20'
-    FROM =f"{SegmentTable_name} seg1 LEFT JOIN Encodings e ON seg1.image_id = e.image_id"
+    FROM =f"{SegmentTable_name} seg1"
     # FROM ="Encodings e"
-    QUERY = "e.body_landmarks IS NULL AND e.image_id IN"
-    SUBQUERY = f"(SELECT seg1.image_id FROM {SegmentTable_name} seg1 WHERE face_x > -33 AND face_x < -27 AND face_y > -2 AND face_y < 2 AND face_z > -2 AND face_z < 2)"
+    QUERY = "seg1.mongo_body_landmarks IS NULL "
+    SUBQUERY = " "
+    # SUBQUERY = f"(SELECT seg1.image_id FROM {SegmentTable_name} seg1 WHERE face_x > -33 AND face_x < -27 AND face_y > -2 AND face_y < 2 AND face_z > -2 AND face_z < 2)"
+    # SUBQUERY = f"(SELECT seg1.image_id FROM {SegmentTable_name} seg1 WHERE face_x > -33 AND face_x < -27 AND face_y > -2 AND face_y < 2 AND face_z > -2 AND face_z < 2)"
     if SEGMENT:
         QUERY = " "
         FROM = f"{SegmentTable_name} seg1 LEFT JOIN ImagesTopics it ON seg1.image_id = it.image_id"
-        SUBQUERY = f" seg1.mongo_body_landmarks IS NULL AND face_x > -33 AND face_x < -27 AND face_y > -2 AND face_y < 2 AND face_z > -2 AND face_z < 2 AND it.topic_id = {SEGMENT}"
+        # SUBQUERY = f" seg1.mongo_body_landmarks IS NULL AND face_x > -33 AND face_x < -27 AND face_y > -2 AND face_y < 2 AND face_z > -2 AND face_z < 2 AND it.topic_id = {SEGMENT}"
+        SUBQUERY = f" seg1.mongo_body_landmarks IS NULL AND it.topic_id = {SEGMENT}"
+
     if HelperTable_name:
         FROM += f" INNER JOIN {HelperTable_name} ht ON seg1.image_id = ht.image_id LEFT JOIN ImagesTopics it ON seg1.image_id = it.image_id"
         QUERY = "e.body_landmarks IS NULL AND seg1.site_name_id NOT IN (1,4)"

@@ -41,11 +41,11 @@ mongo_db = mongo_client["stock"]
 mongo_collection = mongo_db["encodings"]
 
 # Define the batch size
-batch_size = 1000
+batch_size = 10
 last_id = 0
 # TARGET = "tokens"
-# TARGET = "encodings"
-TARGET = "segment"
+TARGET = "encodings"
+# TARGET = "segment"
 # currently set up for SegmentTable. need to change SegmentTable to Images if you want to use on main table
 
 while True:
@@ -67,17 +67,26 @@ while True:
                 filter(SegmentBig.tokenized_keyword_list.isnot(None), SegmentBig.mongo_tokens.is_(None), SegmentBig.seg_image_id > last_id).\
                 limit(batch_size).all()
         elif TARGET == "encodings":
+            # results = session.query(Encodings.encoding_id, Encodings.image_id).\
+            #     filter(
+            #         sqlalchemy.or_(
+            #             Encodings.face_landmarks.isnot(None),
+            #             Encodings.body_landmarks.isnot(None),
+            #             Encodings.face_encodings68.isnot(None)
+            #         ),
+            #         Encodings.mongo_encodings.is_(None),
+            #         Encodings.encoding_id > last_id
+            #     ).\
+            #     limit(batch_size).all()
             results = session.query(Encodings.encoding_id, Encodings.image_id).\
                 filter(
-                    sqlalchemy.or_(
-                        Encodings.face_landmarks.isnot(None),
-                        Encodings.body_landmarks.isnot(None),
-                        Encodings.face_encodings68.isnot(None)
-                    ),
-                    Encodings.mongo_encodings.is_(None),
+                    Encodings.mongo_encodings == 1,
+                    Encodings.mongo_body_landmarks.is_(None),
+                    Encodings.mongo_face_landmarks.is_(None),
                     Encodings.encoding_id > last_id
                 ).\
                 limit(batch_size).all()
+
         elif TARGET == "segment":
             # results = session.query(SegmentTable.seg_image_id, SegmentTable.image_id).\
             #     filter(
@@ -117,7 +126,20 @@ while True:
         if TARGET == "tokens":
             session.bulk_update_mappings(SegmentBig, [{"seg_image_id": seg_image_id, "image_id": image_id, "tokenized_keyword_list": None, "mongo_tokens": True} for seg_image_id, image_id in results])
         elif TARGET == "encodings":
-            session.bulk_update_mappings(Encodings, [{"encoding_id": encoding_id, "image_id": image_id, "face_landmarks": None, "body_landmarks": None,"face_encodings68": None,  "mongo_encodings": True} for encoding_id, image_id in results])
+            # session.bulk_update_mappings(Encodings, [{"encoding_id": encoding_id, "image_id": image_id, "face_landmarks": None, "body_landmarks": None,"face_encodings68": None,  "mongo_encodings": True} for encoding_id, image_id in results])
+            image_ids = [image_id for encoding_id, image_id in results]
+            mongo_results = mongo_collection.find({"image_id": {"$in": image_ids}})
+
+            # can't do a bulk update because I don't have the seg_image_id
+            for mongo_result in mongo_results:
+                # for each mongo_result, update the corresponding row in the mysql database
+                session.query(Encodings).filter(Encodings.image_id == mongo_result["image_id"]).update({
+                    "mongo_face_landmarks": 1 if mongo_result["face_landmarks"] is not None else Encodings.mongo_face_landmarks,
+                    "mongo_body_landmarks": 1 if mongo_result["body_landmarks"] is not None else Encodings.mongo_body_landmarks
+                })
+                # print the values inserted
+
+
         elif TARGET == "segment":
             # session.bulk_update_mappings(SegmentTable, [{"seg_image_id": seg_image_id, "image_id": image_id, "face_landmarks": None, "body_landmarks": None,"face_encodings68": None, "tokenized_keyword_list": None, "keyword_list": None, "mongo_tokens": True} for seg_image_id, image_id in results])
             image_ids = [image_id for seg_image_id, image_id in results]
@@ -135,6 +157,7 @@ while True:
 
                 # print("mongo_result", mongo_result)
         session.commit()
+        break
         # current_batch = []
         last_id = results[-1][0]
         print("last_id: ", last_id)
