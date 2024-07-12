@@ -80,7 +80,7 @@ IS_TOPICS = False
 N_TOPICS = 30
 
 IS_ONE_TOPIC = True
-TOPIC_NO = [7]
+TOPIC_NO = [3]
 
 #  is isolated,  is business,  babies, 17 pointing
 #  is doctor <<  covid
@@ -101,7 +101,7 @@ SORT_TYPE = "128d"
 if SORT_TYPE == "planar_body": OBJ_CLS_ID = 67
 else: OBJ_CLS_ID = 0
 
-ONE_SHOT = False # take all files, based off the very first sort order.
+ONE_SHOT = True # take all files, based off the very first sort order.
 JUMP_SHOT = True # jump to random file if can't find a run (I don't think this applies to planar?)
 
 
@@ -195,7 +195,7 @@ elif IS_SEGONLY and io.db["name"] == "stock":
     # WHERE += " AND e.encoding_id > 2612275"
 
     # WHERE = "s.site_name_id != 1"
-    LIMIT = 1000
+    LIMIT = 100000
 
     # TEMP TK TESTING
     # WHERE += " AND s.site_name_id = 8"
@@ -291,6 +291,8 @@ start_site_image_id = None
 # start_site_image_id = "3/3B/193146471-photo-portrait-of-funky-young-lady-fooling-show-fingers-claws-growl-tiger-wear-stylish-striped"
 # start_site_image_id = "0/02/159079944-hopeful-happy-young-woman-looking-amazed-winning-prize-standing-white-background.jpg"
 # start_site_image_id = "0/08/158083627-man-in-white-t-shirt-gesturing-with-his-hands-studio-cropped.jpg"
+start_img_name = "start_face_encodings"
+start_site_image_id = [-0.13242901861667633, 0.09738104045391083, 0.003530653193593025, -0.04780442640185356, -0.13073976337909698, 0.07189705967903137, -0.006513072177767754, -0.051335446536540985, 0.1768932193517685, -0.03729865700006485, 0.1137416809797287, 0.13994133472442627, -0.23849385976791382, -0.08209677785634995, 0.06067033112049103, 0.07974598556756973, -0.1882513463497162, -0.24926315248012543, -0.011344537138938904, -0.10508193075656891, 0.010317208245396614, 0.06348179280757904, 0.02852417528629303, 0.06981766223907471, -0.14760875701904297, -0.34729471802711487, -0.014949701726436615, -0.09429284185171127, 0.08592978119850159, -0.11939340829849243, 0.04517041891813278, 0.06180906295776367, -0.1773814857006073, 0.011621855199337006, 0.010536111891269684, 0.12963438034057617, -0.07557092607021332, 0.0027374476194381714, 0.2890719771385193, 0.0692337155342102, -0.17323020100593567, 0.0724603682756424, 0.021229337900877, 0.361629843711853, 0.250482439994812, 0.021974680945277214, 0.018878426402807236, -0.022722169756889343, 0.09668144583702087, -0.29601603746414185, 0.11375367641448975, 0.2568872570991516, 0.11404240131378174, 0.04999732971191406, 0.02831254154443741, -0.15830034017562866, -0.031099170446395874, 0.028748074546456337, -0.180643692612648, 0.13169123232364655, 0.058790236711502075, -0.0858338251709938, 0.029470380395650864, -0.002784252166748047, 0.2532877027988434, 0.07375448942184448, -0.11085735261440277, -0.12285713106393814, 0.11346398293972015, -0.19246435165405273, -0.1447266787290573, 0.054258447140455246, -0.1335202157497406, -0.1264294683933258, -0.23741140961647034, 0.07753928005695343, 0.3753989636898041, 0.08984167128801346, -0.18434450030326843, 0.042485352605581284, -0.08978638052940369, -0.03871896490454674, 0.06451354175806046, 0.08044029772281647, -0.11364202201366425, -0.1158837378025055, -0.10755209624767303, 0.044953495264053345, 0.2573489546775818, 0.049939051270484924, -0.07680445909500122, 0.20810386538505554, 0.09711501002311707, 0.05330953001976013, 0.08986716717481613, 0.0984266921877861, -0.036112621426582336, -0.011795245110988617, -0.15438663959503174, -0.027118921279907227, -0.012514196336269379, -0.11667540669441223, 0.04242435097694397, 0.13383115828037262, -0.18503828346729279, 0.19057676196098328, 0.017584845423698425, -0.005235005170106888, 0.010936722159385681, 0.08952657878398895, -0.1809171438217163, -0.07223983108997345, 0.16210225224494934, -0.264881432056427, 0.3121953308582306, 0.21528613567352295, 0.02137373574078083, 0.12006716430187225, 0.08322857320308685, 0.0802738219499588, -0.013485163450241089, 0.005497157573699951, -0.0893208310008049, -0.06330209970474243, 0.017513029277324677, -0.007281661033630371, 0.06451432406902313, 0.10179871320724487]
 
 # no gap
 # start_site_image_id = "5/58/95516714-happy-well-dressed-man-holding-a-gift-on-white-background.jpg"
@@ -402,181 +404,13 @@ def save_segment_DB(df_segment):
 # need to pass through start_img_enc rather than start_img_name
 # for linear it is in the df_enc, but for itter, the start_img_name is in prev df_enc
 # takes a dataframe of images and encodings and returns a df sorted by distance
-def sort_by_face_dist(df_enc, df_128_enc, df_33_lms):
-    
-
-    this_start = sort.counter_dict["start_img_name"]
-    face_distances=[]
-
-    # this prob should be a df.iterrows
-    print("df_enc.index")
-    print(df_enc.index)
-    print(len(df_enc.index))
-    # print(sort.counter_dict)
-    FIRST_ROUND = True
-    if sort.CUTOFF < len(df_enc.index):
-        itters = sort.CUTOFF
-    else: 
-        itters = len(df_enc.index)
-    for i in range(itters):
-        # find the image
-        # print(df_enc)
-        # this is the site_name_id for this_start, needed to test mse
-        print("this_start", this_start)
-        print("starting sort round ",str(i))
-        
-        ## Get the starting encodings (if not passed through)
-        if this_start != "median" and this_start != "start_site_image_id" and i == 0:
-            # this is the first round for clusters/itter where last_image_enc is true
-            # set encodings to the passed through encodings
-            # IF NO START IMAGE SPECIFIED (this line works for no clusters)
-            print("attempting set enc1 from pass through")
-            enc1 = sort.counter_dict["last_image_enc"]
-            # enc1 = df_enc.loc[this_start]['face_encodings']
-            # print(enc1)
-            print("set enc1 from pass through")
-        else:
-            #this is the first??? round, set via df
-            print(f"trying get_start_enc() from {this_start}")
-            enc1, df_128_enc, df_33_lms = sort.get_start_enc(this_start, df_128_enc, df_33_lms, SORT_TYPE)
-            # # test to see if get_start_enc was successful
-            # # if not, retain previous enc1. or shoudl it reassign median? 
-            # if enc1_temp is not None:
-            #     enc1 = enc1_temp
-            print(f"set enc1 from get_start_enc() to {enc1}")
-            
-        ## Find closest
-        try:
-            # closest_dict is now a dict with 1 or more items
-            # this_start is a filepath, which serves as df index
-            # it is now a dict of key=distance value=filepath
-            print("going to get closest")
-
-            # NEED TO GET IT TO DROP FROM df_33_lms in get_closest_df
-            # need to send the df_enc with the same two keys through to get_closest
-            dist, closest_dict, df_128_enc, df_33_lms = sort.get_closest_df(FIRST_ROUND, enc1,df_enc, df_128_enc, df_33_lms, sorttype=SORT_TYPE)
-            # dist, closest_dict, df_128_enc = sort.get_closest_df(FIRST_ROUND, enc1,df_enc, df_128_enc, sorttype="planar")
-            # dist, closest_dict, df_128_enc = sort.get_closest_df(enc1,df_enc, df_128_enc)
-            FIRST_ROUND = False
-
-
-            print("got closest")
-            # print(closest_dict)
-
-            # Break out of the loop if greater than MAXDIST
-            # I think this will be graceful with cluster iteration
-            print("dist")
-            # print(dist)
-            if dist > sort.MAXD and sort.SHOT_CLOCK != 0:
-                print("should breakout")
-                break
-
-        except Exception as e:
-            print("exception on going to get closest")
-            print(str(e))
-            traceback.print_exc()
-
-
-     
-        # Iterate through the results and append
-        dkeys = list(closest_dict.keys())
-        dkeys.sort()
-        images_to_drop =[]
-        print("length of dkeys for closest_dict is ", len(dkeys))
-        for dkey in dkeys:
-
-
-            ## Collect values and append to face_distances
-            this_start = closest_dict[dkey]
-            if VERBOSE: print("this_start assigned as ", this_start)
-            face_landmarks=None
-            bbox=None
-
-            # print("THIS: closest_dict[dkey],")
-            # print(closest_dict[dkey])
-
-            try:
-                # print("dkey, df_enc.loc[closest_dict[dkey]]")
-                # print(dkey)
-                # print(closest_dict[dkey])
-                # print(df_enc.loc[closest_dict[dkey]])
-                site_name_id = df_enc.loc[closest_dict[dkey]]['site_name_id']
-                face_landmarks = df_enc.loc[closest_dict[dkey]]['face_landmarks']
-                bbox = df_enc.loc[closest_dict[dkey]]['bbox']
-                # print("assigned bbox", bbox)
-            except:
-                print("won't assign landmarks/bbox")
-            # print("site_name_id is the following")
-
-            # for some reason, site_name_id is not an int. trying to test if int.
-            # print(type(site_name_id))
-            # if not pd.is_int(site_name_id): continue
-            # print(site_name_id)
-            # print("site_specific_root_folder", io.folder_list[site_name_id])
-            site_specific_root_folder = io.folder_list[site_name_id]
-            # print("site_specific_root_folder")
-            # print(site_specific_root_folder)
-            # save the image -- this prob will be to append to list, and return list? 
-            # save_sorted(i, folder, start_img_name, dist)
-            this_dist=[dkey, site_specific_root_folder, this_start, site_name_id, face_landmarks, bbox]
-            face_distances.append(this_dist)
-            images_to_drop.append(this_start)
-
-        # remove the last image this_start, then drop them from df_128_enc
-        # the this_start will be dropped in the get_start_enc method
-        print("lenght of images to drop before and after removing this_start")
-        print(len(images_to_drop))
-        try:
-            images_to_drop.remove(this_start)
-        except Exception as e:
-            traceback.print_exc()
-            print("images_to_drop.remove failed because was too great a lum diff", str(e))
-        print(len(images_to_drop))
-        for dropimage in images_to_drop:
-            if VERBOSE: print("going to remove this image enc", dropimage)
-            try:
-                df_128_enc=df_128_enc.drop(dropimage)
-            except Exception as e:
-                traceback.print_exc()
-                print(str(e))
-
-        #debuggin
-        print(f"sorted round {str(i)} which is actually round  {str(i+len(dkeys)-1)}")
-        print(f"{len(df_128_enc.index)} images remain in df_128_enc")
-        if len(df_128_enc.index) < 2:
-            break
-        print(f"last distance was {dist}, next image is {start_img_name}")
-        
-    ## When loop is complete, create df
-    df = pd.DataFrame(face_distances, columns =['dist', 'folder', 'filename','site_name_id','face_landmarks', 'bbox'])
-    print(df)
-
-    ## Set a start_img_name for next round --> for clusters
-    try:
-        last_file = face_distances[-1][2]
-        print("last_file ",last_file)
-    except:
-        last_file = this_start
-        print("last_file is this_start",last_file)
-    sort.counter_dict["start_img_name"] = last_file
-
-    # df = df.sort_values(by=['dist']) # this was sorting based on delta distance, not sequential distance
-    # print(df)
-    return df
-
-
-# need to pass through start_img_enc rather than start_img_name
-# for linear it is in the df_enc, but for itter, the start_img_name is in prev df_enc
-# takes a dataframe of images and encodings and returns a df sorted by distance
 def sort_by_face_dist_NN(df_enc):
     
     # create emtpy df_sorted with the same columns as df_enc
     df_sorted = pd.DataFrame(columns = df_enc.columns)
 
-    if sort.CUTOFF < len(df_enc.index):
-        itters = sort.CUTOFF
-    else: 
-        itters = len(df_enc.index)
+    if sort.CUTOFF < len(df_enc.index): itters = sort.CUTOFF
+    else: itters = len(df_enc.index)
     
 
     # input enc1, df_128_enc, df_33_lmsNN
@@ -584,11 +418,11 @@ def sort_by_face_dist_NN(df_enc):
 
 
     # find the df_enc row with image_id = 10498233
-    test_row = df_enc.loc[df_enc['image_id'] == 10498233]
-    # print body_landmarks for this row
-    print("body_landmarks for test_row")
-    test_lms = test_row['body_landmarks']
-    print(test_lms)
+    # test_row = df_enc.loc[df_enc['image_id'] == 10498233]
+    # # print body_landmarks for this row
+    # print("body_landmarks for test_row")
+    # test_lms = test_row['body_landmarks']
+    # print(test_lms)
 
     for i in range(itters):
 
@@ -597,11 +431,11 @@ def sort_by_face_dist_NN(df_enc):
             # send in both dfs, and return same dfs with 1+ rows sorted
             df_enc, df_sorted = sort.get_closest_df_NN(df_enc, df_sorted)
 
-            # test to see if body_landmarks for row with image_id = 5251199 still is the same as test_lms
-            retest_row = df_enc.loc[df_enc['image_id'] == 10498233]
-            print("body_landmarks for retest_row")
-            retest_lms = retest_row['body_landmarks']
-            print(retest_lms)
+            # # test to see if body_landmarks for row with image_id = 5251199 still is the same as test_lms
+            # retest_row = df_enc.loc[df_enc['image_id'] == 10498233]
+            # print("body_landmarks for retest_row")
+            # retest_lms = retest_row['body_landmarks']
+            # print(retest_lms)
             # calculate any different between test_lms to retest_lms
 
 
@@ -609,7 +443,13 @@ def sort_by_face_dist_NN(df_enc):
             # print(dist)
 
             # Break out of the loop if greater than MAXDIST
-            if dist > sort.MAXD and sort.SHOT_CLOCK != 0:
+            if ONE_SHOT:
+                df_sorted = pd.concat([df_sorted, df_enc])
+                # only return the first x rows
+                df_sorted = df_sorted.head(sort.CUTOFF)
+                print("one shot, breaking out", df_sorted)
+                break
+            elif dist > sort.MAXD and sort.SHOT_CLOCK != 0:
                 print("should breakout, dist is", dist)
                 break
 
@@ -911,7 +751,8 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
         # image_id = parent_row['image_id'].values[0] #NON NN
         image_id = row['image_id']
         description = row['description']
-        topic_score = row['topic_score']
+        try: topic_score = row['topic_score']
+        except: topic_score = 0
         # use image_id to retrieve description from mysql database 
         # this is temporary until I resegment the images with description in the segment
         # try:
@@ -1204,7 +1045,7 @@ def main():
                 face_encodings68 = results['face_encodings68']
                 face_landmarks = results['face_landmarks']
                 body_landmarks = results['body_landmarks']
-                print("got encodings from mongo, types are: ", type(face_encodings68), type(face_landmarks), type(body_landmarks))
+                # print("got encodings from mongo, types are: ", type(face_encodings68), type(face_landmarks), type(body_landmarks))
                 return pd.Series([face_encodings68, face_landmarks, body_landmarks])
             else:
                 return pd.Series([None, None, None])

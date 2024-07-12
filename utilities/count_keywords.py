@@ -2,8 +2,11 @@ import csv
 import re
 from collections import Counter
 
-input_file = '/Users/michaelmandiberg/Documents/projects-active/facemap_production/April_2024_production/final_key2key/nokey.csv'
-output_file = '/Users/michaelmandiberg/Documents/projects-active/facemap_production/April_2024_production/final_key2key/CSV_NOKEYSunique.csv'
+input_file = '/Users/michaelmandiberg/Documents/projects-active/facemap_production/ImagesBazzar/CSV_NOKEYS.csv'
+output_file = '/Users/michaelmandiberg/Documents/projects-active/facemap_production/ImagesBazzar/CSV_NOKEYSunique.csv'
+
+# input_file = '/Users/michaelmandiberg/Library/CloudStorage/Dropbox/takingstock_dropbox/INDIA-PB/CSV_NOKEYS.csv'
+# output_file = '/Users/michaelmandiberg/Library/CloudStorage/Dropbox/takingstock_dropbox/INDIA-PB/CSV_NOKEYSunique.csv'
 
 # Read the CSV file and extract the second column
 keywords = []
@@ -27,4 +30,5 @@ with open(output_file, 'w', newline='', encoding='utf-8') as f:
     writer = csv.writer(f)
     writer.writerow(['Count', 'Keyword'])  # Write the header row
     for keyword, count in sorted_keyword_counts:
+        print(count, keyword)
         writer.writerow([count, keyword])

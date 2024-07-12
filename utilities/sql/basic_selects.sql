@@ -12,13 +12,47 @@ JOIN ImagesTopics it ON so.image_id = it.image_id
 WHERE it.topic_id = 17
 ;
 
-
-SELECT *
-FROM Images i
-WHERE i.image_id  = 9923454
--- AND i.site_name_id = 1
+SELECT COUNT(so.seg_image_id) as ccount
+FROM SegmentOct20 so 
+JOIN Encodings e ON so.image_id = e.image_id 
+WHERE e.mongo_face_landmarks = 1
+AND e.mongo_body_landmarks is NULL
 ;
 
+SELECT COUNT(so.seg_image_id) as ccount
+FROM SegmentOct20 so 
+JOIN Encodings e ON so.image_id = e.image_id 
+WHERE e.mongo_body_landmarks = 1
+;
+
+
+SELECT count(seg1.image_id) 
+FROM SegmentOct20 seg1 
+JOIN ImagesTopics it ON seg1.image_id = it.image_id 
+WHERE seg1.mongo_body_landmarks IS NULL 
+AND it.topic_id = 5
+
+;
+
+
+
+SELECT *
+FROM ImagesKeywords ik 
+JOIN Images i ON ik.image_id = i.image_id 
+WHERE ik.keyword_id = 1762
+AND i.site_name_id = 13
+;
+
+SELECT *
+FROM Keywords k 
+WHERE k.keyword_id = 1762
+;
+
+
+SELECT so.mongo_body_landmarks, so.mongo_face_landmarks 
+FROM SegmentOct20 so 
+WHERE so.image_id = 2894566
+;
 
 
 SELECT *

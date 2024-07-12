@@ -13,8 +13,8 @@ SELECT e.encoding_id
 FROM Encodings e 
 WHERE e.is_face = 0
 and e.is_body  = 1
-and e.encoding_id > 50000000
-and e.encoding_id < 100000000
+and e.encoding_id > 100000000
+and e.encoding_id < 130000000
 LIMIT 1
 ;
  

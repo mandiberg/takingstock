@@ -22,25 +22,25 @@ class DataIO:
             #     "pass":"XFZ5dPJq2"
             # }
 
-            # ####### Michael's MAMP Credentials ########
-            # self.db = {
-            #     "host":"localhost",
-            #     "name":"stock",            
-            #     "user":"root",
-            #     "pass":"root",
-            #     "unix_socket":"/Applications/MAMP/tmp/mysql/mysql.sock",
-            #     "raise_on_warnings": True
-            # }
-
             ####### Michael's MAMP Credentials ########
             self.db = {
-                "host":"127.0.0.1",
+                "host":"localhost",
                 "name":"stock",            
                 "user":"root",
                 "pass":"mypassword",
-                "unix_socket":"",
+                "unix_socket":"/Applications/MAMP/tmp/mysql/mysql.sock",
                 "raise_on_warnings": True
             }
+
+            # ####### Michael's MAMP Credentials ########
+            # self.db = {
+            #     "host":"127.0.0.1",
+            #     "name":"stock",            
+            #     "user":"root",
+            #     "pass":"mypassword",
+            #     "unix_socket":"",
+            #     "raise_on_warnings": True
+            # }
 
             self.dbmongo = {
                 "host":"mongodb://localhost:27017/",
@@ -48,7 +48,10 @@ class DataIO:
                 "collection":"encodings"
             }
 
-            self.ROOT_PROD= os.path.join(os.environ['HOME'], "Documents/projects-active/facemap_production/segment_images") ## only on Mac
+            # self.ROOT_PROD= os.path.join(os.environ['HOME'], "Documents/projects-active/facemap_production/segment_images") ## only on Mac
+            # moved images to SSD
+            self.ROOT_PROD=  "/Volumes/OWC4/segment_images" ## only on Mac
+
             self.ROOT54= "/Volumes/RAID54" ## only on 
             # temp migration for
             # self.ROOT54= "/Volumes/6TB_mayday_2" ## only on 

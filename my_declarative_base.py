@@ -29,6 +29,11 @@ class Site(Base):
     site_name_id = Column(Integer, primary_key=True, autoincrement=True)
     site_name    = Column(String(20))
 
+class Model_Release(Base):
+    __tablename__ = 'model_release'
+    release_name_id = Column(Integer, primary_key=True, autoincrement=True)
+    release_name    = Column(String(20))
+
 class Location(Base):
     __tablename__ = 'location'
     location_id           = Column(Integer, primary_key=True, autoincrement=True)
@@ -58,12 +63,14 @@ class Images(Base):
     description   = Column(String(150))
     imagename     = Column(String(200))
     uploadDate    = Column(Date)
+    release_name_id = Column(Integer, ForeignKey('model_release.release_name_id'))
 
     site      = relationship("Site")
     age       = relationship("Age")
     agedetail = relationship("AgeDetail")
     gender    = relationship("Gender")
     location  = relationship("Location")
+    model_release = relationship("Model_Release")
 
 class Keywords(Base):
     __tablename__ = 'keywords'

@@ -37,8 +37,8 @@ class SortPose:
         self.BODY_DUPE_DIST = .04
         self.HSV_DELTA_MAX = .5
         self.HSVMULTIPLIER = 3
-        self.BRUTEFORCE = True
-        self.CUTOFF = 100
+        self.BRUTEFORCE = False
+        self.CUTOFF = 1000
 
         self.SORT_TYPE = SORT_TYPE
         if self.SORT_TYPE == "128d":
@@ -1000,6 +1000,9 @@ class SortPose:
             # print(start_site_image_id)
             print(self.counter_dict["start_site_image_id"])
             enc1 = df_128_enc.loc[self.counter_dict["start_site_image_id"]].to_list()
+        elif start_img == "start_face_encodings":
+            print("starting from start_face_encodings")
+            enc1 = self.counter_dict["start_site_image_id"]
         elif self.SORT_TYPE == "planar_body":
             # print("get_start_enc planar_body start_img key is (this is what we are comparing to):")
             # print(start_img)
@@ -1125,7 +1128,7 @@ class SortPose:
         if FIRST_ROUND:
             this_start = self.counter_dict["start_img_name"]
             ## Get the starting encodings (if not passed through)
-            if this_start != "median" and this_start != "start_site_image_id":
+            if this_start != "median" and this_start != "start_site_image_id" and this_start != "start_face_encodings":
                 # this is the first round for clusters/itter where last_image_enc is true
                 # set encodings to the passed through encodings
                 # IF NO START IMAGE SPECIFIED (this line works for no clusters)
@@ -1365,7 +1368,7 @@ class SortPose:
             last_image = df_sorted.iloc[-1].to_dict()
             dupe_index = []
             hsvll_dist = face_dist = bbox_dist = 1 # so it doesn't trigger the dupe_score
-            print("de_duping from", last_image['image_id'], last_image['dist_enc1'], last_image['description'], last_image['bbox'])
+            # print("de_duping from", last_image['image_id'], last_image['dist_enc1'], last_image['description'], last_image['bbox'])
             for index, row in df_close_ones.iterrows():
                 
                 # print("de_duping aginst", row['image_id'], row['dist_enc1'], row['description'], last_image['bbox'])
@@ -1374,7 +1377,7 @@ class SortPose:
                 face_dist = self.get_d(last_image['face_encodings68'], row['face_encodings68'])
                 # should also test body_landmarks, (for 128d sort), and then bump dupe_score threshold to 3
                 bbox_dist = self.get_d(json_to_list(last_image['bbox']), json_to_list(row['bbox']))
-                print("hsvll_dist", hsvll_dist, "face_dist", face_dist, "bbox_dist", bbox_dist)
+                # print("hsvll_dist", hsvll_dist, "face_dist", face_dist, "bbox_dist", bbox_dist)
 
                 # tally up the dupe_score
                 dupe_score = 0
@@ -1382,7 +1385,7 @@ class SortPose:
                 if hsvll_dist < .1 :  dupe_score += 1
                 if face_dist < .4 : dupe_score += 1
                 if bbox_dist < 5 : dupe_score += 1
-                print("dupe_score", dupe_score)
+                # print("dupe_score", dupe_score)
 
                 if dupe_score > 2:
                     print("de_duping score", dupe_score, last_image['image_id'], "is a duplicate of", row['image_id'])
@@ -1417,12 +1420,17 @@ class SortPose:
         print("df_shuffled 128d", df_dist_enc[['image_id','dist_enc1']].sort_values(by='dist_enc1'))
         
         # set HSV start enc and add HSV dist
-        if not 'dist_HSV' in df_sorted.columns:  enc1 = self.get_enc1(df_enc, FIRST_ROUND=True, hsv_sort=True)
-        else:  enc1 = self.get_enc1(df_sorted, FIRST_ROUND=False, hsv_sort=True)
-        print("enc1", enc1)
-        df_dist_hsv = self.normalize_hsv(enc1, df_dist_enc)
-        df_dist_hsv = self.sort_df_KNN(df_dist_hsv, enc1, "HSV")
-        print("df_shuffled HSV", df_dist_hsv[['image_id','dist_enc1','dist_HSV']].head())
+        if not self.ONE_SHOT:
+            if not 'dist_HSV' in df_sorted.columns:  enc1 = self.get_enc1(df_enc, FIRST_ROUND=True, hsv_sort=True)
+            else:  enc1 = self.get_enc1(df_sorted, FIRST_ROUND=False, hsv_sort=True)
+            print("enc1", enc1)
+            df_dist_hsv = self.normalize_hsv(enc1, df_dist_enc)
+            df_dist_hsv = self.sort_df_KNN(df_dist_hsv, enc1, "HSV")
+            print("df_shuffled HSV", df_dist_hsv[['image_id','dist_enc1','dist_HSV']].head())
+        else:
+            # skip HSV if ONE_SHOT (which is for still images, so N/A)
+            # assign 0 to dist_HSV for first round
+            df_dist_hsv = df_dist_enc
 
         if len(df_dist_hsv) > 0:
             if not FIRST_ROUND:
@@ -1432,38 +1440,42 @@ class SortPose:
                 # assign backto main df_enc to permanently rm dupes. 
                 df_enc = df_dist_hsv
             
-            # temporarily removes items for this round
-            df_dist_noflash = mask_df(df_dist_hsv, 'dist_HSV', self.HSV_DELTA_MAX, "lessthan")
-            df_dist_close = mask_df(df_dist_noflash, 'dist_HSV', self.MAXD, "lessthan")
+            if not self.ONE_SHOT:
+                # temporarily removes items for this round
+                df_dist_noflash = mask_df(df_dist_hsv, 'dist_HSV', self.HSV_DELTA_MAX, "lessthan")
+                df_dist_close = mask_df(df_dist_noflash, 'dist_HSV', self.MAXD, "lessthan")
+                # implementing these masks for now
+                df_shuffled = df_dist_close
+                
+                # sort df_shuffled by the sum of dist_enc1 and dist_HSV
+                df_shuffled['sum_dist'] = df_dist_noflash['dist_enc1'] + self.MULTIPLIER * df_shuffled['dist_HSV']
+                # df_shuffled['sum_dist'] = df_dist_noflash['dist_enc1'] 
+                df_shuffled = df_shuffled.sort_values(by='sum_dist').reset_index(drop=True)
+                print("df_shuffled pre_run", df_shuffled[['image_id','dist_enc1','dist_HSV','sum_dist']])
+            else:
+                # if ONE_SHOT, skip the mask, and keep all data
+                df_shuffled = df_dist_hsv
 
-            # implementing these masks for now
-            df_shuffled = df_dist_close
-
-            # sort df_shuffled by the sum of dist_enc1 and dist_HSV
-            df_shuffled['sum_dist'] = df_dist_noflash['dist_enc1'] + self.MULTIPLIER * df_shuffled['dist_HSV']
-            # df_shuffled['sum_dist'] = df_dist_noflash['dist_enc1'] 
-            df_shuffled = df_shuffled.sort_values(by='sum_dist').reset_index(drop=True)
-            print("df_shuffled pre_run", df_shuffled[['image_id','dist_enc1','dist_HSV','sum_dist']])
-
-            runmask = df_shuffled['sum_dist'] < self.MIND
+            try: runmask = df_shuffled['sum_dist'] < self.MIND
+            except: runmask = None
             print("runmask", runmask)
-            if runmask.any():
+
+            # if self.ONE_SHOT and not runmask:
+
+            if runmask and runmask.any():
                 num_true_values = runmask.sum()
                 print("we have a run ---->>>>", num_true_values)
                 # if there is a run < MINFACEDIST
                 df_run = df_shuffled[runmask]
 
-                # need to dedupe run if not firt round
+                # need to dedupe run if not first round
                 if not FIRST_ROUND: df_run = de_dupe(df_run, df_sorted, 'dist_enc1', is_run=True)
 
                 # locate the index of df_enc where image_id = image_id in df_run
                 index_names = df_enc[df_enc['image_id'].isin(df_run['image_id'])].index
 
-
                 # remove the run from df_enc where image_id = image_id in df_run
                 df_enc = df_enc.drop(index_names).reset_index(drop=True)
-                
-
 
             elif len(df_shuffled) > 0:
 
@@ -1472,7 +1484,6 @@ class SortPose:
                 print("NO run <<<< ", df_run)
 
                 df_enc = df_enc.drop(df_run.index).reset_index(drop=True)
-
 
             else:
                 #jump somewhere else

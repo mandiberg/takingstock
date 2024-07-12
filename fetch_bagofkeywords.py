@@ -59,7 +59,8 @@ title = 'Please choose your operation: '
 options = ['Create table', 'Fetch keywords list and make tokens', 'Fetch ethnicity list', 'Prune Table where is_face == None','Insert from segment']
 option, index = pick(options, title)
 
-LIMIT= 2000000
+LIMIT= 10000000
+MAXID = 89000000
 # Initialize the counter
 counter = 0
 
@@ -324,7 +325,7 @@ if index == 0:
             Encodings.bbox).\
         select_from(Images).\
         outerjoin(Encodings, Images.image_id == Encodings.image_id).\
-        filter(Images.image_id > max_image_id, Encodings.face_x.is_not(None)).\
+        filter(Images.image_id > max_image_id, Images.image_id < MAXID, Encodings.face_x.is_not(None)).\
         limit(LIMIT)
 
             # removed this from the filter, as I will be moving emb to noSQL

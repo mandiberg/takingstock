@@ -41,7 +41,7 @@ mongo_db = mongo_client["stock"]
 mongo_collection = mongo_db["encodings"]
 
 # Define the batch size
-batch_size = 10
+batch_size = 1000
 last_id = 0
 # TARGET = "tokens"
 TARGET = "encodings"
@@ -157,7 +157,6 @@ while True:
 
                 # print("mongo_result", mongo_result)
         session.commit()
-        break
         # current_batch = []
         last_id = results[-1][0]
         print("last_id: ", last_id)

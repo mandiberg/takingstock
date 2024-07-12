@@ -97,7 +97,7 @@ if BODYLMS is True:
     SegmentTable_name = 'SegmentOct20'
     FROM =f"{SegmentTable_name} seg1"
     # FROM ="Encodings e"
-    QUERY = "seg1.mongo_body_landmarks IS NULL "
+    QUERY = "seg1.mongo_body_landmarks IS NULL AND seg1.site_name_id > 1"
     SUBQUERY = " "
     # SUBQUERY = f"(SELECT seg1.image_id FROM {SegmentTable_name} seg1 WHERE face_x > -33 AND face_x < -27 AND face_y > -2 AND face_y < 2 AND face_z > -2 AND face_z < 2)"
     # SUBQUERY = f"(SELECT seg1.image_id FROM {SegmentTable_name} seg1 WHERE face_x > -33 AND face_x < -27 AND face_y > -2 AND face_y < 2 AND face_z > -2 AND face_z < 2)"
