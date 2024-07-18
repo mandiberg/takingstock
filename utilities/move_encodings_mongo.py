@@ -12,7 +12,7 @@ import sys
 # caution: path[0] is reserved for script path (or '' in REPL)
 sys.path.insert(1, '/Users/michaelmandiberg/Documents/GitHub/facemap/')
 from mp_db_io import DataIO
-from my_declarative_base import Images, Base, Encodings, Clusters, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON
+from my_declarative_base import Images, Base, SegmentTable, Encodings, Clusters, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON
 
 ######## Michael's Credentials ########
 # platform specific credentials
@@ -38,37 +38,63 @@ Base = declarative_base()
 mongo_client = pymongo.MongoClient("mongodb://localhost:27017/")
 mongo_db = mongo_client["stock"]
 mongo_collection = mongo_db["encodings"]
+mongo_collection_destination = mongo_db["encodings_segment"]
 
 # Define the batch size
 batch_size = 10
-start_enc_id = mongo_collection.find_one(sort=[("encoding_id", -1)])["encoding_id"]
-last_id = 4262137
-final_id = 4287381
+try:
+    start_enc_id = mongo_collection_destination.find_one(sort=[("image_id", -1)])["image_id"]
+except Exception as e:
+    print(f"An error occurred: {e}")
+    start_enc_id = 0
+
+# last_id = 4262137
+# final_id = 4287381
 # this last configuration is for a set of getty where I had body but not face. 
 # i did this after doign a full run of face, so I had to cludge some limits in if/else start_enc_id
 print("start_enc_id: ", start_enc_id)
 while True:
     try:
-        if last_id == 0 and start_enc_id < 10000:
+        if last_id == 0:
             start_enc_id = 0
         else:
             start_enc_id = last_id
     except Exception as e:
         print(f"An error occurred: {e}")
     print("start_enc_id: ", start_enc_id)
-    results = session.query(Encodings.encoding_id, Encodings.image_id, Encodings.face_landmarks, Encodings.face_encodings68, Encodings.body_landmarks).\
-        filter(Encodings.encoding_id > start_enc_id, Encodings.encoding_id <= final_id, Encodings.is_face == 0, Encodings.is_body == 1).\
+    
+    # # this was for moving everything over
+    # results = session.query(Encodings.encoding_id, Encodings.image_id, Encodings.face_landmarks, Encodings.face_encodings68, Encodings.body_landmarks).\
+    #     filter(Encodings.encoding_id > start_enc_id, Encodings.encoding_id <= final_id, Encodings.is_face == 0, Encodings.is_body == 1).\
+    #     limit(batch_size).all()
+
+    # this is for making a segment
+    results = session.query(SegmentTable.image_id).\
+        filter(SegmentTable.image_id > start_enc_id).\
         limit(batch_size).all()
+    print("results: ", results)
+
     if len(results) == 0:
         break
 
-    for encoding_id, image_id, face_landmarks, face_encodings68, body_landmarks in results:
-        last_id = encoding_id
+    for result in results:
+        image_id = result[0]
+        last_id = image_id
+
+
+        results = mongo_collection.find_one({"image_id": image_id})
+        if results:
+            encoding_id = results['encoding_id']
+            face_encodings68 = results['face_encodings68']
+            face_landmarks = results['face_landmarks']
+            body_landmarks = results['body_landmarks']
+
+
         # print(encoding_id, image_id, face_landmarks, face_encodings68, body_landmarks)
         # Store data in MongoDB
-        if encoding_id and image_id and body_landmarks:
+        if encoding_id and image_id and face_encodings68:
             try:
-                mongo_collection.insert_one({
+                mongo_collection_destination.insert_one({
                     "encoding_id": encoding_id,
                     "image_id": image_id,
                     "face_landmarks": face_landmarks,

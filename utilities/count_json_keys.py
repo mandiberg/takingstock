@@ -1,9 +1,15 @@
 import json
 import csv
+import os
 
 # Specify the path to your jsonl file and CSV output file
-jsonl_file_path = '/Users/michaelmandiberg/Library/CloudStorage/Dropbox/takingstock_dropbox/INDIA-PB/items_cache.jsonl'
-csv_output_file_path = '/Users/michaelmandiberg/Library/CloudStorage/Dropbox/takingstock_dropbox/INDIA-PB/keys_by_count.csv'
+# jsonl_file_path = '/Users/michaelmandiberg/Library/CloudStorage/Dropbox/takingstock_dropbox/INDIA-PB/items_cache.jsonl'
+# csv_output_file_path = '/Users/michaelmandiberg/Library/CloudStorage/Dropbox/takingstock_dropbox/INDIA-PB/keys_by_count.csv'
+
+FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/VCG2"
+
+jsonl_file_path = os.path.join(FOLDER,'items_cache.jsonl')
+csv_output_file_path = os.path.join(FOLDER,'jsonl_keys_by_count.csv')
 
 # Create an empty dictionary to store keyword counts
 keyword_counts = {}

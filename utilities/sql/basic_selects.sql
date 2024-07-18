@@ -270,3 +270,27 @@ WHERE i.site_name_id = 1
 -- AND i.imagename LIKE 'images%'
 ;
 
+
+
+USE stocktest
+;
+
+DELETE FROM Images 
+WHERE site_name_id = 9
+;
+
+SELECT k.keyword_text 
+FROM ImagesKeywords ik 
+JOIN Images i ON i.image_id = ik.image_id 
+JOIN Keywords k ON ik.keyword_id = k.keyword_id
+WHERE i.site_image_id = 10393345
+;
+
+SELECT COUNT(ik.image_id)  
+FROM ImagesKeywords ik 
+JOIN Images i ON i.image_id = ik.image_id 
+JOIN Keywords k ON ik.keyword_id = k.keyword_id
+WHERE k.keyword_text = "gorgeous"
+AND i.site_name_id = 9
+;
+

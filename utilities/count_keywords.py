@@ -1,12 +1,22 @@
 import csv
 import re
+import os
 from collections import Counter
 
-input_file = '/Users/michaelmandiberg/Documents/projects-active/facemap_production/ImagesBazzar/CSV_NOKEYS.csv'
-output_file = '/Users/michaelmandiberg/Documents/projects-active/facemap_production/ImagesBazzar/CSV_NOKEYSunique.csv'
+# FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/alamyCSV"
+# FOLDER = "/Users/michaelmandiberg/Library/CloudStorage/Dropbox/takingstock_dropbox/INDIA-PB"
+FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/ImagesBazzar"
+# FOLDER = "/Users/michaelmandiberg/Downloads/pixcy_v2"
+
+
+# input_file = '/Users/michaelmandiberg/Documents/projects-active/facemap_production/ImagesBazzar/CSV_NOKEYS.csv'
+# output_file = '/Users/michaelmandiberg/Documents/projects-active/facemap_production/ImagesBazzar/CSV_NOKEYSunique.csv'
 
 # input_file = '/Users/michaelmandiberg/Library/CloudStorage/Dropbox/takingstock_dropbox/INDIA-PB/CSV_NOKEYS.csv'
 # output_file = '/Users/michaelmandiberg/Library/CloudStorage/Dropbox/takingstock_dropbox/INDIA-PB/CSV_NOKEYSunique.csv'
+
+input_file = os.path.join(FOLDER,'CSV_NOKEYS.csv')
+output_file = os.path.join(FOLDER,'CSV_NOKEYSunique.csv')
 
 # Read the CSV file and extract the second column
 keywords = []

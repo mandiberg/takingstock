@@ -101,7 +101,7 @@ SORT_TYPE = "128d"
 if SORT_TYPE == "planar_body": OBJ_CLS_ID = 67
 else: OBJ_CLS_ID = 0
 
-ONE_SHOT = True # take all files, based off the very first sort order.
+ONE_SHOT = False # take all files, based off the very first sort order.
 JUMP_SHOT = True # jump to random file if can't find a run (I don't think this applies to planar?)
 
 
@@ -195,7 +195,7 @@ elif IS_SEGONLY and io.db["name"] == "stock":
     # WHERE += " AND e.encoding_id > 2612275"
 
     # WHERE = "s.site_name_id != 1"
-    LIMIT = 100000
+    LIMIT = 1000
 
     # TEMP TK TESTING
     # WHERE += " AND s.site_name_id = 8"
