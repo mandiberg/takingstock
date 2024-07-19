@@ -112,7 +112,7 @@ title = 'Please choose your operation: '
 options = ['Create table', 'Fetch BG color stats',"test sorting"]
 option, index = pick(options, title)
 
-LIMIT= 10
+LIMIT= 100000
 # Initialize the counter
 counter = 0
 
@@ -607,14 +607,17 @@ elif index == 1:
     # if USE_BBOX:distinct_image_ids_query = select(ImagesBackground.image_id.distinct()).\
     #     filter(ImagesBackground.lum_torso == None).limit(LIMIT)
     # FOR SELFIE BBOX
+
     if USE_BBOX:distinct_image_ids_query = select(ImagesBackground.image_id.distinct()).\
+        join(SegmentTable, ImagesBackground.image_id == SegmentTable.image_id).\
+        filter(SegmentTable.bbox != None).\
         filter(ImagesBackground.selfie_bbox == None).limit(LIMIT)
 
     # if USE_BBOX:distinct_image_ids_query = select(ImagesBackground.image_id.distinct()).filter(ImagesBackground.hue_bb == None).limit(LIMIT)
-    else:distinct_image_ids_query = select(ImagesBackground.image_id.distinct()).filter(ImagesBackground.hue == None).limit(LIMIT)
+    else:distinct_image_ids_query = select(ImagesBackground.image_id.distinct()).filter(ImagesBackground.selfie_bbox == None).limit(LIMIT)
     distinct_image_ids = [row[0] for row in session.execute(distinct_image_ids_query).fetchall()]
     for counter,target_image_id in enumerate(distinct_image_ids):
-        if counter%10000==0:print("###########"+str(counter)+"images processed ##########")
+        if counter%1000==0:print("###########"+str(counter)+"images processed ##########")
         work_queue.put(target_image_id)        
 
 elif index == 2:
