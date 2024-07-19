@@ -235,7 +235,8 @@ elif IS_SEGONLY and io.db["name"] == "fullstock":
     if HSV_BOUNDS:
         FROM += " JOIN ImagesBackground ibg ON s.image_id = ibg.image_id "
         # WHERE += " AND ibg.lum > .3"
-        SELECT += ", ibg.lum, ibg.lum_bb, ibg.hue, ibg.hue_bb, ibg.sat, ibg.sat_bb, ibg.val, ibg.val_bb, ibg.lum_torso, ibg.lum_torso_bb " # add description here, after resegmenting
+        WHERE +=" AND ibg.selfie_bbox IS NOT NULL "
+        SELECT += ", ibg.lum, ibg.lum_bb, ibg.hue, ibg.hue_bb, ibg.sat, ibg.sat_bb, ibg.val, ibg.val_bb, ibg.lum_torso, ibg.lum_torso_bb, ibg.selfie_bbox " # add description here, after resegmenting
     ###############
     if OBJ_CLS_ID:
         FROM += " JOIN PhoneBbox pb ON s.image_id = pb.image_id "
@@ -703,11 +704,21 @@ def fetch_selfie_bbox(target_image_id):
 
     result = session.execute(select_image_ids_query).fetchall()
     image_id,selfie_bbox=result[0]
-
+    print("before json selie bbox",selfie_bbox,type(selfie_bbox))
+    if type(selfie_bbox)==str:
+        selfie_bbox=json.loads(selfie_bbox)
+    print("after json selie bbox",selfie_bbox,type(selfie_bbox))
     ##making cutoffs##
     threshold={"top":50,"right":50,"bottom":10,"left":50}
-    selfie_bbox={"top":np.min(selfie_bbox["top"],threshold["top"]),"right":np.min(selfie_bbox["right"],threshold["right"]),"bottom":np.min(selfie_bbox["bottom"],threshold["bottom"]),"left":np.min(selfie_bbox["left"],threshold["left"])}
-
+    if selfie_bbox:
+        print("after json selie bbox",selfie_bbox,type(selfie_bbox))
+        selfie_bbox["left"]=np.minimum(selfie_bbox["left"],threshold["left"])
+        selfie_bbox["right"]=np.minimum(selfie_bbox["right"],threshold["right"])
+        selfie_bbox["bottom"]=np.minimum(selfie_bbox["bottom"],threshold["bottom"])
+        selfie_bbox["top"]=np.minimum(selfie_bbox["top"],threshold["top"])
+        # selfie_bbox={"top":np.min(selfie_bbox["top"],threshold["top"]),"right":np.min(selfie_bbox["right"],threshold["right"]),"bottom":np.min(selfie_bbox["bottom"],threshold["bottom"]),"left":np.min(selfie_bbox["left"],threshold["left"])}
+    else:
+        print("selfie bbox calculation not done")
     return selfie_bbox
 
 def merge_inpaint(inpaint_image,img,extended_img,extension_pixels,blur_radius=BLUR_RADIUS):
@@ -741,7 +752,6 @@ def merge_inpaint2(inpaint_image,img,extended_img,extension_pixels,selfie_bbox,b
     top, bottom, left, right = extension_pixels["top"], extension_pixels["top"]+height, extension_pixels["left"],extension_pixels["left"]+width
     ################
     # mask = np.zeros(np.shape(inpaint_image))
-
     # mask[:top,:] = [255,255,255]
     # mask[:,:left] = [255,255,255]
     # mask[bottom:,:] = [255,255,255]
@@ -758,16 +768,16 @@ def merge_inpaint2(inpaint_image,img,extended_img,extension_pixels,selfie_bbox,b
     mask_bottom[bottom:,:] = [255,255,255]
     mask_right[:,right:] = [255,255,255]
 
-    blur_radius_left=selfie_bbox['left']*blur_radius
-    blur_radius_right=selfie_bbox['right']*blur_radius
-    blur_radius_top=selfie_bbox['top']*blur_radius
-    blur_radius_bottom=selfie_bbox['bottom']*blur_radius
+    blur_radius_left=selfie_bbox['left']*blur_radius//100+1
+    blur_radius_right=selfie_bbox['right']*blur_radius//100+1
+    blur_radius_top=selfie_bbox['top']*blur_radius//100+1
+    blur_radius_bottom=selfie_bbox['bottom']*blur_radius//100+1
 
 
-    mask_left = cv2.GaussianBlur(mask, (blur_radius_left, 1), sigmaX=SIGMAX,sigmaY=0)
-    mask_right = cv2.GaussianBlur(mask, (blur_radius_right, 1), sigmaX=SIGMAX,sigmaY=0)
-    mask_top = cv2.GaussianBlur(mask, (1, blur_radius_top), sigmaX=0,sigmaY=SIGMAX)
-    mask_bottom = cv2.GaussianBlur(mask, (1, blur_radius_bottom), sigmaX=0,sigmaY=SIGMAX)
+    mask_left = cv2.GaussianBlur(mask_left, (blur_radius_left, 1), sigmaX=SIGMAX,sigmaY=1)
+    mask_right = cv2.GaussianBlur(mask_right, (blur_radius_right, 1), sigmaX=SIGMAX,sigmaY=1)
+    mask_top = cv2.GaussianBlur(mask_top, (1, blur_radius_top), sigmaX=1,sigmaY=SIGMAX)
+    mask_bottom = cv2.GaussianBlur(mask_bottom, (1, blur_radius_bottom), sigmaX=1,sigmaY=SIGMAX)
 
     mask=np.maximum(mask_left+mask_right,mask_top+mask_bottom)    
 
@@ -843,7 +853,7 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
             print("maxkey", maxkey)
             print("extension_pixels[maxkey]", extension_pixels[maxkey])
             ##################
-            # selfie_bbox=fetch_selfie_bbox(row['image_id'])
+            selfie_bbox=fetch_selfie_bbox(row['image_id'])
             ##################
             if extension_pixels[maxkey] <= INPAINT_MAX:
                 print("inpainting small extension")
@@ -856,8 +866,10 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
                 ### use inpainting for the extended part, but use original for non extend to keep image sharp ###
                 # inpaint_image[extension_pixels["top"]:extension_pixels["top"]+np.shape(img)[0],extension_pixels["left"]:extension_pixels["left"]+np.shape(img)[1]]=img
                 # move the boundary of the blur in 50px
-                inpaint_image=merge_inpaint(inpaint_image,img,extended_img,extension_pixels)
-                # inpaint_image=merge_inpaint2(inpaint_image,img,extended_img,extension_pixels,selfie_bbox)
+                ########
+                # inpaint_image=merge_inpaint(inpaint_image,img,extended_img,extension_pixels)
+                inpaint_image=merge_inpaint2(inpaint_image,img,extended_img,extension_pixels,selfie_bbox)
+                ########
                 cv2.imwrite(inpaint_file,inpaint_image) #temp comment out
                 print("inpainting done", inpaint_file,"shape",np.shape(inpaint_image))
             elif extension_pixels[maxkey] < OUTPAINT_MAX:

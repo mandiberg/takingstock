@@ -906,6 +906,10 @@ class SortPose:
     
 
     def get_bg_hue_lum(self,image,segmentation_mask,bbox):
+        if type(bbox)==str:
+            bbox=json.loads(bbox)
+   
+        print("[get_bg_hue_lum] bbox is",bbox)
         # expects image in RGB format
         
         mask=np.repeat((1-segmentation_mask)[:, :, np.newaxis], 3, axis=2) 
@@ -932,8 +936,8 @@ class SortPose:
         if self.VERBOSE: print("NOTmasked_img_torso size", masked_img_torso.shape, black_pixels_mask_torso.shape)
         if bbox :
             # SJ something is broken in here. It returns an all black image which produces a lum of 100
-            masked_img_torso = masked_img_torso[bbox['bottom']:]
-            black_pixels_mask_torso = black_pixels_mask_torso[bbox['bottom']:]
+            masked_img_torso = masked_img_torso[bbox["bottom"]:]
+            black_pixels_mask_torso = black_pixels_mask_torso[bbox["bottom"]:]
         # else:
         #     print("YIKES! no bbox. Here's a hacky hack to crop to the bottom 20%")
         #     bottom_fraction = masked_img_torso.shape[0] // 5
