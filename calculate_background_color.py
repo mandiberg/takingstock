@@ -39,6 +39,7 @@ import json
 from my_declarative_base import Base, Clusters, Images,ImagesBackground, SegmentTable, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON, Images
 #from sqlalchemy.ext.declarative import declarative_base
 from mp_sort_pose import SortPose
+import pymongo
 
 Base = declarative_base()
 USE_BBOX=True
@@ -59,7 +60,9 @@ io = DataIO(IS_SSD)
 db = io.db
 # io.db["name"] = "stock"
 # io.db["name"] = "ministock"
-
+mongo_client = pymongo.MongoClient(io.dbmongo['host'])
+mongo_db = mongo_client[io.dbmongo['name']]
+mongo_collection = mongo_db[io.dbmongo['collection']]
 
 # Create a database engine
 engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}".format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']), poolclass=NullPool)
@@ -361,17 +364,45 @@ def get_filename(target_image_id, return_endfile=False):
     if return_endfile: return file,end_file
     return file
  
+def get_landmarks_mongo(image_id):
+    if image_id:
+        results = mongo_collection.find_one({"image_id": image_id})
+        if results:
+            face_landmarks = results['face_landmarks']
+            # print("got encodings from mongo, types are: ", type(face_encodings68), type(face_landmarks), type(body_landmarks))
+            return face_landmarks
+        else:
+            return None
+    else:
+        return None
 
+def unpickle_array(pickled_array):
+    if pickled_array:
+        try:
+            # Attempt to unpickle using Protocol 3 in v3.7
+            return pickle.loads(pickled_array, encoding='latin1')
+        except TypeError:
+            # If TypeError occurs, unpickle using specific protocl 3 in v3.11
+            # return pickle.loads(pickled_array, encoding='latin1', fix_imports=True)
+            try:
+                # Set the encoding argument to 'latin1' and protocol argument to 3
+                obj = pickle.loads(pickled_array, encoding='latin1', fix_imports=True, errors='strict', protocol=3)
+                return obj
+            except pickle.UnpicklingError as e:
+                print(f"Error loading pickle data: {e}")
+                return None
+    else:
+        return None
 
 def get_bbox(target_image_id):
     select_image_ids_query = (
-        select(SegmentTable.bbox,SegmentTable.face_landmarks)
+        select(SegmentTable.bbox)
         .filter(SegmentTable.image_id == target_image_id)
     )
     result = session.execute(select_image_ids_query).fetchall()
     bbox=result[0][0]
     
-    face_landmarks=pickle.loads(result[0][1])
+    face_landmarks=unpickle_array(get_landmarks_mongo(target_image_id))
 
     return bbox,face_landmarks
     

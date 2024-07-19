@@ -64,16 +64,17 @@ class DataIO:
             self.db = {
                 #"host":"localhost",
                 "host":"127.0.0.1:3333",
-                "name":"ministock",                 
+                "name":"fullstock",                 
                 "user":"root",
                 "unix_socket":"",
                 "pass":"SSJ2_mysql"
             }
 
             self.dbmongo = {
-                "host":"mongodb://localhost:27017/",
-                "name":"test2",
-                "collection":"encodings3"
+                # "host":"mongodb://127.0.0.1:27018/",
+                "host":"mongodb://SJHA:SSJ2_mongo@127.0.0.1:27018/",
+                "name":"fullstock",
+                "collection":"tokens"
             }
 
             # self.ROOT= "E:\\"+"work\\face_map\\Documents\\projects-active\\facemap_production\\" ## SSD

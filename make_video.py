@@ -11,12 +11,12 @@ import traceback
 import numpy as np
 from mediapipe.framework.formats import landmark_pb2
 
-from sqlalchemy import create_engine, text, MetaData, Table, Column, Numeric, Integer, VARCHAR, update, Float
+from sqlalchemy import create_engine, text,select, MetaData, Table, Column, Numeric, Integer, VARCHAR, update, Float
 from sqlalchemy.pool import NullPool
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
 # my ORM
-from my_declarative_base import Base, SegmentTable, Clusters, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON, Images
+from my_declarative_base import Base, SegmentTable, Clusters,ImagesBackground, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON, Images
 import pymongo
 
 #mine
@@ -59,7 +59,7 @@ CLUSTER_NO = 63
 # cut the kids
 NO_KIDS = True
 USE_PAINTED = True
-OUTPAINT = True
+OUTPAINT = False
 INPAINT= True
 INPAINT_MAX = 500
 OUTPAINT_MAX = 501
@@ -101,7 +101,7 @@ SORT_TYPE = "128d"
 if SORT_TYPE == "planar_body": OBJ_CLS_ID = 67
 else: OBJ_CLS_ID = 0
 
-ONE_SHOT = False # take all files, based off the very first sort order.
+ONE_SHOT = True # take all files, based off the very first sort order.
 JUMP_SHOT = True # jump to random file if can't find a run (I don't think this applies to planar?)
 
 
@@ -195,24 +195,24 @@ elif IS_SEGONLY and io.db["name"] == "stock":
     # WHERE += " AND e.encoding_id > 2612275"
 
     # WHERE = "s.site_name_id != 1"
-    LIMIT = 1000
+    LIMIT = 10000
 
     # TEMP TK TESTING
     # WHERE += " AND s.site_name_id = 8"
 ######################################
 ############SATYAM##################
-elif IS_SEGONLY and io.db["name"] == "ministock":
+elif IS_SEGONLY and io.db["name"] == "fullstock":
 
     SAVE_SEGMENT = False
     # no JOIN just Segment table
-    # SELECT = "DISTINCT(s.image_id), s.site_name_id, s.contentUrl, s.imagename, s.description, s.face_x, s.face_y, s.face_z, s.mouth_gap, s.face_landmarks, s.bbox, s.face_encodings68, s.site_image_id, s.body_landmarks"
-    SELECT = "DISTINCT(s.image_id), s.site_name_id, s.contentUrl, s.imagename,s.face_x, s.face_y, s.face_z, s.mouth_gap, s.face_landmarks, s.bbox, s.face_encodings68, s.site_image_id, s.body_landmarks"
+    SELECT = "DISTINCT(s.image_id), s.site_name_id, s.contentUrl, s.imagename, s.description, s.face_x, s.face_y, s.face_z, s.mouth_gap, s.face_landmarks, s.bbox, s.face_encodings68, s.site_image_id, s.body_landmarks"
+    # SELECT = "DISTINCT(s.image_id), s.site_name_id, s.contentUrl, s.imagename,s.face_x, s.face_y, s.face_z, s.mouth_gap, s.face_landmarks, s.bbox, s.face_encodings68, s.site_image_id, s.body_landmarks"
 
     FROM =f"{SegmentTable_name} s "
 
     # this is the standard segment topics/clusters query for April 2024
-    WHERE = " face_encodings68 IS NOT NULL AND face_x > -33 AND face_x < -27 AND face_y > -2 AND face_y < 2 AND face_z > -2 AND face_z < 2"
-
+    # WHERE = " face_encodings68 IS NOT NULL AND face_x > -33 AND face_x < -27 AND face_y > -2 AND face_y < 2 AND face_z > -2 AND face_z < 2"
+    WHERE = "  s.face_x > -33 AND s.face_x < -27 AND s.face_y > -2 AND s.face_y < 2 AND s.face_z > -2 AND s.face_z < 2"
     # HIGHER
     # WHERE = "s.site_name_id != 1 AND face_encodings68 IS NOT NULL AND face_x > -27 AND face_x < -23 AND face_y > -2 AND face_y < 2 AND face_z > -2 AND face_z < 2"
 
@@ -237,18 +237,18 @@ elif IS_SEGONLY and io.db["name"] == "ministock":
         # WHERE += " AND ibg.lum > .3"
         SELECT += ", ibg.lum, ibg.lum_bb, ibg.hue, ibg.hue_bb, ibg.sat, ibg.sat_bb, ibg.val, ibg.val_bb, ibg.lum_torso, ibg.lum_torso_bb " # add description here, after resegmenting
     ###############
-    # if OBJ_CLS_ID:
-    #     FROM += " JOIN PhoneBbox pb ON s.image_id = pb.image_id "
-    #     SELECT += ", pb.bbox_67, pb.conf_67, pb.bbox_63, pb.conf_63, pb.bbox_26, pb.conf_26, pb.bbox_27, pb.conf_27, pb.bbox_32, pb.conf_32 "
-    # if SORT_TYPE == "planar_body":
-    #     WHERE += " AND s.body_landmarks IS NOT NULL "
+    if OBJ_CLS_ID:
+        FROM += " JOIN PhoneBbox pb ON s.image_id = pb.image_id "
+        SELECT += ", pb.bbox_67, pb.conf_67, pb.bbox_63, pb.conf_63, pb.bbox_26, pb.conf_26, pb.bbox_27, pb.conf_27, pb.bbox_32, pb.conf_32 "
+    if SORT_TYPE == "planar_body":
+        WHERE += " AND s.body_landmarks IS NOT NULL "
     ###############
     # # join to keywords
     # FROM += " JOIN ImagesKeywords ik ON s.image_id = ik.image_id JOIN Keywords k ON ik.keyword_id = k.keyword_id "
     # WHERE += " AND k.keyword_text LIKE 'surpris%' "
 
     # WHERE = "s.site_name_id != 1"
-    LIMIT = 1000
+    LIMIT = 100
 
     # TEMP TK TESTING
     # WHERE += " AND s.site_name_id = 8"
@@ -698,6 +698,18 @@ def const_imgfilename(filename, df, imgfileprefix):
 #         i+=1
 #     return translated_landmarks
 
+def fetch_selfie_bbox(target_image_id):
+    select_image_ids_query = (select(ImagesBackground.image_id,ImagesBackground.selfie_bbox).filter(ImagesBackground.image_id == target_image_id))
+
+    result = session.execute(select_image_ids_query).fetchall()
+    image_id,selfie_bbox=result[0]
+
+    ##making cutoffs##
+    threshold={"top":50,"right":50,"bottom":10,"left":50}
+    selfie_bbox={"top":np.min(selfie_bbox["top"],threshold["top"]),"right":np.min(selfie_bbox["right"],threshold["right"]),"bottom":np.min(selfie_bbox["bottom"],threshold["bottom"]),"left":np.min(selfie_bbox["left"],threshold["left"])}
+
+    return selfie_bbox
+
 def merge_inpaint(inpaint_image,img,extended_img,extension_pixels,blur_radius=BLUR_RADIUS):
     height, width = img.shape[:2]
     # top, bottom, left, right = extension_pixels["top"], extension_pixels["bottom"], extension_pixels["left"],extension_pixels["right"] 
@@ -719,9 +731,50 @@ def merge_inpaint(inpaint_image,img,extended_img,extension_pixels,blur_radius=BL
     # mask=mask[top:bottom,left:right]
     # inpaint_image[extension_pixels["top"]:extension_pixels["top"]+np.shape(img)[0],extension_pixels["left"]:extension_pixels["left"]+np.shape(img)[1]]=img
     # inpaint_image[top:bottom,left:right]=img[offset:height-offset,offset:width-offset]*(1-mask)+(mask)*inpaint_image[top:bottom,left:right]
-    inpaint_merge_2=extended_img*(1-mask/255)+(mask/255)*inpaint_image
-    inpaint_merge_2=np.array(inpaint_merge_2,dtype=np.uint8)
-    return inpaint_merge_2
+    inpaint_merge=extended_img*(1-mask/255)+(mask/255)*inpaint_image
+    inpaint_merge=np.array(inpaint_merge,dtype=np.uint8)
+
+    return inpaint_merge
+
+def merge_inpaint2(inpaint_image,img,extended_img,extension_pixels,selfie_bbox,blur_radius=BLUR_RADIUS):
+    height, width = img.shape[:2]
+    top, bottom, left, right = extension_pixels["top"], extension_pixels["top"]+height, extension_pixels["left"],extension_pixels["left"]+width
+    ################
+    # mask = np.zeros(np.shape(inpaint_image))
+
+    # mask[:top,:] = [255,255,255]
+    # mask[:,:left] = [255,255,255]
+    # mask[bottom:,:] = [255,255,255]
+    # mask[:,right:] = [255,255,255]
+    # mask = cv2.GaussianBlur(mask, (blur_radius, blur_radius), sigmaX=SIGMAX)
+    ######################
+    mask_top = np.zeros(np.shape(inpaint_image))
+    mask_left = np.zeros(np.shape(inpaint_image))
+    mask_bottom = np.zeros(np.shape(inpaint_image))
+    mask_right = np.zeros(np.shape(inpaint_image))
+    
+    mask_top[:top,:] = [255,255,255]
+    mask_left[:,:left] = [255,255,255]
+    mask_bottom[bottom:,:] = [255,255,255]
+    mask_right[:,right:] = [255,255,255]
+
+    blur_radius_left=selfie_bbox['left']*blur_radius
+    blur_radius_right=selfie_bbox['right']*blur_radius
+    blur_radius_top=selfie_bbox['top']*blur_radius
+    blur_radius_bottom=selfie_bbox['bottom']*blur_radius
+
+
+    mask_left = cv2.GaussianBlur(mask, (blur_radius_left, 1), sigmaX=SIGMAX,sigmaY=0)
+    mask_right = cv2.GaussianBlur(mask, (blur_radius_right, 1), sigmaX=SIGMAX,sigmaY=0)
+    mask_top = cv2.GaussianBlur(mask, (1, blur_radius_top), sigmaX=0,sigmaY=SIGMAX)
+    mask_bottom = cv2.GaussianBlur(mask, (1, blur_radius_bottom), sigmaX=0,sigmaY=SIGMAX)
+
+    mask=np.maximum(mask_left+mask_right,mask_top+mask_bottom)    
+
+    # Expand the mask dimensions to match the image
+    inpaint_merge=extended_img*(1-mask/255)+(mask/255)*inpaint_image
+    inpaint_merge=np.array(inpaint_merge,dtype=np.uint8)
+    return inpaint_merge
 
 def extend_cv2(extended_img,mask,iR=3,method="NS"):
     if method=="NS":
@@ -789,6 +842,9 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
             maxkey = max(extension_pixels, key=lambda y: abs(extension_pixels[y]))
             print("maxkey", maxkey)
             print("extension_pixels[maxkey]", extension_pixels[maxkey])
+            ##################
+            # selfie_bbox=fetch_selfie_bbox(row['image_id'])
+            ##################
             if extension_pixels[maxkey] <= INPAINT_MAX:
                 print("inpainting small extension")
                 # extimg is 50px smaller and mask is 10px bigger
@@ -801,6 +857,7 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
                 # inpaint_image[extension_pixels["top"]:extension_pixels["top"]+np.shape(img)[0],extension_pixels["left"]:extension_pixels["left"]+np.shape(img)[1]]=img
                 # move the boundary of the blur in 50px
                 inpaint_image=merge_inpaint(inpaint_image,img,extended_img,extension_pixels)
+                # inpaint_image=merge_inpaint2(inpaint_image,img,extended_img,extension_pixels,selfie_bbox)
                 cv2.imwrite(inpaint_file,inpaint_image) #temp comment out
                 print("inpainting done", inpaint_file,"shape",np.shape(inpaint_image))
             elif extension_pixels[maxkey] < OUTPAINT_MAX:
