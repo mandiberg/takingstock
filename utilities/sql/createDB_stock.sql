@@ -164,7 +164,7 @@ CREATE TABLE ImagesBackground (
     sat_bb FLOAT,
     val_bb FLOAT,
     torso_lum_bb FLOAT,
-    
+    selfie_bbox JSON,
     FOREIGN KEY (image_id) REFERENCES images(image_id)
 );
 
