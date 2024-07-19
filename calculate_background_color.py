@@ -65,7 +65,14 @@ mongo_db = mongo_client[io.dbmongo['name']]
 mongo_collection = mongo_db[io.dbmongo['collection']]
 
 # Create a database engine
-engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}".format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']), poolclass=NullPool)
+if db['unix_socket']:
+    # for MM's MAMP config
+    engine = create_engine("mysql+pymysql://{user}:{pw}@/{db}?unix_socket={socket}".format(
+        user=db['user'], pw=db['pass'], db=db['name'], socket=db['unix_socket']
+    ), poolclass=NullPool)
+else:
+    engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}"
+                                .format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']), poolclass=NullPool)
 
 get_background_mp = mp.solutions.selfie_segmentation
 get_bg_segment = get_background_mp.SelfieSegmentation()
@@ -548,7 +555,7 @@ if index == 0:
     ).\
     select_from(SegmentTable).\
     outerjoin(ImagesBackground, SegmentTable.image_id == ImagesBackground.image_id).\
-    filter(ImagesBackground.image_id == None).\
+    filter(ImagesBackground.image_id == None, SegmentTable.image_id != None).\
     limit(LIMIT)    
     ####################
     #####################
