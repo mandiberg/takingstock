@@ -29,7 +29,7 @@ CREATE TABLE Site (
     site_name varchar(20)
 ); 
 
-CREATE TABLE Release (
+CREATE TABLE Model_Release (
     release_name_id int NOT NULL AUTO_INCREMENT PRIMARY KEY,
     release_name varchar(20)
 ); 
@@ -73,9 +73,9 @@ CREATE TABLE Images (
     contentUrl varchar(300) NOT NULL,
     description varchar(150),
     imagename varchar(200),
-    uploadDate DATE
+    uploadDate DATE,
     release_name_id INTEGER,
-    FOREIGN KEY (release_name_id) REFERENCES Release (release_name_id)
+    FOREIGN KEY (release_name_id) REFERENCES Model_Release (release_name_id)
 );
 
 
