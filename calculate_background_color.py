@@ -608,20 +608,21 @@ elif index == 1:
     # if USE_BBOX:distinct_image_ids_query = select(ImagesBackground.image_id.distinct()).\
     #     filter(ImagesBackground.lum_torso == None).limit(LIMIT)
     # FOR SELFIE BBOX
+
     if USE_BBOX and TOPIC:
         # for processing specific topics
         distinct_image_ids_query = select(ImagesBackground.image_id.distinct()).\
             join(ImagesTopics, ImagesBackground.image_id == ImagesTopics.image_id).\
-            filter(ImagesBackground.selfie_bbox == None, ImagesTopics.topic_id == TOPIC).limit(LIMIT)
+            filter(ImagesBackground.selfie_bbox == None, ImagesTopics.topic_id == TOPIC, SegmentTable.bbox != None).limit(LIMIT)
     elif USE_BBOX:
         distinct_image_ids_query = select(ImagesBackground.image_id.distinct()).\
             filter(ImagesBackground.selfie_bbox == None).limit(LIMIT)
 
     # if USE_BBOX:distinct_image_ids_query = select(ImagesBackground.image_id.distinct()).filter(ImagesBackground.hue_bb == None).limit(LIMIT)
-    else:distinct_image_ids_query = select(ImagesBackground.image_id.distinct()).filter(ImagesBackground.hue == None).limit(LIMIT)
+    else:distinct_image_ids_query = select(ImagesBackground.image_id.distinct()).filter(ImagesBackground.selfie_bbox == None).limit(LIMIT)
     distinct_image_ids = [row[0] for row in session.execute(distinct_image_ids_query).fetchall()]
     for counter,target_image_id in enumerate(distinct_image_ids):
-        if counter%10000==0:print("###########"+str(counter)+"images processed ##########")
+        if counter%1000==0:print("###########"+str(counter)+"images processed ##########")
         work_queue.put(target_image_id)        
 
 elif index == 2:
