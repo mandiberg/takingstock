@@ -36,7 +36,7 @@ import mediapipe as mp
 import shutil
 import pandas as pd
 import json
-from my_declarative_base import Base, Clusters, Images,ImagesBackground, SegmentTable, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON, Images
+from my_declarative_base import Base, Clusters, Images,ImagesBackground, ImagesTopics, SegmentTable, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON, Images
 #from sqlalchemy.ext.declarative import declarative_base
 from mp_sort_pose import SortPose
 import pymongo
@@ -44,6 +44,7 @@ import pymongo
 Base = declarative_base()
 USE_BBOX=True
 VERBOSE = True
+TOPIC = 3
 
 # 3.8 M large table (for Topic Model)
 # HelperTable_name = "SegmentHelperMar23_headon"
@@ -112,7 +113,7 @@ title = 'Please choose your operation: '
 options = ['Create table', 'Fetch BG color stats',"test sorting"]
 option, index = pick(options, title)
 
-LIMIT= 10
+LIMIT= 10000000
 # Initialize the counter
 counter = 0
 
@@ -607,8 +608,14 @@ elif index == 1:
     # if USE_BBOX:distinct_image_ids_query = select(ImagesBackground.image_id.distinct()).\
     #     filter(ImagesBackground.lum_torso == None).limit(LIMIT)
     # FOR SELFIE BBOX
-    if USE_BBOX:distinct_image_ids_query = select(ImagesBackground.image_id.distinct()).\
-        filter(ImagesBackground.selfie_bbox == None).limit(LIMIT)
+    if USE_BBOX and TOPIC:
+        # for processing specific topics
+        distinct_image_ids_query = select(ImagesBackground.image_id.distinct()).\
+            join(ImagesTopics, ImagesBackground.image_id == ImagesTopics.image_id).\
+            filter(ImagesBackground.selfie_bbox == None, ImagesTopics.topic_id == TOPIC).limit(LIMIT)
+    elif USE_BBOX:
+        distinct_image_ids_query = select(ImagesBackground.image_id.distinct()).\
+            filter(ImagesBackground.selfie_bbox == None).limit(LIMIT)
 
     # if USE_BBOX:distinct_image_ids_query = select(ImagesBackground.image_id.distinct()).filter(ImagesBackground.hue_bb == None).limit(LIMIT)
     else:distinct_image_ids_query = select(ImagesBackground.image_id.distinct()).filter(ImagesBackground.hue == None).limit(LIMIT)

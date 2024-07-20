@@ -907,6 +907,15 @@ class SortPose:
 
     def get_bg_hue_lum(self,image,segmentation_mask,bbox):
         # expects image in RGB format
+
+        if isinstance(bbox, str):
+            # catching any str bbox that slipped through
+            try:
+                bbox = json.loads(bbox)
+            except json.JSONDecodeError:
+                print("Error: bbox is a string but not a valid JSON")
+                return None  # or handle this error appropriately
+
         
         mask=np.repeat((1-segmentation_mask)[:, :, np.newaxis], 3, axis=2) 
         print("[get_bg_hue_lum] made mask")
