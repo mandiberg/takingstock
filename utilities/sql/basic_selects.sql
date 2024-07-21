@@ -8,9 +8,18 @@ USE stock
 
 SELECT COUNT(so.seg_image_id) as ccount, COUNT(so.mongo_face_landmarks) as fcount, COUNT(so.mongo_body_landmarks) as bcount
 FROM SegmentOct20 so 
-JOIN ImagesTopics it ON so.image_id = it.image_id 
-WHERE it.topic_id = 17
+JOIN ImagesBackground ib on ib.image_id = so.image_id 
 ;
+
+
+SELECT *
+FROM SegmentOct20 so 
+LEFT JOIN ImagesBackground ON so.image_id = ImagesBackground.image_id
+WHERE ImagesBackground.image_id IS NULL
+LIMIT 10;
+
+
+
 
 SELECT COUNT(so.seg_image_id) as ccount
 FROM SegmentOct20 so 
@@ -272,11 +281,15 @@ WHERE i.site_name_id = 1
 
 
 
-USE stocktest
+USE stocktest;
+
+SELECT COUNT(i.image_id)
+FROM Images i
+WHERE i.site_name_id = 12
 ;
 
-DELETE FROM Images 
-WHERE site_name_id = 9
+DELETE FROM Images
+WHERE site_name_id = 12
 ;
 
 SELECT k.keyword_text 

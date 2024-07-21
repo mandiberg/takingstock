@@ -6,7 +6,7 @@ import os
 # jsonl_file_path = '/Users/michaelmandiberg/Library/CloudStorage/Dropbox/takingstock_dropbox/INDIA-PB/items_cache.jsonl'
 # csv_output_file_path = '/Users/michaelmandiberg/Library/CloudStorage/Dropbox/takingstock_dropbox/INDIA-PB/keys_by_count.csv'
 
-FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/VCG2"
+FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/alamyCSV"
 
 jsonl_file_path = os.path.join(FOLDER,'items_cache.jsonl')
 csv_output_file_path = os.path.join(FOLDER,'jsonl_keys_by_count.csv')

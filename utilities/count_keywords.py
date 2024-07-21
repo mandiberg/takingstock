@@ -3,10 +3,11 @@ import re
 import os
 from collections import Counter
 
-# FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/alamyCSV"
+FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/alamyCSV"
 # FOLDER = "/Users/michaelmandiberg/Library/CloudStorage/Dropbox/takingstock_dropbox/INDIA-PB"
-FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/ImagesBazzar"
+# FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/ImagesBazzar"
 # FOLDER = "/Users/michaelmandiberg/Downloads/pixcy_v2"
+# FOLDER = "/Users/michaelmandiberg/Library/CloudStorage/Dropbox/takingstock_dropbox/PIXERF"
 
 
 # input_file = '/Users/michaelmandiberg/Documents/projects-active/facemap_production/ImagesBazzar/CSV_NOKEYS.csv'

@@ -27,7 +27,7 @@ class DataIO:
                 "host":"localhost",
                 "name":"stock",            
                 "user":"root",
-                "pass":"mypassword",
+                "pass":"root",
                 "unix_socket":"/Applications/MAMP/tmp/mysql/mysql.sock",
                 "raise_on_warnings": True
             }

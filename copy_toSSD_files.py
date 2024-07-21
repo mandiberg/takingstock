@@ -10,7 +10,7 @@ from sqlalchemy import create_engine, text, MetaData, Table, Column, Numeric, In
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.orm import relationship
 from sqlalchemy.ext.declarative import declarative_base
-from my_declarative_base import Base, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON
+from my_declarative_base import Base, Column, SegmentTable, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON
 
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.pool import NullPool
@@ -32,10 +32,10 @@ sig = '''
 # for moving segment to SSD
 
 #where the images are:
-PATH = "/Volumes/SSD4/"
+PATH = "/Volumes/RAID54/"
 #where the images are going:
-PATH2 = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/segment_images"
-SEGMENTTABLE_NAME = 'SegmentNov25'
+PATH2 = "/Volumes/OWC4/segment_images"
+SEGMENTTABLE_NAME = 'SegmentOct20'
 
 # i don'tthink this does anything
 IMAGES_THREAD_COUNTER = 0
@@ -54,9 +54,9 @@ IMAGES_THREAD_COUNTER = 0
 '''
 
 # right now this is only working for one site at a time
-SITE_NAME_ID = 4
-IMAGES_FOLDER_NAME = 'images_istock'
-NEWIMAGES_FOLDER_NAME = 'images_istock'
+SITE_NAME_ID = 3
+IMAGES_FOLDER_NAME = 'images_adobe'
+NEWIMAGES_FOLDER_NAME = 'images_adobe'
 NUMBER_OF_THREADS_IMAGES_DOWNLOAD =15
 OLDPATH = os.path.join(PATH, IMAGES_FOLDER_NAME)
 NEWPATH = os.path.join(PATH2, NEWIMAGES_FOLDER_NAME)
@@ -72,32 +72,37 @@ NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 # engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}"
 #                                 .format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']), poolclass=NullPool)
 
-# MAMP
-engine = create_engine("mysql+pymysql://{user}:{pw}@/{db}?unix_socket={socket}".format(
-    user=db['user'], pw=db['pass'], db=db['name'], socket=db['unix_socket']
-), poolclass=NullPool)
+# Create a database engine
+if db['unix_socket']:
+    # for MM's MAMP config
+    engine = create_engine("mysql+pymysql://{user}:{pw}@/{db}?unix_socket={socket}".format(
+        user=db['user'], pw=db['pass'], db=db['name'], socket=db['unix_socket']
+    ), poolclass=NullPool)
+else:
+    engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}"
+                                .format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']), poolclass=NullPool)
 
 Session = sessionmaker(bind=engine)
 session = Session()
 Base = declarative_base()
 
-class SegmentTable(Base):
-    __tablename__ = SEGMENTTABLE_NAME
+# class SegmentTable(Base):
+#     __tablename__ = SEGMENTTABLE_NAME
 
-    image_id = Column(Integer, primary_key=True)
-    site_name_id = Column(Integer)
-    contentUrl = Column(String(300), nullable=False)
-    imagename = Column(String(200))
-    face_x = Column(DECIMAL(6, 3))
-    face_y = Column(DECIMAL(6, 3))
-    face_z = Column(DECIMAL(6, 3))
-    mouth_gap = Column(DECIMAL(6, 3))
-    face_landmarks = Column(BLOB)
-    bbox = Column(JSON)
-    face_encodings = Column(BLOB)
-    face_encodings68 = Column(BLOB)
-    body_landmarks = Column(BLOB)
-    site_image_id = Column(String(50), nullable=False)
+#     image_id = Column(Integer, primary_key=True)
+#     site_name_id = Column(Integer)
+#     contentUrl = Column(String(300), nullable=False)
+#     imagename = Column(String(200))
+#     face_x = Column(DECIMAL(6, 3))
+#     face_y = Column(DECIMAL(6, 3))
+#     face_z = Column(DECIMAL(6, 3))
+#     mouth_gap = Column(DECIMAL(6, 3))
+#     face_landmarks = Column(BLOB)
+#     bbox = Column(JSON)
+#     face_encodings = Column(BLOB)
+#     face_encodings68 = Column(BLOB)
+#     body_landmarks = Column(BLOB)
+#     site_image_id = Column(String(50), nullable=False)
 
 
 
