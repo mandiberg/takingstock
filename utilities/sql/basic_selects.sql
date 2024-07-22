@@ -6,6 +6,13 @@ USE stock
 ;
 
 
+SELECT COUNT(i.image_id) 
+FROM Images i 
+WHERE i.site_name_id = 13
+
+;
+
+
 SELECT COUNT(so.seg_image_id) as ccount, COUNT(so.mongo_face_landmarks) as fcount, COUNT(so.mongo_body_landmarks) as bcount
 FROM SegmentOct20 so 
 JOIN ImagesBackground ib on ib.image_id = so.image_id 
@@ -18,7 +25,15 @@ LEFT JOIN ImagesBackground ON so.image_id = ImagesBackground.image_id
 WHERE ImagesBackground.image_id IS NULL
 LIMIT 10;
 
+SELECT COUNT(ib.image_id)
+FROM ImagesBackground ib
+WHERE ib.selfie_bbox IS NOT NULL
+;
 
+SELECT COUNT(so.image_id) 
+FROM SegmentOct20 so 
+WHERE so.site_name_id = 1
+;
 
 
 SELECT COUNT(so.seg_image_id) as ccount
@@ -282,6 +297,12 @@ WHERE i.site_name_id = 1
 
 
 USE stocktest;
+
+CREATE TABLE Model_Release (
+    release_name_id int NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    release_name varchar(20)
+); 
+
 
 SELECT COUNT(i.image_id)
 FROM Images i

@@ -38,7 +38,7 @@ class SortPose:
         self.HSV_DELTA_MAX = .5
         self.HSVMULTIPLIER = 3
         self.BRUTEFORCE = False
-        self.CUTOFF = 100
+        self.CUTOFF = 10
 
         self.SORT_TYPE = SORT_TYPE
         if self.SORT_TYPE == "128d":
@@ -1475,7 +1475,7 @@ class SortPose:
 
             # if self.ONE_SHOT and not runmask:
 
-            if runmask and runmask.any():
+            if runmask.any():
                 num_true_values = runmask.sum()
                 print("we have a run ---->>>>", num_true_values)
                 # if there is a run < MINFACEDIST
