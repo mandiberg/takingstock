@@ -38,7 +38,7 @@ class SortPose:
         self.HSV_DELTA_MAX = .5
         self.HSVMULTIPLIER = 3
         self.BRUTEFORCE = False
-        self.CUTOFF = 10
+        self.CUTOFF = 100
 
         self.SORT_TYPE = SORT_TYPE
         if self.SORT_TYPE == "128d":

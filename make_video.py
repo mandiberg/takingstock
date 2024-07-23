@@ -195,7 +195,7 @@ elif IS_SEGONLY and io.db["name"] == "stock":
     # WHERE += " AND e.encoding_id > 2612275"
 
     # WHERE = "s.site_name_id != 1"
-    LIMIT = 1000
+    LIMIT = 10000
 
     # TEMP TK TESTING
     # WHERE += " AND s.site_name_id = 8"
@@ -800,13 +800,16 @@ def merge_inpaint2(inpaint_image,img,extended_img,extension_pixels,selfie_bbox,b
     blur_radius_left=selfie_bbox['left']*blur_radius//100+1
     blur_radius_right=selfie_bbox['right']*blur_radius//100+1
     blur_radius_top=selfie_bbox['top']*blur_radius//100+1
-    blur_radius_bottom=selfie_bbox['bottom']*blur_radius//100+1
+    blur_radius_bottom=extension_pixels['bottom']*blur_radius//100+1
     
 
-    mask_left = cv2.GaussianBlur(mask_left, (blur_radius_left, 1), sigmaX=SIGMAX,sigmaY=1)
-    mask_right = cv2.GaussianBlur(mask_right, (blur_radius_right, 1), sigmaX=SIGMAX,sigmaY=1)
-    mask_top = cv2.GaussianBlur(mask_top, (1, blur_radius_top), sigmaX=1,sigmaY=SIGMAX)
-    mask_bottom = cv2.GaussianBlur(mask_bottom, (1, blur_radius_bottom), sigmaX=1,sigmaY=SIGMAX)
+    mask_left = cv2.GaussianBlur(mask_left, (blur_radius_left, 1), sigmaX=selfie_bbox['left'],sigmaY=1)
+    mask_right = cv2.GaussianBlur(mask_right, (blur_radius_right, 1), sigmaX=selfie_bbox['right'],sigmaY=1)
+    mask_top = cv2.GaussianBlur(mask_top, (1, blur_radius_top), sigmaX=1,sigmaY=selfie_bbox['bottom'])
+    mask_bottom = cv2.GaussianBlur(mask_bottom, (1, blur_radius_bottom), sigmaX=1,sigmaY=extension_pixels['bottom'])
+
+    print("extension_pixels", extension_pixels)
+    print("selfie_bbox", selfie_bbox)
 
     # add the masks, keeping whites white, and allowing blacks to get full black
     mask=np.maximum(mask_left+mask_right,mask_top+mask_bottom)
