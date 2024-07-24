@@ -61,8 +61,8 @@ NO_KIDS = True
 USE_PAINTED = True
 OUTPAINT = False
 INPAINT= True
-INPAINT_MAX = 500
-OUTPAINT_MAX = 501
+INPAINT_MAX = 5000
+OUTPAINT_MAX = 5001
 
 # BLUR_RADIUS = 200
 SIGMAX=1000
@@ -277,9 +277,10 @@ face_height_output = 500
 # units are ratio of faceheight
 # top, right, bottom, left
 # image_edge_multiplier = [1, 1, 1, 1] # just face
-image_edge_multiplier = [1.5,1.5,2,1.5] # bigger portrait
+# image_edge_multiplier = [1.5,1.5,2,1.5] # bigger portrait
 # image_edge_multiplier = [1.5,1.33, 2.5,1.33] # bigger 2x3 portrait
 # image_edge_multiplier = [1.4,2.6,1.9,2.6] # wider for hands
+image_edge_multiplier = [3,5,3,5] # megawide for testing
 # image_edge_multiplier = [1.4,3.3,3,3.3] # widerest 16:10 for hands
 # image_edge_multiplier = [1.6,3.84,3.2,3.84] # wiiiiiiiidest 16:10 for hands
 # image_edge_multiplier = [1.45,3.84,2.87,3.84] # wiiiiiiiidest 16:9 for hands
@@ -716,14 +717,19 @@ def fetch_selfie_bbox(target_image_id):
         selfie_bbox=json.loads(selfie_bbox)
     # print("after json selie bbox",selfie_bbox,type(selfie_bbox))
     ##making cutoffs##
-    threshold={"top":50,"right":50,"bottom":10,"left":50}
+    threshold_max={"top":50,"right":100,"bottom":10,"left":100}
+    threshold_min={"top":0,"right":10,"bottom":10,"left":10}
     if selfie_bbox:
-        # print("after json selie bbox",selfie_bbox,type(selfie_bbox))
-        selfie_bbox["left"]=np.minimum(selfie_bbox["left"],threshold["left"])
-        selfie_bbox["right"]=np.minimum(selfie_bbox["right"],threshold["right"])
-        selfie_bbox["bottom"]=np.minimum(selfie_bbox["bottom"],threshold["bottom"])
-        selfie_bbox["top"]=np.minimum(selfie_bbox["top"],threshold["top"])
-        # selfie_bbox={"top":np.min(selfie_bbox["top"],threshold["top"]),"right":np.min(selfie_bbox["right"],threshold["right"]),"bottom":np.min(selfie_bbox["bottom"],threshold["bottom"]),"left":np.min(selfie_bbox["left"],threshold["left"])}
+        selfie_bbox["left"]=np.minimum(selfie_bbox["left"],threshold_max["left"])
+        selfie_bbox["right"]=np.minimum(selfie_bbox["right"],threshold_max["right"])
+        selfie_bbox["bottom"]=np.minimum(selfie_bbox["bottom"],threshold_max["bottom"])
+        selfie_bbox["top"]=np.minimum(selfie_bbox["top"],threshold_max["top"])
+
+        selfie_bbox["left"]=np.maximum(selfie_bbox["left"],threshold_min["left"])
+        selfie_bbox["right"]=np.maximum(selfie_bbox["right"],threshold_min["right"])
+        selfie_bbox["bottom"]=np.maximum(selfie_bbox["bottom"],threshold_min["bottom"])
+        selfie_bbox["top"]=np.maximum(selfie_bbox["top"],threshold_min["top"])
+
     else:
         print("selfie bbox calculation not done")
     return selfie_bbox
