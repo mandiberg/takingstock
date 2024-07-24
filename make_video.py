@@ -65,9 +65,9 @@ INPAINT_MAX = 500
 OUTPAINT_MAX = 501
 
 # BLUR_RADIUS = 200
-# SIGMAX=1000
-BLUR_RADIUS = 200  ##computationally more expensive
-SIGMAX=10
+SIGMAX=1000
+BLUR_RADIUS = 1  ##computationally more expensive
+# SIGMAX=10
 
 def oddify(x):
     if x % 2 == 0: return x+1
@@ -743,7 +743,7 @@ def fetch_selfie_bbox(target_image_id):
 #     mask[:,right:] = [255,255,255]
 #     # mask blur
     
-#     mask = cv2.GaussianBlur(mask, (blur_radius, blur_radius), sigmaX=SIGMAX)
+    mask = cv2.GaussianBlur(mask, (blur_radius, blur_radius), sigmaX=SIGMAX)
 #     # Expand the mask dimensions to match the image
 #     # mask = np.expand_dims(mask, axis=-1)
 #     # mask=mask[top:bottom,left:right]
@@ -780,16 +780,21 @@ def merge_inpaint2(inpaint_image,img,extended_img,extension_pixels,selfie_bbox,b
     mask_bottom[bottom:,:] = [255,255,255]
     mask_right[:,right:] = [255,255,255]
 
-    blur_radius_left=selfie_bbox['left']*blur_radius//100+1
-    blur_radius_right=selfie_bbox['right']*blur_radius//100+1
-    blur_radius_top=selfie_bbox['top']*blur_radius//100+1
-    blur_radius_bottom=oddify(extension_pixels['bottom']*blur_radius//100+1)
+    blur_radius_left=oddify(selfie_bbox['left']*blur_radius)
+    blur_radius_right=oddify(selfie_bbox['right']*blur_radius)
+    blur_radius_top=oddify(extension_pixels['top']*blur_radius)
+    blur_radius_bottom=oddify(extension_pixels['bottom']*blur_radius)
     
 
-    mask_left = cv2.GaussianBlur(mask_left, (blur_radius_left, 1), sigmaX=oddify(selfie_bbox['left']),sigmaY=1)
-    mask_right = cv2.GaussianBlur(mask_right, (blur_radius_right, 1), sigmaX=oddify(selfie_bbox['right']),sigmaY=1)
-    mask_top = cv2.GaussianBlur(mask_top, (1, blur_radius_top), sigmaX=1,sigmaY=oddify(selfie_bbox['top']))
-    mask_bottom = cv2.GaussianBlur(mask_bottom, (1, blur_radius_bottom), sigmaX=1,sigmaY=oddify(extension_pixels['bottom']))
+    # mask_left = cv2.GaussianBlur(mask_left, (blur_radius_left, 1), sigmaX=oddify(selfie_bbox['left']),sigmaY=1)
+    # mask_right = cv2.GaussianBlur(mask_right, (blur_radius_right, 1), sigmaX=oddify(selfie_bbox['right']),sigmaY=1)
+    # mask_top = cv2.GaussianBlur(mask_top, (1, blur_radius_top), sigmaX=1,sigmaY=oddify(selfie_bbox['top']))
+    # mask_bottom = cv2.GaussianBlur(mask_bottom, (1, blur_radius_bottom), sigmaX=1,sigmaY=oddify(extension_pixels['bottom']))
+
+    mask_left = cv2.blur(mask_left, (blur_radius_left, 1))
+    mask_right = cv2.blur(mask_right, (blur_radius_right, 1))
+    mask_top = cv2.blur(mask_top, (1, blur_radius_top))
+    mask_bottom = cv2.blur(mask_bottom, (1, blur_radius_bottom))
 
     print("extension_pixels", extension_pixels)
     print("selfie_bbox", selfie_bbox)
