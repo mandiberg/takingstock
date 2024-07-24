@@ -38,7 +38,7 @@ class SortPose:
         self.HSV_DELTA_MAX = .5
         self.HSVMULTIPLIER = 3
         self.BRUTEFORCE = False
-        self.CUTOFF = 100
+        self.CUTOFF = 10
 
         self.SORT_TYPE = SORT_TYPE
         if self.SORT_TYPE == "128d":
@@ -785,12 +785,17 @@ class SortPose:
     
     def extend_lama(self,extended_img, mask,downsampling_scale=1):
         if self.VERBOSE: print("doing lama generative fill")
+        def kludge(dimension, dim):
+            if dim == "w": factor = 1.035
+            if dim == "h": factor = 1.027
+            new_dim = int(dimension*factor)
+            return new_dim
         n_height,n_width=extended_img.shape[:2]
         extended_img = cv2.resize(extended_img, (n_width//downsampling_scale, n_height//downsampling_scale), interpolation = cv2.INTER_AREA)
         mask = cv2.resize(mask, (n_width//downsampling_scale, n_height//downsampling_scale), interpolation = cv2.INTER_AREA)
         inpaint = self.INPAINT_MODEL(extended_img, mask)
         inpaint=np.array(inpaint,dtype=np.uint8)
-        inpaint = cv2.resize(inpaint, (n_width,n_height), interpolation = cv2.INTER_LANCZOS4)
+        inpaint = cv2.resize(inpaint, (kludge(n_width,"w"),kludge(n_height,"h")), interpolation = cv2.INTER_LANCZOS4)
         if self.VERBOSE: print("generative fill done")
 
         return inpaint
@@ -845,71 +850,11 @@ class SortPose:
             # resize = None
         return cropped_image
 
-    # def get_bg_hue_lum(self,image,bbox=None,faceLms=None):
-    #     # expects image in RGB format
-    #     print("in get_bg_hue_lum")
-    #     hue = sat = val = lum = lum_torso = None
-    #     if bbox:
-    #         try:
-    #             if type(bbox)==str:
-    #                 bbox=json.loads(bbox)
-    #                 if self.VERBOSE: print("bbox type", type(bbox))
-    #             #sample_img=sample_img[bbox['top']:bbox['bottom'],bbox['left']:bbox['right'],:]
-    #             # passing in bbox as a str
-    #             image = self.crop_image(image, faceLms, bbox)
-    #             if image is None: return -1,-1,-1,-1,-1 ## if TOO_BIG==true, checking if cropped image is empty
-    #         except:
-    #             if self.VERBOSE: print("FAILED CROPPING, bad bbox",bbox)
-    #             return -2,-2,-2,-2,-2
-    #         print("bbox['bottom'], ", bbox['bottom'])
-    #     print("[get_bg_hue_lum] about to go for segemntation")
-    #     result = self.get_bg_segment.process(image[:,:,::-1]) #convert RBG to BGR then process with mp
-    #     print("[get_bg_hue_lum] got result")
-    #     mask=np.repeat((1-result.segmentation_mask)[:, :, np.newaxis], 3, axis=2) 
-    #     print("[get_bg_hue_lum] made mask")
-    #     mask_torso=np.repeat((result.segmentation_mask)[:, :, np.newaxis], 3, axis=2) 
-    #     print("[get_bg_hue_lum] made torso mask")
-
-    #     print("[get_bg_hue_lum] doing some stuff")
-    #     masked_img=mask*image[:,:,::-1]/255 ##RGB format
-    #     masked_img_torso=mask_torso*image[:,:,::-1]/255 ##RGB format
-
-    #     print("[get_bg_hue_lum] about to make bk px mask")
-    #     # Identify black pixels where R=0, G=0, B=0
-    #     black_pixels_mask = np.all(masked_img == [0, 0, 0], axis=-1)
-    #     black_pixels_mask_torso = np.all(masked_img_torso == [0, 0, 0], axis=-1)
-
-    #     # Filter out black pixels and compute the mean color of the remaining pixels
-    #     mean_color = np.mean(masked_img[~black_pixels_mask], axis=0)[np.newaxis,np.newaxis,:] # ~ means negate/remove
-    #     self.hue = cv2.cvtColor(mean_color, cv2.COLOR_RGB2HSV)[0,0,0]
-    #     self.sat = cv2.cvtColor(mean_color, cv2.COLOR_RGB2HSV)[0,0,1]
-    #     self.val = cv2.cvtColor(mean_color, cv2.COLOR_RGB2HSV)[0,0,2]
-    #     self.lum = cv2.cvtColor(mean_color, cv2.COLOR_RGB2LAB)[0,0,0]
-    #     print("hue, sat, val, lum", self.hue, self.sat, self.val, self.lum)
-    #     if self.VERBOSE: print("NOTmasked_img_torso size", masked_img_torso.shape, black_pixels_mask_torso.shape)
-    #     if bbox:
-    #         # SJ something is broken in here. It returns an all black image which produces a lum of 100
-    #         masked_img_torso = masked_img_torso[bbox['bottom']:]
-    #         black_pixels_mask_torso = black_pixels_mask_torso[bbox['bottom']:]
-    #     # else:
-    #     #     print("YIKES! no bbox. Here's a hacky hack to crop to the bottom 20%")
-    #     #     bottom_fraction = masked_img_torso.shape[0] // 5
-    #     #     masked_img_torso = masked_img_torso[-bottom_fraction:]
-    #     #     black_pixels_mask_torso = black_pixels_mask_torso[-bottom_fraction:]
-
-    #     if self.VERBOSE: print("masked_img_torso size", masked_img_torso.shape, black_pixels_mask_torso.shape)
-    #     mean_color = np.mean(masked_img_torso[~black_pixels_mask_torso], axis=0)[np.newaxis,np.newaxis,:] # ~ is negate
-    #     self.lum_torso=cv2.cvtColor(mean_color, cv2.COLOR_RGB2LAB)[0,0,0]
-
-    #     if self.VERBOSE: print("HSV, lum", hue,sat,val,lum, lum_torso)
-    #     return self.hue,self.sat,self.val,self.lum,self.lum_torso
-    
-
     def get_bg_hue_lum(self,image,segmentation_mask,bbox):
         if type(bbox)==str:
             bbox=json.loads(bbox)
    
-        print("[get_bg_hue_lum] bbox is",bbox)
+        if self.VERBOSE: print("[get_bg_hue_lum] bbox is",bbox)
         # expects image in RGB format
 
         if isinstance(bbox, str):
@@ -922,15 +867,15 @@ class SortPose:
 
         
         mask=np.repeat((1-segmentation_mask)[:, :, np.newaxis], 3, axis=2) 
-        print("[get_bg_hue_lum] made mask")
+        if self.VERBOSE: print("[get_bg_hue_lum] made mask")
         mask_torso=np.repeat((segmentation_mask)[:, :, np.newaxis], 3, axis=2) 
-        print("[get_bg_hue_lum] made torso mask")
+        if self.VERBOSE: print("[get_bg_hue_lum] made torso mask")
 
-        print("[get_bg_hue_lum] doing some stuff")
+        if self.VERBOSE: print("[get_bg_hue_lum] doing some stuff")
         masked_img=mask*image[:,:,::-1]/255 ##RGB format
         masked_img_torso=mask_torso*image[:,:,::-1]/255 ##RGB format
 
-        print("[get_bg_hue_lum] about to make bk px mask")
+        if self.VERBOSE: print("[get_bg_hue_lum] about to make bk px mask")
         # Identify black pixels where R=0, G=0, B=0
         black_pixels_mask = np.all(masked_img == [0, 0, 0], axis=-1)
         black_pixels_mask_torso = np.all(masked_img_torso == [0, 0, 0], axis=-1)
@@ -941,7 +886,7 @@ class SortPose:
         self.sat = cv2.cvtColor(mean_color, cv2.COLOR_RGB2HSV)[0,0,1]
         self.val = cv2.cvtColor(mean_color, cv2.COLOR_RGB2HSV)[0,0,2]
         self.lum = cv2.cvtColor(mean_color, cv2.COLOR_RGB2LAB)[0,0,0]
-        print("hue, sat, val, lum", self.hue, self.sat, self.val, self.lum)
+        if self.VERBOSE: print("hue, sat, val, lum", self.hue, self.sat, self.val, self.lum)
         if self.VERBOSE: print("NOTmasked_img_torso size", masked_img_torso.shape, black_pixels_mask_torso.shape)
         if bbox :
             # SJ something is broken in here. It returns an all black image which produces a lum of 100

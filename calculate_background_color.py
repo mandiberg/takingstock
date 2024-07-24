@@ -43,9 +43,9 @@ import pymongo
 
 Base = declarative_base()
 USE_BBOX=True
-VERBOSE = True
-TOPIC = 3
-
+VERBOSE = False
+TOPIC = 0
+START_ID = 91034671
 # 3.8 M large table (for Topic Model)
 # HelperTable_name = "SegmentHelperMar23_headon"
 
@@ -55,7 +55,7 @@ TOPIC = 3
 # for fingerpoint
 HelperTable_name = "SegmentHelperMay7_fingerpoint"
 # MM controlling which folder to use
-IS_SSD = False
+IS_SSD = True
 
 io = DataIO(IS_SSD)
 db = io.db
@@ -81,20 +81,14 @@ get_bg_segment = get_background_mp.SelfieSegmentation()
 image_edge_multiplier = [1.5,1.5,2,1.5] # bigger portrait
 image_edge_multiplier_sm = [1.2, 1.2, 1.6, 1.2] # standard portrait
 face_height_output = 500
-motion = {
-    "side_to_side": False,
-    "forward_smile": True,
-    "laugh": False,
-    "forward_nosmile":  False,
-    "static_pose":  False,
-    "simple": False,
-}
+motion = {"side_to_side": False, "forward_smile": True, "laugh": False, "forward_nosmile": False, "static_pose": False, "simple": False}
 
 EXPAND = False
 ONE_SHOT = False # take all files, based off the very first sort order.
 JUMP_SHOT = False # jump to random file if can't find a run
 
-sort = SortPose(motion, face_height_output, image_edge_multiplier_sm,EXPAND, ONE_SHOT, JUMP_SHOT)
+sort = SortPose(motion, face_height_output, image_edge_multiplier_sm,EXPAND, ONE_SHOT, JUMP_SHOT, None, VERBOSE, False, None, 0)
+# sort = SortPose(motion, face_height_output, image_edge_multiplier,EXPAND, ONE_SHOT, JUMP_SHOT, HSV_BOUNDS, VERBOSE,INPAINT, SORT_TYPE, OBJ_CLS_ID)
 
 
 # if USE_BBOX:FOLDER_PATH = os.path.join(io.ROOT_PROD, "bg_color/0900_bb")
@@ -113,7 +107,7 @@ title = 'Please choose your operation: '
 options = ['Create table', 'Fetch BG color stats',"test sorting"]
 option, index = pick(options, title)
 
-LIMIT= 10000000
+LIMIT= 1000000
 # Initialize the counter
 counter = 0
 
@@ -121,61 +115,12 @@ counter = 0
 #num_threads = io.NUMBER_OF_PROCESSES
 num_threads = 1
 
-class SegmentTable(Base):
-    # __tablename__ = 'SegmentTable'
-    __tablename__ = 'SegmentOct20'
-    seg_image_id=Column(Integer,primary_key=True, autoincrement=True)
-    image_id = Column(Integer)
-    site_name_id = Column(Integer)
-    site_image_id = Column(String(50),nullable=False)
-    contentUrl = Column(String(300), nullable=False)
-    imagename = Column(String(200))
-    age_id = Column(Integer)
-    age_detail_id = Column(Integer)
-    gender_id = Column(Integer)
-    location_id = Column(Integer)
-    face_x = Column(DECIMAL(6, 3))
-    face_y = Column(DECIMAL(6, 3))
-    face_z = Column(DECIMAL(6, 3))
-    mouth_gap = Column(DECIMAL(6, 3))
-    face_landmarks = Column(BLOB)
-    bbox = Column(JSON)
-    face_encodings = Column(BLOB)
-    face_encodings68 = Column(BLOB)
-    body_landmarks = Column(BLOB)
 
 class HelperTable(Base):
     __tablename__ = HelperTable_name
     seg_image_id=Column(Integer,primary_key=True, autoincrement=True)
     image_id = Column(Integer, primary_key=True, autoincrement=True)
 
-# def get_bg_folder(folder_path):
-#     for filename in os.listdir(folder_path):
-#         if filename.endswith(".jpg") or filename.endswith(".jpeg") or filename.endswith(".png"):
-#             file_path = os.path.join(folder_path, filename)
-#             hue, lum = get_bg_hue_lum(file_path)
-#             results.append({"file": filename, "hue": hue, "luminosity": lum})
-
-#     # Create DataFrame from results and sort by SORTYPE
-#     df = pd.DataFrame(results)
-#     df_sorted = df.sort_values(by=SORTTYPE)
-
-#     print(df_sorted)
-
-#     # Iterate over sorted DataFrame and save copies of each file to output folder
-#     counter = 0
-#     total = len(df_sorted)
-
-#     for index, row in df_sorted.iterrows():
-#         old_file_path = os.path.join(folder_path, row["file"])
-#         filename = f"{str(counter)}_{int(row[SORTTYPE])}_{row['file']}"
-#         print(filename)
-#         new_file_path = os.path.join(output_folder, filename)
-#         shutil.copyfile(old_file_path, new_file_path)
-#         print(f"File '{row['file']}' copied to '{filename}'")
-#         counter += 1
-
-#     print("Files saved to", output_folder)
 
 def sort_files_onBG():
     # Define the select statement to fetch all columns from the table
@@ -192,10 +137,6 @@ def sort_files_onBG():
     # Execute the query and fetch all results
     result = session.execute(query).fetchall()
 
-    # Convert the result to a DataFrame
-    # df = pd.DataFrame(result, columns=result[0].keys()) if result else pd.DataFrame()
-    # print(df)
-    # return df
 
     results=[]
     counter = 0
@@ -214,7 +155,7 @@ def sort_files_onBG():
         else:
             hue = row[1]
             lum = row[2]
-        print(hue,lum)
+        if VERBOSE: print(hue,lum)
         filename=get_filename(image_id)
         results.append({"file": filename, "hue": hue, "luminosity": lum})
 
@@ -262,7 +203,7 @@ def get_selfie_bbox(segmentation_mask):
     return bbox
 
 def get_segmentation_mask(img,bbox=None,face_landmarks=None):
-    print("[get_bg_hue_lum] about to go for segemntation")
+    if VERBOSE: print("[get_bg_hue_lum] about to go for segemntation")
 
     if bbox:
         try:
@@ -279,48 +220,9 @@ def get_segmentation_mask(img,bbox=None,face_landmarks=None):
         print("bbox['bottom'], ", bbox['bottom'])
 
     result = get_bg_segment.process(img[:,:,::-1]) #convert RBG to BGR then process with mp
-    print("[get_bg_hue_lum] got result")
+    if VERBOSE: print("[get_bg_hue_lum] got result")
     return result.segmentation_mask
 
-
-# def get_bg_hue_lum(img,segmentation_mask,bbox):
-#     hue = sat = val = lum = lum_torso = None
-    
-#     mask      =np.repeat((1-segmentation_mask)[:, :, np.newaxis], 3, axis=2) 
-#     mask_torso=np.repeat((segmentation_mask)[:, :, np.newaxis], 3, axis=2) 
-
-#     masked_img=mask*img[:,:,::-1]/255 ##RGB format
-#     masked_img_torso=mask_torso*img[:,:,::-1]/255 ##RGB format
-
-#     # Identify black pixels where R=0, G=0, B=0
-#     black_pixels_mask = np.all(masked_img == [0, 0, 0], axis=-1)
-#     black_pixels_mask_torso = np.all(masked_img_torso == [0, 0, 0], axis=-1)
-
-#     # Filter out black pixels and compute the mean color of the remaining pixels
-#     mean_color = np.mean(masked_img[~black_pixels_mask], axis=0)[np.newaxis,np.newaxis,:] # ~ means negate/remove
-#     hue=cv2.cvtColor(mean_color, cv2.COLOR_RGB2HSV)[0,0,0]
-#     sat = cv2.cvtColor(mean_color, cv2.COLOR_RGB2HSV)[0, 0, 1]
-#     val = cv2.cvtColor(mean_color, cv2.COLOR_RGB2HSV)[0, 0, 2]
-#     lum=cv2.cvtColor(mean_color, cv2.COLOR_RGB2LAB)[0,0,0]
-
-#     if VERBOSE: print("NOTmasked_img_torso size", masked_img_torso.shape, black_pixels_mask_torso.shape)
-#     if bbox:
-#         # SJ something is broken in here. It returns an all black image which produces a lum of 100
-#         masked_img_torso = masked_img_torso[bbox['bottom']:]
-#         black_pixels_mask_torso = black_pixels_mask_torso[bbox['bottom']:]
-#     # else:
-#     #     print("YIKES! no bbox. Here's a hacky hack to crop to the bottom 20%")
-#     #     bottom_fraction = masked_img_torso.shape[0] // 5
-#     #     masked_img_torso = masked_img_torso[-bottom_fraction:]
-#     #     black_pixels_mask_torso = black_pixels_mask_torso[-bottom_fraction:]
-
-#     if VERBOSE: print("masked_img_torso size", masked_img_torso.shape, black_pixels_mask_torso.shape)
-#     mean_color = np.mean(masked_img_torso[~black_pixels_mask_torso], axis=0)[np.newaxis,np.newaxis,:] # ~ is negate
-#     lum_torso=cv2.cvtColor(mean_color, cv2.COLOR_RGB2LAB)[0,0,0]
-
-#     if VERBOSE: 
-#         print("HSV, lum", hue,sat,val,lum, lum_torso)
-#     return hue,sat,val,lum,lum_torso
 
 
 def create_table(row, lock, session):
@@ -451,7 +353,7 @@ def fetch_BG_stat(target_image_id, lock, session):
             #will do a second round for bbox with same cv2 image
             bbox,face_landmarks=get_bbox(target_image_id)
             hue_bb,sat_bb, val_bb, lum_bb, lum_torso_bb =sort.get_bg_hue_lum(img,segmentation_mask,bbox)  
-            print("sat values before insert", hue_bb,sat_bb, val_bb, lum_bb, lum_torso_bb)
+            if VERBOSE: print("sat values before insert", hue_bb,sat_bb, val_bb, lum_bb, lum_torso_bb)
             # hue_bb,sat_bb, val_bb, lum_bb, lum_torso_bb =get_bg_hue_lum(img,bbox,facelandmark)
 
     selfie_bbox=get_selfie_bbox(segmentation_mask)
@@ -491,17 +393,17 @@ def fetch_BG_stat(target_image_id, lock, session):
             print("selfie bbox",selfie_bbox)
 
         #session.commit()
-        print(f"BG stat for image_id {target_image_id} updated successfully.")
+        if VERBOSE: print(f"BG stat for image_id {target_image_id} updated successfully.")
     else:
         print(f"BG stat entry for image_id {target_image_id} not found.")
     
     with lock:
         # Increment the counter using the lock to ensure thread safety
         global counter
-        counter += 1
+        counter -= 1
         session.commit()
     if counter % 100 == 0:
-        print(f"Updated Images_BG number: {counter}")
+        print(f"This many left: {counter}")
     return
 
 #######MULTI THREADING##################
@@ -616,7 +518,7 @@ elif index == 1:
             filter(ImagesBackground.selfie_bbox == None, ImagesTopics.topic_id == TOPIC, SegmentTable.bbox != None).limit(LIMIT)
     elif USE_BBOX:
         distinct_image_ids_query = select(ImagesBackground.image_id.distinct()).\
-            filter(ImagesBackground.selfie_bbox == None).limit(LIMIT)
+            filter(ImagesBackground.selfie_bbox == None, ImagesBackground.image_id > START_ID).limit(LIMIT)
 
     # if USE_BBOX:distinct_image_ids_query = select(ImagesBackground.image_id.distinct()).filter(ImagesBackground.hue_bb == None).limit(LIMIT)
     else:distinct_image_ids_query = select(ImagesBackground.image_id.distinct()).filter(ImagesBackground.selfie_bbox == None).limit(LIMIT)
