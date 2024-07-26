@@ -6,9 +6,29 @@ USE stock
 ;
 
 
+SELECT *
+FROM ImagesBackground ib 
+WHERE ib.image_id = 614
+
+
+SELECT COUNT(ib.image_id)
+FROM ImagesBackground ib 
+WHERE JSON_EXTRACT(ib.selfie_bbox , '$.left') = 0
+OR JSON_EXTRACT(ib.selfie_bbox , '$.right') = 0
+;
+
+
+
+SELECT JSON_EXTRACT(sales_data, '$.amount') AS total_amount 
+FROM sales 
+WHERE JSON_EXTRACT(sales_data, '$.product') = 'Widget X';
+
+
+
+
 SELECT COUNT(i.image_id) 
 FROM Images i 
-WHERE i.site_name_id = 13
+WHERE i.site_name_id = 11
 
 ;
 
@@ -306,11 +326,11 @@ CREATE TABLE Model_Release (
 
 SELECT COUNT(i.image_id)
 FROM Images i
-WHERE i.site_name_id = 12
+WHERE i.site_name_id = 11
 ;
 
 DELETE FROM Images
-WHERE site_name_id = 12
+WHERE site_name_id = 11
 ;
 
 SELECT k.keyword_text 

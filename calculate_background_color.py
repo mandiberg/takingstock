@@ -1,19 +1,20 @@
-# FOLDER_PATH = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/bg_color/0900"
-# results = []
-# '''
-# now itterates through folder for testing.
-# luminosity works well.
-# hue isn't as useful, as it is only the chroma, so it treats 95% white with a blue cast the same as a vivid blue
+'''
+query all items where left or right are 0
 
-# the next step is to pull from db and write back to db. 
-# let's stick to the segment table.
-# I revised fetch_bagofkeywords.py, and I would suggest using that as a template for this.
-# it uses myslqalchemy now. and the threading is stable
+SELECT ib.image_id 
+FROM ImagesBackground ib 
+WHERE JSON_EXTRACT(ib.selfie_bbox , '$.left') = 0
+OR JSON_EXTRACT(ib.selfie_bbox , '$.righ') = 0;
 
-# it needs to pull the bbox, and crop the image to bbox and then run that through the function
-# because that is what will actually be in the final image
-# most images have even continuous backgrounds, but some have uneven backgrounds that throw off the average.
-# '''
+rerun the selfie segmentation on these images
+test the bottom corner pixel
+store that data in the table
+
+ib.is_left_shoulder = 1/0 (boolean)
+ib.is_right_shoulder
+
+s
+'''
 
 
 

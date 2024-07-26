@@ -78,7 +78,7 @@ NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 18	afripics
 '''
 
-THIS_SITE = 9
+THIS_SITE = 11
 
 SEARCH_KEYS_FOR_LOC = True
 VERBOSE = False
@@ -106,20 +106,21 @@ elif THIS_SITE == 10:
     INGEST_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/VCG2"
     JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache.jsonl")
 elif THIS_SITE == 11:
-    # >> FH
+    io.db["name"] = "stock"
+    # in progress, 1.28M
     INGEST_FOLDER = "/Users/michaelmandiberg/Downloads/pixcy_v2"
     JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache_filtered.jsonl")
 elif THIS_SITE == 12:
-    # unique in google sheet for plurals, then FH
+    # keys by count ready for final parse
     INGEST_FOLDER = "/Users/michaelmandiberg/Library/CloudStorage/Dropbox/takingstock_dropbox/PIXERF"
     JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache.jsonl")
 elif THIS_SITE == 13:
-    # prepped and ready to go. did final check (add new keys)
+    # DONE
     INGEST_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/ImagesBazzar"
     JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache.jsonl")
     eth_dict_per_site = {'asian ethnicity':9, 'tika':9, 'alta':9, 'asian  ethnicity':9,'asian ethinicity':9,'asian farmer':9,'asian medicine':9,'asians':9,'asiascher':9,'asiatisch':9,'asiatische':9,'asiatischen':9,'asiatischer':9,'asiatisches':9,'asien':9}
 elif THIS_SITE == 14:
-    # prepped and ready to go. did final check (add new keys)
+    # DONE
     INGEST_FOLDER = "/Users/michaelmandiberg/Library/CloudStorage/Dropbox/takingstock_dropbox/INDIA-PB"
     JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache.jsonl")
     eth_dict_per_site = {'asian ethnicity':9, 'tika':9, 'alta':9, 'asian  ethnicity':9,'asian ethinicity':9,'asian farmer':9,'asian medicine':9,'asians':9,'asiascher':9,'asiatisch':9,'asiatische':9,'asiatischen':9,'asiatischer':9,'asiatisches':9,'asien':9}
@@ -139,7 +140,7 @@ elif THIS_SITE == 18:
 
 
 # key, etc csvs
-KEYWORD_PATH = os.path.join(INGEST_ROOT, "Keywords_202407151345.csv")
+KEYWORD_PATH = os.path.join(INGEST_ROOT, "Keywords_202407221412.csv")
 LOCATION_PATH = os.path.join(INGEST_ROOT, "Location_202308041952.csv")
 CSV_KEY2LOC_PATH = os.path.join(INGEST_ROOT, "CSV_KEY2LOC.csv")
 CSV_KEY2KEY_GETTY_PATH = os.path.join(INGEST_ROOT, "CSV_KEY2KEY_GETTY.csv")
@@ -178,16 +179,16 @@ def dict_from_csv(file_path):
 
 
 loc2loc = {"niue":"Niue Island", "east timor":"timor-leste"}
-key2key = {}
+# key2key = {}
 key2loc = dict_from_csv(CSV_KEY2LOC_PATH)
 skip_keys = ["other", "easy resource", "suggestive filter", "unspecified", "diffrential focus", "internal term 1", "birds eye view", "bird's eye view", "los banos", "scoot", "angel fire"]
-key2key_getty = dict_from_csv(CSV_KEY2KEY_GETTY_PATH)
+key2key = dict_from_csv(CSV_KEY2KEY_GETTY_PATH)
 key2key_vcg = dict_from_csv(CSV_KEY2KEY_VCG_PATH)
 age_dict = dict_from_csv(CSV_AGE_DICT_PATH)
 gender_dict = dict_from_csv(CSV_GENDER_DICT_PATH)
 
 gender_dict_shutter_secondary = {}
-gender_dict_both = {}
+# gender_dict_both = {}
 gender_dict_TNB = dict_from_csv(CSV_GENDER_DICT_TNB_PATH)
 
 eth_dict = {}
@@ -207,12 +208,12 @@ def lower_dict(this_dict):
     lower_dict = {k.lower(): v for k, v in this_dict.items()}
     return lower_dict
 
-gender_dict = lower_dict({**gender_dict, **gender_dict_both, **gender_dict_TNB})
-gender_dict_secondary = lower_dict({**gender_dict, **gender_dict_shutter_secondary})
+gender_dict_secondary = gender_dict = lower_dict({**gender_dict, **gender_dict_TNB})
+# gender_dict_secondary = lower_dict({**gender_dict, **gender_dict_shutter_secondary})
 eth_dict = lower_dict({**eth_dict, **eth_dict_istock, **eth_dict_getty, **multi_dict})
 age_details_dict = lower_dict({**age_details_dict, **age_detail_dict_istock, **age_details_dict_shutterstock, **age_dict_shutter_secondary})
 eth_all_dict = lower_dict({**eth_dict_istock_secondary, **eth_dict_shutter_secondary, **eth_dict_per_site})
-key2key = lower_dict({**key2key, **key2key_getty})
+# key2key = lower_dict({**key2key, **key2key_getty})
 key2key_set = set(key2key)
 eth_all_dict = lower_dict({**eth_dict, **eth_all_dict})
 # eth_set = set(eth_all_dict.keys())
@@ -400,10 +401,12 @@ def unlock_key_plurals_etc(site_id,key, this_dict):
 
     key_no = None
     key = key.lower()
+    if VERBOSE: print("trying to unlock key:", key)
     this_dict_set = set(this_dict.keys())
     if key in this_dict_set:
     # try:
         if VERBOSE: print("trying basic keys_dict for this key:,", key)
+        # print("this is the dict", this_dict)
         key_no = this_dict[key]
         if VERBOSE: print("this is the key_no", key_no)
 
@@ -1298,11 +1301,15 @@ def get_location(country, keys_list):
     return country_key
 
 def structure_row_pixcy(item, ind, keys_list):
+    print("keys_list", keys_list)
     gender = item.get("gender", None)
+    print("gender", gender)
     age = item.get("age", None)
     description = item.get("title", None)
     gender_key, age_key, age_detail_key = get_gender_age_row(gender, age, description, keys_list, THIS_SITE)
+    print("gender_key, age_key, age_detail_key", gender_key, age_key, age_detail_key)
     location = item.get("location", None)
+    filename = item["id"]+".jpg"
 
     if item["location"]:
         if VERBOSE: print("we gotta location: ", item["location"])
@@ -1325,7 +1332,7 @@ def structure_row_pixcy(item, ind, keys_list):
         "author": item["author"],        
         
         ## TK
-        "model_release": item["model_release"],        
+        "release_name_id": get_release(item)
 
         # "imagename": generate_local_unhashed_image_filepath(item[9].replace("images/",""))  # need to refactor this from the contentURL using the hash function
     }
@@ -1389,7 +1396,7 @@ def structure_row_ImagesBazzar(item, ind, keys_list):
     return nan2none(image_row), shoot_location
 
 def get_release(item):
-    release_dict = {'yes': 1, 'no': 2, 'ccbysa': 3, 'ccby': 4, 'ccbysanc': 5, 'ccbync': 6, 'free': 7}
+    release_dict = {'Yes': 1, 'No': 2, 'CCBYSA': 3, 'CCBY': 4, 'CCBYSANC': 5, 'CCBYNC': 6, 'Free': 7, 'N/A': 8}
     release_key = item.get("model_release", None)
     if release_key:
         release_value = release_dict.get(release_key.lower(), None)
@@ -1758,6 +1765,10 @@ def ingest_json():
                 print(keys_list)
                 image_row, shoot_location = structure_row_VCG(item, ind, keys_list)
             elif THIS_SITE == 11:
+                search_string = item.get("filters", {}).get("search", None)
+                if search_string:
+                    search_keys = search_string.split(" ")
+                    keys_list = keys_list + search_keys
                 image_row = structure_row_pixcy(item, ind, keys_list)
                 search_desc_for_keys = True
                 # item["ethnicity"] = None

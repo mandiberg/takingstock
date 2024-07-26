@@ -6,7 +6,15 @@ import os
 # jsonl_file_path = '/Users/michaelmandiberg/Library/CloudStorage/Dropbox/takingstock_dropbox/INDIA-PB/items_cache.jsonl'
 # csv_output_file_path = '/Users/michaelmandiberg/Library/CloudStorage/Dropbox/takingstock_dropbox/INDIA-PB/keys_by_count.csv'
 
-FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/alamyCSV"
+# FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/alamyCSV"
+# FOLDER = "/Users/michaelmandiberg/Library/CloudStorage/Dropbox/takingstock_dropbox/INDIA-PB"
+# FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/ImagesBazzar"
+FOLDER = "/Users/michaelmandiberg/Downloads/pixcy_v2"
+# FOLDER = "/Users/michaelmandiberg/Library/CloudStorage/Dropbox/takingstock_dropbox/PIXERF"
+# FOLDER = "/Users/michaelmandiberg/Library/CloudStorage/Dropbox/takingstock_dropbox/iwaria"
+# FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/nappy_v3_w-data"
+# FOLDER = "/Users/michaelmandiberg/Library/CloudStorage/Dropbox/takingstock_dropbox/PICHA-STOCK"
+# FOLDER = "/Users/michaelmandiberg/Library/CloudStorage/Dropbox/takingstock_dropbox/AFRIPICS"
 
 jsonl_file_path = os.path.join(FOLDER,'items_cache.jsonl')
 csv_output_file_path = os.path.join(FOLDER,'jsonl_keys_by_count.csv')
@@ -22,6 +30,7 @@ with open(jsonl_file_path, 'r') as file:
         
         # Extract the 'keywords' value and split it into a list
         keywords = json_object.get('keywords', '').split('|')
+        keywords = json_object.get('model_release', '')
         # print(keywords)
         # Update the counts in the dictionary
         for keyword in keywords:

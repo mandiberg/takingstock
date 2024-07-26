@@ -48,7 +48,7 @@ HSV_BOUNDS["LUM_WEIGHT"] = 1
 HSV_NORMS = {"LUM": .01, "SAT": 1,  "HUE": 0.002777777778, "VAL": 1}
 
 # this is for controlling if it is using
-# all clusters,
+# all clusters, 
 IS_CLUSTER = False
 # number of clusters to analyze -- this is also declared in Clustering_SQL. Move to IO?
 N_CLUSTERS = 128
@@ -59,13 +59,19 @@ CLUSTER_NO = 63
 # cut the kids
 NO_KIDS = True
 USE_PAINTED = True
-OUTPAINT = False
+OUTPAINT = True
 INPAINT= True
-INPAINT_MAX = 5000
-OUTPAINT_MAX = 5001
+INPAINT_MAX = {"top":250,"right":250,"bottom":75,"left":250}
+INPAINT_MAX = {"top":80,"right":80,"bottom":20,"left":80}
+OUTPAINT_MAX = {"top":280,"right":280,"bottom":80,"left":280}
+INPAINT_MAX = {"top":.4,"right":.4,"bottom":.1,"left":.4}
+OUTPAINT_MAX = {"top":.8,"right":.8,"bottom":.2,"left":.8}
+
+BLUR_THRESH_MAX={"top":50,"right":100,"bottom":10,"left":100}
+BLUR_THRESH_MIN={"top":0,"right":20,"bottom":10,"left":20}
 
 # BLUR_RADIUS = 200
-SIGMAX=1000
+# SIGMAX=1000
 BLUR_RADIUS = 1  ##computationally more expensive
 # SIGMAX=10
 
@@ -105,7 +111,7 @@ SORT_TYPE = "128d"
 if SORT_TYPE == "planar_body": OBJ_CLS_ID = 67
 else: OBJ_CLS_ID = 0
 
-ONE_SHOT = False # take all files, based off the very first sort order.
+ONE_SHOT = True # take all files, based off the very first sort order.
 JUMP_SHOT = True # jump to random file if can't find a run (I don't think this applies to planar?)
 
 
@@ -280,9 +286,9 @@ face_height_output = 500
 # image_edge_multiplier = [1.5,1.5,2,1.5] # bigger portrait
 # image_edge_multiplier = [1.5,1.33, 2.5,1.33] # bigger 2x3 portrait
 # image_edge_multiplier = [1.4,2.6,1.9,2.6] # wider for hands
-image_edge_multiplier = [3,5,3,5] # megawide for testing
+# image_edge_multiplier = [3,5,3,5] # megawide for testing
 # image_edge_multiplier = [1.4,3.3,3,3.3] # widerest 16:10 for hands
-# image_edge_multiplier = [1.6,3.84,3.2,3.84] # wiiiiiiiidest 16:10 for hands
+image_edge_multiplier = [1.6,3.84,3.2,3.84] # wiiiiiiiidest 16:10 for hands
 # image_edge_multiplier = [1.45,3.84,2.87,3.84] # wiiiiiiiidest 16:9 for hands
 # image_edge_multiplier = [1.2,2.3,1.7,2.3] # medium for hands
 # image_edge_multiplier = [1.2, 1.2, 1.6, 1.2] # standard portrait
@@ -299,8 +305,8 @@ start_site_image_id = None
 # start_site_image_id = "0/08/158083627-man-in-white-t-shirt-gesturing-with-his-hands-studio-cropped.jpg"
 
 # for PFP
-start_img_name = "start_face_encodings"
-start_site_image_id = [-0.13242901861667633, 0.09738104045391083, 0.003530653193593025, -0.04780442640185356, -0.13073976337909698, 0.07189705967903137, -0.006513072177767754, -0.051335446536540985, 0.1768932193517685, -0.03729865700006485, 0.1137416809797287, 0.13994133472442627, -0.23849385976791382, -0.08209677785634995, 0.06067033112049103, 0.07974598556756973, -0.1882513463497162, -0.24926315248012543, -0.011344537138938904, -0.10508193075656891, 0.010317208245396614, 0.06348179280757904, 0.02852417528629303, 0.06981766223907471, -0.14760875701904297, -0.34729471802711487, -0.014949701726436615, -0.09429284185171127, 0.08592978119850159, -0.11939340829849243, 0.04517041891813278, 0.06180906295776367, -0.1773814857006073, 0.011621855199337006, 0.010536111891269684, 0.12963438034057617, -0.07557092607021332, 0.0027374476194381714, 0.2890719771385193, 0.0692337155342102, -0.17323020100593567, 0.0724603682756424, 0.021229337900877, 0.361629843711853, 0.250482439994812, 0.021974680945277214, 0.018878426402807236, -0.022722169756889343, 0.09668144583702087, -0.29601603746414185, 0.11375367641448975, 0.2568872570991516, 0.11404240131378174, 0.04999732971191406, 0.02831254154443741, -0.15830034017562866, -0.031099170446395874, 0.028748074546456337, -0.180643692612648, 0.13169123232364655, 0.058790236711502075, -0.0858338251709938, 0.029470380395650864, -0.002784252166748047, 0.2532877027988434, 0.07375448942184448, -0.11085735261440277, -0.12285713106393814, 0.11346398293972015, -0.19246435165405273, -0.1447266787290573, 0.054258447140455246, -0.1335202157497406, -0.1264294683933258, -0.23741140961647034, 0.07753928005695343, 0.3753989636898041, 0.08984167128801346, -0.18434450030326843, 0.042485352605581284, -0.08978638052940369, -0.03871896490454674, 0.06451354175806046, 0.08044029772281647, -0.11364202201366425, -0.1158837378025055, -0.10755209624767303, 0.044953495264053345, 0.2573489546775818, 0.049939051270484924, -0.07680445909500122, 0.20810386538505554, 0.09711501002311707, 0.05330953001976013, 0.08986716717481613, 0.0984266921877861, -0.036112621426582336, -0.011795245110988617, -0.15438663959503174, -0.027118921279907227, -0.012514196336269379, -0.11667540669441223, 0.04242435097694397, 0.13383115828037262, -0.18503828346729279, 0.19057676196098328, 0.017584845423698425, -0.005235005170106888, 0.010936722159385681, 0.08952657878398895, -0.1809171438217163, -0.07223983108997345, 0.16210225224494934, -0.264881432056427, 0.3121953308582306, 0.21528613567352295, 0.02137373574078083, 0.12006716430187225, 0.08322857320308685, 0.0802738219499588, -0.013485163450241089, 0.005497157573699951, -0.0893208310008049, -0.06330209970474243, 0.017513029277324677, -0.007281661033630371, 0.06451432406902313, 0.10179871320724487]
+# start_img_name = "start_face_encodings"
+# start_site_image_id = [-0.13242901861667633, 0.09738104045391083, 0.003530653193593025, -0.04780442640185356, -0.13073976337909698, 0.07189705967903137, -0.006513072177767754, -0.051335446536540985, 0.1768932193517685, -0.03729865700006485, 0.1137416809797287, 0.13994133472442627, -0.23849385976791382, -0.08209677785634995, 0.06067033112049103, 0.07974598556756973, -0.1882513463497162, -0.24926315248012543, -0.011344537138938904, -0.10508193075656891, 0.010317208245396614, 0.06348179280757904, 0.02852417528629303, 0.06981766223907471, -0.14760875701904297, -0.34729471802711487, -0.014949701726436615, -0.09429284185171127, 0.08592978119850159, -0.11939340829849243, 0.04517041891813278, 0.06180906295776367, -0.1773814857006073, 0.011621855199337006, 0.010536111891269684, 0.12963438034057617, -0.07557092607021332, 0.0027374476194381714, 0.2890719771385193, 0.0692337155342102, -0.17323020100593567, 0.0724603682756424, 0.021229337900877, 0.361629843711853, 0.250482439994812, 0.021974680945277214, 0.018878426402807236, -0.022722169756889343, 0.09668144583702087, -0.29601603746414185, 0.11375367641448975, 0.2568872570991516, 0.11404240131378174, 0.04999732971191406, 0.02831254154443741, -0.15830034017562866, -0.031099170446395874, 0.028748074546456337, -0.180643692612648, 0.13169123232364655, 0.058790236711502075, -0.0858338251709938, 0.029470380395650864, -0.002784252166748047, 0.2532877027988434, 0.07375448942184448, -0.11085735261440277, -0.12285713106393814, 0.11346398293972015, -0.19246435165405273, -0.1447266787290573, 0.054258447140455246, -0.1335202157497406, -0.1264294683933258, -0.23741140961647034, 0.07753928005695343, 0.3753989636898041, 0.08984167128801346, -0.18434450030326843, 0.042485352605581284, -0.08978638052940369, -0.03871896490454674, 0.06451354175806046, 0.08044029772281647, -0.11364202201366425, -0.1158837378025055, -0.10755209624767303, 0.044953495264053345, 0.2573489546775818, 0.049939051270484924, -0.07680445909500122, 0.20810386538505554, 0.09711501002311707, 0.05330953001976013, 0.08986716717481613, 0.0984266921877861, -0.036112621426582336, -0.011795245110988617, -0.15438663959503174, -0.027118921279907227, -0.012514196336269379, -0.11667540669441223, 0.04242435097694397, 0.13383115828037262, -0.18503828346729279, 0.19057676196098328, 0.017584845423698425, -0.005235005170106888, 0.010936722159385681, 0.08952657878398895, -0.1809171438217163, -0.07223983108997345, 0.16210225224494934, -0.264881432056427, 0.3121953308582306, 0.21528613567352295, 0.02137373574078083, 0.12006716430187225, 0.08322857320308685, 0.0802738219499588, -0.013485163450241089, 0.005497157573699951, -0.0893208310008049, -0.06330209970474243, 0.017513029277324677, -0.007281661033630371, 0.06451432406902313, 0.10179871320724487]
 
 
 # no gap
@@ -717,70 +723,32 @@ def fetch_selfie_bbox(target_image_id):
         selfie_bbox=json.loads(selfie_bbox)
     # print("after json selie bbox",selfie_bbox,type(selfie_bbox))
     ##making cutoffs##
-    threshold_max={"top":50,"right":100,"bottom":10,"left":100}
-    threshold_min={"top":0,"right":10,"bottom":10,"left":10}
     if selfie_bbox:
-        selfie_bbox["left"]=np.minimum(selfie_bbox["left"],threshold_max["left"])
-        selfie_bbox["right"]=np.minimum(selfie_bbox["right"],threshold_max["right"])
-        selfie_bbox["bottom"]=np.minimum(selfie_bbox["bottom"],threshold_max["bottom"])
-        selfie_bbox["top"]=np.minimum(selfie_bbox["top"],threshold_max["top"])
+        selfie_bbox["left"]=np.minimum(selfie_bbox["left"],BLUR_THRESH_MAX["left"])
+        selfie_bbox["right"]=np.minimum(selfie_bbox["right"],BLUR_THRESH_MAX["right"])
+        selfie_bbox["bottom"]=np.minimum(selfie_bbox["bottom"],BLUR_THRESH_MAX["bottom"])
+        selfie_bbox["top"]=np.minimum(selfie_bbox["top"],BLUR_THRESH_MAX["top"])
 
-        selfie_bbox["left"]=np.maximum(selfie_bbox["left"],threshold_min["left"])
-        selfie_bbox["right"]=np.maximum(selfie_bbox["right"],threshold_min["right"])
-        selfie_bbox["bottom"]=np.maximum(selfie_bbox["bottom"],threshold_min["bottom"])
-        selfie_bbox["top"]=np.maximum(selfie_bbox["top"],threshold_min["top"])
+        selfie_bbox["left"]=np.maximum(selfie_bbox["left"],BLUR_THRESH_MIN["left"])
+        selfie_bbox["right"]=np.maximum(selfie_bbox["right"],BLUR_THRESH_MIN["right"])
+        selfie_bbox["bottom"]=np.maximum(selfie_bbox["bottom"],BLUR_THRESH_MIN["bottom"])
+        selfie_bbox["top"]=np.maximum(selfie_bbox["top"],BLUR_THRESH_MIN["top"])
 
     else:
         print("selfie bbox calculation not done")
     return selfie_bbox
 
-# def merge_inpaint(inpaint_image,img,extended_img,extension_pixels,blur_radius=BLUR_RADIUS):
-#     height, width = img.shape[:2]
-#     # top, bottom, left, right = extension_pixels["top"], extension_pixels["bottom"], extension_pixels["left"],extension_pixels["right"] 
-#     top, bottom, left, right = extension_pixels["top"], extension_pixels["top"]+height, extension_pixels["left"],extension_pixels["left"]+width
-#     # top, bottom, left, right = extension_pixels["top"]+offset, extension_pixels["top"]-offset+height, extension_pixels["left"]+offset,extension_pixels["left"]-offset+width
 
-#     # mask = np.zeros_like(inpaint_image[:, :, 0])
-#     mask = np.zeros(np.shape(inpaint_image))
-
-#     mask[:top,:] = [255,255,255]
-#     mask[:,:left] = [255,255,255]
-#     mask[bottom:,:] = [255,255,255]
-#     mask[:,right:] = [255,255,255]
-#     # mask blur
-    
-    mask = cv2.GaussianBlur(mask, (blur_radius, blur_radius), sigmaX=SIGMAX)
-#     # Expand the mask dimensions to match the image
-#     # mask = np.expand_dims(mask, axis=-1)
-#     # mask=mask[top:bottom,left:right]
-#     # inpaint_image[extension_pixels["top"]:extension_pixels["top"]+np.shape(img)[0],extension_pixels["left"]:extension_pixels["left"]+np.shape(img)[1]]=img
-#     # inpaint_image[top:bottom,left:right]=img[offset:height-offset,offset:width-offset]*(1-mask)+(mask)*inpaint_image[top:bottom,left:right]
-#     inpaint_merge=extended_img*(1-mask/255)+(mask/255)*inpaint_image
-#     inpaint_merge=np.array(inpaint_merge,dtype=np.uint8)
-
-#     return inpaint_merge
-
-def merge_inpaint2(inpaint_image,img,extended_img,extension_pixels,selfie_bbox,blur_radius=BLUR_RADIUS):
+def merge_inpaint(inpaint_image,img,extended_img,extension_pixels,selfie_bbox,blur_radius=BLUR_RADIUS):
     height, width = img.shape[:2]
     top, bottom, left, right = extension_pixels["top"], extension_pixels["top"]+height, extension_pixels["left"],extension_pixels["left"]+width
     print("top, bottom, left, right", top, bottom, left, right)
-    ################
-    # mask = np.zeros(np.shape(inpaint_image))
-    # mask[:top,:] = [255,255,255]
-    # mask[:,:left] = [255,255,255]
-    # mask[bottom:,:] = [255,255,255]
-    # mask[:,right:] = [255,255,255]
-    # mask = cv2.GaussianBlur(mask, (blur_radius, blur_radius), sigmaX=SIGMAX)
-    ######################
-
 
     mask_top = np.zeros(np.shape(inpaint_image))
     mask_left = np.zeros(np.shape(inpaint_image))
     mask_bottom = np.zeros(np.shape(inpaint_image))
     mask_right = np.zeros(np.shape(inpaint_image))
     
-    # put if in here, to reduce blurring?
-
     mask_top[:top,:] = [255,255,255]
     mask_left[:,:left] = [255,255,255]
     mask_bottom[bottom:,:] = [255,255,255]
@@ -791,12 +759,6 @@ def merge_inpaint2(inpaint_image,img,extended_img,extension_pixels,selfie_bbox,b
     blur_radius_top=oddify(extension_pixels['top']*blur_radius)
     blur_radius_bottom=oddify(extension_pixels['bottom']*blur_radius)
     
-
-    # mask_left = cv2.GaussianBlur(mask_left, (blur_radius_left, 1), sigmaX=oddify(selfie_bbox['left']),sigmaY=1)
-    # mask_right = cv2.GaussianBlur(mask_right, (blur_radius_right, 1), sigmaX=oddify(selfie_bbox['right']),sigmaY=1)
-    # mask_top = cv2.GaussianBlur(mask_top, (1, blur_radius_top), sigmaX=1,sigmaY=oddify(selfie_bbox['top']))
-    # mask_bottom = cv2.GaussianBlur(mask_bottom, (1, blur_radius_bottom), sigmaX=1,sigmaY=oddify(extension_pixels['bottom']))
-
     mask_left = cv2.blur(mask_left, (blur_radius_left, 1))
     mask_right = cv2.blur(mask_right, (blur_radius_right, 1))
     mask_top = cv2.blur(mask_top, (1, blur_radius_top))
@@ -809,11 +771,8 @@ def merge_inpaint2(inpaint_image,img,extended_img,extension_pixels,selfie_bbox,b
     mask=np.maximum(mask_left+mask_right,mask_top+mask_bottom)
 
     # increase the white values by 4x, while keeping the black at 0
+    # did this get lost???????
     
-
-    # invert the mask
-    # mask = 255 - mask
-
     # Expand the mask dimensions to match the image
     inpaint_merge = extended_img * (1 - mask / 255) + (mask / 255) * inpaint_image
     inpaint_merge=np.array(inpaint_merge,dtype=np.uint8)
@@ -865,6 +824,19 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
         # return([image_id, description[0], topic_score])
 
     def in_out_paint(img, row):
+        def check_extension(shape, extension_pixels, threshold):
+            key = 0
+            for index, (key, value) in enumerate(extension_pixels.items()):
+                if index in [0,2]: dim = shape[0]
+                else: dim = shape[1]
+                ratio_factor = extension_pixels[key] / dim
+                print("ratio_factor", ratio_factor)
+                if ratio_factor > threshold[key]:
+                    if VERBOSE: print("extension too big, not inpainting")
+                    return False
+            if VERBOSE: print("extension is big, going to be inpainting")
+            return True
+
         cropped_image = None
         face_diff=None
         bailout=False
@@ -882,16 +854,21 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
             # Create the directory if it doesn't exist (creates directories even if skips below because extension too large)
             if not os.path.exists(directory):
                 os.makedirs(directory)
-            maxkey = max(extension_pixels, key=lambda y: abs(extension_pixels[y]))
-            print("maxkey", maxkey)
-            print("extension_pixels[maxkey]", extension_pixels[maxkey])
+                # maxkey = max(extension_pixels, key=lambda y: abs(extension_pixels[y]))
+            # print("maxkey", maxkey)
+            # print("extension_pixels[maxkey]", extension_pixels[maxkey])
             ##################
             selfie_bbox=fetch_selfie_bbox(row['image_id'])
-            if selfie_bbox["top"]==0: 
+            if selfie_bbox["left"]==0 or selfie_bbox["top"]==0 or selfie_bbox["right"]==0: 
                 if VERBOSE: print("no selfie bbox, skipping -------------------> bailout !!!!!!!!!!!!!!!!!")
                 bailout=True
+            elif selfie_bbox["left"]==0 or selfie_bbox["right"]==0: 
+                # retest if the bbox touch area starts at the bottom of the image
+                # does the mask touch the bottom of the image?
+                pass
+            
             ##################
-            if extension_pixels[maxkey] <= INPAINT_MAX and not bailout:
+            if check_extension(img.shape, extension_pixels, INPAINT_MAX) and not bailout:
                 print("inpainting small extension")
                 # extimg is 50px smaller and mask is 10px bigger
                 extended_img,mask=sort.prepare_mask(img,extension_pixels)
@@ -914,13 +891,13 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
                 # move the boundary of the blur in 50px
                 ########
                 # inpaint_image=merge_inpaint(inpaint_image,img,extended_img,extension_pixels)
-                inpaint_image, blurmask =merge_inpaint2(inpaint_image,img,extended_img,extension_pixels,selfie_bbox)
+                inpaint_image, blurmask =merge_inpaint(inpaint_image,img,extended_img,extension_pixels,selfie_bbox)
                 cv2.imwrite(inpaint_file+"5_aftmerge.jpg",inpaint_image)
                 cv2.imwrite(inpaint_file+"6_blurmask.jpg",blurmask)
                 ########
                 cv2.imwrite(inpaint_file,inpaint_image) #temp comment out
                 print("inpainting done", inpaint_file,"shape",np.shape(inpaint_image))
-            elif extension_pixels[maxkey] < OUTPAINT_MAX:
+            elif check_extension(img.shape, extension_pixels, OUTPAINT_MAX) and OUTPAINT:
                 print("outpainting medium extension")
                 inpaint_image=outpaint(img,extension_pixels,downsampling_scale=1,prompt="",negative_prompt="")
                 cv2.imwrite(inpaint_file,inpaint_image) 

@@ -1420,7 +1420,15 @@ class SortPose:
 
             # if self.ONE_SHOT and not runmask:
 
-            if runmask.any():
+            if self.ONE_SHOT:
+                print("ONE_SHOT going to assign all and try to drop everything")
+                df_run = df_shuffled
+                # drop all rows from df_shuffled
+                df_enc = df_enc.drop(df_run.index).reset_index(drop=True)
+                print("df_run", df_run)
+                print("df_enc", len(df_enc))
+
+            elif runmask.any():
                 num_true_values = runmask.sum()
                 print("we have a run ---->>>>", num_true_values)
                 # if there is a run < MINFACEDIST

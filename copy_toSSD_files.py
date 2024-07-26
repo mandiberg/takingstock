@@ -32,7 +32,7 @@ sig = '''
 # for moving segment to SSD
 
 #where the images are:
-PATH = "/Volumes/RAID54/"
+PATH = "/Volumes/RAID18/"
 #where the images are going:
 PATH2 = "/Volumes/OWC4/segment_images"
 SEGMENTTABLE_NAME = 'SegmentOct20'
@@ -46,17 +46,17 @@ IMAGES_THREAD_COUNTER = 0
 3   adobe
 4   istock
 5   pexels
-6   unsplash
-7   pond5
-8   123rf
+6   unsplash - did I DL these???
+7   pond5 - no images (in db?)
+8   123rf - many missing files
 9   alamy
 10  visualchinagroup
 '''
 
 # right now this is only working for one site at a time
-SITE_NAME_ID = 3
-IMAGES_FOLDER_NAME = 'images_adobe'
-NEWIMAGES_FOLDER_NAME = 'images_adobe'
+SITE_NAME_ID = 8
+IMAGES_FOLDER_NAME = 'images_123rf'
+NEWIMAGES_FOLDER_NAME = 'images_123rf'
 NUMBER_OF_THREADS_IMAGES_DOWNLOAD =15
 OLDPATH = os.path.join(PATH, IMAGES_FOLDER_NAME)
 NEWPATH = os.path.join(PATH2, NEWIMAGES_FOLDER_NAME)
