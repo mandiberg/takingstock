@@ -176,7 +176,9 @@ class ImagesBackground(Base):
     val_bb       = Column(Float)
     lum_torso_bb = Column(Float)
     selfie_bbox  = Column(JSON(none_as_null=True))
-    
+    is_left_shoulder= Column(Boolean)
+    is_right_shoulder= Column(Boolean)
+
 class SegmentTable(Base):
     __tablename__ = 'SegmentOct20'
     

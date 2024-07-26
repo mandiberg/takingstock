@@ -165,6 +165,8 @@ CREATE TABLE ImagesBackground (
     val_bb FLOAT,
     torso_lum_bb FLOAT,
     selfie_bbox JSON,
+    is_left_shoulder boolean,
+    is_right_shoulder boolean,
     FOREIGN KEY (image_id) REFERENCES images(image_id)
 );
 

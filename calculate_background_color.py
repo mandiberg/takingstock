@@ -20,7 +20,7 @@ s
 
 #################################
 
-from sqlalchemy import create_engine, select, delete, and_
+from sqlalchemy import create_engine, text,func, select, delete, and_
 from sqlalchemy.orm import sessionmaker,scoped_session, declarative_base
 from sqlalchemy.pool import NullPool
 # from my_declarative_base import Images,ImagesBackground, SegmentTable, Site 
@@ -44,11 +44,12 @@ import pymongo
 
 Base = declarative_base()
 USE_BBOX=True
-VERBOSE = False
+VERBOSE = True
 TOPIC = 0
 START_ID = 91034671
 # 3.8 M large table (for Topic Model)
 # HelperTable_name = "SegmentHelperMar23_headon"
+SHOULDER_THRESH=0.1
 
 # 7K for topic 7
 # HelperTable_name = "SegmentHelperApril12_2x2x33x27"
@@ -108,7 +109,7 @@ title = 'Please choose your operation: '
 options = ['Create table', 'Fetch BG color stats',"test sorting"]
 option, index = pick(options, title)
 
-LIMIT= 1000000
+LIMIT= 100
 # Initialize the counter
 counter = 0
 
@@ -348,6 +349,27 @@ def fetch_BG_stat(target_image_id, lock, session):
     #####################
     # hue,sat,val,lum, lum_torso=get_bg_hue_lum(img,bbox,facelandmark)
     segmentation_mask=get_segmentation_mask(img,bbox,face_landmarks)
+
+    left_shoulder=segmentation_mask[-1,0]
+    right_shoulder=segmentation_mask[-1,-1]
+    if left_shoulder<SHOULDER_THRESH:
+        is_left_shoulder=False
+        print("no left shoulder")
+    else:
+        print("left shoulder present")
+        is_left_shoulder=True
+
+    if right_shoulder<SHOULDER_THRESH:
+        is_right_shoulder=False
+        print("no right shoulder")
+    else:
+        print("right shoulder present")
+        is_right_shoulder=True
+    ########UNCOMMENT THIS TO SAVE MASK####
+    # folder=os.path.join(io.ROOT,"test")
+    # cv2.imwrite(folder+"//"+str(target_image_id)+str(is_left_shoulder)+str(is_right_shoulder)+"_image_.jpg",img)
+    # cv2.imwrite(folder+"//"+str(target_image_id)+str(is_left_shoulder)+str(is_right_shoulder)+"_mask_.jpg",255*segmentation_mask)
+    #######################################
     if FULL_ANALYSIS:
         hue,sat,val,lum, lum_torso=sort.get_bg_hue_lum(img,segmentation_mask,bbox)  
         if USE_BBOX:
@@ -358,7 +380,7 @@ def fetch_BG_stat(target_image_id, lock, session):
             # hue_bb,sat_bb, val_bb, lum_bb, lum_torso_bb =get_bg_hue_lum(img,bbox,facelandmark)
 
     selfie_bbox=get_selfie_bbox(segmentation_mask)
-    
+    print("selfie_bbox",selfie_bbox)
     # Update the BG entry with the corresponding image_id
 
 
@@ -377,6 +399,8 @@ def fetch_BG_stat(target_image_id, lock, session):
             ImagesBG_entry.val = val
             ImagesBG_entry.lum_torso = lum_torso   
 
+        ImagesBG_entry.is_left_shoulder = is_left_shoulder
+        ImagesBG_entry.is_right_shoulder = is_right_shoulder
         ImagesBG_entry.selfie_bbox=selfie_bbox
 
         if VERBOSE:
@@ -451,16 +475,16 @@ if index == 0:
     # filter(not_(SegmentTable.age_id.in_([1, 2, 3]))).\
     # limit(LIMIT)
     #####################
-    ####################
-    select_query = select(
-        SegmentTable.image_id,
-        SegmentTable.imagename,
-        SegmentTable.site_name_id
-    ).\
-    select_from(SegmentTable).\
-    outerjoin(ImagesBackground, SegmentTable.image_id == ImagesBackground.image_id).\
-    filter(ImagesBackground.image_id == None, SegmentTable.image_id != None).\
-    limit(LIMIT)    
+
+    # select_query = select(
+    #     SegmentTable.image_id,
+    #     SegmentTable.imagename,
+    #     SegmentTable.site_name_id
+    # ).\
+    # select_from(SegmentTable).\
+    # outerjoin(ImagesBackground, SegmentTable.image_id == ImagesBackground.image_id).\
+    # filter(ImagesBackground.image_id == None, SegmentTable.image_id != None).\
+    # limit(LIMIT)    
     ####################
     #####################
     #for some reason ''' select ([xyx])''' produces error
@@ -483,6 +507,7 @@ if index == 0:
 
 
     result = session.execute(select_query).fetchall()
+    # print(result)
     # print the length of the result
     print(len(result), "rows")
     for row in result:
@@ -510,17 +535,39 @@ elif index == 1:
 
     # if USE_BBOX:distinct_image_ids_query = select(ImagesBackground.image_id.distinct()).\
     #     filter(ImagesBackground.lum_torso == None).limit(LIMIT)
+    ########################
+    # FOR SHOULDER CALCULATION
+
+    # select_query = select(
+    #     SegmentTable.image_id,
+    #     SegmentTable.imagename,
+    #     SegmentTable.site_name_id
+    # ).\
+    # select_from(SegmentTable).\
+    # outerjoin(ImagesBackground, SegmentTable.image_id == ImagesBackground.image_id).\
+    # filter(ImagesBackground.selfie_bbox != None).\
+    # filter(func.json_extract(ImagesBackground.selfie_bbox, '$.left')==0).\
+    # filter(func.json_extract(ImagesBackground.selfie_bbox, '$.right')==0).\
+    # limit(LIMIT) 
+
+    if USE_BBOX:
+        distinct_image_ids_query = select(ImagesBackground.image_id.distinct()).\
+            filter(ImagesBackground.is_left_shoulder == None).\
+            filter(func.json_extract(ImagesBackground.selfie_bbox, '$.left')==0).\
+            filter(func.json_extract(ImagesBackground.selfie_bbox, '$.right')==0).\
+            limit(LIMIT)
+    ####################
     # FOR SELFIE BBOX
-
-    if USE_BBOX and TOPIC:
-        # for processing specific topics
-        distinct_image_ids_query = select(ImagesBackground.image_id.distinct()).\
-            join(ImagesTopics, ImagesBackground.image_id == ImagesTopics.image_id).\
-            filter(ImagesBackground.selfie_bbox == None, ImagesTopics.topic_id == TOPIC, SegmentTable.bbox != None).limit(LIMIT)
-    elif USE_BBOX:
-        distinct_image_ids_query = select(ImagesBackground.image_id.distinct()).\
-            filter(ImagesBackground.selfie_bbox == None, ImagesBackground.image_id > START_ID).limit(LIMIT)
-
+    
+    # if USE_BBOX and TOPIC:
+    #     # for processing specific topics
+    #     distinct_image_ids_query = select(ImagesBackground.image_id.distinct()).\
+    #         join(ImagesTopics, ImagesBackground.image_id == ImagesTopics.image_id).\
+    #         filter(ImagesBackground.selfie_bbox == None, ImagesTopics.topic_id == TOPIC, SegmentTable.bbox != None).limit(LIMIT)
+    # elif USE_BBOX:
+    #     distinct_image_ids_query = select(ImagesBackground.image_id.distinct()).\
+    #         filter(ImagesBackground.selfie_bbox == None, ImagesBackground.image_id > START_ID).limit(LIMIT)
+    #######################
     # if USE_BBOX:distinct_image_ids_query = select(ImagesBackground.image_id.distinct()).filter(ImagesBackground.hue_bb == None).limit(LIMIT)
     else:distinct_image_ids_query = select(ImagesBackground.image_id.distinct()).filter(ImagesBackground.selfie_bbox == None).limit(LIMIT)
     distinct_image_ids = [row[0] for row in session.execute(distinct_image_ids_query).fetchall()]
