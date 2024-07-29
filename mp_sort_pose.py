@@ -38,7 +38,7 @@ class SortPose:
         self.HSV_DELTA_MAX = .5
         self.HSVMULTIPLIER = 3
         self.BRUTEFORCE = False
-        self.CUTOFF = 20
+        self.CUTOFF = 200
 
         self.SORT_TYPE = SORT_TYPE
         if self.SORT_TYPE == "128d":
@@ -807,7 +807,7 @@ class SortPose:
         std_dev = np.std(pixels, axis=0)
         overall_std_dev = np.mean(std_dev)
         is_consistent = overall_std_dev < threshold
-        # if is_consistent:
+        # if not is_consistent:
             
         #     cv2.imshow("grid",grid)
         #     cv2.waitKey(0)

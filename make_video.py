@@ -84,7 +84,7 @@ BLUR_RADIUS = io.oddify(BLUR_RADIUS)
 MASK_OFFSET = [50,50,50,50]
 if OUTPAINT: from outpainting_modular import outpaint, image_resize
 VERBOSE = True
-SAVE_IMG_PROCESS = True
+SAVE_IMG_PROCESS = False
 # this controls whether it is using the linear or angle process
 IS_ANGLE_SORT = False
 
@@ -256,7 +256,7 @@ elif IS_SEGONLY and io.db["name"] == "fullstock":
     # WHERE += " AND k.keyword_text LIKE 'surpris%' "
 
     # WHERE = "s.site_name_id != 1"
-    LIMIT = 100
+    LIMIT = 10000
 
     # TEMP TK TESTING
     # WHERE += " AND s.site_name_id = 8"
@@ -748,8 +748,14 @@ def merge_inpaint(inpaint_image,img,extended_img,extension_pixels,selfie_bbox,bl
 
     corners = sort.define_corners(extension_pixels,img.shape)
     if corners["top_left"]:
-        is_ext_UL_consistent = sort.test_consistency(extended_img,corners["top_left"],10)
-        is_inpaint_UL_consistent = sort.test_consistency(inpaint_image,corners["top_left"],10)
+        # doubling test area, to compare it to areas around it
+        test_corner = [[corners["top_left"][0][0],io.oddify(corners["top_left"][0][1]*1.5)],[corners["top_left"][1][0],io.oddify(corners["top_left"][1][1]*1.5)]]
+        is_ext_UL_consistent = sort.test_consistency(extended_img,test_corner,10)
+        is_inpaint_UL_consistent = sort.test_consistency(inpaint_image,test_corner,10)
+        test_top = [[0,top+selfie_bbox["top"]],[0,inpaint_image.shape[1]]]
+                    
+        is_ext_top_consistent = sort.test_consistency(extended_img,test_top,10)
+        is_inpaint_top_consistent = sort.test_consistency(inpaint_image,test_top,10)
     print("is_ext_UL_consistent", is_ext_UL_consistent)
 
     mask_top = np.zeros(np.shape(inpaint_image))
@@ -783,7 +789,7 @@ def merge_inpaint(inpaint_image,img,extended_img,extension_pixels,selfie_bbox,bl
 
     # correction mask
     # if top is all same color, then don't use inpaint, leave mask black and use CV2
-    if is_consistent and is_ext_UL_consistent:
+    if is_consistent and is_ext_UL_consistent and is_ext_top_consistent:
         if top <= 10:
             print("small top", top)
             invert_dist = selfie_bbox["top"]
@@ -802,7 +808,7 @@ def merge_inpaint(inpaint_image,img,extended_img,extension_pixels,selfie_bbox,bl
         # mask=np.minimum(mask,mask_top_invert)
         mask=mask-mask_top_invert
         mask = np.where(mask < 0, 0, mask) # zero out any negative numbers
-    elif not is_inpaint_UL_consistent:
+    elif not is_inpaint_UL_consistent and not is_inpaint_top_consistent:
         return None, None
     # increase the white values by 4x, while keeping the black at 0
     # did this get lost???????
