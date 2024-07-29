@@ -38,7 +38,7 @@ class SortPose:
         self.HSV_DELTA_MAX = .5
         self.HSVMULTIPLIER = 3
         self.BRUTEFORCE = False
-        self.CUTOFF = 50
+        self.CUTOFF = 20
 
         self.SORT_TYPE = SORT_TYPE
         if self.SORT_TYPE == "128d":
@@ -775,6 +775,9 @@ class SortPose:
         top, bottom, left, right = extension_pixels["top"], extension_pixels["bottom"], extension_pixels["left"],extension_pixels["right"] 
         extended_img = np.zeros((height + top+bottom, width+left+right, 3), dtype=np.uint8)
         extended_img[top:height+top, left:width+left,:] = image
+
+
+        # main mask
         mask = np.zeros_like(extended_img[:, :, 0])
         mask[:top,:] = 255
         mask[:,:left] = 255
@@ -782,17 +785,19 @@ class SortPose:
         mask[:,(width+left):] = 255
         if self.VERBOSE:print("mask preparation done")
 
+        # corner mask for second CV2 inpaint
         cornermask = np.zeros_like(extended_img[:, :, 0])
+        # top left corner
         if top and not left: cornermask[:top,:top] = 255
         elif top and left: cornermask[:top,:left] = 255
         elif not top and left: cornermask[:left,:left] = 255
-
+        # top right corner
         cornermask[:top,(width+left):] = 255
-        
+        # bottom left corner
         if bottom and not left: cornermask[(height+top):,:bottom] = 255
         elif bottom and left: cornermask[(height+top):,:left] = 255
         elif not bottom and left: cornermask[(height+top-left):,:left] = 255
-
+        # bottom right corner
         cornermask[(height+top):,(width+left):] = 255
 
         return extended_img,mask, cornermask

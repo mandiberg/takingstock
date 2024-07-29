@@ -80,7 +80,7 @@ BLUR_RADIUS = oddify(BLUR_RADIUS)
 MASK_OFFSET = [50,50,50,50]
 if OUTPAINT: from outpainting_modular import outpaint, image_resize
 VERBOSE = True
-SAVE_IMG_PROCESS = False
+SAVE_IMG_PROCESS = True
 # this controls whether it is using the linear or angle process
 IS_ANGLE_SORT = False
 
@@ -743,39 +743,30 @@ def merge_inpaint(inpaint_image,img,extended_img,extension_pixels,selfie_bbox,bl
     top, bottom, left, right = extension_pixels["top"], extension_pixels["top"]+height, extension_pixels["left"],extension_pixels["left"]+width
     print("top, bottom, left, right", top, bottom, left, right)
 
+    # test the top strip
+    top_strip = img[:selfie_bbox["top"], :, :]
+    pixels = top_strip.reshape(-1, 3) # Reshape the strip to a 2D array of pixels
+    # mean_color = np.mean(pixels, axis=0)
+    std_dev = np.std(pixels, axis=0)
+    overall_std_dev = np.mean(std_dev)
+    threshold = 20 
+    is_consistent = overall_std_dev < threshold
+    print("is_consistent", is_consistent)
+    # if SAVE_IMG_PROCESS:
+    #     if is_consistent:
+    #         cv2.imshow("is_consistent", top_strip)
+    #         cv2.waitKey(0)
+    #         cv2.destroyAllWindows()
+
+    #     else:
+    #         cv2.imshow("NOT consistent", top_strip)
+    #         cv2.waitKey(0)
+    #         cv2.destroyAllWindows()
+
     mask_top = np.zeros(np.shape(inpaint_image))
     mask_left = np.zeros(np.shape(inpaint_image))
     mask_bottom = np.zeros(np.shape(inpaint_image))
     mask_right = np.zeros(np.shape(inpaint_image))
-
-    # mask_corners = np.ones(np.shape(inpaint_image))
-    
-    # # Get the dimensions of the image
-    # mc_height, mc_width = mask_corners.shape[:2]
-
-    # # Define the radius (half of the diameter)
-    # # radius = oddify(np.max([top, bottom, left, right]))
-    # radius = 50
-    # # Define the centers of the circles (the four corners)
-    # centers = [
-    #     (0, 0),                  # Top-left
-    #     (mc_width - 1, 0),          # Top-right
-    #     (0, mc_height - 1),         # Bottom-left
-    #     (mc_width - 1, mc_height - 1)  # Bottom-right
-    # ]
-
-    # # Draw black circles at each corner
-    # for center in centers:
-    #     cv2.circle(mask_corners, center, radius, 0, -1)
-
-    # cv2.imshow('mask_corners', mask_corners)
-    # cv2.waitKey(0)
-    # cv2.destroyAllWindows()
-
-    # ksize = (radius, radius) 
-    
-    # # Using cv2.blur() method  
-    # mask_corners = cv2.blur(mask_corners, ksize)  
 
     mask_top[:top,:] = [255,255,255]
     mask_left[:,:left] = [255,255,255]
@@ -797,15 +788,9 @@ def merge_inpaint(inpaint_image,img,extended_img,extension_pixels,selfie_bbox,bl
 
     # add the masks, keeping whites white, and allowing blacks to get full black
     mask=np.maximum(mask_left+mask_right,mask_top+mask_bottom)
-    # cv2.imshow('mask', mask)
-    # cv2.waitKey(0)
-    # cv2.destroyAllWindows()
-
-    # # trying to deal with the corners
-    # mask=np.minimum(mask,mask_corners)
-    # cv2.imshow('mask', mask)
-    # cv2.waitKey(0)
-    # cv2.destroyAllWindows()
+    cv2.imshow('mask', mask)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
 
     # increase the white values by 4x, while keeping the black at 0
     # did this get lost???????
