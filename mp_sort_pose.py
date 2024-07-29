@@ -769,6 +769,46 @@ class SortPose:
         if self.VERBOSE: print("extension pixels calculated")
         return extension_pixels
 
+    def define_corners(self,extension_pixels,shape):
+        # access results via corners["top_left"][0][0]
+        # cornermask[corners["top_left"][0][0]:corners["top_left"][0][1],corners["top_left"][1][0]:corners["top_left"][1][1]] = 255
+        top, bottom, left, right = extension_pixels["top"], extension_pixels["bottom"], extension_pixels["left"],extension_pixels["right"] 
+        height, width = shape[:2]
+        corners = {}
+        # top left corner
+        if top and not left: corners["top_left"] = [0,top],[0,top]
+        elif top and left: corners["top_left"] = [0,top],[0,left]
+        elif not top and left: corners["top_left"] = [0,left],[0,left]
+        else: corners["top_left"] = [0,0],[0,0]
+        # top right corner
+        if top and not right: corners["top_right"] = [0,top],[width+left-top,width+left]
+        elif top and right: corners["top_right"] = [0,top],[width+left,width+left+right]
+        elif not top and right: corners["top_right"] = [0,right],[width+left,width+left+right]
+        else: corners["top_right"] = [0,0],[width+left,width+left]
+        # bottom left corner
+        if bottom and not left: corners["bottom_left"] = [height+top,height+top+bottom],[0,bottom]
+        elif bottom and left: corners["bottom_left"] = [height+top,height+top+bottom],[0,left]
+        elif not bottom and left: corners["bottom_left"] = [height+top-left,height+top],[0,left]
+        else: corners["bottom_left"] = [height+top,height+top],[0,0]
+        # bottom right corner
+        if bottom and not right: corners["bottom_right"] = [height+top,height+top+bottom],[width+left-bottom,width+left]
+        elif bottom and right: corners["bottom_right"] = [height+top,height+top+bottom],[width+left,width+left+right]
+        elif not bottom and right: corners["bottom_right"] = [height+top-right,height+top],[width+left,width+left+right]
+        else: corners["bottom_right"] = [height+top,height+top],[width+left,width+left]
+
+        return corners
+    
+        # elif top and left: corners[:top,:left] = 255
+        # elif not top and left: corners[:left,:left] = 255
+        # # top right corner
+        # corners[:top,(width+left):] = 255
+        # # bottom left corner
+        # if bottom and not left: corners[(height+top):,:bottom] = 255
+        # elif bottom and left: corners[(height+top):,:left] = 255
+        # elif not bottom and left: corners[(height+top-left):,:left] = 255
+        # # bottom right corner
+        # corners[(height+top):,(width+left):] = 255
+
     def prepare_mask(self,image,extension_pixels):
         if self.VERBOSE:print("starting mask preparation")
         height, width = image.shape[:2]
@@ -787,18 +827,24 @@ class SortPose:
 
         # corner mask for second CV2 inpaint
         cornermask = np.zeros_like(extended_img[:, :, 0])
-        # top left corner
-        if top and not left: cornermask[:top,:top] = 255
-        elif top and left: cornermask[:top,:left] = 255
-        elif not top and left: cornermask[:left,:left] = 255
-        # top right corner
-        cornermask[:top,(width+left):] = 255
-        # bottom left corner
-        if bottom and not left: cornermask[(height+top):,:bottom] = 255
-        elif bottom and left: cornermask[(height+top):,:left] = 255
-        elif not bottom and left: cornermask[(height+top-left):,:left] = 255
-        # bottom right corner
-        cornermask[(height+top):,(width+left):] = 255
+        corners = self.define_corners(extension_pixels,image.shape)
+        cornermask[corners["top_left"][0][0]:corners["top_left"][0][1],corners["top_left"][1][0]:corners["top_left"][1][1]] = 255
+        cornermask[corners["top_right"][0][0]:corners["top_right"][0][1],corners["top_right"][1][0]:corners["top_right"][1][1]] = 255
+        cornermask[corners["bottom_left"][0][0]:corners["bottom_left"][0][1],corners["bottom_left"][1][0]:corners["bottom_left"][1][1]] = 255
+        cornermask[corners["bottom_right"][0][0]:corners["bottom_right"][0][1],corners["bottom_right"][1][0]:corners["bottom_right"][1][1]] = 255
+
+        # # # top left corner
+        # # if top and not left: cornermask[:top,:top] = 255
+        # # elif top and left: cornermask[:top,:left] = 255
+        # # elif not top and left: cornermask[:left,:left] = 255
+        # # top right corner
+        # cornermask[:top,(width+left):] = 255
+        # # bottom left corner
+        # if bottom and not left: cornermask[(height+top):,:bottom] = 255
+        # elif bottom and left: cornermask[(height+top):,:left] = 255
+        # elif not bottom and left: cornermask[(height+top-left):,:left] = 255
+        # # bottom right corner
+        # cornermask[(height+top):,(width+left):] = 255
 
         return extended_img,mask, cornermask
     
