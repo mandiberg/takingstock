@@ -34,6 +34,13 @@ SegmentTable_name = 'SegmentOct20'
 IS_SSD = True
 #IS_MOVE is in move_toSSD_files.py
 
+# I/O utils
+io = DataIO(IS_SSD)
+db = io.db
+# overriding DB for testing
+# io.db["name"] = "stock"
+# io.db["name"] = "ministock"
+
 # This is for when you only have the segment table. RW SQL query
 IS_SEGONLY= True
 
@@ -73,10 +80,7 @@ BLUR_THRESH_MIN={"top":0,"right":20,"bottom":10,"left":20}
 BLUR_RADIUS = 1  ##computationally more expensive
 # SIGMAX=10
 
-def oddify(x):
-    if x % 2 == 0: return x+1
-    else: return x
-BLUR_RADIUS = oddify(BLUR_RADIUS)
+BLUR_RADIUS = io.oddify(BLUR_RADIUS)
 MASK_OFFSET = [50,50,50,50]
 if OUTPAINT: from outpainting_modular import outpaint, image_resize
 VERBOSE = True
@@ -114,12 +118,6 @@ ONE_SHOT = True # take all files, based off the very first sort order.
 JUMP_SHOT = True # jump to random file if can't find a run (I don't think this applies to planar?)
 
 
-# I/O utils
-io = DataIO(IS_SSD)
-db = io.db
-# overriding DB for testing
-# io.db["name"] = "stock"
-# io.db["name"] = "ministock"
 
 
 METAS_FILE = "metas.csv"
@@ -344,6 +342,7 @@ mongo_collection = mongo_db[io.dbmongo['collection']]
 
 # mp_face_mesh = mp.solutions.face_mesh
 # face_mesh = mp_face_mesh.FaceMesh(static_image_mode=True, max_num_faces=1,min_detection_confidence=0.5)
+
 
 
 ###################
@@ -773,10 +772,10 @@ def merge_inpaint(inpaint_image,img,extended_img,extension_pixels,selfie_bbox,bl
     mask_bottom[bottom:,:] = [255,255,255]
     mask_right[:,right:] = [255,255,255]
 
-    blur_radius_left=oddify(selfie_bbox['left']*blur_radius)
-    blur_radius_right=oddify(selfie_bbox['right']*blur_radius)
-    blur_radius_top=oddify(extension_pixels['top']*blur_radius)
-    blur_radius_bottom=oddify(extension_pixels['bottom']*blur_radius)
+    blur_radius_left=io.oddify(selfie_bbox['left']*blur_radius)
+    blur_radius_right=io.oddify(selfie_bbox['right']*blur_radius)
+    blur_radius_top=io.oddify(extension_pixels['top']*blur_radius)
+    blur_radius_bottom=io.oddify(extension_pixels['bottom']*blur_radius)
     
     mask_left = cv2.blur(mask_left, (blur_radius_left, 1))
     mask_right = cv2.blur(mask_right, (blur_radius_right, 1))
@@ -788,9 +787,35 @@ def merge_inpaint(inpaint_image,img,extended_img,extension_pixels,selfie_bbox,bl
 
     # add the masks, keeping whites white, and allowing blacks to get full black
     mask=np.maximum(mask_left+mask_right,mask_top+mask_bottom)
-    cv2.imshow('mask', mask)
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
+    # cv2.imshow('mask', mask)
+    # cv2.waitKey(0)
+    # cv2.destroyAllWindows()
+
+    # correction mask
+    # if top is all same color, then don't use inpaint, leave mask black and use CV2
+    if is_consistent:
+        if top <= 10:
+            print("small top", top)
+            invert_dist = selfie_bbox["top"]
+            invert_blur = io.oddify(invert_dist/2)
+        else: 
+            invert_dist = top*2
+            invert_blur = blur_radius_top
+        print("invert_dist, invert_blur", invert_dist, invert_blur)
+        mask_top_invert = np.zeros(np.shape(inpaint_image))
+        mask_top_invert[:invert_dist,:] = [255,255,255]
+        mask_top_invert = cv2.blur(mask_top_invert, (1, invert_blur))
+        # mask_top_invert = cv2.bitwise_not(mask_top_invert) 
+        # cv2.imshow("mask_top_invert",mask_top_invert)
+        # cv2.waitKey(0)
+        # cv2.destroyAllWindows()
+        # mask=np.minimum(mask,mask_top_invert)
+        mask=mask-mask_top_invert
+        mask = np.where(mask < 0, 0, mask) # zero out any negative numbers
+        print("final mask data", mask)
+        # cv2.imshow("final",mask)
+        # cv2.waitKey(0)
+        # cv2.destroyAllWindows()
 
     # increase the white values by 4x, while keeping the black at 0
     # did this get lost???????
