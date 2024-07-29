@@ -62,6 +62,7 @@ USE_PAINTED = True
 OUTPAINT = False
 INPAINT= True
 INPAINT_MAX = {"top":.4,"right":.4,"bottom":.2,"left":.4}
+INPAINT_MAX_SHOULDERS = {"top":.4,"right":.15,"bottom":.2,"left":.15}
 OUTPAINT_MAX = {"top":.7,"right":.7,"bottom":.2,"left":.7}
 
 BLUR_THRESH_MAX={"top":50,"right":100,"bottom":10,"left":100}
@@ -79,6 +80,7 @@ BLUR_RADIUS = oddify(BLUR_RADIUS)
 MASK_OFFSET = [50,50,50,50]
 if OUTPAINT: from outpainting_modular import outpaint, image_resize
 VERBOSE = True
+SAVE_IMG_PROCESS = False
 # this controls whether it is using the linear or angle process
 IS_ANGLE_SORT = False
 
@@ -202,7 +204,7 @@ elif IS_SEGONLY and io.db["name"] == "stock":
     # WHERE += " AND e.encoding_id > 2612275"
 
     # WHERE = "s.site_name_id != 1"
-    LIMIT = 1000000
+    LIMIT = 1000
 
     # TEMP TK TESTING
     # WHERE += " AND s.site_name_id = 8"
@@ -711,10 +713,10 @@ def const_imgfilename(filename, df, imgfileprefix):
 #     return translated_landmarks
 
 def fetch_selfie_bbox(target_image_id):
-    select_image_ids_query = (select(ImagesBackground.image_id,ImagesBackground.selfie_bbox).filter(ImagesBackground.image_id == target_image_id))
+    select_image_ids_query = (select(ImagesBackground.image_id,ImagesBackground.selfie_bbox,ImagesBackground.is_left_shoulder, ImagesBackground.is_right_shoulder).filter(ImagesBackground.image_id == target_image_id))
 
     result = session.execute(select_image_ids_query).fetchall()
-    image_id,selfie_bbox=result[0]
+    image_id,selfie_bbox,is_left_shoulder,is_right_shoulder=result[0]
     # print("before json selie bbox",selfie_bbox,type(selfie_bbox))
     if type(selfie_bbox)==str:
         selfie_bbox=json.loads(selfie_bbox)
@@ -733,7 +735,7 @@ def fetch_selfie_bbox(target_image_id):
 
     else:
         print("selfie bbox calculation not done")
-    return selfie_bbox
+    return selfie_bbox, is_left_shoulder,is_right_shoulder
 
 
 def merge_inpaint(inpaint_image,img,extended_img,extension_pixels,selfie_bbox,blur_radius=BLUR_RADIUS):
@@ -745,7 +747,36 @@ def merge_inpaint(inpaint_image,img,extended_img,extension_pixels,selfie_bbox,bl
     mask_left = np.zeros(np.shape(inpaint_image))
     mask_bottom = np.zeros(np.shape(inpaint_image))
     mask_right = np.zeros(np.shape(inpaint_image))
+
+    # mask_corners = np.ones(np.shape(inpaint_image))
     
+    # # Get the dimensions of the image
+    # mc_height, mc_width = mask_corners.shape[:2]
+
+    # # Define the radius (half of the diameter)
+    # # radius = oddify(np.max([top, bottom, left, right]))
+    # radius = 50
+    # # Define the centers of the circles (the four corners)
+    # centers = [
+    #     (0, 0),                  # Top-left
+    #     (mc_width - 1, 0),          # Top-right
+    #     (0, mc_height - 1),         # Bottom-left
+    #     (mc_width - 1, mc_height - 1)  # Bottom-right
+    # ]
+
+    # # Draw black circles at each corner
+    # for center in centers:
+    #     cv2.circle(mask_corners, center, radius, 0, -1)
+
+    # cv2.imshow('mask_corners', mask_corners)
+    # cv2.waitKey(0)
+    # cv2.destroyAllWindows()
+
+    # ksize = (radius, radius) 
+    
+    # # Using cv2.blur() method  
+    # mask_corners = cv2.blur(mask_corners, ksize)  
+
     mask_top[:top,:] = [255,255,255]
     mask_left[:,:left] = [255,255,255]
     mask_bottom[bottom:,:] = [255,255,255]
@@ -761,11 +792,20 @@ def merge_inpaint(inpaint_image,img,extended_img,extension_pixels,selfie_bbox,bl
     mask_top = cv2.blur(mask_top, (1, blur_radius_top))
     mask_bottom = cv2.blur(mask_bottom, (1, blur_radius_bottom))
 
-    print("extension_pixels", extension_pixels)
-    print("selfie_bbox", selfie_bbox)
+    # print("extension_pixels", extension_pixels)
+    # print("selfie_bbox", selfie_bbox)
 
     # add the masks, keeping whites white, and allowing blacks to get full black
     mask=np.maximum(mask_left+mask_right,mask_top+mask_bottom)
+    # cv2.imshow('mask', mask)
+    # cv2.waitKey(0)
+    # cv2.destroyAllWindows()
+
+    # # trying to deal with the corners
+    # mask=np.minimum(mask,mask_corners)
+    # cv2.imshow('mask', mask)
+    # cv2.waitKey(0)
+    # cv2.destroyAllWindows()
 
     # increase the white values by 4x, while keeping the black at 0
     # did this get lost???????
@@ -850,22 +890,23 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
             # print("maxkey", maxkey)
             # print("extension_pixels[maxkey]", extension_pixels[maxkey])
             ##################
-            selfie_bbox=fetch_selfie_bbox(row['image_id'])
-            if selfie_bbox["left"]==0 or selfie_bbox["top"]==0 or selfie_bbox["right"]==0: 
-                if VERBOSE: print("no selfie bbox, skipping -------------------> bailout !!!!!!!!!!!!!!!!!")
+            selfie_bbox, is_left_shoulder,is_right_shoulder=fetch_selfie_bbox(row['image_id'])
+            if selfie_bbox["left"]==0: 
+                if VERBOSE: print("head hits the top of the image, skipping -------------------> bailout !!!!!!!!!!!!!!!!!")
                 bailout=True
-            elif selfie_bbox["left"]==0 or selfie_bbox["right"]==0: 
-                # test if ib.is_left_shoulder or ib.is_right_shoulder is 1
-
-                # ib.is_left_shoulder = 1/0 (boolean)
-                # ib.is_right_shoulder
-
-                # retest if the bbox touch area starts at the bottom of the image
-                # does the mask touch the bottom of the image?
+            elif row["site_name_id"] == 2 and extension_pixels["botom"]>0: 
+                if VERBOSE: print("shutter at the bottom, skipping -------------------> bailout !!!!!!!!!!!!!!!!!")
+                bailout=True
+            elif is_left_shoulder or is_right_shoulder: 
+                # if the selfie bbox is touching the R/L side of the image
+                # but doesn't reach the bottom, it means there is a shoulder in the image
+                # do_inpaint, but lower the threshold on left and right
+                do_inpaint = check_extension(img.shape, extension_pixels, INPAINT_MAX_SHOULDERS)
                 pass
-            
+            else:
+                do_inpaint = check_extension(img.shape, extension_pixels, INPAINT_MAX)
             ##################
-            if check_extension(img.shape, extension_pixels, INPAINT_MAX) and not bailout:
+            if do_inpaint and not bailout:
                 directory = os.path.dirname(inpaint_file)
                 # Create the directory if it doesn't exist (creates directories even if skips below because extension too large)
                 if not os.path.exists(directory):
@@ -873,12 +914,17 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
                 # maxkey = max(extension_pixels, key=lambda y: abs(extension_pixels[y]))
                 print("inpainting small extension")
                 # extimg is 50px smaller and mask is 10px bigger
-                extended_img,mask=sort.prepare_mask(img,extension_pixels)
-                # cv2.imwrite(inpaint_file+"1_prepmask.jpg",extended_img)
-                # cv2.imwrite(inpaint_file+"2_mask.jpg",mask)
+                extended_img,mask,cornermask=sort.prepare_mask(img,extension_pixels)
+                if SAVE_IMG_PROCESS:
+                    cv2.imwrite(inpaint_file+"1_prepmask.jpg",extended_img)
+                    cv2.imwrite(inpaint_file+"2_mask.jpg",mask)
+                    cv2.imwrite(inpaint_file+"2.5_cornermask.jpg",cornermask)
                 extended_img=extend_cv2(extended_img,mask,iR=3,method="NS")
-                # cv2.imwrite(inpaint_file+"3_extendcv2.jpg",extended_img)
+                if SAVE_IMG_PROCESS: cv2.imwrite(inpaint_file+"3_extendcv2.jpg",extended_img)
                 
+                extended_img=extend_cv2(extended_img,cornermask,iR=3,method="TELEA")
+                if SAVE_IMG_PROCESS: cv2.imwrite(inpaint_file+"3.5_extendcv2_corners.jpg",extended_img)
+
                 inpaint_image=sort.extend_lama(extended_img, mask, downsampling_scale = 8)
                 # print("inpaint_image shape after lama extend",np.shape(inpaint_image))
                 # inpaint_image = inpaint_image[y:y+h, x:x+w]
@@ -886,19 +932,22 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
                 # inpaint_image = cv2.crop(inpaint_image, (np.shape(extended_img)[1],np.shape(extended_img)[0]))
                 # print("inpaint_image shape after transform",np.shape(inpaint_image))
                 # print("extended_img shape after transform",np.shape(extended_img))                
-                # cv2.imwrite(inpaint_file+"4_premerge.jpg",inpaint_image)
+                if SAVE_IMG_PROCESS: cv2.imwrite(inpaint_file+"4_premerge.jpg",inpaint_image)
 
                 ### use inpainting for the extended part, but use original for non extend to keep image sharp ###
                 # inpaint_image[extension_pixels["top"]:extension_pixels["top"]+np.shape(img)[0],extension_pixels["left"]:extension_pixels["left"]+np.shape(img)[1]]=img
                 # move the boundary of the blur in 50px
                 ########
                 # inpaint_image=merge_inpaint(inpaint_image,img,extended_img,extension_pixels)
-                inpaint_image, blurmask =merge_inpaint(inpaint_image,img,extended_img,extension_pixels,selfie_bbox)
+                inpaint_image, blurmask = merge_inpaint(inpaint_image,img,extended_img,extension_pixels,selfie_bbox)
                 # cv2.imwrite(inpaint_file+"5_aftmerge.jpg",inpaint_image)
-                # cv2.imwrite(inpaint_file+"6_blurmask.jpg",blurmask)
+                # cv2.imshow('blurmask', blurmask)
+                # cv2.waitKey(0)
+                # cv2.destroyAllWindows()
+                if SAVE_IMG_PROCESS:  cv2.imwrite(inpaint_file+"6_blurmask.jpg",blurmask)
                 ########
-                cv2.imwrite(inpaint_file+"_inpaint.jpg",inpaint_image) #for testing out
-                # cv2.imwrite(inpaint_file,inpaint_image) #temp comment out
+                if SAVE_IMG_PROCESS: cv2.imwrite(inpaint_file+"_inpaint.jpg",inpaint_image) #for testing out
+                else: cv2.imwrite(inpaint_file,inpaint_image) #temp comment out
                 print("inpainting done", inpaint_file,"shape",np.shape(inpaint_image))
             elif check_extension(img.shape, extension_pixels, OUTPAINT_MAX) and OUTPAINT:
                 directory = os.path.dirname(inpaint_file)

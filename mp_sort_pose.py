@@ -38,7 +38,7 @@ class SortPose:
         self.HSV_DELTA_MAX = .5
         self.HSVMULTIPLIER = 3
         self.BRUTEFORCE = False
-        self.CUTOFF = 10
+        self.CUTOFF = 50
 
         self.SORT_TYPE = SORT_TYPE
         if self.SORT_TYPE == "128d":
@@ -781,12 +781,26 @@ class SortPose:
         mask[(height+top):,:] = 255
         mask[:,(width+left):] = 255
         if self.VERBOSE:print("mask preparation done")
-        return extended_img,mask
+
+        cornermask = np.zeros_like(extended_img[:, :, 0])
+        if top and not left: cornermask[:top,:top] = 255
+        elif top and left: cornermask[:top,:left] = 255
+        elif not top and left: cornermask[:left,:left] = 255
+
+        cornermask[:top,(width+left):] = 255
+        
+        if bottom and not left: cornermask[(height+top):,:bottom] = 255
+        elif bottom and left: cornermask[(height+top):,:left] = 255
+        elif not bottom and left: cornermask[(height+top-left):,:left] = 255
+
+        cornermask[(height+top):,(width+left):] = 255
+
+        return extended_img,mask, cornermask
     
     def extend_lama(self,extended_img, mask,downsampling_scale=1):
         if self.VERBOSE: print("doing lama generative fill")
         def kludge(dimension, dim):
-            if dim == "w": factor = 1.035
+            if dim == "w": factor = 1.034
             if dim == "h": factor = 1.027
             new_dim = int(dimension*factor)
             return new_dim
