@@ -741,26 +741,16 @@ def merge_inpaint(inpaint_image,img,extended_img,extension_pixels,selfie_bbox,bl
     height, width = img.shape[:2]
     top, bottom, left, right = extension_pixels["top"], extension_pixels["top"]+height, extension_pixels["left"],extension_pixels["left"]+width
     print("top, bottom, left, right", top, bottom, left, right)
-
-    # test the top strip
-    top_strip = img[:selfie_bbox["top"], :, :]
-    pixels = top_strip.reshape(-1, 3) # Reshape the strip to a 2D array of pixels
-    # mean_color = np.mean(pixels, axis=0)
-    std_dev = np.std(pixels, axis=0)
-    overall_std_dev = np.mean(std_dev)
-    threshold = 20 
-    is_consistent = overall_std_dev < threshold
+    # test to see if top strip is consistent -- eg a seamless background
+    area = [0,selfie_bbox["top"]],[0,width]
+    is_consistent = sort.test_consistency(img,area)
     print("is_consistent", is_consistent)
-    # if SAVE_IMG_PROCESS:
-    #     if is_consistent:
-    #         cv2.imshow("is_consistent", top_strip)
-    #         cv2.waitKey(0)
-    #         cv2.destroyAllWindows()
 
-    #     else:
-    #         cv2.imshow("NOT consistent", top_strip)
-    #         cv2.waitKey(0)
-    #         cv2.destroyAllWindows()
+    corners = sort.define_corners(extension_pixels,img.shape)
+    if corners["top_left"]:
+        is_ext_UL_consistent = sort.test_consistency(extended_img,corners["top_left"],10)
+        is_inpaint_UL_consistent = sort.test_consistency(inpaint_image,corners["top_left"],10)
+    print("is_ext_UL_consistent", is_ext_UL_consistent)
 
     mask_top = np.zeros(np.shape(inpaint_image))
     mask_left = np.zeros(np.shape(inpaint_image))
@@ -793,7 +783,7 @@ def merge_inpaint(inpaint_image,img,extended_img,extension_pixels,selfie_bbox,bl
 
     # correction mask
     # if top is all same color, then don't use inpaint, leave mask black and use CV2
-    if is_consistent:
+    if is_consistent and is_ext_UL_consistent:
         if top <= 10:
             print("small top", top)
             invert_dist = selfie_bbox["top"]
@@ -812,11 +802,8 @@ def merge_inpaint(inpaint_image,img,extended_img,extension_pixels,selfie_bbox,bl
         # mask=np.minimum(mask,mask_top_invert)
         mask=mask-mask_top_invert
         mask = np.where(mask < 0, 0, mask) # zero out any negative numbers
-        print("final mask data", mask)
-        # cv2.imshow("final",mask)
-        # cv2.waitKey(0)
-        # cv2.destroyAllWindows()
-
+    elif not is_inpaint_UL_consistent:
+        return None, None
     # increase the white values by 4x, while keeping the black at 0
     # did this get lost???????
     
@@ -852,7 +839,8 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
         # parent_row = df_segment[df_segment['image_id'] == row['image_id']]
         # image_id = parent_row['image_id'].values[0] #NON NN
         image_id = row['image_id']
-        description = row['description']
+        if row['description']: description = row['description']
+        else: description = None
         try: topic_score = row['topic_score']
         except: topic_score = 0
         # use image_id to retrieve description from mysql database 
@@ -954,11 +942,15 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
                 # cv2.imshow('blurmask', blurmask)
                 # cv2.waitKey(0)
                 # cv2.destroyAllWindows()
-                if SAVE_IMG_PROCESS:  cv2.imwrite(inpaint_file+"6_blurmask.jpg",blurmask)
-                ########
-                if SAVE_IMG_PROCESS: cv2.imwrite(inpaint_file+"_inpaint.jpg",inpaint_image) #for testing out
-                else: cv2.imwrite(inpaint_file,inpaint_image) #temp comment out
-                print("inpainting done", inpaint_file,"shape",np.shape(inpaint_image))
+                if inpaint_image is not None:
+                    if SAVE_IMG_PROCESS:  cv2.imwrite(inpaint_file+"6_blurmask.jpg",blurmask)
+                    ########
+                    if SAVE_IMG_PROCESS: cv2.imwrite(inpaint_file+"_inpaint.jpg",inpaint_image) #for testing out
+                    else: cv2.imwrite(inpaint_file,inpaint_image) #temp comment out
+                    print("inpainting done", inpaint_file,"shape",np.shape(inpaint_image))
+                else: 
+                    print("inpainting failed")
+                    bailout=True
             elif check_extension(img.shape, extension_pixels, OUTPAINT_MAX) and OUTPAINT:
                 directory = os.path.dirname(inpaint_file)
                 # Create the directory if it doesn't exist (creates directories even if skips below because extension too large)
@@ -986,6 +978,7 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
     good = 0
     img_list = []
     metas_list = []
+    description = None
     for index, row in df_sorted.iterrows():
         # parent_row = df_segment[df_segment['imagename'] == row['filename']]
         # print("parent_row")

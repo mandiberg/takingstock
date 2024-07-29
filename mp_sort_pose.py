@@ -797,17 +797,23 @@ class SortPose:
         else: corners["bottom_right"] = [height+top,height+top],[width+left,width+left]
 
         return corners
-    
-        # elif top and left: corners[:top,:left] = 255
-        # elif not top and left: corners[:left,:left] = 255
-        # # top right corner
-        # corners[:top,(width+left):] = 255
-        # # bottom left corner
-        # if bottom and not left: corners[(height+top):,:bottom] = 255
-        # elif bottom and left: corners[(height+top):,:left] = 255
-        # elif not bottom and left: corners[(height+top-left):,:left] = 255
-        # # bottom right corner
-        # corners[(height+top):,(width+left):] = 255
+
+    def test_consistency(self,img, area, threshold=20):
+        # takes area matrix, and segments the image
+        grid = img[area[0][0]:area[0][1],area[1][0]:area[1][1], :]
+        
+        pixels = grid.reshape(-1, 3) # Reshape the strip to a 2D array of pixels
+        # mean_color = np.mean(pixels, axis=0)
+        std_dev = np.std(pixels, axis=0)
+        overall_std_dev = np.mean(std_dev)
+        is_consistent = overall_std_dev < threshold
+        # if is_consistent:
+            
+        #     cv2.imshow("grid",grid)
+        #     cv2.waitKey(0)
+        #     cv2.destroyAllWindows()
+
+        return is_consistent
 
     def prepare_mask(self,image,extension_pixels):
         if self.VERBOSE:print("starting mask preparation")
@@ -815,7 +821,6 @@ class SortPose:
         top, bottom, left, right = extension_pixels["top"], extension_pixels["bottom"], extension_pixels["left"],extension_pixels["right"] 
         extended_img = np.zeros((height + top+bottom, width+left+right, 3), dtype=np.uint8)
         extended_img[top:height+top, left:width+left,:] = image
-
 
         # main mask
         mask = np.zeros_like(extended_img[:, :, 0])
@@ -832,19 +837,6 @@ class SortPose:
         cornermask[corners["top_right"][0][0]:corners["top_right"][0][1],corners["top_right"][1][0]:corners["top_right"][1][1]] = 255
         cornermask[corners["bottom_left"][0][0]:corners["bottom_left"][0][1],corners["bottom_left"][1][0]:corners["bottom_left"][1][1]] = 255
         cornermask[corners["bottom_right"][0][0]:corners["bottom_right"][0][1],corners["bottom_right"][1][0]:corners["bottom_right"][1][1]] = 255
-
-        # # # top left corner
-        # # if top and not left: cornermask[:top,:top] = 255
-        # # elif top and left: cornermask[:top,:left] = 255
-        # # elif not top and left: cornermask[:left,:left] = 255
-        # # top right corner
-        # cornermask[:top,(width+left):] = 255
-        # # bottom left corner
-        # if bottom and not left: cornermask[(height+top):,:bottom] = 255
-        # elif bottom and left: cornermask[(height+top):,:left] = 255
-        # elif not bottom and left: cornermask[(height+top-left):,:left] = 255
-        # # bottom right corner
-        # cornermask[(height+top):,(width+left):] = 255
 
         return extended_img,mask, cornermask
     
@@ -864,12 +856,6 @@ class SortPose:
         if self.VERBOSE: print("generative fill done")
 
         return inpaint
-
-    # def inpaint(self,image):
-    #     extension_pixels=self.get_extension_pixels(image)
-    #     extended_img,mask=self.prepare_mask(image,extension_pixels)
-    #     inpaint_image=self.extend_lama(extended_img, mask,scale=4)
-    #     return inpaint_image
 
     def crop_image(self,image, faceLms, bbox, sinY=0,SAVE=False):
         self.get_image_face_data(image, faceLms, bbox) 
