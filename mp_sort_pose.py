@@ -1151,6 +1151,7 @@ class SortPose:
 
 
     def get_enc1(self, df, FIRST_ROUND=False, hsv_sort = False):
+        enc1 = None
         obj_bbox1 = None
         if FIRST_ROUND:
             this_start = self.counter_dict["start_img_name"]
@@ -1173,21 +1174,16 @@ class SortPose:
                 if self.OBJ_CLS_ID > 0: obj_bbox1 = self.get_start_obj_bbox(this_start, df)
                 print(f"set enc1 from get_start_enc() to {enc1}")
         else: 
+            # print the last row of the dataframe
+            print("setting enc1 -- last row of the dataframe", df.iloc[-1])
+
             if hsv_sort == True: enc1 = df.iloc[-1]["hsvll"]
             elif self.SORT_TYPE == "128d": enc1 = df.iloc[-1]["face_encodings68"]
             elif self.SORT_TYPE == "planar": enc1 = df.iloc[-1]["face_landmarks"]
             elif self.SORT_TYPE == "planar_body" and "body_landmarks_array" in df.columns: enc1 = df.iloc[-1]["body_landmarks_array"]
             elif self.SORT_TYPE == "planar_body": enc1 = df.iloc[-1]["body_landmarks"]
+        if self.SORT_TYPE == "planar_body" and "obj_bbox_list" in df.columns: obj_bbox1 = df.iloc[-1]["obj_bbox_list"]
         return enc1, obj_bbox1
-
-
-            # sortcol = 'body_landmarks_array'
-            # sourcecol = 'body_landmarks'
-            # print("body_landmarks elif")
-
-            # # test to see if df_enc contains the sortcol column
-            # if sortcol not in df_enc.columns:
-
 
 
     def brute_force(self, df_enc, enc1):
@@ -1270,7 +1266,7 @@ class SortPose:
     
     def prep_enc(self, enc1, structure="dict"):
         
-        print("prep_enc enc before get_landmarks_2d", enc1)
+        # print("prep_enc enc before get_landmarks_2d", enc1)
         pointers = self.get_landmarks_2d(enc1, self.POINTERS, structure)
         thumbs = self.get_landmarks_2d(enc1, self.THUMBS, structure)
         # body = self.get_landmarks_2d(enc1, self.BODY_LMS, structure)
@@ -1309,7 +1305,7 @@ class SortPose:
             print("body_landmarks elif")
             # test to see if df_enc contains the sortcol column
             if sortcol not in df_enc.columns:
-                # print("body_landmarks pre prep_enc")
+                print("sortcol not in df_enc.columns - body_landmarks enc1 pre prep_enc", enc1)
             # if enc1 is not a numpy array, convert it to a list
                 # create enc list with x/y position and angles and visibility
                 enc1 = self.prep_enc(enc1, structure="list")
@@ -1350,8 +1346,9 @@ class SortPose:
         # Extract the face encodings from the dataframe
         encodings_array = df_enc[sortcol].to_numpy().tolist()
         # print("df_enc", df_enc)
-        # print("encodings_array", encodings_array)
-        # print("[sort_df_KNN] enc1", enc1)
+        if knn_sort == "obj":
+            print("encodings_array", encodings_array)
+            print("[sort_df_KNN] enc1", enc1)
 
         self.knn.fit(encodings_array)
 
@@ -1515,6 +1512,7 @@ class SortPose:
         elif self.SORT_TYPE == "planar_body": 
             knn_sort = "planar_body"
         
+        print("get_closest_df_NN - pre KNN - enc1", enc1)
         # sort KNN (always for planar) or BRUTEFORCE (optional only for 128d)
         if self.BRUTEFORCE and knn_sort == "128d": df_dist_enc = self.brute_force(df_enc, enc1)
         else: df_dist_enc = self.sort_df_KNN(df_enc, enc1, knn_sort)

@@ -111,7 +111,7 @@ SORT_TYPE = "planar_body"
 
 # if planar_body set OBJ_CLS_ID for each object type
 # 67 is phone, 63 is laptop, 26: 'handbag', 27: 'tie', 32: 'sports ball'
-if SORT_TYPE == "planar_body": OBJ_CLS_ID = 67
+if SORT_TYPE == "planar_body": OBJ_CLS_ID = 0
 else: OBJ_CLS_ID = 0
 
 ONE_SHOT = False # take all files, based off the very first sort order.
@@ -763,24 +763,27 @@ def fetch_selfie_bbox(target_image_id):
 
 
 def merge_inpaint(inpaint_image,img,extended_img,extension_pixels,selfie_bbox,blur_radius=BLUR_RADIUS):
+    is_consistent = is_ext_UL_consistent = is_ext_top_consistent = is_inpaint_UL_consistent = is_inpaint_top_consistent = False
     height, width = img.shape[:2]
     top, bottom, left, right = extension_pixels["top"], extension_pixels["top"]+height, extension_pixels["left"],extension_pixels["left"]+width
     print("top, bottom, left, right", top, bottom, left, right)
     # test to see if top strip is consistent -- eg a seamless background
     area = [0,selfie_bbox["top"]],[0,width]
-    is_consistent = sort.test_consistency(img,area)
+    if area[0][1] > 0 and area[1][1] > 0:
+        is_consistent = sort.test_consistency(img,area)
     print("is_consistent", is_consistent)
 
     corners = sort.define_corners(extension_pixels,img.shape)
     if corners["top_left"]:
         # doubling test area, to compare it to areas around it
         test_corner = [[corners["top_left"][0][0],io.oddify(corners["top_left"][0][1]*1.5)],[corners["top_left"][1][0],io.oddify(corners["top_left"][1][1]*1.5)]]
-        is_ext_UL_consistent = sort.test_consistency(extended_img,test_corner,10)
-        is_inpaint_UL_consistent = sort.test_consistency(inpaint_image,test_corner,10)
+        if test_corner[0][1] > 0 and test_corner[1][1] > 0:
+            is_ext_UL_consistent = sort.test_consistency(extended_img,test_corner,10)
+            is_inpaint_UL_consistent = sort.test_consistency(inpaint_image,test_corner,10)
         test_top = [[0,top+selfie_bbox["top"]],[0,inpaint_image.shape[1]]]
-                    
-        is_ext_top_consistent = sort.test_consistency(extended_img,test_top,10)
-        is_inpaint_top_consistent = sort.test_consistency(inpaint_image,test_top,10)
+        if test_top[0][1] > 0 and test_top[1][1] > 0:                        
+            is_ext_top_consistent = sort.test_consistency(extended_img,test_top,10)
+            is_inpaint_top_consistent = sort.test_consistency(inpaint_image,test_top,10)
     print("is_ext_UL_consistent", is_ext_UL_consistent)
 
     mask_top = np.zeros(np.shape(inpaint_image))
