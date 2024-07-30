@@ -111,7 +111,7 @@ SORT_TYPE = "planar_body"
 
 # if planar_body set OBJ_CLS_ID for each object type
 # 67 is phone, 63 is laptop, 26: 'handbag', 27: 'tie', 32: 'sports ball'
-if SORT_TYPE == "planar_body": OBJ_CLS_ID = 0
+if SORT_TYPE == "planar_body": OBJ_CLS_ID = 67
 else: OBJ_CLS_ID = 0
 
 ONE_SHOT = False # take all files, based off the very first sort order.
@@ -204,7 +204,7 @@ elif IS_SEGONLY and io.db["name"] == "stock":
     # WHERE += " AND e.encoding_id > 2612275"
 
     # WHERE = "s.site_name_id != 1"
-    LIMIT = 100
+    LIMIT = 10000
 
     # TEMP TK TESTING
     # WHERE += " AND s.site_name_id = 8"

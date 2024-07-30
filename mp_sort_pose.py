@@ -38,7 +38,7 @@ class SortPose:
         self.HSV_DELTA_MAX = .5
         self.HSVMULTIPLIER = 3
         self.BRUTEFORCE = False
-        self.CUTOFF = 20
+        self.CUTOFF = 200
 
         self.SORT_TYPE = SORT_TYPE
         if self.SORT_TYPE == "128d":
@@ -1171,18 +1171,24 @@ class SortPose:
                 #this is the first??? round, set via df, defaults to face_encodings68
                 print(f"trying get_start_enc() from {this_start}")
                 enc1 = self.get_start_enc_NN(this_start, df)
-                if self.OBJ_CLS_ID > 0: obj_bbox1 = self.get_start_obj_bbox(this_start, df)
+                if self.OBJ_CLS_ID > 0: 
+                    print("setting obj_bbox1 from this_start", this_start)
+                    obj_bbox1 = self.get_start_obj_bbox(this_start, df)
+                    print("returned obj_bbox1 from this_start", obj_bbox1)
                 print(f"set enc1 from get_start_enc() to {enc1}")
         else: 
             # print the last row of the dataframe
             print("setting enc1 -- last row of the dataframe", df.iloc[-1])
 
+            # setting enc1
             if hsv_sort == True: enc1 = df.iloc[-1]["hsvll"]
             elif self.SORT_TYPE == "128d": enc1 = df.iloc[-1]["face_encodings68"]
             elif self.SORT_TYPE == "planar": enc1 = df.iloc[-1]["face_landmarks"]
             elif self.SORT_TYPE == "planar_body" and "body_landmarks_array" in df.columns: enc1 = df.iloc[-1]["body_landmarks_array"]
             elif self.SORT_TYPE == "planar_body": enc1 = df.iloc[-1]["body_landmarks"]
-        if self.SORT_TYPE == "planar_body" and "obj_bbox_list" in df.columns: obj_bbox1 = df.iloc[-1]["obj_bbox_list"]
+            # setting obj_bbox1
+            if self.SORT_TYPE == "planar_body" and "obj_bbox_list" in df.columns: obj_bbox1 = df.iloc[-1]["obj_bbox_list"]
+        print("returning enc1, obj_bbox1", enc1, obj_bbox1)
         return enc1, obj_bbox1
 
 
@@ -1347,7 +1353,7 @@ class SortPose:
         encodings_array = df_enc[sortcol].to_numpy().tolist()
         # print("df_enc", df_enc)
         if knn_sort == "obj":
-            print("encodings_array", encodings_array)
+            print("encodings_array length", len(encodings_array))
             print("[sort_df_KNN] enc1", enc1)
 
         self.knn.fit(encodings_array)
@@ -1490,18 +1496,13 @@ class SortPose:
         if len(df_sorted) == 0: 
             FIRST_ROUND = True
             enc1, obj_bbox1 = self.get_enc1(df_enc, FIRST_ROUND)
-            # print all rows of df_enc where obj_bbox_list is None
-            # print(df_enc[df_enc['obj_bbox_list'].isnull()])
-
+            print("first round enc1, obj_bbox1", enc1, obj_bbox1)
             # drop all rows where obj_bbox_list is None
             if self.OBJ_CLS_ID > 0: df_enc = df_enc.dropna(subset=["obj_bbox_list"])
-            # print("df_enc", df_enc)
-
-            # df_enc = df_enc.dropna(subset=["obj_bbox_list"])
-            # print(df_enc.dtypes)     
         else: 
             FIRST_ROUND = False
             enc1, obj_bbox1 = self.get_enc1(df_sorted, FIRST_ROUND)
+            print("LATER round enc1, obj_bbox1", enc1, obj_bbox1)
 
         print(f"get_closest_df_NN, self.SORT_TYPE is {self.SORT_TYPE} FIRST_ROUND is {FIRST_ROUND}")
         # define self.SORT_TYPE for KNN
@@ -1520,6 +1521,7 @@ class SortPose:
         
         # sort KNN for OBJ_CLS_ID
         if self.OBJ_CLS_ID > 0: 
+            print("get_closest_df_NN - pre KNN - obj_bbox1", obj_bbox1)
             df_dist_enc = self.sort_df_KNN(df_enc, obj_bbox1, "obj")
             print("df_shuffled obj", df_dist_enc[['image_id','dist_obj']].sort_values(by='dist_obj')) 
 
@@ -1552,7 +1554,10 @@ class SortPose:
                 df_shuffled = df_dist_close
                 
                 # sort df_shuffled by the sum of dist_enc1 and dist_HSV
-                df_shuffled['sum_dist'] = df_dist_noflash['dist_enc1'] + self.MULTIPLIER * df_shuffled['dist_HSV']
+                # df_shuffled['sum_dist'] = df_dist_noflash['dist_enc1'] + self.MULTIPLIER * df_shuffled['dist_HSV']
+                print("df_shuffled columns", df_shuffled.columns)
+                print("df_shuffled before assigning obj", df_shuffled[['image_id','dist_enc1','dist_obj']])
+                df_shuffled['sum_dist'] = df_shuffled['dist_obj']
                 # df_shuffled['sum_dist'] = df_dist_noflash['dist_enc1'] 
                 df_shuffled = df_shuffled.sort_values(by='sum_dist').reset_index(drop=True)
                 print("df_shuffled pre_run", df_shuffled[['image_id','dist_enc1','dist_HSV','sum_dist']])
