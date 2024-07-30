@@ -982,18 +982,15 @@ class SortPose:
             print("[get_start_obj_bbox] in median")
             bbox_col = "obj_bbox_list"
             df_rounded = pd.DataFrame()
-            # Round each value in the face_encodings68 column to 2 decimal places            
-            # df_enc['face_encodings68'] = df_enc['face_encodings68'].apply(self.safe_round)
+            # Round each value in the face_encodings68 column to -2 decimal places (hundreds)       
             df_rounded[bbox_col] = df_enc[bbox_col].apply(lambda x: self.safe_round(x, -2))
 
             # drop all rows where bbox_col is None
             df_rounded = df_rounded.dropna(subset=[bbox_col])
 
-            # df[cols].apply(lambda x: apply_join(x,sep),axis=1)
-
             # Convert the face_encodings68 column to a list of lists
             flattened_array = df_rounded[bbox_col].tolist()        
-            print("flattened_array", flattened_array)    
+            # print("flattened_array", flattened_array)    
             try:
                 enc1 = self.most_common_row(flattened_array)
             except:
@@ -1298,7 +1295,7 @@ class SortPose:
         print("enc1++ final np array", enc1)
         return enc1
     
-    def sort_df_KNN(self, df_enc, enc1, knn_sort="128d", obj_bbox=None):
+    def sort_df_KNN(self, df_enc, enc1, knn_sort="128d", obj_bbox1=None):
         output_cols = ['dist_enc1']
         if knn_sort == "128d":
             sortcol = 'face_encodings68'
@@ -1431,11 +1428,10 @@ class SortPose:
 
         if len(df_sorted) == 0: 
             FIRST_ROUND = True
-            enc1 = self.get_enc1(df_enc, FIRST_ROUND)
-            obj_bbox = None
+            enc1, obj_bbox1 = self.get_enc1(df_enc, FIRST_ROUND)
         else: 
             FIRST_ROUND = False
-            enc1 = self.get_enc1(df_sorted, FIRST_ROUND)
+            enc1, obj_bbox1 = self.get_enc1(df_sorted, FIRST_ROUND)
 
         print(f"get_closest_df_NN, self.SORT_TYPE is {self.SORT_TYPE} FIRST_ROUND is {FIRST_ROUND}")
         # define self.SORT_TYPE for KNN
@@ -1448,13 +1444,13 @@ class SortPose:
         
         # sort KNN (always for planar) or BRUTEFORCE (optional only for 128d)
         if self.BRUTEFORCE and knn_sort == "128d": df_dist_enc = self.brute_force(df_enc, enc1)
-        else: df_dist_enc = self.sort_df_KNN(df_enc, enc1, knn_sort, obj_bbox)
+        else: df_dist_enc = self.sort_df_KNN(df_enc, enc1, knn_sort, obj_bbox1)
         print("df_shuffled 128d", df_dist_enc[['image_id','dist_enc1']].sort_values(by='dist_enc1'))
         
         # set HSV start enc and add HSV dist
         if not self.ONE_SHOT:
-            if not 'dist_HSV' in df_sorted.columns:  enc1 = self.get_enc1(df_enc, FIRST_ROUND=True, hsv_sort=True)
-            else:  enc1 = self.get_enc1(df_sorted, FIRST_ROUND=False, hsv_sort=True)
+            if not 'dist_HSV' in df_sorted.columns:  enc1, obj_bbox1 = self.get_enc1(df_enc, FIRST_ROUND=True, hsv_sort=True)
+            else:  enc1, obj_bbox1 = self.get_enc1(df_sorted, FIRST_ROUND=False, hsv_sort=True)
             print("enc1", enc1)
             df_dist_hsv = self.normalize_hsv(enc1, df_dist_enc)
             df_dist_hsv = self.sort_df_KNN(df_dist_hsv, enc1, "HSV")
