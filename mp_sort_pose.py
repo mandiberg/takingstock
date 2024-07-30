@@ -1298,7 +1298,7 @@ class SortPose:
     def sort_df_KNN(self, df_enc, enc1, knn_sort="128d", obj_bbox1=None):
         print("df_enc at the start of sort_df_KNN")
 
-        output_cols = ['dist_enc1']
+        output_cols = 'dist_enc1'
         if knn_sort == "128d":
             sortcol = 'face_encodings68'
         elif knn_sort == "planar":
@@ -1318,14 +1318,14 @@ class SortPose:
         elif knn_sort == "HSV":
             print("knn_sort is HSV")
             sortcol = 'hsvll'
-            output_cols = ['dist_HSV']
+            output_cols = 'dist_HSV'
             print(type(enc1))
             print(enc1)
             # print(df_enc.loc[0])
             print(type(df_enc.loc[0, 'lum']))
             print(df_enc.loc[0, 'lum'])
 
-        if self.OBJ_CLS_ID:
+        if self.OBJ_CLS_ID > 0:
             # overriding for object detection
             sortcol = 'obj_bbox_list'
             enc1 = obj_bbox1
@@ -1381,7 +1381,7 @@ class SortPose:
         # Update the 'dist_enc1' column with the distances for valid indices
         for idx in df_enc.index:
             if idx in id_dict:
-                df_enc.at[idx, 'dist_enc1'] = id_dict[idx]
+                df_enc.at[idx, output_cols] = id_dict[idx]
             else:
                 print(f"Index {idx} not found in id_dict")
                 
