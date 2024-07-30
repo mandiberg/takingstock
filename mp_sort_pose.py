@@ -1170,7 +1170,7 @@ class SortPose:
                 #this is the first??? round, set via df, defaults to face_encodings68
                 print(f"trying get_start_enc() from {this_start}")
                 enc1 = self.get_start_enc_NN(this_start, df)
-                obj_bbox1 = self.get_start_obj_bbox(this_start, df)
+                if self.OBJ_CLS_ID > 0: obj_bbox1 = self.get_start_obj_bbox(this_start, df)
                 print(f"set enc1 from get_start_enc() to {enc1}")
         else: 
             if hsv_sort == True: enc1 = df.iloc[-1]["hsvll"]
@@ -1333,14 +1333,14 @@ class SortPose:
         #create output column -- do i need to do this?
         df_enc[output_cols] = np.nan
         # df_enc[output_cols] = pd.Series(dtype='float64')
-        print(">>>>>       df_enc.index")
-        print(df_enc.index)
-        print(len(df_enc.index))
-        # print(df_enc[sortcol])
-        # print(df_enc[output_cols])
-        # print the count of NaN values in the sortcol column
-        print(">>>>>       NaN count in sortcol", df_enc[sortcol].isnull().sum())
-        # print("NaN in sortcol", df_enc[sortcol].isnull())
+        # print(">>>>>       df_enc.index")
+        # print(df_enc.index)
+        # print(len(df_enc.index))
+        # # print(df_enc[sortcol])
+        # # print(df_enc[output_cols])
+        # # print the count of NaN values in the sortcol column
+        # print(">>>>>       NaN count in sortcol", df_enc[sortcol].isnull().sum())
+        # # print("NaN in sortcol", df_enc[sortcol].isnull())
         print("sort_df_KNN, knn_sort is", knn_sort)
         # Extract the face encodings from the dataframe
         encodings_array = df_enc[sortcol].to_numpy().tolist()
@@ -1368,10 +1368,10 @@ class SortPose:
 
         # # Create a dictionary with valid indices as keys
         # id_dict = {idx: dist for idx, dist in zip(indices, distances)}
-        print("id_dict", id_dict)
-        print("len(id_dict)", len(id_dict))
-        # print count of NaN values the id_dict
-        print("NaN count in id_dict", pd.Series(id_dict).isnull().sum())
+        # print("id_dict", id_dict)
+        # print("len(id_dict)", len(id_dict))
+        # # print count of NaN values the id_dict
+        # print("NaN count in id_dict", pd.Series(id_dict).isnull().sum())
 
         # the id_dict is a dictionary with the index as the key and the distance as the value
         # it is correct
@@ -1387,22 +1387,22 @@ class SortPose:
                 
 
         print("df_enc after adding distance")
-        print(df_enc.index)
-        print(df_enc[sortcol])
-        print(df_enc[output_cols])
-        print("<<<<<       NaN count in sortcol AFTER KNN", df_enc[sortcol].isnull().sum())
+        # print(df_enc.index)
+        # print(df_enc[sortcol])
+        # print(df_enc[output_cols])
+        # print("<<<<<       NaN count in sortcol AFTER KNN", df_enc[sortcol].isnull().sum())
 
         # print(df_enc['dist_enc1'].dtype)
 
         # df_enc['dist_enc1'] = df_enc['dist_enc1'].astype(float)
 
-        def safe_float_convert(x):
-            try:
-                return float(x)
-            except:
-                return np.nan
+        # def safe_float_convert(x):
+        #     try:
+        #         return float(x)
+        #     except:
+        #         return np.nan
 
-        df_enc['dist_enc1'] = df_enc['dist_enc1'].apply(safe_float_convert)
+        # df_enc['dist_enc1'] = df_enc['dist_enc1'].apply(safe_float_convert)
 
         # df_enc = df_enc.sort_values(by='dist_enc1', na_position='last')
         # df_enc = df_enc.sort_values(by='dist_enc1', na_position='last').reset_index(drop=True)
@@ -1415,10 +1415,10 @@ class SortPose:
 
 
         df_enc = df_enc.sort_values(by=output_cols)
-        print("df_enc after sorting")
-        print(df_enc.index)
-        print(df_enc[sortcol])
-        print(df_enc[output_cols])
+        # print("df_enc after sorting")
+        # print(df_enc.index)
+        # print(df_enc[sortcol])
+        # print(df_enc[output_cols])
         return df_enc
 
     def draw_point(self,image,landmarks_2d,index):
@@ -1492,7 +1492,7 @@ class SortPose:
             # print(df_enc[df_enc['obj_bbox_list'].isnull()])
 
             # drop all rows where obj_bbox_list is None
-            df_enc = df_enc.dropna(subset=["obj_bbox_list"])
+            if self.OBJ_CLS_ID > 0: df_enc = df_enc.dropna(subset=["obj_bbox_list"])
             # print("df_enc", df_enc)
 
             # df_enc = df_enc.dropna(subset=["obj_bbox_list"])

@@ -111,7 +111,7 @@ SORT_TYPE = "planar_body"
 
 # if planar_body set OBJ_CLS_ID for each object type
 # 67 is phone, 63 is laptop, 26: 'handbag', 27: 'tie', 32: 'sports ball'
-if SORT_TYPE == "planar_body": OBJ_CLS_ID = 67
+if SORT_TYPE == "planar_body": OBJ_CLS_ID = 0
 else: OBJ_CLS_ID = 0
 
 ONE_SHOT = False # take all files, based off the very first sort order.
@@ -187,12 +187,13 @@ elif IS_SEGONLY and io.db["name"] == "stock":
         # WHERE += " AND ibg.lum > .3"
         SELECT += ", ibg.lum, ibg.lum_bb, ibg.hue, ibg.hue_bb, ibg.sat, ibg.sat_bb, ibg.val, ibg.val_bb, ibg.lum_torso, ibg.lum_torso_bb " # add description here, after resegmenting
     ###############
-    if OBJ_CLS_ID:
+    if OBJ_CLS_ID > 0:
         FROM += " JOIN PhoneBbox pb ON s.image_id = pb.image_id "
         # SELECT += ", pb.bbox_67, pb.conf_67, pb.bbox_63, pb.conf_63, pb.bbox_26, pb.conf_26, pb.bbox_27, pb.conf_27, pb.bbox_32, pb.conf_32 "
         SELECT += ", pb.bbox_"+str(OBJ_CLS_ID)+", pb.conf_"+str(OBJ_CLS_ID)
+        WHERE += " AND pb.bbox_"+str(OBJ_CLS_ID)+" IS NOT NULL "
     if SORT_TYPE == "planar_body":
-        WHERE += " AND s.mongo_body_landmarks = 1 AND pb.bbox_"+str(OBJ_CLS_ID)+" IS NOT NULL "
+        WHERE += " AND s.mongo_body_landmarks = 1  "
     ###############
     # # join to keywords
     # FROM += " JOIN ImagesKeywords ik ON s.image_id = ik.image_id JOIN Keywords k ON ik.keyword_id = k.keyword_id "
@@ -611,11 +612,12 @@ def prep_encodings_NN(df_segment):
     df_segment['lum'] = df_segment.apply(lambda row: create_lum_list(row), axis=1)
     # load the OBJ_CLS_ID bbox as list into obj_bbox_list
     # df_segment['obj_bbox_list'] = df_segment.apply(lambda row: json_to_list(row), axis=1)
-    df_segment['obj_bbox_list'] = df_segment.apply(json_to_list, axis=1)
-    null_bboxes = df_segment[df_segment['obj_bbox_list'].isnull()]
-    if not null_bboxes.empty:
-        print("Rows with invalid bbox data:")
-        print(null_bboxes)
+    if OBJ_CLS_ID > 0: 
+        df_segment['obj_bbox_list'] = df_segment.apply(json_to_list, axis=1)
+        null_bboxes = df_segment[df_segment['obj_bbox_list'].isnull()]
+        if not null_bboxes.empty:
+            print("Rows with invalid bbox data:")
+            print(null_bboxes)
 
     print("df_segment length", len(df_segment.index))
     if SORT_TYPE == "planar_body":
@@ -1299,7 +1301,7 @@ def main():
             df['face_landmarks'] = df['face_landmarks'].apply(unpickle_array)
             df['body_landmarks'] = df['body_landmarks'].apply(unpickle_array)
             df['bbox'] = df['bbox'].apply(lambda x: unstring_json(x))
-            df["bbox_"+str(OBJ_CLS_ID)] = df["bbox_"+str(OBJ_CLS_ID)].apply(lambda x: unstring_json(x))
+            if OBJ_CLS_ID > 0: df["bbox_"+str(OBJ_CLS_ID)] = df["bbox_"+str(OBJ_CLS_ID)].apply(lambda x: unstring_json(x))
 
             # this may be a big problem
             # turn URL into local hashpath (still needs local root folder)
