@@ -189,9 +189,10 @@ elif IS_SEGONLY and io.db["name"] == "stock":
     ###############
     if OBJ_CLS_ID:
         FROM += " JOIN PhoneBbox pb ON s.image_id = pb.image_id "
-        SELECT += ", pb.bbox_67, pb.conf_67, pb.bbox_63, pb.conf_63, pb.bbox_26, pb.conf_26, pb.bbox_27, pb.conf_27, pb.bbox_32, pb.conf_32 "
+        # SELECT += ", pb.bbox_67, pb.conf_67, pb.bbox_63, pb.conf_63, pb.bbox_26, pb.conf_26, pb.bbox_27, pb.conf_27, pb.bbox_32, pb.conf_32 "
+        SELECT += ", pb.bbox_"+str(OBJ_CLS_ID)+", pb.conf_"+str(OBJ_CLS_ID)
     if SORT_TYPE == "planar_body":
-        WHERE += " AND s.mongo_body_landmarks = 1 "
+        WHERE += " AND s.mongo_body_landmarks = 1 AND pb.bbox_"+str(OBJ_CLS_ID)+" IS NOT NULL "
     ###############
     # # join to keywords
     # FROM += " JOIN ImagesKeywords ik ON s.image_id = ik.image_id JOIN Keywords k ON ik.keyword_id = k.keyword_id "

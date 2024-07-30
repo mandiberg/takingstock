@@ -1296,6 +1296,8 @@ class SortPose:
         return enc1
     
     def sort_df_KNN(self, df_enc, enc1, knn_sort="128d", obj_bbox1=None):
+        print("df_enc at the start of sort_df_KNN")
+
         output_cols = ['dist_enc1']
         if knn_sort == "128d":
             sortcol = 'face_encodings68'
@@ -1305,26 +1307,14 @@ class SortPose:
             sortcol = 'body_landmarks_array'
             sourcecol = 'body_landmarks'
             print("body_landmarks elif")
-
             # test to see if df_enc contains the sortcol column
             if sortcol not in df_enc.columns:
                 # print("body_landmarks pre prep_enc")
             # if enc1 is not a numpy array, convert it to a list
-            # if not isinstance(enc1,np.ndarray):
                 # create enc list with x/y position and angles and visibility
                 enc1 = self.prep_enc(enc1, structure="list")
-
                 # apply prep_enc to the sortcol column 
                 df_enc[sortcol] = df_enc[sourcecol].apply(lambda x: self.prep_enc(x, structure="list"))
-                # print("body_landmarks post prep_enc - should be 33")
-                # print(df_enc[sortcol].to_list())
-
-            # print("body_landmarks post_sort")
-            # print(df_enc[sortcol])
-
-            # test_row = df_enc.loc[df_enc['image_id'] == 10498233]
-            # print(test_row['body_landmarks'])
-            # print(test_row['body_landmarks_array'])
         elif knn_sort == "HSV":
             print("knn_sort is HSV")
             sortcol = 'hsvll'
@@ -1335,31 +1325,100 @@ class SortPose:
             print(type(df_enc.loc[0, 'lum']))
             print(df_enc.loc[0, 'lum'])
 
+        if self.OBJ_CLS_ID:
+            # overriding for object detection
+            sortcol = 'obj_bbox_list'
+            enc1 = obj_bbox1
+
+        #create output column -- do i need to do this?
+        df_enc[output_cols] = np.nan
+        # df_enc[output_cols] = pd.Series(dtype='float64')
+        print(">>>>>       df_enc.index")
+        print(df_enc.index)
+        print(len(df_enc.index))
+        # print(df_enc[sortcol])
+        # print(df_enc[output_cols])
+        # print the count of NaN values in the sortcol column
+        print(">>>>>       NaN count in sortcol", df_enc[sortcol].isnull().sum())
+        # print("NaN in sortcol", df_enc[sortcol].isnull())
         print("sort_df_KNN, knn_sort is", knn_sort)
         # Extract the face encodings from the dataframe
         encodings_array = df_enc[sortcol].to_numpy().tolist()
         # print("df_enc", df_enc)
         # print("encodings_array", encodings_array)
-        print("enc1", enc1)
+        # print("[sort_df_KNN] enc1", enc1)
+
         self.knn.fit(encodings_array)
 
         # Find the distances and indices of the neighbors
         distances, indices = self.knn.kneighbors([enc1], n_neighbors=len(df_enc))
-
+        # zip the indices and distances and print
+        # print("indices and distances", list(zip(indices, distances)))
+        # print("indices and distances", list(zip(indices.flatten(), distances.flatten())))        
         # Flatten the indices and distances
         indices = indices.flatten()
         distances = distances.flatten()
 
-        # Create a dictionary with valid indices as keys
-        id_dict = {idx: dist for idx, dist in zip(indices, distances)}
+        # Mapping from position to actual index
+        position_to_index = {pos: idx for pos, idx in enumerate(df_enc.index)}
+
+        # Create a dictionary with actual indices as keys
+        id_dict = {position_to_index[idx]: dist for idx, dist in zip(indices, distances)}
+
+
+        # # Create a dictionary with valid indices as keys
+        # id_dict = {idx: dist for idx, dist in zip(indices, distances)}
+        print("id_dict", id_dict)
+        print("len(id_dict)", len(id_dict))
+        # print count of NaN values the id_dict
+        print("NaN count in id_dict", pd.Series(id_dict).isnull().sum())
+
+        # the id_dict is a dictionary with the index as the key and the distance as the value
+        # it is correct
+        # the code below is NOT correctly assigning the values to the df_enc
+
 
         # Update the 'dist_enc1' column with the distances for valid indices
-        for idx in indices:
-            df_enc.loc[idx, output_cols] = id_dict[idx]
-                        
-        # print("df_enc after adding distance", df_enc)
-        df_enc = df_enc.sort_values(by=output_cols)
+        for idx in df_enc.index:
+            if idx in id_dict:
+                df_enc.at[idx, 'dist_enc1'] = id_dict[idx]
+            else:
+                print(f"Index {idx} not found in id_dict")
+                
 
+        print("df_enc after adding distance")
+        print(df_enc.index)
+        print(df_enc[sortcol])
+        print(df_enc[output_cols])
+        print("<<<<<       NaN count in sortcol AFTER KNN", df_enc[sortcol].isnull().sum())
+
+        # print(df_enc['dist_enc1'].dtype)
+
+        # df_enc['dist_enc1'] = df_enc['dist_enc1'].astype(float)
+
+        def safe_float_convert(x):
+            try:
+                return float(x)
+            except:
+                return np.nan
+
+        df_enc['dist_enc1'] = df_enc['dist_enc1'].apply(safe_float_convert)
+
+        # df_enc = df_enc.sort_values(by='dist_enc1', na_position='last')
+        # df_enc = df_enc.sort_values(by='dist_enc1', na_position='last').reset_index(drop=True)
+        # problematic_rows = df_enc[pd.to_numeric(df_enc['dist_enc1'], errors='coerce').isna()]
+        # print("Problematic rows:")
+        # print(problematic_rows)
+
+        # df_enc = df_enc.dropna(subset=['dist_enc1'])
+        # df_enc = df_enc.sort_values(by='dist_enc1').reset_index(drop=True)
+
+
+        df_enc = df_enc.sort_values(by=output_cols)
+        print("df_enc after sorting")
+        print(df_enc.index)
+        print(df_enc[sortcol])
+        print(df_enc[output_cols])
         return df_enc
 
     def draw_point(self,image,landmarks_2d,index):
@@ -1429,6 +1488,15 @@ class SortPose:
         if len(df_sorted) == 0: 
             FIRST_ROUND = True
             enc1, obj_bbox1 = self.get_enc1(df_enc, FIRST_ROUND)
+            # print all rows of df_enc where obj_bbox_list is None
+            # print(df_enc[df_enc['obj_bbox_list'].isnull()])
+
+            # drop all rows where obj_bbox_list is None
+            df_enc = df_enc.dropna(subset=["obj_bbox_list"])
+            # print("df_enc", df_enc)
+
+            # df_enc = df_enc.dropna(subset=["obj_bbox_list"])
+            # print(df_enc.dtypes)     
         else: 
             FIRST_ROUND = False
             enc1, obj_bbox1 = self.get_enc1(df_sorted, FIRST_ROUND)
