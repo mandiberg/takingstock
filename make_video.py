@@ -111,7 +111,7 @@ SORT_TYPE = "planar_body"
 
 # if planar_body set OBJ_CLS_ID for each object type
 # 67 is phone, 63 is laptop, 26: 'handbag', 27: 'tie', 32: 'sports ball'
-if SORT_TYPE == "planar_body": OBJ_CLS_ID = 0
+if SORT_TYPE == "planar_body": OBJ_CLS_ID = 67
 else: OBJ_CLS_ID = 0
 
 ONE_SHOT = False # take all files, based off the very first sort order.

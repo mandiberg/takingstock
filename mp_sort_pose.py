@@ -1295,7 +1295,7 @@ class SortPose:
         print("enc1++ final np array", enc1)
         return enc1
     
-    def sort_df_KNN(self, df_enc, enc1, knn_sort="128d", obj_bbox1=None):
+    def sort_df_KNN(self, df_enc, enc1, knn_sort="128d"):
         print("df_enc at the start of sort_df_KNN")
 
         output_cols = 'dist_enc1'
@@ -1324,11 +1324,16 @@ class SortPose:
             # print(df_enc.loc[0])
             print(type(df_enc.loc[0, 'lum']))
             print(df_enc.loc[0, 'lum'])
-
-        if self.OBJ_CLS_ID > 0:
+        elif knn_sort == "obj":
             # overriding for object detection
             sortcol = 'obj_bbox_list'
-            enc1 = obj_bbox1
+            output_cols = 'dist_obj'
+            # enc1 = obj_bbox1
+
+        # if self.OBJ_CLS_ID > 0:
+        #     # overriding for object detection
+        #     sortcol = 'obj_bbox_list'
+        #     enc1 = obj_bbox1
 
         #create output column -- do i need to do this?
         df_enc[output_cols] = np.nan
@@ -1512,9 +1517,14 @@ class SortPose:
         
         # sort KNN (always for planar) or BRUTEFORCE (optional only for 128d)
         if self.BRUTEFORCE and knn_sort == "128d": df_dist_enc = self.brute_force(df_enc, enc1)
-        else: df_dist_enc = self.sort_df_KNN(df_enc, enc1, knn_sort, obj_bbox1)
+        else: df_dist_enc = self.sort_df_KNN(df_enc, enc1, knn_sort)
         print("df_shuffled 128d", df_dist_enc[['image_id','dist_enc1']].sort_values(by='dist_enc1'))
         
+        # sort KNN for OBJ_CLS_ID
+        if self.OBJ_CLS_ID > 0: 
+            df_dist_enc = self.sort_df_KNN(df_enc, obj_bbox1, "obj")
+            print("df_shuffled obj", df_dist_enc[['image_id','dist_obj']].sort_values(by='dist_obj')) 
+
         # set HSV start enc and add HSV dist
         if not self.ONE_SHOT:
             if not 'dist_HSV' in df_sorted.columns:  enc1, obj_bbox1 = self.get_enc1(df_enc, FIRST_ROUND=True, hsv_sort=True)
