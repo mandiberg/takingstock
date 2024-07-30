@@ -38,7 +38,7 @@ class SortPose:
         self.HSV_DELTA_MAX = .5
         self.HSVMULTIPLIER = 3
         self.BRUTEFORCE = False
-        self.CUTOFF = 200
+        self.CUTOFF = 20
 
         self.SORT_TYPE = SORT_TYPE
         if self.SORT_TYPE == "128d":
@@ -86,7 +86,8 @@ class SortPose:
         self.POINTERS = [16,20,15,19] # 0 is nose, 13-22 are left and right hands and elbows
         self.THUMBS = [16,22,15,21] # 0 is nose, 13-22 are left and right hands and elbows
         # self.BODY_LMS = [20,19] # 0 is nose, 13-22 are left and right hands and elbows
-    
+        self.OBJ_CLS_ID = OBJ_CLS_ID
+
         # self.BODY_LMS = [15]
         self.VERBOSE = VERBOSE
 
@@ -957,50 +958,69 @@ class SortPose:
         return self.hue,self.sat,self.val,self.lum,self.lum_torso
     
 
+    def most_common_row(self, flattened_array):
+        # Convert the flattened array into tuples for hashing
+        hashable_rows = [tuple(row) for row in flattened_array]
 
+        # Find the mode using the most_common function from the collections module
+        counter = Counter(hashable_rows)
+        most_common_row = counter.most_common(1)[0][0]
+        print("Most common face embedding:")
+        print(most_common_row)
+        return most_common_row
+    
+    def safe_round(self,x, decimals=1):
+        if x is None:
+            return None
+        try:
+            return np.round(x, decimals)
+        except:
+            return None
+
+    def get_start_obj_bbox(self, start_img, df_enc):
+        if start_img == "median":
+            print("[get_start_obj_bbox] in median")
+            bbox_col = "obj_bbox_list"
+            df_rounded = pd.DataFrame()
+            # Round each value in the face_encodings68 column to 2 decimal places            
+            # df_enc['face_encodings68'] = df_enc['face_encodings68'].apply(self.safe_round)
+            df_rounded[bbox_col] = df_enc[bbox_col].apply(lambda x: self.safe_round(x, -2))
+
+            # drop all rows where bbox_col is None
+            df_rounded = df_rounded.dropna(subset=[bbox_col])
+
+            # df[cols].apply(lambda x: apply_join(x,sep),axis=1)
+
+            # Convert the face_encodings68 column to a list of lists
+            flattened_array = df_rounded[bbox_col].tolist()        
+            print("flattened_array", flattened_array)    
+            try:
+                enc1 = self.most_common_row(flattened_array)
+            except:
+                enc1 = random.choice(flattened_array)
+            print("get_start_obj_bbox", enc1)
+            return enc1
+        else:
+            print("[get_start_obj_bbox] - not median")
+            return None
 
     def get_start_enc_NN(self, start_img, df_enc):
-
-        def safe_round(x):
-            if x is None:
-                return None
-            try:
-                return np.round(x, 1)
-            except:
-                return None
-
-
         print("get_start_enc")
 
         if start_img == "median":
+            print("in median")
 
             # Round each value in the face_encodings68 column to 2 decimal places            
-            df_enc['face_encodings68'] = df_enc['face_encodings68'].apply(safe_round)
-            # df_enc['face_encodings68'] = df_enc['face_encodings68'].apply(lambda x: np.round(x, 1))
+            # df_enc['face_encodings68'] = df_enc['face_encodings68'].apply(self.safe_round)
+            df_enc['face_encodings68'] = df_enc['face_encodings68'].apply(lambda x: np.round(x, 1))
 
             # Convert the face_encodings68 column to a list of lists
             flattened_array = df_enc['face_encodings68'].tolist()            
             
-            # # Step 1: Round all values to 2 decimal points
-            # df_rounded = df_128_enc.round(3)
-
-            # # Step 2: Flatten the DataFrame into a single array
-            # flattened_array = df_rounded.values
-
-            # Step 3: Convert the flattened array into tuples for hashing
-            hashable_rows = [tuple(row) for row in flattened_array]
-
-            # Step 4: Find the mode using the most_common function from the collections module
-            counter = Counter(hashable_rows)
-            most_common_row = counter.most_common(1)[0][0]
-
-            print("Most common face embedding:")
-            print(most_common_row)
-            enc1 = most_common_row
+            enc1 = self.most_common_row(flattened_array)
             # print(dfmode)
             # enc1 = dfmode.iloc[0].to_list()
             # enc1 = df_128_enc.median().to_list()
-            print("in median")
 
 # TK needs to be refactored NN June 8
 
@@ -1134,6 +1154,7 @@ class SortPose:
 
 
     def get_enc1(self, df, FIRST_ROUND=False, hsv_sort = False):
+        obj_bbox1 = None
         if FIRST_ROUND:
             this_start = self.counter_dict["start_img_name"]
             ## Get the starting encodings (if not passed through)
@@ -1152,6 +1173,7 @@ class SortPose:
                 #this is the first??? round, set via df, defaults to face_encodings68
                 print(f"trying get_start_enc() from {this_start}")
                 enc1 = self.get_start_enc_NN(this_start, df)
+                obj_bbox1 = self.get_start_obj_bbox(this_start, df)
                 print(f"set enc1 from get_start_enc() to {enc1}")
         else: 
             if hsv_sort == True: enc1 = df.iloc[-1]["hsvll"]
@@ -1159,7 +1181,7 @@ class SortPose:
             elif self.SORT_TYPE == "planar": enc1 = df.iloc[-1]["face_landmarks"]
             elif self.SORT_TYPE == "planar_body" and "body_landmarks_array" in df.columns: enc1 = df.iloc[-1]["body_landmarks_array"]
             elif self.SORT_TYPE == "planar_body": enc1 = df.iloc[-1]["body_landmarks"]
-        return enc1
+        return enc1, obj_bbox1
 
 
             # sortcol = 'body_landmarks_array'
@@ -1256,7 +1278,7 @@ class SortPose:
         thumbs = self.get_landmarks_2d(enc1, self.THUMBS, structure)
         # body = self.get_landmarks_2d(enc1, self.BODY_LMS, structure)
         body = self.get_landmarks_2d(enc1, list(range(33)), structure)
-        print("prep_enc enc after get_landmarks_2d", pointers, thumbs, body)
+        # print("prep_enc enc after get_landmarks_2d", pointers, thumbs, body)
         # enc1_np = np.array(enc1_list)
 
         # calculate the angle of the vector between landmarks 16 and 20
@@ -1276,7 +1298,7 @@ class SortPose:
         print("enc1++ final np array", enc1)
         return enc1
     
-    def sort_df_KNN(self, df_enc, enc1, knn_sort="128d"):
+    def sort_df_KNN(self, df_enc, enc1, knn_sort="128d", obj_bbox=None):
         output_cols = ['dist_enc1']
         if knn_sort == "128d":
             sortcol = 'face_encodings68'
@@ -1297,8 +1319,8 @@ class SortPose:
 
                 # apply prep_enc to the sortcol column 
                 df_enc[sortcol] = df_enc[sourcecol].apply(lambda x: self.prep_enc(x, structure="list"))
-                print("body_landmarks post prep_enc - should be 33")
-                print(df_enc[sortcol].to_list())
+                # print("body_landmarks post prep_enc - should be 33")
+                # print(df_enc[sortcol].to_list())
 
             # print("body_landmarks post_sort")
             # print(df_enc[sortcol])
@@ -1410,6 +1432,7 @@ class SortPose:
         if len(df_sorted) == 0: 
             FIRST_ROUND = True
             enc1 = self.get_enc1(df_enc, FIRST_ROUND)
+            obj_bbox = None
         else: 
             FIRST_ROUND = False
             enc1 = self.get_enc1(df_sorted, FIRST_ROUND)
@@ -1425,7 +1448,7 @@ class SortPose:
         
         # sort KNN (always for planar) or BRUTEFORCE (optional only for 128d)
         if self.BRUTEFORCE and knn_sort == "128d": df_dist_enc = self.brute_force(df_enc, enc1)
-        else: df_dist_enc = self.sort_df_KNN(df_enc, enc1, knn_sort)
+        else: df_dist_enc = self.sort_df_KNN(df_enc, enc1, knn_sort, obj_bbox)
         print("df_shuffled 128d", df_dist_enc[['image_id','dist_enc1']].sort_values(by='dist_enc1'))
         
         # set HSV start enc and add HSV dist

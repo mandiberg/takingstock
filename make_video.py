@@ -93,7 +93,7 @@ IS_TOPICS = False
 N_TOPICS = 30
 
 IS_ONE_TOPIC = True
-TOPIC_NO = [3]
+TOPIC_NO = [15]
 
 #  is isolated,  is business,  babies, 17 pointing
 #  is doctor <<  covid
@@ -105,16 +105,16 @@ TOPIC_NO = [3]
 # 7 is surprise
 #  is yoga << planar,  planar,  fingers crossed
 
-SORT_TYPE = "128d"
+# SORT_TYPE = "128d"
 # SORT_TYPE ="planar"
-# SORT_TYPE = "planar_body"
+SORT_TYPE = "planar_body"
 
 # if planar_body set OBJ_CLS_ID for each object type
 # 67 is phone, 63 is laptop, 26: 'handbag', 27: 'tie', 32: 'sports ball'
 if SORT_TYPE == "planar_body": OBJ_CLS_ID = 67
 else: OBJ_CLS_ID = 0
 
-ONE_SHOT = True # take all files, based off the very first sort order.
+ONE_SHOT = False # take all files, based off the very first sort order.
 JUMP_SHOT = True # jump to random file if can't find a run (I don't think this applies to planar?)
 
 
@@ -191,7 +191,7 @@ elif IS_SEGONLY and io.db["name"] == "stock":
         FROM += " JOIN PhoneBbox pb ON s.image_id = pb.image_id "
         SELECT += ", pb.bbox_67, pb.conf_67, pb.bbox_63, pb.conf_63, pb.bbox_26, pb.conf_26, pb.bbox_27, pb.conf_27, pb.bbox_32, pb.conf_32 "
     if SORT_TYPE == "planar_body":
-        WHERE += " AND s.body_landmarks IS NOT NULL "
+        WHERE += " AND s.mongo_body_landmarks = 1 "
     ###############
     # # join to keywords
     # FROM += " JOIN ImagesKeywords ik ON s.image_id = ik.image_id JOIN Keywords k ON ik.keyword_id = k.keyword_id "
@@ -202,7 +202,7 @@ elif IS_SEGONLY and io.db["name"] == "stock":
     # WHERE += " AND e.encoding_id > 2612275"
 
     # WHERE = "s.site_name_id != 1"
-    LIMIT = 1000
+    LIMIT = 100
 
     # TEMP TK TESTING
     # WHERE += " AND s.site_name_id = 8"
@@ -302,8 +302,8 @@ start_site_image_id = None
 # start_site_image_id = "0/08/158083627-man-in-white-t-shirt-gesturing-with-his-hands-studio-cropped.jpg"
 
 # for PFP
-start_img_name = "start_face_encodings"
-start_site_image_id = [-0.13242901861667633, 0.09738104045391083, 0.003530653193593025, -0.04780442640185356, -0.13073976337909698, 0.07189705967903137, -0.006513072177767754, -0.051335446536540985, 0.1768932193517685, -0.03729865700006485, 0.1137416809797287, 0.13994133472442627, -0.23849385976791382, -0.08209677785634995, 0.06067033112049103, 0.07974598556756973, -0.1882513463497162, -0.24926315248012543, -0.011344537138938904, -0.10508193075656891, 0.010317208245396614, 0.06348179280757904, 0.02852417528629303, 0.06981766223907471, -0.14760875701904297, -0.34729471802711487, -0.014949701726436615, -0.09429284185171127, 0.08592978119850159, -0.11939340829849243, 0.04517041891813278, 0.06180906295776367, -0.1773814857006073, 0.011621855199337006, 0.010536111891269684, 0.12963438034057617, -0.07557092607021332, 0.0027374476194381714, 0.2890719771385193, 0.0692337155342102, -0.17323020100593567, 0.0724603682756424, 0.021229337900877, 0.361629843711853, 0.250482439994812, 0.021974680945277214, 0.018878426402807236, -0.022722169756889343, 0.09668144583702087, -0.29601603746414185, 0.11375367641448975, 0.2568872570991516, 0.11404240131378174, 0.04999732971191406, 0.02831254154443741, -0.15830034017562866, -0.031099170446395874, 0.028748074546456337, -0.180643692612648, 0.13169123232364655, 0.058790236711502075, -0.0858338251709938, 0.029470380395650864, -0.002784252166748047, 0.2532877027988434, 0.07375448942184448, -0.11085735261440277, -0.12285713106393814, 0.11346398293972015, -0.19246435165405273, -0.1447266787290573, 0.054258447140455246, -0.1335202157497406, -0.1264294683933258, -0.23741140961647034, 0.07753928005695343, 0.3753989636898041, 0.08984167128801346, -0.18434450030326843, 0.042485352605581284, -0.08978638052940369, -0.03871896490454674, 0.06451354175806046, 0.08044029772281647, -0.11364202201366425, -0.1158837378025055, -0.10755209624767303, 0.044953495264053345, 0.2573489546775818, 0.049939051270484924, -0.07680445909500122, 0.20810386538505554, 0.09711501002311707, 0.05330953001976013, 0.08986716717481613, 0.0984266921877861, -0.036112621426582336, -0.011795245110988617, -0.15438663959503174, -0.027118921279907227, -0.012514196336269379, -0.11667540669441223, 0.04242435097694397, 0.13383115828037262, -0.18503828346729279, 0.19057676196098328, 0.017584845423698425, -0.005235005170106888, 0.010936722159385681, 0.08952657878398895, -0.1809171438217163, -0.07223983108997345, 0.16210225224494934, -0.264881432056427, 0.3121953308582306, 0.21528613567352295, 0.02137373574078083, 0.12006716430187225, 0.08322857320308685, 0.0802738219499588, -0.013485163450241089, 0.005497157573699951, -0.0893208310008049, -0.06330209970474243, 0.017513029277324677, -0.007281661033630371, 0.06451432406902313, 0.10179871320724487]
+# start_img_name = "start_face_encodings"
+# start_site_image_id = [-0.13242901861667633, 0.09738104045391083, 0.003530653193593025, -0.04780442640185356, -0.13073976337909698, 0.07189705967903137, -0.006513072177767754, -0.051335446536540985, 0.1768932193517685, -0.03729865700006485, 0.1137416809797287, 0.13994133472442627, -0.23849385976791382, -0.08209677785634995, 0.06067033112049103, 0.07974598556756973, -0.1882513463497162, -0.24926315248012543, -0.011344537138938904, -0.10508193075656891, 0.010317208245396614, 0.06348179280757904, 0.02852417528629303, 0.06981766223907471, -0.14760875701904297, -0.34729471802711487, -0.014949701726436615, -0.09429284185171127, 0.08592978119850159, -0.11939340829849243, 0.04517041891813278, 0.06180906295776367, -0.1773814857006073, 0.011621855199337006, 0.010536111891269684, 0.12963438034057617, -0.07557092607021332, 0.0027374476194381714, 0.2890719771385193, 0.0692337155342102, -0.17323020100593567, 0.0724603682756424, 0.021229337900877, 0.361629843711853, 0.250482439994812, 0.021974680945277214, 0.018878426402807236, -0.022722169756889343, 0.09668144583702087, -0.29601603746414185, 0.11375367641448975, 0.2568872570991516, 0.11404240131378174, 0.04999732971191406, 0.02831254154443741, -0.15830034017562866, -0.031099170446395874, 0.028748074546456337, -0.180643692612648, 0.13169123232364655, 0.058790236711502075, -0.0858338251709938, 0.029470380395650864, -0.002784252166748047, 0.2532877027988434, 0.07375448942184448, -0.11085735261440277, -0.12285713106393814, 0.11346398293972015, -0.19246435165405273, -0.1447266787290573, 0.054258447140455246, -0.1335202157497406, -0.1264294683933258, -0.23741140961647034, 0.07753928005695343, 0.3753989636898041, 0.08984167128801346, -0.18434450030326843, 0.042485352605581284, -0.08978638052940369, -0.03871896490454674, 0.06451354175806046, 0.08044029772281647, -0.11364202201366425, -0.1158837378025055, -0.10755209624767303, 0.044953495264053345, 0.2573489546775818, 0.049939051270484924, -0.07680445909500122, 0.20810386538505554, 0.09711501002311707, 0.05330953001976013, 0.08986716717481613, 0.0984266921877861, -0.036112621426582336, -0.011795245110988617, -0.15438663959503174, -0.027118921279907227, -0.012514196336269379, -0.11667540669441223, 0.04242435097694397, 0.13383115828037262, -0.18503828346729279, 0.19057676196098328, 0.017584845423698425, -0.005235005170106888, 0.010936722159385681, 0.08952657878398895, -0.1809171438217163, -0.07223983108997345, 0.16210225224494934, -0.264881432056427, 0.3121953308582306, 0.21528613567352295, 0.02137373574078083, 0.12006716430187225, 0.08322857320308685, 0.0802738219499588, -0.013485163450241089, 0.005497157573699951, -0.0893208310008049, -0.06330209970474243, 0.017513029277324677, -0.007281661033630371, 0.06451432406902313, 0.10179871320724487]
 
 
 # no gap
@@ -561,10 +561,60 @@ def prep_encodings_NN(df_segment):
             return [row['lum']*HSV_NORMS["LUM"], row['lum_torso_bb']*HSV_NORMS["LUM"]]
         else:
             return [row['lum']*HSV_NORMS["LUM"], row['lum_torso']*HSV_NORMS["LUM"]]    
-
+    def json_to_list(row):      
+        bbox = row["bbox_"+str(OBJ_CLS_ID)]
+        if bbox: return [bbox["left"], bbox["top"], bbox["right"], bbox["bottom"]]
+        else: return None
+      
+    #     bbox = json.loads(row["bbox_"+str(OBJ_CLS_ID)])
+    #     bbox_list = [bbox["left"], bbox["top"], bbox["right"], bbox["bottom"]]
+    #     return bbox_list
+    # def json_to_list(row):
+    #     bbox = row["bbox_"+str(OBJ_CLS_ID)]
+    #     print("type of bbox", type(bbox))
+    #     print("bbox", bbox)
+    #     bbox_json = json.loads((bbox))
+    #     print("bbox_json", bbox_json)
+    #     print("type of bbox_json", type(bbox_json))
+    #     # If bbox is None, return None
+    #     if bbox is None:
+    #         print("bbox is None")
+    #         return None
+    #     else:
+    #         print("type of bbox", type(bbox))
+        
+    #     # If bbox is a string, try to parse it as JSON
+    #     if isinstance(bbox, str):
+    #         print("going to ttry to load json")
+    #         try:
+    #             print("loading json")
+    #             bbox_dict = json.loads(json.dumps(bbox))
+    #             # bbox_dict = ast.literal_eval(bbox)
+    #             # bbox_dict = json.loads(bbox)
+    #             print("loaded json, type is", type(bbox_dict))
+    #         except json.JSONDecodeError:
+    #             print(f"Invalid JSON string: {bbox}")
+    #             return None
+    #     # If bbox is already a dictionary, use it directly
+    #     elif isinstance(bbox, dict):
+    #         bbox_dict = bbox
+    #     else:
+    #         print(f"Unexpected bbox format: {bbox}")
+    #         return None
+    #     print("type of bbox_dict", type(bbox_dict))        
+    #     # Now bbox_dict should be a dictionary, so we can safely use .get()
+    #     return [bbox_dict.get("left"), bbox_dict.get("top"), bbox_dict.get("right"), bbox_dict.get("bottom")]
+                
     # create a column for the hsv values using df_segment.apply(lambda row: create_hsv_list(row), axis=1)
     df_segment['hsv'] = df_segment.apply(lambda row: create_hsv_list(row), axis=1)
     df_segment['lum'] = df_segment.apply(lambda row: create_lum_list(row), axis=1)
+    # load the OBJ_CLS_ID bbox as list into obj_bbox_list
+    # df_segment['obj_bbox_list'] = df_segment.apply(lambda row: json_to_list(row), axis=1)
+    df_segment['obj_bbox_list'] = df_segment.apply(json_to_list, axis=1)
+    null_bboxes = df_segment[df_segment['obj_bbox_list'].isnull()]
+    if not null_bboxes.empty:
+        print("Rows with invalid bbox data:")
+        print(null_bboxes)
 
     print("df_segment length", len(df_segment.index))
     if SORT_TYPE == "planar_body":
@@ -682,34 +732,6 @@ def const_imgfilename_NN(UID, df, imgfileprefix):
     imgfilename = imgfileprefix+"_"+str(counter_str)+"_"+str(UID)+".jpg"
     print("imgfilename ",imgfilename)
     return imgfilename
-
-def const_imgfilename(filename, df, imgfileprefix):
-    # print("filename", filename)
-    UID = filename.split('-id')[-1].split("/")[-1].replace(".jpg","")
-    # print("UID ",UID)
-    counter_str = str(sort.counter_dict["counter"]).zfill(len(str(df.size)))  # Add leading zeros to the counter
-    imgfilename = imgfileprefix+"_"+str(counter_str)+"_"+UID+".jpg"
-    print("imgfilename ",imgfilename)
-    return imgfilename
-
-# def shift_landmarks(landmarks,extension_pixels,img):
-#     height,width = img.shape[:2]
-#     new_height=extension_pixels["top"]+extension_pixels["bottom"]+height
-#     new_width=extension_pixels["left"]+extension_pixels["right"]+width
-#     translated_landmarks = landmark_pb2.NormalizedLandmarkList()
-#     i=0
-#     for landmark in landmarks.landmark:
-#         translated_landmark = landmark_pb2.NormalizedLandmark()
-#         translated_landmark.x = (landmark.x*width + extension_pixels["left"])/new_width
-#         translated_landmark.y = (landmark.y*height + extension_pixels["top"])/new_height
-#         translated_landmarks.landmark.append(translated_landmark)
-#         if sort.VERBOSE:
-#             if i==0:
-#                 print("before shifting landmark:",(landmark.x*width)//1,(landmark.y*height)//1,"after shifting landmark:",(translated_landmark.x*new_width)//1,(translated_landmark.y*new_height)//1)
-#             # if i>0:
-#                 # print("change:",(landmark.x*width)//1-(translated_landmark.x*new_width)//1,(landmark.y*height)//1-(translated_landmark.y*new_height)//1)
-#         i+=1
-#     return translated_landmarks
 
 def fetch_selfie_bbox(target_image_id):
     select_image_ids_query = (select(ImagesBackground.image_id,ImagesBackground.selfie_bbox,ImagesBackground.is_left_shoulder, ImagesBackground.is_right_shoulder).filter(ImagesBackground.image_id == target_image_id))
@@ -1276,6 +1298,7 @@ def main():
             df['face_landmarks'] = df['face_landmarks'].apply(unpickle_array)
             df['body_landmarks'] = df['body_landmarks'].apply(unpickle_array)
             df['bbox'] = df['bbox'].apply(lambda x: unstring_json(x))
+            df["bbox_"+str(OBJ_CLS_ID)] = df["bbox_"+str(OBJ_CLS_ID)].apply(lambda x: unstring_json(x))
 
             # this may be a big problem
             # turn URL into local hashpath (still needs local root folder)
