@@ -78,10 +78,10 @@ NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 18	afripics
 '''
 
-THIS_SITE = 11
+THIS_SITE = 18
 
 SEARCH_KEYS_FOR_LOC = True
-VERBOSE = False
+VERBOSE = True
 
 # where key, etc csvs stored
 INGEST_ROOT = "/Users/michaelmandiberg/Documents/GitHub/facemap/utilities/keys/"
@@ -125,10 +125,11 @@ elif THIS_SITE == 14:
     JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache.jsonl")
     eth_dict_per_site = {'asian ethnicity':9, 'tika':9, 'alta':9, 'asian  ethnicity':9,'asian ethinicity':9,'asian farmer':9,'asian medicine':9,'asians':9,'asiascher':9,'asiatisch':9,'asiatische':9,'asiatischen':9,'asiatischer':9,'asiatisches':9,'asien':9}
 elif THIS_SITE == 15:
-    # not saving csv files... to db also?
+    # tested - once newkeys are in, can go
     INGEST_FOLDER = "/Users/michaelmandiberg/Library/CloudStorage/Dropbox/takingstock_dropbox/iwaria"
     JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache.jsonl")
 elif THIS_SITE == 16:
+    # tested - once newkeys are in, can go
     INGEST_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/nappy_v3_w-data"
     JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache.jsonl")
 elif THIS_SITE == 17:
@@ -602,7 +603,11 @@ def search_keys(keys_list, this_dict, do_write_csv, multi=False):
 
 
     if len(set(results)) == 1:
-        one_result = int(results[0])
+        try:
+            one_result = int(results[0])
+        except:
+            if VERBOSE: print("one_result int failed with this key: ", results[0])
+            one_result = None
         # print("found a GOOD result: ", one_result)
     else:
         one_result = None

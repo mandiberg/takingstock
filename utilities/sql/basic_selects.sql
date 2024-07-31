@@ -8,7 +8,21 @@ USE stock
 
 SELECT *
 FROM ImagesBackground ib 
-WHERE ib.image_id = 614
+WHERE ib.image_id = 9634
+
+SELECT COUNT(ib.image_id)
+FROM ImagesBackground ib 
+WHERE ib.is_left_shoulder = 1
+;
+
+
+UPDATE ImagesBackground
+SET    is_left_shoulder = NULL
+WHERE  is_left_shoulder IS NOT NULL;
+
+UPDATE ImagesBackground
+SET    is_right_shoulder  = NULL
+WHERE  is_right_shoulder IS NOT NULL;
 
 
 SELECT COUNT(ib.image_id)
@@ -326,7 +340,7 @@ CREATE TABLE Model_Release (
 
 SELECT COUNT(i.image_id)
 FROM Images i
-WHERE i.site_name_id = 11
+WHERE i.site_name_id = 15
 ;
 
 DELETE FROM Images

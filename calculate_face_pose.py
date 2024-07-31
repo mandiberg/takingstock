@@ -53,10 +53,12 @@ http="https://media.gettyimages.com/photos/"
 
 # am I looking on RAID/SSD for a folder? If not, will pull directly from SQL
 # if so, also change the site_name_id etc around line 930
-IS_FOLDER = False
-SITE_NAME_ID = 2
+IS_FOLDER = True
+SITE_NAME_ID = 13
 # 2, shutter. 4, istock
 # 7 pond5
+
+
 '''
 1   getty
 2   shutterstock
@@ -68,10 +70,19 @@ SITE_NAME_ID = 2
 8   123rf
 9   alamy
 10  visualchinagroup
+11	picxy
+12	pixerf
+13	imagesbazaar - doing
+14	indiapicturebudget
+15	iwaria
+16	nappy
+17	picha
+18	afripics
 '''
 
+
 # MAIN_FOLDER = "/Volumes/RAID54/images_shutterstock"
-MAIN_FOLDER = "/Volumes/RAID18/images_pexels"
+MAIN_FOLDER = "/Volumes/RAID18/images_bazzar"
 # MAIN_FOLDER = "/Volumes/SSD4/images_getty_reDL"
 BATCH_SIZE = 25000 # Define how many from each folder in each batch
 
@@ -84,7 +95,7 @@ THESE_FOLDER_PATHS = ["9/9C", "9/9D", "9/9E", "9/9F", "9/90", "9/91", "9/92", "9
 CSV_FOLDERCOUNT_PATH = os.path.join(MAIN_FOLDER, "folder_countout.csv")
 
 IS_SSD=False
-BODYLMS = True # only matters if IS_FOLDER is False
+BODYLMS = False # only matters if IS_FOLDER is False
 SEGMENT = 0 # topic_id set to 0 or False if using HelperTable or not using a segment
 HelperTable_name = False #"SegmentHelperMay7_fingerpoint" # set to False if not using a HelperTable
 

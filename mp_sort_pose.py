@@ -38,7 +38,7 @@ class SortPose:
         self.HSV_DELTA_MAX = .5
         self.HSVMULTIPLIER = 3
         self.BRUTEFORCE = False
-        self.CUTOFF = 200
+        self.CUTOFF = 1500
 
         self.SORT_TYPE = SORT_TYPE
         if self.SORT_TYPE == "128d":
@@ -997,6 +997,13 @@ class SortPose:
                 enc1 = random.choice(flattened_array)
             print("get_start_obj_bbox", enc1)
             return enc1
+        elif start_img == "start_bbox":
+            print("starting from start_bbox")
+            print(self.counter_dict["start_site_image_id"])
+            enc1 = self.counter_dict["start_site_image_id"]
+            # enc1 = df_enc.loc[self.counter_dict["start_site_image_id"]].to_list()
+            return enc1
+
         else:
             print("[get_start_obj_bbox] - not median")
             return None
@@ -1004,7 +1011,8 @@ class SortPose:
     def get_start_enc_NN(self, start_img, df_enc):
         print("get_start_enc")
 
-        if start_img == "median":
+        if start_img == "median" or start_img == "start_bbox":
+            # when I want to start from start_bbox, I pass it a median 128d enc
             print("in median")
 
             # Round each value in the face_encodings68 column to 2 decimal places            
@@ -1156,12 +1164,13 @@ class SortPose:
         if FIRST_ROUND:
             this_start = self.counter_dict["start_img_name"]
             ## Get the starting encodings (if not passed through)
-            if this_start != "median" and this_start != "start_site_image_id" and this_start != "start_face_encodings":
+            # if this_start != "median" and this_start != "start_site_image_id" and this_start != "start_face_encodings":
+            if this_start not in ["median", "start_site_image_id", "start_face_encodings", "start_bbox"]:
                 # this is the first round for clusters/itter where last_image_enc is true
                 # set encodings to the passed through encodings
                 # IF NO START IMAGE SPECIFIED (this line works for no clusters)
                 print("attempting set enc1 from pass through")
-                enc1 = sort.counter_dict["last_image_enc"]
+                enc1 = self.counter_dict["last_image_enc"]
                 print("set enc1 from pass through")
             elif hsv_sort == True:
                 print("setting enc1 to HSV")
@@ -1178,7 +1187,7 @@ class SortPose:
                 print(f"set enc1 from get_start_enc() to {enc1}")
         else: 
             # print the last row of the dataframe
-            print("setting enc1 -- last row of the dataframe", df.iloc[-1])
+            # print("setting enc1 -- last row of the dataframe", df.iloc[-1])
 
             # setting enc1
             if hsv_sort == True: enc1 = df.iloc[-1]["hsvll"]
@@ -1188,7 +1197,7 @@ class SortPose:
             elif self.SORT_TYPE == "planar_body": enc1 = df.iloc[-1]["body_landmarks"]
             # setting obj_bbox1
             if self.SORT_TYPE == "planar_body" and "obj_bbox_list" in df.columns: obj_bbox1 = df.iloc[-1]["obj_bbox_list"]
-        print("returning enc1, obj_bbox1", enc1, obj_bbox1)
+        # print("returning enc1, obj_bbox1", enc1, obj_bbox1)
         return enc1, obj_bbox1
 
 
@@ -1351,12 +1360,15 @@ class SortPose:
         print("sort_df_KNN, knn_sort is", knn_sort)
         # Extract the face encodings from the dataframe
         encodings_array = df_enc[sortcol].to_numpy().tolist()
-        # print("df_enc", df_enc)
+
         if knn_sort == "obj":
             print("encodings_array length", len(encodings_array))
             print("[sort_df_KNN] enc1", enc1)
 
         self.knn.fit(encodings_array)
+        
+        print("before knn enc1", enc1)
+        print("encodings_array", encodings_array)
 
         # Find the distances and indices of the neighbors
         distances, indices = self.knn.kneighbors([enc1], n_neighbors=len(df_enc))
