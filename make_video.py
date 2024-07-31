@@ -111,10 +111,10 @@ SORT_TYPE = "planar_body"
 
 # if planar_body set OBJ_CLS_ID for each object type
 # 67 is phone, 63 is laptop, 26: 'handbag', 27: 'tie', 32: 'sports ball'
-if SORT_TYPE == "planar_body": OBJ_CLS_ID = 67
+if SORT_TYPE == "planar_body": OBJ_CLS_ID = 0
 else: OBJ_CLS_ID = 0
 
-ONE_SHOT = True # take all files, based off the very first sort order.
+ONE_SHOT = False # take all files, based off the very first sort order.
 JUMP_SHOT = True # jump to random file if can't find a run (I don't think this applies to planar?)
 
 
@@ -1020,7 +1020,7 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
         # print(parent_row)
 
         print('-- linear_test_df [-] in loop, index is', str(index))
-        print(row)
+        print(row["body_landmarks"])
         # select the row in df_segment where the imagename == row['filename']
         try:
             imgfilename = const_imgfilename_NN(row['image_id'], df_sorted, imgfileprefix)
@@ -1290,8 +1290,11 @@ def main():
             print('you forgot to change the filename DUH')
         if not df.empty:
 
+
+            print("going to get mongo encodings")
             # use the image_id to query the mongoDB for face_encodings68, face_landmarks, body_landmarks
             df[['face_encodings68', 'face_landmarks', 'body_landmarks']] = df['image_id'].apply(get_encodings_mongo)
+            print("got mongo encodings")
 
             # drop all rows where face_encodings68 is None TK revist this after migration to mongo
             df = df.dropna(subset=['face_encodings68'])

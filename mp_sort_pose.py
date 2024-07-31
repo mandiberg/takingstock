@@ -38,7 +38,7 @@ class SortPose:
         self.HSV_DELTA_MAX = .5
         self.HSVMULTIPLIER = 3
         self.BRUTEFORCE = False
-        self.CUTOFF = 1500
+        self.CUTOFF = 10
 
         self.SORT_TYPE = SORT_TYPE
         if self.SORT_TYPE == "128d":
@@ -1566,11 +1566,12 @@ class SortPose:
                 df_shuffled = df_dist_close
                 
                 # sort df_shuffled by the sum of dist_enc1 and dist_HSV
-                # df_shuffled['sum_dist'] = df_dist_noflash['dist_enc1'] + self.MULTIPLIER * df_shuffled['dist_HSV']
+                df_shuffled['sum_dist'] = df_dist_noflash['dist_enc1'] + self.MULTIPLIER * df_shuffled['dist_HSV']
                 print("df_shuffled columns", df_shuffled.columns)
-                print("df_shuffled before assigning obj", df_shuffled[['image_id','dist_enc1','dist_obj']])
-                df_shuffled['sum_dist'] = df_shuffled['dist_obj']
-                # df_shuffled['sum_dist'] = df_dist_noflash['dist_enc1'] 
+
+                # of OBJ sort kludge but throws errors for non object, non ONE SHOT. If so, use above
+                # df_shuffled['sum_dist'] = df_shuffled['dist_obj'] 
+
                 df_shuffled = df_shuffled.sort_values(by='sum_dist').reset_index(drop=True)
                 print("df_shuffled pre_run", df_shuffled[['image_id','dist_enc1','dist_HSV','sum_dist']])
             else:
