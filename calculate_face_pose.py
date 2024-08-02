@@ -836,6 +836,7 @@ def process_image_bodylms(task):
     init_session()
     init_mongo()
 
+
     # df = pd.DataFrame(columns=['image_id','is_face','is_body','is_face_distant','face_x','face_y','face_z','mouth_gap','face_landmarks','bbox','face_encodings','face_encodings68_J','body_landmarks'])
     # df.at['1', 'image_id'] = image_id
 
@@ -924,7 +925,8 @@ def process_image(task):
         save_image_by_path(image, sort, name)
 
     init_session()
-    
+    init_mongo()
+
 
     df = pd.DataFrame(columns=['image_id','is_face','is_body','is_face_distant','face_x','face_y','face_z','mouth_gap','face_landmarks','bbox','face_encodings','face_encodings68_J','body_landmarks'])
     # print(task)
@@ -1021,15 +1023,64 @@ def process_image(task):
         if IS_FOLDER is True or existing_entry is None:
             for _ in range(io.max_retries):
                 try:
-                    # print(insert_dict)
+                    face_encodings68 = insert_dict.pop('face_encodings68', None)
+                    face_landmarks = insert_dict.pop('face_landmarks', None)
                     # print(f"trying to store {image_id}")
                     # update_sql = f"UPDATE Encodings SET bbox = '{bbox_json}' WHERE encoding_id = {encoding_id};"
                     # engine.connect().execute(text(update_sql))
                     # Entry does not exist, insert insert_dict into the table
                     new_entry = Encodings(**insert_dict)
+                    if face_encodings68: is_encodings = 1
+                    else: is_encodings = 0
+                    new_entry.mongo_encodings = is_encodings
+                    new_entry.mongo_face_landmarks = is_encodings
                     session.add(new_entry)
                     session.commit()
                     # print(f"just added to db")
+
+                    encoding_id = new_entry.encoding_id  # Assuming 'encoding_id' is the name of your primary key column
+
+                    print(f"Newly inserted row has encoding_id: {encoding_id}")
+                    # Get the last row ID
+                    print("Last Row ID:", encoding_id, "image_id", image_id)
+
+
+                    if is_encodings:
+                        try:
+                            mongo_collection.insert_one({
+                                "encoding_id": encoding_id,
+                                "image_id": image_id,
+                                "face_landmarks": face_landmarks,
+                                "face_encodings68": face_encodings68
+                            })
+                        except DuplicateKeyError as e:
+                            print(f"Duplicate key error for encoding_id: {encoding_id}, image_id: {image_id}")
+                            print(f"Error details: {e}")
+                            continue  # Move to the next iteration of the loop
+                        except Exception as e:
+                            print(f"An unexpected error occurred: {e}")
+                            continue  # Move to the next iteration of the loop
+
+
+                # session.query(Encodings).filter(Encodings.image_id == image_id).update({
+                #     Encodings.is_body: is_body,
+                #     # Encodings.body_landmarks: body_landmarks
+                #     Encodings.mongo_body_landmarks: is_body
+                # })
+
+                # session.query(SegmentTable).filter(SegmentTable.image_id == image_id).update({
+                #     SegmentTable.mongo_body_landmarks: is_body
+                # })
+
+                # # total_processed += 1
+
+                # if body_landmarks:
+                #     mongo_collection.update_one(
+                #         {"image_id": image_id},
+                #         {"$set": {"body_landmarks": body_landmarks}}
+                #     )
+                #     print("----------- >>>>>>>>   mongo body_landmarks updated:", image_id)
+
 
                     break  # Transaction succeeded, exit the loop
                 except OperationalError as e:
@@ -1052,6 +1103,7 @@ def process_image(task):
         print(e)
 
     # Close the session and dispose of the engine before the worker process exits
+    close_mongo()
     close_session()
     # print(f"finished session {image_id}")
 
