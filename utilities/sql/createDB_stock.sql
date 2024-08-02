@@ -75,7 +75,9 @@ CREATE TABLE Images (
     imagename varchar(200),
     uploadDate DATE,
     release_name_id INTEGER,
-    FOREIGN KEY (release_name_id) REFERENCES Model_Release (release_name_id)
+    FOREIGN KEY (release_name_id) REFERENCES Model_Release (release_name_id),
+    h INTEGER,
+    w INTEGER,
 );
 
 
