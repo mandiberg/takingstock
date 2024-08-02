@@ -108,6 +108,7 @@ TOPIC_NO = [15,17]
 # SORT_TYPE = "128d"
 # SORT_TYPE ="planar"
 SORT_TYPE = "planar_body"
+NORMED_BODY_LMS = True
 
 # if planar_body set OBJ_CLS_ID for each object type
 # 67 is phone, 63 is laptop, 26: 'handbag', 27: 'tie', 32: 'sports ball'
@@ -204,7 +205,7 @@ elif IS_SEGONLY and io.db["name"] == "stock":
     # WHERE += " AND e.encoding_id > 2612275"
 
     # WHERE = "s.site_name_id != 1"
-    LIMIT = 100000
+    LIMIT = 10000
 
     # TEMP TK TESTING
     # WHERE += " AND s.site_name_id = 8"
@@ -334,7 +335,7 @@ Base = declarative_base()
 
 mongo_client = pymongo.MongoClient(io.dbmongo['host'])
 mongo_db = mongo_client[io.dbmongo['name']]
-mongo_collection = mongo_db[io.dbmongo['collection']]
+# mongo_collection = mongo_db[io.dbmongo['collection']]
 
 
 # construct mediapipe objects
@@ -1226,17 +1227,24 @@ def main():
         else:
             return None
 
-    def get_encodings_mongo(image_id):
+    def get_encodings_mongo(image_id,enc_type="face_encodings68"):
+        mongo_collection_face = mongo_db['encodings']
+        mongo_collection_body = mongo_db["bboxnormed_lms"]
+
         if image_id:
-            results = mongo_collection.find_one({"image_id": image_id})
-            if results:
-                face_encodings68 = results['face_encodings68']
-                face_landmarks = results['face_landmarks']
-                body_landmarks = results['body_landmarks']
+            results_face = mongo_collection_face.find_one({"image_id": image_id})
+            results_body = mongo_collection_body.find_one({"image_id": image_id})
+            face_encodings68 = face_landmarks = body_landmarks = None
+            if results_body:
+                body_landmarks = results_body["nlms"]
+            if results_face:
+                face_encodings68 = results_face['face_encodings68']
+                face_landmarks = results_face['face_landmarks']
+                # body_landmarks = results['body_landmarks']
                 # print("got encodings from mongo, types are: ", type(face_encodings68), type(face_landmarks), type(body_landmarks))
-                return pd.Series([face_encodings68, face_landmarks, body_landmarks])
-            else:
-                return pd.Series([None, None, None])
+            return pd.Series([face_encodings68, face_landmarks, body_landmarks])
+            # else:
+            #     return pd.Series([None, None, None])
         else:
             return pd.Series([None, None, None])
 

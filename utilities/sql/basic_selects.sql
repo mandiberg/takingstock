@@ -64,17 +64,39 @@ FROM ImagesBackground ib
 WHERE ib.selfie_bbox IS NOT NULL
 ;
 
+
+SELECT *
+FROM Encodings e 
+WHERE e.image_id = 9923170
+;
+
 SELECT COUNT(so.image_id) 
 FROM SegmentOct20 so 
 WHERE so.site_name_id = 1
 ;
 
 
-SELECT COUNT(so.seg_image_id) as ccount
-FROM SegmentOct20 so 
-JOIN Encodings e ON so.image_id = e.image_id 
+-- ENCODINGS STUFFFFFFFFFF
+
+SELECT COUNT(i.image_id) as ccount
+FROM Images i  
+JOIN Encodings e ON i.image_id = e.image_id 
 WHERE e.mongo_face_landmarks = 1
-AND e.mongo_body_landmarks is NULL
+AND i.site_name_id = 15
+;
+
+SELECT COUNT(i.image_id) as ccount
+FROM Images i  
+JOIN Encodings e ON i.image_id = e.image_id 
+WHERE e.face_landmarks is not NULL 
+AND i.site_name_id = 13
+;
+
+
+SELECT *
+FROM Encodings e 
+WHERE e.image_id  = 122582509
+AND e.face_landmarks IS NOT NULL
 ;
 
 SELECT COUNT(so.seg_image_id) as ccount
@@ -338,13 +360,19 @@ CREATE TABLE Model_Release (
 ); 
 
 
+SELECT COUNT(ik.keyword_id)
+FROM Images i
+JOIN ImagesKeywords ik on ik.image_id = i.image_id 
+WHERE i.site_name_id = 10
+;
+
 SELECT COUNT(i.image_id)
 FROM Images i
-WHERE i.site_name_id = 15
+WHERE i.site_name_id = 10
 ;
 
 DELETE FROM Images
-WHERE site_name_id = 11
+WHERE site_name_id = 10
 ;
 
 SELECT k.keyword_text 

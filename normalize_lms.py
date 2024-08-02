@@ -17,12 +17,13 @@ import mediapipe as mp
 import shutil
 import pandas as pd
 import json
-from my_declarative_base import Base, Clusters, Images,ImagesBackground, ImagesTopics, SegmentTable, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON, Images
+from my_declarative_base import Base, Clusters, Encodings, Images,ImagesBackground, ImagesTopics, SegmentTable, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON, Images
 #from sqlalchemy.ext.declarative import declarative_base
 from mp_sort_pose import SortPose
 import pymongo
 from mediapipe.framework.formats import landmark_pb2
 from pymediainfo import MediaInfo
+
 
 NOSE_ID=0
 
@@ -69,7 +70,7 @@ sort = SortPose(motion, face_height_output, image_edge_multiplier_sm,EXPAND, ONE
 # Create a session
 session = scoped_session(sessionmaker(bind=engine))
 
-LIMIT= 1000
+LIMIT= 10000
 # Initialize the counter
 counter = 0
 
@@ -90,7 +91,11 @@ def get_shape(target_image_id):
     site_specific_root_folder = io.folder_list[site_name_id]
     file=site_specific_root_folder+"/"+imagename  ###os.path.join was acting wierd so had to do this
 
-    media_info = MediaInfo.parse(file)
+    if io.platform == "darwin":
+        media_info = MediaInfo.parse(file, library_file="/opt/homebrew/Cellar/libmediainfo/24.06/lib/libmediainfo.dylib")
+    else:
+        media_info = MediaInfo.parse(file)
+
     for track in media_info.tracks:
         if track.track_type == 'Image':
             return track.height,track.width
@@ -102,9 +107,11 @@ def normalize_landmarks(landmarks,nose_pos,face_height,shape):
     translated_landmarks = landmark_pb2.NormalizedLandmarkList()
     i=0
     for landmark in landmarks.landmark:
+        # print(landmark)
         translated_landmark = landmark_pb2.NormalizedLandmark()
         translated_landmark.x = (landmark.x*width -nose_pos.x)/face_height
         translated_landmark.y = (landmark.y*height-nose_pos.y)/face_height
+        translated_landmark.visibility = landmark.visibility
         translated_landmarks.landmark.append(translated_landmark)
 
     return translated_landmarks
@@ -124,6 +131,7 @@ def get_landmarks_mongo(image_id):
     
 def insert_n_landmarks(image_id,n_landmarks):
     bboxnormed_collection
+    # print(image_id,n_landmarks)
     nlms_dict = { "image_id": image_id, "nlms": pickle.dumps(n_landmarks) }
     x = bboxnormed_collection.insert_one(nlms_dict)
     print("inserted id",x.inserted_id)
@@ -187,6 +195,9 @@ def calc_nlm(target_image_id, lock, session):
     if body_landmarks:
         nose_pos=body_landmarks.landmark[NOSE_ID]
         height,width=get_shape(target_image_id)
+        nose_pos.x=nose_pos.x*width
+        nose_pos.y=nose_pos.y*height
+        print("nose_pos",nose_pos)
         n_landmarks=normalize_landmarks(body_landmarks,nose_pos,face_height,[height,width])
         insert_n_landmarks(target_image_id,n_landmarks)
         insert_shape(target_image_id,[height,width])
@@ -214,7 +225,9 @@ function=calc_nlm
 
 distinct_image_ids_query = select(Images.image_id.distinct()).\
     outerjoin(SegmentTable,Images.image_id == SegmentTable.image_id).\
+    join(Encodings,Images.image_id == Encodings.image_id).\
     filter(SegmentTable.bbox != None).\
+    filter(SegmentTable.mongo_body_landmarks == 1).\
     filter(Images.h == None).limit(LIMIT)
 
 

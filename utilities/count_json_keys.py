@@ -9,14 +9,16 @@ import os
 # FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/alamyCSV"
 # FOLDER = "/Users/michaelmandiberg/Library/CloudStorage/Dropbox/takingstock_dropbox/INDIA-PB"
 # FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/ImagesBazzar"
-FOLDER = "/Users/michaelmandiberg/Downloads/pixcy_v2"
+# FOLDER = "/Users/michaelmandiberg/Downloads/pixcy_v2"
+FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/VCG2"
 # FOLDER = "/Users/michaelmandiberg/Library/CloudStorage/Dropbox/takingstock_dropbox/PIXERF"
 # FOLDER = "/Users/michaelmandiberg/Library/CloudStorage/Dropbox/takingstock_dropbox/iwaria"
 # FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/nappy_v3_w-data"
 # FOLDER = "/Users/michaelmandiberg/Library/CloudStorage/Dropbox/takingstock_dropbox/PICHA-STOCK"
 # FOLDER = "/Users/michaelmandiberg/Library/CloudStorage/Dropbox/takingstock_dropbox/AFRIPICS"
 
-jsonl_file_path = os.path.join(FOLDER,'items_cache.jsonl')
+# jsonl_file_path = os.path.join(FOLDER,'items_cache.jsonl')
+jsonl_file_path = os.path.join(FOLDER,'items_cache_translated.jsonl')
 csv_output_file_path = os.path.join(FOLDER,'jsonl_keys_by_count.csv')
 
 # Create an empty dictionary to store keyword counts

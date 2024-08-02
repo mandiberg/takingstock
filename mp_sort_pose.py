@@ -38,7 +38,7 @@ class SortPose:
         self.HSV_DELTA_MAX = .5
         self.HSVMULTIPLIER = 3
         self.BRUTEFORCE = False
-        self.CUTOFF = 10
+        self.CUTOFF = 30
 
         self.SORT_TYPE = SORT_TYPE
         if self.SORT_TYPE == "128d":
@@ -1529,7 +1529,7 @@ class SortPose:
         # sort KNN (always for planar) or BRUTEFORCE (optional only for 128d)
         if self.BRUTEFORCE and knn_sort == "128d": df_dist_enc = self.brute_force(df_enc, enc1)
         else: df_dist_enc = self.sort_df_KNN(df_enc, enc1, knn_sort)
-        print("df_shuffled 128d", df_dist_enc[['image_id','dist_enc1']].sort_values(by='dist_enc1'))
+        print("df_shuffled", df_dist_enc[['image_id','dist_enc1']].sort_values(by='dist_enc1'))
         
         # sort KNN for OBJ_CLS_ID
         if self.OBJ_CLS_ID > 0: 
@@ -1539,8 +1539,12 @@ class SortPose:
 
         # set HSV start enc and add HSV dist
         if not self.ONE_SHOT:
-            if not 'dist_HSV' in df_sorted.columns:  enc1, obj_bbox1 = self.get_enc1(df_enc, FIRST_ROUND=True, hsv_sort=True)
-            else:  enc1, obj_bbox1 = self.get_enc1(df_sorted, FIRST_ROUND=False, hsv_sort=True)
+            if not 'dist_HSV' in df_sorted.columns:  
+                print("not dist_HSV")
+                enc1, obj_bbox1 = self.get_enc1(df_enc, FIRST_ROUND=True, hsv_sort=True)
+            else: 
+                print("else is dist_HSV")
+                enc1, obj_bbox1 = self.get_enc1(df_sorted, FIRST_ROUND=False, hsv_sort=True)
             print("enc1", enc1)
             df_dist_hsv = self.normalize_hsv(enc1, df_dist_enc)
             df_dist_hsv = self.sort_df_KNN(df_dist_hsv, enc1, "HSV")
@@ -1567,7 +1571,7 @@ class SortPose:
                 
                 # sort df_shuffled by the sum of dist_enc1 and dist_HSV
                 df_shuffled['sum_dist'] = df_dist_noflash['dist_enc1'] + self.MULTIPLIER * df_shuffled['dist_HSV']
-                print("df_shuffled columns", df_shuffled.columns)
+                # print("df_shuffled columns", df_shuffled.columns)
 
                 # of OBJ sort kludge but throws errors for non object, non ONE SHOT. If so, use above
                 # df_shuffled['sum_dist'] = df_shuffled['dist_obj'] 

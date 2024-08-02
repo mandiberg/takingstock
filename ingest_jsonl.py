@@ -78,7 +78,7 @@ NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 18	afripics
 '''
 
-THIS_SITE = 18
+THIS_SITE = 10
 
 SEARCH_KEYS_FOR_LOC = True
 VERBOSE = True
@@ -102,9 +102,9 @@ elif THIS_SITE == 9:
     INGEST_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/alamyCSV"
     JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache.jsonl")
 elif THIS_SITE == 10:
-    # >> FH
+    # testing
     INGEST_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/VCG2"
-    JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache.jsonl")
+    JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache_translated.jsonl")
 elif THIS_SITE == 11:
     io.db["name"] = "stock"
     # in progress, 1.28M
@@ -133,9 +133,11 @@ elif THIS_SITE == 16:
     INGEST_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/nappy_v3_w-data"
     JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache.jsonl")
 elif THIS_SITE == 17:
+    # tested - once newkeys are in, can go
     INGEST_FOLDER = "/Users/michaelmandiberg/Library/CloudStorage/Dropbox/takingstock_dropbox/PICHA-STOCK"
     JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache.jsonl")
 elif THIS_SITE == 18:
+    # tested - once newkeys are in, can go
     INGEST_FOLDER = "/Users/michaelmandiberg/Library/CloudStorage/Dropbox/takingstock_dropbox/AFRIPICS"
     JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache.jsonl")
 
@@ -1759,15 +1761,16 @@ def ingest_json():
                 ethnicity = item.get("filters", {}).get("ethnicity", None)
 
             elif THIS_SITE == 10:
-                en_keys = []
-                for key in keys_list:
-                    try:
-                        en_key = key2key_vcg[key]
-                        en_keys.append(en_key)
-                    except:
-                        print("no key2key for", key)
-                keys_list = en_keys
-                print(keys_list)
+                # en_keys = []
+                # for key in keys_list:
+                #     try:
+                #         en_key = key2key_vcg[key]
+                #         en_keys.append(en_key)
+                #     except:
+                #         print("going to reappend because no key2key for", key) # for gender, loc, eth
+                #         en_keys.append(key)
+                # keys_list = en_keys
+                # print(keys_list)
                 image_row, shoot_location = structure_row_VCG(item, ind, keys_list)
             elif THIS_SITE == 11:
                 search_string = item.get("filters", {}).get("search", None)

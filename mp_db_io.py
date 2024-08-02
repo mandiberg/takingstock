@@ -14,6 +14,7 @@ class DataIO:
         self.retry_delay = 5
         # platform specific file folder (mac for michael, win for satyam)
         if platform == "darwin":
+            self.platform = "darwin"
             ####### Michael's OS X Credentials ########
             # self.db = {
             #     "host":"localhost",
