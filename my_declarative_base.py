@@ -1,6 +1,7 @@
 from sqlalchemy import Column, Integer,Float, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON
 from sqlalchemy.orm import relationship, declarative_base
 #from sqlalchemy.ext.declarative import declarative_base
+from sys import platform
 
 Base = declarative_base()
 
@@ -63,14 +64,17 @@ class Images(Base):
     description   = Column(String(150))
     imagename     = Column(String(200))
     uploadDate    = Column(Date)
-    release_name_id = Column(Integer, ForeignKey('model_release.release_name_id'))
-
+    h             = Column(Integer)
+    w             = Column(Integer)
     site      = relationship("Site")
     age       = relationship("Age")
     agedetail = relationship("AgeDetail")
     gender    = relationship("Gender")
     location  = relationship("Location")
-    model_release = relationship("Model_Release")
+    if platform == "darwin":
+        release_name_id = Column(Integer, ForeignKey('model_release.release_name_id'))
+        model_release = relationship("Model_Release")
+
 
 class Keywords(Base):
     __tablename__ = 'keywords'
