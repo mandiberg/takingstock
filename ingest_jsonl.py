@@ -194,18 +194,11 @@ gender_dict_shutter_secondary = {}
 # gender_dict_both = {}
 gender_dict_TNB = dict_from_csv(CSV_GENDER_DICT_TNB_PATH)
 
-eth_dict = {}
-eth_dict_istock = {}
-eth_dict_istock_secondary = {}
-eth_dict_shutter_secondary = {}
-eth_dict_getty = dict_from_csv(CSV_ETH2_GETTY)
+eth_dict = dict_from_csv(CSV_ETH2_GETTY)
 pond5_spacedeth = ['american indian', 'asian woman', 'black woman', 'asian man', 'indian man', 'african man', 'african woman', 'black man', 'indian woman', 'hispanic woman', 'hispanic man', 'chinese man', 'latino man', 'japanese man', 'vietnam woman']
 multi_dict = dict_from_csv(CSV_ETH_MULTI_PATH)
-age_dict_shutter_secondary = {}
 
 age_details_dict = dict_from_csv(CSV_AGE_DETAIL_DICT_PATH)
-age_detail_dict_istock = {}
-age_details_dict_shutterstock = {}
 
 def lower_dict(this_dict):
     lower_dict = {k.lower(): v for k, v in this_dict.items()}
@@ -213,12 +206,9 @@ def lower_dict(this_dict):
 
 gender_dict_secondary = gender_dict = lower_dict({**gender_dict, **gender_dict_TNB})
 # gender_dict_secondary = lower_dict({**gender_dict, **gender_dict_shutter_secondary})
-eth_dict = lower_dict({**eth_dict, **eth_dict_istock, **eth_dict_getty, **multi_dict})
-age_details_dict = lower_dict({**age_details_dict, **age_detail_dict_istock, **age_details_dict_shutterstock, **age_dict_shutter_secondary})
-eth_all_dict = lower_dict({**eth_dict_istock_secondary, **eth_dict_shutter_secondary, **eth_dict_per_site})
+eth_all_dict = eth_dict = lower_dict({**eth_dict, **eth_dict_per_site, **multi_dict})
 # key2key = lower_dict({**key2key, **key2key_getty})
 key2key_set = set(key2key)
-eth_all_dict = lower_dict({**eth_dict, **eth_all_dict})
 # eth_set = set(eth_all_dict.keys())
 gender_all_dict = lower_dict({**gender_dict, **gender_dict_secondary})
 # gender_set = set(gender_all_dict.keys())
@@ -633,14 +623,17 @@ def get_key_no_dictonly(eth_name, keys_list, this_dict, do_write_csv=False):
     # if eth_name is not None or eth_name is not np.isnan(eth_name):
     if not pd.isnull(eth_name):
         try:
+            if VERBOSE: print("trying with eth_name ",eth_name)
+            print("this_dict", this_dict)
             key_no = unlock_key_dict(eth_name, this_dict)
+            if VERBOSE: print("key_no with eth_name ",key_no)
+            key_no_list.append(key_no)
+
             # key_no = eth_dict[eth_name.lower()]
         # need to key this into integer, like with keys
             # print("eth_name ",eth_name)
         except:
-            key_no = None
             if VERBOSE: print("eth_dict failed with this key: ", eth_name)
-        key_no_list.append(key_no)
     else:
         key_no_list = search_keys(keys_list, this_dict, do_write_csv, True)
         if VERBOSE: print("searched keys and found key_no: ", key_no_list)
@@ -1772,6 +1765,7 @@ def ingest_json():
                 # keys_list = en_keys
                 # print(keys_list)
                 image_row, shoot_location = structure_row_VCG(item, ind, keys_list)
+                ethnicity = item.get("filters", {}).get("ethnicity", None)
             elif THIS_SITE == 11:
                 search_string = item.get("filters", {}).get("search", None)
                 if search_string:
@@ -1821,6 +1815,7 @@ def ingest_json():
             # this isn't working. not catching nulls. 
             if not pd.isnull(ethnicity) and len(ethnicity)>0:
                 print("have eth", ethnicity.lower(), "type is", type(ethnicity.lower()))
+                print("len of eth_dict", len(eth_dict))
                 eth_no_list = get_key_no_dictonly(ethnicity.lower(), keys_list, eth_dict)
                 print("eth_no_list after get_key_no_dictonly", eth_no_list)
             else:
@@ -1832,7 +1827,7 @@ def ingest_json():
                 if not eth_no_list:
                     eth_no_list = get_key_no_dictonly(None, keys_list, eth_all_dict, True)
                     if eth_no_list: 
-                        print(f"eth_dict_istock_secondary found for {eth_no_list}")
+                        print(f"_secondary found for {eth_no_list}")
                     elif "descent" in keys_list:
                         print(f"descent in keys_list {keys_list}")
                         

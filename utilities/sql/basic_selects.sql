@@ -67,7 +67,7 @@ WHERE ib.selfie_bbox IS NOT NULL
 
 SELECT *
 FROM Encodings e 
-WHERE e.image_id = 9923170
+WHERE e.image_id = 122709209
 ;
 
 SELECT COUNT(so.image_id) 
@@ -81,9 +81,16 @@ WHERE so.site_name_id = 1
 SELECT COUNT(i.image_id) as ccount
 FROM Images i  
 JOIN Encodings e ON i.image_id = e.image_id 
-WHERE e.mongo_face_landmarks = 1
-AND i.site_name_id = 15
+WHERE  i.site_name_id = 13
 ;
+
+
+DELETE Encodings
+FROM Encodings 
+JOIN Images ON images.image_id = encodings.image_id 
+WHERE images.site_name_id = 13
+;
+
 
 SELECT COUNT(i.image_id) as ccount
 FROM Images i  
@@ -98,6 +105,7 @@ FROM Encodings e
 WHERE e.image_id  = 122582509
 AND e.face_landmarks IS NOT NULL
 ;
+
 
 SELECT COUNT(so.seg_image_id) as ccount
 FROM SegmentOct20 so 
@@ -375,11 +383,25 @@ DELETE FROM Images
 WHERE site_name_id = 10
 ;
 
-SELECT k.keyword_text 
+SELECT k.keyword_text
 FROM ImagesKeywords ik 
 JOIN Images i ON i.image_id = ik.image_id 
 JOIN Keywords k ON ik.keyword_id = k.keyword_id
-WHERE i.site_image_id = 10393345
+JOIN ImagesEthnicity ie ON ie.image_id = i.image_id 
+WHERE i.site_image_id = 1008421694
+AND i.site_name_id = 10
+;
+
+
+SELECT i.image_id
+FROM Images i 
+ WHERE i.site_image_id = 1008421694
+AND i.site_name_id = 10
+;
+
+SELECT ie.ethnicity_id 
+FROM ImagesEthnicity ie 
+WHERE ie.image_id = 1628948
 ;
 
 SELECT COUNT(ik.image_id)  
