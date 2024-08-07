@@ -153,7 +153,7 @@ if IS_SEGONLY is not True:
     LIMIT = 500
 
 ##################MICHAEL#####################
-elif IS_SEGONLY and io.db["name"] == "stock":
+elif IS_SEGONLY and io.platform == "darwin":
 
     SAVE_SEGMENT = False
     # no JOIN just Segment table
@@ -211,7 +211,7 @@ elif IS_SEGONLY and io.db["name"] == "stock":
     # WHERE += " AND s.site_name_id = 8"
 ######################################
 ############SATYAM##################
-elif IS_SEGONLY and io.db["name"] == "fullstock":
+elif IS_SEGONLY and io.platform == "win32":
 
     SAVE_SEGMENT = False
     # no JOIN just Segment table
@@ -252,14 +252,14 @@ elif IS_SEGONLY and io.db["name"] == "fullstock":
         FROM += " JOIN PhoneBbox pb ON s.image_id = pb.image_id "
         SELECT += ", pb.bbox_67, pb.conf_67, pb.bbox_63, pb.conf_63, pb.bbox_26, pb.conf_26, pb.bbox_27, pb.conf_27, pb.bbox_32, pb.conf_32 "
     if SORT_TYPE == "planar_body":
-        WHERE += " AND s.body_landmarks IS NOT NULL "
+        WHERE += " AND s.mongo_body_landmarks = 1 "
     ###############
     # # join to keywords
     # FROM += " JOIN ImagesKeywords ik ON s.image_id = ik.image_id JOIN Keywords k ON ik.keyword_id = k.keyword_id "
     # WHERE += " AND k.keyword_text LIKE 'surpris%' "
 
     # WHERE = "s.site_name_id != 1"
-    LIMIT = 1000
+    LIMIT = 10
 
     # TEMP TK TESTING
     # WHERE += " AND s.site_name_id = 8"
