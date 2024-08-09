@@ -116,6 +116,16 @@ def normalize_landmarks(landmarks,nose_pos,face_height,shape):
 
     return translated_landmarks
 
+def normalize_phone_bbox(phone_bbox,nose_pos,face_height,shape):
+    height,width = shape[:2]
+    
+    n_phone_bbox=phone_bbox
+    n_phone_bbox["right"]=(n_phone_bbox["right"]*width -nose_pos.x)/face_height
+    n_phone_bbox["left"]=(n_phone_bbox["left"]*width -nose_pos.x)/face_height
+    n_phone_bbox["top"]=(n_phone_bbox["top"]*height -nose_pos.y)/face_height
+    n_phone_bbox["bottom"]=(n_phone_bbox["bottom"]*height -nose_pos.y)/face_height
+
+    return n_phone_bbox
 
 def get_landmarks_mongo(image_id):
     if image_id:

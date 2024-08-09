@@ -61,20 +61,36 @@ class DataIO:
             self.ROOT18 = "/Volumes/RAID18"
             self.NUMBER_OF_PROCESSES = 8
         elif platform == "win32":
+            self.platform = "win32"
             ######## Satyam's WIN Credentials #########
+            ####DOCKER#################
+            # self.db = {
+            #     #"host":"localhost",
+            #     "host":"127.0.0.1:3333",
+            #     "name":"fullstock",                 
+            #     "user":"root",
+            #     "unix_socket":"",
+            #     "pass":"SSJ2_mysql"
+            # }
+
+            # self.dbmongo = {
+            #     # "host":"mongodb://127.0.0.1:27018/",
+            #     "host":"mongodb://SJHA:SSJ2_mongo@127.0.0.1:27018/",
+            #     "name":"fullstock",
+            #     "collection":"tokens"
+            # }
+            #############################
             self.db = {
-                #"host":"localhost",
-                "host":"127.0.0.1:3333",
-                "name":"fullstock",                 
+                "host":"127.0.0.1:3306",
+                "name":"stock",                 
                 "user":"root",
                 "unix_socket":"",
                 "pass":"SSJ2_mysql"
             }
 
             self.dbmongo = {
-                # "host":"mongodb://127.0.0.1:27018/",
-                "host":"mongodb://SJHA:SSJ2_mongo@127.0.0.1:27018/",
-                "name":"fullstock",
+                "host":"mongodb://127.0.0.1:27017/",
+                "name":"stock",
                 "collection":"tokens"
             }
 
