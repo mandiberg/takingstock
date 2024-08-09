@@ -84,6 +84,7 @@ BLUR_RADIUS = io.oddify(BLUR_RADIUS)
 MASK_OFFSET = [50,50,50,50]
 if OUTPAINT: from outpainting_modular import outpaint, image_resize
 VERBOSE = True
+V_VERBOSE= False
 SAVE_IMG_PROCESS = False
 # this controls whether it is using the linear or angle process
 IS_ANGLE_SORT = False
@@ -215,7 +216,7 @@ elif IS_SEGONLY and io.platform == "win32":
 
     SAVE_SEGMENT = False
     # no JOIN just Segment table
-    SELECT = "DISTINCT(s.image_id), s.site_name_id, s.contentUrl, s.imagename, s.description, s.face_x, s.face_y, s.face_z, s.mouth_gap, s.face_landmarks, s.bbox, s.face_encodings68, s.site_image_id, s.body_landmarks"
+    SELECT = "DISTINCT(s.image_id), s.site_name_id, s.contentUrl, s.imagename, s.description, s.face_x, s.face_y, s.face_z, s.mouth_gap, s.bbox, s.site_image_id"
     # SELECT = "DISTINCT(s.image_id), s.site_name_id, s.contentUrl, s.imagename,s.face_x, s.face_y, s.face_z, s.mouth_gap, s.face_landmarks, s.bbox, s.face_encodings68, s.site_image_id, s.body_landmarks"
 
     FROM =f"{SegmentTable_name} s "
@@ -259,7 +260,7 @@ elif IS_SEGONLY and io.platform == "win32":
     # WHERE += " AND k.keyword_text LIKE 'surpris%' "
 
     # WHERE = "s.site_name_id != 1"
-    LIMIT = 10
+    LIMIT = 1000
 
     # TEMP TK TESTING
     # WHERE += " AND s.site_name_id = 8"
@@ -1021,7 +1022,7 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
         # print(parent_row)
 
         print('-- linear_test_df [-] in loop, index is', str(index))
-        print(row["body_landmarks"])
+        if V_VERBOSE: print(row["body_landmarks"])
         # select the row in df_segment where the imagename == row['filename']
         try:
             imgfilename = const_imgfilename_NN(row['image_id'], df_sorted, imgfileprefix)
@@ -1227,7 +1228,7 @@ def main():
         else:
             return None
 
-    def get_encodings_mongo(image_id,enc_type="face_encodings68"):
+    def get_encodings_mongo(image_id):
         mongo_collection_face = mongo_db['encodings']
         mongo_collection_body = mongo_db["bboxnormed_lms"]
 
@@ -1300,16 +1301,17 @@ def main():
 
 
             print("going to get mongo encodings")
+            print("size",df.size)
             # use the image_id to query the mongoDB for face_encodings68, face_landmarks, body_landmarks
             df[['face_encodings68', 'face_landmarks', 'body_landmarks']] = df['image_id'].apply(get_encodings_mongo)
             print("got mongo encodings")
 
             # drop all rows where face_encodings68 is None TK revist this after migration to mongo
             df = df.dropna(subset=['face_encodings68'])
-
+            print("size",df.size)
             # print the first row value for 'face_encodings68' column
-            print("face_encodings68")
-            print(df['face_encodings68'][0])
+            # print("face_encodings68")
+            # print(df['face_encodings68'][0])
 
             # Apply the unpickling function to the 'face_encodings' column
             df['face_encodings68'] = df['face_encodings68'].apply(unpickle_array)

@@ -15,12 +15,13 @@ from simple_lama_inpainting import SimpleLama
 from sklearn.neighbors import NearestNeighbors
 import re
 import random
+from cv2 import dnn_superres
 
 
 class SortPose:
     # """Sort image files based on head pose"""
 
-    def __init__(self, motion, face_height_output, image_edge_multiplier, EXPAND, ONE_SHOT, JUMP_SHOT, HSV_CONTROL=None, VERBOSE=True,INPAINT=False, SORT_TYPE="128d", OBJ_CLS_ID = None):
+    def __init__(self, motion, face_height_output, image_edge_multiplier, EXPAND, ONE_SHOT, JUMP_SHOT, HSV_CONTROL=None, VERBOSE=True,INPAINT=False, SORT_TYPE="128d", OBJ_CLS_ID = None,UPSCALE_MODEL_PATH=None):
 
         self.mp_face_detection = mp.solutions.face_detection
         self.mp_drawing = mp.solutions.drawing_utils
@@ -94,7 +95,9 @@ class SortPose:
         # place to save bad images
         self.not_make_face = []
         self.same_img = []
-        
+        #UPSCALING PARAMS
+        if UPSCALE_MODEL_PATH:
+            self.upscale_model= self.set_upscale_model(UPSCALE_MODEL_PATH)
         # luminosity parameters
         if HSV_CONTROL:
             self.LUM_MIN = HSV_CONTROL['LUM_MIN']
@@ -239,7 +242,7 @@ class SortPose:
 
     def make_segment(self, df):
 
-
+        print(df.size)
         segment = df.loc[((df['face_y'] < self.YHIGH) & (df['face_y'] > self.YLOW))]
         print(segment.size)
         segment = segment.loc[((segment['face_x'] < self.XHIGH) & (segment['face_x'] > self.XLOW))]
@@ -858,6 +861,13 @@ class SortPose:
 
         return inpaint
 
+    def set_upscale_model(self,UPSCALE_MODEL_PATH):
+        print("model_path",UPSCALE_MODEL_PATH)
+        sr = dnn_superres.DnnSuperResImpl_create()
+        sr.readModel(UPSCALE_MODEL_PATH)
+        sr.setModel("fsrcnn", 4) 
+        return sr
+
     def crop_image(self,image, faceLms, bbox, sinY=0,SAVE=False):
         self.get_image_face_data(image, faceLms, bbox) 
  
@@ -891,7 +901,12 @@ class SortPose:
                 if self.VERBOSE: print("about to resize")
                 # crop[0] is top, and clockwise from there. Right is 1, Bottom is 2, Left is 3. 
                 if self.VERBOSE: print("output dims", self.output_dims)
-                cropped_image = cv2.resize(cropped_actualsize_image, (self.output_dims), interpolation=cv2.INTER_LINEAR)
+                #####UPSCALING#######
+                
+                cropped_image = self.upscale_model.upsample(cropped_actualsize_image)
+                print("UPSCALING DONEEEEEEEEEEEEEEEEEEEEEEE")
+                ####################
+                # cropped_image = cv2.resize(cropped_actualsize_image, (self.output_dims), interpolation=cv2.INTER_LINEAR)
                 if self.VERBOSE: print("image actually cropped")
             except:
                 cropped_image = None
