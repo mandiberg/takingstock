@@ -903,8 +903,9 @@ class SortPose:
                 if self.VERBOSE: print("output dims", self.output_dims)
                 #####UPSCALING#######
                 
-                cropped_image = self.upscale_model.upsample(cropped_actualsize_image)
-                print("UPSCALING DONEEEEEEEEEEEEEEEEEEEEEEE")
+                upsized_image = self.upscale_model.upsample(cropped_actualsize_image)
+                cropped_image = cv2.resize(upsized_image, (self.output_dims), interpolation=cv2.INTER_LINEAR)
+                # print("UPSCALING DONEEEEEEEEEEEEEEEEEEEEEEE")
                 ####################
                 # cropped_image = cv2.resize(cropped_actualsize_image, (self.output_dims), interpolation=cv2.INTER_LINEAR)
                 if self.VERBOSE: print("image actually cropped")

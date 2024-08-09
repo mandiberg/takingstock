@@ -929,7 +929,7 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
             if selfie_bbox["left"]==0: 
                 if VERBOSE: print("head hits the top of the image, skipping -------------------> bailout !!!!!!!!!!!!!!!!!")
                 bailout=True
-            elif row["site_name_id"] == 2 and extension_pixels["botom"]>0: 
+            elif row["site_name_id"] == 2 and extension_pixels["bottom"]>0: 
                 if VERBOSE: print("shutter at the bottom, skipping -------------------> bailout !!!!!!!!!!!!!!!!!")
                 bailout=True
             elif is_left_shoulder or is_right_shoulder: 
