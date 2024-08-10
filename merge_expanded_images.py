@@ -22,11 +22,11 @@ ALL_ONE_VIDEO = False
 
 # MERGE
 # Provide the path to the folder containing the images
-ROOT_FOLDER_PATH = '/Users/michaelmandiberg/Documents/projects-active/facemap_production/segment_images/'
+ROOT_FOLDER_PATH = '/Volumes/OWC4/segment_images'
 # if IS_CLUSTER this should be the folder holding all the cluster folders
 # if not, this should be the individual folder holding the images
 # will not accept clusterNone -- change to cluster00
-FOLDER_NAME ="June21_topic7"
+FOLDER_NAME ="track_phone"
 FOLDER_PATH = os.path.join(ROOT_FOLDER_PATH,FOLDER_NAME)
 DIRS = ["1x1", "4x3", "16x10"]
 
@@ -166,6 +166,15 @@ def crop_images(img_array, subfolder_path=None):
             "4x2": [0,width, 0,height],
             "16x10": [0,int(height*10/16) , 0,height]
         }
+    elif width > height:
+        # this offset isn't configured right but without hsomething the code doesn't work 
+        crop_dict = {
+            "1x1": [0, height, cropfset, height + cropfset],
+            "4x3": [0, height, int(cropfset / 2), int(height * 4 / 3 + cropfset / 2)],
+            "4x2": [0, height, 0, width],
+            "16x10": [0, int(width * 10 / 16), 0, width]
+        }
+
     for dir in DIRS:
         if subfolder_path:
             dir_path = os.path.join(subfolder_path, dir)

@@ -360,7 +360,7 @@ WHERE i.site_name_id = 1
 
 
 
-USE stocktest;
+USE stock;
 
 CREATE TABLE Model_Release (
     release_name_id int NOT NULL AUTO_INCREMENT PRIMARY KEY,
@@ -374,13 +374,27 @@ JOIN ImagesKeywords ik on ik.image_id = i.image_id
 WHERE i.site_name_id = 10
 ;
 
+SELECT *
+FROM Images i 
+WHERE i.site_image_id = 1000002663
+AND i.site_name_id = 10
+;
+
+SELECT DISTINCT(i.author)
+FROM Images i 
+WHERE i.site_name_id = 15
+
+;
+
+
 SELECT COUNT(i.image_id)
 FROM Images i
-WHERE i.site_name_id = 10
+WHERE i.site_name_id = 18
+
 ;
 
 DELETE FROM Images
-WHERE site_name_id = 10
+WHERE site_name_id = 18
 ;
 
 SELECT k.keyword_text
@@ -401,7 +415,7 @@ AND i.site_name_id = 10
 
 SELECT ie.ethnicity_id 
 FROM ImagesEthnicity ie 
-WHERE ie.image_id = 1628948
+WHERE ie.image_id = 1847892
 ;
 
 SELECT COUNT(ik.image_id)  

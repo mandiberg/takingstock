@@ -78,7 +78,7 @@ NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 18	afripics
 '''
 
-THIS_SITE = 10
+THIS_SITE = 9
 
 SEARCH_KEYS_FOR_LOC = True
 VERBOSE = True
@@ -100,14 +100,15 @@ elif THIS_SITE == 9:
     # test one more time?
     # io.db["name"] = "stock"
     INGEST_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/alamyCSV"
-    JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache.jsonl")
+    JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache_translated.jsonl")
 elif THIS_SITE == 10:
-    # testing
+    # DONE
+    io.db["name"] = "stock"
     INGEST_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/VCG2"
     JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache_translated.jsonl")
 elif THIS_SITE == 11:
     io.db["name"] = "stock"
-    # in progress, 1.28M
+    # DONE
     INGEST_FOLDER = "/Users/michaelmandiberg/Downloads/pixcy_v2"
     JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache_filtered.jsonl")
 elif THIS_SITE == 12:
@@ -125,25 +126,30 @@ elif THIS_SITE == 14:
     JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache.jsonl")
     eth_dict_per_site = {'asian ethnicity':9, 'tika':9, 'alta':9, 'asian  ethnicity':9,'asian ethinicity':9,'asian farmer':9,'asian medicine':9,'asians':9,'asiascher':9,'asiatisch':9,'asiatische':9,'asiatischen':9,'asiatischer':9,'asiatisches':9,'asien':9}
 elif THIS_SITE == 15:
-    # tested - once newkeys are in, can go
+    # DONE
+    io.db["name"] = "stock"
     INGEST_FOLDER = "/Users/michaelmandiberg/Library/CloudStorage/Dropbox/takingstock_dropbox/iwaria"
-    JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache.jsonl")
+    JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache_translated.jsonl")
 elif THIS_SITE == 16:
     # tested - once newkeys are in, can go
+    # io.db["name"] = "stock"
     INGEST_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/nappy_v3_w-data"
+    # JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache_translated.jsonl")
     JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache.jsonl")
 elif THIS_SITE == 17:
     # tested - once newkeys are in, can go
+    # io.db["name"] = "stock"
     INGEST_FOLDER = "/Users/michaelmandiberg/Library/CloudStorage/Dropbox/takingstock_dropbox/PICHA-STOCK"
     JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache.jsonl")
 elif THIS_SITE == 18:
     # tested - once newkeys are in, can go
+    # io.db["name"] = "stock"
     INGEST_FOLDER = "/Users/michaelmandiberg/Library/CloudStorage/Dropbox/takingstock_dropbox/AFRIPICS"
     JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache.jsonl")
 
 
 # key, etc csvs
-KEYWORD_PATH = os.path.join(INGEST_ROOT, "Keywords_202407221412.csv")
+KEYWORD_PATH = os.path.join(INGEST_ROOT, "Keywords_202408101154.csv")
 LOCATION_PATH = os.path.join(INGEST_ROOT, "Location_202308041952.csv")
 CSV_KEY2LOC_PATH = os.path.join(INGEST_ROOT, "CSV_KEY2LOC.csv")
 CSV_KEY2KEY_GETTY_PATH = os.path.join(INGEST_ROOT, "CSV_KEY2KEY_GETTY.csv")
@@ -614,29 +620,35 @@ def search_keys(keys_list, this_dict, do_write_csv, multi=False):
 
 # print(key_nos_list)
 
-def get_key_no_dictonly(eth_name, keys_list, this_dict, do_write_csv=False):
-    # eth_name = df['ethnicity'][ind]
+def get_key_no_dictonly(key_name, keys_list, this_dict, do_write_csv=False):
+    # key_name = df['ethnicity'][ind]
     # print('isnan?')
-    # print(np.isnan(eth_name))
+    # print(np.isnan(key_name))
     key_no_list = []
     key_no = None
-    # if eth_name is not None or eth_name is not np.isnan(eth_name):
-    if not pd.isnull(eth_name):
+    # if key_name is not None or key_name is not np.isnan(key_name):
+    # metis checks to see if it VCG, and if so, does alternate loop to deal with Metis mistagging
+    if not pd.isnull(key_name) and (key_name.lower() not in ["metis","6"] and THIS_SITE == 10):
         try:
-            if VERBOSE: print("trying with eth_name ",eth_name)
-            print("this_dict", this_dict)
-            key_no = unlock_key_dict(eth_name, this_dict)
-            if VERBOSE: print("key_no with eth_name ",key_no)
+            if VERBOSE: print("trying with key_name ",key_name)
+            # print("this_dict", this_dict)
+            key_no = unlock_key_dict(key_name, this_dict)
+            if VERBOSE: print("key_no with key_name ",key_no)
             key_no_list.append(key_no)
 
-            # key_no = eth_dict[eth_name.lower()]
+            # key_no = eth_dict[key_name.lower()]
         # need to key this into integer, like with keys
-            # print("eth_name ",eth_name)
+            # print("key_name ",key_name)
         except:
             if VERBOSE: print("eth_dict failed with this key: ", eth_name)
     else:
         key_no_list = search_keys(keys_list, this_dict, do_write_csv, True)
         if VERBOSE: print("searched keys and found key_no: ", key_no_list)
+    if THIS_SITE == 10:
+        # adding more general BIPOC tag, as Metis seems to be very imprecisely used in VCG
+        if not key_no_list and key_name.lower() == "metis": key_no_list.append(13)
+        # handle the "6" in VCG data, actually nope, skipping.
+        elif key_name == "6": pass # key_no_list.append(6)
     return(key_no_list)
 
 def unlock_key_dict(key,this_dict,this_key2key=None):
@@ -1241,7 +1253,7 @@ def structure_row_unsplash(item, ind, keys_list):
 
 def itter_location(country, keys_list):
     country_key = None
-    country = country.lstrip().rstrip()
+    if country: country = country.lstrip().rstrip()
     if country and country != "" and len(country) == 2:
         if country == "uk": country = "gb"
         country_key = unlock_key_dict(country,locations_dict_AA, loc2loc)
@@ -1269,35 +1281,38 @@ def itter_location(country, keys_list):
     return country_key
 
 def get_location(country, keys_list):
+    if VERBOSE: print("get_location starting")
     country_key = None
     location_info = []
     if country:
+        if VERBOSE: print("we gotta location: ", country)
         location_info = country.split(",") if "," in country else []
-    else:
-        return None
-    if len(location_info) > 1: 
-        print(location_info)
-        country_key = itter_location(location_info[-1], keys_list)
+        if len(location_info) > 1: 
+            print(location_info)
+            country_key = itter_location(location_info[-1], keys_list)
     if not country_key and len(location_info) > 1:
+        if VERBOSE: print("we location_info: ", country)
         for loc in location_info:
             country_key = itter_location(loc, keys_list)
             if country_key:
                 break
     if not country_key:
+        if VERBOSE: print("itter country: ", country)
         country_key = itter_location(country, keys_list)
     if not country_key and len(location_info) > 1:
         for loc in location_info:
+            print("loc", loc)
             try:
                 country_key = loc2loc[loc.lstrip().rstrip()]
                 if country_key:
                     return(country_key)
             except:
                 print("failed loc2loc, onto next")
-    if not country_key:
-        try:
-            country_key = loc2loc[loc.lstrip().rstrip()]
-        except:
-            print("failed final loc2loc")
+            if not country_key:
+                try:
+                    country_key = loc2loc[loc.lstrip().rstrip()]
+                except:
+                    print("failed final loc2loc")
     return country_key
 
 def structure_row_pixcy(item, ind, keys_list):
@@ -1471,6 +1486,8 @@ def structure_row_nappy(item, ind, keys_list):
     gender_key, age_key, age_detail_key = get_gender_age_row(gender, age, description, keys_list, THIS_SITE)
     filename = item["id"]+".jpg"
     location = item.get("location", None)
+    location_id = get_location(location, keys_list)
+    print("location", location_id)
     image_row = {
         "site_image_id": item["id"],
         "site_name_id": THIS_SITE,
@@ -1480,13 +1497,14 @@ def structure_row_nappy(item, ind, keys_list):
         "age_detail_id": age_detail_key,
         "contentUrl": item["img"],
         "imagename": os.path.join(get_hash_folders(filename)[0],get_hash_folders(filename)[1],filename),  # hash filename from id+jpg
-        "location_id": get_location(location, keys_list),        
+        "location_id": location_id,        
         "author": item.get("author", None),     
         "uploadDate": item.get("uploadDate"),        
 
         ## TK
         # "imagename": generate_local_unhashed_image_filepath(item[9].replace("images/",""))  # need to refactor this from the contentURL using the hash function
     }
+    print("image_row", image_row)
     return nan2none(image_row)
 
 def structure_row_PICHA(item, ind, keys_list):

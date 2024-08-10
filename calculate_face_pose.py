@@ -54,7 +54,7 @@ http="https://media.gettyimages.com/photos/"
 # am I looking on RAID/SSD for a folder? If not, will pull directly from SQL
 # if so, also change the site_name_id etc around line 930
 IS_FOLDER = True
-SITE_NAME_ID = 13
+SITE_NAME_ID = 11
 # 2, shutter. 4, istock
 # 7 pond5
 
@@ -68,11 +68,11 @@ SITE_NAME_ID = 13
 6   unsplash
 7   pond5
 8   123rf
-9   alamy
-10  visualchinagroup
-11	picxy
+9   alamy - not ingested yet
+10  visualchinagroup - ingesting
+11	picxy - done
 12	pixerf
-13	imagesbazaar - doing
+13	imagesbazaar - done
 14	indiapicturebudget
 15	iwaria
 16	nappy
@@ -82,7 +82,8 @@ SITE_NAME_ID = 13
 
 
 # MAIN_FOLDER = "/Volumes/RAID54/images_shutterstock"
-MAIN_FOLDER = "/Volumes/RAID18/images_bazzar"
+# MAIN_FOLDER = "/Volumes/RAID18/images_pixcy"
+MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/images_vcg"
 # MAIN_FOLDER = "/Volumes/SSD4/images_getty_reDL"
 BATCH_SIZE = 25000 # Define how many from each folder in each batch
 
@@ -194,7 +195,7 @@ face_recognition_model = face_recognition_models.face_recognition_model_location
 face_encoder = dlib.face_recognition_model_v1(face_recognition_model)
 
 SMALL_MODEL = False
-NUM_JITTERS = 1
+NUM_JITTERSt= 1
 ###############
 
 ## CREATING POSE OBJECT FOR SELFIE SEGMENTATION
@@ -951,6 +952,7 @@ def process_image(task):
     if image is not None and image.shape[0]>MINSIZE and image.shape[1]>MINSIZE:
         # Do FaceMesh
         df = find_face(image, df)
+        is_small = 0
         # print(">> SPLIT >> done find_face")
         # pr_split = print_get_split(pr_split)
 
@@ -967,6 +969,9 @@ def process_image(task):
         # save_image_triage(image,df)
     else:
         print('toooooo smallllll')
+        df = find_face(image, df)
+        is_small = 1
+
         # I should probably assign no_good here...?
 
     # store data
@@ -977,6 +982,7 @@ def process_image(task):
         # print(df.at['1', 'face_encodings'])
         dict_df = df.to_dict('index')
         insert_dict = dict_df["1"]
+        insert_dict['is_small'] = is_small
 
         # remove all nan/none/null values
         keys_to_remove = []
