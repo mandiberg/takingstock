@@ -81,7 +81,7 @@ NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 THIS_SITE = 9
 
 SEARCH_KEYS_FOR_LOC = True
-VERBOSE = True
+VERBOSE = False
 
 # where key, etc csvs stored
 INGEST_ROOT = "/Users/michaelmandiberg/Documents/GitHub/facemap/utilities/keys/"
@@ -101,44 +101,45 @@ elif THIS_SITE == 9:
     # io.db["name"] = "stock"
     INGEST_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/alamyCSV"
     JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache_translated.jsonl")
+    # JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache_funny1.jsonl")
 elif THIS_SITE == 10:
-    # DONE
+    # DONE 504250
     io.db["name"] = "stock"
     INGEST_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/VCG2"
     JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache_translated.jsonl")
 elif THIS_SITE == 11:
     io.db["name"] = "stock"
-    # DONE
+    # DONE 426693
     INGEST_FOLDER = "/Users/michaelmandiberg/Downloads/pixcy_v2"
     JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache_filtered.jsonl")
 elif THIS_SITE == 12:
-    # keys by count ready for final parse
+    # keys by count ready for final parse 0
     INGEST_FOLDER = "/Users/michaelmandiberg/Library/CloudStorage/Dropbox/takingstock_dropbox/PIXERF"
     JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache.jsonl")
 elif THIS_SITE == 13:
-    # DONE
+    # DONE 305058
     INGEST_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/ImagesBazzar"
     JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache.jsonl")
     eth_dict_per_site = {'asian ethnicity':9, 'tika':9, 'alta':9, 'asian  ethnicity':9,'asian ethinicity':9,'asian farmer':9,'asian medicine':9,'asians':9,'asiascher':9,'asiatisch':9,'asiatische':9,'asiatischen':9,'asiatischer':9,'asiatisches':9,'asien':9}
 elif THIS_SITE == 14:
-    # DONE
+    # DONE 49176
     INGEST_FOLDER = "/Users/michaelmandiberg/Library/CloudStorage/Dropbox/takingstock_dropbox/INDIA-PB"
     JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache.jsonl")
     eth_dict_per_site = {'asian ethnicity':9, 'tika':9, 'alta':9, 'asian  ethnicity':9,'asian ethinicity':9,'asian farmer':9,'asian medicine':9,'asians':9,'asiascher':9,'asiatisch':9,'asiatische':9,'asiatischen':9,'asiatischer':9,'asiatisches':9,'asien':9}
 elif THIS_SITE == 15:
-    # DONE
+    # DONE 385
     io.db["name"] = "stock"
     INGEST_FOLDER = "/Users/michaelmandiberg/Library/CloudStorage/Dropbox/takingstock_dropbox/iwaria"
     JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache_translated.jsonl")
 elif THIS_SITE == 16:
-    # tested - once newkeys are in, can go
-    # io.db["name"] = "stock"
+    # DONE 209
+    io.db["name"] = "stock"
     INGEST_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/nappy_v3_w-data"
     # JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache_translated.jsonl")
     JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache.jsonl")
 elif THIS_SITE == 17:
-    # tested - once newkeys are in, can go
-    # io.db["name"] = "stock"
+    # DONE 25663
+    io.db["name"] = "stock"
     INGEST_FOLDER = "/Users/michaelmandiberg/Library/CloudStorage/Dropbox/takingstock_dropbox/PICHA-STOCK"
     JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache.jsonl")
 elif THIS_SITE == 18:
@@ -149,7 +150,7 @@ elif THIS_SITE == 18:
 
 
 # key, etc csvs
-KEYWORD_PATH = os.path.join(INGEST_ROOT, "Keywords_202408101154.csv")
+KEYWORD_PATH = os.path.join(INGEST_ROOT, "Keywords_202408122130.csv")
 LOCATION_PATH = os.path.join(INGEST_ROOT, "Location_202308041952.csv")
 CSV_KEY2LOC_PATH = os.path.join(INGEST_ROOT, "CSV_KEY2LOC.csv")
 CSV_KEY2KEY_GETTY_PATH = os.path.join(INGEST_ROOT, "CSV_KEY2KEY_GETTY.csv")
@@ -356,6 +357,7 @@ def unlock_key_list(site_image_id, keys_list, keys_dict):
             key_nos_list.append(key_no)
     return key_nos_list
 
+
 # takes a key and runs all permutations through the dict, and saves missing ones
 # this is the kitchen sink function
 def unlock_key_plurals_etc(site_id,key, this_dict):
@@ -396,18 +398,23 @@ def unlock_key_plurals_etc(site_id,key, this_dict):
         #         # print(key)
 
 
-
-
+    dict_name = None
+    first_key = next(iter(this_dict))
+    # print("first_key", first_key)
+    if first_key == "drug": dict_name = "keywords"
+    elif first_key == "men": dict_name = "gender"
+    # elif first_key == "drug": dict_name = "keywords"
     key_no = None
     key = key.lower()
-    if VERBOSE: print("trying to unlock key:", key)
+    if VERBOSE: print("trying to unlock key, and keys_dict:", key, dict_name)
+
     this_dict_set = set(this_dict.keys())
     if key in this_dict_set:
     # try:
-        if VERBOSE: print("trying basic keys_dict for this key:,", key)
+        # if VERBOSE: print("trying basic keys_dict for this key:,", key)
         # print("this is the dict", this_dict)
         key_no = this_dict[key]
-        if VERBOSE: print("this is the key_no", key_no)
+        if VERBOSE: print("this is the key and key_no", key, key_no)
 
     # except:
         # key2keyGB = {"colour":"color", "centre":"center", "organisation":"organization", "recognise":"recognize", "realise":"realize", "favour":"favor", "labour":"labor", "neighbour":"neighbor", "theatre":"theater", "cheque":"check", "defence":"defense", "licence":"license", "offence":"offense", "ogue":"og", "programme":"program", "dialogue":"dialog", "catalogue":"catalog", "humour":"humor", "fibre":"fiber"}
@@ -528,14 +535,17 @@ def unlock_key_plurals_etc(site_id,key, this_dict):
             try:
                 print("key2loc[key]", key2loc[key])
             except:
-                print("key not in key2loc")
+                print("key not in key2loc - thus not a location")
                 # not isinstance(site_id, int) and
         if key and len(this_dict) > 5000 and not key.startswith('-') and not key.endswith('.jpg') and not key in all_set and not key in set(TNB_list+multi_eth_list):
             # print(type(site_id))
             # print(site_id)
             value_list = [site_id,key]
-            print("could not unlock:", value_list)
-            write_csv(CSV_NOKEYS_PATH,value_list)
+            if dict_name == "gender":
+                print("could not unlock:", value_list, "not saving")
+            else:
+                print("could not unlock:", value_list, "and saving")
+                write_csv(CSV_NOKEYS_PATH,value_list)
         # print(value_list)
         return None
 
@@ -713,10 +723,11 @@ def description_to_keys(description, site_id, this_dict="keys_dict"):
     # print(description)
     key_no = None
     desc_keys = description.split(" ")
-    # print("desc_keys ",desc_keys)
+    if VERBOSE: print("[description_to_keys] desc_keys ",desc_keys)
+    # print(this_dict)
     for key in desc_keys:
-        # print("checking key ", key)
-        if not pd.isnull(key):
+        if VERBOSE: print("checking key ", key)
+        if not pd.isnull(key) and len(key) > 2:
             key_no = unlock_key_plurals_etc(site_id,key,this_dict)
             # print("key_no passed through:")
             # print(key_no)
@@ -1286,7 +1297,7 @@ def get_location(country, keys_list):
     location_info = []
     if country:
         if VERBOSE: print("we gotta location: ", country)
-        location_info = country.split(",") if "," in country else []
+        location_info = country.split(", ") if "," in country else []
         if len(location_info) > 1: 
             print(location_info)
             country_key = itter_location(location_info[-1], keys_list)
