@@ -190,8 +190,8 @@ def translate_file(input_file, output_file, translations, age_translations, age_
 
 def main():
     KEYROOT = "/Users/michaelmandiberg/Documents/GitHub/facemap/utilities/keys/"
-    # JSONROOT = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/alamyCSV/"
-    JSONROOT = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/nappy_v3_w-data"
+    JSONROOT = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/alamyCSV/"
+    # JSONROOT = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/nappy_v3_w-data"
     
     # translations = load_translations(os.path.join(KEYROOT, 'CSV_KEY2KEY_VCG.csv'))
     translations = load_translations(os.path.join(KEYROOT, 'CSV_KEY2KEY_ALAMY.csv'))
@@ -218,8 +218,8 @@ def main():
         os.path.join(KEYROOT, 'locations_table.csv')
     )
     
-    # input_file = os.path.join(JSONROOT, 'items_cache.jsonl')
-    input_file = os.path.join(JSONROOT, 'items_cache.notvia.jsonl')
+    input_file = os.path.join(JSONROOT, 'items_cache.jsonl')
+    # input_file = os.path.join(JSONROOT, 'items_cache.notvia.jsonl')
     output_file = os.path.join(JSONROOT, 'items_cache_translated.jsonl')
 
     # # for second VCG2 translation

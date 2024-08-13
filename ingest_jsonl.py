@@ -190,6 +190,7 @@ def dict_from_csv(file_path):
 
 loc2loc = {"niue":"Niue Island", "east timor":"timor-leste"}
 # key2key = {}
+
 key2loc = dict_from_csv(CSV_KEY2LOC_PATH)
 skip_keys = ["other", "easy resource", "suggestive filter", "unspecified", "diffrential focus", "internal term 1", "birds eye view", "bird's eye view", "los banos", "scoot", "angel fire"]
 key2key = dict_from_csv(CSV_KEY2KEY_GETTY_PATH)
@@ -214,10 +215,12 @@ def lower_dict(this_dict):
 gender_dict_secondary = gender_dict = lower_dict({**gender_dict, **gender_dict_TNB})
 # gender_dict_secondary = lower_dict({**gender_dict, **gender_dict_shutter_secondary})
 eth_all_dict = eth_dict = lower_dict({**eth_dict, **eth_dict_per_site, **multi_dict})
+eth_set = set(eth_dict.keys())
 # key2key = lower_dict({**key2key, **key2key_getty})
 key2key_set = set(key2key)
 # eth_set = set(eth_all_dict.keys())
 gender_all_dict = lower_dict({**gender_dict, **gender_dict_secondary})
+gender_set = set(gender_all_dict.keys())
 # gender_set = set(gender_all_dict.keys())
 multi_eth_list = [k for k,v in eth_all_dict.items() if v == 6]
 TNB_list = [k.lower() for k,v in gender_all_dict.items() if v == 5 or v == 7]
@@ -401,14 +404,21 @@ def unlock_key_plurals_etc(site_id,key, this_dict):
     dict_name = None
     first_key = next(iter(this_dict))
     # print("first_key", first_key)
-    if first_key == "drug": dict_name = "keywords"
-    elif first_key == "men": dict_name = "gender"
+    if first_key == "drug": 
+        dict_name = "keywords"
+        this_dict_set = keys_set
+    elif first_key == "men": 
+        dict_name = "gender"
+        this_dict_set = gender_set
+    else:
+        print("no dict_name", first_key)
+        this_dict_set = set(this_dict.keys())
+
     # elif first_key == "drug": dict_name = "keywords"
     key_no = None
     key = key.lower()
     if VERBOSE: print("trying to unlock key, and keys_dict:", key, dict_name)
 
-    this_dict_set = set(this_dict.keys())
     if key in this_dict_set:
     # try:
         # if VERBOSE: print("trying basic keys_dict for this key:,", key)
@@ -542,7 +552,8 @@ def unlock_key_plurals_etc(site_id,key, this_dict):
             # print(site_id)
             value_list = [site_id,key]
             if dict_name == "gender":
-                print("could not unlock:", value_list, "not saving")
+                # print("could not unlock:", value_list, "not saving")
+                pass # not saving
             else:
                 print("could not unlock:", value_list, "and saving")
                 write_csv(CSV_NOKEYS_PATH,value_list)
@@ -664,6 +675,9 @@ def get_key_no_dictonly(key_name, keys_list, this_dict, do_write_csv=False):
 def unlock_key_dict(key,this_dict,this_key2key=None):
     key_no = None
     key = key.lower()
+    # print("len of this_dict", len(this_dict))
+    # print("len of this_key2key", len(this_key2key))
+    # print("this_key2key", this_key2key)
     try:
         try:
             key_no = this_dict[key]
@@ -677,10 +691,14 @@ def unlock_key_dict(key,this_dict,this_key2key=None):
     except:
         if this_key2key:
             try:
-                altkey = this_key2key[key.lower()]
-                if VERBOSE: print("altkey", altkey)
-                key_no = this_dict[altkey.lower()]
-                if VERBOSE: print("this is the key_no via loc2loc", key_no)
+                if key in this_key2key.keys():
+                    altkey = this_key2key[key.lower()]
+                    if VERBOSE: print("altkey", altkey)
+                    key_no = this_dict[altkey.lower()]
+                    if VERBOSE: print("this is the key_no via loc2loc", key_no)
+                else:
+                    print("key not in this_key2key")
+                    key_no = key2loc[key]
                 return(key_no)
             except:
                 try:
@@ -2004,6 +2022,7 @@ if __name__ == '__main__':
         init_csv(CSV_NOKEYS_PATH,IMG_KEYWORD_HEADERS)
         init_csv(CSV_IMAGEKEYS_PATH,IMG_KEYWORD_HEADERS)
         keys_dict = make_key_dict(KEYWORD_PATH)
+        keys_set = set(keys_dict.keys())
         print("this many keys", len(keys_dict))
         locations_dict = make_key_dict(LOCATION_PATH)
         locations_dict_alt = make_key_dict_col3(LOCATION_PATH)
