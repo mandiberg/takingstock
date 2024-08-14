@@ -206,7 +206,7 @@ elif IS_SEGONLY and io.platform == "darwin":
     # WHERE += " AND e.encoding_id > 2612275"
 
     # WHERE = "s.site_name_id != 1"
-    LIMIT = 10000
+    LIMIT = 1000
 
     # TEMP TK TESTING
     # WHERE += " AND s.site_name_id = 8"
@@ -277,7 +277,7 @@ motion = {
 
 EXPAND = False
 # face_height_output is how large each face will be. default is 750
-face_height_output = 500
+face_height_output = 1000
 # face_height_output = 256
 
 # define ratios, in relationship to nose

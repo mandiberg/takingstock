@@ -904,7 +904,7 @@ class SortPose:
                 #####UPSCALING#######
                 
                 upsized_image = self.upscale_model.upsample(cropped_actualsize_image)
-                cropped_image = cv2.resize(upsized_image, (self.output_dims), interpolation=cv2.INTER_LINEAR)
+                cropped_image = cv2.resize(upsized_image, (self.output_dims))
                 # print("UPSCALING DONEEEEEEEEEEEEEEEEEEEEEEE")
                 ####################
                 # cropped_image = cv2.resize(cropped_actualsize_image, (self.output_dims), interpolation=cv2.INTER_LINEAR)
@@ -1383,8 +1383,8 @@ class SortPose:
 
         self.knn.fit(encodings_array)
         
-        print("before knn enc1", enc1)
-        print("encodings_array", encodings_array)
+        # print("before knn enc1", enc1)
+        # print("encodings_array", encodings_array)
 
         # Find the distances and indices of the neighbors
         distances, indices = self.knn.kneighbors([enc1], n_neighbors=len(df_enc))
