@@ -140,3 +140,5 @@ performance_notes.txt
 utilities/sql/Scripts alias
 sound/barks/output_file.csv
 sound/barks/output_file.csv
+upscale.py
+upscale4x.py
