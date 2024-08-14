@@ -1117,6 +1117,7 @@ class SortPose:
         Lms1d = []
         for idx, lm in enumerate(Lms.landmark):
             if idx in selected_Lms:
+                print("idx", idx)
                 # x, y = int(lm.x * img_w), int(lm.y * img_h)
                 # print("lm.x, lm.y", lm.x, lm.y)
                 if structure == "dict":
@@ -1204,13 +1205,13 @@ class SortPose:
         else: 
             # print the last row of the dataframe
             # print("setting enc1 -- last row of the dataframe", df.iloc[-1])
-
+            print("debugging enc1 setting", df.iloc[-1])
             # setting enc1
             if hsv_sort == True: enc1 = df.iloc[-1]["hsvll"]
             elif self.SORT_TYPE == "128d": enc1 = df.iloc[-1]["face_encodings68"]
             elif self.SORT_TYPE == "planar": enc1 = df.iloc[-1]["face_landmarks"]
             elif self.SORT_TYPE == "planar_body" and "body_landmarks_array" in df.columns: enc1 = df.iloc[-1]["body_landmarks_array"]
-            elif self.SORT_TYPE == "planar_body": enc1 = df.iloc[-1]["body_landmarks"]
+            elif self.SORT_TYPE == "planar_body": enc1 = df.iloc[-1]["body_landmarks_normalized"]
             # setting obj_bbox1
             if self.SORT_TYPE == "planar_body" and "obj_bbox_list" in df.columns: obj_bbox1 = df.iloc[-1]["obj_bbox_list"]
         # print("returning enc1, obj_bbox1", enc1, obj_bbox1)
@@ -1332,14 +1333,16 @@ class SortPose:
             sortcol = 'face_landmarks'
         elif knn_sort == "planar_body":
             sortcol = 'body_landmarks_array'
-            sourcecol = 'body_landmarks'
+            sourcecol = 'body_landmarks_normalized'
             print("body_landmarks elif")
             # test to see if df_enc contains the sortcol column
             if sortcol not in df_enc.columns:
                 print("sortcol not in df_enc.columns - body_landmarks enc1 pre prep_enc", enc1)
             # if enc1 is not a numpy array, convert it to a list
                 # create enc list with x/y position and angles and visibility
+                print("enc1 before prep_enc", enc1)
                 enc1 = self.prep_enc(enc1, structure="list")
+                print("enc1 after prep_enc", enc1)
                 # apply prep_enc to the sortcol column 
                 df_enc[sortcol] = df_enc[sourcecol].apply(lambda x: self.prep_enc(x, structure="list"))
         elif knn_sort == "HSV":
@@ -1470,6 +1473,7 @@ class SortPose:
         return image
     
     def get_closest_df_NN(self, df_enc, df_sorted):
+  
         def mask_df(df, column, limit, type="lessthan"):
             # removes rows where the value in the column is greater than the limit
             if type == "lessthan":
@@ -1521,6 +1525,8 @@ class SortPose:
 
             return df_dist_hsv
 
+        print("debugging df_enc", df_enc.columns)
+        print("debugging df_sorted", df_sorted.columns)
         if len(df_sorted) == 0: 
             FIRST_ROUND = True
             enc1, obj_bbox1 = self.get_enc1(df_enc, FIRST_ROUND)

@@ -609,7 +609,25 @@ def prep_encodings_NN(df_segment):
     #     print("type of bbox_dict", type(bbox_dict))        
     #     # Now bbox_dict should be a dictionary, so we can safely use .get()
     #     return [bbox_dict.get("left"), bbox_dict.get("top"), bbox_dict.get("right"), bbox_dict.get("bottom")]
-                
+    
+    
+    ########################################
+    # THIS IS WHERE THE BUGS NEED TO BE FIXED
+    ########################################
+
+    print("degugging df_segment prep encodings", df_segment.columns)      
+    # drop rows where body_landmarks_normalized is None
+    df_segment = df_segment.dropna(subset=['body_landmarks_normalized'])
+    print("df_segment length", len(df_segment.index))
+    
+    # print rows where body_landmarks_normalized is None
+    null_encodings = df_segment[df_segment['body_landmarks_normalized'].isnull()]
+    if not null_encodings.empty:
+        print("Rows with invalid body_landmarks_normalized data:")
+        print(null_encodings)
+        
+
+
     # create a column for the hsv values using df_segment.apply(lambda row: create_hsv_list(row), axis=1)
     df_segment['hsv'] = df_segment.apply(lambda row: create_hsv_list(row), axis=1)
     df_segment['lum'] = df_segment.apply(lambda row: create_lum_list(row), axis=1)
@@ -1192,7 +1210,7 @@ def process_linear(start_img_name, df_segment, cluster_no, sort):
 
     # df_enc, df_128_enc, df_33_lms = prep_encodings(df_segment)
     df_enc = prep_encodings_NN(df_segment)
-
+    
     # # get dataframe sorted by distance
     df_sorted = sort_by_face_dist_NN(df_enc)
     # df_sorted = sort_by_face_dist(df_enc, df_128_enc, df_33_lms)
@@ -1235,19 +1253,19 @@ def main():
         if image_id:
             results_face = mongo_collection_face.find_one({"image_id": image_id})
             results_body = mongo_collection_body.find_one({"image_id": image_id})
-            face_encodings68 = face_landmarks = body_landmarks = None
+            face_encodings68 = face_landmarks = body_landmarks = body_landmarks_normalized = None
             if results_body:
-                body_landmarks = results_body["nlms"]
+                body_landmarks_normalized = results_body["nlms"]
             if results_face:
                 face_encodings68 = results_face['face_encodings68']
                 face_landmarks = results_face['face_landmarks']
-                # body_landmarks = results['body_landmarks']
+                body_landmarks = results_face['body_landmarks']
                 # print("got encodings from mongo, types are: ", type(face_encodings68), type(face_landmarks), type(body_landmarks))
-            return pd.Series([face_encodings68, face_landmarks, body_landmarks])
+            return pd.Series([face_encodings68, face_landmarks, body_landmarks, body_landmarks_normalized])
             # else:
             #     return pd.Series([None, None, None])
         else:
-            return pd.Series([None, None, None])
+            return pd.Series([None, None, None, None])
 
 
     def unstring_json(json_string):
@@ -1303,7 +1321,7 @@ def main():
             print("going to get mongo encodings")
             print("size",df.size)
             # use the image_id to query the mongoDB for face_encodings68, face_landmarks, body_landmarks
-            df[['face_encodings68', 'face_landmarks', 'body_landmarks']] = df['image_id'].apply(get_encodings_mongo)
+            df[['face_encodings68', 'face_landmarks', 'body_landmarks', 'body_landmarks_normalized']] = df['image_id'].apply(get_encodings_mongo)
             print("got mongo encodings")
 
             # drop all rows where face_encodings68 is None TK revist this after migration to mongo
@@ -1317,6 +1335,7 @@ def main():
             df['face_encodings68'] = df['face_encodings68'].apply(unpickle_array)
             df['face_landmarks'] = df['face_landmarks'].apply(unpickle_array)
             df['body_landmarks'] = df['body_landmarks'].apply(unpickle_array)
+            df['body_landmarks_normalized'] = df['body_landmarks_normalized'].apply(unpickle_array)
             df['bbox'] = df['bbox'].apply(lambda x: unstring_json(x))
             if OBJ_CLS_ID > 0: df["bbox_"+str(OBJ_CLS_ID)] = df["bbox_"+str(OBJ_CLS_ID)].apply(lambda x: unstring_json(x))
 
