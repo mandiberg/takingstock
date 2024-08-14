@@ -626,6 +626,10 @@ def prep_encodings_NN(df_segment):
         print("Rows with invalid body_landmarks_normalized data:")
         print(null_encodings)
         
+    print("debugging biiiiiiig nose landmarks")
+    print(df_segment.size)
+    print(df_segment['body_landmarks_normalized'])
+    print(df_segment['body_landmarks'])
 
 
     # create a column for the hsv values using df_segment.apply(lambda row: create_hsv_list(row), axis=1)
@@ -1338,6 +1342,7 @@ def main():
             df['body_landmarks_normalized'] = df['body_landmarks_normalized'].apply(unpickle_array)
             df['bbox'] = df['bbox'].apply(lambda x: unstring_json(x))
             if OBJ_CLS_ID > 0: df["bbox_"+str(OBJ_CLS_ID)] = df["bbox_"+str(OBJ_CLS_ID)].apply(lambda x: unstring_json(x))
+
 
             # this may be a big problem
             # turn URL into local hashpath (still needs local root folder)
