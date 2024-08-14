@@ -81,7 +81,8 @@ NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 THIS_SITE = 9
 
 SEARCH_KEYS_FOR_LOC = True
-VERBOSE = True
+VERBOSE = False
+TIMER = True
 
 # where key, etc csvs stored
 INGEST_ROOT = "/Users/michaelmandiberg/Documents/GitHub/facemap/utilities/keys/"
@@ -101,44 +102,45 @@ elif THIS_SITE == 9:
     # io.db["name"] = "stock"
     INGEST_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/alamyCSV"
     JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache_translated.jsonl")
+    # JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache_funny1.jsonl")
 elif THIS_SITE == 10:
-    # DONE
+    # DONE 504250
     io.db["name"] = "stock"
     INGEST_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/VCG2"
     JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache_translated.jsonl")
 elif THIS_SITE == 11:
     io.db["name"] = "stock"
-    # DONE
+    # DONE 426693
     INGEST_FOLDER = "/Users/michaelmandiberg/Downloads/pixcy_v2"
     JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache_filtered.jsonl")
 elif THIS_SITE == 12:
-    # keys by count ready for final parse
+    # keys by count ready for final parse 0
     INGEST_FOLDER = "/Users/michaelmandiberg/Library/CloudStorage/Dropbox/takingstock_dropbox/PIXERF"
     JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache.jsonl")
 elif THIS_SITE == 13:
-    # DONE
+    # DONE 305058
     INGEST_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/ImagesBazzar"
     JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache.jsonl")
     eth_dict_per_site = {'asian ethnicity':9, 'tika':9, 'alta':9, 'asian  ethnicity':9,'asian ethinicity':9,'asian farmer':9,'asian medicine':9,'asians':9,'asiascher':9,'asiatisch':9,'asiatische':9,'asiatischen':9,'asiatischer':9,'asiatisches':9,'asien':9}
 elif THIS_SITE == 14:
-    # DONE
+    # DONE 49176
     INGEST_FOLDER = "/Users/michaelmandiberg/Library/CloudStorage/Dropbox/takingstock_dropbox/INDIA-PB"
     JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache.jsonl")
     eth_dict_per_site = {'asian ethnicity':9, 'tika':9, 'alta':9, 'asian  ethnicity':9,'asian ethinicity':9,'asian farmer':9,'asian medicine':9,'asians':9,'asiascher':9,'asiatisch':9,'asiatische':9,'asiatischen':9,'asiatischer':9,'asiatisches':9,'asien':9}
 elif THIS_SITE == 15:
-    # DONE
+    # DONE 385
     io.db["name"] = "stock"
     INGEST_FOLDER = "/Users/michaelmandiberg/Library/CloudStorage/Dropbox/takingstock_dropbox/iwaria"
     JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache_translated.jsonl")
 elif THIS_SITE == 16:
-    # tested - once newkeys are in, can go
-    # io.db["name"] = "stock"
+    # DONE 209
+    io.db["name"] = "stock"
     INGEST_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/nappy_v3_w-data"
     # JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache_translated.jsonl")
     JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache.jsonl")
 elif THIS_SITE == 17:
-    # tested - once newkeys are in, can go
-    # io.db["name"] = "stock"
+    # DONE 25663
+    io.db["name"] = "stock"
     INGEST_FOLDER = "/Users/michaelmandiberg/Library/CloudStorage/Dropbox/takingstock_dropbox/PICHA-STOCK"
     JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache.jsonl")
 elif THIS_SITE == 18:
@@ -149,7 +151,7 @@ elif THIS_SITE == 18:
 
 
 # key, etc csvs
-KEYWORD_PATH = os.path.join(INGEST_ROOT, "Keywords_202408101154.csv")
+KEYWORD_PATH = os.path.join(INGEST_ROOT, "Keywords_202408122130.csv")
 LOCATION_PATH = os.path.join(INGEST_ROOT, "Location_202308041952.csv")
 CSV_KEY2LOC_PATH = os.path.join(INGEST_ROOT, "CSV_KEY2LOC.csv")
 CSV_KEY2KEY_GETTY_PATH = os.path.join(INGEST_ROOT, "CSV_KEY2KEY_GETTY.csv")
@@ -189,6 +191,7 @@ def dict_from_csv(file_path):
 
 loc2loc = {"niue":"Niue Island", "east timor":"timor-leste"}
 # key2key = {}
+
 key2loc = dict_from_csv(CSV_KEY2LOC_PATH)
 skip_keys = ["other", "easy resource", "suggestive filter", "unspecified", "diffrential focus", "internal term 1", "birds eye view", "bird's eye view", "los banos", "scoot", "angel fire"]
 key2key = dict_from_csv(CSV_KEY2KEY_GETTY_PATH)
@@ -213,10 +216,12 @@ def lower_dict(this_dict):
 gender_dict_secondary = gender_dict = lower_dict({**gender_dict, **gender_dict_TNB})
 # gender_dict_secondary = lower_dict({**gender_dict, **gender_dict_shutter_secondary})
 eth_all_dict = eth_dict = lower_dict({**eth_dict, **eth_dict_per_site, **multi_dict})
+eth_set = set(eth_dict.keys())
 # key2key = lower_dict({**key2key, **key2key_getty})
 key2key_set = set(key2key)
 # eth_set = set(eth_all_dict.keys())
 gender_all_dict = lower_dict({**gender_dict, **gender_dict_secondary})
+gender_set = set(gender_all_dict.keys())
 # gender_set = set(gender_all_dict.keys())
 multi_eth_list = [k for k,v in eth_all_dict.items() if v == 6]
 TNB_list = [k.lower() for k,v in gender_all_dict.items() if v == 5 or v == 7]
@@ -246,6 +251,17 @@ ONETWOTHREE_HEADERS = ["id","title","keywords","orientation","age","word","exclu
 KEYWORD_HEADERS = ["keyword_id","keyword_number","keyword_text","keytype","weight","parent_keyword_id","parent_keyword_text"]
 IMG_KEYWORD_HEADERS = ["site_image_id","keyword_text"]
 header_list = PEXELS_HEADERS
+
+# get all inserted rows for this site
+with engine.connect() as conn:
+    select_stmt = select(Images.site_image_id).where(
+        (Images.site_name_id == THIS_SITE) 
+    )
+    # select all the rows
+    results = conn.execute(select_stmt).fetchall()
+    # make a set of all the site_image_ids
+    already_ingested = set([row[0] for row in results])
+print("already_ingested", len(already_ingested))
 
 def read_csv(csv_file):
     with open(csv_file, encoding="utf-8", newline="") as in_file:
@@ -356,6 +372,7 @@ def unlock_key_list(site_image_id, keys_list, keys_dict):
             key_nos_list.append(key_no)
     return key_nos_list
 
+
 # takes a key and runs all permutations through the dict, and saves missing ones
 # this is the kitchen sink function
 def unlock_key_plurals_etc(site_id,key, this_dict):
@@ -396,18 +413,30 @@ def unlock_key_plurals_etc(site_id,key, this_dict):
         #         # print(key)
 
 
+    dict_name = None
+    first_key = next(iter(this_dict))
+    # print("first_key", first_key)
+    if first_key == "drug": 
+        dict_name = "keywords"
+        this_dict_set = keys_set
+    elif first_key == "men": 
+        dict_name = "gender"
+        this_dict_set = gender_set
+    else:
+        print("no dict_name", first_key)
+        this_dict_set = set(this_dict.keys())
 
-
+    # elif first_key == "drug": dict_name = "keywords"
     key_no = None
     key = key.lower()
-    if VERBOSE: print("trying to unlock key:", key)
-    this_dict_set = set(this_dict.keys())
+    if VERBOSE: print("trying to unlock key, and keys_dict:", key, dict_name)
+
     if key in this_dict_set:
     # try:
-        if VERBOSE: print("trying basic keys_dict for this key:,", key)
+        # if VERBOSE: print("trying basic keys_dict for this key:,", key)
         # print("this is the dict", this_dict)
         key_no = this_dict[key]
-        if VERBOSE: print("this is the key_no", key_no)
+        if VERBOSE: print("this is the key and key_no", key, key_no)
 
     # except:
         # key2keyGB = {"colour":"color", "centre":"center", "organisation":"organization", "recognise":"recognize", "realise":"realize", "favour":"favor", "labour":"labor", "neighbour":"neighbor", "theatre":"theater", "cheque":"check", "defence":"defense", "licence":"license", "offence":"offense", "ogue":"og", "programme":"program", "dialogue":"dialog", "catalogue":"catalog", "humour":"humor", "fibre":"fiber"}
@@ -528,14 +557,18 @@ def unlock_key_plurals_etc(site_id,key, this_dict):
             try:
                 print("key2loc[key]", key2loc[key])
             except:
-                print("key not in key2loc")
+                print("key not in key2loc - thus not a location")
                 # not isinstance(site_id, int) and
         if key and len(this_dict) > 5000 and not key.startswith('-') and not key.endswith('.jpg') and not key in all_set and not key in set(TNB_list+multi_eth_list):
             # print(type(site_id))
             # print(site_id)
             value_list = [site_id,key]
-            print("could not unlock:", value_list)
-            write_csv(CSV_NOKEYS_PATH,value_list)
+            if dict_name == "gender":
+                # print("could not unlock:", value_list, "not saving")
+                pass # not saving
+            else:
+                print("could not unlock:", value_list, "and saving")
+                write_csv(CSV_NOKEYS_PATH,value_list)
         # print(value_list)
         return None
 
@@ -654,6 +687,9 @@ def get_key_no_dictonly(key_name, keys_list, this_dict, do_write_csv=False):
 def unlock_key_dict(key,this_dict,this_key2key=None):
     key_no = None
     key = key.lower()
+    # print("len of this_dict", len(this_dict))
+    # print("len of this_key2key", len(this_key2key))
+    # print("this_key2key", this_key2key)
     try:
         try:
             key_no = this_dict[key]
@@ -667,10 +703,16 @@ def unlock_key_dict(key,this_dict,this_key2key=None):
     except:
         if this_key2key:
             try:
-                altkey = this_key2key[key.lower()]
-                if VERBOSE: print("altkey", altkey)
-                key_no = this_dict[altkey.lower()]
-                if VERBOSE: print("this is the key_no via loc2loc", key_no)
+                if key in this_key2key.keys():
+                    altkey = this_key2key[key.lower()]
+                    if VERBOSE: print("altkey", altkey)
+                    key_no = this_dict[altkey.lower()]
+                    if VERBOSE: print("this is the key_no via loc2loc", key_no)
+                else:
+                    print("key not in this_key2key", key)
+                    key_no = key2loc[key]
+                    print("key in key2loc", key_no)
+
                 return(key_no)
             except:
                 try:
@@ -713,10 +755,11 @@ def description_to_keys(description, site_id, this_dict="keys_dict"):
     # print(description)
     key_no = None
     desc_keys = description.split(" ")
-    # print("desc_keys ",desc_keys)
+    if VERBOSE: print("[description_to_keys] desc_keys ",desc_keys)
+    # print(this_dict)
     for key in desc_keys:
-        # print("checking key ", key)
-        if not pd.isnull(key):
+        if VERBOSE: print("checking key ", key)
+        if not pd.isnull(key) and len(key) > 2:
             key_no = unlock_key_plurals_etc(site_id,key,this_dict)
             # print("key_no passed through:")
             # print(key_no)
@@ -965,8 +1008,11 @@ def get_gender_age_row(gender_string, age_string, description, keys_list, site_i
         print(age)
 
     if not age or not gender:
-        print("MISSING AGE OR GENDER, IS IT IN THE KEYS?")
-        if VERBOSE: print(keys_list)
+        pass
+        if VERBOSE: 
+            print("MISSING AGE OR GENDER, IS IT IN THE KEYS?")
+
+            print(keys_list)
 
     return gender, age, age_detail
 
@@ -1286,7 +1332,7 @@ def get_location(country, keys_list):
     location_info = []
     if country:
         if VERBOSE: print("we gotta location: ", country)
-        location_info = country.split(",") if "," in country else []
+        location_info = country.split(", ") if "," in country else []
         if len(location_info) > 1: 
             print(location_info)
             country_key = itter_location(location_info[-1], keys_list)
@@ -1740,7 +1786,7 @@ def ingest_json():
 
         for item in cache_file.readlines():
             item = json.loads(item)
-
+            if TIMER: start_timer = time.time()
         
         # for row in reader_obj:
             # print(row[1])
@@ -1819,6 +1865,10 @@ def ingest_json():
 
             if shoot_location: keys_list.append(shoot_location)
 
+            if TIMER: 
+                print("time to structure row", time.time()-start_timer)
+                start_timer = time.time()
+
             # if the image row has problems, skip it (structure_row saved it to csv)
             if not image_row:
                 continue
@@ -1833,9 +1883,9 @@ def ingest_json():
             # this isn't working. not catching nulls. 
             if not pd.isnull(ethnicity) and len(ethnicity)>0:
                 print("have eth", ethnicity.lower(), "type is", type(ethnicity.lower()))
-                print("len of eth_dict", len(eth_dict))
+                if VERBOSE: print("len of eth_dict", len(eth_dict))
                 eth_no_list = get_key_no_dictonly(ethnicity.lower(), keys_list, eth_dict)
-                print("eth_no_list after get_key_no_dictonly", eth_no_list)
+                if VERBOSE: print("eth_no_list after get_key_no_dictonly", eth_no_list)
             else:
                 # get eth from keywords, using keys_list and eth_keys_dict
                 print("UNLOCKING KEYS FOR eth_keys_dict <><><><><><><><>")
@@ -1848,7 +1898,11 @@ def ingest_json():
                         print(f"_secondary found for {eth_no_list}")
                     elif "descent" in keys_list:
                         print(f"descent in keys_list {keys_list}")
-                        
+
+            if TIMER: 
+                print("time to description and ethnicity", time.time()-start_timer)
+                start_timer = time.time()
+
             # look for multi_dict, and add to eth_no_list
             if not 6 in eth_no_list and image_row['description'] and THIS_SITE != 10:
                 is_multi = False
@@ -1870,6 +1924,10 @@ def ingest_json():
             print("finally, eth_no_list", eth_no_list)
 
 
+            if TIMER: 
+                print("time to multi ethnicity", time.time()-start_timer)
+                start_timer = time.time()
+
 
 
 
@@ -1882,13 +1940,30 @@ def ingest_json():
 
     
             try:
+                # check to see if site_image_id is in already_ingested
+                if image_row['site_image_id'] in already_ingested:
+                    print("already ingested", image_row['site_image_id'])
+                    insert_row = False
+                else:
+                    insert_row = True
+                    # add to already_ingested
+                    already_ingested.add(image_row['site_image_id'])
+                    print(len(already_ingested), "already ingested")
+
+
+
                 with engine.connect() as conn:
-                    select_stmt = select(Images).where(
-                        (Images.site_name_id == image_row['site_name_id']) &
-                        (Images.site_image_id == image_row['site_image_id'])
-                    )
-                    row = conn.execute(select_stmt).fetchone()
-                    if row is None:
+                #     select_stmt = select(Images).where(
+                #         (Images.site_name_id == image_row['site_name_id']) &
+                #         (Images.site_image_id == image_row['site_image_id'])
+                #     )
+                #     row = conn.execute(select_stmt).fetchone()
+
+                    if TIMER: 
+                        print("time to check if already exists", time.time()-start_timer)
+                        start_timer = time.time()
+
+                    if insert_row:
                         insert_stmt = insert(Images).values(image_row)
                         if VERBOSE: print(str(insert_stmt))
                         dialect = mysql.dialect()
@@ -1901,6 +1976,9 @@ def ingest_json():
                         except Exception as e:
                             print(f"Exception occurred: {e}")
                         # result = execute_query_with_retry(conn, insert_stmt)  # Retry on OperationalError
+                        if TIMER: 
+                            print("time to insert Images", time.time()-start_timer)
+                            start_timer = time.time()
 
                         if key_nos_list and result.lastrowid:
                             keyrows = [{'image_id': result.lastrowid, 'keyword_id': keyword_id} for keyword_id in key_nos_list]
@@ -1910,6 +1988,9 @@ def ingest_json():
                                     keyword_id=imageskeywords_insert_stmt.inserted.keyword_id
                                 )
                                 execute_query_with_retry(conn, imageskeywords_insert_stmt)  # Retry on OperationalError
+                        if TIMER: 
+                            print("time to insert Keys", time.time()-start_timer)
+                            start_timer = time.time()
 
                         if eth_no_list and result.lastrowid:
                             ethrows = [{'image_id': result.lastrowid, 'ethnicity_id': ethnicity_id} for ethnicity_id in eth_no_list if ethnicity_id is not None]
@@ -1920,6 +2001,9 @@ def ingest_json():
                                         ethnicity_id=imagesethnicity_insert_stmt.inserted.ethnicity_id
                                     )
                                     execute_query_with_retry(conn, imagesethnicity_insert_stmt)  # Retry on OperationalError
+                        if TIMER: 
+                            print("time to insert eth", time.time()-start_timer)
+                            start_timer = time.time()
 
                         print("last_inserted_id:", result.lastrowid)
                         print(" ")
@@ -1982,6 +2066,10 @@ def ingest_json():
             if counter % 1000 == 0:
                 save_counter = [counter]
                 write_csv(CSV_COUNTOUT_PATH, save_counter)
+            if TIMER: 
+                print("time to store", time.time()-start_timer)
+                print(" ")
+                start_timer = time.time()
             
             counter += 1
             ind += 1
@@ -1993,6 +2081,7 @@ if __name__ == '__main__':
         init_csv(CSV_NOKEYS_PATH,IMG_KEYWORD_HEADERS)
         init_csv(CSV_IMAGEKEYS_PATH,IMG_KEYWORD_HEADERS)
         keys_dict = make_key_dict(KEYWORD_PATH)
+        keys_set = set(keys_dict.keys())
         print("this many keys", len(keys_dict))
         locations_dict = make_key_dict(LOCATION_PATH)
         locations_dict_alt = make_key_dict_col3(LOCATION_PATH)

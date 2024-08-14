@@ -6,14 +6,6 @@ import concurrent.futures
 import re
 import os
 
-# def load_translations(csv_file):
-#     translations = defaultdict(str)
-#     with open(csv_file, 'r', encoding='utf-8') as f:
-#         reader = csv.DictReader(f)
-#         for row in reader:
-#             translations[row['Chinese']] = row['Fitted']
-#     return translations
-
 
 def load_translations(csv_file):
     translations = defaultdict(str)
@@ -53,27 +45,56 @@ def load_table_translations(csv_file, table_file):
 
     return translations, table_mapping
 
+def load_locations(csv_file):
+    locations = []
+    with open(csv_file, 'r', encoding='utf-8') as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            locations.append(row)
+    return locations
+
+def find_location_match(location_filter, locations):
+    fields_to_check = ['getty_name', 'nation_name', 'nation_name_alpha', 'official_nation_name', 'code_alpha2', 'code_alpha3']
+    
+    for field in fields_to_check:
+        for location in locations:
+            try:
+                field_value = location[field].strip().lower()
+                if field_value and len(field_value) > 1:  # Ignore empty or single-character fields
+                    if re.search(r'\b' + re.escape(field_value) + r'\b', location_filter):
+                        return location['getty_name']  # or whichever field you want to use as the result
+            except:
+                pass
+    
+    # print(f">> Location not found in: {location_filter}")
+    return None
+
+def clean_keywords(words):
+    cleaned_words = []
+    for word in words:
+        # strip all punctuation
+        orig_word = word
+        cleaned_word = word.strip(string.punctuation)
+        cleaned_word = re.sub(r'^[^\w\s]+|[^\w\s]+$', '', cleaned_word)
+        cleaned_word = cleaned_word.replace('.', '')
+        
+        if cleaned_word != orig_word:
+            pass
+            # print(f"Warning: Stripped punctuation from word: {orig_word} -> {cleaned_word}")
+        if cleaned_word:  # Only add non-empty words
+            cleaned_words.append(cleaned_word)
+    return cleaned_words
+
 def process_line(line, translations, age_translations, age_mapping, gender_translations, gender_mapping, 
-                 ethnicity_translations, ethnicity_mapping, location_translations, location_mapping):
+                 ethnicity_translations, ethnicity_mapping, location_translations, location_mapping,locations):
     data = json.loads(line)
 
     # if no keywords get them from description
     if not data['keywords']:
         if data['title']:
-            cleaned_words = []
             words = data['title'].split(' ')
-            print("words:", words)
-            for word in words:
-                # strip all punctuation
-                orig_word = word
-                cleaned_word = word.strip(string.punctuation)
-                cleaned_word = re.sub(r'^[^\w\s]+|[^\w\s]+$', '', cleaned_word)
-                cleaned_word = cleaned_word.replace('.', '')
-                
-                if cleaned_word != orig_word:
-                    print(f"Warning: Stripped punctuation from word: {orig_word} -> {cleaned_word}")
-                if cleaned_word:  # Only add non-empty words
-                    cleaned_words.append(cleaned_word)
+            # print("words:", words)
+            cleaned_words = clean_keywords(words)
             data['keywords'] = '|'.join(cleaned_words)
             
             # If you need to join the words back into a string:
@@ -83,6 +104,7 @@ def process_line(line, translations, age_translations, age_mapping, gender_trans
 
         else:
             data['keywords'] = data.get("filters", {}).get("base", None).replace('person ', '')
+
             # print("Warning: Empty keywords field, using filters instead:", data['keywords'])
 
     # Step 1: Regular translations
@@ -126,15 +148,62 @@ def process_line(line, translations, age_translations, age_mapping, gender_trans
 
     data['keywords'] = '|'.join(final_keywords)
     
+    def translate_location(location_filter, location_translations, location_mapping):
+        if location_filter in location_translations:
+            translated_location = location_mapping.get(location_translations[location_filter], location_filter)
+            # data['filters']['location'] = translated_location
+        elif location_filter:
+            matched_location = find_location_match(location_filter, locations)
+            if matched_location:
+                # print(f"Match found for location: {location_filter} --> {matched_location}")
+                translated_location = matched_location
+            else: 
+                # print(f"No match found for location: {location_filter}")
+                translated_location = None
+        else:
+            translated_location = None
+        return translated_location
 
     # translate the location filter
     # location_filter = data.get("filters", {}).get("location", None)
     location_filter = data.get("location", None)
     location_filter = location_filter.lower() if location_filter else None
-    if location_filter in location_translations:
-        translated_location = location_mapping.get(location_translations[location_filter], location_filter)
-        # data['filters']['location'] = translated_location
+    translated_location = None
+    if location_filter:
+        translated_location = translate_location(location_filter, location_translations, location_mapping)
+        # print(f"first attempt at translate_location: {location_filter} --> {translated_location}")
+        if not translated_location and '"' in location_filter:
+            location_filter = location_filter.replace('"', '')
+            # print(f"Removing quotes from location filter: {location_filter}")
+            translated_location = translate_location(location_filter, location_translations, location_mapping)
+        if not translated_location:
+            # print(f"No match found for location: {location_filter} so trying to split")
+            # if no result, split on commas and try again
+            split_chars = [',', '-', '/', '|', '.']
+            for char in split_chars:
+                if char in location_filter:
+                    print(f"Splitting location filter: {location_filter}")
+                    locations = location_filter.split(",")
+                    locations = clean_keywords(locations)
+                    for location in locations:
+                        translated_location = translate_location(location, location_translations, location_mapping)
+                        if translated_location:
+                            print(f"REDUX Match found for location: {location_filter} --> {translated_location}")
+                            break
+                    print(f"REDUX No match found for location: {location_filter}")
+                else:
+                    pass
+                    # Handle case where no match is found
+                    # print(f"No match found for location: {location_filter}")
+    if translated_location: 
+        # if translated_location found, else leave as it was at the start
         data['location'] = translated_location
+
+    elif location_filter and not "studio" in location_filter and not "home" in location_filter and not "outdoors" in location_filter and not "office" in location_filter:
+        print(f">> missing: {location_filter}")
+
+
+
 
 
     # # Process title - VCG only
@@ -161,7 +230,7 @@ def process_line(line, translations, age_translations, age_mapping, gender_trans
 
 def translate_file(input_file, output_file, translations, age_translations, age_mapping, 
                    gender_translations, gender_mapping, ethnicity_translations, ethnicity_mapping, 
-                   location_translations, location_mapping):
+                   location_translations, location_mapping,locations):
     with open(input_file, 'r', encoding='utf-8') as infile, \
          open(output_file, 'w', encoding='utf-8') as outfile:
         with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
@@ -171,7 +240,7 @@ def translate_file(input_file, output_file, translations, age_translations, age_
                                                age_translations, age_mapping,
                                                gender_translations, gender_mapping,
                                                ethnicity_translations, ethnicity_mapping,
-                                               location_translations, location_mapping))
+                                               location_translations, location_mapping,locations))
                 if i % 1000 == 0:
                     print(f"Submitted {i} lines for processing")
 
@@ -190,8 +259,8 @@ def translate_file(input_file, output_file, translations, age_translations, age_
 
 def main():
     KEYROOT = "/Users/michaelmandiberg/Documents/GitHub/facemap/utilities/keys/"
-    # JSONROOT = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/alamyCSV/"
-    JSONROOT = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/nappy_v3_w-data"
+    JSONROOT = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/alamyCSV/"
+    # JSONROOT = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/nappy_v3_w-data"
     
     # translations = load_translations(os.path.join(KEYROOT, 'CSV_KEY2KEY_VCG.csv'))
     translations = load_translations(os.path.join(KEYROOT, 'CSV_KEY2KEY_ALAMY.csv'))
@@ -218,9 +287,14 @@ def main():
         os.path.join(KEYROOT, 'locations_table.csv')
     )
     
-    # input_file = os.path.join(JSONROOT, 'items_cache.jsonl')
-    input_file = os.path.join(JSONROOT, 'items_cache.notvia.jsonl')
+    locations = load_locations(
+        os.path.join(KEYROOT, 'Location_202308041952.csv')
+    )
+
+    input_file = os.path.join(JSONROOT, 'items_cache.jsonl')
+    # input_file = os.path.join(JSONROOT, 'items_cache.notvia.jsonl')
     output_file = os.path.join(JSONROOT, 'items_cache_translated.jsonl')
+    # missing_file = os.path.join(JSONROOT, 'items_cache_translated.jsonl')
 
     # # for second VCG2 translation
     # translations2 = load_translations(os.path.join(KEYROOT, 'CSV_KEY2KEY_VCG2.csv'))
@@ -236,7 +310,7 @@ def main():
                    age_translations, age_mapping,
                    gender_translations, gender_mapping,
                    ethnicity_translations, ethnicity_mapping,
-                   location_translations, location_mapping)
+                   location_translations, location_mapping, locations)
 
 if __name__ == '__main__':
     main()
