@@ -82,6 +82,7 @@ THIS_SITE = 9
 
 SEARCH_KEYS_FOR_LOC = True
 VERBOSE = False
+TIMER = True
 
 # where key, etc csvs stored
 INGEST_ROOT = "/Users/michaelmandiberg/Documents/GitHub/facemap/utilities/keys/"
@@ -250,6 +251,17 @@ ONETWOTHREE_HEADERS = ["id","title","keywords","orientation","age","word","exclu
 KEYWORD_HEADERS = ["keyword_id","keyword_number","keyword_text","keytype","weight","parent_keyword_id","parent_keyword_text"]
 IMG_KEYWORD_HEADERS = ["site_image_id","keyword_text"]
 header_list = PEXELS_HEADERS
+
+# get all inserted rows for this site
+with engine.connect() as conn:
+    select_stmt = select(Images.site_image_id).where(
+        (Images.site_name_id == THIS_SITE) 
+    )
+    # select all the rows
+    results = conn.execute(select_stmt).fetchall()
+    # make a set of all the site_image_ids
+    already_ingested = set([row[0] for row in results])
+print("already_ingested", len(already_ingested))
 
 def read_csv(csv_file):
     with open(csv_file, encoding="utf-8", newline="") as in_file:
@@ -697,8 +709,10 @@ def unlock_key_dict(key,this_dict,this_key2key=None):
                     key_no = this_dict[altkey.lower()]
                     if VERBOSE: print("this is the key_no via loc2loc", key_no)
                 else:
-                    print("key not in this_key2key")
+                    print("key not in this_key2key", key)
                     key_no = key2loc[key]
+                    print("key in key2loc", key_no)
+
                 return(key_no)
             except:
                 try:
@@ -994,8 +1008,11 @@ def get_gender_age_row(gender_string, age_string, description, keys_list, site_i
         print(age)
 
     if not age or not gender:
-        print("MISSING AGE OR GENDER, IS IT IN THE KEYS?")
-        if VERBOSE: print(keys_list)
+        pass
+        if VERBOSE: 
+            print("MISSING AGE OR GENDER, IS IT IN THE KEYS?")
+
+            print(keys_list)
 
     return gender, age, age_detail
 
@@ -1769,7 +1786,7 @@ def ingest_json():
 
         for item in cache_file.readlines():
             item = json.loads(item)
-
+            if TIMER: start_timer = time.time()
         
         # for row in reader_obj:
             # print(row[1])
@@ -1848,6 +1865,10 @@ def ingest_json():
 
             if shoot_location: keys_list.append(shoot_location)
 
+            if TIMER: 
+                print("time to structure row", time.time()-start_timer)
+                start_timer = time.time()
+
             # if the image row has problems, skip it (structure_row saved it to csv)
             if not image_row:
                 continue
@@ -1862,9 +1883,9 @@ def ingest_json():
             # this isn't working. not catching nulls. 
             if not pd.isnull(ethnicity) and len(ethnicity)>0:
                 print("have eth", ethnicity.lower(), "type is", type(ethnicity.lower()))
-                print("len of eth_dict", len(eth_dict))
+                if VERBOSE: print("len of eth_dict", len(eth_dict))
                 eth_no_list = get_key_no_dictonly(ethnicity.lower(), keys_list, eth_dict)
-                print("eth_no_list after get_key_no_dictonly", eth_no_list)
+                if VERBOSE: print("eth_no_list after get_key_no_dictonly", eth_no_list)
             else:
                 # get eth from keywords, using keys_list and eth_keys_dict
                 print("UNLOCKING KEYS FOR eth_keys_dict <><><><><><><><>")
@@ -1877,7 +1898,11 @@ def ingest_json():
                         print(f"_secondary found for {eth_no_list}")
                     elif "descent" in keys_list:
                         print(f"descent in keys_list {keys_list}")
-                        
+
+            if TIMER: 
+                print("time to description and ethnicity", time.time()-start_timer)
+                start_timer = time.time()
+
             # look for multi_dict, and add to eth_no_list
             if not 6 in eth_no_list and image_row['description'] and THIS_SITE != 10:
                 is_multi = False
@@ -1899,6 +1924,10 @@ def ingest_json():
             print("finally, eth_no_list", eth_no_list)
 
 
+            if TIMER: 
+                print("time to multi ethnicity", time.time()-start_timer)
+                start_timer = time.time()
+
 
 
 
@@ -1911,13 +1940,30 @@ def ingest_json():
 
     
             try:
+                # check to see if site_image_id is in already_ingested
+                if image_row['site_image_id'] in already_ingested:
+                    print("already ingested", image_row['site_image_id'])
+                    insert_row = False
+                else:
+                    insert_row = True
+                    # add to already_ingested
+                    already_ingested.add(image_row['site_image_id'])
+                    print(len(already_ingested), "already ingested")
+
+
+
                 with engine.connect() as conn:
-                    select_stmt = select(Images).where(
-                        (Images.site_name_id == image_row['site_name_id']) &
-                        (Images.site_image_id == image_row['site_image_id'])
-                    )
-                    row = conn.execute(select_stmt).fetchone()
-                    if row is None:
+                #     select_stmt = select(Images).where(
+                #         (Images.site_name_id == image_row['site_name_id']) &
+                #         (Images.site_image_id == image_row['site_image_id'])
+                #     )
+                #     row = conn.execute(select_stmt).fetchone()
+
+                    if TIMER: 
+                        print("time to check if already exists", time.time()-start_timer)
+                        start_timer = time.time()
+
+                    if insert_row:
                         insert_stmt = insert(Images).values(image_row)
                         if VERBOSE: print(str(insert_stmt))
                         dialect = mysql.dialect()
@@ -1930,6 +1976,9 @@ def ingest_json():
                         except Exception as e:
                             print(f"Exception occurred: {e}")
                         # result = execute_query_with_retry(conn, insert_stmt)  # Retry on OperationalError
+                        if TIMER: 
+                            print("time to insert Images", time.time()-start_timer)
+                            start_timer = time.time()
 
                         if key_nos_list and result.lastrowid:
                             keyrows = [{'image_id': result.lastrowid, 'keyword_id': keyword_id} for keyword_id in key_nos_list]
@@ -1939,6 +1988,9 @@ def ingest_json():
                                     keyword_id=imageskeywords_insert_stmt.inserted.keyword_id
                                 )
                                 execute_query_with_retry(conn, imageskeywords_insert_stmt)  # Retry on OperationalError
+                        if TIMER: 
+                            print("time to insert Keys", time.time()-start_timer)
+                            start_timer = time.time()
 
                         if eth_no_list and result.lastrowid:
                             ethrows = [{'image_id': result.lastrowid, 'ethnicity_id': ethnicity_id} for ethnicity_id in eth_no_list if ethnicity_id is not None]
@@ -1949,6 +2001,9 @@ def ingest_json():
                                         ethnicity_id=imagesethnicity_insert_stmt.inserted.ethnicity_id
                                     )
                                     execute_query_with_retry(conn, imagesethnicity_insert_stmt)  # Retry on OperationalError
+                        if TIMER: 
+                            print("time to insert eth", time.time()-start_timer)
+                            start_timer = time.time()
 
                         print("last_inserted_id:", result.lastrowid)
                         print(" ")
@@ -2011,6 +2066,10 @@ def ingest_json():
             if counter % 1000 == 0:
                 save_counter = [counter]
                 write_csv(CSV_COUNTOUT_PATH, save_counter)
+            if TIMER: 
+                print("time to store", time.time()-start_timer)
+                print(" ")
+                start_timer = time.time()
             
             counter += 1
             ind += 1
