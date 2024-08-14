@@ -254,14 +254,18 @@ header_list = PEXELS_HEADERS
 
 # get all inserted rows for this site
 with engine.connect() as conn:
-    select_stmt = select(Images.site_image_id).where(
+    select_stmt = select(Images.image_id, Images.site_image_id).where(
         (Images.site_name_id == THIS_SITE) 
     )
     # select all the rows
     results = conn.execute(select_stmt).fetchall()
+    # make a dict of the image_id and site_image_id
+    site_image_id_dict = {row[1]: row[0] for row in results}
     # make a set of all the site_image_ids
-    already_ingested = set([row[0] for row in results])
+    # already_ingested = set([row[1] for row in results])
+    already_ingested = set(site_image_id_dict.keys())
 print("already_ingested", len(already_ingested))
+if already_ingested: print("site_image_id_dict first", site_image_id_dict[next(iter(site_image_id_dict))])
 
 def read_csv(csv_file):
     with open(csv_file, encoding="utf-8", newline="") as in_file:
@@ -1943,9 +1947,10 @@ def ingest_json():
                 # check to see if site_image_id is in already_ingested
                 if image_row['site_image_id'] in already_ingested:
                     print("already ingested", image_row['site_image_id'])
-                    insert_row = False
+                    insert_image_row = False
+                    already_image_id = site_image_id_dict.get(image_row['site_image_id'], None)
                 else:
-                    insert_row = True
+                    insert_image_row = True
                     # add to already_ingested
                     already_ingested.add(image_row['site_image_id'])
                     print(len(already_ingested), "already ingested")
@@ -1963,7 +1968,7 @@ def ingest_json():
                         print("time to check if already exists", time.time()-start_timer)
                         start_timer = time.time()
 
-                    if insert_row:
+                    if insert_image_row:
                         insert_stmt = insert(Images).values(image_row)
                         if VERBOSE: print(str(insert_stmt))
                         dialect = mysql.dialect()
@@ -1981,6 +1986,9 @@ def ingest_json():
                             start_timer = time.time()
 
                         if key_nos_list and result.lastrowid:
+                            # add image_id to site_image_id_dict
+                            site_image_id_dict[image_row['site_image_id']] = result.lastrowid
+
                             keyrows = [{'image_id': result.lastrowid, 'keyword_id': keyword_id} for keyword_id in key_nos_list]
                             with engine.connect() as conn:
                                 imageskeywords_insert_stmt = insert(ImagesKeywords).values(keyrows)
@@ -2018,10 +2026,11 @@ def ingest_json():
 
                         
                     else:
-                        print('Row already exists:', ind, row[0])
+                        # if it already exists, add any new eth_no_list values
+                        print('Row already exists:', ind, already_image_id)
                         with engine.connect() as conn:
                             select_stmt = select(ImagesEthnicity).where(
-                                (ImagesEthnicity.image_id == row[0]) 
+                                (ImagesEthnicity.image_id == already_image_id) 
                             )
                             eth_already = conn.execute(select_stmt).fetchall()
                             # print(eth_already)
@@ -2039,7 +2048,7 @@ def ingest_json():
 
                             # if we still have any values in eth_no_list, insert them
                             if eth_no_list:
-                                ethrows = [{'image_id': row[0], 'ethnicity_id': ethnicity_id} for ethnicity_id in eth_no_list if ethnicity_id is not None]
+                                ethrows = [{'image_id': already_image_id, 'ethnicity_id': ethnicity_id} for ethnicity_id in eth_no_list if ethnicity_id is not None]
                                 if ethrows:
                                     if VERBOSE: print("going to insert ", ethrows)
                                     with engine.connect() as conn:
