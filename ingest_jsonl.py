@@ -97,8 +97,8 @@ elif THIS_SITE == 6:
     INGEST_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/unsplashCSVs"
     JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache.jsonl")
 elif THIS_SITE == 9:
-    # final test running
-    # io.db["name"] = "stock"
+    # running
+    io.db["name"] = "stock"
     INGEST_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/alamyCSV"
     JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache_translated.jsonl")
     # JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache_funny1.jsonl")
@@ -150,7 +150,7 @@ elif THIS_SITE == 18:
 
 
 # key, etc csvs
-KEYWORD_PATH = os.path.join(INGEST_ROOT, "Keywords_202408122130.csv")
+KEYWORD_PATH = os.path.join(INGEST_ROOT, "Keywords_202408151415.csv")
 LOCATION_PATH = os.path.join(INGEST_ROOT, "Location_202308041952.csv")
 CSV_KEY2LOC_PATH = os.path.join(INGEST_ROOT, "CSV_KEY2LOC.csv")
 CSV_KEY2KEY_GETTY_PATH = os.path.join(INGEST_ROOT, "CSV_KEY2KEY_GETTY.csv")
