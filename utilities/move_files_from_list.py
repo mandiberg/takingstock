@@ -7,10 +7,10 @@ import shutil
 # this script will copy the files from the original path to the destination path
 
 # Define the path to the CSV file
-csv_file = '/Volumes/2TB_Quadra_Bare 1/Encodings_Images_202404132159.istock.csv'
+csv_file = '/Users/michaelmandiberg/SegmentOct20_ImagesTopics_202408141301.csv'
 
-ORIGIN = "/Volumes/RAID54/images_istock"
-DEST = "/Volumes/2TB_Quadra_Bare 1/images_istock"
+ORIGIN = "/Volumes/OWC4/segment_images/images_adobe"
+DEST = "/Volumes/OWC4/segment_images_segment/images_adobe"
 START = 0
 
 def make_hash_folders(path):
@@ -68,10 +68,10 @@ with open(csv_file, mode='r', newline='') as file:
             try:
                 if not os.path.exists(destination_path):
                     # Copy the file to the destination location, but leave the original file in place
-                    # shutil.copy(original_path, destination_path)
+                    shutil.copy(original_path, destination_path)
 
                     # Move the file to the destination location, and delete the original file
-                    shutil.move(original_path, destination_path)
+                    # shutil.move(original_path, destination_path)
                     # print(original_path, destination_path)
                     
                     if i % 100 == 0:

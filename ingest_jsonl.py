@@ -82,7 +82,7 @@ THIS_SITE = 9
 
 SEARCH_KEYS_FOR_LOC = True
 VERBOSE = False
-TIMER = True
+TIMER = False
 
 # where key, etc csvs stored
 INGEST_ROOT = "/Users/michaelmandiberg/Documents/GitHub/facemap/utilities/keys/"
@@ -97,8 +97,7 @@ elif THIS_SITE == 6:
     INGEST_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/unsplashCSVs"
     JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache.jsonl")
 elif THIS_SITE == 9:
-    # ready to go
-    # test one more time?
+    # final test running
     # io.db["name"] = "stock"
     INGEST_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/alamyCSV"
     JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache_translated.jsonl")
@@ -128,12 +127,12 @@ elif THIS_SITE == 14:
     JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache.jsonl")
     eth_dict_per_site = {'asian ethnicity':9, 'tika':9, 'alta':9, 'asian  ethnicity':9,'asian ethinicity':9,'asian farmer':9,'asian medicine':9,'asians':9,'asiascher':9,'asiatisch':9,'asiatische':9,'asiatischen':9,'asiatischer':9,'asiatisches':9,'asien':9}
 elif THIS_SITE == 15:
-    # DONE 385
+    # DONE 4385
     io.db["name"] = "stock"
     INGEST_FOLDER = "/Users/michaelmandiberg/Library/CloudStorage/Dropbox/takingstock_dropbox/iwaria"
     JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache_translated.jsonl")
 elif THIS_SITE == 16:
-    # DONE 209
+    # DONE 2209
     io.db["name"] = "stock"
     INGEST_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/nappy_v3_w-data"
     # JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache_translated.jsonl")
@@ -1946,14 +1945,14 @@ def ingest_json():
             try:
                 # check to see if site_image_id is in already_ingested
                 if image_row['site_image_id'] in already_ingested:
-                    print("already ingested", image_row['site_image_id'])
+                    print("this has been already ingested", image_row['site_image_id'])
                     insert_image_row = False
                     already_image_id = site_image_id_dict.get(image_row['site_image_id'], None)
                 else:
                     insert_image_row = True
                     # add to already_ingested
                     already_ingested.add(image_row['site_image_id'])
-                    print(len(already_ingested), "already ingested")
+                    print(len(already_ingested), " total ingested")
 
 
 
