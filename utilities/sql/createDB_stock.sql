@@ -185,6 +185,12 @@ CREATE TABLE PhoneBbox (
     conf_27 Float,
     bbox_32 JSON,
     conf_32 Float,
+    bbox_67_norm JSON,
+    bbox_63_norm JSON,
+    bbox_26_norm JSON,
+    bbox_27_norm JSON,
+    bbox_32_norm JSON
+
     PRIMARY KEY (image_id),
     FOREIGN KEY (image_id) REFERENCES images(image_id)
 );

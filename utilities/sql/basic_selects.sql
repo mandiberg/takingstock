@@ -5,6 +5,13 @@
 USE stock
 ;
 
+SELECT so.image_id, so.imagename 
+FROM SegmentOct20 so 
+JOIN ImagesTopics it ON it.image_id = so.image_id 
+WHERE it.topic_id in (15,17)
+AND so.site_name_id = 3
+;
+
 
 SELECT *
 FROM ImagesBackground ib 
@@ -67,7 +74,7 @@ WHERE ib.selfie_bbox IS NOT NULL
 
 SELECT *
 FROM Encodings e 
-WHERE e.image_id = 122709209
+WHERE e.encoding_id  = 114852545
 ;
 
 SELECT COUNT(so.image_id) 
@@ -360,7 +367,7 @@ WHERE i.site_name_id = 1
 
 
 
-USE stock;
+USE stocktest;
 
 CREATE TABLE Model_Release (
     release_name_id int NOT NULL AUTO_INCREMENT PRIMARY KEY,
@@ -374,10 +381,17 @@ JOIN ImagesKeywords ik on ik.image_id = i.image_id
 WHERE i.site_name_id = 10
 ;
 
+
+SELECT COUNT(i.image_id)
+FROM Images i
+WHERE i.site_name_id = 11
+AND i.location_id IS NULL
+;
+
 SELECT *
 FROM Images i 
-WHERE i.site_image_id = 1000002663
-AND i.site_name_id = 10
+WHERE i.site_image_id = 7696
+AND i.site_name_id = 15
 ;
 
 SELECT DISTINCT(i.author)
@@ -386,10 +400,35 @@ WHERE i.site_name_id = 15
 
 ;
 
+USE Stock;
+
+
+SELECT DISTINCT i.image_id
+FROM Images i
+LEFT JOIN SegmentOct20 so ON i.image_id = so.image_id
+WHERE so.bbox IS NOT NULL
+AND so.mongo_body_landmarks = 1
+AND i.h IS NULL
+LIMIT 1000;
 
 SELECT COUNT(i.image_id)
 FROM Images i
-WHERE i.site_name_id = 18
+LEFT JOIN SegmentOct20 so ON i.image_id = so.image_id
+WHERE so.bbox IS NOT NULL
+AND so.mongo_body_landmarks = 1
+AND i.h IS NOT NULL
+;
+
+SELECT COUNT(*)
+FROM PhoneBbox pb 
+WHERE pb.bbox_67_norm IS NOT NULL
+;
+
+
+    
+SELECT COUNT(i.image_id)
+FROM Images i
+WHERE i.site_name_id = 6
 
 ;
 
@@ -397,13 +436,30 @@ DELETE FROM Images
 WHERE site_name_id = 18
 ;
 
+
+SELECT *
+FROM Images i 
+WHERE i.image_id = 2402477
+;
+
+
+SELECT COUNT(i.image_id)
+FROM ImagesKeywords ik 
+JOIN Images i ON i.image_id = ik.image_id 
+JOIN Keywords k ON ik.keyword_id = k.keyword_id
+JOIN ImagesEthnicity ie ON ie.image_id = i.image_id 
+WHERE ik.keyword_id = 22310
+AND i.site_name_id = 9
+;
+
+
 SELECT k.keyword_text
 FROM ImagesKeywords ik 
 JOIN Images i ON i.image_id = ik.image_id 
 JOIN Keywords k ON ik.keyword_id = k.keyword_id
 JOIN ImagesEthnicity ie ON ie.image_id = i.image_id 
-WHERE i.site_image_id = 1008421694
-AND i.site_name_id = 10
+WHERE i.image_id = 2400730
+AND i.site_name_id = 9
 ;
 
 
