@@ -103,9 +103,9 @@ def process_line(line, translations, age_translations, age_mapping, gender_trans
 
 
         else:
-            data['keywords'] = data.get("filters", {}).get("base", None).replace('person ', '')
+            # data['keywords'] = data.get("filters", {}).get("base", None).replace('person ', '')
 
-            # print("Warning: Empty keywords field, using filters instead:", data['keywords'])
+            print("Warning: Empty keywords field:", data)
 
     # Step 1: Regular translations
     keywords = data['keywords'].split('|')
@@ -259,13 +259,14 @@ def translate_file(input_file, output_file, translations, age_translations, age_
 
 def main():
     KEYROOT = "/Users/michaelmandiberg/Documents/GitHub/facemap/utilities/keys/"
-    JSONROOT = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/alamyCSV/"
+    JSONROOT = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/unsplashCSVs"
     # JSONROOT = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/nappy_v3_w-data"
     
-    # translations = load_translations(os.path.join(KEYROOT, 'CSV_KEY2KEY_VCG.csv'))
+    translationsCN = load_translations(os.path.join(KEYROOT, 'CSV_KEY2KEY_VCG.csv'))
     translations = load_translations(os.path.join(KEYROOT, 'CSV_KEY2KEY_ALAMY.csv'))
     translations2 = load_translations(os.path.join(KEYROOT, 'CSV_KEY2KEY_GETTY.csv'))
     translations.update(translations2)
+    translations.update(translationsCN)
 
     age_translations, age_mapping = load_table_translations(
         os.path.join(KEYROOT, 'VCG_age.csv'), 

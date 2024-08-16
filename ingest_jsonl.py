@@ -78,7 +78,7 @@ NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 18	afripics
 '''
 
-THIS_SITE = 9
+THIS_SITE = 6
 
 SEARCH_KEYS_FOR_LOC = True
 VERBOSE = False
@@ -93,11 +93,11 @@ if THIS_SITE == 1:
     INGEST_FOLDER = os.path.join(INGEST_ROOTG, "getty_noeth_toobig")
     JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache_noNoNOs_noSilver.jsonl")
 elif THIS_SITE == 6:
-    # done
+    # done -- only 334?
     INGEST_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/unsplashCSVs"
     JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache.jsonl")
 elif THIS_SITE == 9:
-    # running
+    # DONE 6150898
     io.db["name"] = "stock"
     INGEST_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/alamyCSV"
     JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache_translated.jsonl")
@@ -113,9 +113,10 @@ elif THIS_SITE == 11:
     INGEST_FOLDER = "/Users/michaelmandiberg/Downloads/pixcy_v2"
     JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache_filtered.jsonl")
 elif THIS_SITE == 12:
-    # keys by count ready for final parse 0
+    # DONE 16854
+    io.db["name"] = "stock"
     INGEST_FOLDER = "/Users/michaelmandiberg/Library/CloudStorage/Dropbox/takingstock_dropbox/PIXERF"
-    JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache.jsonl")
+    JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache_translated.jsonl")
 elif THIS_SITE == 13:
     # DONE 305058
     INGEST_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/ImagesBazzar"
@@ -143,10 +144,10 @@ elif THIS_SITE == 17:
     INGEST_FOLDER = "/Users/michaelmandiberg/Library/CloudStorage/Dropbox/takingstock_dropbox/PICHA-STOCK"
     JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache.jsonl")
 elif THIS_SITE == 18:
-    # tested - once newkeys are in, can go
-    # io.db["name"] = "stock"
+    # ready to go
+    io.db["name"] = "stock"
     INGEST_FOLDER = "/Users/michaelmandiberg/Library/CloudStorage/Dropbox/takingstock_dropbox/AFRIPICS"
-    JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache.jsonl")
+    JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache_translated.jsonl")
 
 
 # key, etc csvs
@@ -221,6 +222,7 @@ key2key_set = set(key2key)
 # eth_set = set(eth_all_dict.keys())
 gender_all_dict = lower_dict({**gender_dict, **gender_dict_secondary})
 gender_set = set(gender_all_dict.keys())
+age_set = set(age_dict.keys())
 # gender_set = set(gender_all_dict.keys())
 multi_eth_list = [k for k,v in eth_all_dict.items() if v == 6]
 TNB_list = [k.lower() for k,v in gender_all_dict.items() if v == 5 or v == 7]
@@ -418,13 +420,16 @@ def unlock_key_plurals_etc(site_id,key, this_dict):
 
     dict_name = None
     first_key = next(iter(this_dict))
-    # print("first_key", first_key)
+    if VERBOSE: print("first_key", first_key)
     if first_key == "drug": 
         dict_name = "keywords"
         this_dict_set = keys_set
     elif first_key == "men": 
         dict_name = "gender"
         this_dict_set = gender_set
+    elif first_key == "newborn":
+        dict_name = "age"
+        this_dict_set = age_set
     else:
         print("no dict_name", first_key)
         this_dict_set = set(this_dict.keys())
@@ -462,13 +467,13 @@ def unlock_key_plurals_etc(site_id,key, this_dict):
         # getting rid of getty dash specifier categories
     else:
         if key in key2key_set:
-            if VERBOSE: print("trying k2k for this key:,", key)
+            if VERBOSE: print(dict_name, "trying k2k for this key:,", key)
             # key = key2key[key]
             try:
                 key_no = this_dict[key2key[key]]
                 if VERBOSE: print("this is the key_no", key_no)
             except:
-                if VERBOSE: print("wrong this_dict, no result for", key_no, "because this_dict only is only this long", len(this_dict))
+                if VERBOSE: print("wrong this_dict, no result for", key_no, "dict_name is ", dict_name)
                 key_no = None
         if " - " in key and pd.isnull(key_no):
             dashlesskey = key.replace(" - "," ")
@@ -566,7 +571,7 @@ def unlock_key_plurals_etc(site_id,key, this_dict):
             # print(type(site_id))
             # print(site_id)
             value_list = [site_id,key]
-            if dict_name == "gender":
+            if dict_name == "gender" or dict_name == "age":
                 # print("could not unlock:", value_list, "not saving")
                 pass # not saving
             else:
