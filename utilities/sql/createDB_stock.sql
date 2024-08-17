@@ -155,6 +155,19 @@ CREATE TABLE ImagesClusters (
 );
 
 
+CREATE TABLE Poses (
+    cluster_id int NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    cluster_median BLOB
+);
+
+-- This is the poses junction table.
+CREATE TABLE ImagesPoses (
+    image_id INTEGER REFERENCES Images (image_id),
+    cluster_id INTEGER REFERENCES Clusters (cluster_id),
+    PRIMARY KEY (image_id)
+);
+
+
 CREATE TABLE ImagesBackground (
     image_id INT PRIMARY KEY,
     hue FLOAT,

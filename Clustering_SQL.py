@@ -21,7 +21,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 # my ORM
-from my_declarative_base import Base, Images, Clusters, ImagesClusters, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON, ForeignKey
+from my_declarative_base import Base, Images, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON, ForeignKey
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import create_engine, text, MetaData, Table, Column, Numeric, Integer, VARCHAR, update, Float
@@ -63,6 +63,8 @@ db = io.db
 io.db["name"] = "stock"
 NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 MODE = 1
+# CLUSTER_TYPE = "Clusters"
+CLUSTER_TYPE = "Poses"
 
 # this works for using segment in stock, and for ministock
 USE_SEGMENT = True
@@ -74,7 +76,26 @@ GET_OPTIMAL_CLUSTERS=False
 N_CLUSTERS = 128
 SAVE_FIG=False ##### option for saving the visualized data
 
-if USE_SEGMENT is True and MODE == 0:
+if USE_SEGMENT is True and CLUSTER_TYPE = "Poses" and MODE == 0:
+
+    SegmentTable_name = 'SegmentOct20'
+
+    # 3.8 M large table (for Topic Model)
+    # HelperTable_name = "SegmentHelperMar23_headon"
+
+    ######################################################
+    #TK need to rework this query for CLUSTER_TYPE
+    ###################################################### 
+
+    # Basic Query, this works with gettytest3
+    SELECT = "DISTINCT(s.image_id),face_encodings68"
+    FROM = f"{SegmentTable_name} s"
+    # FROM += f" INNER JOIN {HelperTable_name} h ON h.image_id = s.image_id " 
+    WHERE = "face_encodings68 IS NOT NULL"
+    # WHERE = "face_encodings68 IS NOT NULL AND face_x > -33 AND face_x < -27 AND face_y > -2 AND face_y < 2 AND face_z > -2 AND face_z < 2"
+    LIMIT = 5000000
+
+elif USE_SEGMENT is True and MODE == 0:
 
     # where the script is looking for files list
     # do not use this if you are using the regular Clusters and ImagesClusters tables
@@ -103,7 +124,7 @@ elif USE_SEGMENT is True and MODE == 1:
     SegmentTable_name = 'SegmentOct20'
     # Basic Query, this works with gettytest3
     SELECT = "DISTINCT(s.image_id),s.face_encodings68"
-    FROM = f"{SegmentTable_name} s LEFT JOIN ImagesClusters ic ON s.image_id = ic.image_id"
+    FROM = f"{SegmentTable_name} s LEFT JOIN Images{CLUSTER_TYPE} ic ON s.image_id = ic.image_id"
     WHERE = "ic.cluster_id IS NULL"
     LIMIT = "100"
  
@@ -127,6 +148,23 @@ else:
 Session = sessionmaker(bind=engine)
 session = Session()
 Base = declarative_base()
+
+# handle the table objects based on CLUSTER_TYPE
+ClustersTable_name = CLUSTER_TYPE
+ImagesClustersTable_name = "Images"+CLUSTER_TYPE
+
+class Clusters(Base):
+    __tablename__ = ClustersTable_name
+
+    cluster_id = Column(Integer, primary_key=True, autoincrement=True)
+    cluster_median = Column(BLOB)
+
+class ImagesClusters(Base):
+    __tablename__ = ImagesClustersTable_name
+
+    image_id = Column(Integer, ForeignKey('Images.image_id'), primary_key=True)
+    cluster_id = Column(Integer, ForeignKey('Clusters.cluster_id'))
+
 
 # # define new cluster table names based on segment name
 # SegmentClustersTable_name = "Clusters_"+SegmentTable_name
@@ -268,6 +306,7 @@ def save_images_clusters_DB(df):
         existing_record = session.query(ImagesClusters).filter_by(image_id=image_id).first()
 
         if existing_record is None:
+            # it may be easier to define this locally, and assign the name via CLUSTER_TYPE
             instance = ImagesClusters(
                 image_id=image_id,
                 cluster_id=cluster_id,
@@ -286,6 +325,11 @@ def save_images_clusters_DB(df):
 
 def get_cluster_medians():
 
+
+    ####################################
+    # this has a LIMIT on it, that I didn't see before
+    ####################################
+    
     # Create a SQLAlchemy select statement
     select_query = select([Clusters.cluster_id, Clusters.cluster_median]).limit(1000)
 
@@ -350,6 +394,12 @@ def main():
     enc_data=pd.DataFrame()
     for row in resultsjson:
         # gets contentUrl
+
+        ##################
+        #TK need to rework this for CLUSTER_TYPE
+        # to prep the data properly 128d vs 4-33lms
+        ##################
+
         df=encodings_split(pickle.loads(row["face_encodings68"], encoding='latin1'))
         df["image_id"]=row["image_id"]
         enc_data = pd.concat([enc_data,df],ignore_index=True) 
