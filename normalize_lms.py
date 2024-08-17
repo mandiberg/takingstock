@@ -1,6 +1,6 @@
 #################################
 
-from sqlalchemy import create_engine, text,func, select, delete, and_
+from sqlalchemy import create_engine, text,func, select, delete, and_, or_
 from sqlalchemy.orm import sessionmaker,scoped_session, declarative_base
 from sqlalchemy.pool import NullPool
 # from my_declarative_base import Images,ImagesBackground, SegmentTable, Site 
@@ -30,8 +30,8 @@ NOSE_ID=0
 
 Base = declarative_base()
 VERBOSE = False
-
-IS_SSD = True
+SKIP_EXISTING = True # Skips images with a normed bbox but that have Images.h
+IS_SSD = False
 
 io = DataIO(IS_SSD)
 db = io.db
@@ -92,10 +92,10 @@ sort = SortPose(motion, face_height_output, image_edge_multiplier_sm,EXPAND, ONE
 # Create a session
 session = scoped_session(sessionmaker(bind=engine))
 
-LIMIT= 10000
+LIMIT= 4000000
 # Initialize the counter
 counter = 0
-USE_OBJ = 67
+USE_OBJ = 32
 
 # Number of threads
 #num_threads = io.NUMBER_OF_PROCESSES
@@ -122,7 +122,8 @@ def get_shape(target_image_id):
         else:
             media_info = MediaInfo.parse(file)
     except Exception as e:
-        traceback.print_exc() 
+        print("Error getting media info, file not found", target_image_id)
+        # traceback.print_exc() 
         return None,None
 
     for track in media_info.tracks:
@@ -192,9 +193,9 @@ def insert_n_phone_bbox(image_id,n_phone_bbox):
         .first()
     )    
     if phone_bbox_norm_entry:
-        phone_bbox_norm_entry.bbox_67_norm = json.dumps(n_phone_bbox)
+        phone_bbox_norm_entry.bbox_32_norm = json.dumps(n_phone_bbox)
         if VERBOSE:
-            print("image_id:", PhoneBbox.image_id,"bbox_67_norm:", phone_bbox_norm_entry.bbox_67_norm)
+            print("image_id:", PhoneBbox.image_id,"bbox_32_norm:", phone_bbox_norm_entry.bbox_32_norm)
 
             
     session.commit()
@@ -248,7 +249,7 @@ def insert_shape(target_image_id,shape):
     return
 def get_phone_bbox(target_image_id):
     select_image_ids_query = (
-        select(PhoneBbox.bbox_67)
+        select(PhoneBbox.bbox_32)
         .filter(PhoneBbox.image_id == target_image_id)
     )
     result = session.execute(select_image_ids_query).fetchall()
@@ -315,15 +316,15 @@ work_queue = queue.Queue()
 function=calc_nlm
 
 
-if USE_OBJ == 67:
+if USE_OBJ == 32:
     distinct_image_ids_query = select(Images.image_id.distinct()).\
         outerjoin(SegmentTable,Images.image_id == SegmentTable.image_id).\
         outerjoin(PhoneBbox,PhoneBbox.image_id == SegmentTable.image_id).\
         filter(SegmentTable.bbox != None).\
         filter(SegmentTable.mongo_body_landmarks == 1).\
-        filter(PhoneBbox.bbox_67 != None).\
-        filter(PhoneBbox.bbox_67_norm == None).\
-        filter(PhoneBbox.conf_67 != -1).\
+        filter(PhoneBbox.bbox_32 != None).\
+        filter(PhoneBbox.bbox_32_norm == None).\
+        filter(PhoneBbox.conf_32 != -1).\
         limit(LIMIT)
 
 else:
@@ -331,11 +332,26 @@ else:
         outerjoin(SegmentTable,Images.image_id == SegmentTable.image_id).\
         filter(SegmentTable.bbox != None).\
         filter(SegmentTable.mongo_body_landmarks == 1).\
+        filter(Images.h == None).\
         limit(LIMIT)
 
-    # filter(Images.h == None).\
 
+if SKIP_EXISTING:
+    
+    normed_image_ids_query = select(SegmentTable.image_id.distinct()).\
+        outerjoin(PhoneBbox,PhoneBbox.image_id == SegmentTable.image_id).\
+        filter(
+            or_(
+                PhoneBbox.bbox_63_norm != None,
+                PhoneBbox.bbox_67_norm != None,
+                PhoneBbox.bbox_26_norm != None,
+                PhoneBbox.bbox_27_norm != None,
+                PhoneBbox.bbox_32_norm != None
+            )
+        ).\
+        limit(LIMIT)
 
+    distinct_image_ids_query = distinct_image_ids_query.except_(normed_image_ids_query)
 
 if VERBOSE: print("about to execute query")
 

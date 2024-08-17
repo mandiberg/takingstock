@@ -32,7 +32,7 @@ sig = '''
 # for moving segment to SSD
 
 #where the images are:
-PATH = "/Volumes/RAID18/"
+PATH = "/Volumes/RAID54/"
 #where the images are going:
 PATH2 = "/Volumes/OWC4/segment_images"
 SEGMENTTABLE_NAME = 'SegmentOct20'

@@ -93,7 +93,8 @@ if THIS_SITE == 1:
     INGEST_FOLDER = os.path.join(INGEST_ROOTG, "getty_noeth_toobig")
     JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache_noNoNOs_noSilver.jsonl")
 elif THIS_SITE == 6:
-    # done -- only 334?
+    # done -- only 1488334?
+    io.db["name"] = "stock"
     INGEST_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/unsplashCSVs"
     JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache.jsonl")
 elif THIS_SITE == 9:
@@ -144,7 +145,7 @@ elif THIS_SITE == 17:
     INGEST_FOLDER = "/Users/michaelmandiberg/Library/CloudStorage/Dropbox/takingstock_dropbox/PICHA-STOCK"
     JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache.jsonl")
 elif THIS_SITE == 18:
-    # ready to go
+    # DONE 60300
     io.db["name"] = "stock"
     INGEST_FOLDER = "/Users/michaelmandiberg/Library/CloudStorage/Dropbox/takingstock_dropbox/AFRIPICS"
     JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache_translated.jsonl")

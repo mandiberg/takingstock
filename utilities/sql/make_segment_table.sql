@@ -6,7 +6,7 @@ USE stock;
 DELETE FROM SegmentHelperMar23_headon;
 
 -- create helper segment table
-CREATE TABLE SegmentHelperMay24_allfingers (
+CREATE TABLE SegmentHelperAug16_SegOct20_preAlamy (
     seg_image_id int NOT NULL AUTO_INCREMENT PRIMARY KEY,
     image_id INTEGER,
     FOREIGN KEY (image_id) REFERENCES Images(image_id)
@@ -169,13 +169,13 @@ LIMIT 100000; -- Adjust the batch size as needed
 
 
 -- insert into new temp segment
-INSERT INTO SegmentMar21  (image_id)
+INSERT INTO SegmentHelperAug16_SegOct20_preAlamy  (image_id)
 SELECT DISTINCT e.image_id
 FROM Encodings e
 WHERE e.face_encodings68 IS NOT NULL 
 	AND e.face_x > -40 AND e.face_x < -24
-    AND e.face_y > -2 AND e.face_y < 2
-    AND e.face_z > -2 AND e.face_z < 2
+    AND e.face_y > -4 AND e.face_y < 4
+    AND e.face_z > -4 AND e.face_z < 4
 ; -- Adjust the batch size as needed
 
 
