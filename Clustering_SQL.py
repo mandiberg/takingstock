@@ -65,6 +65,8 @@ db = io.db
 # io.db["name"] = "ministock"
 mongo_client = pymongo.MongoClient(io.dbmongo['host'])
 mongo_db = mongo_client[io.dbmongo['name']]
+io.mongo_db = mongo_db
+
 mongo_collection = mongo_db[io.dbmongo['collection']]
 
 
@@ -80,7 +82,7 @@ USE_SEGMENT = True
 GET_OPTIMAL_CLUSTERS=False
 
 # number of clusters produced. run GET_OPTIMAL_CLUSTERS and add that number here
-N_CLUSTERS = 128
+N_CLUSTERS = 2
 SAVE_FIG=False ##### option for saving the visualized data
 
 if USE_SEGMENT is True and CLUSTER_TYPE == "Poses" and MODE == 0:
@@ -198,10 +200,15 @@ def selectSQL():
     return(resultsjson)
 
 
-def kmeans_cluster(df,n_clusters=32):
-    kmeans = KMeans(n_clusters,n_init=10, init = 'k-means++', random_state = 42, max_iter = 300, verbose=1)
-    kmeans.fit(df)
-    clusters = kmeans.predict(df)
+def kmeans_cluster(df, n_clusters=32):
+    # Select only the numerical columns (coord_0 to coord_65)
+    numerical_columns = [col for col in df.columns if col.startswith('coord_')]
+    numerical_data = df[numerical_columns]
+    
+    print("clustering", numerical_data)
+    kmeans = KMeans(n_clusters=n_clusters, n_init=10, init='k-means++', random_state=42, max_iter=300, verbose=1)
+    kmeans.fit(numerical_data)
+    clusters = kmeans.predict(numerical_data)
     return clusters
     
 def export_html_clusters(enc_data,n_clusters):
@@ -401,10 +408,32 @@ def assign_images_clusters_DB(df):
         session.rollback()
         print(f"Error occurred during data saving: {str(e)}")
 
-def unpickle_df(df):
+def df_list_to_cols(df, col_name):
+
+    # Convert the string representation of lists to actual lists
+    # df[col_name] = df[col_name].apply(eval)
+
+    # Create new columns for each coordinate
+    num_coords = len(df[col_name].iloc[0])
+    for i in range(num_coords):
+        df[f'coord_{i}'] = df[col_name].apply(lambda x: x[i])
+
+    # Drop the original col_name column
+    df = df.drop(col_name, axis=1)
+    return df
+
+def prepare_df(df):
     if CLUSTER_TYPE == "Poses":
         df = df.dropna(subset=['body_landmarks_normalized'])
         df['body_landmarks_normalized'] = df['body_landmarks_normalized'].apply(io.unpickle_array)
+        # body = self.get_landmarks_2d(enc1, list(range(33)), structure)
+        df['body_landmarks_array'] = df['body_landmarks_normalized'].apply(lambda x: io.get_landmarks_2d(x, list(range(33)), structure="list"))
+        # drop the columns that are not needed
+        df = df.drop(columns=['image_id','face_encodings68', 'face_landmarks', 'body_landmarks', 'body_landmarks_normalized'])
+        print("before cols",df)
+
+        df_list_to_cols(df, 'body_landmarks_array')
+        print("after cols",df)
 
     elif CLUSTER_TYPE == "Clusters":
         df = df.dropna(subset=['face_encodings68'])
@@ -413,6 +442,8 @@ def unpickle_df(df):
         df['face_encodings68'] = df['face_encodings68'].apply(io.unpickle_array)
         df['face_landmarks'] = df['face_landmarks'].apply(io.unpickle_array)
         df['body_landmarks'] = df['body_landmarks'].apply(io.unpickle_array)
+        df = df.drop(columns=['image_id','face_landmarks', 'body_landmarks', 'body_landmarks_normalized'])
+        df_list_to_cols(df, 'face_encodings68')
 
     return df
 
@@ -428,12 +459,11 @@ def main():
     print(df)
     if CLUSTER_TYPE == "Poses": io.query_face = False
     elif CLUSTER_TYPE == "Clusters": io.query_body = False
-    io.mongo_db = mongo_db
     df[['face_encodings68', 'face_landmarks', 'body_landmarks', 'body_landmarks_normalized']] = df['image_id'].apply(io.get_encodings_mongo)
     # face_encodings68, face_landmarks, body_landmarks, body_landmarks_normalized = io.get_encodings_mongo(mongo_db,row["image_id"], is_body=True, is_face=False)
-    enc_data = unpickle_df(df)
+    enc_data = prepare_df(df)
 
-    print(enc_data)
+    # print(enc_data)
 
     # for row in resultsjson:
     #     # gets contentUrl
@@ -455,13 +485,13 @@ def main():
     # choose if you want optimal cluster size or custom cluster size using the parameter GET_OPTIMAL_CLUSTERS
     if MODE == 0:
         if GET_OPTIMAL_CLUSTERS is True: 
-            OPTIMAL_CLUSTERS= best_score(enc_data.drop("image_id", axis=1))   #### Input ONLY encodings into clustering alhorithm
+            OPTIMAL_CLUSTERS= best_score(enc_data)   #### Input ONLY encodings into clustering alhorithm
             print(OPTIMAL_CLUSTERS)
             N_CLUSTERS = OPTIMAL_CLUSTERS
         print(enc_data)
-        enc_data["cluster_id"] = kmeans_cluster(enc_data.drop("image_id", axis=1),n_clusters=N_CLUSTERS)
+        enc_data["cluster_id"] = kmeans_cluster(enc_data,n_clusters=N_CLUSTERS)
         
-        if SAVE_FIG: export_html_clusters(enc_data.drop("image_id", axis=1))
+        if SAVE_FIG: export_html_clusters(enc_data)
         print(enc_data)
         print(set(enc_data["cluster_id"].tolist()))
         # don't need to write a CSV

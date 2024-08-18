@@ -1113,6 +1113,7 @@ class SortPose:
 
                 
     def get_landmarks_2d(self, Lms, selected_Lms, structure="dict"):
+        # this is redundantly in sort_pose also
         Lms2d = {}
         Lms1d = []
         for idx, lm in enumerate(Lms.landmark):
@@ -1127,12 +1128,7 @@ class SortPose:
                     Lms1d.append(lm.y)
         print("Lms2d", Lms2d)
         print("Lms1d", Lms1d)
-                # Get the 2D Coordinates
-                # body_2d.append([x, y])
 
-        # Convert it to the NumPy array
-        # image points
-        # self.body_2d = np.array(body_2d, dtype=np.float64)
         if Lms1d:
             return Lms1d
         else:

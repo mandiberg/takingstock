@@ -6,6 +6,7 @@ import json
 import ast
 import pandas as pd
 import pickle
+import numpy as np
 
 
 class DataIO:
@@ -302,8 +303,45 @@ class DataIO:
         else:
             return None
 
+    def get_landmarks_2d(self, Lms, selected_Lms, structure="dict"):
+        # this is redundantly in sort_pose also
+        Lms2d = {}
+        Lms1d = []
+        for idx, lm in enumerate(Lms.landmark):
+            if idx in selected_Lms:
+                # print("idx", idx)
+                # x, y = int(lm.x * img_w), int(lm.y * img_h)
+                # print("lm.x, lm.y", lm.x, lm.y)
+                if structure == "dict":
+                    Lms2d[idx] =([lm.x, lm.y])
+                elif structure == "list":
+                    Lms1d.append(lm.x)
+                    Lms1d.append(lm.y)
+        # print("Lms2d", Lms2d)
+        # print("Lms1d", Lms1d)
+
+        if Lms1d:
+            return Lms1d
+        else:
+            return Lms2d
+
+
+    def unstring_json(self, json_string):
+        eval_string = ast.literal_eval(json_string)
+        if isinstance(eval_string, dict):
+            return eval_string
+        else:
+            json_dict = json.loads(eval_string)
+            return json_dict
+    def make_float(self, value):
+        try:
+            return float(value)
+        except (ValueError, TypeError):
+            return value
+
     def convert_lms_to_array(self,lms):
         if lms:
             return np.array(lms)
         else:
             return None
+        
