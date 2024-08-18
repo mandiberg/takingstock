@@ -32,7 +32,10 @@ sig = '''
 # for moving segment to SSD
 
 #where the images are:
-PATH = "/Volumes/RAID54/"
+# PATH = "/Volumes/RAID54/"
+PATH = "/Volumes/RAID18/"
+# PATH = "/Volumes/OWC4/"
+# PATH = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/"
 #where the images are going:
 PATH2 = "/Volumes/OWC4/segment_images"
 SEGMENTTABLE_NAME = 'SegmentOct20'
@@ -41,22 +44,39 @@ SEGMENTTABLE_NAME = 'SegmentOct20'
 IMAGES_THREAD_COUNTER = 0
 
 '''
-1   getty
-2   shutterstock
-3   adobe
-4   istock
-5   pexels
+1   getty - aug17 128175
+2   shutterstock - aug17 1534850
+3   adobe - aug17 1740113
+4   istock - aug17 351105
+5   pexels - aug17 11557
 6   unsplash - did I DL these???
-7   pond5 - no images (in db?)
-8   123rf - many missing files
-9   alamy
-10  visualchinagroup
+7   pond5 - WIP
+8   123rf - aug17 823542
+9   alamy - WIP
+10  visualchinagroup - aug17 DONE
+11	picxy - aug17 DONE (only 1500?)
+12	pixerf
+13	imagesbazaar - aug17 DONE
+14	indiapicturebudget - aug17 DONE
+15	iwaria - aug17 DONE (only 30?)
+16	nappy - aug17 DONE (only 3?)
+17	picha - aug17 DONE (only 410)
+18	afripics
+
+
+MAIN_FOLDER = "/Volumes/RAID18/images_pond5"
+# MAIN_FOLDER = "/Volumes/OWC4/images_alamy"
+# MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/images_picha"
+# MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/afripics_v2/images"
+
 '''
 
 # right now this is only working for one site at a time
-SITE_NAME_ID = 8
-IMAGES_FOLDER_NAME = 'images_123rf'
-NEWIMAGES_FOLDER_NAME = 'images_123rf'
+SITE_NAME_ID = 1
+NEWIMAGES_FOLDER_NAME = IMAGES_FOLDER_NAME = 'images_getty'
+# SITE_NAME_ID = 2
+# IMAGES_FOLDER_NAME = 'images_shutterstock'
+# NEWIMAGES_FOLDER_NAME = 'images_shutterstock'
 NUMBER_OF_THREADS_IMAGES_DOWNLOAD =15
 OLDPATH = os.path.join(PATH, IMAGES_FOLDER_NAME)
 NEWPATH = os.path.join(PATH2, NEWIMAGES_FOLDER_NAME)

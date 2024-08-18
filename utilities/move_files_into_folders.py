@@ -32,8 +32,8 @@ MOVE_DELETE_ORIGINAL = False
 # PATH = "/Volumes/SSD4green/images_shutterstock2"
 # NEWPATH = "/Volumes/RAID54/images_shutterstock"
 
-PATH = "/Volumes/SSD4/images_getty_reDL"
-NEWPATH = "/Volumes/RAID18/images_getty"
+PATH = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/images_pixcy"
+NEWPATH = "/Volumes/RAID18/images_pixcy"
 
 ALL_IN_ONE_FOLDER = False
 

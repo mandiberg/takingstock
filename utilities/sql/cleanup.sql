@@ -2,6 +2,10 @@
 
 USE stock;
 
+
+
+       
+
 SELECT e.image_id, i.imagename
 FROM Encodings e 
 JOIN Images i ON e.image_id = i.image_id
@@ -31,17 +35,34 @@ HAVING COUNT(*) > 1;
 
 
 
--- fix bad imagename paths
+-- fix bad imagename paths (maybe not working anymore?)
+-- get count
+       SELECT COUNT(image_id)
+        FROM Images
+        WHERE site_name_id = 1
+        AND imagename LIKE '/Users/michael.mandiberg/Desktop/getty_33333/images_getty_33333_last4/%'
+; 
 
-SET @batch_size = 1000;
 
-WHILE (SELECT COUNT(*) FROM Images WHERE site_name_id = 1 AND imagename LIKE 'images/%') > 0 DO
-    UPDATE Images
-    SET imagename = REPLACE(imagename, 'images/', '')
-    WHERE site_name_id = 1
-    AND imagename LIKE 'images/%'
-    LIMIT @batch_size;
-END WHILE;
+-- update
+        UPDATE Images
+    SET imagename = REPLACE(imagename, '/Volumes/SSD4/images_getty_reDL/', '')        
+        WHERE site_name_id = 1
+        AND imagename LIKE '/Volumes/SSD4/images_getty_reDL/%'
+        LIMIT 1000000; 
+
+
+
+        UPDATE SegmentOct20 so
+        JOIN Images i ON i.image_id = so.image_id
+     SET so.imagename = REPLACE(so.imagename, '/Users/michael.mandiberg/Desktop/getty_33333/images_getty_33333_last4/', '')        
+        WHERE i.site_name_id = 1
+        AND so.imagename LIKE '/Users/michael.mandiberg/Desktop/getty_33333/images_getty_33333_last4/%'
+        LIMIT 200000;
+
+
+
+
 
 
 SELECT MAX(i.image_id) 

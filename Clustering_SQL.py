@@ -12,8 +12,8 @@ import datetime   ####### for saving cluster analytics
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 from matplotlib import cm
-import plotly as py
-import plotly.graph_objs as go
+# import plotly as py
+# import plotly.graph_objs as go
 
 
 from sqlalchemy import create_engine, select
@@ -27,6 +27,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy import create_engine, text, MetaData, Table, Column, Numeric, Integer, VARCHAR, update, Float
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.pool import NullPool
+import pymongo
 
 import numpy as np
 import pandas as pd
@@ -60,9 +61,15 @@ start = time.time()
 
 io = DataIO()
 db = io.db
-io.db["name"] = "stock"
+# io.db["name"] = "stock"
+# io.db["name"] = "ministock"
+mongo_client = pymongo.MongoClient(io.dbmongo['host'])
+mongo_db = mongo_client[io.dbmongo['name']]
+mongo_collection = mongo_db[io.dbmongo['collection']]
+
+
 NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
-MODE = 1
+MODE = 0
 # CLUSTER_TYPE = "Clusters"
 CLUSTER_TYPE = "Poses"
 
@@ -76,8 +83,8 @@ GET_OPTIMAL_CLUSTERS=False
 N_CLUSTERS = 128
 SAVE_FIG=False ##### option for saving the visualized data
 
-if USE_SEGMENT is True and CLUSTER_TYPE = "Poses" and MODE == 0:
-
+if USE_SEGMENT is True and CLUSTER_TYPE == "Poses" and MODE == 0:
+    print("setting Poses SQL")
     SegmentTable_name = 'SegmentOct20'
 
     # 3.8 M large table (for Topic Model)
@@ -88,12 +95,12 @@ if USE_SEGMENT is True and CLUSTER_TYPE = "Poses" and MODE == 0:
     ###################################################### 
 
     # Basic Query, this works with gettytest3
-    SELECT = "DISTINCT(s.image_id),face_encodings68"
+    SELECT = "DISTINCT(s.image_id)"
     FROM = f"{SegmentTable_name} s"
     # FROM += f" INNER JOIN {HelperTable_name} h ON h.image_id = s.image_id " 
-    WHERE = "face_encodings68 IS NOT NULL"
+    WHERE = "mongo_body_landmarks = 1"
     # WHERE = "face_encodings68 IS NOT NULL AND face_x > -33 AND face_x < -27 AND face_y > -2 AND face_y < 2 AND face_z > -2 AND face_z < 2"
-    LIMIT = 5000000
+    LIMIT = 50
 
 elif USE_SEGMENT is True and MODE == 0:
 
@@ -257,13 +264,23 @@ def best_score(df):
     
     return b_score
     
+# def encodings_split(encodings):
+#     col="encodings"
+#     col_list=[]
+#     for i in range(128):col_list.append(col+str(i))
+#     encoding_data=pd.DataFrame({col:[np.array(encodings)]})
+#     #splitting the encodings column
+#     df = pd.DataFrame(encoding_data["encodings"].tolist(), columns=col_list)
+#     return df
+
 def encodings_split(encodings):
-    col="encodings"
-    col_list=[]
-    for i in range(128):col_list.append(col+str(i))
-    encoding_data=pd.DataFrame({col:[np.array(encodings)]})
-    #splitting the encodings column
-    df = pd.DataFrame(encoding_data["encodings"].tolist(), columns=col_list)
+    col_list = [f"encodings{i}" for i in range(128)]
+    df = pd.DataFrame([encodings], columns=col_list)
+    return df
+
+def landmarks_preprocess(landmarks):
+    col_list = [f"landmarks{i}" for i in range(33)]
+    df = pd.DataFrame([landmarks], columns=col_list)
     return df
 
 def save_clusters_DB(df):
@@ -329,7 +346,7 @@ def get_cluster_medians():
     ####################################
     # this has a LIMIT on it, that I didn't see before
     ####################################
-    
+
     # Create a SQLAlchemy select statement
     select_query = select([Clusters.cluster_id, Clusters.cluster_median]).limit(1000)
 
@@ -384,6 +401,20 @@ def assign_images_clusters_DB(df):
         session.rollback()
         print(f"Error occurred during data saving: {str(e)}")
 
+def unpickle_df(df):
+    if CLUSTER_TYPE == "Poses":
+        df = df.dropna(subset=['body_landmarks_normalized'])
+        df['body_landmarks_normalized'] = df['body_landmarks_normalized'].apply(io.unpickle_array)
+
+    elif CLUSTER_TYPE == "Clusters":
+        df = df.dropna(subset=['face_encodings68'])
+
+        # Apply the unpickling function to the 'face_encodings' column
+        df['face_encodings68'] = df['face_encodings68'].apply(io.unpickle_array)
+        df['face_landmarks'] = df['face_landmarks'].apply(io.unpickle_array)
+        df['body_landmarks'] = df['body_landmarks'].apply(io.unpickle_array)
+
+    return df
 
 def main():
     # create_my_engine(db)
@@ -392,17 +423,34 @@ def main():
     resultsjson = selectSQL()
     print("got results, count is: ",len(resultsjson))
     enc_data=pd.DataFrame()
-    for row in resultsjson:
-        # gets contentUrl
+    is_body = is_face = True
+    df = pd.json_normalize(resultsjson)
+    print(df)
+    if CLUSTER_TYPE == "Poses": io.query_face = False
+    elif CLUSTER_TYPE == "Clusters": io.query_body = False
+    io.mongo_db = mongo_db
+    df[['face_encodings68', 'face_landmarks', 'body_landmarks', 'body_landmarks_normalized']] = df['image_id'].apply(io.get_encodings_mongo)
+    # face_encodings68, face_landmarks, body_landmarks, body_landmarks_normalized = io.get_encodings_mongo(mongo_db,row["image_id"], is_body=True, is_face=False)
+    enc_data = unpickle_df(df)
 
-        ##################
-        #TK need to rework this for CLUSTER_TYPE
-        # to prep the data properly 128d vs 4-33lms
-        ##################
+    print(enc_data)
 
-        df=encodings_split(pickle.loads(row["face_encodings68"], encoding='latin1'))
-        df["image_id"]=row["image_id"]
-        enc_data = pd.concat([enc_data,df],ignore_index=True) 
+    # for row in resultsjson:
+    #     # gets contentUrl
+    #     if CLUSTER_TYPE == "Poses":
+    #         ##################
+    #         #TK need to rework this for CLUSTER_TYPE
+    #         # to prep the data properly 128d vs 4-33lms
+    #         ##################
+    #         print(row)
+    #         face_encodings68, face_landmarks, body_landmarks, body_landmarks_normalized = io.get_encodings_mongo(mongo_db,row["image_id"], is_body=True, is_face=False)
+    #         print("got encodings from mongo, types are: ", type(face_encodings68), type(face_landmarks), type(body_landmarks_normalized))
+    #         quit()
+    #         pass
+    #     else:
+    #         df=encodings_split(pickle.loads(row["face_encodings68"], encoding='latin1'))
+    #         df["image_id"]=row["image_id"]
+    #         enc_data = pd.concat([enc_data,df],ignore_index=True) 
     
     # choose if you want optimal cluster size or custom cluster size using the parameter GET_OPTIMAL_CLUSTERS
     if MODE == 0:

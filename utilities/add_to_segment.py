@@ -23,6 +23,11 @@ ROOT = io.ROOT
 NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 #######################################
 
+#######################################
+# AUG 2024 -- DO NOT USE THIS, USE 
+# USE utilities/sql/make_segment_table.sql
+# AT THE BOTTOM THERE ARE STEPS
+#######################################
 
 # ADD TO SEGMENTS WHEN SQL/WORKBENCH IS BORKING
 

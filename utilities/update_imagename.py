@@ -23,6 +23,11 @@ ROOT = io.ROOT
 NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 #######################################
 
+#######################################
+# DEPRECATED, USE CLEANUP.SQL INSTEAD #
+#######################################
+
+
 
 engine = create_engine("mysql+pymysql://{user}:{pw}@/{db}?unix_socket={socket}".format(
     user=db['user'], pw=db['pass'], db=db['name'], socket=db['unix_socket']
@@ -69,6 +74,25 @@ def generate_local_unhashed_image_filepath(contentUrl):
     # print("hash_subfolder: ", hash_subfolder)
     # print(os.path.join(hash_folder, hash_subfolder, file_name))
     return os.path.join(hash_folder, hash_subfolder, file_name), contentUrl
+
+# Define the function for generating imagename
+def generate_site_name_id_filepath(contentUrl):
+    file_name_path = contentUrl.split('?')[0]
+    file_name = file_name_path.split('/')[-1]
+    if ".jpeg" in file_name:
+        file_name = file_name.replace(".jpeg", ".jpg")
+    elif ".jpg" in file_name:
+        pass
+    else: 
+        file_name = file_name+".jpg"
+        contentUrl = contentUrl+".jpg"
+    # extension = file_name.split('.')[-1]
+    hash_folder, hash_subfolder = io.get_hash_folders(file_name)
+    # print("hash_folder: ", hash_folder)
+    # print("hash_subfolder: ", hash_subfolder)
+    # print(os.path.join(hash_folder, hash_subfolder, file_name))
+    return os.path.join(hash_folder, hash_subfolder, file_name), contentUrl
+
 
 # Define the function for generating imagename
 def generate_proper_getty_path(imagename):

@@ -29,9 +29,9 @@ NOSE_ID=0
 
 
 Base = declarative_base()
-VERBOSE = False
+VERBOSE = True
 SKIP_EXISTING = True # Skips images with a normed bbox but that have Images.h
-IS_SSD = False
+IS_SSD = True
 
 io = DataIO(IS_SSD)
 db = io.db
@@ -92,10 +92,10 @@ sort = SortPose(motion, face_height_output, image_edge_multiplier_sm,EXPAND, ONE
 # Create a session
 session = scoped_session(sessionmaker(bind=engine))
 
-LIMIT= 4000000
+LIMIT= 5000000
 # Initialize the counter
 counter = 0
-USE_OBJ = 32
+USE_OBJ = 0
 
 # Number of threads
 #num_threads = io.NUMBER_OF_PROCESSES
@@ -174,13 +174,26 @@ def get_landmarks_mongo(image_id):
     else:
         return None
     
-def insert_n_landmarks(image_id,n_landmarks):
-    # bboxnormed_collection
-    # print(image_id,n_landmarks)
-    nlms_dict = { "image_id": image_id, "nlms": pickle.dumps(n_landmarks) }
-    x = bboxnormed_collection.insert_one(nlms_dict)
-    print("inserted id",x.inserted_id)
+# def insert_n_landmarks(image_id,n_landmarks):
+#     nlms_dict = { "image_id": image_id, "nlms": pickle.dumps(n_landmarks) }
+#     x = bboxnormed_collection.insert_one(nlms_dict)
+#     print("inserted id",x.inserted_id)
+#     return
+
+
+def insert_n_landmarks(image_id, n_landmarks):
+    nlms_dict = {"image_id": image_id, "nlms": pickle.dumps(n_landmarks)}
+    result = bboxnormed_collection.update_one(
+        {"image_id": image_id},  # filter
+        {"$set": nlms_dict},     # update
+        upsert=True              # insert if not exists
+    )
+    if result.upserted_id:
+        print("Inserted new document with id:", result.upserted_id)
+    else:
+        print("Updated existing document")
     return
+
 
 def insert_n_phone_bbox(image_id,n_phone_bbox):
     # nlms_dict = { "image_id": image_id, "n_phone_bbox": n_phone_bbox }
@@ -193,9 +206,9 @@ def insert_n_phone_bbox(image_id,n_phone_bbox):
         .first()
     )    
     if phone_bbox_norm_entry:
-        phone_bbox_norm_entry.bbox_32_norm = json.dumps(n_phone_bbox)
+        phone_bbox_norm_entry.bbox_27_norm = json.dumps(n_phone_bbox)
         if VERBOSE:
-            print("image_id:", PhoneBbox.image_id,"bbox_32_norm:", phone_bbox_norm_entry.bbox_32_norm)
+            print("image_id:", PhoneBbox.image_id,"bbox_27_norm:", phone_bbox_norm_entry.bbox_27_norm)
 
             
     session.commit()
@@ -249,7 +262,7 @@ def insert_shape(target_image_id,shape):
     return
 def get_phone_bbox(target_image_id):
     select_image_ids_query = (
-        select(PhoneBbox.bbox_32)
+        select(PhoneBbox.bbox_27)
         .filter(PhoneBbox.image_id == target_image_id)
     )
     result = session.execute(select_image_ids_query).fetchall()
@@ -261,6 +274,7 @@ def get_phone_bbox(target_image_id):
     return phone_bbox
 
 def calc_nlm(target_image_id, lock, session):
+    if VERBOSE: print("target_image_id",target_image_id)
     face_height=get_face_height(target_image_id)
     height,width=get_shape(target_image_id)
     if not height or not width: 
@@ -270,6 +284,8 @@ def calc_nlm(target_image_id, lock, session):
 
     body_landmarks=unpickle_array(get_landmarks_mongo(target_image_id))
     if body_landmarks:
+        if VERBOSE: print("has body_landmarks")
+
         nose_pixel_pos ={
             "x":0,
             "y":0,
@@ -283,15 +299,17 @@ def calc_nlm(target_image_id, lock, session):
         nose_pixel_pos["visibility"]+=body_landmarks.landmark[NOSE_ID].visibility
         n_landmarks=normalize_landmarks (body_landmarks,nose_pixel_pos,face_height,[height,width])
         insert_n_landmarks(target_image_id,n_landmarks)
+        if VERBOSE: print("did insert_n_landmarks, going to get phone bbox")
         
-        phone_bbox=get_phone_bbox(target_image_id)
-        if phone_bbox:
-            n_phone_bbox=normalize_phone_bbox(phone_bbox,nose_pixel_pos,face_height,[height,width])
-            insert_n_phone_bbox(target_image_id,n_phone_bbox)
-        else:
-            print("PHONE BBOX NOT FOUND 404")
+        if USE_OBJ > 0: 
+            phone_bbox=get_phone_bbox(target_image_id)
+            if phone_bbox:
+                n_phone_bbox=normalize_phone_bbox(phone_bbox,nose_pixel_pos,face_height,[height,width])
+                insert_n_phone_bbox(target_image_id,n_phone_bbox)
+            else:
+                print("PHONE BBOX NOT FOUND 404", target_image_id)
     else:
-        print("BODY LANDMARK NOT FOUND 404")
+        print("BODY LANDMARK NOT FOUND 404", target_image_id)
 
     
 
@@ -316,15 +334,15 @@ work_queue = queue.Queue()
 function=calc_nlm
 
 
-if USE_OBJ == 32:
+if USE_OBJ == 27:
     distinct_image_ids_query = select(Images.image_id.distinct()).\
         outerjoin(SegmentTable,Images.image_id == SegmentTable.image_id).\
         outerjoin(PhoneBbox,PhoneBbox.image_id == SegmentTable.image_id).\
         filter(SegmentTable.bbox != None).\
         filter(SegmentTable.mongo_body_landmarks == 1).\
-        filter(PhoneBbox.bbox_32 != None).\
-        filter(PhoneBbox.bbox_32_norm == None).\
-        filter(PhoneBbox.conf_32 != -1).\
+        filter(PhoneBbox.bbox_27 != None).\
+        filter(PhoneBbox.bbox_27_norm == None).\
+        filter(PhoneBbox.conf_27 != -1).\
         limit(LIMIT)
 
 else:
@@ -332,9 +350,10 @@ else:
         outerjoin(SegmentTable,Images.image_id == SegmentTable.image_id).\
         filter(SegmentTable.bbox != None).\
         filter(SegmentTable.mongo_body_landmarks == 1).\
-        filter(Images.h == None).\
         limit(LIMIT)
 
+# put this back in at future date if needed
+        # filter(Images.h == None).\
 
 if SKIP_EXISTING:
     
@@ -342,7 +361,7 @@ if SKIP_EXISTING:
         outerjoin(PhoneBbox,PhoneBbox.image_id == SegmentTable.image_id).\
         filter(
             or_(
-                PhoneBbox.bbox_63_norm != None,
+                PhoneBbox.bbox_27_norm != None,
                 PhoneBbox.bbox_67_norm != None,
                 PhoneBbox.bbox_26_norm != None,
                 PhoneBbox.bbox_27_norm != None,
@@ -358,6 +377,7 @@ if VERBOSE: print("about to execute query")
 
 distinct_image_ids = [row[0] for row in session.execute(distinct_image_ids_query).fetchall()]
 if VERBOSE: print("query length",len(distinct_image_ids))
+if VERBOSE: print("distinct_image_ids",(distinct_image_ids))
 for counter,target_image_id in enumerate(distinct_image_ids):
     if counter%1000==0:print("###########"+str(counter)+"images processed ##########")
     work_queue.put(target_image_id)        

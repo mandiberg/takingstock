@@ -2,8 +2,8 @@
 USE stock;
 
 -- cleanup
--- DROP TABLE SegmentAug30Straightahead ;
-DELETE FROM SegmentHelperMar23_headon;
+DROP TABLE SegmentHelperAug16_SegOct20_preAlamy ;
+DELETE FROM SegmentHelperAug16_SegOct20_preAlamy;
 
 -- create helper segment table
 CREATE TABLE SegmentHelperAug16_SegOct20_preAlamy (
@@ -168,16 +168,73 @@ WHERE e.face_encodings68 IS NOT NULL
 LIMIT 100000; -- Adjust the batch size as needed
 
 
--- insert into new temp segment
-INSERT INTO SegmentHelperAug16_SegOct20_preAlamy  (image_id)
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- 
+-- 
+--    UPDATE SEGMENT, AUGUST 2024
+-- 
+--    1. create helper
+--    2. flag helper rows where is_new
+--    3. move is_new ids to segment
+-- 
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- 
+
+-- DO THIS FIRST
+-- create a helpertable (use SQL above)
+-- insert into new temp segment 
+-- this skips existing so you can rerun ontop of existing data
+
+INSERT INTO SegmentHelperAug16_SegOct20_preAlamy (image_id)
 SELECT DISTINCT e.image_id
 FROM Encodings e
-WHERE e.face_encodings68 IS NOT NULL 
-	AND e.face_x > -40 AND e.face_x < -24
+WHERE e.mongo_encodings = 1 
+    AND e.face_x > -40 AND e.face_x < -3
     AND e.face_y > -4 AND e.face_y < 4
     AND e.face_z > -4 AND e.face_z < 4
-; -- Adjust the batch size as needed
+    AND NOT EXISTS (
+        SELECT 1
+        FROM SegmentHelperAug16_SegOct20_preAlamy sh
+        WHERE sh.image_id = e.image_id
+    );
+   
+-- DO THIS SECOND
+-- add column for is_new 
+ALTER TABLE SegmentHelperAug16_SegOct20_preAlamy
+ADD COLUMN is_new BOOL ;
+-- and set is_new to True for new image_id
+UPDATE SegmentHelperAug16_SegOct20_preAlamy sh
+LEFT JOIN SegmentOct20 s ON sh.image_id = s.image_id
+SET sh.is_new = True
+WHERE s.image_id IS NULL;
 
+-- DO THIS THIRD
+-- Add info from Images
+INSERT INTO SegmentOct20 (image_id, site_name_id, site_image_id, contentUrl, imagename, age_id, age_detail_id, gender_id, location_id, face_x, face_y, face_z, mouth_gap, bbox, mongo_body_landmarks, mongo_face_landmarks)
+SELECT DISTINCT i.image_id, i.site_name_id, i.site_image_id, i.contentUrl, i.imagename, i.age_id, i.age_detail_id, i.gender_id, i.location_id, e.face_x, e.face_y, e.face_z, e.mouth_gap, e.bbox, e.mongo_body_landmarks, e.mongo_face_landmarks
+FROM Images i
+LEFT JOIN Encodings e ON i.image_id = e.image_id
+LEFT JOIN SegmentHelperAug16_SegOct20_preAlamy sh ON sh.image_id = i.image_id 
+LEFT JOIN SegmentOct20 j ON i.image_id = j.image_id
+WHERE sh.is_new IS TRUE
+    AND j.image_id IS NULL    
+	AND i.age_id  > 3
+	AND i.site_name_id = 9
+LIMIT 1000000; -- Adjust the batch size as needed
+
+-- to test the last row inserted
+SELECT * FROM SegmentOct20 so ORDER BY so.seg_image_id DESC LIMIT 1
+
+-- count the above insert, before doing it
+SELECT count(DISTINCT e.encoding_id) 
+FROM Encodings e
+WHERE e.mongo_encodings = 1 
+	AND e.face_x > -40 AND e.face_x < -3
+    AND e.face_y > -4 AND e.face_y < 4
+    AND e.face_z > -4 AND e.face_z < 4
+; -- 
+
+SELECT MAX(so.seg_image_id)
+FROM SegmentOct20 so 
+;
 
 -- modifying to only do image_id etc, and from e
 INSERT INTO SegmentMar21  (image_id)

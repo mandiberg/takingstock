@@ -9,7 +9,6 @@ SELECT
     COUNT(i.image_id) AS image_count,
     COUNT(e.encoding_id) AS encoding_count,
     SUM(e.is_face) AS is_face_count,
-    SUM(CASE WHEN e.face_encodings68 IS NOT NULL THEN 1 ELSE 0 END) AS face_encodings68_not_null_count
 FROM
     Images i
 LEFT JOIN
@@ -28,8 +27,8 @@ ORDER BY
 SELECT
     so.site_name_id,
     COUNT(so.image_id) AS image_count,
-    SUM(CASE WHEN so.face_encodings68 IS NOT NULL THEN 1 ELSE 0 END) AS face_encodings68_not_null_count,
-    SUM(CASE WHEN so.body_landmarks IS NOT NULL THEN 1 ELSE 0 END) AS body_landmarks_not_null_count
+    SUM(CASE WHEN so.mongo_face_landmarks  IS NOT NULL THEN 1 ELSE 0 END) AS face_encodings68_not_null_count,
+    SUM(CASE WHEN so.mongo_body_landmarks  IS NOT NULL THEN 1 ELSE 0 END) AS body_landmarks_not_null_count
 FROM
     SegmentOct20 so 
 GROUP BY
@@ -43,8 +42,8 @@ ORDER BY
 SELECT
     so.site_name_id,
     COUNT(so.image_id) AS image_count,
-    SUM(CASE WHEN so.face_encodings68 IS NOT NULL THEN 1 ELSE 0 END) AS face_encodings68_not_null_count,
-    SUM(CASE WHEN so.body_landmarks IS NOT NULL THEN 1 ELSE 0 END) AS body_landmarks_not_null_count
+    SUM(CASE WHEN so.mongo_face_landmarks IS NOT NULL THEN 1 ELSE 0 END) AS face_encodings68_not_null_count,
+    SUM(CASE WHEN so.mongo_body_landmarks IS NOT NULL THEN 1 ELSE 0 END) AS body_landmarks_not_null_count
 FROM
     SegmentOct20 so 
 INNER JOIN

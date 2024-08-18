@@ -4,6 +4,8 @@ import csv
 import hashlib
 import json
 import ast
+import pandas as pd
+import pickle
 
 
 class DataIO:
@@ -12,6 +14,8 @@ class DataIO:
     def __init__(self, IS_SSD=False):
         self.max_retries = 3
         self.retry_delay = 5
+        self.query_face = True
+        self.query_body = True
         # platform specific file folder (mac for michael, win for satyam)
         if platform == "darwin":
             self.platform = "darwin"
@@ -252,3 +256,54 @@ class DataIO:
         x = int(x)
         if x % 2 == 0: return x+1
         else: return x
+
+    def get_encodings_mongo(self,image_id):
+
+        # print("self.query_face: ", self.query_face)
+        # print("self.query_body: ", self.query_body)
+        mongo_collection_face = self.mongo_db['encodings']
+        mongo_collection_body = self.mongo_db["body_landmarks_norm"]
+        results_face = results_body = None
+        if image_id:
+            if self.query_face: results_face = mongo_collection_face.find_one({"image_id": image_id})
+            if self.query_body: results_body = mongo_collection_body.find_one({"image_id": image_id})
+            # print("got results from mongo, types are: ", type(results_face), type(results_body))
+            # print("results_face: ", results_face)
+            # print("results_body: ", results_body)
+            face_encodings68 = face_landmarks = body_landmarks = body_landmarks_normalized = None
+            if results_body:
+                body_landmarks_normalized = results_body["nlms"]
+            if results_face:
+                face_encodings68 = results_face['face_encodings68']
+                face_landmarks = results_face['face_landmarks']
+                body_landmarks = results_face['body_landmarks']
+                # print("got encodings from mongo, types are: ", type(face_encodings68), type(face_landmarks), type(body_landmarks))
+            return pd.Series([face_encodings68, face_landmarks, body_landmarks, body_landmarks_normalized])
+            # else:
+            #     return pd.Series([None, None, None])
+        else:
+            return pd.Series([None, None, None, None])
+
+    def unpickle_array(self,pickled_array):
+        if pickled_array:
+            try:
+                # Attempt to unpickle using Protocol 3 in v3.7
+                return pickle.loads(pickled_array, encoding='latin1')
+            except TypeError:
+                # If TypeError occurs, unpickle using specific protocl 3 in v3.11
+                # return pickle.loads(pickled_array, encoding='latin1', fix_imports=True)
+                try:
+                    # Set the encoding argument to 'latin1' and protocol argument to 3
+                    obj = pickle.loads(pickled_array, encoding='latin1', fix_imports=True, errors='strict', protocol=3)
+                    return obj
+                except pickle.UnpicklingError as e:
+                    print(f"Error loading pickle data: {e}")
+                    return None
+        else:
+            return None
+
+    def convert_lms_to_array(self,lms):
+        if lms:
+            return np.array(lms)
+        else:
+            return None

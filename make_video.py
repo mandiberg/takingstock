@@ -336,6 +336,8 @@ Base = declarative_base()
 
 mongo_client = pymongo.MongoClient(io.dbmongo['host'])
 mongo_db = mongo_client[io.dbmongo['name']]
+io.mongo_db = mongo_db
+
 # mongo_collection = mongo_db[io.dbmongo['collection']]
 
 
@@ -1232,23 +1234,23 @@ def process_linear(start_img_name, df_segment, cluster_no, sort):
 
 def main():
     # these are used in cleaning up fresh df from SQL
-    def unpickle_array(pickled_array):
-        if pickled_array:
-            try:
-                # Attempt to unpickle using Protocol 3 in v3.7
-                return pickle.loads(pickled_array, encoding='latin1')
-            except TypeError:
-                # If TypeError occurs, unpickle using specific protocl 3 in v3.11
-                # return pickle.loads(pickled_array, encoding='latin1', fix_imports=True)
-                try:
-                    # Set the encoding argument to 'latin1' and protocol argument to 3
-                    obj = pickle.loads(pickled_array, encoding='latin1', fix_imports=True, errors='strict', protocol=3)
-                    return obj
-                except pickle.UnpicklingError as e:
-                    print(f"Error loading pickle data: {e}")
-                    return None
-        else:
-            return None
+    # def io.unpickle_array(pickled_array):
+    #     if pickled_array:
+    #         try:
+    #             # Attempt to unpickle using Protocol 3 in v3.7
+    #             return pickle.loads(pickled_array, encoding='latin1')
+    #         except TypeError:
+    #             # If TypeError occurs, unpickle using specific protocl 3 in v3.11
+    #             # return pickle.loads(pickled_array, encoding='latin1', fix_imports=True)
+    #             try:
+    #                 # Set the encoding argument to 'latin1' and protocol argument to 3
+    #                 obj = pickle.loads(pickled_array, encoding='latin1', fix_imports=True, errors='strict', protocol=3)
+    #                 return obj
+    #             except pickle.UnpicklingError as e:
+    #                 print(f"Error loading pickle data: {e}")
+    #                 return None
+    #     else:
+    #         return None
 
     def get_encodings_mongo(image_id):
         mongo_collection_face = mongo_db['encodings']
@@ -1325,7 +1327,7 @@ def main():
             print("going to get mongo encodings")
             print("size",df.size)
             # use the image_id to query the mongoDB for face_encodings68, face_landmarks, body_landmarks
-            df[['face_encodings68', 'face_landmarks', 'body_landmarks', 'body_landmarks_normalized']] = df['image_id'].apply(get_encodings_mongo)
+            df[['face_encodings68', 'face_landmarks', 'body_landmarks', 'body_landmarks_normalized']] = df['image_id'].apply(io.get_encodings_mongo)
             print("got mongo encodings")
 
             # drop all rows where face_encodings68 is None TK revist this after migration to mongo
@@ -1336,10 +1338,10 @@ def main():
             # print(df['face_encodings68'][0])
 
             # Apply the unpickling function to the 'face_encodings' column
-            df['face_encodings68'] = df['face_encodings68'].apply(unpickle_array)
-            df['face_landmarks'] = df['face_landmarks'].apply(unpickle_array)
-            df['body_landmarks'] = df['body_landmarks'].apply(unpickle_array)
-            df['body_landmarks_normalized'] = df['body_landmarks_normalized'].apply(unpickle_array)
+            df['face_encodings68'] = df['face_encodings68'].apply(io.unpickle_array)
+            df['face_landmarks'] = df['face_landmarks'].apply(io.unpickle_array)
+            df['body_landmarks'] = df['body_landmarks'].apply(io.unpickle_array)
+            df['body_landmarks_normalized'] = df['body_landmarks_normalized'].apply(io.unpickle_array)
             df['bbox'] = df['bbox'].apply(lambda x: unstring_json(x))
             if OBJ_CLS_ID > 0: df["bbox_"+str(OBJ_CLS_ID)] = df["bbox_"+str(OBJ_CLS_ID)].apply(lambda x: unstring_json(x))
 
@@ -1390,7 +1392,7 @@ def main():
 
 
                 print(results)
-                cluster_median = unpickle_array(results.cluster_median)
+                cluster_median = io.unpickle_array(results.cluster_median)
                 sort.counter_dict["last_image_enc"]=cluster_median
 
 
