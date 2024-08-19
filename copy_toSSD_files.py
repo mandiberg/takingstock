@@ -50,7 +50,7 @@ IMAGES_THREAD_COUNTER = 0
 4   istock - aug17 351105
 5   pexels - aug17 11557
 6   unsplash - did I DL these???
-7   pond5 - WIP
+7   pond5 - renamed
 8   123rf - aug17 823542
 9   alamy - WIP
 10  visualchinagroup - aug17 DONE
@@ -72,8 +72,8 @@ MAIN_FOLDER = "/Volumes/RAID18/images_pond5"
 '''
 
 # right now this is only working for one site at a time
-SITE_NAME_ID = 1
-NEWIMAGES_FOLDER_NAME = IMAGES_FOLDER_NAME = 'images_getty'
+SITE_NAME_ID = 7
+NEWIMAGES_FOLDER_NAME = IMAGES_FOLDER_NAME = 'images_pond5'
 # SITE_NAME_ID = 2
 # IMAGES_FOLDER_NAME = 'images_shutterstock'
 # NEWIMAGES_FOLDER_NAME = 'images_shutterstock'

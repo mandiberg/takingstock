@@ -25,6 +25,7 @@ NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 
 #######################################
 # DEPRECATED, USE CLEANUP.SQL INSTEAD #
+# unless creating md5 hash folders    #
 #######################################
 
 
@@ -93,6 +94,28 @@ def generate_site_name_id_filepath(contentUrl):
     # print(os.path.join(hash_folder, hash_subfolder, file_name))
     return os.path.join(hash_folder, hash_subfolder, file_name), contentUrl
 
+# Define the function for generating imagename
+def generate_pond5_filepath(contentUrl):
+    # https://images.pond5.com/business-people-and-globe-photo-147339920_iconl_nowm.jpeg
+    file_name_path = contentUrl.split('?')[0]
+    file_name_full = file_name_path.split('/')[-1]
+    file_name = file_name_full.split('-')[-1].replace("_iconl_nowm", "").replace("_iconl_wide_nowm", "")
+    if ".jpeg" in file_name:
+        file_name = file_name.replace(".jpeg", ".jpg")
+    elif ".jpg" in file_name:
+        pass
+    else: 
+        file_name = file_name+".jpg"
+        contentUrl = contentUrl+".jpg"
+    # remove any leading zeros
+    file_name = file_name.lstrip("0")
+    
+    hash_folder, hash_subfolder = io.get_hash_folders(file_name)
+    # print("hash_folder: ", hash_folder)
+    # print("hash_subfolder: ", hash_subfolder)
+    # print(os.path.join(hash_folder, hash_subfolder, file_name))
+    return os.path.join(hash_folder, hash_subfolder, file_name)
+
 
 # Define the function for generating imagename
 def generate_proper_getty_path(imagename):
@@ -118,8 +141,10 @@ batch_size = 1000
 # currently set up for SegmentTable. need to change SegmentTable to Images if you want to use on main table
 
 try:
-    # Query the Images table for image_id and contentUrl where site_name_id is 1
-    results = session.query(SegmentTable.image_id, SegmentTable.imagename, SegmentTable.contentUrl).filter(SegmentTable.site_name_id == 1).all()
+    # Query the Images table for image_id and contentUrl where site_name_id is 7
+    # results = session.query(Images.image_id, Images.site_image_id,Images.site_name_id, SegmentTable.imagename, SegmentTable.contentUrl).filter(SegmentTable.site_name_id == 7).limit(2000)
+    # results = session.query(SegmentTable.image_id, SegmentTable.imagename, SegmentTable.contentUrl).filter(SegmentTable.site_name_id == 7).all()
+    results = session.query(Images.image_id, Images.imagename, Images.contentUrl).filter(Images.site_name_id == 7).all()
 
     # Initialize counters
     total_processed = 0
@@ -130,9 +155,11 @@ try:
         # new_imagename, contentUrl = generate_local_unhashed_image_filepath(contentUrl)
 
         # for getty SNAFU
-        print("imagename: ", imagename)
-        new_imagename = generate_proper_getty_path(imagename)
-        print("new_imagename: ", new_imagename)
+        # print("imagename: ", image_id, imagename, contentUrl)
+        # new_imagename = generate_proper_getty_path(imagename)
+        new_imagename = generate_pond5_filepath(contentUrl)
+        # print("new_imagename: ", new_imagename)
+    
         if new_imagename != imagename:
             print(f"Updating Image ID: {image_id}, Imagename: {new_imagename}, contentUrl: {contentUrl}")
 

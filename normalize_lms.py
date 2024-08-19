@@ -21,11 +21,13 @@ from my_declarative_base import Base, Clusters, Encodings, Images,PhoneBbox, Seg
 #from sqlalchemy.ext.declarative import declarative_base
 from mp_sort_pose import SortPose
 import pymongo
+from pymongo import UpdateOne
 from mediapipe.framework.formats import landmark_pb2
 from pymediainfo import MediaInfo
 import traceback 
 import time
 
+BATCH_SIZE = 1000
 NOSE_ID=0
 
 
@@ -197,6 +199,33 @@ def insert_n_landmarks(image_id, n_landmarks):
     print("Time to insert:", time.time()-start)
     return
 
+def batch_insert_worker():
+    batch = []
+    while True:
+        try:
+            item = batch_queue.get(timeout=5)  # Wait for 5 seconds for new items
+            batch.append(item)
+            if len(batch) >= BATCH_SIZE:
+                batch_insert_n_landmarks(batch)
+                batch = []
+        except queue.Empty:
+            if batch:  # Insert any remaining items
+                batch_insert_n_landmarks(batch)
+            break  # Exit if no more items and queue is empty
+
+def batch_insert_n_landmarks(batch_data):
+    start = time.time()
+    operations = [
+        UpdateOne(
+            {"image_id": data["image_id"]},
+            {"$set": {"nlms": pickle.dumps(data["n_landmarks"])}},
+            upsert=True
+        ) for data in batch_data
+    ]
+    result = bboxnormed_collection.bulk_write(operations)
+    print(f"Inserted/Updated {len(batch_data)} documents")
+    print("Time to insert batch:", time.time()-start)
+    return result
 
 def insert_n_phone_bbox(image_id,n_phone_bbox):
     # nlms_dict = { "image_id": image_id, "n_phone_bbox": n_phone_bbox }
@@ -322,7 +351,10 @@ def calc_nlm(image_id_to_shape, lock, session):
         if VERBOSE: print("Time to get norm lms:", time.time()-start)
         start = time.time()
 
-        insert_n_landmarks(target_image_id,n_landmarks)
+        # refactoring to use a queue
+        # insert_n_landmarks(target_image_id,n_landmarks)
+        batch_queue.put({"image_id": target_image_id, "n_landmarks": n_landmarks})
+
         if VERBOSE: print("did insert_n_landmarks, going to get phone bbox")
         if VERBOSE: print("Time to get insert:", time.time()-start)
         start = time.time()
@@ -356,6 +388,7 @@ threads_completed = threading.Event()
 
 # Create a queue for distributing work among threads
 work_queue = queue.Queue()
+batch_queue = queue.Queue()
         
 function=calc_nlm
 
@@ -433,9 +466,18 @@ def threaded_processing():
         thread = threading.Thread(target=threaded_fetching)
         thread_list.append(thread)
         thread.start()
+    
+    # Start the batch insert worker
+    batch_thread = threading.Thread(target=batch_insert_worker)
+    batch_thread.start()
+    
     # Wait for all threads to complete
     for thread in thread_list:
         thread.join()
+    
+    # Wait for the batch insert worker to finish
+    batch_thread.join()
+    
     # Set the event to signal that threads are completed
     threads_completed.set()
 
