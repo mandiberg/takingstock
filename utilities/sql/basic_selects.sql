@@ -5,46 +5,29 @@
 USE stock
 ;
 
-SELECT so.image_id, so.imagename 
-FROM SegmentOct20 so 
-JOIN ImagesTopics it ON it.image_id = so.image_id 
-WHERE it.topic_id in (15,17)
-AND so.site_name_id = 3
+
+SELECT *  
+FROM Images so 
+WHERE image_id = 102921534
+LIMIT 10
 ;
 
-
-SELECT *
-FROM ImagesBackground ib 
-WHERE ib.image_id = 9634
-
-SELECT COUNT(ib.image_id)
-FROM ImagesBackground ib 
-WHERE ib.is_left_shoulder = 1
-;
+CREATE TABLE SegmentHelperAug16_SegOct20_preAlamy (
+    seg_image_id int NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    image_id INTEGER,
+    FOREIGN KEY (image_id) REFERENCES Images(image_id)
+);
 
 
-UPDATE ImagesBackground
-SET    is_left_shoulder = NULL
-WHERE  is_left_shoulder IS NOT NULL;
-
-UPDATE ImagesBackground
-SET    is_right_shoulder  = NULL
-WHERE  is_right_shoulder IS NOT NULL;
-
-
-SELECT COUNT(ib.image_id)
-FROM ImagesBackground ib 
-WHERE JSON_EXTRACT(ib.selfie_bbox , '$.left') = 0
-OR JSON_EXTRACT(ib.selfie_bbox , '$.right') = 0
-;
-
-
-
-SELECT JSON_EXTRACT(sales_data, '$.amount') AS total_amount 
-FROM sales 
-WHERE JSON_EXTRACT(sales_data, '$.product') = 'Widget X';
-
-
+SELECT 
+    FLOOR(face_z) AS face_x_unit,
+    COUNT(*) AS row_count
+FROM 
+    SegmentOct20
+GROUP BY 
+    FLOOR(face_z)
+ORDER BY 
+    face_x_unit;
 
 
 SELECT COUNT(i.image_id) 

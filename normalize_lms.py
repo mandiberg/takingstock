@@ -24,12 +24,13 @@ import pymongo
 from mediapipe.framework.formats import landmark_pb2
 from pymediainfo import MediaInfo
 import traceback 
+import time
 
 NOSE_ID=0
 
 
 Base = declarative_base()
-VERBOSE = True
+VERBOSE = False
 SKIP_EXISTING = True # Skips images with a normed bbox but that have Images.h
 IS_SSD = True
 
@@ -92,7 +93,7 @@ sort = SortPose(motion, face_height_output, image_edge_multiplier_sm,EXPAND, ONE
 # Create a session
 session = scoped_session(sessionmaker(bind=engine))
 
-LIMIT= 5000000
+LIMIT= 100000
 # Initialize the counter
 counter = 0
 USE_OBJ = 0
@@ -182,6 +183,7 @@ def get_landmarks_mongo(image_id):
 
 
 def insert_n_landmarks(image_id, n_landmarks):
+    start = time.time()
     nlms_dict = {"image_id": image_id, "nlms": pickle.dumps(n_landmarks)}
     result = bboxnormed_collection.update_one(
         {"image_id": image_id},  # filter
@@ -192,6 +194,7 @@ def insert_n_landmarks(image_id, n_landmarks):
         print("Inserted new document with id:", result.upserted_id)
     else:
         print("Updated existing document")
+    print("Time to insert:", time.time()-start)
     return
 
 
@@ -273,16 +276,34 @@ def get_phone_bbox(target_image_id):
 
     return phone_bbox
 
-def calc_nlm(target_image_id, lock, session):
+def calc_nlm(image_id_to_shape, lock, session):
+    # start a timer
+    start = time.time()
+    target_image_id = list(image_id_to_shape.keys())[0]
+    height,width = image_id_to_shape[target_image_id]
+    if VERBOSE: print("height,width from DB:",height,width)
     if VERBOSE: print("target_image_id",target_image_id)
     face_height=get_face_height(target_image_id)
-    height,width=get_shape(target_image_id)
-    if not height or not width: 
-        print(">> IMAGE NOT FOUND,", target_image_id)
-        return
-    insert_shape(target_image_id,[height,width])
+    # print timer
+    if VERBOSE: print("Time to get face height:", time.time()-start)
+    start = time.time()
+
+    if height and width:
+        print(target_image_id, "have height,width already",height,width)
+    else:
+        height,width=get_shape(target_image_id)
+        if not height or not width: 
+            print(">> IMAGE NOT FOUND,", target_image_id)
+            return
+        insert_shape(target_image_id,[height,width])
+
+    if VERBOSE: print("Time to get h w:", time.time()-start)
+    start = time.time()
 
     body_landmarks=unpickle_array(get_landmarks_mongo(target_image_id))
+    if VERBOSE: print("Time to get mongo lms:", time.time()-start)
+    start = time.time()
+
     if body_landmarks:
         if VERBOSE: print("has body_landmarks")
 
@@ -298,8 +319,13 @@ def calc_nlm(target_image_id, lock, session):
         nose_pixel_pos["y"]+=body_landmarks.landmark[NOSE_ID].y*height
         nose_pixel_pos["visibility"]+=body_landmarks.landmark[NOSE_ID].visibility
         n_landmarks=normalize_landmarks (body_landmarks,nose_pixel_pos,face_height,[height,width])
+        if VERBOSE: print("Time to get norm lms:", time.time()-start)
+        start = time.time()
+
         insert_n_landmarks(target_image_id,n_landmarks)
         if VERBOSE: print("did insert_n_landmarks, going to get phone bbox")
+        if VERBOSE: print("Time to get insert:", time.time()-start)
+        start = time.time()
         
         if USE_OBJ > 0: 
             phone_bbox=get_phone_bbox(target_image_id)
@@ -346,18 +372,20 @@ if USE_OBJ == 27:
         limit(LIMIT)
 
 else:
-    distinct_image_ids_query = select(Images.image_id.distinct()).\
+    distinct_image_ids_query = select(Images.image_id.distinct(), Images.h, Images.w).\
         outerjoin(SegmentTable,Images.image_id == SegmentTable.image_id).\
         filter(SegmentTable.bbox != None).\
         filter(SegmentTable.mongo_body_landmarks == 1).\
+        filter(SegmentTable.image_id >= 9942966).\
         limit(LIMIT)
 
 # put this back in at future date if needed
         # filter(Images.h == None).\
 
 if SKIP_EXISTING:
-    
-    normed_image_ids_query = select(SegmentTable.image_id.distinct()).\
+    # skips the ones that have obj bbox which have already been done
+    normed_image_ids_query = select(SegmentTable.image_id.distinct(), Images.h, Images.w).\
+        outerjoin(Images, Images.image_id == SegmentTable.image_id).\
         outerjoin(PhoneBbox,PhoneBbox.image_id == SegmentTable.image_id).\
         filter(
             or_(
@@ -368,19 +396,28 @@ if SKIP_EXISTING:
                 PhoneBbox.bbox_32_norm != None
             )
         ).\
+        filter(SegmentTable.image_id >= 9942966).\
         limit(LIMIT)
 
     distinct_image_ids_query = distinct_image_ids_query.except_(normed_image_ids_query)
 
+
 if VERBOSE: print("about to execute query")
+results = session.execute(distinct_image_ids_query).fetchall()
 
+# make a dictionary of image_id to shape
+for result in results:
+    image_id_to_shape = {}
+    image_id, height, width = result
+    image_id_to_shape[image_id] = (height, width)
+    work_queue.put(image_id_to_shape)        
 
-distinct_image_ids = [row[0] for row in session.execute(distinct_image_ids_query).fetchall()]
-if VERBOSE: print("query length",len(distinct_image_ids))
-if VERBOSE: print("distinct_image_ids",(distinct_image_ids))
-for counter,target_image_id in enumerate(distinct_image_ids):
-    if counter%1000==0:print("###########"+str(counter)+"images processed ##########")
-    work_queue.put(target_image_id)        
+# distinct_image_ids = [row[0] for row in session.execute(distinct_image_ids_query).fetchall()]
+# if VERBOSE: print("query length",len(distinct_image_ids))
+# if VERBOSE: print("distinct_image_ids",(distinct_image_ids))
+# for counter,target_image_id in enumerate(distinct_image_ids):
+#     if counter%1000==0:print("###########"+str(counter)+"images processed ##########")
+    # work_queue.put(target_image_id)        
 
 if VERBOSE: print("queue filled")
         
