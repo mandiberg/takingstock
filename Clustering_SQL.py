@@ -71,7 +71,7 @@ mongo_collection = mongo_db[io.dbmongo['collection']]
 
 
 NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
-MODE = 0
+MODE = 1
 # CLUSTER_TYPE = "Clusters"
 CLUSTER_TYPE = "Poses"
 
@@ -158,6 +158,7 @@ Session = sessionmaker(bind=engine)
 session = Session()
 Base = declarative_base()
 
+
 # handle the table objects based on CLUSTER_TYPE
 ClustersTable_name = CLUSTER_TYPE
 ImagesClustersTable_name = "Images"+CLUSTER_TYPE
@@ -171,9 +172,11 @@ class Clusters(Base):
 class ImagesClusters(Base):
     __tablename__ = ImagesClustersTable_name
 
-    image_id = Column(Integer, ForeignKey('Images.image_id'), primary_key=True)
-    cluster_id = Column(Integer, ForeignKey('Clusters.cluster_id'))
+    # image_id = Column(Integer, ForeignKey('Images.image_id'), primary_key=True)
+    # cluster_id = Column(Integer, ForeignKey('Clusters.cluster_id'))
 
+    image_id = Column(Integer, ForeignKey('Images.image_id', ondelete="CASCADE"), primary_key=True)
+    cluster_id = Column(Integer, ForeignKey(f'{ClustersTable_name}.cluster_id', ondelete="CASCADE"))
 
 # # define new cluster table names based on segment name
 # SegmentClustersTable_name = "Clusters_"+SegmentTable_name
@@ -201,8 +204,8 @@ def selectSQL():
 
 
 def kmeans_cluster(df, n_clusters=32):
-    # Select only the numerical columns (coord_0 to coord_65)
-    numerical_columns = [col for col in df.columns if col.startswith('coord_')]
+    # Select only the numerical columns (dim_0 to dim_65)
+    numerical_columns = [col for col in df.columns if col.startswith('dim_')]
     numerical_data = df[numerical_columns]
     
     print("clustering", numerical_data)
@@ -291,9 +294,10 @@ def landmarks_preprocess(landmarks):
     return df
 
 def save_clusters_DB(df):
-    col="encodings"
-    col_list=[]
-    for i in range(128):col_list.append(col+str(i))
+    # col="encodings"
+    # col_list=[]
+    # for i in range(128):col_list.append(col+str(i))
+    col_list = [col for col in df.columns if col.startswith('dim_')]
 
 
     # this isn't saving means for each cluster. all cluster_median are the same
@@ -412,11 +416,11 @@ def df_list_to_cols(df, col_name):
 
     # Convert the string representation of lists to actual lists
     # df[col_name] = df[col_name].apply(eval)
-
+    df_data = df.drop("image_id", axis=1)
     # Create new columns for each coordinate
-    num_coords = len(df[col_name].iloc[0])
+    num_coords = len(df_data[col_name].iloc[0])
     for i in range(num_coords):
-        df[f'coord_{i}'] = df[col_name].apply(lambda x: x[i])
+        df[f'dim_{i}'] = df[col_name].apply(lambda x: x[i])
 
     # Drop the original col_name column
     df = df.drop(col_name, axis=1)
@@ -429,7 +433,7 @@ def prepare_df(df):
         # body = self.get_landmarks_2d(enc1, list(range(33)), structure)
         df['body_landmarks_array'] = df['body_landmarks_normalized'].apply(lambda x: io.get_landmarks_2d(x, list(range(33)), structure="list"))
         # drop the columns that are not needed
-        df = df.drop(columns=['image_id','face_encodings68', 'face_landmarks', 'body_landmarks', 'body_landmarks_normalized'])
+        df = df.drop(columns=['face_encodings68', 'face_landmarks', 'body_landmarks', 'body_landmarks_normalized'])
         print("before cols",df)
 
         df_list_to_cols(df, 'body_landmarks_array')
@@ -442,7 +446,7 @@ def prepare_df(df):
         df['face_encodings68'] = df['face_encodings68'].apply(io.unpickle_array)
         df['face_landmarks'] = df['face_landmarks'].apply(io.unpickle_array)
         df['body_landmarks'] = df['body_landmarks'].apply(io.unpickle_array)
-        df = df.drop(columns=['image_id','face_landmarks', 'body_landmarks', 'body_landmarks_normalized'])
+        df = df.drop(columns=['face_landmarks', 'body_landmarks', 'body_landmarks_normalized'])
         df_list_to_cols(df, 'face_encodings68')
 
     return df
@@ -485,13 +489,14 @@ def main():
     # choose if you want optimal cluster size or custom cluster size using the parameter GET_OPTIMAL_CLUSTERS
     if MODE == 0:
         if GET_OPTIMAL_CLUSTERS is True: 
-            OPTIMAL_CLUSTERS= best_score(enc_data)   #### Input ONLY encodings into clustering alhorithm
+            OPTIMAL_CLUSTERS= best_score(enc_data.drop("image_id", axis=1))   #### Input ONLY encodings into clustering alhorithm
             print(OPTIMAL_CLUSTERS)
             N_CLUSTERS = OPTIMAL_CLUSTERS
         print(enc_data)
-        enc_data["cluster_id"] = kmeans_cluster(enc_data,n_clusters=N_CLUSTERS)
+        # I drop image_id as I pass it to knn bc I need it later, but knn can't handle strings
+        enc_data["cluster_id"] = kmeans_cluster(enc_data.drop("image_id", axis=1),n_clusters=N_CLUSTERS)
         
-        if SAVE_FIG: export_html_clusters(enc_data)
+        if SAVE_FIG: export_html_clusters(enc_data.drop("image_id", axis=1))
         print(enc_data)
         print(set(enc_data["cluster_id"].tolist()))
         # don't need to write a CSV
