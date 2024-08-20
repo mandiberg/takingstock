@@ -119,6 +119,8 @@ class Encodings(Base):
     mongo_encodings     = Column(Boolean)
     mongo_body_landmarks   = Column(Boolean)
     mongo_face_landmarks   = Column(Boolean)
+    is_small           = Column(Boolean)
+    mongo_body_landmarks_norm   = Column(Boolean)
 
 class Clusters(Base):
     __tablename__ = 'Clusters'
@@ -131,7 +133,19 @@ class ImagesClusters(Base):
 
     image_id   = Column(Integer, ForeignKey('images.image_id'), primary_key=True)
     cluster_id = Column(Integer, ForeignKey('Clusters.cluster_id'))
-    
+
+class Poses(Base):
+    __tablename__ = 'Poses'
+
+    cluster_id     = Column(Integer, primary_key=True, autoincrement=True)
+    cluster_median = Column(BLOB)
+
+class ImagesPoses(Base):
+    __tablename__ = 'ImagesPoses'
+
+    image_id   = Column(Integer, ForeignKey('images.image_id'), primary_key=True)
+    cluster_id = Column(Integer, ForeignKey('Poses.cluster_id'))
+
 class ClustersTemp(Base):
     __tablename__ = 'ClustersTemp'
 
@@ -212,6 +226,7 @@ class SegmentTable(Base):
     mongo_tokens           = Column(Boolean)
     mongo_body_landmarks   = Column(Boolean)
     mongo_face_landmarks   = Column(Boolean)
+    mongo_body_landmarks_norm   = Column(Boolean)
 
     site     = relationship("Site")
     age      = relationship("Age")
@@ -262,6 +277,11 @@ class PhoneBbox(Base):
     conf_27     = Column(Float)
     bbox_32     = Column(JSON(none_as_null=True))
     conf_32     = Column(Float)
+    bbox_67_norm     = Column(JSON(none_as_null=True))
+    bbox_63_norm     = Column(JSON(none_as_null=True))
+    bbox_26_norm     = Column(JSON(none_as_null=True))
+    bbox_27_norm     = Column(JSON(none_as_null=True))
+    bbox_32_norm     = Column(JSON(none_as_null=True))
 
 # these are for MM use for using segments
 # class Clusters(Base):

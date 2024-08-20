@@ -53,10 +53,7 @@ http="https://media.gettyimages.com/photos/"
 
 # am I looking on RAID/SSD for a folder? If not, will pull directly from SQL
 # if so, also change the site_name_id etc around line 930
-IS_FOLDER = True
-SITE_NAME_ID = 11
-# 2, shutter. 4, istock
-# 7 pond5
+IS_FOLDER = False
 
 
 '''
@@ -68,22 +65,28 @@ SITE_NAME_ID = 11
 6   unsplash
 7   pond5
 8   123rf
-9   alamy - not ingested yet
-10  visualchinagroup - ingesting
+9   alamy - WIP
+10  visualchinagroup - done
 11	picxy - done
-12	pixerf
+12	pixerf - done
 13	imagesbazaar - done
-14	indiapicturebudget
-15	iwaria
-16	nappy
-17	picha
+14	indiapicturebudget - done
+15	iwaria - done
+16	nappy  - done
+17	picha - done
 18	afripics
 '''
 
+SITE_NAME_ID = 9
+# 2, shutter. 4, istock
+# 7 pond5
 
-# MAIN_FOLDER = "/Volumes/RAID54/images_shutterstock"
-# MAIN_FOLDER = "/Volumes/RAID18/images_pixcy"
-MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/images_vcg"
+# MAIN_FOLDER = "/Volumes/RAID18/images_pond5"
+# MAIN_FOLDER = "/Volumes/SSD4green/images_pixerf"
+MAIN_FOLDER = "/Volumes/SSD4green/images_alamy"
+# MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/images_picha"
+# MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/afripics_v2/images"
+
 # MAIN_FOLDER = "/Volumes/SSD4/images_getty_reDL"
 BATCH_SIZE = 25000 # Define how many from each folder in each batch
 
@@ -95,8 +98,8 @@ THESE_FOLDER_PATHS = ["9/9C", "9/9D", "9/9E", "9/9F", "9/90", "9/91", "9/92", "9
 # MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages"
 CSV_FOLDERCOUNT_PATH = os.path.join(MAIN_FOLDER, "folder_countout.csv")
 
-IS_SSD=False
-BODYLMS = False # only matters if IS_FOLDER is False
+IS_SSD=True
+BODYLMS = True # only matters if IS_FOLDER is False
 SEGMENT = 0 # topic_id set to 0 or False if using HelperTable or not using a segment
 HelperTable_name = False #"SegmentHelperMay7_fingerpoint" # set to False if not using a HelperTable
 
@@ -109,7 +112,7 @@ if BODYLMS is True:
     SegmentTable_name = 'SegmentOct20'
     FROM =f"{SegmentTable_name} seg1"
     # FROM ="Encodings e"
-    QUERY = "seg1.mongo_body_landmarks IS NULL AND seg1.site_name_id > 1"
+    QUERY = "seg1.mongo_body_landmarks IS NULL"
     SUBQUERY = " "
     # SUBQUERY = f"(SELECT seg1.image_id FROM {SegmentTable_name} seg1 WHERE face_x > -33 AND face_x < -27 AND face_y > -2 AND face_y < 2 AND face_z > -2 AND face_z < 2)"
     # SUBQUERY = f"(SELECT seg1.image_id FROM {SegmentTable_name} seg1 WHERE face_x > -33 AND face_x < -27 AND face_y > -2 AND face_y < 2 AND face_z > -2 AND face_z < 2)"
@@ -126,6 +129,7 @@ if BODYLMS is True:
     WHERE = f"{QUERY} {SUBQUERY}"
 
 else:
+    
     ############ KEYWORD SELECT #############
     SELECT = "DISTINCT i.image_id, i.site_name_id, i.contentUrl, i.imagename, e.encoding_id, i.site_image_id, e.face_landmarks, e.bbox"
     # FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings e ON i.image_id = e.image_id"
@@ -161,7 +165,7 @@ else:
 # IS_SSD=True
 ##########################################
 
-LIMIT = 2000
+LIMIT = 20
 
 # platform specific credentials
 io = DataIO(IS_SSD)
@@ -195,7 +199,7 @@ face_recognition_model = face_recognition_models.face_recognition_model_location
 face_encoder = dlib.face_recognition_model_v1(face_recognition_model)
 
 SMALL_MODEL = False
-NUM_JITTERSt= 1
+NUM_JITTERS= 1
 ###############
 
 ## CREATING POSE OBJECT FOR SELFIE SEGMENTATION
@@ -831,7 +835,7 @@ def process_image_enc_only(task):
 
 def process_image_bodylms(task):
     # df = pd.DataFrame(columns=['image_id','bbox'])
-    # print("task is: ",task)
+    print("task is: ",task)
     image_id = task[0] ### is it enc or image_id
     cap_path = capitalize_directory(task[1])
     init_session()
@@ -859,6 +863,7 @@ def process_image_bodylms(task):
         # if bbox_json: 
 
         print("is_body", is_body)
+        quit()
         for _ in range(io.max_retries):
             try:
                 # new_entry = Encodings(**insert_dict)
@@ -951,9 +956,10 @@ def process_image(task):
 
     if image is not None and image.shape[0]>MINSIZE and image.shape[1]>MINSIZE:
         # Do FaceMesh
+
+        print(">> SPLIT >> about to find_face")
         df = find_face(image, df)
         is_small = 0
-        # print(">> SPLIT >> done find_face")
         # pr_split = print_get_split(pr_split)
 
         # Do Body Pose
@@ -967,15 +973,20 @@ def process_image(task):
         # for testing: this will save images into folders for is_face, is_body, and none. 
         # only save images that aren't too smallllll
         # save_image_triage(image,df)
-    else:
-        print('toooooo smallllll')
+    elif image is not None and image.shape[0]>0 and image.shape[1]>0 :
+        print('smallllll but still processing')
+        # print(task[0], "shape of image", image.shape)
         df = find_face(image, df)
+        # print(df)
         is_small = 1
-
+    else:
+        print(">> no image", task)
         # I should probably assign no_good here...?
+        return
 
     # store data
-    # print(df)
+    # return
+    
     try:
         # DEBUGGING --> need to change this back to "encodings"
         # print(df)  ### made it all lower case to avoid discrepancy
@@ -1321,7 +1332,6 @@ def main():
             # print("about to SQL: ",SELECT,FROM,WHERE,LIMIT)
             resultsjson = selectSQL()    
             print("got results, count is: ",len(resultsjson))
-            # print(resultsjson)
             print(">> SPLIT >> jsonsplit")
             split = print_get_split(jsonsplit)
             #catches the last round, where it returns less than full results
@@ -1339,12 +1349,12 @@ def main():
                 item = row["contentUrl"]
                 hashed_path = row["imagename"]
                 site_id = row["site_name_id"]
-                if site_id == 1:
-                    # print("fixing gettyimages hash")
-                    orig_filename = item.replace(http, "")+".jpg"
-                    orig_filename = orig_filename.replace(".jpg.jpg", ".jpg")
-                    d0, d02 = get_hash_folders(orig_filename)
-                    hashed_path = os.path.join(d0, d02, orig_filename)
+                # if site_id == 1:
+                #     # print("fixing gettyimages hash")
+                #     orig_filename = item.replace(http, "")+".jpg"
+                #     orig_filename = orig_filename.replace(".jpg.jpg", ".jpg")
+                #     d0, d02 = get_hash_folders(orig_filename)
+                #     hashed_path = os.path.join(d0, d02, orig_filename)
                 
                 # gets folder via the folder list, keyed with site_id integer
                 imagepath=os.path.join(io.folder_list[site_id], hashed_path)

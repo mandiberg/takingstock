@@ -1,7 +1,7 @@
 #################################
 
-from sqlalchemy import create_engine, text,func, select, delete, and_, or_, update
-from sqlalchemy.orm import sessionmaker,scoped_session, declarative_base, Session
+from sqlalchemy import create_engine, text,func, select, delete, and_, or_
+from sqlalchemy.orm import sessionmaker,scoped_session, declarative_base
 from sqlalchemy.pool import NullPool
 # from my_declarative_base import Images,ImagesBackground, SegmentTable, Site 
 from mp_db_io import DataIO
@@ -17,17 +17,15 @@ import mediapipe as mp
 import shutil
 import pandas as pd
 import json
-from my_declarative_base import Base, SegmentTable, Clusters, Encodings, Images,PhoneBbox, SegmentTable, Images
+from my_declarative_base import Base, Clusters, Encodings, Images,PhoneBbox, SegmentTable, Images
 #from sqlalchemy.ext.declarative import declarative_base
 from mp_sort_pose import SortPose
 import pymongo
-from pymongo import UpdateOne
 from mediapipe.framework.formats import landmark_pb2
 from pymediainfo import MediaInfo
 import traceback 
 import time
 
-BATCH_SIZE = 1000
 NOSE_ID=0
 
 
@@ -95,7 +93,7 @@ sort = SortPose(motion, face_height_output, image_edge_multiplier_sm,EXPAND, ONE
 # Create a session
 session = scoped_session(sessionmaker(bind=engine))
 
-LIMIT= 100000
+LIMIT= 10
 # Initialize the counter
 counter = 0
 USE_OBJ = 0
@@ -135,35 +133,22 @@ def get_shape(target_image_id):
 
     return None,None 
 
-def normalize_landmarks(landmarks,nose_pos,face_height,shape):
-    height,width = shape[:2]
-    translated_landmarks = landmark_pb2.NormalizedLandmarkList()
-    i=0
-    for landmark in landmarks.landmark:
-        # print(landmark)
-        translated_landmark = landmark_pb2.NormalizedLandmark()
-        translated_landmark.x = (landmark.x*width -nose_pos["x"])/face_height
-        translated_landmark.y = (landmark.y*height-nose_pos["y"])/face_height
-        translated_landmark.visibility = landmark.visibility
-        translated_landmarks.landmark.append(translated_landmark)
 
-    return translated_landmarks
+# def normalize_phone_bbox(phone_bbox,nose_pos,face_height,shape):
+#     height,width = shape[:2]
+#     # print("phone_bbox",phone_bbox)
+#     n_phone_bbox=phone_bbox
+#     n_phone_bbox["right"]=(n_phone_bbox["right"] -nose_pos["x"])/face_height
+#     n_phone_bbox["left"]=(n_phone_bbox["left"] -nose_pos["x"])/face_height
+#     n_phone_bbox["top"]=(n_phone_bbox["top"] -nose_pos["y"])/face_height
+#     n_phone_bbox["bottom"]=(n_phone_bbox["bottom"] -nose_pos["y"])/face_height
+#     # n_phone_bbox["right"]=(n_phone_bbox["right"]*width -nose_pos["x"])/face_height
+#     # n_phone_bbox["left"]=(n_phone_bbox["left"]*width -nose_pos["x"])/face_height
+#     # n_phone_bbox["top"]=(n_phone_bbox["top"]*height -nose_pos["y"])/face_height
+#     # n_phone_bbox["bottom"]=(n_phone_bbox["bottom"]*height -nose_pos["y"])/face_height
+#     # print("n_phone_bbox",n_phone_bbox)
 
-def normalize_phone_bbox(phone_bbox,nose_pos,face_height,shape):
-    height,width = shape[:2]
-    # print("phone_bbox",phone_bbox)
-    n_phone_bbox=phone_bbox
-    n_phone_bbox["right"]=(n_phone_bbox["right"] -nose_pos["x"])/face_height
-    n_phone_bbox["left"]=(n_phone_bbox["left"] -nose_pos["x"])/face_height
-    n_phone_bbox["top"]=(n_phone_bbox["top"] -nose_pos["y"])/face_height
-    n_phone_bbox["bottom"]=(n_phone_bbox["bottom"] -nose_pos["y"])/face_height
-    # n_phone_bbox["right"]=(n_phone_bbox["right"]*width -nose_pos["x"])/face_height
-    # n_phone_bbox["left"]=(n_phone_bbox["left"]*width -nose_pos["x"])/face_height
-    # n_phone_bbox["top"]=(n_phone_bbox["top"]*height -nose_pos["y"])/face_height
-    # n_phone_bbox["bottom"]=(n_phone_bbox["bottom"]*height -nose_pos["y"])/face_height
-    # print("n_phone_bbox",n_phone_bbox)
-
-    return n_phone_bbox
+#     return n_phone_bbox
 
 def get_landmarks_mongo(image_id):
     if image_id:
@@ -184,69 +169,21 @@ def get_landmarks_mongo(image_id):
 #     return
 
 
-def insert_n_landmarks(image_id, n_landmarks):
-    start = time.time()
-    nlms_dict = {"image_id": image_id, "nlms": pickle.dumps(n_landmarks)}
-    result = bboxnormed_collection.update_one(
-        {"image_id": image_id},  # filter
-        {"$set": nlms_dict},     # update
-        upsert=True              # insert if not exists
-    )
-    if result.upserted_id:
-        print("Inserted new document with id:", result.upserted_id)
-    else:
-        print("Updated existing document")
-    print("Time to insert:", time.time()-start)
-    return
+# def insert_n_landmarks(image_id, n_landmarks):
+#     start = time.time()
+#     nlms_dict = {"image_id": image_id, "nlms": pickle.dumps(n_landmarks)}
+#     result = bboxnormed_collection.update_one(
+#         {"image_id": image_id},  # filter
+#         {"$set": nlms_dict},     # update
+#         upsert=True              # insert if not exists
+#     )
+#     if result.upserted_id:
+#         print("Inserted new document with id:", result.upserted_id)
+#     else:
+#         print("Updated existing document")
+#     print("Time to insert:", time.time()-start)
+#     return
 
-def batch_insert_worker(mysql_session):
-    batch = []
-    while True:
-        try:
-            item = batch_queue.get(timeout=5)  # Wait for 5 seconds for new items
-            batch.append(item)
-            print(f"Added item to batch: {item['image_id']} batch size: {len(batch)}")
-            if len(batch) >= BATCH_SIZE:
-                batch_insert_n_landmarks(batch, mysql_session)
-                batch = []
-        except queue.Empty:
-            if batch:  # Insert any remaining items
-                batch_insert_n_landmarks(batch, mysql_session)
-            break  # Exit if no more items and queue is empty
-
-def batch_insert_n_landmarks(batch_data, mysql_session: Session):
-    start = time.time()
-    print(f"Processing batch of {len(batch_data)} items")
-    # MongoDB operations
-    mongo_operations = [
-        UpdateOne(
-            {"image_id": data["image_id"]},
-            {"$set": {"nlms": pickle.dumps(data["n_landmarks"])}},
-            upsert=True
-        ) for data in batch_data
-    ]
-    mongo_result = bboxnormed_collection.bulk_write(mongo_operations)
-    
-    # MySQL operations
-    image_ids = [data["image_id"] for data in batch_data]
-    
-    # Update Encodings table
-    encodings_update = update(Encodings).where(Encodings.image_id.in_(image_ids)).values(mongo_body_landmarks_norm=1)
-    mysql_session.execute(encodings_update)
-    
-    # Update SegmentOct20 SegmentTable
-    segment_update = update(SegmentTable).where(SegmentTable.image_id.in_(image_ids)).values(mongo_body_landmarks_norm=1)
-    mysql_session.execute(segment_update)
-    
-    # Commit MySQL changes
-    mysql_session.commit()
-    
-    end = time.time()
-    print(f"Inserted/Updated {len(batch_data)} documents in MongoDB")
-    print(f"Updated {len(image_ids)} rows in MySQL (Encodings and SegmentOct20)")
-    print("Total time for batch operation:", end - start)
-    
-    return mongo_result
 
 def insert_n_phone_bbox(image_id,n_phone_bbox):
     # nlms_dict = { "image_id": image_id, "n_phone_bbox": n_phone_bbox }
@@ -339,8 +276,7 @@ def calc_nlm(image_id_to_shape, lock, session):
     start = time.time()
 
     if height and width:
-        pass
-        # print(target_image_id, "have height,width already",height,width)
+        print(target_image_id, "have height,width already",height,width)
     else:
         height,width=get_shape(target_image_id)
         if not height or not width: 
@@ -358,25 +294,14 @@ def calc_nlm(image_id_to_shape, lock, session):
     if body_landmarks:
         if VERBOSE: print("has body_landmarks")
 
-        nose_pixel_pos ={
-            "x":0,
-            "y":0,
-            "visibility":0
-        }
-        # nose_pixel_pos <- 864, 442 (stay as a separate variable)
-        # nose_normalized_pos 0,0
-        # nose_pos=body_landmarks.landmark[NOSE_ID]
-        nose_pixel_pos["x"]+=body_landmarks.landmark[NOSE_ID].x*width
-        nose_pixel_pos["y"]+=body_landmarks.landmark[NOSE_ID].y*height
-        nose_pixel_pos["visibility"]+=body_landmarks.landmark[NOSE_ID].visibility
-        n_landmarks=normalize_landmarks (body_landmarks,nose_pixel_pos,face_height,[height,width])
+        nose_pixel_pos = sort.set_nose_pixel_pos(body_landmarks,height,width)
+        print("nose_pixel_pos",nose_pixel_pos)
+        n_landmarks=sort.normalize_landmarks(body_landmarks,nose_pixel_pos,face_height,[height,width])
+        
         if VERBOSE: print("Time to get norm lms:", time.time()-start)
         start = time.time()
 
-        # refactoring to use a queue
-        # insert_n_landmarks(target_image_id,n_landmarks)
-        batch_queue.put({"image_id": target_image_id, "n_landmarks": n_landmarks})
-
+        sort.insert_n_landmarks(bboxnormed_collection, target_image_id,n_landmarks)
         if VERBOSE: print("did insert_n_landmarks, going to get phone bbox")
         if VERBOSE: print("Time to get insert:", time.time()-start)
         start = time.time()
@@ -384,7 +309,7 @@ def calc_nlm(image_id_to_shape, lock, session):
         if USE_OBJ > 0: 
             phone_bbox=get_phone_bbox(target_image_id)
             if phone_bbox:
-                n_phone_bbox=normalize_phone_bbox(phone_bbox,nose_pixel_pos,face_height,[height,width])
+                n_phone_bbox=sort.normalize_phone_bbox(phone_bbox,nose_pixel_pos,face_height,[height,width])
                 insert_n_phone_bbox(target_image_id,n_phone_bbox)
             else:
                 print("PHONE BBOX NOT FOUND 404", target_image_id)
@@ -410,7 +335,6 @@ threads_completed = threading.Event()
 
 # Create a queue for distributing work among threads
 work_queue = queue.Queue()
-batch_queue = queue.Queue()
         
 function=calc_nlm
 
@@ -482,28 +406,19 @@ def threaded_fetching():
         function(param, lock, session)
         work_queue.task_done()
 
-def threaded_processing(mysql_session):
+def threaded_processing():
     thread_list = []
     for _ in range(num_threads):
         thread = threading.Thread(target=threaded_fetching)
         thread_list.append(thread)
         thread.start()
-    
-    # Start the batch insert worker
-    batch_thread = threading.Thread(target=batch_insert_worker, args=(mysql_session,))
-    batch_thread.start()
-
     # Wait for all threads to complete
     for thread in thread_list:
         thread.join()
-    
-    # Wait for the batch insert worker to finish
-    batch_thread.join()
-    
     # Set the event to signal that threads are completed
     threads_completed.set()
 
-threaded_processing(session)
+threaded_processing()
 # Commit the changes to the database
 threads_completed.wait()
 
