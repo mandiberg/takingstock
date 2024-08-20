@@ -228,11 +228,8 @@ def get_face_height(target_image_id):
     )
     result = session.execute(select_image_ids_query).fetchall()
     bbox=result[0][0]
-    if type(bbox)==str:
-        bbox=json.loads(bbox)
-    # if VERBOSE:
-    #     print("bbox",bbox)
-    face_height=bbox["top"]-bbox["bottom"]
+
+    face_height = sort.convert_bbox_to_face_height(bbox)
     return face_height
 
 def insert_shape(target_image_id,shape):
@@ -294,7 +291,8 @@ def calc_nlm(image_id_to_shape, lock, session):
     if body_landmarks:
         if VERBOSE: print("has body_landmarks")
 
-        nose_pixel_pos = sort.set_nose_pixel_pos(body_landmarks,height,width)
+        ### NORMALIZE LANDMARKS ###
+        nose_pixel_pos = sort.set_nose_pixel_pos(body_landmarks,[height,width])
         print("nose_pixel_pos",nose_pixel_pos)
         n_landmarks=sort.normalize_landmarks(body_landmarks,nose_pixel_pos,face_height,[height,width])
         

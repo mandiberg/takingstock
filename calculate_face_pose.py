@@ -692,7 +692,7 @@ def find_body(image):
                 body_landmarks = None
             else: 
                 is_body = True
-                body_landmarks = pickle.dumps(bodyLms.pose_landmarks)
+                body_landmarks = bodyLms.pose_landmarks
 
             
         except:
@@ -837,6 +837,7 @@ def process_image_bodylms(task):
     # df = pd.DataFrame(columns=['image_id','bbox'])
     print("task is: ",task)
     image_id = task[0] ### is it enc or image_id
+    bbox = io.unstring_json(task[3])
     cap_path = capitalize_directory(task[1])
     init_session()
     init_mongo()
@@ -857,12 +858,22 @@ def process_image_bodylms(task):
     if image is not None and image.shape[0]>MINSIZE and image.shape[1]>MINSIZE:
         # Do findbody
         is_body, body_landmarks = find_body(image)
+        print("is_body", is_body)
+        print("body_landmarks", body_landmarks)
 
         # bbox_json = retro_bbox(image)
         # print(bbox_json)
         # if bbox_json: 
 
-        print("is_body", is_body)
+        ### NORMALIZE LANDMARKS ###
+        nose_pixel_pos = sort.set_nose_pixel_pos(body_landmarks,image.shape)
+        print("nose_pixel_pos",nose_pixel_pos)
+        face_height = sort.convert_bbox_to_face_height(bbox)
+        n_landmarks=sort.normalize_landmarks(body_landmarks,nose_pixel_pos,face_height,image.shape)
+        print("n_landmarks",n_landmarks)
+        # sort.insert_n_landmarks(bboxnormed_collection, target_image_id,n_landmarks)
+
+
         quit()
         for _ in range(io.max_retries):
             try:
@@ -885,7 +896,7 @@ def process_image_bodylms(task):
                 if body_landmarks:
                     mongo_collection.update_one(
                         {"image_id": image_id},
-                        {"$set": {"body_landmarks": body_landmarks}}
+                        {"$set": {"body_landmarks": pickle.dumps(body_landmarks)}}
                     )
                     print("----------- >>>>>>>>   mongo body_landmarks updated:", image_id)
                 

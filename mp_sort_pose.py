@@ -16,12 +16,14 @@ from sklearn.neighbors import NearestNeighbors
 import re
 import random
 from cv2 import dnn_superres
+import pymongo
+import pickle
 
 
 class SortPose:
     # """Sort image files based on head pose"""
 
-    def __init__(self, motion, face_height_output, image_edge_multiplier, EXPAND, ONE_SHOT, JUMP_SHOT, HSV_CONTROL=None, VERBOSE=True,INPAINT=False, SORT_TYPE="128d", OBJ_CLS_ID = None,UPSCALE_MODEL_PATH=None):
+    def __init__(self, motion, face_height_output, image_edge_multiplier, EXPAND=False, ONE_SHOT=False, JUMP_SHOT=False, HSV_CONTROL=None, VERBOSE=True,INPAINT=False, SORT_TYPE="128d", OBJ_CLS_ID = None,UPSCALE_MODEL_PATH=None):
 
         self.mp_face_detection = mp.solutions.face_detection
         self.mp_drawing = mp.solutions.drawing_utils
@@ -1677,3 +1679,71 @@ class SortPose:
             print('failed VIDEO, probably because segmented df until empty')
 
 
+#####################################################
+# BODY BACKGROUND OBJECT DETECTION STUFF            #
+#####################################################
+
+
+    def normalize_landmarks(self,landmarks,nose_pos,face_height,shape):
+        height,width = shape[:2]
+        translated_landmarks = landmark_pb2.NormalizedLandmarkList()
+        i=0
+        for landmark in landmarks.landmark:
+            # print(landmark)
+            translated_landmark = landmark_pb2.NormalizedLandmark()
+            translated_landmark.x = (landmark.x*width -nose_pos["x"])/face_height
+            translated_landmark.y = (landmark.y*height-nose_pos["y"])/face_height
+            translated_landmark.visibility = landmark.visibility
+            translated_landmarks.landmark.append(translated_landmark)
+
+        return translated_landmarks
+    
+    def convert_bbox_to_face_height(self,bbox):
+        if type(bbox)==str:
+            bbox=json.loads(bbox)
+        # if VERBOSE:
+        #     print("bbox",bbox)
+        face_height=bbox["top"]-bbox["bottom"]
+        return face_height
+
+    def set_nose_pixel_pos(self,body_landmarks,shape):
+        height,width = shape[:2]
+        nose_pixel_pos ={
+            "x":0,
+            "y":0,
+            "visibility":0
+        }
+        # nose_pixel_pos <- 864, 442 (stay as a separate variable)
+        # nose_normalized_pos 0,0
+        # nose_pos=body_landmarks.landmark[NOSE_ID]
+        nose_pixel_pos["x"]+=body_landmarks.landmark[0].x*width
+        nose_pixel_pos["y"]+=body_landmarks.landmark[0].y*height
+        nose_pixel_pos["visibility"]+=body_landmarks.landmark[0].visibility
+        return nose_pixel_pos
+    
+    def normalize_phone_bbox(self,phone_bbox,nose_pos,face_height,shape):
+        height,width = shape[:2]
+        # print("phone_bbox",phone_bbox)
+        n_phone_bbox=phone_bbox
+        n_phone_bbox["right"]=(n_phone_bbox["right"] -nose_pos["x"])/face_height
+        n_phone_bbox["left"]=(n_phone_bbox["left"] -nose_pos["x"])/face_height
+        n_phone_bbox["top"]=(n_phone_bbox["top"] -nose_pos["y"])/face_height
+        n_phone_bbox["bottom"]=(n_phone_bbox["bottom"] -nose_pos["y"])/face_height
+
+        return n_phone_bbox
+
+
+    def insert_n_landmarks(self,bboxnormed_collection, image_id, n_landmarks):
+        start = time.time()
+        nlms_dict = {"image_id": image_id, "nlms": pickle.dumps(n_landmarks)}
+        result = bboxnormed_collection.update_one(
+            {"image_id": image_id},  # filter
+            {"$set": nlms_dict},     # update
+            upsert=True              # insert if not exists
+        )
+        if result.upserted_id:
+            print("Inserted new document with id:", result.upserted_id)
+        else:
+            print("Updated existing document")
+        print("Time to insert:", time.time()-start)
+        return
