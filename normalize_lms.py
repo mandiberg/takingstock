@@ -1,7 +1,7 @@
 #################################
 
-from sqlalchemy import create_engine, text,func, select, delete, and_, or_
-from sqlalchemy.orm import sessionmaker,scoped_session, declarative_base
+from sqlalchemy import create_engine, text,func, select, delete, and_, or_, update
+from sqlalchemy.orm import sessionmaker,scoped_session, declarative_base, Session
 from sqlalchemy.pool import NullPool
 # from my_declarative_base import Images,ImagesBackground, SegmentTable, Site 
 from mp_db_io import DataIO
@@ -17,7 +17,7 @@ import mediapipe as mp
 import shutil
 import pandas as pd
 import json
-from my_declarative_base import Base, Clusters, Encodings, Images,PhoneBbox, SegmentTable, Images
+from my_declarative_base import Base, SegmentTable, Clusters, Encodings, Images,PhoneBbox, SegmentTable, Images
 #from sqlalchemy.ext.declarative import declarative_base
 from mp_sort_pose import SortPose
 import pymongo
@@ -199,33 +199,54 @@ def insert_n_landmarks(image_id, n_landmarks):
     print("Time to insert:", time.time()-start)
     return
 
-def batch_insert_worker():
+def batch_insert_worker(mysql_session):
     batch = []
     while True:
         try:
             item = batch_queue.get(timeout=5)  # Wait for 5 seconds for new items
             batch.append(item)
+            print(f"Added item to batch: {item['image_id']} batch size: {len(batch)}")
             if len(batch) >= BATCH_SIZE:
-                batch_insert_n_landmarks(batch)
+                batch_insert_n_landmarks(batch, mysql_session)
                 batch = []
         except queue.Empty:
             if batch:  # Insert any remaining items
-                batch_insert_n_landmarks(batch)
+                batch_insert_n_landmarks(batch, mysql_session)
             break  # Exit if no more items and queue is empty
 
-def batch_insert_n_landmarks(batch_data):
+def batch_insert_n_landmarks(batch_data, mysql_session: Session):
     start = time.time()
-    operations = [
+    print(f"Processing batch of {len(batch_data)} items")
+    # MongoDB operations
+    mongo_operations = [
         UpdateOne(
             {"image_id": data["image_id"]},
             {"$set": {"nlms": pickle.dumps(data["n_landmarks"])}},
             upsert=True
         ) for data in batch_data
     ]
-    result = bboxnormed_collection.bulk_write(operations)
-    print(f"Inserted/Updated {len(batch_data)} documents")
-    print("Time to insert batch:", time.time()-start)
-    return result
+    mongo_result = bboxnormed_collection.bulk_write(mongo_operations)
+    
+    # MySQL operations
+    image_ids = [data["image_id"] for data in batch_data]
+    
+    # Update Encodings table
+    encodings_update = update(Encodings).where(Encodings.image_id.in_(image_ids)).values(mongo_body_landmarks_norm=1)
+    mysql_session.execute(encodings_update)
+    
+    # Update SegmentOct20 SegmentTable
+    segment_update = update(SegmentTable).where(SegmentTable.image_id.in_(image_ids)).values(mongo_body_landmarks_norm=1)
+    mysql_session.execute(segment_update)
+    
+    # Commit MySQL changes
+    mysql_session.commit()
+    
+    end = time.time()
+    print(f"Inserted/Updated {len(batch_data)} documents in MongoDB")
+    print(f"Updated {len(image_ids)} rows in MySQL (Encodings and SegmentOct20)")
+    print("Total time for batch operation:", end - start)
+    
+    return mongo_result
 
 def insert_n_phone_bbox(image_id,n_phone_bbox):
     # nlms_dict = { "image_id": image_id, "n_phone_bbox": n_phone_bbox }
@@ -318,7 +339,8 @@ def calc_nlm(image_id_to_shape, lock, session):
     start = time.time()
 
     if height and width:
-        print(target_image_id, "have height,width already",height,width)
+        pass
+        # print(target_image_id, "have height,width already",height,width)
     else:
         height,width=get_shape(target_image_id)
         if not height or not width: 
@@ -460,7 +482,7 @@ def threaded_fetching():
         function(param, lock, session)
         work_queue.task_done()
 
-def threaded_processing():
+def threaded_processing(mysql_session):
     thread_list = []
     for _ in range(num_threads):
         thread = threading.Thread(target=threaded_fetching)
@@ -468,9 +490,9 @@ def threaded_processing():
         thread.start()
     
     # Start the batch insert worker
-    batch_thread = threading.Thread(target=batch_insert_worker)
+    batch_thread = threading.Thread(target=batch_insert_worker, args=(mysql_session,))
     batch_thread.start()
-    
+
     # Wait for all threads to complete
     for thread in thread_list:
         thread.join()
@@ -481,7 +503,7 @@ def threaded_processing():
     # Set the event to signal that threads are completed
     threads_completed.set()
 
-threaded_processing()
+threaded_processing(session)
 # Commit the changes to the database
 threads_completed.wait()
 
