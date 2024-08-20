@@ -339,9 +339,3 @@ class DataIO:
         except (ValueError, TypeError):
             return value
 
-    def convert_lms_to_array(self,lms):
-        if lms:
-            return np.array(lms)
-        else:
-            return None
-        

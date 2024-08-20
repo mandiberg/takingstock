@@ -7,9 +7,24 @@ USE stock
 
 
 SELECT *  
-FROM Images so 
-WHERE image_id = 102921534
+FROM Images i
+-- WHERE i.site_image_id = "___638KPrmA"
+WHERE i.image_id = 114615600
 LIMIT 10
+;
+
+
+SELECT *  
+FROM Images i
+-- WHERE i.site_image_id = "___638KPrmA"
+WHERE i.site_name_id = 7
+LIMIT 10
+;
+
+
+SELECT COUNT(e.image_id)
+FROM SegmentOct20  e  
+WHERE e.mongo_body_landmarks_norm = 1
 ;
 
 CREATE TABLE SegmentHelperAug16_SegOct20_preAlamy (

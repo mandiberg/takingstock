@@ -44,6 +44,9 @@ CREATE TABLE SegmentBig_isface (
     tokenized_keyword_list BLOB,
     ethnicity_list BLOB,
     mongo_tokens boolean,
+    mongo_body_landmarks boolean,
+    mongo_face_landmarks boolean,
+    mongo_body_landmarks_norm boolean,
     UNIQUE (image_id)
 
 

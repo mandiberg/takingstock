@@ -33,8 +33,8 @@ sig = '''
 
 #where the images are:
 # PATH = "/Volumes/RAID54/"
-PATH = "/Volumes/RAID18/"
-# PATH = "/Volumes/OWC4/"
+# PATH = "/Volumes/RAID18/"
+PATH = "/Volumes/SSD4green/"
 # PATH = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/"
 #where the images are going:
 PATH2 = "/Volumes/OWC4/segment_images"
@@ -50,9 +50,9 @@ IMAGES_THREAD_COUNTER = 0
 4   istock - aug17 351105
 5   pexels - aug17 11557
 6   unsplash - did I DL these???
-7   pond5 - renamed
+7   pond5 - aug 19 51919  
 8   123rf - aug17 823542
-9   alamy - WIP
+9   alamy - Aug 19 WIP 154508
 10  visualchinagroup - aug17 DONE
 11	picxy - aug17 DONE (only 1500?)
 12	pixerf
@@ -72,8 +72,8 @@ MAIN_FOLDER = "/Volumes/RAID18/images_pond5"
 '''
 
 # right now this is only working for one site at a time
-SITE_NAME_ID = 7
-NEWIMAGES_FOLDER_NAME = IMAGES_FOLDER_NAME = 'images_pond5'
+SITE_NAME_ID = 9
+NEWIMAGES_FOLDER_NAME = IMAGES_FOLDER_NAME = 'images_alamy'
 # SITE_NAME_ID = 2
 # IMAGES_FOLDER_NAME = 'images_shutterstock'
 # NEWIMAGES_FOLDER_NAME = 'images_shutterstock'

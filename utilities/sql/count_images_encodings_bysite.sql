@@ -20,7 +20,21 @@ ORDER BY
 
    
    
+SELECT
+    COUNT(i.image_id) AS image_count,
+    COUNT(e.encoding_id) AS encoding_count
+FROM
+    Images i
+LEFT JOIN
+    Encodings e ON i.image_id = e.image_id
+WHERE i.site_name_id = 6
+;
+
    
+SELECT *
+FROM Images i
+WHERE i.site_image_id = "_0YYK-PqvXE"
+AND i.site_name_id = 6
    
 -- segment only
    

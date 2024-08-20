@@ -171,13 +171,13 @@ try:
 
         # Check if the current batch is ready for commit
         if len(current_batch) >= batch_size:
-            session.bulk_update_mappings(SegmentTable, [{"image_id": image_id, "imagename": new_imagename, "contentUrl": contentUrl} for image_id, new_imagename, contentUrl in current_batch])
+            session.bulk_update_mappings(Images, [{"image_id": image_id, "imagename": new_imagename, "contentUrl": contentUrl} for image_id, new_imagename, contentUrl in current_batch])
             session.commit()
             print(f"{total_processed} Changes committed for {batch_size} rows.")
             current_batch = []
     # Commit any remaining changes
     if current_batch:
-        session.bulk_update_mappings(SegmentTable, [{"image_id": image_id, "imagename": new_imagename, "contentUrl": contentUrl} for image_id, new_imagename, contentUrl in current_batch])
+        session.bulk_update_mappings(Images, [{"image_id": image_id, "imagename": new_imagename, "contentUrl": contentUrl} for image_id, new_imagename, contentUrl in current_batch])
         session.commit()
         print(f"Changes committed for the remaining {len(current_batch)} rows.")
 

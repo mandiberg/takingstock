@@ -25,13 +25,18 @@ LIMIT 1
 
 -- 4287381
 
--- Identify duplicate image_id entries in the Encodings table
+-- Identify duplicate image_id entries in the Images table
 SELECT site_image_id, COUNT(*)
 FROM Images i 
 WHERE i.site_name_id = 1
 GROUP BY site_image_id
 HAVING COUNT(*) > 1;
 
+-- Identify duplicate image_id entries in the Segment table
+SELECT image_id, COUNT(*)
+FROM SegmentOct20 so  
+GROUP BY image_id
+HAVING COUNT(*) > 1;
 
 
 
@@ -40,25 +45,25 @@ HAVING COUNT(*) > 1;
        SELECT COUNT(image_id)
         FROM Images
         WHERE site_name_id = 1
-        AND imagename LIKE '/Users/michael.mandiberg/Desktop/getty_33333/images_getty_33333_last4/%'
+        AND imagename LIKE '/Users/michaelmandiberg/Documents/projects-active/facemap_production/getty_scrape/getty_33333_china/images_china_lastset/%'
 ; 
 
 
--- update
+-- update Images
         UPDATE Images
-    SET imagename = REPLACE(imagename, '/Volumes/SSD4/images_getty_reDL/', '')        
+    SET imagename = REPLACE(imagename, '/Users/michaelmandiberg/Documents/projects-active/facemap_production/getty_scrape/getty_33333_china/images_china_lastset/', '')        
         WHERE site_name_id = 1
-        AND imagename LIKE '/Volumes/SSD4/images_getty_reDL/%'
+        AND imagename LIKE '/Users/michaelmandiberg/Documents/projects-active/facemap_production/getty_scrape/getty_33333_china/images_china_lastset/%'
         LIMIT 1000000; 
 
 
-
+-- update segment with images 
         UPDATE SegmentOct20 so
         JOIN Images i ON i.image_id = so.image_id
-     SET so.imagename = REPLACE(so.imagename, '/Users/michael.mandiberg/Desktop/getty_33333/images_getty_33333_last4/', '')        
+     SET so.imagename = i.imagename
         WHERE i.site_name_id = 1
-        AND so.imagename LIKE '/Users/michael.mandiberg/Desktop/getty_33333/images_getty_33333_last4/%'
-        LIMIT 200000;
+        AND so.imagename LIKE '/Users/%'
+        ;
 
 
 

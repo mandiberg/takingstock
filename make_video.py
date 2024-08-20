@@ -1252,40 +1252,40 @@ def main():
     #     else:
     #         return None
 
-    def get_encodings_mongo(image_id):
-        mongo_collection_face = mongo_db['encodings']
-        mongo_collection_body = mongo_db["bboxnormed_lms"]
+    # def get_encodings_mongo(image_id):
+    #     mongo_collection_face = mongo_db['encodings']
+    #     mongo_collection_body = mongo_db["bboxnormed_lms"]
 
-        if image_id:
-            results_face = mongo_collection_face.find_one({"image_id": image_id})
-            results_body = mongo_collection_body.find_one({"image_id": image_id})
-            face_encodings68 = face_landmarks = body_landmarks = body_landmarks_normalized = None
-            if results_body:
-                body_landmarks_normalized = results_body["nlms"]
-            if results_face:
-                face_encodings68 = results_face['face_encodings68']
-                face_landmarks = results_face['face_landmarks']
-                body_landmarks = results_face['body_landmarks']
-                # print("got encodings from mongo, types are: ", type(face_encodings68), type(face_landmarks), type(body_landmarks))
-            return pd.Series([face_encodings68, face_landmarks, body_landmarks, body_landmarks_normalized])
-            # else:
-            #     return pd.Series([None, None, None])
-        else:
-            return pd.Series([None, None, None, None])
+    #     if image_id:
+    #         results_face = mongo_collection_face.find_one({"image_id": image_id})
+    #         results_body = mongo_collection_body.find_one({"image_id": image_id})
+    #         face_encodings68 = face_landmarks = body_landmarks = body_landmarks_normalized = None
+    #         if results_body:
+    #             body_landmarks_normalized = results_body["nlms"]
+    #         if results_face:
+    #             face_encodings68 = results_face['face_encodings68']
+    #             face_landmarks = results_face['face_landmarks']
+    #             body_landmarks = results_face['body_landmarks']
+    #             # print("got encodings from mongo, types are: ", type(face_encodings68), type(face_landmarks), type(body_landmarks))
+    #         return pd.Series([face_encodings68, face_landmarks, body_landmarks, body_landmarks_normalized])
+    #         # else:
+    #         #     return pd.Series([None, None, None])
+    #     else:
+    #         return pd.Series([None, None, None, None])
 
 
-    def unstring_json(json_string):
-        eval_string = ast.literal_eval(json_string)
-        if isinstance(eval_string, dict):
-            return eval_string
-        else:
-            json_dict = json.loads(eval_string)
-            return json_dict
-    def make_float(value):
-        try:
-            return float(value)
-        except (ValueError, TypeError):
-            return value
+    # def unstring_json(json_string):
+    #     eval_string = ast.literal_eval(json_string)
+    #     if isinstance(eval_string, dict):
+    #         return eval_string
+    #     else:
+    #         json_dict = json.loads(eval_string)
+    #         return json_dict
+    # def make_float(value):
+    #     try:
+    #         return float(value)
+    #     except (ValueError, TypeError):
+    #         return value
     def decode_64_array(encoded):
         decoded = base64.b64decode(encoded).decode('utf-8')
         return decoded
@@ -1342,8 +1342,10 @@ def main():
             df['face_landmarks'] = df['face_landmarks'].apply(io.unpickle_array)
             df['body_landmarks'] = df['body_landmarks'].apply(io.unpickle_array)
             df['body_landmarks_normalized'] = df['body_landmarks_normalized'].apply(io.unpickle_array)
-            df['bbox'] = df['bbox'].apply(lambda x: unstring_json(x))
-            if OBJ_CLS_ID > 0: df["bbox_"+str(OBJ_CLS_ID)] = df["bbox_"+str(OBJ_CLS_ID)].apply(lambda x: unstring_json(x))
+            df['bbox'] = df['bbox'].apply(lambda x: io.unstring_json(x))
+            if OBJ_CLS_ID > 0: df["bbox_"+str(OBJ_CLS_ID)] = df["bbox_"+str(OBJ_CLS_ID)].apply(lambda x: io.unstring_json(x))
+
+
 
 
             # this may be a big problem
@@ -1351,7 +1353,7 @@ def main():
             # df['imagename'] = df['contentUrl'].apply(newname)
             # make decimals into float
             columns_to_convert = ['face_x', 'face_y', 'face_z', 'mouth_gap']
-            df[columns_to_convert] = df[columns_to_convert].applymap(make_float)
+            df[columns_to_convert] = df[columns_to_convert].applymap(io.make_float)
 
             ### SEGMENT THE DATA ###
 
