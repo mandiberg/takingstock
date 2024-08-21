@@ -16,7 +16,7 @@ from sqlalchemy.pool import NullPool
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
 # my ORM
-from my_declarative_base import Base, SegmentTable, Clusters,ImagesBackground, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON, Images
+from my_declarative_base import Base, SegmentTable,ImagesBackground, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON, Images
 import pymongo
 
 #mine
@@ -56,9 +56,10 @@ HSV_NORMS = {"LUM": .01, "SAT": 1,  "HUE": 0.002777777778, "VAL": 1}
 
 # this is for controlling if it is using
 # all clusters, 
-IS_CLUSTER = False
+IS_CLUSTER = True
+CLUSTER_TYPE = "Poses"
 # number of clusters to analyze -- this is also declared in Clustering_SQL. Move to IO?
-N_CLUSTERS = 128
+N_CLUSTERS = 30
 # this is for IS_ONE_CLUSTER to only run on a specific CLUSTER_NO
 IS_ONE_CLUSTER = False
 CLUSTER_NO = 63
@@ -93,7 +94,7 @@ IS_ANGLE_SORT = False
 IS_TOPICS = False
 N_TOPICS = 30
 
-IS_ONE_TOPIC = True
+IS_ONE_TOPIC = False
 TOPIC_NO = [15,17]
 
 #  is isolated,  is business,  babies, 17 pointing
@@ -177,7 +178,7 @@ elif IS_SEGONLY and io.platform == "darwin":
     # WHERE += " AND k.keyword_text LIKE 'shout%' "
 
     if IS_CLUSTER or IS_ONE_CLUSTER:
-        FROM += " JOIN ImagesClusters ic ON s.image_id = ic.image_id "
+        FROM += f" JOIN Images{CLUSTER_TYPE} ic ON s.image_id = ic.image_id "
     if IS_TOPICS or IS_ONE_TOPIC:
         FROM += " JOIN ImagesTopics it ON s.image_id = it.image_id "
         WHERE += " AND it.topic_score > .3"
@@ -236,7 +237,7 @@ elif IS_SEGONLY and io.platform == "win32":
     # WHERE += " AND k.keyword_text LIKE 'shout%' "
 
     if IS_CLUSTER or IS_ONE_CLUSTER:
-        FROM += " JOIN ImagesClusters ic ON s.image_id = ic.image_id "
+        FROM += f" JOIN Images{CLUSTER_TYPE} ic ON s.image_id = ic.image_id "
     if IS_TOPICS or IS_ONE_TOPIC:
         FROM += " JOIN ImagesTopics it ON s.image_id = it.image_id "
         WHERE += " AND it.topic_score > .3"
@@ -337,6 +338,23 @@ Base = declarative_base()
 mongo_client = pymongo.MongoClient(io.dbmongo['host'])
 mongo_db = mongo_client[io.dbmongo['name']]
 io.mongo_db = mongo_db
+
+
+# handle the table objects based on CLUSTER_TYPE
+ClustersTable_name = CLUSTER_TYPE
+ImagesClustersTable_name = "Images"+CLUSTER_TYPE
+
+class Clusters(Base):
+    __tablename__ = ClustersTable_name
+
+    cluster_id = Column(Integer, primary_key=True, autoincrement=True)
+    cluster_median = Column(BLOB)
+
+class ImagesClusters(Base):
+    __tablename__ = ImagesClustersTable_name
+
+    image_id = Column(Integer, ForeignKey(Images.image_id, ondelete="CASCADE"), primary_key=True)
+    cluster_id = Column(Integer, ForeignKey(f'{ClustersTable_name}.cluster_id', ondelete="CASCADE"))
 
 # mongo_collection = mongo_db[io.dbmongo['collection']]
 
@@ -449,7 +467,12 @@ def sort_by_face_dist_NN(df_enc):
         ## Find closest
         try:
             # send in both dfs, and return same dfs with 1+ rows sorted
+            print("sort_by_face_dist_NN _ for loop df_enc is", df_enc)
+
             df_enc, df_sorted = sort.get_closest_df_NN(df_enc, df_sorted)
+    
+            print("sort_by_face_dist_NN _ for loop df_enc is", df_enc)
+            print("sort_by_face_dist_NN _ for loop df_sorted is", df_sorted)
 
             # # test to see if body_landmarks for row with image_id = 5251199 still is the same as test_lms
             # retest_row = df_enc.loc[df_enc['image_id'] == 10498233]
@@ -460,7 +483,7 @@ def sort_by_face_dist_NN(df_enc):
 
 
             dist = df_sorted.iloc[-1]['dist_enc1']
-            # print(dist)
+            print("sort_by_face_dist_NN _ for loop dist is", dist)
 
             # Break out of the loop if greater than MAXDIST
             if ONE_SHOT:
@@ -724,7 +747,7 @@ def compare_images(last_image, img, face_landmarks, bbox):
         print("first run, but bad first image")
         last_image = cropped_image
         sort.counter_dict["cropfail_count"] += 1
-    elif len(cropped_image)==1:
+    elif cropped_image and len(cropped_image)==1:
         print("bad crop, will try inpainting and try again")
         sort.counter_dict["inpaint_count"] += 1
     else:

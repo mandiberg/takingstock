@@ -63,18 +63,20 @@ io = DataIO()
 db = io.db
 # io.db["name"] = "stock"
 # io.db["name"] = "ministock"
-mongo_client = pymongo.MongoClient(io.dbmongo['host'])
-mongo_db = mongo_client[io.dbmongo['name']]
-io.mongo_db = mongo_db
+# mongo_client = pymongo.MongoClient(io.dbmongo['host'])
+# mongo_db = mongo_client[io.dbmongo['name']]
+# io.mongo_db = mongo_db
 
-mongo_collection = mongo_db[io.dbmongo['collection']]
+# mongo_collection = mongo_db[io.dbmongo['collection']]
 
 
 NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
-MODE = 1
+MODE = 0
 # CLUSTER_TYPE = "Clusters"
 CLUSTER_TYPE = "Poses"
-
+# POINTERS = [16,20,15,19]
+HAND_LANDMARKS = []
+# HAND_LANDMARKS = [i for i in range(13,22)]
 # this works for using segment in stock, and for ministock
 USE_SEGMENT = True
 
@@ -82,7 +84,7 @@ USE_SEGMENT = True
 GET_OPTIMAL_CLUSTERS=False
 
 # number of clusters produced. run GET_OPTIMAL_CLUSTERS and add that number here
-N_CLUSTERS = 2
+N_CLUSTERS = 30
 SAVE_FIG=False ##### option for saving the visualized data
 
 if USE_SEGMENT is True and CLUSTER_TYPE == "Poses" and MODE == 0:
@@ -102,7 +104,18 @@ if USE_SEGMENT is True and CLUSTER_TYPE == "Poses" and MODE == 0:
     # FROM += f" INNER JOIN {HelperTable_name} h ON h.image_id = s.image_id " 
     WHERE = "mongo_body_landmarks = 1"
     # WHERE = "face_encodings68 IS NOT NULL AND face_x > -33 AND face_x < -27 AND face_y > -2 AND face_y < 2 AND face_z > -2 AND face_z < 2"
-    LIMIT = 50
+    LIMIT = 4000
+
+
+    '''
+    Poses
+    500 11s
+    1000 21s
+    2000 43s
+    4000 87s
+    10000
+
+    '''
 
 elif USE_SEGMENT is True and MODE == 0:
 
@@ -172,10 +185,7 @@ class Clusters(Base):
 class ImagesClusters(Base):
     __tablename__ = ImagesClustersTable_name
 
-    # image_id = Column(Integer, ForeignKey('Images.image_id'), primary_key=True)
-    # cluster_id = Column(Integer, ForeignKey('Clusters.cluster_id'))
-
-    image_id = Column(Integer, ForeignKey('Images.image_id', ondelete="CASCADE"), primary_key=True)
+    image_id = Column(Integer, ForeignKey(Images.image_id, ondelete="CASCADE"), primary_key=True)
     cluster_id = Column(Integer, ForeignKey(f'{ClustersTable_name}.cluster_id', ondelete="CASCADE"))
 
 # # define new cluster table names based on segment name
@@ -206,7 +216,12 @@ def selectSQL():
 def kmeans_cluster(df, n_clusters=32):
     # Select only the numerical columns (dim_0 to dim_65)
     numerical_columns = [col for col in df.columns if col.startswith('dim_')]
-    numerical_data = df[numerical_columns]
+    # set hand_columns = to the numerical_columns in HAND_LANDMARKS
+    if HAND_LANDMARKS:
+        subset_columns = [f'dim_{i}' for i in HAND_LANDMARKS]
+    else:
+        subset_columns = numerical_columns
+    numerical_data = df[subset_columns]
     
     print("clustering", numerical_data)
     kmeans = KMeans(n_clusters=n_clusters, n_init=10, init='k-means++', random_state=42, max_iter=300, verbose=1)

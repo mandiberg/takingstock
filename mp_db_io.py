@@ -7,6 +7,7 @@ import ast
 import pandas as pd
 import pickle
 import numpy as np
+import pymongo
 
 
 class DataIO:
@@ -53,6 +54,10 @@ class DataIO:
                 "name":"stock",
                 "collection":"encodings"
             }
+            self.mongo_client = pymongo.MongoClient(self.dbmongo['host'])
+            self.mongo_db = self.mongo_client[self.dbmongo['name']]
+            self.mongo_collection_face = self.mongo_db['encodings']
+            self.mongo_collection_body = self.mongo_db["body_landmarks_norm"]
 
             # self.ROOT_PROD= os.path.join(os.environ['HOME'], "Documents/projects-active/facemap_production/segment_images") ## only on Mac
             # moved images to SSD
@@ -262,12 +267,10 @@ class DataIO:
 
         # print("self.query_face: ", self.query_face)
         # print("self.query_body: ", self.query_body)
-        mongo_collection_face = self.mongo_db['encodings']
-        mongo_collection_body = self.mongo_db["body_landmarks_norm"]
         results_face = results_body = None
         if image_id:
-            if self.query_face: results_face = mongo_collection_face.find_one({"image_id": image_id})
-            if self.query_body: results_body = mongo_collection_body.find_one({"image_id": image_id})
+            if self.query_face: results_face = self.mongo_collection_face.find_one({"image_id": image_id})
+            if self.query_body: results_body = self.mongo_collection_body.find_one({"image_id": image_id})
             # print("got results from mongo, types are: ", type(results_face), type(results_body))
             # print("results_face: ", results_face)
             # print("results_body: ", results_body)

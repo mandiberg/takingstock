@@ -1342,7 +1342,11 @@ class SortPose:
                 enc1 = self.prep_enc(enc1, structure="list")
                 print("enc1 after prep_enc", enc1)
                 # apply prep_enc to the sortcol column 
+                print("applying prep_enc to the sortcol column")
+                print("df_enc[sourcecol]", df_enc[sourcecol])
+                # do I need to reduce the number of landmarks I'm tracking at this point? 
                 df_enc[sortcol] = df_enc[sourcecol].apply(lambda x: self.prep_enc(x, structure="list"))
+                print("df_enc[sortcol]", df_enc[sortcol])
         elif knn_sort == "HSV":
             print("knn_sort is HSV")
             sortcol = 'hsvll'
@@ -1376,7 +1380,10 @@ class SortPose:
         # # print("NaN in sortcol", df_enc[sortcol].isnull())
         print("sort_df_KNN, knn_sort is", knn_sort)
         # Extract the face encodings from the dataframe
+        print("df_enc[sortcol]", df_enc[sortcol])
+
         encodings_array = df_enc[sortcol].to_numpy().tolist()
+        print("encodings_array to_numpy().tolist", (encodings_array))
 
         if knn_sort == "obj":
             print("encodings_array length", len(encodings_array))
@@ -1639,13 +1646,18 @@ class SortPose:
 
                 df_enc = df_enc.drop(df_run.index).reset_index(drop=True)
 
-            else:
-                #jump somewhere else
-                random_index = random.randint(0, len(df_shuffled) - 1)                
-                print("JUMPING AROUND ^^^^ ", df_run)
-                df_run = df_shuffled.iloc[[random_index]]
+            # else:
+            #     #jump somewhere else
+            #     random_index = random.randint(0, len(df_shuffled) - 1)                
+            #     print("JUMPING AROUND ^^^^ ", df_run)
+            #     df_run = df_shuffled.iloc[[random_index]]
 
-                df_enc = df_enc.drop(df_run.index).reset_index(drop=True)
+            #     df_enc = df_enc.drop(df_run.index).reset_index(drop=True)
+
+
+            else:
+                print("df_shuffled is empty")
+                return df_enc, df_sorted
 
             print("df_run", df_run)
             # print("df_run", df_run[['image_id','dist_enc1','dist_HSV','sum_dist']])
