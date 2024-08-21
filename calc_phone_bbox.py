@@ -14,6 +14,7 @@ import queue
 import json
 from my_declarative_base import Base, ImagesTopics,PhoneBbox, SegmentTable
 
+from mp_sort_pose import SortPose
 
 title = 'Please choose your operation: '
 options = ['Create table', 'Object detection']
@@ -21,19 +22,36 @@ option, index = pick(options, title)
 
 Base = declarative_base()
 # MM controlling which folder to use
-IS_SSD = False
+IS_SSD = True
 VERBOSE = True
 io = DataIO(IS_SSD)
 db = io.db
 io.db["name"] = "stock"
 # io.db["name"] = "ministock"
 # Create a database engine
-engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}".format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']), poolclass=NullPool)
+if db['unix_socket']:
+    # for MM's MAMP config
+    engine = create_engine("mysql+pymysql://{user}:{pw}@/{db}?unix_socket={socket}".format(
+        user=db['user'], pw=db['pass'], db=db['name'], socket=db['unix_socket']
+    ), poolclass=NullPool)
+else:
+    engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}"
+                                .format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']), poolclass=NullPool)
 
 # Create a session
 session = scoped_session(sessionmaker(bind=engine))
     
 
+image_edge_multiplier = [1.5,1.5,2,1.5] # bigger portrait
+image_edge_multiplier_sm = [1.2, 1.2, 1.6, 1.2] # standard portrait
+face_height_output = 500
+motion = {"side_to_side": False, "forward_smile": True, "laugh": False, "forward_nosmile": False, "static_pose": False, "simple": False}
+
+EXPAND = False
+ONE_SHOT = False # take all files, based off the very first sort order.
+JUMP_SHOT = False # jump to random file if can't find a run
+
+sort = SortPose(motion, face_height_output, image_edge_multiplier_sm)
 
 LIMIT= 200000
 # Initialize the counter
@@ -146,32 +164,32 @@ def return_bbox_one(image):
     
     return bbox,conf
 
-def return_bbox(image):
-    result = model(image,classes=[OBJ_CLS_LIST])[0]
-    bbox_dict={}
-    bbox_count=np.zeros(len(OBJ_CLS_LIST))
-    for i,OBJ_CLS_ID in enumerate(OBJ_CLS_LIST):
-        for box in result.boxes:
-            if int(box.cls[0].item())==OBJ_CLS_ID:
-                bbox = box.xyxy[0].tolist()    #the coordinates of the box as an array [x1,y1,x2,y2]
-                bbox = {"left":round(bbox[0]),"top":round(bbox[1]),"right":round(bbox[2]),"bottom":round(bbox[3])}
-                bbox=json.dumps(bbox)
-                # bbox=json.dumps(bbox, indent = 4) 
-                conf = round(box.conf[0].item(), 2)                
-                bbox_count[i]+=1 
-                bbox_dict[OBJ_CLS_ID]={"bbox": bbox, "conf": conf}
-                if VERBOSE:print("object IS detected",result.names[box.cls[0].item()])
+# def return_bbox(image):
+#     result = model(image,classes=[OBJ_CLS_LIST])[0]
+#     bbox_dict={}
+#     bbox_count=np.zeros(len(OBJ_CLS_LIST))
+#     for i,OBJ_CLS_ID in enumerate(OBJ_CLS_LIST):
+#         for box in result.boxes:
+#             if int(box.cls[0].item())==OBJ_CLS_ID:
+#                 bbox = box.xyxy[0].tolist()    #the coordinates of the box as an array [x1,y1,x2,y2]
+#                 bbox = {"left":round(bbox[0]),"top":round(bbox[1]),"right":round(bbox[2]),"bottom":round(bbox[3])}
+#                 bbox=json.dumps(bbox)
+#                 # bbox=json.dumps(bbox, indent = 4) 
+#                 conf = round(box.conf[0].item(), 2)                
+#                 bbox_count[i]+=1 
+#                 bbox_dict[OBJ_CLS_ID]={"bbox": bbox, "conf": conf}
+#                 if VERBOSE:print("object IS detected",result.names[box.cls[0].item()])
 
-    for i,OBJ_CLS_ID in enumerate(OBJ_CLS_LIST):
-        if bbox_count[i]>1: # checking to see it there are more than one objects of a class and removing 
-            bbox_dict.pop(OBJ_CLS_ID)
-            bbox_dict[OBJ_CLS_ID]={"bbox": None, "conf": -1} ##setting to default
-            if VERBOSE:print("popping because too many",OBJ_CLS_NAME[OBJ_CLS_ID])
-        if bbox_count[i]==0:
-            bbox_dict[OBJ_CLS_ID]={"bbox": None, "conf": -1} ##setting to default
-            if VERBOSE:print("object NOT detected",OBJ_CLS_NAME[OBJ_CLS_ID])
+#     for i,OBJ_CLS_ID in enumerate(OBJ_CLS_LIST):
+#         if bbox_count[i]>1: # checking to see it there are more than one objects of a class and removing 
+#             bbox_dict.pop(OBJ_CLS_ID)
+#             bbox_dict[OBJ_CLS_ID]={"bbox": None, "conf": -1} ##setting to default
+#             if VERBOSE:print("popping because too many",OBJ_CLS_NAME[OBJ_CLS_ID])
+#         if bbox_count[i]==0:
+#             bbox_dict[OBJ_CLS_ID]={"bbox": None, "conf": -1} ##setting to default
+#             if VERBOSE:print("object NOT detected",OBJ_CLS_NAME[OBJ_CLS_ID])
 
-    return bbox_dict
+#     return bbox_dict
 
 def write_bbox_one(target_image_id, lock, session):
     file=get_filename(target_image_id)
@@ -236,33 +254,37 @@ def write_bbox(target_image_id, lock, session):
     ########cv.imread reads it and produces None, because it reads "hands" not "hand's"
     if img is None:return
     #####################
-    bbox_dict=return_bbox(img)
-    for OBJ_CLS_ID in OBJ_CLS_LIST:
-        if VERBOSE:
-            if bbox_dict[OBJ_CLS_ID]["conf"]==-1:
-                folder = "no_phone"
-            else:
-                folder = "phone"
-            # cv2.imwrite(os.path.join(io.ROOT_PROD, folder, str(target_image_id)+".jpg"), img)
+    bbox_dict=sort.return_bbox(model,img,OBJ_CLS_LIST)
+    session = sort.parse_bbox_dict(session, target_image_id, PhoneBbox, OBJ_CLS_LIST, bbox_dict)
+    # unclear if PhoneBbox will actually be sent through as an object
+    # or if I need to construct it inside the class
 
-    # print(bbox,conf)
-        PhoneBbox_entry = (
-            session.query(PhoneBbox)
-            .filter(PhoneBbox.image_id == target_image_id)
-            .first()
-        )
+    # for OBJ_CLS_ID in OBJ_CLS_LIST:
+    #     if VERBOSE:
+    #         if bbox_dict[OBJ_CLS_ID]["conf"]==-1:
+    #             folder = "no_phone"
+    #         else:
+    #             folder = "phone"
+    #         # cv2.imwrite(os.path.join(io.ROOT_PROD, folder, str(target_image_id)+".jpg"), img)
 
-        if PhoneBbox_entry:
-            setattr(PhoneBbox_entry, "bbox_{0}".format(OBJ_CLS_ID), bbox_dict[OBJ_CLS_ID]["bbox"])
-            setattr(PhoneBbox_entry, "conf_{0}".format(OBJ_CLS_ID), bbox_dict[OBJ_CLS_ID]["conf"])
-            if VERBOSE:
-                print("image_id:", PhoneBbox_entry.image_id)
-                print("bbox:", OBJ_CLS_NAME[OBJ_CLS_ID],getattr(PhoneBbox_entry, "bbox_{0}".format(OBJ_CLS_ID)))
-                print("conf:", OBJ_CLS_NAME[OBJ_CLS_ID],getattr(PhoneBbox_entry, "conf_{0}".format(OBJ_CLS_ID)))
-            #session.commit()
-            print(f"Bbox {OBJ_CLS_ID} for image_id {target_image_id} updated successfully.")
-        else:
-            print(f"Bbox {OBJ_CLS_ID} for image_id {target_image_id} not found.")
+    # # print(bbox,conf)
+    #     PhoneBbox_entry = (
+    #         session.query(PhoneBbox)
+    #         .filter(PhoneBbox.image_id == target_image_id)
+    #         .first()
+    #     )
+
+    #     if PhoneBbox_entry:
+    #         setattr(PhoneBbox_entry, "bbox_{0}".format(OBJ_CLS_ID), bbox_dict[OBJ_CLS_ID]["bbox"])
+    #         setattr(PhoneBbox_entry, "conf_{0}".format(OBJ_CLS_ID), bbox_dict[OBJ_CLS_ID]["conf"])
+    #         if VERBOSE:
+    #             print("image_id:", PhoneBbox_entry.image_id)
+    #             print("bbox:", OBJ_CLS_NAME[OBJ_CLS_ID],getattr(PhoneBbox_entry, "bbox_{0}".format(OBJ_CLS_ID)))
+    #             print("conf:", OBJ_CLS_NAME[OBJ_CLS_ID],getattr(PhoneBbox_entry, "conf_{0}".format(OBJ_CLS_ID)))
+    #         #session.commit()
+    #         print(f"Bbox {OBJ_CLS_ID} for image_id {target_image_id} updated successfully.")
+    #     else:
+    #         print(f"Bbox {OBJ_CLS_ID} for image_id {target_image_id} not found.")
     
     with lock:
         # Increment the counter using the lock to ensure thread safety

@@ -1747,3 +1747,52 @@ class SortPose:
             print("Updated existing document")
         print("Time to insert:", time.time()-start)
         return
+
+    def return_bbox(self, model, image, OBJ_CLS_LIST):
+        result = model(image,classes=[OBJ_CLS_LIST])[0]
+        bbox_dict={}
+        bbox_count=np.zeros(len(OBJ_CLS_LIST))
+        for i,OBJ_CLS_ID in enumerate(OBJ_CLS_LIST):
+            for box in result.boxes:
+                if int(box.cls[0].item())==OBJ_CLS_ID:
+                    bbox = box.xyxy[0].tolist()    #the coordinates of the box as an array [x1,y1,x2,y2]
+                    bbox = {"left":round(bbox[0]),"top":round(bbox[1]),"right":round(bbox[2]),"bottom":round(bbox[3])}
+                    bbox=json.dumps(bbox)
+                    # bbox=json.dumps(bbox, indent = 4) 
+                    conf = round(box.conf[0].item(), 2)                
+                    bbox_count[i]+=1 
+                    bbox_dict[OBJ_CLS_ID]={"bbox": bbox, "conf": conf}
+
+        for i,OBJ_CLS_ID in enumerate(OBJ_CLS_LIST):
+            if bbox_count[i]>1: # checking to see it there are more than one objects of a class and removing 
+                bbox_dict.pop(OBJ_CLS_ID)
+                bbox_dict[OBJ_CLS_ID]={"bbox": None, "conf": -1} ##setting to default
+            if bbox_count[i]==0:
+                bbox_dict[OBJ_CLS_ID]={"bbox": None, "conf": -1} ##setting to default
+        return bbox_dict
+
+    def parse_bbox_dict(self, session, target_image_id, PhoneBbox, OBJ_CLS_LIST, bbox_dict):
+        # I don't think it likes me sending PhoneBbox as a class
+        for OBJ_CLS_ID in OBJ_CLS_LIST:
+            bbox_n_key = "bbox_{0}_norm".format(OBJ_CLS_ID)
+            print(bbox_dict)
+            if bbox_dict[OBJ_CLS_ID]["bbox"]:
+                PhoneBbox_entry = (
+                    session.query(PhoneBbox)
+                    .filter(PhoneBbox.image_id == target_image_id)
+                    .first()
+                )
+
+                if PhoneBbox_entry:
+                    setattr(PhoneBbox_entry, "bbox_{0}".format(OBJ_CLS_ID), bbox_dict[OBJ_CLS_ID]["bbox"])
+                    setattr(PhoneBbox_entry, "conf_{0}".format(OBJ_CLS_ID), bbox_dict[OBJ_CLS_ID]["conf"])
+                    setattr(PhoneBbox_entry, bbox_n_key, bbox_dict[bbox_n_key])
+                    print("image_id:", PhoneBbox_entry.target_image_id)
+                    #session.commit()
+                    print(f"Bbox {OBJ_CLS_ID} for image_id {target_image_id} updated successfully.")
+                else:
+                    print(f"Bbox {OBJ_CLS_ID} for image_id {target_image_id} not found.")
+            else:
+                print(f"No bbox for {OBJ_CLS_ID} in image_id {target_image_id}")
+        
+        return session

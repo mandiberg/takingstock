@@ -15,13 +15,14 @@ import base64
 import numpy as np
 import mediapipe as mp
 import pandas as pd
+from ultralytics import YOLO
 
 from sqlalchemy import create_engine, text, MetaData, Table, Column, Numeric, Integer, VARCHAR, Boolean, DECIMAL, BLOB, JSON, String, Date, ForeignKey, update, select
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.orm import relationship
 from sqlalchemy.ext.declarative import declarative_base
 # my ORM
-from my_declarative_base import Base, Images, Keywords, SegmentTable, ImagesKeywords, Encodings, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON
+from my_declarative_base import Base, Images, Keywords, SegmentTable, ImagesKeywords, Encodings, PhoneBbox, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON
 
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.pool import NullPool
@@ -197,10 +198,24 @@ face_detection = mp_face_detection.FaceDetection(min_detection_confidence=0.7)
 
 face_recognition_model = face_recognition_models.face_recognition_model_location()
 face_encoder = dlib.face_recognition_model_v1(face_recognition_model)
+YOLO_MODEL = YOLO("yolov8m.pt")   #MEDIUM
 
 SMALL_MODEL = False
 NUM_JITTERS= 1
 ###############
+
+OBJ_CLS_LIST=[67,63,26,27,32] ## 
+OBJ_CLS_NAME={0: 'person', 1: 'bicycle', 2: 'car', 3: 'motorcycle', 4: 'airplane', 5: 'bus', 6: 'train', 7: 'truck', 8: 'boat'\
+   , 9: 'traffic light', 10: 'fire hydrant', 11: 'stop sign', 12: 'parking meter', 13: 'bench', 14: 'bird', 15: 'cat'\
+    , 16: 'dog', 17: 'horse', 18: 'sheep', 19: 'cow', 20: 'elephant', 21: 'bear', 22: 'zebra', 23: 'giraffe'\
+    , 24: 'backpack', 25: 'umbrella', 26: 'handbag', 27: 'tie', 28: 'suitcase', 29: 'frisbee', 30: 'skis', 31: 'snowboard'\
+    , 32: 'sports ball', 33: 'kite', 34: 'baseball bat', 35: 'baseball glove', 36: 'skateboard', 37: 'surfboard'\
+    , 38: 'tennis racket', 39: 'bottle', 40: 'wine glass', 41: 'cup', 42: 'fork', 43: 'knife', 44: 'spoon', 45: 'bowl'\
+    , 46: 'banana', 47: 'apple', 48: 'sandwich', 49: 'orange', 50: 'broccoli', 51: 'carrot', 52: 'hot dog', 53: 'pizza'\
+    , 54: 'donut', 55: 'cake', 56: 'chair', 57: 'couch', 58: 'potted plant', 59: 'bed', 60: 'dining table', 61: 'toilet'\
+    , 62: 'tv', 63: 'laptop', 64: 'mouse', 65: 'remote', 66: 'keyboard', 67: 'cell phone', 68: 'microwave', 69: 'oven', 70: 'toaster'\
+    , 71: 'sink', 72: 'refrigerator', 73: 'book', 74: 'clock', 75: 'vase', 76: 'scissors', 77: 'teddy bear', 78: 'hair drier'\
+    , 79: 'toothbrush'}
 
 ## CREATING POSE OBJECT FOR SELFIE SEGMENTATION
 ## none of these are used in this script ##
@@ -858,21 +873,40 @@ def process_image_bodylms(task):
     if image is not None and image.shape[0]>MINSIZE and image.shape[1]>MINSIZE:
         # Do findbody
         is_body, body_landmarks = find_body(image)
-        print("is_body", is_body)
-        print("body_landmarks", body_landmarks)
+        # print("is_body", is_body)
+        # print("body_landmarks", body_landmarks)
 
         # bbox_json = retro_bbox(image)
         # print(bbox_json)
         # if bbox_json: 
 
-        ### NORMALIZE LANDMARKS ###
-        nose_pixel_pos = sort.set_nose_pixel_pos(body_landmarks,image.shape)
-        print("nose_pixel_pos",nose_pixel_pos)
-        face_height = sort.convert_bbox_to_face_height(bbox)
-        n_landmarks=sort.normalize_landmarks(body_landmarks,nose_pixel_pos,face_height,image.shape)
-        print("n_landmarks",n_landmarks)
-        # sort.insert_n_landmarks(bboxnormed_collection, target_image_id,n_landmarks)
+        if is_body:
+            ### NORMALIZE LANDMARKS ###
+            nose_pixel_pos = sort.set_nose_pixel_pos(body_landmarks,image.shape)
+            print("nose_pixel_pos",nose_pixel_pos)
+            face_height = sort.convert_bbox_to_face_height(bbox)
+            n_landmarks=sort.normalize_landmarks(body_landmarks,nose_pixel_pos,face_height,image.shape)
+            # print("n_landmarks",n_landmarks)
+            # sort.insert_n_landmarks(bboxnormed_collection, target_image_id,n_landmarks)
 
+        ### detect object info, 
+        bbox_dict=sort.return_bbox(YOLO_MODEL,image, OBJ_CLS_LIST)
+
+        ### normed object bbox
+        for OBJ_CLS_ID in OBJ_CLS_LIST:
+            bbox_key = "bbox_{0}".format(OBJ_CLS_ID)
+            # conf_key = "conf_{0}".format(OBJ_CLS_ID)
+            bbox_n_key = "conf_{0}_norm".format(OBJ_CLS_ID)
+            if bbox_dict[bbox_key]:
+                n_phone_bbox=sort.normalize_phone_bbox(bbox_dict[bbox_key],nose_pixel_pos,face_height,image.shape)
+                bbox_dict[bbox_n_key]=n_phone_bbox
+            else:
+                print("NO bbox_key for", image_id)
+ 
+        ### save object bbox info
+        session = sort.parse_bbox_dict(session, image_id, PhoneBbox, OBJ_CLS_LIST, bbox_dict)
+
+        ### do imagebackground calcs
 
         quit()
         for _ in range(io.max_retries):
@@ -891,6 +925,12 @@ def process_image_bodylms(task):
                     SegmentTable.mongo_body_landmarks: is_body
                 })
 
+                ### add height and width
+
+                ### save selfie bbox info
+
+                ### save obj deteciton info, including normed bbox
+
                 # total_processed += 1
 
                 if body_landmarks:
@@ -899,7 +939,9 @@ def process_image_bodylms(task):
                         {"$set": {"body_landmarks": pickle.dumps(body_landmarks)}}
                     )
                     print("----------- >>>>>>>>   mongo body_landmarks updated:", image_id)
-                
+
+                ### save normalized landmarks                
+
                 # Check if the current batch is ready for commit
                 # if total_processed % BATCH_SIZE == 0:
 
