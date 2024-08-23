@@ -104,7 +104,7 @@ if USE_SEGMENT is True and CLUSTER_TYPE == "Poses" and MODE == 0:
     # FROM += f" INNER JOIN {HelperTable_name} h ON h.image_id = s.image_id " 
     WHERE = "mongo_body_landmarks = 1"
     # WHERE = "face_encodings68 IS NOT NULL AND face_x > -33 AND face_x < -27 AND face_y > -2 AND face_y < 2 AND face_z > -2 AND face_z < 2"
-    LIMIT = 4000
+    LIMIT = 200000
 
 
     '''
@@ -113,7 +113,7 @@ if USE_SEGMENT is True and CLUSTER_TYPE == "Poses" and MODE == 0:
     1000 21s
     2000 43s
     4000 87s
-    10000
+    200000 18664
 
     '''
 

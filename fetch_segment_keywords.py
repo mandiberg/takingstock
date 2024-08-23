@@ -29,11 +29,18 @@ db = io.db
 # io.db["name"] = "ministock"
 
 VERBOSE = True
-SegmentHelper_name = 'SegmentHelperApril12_2x2x33x27'
+SegmentHelper_name = 'SegmentHelperAug16_SegOct20_preAlamy'
 TOKEN_COUNT_PATH = "token_counts.csv"
 
 # Create a database engine
-engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}".format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']), poolclass=NullPool)
+if db['unix_socket']:
+    # for MM's MAMP config
+    engine = create_engine("mysql+pymysql://{user}:{pw}@/{db}?unix_socket={socket}".format(
+        user=db['user'], pw=db['pass'], db=db['name'], socket=db['unix_socket']
+    ), poolclass=NullPool)
+else:
+    engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}"
+                                .format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']), poolclass=NullPool)
 
 # Create a session
 session = scoped_session(sessionmaker(bind=engine))

@@ -56,8 +56,9 @@ HSV_NORMS = {"LUM": .01, "SAT": 1,  "HUE": 0.002777777778, "VAL": 1}
 
 # this is for controlling if it is using
 # all clusters, 
-IS_CLUSTER = True
-CLUSTER_TYPE = "Poses"
+IS_CLUSTER = False
+# CLUSTER_TYPE = "Poses"
+CLUSTER_TYPE = "Clusters"
 # number of clusters to analyze -- this is also declared in Clustering_SQL. Move to IO?
 N_CLUSTERS = 30
 # this is for IS_ONE_CLUSTER to only run on a specific CLUSTER_NO
@@ -94,7 +95,7 @@ IS_ANGLE_SORT = False
 IS_TOPICS = False
 N_TOPICS = 30
 
-IS_ONE_TOPIC = False
+IS_ONE_TOPIC = True
 TOPIC_NO = [15,17]
 
 #  is isolated,  is business,  babies, 17 pointing
@@ -207,7 +208,7 @@ elif IS_SEGONLY and io.platform == "darwin":
     # WHERE += " AND e.encoding_id > 2612275"
 
     # WHERE = "s.site_name_id != 1"
-    LIMIT = 1000
+    LIMIT = 100
 
     # TEMP TK TESTING
     # WHERE += " AND s.site_name_id = 8"

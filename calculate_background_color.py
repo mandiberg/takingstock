@@ -109,7 +109,7 @@ title = 'Please choose your operation: '
 options = ['Create table', 'Fetch BG color stats',"test sorting"]
 option, index = pick(options, title)
 
-LIMIT= 1000000
+LIMIT= 10
 # Initialize the counter
 counter = 0
 
@@ -183,47 +183,49 @@ def sort_files_onBG():
 
     print("Files saved to", output_folder)
 
-def get_selfie_bbox(segmentation_mask):
-    bbox=None
-    scaled_mask = (segmentation_mask * 255).astype(np.uint8)
-    # Apply a binary threshold to get a binary image
-    _, binary = cv2.threshold(scaled_mask, 127, 255, cv2.THRESH_BINARY)
-    # Find contours in the binary image
-    contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    if contours:
-        # Assume the largest contour is the shape
-        contour = max(contours, key=cv2.contourArea)
-        # Get the bounding box of the shape
-        x, y, w, h = cv2.boundingRect(contour)
-        # Draw the bounding box for visualization
-        bbox={"top":y,"right":scaled_mask.shape[1] - (x + w),"bottom":scaled_mask.shape[0] - (y + h),"left":x}
-    else:
-        print("No contours were found")
-    if bbox is None: print("bbox is empty, figure out what happened")
-    else:
-        if VERBOSE:print("bbox=",bbox)
-    return bbox
+# move this to sort
+# def get_selfie_bbox(segmentation_mask):
+#     bbox=None
+#     scaled_mask = (segmentation_mask * 255).astype(np.uint8)
+#     # Apply a binary threshold to get a binary image
+#     _, binary = cv2.threshold(scaled_mask, 127, 255, cv2.THRESH_BINARY)
+#     # Find contours in the binary image
+#     contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+#     if contours:
+#         # Assume the largest contour is the shape
+#         contour = max(contours, key=cv2.contourArea)
+#         # Get the bounding box of the shape
+#         x, y, w, h = cv2.boundingRect(contour)
+#         # Draw the bounding box for visualization
+#         bbox={"top":y,"right":scaled_mask.shape[1] - (x + w),"bottom":scaled_mask.shape[0] - (y + h),"left":x}
+#     else:
+#         print("No contours were found")
+#     if bbox is None: print("bbox is empty, figure out what happened")
+#     else:
+#         if VERBOSE:print("bbox=",bbox)
+#     return bbox
 
-def get_segmentation_mask(img,bbox=None,face_landmarks=None):
-    if VERBOSE: print("[get_bg_hue_lum] about to go for segemntation")
+# move this to sort
+# def get_segmentation_mask(img,bbox=None,face_landmarks=None):
+#     if VERBOSE: print("[get_bg_hue_lum] about to go for segemntation")
 
-    if bbox:
-        try:
-            if type(bbox)==str:
-                bbox=json.loads(bbox)
-                if VERBOSE: print("bbox type", type(bbox))
-            #sample_img=sample_img[bbox['top']:bbox['bottom'],bbox['left']:bbox['right'],:]
-            # passing in bbox as a str
-            img = sort.crop_image(img, face_landmarks, bbox)
-            if img is None: return -1,-1,-1,-1,-1 ## if TOO_BIG==true, checking if cropped image is empty
-        except:
-            if VERBOSE: print("FAILED CROPPING, bad bbox",bbox)
-            return -2,-2,-2,-2,-2
-        print("bbox['bottom'], ", bbox['bottom'])
+#     if bbox:
+#         try:
+#             if type(bbox)==str:
+#                 bbox=json.loads(bbox)
+#                 if VERBOSE: print("bbox type", type(bbox))
+#             #sample_img=sample_img[bbox['top']:bbox['bottom'],bbox['left']:bbox['right'],:]
+#             # passing in bbox as a str
+#             img = sort.crop_image(img, face_landmarks, bbox)
+#             if img is None: return -1,-1,-1,-1,-1 ## if TOO_BIG==true, checking if cropped image is empty
+#         except:
+#             if VERBOSE: print("FAILED CROPPING, bad bbox",bbox)
+#             return -2,-2,-2,-2,-2
+#         print("bbox['bottom'], ", bbox['bottom'])
 
-    result = get_bg_segment.process(img[:,:,::-1]) #convert RBG to BGR then process with mp
-    if VERBOSE: print("[get_bg_hue_lum] got result")
-    return result.segmentation_mask
+#     result = get_bg_segment.process(img[:,:,::-1]) #convert RBG to BGR then process with mp
+#     if VERBOSE: print("[get_bg_hue_lum] got result")
+#     return result.segmentation_mask
 
 
 
@@ -318,23 +320,24 @@ def get_bbox(target_image_id):
 
     return bbox,face_landmarks
     
-def test_shoulders(segmentation_mask):
-    left_shoulder=segmentation_mask[-1,0]
-    right_shoulder=segmentation_mask[-1,-1]
-    if left_shoulder<=SHOULDER_THRESH:
-        is_left_shoulder=False
-        # print("no left shoulder")
-    else:
-        # print("left shoulder present")
-        is_left_shoulder=True
+# move this to sort
+# def test_shoulders(segmentation_mask):
+#     left_shoulder=segmentation_mask[-1,0]
+#     right_shoulder=segmentation_mask[-1,-1]
+#     if left_shoulder<=SHOULDER_THRESH:
+#         is_left_shoulder=False
+#         # print("no left shoulder")
+#     else:
+#         # print("left shoulder present")
+#         is_left_shoulder=True
 
-    if right_shoulder<=SHOULDER_THRESH:
-        is_right_shoulder=False
-        # print("no right shoulder")
-    else:
-        # print("right shoulder present")
-        is_right_shoulder=True
-    return is_left_shoulder,is_right_shoulder
+#     if right_shoulder<=SHOULDER_THRESH:
+#         is_right_shoulder=False
+#         # print("no right shoulder")
+#     else:
+#         # print("right shoulder present")
+#         is_right_shoulder=True
+#     return is_left_shoulder,is_right_shoulder
     
 def fetch_BG_stat(target_image_id, lock, session):
     ImagesBG_entry = (
@@ -366,9 +369,9 @@ def fetch_BG_stat(target_image_id, lock, session):
     if img is None:return
     #####################
     # hue,sat,val,lum, lum_torso=get_bg_hue_lum(img,bbox,facelandmark)
-    segmentation_mask=get_segmentation_mask(img,bbox,face_landmarks)
+    segmentation_mask=sort.get_segmentation_mask(get_bg_segment,img,bbox,face_landmarks)
 
-    is_left_shoulder,is_right_shoulder=test_shoulders(segmentation_mask)
+    is_left_shoulder,is_right_shoulder=sort.test_shoulders(segmentation_mask)
     if VERBOSE:
         folder=os.path.join(io.ROOT,"test")
         cv2.imwrite(folder+"//"+str(target_image_id)+str(is_left_shoulder)+str(is_right_shoulder)+"_image_.jpg",img)
@@ -383,7 +386,7 @@ def fetch_BG_stat(target_image_id, lock, session):
             if VERBOSE: print("sat values before insert", hue_bb,sat_bb, val_bb, lum_bb, lum_torso_bb)
             # hue_bb,sat_bb, val_bb, lum_bb, lum_torso_bb =get_bg_hue_lum(img,bbox,facelandmark)
 
-    selfie_bbox=get_selfie_bbox(segmentation_mask)
+    selfie_bbox=sort.get_selfie_bbox(segmentation_mask)
     if VERBOSE: print("selfie_bbox",selfie_bbox)
     # Update the BG entry with the corresponding image_id
 
@@ -527,10 +530,10 @@ elif index == 1:
     #     filter(ImagesBackground.hue_bb == -1).limit(LIMIT).offset(3000)
 
     # for reprocessing torso+row only for subsegment through join to helper table
-    # if USE_BBOX:distinct_image_ids_query = select(ImagesBackground.image_id.distinct()).\
-    #     outerjoin(HelperTable, ImagesBackground.image_id == HelperTable.image_id).\
-    #     filter(HelperTable.image_id != None).\
-    #     filter(ImagesBackground.lum_torso == None).limit(LIMIT)
+    if USE_BBOX:distinct_image_ids_query = select(ImagesBackground.image_id.distinct()).\
+        outerjoin(HelperTable, ImagesBackground.image_id == HelperTable.image_id).\
+        filter(HelperTable.image_id != None).\
+        filter(ImagesBackground.lum_torso == None).limit(LIMIT)
 
     # # for helpertable
     # if USE_BBOX:distinct_image_ids_query = select(HelperTable.image_id.distinct()).\
@@ -542,12 +545,12 @@ elif index == 1:
     # queries where selfie_bbox touches the R/L edge
     # not for general use, only for reprocessing
 
-    if USE_BBOX:
-        distinct_image_ids_query = select(ImagesBackground.image_id.distinct()).\
-            filter(ImagesBackground.is_left_shoulder == None).\
-            filter(func.json_extract(ImagesBackground.selfie_bbox, '$.left')==0).\
-            filter(func.json_extract(ImagesBackground.selfie_bbox, '$.right')==0).\
-            limit(LIMIT)
+    # if USE_BBOX:
+    #     distinct_image_ids_query = select(ImagesBackground.image_id.distinct()).\
+    #         filter(ImagesBackground.is_left_shoulder == None).\
+    #         filter(func.json_extract(ImagesBackground.selfie_bbox, '$.left')==0).\
+    #         filter(func.json_extract(ImagesBackground.selfie_bbox, '$.right')==0).\
+    #         limit(LIMIT)
         
     ####################
     # FOR SELFIE BBOX

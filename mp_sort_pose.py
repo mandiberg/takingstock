@@ -97,6 +97,9 @@ class SortPose:
         # place to save bad images
         self.not_make_face = []
         self.same_img = []
+        # for testing shoulders for image background
+        self.SHOULDER_THRESH = 0.75
+        self.nose_2d = None
         #UPSCALING PARAMS
         if UPSCALE_MODEL_PATH:
             self.upscale_model= self.set_upscale_model(UPSCALE_MODEL_PATH)
@@ -688,12 +691,18 @@ class SortPose:
         #I'm not sure the diff between nose_2d and p1. May be redundant.
         #it would prob be better to do this with a dict and a loop
         # Instead of hard-coding the index 1, you can use a variable or constant for the point index
-        nose_point_index = 1
-        self.nose_2d = self.get_face_2d_point(nose_point_index)
+        if not self.nose_2d:
+            nose_point_index = 1
+            self.nose_2d = self.get_face_2d_point(nose_point_index)
 
         try:
-            # get self.face_height
-            self.get_faceheight_data()
+            if faceLms.landmark:
+                # get self.face_height
+                self.get_faceheight_data()
+            else:
+                # calculate face height based on bbox dimensions
+                # TK I dont think this is accurate....????
+                self.face_height = (self.bbox['bottom'] - self.bbox['top'])/2
         except:
             print("couldn't get_faceheight_data")
 
@@ -1731,6 +1740,8 @@ class SortPose:
         nose_pixel_pos["x"]+=body_landmarks.landmark[0].x*width
         nose_pixel_pos["y"]+=body_landmarks.landmark[0].y*height
         nose_pixel_pos["visibility"]+=body_landmarks.landmark[0].visibility
+        # TK set nose_pixel_pos to attribute
+        self.nose_2d = nose_pixel_pos
         return nose_pixel_pos
     
     def normalize_phone_bbox(self,phone_bbox,nose_pos,face_height,shape):
@@ -1808,3 +1819,66 @@ class SortPose:
                 print(f"No bbox for {OBJ_CLS_ID} in image_id {target_image_id}")
         
         return session
+    
+#### ImagesBackground Stuff
+
+    def get_segmentation_mask(self,get_bg_segment,img,bbox=None,face_landmarks=None):
+        if self.VERBOSE: print("[get_bg_hue_lum] about to go for segemntation")
+
+        if bbox:
+            try:
+                if type(bbox)==str:
+                    bbox=json.loads(bbox)
+                    if self.VERBOSE: print("bbox type", type(bbox))
+                #sample_img=sample_img[bbox['top']:bbox['bottom'],bbox['left']:bbox['right'],:]
+                # passing in bbox as a str
+                img = self.crop_image(img, face_landmarks, bbox)
+                if img is None: return -1,-1,-1,-1,-1 ## if TOO_BIG==true, checking if cropped image is empty
+            except:
+                if self.VERBOSE: print("FAILED CROPPING, bad bbox",bbox)
+                return -2,-2,-2,-2,-2
+            print("bbox['bottom'], ", bbox['bottom'])
+
+        result = get_bg_segment.process(img[:,:,::-1]) #convert RBG to BGR then process with mp
+        if self.VERBOSE: print("[get_bg_hue_lum] got result")
+        return result.segmentation_mask
+
+
+    def get_selfie_bbox(self, segmentation_mask):
+        bbox=None
+        scaled_mask = (segmentation_mask * 255).astype(np.uint8)
+        # Apply a binary threshold to get a binary image
+        _, binary = cv2.threshold(scaled_mask, 127, 255, cv2.THRESH_BINARY)
+        # Find contours in the binary image
+        contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        if contours:
+            # Assume the largest contour is the shape
+            contour = max(contours, key=cv2.contourArea)
+            # Get the bounding box of the shape
+            x, y, w, h = cv2.boundingRect(contour)
+            # Draw the bounding box for visualization
+            bbox={"top":y,"right":scaled_mask.shape[1] - (x + w),"bottom":scaled_mask.shape[0] - (y + h),"left":x}
+        else:
+            print("No contours were found")
+        if bbox is None: print("bbox is empty, figure out what happened")
+        else:
+            if self.VERBOSE:print("bbox=",bbox)
+        return bbox
+
+    def test_shoulders(self,segmentation_mask):
+        left_shoulder=segmentation_mask[-1,0]
+        right_shoulder=segmentation_mask[-1,-1]
+        if left_shoulder<=self.SHOULDER_THRESH:
+            is_left_shoulder=False
+            # print("no left shoulder")
+        else:
+            # print("left shoulder present")
+            is_left_shoulder=True
+
+        if right_shoulder<=self.SHOULDER_THRESH:
+            is_right_shoulder=False
+            # print("no right shoulder")
+        else:
+            # print("right shoulder present")
+            is_right_shoulder=True
+        return is_left_shoulder,is_right_shoulder

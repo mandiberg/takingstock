@@ -107,6 +107,11 @@ HelperTable_name = False #"SegmentHelperMay7_fingerpoint" # set to False if not 
 
 if BODYLMS is True:
 
+    # prep for image background object
+    get_background_mp = mp.solutions.selfie_segmentation
+    get_bg_segment = get_background_mp.SelfieSegmentation()
+
+
     ############# Reencodings #############
     SELECT = "DISTINCT seg1.image_id, seg1.site_name_id, seg1.contentUrl, seg1.imagename, seg1.site_image_id, seg1.mongo_body_landmarks, seg1.mongo_face_landmarks, seg1.bbox"
 
@@ -890,23 +895,40 @@ def process_image_bodylms(task):
             # sort.insert_n_landmarks(bboxnormed_collection, target_image_id,n_landmarks)
 
         ### detect object info, 
+        print("detecting objects")
         bbox_dict=sort.return_bbox(YOLO_MODEL,image, OBJ_CLS_LIST)
+        print("detected objects")
 
         ### normed object bbox
         for OBJ_CLS_ID in OBJ_CLS_LIST:
             bbox_key = "bbox_{0}".format(OBJ_CLS_ID)
             # conf_key = "conf_{0}".format(OBJ_CLS_ID)
             bbox_n_key = "conf_{0}_norm".format(OBJ_CLS_ID)
-            if bbox_dict[bbox_key]:
+            try: bbox_dict_value = bbox_dict[bbox_key]
+            except: bbox_dict_value = None
+            if bbox_dict_value:
                 n_phone_bbox=sort.normalize_phone_bbox(bbox_dict[bbox_key],nose_pixel_pos,face_height,image.shape)
                 bbox_dict[bbox_n_key]=n_phone_bbox
             else:
-                print("NO bbox_key for", image_id)
+                print(f"NO {bbox_key} for", image_id)
  
         ### save object bbox info
         session = sort.parse_bbox_dict(session, image_id, PhoneBbox, OBJ_CLS_LIST, bbox_dict)
 
         ### do imagebackground calcs
+
+        segmentation_mask=sort.get_segmentation_mask(get_bg_segment,image_id,bbox,face_landmarks)
+
+        is_left_shoulder,is_right_shoulder=sort.test_shoulders(segmentation_mask)
+        hue,sat,val,lum, lum_torso=sort.get_bg_hue_lum(image,segmentation_mask,bbox)  
+        if bbox:
+            #will do a second round for bbox with same cv2 image
+            # bbox,face_landmarks=get_bbox(target_image_id)
+            hue_bb,sat_bb, val_bb, lum_bb, lum_torso_bb =sort.get_bg_hue_lum(img,segmentation_mask,bbox)  
+            if VERBOSE: print("sat values before insert", hue_bb,sat_bb, val_bb, lum_bb, lum_torso_bb)
+            # hue_bb,sat_bb, val_bb, lum_bb, lum_torso_bb =get_bg_hue_lum(img,bbox,facelandmark)
+
+        selfie_bbox=sort.get_selfie_bbox(segmentation_mask)
 
         quit()
         for _ in range(io.max_retries):

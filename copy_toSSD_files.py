@@ -48,14 +48,14 @@ IMAGES_THREAD_COUNTER = 0
 2   shutterstock - aug17 1534850
 3   adobe - aug17 1740113
 4   istock - aug17 351105
-5   pexels - aug17 11557
-6   unsplash - did I DL these???
+5   pexels - aug17 11557 
+6   unsplash - 0 images?
 7   pond5 - aug 19 51919  
 8   123rf - aug17 823542
-9   alamy - Aug 19 WIP 154508
+9   alamy - Aug 22 285000
 10  visualchinagroup - aug17 DONE
 11	picxy - aug17 DONE (only 1500?)
-12	pixerf
+12	pixerf - 
 13	imagesbazaar - aug17 DONE
 14	indiapicturebudget - aug17 DONE
 15	iwaria - aug17 DONE (only 30?)
