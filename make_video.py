@@ -686,17 +686,24 @@ def prep_encodings_NN(df_segment):
 def compare_images(last_image, img, face_landmarks, bbox):
     is_face = None
     face_diff = 100 # declaring full value, for first round
+    skip_face = False
     #crop image here:
     if sort.EXPAND:
         cropped_image = sort.expand_image(img, face_landmarks, bbox)
     else:
-        cropped_image = sort.crop_image(img, face_landmarks, bbox)
-    # print("cropped_image type: ",type(cropped_image))
+        cropped_image, is_inpaint = sort.crop_image(img, face_landmarks, bbox)
+    print("cropped_image: ",cropped_image)
+    # if cropped_image is not None and len(cropped_image)>1 :
+    #     print(" >> have a cropped image trying to save", cropped_image.shape)
+    # elif cropped_image is not None and len(cropped_image)==1 :
+    #     print(" >> bad crop, will try inpainting and try again")
+    # elif cropped_image is None:
+    #     print(" >> no image here, trying next")
 
     # this code takes image i, and blends it with the subsequent image
     # next step is to test to see if mp can recognize a face in the image
     # if no face, a bad blend, try again with i+2, etc. 
-    if cropped_image is not None and len(cropped_image)>1 :
+    if cropped_image is not None and not is_inpaint:
         if VERBOSE: print("have a cropped image trying to save", cropped_image.shape)
         # try:
         #     print("last_image is ", type(last_image))
@@ -742,21 +749,22 @@ def compare_images(last_image, img, face_landmarks, bbox):
         else: 
             print("pair do not make a face, skipping")
             sort.counter_dict["isnot_face_count"] += 1
-            return None
+            return None, None, True
         
     elif cropped_image is None and sort.counter_dict["first_run"]:
         print("first run, but bad first image")
         last_image = cropped_image
         sort.counter_dict["cropfail_count"] += 1
-    elif cropped_image and len(cropped_image)==1:
+    elif is_inpaint:
         print("bad crop, will try inpainting and try again")
         sort.counter_dict["inpaint_count"] += 1
-    else:
-        print("no image here, trying next")
+    elif cropped_image is None:
+        print("no image or resize to great, trying next")
         sort.counter_dict["cropfail_count"] += 1
+        skip_face = True
     # print(type(cropped_image),"$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$")
 
-    return cropped_image, face_diff
+    return cropped_image, face_diff, skip_face
 
 
 def print_counters():
@@ -1050,9 +1058,9 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
                 bailout=True
         if not bailout:
             bbox=shift_bbox(row['bbox'],extension_pixels)
-            cropped_image, face_diff = compare_images(sort.counter_dict["last_image"], inpaint_image,row['face_landmarks'], bbox)
+            cropped_image, face_diff, skip_face = compare_images(sort.counter_dict["last_image"], inpaint_image,row['face_landmarks'], bbox)
             if sort.VERBOSE:print("inpainting done","shape:",np.shape(cropped_image))
-            if len(cropped_image)==1:print("still 1x1 image , you're probably shifting both landmarks and bbox, only bbox needs to be shifted")
+            if skip_face:print("still 1x1 image , you're probably shifting both landmarks and bbox, only bbox needs to be shifted")
 
         return cropped_image, face_diff
 
@@ -1064,6 +1072,7 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
     img_list = []
     metas_list = []
     description = None
+    cropped_image = np.array([-10])
     for index, row in df_sorted.iterrows():
         # parent_row = df_segment[df_segment['imagename'] == row['filename']]
         # print("parent_row")
@@ -1082,12 +1091,22 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
             except:
                 print("couldn't read image")
                 continue
+            print("img shape", img.shape)
+            print("img type", type(img))
+            print("img", img)
             if row['dist'] < sort.MAXD:
                 # compare_images to make sure they are face and not the same
                 # last_image is cv2 np.array
-                cropped_image, face_diff = compare_images(sort.counter_dict["last_image"], img, row['face_landmarks'], row['bbox'])
-                print("len cropped_image", len(cropped_image))
-                if len(cropped_image)==1 and (OUTPAINT or INPAINT):
+                cropped_image, face_diff, skip_face = compare_images(sort.counter_dict["last_image"], img, row['face_landmarks'], row['bbox'])
+                print("type of cropped_image", type(cropped_image))
+                if skip_face:
+                    print("skipping face")
+                    continue
+                # if cropped_image[0][0] == -10:
+                #     print("-10 is returned from compare_images, so resize is too big, skipping")
+                #     continue
+                elif cropped_image is None and not skip_face:
+                # if len(cropped_image)==1 and (OUTPAINT or INPAINT):
                     print("gotta paint that shizzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz")
                     cropped_image, face_diff = in_out_paint(img, row)
 

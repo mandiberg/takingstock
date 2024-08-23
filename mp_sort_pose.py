@@ -691,9 +691,10 @@ class SortPose:
         #I'm not sure the diff between nose_2d and p1. May be redundant.
         #it would prob be better to do this with a dict and a loop
         # Instead of hard-coding the index 1, you can use a variable or constant for the point index
-        if not self.nose_2d:
-            nose_point_index = 1
-            self.nose_2d = self.get_face_2d_point(nose_point_index)
+        
+        # if not self.nose_2d:
+        nose_point_index = 1
+        self.nose_2d = self.get_face_2d_point(nose_point_index)
 
         try:
             if faceLms.landmark:
@@ -881,7 +882,8 @@ class SortPose:
 
     def crop_image(self,image, faceLms, bbox, sinY=0,SAVE=False):
         self.get_image_face_data(image, faceLms, bbox) 
- 
+        is_inpaint = False
+        cropped_image = None
         # check for crop, and if not exist, then get
         # if not hasattr(self, 'crop'): 
         try:
@@ -906,9 +908,9 @@ class SortPose:
                 resize = self.output_dims[0]/cropped_actualsize_image.shape[0] 
                 if self.VERBOSE: print("resize", resize)
                 if resize > self.resize_max:
-                    if self.VERBOSE: print("toosmall")
+                    if self.VERBOSE: print("toosmall, returning None ")
                     self.toosmall_count += 1
-                    return None
+                    return None, is_inpaint
                 if self.VERBOSE: print("about to resize")
                 # crop[0] is top, and clockwise from there. Right is 1, Bottom is 2, Left is 3. 
                 if self.VERBOSE: print("output dims", self.output_dims)
@@ -924,10 +926,12 @@ class SortPose:
                 cropped_image = None
                 print("not cropped_image loop", self.h, self.w)
         else:
-            cropped_image = np.array([-1])
+            # cropped_image = np.array([-1])
             print("crop_image: cropped_image is None because too big is ", toobig)
+            cropped_image = None
+            is_inpaint = True
             # resize = None
-        return cropped_image
+        return cropped_image, is_inpaint
 
     def get_bg_hue_lum(self,image,segmentation_mask,bbox):
         if type(bbox)==str:
