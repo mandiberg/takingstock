@@ -934,10 +934,9 @@ def process_image_bodylms(task):
         print("selfie_bbox",selfie_bbox)
 
         ### save object bbox info
-        session = sort.parse_bbox_dict(session, image_id, PhoneBbox, OBJ_CLS_LIST, bbox_dict)
+        # session = sort.parse_bbox_dict(session, image_id, PhoneBbox, OBJ_CLS_LIST, bbox_dict)
 
 
-        
         quit()
         for _ in range(io.max_retries):
             try:
@@ -958,9 +957,37 @@ def process_image_bodylms(task):
                 })
 
                 # MySQL
-                ### add height and width
+                ### save image.shape to Images.h and Images.w
+                session.query(Images).filter(Images.image_id == image_id).update({
+                    Images.h: image.shape[0],
+                    Images.w: image.shape[1]
+                })
+
                 ### save selfie bbox info
-                    # adapt the parse_bbox_dict from class to here
+
+
+
+                ### save bbox_dict (including normed bbox) to PhoneBbox
+                for OBJ_CLS_ID in OBJ_CLS_LIST:
+                    bbox_n_key = f"bbox_{OBJ_CLS_ID}_norm"
+                    print(bbox_dict)
+                    if bbox_dict[OBJ_CLS_ID]["bbox"]:
+                        # Create a new PhoneBbox entry
+                        new_entry = PhoneBbox(image_id=image_id)
+                        
+                        # Set attributes
+                        setattr(new_entry, f"bbox_{OBJ_CLS_ID}", bbox_dict[OBJ_CLS_ID]["bbox"])
+                        setattr(new_entry, f"conf_{OBJ_CLS_ID}", bbox_dict[OBJ_CLS_ID]["conf"])
+                        setattr(new_entry, bbox_n_key, bbox_dict[bbox_n_key])
+                        
+                        # Add the new entry to the session
+                        session.add(new_entry)
+                        
+                        print(f"New Bbox {OBJ_CLS_ID} for image_id {image_id} created successfully.")
+                    else:
+                        print(f"No bbox for {OBJ_CLS_ID} in image_id {image_id}")
+
+
                 ### save obj deteciton info, including normed bbox
                     # bbox_dict
                     # is_left_shoulder,is_right_shoulder
@@ -983,7 +1010,8 @@ def process_image_bodylms(task):
                 # Check if the current batch is ready for commit
                 # if total_processed % BATCH_SIZE == 0:
 
-                session.commit()
+                # for testing, comment out the commit
+                # session.commit()
                 
                 print("bbbbody:")
                 print(image_id)

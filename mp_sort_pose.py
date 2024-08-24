@@ -102,6 +102,7 @@ class SortPose:
         # for testing shoulders for image background
         self.SHOULDER_THRESH = 0.75
         self.nose_2d = None
+        self.nose_3d = None
         #UPSCALING PARAMS
         if UPSCALE_MODEL_PATH:
             self.upscale_model= self.set_upscale_model(UPSCALE_MODEL_PATH)
@@ -689,33 +690,58 @@ class SortPose:
         self.faceLms = faceLms
         self.bbox = (bbox)
 
-        print("get_image_face_data [-] size is", self.size)
+        # print("get_image_face_data [-] size is", self.size)
         #I'm not sure the diff between nose_2d and p1. May be redundant.
         #it would prob be better to do this with a dict and a loop
         # Instead of hard-coding the index 1, you can use a variable or constant for the point index
         
-        if not self.nose_2d:
+        try:
             nose_point_index = 1
             self.nose_2d = self.get_face_2d_point(nose_point_index)
+            # cv2.circle(self.image, tuple(map(int, self.nose_2d)), 5, (0, 0,0), 5)
+            print("get_image_face_data nose_2d",self.nose_2d)
+        except:
+            print("couldn't get nose_2d via faceLms")
+
+
 
         try:
-            if faceLms is None:
-                # calculate face height based on bbox dimensions
-                # TK I dont think this is accurate....????
-                self.face_height = (self.bbox['bottom'] - self.bbox['top'])*1
-            elif faceLms.landmark:
+            if faceLms is not None and faceLms.landmark:
+                print("get_image_face_data - faceLms is not None, using faceLms")
                 # get self.face_height
                 self.get_faceheight_data()
             else:
-                print("no faceLms, and not None")
+                print("get_image_face_data - NO faceLms, using bbox")
                 # calculate face height based on bbox dimensions
                 # TK I dont think this is accurate....????
+                self.face_height = (self.bbox['bottom'] - self.bbox['top'])/2
         except:
             print(traceback.format_exc())
             print("couldn't get_faceheight_data")
 
             # this is the in progress neck rotation stuff
             # self.get_crop_data(sinY)
+
+        
+        # if not self.nose_2d:
+        #     nose_point_index = 1
+        #     self.nose_2d = self.get_face_2d_point(nose_point_index)
+
+        # try:
+        #     if faceLms is None:
+        #         # calculate face height based on bbox dimensions
+        #         # TK I dont think this is accurate....????
+        #         self.face_height = (self.bbox['bottom'] - self.bbox['top'])*1
+        #     elif faceLms.landmark:
+        #         # get self.face_height
+        #         self.get_faceheight_data()
+        #     else:
+        #         print("no faceLms, and not None")
+        #         # calculate face height based on bbox dimensions
+        #         # TK I dont think this is accurate....????
+
+
+
 
     def expand_image(self,image, faceLms, bbox, sinY=0):
         self.get_image_face_data(image, faceLms, bbox)    
@@ -1752,6 +1778,7 @@ class SortPose:
         return face_height
 
     def set_nose_pixel_pos(self,body_landmarks,shape):
+        print("set_nose_pixel_pos body_landmarks")
         height,width = shape[:2]
         nose_pixel_pos ={
             "x":0,
@@ -1763,9 +1790,11 @@ class SortPose:
         # nose_pos=body_landmarks.landmark[NOSE_ID]
         nose_pixel_pos["x"]+=body_landmarks.landmark[0].x*width
         nose_pixel_pos["y"]+=body_landmarks.landmark[0].y*height
-        nose_pixel_pos["visibility"]+=body_landmarks.landmark[0].visibility
-        # TK set nose_pixel_pos to attribute
         self.nose_2d = nose_pixel_pos
+        print("set_nose_pixel_pos nose_pixel_pos",nose_pixel_pos)
+        nose_pixel_pos["visibility"]+=body_landmarks.landmark[0].visibility
+        # nose_3d has visibility
+        self.nose_3d = nose_pixel_pos
         return nose_pixel_pos
     
     def normalize_phone_bbox(self,phone_bbox,nose_pos,face_height,shape):
@@ -1820,6 +1849,7 @@ class SortPose:
 
     def parse_bbox_dict(self, session, target_image_id, PhoneBbox, OBJ_CLS_LIST, bbox_dict):
         # I don't think it likes me sending PhoneBbox as a class
+        # for calc face pose i'm moving this back to function
         for OBJ_CLS_ID in OBJ_CLS_LIST:
             bbox_n_key = "bbox_{0}_norm".format(OBJ_CLS_ID)
             print(bbox_dict)
