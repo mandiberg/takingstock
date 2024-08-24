@@ -56,14 +56,14 @@ HSV_NORMS = {"LUM": .01, "SAT": 1,  "HUE": 0.002777777778, "VAL": 1}
 
 # this is for controlling if it is using
 # all clusters, 
-IS_CLUSTER = False
+IS_CLUSTER = True
 CLUSTER_TYPE = "Poses"
 # CLUSTER_TYPE = "Clusters"
 # number of clusters to analyze -- this is also declared in Clustering_SQL. Move to IO?
 N_CLUSTERS = 8
 # this is for IS_ONE_CLUSTER to only run on a specific CLUSTER_NO
-IS_ONE_CLUSTER = False
-CLUSTER_NO = 23
+IS_ONE_CLUSTER = True
+CLUSTER_NO = 2
 
 # cut the kids
 NO_KIDS = True
@@ -95,7 +95,7 @@ IS_ANGLE_SORT = False
 IS_TOPICS = False
 N_TOPICS = 30
 
-IS_ONE_TOPIC = True
+IS_ONE_TOPIC = False
 TOPIC_NO = [15,17]
 
 #  is isolated,  is business,  babies, 17 pointing
@@ -285,12 +285,12 @@ face_height_output = 1000
 # define ratios, in relationship to nose
 # units are ratio of faceheight
 # top, right, bottom, left
-image_edge_multiplier = [1, 1, 1, 1] # just face
+# image_edge_multiplier = [1, 1, 1, 1] # just face
 # image_edge_multiplier = [1.5,1.5,2,1.5] # bigger portrait
 # image_edge_multiplier = [1.5,1.33, 2.5,1.33] # bigger 2x3 portrait
 # image_edge_multiplier = [1.4,2.6,1.9,2.6] # wider for hands
 # image_edge_multiplier = [3,5,3,5] # megawide for testing
-# image_edge_multiplier = [1.4,3.3,3,3.3] # widerest 16:10 for hands
+image_edge_multiplier = [1.4,3.3,3,3.3] # widerest 16:10 for hands
 # image_edge_multiplier = [1.6,3.84,3.2,3.84] # wiiiiiiiidest 16:10 for hands
 # image_edge_multiplier = [1.45,3.84,2.87,3.84] # wiiiiiiiidest 16:9 for hands
 # image_edge_multiplier = [1.2,2.3,1.7,2.3] # medium for hands
@@ -310,8 +310,9 @@ start_site_image_id = None
 # for PFP
 # start_img_name = "start_face_encodings"
 # start_site_image_id = [-0.13242901861667633, 0.09738104045391083, 0.003530653193593025, -0.04780442640185356, -0.13073976337909698, 0.07189705967903137, -0.006513072177767754, -0.051335446536540985, 0.1768932193517685, -0.03729865700006485, 0.1137416809797287, 0.13994133472442627, -0.23849385976791382, -0.08209677785634995, 0.06067033112049103, 0.07974598556756973, -0.1882513463497162, -0.24926315248012543, -0.011344537138938904, -0.10508193075656891, 0.010317208245396614, 0.06348179280757904, 0.02852417528629303, 0.06981766223907471, -0.14760875701904297, -0.34729471802711487, -0.014949701726436615, -0.09429284185171127, 0.08592978119850159, -0.11939340829849243, 0.04517041891813278, 0.06180906295776367, -0.1773814857006073, 0.011621855199337006, 0.010536111891269684, 0.12963438034057617, -0.07557092607021332, 0.0027374476194381714, 0.2890719771385193, 0.0692337155342102, -0.17323020100593567, 0.0724603682756424, 0.021229337900877, 0.361629843711853, 0.250482439994812, 0.021974680945277214, 0.018878426402807236, -0.022722169756889343, 0.09668144583702087, -0.29601603746414185, 0.11375367641448975, 0.2568872570991516, 0.11404240131378174, 0.04999732971191406, 0.02831254154443741, -0.15830034017562866, -0.031099170446395874, 0.028748074546456337, -0.180643692612648, 0.13169123232364655, 0.058790236711502075, -0.0858338251709938, 0.029470380395650864, -0.002784252166748047, 0.2532877027988434, 0.07375448942184448, -0.11085735261440277, -0.12285713106393814, 0.11346398293972015, -0.19246435165405273, -0.1447266787290573, 0.054258447140455246, -0.1335202157497406, -0.1264294683933258, -0.23741140961647034, 0.07753928005695343, 0.3753989636898041, 0.08984167128801346, -0.18434450030326843, 0.042485352605581284, -0.08978638052940369, -0.03871896490454674, 0.06451354175806046, 0.08044029772281647, -0.11364202201366425, -0.1158837378025055, -0.10755209624767303, 0.044953495264053345, 0.2573489546775818, 0.049939051270484924, -0.07680445909500122, 0.20810386538505554, 0.09711501002311707, 0.05330953001976013, 0.08986716717481613, 0.0984266921877861, -0.036112621426582336, -0.011795245110988617, -0.15438663959503174, -0.027118921279907227, -0.012514196336269379, -0.11667540669441223, 0.04242435097694397, 0.13383115828037262, -0.18503828346729279, 0.19057676196098328, 0.017584845423698425, -0.005235005170106888, 0.010936722159385681, 0.08952657878398895, -0.1809171438217163, -0.07223983108997345, 0.16210225224494934, -0.264881432056427, 0.3121953308582306, 0.21528613567352295, 0.02137373574078083, 0.12006716430187225, 0.08322857320308685, 0.0802738219499588, -0.013485163450241089, 0.005497157573699951, -0.0893208310008049, -0.06330209970474243, 0.017513029277324677, -0.007281661033630371, 0.06451432406902313, 0.10179871320724487]
-start_img_name = "start_bbox"
-start_site_image_id = [94, 428, 428,0]
+
+# start_img_name = "start_bbox"
+# start_site_image_id = [94, 428, 428,0]
 
 # no gap
 # start_site_image_id = "5/58/95516714-happy-well-dressed-man-holding-a-gift-on-white-background.jpg"
@@ -356,6 +357,23 @@ class ImagesClusters(Base):
 
     image_id = Column(Integer, ForeignKey(Images.image_id, ondelete="CASCADE"), primary_key=True)
     cluster_id = Column(Integer, ForeignKey(f'{ClustersTable_name}.cluster_id', ondelete="CASCADE"))
+
+if IS_CLUSTER or IS_ONE_CLUSTER:
+    # select cluster_median from Clusters
+    results = session.execute(select(Clusters.cluster_id, Clusters.cluster_median)).fetchall()
+    print("results", results)
+    
+    # store the results in a dictionary where the key is the cluster_id
+    if results:
+        cluster_medians = {}
+        for i, row in enumerate(results, start=1):
+            cluster_median = pickle.loads(row.cluster_median)
+            cluster_medians[i] = cluster_median
+            print("cluster_medians", i, cluster_median)
+        sort.set_cluster_medians(cluster_medians)
+
+
+
 
 # mongo_collection = mongo_db[io.dbmongo['collection']]
 
@@ -1255,7 +1273,7 @@ def process_linear(start_img_name, df_segment, cluster_no, sort):
     # linear sort by encoding distance
     print("processing linear")
     # preps the encodings for sort
-    # sort.set_counters(io.ROOT,cluster_no, start_img_name)  
+    sort.set_counters(io.ROOT,cluster_no, start_img_name, None)  
 
     # df_enc, df_128_enc, df_33_lms = prep_encodings(df_segment)
     df_enc = prep_encodings_NN(df_segment)

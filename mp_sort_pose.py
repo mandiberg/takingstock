@@ -42,7 +42,7 @@ class SortPose:
         self.HSV_DELTA_MAX = .5
         self.HSVMULTIPLIER = 3
         self.BRUTEFORCE = False
-        self.CUTOFF = 30
+        self.CUTOFF = 100
 
         self.SORT_TYPE = SORT_TYPE
         if self.SORT_TYPE == "128d":
@@ -243,10 +243,13 @@ class SortPose:
             "last_description":None,
             "last_image_enc":None,
             "last_image_hsv":None,
-            "last_image_lum":None
+            "last_image_lum":None,
+            "cluster_no":cluster_no
 
         }
 
+    def set_cluster_medians(self,cluster_medians):
+        self.cluster_medians = cluster_medians
 
     def make_segment(self, df):
 
@@ -1234,8 +1237,16 @@ class SortPose:
         if FIRST_ROUND:
             this_start = self.counter_dict["start_img_name"]
             ## Get the starting encodings (if not passed through)
-            # if this_start != "median" and this_start != "start_site_image_id" and this_start != "start_face_encodings":
+
+            # this catches cluster_no, but the value is all 33 lms
+            # if self.counter_dict["cluster_no"]:
+            #     # this is the first round for a cluster, so set from median
+            #     enc1 = self.cluster_medians[self.counter_dict["cluster_no"]]
+            #     print("set enc1 from cluster median")
+            #     print("enc1", enc1)
+                
             if this_start not in ["median", "start_site_image_id", "start_face_encodings", "start_bbox"]:
+            # elif this_start not in ["median", "start_site_image_id", "start_face_encodings", "start_bbox"]:
                 # this is the first round for clusters/itter where last_image_enc is true
                 # set encodings to the passed through encodings
                 # IF NO START IMAGE SPECIFIED (this line works for no clusters)

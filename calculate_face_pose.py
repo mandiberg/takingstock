@@ -22,7 +22,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.orm import relationship
 from sqlalchemy.ext.declarative import declarative_base
 # my ORM
-from my_declarative_base import Base, Images, Keywords, SegmentTable, ImagesKeywords, Encodings, PhoneBbox, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON
+from my_declarative_base import Base, Images, Keywords, SegmentTable, ImagesKeywords, ImagesBackground, Encodings, PhoneBbox, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON
 
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.pool import NullPool
@@ -929,6 +929,8 @@ def process_image_bodylms(task):
             hue_bb,sat_bb, val_bb, lum_bb, lum_torso_bb =sort.get_bg_hue_lum(image,segmentation_mask,bbox)  
             if sort.VERBOSE: print("sat values before insert", hue_bb,sat_bb, val_bb, lum_bb, lum_torso_bb)
             # hue_bb,sat_bb, val_bb, lum_bb, lum_torso_bb =get_bg_hue_lum(img,bbox,facelandmark)
+        else:
+            hue_bb = sat_bb = val_bb = lum_bb = lum_torso_bb = None
 
         selfie_bbox=sort.get_selfie_bbox(segmentation_mask)
         print("selfie_bbox",selfie_bbox)
@@ -937,7 +939,6 @@ def process_image_bodylms(task):
         # session = sort.parse_bbox_dict(session, image_id, PhoneBbox, OBJ_CLS_LIST, bbox_dict)
 
 
-        quit()
         for _ in range(io.max_retries):
             try:
                 # new_entry = Encodings(**insert_dict)
@@ -963,46 +964,89 @@ def process_image_bodylms(task):
                     Images.w: image.shape[1]
                 })
 
-                ### save selfie bbox info
-
-
-
                 ### save bbox_dict (including normed bbox) to PhoneBbox
                 for OBJ_CLS_ID in OBJ_CLS_LIST:
                     bbox_n_key = f"bbox_{OBJ_CLS_ID}_norm"
                     print(bbox_dict)
                     if bbox_dict[OBJ_CLS_ID]["bbox"]:
                         # Create a new PhoneBbox entry
-                        new_entry = PhoneBbox(image_id=image_id)
+                        new_entry_phonebbox = PhoneBbox(image_id=image_id)
                         
                         # Set attributes
-                        setattr(new_entry, f"bbox_{OBJ_CLS_ID}", bbox_dict[OBJ_CLS_ID]["bbox"])
-                        setattr(new_entry, f"conf_{OBJ_CLS_ID}", bbox_dict[OBJ_CLS_ID]["conf"])
-                        setattr(new_entry, bbox_n_key, bbox_dict[bbox_n_key])
+                        setattr(new_entry_phonebbox, f"bbox_{OBJ_CLS_ID}", bbox_dict[OBJ_CLS_ID]["bbox"])
+                        setattr(new_entry_phonebbox, f"conf_{OBJ_CLS_ID}", bbox_dict[OBJ_CLS_ID]["conf"])
+                        setattr(new_entry_phonebbox, bbox_n_key, bbox_dict[bbox_n_key])
                         
                         # Add the new entry to the session
-                        session.add(new_entry)
+                        session.add(new_entry_phonebbox)
                         
-                        print(f"New Bbox {OBJ_CLS_ID} for image_id {image_id} created successfully.")
+                        print(f"New Bbox {OBJ_CLS_ID} session entry for image_id {image_id} created successfully.")
                     else:
                         print(f"No bbox for {OBJ_CLS_ID} in image_id {image_id}")
 
 
-                ### save obj deteciton info, including normed bbox
-                    # bbox_dict
-                    # is_left_shoulder,is_right_shoulder
+                ### ImageBackground
+
+                # Create a new ImagesBackground entry
+                new_entry_ib = ImagesBackground(image_id=image_id)
+
+                # bbox
+                new_entry_ib.hue_bb = hue_bb
+                new_entry_ib.lum_bb = lum_bb
+                new_entry_ib.sat_bb = sat_bb
+                new_entry_ib.val_bb = val_bb
+                new_entry_ib.lum_torso_bb = lum_torso_bb
+                # no bbox
+                new_entry_ib.hue = hue
+                new_entry_ib.lum = lum
+                new_entry_ib.sat = sat
+                new_entry_ib.val = val
+                new_entry_ib.lum_torso = lum_torso   
+                # selfie stuff
+                new_entry_ib.is_left_shoulder = is_left_shoulder
+                new_entry_ib.is_right_shoulder = is_right_shoulder
+                new_entry_ib.selfie_bbox = selfie_bbox
+
+                # Add the new entry to the session
+                session.add(new_entry_ib)
+
+                if sort.VERBOSE:
+                    # Print everything in the session
+                    for obj in session:
+                        print(obj)
+
+
+
+
+                    # print("New entry created:")
+                    # print("image_id:", new_entry_ib.image_id)
+                    # print("hue_bb:", new_entry_ib.hue_bb)
+                    # print("lum_bb:", new_entry_ib.lum_bb)
+                    # print("sat_bb:", new_entry_ib.sat_bb)
+                    # print("val_bb:", new_entry_ib.val_bb)
+                    # print("lum_torso_bb:", new_entry_ib.lum_torso_bb)
+                    # print("hue:", new_entry_ib.hue)
+                    # print("lum:", new_entry_ib.lum)
+                    # print("sat:", new_entry_ib.sat)
+                    # print("val:", new_entry_ib.val)
+                    # print("lum_torso:", new_entry_ib.lum_torso)
+                    # print("selfie bbox", new_entry_ib.selfie_bbox)
+
+
+
                     # hue,sat,val,lum, lum_torso
                     # hue_bb,sat_bb, val_bb, lum_bb, lum_torso_bb
-                    # selfie_bbox
+                    # 
 
-                # total_processed += 1
 
-                if body_landmarks:
-                    mongo_collection.update_one(
-                        {"image_id": image_id},
-                        {"$set": {"body_landmarks": pickle.dumps(body_landmarks)}}
-                    )
-                    print("----------- >>>>>>>>   mongo body_landmarks updated:", image_id)
+
+                quit()
+                # if body_landmarks:
+                #     mongo_collection.update_one(
+                #         {"image_id": image_id},
+                #         {"$set": {"body_landmarks": pickle.dumps(body_landmarks)}}
+                #     )
+                #     print("----------- >>>>>>>>   mongo body_landmarks updated:", image_id)
 
                 ### save normalized landmarks                
                     # n_landmarks
