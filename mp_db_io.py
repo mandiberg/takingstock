@@ -310,6 +310,7 @@ class DataIO:
         # this is redundantly in sort_pose also
         Lms2d = {}
         Lms1d = []
+        Lms1d3 = []
         for idx, lm in enumerate(Lms.landmark):
             if idx in selected_Lms:
                 # print("idx", idx)
@@ -320,11 +321,17 @@ class DataIO:
                 elif structure == "list":
                     Lms1d.append(lm.x)
                     Lms1d.append(lm.y)
+                elif structure == "list3":
+                    Lms1d3.append(lm.x)
+                    Lms1d3.append(lm.y)
+                    Lms1d3.append(lm.visibility)
         # print("Lms2d", Lms2d)
         # print("Lms1d", Lms1d)
 
         if Lms1d:
             return Lms1d
+        elif Lms1d3:
+            return Lms1d3
         else:
             return Lms2d
 

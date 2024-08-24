@@ -39,7 +39,7 @@ from sys import platform
 #mine
 from mp_db_io import DataIO
 
-# MM you need to use conda activate minimal_ds 
+# MM you need to use conda activate mps_torch310 
 
 '''
 tracking time based on items, for speed predictions
@@ -75,8 +75,9 @@ MODE = 0
 # CLUSTER_TYPE = "Clusters"
 CLUSTER_TYPE = "Poses"
 # POINTERS = [16,20,15,19]
-HAND_LANDMARKS = []
-# HAND_LANDMARKS = [i for i in range(13,22)]
+SUBSET_LANDMARKS = []
+# SUBSET_LANDMARKS = [i for i in range(13,22)]
+SUBSET_LANDMARKS = [13,14,19,20]
 # this works for using segment in stock, and for ministock
 USE_SEGMENT = True
 
@@ -84,7 +85,7 @@ USE_SEGMENT = True
 GET_OPTIMAL_CLUSTERS=False
 
 # number of clusters produced. run GET_OPTIMAL_CLUSTERS and add that number here
-N_CLUSTERS = 30
+N_CLUSTERS = 8
 SAVE_FIG=False ##### option for saving the visualized data
 
 if USE_SEGMENT is True and CLUSTER_TYPE == "Poses" and MODE == 0:
@@ -104,7 +105,7 @@ if USE_SEGMENT is True and CLUSTER_TYPE == "Poses" and MODE == 0:
     # FROM += f" INNER JOIN {HelperTable_name} h ON h.image_id = s.image_id " 
     WHERE = "mongo_body_landmarks = 1"
     # WHERE = "face_encodings68 IS NOT NULL AND face_x > -33 AND face_x < -27 AND face_y > -2 AND face_y < 2 AND face_z > -2 AND face_z < 2"
-    LIMIT = 200000
+    LIMIT = 300000
 
 
     '''
@@ -113,7 +114,9 @@ if USE_SEGMENT is True and CLUSTER_TYPE == "Poses" and MODE == 0:
     1000 21s
     2000 43s
     4000 87s
-    200000 18664
+    40000 2248
+    200000 18664 @ 33
+
 
     '''
 
@@ -216,9 +219,9 @@ def selectSQL():
 def kmeans_cluster(df, n_clusters=32):
     # Select only the numerical columns (dim_0 to dim_65)
     numerical_columns = [col for col in df.columns if col.startswith('dim_')]
-    # set hand_columns = to the numerical_columns in HAND_LANDMARKS
-    if HAND_LANDMARKS:
-        subset_columns = [f'dim_{i}' for i in HAND_LANDMARKS]
+    # set hand_columns = to the numerical_columns in SUBSET_LANDMARKS
+    if SUBSET_LANDMARKS:
+        subset_columns = [f'dim_{i}' for i in SUBSET_LANDMARKS]
     else:
         subset_columns = numerical_columns
     numerical_data = df[subset_columns]
@@ -278,7 +281,8 @@ def export_html_clusters(enc_data,n_clusters):
     return
 
 def best_score(df):
-    n_list=np.linspace(64,128,10,dtype='int')
+    print(df)
+    n_list=np.linspace(8,64,10,dtype='int')
     score=np.zeros(len(n_list))
     for i,n_clusters in enumerate(n_list):
         kmeans = KMeans(n_clusters,n_init=10, init = 'k-means++', random_state = 42, max_iter = 300)
@@ -446,7 +450,7 @@ def prepare_df(df):
         df = df.dropna(subset=['body_landmarks_normalized'])
         df['body_landmarks_normalized'] = df['body_landmarks_normalized'].apply(io.unpickle_array)
         # body = self.get_landmarks_2d(enc1, list(range(33)), structure)
-        df['body_landmarks_array'] = df['body_landmarks_normalized'].apply(lambda x: io.get_landmarks_2d(x, list(range(33)), structure="list"))
+        df['body_landmarks_array'] = df['body_landmarks_normalized'].apply(lambda x: io.get_landmarks_2d(x, list(range(33)), structure="list3"))
         # drop the columns that are not needed
         df = df.drop(columns=['face_encodings68', 'face_landmarks', 'body_landmarks', 'body_landmarks_normalized'])
         print("before cols",df)
@@ -504,12 +508,12 @@ def main():
     # choose if you want optimal cluster size or custom cluster size using the parameter GET_OPTIMAL_CLUSTERS
     if MODE == 0:
         if GET_OPTIMAL_CLUSTERS is True: 
-            OPTIMAL_CLUSTERS= best_score(enc_data.drop("image_id", axis=1))   #### Input ONLY encodings into clustering alhorithm
+            OPTIMAL_CLUSTERS = best_score(enc_data.drop(["image_id", "body_landmarks_array"], axis=1))   #### Input ONLY encodings into clustering algorithm
             print(OPTIMAL_CLUSTERS)
             N_CLUSTERS = OPTIMAL_CLUSTERS
         print(enc_data)
         # I drop image_id as I pass it to knn bc I need it later, but knn can't handle strings
-        enc_data["cluster_id"] = kmeans_cluster(enc_data.drop("image_id", axis=1),n_clusters=N_CLUSTERS)
+        enc_data["cluster_id"] = kmeans_cluster(enc_data.drop(["image_id", "body_landmarks_array"], axis=1),n_clusters=N_CLUSTERS)
         
         if SAVE_FIG: export_html_clusters(enc_data.drop("image_id", axis=1))
         print(enc_data)

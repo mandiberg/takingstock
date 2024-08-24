@@ -57,13 +57,13 @@ HSV_NORMS = {"LUM": .01, "SAT": 1,  "HUE": 0.002777777778, "VAL": 1}
 # this is for controlling if it is using
 # all clusters, 
 IS_CLUSTER = False
-# CLUSTER_TYPE = "Poses"
-CLUSTER_TYPE = "Clusters"
+CLUSTER_TYPE = "Poses"
+# CLUSTER_TYPE = "Clusters"
 # number of clusters to analyze -- this is also declared in Clustering_SQL. Move to IO?
-N_CLUSTERS = 30
+N_CLUSTERS = 8
 # this is for IS_ONE_CLUSTER to only run on a specific CLUSTER_NO
 IS_ONE_CLUSTER = False
-CLUSTER_NO = 63
+CLUSTER_NO = 23
 
 # cut the kids
 NO_KIDS = True
@@ -208,7 +208,7 @@ elif IS_SEGONLY and io.platform == "darwin":
     # WHERE += " AND e.encoding_id > 2612275"
 
     # WHERE = "s.site_name_id != 1"
-    LIMIT = 100
+    LIMIT = 1000
 
     # TEMP TK TESTING
     # WHERE += " AND s.site_name_id = 8"
@@ -285,13 +285,13 @@ face_height_output = 1000
 # define ratios, in relationship to nose
 # units are ratio of faceheight
 # top, right, bottom, left
-# image_edge_multiplier = [1, 1, 1, 1] # just face
+image_edge_multiplier = [1, 1, 1, 1] # just face
 # image_edge_multiplier = [1.5,1.5,2,1.5] # bigger portrait
 # image_edge_multiplier = [1.5,1.33, 2.5,1.33] # bigger 2x3 portrait
 # image_edge_multiplier = [1.4,2.6,1.9,2.6] # wider for hands
 # image_edge_multiplier = [3,5,3,5] # megawide for testing
 # image_edge_multiplier = [1.4,3.3,3,3.3] # widerest 16:10 for hands
-image_edge_multiplier = [1.6,3.84,3.2,3.84] # wiiiiiiiidest 16:10 for hands
+# image_edge_multiplier = [1.6,3.84,3.2,3.84] # wiiiiiiiidest 16:10 for hands
 # image_edge_multiplier = [1.45,3.84,2.87,3.84] # wiiiiiiiidest 16:9 for hands
 # image_edge_multiplier = [1.2,2.3,1.7,2.3] # medium for hands
 # image_edge_multiplier = [1.2, 1.2, 1.6, 1.2] # standard portrait
@@ -1032,14 +1032,16 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
                 # inpaint_image=merge_inpaint(inpaint_image,img,extended_img,extension_pixels)
                 inpaint_image, blurmask = merge_inpaint(inpaint_image,img,extended_img,extension_pixels,selfie_bbox)
                 # cv2.imwrite(inpaint_file+"5_aftmerge.jpg",inpaint_image)
-                # cv2.imshow('blurmask', blurmask)
+                # cv2.imshow('inpaint_image', inpaint_image)
                 # cv2.waitKey(0)
                 # cv2.destroyAllWindows()
                 if inpaint_image is not None:
+                    print("we have an inpaint_image")
                     if SAVE_IMG_PROCESS:  cv2.imwrite(inpaint_file+"6_blurmask.jpg",blurmask)
                     ########
                     if SAVE_IMG_PROCESS: cv2.imwrite(inpaint_file+"_inpaint.jpg",inpaint_image) #for testing out
                     else: cv2.imwrite(inpaint_file,inpaint_image) #temp comment out
+                    print("shape of inpaint_image",np.shape(inpaint_image))
                     print("inpainting done", inpaint_file,"shape",np.shape(inpaint_image))
                 else: 
                     print("inpainting failed")
@@ -1057,6 +1059,7 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
                 # inpaint_image=0
                 bailout=True
         if not bailout:
+            print("not bailing out, going to compare_images")
             bbox=shift_bbox(row['bbox'],extension_pixels)
             cropped_image, face_diff, skip_face = compare_images(sort.counter_dict["last_image"], inpaint_image,row['face_landmarks'], bbox)
             if sort.VERBOSE:print("inpainting done","shape:",np.shape(cropped_image))
@@ -1091,9 +1094,6 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
             except:
                 print("couldn't read image")
                 continue
-            print("img shape", img.shape)
-            print("img type", type(img))
-            print("img", img)
             if row['dist'] < sort.MAXD:
                 # compare_images to make sure they are face and not the same
                 # last_image is cv2 np.array

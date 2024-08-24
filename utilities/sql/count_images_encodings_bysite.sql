@@ -31,10 +31,6 @@ WHERE i.site_name_id = 6
 ;
 
    
-SELECT *
-FROM Images i
-WHERE i.site_image_id = "_0YYK-PqvXE"
-AND i.site_name_id = 6
    
 -- segment only
    

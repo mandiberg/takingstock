@@ -18,6 +18,7 @@ import random
 from cv2 import dnn_superres
 import pymongo
 import pickle
+import traceback
 
 
 class SortPose:
@@ -89,6 +90,7 @@ class SortPose:
         self.POINTERS = [16,20,15,19] # 0 is nose, 13-22 are left and right hands and elbows
         self.THUMBS = [16,22,15,21] # 0 is nose, 13-22 are left and right hands and elbows
         # self.BODY_LMS = [20,19] # 0 is nose, 13-22 are left and right hands and elbows
+        self.SUBSET_LANDMARKS = [13,14,19,20] # this should match what is in Clustering
         self.OBJ_CLS_ID = OBJ_CLS_ID
 
         # self.BODY_LMS = [15]
@@ -692,19 +694,24 @@ class SortPose:
         #it would prob be better to do this with a dict and a loop
         # Instead of hard-coding the index 1, you can use a variable or constant for the point index
         
-        # if not self.nose_2d:
-        nose_point_index = 1
-        self.nose_2d = self.get_face_2d_point(nose_point_index)
+        if not self.nose_2d:
+            nose_point_index = 1
+            self.nose_2d = self.get_face_2d_point(nose_point_index)
 
         try:
-            if faceLms.landmark:
+            if faceLms is None:
+                # calculate face height based on bbox dimensions
+                # TK I dont think this is accurate....????
+                self.face_height = (self.bbox['bottom'] - self.bbox['top'])*1
+            elif faceLms.landmark:
                 # get self.face_height
                 self.get_faceheight_data()
             else:
+                print("no faceLms, and not None")
                 # calculate face height based on bbox dimensions
                 # TK I dont think this is accurate....????
-                self.face_height = (self.bbox['bottom'] - self.bbox['top'])/2
         except:
+            print(traceback.format_exc())
             print("couldn't get_faceheight_data")
 
             # this is the in progress neck rotation stuff
@@ -1128,12 +1135,13 @@ class SortPose:
 
                 
     def get_landmarks_2d(self, Lms, selected_Lms, structure="dict"):
-        # this is redundantly in sort_pose also
+        # this is redundantly in io also
         Lms2d = {}
         Lms1d = []
+        Lms1d3 = []
         for idx, lm in enumerate(Lms.landmark):
             if idx in selected_Lms:
-                print("idx", idx)
+                # print("idx", idx)
                 # x, y = int(lm.x * img_w), int(lm.y * img_h)
                 # print("lm.x, lm.y", lm.x, lm.y)
                 if structure == "dict":
@@ -1141,13 +1149,21 @@ class SortPose:
                 elif structure == "list":
                     Lms1d.append(lm.x)
                     Lms1d.append(lm.y)
+                elif structure == "list3":
+                    Lms1d3.append(lm.x)
+                    Lms1d3.append(lm.y)
+                    Lms1d3.append(lm.visibility)
         print("Lms2d", Lms2d)
         print("Lms1d", Lms1d)
+        print("Lms1d3", Lms1d3)
 
         if Lms1d:
             return Lms1d
+        elif Lms1d3:
+            return Lms1d3
         else:
             return Lms2d
+
 
     def normalize_hsv(self, hsv1, df):
         def scale_hue(hsv1,hsv2):
@@ -1308,24 +1324,26 @@ class SortPose:
         return [angle_LH, angle_RH]
     
     def prep_enc(self, enc1, structure="dict"):
-        
-        # print("prep_enc enc before get_landmarks_2d", enc1)
-        pointers = self.get_landmarks_2d(enc1, self.POINTERS, structure)
-        thumbs = self.get_landmarks_2d(enc1, self.THUMBS, structure)
-        # body = self.get_landmarks_2d(enc1, self.BODY_LMS, structure)
-        body = self.get_landmarks_2d(enc1, list(range(33)), structure)
-        # print("prep_enc enc after get_landmarks_2d", pointers, thumbs, body)
-        # enc1_np = np.array(enc1_list)
 
-        # calculate the angle of the vector between landmarks 16 and 20
-        angles_pointers = self.get_hand_angles(np.array(pointers))
-        angles_thumbs = self.get_hand_angles(np.array(thumbs))
+        pointers = self.get_landmarks_2d(enc1, self.SUBSET_LANDMARKS, structure)
 
-        # check if hands are visible
-        visibility = self.test_landmarks_vis(pointers)
+        # # print("prep_enc enc before get_landmarks_2d", enc1)
+        # pointers = self.get_landmarks_2d(enc1, self.POINTERS, structure)
+        # thumbs = self.get_landmarks_2d(enc1, self.THUMBS, structure)
+        # # body = self.get_landmarks_2d(enc1, self.BODY_LMS, structure)
+        # body = self.get_landmarks_2d(enc1, list(range(33)), structure)
+        # # print("prep_enc enc after get_landmarks_2d", pointers, thumbs, body)
+        # # enc1_np = np.array(enc1_list)
 
-        print("types", type(angles_pointers), type(angles_thumbs), type(body), type(visibility))
-        print("enc1++ angles", angles_pointers, angles_thumbs, body, visibility)
+        # # calculate the angle of the vector between landmarks 16 and 20
+        # angles_pointers = self.get_hand_angles(np.array(pointers))
+        # angles_thumbs = self.get_hand_angles(np.array(thumbs))
+
+        # # check if hands are visible
+        # visibility = self.test_landmarks_vis(pointers)
+
+        # print("types", type(angles_pointers), type(angles_thumbs), type(body), type(visibility))
+        # print("enc1++ angles", angles_pointers, angles_thumbs, body, visibility)
 
         # print("enc1++ pointers", pointers, angles_pointers)
         # enc_angles_list = angles_pointers + angles_thumbs + body + visibility
@@ -1334,6 +1352,8 @@ class SortPose:
         print("enc1++ final np array", enc1)
         return enc1
     
+
+
     def sort_df_KNN(self, df_enc, enc1, knn_sort="128d"):
         print("df_enc at the start of sort_df_KNN")
 
@@ -1352,13 +1372,13 @@ class SortPose:
             # if enc1 is not a numpy array, convert it to a list
                 # create enc list with x/y position and angles and visibility
                 print("enc1 before prep_enc", enc1)
-                enc1 = self.prep_enc(enc1, structure="list")
+                enc1 = self.prep_enc(enc1, structure="list") # swittching to 3d
                 print("enc1 after prep_enc", enc1)
                 # apply prep_enc to the sortcol column 
                 print("applying prep_enc to the sortcol column")
                 print("df_enc[sourcecol]", df_enc[sourcecol])
                 # do I need to reduce the number of landmarks I'm tracking at this point? 
-                df_enc[sortcol] = df_enc[sourcecol].apply(lambda x: self.prep_enc(x, structure="list"))
+                df_enc[sortcol] = df_enc[sourcecol].apply(lambda x: self.prep_enc(x, structure="list")) # swittching to 3d
                 print("df_enc[sortcol]", df_enc[sortcol])
         elif knn_sort == "HSV":
             print("knn_sort is HSV")
@@ -1831,14 +1851,16 @@ class SortPose:
 
         if bbox:
             try:
+                print("get_segmentation_mask: bbox type", type(bbox))
                 if type(bbox)==str:
                     bbox=json.loads(bbox)
                     if self.VERBOSE: print("bbox type", type(bbox))
                 #sample_img=sample_img[bbox['top']:bbox['bottom'],bbox['left']:bbox['right'],:]
                 # passing in bbox as a str
-                img = self.crop_image(img, face_landmarks, bbox)
+                img, is_inpaint  = self.crop_image(img, face_landmarks, bbox)
                 if img is None: return -1,-1,-1,-1,-1 ## if TOO_BIG==true, checking if cropped image is empty
             except:
+                print(traceback.format_exc())
                 if self.VERBOSE: print("FAILED CROPPING, bad bbox",bbox)
                 return -2,-2,-2,-2,-2
             print("bbox['bottom'], ", bbox['bottom'])
@@ -1870,6 +1892,10 @@ class SortPose:
         return bbox
 
     def test_shoulders(self,segmentation_mask):
+        print("segmentation_mask", segmentation_mask)
+        print("segmentation_mask[-1,0]", segmentation_mask[-1,0])
+        print("segmentation_mask[-1,-1]", segmentation_mask[-1,-1])
+        print("type segmentation_mask[-1,0]", type(segmentation_mask))
         left_shoulder=segmentation_mask[-1,0]
         right_shoulder=segmentation_mask[-1,-1]
         if left_shoulder<=self.SHOULDER_THRESH:

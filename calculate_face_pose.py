@@ -225,8 +225,9 @@ OBJ_CLS_NAME={0: 'person', 1: 'bicycle', 2: 'car', 3: 'motorcycle', 4: 'airplane
 ## CREATING POSE OBJECT FOR SELFIE SEGMENTATION
 ## none of these are used in this script ##
 ## just to initialize the object ## 
-image_edge_multiplier = [1.5,1.5,2,1.5] # bigger portrait
-image_edge_multiplier_sm = [1.2, 1.2, 1.6, 1.2] # standard portrait
+# image_edge_multiplier = [1.5,1.5,2,1.5] # bigger portrait
+# image_edge_multiplier_sm = [1.2, 1.2, 1.6, 1.2] # standard portrait
+image_edge_multiplier_sm = [2.2, 2.2, 2.6, 2.2] # standard portrait
 face_height_output = 500
 motion = {"side_to_side": False, "forward_smile": True, "laugh": False, "forward_nosmile":  False, "static_pose":  False, "simple": False}
 EXPAND = False
@@ -885,6 +886,7 @@ def process_image_bodylms(task):
         # print(bbox_json)
         # if bbox_json: 
 
+
         if is_body:
             ### NORMALIZE LANDMARKS ###
             nose_pixel_pos = sort.set_nose_pixel_pos(body_landmarks,image.shape)
@@ -912,24 +914,30 @@ def process_image_bodylms(task):
             else:
                 print(f"NO {bbox_key} for", image_id)
  
-        ### save object bbox info
-        session = sort.parse_bbox_dict(session, image_id, PhoneBbox, OBJ_CLS_LIST, bbox_dict)
 
         ### do imagebackground calcs
 
-        segmentation_mask=sort.get_segmentation_mask(get_bg_segment,image_id,bbox,face_landmarks)
-
+        segmentation_mask=sort.get_segmentation_mask(get_bg_segment,image,None,None)
         is_left_shoulder,is_right_shoulder=sort.test_shoulders(segmentation_mask)
+        print("shoulders",is_left_shoulder,is_right_shoulder)
         hue,sat,val,lum, lum_torso=sort.get_bg_hue_lum(image,segmentation_mask,bbox)  
+        print("sat values before insert", hue,sat,val,lum,lum_torso)
+
         if bbox:
             #will do a second round for bbox with same cv2 image
             # bbox,face_landmarks=get_bbox(target_image_id)
-            hue_bb,sat_bb, val_bb, lum_bb, lum_torso_bb =sort.get_bg_hue_lum(img,segmentation_mask,bbox)  
-            if VERBOSE: print("sat values before insert", hue_bb,sat_bb, val_bb, lum_bb, lum_torso_bb)
+            hue_bb,sat_bb, val_bb, lum_bb, lum_torso_bb =sort.get_bg_hue_lum(image,segmentation_mask,bbox)  
+            if sort.VERBOSE: print("sat values before insert", hue_bb,sat_bb, val_bb, lum_bb, lum_torso_bb)
             # hue_bb,sat_bb, val_bb, lum_bb, lum_torso_bb =get_bg_hue_lum(img,bbox,facelandmark)
 
         selfie_bbox=sort.get_selfie_bbox(segmentation_mask)
+        print("selfie_bbox",selfie_bbox)
 
+        ### save object bbox info
+        session = sort.parse_bbox_dict(session, image_id, PhoneBbox, OBJ_CLS_LIST, bbox_dict)
+
+
+        
         quit()
         for _ in range(io.max_retries):
             try:
@@ -940,18 +948,25 @@ def process_image_bodylms(task):
                 session.query(Encodings).filter(Encodings.image_id == image_id).update({
                     Encodings.is_body: is_body,
                     # Encodings.body_landmarks: body_landmarks
-                    Encodings.mongo_body_landmarks: is_body
+                    Encodings.mongo_body_landmarks: is_body,
+                    Encodings.mongo_body_landmarks_norm: 1
                 })
 
                 session.query(SegmentTable).filter(SegmentTable.image_id == image_id).update({
-                    SegmentTable.mongo_body_landmarks: is_body
+                    SegmentTable.mongo_body_landmarks: is_body,
+                    SegmentTable.mongo_body_landmarks_norm: 1
                 })
 
+                # MySQL
                 ### add height and width
-
                 ### save selfie bbox info
-
+                    # adapt the parse_bbox_dict from class to here
                 ### save obj deteciton info, including normed bbox
+                    # bbox_dict
+                    # is_left_shoulder,is_right_shoulder
+                    # hue,sat,val,lum, lum_torso
+                    # hue_bb,sat_bb, val_bb, lum_bb, lum_torso_bb
+                    # selfie_bbox
 
                 # total_processed += 1
 
@@ -963,6 +978,7 @@ def process_image_bodylms(task):
                     print("----------- >>>>>>>>   mongo body_landmarks updated:", image_id)
 
                 ### save normalized landmarks                
+                    # n_landmarks
 
                 # Check if the current batch is ready for commit
                 # if total_processed % BATCH_SIZE == 0:
