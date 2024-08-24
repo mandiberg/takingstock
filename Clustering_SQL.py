@@ -76,8 +76,8 @@ MODE = 0
 CLUSTER_TYPE = "Poses"
 # POINTERS = [16,20,15,19]
 SUBSET_LANDMARKS = []
-# SUBSET_LANDMARKS = [i for i in range(13,22)]
-SUBSET_LANDMARKS = [13,14,19,20]
+SUBSET_LANDMARKS = [i for i in range(13,22)]
+# SUBSET_LANDMARKS = [13,14,19,20]
 # this works for using segment in stock, and for ministock
 USE_SEGMENT = True
 
@@ -85,7 +85,7 @@ USE_SEGMENT = True
 GET_OPTIMAL_CLUSTERS=False
 
 # number of clusters produced. run GET_OPTIMAL_CLUSTERS and add that number here
-N_CLUSTERS = 8
+N_CLUSTERS = 20
 SAVE_FIG=False ##### option for saving the visualized data
 
 if USE_SEGMENT is True and CLUSTER_TYPE == "Poses" and MODE == 0:
@@ -102,10 +102,12 @@ if USE_SEGMENT is True and CLUSTER_TYPE == "Poses" and MODE == 0:
     # Basic Query, this works with gettytest3
     SELECT = "DISTINCT(s.image_id)"
     FROM = f"{SegmentTable_name} s"
+    # FROM += f" INNER JOIN Encodings h ON h.image_id = s.image_id " 
     # FROM += f" INNER JOIN {HelperTable_name} h ON h.image_id = s.image_id " 
-    WHERE = "mongo_body_landmarks = 1"
-    # WHERE = "face_encodings68 IS NOT NULL AND face_x > -33 AND face_x < -27 AND face_y > -2 AND face_y < 2 AND face_z > -2 AND face_z < 2"
-    LIMIT = 300000
+    WHERE = " s.mongo_body_landmarks = 1 "
+    WHERE += " AND s.face_x > -33 AND s.face_x < -27 AND s.face_y > -2 AND s.face_y < 2 AND s.face_z > -2 AND s.face_z < 2 "
+    # WHERE += " AND h.is_body = 1"
+    LIMIT = 30000
 
 
     '''
@@ -114,9 +116,10 @@ if USE_SEGMENT is True and CLUSTER_TYPE == "Poses" and MODE == 0:
     1000 21s
     2000 43s
     4000 87s
+    30000 2553 @ hands elbows x 3d
     40000 2248
     200000 18664 @ 33
-
+    300000 32475 @ 4 x 3d
 
     '''
 

@@ -90,7 +90,8 @@ class SortPose:
         self.POINTERS = [16,20,15,19] # 0 is nose, 13-22 are left and right hands and elbows
         self.THUMBS = [16,22,15,21] # 0 is nose, 13-22 are left and right hands and elbows
         # self.BODY_LMS = [20,19] # 0 is nose, 13-22 are left and right hands and elbows
-        self.SUBSET_LANDMARKS = [13,14,19,20] # this should match what is in Clustering
+        # self.SUBSET_LANDMARKS = [13,14,19,20] # this should match what is in Clustering
+        self.SUBSET_LANDMARKS = [i for i in range(13,22)]
         self.OBJ_CLS_ID = OBJ_CLS_ID
 
         # self.BODY_LMS = [15]
@@ -1789,7 +1790,7 @@ class SortPose:
         return face_height
 
     def set_nose_pixel_pos(self,body_landmarks,shape):
-        print("set_nose_pixel_pos body_landmarks")
+        if self.VERBOSE: print("set_nose_pixel_pos body_landmarks")
         height,width = shape[:2]
         nose_pixel_pos ={
             "x":0,
@@ -1802,7 +1803,7 @@ class SortPose:
         nose_pixel_pos["x"]+=body_landmarks.landmark[0].x*width
         nose_pixel_pos["y"]+=body_landmarks.landmark[0].y*height
         self.nose_2d = nose_pixel_pos
-        print("set_nose_pixel_pos nose_pixel_pos",nose_pixel_pos)
+        if self.VERBOSE: print("set_nose_pixel_pos nose_pixel_pos",nose_pixel_pos)
         nose_pixel_pos["visibility"]+=body_landmarks.landmark[0].visibility
         # nose_3d has visibility
         self.nose_3d = nose_pixel_pos
@@ -1892,7 +1893,7 @@ class SortPose:
 
         if bbox:
             try:
-                print("get_segmentation_mask: bbox type", type(bbox))
+                if self.VERBOSE: print("get_segmentation_mask: bbox type", type(bbox))
                 if type(bbox)==str:
                     bbox=json.loads(bbox)
                     if self.VERBOSE: print("bbox type", type(bbox))
@@ -1933,10 +1934,10 @@ class SortPose:
         return bbox
 
     def test_shoulders(self,segmentation_mask):
-        print("segmentation_mask", segmentation_mask)
-        print("segmentation_mask[-1,0]", segmentation_mask[-1,0])
-        print("segmentation_mask[-1,-1]", segmentation_mask[-1,-1])
-        print("type segmentation_mask[-1,0]", type(segmentation_mask))
+        # print("segmentation_mask", segmentation_mask)
+        # print("segmentation_mask[-1,0]", segmentation_mask[-1,0])
+        # print("segmentation_mask[-1,-1]", segmentation_mask[-1,-1])
+        # print("type segmentation_mask[-1,0]", type(segmentation_mask))
         left_shoulder=segmentation_mask[-1,0]
         right_shoulder=segmentation_mask[-1,-1]
         if left_shoulder<=self.SHOULDER_THRESH:

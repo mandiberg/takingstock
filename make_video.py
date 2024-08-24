@@ -58,11 +58,12 @@ HSV_NORMS = {"LUM": .01, "SAT": 1,  "HUE": 0.002777777778, "VAL": 1}
 # all clusters, 
 IS_CLUSTER = True
 CLUSTER_TYPE = "Poses"
+DROP_LOW_VIS = False
 # CLUSTER_TYPE = "Clusters"
 # number of clusters to analyze -- this is also declared in Clustering_SQL. Move to IO?
-N_CLUSTERS = 8
+N_CLUSTERS = 20
 # this is for IS_ONE_CLUSTER to only run on a specific CLUSTER_NO
-IS_ONE_CLUSTER = True
+IS_ONE_CLUSTER = False
 CLUSTER_NO = 2
 
 # cut the kids
@@ -689,7 +690,7 @@ def prep_encodings_NN(df_segment):
             print(null_bboxes)
 
     print("df_segment length", len(df_segment.index))
-    if SORT_TYPE == "planar_body":
+    if SORT_TYPE == "planar_body" and DROP_LOW_VIS:
         # if planar_body drop rows where self.BODY_LMS are low visibility
         df_segment['hand_visible'] = df_segment.apply(lambda row: any(sort.test_landmarks_vis(row)), axis=1)
 
@@ -1278,15 +1279,17 @@ def process_linear(start_img_name, df_segment, cluster_no, sort):
     # df_enc, df_128_enc, df_33_lms = prep_encodings(df_segment)
     df_enc = prep_encodings_NN(df_segment)
     
-    # # get dataframe sorted by distance
-    df_sorted = sort_by_face_dist_NN(df_enc)
-    # df_sorted = sort_by_face_dist(df_enc, df_128_enc, df_33_lms)
+    # if results in df_enc, then sort by face distance
+    if not df_enc.empty:
+        # # get dataframe sorted by distance
+        df_sorted = sort_by_face_dist_NN(df_enc)
+        # df_sorted = sort_by_face_dist(df_enc, df_128_enc, df_33_lms)
 
-    # test to see if they make good faces
-    img_list = linear_test_df(df_sorted,df_segment,cluster_no)
-    write_images(img_list)
-    write_images(sort.not_make_face)
-    print_counters()
+        # test to see if they make good faces
+        img_list = linear_test_df(df_sorted,df_segment,cluster_no)
+        write_images(img_list)
+        write_images(sort.not_make_face)
+        print_counters()
 
 
 ###################

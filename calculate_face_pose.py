@@ -45,6 +45,7 @@ SAVE_ORIG = False
 DRAW_BOX = False
 MINSIZE = 500
 SLEEP_TIME=0
+VERBOSE = False
 
 # only for triage
 sortfolder ="getty_test"
@@ -234,7 +235,7 @@ EXPAND = False
 ONE_SHOT = False # take all files, based off the very first sort order.
 JUMP_SHOT = False # jump to random file if can't find a run
 
-sort = SortPose(motion, face_height_output, image_edge_multiplier_sm,EXPAND, ONE_SHOT, JUMP_SHOT)
+sort = SortPose(motion, face_height_output, image_edge_multiplier_sm,EXPAND, ONE_SHOT, JUMP_SHOT, None, VERBOSE)
 
 
 start = time.time()
@@ -890,7 +891,7 @@ def process_image_bodylms(task):
         if is_body:
             ### NORMALIZE LANDMARKS ###
             nose_pixel_pos = sort.set_nose_pixel_pos(body_landmarks,image.shape)
-            print("nose_pixel_pos",nose_pixel_pos)
+            if VERBOSE: print("nose_pixel_pos",nose_pixel_pos)
             face_height = sort.convert_bbox_to_face_height(bbox)
             n_landmarks=sort.normalize_landmarks(body_landmarks,nose_pixel_pos,face_height,image.shape)
             # print("n_landmarks",n_landmarks)
@@ -899,7 +900,7 @@ def process_image_bodylms(task):
         ### detect object info, 
         print("detecting objects")
         bbox_dict=sort.return_bbox(YOLO_MODEL,image, OBJ_CLS_LIST)
-        print("detected objects")
+        if VERBOSE: print("detected objects")
 
         ### normed object bbox
         for OBJ_CLS_ID in OBJ_CLS_LIST:
@@ -912,28 +913,29 @@ def process_image_bodylms(task):
                 n_phone_bbox=sort.normalize_phone_bbox(bbox_dict[bbox_key],nose_pixel_pos,face_height,image.shape)
                 bbox_dict[bbox_n_key]=n_phone_bbox
             else:
-                print(f"NO {bbox_key} for", image_id)
+                pass
+                if VERBOSE: print(f"NO {bbox_key} for", image_id)
  
 
         ### do imagebackground calcs
 
         segmentation_mask=sort.get_segmentation_mask(get_bg_segment,image,None,None)
         is_left_shoulder,is_right_shoulder=sort.test_shoulders(segmentation_mask)
-        print("shoulders",is_left_shoulder,is_right_shoulder)
+        if VERBOSE: print("shoulders",is_left_shoulder,is_right_shoulder)
         hue,sat,val,lum, lum_torso=sort.get_bg_hue_lum(image,segmentation_mask,bbox)  
-        print("sat values before insert", hue,sat,val,lum,lum_torso)
+        if VERBOSE: print("sat values before insert", hue,sat,val,lum,lum_torso)
 
         if bbox:
             #will do a second round for bbox with same cv2 image
             # bbox,face_landmarks=get_bbox(target_image_id)
             hue_bb,sat_bb, val_bb, lum_bb, lum_torso_bb =sort.get_bg_hue_lum(image,segmentation_mask,bbox)  
-            if sort.VERBOSE: print("sat values before insert", hue_bb,sat_bb, val_bb, lum_bb, lum_torso_bb)
+            if VERBOSE: print("sat values before insert", hue_bb,sat_bb, val_bb, lum_bb, lum_torso_bb)
             # hue_bb,sat_bb, val_bb, lum_bb, lum_torso_bb =get_bg_hue_lum(img,bbox,facelandmark)
         else:
             hue_bb = sat_bb = val_bb = lum_bb = lum_torso_bb = None
 
         selfie_bbox=sort.get_selfie_bbox(segmentation_mask)
-        print("selfie_bbox",selfie_bbox)
+        if VERBOSE: print("selfie_bbox",selfie_bbox)
 
         ### save object bbox info
         # session = sort.parse_bbox_dict(session, image_id, PhoneBbox, OBJ_CLS_LIST, bbox_dict)
@@ -967,7 +969,7 @@ def process_image_bodylms(task):
                 ### save bbox_dict (including normed bbox) to PhoneBbox
                 for OBJ_CLS_ID in OBJ_CLS_LIST:
                     bbox_n_key = f"bbox_{OBJ_CLS_ID}_norm"
-                    print(bbox_dict)
+                    # print(bbox_dict)
                     if bbox_dict[OBJ_CLS_ID]["bbox"]:
                         # Create a new PhoneBbox entry
                         new_entry_phonebbox = PhoneBbox(image_id=image_id)
@@ -1010,10 +1012,10 @@ def process_image_bodylms(task):
                 # Add the new entry to the session
                 session.add(new_entry_ib)
 
-                if sort.VERBOSE:
+                # if VERBOSE:
                     # Print everything in the session
-                    for obj in session:
-                        print(obj)
+                for obj in session:
+                    print(obj)
 
 
 
@@ -1309,16 +1311,16 @@ def do_job(tasks_to_accomplish, tasks_that_are_done):
             if len(task) > 2:
                 
                 if BODYLMS is True:
-                    print("do_job via process_image_bodylms:")
+                    if VERBOSE: print("do_job via process_image_bodylms:")
                     process_image_bodylms(task)
                 else:
                     # landmarks and bbox, so this is an encodings only
                     process_image_enc_only(task)
-                    print("process_image_enc_only")
+                    if VERBOSE: print("process_image_enc_only")
 
 
             else:
-                print("do_job via regular process_image:", task)
+                if VERBOSE: print("do_job via regular process_image:", task)
                 process_image(task)
                 # print(f"done process_image for {task}")
             # tasks_that_are_done.put(task + ' is done by ' + current_process().name)
@@ -1524,7 +1526,7 @@ def main():
 
                 if row["mongo_face_landmarks"] is not None:
                     # this is a reprocessing, so don't need to test isExist
-                    print("reprocessing")
+                    if VERBOSE: print("reprocessing")
                     task = (image_id,imagepath,row["mongo_face_landmarks"],row["bbox"])
                 else:
                     task = (image_id,imagepath)
