@@ -77,6 +77,7 @@ CLUSTER_TYPE = "Poses"
 # POINTERS = [16,20,15,19]
 SUBSET_LANDMARKS = []
 SUBSET_LANDMARKS = [i for i in range(13,22)]
+ANGLES = []
 # SUBSET_LANDMARKS = [13,14,19,20]
 # this works for using segment in stock, and for ministock
 USE_SEGMENT = True
@@ -218,9 +219,7 @@ def selectSQL():
     resultsjson = ([dict(row) for row in result.mappings()])
     return(resultsjson)
 
-
-def kmeans_cluster(df, n_clusters=32):
-    # Select only the numerical columns (dim_0 to dim_65)
+def make_subset_landmarks(df):
     numerical_columns = [col for col in df.columns if col.startswith('dim_')]
     # set hand_columns = to the numerical_columns in SUBSET_LANDMARKS
     if SUBSET_LANDMARKS:
@@ -228,7 +227,14 @@ def kmeans_cluster(df, n_clusters=32):
     else:
         subset_columns = numerical_columns
     numerical_data = df[subset_columns]
-    
+    return numerical_data
+
+def kmeans_cluster(df, n_clusters=32):
+    # Select only the numerical columns (dim_0 to dim_65)
+    if ANGLES:
+        pass
+    else:
+        numerical_data = make_subset_landmarks(df)
     print("clustering", numerical_data)
     kmeans = KMeans(n_clusters=n_clusters, n_init=10, init='k-means++', random_state=42, max_iter=300, verbose=1)
     kmeans.fit(numerical_data)

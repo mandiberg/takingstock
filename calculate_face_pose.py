@@ -172,7 +172,7 @@ else:
 # IS_SSD=True
 ##########################################
 
-LIMIT = 20
+LIMIT = 1
 
 # platform specific credentials
 io = DataIO(IS_SSD)
@@ -263,7 +263,7 @@ def close_session():
 def init_mongo():
     # init session
     # global engine, Session, session
-    global mongo_client, mongo_db, mongo_collection
+    global mongo_client, mongo_db, mongo_collection, bboxnormed_collection
     # engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}"
     #                                 .format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']), poolclass=NullPool)
     
@@ -280,6 +280,7 @@ def init_mongo():
     mongo_client = pymongo.MongoClient("mongodb://localhost:27017/")
     mongo_db = mongo_client["stock"]
     mongo_collection = mongo_db["encodings"]
+    bboxnormed_collection = mongo_db["body_landmarks_norm"]
 
 def close_mongo():
     mongo_client.close()    
@@ -1018,49 +1019,33 @@ def process_image_bodylms(task):
                     print(obj)
 
 
-
-
-                    # print("New entry created:")
-                    # print("image_id:", new_entry_ib.image_id)
-                    # print("hue_bb:", new_entry_ib.hue_bb)
-                    # print("lum_bb:", new_entry_ib.lum_bb)
-                    # print("sat_bb:", new_entry_ib.sat_bb)
-                    # print("val_bb:", new_entry_ib.val_bb)
-                    # print("lum_torso_bb:", new_entry_ib.lum_torso_bb)
-                    # print("hue:", new_entry_ib.hue)
-                    # print("lum:", new_entry_ib.lum)
-                    # print("sat:", new_entry_ib.sat)
-                    # print("val:", new_entry_ib.val)
-                    # print("lum_torso:", new_entry_ib.lum_torso)
-                    # print("selfie bbox", new_entry_ib.selfie_bbox)
-
-
-
-                    # hue,sat,val,lum, lum_torso
-                    # hue_bb,sat_bb, val_bb, lum_bb, lum_torso_bb
-                    # 
-
-
-
-                quit()
-                # if body_landmarks:
-                #     mongo_collection.update_one(
-                #         {"image_id": image_id},
-                #         {"$set": {"body_landmarks": pickle.dumps(body_landmarks)}}
-                #     )
-                #     print("----------- >>>>>>>>   mongo body_landmarks updated:", image_id)
+                ### save regular landmarks                
+                if body_landmarks:
+                    mongo_collection.update_one(
+                        {"image_id": image_id},
+                        {"$set": {"body_landmarks": pickle.dumps(body_landmarks)}},
+                        upsert=True
+                    )
+                    print("----------- >>>>>>>>   mongo body_landmarks updated:", image_id)
 
                 ### save normalized landmarks                
-                    # n_landmarks
+                if n_landmarks:
+                    bboxnormed_collection.update_one(
+                        {"image_id": image_id},
+                        {"$set": {"nlms": pickle.dumps(n_landmarks)}},
+                        upsert=True
+                    )
+                    print("----------- >>>>>>>>   mongo n_landmarks updated:", image_id)
 
                 # Check if the current batch is ready for commit
                 # if total_processed % BATCH_SIZE == 0:
 
                 # for testing, comment out the commit
-                # session.commit()
+                session.commit()
                 
-                print("bbbbody:")
-                print(image_id)
+                print("bbbbody:", image_id)
+                print("sleeepy temp time")
+                time.sleep(100)
                 break  # Transaction succeeded, exit the loop
             except OperationalError as e:
                 print(e)
