@@ -56,7 +56,7 @@ HSV_NORMS = {"LUM": .01, "SAT": 1,  "HUE": 0.002777777778, "VAL": 1}
 
 # this is for controlling if it is using
 # all clusters, 
-IS_CLUSTER = True
+IS_CLUSTER = False
 CLUSTER_TYPE = "Poses"
 DROP_LOW_VIS = False
 # CLUSTER_TYPE = "Clusters"
@@ -96,8 +96,8 @@ IS_ANGLE_SORT = False
 IS_TOPICS = False
 N_TOPICS = 30
 
-IS_ONE_TOPIC = False
-TOPIC_NO = [15,17]
+IS_ONE_TOPIC = True
+TOPIC_NO = [15]
 
 #  is isolated,  is business,  babies, 17 pointing
 #  is doctor <<  covid
@@ -117,7 +117,7 @@ NORMED_BODY_LMS = True
 # if planar_body set OBJ_CLS_ID for each object type
 # 67 is phone, 63 is laptop, 26: 'handbag', 27: 'tie', 32: 'sports ball'
 if SORT_TYPE == "planar_body": OBJ_CLS_ID = 0
-else: OBJ_CLS_ID = 0
+else: OBJ_CLS_ID = 67
 
 ONE_SHOT = False # take all files, based off the very first sort order.
 JUMP_SHOT = True # jump to random file if can't find a run (I don't think this applies to planar?)
@@ -209,7 +209,7 @@ elif IS_SEGONLY and io.platform == "darwin":
     # WHERE += " AND e.encoding_id > 2612275"
 
     # WHERE = "s.site_name_id != 1"
-    LIMIT = 1000
+    LIMIT = 100000
 
     # TEMP TK TESTING
     # WHERE += " AND s.site_name_id = 8"
@@ -291,7 +291,8 @@ face_height_output = 1000
 # image_edge_multiplier = [1.5,1.33, 2.5,1.33] # bigger 2x3 portrait
 # image_edge_multiplier = [1.4,2.6,1.9,2.6] # wider for hands
 # image_edge_multiplier = [3,5,3,5] # megawide for testing
-image_edge_multiplier = [1.4,3.3,3,3.3] # widerest 16:10 for hands
+# image_edge_multiplier = [1.4,3.3,3,3.3] # widerest 16:10 for hands -- actual 2:3
+image_edge_multiplier = [1.3,3.4,2.9,3.4] # slightly less wide 16:10 for hands
 # image_edge_multiplier = [1.6,3.84,3.2,3.84] # wiiiiiiiidest 16:10 for hands
 # image_edge_multiplier = [1.45,3.84,2.87,3.84] # wiiiiiiiidest 16:9 for hands
 # image_edge_multiplier = [1.2,2.3,1.7,2.3] # medium for hands
@@ -711,7 +712,7 @@ def compare_images(last_image, img, face_landmarks, bbox):
         cropped_image = sort.expand_image(img, face_landmarks, bbox)
     else:
         cropped_image, is_inpaint = sort.crop_image(img, face_landmarks, bbox)
-    print("cropped_image: ",cropped_image)
+    # print("cropped_image: ",cropped_image)
     # if cropped_image is not None and len(cropped_image)>1 :
     #     print(" >> have a cropped image trying to save", cropped_image.shape)
     # elif cropped_image is not None and len(cropped_image)==1 :

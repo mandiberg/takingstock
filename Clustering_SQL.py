@@ -38,6 +38,7 @@ from sys import platform
 
 #mine
 from mp_db_io import DataIO
+from mp_sort_pose import SortPose
 
 # MM you need to use conda activate mps_torch310 
 
@@ -195,21 +196,13 @@ class ImagesClusters(Base):
     image_id = Column(Integer, ForeignKey(Images.image_id, ondelete="CASCADE"), primary_key=True)
     cluster_id = Column(Integer, ForeignKey(f'{ClustersTable_name}.cluster_id', ondelete="CASCADE"))
 
-# # define new cluster table names based on segment name
-# SegmentClustersTable_name = "Clusters_"+SegmentTable_name
-# SegmentImagesClustersTable_name = "ImagesClusters_"+SegmentTable_name
-
-# class SegmentClustersTable(Base):
-#     __tablename__ = SegmentClustersTable_name
-
-#     cluster_id = Column(Integer, primary_key=True, autoincrement=True)
-#     cluster_median = Column(BLOB)
-
-# class SegmentImagesClustersTable(Base):
-#     __tablename__ = SegmentImagesClustersTable_name
-
-#     image_id = Column(Integer, ForeignKey('Images.image_id'), primary_key=True)
-#     cluster_id = Column(Integer, ForeignKey('Clusters.cluster_id'))
+image_edge_multiplier_sm = [2.2, 2.2, 2.6, 2.2] # standard portrait
+face_height_output = 500
+motion = {"side_to_side": False, "forward_smile": True, "laugh": False, "forward_nosmile":  False, "static_pose":  False, "simple": False}
+EXPAND = False
+ONE_SHOT = False # take all files, based off the very first sort order.
+JUMP_SHOT = False # jump to random file if can't find a run
+sort = SortPose(motion, face_height_output, image_edge_multiplier_sm,EXPAND, ONE_SHOT, JUMP_SHOT, None, VERBOSE)
 
 
 def selectSQL():

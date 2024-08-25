@@ -42,7 +42,7 @@ class SortPose:
         self.HSV_DELTA_MAX = .5
         self.HSVMULTIPLIER = 3
         self.BRUTEFORCE = False
-        self.CUTOFF = 100
+        self.CUTOFF = 300
 
         self.SORT_TYPE = SORT_TYPE
         if self.SORT_TYPE == "128d":
@@ -1454,7 +1454,7 @@ class SortPose:
         print("df_enc[sortcol]", df_enc[sortcol])
 
         encodings_array = df_enc[sortcol].to_numpy().tolist()
-        print("encodings_array to_numpy().tolist", (encodings_array))
+        # print("encodings_array to_numpy().tolist", (encodings_array))
 
         if knn_sort == "obj":
             print("encodings_array length", len(encodings_array))
