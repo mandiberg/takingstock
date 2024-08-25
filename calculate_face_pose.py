@@ -897,6 +897,9 @@ def process_image_bodylms(task):
             n_landmarks=sort.normalize_landmarks(body_landmarks,nose_pixel_pos,face_height,image.shape)
             # print("n_landmarks",n_landmarks)
             # sort.insert_n_landmarks(bboxnormed_collection, target_image_id,n_landmarks)
+        else:
+            print("no body")
+            n_landmarks = None
 
         ### detect object info, 
         print("detecting objects")
@@ -953,19 +956,19 @@ def process_image_bodylms(task):
                     # Encodings.body_landmarks: body_landmarks
                     Encodings.mongo_body_landmarks: is_body,
                     Encodings.mongo_body_landmarks_norm: 1
-                })
+                }, synchronize_session=False)
 
                 session.query(SegmentTable).filter(SegmentTable.image_id == image_id).update({
                     SegmentTable.mongo_body_landmarks: is_body,
                     SegmentTable.mongo_body_landmarks_norm: 1
-                })
+                }, synchronize_session=False)
 
                 # MySQL
                 ### save image.shape to Images.h and Images.w
                 session.query(Images).filter(Images.image_id == image_id).update({
                     Images.h: image.shape[0],
                     Images.w: image.shape[1]
-                })
+                }, synchronize_session=False)
 
                 ### save bbox_dict (including normed bbox) to PhoneBbox
                 for OBJ_CLS_ID in OBJ_CLS_LIST:
@@ -981,7 +984,7 @@ def process_image_bodylms(task):
                         setattr(new_entry_phonebbox, bbox_n_key, bbox_dict[bbox_n_key])
                         
                         # Add the new entry to the session
-                        session.add(new_entry_phonebbox)
+                        session.merge(new_entry_phonebbox)
                         
                         print(f"New Bbox {OBJ_CLS_ID} session entry for image_id {image_id} created successfully.")
                     else:
@@ -1011,12 +1014,7 @@ def process_image_bodylms(task):
                 new_entry_ib.selfie_bbox = selfie_bbox
 
                 # Add the new entry to the session
-                session.add(new_entry_ib)
-
-                # if VERBOSE:
-                    # Print everything in the session
-                for obj in session:
-                    print(obj)
+                session.merge(new_entry_ib)
 
 
                 ### save regular landmarks                
@@ -1043,9 +1041,9 @@ def process_image_bodylms(task):
                 # for testing, comment out the commit
                 session.commit()
                 
-                print("bbbbody:", image_id)
+                print("------ ++++++ MySQL bbbbody updated:", image_id)
                 print("sleeepy temp time")
-                time.sleep(100)
+                time.sleep(1)
                 break  # Transaction succeeded, exit the loop
             except OperationalError as e:
                 print(e)
