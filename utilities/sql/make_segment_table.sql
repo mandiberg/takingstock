@@ -47,6 +47,7 @@ CREATE TABLE SegmentBig_isface (
     mongo_body_landmarks boolean,
     mongo_face_landmarks boolean,
     mongo_body_landmarks_norm boolean,
+    no_image boolean,
     UNIQUE (image_id)
 
 

@@ -119,7 +119,7 @@ if BODYLMS is True:
     SegmentTable_name = 'SegmentOct20'
     FROM =f"{SegmentTable_name} seg1"
     # FROM ="Encodings e"
-    QUERY = "seg1.mongo_body_landmarks IS NULL"
+    QUERY = " seg1.mongo_body_landmarks IS NULL and seg1.no_image IS NULL"
     SUBQUERY = " "
     # SUBQUERY = f"(SELECT seg1.image_id FROM {SegmentTable_name} seg1 WHERE face_x > -33 AND face_x < -27 AND face_y > -2 AND face_y < 2 AND face_z > -2 AND face_z < 2)"
     # SUBQUERY = f"(SELECT seg1.image_id FROM {SegmentTable_name} seg1 WHERE face_x > -33 AND face_x < -27 AND face_y > -2 AND face_y < 2 AND face_z > -2 AND face_z < 2)"
@@ -977,7 +977,12 @@ def process_image_bodylms(task):
                     if bbox_dict[OBJ_CLS_ID]["bbox"]:
                         # Create a new PhoneBbox entry
                         new_entry_phonebbox = PhoneBbox(image_id=image_id)
-                        
+
+                        print(f"bbox_dict[OBJ_CLS_ID][bbox]: {bbox_dict[OBJ_CLS_ID]['bbox']}")
+                        print(f"bbox_dict[OBJ_CLS_ID][conf]: {bbox_dict[OBJ_CLS_ID]['conf']}")
+                        print("bbox_n_key:", bbox_n_key)
+                        print(f"bbox_dict[bbox_n_key]: {bbox_dict[bbox_n_key]}")
+
                         # Set attributes
                         setattr(new_entry_phonebbox, f"bbox_{OBJ_CLS_ID}", bbox_dict[OBJ_CLS_ID]["bbox"])
                         setattr(new_entry_phonebbox, f"conf_{OBJ_CLS_ID}", bbox_dict[OBJ_CLS_ID]["conf"])
@@ -1057,6 +1062,9 @@ def process_image_bodylms(task):
         # store no_image in Images table
         session.query(Images).filter(Images.image_id == image_id).update({
             Images.no_image: no_image
+        }, synchronize_session=False)
+        session.query(SegmentTable).filter(SegmentTable.image_id == image_id).update({
+            SegmentTable.no_image: no_image
         }, synchronize_session=False)
         session.commit()
         print('no image or toooooo smallllll, stored in Images table')
