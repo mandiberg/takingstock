@@ -1,7 +1,7 @@
 from sqlalchemy import create_engine, select, delete
 from sqlalchemy.orm import sessionmaker,scoped_session
 from sqlalchemy.pool import NullPool
-from sqlalchemy import and_, or_
+from sqlalchemy import and_, or_, func
 
 from sqlalchemy.ext.declarative import declarative_base
 # my ORM
@@ -18,12 +18,20 @@ import csv
 import os
 import gensim
 from collections import Counter
+import pymongo
 
 # nltk stuff
 from nltk.stem import WordNetLemmatizer, SnowballStemmer
 from nltk.stem.porter import *
 
+############################################
+# I think this is the most current version #
+############################################
 
+'''
+1. Opt 0: add image_id and some encodings info to a SegmentBig table via create_table_from_encodings() with all the image_ids from encodings that are within the x,y,z range
+1. Opt 0:
+'''
 io = DataIO()
 db = io.db
 # io.db["name"] = "ministock"
@@ -44,6 +52,11 @@ else:
 
 # Create a session
 session = scoped_session(sessionmaker(bind=engine))
+
+# Connect to MongoDB
+mongo_client = pymongo.MongoClient("mongodb://localhost:27017/")
+mongo_db = mongo_client["stock"]
+mongo_collection = mongo_db["tokens"]
 
 # create a stemmer object for preprocessing
 stemmer = SnowballStemmer('english')
@@ -80,7 +93,7 @@ options = ['Create helper table', 'Fetch keywords list and make tokens', 'Fetch 
            ]
 option, index = pick(options, title)
 
-LIMIT= 4000
+LIMIT= 1
 # Initialize the counter
 counter = 0
 
@@ -92,55 +105,55 @@ class SegmentHelper(Base):
 
     image_id = Column(Integer, primary_key=True)
 
-def create_TempTable(row, lock, session):
-    # image_id, bbox, face_x, face_y, face_z, mouth_gap, face_landmarks, face_encodings68, body_landmarks = row
+# def create_TempTable(row, lock, session):
+#     # image_id, bbox, face_x, face_y, face_z, mouth_gap, face_landmarks, face_encodings68, body_landmarks = row
 
-    image_id = row[0]
+#     image_id = row[0]
 
-    # Create a SegmentTable object
-    segment_table = SegmentHelper(
-        image_id=image_id
-    )
+#     # Create a SegmentTable object
+#     segment_table = SegmentHelper(
+#         image_id=image_id
+#     )
 
 
-    # # Create a SegmentTable object
-    # segment_table = SegmentHelper(
-    #     image_id=image_id,
-    #     bbox=bbox,
-    #     face_x=face_x,
-    #     face_y=face_y,
-    #     face_z=face_z,
-    #     mouth_gap=mouth_gap,
-    #     face_landmarks=face_landmarks,
-    #     face_encodings68=face_encodings68,
-    #     body_landmarks=body_landmarks
-    # )
+#     # # Create a SegmentTable object
+#     # segment_table = SegmentHelper(
+#     #     image_id=image_id,
+#     #     bbox=bbox,
+#     #     face_x=face_x,
+#     #     face_y=face_y,
+#     #     face_z=face_z,
+#     #     mouth_gap=mouth_gap,
+#     #     face_landmarks=face_landmarks,
+#     #     face_encodings68=face_encodings68,
+#     #     body_landmarks=body_landmarks
+#     # )
     
-    # # Create a BagOfKeywords object
-    # bag_of_keywords = BagOfKeywords(
-    #     image_id=image_id,
-    #     description=description,
-    #     gender_id=gender_id,
-    #     age_id=age_id,
-    #     location_id=location_id,
-    #     keyword_list=None,  # Set this to None or your desired value
-    #     tokenized_keyword_list=None,  # Set this to None or your desired value
-    #     ethnicity_list=None  # Set this to None or your desired value
-    # )
+#     # # Create a BagOfKeywords object
+#     # bag_of_keywords = BagOfKeywords(
+#     #     image_id=image_id,
+#     #     description=description,
+#     #     gender_id=gender_id,
+#     #     age_id=age_id,
+#     #     location_id=location_id,
+#     #     keyword_list=None,  # Set this to None or your desired value
+#     #     tokenized_keyword_list=None,  # Set this to None or your desired value
+#     #     ethnicity_list=None  # Set this to None or your desired value
+#     # )
     
-    # Add the BagOfKeywords object to the session
-    session.add(segment_table)
+#     # Add the BagOfKeywords object to the session
+#     session.add(segment_table)
 
-    with lock:
-        # Increment the counter using the lock to ensure thread safety
-        global counter
-        counter += 1
-        session.commit()
+#     with lock:
+#         # Increment the counter using the lock to ensure thread safety
+#         global counter
+#         counter += 1
+#         session.commit()
 
-    # Print a message to confirm the update
-    # print(f"Keyword list for image_id {image_id} updated successfully.")
-    if counter % 1000 == 0:
-        print(f"Created SegmentTable number: {counter}")
+#     # Print a message to confirm the update
+#     # print(f"Keyword list for image_id {image_id} updated successfully.")
+#     if counter % 1000 == 0:
+#         print(f"Created SegmentTable number: {counter}")
 
 
 
@@ -175,7 +188,7 @@ def create_table(row, lock, session):
 
 def create_table_from_encodings(row, lock, session):
     image_id, bbox, face_x, face_y, face_z, mouth_gap, face_landmarks, face_encodings68, body_landmarks = row
-    
+    # print(row)
     # Create a BagOfKeywords object
     segment_big = SegmentBig(
         image_id=image_id,
@@ -512,10 +525,14 @@ def preprocess_keywords(target_image_id, lock,session):
 
         # Execute the query and fetch the result as a list of keyword_ids
         result = session.execute(select_description_query).fetchone()
-        keyword_list = result[0].replace(".","").split()
-        print(keyword_list)
+        print(result[0])
+        if result[0]:
+            keyword_list = result[0].replace(".","").split()
+        else:
+            print(f"Description entry for image_id {target_image_id} not found.")
+            return
+        # print(keyword_list)
         
-
     # print(keyword_list)
 
     # # this pulls each key text from db - refactoring
@@ -538,27 +555,45 @@ def preprocess_keywords(target_image_id, lock,session):
     # print(token_list)
     keyword_list_pickle = pickle.dumps(token_list)
 
+    # have to do the Mongo here
+
     # Update the BagOfKeywords entry with the corresponding image_id
-    Segment_keywords_entry = (
-        session.query(SegmentTable)
-        .filter(SegmentTable.image_id == target_image_id)
+    #OLD
+    # Segment_keywords_entry = (
+    #     session.query(SegmentTable)
+    #     .filter(SegmentTable.image_id == target_image_id)
+    #     .first()
+    # )
+    #NEW
+    
+    # create a SegmentBig entry
+    SegmentBig_entry = (
+        session.query(SegmentBig)
+        .filter(SegmentBig.image_id == target_image_id)
         .first()
     )
 
-    if Segment_keywords_entry and token_list:
-        # this is the old version, making a keylist first. 
-        # BOK_keywords_entry.keyword_list = keyword_list_pickle
-        Segment_keywords_entry.tokenized_keyword_list = keyword_list_pickle
-        #session.commit()
-        print(f"Keyword list for image_id {target_image_id} updated successfully.")
-
+    # query the mongo collection to see if the tokens exist for image_id
+    query = {"image_id": target_image_id}
+    result = mongo_collection.find(query)
+    if result and token_list:
+        print(f"Tokens for image_id {target_image_id} already exist, setting mongo_tokens to 1.")
+        SegmentBig_entry.mongo_tokens = 1
+        insert_mongo = False
+    elif token_list:
+        # insert the tokens into the mongo collection
+        insert_mongo = True
+        SegmentBig_entry.mongo_tokens = 1
+        print(f"Keyword list for image_id {target_image_id} will be updated.")
     else:
         print(f"Keywords entry for image_id {target_image_id} not found.")
-        
+
     with lock:
         # Increment the counter using the lock to ensure thread safety
         global counter
         counter += 1
+        # commented out for testing
+        if insert_mongo: mongo_collection.insert_one({"image_id": target_image_id, "tokenized_keyword_list": keyword_list_pickle})
         session.commit()
 
     if counter % 10000 == 0:
@@ -620,6 +655,12 @@ if index == 0:
 
     # select_query = select(Images.image_id, Images.description, Images.gender_id, Images.age_id, Images.location_id).\
     #     select_from(Images).outerjoin(BagOfKeywords, Images.image_id == BagOfKeywords.image_id).filter(BagOfKeywords.image_id == None, Images.site_name_id.in_([2,4])).limit(LIMIT)
+    
+    # select max image_id from SegmentBig
+    select_query = select(func.max(SegmentBig.image_id))
+    result = session.execute(select_query).fetchone()
+    max_image_id = result[0]
+    print("max image_id: ", max_image_id)
 
     # this is the regular one to use
     select_query = (
@@ -629,6 +670,7 @@ if index == 0:
         .outerjoin(SegmentBig, Encodings.image_id == SegmentBig.image_id)
         .filter(SegmentBig.image_id == None)
         .filter(and_(
+            Encodings.image_id >= max_image_id,
             Encodings.face_x > -45,
             Encodings.face_x < -20,
             Encodings.face_y > -10,
@@ -638,6 +680,9 @@ if index == 0:
         ))
         .limit(LIMIT)
     )
+            # there are NULL image_ids in the Encodings table!!!
+            # Encodings.image_id.isnot(None),
+
 
     # # this is for one specific topic
     # select_query = (
@@ -700,7 +745,7 @@ if index == 0:
 elif index == 1:
     function=preprocess_keywords
     ################FETCHING KEYWORDS AND CREATING TOKENS #################
-    distinct_image_ids_query = select(SegmentTable.image_id.distinct()).filter(SegmentTable.tokenized_keyword_list == None).limit(LIMIT)
+    distinct_image_ids_query = select(SegmentTable.image_id.distinct()).filter(SegmentTable.mongo_tokens == None).limit(LIMIT)
     distinct_image_ids = [row[0] for row in session.execute(distinct_image_ids_query).fetchall()]
 
     # print the length of the result

@@ -38,7 +38,8 @@ SELECT
     so.site_name_id,
     COUNT(so.image_id) AS image_count,
     SUM(CASE WHEN so.mongo_face_landmarks  IS NOT NULL THEN 1 ELSE 0 END) AS face_encodings68_not_null_count,
-    SUM(CASE WHEN so.mongo_body_landmarks  IS NOT NULL THEN 1 ELSE 0 END) AS body_landmarks_not_null_count
+    SUM(CASE WHEN so.mongo_body_landmarks  IS NOT NULL THEN 1 ELSE 0 END) AS body_landmarks_not_null_count,
+    SUM(CASE WHEN so.mongo_body_landmarks_norm  IS NOT NULL THEN 1 ELSE 0 END) AS mongo_body_landmarks_norm_count
 FROM
     SegmentOct20 so 
 GROUP BY
@@ -62,3 +63,35 @@ GROUP BY
     so.site_name_id
 ORDER BY
     so.site_name_id;
+
+   
+   
+-- count ages per site
+   
+SELECT 
+    site_name_id,
+    SUM(CASE WHEN age_id IS NULL THEN image_count ELSE 0 END) AS 'NULL',
+    SUM(CASE WHEN age_id = 1 THEN image_count ELSE 0 END) AS '1',
+    SUM(CASE WHEN age_id = 2 THEN image_count ELSE 0 END) AS '2',
+    SUM(CASE WHEN age_id = 3 THEN image_count ELSE 0 END) AS '3',
+    SUM(CASE WHEN age_id = 4 THEN image_count ELSE 0 END) AS '4',
+    SUM(CASE WHEN age_id = 5 THEN image_count ELSE 0 END) AS '5',
+    SUM(CASE WHEN age_id = 6 THEN image_count ELSE 0 END) AS '6',
+    SUM(CASE WHEN age_id = 7 THEN image_count ELSE 0 END) AS '7'
+FROM 
+(
+    SELECT 
+        site_name_id,
+        age_id,
+        COUNT(*) AS image_count
+    FROM 
+        Images
+    JOIN Encodings ON Encodings.image_id = Images.image_id 
+    WHERE Encodings.is_face = 1
+    GROUP BY 
+        site_name_id, age_id
+) AS counts
+GROUP BY 
+    site_name_id
+ORDER BY 
+    site_name_id;

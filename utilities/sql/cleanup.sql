@@ -28,7 +28,7 @@ LIMIT 1
 -- Identify duplicate image_id entries in the Images table
 SELECT site_image_id, COUNT(*)
 FROM Images i 
-WHERE i.site_name_id = 1
+WHERE i.site_name_id = 3
 GROUP BY site_image_id
 HAVING COUNT(*) > 1;
 

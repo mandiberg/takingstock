@@ -1064,8 +1064,8 @@ def process_image_bodylms(task):
                 session.commit()
                 
                 print("------ ++++++ MySQL bbbbody updated:", image_id)
-                print("sleeepy temp time")
-                time.sleep(1)
+                # print("sleeepy temp time")
+                # time.sleep(1)
                 break  # Transaction succeeded, exit the loop
             except OperationalError as e:
                 print(e)

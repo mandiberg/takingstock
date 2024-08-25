@@ -31,6 +31,29 @@ CREATE TABLE ImagesTopics (
 
 
 
+SELECT MAX(sbi.image_id)
+FROM SegmentBig_isface sbi 
+;
+
+SELECT COUNT(e.image_id)
+FROM Encodings e 
+LEFT JOIN 
+    SegmentBig_isface sb 
+ON 
+    e.image_id = sb.image_id
+WHERE 
+    sb.image_id IS NULL
+    AND e.image_id IS NOT NULL
+    AND e.image_id >= 89000000
+    AND e.face_x > -45
+    AND e.face_x < -20
+    AND e.face_y > -10
+    AND e.face_y < 10
+    AND e.face_z > -10
+    AND e.face_z < 10
+;
+
+
 
 
 -- this is meta stuff
