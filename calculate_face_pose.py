@@ -908,14 +908,26 @@ def process_image_bodylms(task):
 
         ### normed object bbox
         for OBJ_CLS_ID in OBJ_CLS_LIST:
-            bbox_key = "bbox_{0}".format(OBJ_CLS_ID)
+            print("OBJ_CLS_ID to norm", OBJ_CLS_ID)
+            bbox_key = "bbox"
             # conf_key = "conf_{0}".format(OBJ_CLS_ID)
-            bbox_n_key = "conf_{0}_norm".format(OBJ_CLS_ID)
-            try: bbox_dict_value = bbox_dict[bbox_key]
-            except: bbox_dict_value = None
+            bbox_n_key = "bbox_{0}_norm".format(OBJ_CLS_ID)
+            print("OBJ_CLS_ID", OBJ_CLS_ID)
+            try: 
+                print("trying to get bbox", OBJ_CLS_ID)
+                bbox_dict_value = bbox_dict[OBJ_CLS_ID]["bbox"]
+                bbox_dict_value = io.unstring_json(bbox_dict_value)
+            except: 
+                print("no bbox", OBJ_CLS_ID)
+                bbox_dict_value = None
             if bbox_dict_value:
-                n_phone_bbox=sort.normalize_phone_bbox(bbox_dict[bbox_key],nose_pixel_pos,face_height,image.shape)
+                print("setting normed bbox for OBJ_CLS_ID", OBJ_CLS_ID)
+                print("bbox_dict_value", bbox_dict_value)
+                print("bbox_n_key", bbox_n_key)
+
+                n_phone_bbox=sort.normalize_phone_bbox(bbox_dict_value,nose_pixel_pos,face_height,image.shape)
                 bbox_dict[bbox_n_key]=n_phone_bbox
+                print("normed bbox", bbox_dict[bbox_n_key])
             else:
                 pass
                 if VERBOSE: print(f"NO {bbox_key} for", image_id)

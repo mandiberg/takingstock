@@ -1811,12 +1811,15 @@ class SortPose:
     
     def normalize_phone_bbox(self,phone_bbox,nose_pos,face_height,shape):
         height,width = shape[:2]
-        # print("phone_bbox",phone_bbox)
+        print("phone_bbox",phone_bbox)
+        print("type phone_bbox",type(phone_bbox))
+
         n_phone_bbox=phone_bbox
         n_phone_bbox["right"]=(n_phone_bbox["right"] -nose_pos["x"])/face_height
         n_phone_bbox["left"]=(n_phone_bbox["left"] -nose_pos["x"])/face_height
         n_phone_bbox["top"]=(n_phone_bbox["top"] -nose_pos["y"])/face_height
         n_phone_bbox["bottom"]=(n_phone_bbox["bottom"] -nose_pos["y"])/face_height
+        print("type phone_bbox",type(n_phone_bbox["right"]))
 
         return n_phone_bbox
 

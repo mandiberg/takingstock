@@ -1319,7 +1319,6 @@ def main():
 
     # def get_encodings_mongo(image_id):
     #     mongo_collection_face = mongo_db['encodings']
-    #     mongo_collection_body = mongo_db["bboxnormed_lms"]
 
     #     if image_id:
     #         results_face = mongo_collection_face.find_one({"image_id": image_id})
