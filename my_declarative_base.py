@@ -66,6 +66,7 @@ class Images(Base):
     uploadDate    = Column(Date)
     h             = Column(Integer)
     w             = Column(Integer)
+    no_image     = Column(Boolean)
     site      = relationship("Site")
     age       = relationship("Age")
     agedetail = relationship("AgeDetail")

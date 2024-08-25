@@ -78,6 +78,7 @@ CREATE TABLE Images (
     FOREIGN KEY (release_name_id) REFERENCES Model_Release (release_name_id),
     h INTEGER,
     w INTEGER,
+    no_image boolean
 );
 
 

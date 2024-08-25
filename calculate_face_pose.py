@@ -900,7 +900,7 @@ def process_image_bodylms(task):
         else:
             print("no body")
             n_landmarks = None
-
+            
         ### detect object info, 
         print("detecting objects")
         bbox_dict=sort.return_bbox(YOLO_MODEL,image, OBJ_CLS_LIST)
@@ -1043,7 +1043,7 @@ def process_image_bodylms(task):
                 
                 print("------ ++++++ MySQL bbbbody updated:", image_id)
                 print("sleeepy temp time")
-                time.sleep(1)
+                time.sleep(100)
                 break  # Transaction succeeded, exit the loop
             except OperationalError as e:
                 print(e)
@@ -1053,7 +1053,14 @@ def process_image_bodylms(task):
             print("no bbox")
 
     else:
-        print('no image or toooooo smallllll')
+        no_image = True
+        # store no_image in Images table
+        session.query(Images).filter(Images.image_id == image_id).update({
+            Images.no_image: no_image
+        }, synchronize_session=False)
+        session.commit()
+        print('no image or toooooo smallllll, stored in Images table')
+
         # I should probably assign no_good here...?
     # Close the session and dispose of the engine before the worker process exits
     close_mongo()
