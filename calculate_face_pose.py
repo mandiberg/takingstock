@@ -172,7 +172,7 @@ else:
 # IS_SSD=True
 ##########################################
 
-LIMIT = 1
+LIMIT = 1000
 
 # platform specific credentials
 io = DataIO(IS_SSD)
@@ -858,13 +858,13 @@ def process_image_enc_only(task):
 
 def process_image_bodylms(task):
     # df = pd.DataFrame(columns=['image_id','bbox'])
-    print("task is: ",task)
+    if VERBOSE: print("task is: ",task)
     image_id = task[0] ### is it enc or image_id
     bbox = io.unstring_json(task[3])
     cap_path = capitalize_directory(task[1])
     init_session()
     init_mongo()
-
+    nose_pixel_pos = None
 
     # df = pd.DataFrame(columns=['image_id','is_face','is_body','is_face_distant','face_x','face_y','face_z','mouth_gap','face_landmarks','bbox','face_encodings','face_encodings68_J','body_landmarks'])
     # df.at['1', 'image_id'] = image_id
@@ -908,22 +908,24 @@ def process_image_bodylms(task):
 
         ### normed object bbox
         for OBJ_CLS_ID in OBJ_CLS_LIST:
-            print("OBJ_CLS_ID to norm", OBJ_CLS_ID)
+            if VERBOSE: print("OBJ_CLS_ID to norm", OBJ_CLS_ID)
             bbox_key = "bbox"
             # conf_key = "conf_{0}".format(OBJ_CLS_ID)
             bbox_n_key = "bbox_{0}_norm".format(OBJ_CLS_ID)
-            print("OBJ_CLS_ID", OBJ_CLS_ID)
+            if VERBOSE: print("OBJ_CLS_ID", OBJ_CLS_ID)
             try: 
-                print("trying to get bbox", OBJ_CLS_ID)
+                if VERBOSE: print("trying to get bbox", OBJ_CLS_ID)
                 bbox_dict_value = bbox_dict[OBJ_CLS_ID]["bbox"]
                 bbox_dict_value = io.unstring_json(bbox_dict_value)
             except: 
-                print("no bbox", OBJ_CLS_ID)
+                if VERBOSE: print("no bbox", OBJ_CLS_ID)
                 bbox_dict_value = None
-            if bbox_dict_value:
-                print("setting normed bbox for OBJ_CLS_ID", OBJ_CLS_ID)
-                print("bbox_dict_value", bbox_dict_value)
-                print("bbox_n_key", bbox_n_key)
+            if bbox_dict_value and not nose_pixel_pos:
+                print("normalized bbox but no nose_pixel_pos for ", image_id)
+            elif bbox_dict_value:
+                if VERBOSE: print("setting normed bbox for OBJ_CLS_ID", OBJ_CLS_ID)
+                if VERBOSE: print("bbox_dict_value", bbox_dict_value)
+                if VERBOSE: print("bbox_n_key", bbox_n_key)
 
                 n_phone_bbox=sort.normalize_phone_bbox(bbox_dict_value,nose_pixel_pos,face_height,image.shape)
                 bbox_dict[bbox_n_key]=n_phone_bbox
@@ -990,22 +992,25 @@ def process_image_bodylms(task):
                         # Create a new PhoneBbox entry
                         new_entry_phonebbox = PhoneBbox(image_id=image_id)
 
-                        print(f"bbox_dict[OBJ_CLS_ID][bbox]: {bbox_dict[OBJ_CLS_ID]['bbox']}")
-                        print(f"bbox_dict[OBJ_CLS_ID][conf]: {bbox_dict[OBJ_CLS_ID]['conf']}")
-                        print("bbox_n_key:", bbox_n_key)
-                        print(f"bbox_dict[bbox_n_key]: {bbox_dict[bbox_n_key]}")
+                        if VERBOSE: print(f"bbox_dict[OBJ_CLS_ID][bbox]: {bbox_dict[OBJ_CLS_ID]['bbox']}")
+                        if VERBOSE: print(f"bbox_dict[OBJ_CLS_ID][conf]: {bbox_dict[OBJ_CLS_ID]['conf']}")
+                        if VERBOSE: print("bbox_n_key:", bbox_n_key)
+                        if VERBOSE: print(f"bbox_dict[bbox_n_key]: {bbox_dict[bbox_n_key]}")
 
                         # Set attributes
                         setattr(new_entry_phonebbox, f"bbox_{OBJ_CLS_ID}", bbox_dict[OBJ_CLS_ID]["bbox"])
                         setattr(new_entry_phonebbox, f"conf_{OBJ_CLS_ID}", bbox_dict[OBJ_CLS_ID]["conf"])
-                        setattr(new_entry_phonebbox, bbox_n_key, bbox_dict[bbox_n_key])
-                        
+                        try:
+                            setattr(new_entry_phonebbox, bbox_n_key, bbox_dict[bbox_n_key])
+                        except:
+                            print(f"Error setting {bbox_n_key} for {image_id}")
                         # Add the new entry to the session
                         session.merge(new_entry_phonebbox)
                         
                         print(f"New Bbox {OBJ_CLS_ID} session entry for image_id {image_id} created successfully.")
                     else:
-                        print(f"No bbox for {OBJ_CLS_ID} in image_id {image_id}")
+                        pass
+                        if VERBOSE: print(f"No bbox for {OBJ_CLS_ID} in image_id {image_id}")
 
 
                 ### ImageBackground
@@ -1060,7 +1065,7 @@ def process_image_bodylms(task):
                 
                 print("------ ++++++ MySQL bbbbody updated:", image_id)
                 print("sleeepy temp time")
-                time.sleep(100)
+                time.sleep(1)
                 break  # Transaction succeeded, exit the loop
             except OperationalError as e:
                 print(e)
