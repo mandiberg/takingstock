@@ -83,7 +83,7 @@ def make_key_dict(filepath):
             # print(row)
             keys_dict[int(row[0])] = row[2]
         return keys_dict
-keys_dict = make_key_dict(os.path.join(io.ROOT, "Keywords_202405151718.csv"))
+keys_dict = make_key_dict("/Users/michaelmandiberg/Documents/GitHub/facemap/utilities/keys/Keywords_202408151415.csv")
 
 
 title = 'Please choose your operation: '
@@ -93,8 +93,8 @@ options = ['Create helper table', 'Fetch keywords list and make tokens', 'Fetch 
            ]
 option, index = pick(options, title)
 
-LIMIT= 10000000
-START_ID = 88999335
+LIMIT= 10000
+START_ID = 121232831
 # Initialize the counter
 counter = 0
 
@@ -515,7 +515,25 @@ def preprocess_keywords(target_image_id, lock,session):
     # for row in result:
     #     print(row.keyword_id) 
     if result:
-        keyword_list = [keys_dict[row.keyword_id] for row in result]
+        keyword_list = []
+        if target_image_id <120000000:
+            # faster list comprehension for the first 120M
+            keyword_list = [keys_dict[row.keyword_id] for row in result]
+        else:
+            # some of the last entries have random error keys. Doing a slower version to catch them
+            try:
+                # print(f"Keyword entry for image_id {target_image_id} found.", result)
+                for row in result:
+                    try:
+                        pass
+                        # print(keys_dict[row.keyword_id])
+                        keyword_list.append(keys_dict[row.keyword_id])
+                    except:
+                        print(f">>> Keyword entry {row.keyword_id} for image_id {target_image_id} not found.")
+                # print(keyword_list)
+            except:
+                print(f"Keyword entry for image_id {target_image_id} not found from")
+                return
     else:
         print(f"Keywords entry for image_id {target_image_id} not found.")
 
