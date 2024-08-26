@@ -66,31 +66,20 @@ HAVING COUNT(*) > 1;
         ;
 
 
+-- set cells to NULL
+SET GLOBAL innodb_buffer_pool_size=8294967296;
 
 
-
-
-SELECT MAX(i.image_id) 
-FROM Images i 
+SELECT COUNT(*)
+FROM SegmentBig_isface
+WHERE image_id > 88000000
+AND mongo_tokens = 1
 ;
--- 121943655 stock may 31
-
--- 126887888 pnd5
-
-SELECT *
-FROM Images i
-WHERE i.image_id  = 126887888
-;
-
-
-SELECT MAX(image_id) 
-FROM Images i 
+       
+UPDATE SegmentBig_isface
+SET    mongo_tokens = NULL
+WHERE  image_id > 88000000
+AND  image_id < 89300000
+AND mongo_tokens = 1
 ;
 
-
-SELECT *
-FROM Encodings e 
-WHERE e.image_id = 108079574
-;
--- 97102179
--- max 108079574

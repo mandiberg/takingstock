@@ -1,3 +1,4 @@
+#fetch bok
 from sqlalchemy import create_engine, select, delete, distinct, func
 from sqlalchemy.orm import sessionmaker,scoped_session
 from sqlalchemy.pool import NullPool
@@ -16,6 +17,8 @@ import gensim
 from nltk.stem import WordNetLemmatizer, SnowballStemmer
 from nltk.stem.porter import *
 
+
+## this is not the current version. go to fetch_segment_keywords.py
 
 io = DataIO()
 db = io.db

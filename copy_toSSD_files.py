@@ -49,13 +49,13 @@ IMAGES_THREAD_COUNTER = 0
 3   adobe - aug17 1740113
 4   istock - aug17 351105
 5   pexels - aug17 11557 
-6   unsplash - 0 images?
+6   unsplash - aug25 135
 7   pond5 - aug 19 51919  
 8   123rf - aug17 823542
 9   alamy - Aug 22 285000
 10  visualchinagroup - aug17 DONE
 11	picxy - aug17 DONE (only 1500?)
-12	pixerf - 
+12	pixerf - aug25 289
 13	imagesbazaar - aug17 DONE
 14	indiapicturebudget - aug17 DONE
 15	iwaria - aug17 DONE (only 30?)
@@ -72,8 +72,8 @@ MAIN_FOLDER = "/Volumes/RAID18/images_pond5"
 '''
 
 # right now this is only working for one site at a time
-SITE_NAME_ID = 9
-NEWIMAGES_FOLDER_NAME = IMAGES_FOLDER_NAME = 'images_alamy'
+SITE_NAME_ID = 12
+NEWIMAGES_FOLDER_NAME = IMAGES_FOLDER_NAME = 'images_pixerf'
 # SITE_NAME_ID = 2
 # IMAGES_FOLDER_NAME = 'images_shutterstock'
 # NEWIMAGES_FOLDER_NAME = 'images_shutterstock'

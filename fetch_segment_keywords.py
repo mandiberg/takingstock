@@ -30,7 +30,7 @@ from nltk.stem.porter import *
 
 '''
 1. Opt 0: add image_id and some encodings info to a SegmentBig table via create_table_from_encodings() with all the image_ids from encodings that are within the x,y,z range
-1. Opt 0:
+2. Opt 1: preprocess_keywords which stores tokens in the mongo collection and sets mongo_tokens to 1
 '''
 io = DataIO()
 db = io.db
@@ -93,7 +93,8 @@ options = ['Create helper table', 'Fetch keywords list and make tokens', 'Fetch 
            ]
 option, index = pick(options, title)
 
-LIMIT= 1
+LIMIT= 10000000
+START_ID = 88999335
 # Initialize the counter
 counter = 0
 
@@ -525,8 +526,7 @@ def preprocess_keywords(target_image_id, lock,session):
 
         # Execute the query and fetch the result as a list of keyword_ids
         result = session.execute(select_description_query).fetchone()
-        print(result[0])
-        if result[0]:
+        if result and result[0]:
             keyword_list = result[0].replace(".","").split()
         else:
             print(f"Description entry for image_id {target_image_id} not found.")
@@ -575,17 +575,30 @@ def preprocess_keywords(target_image_id, lock,session):
 
     # query the mongo collection to see if the tokens exist for image_id
     query = {"image_id": target_image_id}
+    is_mongo_tokens = False
     result = mongo_collection.find(query)
-    if result and token_list:
-        print(f"Tokens for image_id {target_image_id} already exist, setting mongo_tokens to 1.")
-        SegmentBig_entry.mongo_tokens = 1
-        insert_mongo = False
-    elif token_list:
+    # print("result, ",result)
+    for doc in result:
+        if "tokenized_keyword_list" in doc:
+            tokenized_keyword_list = pickle.loads(doc["tokenized_keyword_list"])
+            is_mongo_tokens = True
+            # print("tokenized_keyword_list: ", tokenized_keyword_list)
+        else:
+            is_mongo_tokens = False
+            # print("tokenized_keyword_list not found in the document.")
+    # print("token_list, ",token_list)
+    print("is_mongo_tokens: ", is_mongo_tokens)
+    if not is_mongo_tokens and token_list:
         # insert the tokens into the mongo collection
         insert_mongo = True
         SegmentBig_entry.mongo_tokens = 1
         print(f"Keyword list for image_id {target_image_id} will be updated.")
+    elif is_mongo_tokens and token_list:
+        print(f"Tokens for image_id {target_image_id} already exist, setting mongo_tokens to 1.")
+        SegmentBig_entry.mongo_tokens = 1
+        insert_mongo = False
     else:
+        insert_mongo = False
         print(f"Keywords entry for image_id {target_image_id} not found.")
 
     with lock:
@@ -593,7 +606,12 @@ def preprocess_keywords(target_image_id, lock,session):
         global counter
         counter += 1
         # commented out for testing
-        if insert_mongo: mongo_collection.insert_one({"image_id": target_image_id, "tokenized_keyword_list": keyword_list_pickle})
+        if insert_mongo:
+            mongo_collection.update_one(
+            {"image_id": target_image_id},
+            {"$set": {"tokenized_keyword_list": keyword_list_pickle}},
+            upsert=True
+            )
         session.commit()
 
     if counter % 10000 == 0:
@@ -745,7 +763,7 @@ if index == 0:
 elif index == 1:
     function=preprocess_keywords
     ################FETCHING KEYWORDS AND CREATING TOKENS #################
-    distinct_image_ids_query = select(SegmentTable.image_id.distinct()).filter(SegmentTable.mongo_tokens == None).limit(LIMIT)
+    distinct_image_ids_query = select(SegmentBig.image_id.distinct()).filter(SegmentBig.mongo_tokens == None, SegmentBig.image_id > START_ID).limit(LIMIT)
     distinct_image_ids = [row[0] for row in session.execute(distinct_image_ids_query).fetchall()]
 
     # print the length of the result

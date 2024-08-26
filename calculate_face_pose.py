@@ -1535,7 +1535,7 @@ def main():
                 #     orig_filename = orig_filename.replace(".jpg.jpg", ".jpg")
                 #     d0, d02 = get_hash_folders(orig_filename)
                 #     hashed_path = os.path.join(d0, d02, orig_filename)
-                
+                if not image_id or not site_id or not hashed_path: continue
                 # gets folder via the folder list, keyed with site_id integer
                 imagepath=os.path.join(io.folder_list[site_id], hashed_path)
 
