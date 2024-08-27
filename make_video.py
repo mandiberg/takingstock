@@ -96,7 +96,7 @@ IS_ANGLE_SORT = False
 IS_TOPICS = False
 N_TOPICS = 30
 
-IS_ONE_TOPIC = True
+IS_ONE_TOPIC = False
 TOPIC_NO = [15]
 
 #  is isolated,  is business,  babies, 17 pointing
@@ -119,7 +119,7 @@ NORMED_BODY_LMS = True
 if SORT_TYPE == "planar_body": OBJ_CLS_ID = 0
 else: OBJ_CLS_ID = 0 # if sort is 128d, this gets picked up. borks if starting from image_id
 
-ONE_SHOT = False # take all files, based off the very first sort order.
+ONE_SHOT = True # take all files, based off the very first sort order.
 JUMP_SHOT = True # jump to random file if can't find a run (I don't think this applies to planar?)
 
 
@@ -209,7 +209,7 @@ elif IS_SEGONLY and io.platform == "darwin":
     # WHERE += " AND e.encoding_id > 2612275"
 
     # WHERE = "s.site_name_id != 1"
-    LIMIT = 100
+    LIMIT = 6000000
 
     # TEMP TK TESTING
     # WHERE += " AND s.site_name_id = 8"
@@ -306,7 +306,11 @@ sort = SortPose(motion, face_height_output, image_edge_multiplier,EXPAND, ONE_SH
 # start_site_image_id = None
 
 start_img_name = "start_image_id"
-start_site_image_id = 3259334
+start_site_image_id = 6050372
+
+# 3279908 hands to face excited
+# 6050372 hands to mouth in shock
+# 87210848 43008591 11099323 phone held up
 
 # start_site_image_id is not working Aug 2024
 # start_img_name = "start_site_image_id"
@@ -715,6 +719,7 @@ def compare_images(last_image, img, face_landmarks, bbox):
     #crop image here:
     if sort.EXPAND:
         cropped_image = sort.expand_image(img, face_landmarks, bbox)
+        is_inpaint = False
     else:
         cropped_image, is_inpaint = sort.crop_image(img, face_landmarks, bbox)
     # print("cropped_image: ",cropped_image)
@@ -1009,9 +1014,11 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
             selfie_bbox, is_left_shoulder,is_right_shoulder=fetch_selfie_bbox(row['image_id'])
             if selfie_bbox["left"]==0: 
                 if VERBOSE: print("head hits the top of the image, skipping -------------------> bailout !!!!!!!!!!!!!!!!!")
+                do_inpaint = False
                 bailout=True
             elif row["site_name_id"] == 2 and extension_pixels["bottom"]>0: 
                 if VERBOSE: print("shutter at the bottom, skipping -------------------> bailout !!!!!!!!!!!!!!!!!")
+                do_inpaint = False
                 bailout=True
             elif is_left_shoulder or is_right_shoulder: 
                 # if the selfie bbox is touching the R/L side of the image
