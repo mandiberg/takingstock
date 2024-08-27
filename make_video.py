@@ -109,15 +109,15 @@ TOPIC_NO = [15]
 # 7 is surprise
 #  is yoga << planar,  planar,  fingers crossed
 
-# SORT_TYPE = "128d"
+SORT_TYPE = "128d"
 # SORT_TYPE ="planar"
-SORT_TYPE = "planar_body"
+# SORT_TYPE = "planar_body"
 NORMED_BODY_LMS = True
 
 # if planar_body set OBJ_CLS_ID for each object type
 # 67 is phone, 63 is laptop, 26: 'handbag', 27: 'tie', 32: 'sports ball'
 if SORT_TYPE == "planar_body": OBJ_CLS_ID = 0
-else: OBJ_CLS_ID = 67
+else: OBJ_CLS_ID = 0 # if sort is 128d, this gets picked up. borks if starting from image_id
 
 ONE_SHOT = False # take all files, based off the very first sort order.
 JUMP_SHOT = True # jump to random file if can't find a run (I don't think this applies to planar?)
@@ -209,7 +209,7 @@ elif IS_SEGONLY and io.platform == "darwin":
     # WHERE += " AND e.encoding_id > 2612275"
 
     # WHERE = "s.site_name_id != 1"
-    LIMIT = 100000
+    LIMIT = 100
 
     # TEMP TK TESTING
     # WHERE += " AND s.site_name_id = 8"
@@ -302,10 +302,15 @@ UPSCALE_MODEL_PATH=os.path.join(os.getcwd(), "models", "FSRCNN_x4.pb")
 # construct my own objects
 sort = SortPose(motion, face_height_output, image_edge_multiplier,EXPAND, ONE_SHOT, JUMP_SHOT, HSV_BOUNDS, VERBOSE,INPAINT, SORT_TYPE, OBJ_CLS_ID,UPSCALE_MODEL_PATH=UPSCALE_MODEL_PATH)
 
-start_img_name = "median"
-start_site_image_id = None
+# start_img_name = "median"
+# start_site_image_id = None
+
+start_img_name = "start_image_id"
+start_site_image_id = "2761761"
+
+# start_site_image_id is not working Aug 2024
 # start_img_name = "start_site_image_id"
-# start_site_image_id = "3/3B/193146471-photo-portrait-of-funky-young-lady-fooling-show-fingers-claws-growl-tiger-wear-stylish-striped"
+# start_site_image_id = "F/F4/538577009.jpg"
 # start_site_image_id = "0/02/159079944-hopeful-happy-young-woman-looking-amazed-winning-prize-standing-white-background.jpg"
 # start_site_image_id = "0/08/158083627-man-in-white-t-shirt-gesturing-with-his-hands-studio-cropped.jpg"
 
@@ -488,12 +493,12 @@ def sort_by_face_dist_NN(df_enc):
         ## Find closest
         try:
             # send in both dfs, and return same dfs with 1+ rows sorted
-            print("sort_by_face_dist_NN _ for loop df_enc is", df_enc)
+            print("BEFORE sort_by_face_dist_NN _ for loop df_enc is", df_enc)
 
             df_enc, df_sorted = sort.get_closest_df_NN(df_enc, df_sorted)
     
-            print("sort_by_face_dist_NN _ for loop df_enc is", df_enc)
-            print("sort_by_face_dist_NN _ for loop df_sorted is", df_sorted)
+            print("AFTER sort_by_face_dist_NN _ for loop df_enc is", df_enc)
+            print("AFTER sort_by_face_dist_NN _ for loop df_sorted is", df_sorted)
 
             # # test to see if body_landmarks for row with image_id = 5251199 still is the same as test_lms
             # retest_row = df_enc.loc[df_enc['image_id'] == 10498233]
@@ -1275,10 +1280,11 @@ def process_linear(start_img_name, df_segment, cluster_no, sort):
     # linear sort by encoding distance
     print("processing linear")
     # preps the encodings for sort
-    sort.set_counters(io.ROOT,cluster_no, start_img_name, None)  
-
+    sort.set_counters(io.ROOT,cluster_no, start_img_name, start_site_image_id)  
+    print("sort.counter_dict after sort.set_counters", sort.counter_dict)
     # df_enc, df_128_enc, df_33_lms = prep_encodings(df_segment)
     df_enc = prep_encodings_NN(df_segment)
+    print("sort.counter_dict after prep_encodings_NN", sort.counter_dict)
     
     # if results in df_enc, then sort by face distance
     if not df_enc.empty:

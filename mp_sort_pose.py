@@ -1095,6 +1095,19 @@ class SortPose:
             # enc1 = dfmode.iloc[0].to_list()
             # enc1 = df_128_enc.median().to_list()
 
+        elif start_img == "start_image_id":
+            print("start_image_id (this is what we are comparing to)")
+            # print(start_site_image_id)
+            print(self.counter_dict["start_site_image_id"])
+            print(df_enc.columns)
+            print(df_enc.head)
+            if self.SORT_TYPE == "128d": sort_column = "face_encodings68"
+            else: sort_column = "body_landmarks_normalized"
+            # set enc1 = df_enc value in the self.SORT_TYPE column, for the row where column image_id = self.counter_dict["start_site_image_id"]
+            # enc1 = df_enc.loc[df_enc['image_id'] == self.counter_dict["start_site_image_id"], sort_column].to_list()
+            # enc1 = df_enc.loc[df_enc['image_id'] == self.counter_dict["start_site_image_id"], sort_column].to_list()
+            enc1 = df_enc.loc[df_enc['image_id'] == 2761761, sort_column].values[0]
+            print("enc1 set from sort_column", enc1)
 # TK needs to be refactored NN June 8
 
         elif start_img == "start_site_image_id":
@@ -1104,7 +1117,9 @@ class SortPose:
             enc1 = df_128_enc.loc[self.counter_dict["start_site_image_id"]].to_list()
         elif start_img == "start_face_encodings":
             print("starting from start_face_encodings")
+            print("self.counter_dict", self.counter_dict)
             enc1 = self.counter_dict["start_site_image_id"]
+            print("start_face_encodings", enc1)
         elif self.SORT_TYPE == "planar_body":
             # print("get_start_enc planar_body start_img key is (this is what we are comparing to):")
             # print(start_img)
@@ -1246,7 +1261,7 @@ class SortPose:
             #     print("set enc1 from cluster median")
             #     print("enc1", enc1)
                 
-            if this_start not in ["median", "start_site_image_id", "start_face_encodings", "start_bbox"]:
+            if this_start not in ["median", "start_site_image_id", "start_image_id", "start_face_encodings", "start_bbox"]:
             # elif this_start not in ["median", "start_site_image_id", "start_face_encodings", "start_bbox"]:
                 # this is the first round for clusters/itter where last_image_enc is true
                 # set encodings to the passed through encodings
@@ -1260,7 +1275,7 @@ class SortPose:
                 enc1 = [0,0,1,1,.5]
             else:
                 #this is the first??? round, set via df, defaults to face_encodings68
-                print(f"trying get_start_enc() from {this_start}")
+                print(f"trying get_start_enc() from {this_start} which corresponds to {self.counter_dict}")
                 enc1 = self.get_start_enc_NN(this_start, df)
                 if self.OBJ_CLS_ID > 0: 
                     print("setting obj_bbox1 from this_start", this_start)
