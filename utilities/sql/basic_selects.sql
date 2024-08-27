@@ -6,25 +6,127 @@ USE stock
 ;
 
 
-SELECT *  
-FROM Images i
--- WHERE i.site_image_id = "___638KPrmA"
-WHERE i.image_id = 114615600
-LIMIT 10
+DELETE 
+FROM Poses
+;
+DELETE 
+FROM ImagesPoses
 ;
 
-
-SELECT *  
+SELECT COUNT(i.image_id) 
 FROM Images i
+JOIN Encodings e ON e.image_id = i.image_id 
 -- WHERE i.site_image_id = "___638KPrmA"
-WHERE i.site_name_id = 7
-LIMIT 10
-;
+WHERE i.site_name_id in (6,12)
+AND e.is_face = 1
+    AND e.face_x > -40 AND e.face_x < -3
+    AND e.face_y > -4 AND e.face_y < 4
+    AND e.face_z > -4 AND e.face_z < 4
+   	AND NOT i.age_id <= 3)
 
+;
 
 SELECT COUNT(e.image_id)
-FROM SegmentOct20  e  
-WHERE e.mongo_body_landmarks_norm = 1
+FROM Encodings e 
+LEFT JOIN 
+    SegmentBig_isface sb 
+ON 
+    e.image_id = sb.image_id
+WHERE 
+    sb.image_id IS NULL
+    AND e.image_id IS NOT NULL
+    AND e.face_x > -45
+    AND e.face_x < -20
+    AND e.face_y > -10
+    AND e.face_y < 10
+    AND e.face_z > -10
+    AND e.face_z < 10
+;
+
+SELECT MAX(sbi.seg_image_id)
+FROM SegmentBig_isface sbi 
+;
+
+SELECT *
+FROM SegmentBig_isface sbi 
+WHERE sbi.image_id = 89000001
+;
+
+
+
+SELECT 
+    e.encoding_id, 
+    e.image_id, 
+    e.bbox, 
+    e.face_x, 
+    e.face_y, 
+    e.face_z, 
+    e.mouth_gap, 
+    e.face_landmarks, 
+    e.face_encodings68, 
+    e.body_landmarks
+FROM 
+    Encodings e
+LEFT JOIN 
+    SegmentBig_isface sb 
+ON 
+    e.image_id = sb.image_id
+WHERE 
+    sb.image_id IS NULL
+    AND e.image_id IS NOT NULL
+    AND e.face_x > -45
+    AND e.face_x < -20
+    AND e.face_y > -10
+    AND e.face_y < 10
+    AND e.face_z > -10
+    AND e.face_z < 10
+LIMIT 100;  -- Replace 100 with the desired LIMIT value
+
+
+
+   
+   
+SELECT *
+FROM PhoneBbox
+WHERE image_id = 118060332
+;
+
+SELECT COUNT(image_id) AS count,
+       it.topic_id,
+       t.topic
+FROM ImagesTopics it
+JOIN Topics t ON it.topic_id = t.topic_id
+GROUP BY it.topic_id, t.topic;
+
+
+SELECT COUNT(image_id) AS count,
+       ip.cluster_id
+FROM ImagesPoses ip 
+JOIN Poses p ON ip.cluster_id = p.cluster_id
+GROUP BY ip.cluster_id;
+
+
+SELECT k.keyword_id, k.keyword_number, k.keyword_text 
+FROM ImagesKeywords ik 
+JOIN Keywords k ON ik.keyword_id = k.keyword_id 
+-- WHERE i.site_image_id = "___638KPrmA"
+WHERE ik.image_id = 121233771
+;
+
+SELECT COUNT(*)  
+FROM SegmentOct20 so
+WHERE so.mongo_body_landmarks_norm = 1
+;
+
+SELECT *
+FROM Encodings e 
+WHERE e.image_id = 81533412
+;
+
+SELECT COUNT(s.image_id)
+FROM SegmentOct20  s
+WHERE s.mongo_body_landmarks = 1
+AND s.face_x > -33 AND s.face_x < -27 AND s.face_y > -2 AND s.face_y < 2 AND s.face_z > -2 AND s.face_z < 2
 ;
 
 CREATE TABLE SegmentHelperAug16_SegOct20_preAlamy (

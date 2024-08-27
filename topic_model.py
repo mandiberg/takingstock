@@ -48,26 +48,18 @@ from pprint import pprint
 
 # MM you need to use conda activate gensim311 
 
+
 '''
-tracking time based on items, for speed predictions, 88topics
-items, seconds
-100000, 61
-500000, 1015
-1000000, 486
-2000000, 4503
-4000000, 
+Gen_corpus, Aug26
+1M, 101s
+5M, 320s
+10M, 721s
+20M,
 '''
 
 '''
-Gen_corpus, Feb24
-1M, 145s
-2M, 360s
-4M, 882s
-8M, 1782
-16M, 4600, 2321
-24M, 8633,
-'''
 
+'''
 
 title = 'Please choose your operation: '
 options = ['Make Dictionary and BoW Corpus','Model topics', 'Index topics','calculate optimum_topics', 'Make Dict & BoW in batches', 'Merge corpus batches']
@@ -89,9 +81,8 @@ USE_BIGSEGMENT = True
 VERBOSE = True
 RANDOM = False
 global_counter = 0
-QUERY_LIMIT = 100
+QUERY_LIMIT = 50000000
 # started at 9:45PM, Feb 17
-BATCH_SIZE = 100
 
 
 MODEL="TF" ## OR TF  ## Bag of words or TF-IDF
@@ -175,24 +166,13 @@ def clarify_keywords(text):
     return text
 
 def set_query():
-    # # Basic Query, this works with gettytest3
-    # # currently only used for indexing
-    # SELECT = "DISTINCT(image_id),description,tokenized_keyword_list"
-    # FROM ="SegmentOct20"
-    # WHERE = "tokenized_keyword_list IS NOT NULL "
-    # if RANDOM: 
-    #     WHERE += "AND image_id >= (SELECT FLOOR(MAX(image_id) * RAND()) FROM bagofkeywords)"
-    # LIMIT = QUERY_LIMIT
-    # if MODE==2:
-    #     # assigning topics
-    #     WHERE = "tokenized_keyword_list IS NOT NULL AND image_id NOT IN (SELECT image_id FROM imagestopics)"
-    #     # WHERE = "image_id = 423638"
-    #     LIMIT=QUERY_LIMIT
+    # currently only used for indexing
+    # not refactored for mongo (despite the one WHERE line)
 
     # mongofy, for indexing:
     SELECT = "DISTINCT(image_id),description"
     FROM = SegmentTable_name
-    WHERE = "tokenized_keyword_list IS NOT NULL "
+    WHERE = " mongo_tokens IS NOT NULL "
     if RANDOM: 
         WHERE += "AND image_id >= (SELECT FLOOR(MAX(image_id) * RAND()) FROM bagofkeywords)"
     LIMIT = QUERY_LIMIT
@@ -276,6 +256,8 @@ def write_topics(lda_model):
     # Add the Topics object to the session
         session.add(topics_entry)
         print("Updated topic_id {}".format(idx))
+    print(" >>>>>>>>>>>> DID NOT SAVE TOPICS TO DATABASE <<<<<<<<<<<<")
+    return
     session.commit()
     return
 
@@ -352,7 +334,8 @@ def calc_optimum_topics():
 def gen_corpus():
     # this takes the tokenized keyword list and generates a corpus saved to disk
     print("generating corpus")
-    query = session.query(SegmentTable.tokenized_keyword_list).filter(SegmentTable.tokenized_keyword_list.isnot(None)).limit(QUERY_LIMIT)
+    # query = session.query(SegmentTable.tokenized_keyword_list).filter(SegmentTable.tokenized_keyword_list.isnot(None)).limit(QUERY_LIMIT)
+    query = session.query(SegmentTable.image_id).filter(SegmentTable.mongo_tokens.isnot(None)).limit(QUERY_LIMIT)
     results = query.all()
     total_rows = query.count()
     if VERBOSE: 
@@ -360,12 +343,44 @@ def gen_corpus():
         print("total_rows in query: ",total_rows)
         print("results length: ",len(results))
         # for row in results: print("row: ",row.tokenized_keyword_list)
+    if results: 
+        image_id_list = [row[0] for row in results]
+    else: 
+        print("no image_id results")
+        return
+        # get list of image_id
     
-    token_lists = [pickle.loads(row.tokenized_keyword_list) for row in results]
+    # query mongo tokens collection for tokenized_keyword_list
+    # query = mongo_collection.find({"image_id": {"$in": image_id_list}})
+    # results = list(query)
+
+    batch_size = 100  # Set your desired batch size
+
+    all_results = []  # To accumulate all results
+
+    # Break image_id_list into batches
+    for batch_start in range(0, len(image_id_list), batch_size):
+        batch = image_id_list[batch_start:batch_start + batch_size]
+        
+        # Perform a query for the current batch
+        query = mongo_collection.find({"image_id": {"$in": batch}})
+        
+        # Convert the cursor to a list and append to the accumulated results
+        batch_results = list(query)
+        all_results.extend(batch_results)
+
+    # Now, all_results contains all the documents retrieved in batches
+
+    if VERBOSE:  print("mongo results length: ", len(all_results))
+    if not all_results: 
+        print("no mongo results")
+        return
+
+    # Ensure we are working with all_results, not results
+    token_lists = [pickle.loads(row["tokenized_keyword_list"]) for row in all_results]
     token_lists = [[token for token in doc if token not in SKIP_TOKEN_LIST] for doc in token_lists]
 
     if VERBOSE: print("token_lists first entry: ",token_lists[:1])
-
     dictionary = gensim.corpora.Dictionary(token_lists)
     if VERBOSE: print("gen_corpus: created dictionary")
     dictionary.filter_extremes(no_below=100, no_above=0.5, keep_n=100000)
@@ -387,120 +402,13 @@ def gen_corpus():
 
 def gen_corpus_in_batches():
     # I think this was an attempt to batch the corpuse generation but you can't quite add them back together
-    # so probably not useful
-    print("generating corpus")
-    offset = 0
-    batch_size = 500000  # Adjust the batch size as needed
-    batch_number = 1
-    try:
-        dictionary = corpora.Dictionary.load(DICT_PATH)
-        print("loaded dictionary")
-    except:
-        dictionary = gensim.corpora.Dictionary()  # Initialize an empty dictionary
-    
-    while True:
-        query = session.query(SegmentTable.tokenized_keyword_list).filter(SegmentTable.tokenized_keyword_list.isnot(None)).offset(offset).limit(batch_size)
-        results = query.all()
-        total_rows = len(results)
-        if total_rows == 0 or batch_number > 2: # temp fix for 1M
-            break  # No more rows to process
-        
-        if VERBOSE: 
-            print("Processing rows {} to {} (Batch {})".format(offset, offset + total_rows - 1, batch_number))
-        # if dictionary is empty, create it
-
-        token_lists = [pickle.loads(row.tokenized_keyword_list) for row in results]
-
-        if not dictionary:
-            print("first run, making dictionary")
-            token_lists = [pickle.loads(row.tokenized_keyword_list) for row in results]
-            dictionary = gensim.corpora.Dictionary(token_lists)
-            dictionary.filter_extremes(no_below=100, no_above=0.5, keep_n=100000)
-        else:
-            print("updating dictionary - except not...")
-            # for doc in token_lists:
-            #     dictionary.add_documents([doc])  # Update the dictionary with tokens from the current batch
-            # dictionary.filter_extremes(no_below=15, no_above=0.5, keep_n=100000)
-
-        if VERBOSE: 
-            print("gen_corpus: updated dictionary")
-        
-        bow_corpus = [dictionary.doc2bow(doc) for doc in token_lists]  # BoW corpus
-
-        # Create TF-IDF model
-        tfidf_model = models.TfidfModel(bow_corpus)
-        tfidf_corpus = tfidf_model[bow_corpus]  # TF-IDF corpus
-
-        # Modify file names to include batch number
-        # dict_path = os.path.join(io.ROOT, "batches", "dictionary_batch{}.dict".format(batch_number))
-        bow_corpus_path = os.path.join(io.ROOT, "batches", "bow_corpus_batch{}.mm".format(batch_number))
-        tfidf_corpus_path = os.path.join(io.ROOT, "batches", "tfidf_corpus_batch{}.mm".format(batch_number))
-        
-        corpora.MmCorpus.serialize(bow_corpus_path, bow_corpus)
-        if VERBOSE: 
-            print("gen_corpus: saved bow_corpus")
-        
-        corpora.MmCorpus.serialize(tfidf_corpus_path, tfidf_corpus)
-        if VERBOSE: 
-            print("gen_corpus: saved tfidf_corpus")
-        
-        offset += total_rows
-        batch_number += 1
-
-    dictionary.save(DICT_PATH)
-    if VERBOSE: 
-        print("gen_corpus: saved dictionary")
-
-    return
-
+    # deleting. it is in the repo if needed
+    pass
 
 def merge_corpus_batches():
-    # Merge all batches of dictionaries, BoW corpora, and TF-IDF corpora
-    # all_dicts = []
-    all_bow_corpora = []
-    all_tfidf_corpora = []
-
-    # Determine MAX_BATCH_NUMBER dynamically
-    batch_files = os.listdir(os.path.join(io.ROOT, "batches"))
-    batch_numbers = [int(re.findall(r'\d+', filename)[0]) for filename in batch_files if 'batch' in filename]
-    if batch_numbers:
-        MAX_BATCH_NUMBER = max(batch_numbers)
-    else:
-        print("No batch files found in the specified directory.")
-        return
-
-    for batch_number in range(1, MAX_BATCH_NUMBER + 1):
-        # dict_path = os.path.join(io.ROOT, "batches", "dictionary_batch{}.dict".format(batch_number))
-        bow_corpus_path = os.path.join(io.ROOT, "batches", "bow_corpus_batch{}.mm".format(batch_number))
-        tfidf_corpus_path = os.path.join(io.ROOT, "batches", "tfidf_corpus_batch{}.mm".format(batch_number))
-
-        if os.path.exists(bow_corpus_path) and os.path.exists(tfidf_corpus_path):
-            # dictionary = gensim.corpora.Dictionary.load(dict_path)
-            bow_corpus = corpora.MmCorpus(bow_corpus_path)
-            tfidf_corpus = corpora.MmCorpus(tfidf_corpus_path)
-
-            # all_dicts.append(dictionary)
-            all_bow_corpora.append(bow_corpus)
-            all_tfidf_corpora.append(tfidf_corpus)
-
-    # # Merge dictionaries
-    # merged_dict = gensim.corpora.Dictionary()
-    # for dictionary in all_dicts:
-    #     merged_dict.merge_with(dictionary)
-
-    # Concatenate BoW corpora
-    merged_bow_corpus = [doc for corpus in all_bow_corpora for doc in corpus]
-
-    # Concatenate TF-IDF corpora
-    merged_tfidf_corpus = [doc for corpus in all_tfidf_corpora for doc in corpus]
-
-    # Save merged dictionary, BoW corpus, and TF-IDF corpus
-    # merged_dict.save(DICT_PATH)
-    corpora.MmCorpus.serialize(BOW_CORPUS_PATH, merged_bow_corpus)
-    corpora.MmCorpus.serialize(TFIDF_CORPUS_PATH, merged_tfidf_corpus)
-
-    return
-
+    # I think this was an attempt to batch the corpuse generation but you can't quite add them back together
+    # deleting. it is in the repo if needed
+    pass
 
 def topic_model():
     # #######TOPIC MODELING ############

@@ -31,6 +31,7 @@ from nltk.stem.porter import *
 '''
 1. Opt 0: add image_id and some encodings info to a SegmentBig table via create_table_from_encodings() with all the image_ids from encodings that are within the x,y,z range
 2. Opt 1: preprocess_keywords which stores tokens in the mongo collection and sets mongo_tokens to 1
+3. I think I can move to topic_model.py???
 '''
 io = DataIO()
 db = io.db
@@ -93,7 +94,7 @@ options = ['Create helper table', 'Fetch keywords list and make tokens', 'Fetch 
            ]
 option, index = pick(options, title)
 
-LIMIT= 10000
+LIMIT= 10000000
 START_ID = 121232831
 # Initialize the counter
 counter = 0
