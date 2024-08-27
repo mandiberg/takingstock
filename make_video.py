@@ -109,9 +109,9 @@ TOPIC_NO = [15]
 # 7 is surprise
 #  is yoga << planar,  planar,  fingers crossed
 
-SORT_TYPE = "128d"
+# SORT_TYPE = "128d"
 # SORT_TYPE ="planar"
-# SORT_TYPE = "planar_body"
+SORT_TYPE = "planar_body"
 NORMED_BODY_LMS = True
 
 # if planar_body set OBJ_CLS_ID for each object type
@@ -306,7 +306,7 @@ sort = SortPose(motion, face_height_output, image_edge_multiplier,EXPAND, ONE_SH
 # start_site_image_id = None
 
 start_img_name = "start_image_id"
-start_site_image_id = "2761761"
+start_site_image_id = 3259334
 
 # start_site_image_id is not working Aug 2024
 # start_img_name = "start_site_image_id"

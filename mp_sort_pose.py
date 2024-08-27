@@ -1102,11 +1102,15 @@ class SortPose:
             print(df_enc.columns)
             print(df_enc.head)
             if self.SORT_TYPE == "128d": sort_column = "face_encodings68"
-            else: sort_column = "body_landmarks_normalized"
+            elif self.SORT_TYPE == "planar_body": sort_column = "body_landmarks_normalized"
             # set enc1 = df_enc value in the self.SORT_TYPE column, for the row where column image_id = self.counter_dict["start_site_image_id"]
             # enc1 = df_enc.loc[df_enc['image_id'] == self.counter_dict["start_site_image_id"], sort_column].to_list()
             # enc1 = df_enc.loc[df_enc['image_id'] == self.counter_dict["start_site_image_id"], sort_column].to_list()
-            enc1 = df_enc.loc[df_enc['image_id'] == 2761761, sort_column].values[0]
+            enc1_image_id = self.counter_dict["start_site_image_id"]
+            print("enc1_image_id", enc1_image_id)
+            enc1 = df_enc.loc[df_enc['image_id'] == enc1_image_id, sort_column].values[0]
+            if self.SORT_TYPE == "planar_body":
+                enc1 = self.get_landmarks_2d(enc1, self.SUBSET_LANDMARKS, "list")
             print("enc1 set from sort_column", enc1)
 # TK needs to be refactored NN June 8
 
@@ -1425,7 +1429,8 @@ class SortPose:
             # if enc1 is not a numpy array, convert it to a list
                 # create enc list with x/y position and angles and visibility
                 print("enc1 before prep_enc", enc1)
-                enc1 = self.prep_enc(enc1, structure="list") # swittching to 3d
+                if type(enc1) is not list:
+                    enc1 = self.prep_enc(enc1, structure="list") # switching to 3d
                 print("enc1 after prep_enc", enc1)
                 # apply prep_enc to the sortcol column 
                 print("applying prep_enc to the sortcol column")
@@ -1631,7 +1636,7 @@ class SortPose:
 
         print(f"get_closest_df_NN, self.SORT_TYPE is {self.SORT_TYPE} FIRST_ROUND is {FIRST_ROUND}")
         # define self.SORT_TYPE for KNN
-        if self.SORT_TYPE == "128d" or (self.SORT_TYPE == "planar" and FIRST_ROUND) or (self.SORT_TYPE == "planar_body" and FIRST_ROUND): 
+        if self.SORT_TYPE == "128d" or (self.SORT_TYPE == "planar" and FIRST_ROUND) or (self.SORT_TYPE == "planar_body" and len(enc1) > 66): 
             knn_sort = "128d"      
         elif self.SORT_TYPE == "planar": 
             knn_sort = "planar"
