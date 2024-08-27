@@ -53,12 +53,13 @@ from pprint import pprint
 Gen_corpus, Aug26
 1M, 101s
 5M, 320s
-10M, 721s
-20M,
+8.8M (5x5) 1133s
+14.9M (8x8) 3157s
 '''
 
 '''
-
+LDA_model, Aug26
+14.9M, 302s
 '''
 
 title = 'Please choose your operation: '
@@ -78,10 +79,10 @@ TFIDF_CORPUS_PATH=os.path.join(io.ROOT,"TFIDF_lda_corpus.mm")
 # Satyam, you want to set this to False
 USE_SEGMENT = True
 USE_BIGSEGMENT = True
-VERBOSE = True
+VERBOSE = False
 RANDOM = False
 global_counter = 0
-QUERY_LIMIT = 50000000
+QUERY_LIMIT = 100000
 # started at 9:45PM, Feb 17
 
 
@@ -178,9 +179,10 @@ def set_query():
     LIMIT = QUERY_LIMIT
     if MODE==2 and USE_BIGSEGMENT:
         # assigning topics
-        WHERE = " image_id NOT IN (SELECT image_id FROM imagestopics)"
+        WHERE = " mongo_tokens IS NOT NULL AND image_id NOT IN (SELECT image_id FROM imagestopics)"
     elif MODE==2:
         # assigning topics
+        # I'm not sure how this is different from USE_BIGSEGMENT
         WHERE = "tokenized_keyword_list IS NOT NULL AND image_id NOT IN (SELECT image_id FROM imagestopics)"
 
     return SELECT, FROM, WHERE, LIMIT
@@ -256,8 +258,6 @@ def write_topics(lda_model):
     # Add the Topics object to the session
         session.add(topics_entry)
         print("Updated topic_id {}".format(idx))
-    print(" >>>>>>>>>>>> DID NOT SAVE TOPICS TO DATABASE <<<<<<<<<<<<")
-    return
     session.commit()
     return
 
@@ -265,16 +265,16 @@ def write_imagetopics(resultsjson,lda_model_tfidf,dictionary):
     print("writing data to the imagetopic table")
     idx_list, topic_list = zip(*lda_model_tfidf.print_topics(-1))
     for i,row in enumerate(resultsjson):
-        print("row: ",row)
+        if VERBOSE: print("row: ",row)
         # mongofy:
         results = mongo_collection.find_one({"image_id": row["image_id"]})
         if results:
-            print("results: ",results)
+            if VERBOSE: print("results: ",results)
             keyword_list=" ".join(pickle.loads(results['tokenized_keyword_list']))
         else:
             print("mongo results are empty, using description instead")
             keyword_list = row["description"]
-        print(keyword_list)
+        if VERBOSE: print(keyword_list)
         # keyword_list=" ".join(pickle.loads(row["tokenized_keyword_list"]))
 
 
@@ -335,7 +335,13 @@ def gen_corpus():
     # this takes the tokenized keyword list and generates a corpus saved to disk
     print("generating corpus")
     # query = session.query(SegmentTable.tokenized_keyword_list).filter(SegmentTable.tokenized_keyword_list.isnot(None)).limit(QUERY_LIMIT)
-    query = session.query(SegmentTable.image_id).filter(SegmentTable.mongo_tokens.isnot(None)).limit(QUERY_LIMIT)
+    query = session.query(SegmentTable.image_id).filter(
+        SegmentTable.mongo_tokens.isnot(None),
+        SegmentTable.face_y > -8,
+        SegmentTable.face_y < 8,
+        SegmentTable.face_z > -8,
+        SegmentTable.face_z < 8
+    ).limit(QUERY_LIMIT)
     results = query.all()
     total_rows = query.count()
     if VERBOSE: 
@@ -436,6 +442,7 @@ def topic_index(resultsjson):
     print("model loaded successfully")
     while True:
         # go get LIMIT number of items (will duplicate initial select, but only the initial one)
+        # LIMIT is set to a reasonably small number, so as to itterate, (not the whole db)
         print("about to SQL:")
         resultsjson = selectSQL()
         print("got results, count is: ",len(resultsjson))

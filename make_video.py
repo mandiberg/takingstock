@@ -287,12 +287,12 @@ face_height_output = 1000
 # units are ratio of faceheight
 # top, right, bottom, left
 # image_edge_multiplier = [1, 1, 1, 1] # just face
-# image_edge_multiplier = [1.5,1.5,2,1.5] # bigger portrait
+image_edge_multiplier = [1.5,1.5,2,1.5] # bigger portrait
 # image_edge_multiplier = [1.5,1.33, 2.5,1.33] # bigger 2x3 portrait
 # image_edge_multiplier = [1.4,2.6,1.9,2.6] # wider for hands
 # image_edge_multiplier = [3,5,3,5] # megawide for testing
 # image_edge_multiplier = [1.4,3.3,3,3.3] # widerest 16:10 for hands -- actual 2:3
-image_edge_multiplier = [1.3,3.4,2.9,3.4] # slightly less wide 16:10 for hands
+# image_edge_multiplier = [1.3,3.4,2.9,3.4] # slightly less wide 16:10 for hands < Aug 27
 # image_edge_multiplier = [1.6,3.84,3.2,3.84] # wiiiiiiiidest 16:10 for hands
 # image_edge_multiplier = [1.45,3.84,2.87,3.84] # wiiiiiiiidest 16:9 for hands
 # image_edge_multiplier = [1.2,2.3,1.7,2.3] # medium for hands
@@ -306,7 +306,7 @@ sort = SortPose(motion, face_height_output, image_edge_multiplier,EXPAND, ONE_SH
 # start_site_image_id = None
 
 start_img_name = "start_image_id"
-start_site_image_id = 6050372
+start_site_image_id = 3279908
 
 # 3279908 hands to face excited
 # 6050372 hands to mouth in shock
@@ -621,10 +621,10 @@ def prep_encodings_NN(df_segment):
             return [row['lum']*HSV_NORMS["LUM"], row['lum_torso_bb']*HSV_NORMS["LUM"]]
         else:
             return [row['lum']*HSV_NORMS["LUM"], row['lum_torso']*HSV_NORMS["LUM"]]    
-    def json_to_list(row):      
-        bbox = row["bbox_"+str(OBJ_CLS_ID)]
-        if bbox: return [bbox["left"], bbox["top"], bbox["right"], bbox["bottom"]]
-        else: return None
+    # def json_to_list(row):      
+    #     bbox = row["bbox_"+str(OBJ_CLS_ID)]
+    #     if bbox: return [bbox["left"], bbox["top"], bbox["right"], bbox["bottom"]]
+    #     else: return None
       
     #     bbox = json.loads(row["bbox_"+str(OBJ_CLS_ID)])
     #     bbox_list = [bbox["left"], bbox["top"], bbox["right"], bbox["bottom"]]
@@ -693,7 +693,7 @@ def prep_encodings_NN(df_segment):
     # load the OBJ_CLS_ID bbox as list into obj_bbox_list
     # df_segment['obj_bbox_list'] = df_segment.apply(lambda row: json_to_list(row), axis=1)
     if OBJ_CLS_ID > 0: 
-        df_segment['obj_bbox_list'] = df_segment.apply(json_to_list, axis=1)
+        df_segment['obj_bbox_list'] = df_segment.apply(sort.json_to_list, axis=1)
         null_bboxes = df_segment[df_segment['obj_bbox_list'].isnull()]
         if not null_bboxes.empty:
             print("Rows with invalid bbox data:")

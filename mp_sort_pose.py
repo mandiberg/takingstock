@@ -42,7 +42,7 @@ class SortPose:
         self.HSV_DELTA_MAX = .5
         self.HSVMULTIPLIER = 3
         self.BRUTEFORCE = False
-        self.CUTOFF = 300
+        self.CUTOFF = 1000 # DOES factor if ONE_SHOT
 
         self.SORT_TYPE = SORT_TYPE
         if self.SORT_TYPE == "128d":
@@ -1045,6 +1045,14 @@ class SortPose:
         except:
             return None
 
+    def json_to_list(self,row):  
+        if type(row) == dict:
+            bbox = row    
+        else:
+            bbox = row["bbox_"+str(self.OBJ_CLS_ID)]
+        if bbox: return [bbox["left"], bbox["top"], bbox["right"], bbox["bottom"]]
+        else: return None
+
     def get_start_obj_bbox(self, start_img, df_enc):
         if start_img == "median":
             print("[get_start_obj_bbox] in median")
@@ -1071,7 +1079,17 @@ class SortPose:
             enc1 = self.counter_dict["start_site_image_id"]
             # enc1 = df_enc.loc[self.counter_dict["start_site_image_id"]].to_list()
             return enc1
-
+        elif start_img == "start_image_id":
+            print("starting from start_bbox")
+            # print(self.counter_dict["start_site_image_id"])
+            sort_column = "bbox_"+str(self.OBJ_CLS_ID)
+            enc1_image_id = self.counter_dict["start_site_image_id"]
+            print("enc1_image_id", enc1_image_id)
+            enc1 = df_enc.loc[df_enc['image_id'] == enc1_image_id, sort_column].values[0]            
+            # enc1 = self.counter_dict["start_site_image_id"]
+            print("enc1 phone bbox set from sort_column", enc1)
+            # enc1 = df_enc.loc[self.counter_dict["start_site_image_id"]].to_list()
+            return enc1
         else:
             print("[get_start_obj_bbox] - not median")
             return None
@@ -1652,6 +1670,9 @@ class SortPose:
         # sort KNN for OBJ_CLS_ID
         if self.OBJ_CLS_ID > 0: 
             print("get_closest_df_NN - pre KNN - obj_bbox1", obj_bbox1)
+            if type(obj_bbox1) is not list:
+                # turn the obj_bbox1 json dict into a list
+                obj_bbox1 = self.json_to_list(obj_bbox1)
             df_dist_enc = self.sort_df_KNN(df_enc, obj_bbox1, "obj")
             print("df_shuffled obj", df_dist_enc[['image_id','dist_obj']].sort_values(by='dist_obj')) 
 

@@ -43,13 +43,14 @@ WHERE
     AND e.face_z < 10
 ;
 
-SELECT MAX(sbi.seg_image_id)
+SELECT COUNT(sbi.seg_image_id)
 FROM SegmentBig_isface sbi 
+WHERE sbi.mongo_tokens = 1
 ;
 
 SELECT *
 FROM SegmentBig_isface sbi 
-WHERE sbi.image_id = 89000001
+WHERE sbi.image_id = 35868833
 ;
 
 

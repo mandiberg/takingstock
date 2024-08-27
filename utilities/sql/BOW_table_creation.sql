@@ -30,7 +30,6 @@ CREATE TABLE ImagesTopics (
 );
 
 
-
 SELECT MAX(sbi.image_id)
 FROM SegmentBig_isface sbi 
 ;
@@ -59,9 +58,11 @@ WHERE
 -- this is meta stuff
 
 
-DELETE FROM BagOfKeywords;
-DELETE FROM Topics t ;
+-- to delete topics (in this order)
 DELETE FROM ImagesTopics;
+DELETE FROM CountGender_Topics_so t ;
+DELETE FROM CountEthnicity_Topics_so t ;
+DELETE FROM Topics t ;
 
 SELECT * FROM BagOfKeywords bok 
 LIMIT 1000;
