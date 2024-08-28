@@ -1,5 +1,6 @@
 -- 86.3gb, 2.46tb
 
+SET GLOBAL innodb_buffer_pool_size=8073741824;
 
 
 USE stock
@@ -50,7 +51,29 @@ WHERE sbi.mongo_tokens = 1
 
 SELECT *
 FROM SegmentBig_isface sbi 
-WHERE sbi.image_id = 35868833
+WHERE sbi.image_id = 8282847
+;
+
+
+
+SELECT COUNT(*)
+FROM SegmentOct20 so 
+WHERE so.contentUrl LIKE '%wasja1603%'
+AND description LIKE 'Young woman with%'
+;
+
+DELETE 
+FROM Images 
+
+WHERE description LIKE 'White guy holding a flag of%'
+;
+
+-- kurdistan and holds his hand on his heart isolated on a white background with love to kurdistan
+
+SELECT COUNT(s.image_id)
+FROM SegmentOct20 s
+WHERE s.mongo_body_landmarks = 1
+AND s.face_x > -35 AND s.face_x < -24 AND s.face_y > -3 AND s.face_y < 3 AND s.face_z > -3 AND s.face_z < 3
 ;
 
 

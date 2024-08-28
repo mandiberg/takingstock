@@ -94,7 +94,7 @@ USE_SEGMENT = True
 GET_OPTIMAL_CLUSTERS=False
 
 # number of clusters produced. run GET_OPTIMAL_CLUSTERS and add that number here
-N_CLUSTERS = 16
+N_CLUSTERS = 24
 SAVE_FIG=False ##### option for saving the visualized data
 
 if USE_SEGMENT is True and CLUSTER_TYPE == "Poses" and MODE == 0:

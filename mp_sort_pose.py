@@ -43,7 +43,7 @@ class SortPose:
         self.HSVMULTIPLIER = 3
         self.NORM_BODY_MULTIPLIER = 4
         self.BRUTEFORCE = False
-        self.CUTOFF = 70 # DOES factor if ONE_SHOT
+        self.CUTOFF = 100 # DOES factor if ONE_SHOT
 
         self.SORT_TYPE = SORT_TYPE
         if self.SORT_TYPE == "128ds":
@@ -1113,12 +1113,17 @@ class SortPose:
             # when I want to start from start_bbox, I pass it a median 128d enc
             print("in median")
 
+            if self.SORT_TYPE == "128d": sort_column = "face_encodings68"
+            elif self.SORT_TYPE == "planar_body": sort_column = "body_landmarks_array"
+
+            print("sort_column", sort_column)
+            print(df_enc[sort_column].head())
             # Round each value in the face_encodings68 column to 2 decimal places            
             # df_enc['face_encodings68'] = df_enc['face_encodings68'].apply(self.safe_round)
-            df_enc['face_encodings68'] = df_enc['face_encodings68'].apply(lambda x: np.round(x, 1))
+            df_enc[sort_column] = df_enc[sort_column].apply(lambda x: np.round(x, 1))
 
             # Convert the face_encodings68 column to a list of lists
-            flattened_array = df_enc['face_encodings68'].tolist()            
+            flattened_array = df_enc[sort_column].tolist()            
             
             enc1 = self.most_common_row(flattened_array)
             # print(dfmode)
@@ -1219,15 +1224,16 @@ class SortPose:
         return subset
                 
     def get_landmarks_2d(self, Lms, selected_Lms, structure="dict"):
+        print("get_landmarks_2d", selected_Lms)
         # this is redundantly in io also
         Lms2d = {}
         Lms1d = []
         Lms1d3 = []
         for idx, lm in enumerate(Lms.landmark):
             if idx in selected_Lms:
-                # print("idx", idx)
+                print("idx", idx)
                 # x, y = int(lm.x * img_w), int(lm.y * img_h)
-                # print("lm.x, lm.y", lm.x, lm.y)
+                print("lm.x, lm.y", lm.x, lm.y)
                 if structure == "dict":
                     Lms2d[idx] =([lm.x, lm.y])
                 elif structure == "list":
@@ -1416,8 +1422,22 @@ class SortPose:
         return [angle_LH, angle_RH]
     
     def prep_enc(self, enc1, structure="dict"):
+        print("prep_enc enc1", enc1)
+        print("prep_enc enc1", type(enc1))
+        if enc1 is list or enc1 is tuple:
+            landmarks = self.SUBSET_LANDMARKS
+        else:
+            print("prep_enc enc1 is dict, so devolving SUBSET")
+            # devolve the x y landmarks back to index
+            landmarks = []
+            # take the even landmarks and divide by 2
+            for lm in self.SUBSET_LANDMARKS:
+                if lm % 2 == 0:
+                    landmarks.append(int(lm / 2))
 
-        pointers = self.get_landmarks_2d(enc1, self.SUBSET_LANDMARKS, structure)
+        pointers = self.get_landmarks_2d(enc1, landmarks, structure)
+        # pointers = self.get_landmarks_2d(enc1, self.SUBSET_LANDMARKS, structure)
+        print("prep_enc enc after get_landmarks_2d", enc1)
 
         # # print("prep_enc enc before get_landmarks_2d", enc1)
         # pointers = self.get_landmarks_2d(enc1, self.POINTERS, structure)
@@ -1457,22 +1477,23 @@ class SortPose:
         elif knn_sort == "planar_body":
             sortcol = 'body_landmarks_array'
             sourcecol = 'body_landmarks_normalized'
+            # if type(enc1) is not list:
+            #     enc1 = self.prep_enc(enc1, structure="list") # switching to 3d
             print("body_landmarks elif")
             # test to see if df_enc contains the sortcol column
             if sortcol not in df_enc.columns:
                 print("sortcol not in df_enc.columns - body_landmarks enc1 pre prep_enc", enc1)
-            # if enc1 is not a numpy array, convert it to a list
-                # create enc list with x/y position and angles and visibility
-                print("enc1 before prep_enc", enc1)
-                if type(enc1) is not list:
-                    enc1 = self.prep_enc(enc1, structure="list") # switching to 3d
-                print("enc1 after prep_enc", enc1)
-                # apply prep_enc to the sortcol column 
-                print("applying prep_enc to the sortcol column")
-                print("df_enc[sourcecol]", df_enc[sourcecol])
-                # do I need to reduce the number of landmarks I'm tracking at this point? 
-                df_enc[sortcol] = df_enc[sourcecol].apply(lambda x: self.prep_enc(x, structure="list")) # swittching to 3d
-                print("df_enc[sortcol]", df_enc[sortcol])
+                # # if enc1 is not a numpy array, convert it to a list
+                # # create enc list with x/y position and angles and visibility
+                # print("enc1 before prep_enc", enc1)
+                # print("enc1 after prep_enc", enc1)
+                # # apply prep_enc to the sortcol column 
+                # print("applying prep_enc to the sortcol column")
+                # print("df_enc[sourcecol]", df_enc[sourcecol])
+                # # do I need to reduce the number of landmarks I'm tracking at this point? 
+                # # moving to pre_enc in makevid
+                # # df_enc[sortcol] = df_enc[sourcecol].apply(lambda x: self.prep_enc(x, structure="list")) # swittching to 3d
+                # print("df_enc[sortcol]", df_enc[sortcol])
         elif knn_sort == "HSV":
             print("knn_sort is HSV")
             sortcol = 'hsvll'

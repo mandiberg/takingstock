@@ -648,55 +648,7 @@ def prep_encodings_NN(df_segment):
             return [row['lum']*HSV_NORMS["LUM"], row['lum_torso_bb']*HSV_NORMS["LUM"]]
         else:
             return [row['lum']*HSV_NORMS["LUM"], row['lum_torso']*HSV_NORMS["LUM"]]    
-    # def json_to_list(row):      
-    #     bbox = row["bbox_"+str(OBJ_CLS_ID)]
-    #     if bbox: return [bbox["left"], bbox["top"], bbox["right"], bbox["bottom"]]
-    #     else: return None
-      
-    #     bbox = json.loads(row["bbox_"+str(OBJ_CLS_ID)])
-    #     bbox_list = [bbox["left"], bbox["top"], bbox["right"], bbox["bottom"]]
-    #     return bbox_list
-    # def json_to_list(row):
-    #     bbox = row["bbox_"+str(OBJ_CLS_ID)]
-    #     print("type of bbox", type(bbox))
-    #     print("bbox", bbox)
-    #     bbox_json = json.loads((bbox))
-    #     print("bbox_json", bbox_json)
-    #     print("type of bbox_json", type(bbox_json))
-    #     # If bbox is None, return None
-    #     if bbox is None:
-    #         print("bbox is None")
-    #         return None
-    #     else:
-    #         print("type of bbox", type(bbox))
-        
-    #     # If bbox is a string, try to parse it as JSON
-    #     if isinstance(bbox, str):
-    #         print("going to ttry to load json")
-    #         try:
-    #             print("loading json")
-    #             bbox_dict = json.loads(json.dumps(bbox))
-    #             # bbox_dict = ast.literal_eval(bbox)
-    #             # bbox_dict = json.loads(bbox)
-    #             print("loaded json, type is", type(bbox_dict))
-    #         except json.JSONDecodeError:
-    #             print(f"Invalid JSON string: {bbox}")
-    #             return None
-    #     # If bbox is already a dictionary, use it directly
-    #     elif isinstance(bbox, dict):
-    #         bbox_dict = bbox
-    #     else:
-    #         print(f"Unexpected bbox format: {bbox}")
-    #         return None
-    #     print("type of bbox_dict", type(bbox_dict))        
-    #     # Now bbox_dict should be a dictionary, so we can safely use .get()
-    #     return [bbox_dict.get("left"), bbox_dict.get("top"), bbox_dict.get("right"), bbox_dict.get("bottom")]
     
-    
-    ########################################
-    # THIS IS WHERE THE BUGS NEED TO BE FIXED
-    ########################################
-
     print("degugging df_segment prep encodings", df_segment.columns)      
     # drop rows where body_landmarks_normalized is None
     df_segment = df_segment.dropna(subset=['body_landmarks_normalized'])
@@ -727,7 +679,15 @@ def prep_encodings_NN(df_segment):
             print(null_bboxes)
 
     print("df_segment length", len(df_segment.index))
+
+    # convert body_landmarks_normalized to a list (only for SUBSET_LANDMARKS)
+    if SORT_TYPE == "planar_body":
+        print("prepping body_landmarks_array")
+        print(df_segment['body_landmarks_normalized'].head())
+        df_segment["body_landmarks_array"] = df_segment["body_landmarks_normalized"].apply(lambda x: sort.prep_enc(x, structure="list")) # swittching to 3d
+        print("body_landmarks_array", df_segment["body_landmarks_array"].head())
     if SORT_TYPE == "planar_body" and DROP_LOW_VIS:
+
         # if planar_body drop rows where self.BODY_LMS are low visibility
         df_segment['hand_visible'] = df_segment.apply(lambda row: any(sort.test_landmarks_vis(row)), axis=1)
 
