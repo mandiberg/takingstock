@@ -43,10 +43,10 @@ class SortPose:
         self.HSVMULTIPLIER = 3
         self.NORM_BODY_MULTIPLIER = 4
         self.BRUTEFORCE = False
-        self.CUTOFF = 1000 # DOES factor if ONE_SHOT
+        self.CUTOFF = 70 # DOES factor if ONE_SHOT
 
         self.SORT_TYPE = SORT_TYPE
-        if self.SORT_TYPE == "128d":
+        if self.SORT_TYPE == "128ds":
             self.MIND = self.MINFACEDIST * 1.5
             self.MAXD = self.MAXFACEDIST
             self.MULTIPLIER = self.HSVMULTIPLIER
@@ -92,7 +92,18 @@ class SortPose:
         self.THUMBS = [16,22,15,21] # 0 is nose, 13-22 are left and right hands and elbows
         # self.BODY_LMS = [20,19] # 0 is nose, 13-22 are left and right hands and elbows
         # self.SUBSET_LANDMARKS = [13,14,19,20] # this should match what is in Clustering
-        self.SUBSET_LANDMARKS = [i for i in range(13,22)]
+        # self.SUBSET_LANDMARKS = [i for i in range(13,22)]
+
+        # forearm
+        self.FOREARM_LMS = self.make_subset_landmarks(13,16)
+        self.FINGER_LMS = self.make_subset_landmarks(19,20)
+        self.THUMB_POINTER_LMS = self.make_subset_landmarks(19,22)
+        self.WRIST_LMS = self.make_subset_landmarks(15,16)
+        # adding pointer finger tip
+        # self.SUBSET_LANDMARKS.extend(self.FINGER_LMS) # this should match what is in Clustering
+        # only use wrist and finger
+        self.SUBSET_LANDMARKS = self.FINGER_LMS
+
         self.OBJ_CLS_ID = OBJ_CLS_ID
 
         # self.BODY_LMS = [15]
@@ -1200,7 +1211,12 @@ class SortPose:
 
         return face_2d
 
-
+    def make_subset_landmarks(self, first, last, dim=2):
+        # takes number of lms and multiplies them by dim
+        # add 1 to last to make it inclusive of final landmark
+        subset = list(range(first*dim, (last+1)*dim))
+        print("subset", subset)
+        return subset
                 
     def get_landmarks_2d(self, Lms, selected_Lms, structure="dict"):
         # this is redundantly in io also

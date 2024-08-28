@@ -56,15 +56,15 @@ HSV_NORMS = {"LUM": .01, "SAT": 1,  "HUE": 0.002777777778, "VAL": 1}
 
 # this is for controlling if it is using
 # all clusters, 
-IS_CLUSTER = False
+IS_CLUSTER = True
 CLUSTER_TYPE = "Poses"
 DROP_LOW_VIS = False
 # CLUSTER_TYPE = "Clusters"
-# number of clusters to analyze -- this is also declared in Clustering_SQL. Move to IO?
-N_CLUSTERS = 20
+N_CLUSTERS = None # declared here, but set in the SQL query below
+
 # this is for IS_ONE_CLUSTER to only run on a specific CLUSTER_NO
 IS_ONE_CLUSTER = False
-CLUSTER_NO = 2
+CLUSTER_NO = 19
 
 # cut the kids
 NO_KIDS = True
@@ -78,12 +78,9 @@ OUTPAINT_MAX = {"top":.7,"right":.7,"bottom":.2,"left":.7}
 BLUR_THRESH_MAX={"top":50,"right":100,"bottom":10,"left":100}
 BLUR_THRESH_MIN={"top":0,"right":20,"bottom":10,"left":20}
 
-# BLUR_RADIUS = 200
-# SIGMAX=1000
 BLUR_RADIUS = 1  ##computationally more expensive
-# SIGMAX=10
-
 BLUR_RADIUS = io.oddify(BLUR_RADIUS)
+
 MASK_OFFSET = [50,50,50,50]
 if OUTPAINT: from outpainting_modular import outpaint, image_resize
 VERBOSE = True
@@ -113,7 +110,7 @@ TOPIC_NO = [15]
 SORT_TYPE = "planar_body"
 NORMED_BODY_LMS = True
 
-MOUTH_GAP = 10
+MOUTH_GAP = 0
 # if planar_body set OBJ_CLS_ID for each object type
 # 67 is phone, 63 is laptop, 26: 'handbag', 27: 'tie', 32: 'sports ball'
 OBJ_CLS_ID = 0
@@ -307,12 +304,14 @@ UPSCALE_MODEL_PATH=os.path.join(os.getcwd(), "models", "FSRCNN_x4.pb")
 # construct my own objects
 sort = SortPose(motion, face_height_output, image_edge_multiplier,EXPAND, ONE_SHOT, JUMP_SHOT, HSV_BOUNDS, VERBOSE,INPAINT, SORT_TYPE, OBJ_CLS_ID,UPSCALE_MODEL_PATH=UPSCALE_MODEL_PATH)
 
-# start_img_name = "median"
-# start_site_image_id = None
+start_img_name = "median"
+start_site_image_id = None
 
-start_img_name = "start_image_id"
-start_site_image_id = 38217385
+# start_img_name = "start_image_id"
+# start_site_image_id = 9875985
 
+# 9875985 fingers pointing up
+# 121076470 eyes closed mouth open, arms raised victory
 # 38217385 mouth open pointing at phone
 # 2752224 scream, hands on head
 # 3279908 hands to face excited
@@ -388,6 +387,7 @@ if IS_CLUSTER or IS_ONE_CLUSTER:
             cluster_median = pickle.loads(row.cluster_median)
             cluster_medians[i] = cluster_median
             print("cluster_medians", i, cluster_median)
+            N_CLUSTERS = i # will be the last cluster_id which is count of clusters
         sort.set_cluster_medians(cluster_medians)
 
 
@@ -412,12 +412,32 @@ if IS_CLUSTER or IS_ONE_CLUSTER:
 ###################
 
 def selectSQL(cluster_no=None, topic_no=None):
+    def cluster_topic_select(cluster_topic_table, cluster_topic_no):
+        if isinstance(cluster_topic_no, list):
+            # Convert the list into a comma-separated string
+            cluster_topic_ids = ', '.join(map(str, cluster_topic_no))
+            # Use the IN operator to check if topic_id is in the list of values
+            return f"AND {cluster_topic_table} IN ({cluster_topic_ids}) "
+        else:
+            # If topic_no is not a list, simply check for equality
+            return f"AND {cluster_topic_table} = {str(cluster_topic_no)} "            
+
+
     # print(f"cluster_no is")
     # print(cluster_no)
     if cluster_no is not None or topic_no is not None:
         cluster = " "
         if IS_CLUSTER or IS_ONE_CLUSTER:
-            cluster +=f"AND ic.cluster_id = {str(cluster_no)} "
+            cluster += cluster_topic_select("ic.cluster_id", cluster_no)
+            # cluster +=f"AND ic.cluster_id = {str(cluster_no)} "
+            # if isinstance(topic_no, list):
+            #     # Convert the list into a comma-separated string
+            #     topic_ids = ', '.join(map(str, cluster_no))
+            #     # Use the IN operator to check if topic_id is in the list of values
+            #     cluster += f"AND ic.cluster_id IN ({topic_ids}) "
+            # else:
+            #     # If topic_no is not a list, simply check for equality
+            #     if IS_ONE_TOPIC: cluster += f"AND ic.cluster_id = {str(cluster_no)} "            
         if IS_TOPICS or IS_ONE_TOPIC:
             # cluster +=f"AND it.topic_id = {str(topic_no)} "
             if isinstance(topic_no, list):
@@ -1121,7 +1141,7 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
         # print(parent_row)
 
         print('-- linear_test_df [-] in loop, index is', str(index))
-        if VERBOSE: print(row["body_landmarks"])
+        # if VERBOSE: print(row["body_landmarks"])
         # select the row in df_segment where the imagename == row['filename']
         try:
             imgfilename = const_imgfilename_NN(row['image_id'], df_sorted, imgfileprefix)
@@ -1293,9 +1313,12 @@ def process_iterr_angles(start_img_name, df_segment, cluster_no, sort):
 def process_linear(start_img_name, df_segment, cluster_no, sort):
     # linear sort by encoding distance
     print("processing linear")
+
+    # redundant I think     
+    # sort.set_counters(io.ROOT,cluster_no, start_img_name, start_site_image_id)  
+    # print("sort.counter_dict after sort.set_counters", sort.counter_dict)
+
     # preps the encodings for sort
-    sort.set_counters(io.ROOT,cluster_no, start_img_name, start_site_image_id)  
-    print("sort.counter_dict after sort.set_counters", sort.counter_dict)
     # df_enc, df_128_enc, df_33_lms = prep_encodings(df_segment)
     df_enc = prep_encodings_NN(df_segment)
     print("sort.counter_dict after prep_encodings_NN", sort.counter_dict)

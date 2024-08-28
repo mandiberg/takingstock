@@ -40,6 +40,14 @@ from sys import platform
 from mp_db_io import DataIO
 from mp_sort_pose import SortPose
 
+image_edge_multiplier_sm = [2.2, 2.2, 2.6, 2.2] # standard portrait
+face_height_output = 500
+motion = {"side_to_side": False, "forward_smile": True, "laugh": False, "forward_nosmile":  False, "static_pose":  False, "simple": False}
+EXPAND = False
+ONE_SHOT = False # take all files, based off the very first sort order.
+JUMP_SHOT = False # jump to random file if can't find a run
+sort = SortPose(motion, face_height_output, image_edge_multiplier_sm,EXPAND, ONE_SHOT, JUMP_SHOT, None, None)
+
 # MM you need to use conda activate mps_torch310 
 
 '''
@@ -75,19 +83,18 @@ NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 MODE = 0
 # CLUSTER_TYPE = "Clusters"
 CLUSTER_TYPE = "Poses"
-# POINTERS = [16,20,15,19]
-SUBSET_LANDMARKS = []
-SUBSET_LANDMARKS = [i for i in range(13,22)]
+# SUBSET_LANDMARKS is now set in sort pose init
+
 ANGLES = []
-# SUBSET_LANDMARKS = [13,14,19,20]
+STRUCTURE = "list"
 # this works for using segment in stock, and for ministock
 USE_SEGMENT = True
 
 # get the best fit for clusters
-GET_OPTIMAL_CLUSTERS=True
+GET_OPTIMAL_CLUSTERS=False
 
 # number of clusters produced. run GET_OPTIMAL_CLUSTERS and add that number here
-N_CLUSTERS = 20
+N_CLUSTERS = 16
 SAVE_FIG=False ##### option for saving the visualized data
 
 if USE_SEGMENT is True and CLUSTER_TYPE == "Poses" and MODE == 0:
@@ -109,7 +116,7 @@ if USE_SEGMENT is True and CLUSTER_TYPE == "Poses" and MODE == 0:
     WHERE = " s.mongo_body_landmarks = 1 "
     WHERE += " AND s.face_x > -35 AND s.face_x < -24 AND s.face_y > -3 AND s.face_y < 3 AND s.face_z > -3 AND s.face_z < 3 "
     # WHERE += " AND h.is_body = 1"
-    LIMIT = 3000000
+    LIMIT = 6000000
 
 
     '''
@@ -196,13 +203,6 @@ class ImagesClusters(Base):
     image_id = Column(Integer, ForeignKey(Images.image_id, ondelete="CASCADE"), primary_key=True)
     cluster_id = Column(Integer, ForeignKey(f'{ClustersTable_name}.cluster_id', ondelete="CASCADE"))
 
-image_edge_multiplier_sm = [2.2, 2.2, 2.6, 2.2] # standard portrait
-face_height_output = 500
-motion = {"side_to_side": False, "forward_smile": True, "laugh": False, "forward_nosmile":  False, "static_pose":  False, "simple": False}
-EXPAND = False
-ONE_SHOT = False # take all files, based off the very first sort order.
-JUMP_SHOT = False # jump to random file if can't find a run
-sort = SortPose(motion, face_height_output, image_edge_multiplier_sm,EXPAND, ONE_SHOT, JUMP_SHOT, None, None)
 
 
 def selectSQL():
@@ -214,9 +214,9 @@ def selectSQL():
 
 def make_subset_landmarks(df):
     numerical_columns = [col for col in df.columns if col.startswith('dim_')]
-    # set hand_columns = to the numerical_columns in SUBSET_LANDMARKS
-    if SUBSET_LANDMARKS:
-        subset_columns = [f'dim_{i}' for i in SUBSET_LANDMARKS]
+    # set hand_columns = to the numerical_columns in sort.SUBSET_LANDMARKS
+    if sort.SUBSET_LANDMARKS:
+        subset_columns = [f'dim_{i}' for i in sort.SUBSET_LANDMARKS]
     else:
         subset_columns = numerical_columns
     numerical_data = df[subset_columns]
@@ -224,11 +224,9 @@ def make_subset_landmarks(df):
 
 def kmeans_cluster(df, n_clusters=32):
     # Select only the numerical columns (dim_0 to dim_65)
-    if ANGLES:
-        pass
-    else:
-        numerical_data = make_subset_landmarks(df)
-    print("clustering", numerical_data)
+    print("about to subset landmarks to thse columns: ",sort.SUBSET_LANDMARKS)
+    numerical_data = make_subset_landmarks(df)
+    print("clustering subset data", numerical_data)
     kmeans = KMeans(n_clusters=n_clusters, n_init=10, init='k-means++', random_state=42, max_iter=300, verbose=1)
     kmeans.fit(numerical_data)
     clusters = kmeans.predict(numerical_data)
@@ -283,8 +281,12 @@ def export_html_clusters(enc_data,n_clusters):
     return
 
 def best_score(df):
-    print(df)
-    n_list=np.linspace(4,64,6,dtype='int')
+    print("starting best score", df)
+    print("about to subset landmarks to thse columns: ",sort.SUBSET_LANDMARKS)
+    df = make_subset_landmarks(df)
+    print("about to best score with subset data", df)
+
+    n_list=np.linspace(4,24,6,dtype='int')
     score=np.zeros(len(n_list))
     for i,n_clusters in enumerate(n_list):
         kmeans = KMeans(n_clusters,n_init=10, init = 'k-means++', random_state = 42, max_iter = 300)
@@ -327,7 +329,7 @@ def save_clusters_DB(df):
     unique_clusters = set(df['cluster_id'])
     for cluster_id in unique_clusters:
         cluster_df=df[df['cluster_id']==cluster_id]
-        cluster_mean=np.array(df[col_list].mean())
+        cluster_mean=np.array(cluster_df[col_list].mean())
         existing_record = session.query(Clusters).filter_by(cluster_id=cluster_id).first()
 
         if existing_record is None:
@@ -452,7 +454,7 @@ def prepare_df(df):
         df = df.dropna(subset=['body_landmarks_normalized'])
         df['body_landmarks_normalized'] = df['body_landmarks_normalized'].apply(io.unpickle_array)
         # body = self.get_landmarks_2d(enc1, list(range(33)), structure)
-        df['body_landmarks_array'] = df['body_landmarks_normalized'].apply(lambda x: io.get_landmarks_2d(x, list(range(33)), structure="list3"))
+        df['body_landmarks_array'] = df['body_landmarks_normalized'].apply(lambda x: io.get_landmarks_2d(x, list(range(33)), structure=STRUCTURE))
         # drop the columns that are not needed
         df = df.drop(columns=['face_encodings68', 'face_landmarks', 'body_landmarks', 'body_landmarks_normalized'])
         print("before cols",df)
