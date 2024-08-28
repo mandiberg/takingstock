@@ -41,6 +41,7 @@ class SortPose:
         self.BODY_DUPE_DIST = .04
         self.HSV_DELTA_MAX = .5
         self.HSVMULTIPLIER = 3
+        self.NORM_BODY_MULTIPLIER = 4
         self.BRUTEFORCE = False
         self.CUTOFF = 1000 # DOES factor if ONE_SHOT
 
@@ -57,7 +58,7 @@ class SortPose:
             self.DUPED = self.BODY_DUPE_DIST
         elif self.SORT_TYPE == "planar_body": 
             self.MIND = self.MINBODYDIST
-            self.MAXD = self.MAXBODYDIST
+            self.MAXD = self.MAXBODYDIST * 4
             self.MULTIPLIER = self.HSVMULTIPLIER * (self.MINBODYDIST / self.MINFACEDIST)
             self.DUPED = self.BODY_DUPE_DIST
 
@@ -1220,9 +1221,9 @@ class SortPose:
                     Lms1d3.append(lm.x)
                     Lms1d3.append(lm.y)
                     Lms1d3.append(lm.visibility)
-        print("Lms2d", Lms2d)
-        print("Lms1d", Lms1d)
-        print("Lms1d3", Lms1d3)
+        # print("Lms2d", Lms2d)
+        # print("Lms1d", Lms1d)
+        # print("Lms1d3", Lms1d3)
 
         if Lms1d:
             return Lms1d

@@ -55,7 +55,7 @@ items, seconds
 100000, 1030
 200000, 3202
 300000, 6275
-1340000, ???
+1.1M, ???
 '''
 
 start = time.time()
@@ -84,7 +84,7 @@ ANGLES = []
 USE_SEGMENT = True
 
 # get the best fit for clusters
-GET_OPTIMAL_CLUSTERS=False
+GET_OPTIMAL_CLUSTERS=True
 
 # number of clusters produced. run GET_OPTIMAL_CLUSTERS and add that number here
 N_CLUSTERS = 20
@@ -107,9 +107,9 @@ if USE_SEGMENT is True and CLUSTER_TYPE == "Poses" and MODE == 0:
     # FROM += f" INNER JOIN Encodings h ON h.image_id = s.image_id " 
     # FROM += f" INNER JOIN {HelperTable_name} h ON h.image_id = s.image_id " 
     WHERE = " s.mongo_body_landmarks = 1 "
-    WHERE += " AND s.face_x > -33 AND s.face_x < -27 AND s.face_y > -2 AND s.face_y < 2 AND s.face_z > -2 AND s.face_z < 2 "
+    WHERE += " AND s.face_x > -35 AND s.face_x < -24 AND s.face_y > -3 AND s.face_y < 3 AND s.face_z > -3 AND s.face_z < 3 "
     # WHERE += " AND h.is_body = 1"
-    LIMIT = 30000
+    LIMIT = 3000000
 
 
     '''
@@ -202,7 +202,7 @@ motion = {"side_to_side": False, "forward_smile": True, "laugh": False, "forward
 EXPAND = False
 ONE_SHOT = False # take all files, based off the very first sort order.
 JUMP_SHOT = False # jump to random file if can't find a run
-sort = SortPose(motion, face_height_output, image_edge_multiplier_sm,EXPAND, ONE_SHOT, JUMP_SHOT, None, VERBOSE)
+sort = SortPose(motion, face_height_output, image_edge_multiplier_sm,EXPAND, ONE_SHOT, JUMP_SHOT, None, None)
 
 
 def selectSQL():
@@ -284,7 +284,7 @@ def export_html_clusters(enc_data,n_clusters):
 
 def best_score(df):
     print(df)
-    n_list=np.linspace(8,64,10,dtype='int')
+    n_list=np.linspace(4,64,6,dtype='int')
     score=np.zeros(len(n_list))
     for i,n_clusters in enumerate(n_list):
         kmeans = KMeans(n_clusters,n_init=10, init = 'k-means++', random_state = 42, max_iter = 300)

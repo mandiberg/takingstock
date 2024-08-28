@@ -87,7 +87,6 @@ BLUR_RADIUS = io.oddify(BLUR_RADIUS)
 MASK_OFFSET = [50,50,50,50]
 if OUTPAINT: from outpainting_modular import outpaint, image_resize
 VERBOSE = True
-V_VERBOSE= False
 SAVE_IMG_PROCESS = False
 # this controls whether it is using the linear or angle process
 IS_ANGLE_SORT = False
@@ -114,10 +113,11 @@ TOPIC_NO = [15]
 SORT_TYPE = "planar_body"
 NORMED_BODY_LMS = True
 
+MOUTH_GAP = 10
 # if planar_body set OBJ_CLS_ID for each object type
 # 67 is phone, 63 is laptop, 26: 'handbag', 27: 'tie', 32: 'sports ball'
-if SORT_TYPE == "planar_body": OBJ_CLS_ID = 0
-else: OBJ_CLS_ID = 0 # if sort is 128d, this gets picked up. borks if starting from image_id
+OBJ_CLS_ID = 0
+OBJ_DONT_SUBSELECT = False # this is a flag for selecting a specific object type when not sorting on obj
 
 ONE_SHOT = True # take all files, based off the very first sort order.
 JUMP_SHOT = True # jump to random file if can't find a run (I don't think this applies to planar?)
@@ -171,7 +171,7 @@ elif IS_SEGONLY and io.platform == "darwin":
     # HIGHER
     # WHERE = "s.site_name_id != 1 AND face_encodings68 IS NOT NULL AND face_x > -27 AND face_x < -23 AND face_y > -2 AND face_y < 2 AND face_z > -2 AND face_z < 2"
 
-    # WHERE += " AND mouth_gap > 15 "
+    if MOUTH_GAP: WHERE += f" AND mouth_gap > {MOUTH_GAP} "
     # WHERE += " AND s.age_id NOT IN (1,2,3,4) "
     # WHERE += " AND s.age_id > 4 "
 
@@ -192,11 +192,16 @@ elif IS_SEGONLY and io.platform == "darwin":
         # WHERE += " AND ibg.lum > .3"
         SELECT += ", ibg.lum, ibg.lum_bb, ibg.hue, ibg.hue_bb, ibg.sat, ibg.sat_bb, ibg.val, ibg.val_bb, ibg.lum_torso, ibg.lum_torso_bb " # add description here, after resegmenting
     ###############
-    if OBJ_CLS_ID > 0:
+    if OBJ_CLS_ID > 0 and not OBJ_DONT_SUBSELECT:
         FROM += " JOIN PhoneBbox pb ON s.image_id = pb.image_id "
         # SELECT += ", pb.bbox_67, pb.conf_67, pb.bbox_63, pb.conf_63, pb.bbox_26, pb.conf_26, pb.bbox_27, pb.conf_27, pb.bbox_32, pb.conf_32 "
         SELECT += ", pb.bbox_"+str(OBJ_CLS_ID)+", pb.conf_"+str(OBJ_CLS_ID)
         WHERE += " AND pb.bbox_"+str(OBJ_CLS_ID)+" IS NOT NULL "
+
+        # for some reason I have to set OBJ_CLS_ID to 0 if I'm doing planar_body
+        # but I want to store the value in OBJ_SUBSELECT to use in SQL
+        if SORT_TYPE == "planar_body": OBJ_CLS_ID = 0
+            
     if SORT_TYPE == "planar_body":
         WHERE += " AND s.mongo_body_landmarks = 1  "
     ###############
@@ -287,12 +292,12 @@ face_height_output = 1000
 # units are ratio of faceheight
 # top, right, bottom, left
 # image_edge_multiplier = [1, 1, 1, 1] # just face
-image_edge_multiplier = [1.5,1.5,2,1.5] # bigger portrait
+# image_edge_multiplier = [1.5,1.5,2,1.5] # bigger portrait
 # image_edge_multiplier = [1.5,1.33, 2.5,1.33] # bigger 2x3 portrait
 # image_edge_multiplier = [1.4,2.6,1.9,2.6] # wider for hands
 # image_edge_multiplier = [3,5,3,5] # megawide for testing
 # image_edge_multiplier = [1.4,3.3,3,3.3] # widerest 16:10 for hands -- actual 2:3
-# image_edge_multiplier = [1.3,3.4,2.9,3.4] # slightly less wide 16:10 for hands < Aug 27
+image_edge_multiplier = [1.3,3.4,2.9,3.4] # slightly less wide 16:10 for hands < Aug 27
 # image_edge_multiplier = [1.6,3.84,3.2,3.84] # wiiiiiiiidest 16:10 for hands
 # image_edge_multiplier = [1.45,3.84,2.87,3.84] # wiiiiiiiidest 16:9 for hands
 # image_edge_multiplier = [1.2,2.3,1.7,2.3] # medium for hands
@@ -306,8 +311,10 @@ sort = SortPose(motion, face_height_output, image_edge_multiplier,EXPAND, ONE_SH
 # start_site_image_id = None
 
 start_img_name = "start_image_id"
-start_site_image_id = 3279908
+start_site_image_id = 38217385
 
+# 38217385 mouth open pointing at phone
+# 2752224 scream, hands on head
 # 3279908 hands to face excited
 # 6050372 hands to mouth in shock
 # 87210848 43008591 11099323 phone held up
@@ -1114,7 +1121,7 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
         # print(parent_row)
 
         print('-- linear_test_df [-] in loop, index is', str(index))
-        if V_VERBOSE: print(row["body_landmarks"])
+        if VERBOSE: print(row["body_landmarks"])
         # select the row in df_segment where the imagename == row['filename']
         try:
             imgfilename = const_imgfilename_NN(row['image_id'], df_sorted, imgfileprefix)
