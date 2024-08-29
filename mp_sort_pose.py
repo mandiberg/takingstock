@@ -1137,15 +1137,16 @@ class SortPose:
             print(df_enc.columns)
             print(df_enc.head)
             if self.SORT_TYPE == "128d": sort_column = "face_encodings68"
-            elif self.SORT_TYPE == "planar_body": sort_column = "body_landmarks_normalized"
+            elif self.SORT_TYPE == "planar_body": sort_column = "body_landmarks_array"
             # set enc1 = df_enc value in the self.SORT_TYPE column, for the row where column image_id = self.counter_dict["start_site_image_id"]
             # enc1 = df_enc.loc[df_enc['image_id'] == self.counter_dict["start_site_image_id"], sort_column].to_list()
             # enc1 = df_enc.loc[df_enc['image_id'] == self.counter_dict["start_site_image_id"], sort_column].to_list()
             enc1_image_id = self.counter_dict["start_site_image_id"]
             print("enc1_image_id", enc1_image_id)
             enc1 = df_enc.loc[df_enc['image_id'] == enc1_image_id, sort_column].values[0]
-            if self.SORT_TYPE == "planar_body":
-                enc1 = self.get_landmarks_2d(enc1, self.SUBSET_LANDMARKS, "list")
+            print("enc1 set from sort_column", sort_column, enc1)
+            # if self.SORT_TYPE == "planar_body":
+            #     enc1 = self.get_landmarks_2d(enc1, self.SUBSET_LANDMARKS, "list")
             print("enc1 set from sort_column", enc1)
 # TK needs to be refactored NN June 8
 
@@ -1422,7 +1423,7 @@ class SortPose:
         return [angle_LH, angle_RH]
     
     def prep_enc(self, enc1, structure="dict"):
-        print("prep_enc enc1", enc1)
+        # print("prep_enc enc1", enc1)
         print("prep_enc enc1", type(enc1))
         if enc1 is list or enc1 is tuple:
             landmarks = self.SUBSET_LANDMARKS

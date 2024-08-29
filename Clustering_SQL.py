@@ -418,26 +418,23 @@ def assign_images_clusters_DB(df):
     median_dict = get_cluster_medians()
     print(median_dict)
 
+    batch_size = 100
+    batch_counter = 0
+
     for index, row in df.iterrows():
         image_id = row['image_id']        
         if CLUSTER_TYPE == "Poses":
             this_enc = df_subset_landmarks.iloc[index].tolist()
-            # print("this_enc",this_enc)
         elif CLUSTER_TYPE == "Clusters":
             this_enc = [row[f'encodings{i}'] for i in range(128)]
-        # print(existing_record)
-        # face_encodings68 = row['face_encodings68']
-        # existing_record = session.query(ImagesClusters).filter_by(image_id=image_id).first()
 
         this_dist_dict = {}
-        enc1=np.array(this_enc)
+        enc1 = np.array(this_enc)
         for cluster_id in median_dict:
-            enc2=median_dict[cluster_id]
-            # enc2=np.array(median_dict[cluster_id])
-            this_dist_dict[cluster_id]=np.linalg.norm(enc1 - enc2, axis=0)
+            enc2 = median_dict[cluster_id]
+            this_dist_dict[cluster_id] = np.linalg.norm(enc1 - enc2, axis=0)
+        
         cluster_id = min(this_dist_dict, key=this_dist_dict.get)
-        # print(this_dist_dict)
-        # print(cluster_id)
         
         if cluster_id:
             print(f"Assigning image_id {image_id} to cluster_id {cluster_id}")
@@ -446,17 +443,29 @@ def assign_images_clusters_DB(df):
                 cluster_id=cluster_id,
             )
             session.add(instance)
-
         else:
             print(f"Something went wrong with image_id {image_id}")
 
+        # Increment the batch counter
+        batch_counter += 1
+
+        # If the batch counter reaches the batch size, commit the session
+        if batch_counter % batch_size == 0:
+            try:
+                session.commit()
+                print(f"Batch committed successfully. Processed {batch_counter} rows so far.")
+            except IntegrityError as e:
+                session.rollback()
+                print(f"Error occurred during batch commit: {str(e)}")
+
+    # Commit any remaining records after the loop
     try:
         session.commit()
-        print("Data saved successfully.")
+        print("Final batch committed successfully.")
     except IntegrityError as e:
         session.rollback()
-        print(f"Error occurred during data saving: {str(e)}")
-
+        print(f"Error occurred during final commit: {str(e)}")
+        
 def df_list_to_cols(df, col_name):
 
     # Convert the string representation of lists to actual lists
