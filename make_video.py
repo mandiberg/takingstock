@@ -56,15 +56,15 @@ HSV_NORMS = {"LUM": .01, "SAT": 1,  "HUE": 0.002777777778, "VAL": 1}
 
 # this is for controlling if it is using
 # all clusters, 
-IS_CLUSTER = True
+IS_CLUSTER = False
 CLUSTER_TYPE = "Poses"
 DROP_LOW_VIS = False
 # CLUSTER_TYPE = "Clusters"
 N_CLUSTERS = None # declared here, but set in the SQL query below
 
 # this is for IS_ONE_CLUSTER to only run on a specific CLUSTER_NO
-IS_ONE_CLUSTER = False
-CLUSTER_NO = 19
+IS_ONE_CLUSTER = True
+CLUSTER_NO = 5
 
 # cut the kids
 NO_KIDS = True
@@ -304,12 +304,13 @@ UPSCALE_MODEL_PATH=os.path.join(os.getcwd(), "models", "FSRCNN_x4.pb")
 # construct my own objects
 sort = SortPose(motion, face_height_output, image_edge_multiplier,EXPAND, ONE_SHOT, JUMP_SHOT, HSV_BOUNDS, VERBOSE,INPAINT, SORT_TYPE, OBJ_CLS_ID,UPSCALE_MODEL_PATH=UPSCALE_MODEL_PATH)
 
-start_img_name = "median"
-start_site_image_id = None
+# start_img_name = "median"
+# start_site_image_id = None
 
-# start_img_name = "start_image_id"
-# start_site_image_id = 9875985
+start_img_name = "start_image_id"
+start_site_image_id = 4004183
 
+# 4004183 whisper finger to lips
 # 9875985 fingers pointing up
 # 121076470 eyes closed mouth open, arms raised victory
 # 38217385 mouth open pointing at phone

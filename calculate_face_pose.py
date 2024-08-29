@@ -1523,7 +1523,6 @@ def main():
                 print("last_round just assigned")
             # process resultsjson
             for row in resultsjson:
-                # print(row)
                 # encoding_id = row["encoding_id"]
                 image_id = row["image_id"]
                 item = row["contentUrl"]
@@ -1535,27 +1534,32 @@ def main():
                 #     orig_filename = orig_filename.replace(".jpg.jpg", ".jpg")
                 #     d0, d02 = get_hash_folders(orig_filename)
                 #     hashed_path = os.path.join(d0, d02, orig_filename)
-                if not image_id or not site_id or not hashed_path: continue
+                if not image_id or not site_id or not hashed_path: 
+                    print("missing image_id or site_id or hashed_path", row)
                 # gets folder via the folder list, keyed with site_id integer
-                imagepath=os.path.join(io.folder_list[site_id], hashed_path)
-
-                if row["mongo_face_landmarks"] is not None:
-                    # this is a reprocessing, so don't need to test isExist
-                    if VERBOSE: print("reprocessing")
-                    task = (image_id,imagepath,row["mongo_face_landmarks"],row["bbox"])
                 else:
-                    task = (image_id,imagepath)
+                    try:
+                        imagepath=os.path.join(io.folder_list[site_id], hashed_path)
+                    except:
+                        print("missing folder for site_id", site_id)
+                        continue
+                    if row["mongo_face_landmarks"] is not None:
+                        # this is a reprocessing, so don't need to test isExist
+                        if VERBOSE: print("reprocessing")
+                        task = (image_id,imagepath,row["mongo_face_landmarks"],row["bbox"])
+                    else:
+                        task = (image_id,imagepath)
 
-                    # getting rid of isExist test for now
-                    # isExist = os.path.exists(imagepath)
-                    # print(">> SPLIT >> isExist")
-                    # split = print_get_split(split)
-                    # if isExist: 
-                    #     task = (image_id,imagepath)
-                    # else:
-                    #     print("this file is missssssssssing --------> ",imagepath)
-                tasks_to_accomplish.put(task)
-                # print("tasks_to_accomplish.put(task) ",imagepath)
+                        # getting rid of isExist test for now
+                        # isExist = os.path.exists(imagepath)
+                        # print(">> SPLIT >> isExist")
+                        # split = print_get_split(split)
+                        # if isExist: 
+                        #     task = (image_id,imagepath)
+                        # else:
+                        #     print("this file is missssssssssing --------> ",imagepath)
+                    tasks_to_accomplish.put(task)
+                    # print("tasks_to_accomplish.put(task) ",imagepath)
 
             # creating processes
             for w in range(NUMBER_OF_PROCESSES):

@@ -80,7 +80,7 @@ db = io.db
 
 
 NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
-MODE = 0
+MODE = 1
 # CLUSTER_TYPE = "Clusters"
 CLUSTER_TYPE = "Poses"
 # SUBSET_LANDMARKS is now set in sort pose init
@@ -97,7 +97,7 @@ GET_OPTIMAL_CLUSTERS=False
 N_CLUSTERS = 24
 SAVE_FIG=False ##### option for saving the visualized data
 
-if USE_SEGMENT is True and CLUSTER_TYPE == "Poses" and MODE == 0:
+if USE_SEGMENT is True and CLUSTER_TYPE == "Poses":
     print("setting Poses SQL")
     SegmentTable_name = 'SegmentOct20'
 
@@ -110,13 +110,18 @@ if USE_SEGMENT is True and CLUSTER_TYPE == "Poses" and MODE == 0:
 
     # Basic Query, this works with gettytest3
     SELECT = "DISTINCT(s.image_id)"
-    FROM = f"{SegmentTable_name} s"
+    WHERE = " s.mongo_body_landmarks = 1 "
+    if MODE == 0:
+        FROM = f"{SegmentTable_name} s"
+        WHERE += " AND s.face_x > -35 AND s.face_x < -24 AND s.face_y > -3 AND s.face_y < 3 AND s.face_z > -3 AND s.face_z < 3 "
     # FROM += f" INNER JOIN Encodings h ON h.image_id = s.image_id " 
     # FROM += f" INNER JOIN {HelperTable_name} h ON h.image_id = s.image_id " 
-    WHERE = " s.mongo_body_landmarks = 1 "
-    WHERE += " AND s.face_x > -35 AND s.face_x < -24 AND s.face_y > -3 AND s.face_y < 3 AND s.face_z > -3 AND s.face_z < 3 "
+    elif MODE == 1:
+        FROM = f"{SegmentTable_name} s LEFT JOIN Images{CLUSTER_TYPE} ic ON s.image_id = ic.image_id"
+        WHERE += " AND ic.cluster_id IS NULL "
+
     # WHERE += " AND h.is_body = 1"
-    LIMIT = 6000000
+    LIMIT = 500
 
 
     '''
@@ -142,12 +147,12 @@ elif USE_SEGMENT is True and MODE == 0:
     HelperTable_name = "SegmentHelperMar23_headon"
 
     # Basic Query, this works with gettytest3
-    SELECT = "DISTINCT(s.image_id),face_encodings68"
+    SELECT = "DISTINCT(s.image_id)"
     FROM = f"{SegmentTable_name} s"
     FROM += f" INNER JOIN {HelperTable_name} h ON h.image_id = s.image_id " 
-    WHERE = "face_encodings68 IS NOT NULL"
+    WHERE = " s.mongo_body_landmarks = 1"
     # WHERE = "face_encodings68 IS NOT NULL AND face_x > -33 AND face_x < -27 AND face_y > -2 AND face_y < 2 AND face_z > -2 AND face_z < 2"
-    LIMIT = 5000000
+    LIMIT = 1000
 
     # # join with SSD tables. Satyam, use the one below
     # SELECT = "DISTINCT(e.image_id), e.face_encodings68"
@@ -379,10 +384,11 @@ def get_cluster_medians():
 
     ####################################
     # this has a LIMIT on it, that I didn't see before
+    # hmm... wait, that just limits to 1000 clusters. I don't have that many
     ####################################
 
     # Create a SQLAlchemy select statement
-    select_query = select([Clusters.cluster_id, Clusters.cluster_median]).limit(1000)
+    select_query = select(Clusters.cluster_id, Clusters.cluster_median).limit(1000)
 
     # Execute the query using your SQLAlchemy session
     results = session.execute(select_query)
@@ -392,33 +398,49 @@ def get_cluster_medians():
     for row in results:
         print(row)
         cluster_id, cluster_median = row
-        median_dict[cluster_id] = pickle.loads(cluster_median, encoding='latin1')
+        cluster_median = pickle.loads(cluster_median, encoding='latin1')
+        if sort.SUBSET_LANDMARKS:
+            # handles body lms subsets
+            subset_cluster_median = []
+            for i in range(len(cluster_median)):
+                if i in sort.SUBSET_LANDMARKS:
+                    subset_cluster_median.append(cluster_median[i])
+            cluster_median = subset_cluster_median
+        median_dict[cluster_id] = cluster_median
     return median_dict 
 
 
 def assign_images_clusters_DB(df):
     #assign clusters to each image's encodings
-    for _, row in df.iterrows():
-        median_dict = get_cluster_medians()
-        print(median_dict)
+    print("assigning images to clusters, df at start",df)
+    df_subset_landmarks = make_subset_landmarks(df)
+    print("assigning images to clusters, df after subset",df)
+    median_dict = get_cluster_medians()
+    print(median_dict)
 
-        image_id = row['image_id']
-        face_encodings68 = [row[f'encodings{i}'] for i in range(128)]
+    for index, row in df.iterrows():
+        image_id = row['image_id']        
+        if CLUSTER_TYPE == "Poses":
+            this_enc = df_subset_landmarks.iloc[index].tolist()
+            # print("this_enc",this_enc)
+        elif CLUSTER_TYPE == "Clusters":
+            this_enc = [row[f'encodings{i}'] for i in range(128)]
         # print(existing_record)
         # face_encodings68 = row['face_encodings68']
         # existing_record = session.query(ImagesClusters).filter_by(image_id=image_id).first()
 
         this_dist_dict = {}
+        enc1=np.array(this_enc)
         for cluster_id in median_dict:
-            enc1=np.array(face_encodings68)
             enc2=median_dict[cluster_id]
             # enc2=np.array(median_dict[cluster_id])
             this_dist_dict[cluster_id]=np.linalg.norm(enc1 - enc2, axis=0)
         cluster_id = min(this_dist_dict, key=this_dist_dict.get)
-        print(this_dist_dict)
-        print(cluster_id)
-        quit()
+        # print(this_dist_dict)
+        # print(cluster_id)
+        
         if cluster_id:
+            print(f"Assigning image_id {image_id} to cluster_id {cluster_id}")
             instance = ImagesClusters(
                 image_id=image_id,
                 cluster_id=cluster_id,

@@ -26,7 +26,7 @@ ROOT_FOLDER_PATH = '/Volumes/OWC4/segment_images'
 # if IS_CLUSTER this should be the folder holding all the cluster folders
 # if not, this should be the individual folder holding the images
 # will not accept clusterNone -- change to cluster00
-FOLDER_NAME ="fingersthumbs_32poses"
+FOLDER_NAME ="body_fingers_24poses"
 FOLDER_PATH = os.path.join(ROOT_FOLDER_PATH,FOLDER_NAME)
 DIRS = ["1x1", "4x3", "16x10"]
 

@@ -125,7 +125,15 @@ class DataIO:
                 os.path.join(self.ROOT_PROD,"images_pond5"),
                 os.path.join(self.ROOT_PROD,"images_123rf"), #8, images_123rf
                 os.path.join(self.ROOT_PROD,"images_alamy"), #9 alamy
-                os.path.join(self.ROOT_PROD,"images_vcg") # visual china group
+                os.path.join(self.ROOT_PROD,"images_vcg"), # 10 visual china group
+                os.path.join(self.ROOT_PROD,"images_pixcy"), # 11	picxy
+                os.path.join(self.ROOT_PROD,"images_pixerf"), # 12	pixerf
+                os.path.join(self.ROOT_PROD,"images_bazzar"), # 13	imagesbazaar
+                os.path.join(self.ROOT_PROD,"images_india"), # 14	indiapicturebudget
+                os.path.join(self.ROOT_PROD,"images_iwaria"), # 15	iwaria
+                os.path.join(self.ROOT_PROD,"images_nappy"), # 16	nappy
+                os.path.join(self.ROOT_PROD,"images_picha"), # 17	picha
+                os.path.join(self.ROOT_PROD,"") # 18	afripics
             ]
         else:
             self.folder_list = [
@@ -142,7 +150,15 @@ class DataIO:
                 os.path.join(self.ROOT18,"images_pond5"),
                 os.path.join(self.ROOT54,"images_123rf"), #8, images_123rf
                 os.path.join(self.ROOT18,"images_alamy"), #9 alamy
-                os.path.join(self.ROOT18,"images_vcg") # visual china group
+                os.path.join(self.ROOT18,"images_vcg"), # visual china group
+                os.path.join(self.ROOT18,"images_pixcy"), # 11	picxy
+                os.path.join(self.ROOT18,"images_pixerf"), # 12	pixerf
+                os.path.join(self.ROOT18,"images_bazzar"), # 13	imagesbazaar
+                os.path.join(self.ROOT18,"images_india"), # 14	indiapicturebudget
+                os.path.join(self.ROOT18,"images_iwaria"), # 15	iwaria
+                os.path.join(self.ROOT18,"images_nappy"), # 16	nappy
+                os.path.join(self.ROOT18,"images_picha"), # 17	picha
+                os.path.join(self.ROOT18,"") # 18	afripics
             ]
 
     def capitalize_directory(self,path):
