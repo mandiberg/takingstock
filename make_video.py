@@ -63,8 +63,8 @@ DROP_LOW_VIS = False
 N_CLUSTERS = None # declared here, but set in the SQL query below
 
 # this is for IS_ONE_CLUSTER to only run on a specific CLUSTER_NO
-IS_ONE_CLUSTER = True
-CLUSTER_NO = 5
+IS_ONE_CLUSTER = False
+CLUSTER_NO = 10
 
 # cut the kids
 NO_KIDS = True
@@ -113,8 +113,10 @@ NORMED_BODY_LMS = True
 MOUTH_GAP = 0
 # if planar_body set OBJ_CLS_ID for each object type
 # 67 is phone, 63 is laptop, 26: 'handbag', 27: 'tie', 32: 'sports ball'
-OBJ_CLS_ID = 0
-OBJ_DONT_SUBSELECT = False # this is a flag for selecting a specific object type when not sorting on obj
+OBJ_CLS_ID = 67
+DO_OBJ_SORT = True
+OBJ_DONT_SUBSELECT = False # False means select for OBJ. this is a flag for selecting a specific object type when not sorting on obj
+PHONE_BBOX_LIMITS = [] # this is an attempt to control the BBOX placement. I don't think it is going to work, but with non-zero it will make a bigger selection. Fix this hack TK. 
 
 ONE_SHOT = True # take all files, based off the very first sort order.
 JUMP_SHOT = True # jump to random file if can't find a run (I don't think this applies to planar?)
@@ -163,8 +165,10 @@ elif IS_SEGONLY and io.platform == "darwin":
     FROM =f"{SegmentTable_name} s "
 
     # this is the standard segment topics/clusters query for June 2024
-    WHERE = "  s.face_x > -33 AND s.face_x < -27 AND s.face_y > -2 AND s.face_y < 2 AND s.face_z > -2 AND s.face_z < 2"
-
+    if PHONE_BBOX_LIMITS:
+        WHERE = "  s.face_x > -50 "
+    else:
+        WHERE = "  s.face_x > -33 AND s.face_x < -27 AND s.face_y > -2 AND s.face_y < 2 AND s.face_z > -2 AND s.face_z < 2"
     # HIGHER
     # WHERE = "s.site_name_id != 1 AND face_encodings68 IS NOT NULL AND face_x > -27 AND face_x < -23 AND face_y > -2 AND face_y < 2 AND face_z > -2 AND face_z < 2"
 
@@ -197,7 +201,7 @@ elif IS_SEGONLY and io.platform == "darwin":
 
         # for some reason I have to set OBJ_CLS_ID to 0 if I'm doing planar_body
         # but I want to store the value in OBJ_SUBSELECT to use in SQL
-        if SORT_TYPE == "planar_body": OBJ_CLS_ID = 0
+        if SORT_TYPE == "planar_body" and not DO_OBJ_SORT: OBJ_CLS_ID = 0
             
     if SORT_TYPE == "planar_body":
         WHERE += " AND s.mongo_body_landmarks = 1  "
@@ -211,7 +215,7 @@ elif IS_SEGONLY and io.platform == "darwin":
     # WHERE += " AND e.encoding_id > 2612275"
 
     # WHERE = "s.site_name_id != 1"
-    LIMIT = 6000000
+    LIMIT = 6000
 
     # TEMP TK TESTING
     # WHERE += " AND s.site_name_id = 8"
@@ -295,6 +299,7 @@ face_height_output = 1000
 # image_edge_multiplier = [3,5,3,5] # megawide for testing
 # image_edge_multiplier = [1.4,3.3,3,3.3] # widerest 16:10 for hands -- actual 2:3
 image_edge_multiplier = [1.3,3.4,2.9,3.4] # slightly less wide 16:10 for hands < Aug 27
+# image_edge_multiplier = [1.3,2,2.9,2] # portrait crop for paris photo images < Aug 30
 # image_edge_multiplier = [1.6,3.84,3.2,3.84] # wiiiiiiiidest 16:10 for hands
 # image_edge_multiplier = [1.45,3.84,2.87,3.84] # wiiiiiiiidest 16:9 for hands
 # image_edge_multiplier = [1.2,2.3,1.7,2.3] # medium for hands
@@ -304,20 +309,26 @@ UPSCALE_MODEL_PATH=os.path.join(os.getcwd(), "models", "FSRCNN_x4.pb")
 # construct my own objects
 sort = SortPose(motion, face_height_output, image_edge_multiplier,EXPAND, ONE_SHOT, JUMP_SHOT, HSV_BOUNDS, VERBOSE,INPAINT, SORT_TYPE, OBJ_CLS_ID,UPSCALE_MODEL_PATH=UPSCALE_MODEL_PATH)
 
-# start_img_name = "median"
-# start_site_image_id = None
+start_img_name = "median"
+start_site_image_id = None
 
-start_img_name = "start_image_id"
-start_site_image_id = 4004183
+# start_img_name = "start_image_id"
+# start_site_image_id = 126993730
 
-# 4004183 whisper finger to lips
+# 9774337 screaming hands to head 10
+# 10528975 phone right hand pose 4
+# 15940552 two fingers up pose 4
+# 107124684 hands to mouth shock pose 16
+# 56159379 holding phone belly pose 8
+# 105444295 right hand pointing up pose 11
+# 4004183 whisper finger to lips pose 5
 # 9875985 fingers pointing up
 # 121076470 eyes closed mouth open, arms raised victory
 # 38217385 mouth open pointing at phone
 # 2752224 scream, hands on head
 # 3279908 hands to face excited
 # 6050372 hands to mouth in shock
-# 87210848 43008591 11099323 phone held up
+# 126993730 87210848 43008591 11099323 phone held up
 
 # start_site_image_id is not working Aug 2024
 # start_img_name = "start_site_image_id"
@@ -387,7 +398,7 @@ if IS_CLUSTER or IS_ONE_CLUSTER:
         for i, row in enumerate(results, start=1):
             cluster_median = pickle.loads(row.cluster_median)
             cluster_medians[i] = cluster_median
-            print("cluster_medians", i, cluster_median)
+            # print("cluster_medians", i, cluster_median)
             N_CLUSTERS = i # will be the last cluster_id which is count of clusters
         sort.set_cluster_medians(cluster_medians)
 
@@ -1411,6 +1422,8 @@ def main():
             df['body_landmarks'] = df['body_landmarks'].apply(io.unpickle_array)
             df['body_landmarks_normalized'] = df['body_landmarks_normalized'].apply(io.unpickle_array)
             df['bbox'] = df['bbox'].apply(lambda x: io.unstring_json(x))
+            print("df before bboxing,", df.columns)
+
             if OBJ_CLS_ID > 0: df["bbox_"+str(OBJ_CLS_ID)] = df["bbox_"+str(OBJ_CLS_ID)].apply(lambda x: io.unstring_json(x))
 
 

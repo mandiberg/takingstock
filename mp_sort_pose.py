@@ -87,13 +87,14 @@ class SortPose:
         self.SHOT_CLOCK = 0
         self.SHOT_CLOCK_MAX = 10
         self.BODY_LMS = list(range(13, 23)) # 0 is nose, 13-22 are left and right hands and elbows
-        # self.BODY_LMS = [0,15,16,19,20,21,22] # 0 is nose, 13-22 are left and right hands and elbows
-        self.POINTERS = [16,20,15,19] # 0 is nose, 13-22 are left and right hands and elbows
-        self.THUMBS = [16,22,15,21] # 0 is nose, 13-22 are left and right hands and elbows
+        # # self.BODY_LMS = [0,15,16,19,20,21,22] # 0 is nose, 13-22 are left and right hands and elbows
+        # self.POINTERS = [16,20,15,19] # 0 is nose, 13-22 are left and right hands and elbows
+        # self.THUMBS = [16,22,15,21] # 0 is nose, 13-22 are left and right hands and elbows
         # self.BODY_LMS = [20,19] # 0 is nose, 13-22 are left and right hands and elbows
         # self.SUBSET_LANDMARKS = [13,14,19,20] # this should match what is in Clustering
-        # self.SUBSET_LANDMARKS = [i for i in range(13,22)]
-
+        self.ELBOW_HAND = [i for i in range(13,22)]
+        self.HAND_LMS = self.make_subset_landmarks(15,22)
+        # self.RIGHT_HAND_LMS = self.make_subset_landmarks(16,18,20,22)
         # forearm
         self.FOREARM_LMS = self.make_subset_landmarks(13,16)
         self.FINGER_LMS = self.make_subset_landmarks(19,20)
@@ -102,7 +103,9 @@ class SortPose:
         # adding pointer finger tip
         # self.SUBSET_LANDMARKS.extend(self.FINGER_LMS) # this should match what is in Clustering
         # only use wrist and finger
-        self.SUBSET_LANDMARKS = self.FINGER_LMS
+        # self.SUBSET_LANDMARKS = self.HAND_LMS
+        self.SUBSET_LANDMARKS = self.choose_hand(self.HAND_LMS,"right")
+        
 
         self.OBJ_CLS_ID = OBJ_CLS_ID
 
@@ -1217,6 +1220,21 @@ class SortPose:
 
         return face_2d
 
+    def choose_hand(self, landmark_list, hand):
+        right = []
+        left = []
+        for idx, lm in enumerate(landmark_list):
+            print("idx", idx)
+            if idx % 2 == 0:
+                print("even appended right", idx)
+                right.append(lm)
+            else:
+                left.append(lm)
+        if hand == "right":
+            return right
+        elif hand == "left":
+            return left
+
     def make_subset_landmarks(self, first, last, dim=2):
         # takes number of lms and multiplies them by dim
         # add 1 to last to make it inclusive of final landmark
@@ -1438,9 +1456,8 @@ class SortPose:
 
         pointers = self.get_landmarks_2d(enc1, landmarks, structure)
         # pointers = self.get_landmarks_2d(enc1, self.SUBSET_LANDMARKS, structure)
-        print("prep_enc enc after get_landmarks_2d", enc1)
+        print("prep_enc enc after get_landmarks_2d", type(enc1))
 
-        # # print("prep_enc enc before get_landmarks_2d", enc1)
         # pointers = self.get_landmarks_2d(enc1, self.POINTERS, structure)
         # thumbs = self.get_landmarks_2d(enc1, self.THUMBS, structure)
         # # body = self.get_landmarks_2d(enc1, self.BODY_LMS, structure)
@@ -1706,10 +1723,11 @@ class SortPose:
         else: df_dist_enc = self.sort_df_KNN(df_enc, enc1, knn_sort)
         print("df_shuffled", df_dist_enc[['image_id','dist_enc1']].sort_values(by='dist_enc1'))
         
+        print("self.OBJ_CLS_ID", self.OBJ_CLS_ID)
         # sort KNN for OBJ_CLS_ID
         if self.OBJ_CLS_ID > 0: 
             print("get_closest_df_NN - pre KNN - obj_bbox1", obj_bbox1)
-            if type(obj_bbox1) is not list:
+            if type(obj_bbox1) is dict:
                 # turn the obj_bbox1 json dict into a list
                 obj_bbox1 = self.json_to_list(obj_bbox1)
             df_dist_enc = self.sort_df_KNN(df_enc, obj_bbox1, "obj")
