@@ -31,7 +31,7 @@ NOSE_ID=0
 
 Base = declarative_base()
 VERBOSE = False
-SKIP_EXISTING = True # Skips images with a normed bbox but that have Images.h
+SKIP_EXISTING = False # Skips images with a normed bbox but that have Images.h
 IS_SSD = True
 
 io = DataIO(IS_SSD)
@@ -236,7 +236,7 @@ def insert_shape(target_image_id,shape):
     Images_entry = (
         session.query(Images)
         .filter(Images.image_id == target_image_id)
-        .first()
+        # .first() #### MICHAEL I suspect this is a database dependent problem, doesnt work for me
     )    
     if Images_entry:
         Images_entry.w=shape[0]

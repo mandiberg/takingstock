@@ -1872,8 +1872,8 @@ class SortPose:
         for landmark in landmarks.landmark:
             # print(landmark)
             translated_landmark = landmark_pb2.NormalizedLandmark()
-            translated_landmark.x = (landmark.x*width -nose_pos["x"])/face_height
-            translated_landmark.y = (landmark.y*height-nose_pos["y"])/face_height
+            translated_landmark.x = (nose_pos["x"]-landmark.x*width )/face_height
+            translated_landmark.y = (nose_pos["y"]-landmark.y*height)/face_height
             translated_landmark.visibility = landmark.visibility
             translated_landmarks.landmark.append(translated_landmark)
 
@@ -1913,10 +1913,10 @@ class SortPose:
         if self.VERBOSE: print("type phone_bbox",type(phone_bbox))
 
         n_phone_bbox=phone_bbox
-        n_phone_bbox["right"]=(n_phone_bbox["right"] -nose_pos["x"])/face_height
-        n_phone_bbox["left"]=(n_phone_bbox["left"] -nose_pos["x"])/face_height
-        n_phone_bbox["top"]=(n_phone_bbox["top"] -nose_pos["y"])/face_height
-        n_phone_bbox["bottom"]=(n_phone_bbox["bottom"] -nose_pos["y"])/face_height
+        n_phone_bbox["right"] =(nose_pos["x"]-n_phone_bbox["right"] )/face_height
+        n_phone_bbox["left"]  =(nose_pos["x"]-n_phone_bbox["left"]  )/face_height
+        n_phone_bbox["top"]   =(nose_pos["y"]-n_phone_bbox["top"]   )/face_height
+        n_phone_bbox["bottom"]=(nose_pos["y"]-n_phone_bbox["bottom"])/face_height
         if self.VERBOSE: print("type phone_bbox",type(n_phone_bbox["right"]))
 
         return n_phone_bbox
