@@ -121,7 +121,7 @@ if USE_SEGMENT is True and CLUSTER_TYPE == "Poses":
         WHERE += " AND ic.cluster_id IS NULL "
 
     # WHERE += " AND h.is_body = 1"
-    LIMIT = 500
+    LIMIT = 50000
 
 
     '''
@@ -208,6 +208,36 @@ class ImagesClusters(Base):
     image_id = Column(Integer, ForeignKey(Images.image_id, ondelete="CASCADE"), primary_key=True)
     cluster_id = Column(Integer, ForeignKey(f'{ClustersTable_name}.cluster_id', ondelete="CASCADE"))
 
+def get_cluster_medians():
+
+
+    ####################################
+    # this has a LIMIT on it, that I didn't see before
+    # hmm... wait, that just limits to 1000 clusters. I don't have that many
+    ####################################
+
+    # Create a SQLAlchemy select statement
+    select_query = select(Clusters.cluster_id, Clusters.cluster_median).limit(1000)
+
+    # Execute the query using your SQLAlchemy session
+    results = session.execute(select_query)
+    median_dict = {}
+
+    # Process the results as needed
+    for row in results:
+        print(row)
+        cluster_id, cluster_median = row
+        cluster_median = pickle.loads(cluster_median, encoding='latin1')
+        if sort.SUBSET_LANDMARKS:
+            # handles body lms subsets
+            subset_cluster_median = []
+            for i in range(len(cluster_median)):
+                if i in sort.SUBSET_LANDMARKS:
+                    subset_cluster_median.append(cluster_median[i])
+            cluster_median = subset_cluster_median
+        median_dict[cluster_id] = cluster_median
+    return median_dict 
+
 
 
 def selectSQL():
@@ -217,14 +247,18 @@ def selectSQL():
     resultsjson = ([dict(row) for row in result.mappings()])
     return(resultsjson)
 
-def make_subset_landmarks(df):
+def make_subset_landmarks(df,add_list=False):
     numerical_columns = [col for col in df.columns if col.startswith('dim_')]
     # set hand_columns = to the numerical_columns in sort.SUBSET_LANDMARKS
     if sort.SUBSET_LANDMARKS:
         subset_columns = [f'dim_{i}' for i in sort.SUBSET_LANDMARKS]
     else:
         subset_columns = numerical_columns
-    numerical_data = df[subset_columns]
+    if add_list:
+        numerical_data = df
+        numerical_data["obj_bbox_list"] = df[subset_columns].values.tolist()
+    else:
+        numerical_data = df[subset_columns]
     return numerical_data
 
 def kmeans_cluster(df, n_clusters=32):
@@ -379,48 +413,39 @@ def save_images_clusters_DB(df):
         session.rollback()
         print(f"Error occurred during data saving: {str(e)}")
 
-def get_cluster_medians():
-
-
-    ####################################
-    # this has a LIMIT on it, that I didn't see before
-    # hmm... wait, that just limits to 1000 clusters. I don't have that many
-    ####################################
-
-    # Create a SQLAlchemy select statement
-    select_query = select(Clusters.cluster_id, Clusters.cluster_median).limit(1000)
-
-    # Execute the query using your SQLAlchemy session
-    results = session.execute(select_query)
-    median_dict = {}
-
-    # Process the results as needed
-    for row in results:
-        print(row)
-        cluster_id, cluster_median = row
-        cluster_median = pickle.loads(cluster_median, encoding='latin1')
-        if sort.SUBSET_LANDMARKS:
-            # handles body lms subsets
-            subset_cluster_median = []
-            for i in range(len(cluster_median)):
-                if i in sort.SUBSET_LANDMARKS:
-                    subset_cluster_median.append(cluster_median[i])
-            cluster_median = subset_cluster_median
-        median_dict[cluster_id] = cluster_median
-    return median_dict 
-
 
 def assign_images_clusters_DB(df):
+    def prep_pose_clusters_enc(enc1):
+        # print(enc1)  
+        enc1 = np.array(enc1)
+        this_dist_dict = {}
+        for cluster_id in MEDIAN_DICT:
+            enc2 = MEDIAN_DICT[cluster_id]
+            this_dist_dict[cluster_id] = np.linalg.norm(enc1 - enc2, axis=0)
+        
+        cluster_id = min(this_dist_dict, key=this_dist_dict.get)
+        # print(cluster_id)
+        return cluster_id
+
     #assign clusters to each image's encodings
-    print("assigning images to clusters, df at start",df)
-    df_subset_landmarks = make_subset_landmarks(df)
-    print("assigning images to clusters, df after subset",df)
-    median_dict = get_cluster_medians()
-    print(median_dict)
+    # print("assigning images to clusters, df at start",df)
+    df_subset_landmarks = make_subset_landmarks(df, add_list=True)
+    # print("assigning images to clusters, df after subset",df_subset_landmarks)
+    # print("obj_bbox_list column", df_subset_landmarks["obj_bbox_list"].head())
+    # print(MEDIAN_DICT)
 
-    batch_size = 100
-    batch_counter = 0
+    # batch_size = 100
+    # batch_counter = 0
 
+
+    df_subset_landmarks["cluster_id"] = df_subset_landmarks["obj_bbox_list"].apply(prep_pose_clusters_enc)
+    print("df_subset_landmarks clustered after apply")
+    print(df_subset_landmarks[["image_id", "cluster_id"]].head())
+
+    save_images_clusters_DB(df_subset_landmarks)
+
+
+    return
     for index, row in df.iterrows():
         image_id = row['image_id']        
         if CLUSTER_TYPE == "Poses":
@@ -452,7 +477,7 @@ def assign_images_clusters_DB(df):
         # If the batch counter reaches the batch size, commit the session
         if batch_counter % batch_size == 0:
             try:
-                session.commit()
+                # session.commit()
                 print(f"Batch committed successfully. Processed {batch_counter} rows so far.")
             except IntegrityError as e:
                 session.rollback()
@@ -460,7 +485,7 @@ def assign_images_clusters_DB(df):
 
     # Commit any remaining records after the loop
     try:
-        session.commit()
+        # session.commit()
         print("Final batch committed successfully.")
     except IntegrityError as e:
         session.rollback()
@@ -504,6 +529,9 @@ def prepare_df(df):
         df_list_to_cols(df, 'face_encodings68')
 
     return df
+
+# defining globally 
+MEDIAN_DICT = get_cluster_medians()
 
 def main():
     # create_my_engine(db)
@@ -562,6 +590,7 @@ def main():
         save_images_clusters_DB(enc_data)
         print("saved segment to clusters")
     elif MODE == 1:
+
         assign_images_clusters_DB(enc_data)
         print("assigned and saved segment to clusters")
 

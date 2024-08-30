@@ -103,8 +103,8 @@ class SortPose:
         # adding pointer finger tip
         # self.SUBSET_LANDMARKS.extend(self.FINGER_LMS) # this should match what is in Clustering
         # only use wrist and finger
-        # self.SUBSET_LANDMARKS = self.HAND_LMS
-        self.SUBSET_LANDMARKS = self.choose_hand(self.HAND_LMS,"right")
+        self.SUBSET_LANDMARKS = self.HAND_LMS
+        # self.SUBSET_LANDMARKS = self.choose_hand(self.HAND_LMS,"right")
         
 
         self.OBJ_CLS_ID = OBJ_CLS_ID
