@@ -43,7 +43,7 @@ class SortPose:
         self.HSVMULTIPLIER = 3
         self.NORM_BODY_MULTIPLIER = 4
         self.BRUTEFORCE = False
-        self.CUTOFF = 1500 # DOES factor if ONE_SHOT
+        self.CUTOFF = 15 # DOES factor if ONE_SHOT
 
         self.SORT_TYPE = SORT_TYPE
         if self.SORT_TYPE == "128ds":
@@ -797,14 +797,14 @@ class SortPose:
                 # calculate boder size by comparing scaled image dimensions to EXPAND_SIZE
                 # nose as center
                 # set top, bottom, left, right
-                top_border = int(self.EXPAND_SIZE[1]/2 - resize_nose[1]-self.EXPAND_SIZE[1]*75)
+                top_border = int(self.EXPAND_SIZE[1]/2 - resize_nose[1])
                 bottom_border = int(self.EXPAND_SIZE[1]/2 - (resize_dims[1]-resize_nose[1]))
                 left_border = int(self.EXPAND_SIZE[0]/2 - resize_nose[0])
                 right_border = int(self.EXPAND_SIZE[0]/2 - (resize_dims[0]-resize_nose[0]))
 
-                # print([top_border, bottom_border, left_border, right_border])
-                # print([top_border, resize_dims[0]/2-right_border, resize_dims[1]/2-bottom_border, left_border])
-                # print([top_border, self.EXPAND_SIZE[0]/2-right_border, self.EXPAND_SIZE[1]/2-bottom_border, left_border])
+                print([top_border, bottom_border, left_border, right_border])
+                print([top_border, resize_dims[0]/2-right_border, resize_dims[1]/2-bottom_border, left_border])
+                print([top_border, self.EXPAND_SIZE[0]/2-right_border, self.EXPAND_SIZE[1]/2-bottom_border, left_border])
 
                 # expand image with borders
                 if top_border >= 0 and right_border >= 0 and self.EXPAND_SIZE[0]/2-right_border >= 0 and bottom_border >= 0 and self.EXPAND_SIZE [1]/2-bottom_border>= 0 and left_border>= 0:

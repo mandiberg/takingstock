@@ -215,7 +215,7 @@ elif IS_SEGONLY and io.platform == "darwin":
     # WHERE += " AND e.encoding_id > 2612275"
 
     # WHERE = "s.site_name_id != 1"
-    LIMIT = 600000
+    LIMIT = 600
 
     # TEMP TK TESTING
     # WHERE += " AND s.site_name_id = 8"
@@ -1103,7 +1103,7 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
     imgfileprefix = f"X{str(sort.XLOW)}-{str(sort.XHIGH)}_Y{str(sort.YLOW)}-{str(sort.YHIGH)}_Z{str(sort.ZLOW)}-{str(sort.ZHIGH)}_ct{str(df_sorted.size)}"
     print(imgfileprefix)
     good = 0
-    img_list = []
+    # img_list = []
     metas_list = []
     description = None
     cropped_image = np.array([-10])
@@ -1164,7 +1164,8 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
 
 
                 if cropped_image is not None:
-                    img_list.append((outpath, cropped_image))
+                    cv2.imwrite(outpath, cropped_image)
+                    # img_list.append((outpath, cropped_image))
                     # this is done in compare function
                     # sort.counter_dict["good_count"] += 1
                     good += 1
@@ -1185,7 +1186,8 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
                     if itter and good > itter:
                         print("breaking after this many itters,", str(good), str(itter))
                         continue
-                    sort.counter_dict["last_image"] = img_list[-1][1]  #last pair in list, second item in pair
+                    # sort.counter_dict["last_image"] = img_list[-1][1]  #last pair in list, second item in pair
+                    sort.counter_dict["last_image"] = cropped_image  #last pair in list, second item in pair
                 else:
                     print("cropped_image is None")
             else:
@@ -1199,7 +1201,7 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
             print(str(e))
         print("metas_list")
         print(metas_list)
-    return img_list
+    return 
     
 def write_images(img_list):
     for path_img in img_list:
@@ -1302,9 +1304,9 @@ def process_linear(start_img_name, df_segment, cluster_no, sort):
         # df_sorted = sort_by_face_dist(df_enc, df_128_enc, df_33_lms)
 
         # test to see if they make good faces
-        img_list = linear_test_df(df_sorted,df_segment,cluster_no)
-        write_images(img_list)
-        write_images(sort.not_make_face)
+        linear_test_df(df_sorted,df_segment,cluster_no)
+        # write_images(img_list)
+        # write_images(sort.not_make_face)
         print_counters()
 
 
