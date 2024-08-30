@@ -121,7 +121,7 @@ if USE_SEGMENT is True and CLUSTER_TYPE == "Poses":
         WHERE += " AND ic.cluster_id IS NULL "
 
     # WHERE += " AND h.is_body = 1"
-    LIMIT = 50000
+    LIMIT = 5000000
 
 
     '''
@@ -430,13 +430,6 @@ def assign_images_clusters_DB(df):
     #assign clusters to each image's encodings
     # print("assigning images to clusters, df at start",df)
     df_subset_landmarks = make_subset_landmarks(df, add_list=True)
-    # print("assigning images to clusters, df after subset",df_subset_landmarks)
-    # print("obj_bbox_list column", df_subset_landmarks["obj_bbox_list"].head())
-    # print(MEDIAN_DICT)
-
-    # batch_size = 100
-    # batch_counter = 0
-
 
     df_subset_landmarks["cluster_id"] = df_subset_landmarks["obj_bbox_list"].apply(prep_pose_clusters_enc)
     print("df_subset_landmarks clustered after apply")

@@ -63,8 +63,8 @@ DROP_LOW_VIS = False
 N_CLUSTERS = None # declared here, but set in the SQL query below
 
 # this is for IS_ONE_CLUSTER to only run on a specific CLUSTER_NO
-IS_ONE_CLUSTER = False
-CLUSTER_NO = 10
+IS_ONE_CLUSTER = True
+CLUSTER_NO = 8
 
 # cut the kids
 NO_KIDS = True
@@ -116,7 +116,7 @@ MOUTH_GAP = 0
 OBJ_CLS_ID = 67
 DO_OBJ_SORT = True
 OBJ_DONT_SUBSELECT = False # False means select for OBJ. this is a flag for selecting a specific object type when not sorting on obj
-PHONE_BBOX_LIMITS = [] # this is an attempt to control the BBOX placement. I don't think it is going to work, but with non-zero it will make a bigger selection. Fix this hack TK. 
+PHONE_BBOX_LIMITS = [1] # this is an attempt to control the BBOX placement. I don't think it is going to work, but with non-zero it will make a bigger selection. Fix this hack TK. 
 
 ONE_SHOT = True # take all files, based off the very first sort order.
 JUMP_SHOT = True # jump to random file if can't find a run (I don't think this applies to planar?)
@@ -215,7 +215,7 @@ elif IS_SEGONLY and io.platform == "darwin":
     # WHERE += " AND e.encoding_id > 2612275"
 
     # WHERE = "s.site_name_id != 1"
-    LIMIT = 6000
+    LIMIT = 600000
 
     # TEMP TK TESTING
     # WHERE += " AND s.site_name_id = 8"
@@ -284,7 +284,7 @@ motion = {
     "simple": False,
 }
 
-EXPAND = False
+EXPAND = True
 # face_height_output is how large each face will be. default is 750
 face_height_output = 1000
 # face_height_output = 256
@@ -298,8 +298,8 @@ face_height_output = 1000
 # image_edge_multiplier = [1.4,2.6,1.9,2.6] # wider for hands
 # image_edge_multiplier = [3,5,3,5] # megawide for testing
 # image_edge_multiplier = [1.4,3.3,3,3.3] # widerest 16:10 for hands -- actual 2:3
-image_edge_multiplier = [1.3,3.4,2.9,3.4] # slightly less wide 16:10 for hands < Aug 27
-# image_edge_multiplier = [1.3,2,2.9,2] # portrait crop for paris photo images < Aug 30
+# image_edge_multiplier = [1.3,3.4,2.9,3.4] # slightly less wide 16:10 for hands < Aug 27
+image_edge_multiplier = [1.3,2,2.9,2] # portrait crop for paris photo images < Aug 30
 # image_edge_multiplier = [1.6,3.84,3.2,3.84] # wiiiiiiiidest 16:10 for hands
 # image_edge_multiplier = [1.45,3.84,2.87,3.84] # wiiiiiiiidest 16:9 for hands
 # image_edge_multiplier = [1.2,2.3,1.7,2.3] # medium for hands
@@ -313,7 +313,7 @@ start_img_name = "median"
 start_site_image_id = None
 
 # start_img_name = "start_image_id"
-# start_site_image_id = 126993730
+# start_site_image_id = 56159379
 
 # 9774337 screaming hands to head 10
 # 10528975 phone right hand pose 4

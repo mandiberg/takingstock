@@ -43,7 +43,7 @@ class SortPose:
         self.HSVMULTIPLIER = 3
         self.NORM_BODY_MULTIPLIER = 4
         self.BRUTEFORCE = False
-        self.CUTOFF = 100 # DOES factor if ONE_SHOT
+        self.CUTOFF = 1500 # DOES factor if ONE_SHOT
 
         self.SORT_TYPE = SORT_TYPE
         if self.SORT_TYPE == "128ds":
@@ -78,7 +78,7 @@ class SortPose:
         # takes base image size and multiplies by avg of multiplier
         self.output_dims = (int(face_height_output*(image_edge_multiplier[1]+image_edge_multiplier[3])/2),int(face_height_output*(image_edge_multiplier[0]+image_edge_multiplier[2])/2))
         self.EXPAND = EXPAND
-        self.EXPAND_SIZE = (2000,2000)
+        self.EXPAND_SIZE = (10000,10000)
         # self.EXPAND_SIZE = (4000,3000)
         self.BGCOLOR = [255,255,255]
         # self.BGCOLOR = [0,0,0]
@@ -104,7 +104,7 @@ class SortPose:
         # self.SUBSET_LANDMARKS.extend(self.FINGER_LMS) # this should match what is in Clustering
         # only use wrist and finger
         self.SUBSET_LANDMARKS = self.HAND_LMS
-        # self.SUBSET_LANDMARKS = self.choose_hand(self.HAND_LMS,"right")
+        self.SUBSET_LANDMARKS = self.choose_hand(self.HAND_LMS,"right")
         
 
         self.OBJ_CLS_ID = OBJ_CLS_ID
@@ -681,6 +681,9 @@ class SortPose:
         print("nose_2d",p1)
         print("face_height",self.face_height)
 
+        if not self.image_edge_multiplier[1] == self.image_edge_multiplier[3]:
+            print("self.image_edge_multiplier left and right are not symmetrical breaking out", self.image_edge_multiplier[1], self.image_edge_multiplier[3])
+            return
         topcrop = int(p1[1]-self.face_height*self.image_edge_multiplier[0])
         rightcrop = int(p1[0]+self.face_height*self.image_edge_multiplier[1])
         botcrop = int(p1[1]+self.face_height*self.image_edge_multiplier[2])
@@ -770,24 +773,31 @@ class SortPose:
 
             # scale image to match face heights
             resize = self.face_height_output/self.face_height
+            print("expand_image resize")
             if resize < 15:
                 print("expand_image [-] resize", str(resize))
                 # image.shape is height[0] and width[1]
                 resize_dims = (int(self.image.shape[1]*resize),int(self.image.shape[0]*resize))
                 # resize_nose.shape is  width[0] and height[1]
                 resize_nose = (int(self.nose_2d[0]*resize),int(self.nose_2d[1]*resize))
-                # print("resize_dims")
-                # print(resize_dims)
-                # print("resize_nose")
-                # print(resize_nose)
+                # print("resize_dims", resize_dims)
+                # print("resize_nose", resize_nose)
                 # this wants width and height
-                resized_image = cv2.resize(self.image, resize_dims, interpolation=cv2.INTER_LINEAR)
+
+                # OLD WAY
+                # resized_image = cv2.resize(self.image, resize_dims, interpolation=cv2.INTER_LINEAR)
+
+                # NEW WAY
+                upsized_image = self.upscale_model.upsample(self.image)
+                resized_image = cv2.resize(upsized_image, (resize_dims))
+
+
                 # self.preview_img(resized_image)
 
                 # calculate boder size by comparing scaled image dimensions to EXPAND_SIZE
                 # nose as center
                 # set top, bottom, left, right
-                top_border = int(self.EXPAND_SIZE[1]/2 - resize_nose[1])
+                top_border = int(self.EXPAND_SIZE[1]/2 - resize_nose[1]-self.EXPAND_SIZE[1]*75)
                 bottom_border = int(self.EXPAND_SIZE[1]/2 - (resize_dims[1]-resize_nose[1]))
                 left_border = int(self.EXPAND_SIZE[0]/2 - resize_nose[0])
                 right_border = int(self.EXPAND_SIZE[0]/2 - (resize_dims[0]-resize_nose[0]))
