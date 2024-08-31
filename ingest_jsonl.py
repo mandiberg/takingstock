@@ -78,11 +78,12 @@ NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 18	afripics
 '''
 
-THIS_SITE = 6
+THIS_SITE = 9
 
 SEARCH_KEYS_FOR_LOC = True
 VERBOSE = False
 TIMER = False
+LOC_ONLY = True
 
 # where key, etc csvs stored
 INGEST_ROOT = "/Users/michaelmandiberg/Documents/GitHub/facemap/utilities/keys/"
@@ -94,6 +95,7 @@ if THIS_SITE == 1:
     JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache_noNoNOs_noSilver.jsonl")
 elif THIS_SITE == 6:
     # done -- only 1488334?
+    # no keys so no loc info
     io.db["name"] = "stock"
     INGEST_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/unsplashCSVs"
     JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache.jsonl")
@@ -256,8 +258,9 @@ header_list = PEXELS_HEADERS
 
 # get all inserted rows for this site
 with engine.connect() as conn:
-    select_stmt = select(Images.image_id, Images.site_image_id).where(
-        (Images.site_name_id == THIS_SITE) 
+
+    select_stmt = select(Images.image_id, Images.site_image_id, Images.location_id).where(
+        (Images.site_name_id == THIS_SITE)
     )
     # select all the rows
     results = conn.execute(select_stmt).fetchall()
@@ -265,7 +268,10 @@ with engine.connect() as conn:
     site_image_id_dict = {row[1]: row[0] for row in results}
     # make a set of all the site_image_ids
     # already_ingested = set([row[1] for row in results])
-    already_ingested = set(site_image_id_dict.keys())
+    if LOC_ONLY:
+        already_ingested = set([row[1] for row in results if row[2] is not None])
+    else:
+        already_ingested = set(site_image_id_dict.keys())
 print("already_ingested", len(already_ingested))
 if already_ingested: print("site_image_id_dict first", site_image_id_dict[next(iter(site_image_id_dict))])
 
@@ -576,7 +582,7 @@ def unlock_key_plurals_etc(site_id,key, this_dict):
                 # print("could not unlock:", value_list, "not saving")
                 pass # not saving
             else:
-                print("could not unlock:", value_list, "and saving")
+                if not LOC_ONLY: print("could not unlock:", value_list, "and saving")
                 write_csv(CSV_NOKEYS_PATH,value_list)
         # print(value_list)
         return None
@@ -822,6 +828,10 @@ def get_gender_age_row(gender_string, age_string, description, keys_list, site_i
     global age_details_dict
     global skip_keys
 
+    if LOC_ONLY:
+        # skipping if reprocessing for location only
+        return None, None, None
+    
     def try_gender_age_key(gender, age, age_detail, this_string, extra_dict=False):
         global gender_dict
         global age_dict
@@ -1143,7 +1153,7 @@ def structure_row_istock(row, ind, keys_list):
     if not country or country == "":
         #tk search keys
         # get eth from keywords, using keys_list and eth_keys_dict
-        print("UNLOCKING SEARCH_KEYS_FOR_LOC <><><><><><><><>")
+        if not LOC_ONLY: print("UNLOCKING SEARCH_KEYS_FOR_LOC <><><><><><><><>")
         # absence of search string ("None") triggers search_keys function
         loc_no_list = get_key_no_dictonly(None, keys_list, locations_dict, True)
         print(loc_no_list)
@@ -1151,7 +1161,7 @@ def structure_row_istock(row, ind, keys_list):
         # if not loc_no_list:
         #     loc_no_list = get_key_no_dictonly(None, keys_list, locations_dict_alt, True)
         #     if loc_no_list: 
-        print(f"SEARCH_KEYS_FOR_LOC found for {country_key}")
+        if country_key: print(f"SEARCH_KEYS_FOR_LOC found for location_id {country_key}")
     else:
         country_key = None
 
@@ -1192,7 +1202,7 @@ def structure_row_shutterstock(row, ind, keys_list):
     elif not country or country == "":
         #tk search keys
         # get eth from keywords, using keys_list and eth_keys_dict
-        print("UNLOCKING SEARCH_KEYS_FOR_LOC <><><><><><><><>")
+        if not LOC_ONLY: print("UNLOCKING SEARCH_KEYS_FOR_LOC <><><><><><><><>")
         # absence of search string ("None") triggers search_keys function
         loc_no_list = get_key_no_dictonly(None, keys_list, locations_dict, True)
         print(loc_no_list)
@@ -1200,7 +1210,7 @@ def structure_row_shutterstock(row, ind, keys_list):
         # if not loc_no_list:
         #     loc_no_list = get_key_no_dictonly(None, keys_list, locations_dict_alt, True)
         #     if loc_no_list: 
-        print(f"SEARCH_KEYS_FOR_LOC found for {country_key}")
+        if country_key: print(f"SEARCH_KEYS_FOR_LOC found for {country_key}")
     else:
         country_key = None
 
@@ -1322,15 +1332,15 @@ def itter_location(country, keys_list):
     elif not country or country == "":
         #tk search keys
         # get eth from keywords, using keys_list and eth_keys_dict
-        print("UNLOCKING SEARCH_KEYS_FOR_LOC <><><><><><><><>")
+        if not LOC_ONLY: print("UNLOCKING SEARCH_KEYS_FOR_LOC <><><><><><><><>")
         # absence of search string ("None") triggers search_keys function
         loc_no_list = get_key_no_dictonly(None, keys_list, locations_dict, True)
-        print(loc_no_list)
+        if not LOC_ONLY: print(loc_no_list)
         if not loc_no_list:
             loc_no_list = get_key_no_dictonly(None, keys_list, locations_dict_alt, True)
         #     if loc_no_list: 
         country_key = get_mode(loc_no_list)
-        print(f"SEARCH_KEYS_FOR_LOC found for {country_key}")
+        if country_key: print(f"SEARCH_KEYS_FOR_LOC found for {country_key}")
     if country_key == 999999999:
         return(None)
     return country_key
@@ -1648,7 +1658,6 @@ def structure_row_alamy(item, ind, keys_list):
         formatted_date = parsed_date.strftime('%Y-%m-%d') if parsed_date else None
     else:
         formatted_date = None
-
     image_row = {
         "site_image_id": item["id"],
         "site_name_id": THIS_SITE,
@@ -1778,6 +1787,7 @@ def ingest_json():
     # column_eth = 7 #ethnicity
 
     search_desc_for_keys = False
+    if LOC_ONLY: search_desc_for_keys = True
     
 
     # with open(JSONL_IN_PATH) as file_obj:
@@ -1789,7 +1799,9 @@ def ingest_json():
         start_counter = get_counter()
         print("start_counter: ", start_counter)
         # start_counter = 358430 #temporary for testing, while adobe is ongoing
+        if LOC_ONLY: start_counter = 0
         counter = 0
+        new_loc_counter = 0
         ind = 0
         shoot_location = None
 
@@ -1804,6 +1816,11 @@ def ingest_json():
                 counter += 1
                 continue
             
+            if LOC_ONLY:
+                if item.get("id", None) in already_ingested:
+                    counter += 1
+                    # print("already ingested", item.get("id", None))
+                    continue
             key_nos_list = []
             keys_list = []
             if VERBOSE: print("getting keys from item[keywords]", item["keywords"])
@@ -1889,53 +1906,54 @@ def ingest_json():
 
             
                 # >> need to revisit this for row/item <<
-            # this isn't working. not catching nulls. 
-            if not pd.isnull(ethnicity) and len(ethnicity)>0:
-                print("have eth", ethnicity.lower(), "type is", type(ethnicity.lower()))
-                if VERBOSE: print("len of eth_dict", len(eth_dict))
-                eth_no_list = get_key_no_dictonly(ethnicity.lower(), keys_list, eth_dict)
-                if VERBOSE: print("eth_no_list after get_key_no_dictonly", eth_no_list)
-            else:
-                # get eth from keywords, using keys_list and eth_keys_dict
-                print("UNLOCKING KEYS FOR eth_keys_dict <><><><><><><><>")
-                # absence of search string (ie "None") triggers search_keys function
-                eth_no_list = get_key_no_dictonly(None, keys_list, eth_keys_dict)
-                print(eth_no_list)
-                if not eth_no_list:
-                    eth_no_list = get_key_no_dictonly(None, keys_list, eth_all_dict, True)
-                    if eth_no_list: 
-                        print(f"_secondary found for {eth_no_list}")
-                    elif "descent" in keys_list:
-                        print(f"descent in keys_list {keys_list}")
+            # skipping ethnicity for LOC_ONLY reprocessing. 
+            if not LOC_ONLY:
+                if not pd.isnull(ethnicity) and len(ethnicity)>0:
+                    print("have eth", ethnicity.lower(), "type is", type(ethnicity.lower()))
+                    if VERBOSE: print("len of eth_dict", len(eth_dict))
+                    eth_no_list = get_key_no_dictonly(ethnicity.lower(), keys_list, eth_dict)
+                    if VERBOSE: print("eth_no_list after get_key_no_dictonly", eth_no_list)
+                else:
+                    # get eth from keywords, using keys_list and eth_keys_dict
+                    print("UNLOCKING KEYS FOR eth_keys_dict <><><><><><><><>")
+                    # absence of search string (ie "None") triggers search_keys function
+                    eth_no_list = get_key_no_dictonly(None, keys_list, eth_keys_dict)
+                    print(eth_no_list)
+                    if not eth_no_list:
+                        eth_no_list = get_key_no_dictonly(None, keys_list, eth_all_dict, True)
+                        if eth_no_list: 
+                            print(f"_secondary found for {eth_no_list}")
+                        elif "descent" in keys_list:
+                            print(f"descent in keys_list {keys_list}")
 
-            if TIMER: 
-                print("time to description and ethnicity", time.time()-start_timer)
-                start_timer = time.time()
+                if TIMER: 
+                    print("time to description and ethnicity", time.time()-start_timer)
+                    start_timer = time.time()
 
-            # look for multi_dict, and add to eth_no_list
-            if not 6 in eth_no_list and image_row['description'] and THIS_SITE != 10:
-                is_multi = False
-                key_soup = " ".join(keys_list)+" "+image_row['description']
+                # look for multi_dict, and add to eth_no_list
+                if not 6 in eth_no_list and image_row['description'] and THIS_SITE != 10:
+                    is_multi = False
+                    key_soup = " ".join(keys_list)+" "+image_row['description']
 
-                for multi in multi_dict:
-                    if multi in key_soup:
-                        print("multi found", multi)
-                        is_multi = True
-                if is_multi: eth_no_list.append(6)
+                    for multi in multi_dict:
+                        if multi in key_soup:
+                            print("multi found", multi)
+                            is_multi = True
+                    if is_multi: eth_no_list.append(6)
 
-            if 6 in eth_no_list: 
-                multi_eth_no_list = get_key_no_dictonly(None, keys_list, eth_keys_dict)
-                print("multi_eth_no_list", multi_eth_no_list)
-                #if there are any new values in multi_eth_no_list, add them to eth_no_list
-                for eth in multi_eth_no_list:
-                    if eth not in eth_no_list:
-                        eth_no_list.append(eth)
-            print("finally, eth_no_list", eth_no_list)
+                if 6 in eth_no_list: 
+                    multi_eth_no_list = get_key_no_dictonly(None, keys_list, eth_keys_dict)
+                    print("multi_eth_no_list", multi_eth_no_list)
+                    #if there are any new values in multi_eth_no_list, add them to eth_no_list
+                    for eth in multi_eth_no_list:
+                        if eth not in eth_no_list:
+                            eth_no_list.append(eth)
+                print("finally, eth_no_list", eth_no_list)
 
 
-            if TIMER: 
-                print("time to multi ethnicity", time.time()-start_timer)
-                start_timer = time.time()
+                if TIMER: 
+                    print("time to multi ethnicity", time.time()-start_timer)
+                    start_timer = time.time()
 
 
 
@@ -1958,7 +1976,8 @@ def ingest_json():
                     insert_image_row = True
                     # add to already_ingested
                     already_ingested.add(image_row['site_image_id'])
-                    print(len(already_ingested), " total ingested")
+                    # if len(already_ingested) % 100 == 0:
+                    #     print(len(already_ingested), " total ingested")
 
 
 
@@ -1973,7 +1992,7 @@ def ingest_json():
                         print("time to check if already exists", time.time()-start_timer)
                         start_timer = time.time()
 
-                    if insert_image_row:
+                    if insert_image_row and not LOC_ONLY:
                         insert_stmt = insert(Images).values(image_row)
                         if VERBOSE: print(str(insert_stmt))
                         dialect = mysql.dialect()
@@ -2029,7 +2048,18 @@ def ingest_json():
                                 print(result.lastrowid, "row:", row)
                                 print(" ")
 
-                        
+                    elif LOC_ONLY:
+                        # add any new loc_no_list values
+                        location_id = image_row['location_id']
+                        image_id = site_image_id_dict.get(image_row['site_image_id'], None)
+                        if location_id and image_id:
+                            print(' --- >>>> adding new LOCATION:', new_loc_counter, image_id, location_id)
+                            new_loc_counter += 1
+                            with engine.connect() as conn:
+                                # Perform the update using SQLAlchemy Core
+                                update_stmt = update(Images).where(Images.c.image_id == image_id).values(location_id=location_id)
+                                execute_query_with_retry(conn, update_stmt)
+
                     else:
                         # if it already exists, add any new eth_no_list values
                         print('Row already exists:', ind, already_image_id)
@@ -2078,6 +2108,7 @@ def ingest_json():
                 session.close()
 
             if counter % 1000 == 0:
+                print(counter, " images ingested")
                 save_counter = [counter]
                 write_csv(CSV_COUNTOUT_PATH, save_counter)
             if TIMER: 
