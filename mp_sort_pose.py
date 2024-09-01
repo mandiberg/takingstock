@@ -1942,10 +1942,11 @@ class SortPose:
             upsert=True              # insert if not exists
         )
         if result.upserted_id:
-            print("Inserted new document with id:", result.upserted_id)
+            pass
+            # print("Inserted new document with id:", result.upserted_id)
         else:
             print("Updated existing document")
-        print("Time to insert:", time.time()-start)
+        # print("Time to insert:", time.time()-start)
         return
 
     def return_bbox(self, model, image, OBJ_CLS_LIST):

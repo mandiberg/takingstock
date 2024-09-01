@@ -30,7 +30,7 @@ NOSE_ID=0
 
 
 Base = declarative_base()
-VERBOSE = True
+VERBOSE = False
 SKIP_EXISTING = False # Skips images with a normed bbox but that have Images.h
 IS_SSD = True
 
@@ -94,7 +94,7 @@ sort = SortPose(motion, face_height_output, image_edge_multiplier_sm,EXPAND, ONE
 # Create a session
 session = scoped_session(sessionmaker(bind=engine))
 
-LIMIT= 10
+LIMIT= 2000000
 # Initialize the counter
 counter = 0
 USE_OBJ = 0
@@ -227,7 +227,8 @@ def get_face_height_lms(target_image_id,bbox):
     results = face_landmarks_collection.find_one({"image_id": target_image_id})
     if results:
         # set the face height input properties
-        sort.bbox = io.unstring_json(bbox)
+        if type(bbox)==str: bbox = io.unstring_json(bbox)
+        sort.bbox = bbox
         sort.faceLms = pickle.loads(results['face_landmarks'])
         # set the face height
         sort.get_faceheight_data()
@@ -275,9 +276,12 @@ def get_phone_bbox(target_image_id):
     return phone_bbox
 
 def calc_nlm(image_id_to_shape, lock, session):
+    if VERBOSE: print("calc_nlm image_id_to_shape",image_id_to_shape)
     # start a timer
     start = time.time()
     target_image_id = list(image_id_to_shape.keys())[0]
+
+    # TK this needs to be ported to calc body code
     height,width, bbox = image_id_to_shape[target_image_id]
     sort.h = height
     sort.w = width
@@ -289,7 +293,7 @@ def calc_nlm(image_id_to_shape, lock, session):
     start = time.time()
 
     if height and width:
-        print(target_image_id, "have height,width already",height,width)
+        if VERBOSE: print(target_image_id, "have height,width already",height,width)
     else:
         height,width=get_shape(target_image_id)
         if not height or not width: 
@@ -309,15 +313,25 @@ def calc_nlm(image_id_to_shape, lock, session):
 
         ### NORMALIZE LANDMARKS ###
         nose_pixel_pos = sort.set_nose_pixel_pos(body_landmarks,[height,width])
-        print("nose_pixel_pos",nose_pixel_pos)
+        if VERBOSE: print("nose_pixel_pos",nose_pixel_pos)
         n_landmarks=sort.normalize_landmarks(body_landmarks,nose_pixel_pos,face_height,[height,width])
         
         if VERBOSE: print("Time to get norm lms:", time.time()-start)
         start = time.time()
 
         if VERBOSE: print("about to insert n_landmarks",n_landmarks)
-        return
+        
+        # store the normalized landmarks in mongo
         sort.insert_n_landmarks(bboxnormed_collection, target_image_id,n_landmarks)
+        # update encodings and segment tables to reflect that the landmarks have been normalized
+        session.query(Encodings).filter(Encodings.image_id == target_image_id).update({
+                Encodings.mongo_body_landmarks_norm: 1
+            }, synchronize_session=False)
+        session.query(SegmentTable).filter(SegmentTable.image_id == target_image_id).update({
+                SegmentTable.mongo_body_landmarks_norm: 1
+            }, synchronize_session=False)
+        session.commit()
+
         if VERBOSE: print("did insert_n_landmarks, going to get phone bbox")
         if VERBOSE: print("Time to get insert:", time.time()-start)
         start = time.time()
@@ -371,11 +385,12 @@ else:
         outerjoin(SegmentTable,Images.image_id == SegmentTable.image_id).\
         filter(SegmentTable.bbox != None).\
         filter(SegmentTable.mongo_body_landmarks == 1).\
-        filter(SegmentTable.image_id >= 9942966).\
+        filter(SegmentTable.mongo_body_landmarks_norm.is_(None)).\
         limit(LIMIT)
 
 # put this back in at future date if needed
         # filter(Images.h == None).\
+        # filter(SegmentTable.image_id >= 9942966).\
 
 if SKIP_EXISTING:
     # skips the ones that have obj bbox which have already been done
