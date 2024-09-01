@@ -210,12 +210,13 @@ elif IS_SEGONLY and io.platform == "darwin":
     # FROM += " JOIN ImagesKeywords ik ON s.image_id = ik.image_id JOIN Keywords k ON ik.keyword_id = k.keyword_id "
     # WHERE += " AND k.keyword_text LIKE 'surpris%' "
 
+    WHERE += " AND s.site_name_id = 9 "
     # # testing mongo
     # FROM += " JOIN Encodings e ON s.image_id = e.image_id "
     # WHERE += " AND e.encoding_id > 2612275"
 
     # WHERE = "s.site_name_id != 1"
-    LIMIT = 600
+    LIMIT = 600000
 
     # TEMP TK TESTING
     # WHERE += " AND s.site_name_id = 8"
@@ -1015,10 +1016,11 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
                 if VERBOSE: print("head hits the top of the image, skipping -------------------> bailout !!!!!!!!!!!!!!!!!")
                 do_inpaint = False
                 bailout=True
-            elif row["site_name_id"] == 2 and extension_pixels["bottom"]>0: 
-                if VERBOSE: print("shutter at the bottom, skipping -------------------> bailout !!!!!!!!!!!!!!!!!")
-                do_inpaint = False
-                bailout=True
+            # no longer skipping because I trim above
+            # elif row["site_name_id"] == 2 and extension_pixels["bottom"]>0: 
+            #     if VERBOSE: print("shutter at the bottom, skipping -------------------> bailout !!!!!!!!!!!!!!!!!")
+            #     do_inpaint = False
+            #     bailout=True
             elif is_left_shoulder or is_right_shoulder: 
                 # if the selfie bbox is touching the R/L side of the image
                 # but doesn't reach the bottom, it means there is a shoulder in the image
@@ -1098,6 +1100,13 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
 
         return cropped_image, face_diff
 
+    def trim_bottom(img, site_name_id):
+        print("trimming bottom")
+        if site_name_id == 2: trim = 100
+        elif site_name_id == 9: trim = 90
+        img = img[0:img.shape[0]-trim, 0:img.shape[1]]
+        return img
+    
     #itter is a cap, to stop the process after a certain number of rounds
     print('linear_test_df writing images')
     imgfileprefix = f"X{str(sort.XLOW)}-{str(sort.XHIGH)}_Y{str(sort.YLOW)}-{str(sort.YHIGH)}_Z{str(sort.ZLOW)}-{str(sort.ZHIGH)}_ct{str(df_sorted.size)}"
@@ -1122,8 +1131,11 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
             # print(outpath, open_path)
             try:
                 img = cv2.imread(open_path)
+                if row["site_name_id"] in [2,9]: 
+                    if VERBOSE: print("shutter alamy trimming at the bottom")
+                    img = trim_bottom(img, row["site_name_id"])
             except:
-                print("couldn't read image")
+                print("trim failed")
                 continue
             if row['dist'] < sort.MAXD:
                 # compare_images to make sure they are face and not the same
