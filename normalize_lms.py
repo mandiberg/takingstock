@@ -30,7 +30,7 @@ NOSE_ID=0
 
 
 Base = declarative_base()
-VERBOSE = False
+VERBOSE = True
 SKIP_EXISTING = False # Skips images with a normed bbox but that have Images.h
 IS_SSD = True
 
@@ -42,6 +42,7 @@ mongo_client = pymongo.MongoClient(io.dbmongo['host'])
 mongo_db = mongo_client[io.dbmongo['name']]
 mongo_collection = mongo_db[io.dbmongo['collection']]
 
+face_landmarks_collection = mongo_db["encodings"]
 bboxnormed_collection = mongo_db["body_landmarks_norm"]
 # n_phonebbox_collection= mongo_db["bboxnormed_phone"]
 
@@ -221,7 +222,20 @@ def unpickle_array(pickled_array):
     else:
         return None
 
-def get_face_height(target_image_id):
+def get_face_height_lms(target_image_id,bbox):
+    # select target image from mongo mongo_collection
+    results = face_landmarks_collection.find_one({"image_id": target_image_id})
+    if results:
+        # set the face height input properties
+        sort.bbox = io.unstring_json(bbox)
+        sort.faceLms = pickle.loads(results['face_landmarks'])
+        # set the face height
+        sort.get_faceheight_data()
+        return sort.face_height
+    else:
+        return None
+
+def get_face_height_bbox(target_image_id):
     select_image_ids_query = (
         select(SegmentTable.bbox)
         .filter(SegmentTable.image_id == target_image_id)
@@ -264,10 +278,12 @@ def calc_nlm(image_id_to_shape, lock, session):
     # start a timer
     start = time.time()
     target_image_id = list(image_id_to_shape.keys())[0]
-    height,width = image_id_to_shape[target_image_id]
+    height,width, bbox = image_id_to_shape[target_image_id]
+    sort.h = height
+    sort.w = width
     if VERBOSE: print("height,width from DB:",height,width)
     if VERBOSE: print("target_image_id",target_image_id)
-    face_height=get_face_height(target_image_id)
+    face_height=get_face_height_lms(target_image_id,bbox)
     # print timer
     if VERBOSE: print("Time to get face height:", time.time()-start)
     start = time.time()
@@ -299,6 +315,8 @@ def calc_nlm(image_id_to_shape, lock, session):
         if VERBOSE: print("Time to get norm lms:", time.time()-start)
         start = time.time()
 
+        if VERBOSE: print("about to insert n_landmarks",n_landmarks)
+        return
         sort.insert_n_landmarks(bboxnormed_collection, target_image_id,n_landmarks)
         if VERBOSE: print("did insert_n_landmarks, going to get phone bbox")
         if VERBOSE: print("Time to get insert:", time.time()-start)
@@ -349,7 +367,7 @@ if USE_OBJ == 27:
         limit(LIMIT)
 
 else:
-    distinct_image_ids_query = select(Images.image_id.distinct(), Images.h, Images.w).\
+    distinct_image_ids_query = select(Images.image_id.distinct(), Images.h, Images.w, SegmentTable.bbox).\
         outerjoin(SegmentTable,Images.image_id == SegmentTable.image_id).\
         filter(SegmentTable.bbox != None).\
         filter(SegmentTable.mongo_body_landmarks == 1).\
@@ -385,8 +403,8 @@ results = session.execute(distinct_image_ids_query).fetchall()
 # make a dictionary of image_id to shape
 for result in results:
     image_id_to_shape = {}
-    image_id, height, width = result
-    image_id_to_shape[image_id] = (height, width)
+    image_id, height, width, bbox = result
+    image_id_to_shape[image_id] = (height, width, bbox)
     work_queue.put(image_id_to_shape)        
 
 # distinct_image_ids = [row[0] for row in session.execute(distinct_image_ids_query).fetchall()]

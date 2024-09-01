@@ -43,7 +43,7 @@ class SortPose:
         self.HSVMULTIPLIER = 3
         self.NORM_BODY_MULTIPLIER = 4
         self.BRUTEFORCE = False
-        self.CUTOFF = 15 # DOES factor if ONE_SHOT
+        self.CUTOFF = 150 # DOES factor if ONE_SHOT
 
         self.SORT_TYPE = SORT_TYPE
         if self.SORT_TYPE == "128ds":
@@ -632,18 +632,19 @@ class SortPose:
         # print(type(self.bbox))
         # print(self.bbox['left'])
         # set bbox dimensions
-        # img_h = self.h
-        # img_w = self.w
+        img_h = self.h
+        img_w = self.w
         bbox_x = self.bbox['left']
         bbox_y = self.bbox['top']
         bbox_w = self.bbox['right'] - self.bbox['left']
         bbox_h = self.bbox['bottom'] - self.bbox['top']
         # print("bboxxxxxxxxxxxxxxxxx",bbox_x,bbox_y,bbox_w,bbox_h)
         for idx, lm in enumerate(self.faceLms.landmark):
+            # print("landmark",idx)
             if idx == point:
                 # print("found point:")
                 # print(idx)
-                # pointXY = (lm.x * img_w, lm.y * img_h)
+                pointXY = (lm.x * img_w, lm.y * img_h)
                 pointXY = (lm.x * bbox_w + bbox_x, lm.y * bbox_h + bbox_y)
                 # print("landmarkkkkkkkkkkkkkkkkkk",lm.x,lm.y,point)
                 # print(pointXY)
@@ -1253,16 +1254,16 @@ class SortPose:
         return subset
                 
     def get_landmarks_2d(self, Lms, selected_Lms, structure="dict"):
-        print("get_landmarks_2d", selected_Lms)
+        # print("get_landmarks_2d", selected_Lms)
         # this is redundantly in io also
         Lms2d = {}
         Lms1d = []
         Lms1d3 = []
         for idx, lm in enumerate(Lms.landmark):
             if idx in selected_Lms:
-                print("idx", idx)
+                # print("idx", idx)
                 # x, y = int(lm.x * img_w), int(lm.y * img_h)
-                print("lm.x, lm.y", lm.x, lm.y)
+                # print("lm.x, lm.y", lm.x, lm.y)
                 if structure == "dict":
                     Lms2d[idx] =([lm.x, lm.y])
                 elif structure == "list":
@@ -1466,7 +1467,7 @@ class SortPose:
 
         pointers = self.get_landmarks_2d(enc1, landmarks, structure)
         # pointers = self.get_landmarks_2d(enc1, self.SUBSET_LANDMARKS, structure)
-        print("prep_enc enc after get_landmarks_2d", type(enc1))
+        # print("prep_enc enc after get_landmarks_2d", type(enc1))
 
         # pointers = self.get_landmarks_2d(enc1, self.POINTERS, structure)
         # thumbs = self.get_landmarks_2d(enc1, self.THUMBS, structure)
