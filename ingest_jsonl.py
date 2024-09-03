@@ -52,7 +52,8 @@ _|_|  _|\__, |\___|____/\__| \___|____/  \_/
 io = DataIO()
 db = io.db
 # overriding DB for testing
-io.db["name"] = "stocktest"
+# io.db["name"] = "stocktest"
+io.db["name"] = "stock"
 ROOT = io.ROOT 
 NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 #######################################
@@ -78,7 +79,7 @@ NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 18	afripics
 '''
 
-THIS_SITE = 9
+THIS_SITE = 18
 
 SEARCH_KEYS_FOR_LOC = True
 VERBOSE = False
@@ -93,6 +94,25 @@ if THIS_SITE == 1:
     INGEST_ROOTG = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/getty_scrape/done"
     INGEST_FOLDER = os.path.join(INGEST_ROOTG, "getty_noeth_toobig")
     JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache_noNoNOs_noSilver.jsonl")
+elif THIS_SITE == 2:
+    # testing round 2
+    INGEST_FOLDER = "/Volumes/RAID54/process_CSVs_to_ingest/shutterstockCSVs/Shutterstock_Caches-bup/less_1M_done"
+    JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache.jsonl")
+    LOC_ONLY = False
+elif THIS_SITE == 3:
+    # LOC 2
+    INGEST_FOLDER = "/Users/michaelmandiberg/Documents/GitHub/facemap/"
+    # INGEST_FOLDER = "/Volumes/RAID18/scraping_process/process_adobe/output.jsonl"
+    # also at /Volumes/RAID18/scraping_process/process_adobe/output.jsonl
+    JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "output.jsonl")
+    # JSONL_IN_PATH = "/Volumes/RAID18/scraping_process/process_adobe/adobe_all_jsonl_files/3400/3400alpha2.jsonl"
+elif THIS_SITE == 4:
+    # LOC 2
+    INGEST_FOLDER = "/Volumes/RAID54/process_CSVs_to_ingest/iStock"
+    JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "april15_iStock_output.jsonl")
+elif THIS_SITE == 5:
+    JSONL_IN_PATH = "/Volumes/RAID54/process_CSVs_to_ingest/pexelsCSVs/pexels.output.csv"
+    INPUT_TYPE = "csv"
 elif THIS_SITE == 6:
     # done -- only 1488334?
     # no keys so no loc info
@@ -101,53 +121,63 @@ elif THIS_SITE == 6:
     JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache.jsonl")
 elif THIS_SITE == 9:
     # DONE 6150898
+    # LOC_ONLY'd
     io.db["name"] = "stock"
     INGEST_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/alamyCSV"
     JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache_translated.jsonl")
     # JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache_funny1.jsonl")
 elif THIS_SITE == 10:
     # DONE 504250
+    # LOC 2
     io.db["name"] = "stock"
     INGEST_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/VCG2"
     JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache_translated.jsonl")
 elif THIS_SITE == 11:
     io.db["name"] = "stock"
     # DONE 426693
+    # LOC 2
     INGEST_FOLDER = "/Users/michaelmandiberg/Downloads/pixcy_v2"
     JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache_filtered.jsonl")
 elif THIS_SITE == 12:
     # DONE 16854
+    # LOC 2
     io.db["name"] = "stock"
     INGEST_FOLDER = "/Users/michaelmandiberg/Library/CloudStorage/Dropbox/takingstock_dropbox/PIXERF"
     JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache_translated.jsonl")
 elif THIS_SITE == 13:
     # DONE 305058
+    # LOC 2
     INGEST_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/ImagesBazzar"
     JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache.jsonl")
     eth_dict_per_site = {'asian ethnicity':9, 'tika':9, 'alta':9, 'asian  ethnicity':9,'asian ethinicity':9,'asian farmer':9,'asian medicine':9,'asians':9,'asiascher':9,'asiatisch':9,'asiatische':9,'asiatischen':9,'asiatischer':9,'asiatisches':9,'asien':9}
 elif THIS_SITE == 14:
     # DONE 49176
+    # LOC 2
     INGEST_FOLDER = "/Users/michaelmandiberg/Library/CloudStorage/Dropbox/takingstock_dropbox/INDIA-PB"
     JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache.jsonl")
     eth_dict_per_site = {'asian ethnicity':9, 'tika':9, 'alta':9, 'asian  ethnicity':9,'asian ethinicity':9,'asian farmer':9,'asian medicine':9,'asians':9,'asiascher':9,'asiatisch':9,'asiatische':9,'asiatischen':9,'asiatischer':9,'asiatisches':9,'asien':9}
 elif THIS_SITE == 15:
     # DONE 4385
+    # LOC 2
     io.db["name"] = "stock"
     INGEST_FOLDER = "/Users/michaelmandiberg/Library/CloudStorage/Dropbox/takingstock_dropbox/iwaria"
     JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache_translated.jsonl")
 elif THIS_SITE == 16:
     # DONE 2209
+    # LOC 2
     io.db["name"] = "stock"
     INGEST_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/nappy_v3_w-data"
     # JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache_translated.jsonl")
     JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache.jsonl")
 elif THIS_SITE == 17:
     # DONE 25663
+    # LOC 2
     io.db["name"] = "stock"
     INGEST_FOLDER = "/Users/michaelmandiberg/Library/CloudStorage/Dropbox/takingstock_dropbox/PICHA-STOCK"
     JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache.jsonl")
 elif THIS_SITE == 18:
     # DONE 60300
+    # LOC 2
     io.db["name"] = "stock"
     INGEST_FOLDER = "/Users/michaelmandiberg/Library/CloudStorage/Dropbox/takingstock_dropbox/AFRIPICS"
     JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache_translated.jsonl")
@@ -272,7 +302,7 @@ with engine.connect() as conn:
         already_ingested = set([row[1] for row in results if row[2] is not None])
     else:
         already_ingested = set(site_image_id_dict.keys())
-print("already_ingested", len(already_ingested))
+if VERBOSE: print("already_ingested", len(already_ingested))
 if already_ingested: print("site_image_id_dict first", site_image_id_dict[next(iter(site_image_id_dict))])
 
 def read_csv(csv_file):
@@ -583,7 +613,8 @@ def unlock_key_plurals_etc(site_id,key, this_dict):
                 pass # not saving
             else:
                 if not LOC_ONLY: print("could not unlock:", value_list, "and saving")
-                write_csv(CSV_NOKEYS_PATH,value_list)
+                try: write_csv(CSV_NOKEYS_PATH,value_list)
+                except: print("failed to write", value_list)
         # print(value_list)
         return None
 
@@ -692,7 +723,7 @@ def get_key_no_dictonly(key_name, keys_list, this_dict, do_write_csv=False):
     else:
         key_no_list = search_keys(keys_list, this_dict, do_write_csv, True)
         if VERBOSE: print("searched keys and found key_no: ", key_no_list)
-    if THIS_SITE == 10:
+    if THIS_SITE == 10 and not LOC_ONLY:
         # adding more general BIPOC tag, as Metis seems to be very imprecisely used in VCG
         if not key_no_list and key_name.lower() == "metis": key_no_list.append(13)
         # handle the "6" in VCG data, actually nope, skipping.
@@ -1133,6 +1164,33 @@ def structure_row_adobe(row, ind, keys_list):
     }
     
     return nan2none(image_row)
+def structure_row_loconly(item, ind, keys_list):
+    if VERBOSE: print(item)
+    gender = item.get("filters", {}).get("gender", None)
+    age = item.get("filters", {}).get("age", None)
+    shoot_location = item.get("filters", {}).get("location", None)
+    description = item.get("title", None)
+    gender_key, age_key, age_detail_key = get_gender_age_row(gender, age, description, keys_list, THIS_SITE)
+    filename = item["id"]+".jpg"
+    location = item.get("country", None)
+    image_row = {
+        "site_image_id": item["id"],
+        "site_name_id": THIS_SITE,
+        "description": description[:140],
+        "age_id": age_key,
+        "gender_id": gender_key,
+        "age_detail_id": age_detail_key,
+        "contentUrl": item["img"],
+        "imagename": os.path.join(get_hash_folders(filename)[0],get_hash_folders(filename)[1],filename),  # hash filename from id+jpg
+        "location_id": get_location(location, keys_list),        
+        "author": item.get("author", None),     
+
+        ## TK
+        # "shoot_location": shoot_location,
+        # "imagename": generate_local_unhashed_image_filepath(item[9].replace("images/",""))  # need to refactor this from the contentURL using the hash function
+    }
+    return nan2none(image_row)
+
 
 
 def structure_row_istock(row, ind, keys_list):
@@ -1183,6 +1241,34 @@ def structure_row_istock(row, ind, keys_list):
     
     return nan2none(image_row)
 
+def structure_row_istock_loconly(item, ind, keys_list):
+    if VERBOSE: print(item)
+    gender = item.get("filters", {}).get("gender", None)
+    age = item.get("filters", {}).get("age", None)
+    shoot_location = item.get("filters", {}).get("location", None)
+    description = item.get("title", None)
+    gender_key, age_key, age_detail_key = get_gender_age_row(gender, age, description, keys_list, THIS_SITE)
+    filename = item["id"]+".jpg"
+    location = item.get("country", None)
+    image_row = {
+        "site_image_id": item["id"],
+        "site_name_id": THIS_SITE,
+        "description": description[:140],
+        "age_id": age_key,
+        "gender_id": gender_key,
+        "age_detail_id": age_detail_key,
+        "contentUrl": item["img"],
+        "imagename": os.path.join(get_hash_folders(filename)[0],get_hash_folders(filename)[1],filename),  # hash filename from id+jpg
+        "location_id": get_location(location, keys_list),        
+        "author": item.get("author", None),     
+
+        ## TK
+        # "shoot_location": shoot_location,
+        # "imagename": generate_local_unhashed_image_filepath(item[9].replace("images/",""))  # need to refactor this from the contentURL using the hash function
+    }
+    return nan2none(image_row)
+
+
 def structure_row_shutterstock(row, ind, keys_list):
     # print(row[11])
     site_id = 2 #id for the site, not the image
@@ -1232,6 +1318,34 @@ def structure_row_shutterstock(row, ind, keys_list):
     # print(image_row)
     return nan2none(image_row)
 
+def structure_row_shutterstock_loconly(item, ind, keys_list):
+    if VERBOSE: print(item)
+    gender = item.get("filters", {}).get("gender", None)
+    age = item.get("filters", {}).get("age", None)
+    shoot_location = item.get("filters", {}).get("location", None)
+    description = item.get("title", None)
+    gender_key, age_key, age_detail_key = get_gender_age_row(gender, age, description, keys_list, THIS_SITE)
+    filename = item["id"]+".jpg"
+    location = item.get("filters", {}).get("country", None)
+    if not location: location = item.get("country", None)
+
+    image_row = {
+        "site_image_id": item["id"],
+        "site_name_id": THIS_SITE,
+        "description": description[:140],
+        "age_id": age_key,
+        "gender_id": gender_key,
+        "age_detail_id": age_detail_key,
+        "contentUrl": item["img"],
+        "imagename": os.path.join(get_hash_folders(filename)[0],get_hash_folders(filename)[1],filename),  # hash filename from id+jpg
+        "location_id": get_location(location, keys_list),        
+        "author": item.get("author", None),     
+
+        ## TK
+        # "shoot_location": shoot_location,
+        # "imagename": generate_local_unhashed_image_filepath(item[9].replace("images/",""))  # need to refactor this from the contentURL using the hash function
+    }
+    return nan2none(image_row)
 
 def structure_row_getty(item, ind, keys_list):
     site_id = 1
@@ -1794,8 +1908,6 @@ def ingest_json():
     #     # reader = csv.reader((row.replace('\0', '').replace('\x00', '') for row in in_file), delimiter=",")
 
     with open(JSONL_IN_PATH, 'r') as cache_file:
-        # reader_obj = csv.reader(file_obj)
-        # next(reader_obj)  # Skip header row
         start_counter = get_counter()
         print("start_counter: ", start_counter)
         # start_counter = 358430 #temporary for testing, while adobe is ongoing
@@ -1807,11 +1919,15 @@ def ingest_json():
 
         for item in cache_file.readlines():
             item = json.loads(item)
-            if TIMER: start_timer = time.time()
         
+        ## for csv - PEXELS
+        # reader_obj = csv.reader(file_obj)
+        # next(reader_obj)  # Skip header row
         # for row in reader_obj:
             # print(row[1])
-            
+
+            if TIMER: start_timer = time.time()
+
             if counter < start_counter:
                 counter += 1
                 continue
@@ -1819,8 +1935,10 @@ def ingest_json():
             if LOC_ONLY:
                 if item.get("id", None) in already_ingested:
                     counter += 1
-                    # print("already ingested", item.get("id", None))
+                    print("already ingested", item.get("id", None))
                     continue
+                else:
+                    print("new loc", item.get("id", None))
             key_nos_list = []
             keys_list = []
             if VERBOSE: print("getting keys from item[keywords]", item["keywords"])
@@ -1835,6 +1953,13 @@ def ingest_json():
             if THIS_SITE == 1:
             # image_row = structure_row_adobe(row, ind, keys_list)
                 image_row = structure_row_getty(item, ind, keys_list)
+            elif THIS_SITE == 2 and not LOC_ONLY:
+                image_row = structure_row_shutterstock_loconly(item, ind, keys_list)
+                ethnicity = item.get("filters", {}).get("ethnicity", None)
+            elif THIS_SITE == 2 and LOC_ONLY:
+                image_row = structure_row_shutterstock_loconly(item, ind, keys_list)
+            elif THIS_SITE in [3,4,5] and LOC_ONLY:
+                image_row = structure_row_loconly(item, ind, keys_list)
             elif THIS_SITE == 6:
                 image_row = structure_row_unsplash(item, ind, keys_list)
                 search_desc_for_keys = True
@@ -1963,7 +2088,7 @@ def ingest_json():
             if VERBOSE: 
                 print(image_row)
                 print("key_nos_list", key_nos_list)
-                print("eth_no_list", eth_no_list)
+                if not LOC_ONLY: print("eth_no_list", eth_no_list)
 
     
             try:
@@ -2057,7 +2182,7 @@ def ingest_json():
                             new_loc_counter += 1
                             with engine.connect() as conn:
                                 # Perform the update using SQLAlchemy Core
-                                update_stmt = update(Images).where(Images.c.image_id == image_id).values(location_id=location_id)
+                                update_stmt = update(Images).where(Images.image_id == image_id).values(location_id=location_id)
                                 execute_query_with_retry(conn, update_stmt)
 
                     else:
