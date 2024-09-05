@@ -25,14 +25,18 @@ from mediapipe.framework.formats import landmark_pb2
 from pymediainfo import MediaInfo
 import traceback 
 import time
+import math
 
 NOSE_ID=0
 
 
 Base = declarative_base()
-VERBOSE = False
-SKIP_EXISTING = False # Skips images with a normed bbox but that have Images.h
+VERBOSE = True
 IS_SSD = True
+
+SKIP_EXISTING = False # Skips images with a normed bbox but that have Images.h
+USE_OBJ = 26 # select the bbox to work with
+SKIP_BODY = True # skip body landmarks. mostly you want to skip when doing obj bbox
 
 io = DataIO(IS_SSD)
 db = io.db
@@ -94,10 +98,9 @@ sort = SortPose(motion, face_height_output, image_edge_multiplier_sm,EXPAND, ONE
 # Create a session
 session = scoped_session(sessionmaker(bind=engine))
 
-LIMIT= 2000000
+LIMIT= 10
 # Initialize the counter
 counter = 0
-USE_OBJ = 0
 
 # Number of threads
 #num_threads = io.NUMBER_OF_PROCESSES
@@ -197,9 +200,9 @@ def insert_n_phone_bbox(image_id,n_phone_bbox):
         .first()
     )    
     if phone_bbox_norm_entry:
-        phone_bbox_norm_entry.bbox_27_norm = json.dumps(n_phone_bbox)
+        phone_bbox_norm_entry.bbox_26_norm = json.dumps(n_phone_bbox)
         if VERBOSE:
-            print("image_id:", PhoneBbox.image_id,"bbox_27_norm:", phone_bbox_norm_entry.bbox_27_norm)
+            print("image_id:", PhoneBbox.image_id,"bbox_26_norm:", phone_bbox_norm_entry.bbox_26_norm)
 
             
     session.commit()
@@ -264,7 +267,7 @@ def insert_shape(target_image_id,shape):
     return
 def get_phone_bbox(target_image_id):
     select_image_ids_query = (
-        select(PhoneBbox.bbox_27)
+        select(PhoneBbox.bbox_26)
         .filter(PhoneBbox.image_id == target_image_id)
     )
     result = session.execute(select_image_ids_query).fetchall()
@@ -280,6 +283,7 @@ def calc_nlm(image_id_to_shape, lock, session):
     # start a timer
     start = time.time()
     target_image_id = list(image_id_to_shape.keys())[0]
+    body_landmarks = None
 
     # TK this needs to be ported to calc body code
     height,width, bbox = image_id_to_shape[target_image_id]
@@ -287,10 +291,39 @@ def calc_nlm(image_id_to_shape, lock, session):
     sort.w = width
     if VERBOSE: print("height,width from DB:",height,width)
     if VERBOSE: print("target_image_id",target_image_id)
+
+    # get the landmarks
     face_height=get_face_height_lms(target_image_id,bbox)
+    print("face_height from lms",face_height)
+    nose_pixel_pos_face = sort.get_face_2d_point(1)
+    print("nose_pixel_pos from face",nose_pixel_pos_face)
+    body_landmarks=unpickle_array(get_landmarks_mongo(target_image_id))
+    nose_pixel_pos_body = sort.set_nose_pixel_pos(body_landmarks,[height,width])
+    print("nose_pixel_pos from body",nose_pixel_pos_body)
+    
+    # Extract x and y coordinates
+    x1, y1 = nose_pixel_pos_face
+    x2, y2 = nose_pixel_pos_body['x'], nose_pixel_pos_body['y']
+
+    # set the nose pixel position in the expected dictionary format
+    nose_pixel_pos = {'x': x1, 'y': y1}
+
+    # Calculate Euclidean distance
+    distance = math.sqrt((x2 - x1)**2 + (y2 - y1)**2)
+
+    if distance > 40:
+        print(f" >>> TWO NOSES - {target_image_id}. Dist between nose_pixel_pos and nose_pixel_pos_body:", distance)
+
+        session.query(Encodings).filter(Encodings.image_id == target_image_id).update({
+                Encodings.two_noses: 1
+            }, synchronize_session=False)
+        session.query(SegmentTable).filter(SegmentTable.image_id == target_image_id).update({
+                SegmentTable.two_noses: 1
+            }, synchronize_session=False)
+        session.commit()
+        return
+
     # print timer
-    if VERBOSE: print("Time to get face height:", time.time()-start)
-    start = time.time()
 
     if height and width:
         if VERBOSE: print(target_image_id, "have height,width already",height,width)
@@ -301,42 +334,37 @@ def calc_nlm(image_id_to_shape, lock, session):
             return
         insert_shape(target_image_id,[height,width])
 
-    if VERBOSE: print("Time to get h w:", time.time()-start)
-    start = time.time()
-
-    body_landmarks=unpickle_array(get_landmarks_mongo(target_image_id))
-    if VERBOSE: print("Time to get mongo lms:", time.time()-start)
-    start = time.time()
 
     if body_landmarks:
         if VERBOSE: print("has body_landmarks")
 
         ### NORMALIZE LANDMARKS ###
-        nose_pixel_pos = sort.set_nose_pixel_pos(body_landmarks,[height,width])
         if VERBOSE: print("nose_pixel_pos",nose_pixel_pos)
-        n_landmarks=sort.normalize_landmarks(body_landmarks,nose_pixel_pos,face_height,[height,width])
-        
-        if VERBOSE: print("Time to get norm lms:", time.time()-start)
-        start = time.time()
 
-        if VERBOSE: print("about to insert n_landmarks",n_landmarks)
-        
-        # store the normalized landmarks in mongo
-        sort.insert_n_landmarks(bboxnormed_collection, target_image_id,n_landmarks)
-        # update encodings and segment tables to reflect that the landmarks have been normalized
-        session.query(Encodings).filter(Encodings.image_id == target_image_id).update({
-                Encodings.mongo_body_landmarks_norm: 1
-            }, synchronize_session=False)
-        session.query(SegmentTable).filter(SegmentTable.image_id == target_image_id).update({
-                SegmentTable.mongo_body_landmarks_norm: 1
-            }, synchronize_session=False)
-        session.commit()
+        if not SKIP_BODY:
+            n_landmarks=sort.normalize_landmarks(body_landmarks,nose_pixel_pos,face_height,[height,width])
+            
+            if VERBOSE: print("Time to get norm lms:", time.time()-start)
+            start = time.time()
 
-        if VERBOSE: print("did insert_n_landmarks, going to get phone bbox")
-        if VERBOSE: print("Time to get insert:", time.time()-start)
-        start = time.time()
+            if VERBOSE: print("about to insert n_landmarks",n_landmarks)
+            
+            # store the normalized landmarks in mongo
+            sort.insert_n_landmarks(bboxnormed_collection, target_image_id,n_landmarks)
+            # update encodings and segment tables to reflect that the landmarks have been normalized
+            session.query(Encodings).filter(Encodings.image_id == target_image_id).update({
+                    Encodings.mongo_body_landmarks_norm: 1
+                }, synchronize_session=False)
+            session.query(SegmentTable).filter(SegmentTable.image_id == target_image_id).update({
+                    SegmentTable.mongo_body_landmarks_norm: 1
+                }, synchronize_session=False)
+            session.commit()
+
+            if VERBOSE: print("did insert_n_landmarks, going to get phone bbox")
+            if VERBOSE: print("Time to get insert:", time.time()-start)
+            start = time.time()
         
-        if USE_OBJ > 0: 
+        elif USE_OBJ > 0: 
             phone_bbox=get_phone_bbox(target_image_id)
             if phone_bbox:
                 n_phone_bbox=sort.normalize_phone_bbox(phone_bbox,nose_pixel_pos,face_height,[height,width])
@@ -369,21 +397,23 @@ work_queue = queue.Queue()
 function=calc_nlm
 
 
-if USE_OBJ == 27:
-    distinct_image_ids_query = select(Images.image_id.distinct()).\
+if USE_OBJ == 26:
+    distinct_image_ids_query = select(Images.image_id.distinct(), Images.h, Images.w, SegmentTable.bbox).\
         outerjoin(SegmentTable,Images.image_id == SegmentTable.image_id).\
         outerjoin(PhoneBbox,PhoneBbox.image_id == SegmentTable.image_id).\
         filter(SegmentTable.bbox != None).\
+        filter(SegmentTable.two_noses.is_(None)).\
         filter(SegmentTable.mongo_body_landmarks == 1).\
-        filter(PhoneBbox.bbox_27 != None).\
-        filter(PhoneBbox.bbox_27_norm == None).\
-        filter(PhoneBbox.conf_27 != -1).\
+        filter(PhoneBbox.bbox_26 != None).\
+        filter(PhoneBbox.bbox_26_norm == None).\
+        filter(PhoneBbox.conf_26 != -1).\
         limit(LIMIT)
 
 else:
     distinct_image_ids_query = select(Images.image_id.distinct(), Images.h, Images.w, SegmentTable.bbox).\
         outerjoin(SegmentTable,Images.image_id == SegmentTable.image_id).\
         filter(SegmentTable.bbox != None).\
+        filter(SegmentTable.two_noses.is_(None)).\
         filter(SegmentTable.mongo_body_landmarks == 1).\
         filter(SegmentTable.mongo_body_landmarks_norm.is_(None)).\
         limit(LIMIT)
@@ -399,10 +429,10 @@ if SKIP_EXISTING:
         outerjoin(PhoneBbox,PhoneBbox.image_id == SegmentTable.image_id).\
         filter(
             or_(
-                PhoneBbox.bbox_27_norm != None,
+                PhoneBbox.bbox_63_norm != None,
                 PhoneBbox.bbox_67_norm != None,
                 PhoneBbox.bbox_26_norm != None,
-                PhoneBbox.bbox_27_norm != None,
+                PhoneBbox.bbox_26_norm != None,
                 PhoneBbox.bbox_32_norm != None
             )
         ).\

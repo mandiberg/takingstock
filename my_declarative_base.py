@@ -122,6 +122,7 @@ class Encodings(Base):
     mongo_face_landmarks   = Column(Boolean)
     is_small           = Column(Boolean)
     mongo_body_landmarks_norm   = Column(Boolean)
+    two_noses              = Column(Boolean)
 
 class Clusters(Base):
     __tablename__ = 'Clusters'
@@ -228,7 +229,8 @@ class SegmentTable(Base):
     mongo_body_landmarks   = Column(Boolean)
     mongo_face_landmarks   = Column(Boolean)
     mongo_body_landmarks_norm   = Column(Boolean)
-    no_image     = Column(Boolean)
+    no_image               = Column(Boolean)
+    two_noses              = Column(Boolean)
 
     site     = relationship("Site")
     age      = relationship("Age")
