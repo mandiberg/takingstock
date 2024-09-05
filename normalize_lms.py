@@ -32,7 +32,7 @@ NOSE_ID=0
 
 Base = declarative_base()
 VERBOSE = True
-IS_SSD = True
+IS_SSD = False
 
 SKIP_EXISTING = False # Skips images with a normed bbox but that have Images.h
 USE_OBJ = 26 # select the bbox to work with
@@ -98,7 +98,7 @@ sort = SortPose(motion, face_height_output, image_edge_multiplier_sm,EXPAND, ONE
 # Create a session
 session = scoped_session(sessionmaker(bind=engine))
 
-LIMIT= 10
+LIMIT= 2
 # Initialize the counter
 counter = 0
 
@@ -301,10 +301,45 @@ def calc_nlm(image_id_to_shape, lock, session):
     nose_pixel_pos_body = sort.set_nose_pixel_pos(body_landmarks,[height,width])
     print("nose_pixel_pos from body",nose_pixel_pos_body)
     
+
+    #     # for drawing landmarks on test image
+    # landmarks_2d = sort.get_landmarks_2d(row['face_landmarks'], list(range(33)), "list")
+    # print("landmarks_2d before drawing", landmarks_2d)
+    # cropped_image = sort.draw_point(cropped_image, landmarks_2d, index = 0)                    
+
+    # landmarks_2d = sort.get_landmarks_2d(row['face_landmarks'], list(range(420)), "list")
+    # cropped_image = sort.draw_point(cropped_image, landmarks_2d, index = 0)                    
+
     # Extract x and y coordinates
     x1, y1 = nose_pixel_pos_face
     x2, y2 = nose_pixel_pos_body['x'], nose_pixel_pos_body['y']
 
+    # query mysql SegmentTable for imagename
+    select_image_ids_query = (
+        select(SegmentTable.imagename, SegmentTable.site_name_id)
+        .filter(SegmentTable.image_id == target_image_id)
+    )
+    result = session.execute(select_image_ids_query).fetchall()
+    imagename=result[0][0]
+    site_name_id=result[0][1]
+
+    # open the image with cv2
+    image_path = os.path.join(io.ROOT,io.folder_list[site_name_id],imagename)
+    print("image_path",image_path)
+
+    x2 = int(nose_pixel_pos_body['x'])
+    y2 = int(nose_pixel_pos_body['y'])
+
+    # Draw the circle with the converted integer coordinates
+
+    image = cv2.imread(image_path)
+    print("image shape",image.shape)
+    cv2.circle(image, (int(x1), int(y1)), 5, (0, 255, 0), -1)
+    cv2.circle(image, (int(x2), int(y2)), 5, (255, 0, 0), -1)
+    cv2.imshow("image", image)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
+    return
     # set the nose pixel position in the expected dictionary format
     nose_pixel_pos = {'x': x1, 'y': y1}
 
@@ -450,6 +485,10 @@ for result in results:
     image_id_to_shape = {}
     image_id, height, width, bbox = result
     image_id_to_shape[image_id] = (height, width, bbox)
+
+    ### temp single thread for debugging
+    calc_nlm(image_id_to_shape, lock=None, session=session)
+
     work_queue.put(image_id_to_shape)        
 
 # distinct_image_ids = [row[0] for row in session.execute(distinct_image_ids_query).fetchall()]
@@ -478,6 +517,8 @@ def threaded_processing():
         thread.join()
     # Set the event to signal that threads are completed
     threads_completed.set()
+
+
 
 threaded_processing()
 # Commit the changes to the database
