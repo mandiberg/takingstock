@@ -38,15 +38,31 @@ Base = declarative_base()
 # Connect to MongoDB
 mongo_client = pymongo.MongoClient("mongodb://localhost:27017/")
 mongo_db = mongo_client["stock"]
-mongo_collection = mongo_db["encodings"]
+# mongo_collection = mongo_db["encodings"]
+mongo_collection = mongo_db["body_landmarks_norm"]
 
 # Define the batch size
 batch_size = 1000
 last_id = 0
 # TARGET = "tokens"
-TARGET = "encodings"
+# TARGET = "encodings"
 # TARGET = "segment"
+TARGET = "mongo_body_landmarks_norm"
 # currently set up for SegmentTable. need to change SegmentTable to Images if you want to use on main table
+
+if TARGET == "mongo_body_landmarks_norm":
+    # select all the image_ids from the mongo collection
+    mongo_image_ids = [x["image_id"] for x in mongo_collection.find()]
+    # assign mongo_body_landmarks_norm to 1 for all the image_ids in the mysql database
+    batch_size = 1000
+    for i in range(0, len(mongo_image_ids), batch_size):
+        batch_ids = mongo_image_ids[i:i+batch_size]
+        session.query(Encodings).filter(Encodings.image_id.in_(batch_ids)).update({"mongo_body_landmarks_norm": 1})
+        session.query(SegmentTable).filter(SegmentTable.image_id.in_(batch_ids)).update({"mongo_body_landmarks_norm": 1})
+        session.commit()
+        print(f"Processed {i} of {len(mongo_image_ids)}")
+    session.close()
+    exit()
 
 while True:
     # try:

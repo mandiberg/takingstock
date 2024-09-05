@@ -20,7 +20,7 @@ def process_folder(folder_path, output_file_path):
                     process_jsonl_file(file_path, file_ids_set, output_file)
 
 if __name__ == "__main__":
-    folder_path = "/Volumes/RAID18/scraping_process/process_adobe"  # Root folder to search
+    folder_path = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/getty_scrape"  # Root folder to search
     output_file_path = "output.jsonl"  # Output file path
     
     process_folder(folder_path, output_file_path)

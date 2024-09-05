@@ -1,12 +1,14 @@
 
 USE stock;
 
+SET GLOBAL innodb_buffer_pool_size=8073741824;
+
 -- cleanup
 DROP TABLE SegmentHelperAug16_SegOct20_preAlamy ;
-DELETE FROM SegmentHelperAug16_SegOct20_preAlamy;
+DELETE FROM SegmentHelper_sept4_all_adults_facing_forward;
 
 -- create helper segment table
-CREATE TABLE SegmentHelper_Aug25_6and12 (
+CREATE TABLE SegmentHelper_sept4_all_adults_facing_forward (
     seg_image_id int NOT NULL AUTO_INCREMENT PRIMARY KEY,
     image_id INTEGER,
     FOREIGN KEY (image_id) REFERENCES Images(image_id)
@@ -186,44 +188,65 @@ LIMIT 100000; -- Adjust the batch size as needed
 -- create a helpertable (use SQL above)
 -- insert into new temp segment 
 -- this skips existing so you can rerun ontop of existing data
+-- seg big is -45 to -3, with yz at 10
 
-INSERT INTO SegmentHelper_Aug25_6and12 (image_id)
+INSERT INTO SegmentHelper_sept4_all_adults_facing_forward (image_id)
 SELECT DISTINCT e.image_id
 FROM Encodings e
 JOIN Images i ON i.image_id = e.image_id
 WHERE e.mongo_encodings = 1 
-	AND i.site_name_id in (6,12)
-    AND e.face_x > -40 AND e.face_x < -3
-    AND e.face_y > -4 AND e.face_y < 4
-    AND e.face_z > -4 AND e.face_z < 4
+	AND i.age_id > 3
+	AND e.face_x > -45 AND e.face_x < -3
+    AND e.face_y > -10 AND e.face_y < 10
+    AND e.face_z > -10 AND e.face_z < 10
     AND NOT EXISTS (
         SELECT 1
-        FROM SegmentHelper_Aug25_6and12 sh
+        FROM SegmentBig_isface sh
         WHERE sh.image_id = e.image_id
     );
    
+   
 -- DO THIS SECOND
 -- add column for is_new 
-ALTER TABLE SegmentHelper_Aug25_6and12
+ALTER TABLE SegmentHelper_sept4_all_adults_facing_forward
 ADD COLUMN is_new BOOL ;
 -- and set is_new to True for new image_id
-UPDATE SegmentHelper_Aug25_6and12 sh
-LEFT JOIN SegmentOct20 s ON sh.image_id = s.image_id
+UPDATE SegmentHelper_sept4_all_adults_facing_forward sh
+LEFT JOIN SegmentBig_isface s ON sh.image_id = s.image_id
 SET sh.is_new = True
 WHERE s.image_id IS NULL;
 
 -- DO THIS THIRD
 -- Add info from Images
-INSERT INTO SegmentOct20 (image_id, site_name_id, site_image_id, contentUrl, imagename, age_id, age_detail_id, gender_id, location_id, face_x, face_y, face_z, mouth_gap, bbox, mongo_body_landmarks, mongo_face_landmarks)
-SELECT DISTINCT i.image_id, i.site_name_id, i.site_image_id, i.contentUrl, i.imagename, i.age_id, i.age_detail_id, i.gender_id, i.location_id, e.face_x, e.face_y, e.face_z, e.mouth_gap, e.bbox, e.mongo_body_landmarks, e.mongo_face_landmarks
+-- INSERT INTO SegmentOct20 (image_id, site_name_id, site_image_id, contentUrl, imagename, age_id, age_detail_id, gender_id, location_id, face_x, face_y, face_z, mouth_gap, bbox, mongo_body_landmarks, mongo_face_landmarks)
+-- SELECT DISTINCT i.image_id, i.site_name_id, i.site_image_id, i.contentUrl, i.imagename, i.age_id, i.age_detail_id, i.gender_id, i.location_id, e.face_x, e.face_y, e.face_z, e.mouth_gap, e.bbox, e.mongo_body_landmarks, e.mongo_face_landmarks
+
+INSERT INTO SegmentBig_isface (image_id, site_name_id, site_image_id, contentUrl, imagename, age_id, age_detail_id, gender_id, location_id, face_x, face_y, face_z, mouth_gap, bbox)
+SELECT DISTINCT i.image_id, i.site_name_id, i.site_image_id, i.contentUrl, i.imagename, i.age_id, i.age_detail_id, i.gender_id, i.location_id, e.face_x, e.face_y, e.face_z, e.mouth_gap, e.bbox
 FROM Images i
 LEFT JOIN Encodings e ON i.image_id = e.image_id
-LEFT JOIN SegmentHelper_Aug25_6and12 sh ON sh.image_id = i.image_id 
-LEFT JOIN SegmentOct20 j ON i.image_id = j.image_id
+LEFT JOIN SegmentHelper_sept4_all_adults_facing_forward sh ON sh.image_id = i.image_id 
+LEFT JOIN SegmentBig_isface j ON i.image_id = j.image_id
 WHERE sh.is_new IS TRUE
     AND j.image_id IS NULL    
-	AND i.age_id  > 3
-LIMIT 1000000; -- Adjust the batch size as needed
+--	AND i.age_id IS NULL
+LIMIT 20000000; -- Adjust the batch size as needed
+
+-- DO THIS EXTRA
+-- Add Location_id from Images
+UPDATE SegmentOct20 j
+JOIN Images i ON j.image_id = i.image_id
+JOIN SegmentHelper_Aug25_6and12 sh ON sh.image_id = i.image_id
+SET j.location_id = i.location_id
+WHERE  j.location_id IS NULL
+    AND i.location_id IS NOT NULL
+    AND i.age_id > 3
+; -- Adjust the batch size as needed
+
+
+SELECT MAX(seg_image_id)
+FROM SegmentBig_isface
+;
 
 -- to test the last row inserted
 SELECT * FROM SegmentOct20 so ORDER BY so.seg_image_id DESC LIMIT 1
@@ -236,6 +259,18 @@ WHERE e.mongo_encodings = 1
     AND e.face_y > -4 AND e.face_y < 4
     AND e.face_z > -4 AND e.face_z < 4
 ; -- 
+
+-- count the above UPDATE, before doing it
+SELECT count(DISTINCT i.image_id) 
+FROM Images i
+LEFT JOIN Encodings e ON i.image_id = e.image_id
+LEFT JOIN SegmentHelper_Aug25_6and12 sh ON sh.image_id = i.image_id 
+LEFT JOIN SegmentOct20 j ON i.image_id = j.image_id
+WHERE  j.location_id IS NULL
+    AND i.location_id IS NOT NULL
+    AND i.age_id > 3
+; -- 
+
 
 SELECT MAX(so.seg_image_id)
 FROM SegmentOct20 so 

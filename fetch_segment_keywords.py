@@ -33,6 +33,27 @@ from nltk.stem.porter import *
 2. Opt 1: preprocess_keywords which stores tokens in the mongo collection and sets mongo_tokens to 1
 3. I think I can move to topic_model.py???
 '''
+
+'''
+seg_image_id limits
+
+53887549 last id in the range: 
+	AND i.age_id > 3
+	AND e.face_x > -45 AND e.face_x < -3
+    AND e.face_y > -10 AND e.face_y < 10
+    AND e.face_z > -10 AND e.face_z < 10
+
+54033177 last id in the range: 
+	AND i.age_id > 3 OR IS NULL
+	AND e.face_x > -45 AND e.face_x < -3
+    AND e.face_y > -10 AND e.face_y < 10
+    AND e.face_z > -10 AND e.face_z < 10
+
+TK last id in the range: 
+    NONE -- just mongo_encodings == 1
+    
+'''
+
 io = DataIO()
 db = io.db
 # io.db["name"] = "ministock"
@@ -75,17 +96,22 @@ ETH_LIST = read_csv(os.path.join(io.ROOT, "stopwords_ethnicity.csv"))
 AGE_LIST = read_csv(os.path.join(io.ROOT, "stopwords_age.csv"))                       
 MY_STOPWORDS = gensim.parsing.preprocessing.STOPWORDS.union(set(GENDER_LIST+ETH_LIST+AGE_LIST))
 
-def make_key_dict(filepath):
+def make_key_dict(filepath, type="keywords"):
     keys_dict = {}
     with open(filepath, 'r') as file:
         keys = csv.reader(file)
         next(keys)
         for row in keys:
             # print(row)
-            keys_dict[int(row[0])] = row[2]
+            if type == "keywords":
+                keys_dict[int(row[0])] = row[2]
+            elif type == "stopwords":
+                if not row[0] == row[1]:
+                    keys_dict[row[0]] = row[1]
         return keys_dict
-keys_dict = make_key_dict("/Users/michaelmandiberg/Documents/GitHub/facemap/utilities/keys/Keywords_202408151415.csv")
-
+KEYS_DICT = make_key_dict("/Users/michaelmandiberg/Documents/GitHub/facemap/utilities/keys/Keywords_202408151415.csv")
+STOPWORDS_DICT = make_key_dict(os.path.join(io.ROOT, "gender_stopwords_dict.csv"), type="stopwords")     
+STOPWORDS_DICT_SET = set(STOPWORDS_DICT.keys())
 
 title = 'Please choose your operation: '
 options = ['Create helper table', 'Fetch keywords list and make tokens', 'Fetch ethnicity list', 'Prune Table where is_face == None', 
@@ -94,8 +120,9 @@ options = ['Create helper table', 'Fetch keywords list and make tokens', 'Fetch 
            ]
 option, index = pick(options, title)
 
-LIMIT= 10000000
-START_ID = 121232831
+# start at 3:41
+LIMIT= 1000000
+START_ID = 20640387
 # Initialize the counter
 counter = 0
 
@@ -106,57 +133,6 @@ class SegmentHelper(Base):
     __tablename__ = SegmentHelper_name
 
     image_id = Column(Integer, primary_key=True)
-
-# def create_TempTable(row, lock, session):
-#     # image_id, bbox, face_x, face_y, face_z, mouth_gap, face_landmarks, face_encodings68, body_landmarks = row
-
-#     image_id = row[0]
-
-#     # Create a SegmentTable object
-#     segment_table = SegmentHelper(
-#         image_id=image_id
-#     )
-
-
-#     # # Create a SegmentTable object
-#     # segment_table = SegmentHelper(
-#     #     image_id=image_id,
-#     #     bbox=bbox,
-#     #     face_x=face_x,
-#     #     face_y=face_y,
-#     #     face_z=face_z,
-#     #     mouth_gap=mouth_gap,
-#     #     face_landmarks=face_landmarks,
-#     #     face_encodings68=face_encodings68,
-#     #     body_landmarks=body_landmarks
-#     # )
-    
-#     # # Create a BagOfKeywords object
-#     # bag_of_keywords = BagOfKeywords(
-#     #     image_id=image_id,
-#     #     description=description,
-#     #     gender_id=gender_id,
-#     #     age_id=age_id,
-#     #     location_id=location_id,
-#     #     keyword_list=None,  # Set this to None or your desired value
-#     #     tokenized_keyword_list=None,  # Set this to None or your desired value
-#     #     ethnicity_list=None  # Set this to None or your desired value
-#     # )
-    
-#     # Add the BagOfKeywords object to the session
-#     session.add(segment_table)
-
-#     with lock:
-#         # Increment the counter using the lock to ensure thread safety
-#         global counter
-#         counter += 1
-#         session.commit()
-
-#     # Print a message to confirm the update
-#     # print(f"Keyword list for image_id {image_id} updated successfully.")
-#     if counter % 1000 == 0:
-#         print(f"Created SegmentTable number: {counter}")
-
 
 
 def create_table(row, lock, session):
@@ -332,7 +308,7 @@ def fetch_images_metadata(image_id_with_no_meta, lock, session):
     else:
         if VERBOSE: print(f"NO ACTION image_id {image_id_with_no_meta} Metas gender age location already exists completely.")
 
-
+    # done at the previous stage now
     if not existing_segment_entry.bbox:
         # Execute the query and fetch the result as a list of keyword_ids
         result_Encodings = session.execute(select_Encodings_metas_query).fetchall()
@@ -490,101 +466,133 @@ def preprocess_keywords(target_image_id, lock,session):
         return stemmer.stem(lemmatizer.lemmatize(text, pos='v'))
     def preprocess_list(keyword_list):
         result = []
-        # text = clarify_keywords(text.lower())
-        individual_words = [word for phrase in keyword_list for word in phrase.split()]
+
+        # Normalize the phrases to lowercase for consistent comparison
+        keyword_list = [phrase.lower() for phrase in keyword_list]
+
+        def check_for_stopwords(phrases):
+            # Step 1: Create a list of individual phrases with stopword replacement
+            individual_phrases = []
+            for phrase in phrases:
+                # print(f"this is the phrase to check for stopwords: {phrase}")
+                # If the entire phrase is a stopword, replace it
+                if phrase in STOPWORDS_DICT_SET:
+                    # print("stopword found: ", phrase)
+                    phrase = STOPWORDS_DICT[phrase]
+                    # print("stopword replaced: ", phrase)
+                individual_phrases.append(phrase)
+            return individual_phrases
+
+        # Step 1: Check for stopwords at the phrase level
+        individual_phrases = check_for_stopwords(keyword_list)
+
+        # Step 2: Split phrases into individual words
+        individual_words = [word for phrase in individual_phrases for word in phrase.split()]
+
+        # Step 3: Check for stopwords at the word level
+        def check_words_for_stopwords(words):
+            filtered_words = []
+            for word in words:
+                # print(f"this is the word to check for stopwords: {word}")
+                # Check for stopwords at the word level
+                if word in STOPWORDS_DICT_SET:
+                    # print("stopword found: ", word)
+                    word = STOPWORDS_DICT[word]
+                    # print("stopword replaced: ", word)
+                filtered_words.append(word)
+            return filtered_words
+
+        individual_words = check_words_for_stopwords(individual_words)
+
+        # Step 4: Process the final list of words
         for token in individual_words:
-            token = clarify_keyword(token.lower())
-            if token not in MY_STOPWORDS and len(token) > 3:
+            # print("this is the token: ", token)
+            token = clarify_keyword(token.lower())  # Normalize to lowercase again, if needed
+            if token and token not in MY_STOPWORDS and len(token) > 3:
                 result.append(lemmatize_stemming(token))
+
         return result
 
     ####
     ## this is the correct regular version, creating a keyword list from the keywords table
     ####
+    token_list = []
 
-    #global session
-    # Build a select query to retrieve keyword_ids for the specified image_id
-    select_keyword_ids_query = (
-        select(ImagesKeywords.keyword_id)
-        .filter(ImagesKeywords.image_id == target_image_id)
-    )
-
-    # Execute the query and fetch the result as a list of keyword_ids
-    result = session.execute(select_keyword_ids_query).fetchall()
-    # keyword_ids = [row.keyword_id for row in result]
-    # print(keys_dict)
-    # for row in result:
-    #     print(row.keyword_id) 
-    if result:
-        keyword_list = []
-        if target_image_id <120000000:
-            # faster list comprehension for the first 120M
-            keyword_list = [keys_dict[row.keyword_id] for row in result]
+    # test to see if tokenized_keyword_list exists in mongo
+    query = {"image_id": target_image_id}
+    is_mongo_tokens = False
+    result = mongo_collection.find(query)
+    for doc in result:
+        if "tokenized_keyword_list" in doc:
+            is_mongo_tokens = True
+            token_list = True
+            # tokenized_keyword_list = pickle.loads(doc["tokenized_keyword_list"])
+            # print("tokenized_keyword_list: ", tokenized_keyword_list)
         else:
-            # some of the last entries have random error keys. Doing a slower version to catch them
-            try:
-                # print(f"Keyword entry for image_id {target_image_id} found.", result)
-                for row in result:
-                    try:
-                        pass
-                        # print(keys_dict[row.keyword_id])
-                        keyword_list.append(keys_dict[row.keyword_id])
-                    except:
-                        print(f">>> Keyword entry {row.keyword_id} for image_id {target_image_id} not found.")
-                # print(keyword_list)
-            except:
-                print(f"Keyword entry for image_id {target_image_id} not found from")
-                return
-    else:
-        print(f"Keywords entry for image_id {target_image_id} not found.")
+            is_mongo_tokens = False
+            print("tokenized_keyword_list not found in the document, will process keywords.")
 
-        select_description_query = (
-            select(SegmentTable.description)
-            .filter(SegmentTable.image_id == target_image_id)
+    # if no tokenized_keyword_list process the keywords
+    if not is_mongo_tokens:
+        #global session
+        # Build a select query to retrieve keyword_ids for the specified image_id
+        select_keyword_ids_query = (
+            select(ImagesKeywords.keyword_id)
+            .filter(ImagesKeywords.image_id == target_image_id)
         )
 
         # Execute the query and fetch the result as a list of keyword_ids
-        result = session.execute(select_description_query).fetchone()
-        if result and result[0]:
-            keyword_list = result[0].replace(".","").split()
+        result = session.execute(select_keyword_ids_query).fetchall()
+        # keyword_ids = [row.keyword_id for row in result]
+        # print(KEYS_DICT)
+        # for row in result:
+        #     print(row.keyword_id) 
+        if result:
+            keyword_list = []
+            if target_image_id <120000000:
+                # faster list comprehension for the first 120M
+                keyword_list = [KEYS_DICT[row.keyword_id] for row in result]
+            else:
+                # some of the last entries have random error keys. Doing a slower version to catch them
+                try:
+                    # print(f"Keyword entry for image_id {target_image_id} found.", result)
+                    for row in result:
+                        try:
+                            pass
+                            # print(KEYS_DICT[row.keyword_id])
+                            keyword_list.append(KEYS_DICT[row.keyword_id])
+                        except:
+                            print(f">>> Keyword entry {row.keyword_id} for image_id {target_image_id} not found.")
+                    # print(keyword_list)
+                except:
+                    print(f"Keyword entry for image_id {target_image_id} not found from")
+                    return
         else:
-            print(f"Description entry for image_id {target_image_id} not found.")
-            return
-        # print(keyword_list)
-        
-    # print(keyword_list)
+            print(f"Keywords entry for image_id {target_image_id} not found.")
 
-    # # this pulls each key text from db - refactoring
-    # # Build a select query to retrieve keywords for the specified keyword_ids
-    # select_keywords_query = (
-    #     select(Keywords.keyword_text)
-    #     .filter(Keywords.keyword_id.in_(keyword_ids))
-    #     .order_by(Keywords.keyword_id)
-    # )
-    # # Execute the query and fetch the results as a list of keyword_text
-    # result = session.execute(select_keywords_query).fetchall()
-    # keyword_list = [row.keyword_text for row in result]
+            select_description_query = (
+                select(SegmentTable.description)
+                .filter(SegmentTable.image_id == target_image_id)
+            )
 
-    with lock:
-
-        # prepare the keyword_list (no pickles, return a string)
-        token_list = preprocess_list(keyword_list)
-
-    # Pickle the keyword_list
-    # print(token_list)
-    keyword_list_pickle = pickle.dumps(token_list)
-
-    # have to do the Mongo here
-
-    # Update the BagOfKeywords entry with the corresponding image_id
-    #OLD
-    # Segment_keywords_entry = (
-    #     session.query(SegmentTable)
-    #     .filter(SegmentTable.image_id == target_image_id)
-    #     .first()
-    # )
-    #NEW
+            # Execute the query and fetch the result as a list of keyword_ids
+            result = session.execute(select_description_query).fetchone()
+            if result and result[0]:
+                keyword_list = result[0].replace(".","").split()
+            else:
+                print(f"Description entry for image_id {target_image_id} not found.")
+                return
     
+        with lock:
+            print(f"prepare the keyword_list {target_image_id} .")
+            # prepare the keyword_list (no pickles, return a string)
+            token_list = preprocess_list(keyword_list)
+
+        # Pickle the keyword_list
+        # print(token_list)
+        keyword_list_pickle = pickle.dumps(token_list)
+
+    # do this regardless of whether is_mongo_tokens is True or False    
     # create a SegmentBig entry
     SegmentBig_entry = (
         session.query(SegmentBig)
@@ -592,30 +600,30 @@ def preprocess_keywords(target_image_id, lock,session):
         .first()
     )
 
-    # query the mongo collection to see if the tokens exist for image_id
-    query = {"image_id": target_image_id}
-    is_mongo_tokens = False
-    result = mongo_collection.find(query)
-    # print("result, ",result)
-    for doc in result:
-        if "tokenized_keyword_list" in doc:
-            tokenized_keyword_list = pickle.loads(doc["tokenized_keyword_list"])
-            is_mongo_tokens = True
-            # print("tokenized_keyword_list: ", tokenized_keyword_list)
+    # use SegmentTable object to test if target_image_id is in the SegmentTable table
+    existing_segment_entry = (
+        session.query(SegmentTable)
+        .filter(SegmentTable.image_id == target_image_id)
+        .first()
+    )
+    if existing_segment_entry:
+        is_in_segment_table = True
+        # print(f"image_id {target_image_id} already exists in the SegmentTable.")
+    else:
+        is_in_segment_table = False
+        # print(f"image_id {target_image_id} does not exist in the SegmentTable.")
+
+    if token_list:
+        # if tokens processed, insert the tokens into the mongo collection
+        if is_mongo_tokens:
+            insert_mongo = False
+            # print(f"Tokens for image_id {target_image_id} already exist, setting mongo_tokens to 1.")
         else:
-            is_mongo_tokens = False
-            # print("tokenized_keyword_list not found in the document.")
-    # print("token_list, ",token_list)
-    print("is_mongo_tokens: ", is_mongo_tokens)
-    if not is_mongo_tokens and token_list:
-        # insert the tokens into the mongo collection
-        insert_mongo = True
+            insert_mongo = True
+            # print(f"Keyword list for image_id {target_image_id} will be updated.")
         SegmentBig_entry.mongo_tokens = 1
-        print(f"Keyword list for image_id {target_image_id} will be updated.")
-    elif is_mongo_tokens and token_list:
-        print(f"Tokens for image_id {target_image_id} already exist, setting mongo_tokens to 1.")
-        SegmentBig_entry.mongo_tokens = 1
-        insert_mongo = False
+        if is_in_segment_table:
+            existing_segment_entry.mongo_tokens = 1
     else:
         insert_mongo = False
         print(f"Keywords entry for image_id {target_image_id} not found.")
@@ -631,6 +639,9 @@ def preprocess_keywords(target_image_id, lock,session):
             {"$set": {"tokenized_keyword_list": keyword_list_pickle}},
             upsert=True
             )
+            print("inserted into mongo", target_image_id)
+        if counter % 1000 == 0: 
+            print(f"Keyword list updated: {counter} at {target_image_id}" )
         session.commit()
 
     if counter % 10000 == 0:

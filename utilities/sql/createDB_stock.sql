@@ -139,6 +139,7 @@ CREATE TABLE Encodings (
     mongo_face_landmarks boolean,
     is_small boolean,
     mongo_body_landmarks_norm boolean,
+    two_noses boolean,
     UNIQUE (image_id)
 ); 
 

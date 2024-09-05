@@ -64,6 +64,11 @@ DELETE FROM CountGender_Topics_so t ;
 DELETE FROM CountEthnicity_Topics_so t ;
 DELETE FROM Topics t ;
 
+
+DELETE FROM ImagesPoses ;
+DELETE FROM Poses ;
+
+
 SELECT * FROM BagOfKeywords bok 
 LIMIT 1000;
 

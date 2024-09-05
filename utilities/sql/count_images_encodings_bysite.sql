@@ -38,6 +38,7 @@ SELECT
     so.site_name_id,
     COUNT(so.image_id) AS image_count,
     SUM(CASE WHEN so.mongo_face_landmarks  IS NOT NULL THEN 1 ELSE 0 END) AS face_encodings68_not_null_count,
+    SUM(CASE WHEN so.location_id  IS NOT NULL THEN 1 ELSE 0 END) AS location_id_count,
     SUM(CASE WHEN so.mongo_body_landmarks  IS NOT NULL THEN 1 ELSE 0 END) AS body_landmarks_not_null_count,
     SUM(CASE WHEN so.mongo_body_landmarks_norm  IS NOT NULL THEN 1 ELSE 0 END) AS mongo_body_landmarks_norm_count
 FROM
@@ -95,3 +96,48 @@ GROUP BY
     site_name_id
 ORDER BY 
     site_name_id;
+   
+   
+   
+-- count of poses
+   
+SELECT
+    ip.cluster_id,
+    COUNT(so.image_id) AS image_count,
+    SUM(CASE WHEN pb.bbox_67  IS NOT NULL THEN 1 ELSE 0 END) AS phone bbox
+FROM
+    SegmentOct20 so 
+INNER JOIN ImagesPoses ip ON ip.image_id = so.image_id
+JOIN PhoneBbox pb ON pb.image_id = so.image_id 
+GROUP BY
+    ip.cluster_id
+ORDER BY
+    ip.cluster_id;
+   
+   
+   
+   
+   
+   
+   
+   
+   
+   
+   
+   
+   
+   
+   -- stuff
+   
+       SUM(CASE WHEN so.mongo_face_landmarks  IS NOT NULL THEN 1 ELSE 0 END) AS face_encodings68_not_null_count,
+    SUM(CASE WHEN so.mongo_body_landmarks  IS NOT NULL THEN 1 ELSE 0 END) AS body_landmarks_not_null_count,
+    SUM(CASE WHEN so.mongo_body_landmarks_norm  IS NOT NULL THEN 1 ELSE 0 END) AS mongo_body_landmarks_norm_count
+
+   
+   
+   
+   
+   
+   
+
+

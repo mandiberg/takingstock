@@ -7,6 +7,10 @@ USE stock
 ;
 
 
+UPDATE SegmentBig_isface
+SET mongo_tokens = NULL
+WHERE mongo_tokens is not null;
+
 DELETE 
 FROM Poses
 ;
@@ -44,24 +48,45 @@ WHERE
     AND e.face_z < 10
 ;
 
-SELECT COUNT(sbi.seg_image_id)
-FROM SegmentBig_isface sbi 
-WHERE sbi.mongo_tokens = 1
+SELECT COUNT(sbi.image_id)
+FROM Images sbi 
+WHERE  sbi.site_name_id = 1
+AND sbi.location_id IS NULL
 ;
 
 SELECT *
-FROM SegmentBig_isface sbi 
-WHERE sbi.image_id = 8282847
+FROM Images sbi 
+WHERE sbi.image_id = 6327930
 ;
 
+SELECT *
+FROM Images i
+WHERE i.site_image_id = 1279105214
+AND i.site_name_id = 1
+;
 
+SELECT *
+FROM SegmentOct20 so 
+WHERE so.contentUrl LIKE '%wasja%'
+;
 
 SELECT COUNT(*)
 FROM SegmentOct20 so 
-WHERE so.contentUrl LIKE '%wasja1603%'
+WHERE so.contentUrl LIKE '%wasja%'
 AND description LIKE 'Young woman with%'
 ;
 
+SELECT COUNT(*)
+FROM SegmentBig_isface so 
+WHERE so.mongo_tokens = 1
+;
+
+SELECT *
+FROM Images ip 
+WHERE ip.site_image_id = 1533708242
+;
+
+-- 105617677 
 DELETE 
 FROM Images 
 
@@ -143,8 +168,8 @@ WHERE so.mongo_body_landmarks_norm = 1
 ;
 
 SELECT *
-FROM Encodings e 
-WHERE e.image_id = 81533412
+FROM SegmentBig_isface e 
+WHERE e.image_id = 427500
 ;
 
 SELECT COUNT(s.image_id)

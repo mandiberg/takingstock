@@ -1,3 +1,563 @@
+"Belarus",1
+"The Republic of Belarus",1
+"Bulgaria",2
+"The Republic of Bulgaria",2
+"Czechia",3
+"Czech Republic",3
+"The Czech Republic",3
+"Hungary",4
+"Moldova",5
+"The Republic of Moldova",5
+"Moldova (the Republic of)",5
+"Poland",6
+"The Republic of Poland",6
+"Romania",7
+"Russia",8
+"Russia Russian",8
+"Federation (the)",8
+"The Russian Federation",8
+"Slovakia",9
+"The Slovak Republic",9
+"Ukraine",10
+"Cocos (Keeling) Islands",11
+"Cocos (Keeling) Islands (the)",11
+"The Territory of Cocos (Keeling) Islands",11
+"Cocos or Keeling Islands - Australian Territory",11
+"Comoros",12
+"Comoros (the)",12
+"The Union of the Comoros",12
+"Maldives",13
+"The Republic of Maldives",13
+"Mauritius",14
+"The Republic of Mauritius",14
+"Réunion",15
+"Réunion - French Overseas Territory",15
+"Seychelles",16
+"The Republic of Seychelles",16
+"Afghanistan",17
+"Islamic Republic of Afghanistan",17
+"The Islamic Republic of Afghanistan",17
+"Kazakhstan",18
+"The Republic of Kazakhstan",18
+"Kyrgyzstan",19
+"The Kyrgyz Republic",19
+"Nepal",20
+"The Federal Democratic Republic of Nepal",20
+"Tajikistan",21
+"The Republic of Tajikistan",21
+"Turkmenistan",22
+"Uzbekistan",23
+"The Republic of Uzbekistan",23
+"China",24
+"China - East Asia",24
+"The People's Republic of China",24
+"Hong Kong",25
+"The Hong Kong Special Administrative Region of China",25
+"Japan",26
+"Macau",27
+"Macao",27
+"The Macao Special Administrative Region of China",27
+"Mongolia",28
+"Independent Mongolia",28
+"North Korea",29
+"The Democratic People's Republic of Korea",29
+"Korea (the Democratic People's Republic of)",29
+"South Korea",30
+"(the Republic of)",30
+"South Korea Korea",30
+"The Republic of Korea",30
+"Taiwan",31
+"The Republic of China",31
+"Taiwan (Province of China)",31
+"Cambodia",32
+"The Kingdom of Cambodia",32
+"Indonesia",33
+"The Republic of Indonesia",33
+"Laos",34
+"The Lao People's Democratic Republic",34
+"Lao People's Democratic Republic (the)",34
+"Malaysia",35
+"Philippines",36
+"Philippines (the)",36
+"The Republic of the Philippines",36
+"Singapore",37
+"The Republic of Singapore",37
+"Vietnam",38
+"Viet Nam",38
+"The Socialist Republic of Viet Nam",38
+"Bangladesh",39
+"The People's Republic of Bangladesh",39
+"Bhutan",40
+"The Kingdom of Bhutan",40
+"India",41
+"The Republic of India",41
+"Pakistan",42
+"The Islamic Republic of Pakistan",42
+"Sri Lanka",43
+"The Democratic Socialist Republic of Sri Lanka",43
+"Iran",44
+"Iran (Islamic Republic of)",44
+"The Islamic Republic of Iran",44
+"Iraq",45
+"The Republic of Iraq",45
+"Israel",46
+"The State of Israel",46
+"Jordan",47
+"Jordan - Middle East",47
+"The Hashemite Kingdom of Jordan",47
+"Lebanon",48
+"Lebanon - Country",48
+"The Lebanese Republic",48
+"Syria",49
+"The Syrian Arab Republic",49
+"Syrian Arab Republic (the)",49
+"Turkey",50
+"Türkiye",50
+"Türkiye - Country",50
+"The Republic of Türkiye",50
+"Algeria",51
+"The People's Democratic Republic of Algeria",51
+"Egypt",52
+"The Arab Republic of Egypt",52
+"Libya",53
+"The State of Libya",53
+"Morocco",54
+"The Kingdom of Morocco",54
+"Tunisia",55
+"The Republic of Tunisia",55
+"Benin",56
+"The Republic of Benin",56
+"Ghana",57
+"The Republic of Ghana",57
+"Guinea",58
+"The Republic of Guinea",58
+"Guinea Bissau",59
+"Guinea-Bissau",59
+"The Republic of Guinea-Bissau",59
+"Ivory Coast",60
+"Côte d'Ivoire",60
+"The Republic of Côte d'Ivoire",60
+"Liberia",61
+"The Republic of Liberia",61
+"Mali",62
+"The Republic of Mali",62
+"Mauritania",63
+"The Islamic Republic of Mauritania",63
+"Niger",64
+"Niger (the)",64
+"The Republic of the Niger",64
+"Nigeria",65
+"The Federal Republic of Nigeria",65
+"Senegal",66
+"The Republic of Senegal",66
+"Sierra Leone",67
+"The Republic of Sierra Leone",67
+"Gambia",68
+"The Gambia",68
+"Gambia (the)",68
+"The Republic of The Gambia",68
+"Togo",69
+"The Togolese Republic",69
+"Cameroon",70
+"The Republic of Cameroon",70
+"Central African Republic",71
+"The Central African Republic",71
+"Central African Republic (the)",71
+"Chad",72
+"The Republic of Chad",72
+"Chad - Central Africa",72
+"Equatorial Guinea",73
+"The Republic of Equatorial Guinea",73
+"Gabon",74
+"The Gabonese Republic",74
+"São Tomé and Príncipe",75
+"Sao Tome and Principe",75
+"The Democratic Republic of São Tomé and Príncipe",75
+"Democratic Republic of the Congo",76
+"The Democratic Republic of the Congo",76
+"Congo (the Democratic Republic of the)",76
+"Angola",77
+"The Republic of Angola",77
+"Botswana",78
+"The Republic of Botswana",78
+"Burundi",79
+"Burundi - East Africa",79
+"The Republic of Burundi",79
+"Djibouti",80
+"The Republic of Djibouti",80
+"Eritrea",81
+"The State of Eritrea",81
+"Ethiopia",82
+"The Federal Democratic Republic of Ethiopia",82
+"Kenya",83
+"The Republic of Kenya",83
+"Malawi",84
+"The Republic of Malawi",84
+"Mozambique",85
+"The Republic of Mozambique",85
+"Namibia",86
+"The Republic of Namibia",86
+"Rwanda",87
+"The Republic of Rwanda",87
+"Somalia",88
+"The Federal Republic of Somalia",88
+"Sudan",89
+"Sudan (the)",89
+"The Republic of the Sudan",89
+"Tanzania",90
+"The United Republic of Tanzania",90
+"Tanzania, the United Republic of",90
+"Uganda",91
+"The Republic of Uganda",91
+"Zambia",92
+"The Republic of Zambia",92
+"Zimbabwe",93
+"The Republic of Zimbabwe",93
+"Lesotho",94
+"The Kingdom of Lesotho",94
+"Madagascar",95
+"The Republic of Madagascar",95
+"South Africa",96
+"The Republic of South Africa",96
+"Eswatini",97
+"Eswatini (Swaziland)",97
+"The Kingdom of Eswatini",97
+"Bermuda",98
+"France",99
+"The French Republic",99
+"Denmark",100
+"The Kingdom of Denmark",100
+"Finland",101
+"The Republic of Finland",101
+"Norway",102
+"The Kingdom of Norway",102
+"Sweden",103
+"The Kingdom of Sweden",103
+"Belgium",104
+"The Kingdom of Belgium",104
+"Luxembourg",105
+"Luxembourg - Benelux",105
+"The Grand Duchy of Luxembourg",105
+"Netherlands",106
+"Netherlands, Kingdom of the",106
+"The Kingdom of the Netherlands",106
+"Greenland",107
+"Kalaallit Nunaat",107
+"Iceland",108
+"Ireland",109
+"Republic of",109
+"Ireland Ireland",109
+"Republic of Ireland",109
+"United Kingdom",110
+"The United Kingdom of Great Britain and Northern Ireland",110
+"United Kingdom of Great Britain and Northern Ireland (the)",110
+"Scotland",111
+"Wales",112
+"England",113
+"Austria",114
+"The Republic of Austria",114
+"Germany",115
+"The Federal Republic of Germany",115
+"Switzerland",116
+"The Swiss Confederation",116
+"Greece",117
+"The Hellenic Republic",117
+"Italy",118
+"The Italian Republic",118
+"Malta",119
+"The Republic of Malta",119
+"Portugal",120
+"The Portuguese Republic",120
+"Spain",121
+"The Kingdom of Spain",121
+"Albania",122
+"The Republic of Albania",122
+"Serbia",123
+"The Republic of Serbia",123
+"Montenegro",124
+"Kosovo",125
+"Estonia",126
+"The Republic of Estonia",126
+"Latvia",127
+"The Republic of Latvia",127
+"Lithuania",128
+"The Republic of Lithuania",128
+"Armenia",129
+"Armenia - Country",129
+"The Republic of Armenia",129
+"Azerbaijan",130
+"The Republic of Azerbaijan",130
+"Georgia",131
+"Georgia - Country",131
+"Georgia (country)",131
+"Bahrain",132
+"The Kingdom of Bahrain",132
+"Kuwait",133
+"The State of Kuwait",133
+"Oman",134
+"The Sultanate of Oman",134
+"Saudi Arabia",135
+"The Kingdom of Saudi Arabia",135
+"United Arab Emirates",136
+"The United Arab Emirates",136
+"United Arab Emirates (the)",136
+"Yemen",137
+"The Republic of Yemen",137
+"Mexico",138
+"The United Mexican States",138
+"United States United",139
+"States of America (the)",139
+"The United States of America",139
+"Bahamas",140
+"The Bahamas",140
+"Bahamas (the)",140
+"The Commonwealth of The Bahamas",140
+"Belize",141
+"Costa Rica",142
+"The Republic of Costa Rica",142
+"Guatemala",143
+"The Republic of Guatemala",143
+"Honduras",144
+"The Republic of Honduras",144
+"Nicaragua",145
+"The Republic of Nicaragua",145
+"Panama",146
+"The Republic of Panamá",146
+"Argentina",147
+"The Argentine Republic",147
+"Bolivia",148
+"Bolivia (Plurinational State of)",148
+"The Plurinational State of Bolivia",148
+"Brazil",149
+"The Federative Republic of Brazil",149
+"Chile",150
+"The Republic of Chile",150
+"Colombia",151
+"The Republic of Colombia",151
+"Ecuador",152
+"The Republic of Ecuador",152
+"Guyane",153
+"French Guiana",153
+"Guyana",154
+"The Co-operative Republic of Guyana",154
+"Paraguay",155
+"The Republic of Paraguay",155
+"Peru",156
+"The Republic of Perú",156
+"Suriname",157
+"The Republic of Suriname",157
+"Uruguay",158
+"The Oriental Republic of Uruguay",158
+"Venezuela",159
+"Venezuela (Bolivarian Republic of)",159
+"The Bolivarian Republic of Venezuela",159
+"Canada",160
+"San Marino",161
+"The Republic of San Marino",161
+"Monaco",162
+"The Principality of Monaco",162
+"Northern Ireland",163
+"Qatar",164
+"The State of Qatar",164
+"Zanzibar",165
+"French Polynesia",166
+"Tonga",167
+"The Kingdom of Tonga",167
+"Micronesia",168
+"Federated States of Micronesia",168
+"Micronesia (Federated States of)",168
+"The Federated States of Micronesia",168
+"Samoa",169
+"The Independent State of Samoa",169
+"Cook Islands",170
+"The Cook Islands",170
+"Cook Islands (the)",170
+"Palau",171
+"The Republic of Palau",171
+"Fiji",172
+"The Republic of Fiji",172
+"Solomon Islands",173
+"The Solomon Islands",173
+"Vanuatu",174
+"The Republic of Vanuatu",174
+"New Zealand",175
+"The Virgin Islands",176
+"British Virgin Islands",176
+"Virgin Islands (British)",176
+"Aruba",177
+"Curaçao",178
+"The Country of Curaçao",178
+"Martinique",179
+"Saint Barthélemy",180
+"The Collectivity of Saint-Barthélemy",180
+"Guadeloupe",181
+"Australia",182
+"The Commonwealth of Australia",182
+"Sint Maarten",183
+"Sint Maarten Sint",183
+"Maarten (Dutch part)",183
+"Saba - Antilles",184
+"Grenada",185
+"Saint Lucia",186
+"Barbados",187
+"Cuba",188
+"The Republic of Cuba",188
+"Puerto Rico",189
+"The Commonwealth of Puerto Rico",189
+"Jamaica",190
+"Dominican Republic",191
+"The Dominican Republic",191
+"Dominican Republic (the)",191
+"Cayman Islands",192
+"The Cayman Islands",192
+"Cayman Islands (the)",192
+"Svalbard",193
+"Brunei",194
+"Brunei Darussalam",194
+"The Nation of Brunei, the Abode of Peace",194
+"Myanmar",195
+"The Republic of the Union of Myanmar",195
+"North Macedonia",196
+"The Republic of North Macedonia",196
+"Slovenia",197
+"The Republic of Slovenia",197
+"Bosnia and Hercegovina",198
+"Bosnia and Herzegovina",198
+"Croatia",199
+"The Republic of Croatia",199
+"Burkina Faso",200
+"Papua New Guinea",201
+"The Independent State of Papua New Guinea",201
+"Thailand",202
+"The Kingdom of Thailand",202
+"Malvinas",203
+"Falkland Islands",203
+"The Falkland Islands",203
+"Antarctica",204
+"All land and ice shelves south of the 60th parallel south",204
+"Isle of Man",205
+"The Isle of Man",205
+"Jersey",206
+"Jersey - England",206
+"The Bailiwick of Jersey",206
+"Guernsey",207
+"Bailiwick of",207
+"Guernsey Guernsey",207
+"The Bailiwick of Guernsey",207
+"Mayotte",208
+"The Department of Mayotte",208
+"Haiti",209
+"The Republic of Haiti",209
+"El Salvador",210
+"The Republic of El Salvador",210
+"Liechtenstein",211
+"The Principality of Liechtenstein",211
+"Wallis and Futuna",212
+"The Territory of the Wallis and Futuna Islands",212
+"New Caledonia",213
+"Trinidad and Tobago",214
+"The Republic of Trinidad and Tobago",214
+"Turks and Caicos Islands",215
+"The Turks and Caicos Islands",215
+"Turks and Caicos Islands (the)",215
+"Anguilla",216
+"Dominica",217
+"The Commonwealth of Dominica",217
+"Faroe Islands",218
+"The Faroe Islands",218
+"Faroe Islands (the)",218
+"Gibraltar",219
+"Virgin Islands",220
+"Virgin Islands (U.S.)",220
+"United States Virgin Islands",220
+"The Virgin Islands of the United States",220
+"Saba",221
+"Bonaire",221
+"Saba (island)",221
+"Bonaire, Sint Eustatius and Saba",221
+"Nauru",222
+"The Republic of Nauru",222
+"Marshall Islands",223
+"Marshall Islands (the)",223
+"The Republic of the Marshall Islands",223
+"Andorra",224
+"The Principality of Andorra",224
+"Guam",225
+"The Territory of Guam",225
+"Kiribati",226
+"The Republic of Kiribati",226
+"American Samoa",227
+"The Territory of American Samoa",227
+"Cabo Verde",228
+"Cape Verde",228
+"The Republic of Cabo Verde",228
+"Antigua and Barbuda",229
+"Åland",230
+"Åland Islands",230
+"Christmas Island",231
+"The Territory of Christmas Island",231
+"Niue",232
+"Tuvalu",233
+"East Timor",234
+"Timor-Leste",234
+"The Democratic Republic of Timor-Leste",234
+"Northern Mariana Islands",235
+"Northern Mariana Islands (the)",235
+"The Commonwealth of the Northern Mariana Islands",235
+"Saint Vincent and the Grenadines",236
+"Saint Kitts and Nevis",237
+"Abkhazia",238
+"South Ossetia",239
+"Norfolk Island",240
+"The Territory of Norfolk Island",240
+"Tokelau",241
+"Somaliland",242
+"French Overseas Territory",243
+"French Southern Territories (the)",243
+"French Southern and Antarctic Lands",243
+"The French Southern and Antarctic Lands",243
+"Holy See",244
+"The Holy See",244
+"Holy See (the)",244
+"State of the Vatican City",244
+"Republic of the",245
+"Congo Congo (the)",245
+"Republic of the Congo",245
+"The Republic of the Congo",245
+"South Sudan",246
+"The Republic of South Sudan",246
+"Western Sahara",247
+"The Sahrawi Arab Democratic Republic",247
+"British Indian Ocean Territory",248
+"The British Indian Ocean Territory",248
+"British Indian Ocean Territory (the)",248
+"Jan Mayen",249
+"Svalbard and Jan Mayen",249
+"Palestine",250
+"State of Palestine",250
+"Palestine, State of",250
+"The State of Palestine",250
+"Cyprus",251
+"The Republic of Cyprus",251
+"South Georgia and the South Sandwich Islands",252
+"Saint Martin",253
+"Saint Martin (French part)",253
+"Collectivity of Saint Martin",253
+"The Collectivity of Saint-Martin",253
+"Saint Helena Ascension and Tristan da Cunha",254
+"Saint Helena, Ascension and Tristan da Cunha",254
+"Saint Helena, Ascension Island and Tristan da Cunha",254
+"Montserrat",255
+"Pitcairn",256
+"Pitcairn Islands",256
+"The Pitcairn, Henderson, Ducie and Oeno Islands",256
+"Bouvet Island",257
+"United States Minor Outlying Islands",258
+"United States Minor Outlying Islands (the)",258
+"Baker Island, Howland Island, Jarvis Island, Johnston Atoll, Kingman Reef, Midway Atoll, Navassa Island, Palmyra Atoll, and Wake Island",258
+"Saint Pierre and Miquelon",259
+"The Overseas Collectivity of Saint-Pierre and Miquelon",259
+"The Territory of Heard Island and McDonald Islands",260
 "chornobyl",1
 "targovishte",2
 "bansko",2

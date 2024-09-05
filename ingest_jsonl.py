@@ -79,21 +79,27 @@ NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 18	afripics
 '''
 
-THIS_SITE = 18
+THIS_SITE = 1
 
 SEARCH_KEYS_FOR_LOC = True
 VERBOSE = False
 TIMER = False
 LOC_ONLY = True
+CSV_TYPE = None
 
 # where key, etc csvs stored
 INGEST_ROOT = "/Users/michaelmandiberg/Documents/GitHub/facemap/utilities/keys/"
 eth_dict_per_site = {}
 
 if THIS_SITE == 1:
-    INGEST_ROOTG = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/getty_scrape/done"
-    INGEST_FOLDER = os.path.join(INGEST_ROOTG, "getty_noeth_toobig")
-    JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache_noNoNOs_noSilver.jsonl")
+    # LOC 2
+    # INGEST_ROOTG = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/getty_scrape/done"
+    # INGEST_FOLDER = os.path.join(INGEST_ROOTG, "unfinished_serbia")
+    # JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache.jsonl")
+
+    INGEST_FOLDER = "/Users/michaelmandiberg/Documents/GitHub/facemap/"
+    JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "getty_metas_id_loc.jsonl")
+
 elif THIS_SITE == 2:
     # testing round 2
     INGEST_FOLDER = "/Volumes/RAID54/process_CSVs_to_ingest/shutterstockCSVs/Shutterstock_Caches-bup/less_1M_done"
@@ -111,14 +117,25 @@ elif THIS_SITE == 4:
     INGEST_FOLDER = "/Volumes/RAID54/process_CSVs_to_ingest/iStock"
     JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "april15_iStock_output.jsonl")
 elif THIS_SITE == 5:
-    JSONL_IN_PATH = "/Volumes/RAID54/process_CSVs_to_ingest/pexelsCSVs/pexels.output.csv"
+    # LOC 2 as CSV
+    INGEST_FOLDER = "/Volumes/RAID54/process_CSVs_to_ingest/pexelsCSVs"
+    JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "pexels.output.csv")
     INPUT_TYPE = "csv"
 elif THIS_SITE == 6:
     # done -- only 1488334?
-    # no keys so no loc info
+    # LOC 2 (no keys, so no loc)
     io.db["name"] = "stock"
     INGEST_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/unsplashCSVs"
     JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache.jsonl")
+elif THIS_SITE == 7:
+    # LOC 2
+    INGEST_FOLDER = "/Volumes/RAID18/scraping_process/process_scraping process_deletewhendoneDL/Pond5"
+    JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "items_cache.jsonl")
+elif THIS_SITE == 8:
+    # LOC 2 as CSV
+    CSV_TYPE = "123rf"
+    INGEST_FOLDER = "/Volumes/RAID54/process_CSVs_to_ingest/123rfCSVs"
+    JSONL_IN_PATH = os.path.join(INGEST_FOLDER, "123rf.output.csv")
 elif THIS_SITE == 9:
     # DONE 6150898
     # LOC_ONLY'd
@@ -1349,35 +1366,36 @@ def structure_row_shutterstock_loconly(item, ind, keys_list):
 
 def structure_row_getty(item, ind, keys_list):
     site_id = 1
-    gender = item["gender_id"]
-    age = item["age_id"]
-    description = item["title"]
+    gender = item.get("gender_id", None)
+    age = item.get("age_id", None)
+    description = item.get("title", None)
     gender_key, age_key, age_detail_key = get_gender_age_row(gender, age, description, keys_list, site_id)
     country_key = None
-    if item["location_id"]:
-        if VERBOSE: print("we gotta location: ", item["location_id"])
-        country_key = unlock_key_dict(item["location_id"],locations_dict_getty, loc2loc)
-    if not item["location_id"] or not country_key:
-        if VERBOSE: print("nada location: ", item["location_id"])
+    if item.get("location_id") is not None:
+        print("item location_id is", item.get("location_id"))
+        if VERBOSE: print("we gotta location: ", item.get("location_id"))
+        country_key = unlock_key_dict(item.get("location_id"),locations_dict_getty, loc2loc)
+    if not item.get("location_id") or not country_key:
+        if VERBOSE: print("nada location: ", item.get("location_id"))
         country_key = search_keys(keys_list, key2loc, True)
         if VERBOSE: ("search_keys key2loc for location found: ", country_key)
 
     image_row = {
-        "site_image_id": item["id"],
+        "site_image_id": item.get("id"),
         "site_name_id": site_id,
-        "description": description[:140],
-        "caption": item["caption"][:140],
+        "description": description[:140] if description else None,
+        "caption": item.get("caption", None)[:140] if item.get("caption") else None,
         "age_id": age_key,
         "gender_id": gender_key,
         "age_detail_id": age_detail_key,
-        "contentUrl": item["contentUrl"],
-        "imagename": item["imagename"],
+        "contentUrl": item.get("contentUrl", None),
+        "imagename": item.get("imagename", None),
         "location_id": country_key,        
-        "author": item["author"],        
-        "uploadDate": item["uploadDate"],        
+        "author": item.get("author", None),        
+        "uploadDate": item.get("uploadDate", None),        
+    }
 
         # "imagename": generate_local_unhashed_image_filepath(item[9].replace("images/",""))  # need to refactor this from the contentURL using the hash function
-    }
 
     return nan2none(image_row)
 
@@ -1885,6 +1903,40 @@ def ingest_json():
         if VERBOSE: print("keys_list", keys_list)
         return keys_list
 
+    def item_from_row(row, CSV_TYPE=None):
+        if CSV_TYPE == "123rf":
+            # Parse according to the new CSV structure (123rf.com)
+            item = {
+                "id": row["id"],
+                "title": row["title"],
+                "keywords": row["word"],  # Use "word" for keywords in the 123rf structure
+                "img": row["image_url"],
+                "filters": {
+                    "number_of_people": row["people"] if row["people"] else "",
+                    "country": "",  # This CSV structure doesn't have a country field
+                    "gender": "",  # No gender field in this structure
+                    "age": row["age"] if row["age"] else "",
+                    "mood": row["exclude"] if row["exclude"] else "",  # Assuming "exclude" represents mood
+                    "ethnicity": row["ethnicity"] if row["ethnicity"] else "",
+                }
+            }
+        else:
+            # Parse according to the original CSV structure
+            item = {
+                "id": row["id"],
+                "title": row["title"],
+                "keywords": row["keywords"].replace('|', '|'),  # Adjust if needed for keyword delimiter
+                "img": row["image_url"],
+                "filters": {
+                    "number_of_people": row["number_of_people"] if row["number_of_people"] else "",
+                    "country": row["country"] if row["country"] else "",
+                    "gender": row["gender"] if row["gender"] else "",
+                    "age": row["age"] if row["age"] else "",
+                    "mood": row["mood"] if row["mood"] else "",
+                    "ethnicity": row["ethnicity"] if row["ethnicity"] else "",
+                }
+            }
+        return item
     # change this for each site ingested #
     # adobe
     # column_keys = 6 #where the keywords are
@@ -1907,7 +1959,14 @@ def ingest_json():
     # with open(JSONL_IN_PATH) as file_obj:
     #     # reader = csv.reader((row.replace('\0', '').replace('\x00', '') for row in in_file), delimiter=",")
 
+    # # for csv - PEXELS
+    # with open(JSONL_IN_PATH, newline='', encoding='utf-8') as csvfile:
+    #     reader = csv.DictReader(csvfile)
+    #     print("CSV_TYPE", CSV_TYPE)
+
+    # restore this
     with open(JSONL_IN_PATH, 'r') as cache_file:
+
         start_counter = get_counter()
         print("start_counter: ", start_counter)
         # start_counter = 358430 #temporary for testing, while adobe is ongoing
@@ -1917,14 +1976,14 @@ def ingest_json():
         ind = 0
         shoot_location = None
 
+        # restore this
         for item in cache_file.readlines():
             item = json.loads(item)
         
-        ## for csv - PEXELS
-        # reader_obj = csv.reader(file_obj)
-        # next(reader_obj)  # Skip header row
-        # for row in reader_obj:
-            # print(row[1])
+        # # for csv - PEXELS/123
+        # for row in reader:
+        #     item = item_from_row(row, CSV_TYPE)
+            
 
             if TIMER: start_timer = time.time()
 
@@ -1935,7 +1994,9 @@ def ingest_json():
             if LOC_ONLY:
                 if item.get("id", None) in already_ingested:
                     counter += 1
-                    print("already ingested", item.get("id", None))
+                    if counter % 10000 == 0:
+                        print("already ingested count ", counter)
+                    # print("already ingested", item.get("id", None))
                     continue
                 else:
                     print("new loc", item.get("id", None))
@@ -1958,7 +2019,7 @@ def ingest_json():
                 ethnicity = item.get("filters", {}).get("ethnicity", None)
             elif THIS_SITE == 2 and LOC_ONLY:
                 image_row = structure_row_shutterstock_loconly(item, ind, keys_list)
-            elif THIS_SITE in [3,4,5] and LOC_ONLY:
+            elif THIS_SITE in [3,4,5,6,7,8] and LOC_ONLY:
                 image_row = structure_row_loconly(item, ind, keys_list)
             elif THIS_SITE == 6:
                 image_row = structure_row_unsplash(item, ind, keys_list)
@@ -2097,6 +2158,10 @@ def ingest_json():
                     print("this has been already ingested", image_row['site_image_id'])
                     insert_image_row = False
                     already_image_id = site_image_id_dict.get(image_row['site_image_id'], None)
+                elif image_row['location_id'][0] is None:
+                    # print("this has a NULL value", image_row['site_image_id'])
+                    insert_image_row = False
+                    already_image_id = site_image_id_dict.get(image_row['site_image_id'], None)
                 else:
                     insert_image_row = True
                     # add to already_ingested
@@ -2174,6 +2239,7 @@ def ingest_json():
                                 print(" ")
 
                     elif LOC_ONLY:
+                        if not insert_image_row: continue
                         # add any new loc_no_list values
                         location_id = image_row['location_id']
                         image_id = site_image_id_dict.get(image_row['site_image_id'], None)
