@@ -644,6 +644,7 @@ class SortPose:
             if idx == point:
                 # print("found point:")
                 # print(idx)
+                if self.VERBOSE: print("unprojected face lms",lm.x,lm.y)
                 pointXY = (lm.x * img_w, lm.y * img_h)
                 pointXY = (lm.x * bbox_w + bbox_x, lm.y * bbox_h + bbox_y)
                 # print("landmarkkkkkkkkkkkkkkkkkk",lm.x,lm.y,point)
@@ -1881,7 +1882,7 @@ class SortPose:
         translated_landmarks = landmark_pb2.NormalizedLandmarkList()
         i=0
         for landmark in landmarks.landmark:
-            # print(landmark)
+            # print("normalize_landmarks", nose_pos["x"], landmark.x, width, face_height)
             translated_landmark = landmark_pb2.NormalizedLandmark()
             translated_landmark.x = (nose_pos["x"]-landmark.x*width )/face_height
             translated_landmark.y = (nose_pos["y"]-landmark.y*height)/face_height
@@ -1889,7 +1890,25 @@ class SortPose:
             translated_landmarks.landmark.append(translated_landmark)
 
         return translated_landmarks
-    
+
+    def project_normalized_landmarks(self,landmarks,nose_pos,face_height,shape):
+        # height,width = shape[:2]
+        projected_landmarks = landmark_pb2.NormalizedLandmarkList()
+        i=0
+        for landmark in landmarks.landmark:
+            # print(nose_pos)
+            #  nose_pos[x]-landmark.x*face_height
+            projected_landmark = landmark_pb2.NormalizedLandmark()
+            projected_landmark.x = int(nose_pos["x"]-landmark.x*face_height)
+            projected_landmark.y = int(nose_pos["y"]-landmark.y*face_height)
+            # projected_landmark.x=projected_landmark.x*height/width
+            # projected_landmark.y=projected_landmark.x*width/height   
+            projected_landmark.visibility = landmark.visibility
+            projected_landmarks.landmark.append(projected_landmark)
+
+        return projected_landmarks
+
+
     def convert_bbox_to_face_height(self,bbox):
         if type(bbox)==str:
             bbox=json.loads(bbox)
@@ -1898,9 +1917,14 @@ class SortPose:
         face_height=bbox["top"]-bbox["bottom"]
         return face_height
 
+
+
+
+
     def set_nose_pixel_pos(self,body_landmarks,shape):
         if self.VERBOSE: print("set_nose_pixel_pos body_landmarks")
         height,width = shape[:2]
+        if self.VERBOSE: print("set_nose_pixel_pos bodylms height, width", height, width)
         nose_pixel_pos ={
             "x":0,
             "y":0,
@@ -1909,10 +1933,13 @@ class SortPose:
         # nose_pixel_pos <- 864, 442 (stay as a separate variable)
         # nose_normalized_pos 0,0
         # nose_pos=body_landmarks.landmark[NOSE_ID]
+        if self.VERBOSE: print("unprojected bodylms: ", body_landmarks.landmark[0].x, body_landmarks.landmark[0].y)
         nose_pixel_pos["x"]+=body_landmarks.landmark[0].x*width
         nose_pixel_pos["y"]+=body_landmarks.landmark[0].y*height
-        self.nose_2d = nose_pixel_pos
+        if self.VERBOSE: print ("set_nose_pixel_pos bodylms nose_pixel_pos", nose_pixel_pos)
+        self.nose_2d = nose_pixel_pos # this could be a problem
         if self.VERBOSE: print("set_nose_pixel_pos nose_pixel_pos",nose_pixel_pos)
+        if self.VERBOSE: print("set_nose_pixel_pos self.nose_2d",self.nose_2d)
         nose_pixel_pos["visibility"]+=body_landmarks.landmark[0].visibility
         # nose_3d has visibility
         self.nose_3d = nose_pixel_pos

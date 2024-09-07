@@ -4,7 +4,6 @@ from sqlalchemy import create_engine, text,func, select, delete, and_, or_
 from sqlalchemy.orm import sessionmaker,scoped_session, declarative_base
 from sqlalchemy.pool import NullPool
 # from my_declarative_base import Images,ImagesBackground, SegmentTable, Site 
-from mp_db_io import DataIO
 import pickle
 import numpy as np
 from pick import pick
@@ -17,22 +16,26 @@ import mediapipe as mp
 import shutil
 import pandas as pd
 import json
-from my_declarative_base import Base, Clusters, Encodings, Images,PhoneBbox, SegmentTable, Images
 #from sqlalchemy.ext.declarative import declarative_base
-from mp_sort_pose import SortPose
 import pymongo
 from mediapipe.framework.formats import landmark_pb2
 from pymediainfo import MediaInfo
 import traceback 
 import time
 import math
+import sys
+
+sys.path.insert(1, '/Users/michaelmandiberg/Documents/GitHub/facemap/')
+from mp_db_io import DataIO
+from my_declarative_base import Images, Base, SegmentTable, PhoneBbox, SegmentBig, Clusters, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON
+from mp_sort_pose import SortPose
 
 NOSE_ID=0
 
 
 Base = declarative_base()
-VERBOSE = False
-IS_SSD = True
+VERBOSE = True
+IS_SSD = False
 
 SKIP_EXISTING = False # Skips images with a normed bbox but that have Images.h
 USE_OBJ = 0 # select the bbox to work with
@@ -49,9 +52,6 @@ mongo_collection = mongo_db[io.dbmongo['collection']]
 face_landmarks_collection = mongo_db["encodings"]
 bboxnormed_collection = mongo_db["body_landmarks_norm"]
 # n_phonebbox_collection= mongo_db["bboxnormed_phone"]
-
-# start a timer
-start = time.time()
 
 def ensure_unique_index(collection, field_name):
     # List existing indexes on the collection
@@ -101,7 +101,7 @@ sort = SortPose(motion, face_height_output, image_edge_multiplier_sm,EXPAND, ONE
 # Create a session
 session = scoped_session(sessionmaker(bind=engine))
 
-LIMIT= 30000
+LIMIT= 2
 # Initialize the counter
 counter = 0
 
@@ -136,7 +136,6 @@ def get_shape(target_image_id):
 
     for track in media_info.tracks:
         if track.track_type == 'Image':
-            if VERBOSE: print ("track.height,track.width", track.height,track.width)
             return track.height,track.width
 
     return None,None 
@@ -158,15 +157,22 @@ def get_shape(target_image_id):
 
 #     return n_phone_bbox
 
-def get_landmarks_mongo(image_id):
+def get_landmarks_mongo(image_id, norm=False):
     if image_id:
-        results = mongo_collection.find_one({"image_id": image_id})
-        if results:
-            body_landmarks = results['body_landmarks']
-            # print("got encodings from mongo, types are: ", type(face_encodings68), type(face_landmarks), type(body_landmarks))
-            return unpickle_array(body_landmarks)
+        if norm:
+            results = bboxnormed_collection.find_one({"image_id": image_id})
+            if results:
+                print("got NORM from mongo, types are: ", type(results['nlms']))
+                body_landmarks = results['nlms']
+                return unpickle_array(body_landmarks)
         else:
-            return None
+            results = face_landmarks_collection.find_one({"image_id": image_id})
+            if results:
+                print("got REG from mongo, types are: ", type(results['body_landmarks']))
+                body_landmarks = results['body_landmarks']
+
+            # print("got encodings from mongo, types are: ", type(face_encodings68), type(face_landmarks), type(body_landmarks))
+                return unpickle_array(body_landmarks)
     else:
         return None
     
@@ -258,11 +264,11 @@ def insert_shape(target_image_id,shape):
     Images_entry = (
         session.query(Images)
         .filter(Images.image_id == target_image_id)
-        .first() #### MICHAEL I suspect this is a database dependent problem, doesnt work for me
+        # .first() #### MICHAEL I suspect this is a database dependent problem, doesnt work for me
     )    
     if Images_entry:
-        Images_entry.h=shape[0]
-        Images_entry.w=shape[1]
+        Images_entry.w=shape[0]
+        Images_entry.h=shape[1]
         if VERBOSE:
             print("image_id:", Images_entry.image_id,"height:", Images_entry.h,"width:", Images_entry.w)
 
@@ -282,25 +288,15 @@ def get_phone_bbox(target_image_id):
 
     return phone_bbox
 
-def calc_nlm(image_id_to_shape, lock, session):
-    if VERBOSE: print("calc_nlm image_id_to_shape",image_id_to_shape)
+def project_nlm(image_id_to_shape, lock, session):
+    if VERBOSE: print("project_nlm image_id_to_shape",image_id_to_shape)
+    # start a timer
+    start = time.time()
     target_image_id = list(image_id_to_shape.keys())[0]
     body_landmarks = None
 
     # TK this needs to be ported to calc body code
     height,width, bbox = image_id_to_shape[target_image_id]
-
-    # get the shape of the image if no height in db
-    if height and width:
-        if VERBOSE: print(target_image_id, "have height,width already",height,width)
-    else:
-        height,width=get_shape(target_image_id)
-        if not height or not width: 
-            print(">> IMAGE NOT FOUND,", target_image_id)
-            return
-        insert_shape(target_image_id,[height,width])
-
-
     sort.h = height
     sort.w = width
     if VERBOSE: print("height,width from DB:",height,width)
@@ -308,12 +304,13 @@ def calc_nlm(image_id_to_shape, lock, session):
 
     # get the landmarks
     face_height=get_face_height_face_lms(target_image_id,bbox)
-    if sort.VERBOSE: print("face_height from lms",face_height)
+    print("face_height from lms",face_height)
     nose_pixel_pos_face = sort.get_face_2d_point(1)
-    if sort.VERBOSE: print("nose_pixel_pos from face",nose_pixel_pos_face)
+    print("nose_pixel_pos from face",nose_pixel_pos_face)
+    body_landmarks_norm=get_landmarks_mongo(target_image_id, norm=True)
     body_landmarks=get_landmarks_mongo(target_image_id)
     nose_pixel_pos_body_withviz = sort.set_nose_pixel_pos(body_landmarks,[height,width])
-    if sort.VERBOSE: print("nose_pixel_pos from body",nose_pixel_pos_body_withviz)
+    print("nose_pixel_pos from body",nose_pixel_pos_body_withviz)
     
     #     # for drawing landmarks on test image
     # landmarks_2d = sort.get_landmarks_2d(row['face_landmarks'], list(range(33)), "list")
@@ -324,75 +321,67 @@ def calc_nlm(image_id_to_shape, lock, session):
     # cropped_image = sort.draw_point(cropped_image, landmarks_2d, index = 0)                    
 
     # Extract x and y coordinates
-    xF, yF = int(nose_pixel_pos_face[0]), int(nose_pixel_pos_face[1])
+    # xF, yF = int(nose_pixel_pos_face[0]), int(nose_pixel_pos_face[1])
     xB, yB = int(nose_pixel_pos_body_withviz['x']), int(nose_pixel_pos_body_withviz['y'])
     
-
-        # gets ride of visiblity
     nose_pixel_pos_body = {'x': xB, 'y': yB}
 
-    ## begin testing stuff
 
-    ## FOR TESTING
-    def visualize_landmarks(target_image_id, nose_pixel_pos_face, nose_pixel_pos_body, body_landmarks):
-        all_body_landmarks_dict = sort.get_landmarks_2d(body_landmarks, list(range(33)), "dict")
-        # query mysql SegmentTable for imagename
-        select_image_ids_query = (
-            select(SegmentTable.imagename, SegmentTable.site_name_id)
-            .filter(SegmentTable.image_id == target_image_id)
-        )
-        result = session.execute(select_image_ids_query).fetchall()
-        imagename=result[0][0]
-        site_name_id=result[0][1]
+    ## begin projecting landmarks
+    # landmarks,nose_pos,face_height,shape
+    
+    projected_landmarks = sort.project_normalized_landmarks(body_landmarks_norm, nose_pixel_pos_body, face_height, [height, width])
+    # query mysql SegmentTable for imagename
+    select_image_ids_query = (
+        select(SegmentTable.imagename, SegmentTable.site_name_id)
+        .filter(SegmentTable.image_id == target_image_id)
+    )
+    result = session.execute(select_image_ids_query).fetchall()
+    imagename=result[0][0]
+    site_name_id=result[0][1]
 
-        # open the image with cv2
-        image_path = os.path.join(io.ROOT,io.folder_list[site_name_id],imagename)
-        print("image_path",image_path)
+    # open the image with cv2
+    image_path = os.path.join(io.ROOT,io.folder_list[site_name_id],imagename)
+    print("image_path",image_path)
 
-        # Draw the circle with the converted integer coordinates
-        image = cv2.imread(image_path)
-        print("image shape",image.shape)
-        cv2.circle(image, (int(nose_pixel_pos_face[0]), int(nose_pixel_pos_face[1])), 5, (0, 255, 0), -1)
-        cv2.circle(image, (int(nose_pixel_pos_body['x']), int(nose_pixel_pos_body['y'])), 10, (255, 0, 0), -1)
+    # Draw the circle with the converted integer coordinates
 
-        # iterate through all_body_landmarks_dict and draw the points
-        for key, value in all_body_landmarks_dict.items():
-            print("value",value)
-            x, y = value
-            if x < 10 or y < 10:
-                cv2.circle(image, (int(x*sort.w), int(y*sort.h)), 5, (0, 0, 255), -1)
-            else:
-                cv2.circle(image, (int(x), int(y)), 5, (0, 0, 255), -1)
+    image = cv2.imread(image_path)
+    print("image shape",image.shape)
+    # cv2.circle(image, (int(xF), int(yF)), 5, (0, 255, 0), -1)
+    cv2.circle(image, (int(xB), int(yB)), 10, (255, 0, 0), -1)
 
-        cv2.imshow("image", image)
-        cv2.waitKey(0)
-        cv2.destroyAllWindows()
+    # iterate through all_body_landmarks_dict and draw the points
+    # for key, value in all_body_landmarks_dict.items():
+    #     x, y = value
+
+    for landmark in projected_landmarks.landmark:
+        # print(landmark)
+
+        # print("key",key)
+        # print("value",value)
+        cv2.circle(image, (int(landmark.x), int(landmark.y)), 5, (0, 0, 255), -1)
+
+
+    cv2.imshow("image", image)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
     # set the nose pixel position in the expected dictionary format
 
-    # visualize_landmarks(target_image_id, nose_pixel_pos_face, nose_pixel_pos_body, body_landmarks)
-    
-    ## end testing stuff
+    # end testing stuff
+    return
 
-    # gets ride of visiblity
-    nose_pixel_pos_body = {'x': xB, 'y': yB}
-
-    # Calculate Euclidean distance
-    distance = math.sqrt((xB - xF)**2 + (yB - yF)**2)
-
-    if distance > 300:
-        print(f" >>> TWO NOSES - {target_image_id}. Dist between nose_pixel_pos and nose_pixel_pos_body:", distance)
-
-        session.query(Encodings).filter(Encodings.image_id == target_image_id).update({
-                Encodings.two_noses: 1
-            }, synchronize_session=False)
-        session.query(SegmentTable).filter(SegmentTable.image_id == target_image_id).update({
-                SegmentTable.two_noses: 1
-            }, synchronize_session=False)
-        session.commit()
-        return
 
     # print timer
 
+    if height and width:
+        if VERBOSE: print(target_image_id, "have height,width already",height,width)
+    else:
+        height,width=get_shape(target_image_id)
+        if not height or not width: 
+            print(">> IMAGE NOT FOUND,", target_image_id)
+            return
+        insert_shape(target_image_id,[height,width])
 
 
     if body_landmarks:
@@ -434,10 +423,7 @@ def calc_nlm(image_id_to_shape, lock, session):
     else:
         print("BODY LANDMARK NOT FOUND 404", target_image_id)
 
-    ## FOR TESTING
-    # projected_landmarks = sort.project_normalized_landmarks(n_landmarks, nose_pixel_pos_body, face_height, [height, width])
-    # visualize_landmarks(target_image_id, nose_pixel_pos_face, nose_pixel_pos_body, projected_landmarks)
-
+    
 
 
     with lock:
@@ -451,13 +437,13 @@ def calc_nlm(image_id_to_shape, lock, session):
 
 #######MULTI THREADING##################
 # Create a lock for thread synchronization
-lock = threading.Lock()
-threads_completed = threading.Event()
+# lock = threading.Lock()
+# threads_completed = threading.Event()
 
-# Create a queue for distributing work among threads
-work_queue = queue.Queue()
+# # Create a queue for distributing work among threads
+# work_queue = queue.Queue()
         
-function=calc_nlm
+# function=calc_nlm
 
 
 if USE_OBJ == 26:
@@ -473,12 +459,12 @@ if USE_OBJ == 26:
         limit(LIMIT)
 
 else:
+    print("DOING REGULAR QUERY")
     distinct_image_ids_query = select(Images.image_id.distinct(), Images.h, Images.w, SegmentTable.bbox).\
         outerjoin(SegmentTable,Images.image_id == SegmentTable.image_id).\
         filter(SegmentTable.bbox != None).\
         filter(SegmentTable.two_noses.is_(None)).\
-        filter(SegmentTable.mongo_body_landmarks == 1).\
-        filter(SegmentTable.mongo_body_landmarks_norm.is_(None)).\
+        filter(SegmentTable.mongo_body_landmarks_norm == 1).\
         limit(LIMIT)
 
 # put this back in at future date if needed
@@ -515,11 +501,11 @@ for result in results:
     image_id_to_shape[image_id] = (height, width, bbox)
 
     ### temp single thread for debugging
-    # calc_nlm(image_id_to_shape, lock=None, session=session)
+    project_nlm(image_id_to_shape, lock=None, session=session)
     # print("done with single thread")
     # print(" ")
     # print(" ")
-    work_queue.put(image_id_to_shape)        
+    # work_queue.put(image_id_to_shape)        
 
 # distinct_image_ids = [row[0] for row in session.execute(distinct_image_ids_query).fetchall()]
 # if VERBOSE: print("query length",len(distinct_image_ids))
@@ -558,6 +544,3 @@ print("done")
 # Close the session
 session.commit()
 session.close()
-
-# Print the time taken
-print("Time taken:", time.time()-start)
