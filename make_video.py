@@ -56,15 +56,15 @@ HSV_NORMS = {"LUM": .01, "SAT": 1,  "HUE": 0.002777777778, "VAL": 1}
 
 # this is for controlling if it is using
 # all clusters, 
-IS_CLUSTER = True
+IS_CLUSTER = False
 CLUSTER_TYPE = "Poses"
 DROP_LOW_VIS = False
-USE_HEAD_POSE = True
+USE_HEAD_POSE = False
 # CLUSTER_TYPE = "Clusters"
 N_CLUSTERS = None # declared here, but set in the SQL query below
 # this is for IS_ONE_CLUSTER to only run on a specific CLUSTER_NO
-IS_ONE_CLUSTER = False
-CLUSTER_NO = 8
+IS_ONE_CLUSTER = True
+CLUSTER_NO = 17
 
 # cut the kids
 NO_KIDS = True
@@ -752,30 +752,31 @@ def compare_images(last_image, img, face_landmarks, bbox):
         try:
             if not sort.counter_dict["first_run"]:
                 if VERBOSE:  print("testing is_face")
-                if SORT_TYPE == "planar_body":
-                    # skipping test_pair for body, b/c it is meant for face
-                    is_face = True
-                else:
+                if SORT_TYPE != "planar_body":
+                #     # skipping test_pair for body, b/c it is meant for face
+                #     is_face = True
+                # else:
                     is_face = sort.test_pair(last_image, cropped_image)
-                    if is_face:
-                        if VERBOSE: print("testing mse to see if same image")
-                        face_diff = sort.unique_face(last_image,cropped_image)
-                        # if VERBOSE: print ("mse ", mse) ########## mse not a variable
-                    else:
-                        print("failed is_face test")
-                        # use cv2 to place last_image and cropped_image side by side in a new image
+                if is_face or SORT_TYPE == "planar_body":
+                    if VERBOSE: print("testing mse to see if same image")
+                    face_diff = sort.unique_face(last_image,cropped_image)
+                    if VERBOSE: print("face_diff ", face_diff)
+                    # if VERBOSE: print ("mse ", mse) ########## mse not a variable
+                else:
+                    print("failed is_face test")
+                    # use cv2 to place last_image and cropped_image side by side in a new image
 
 
-                        height = max(last_image.shape[0], cropped_image.shape[0])
-                        last_image = cv2.resize(last_image, (last_image.shape[1], height))
-                        cropped_image = cv2.resize(cropped_image, (cropped_image.shape[1], height))
-                        #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@#
-                        # Concatenate images horizontally
-                        combined_image = cv2.hconcat([last_image, cropped_image])
-                        outpath_notface = os.path.join(sort.counter_dict["outfolder"],"notface",sort.counter_dict['last_description'][:30]+".jpg")
-                        # sort.not_make_face.append(outpath_notfacecombined_image) ########## variable name error
-                        # Save the new image
-                        #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@#
+                    height = max(last_image.shape[0], cropped_image.shape[0])
+                    last_image = cv2.resize(last_image, (last_image.shape[1], height))
+                    cropped_image = cv2.resize(cropped_image, (cropped_image.shape[1], height))
+                    #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@#
+                    # Concatenate images horizontally
+                    combined_image = cv2.hconcat([last_image, cropped_image])
+                    outpath_notface = os.path.join(sort.counter_dict["outfolder"],"notface",sort.counter_dict['last_description'][:30]+".jpg")
+                    # sort.not_make_face.append(outpath_notfacecombined_image) ########## variable name error
+                    # Save the new image
+                    #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@#
 
             else:
                 print("first round, skipping the pair test")
@@ -1138,6 +1139,7 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
             imgfilename = const_imgfilename_NN(row['image_id'], df_sorted, imgfileprefix)
             outpath = os.path.join(sort.counter_dict["outfolder"],imgfilename)
             open_path = os.path.join(io.ROOT,row['folder'],row['imagename'])
+            description = row['description']
             # print(outpath, open_path)
             try:
                 img = cv2.imread(open_path)
@@ -1171,17 +1173,24 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
                 # landmarks_2d = sort.get_landmarks_2d(row['face_landmarks'], list(range(420)), "list")
                 # cropped_image = sort.draw_point(cropped_image, landmarks_2d, index = 0)                    
 
+
+                ### testing
+                print("face_diff", face_diff)
+                # cv2.imshow(str(face_diff), cropped_image)
+                # cv2.waitKey(0)
+                # cv2.destroyAllWindows()
+
                 temp_first_run = sort.counter_dict["first_run"]
                 print("temp_first_run", temp_first_run)
                 if sort.counter_dict["first_run"]:
                     sort.counter_dict["last_description"] = description
                     print("first run, setting last_description")
-                elif face_diff and face_diff < 30:
-                    print("face_diff too small")
+                elif face_diff and face_diff < sort.FACE_DIST_TEST:
+                    print("face_diff too small:", face_diff)
                     # temp, until resegmenting
-                    print(description[0])
-                    print(sort.counter_dict["last_description"])
-                    if description[0] == sort.counter_dict["last_description"]:
+                    print("description", description)
+                    print("sort.counter_dict[last_description]", sort.counter_dict["last_description"])
+                    if description == sort.counter_dict["last_description"]:
                         print("same description!!!")
 
 

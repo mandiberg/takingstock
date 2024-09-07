@@ -44,7 +44,7 @@ class SortPose:
         self.NORM_BODY_MULTIPLIER = 4
         self.BRUTEFORCE = False
         self.CUTOFF = 30 # DOES factor if ONE_SHOT
-
+        self.FACE_DIST_TEST = 30
         self.SORT_TYPE = SORT_TYPE
         if self.SORT_TYPE == "128ds":
             self.MIND = self.MINFACEDIST * 1.5
@@ -61,6 +61,7 @@ class SortPose:
             self.MAXD = self.MAXBODYDIST * 4
             self.MULTIPLIER = self.HSVMULTIPLIER * (self.MINBODYDIST / self.MINFACEDIST)
             self.DUPED = self.BODY_DUPE_DIST
+            self.FACE_DUPE_DIST = self.FACE_DIST_TEST = .01
 
 
         self.INPAINT=INPAINT
@@ -589,6 +590,10 @@ class SortPose:
 
         error, diff = mse(img1, img2)
         
+        # cv2.imshow("difference", diff)
+        # cv2.waitKey(0)
+        # cv2.destroyAllWindows()
+
         # # i don't know what number to use
         # if error == 0:
         #     print(f"unique_face: {error} Fail, images identical")
