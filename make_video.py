@@ -56,14 +56,14 @@ HSV_NORMS = {"LUM": .01, "SAT": 1,  "HUE": 0.002777777778, "VAL": 1}
 
 # this is for controlling if it is using
 # all clusters, 
-IS_CLUSTER = False
+IS_CLUSTER = True
 CLUSTER_TYPE = "Poses"
 DROP_LOW_VIS = False
+USE_HEAD_POSE = True
 # CLUSTER_TYPE = "Clusters"
 N_CLUSTERS = None # declared here, but set in the SQL query below
-
 # this is for IS_ONE_CLUSTER to only run on a specific CLUSTER_NO
-IS_ONE_CLUSTER = True
+IS_ONE_CLUSTER = False
 CLUSTER_NO = 8
 
 # cut the kids
@@ -113,12 +113,13 @@ NORMED_BODY_LMS = True
 MOUTH_GAP = 0
 # if planar_body set OBJ_CLS_ID for each object type
 # 67 is phone, 63 is laptop, 26: 'handbag', 27: 'tie', 32: 'sports ball'
-OBJ_CLS_ID = 67
+OBJ_CLS_ID = 0
 DO_OBJ_SORT = True
 OBJ_DONT_SUBSELECT = False # False means select for OBJ. this is a flag for selecting a specific object type when not sorting on obj
 PHONE_BBOX_LIMITS = [1] # this is an attempt to control the BBOX placement. I don't think it is going to work, but with non-zero it will make a bigger selection. Fix this hack TK. 
 
 ONE_SHOT = True # take all files, based off the very first sort order.
+EXPAND = True # expand with white, as opposed to inpaint and crop
 JUMP_SHOT = True # jump to random file if can't find a run (I don't think this applies to planar?)
 
 
@@ -210,13 +211,12 @@ elif IS_SEGONLY and io.platform == "darwin":
     # FROM += " JOIN ImagesKeywords ik ON s.image_id = ik.image_id JOIN Keywords k ON ik.keyword_id = k.keyword_id "
     # WHERE += " AND k.keyword_text LIKE 'surpris%' "
 
-    WHERE += " AND s.site_name_id = 9 "
     # # testing mongo
     # FROM += " JOIN Encodings e ON s.image_id = e.image_id "
     # WHERE += " AND e.encoding_id > 2612275"
 
     # WHERE = "s.site_name_id != 1"
-    LIMIT = 600000
+    LIMIT = 6000
 
     # TEMP TK TESTING
     # WHERE += " AND s.site_name_id = 8"
@@ -285,7 +285,6 @@ motion = {
     "simple": False,
 }
 
-EXPAND = True
 # face_height_output is how large each face will be. default is 750
 face_height_output = 1000
 # face_height_output = 256
@@ -699,6 +698,17 @@ def prep_encodings_NN(df_segment):
         print(df_segment['body_landmarks_normalized'].head())
         df_segment["body_landmarks_array"] = df_segment["body_landmarks_normalized"].apply(lambda x: sort.prep_enc(x, structure="list")) # swittching to 3d
         print("body_landmarks_array", df_segment["body_landmarks_array"].head())
+        if USE_HEAD_POSE:
+            df_segment = df_segment.apply(sort.weight_face_pose, axis=1)            
+            head_columns = ['face_x', 'face_y', 'face_z', 'mouth_gap']
+
+            # Add the face_x, face_y, face_z, and mouth_gap to the body_landmarks_array
+            df_segment["body_landmarks_array"] = df_segment.apply(
+                lambda row: row["body_landmarks_array"] + [row[col] for col in head_columns] if isinstance(row["body_landmarks_array"], list) else row["body_landmarks_array"],
+                axis=1
+            )            
+            # print("body_landmarks_array after adding head pose", df_segment["body_landmarks_array"])
+
     if SORT_TYPE == "planar_body" and DROP_LOW_VIS:
 
         # if planar_body drop rows where self.BODY_LMS are low visibility

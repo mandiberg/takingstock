@@ -43,7 +43,7 @@ class SortPose:
         self.HSVMULTIPLIER = 3
         self.NORM_BODY_MULTIPLIER = 4
         self.BRUTEFORCE = False
-        self.CUTOFF = 150 # DOES factor if ONE_SHOT
+        self.CUTOFF = 30 # DOES factor if ONE_SHOT
 
         self.SORT_TYPE = SORT_TYPE
         if self.SORT_TYPE == "128ds":
@@ -1087,7 +1087,7 @@ class SortPose:
 
     def get_start_obj_bbox(self, start_img, df_enc):
         if start_img == "median":
-            print("[get_start_obj_bbox] in median")
+            print("[get_start_obj_bbox] in median", df_enc)
             bbox_col = "obj_bbox_list"
             df_rounded = pd.DataFrame()
             # Round each value in the face_encodings68 column to -2 decimal places (hundreds)       
@@ -1098,7 +1098,7 @@ class SortPose:
 
             # Convert the face_encodings68 column to a list of lists
             flattened_array = df_rounded[bbox_col].tolist()        
-            # print("flattened_array", flattened_array)    
+            print("flattened_array", flattened_array)    
             try:
                 enc1 = self.most_common_row(flattened_array)
             except:
@@ -1146,6 +1146,7 @@ class SortPose:
             flattened_array = df_enc[sort_column].tolist()            
             
             enc1 = self.most_common_row(flattened_array)
+            print("get_start_enc_NN most_common_row", enc1)
             # print(dfmode)
             # enc1 = dfmode.iloc[0].to_list()
             # enc1 = df_128_enc.median().to_list()
@@ -1364,6 +1365,9 @@ class SortPose:
                     print("returned obj_bbox1 from this_start", obj_bbox1)
                 print(f"set enc1 from get_start_enc() to {enc1}")
         else: 
+            # if not first round -- is this for round 2+ ?
+            # or is this when it is a cluster/topics pass through? 
+            # 
             # print the last row of the dataframe
             # print("setting enc1 -- last row of the dataframe", df.iloc[-1])
             print("debugging enc1 setting", df.iloc[-1])
@@ -1456,7 +1460,15 @@ class SortPose:
         angle_LH = get_angle(LW, LF)
         angle_RH = get_angle(RW, RF)
         return [angle_LH, angle_RH]
-    
+
+    def weight_face_pose(self,row):
+        row['face_x'] = (row['face_x'] - -28) * 0.25
+        row['face_y'] = row['face_y'] * 0.25
+        row['face_z'] = row['face_z']  * 0.25
+        row['mouth_gap'] = row['mouth_gap']  * 0.25
+        return row
+
+
     def prep_enc(self, enc1, structure="dict"):
         # print("prep_enc enc1", enc1)
         print("prep_enc enc1", type(enc1))

@@ -249,18 +249,18 @@ def selectSQL():
     return(resultsjson)
 
 def make_subset_landmarks(df,add_list=False):
-    def weight_face_pose(row):
-        row['face_x'] = (row['face_x'] - -28) * 0.25
-        row['face_y'] = row['face_y'] * 0.25
-        row['face_z'] = row['face_z']  * 0.25
-        row['mouth_gap'] = row['mouth_gap']  * 0.25
-        return row
+    # def weight_face_pose(row):
+    #     row['face_x'] = (row['face_x'] - -28) * 0.25
+    #     row['face_y'] = row['face_y'] * 0.25
+    #     row['face_z'] = row['face_z']  * 0.25
+    #     row['mouth_gap'] = row['mouth_gap']  * 0.25
+    #     return row
     numerical_columns = [col for col in df.columns if col.startswith('dim_')]
     # set hand_columns = to the numerical_columns in sort.SUBSET_LANDMARKS
     if sort.SUBSET_LANDMARKS:
         subset_columns = [f'dim_{i}' for i in sort.SUBSET_LANDMARKS]
         if USE_HEAD_POSE:
-            df = df.apply(weight_face_pose, axis=1)
+            df = df.apply(sort.weight_face_pose, axis=1)
             head_columns = ['face_x', 'face_y', 'face_z', 'mouth_gap']
             subset_columns += head_columns
     else:
