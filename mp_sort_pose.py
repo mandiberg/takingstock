@@ -87,6 +87,11 @@ class SortPose:
         self.SHOT_CLOCK = 0
         self.SHOT_CLOCK_MAX = 10
         self.BODY_LMS = list(range(13, 23)) # 0 is nose, 13-22 are left and right hands and elbows
+        
+        ## clustering parameters
+        self.query_face = True # set to true. Clusturing code will set some to false
+        self.query_body = True
+        self.query_head_pose = True
         # # self.BODY_LMS = [0,15,16,19,20,21,22] # 0 is nose, 13-22 are left and right hands and elbows
         # self.POINTERS = [16,20,15,19] # 0 is nose, 13-22 are left and right hands and elbows
         # self.THUMBS = [16,22,15,21] # 0 is nose, 13-22 are left and right hands and elbows
@@ -104,7 +109,7 @@ class SortPose:
         # self.SUBSET_LANDMARKS.extend(self.FINGER_LMS) # this should match what is in Clustering
         # only use wrist and finger
         self.SUBSET_LANDMARKS = self.HAND_LMS
-        self.SUBSET_LANDMARKS = self.choose_hand(self.HAND_LMS,"right")
+        # self.SUBSET_LANDMARKS = self.choose_hand(self.HAND_LMS,"right")
         
 
         self.OBJ_CLS_ID = OBJ_CLS_ID
@@ -2094,3 +2099,5 @@ class SortPose:
             # print("right shoulder present")
             is_right_shoulder=True
         return is_left_shoulder,is_right_shoulder
+
+

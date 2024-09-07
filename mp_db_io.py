@@ -8,7 +8,7 @@ import pandas as pd
 import pickle
 import numpy as np
 import pymongo
-
+from decimal import Decimal
 
 class DataIO:
     """Store key database and file IO info for use across codebase"""
@@ -18,6 +18,7 @@ class DataIO:
         self.retry_delay = 5
         self.query_face = True
         self.query_body = True
+        self.query_head_pose = True
         # platform specific file folder (mac for michael, win for satyam)
         if platform == "darwin":
             self.platform = "darwin"
@@ -278,6 +279,11 @@ class DataIO:
         x = int(x)
         if x % 2 == 0: return x+1
         else: return x
+
+
+    def convert_decimals_to_float(self, arr):
+        return [float(x) if isinstance(x, Decimal) else x for x in arr]
+
 
     def get_encodings_mongo(self,image_id):
 

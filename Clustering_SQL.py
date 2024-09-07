@@ -80,10 +80,11 @@ db = io.db
 
 
 NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
-MODE = 1
+MODE = 0
 # CLUSTER_TYPE = "Clusters"
 CLUSTER_TYPE = "Poses"
 # SUBSET_LANDMARKS is now set in sort pose init
+USE_HEAD_POSE = True
 
 ANGLES = []
 STRUCTURE = "list"
@@ -109,7 +110,7 @@ if USE_SEGMENT is True and CLUSTER_TYPE == "Poses":
     ###################################################### 
 
     # Basic Query, this works with gettytest3
-    SELECT = "DISTINCT(s.image_id)"
+    SELECT = "DISTINCT(s.image_id), s.face_x, s.face_y, s.face_z, s.mouth_gap"
     WHERE = " s.mongo_body_landmarks = 1 "
     if MODE == 0:
         FROM = f"{SegmentTable_name} s"
@@ -121,7 +122,7 @@ if USE_SEGMENT is True and CLUSTER_TYPE == "Poses":
         WHERE += " AND ic.cluster_id IS NULL "
 
     # WHERE += " AND h.is_body = 1"
-    LIMIT = 5000000
+    LIMIT = 50000
 
 
     '''
@@ -131,7 +132,7 @@ if USE_SEGMENT is True and CLUSTER_TYPE == "Poses":
     2000 43s
     4000 87s
     30000 2553 @ hands elbows x 3d
-    40000 2248
+    50000 TK @ HAND_LMS + FACE_POSE
     200000 18664 @ 33
     300000 32475 @ 4 x 3d
 
@@ -248,10 +249,20 @@ def selectSQL():
     return(resultsjson)
 
 def make_subset_landmarks(df,add_list=False):
+    def weight_face_pose(row):
+        row['face_x'] = (row['face_x'] - -28) * 0.25
+        row['face_y'] = row['face_y'] * 0.25
+        row['face_z'] = row['face_z']  * 0.25
+        row['mouth_gap'] = row['mouth_gap']  * 0.25
+        return row
     numerical_columns = [col for col in df.columns if col.startswith('dim_')]
     # set hand_columns = to the numerical_columns in sort.SUBSET_LANDMARKS
     if sort.SUBSET_LANDMARKS:
         subset_columns = [f'dim_{i}' for i in sort.SUBSET_LANDMARKS]
+        if USE_HEAD_POSE:
+            df = df.apply(weight_face_pose, axis=1)
+            head_columns = ['face_x', 'face_y', 'face_z', 'mouth_gap']
+            subset_columns += head_columns
     else:
         subset_columns = numerical_columns
     if add_list:
@@ -336,15 +347,6 @@ def best_score(df):
     
     return b_score
     
-# def encodings_split(encodings):
-#     col="encodings"
-#     col_list=[]
-#     for i in range(128):col_list.append(col+str(i))
-#     encoding_data=pd.DataFrame({col:[np.array(encodings)]})
-#     #splitting the encodings column
-#     df = pd.DataFrame(encoding_data["encodings"].tolist(), columns=col_list)
-#     return df
-
 def encodings_split(encodings):
     col_list = [f"encodings{i}" for i in range(128)]
     df = pd.DataFrame([encodings], columns=col_list)
@@ -438,52 +440,6 @@ def assign_images_clusters_DB(df):
     save_images_clusters_DB(df_subset_landmarks)
 
 
-    return
-    for index, row in df.iterrows():
-        image_id = row['image_id']        
-        if CLUSTER_TYPE == "Poses":
-            this_enc = df_subset_landmarks.iloc[index].tolist()
-        elif CLUSTER_TYPE == "Clusters":
-            this_enc = [row[f'encodings{i}'] for i in range(128)]
-
-        this_dist_dict = {}
-        enc1 = np.array(this_enc)
-        for cluster_id in median_dict:
-            enc2 = median_dict[cluster_id]
-            this_dist_dict[cluster_id] = np.linalg.norm(enc1 - enc2, axis=0)
-        
-        cluster_id = min(this_dist_dict, key=this_dist_dict.get)
-        
-        if cluster_id:
-            print(f"Assigning image_id {image_id} to cluster_id {cluster_id}")
-            instance = ImagesClusters(
-                image_id=image_id,
-                cluster_id=cluster_id,
-            )
-            session.add(instance)
-        else:
-            print(f"Something went wrong with image_id {image_id}")
-
-        # Increment the batch counter
-        batch_counter += 1
-
-        # If the batch counter reaches the batch size, commit the session
-        if batch_counter % batch_size == 0:
-            try:
-                # session.commit()
-                print(f"Batch committed successfully. Processed {batch_counter} rows so far.")
-            except IntegrityError as e:
-                session.rollback()
-                print(f"Error occurred during batch commit: {str(e)}")
-
-    # Commit any remaining records after the loop
-    try:
-        # session.commit()
-        print("Final batch committed successfully.")
-    except IntegrityError as e:
-        session.rollback()
-        print(f"Error occurred during final commit: {str(e)}")
-        
 def df_list_to_cols(df, col_name):
 
     # Convert the string representation of lists to actual lists
@@ -504,7 +460,12 @@ def prepare_df(df):
         df['body_landmarks_normalized'] = df['body_landmarks_normalized'].apply(io.unpickle_array)
         # body = self.get_landmarks_2d(enc1, list(range(33)), structure)
         df['body_landmarks_array'] = df['body_landmarks_normalized'].apply(lambda x: io.get_landmarks_2d(x, list(range(33)), structure=STRUCTURE))
+
+        # apply io.convert_decimals_to_float to face_x, face_y, face_z, and mouth_gap 
+        df[['face_x', 'face_y', 'face_z', 'mouth_gap']] = df[['face_x', 'face_y', 'face_z', 'mouth_gap']].astype(float)
+        # df['body_landmarks_array'] = df.apply(lambda row: io.convert_decimals_to_float(row['body_landmarks_array'] + [row['face_x'], row['face_y'], row['face_z'], row['mouth_gap']]), axis=1)
         # drop the columns that are not needed
+        if not USE_HEAD_POSE: df = df.drop(columns=['face_x', 'face_y', 'face_z', 'mouth_gap']) 
         df = df.drop(columns=['face_encodings68', 'face_landmarks', 'body_landmarks', 'body_landmarks_normalized'])
         print("before cols",df)
 
@@ -533,33 +494,14 @@ def main():
     resultsjson = selectSQL()
     print("got results, count is: ",len(resultsjson))
     enc_data=pd.DataFrame()
-    is_body = is_face = True
     df = pd.json_normalize(resultsjson)
     print(df)
-    if CLUSTER_TYPE == "Poses": io.query_face = False
-    elif CLUSTER_TYPE == "Clusters": io.query_body = False
+    if CLUSTER_TYPE == "Poses": io.query_face = sort.query_face = False
+    elif CLUSTER_TYPE == "Clusters": io.query_body = sort.query_body = False
+    if not USE_HEAD_POSE: io.query_head_pose = sort.query_head_pose= False
     df[['face_encodings68', 'face_landmarks', 'body_landmarks', 'body_landmarks_normalized']] = df['image_id'].apply(io.get_encodings_mongo)
-    # face_encodings68, face_landmarks, body_landmarks, body_landmarks_normalized = io.get_encodings_mongo(mongo_db,row["image_id"], is_body=True, is_face=False)
+    # face_encodings68, face_landmarks, body_landmarks, body_landmarks_normalized = sort.get_encodings_mongo(mongo_db,row["image_id"], is_body=True, is_face=False)
     enc_data = prepare_df(df)
-
-    # print(enc_data)
-
-    # for row in resultsjson:
-    #     # gets contentUrl
-    #     if CLUSTER_TYPE == "Poses":
-    #         ##################
-    #         #TK need to rework this for CLUSTER_TYPE
-    #         # to prep the data properly 128d vs 4-33lms
-    #         ##################
-    #         print(row)
-    #         face_encodings68, face_landmarks, body_landmarks, body_landmarks_normalized = io.get_encodings_mongo(mongo_db,row["image_id"], is_body=True, is_face=False)
-    #         print("got encodings from mongo, types are: ", type(face_encodings68), type(face_landmarks), type(body_landmarks_normalized))
-    #         quit()
-    #         pass
-    #     else:
-    #         df=encodings_split(pickle.loads(row["face_encodings68"], encoding='latin1'))
-    #         df["image_id"]=row["image_id"]
-    #         enc_data = pd.concat([enc_data,df],ignore_index=True) 
     
     # choose if you want optimal cluster size or custom cluster size using the parameter GET_OPTIMAL_CLUSTERS
     if MODE == 0:
