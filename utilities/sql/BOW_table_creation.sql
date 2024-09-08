@@ -28,7 +28,11 @@ CREATE TABLE Topics (
 CREATE TABLE ImagesTopics (
 	image_id INT,
     topic_id INT,
-    topic_score FLOAT
+    topic_score FLOAT,
+    topic_id2 INT,
+    topic_score2 FLOAT,
+    topic_id3 INT,
+    topic_score3 FLOAT
 );
 
 

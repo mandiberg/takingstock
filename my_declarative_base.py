@@ -182,6 +182,10 @@ class ImagesTopics(Base):
     image_id    = Column(Integer, ForeignKey('images.image_id'), primary_key=True)
     topic_id    = Column(Integer, ForeignKey('Topics.topic_id'))
     topic_score = Column(Float)
+    topic_id2    = Column(Integer, ForeignKey('Topics.topic_id'))
+    topic_score2 = Column(Float)
+    topic_id3    = Column(Integer, ForeignKey('Topics.topic_id'))
+    topic_score3 = Column(Float)
 
 class ImagesBackground(Base):
     __tablename__ = 'ImagesBackground' 

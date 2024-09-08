@@ -55,11 +55,17 @@ Gen_corpus, Aug26
 5M, 320s
 8.8M (5x5) 1133s
 14.9M (8x8) 3157s
+TK M (9x9) 3800s
 '''
 
 '''
 LDA_model, Aug26
 14.9M, 302s
+9x9, 402s Sept 7 30 topics
+
+
+
+testing cohoerence for 30,40,50 topics sept 7: 21367s
 '''
 
 title = 'Please choose your operation: '
@@ -82,7 +88,7 @@ USE_BIGSEGMENT = True
 VERBOSE = False
 RANDOM = False
 global_counter = 0
-QUERY_LIMIT = 100000
+QUERY_LIMIT = 10000
 # started at 9:45PM, Feb 17
 
 
@@ -286,12 +292,38 @@ def write_imagetopics(resultsjson,lda_model_tfidf,dictionary):
 
         bow_vector = dictionary.doc2bow(preprocess(keyword_list))
 
-        #index,score=sorted(lda_model_tfidf[bow_corpus[i]], key=lambda tup: -1*tup[1])[0]
-        index,score=sorted(lda_model_tfidf[bow_vector], key=lambda tup: -1*tup[1])[0]
+        # #index,score=sorted(lda_model_tfidf[bow_corpus[i]], key=lambda tup: -1*tup[1])[0]
+        # index, score = sorted(lda_model_tfidf[bow_vector], key=lambda tup: -1*tup[1])[0]
+        # index2, score2 = sorted(lda_model_tfidf[bow_vector], key=lambda tup: -1*tup[1])[1]
+        # index3, score3 = sorted(lda_model_tfidf[bow_vector], key=lambda tup: -1*tup[1])[2]
+        sorted_topics = sorted(lda_model_tfidf[bow_vector], key=lambda tup: -1 * tup[1])
+
+        # Extract the first topic
+        if len(sorted_topics) > 0:
+            index, score = sorted_topics[0]
+        else:
+            index, score = None, None
+
+        # Extract the second topic
+        if len(sorted_topics) > 1:
+            index2, score2 = sorted_topics[1]
+        else:
+            index2, score2 = None, None
+
+        # Extract the third topic
+        if len(sorted_topics) > 2:
+            index3, score3 = sorted_topics[2]
+        else:
+            index3, score3 = None, None
+
         imagestopics_entry=ImagesTopics(
-        image_id=row["image_id"],
-        topic_id=index,
-        topic_score=score
+            image_id=row["image_id"],
+            topic_id=index,
+            topic_score=score,
+            topic_id2=index2,
+            topic_score2=score2,
+            topic_id3=index3,
+            topic_score3=score3
         )
         session.add(imagestopics_entry)
         # print(f'image_id {row["image_id"]} -- topic_id {index} -- topic tokens {topic_list[index][:100]}')
@@ -329,6 +361,7 @@ def calc_optimum_topics():
         lda_model = gensim.models.LdaMulticore(corpus, num_topics=num_topics, id2word=dictionary, passes=2, workers=NUMBER_OF_PROCESSES)
         cm = CoherenceModel(model=lda_model, corpus=corpus, coherence='u_mass')
         coher_val_list[i]=cm.get_coherence()
+        print("num_topics: ",num_topics,"coherence: ",coher_val_list[i])
     print(num_topics_list,coher_val_list)  # get coherence value
 
 def gen_corpus():
@@ -337,10 +370,10 @@ def gen_corpus():
     # query = session.query(SegmentTable.tokenized_keyword_list).filter(SegmentTable.tokenized_keyword_list.isnot(None)).limit(QUERY_LIMIT)
     query = session.query(SegmentTable.image_id).filter(
         SegmentTable.mongo_tokens.isnot(None),
-        SegmentTable.face_y > -8,
-        SegmentTable.face_y < 8,
-        SegmentTable.face_z > -8,
-        SegmentTable.face_z < 8
+        SegmentTable.face_y > -9,
+        SegmentTable.face_y < 9,
+        SegmentTable.face_z > -9,
+        SegmentTable.face_z < 9
     ).limit(QUERY_LIMIT)
     results = query.all()
     total_rows = query.count()
