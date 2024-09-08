@@ -1,19 +1,20 @@
 -- 86.3gb, 2.46tb
 
-SET GLOBAL innodb_buffer_pool_size=8073741824;
+SET GLOBAL innodb_buffer_pool_size=8053063680;
 
 
 USE stock
 ;
 
 
-UPDATE SegmentBig_isface
-SET mongo_tokens = NULL
-WHERE mongo_tokens is not null;
+UPDATE Images
+SET w = NULL
+WHERE image_id < 5000;
 
 DELETE 
-FROM Poses
+FROM CountGender_Location
 ;
+
 DELETE 
 FROM ImagesPoses
 ;
@@ -48,15 +49,16 @@ WHERE
     AND e.face_z < 10
 ;
 
-SELECT COUNT(sbi.image_id)
-FROM Images sbi 
-WHERE  sbi.site_name_id = 1
-AND sbi.location_id IS NULL
+SELECT MAX(sbi.image_id)
+FROM SegmentBig_isface sbi 
+WHERE sbi.mongo_tokens IS NOT NULL
 ;
 
+-- 44374493
+
 SELECT *
-FROM Images sbi 
-WHERE sbi.image_id = 6327930
+FROM SegmentOct20 sbi 
+WHERE sbi.image_id = 582260
 ;
 
 SELECT *
@@ -67,7 +69,7 @@ AND i.site_name_id = 1
 
 SELECT *
 FROM SegmentOct20 so 
-WHERE so.contentUrl LIKE '%wasja%'
+WHERE so.mongo_body_landmarks_norm = 1
 ;
 
 SELECT COUNT(*)
@@ -77,8 +79,8 @@ AND description LIKE 'Young woman with%'
 ;
 
 SELECT COUNT(*)
-FROM SegmentBig_isface so 
-WHERE so.mongo_tokens = 1
+FROM SegmentOct20 so 
+WHERE so.mongo_body_landmarks_norm = 1
 ;
 
 SELECT *
@@ -88,7 +90,7 @@ WHERE ip.site_image_id = 1533708242
 
 -- 105617677 
 DELETE 
-FROM Images 
+FROM Images
 
 WHERE description LIKE 'White guy holding a flag of%'
 ;

@@ -1,5 +1,7 @@
 USE stock;
 
+SET GLOBAL innodb_buffer_pool_size=8053063680;
+
 -- create the three tables used by fetch_bagofkeywords.py
 
 CREATE TABLE BagOfKeywords (

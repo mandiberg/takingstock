@@ -123,6 +123,7 @@ class Encodings(Base):
     is_small           = Column(Boolean)
     mongo_body_landmarks_norm   = Column(Boolean)
     two_noses              = Column(Boolean)
+    is_dupe_of            = Column(Integer, ForeignKey('images.image_id'))
 
 class Clusters(Base):
     __tablename__ = 'Clusters'
@@ -231,6 +232,7 @@ class SegmentTable(Base):
     mongo_body_landmarks_norm   = Column(Boolean)
     no_image               = Column(Boolean)
     two_noses              = Column(Boolean)
+    is_dupe_of            = Column(Integer, ForeignKey('images.image_id'))
 
     site     = relationship("Site")
     age      = relationship("Age")

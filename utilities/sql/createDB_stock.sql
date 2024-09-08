@@ -140,6 +140,9 @@ CREATE TABLE Encodings (
     is_small boolean,
     mongo_body_landmarks_norm boolean,
     two_noses boolean,
+    is_dupe_of INTEGER,
+    FOREIGN KEY (image_id) REFERENCES Images(image_id),
+
     UNIQUE (image_id)
 ); 
 

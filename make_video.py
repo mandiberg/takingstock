@@ -16,7 +16,7 @@ from sqlalchemy.pool import NullPool
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
 # my ORM
-from my_declarative_base import Base, SegmentTable,ImagesBackground, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON, Images
+from my_declarative_base import Base, Encodings, SegmentTable,ImagesBackground, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON, Images
 import pymongo
 
 #mine
@@ -56,14 +56,14 @@ HSV_NORMS = {"LUM": .01, "SAT": 1,  "HUE": 0.002777777778, "VAL": 1}
 
 # this is for controlling if it is using
 # all clusters, 
-IS_CLUSTER = False
+IS_CLUSTER = True
 CLUSTER_TYPE = "Poses"
 DROP_LOW_VIS = False
 USE_HEAD_POSE = False
 # CLUSTER_TYPE = "Clusters"
 N_CLUSTERS = None # declared here, but set in the SQL query below
 # this is for IS_ONE_CLUSTER to only run on a specific CLUSTER_NO
-IS_ONE_CLUSTER = True
+IS_ONE_CLUSTER = False
 CLUSTER_NO = 17
 
 # cut the kids
@@ -164,12 +164,12 @@ elif IS_SEGONLY and io.platform == "darwin":
     SELECT = "DISTINCT(s.image_id), s.site_name_id, s.contentUrl, s.imagename, s.description, s.face_x, s.face_y, s.face_z, s.mouth_gap, s.bbox, s.site_image_id"
 
     FROM =f"{SegmentTable_name} s "
-
+    WHERE = " s.is_dupe_of IS NULL "
     # this is the standard segment topics/clusters query for June 2024
     if PHONE_BBOX_LIMITS:
-        WHERE = "  s.face_x > -50 "
+        WHERE += " AND s.face_x > -50 "
     else:
-        WHERE = "  s.face_x > -33 AND s.face_x < -27 AND s.face_y > -2 AND s.face_y < 2 AND s.face_z > -2 AND s.face_z < 2"
+        WHERE += " AND s.face_x > -33 AND s.face_x < -27 AND s.face_y > -2 AND s.face_y < 2 AND s.face_z > -2 AND s.face_z < 2"
     # HIGHER
     # WHERE = "s.site_name_id != 1 AND face_encodings68 IS NOT NULL AND face_x > -27 AND face_x < -23 AND face_y > -2 AND face_y < 2 AND face_z > -2 AND face_z < 2"
 
@@ -760,7 +760,7 @@ def compare_images(last_image, img, face_landmarks, bbox):
                 if is_face or SORT_TYPE == "planar_body":
                     if VERBOSE: print("testing mse to see if same image")
                     face_diff = sort.unique_face(last_image,cropped_image)
-                    if VERBOSE: print("face_diff ", face_diff)
+                    if VERBOSE: print("compare_images face_diff ", face_diff)
                     # if VERBOSE: print ("mse ", mse) ########## mse not a variable
                 else:
                     print("failed is_face test")
@@ -788,9 +788,10 @@ def compare_images(last_image, img, face_landmarks, bbox):
             last_image = cropped_image
             sort.counter_dict["good_count"] += 1
         else: 
-            print("pair do not make a face, skipping")
             sort.counter_dict["isnot_face_count"] += 1
-            return None, None, True
+            print("pair do not make a face, skipping <<< is this really true? Isn't this for dupes?")
+
+            return None, face_diff, True
         
     elif cropped_image is None and sort.counter_dict["first_run"]:
         print("first run, but bad first image")
@@ -1154,6 +1155,43 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
                 # last_image is cv2 np.array
                 cropped_image, face_diff, skip_face = compare_images(sort.counter_dict["last_image"], img, row['face_landmarks'], row['bbox'])
                 print("type of cropped_image", type(cropped_image))
+                if cropped_image is None and skip_face:
+                    print("face_diff", face_diff)
+                    if face_diff == 0:
+                        is_dupe_of = True
+                    elif SORT_TYPE == "planar_body" and face_diff < 10:
+                        print("face_diff is small, so will check description face_diff is small, so will check description")
+                        print(" ")
+                        print(" ")
+                        if description == sort.counter_dict["last_description"]: 
+                            print("same description, going to record as a dupe")
+                            print(" ")
+                            is_dupe_of = True
+                        else:
+                            print(" ")
+                            print("different description, not a dupe")
+                            print(" ")
+                            print("description", description)
+                            print(" ")
+                            print("sort.counter_dict[last_description]", sort.counter_dict["last_description"])
+                            print(" ")
+
+                            is_dupe_of = False
+                    ## TK NEED TO ADD IN CONDITIONAL FOR FACE DUPE DIST
+                    else:
+                        is_dupe_of = False
+
+                    if is_dupe_of:
+                        print(f"identical image, going to record {row['image_id']} as a dupe of ", sort.counter_dict["last_image_id"])
+                        
+                        session.query(Encodings).filter(Encodings.image_id == row['image_id']).update({
+                                Encodings.is_dupe_of: sort.counter_dict["last_image_id"]
+                            }, synchronize_session=False)
+                        session.query(SegmentTable).filter(SegmentTable.image_id == row['image_id']).update({
+                                SegmentTable.is_dupe_of: sort.counter_dict["last_image_id"]
+                            }, synchronize_session=False)
+                        session.commit()
+
                 if skip_face:
                     print("skipping face")
                     continue
@@ -1175,7 +1213,7 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
 
 
                 ### testing
-                print("face_diff", face_diff)
+                print("linear_test_df face_diff", face_diff)
                 # cv2.imshow(str(face_diff), cropped_image)
                 # cv2.waitKey(0)
                 # cv2.destroyAllWindows()
@@ -1185,8 +1223,8 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
                 if sort.counter_dict["first_run"]:
                     sort.counter_dict["last_description"] = description
                     print("first run, setting last_description")
-                elif face_diff and face_diff < sort.FACE_DIST_TEST:
-                    print("face_diff too small:", face_diff)
+                elif face_diff and face_diff < sort.CHECK_DESC_DIST:
+                    print("face_diff is small, so will check descriface_diffption:", face_diff)
                     # temp, until resegmenting
                     print("description", description)
                     print("sort.counter_dict[last_description]", sort.counter_dict["last_description"])
@@ -1219,6 +1257,7 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
                         continue
                     # sort.counter_dict["last_image"] = img_list[-1][1]  #last pair in list, second item in pair
                     sort.counter_dict["last_image"] = cropped_image  #last pair in list, second item in pair
+                    sort.counter_dict["last_image_id"] = row['image_id']  #last pair in list, second item in pair
                 else:
                     print("cropped_image is None")
             else:

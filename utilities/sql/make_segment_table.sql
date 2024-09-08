@@ -1,14 +1,14 @@
 
 USE stock;
 
-SET GLOBAL innodb_buffer_pool_size=8073741824;
+SET GLOBAL innodb_buffer_pool_size = 8053063680;
 
 -- cleanup
 DROP TABLE SegmentHelperAug16_SegOct20_preAlamy ;
 DELETE FROM SegmentHelper_sept4_all_adults_facing_forward;
 
 -- create helper segment table
-CREATE TABLE SegmentHelper_sept4_all_adults_facing_forward (
+CREATE TABLE SegmentHelper_sept4_all_noage_facing_forward (
     seg_image_id int NOT NULL AUTO_INCREMENT PRIMARY KEY,
     image_id INTEGER,
     FOREIGN KEY (image_id) REFERENCES Images(image_id)
@@ -50,6 +50,8 @@ CREATE TABLE SegmentBig_isface (
     mongo_face_landmarks boolean,
     mongo_body_landmarks_norm boolean,
     no_image boolean,
+    is_dupe_of INTEGER,
+    FOREIGN KEY (image_id) REFERENCES Images(image_id),
     UNIQUE (image_id)
 
 
@@ -190,15 +192,15 @@ LIMIT 100000; -- Adjust the batch size as needed
 -- this skips existing so you can rerun ontop of existing data
 -- seg big is -45 to -3, with yz at 10
 
-INSERT INTO SegmentHelper_sept4_all_adults_facing_forward (image_id)
+INSERT INTO SegmentHelper_sept4_all_faces (image_id)
 SELECT DISTINCT e.image_id
 FROM Encodings e
 JOIN Images i ON i.image_id = e.image_id
 WHERE e.mongo_encodings = 1 
-	AND i.age_id > 3
-	AND e.face_x > -45 AND e.face_x < -3
-    AND e.face_y > -10 AND e.face_y < 10
-    AND e.face_z > -10 AND e.face_z < 10
+--	AND i.age_id IS NULL
+--	AND e.face_x > -45 AND e.face_x < -3
+--    AND e.face_y > -10 AND e.face_y < 10
+--    AND e.face_z > -10 AND e.face_z < 10
     AND NOT EXISTS (
         SELECT 1
         FROM SegmentBig_isface sh
@@ -208,10 +210,10 @@ WHERE e.mongo_encodings = 1
    
 -- DO THIS SECOND
 -- add column for is_new 
-ALTER TABLE SegmentHelper_sept4_all_adults_facing_forward
+ALTER TABLE SegmentHelper_sept4_all_faces
 ADD COLUMN is_new BOOL ;
 -- and set is_new to True for new image_id
-UPDATE SegmentHelper_sept4_all_adults_facing_forward sh
+UPDATE SegmentHelper_sept4_all_faces sh
 LEFT JOIN SegmentBig_isface s ON sh.image_id = s.image_id
 SET sh.is_new = True
 WHERE s.image_id IS NULL;
@@ -225,12 +227,12 @@ INSERT INTO SegmentBig_isface (image_id, site_name_id, site_image_id, contentUrl
 SELECT DISTINCT i.image_id, i.site_name_id, i.site_image_id, i.contentUrl, i.imagename, i.age_id, i.age_detail_id, i.gender_id, i.location_id, e.face_x, e.face_y, e.face_z, e.mouth_gap, e.bbox
 FROM Images i
 LEFT JOIN Encodings e ON i.image_id = e.image_id
-LEFT JOIN SegmentHelper_sept4_all_adults_facing_forward sh ON sh.image_id = i.image_id 
+LEFT JOIN SegmentHelper_sept4_all_faces sh ON sh.image_id = i.image_id 
 LEFT JOIN SegmentBig_isface j ON i.image_id = j.image_id
 WHERE sh.is_new IS TRUE
     AND j.image_id IS NULL    
 --	AND i.age_id IS NULL
-LIMIT 20000000; -- Adjust the batch size as needed
+LIMIT 50000000; -- Adjust the batch size as needed
 
 -- DO THIS EXTRA
 -- Add Location_id from Images
@@ -244,12 +246,94 @@ WHERE  j.location_id IS NULL
 ; -- Adjust the batch size as needed
 
 
+
+-- DO THIS EXTRA PART TWO
+-- Add images metadata
+
+UPDATE SegmentBig_isface sb
+JOIN Images i ON sb.image_id = i.image_id
+SET
+    sb.description = IF(sb.description IS NULL, i.description, sb.description),
+    sb.site_name_id = IF(sb.site_name_id IS NULL, i.site_name_id, sb.site_name_id),
+    sb.site_image_id = IF(sb.site_image_id IS NULL, i.site_image_id, sb.site_image_id),
+    sb.contentUrl = IF(sb.contentUrl IS NULL, i.contentUrl, sb.contentUrl),
+    sb.imagename = IF(sb.imagename IS NULL, i.imagename, sb.imagename),
+    sb.age_id = IF(sb.age_id IS NULL, i.age_id, sb.age_id),
+    sb.gender_id = IF(sb.gender_id IS NULL, i.gender_id, sb.gender_id),
+    sb.location_id = IF(sb.location_id IS NULL, i.location_id, sb.location_id)
+WHERE sb.image_id IN (
+    SELECT image_id 
+    FROM (
+        SELECT sb.image_id
+        FROM SegmentBig_isface sb
+        JOIN Images i ON sb.image_id = i.image_id
+        WHERE 
+            (sb.description IS NULL 
+            OR sb.site_name_id IS NULL
+            OR sb.site_image_id IS NULL
+            OR sb.contentUrl IS NULL
+            OR sb.imagename IS NULL
+            OR sb.age_id IS NULL
+            OR sb.gender_id IS NULL
+            OR sb.location_id IS NULL)
+        LIMIT 1000  -- Adjust the batch size as needed
+    ) AS tmp
+);
+
+SELECT MAX(seg_image_id)
+FROM SegmentBig_isface
+;
+
+SELECT *
+FROM SegmentBig_isface
+WHERE  image_id = 107737723
+;
+
 SELECT MAX(seg_image_id)
 FROM SegmentBig_isface
 ;
 
 -- to test the last row inserted
-SELECT * FROM SegmentOct20 so ORDER BY so.seg_image_id DESC LIMIT 1
+SELECT * FROM SegmentBig_isface so ORDER BY so.seg_image_id DESC LIMIT 1
+
+
+
+SELECT 
+    COUNT(*) AS total_rows, -- Total number of rows in the table
+    COUNT(image_id) AS image_id_count,
+    COUNT(site_name_id) AS site_name_id_count,
+    COUNT(site_image_id) AS site_image_id_count,
+    COUNT(contentUrl) AS contentUrl_count,
+    COUNT(imagename) AS imagename_count,
+    COUNT(description) AS description_count,
+    COUNT(age_id) AS age_id_count,
+    COUNT(age_detail_id) AS age_detail_id_count,
+    COUNT(gender_id) AS gender_id_count,
+    COUNT(location_id) AS location_id_count,
+    COUNT(face_x) AS face_x_count,
+    COUNT(face_y) AS face_y_count,
+    COUNT(face_z) AS face_z_count,
+    COUNT(mouth_gap) AS mouth_gap_count,
+    COUNT(face_landmarks) AS face_landmarks_count,
+    COUNT(bbox) AS bbox_count,
+    COUNT(face_encodings68) AS face_encodings68_count,
+    COUNT(body_landmarks) AS body_landmarks_count,
+    COUNT(keyword_list) AS keyword_list_count,
+    COUNT(tokenized_keyword_list) AS tokenized_keyword_list_count,
+    COUNT(ethnicity_list) AS ethnicity_list_count,
+    COUNT(mongo_tokens) AS mongo_tokens_count
+FROM SegmentBig_isface;
+
+
+-- rows missing descriptions that have images.desc
+SELECT 
+    COUNT(*) AS total_rows_missing_desc -- Total number of rows in the table
+FROM SegmentBig_isface sbi
+LEFT JOIN Images i on i.image_id = sbi.image_id
+WHERE i.description IS  NULL
+AND sbi.description IS NULL
+;
+
 
 -- count the above insert, before doing it
 SELECT count(DISTINCT e.encoding_id) 
@@ -420,5 +504,11 @@ AND image_id IS NOT NULL
 LIMIT 1000000;
 
 DELETE FROM Clusters ;
+
+
+
+UPDATE SegmentOct20
+SET two_noses = NULL
+WHERE image_id < 150000;
 
 

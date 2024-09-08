@@ -43,8 +43,9 @@ class SortPose:
         self.HSVMULTIPLIER = 3
         self.NORM_BODY_MULTIPLIER = 4
         self.BRUTEFORCE = False
-        self.CUTOFF = 30 # DOES factor if ONE_SHOT
-        self.FACE_DIST_TEST = 30
+        self.CUTOFF = 150 # DOES factor if ONE_SHOT
+
+        self.CHECK_DESC_DIST = 30
         self.SORT_TYPE = SORT_TYPE
         if self.SORT_TYPE == "128ds":
             self.MIND = self.MINFACEDIST * 1.5
@@ -61,7 +62,8 @@ class SortPose:
             self.MAXD = self.MAXBODYDIST * 4
             self.MULTIPLIER = self.HSVMULTIPLIER * (self.MINBODYDIST / self.MINFACEDIST)
             self.DUPED = self.BODY_DUPE_DIST
-            self.FACE_DUPE_DIST = self.FACE_DIST_TEST = .01
+            self.FACE_DIST_TEST = .02
+            self.CHECK_DESC_DIST = 10
 
 
         self.INPAINT=INPAINT
@@ -262,6 +264,7 @@ class SortPose:
             "start_img_name":start_img_name,
             "start_site_image_id":start_site_image_id,
             "last_image":None,
+            "last_image_id":None,
             "last_description":None,
             "last_image_enc":None,
             "last_image_hsv":None,
