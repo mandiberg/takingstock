@@ -24,7 +24,7 @@ import traceback
 class SortPose:
     # """Sort image files based on head pose"""
 
-    def __init__(self, motion, face_height_output, image_edge_multiplier, EXPAND=False, ONE_SHOT=False, JUMP_SHOT=False, HSV_CONTROL=None, VERBOSE=True,INPAINT=False, SORT_TYPE="128d", OBJ_CLS_ID = None,UPSCALE_MODEL_PATH=None):
+    def __init__(self, motion, face_height_output, image_edge_multiplier, EXPAND=False, ONE_SHOT=False, JUMP_SHOT=False, HSV_CONTROL=None, VERBOSE=True,INPAINT=False, SORT_TYPE="128d", OBJ_CLS_ID = None,UPSCALE_MODEL_PATH=None, use_3D=False):
 
         self.mp_face_detection = mp.solutions.face_detection
         self.mp_drawing = mp.solutions.drawing_utils
@@ -43,7 +43,9 @@ class SortPose:
         self.HSVMULTIPLIER = 3
         self.NORM_BODY_MULTIPLIER = 4
         self.BRUTEFORCE = False
-        self.CUTOFF = 150 # DOES factor if ONE_SHOT
+        self.use_3D = use_3D
+        print("init use_3D",self.use_3D)
+        self.CUTOFF = 30 # DOES factor if ONE_SHOT
 
         self.CHECK_DESC_DIST = 30
         self.SORT_TYPE = SORT_TYPE
@@ -1264,8 +1266,10 @@ class SortPose:
     def make_subset_landmarks(self, first, last, dim=2):
         # takes number of lms and multiplies them by dim
         # add 1 to last to make it inclusive of final landmark
+        print("am I using 3D?", self.use_3D)
+        if self.use_3D == True: dim = 3
         subset = list(range(first*dim, (last+1)*dim))
-        print("subset", subset)
+        print(f"first {first} last {last} subset {subset}")
         return subset
                 
     def get_landmarks_2d(self, Lms, selected_Lms, structure="dict"):

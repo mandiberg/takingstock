@@ -9,12 +9,6 @@ from sklearn.metrics import silhouette_score
 #from sklearn import metrics
 
 import datetime   ####### for saving cluster analytics
-import matplotlib as mpl
-import matplotlib.pyplot as plt
-from matplotlib import cm
-# import plotly as py
-# import plotly.graph_objs as go
-
 
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
@@ -46,8 +40,7 @@ motion = {"side_to_side": False, "forward_smile": True, "laugh": False, "forward
 EXPAND = False
 ONE_SHOT = False # take all files, based off the very first sort order.
 JUMP_SHOT = False # jump to random file if can't find a run
-sort = SortPose(motion, face_height_output, image_edge_multiplier_sm,EXPAND, ONE_SHOT, JUMP_SHOT, None, None)
-
+sort = SortPose(motion, face_height_output, image_edge_multiplier_sm,EXPAND, ONE_SHOT, JUMP_SHOT, None, None, use_3D=True)
 # MM you need to use conda activate mps_torch310 
 
 '''
@@ -84,10 +77,15 @@ MODE = 0
 # CLUSTER_TYPE = "Clusters"
 CLUSTER_TYPE = "Poses"
 # SUBSET_LANDMARKS is now set in sort pose init
-USE_HEAD_POSE = True
+USE_HEAD_POSE = False
 
 ANGLES = []
-STRUCTURE = "list"
+STRUCTURE = "list3"
+print("STRUCTURE: ",STRUCTURE)
+if STRUCTURE == "list3": 
+    print("setting 3D to True")
+    sort.use_3D = True
+
 # this works for using segment in stock, and for ministock
 USE_SEGMENT = True
 
@@ -122,7 +120,7 @@ if USE_SEGMENT is True and CLUSTER_TYPE == "Poses":
         WHERE += " AND ic.cluster_id IS NULL "
 
     # WHERE += " AND h.is_body = 1"
-    LIMIT = 50000
+    LIMIT = 1000000
 
 
     '''
@@ -132,9 +130,8 @@ if USE_SEGMENT is True and CLUSTER_TYPE == "Poses":
     2000 43s
     4000 87s
     30000 2553 @ hands elbows x 3d
-    50000 TK @ HAND_LMS + FACE_POSE
-    200000 18664 @ 33
-    300000 32475 @ 4 x 3d
+    100000 90s @ HAND_LMS
+    1000000 1077s @ HAND_LMS
 
     '''
 
@@ -249,16 +246,12 @@ def selectSQL():
     return(resultsjson)
 
 def make_subset_landmarks(df,add_list=False):
-    # def weight_face_pose(row):
-    #     row['face_x'] = (row['face_x'] - -28) * 0.25
-    #     row['face_y'] = row['face_y'] * 0.25
-    #     row['face_z'] = row['face_z']  * 0.25
-    #     row['mouth_gap'] = row['mouth_gap']  * 0.25
-    #     return row
     numerical_columns = [col for col in df.columns if col.startswith('dim_')]
     # set hand_columns = to the numerical_columns in sort.SUBSET_LANDMARKS
+    print("subset df columns: ",df.columns)
     if sort.SUBSET_LANDMARKS:
         subset_columns = [f'dim_{i}' for i in sort.SUBSET_LANDMARKS]
+        print("subset columns: ",subset_columns)
         if USE_HEAD_POSE:
             df = df.apply(sort.weight_face_pose, axis=1)
             head_columns = ['face_x', 'face_y', 'face_z', 'mouth_gap']
@@ -274,7 +267,7 @@ def make_subset_landmarks(df,add_list=False):
 
 def kmeans_cluster(df, n_clusters=32):
     # Select only the numerical columns (dim_0 to dim_65)
-    print("about to subset landmarks to thse columns: ",sort.SUBSET_LANDMARKS)
+    print(" : ",sort.SUBSET_LANDMARKS)
     numerical_data = make_subset_landmarks(df)
     print("clustering subset data", numerical_data)
     kmeans = KMeans(n_clusters=n_clusters, n_init=10, init='k-means++', random_state=42, max_iter=300, verbose=1)
@@ -282,54 +275,6 @@ def kmeans_cluster(df, n_clusters=32):
     clusters = kmeans.predict(numerical_data)
     return clusters
     
-def export_html_clusters(enc_data,n_clusters):
-    x = datetime.datetime.now()
-    d_time=x.strftime("%c").replace(":","-").replace(" ","_")
-    title = "Visualizing Clusters in Two Dimensions Using PCA"
-    filename="cluster_analytics"+str(d_time)+".html"
-    
-    class MplColorHelper:     ### making a class using matplotlib to choose colors instead of doing it manually
-
-        def __init__(self, cmap_name, start_val, stop_val):
-            self.cmap_name = cmap_name
-            self.cmap = plt.get_cmap(cmap_name)
-            self.norm = mpl.colors.Normalize(vmin=start_val, vmax=stop_val)
-            self.scalarMap = cm.ScalarMappable(norm=self.norm, cmap=self.cmap)
-
-        def get_rgb(self, val):
-            return self.scalarMap.to_rgba(val)
-    COL = MplColorHelper('magma', 0, n_clusters-1)
-    c=COL.get_rgb(np.arange(n_clusters))           ####### determining color for each cluster
-    
-    pca_2d = PCA(n_components=2)
-
-
-    PCs_2d = pd.DataFrame(pca_2d.fit_transform(enc_data.drop(["cluster_id"], axis=1)))
-    PCs_2d.columns = ["PC1_2d", "PC2_2d"]
-    plotX = pd.concat([plotX,PCs_2d], axis=1, join='inner')
-    data=[]
-    for i in range(n_clusters):
-        cluster=plotX[plotX["cluster_id"] == i]        
-        data.append(go.Scatter(
-                        x = cluster["PC1_2d"],
-                        y = cluster["PC2_2d"],
-                        mode = "markers",
-                        name = "Cluster "+str(i),
-                        marker = dict(color = 'rgba'+str(tuple(c[i]))),  ## it has to be tuples
-                        text = None)
-                    )
-
-
-    layout = dict(title = title,
-                  xaxis= dict(title= 'PC1',ticklen= 5,zeroline= False),
-                  yaxis= dict(title= 'PC2',ticklen= 5,zeroline= False)
-                 )
-
-    fig = dict(data = data, layout = layout)
-    py.offline.plot(fig, filename=filename, auto_open=False)
-    
-    return
-
 def best_score(df):
     print("starting best score", df)
     print("about to subset landmarks to thse columns: ",sort.SUBSET_LANDMARKS)
@@ -347,16 +292,6 @@ def best_score(df):
     
     return b_score
     
-def encodings_split(encodings):
-    col_list = [f"encodings{i}" for i in range(128)]
-    df = pd.DataFrame([encodings], columns=col_list)
-    return df
-
-def landmarks_preprocess(landmarks):
-    col_list = [f"landmarks{i}" for i in range(33)]
-    df = pd.DataFrame([landmarks], columns=col_list)
-    return df
-
 def save_clusters_DB(df):
     # col="encodings"
     # col_list=[]
@@ -459,7 +394,7 @@ def prepare_df(df):
         df = df.dropna(subset=['body_landmarks_normalized'])
         df['body_landmarks_normalized'] = df['body_landmarks_normalized'].apply(io.unpickle_array)
         # body = self.get_landmarks_2d(enc1, list(range(33)), structure)
-        df['body_landmarks_array'] = df['body_landmarks_normalized'].apply(lambda x: io.get_landmarks_2d(x, list(range(33)), structure=STRUCTURE))
+        df['body_landmarks_array'] = df['body_landmarks_normalized'].apply(lambda x: sort.get_landmarks_2d(x, list(range(33)), structure=STRUCTURE))
 
         # apply io.convert_decimals_to_float to face_x, face_y, face_z, and mouth_gap 
         df[['face_x', 'face_y', 'face_z', 'mouth_gap']] = df[['face_x', 'face_y', 'face_z', 'mouth_gap']].astype(float)
@@ -513,7 +448,6 @@ def main():
         # I drop image_id as I pass it to knn bc I need it later, but knn can't handle strings
         enc_data["cluster_id"] = kmeans_cluster(enc_data.drop(["image_id", "body_landmarks_array"], axis=1),n_clusters=N_CLUSTERS)
         
-        if SAVE_FIG: export_html_clusters(enc_data.drop("image_id", axis=1))
         print(enc_data)
         print(set(enc_data["cluster_id"].tolist()))
         # don't need to write a CSV
