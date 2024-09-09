@@ -83,3 +83,24 @@ AND  image_id < 89300000
 AND mongo_tokens = 1
 ;
 
+
+
+
+-- SET IS DUPE OF
+
+UPDATE Encodings 
+SET is_dupe_of = 26249879
+WHERE image_id IN (
+
+
+14694342,
+26249863,
+26249997,
+85968654,
+84866475,
+84923435,
+4708708
+
+
+
+);

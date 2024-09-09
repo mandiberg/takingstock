@@ -280,19 +280,59 @@ class SelectPose:
 
         return face_2d, face_3d
 
+    def get_eye_pitch(self, faceLms):
+        def get_average_y(landmarks, point1, point2):
+            y1 = landmarks.landmark[point1].y
+            y2 = landmarks.landmark[point2].y
+            return (y1 + y2) / 2
+        # eye pitch
+        left_eye_tops = get_average_y(faceLms, 159,145)
+        right_eye_tops = get_average_y(faceLms, 386,374)
+        left_eye_sides = get_average_y(faceLms, 33,133)
+        right_eye_sides = get_average_y(faceLms, 362,263)
 
-    def get_mouth_data(self, faceLms):
-        toplip = self.get_face_2d_point(faceLms,13)
-        botlip = self.get_face_2d_point(faceLms,14)
-        #calculate mouth gap
-        mouth_gap = self.dist(self.point(botlip), self.point(toplip))
- 
+        # print(left_eye_tops, right_eye_tops, left_eye_sides, right_eye_sides)
+        left_pitch = (left_eye_tops - left_eye_sides) / self.face_height*100
+        right_pitch = (right_eye_tops - right_eye_sides) / self.face_height*100
+        average_pitch = (left_pitch + right_pitch) / 2
+        # print(average_pitch)
+        return average_pitch
+        # left eye left corner 33, rt 133
+        # right eye left corner ,  362, rt 263
+
+    def get_dist_btwn_landmarks(self, faceLms, point1, point2, style="new"):
+        print("point1, point2",point1,point2)
+        # point 1 is the top point, point 2 is the bottom point
+        top_point = self.get_face_2d_point(faceLms,point1)
+        bot_point = self.get_face_2d_point(faceLms,point2)
+        print("top_point, bot_point",top_point,bot_point)
+        #calculate  gap
+        if style == "new":
+            gap = top_point[1] - bot_point[1]
+        else:
+            gap = self.dist(self.point(bot_point), self.point(top_point))
+        print("gap",gap)
         # check for face height, and if not exist, then get
         if not hasattr(self, 'face_height'): 
             self.get_faceheight_data(faceLms)
  
-        mouth_pct = mouth_gap/self.face_height*100
-        # print(mouth_pct)
+        gap_pct = gap/self.face_height*100
+        print(gap_pct)
+        return gap_pct
+    
+    def get_mouth_data(self, faceLms):
+        # toplip = self.get_face_2d_point(faceLms,13)
+        # botlip = self.get_face_2d_point(faceLms,14)
+        # #calculate mouth gap
+        # mouth_gap = self.dist(self.point(botlip), self.point(toplip))
+ 
+        # # check for face height, and if not exist, then get
+        # if not hasattr(self, 'face_height'): 
+        #     self.get_faceheight_data(faceLms)
+ 
+        # mouth_pct = mouth_gap/self.face_height*100
+        # # print(mouth_pct)
+        mouth_pct = self.get_dist_btwn_landmarks(faceLms,13,14, style="old")
         return mouth_pct
 
 
