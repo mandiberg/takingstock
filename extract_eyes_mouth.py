@@ -104,7 +104,7 @@ pose = SelectPose(placeholder_image)
 # Create a session
 session = scoped_session(sessionmaker(bind=engine))
 
-LIMIT= 2
+LIMIT= 25
 # Initialize the counter
 counter = 0
 
@@ -290,9 +290,10 @@ def get_eyes_mouth(target_image_id):
     else:
         return None, None, None, None
 
-def extract_eyes_mouth(target_image_id, lock, session):
+def extract_eyes_mouth(image_id_to_shape, lock, session):
     if VERBOSE: print("extract_eyes_mouth target_image_id",target_image_id)
-    # target_image_id = list(image_id_to_shape.keys())[0]
+    target_image_id = list(image_id_to_shape.keys())[0]
+    bbox = io.unstring_json(image_id_to_shape[target_image_id])
     dist_mouth, dist_eye_l, dist_eye_r, eye_pitch = get_eyes_mouth(target_image_id)
     print("dist_mouth, dist_eye_l, dist_eye_r, eye_pitch",dist_mouth, dist_eye_l, dist_eye_r, eye_pitch)
     
@@ -329,7 +330,8 @@ def extract_eyes_mouth(target_image_id, lock, session):
                     cv2.circle(image, (int(x*sort.w), int(y*sort.h)), 5, (0, 0, 255), -1)
                 else:
                     cv2.circle(image, (int(x), int(y)), 5, (0, 0, 255), -1)
-        if image is not None:
+        if image is not None and image.size > 0:
+            image = pose.draw_face_landmarks(image, sort.faceLms, bbox)
             cv2.imshow("image", image)
             cv2.waitKey(0)
             cv2.destroyAllWindows()
@@ -385,13 +387,14 @@ function=extract_eyes_mouth
 
 
 
-distinct_image_ids_query = select(Images.image_id.distinct()).\
+distinct_image_ids_query = select(Images.image_id.distinct(), SegmentTable.bbox).\
     outerjoin(SegmentTable,Images.image_id == SegmentTable.image_id).\
     filter(SegmentTable.bbox != None).\
     filter(SegmentTable.two_noses.is_(None)).\
     filter(SegmentTable.mongo_body_landmarks == 1).\
     filter(SegmentTable.mongo_body_landmarks_norm.is_(None)).\
-    limit(LIMIT)
+    limit(LIMIT).\
+    offset(300)
 
 # put this back in at future date if needed
         # filter(Images.h == None).\
@@ -404,16 +407,16 @@ results = session.execute(distinct_image_ids_query).fetchall()
 
 # make a dictionary of image_id to shape
 for result in results:
-    # image_id_to_shape = {}
-    # image_id, height, width, bbox = result
-    # image_id_to_shape[image_id] = (height, width, bbox)
+    image_id_to_shape = {}
+    image_id, bbox = result
+    image_id_to_shape[image_id] = (bbox)
 
     ### temp single thread for debugging
-    # calc_nlm(image_id_to_shape, lock=None, session=session)
-    # print("done with single thread")
-    # print(" ")
-    # print(" ")
-    work_queue.put(result[0])        
+    extract_eyes_mouth(image_id_to_shape, lock=None, session=session)
+    print("done with single thread")
+    print(" ")
+    print(" ")
+    work_queue.put(image_id_to_shape)        
 
 # distinct_image_ids = [row[0] for row in session.execute(distinct_image_ids_query).fetchall()]
 # if VERBOSE: print("query length",len(distinct_image_ids))

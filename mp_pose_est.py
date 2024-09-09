@@ -106,6 +106,17 @@ class SelectPose:
             # cv2.line(self.image, p1, p2, (255, 0, 0), 2)
             return faceLms
 
+    def draw_face_landmarks(self, image, faceLms, bbox):
+        # Draw the landmarks
+        for id, lm in enumerate(faceLms.landmark):
+            # print(bbox)
+            bbox_width = bbox["right"]-bbox["left"]
+            bbox_height = bbox["bottom"]-bbox["top"]
+            x = int(bbox["left"] + lm.x * bbox_width)
+            y = int(bbox["top"] + lm.y * bbox_height)
+            # print(x,y)
+            cv2.circle(image, (x, y), 1, (255, 0, 0), -1)
+        return image
 
 
 
@@ -282,16 +293,34 @@ class SelectPose:
 
     def get_eye_pitch(self, faceLms):
         def get_average_y(landmarks, point1, point2):
+            print("point1, point2",point1,point2)
             y1 = landmarks.landmark[point1].y
             y2 = landmarks.landmark[point2].y
+            print("y1, y2",y1,y2)
             return (y1 + y2) / 2
         # eye pitch
         left_eye_tops = get_average_y(faceLms, 159,145)
-        right_eye_tops = get_average_y(faceLms, 386,374)
+        left_eye_top = faceLms.landmark[159].y
+        left_eye_bottom = faceLms.landmark[145].y
         left_eye_sides = get_average_y(faceLms, 33,133)
-        right_eye_sides = get_average_y(faceLms, 362,263)
+        left_eye_top_delta = left_eye_sides - left_eye_top 
+        left_eye_bottom_delta = left_eye_bottom - left_eye_sides
+        left_pitch = left_eye_bottom_delta - left_eye_top_delta
+        print("left_eye_top[1]",left_eye_top)
+        print("left_eye_bottom[1]",left_eye_bottom)
+        print("left_eye_sides",left_eye_sides)
+        print("left eye top delta",left_eye_top_delta)
+        print("left eye bottom delta",left_eye_bottom_delta)
+        print("left pitch",left_pitch)
 
-        # print(left_eye_tops, right_eye_tops, left_eye_sides, right_eye_sides)
+        right_eye_tops = get_average_y(faceLms, 386,374)
+        right_eye_top = self.get_face_2d_point(faceLms, 386)
+        right_eye_bottom = self.get_face_2d_point(faceLms, 374)
+        right_eye_sides = get_average_y(faceLms, 362,263)
+        right_eye_top_delta = right_eye_top[1] - right_eye_sides
+        right_eye_bottom_delta = right_eye_bottom[1] - right_eye_sides
+        
+        # print(left_eye_top_delta, left_eye_bottom_delta, right_eye_top_delta, right_eye_bottom_delta)
         left_pitch = (left_eye_tops - left_eye_sides) / self.face_height*100
         right_pitch = (right_eye_tops - right_eye_sides) / self.face_height*100
         average_pitch = (left_pitch + right_pitch) / 2
