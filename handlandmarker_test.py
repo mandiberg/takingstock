@@ -108,20 +108,14 @@ def project_hand_point(point, hand_bbox):
     return x_pixel, y_pixel
 def return_landmarks(rgb_image, detection_result):
     hand_landmarks_list = detection_result.hand_landmarks
-    world_landmarks_list = detection_result.hand_world_landmarks    # 3D world landmarks
     handedness_list = detection_result.handedness
     annotated_image = np.copy(rgb_image)
+    
+    height, width, _ = annotated_image.shape  # Get image dimensions
 
-    hand_bboxes = get_hand_bboxes(detection_result, annotated_image.shape[1], annotated_image.shape[0])
-    hand_bbox_right = hand_bboxes[0]
-    hand_bbox_left = hand_bboxes[1]
-    print("these are the returned hand bboxes:", hand_bbox_right, hand_bbox_left)
     # Loop through the detected hands to visualize.
     for idx in range(len(hand_landmarks_list)): 
-        # goes hand by hand, starting with right hand, which is hand[0]
-        print("Hand index:", idx)
         hand_landmarks = hand_landmarks_list[idx]
-        world_landmarks = world_landmarks_list[idx]    # 3D world landmarks
         handedness = handedness_list[idx]
 
         score = handedness[0].score
@@ -129,23 +123,22 @@ def return_landmarks(rgb_image, detection_result):
         print(f"Hand {idx}:")
         print(f"    Type: {hand_type}")
         print(f"    Score: {score}")
-        # print(f"    Normalized 2D Landmarks: {hand_landmarks}")
-        # print(f"    3D World Landmarks: {world_landmarks}\n")
 
         # Pointer finger tip is landmark 8
         pointer_finger_tip = hand_landmarks[8]
 
-        # Get the 2D location (normalized coordinates between 0 and 1)
-        pointer_finger_x, pointer_finger_y = project_hand_point(pointer_finger_tip, hand_bboxes[idx])
+        # Convert normalized coordinates to pixel values
+        pointer_finger_x = int(pointer_finger_tip.x * width)
+        pointer_finger_y = int(pointer_finger_tip.y * height)
 
+        # Draw the point on the image
         cv2.circle(annotated_image, (pointer_finger_x, pointer_finger_y), 25, (0, 255, 0), -1)
         print(f"  >>>  Pointer finger (2D) location: x = {pointer_finger_x}, y = {pointer_finger_y}")
-        cv2.imshow("marked image", cv2.cvtColor(annotated_image, cv2.COLOR_RGB2BGR))
 
+        # Display the image with the annotation
+        cv2.imshow("marked image", cv2.cvtColor(annotated_image, cv2.COLOR_RGB2BGR))
         cv2.waitKey(0)
         cv2.destroyAllWindows()
-
-        hand_bbox = get_hand_bboxes(detection_result, annotated_image.shape[1], annotated_image.shape[0])
 
     # Draw the hand landmarks.
         # hand_landmarks_proto = landmark_pb2.NormalizedLandmarkList()
