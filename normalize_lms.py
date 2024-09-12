@@ -48,6 +48,8 @@ mongo_collection = mongo_db[io.dbmongo['collection']]
 
 face_landmarks_collection = mongo_db["encodings"]
 bboxnormed_collection = mongo_db["body_landmarks_norm"]
+mongo_hand_collection = mongo_db["hand_landmarks"]
+
 # n_phonebbox_collection= mongo_db["bboxnormed_phone"]
 
 # start a timer
@@ -165,6 +167,18 @@ def get_landmarks_mongo(image_id):
             body_landmarks = results['body_landmarks']
             # print("got encodings from mongo, types are: ", type(face_encodings68), type(face_landmarks), type(body_landmarks))
             return unpickle_array(body_landmarks)
+        else:
+            return None
+    else:
+        return None
+    
+def get_hand_landmarks_mongo(image_id):
+    if image_id:
+        results = mongo_hand_collection.find_one({"image_id": image_id})
+        if results:
+            hand_landmarks = results['nlms']
+            # print("got encodings from mongo, types are: ", type(face_encodings68), type(face_landmarks), type(body_landmarks))
+            return unpickle_array(hand_landmarks)
         else:
             return None
     else:
@@ -314,7 +328,7 @@ def calc_nlm(image_id_to_shape, lock, session):
     body_landmarks=get_landmarks_mongo(target_image_id)
     nose_pixel_pos_body_withviz = sort.set_nose_pixel_pos(body_landmarks,[height,width])
     if sort.VERBOSE: print("nose_pixel_pos from body",nose_pixel_pos_body_withviz)
-    
+    detection_results=get_hand_landmarks_mongo(target_image_id)
     #     # for drawing landmarks on test image
     # landmarks_2d = sort.get_landmarks_2d(row['face_landmarks'], list(range(33)), "list")
     # print("landmarks_2d before drawing", landmarks_2d)
@@ -394,7 +408,18 @@ def calc_nlm(image_id_to_shape, lock, session):
     # print timer
 
 
-
+    if detection_results:
+        if VERBOSE: print("has hand_landmarks")
+        n_hand_landmarks=sort.normalize_hand_landmarks(detection_results,nose_pixel_pos_body,face_height,[height,width])
+        sort.insert_n_hand_landmarks(mongo_hand_collection, target_image_id,n_hand_landmarks)
+        session.query(Encodings).filter(Encodings.image_id == target_image_id).update({
+                Encodings.mongo_hand_landmarks_norm: 1
+            }, synchronize_session=False)
+        session.query(SegmentTable).filter(SegmentTable.image_id == target_image_id).update({
+                SegmentTable.mongo_hand_landmarks_norm: 1
+            }, synchronize_session=False)
+        session.commit()    
+        
     if body_landmarks:
         if VERBOSE: print("has body_landmarks")
 
