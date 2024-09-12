@@ -124,6 +124,7 @@ class Encodings(Base):
     mongo_body_landmarks_norm   = Column(Boolean)
     two_noses              = Column(Boolean)
     is_dupe_of            = Column(Integer, ForeignKey('images.image_id'))
+    mongo_hand_landmarks   = Column(Boolean)
 
 class Clusters(Base):
     __tablename__ = 'Clusters'
@@ -148,6 +149,18 @@ class ImagesPoses(Base):
 
     image_id   = Column(Integer, ForeignKey('images.image_id'), primary_key=True)
     cluster_id = Column(Integer, ForeignKey('Poses.cluster_id'))
+
+class Hands(Base):
+    __tablename__ = 'Hands'
+
+    cluster_id     = Column(Integer, primary_key=True, autoincrement=True)
+    cluster_median = Column(BLOB)
+
+class ImagesHands(Base):
+    __tablename__ = 'ImagesHands'
+
+    image_id   = Column(Integer, ForeignKey('images.image_id'), primary_key=True)
+    cluster_id = Column(Integer, ForeignKey('Hands.cluster_id'))
 
 class ClustersTemp(Base):
     __tablename__ = 'ClustersTemp'
@@ -237,6 +250,7 @@ class SegmentTable(Base):
     no_image               = Column(Boolean)
     two_noses              = Column(Boolean)
     is_dupe_of            = Column(Integer, ForeignKey('images.image_id'))
+    mongo_hand_landmarks   = Column(Boolean)
 
     site     = relationship("Site")
     age      = relationship("Age")

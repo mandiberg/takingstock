@@ -83,17 +83,18 @@ TOKEN_PATH=os.path.join(io.ROOT,"tokenized_keyword_list.csv")
 TFIDF_CORPUS_PATH=os.path.join(io.ROOT,"TFIDF_lda_corpus.mm")
 
 # Satyam, you want to set this to False
-USE_SEGMENT = True
+USE_SEGMENT = False
 USE_BIGSEGMENT = True
 VERBOSE = False
 RANDOM = False
 global_counter = 0
-QUERY_LIMIT = 10000
+QUERY_LIMIT = 1000000
+query_start_counter = 0
 # started at 9:45PM, Feb 17
 
 
 MODEL="TF" ## OR TF  ## Bag of words or TF-IDF
-NUM_TOPICS=30
+NUM_TOPICS=48
 
 stemmer = SnowballStemmer('english')
 
@@ -175,21 +176,31 @@ def clarify_keywords(text):
 def set_query():
     # currently only used for indexing
     # not refactored for mongo (despite the one WHERE line)
-
+    print("setting query from MODE: ",MODE)
     # mongofy, for indexing:
     SELECT = "DISTINCT(image_id),description"
     FROM = SegmentTable_name
-    WHERE = " mongo_tokens IS NOT NULL "
+    WHERE = f" mongo_tokens IS NOT NULL "
+    WHERE += " AND face_x > -35 AND face_x < -24 AND face_y > -3 AND face_y < 3 AND face_z > -3 AND face_z < 3 "
     if RANDOM: 
         WHERE += "AND image_id >= (SELECT FLOOR(MAX(image_id) * RAND()) FROM bagofkeywords)"
     LIMIT = QUERY_LIMIT
     if MODE==2 and USE_BIGSEGMENT:
+        print("assigning topics via bigsegment")
         # assigning topics
         WHERE = " mongo_tokens IS NOT NULL AND image_id NOT IN (SELECT image_id FROM imagestopics)"
+    elif MODE==2 and USE_SEGMENT:
+        print("assigning topics via small segment")
+        WHERE = " face_x > -35 AND face_x < -24 AND face_y > -3 AND face_y < 3 AND face_z > -3 AND face_z < 3 AND "
+        WHERE += " mongo_tokens IS NOT NULL AND image_id NOT IN (SELECT image_id FROM imagestopics)"
+
     elif MODE==2:
+        print("assigning topics without any segment")
         # assigning topics
         # I'm not sure how this is different from USE_BIGSEGMENT
-        WHERE = "tokenized_keyword_list IS NOT NULL AND image_id NOT IN (SELECT image_id FROM imagestopics)"
+        WHERE = " tokenized_keyword_list IS NOT NULL AND image_id NOT IN (SELECT image_id FROM imagestopics)"
+
+    WHERE += f" AND image_id > {query_start_counter} "
 
     return SELECT, FROM, WHERE, LIMIT
 
@@ -268,6 +279,7 @@ def write_topics(lda_model):
     return
 
 def write_imagetopics(resultsjson,lda_model_tfidf,dictionary):
+    global query_start_counter
     print("writing data to the imagetopic table")
     idx_list, topic_list = zip(*lda_model_tfidf.print_topics(-1))
     for i,row in enumerate(resultsjson):
@@ -331,6 +343,7 @@ def write_imagetopics(resultsjson,lda_model_tfidf,dictionary):
 
         if row["image_id"] % 1000 == 0:
             print("Updated image_id {}".format(row["image_id"]))
+            query_start_counter = row["image_id"]
 
 
     # Add the imagestopics object to the session

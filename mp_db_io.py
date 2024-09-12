@@ -17,6 +17,7 @@ class DataIO:
         self.max_retries = 3
         self.retry_delay = 5
         self.query_face = True
+        self.query_hands = True
         self.query_body = True
         self.query_head_pose = True
         # platform specific file folder (mac for michael, win for satyam)
@@ -59,6 +60,7 @@ class DataIO:
             self.mongo_db = self.mongo_client[self.dbmongo['name']]
             self.mongo_collection_face = self.mongo_db['encodings']
             self.mongo_collection_body = self.mongo_db["body_landmarks_norm"]
+            self.mongo_collection_hands = self.mongo_db["hand_landmarks"]
 
             # self.ROOT_PROD= os.path.join(os.environ['HOME'], "Documents/projects-active/facemap_production/segment_images") ## only on Mac
             # moved images to SSD
@@ -289,10 +291,11 @@ class DataIO:
 
         # print("self.query_face: ", self.query_face)
         # print("self.query_body: ", self.query_body)
-        results_face = results_body = None
+        results_face = results_body = results_hands = None
         if image_id:
             if self.query_face: results_face = self.mongo_collection_face.find_one({"image_id": image_id})
             if self.query_body: results_body = self.mongo_collection_body.find_one({"image_id": image_id})
+            if self.query_hands: results_hands = self.mongo_collection_hands.find_one({"image_id": image_id})
             # print("got results from mongo, types are: ", type(results_face), type(results_body))
             # print("results_face: ", results_face)
             # print("results_body: ", results_body)
@@ -303,12 +306,16 @@ class DataIO:
                 face_encodings68 = results_face['face_encodings68']
                 face_landmarks = results_face['face_landmarks']
                 body_landmarks = results_face['body_landmarks']
+            # if results_hands:
+            #     print("results_hands: ", results_hands)
+                # left_hand = results_hands['left_hand']
+                # right_hand = results_hands['right_hand']
                 # print("got encodings from mongo, types are: ", type(face_encodings68), type(face_landmarks), type(body_landmarks))
-            return pd.Series([face_encodings68, face_landmarks, body_landmarks, body_landmarks_normalized])
-            # else:
-            #     return pd.Series([None, None, None])
-        else:
-            return pd.Series([None, None, None, None])
+        return pd.Series([face_encodings68, face_landmarks, body_landmarks, body_landmarks_normalized, results_hands])
+        #     # else:
+        #     #     return pd.Series([None, None, None])
+        # else:
+        #     return pd.Series([None, None, None, None, None])
 
     def unpickle_array(self,pickled_array):
         if pickled_array:
@@ -328,34 +335,35 @@ class DataIO:
         else:
             return None
 
-    def get_landmarks_2d(self, Lms, selected_Lms, structure="dict"):
-        # this is redundantly in sort_pose also
-        Lms2d = {}
-        Lms1d = []
-        Lms1d3 = []
-        for idx, lm in enumerate(Lms.landmark):
-            if idx in selected_Lms:
-                # print("idx", idx)
-                # x, y = int(lm.x * img_w), int(lm.y * img_h)
-                # print("lm.x, lm.y", lm.x, lm.y)
-                if structure == "dict":
-                    Lms2d[idx] =([lm.x, lm.y])
-                elif structure == "list":
-                    Lms1d.append(lm.x)
-                    Lms1d.append(lm.y)
-                elif structure == "list3":
-                    Lms1d3.append(lm.x)
-                    Lms1d3.append(lm.y)
-                    Lms1d3.append(lm.visibility)
-        # print("Lms2d", Lms2d)
-        # print("Lms1d", Lms1d)
+    # should just be in sort pose
+    # def get_landmarks_2d(self, Lms, selected_Lms, structure="dict"):
+    #     # this is redundantly in sort_pose also
+    #     Lms2d = {}
+    #     Lms1d = []
+    #     Lms1d3 = []
+    #     for idx, lm in enumerate(Lms.landmark):
+    #         if idx in selected_Lms:
+    #             # print("idx", idx)
+    #             # x, y = int(lm.x * img_w), int(lm.y * img_h)
+    #             # print("lm.x, lm.y", lm.x, lm.y)
+    #             if structure == "dict":
+    #                 Lms2d[idx] =([lm.x, lm.y])
+    #             elif structure == "list":
+    #                 Lms1d.append(lm.x)
+    #                 Lms1d.append(lm.y)
+    #             elif structure == "list3":
+    #                 Lms1d3.append(lm.x)
+    #                 Lms1d3.append(lm.y)
+    #                 Lms1d3.append(lm.visibility)
+    #     # print("Lms2d", Lms2d)
+    #     # print("Lms1d", Lms1d)
 
-        if Lms1d:
-            return Lms1d
-        elif Lms1d3:
-            return Lms1d3
-        else:
-            return Lms2d
+    #     if Lms1d:
+    #         return Lms1d
+    #     elif Lms1d3:
+    #         return Lms1d3
+    #     else:
+    #         return Lms2d
 
 
     def unstring_json(self, json_string):

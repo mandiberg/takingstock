@@ -16,14 +16,15 @@ import pickle
 
 detection_result = None
 
-# mongo_client = pymongo.MongoClient("mongodb://localhost:27017/")
-# mongo_db = mongo_client["stock"]
-# # mongo_collection = mongo_db["encodings"]
-# mongo_hand_collection = mongo_db["hand_landmarks"]
+mongo_client = pymongo.MongoClient("mongodb://localhost:27017/")
+mongo_db = mongo_client["stock"]
+# mongo_collection = mongo_db["encodings"]
+mongo_hand_collection = mongo_db["hand_landmarks"]
 
 
 # img = cv2.imread("woman_hands.jpg")
-image_path = "woman_hands.jpg"
+image_path = "victory.jpg"
+# image_path = "/Volumes/OWC4/segment_images/images_getty/5/57/young-man-taking-selfie-holding-free-hugs-sign-at-holi-festival-picture-id1016324430.jpg"
 image_id = 1
 
 # calculate_hand_landmarks() wants an mp image object not cv2
@@ -36,16 +37,20 @@ detection_result = pose.calculate_hand_landmarks(image)
 
 
 # store detection result in mongo_hand_collection
-# if detection_result:
-#     mongo_hand_collection.update_one(
-#         {"image_id": image_id},
-#         {"$set": {"nlms": pickle.dumps(detection_result)}},
-#         upsert=True
-#     )
-#     print("----------- >>>>>>>>   mongo hand_landmarks updated:", image_id)
+if detection_result:
+    mongo_hand_collection.update_one(
+        {"image_id": image_id},
+        {"$set": {"nlms": pickle.dumps(detection_result)}},
+        upsert=True
+    )
+    print("----------- >>>>>>>>   mongo hand_landmarks updated:", image_id)
 
 
 annotated_image = pose.display_landmarks(image.numpy_view(), detection_result)
+
+# get the global landmarks from detection_result
+global_landmarks = detection_result.hand_world_landmarks
+print(global_landmarks)
 
 # STEP 5: Process the classification result. In this case, visualize it.
 annotated_image = pose.draw_landmarks_on_image(image.numpy_view(), detection_result)

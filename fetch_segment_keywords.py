@@ -43,7 +43,7 @@ seg_image_id limits
     AND e.face_y > -10 AND e.face_y < 10
     AND e.face_z > -10 AND e.face_z < 10
 
-54033177 last id in the range: 
+53967627 last id in the range: 
 	AND i.age_id > 3 OR IS NULL
 	AND e.face_x > -45 AND e.face_x < -3
     AND e.face_y > -10 AND e.face_y < 10
@@ -120,9 +120,8 @@ options = ['Create helper table', 'Fetch keywords list and make tokens', 'Fetch 
            ]
 option, index = pick(options, title)
 
-# start at 3:41
-LIMIT= 1000000
-START_ID = 20640387
+LIMIT= 30000000
+START_ID = 117757281
 # Initialize the counter
 counter = 0
 
@@ -584,7 +583,7 @@ def preprocess_keywords(target_image_id, lock,session):
                 return
     
         with lock:
-            print(f"prepare the keyword_list {target_image_id} .")
+            # print(f"prepare the keyword_list {target_image_id} .")
             # prepare the keyword_list (no pickles, return a string)
             token_list = preprocess_list(keyword_list)
 
@@ -639,7 +638,7 @@ def preprocess_keywords(target_image_id, lock,session):
             {"$set": {"tokenized_keyword_list": keyword_list_pickle}},
             upsert=True
             )
-            print("inserted into mongo", target_image_id)
+            # print("inserted mongo", target_image_id)
         if counter % 1000 == 0: 
             print(f"Keyword list updated: {counter} at {target_image_id}" )
         session.commit()
@@ -851,6 +850,7 @@ elif index == 4:
         work_queue.put(target_image_id)
 
 elif index == 5:
+    # this is now an SQL query in make_segment_table.sql "-- DO THIS THIRD -- Add info from Images"
     # function=fetch_description
     function=fetch_images_metadata
     #################PRUNE THE TABLE#######################################

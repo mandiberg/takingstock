@@ -16,7 +16,7 @@ from sqlalchemy.pool import NullPool
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
 # my ORM
-from my_declarative_base import Base, Encodings, SegmentTable,ImagesBackground, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON, Images
+from my_declarative_base import Base, Encodings, SegmentTable,ImagesBackground, Hands, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON, Images
 import pymongo
 
 #mine
@@ -57,14 +57,20 @@ HSV_NORMS = {"LUM": .01, "SAT": 1,  "HUE": 0.002777777778, "VAL": 1}
 # this is for controlling if it is using
 # all clusters, 
 IS_CLUSTER = True
-CLUSTER_TYPE = "Poses"
+# CLUSTER_TYPE = "Poses"
+CLUSTER_TYPE = "Hands"
 DROP_LOW_VIS = False
 USE_HEAD_POSE = False
 # CLUSTER_TYPE = "Clusters"
-N_CLUSTERS = None # declared here, but set in the SQL query below
+N_HANDS = N_CLUSTERS = None # declared here, but set in the SQL query below
 # this is for IS_ONE_CLUSTER to only run on a specific CLUSTER_NO
 IS_ONE_CLUSTER = False
 CLUSTER_NO = 17
+
+# I started to create a separate track for Hands, but am pausing for the moment
+IS_HANDS = False
+IS_ONE_HAND = False
+HAND_NO = 1
 
 # cut the kids
 NO_KIDS = True
@@ -183,6 +189,8 @@ elif IS_SEGONLY and io.platform == "darwin":
 
     if IS_CLUSTER or IS_ONE_CLUSTER:
         FROM += f" JOIN Images{CLUSTER_TYPE} ic ON s.image_id = ic.image_id "
+    if IS_HANDS or IS_ONE_HAND:
+        FROM += f" JOIN ImagesHands ih ON s.image_id = ih.image_id "
     if IS_TOPICS or IS_ONE_TOPIC:
         FROM += " JOIN ImagesTopics it ON s.image_id = it.image_id "
         WHERE += " AND it.topic_score > .3"
@@ -216,7 +224,7 @@ elif IS_SEGONLY and io.platform == "darwin":
     # WHERE += " AND e.encoding_id > 2612275"
 
     # WHERE = "s.site_name_id != 1"
-    LIMIT = 6000
+    LIMIT = 10000
 
     # TEMP TK TESTING
     # WHERE += " AND s.site_name_id = 8"
@@ -387,11 +395,7 @@ class ImagesClusters(Base):
     image_id = Column(Integer, ForeignKey(Images.image_id, ondelete="CASCADE"), primary_key=True)
     cluster_id = Column(Integer, ForeignKey(f'{ClustersTable_name}.cluster_id', ondelete="CASCADE"))
 
-if IS_CLUSTER or IS_ONE_CLUSTER:
-    # select cluster_median from Clusters
-    results = session.execute(select(Clusters.cluster_id, Clusters.cluster_median)).fetchall()
-    print("results", results)
-    
+def prep_cluster_medians():
     # store the results in a dictionary where the key is the cluster_id
     if results:
         cluster_medians = {}
@@ -400,7 +404,28 @@ if IS_CLUSTER or IS_ONE_CLUSTER:
             cluster_medians[i] = cluster_median
             # print("cluster_medians", i, cluster_median)
             N_CLUSTERS = i # will be the last cluster_id which is count of clusters
-        sort.set_cluster_medians(cluster_medians)
+
+if IS_CLUSTER or IS_ONE_CLUSTER:
+    # select cluster_median from Clusters
+    results = session.execute(select(Clusters.cluster_id, Clusters.cluster_median)).fetchall()
+    cluster_medians, N_CLUSTERS = sort.prep_cluster_medians(results)
+    sort.cluster_medians = cluster_medians
+    print("cluster results", results)
+if IS_HANDS or IS_ONE_HAND:
+    results = session.execute(select(Hands.cluster_id, Hands.cluster_median)).fetchall()
+    hands_medians, N_HANDS = sort.prep_cluster_medians(results)
+    sort.hands_medians = hands_medians
+    print("hands results", results)
+
+    # # store the results in a dictionary where the key is the cluster_id
+    # if results:
+    #     cluster_medians = {}
+    #     for i, row in enumerate(results, start=1):
+    #         cluster_median = pickle.loads(row.cluster_median)
+    #         cluster_medians[i] = cluster_median
+    #         # print("cluster_medians", i, cluster_median)
+    #         N_CLUSTERS = i # will be the last cluster_id which is count of clusters
+    #     sort.set_cluster_medians(cluster_medians)
 
 
 
@@ -1478,8 +1503,9 @@ def main():
             print("going to get mongo encodings")
             print("size",df.size)
             # use the image_id to query the mongoDB for face_encodings68, face_landmarks, body_landmarks
-            df[['face_encodings68', 'face_landmarks', 'body_landmarks', 'body_landmarks_normalized']] = df['image_id'].apply(io.get_encodings_mongo)
-            print("got mongo encodings")
+            df[['face_encodings68', 'face_landmarks', 'body_landmarks', 'body_landmarks_normalized','hand_results']] = df['image_id'].apply(io.get_encodings_mongo)
+            print("got mongo encodings", df.columns)
+            print("first row", df.iloc[0])
 
             # drop all rows where face_encodings68 is None TK revist this after migration to mongo
             df = df.dropna(subset=['face_encodings68'])
@@ -1493,6 +1519,9 @@ def main():
             df['face_landmarks'] = df['face_landmarks'].apply(io.unpickle_array)
             df['body_landmarks'] = df['body_landmarks'].apply(io.unpickle_array)
             df['body_landmarks_normalized'] = df['body_landmarks_normalized'].apply(io.unpickle_array)
+            df[['left_hand_landmarks', 'left_hand_world_landmarks', 'right_hand_landmarks', 'right_hand_world_landmarks']] = pd.DataFrame(df['hand_results'].apply(sort.prep_hand_landmarks).tolist(), index=df.index)
+            df = sort.split_landmarks_to_columns(df, left_col="left_hand_world_landmarks", right_col="right_hand_world_landmarks", structure="list")
+
             df['bbox'] = df['bbox'].apply(lambda x: io.unstring_json(x))
             print("df before bboxing,", df.columns)
 

@@ -573,6 +573,7 @@ class SelectPose:
         from mediapipe.tasks import python
         from mediapipe.tasks.python import vision
 
+        # this version allows specific model to be loaded, so more flexible, but not going to use
         base_options = python.BaseOptions(model_asset_path='hand_landmarker.task')
         options = vision.HandLandmarkerOptions(base_options=base_options, num_hands=2)
         detector = vision.HandLandmarker.create_from_options(options)
@@ -620,6 +621,64 @@ class SelectPose:
             cv2.destroyAllWindows()
 
         return annotated_image
+
+
+    def store_hand_landmarks(self, image_id, hands_data, mongo_hand_collection):
+        hand_data_dict = {}
+
+        for hand_data in hands_data:
+            # Prepare the data for each hand
+            hand_landmarks_data = {
+                "image_landmarks": hand_data["image_landmarks"],
+                "world_landmarks": hand_data["world_landmarks"],
+                "confidence_score": hand_data["confidence_score"]
+            }
+
+            # Store the hand data based on handedness
+            if hand_data["handedness"] == "Right":
+                hand_data_dict["right_hand"] = hand_landmarks_data
+            elif hand_data["handedness"] == "Left":
+                hand_data_dict["left_hand"] = hand_landmarks_data
+
+        # Store both left and right hand data in the same MongoDB document
+        # print(f"Storing data for image_id: {image_id}")
+        mongo_hand_collection.update_one(
+            {"image_id": image_id},
+            {"$set": hand_data_dict},
+            upsert=True  # Insert if doesn't exist or update if it does
+        )
+        # print(f"----------- >>>>>>>>   MongoDB hand data updated for image_id: {image_id}")
+
+
+    def extract_hand_landmarks(self, detection_result):
+        hands_data = []
+
+        # Loop through each hand detected and extract the necessary details
+        if detection_result.multi_hand_landmarks:
+            for idx, hand_landmarks in enumerate(detection_result.multi_hand_landmarks):
+                # Extract landmarks in image coordinates (x, y, z)
+                image_landmarks = [(lm.x, lm.y, lm.z) for lm in hand_landmarks.landmark]
+
+                # Extract landmarks in world coordinates (for 3D space)
+                world_landmarks = [(lm.x, lm.y, lm.z) for lm in detection_result.multi_hand_world_landmarks[idx].landmark]
+
+                # Extract confidence score and handedness (left or right hand)
+                handedness = detection_result.multi_handedness[idx].classification[0]
+                confidence_score = handedness.score
+                hand_label = handedness.label  # "Left" or "Right"
+
+                # Create a dictionary to store all information for this hand
+                hand_data = {
+                    "image_landmarks": image_landmarks,
+                    "world_landmarks": world_landmarks,
+                    "handedness": hand_label,
+                    "confidence_score": confidence_score
+                }
+
+                # Append the hand data to the list
+                hands_data.append(hand_data)
+
+        return hands_data
 
 
     def draw_landmarks_on_image(self,rgb_image, detection_result):

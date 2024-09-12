@@ -45,7 +45,7 @@ class SortPose:
         self.BRUTEFORCE = False
         self.use_3D = use_3D
         print("init use_3D",self.use_3D)
-        self.CUTOFF = 30 # DOES factor if ONE_SHOT
+        self.CUTOFF = 100 # DOES factor if ONE_SHOT
 
         self.CHECK_DESC_DIST = 30
         self.SORT_TYPE = SORT_TYPE
@@ -95,8 +95,11 @@ class SortPose:
         
         ## clustering parameters
         self.query_face = True # set to true. Clusturing code will set some to false
+        self.query_hands = True
         self.query_body = True
         self.query_head_pose = True
+        self.cluster_medians = None
+        self.hands_medians = None
         # # self.BODY_LMS = [0,15,16,19,20,21,22] # 0 is nose, 13-22 are left and right hands and elbows
         # self.POINTERS = [16,20,15,19] # 0 is nose, 13-22 are left and right hands and elbows
         # self.THUMBS = [16,22,15,21] # 0 is nose, 13-22 are left and right hands and elbows
@@ -414,19 +417,6 @@ class SortPose:
         print("returning is_face ", is_face)
         return is_face
 
-    # def blend_is_face(self, oldimage, newimage):
-    #     blend = cv2.addWeighted(oldimage, 0.5, newimage, 0.5, 0.0)
-    #     # blend = cv2.addWeighted(img, 0.5, img_array[i-1], 0.5, 0.0)
-    #     blended_face = sort.is_face(blend)
-    #     return blended_face
-
-    # def get_hash_folders(self,filename):
-    #     m = hashlib.md5()
-    #     m.update(filename.encode('utf-8'))
-    #     d = m.hexdigest()
-    #     # csvWriter1.writerow(["https://upload.wikimedia.org/wikipedia/commons/"+d[0]+'/'+d[0:2]+'/'+filename])
-    #     return d[0], d[0:2]
-
     #get distance beetween encodings
     def get_d(self, enc1, enc2):
         enc1=np.array(enc1)
@@ -506,23 +496,6 @@ class SortPose:
 
         size = (img.shape[0], img.shape[1])
         return img, size
-
-    # # test if new and old make a face
-    # def is_face(self,image):
-    #     # For static images:
-    #     # I think this list is not used
-    #     IMAGE_FILES = []
-    #     with mp_face_detection.FaceDetection(model_selection=1, 
-    #                                         min_detection_confidence=0.6
-    #                                         ) as face_detection:
-    #         results = face_detection.process(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
-
-    #         # Draw face detections of each face.
-    #         if not results.detections:
-    #             is_face = False
-    #         else:
-    #             is_face = True
-    #         return is_face
 
 
 
@@ -2125,3 +2098,56 @@ class SortPose:
         return is_left_shoulder,is_right_shoulder
 
 
+#### HANDS STUFF
+
+    def prep_cluster_medians(self, results):
+        # store the results in a dictionary where the key is the cluster_id
+        if results:
+            cluster_medians = {}
+            for i, row in enumerate(results, start=1):
+                cluster_median = pickle.loads(row.cluster_median)
+                cluster_medians[i] = cluster_median
+                # print("cluster_medians", i, cluster_median)
+                N_CLUSTERS = i # will be the last cluster_id which is count of clusters
+        else:
+            cluster_medians = None
+            N_CLUSTERS = 0
+        return cluster_medians, N_CLUSTERS
+    
+    def prep_hand_landmarks(self, hand_results):  
+        left_hand_landmarks = left_hand_world_landmarks = right_hand_landmarks = right_hand_world_landmarks = []
+        if 'left_hand' in hand_results:
+            left_hand_landmarks = hand_results['left_hand'].get('image_landmarks', [])
+            left_hand_world_landmarks = hand_results['left_hand'].get('world_landmarks', [])
+        if 'right_hand' in hand_results:
+            right_hand_landmarks = hand_results['right_hand'].get('image_landmarks', [])
+            right_hand_world_landmarks = hand_results['right_hand'].get('world_landmarks', [])
+        return left_hand_landmarks, left_hand_world_landmarks, right_hand_landmarks, right_hand_world_landmarks
+
+
+    def split_landmarks_to_columns(self, df, left_col="left_hand_world_landmarks", right_col="right_hand_world_landmarks", structure="cols"):
+        def extract_landmarks(landmarks):
+            # If no landmarks, return 63 zeros (21 points * 3 dimensions)
+            if not landmarks:
+                return [0.0] * 63
+            # Flatten the list of (x, y, z) for each landmark
+            flat_landmarks = [coord for point in landmarks for coord in point]
+            return flat_landmarks
+        
+        # Extract and flatten landmarks for left and right hands
+        left_landmarks = df[left_col].apply(extract_landmarks)
+        right_landmarks = df[right_col].apply(extract_landmarks)
+        
+        if structure == "cols":
+            # Create new columns for each dimension (21 points * 3 = 63 columns for each hand)
+            left_landmark_cols = pd.DataFrame(left_landmarks.tolist(), columns=[f'left_dim_{i+1}' for i in range(63)])
+            right_landmark_cols = pd.DataFrame(right_landmarks.tolist(), columns=[f'right_dim_{i+1}' for i in range(63)])
+            
+            # Concatenate the original DataFrame with the new columns
+            df = pd.concat([df, left_landmark_cols, right_landmark_cols], axis=1)
+        if structure == "list":
+            # combine the left and right landmarks into a single list
+            landmarks_list = left_landmarks + right_landmarks
+            df['hand_landmarks'] = landmarks_list
+        
+        return df

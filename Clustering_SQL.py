@@ -75,7 +75,8 @@ db = io.db
 NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 MODE = 0
 # CLUSTER_TYPE = "Clusters"
-CLUSTER_TYPE = "Poses"
+# CLUSTER_TYPE = "Poses"
+CLUSTER_TYPE = "Hands"
 # SUBSET_LANDMARKS is now set in sort pose init
 USE_HEAD_POSE = False
 
@@ -93,10 +94,10 @@ USE_SEGMENT = True
 GET_OPTIMAL_CLUSTERS=False
 
 # number of clusters produced. run GET_OPTIMAL_CLUSTERS and add that number here
-N_CLUSTERS = 24
+N_CLUSTERS = 128
 SAVE_FIG=False ##### option for saving the visualized data
 
-if USE_SEGMENT is True and CLUSTER_TYPE == "Poses":
+if USE_SEGMENT is True and (CLUSTER_TYPE == "Poses" or CLUSTER_TYPE == "Hands"):
     print("setting Poses SQL")
     SegmentTable_name = 'SegmentOct20'
 
@@ -109,7 +110,8 @@ if USE_SEGMENT is True and CLUSTER_TYPE == "Poses":
 
     # Basic Query, this works with gettytest3
     SELECT = "DISTINCT(s.image_id), s.face_x, s.face_y, s.face_z, s.mouth_gap"
-    WHERE = " s.mongo_body_landmarks = 1 "
+    if CLUSTER_TYPE == "Poses": WHERE = " s.mongo_body_landmarks = 1 "
+    elif CLUSTER_TYPE == "Hands": WHERE = " s.mongo_hand_landmarks = 1 "
     if MODE == 0:
         FROM = f"{SegmentTable_name} s"
         WHERE += " AND s.face_x > -35 AND s.face_x < -24 AND s.face_y > -3 AND s.face_y < 3 AND s.face_z > -3 AND s.face_z < 3 "
@@ -120,7 +122,7 @@ if USE_SEGMENT is True and CLUSTER_TYPE == "Poses":
         WHERE += " AND ic.cluster_id IS NULL "
 
     # WHERE += " AND h.is_body = 1"
-    LIMIT = 1000000
+    LIMIT = 10000000
 
 
     '''
@@ -132,7 +134,7 @@ if USE_SEGMENT is True and CLUSTER_TYPE == "Poses":
     30000 2553 @ hands elbows x 3d
     100000 90s @ HAND_LMS
     1000000 1077s @ HAND_LMS
-
+    1100000 1177 @ HAND_LMSx 3d
     '''
 
 elif USE_SEGMENT is True and MODE == 0:
@@ -268,7 +270,10 @@ def make_subset_landmarks(df,add_list=False):
 def kmeans_cluster(df, n_clusters=32):
     # Select only the numerical columns (dim_0 to dim_65)
     print(" : ",sort.SUBSET_LANDMARKS)
-    numerical_data = make_subset_landmarks(df)
+    if CLUSTER_TYPE == "Poses":
+        numerical_data = make_subset_landmarks(df)
+    else:
+        numerical_data = df
     print("clustering subset data", numerical_data)
     kmeans = KMeans(n_clusters=n_clusters, n_init=10, init='k-means++', random_state=42, max_iter=300, verbose=1)
     kmeans.fit(numerical_data)
@@ -406,6 +411,66 @@ def prepare_df(df):
 
         df_list_to_cols(df, 'body_landmarks_array')
         print("after cols",df)
+    elif CLUSTER_TYPE == "Hands":
+        # def prep_hand_landmarks(hand_results):  
+        #     left_hand_landmarks = left_hand_world_landmarks = right_hand_landmarks = right_hand_world_landmarks = []
+        #     if 'left_hand' in hand_results:
+        #         left_hand_landmarks = hand_results['left_hand'].get('image_landmarks', [])
+        #         left_hand_world_landmarks = hand_results['left_hand'].get('world_landmarks', [])
+        #     if 'right_hand' in hand_results:
+        #         right_hand_landmarks = hand_results['right_hand'].get('image_landmarks', [])
+        #         right_hand_world_landmarks = hand_results['right_hand'].get('world_landmarks', [])
+        #     return left_hand_landmarks, left_hand_world_landmarks, right_hand_landmarks, right_hand_world_landmarks
+            
+        # def sort.split_landmarks_to_columns(df, left_col="left_hand_world_landmarks", right_col="right_hand_world_landmarks"):
+        #     def extract_landmarks(landmarks):
+        #         # If no landmarks, return 63 zeros (21 points * 3 dimensions)
+        #         if not landmarks:
+        #             return [0.0] * 63
+        #         # Flatten the list of (x, y, z) for each landmark
+        #         flat_landmarks = [coord for point in landmarks for coord in point]
+        #         return flat_landmarks
+            
+        #     # Extract and flatten landmarks for left and right hands
+        #     left_landmarks = df[left_col].apply(extract_landmarks)
+        #     right_landmarks = df[right_col].apply(extract_landmarks)
+            
+        #     # Create new columns for each dimension (21 points * 3 = 63 columns for each hand)
+        #     left_landmark_cols = pd.DataFrame(left_landmarks.tolist(), columns=[f'left_dim_{i+1}' for i in range(63)])
+        #     right_landmark_cols = pd.DataFrame(right_landmarks.tolist(), columns=[f'right_dim_{i+1}' for i in range(63)])
+            
+        #     # Concatenate the original DataFrame with the new columns
+        #     df = pd.concat([df, left_landmark_cols, right_landmark_cols], axis=1)
+        
+        #     return df
+        
+        # print("preapring hands", df)
+        # df = df.dropna(subset=['hand_landmarks'])
+        # print("first row of df",df.iloc[0])
+
+        df[['left_hand_landmarks', 'left_hand_world_landmarks', 'right_hand_landmarks', 'right_hand_world_landmarks']] = pd.DataFrame(df['hand_results'].apply(sort.prep_hand_landmarks).tolist(), index=df.index)
+        # print("after prep",df)
+
+        # print("first row of df",df.iloc[0])
+
+        df = sort.split_landmarks_to_columns(df, left_col="left_hand_world_landmarks", right_col="right_hand_world_landmarks")
+        # print("after split",df)
+        # print("first row of df",df.iloc[0])
+        # print("columns",df.columns)
+
+        # df['hand_landmarks'] = df['hand_landmarks'].apply(io.unpickle_array)
+        # body = self.get_landmarks_2d(enc1, list(range(33)), structure)
+        # df['hand_landmarks_array'] = df['hand_landmarks'].apply(lambda x: sort.get_landmarks_2d(x, list(range(33)), structure=STRUCTURE))
+
+        # apply io.convert_decimals_to_float to face_x, face_y, face_z, and mouth_gap 
+        df[['face_x', 'face_y', 'face_z', 'mouth_gap']] = df[['face_x', 'face_y', 'face_z', 'mouth_gap']].astype(float)
+        # df['body_landmarks_array'] = df.apply(lambda row: io.convert_decimals_to_float(row['body_landmarks_array'] + [row['face_x'], row['face_y'], row['face_z'], row['mouth_gap']]), axis=1)
+        # drop the columns that are not needed
+        if not USE_HEAD_POSE: df = df.drop(columns=['face_x', 'face_y', 'face_z', 'mouth_gap']) 
+        columns_to_drop = ['face_encodings68', 'face_landmarks', 'body_landmarks', 'body_landmarks_normalized', 
+                           'hand_results', 'left_hand_landmarks', 'right_hand_landmarks', 'left_hand_world_landmarks', 'right_hand_world_landmarks']
+        df = df.drop(columns=columns_to_drop)
+        # print("after drop",df)
 
     elif CLUSTER_TYPE == "Clusters":
         df = df.dropna(subset=['face_encodings68'])
@@ -431,10 +496,12 @@ def main():
     enc_data=pd.DataFrame()
     df = pd.json_normalize(resultsjson)
     print(df)
-    if CLUSTER_TYPE == "Poses": io.query_face = sort.query_face = False
-    elif CLUSTER_TYPE == "Clusters": io.query_body = sort.query_body = False
-    if not USE_HEAD_POSE: io.query_head_pose = sort.query_head_pose= False
-    df[['face_encodings68', 'face_landmarks', 'body_landmarks', 'body_landmarks_normalized']] = df['image_id'].apply(io.get_encodings_mongo)
+    # tell sort_pose which columns to NOT query
+    if CLUSTER_TYPE == "Poses": io.query_face = sort.query_face = io.query_hands = sort.query_hands = False
+    elif CLUSTER_TYPE == "Hands": io.query_body = sort.query_body = io.query_face = sort.query_face = False
+    elif CLUSTER_TYPE == "Clusters": io.query_body = sort.query_body = io.query_hands = sort.query_hands = False
+    if not USE_HEAD_POSE: io.query_head_pose = sort.query_head_pose = False
+    df[['face_encodings68', 'face_landmarks', 'body_landmarks', 'body_landmarks_normalized', 'hand_results']] = df['image_id'].apply(io.get_encodings_mongo)
     # face_encodings68, face_landmarks, body_landmarks, body_landmarks_normalized = sort.get_encodings_mongo(mongo_db,row["image_id"], is_body=True, is_face=False)
     enc_data = prepare_df(df)
     
@@ -445,8 +512,16 @@ def main():
             print(OPTIMAL_CLUSTERS)
             N_CLUSTERS = OPTIMAL_CLUSTERS
         print(enc_data)
+        
+
         # I drop image_id as I pass it to knn bc I need it later, but knn can't handle strings
-        enc_data["cluster_id"] = kmeans_cluster(enc_data.drop(["image_id", "body_landmarks_array"], axis=1),n_clusters=N_CLUSTERS)
+        # if body_landmarks_array is one of the df.columns, drop it
+        if "body_landmarks_array" in df.columns:
+            columns_to_drop = ["image_id", "body_landmarks_array"]
+        else:
+            columns_to_drop = ["image_id"]
+
+        enc_data["cluster_id"] = kmeans_cluster(enc_data.drop(columns=columns_to_drop), n_clusters=N_CLUSTERS)
         
         print(enc_data)
         print(set(enc_data["cluster_id"].tolist()))

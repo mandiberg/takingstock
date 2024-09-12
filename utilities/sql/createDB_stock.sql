@@ -141,8 +141,8 @@ CREATE TABLE Encodings (
     mongo_body_landmarks_norm boolean,
     two_noses boolean,
     is_dupe_of INTEGER,
-    FOREIGN KEY (image_id) REFERENCES Images(image_id),
-
+    FOREIGN KEY (is_dupe_of) REFERENCES Images(image_id),
+    mongo_hand_landmarks boolean,
     UNIQUE (image_id)
 ); 
 

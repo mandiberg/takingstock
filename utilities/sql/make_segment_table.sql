@@ -51,7 +51,8 @@ CREATE TABLE SegmentBig_isface (
     mongo_body_landmarks_norm boolean,
     no_image boolean,
     is_dupe_of INTEGER,
-    FOREIGN KEY (image_id) REFERENCES Images(image_id),
+    FOREIGN KEY (is_dupe_of) REFERENCES Images(image_id),
+    mongo_hand_landmarks boolean,    
     UNIQUE (image_id)
 
 
@@ -507,8 +508,8 @@ DELETE FROM Clusters ;
 
 
 
-UPDATE SegmentOct20
-SET two_noses = NULL
-WHERE image_id < 150000;
+UPDATE Encodings 
+SET is_dupe_of = NULL
+WHERE is_dupe_of IS NOT NULL;
 
 
