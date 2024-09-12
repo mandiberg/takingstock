@@ -1877,7 +1877,23 @@ class SortPose:
 #####################################################
 # BODY BACKGROUND OBJECT DETECTION STUFF            #
 #####################################################
+    def normalize_hand_landmarks(self,results,nose_pos,face_height,shape):
+        height,width = shape[:2]
+        translated_landmarks = landmark_pb2.NormalizedLandmarkList()
+        # i=0
+        for hand_landmarks in results.multi_hand_landmarks:
+            print("hand_landmarks",hand_landmarks)
+            for hand_landmark in hand_landmarks.landmark:
+                print("hand_landmark",hand_landmark)
+                # print("normalize_landmarks", nose_pos["x"], landmark.x, width, face_height)
+                translated_landmark = landmark_pb2.NormalizedLandmark()
+                translated_landmark.x = (nose_pos["x"]-hand_landmark.x*width )/face_height
+                translated_landmark.y = (nose_pos["y"]-hand_landmark.y*height)/face_height
+                translated_landmark.visibility = hand_landmark.visibility
+                translated_landmarks.landmark.append(translated_landmark)
 
+        return translated_landmarks
+    
 
     def normalize_landmarks(self,landmarks,nose_pos,face_height,shape):
         height,width = shape[:2]
@@ -1966,6 +1982,22 @@ class SortPose:
         start = time.time()
         nlms_dict = {"image_id": image_id, "nlms": pickle.dumps(n_landmarks)}
         result = bboxnormed_collection.update_one(
+            {"image_id": image_id},  # filter
+            {"$set": nlms_dict},     # update
+            upsert=True              # insert if not exists
+        )
+        if result.upserted_id:
+            pass
+            # print("Inserted new document with id:", result.upserted_id)
+        else:
+            print("Updated existing document")
+        # print("Time to insert:", time.time()-start)
+        return
+    
+    def insert_n_hand_landmarks(self,mongo_hand_collection, image_id, n_hand_landmarks):
+        # start = time.time()
+        nlms_dict = {"image_id": image_id, "nlms": pickle.dumps(n_hand_landmarks)}
+        result = mongo_hand_collection.update_one(
             {"image_id": image_id},  # filter
             {"$set": nlms_dict},     # update
             upsert=True              # insert if not exists
