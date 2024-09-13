@@ -20,10 +20,9 @@ CREATE TABLE CountGender_Location (
     FOREIGN KEY (location_id) REFERENCES Location (location_id)
 );
 
-
 CREATE INDEX idx_topic_id ON Topics(topic_id);
 
-CREATE TABLE CountGender_Topics (
+CREATE TABLE CountGender_Topics_so (
     topic_id INT,
     men INT DEFAULT 0,
     nogender INT DEFAULT 0,

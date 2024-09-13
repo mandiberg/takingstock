@@ -28,7 +28,7 @@ VERBOSE = False
 # HelperTable_name = "SegmentHelperMar23_headon"
 
 # 7K for topic 7
-HelperTable_name = "SegmentHelperApril12_2x2x33x27"
+HelperTable_name = "SegmentBig_isface"
 
 # MM controlling which folder to use
 IS_SSD = False
@@ -40,12 +40,21 @@ io.db["name"] = "stock"
 
 
 # Create a database engine
-engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}".format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']), poolclass=NullPool)
+if db['unix_socket']:
+    # for MM's MAMP config
+    engine = create_engine("mysql+pymysql://{user}:{pw}@/{db}?unix_socket={socket}".format(
+        user=db['user'], pw=db['pass'], db=db['name'], socket=db['unix_socket']
+    ), poolclass=NullPool)
+else:
+    engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}"
+                                .format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']), poolclass=NullPool)
+
 
 
 
 title = 'Please choose your operation: '
-options = ["CountGender_Location_so", "CountGender_Topic_so", "CountEthnicity_Location_so", "CountEthnicity_Topics_so", "CountGender_Location", "CountEthnicity_Location"]
+options = ["CountGender_Location_so", "CountGender_Topic_so", "CountEthnicity_Location_so", "CountEthnicity_Topics_so", 
+           "CountGender_Location", "CountGender_Topic", "CountEthnicity_Location", "CountEthnicity_Topics"]
 option, index = pick(options, title)
 print(f"Selected option: {option}, index: {index}")
 if index <= 3: 
@@ -56,9 +65,9 @@ if index <= 3:
 else: 
     print(f"setting tables for option: {option}, index: {index}")
     gender_location = "CountGender_Location"
-    gender_topic = "CountGender_Topics_so" # placeholder, not functional
+    gender_topic = "CountGender_Topics" # placeholder, not functional
     ethnicity_location = "CountEthnicity_Location"
-    ethnicity_topic = "CountEthnicity_Topics_so" # placeholder, not functional
+    ethnicity_topic = "CountEthnicity_Topics" # placeholder, not functional
 
 # Initialize the counter
 counter = 0
@@ -420,8 +429,12 @@ elif index == 3:
 elif index == 4:
     count_gender_location(Images)
 elif index == 5:
+    count_gender_topic(Images)
+elif index == 6:    
     # get_bg_database()
     count_ethnicity_location(Images)
+elif index == 7:
+    count_ethnicity_topic(Images)
         
 def threaded_fetching():
     while not work_queue.empty():
