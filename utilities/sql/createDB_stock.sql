@@ -143,6 +143,7 @@ CREATE TABLE Encodings (
     is_dupe_of INTEGER,
     FOREIGN KEY (is_dupe_of) REFERENCES Images(image_id),
     mongo_hand_landmarks boolean,
+    mongo_hand_landmarks_norm boolean,
     UNIQUE (image_id)
 ); 
 

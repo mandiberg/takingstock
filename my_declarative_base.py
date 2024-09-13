@@ -125,6 +125,7 @@ class Encodings(Base):
     two_noses              = Column(Boolean)
     is_dupe_of            = Column(Integer, ForeignKey('images.image_id'))
     mongo_hand_landmarks   = Column(Boolean)
+    mongo_hand_landmarks_norm   = Column(Boolean)
 
 class Clusters(Base):
     __tablename__ = 'Clusters'
@@ -251,6 +252,7 @@ class SegmentTable(Base):
     two_noses              = Column(Boolean)
     is_dupe_of            = Column(Integer, ForeignKey('images.image_id'))
     mongo_hand_landmarks   = Column(Boolean)
+    mongo_hand_landmarks_norm   = Column(Boolean)
 
     site     = relationship("Site")
     age      = relationship("Age")

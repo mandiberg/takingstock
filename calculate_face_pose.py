@@ -103,9 +103,14 @@ THESE_FOLDER_PATHS = ["9/9C", "9/9D", "9/9E", "9/9F", "9/90", "9/91", "9/92", "9
 # MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages"
 CSV_FOLDERCOUNT_PATH = os.path.join(MAIN_FOLDER, "folder_countout.csv")
 
-IS_SSD=True
+IS_SSD=False
+
+# set BODY to true, set SSD to false, set TOPIC_ID
+# for SSD, start at 29654961
 BODYLMS = True # only matters if IS_FOLDER is False
 HANDLMS = True
+TOPIC_ID = None
+TOPIC_ID = [24, 29] # adding a TOPIC_ID forces it to work from SegmentBig_isface
 DO_INVERSE = True
 SEGMENT = 0 # topic_id set to 0 or False if using HelperTable or not using a segment
 HelperTable_name = False #"SegmentHelperMay7_fingerpoint" # set to False if not using a HelperTable
@@ -123,10 +128,20 @@ if BODYLMS is True or HANDLMS is True:
 
     SegmentTable_name = 'SegmentOct20'
     FROM =f"{SegmentTable_name} seg1"
+    
     # FROM ="Encodings e"
     if BODYLMS or (BODYLMS and HANDLMS):
-        QUERY = " seg1.mongo_body_landmarks IS NULL and seg1.no_image IS NULL"
-        SUBQUERY = " "
+        # if doing both BODYLMS and HANDLMS, query as if BODY, and also do HAND on those image_ids
+        if TOPIC_ID:
+            SELECT = "DISTINCT seg1.image_id, seg1.site_name_id, seg1.contentUrl, seg1.imagename, seg1.site_image_id, e.mongo_body_landmarks, e.mongo_face_landmarks, e.bbox"
+            QUERY = " e.mongo_body_landmarks IS NULL "
+            FROM = " SegmentBig_isface seg1 "
+            FROM += " JOIN Encodings e ON seg1.image_id = e.image_id"
+            FROM += " LEFT JOIN ImagesTopics it ON seg1.image_id = it.image_id"
+            SUBQUERY = f" AND it.topic_id IN {tuple(TOPIC_ID)} "
+        else:
+            QUERY = " seg1.mongo_body_landmarks IS NULL and seg1.no_image IS NULL"
+            SUBQUERY = " "
     elif HANDLMS:
         QUERY = " seg1.mongo_hand_landmarks IS NULL and seg1.no_image IS NULL"
         # SUBQUERY = " "
@@ -1607,7 +1622,7 @@ def main():
 
     else:
         print("old school SQL")
-        start_id = 0
+        start_id = 3776205
         while True:
             init_session()
 

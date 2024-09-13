@@ -53,6 +53,7 @@ CREATE TABLE SegmentBig_isface (
     is_dupe_of INTEGER,
     FOREIGN KEY (is_dupe_of) REFERENCES Images(image_id),
     mongo_hand_landmarks boolean,    
+    mongo_hand_landmarks_norm boolean,
     UNIQUE (image_id)
 
 
@@ -440,49 +441,6 @@ AND e.face_z > -3 AND e.face_z < 3
 LIMIT 100
 ;
 
-
-
--- debugging makevideo query
-SELECT *
-FROM SegmentAug30Straightahead AS seg JOIN ImagesClusters AS ic ON seg.image_id = ic.image_id
-WHERE seg.age_id NOT IN (1, 2, 3, 4) AND seg.mouth_gap > 15 AND ic.cluster_id = 77
-LIMIT 1000;
-
-SELECT * FROM SegmentAug30Straightahead AS seg JOIN ImagesClusters AS ic ON seg.image_id = ic.image_id 
-WHERE seg.age_id NOT IN (1,2,3,4) and seg.mouth_gap > 15 AND ImagesClusters.cluster_id = 77 LIMIT 100;
-
-SET GLOBAL innodb_buffer_pool_size=4294967296;
-SHOW VARIABLES LIKE '%innodb_buffer_pool_size%';
-
-SELECT COUNT(s.image_id) as ccount
-FROM SegmentDec20 s
-;
-
-USE ministock;
-SELECT COUNT(it.image_id) as ccount
-FROM ImagesTopics it
-;
-
-USE ministock;
-SELECT COUNT(i.image_id) as ccount
-FROM Images i
-;
-
-
-SELECT COUNT(s.image_id) as ccount
-FROM SegmentAug30Straightahead s
-WHERE s.mouth_gap > 15
-;
-
-SELECT COUNT(e.image_id) FROM Encodings e 
-WHERE e.is_face IS TRUE AND e.face_encodings68 IS NULL
-;
-
-
-SELECT COUNT(s.image_id)
-FROM SegmentAug30Straightahead s
-WHERE mouth_gap > 15
-;
 
 
 

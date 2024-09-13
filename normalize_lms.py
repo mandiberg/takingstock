@@ -36,7 +36,9 @@ IS_SSD = True
 
 SKIP_EXISTING = False # Skips images with a normed bbox but that have Images.h
 USE_OBJ = 0 # select the bbox to work with
-SKIP_BODY = False # skip body landmarks. mostly you want to skip when doing obj bbox
+SKIP_BODY = True # skip body landmarks. mostly you want to skip when doing obj bbox
+                # or are just redoing hands
+REPROCESS_HANDS = True # do hands
 
 io = DataIO(IS_SSD)
 db = io.db
@@ -103,7 +105,7 @@ sort = SortPose(motion, face_height_output, image_edge_multiplier_sm,EXPAND, ONE
 # Create a session
 session = scoped_session(sessionmaker(bind=engine))
 
-LIMIT= 30000
+LIMIT= 10000000
 # Initialize the counter
 counter = 0
 
@@ -243,9 +245,12 @@ def unpickle_array(pickled_array):
     else:
         return None
 
-def get_face_height_face_lms(target_image_id,bbox):
-    # select target image from mongo mongo_collection
-    results = face_landmarks_collection.find_one({"image_id": target_image_id})
+def get_face_height_face_lms(target_image_id,bbox, face_landmarks=None):
+    # select target image from mongo mongo_collection if not passed through
+    if not face_landmarks:
+        results = face_landmarks
+    else:
+        results = face_landmarks_collection.find_one({"image_id": target_image_id})
     if results:
         # set the face height input properties
         if type(bbox)==str: bbox = io.unstring_json(bbox)
@@ -320,15 +325,27 @@ def calc_nlm(image_id_to_shape, lock, session):
     if VERBOSE: print("height,width from DB:",height,width)
     if VERBOSE: print("target_image_id",target_image_id)
 
-    # get the landmarks
-    face_height=get_face_height_face_lms(target_image_id,bbox)
+
+    # get all the landmarks
+    face_encodings68, face_landmarks, body_landmarks, body_landmarks_normalized, hand_results = io.get_encodings_mongo(target_image_id)
+
+
+    face_height=get_face_height_face_lms(target_image_id,bbox, face_landmarks)
     if sort.VERBOSE: print("face_height from lms",face_height)
     nose_pixel_pos_face = sort.get_face_2d_point(1)
     if sort.VERBOSE: print("nose_pixel_pos from face",nose_pixel_pos_face)
-    body_landmarks=get_landmarks_mongo(target_image_id)
-    nose_pixel_pos_body_withviz = sort.set_nose_pixel_pos(body_landmarks,[height,width])
+    # only do this if the io.get_encodings_mongo didn't return the body landmarks
+    if not body_landmarks: body_landmarks=get_landmarks_mongo(target_image_id)
+    if body_landmarks:
+        nose_pixel_pos_body_withviz = sort.set_nose_pixel_pos(body_landmarks,[height,width])
+    else:
+        print("BODY LANDMARK NOT FOUND 404, bailing for this one ", target_image_id)
+        return
+        nose_pixel_pos_body_withviz = nose_pixel_pos_face
     if sort.VERBOSE: print("nose_pixel_pos from body",nose_pixel_pos_body_withviz)
-    detection_results=get_hand_landmarks_mongo(target_image_id)
+    # hand_results=get_hand_landmarks_mongo(target_image_id)
+    # print("hand_results",hand_results)
+
     #     # for drawing landmarks on test image
     # landmarks_2d = sort.get_landmarks_2d(row['face_landmarks'], list(range(33)), "list")
     # print("landmarks_2d before drawing", landmarks_2d)
@@ -408,17 +425,18 @@ def calc_nlm(image_id_to_shape, lock, session):
     # print timer
 
 
-    if detection_results:
+    if hand_results:
         if VERBOSE: print("has hand_landmarks")
-        n_hand_landmarks=sort.normalize_hand_landmarks(detection_results,nose_pixel_pos_body,face_height,[height,width])
-        sort.insert_n_hand_landmarks(mongo_hand_collection, target_image_id,n_hand_landmarks)
+        hand_landmarks_norm=sort.normalize_hand_landmarks(hand_results,nose_pixel_pos_body,face_height,[height,width])
+        # print("hand_landmarks_norm",hand_landmarks_norm)
+        sort.update_hand_landmarks_in_mongo(mongo_hand_collection, target_image_id,hand_landmarks_norm)
         session.query(Encodings).filter(Encodings.image_id == target_image_id).update({
                 Encodings.mongo_hand_landmarks_norm: 1
             }, synchronize_session=False)
         session.query(SegmentTable).filter(SegmentTable.image_id == target_image_id).update({
                 SegmentTable.mongo_hand_landmarks_norm: 1
             }, synchronize_session=False)
-        session.commit()    
+        # session.commit()    
         
     if body_landmarks:
         if VERBOSE: print("has body_landmarks")
@@ -443,7 +461,7 @@ def calc_nlm(image_id_to_shape, lock, session):
             session.query(SegmentTable).filter(SegmentTable.image_id == target_image_id).update({
                     SegmentTable.mongo_body_landmarks_norm: 1
                 }, synchronize_session=False)
-            session.commit()
+            # session.commit()
 
             if VERBOSE: print("did insert_n_landmarks, going to get phone bbox")
             if VERBOSE: print("Time to get insert:", time.time()-start)
@@ -497,6 +515,14 @@ if USE_OBJ == 26:
         filter(PhoneBbox.conf_26 != -1).\
         limit(LIMIT)
 
+elif REPROCESS_HANDS == True:
+    distinct_image_ids_query = select(Images.image_id.distinct(), Images.h, Images.w, SegmentTable.bbox).\
+        outerjoin(SegmentTable,Images.image_id == SegmentTable.image_id).\
+        filter(SegmentTable.bbox != None).\
+        filter(SegmentTable.two_noses.is_(None)).\
+        filter(SegmentTable.mongo_hand_landmarks == 1).\
+        filter(SegmentTable.mongo_hand_landmarks_norm.is_(None)).\
+        limit(LIMIT)
 else:
     distinct_image_ids_query = select(Images.image_id.distinct(), Images.h, Images.w, SegmentTable.bbox).\
         outerjoin(SegmentTable,Images.image_id == SegmentTable.image_id).\

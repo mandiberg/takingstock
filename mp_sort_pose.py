@@ -1877,23 +1877,41 @@ class SortPose:
 #####################################################
 # BODY BACKGROUND OBJECT DETECTION STUFF            #
 #####################################################
-    def normalize_hand_landmarks(self,results,nose_pos,face_height,shape):
-        height,width = shape[:2]
-        translated_landmarks = landmark_pb2.NormalizedLandmarkList()
-        # i=0
-        for hand_landmarks in results.multi_hand_landmarks:
-            print("hand_landmarks",hand_landmarks)
-            for hand_landmark in hand_landmarks.landmark:
-                print("hand_landmark",hand_landmark)
-                # print("normalize_landmarks", nose_pos["x"], landmark.x, width, face_height)
-                translated_landmark = landmark_pb2.NormalizedLandmark()
-                translated_landmark.x = (nose_pos["x"]-hand_landmark.x*width )/face_height
-                translated_landmark.y = (nose_pos["y"]-hand_landmark.y*height)/face_height
-                translated_landmark.visibility = hand_landmark.visibility
-                translated_landmarks.landmark.append(translated_landmark)
 
-        return translated_landmarks
-    
+    def normalize_hand_landmarks(self, results, nose_pos, face_height, shape):
+        height, width = shape[:2]
+        translated_landmark_dict = {}
+
+        for hand_side in ['left_hand', 'right_hand']:
+            if hand_side in results and 'image_landmarks' in results[hand_side]:
+                hand_landmarks = results[hand_side]['image_landmarks']  # Get the image landmarks list
+
+                translated_image_landmarks = []
+                # print("nose_pos", nose_pos)
+                for hand_landmark in hand_landmarks:
+                    # Translate the landmark coordinates
+                    translated_landmark = [
+                        # in the hand_landmark, 0 is x and 1 is y
+                        # this is the extant math:
+                        # (nose_pos["x"] - hand_landmark[0] * width) / face_height,  # x
+                        # (nose_pos["y"] - hand_landmark[1] * height) / face_height,  # y
+                        # I changed to this math. This gives a negative number when hand is to the left of the nose
+                        # and a positive number when the hand is below the nose
+                        (hand_landmark[0] * width - nose_pos["x"]) / face_height,  # x
+                        (hand_landmark[1] * height - nose_pos["y"]) / face_height,  # y
+                        (0 - hand_landmark[2] * height) / face_height,  # z
+                    ]
+
+                    # Add the translated landmark to the list
+                    translated_image_landmarks.append(translated_landmark)
+
+                # Store the list of translated landmarks in the dictionary
+                translated_landmark_dict[hand_side] = {
+                    "image_landmarks": translated_image_landmarks,
+                }
+
+        return translated_landmark_dict
+
 
     def normalize_landmarks(self,landmarks,nose_pos,face_height,shape):
         height,width = shape[:2]
@@ -1940,6 +1958,9 @@ class SortPose:
 
 
     def set_nose_pixel_pos(self,body_landmarks,shape):
+        # if body_landmarks is pickled, unpickle it
+        if type(body_landmarks)==bytes:
+            body_landmarks=pickle.loads(body_landmarks)
         if self.VERBOSE: print("set_nose_pixel_pos body_landmarks")
         height,width = shape[:2]
         if self.VERBOSE: print("set_nose_pixel_pos bodylms height, width", height, width)
@@ -1994,9 +2015,32 @@ class SortPose:
         # print("Time to insert:", time.time()-start)
         return
     
-    def insert_n_hand_landmarks(self,mongo_hand_collection, image_id, n_hand_landmarks):
+    def update_hand_landmarks_in_mongo(self,mongo_hand_collection, image_id, hand_landmarks_norm):
+        update_data = {}
+        
+            
+                    # Check if left_hand exists and update accordingly
+        if 'left_hand' in hand_landmarks_norm:            
+            update_data['left_hand.hand_landmarks_norm'] = hand_landmarks_norm['left_hand']['image_landmarks']
+        
+        # Check if right_hand exists and update accordingly
+        if 'right_hand' in hand_landmarks_norm:
+            update_data['right_hand.hand_landmarks_norm'] = hand_landmarks_norm['right_hand']['image_landmarks']
+        
+        # Perform the MongoDB update operation
+        if update_data:
+            # print("update_data", update_data)
+            mongo_hand_collection.update_one(
+                {'image_id': image_id},  # Assuming you have a document_id to update
+                {'$set': update_data},
+                upsert=True
+            )
+        print("Hand landmarks updated successfully.", image_id)
+
+
+    def insert_hand_landmarks_norm(self,mongo_hand_collection, image_id, hand_landmarks_norm):
         # start = time.time()
-        nlms_dict = {"image_id": image_id, "nlms": pickle.dumps(n_hand_landmarks)}
+        nlms_dict = {"image_id": image_id, "nlms": pickle.dumps(hand_landmarks_norm)}
         result = mongo_hand_collection.update_one(
             {"image_id": image_id},  # filter
             {"$set": nlms_dict},     # update
@@ -2156,19 +2200,19 @@ class SortPose:
             right_hand_world_landmarks = hand_results['right_hand'].get('world_landmarks', [])
         return left_hand_landmarks, left_hand_world_landmarks, right_hand_landmarks, right_hand_world_landmarks
 
+    def extract_landmarks(self, landmarks):
+        # If no landmarks, return 63 zeros (21 points * 3 dimensions)
+        if not landmarks:
+            return [0.0] * 63
+        # Flatten the list of (x, y, z) for each landmark
+        flat_landmarks = [coord for point in landmarks for coord in point]
+        return flat_landmarks
 
     def split_landmarks_to_columns(self, df, left_col="left_hand_world_landmarks", right_col="right_hand_world_landmarks", structure="cols"):
-        def extract_landmarks(landmarks):
-            # If no landmarks, return 63 zeros (21 points * 3 dimensions)
-            if not landmarks:
-                return [0.0] * 63
-            # Flatten the list of (x, y, z) for each landmark
-            flat_landmarks = [coord for point in landmarks for coord in point]
-            return flat_landmarks
         
         # Extract and flatten landmarks for left and right hands
-        left_landmarks = df[left_col].apply(extract_landmarks)
-        right_landmarks = df[right_col].apply(extract_landmarks)
+        left_landmarks = df[left_col].apply(self.extract_landmarks)
+        right_landmarks = df[right_col].apply(self.extract_landmarks)
         
         if structure == "cols":
             # Create new columns for each dimension (21 points * 3 = 63 columns for each hand)
