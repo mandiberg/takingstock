@@ -104,7 +104,7 @@ ORDER BY
 SELECT
     ip.cluster_id,
     COUNT(so.image_id) AS image_count,
-    SUM(CASE WHEN pb.bbox_67  IS NOT NULL THEN 1 ELSE 0 END) AS phone bbox
+    SUM(CASE WHEN pb.bbox_67  IS NOT NULL THEN 1 ELSE 0 END) AS phone_bbox
 FROM
     SegmentOct20 so 
 INNER JOIN ImagesPoses ip ON ip.image_id = so.image_id

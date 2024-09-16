@@ -56,22 +56,30 @@ HSV_NORMS = {"LUM": .01, "SAT": 1,  "HUE": 0.002777777778, "VAL": 1}
 
 # this is for controlling if it is using
 # all clusters, 
-IS_CLUSTER = True
-# CLUSTER_TYPE = "Poses"
-CLUSTER_TYPE = "HandsPoses" # 2d hands
-# CLUSTER_TYPE = "Hands"
+IS_HAND_POSE_FUSION = True
+ONLY_ONE = True
+IS_CLUSTER = False
+if IS_HAND_POSE_FUSION:
+    # first sort on HandsPosts, then on Hands
+    CLUSTER_TYPE = "Hands" # Select on 3d hands
+    CLUSTER_TYPE_2 = "HandsPoses" # Sort on 2d hands
+else:
+    # CLUSTER_TYPE = "Poses"
+    CLUSTER_TYPE = "HandsPoses" # 2d hands
+    # CLUSTER_TYPE = "Hands"
+    CLUSTER_TYPE_2 = None
 DROP_LOW_VIS = False
 USE_HEAD_POSE = False
 # CLUSTER_TYPE = "Clusters"
 N_HANDS = N_CLUSTERS = None # declared here, but set in the SQL query below
 # this is for IS_ONE_CLUSTER to only run on a specific CLUSTER_NO
 IS_ONE_CLUSTER = False
-CLUSTER_NO = 17
+CLUSTER_NO = 123 # sort on this one as HAND_POSITION for IS_HAND_POSE_FUSION
 
 # I started to create a separate track for Hands, but am pausing for the moment
 IS_HANDS = False
-IS_ONE_HAND = False
-HAND_NO = 1
+IS_ONE_HAND = True
+HAND_POSE_NO = 100
 
 # cut the kids
 NO_KIDS = True
@@ -125,8 +133,8 @@ DO_OBJ_SORT = True
 OBJ_DONT_SUBSELECT = False # False means select for OBJ. this is a flag for selecting a specific object type when not sorting on obj
 PHONE_BBOX_LIMITS = [1] # this is an attempt to control the BBOX placement. I don't think it is going to work, but with non-zero it will make a bigger selection. Fix this hack TK. 
 
-ONE_SHOT = True # take all files, based off the very first sort order.
-EXPAND = True # expand with white, as opposed to inpaint and crop
+ONE_SHOT = False # take all files, based off the very first sort order.
+EXPAND = False # expand with white, as opposed to inpaint and crop
 JUMP_SHOT = True # jump to random file if can't find a run (I don't think this applies to planar?)
 
 
@@ -188,14 +196,17 @@ elif IS_SEGONLY and io.platform == "darwin":
     # FROM += " JOIN ImagesKeywords ik ON s.image_id = ik.image_id JOIN Keywords k ON ik.keyword_id = k.keyword_id "
     # WHERE += " AND k.keyword_text LIKE 'shout%' "
 
-    if IS_CLUSTER or IS_ONE_CLUSTER:
-        FROM += f" JOIN Images{CLUSTER_TYPE} ic ON s.image_id = ic.image_id "
-    if IS_HANDS or IS_ONE_HAND:
+    if IS_HAND_POSE_FUSION:
+        FROM += f" JOIN ImagesHandsPoses ihp ON s.image_id = ihp.image_id "
         FROM += f" JOIN ImagesHands ih ON s.image_id = ih.image_id "
-    if IS_TOPICS or IS_ONE_TOPIC:
+    elif IS_CLUSTER or IS_ONE_CLUSTER:
+        FROM += f" JOIN Images{CLUSTER_TYPE} ic ON s.image_id = ic.image_id "
+    elif IS_TOPICS or IS_ONE_TOPIC:
         FROM += " JOIN ImagesTopics it ON s.image_id = it.image_id "
         WHERE += " AND it.topic_score > .3"
         SELECT += ", it.topic_score" # add description here, after resegmenting
+
+
     if NO_KIDS:
         WHERE += " AND s.age_id NOT IN (1,2,3) "
     if HSV_BOUNDS:
@@ -225,7 +236,7 @@ elif IS_SEGONLY and io.platform == "darwin":
     # WHERE += " AND e.encoding_id > 2612275"
 
     # WHERE = "s.site_name_id != 1"
-    LIMIT = 100000
+    LIMIT = 1000
 
     # TEMP TK TESTING
     # WHERE += " AND s.site_name_id = 8"
@@ -308,7 +319,8 @@ face_height_output = 1000
 # image_edge_multiplier = [3,5,3,5] # megawide for testing
 # image_edge_multiplier = [1.4,3.3,3,3.3] # widerest 16:10 for hands -- actual 2:3
 # image_edge_multiplier = [1.3,3.4,2.9,3.4] # slightly less wide 16:10 for hands < Aug 27
-image_edge_multiplier = [1.3,2,2.9,2] # portrait crop for paris photo images < Aug 30
+# image_edge_multiplier = [1.3,2,2.9,2] # portrait crop for paris photo images < Aug 30
+image_edge_multiplier = [1.3,2,2.7,2] # square crop for paris photo videos < Sept 16
 # image_edge_multiplier = [1.6,3.84,3.2,3.84] # wiiiiiiiidest 16:10 for hands
 # image_edge_multiplier = [1.45,3.84,2.87,3.84] # wiiiiiiiidest 16:9 for hands
 # image_edge_multiplier = [1.2,2.3,1.7,2.3] # medium for hands
@@ -380,6 +392,7 @@ mongo_db = mongo_client[io.dbmongo['name']]
 io.mongo_db = mongo_db
 
 
+
 # handle the table objects based on CLUSTER_TYPE
 ClustersTable_name = CLUSTER_TYPE
 ImagesClustersTable_name = "Images"+CLUSTER_TYPE
@@ -396,6 +409,23 @@ class ImagesClusters(Base):
     image_id = Column(Integer, ForeignKey(Images.image_id, ondelete="CASCADE"), primary_key=True)
     cluster_id = Column(Integer, ForeignKey(f'{ClustersTable_name}.cluster_id', ondelete="CASCADE"))
 
+# not currently in use
+if IS_HAND_POSE_FUSION and CLUSTER_TYPE_2:
+    ClustersTable_name_2 = CLUSTER_TYPE_2
+    ImagesClustersTable_name_2 = "Images"+CLUSTER_TYPE_2
+
+    class Clusters_2(Base):
+        __tablename__ = ClustersTable_name_2
+
+        cluster_id = Column(Integer, primary_key=True, autoincrement=True)
+        cluster_median = Column(BLOB)
+
+    class ImagesClusters_2(Base):
+        __tablename__ = ImagesClustersTable_name_2
+
+        image_id = Column(Integer, ForeignKey(Images.image_id, ondelete="CASCADE"), primary_key=True)
+        cluster_id = Column(Integer, ForeignKey(f'{ClustersTable_name_2}.cluster_id', ondelete="CASCADE"))
+
 def prep_cluster_medians():
     # store the results in a dictionary where the key is the cluster_id
     if results:
@@ -406,7 +436,7 @@ def prep_cluster_medians():
             # print("cluster_medians", i, cluster_median)
             N_CLUSTERS = i # will be the last cluster_id which is count of clusters
 
-if IS_CLUSTER or IS_ONE_CLUSTER:
+if IS_CLUSTER or IS_ONE_CLUSTER or IS_HAND_POSE_FUSION:
     # select cluster_median from Clusters
     results = session.execute(select(Clusters.cluster_id, Clusters.cluster_median)).fetchall()
     cluster_medians, N_CLUSTERS = sort.prep_cluster_medians(results)
@@ -463,7 +493,13 @@ def selectSQL(cluster_no=None, topic_no=None):
 
     # print(f"cluster_no is")
     # print(cluster_no)
-    if cluster_no is not None or topic_no is not None:
+    if IS_HAND_POSE_FUSION:
+        cluster = " "
+        if isinstance(cluster_no, list):
+            # we have two values, C1 and C2. C1 should be IHP, C2 should be IH
+            cluster += f" AND ihp.cluster_id = {str(cluster_no[0])} "            
+            cluster += f" AND ih.cluster_id = {str(cluster_no[1])} "            
+    elif cluster_no is not None or topic_no is not None:
         cluster = " "
         if IS_CLUSTER or IS_ONE_CLUSTER:
             cluster += cluster_topic_select("ic.cluster_id", cluster_no)
@@ -1491,6 +1527,12 @@ def main():
     # or only once if no clusters
     def map_images(resultsjson, cluster_no=None):
         # print(df_sql)
+        # if cluster_no is a list, then assign the first one to cluster_no
+        # temp fix, to deal with passing in two values for FUSION
+        # select on both, sort on CLUSTER_NO
+        # for FUSION, CLUSTER_NO is HAND_POSITION and is the first value
+        if isinstance(cluster_no, list):
+            cluster_no = cluster_no[0]
 
         # read the csv and construct dataframe
         try:
@@ -1628,7 +1670,13 @@ def main():
     start = time.time()
 
     # to loop or not to loop that is the cluster
-    if IS_CLUSTER and not IS_ONE_TOPIC:
+    if IS_HAND_POSE_FUSION and ONLY_ONE:
+        print("IS_HAND_POSE_FUSION is True")
+        # select on both, sort on CLUSTER_NO 
+        CLUSTER_PAIR = [CLUSTER_NO, HAND_POSE_NO]
+        resultsjson = selectSQL(CLUSTER_PAIR)
+        map_images(resultsjson, CLUSTER_PAIR)
+    elif IS_CLUSTER and not IS_ONE_TOPIC:
         print(f"IS_CLUSTER is {IS_CLUSTER} with {N_CLUSTERS}")
         for cluster_no in range(N_CLUSTERS):
             print(f"SELECTing cluster {cluster_no} of {N_CLUSTERS}")
