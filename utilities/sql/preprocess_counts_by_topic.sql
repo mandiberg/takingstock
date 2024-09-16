@@ -22,7 +22,7 @@ CREATE TABLE CountGender_Location (
 
 CREATE INDEX idx_topic_id ON Topics(topic_id);
 
-CREATE TABLE CountGender_Topics_so (
+CREATE TABLE CountGender_Topics (
     topic_id INT,
     men INT DEFAULT 0,
     nogender INT DEFAULT 0,
@@ -60,7 +60,7 @@ CREATE TABLE CountEthnicity_Location (
 	FOREIGN KEY (location_id) REFERENCES Location (location_id)
 );
 
-CREATE TABLE CountEthnicity_Topics_so (
+CREATE TABLE CountEthnicity_Topics (
     topic_id INT,
 	POC INT DEFAULT 0,
 	Black INT DEFAULT 0,

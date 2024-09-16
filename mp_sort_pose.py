@@ -2191,14 +2191,16 @@ class SortPose:
         return cluster_medians, N_CLUSTERS
     
     def prep_hand_landmarks(self, hand_results):  
-        left_hand_landmarks = left_hand_world_landmarks = right_hand_landmarks = right_hand_world_landmarks = []
+        left_hand_landmarks = left_hand_world_landmarks = left_hand_landmarks_norm = right_hand_landmarks = right_hand_world_landmarks = right_hand_landmarks_norm = []
         if 'left_hand' in hand_results:
             left_hand_landmarks = hand_results['left_hand'].get('image_landmarks', [])
             left_hand_world_landmarks = hand_results['left_hand'].get('world_landmarks', [])
+            left_hand_landmarks_norm = hand_results['left_hand'].get('hand_landmarks_norm', [])
         if 'right_hand' in hand_results:
             right_hand_landmarks = hand_results['right_hand'].get('image_landmarks', [])
             right_hand_world_landmarks = hand_results['right_hand'].get('world_landmarks', [])
-        return left_hand_landmarks, left_hand_world_landmarks, right_hand_landmarks, right_hand_world_landmarks
+            right_hand_landmarks_norm = hand_results['right_hand'].get('hand_landmarks_norm', [])
+        return left_hand_landmarks, left_hand_world_landmarks, left_hand_landmarks_norm, right_hand_landmarks, right_hand_world_landmarks, right_hand_landmarks_norm
 
     def extract_landmarks(self, landmarks):
         # If no landmarks, return 63 zeros (21 points * 3 dimensions)

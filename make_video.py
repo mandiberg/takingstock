@@ -58,7 +58,8 @@ HSV_NORMS = {"LUM": .01, "SAT": 1,  "HUE": 0.002777777778, "VAL": 1}
 # all clusters, 
 IS_CLUSTER = True
 # CLUSTER_TYPE = "Poses"
-CLUSTER_TYPE = "Hands"
+CLUSTER_TYPE = "HandsPoses" # 2d hands
+# CLUSTER_TYPE = "Hands"
 DROP_LOW_VIS = False
 USE_HEAD_POSE = False
 # CLUSTER_TYPE = "Clusters"
@@ -224,7 +225,7 @@ elif IS_SEGONLY and io.platform == "darwin":
     # WHERE += " AND e.encoding_id > 2612275"
 
     # WHERE = "s.site_name_id != 1"
-    LIMIT = 10000
+    LIMIT = 100000
 
     # TEMP TK TESTING
     # WHERE += " AND s.site_name_id = 8"
@@ -1519,7 +1520,7 @@ def main():
             df['face_landmarks'] = df['face_landmarks'].apply(io.unpickle_array)
             df['body_landmarks'] = df['body_landmarks'].apply(io.unpickle_array)
             df['body_landmarks_normalized'] = df['body_landmarks_normalized'].apply(io.unpickle_array)
-            df[['left_hand_landmarks', 'left_hand_world_landmarks', 'right_hand_landmarks', 'right_hand_world_landmarks']] = pd.DataFrame(df['hand_results'].apply(sort.prep_hand_landmarks).tolist(), index=df.index)
+            df[['left_hand_landmarks', 'left_hand_world_landmarks', 'left_hand_landmarks_norm', 'right_hand_landmarks', 'right_hand_world_landmarks', 'left_hand_landmarks_norm']] = pd.DataFrame(df['hand_results'].apply(sort.prep_hand_landmarks).tolist(), index=df.index)
             df = sort.split_landmarks_to_columns(df, left_col="left_hand_world_landmarks", right_col="right_hand_world_landmarks", structure="list")
 
             df['bbox'] = df['bbox'].apply(lambda x: io.unstring_json(x))

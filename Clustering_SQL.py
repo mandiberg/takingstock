@@ -76,7 +76,8 @@ NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 MODE = 0
 # CLUSTER_TYPE = "Clusters"
 # CLUSTER_TYPE = "Poses"
-CLUSTER_TYPE = "Hands"
+CLUSTER_TYPE = "HandsPoses"
+# CLUSTER_TYPE = "Hands"
 # SUBSET_LANDMARKS is now set in sort pose init
 USE_HEAD_POSE = False
 
@@ -97,7 +98,7 @@ GET_OPTIMAL_CLUSTERS=False
 N_CLUSTERS = 128
 SAVE_FIG=False ##### option for saving the visualized data
 
-if USE_SEGMENT is True and (CLUSTER_TYPE == "Poses" or CLUSTER_TYPE == "Hands"):
+if USE_SEGMENT is True and (CLUSTER_TYPE != "Clusters"):
     print("setting Poses SQL")
     SegmentTable_name = 'SegmentOct20'
 
@@ -112,6 +113,7 @@ if USE_SEGMENT is True and (CLUSTER_TYPE == "Poses" or CLUSTER_TYPE == "Hands"):
     SELECT = "DISTINCT(s.image_id), s.face_x, s.face_y, s.face_z, s.mouth_gap"
     if CLUSTER_TYPE == "Poses": WHERE = " s.mongo_body_landmarks = 1 "
     elif CLUSTER_TYPE == "Hands": WHERE = " s.mongo_hand_landmarks = 1 "
+    elif CLUSTER_TYPE == "HandsPoses": WHERE = " s.mongo_hand_landmarks_norm = 1 "
     if MODE == 0:
         FROM = f"{SegmentTable_name} s"
         WHERE += " AND s.face_x > -35 AND s.face_x < -24 AND s.face_y > -3 AND s.face_y < 3 AND s.face_z > -3 AND s.face_z < 3 "
@@ -395,6 +397,10 @@ def df_list_to_cols(df, col_name):
     return df
 
 def prepare_df(df):
+    # apply io.convert_decimals_to_float to face_x, face_y, face_z, and mouth_gap 
+    # if faxe_x, face_y, face_z, and mouth_gap are not already floats
+    if df['face_x'].dtype != float:
+        df[['face_x', 'face_y', 'face_z', 'mouth_gap']] = df[['face_x', 'face_y', 'face_z', 'mouth_gap']].astype(float)
     if CLUSTER_TYPE == "Poses":
         df = df.dropna(subset=['body_landmarks_normalized'])
         df['body_landmarks_normalized'] = df['body_landmarks_normalized'].apply(io.unpickle_array)
@@ -402,75 +408,31 @@ def prepare_df(df):
         df['body_landmarks_array'] = df['body_landmarks_normalized'].apply(lambda x: sort.get_landmarks_2d(x, list(range(33)), structure=STRUCTURE))
 
         # apply io.convert_decimals_to_float to face_x, face_y, face_z, and mouth_gap 
-        df[['face_x', 'face_y', 'face_z', 'mouth_gap']] = df[['face_x', 'face_y', 'face_z', 'mouth_gap']].astype(float)
         # df['body_landmarks_array'] = df.apply(lambda row: io.convert_decimals_to_float(row['body_landmarks_array'] + [row['face_x'], row['face_y'], row['face_z'], row['mouth_gap']]), axis=1)
         # drop the columns that are not needed
-        if not USE_HEAD_POSE: df = df.drop(columns=['face_x', 'face_y', 'face_z', 'mouth_gap']) 
-        df = df.drop(columns=['face_encodings68', 'face_landmarks', 'body_landmarks', 'body_landmarks_normalized'])
+        # if not USE_HEAD_POSE: df = df.drop(columns=['face_x', 'face_y', 'face_z', 'mouth_gap']) 
+        columns_to_drop=['face_encodings68', 'face_landmarks', 'body_landmarks', 'body_landmarks_normalized']
         print("before cols",df)
 
         df_list_to_cols(df, 'body_landmarks_array')
         print("after cols",df)
-    elif CLUSTER_TYPE == "Hands":
-        # def prep_hand_landmarks(hand_results):  
-        #     left_hand_landmarks = left_hand_world_landmarks = right_hand_landmarks = right_hand_world_landmarks = []
-        #     if 'left_hand' in hand_results:
-        #         left_hand_landmarks = hand_results['left_hand'].get('image_landmarks', [])
-        #         left_hand_world_landmarks = hand_results['left_hand'].get('world_landmarks', [])
-        #     if 'right_hand' in hand_results:
-        #         right_hand_landmarks = hand_results['right_hand'].get('image_landmarks', [])
-        #         right_hand_world_landmarks = hand_results['right_hand'].get('world_landmarks', [])
-        #     return left_hand_landmarks, left_hand_world_landmarks, right_hand_landmarks, right_hand_world_landmarks
-            
-        # def sort.split_landmarks_to_columns(df, left_col="left_hand_world_landmarks", right_col="right_hand_world_landmarks"):
-        #     def extract_landmarks(landmarks):
-        #         # If no landmarks, return 63 zeros (21 points * 3 dimensions)
-        #         if not landmarks:
-        #             return [0.0] * 63
-        #         # Flatten the list of (x, y, z) for each landmark
-        #         flat_landmarks = [coord for point in landmarks for coord in point]
-        #         return flat_landmarks
-            
-        #     # Extract and flatten landmarks for left and right hands
-        #     left_landmarks = df[left_col].apply(extract_landmarks)
-        #     right_landmarks = df[right_col].apply(extract_landmarks)
-            
-        #     # Create new columns for each dimension (21 points * 3 = 63 columns for each hand)
-        #     left_landmark_cols = pd.DataFrame(left_landmarks.tolist(), columns=[f'left_dim_{i+1}' for i in range(63)])
-        #     right_landmark_cols = pd.DataFrame(right_landmarks.tolist(), columns=[f'right_dim_{i+1}' for i in range(63)])
-            
-        #     # Concatenate the original DataFrame with the new columns
-        #     df = pd.concat([df, left_landmark_cols, right_landmark_cols], axis=1)
-        
-        #     return df
-        
-        # print("preapring hands", df)
-        # df = df.dropna(subset=['hand_landmarks'])
-        # print("first row of df",df.iloc[0])
-
-        df[['left_hand_landmarks', 'left_hand_world_landmarks', 'right_hand_landmarks', 'right_hand_world_landmarks']] = pd.DataFrame(df['hand_results'].apply(sort.prep_hand_landmarks).tolist(), index=df.index)
+    elif CLUSTER_TYPE == "HandsPoses":
+        print("first row of df",df.iloc[0])
+        df[['left_hand_landmarks', 'left_hand_world_landmarks', 'left_hand_landmarks_norm', 'right_hand_landmarks', 'right_hand_world_landmarks', 'right_hand_landmarks_norm']] = pd.DataFrame(df['hand_results'].apply(sort.prep_hand_landmarks).tolist(), index=df.index)
         # print("after prep",df)
-
-        # print("first row of df",df.iloc[0])
-
-        df = sort.split_landmarks_to_columns(df, left_col="left_hand_world_landmarks", right_col="right_hand_world_landmarks")
+        df = sort.split_landmarks_to_columns(df, left_col="left_hand_landmarks_norm", right_col="right_hand_landmarks_norm")
         # print("after split",df)
-        # print("first row of df",df.iloc[0])
-        # print("columns",df.columns)
+        columns_to_drop = ['face_encodings68', 'face_landmarks', 'body_landmarks', 'body_landmarks_normalized', 
+                           'hand_results', 'left_hand_landmarks', 'right_hand_landmarks', 
+                           'left_hand_world_landmarks', 'right_hand_world_landmarks',
+                           'left_hand_landmarks_norm', 'right_hand_landmarks_norm']
 
-        # df['hand_landmarks'] = df['hand_landmarks'].apply(io.unpickle_array)
-        # body = self.get_landmarks_2d(enc1, list(range(33)), structure)
-        # df['hand_landmarks_array'] = df['hand_landmarks'].apply(lambda x: sort.get_landmarks_2d(x, list(range(33)), structure=STRUCTURE))
-
-        # apply io.convert_decimals_to_float to face_x, face_y, face_z, and mouth_gap 
-        df[['face_x', 'face_y', 'face_z', 'mouth_gap']] = df[['face_x', 'face_y', 'face_z', 'mouth_gap']].astype(float)
-        # df['body_landmarks_array'] = df.apply(lambda row: io.convert_decimals_to_float(row['body_landmarks_array'] + [row['face_x'], row['face_y'], row['face_z'], row['mouth_gap']]), axis=1)
+    elif CLUSTER_TYPE == "Hands":
+        df[['left_hand_landmarks', 'left_hand_world_landmarks', 'left_hand_landmarks_norm', 'right_hand_landmarks', 'right_hand_world_landmarks', 'right_hand_landmarks_norm']] = pd.DataFrame(df['hand_results'].apply(sort.prep_hand_landmarks).tolist(), index=df.index)
+        df = sort.split_landmarks_to_columns(df, left_col="left_hand_world_landmarks", right_col="right_hand_world_landmarks")
         # drop the columns that are not needed
-        if not USE_HEAD_POSE: df = df.drop(columns=['face_x', 'face_y', 'face_z', 'mouth_gap']) 
         columns_to_drop = ['face_encodings68', 'face_landmarks', 'body_landmarks', 'body_landmarks_normalized', 
                            'hand_results', 'left_hand_landmarks', 'right_hand_landmarks', 'left_hand_world_landmarks', 'right_hand_world_landmarks']
-        df = df.drop(columns=columns_to_drop)
-        # print("after drop",df)
 
     elif CLUSTER_TYPE == "Clusters":
         df = df.dropna(subset=['face_encodings68'])
@@ -479,9 +441,12 @@ def prepare_df(df):
         df['face_encodings68'] = df['face_encodings68'].apply(io.unpickle_array)
         df['face_landmarks'] = df['face_landmarks'].apply(io.unpickle_array)
         df['body_landmarks'] = df['body_landmarks'].apply(io.unpickle_array)
-        df = df.drop(columns=['face_landmarks', 'body_landmarks', 'body_landmarks_normalized'])
+        columns_to_drop=['face_landmarks', 'body_landmarks', 'body_landmarks_normalized']
         df_list_to_cols(df, 'face_encodings68')
-
+    if not USE_HEAD_POSE: 
+        # add 'face_x', 'face_y', 'face_z', 'mouth_gap' to existing columns_to_drop
+        columns_to_drop += ['face_x', 'face_y', 'face_z', 'mouth_gap']
+    df = df.drop(columns=columns_to_drop)
     return df
 
 # defining globally 

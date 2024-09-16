@@ -17,7 +17,7 @@ import cv2
 import shutil
 import pandas as pd
 import json
-from my_declarative_base import Base, Clusters, Location, Ethnicity, ImagesEthnicity, Gender, Images,ImagesTopics, SegmentTable, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON, Images
+from my_declarative_base import Base, Clusters, Location, Ethnicity, ImagesEthnicity, Gender, Images,ImagesTopics, SegmentBig, SegmentTable, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON, Images
 #from sqlalchemy.ext.declarative import declarative_base
 from mp_sort_pose import SortPose
 
@@ -427,14 +427,14 @@ elif index == 3:
 
 # full Images table queries
 elif index == 4:
-    count_gender_location(Images)
+    count_gender_location(SegmentBig)
 elif index == 5:
-    count_gender_topic(Images)
+    count_gender_topic(SegmentBig)
 elif index == 6:    
     # get_bg_database()
-    count_ethnicity_location(Images)
+    count_ethnicity_location(SegmentBig)
 elif index == 7:
-    count_ethnicity_topic(Images)
+    count_ethnicity_topic(SegmentBig)
         
 def threaded_fetching():
     while not work_queue.empty():
