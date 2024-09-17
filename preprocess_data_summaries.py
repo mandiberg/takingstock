@@ -160,7 +160,7 @@ class CountGender_Topics(Base):
 
 
 class CountEthnicity_Topics_so(Base):
-    __tablename__ = 'CountEthnicity_Topics_so'
+    __tablename__ = ethnicity_topic
     topic_id = Column(Integer, ForeignKey('Topics.topic_id'), primary_key=True)
     # Ethnicity columns
     POC = Column(Integer, default=0)

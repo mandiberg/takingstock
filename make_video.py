@@ -98,7 +98,7 @@ BLUR_RADIUS = io.oddify(BLUR_RADIUS)
 
 MASK_OFFSET = [50,50,50,50]
 if OUTPAINT: from outpainting_modular import outpaint, image_resize
-VERBOSE = True
+VERBOSE = False
 SAVE_IMG_PROCESS = False
 # this controls whether it is using the linear or angle process
 IS_ANGLE_SORT = False
@@ -236,7 +236,7 @@ elif IS_SEGONLY and io.platform == "darwin":
     # WHERE += " AND e.encoding_id > 2612275"
 
     # WHERE = "s.site_name_id != 1"
-    LIMIT = 10000
+    LIMIT = 200000
 
     # TEMP TK TESTING
     # WHERE += " AND s.site_name_id = 8"
@@ -1075,7 +1075,9 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
         extension_pixels=sort.get_extension_pixels(img)
         if sort.VERBOSE:print("extension_pixels",extension_pixels)
         # inpaint_file=os.path.join(os.path.join(os.path.dirname(row['folder']), "inpaint", os.path.basename(row['folder'])),row['filename'])
-        inpaint_file=os.path.join(os.path.dirname(row['folder']), os.path.basename(row['folder'])+"_inpaint",row['imagename'])
+        # aspect_ratio = '_'.join(image_edge_multiplier)
+        aspect_ratio = '_'.join(str(v) for v in image_edge_multiplier)
+        inpaint_file=os.path.join(os.path.dirname(row['folder']), os.path.basename(row['folder'])+"_inpaint_"+aspect_ratio,row['imagename'])
         print("inpaint_file", inpaint_file)
         if USE_PAINTED and os.path.exists(inpaint_file):
             if sort.VERBOSE: print("path exists, loading image",inpaint_file)
