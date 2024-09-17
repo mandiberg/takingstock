@@ -45,7 +45,7 @@ class SortPose:
         self.BRUTEFORCE = False
         self.use_3D = use_3D
         print("init use_3D",self.use_3D)
-        self.CUTOFF = 100 # DOES factor if ONE_SHOT
+        self.CUTOFF = 10 # DOES factor if ONE_SHOT
 
         self.CHECK_DESC_DIST = 30
         self.SORT_TYPE = SORT_TYPE
@@ -1500,6 +1500,7 @@ class SortPose:
 
     def sort_df_KNN(self, df_enc, enc1, knn_sort="128d"):
         print("df_enc at the start of sort_df_KNN")
+        print(df_enc)
 
         output_cols = 'dist_enc1'
         if knn_sort == "128d":
@@ -1533,8 +1534,8 @@ class SortPose:
             print(type(enc1))
             print(enc1)
             # print(df_enc.loc[0])
-            print(type(df_enc.loc[0, 'lum']))
-            print(df_enc.loc[0, 'lum'])
+            print(type(df_enc.head(1)['lum'].values[0]))
+            print(df_enc.head(1)['lum'].values[0])
         elif knn_sort == "obj":
             # overriding for object detection
             sortcol = 'obj_bbox_list'
@@ -1823,11 +1824,20 @@ class SortPose:
 
             elif len(df_shuffled) > 0:
 
-                # df_run = first row of df_shuffled
-                df_run = df_shuffled.iloc[[0]]  # Wrap in list to keep it as DataFrame
+                # df_run = first row of df_shuffled based on image_id
+                df_run = df_shuffled.iloc[[0]]  # Select the first row
                 print("NO run <<<< ", df_run)
 
-                df_enc = df_enc.drop(df_run.index).reset_index(drop=True)
+                # Locate the rows in df_enc with matching image_id
+                index_names = df_enc[df_enc['image_id'].isin(df_run['image_id'])].index
+
+                # Drop rows with matching image_id from df_enc
+                if len(index_names) > 0:
+                    df_enc = df_enc.drop(index_names).reset_index(drop=True)
+                    print("df_run", df_run)
+                    print("df_enc", len(df_enc))
+                else:
+                    print("No matching image_id found in df_enc for df_run")
 
             # else:
             #     #jump somewhere else
