@@ -49,7 +49,7 @@ class SortPose:
 
         self.CHECK_DESC_DIST = 30
         self.SORT_TYPE = SORT_TYPE
-        if self.SORT_TYPE == "128ds":
+        if self.SORT_TYPE == "128d":
             self.MIND = self.MINFACEDIST * 1.5
             self.MAXD = self.MAXFACEDIST
             self.MULTIPLIER = self.HSVMULTIPLIER

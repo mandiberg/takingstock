@@ -40,7 +40,9 @@ SELECT
     SUM(CASE WHEN so.mongo_face_landmarks  IS NOT NULL THEN 1 ELSE 0 END) AS face_encodings68_not_null_count,
     SUM(CASE WHEN so.location_id  IS NOT NULL THEN 1 ELSE 0 END) AS location_id_count,
     SUM(CASE WHEN so.mongo_body_landmarks  IS NOT NULL THEN 1 ELSE 0 END) AS body_landmarks_not_null_count,
-    SUM(CASE WHEN so.mongo_body_landmarks_norm  IS NOT NULL THEN 1 ELSE 0 END) AS mongo_body_landmarks_norm_count
+    SUM(CASE WHEN so.mongo_body_landmarks_norm  IS NOT NULL THEN 1 ELSE 0 END) AS mongo_body_landmarks_norm_count,
+    SUM(CASE WHEN so.mongo_hand_landmarks  IS NOT NULL THEN 1 ELSE 0 END) AS body_landmarks_not_null_count,
+    SUM(CASE WHEN so.mongo_hand_landmarks_norm  IS NOT NULL THEN 1 ELSE 0 END) AS mongo_body_landmarks_norm_count
 FROM
     SegmentOct20 so 
 GROUP BY
@@ -104,7 +106,7 @@ ORDER BY
 SELECT
     ip.cluster_id,
     COUNT(so.image_id) AS image_count,
-    SUM(CASE WHEN pb.bbox_67  IS NOT NULL THEN 1 ELSE 0 END) AS phone_bbox
+    SUM(CASE WHEN pb.bbox_67  IS NOT NULL THEN 1 ELSE 0 END) AS phone bbox
 FROM
     SegmentOct20 so 
 INNER JOIN ImagesPoses ip ON ip.image_id = so.image_id
@@ -115,7 +117,65 @@ ORDER BY
     ip.cluster_id;
    
    
+-- count of fusion poses
    
+SELECT
+    ih.cluster_id,
+    COUNT(so.image_id) AS image_count,
+    SUM(CASE WHEN pb.bbox_67  IS NOT NULL THEN 1 ELSE 0 END) AS phone_bbox
+FROM
+    SegmentOct20 so 
+INNER JOIN ImagesHandsPoses ihp ON ihp.image_id = so.image_id
+INNER JOIN ImagesHands ih ON ih.image_id = so.image_id
+JOIN PhoneBbox pb ON pb.image_id = so.image_id 
+WHERE ihp.cluster_id = 75
+GROUP BY
+    ih.cluster_id
+ORDER BY
+    ih.cluster_id;
+   
+
+   
+-- matrix of fusion poses
+   
+   
+SELECT 
+    ihp.cluster_id AS ihp_cluster,  -- Row: ImagesHandsPoses cluster_id
+    SUM(CASE WHEN ih.cluster_id = 0 THEN 1 ELSE 0 END) AS ih_0,  -- Column for ih.cluster_id = 0
+    SUM(CASE WHEN ih.cluster_id = 1 THEN 1 ELSE 0 END) AS ih_1,  -- Column for ih.cluster_id = 1
+    SUM(CASE WHEN ih.cluster_id = 2 THEN 1 ELSE 0 END) AS ih_2,  -- Column for ih.cluster_id = 2
+    SUM(CASE WHEN ih.cluster_id = 3 THEN 1 ELSE 0 END) AS ih_3  -- Column for ih.cluster_id = 3
+    -- Add more CASE statements for additional clusters if necessary
+    -- SUM(CASE WHEN ih.cluster_id = 75 THEN 1 ELSE 0 END) AS ih_75 -- Example cluster for ihp
+FROM 
+    SegmentOct20 so
+JOIN 
+    ImagesHandsPoses ihp ON ihp.image_id = so.image_id
+JOIN 
+    ImagesHands ih ON ih.image_id = so.image_id
+GROUP BY 
+    ihp.cluster_id  -- Group by ImagesHandsPoses cluster_id to create rows
+ORDER BY 
+    ihp_cluster;
+
+   
+   
+
+   
+   
+ SELECT DISTINCT(s.image_id), s.site_name_id, s.contentUrl, s.imagename, s.description, s.face_x, s.face_y, s.face_z, s.mouth_gap, s.bbox, s.site_image_id, 
+ ibg.lum, ibg.lum_bb, ibg.hue, ibg.hue_bb, ibg.sat, ibg.sat_bb, ibg.val, ibg.val_bb, ibg.lum_torso,ibg.lum_torso_bb  
+FROM SegmentOct20 s  JOIN ImagesHandsPoses ihp ON s.image_id = ihp.image_id  
+JOIN ImagesHands ih ON s.image_id = ih.image_id  JOIN ImagesBackground ibg ON s.image_id = ibg.image_id  
+WHERE  s.is_dupe_of IS NULL  AND s.face_x > -50  AND s.age_id NOT IN (1,2,3)  AND s.mongo_body_landmarks = 1     
+AND ihp.cluster_id = 15  AND ih.cluster_id = 80  LIMIT 1000;
+
+
+SELECT COUNT(*) 
+FROM SegmentOct20 s  JOIN ImagesHandsPoses ihp ON s.image_id = ihp.image_id  
+JOIN ImagesHands ih ON s.image_id = ih.image_id    
+WHERE   ihp.cluster_id = 15  AND ih.cluster_id = 80  ;
+
    
    
    

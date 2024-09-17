@@ -1,10 +1,9 @@
 -- 86.3gb, 2.46tb
 
+
+
+USE stock;
 SET GLOBAL innodb_buffer_pool_size=8053063680;
-
-
-USE stock
-;
 
 
 UPDATE Images
@@ -12,11 +11,7 @@ SET w = NULL
 WHERE image_id < 5000;
 
 DELETE 
-FROM CountGender_Location
-;
-
-DELETE 
-FROM ImagesPoses
+FROM CountGender_Topics
 ;
 
 SELECT COUNT(i.image_id) 
@@ -58,7 +53,7 @@ WHERE sbi.mongo_tokens IS NOT NULL
 
 SELECT *
 FROM SegmentOct20 sbi 
-WHERE sbi.image_id = 582260
+WHERE sbi.is_dupe_of IS NOT NULL
 ;
 
 SELECT *
@@ -69,7 +64,8 @@ AND i.site_name_id = 1
 
 SELECT *
 FROM SegmentOct20 so 
-WHERE so.mongo_body_landmarks_norm = 1
+WHERE so.image_id = 123984366
+
 ;
 
 SELECT COUNT(*)
@@ -80,17 +76,53 @@ AND description LIKE 'Young woman with%'
 
 SELECT COUNT(*)
 FROM SegmentOct20 so 
-WHERE so.mongo_body_landmarks_norm = 1
+WHERE so.mongo_body_landmarks_norm IS NULL
+AND so.mongo_body_landmarks  = 1
 ;
 
 SELECT *
-FROM Images ip 
-WHERE ip.site_image_id = 1533708242
+FROM ImagesPoses128 ip 
+WHERE ip.image_id = 894
+LIMIT 10
 ;
+
+SELECT ip.image_id FROM ImagesPoses128 ip WHERE ip.cluster_id = 6
+LIMIT 10
+;
+
+SELECT DISTINCT seg1.image_id, seg1.site_name_id, seg1.contentUrl, seg1.imagename, seg1.site_image_id, seg1.mongo_body_landmarks, seg1.mongo_face_landmarks, seg1.bbox 
+FROM SegmentOct20 seg1 
+WHERE  seg1.mongo_hand_landmarks IS NULL and seg1.no_image IS NULL AND seg1.image_id > 592091  
+AND seg1.image_id 
+IN (SELECT seg1.image_id FROM ImagesPoses128 ip WHERE ip.cluster_id = 6) LIMIT 10000;
 
 -- 105617677 
 DELETE 
+FROM ImagesHandsPoses
+;
+
+DELETE 
+FROM HandsPoses
+;
+
+CREATE TABLE HandsPositions (
+    cluster_id int NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    cluster_median BLOB
+);
+
+-- This is the poses junction table.
+-- need to change the cluster_id reference to the correct cluster table
+CREATE TABLE ImagesHandsPositions (
+    image_id INTEGER REFERENCES Images (image_id),
+    cluster_id INTEGER REFERENCES HandsPositions (cluster_id),
+    PRIMARY KEY (image_id)
+);
+
+
+SELECT * 
 FROM Images
+WHERE image_id = 30295
+;
 
 WHERE description LIKE 'White guy holding a flag of%'
 ;
@@ -170,8 +202,8 @@ WHERE so.mongo_body_landmarks_norm = 1
 ;
 
 SELECT *
-FROM SegmentBig_isface e 
-WHERE e.image_id = 427500
+FROM SegmentOct20 e 
+WHERE e.image_id = 99041374
 ;
 
 SELECT COUNT(s.image_id)

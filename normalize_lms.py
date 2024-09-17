@@ -36,9 +36,9 @@ IS_SSD = True
 
 SKIP_EXISTING = False # Skips images with a normed bbox but that have Images.h
 USE_OBJ = 0 # select the bbox to work with
-SKIP_BODY = True # skip body landmarks. mostly you want to skip when doing obj bbox
+SKIP_BODY = False # skip body landmarks. mostly you want to skip when doing obj bbox
                 # or are just redoing hands
-REPROCESS_HANDS = True # do hands
+REPROCESS_HANDS = False # do hands
 
 io = DataIO(IS_SSD)
 db = io.db
@@ -105,7 +105,7 @@ sort = SortPose(motion, face_height_output, image_edge_multiplier_sm,EXPAND, ONE
 # Create a session
 session = scoped_session(sessionmaker(bind=engine))
 
-LIMIT= 10000000
+LIMIT= 1000000
 # Initialize the counter
 counter = 0
 
@@ -116,34 +116,58 @@ num_threads = 1
 if VERBOSE: print("objects created")
 
 
+import cv2
+
 def get_shape(target_image_id):
     ## get the image somehow
+    if VERBOSE: print("get_shape target_image_id", target_image_id)
+    
     select_image_ids_query = (
-        select(SegmentTable.site_name_id,SegmentTable.imagename)
+        select(SegmentTable.site_name_id, SegmentTable.imagename)
         .filter(SegmentTable.image_id == target_image_id)
     )
-
+    
     result = session.execute(select_image_ids_query).fetchall()
-    site_name_id,imagename=result[0]
+    site_name_id, imagename = result[0]
     site_specific_root_folder = io.folder_list[site_name_id]
-    file=site_specific_root_folder+"/"+imagename  ###os.path.join was acting wierd so had to do this
+    file = site_specific_root_folder + "/" + imagename  # os.path.join acting weird, so avoided
+    if VERBOSE: print("get_shape file", file)
 
     try:
         if io.platform == "darwin":
             media_info = MediaInfo.parse(file, library_file="/opt/homebrew/Cellar/libmediainfo/24.06/lib/libmediainfo.dylib")
+            if VERBOSE: print("darwin got media_info")
         else:
             media_info = MediaInfo.parse(file)
     except Exception as e:
         print("Error getting media info, file not found", target_image_id)
-        # traceback.print_exc() 
-        return None,None
+        return None, None
 
+    # Try to get image dimensions from MediaInfo
     for track in media_info.tracks:
+        # print("track.track_type", track.track_type)
+        
+        # Check if it's an image track
         if track.track_type == 'Image':
-            if VERBOSE: print ("track.height,track.width", track.height,track.width)
-            return track.height,track.width
+            if VERBOSE: print("track.height, track.width", track.height, track.width)
+            if track.height is not None and track.width is not None:
+                return track.height, track.width
+        
+    # If MediaInfo fails, try loading the image with OpenCV as a fallback
+    try:
+        image = cv2.imread(file)
+        if image is not None:
+            height, width = image.shape[:2]  # Extract height and width
+            if VERBOSE: print("cv2 found dimensions", height, width)
+            return height, width
+        else:
+            print(f"Could not read the image using cv2, file: {file}")
+            return None, None
+    except Exception as e:
+        print(f"Error loading image with cv2 for file: {file}, error: {e}")
+        return None, None
 
-    return None,None 
+    return None, None
 
 
 # def normalize_phone_bbox(phone_bbox,nose_pos,face_height,shape):
@@ -166,9 +190,13 @@ def get_landmarks_mongo(image_id):
     if image_id:
         results = mongo_collection.find_one({"image_id": image_id})
         if results:
-            body_landmarks = results['body_landmarks']
+            try:
+                body_landmarks = results['body_landmarks']
             # print("got encodings from mongo, types are: ", type(face_encodings68), type(face_landmarks), type(body_landmarks))
-            return unpickle_array(body_landmarks)
+                return unpickle_array(body_landmarks)
+            except KeyError:
+                print("KeyError, body_landmarks not found for", image_id)
+                return None
         else:
             return None
     else:
@@ -445,10 +473,13 @@ def calc_nlm(image_id_to_shape, lock, session):
         if VERBOSE: print("nose_pixel_pos",nose_pixel_pos_body)
 
         if not SKIP_BODY:
+            # if type body_landmarks is bytes, unpickle it
+            if type(body_landmarks) == bytes:
+                body_landmarks = pickle.loads(body_landmarks)
             n_landmarks=sort.normalize_landmarks(body_landmarks,nose_pixel_pos_body,face_height,[height,width])
 
-            if VERBOSE: print("Time to get norm lms:", time.time()-start)
-            start = time.time()
+            # if VERBOSE: print("Time to get norm lms:", time.time()-start)
+            # start = time.time()
 
             if VERBOSE: print("about to insert n_landmarks",n_landmarks)
             
@@ -464,8 +495,8 @@ def calc_nlm(image_id_to_shape, lock, session):
             # session.commit()
 
             if VERBOSE: print("did insert_n_landmarks, going to get phone bbox")
-            if VERBOSE: print("Time to get insert:", time.time()-start)
-            start = time.time()
+            # if VERBOSE: print("Time to get insert:", time.time()-start)
+            # start = time.time()
         
         elif USE_OBJ > 0: 
             phone_bbox=get_phone_bbox(target_image_id)

@@ -303,9 +303,12 @@ class DataIO:
             if results_body:
                 body_landmarks_normalized = results_body["nlms"]
             if results_face:
-                face_encodings68 = results_face['face_encodings68']
-                face_landmarks = results_face['face_landmarks']
-                body_landmarks = results_face['body_landmarks']
+                try:
+                    face_encodings68 = results_face['face_encodings68']
+                    face_landmarks = results_face['face_landmarks']
+                    body_landmarks = results_face['body_landmarks']
+                except KeyError as e:
+                    print(f"Error loading face data for image {image_id}: {e}")
             # if results_hands:
             #     print("results_hands: ", results_hands)
                 # left_hand = results_hands['left_hand']

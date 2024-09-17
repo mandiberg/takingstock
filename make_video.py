@@ -105,10 +105,10 @@ IS_ANGLE_SORT = False
 
 # this control whether sorting by topics
 IS_TOPICS = False
-N_TOPICS = 30
+N_TOPICS = 48
 
 IS_ONE_TOPIC = True
-TOPIC_NO = [29]
+TOPIC_NO = [27]
 
 #  is isolated,  is business,  babies, 17 pointing
 #  is doctor <<  covid
@@ -120,9 +120,9 @@ TOPIC_NO = [29]
 # 7 is surprise
 #  is yoga << planar,  planar,  fingers crossed
 
-# SORT_TYPE = "128d"
+SORT_TYPE = "128d"
 # SORT_TYPE ="planar"
-SORT_TYPE = "planar_body"
+# SORT_TYPE = "planar_body"
 NORMED_BODY_LMS = True
 
 MOUTH_GAP = 0
