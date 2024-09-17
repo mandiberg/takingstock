@@ -45,7 +45,7 @@ class SortPose:
         self.BRUTEFORCE = False
         self.use_3D = use_3D
         print("init use_3D",self.use_3D)
-        self.CUTOFF = 10 # DOES factor if ONE_SHOT
+        self.CUTOFF = 50 # DOES factor if ONE_SHOT
 
         self.CHECK_DESC_DIST = 30
         self.SORT_TYPE = SORT_TYPE
@@ -1456,11 +1456,11 @@ class SortPose:
 
     def prep_enc(self, enc1, structure="dict"):
         # print("prep_enc enc1", enc1)
-        print("prep_enc enc1", type(enc1))
+        # print("prep_enc enc1", type(enc1))
         if enc1 is list or enc1 is tuple:
             landmarks = self.SUBSET_LANDMARKS
         else:
-            print("prep_enc enc1 is dict, so devolving SUBSET")
+            # print("prep_enc enc1 is dict, so devolving SUBSET")
             # devolve the x y landmarks back to index
             landmarks = []
             # take the even landmarks and divide by 2
@@ -2202,14 +2202,15 @@ class SortPose:
     
     def prep_hand_landmarks(self, hand_results):  
         left_hand_landmarks = left_hand_world_landmarks = left_hand_landmarks_norm = right_hand_landmarks = right_hand_world_landmarks = right_hand_landmarks_norm = []
-        if 'left_hand' in hand_results:
-            left_hand_landmarks = hand_results['left_hand'].get('image_landmarks', [])
-            left_hand_world_landmarks = hand_results['left_hand'].get('world_landmarks', [])
-            left_hand_landmarks_norm = hand_results['left_hand'].get('hand_landmarks_norm', [])
-        if 'right_hand' in hand_results:
-            right_hand_landmarks = hand_results['right_hand'].get('image_landmarks', [])
-            right_hand_world_landmarks = hand_results['right_hand'].get('world_landmarks', [])
-            right_hand_landmarks_norm = hand_results['right_hand'].get('hand_landmarks_norm', [])
+        if hand_results:
+            if 'left_hand' in hand_results:
+                left_hand_landmarks = hand_results['left_hand'].get('image_landmarks', [])
+                left_hand_world_landmarks = hand_results['left_hand'].get('world_landmarks', [])
+                left_hand_landmarks_norm = hand_results['left_hand'].get('hand_landmarks_norm', [])
+            if 'right_hand' in hand_results:
+                right_hand_landmarks = hand_results['right_hand'].get('image_landmarks', [])
+                right_hand_world_landmarks = hand_results['right_hand'].get('world_landmarks', [])
+                right_hand_landmarks_norm = hand_results['right_hand'].get('hand_landmarks_norm', [])
         return left_hand_landmarks, left_hand_world_landmarks, left_hand_landmarks_norm, right_hand_landmarks, right_hand_world_landmarks, right_hand_landmarks_norm
 
     def extract_landmarks(self, landmarks):

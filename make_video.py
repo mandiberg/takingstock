@@ -56,8 +56,8 @@ HSV_NORMS = {"LUM": .01, "SAT": 1,  "HUE": 0.002777777778, "VAL": 1}
 
 # this is for controlling if it is using
 # all clusters, 
-IS_HAND_POSE_FUSION = True
-ONLY_ONE = True
+IS_HAND_POSE_FUSION = False
+ONLY_ONE = False
 IS_CLUSTER = False
 if IS_HAND_POSE_FUSION:
     # first sort on HandsPosts, then on Hands
@@ -107,8 +107,8 @@ IS_ANGLE_SORT = False
 IS_TOPICS = False
 N_TOPICS = 30
 
-IS_ONE_TOPIC = False
-TOPIC_NO = [15]
+IS_ONE_TOPIC = True
+TOPIC_NO = [29]
 
 #  is isolated,  is business,  babies, 17 pointing
 #  is doctor <<  covid
@@ -236,7 +236,7 @@ elif IS_SEGONLY and io.platform == "darwin":
     # WHERE += " AND e.encoding_id > 2612275"
 
     # WHERE = "s.site_name_id != 1"
-    LIMIT = 1000
+    LIMIT = 10000
 
     # TEMP TK TESTING
     # WHERE += " AND s.site_name_id = 8"
@@ -1562,6 +1562,9 @@ def main():
             df['face_landmarks'] = df['face_landmarks'].apply(io.unpickle_array)
             df['body_landmarks'] = df['body_landmarks'].apply(io.unpickle_array)
             df['body_landmarks_normalized'] = df['body_landmarks_normalized'].apply(io.unpickle_array)
+            # if hand_results has any values
+            # if not df['hand_results'].isnull().all():
+            
             df[['left_hand_landmarks', 'left_hand_world_landmarks', 'left_hand_landmarks_norm', 'right_hand_landmarks', 'right_hand_world_landmarks', 'left_hand_landmarks_norm']] = pd.DataFrame(df['hand_results'].apply(sort.prep_hand_landmarks).tolist(), index=df.index)
             df = sort.split_landmarks_to_columns(df, left_col="left_hand_world_landmarks", right_col="right_hand_world_landmarks", structure="list")
 
