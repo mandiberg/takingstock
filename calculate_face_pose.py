@@ -79,12 +79,13 @@ IS_FOLDER = False
 17	picha - done
 18	afripics
 '''
-
+# I think this only matters for IS_FOLDER mode, and the old SQL way
 SITE_NAME_ID = 1
 # 2, shutter. 4, istock
 # 7 pond5
 POSE_ID = 0
 
+# folder doesn't matter if IS_FOLDER is False. Declared FAR below. 
 # MAIN_FOLDER = "/Volumes/RAID18/images_pond5"
 # MAIN_FOLDER = "/Volumes/SSD4green/images_pixerf"
 MAIN_FOLDER = "/Volumes/SSD4green/images_alamy"
@@ -93,7 +94,7 @@ MAIN_FOLDER = "/Volumes/SSD4green/images_alamy"
 
 # MAIN_FOLDER = "/Volumes/SSD4/images_getty_reDL"
 BATCH_SIZE = 1000 # Define how many from each folder in each batch
-LIMIT = 10000
+LIMIT = 1000
 
 #temp hack to go 1 subfolder at a time
 # THESE_FOLDER_PATHS = ["8/8A", "8/8B","8/8C", "8/8D", "8/8E", "8/8F", "8/80", "8/81", "8/82", "8/83", "8/84", "8/85", "8/86", "8/87", "8/88", "8/89"]
@@ -106,15 +107,18 @@ CSV_FOLDERCOUNT_PATH = os.path.join(MAIN_FOLDER, "folder_countout.csv")
 IS_SSD=False
 
 # set BODY to true, set SSD to false, set TOPIC_ID
-# for SSD, start at 29654961
+# for silence, start at 103747511
+# for HDD topic, start at 5270831
 BODYLMS = True # only matters if IS_FOLDER is False
 HANDLMS = True
-TOPIC_ID = None
-TOPIC_ID = [24, 29] # adding a TOPIC_ID forces it to work from SegmentBig_isface
+# TOPIC_ID = None
+TOPIC_ID = [24, 29] # adding a TOPIC_ID forces it to work from SegmentBig_isface, currently at 7412083
 DO_INVERSE = True
 SEGMENT = 0 # topic_id set to 0 or False if using HelperTable or not using a segment
-HelperTable_name = False #"SegmentHelperMay7_fingerpoint" # set to False if not using a HelperTable
-
+# HelperTable_name = "SegmentHelper_sept18_silence" #"SegmentHelperMay7_fingerpoint" # set to False if not using a HelperTable
+HelperTable_name = False    
+# SegmentTable_name = 'SegmentOct20'
+SegmentTable_name = 'SegmentBig_isface'
 
 if BODYLMS is True or HANDLMS is True:
 
@@ -124,24 +128,33 @@ if BODYLMS is True or HANDLMS is True:
 
 
     ############# Reencodings #############
-    SELECT = "DISTINCT seg1.image_id, seg1.site_name_id, seg1.contentUrl, seg1.imagename, seg1.site_image_id, seg1.mongo_body_landmarks, seg1.mongo_face_landmarks, seg1.bbox"
 
-    SegmentTable_name = 'SegmentOct20'
     FROM =f"{SegmentTable_name} seg1"
+    if SegmentTable_name == 'SegmentOct20':
+        SELECT = "DISTINCT seg1.image_id, seg1.site_name_id, seg1.contentUrl, seg1.imagename, seg1.site_image_id, seg1.mongo_body_landmarks, seg1.mongo_face_landmarks, seg1.bbox"
+    if SegmentTable_name == 'SegmentBig_isface':
+        # segmentbig does not have mongo booleans
+        SELECT = "DISTINCT seg1.image_id, seg1.site_name_id, seg1.contentUrl, seg1.imagename, seg1.site_image_id, e.mongo_body_landmarks, e.mongo_face_landmarks, e.bbox"
+        FROM += " JOIN Encodings e ON seg1.image_id = e.image_id"
     
     # FROM ="Encodings e"
     if BODYLMS or (BODYLMS and HANDLMS):
+
+        if SegmentTable_name == 'SegmentOct20':
+            QUERY = " seg1.mongo_body_landmarks IS NULL and seg1.no_image IS NULL"
+        elif SegmentTable_name == 'SegmentBig_isface':
+            QUERY = " e.mongo_body_landmarks IS NULL "
+
         # if doing both BODYLMS and HANDLMS, query as if BODY, and also do HAND on those image_ids
         if TOPIC_ID:
-            SELECT = "DISTINCT seg1.image_id, seg1.site_name_id, seg1.contentUrl, seg1.imagename, seg1.site_image_id, e.mongo_body_landmarks, e.mongo_face_landmarks, e.bbox"
-            QUERY = " e.mongo_body_landmarks IS NULL "
-            FROM = " SegmentBig_isface seg1 "
-            FROM += " JOIN Encodings e ON seg1.image_id = e.image_id"
+            # FROM = " SegmentBig_isface seg1 "
             FROM += " LEFT JOIN ImagesTopics it ON seg1.image_id = it.image_id"
             SUBQUERY = f" AND it.topic_id IN {tuple(TOPIC_ID)} "
         else:
-            QUERY = " seg1.mongo_body_landmarks IS NULL and seg1.no_image IS NULL"
             SUBQUERY = " "
+        if HelperTable_name:
+            FROM += f" INNER JOIN {HelperTable_name} ht ON seg1.image_id = ht.image_id "
+    
     elif HANDLMS:
         QUERY = " seg1.mongo_hand_landmarks IS NULL and seg1.no_image IS NULL"
         # SUBQUERY = " "
@@ -156,13 +169,13 @@ if BODYLMS is True or HANDLMS is True:
 
     # SUBQUERY = f"(SELECT seg1.image_id FROM {SegmentTable_name} seg1 WHERE face_x > -33 AND face_x < -27 AND face_y > -2 AND face_y < 2 AND face_z > -2 AND face_z < 2)"
     # SUBQUERY = f"(SELECT seg1.image_id FROM {SegmentTable_name} seg1 WHERE face_x > -33 AND face_x < -27 AND face_y > -2 AND face_y < 2 AND face_z > -2 AND face_z < 2)"
-    if SEGMENT:
+    elif SEGMENT:
         QUERY = " "
         FROM = f"{SegmentTable_name} seg1 LEFT JOIN ImagesTopics it ON seg1.image_id = it.image_id"
         # SUBQUERY = f" seg1.mongo_body_landmarks IS NULL AND face_x > -33 AND face_x < -27 AND face_y > -2 AND face_y < 2 AND face_z > -2 AND face_z < 2 AND it.topic_id = {SEGMENT}"
         SUBQUERY = f" seg1.mongo_body_landmarks IS NULL AND it.topic_id = {SEGMENT}"
 
-    if HelperTable_name:
+    elif HelperTable_name:
         FROM += f" INNER JOIN {HelperTable_name} ht ON seg1.image_id = ht.image_id LEFT JOIN ImagesTopics it ON seg1.image_id = it.image_id"
         QUERY = "e.body_landmarks IS NULL AND seg1.site_name_id NOT IN (1,4)"
         SUBQUERY = ""
@@ -1414,7 +1427,7 @@ def process_image(task):
 
         # insertignore_df(df,"encodings", engine)  ### made it all lower case to avoid discrepancy
     except OperationalError as e:
-        print(e)
+        print("process_image", image_id, e)
 
     # Close the session and dispose of the engine before the worker process exits
     close_mongo()
@@ -1622,7 +1635,7 @@ def main():
 
     else:
         print("old school SQL")
-        start_id = 3776205
+        start_id = 5270831
         while True:
             init_session()
 

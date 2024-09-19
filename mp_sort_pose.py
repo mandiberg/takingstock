@@ -45,9 +45,10 @@ class SortPose:
         self.BRUTEFORCE = False
         self.use_3D = use_3D
         print("init use_3D",self.use_3D)
-        self.CUTOFF = 1000 # DOES factor if ONE_SHOT
+        self.CUTOFF = 100 # DOES factor if ONE_SHOT
 
         self.CHECK_DESC_DIST = 30
+        self.CLUSTER_TYPE = "BodyPoses" # defaults
         self.SORT_TYPE = SORT_TYPE
         if self.SORT_TYPE == "128d":
             self.MIND = self.MINFACEDIST * 1.5
@@ -65,7 +66,7 @@ class SortPose:
             self.MULTIPLIER = self.HSVMULTIPLIER * (self.MINBODYDIST / self.MINFACEDIST)
             self.DUPED = self.BODY_DUPE_DIST
             self.FACE_DIST_TEST = .02
-            self.CHECK_DESC_DIST = 10
+            self.CHECK_DESC_DIST = 45
 
 
         self.INPAINT=INPAINT
@@ -113,10 +114,13 @@ class SortPose:
         self.FINGER_LMS = self.make_subset_landmarks(19,20)
         self.THUMB_POINTER_LMS = self.make_subset_landmarks(19,22)
         self.WRIST_LMS = self.make_subset_landmarks(15,16)
+        self.HAND_LMS_POINTER = self.make_subset_landmarks(8,8)
         # adding pointer finger tip
         # self.SUBSET_LANDMARKS.extend(self.FINGER_LMS) # this should match what is in Clustering
         # only use wrist and finger
+
         self.SUBSET_LANDMARKS = self.HAND_LMS
+
         # self.SUBSET_LANDMARKS = self.choose_hand(self.HAND_LMS,"right")
         
 
@@ -277,6 +281,14 @@ class SortPose:
             "cluster_no":cluster_no
 
         }
+
+
+    def set_subset_landmarks(self,CLUSTER_TYPE):
+        self.CLUSTER_TYPE = CLUSTER_TYPE
+        if self.CLUSTER_TYPE == "FingertipsPositions":
+            self.SUBSET_LANDMARKS = self.HAND_LMS_POINTER
+        else:
+            self.SUBSET_LANDMARKS = self.HAND_LMS
 
     def set_cluster_medians(self,cluster_medians):
         self.cluster_medians = cluster_medians
@@ -2215,10 +2227,29 @@ class SortPose:
 
     def extract_landmarks(self, landmarks):
         # If no landmarks, return 63 zeros (21 points * 3 dimensions)
+        # print("self.SUBSET_LANDMARKS", self.SUBSET_LANDMARKS)
         if not landmarks:
-            return [0.0] * 63
+            if self.CLUSTER_TYPE == "FingertipsPositions":
+                return [0.0] * len(self.SUBSET_LANDMARKS)
+            else:
+                return [0.0] * 63
+                
+        # print("landmarks", landmarks)
+        # print("type landmarks", type(landmarks))
+        # print("len landmarks", len(landmarks))
+        # print("landmarks[0]", landmarks[0])
+
+
+        # pointers = self.get_landmarks_2d(enc1, landmarks, structure)
+
         # Flatten the list of (x, y, z) for each landmark
         flat_landmarks = [coord for point in landmarks for coord in point]
+        # print("flat_landmarks", flat_landmarks)
+
+        # assign the subset of landmarks to the flat_landmarks_subset
+        if self.CLUSTER_TYPE == "FingertipsPositions":
+            flat_landmarks = [flat_landmarks[i] for i in self.SUBSET_LANDMARKS]
+        # print("flat_landmarks_subset", flat_landmarks)
         return flat_landmarks
 
     def split_landmarks_to_columns(self, df, left_col="left_hand_world_landmarks", right_col="right_hand_world_landmarks", structure="cols"):
@@ -2228,9 +2259,14 @@ class SortPose:
         right_landmarks = df[right_col].apply(self.extract_landmarks)
         
         if structure == "cols":
+            if self.CLUSTER_TYPE == "FingertipsPositions":
+                col_num = len(self.SUBSET_LANDMARKS)
+            else:
+                col_num = 63
+            # col_num = 
             # Create new columns for each dimension (21 points * 3 = 63 columns for each hand)
-            left_landmark_cols = pd.DataFrame(left_landmarks.tolist(), columns=[f'left_dim_{i+1}' for i in range(63)])
-            right_landmark_cols = pd.DataFrame(right_landmarks.tolist(), columns=[f'right_dim_{i+1}' for i in range(63)])
+            left_landmark_cols = pd.DataFrame(left_landmarks.tolist(), columns=[f'left_dim_{i+1}' for i in range(col_num)])
+            right_landmark_cols = pd.DataFrame(right_landmarks.tolist(), columns=[f'right_dim_{i+1}' for i in range(col_num)])
             
             # Concatenate the original DataFrame with the new columns
             df = pd.concat([df, left_landmark_cols, right_landmark_cols], axis=1)

@@ -8,7 +8,7 @@ DROP TABLE SegmentHelperAug16_SegOct20_preAlamy ;
 DELETE FROM SegmentHelper_sept4_all_adults_facing_forward;
 
 -- create helper segment table
-CREATE TABLE SegmentHelper_sept4_all_noage_facing_forward (
+CREATE TABLE SegmentHelper_sept18_silence (
     seg_image_id int NOT NULL AUTO_INCREMENT PRIMARY KEY,
     image_id INTEGER,
     FOREIGN KEY (image_id) REFERENCES Images(image_id)
@@ -178,6 +178,11 @@ WHERE e.face_encodings68 IS NOT NULL
 LIMIT 100000; -- Adjust the batch size as needed
 
 
+SELECT *
+FROM keywords k
+WHERE k.keyword_text LIKE "%quiet%"
+;
+
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- 
 -- 
 --    UPDATE SEGMENT, AUGUST 2024
@@ -194,19 +199,21 @@ LIMIT 100000; -- Adjust the batch size as needed
 -- this skips existing so you can rerun ontop of existing data
 -- seg big is -45 to -3, with yz at 10
 
-INSERT INTO SegmentHelper_sept4_all_faces (image_id)
+INSERT INTO SegmentHelper_sept18_silence (image_id)
 SELECT DISTINCT e.image_id
 FROM Encodings e
 JOIN Images i ON i.image_id = e.image_id
+JOIN ImagesKeywords ik ON ik.image_id = i.image_id
 WHERE e.mongo_encodings = 1 
+	AND ik.keyword_id IN (9758, 76667, 83610, 100134, 102145, 22126, 99525, 115178, 116993, 125891)
 --	AND i.age_id IS NULL
 --	AND e.face_x > -45 AND e.face_x < -3
 --    AND e.face_y > -10 AND e.face_y < 10
 --    AND e.face_z > -10 AND e.face_z < 10
     AND NOT EXISTS (
         SELECT 1
-        FROM SegmentBig_isface sh
-        WHERE sh.image_id = e.image_id
+        FROM SegmentOct20 s
+        WHERE s.image_id = e.image_id
     );
    
    
@@ -281,6 +288,29 @@ WHERE sb.image_id IN (
         LIMIT 1000  -- Adjust the batch size as needed
     ) AS tmp
 );
+
+
+
+-- CLEANUP TO ADD MISSING DATA FROM IMAGES TABLE
+-- run this tomorrow
+
+UPDATE SegmentBig_isface sb
+JOIN Images i ON sb.image_id = i.image_id
+SET 
+    sb.site_name_id = i.site_name_id,
+    sb.site_image_id = i.site_image_id,
+    sb.contentUrl = i.contentUrl,
+    sb.imagename = i.imagename,
+    sb.description = i.description,
+    sb.age_id = i.age_id,
+    sb.age_detail_id = i.age_detail_id,
+    sb.gender_id = i.gender_id,
+    sb.location_id = i.location_id
+WHERE sb.imagename IS NULL 
+	AND sb.image_id >= 103748034;
+
+
+
 
 SELECT MAX(seg_image_id)
 FROM SegmentBig_isface

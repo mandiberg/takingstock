@@ -41,8 +41,8 @@ SELECT
     SUM(CASE WHEN so.location_id  IS NOT NULL THEN 1 ELSE 0 END) AS location_id_count,
     SUM(CASE WHEN so.mongo_body_landmarks  IS NOT NULL THEN 1 ELSE 0 END) AS body_landmarks_not_null_count,
     SUM(CASE WHEN so.mongo_body_landmarks_norm  IS NOT NULL THEN 1 ELSE 0 END) AS mongo_body_landmarks_norm_count,
-    SUM(CASE WHEN so.mongo_hand_landmarks  IS NOT NULL THEN 1 ELSE 0 END) AS body_landmarks_not_null_count,
-    SUM(CASE WHEN so.mongo_hand_landmarks_norm  IS NOT NULL THEN 1 ELSE 0 END) AS mongo_body_landmarks_norm_count
+    SUM(CASE WHEN so.mongo_hand_landmarks  IS NOT NULL THEN 1 ELSE 0 END) AS hand_landmarks_not_null_count,
+    SUM(CASE WHEN so.mongo_hand_landmarks_norm  IS NOT NULL THEN 1 ELSE 0 END) AS hand_body_landmarks_norm_count
 FROM
     SegmentOct20 so 
 GROUP BY
@@ -125,14 +125,14 @@ SELECT
     SUM(CASE WHEN pb.bbox_67  IS NOT NULL THEN 1 ELSE 0 END) AS phone_bbox
 FROM
     SegmentOct20 so 
-INNER JOIN ImagesHandsPoses ihp ON ihp.image_id = so.image_id
-INNER JOIN ImagesHands ih ON ih.image_id = so.image_id
+INNER JOIN ImagesHandsPositions ihp ON ihp.image_id = so.image_id
+INNER JOIN ImagesHandsGestures ihg ON ihg.image_id = so.image_id
 JOIN PhoneBbox pb ON pb.image_id = so.image_id 
-WHERE ihp.cluster_id = 75
+WHERE ihp.cluster_id = 113
 GROUP BY
-    ih.cluster_id
+    ihg.cluster_id
 ORDER BY
-    ih.cluster_id;
+    ihg.cluster_id;
    
 
    

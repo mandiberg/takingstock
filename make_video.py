@@ -56,17 +56,18 @@ HSV_NORMS = {"LUM": .01, "SAT": 1,  "HUE": 0.002777777778, "VAL": 1}
 
 # this is for controlling if it is using
 # all clusters, 
-IS_HAND_POSE_FUSION = False
-ONLY_ONE = False
-IS_CLUSTER = False
+IS_HAND_POSE_FUSION = True
+ONLY_ONE = True
+IS_CLUSTER = True
 if IS_HAND_POSE_FUSION:
     # first sort on HandsPosts, then on Hands
-    CLUSTER_TYPE = "Hands" # Select on 3d hands
-    CLUSTER_TYPE_2 = "HandsPoses" # Sort on 2d hands
+    CLUSTER_TYPE = "HandsGestures" # Select on 3d hands
+    CLUSTER_TYPE_2 = "HandsPositions" # Sort on 2d hands
 else:
-    # CLUSTER_TYPE = "Poses"
-    CLUSTER_TYPE = "HandsPoses" # 2d hands
-    # CLUSTER_TYPE = "Hands"
+    # choose the cluster type manually here
+    # CLUSTER_TYPE = "BodyPoses"
+    # CLUSTER_TYPE = "HandsPositions" # 2d hands
+    CLUSTER_TYPE = "HandsGestures"
     CLUSTER_TYPE_2 = None
 DROP_LOW_VIS = False
 USE_HEAD_POSE = False
@@ -74,12 +75,12 @@ USE_HEAD_POSE = False
 N_HANDS = N_CLUSTERS = None # declared here, but set in the SQL query below
 # this is for IS_ONE_CLUSTER to only run on a specific CLUSTER_NO
 IS_ONE_CLUSTER = False
-CLUSTER_NO = 123 # sort on this one as HAND_POSITION for IS_HAND_POSE_FUSION
+CLUSTER_NO = 113 # sort on this one as HAND_POSITION for IS_HAND_POSE_FUSION
 
 # I started to create a separate track for Hands, but am pausing for the moment
 IS_HANDS = False
 IS_ONE_HAND = True
-HAND_POSE_NO = 100
+HAND_POSE_NO = 12
 
 # cut the kids
 NO_KIDS = True
@@ -107,7 +108,7 @@ IS_ANGLE_SORT = False
 IS_TOPICS = False
 N_TOPICS = 48
 
-IS_ONE_TOPIC = True
+IS_ONE_TOPIC = False
 TOPIC_NO = [27]
 
 #  is isolated,  is business,  babies, 17 pointing
@@ -120,9 +121,9 @@ TOPIC_NO = [27]
 # 7 is surprise
 #  is yoga << planar,  planar,  fingers crossed
 
-SORT_TYPE = "128d"
+# SORT_TYPE = "128d"
 # SORT_TYPE ="planar"
-# SORT_TYPE = "planar_body"
+SORT_TYPE = "planar_body"
 NORMED_BODY_LMS = True
 
 MOUTH_GAP = 0
@@ -133,8 +134,8 @@ DO_OBJ_SORT = True
 OBJ_DONT_SUBSELECT = False # False means select for OBJ. this is a flag for selecting a specific object type when not sorting on obj
 PHONE_BBOX_LIMITS = [1] # this is an attempt to control the BBOX placement. I don't think it is going to work, but with non-zero it will make a bigger selection. Fix this hack TK. 
 
-ONE_SHOT = False # take all files, based off the very first sort order.
-EXPAND = False # expand with white, as opposed to inpaint and crop
+ONE_SHOT = True # take all files, based off the very first sort order.
+EXPAND = True # expand with white, as opposed to inpaint and crop
 JUMP_SHOT = True # jump to random file if can't find a run (I don't think this applies to planar?)
 
 
@@ -197,8 +198,8 @@ elif IS_SEGONLY and io.platform == "darwin":
     # WHERE += " AND k.keyword_text LIKE 'shout%' "
 
     if IS_HAND_POSE_FUSION:
-        FROM += f" JOIN ImagesHandsPoses ihp ON s.image_id = ihp.image_id "
-        FROM += f" JOIN ImagesHands ih ON s.image_id = ih.image_id "
+        FROM += f" JOIN ImagesHandsPositions ihp ON s.image_id = ihp.image_id "
+        FROM += f" JOIN ImagesHandsGestures ih ON s.image_id = ih.image_id "
     elif IS_CLUSTER or IS_ONE_CLUSTER:
         FROM += f" JOIN Images{CLUSTER_TYPE} ic ON s.image_id = ic.image_id "
     elif IS_TOPICS or IS_ONE_TOPIC:
@@ -236,7 +237,7 @@ elif IS_SEGONLY and io.platform == "darwin":
     # WHERE += " AND e.encoding_id > 2612275"
 
     # WHERE = "s.site_name_id != 1"
-    LIMIT = 200000
+    LIMIT = 5000
 
     # TEMP TK TESTING
     # WHERE += " AND s.site_name_id = 8"
@@ -1613,7 +1614,7 @@ def main():
 
             ### Get cluster_median encodings for cluster_no ###
 
-            if cluster_no is not None and cluster_no !=0 and IS_CLUSTER:
+            if cluster_no is not None and cluster_no !=0 and IS_CLUSTER and not ONLY_ONE:
                 # skips cluster 0 for pulling median because it was returning NULL
                 # cluster_median = select_cluster_median(cluster_no)
                 # image_id = insert_dict['image_id']
@@ -1684,6 +1685,8 @@ def main():
     elif IS_CLUSTER and not IS_ONE_TOPIC:
         print(f"IS_CLUSTER is {IS_CLUSTER} with {N_CLUSTERS}")
         for cluster_no in range(N_CLUSTERS):
+            # temp hack
+            # if cluster_no < 10: continue
             print(f"SELECTing cluster {cluster_no} of {N_CLUSTERS}")
             resultsjson = selectSQL(cluster_no, None)
             print(f"resultsjson contains {len(resultsjson)} images")

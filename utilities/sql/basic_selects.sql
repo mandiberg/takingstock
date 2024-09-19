@@ -105,14 +105,14 @@ DELETE
 FROM HandsPoses
 ;
 
-CREATE TABLE HandsPositions (
+CREATE TABLE BodyPoses (
     cluster_id int NOT NULL AUTO_INCREMENT PRIMARY KEY,
     cluster_median BLOB
 );
 
 -- This is the poses junction table.
 -- need to change the cluster_id reference to the correct cluster table
-CREATE TABLE ImagesHandsPositions (
+CREATE TABLE ImagesBodyPoses (
     image_id INTEGER REFERENCES Images (image_id),
     cluster_id INTEGER REFERENCES HandsPositions (cluster_id),
     PRIMARY KEY (image_id)
@@ -203,7 +203,7 @@ WHERE so.mongo_body_landmarks_norm = 1
 
 SELECT *
 FROM SegmentOct20 e 
-WHERE e.image_id = 99041374
+WHERE e.image_id = 110110042
 ;
 
 SELECT COUNT(s.image_id)

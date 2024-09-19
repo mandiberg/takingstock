@@ -2,7 +2,7 @@
 from sklearn.decomposition import PCA #Principal Component Analysis
 from sklearn.cluster import KMeans #K-Means Clustering
 from sklearn.metrics import silhouette_score
-
+from scipy.optimize import minimize
 #from sklearn.manifold import TSNE #T-Distributed Stochastic Neighbor Embedding
 #from sklearn.preprocessing import StandardScaler #used for 'Feature Scaling'
 #from sklearn.model_selection import ParameterGrid
@@ -25,6 +25,7 @@ import pymongo
 
 import numpy as np
 import pandas as pd
+from scipy.optimize import minimize
 import os
 import time
 import pickle
@@ -75,9 +76,13 @@ db = io.db
 NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 MODE = 0
 # CLUSTER_TYPE = "Clusters"
-# CLUSTER_TYPE = "Poses"
-CLUSTER_TYPE = "HandsPoses"
-# CLUSTER_TYPE = "Hands"
+# CLUSTER_TYPE = "BodyPoses"
+# CLUSTER_TYPE = "HandsPositions"
+CLUSTER_TYPE = "HandsGestures"
+# CLUSTER_TYPE = "FingertipsPositions"
+sort.set_subset_landmarks(CLUSTER_TYPE)
+SUBSELECT_ONE_CLUSTER = 0
+
 # SUBSET_LANDMARKS is now set in sort pose init
 USE_HEAD_POSE = False
 
@@ -95,6 +100,8 @@ USE_SEGMENT = True
 GET_OPTIMAL_CLUSTERS=False
 
 # number of clusters produced. run GET_OPTIMAL_CLUSTERS and add that number here
+# 24 for body poses
+# 128 for hands 
 N_CLUSTERS = 128
 SAVE_FIG=False ##### option for saving the visualized data
 
@@ -111,20 +118,26 @@ if USE_SEGMENT is True and (CLUSTER_TYPE != "Clusters"):
 
     # Basic Query, this works with gettytest3
     SELECT = "DISTINCT(s.image_id), s.face_x, s.face_y, s.face_z, s.mouth_gap"
-    if CLUSTER_TYPE == "Poses": WHERE = " s.mongo_body_landmarks = 1 "
-    elif CLUSTER_TYPE == "Hands": WHERE = " s.mongo_hand_landmarks = 1 "
-    elif CLUSTER_TYPE == "HandsPoses": WHERE = " s.mongo_hand_landmarks_norm = 1 "
+    if CLUSTER_TYPE == "BodyPoses": WHERE = " s.mongo_body_landmarks = 1 "
+    elif CLUSTER_TYPE == "HandsGestures": WHERE = " s.mongo_hand_landmarks = 1 "
+    elif CLUSTER_TYPE in ["HandsPositions","FingertipsPositions"] : WHERE = " s.mongo_hand_landmarks_norm = 1 "
+    WHERE += " AND s.is_dupe_of IS NULL "
     if MODE == 0:
         FROM = f"{SegmentTable_name} s"
         WHERE += " AND s.face_x > -35 AND s.face_x < -24 AND s.face_y > -3 AND s.face_y < 3 AND s.face_z > -3 AND s.face_z < 3 "
     # FROM += f" INNER JOIN Encodings h ON h.image_id = s.image_id " 
     # FROM += f" INNER JOIN {HelperTable_name} h ON h.image_id = s.image_id " 
+        if SUBSELECT_ONE_CLUSTER:
+            if CLUSTER_TYPE == "HandsGestures": subselect_cluster = "ImagesHandsPositions"
+            elif CLUSTER_TYPE == "HandsPositions": subselect_cluster = "ImagesHandsGestures"
+            FROM += f" INNER JOIN {subselect_cluster} sc ON sc.image_id = s.image_id " 
+            WHERE += f" AND sc.cluster_id = {SUBSELECT_ONE_CLUSTER} "
     elif MODE == 1:
         FROM = f"{SegmentTable_name} s LEFT JOIN Images{CLUSTER_TYPE} ic ON s.image_id = ic.image_id"
         WHERE += " AND ic.cluster_id IS NULL "
 
     # WHERE += " AND h.is_body = 1"
-    LIMIT = 10000000
+    LIMIT = 5000000
 
 
     '''
@@ -154,7 +167,8 @@ elif USE_SEGMENT is True and MODE == 0:
     FROM += f" INNER JOIN {HelperTable_name} h ON h.image_id = s.image_id " 
     WHERE = " s.mongo_body_landmarks = 1"
     # WHERE = "face_encodings68 IS NOT NULL AND face_x > -33 AND face_x < -27 AND face_y > -2 AND face_y < 2 AND face_z > -2 AND face_z < 2"
-    LIMIT = 1000
+    LIMIT = 100
+
 
     # # join with SSD tables. Satyam, use the one below
     # SELECT = "DISTINCT(e.image_id), e.face_encodings68"
@@ -272,7 +286,7 @@ def make_subset_landmarks(df,add_list=False):
 def kmeans_cluster(df, n_clusters=32):
     # Select only the numerical columns (dim_0 to dim_65)
     print(" : ",sort.SUBSET_LANDMARKS)
-    if CLUSTER_TYPE == "Poses":
+    if CLUSTER_TYPE == "BodyPoses":
         numerical_data = make_subset_landmarks(df)
     else:
         numerical_data = df
@@ -299,28 +313,62 @@ def best_score(df):
     
     return b_score
     
+def geometric_median(X, eps=1e-5):
+    """
+    Compute the geometric median of an array of points using Weiszfeld's algorithm.
+    Args:
+        X: A 2D numpy array where each row is a point in n-dimensional space.
+        eps: Convergence threshold.
+    Returns:
+        The geometric median.
+    """
+    def distance_sum(y, X):
+        return np.sum(np.linalg.norm(X - y, axis=1))
+
+    # Initial guess: mean of the points
+    initial_guess = np.mean(X, axis=0)
+    result = minimize(distance_sum, initial_guess, args=(X,), method='COBYLA', tol=eps)
+    return result.x
+
 def save_clusters_DB(df):
-    # col="encodings"
-    # col_list=[]
-    # for i in range(128):col_list.append(col+str(i))
     col_list = [col for col in df.columns if col.startswith('dim_')]
-
-
-    # this isn't saving means for each cluster. all cluster_median are the same
 
     # Convert to set and Save the df to a table
     unique_clusters = set(df['cluster_id'])
     for cluster_id in unique_clusters:
-        cluster_df=df[df['cluster_id']==cluster_id]
-        cluster_mean=np.array(cluster_df[col_list].mean())
-        existing_record = session.query(Clusters).filter_by(cluster_id=cluster_id).first()
+        cluster_df = df[df['cluster_id'] == cluster_id]
+
+        # Convert the selected dimensions into a NumPy array
+        cluster_points = cluster_df[col_list].values
+        
+        # Calculate the geometric median for the cluster points
+        cluster_median = geometric_median(cluster_points)
+        
+        # Explicitly handle cluster_id 0
+        if cluster_id == 0:
+            print("Handling cluster_id 0 explicitly. this cluster is ", cluster_id)
+            existing_record = None
+        else:
+            print("Checking for existing record with cluster_id ", cluster_id)
+            # Check if the record already exists
+            existing_record = session.query(Clusters).filter_by(cluster_id=cluster_id).first()
 
         if existing_record is None:
+            # Save the geometric median into the database
+            print(f"Saving new record with cluster_id {cluster_id}")
             instance = Clusters(
                 cluster_id=cluster_id,
-                cluster_median=pickle.dumps(cluster_mean)
+                cluster_median=pickle.dumps(cluster_median)  # Serialize the geometric median
             )
             session.add(instance)
+            session.flush()  # Force database insertion to catch issues early
+            if cluster_id == 0:
+
+                saved_record = session.query(Clusters).filter_by(cluster_id=0).first()
+                if saved_record:
+                    print(f"Successfully saved cluster_id 0: {saved_record}")
+                else:
+                    print("Failed to save cluster_id 0.")
         else:
             print(f"Skipping duplicate record with cluster_id {cluster_id}")
 
@@ -330,7 +378,6 @@ def save_clusters_DB(df):
     except IntegrityError as e:
         session.rollback()
         print(f"Error occurred during data saving: {str(e)}")
-
 
 def save_images_clusters_DB(df):
     #save the df to a table
@@ -379,6 +426,7 @@ def assign_images_clusters_DB(df):
     print("df_subset_landmarks clustered after apply")
     print(df_subset_landmarks[["image_id", "cluster_id"]].head())
 
+    return
     save_images_clusters_DB(df_subset_landmarks)
 
 
@@ -401,7 +449,7 @@ def prepare_df(df):
     # if faxe_x, face_y, face_z, and mouth_gap are not already floats
     if df['face_x'].dtype != float:
         df[['face_x', 'face_y', 'face_z', 'mouth_gap']] = df[['face_x', 'face_y', 'face_z', 'mouth_gap']].astype(float)
-    if CLUSTER_TYPE == "Poses":
+    if CLUSTER_TYPE == "BodyPoses":
         df = df.dropna(subset=['body_landmarks_normalized'])
         df['body_landmarks_normalized'] = df['body_landmarks_normalized'].apply(io.unpickle_array)
         # body = self.get_landmarks_2d(enc1, list(range(33)), structure)
@@ -416,18 +464,19 @@ def prepare_df(df):
 
         df_list_to_cols(df, 'body_landmarks_array')
         print("after cols",df)
-    elif CLUSTER_TYPE == "HandsPoses":
+    # elif CLUSTER_TYPE == "HandsPositions":
+    elif CLUSTER_TYPE in ["HandsPositions","FingertipsPositions"]:
         print("first row of df",df.iloc[0])
         df[['left_hand_landmarks', 'left_hand_world_landmarks', 'left_hand_landmarks_norm', 'right_hand_landmarks', 'right_hand_world_landmarks', 'right_hand_landmarks_norm']] = pd.DataFrame(df['hand_results'].apply(sort.prep_hand_landmarks).tolist(), index=df.index)
-        # print("after prep",df)
+        print("after prep",df)
         df = sort.split_landmarks_to_columns(df, left_col="left_hand_landmarks_norm", right_col="right_hand_landmarks_norm")
-        # print("after split",df)
+        print("after split",df)
         columns_to_drop = ['face_encodings68', 'face_landmarks', 'body_landmarks', 'body_landmarks_normalized', 
                            'hand_results', 'left_hand_landmarks', 'right_hand_landmarks', 
                            'left_hand_world_landmarks', 'right_hand_world_landmarks',
                            'left_hand_landmarks_norm', 'right_hand_landmarks_norm']
 
-    elif CLUSTER_TYPE == "Hands":
+    elif CLUSTER_TYPE == "HandsGestures":
         df[['left_hand_landmarks', 'left_hand_world_landmarks', 'left_hand_landmarks_norm', 'right_hand_landmarks', 'right_hand_world_landmarks', 'right_hand_landmarks_norm']] = pd.DataFrame(df['hand_results'].apply(sort.prep_hand_landmarks).tolist(), index=df.index)
         df = sort.split_landmarks_to_columns(df, left_col="left_hand_world_landmarks", right_col="right_hand_world_landmarks")
         # drop the columns that are not needed
@@ -462,8 +511,8 @@ def main():
     df = pd.json_normalize(resultsjson)
     print(df)
     # tell sort_pose which columns to NOT query
-    if CLUSTER_TYPE == "Poses": io.query_face = sort.query_face = io.query_hands = sort.query_hands = False
-    elif CLUSTER_TYPE == "Hands": io.query_body = sort.query_body = io.query_face = sort.query_face = False
+    if CLUSTER_TYPE == "BodyPoses": io.query_face = sort.query_face = io.query_hands = sort.query_hands = False
+    elif CLUSTER_TYPE == "HandsGestures": io.query_body = sort.query_body = io.query_face = sort.query_face = False
     elif CLUSTER_TYPE == "Clusters": io.query_body = sort.query_body = io.query_hands = sort.query_hands = False
     if not USE_HEAD_POSE: io.query_head_pose = sort.query_head_pose = False
     df[['face_encodings68', 'face_landmarks', 'body_landmarks', 'body_landmarks_normalized', 'hand_results']] = df['image_id'].apply(io.get_encodings_mongo)
@@ -481,11 +530,12 @@ def main():
 
         # I drop image_id as I pass it to knn bc I need it later, but knn can't handle strings
         # if body_landmarks_array is one of the df.columns, drop it
-        if "body_landmarks_array" in df.columns:
-            columns_to_drop = ["image_id", "body_landmarks_array"]
-        else:
-            columns_to_drop = ["image_id"]
-
+        print("df columns: ",enc_data.columns)
+        columns_to_drop = ["image_id"]
+        if "body_landmarks_array" in enc_data.columns: columns_to_drop.append("body_landmarks_array")
+        if "left_hand_landmarks_norm" in enc_data.columns: columns_to_drop.append("left_hand_landmarks_norm")
+        if "right_hand_landmarks_norm" in enc_data.columns: columns_to_drop.append("right_hand_landmarks_norm")
+        print("columns to drop: ",columns_to_drop)
         enc_data["cluster_id"] = kmeans_cluster(enc_data.drop(columns=columns_to_drop), n_clusters=N_CLUSTERS)
         
         print(enc_data)
