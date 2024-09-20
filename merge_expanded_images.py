@@ -14,7 +14,7 @@ io = DataIO()
 db = io.db
 
 # iterate through folders? 
-IS_CLUSTER = True
+IS_CLUSTER = False
 
 # are we making videos or making merged stills?
 IS_VIDEO = False
@@ -23,10 +23,11 @@ ALL_ONE_VIDEO = False
 # MERGE
 # Provide the path to the folder containing the images
 ROOT_FOLDER_PATH = '/Volumes/OWC4/segment_images'
+# ROOT_FOLDER_PATH = '/Users/michaelmandiberg/Documents/projects-active/facemap_production/Aug29_composites'
 # if IS_CLUSTER this should be the folder holding all the cluster folders
 # if not, this should be the individual folder holding the images
 # will not accept clusterNone -- change to cluster00
-FOLDER_NAME ="body_fingers_24poses"
+FOLDER_NAME ="fusion_sept20/cluster111_119_1726817394.610477/money"
 FOLDER_PATH = os.path.join(ROOT_FOLDER_PATH,FOLDER_NAME)
 DIRS = ["1x1", "4x3", "16x10"]
 
@@ -84,13 +85,15 @@ def merge_images(FOLDER_PATH):
     # Get a list of image files in the folder
     image_files = io.get_img_list(FOLDER_PATH)
     # print(image_files)
-    cluster_no = None
+    cluster_no = handpose_no = None
     successes = 0
     if len(image_files) > 1:
         image_folder = FOLDER_PATH.split("/")[-1]
         if "cluster" in image_folder:
             print("cluster found", image_folder)
             cluster_no = int(image_folder.split("_")[0].replace("cluster",""))
+            try: handpose_no = int(image_folder.split("_")[1])
+            except: print("handpose_no = None")
         count = len(image_files)
         print(count)
         merged_pairs, successes = iterate_image_list(FOLDER_PATH,image_files,successes)
@@ -102,13 +105,13 @@ def merge_images(FOLDER_PATH):
 
         final_merged = merged_pairs[0]
 
-        return final_merged, successes, cluster_no
+        return final_merged, successes, cluster_no, handpose_no
     else:
-        return None, 0, cluster_no
+        return None, 0, cluster_no, handpose_no
 
-def save_merge(merged_image, count, cluster_no, FOLDER_PATH):
+def save_merge(merged_image, count, cluster_no, handpose_no, FOLDER_PATH):
     if cluster_no is not None:
-        savename = 'merged_cluster_' + str(cluster_no)+ "_"+str(count*2)+'.jpg'
+        savename = 'merged_cluster_' + str(cluster_no)+ "_"+ str(handpose_no)+ "_"+ str(count*2)+'.jpg'
     else:
         savename = 'merged_image'+str(count)+'.jpg'
     output_path = os.path.join(FOLDER_PATH, savename)
@@ -257,12 +260,12 @@ def main():
         else:
             for subfolder_path in subfolders:
                 # print(subfolder_path)
-                merged_image, count, cluster_no = merge_images(subfolder_path)
+                merged_image, count, cluster_no, handpose_no = merge_images(subfolder_path)
                 if count == 0:
                     print("no images here")
                     continue
                 else:
-                    save_merge(merged_image, count, cluster_no, FOLDER_PATH)
+                    save_merge(merged_image, count, cluster_no, handpose_no, FOLDER_PATH)
     else:
         if IS_VIDEO is True:
             print("going to get folder ls")
@@ -276,8 +279,8 @@ def main():
             #     write_video(subfolder_path, FRAMERATE)
         else:
 
-            merged_image, count, cluster_no = merge_images(FOLDER_PATH)
-            save_merge(merged_image, count, cluster_no, FOLDER_PATH)
+            merged_image, count, cluster_no, handpose_no = merge_images(FOLDER_PATH)
+            save_merge(merged_image, count, cluster_no, handpose_no, FOLDER_PATH)
      
 
 
