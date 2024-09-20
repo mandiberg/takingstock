@@ -287,6 +287,8 @@ class SortPose:
         self.CLUSTER_TYPE = CLUSTER_TYPE
         if self.CLUSTER_TYPE == "FingertipsPositions":
             self.SUBSET_LANDMARKS = self.HAND_LMS_POINTER
+        if self.CLUSTER_TYPE == "HandsPositions":
+            self.SUBSET_LANDMARKS = None
         else:
             self.SUBSET_LANDMARKS = self.HAND_LMS
 

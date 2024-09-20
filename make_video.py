@@ -57,7 +57,7 @@ HSV_NORMS = {"LUM": .01, "SAT": 1,  "HUE": 0.002777777778, "VAL": 1}
 # this is for controlling if it is using
 # all clusters, 
 IS_HAND_POSE_FUSION = True
-ONLY_ONE = True
+ONLY_ONE = False
 IS_CLUSTER = True
 if IS_HAND_POSE_FUSION:
     # first sort on HandsPosts, then on Hands
@@ -75,12 +75,12 @@ USE_HEAD_POSE = False
 N_HANDS = N_CLUSTERS = None # declared here, but set in the SQL query below
 # this is for IS_ONE_CLUSTER to only run on a specific CLUSTER_NO
 IS_ONE_CLUSTER = False
-CLUSTER_NO = 113 # sort on this one as HAND_POSITION for IS_HAND_POSE_FUSION
+CLUSTER_NO = 53 # sort on this one as HAND_POSITION for IS_HAND_POSE_FUSION
 
 # I started to create a separate track for Hands, but am pausing for the moment
 IS_HANDS = False
 IS_ONE_HAND = True
-HAND_POSE_NO = 12
+HAND_POSE_NO = 21
 
 # cut the kids
 NO_KIDS = True
@@ -138,7 +138,13 @@ ONE_SHOT = True # take all files, based off the very first sort order.
 EXPAND = True # expand with white, as opposed to inpaint and crop
 JUMP_SHOT = True # jump to random file if can't find a run (I don't think this applies to planar?)
 
-
+FUSION_PAIRS =[
+    #CLUSTER_NO, HAND_POSE_NO
+    # 300 below
+    [1,21],[115,97],[53,21],[47,21],[47,67],[4,103],[5,115],[7,57],[52,8],[11,17],[112,57],[3,24],[11,71],[11,48],[120,115],[121,29],[15,74],[1,67],[121,123],[3,27],[115,112],[121,8],[74,67],[17,94],[99,62],[56,102],[126,102],[20,0],[31,24],[28,111],[0,68],[121,7],[35,99],[4,76],[18,97],[52,29],[84,25],[109,8],[66,54],[4,3],[38,48],[52,123],[2,64],[2,56],[94,19],[50,21],[68,21],[20,116],[5,78],[52,99],[1,80],
+    [7,105],[68,45],[80,35],[10,67],[33,104],[120,22],[88,57],[7,120],[46,124],[2,29],[113,3],[36,105],[28,89],[8,91],[120,78],[1,110],[18,87],[31,19],[36,120],[75,115],[96,90],[31,27],[73,63],[115,126],[10,45],[108,16],[29,127],[88,64],[35,126],[35,11],[15,89],[17,114],[83,57],[108,77],[4,52],[94,33],[94,27],[23,114],[111,90],[2,4],[11,108],[7,64],[115,58],[65,24],[84,108],[87,90],[88,54],[65,33],[87,120],[29,33],[83,41],[5,74],[11,127],[109,29],[73,27],[3,33],[89,102],[55,24],[79,94],[23,94],[73,24],[115,99],[121,4],[38,17],[49,44],[48,59],[2,54],[80,92],[4,71],[65,63],[55,19],[73,33],[88,120],[113,117],[106,41],[83,54],[62,35],[47,80],[40,44],[4,48],[68,67],[49,74],[7,54],[36,64],[3,63],[15,114],[49,46],[77,111],
+    [80,88],[92,73],[65,93],[77,89],[2,99],[112,54],[47,110],[15,94],[50,114],[53,80],[87,57],[57,92],[0,84],[3,19],[22,6],[57,9],[18,58],[35,113],[113,106],[15,92],[28,114],[50,107],[94,71],[57,85],[53,110],[108,88],[11,33],[47,45],[104,31],[13,63],[120,98],[53,28],[50,28],[126,89],[88,4],[2,120],[60,102],[52,4],[111,64],[85,67],[66,42],[88,90],[11,106],[92,5],[18,8],[4,127],[120,74],[125,104],[35,42],[94,12],[115,113],[31,2],[15,78],[57,114],[68,28],[1,89],[1,26],[55,100],[87,64],[126,107],[12,105],[2,42],[87,105],[38,71],[112,120],[50,45],[90,114],[113,2],[57,45],[115,119],[42,44],[118,45],
+    [3,93],[15,35],[90,89],[121,119],[1,16],[5,72],[52,58],[68,34],[0,72],[0,0],[51,77],[53,89],[111,4],[83,51],[112,11],[15,55],[18,112],[28,35],[83,105],[2,57],[90,21],[115,13],[85,47],[50,50],[22,21],[111,119],[103,82],[55,27],[78,67],[35,13],[56,25],[111,7],[51,94],[57,28],[29,108],[50,110],[50,34],[88,56],[92,81],[31,33],[59,30],[54,100],[74,10],[94,24],[67,102],[78,21],[3,79],[5,111],[35,57],[2,119],[1,85],[15,115],[80,74],[78,125],[18,126],[53,16],[1,125],[12,120],[112,13],[122,91],[112,64],[94,127],[12,124],[68,110],[113,27],[42,80],[80,78],[36,57],[15,111],[7,41],[97,94],[55,118],[28,17],[75,22],[84,127],[127,118],[52,40],[52,7],[80,115],[122,35],[15,28],[120,35],[112,113],[49,36],[15,102],[67,89],[80,22],[121,64]]
 
 
 METAS_FILE = "metas.csv"
@@ -1535,7 +1541,11 @@ def main():
         # select on both, sort on CLUSTER_NO
         # for FUSION, CLUSTER_NO is HAND_POSITION and is the first value
         if isinstance(cluster_no, list):
+            print("cluster_no is a list", cluster_no)
+            pose_no = cluster_no[1]
             cluster_no = cluster_no[0]
+        else:
+            pose_no = None
 
         # read the csv and construct dataframe
         try:
@@ -1605,8 +1615,9 @@ def main():
                 quit()
 
             ### Set counter_dict ###
-
-            sort.set_counters(io.ROOT,cluster_no, start_img_name,start_site_image_id)
+            if pose_no: cluster_string = f"{cluster_no}_{pose_no}"
+            else: cluster_string = str(cluster_no)
+            sort.set_counters(io.ROOT,cluster_string, start_img_name,start_site_image_id)
 
             print("set sort.counter_dict:" )
             print(sort.counter_dict)
@@ -1682,6 +1693,11 @@ def main():
         CLUSTER_PAIR = [CLUSTER_NO, HAND_POSE_NO]
         resultsjson = selectSQL(CLUSTER_PAIR)
         map_images(resultsjson, CLUSTER_PAIR)
+    elif IS_HAND_POSE_FUSION and not ONLY_ONE:
+        for CLUSTER_PAIR in FUSION_PAIRS:
+            print(f"IS_HAND_POSE_FUSION is True, with {CLUSTER_PAIR}")
+            resultsjson = selectSQL(CLUSTER_PAIR)
+            map_images(resultsjson, CLUSTER_PAIR)
     elif IS_CLUSTER and not IS_ONE_TOPIC:
         print(f"IS_CLUSTER is {IS_CLUSTER} with {N_CLUSTERS}")
         for cluster_no in range(N_CLUSTERS):
