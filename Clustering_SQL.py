@@ -74,7 +74,7 @@ db = io.db
 
 
 NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
-MODE = 0
+MODE = 2
 # CLUSTER_TYPE = "Clusters"
 # CLUSTER_TYPE = "BodyPoses"
 # CLUSTER_TYPE = "HandsPositions"
@@ -132,12 +132,15 @@ if USE_SEGMENT is True and (CLUSTER_TYPE != "Clusters"):
             elif CLUSTER_TYPE == "HandsPositions": subselect_cluster = "ImagesHandsGestures"
             FROM += f" INNER JOIN {subselect_cluster} sc ON sc.image_id = s.image_id " 
             WHERE += f" AND sc.cluster_id = {SUBSELECT_ONE_CLUSTER} "
-    elif MODE == 1:
+    elif MODE in (1,2):
         FROM = f"{SegmentTable_name} s LEFT JOIN Images{CLUSTER_TYPE} ic ON s.image_id = ic.image_id"
-        WHERE += " AND ic.cluster_id IS NULL "
+        if MODE == 1: WHERE += " AND ic.cluster_id IS NULL "
+        elif MODE == 2: 
+            SELECT += ",ic.cluster_id"
+            WHERE += " AND ic.cluster_id IS NOT NULL "
 
     # WHERE += " AND h.is_body = 1"
-    LIMIT = 5000000
+    LIMIT = 1000
 
 
     '''
@@ -227,6 +230,15 @@ class ImagesClusters(Base):
 def get_cluster_medians():
 
 
+    # store the results in a dictionary where the key is the cluster_id
+    # if results:
+    #     cluster_medians = {}
+    #     for i, row in enumerate(results, start=1):
+    #         cluster_median = pickle.loads(row.cluster_median)
+    #         cluster_medians[i] = cluster_median
+    #         # print("cluster_medians", i, cluster_median)
+    #         N_CLUSTERS = i # will be the last cluster_id which is count of clusters
+
     ####################################
     # this has a LIMIT on it, that I didn't see before
     # hmm... wait, that just limits to 1000 clusters. I don't have that many
@@ -242,8 +254,24 @@ def get_cluster_medians():
     # Process the results as needed
     for row in results:
         print(row)
-        cluster_id, cluster_median = row
-        cluster_median = pickle.loads(cluster_median, encoding='latin1')
+        cluster_id, cluster_median_pickle = row
+        print("cluster_id: ",cluster_id)
+
+        import pprint
+        pp = pprint.PrettyPrinter(indent=4)
+        # print the pickle using pprint
+        pp.pprint(cluster_median_pickle)
+
+        cluster_median = pickle.loads(cluster_median_pickle)
+        
+        # Check the type and content of the deserialized object
+        if isinstance(cluster_median, np.ndarray):
+            print(f"Deserialized cluster_median type: {type(cluster_median)}, shape: {cluster_median.shape}")
+        else:
+            print(f"Deserialized object is not a numpy array, it's of type: {type(cluster_median)}")
+        
+        print("cluster_median content: ", cluster_median)
+
         if sort.SUBSET_LANDMARKS:
             # handles body lms subsets
             subset_cluster_median = []
@@ -252,6 +280,7 @@ def get_cluster_medians():
                     subset_cluster_median.append(cluster_median[i])
             cluster_median = subset_cluster_median
         median_dict[cluster_id] = cluster_median
+    print("median dict: ",median_dict)
     return median_dict 
 
 
@@ -287,6 +316,7 @@ def kmeans_cluster(df, n_clusters=32):
     # Select only the numerical columns (dim_0 to dim_65)
     print(" : ",sort.SUBSET_LANDMARKS)
     if CLUSTER_TYPE == "BodyPoses":
+        print("CLUSTER_TYPE == BodyPoses", df)
         numerical_data = make_subset_landmarks(df)
     else:
         numerical_data = df
@@ -320,15 +350,52 @@ def geometric_median(X, eps=1e-5):
         X: A 2D numpy array where each row is a point in n-dimensional space.
         eps: Convergence threshold.
     Returns:
-        The geometric median.
+        The geometric median or None if X is empty or invalid.
     """
+    if len(X) == 0:  # Handle empty input
+        return None
+    
     def distance_sum(y, X):
         return np.sum(np.linalg.norm(X - y, axis=1))
 
     # Initial guess: mean of the points
     initial_guess = np.mean(X, axis=0)
     result = minimize(distance_sum, initial_guess, args=(X,), method='COBYLA', tol=eps)
+    
     return result.x
+
+def calc_cluster_median(df, col_list, cluster_id):
+    cluster_df = df[df['cluster_id'] == cluster_id]
+    print(f"Cluster {cluster_id} data: {cluster_df}")
+    # Convert the selected dimensions into a NumPy array
+    cluster_points = cluster_df[col_list].values
+    
+    # Check if there are valid points in the cluster
+    if len(cluster_points) == 0 or np.isnan(cluster_points).any():
+        print(f"No valid points for cluster {cluster_id}, skipping median calculation.")
+        return None
+    
+    print(f"Cluster {cluster_id} points: {cluster_points}")
+
+    # Calculate the geometric median for the cluster points
+    cluster_median = geometric_median(cluster_points)
+    
+    return cluster_median
+
+def recalculate_cluster_medians(df):
+    col_list = [col for col in df.columns if col.startswith('right_dim') or col.startswith('left_dim') or col.startswith('dim')]
+    # print(f"Columns used for median calculation: {col_list}")
+    # print(f"All DataFrame columns: {df.columns}")
+
+    # print(df)
+    unique_clusters = set(df['cluster_id'])
+    for cluster_id in unique_clusters:
+        cluster_median = calc_cluster_median(df, col_list, cluster_id)
+        if cluster_median is not None:
+            print(f"Recalculated median for cluster {cluster_id}: {cluster_median}")
+        else:
+            print(f"Cluster {cluster_id} has no valid points or data.")
+    return
 
 def save_clusters_DB(df):
     col_list = [col for col in df.columns if col.startswith('dim_')]
@@ -336,14 +403,9 @@ def save_clusters_DB(df):
     # Convert to set and Save the df to a table
     unique_clusters = set(df['cluster_id'])
     for cluster_id in unique_clusters:
-        cluster_df = df[df['cluster_id'] == cluster_id]
-
-        # Convert the selected dimensions into a NumPy array
-        cluster_points = cluster_df[col_list].values
+        cluster_median = calc_cluster_median(df, col_list, cluster_id)
         
-        # Calculate the geometric median for the cluster points
-        cluster_median = geometric_median(cluster_points)
-        
+        # store the data in the database
         # Explicitly handle cluster_id 0
         if cluster_id == 0:
             print("Handling cluster_id 0 explicitly. this cluster is ", cluster_id)
@@ -407,24 +469,42 @@ def save_images_clusters_DB(df):
 
 def assign_images_clusters_DB(df):
     def prep_pose_clusters_enc(enc1):
-        # print(enc1)  
+        print("enc1", enc1)  
         enc1 = np.array(enc1)
         this_dist_dict = {}
         for cluster_id in MEDIAN_DICT:
             enc2 = MEDIAN_DICT[cluster_id]
+            print("enc2: ",enc2)
             this_dist_dict[cluster_id] = np.linalg.norm(enc1 - enc2, axis=0)
         
         cluster_id = min(this_dist_dict, key=this_dist_dict.get)
-        # print(cluster_id)
+        print(cluster_id)
         return cluster_id
 
     #assign clusters to each image's encodings
-    # print("assigning images to clusters, df at start",df)
+    print("assigning images to clusters, df at start",df)
     df_subset_landmarks = make_subset_landmarks(df, add_list=True)
 
-    df_subset_landmarks["cluster_id"] = df_subset_landmarks["obj_bbox_list"].apply(prep_pose_clusters_enc)
+
+    if CLUSTER_TYPE in ["BodyPoses","HandsGestures", "HandsPositions","FingertipsPositions"]:
+        # combine all columns that start with left_dim_ or right_dim_ or dim_ into one list in the "enc1" column
+
+        # Step 1: Identify columns that contain "_dim_"
+        dim_columns = [col for col in df_subset_landmarks.columns if "_dim_" in col]
+
+        # Step 2: Combine values from these columns into a list for each row
+        df_subset_landmarks['enc1'] = df_subset_landmarks[dim_columns].values.tolist()
+
+        # Step 3: Print the result to check
+        print(df_subset_landmarks[['image_id', 'enc1']])
+
+        df_subset_landmarks["cluster_id"] = df_subset_landmarks["enc1"].apply(prep_pose_clusters_enc)
+    else:
+        # this is for obj_bbox_list
+        df_subset_landmarks["cluster_id"] = df_subset_landmarks["obj_bbox_list"].apply(prep_pose_clusters_enc)
+
     print("df_subset_landmarks clustered after apply")
-    print(df_subset_landmarks[["image_id", "cluster_id"]].head())
+    print(df_subset_landmarks[["image_id", "cluster_id"]])
 
     return
     save_images_clusters_DB(df_subset_landmarks)
@@ -551,6 +631,12 @@ def main():
     elif MODE == 1:
 
         assign_images_clusters_DB(enc_data)
+        print("assigned and saved segment to clusters")
+
+    elif MODE == 2:
+
+        recalculate_cluster_medians(enc_data)
+        # assign_images_clusters_DB(enc_data)
         print("assigned and saved segment to clusters")
 
 
