@@ -74,7 +74,7 @@ db = io.db
 
 
 NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
-MODE = 2
+MODE = 1
 # CLUSTER_TYPE = "Clusters"
 # CLUSTER_TYPE = "BodyPoses"
 # CLUSTER_TYPE = "HandsPositions"
@@ -134,13 +134,14 @@ if USE_SEGMENT is True and (CLUSTER_TYPE != "Clusters"):
             WHERE += f" AND sc.cluster_id = {SUBSELECT_ONE_CLUSTER} "
     elif MODE in (1,2):
         FROM = f"{SegmentTable_name} s LEFT JOIN Images{CLUSTER_TYPE} ic ON s.image_id = ic.image_id"
-        if MODE == 1: WHERE += " AND ic.cluster_id IS NULL "
+        if MODE == 1: 
+            WHERE += " AND ic.cluster_id IS NULL "
         elif MODE == 2: 
             SELECT += ",ic.cluster_id"
             WHERE += " AND ic.cluster_id IS NOT NULL "
 
     # WHERE += " AND h.is_body = 1"
-    LIMIT = 5000000
+    LIMIT = 1
 
 
     '''
@@ -541,9 +542,8 @@ def assign_images_clusters_DB(df):
     # print all rows where cluster_id is 68
     print(df_subset_landmarks[df_subset_landmarks["cluster_id"] == 68])
 
-    return
     save_images_clusters_DB(df_subset_landmarks)
-
+    print ("saved to imagesclusters")
 
 def df_list_to_cols(df, col_name):
 
