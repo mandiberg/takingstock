@@ -140,7 +140,7 @@ if USE_SEGMENT is True and (CLUSTER_TYPE != "Clusters"):
             WHERE += " AND ic.cluster_id IS NOT NULL "
 
     # WHERE += " AND h.is_body = 1"
-    LIMIT = 1000
+    LIMIT = 10000
 
 
     '''
@@ -253,25 +253,21 @@ def get_cluster_medians():
 
     # Process the results as needed
     for row in results:
-        print(row)
+        # print(row)
         cluster_id, cluster_median_pickle = row
-        print("cluster_id: ",cluster_id)
+        # print("cluster_id: ",cluster_id)
 
         import pprint
         pp = pprint.PrettyPrinter(indent=4)
         # print the pickle using pprint
-        pp.pprint(cluster_median_pickle)
+        # pp.pprint(cluster_median_pickle)
 
         cluster_median = pickle.loads(cluster_median_pickle)
-        
+        print("cluster_median: ", cluster_id, cluster_median)
         # Check the type and content of the deserialized object
-        if isinstance(cluster_median, np.ndarray):
-            print(f"Deserialized cluster_median type: {type(cluster_median)}, shape: {cluster_median.shape}")
-        else:
+        if not isinstance(cluster_median, np.ndarray):
             print(f"Deserialized object is not a numpy array, it's of type: {type(cluster_median)}")
         
-        print("cluster_median content: ", cluster_median)
-
         if sort.SUBSET_LANDMARKS:
             # handles body lms subsets
             subset_cluster_median = []
@@ -280,7 +276,7 @@ def get_cluster_medians():
                     subset_cluster_median.append(cluster_median[i])
             cluster_median = subset_cluster_median
         median_dict[cluster_id] = cluster_median
-    print("median dict: ",median_dict)
+    # print("median dict: ",median_dict)
     return median_dict 
 
 
@@ -343,26 +339,30 @@ def best_score(df):
     
     return b_score
     
-def geometric_median(X, eps=1e-5):
+def geometric_median(X, eps=1e-5, zero_threshold=1e-6):
     """
     Compute the geometric median of an array of points using Weiszfeld's algorithm.
     Args:
         X: A 2D numpy array where each row is a point in n-dimensional space.
         eps: Convergence threshold.
+        zero_threshold: Threshold below which values are set to zero.
     Returns:
         The geometric median or None if X is empty or invalid.
     """
-    if len(X) == 0:  # Handle empty input
+    if len(X) == 0:
         return None
-    
+
     def distance_sum(y, X):
         return np.sum(np.linalg.norm(X - y, axis=1))
 
     # Initial guess: mean of the points
     initial_guess = np.mean(X, axis=0)
     result = minimize(distance_sum, initial_guess, args=(X,), method='COBYLA', tol=eps)
-    
-    return result.x
+
+    # Set values close to zero to exactly zero
+    result_x = result.x
+    result_x[np.abs(result_x) < zero_threshold] = 0
+    return result_x
 
 def calc_cluster_median(df, col_list, cluster_id):
     cluster_df = df[df['cluster_id'] == cluster_id]
@@ -382,28 +382,52 @@ def calc_cluster_median(df, col_list, cluster_id):
     
     return cluster_median
 
+def build_col_list(df):
+    col_list = {}
+    col_list["left"] = [col for col in df.columns if col.startswith('left_dim_')]
+    col_list["right"] = [col for col in df.columns if col.startswith('right_dim_')]
+    return col_list
+
+
 def recalculate_cluster_medians(df):
-    col_list = [col for col in df.columns if col.startswith('right_dim') or col.startswith('left_dim') or col.startswith('dim')]
+    # col_list = [col for col in df.columns if col.startswith('right_dim') or col.startswith('left_dim') or col.startswith('dim')]
+    col_list = build_col_list(df)
+
     # print(f"Columns used for median calculation: {col_list}")
     # print(f"All DataFrame columns: {df.columns}")
 
     # print(df)
     unique_clusters = set(df['cluster_id'])
     for cluster_id in unique_clusters:
-        cluster_median = calc_cluster_median(df, col_list, cluster_id)
+        # cluster_median = calc_cluster_median(df, col_list, cluster_id)
+        cluster_median = {}
+        cluster_median["left"] = calc_cluster_median(df, col_list["left"], cluster_id)
+        cluster_median["right"] = calc_cluster_median(df, col_list["right"], cluster_id)
         if cluster_median is not None:
             print(f"Recalculated median for cluster {cluster_id}: {cluster_median}")
         else:
             print(f"Cluster {cluster_id} has no valid points or data.")
-    return
+        # if every value in the cluster median < .01, then set all values to 0.0
+        for key in cluster_median.keys():
+            if cluster_median[key] is not None and all([abs(val) < .01 for val in cluster_median[key]]):
+                print(f" --- >>> Setting cluster {cluster_id} {key} median to all zeros.")
+                cluster_median[key] = [0.0 for _ in cluster_median[key]]
+            # if cluster_median[key] is not None and all([abs(val) < .01 for val in cluster_median[key]]):
+            #     print(f" --- >>> Setting cluster {cluster_id} {key} median to all zeros.")
+            #     cluster_median[key] = [0.0 for _ in cluster_median[key]]
+        # if cluster_median is not None and all([abs(val) < .01 for val in cluster_median]):
+        #     print(f"Setting cluster {cluster_id} median to all zeros.")
+        #     cluster_median = [0.0 for _ in cluster_median]
+    return 
 
 def save_clusters_DB(df):
-    col_list = [col for col in df.columns if col.startswith('dim_')]
-
     # Convert to set and Save the df to a table
+    col_list = build_col_list(df)
     unique_clusters = set(df['cluster_id'])
     for cluster_id in unique_clusters:
-        cluster_median = calc_cluster_median(df, col_list, cluster_id)
+        cluster_median = {}
+        cluster_median["left"] = calc_cluster_median(df, col_list["left"], cluster_id)
+        cluster_median["right"] = calc_cluster_median(df, col_list["right"], cluster_id)
         
         # store the data in the database
         # Explicitly handle cluster_id 0
