@@ -140,7 +140,7 @@ if USE_SEGMENT is True and (CLUSTER_TYPE != "Clusters"):
             WHERE += " AND ic.cluster_id IS NOT NULL "
 
     # WHERE += " AND h.is_body = 1"
-    LIMIT = 10000
+    LIMIT = 5000000
 
 
     '''
@@ -263,7 +263,7 @@ def get_cluster_medians():
         # pp.pprint(cluster_median_pickle)
 
         cluster_median = pickle.loads(cluster_median_pickle)
-        print("cluster_median: ", cluster_id, cluster_median)
+        # print("cluster_median: ", cluster_id, cluster_median)
         # Check the type and content of the deserialized object
         if not isinstance(cluster_median, np.ndarray):
             print(f"Deserialized object is not a numpy array, it's of type: {type(cluster_median)}")
@@ -366,7 +366,7 @@ def geometric_median(X, eps=1e-5, zero_threshold=1e-6):
 
 def calc_cluster_median(df, col_list, cluster_id):
     cluster_df = df[df['cluster_id'] == cluster_id]
-    print(f"Cluster {cluster_id} data: {cluster_df}")
+    # print(f"Cluster {cluster_id} data: {cluster_df}")
     # Convert the selected dimensions into a NumPy array
     cluster_points = cluster_df[col_list].values
     
@@ -375,7 +375,7 @@ def calc_cluster_median(df, col_list, cluster_id):
         print(f"No valid points for cluster {cluster_id}, skipping median calculation.")
         return None
     
-    print(f"Cluster {cluster_id} points: {cluster_points}")
+    # print(f"Cluster {cluster_id} points: {cluster_points}")
 
     # Calculate the geometric median for the cluster points
     cluster_median = geometric_median(cluster_points)
@@ -388,9 +388,15 @@ def build_col_list(df):
     col_list["right"] = [col for col in df.columns if col.startswith('right_dim_')]
     return col_list
 
+def zero_out_medians(cluster_median):
+    for key in cluster_median.keys():
+        if cluster_median[key] is not None and all([abs(val) < .01 for val in cluster_median[key]]):
+            print(f" --- >>> Setting cluster {key} median to all zeros.")
+            cluster_median[key] = [0.0 for _ in cluster_median[key]]
+    return cluster_median
 
-def recalculate_cluster_medians(df):
-    # col_list = [col for col in df.columns if col.startswith('right_dim') or col.startswith('left_dim') or col.startswith('dim')]
+def calculate_cluster_medians(df):
+    median_dict = {}
     col_list = build_col_list(df)
 
     # print(f"Columns used for median calculation: {col_list}")
@@ -405,39 +411,36 @@ def recalculate_cluster_medians(df):
         cluster_median["right"] = calc_cluster_median(df, col_list["right"], cluster_id)
         if cluster_median is not None:
             print(f"Recalculated median for cluster {cluster_id}: {cluster_median}")
+            # if every value in the cluster median < .01, then set all values to 0.0
+            cluster_median = zero_out_medians(cluster_median)
+            # add left and right hands
+            flattened_median = np.concatenate((cluster_median["left"], cluster_median["right"]))
+            print(f"compressed cluster_median for {cluster_id}: {flattened_median}")
+            median_dict[cluster_id] = flattened_median
         else:
             print(f"Cluster {cluster_id} has no valid points or data.")
-        # if every value in the cluster median < .01, then set all values to 0.0
-        for key in cluster_median.keys():
-            if cluster_median[key] is not None and all([abs(val) < .01 for val in cluster_median[key]]):
-                print(f" --- >>> Setting cluster {cluster_id} {key} median to all zeros.")
-                cluster_median[key] = [0.0 for _ in cluster_median[key]]
-            # if cluster_median[key] is not None and all([abs(val) < .01 for val in cluster_median[key]]):
-            #     print(f" --- >>> Setting cluster {cluster_id} {key} median to all zeros.")
-            #     cluster_median[key] = [0.0 for _ in cluster_median[key]]
-        # if cluster_median is not None and all([abs(val) < .01 for val in cluster_median]):
-        #     print(f"Setting cluster {cluster_id} median to all zeros.")
-        #     cluster_median = [0.0 for _ in cluster_median]
-    return 
+    return median_dict
 
-def save_clusters_DB(df):
+
+
+
+def save_clusters_DB(median_dict, update=False):
     # Convert to set and Save the df to a table
-    col_list = build_col_list(df)
-    unique_clusters = set(df['cluster_id'])
-    for cluster_id in unique_clusters:
-        cluster_median = {}
-        cluster_median["left"] = calc_cluster_median(df, col_list["left"], cluster_id)
-        cluster_median["right"] = calc_cluster_median(df, col_list["right"], cluster_id)
+    
+    cluster_ids = median_dict.keys()
+    for cluster_id in cluster_ids:
+        cluster_median = median_dict[cluster_id]
         
         # store the data in the database
         # Explicitly handle cluster_id 0
-        if cluster_id == 0:
-            print("Handling cluster_id 0 explicitly. this cluster is ", cluster_id)
-            existing_record = None
-        else:
-            print("Checking for existing record with cluster_id ", cluster_id)
-            # Check if the record already exists
-            existing_record = session.query(Clusters).filter_by(cluster_id=cluster_id).first()
+        # if cluster_id == 0:
+        #     print("Handling cluster_id 0 explicitly, checking for cluster 1. this cluster is ", cluster_id)
+        #     existing_record = session.query(Clusters).filter_by(cluster_id=1).first()
+        # else:
+
+        print("Checking for existing record with cluster_id ", cluster_id)
+        # Check if the record already exists
+        existing_record = session.query(Clusters).filter_by(cluster_id=cluster_id).first()
 
         if existing_record is None:
             # Save the geometric median into the database
@@ -455,6 +458,10 @@ def save_clusters_DB(df):
                     print(f"Successfully saved cluster_id 0: {saved_record}")
                 else:
                     print("Failed to save cluster_id 0.")
+        if existing_record is not None and update:
+            print(f"Updating existing record with cluster_id {cluster_id} and median {cluster_median}")
+            existing_record.cluster_median = pickle.dumps(cluster_median)
+            
         else:
             print(f"Skipping duplicate record with cluster_id {cluster_id}")
 
@@ -464,6 +471,7 @@ def save_clusters_DB(df):
     except IntegrityError as e:
         session.rollback()
         print(f"Error occurred during data saving: {str(e)}")
+
 
 def save_images_clusters_DB(df):
     #save the df to a table
@@ -493,16 +501,16 @@ def save_images_clusters_DB(df):
 
 def assign_images_clusters_DB(df):
     def prep_pose_clusters_enc(enc1):
-        print("enc1", enc1)  
+        # print("current image enc1", enc1)  
         enc1 = np.array(enc1)
         this_dist_dict = {}
         for cluster_id in MEDIAN_DICT:
             enc2 = MEDIAN_DICT[cluster_id]
-            print("enc2: ",enc2)
+            # print("cluster_id enc2: ", cluster_id,enc2)
             this_dist_dict[cluster_id] = np.linalg.norm(enc1 - enc2, axis=0)
         
         cluster_id = min(this_dist_dict, key=this_dist_dict.get)
-        print(cluster_id)
+        # print(cluster_id)
         return cluster_id
 
     #assign clusters to each image's encodings
@@ -520,7 +528,7 @@ def assign_images_clusters_DB(df):
         df_subset_landmarks['enc1'] = df_subset_landmarks[dim_columns].values.tolist()
 
         # Step 3: Print the result to check
-        print(df_subset_landmarks[['image_id', 'enc1']])
+        print("df_subset_landmarks", df_subset_landmarks[['image_id', 'enc1']])
 
         df_subset_landmarks["cluster_id"] = df_subset_landmarks["enc1"].apply(prep_pose_clusters_enc)
     else:
@@ -529,6 +537,9 @@ def assign_images_clusters_DB(df):
 
     print("df_subset_landmarks clustered after apply")
     print(df_subset_landmarks[["image_id", "cluster_id"]])
+
+    # print all rows where cluster_id is 68
+    print(df_subset_landmarks[df_subset_landmarks["cluster_id"] == 68])
 
     return
     save_images_clusters_DB(df_subset_landmarks)
@@ -658,9 +669,9 @@ def main():
         print("assigned and saved segment to clusters")
 
     elif MODE == 2:
-
-        recalculate_cluster_medians(enc_data)
-        # assign_images_clusters_DB(enc_data)
+        # reprocesses the data to get the cluster medians
+        median_dict = calculate_cluster_medians(enc_data)
+        save_clusters_DB(median_dict, update=True)
         print("assigned and saved segment to clusters")
 
 
