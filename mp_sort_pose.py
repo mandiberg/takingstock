@@ -1,3 +1,4 @@
+import math
 import statistics
 import os
 import cv2
@@ -45,7 +46,7 @@ class SortPose:
         self.BRUTEFORCE = False
         self.use_3D = use_3D
         print("init use_3D",self.use_3D)
-        self.CUTOFF = 100 # DOES factor if ONE_SHOT
+        self.CUTOFF = 10 # DOES factor if ONE_SHOT
 
         self.CHECK_DESC_DIST = 30
         self.CLUSTER_TYPE = "BodyPoses" # defaults
@@ -79,13 +80,15 @@ class SortPose:
         # if edge_multiplier_name:self.edge_multiplier_name=edge_multiplier_name
         # maximum allowable scale up
         self.resize_max = 5.99
+        self.resize_increment = 250
+        self.USE_INCREMENTAL_RESIZE = True
         self.image_edge_multiplier = image_edge_multiplier
         self.face_height_output = face_height_output
         # takes base image size and multiplies by avg of multiplier
         self.output_dims = (int(face_height_output*(image_edge_multiplier[1]+image_edge_multiplier[3])/2),int(face_height_output*(image_edge_multiplier[0]+image_edge_multiplier[2])/2))
         self.EXPAND = EXPAND
-        self.EXPAND_SIZE = (10000,10000)
-        # self.EXPAND_SIZE = (4000,3000)
+        # self.EXPAND_SIZE = (10000,10000)
+        self.EXPAND_SIZE = (6400,6400)
         self.BGCOLOR = [255,255,255]
         # self.BGCOLOR = [0,0,0]
         self.ONE_SHOT = ONE_SHOT
@@ -287,7 +290,7 @@ class SortPose:
         self.CLUSTER_TYPE = CLUSTER_TYPE
         if self.CLUSTER_TYPE == "FingertipsPositions":
             self.SUBSET_LANDMARKS = self.HAND_LMS_POINTER
-        if self.CLUSTER_TYPE == "HandsPositions":
+        if self.CLUSTER_TYPE in ["HandsPositions","HandsGestures"]:
             self.SUBSET_LANDMARKS = None
         else:
             self.SUBSET_LANDMARKS = self.HAND_LMS
@@ -775,8 +778,16 @@ class SortPose:
             # print(type(self.image))
             borderType = cv2.BORDER_CONSTANT
 
-            # scale image to match face heights
-            resize = self.face_height_output/self.face_height
+
+            if self.USE_INCREMENTAL_RESIZE:
+                resize_factor = math.ceil(self.face_height/self.resize_increment)
+                face_incremental_output_size = resize_factor*self.resize_increment
+                resize = face_incremental_output_size/self.face_height
+            else:
+                # scale image to match face heights
+                resize_factor = None
+                resize = self.face_height_output/self.face_height
+                face_incremental_output_size = None
             print("expand_image resize")
             if resize < 15:
                 print("expand_image [-] resize", str(resize))
@@ -784,7 +795,7 @@ class SortPose:
                 resize_dims = (int(self.image.shape[1]*resize),int(self.image.shape[0]*resize))
                 # resize_nose.shape is  width[0] and height[1]
                 resize_nose = (int(self.nose_2d[0]*resize),int(self.nose_2d[1]*resize))
-                # print("resize_dims", resize_dims)
+                print(f"resize_factor {resize_factor} resize_dims {resize_dims}")
                 # print("resize_nose", resize_nose)
                 # this wants width and height
 
@@ -795,7 +806,12 @@ class SortPose:
                 upsized_image = self.upscale_model.upsample(self.image)
                 resized_image = cv2.resize(upsized_image, (resize_dims))
 
+                if face_incremental_output_size:
+                    image_incremental_output_ratio = face_incremental_output_size/self.face_height_output
+                    this_expand_size = (self.EXPAND_SIZE[0]*image_incremental_output_ratio,self.EXPAND_SIZE[1]*image_incremental_output_ratio)
 
+                else:
+                    this_expand_size = (self.EXPAND_SIZE[0],self.EXPAND_SIZE[1])
                 # self.preview_img(resized_image)
 
                 # calculate boder size by comparing scaled image dimensions to EXPAND_SIZE
@@ -818,8 +834,7 @@ class SortPose:
                 else:
                     print("crop failed")
                     new_image = None
-                    self.negmargin_count += 1
-                # self.preview_img(new_image)
+                    self.negmargin_count += 1                # self.preview_img(new_image)
                 # quit()
             else:
                 new_image = None
@@ -831,7 +846,7 @@ class SortPose:
             print('Error:', str(e))
             sys.exit(1)
         # quit() 
-        return new_image  
+        return new_image
 
     def get_extension_pixels(self,image):
         

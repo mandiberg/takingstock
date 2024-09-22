@@ -57,7 +57,7 @@ HSV_NORMS = {"LUM": .01, "SAT": 1,  "HUE": 0.002777777778, "VAL": 1}
 # this is for controlling if it is using
 # all clusters, 
 IS_HAND_POSE_FUSION = True
-ONLY_ONE = False
+ONLY_ONE = True
 IS_CLUSTER = True
 if IS_HAND_POSE_FUSION:
     # first sort on HandsPosts, then on Hands
@@ -75,7 +75,7 @@ USE_HEAD_POSE = False
 N_HANDS = N_CLUSTERS = None # declared here, but set in the SQL query below
 # this is for IS_ONE_CLUSTER to only run on a specific CLUSTER_NO
 IS_ONE_CLUSTER = False
-CLUSTER_NO = 53 # sort on this one as HAND_POSITION for IS_HAND_POSE_FUSION
+CLUSTER_NO = 1 # sort on this one as HAND_POSITION for IS_HAND_POSE_FUSION
 
 # I started to create a separate track for Hands, but am pausing for the moment
 IS_HANDS = False
@@ -316,7 +316,7 @@ motion = {
 
 # face_height_output is how large each face will be. default is 750
 face_height_output = 1000
-# face_height_output = 256
+# face_height_output = 250
 
 # define ratios, in relationship to nose
 # units are ratio of faceheight
@@ -450,7 +450,7 @@ if IS_CLUSTER or IS_ONE_CLUSTER or IS_HAND_POSE_FUSION:
     results = session.execute(select(Clusters.cluster_id, Clusters.cluster_median)).fetchall()
     cluster_medians, N_CLUSTERS = sort.prep_cluster_medians(results)
     sort.cluster_medians = cluster_medians
-    print("cluster results", results)
+    print("cluster results", cluster_medians)
 if IS_HANDS or IS_ONE_HAND:
     results = session.execute(select(Hands.cluster_id, Hands.cluster_median)).fetchall()
     hands_medians, N_HANDS = sort.prep_cluster_medians(results)
