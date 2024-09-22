@@ -80,15 +80,15 @@ class SortPose:
         # if edge_multiplier_name:self.edge_multiplier_name=edge_multiplier_name
         # maximum allowable scale up
         self.resize_max = 5.99
-        self.resize_increment = 250
+        self.resize_increment = 345
         self.USE_INCREMENTAL_RESIZE = True
         self.image_edge_multiplier = image_edge_multiplier
         self.face_height_output = face_height_output
         # takes base image size and multiplies by avg of multiplier
         self.output_dims = (int(face_height_output*(image_edge_multiplier[1]+image_edge_multiplier[3])/2),int(face_height_output*(image_edge_multiplier[0]+image_edge_multiplier[2])/2))
         self.EXPAND = EXPAND
-        # self.EXPAND_SIZE = (10000,10000)
-        self.EXPAND_SIZE = (6400,6400)
+        self.EXPAND_SIZE = (10000,10000)
+        # self.EXPAND_SIZE = (6400,6400)
         self.BGCOLOR = [255,255,255]
         # self.BGCOLOR = [0,0,0]
         self.ONE_SHOT = ONE_SHOT
@@ -809,7 +809,7 @@ class SortPose:
                 if face_incremental_output_size:
                     image_incremental_output_ratio = face_incremental_output_size/self.face_height_output
                     this_expand_size = (self.EXPAND_SIZE[0]*image_incremental_output_ratio,self.EXPAND_SIZE[1]*image_incremental_output_ratio)
-
+                    print("this_expand_size", image_incremental_output_ratio, this_expand_size)
                 else:
                     this_expand_size = (self.EXPAND_SIZE[0],self.EXPAND_SIZE[1])
                 # self.preview_img(resized_image)
@@ -817,17 +817,17 @@ class SortPose:
                 # calculate boder size by comparing scaled image dimensions to EXPAND_SIZE
                 # nose as center
                 # set top, bottom, left, right
-                top_border = int(self.EXPAND_SIZE[1]/2 - resize_nose[1])
-                bottom_border = int(self.EXPAND_SIZE[1]/2 - (resize_dims[1]-resize_nose[1]))
-                left_border = int(self.EXPAND_SIZE[0]/2 - resize_nose[0])
-                right_border = int(self.EXPAND_SIZE[0]/2 - (resize_dims[0]-resize_nose[0]))
+                top_border = int(this_expand_size[1]/2 - resize_nose[1])
+                bottom_border = int(this_expand_size[1]/2 - (resize_dims[1]-resize_nose[1]))
+                left_border = int(this_expand_size[0]/2 - resize_nose[0])
+                right_border = int(this_expand_size[0]/2 - (resize_dims[0]-resize_nose[0]))
 
                 print([top_border, bottom_border, left_border, right_border])
                 print([top_border, resize_dims[0]/2-right_border, resize_dims[1]/2-bottom_border, left_border])
-                print([top_border, self.EXPAND_SIZE[0]/2-right_border, self.EXPAND_SIZE[1]/2-bottom_border, left_border])
+                print([top_border, this_expand_size[0]/2-right_border, this_expand_size[1]/2-bottom_border, left_border])
 
                 # expand image with borders
-                if top_border >= 0 and right_border >= 0 and self.EXPAND_SIZE[0]/2-right_border >= 0 and bottom_border >= 0 and self.EXPAND_SIZE [1]/2-bottom_border>= 0 and left_border>= 0:
+                if top_border >= 0 and right_border >= 0 and this_expand_size[0]/2-right_border >= 0 and bottom_border >= 0 and this_expand_size [1]/2-bottom_border>= 0 and left_border>= 0:
                 # if topcrop >= 0 and self.w-rightcrop >= 0 and self.h-botcrop>= 0 and leftcrop>= 0:
                     print("crop is good")
                     new_image = cv2.copyMakeBorder(resized_image, top_border, bottom_border, left_border, right_border, borderType, None, self.BGCOLOR)
