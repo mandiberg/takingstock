@@ -46,7 +46,7 @@ class SortPose:
         self.BRUTEFORCE = False
         self.use_3D = use_3D
         print("init use_3D",self.use_3D)
-        self.CUTOFF = 10 # DOES factor if ONE_SHOT
+        self.CUTOFF = 1000 # DOES factor if ONE_SHOT
 
         self.CHECK_DESC_DIST = 30
         self.CLUSTER_TYPE = "BodyPoses" # defaults
@@ -193,6 +193,23 @@ class SortPose:
             self.YHIGH = 2
             self.ZLOW = -2
             self.ZHIGH = 2
+            self.MINCROP = 1
+            self.MAXRESIZE = .5
+            self.FRAMERATE = 15
+            self.SECOND_SORT = 'face_x'
+            self.MINMOUTHGAP = 0
+            self.MAXMOUTHGAP = 40
+            self.SORT = 'mouth_gap'
+            self.ROUND = 1
+        elif motion['forward_wider'] == True:
+            # self.XLOW = -33
+            # self.XHIGH = -27
+            self.XLOW = -40
+            self.XHIGH = -20
+            self.YLOW = -5
+            self.YHIGH = 5
+            self.ZLOW = -5
+            self.ZHIGH = 5
             self.MINCROP = 1
             self.MAXRESIZE = .5
             self.FRAMERATE = 15

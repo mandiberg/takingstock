@@ -56,9 +56,9 @@ HSV_NORMS = {"LUM": .01, "SAT": 1,  "HUE": 0.002777777778, "VAL": 1}
 
 # this is for controlling if it is using
 # all clusters, 
-IS_HAND_POSE_FUSION = True
-ONLY_ONE = True
-IS_CLUSTER = True
+IS_HAND_POSE_FUSION = False
+ONLY_ONE = False
+IS_CLUSTER = False
 if IS_HAND_POSE_FUSION:
     # first sort on HandsPosts, then on Hands
     CLUSTER_TYPE = "HandsGestures" # Select on 3d hands
@@ -105,7 +105,7 @@ SAVE_IMG_PROCESS = False
 IS_ANGLE_SORT = False
 
 # this control whether sorting by topics
-IS_TOPICS = False
+IS_TOPICS = True
 N_TOPICS = 48
 
 IS_ONE_TOPIC = False
@@ -129,7 +129,7 @@ NORMED_BODY_LMS = True
 MOUTH_GAP = 0
 # if planar_body set OBJ_CLS_ID for each object type
 # 67 is phone, 63 is laptop, 26: 'handbag', 27: 'tie', 32: 'sports ball'
-OBJ_CLS_ID = 67
+OBJ_CLS_ID = 0
 DO_OBJ_SORT = True
 OBJ_DONT_SUBSELECT = False # False means select for OBJ. this is a flag for selecting a specific object type when not sorting on obj
 PHONE_BBOX_LIMITS = [1] # this is an attempt to control the BBOX placement. I don't think it is going to work, but with non-zero it will make a bigger selection. Fix this hack TK. 
@@ -245,7 +245,7 @@ elif IS_SEGONLY and io.platform == "darwin":
     # WHERE += " AND e.encoding_id > 2612275"
 
     # WHERE = "s.site_name_id != 1"
-    LIMIT = 5000
+    LIMIT = 500
 
     # TEMP TK TESTING
     # WHERE += " AND s.site_name_id = 8"
@@ -307,7 +307,8 @@ elif IS_SEGONLY and io.platform == "win32":
 
 motion = {
     "side_to_side": False,
-    "forward_smile": True,
+    "forward_smile": False,
+    "forward_wider": True,
     "laugh": False,
     "forward_nosmile":  False,
     "static_pose":  False,
@@ -530,7 +531,7 @@ def selectSQL(cluster_no=None, topic_no=None):
                 cluster += f"AND it.topic_id IN ({topic_ids}) "
             else:
                 # If topic_no is not a list, simply check for equality
-                if IS_ONE_TOPIC: cluster += f"AND it.topic_id = {str(topic_no)} "            
+                cluster += f"AND it.topic_id = {str(topic_no)} "            
     else:
         cluster=""
     # print(f"cluster SELECT is {cluster}")
