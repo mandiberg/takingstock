@@ -56,8 +56,8 @@ HSV_NORMS = {"LUM": .01, "SAT": 1,  "HUE": 0.002777777778, "VAL": 1}
 
 # this is for controlling if it is using
 # all clusters, 
-IS_HAND_POSE_FUSION = False
-ONLY_ONE = False
+IS_HAND_POSE_FUSION = True
+ONLY_ONE = True
 IS_CLUSTER = False
 if IS_HAND_POSE_FUSION:
     # first sort on HandsPosts, then on Hands
@@ -75,12 +75,12 @@ USE_HEAD_POSE = False
 N_HANDS = N_CLUSTERS = None # declared here, but set in the SQL query below
 # this is for IS_ONE_CLUSTER to only run on a specific CLUSTER_NO
 IS_ONE_CLUSTER = False
-CLUSTER_NO = 1 # sort on this one as HAND_POSITION for IS_HAND_POSE_FUSION
+CLUSTER_NO = 5 # sort on this one as HAND_POSITION for IS_HAND_POSE_FUSION
 
 # I started to create a separate track for Hands, but am pausing for the moment
 IS_HANDS = False
 IS_ONE_HAND = True
-HAND_POSE_NO = 21
+HAND_POSE_NO = 72
 
 # cut the kids
 NO_KIDS = True
@@ -105,7 +105,7 @@ SAVE_IMG_PROCESS = False
 IS_ANGLE_SORT = False
 
 # this control whether sorting by topics
-IS_TOPICS = True
+IS_TOPICS = False
 N_TOPICS = 48
 
 IS_ONE_TOPIC = False
@@ -134,8 +134,8 @@ DO_OBJ_SORT = True
 OBJ_DONT_SUBSELECT = False # False means select for OBJ. this is a flag for selecting a specific object type when not sorting on obj
 PHONE_BBOX_LIMITS = [1] # this is an attempt to control the BBOX placement. I don't think it is going to work, but with non-zero it will make a bigger selection. Fix this hack TK. 
 
-ONE_SHOT = True # take all files, based off the very first sort order.
-EXPAND = True # expand with white, as opposed to inpaint and crop
+ONE_SHOT = False # take all files, based off the very first sort order.
+EXPAND = False # expand with white, as opposed to inpaint and crop
 JUMP_SHOT = True # jump to random file if can't find a run (I don't think this applies to planar?)
 
 FUSION_PAIRS = [
@@ -245,7 +245,7 @@ elif IS_SEGONLY and io.platform == "darwin":
     # WHERE += " AND e.encoding_id > 2612275"
 
     # WHERE = "s.site_name_id != 1"
-    LIMIT = 500
+    LIMIT = 50000
 
     # TEMP TK TESTING
     # WHERE += " AND s.site_name_id = 8"
@@ -451,7 +451,9 @@ if IS_CLUSTER or IS_ONE_CLUSTER or IS_HAND_POSE_FUSION:
     results = session.execute(select(Clusters.cluster_id, Clusters.cluster_median)).fetchall()
     cluster_medians, N_CLUSTERS = sort.prep_cluster_medians(results)
     sort.cluster_medians = cluster_medians
-    print("cluster results", cluster_medians)
+    # if any of the cluster_medians are empty, then we need to resegment
+    if not any(cluster_medians):
+        print("cluster results are empty", cluster_medians)
 if IS_HANDS or IS_ONE_HAND:
     results = session.execute(select(Hands.cluster_id, Hands.cluster_median)).fetchall()
     hands_medians, N_HANDS = sort.prep_cluster_medians(results)

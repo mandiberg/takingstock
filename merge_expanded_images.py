@@ -17,7 +17,7 @@ db = io.db
 IS_CLUSTER = False
 
 # are we making videos or making merged stills?
-IS_VIDEO = False
+IS_VIDEO = True
 ALL_ONE_VIDEO = False
 
 # MERGE
@@ -27,7 +27,7 @@ ROOT_FOLDER_PATH = '/Volumes/OWC4/segment_images'
 # if IS_CLUSTER this should be the folder holding all the cluster folders
 # if not, this should be the individual folder holding the images
 # will not accept clusterNone -- change to cluster00
-FOLDER_NAME ="fusion_sept20/cluster111_119_1726817394.610477/money"
+FOLDER_NAME ="cluster5_72_doubleOK_sept24"
 FOLDER_PATH = os.path.join(ROOT_FOLDER_PATH,FOLDER_NAME)
 DIRS = ["1x1", "4x3", "16x10"]
 
@@ -162,7 +162,7 @@ def crop_images(img_array, subfolder_path=None):
     img = cv2.imread(image_path)
     height, width, _ = img.shape
     cropfset = 70
-    if height > width:
+    if height >= width:
         crop_dict = {
             "1x1": [0,width, cropfset,width+cropfset],
             "4x3": [0,width, int(cropfset/2),int(width*4/3+cropfset/2)],
@@ -177,6 +177,9 @@ def crop_images(img_array, subfolder_path=None):
             "4x2": [0, height, 0, width],
             "16x10": [0, int(width * 10 / 16), 0, width]
         }
+    # elif height == width:
+    #     crop_dict = []
+
 
     for dir in DIRS:
         if subfolder_path:
@@ -271,6 +274,7 @@ def main():
             print("going to get folder ls")
             all_img_path_list = io.get_img_list(FOLDER_PATH)
             # print(all_img_path_list)
+
             crop_images(all_img_path_list, FOLDER_PATH)
             write_video(all_img_path_list, FRAMERATE, FOLDER_PATH)
 

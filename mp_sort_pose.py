@@ -46,7 +46,7 @@ class SortPose:
         self.BRUTEFORCE = False
         self.use_3D = use_3D
         print("init use_3D",self.use_3D)
-        self.CUTOFF = 1000 # DOES factor if ONE_SHOT
+        self.CUTOFF = 500 # DOES factor if ONE_SHOT
 
         self.CHECK_DESC_DIST = 30
         self.CLUSTER_TYPE = "BodyPoses" # defaults
@@ -202,6 +202,7 @@ class SortPose:
             self.SORT = 'mouth_gap'
             self.ROUND = 1
         elif motion['forward_wider'] == True:
+            print("setting XYZ for forward_wider")
             # self.XLOW = -33
             # self.XHIGH = -27
             self.XLOW = -40
@@ -716,14 +717,14 @@ class SortPose:
         print("crop top, right, bot, left")
         print(self.simple_crop)
 
-
-        if topcrop >= 0 and width-rightcrop >= 0 and height-botcrop>= 0 and leftcrop>= 0:
-            print("all positive")
-            toobig = False
-        else:
+        if any([topcrop < 0, rightcrop < 0, botcrop < 0, leftcrop < 0]):
             print("one is negative")
             toobig = True
             self.negmargin_count += 1
+        else:
+            print("all positive")
+            toobig = False
+
         return toobig
 
     def get_image_face_data(self,image, faceLms, bbox):
@@ -1615,13 +1616,54 @@ class SortPose:
             print("encodings_array length", len(encodings_array))
             print("[sort_df_KNN] enc1", enc1)
 
-        self.knn.fit(encodings_array)
-        
-        # print("before knn enc1", enc1)
-        # print("encodings_array", encodings_array)
+        def contains_nan(arr):
+            # Check for NaN in a nested structure
+            for x in arr:
+                # If the element is a NumPy array, check if any element is NaN
+                if isinstance(x, np.ndarray):
+                    if np.isnan(x).any():
+                        return True
+                # If the element is a list or scalar, use pd.isnull to check for NaN
+                elif isinstance(x, list):
+                    if any(pd.isnull(el) for el in x):
+                        return True
+                else:
+                    if pd.isnull(x):
+                        return True
+            return False
 
-        # Find the distances and indices of the neighbors
+        # Check if the encodings_array contains NaN values
+        if contains_nan(encodings_array):
+            print("encodings_array contains NaN values")
+            
+            # Convert encodings_array to a NumPy array
+            encodings_array = np.array(encodings_array)
+
+            # Create a boolean mask for non-NaN rows in encodings_array
+            non_nan_mask = ~np.isnan(encodings_array).any(axis=1)
+            
+            # Remove rows with NaN values from encodings_array
+            encodings_array = encodings_array[non_nan_mask]
+            print("Cleaned encodings_array:", encodings_array)
+            print("Cleaned encodings_array shape:", encodings_array.shape)
+
+            # Remove the same rows from df_enc based on the non_nan_mask
+            df_enc = df_enc[non_nan_mask].reset_index(drop=True)
+            print("Cleaned df_enc:", df_enc.shape)
+
+        self.knn.fit(encodings_array)
+
+        
+        # # Ensure n_neighbors does not exceed the number of samples
+        # n_neighbors = min(len(df_enc_clean), len(encodings_array))
+
+        # # Query the KNN model with the cleaned df_enc
+        # distances, indices = self.knn.kneighbors([enc1], n_neighbors=n_neighbors)
+
+        # # Find the distances and indices of the neighbors
         distances, indices = self.knn.kneighbors([enc1], n_neighbors=len(df_enc))
+
+
         # zip the indices and distances and print
         # print("indices and distances", list(zip(indices, distances)))
         # print("indices and distances", list(zip(indices.flatten(), distances.flatten())))        
@@ -1803,8 +1845,14 @@ class SortPose:
                 print("else is dist_HSV")
                 enc1, obj_bbox1 = self.get_enc1(df_sorted, FIRST_ROUND=False, hsv_sort=True)
             print("enc1", enc1)
+            print("df_dist_enc before normalize_hsv", df_dist_enc)
+            print("columns", df_dist_enc.columns)
+            print("first row", df_dist_enc.iloc[0])
             df_dist_hsv = self.normalize_hsv(enc1, df_dist_enc)
+            print("df_dist_enc after normalize_hsv, before sort", df_dist_enc)
+            print("first row", df_dist_enc.iloc[0])
             df_dist_hsv = self.sort_df_KNN(df_dist_hsv, enc1, "HSV")
+            print("columns", df_dist_enc.columns)
             print("df_shuffled HSV", df_dist_hsv[['image_id','dist_enc1','dist_HSV']].head())
         else:
             # skip HSV if ONE_SHOT (which is for still images, so N/A)
