@@ -53,7 +53,7 @@ WHERE sbi.mongo_tokens IS NOT NULL
 
 SELECT *
 FROM SegmentOct20 sbi 
-WHERE sbi.is_dupe_of IS NOT NULL
+WHERE sbi.image_id = 6150634
 ;
 
 SELECT *
@@ -63,10 +63,19 @@ AND i.site_name_id = 1
 ;
 
 SELECT *
-FROM SegmentOct20 so 
-WHERE so.image_id = 123984366
+FROM ImagesHandsGestures so 
+WHERE so.image_id = 16350
 
 ;
+
+SELECT COUNT(*)
+FROM SegmentBig_isface
+WHERE image_id > 103748034
+AND imagename IS NULL
+AND location_id IS NOT NULL
+;
+
+-- 2658545
 
 SELECT COUNT(*)
 FROM SegmentOct20 so 
@@ -98,23 +107,31 @@ IN (SELECT seg1.image_id FROM ImagesPoses128 ip WHERE ip.cluster_id = 6) LIMIT 1
 
 -- 105617677 
 DELETE 
-FROM ImagesHandsPoses
+FROM ImagesHandsGestures
 ;
 
 DELETE 
-FROM HandsPoses
+FROM HandsGestures
 ;
 
-CREATE TABLE BodyPoses (
-    cluster_id int NOT NULL AUTO_INCREMENT PRIMARY KEY,
+INSERT INTO Clusters (cluster_id, cluster_median) VALUES (0, 'TK');
+
+
+DELETE 
+FROM BodyPoses ibp
+WHERE ibp.cluster_id = 32
+;
+
+CREATE TABLE FingertipsPositions (
+    cluster_id int NOT NULL PRIMARY KEY,
     cluster_median BLOB
 );
 
 -- This is the poses junction table.
 -- need to change the cluster_id reference to the correct cluster table
-CREATE TABLE ImagesBodyPoses (
+CREATE TABLE ImagesFingertipsPositions (
     image_id INTEGER REFERENCES Images (image_id),
-    cluster_id INTEGER REFERENCES HandsPositions (cluster_id),
+    cluster_id INTEGER REFERENCES FingertipsPositions (cluster_id),
     PRIMARY KEY (image_id)
 );
 
@@ -193,7 +210,7 @@ SELECT k.keyword_id, k.keyword_number, k.keyword_text
 FROM ImagesKeywords ik 
 JOIN Keywords k ON ik.keyword_id = k.keyword_id 
 -- WHERE i.site_image_id = "___638KPrmA"
-WHERE ik.image_id = 121233771
+WHERE ik.image_id = 15522520
 ;
 
 SELECT COUNT(*)  
@@ -217,6 +234,16 @@ CREATE TABLE SegmentHelperAug16_SegOct20_preAlamy (
     image_id INTEGER,
     FOREIGN KEY (image_id) REFERENCES Images(image_id)
 );
+
+
+
+SELECT DISTINCT seg1.image_id, seg1.site_name_id, seg1.contentUrl, seg1.imagename, seg1.site_image_id, seg1.mongo_body_landmarks, seg1.mongo_face_landmarks, seg1.bbox 
+FROM SegmentBig_isface seg1 
+INNER JOIN SegmentHelper_sept18_silence ht ON seg1.image_id = ht.image_id  
+WHERE  seg1.mongo_body_landmarks IS NULL and seg1.no_image IS NULL   
+LIMIT 10000;
+
+
 
 
 SELECT 

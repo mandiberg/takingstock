@@ -107,12 +107,12 @@ CSV_FOLDERCOUNT_PATH = os.path.join(MAIN_FOLDER, "folder_countout.csv")
 IS_SSD=False
 
 # set BODY to true, set SSD to false, set TOPIC_ID
-# for silence, start at 103747511
-# for HDD topic, start at 5270831
+# for silence, start at 103893643
+# for HDD topic, start at 28714744
 BODYLMS = True # only matters if IS_FOLDER is False
 HANDLMS = True
-# TOPIC_ID = None
-TOPIC_ID = [24, 29] # adding a TOPIC_ID forces it to work from SegmentBig_isface, currently at 7412083
+TOPIC_ID = None
+# TOPIC_ID = [24, 29] # adding a TOPIC_ID forces it to work from SegmentBig_isface, currently at 7412083
 DO_INVERSE = True
 SEGMENT = 0 # topic_id set to 0 or False if using HelperTable or not using a segment
 # HelperTable_name = "SegmentHelper_sept18_silence" #"SegmentHelperMay7_fingerpoint" # set to False if not using a HelperTable
@@ -1635,7 +1635,7 @@ def main():
 
     else:
         print("old school SQL")
-        start_id = 5270831
+        start_id = 105564591
         while True:
             init_session()
 

@@ -17,9 +17,9 @@ db = io.db
 IS_CLUSTER = False
 
 # are we making videos or making merged stills?
-IS_VIDEO = True
+IS_VIDEO = False
 ALL_ONE_VIDEO = False
-
+GIGA_DIMS = 20688
 # MERGE
 # Provide the path to the folder containing the images
 ROOT_FOLDER_PATH = '/Volumes/OWC4/segment_images'
@@ -27,7 +27,8 @@ ROOT_FOLDER_PATH = '/Volumes/OWC4/segment_images'
 # if IS_CLUSTER this should be the folder holding all the cluster folders
 # if not, this should be the individual folder holding the images
 # will not accept clusterNone -- change to cluster00
-FOLDER_NAME ="cluster5_72_doubleOK_sept24"
+FOLDER_NAME ="cluster1_21_phone_sept24production/pinkphone_sept24_production/pinkphone_selects/pinkphone_selects_lowres/up/final_giga"
+FOLDER_NAME = "cluster35_99_silence_sept24/giga6x_plus"
 FOLDER_PATH = os.path.join(ROOT_FOLDER_PATH,FOLDER_NAME)
 DIRS = ["1x1", "4x3", "16x10"]
 
@@ -46,6 +47,14 @@ FRAMERATE = 12
 
 
 def iterate_image_list(FOLDER_PATH,image_files, successes):
+    def crop_giga(img1):
+        # height, width = img1.shape[:3]
+        height, width, _ = img1.shape
+        start_row = (height - GIGA_DIMS) // 2
+        start_col = (width - GIGA_DIMS) // 2
+        img1 = img1[start_row:start_row + GIGA_DIMS, start_col:start_col + GIGA_DIMS]
+        return img1
+    
     # Initialize the merged pairs list with the images in pairs
     merged_pairs = []
     if type(image_files[0]) is np.ndarray:
@@ -55,12 +64,17 @@ def iterate_image_list(FOLDER_PATH,image_files, successes):
     print(loaded)
     # Iterate through the image files and merge them in pairs
     for i in range(0, len(image_files), 2):
-        # print(FOLDER_PATH, image_files[i])
-
+        # Load the first image
         if loaded:
             img1 = image_files[i]
         else:
             img1 = cv2.imread(os.path.join(FOLDER_PATH, image_files[i]))
+
+        print("image shape", img1.shape)
+
+        # Always resize img1 to GIGA_DIMS
+        # img1 = cv2.resize(img1, (GIGA_DIMS, GIGA_DIMS))
+        img1 = crop_giga(img1)
 
         # Check if there is a second image available
         if i + 1 < len(image_files):
@@ -68,6 +82,12 @@ def iterate_image_list(FOLDER_PATH,image_files, successes):
                 img2 = image_files[i+1]
             else:
                 img2 = cv2.imread(os.path.join(FOLDER_PATH, image_files[i + 1]))
+
+            print("second image shape", img2.shape)
+            
+            # Always resize img2 to GIGA_DIMS
+            # img2 = cv2.resize(img2, (GIGA_DIMS, GIGA_DIMS))
+            img2 = crop_giga(img2)
 
             # Merge the pair of images 50/50
             blend = cv2.addWeighted(img1, 0.5, img2, 0.5, 0.0)

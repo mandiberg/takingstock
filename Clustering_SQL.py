@@ -77,8 +77,8 @@ NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 MODE = 1
 # CLUSTER_TYPE = "Clusters"
 # CLUSTER_TYPE = "BodyPoses"
-# CLUSTER_TYPE = "HandsPositions"
-CLUSTER_TYPE = "HandsGestures"
+CLUSTER_TYPE = "HandsPositions"
+# CLUSTER_TYPE = "HandsGestures"
 # CLUSTER_TYPE = "FingertipsPositions"
 sort.set_subset_landmarks(CLUSTER_TYPE)
 SUBSELECT_ONE_CLUSTER = 0
@@ -141,7 +141,7 @@ if USE_SEGMENT is True and (CLUSTER_TYPE != "Clusters"):
             WHERE += " AND ic.cluster_id IS NOT NULL "
 
     # WHERE += " AND h.is_body = 1"
-    LIMIT = 1
+    LIMIT = 5000000
 
 
     '''
@@ -540,7 +540,7 @@ def assign_images_clusters_DB(df):
     print(df_subset_landmarks[["image_id", "cluster_id"]])
 
     # print all rows where cluster_id is 68
-    print(df_subset_landmarks[df_subset_landmarks["cluster_id"] == 68])
+    # print(df_subset_landmarks[df_subset_landmarks["cluster_id"] == 68])
 
     save_images_clusters_DB(df_subset_landmarks)
     print ("saved to imagesclusters")
