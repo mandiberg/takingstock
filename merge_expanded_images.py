@@ -20,6 +20,7 @@ IS_CLUSTER = False
 IS_VIDEO = False
 ALL_ONE_VIDEO = False
 GIGA_DIMS = 20688
+TEST_DIMS = 3448
 # MERGE
 # Provide the path to the folder containing the images
 ROOT_FOLDER_PATH = '/Volumes/OWC4/segment_images'
@@ -29,6 +30,7 @@ ROOT_FOLDER_PATH = '/Volumes/OWC4/segment_images'
 # will not accept clusterNone -- change to cluster00
 FOLDER_NAME ="cluster1_21_phone_sept24production/pinkphone_sept24_production/pinkphone_selects/pinkphone_selects_lowres/up/final_giga"
 FOLDER_NAME = "cluster35_99_silence_sept24/giga6x_plus"
+FOLDER_NAME = "/Volumes/OWC4/segment_images/cluster1_21_phone_sept24production/blackphone_sept24_production"
 FOLDER_PATH = os.path.join(ROOT_FOLDER_PATH,FOLDER_NAME)
 DIRS = ["1x1", "4x3", "16x10"]
 
@@ -70,11 +72,10 @@ def iterate_image_list(FOLDER_PATH,image_files, successes):
         else:
             img1 = cv2.imread(os.path.join(FOLDER_PATH, image_files[i]))
 
-        print("image shape", img1.shape)
-
         # Always resize img1 to GIGA_DIMS
-        # img1 = cv2.resize(img1, (GIGA_DIMS, GIGA_DIMS))
-        img1 = crop_giga(img1)
+        if img1.shape[0] > TEST_DIMS:
+            print("image shape", img1.shape)
+            img1 = crop_giga(img1)
 
         # Check if there is a second image available
         if i + 1 < len(image_files):
@@ -83,11 +84,10 @@ def iterate_image_list(FOLDER_PATH,image_files, successes):
             else:
                 img2 = cv2.imread(os.path.join(FOLDER_PATH, image_files[i + 1]))
 
-            print("second image shape", img2.shape)
-            
             # Always resize img2 to GIGA_DIMS
-            # img2 = cv2.resize(img2, (GIGA_DIMS, GIGA_DIMS))
-            img2 = crop_giga(img2)
+            if img1.shape[0] > TEST_DIMS:
+                print("second image shape", img2.shape)
+                img2 = crop_giga(img2)
 
             # Merge the pair of images 50/50
             blend = cv2.addWeighted(img1, 0.5, img2, 0.5, 0.0)

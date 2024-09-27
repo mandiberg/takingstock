@@ -57,7 +57,7 @@ HSV_NORMS = {"LUM": .01, "SAT": 1,  "HUE": 0.002777777778, "VAL": 1}
 # this is for controlling if it is using
 # all clusters, 
 IS_HAND_POSE_FUSION = True
-ONLY_ONE = False
+ONLY_ONE = True
 IS_CLUSTER = False
 if IS_HAND_POSE_FUSION:
     # first sort on HandsPosts, then on Hands
@@ -824,11 +824,15 @@ def compare_images(last_image, img, face_landmarks, bbox):
     face_diff = 100 # declaring full value, for first round
     skip_face = False
     #crop image here:
+    
+
     if sort.EXPAND:
         cropped_image = sort.expand_image(img, face_landmarks, bbox)
         is_inpaint = False
     else:
         cropped_image, is_inpaint = sort.crop_image(img, face_landmarks, bbox)
+
+
     # print("cropped_image: ",cropped_image)
     # if cropped_image is not None and len(cropped_image)>1 :
     #     print(" >> have a cropped image trying to save", cropped_image.shape)
@@ -849,11 +853,14 @@ def compare_images(last_image, img, face_landmarks, bbox):
         try:
             if not sort.counter_dict["first_run"]:
                 if VERBOSE:  print("testing is_face")
+
                 if SORT_TYPE != "planar_body":
                 #     # skipping test_pair for body, b/c it is meant for face
                 #     is_face = True
                 # else:
                     is_face = sort.test_pair(last_image, cropped_image)
+
+
                 if is_face or SORT_TYPE == "planar_body":
                     if VERBOSE: print("testing mse to see if same image")
                     face_diff = sort.unique_face(last_image,cropped_image)
@@ -1253,7 +1260,10 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
                 # compare_images to make sure they are face and not the same
                 # last_image is cv2 np.array
                 cropped_image, face_diff, skip_face = compare_images(sort.counter_dict["last_image"], img, row['face_landmarks'], row['bbox'])
-                print("type of cropped_image", type(cropped_image))
+                
+                if cropped_image is not None:
+                    print("type of cropped_image", type(cropped_image))
+                    print("shape of cropped image", cropped_image.shape)
                 if cropped_image is None and skip_face:
                     print("face_diff", face_diff)
                     if face_diff == 0:

@@ -46,7 +46,7 @@ class SortPose:
         self.BRUTEFORCE = False
         self.use_3D = use_3D
         print("init use_3D",self.use_3D)
-        self.CUTOFF = 500 # DOES factor if ONE_SHOT
+        self.CUTOFF = 100 # DOES factor if ONE_SHOT
 
         self.CHECK_DESC_DIST = 30
         self.CLUSTER_TYPE = "BodyPoses" # defaults
@@ -130,7 +130,8 @@ class SortPose:
         self.OBJ_CLS_ID = OBJ_CLS_ID
 
         # self.BODY_LMS = [15]
-        self.VERBOSE = VERBOSE
+        # self.VERBOSE = VERBOSE
+        self.VERBOSE = True
 
         # place to save bad images
         self.not_make_face = []
@@ -717,7 +718,8 @@ class SortPose:
         print("crop top, right, bot, left")
         print(self.simple_crop)
 
-        if any([topcrop < 0, rightcrop < 0, botcrop < 0, leftcrop < 0]):
+        # if topcrop >= 0 and width-rightcrop >= 0 and height-botcrop>= 0 and leftcrop>= 0:
+        if any([topcrop < 0, width-rightcrop < 0, height-botcrop < 0, leftcrop < 0]):
             print("one is negative")
             toobig = True
             self.negmargin_count += 1
@@ -1003,6 +1005,7 @@ class SortPose:
                 # image_arr = numpy.array(self.image)
                 # print(type(image_arr))
                 cropped_actualsize_image = self.image[self.simple_crop[0]:self.simple_crop[2], self.simple_crop[3]:self.simple_crop[1]]
+                # self.preview_img(cropped_actualsize_image)
                 if self.VERBOSE: print("cropped_actualsize_image.shape", cropped_actualsize_image.shape)
                 resize = self.output_dims[0]/cropped_actualsize_image.shape[0] 
                 if self.VERBOSE: print("resize", resize)
