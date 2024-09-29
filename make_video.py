@@ -82,8 +82,11 @@ IS_HANDS = False
 IS_ONE_HAND = True
 HAND_POSE_NO = 55
 
+# 80,74 fails between 300-400
+
 # cut the kids
 NO_KIDS = True
+ONLY_KIDS = False
 USE_PAINTED = True
 OUTPAINT = False
 INPAINT= True
@@ -121,9 +124,9 @@ TOPIC_NO = [27]
 # 7 is surprise
 #  is yoga << planar,  planar,  fingers crossed
 
-# SORT_TYPE = "128d"
+SORT_TYPE = "128d"
 # SORT_TYPE ="planar"
-SORT_TYPE = "planar_body"
+# SORT_TYPE = "planar_body"
 NORMED_BODY_LMS = True
 
 MOUTH_GAP = 0
@@ -134,7 +137,7 @@ DO_OBJ_SORT = True
 OBJ_DONT_SUBSELECT = False # False means select for OBJ. this is a flag for selecting a specific object type when not sorting on obj
 PHONE_BBOX_LIMITS = [1] # this is an attempt to control the BBOX placement. I don't think it is going to work, but with non-zero it will make a bigger selection. Fix this hack TK. 
 
-ONE_SHOT = True # take all files, based off the very first sort order.
+ONE_SHOT = False # take all files, based off the very first sort order.
 EXPAND = False # expand with white, as opposed to inpaint and crop
 JUMP_SHOT = True # jump to random file if can't find a run (I don't think this applies to planar?)
 
@@ -241,6 +244,8 @@ elif IS_SEGONLY and io.platform == "darwin":
 
     if NO_KIDS:
         WHERE += " AND s.age_id NOT IN (1,2,3) "
+    if ONLY_KIDS:
+        WHERE += " AND s.age_id IN (1,2,3) "
     if HSV_BOUNDS:
         FROM += " JOIN ImagesBackground ibg ON s.image_id = ibg.image_id "
         # WHERE += " AND ibg.lum > .3"
@@ -658,7 +663,9 @@ def sort_by_face_dist_NN(df_enc):
                 df_sorted = df_sorted.head(sort.CUTOFF)
                 print("one shot, breaking out", df_sorted)
                 break
-            elif dist > sort.MAXD and sort.SHOT_CLOCK != 0:
+            # commenting out SHOT_CLOCK for now, Sept 28
+            # elif dist > sort.MAXD and sort.SHOT_CLOCK != 0:
+            elif dist > sort.MAXD or df_enc.empty:
                 print("should breakout, dist is", dist)
                 break
 
@@ -1130,7 +1137,8 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
             # print("extension_pixels[maxkey]", extension_pixels[maxkey])
             ##################
             selfie_bbox, is_left_shoulder,is_right_shoulder=fetch_selfie_bbox(row['image_id'])
-            if selfie_bbox["left"]==0: 
+            print("selfie_bbox", selfie_bbox)
+            if selfie_bbox is not None and selfie_bbox["left"]==0: 
                 if VERBOSE: print("head hits the top of the image, skipping -------------------> bailout !!!!!!!!!!!!!!!!!")
                 do_inpaint = False
                 bailout=True

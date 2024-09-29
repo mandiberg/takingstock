@@ -46,16 +46,17 @@ class SortPose:
         self.BRUTEFORCE = False
         self.use_3D = use_3D
         print("init use_3D",self.use_3D)
-        self.CUTOFF = 100 # DOES factor if ONE_SHOT
+        self.CUTOFF = 5000 # DOES factor if ONE_SHOT
 
         self.CHECK_DESC_DIST = 30
         self.CLUSTER_TYPE = "BodyPoses" # defaults
         self.SORT_TYPE = SORT_TYPE
         if self.SORT_TYPE == "128d":
             self.MIND = self.MINFACEDIST * 1.5
-            self.MAXD = self.MAXFACEDIST
+            self.MAXD = self.MAXFACEDIST * 1.2
             self.MULTIPLIER = self.HSVMULTIPLIER
             self.DUPED = self.FACE_DUPE_DIST
+            self.HSV_DELTA_MAX = self.HSV_DELTA_MAX * 1.5
         elif self.SORT_TYPE == "planar": 
             self.MIND = self.MINBODYDIST * 1.5
             self.MAXD = self.MAXBODYDIST
@@ -1751,14 +1752,20 @@ class SortPose:
     def get_closest_df_NN(self, df_enc, df_sorted):
   
         def mask_df(df, column, limit, type="lessthan"):
-            # removes rows where the value in the column is greater than the limit
+            # Create the mask based on the condition
             if type == "lessthan":
                 flashmask = df[column] < limit
             elif type == "greaterthan":
                 flashmask = df[column] > limit
-            # print("mask", column, flashmask)
+
+            # Check if all values are False, meaning no rows satisfy the condition
+            if not flashmask.any():
+                print(f"Warning: No rows in '{column}' satisfy the '{type}' condition with limit {limit}.")
+                return pd.DataFrame(columns=df.columns)  # Return an empty DataFrame with the same columns
+
+            # Apply the mask and reset the index
             df = df[flashmask].reset_index(drop=True)
-            # print("df_", column, len(df))
+
             return df
         
         def de_dupe(df_dist_hsv, df_sorted, column, is_run = False):
@@ -1871,11 +1878,26 @@ class SortPose:
                 df_enc = df_dist_hsv
             
             if not self.ONE_SHOT:
+                print("df_enc if not self.ONE_SHOT", df_enc)
+                # np.set_printoptions(threshold = np.inf)
+                # enc_values_list = df_enc['dist_enc1'].values
+                # print("dist_enc1 values:", enc_values_list)
                 # temporarily removes items for this round
                 df_dist_noflash = mask_df(df_dist_hsv, 'dist_HSV', self.HSV_DELTA_MAX, "lessthan")
-                df_dist_close = mask_df(df_dist_noflash, 'dist_HSV', self.MAXD, "lessthan")
+                print("df_dist_noflash if not self.ONE_SHOT",df_dist_noflash)
+                # print all values in the dist_enc1 column
+                # print("dist_enc1 values:", df_dist_noflash['dist_enc1'].values)
+                # replacing dist_HSV with dist_enc1 here, Sept 27
+                df_dist_close = mask_df(df_dist_noflash, 'dist_enc1', self.MAXD, "lessthan")
+                print("df_dist_close if not self.ONE_SHOT",df_dist_close)
+
+                if df_dist_close.empty:
+                    print("No rows in the DataFrame met the filtering criteria, returning empty df and the untouched df_sorted.")
+                    return df_dist_close, df_sorted
+                else:
+                    print("Filtered DataFrame:", df_dist_close)
                 # implementing these masks for now
-                df_shuffled = df_dist_close
+                    df_shuffled = df_dist_close
                 
                 # sort df_shuffled by the sum of dist_enc1 and dist_HSV
                 df_shuffled['sum_dist'] = df_dist_noflash['dist_enc1'] + self.MULTIPLIER * df_shuffled['dist_HSV']
