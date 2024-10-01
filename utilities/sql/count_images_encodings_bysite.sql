@@ -147,6 +147,24 @@ ORDER BY
    
 
    
+-- handsgestures fusion for one topic
+
+SELECT
+    ihg.cluster_id,
+    COUNT(so.image_id) AS image_count
+   -- SUM(CASE WHEN pb.bbox_67  IS NOT NULL THEN 1 ELSE 0 END) AS phone_bbox
+FROM
+    SegmentOct20 so 
+INNER JOIN ImagesTopics it ON it.image_id = so.image_id
+INNER JOIN ImagesHandsGestures ihg ON ihg.image_id = so.image_id
+-- JOIN PhoneBbox pb ON pb.image_id = so.image_id 
+WHERE it.topic_id = 23
+GROUP BY
+    ihg.cluster_id
+ORDER BY
+    ihg.cluster_id;
+   
+   
 -- fusion for all clusters
    
    

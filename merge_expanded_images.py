@@ -17,8 +17,9 @@ db = io.db
 IS_CLUSTER = False
 
 # are we making videos or making merged stills?
-IS_VIDEO = False
+IS_VIDEO = True
 ALL_ONE_VIDEO = False
+DO_RATIOS = False
 GIGA_DIMS = 20688
 TEST_DIMS = 4000
 REG_DIMS = 3448
@@ -30,9 +31,9 @@ ROOT_FOLDER_PATH = '/Volumes/OWC4/segment_images'
 # if not, this should be the individual folder holding the images
 # will not accept clusterNone -- change to cluster00
 # FOLDER_NAME ="cluster20_0_face_cradle_sept26/giga/face_frame"
-FOLDER_NAME = "cluster35_99_silence_sept24/giga6x_plus"
+# FOLDER_NAME = "cluster35_99_silence_sept24/giga6x_plus"
 # FOLDER_NAME = "cluster1_21_phone_sept24production/silverphone_sept24_production/down"
-# FOLDER_NAME = "cluster5_72_doubleOK_facesort_sept24"
+FOLDER_NAME = "cluster6_1727652036.811562"
 FOLDER_PATH = os.path.join(ROOT_FOLDER_PATH,FOLDER_NAME)
 DIRS = ["1x1", "4x3", "16x10"]
 
@@ -310,7 +311,7 @@ def main():
             all_img_path_list = io.get_img_list(FOLDER_PATH)
             # print(all_img_path_list)
 
-            crop_images(all_img_path_list, FOLDER_PATH)
+            if DO_RATIOS: crop_images(all_img_path_list, FOLDER_PATH)
             write_video(all_img_path_list, FRAMERATE, FOLDER_PATH)
 
             # # const_videowriter(subfolder_path, FRAMERATE)

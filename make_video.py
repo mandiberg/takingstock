@@ -56,9 +56,9 @@ HSV_NORMS = {"LUM": .01, "SAT": 1,  "HUE": 0.002777777778, "VAL": 1}
 
 # this is for controlling if it is using
 # all clusters, 
-IS_HAND_POSE_FUSION = True
-ONLY_ONE = True
-IS_CLUSTER = False
+IS_HAND_POSE_FUSION = False
+ONLY_ONE = False
+IS_CLUSTER = True
 if IS_HAND_POSE_FUSION:
     # first sort on HandsPosts, then on Hands
     CLUSTER_TYPE = "HandsGestures" # Select on 3d hands
@@ -75,12 +75,13 @@ USE_HEAD_POSE = False
 N_HANDS = N_CLUSTERS = None # declared here, but set in the SQL query below
 # this is for IS_ONE_CLUSTER to only run on a specific CLUSTER_NO
 IS_ONE_CLUSTER = False
-CLUSTER_NO = 15 # sort on this one as HAND_POSITION for IS_HAND_POSE_FUSION
-
+CLUSTER_NO = 74 # sort on this one as HAND_POSITION for IS_HAND_POSE_FUSION
+                # if not IS_HAND_POSE_FUSION, then this is selecting HandsGestures
+START_CLUSTER = 58
 # I started to create a separate track for Hands, but am pausing for the moment
 IS_HANDS = False
 IS_ONE_HAND = True
-HAND_POSE_NO = 55
+HAND_POSE_NO = 74
 
 # 80,74 fails between 300-400
 
@@ -111,8 +112,8 @@ IS_ANGLE_SORT = False
 IS_TOPICS = False
 N_TOPICS = 48
 
-IS_ONE_TOPIC = False
-TOPIC_NO = [27]
+IS_ONE_TOPIC = True
+TOPIC_NO = [23]
 
 #  is isolated,  is business,  babies, 17 pointing
 #  is doctor <<  covid
@@ -234,12 +235,21 @@ elif IS_SEGONLY and io.platform == "darwin":
     if IS_HAND_POSE_FUSION:
         FROM += f" JOIN ImagesHandsPositions ihp ON s.image_id = ihp.image_id "
         FROM += f" JOIN ImagesHandsGestures ih ON s.image_id = ih.image_id "
-    elif IS_CLUSTER or IS_ONE_CLUSTER:
+    elif IS_ONE_CLUSTER and IS_ONE_TOPIC:
         FROM += f" JOIN Images{CLUSTER_TYPE} ic ON s.image_id = ic.image_id "
-    elif IS_TOPICS or IS_ONE_TOPIC:
         FROM += " JOIN ImagesTopics it ON s.image_id = it.image_id "
         WHERE += " AND it.topic_score > .3"
-        SELECT += ", it.topic_score" # add description here, after resegmenting
+        # not sure about the below
+        # WHERE += f" AND ic.cluster_no = {CLUSTER_NO} AND it.topic_no = {TOPIC_NO}"
+        SELECT += ", it.topic_score"
+        print(f"SELECTING ONE CLUSTER {CLUSTER_NO} AND ONE TOPIC {TOPIC_NO}. This is my WHERE: {WHERE}")
+    else:
+        if IS_CLUSTER or IS_ONE_CLUSTER:
+            FROM += f" JOIN Images{CLUSTER_TYPE} ic ON s.image_id = ic.image_id "
+        if IS_TOPICS or IS_ONE_TOPIC:
+            FROM += " JOIN ImagesTopics it ON s.image_id = it.image_id "
+            WHERE += " AND it.topic_score > .3"
+            SELECT += ", it.topic_score" # add description here, after resegmenting
 
 
     if NO_KIDS:
@@ -531,8 +541,7 @@ def selectSQL(cluster_no=None, topic_no=None):
             return f"AND {cluster_topic_table} = {str(cluster_topic_no)} "            
 
 
-    # print(f"cluster_no is")
-    # print(cluster_no)
+    print(f"cluster_no is {cluster_no} and topic_no is {topic_no}")
     if IS_HAND_POSE_FUSION:
         cluster = " "
         if isinstance(cluster_no, list):
@@ -1098,7 +1107,12 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
         #     print(str(e))
         # description = parent_row['description'].values[0]
         if IS_TOPICS or IS_ONE_TOPIC:
-            metas = [image_id, description[0], topic_score]
+            if description is None:
+                print("no description, skipping")
+                description = None
+            else:
+                description = description[0]
+            metas = [image_id, description, topic_score]
             metas_path = os.path.join(sort.counter_dict["outfolder"],METAS_FILE)
             io.write_csv(metas_path, metas)
         # print(image_id, description[0], topic_score)
@@ -1588,8 +1602,11 @@ def main():
         # for FUSION, CLUSTER_NO is HAND_POSITION and is the first value
         if isinstance(cluster_no, list):
             print("cluster_no is a list", cluster_no)
-            pose_no = cluster_no[1]
-            cluster_no = cluster_no[0]
+            if IS_ONE_TOPIC:
+                pose_no = None
+            else:
+                pose_no = cluster_no[1]
+                cluster_no = cluster_no[0]
         else:
             pose_no = None
 
@@ -1744,18 +1761,27 @@ def main():
             print(f"IS_HAND_POSE_FUSION is True, with {CLUSTER_PAIR}")
             resultsjson = selectSQL(CLUSTER_PAIR)
             map_images(resultsjson, CLUSTER_PAIR)
+    elif IS_ONE_CLUSTER and IS_ONE_TOPIC:
+        print(f"IS_ONE_CLUSTER is {IS_ONE_CLUSTER} with {CLUSTER_NO}, and topic {TOPIC_NO}")
+        resultsjson = selectSQL(CLUSTER_NO, TOPIC_NO)
+        map_images(resultsjson, [CLUSTER_NO, TOPIC_NO])
     elif IS_CLUSTER and not IS_ONE_TOPIC:
         print(f"IS_CLUSTER is {IS_CLUSTER} with {N_CLUSTERS}")
         for cluster_no in range(N_CLUSTERS):
             # temp hack
-            # if cluster_no < 10: continue
-            print(f"SELECTing cluster {cluster_no} of {N_CLUSTERS}")
-            resultsjson = selectSQL(cluster_no, None)
-            print(f"resultsjson contains {len(resultsjson)} images")
-            map_images(resultsjson, cluster_no)
+            # print(f"SELECTing cluster {cluster_no} of {N_CLUSTERS}")
+            if cluster_no < START_CLUSTER: 
+                continue
+            else:
+                print(f"SELECTing cluster {cluster_no} of {N_CLUSTERS}")
+                resultsjson = selectSQL(cluster_no, None)
+                print(f"resultsjson contains {len(resultsjson)} images")
+                map_images(resultsjson, cluster_no)
     elif IS_CLUSTER and IS_ONE_TOPIC:
         print(f"IS_CLUSTER is {IS_CLUSTER} with {N_CLUSTERS}, and topic {TOPIC_NO}")
         for cluster_no in range(N_CLUSTERS):
+            if cluster_no < START_CLUSTER: 
+                continue
             print(f"SELECTing cluster {cluster_no} of {N_CLUSTERS}")
             resultsjson = selectSQL(cluster_no, TOPIC_NO)
             print(f"resultsjson contains {len(resultsjson)} images")
