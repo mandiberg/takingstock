@@ -56,6 +56,8 @@ HSV_NORMS = {"LUM": .01, "SAT": 1,  "HUE": 0.002777777778, "VAL": 1}
 
 # this is for controlling if it is using
 # all clusters, 
+IS_VIDEO_FUSION = True
+MIN_VIDEO_FUSION_COUNT = 100
 IS_HAND_POSE_FUSION = False
 ONLY_ONE = False
 IS_CLUSTER = True
@@ -77,10 +79,10 @@ N_HANDS = N_CLUSTERS = None # declared here, but set in the SQL query below
 IS_ONE_CLUSTER = False
 CLUSTER_NO = 74 # sort on this one as HAND_POSITION for IS_HAND_POSE_FUSION
                 # if not IS_HAND_POSE_FUSION, then this is selecting HandsGestures
-START_CLUSTER = 58
+START_CLUSTER = 0
 # I started to create a separate track for Hands, but am pausing for the moment
 IS_HANDS = False
-IS_ONE_HAND = True
+IS_ONE_HAND = False
 HAND_POSE_NO = 74
 
 # 80,74 fails between 300-400
@@ -232,9 +234,12 @@ elif IS_SEGONLY and io.platform == "darwin":
     # FROM += " JOIN ImagesKeywords ik ON s.image_id = ik.image_id JOIN Keywords k ON ik.keyword_id = k.keyword_id "
     # WHERE += " AND k.keyword_text LIKE 'shout%' "
 
-    if IS_HAND_POSE_FUSION:
+    if IS_HAND_POSE_FUSION or IS_VIDEO_FUSION:
         FROM += f" JOIN ImagesHandsPositions ihp ON s.image_id = ihp.image_id "
         FROM += f" JOIN ImagesHandsGestures ih ON s.image_id = ih.image_id "
+        if IS_VIDEO_FUSION:
+            FROM += " JOIN ImagesTopics it ON s.image_id = it.image_id "
+            WHERE += " AND it.topic_score > .3"
     elif IS_ONE_CLUSTER and IS_ONE_TOPIC:
         FROM += f" JOIN Images{CLUSTER_TYPE} ic ON s.image_id = ic.image_id "
         FROM += " JOIN ImagesTopics it ON s.image_id = it.image_id "
@@ -484,7 +489,8 @@ def prep_cluster_medians():
             # print("cluster_medians", i, cluster_median)
             N_CLUSTERS = i # will be the last cluster_id which is count of clusters
 
-if IS_CLUSTER or IS_ONE_CLUSTER or IS_HAND_POSE_FUSION:
+# TK IS_VIDEO_FUSION ??
+if IS_CLUSTER or IS_ONE_CLUSTER or IS_HAND_POSE_FUSION or IS_VIDEO_FUSION:
     # select cluster_median from Clusters
     results = session.execute(select(Clusters.cluster_id, Clusters.cluster_median)).fetchall()
     cluster_medians, N_CLUSTERS = sort.prep_cluster_medians(results)
@@ -492,7 +498,7 @@ if IS_CLUSTER or IS_ONE_CLUSTER or IS_HAND_POSE_FUSION:
     # if any of the cluster_medians are empty, then we need to resegment
     if not any(cluster_medians):
         print("cluster results are empty", cluster_medians)
-if IS_HANDS or IS_ONE_HAND:
+if IS_HANDS or IS_ONE_HAND or IS_VIDEO_FUSION:
     results = session.execute(select(Hands.cluster_id, Hands.cluster_median)).fetchall()
     hands_medians, N_HANDS = sort.prep_cluster_medians(results)
     sort.hands_medians = hands_medians
@@ -540,39 +546,35 @@ def selectSQL(cluster_no=None, topic_no=None):
             # If topic_no is not a list, simply check for equality
             return f"AND {cluster_topic_table} = {str(cluster_topic_no)} "            
 
-
+    cluster = " "
     print(f"cluster_no is {cluster_no} and topic_no is {topic_no}")
-    if IS_HAND_POSE_FUSION:
-        cluster = " "
+    if IS_HAND_POSE_FUSION or IS_VIDEO_FUSION:
         if isinstance(cluster_no, list):
             # we have two values, C1 and C2. C1 should be IHP, C2 should be IH
             cluster += f" AND ihp.cluster_id = {str(cluster_no[0])} "            
             cluster += f" AND ih.cluster_id = {str(cluster_no[1])} "            
-    elif cluster_no is not None or topic_no is not None:
-        cluster = " "
-        if IS_CLUSTER or IS_ONE_CLUSTER:
-            cluster += cluster_topic_select("ic.cluster_id", cluster_no)
-            # cluster +=f"AND ic.cluster_id = {str(cluster_no)} "
-            # if isinstance(topic_no, list):
-            #     # Convert the list into a comma-separated string
-            #     topic_ids = ', '.join(map(str, cluster_no))
-            #     # Use the IN operator to check if topic_id is in the list of values
-            #     cluster += f"AND ic.cluster_id IN ({topic_ids}) "
-            # else:
-            #     # If topic_no is not a list, simply check for equality
-            #     if IS_ONE_TOPIC: cluster += f"AND ic.cluster_id = {str(cluster_no)} "            
-        if IS_TOPICS or IS_ONE_TOPIC:
-            # cluster +=f"AND it.topic_id = {str(topic_no)} "
-            if isinstance(topic_no, list):
-                # Convert the list into a comma-separated string
-                topic_ids = ', '.join(map(str, topic_no))
-                # Use the IN operator to check if topic_id is in the list of values
-                cluster += f"AND it.topic_id IN ({topic_ids}) "
-            else:
-                # If topic_no is not a list, simply check for equality
-                cluster += f"AND it.topic_id = {str(topic_no)} "            
-    else:
-        cluster=""
+    # elif cluster_no is not None or topic_no is not None:
+    elif IS_CLUSTER or IS_ONE_CLUSTER:
+        cluster += cluster_topic_select("ic.cluster_id", cluster_no)
+        # cluster +=f"AND ic.cluster_id = {str(cluster_no)} "
+        # if isinstance(topic_no, list):
+        #     # Convert the list into a comma-separated string
+        #     topic_ids = ', '.join(map(str, cluster_no))
+        #     # Use the IN operator to check if topic_id is in the list of values
+        #     cluster += f"AND ic.cluster_id IN ({topic_ids}) "
+        # else:
+        #     # If topic_no is not a list, simply check for equality
+        #     if IS_ONE_TOPIC: cluster += f"AND ic.cluster_id = {str(cluster_no)} "            
+    if IS_TOPICS or IS_ONE_TOPIC:
+        # cluster +=f"AND it.topic_id = {str(topic_no)} "
+        if isinstance(topic_no, list):
+            # Convert the list into a comma-separated string
+            topic_ids = ', '.join(map(str, topic_no))
+            # Use the IN operator to check if topic_id is in the list of values
+            cluster += f"AND it.topic_id IN ({topic_ids}) "
+        else:
+            # If topic_no is not a list, simply check for equality
+            cluster += f"AND it.topic_id = {str(topic_no)} "            
     # print(f"cluster SELECT is {cluster}")
     selectsql = f"SELECT {SELECT} FROM {FROM} WHERE {WHERE} {cluster} LIMIT {str(LIMIT)};"
     print("actual SELECT is: ",selectsql)
@@ -1516,77 +1518,6 @@ def process_linear(start_img_name, df_segment, cluster_no, sort):
 ###################
 
 def main():
-    # these are used in cleaning up fresh df from SQL
-    # def io.unpickle_array(pickled_array):
-    #     if pickled_array:
-    #         try:
-    #             # Attempt to unpickle using Protocol 3 in v3.7
-    #             return pickle.loads(pickled_array, encoding='latin1')
-    #         except TypeError:
-    #             # If TypeError occurs, unpickle using specific protocl 3 in v3.11
-    #             # return pickle.loads(pickled_array, encoding='latin1', fix_imports=True)
-    #             try:
-    #                 # Set the encoding argument to 'latin1' and protocol argument to 3
-    #                 obj = pickle.loads(pickled_array, encoding='latin1', fix_imports=True, errors='strict', protocol=3)
-    #                 return obj
-    #             except pickle.UnpicklingError as e:
-    #                 print(f"Error loading pickle data: {e}")
-    #                 return None
-    #     else:
-    #         return None
-
-    # def get_encodings_mongo(image_id):
-    #     mongo_collection_face = mongo_db['encodings']
-
-    #     if image_id:
-    #         results_face = mongo_collection_face.find_one({"image_id": image_id})
-    #         results_body = mongo_collection_body.find_one({"image_id": image_id})
-    #         face_encodings68 = face_landmarks = body_landmarks = body_landmarks_normalized = None
-    #         if results_body:
-    #             body_landmarks_normalized = results_body["nlms"]
-    #         if results_face:
-    #             face_encodings68 = results_face['face_encodings68']
-    #             face_landmarks = results_face['face_landmarks']
-    #             body_landmarks = results_face['body_landmarks']
-    #             # print("got encodings from mongo, types are: ", type(face_encodings68), type(face_landmarks), type(body_landmarks))
-    #         return pd.Series([face_encodings68, face_landmarks, body_landmarks, body_landmarks_normalized])
-    #         # else:
-    #         #     return pd.Series([None, None, None])
-    #     else:
-    #         return pd.Series([None, None, None, None])
-
-
-    # def unstring_json(json_string):
-    #     eval_string = ast.literal_eval(json_string)
-    #     if isinstance(eval_string, dict):
-    #         return eval_string
-    #     else:
-    #         json_dict = json.loads(eval_string)
-    #         return json_dict
-    # def make_float(value):
-    #     try:
-    #         return float(value)
-    #     except (ValueError, TypeError):
-    #         return value
-    def decode_64_array(encoded):
-        decoded = base64.b64decode(encoded).decode('utf-8')
-        return decoded
-    def newname(contentUrl):
-        file_name_path = contentUrl.split('?')[0]
-        file_name = file_name_path.split('/')[-1]
-        extension = file_name.split('.')[-1]
-        if file_name.endswith(".jpeg"):
-            file_name = file_name.replace(".jpeg",".jpg")
-        elif file_name.endswith(".png") or file_name.endswith(".webm"):
-            pass
-        elif not file_name.endswith(".jpg"):
-            file_name += ".jpg"    
-        hash_folder1, hash_folder2 = io.get_hash_folders(file_name)
-        newname = os.path.join(hash_folder1, hash_folder2, file_name)
-        return newname
-        # file_name = file_name_path.split('/')[-1]
-    print("in main, making SQL query")
-
 
     ###################
     #  MAP THE IMGS   #
@@ -1602,11 +1533,12 @@ def main():
         # for FUSION, CLUSTER_NO is HAND_POSITION and is the first value
         if isinstance(cluster_no, list):
             print("cluster_no is a list", cluster_no)
-            if IS_ONE_TOPIC:
+            if IS_ONE_TOPIC and not IS_VIDEO_FUSION:
                 pose_no = None
             else:
                 pose_no = cluster_no[1]
                 cluster_no = cluster_no[0]
+            print(f"cluster_no: {cluster_no}, pose_no: {pose_no}")
         else:
             pose_no = None
 
@@ -1652,10 +1584,6 @@ def main():
 
 
 
-            # this may be a big problem
-            # turn URL into local hashpath (still needs local root folder)
-            # df['imagename'] = df['contentUrl'].apply(newname)
-            # make decimals into float
             columns_to_convert = ['face_x', 'face_y', 'face_z', 'mouth_gap']
             df[columns_to_convert] = df[columns_to_convert].applymap(io.make_float)
 
@@ -1678,7 +1606,7 @@ def main():
                 quit()
 
             ### Set counter_dict ###
-            if pose_no: cluster_string = f"{cluster_no}_{pose_no}"
+            if pose_no is not None: cluster_string = f"{cluster_no}_{pose_no}"
             else: cluster_string = str(cluster_no)
             sort.set_counters(io.ROOT,cluster_string, start_img_name,start_site_image_id)
 
@@ -1688,7 +1616,7 @@ def main():
 
             ### Get cluster_median encodings for cluster_no ###
 
-            if cluster_no is not None and cluster_no !=0 and IS_CLUSTER and not ONLY_ONE:
+            if cluster_no is not None and cluster_no !=0 and (IS_CLUSTER or IS_VIDEO_FUSION) and not ONLY_ONE:
                 # skips cluster 0 for pulling median because it was returning NULL
                 # cluster_median = select_cluster_median(cluster_no)
                 # image_id = insert_dict['image_id']
@@ -1753,6 +1681,7 @@ def main():
     if IS_HAND_POSE_FUSION and ONLY_ONE:
         print("IS_HAND_POSE_FUSION is True")
         # select on both, sort on CLUSTER_NO 
+        # this sends pose and gesture in as a list, and an empty topic
         CLUSTER_PAIR = [CLUSTER_NO, HAND_POSE_NO]
         resultsjson = selectSQL(CLUSTER_PAIR)
         map_images(resultsjson, CLUSTER_PAIR)
@@ -1761,6 +1690,19 @@ def main():
             print(f"IS_HAND_POSE_FUSION is True, with {CLUSTER_PAIR}")
             resultsjson = selectSQL(CLUSTER_PAIR)
             map_images(resultsjson, CLUSTER_PAIR)
+    elif IS_VIDEO_FUSION:
+        print(f"IS_VIDEO_FUSION is True, and topic {TOPIC_NO}")
+        for hand_pose_no in range(N_HANDS):
+            for cluster_no in range(N_CLUSTERS):
+                print(f"SELECTing cluster {cluster_no} and hand_pose {hand_pose_no}")
+                # select on both, sort on CLUSTER_NO 
+                # this sends pose and gesture in as a list, and an empty topic
+                CLUSTER_PAIR = [cluster_no, hand_pose_no]
+                resultsjson = selectSQL(CLUSTER_PAIR, TOPIC_NO)
+                if len(resultsjson) > MIN_VIDEO_FUSION_COUNT:
+                    map_images(resultsjson, CLUSTER_PAIR)
+                else:
+                    print(f"resultsjson contains {len(resultsjson)} images, skipping")
     elif IS_ONE_CLUSTER and IS_ONE_TOPIC:
         print(f"IS_ONE_CLUSTER is {IS_ONE_CLUSTER} with {CLUSTER_NO}, and topic {TOPIC_NO}")
         resultsjson = selectSQL(CLUSTER_NO, TOPIC_NO)
