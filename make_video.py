@@ -57,12 +57,14 @@ HSV_NORMS = {"LUM": .01, "SAT": 1,  "HUE": 0.002777777778, "VAL": 1}
 # this is for controlling if it is using
 # all clusters, 
 IS_VIDEO_FUSION = True
-MIN_VIDEO_FUSION_COUNT = 100
+MIN_VIDEO_FUSION_COUNT = 400
 IS_HAND_POSE_FUSION = False
 ONLY_ONE = False
 IS_CLUSTER = True
 if IS_HAND_POSE_FUSION:
     # first sort on HandsPosts, then on Hands
+    # CLUSTER_TYPE = "HandsGestures" # Select on 3d hands
+    # CLUSTER_TYPE_2 = "HandsPositions" # Sort on 2d hands
     CLUSTER_TYPE = "HandsGestures" # Select on 3d hands
     CLUSTER_TYPE_2 = "HandsPositions" # Sort on 2d hands
 else:
@@ -288,7 +290,7 @@ elif IS_SEGONLY and io.platform == "darwin":
     # WHERE += " AND e.encoding_id > 2612275"
 
     # WHERE = "s.site_name_id != 1"
-    LIMIT = 50000
+    LIMIT = 500
 
     # TEMP TK TESTING
     # WHERE += " AND s.site_name_id = 8"
@@ -496,7 +498,10 @@ if IS_CLUSTER or IS_ONE_CLUSTER or IS_HAND_POSE_FUSION or IS_VIDEO_FUSION:
     cluster_medians, N_CLUSTERS = sort.prep_cluster_medians(results)
     sort.cluster_medians = cluster_medians
     # if any of the cluster_medians are empty, then we need to resegment
-    if not any(cluster_medians):
+    print("cluster results", results)
+    print("cluster_medians", cluster_medians)
+    if cluster_medians is None:
+    # if not any(cluster_medians):
         print("cluster results are empty", cluster_medians)
 if IS_HANDS or IS_ONE_HAND or IS_VIDEO_FUSION:
     results = session.execute(select(Hands.cluster_id, Hands.cluster_median)).fetchall()
@@ -1685,24 +1690,26 @@ def main():
         CLUSTER_PAIR = [CLUSTER_NO, HAND_POSE_NO]
         resultsjson = selectSQL(CLUSTER_PAIR)
         map_images(resultsjson, CLUSTER_PAIR)
-    elif IS_HAND_POSE_FUSION and not ONLY_ONE:
+    elif (IS_HAND_POSE_FUSION and not ONLY_ONE) or IS_VIDEO_FUSION:
+        if IS_VIDEO_FUSION: this_topic = TOPIC_NO
+        else: this_topic = None
         for CLUSTER_PAIR in FUSION_PAIRS:
             print(f"IS_HAND_POSE_FUSION is True, with {CLUSTER_PAIR}")
-            resultsjson = selectSQL(CLUSTER_PAIR)
+            resultsjson = selectSQL(CLUSTER_PAIR, this_topic)
             map_images(resultsjson, CLUSTER_PAIR)
-    elif IS_VIDEO_FUSION:
-        print(f"IS_VIDEO_FUSION is True, and topic {TOPIC_NO}")
-        for hand_pose_no in range(N_HANDS):
-            for cluster_no in range(N_CLUSTERS):
-                print(f"SELECTing cluster {cluster_no} and hand_pose {hand_pose_no}")
-                # select on both, sort on CLUSTER_NO 
-                # this sends pose and gesture in as a list, and an empty topic
-                CLUSTER_PAIR = [cluster_no, hand_pose_no]
-                resultsjson = selectSQL(CLUSTER_PAIR, TOPIC_NO)
-                if len(resultsjson) > MIN_VIDEO_FUSION_COUNT:
-                    map_images(resultsjson, CLUSTER_PAIR)
-                else:
-                    print(f"resultsjson contains {len(resultsjson)} images, skipping")
+    # elif IS_VIDEO_FUSION:
+    #     print(f"IS_VIDEO_FUSION is True, and topic {TOPIC_NO}")
+    #     for hand_pose_no in range(N_HANDS):
+    #         for cluster_no in range(N_CLUSTERS):
+    #             print(f"SELECTing cluster {cluster_no} and hand_pose {hand_pose_no}")
+    #             # select on both, sort on CLUSTER_NO 
+    #             # this sends pose and gesture in as a list, and an empty topic
+    #             CLUSTER_PAIR = [cluster_no, hand_pose_no]
+    #             resultsjson = selectSQL(CLUSTER_PAIR, TOPIC_NO)
+    #             if len(resultsjson) > MIN_VIDEO_FUSION_COUNT:
+    #                 map_images(resultsjson, CLUSTER_PAIR)
+    #             else:
+    #                 print(f"resultsjson contains {len(resultsjson)} images, skipping")
     elif IS_ONE_CLUSTER and IS_ONE_TOPIC:
         print(f"IS_ONE_CLUSTER is {IS_ONE_CLUSTER} with {CLUSTER_NO}, and topic {TOPIC_NO}")
         resultsjson = selectSQL(CLUSTER_NO, TOPIC_NO)

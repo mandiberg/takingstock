@@ -14,11 +14,12 @@ io = DataIO()
 db = io.db
 
 # iterate through folders? 
-IS_CLUSTER = False
+IS_CLUSTER = True
 
 # are we making videos or making merged stills?
 IS_VIDEO = True
-ALL_ONE_VIDEO = False
+ALL_ONE_VIDEO = True
+SORT_ORDER = "Chronological"
 DO_RATIOS = False
 GIGA_DIMS = 20688
 TEST_DIMS = 4000
@@ -33,7 +34,7 @@ ROOT_FOLDER_PATH = '/Volumes/OWC4/segment_images'
 # FOLDER_NAME ="cluster20_0_face_cradle_sept26/giga/face_frame"
 # FOLDER_NAME = "cluster35_99_silence_sept24/giga6x_plus"
 # FOLDER_NAME = "cluster1_21_phone_sept24production/silverphone_sept24_production/down"
-FOLDER_NAME = "cluster6_1727652036.811562"
+FOLDER_NAME = "video_fusion_oct3test"
 FOLDER_PATH = os.path.join(ROOT_FOLDER_PATH,FOLDER_NAME)
 DIRS = ["1x1", "4x3", "16x10"]
 
@@ -282,8 +283,8 @@ def write_video(img_array, FRAMERATE=15, subfolder_path=None):
 def main():
     print("starting merge_expanded_images.py")
     if IS_CLUSTER is True:
-        subfolders = io.get_folders(FOLDER_PATH)
-        # print(subfolders)
+        subfolders = io.get_folders(FOLDER_PATH, SORT_ORDER)
+        print("subfolders", subfolders)
         if IS_VIDEO is True and ALL_ONE_VIDEO is True:
             all_img_path_list = get_img_list_subfolders(subfolders)
             write_video(all_img_path_list, FRAMERATE)

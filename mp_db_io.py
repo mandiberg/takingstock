@@ -226,8 +226,16 @@ class DataIO:
 
 
 
-    def get_folders(self,folder):
-        subfolders = [ f.path for f in os.scandir(folder) if f.is_dir() ]
+    def get_folders(self, folder, sort="alphabetical"):
+        sort = sort.lower()  # Convert to lowercase to make the comparison case-insensitive
+        print("getting folders", sort)
+        subfolders = [f.path for f in os.scandir(folder) if f.is_dir()]
+        if sort == "alphabetical":
+            subfolders.sort()  # Sort alphabetically
+            print("sorted alphabetically", subfolders)
+        elif sort == "chronological":
+            subfolders.sort(key=os.path.getmtime)
+            print("sorted by date", subfolders)
         return subfolders
 
     def get_hash_folders(self,filename):
