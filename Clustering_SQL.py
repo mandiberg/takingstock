@@ -74,11 +74,11 @@ db = io.db
 
 
 NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
-MODE = 1
+MODE = 0
 # CLUSTER_TYPE = "Clusters"
 # CLUSTER_TYPE = "BodyPoses"
-CLUSTER_TYPE = "HandsPositions"
-# CLUSTER_TYPE = "HandsGestures"
+# CLUSTER_TYPE = "HandsPositions"
+CLUSTER_TYPE = "HandsGestures"
 # CLUSTER_TYPE = "FingertipsPositions"
 sort.set_subset_landmarks(CLUSTER_TYPE)
 SUBSELECT_ONE_CLUSTER = 0
@@ -102,7 +102,8 @@ GET_OPTIMAL_CLUSTERS=False
 # number of clusters produced. run GET_OPTIMAL_CLUSTERS and add that number here
 # 24 for body poses
 # 128 for hands 
-N_CLUSTERS = 128
+# redoing handpositions and handsgestures at 32 for video
+N_CLUSTERS = 32
 SAVE_FIG=False ##### option for saving the visualized data
 
 if USE_SEGMENT is True and (CLUSTER_TYPE != "Clusters"):
@@ -254,7 +255,7 @@ def get_cluster_medians():
 
     # Process the results as needed
     for row in results:
-        # print(row)
+        print(row)
         cluster_id, cluster_median_pickle = row
         # print("cluster_id: ",cluster_id)
 
@@ -321,6 +322,7 @@ def kmeans_cluster(df, n_clusters=32):
     kmeans = KMeans(n_clusters=n_clusters, n_init=10, init='k-means++', random_state=42, max_iter=300, verbose=1)
     kmeans.fit(numerical_data)
     clusters = kmeans.predict(numerical_data)
+    # print("clusters: ",clusters)
     return clusters
     
 def best_score(df):
@@ -427,8 +429,10 @@ def calculate_cluster_medians(df):
 
 def save_clusters_DB(median_dict, update=False):
     # Convert to set and Save the df to a table
-    
+    # print("median_dict: ",median_dict)
     cluster_ids = median_dict.keys()
+    print("saving cluster_ids: ",cluster_ids)
+    print("type of cluster_ids: ",type(cluster_ids))
     for cluster_id in cluster_ids:
         cluster_median = median_dict[cluster_id]
         
@@ -502,16 +506,17 @@ def save_images_clusters_DB(df):
 
 def assign_images_clusters_DB(df):
     def prep_pose_clusters_enc(enc1):
-        # print("current image enc1", enc1)  
+        print("current image enc1", enc1)
+        print("MEDIAN_DICT",MEDIAN_DICT)  
         enc1 = np.array(enc1)
         this_dist_dict = {}
         for cluster_id in MEDIAN_DICT:
             enc2 = MEDIAN_DICT[cluster_id]
-            # print("cluster_id enc2: ", cluster_id,enc2)
+            print("cluster_id enc2: ", cluster_id,enc2)
             this_dist_dict[cluster_id] = np.linalg.norm(enc1 - enc2, axis=0)
-        
+        print("this_dist_dict", this_dist_dict)        
         cluster_id = min(this_dist_dict, key=this_dist_dict.get)
-        # print(cluster_id)
+        print(cluster_id)
         return cluster_id
 
     #assign clusters to each image's encodings
@@ -653,14 +658,15 @@ def main():
         print("columns to drop: ",columns_to_drop)
         enc_data["cluster_id"] = kmeans_cluster(enc_data.drop(columns=columns_to_drop), n_clusters=N_CLUSTERS)
         
-        print(enc_data)
+        print("enc_data", enc_data)
         print(set(enc_data["cluster_id"].tolist()))
         # don't need to write a CSV
         # enc_data.to_csv('clusters_clusterID_byImageID.csv')
 
         # if USE_SEGMENT:
         #     Base.metadata.create_all(engine)
-        save_clusters_DB(enc_data)
+        median_dict = calculate_cluster_medians(enc_data)
+        save_clusters_DB(median_dict)
         save_images_clusters_DB(enc_data)
         print("saved segment to clusters")
     elif MODE == 1:

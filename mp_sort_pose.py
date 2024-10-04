@@ -53,7 +53,7 @@ class SortPose:
         self.SORT_TYPE = SORT_TYPE
         if self.SORT_TYPE == "128d":
             self.MIND = self.MINFACEDIST * 1.5
-            self.MAXD = self.MAXFACEDIST * 1.2
+            self.MAXD = self.MAXFACEDIST * 1.1
             self.MULTIPLIER = self.HSVMULTIPLIER
             self.DUPED = self.FACE_DUPE_DIST
             self.HSV_DELTA_MAX = self.HSV_DELTA_MAX * 1.5
