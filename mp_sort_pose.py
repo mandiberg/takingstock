@@ -2383,3 +2383,39 @@ class SortPose:
             df['hand_landmarks'] = landmarks_list
         
         return df
+
+
+
+# FUSION STUFF
+
+    def find_sorted_zero_indices(self, topic_no,min_value):
+        folder_path='utilities/data'
+
+        # Construct the file name and path
+        file_name = 'topic' + str(topic_no[0]) + '_rows_handspositions_cols_handsgestures.csv'
+        file_path = os.path.join(folder_path, file_name)
+        
+        # Load the CSV file into a DataFrame
+        df = pd.read_csv(file_path, header=None)
+        
+        # Convert the DataFrame to a NumPy array
+        gesture_array = df.to_numpy()
+
+        # Optionally, you can check the shape of the array
+        # print("Shape of the array:", gesture_array.shape)
+        # print(gesture_array)  # Print the array to verify its contents
+
+        # Find the indices where elements are zero
+        zero_indices = np.argwhere(gesture_array >min_value)
+        
+        # Convert the list of zero indices to a NumPy array
+        zero_indices_array = np.array(zero_indices)
+
+        # Sort first by axis 0 (rows), then by axis 1 (columns)
+        sorted_zero_indices = zero_indices_array[np.lexsort((zero_indices_array[:,1], zero_indices_array[:,0]))]
+
+        # Convert back to a list (if required)
+        sorted_zero_indices_list = sorted_zero_indices.tolist()
+
+        # Return the sorted list of zero indices
+        return sorted_zero_indices_list

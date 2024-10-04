@@ -76,7 +76,7 @@ db = io.db
 
 NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 title = 'Please choose your operation: '
-options = ['topic model and save clusters', 'topic assignment', 'calculate cluster medians and save clusters']
+options = ['kmeans cluster and save clusters', 'cluster assignment', 'calculate cluster medians and save clusters']
 option, MODE = pick(options, title)
 # MODE = 1
 # CLUSTER_TYPE = "Clusters"
@@ -90,6 +90,7 @@ SUBSELECT_ONE_CLUSTER = 0
 # SUBSET_LANDMARKS is now set in sort pose init
 USE_HEAD_POSE = False
 
+SHORTRANGE = False
 ANGLES = []
 STRUCTURE = "list3"
 print("STRUCTURE: ",STRUCTURE)
@@ -128,7 +129,7 @@ if USE_SEGMENT is True and (CLUSTER_TYPE != "Clusters"):
     WHERE += " AND s.is_dupe_of IS NULL "
     if MODE == 0:
         FROM = f"{SegmentTable_name} s"
-        WHERE += " AND s.face_x > -35 AND s.face_x < -24 AND s.face_y > -3 AND s.face_y < 3 AND s.face_z > -3 AND s.face_z < 3 "
+        if SHORTRANGE: WHERE += " AND s.face_x > -35 AND s.face_x < -24 AND s.face_y > -3 AND s.face_y < 3 AND s.face_z > -3 AND s.face_z < 3 "
     # FROM += f" INNER JOIN Encodings h ON h.image_id = s.image_id " 
     # FROM += f" INNER JOIN {HelperTable_name} h ON h.image_id = s.image_id " 
         if SUBSELECT_ONE_CLUSTER:
