@@ -22,6 +22,7 @@ from sqlalchemy import create_engine, text, MetaData, Table, Column, Numeric, In
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.pool import NullPool
 import pymongo
+from pick import pick
 
 import numpy as np
 import pandas as pd
@@ -74,7 +75,10 @@ db = io.db
 
 
 NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
-MODE = 1
+title = 'Please choose your operation: '
+options = ['topic model and save clusters', 'topic assignment', 'calculate cluster medians and save clusters']
+option, MODE = pick(options, title)
+# MODE = 1
 # CLUSTER_TYPE = "Clusters"
 # CLUSTER_TYPE = "BodyPoses"
 CLUSTER_TYPE = "HandsPositions"
@@ -673,7 +677,6 @@ def main():
         median_dict = calculate_cluster_medians(enc_data)
         save_clusters_DB(median_dict, update=True)
         print("assigned and saved segment to clusters")
-
 
     end = time.time()
     print (end - start)
