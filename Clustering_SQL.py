@@ -90,7 +90,7 @@ SUBSELECT_ONE_CLUSTER = 0
 # SUBSET_LANDMARKS is now set in sort pose init
 USE_HEAD_POSE = False
 
-SHORTRANGE = False
+SHORTRANGE = True
 ANGLES = []
 STRUCTURE = "list3"
 print("STRUCTURE: ",STRUCTURE)
@@ -433,7 +433,9 @@ def calculate_cluster_medians(df):
 def save_clusters_DB(median_dict, update=False):
     # Convert to set and Save the df to a table
     
+    print("save_clusters_DB median_dict", median_dict)
     cluster_ids = median_dict.keys()
+    print("save_clusters_DB cluster_ids", cluster_ids)
     for cluster_id in cluster_ids:
         cluster_median = median_dict[cluster_id]
         
@@ -665,7 +667,8 @@ def main():
 
         # if USE_SEGMENT:
         #     Base.metadata.create_all(engine)
-        save_clusters_DB(enc_data)
+        median_dict = calculate_cluster_medians(enc_data)
+        save_clusters_DB(median_dict)
         save_images_clusters_DB(enc_data)
         print("saved segment to clusters")
     elif MODE == 1:
