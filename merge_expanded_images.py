@@ -24,6 +24,7 @@ DO_RATIOS = False
 GIGA_DIMS = 20688
 TEST_DIMS = 4000
 REG_DIMS = 3448
+VERBOSE = True
 # MERGE
 # Provide the path to the folder containing the images
 ROOT_FOLDER_PATH = '/Volumes/OWC4/segment_images'
@@ -32,9 +33,9 @@ ROOT_FOLDER_PATH = '/Volumes/OWC4/segment_images'
 # if not, this should be the individual folder holding the images
 # will not accept clusterNone -- change to cluster00
 # FOLDER_NAME ="cluster20_0_face_cradle_sept26/giga/face_frame"
-# FOLDER_NAME = "cluster35_99_silence_sept24/giga6x_plus"
-# FOLDER_NAME = "cluster1_21_phone_sept24production/silverphone_sept24_production/down"
-FOLDER_NAME = "video_fusion_oct3test"
+# FOLDER_NAME = "topic17_business_fusion_test"
+# FOLDER_NAME = "cluster1_21_phone_sept24production/silverphone_sept24_production/down/giga"
+FOLDER_NAME = "topic23_oneshot_32x128_full"
 FOLDER_PATH = os.path.join(ROOT_FOLDER_PATH,FOLDER_NAME)
 DIRS = ["1x1", "4x3", "16x10"]
 
@@ -54,11 +55,14 @@ FRAMERATE = 12
 
 def iterate_image_list(FOLDER_PATH,image_files, successes):
     def crop_giga(img1, DIMS=GIGA_DIMS):
+        if VERBOSE: print("cropping image to", DIMS)
         # height, width = img1.shape[:3]
-        height, width, _ = img1.shape
-        start_row = (height - DIMS) // 2
-        start_col = (width - DIMS) // 2
-        img1 = img1[start_row:start_row + DIMS, start_col:start_col + DIMS]
+        if img1.shape[0] > DIMS or img1.shape[1] > DIMS:
+            height, width, _ = img1.shape
+            start_row = (height - DIMS) // 2
+            start_col = (width - DIMS) // 2
+            print("start_row", start_row, "start_col", start_col)
+            img1 = img1[start_row:start_row + DIMS, start_col:start_col + DIMS]
         return img1
     
     # Initialize the merged pairs list with the images in pairs
@@ -78,10 +82,13 @@ def iterate_image_list(FOLDER_PATH,image_files, successes):
 
         # Always resize img1 to GIGA_DIMS
         if img1.shape[0] > TEST_DIMS or img1.shape[1] > TEST_DIMS:
-            print("image shape", img1.shape)
+            if VERBOSE: print("image shape >", img1.shape, image_files[i])
             img1 = crop_giga(img1)
-        elif img1.shape[0] < TEST_DIMS or img1.shape[1] < TEST_DIMS:
-            print("image shape", img1.shape)
+        elif img1.shape[0] == REG_DIMS and img1.shape[1] == REG_DIMS:
+            # not change needed
+            pass
+        elif img1.shape[0] > REG_DIMS or img1.shape[1] > REG_DIMS:
+            if VERBOSE: print("image shape > ", img1.shape, image_files[i])
             img1 = crop_giga(img1, REG_DIMS)
 
         # Check if there is a second image available
@@ -93,10 +100,13 @@ def iterate_image_list(FOLDER_PATH,image_files, successes):
 
             # Always resize img2 to GIGA_DIMS
             if img1.shape[0] > TEST_DIMS or img2.shape[0] > TEST_DIMS:
-                print("second image shape", img2.shape)
+                if VERBOSE: print("second image shape > ", img2.shape, image_files[i + 1])
                 img2 = crop_giga(img2)
-            elif img1.shape[0] < TEST_DIMS or img1.shape[1] < TEST_DIMS:
-                print("image shape", img1.shape)
+            elif img2.shape[0] == REG_DIMS and img2.shape[1] == REG_DIMS:
+                # not change needed
+                pass
+            elif img1.shape[0] > REG_DIMS or img2.shape[1] > REG_DIMS:
+                if VERBOSE: print("second image shape < ", img2.shape, image_files[i + 1])
                 img1 = crop_giga(img1, REG_DIMS)
 
             if len(img1.shape) == 2:  # img1 is grayscale
@@ -106,10 +116,12 @@ def iterate_image_list(FOLDER_PATH,image_files, successes):
             print(img1.shape, img2.shape)
 
             # Merge the pair of images 50/50
-            blend = cv2.addWeighted(img1, 0.5, img2, 0.5, 0.0)
-            merged_pairs.append(blend)
-            successes += 1
-
+            try:
+                blend = cv2.addWeighted(img1, 0.5, img2, 0.5, 0.0)
+                merged_pairs.append(blend)
+                successes += 1
+            except:
+                print("failed to merge", image_files[i], image_files[i+1])
         else:
             print("skipping image key number", str(i))
             # Only one image left, add it to the merged pairs list directly
@@ -121,7 +133,7 @@ def iterate_image_list(FOLDER_PATH,image_files, successes):
 def merge_images(FOLDER_PATH):
     # Get a list of image files in the folder
     image_files = io.get_img_list(FOLDER_PATH)
-    # print(image_files)
+    if VERBOSE: print(image_files)
     cluster_no = handpose_no = None
     successes = 0
     if len(image_files) > 1:
@@ -258,7 +270,7 @@ def write_video(img_array, FRAMERATE=15, subfolder_path=None):
 
     # Define the codec and create VideoWriter object
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-    video_path = os.path.join(FOLDER_PATH, FOLDER_NAME+cluster_no+".mp4")
+    video_path = os.path.join(FOLDER_PATH, FOLDER_NAME.replace("/","_")+cluster_no+".mp4")
     video_writer = cv2.VideoWriter(video_path, fourcc, FRAMERATE, (width, height))
 
     # Iterate over the image array and write frames to the video

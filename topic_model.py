@@ -88,13 +88,13 @@ USE_BIGSEGMENT = True
 VERBOSE = False
 RANDOM = False
 global_counter = 0
-QUERY_LIMIT = 1000000
-query_start_counter = 0
+QUERY_LIMIT = 100000
+query_start_counter = 3360000
 # started at 9:45PM, Feb 17
 
 
 MODEL="TF" ## OR TF  ## Bag of words or TF-IDF
-NUM_TOPICS=48
+NUM_TOPICS=64
 
 stemmer = SnowballStemmer('english')
 

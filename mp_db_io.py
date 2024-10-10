@@ -212,17 +212,18 @@ class DataIO:
             writer.writerow(value_list)
 
     def get_img_list(self, folder, sort=True):
-        img_list=[]
-        for count,file in enumerate(os.listdir(folder)):
+        img_list = []
+        for count, file in enumerate(os.listdir(folder)):
             if not file.startswith('.') and os.path.isfile(os.path.join(folder, file)):
-                filepath = os.path.join(folder, file)
-                filepath=filepath.replace('\\' , '/')
-                img_list.append(file)
+                if not file.endswith(('.csv', '.txt', '.json')):
+                    filepath = os.path.join(folder, file)
+                    filepath = filepath.replace('\\', '/')
+                    img_list.append(file)
         if sort is True:
             img_list.sort()
         print(len(img_list))
         print("got image list")
-        return img_list    
+        return img_list
 
 
 
