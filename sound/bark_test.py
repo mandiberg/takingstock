@@ -11,10 +11,15 @@ from openai import OpenAI
 # go get IO class from parent folder
 # caution: path[0] is reserved for script path (or '' in REPL)
 import sys
-sys.path.insert(1, '/Users/michaelmandiberg/Documents/GitHub/facemap/')
+#######MICHAEL##############
+# sys.path.insert(1, '/Users/michaelmandiberg/Documents/GitHub/facemap/')
+############################
+#######SATYAM##############
+sys.path.insert(1, 'C:/Users/jhash/Documents/GitHub/facemap2/')
+###########################
 from mp_db_io import DataIO
 
-METHOD="bark" ##openai or bark or meta
+METHOD="meta" ##openai or bark or meta
 
 
 start = time.time()
@@ -57,16 +62,19 @@ def write_TTS_openai(input_text,file_name):
       voice=voice_preset,
       input=input_text
     )
+    ### SAMPLE RATE 24 kHz
+    ## NO OPTION TO CHANGE THIS IN OPENAI
+    ## BUT THERE ARE EXTERNAL LIBRARIES
     response.stream_to_file(file_name)
     return
 
 def write_TTS_meta(input_text,file_name):
-    inputs = processor(input_text, voice_preset=voice_preset)
-
-    audio_array = model.generate(**inputs)
+    inputs = tokenizer(input_text, return_tensors="pt")
+    with torch.no_grad():
+        audio_array = model(**inputs).waveform
     audio_array = audio_array.cpu().numpy().squeeze()
     scipy.io.wavfile.write(file_name, rate=sample_rate, data=audio_array)
-
+    #  https://huggingface.co/facebook/mms-tts-eng ##
     return
 
 if METHOD=="openai":
@@ -91,7 +99,9 @@ elif METHOD=="meta":
 
     # processor = AutoProcessor.from_pretrained("suno/bark")
     # model = BarkModel.from_pretrained("suno/bark")
-    sample_rate = model.generation_config.sample_rate
+    # sample_rate = model.generation_config.sample_rate
+    ## SINCE GARBAGE TO LOWER SAMPLE RATE   
+    sample_rate=16000
     # preset_list = [f"v2/en_speaker_{i}" for i in range(10)]
     write_TTS=write_TTS_meta
     
@@ -121,12 +131,15 @@ with open(os.path.join(INPUT, sourcefile), mode='r',encoding='utf-8-sig', newlin
             elif counter < start_at:
                 counter += 1
                 continue
-            if counter%10==0: print(counter,"sounds generated")
-                
+            if counter%10==0: print(counter,"sounds generated")                
             print(row)
             input_text = row['description']
-            voice_preset = random.choice(preset_list)
-            out_name =f"{str(image_id)}_{METHOD}_v{voice_preset[-1]}_{row['topic_fit']}.wav"
+            if METHOD!="meta":
+                voice_preset = random.choice(preset_list)
+                out_name =f"{str(image_id)}_{METHOD}_v{voice_preset[-1]}_{row['topic_fit']}.wav"
+            else:
+                ## NO PRESET OPTION FOR META
+                out_name =f"{str(image_id)}_{METHOD}_{row['topic_fit']}.wav"            
             file_name=os.path.join(OUTPUT, out_name)
             write_TTS(input_text,file_name)
             # Write the row to the output CSV file with 'out_name' added
