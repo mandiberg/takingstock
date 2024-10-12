@@ -88,8 +88,8 @@ USE_BIGSEGMENT = True
 VERBOSE = False
 RANDOM = False
 global_counter = 0
-QUERY_LIMIT = 100000
-query_start_counter = 3360000
+QUERY_LIMIT = 1000000
+query_start_counter = 80536000
 # started at 9:45PM, Feb 17
 
 
@@ -192,6 +192,7 @@ def set_query():
     elif MODE==2 and USE_SEGMENT:
         print("assigning topics via small segment")
         WHERE = " face_x > -35 AND face_x < -24 AND face_y > -3 AND face_y < 3 AND face_z > -3 AND face_z < 3 AND "
+        # WHERE = " face_x > -40 AND face_x < -20 AND face_y > -5 AND face_y < 5 AND face_z > -5 AND face_z < 5 AND "
         WHERE += " mongo_tokens IS NOT NULL AND image_id NOT IN (SELECT image_id FROM imagestopics)"
 
     elif MODE==2:

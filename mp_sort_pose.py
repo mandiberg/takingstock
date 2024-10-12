@@ -46,7 +46,7 @@ class SortPose:
         self.BRUTEFORCE = False
         self.use_3D = use_3D
         print("init use_3D",self.use_3D)
-        self.CUTOFF = 10 # DOES factor if ONE_SHOT
+        self.CUTOFF = 5000 # DOES factor if ONE_SHOT
 
         self.CHECK_DESC_DIST = 30
         self.CLUSTER_TYPE = "BodyPoses" # defaults

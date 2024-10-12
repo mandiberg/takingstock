@@ -115,10 +115,10 @@ IS_ANGLE_SORT = False
 
 # this control whether sorting by topics
 IS_TOPICS = False
-N_TOPICS = 48
+N_TOPICS = 64
 
 IS_ONE_TOPIC = True
-TOPIC_NO = [23]
+TOPIC_NO = [32]
 #######################
 
 #######################
@@ -146,7 +146,7 @@ DO_OBJ_SORT = True
 OBJ_DONT_SUBSELECT = False # False means select for OBJ. this is a flag for selecting a specific object type when not sorting on obj
 PHONE_BBOX_LIMITS = [1] # this is an attempt to control the BBOX placement. I don't think it is going to work, but with non-zero it will make a bigger selection. Fix this hack TK. 
 
-ONE_SHOT = True # take all files, based off the very first sort order.
+ONE_SHOT = False # take all files, based off the very first sort order.
 EXPAND = False # expand with white, as opposed to inpaint and crop
 JUMP_SHOT = True # jump to random file if can't find a run (I don't think this applies to planar?)
 
@@ -158,24 +158,60 @@ if not GENERATE_FUSION_PAIRS:
         # # topic 17 selects
         # [1,5]
 
-        # topic 23 reselects
-        [1,65],
-        [1,88],
-        [1,125],        
-        [13,109],
-        [13,24],
-        [13,33],
-        [13,85],
-        [24,13],
-        [24,85],
-        [25,65],
-        [13,117],
-        [13,2],
-        [13,65],
-        [24,11],
-        [24,7],
-        [25,125],
-        [25,88]        
+        # testing topic 32, T64, ihp128
+        [1, 65],
+        [1, 88],
+        [1, 125],
+        # [13, 2],
+        [13, 24],
+        [13, 65],
+        [13, 85],
+        [13, 101],
+        [13, 117],
+        [24, 11],
+        [24, 13],
+        [24, 57],
+        [25, 65],
+        [25, 88],
+        [25, 125]
+
+
+        # # topic 32, T64
+        # [13, 11],
+        # [13, 29],
+        # [13, 47],
+        # [1, 37],
+        # [24, 12],
+        # [24, 8],
+        # [25, 25],
+        # [13, 37],
+        # [1, 53],
+        # [24, 33],
+        # [25, 11],
+        # [25, 37],
+        # [13, 28],
+        # [1, 25],
+        # [1, 60],
+        # [24, 37]
+
+        # # topic 23 reselects
+        # [1,65],
+        # [1,88],
+        # [1,125],        
+        # [13,109],
+        # [13,24],
+        # [13,33],
+        # [13,85],
+        # [24,13],
+        # [24,85],
+        # [25,65],
+        # [13,117],
+        # [13,2],
+        # [13,65],
+        # [24,11],
+        # [24,7],
+        # [25,125],
+        # [25,88]        
 
         # # topic 23 selects
         # [13,13],

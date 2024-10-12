@@ -17,8 +17,8 @@ db = io.db
 IS_CLUSTER = True
 
 # are we making videos or making merged stills?
-IS_VIDEO = True
-ALL_ONE_VIDEO = True
+IS_VIDEO = False
+ALL_ONE_VIDEO = False
 SORT_ORDER = "Chronological"
 DO_RATIOS = False
 GIGA_DIMS = 20688
@@ -35,7 +35,7 @@ ROOT_FOLDER_PATH = '/Volumes/OWC4/segment_images'
 # FOLDER_NAME ="cluster20_0_face_cradle_sept26/giga/face_frame"
 # FOLDER_NAME = "topic17_business_fusion_test"
 # FOLDER_NAME = "cluster1_21_phone_sept24production/silverphone_sept24_production/down/giga"
-FOLDER_NAME = "topic23_oneshot_32x128_full"
+FOLDER_NAME = "topic32_T64_32x128_128d"
 FOLDER_PATH = os.path.join(ROOT_FOLDER_PATH,FOLDER_NAME)
 DIRS = ["1x1", "4x3", "16x10"]
 
