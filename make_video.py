@@ -65,7 +65,7 @@ IS_CLUSTER = False
 if IS_HAND_POSE_FUSION or IS_VIDEO_FUSION:
     # first sort on HandsPosts, then on Hands
     CLUSTER_TYPE = "HandsPositions" # Select on 3d hands
-    CLUSTER_TYPE_2 = "HandsGestures128" # Sort on 2d hands
+    CLUSTER_TYPE_2 = "HandsGestures" # Sort on 2d hands
     # CLUSTER_TYPE = "HandsPositions" # Select on 3d hands
     # CLUSTER_TYPE_2 = "HandsGestures" # Sort on 2d hands
 else:
@@ -158,22 +158,24 @@ if not GENERATE_FUSION_PAIRS:
         # # topic 17 selects
         # [1,5]
 
+        [24, 13]
+
         # testing topic 32, T64, ihp128
-        [1, 65],
-        [1, 88],
-        [1, 125],
+        # [1, 65],
+        # [1, 88],
+        # [1, 125],
         # [13, 2],
-        [13, 24],
-        [13, 65],
-        [13, 85],
-        [13, 101],
-        [13, 117],
-        [24, 11],
-        [24, 13],
-        [24, 57],
-        [25, 65],
-        [25, 88],
-        [25, 125]
+        # [13, 24],
+        # [13, 65],
+        # [13, 85],
+        # [13, 101],
+        # [13, 117],
+        # [24, 11],
+        # [24, 13],
+        # [24, 57],
+        # [25, 65],
+        # [25, 88],
+        # [25, 125]
 
 
         # # topic 32, T64
@@ -1181,7 +1183,7 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
                 print("no description, skipping")
                 description = None
             else:
-                description = description[0]
+                description = description
             metas = [image_id, description, topic_score]
             metas_path = os.path.join(sort.counter_dict["outfolder"],METAS_FILE)
             io.write_csv(metas_path, metas)

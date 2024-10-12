@@ -76,7 +76,7 @@ db = io.db
 
 NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 title = 'Please choose your operation: '
-options = ['kmeans cluster and save clusters', 'cluster assignment', 'calculate cluster medians and save clusters']
+options = ['kmeans cluster and save clusters', 'cluster assignment', 'calculate cluster medians, cluster_dist and save clusters']
 option, MODE = pick(options, title)
 # MODE = 1
 # CLUSTER_TYPE = "Clusters"
@@ -147,8 +147,8 @@ if USE_SEGMENT is True and (CLUSTER_TYPE != "Clusters"):
             WHERE += " AND ic.cluster_id IS NOT NULL "
 
     # WHERE += " AND h.is_body = 1"
-    LIMIT = 5000000
-
+    LIMIT = 200000
+    OFFSET = 1000000
 
     '''
     Poses
@@ -290,7 +290,9 @@ def get_cluster_medians():
 
 
 def selectSQL():
-    selectsql = f"SELECT {SELECT} FROM {FROM} WHERE {WHERE} LIMIT {str(LIMIT)};"
+    if OFFSET: offset = f" OFFSET {str(OFFSET)}"
+    else: offset = ""
+    selectsql = f"SELECT {SELECT} FROM {FROM} WHERE {WHERE} LIMIT {str(LIMIT)} {offset};"
     print("actual SELECT is: ",selectsql)
     result = engine.connect().execute(text(selectsql))
     resultsjson = ([dict(row) for row in result.mappings()])

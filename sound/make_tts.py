@@ -7,26 +7,29 @@ import random
 import time
 from API import api_key 
 from openai import OpenAI
+from pick import pick
 
 # go get IO class from parent folder
 # caution: path[0] is reserved for script path (or '' in REPL)
 import sys
-#######MICHAEL##############
-# sys.path.insert(1, '/Users/michaelmandiberg/Documents/GitHub/facemap/')
-############################
-#######SATYAM##############
-sys.path.insert(1, 'C:/Users/jhash/Documents/GitHub/facemap2/')
-###########################
+if sys.platform == "darwin": sys.path.insert(1, '/Users/michaelmandiberg/Documents/GitHub/facemap/')
+elif sys.platform == "win32": sys.path.insert(1, 'C:/Users/jhash/Documents/GitHub/facemap2/')
 from mp_db_io import DataIO
 
-METHOD="meta" ##openai or bark or meta
+
+title = 'Please choose your operation: '
+options = ['meta', 'bark', 'openai']
+OPTION, MODE = pick(options, title)
+
+# OPTION="meta" ##openai or bark or meta
 
 
 start = time.time()
 ######Michael's folders##########
 io = DataIO()
-INPUT = os.path.join(io.ROOT, "audioproduction", METHOD)
-OUTPUT = os.path.join(io.ROOT, "audioproduction", METHOD)
+INPUT = os.path.join(io.ROOT, "audioproduction", OPTION)
+OUTPUT = os.path.join(io.ROOT, "audioproduction", OPTION)
+WINDOW = [0,1]
 #################################
 
 ######Satyam's folders###########
@@ -77,24 +80,28 @@ def write_TTS_meta(input_text,file_name):
     #  https://huggingface.co/facebook/mms-tts-eng ##
     return
 
-if METHOD=="openai":
+if OPTION=="openai":
     client = OpenAI(api_key=api_key) ##Michael's API key
     model="tts-1", ##(tts-1,tts-1-hd)
     #voice="alloy", ##(alloy, echo, fable, onyx, nova, and shimmer)
     # preset_list=["alloy", "echo", "fable", "onyx", "nova","shimmer","alloy", "fable", "nova","shimmer", "nova","shimmer", "nova","shimmer"] # this is a clunky way of prioritizing higher pitched voices
     preset_list=["alloy", "echo", "fable", "onyx", "nova","shimmer"]
     write_TTS=write_TTS_openai
+    WINDOW = [.75,1]
     
-elif METHOD=="bark":
+    
+elif OPTION=="bark":
     processor = AutoProcessor.from_pretrained("suno/bark")
     model = BarkModel.from_pretrained("suno/bark")
     sample_rate = model.generation_config.sample_rate
     preset_list = [f"v2/en_speaker_{i}" for i in range(10)]
     write_TTS=write_TTS_bark
+    WINDOW = [.6,.75]
     
-elif METHOD=="meta":
+elif OPTION=="meta":
     model = VitsModel.from_pretrained("facebook/mms-tts-eng")
     tokenizer = AutoTokenizer.from_pretrained("facebook/mms-tts-eng")
+    WINDOW = [0,.6]
 
 
     # processor = AutoProcessor.from_pretrained("suno/bark")
@@ -123,6 +130,9 @@ with open(os.path.join(INPUT, sourcefile), mode='r',encoding='utf-8-sig', newlin
         # Iterate through each row
         for row in reader:
             image_id = int(row['image_id'])
+            input_text = row['description']
+            fit = float(row['topic_fit'])
+            # print(f"-- {counter} -- Processing image {image_id} with text: {input_text}")
             if image_id in existing_image_ids:
                 print(f"Skipping image_id {image_id} because it already exists {counter}")
                 counter += 1
@@ -131,15 +141,22 @@ with open(os.path.join(INPUT, sourcefile), mode='r',encoding='utf-8-sig', newlin
             elif counter < start_at:
                 counter += 1
                 continue
+            elif input_text=="": 
+                print(f"Skipping image_id {image_id} because it has no description {counter}")
+                counter += 1
+                continue
+            elif fit<WINDOW[0] or fit>=WINDOW[1]:
+                print(f"Skipping image_id {image_id} because {fit} doesn't fit in the window {WINDOW} -- {counter}")
+                counter += 1
+                continue
             if counter%10==0: print(counter,"sounds generated")                
             print(row)
-            input_text = row['description']
-            if METHOD!="meta":
+            if OPTION!="meta":
                 voice_preset = random.choice(preset_list)
-                out_name =f"{str(image_id)}_{METHOD}_v{voice_preset[-1]}_{row['topic_fit']}.wav"
+                out_name =f"{str(image_id)}_{OPTION}_v{voice_preset[-1]}_{fit}.wav"
             else:
                 ## NO PRESET OPTION FOR META
-                out_name =f"{str(image_id)}_{METHOD}_{row['topic_fit']}.wav"            
+                out_name =f"{str(image_id)}_{OPTION}_{fit}.wav"            
             file_name=os.path.join(OUTPUT, out_name)
             write_TTS(input_text,file_name)
             # Write the row to the output CSV file with 'out_name' added
