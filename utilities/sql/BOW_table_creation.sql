@@ -55,6 +55,19 @@ GROUP BY t.topic_id, t.topic
 ORDER BY total_images DESC;
 
 
+-- count of images by topic SEGMENT ONLY
+SELECT t.topic_id,
+       COUNT(it.image_id) AS total_images,
+       SUM(CASE WHEN i.gender_id = 8 THEN 1 ELSE 0 END) AS gender_8_count,
+       (SUM(CASE WHEN i.gender_id = 8 THEN 1 ELSE 0 END) / COUNT(it.image_id)) * 100 AS gender_8_percentage,
+       t.topic       
+FROM Topics t
+LEFT JOIN ImagesTopics it ON t.topic_id = it.topic_id
+INNER JOIN SegmentOct20 i ON it.image_id = i.image_id
+GROUP BY t.topic_id, t.topic
+ORDER BY total_images DESC;
+
+
 
 
 

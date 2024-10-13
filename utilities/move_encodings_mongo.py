@@ -81,13 +81,12 @@ while True:
         image_id = result[0]
         last_id = image_id
 
-
         results = mongo_collection.find_one({"image_id": image_id})
         if results:
-            encoding_id = results['encoding_id']
-            face_encodings68 = results['face_encodings68']
-            face_landmarks = results['face_landmarks']
-            body_landmarks = results['body_landmarks']
+            encoding_id = results.get('encoding_id', None)
+            face_encodings68 = results.get('face_encodings68', None)
+            face_landmarks = results.get('face_landmarks', None)
+            body_landmarks = results.get('body_landmarks', None)
 
 
         # print(encoding_id, image_id, face_landmarks, face_encodings68, body_landmarks)
