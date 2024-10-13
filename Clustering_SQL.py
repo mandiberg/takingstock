@@ -144,11 +144,11 @@ if USE_SEGMENT is True and (CLUSTER_TYPE != "Clusters"):
         elif MODE == 2: 
             FROM += f" INNER JOIN {CLUSTER_TYPE} c ON c.cluster_id = ic.cluster_id"
             SELECT += ",ic.cluster_id, ic.cluster_dist, c.cluster_median"
-            WHERE += " AND ic.cluster_id IS NOT NULL "
+            WHERE += " AND ic.cluster_id IS NOT NULL AND ic.cluster_dist IS NULL"
 
     # WHERE += " AND h.is_body = 1"
     LIMIT = 200000
-    OFFSET = 1000000
+    OFFSET = 0
 
     '''
     Poses

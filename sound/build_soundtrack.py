@@ -24,6 +24,8 @@ OUTPUT = os.path.join(io.ROOT, "audioproduction", TOPICFOLDER)
 # OUTPUT = "C:/Users/jhash/Documents/GitHub/facemap2/sound/sound_files/OpenAI"
 #################################
 
+# Choose a file starting with a given string
+# prefixed = [filename for filename in os.listdir('.') if filename.startswith("prefix")]
 
 # Read all rows from the CSV file
 df = pd.read_csv(os.path.join(INPUT,"output_file.csv"))

@@ -16,33 +16,22 @@ if sys.platform == "darwin": sys.path.insert(1, '/Users/michaelmandiberg/Documen
 elif sys.platform == "win32": sys.path.insert(1, 'C:/Users/jhash/Documents/GitHub/facemap2/')
 from mp_db_io import DataIO
 
-
 title = 'Please choose your operation: '
 options = ['meta', 'bark', 'openai']
 OPTION, MODE = pick(options, title)
 
-# OPTION="meta" ##openai or bark or meta
-
-
 start = time.time()
-######Michael's folders##########
 io = DataIO()
-INPUT = os.path.join(io.ROOT, "audioproduction", OPTION)
-OUTPUT = os.path.join(io.ROOT, "audioproduction", OPTION)
+INPUT = os.path.join(io.ROOTSSD, "audioproduction")
+OUTPUT = os.path.join(io.ROOTSSD, "audioproduction/tts_files_test")
 WINDOW = [0,1]
-#################################
-
-######Satyam's folders###########
-# INPUT = "C:/Users/jhash/Documents/GitHub/facemap2/sound"
-# OUTPUT = "C:/Users/jhash/Documents/GitHub/facemap2/sound/sound_files/OpenAI"
-#################################
 
 sourcefile = "metas.csv"
 output_csv = "output_file.csv"
 
 STOP_AFTER = 2000
 counter = 1
-start_at = 425
+start_at = 0
 
 def get_existing_image_ids():
     existing_files = io.get_img_list(OUTPUT)
@@ -129,6 +118,7 @@ with open(os.path.join(INPUT, sourcefile), mode='r',encoding='utf-8-sig', newlin
 
         # Iterate through each row
         for row in reader:
+            print("row", row)
             image_id = int(row['image_id'])
             input_text = row['description']
             fit = float(row['topic_fit'])

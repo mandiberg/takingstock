@@ -133,9 +133,9 @@ TOPIC_NO = [32]
 # 7 is surprise
 #  is yoga << planar,  planar,  fingers crossed
 
-SORT_TYPE = "128d"
+# SORT_TYPE = "128d"
 # SORT_TYPE ="planar"
-# SORT_TYPE = "planar_body"
+SORT_TYPE = "planar_body"
 NORMED_BODY_LMS = True
 
 MOUTH_GAP = 0
@@ -146,7 +146,7 @@ DO_OBJ_SORT = True
 OBJ_DONT_SUBSELECT = False # False means select for OBJ. this is a flag for selecting a specific object type when not sorting on obj
 PHONE_BBOX_LIMITS = [1] # this is an attempt to control the BBOX placement. I don't think it is going to work, but with non-zero it will make a bigger selection. Fix this hack TK. 
 
-ONE_SHOT = False # take all files, based off the very first sort order.
+ONE_SHOT = True # take all files, based off the very first sort order.
 EXPAND = False # expand with white, as opposed to inpaint and crop
 JUMP_SHOT = True # jump to random file if can't find a run (I don't think this applies to planar?)
 
@@ -158,24 +158,24 @@ if not GENERATE_FUSION_PAIRS:
         # # topic 17 selects
         # [1,5]
 
-        [24, 13]
+        # [24, 13]
 
-        # testing topic 32, T64, ihp128
-        # [1, 65],
-        # [1, 88],
-        # [1, 125],
-        # [13, 2],
-        # [13, 24],
-        # [13, 65],
-        # [13, 85],
-        # [13, 101],
-        # [13, 117],
-        # [24, 11],
-        # [24, 13],
-        # [24, 57],
-        # [25, 65],
-        # [25, 88],
-        # [25, 125]
+        # topic 32, T64, ihp128
+        [1, 65],
+        [1, 88],
+        [1, 125],
+        [13, 2],
+        [13, 24],
+        [13, 65],
+        [13, 85],
+        [13, 101],
+        [13, 117],
+        [24, 11],
+        [24, 13],
+        [24, 57],
+        [25, 65],
+        [25, 88],
+        [25, 125]
 
 
         # # topic 32, T64
@@ -303,7 +303,7 @@ elif IS_SEGONLY and io.platform == "darwin":
     # FROM += " JOIN ImagesKeywords ik ON s.image_id = ik.image_id JOIN Keywords k ON ik.keyword_id = k.keyword_id "
     # WHERE += " AND k.keyword_text LIKE 'shout%' "
 
-    def add_cluster_select():
+    def add_topic_select():
         global FROM, WHERE, SELECT
         FROM += " JOIN ImagesTopics it ON s.image_id = it.image_id "
         WHERE += " AND it.topic_score > .3"
@@ -312,16 +312,17 @@ elif IS_SEGONLY and io.platform == "darwin":
     if IS_HAND_POSE_FUSION or IS_VIDEO_FUSION:
         FROM += f" JOIN Images{CLUSTER_TYPE} ihp ON s.image_id = ihp.image_id "
         FROM += f" JOIN Images{CLUSTER_TYPE_2} ih ON s.image_id = ih.image_id "
-        if IS_VIDEO_FUSION: add_cluster_select()
+        # WHERE += " AND ih.cluster_dist > .1" # isn't really working how I want it
+        if IS_VIDEO_FUSION: add_topic_select()
     elif IS_ONE_CLUSTER and IS_ONE_TOPIC:
         FROM += f" JOIN Images{CLUSTER_TYPE} ic ON s.image_id = ic.image_id "
-        add_cluster_select()
+        add_topic_select()
         print(f"SELECTING ONE CLUSTER {CLUSTER_NO} AND ONE TOPIC {TOPIC_NO}. This is my WHERE: {WHERE}")
     else:
         if IS_CLUSTER or IS_ONE_CLUSTER:
             FROM += f" JOIN Images{CLUSTER_TYPE} ic ON s.image_id = ic.image_id "
         if IS_TOPICS or IS_ONE_TOPIC:
-            add_cluster_select()
+            add_topic_select()
 
 
     if NO_KIDS:

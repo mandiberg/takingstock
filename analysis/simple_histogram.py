@@ -59,7 +59,7 @@ if IS_CSV:
 
 else:
 
-    results = session.query(ImagesClusters.cluster_dist).all()
+    results = session.query(ImagesClusters.cluster_dist).filter(ImagesClusters.cluster_id == 125).all()
     df = pd.DataFrame(results)
     plot_column = 'cluster_dist'
 print(df.columns)
