@@ -46,14 +46,14 @@ class SortPose:
         self.BRUTEFORCE = False
         self.use_3D = use_3D
         print("init use_3D",self.use_3D)
-        self.CUTOFF = 2000 # DOES factor if ONE_SHOT
+        self.CUTOFF = 5000 # DOES factor if ONE_SHOT
 
         self.CHECK_DESC_DIST = 30
         self.CLUSTER_TYPE = "BodyPoses" # defaults
         self.SORT_TYPE = SORT_TYPE
         if self.SORT_TYPE == "128d":
             self.MIND = self.MINFACEDIST * 1.5
-            self.MAXD = self.MAXFACEDIST * 1.1
+            self.MAXD = self.MAXFACEDIST * 1.3
             self.MULTIPLIER = self.HSVMULTIPLIER
             self.DUPED = self.FACE_DUPE_DIST
             self.HSV_DELTA_MAX = self.HSV_DELTA_MAX * 1.5

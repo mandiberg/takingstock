@@ -158,7 +158,7 @@ FROM
 INNER JOIN ImagesTopics it ON it.image_id = so.image_id
 INNER JOIN ImagesHandsGestures ihg ON ihg.image_id = so.image_id
 -- JOIN PhoneBbox pb ON pb.image_id = so.image_id 
-WHERE it.topic_id = 23
+WHERE it.topic_id = 32
 GROUP BY
     ihg.cluster_id
 ORDER BY
@@ -183,6 +183,91 @@ GROUP BY
     ihg.cluster_id
 ORDER BY
     image_count DESC;
+
+   
+   
+   
+-- matrix of fusion poses 32 
+   
+   
+SELECT 
+    ihp.cluster_id AS ihp_cluster,  -- Row: ImagesHandsPoses cluster_id
+    SUM(CASE WHEN ihg.cluster_id = 0 THEN 1 ELSE 0 END) AS ihg_1,
+    SUM(CASE WHEN ihg.cluster_id = 1 THEN 1 ELSE 0 END) AS ihg_1,
+    SUM(CASE WHEN ihg.cluster_id = 2 THEN 1 ELSE 0 END) AS ihg_2,
+    SUM(CASE WHEN ihg.cluster_id = 3 THEN 1 ELSE 0 END) AS ihg_3,
+    SUM(CASE WHEN ihg.cluster_id = 4 THEN 1 ELSE 0 END) AS ihg_4,
+    SUM(CASE WHEN ihg.cluster_id = 5 THEN 1 ELSE 0 END) AS ihg_5,
+    SUM(CASE WHEN ihg.cluster_id = 6 THEN 1 ELSE 0 END) AS ihg_6,
+    SUM(CASE WHEN ihg.cluster_id = 7 THEN 1 ELSE 0 END) AS ihg_7,
+    SUM(CASE WHEN ihg.cluster_id = 8 THEN 1 ELSE 0 END) AS ihg_8,
+    SUM(CASE WHEN ihg.cluster_id = 9 THEN 1 ELSE 0 END) AS ihg_9,
+    SUM(CASE WHEN ihg.cluster_id = 10 THEN 1 ELSE 0 END) AS ihg_10,
+    SUM(CASE WHEN ihg.cluster_id = 11 THEN 1 ELSE 0 END) AS ihg_11,
+    SUM(CASE WHEN ihg.cluster_id = 12 THEN 1 ELSE 0 END) AS ihg_12,
+    SUM(CASE WHEN ihg.cluster_id = 13 THEN 1 ELSE 0 END) AS ihg_13,
+    SUM(CASE WHEN ihg.cluster_id = 14 THEN 1 ELSE 0 END) AS ihg_14,
+    SUM(CASE WHEN ihg.cluster_id = 15 THEN 1 ELSE 0 END) AS ihg_15,
+    SUM(CASE WHEN ihg.cluster_id = 16 THEN 1 ELSE 0 END) AS ihg_16,
+    SUM(CASE WHEN ihg.cluster_id = 17 THEN 1 ELSE 0 END) AS ihg_17,
+    SUM(CASE WHEN ihg.cluster_id = 18 THEN 1 ELSE 0 END) AS ihg_18,
+    SUM(CASE WHEN ihg.cluster_id = 19 THEN 1 ELSE 0 END) AS ihg_19,
+    SUM(CASE WHEN ihg.cluster_id = 20 THEN 1 ELSE 0 END) AS ihg_20,
+    SUM(CASE WHEN ihg.cluster_id = 21 THEN 1 ELSE 0 END) AS ihg_21,
+    SUM(CASE WHEN ihg.cluster_id = 22 THEN 1 ELSE 0 END) AS ihg_22,
+    SUM(CASE WHEN ihg.cluster_id = 23 THEN 1 ELSE 0 END) AS ihg_23,
+    SUM(CASE WHEN ihg.cluster_id = 24 THEN 1 ELSE 0 END) AS ihg_24,
+    SUM(CASE WHEN ihg.cluster_id = 25 THEN 1 ELSE 0 END) AS ihg_25,
+    SUM(CASE WHEN ihg.cluster_id = 26 THEN 1 ELSE 0 END) AS ihg_26,
+    SUM(CASE WHEN ihg.cluster_id = 27 THEN 1 ELSE 0 END) AS ihg_27,
+    SUM(CASE WHEN ihg.cluster_id = 28 THEN 1 ELSE 0 END) AS ihg_28,
+    SUM(CASE WHEN ihg.cluster_id = 29 THEN 1 ELSE 0 END) AS ihg_29,
+    SUM(CASE WHEN ihg.cluster_id = 30 THEN 1 ELSE 0 END) AS ihg_30,
+    SUM(CASE WHEN ihg.cluster_id = 31 THEN 1 ELSE 0 END) AS ihg_31,
+    SUM(CASE WHEN ihg.cluster_id = 32 THEN 1 ELSE 0 END) AS ihg_32,
+    SUM(CASE WHEN ihg.cluster_id = 33 THEN 1 ELSE 0 END) AS ihg_33,
+    SUM(CASE WHEN ihg.cluster_id = 34 THEN 1 ELSE 0 END) AS ihg_34,
+    SUM(CASE WHEN ihg.cluster_id = 35 THEN 1 ELSE 0 END) AS ihg_35,
+    SUM(CASE WHEN ihg.cluster_id = 36 THEN 1 ELSE 0 END) AS ihg_36,
+    SUM(CASE WHEN ihg.cluster_id = 37 THEN 1 ELSE 0 END) AS ihg_37,
+    SUM(CASE WHEN ihg.cluster_id = 38 THEN 1 ELSE 0 END) AS ihg_38,
+    SUM(CASE WHEN ihg.cluster_id = 39 THEN 1 ELSE 0 END) AS ihg_39,
+    SUM(CASE WHEN ihg.cluster_id = 40 THEN 1 ELSE 0 END) AS ihg_40,
+    SUM(CASE WHEN ihg.cluster_id = 41 THEN 1 ELSE 0 END) AS ihg_41,
+    SUM(CASE WHEN ihg.cluster_id = 42 THEN 1 ELSE 0 END) AS ihg_42,
+    SUM(CASE WHEN ihg.cluster_id = 43 THEN 1 ELSE 0 END) AS ihg_43,
+    SUM(CASE WHEN ihg.cluster_id = 44 THEN 1 ELSE 0 END) AS ihg_44,
+    SUM(CASE WHEN ihg.cluster_id = 45 THEN 1 ELSE 0 END) AS ihg_45,
+    SUM(CASE WHEN ihg.cluster_id = 46 THEN 1 ELSE 0 END) AS ihg_46,
+    SUM(CASE WHEN ihg.cluster_id = 47 THEN 1 ELSE 0 END) AS ihg_47,
+    SUM(CASE WHEN ihg.cluster_id = 48 THEN 1 ELSE 0 END) AS ihg_48,
+    SUM(CASE WHEN ihg.cluster_id = 49 THEN 1 ELSE 0 END) AS ihg_49,
+    SUM(CASE WHEN ihg.cluster_id = 50 THEN 1 ELSE 0 END) AS ihg_50,
+    SUM(CASE WHEN ihg.cluster_id = 51 THEN 1 ELSE 0 END) AS ihg_51,
+    SUM(CASE WHEN ihg.cluster_id = 52 THEN 1 ELSE 0 END) AS ihg_52,
+    SUM(CASE WHEN ihg.cluster_id = 53 THEN 1 ELSE 0 END) AS ihg_53,
+    SUM(CASE WHEN ihg.cluster_id = 54 THEN 1 ELSE 0 END) AS ihg_54,
+    SUM(CASE WHEN ihg.cluster_id = 55 THEN 1 ELSE 0 END) AS ihg_55,
+    SUM(CASE WHEN ihg.cluster_id = 56 THEN 1 ELSE 0 END) AS ihg_56, 
+SUM(CASE WHEN ihg.cluster_id =  57 THEN 1 ELSE 0 END) AS ihg_57 ,
+SUM(CASE WHEN ihg.cluster_id =  58 THEN 1 ELSE 0 END) AS ihg_58 ,
+SUM(CASE WHEN ihg.cluster_id =  59 THEN 1 ELSE 0 END) AS ihg_59 ,
+SUM(CASE WHEN ihg.cluster_id =  60 THEN 1 ELSE 0 END) AS ihg_60 ,
+SUM(CASE WHEN ihg.cluster_id =  61 THEN 1 ELSE 0 END) AS ihg_61 ,
+SUM(CASE WHEN ihg.cluster_id =  62 THEN 1 ELSE 0 END) AS ihg_62 ,
+SUM(CASE WHEN ihg.cluster_id =  63 THEN 1 ELSE 0 END) AS ihg_63     
+FROM 
+    SegmentOct20 so
+JOIN 
+    ImagesHandsPositions ihp ON ihp.image_id = so.image_id
+JOIN 
+    ImagesHandsGestures ihg ON ihg.image_id = so.image_id
+JOIN ImagesTopics it ON it.image_id = so.image_id
+WHERE it.topic_id = 32
+GROUP BY 
+    ihp.cluster_id  -- Group by ImagesHandsPoses cluster_id to create rows
+ORDER BY 
+    ihp_cluster;
 
    
    
@@ -327,7 +412,9 @@ FROM
 JOIN 
     ImagesHandsPositions ihp ON ihp.image_id = so.image_id
 JOIN 
-    ImagesHandsGestures ihg ON ihg.image_id = so.image_id
+    ImagesHandsGestures128 ihg ON ihg.image_id = so.image_id
+JOIN ImagesTopics it ON it.image_id = so.image_id
+WHERE it.topic_id = 23
 GROUP BY 
     ihp.cluster_id  -- Group by ImagesHandsPoses cluster_id to create rows
 ORDER BY 

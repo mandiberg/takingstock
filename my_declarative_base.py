@@ -201,6 +201,21 @@ class ImagesTopics(Base):
     topic_id3    = Column(Integer, ForeignKey('Topics.topic_id'))
     topic_score3 = Column(Float)
 
+class Topics48(Base):
+    __tablename__ = 'Topics48' 
+    topic_id = Column(Integer, primary_key=True, autoincrement=True)
+    topic    = Column(String(150))
+    
+class ImagesTopics48(Base):
+    __tablename__ = 'ImagesTopics48' 
+    image_id    = Column(Integer, ForeignKey('images.image_id'), primary_key=True)
+    topic_id    = Column(Integer, ForeignKey('Topics48.topic_id'))
+    topic_score = Column(Float)
+    topic_id2    = Column(Integer, ForeignKey('Topics48.topic_id'))
+    topic_score2 = Column(Float)
+    topic_id3    = Column(Integer, ForeignKey('Topics48.topic_id'))
+    topic_score3 = Column(Float)
+
 class ImagesBackground(Base):
     __tablename__ = 'ImagesBackground' 
     image_id     = Column(Integer, ForeignKey('images.image_id'), primary_key=True)

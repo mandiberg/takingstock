@@ -8,7 +8,7 @@ DROP TABLE SegmentHelperAug16_SegOct20_preAlamy ;
 DELETE FROM SegmentHelper_sept4_all_adults_facing_forward;
 
 -- create helper segment table
-CREATE TABLE SegmentHelper_sept18_silence (
+CREATE TABLE SegmentHelper_oct3_bg_doover (
     seg_image_id int NOT NULL AUTO_INCREMENT PRIMARY KEY,
     image_id INTEGER,
     FOREIGN KEY (image_id) REFERENCES Images(image_id)
@@ -199,7 +199,7 @@ WHERE k.keyword_text LIKE "%quiet%"
 -- this skips existing so you can rerun ontop of existing data
 -- seg big is -45 to -3, with yz at 10
 
-INSERT INTO SegmentHelper_sept18_silence (image_id)
+INSERT INTO SegmentHelper_oct3_bg_doover (image_id)
 SELECT DISTINCT e.image_id
 FROM Encodings e
 JOIN Images i ON i.image_id = e.image_id
@@ -215,7 +215,14 @@ WHERE e.mongo_encodings = 1
         FROM SegmentOct20 s
         WHERE s.image_id = e.image_id
     );
-   
+
+-- this just to build a helper with image_ids. from ibg
+INSERT INTO SegmentHelper_oct3_bg_doover (image_id)
+SELECT DISTINCT ib.image_id
+FROM ImagesBackground ib
+WHERE ib.hue IS NULL
+;
+  
    
 -- DO THIS SECOND
 -- add column for is_new 

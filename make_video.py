@@ -57,21 +57,22 @@ HSV_NORMS = {"LUM": .01, "SAT": 1,  "HUE": 0.002777777778, "VAL": 1}
 # this is for controlling if it is using
 # all clusters, 
 IS_VIDEO_FUSION = True
-MIN_VIDEO_FUSION_COUNT = 400
+GENERATE_FUSION_PAIRS = False
+MIN_VIDEO_FUSION_COUNT = 100
 IS_HAND_POSE_FUSION = False
 ONLY_ONE = False
-IS_CLUSTER = True
-if IS_HAND_POSE_FUSION:
+IS_CLUSTER = False
+if IS_HAND_POSE_FUSION or IS_VIDEO_FUSION:
     # first sort on HandsPosts, then on Hands
-    # CLUSTER_TYPE = "HandsGestures" # Select on 3d hands
-    # CLUSTER_TYPE_2 = "HandsPositions" # Sort on 2d hands
-    CLUSTER_TYPE = "HandsGestures" # Select on 3d hands
-    CLUSTER_TYPE_2 = "HandsPositions" # Sort on 2d hands
+    CLUSTER_TYPE = "HandsPositions" # Select on 3d hands
+    CLUSTER_TYPE_2 = "HandsGestures" # Sort on 2d hands
+    # CLUSTER_TYPE = "HandsPositions" # Select on 3d hands
+    # CLUSTER_TYPE_2 = "HandsGestures" # Sort on 2d hands
 else:
     # choose the cluster type manually here
     # CLUSTER_TYPE = "BodyPoses"
-    # CLUSTER_TYPE = "HandsPositions" # 2d hands
-    CLUSTER_TYPE = "HandsGestures"
+    CLUSTER_TYPE = "HandsPositions" # 2d hands
+    # CLUSTER_TYPE = "HandsGestures"
     CLUSTER_TYPE_2 = None
 DROP_LOW_VIS = False
 USE_HEAD_POSE = False
@@ -79,13 +80,13 @@ USE_HEAD_POSE = False
 N_HANDS = N_CLUSTERS = None # declared here, but set in the SQL query below
 # this is for IS_ONE_CLUSTER to only run on a specific CLUSTER_NO
 IS_ONE_CLUSTER = False
-CLUSTER_NO = 74 # sort on this one as HAND_POSITION for IS_HAND_POSE_FUSION
+CLUSTER_NO = 1 # sort on this one as HAND_POSITION for IS_HAND_POSE_FUSION
                 # if not IS_HAND_POSE_FUSION, then this is selecting HandsGestures
 START_CLUSTER = 0
 # I started to create a separate track for Hands, but am pausing for the moment
 IS_HANDS = False
 IS_ONE_HAND = False
-HAND_POSE_NO = 74
+HAND_POSE_NO = 5
 
 # 80,74 fails between 300-400
 
@@ -114,10 +115,10 @@ IS_ANGLE_SORT = False
 
 # this control whether sorting by topics
 IS_TOPICS = False
-N_TOPICS = 48
+N_TOPICS = 64
 
 IS_ONE_TOPIC = True
-TOPIC_NO = [23]
+TOPIC_NO = [32]
 #######################
 
 #######################
@@ -132,9 +133,9 @@ TOPIC_NO = [23]
 # 7 is surprise
 #  is yoga << planar,  planar,  fingers crossed
 
-SORT_TYPE = "128d"
+# SORT_TYPE = "128d"
 # SORT_TYPE ="planar"
-# SORT_TYPE = "planar_body"
+SORT_TYPE = "planar_body"
 NORMED_BODY_LMS = True
 
 MOUTH_GAP = 0
@@ -145,44 +146,107 @@ DO_OBJ_SORT = True
 OBJ_DONT_SUBSELECT = False # False means select for OBJ. this is a flag for selecting a specific object type when not sorting on obj
 PHONE_BBOX_LIMITS = [1] # this is an attempt to control the BBOX placement. I don't think it is going to work, but with non-zero it will make a bigger selection. Fix this hack TK. 
 
-ONE_SHOT = False # take all files, based off the very first sort order.
+ONE_SHOT = True # take all files, based off the very first sort order.
 EXPAND = False # expand with white, as opposed to inpaint and crop
 JUMP_SHOT = True # jump to random file if can't find a run (I don't think this applies to planar?)
 
-# FUSION_PAIRS = [
-#     #CLUSTER_NO, HAND_POSE_NO
+if not GENERATE_FUSION_PAIRS:
+    print("not generating FUSION_PAIRS, pulling from list")
+    FUSION_PAIRS = [
+        #CLUSTER_NO, HAND_POSE_NO
 
-#     # selects
-#     [0, 68], 
-#     [0, 72], 
-#     [5, 72], 
-#     [5, 74], 
-#     [10, 67], 
-#     [15, 55],
-#     [20, 0], 
-#     [31, 2], 
-#     [35, 11], 
-#     [35, 99], 
-#     [36, 105], 
-#     [49, 74], 
-#     [74, 10], 
-#     [80, 88], 
-#     [83, 57], 
-#     [92, 5], 
-#     [111, 119], 
-#     [113, 2], 
-#     [113, 117], 
-#     [120, 98]
+        # # topic 17 selects
+        # [1,5]
 
-#     # 300 largest below
-#     # [1,21],[115,97],[53,21],[47,21],[47,67],[4,103],[5,115],[7,57],[52,8],[11,17],[112,57],[3,24],[11,71],[11,48],[120,115],[121,29],[15,74],[1,67],[121,123],[3,27],[115,112],[121,8],[74,67],[17,94],[99,62],[56,102],[126,102],[20,0],[31,24],[28,111],[0,68],[121,7],[35,99],[4,76],[18,97],[52,29],[84,25],[109,8],[66,54],[4,3],[38,48],[52,123],[2,64],[2,56],[94,19],[50,21],[68,21],[20,116],[5,78],[52,99],[1,80],
-#     # [7,105],[68,45],[80,35],[10,67],[33,104],[120,22],[88,57],[7,120],[46,124],[2,29],[113,3],[36,105],[28,89],[8,91],[120,78],[1,110],[18,87],[31,19],[36,120],[75,115],[96,90],[31,27],[73,63],[115,126],[10,45],[108,16],[29,127],[88,64],[35,126],[35,11],[15,89],[17,114],[83,57],[108,77],[4,52],[94,33],[94,27],[23,114],[111,90],[2,4],[11,108],[7,64],[115,58],[65,24],[84,108],[87,90],[88,54],[65,33],[87,120],[29,33],[83,41],[5,74],[11,127],[109,29],[73,27],[3,33],[89,102],[55,24],[79,94],[23,94],[73,24],[115,99],[121,4],[38,17],[49,44],[48,59],[2,54],[80,92],[4,71],[65,63],[55,19],[73,33],[88,120],[113,117],[106,41],[83,54],[62,35],[47,80],[40,44],[4,48],[68,67],[49,74],[7,54],[36,64],[3,63],[15,114],[49,46],[77,111],
-#     # [80,88],[92,73],[65,93],[77,89],[2,99],[112,54],[47,110],[15,94],[50,114],[53,80],[87,57],[57,92],[0,84],[3,19],[22,6],[57,9],[18,58],[35,113],[113,106],[15,92],[28,114],[50,107],[94,71],[57,85],[53,110],[108,88],[11,33],[47,45],[104,31],[13,63],[120,98],[53,28],[50,28],[126,89],[88,4],[2,120],[60,102],[52,4],[111,64],[85,67],[66,42],[88,90],[11,106],[92,5],[18,8],[4,127],[120,74],[125,104],[35,42],[94,12],[115,113],[31,2],[15,78],[57,114],[68,28],[1,89],[1,26],[55,100],[87,64],[126,107],[12,105],[2,42],[87,105],[38,71],[112,120],[50,45],[90,114],[113,2],[57,45],[115,119],[42,44],[118,45],
-#     # [3,93],[15,35],[90,89],[121,119],[1,16],[5,72],[52,58],[68,34],[0,72],[0,0],[51,77],[53,89],[111,4],[83,51],[112,11],[15,55],[18,112],[28,35],[83,105],[2,57],[90,21],[115,13],[85,47],[50,50],[22,21],[111,119],[103,82],[55,27],[78,67],[35,13],[56,25],[111,7],[51,94],[57,28],[29,108],[50,110],[50,34],[88,56],[92,81],[31,33],[59,30],[54,100],[74,10],[94,24],[67,102],[78,21],[3,79],[5,111],[35,57],[2,119],[1,85],[15,115],[80,74],[78,125],[18,126],[53,16],[1,125],[12,120],[112,13],[122,91],[112,64],[94,127],[12,124],[68,110],[113,27],[42,80],[80,78],[36,57],[15,111],[7,41],[97,94],[55,118],[28,17],[75,22],[84,127],[127,118],[52,40],[52,7],[80,115],[122,35],[15,28],[120,35],[112,113],[49,36],[15,102],[67,89],[80,22],[121,64]
+        # [24, 13]
 
-#     # phone bbox only
-#     # [1,21],[115,97],[53,21],[47,21],[47,67],[4,103],[7,57],[112,57],[3,24],[1,67],[3,27],[115,112],[31,24],[18,97],[74,67],[121,7],[20,0],[4,76],[96,90],[0,68],[1,80],[50,21],[88,57],[68,21],[1,110],[17,94],[115,126],[7,105],[31,27],[115,58],[126,102],[20,116],[4,3],[108,16],[7,120],[111,90],[36,105],[10,67],[4,52],[52,8],[94,27],[57,85],[94,19],[73,24]
-#     ]
+        # topic 32, T64, ihp128
+        [1, 65],
+        [1, 88],
+        [1, 125],
+        [13, 2],
+        [13, 24],
+        [13, 65],
+        [13, 85],
+        [13, 101],
+        [13, 117],
+        [24, 11],
+        [24, 13],
+        [24, 57],
+        [25, 65],
+        [25, 88],
+        [25, 125]
+
+
+        # # topic 32, T64
+        # [13, 11],
+        # [13, 29],
+        # [13, 47],
+        # [1, 37],
+        # [24, 12],
+        # [24, 8],
+        # [25, 25],
+        # [13, 37],
+        # [1, 53],
+        # [24, 33],
+        # [25, 11],
+        # [25, 37],
+        # [13, 28],
+        # [1, 25],
+        # [1, 60],
+        # [24, 37]
+
+        # # topic 23 reselects
+        # [1,65],
+        # [1,88],
+        # [1,125],        
+        # [13,109],
+        # [13,24],
+        # [13,33],
+        # [13,85],
+        # [24,13],
+        # [24,85],
+        # [25,65],
+        # [13,117],
+        # [13,2],
+        # [13,65],
+        # [24,11],
+        # [24,7],
+        # [25,125],
+        # [25,88]        
+
+        # # topic 23 selects
+        # [13,13],
+        # [13,15],
+        # [13,17],
+        # [13,23],
+        # [13,29],
+        # [13,7],
+        # [18,2],
+        # [1,13],
+        # [24,12],
+        # [24,24],
+        # [25,13]
+
+        # no topics
+        # [0,68],
+        # [35,11],
+        # [35,13],
+        # [59,30],
+        # [74,10],
+        # [113,2],
+        # [113,117]
+
+        # 300 largest below
+        # [1,21],[115,97],[53,21],[47,21],[47,67],[4,103],[5,115],[7,57],[52,8],[11,17],[112,57],[3,24],[11,71],[11,48],[120,115],[121,29],[15,74],[1,67],[121,123],[3,27],[115,112],[121,8],[74,67],[17,94],[99,62],[56,102],[126,102],[20,0],[31,24],[28,111],[0,68],[121,7],[35,99],[4,76],[18,97],[52,29],[84,25],[109,8],[66,54],[4,3],[38,48],[52,123],[2,64],[2,56],[94,19],[50,21],[68,21],[20,116],[5,78],[52,99],[1,80],
+        # [7,105],[68,45],[80,35],[10,67],[33,104],[120,22],[88,57],[7,120],[46,124],[2,29],[113,3],[36,105],[28,89],[8,91],[120,78],[1,110],[18,87],[31,19],[36,120],[75,115],[96,90],[31,27],[73,63],[115,126],[10,45],[108,16],[29,127],[88,64],[35,126],[35,11],[15,89],[17,114],[83,57],[108,77],[4,52],[94,33],[94,27],[23,114],[111,90],[2,4],[11,108],[7,64],[115,58],[65,24],[84,108],[87,90],[88,54],[65,33],[87,120],[29,33],[83,41],[5,74],[11,127],[109,29],[73,27],[3,33],[89,102],[55,24],[79,94],[23,94],[73,24],[115,99],[121,4],[38,17],[49,44],[48,59],[2,54],[80,92],[4,71],[65,63],[55,19],[73,33],[88,120],[113,117],[106,41],[83,54],[62,35],[47,80],[40,44],[4,48],[68,67],[49,74],[7,54],[36,64],[3,63],[15,114],[49,46],[77,111],
+        # [80,88],[92,73],[65,93],[77,89],[2,99],[112,54],[47,110],[15,94],[50,114],[53,80],[87,57],[57,92],[0,84],[3,19],[22,6],[57,9],[18,58],[35,113],[113,106],[15,92],[28,114],[50,107],[94,71],[57,85],[53,110],[108,88],[11,33],[47,45],[104,31],[13,63],[120,98],[53,28],[50,28],[126,89],[88,4],[2,120],[60,102],[52,4],[111,64],[85,67],[66,42],[88,90],[11,106],[92,5],[18,8],[4,127],[120,74],[125,104],[35,42],[94,12],[115,113],[31,2],[15,78],[57,114],[68,28],[1,89],[1,26],[55,100],[87,64],[126,107],[12,105],[2,42],[87,105],[38,71],[112,120],[50,45],[90,114],[113,2],[57,45],[115,119],[42,44],[118,45],
+        # [3,93],[15,35],[90,89],[121,119],[1,16],[5,72],[52,58],[68,34],[0,72],[0,0],[51,77],[53,89],[111,4],[83,51],[112,11],[15,55],[18,112],[28,35],[83,105],[2,57],[90,21],[115,13],[85,47],[50,50],[22,21],[111,119],[103,82],[55,27],[78,67],[35,13],[56,25],[111,7],[51,94],[57,28],[29,108],[50,110],[50,34],[88,56],[92,81],[31,33],[59,30],[54,100],[74,10],[94,24],[67,102],[78,21],[3,79],[5,111],[35,57],[2,119],[1,85],[15,115],[80,74],[78,125],[18,126],[53,16],[1,125],[12,120],[112,13],[122,91],[112,64],[94,127],[12,124],[68,110],[113,27],[42,80],[80,78],[36,57],[15,111],[7,41],[97,94],[55,118],[28,17],[75,22],[84,127],[127,118],[52,40],[52,7],[80,115],[122,35],[15,28],[120,35],[112,113],[49,36],[15,102],[67,89],[80,22],[121,64]
+
+        # phone bbox only
+        # [1,21],[115,97],[53,21],[47,21],[47,67],[4,103],[7,57],[112,57],[3,24],[1,67],[3,27],[115,112],[31,24],[18,97],[74,67],[121,7],[20,0],[4,76],[96,90],[0,68],[1,80],[50,21],[88,57],[68,21],[1,110],[17,94],[115,126],[7,105],[31,27],[115,58],[126,102],[20,116],[4,3],[108,16],[7,120],[111,90],[36,105],[10,67],[4,52],[52,8],[94,27],[57,85],[94,19],[73,24]
+        ]
+    print("FUSION_PAIRS", FUSION_PAIRS)
 METAS_FILE = "metas.csv"
 
 NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
@@ -239,27 +303,26 @@ elif IS_SEGONLY and io.platform == "darwin":
     # FROM += " JOIN ImagesKeywords ik ON s.image_id = ik.image_id JOIN Keywords k ON ik.keyword_id = k.keyword_id "
     # WHERE += " AND k.keyword_text LIKE 'shout%' "
 
-    if IS_HAND_POSE_FUSION or IS_VIDEO_FUSION:
-        FROM += f" JOIN ImagesHandsPositions ihp ON s.image_id = ihp.image_id "
-        FROM += f" JOIN ImagesHandsGestures ih ON s.image_id = ih.image_id "
-        if IS_VIDEO_FUSION:
-            FROM += " JOIN ImagesTopics it ON s.image_id = it.image_id "
-            WHERE += " AND it.topic_score > .3"
-    elif IS_ONE_CLUSTER and IS_ONE_TOPIC:
-        FROM += f" JOIN Images{CLUSTER_TYPE} ic ON s.image_id = ic.image_id "
+    def add_topic_select():
+        global FROM, WHERE, SELECT
         FROM += " JOIN ImagesTopics it ON s.image_id = it.image_id "
         WHERE += " AND it.topic_score > .3"
-        # not sure about the below
-        # WHERE += f" AND ic.cluster_no = {CLUSTER_NO} AND it.topic_no = {TOPIC_NO}"
-        SELECT += ", it.topic_score"
+        SELECT += ", it.topic_score" # add description here, after resegmenting
+
+    if IS_HAND_POSE_FUSION or IS_VIDEO_FUSION:
+        FROM += f" JOIN Images{CLUSTER_TYPE} ihp ON s.image_id = ihp.image_id "
+        FROM += f" JOIN Images{CLUSTER_TYPE_2} ih ON s.image_id = ih.image_id "
+        # WHERE += " AND ih.cluster_dist > .1" # isn't really working how I want it
+        if IS_VIDEO_FUSION: add_topic_select()
+    elif IS_ONE_CLUSTER and IS_ONE_TOPIC:
+        FROM += f" JOIN Images{CLUSTER_TYPE} ic ON s.image_id = ic.image_id "
+        add_topic_select()
         print(f"SELECTING ONE CLUSTER {CLUSTER_NO} AND ONE TOPIC {TOPIC_NO}. This is my WHERE: {WHERE}")
     else:
         if IS_CLUSTER or IS_ONE_CLUSTER:
             FROM += f" JOIN Images{CLUSTER_TYPE} ic ON s.image_id = ic.image_id "
         if IS_TOPICS or IS_ONE_TOPIC:
-            FROM += " JOIN ImagesTopics it ON s.image_id = it.image_id "
-            WHERE += " AND it.topic_score > .3"
-            SELECT += ", it.topic_score" # add description here, after resegmenting
+            add_topic_select()
 
 
     if NO_KIDS:
@@ -293,7 +356,7 @@ elif IS_SEGONLY and io.platform == "darwin":
     # WHERE += " AND e.encoding_id > 2612275"
 
     # WHERE = "s.site_name_id != 1"
-    LIMIT = 500
+    LIMIT = 25000
 
     # TEMP TK TESTING
     # WHERE += " AND s.site_name_id = 8"
@@ -501,8 +564,8 @@ if IS_CLUSTER or IS_ONE_CLUSTER or IS_HAND_POSE_FUSION or IS_VIDEO_FUSION:
     cluster_medians, N_CLUSTERS = sort.prep_cluster_medians(results)
     sort.cluster_medians = cluster_medians
     # if any of the cluster_medians are empty, then we need to resegment
-    print("cluster results", results)
-    print("cluster_medians", cluster_medians)
+    print("cluster results", len(results))
+    print("cluster_medians", len(cluster_medians))
     if cluster_medians is None:
     # if not any(cluster_medians):
         print("cluster results are empty", cluster_medians)
@@ -1121,7 +1184,7 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
                 print("no description, skipping")
                 description = None
             else:
-                description = description[0]
+                description = description
             metas = [image_id, description, topic_score]
             metas_path = os.path.join(sort.counter_dict["outfolder"],METAS_FILE)
             io.write_csv(metas_path, metas)
@@ -1526,6 +1589,8 @@ def process_linear(start_img_name, df_segment, cluster_no, sort):
 ###################
 
 def main():
+    # IDK why I need to declare this a global, but it borks otherwise
+    global FUSION_PAIRS
 
     ###################
     #  MAP THE IMGS   #
@@ -1696,8 +1761,9 @@ def main():
     elif (IS_HAND_POSE_FUSION and not ONLY_ONE) or IS_VIDEO_FUSION:
         if IS_VIDEO_FUSION: 
             this_topic = TOPIC_NO
-            FUSION_PAIRS = sort.find_sorted_zero_indices(TOPIC_NO,MIN_VIDEO_FUSION_COUNT)
-            print("FUSION_PAIRS", FUSION_PAIRS)
+            if GENERATE_FUSION_PAIRS:
+                FUSION_PAIRS = sort.find_sorted_zero_indices(TOPIC_NO,MIN_VIDEO_FUSION_COUNT)
+                print("FUSION_PAIRS", FUSION_PAIRS)
         else: 
             this_topic = None
         for CLUSTER_PAIR in FUSION_PAIRS:

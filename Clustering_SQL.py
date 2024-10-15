@@ -76,13 +76,13 @@ db = io.db
 
 NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 title = 'Please choose your operation: '
-options = ['kmeans cluster and save clusters', 'cluster assignment', 'calculate cluster medians and save clusters']
+options = ['kmeans cluster and save clusters', 'cluster assignment', 'calculate cluster medians, cluster_dist and save clusters']
 option, MODE = pick(options, title)
 # MODE = 1
 # CLUSTER_TYPE = "Clusters"
 # CLUSTER_TYPE = "BodyPoses"
-CLUSTER_TYPE = "HandsPositions"
-# CLUSTER_TYPE = "HandsGestures"
+# CLUSTER_TYPE = "HandsPositions"
+CLUSTER_TYPE = "HandsGestures"
 # CLUSTER_TYPE = "FingertipsPositions"
 sort.set_subset_landmarks(CLUSTER_TYPE)
 SUBSELECT_ONE_CLUSTER = 0
@@ -107,7 +107,7 @@ GET_OPTIMAL_CLUSTERS=False
 # number of clusters produced. run GET_OPTIMAL_CLUSTERS and add that number here
 # 24 for body poses
 # 128 for hands 
-N_CLUSTERS = 128
+N_CLUSTERS = 64
 SAVE_FIG=False ##### option for saving the visualized data
 
 if USE_SEGMENT is True and (CLUSTER_TYPE != "Clusters"):
@@ -142,12 +142,13 @@ if USE_SEGMENT is True and (CLUSTER_TYPE != "Clusters"):
         if MODE == 1: 
             WHERE += " AND ic.cluster_id IS NULL "
         elif MODE == 2: 
-            SELECT += ",ic.cluster_id"
-            WHERE += " AND ic.cluster_id IS NOT NULL "
+            FROM += f" INNER JOIN {CLUSTER_TYPE} c ON c.cluster_id = ic.cluster_id"
+            SELECT += ",ic.cluster_id, ic.cluster_dist, c.cluster_median"
+            WHERE += " AND ic.cluster_id IS NOT NULL AND ic.cluster_dist IS NULL"
 
     # WHERE += " AND h.is_body = 1"
-    LIMIT = 5000000
-
+    LIMIT = 200000
+    OFFSET = 0
 
     '''
     Poses
@@ -232,6 +233,7 @@ class ImagesClusters(Base):
 
     image_id = Column(Integer, ForeignKey(Images.image_id, ondelete="CASCADE"), primary_key=True)
     cluster_id = Column(Integer, ForeignKey(f'{ClustersTable_name}.cluster_id', ondelete="CASCADE"))
+    cluster_dist = Column(Float)
 
 def get_cluster_medians():
 
@@ -288,7 +290,9 @@ def get_cluster_medians():
 
 
 def selectSQL():
-    selectsql = f"SELECT {SELECT} FROM {FROM} WHERE {WHERE} LIMIT {str(LIMIT)};"
+    if OFFSET: offset = f" OFFSET {str(OFFSET)}"
+    else: offset = ""
+    selectsql = f"SELECT {SELECT} FROM {FROM} WHERE {WHERE} LIMIT {str(LIMIT)} {offset};"
     print("actual SELECT is: ",selectsql)
     result = engine.connect().execute(text(selectsql))
     resultsjson = ([dict(row) for row in result.mappings()])
@@ -486,6 +490,7 @@ def save_images_clusters_DB(df):
     for _, row in df.iterrows():
         image_id = row['image_id']
         cluster_id = row['cluster_id']
+        cluster_dist = row['cluster_dist']
         existing_record = session.query(ImagesClusters).filter_by(image_id=image_id).first()
 
         if existing_record is None:
@@ -493,9 +498,17 @@ def save_images_clusters_DB(df):
             instance = ImagesClusters(
                 image_id=image_id,
                 cluster_id=cluster_id,
+                cluster_dist=cluster_dist
             )
             session.add(instance)
-
+        
+        elif existing_record is not None:
+            if existing_record.cluster_dist is None:
+                if image_id % 100 == 0:
+                    print(f"Updating existing record with image_id {image_id} to cluster_dist {cluster_dist}")
+                existing_record.cluster_dist = cluster_dist
+            else:
+                print(f"Skipping existing record with image_id {image_id} and cluster_dist {cluster_dist}")
         else:
             print(f"Skipping duplicate record with image_id {image_id}")
 
@@ -517,10 +530,14 @@ def assign_images_clusters_DB(df):
             # print("cluster_id enc2: ", cluster_id,enc2)
             this_dist_dict[cluster_id] = np.linalg.norm(enc1 - enc2, axis=0)
         
-        cluster_id = min(this_dist_dict, key=this_dist_dict.get)
-        # print(cluster_id)
-        return cluster_id
+        cluster_id, cluster_dist = min(this_dist_dict.items(), key=lambda x: x[1])
 
+        # print(cluster_id)
+        return cluster_id, cluster_dist
+
+    def calc_median_dist(enc1, enc2):
+        return np.linalg.norm(enc1 - enc2, axis=0)
+    
     #assign clusters to each image's encodings
     print("assigning images to clusters, df at start",df)
     df_subset_landmarks = make_subset_landmarks(df, add_list=True)
@@ -538,13 +555,20 @@ def assign_images_clusters_DB(df):
         # Step 3: Print the result to check
         print("df_subset_landmarks", df_subset_landmarks[['image_id', 'enc1']])
 
-        df_subset_landmarks["cluster_id"] = df_subset_landmarks["enc1"].apply(prep_pose_clusters_enc)
+        if df['cluster_id'].isnull().values.any():
+            # df_subset_landmarks["cluster_id"], df_subset_landmarks["cluster_dist"] = zip(*df_subset_landmarks["enc1"].apply(prep_pose_clusters_enc))
+            df_subset_landmarks.loc[df_subset_landmarks['cluster_id'].isnull(), ['cluster_id', 'cluster_dist']] = \
+                zip(*df_subset_landmarks.loc[df_subset_landmarks['cluster_id'].isnull(), 'enc1'].apply(prep_pose_clusters_enc))
+        else:
+            # apply calc_median_dist to enc1 and cluster_median
+            df_subset_landmarks["cluster_dist"] = df_subset_landmarks.apply(lambda row: calc_median_dist(row['enc1'], row['cluster_median']), axis=1)
+
     else:
         # this is for obj_bbox_list
         df_subset_landmarks["cluster_id"] = df_subset_landmarks["obj_bbox_list"].apply(prep_pose_clusters_enc)
 
     print("df_subset_landmarks clustered after apply")
-    print(df_subset_landmarks[["image_id", "cluster_id"]])
+    print(df_subset_landmarks[["image_id", "cluster_id","cluster_dist"]])
 
     # print all rows where cluster_id is 68
     # print(df_subset_landmarks[df_subset_landmarks["cluster_id"] == 68])
@@ -571,6 +595,9 @@ def prepare_df(df):
     # if faxe_x, face_y, face_z, and mouth_gap are not already floats
     if df['face_x'].dtype != float:
         df[['face_x', 'face_y', 'face_z', 'mouth_gap']] = df[['face_x', 'face_y', 'face_z', 'mouth_gap']].astype(float)
+    # if cluster_median column is in the df, unpickle it
+    if 'cluster_median' in df.columns:
+        df['cluster_median'] = df['cluster_median'].apply(io.unpickle_array)
     if CLUSTER_TYPE == "BodyPoses":
         df = df.dropna(subset=['body_landmarks_normalized'])
         df['body_landmarks_normalized'] = df['body_landmarks_normalized'].apply(io.unpickle_array)
@@ -678,8 +705,23 @@ def main():
 
     elif MODE == 2:
         # reprocesses the data to get the cluster medians
-        median_dict = calculate_cluster_medians(enc_data)
-        save_clusters_DB(median_dict, update=True)
+        print("reprcessing data to get cluster medians and distances")
+        print(enc_data)
+
+        # if any values in the cluster_median are None or NULL
+        if df['cluster_median'].isnull().values.any():
+            print("Cluster median contains NULL values, recalculating cluster medians.")
+            median_dict = calculate_cluster_medians(enc_data)
+            save_clusters_DB(median_dict, update=True)
+            #assign median_dict to MEDIAN_DICT for global use in assigning clusters
+            MEDIAN_DICT = median_dict
+        else:
+            print("Cluster median contains valid values, skipping recalculation.")
+
+        assign_images_clusters_DB(enc_data)
+
+        # median_dict = calculate_cluster_medians(enc_data)
+        # save_clusters_DB(median_dict, update=True)
         print("assigned and saved segment to clusters")
 
     end = time.time()

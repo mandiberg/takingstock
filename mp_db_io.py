@@ -9,6 +9,7 @@ import pickle
 import numpy as np
 import pymongo
 from decimal import Decimal
+from pathlib import Path
 
 class DataIO:
     """Store key database and file IO info for use across codebase"""
@@ -21,6 +22,7 @@ class DataIO:
         self.query_body = True
         self.query_head_pose = True
         # platform specific file folder (mac for michael, win for satyam)
+        self.home = Path.home()
         if platform == "darwin":
             self.platform = "darwin"
             ####### Michael's OS X Credentials ########
@@ -65,7 +67,7 @@ class DataIO:
             # self.ROOT_PROD= os.path.join(os.environ['HOME'], "Documents/projects-active/facemap_production/segment_images") ## only on Mac
             # moved images to SSD
             self.ROOT_PROD=  "/Volumes/OWC4/segment_images" ## only on Mac
-
+            self.ROOTSSD = os.path.join(self.home,"Documents/projects-active/facemap_production")
             self.ROOT54= "/Volumes/RAID54" ## only on 
             # temp migration for
             # self.ROOT54= "/Volumes/6TB_mayday_2" ## only on 
@@ -112,6 +114,7 @@ class DataIO:
             self.ROOT54= self.ROOT
             self.ROOT18= self.ROOT
             self.ROOT_PROD= self.ROOT
+            self.ROOTSSD = self.ROOT
             self.NUMBER_OF_PROCESSES = 4
 
         if IS_SSD:
@@ -212,17 +215,18 @@ class DataIO:
             writer.writerow(value_list)
 
     def get_img_list(self, folder, sort=True):
-        img_list=[]
-        for count,file in enumerate(os.listdir(folder)):
+        img_list = []
+        for count, file in enumerate(os.listdir(folder)):
             if not file.startswith('.') and os.path.isfile(os.path.join(folder, file)):
-                filepath = os.path.join(folder, file)
-                filepath=filepath.replace('\\' , '/')
-                img_list.append(file)
+                if not file.endswith(('.csv', '.txt', '.json')):
+                    filepath = os.path.join(folder, file)
+                    filepath = filepath.replace('\\', '/')
+                    img_list.append(file)
         if sort is True:
             img_list.sort()
         print(len(img_list))
         print("got image list")
-        return img_list    
+        return img_list
 
 
 
