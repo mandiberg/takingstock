@@ -8,17 +8,11 @@ import time
 from skimage.metrics import structural_similarity as ssim
 
 # Constants for the folder path and settings
-BASE_FOLDER_PATH = '/Volumes/fleurssd//Volumes/fleurssd/fusion_forvideo_oneshot_dedupe'  # Base folder path change to your path
-FOLDER_PATH = os.path.join(BASE_FOLDER_PATH, 'cluster5_72_1727403240.198577')  # Folder with original images change to your cluster folder
-base_name = os.path.basename(FOLDER_PATH)  # Get the base name of the folder
-
-# Create paths for duplicates and CSV output without timestamp
-DUPLICATE_OUTPUT = os.path.join(BASE_FOLDER_PATH, 'dupes', f"{base_name}_dupes")
-CSV_OUTPUT = os.path.join(BASE_FOLDER_PATH, 'csv', f"{base_name}.csv")  # Changed 'csvs' to 'csv'
-
-# Ensure base folders exist
-os.makedirs(os.path.join(BASE_FOLDER_PATH, 'dupes'), exist_ok=True)  # Create dupes folder if it doesn't exist
-os.makedirs(os.path.join(BASE_FOLDER_PATH, 'csv'), exist_ok=True)  # Changed 'csvs' to 'csv'
+BASE_FOLDER_PATH = '/Volumes/OWC4/segment_images'
+CLUSTER_FOLDER = os.path.join(BASE_FOLDER_PATH,'topic34_128d')
+FOLDER_LIST = [f for f in os.listdir(CLUSTER_FOLDER) if not f.startswith('.') and not f.endswith('.csv')]
+print(FOLDER_LIST)
+  # Base folder path change to your path
 
 THRESHOLD = 0.9  # Similarity threshold to use for SSIM comparison
 TARGET_SIZE = (128, 128)  # Size to temporarily resize images for comparison
@@ -107,8 +101,23 @@ def organize_duplicates_from_csv(csv_output, folder_path):
                 else:
                     print(f"Duplicate not found: {duplicate}")
 
-# Find duplicates and create CSV
-duplicates = find_duplicates_with_ssim(FOLDER_PATH, DUPLICATE_OUTPUT, CSV_OUTPUT)
+for FOLDER in FOLDER_LIST:
+    
+    FOLDER_PATH = os.path.join(BASE_FOLDER_PATH, CLUSTER_FOLDER, FOLDER)  # Folder with original images change to your cluster folder
+    base_name = os.path.basename(FOLDER_PATH)  # Get the base name of the folder
 
-# Organize duplicates into folders and move them directly above the possible original
-organize_duplicates_from_csv(CSV_OUTPUT, FOLDER_PATH)
+    # Create paths for duplicates and CSV output without timestamp
+    DUPLICATE_OUTPUT = os.path.join(BASE_FOLDER_PATH, 'dupes', f"{base_name}_dupes")
+    CSV_OUTPUT = os.path.join(BASE_FOLDER_PATH, 'csv', f"{base_name}.csv")  # Changed 'csvs' to 'csv'
+
+    # Ensure base folders exist
+    os.makedirs(os.path.join(BASE_FOLDER_PATH, 'dupes'), exist_ok=True)  # Create dupes folder if it doesn't exist
+    os.makedirs(os.path.join(BASE_FOLDER_PATH, 'csv'), exist_ok=True)  # Changed 'csvs' to 'csv'
+
+    print(FOLDER_PATH, DUPLICATE_OUTPUT, CSV_OUTPUT)
+
+    # Find duplicates and create CSV
+    duplicates = find_duplicates_with_ssim(FOLDER_PATH, DUPLICATE_OUTPUT, CSV_OUTPUT)
+
+    # Organize duplicates into folders and move them directly above the possible original
+    organize_duplicates_from_csv(CSV_OUTPUT, FOLDER_PATH)
