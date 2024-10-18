@@ -1,3 +1,4 @@
+from elevenlabs import ElevenLabs, VoiceSettings
 from transformers import AutoProcessor, BarkModel, VitsModel, AutoTokenizer
 import torch
 import scipy
@@ -5,25 +6,29 @@ import os
 import csv 
 import random
 import time
-from API import api_key 
+from API import api_key
+from API_11labs import XI_API_KEY, VOICE_IDS  
 from openai import OpenAI
 from pick import pick
 
 # go get IO class from parent folder
 # caution: path[0] is reserved for script path (or '' in REPL)
 import sys
-if sys.platform == "darwin": sys.path.insert(1, '/Users/michaelmandiberg/Documents/GitHub/facemap/')
+# if sys.platform == "darwin": sys.path.insert(1, '/Users/michaelmandiberg/Documents/GitHub/facemap/')
+if sys.platform == "darwin": sys.path.insert(1, '/Users/brandonflores/Documents/gitHub/takingstock_brandon/')
 elif sys.platform == "win32": sys.path.insert(1, 'C:/Users/jhash/Documents/GitHub/facemap2/')
 from mp_db_io import DataIO
 
 title = 'Please choose your operation: '
-options = ['meta', 'bark', 'openai']
+options = ['meta', 'bark', 'openai', 'eleven_labs']
 OPTION, MODE = pick(options, title)
 
 start = time.time()
 io = DataIO()
-INPUT = os.path.join(io.ROOTSSD, "audioproduction")
-OUTPUT = os.path.join(io.ROOTSSD, "audioproduction/tts_files_test")
+# INPUT = os.path.join(io.ROOTSSD, "audioproduction")
+INPUT = os.path.join(io.ROOTSSD, "sound")
+# OUTPUT = os.path.join(io.ROOTSSD, "audioproduction/tts_files_test")
+OUTPUT = os.path.join(io.ROOTSSD, "sound/tts_files_test")
 WINDOW = [0,1]
 
 sourcefile = "metas.csv"
@@ -37,6 +42,29 @@ def get_existing_image_ids():
     existing_files = io.get_img_list(OUTPUT)
     existing_image_ids = [int(f.split("_")[0]) for f in existing_files if f.endswith(".wav")]
     return existing_image_ids
+
+# Function to write TTS using Eleven Labs
+def write_TTS_eleven_labs(client, input_text, file_name):
+    # Select a random voice ID from the list
+    voice_id = random.choice(VOICE_IDS) #found in API_11labs.py
+    
+    audio_stream = client.text_to_speech.convert_as_stream(
+        voice_id=voice_id,
+        optimize_streaming_latency="0",
+        output_format="mp3_22050_32",
+        text=input_text,
+        voice_settings=VoiceSettings(
+            stability=0.1,
+            similarity_boost=0.3,
+            style=0.2,
+        ),
+    )
+
+    # Save the stream to an MP3 file
+    with open(file_name, "wb") as f:
+        for chunk in audio_stream:
+            f.write(chunk)
+
 
 def write_TTS_bark(input_text,file_name):
     inputs = processor(input_text, voice_preset=voice_preset)
@@ -100,6 +128,11 @@ elif OPTION=="meta":
     sample_rate=16000
     # preset_list = [f"v2/en_speaker_{i}" for i in range(10)]
     write_TTS=write_TTS_meta
+
+elif OPTION == "eleven_labs":
+    client = ElevenLabs(api_key=XI_API_KEY) #call the API key from API_11labs.py 
+    write_TTS = write_TTS_eleven_labs
+    WINDOW = [0.75, 1] #testing window I don't know what exactly I am looking for to determine the window so I set it to the same as OpenAI
     
 
 
@@ -141,15 +174,25 @@ with open(os.path.join(INPUT, sourcefile), mode='r',encoding='utf-8-sig', newlin
                 continue
             if counter%10==0: print(counter,"sounds generated")                
             print(row)
-            if OPTION!="meta":
-                voice_preset = random.choice(preset_list)
-                out_name =f"{str(image_id)}_{OPTION}_v{voice_preset[-1]}_{fit}.wav"
+
+            if OPTION == "eleven_labs":
+                voice_id = random.choice(VOICE_IDS)  
+                voice_index = VOICE_IDS.index(voice_id) + 1 
+                out_name = f"{str(image_id)}_{OPTION}_v{voice_index}_{fit}.mp3"  # Save as MP3 for Eleven Labs
+                write_TTS(client, input_text, os.path.join(OUTPUT, out_name)) 
+
             else:
-                ## NO PRESET OPTION FOR META
-                out_name =f"{str(image_id)}_{OPTION}_{fit}.wav"            
-            file_name=os.path.join(OUTPUT, out_name)
-            write_TTS(input_text,file_name)
-            # Write the row to the output CSV file with 'out_name' added
+                if OPTION != "meta":
+                    voice_preset = random.choice(preset_list)
+                    out_name = f"{str(image_id)}_{OPTION}_v{voice_preset[-1]}_{fit}.wav"
+                else:
+                    # No preset option for meta
+                    out_name = f"{str(image_id)}_{OPTION}_{fit}.wav"  
+                
+                file_name = os.path.join(OUTPUT, out_name)
+                write_TTS(input_text, file_name)
+                # Write the row to the output CSV file with 'out_name' added
+
             row['out_name'] = out_name
             writer.writerow(row)
 
