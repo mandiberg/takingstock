@@ -12,7 +12,7 @@ elif sys.platform == "win32": sys.path.insert(1, 'C:/Users/jhash/Documents/GitHu
 from mp_db_io import DataIO
 
 
-TOPIC=32 # what folder are the files in?
+TOPIC=34 # what folder are the files in?
 
 CSV_FILE = f"metas_{TOPIC}.csv"
 SOUND_FOLDER = "tts_files_test"
@@ -55,7 +55,8 @@ FIT_VOL_MAX = 1
 FADEOUT = 7
 QUIET =.5
 KEYS = {
-    32: ["shock", "surpris", "mouth", "confus", "shade", "fear", "express", "cover", "open", "excit"]
+    32: ["shock", "surpris", "mouth", "confus", "shade", "fear", "express", "cover", "open", "excit"],
+    34: ["achiev", "scream", "excit", "shout", "celebr", "success", "express", "aggress", "fist", "frustrat"]
 }
 good_files = []
 
@@ -139,11 +140,11 @@ for i, row in df.iterrows():
     # if os.path.exists(input_path):
     #     good_files.append(input_path)
     # elif 
-    # print("Row:", row)
+    print("Row:", row)
     image_id = row['image_id']
     description = row['description']
     # print("Image ID:", image_id)
-    if pd.notna(description):
+    if pd.notna(description) and image_id in existing_files:
         input_file = existing_files.get(str(image_id))
         print("Using existing file:", input_file)
     elif image_id:

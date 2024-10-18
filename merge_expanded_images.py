@@ -5,6 +5,7 @@ import pandas as pd
 
 # mine
 from mp_db_io import DataIO
+import re
 
 
 
@@ -40,6 +41,14 @@ ROOT_FOLDER_PATH = '/Volumes/OWC4/segment_images'
 FOLDER_NAME = "topic34_128d"
 FOLDER_PATH = os.path.join(ROOT_FOLDER_PATH,FOLDER_NAME)
 DIRS = ["1x1", "4x3", "16x10"]
+OUTPUT = os.path.join(io.ROOTSSD, "audioproduction")
+# Extract the topic number from the folder name
+match = re.search(r'topic(\d+)', FOLDER_NAME)
+if match:
+    TOPIC = int(match.group(1))
+else:
+    TOPIC = None
+CSV_FILE = f"metas_{TOPIC}.csv"
 
 #temporary
 # FOLDER_PATH = "/Users/michaelmandiberg/Library/CloudStorage/Dropbox/takingstock_dropbox/excite_small_portrait_jumpshot15after_3D_wgt1_max1.4_delta.5"
@@ -321,12 +330,12 @@ def main():
                     metas_df = pd.read_csv(metas_path)
                     # assign columns=["image_id", "description", "topic_fit"] to metas_df
                     metas_df.columns = ["image_id", "description", "topic_fit"]
-                    
+
                     print(len(metas_df))
                     # append metas_df to cat_metas
                     cat_metas = pd.concat([cat_metas, metas_df], ignore_index=True)
             # save cat_metas to csv
-            output_path = os.path.join(FOLDER_PATH, "cat_metas.csv")
+            output_path = os.path.join(OUTPUT, CSV_FILE)
             print(output_path)
             cat_metas.to_csv(output_path, index=False)
         else:
