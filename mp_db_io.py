@@ -228,6 +228,10 @@ class DataIO:
         print("got image list")
         return img_list
 
+    def get_existing_image_ids_from_wavs(self,folder):
+        existing_files = self.get_img_list(folder)
+        existing_image_ids = [int(f.split("_")[0]) for f in existing_files if f.endswith(".wav")]
+        return existing_image_ids
 
 
     def get_folders(self, folder, sort="alphabetical"):

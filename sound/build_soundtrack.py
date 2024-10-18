@@ -2,33 +2,39 @@ import pandas as pd
 import os
 import soundfile as sf
 import numpy as np
+import librosa
 
 # go get IO class from parent folder
 # caution: path[0] is reserved for script path (or '' in REPL)
 import sys
-sys.path.insert(1, '/Users/michaelmandiberg/Documents/GitHub/facemap/')
+if sys.platform == "darwin": sys.path.insert(1, '/Users/michaelmandiberg/Documents/GitHub/facemap/')
+elif sys.platform == "win32": sys.path.insert(1, 'C:/Users/jhash/Documents/GitHub/facemap2/')
 from mp_db_io import DataIO
 
-TOPIC=17 # what folder are the files in?
-TOPICFOLDER = "topic" + str(TOPIC)
+
+TOPIC=32 # what folder are the files in?
+
+CSV_FILE = f"metas_{TOPIC}.csv"
+SOUND_FOLDER = "tts_files_test"
+
+# TOPICFOLDER = "topic" + str(TOPIC)
 
 # start = time.time()
 ######Michael's folders##########
 io = DataIO()
-INPUT = os.path.join(io.ROOT, "audioproduction", TOPICFOLDER)
-OUTPUT = os.path.join(io.ROOT, "audioproduction", TOPICFOLDER)
+INPUT = os.path.join(io.ROOTSSD, "audioproduction")
 #################################
 
 ######Satyam's folders###########
 # INPUT = "C:/Users/jhash/Documents/GitHub/facemap2/sound"
-# OUTPUT = "C:/Users/jhash/Documents/GitHub/facemap2/sound/sound_files/OpenAI"
 #################################
 
 # Choose a file starting with a given string
 # prefixed = [filename for filename in os.listdir('.') if filename.startswith("prefix")]
 
 # Read all rows from the CSV file
-df = pd.read_csv(os.path.join(INPUT,"output_file.csv"))
+df = pd.read_csv(os.path.join(INPUT,CSV_FILE))
+# sound_files_dict_image_id = io.get_existing_image_ids_from_wavs(INPUT,full_path=True)
 
 # Initialize lists to store audio data for each channel
 left_channel_data = []
@@ -36,6 +42,7 @@ right_channel_data = []
 
 # Sampling rate for the mixdown
 sample_rate = None
+TARGET_SAMPLE_RATE = 24000
 
 # Offset/delay between each sample (in seconds)
 OFFSET = 0.1
@@ -48,8 +55,7 @@ FIT_VOL_MAX = 1
 FADEOUT = 7
 QUIET =.5
 KEYS = {
-    7: ["scream", "excit", "rais", "celebr", "amaz", "success", "victori", "crazi", "surpris", "mouth"],
-    17: ["point", "finger", "show", "number", "pictur", "smile", "confid", "idea", "clock", "hold"]
+    32: ["shock", "surpris", "mouth", "confus", "shade", "fear", "express", "cover", "open", "excit"]
 }
 good_files = []
 
@@ -64,6 +70,12 @@ def apply_fadeout(audio, sample_rate, duration=3.0):
     fade_curve = np.linspace(1.0, 0.0, length)
     # apply the curve
     audio[start:end] = audio[start:end] * fade_curve
+
+def conform_sample_rate(audio_data, sample_rate):
+    if sample_rate != TARGET_SAMPLE_RATE:
+        # Resample the audio to 24000 Hz
+        audio_data = librosa.resample(audio_data, orig_sr=sample_rate, target_sr=TARGET_SAMPLE_RATE)
+    return audio_data, sample_rate
 
 def scale_volume_exp(volume_fit, exponent=3):
     exp_vol = (volume_fit - FIT_VOL_MIN)**exponent / (FIT_VOL_MAX  - FIT_VOL_MIN)**exponent * (VOLUME_MAX - VOLUME_MIN) + VOLUME_MIN
@@ -94,7 +106,8 @@ def search_for_keys(row):
     # search the first three words of the description for each key in KEYS
     # if any of the keys are found, set the volume to 1
     # if not, set the volume to 0.5
-    
+    if pd.isna(row['description']): return False
+
     found = False
     for key in KEYS[TOPIC]:
         for word in row['description'].lower().split(" ")[:5]:
@@ -106,11 +119,12 @@ def search_for_keys(row):
         print("No keys found in", row['description'])
     return found
 
-existing_files = io.get_img_list(INPUT)
+existing_files = io.get_img_list(os.path.join(INPUT, SOUND_FOLDER))
 # make a dict of existing files using the first part of filename (split on _) as the key
 existing_files = {os.path.basename(f).split("_")[0]:f for f in existing_files}
 
 print("Existing files:", len(existing_files))
+# print("Existing files:", (existing_files))
 print("Existing file 1:", existing_files.keys())
 # Iterate through each row in the CSV file
 for i, row in df.iterrows():
@@ -119,28 +133,34 @@ for i, row in df.iterrows():
     cos = abs(np.cos(i/60))
     cycler = [sin,cos]
  
-    input_path = os.path.join(INPUT, row['out_name'])
+    # input_path = os.path.join(INPUT, row['out_name'])
     # input_path = row['out_name']
 
-    if os.path.exists(input_path):
-        good_files.append(input_path)
-    elif existing_files:
-        input_file = existing_files.get(row['image_id'])
-        if input_file:
-            print("Using existing file:", input_file)
-            input_path = os.path.join(INPUT,input_file)
-        elif good_files:
-            input_path = good_files[np.random.randint(0,len(good_files))]
-        else:
-            print("No good files found")
-            continue
+    # if os.path.exists(input_path):
+    #     good_files.append(input_path)
+    # elif 
+    # print("Row:", row)
+    image_id = row['image_id']
+    description = row['description']
+    # print("Image ID:", image_id)
+    if pd.notna(description):
+        input_file = existing_files.get(str(image_id))
+        print("Using existing file:", input_file)
+    elif image_id:
+        input_file = np.random.choice(list(existing_files.values()))
+        print("assigned random file:", input_file)
     else:
         print("No good files found")
         continue
 
+    input_path = os.path.join(INPUT,SOUND_FOLDER,input_file)
+
     # Read the audio file
     audio_data, sample_rate = sf.read(input_path)
-
+    print("Audio data shape:", audio_data.shape, "Sample rate:", sample_rate)
+    audio_data, sample_rate = conform_sample_rate(audio_data, sample_rate)
+    print("Audio data shape:", audio_data.shape, "Sample rate:", sample_rate)
+    
     # search for keys in the description
     # found = search_for_keys(row)
 
@@ -222,7 +242,8 @@ for left_channel, right_channel in zip(left_channel_data, right_channel_data):
 # mixed_audio /= max_amplitude
 
 # Define the output path for the mixdown audio file
-output_path = "multitrack_mixdown_offset_"+str(TOPIC)+".wav"
-
+output_path = os.path.join(INPUT,"multitrack_mixdown_offset_"+str(TOPIC)+".wav")
+print("About to save to output path:", output_path)
 # Write the multitrack mixdown audio to the output file
 sf.write(output_path, mixed_audio, sample_rate, format='wav')
+print("Mixdown audio saved to", output_path)

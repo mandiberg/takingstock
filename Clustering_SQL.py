@@ -81,8 +81,8 @@ option, MODE = pick(options, title)
 # MODE = 1
 # CLUSTER_TYPE = "Clusters"
 # CLUSTER_TYPE = "BodyPoses"
-# CLUSTER_TYPE = "HandsPositions"
-CLUSTER_TYPE = "HandsGestures"
+CLUSTER_TYPE = "HandsPositions"
+# CLUSTER_TYPE = "HandsGestures"
 # CLUSTER_TYPE = "FingertipsPositions"
 sort.set_subset_landmarks(CLUSTER_TYPE)
 SUBSELECT_ONE_CLUSTER = 0
@@ -105,23 +105,16 @@ USE_SEGMENT = True
 GET_OPTIMAL_CLUSTERS=False
 
 # number of clusters produced. run GET_OPTIMAL_CLUSTERS and add that number here
-# 24 for body poses
-# 128 for hands 
-N_CLUSTERS = 64
+# 32 for hand positions
+# 128 for hand gestures
+N_CLUSTERS = 32
 SAVE_FIG=False ##### option for saving the visualized data
 
 if USE_SEGMENT is True and (CLUSTER_TYPE != "Clusters"):
     print("setting Poses SQL")
     SegmentTable_name = 'SegmentOct20'
 
-    # 3.8 M large table (for Topic Model)
-    # HelperTable_name = "SegmentHelperMar23_headon"
-
-    ######################################################
-    #TK need to rework this query for CLUSTER_TYPE
-    ###################################################### 
-
-    # Basic Query, this works with gettytest3
+    # Basic Query, this works with SegmentOct20
     SELECT = "DISTINCT(s.image_id), s.face_x, s.face_y, s.face_z, s.mouth_gap"
     if CLUSTER_TYPE == "BodyPoses": WHERE = " s.mongo_body_landmarks = 1 "
     elif CLUSTER_TYPE == "HandsGestures": WHERE = " s.mongo_hand_landmarks = 1 "
@@ -147,7 +140,7 @@ if USE_SEGMENT is True and (CLUSTER_TYPE != "Clusters"):
             WHERE += " AND ic.cluster_id IS NOT NULL AND ic.cluster_dist IS NULL"
 
     # WHERE += " AND h.is_body = 1"
-    LIMIT = 200000
+    LIMIT = 300000
     OFFSET = 0
 
     '''

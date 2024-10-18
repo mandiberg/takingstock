@@ -37,8 +37,8 @@ IS_CSV = False
 
 # CLUSTER_TYPE = "Clusters"
 # CLUSTER_TYPE = "BodyPoses"
-# CLUSTER_TYPE = "HandsPositions"
-CLUSTER_TYPE = "HandsGestures"
+CLUSTER_TYPE = "HandsPositions"
+# CLUSTER_TYPE = "HandsGestures"
 ClustersTable_name = CLUSTER_TYPE
 ImagesClustersTable_name = "Images"+CLUSTER_TYPE
 
@@ -59,7 +59,8 @@ if IS_CSV:
 
 else:
 
-    results = session.query(ImagesClusters.cluster_dist).filter(ImagesClusters.cluster_id == 125).all()
+    results = session.query(ImagesClusters.cluster_dist).filter(ImagesClusters.cluster_id == 13).all()
+    # results = session.query(ImagesClusters.cluster_dist).all()
     df = pd.DataFrame(results)
     plot_column = 'cluster_dist'
 print(df.columns)

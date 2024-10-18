@@ -58,6 +58,10 @@ http="https://media.gettyimages.com/photos/"
 # if so, also change the site_name_id etc around line 930
 IS_FOLDER = False
 
+'''
+Oct 13, got up to 109217155
+switching to topic targeted
+'''
 
 '''
 1   getty
@@ -115,8 +119,8 @@ TOPIC_ID = None
 # TOPIC_ID = [24, 29] # adding a TOPIC_ID forces it to work from SegmentBig_isface, currently at 7412083
 DO_INVERSE = True
 SEGMENT = 0 # topic_id set to 0 or False if using HelperTable or not using a segment
-# HelperTable_name = "SegmentHelper_sept18_silence" #"SegmentHelperMay7_fingerpoint" # set to False if not using a HelperTable
-HelperTable_name = False    
+HelperTable_name = "SegmentHelper_oct13_T32_forwardish" # set to False if not using a HelperTable
+# HelperTable_name = False    
 # SegmentTable_name = 'SegmentOct20'
 SegmentTable_name = 'SegmentBig_isface'
 
@@ -982,18 +986,45 @@ def process_image_bodylms(task):
         
         if BODYLMS and mongo_body_landmarks is None:
             print("doing body, mongo_body_landmarks is None")
-            is_body, body_landmarks = find_body(image)
-            if is_body:
-                ### NORMALIZE LANDMARKS ###
-                nose_pixel_pos = sort.set_nose_pixel_pos(body_landmarks,image.shape)
-                if VERBOSE: print("nose_pixel_pos",nose_pixel_pos)
-                face_height = sort.convert_bbox_to_face_height(bbox)
-                n_landmarks=sort.normalize_landmarks(body_landmarks,nose_pixel_pos,face_height,image.shape)
-                # print("n_landmarks",n_landmarks)
-                # sort.insert_n_landmarks(bboxnormed_collection, target_image_id,n_landmarks)
+            # check to see if body landmarks are already in mongo
+
+            # Check if body landmarks are already in the normalized collection
+            existing_norm = bboxnormed_collection.find_one({"image_id": image_id})
+            if existing_norm:
+                print(f"Normalized landmarks already exist for image_id: {image_id}")
+                n_landmarks = pickle.loads(existing_norm["nlms"])
             else:
-                print("no body")
-                n_landmarks = None
+                is_body, body_landmarks = find_body(image)
+                if is_body:
+                    ### NORMALIZE LANDMARKS ###
+                    nose_pixel_pos = sort.set_nose_pixel_pos(body_landmarks, image.shape)
+                    if VERBOSE: print("nose_pixel_pos", nose_pixel_pos)
+                    face_height = sort.convert_bbox_to_face_height(bbox)
+                    n_landmarks = sort.normalize_landmarks(body_landmarks, nose_pixel_pos, face_height, image.shape)
+                    # print("n_landmarks", n_landmarks)
+                    # sort.insert_n_landmarks(bboxnormed_collection, target_image_id, n_landmarks)
+                    ### Save normalized landmarks to MongoDB
+                    bboxnormed_collection.update_one(
+                        {"image_id": image_id},
+                        {"$set": {"nlms": pickle.dumps(n_landmarks)}},
+                        upsert=True
+                    )
+                    print(f"Normalized landmarks stored for image_id: {image_id}")
+                else:
+                    print("No body landmarks found")
+                    n_landmarks = None
+
+
+            #     ### NORMALIZE LANDMARKS ###
+            #     nose_pixel_pos = sort.set_nose_pixel_pos(body_landmarks,image.shape)
+            #     if VERBOSE: print("nose_pixel_pos",nose_pixel_pos)
+            #     face_height = sort.convert_bbox_to_face_height(bbox)
+            #     n_landmarks=sort.normalize_landmarks(body_landmarks,nose_pixel_pos,face_height,image.shape)
+            #     # print("n_landmarks",n_landmarks)
+            #     # sort.insert_n_landmarks(bboxnormed_collection, target_image_id,n_landmarks)
+            # else:
+            #     print("no body")
+            #     n_landmarks = None
             
             ### detect object info, 
             print("detecting objects")
@@ -1051,16 +1082,24 @@ def process_image_bodylms(task):
 
         ### save object bbox info
         # session = sort.parse_bbox_dict(session, image_id, PhoneBbox, OBJ_CLS_LIST, bbox_dict)
-
+        is_hands = None
         if HANDLMS:
-            # do hand stuff
-            # print("doing HANDLMS, bc is ", HANDLMS)
-            pose = SelectPose(image)
-            is_hands, hand_landmarks = find_hands(image, pose)
-            # print("is_hands", is_hands)
-            if not is_hands:
-                print(" ------ >>>>>  NO HANDS for ", image_id)
-                # print("hand_landmarks", hand_landmarks)
+            existing_hand = mongo_hand_collection.find_one({"image_id": image_id})
+            if existing_hand:
+                print(f"hand landmarks already exist for image_id: {image_id}")
+                update_hand = False
+            else:
+                # do hand stuff
+                # print("doing HANDLMS, bc is ", HANDLMS)
+                pose = SelectPose(image)
+                is_hands, hand_landmarks = find_hands(image, pose)
+                # print("is_hands", is_hands)
+                if not is_hands:
+                    print(" ------ >>>>>  NO HANDS for ", image_id)
+                    # print("hand_landmarks", hand_landmarks)
+                    update_hand = False
+                else:
+                    update_hand = True
 
         for _ in range(io.max_retries):
             try:
@@ -1182,8 +1221,9 @@ def process_image_bodylms(task):
                     #     {"$set": {"hand_landmarks": pickle.dumps(hand_landmarks)}},
                     #     upsert=True
                     # )
-                    pose.store_hand_landmarks(image_id, hand_landmarks, mongo_hand_collection)
-                    print("----------- >>>>>>>>   mongo hand_landmarks updated:", image_id)
+                    if update_hand:
+                        pose.store_hand_landmarks(image_id, hand_landmarks, mongo_hand_collection)
+                        print("----------- >>>>>>>>   mongo hand_landmarks updated:", image_id)
 
                     pass
 
@@ -1635,7 +1675,7 @@ def main():
 
     else:
         print("old school SQL")
-        start_id = 105564591
+        start_id = 0
         while True:
             init_session()
 

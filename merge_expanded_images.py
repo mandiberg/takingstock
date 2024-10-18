@@ -1,6 +1,7 @@
 import cv2
 import os
 import numpy as np
+import pandas as pd
 
 # mine
 from mp_db_io import DataIO
@@ -18,7 +19,8 @@ IS_CLUSTER = True
 
 # are we making videos or making merged stills?
 IS_VIDEO = False
-ALL_ONE_VIDEO = False
+IS_METAS_AUDIO = True
+ALL_ONE_VIDEO = True
 SORT_ORDER = "Chronological"
 DO_RATIOS = False
 GIGA_DIMS = 20688
@@ -35,7 +37,7 @@ ROOT_FOLDER_PATH = '/Volumes/OWC4/segment_images'
 # FOLDER_NAME ="cluster20_0_face_cradle_sept26/giga/face_frame"
 # FOLDER_NAME = "topic17_business_fusion_test"
 # FOLDER_NAME = "cluster1_21_phone_sept24production/silverphone_sept24_production/down/giga"
-FOLDER_NAME = "topic32_T64_32x128_128d"
+FOLDER_NAME = "topic34_128d"
 FOLDER_PATH = os.path.join(ROOT_FOLDER_PATH,FOLDER_NAME)
 DIRS = ["1x1", "4x3", "16x10"]
 
@@ -309,6 +311,24 @@ def main():
                 all_img_path_list = io.get_img_list(subfolder_path)
                 write_video(all_img_path_list, FRAMERATE, subfolder_path)
 
+        elif IS_METAS_AUDIO is True:
+            cat_metas = pd.DataFrame(columns=["image_id", "description", "topic_fit"])
+            print(cat_metas)
+            for subfolder_path in subfolders:
+                metas_path = os.path.join(subfolder_path, "metas.csv")
+                if os.path.exists(metas_path):
+                    # load the metas into df
+                    metas_df = pd.read_csv(metas_path)
+                    # assign columns=["image_id", "description", "topic_fit"] to metas_df
+                    metas_df.columns = ["image_id", "description", "topic_fit"]
+                    
+                    print(len(metas_df))
+                    # append metas_df to cat_metas
+                    cat_metas = pd.concat([cat_metas, metas_df], ignore_index=True)
+            # save cat_metas to csv
+            output_path = os.path.join(FOLDER_PATH, "cat_metas.csv")
+            print(output_path)
+            cat_metas.to_csv(output_path, index=False)
         else:
             for subfolder_path in subfolders:
                 # print(subfolder_path)
