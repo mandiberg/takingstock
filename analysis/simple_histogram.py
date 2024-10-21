@@ -37,8 +37,8 @@ IS_CSV = False
 
 # CLUSTER_TYPE = "Clusters"
 # CLUSTER_TYPE = "BodyPoses"
-CLUSTER_TYPE = "HandsPositions"
-# CLUSTER_TYPE = "HandsGestures"
+# CLUSTER_TYPE = "HandsPositions"
+CLUSTER_TYPE = "HandsGestures"
 ClustersTable_name = CLUSTER_TYPE
 ImagesClustersTable_name = "Images"+CLUSTER_TYPE
 

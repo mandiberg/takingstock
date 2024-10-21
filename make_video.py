@@ -58,7 +58,7 @@ HSV_NORMS = {"LUM": .01, "SAT": 1,  "HUE": 0.002777777778, "VAL": 1}
 # all clusters, 
 IS_VIDEO_FUSION = True
 GENERATE_FUSION_PAIRS = True
-MIN_VIDEO_FUSION_COUNT = 500
+MIN_VIDEO_FUSION_COUNT = 100
 IS_HAND_POSE_FUSION = False
 ONLY_ONE = False
 IS_CLUSTER = False
@@ -118,7 +118,7 @@ IS_TOPICS = False
 N_TOPICS = 64
 
 IS_ONE_TOPIC = True
-TOPIC_NO = [0]
+TOPIC_NO = [46]
 #######################
 
 #######################
@@ -1096,8 +1096,13 @@ def merge_inpaint(inpaint_image,img,extended_img,extension_pixels,selfie_bbox,bl
     height, width = img.shape[:2]
     top, bottom, left, right = extension_pixels["top"], extension_pixels["top"]+height, extension_pixels["left"],extension_pixels["left"]+width
     print("top, bottom, left, right", top, bottom, left, right)
+    try: 
+        selfie_top, selfie_bottom, selfie_left, selfie_right = selfie_bbox["top"], selfie_bbox["top"]+height, selfie_bbox["left"],selfie_bbox["left"]+width
+    except: 
+        print("selfie_bbox is None, returning None,None")
+        return None, None
     # test to see if top strip is consistent -- eg a seamless background
-    area = [0,selfie_bbox["top"]],[0,width]
+    area = [0,selfie_top],[0,width]
     if area[0][1] > 0 and area[1][1] > 0:
         is_consistent = sort.test_consistency(img,area)
     print("is_consistent", is_consistent)
@@ -1109,7 +1114,7 @@ def merge_inpaint(inpaint_image,img,extended_img,extension_pixels,selfie_bbox,bl
         if test_corner[0][1] > 0 and test_corner[1][1] > 0:
             is_ext_UL_consistent = sort.test_consistency(extended_img,test_corner,10)
             is_inpaint_UL_consistent = sort.test_consistency(inpaint_image,test_corner,10)
-        test_top = [[0,top+selfie_bbox["top"]],[0,inpaint_image.shape[1]]]
+        test_top = [[0,top+selfie_top],[0,inpaint_image.shape[1]]]
         if test_top[0][1] > 0 and test_top[1][1] > 0:                        
             is_ext_top_consistent = sort.test_consistency(extended_img,test_top,10)
             is_inpaint_top_consistent = sort.test_consistency(inpaint_image,test_top,10)
@@ -1125,8 +1130,8 @@ def merge_inpaint(inpaint_image,img,extended_img,extension_pixels,selfie_bbox,bl
     mask_bottom[bottom:,:] = [255,255,255]
     mask_right[:,right:] = [255,255,255]
 
-    blur_radius_left=io.oddify(selfie_bbox['left']*blur_radius)
-    blur_radius_right=io.oddify(selfie_bbox['right']*blur_radius)
+    blur_radius_left=io.oddify(selfie_left*blur_radius)
+    blur_radius_right=io.oddify(selfie_right*blur_radius)
     blur_radius_top=io.oddify(extension_pixels['top']*blur_radius)
     blur_radius_bottom=io.oddify(extension_pixels['bottom']*blur_radius)
     
@@ -1149,7 +1154,7 @@ def merge_inpaint(inpaint_image,img,extended_img,extension_pixels,selfie_bbox,bl
     if is_consistent and is_ext_UL_consistent and is_ext_top_consistent:
         if top <= 10:
             print("small top", top)
-            invert_dist = selfie_bbox["top"]
+            invert_dist = selfie_top
             invert_blur = io.oddify(invert_dist/2)
         else: 
             invert_dist = top*2

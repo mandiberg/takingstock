@@ -9,7 +9,7 @@ from skimage.metrics import structural_similarity as ssim
 
 # Constants for the folder path and settings
 BASE_FOLDER_PATH = '/Volumes/OWC4/segment_images'
-CLUSTER_FOLDER = os.path.join(BASE_FOLDER_PATH,'topic34_128d')
+CLUSTER_FOLDER = os.path.join(BASE_FOLDER_PATH,'topic32_T64_32x128_128d')
 FOLDER_LIST = [f for f in os.listdir(CLUSTER_FOLDER) if not f.startswith('.') and not f.endswith('.csv')]
 print(FOLDER_LIST)
   # Base folder path change to your path

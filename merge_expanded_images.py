@@ -21,7 +21,7 @@ IS_CLUSTER = True
 # are we making videos or making merged stills?
 IS_VIDEO = False
 IS_METAS_AUDIO = True
-ALL_ONE_VIDEO = True
+ALL_ONE_VIDEO = False
 SORT_ORDER = "Chronological"
 DO_RATIOS = False
 GIGA_DIMS = 20688
@@ -38,7 +38,7 @@ ROOT_FOLDER_PATH = '/Volumes/OWC4/segment_images'
 # FOLDER_NAME ="cluster20_0_face_cradle_sept26/giga/face_frame"
 # FOLDER_NAME = "topic17_business_fusion_test"
 # FOLDER_NAME = "cluster1_21_phone_sept24production/silverphone_sept24_production/down/giga"
-FOLDER_NAME = "topic34_128d"
+FOLDER_NAME = "topic32_linearbody"
 FOLDER_PATH = os.path.join(ROOT_FOLDER_PATH,FOLDER_NAME)
 DIRS = ["1x1", "4x3", "16x10"]
 OUTPUT = os.path.join(io.ROOTSSD, "audioproduction")
@@ -279,6 +279,9 @@ def write_video(img_array, FRAMERATE=15, subfolder_path=None):
     img = cv2.imread(image_path)
     height, width, _ = img.shape
 
+    # IS_METAS_AUDIO
+    audio_file = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/audioproduction/multitrack_mixdown_offset_32.wav"
+
     # Define the codec and create VideoWriter object
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
     video_path = os.path.join(FOLDER_PATH, FOLDER_NAME.replace("/","_")+cluster_no+".mp4")
@@ -286,20 +289,38 @@ def write_video(img_array, FRAMERATE=15, subfolder_path=None):
 
     # Iterate over the image array and write frames to the video
 
+    if IS_METAS_AUDIO:
 
-    for filename in img_array:
-        if subfolder_path:
-            image_path = os.path.join(subfolder_path, filename)
-        else:
-            image_path = filename
-        print(image_path)
-        img = cv2.imread(image_path)
-        video_writer.write(img)
+        # Add audio to the video
+        audio_file = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/audioproduction/multitrack_mixdown_offset_32.wav"
+        
+        # Load video and audio using moviepy
+        video_clip = VideoFileClip(video_path)
+        audio_clip = AudioFileClip(audio_file)
+        
+        # Set the audio clip to both channels (stereo)
+        final_clip = video_clip.set_audio(audio_clip)
+        
+        # Save the final video with audio
+        final_video_path = video_path.replace(".mp4", "_with_audio.mp4")
+        final_clip.write_videofile(final_video_path, codec="libx264", audio_codec="aac")
+        
+        print(f"Video saved at: {final_video_path}")
+        
+    else:
+        for filename in img_array:
+            if subfolder_path:
+                image_path = os.path.join(subfolder_path, filename)
+            else:
+                image_path = filename
+            print(image_path)
+            img = cv2.imread(image_path)
+            video_writer.write(img)
 
-    # Release the video writer and close the video file
-    video_writer.release()
+        # Release the video writer and close the video file
+        video_writer.release()
 
-    print(f"Video saved at: {video_path}")
+        print(f"Video saved at: {video_path}")
 
 
 
