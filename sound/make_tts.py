@@ -8,14 +8,15 @@ import random
 import time
 from API import api_key
 from API_11labs import XI_API_KEY, VOICE_IDS  
+# XI_API_KEY, VOICE_IDS = None, None
 from openai import OpenAI
 from pick import pick
 
 # go get IO class from parent folder
 # caution: path[0] is reserved for script path (or '' in REPL)
 import sys
-# if sys.platform == "darwin": sys.path.insert(1, '/Users/michaelmandiberg/Documents/GitHub/facemap/')
-if sys.platform == "darwin": sys.path.insert(1, '/Users/brandonflores/Documents/gitHub/takingstock_brandon/')
+if sys.platform == "darwin": sys.path.insert(1, '/Users/michaelmandiberg/Documents/GitHub/facemap/')
+# if sys.platform == "darwin": sys.path.insert(1, '/Users/brandonflores/Documents/gitHub/takingstock_brandon/')
 elif sys.platform == "win32": sys.path.insert(1, 'C:/Users/jhash/Documents/GitHub/facemap2/')
 from mp_db_io import DataIO
 
@@ -25,16 +26,18 @@ OPTION, MODE = pick(options, title)
 
 start = time.time()
 io = DataIO()
-# INPUT = os.path.join(io.ROOTSSD, "audioproduction")
-INPUT = os.path.join(io.ROOTSSD, "sound")
-# OUTPUT = os.path.join(io.ROOTSSD, "audioproduction/tts_files_test")
-OUTPUT = os.path.join(io.ROOTSSD, "sound/tts_files_test")
+INPUT = os.path.join(io.ROOTSSD, "audioproduction")
+OUTPUT = os.path.join(io.ROOTSSD, "audioproduction/tts_files_test")
+# Brandon paths
+# INPUT = os.path.join(io.ROOTSSD, "sound")
+# OUTPUT = os.path.join(io.ROOTSSD, "sound/tts_files_test")
 WINDOW = [0,1]
 
-sourcefile = "metas.csv"
-output_csv = "output_file.csv"
+TOPIC = 23
+sourcefile = f"metas_{TOPIC}.csv"
+output_csv = f"output_file_{TOPIC}.csv"
 
-STOP_AFTER = 2000
+STOP_AFTER = 10000
 counter = 1
 start_at = 0
 
@@ -104,7 +107,7 @@ if OPTION=="openai":
     # preset_list=["alloy", "echo", "fable", "onyx", "nova","shimmer","alloy", "fable", "nova","shimmer", "nova","shimmer", "nova","shimmer"] # this is a clunky way of prioritizing higher pitched voices
     preset_list=["alloy", "echo", "fable", "onyx", "nova","shimmer"]
     write_TTS=write_TTS_openai
-    WINDOW = [.75,1]
+    WINDOW = [.6,.75]
     
     
 elif OPTION=="bark":
@@ -113,12 +116,12 @@ elif OPTION=="bark":
     sample_rate = model.generation_config.sample_rate
     preset_list = [f"v2/en_speaker_{i}" for i in range(10)]
     write_TTS=write_TTS_bark
-    WINDOW = [.6,.75]
+    WINDOW = [.5,.6]
     
 elif OPTION=="meta":
     model = VitsModel.from_pretrained("facebook/mms-tts-eng")
     tokenizer = AutoTokenizer.from_pretrained("facebook/mms-tts-eng")
-    WINDOW = [0,.6]
+    WINDOW = [0,.5]
 
 
     # processor = AutoProcessor.from_pretrained("suno/bark")
@@ -132,7 +135,7 @@ elif OPTION=="meta":
 elif OPTION == "eleven_labs":
     client = ElevenLabs(api_key=XI_API_KEY) #call the API key from API_11labs.py 
     write_TTS = write_TTS_eleven_labs
-    WINDOW = [0.75, 1] #testing window I don't know what exactly I am looking for to determine the window so I set it to the same as OpenAI
+    WINDOW = [0.85, 1] #testing window I don't know what exactly I am looking for to determine the window so I set it to the same as OpenAI
     
 
 
