@@ -143,3 +143,12 @@ sound/barks/output_file.csv
 upscale.py
 upscale4x.py
 sound/API_11labs.py
+topic_model/BOW_lda_corpus.mm
+topic_model/BOW_lda_corpus.mm.index
+topic_model/BOW_lda_corpus.mm.index
+topic_model/dictionary.dict
+topic_model/display64.txt
+topic_model/display64.xlsx
+topic_model/BOW_lda_corpus.mm.index
+topic_model/TFIDF_lda_corpus.mm
+topic_model/TFIDF_lda_corpus.mm.index

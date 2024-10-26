@@ -412,9 +412,9 @@ FROM
 JOIN 
     ImagesHandsPositions ihp ON ihp.image_id = so.image_id
 JOIN 
-    ImagesHandsGestures128 ihg ON ihg.image_id = so.image_id
+    ImagesHandsGestures ihg ON ihg.image_id = so.image_id
 JOIN ImagesTopics it ON it.image_id = so.image_id
-WHERE it.topic_id = 23
+WHERE it.topic_id = 22
 GROUP BY 
     ihp.cluster_id  -- Group by ImagesHandsPoses cluster_id to create rows
 ORDER BY 
