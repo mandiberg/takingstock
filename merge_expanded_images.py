@@ -19,14 +19,16 @@ db = io.db
 IS_CLUSTER = True
 
 # are we making videos or making merged stills?
-IS_VIDEO = False
-IS_METAS_AUDIO = True
+IS_VIDEO = True
+IS_METAS_AUDIO = False
 ALL_ONE_VIDEO = False
+LOWEST_DIMS = False
 SORT_ORDER = "Chronological"
 DO_RATIOS = False
 GIGA_DIMS = 20688
 TEST_DIMS = 4000
 REG_DIMS = 3448
+if LOWEST_DIMS: GIGA_DIMS = REG_DIMS
 VERBOSE = True
 # MERGE
 # Provide the path to the folder containing the images
@@ -38,7 +40,7 @@ ROOT_FOLDER_PATH = '/Volumes/OWC4/segment_images'
 # FOLDER_NAME ="cluster20_0_face_cradle_sept26/giga/face_frame"
 # FOLDER_NAME = "topic17_business_fusion_test"
 # FOLDER_NAME = "cluster1_21_phone_sept24production/silverphone_sept24_production/down/giga"
-FOLDER_NAME = "topic32_linearbody"
+FOLDER_NAME = "topic23_128d_stress"
 FOLDER_PATH = os.path.join(ROOT_FOLDER_PATH,FOLDER_NAME)
 DIRS = ["1x1", "4x3", "16x10"]
 OUTPUT = os.path.join(io.ROOTSSD, "audioproduction")
@@ -46,8 +48,10 @@ OUTPUT = os.path.join(io.ROOTSSD, "audioproduction")
 match = re.search(r'topic(\d+)', FOLDER_NAME)
 if match:
     TOPIC = int(match.group(1))
+    print("TOPIC", TOPIC)
 else:
     TOPIC = None
+    print("TOPIC", TOPIC)
 CSV_FILE = f"metas_{TOPIC}.csv"
 
 #temporary
@@ -56,7 +60,7 @@ CSV_FILE = f"metas_{TOPIC}.csv"
 # WRITE VIDEO
 # img_array = ['image1.jpg', 'image2.jpg', 'image3.jpg']
 # HOLDER = '/Users/michaelmandiberg/Dropbox/facemap_dropbox/June_tests/'
-FRAMERATE = 12
+FRAMERATE = 10
 # FOLDER = "June4_smilescream_itter_25Ksegment"
 # ROOT = os.path.join(HOLDER,FOLDER)
 # list_of_files= io.get_img_list(ROOT)

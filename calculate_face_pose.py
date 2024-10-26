@@ -992,6 +992,7 @@ def process_image_bodylms(task):
             existing_norm = bboxnormed_collection.find_one({"image_id": image_id})
             if existing_norm:
                 print(f"Normalized landmarks already exist for image_id: {image_id}")
+                is_body = True
                 n_landmarks = pickle.loads(existing_norm["nlms"])
             else:
                 is_body, body_landmarks = find_body(image)
@@ -1088,6 +1089,7 @@ def process_image_bodylms(task):
             if existing_hand:
                 print(f"hand landmarks already exist for image_id: {image_id}")
                 update_hand = False
+                is_hands = True
             else:
                 # do hand stuff
                 # print("doing HANDLMS, bc is ", HANDLMS)

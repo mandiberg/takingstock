@@ -57,7 +57,7 @@ HSV_NORMS = {"LUM": .01, "SAT": 1,  "HUE": 0.002777777778, "VAL": 1}
 # this is for controlling if it is using
 # all clusters, 
 IS_VIDEO_FUSION = True
-GENERATE_FUSION_PAIRS = True
+GENERATE_FUSION_PAIRS = False
 MIN_VIDEO_FUSION_COUNT = 100
 IS_HAND_POSE_FUSION = False
 ONLY_ONE = False
@@ -118,7 +118,7 @@ IS_TOPICS = False
 N_TOPICS = 64
 
 IS_ONE_TOPIC = True
-TOPIC_NO = [46]
+TOPIC_NO = [23]
 #######################
 
 #######################
@@ -133,9 +133,9 @@ TOPIC_NO = [46]
 # 7 is surprise
 #  is yoga << planar,  planar,  fingers crossed
 
-# SORT_TYPE = "128d"
+SORT_TYPE = "128d"
 # SORT_TYPE ="planar"
-SORT_TYPE = "planar_body"
+# SORT_TYPE = "planar_body"
 NORMED_BODY_LMS = True
 
 MOUTH_GAP = 0
@@ -158,22 +158,35 @@ if not GENERATE_FUSION_PAIRS:
         # # topic 17 selects
         # [1,5]
 
-        # [24, 13]
+        #depressed single
+        [21,13]
 
-        # topic 32, T64, ihp128
-        # hands over face
+        #shocked single
+        # [13, 2]
+
+        # # business singles
+        # [23,80]
+        # [26,10]
+        # [7,57]
+
+        # Stressed single
+        # [21, 30],
+        # [21, 68]
+
+        # # topic 32, T64, ihp128
+        # # hands over face
         # [1, 65],
         # [1, 88],
         # [1, 125],
-        # [8, 85],
+        # # [8, 85], # don't use
         # [8, 125],
         # [13, 2],
         # [13, 24],
         # [13, 65],
         # [13, 85],
-        # [13, 101],
+        # # [13, 101], # don't use
         # [13, 117],
-        # [18, 65],
+        # # [18, 65], # don't use
         # [18, 88],
         # [18, 125],
         # [24, 11],
@@ -185,33 +198,33 @@ if not GENERATE_FUSION_PAIRS:
 
         # topic 32, T64, ihp128
         # open mouth
-        [4,124],
-        [5,104],
-        [6,14],
-        [6,37],
-        [6,38],
-        [6,72],
-        [6,115],
-        [9,30],
-        [9,68],
-        [9,109],
-        [10,31],
-        [11,108],
-        [13,76],
-        [13,116],
-        [15,37],
-        [15,38],
-        [15,53],
-        [15,92],
-        [18,7],
-        [21,30],
-        [21,37],
-        [21,68],
-        [21,76],
-        [21,116],
-        [22,127],
-        [30,37],
-        [30,38]
+        # [4,124],
+        # [5,104],
+        # [6,14],
+        # [6,37],
+        # [6,38],
+        # [6,72],
+        # [6,115],
+        # [9,30],
+        # [9,68],
+        # [9,109],
+        # [10,31],
+        # [11,108],
+        # [13,76],
+        # [13,116],
+        # [15,37],
+        # [15,38],
+        # [15,53],
+        # [15,92],
+        # [18,7],
+        # [21,30],
+        # [21,37],
+        # [21,68],
+        # [21,76],
+        # [21,116],
+        # [22,127],
+        # [30,37],
+        # [30,38]
 
         # # topic 32, T64
         # [13, 11],
@@ -347,7 +360,7 @@ elif IS_SEGONLY and io.platform == "darwin":
     if IS_HAND_POSE_FUSION or IS_VIDEO_FUSION:
         FROM += f" JOIN Images{CLUSTER_TYPE} ihp ON s.image_id = ihp.image_id "
         FROM += f" JOIN Images{CLUSTER_TYPE_2} ih ON s.image_id = ih.image_id "
-        # WHERE += " AND ihp.cluster_dist > 3.75" # isn't really working how I want it
+        WHERE += " AND ih.cluster_dist > .1" # isn't really working how I want it
         if IS_VIDEO_FUSION: add_topic_select()
     elif IS_ONE_CLUSTER and IS_ONE_TOPIC:
         FROM += f" JOIN Images{CLUSTER_TYPE} ic ON s.image_id = ic.image_id "

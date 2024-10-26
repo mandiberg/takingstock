@@ -90,16 +90,17 @@ def scale_volume_linear(volume_fit, min_out = VOLUME_MIN, max_out = VOLUME_MAX):
 def scale_volume(row, cycler):
     volume_fit = float(row['topic_fit'])  # Using topic_fit as the volume level 
     if search_for_keys(row):
-        vol = scale_volume_exp(volume_fit,2)*.8
+        # vol = scale_volume_linear(volume_fit, .3,1)
+        vol = scale_volume_exp(volume_fit,2)*1
         # vol =0
-        FADEOUT = 7
+        FADEOUT = 3
     elif volume_fit < QUIET:
         # vol = scale_volume_exp(volume_fit, 3)
-        vol = scale_volume_linear(volume_fit, 0,.01)*cycler[0]
+        vol = scale_volume_linear(volume_fit, 0,.05)*cycler[0]
         # vol = 0
         FADEOUT = 15
     else:
-        vol = scale_volume_linear(volume_fit, .01,.025)*cycler[1]
+        vol = scale_volume_linear(volume_fit, 0,.15)*cycler[1]
         FADEOUT = 15
         # vol = 0
     return vol, FADEOUT
@@ -140,6 +141,7 @@ def process_audio_chunk(chunk_df, existing_files, input_folder, start_index, chu
         sin = np.sin(i/60)
         cos = abs(np.cos(i/60))
         cycler = [sin,cos]
+        print("Cycler:", cycler)
     
         # input_path = os.path.join(INPUT, row['out_name'])
         # input_path = row['out_name']
@@ -154,9 +156,16 @@ def process_audio_chunk(chunk_df, existing_files, input_folder, start_index, chu
         if pd.notna(description) and image_id in existing_files:
             input_file = existing_files.get(str(image_id))
             print("Using existing file:", input_file)
-        elif image_id:
+        elif pd.notna(description) and image_id:
             input_file = np.random.choice(list(existing_files.values()))
-            print("assigned random file:", input_file)
+            if row['topic_fit'] < .6:
+                print("unprocessed meta file")
+            elif row['topic_fit'] > .75:
+                print("unprocessed openai file")
+        elif pd.isna(description) and image_id:
+            input_file = np.random.choice(list(existing_files.values()))
+            row['topic_fit'] = row['topic_fit']/1.25
+            print(f"is NaN assigned random file: {input_file} and topic_fit halved to {row['topic_fit']}")
         else:
             print("No good files found")
             continue
@@ -172,14 +181,15 @@ def process_audio_chunk(chunk_df, existing_files, input_folder, start_index, chu
         # search for keys in the description
         # found = search_for_keys(row)
 
-        try:
-            # pull data from topic fit
-            volume_fit = float(row['topic_fit'])  # Using topic_fit as the volume level
-        except Exception as e:
-            print("Error getting volume fit:", e)
-            if type(row['topic_fit']) == str: continue
-            else: volume_fit = 0.5
-        # # Adjusting volume level and applying panning
+        # I don't think this is still in use
+        # try:
+        #     # pull data from topic fit
+        #     volume_fit = float(row['topic_fit'])  # Using topic_fit as the volume level
+        # except Exception as e:
+        #     print("Error getting volume fit:", e)
+        #     if type(row['topic_fit']) == str: continue
+        #     else: volume_fit = 0.5
+        # # # Adjusting volume level and applying panning
 
         # pan = float(row['pan'])  # Using pan as the panning level
         # set pan to random value between -1 and 1
