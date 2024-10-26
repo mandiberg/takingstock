@@ -1,0 +1,193 @@
+Topic: 0 
+Words: 0.044*"sport" + 0.041*"exercis" + 0.039*"activ" + 0.038*"athlet" + 0.036*"fit" + 0.029*"train" + 0.023*"workout" + 0.021*"lifestyl" + 0.020*"healthi" + 0.020*"yoga"
+Updated topic_id 0
+Topic: 1 
+Words: 0.084*"outsid" + 0.082*"think" + 0.046*"sceneri" + 0.045*"landscap" + 0.043*"calm" + 0.031*"contempl" + 0.029*"peac" + 0.017*"retir" + 0.016*"pension" + 0.015*"blur"
+Updated topic_id 1
+Topic: 2 
+Words: 0.053*"chef" + 0.047*"kitchen" + 0.045*"cook" + 0.038*"apron" + 0.034*"cut" + 0.030*"hard" + 0.028*"occup" + 0.028*"food" + 0.028*"restaur" + 0.027*"uniform"
+Updated topic_id 2
+Topic: 3 
+Words: 0.054*"mustach" + 0.048*"player" + 0.043*"competit" + 0.040*"number" + 0.038*"soccer" + 0.035*"classroom" + 0.035*"limb" + 0.032*"ginger" + 0.030*"count" + 0.029*"curios"
+Updated topic_id 3
+Topic: 4 
+Words: 0.076*"occup" + 0.054*"adolesc" + 0.051*"employ" + 0.034*"expertis" + 0.028*"wisdom" + 0.027*"squar" + 0.026*"world" + 0.023*"project" + 0.023*"intellig" + 0.021*"composit"
+Updated topic_id 4
+Topic: 5 
+Words: 0.056*"denim" + 0.052*"pant" + 0.045*"pocket" + 0.041*"convers" + 0.038*"secur" + 0.027*"sweatshirt" + 0.027*"danger" + 0.024*"timber" + 0.024*"knee" + 0.023*"pigtail"
+Updated topic_id 5
+Topic: 6 
+Words: 0.054*"citi" + 0.050*"urban" + 0.043*"travel" + 0.036*"journey" + 0.035*"street" + 0.027*"sole" + 0.020*"vacat" + 0.019*"walk" + 0.019*"outdoor" + 0.019*"trip"
+Updated topic_id 6
+Topic: 7 
+Words: 0.142*"light" + 0.119*"phenomenon" + 0.109*"pictur" + 0.054*"natur" + 0.031*"brick" + 0.020*"cheek" + 0.019*"glow" + 0.017*"neutral" + 0.015*"lamp" + 0.013*"illumin"
+Updated topic_id 7
+Topic: 8 
+Words: 0.118*"vintag" + 0.089*"retro" + 0.072*"banner" + 0.048*"classic" + 0.037*"poster" + 0.035*"even" + 0.029*"cotton" + 0.022*"logo" + 0.022*"candi" + 0.020*"gown"
+Updated topic_id 8
+Topic: 9 
+Words: 0.059*"makeup" + 0.036*"fashion" + 0.035*"glamour" + 0.034*"beauti" + 0.031*"model" + 0.031*"eleg" + 0.030*"hair" + 0.028*"hairstyl" + 0.028*"style" + 0.024*"sensual"
+Updated topic_id 9
+Topic: 10 
+Words: 0.068*"drink" + 0.058*"reclin" + 0.048*"alcohol" + 0.040*"refresh" + 0.036*"bottl" + 0.035*"unusu" + 0.035*"chocol" + 0.031*"wine" + 0.030*"bunni" + 0.029*"rabbit"
+Updated topic_id 10
+Topic: 11 
+Words: 0.074*"busi" + 0.055*"corpor" + 0.054*"execut" + 0.051*"success" + 0.046*"manag" + 0.040*"offic" + 0.030*"suit" + 0.029*"profession" + 0.029*"confid" + 0.026*"worker"
+Updated topic_id 11
+Topic: 12 
+Words: 0.062*"shoe" + 0.061*"attitud" + 0.039*"determin" + 0.037*"pride" + 0.032*"individu" + 0.028*"desir" + 0.026*"cross" + 0.021*"challeng" + 0.020*"club" + 0.016*"length"
+Updated topic_id 12
+Topic: 13 
+Words: 0.065*"shadow" + 0.054*"multiraci" + 0.051*"magic" + 0.046*"plastic" + 0.039*"surgeri" + 0.030*"develop" + 0.029*"silhouett" + 0.029*"author" + 0.029*"tech" + 0.027*"attack"
+Updated topic_id 13
+Topic: 14 
+Words: 0.064*"stop" + 0.051*"skateboard" + 0.048*"ecolog" + 0.045*"skate" + 0.045*"exot" + 0.037*"extrem" + 0.031*"illustr" + 0.027*"poverti" + 0.026*"forbid" + 0.025*"friday"
+Updated topic_id 14
+Topic: 15 
+Words: 0.053*"muscl" + 0.050*"romant" + 0.044*"shape" + 0.040*"valentin" + 0.035*"heart" + 0.025*"muscular" + 0.022*"lift" + 0.021*"chest" + 0.021*"athlet" + 0.019*"bicep"
+Updated topic_id 15
+Topic: 16 
+Words: 0.067*"food" + 0.045*"eat" + 0.031*"diet" + 0.030*"fruit" + 0.023*"fresh" + 0.023*"healthi" + 0.022*"meal" + 0.018*"breakfast" + 0.017*"kitchen" + 0.017*"sweet"
+Updated topic_id 16
+Topic: 17 
+Words: 0.054*"garden" + 0.049*"plant" + 0.038*"farm" + 0.030*"rural" + 0.030*"growth" + 0.027*"agricultur" + 0.020*"nose" + 0.020*"farmer" + 0.019*"harvest" + 0.019*"natur"
+Updated topic_id 17
+Topic: 18 
+Words: 0.084*"board" + 0.069*"tone" + 0.064*"negat" + 0.064*"headach" + 0.057*"solut" + 0.057*"ribbon" + 0.044*"ecstat" + 0.042*"decis" + 0.034*"choic" + 0.031*"hindu"
+Updated topic_id 18
+Topic: 19 
+Words: 0.110*"masculin" + 0.044*"conscious" + 0.042*"macho" + 0.040*"eyebrow" + 0.034*"ladi" + 0.029*"eyelash" + 0.028*"perspect" + 0.027*"temptat" + 0.024*"deadlin" + 0.024*"old-fashion"
+Updated topic_id 19
+Topic: 20 
+Words: 0.071*"medic" + 0.046*"doctor" + 0.037*"colleg" + 0.037*"hospit" + 0.033*"stethoscop" + 0.031*"health" + 0.031*"healthcar" + 0.028*"medicin" + 0.028*"clinic" + 0.025*"nurs"
+Updated topic_id 20
+Topic: 21 
+Words: 0.066*"educ" + 0.061*"studi" + 0.059*"book" + 0.045*"student" + 0.044*"elementari" + 0.038*"univers" + 0.036*"schoolgirl" + 0.036*"learn" + 0.027*"read" + 0.019*"childhood"
+Updated topic_id 21
+Topic: 22 
+Words: 0.055*"finger" + 0.049*"gestur" + 0.038*"point" + 0.033*"thumb" + 0.032*"show" + 0.029*"symbol" + 0.029*"hand" + 0.027*"sign" + 0.026*"emot" + 0.026*"express"
+Updated topic_id 22
+Topic: 23 
+Words: 0.061*"depress" + 0.060*"stress" + 0.054*"problem" + 0.044*"mood" + 0.042*"frustrat" + 0.036*"sad" + 0.033*"worri" + 0.032*"tire" + 0.028*"heel" + 0.025*"balloon"
+Updated topic_id 23
+Topic: 24 
+Words: 0.049*"winter" + 0.046*"autumn" + 0.035*"cold" + 0.034*"fall" + 0.031*"warm" + 0.030*"scarf" + 0.030*"season" + 0.029*"snow" + 0.023*"forest" + 0.022*"natur"
+Updated topic_id 24
+Topic: 25 
+Words: 0.043*"fashion" + 0.040*"beauti" + 0.040*"pose" + 0.037*"model" + 0.036*"eleg" + 0.035*"hair" + 0.032*"skirt" + 0.029*"dress" + 0.028*"style" + 0.028*"studio"
+Updated topic_id 25
+Topic: 26 
+Words: 0.044*"hope" + 0.043*"pray" + 0.039*"funki" + 0.037*"religion" + 0.037*"billboard" + 0.037*"charact" + 0.031*"religi" + 0.030*"boot" + 0.029*"prayer" + 0.028*"cultur"
+Updated topic_id 26
+Topic: 27 
+Words: 0.100*"flower" + 0.092*"bouquet" + 0.070*"golden" + 0.065*"bride" + 0.065*"fight" + 0.051*"box" + 0.050*"move" + 0.042*"glove" + 0.041*"filter" + 0.032*"wild"
+Updated topic_id 27
+Topic: 28 
+Words: 0.082*"costum" + 0.055*"tradit" + 0.026*"halloween" + 0.026*"arabian" + 0.025*"fantasi" + 0.022*"carniv" + 0.022*"dress" + 0.022*"cultur" + 0.021*"mysteri" + 0.018*"primari"
+Updated topic_id 28
+Topic: 29 
+Words: 0.532*"set" + 0.081*"nutrit" + 0.049*"appl" + 0.045*"vitamin" + 0.038*"choos" + 0.015*"garland" + 0.013*"peel" + 0.013*"start" + 0.012*"knitwear" + 0.011*"individu"
+Updated topic_id 29
+Topic: 30 
+Words: 0.060*"real" + 0.039*"loss" + 0.036*"swimsuit" + 0.031*"vietnames" + 0.029*"villag" + 0.028*"agent" + 0.027*"center" + 0.023*"measur" + 0.022*"fabric" + 0.022*"reject"
+Updated topic_id 30
+Topic: 31 
+Words: 0.104*"innoc" + 0.059*"small" + 0.058*"childhood" + 0.045*"cute" + 0.041*"sweet" + 0.036*"play" + 0.031*"newborn" + 0.030*"beauti" + 0.027*"face" + 0.024*"happi"
+Updated topic_id 31
+Topic: 32 
+Words: 0.081*"shock" + 0.066*"surpris" + 0.038*"mouth" + 0.035*"confus" + 0.035*"shade" + 0.034*"fear" + 0.033*"express" + 0.025*"cover" + 0.025*"open" + 0.023*"excit"
+Updated topic_id 32
+Topic: 33 
+Words: 0.090*"advertis" + 0.074*"engag" + 0.051*"length" + 0.046*"blank" + 0.042*"quarter" + 0.025*"jump" + 0.025*"copi" + 0.024*"inform" + 0.022*"size" + 0.020*"plank"
+Updated topic_id 33
+Topic: 34 
+Words: 0.050*"achiev" + 0.048*"scream" + 0.046*"excit" + 0.043*"shout" + 0.043*"celebr" + 0.039*"success" + 0.030*"express" + 0.029*"aggress" + 0.027*"fist" + 0.024*"frustrat"
+Updated topic_id 34
+Topic: 35 
+Words: 0.049*"skin" + 0.048*"clean" + 0.039*"care" + 0.028*"fresh" + 0.027*"treatment" + 0.026*"health" + 0.025*"beauti" + 0.020*"healthi" + 0.019*"clear" + 0.018*"perfect"
+Updated topic_id 35
+Topic: 36 
+Words: 0.162*"seat" + 0.095*"tie" + 0.078*"chair" + 0.065*"wooden" + 0.056*"floor" + 0.029*"barefoot" + 0.027*"wife" + 0.026*"door" + 0.026*"housewif" + 0.021*"wood"
+Updated topic_id 36
+Topic: 37 
+Words: 0.066*"franc" + 0.061*"money" + 0.060*"win" + 0.055*"strip" + 0.048*"ball" + 0.032*"credit" + 0.032*"financ" + 0.030*"card" + 0.029*"currenc" + 0.029*"cash"
+Updated topic_id 37
+Topic: 38 
+Words: 0.053*"headshot" + 0.037*"dream" + 0.036*"hair" + 0.034*"view" + 0.030*"candid" + 0.029*"real" + 0.028*"focus" + 0.027*"foreground" + 0.024*"look" + 0.024*"imagin"
+Updated topic_id 38
+Topic: 39 
+Words: 0.067*"structur" + 0.056*"floral" + 0.051*"humor" + 0.049*"pattern" + 0.048*"tongu" + 0.047*"rock" + 0.046*"gold" + 0.045*"welcom" + 0.041*"stick" + 0.039*"sound"
+Updated topic_id 39
+Topic: 40 
+Words: 0.036*"internet" + 0.034*"laptop" + 0.033*"technolog" + 0.030*"digit" + 0.025*"tablet" + 0.025*"onlin" + 0.025*"communic" + 0.023*"wireless" + 0.019*"connect" + 0.018*"busi"
+Updated topic_id 40
+Topic: 41 
+Words: 0.112*"friend" + 0.043*"protect" + 0.041*"mask" + 0.033*"covid-19" + 0.032*"virus" + 0.028*"epidem" + 0.028*"diseas" + 0.027*"beverag" + 0.024*"medic" + 0.024*"divers"
+Updated topic_id 41
+Topic: 42 
+Words: 0.077*"coffe" + 0.062*"drink" + 0.043*"break" + 0.038*"cafe" + 0.038*"aspir" + 0.038*"electron" + 0.023*"exhaust" + 0.021*"restaur" + 0.016*"north" + 0.016*"downtown"
+Updated topic_id 42
+Topic: 43 
+Words: 0.080*"shop" + 0.046*"custom" + 0.046*"sale" + 0.043*"buy" + 0.042*"retail" + 0.042*"store" + 0.039*"purchas" + 0.036*"contact" + 0.026*"shopahol" + 0.025*"consumer"
+Updated topic_id 43
+Topic: 44 
+Words: 0.139*"observ" + 0.057*"singl" + 0.031*"teeth" + 0.031*"inform" + 0.021*"express" + 0.021*"confid" + 0.019*"emot" + 0.018*"posit" + 0.018*"studio" + 0.018*"cheer"
+Updated topic_id 44
+Topic: 45 
+Words: 0.050*"spring" + 0.037*"natur" + 0.035*"summer" + 0.026*"beach" + 0.025*"outdoor" + 0.024*"park" + 0.023*"grass" + 0.022*"vacat" + 0.020*"beauti" + 0.020*"activ"
+Updated topic_id 45
+Topic: 46 
+Words: 0.099*"labor" + 0.048*"construct" + 0.043*"engin" + 0.041*"industri" + 0.033*"muslim" + 0.032*"helmet" + 0.031*"tool" + 0.028*"safeti" + 0.024*"worker" + 0.022*"architect"
+Updated topic_id 46
+Topic: 47 
+Words: 0.036*"shirt" + 0.034*"cloth" + 0.033*"jean" + 0.030*"fashion" + 0.030*"studio" + 0.029*"casual" + 0.028*"handsom" + 0.027*"model" + 0.024*"pose" + 0.021*"style"
+Updated topic_id 47
+Topic: 48 
+Words: 0.052*"seduct" + 0.051*"swim" + 0.041*"lingeri" + 0.038*"underwear" + 0.038*"pool" + 0.038*"simplic" + 0.031*"bikini" + 0.028*"water" + 0.026*"culinari" + 0.026*"automobil"
+Updated topic_id 48
+Topic: 49 
+Words: 0.069*"music" + 0.064*"listen" + 0.050*"headphon" + 0.045*"danc" + 0.041*"perform" + 0.029*"nerd" + 0.028*"dancer" + 0.027*"teacher" + 0.023*"entertain" + 0.020*"audio"
+Updated topic_id 49
+Topic: 50 
+Words: 0.089*"object" + 0.078*"blow" + 0.076*"cloud" + 0.066*"wind" + 0.064*"bubbl" + 0.057*"kiss" + 0.047*"disabl" + 0.044*"solitud" + 0.034*"shampoo" + 0.034*"soap"
+Updated topic_id 50
+Topic: 51 
+Words: 0.188*"facad" + 0.050*"individu" + 0.048*"figur" + 0.028*"save" + 0.023*"invest" + 0.021*"retir" + 0.021*"economi" + 0.021*"inform" + 0.021*"chic" + 0.020*"account"
+Updated topic_id 51
+Topic: 52 
+Words: 0.064*"interior" + 0.058*"home" + 0.054*"room" + 0.053*"domest" + 0.028*"hous" + 0.028*"indoor" + 0.027*"live" + 0.023*"relax" + 0.023*"comfort" + 0.022*"sofa"
+Updated topic_id 52
+Topic: 53 
+Words: 0.092*"near" + 0.076*"button" + 0.074*"window" + 0.073*"businesswear" + 0.037*"teamwork" + 0.036*"cocktail" + 0.035*"binocular" + 0.034*"smoke" + 0.031*"press" + 0.030*"colleagu"
+Updated topic_id 53
+Topic: 54 
+Words: 0.085*"action" + 0.051*"time" + 0.039*"applic" + 0.036*"tattoo" + 0.032*"neckti" + 0.029*"textur" + 0.029*"watch" + 0.027*"clock" + 0.024*"histor" + 0.023*"wheel"
+Updated topic_id 54
+Topic: 55 
+Words: 0.062*"free" + 0.042*"anim" + 0.042*"relationship" + 0.041*"friendship" + 0.041*"togeth" + 0.034*"girlfriend" + 0.033*"pet" + 0.032*"famili" + 0.026*"coupl" + 0.023*"flirt"
+Updated topic_id 55
+Topic: 56 
+Words: 0.072*"daughter" + 0.061*"sick" + 0.043*"servic" + 0.036*"packag" + 0.035*"overweight" + 0.032*"parent" + 0.030*"deliveri" + 0.030*"transport" + 0.023*"unhealthi" + 0.023*"order"
+Updated topic_id 56
+Topic: 57 
+Words: 0.164*"satisfact" + 0.080*"collar" + 0.075*"secretari" + 0.059*"star" + 0.058*"well-dress" + 0.047*"reflect" + 0.040*"straw" + 0.039*"vest" + 0.038*"orient" + 0.024*"memori"
+Updated topic_id 57
+Topic: 58 
+Words: 0.044*"parti" + 0.036*"bald" + 0.036*"birthday" + 0.035*"instrument" + 0.027*"faith" + 0.027*"groom" + 0.027*"celebr" + 0.026*"music" + 0.026*"christian" + 0.026*"musician"
+Updated topic_id 58
+Topic: 59 
+Words: 0.063*"christma" + 0.057*"celebr" + 0.056*"present" + 0.053*"gift" + 0.050*"holiday" + 0.036*"santa" + 0.033*"decor" + 0.028*"festiv" + 0.027*"winter" + 0.022*"decemb"
+Updated topic_id 59
+Topic: 60 
+Words: 0.056*"authent" + 0.044*"game" + 0.044*"scienc" + 0.031*"virtual" + 0.030*"placard" + 0.029*"help" + 0.028*"milk" + 0.027*"innov" + 0.027*"templat" + 0.025*"brutal"
+Updated topic_id 60
+Topic: 61 
+Words: 0.120*"level" + 0.117*"infant" + 0.053*"plain" + 0.048*"artist" + 0.045*"paint" + 0.040*"race" + 0.038*"set" + 0.033*"draw" + 0.031*"fold" + 0.029*"mix"
+Updated topic_id 61
+Topic: 62 
+Words: 0.074*"offer" + 0.047*"sexual" + 0.032*"ident" + 0.032*"stone" + 0.030*"contain" + 0.028*"actor" + 0.027*"breast" + 0.022*"rear" + 0.022*"partnership" + 0.020*"ancient"
+Updated topic_id 62
+Topic: 63 
+Words: 0.088*"phone" + 0.071*"mobil" + 0.056*"communic" + 0.034*"telephon" + 0.033*"technolog" + 0.032*"messag" + 0.030*"talk" + 0.027*"smart" + 0.025*"text" + 0.023*"wireless"
+Updated topic_id 63
+653.8521361351013
