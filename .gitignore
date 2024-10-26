@@ -152,3 +152,5 @@ topic_model/display64.xlsx
 topic_model/BOW_lda_corpus.mm.index
 topic_model/TFIDF_lda_corpus.mm
 topic_model/TFIDF_lda_corpus.mm.index
+topic_model/BOW_lda_corpus.mm.index
+*.index
