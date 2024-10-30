@@ -32,8 +32,26 @@ LEFT JOIN
 WHERE i.site_name_id = 6
 ;
 
+ 
+-- count of images by site
    
-   
+SELECT
+    so.site_name_id,
+    s.site_name,
+    COUNT(so.image_id) AS image_count
+FROM
+    Images so 
+JOIN
+	Site s ON so.site_name_id = s.site_name_id 
+GROUP BY
+    so.site_name_id
+ORDER BY
+    so.site_name_id;
+
+
+
+
+
 -- segment only
    
 SELECT

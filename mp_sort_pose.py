@@ -46,7 +46,7 @@ class SortPose:
         self.BRUTEFORCE = False
         self.use_3D = use_3D
         print("init use_3D",self.use_3D)
-        self.CUTOFF = 1500 # DOES factor if ONE_SHOT
+        self.CUTOFF = 100 # DOES factor if ONE_SHOT
 
         self.CHECK_DESC_DIST = 30
         self.CLUSTER_TYPE = "BodyPoses" # defaults
@@ -84,9 +84,15 @@ class SortPose:
         self.resize_increment = 345
         self.USE_INCREMENTAL_RESIZE = True
         self.image_edge_multiplier = image_edge_multiplier
-        self.face_height_output = face_height_output
-        # takes base image size and multiplies by avg of multiplier
-        self.output_dims = (int(face_height_output*(image_edge_multiplier[1]+image_edge_multiplier[3])/2),int(face_height_output*(image_edge_multiplier[0]+image_edge_multiplier[2])/2))
+        if image_edge_multiplier == [1.3,1.85,2.4,1.85]:
+            print("setting face_height_output to 1.925/1.85")
+            self.face_height_output = face_height_output*(1.925/1.85)
+            self.output_dims = (1920,1920)
+        else:            
+            self.face_height_output = face_height_output
+            # takes base image size and multiplies by avg of multiplier
+            self.output_dims = (int(self.face_height_output*(image_edge_multiplier[1]+image_edge_multiplier[3])/2),int(self.face_height_output*(image_edge_multiplier[0]+image_edge_multiplier[2])/2))
+        print("output_dims",self.output_dims)
         self.EXPAND = EXPAND
         self.EXPAND_SIZE = (10000,10000)
         # self.EXPAND_SIZE = (6400,6400)

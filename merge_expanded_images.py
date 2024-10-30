@@ -16,13 +16,13 @@ io = DataIO()
 db = io.db
 
 # iterate through folders? 
-IS_CLUSTER = True
+IS_CLUSTER = False
 
 # are we making videos or making merged stills?
 IS_VIDEO = True
 IS_METAS_AUDIO = False
 ALL_ONE_VIDEO = False
-LOWEST_DIMS = False
+LOWEST_DIMS = True
 SORT_ORDER = "Chronological"
 DO_RATIOS = False
 GIGA_DIMS = 20688
@@ -40,7 +40,7 @@ ROOT_FOLDER_PATH = '/Volumes/OWC4/segment_images'
 # FOLDER_NAME ="cluster20_0_face_cradle_sept26/giga/face_frame"
 # FOLDER_NAME = "topic17_business_fusion_test"
 # FOLDER_NAME = "cluster1_21_phone_sept24production/silverphone_sept24_production/down/giga"
-FOLDER_NAME = "topic23_128d_stress"
+FOLDER_NAME = "cluster24_13_1730250952.966041"
 FOLDER_PATH = os.path.join(ROOT_FOLDER_PATH,FOLDER_NAME)
 DIRS = ["1x1", "4x3", "16x10"]
 OUTPUT = os.path.join(io.ROOTSSD, "audioproduction")

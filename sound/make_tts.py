@@ -33,7 +33,7 @@ OUTPUT = os.path.join(io.ROOTSSD, "audioproduction/tts_files_test")
 # OUTPUT = os.path.join(io.ROOTSSD, "sound/tts_files_test")
 WINDOW = [0,1]
 
-TOPIC = 23
+TOPIC = 37
 sourcefile = f"metas_{TOPIC}.csv"
 output_csv = f"output_file_{TOPIC}.csv"
 

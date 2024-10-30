@@ -58,7 +58,7 @@ HSV_NORMS = {"LUM": .01, "SAT": 1,  "HUE": 0.002777777778, "VAL": 1}
 # all clusters, 
 IS_VIDEO_FUSION = True
 GENERATE_FUSION_PAIRS = False
-MIN_VIDEO_FUSION_COUNT = 100
+MIN_VIDEO_FUSION_COUNT = 200
 IS_HAND_POSE_FUSION = False
 ONLY_ONE = False
 IS_CLUSTER = False
@@ -96,7 +96,7 @@ ONLY_KIDS = False
 USE_PAINTED = True
 OUTPAINT = False
 INPAINT= True
-INPAINT_MAX = {"top":.4,"right":.4,"bottom":.2,"left":.4}
+INPAINT_MAX = {"top":.4,"right":.4,"bottom":.075,"left":.4}
 INPAINT_MAX_SHOULDERS = {"top":.4,"right":.15,"bottom":.2,"left":.15}
 OUTPAINT_MAX = {"top":.7,"right":.7,"bottom":.2,"left":.7}
 
@@ -118,7 +118,7 @@ IS_TOPICS = False
 N_TOPICS = 64
 
 IS_ONE_TOPIC = True
-TOPIC_NO = [23]
+TOPIC_NO = [32]
 #######################
 
 #######################
@@ -146,7 +146,7 @@ DO_OBJ_SORT = True
 OBJ_DONT_SUBSELECT = False # False means select for OBJ. this is a flag for selecting a specific object type when not sorting on obj
 PHONE_BBOX_LIMITS = [1] # this is an attempt to control the BBOX placement. I don't think it is going to work, but with non-zero it will make a bigger selection. Fix this hack TK. 
 
-ONE_SHOT = True # take all files, based off the very first sort order.
+ONE_SHOT = False # take all files, based off the very first sort order.
 EXPAND = False # expand with white, as opposed to inpaint and crop
 JUMP_SHOT = True # jump to random file if can't find a run (I don't think this applies to planar?)
 
@@ -158,8 +158,12 @@ if not GENERATE_FUSION_PAIRS:
         # # topic 17 selects
         # [1,5]
 
-        #depressed single
-        [21,13]
+        # topic 25 beauty, right hand to face
+        # [24, 4], [24, 11], [24, 13], [24, 23], [24, 42], [24, 51], [24, 57], [24, 97], [24, 99], [24, 112], [24, 113], [24, 119], [24, 126]
+
+        #depressed 
+        # [12,79], [13,106], [13,109], [13,117], [13,2], [13,3], [13,55], [13,76], [14,45], [14,69], [15,92], [16,110], [21,0], [21,103], [21,109], [21,112], [21,113], [21,116], [21,118], [21,126], [21,13], [21,14], [21,18], [21,2], [21,30], [21,43], [21,52], [21,5], [21,68], [21,73], [21,76], [21,81], [21,83], [21,84], [21,87], [21,97], [24,113], [24,119], [24,11], [24,126], [24,13], [7,57], [9,109], [9,30], [9,68], [9,6], [9,97
+        # [21,13] # single
 
         #shocked single
         # [13, 2]
@@ -190,7 +194,7 @@ if not GENERATE_FUSION_PAIRS:
         # [18, 88],
         # [18, 125],
         # [24, 11],
-        # [24, 13],
+        [24, 13]
         # [24, 57],
         # [25, 65],
         # [25, 88],
@@ -360,7 +364,7 @@ elif IS_SEGONLY and io.platform == "darwin":
     if IS_HAND_POSE_FUSION or IS_VIDEO_FUSION:
         FROM += f" JOIN Images{CLUSTER_TYPE} ihp ON s.image_id = ihp.image_id "
         FROM += f" JOIN Images{CLUSTER_TYPE_2} ih ON s.image_id = ih.image_id "
-        WHERE += " AND ih.cluster_dist > .1" # isn't really working how I want it
+        # WHERE += " AND ihp.cluster_dist < 2.5" # isn't really working how I want it
         if IS_VIDEO_FUSION: add_topic_select()
     elif IS_ONE_CLUSTER and IS_ONE_TOPIC:
         FROM += f" JOIN Images{CLUSTER_TYPE} ic ON s.image_id = ic.image_id "
@@ -489,7 +493,8 @@ face_height_output = 1000
 # image_edge_multiplier = [1.4,3.3,3,3.3] # widerest 16:10 for hands -- actual 2:3
 # image_edge_multiplier = [1.3,3.4,2.9,3.4] # slightly less wide 16:10 for hands < Aug 27
 # image_edge_multiplier = [1.3,2,2.9,2] # portrait crop for paris photo images < Aug 30
-image_edge_multiplier = [1.3,2,2.7,2] # square crop for paris photo videos < Sept 16
+# image_edge_multiplier = [1.3,2,2.7,2] # square crop for paris photo videos < Sept 16
+image_edge_multiplier = [1.3,1.85,2.4,1.85] # tighter square crop for paris photo videos < Oct 29
 # image_edge_multiplier = [1.6,3.84,3.2,3.84] # wiiiiiiiidest 16:10 for hands
 # image_edge_multiplier = [1.45,3.84,2.87,3.84] # wiiiiiiiidest 16:9 for hands
 # image_edge_multiplier = [1.2,2.3,1.7,2.3] # medium for hands

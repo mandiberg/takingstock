@@ -70,10 +70,8 @@ HAVING COUNT(*) > 1;
 SET GLOBAL innodb_buffer_pool_size=8294967296;
 
 
-SELECT COUNT(*)
+SELECT COUNT(image_id)
 FROM SegmentBig_isface
-WHERE image_id > 88000000
-AND mongo_tokens = 1
 ;
        
 UPDATE SegmentBig_isface
@@ -94,6 +92,7 @@ AND mongo_hand_landmarks = 1
 
 ALTER TABLE HandsGestures128 RENAME TO HandsGestures;
 ALTER TABLE ImagesHandsGestures128 RENAME TO ImagesHandsGestures;
+
 
 -- then create
 

@@ -70,6 +70,18 @@ ORDER BY total_images DESC;
 
 
 
+-- count of keywords and key text, by topic
+SELECT k.keyword_id, k.keyword_text, COUNT(ik.keyword_id) AS keyword_count
+FROM imageskeywords AS ik
+JOIN keywords AS k ON ik.keyword_id = k.keyword_id
+JOIN imagestopics it ON it.image_id = ik.image_id
+WHERE it.topic_id = 37
+AND k.keyword_text LIKE 'franc%'
+GROUP BY k.keyword_id, k.keyword_text
+ORDER BY keyword_count DESC;
+
+
+
 
 -- count of keywords overall
 USE ministock;
