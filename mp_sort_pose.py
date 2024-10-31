@@ -1935,6 +1935,7 @@ class SortPose:
             elif runmask.any():
                 num_true_values = runmask.sum()
                 print("we have a run ---->>>>", num_true_values)
+                self.SHOT_CLOCK = 0 # reset the shot clock
                 # if there is a run < MINFACEDIST
                 df_run = df_shuffled[runmask]
 
@@ -1947,11 +1948,13 @@ class SortPose:
                 # remove the run from df_enc where image_id = image_id in df_run
                 df_enc = df_enc.drop(index_names).reset_index(drop=True)
 
-            elif len(df_shuffled) > 0:
+            elif len(df_shuffled) > 0 and (self.JUMP_SHOT is True and self.SHOT_CLOCK < self.SHOT_CLOCK_MAX):
 
                 # df_run = first row of df_shuffled based on image_id
                 df_run = df_shuffled.iloc[[0]]  # Select the first row
-                print("NO run <<<< ", df_run)
+                # increment the shot clock
+                self.SHOT_CLOCK += 1
+                print(f"NO run, shot clock is {self.SHOT_CLOCK} <<<< ", df_run)
 
                 # Locate the rows in df_enc with matching image_id
                 index_names = df_enc[df_enc['image_id'].isin(df_run['image_id'])].index
@@ -1963,14 +1966,20 @@ class SortPose:
                     print("df_enc", len(df_enc))
                 else:
                     print("No matching image_id found in df_enc for df_run")
+            
 
-            # else:
-            #     #jump somewhere else
-            #     random_index = random.randint(0, len(df_shuffled) - 1)                
-            #     print("JUMPING AROUND ^^^^ ", df_run)
-            #     df_run = df_shuffled.iloc[[random_index]]
+            elif self.JUMP_SHOT is True and self.SHOT_CLOCK >= self.SHOT_CLOCK_MAX:
+                    print("SHOT_CLOCK has reached the maximum value, resetting to 0.")
+                    self.SHOT_CLOCK = 0
 
-            #     df_enc = df_enc.drop(df_run.index).reset_index(drop=True)
+                    #jump somewhere else
+                    print("JUMPING AROUND ^^^^ ", df_shuffled)
+                    random_index = random.randint(0, len(df_shuffled) - 1)                
+                    print("JUMPING TO ---> ", random_index)
+                    df_run = df_shuffled.iloc[[random_index]]
+                    print("df_run new start point", df_run)
+
+                    df_enc = df_enc.drop(df_run.index).reset_index(drop=True)
 
 
             else:
