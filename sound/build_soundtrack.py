@@ -317,6 +317,33 @@ def process_audio_chunk(chunk_df, existing_files, input_folder, start_index, chu
 
     return mixed_audio, max_end_time
 
+def merge_audio(combined_audio, chunk_audio_without_silence):
+    # Assuming sample_rate is defined
+    # sample_rate = TARGET_SAMPLE_RATE  # Example sample rate, replace with your actual sample rate
+    overlap_duration = 10  # Duration in seconds
+    overlap_samples = TARGET_SAMPLE_RATE * overlap_duration
+
+    # Extract the last 10 seconds of combined_audio
+    combined_audio_last_10s = combined_audio[-overlap_samples:]
+
+    # Extract the first 10 seconds of chunk_audio_without_silence
+    chunk_audio_first_10s = chunk_audio_without_silence[:overlap_samples]
+
+    # Ensure both segments are the same length by padding the shorter one with zeros
+    if len(combined_audio_last_10s) < overlap_samples:
+        combined_audio_last_10s = np.pad(combined_audio_last_10s, (0, overlap_samples - len(combined_audio_last_10s)), 'constant')
+
+    if len(chunk_audio_first_10s) < overlap_samples:
+        chunk_audio_first_10s = np.pad(chunk_audio_first_10s, (0, overlap_samples - len(chunk_audio_first_10s)), 'constant')
+
+    # Mix the audio by adding the arrays together
+    overlapped_segment = combined_audio_last_10s + chunk_audio_first_10s
+
+    # Concatenate the mixed segment with the remaining parts of combined_audio and chunk_audio_without_silence
+    combined_audio = np.concatenate((combined_audio[:-overlap_samples], overlapped_segment, chunk_audio_without_silence[overlap_samples:]))
+    # sf.write(str(len(c ombined_audio))+"combined_audio.wav", combined_audio, TARGET_SAMPLE_RATE, format='wav')
+    return combined_audio
+
 def main():
     io = DataIO()
     INPUT = os.path.join(io.ROOTSSD, "audioproduction")
@@ -348,9 +375,12 @@ def main():
             # chunk_audio has silene that is the same length as len combined_audio
             # IDK where this is coming from, but I am just going to remove it
             
-            # Remove 50 seconds of silence from the beginning of chunk_audio
-            non_silent_index = np.argmax(np.abs(chunk_audio) > 0)
-            non_silent_index = int(np.floor(non_silent_index / 2))
+            # find the point where the audio is no longer silent
+            # non_silent_index_raw = np.argmax(np.abs(chunk_audio) > 0)
+            non_silent_index_raw = np.argmax(np.abs(chunk_audio) > 0)
+            # divide that by 2, because for some reason the line above returns 2x value
+            non_silent_index = int(np.floor(non_silent_index_raw / 2))
+
             print("Non-silent index:", non_silent_index)
             print("combined_audio shape:", combined_audio.shape, "chunk_audio shape:", chunk_audio.shape)
             np.set_printoptions(threshold=100)
@@ -360,20 +390,8 @@ def main():
             # remove_silence(chunk_audio, 50, TARGET_SAMPLE_RATE)
 
             # Combine the original combined_audio and the processed chunk_audio
-            combined_audio = np.concatenate((combined_audio, chunk_audio_without_silence))
-
-
-            # # Extend combined_audio if necessary
-            # print(chunk_index, "Combined audio shape:", combined_audio.shape, "Chunk audio shape:", chunk_audio.shape)
-            # if len(chunk_audio) > len(combined_audio):
-            #     padding = np.zeros((len(chunk_audio) - len(combined_audio), 2))
-            #     combined_audio = np.vstack((combined_audio, padding))
-            
-            # # Add chunk_audio to combined_audio
-            # combined_audio[:len(chunk_audio)] += chunk_audio
-        
-        # start_index += len(chunk)
-        
+            combined_audio = merge_audio(combined_audio, chunk_audio_without_silence)
+      
         # Clear memory
         del chunk_audio
         gc.collect()
