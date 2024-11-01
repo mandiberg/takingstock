@@ -13,7 +13,8 @@ elif sys.platform == "win32": sys.path.insert(1, 'C:/Users/jhash/Documents/GitHu
 from mp_db_io import DataIO
 
 
-TOPIC=23 # what folder are the files in?
+
+TOPIC=37 # what folder are the files in?
 
 CSV_FILE = f"metas_{TOPIC}.csv"
 SOUND_FOLDER = "tts_files_test"
@@ -46,10 +47,18 @@ sample_rate = None
 TARGET_SAMPLE_RATE = 24000
 CHUNK_SIZE = 500  # Adjust this value based on your system's capabilities
 
+
+###########
+# open_ai_sr=24000
+# bark=24000
+# 11_labs=22000
+# meta=16000
+##########
 # Offset/delay between each sample (in seconds)
 OFFSET = 0.1
 TRACK_COUNT = len(df)
-
+#### GENERALLY 3 words per second
+WPS=4
 VOLUME_MIN = 0
 VOLUME_MAX = .8
 FIT_VOL_MIN = .3
@@ -136,6 +145,25 @@ def apply_fadeout(audio, sample_rate, duration=3.0):
     # apply the curve
     audio[start:end] = audio[start:end] * fade_curve
 
+def apply_fadein(audio, sample_rate, duration=3.0):
+    print("sample_rate",sample_rate)
+    # convert to audio indices (samples)
+    print("duration",duration)
+    print("len(audio)/samplerate",len(audio)/sample_rate)
+    length = int(duration*sample_rate)
+    print("length",length)
+    end = length
+    start = 0
+
+    # compute fade out curve
+    # linear fade
+    fade_curve = np.linspace(0.0, 1.0, length)
+    print(len(fade_curve),"len(fade_curve)")
+    print(len(audio[start:end]),"len(audio[start:end])")
+    print(len(audio),"len(audio)")
+    # apply the curve
+    audio[start:end] = audio[start:end] * fade_curve
+
 def conform_sample_rate(audio_data, sample_rate):
     if sample_rate != TARGET_SAMPLE_RATE:
         # Resample the audio to 24000 Hz
@@ -150,40 +178,88 @@ def scale_volume_linear(volume_fit, min_out = VOLUME_MIN, max_out = VOLUME_MAX):
     linear_vol = (volume_fit - FIT_VOL_MIN) / (FIT_VOL_MAX  - FIT_VOL_MIN) * (max_out - min_out) + min_out
     return linear_vol
 
+# def scale_volume(row, cycler):
+#     volume_fit = float(row['topic_fit'])  # Using topic_fit as the volume level 
+#     if search_for_keys(row):
+#         # vol = scale_volume_linear(volume_fit, .3,1)
+#         vol = scale_volume_exp(volume_fit,2)*1
+#         # vol =0
+#         FADEOUT = 3
+#     elif volume_fit < QUIET:
+#         # vol = scale_volume_exp(volume_fit, 3)
+#         vol = scale_volume_linear(volume_fit, 0,.05)*cycler[0]
+#         # vol = 0
+#         FADEOUT = 15
+#     else:
+#         vol = scale_volume_linear(volume_fit, 0,.15)*cycler[1]
+#         FADEOUT = 15
+#         # vol = 0
+#     return vol, FADEOUT
+
 def scale_volume(row, cycler):
     volume_fit = float(row['topic_fit'])  # Using topic_fit as the volume level 
-    if search_for_keys(row):
+    key_index,desc_count=search_for_keys(row)
+    if len(key_index)>0:
+        if len(key_index)==1:
+            start,end=key_index[0],key_index[0]
+        else:
+            start,end=key_index[0],key_index[-1]
         # vol = scale_volume_linear(volume_fit, .3,1)
+        FADEIN =   start/WPS
+        FADEOUT = (desc_count-end-1)/WPS 
         vol = scale_volume_exp(volume_fit,2)*1
+        print(key_index)
+        start,end=key_index[0],key_index[-1]
         # vol =0
-        FADEOUT = 3
     elif volume_fit < QUIET:
         # vol = scale_volume_exp(volume_fit, 3)
         vol = scale_volume_linear(volume_fit, 0,.05)*cycler[0]
+        FADEIN=1
         # vol = 0
         FADEOUT = 15
     else:
         vol = scale_volume_linear(volume_fit, 0,.15)*cycler[1]
+        FADEIN = 2
         FADEOUT = 15
         # vol = 0
-    return vol, FADEOUT
+    return vol, FADEOUT,FADEIN
+
+# def search_for_keys(row):
+#     # search the first three words of the description for each key in KEYS
+#     # if any of the keys are found, set the volume to 1
+#     # if not, set the volume to 0.5
+#     if pd.isna(row['description']): return False
+
+#     found = False
+#     for key in KEYS[TOPIC]:
+#         for word in row['description'].lower().split(" ")[:5]:
+#             if key in word:
+#                 print(" ---- ", key, "found in", word, row['description'])
+#                 return True
+#                 break
+#     if not found:
+#         print("No keys found in", row['description'])
+#     return found
 
 def search_for_keys(row):
     # search the first three words of the description for each key in KEYS
     # if any of the keys are found, set the volume to 1
     # if not, set the volume to 0.5
-    if pd.isna(row['description']): return False
+    if pd.isna(row['description']): return [],0
 
-    found = False
-    for key in KEYS[TOPIC]:
-        for word in row['description'].lower().split(" ")[:5]:
+    # found = False
+    found_list=[]
+    desc_split=row['description'].lower().split(" ")
+    desc_count=len(desc_split)
+    for index,word in enumerate(desc_split):
+        for key in KEYS[TOPIC]:
             if key in word:
-                print(" ---- ", key, "found in", word, row['description'])
-                return True
+                print(" ---- ", key, "found in", word, row['description'],row['image_id'])
+                found_list.append(index)
                 break
-    if not found:
-        print("No keys found in", row['description'])
-    return found
+    if len(found_list)==0:
+        print("No keys found in", row['description'],"for topic model",KEYS[TOPIC])
+    return found_list,desc_count
 
 existing_files = io.get_img_list(os.path.join(INPUT, SOUND_FOLDER))
 # make a dict of existing files using the first part of filename (split on _) as the key
@@ -198,6 +274,7 @@ def process_audio_chunk(chunk_df, existing_files, input_folder, start_index, chu
     right_channel_data = []
     max_end_time = 0
     for i, row in chunk_df.iterrows():
+        print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
 # Iterate through each row in the CSV file
 # for i, row in df.iterrows():
         # use i to create a sine wave
@@ -237,6 +314,8 @@ def process_audio_chunk(chunk_df, existing_files, input_folder, start_index, chu
 
         # Read the audio file
         audio_data, sample_rate = sf.read(input_path)
+        print("length at start",len(audio_data))
+        print("location",input_path)
         # print("Audio data shape:", audio_data.shape, "Sample rate:", sample_rate)
         audio_data, sample_rate = conform_sample_rate(audio_data, sample_rate)
         # print("Audio data shape:", audio_data.shape, "Sample rate:", sample_rate)
@@ -259,7 +338,7 @@ def process_audio_chunk(chunk_df, existing_files, input_folder, start_index, chu
         pan = np.random.uniform(-1, 1)
 
         # FADEOUT = len(row['description']) *.5
-        volume_scale, FADEOUT = scale_volume(row, cycler)
+        volume_scale, FADEOUT,FADEIN = scale_volume(row, cycler)
         audio_data_adjusted = audio_data * volume_scale
         # print(f"volume_fit:", volume_fit, "scaled_vol" ,volume_scale, "Pan:", pan, FADEOUT)
 
@@ -267,7 +346,10 @@ def process_audio_chunk(chunk_df, existing_files, input_folder, start_index, chu
             FADEOUT = len(audio_data_adjusted) / sample_rate
         # Apply fadeout to the audio data
         apply_fadeout(audio_data_adjusted, sample_rate, FADEOUT)
-
+        ################
+        # Apply FADEIN to the audio data
+        # apply_fadein(audio_data_adjusted, sample_rate, FADEIN)
+        ####################
         # If the audio is mono, duplicate the channel for both left and right channels
         if len(audio_data_adjusted.shape) == 1:
             audio_data_adjusted = np.column_stack((audio_data_adjusted, audio_data_adjusted))
