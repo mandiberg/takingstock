@@ -33,21 +33,22 @@ OUTPUT = os.path.join(io.ROOTSSD, "audioproduction/tts_files_test")
 # OUTPUT = os.path.join(io.ROOTSSD, "sound/tts_files_test")
 WINDOW = [0,1]
 
-TOPIC = 23
+TOPIC = 32
 sourcefile = f"metas_{TOPIC}.csv"
 output_csv = f"output_file_{TOPIC}.csv"
 
-STOP_AFTER = 1000
+STOP_AFTER = 100000
 counter = 1
 start_at = 0
 
 OPENAI_VOICE_COUNT = 6
 ELEVEN_LABS_VOICE_COUNT = 20
 TOTAL_VOICES = OPENAI_VOICE_COUNT + ELEVEN_LABS_VOICE_COUNT
+OPENAI_PRESET_LIST=["alloy", "echo", "fable", "onyx", "nova", "shimmer"]
 
 def get_existing_image_ids():
     existing_files = io.get_img_list(OUTPUT)
-    existing_image_ids = [int(f.split("_")[0]) for f in existing_files if f.endswith(".wav")]
+    existing_image_ids = [int(f.split("_")[0]) for f in existing_files if (f.endswith(".wav") or f.endswith(".mp3"))]
     return existing_image_ids
 
 # Function to write TTS using Eleven Labs
@@ -75,7 +76,7 @@ def write_TTS_bark(input_text, file_name):
     scipy.io.wavfile.write(file_name, rate=sample_rate, data=audio_array)
 
 def write_TTS_openai(input_text, file_name):
-    voice_preset = random.choice(preset_list)
+    voice_preset = random.choice(OPENAI_PRESET_LIST)
     response = client.audio.speech.create(
       model="tts-1",
       voice=voice_preset,
@@ -93,6 +94,7 @@ def write_TTS_meta(input_text, file_name):
 def select_voice_and_client(api_key_openai, api_key_elevenlabs):
     voice_index = random.randint(1, TOTAL_VOICES)
     if voice_index <= OPENAI_VOICE_COUNT:
+        preset_list = OPENAI_PRESET_LIST
         client = OpenAI(api_key=api_key_openai)
         voice_preset = random.choice(preset_list)
         write_TTS = write_TTS_openai
@@ -106,17 +108,18 @@ def select_voice_and_client(api_key_openai, api_key_elevenlabs):
         return client, write_TTS, voice_id, file_extension
 
 if OPTION == "openai_or_eleven_labs":
+    WINDOW = [0.6, 1] 
     
-    if random.choice([True, False]):  # Randomly choose between OpenAI and ElevenLabs
-        client = OpenAI(api_key=api_key)  
-        model="tts-1"
-        preset_list=["alloy", "echo", "fable", "onyx", "nova", "shimmer"]
-        write_TTS = write_TTS_openai
-        WINDOW = [.6, .75]
-    else:
-        client = ElevenLabs(api_key=XI_API_KEY)  
-        write_TTS = write_TTS_eleven_labs
-        WINDOW = [0.85, 1] 
+    # if random.choice([True, False]):  # Randomly choose between OpenAI and ElevenLabs
+    #     client = OpenAI(api_key=api_key)  
+    #     model="tts-1"
+    #     preset_list=["alloy", "echo", "fable", "onyx", "nova", "shimmer"]
+    #     write_TTS = write_TTS_openai
+    #     WINDOW = [.6, .75]
+    # else:
+    #     client = ElevenLabs(api_key=XI_API_KEY)  
+    #     write_TTS = write_TTS_eleven_labs
+    #     WINDOW = [0.85, 1] 
 
 elif OPTION == "bark":
     processor = AutoProcessor.from_pretrained("suno/bark")
@@ -151,14 +154,14 @@ with open(os.path.join(INPUT, sourcefile), mode='r', encoding='utf-8-sig', newli
 
             # Skip conditions
             if image_id in existing_image_ids:
-                print(f"Skipping image_id {image_id} (already exists)")
+                print(f"~~~ {image_id} (exists)")
                 counter += 1
                 continue
             elif counter < start_at:
                 counter += 1
                 continue
             elif not input_text:
-                print(f"Skipping image_id {image_id} (no description)")
+                print(f"- {image_id} (no description)")
                 counter += 1
                 continue
             elif fit < WINDOW[0] or fit >= WINDOW[1]:
@@ -166,8 +169,8 @@ with open(os.path.join(INPUT, sourcefile), mode='r', encoding='utf-8-sig', newli
                 counter += 1
                 continue
 
-            if counter % 10 == 0: 
-                print(f"{counter} sounds generated")
+            # if counter % 10 == 0: 
+            print(f"{counter} rows processed")
 
             # Dynamic TTS selection
             if OPTION == "openai_or_eleven_labs":
@@ -178,10 +181,10 @@ with open(os.path.join(INPUT, sourcefile), mode='r', encoding='utf-8-sig', newli
                 file_path = os.path.join(OUTPUT, out_name)
                 
                 if file_extension == "wav":
-                    print("doing openai")
+                    print("  ++++++++  doing openai", image_id)
                     write_TTS(input_text, file_path)
                 else:
-                    print("doing elevenlabs")
+                    print("  ++++++++  doing elevenlabs", image_id)
                     write_TTS(client, input_text, file_path, voice_id_or_preset)
             else:
                 if OPTION != "meta":

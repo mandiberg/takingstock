@@ -134,7 +134,13 @@ KEYS = {
 }
 good_files = []
 
+def check_fade_length(fade_length, audio_data_adjusted, sample_rate=TARGET_SAMPLE_RATE):
+    if (fade_length * sample_rate) > len(audio_data_adjusted):
+        fade_length = (len(audio_data_adjusted) / sample_rate)/2
+    return fade_length
+
 def apply_fadeout(audio, sample_rate, duration=3.0):
+    duration = check_fade_length(duration, audio, sample_rate)
     # convert to audio indices (samples)
     length = int(duration*sample_rate)
     end = audio.shape[0]
@@ -147,6 +153,7 @@ def apply_fadeout(audio, sample_rate, duration=3.0):
     audio[start:end] = audio[start:end] * fade_curve
 
 def apply_fadein(audio, sample_rate, duration=3.0):
+    duration = check_fade_length(duration, audio, sample_rate)
     print("sample_rate",sample_rate)
     # convert to audio indices (samples)
     print("duration",duration)
@@ -350,8 +357,6 @@ def process_audio_chunk(chunk_df, existing_files, input_folder, start_index, chu
         audio_data_adjusted = audio_data * volume_scale
         # print(f"volume_fit:", volume_fit, "scaled_vol" ,volume_scale, "Pan:", pan, FADEOUT)
 
-        if (FADEOUT * sample_rate) > len(audio_data_adjusted):
-            FADEOUT = len(audio_data_adjusted) / sample_rate
         # Apply fadeout to the audio data
         apply_fadeout(audio_data_adjusted, sample_rate, FADEOUT)
         ################
