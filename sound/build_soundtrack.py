@@ -206,8 +206,14 @@ def scale_volume_linear(volume_fit, min_out = VOLUME_MIN, max_out = VOLUME_MAX):
 
 def scale_volume(row, cycler):
     volume_fit = float(row['topic_fit'])  # Using topic_fit as the volume level 
+    # defaults
+    FADEIN = 0
+    FADEOUT = 15
+
+    # search_for_keys to see where the matching keys are
     key_index,desc_count=search_for_keys(row)
     if len(key_index)>0:
+        # if keys are found, set the volume and fade in out based on the keys found
         if len(key_index)==1:
             start,end=key_index[0],key_index[0]
         else:
@@ -215,21 +221,18 @@ def scale_volume(row, cycler):
         # vol = scale_volume_linear(volume_fit, .3,1)
         FADEIN =   start/WPS
         FADEOUT = (desc_count-end-1)/WPS 
-        vol = scale_volume_exp(volume_fit,2)*1
+        vol = scale_volume_exp(volume_fit,1.4)*1
         print(key_index)
         # start,end=key_index[0],key_index[-1]
         # vol =0
+        # if vol < .5: vol = .001
     elif volume_fit < QUIET:
         # vol = scale_volume_exp(volume_fit, 3)
-        vol = scale_volume_linear(volume_fit, 0,.05)*cycler[0]
-        FADEIN=0
-        # vol = 0
-        FADEOUT = 15
+        vol = scale_volume_linear(volume_fit, 0,.1)*cycler[0]
+        # vol = .001
     else:
-        vol = scale_volume_linear(volume_fit, 0,.15)*cycler[1]
-        FADEIN = 0
-        FADEOUT = 15
-        # vol = 0
+        vol = scale_volume_linear(volume_fit, 0,.08)*cycler[1]
+        # vol = .001
     return vol, FADEOUT,FADEIN
 
 # def search_for_keys(row):
@@ -269,6 +272,17 @@ def search_for_keys(row):
         print("No keys found in", row['description'],"for topic model",KEYS[TOPIC])
     return found_list,desc_count
 
+def test_repeat(description, last_description):
+    # if the first three words of the description are the same as the last description
+    print("Description:", description)
+    if pd.notna(description) and pd.notna(last_description):
+        if " ".join(description.split()[:3]) == " ".join(last_description.split()[:3]):
+            return 1, description
+        else:
+            return 0, description
+    else:
+        return 0, description
+
 existing_files = io.get_img_list(os.path.join(INPUT, SOUND_FOLDER))
 # make a dict of existing files using the first part of filename (split on _) as the key
 existing_files = {os.path.basename(f).split("_")[0]:f for f in existing_files}
@@ -281,6 +295,7 @@ def process_audio_chunk(chunk_df, existing_files, input_folder, start_index, chu
     left_channel_data = []
     right_channel_data = []
     max_end_time = 0
+    last_description = ""
     for i, row in chunk_df.iterrows():
         print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
 # Iterate through each row in the CSV file
@@ -374,9 +389,10 @@ def process_audio_chunk(chunk_df, existing_files, input_folder, start_index, chu
         # # Append audio data to respective lists
         # left_channel_data.append(audio_data_adjusted[:, 0])
         # right_channel_data.append(audio_data_adjusted[:, 1])
-
+        repeat, last_description = test_repeat(description, last_description)
         # Calculate the start time for this audio clip
-        start_time = (start_index + i) * OFFSET
+        # if repeat, then start at the same time as the last clip
+        start_time = (start_index + i - repeat) * OFFSET
         end_time = start_time + len(audio_data_adjusted) / TARGET_SAMPLE_RATE
         max_end_time = max(max_end_time, end_time)
         
