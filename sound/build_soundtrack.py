@@ -65,6 +65,7 @@ VOLUME_MAX = .8
 FIT_VOL_MIN = .3
 FIT_VOL_MAX = 1
 FADEOUT = 7
+FADE_TIME = 1
 QUIET =.5
 KEYS = {
     0: ["sport", "exercis", "activ", "athlet", "fit", "train", "workout", "lifestyl", "healthi", "yoga"],
@@ -146,11 +147,29 @@ def apply_fadeout(audio, sample_rate, duration=3.0):
     end = audio.shape[0]
     start = end - length
 
+    # new
+    # fade_time = int(FADE_TIME*sample_rate)
+    # print("fade_time",fade_time)
+    # print("length",length)
+    # if fade_time > length:
+    #     fade_time = length
+    # print("fade_time after testing",fade_time)
     # compute fade out curve
-    # linear fade
-    fade_curve = np.linspace(1.0, 0.0, length)
+    # # linear fade
+    # fade_curve = np.linspace(1.0, 0.0, fade_time)
+
+    # # add zeros to the end of the fade curve
+    # fade_curve = np.append(fade_curve, np.zeros(length - fade_time))
+    # print("fade_curve",len(fade_curve))
+
+    fade_curve = np.power(np.linspace(1.0, 0.0, length),2)
+    print("fade_curve",(fade_curve))
+    # old
+
     # apply the curve
     audio[start:end] = audio[start:end] * fade_curve
+
+
 
 def apply_fadein(audio, sample_rate, duration=3.0):
     duration = check_fade_length(duration, audio, sample_rate)
@@ -165,7 +184,7 @@ def apply_fadein(audio, sample_rate, duration=3.0):
 
     # compute fade out curve
     # linear fade
-    fade_curve = np.linspace(0.0, 1.0, length)
+    fade_curve = np.power(np.linspace(0.0, 1.0, length),2)
     print(len(fade_curve),"len(fade_curve)")
     print(len(audio[start:end]),"len(audio[start:end])")
     print(len(audio),"len(audio)")
@@ -186,25 +205,20 @@ def scale_volume_linear(volume_fit, min_out = VOLUME_MIN, max_out = VOLUME_MAX):
     linear_vol = (volume_fit - FIT_VOL_MIN) / (FIT_VOL_MAX  - FIT_VOL_MIN) * (max_out - min_out) + min_out
     return linear_vol
 
-# def scale_volume(row, cycler):
-#     volume_fit = float(row['topic_fit'])  # Using topic_fit as the volume level 
-#     if search_for_keys(row):
-#         # vol = scale_volume_linear(volume_fit, .3,1)
-#         vol = scale_volume_exp(volume_fit,2)*1
-#         # vol =0
-#         FADEOUT = 3
-#     elif volume_fit < QUIET:
-#         # vol = scale_volume_exp(volume_fit, 3)
-#         vol = scale_volume_linear(volume_fit, 0,.05)*cycler[0]
-#         # vol = 0
-#         FADEOUT = 15
-#     else:
-#         vol = scale_volume_linear(volume_fit, 0,.15)*cycler[1]
-#         FADEOUT = 15
-#         # vol = 0
-#     return vol, FADEOUT
-
-def scale_volume(row, cycler):
+def calculate_fades(key_index,desc_count, audio_data, sample_rate):
+    FADEIN = 0
+    FADEOUT = 15
+    wps = desc_count/(len(audio_data)/sample_rate)
+    if len(key_index)>0:
+        if len(key_index)==1:
+            start,end=key_index[0],key_index[0]
+        else:
+            start,end=key_index[0],key_index[-1]
+        # vol = scale_volume_linear(volume_fit, .3,1)
+        FADEIN =   start/wps
+        FADEOUT = (desc_count-end-1)/wps 
+    return FADEIN,FADEOUT
+def scale_volume(row, cycler, audio_data, sample_rate):
     volume_fit = float(row['topic_fit'])  # Using topic_fit as the volume level 
     # defaults
     FADEIN = 0
@@ -212,27 +226,31 @@ def scale_volume(row, cycler):
 
     # search_for_keys to see where the matching keys are
     key_index,desc_count=search_for_keys(row)
-    if len(key_index)>0:
+    if volume_fit < QUIET:
+        # vol = scale_volume_exp(volume_fit, 3)
+        vol = scale_volume_linear(volume_fit, 0,.2)*cycler[0]
+        vol = .001
+    elif len(key_index)>0:
         # if keys are found, set the volume and fade in out based on the keys found
-        if len(key_index)==1:
-            start,end=key_index[0],key_index[0]
-        else:
-            start,end=key_index[0],key_index[-1]
-        # vol = scale_volume_linear(volume_fit, .3,1)
-        FADEIN =   start/WPS
-        FADEOUT = (desc_count-end-1)/WPS 
+        # if len(key_index)==1:
+        #     start,end=key_index[0],key_index[0]
+        # else:
+        #     start,end=key_index[0],key_index[-1]
+        # # vol = scale_volume_linear(volume_fit, .3,1)
+        # FADEIN =   start/WPS
+        # FADEOUT = (desc_count-end-1)/WPS 
+        FADEIN,FADEOUT=calculate_fades(key_index,desc_count, audio_data, sample_rate)
         vol = scale_volume_exp(volume_fit,1.4)*1
         print(key_index)
         # start,end=key_index[0],key_index[-1]
         # vol =0
         # if vol < .5: vol = .001
-    elif volume_fit < QUIET:
-        # vol = scale_volume_exp(volume_fit, 3)
-        vol = scale_volume_linear(volume_fit, 0,.1)*cycler[0]
-        # vol = .001
+        if vol < QUIET: vol = vol *cycler[1]
+        if vol < QUIET: vol = .001
+        # else: vol = .001
     else:
         vol = scale_volume_linear(volume_fit, 0,.08)*cycler[1]
-        # vol = .001
+        vol = .001
     return vol, FADEOUT,FADEIN
 
 # def search_for_keys(row):
@@ -334,7 +352,8 @@ def process_audio_chunk(chunk_df, existing_files, input_folder, start_index, chu
                 print("unprocessed openai file")
         elif pd.isna(description) and image_id:
             input_file = np.random.choice(list(existing_files.values()))
-            row['topic_fit'] = row['topic_fit']/1.25
+            if row['topic_fit'] > QUIET:
+                row['topic_fit'] = row['topic_fit']/2
             print(f"is NaN assigned random file: {input_file} and topic_fit halved to {row['topic_fit']}")
         else:
             print("No good files found")
@@ -368,7 +387,7 @@ def process_audio_chunk(chunk_df, existing_files, input_folder, start_index, chu
         pan = np.random.uniform(-1, 1)
 
         # FADEOUT = len(row['description']) *.5
-        volume_scale, FADEOUT,FADEIN = scale_volume(row, cycler)
+        volume_scale, FADEOUT,FADEIN = scale_volume(row, cycler, audio_data, sample_rate)
         audio_data_adjusted = audio_data * volume_scale
         # print(f"volume_fit:", volume_fit, "scaled_vol" ,volume_scale, "Pan:", pan, FADEOUT)
 
