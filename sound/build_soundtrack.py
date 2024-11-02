@@ -67,6 +67,8 @@ FIT_VOL_MAX = 1
 FADEOUT = 7
 FADE_TIME = 1
 QUIET =.5
+LOUD_ALOWED = 2
+loud_counter = []
 KEYS = {
     0: ["sport", "exercis", "activ", "athlet", "fit", "train", "workout", "lifestyl", "healthi", "yoga"],
     1: ["outsid", "think", "sceneri", "landscap", "calm", "contempl", "peac", "retir", "pension", "blur"],
@@ -206,8 +208,8 @@ def scale_volume_linear(volume_fit, min_out = VOLUME_MIN, max_out = VOLUME_MAX):
     return linear_vol
 
 def calculate_fades(key_index,desc_count, audio_data, sample_rate):
-    FADEIN = 0
-    FADEOUT = 15
+    fadein = 0
+    fadeout = 15
     wps = desc_count/(len(audio_data)/sample_rate)
     if len(key_index)>0:
         if len(key_index)==1:
@@ -215,14 +217,14 @@ def calculate_fades(key_index,desc_count, audio_data, sample_rate):
         else:
             start,end=key_index[0],key_index[-1]
         # vol = scale_volume_linear(volume_fit, .3,1)
-        FADEIN =   start/wps
-        FADEOUT = (desc_count-end-1)/wps 
-    return FADEIN,FADEOUT
+        fadein =   start/wps
+        fadeout = (desc_count-end-1)/wps 
+    return fadein,fadeout
 def scale_volume(row, cycler, audio_data, sample_rate):
     volume_fit = float(row['topic_fit'])  # Using topic_fit as the volume level 
     # defaults
-    FADEIN = 0
-    FADEOUT = 15
+    fadein = 0
+    fadeout = 15
 
     # search_for_keys to see where the matching keys are
     key_index,desc_count=search_for_keys(row)
@@ -237,10 +239,10 @@ def scale_volume(row, cycler, audio_data, sample_rate):
         # else:
         #     start,end=key_index[0],key_index[-1]
         # # vol = scale_volume_linear(volume_fit, .3,1)
-        # FADEIN =   start/WPS
-        # FADEOUT = (desc_count-end-1)/WPS 
-        FADEIN,FADEOUT=calculate_fades(key_index,desc_count, audio_data, sample_rate)
-        vol = scale_volume_exp(volume_fit,1.4)*1
+        # fadein =   start/WPS
+        # fadeout = (desc_count-end-1)/WPS 
+        fadein,fadeout=calculate_fades(key_index,desc_count, audio_data, sample_rate)
+        vol = scale_volume_exp(volume_fit,1.3)*1
         print(key_index)
         # start,end=key_index[0],key_index[-1]
         # vol =0
@@ -251,7 +253,7 @@ def scale_volume(row, cycler, audio_data, sample_rate):
     else:
         vol = scale_volume_linear(volume_fit, 0,.08)*cycler[1]
         vol = .001
-    return vol, FADEOUT,FADEIN
+    return vol, fadeout,fadein
 
 # def search_for_keys(row):
 #     # search the first three words of the description for each key in KEYS
@@ -313,6 +315,7 @@ def process_audio_chunk(chunk_df, existing_files, input_folder, start_index, chu
     left_channel_data = []
     right_channel_data = []
     max_end_time = 0
+    global loud_counter
     last_description = ""
     for i, row in chunk_df.iterrows():
         print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
@@ -386,16 +389,36 @@ def process_audio_chunk(chunk_df, existing_files, input_folder, start_index, chu
         # set pan to random value between -1 and 1
         pan = np.random.uniform(-1, 1)
 
-        # FADEOUT = len(row['description']) *.5
-        volume_scale, FADEOUT,FADEIN = scale_volume(row, cycler, audio_data, sample_rate)
+        # fadeout = len(row['description']) *.5
+        volume_scale, fadeout,fadein = scale_volume(row, cycler, audio_data, sample_rate)
         audio_data_adjusted = audio_data * volume_scale
-        # print(f"volume_fit:", volume_fit, "scaled_vol" ,volume_scale, "Pan:", pan, FADEOUT)
+        # print(f"volume_fit:", volume_fit, "scaled_vol" ,volume_scale, "Pan:", pan, fadeout)
 
+        # count the loud audio files
+        # subtract OFFSET from each value in the loud counter
+        # do this each loop, regardless of the volume
+        loud_delay_duration = 0
+        if loud_counter and len(loud_counter) > 0:
+            loud_counter = [x - OFFSET for x in loud_counter]
+            print("Loud counter:", len(loud_counter))
+            print("Loud counter:", loud_counter)
+            # if any value in the loud counter is less than 0, remove it
+            loud_counter = [x for x in loud_counter if x > 0]
+        print("Loud counter:", len(loud_counter))
+        if loud_counter and len(loud_counter) > LOUD_ALOWED and volume_scale > QUIET:
+            print("TOO LOUD")
+            loud_delay_duration = 2* (len(loud_counter)-LOUD_ALOWED)
+            loud_offset = (max(loud_counter)/OFFSET) +(loud_delay_duration/OFFSET)
+            print("Loud offset:", loud_offset)
+        else:
+            loud_offset = 0
+        if volume_scale > QUIET:
+            loud_counter.append(len(audio_data)/sample_rate+loud_delay_duration)
         # Apply fadeout to the audio data
-        apply_fadeout(audio_data_adjusted, sample_rate, FADEOUT)
+        apply_fadeout(audio_data_adjusted, sample_rate, fadeout)
         ################
-        # Apply FADEIN to the audio data
-        if FADEIN>0:apply_fadein(audio_data_adjusted, sample_rate, FADEIN)
+        # Apply fadein to the audio data
+        if fadein>0:apply_fadein(audio_data_adjusted, sample_rate, fadein)
         ####################
         # If the audio is mono, duplicate the channel for both left and right channels
         if len(audio_data_adjusted.shape) == 1:
@@ -411,7 +434,7 @@ def process_audio_chunk(chunk_df, existing_files, input_folder, start_index, chu
         repeat, last_description = test_repeat(description, last_description)
         # Calculate the start time for this audio clip
         # if repeat, then start at the same time as the last clip
-        start_time = (start_index + i - repeat) * OFFSET
+        start_time = (start_index + i - repeat + loud_offset) * OFFSET
         end_time = start_time + len(audio_data_adjusted) / TARGET_SAMPLE_RATE
         max_end_time = max(max_end_time, end_time)
         
