@@ -18,6 +18,7 @@ TOPIC=37 # what folder are the files in?
 
 CSV_FILE = f"metas_{TOPIC}.csv"
 SOUND_FOLDER = "tts_files_test"
+# SOUND_FOLDER = "37_metas_hold_for_now"
 
 # TOPICFOLDER = "topic" + str(TOPIC)
 
@@ -209,17 +210,17 @@ def scale_volume(row, cycler):
         FADEOUT = (desc_count-end-1)/WPS 
         vol = scale_volume_exp(volume_fit,2)*1
         print(key_index)
-        start,end=key_index[0],key_index[-1]
+        # start,end=key_index[0],key_index[-1]
         # vol =0
     elif volume_fit < QUIET:
         # vol = scale_volume_exp(volume_fit, 3)
         vol = scale_volume_linear(volume_fit, 0,.05)*cycler[0]
-        FADEIN=1
+        FADEIN=0
         # vol = 0
         FADEOUT = 15
     else:
         vol = scale_volume_linear(volume_fit, 0,.15)*cycler[1]
-        FADEIN = 2
+        FADEIN = 0
         FADEOUT = 15
         # vol = 0
     return vol, FADEOUT,FADEIN
@@ -289,11 +290,18 @@ def process_audio_chunk(chunk_df, existing_files, input_folder, start_index, chu
         # if os.path.exists(input_path):
         #     good_files.append(input_path)
         # elif 
-        # print("Row:", row)
+        print("Row:", row)
         image_id = row['image_id']
         description = row['description']
         # print("Image ID:", image_id)
-        if pd.notna(description) and image_id in existing_files:
+        # if str(image_id) in existing_files.keys(): 
+        #     print("^^^^^^^^ Image_id in existing files already ^^^^^^^^^^^^^^^",image_id)
+        #     print("file path",existing_files.get(str(image_id)))
+        # else:
+        #     print(image_id,"^^^^^^ image_id not in existing files ^^^^^^^^^^^")
+        #     print("existing files",existing_files)
+
+        if pd.notna(description) and str(image_id) in existing_files.keys():
             input_file = existing_files.get(str(image_id))
             print("Using existing file:", input_file)
         elif pd.notna(description) and image_id:
@@ -348,7 +356,7 @@ def process_audio_chunk(chunk_df, existing_files, input_folder, start_index, chu
         apply_fadeout(audio_data_adjusted, sample_rate, FADEOUT)
         ################
         # Apply FADEIN to the audio data
-        # apply_fadein(audio_data_adjusted, sample_rate, FADEIN)
+        if FADEIN>0:apply_fadein(audio_data_adjusted, sample_rate, FADEIN)
         ####################
         # If the audio is mono, duplicate the channel for both left and right channels
         if len(audio_data_adjusted.shape) == 1:
