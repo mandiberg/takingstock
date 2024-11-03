@@ -33,7 +33,7 @@ OUTPUT = os.path.join(io.ROOTSSD, "audioproduction/tts_files_test")
 # OUTPUT = os.path.join(io.ROOTSSD, "sound/tts_files_test")
 WINDOW = [0,1]
 
-TOPIC = 32
+TOPIC = 99
 sourcefile = f"metas_{TOPIC}.csv"
 output_csv = f"output_file_{TOPIC}.csv"
 
@@ -41,10 +41,11 @@ STOP_AFTER = 100000
 counter = 1
 start_at = 0
 
-OPENAI_VOICE_COUNT = 6
+OPENAI_PRESET_LIST=["alloy", "echo", "fable", "onyx", "nova", "shimmer"]
+OPENAI_VOICE_COUNT = len(OPENAI_PRESET_LIST)
 ELEVEN_LABS_VOICE_COUNT = 20
 TOTAL_VOICES = OPENAI_VOICE_COUNT + ELEVEN_LABS_VOICE_COUNT
-OPENAI_PRESET_LIST=["alloy", "echo", "fable", "onyx", "nova", "shimmer"]
+
 
 def get_existing_image_ids():
     existing_files = io.get_img_list(OUTPUT)

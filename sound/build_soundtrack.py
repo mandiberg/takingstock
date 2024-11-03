@@ -14,7 +14,7 @@ from mp_db_io import DataIO
 
 
 
-TOPIC=37 # what folder are the files in?
+TOPIC=32 # what folder are the files in?
 
 CSV_FILE = f"metas_{TOPIC}.csv"
 SOUND_FOLDER = "tts_files_test"
@@ -221,6 +221,15 @@ def calculate_fades(key_index,desc_count, audio_data, sample_rate):
         fadeout = (desc_count-end-1)/wps 
     return fadein,fadeout
 def scale_volume(row, cycler, audio_data, sample_rate):
+    def is_bark_loud(row):
+        # image_id = float(row['topic_fit'])  # Using topic_fit as the volume level 
+        image_id = row['image_id']  # Using topic_fit as the volume level
+        path = existing_files.get(str(image_id))
+        # if path containts meta, return True
+        if "bark_v5" in path: return True
+        else: return False
+
+    global loud_counter
     volume_fit = float(row['topic_fit'])  # Using topic_fit as the volume level 
     # defaults
     fadein = 0
@@ -230,28 +239,37 @@ def scale_volume(row, cycler, audio_data, sample_rate):
     key_index,desc_count=search_for_keys(row)
     if volume_fit < QUIET:
         # vol = scale_volume_exp(volume_fit, 3)
-        vol = scale_volume_linear(volume_fit, 0,.2)*cycler[0]
+        vol = scale_volume_linear(volume_fit, 0,.1)*cycler[0]
         vol = .001
     elif len(key_index)>0:
         # if keys are found, set the volume and fade in out based on the keys found
-        # if len(key_index)==1:
-        #     start,end=key_index[0],key_index[0]
-        # else:
-        #     start,end=key_index[0],key_index[-1]
-        # # vol = scale_volume_linear(volume_fit, .3,1)
-        # fadein =   start/WPS
-        # fadeout = (desc_count-end-1)/WPS 
         fadein,fadeout=calculate_fades(key_index,desc_count, audio_data, sample_rate)
-        vol = scale_volume_exp(volume_fit,1.3)*1
+        vol = scale_volume_exp(volume_fit,1)*1
         print(key_index)
         # start,end=key_index[0],key_index[-1]
         # vol =0
         # if vol < .5: vol = .001
-        if vol < QUIET: vol = vol *cycler[1]
-        if vol < QUIET: vol = .001
+        if vol < QUIET: 
+            if vol > QUIET/2:
+                # vol = vol - len(loud_counter)*.1
+                if len(loud_counter) == 0:
+                    vol = scale_volume_linear(volume_fit,.4 ,.8)
+                else:
+                    vol = vol / (len(loud_counter)*.5+1)
+                if np.max(np.abs(audio_data)) > .8: vol = vol/3
+                # if vol > .8: vol = .8
+                vol = .001
+            else:
+                vol = (vol*.5) *cycler[1]
+                vol = .001
+        elif is_bark_loud(row):
+            if np.max(np.abs(audio_data)) > QUIET: vol = vol/3
         # else: vol = .001
     else:
-        vol = scale_volume_linear(volume_fit, 0,.08)*cycler[1]
+        vol = scale_volume_linear(volume_fit, .04,.08)*cycler[1]
+        # if vol > .1: vol = .1
+        # vol = vol*cycler[1]
+        print("cylcerl vol",vol)
         vol = .001
     return vol, fadeout,fadein
 
@@ -398,6 +416,8 @@ def process_audio_chunk(chunk_df, existing_files, input_folder, start_index, chu
         # subtract OFFSET from each value in the loud counter
         # do this each loop, regardless of the volume
         loud_delay_duration = 0
+        loud_offset = 0
+
         if loud_counter and len(loud_counter) > 0:
             loud_counter = [x - OFFSET for x in loud_counter]
             print("Loud counter:", len(loud_counter))
@@ -405,15 +425,22 @@ def process_audio_chunk(chunk_df, existing_files, input_folder, start_index, chu
             # if any value in the loud counter is less than 0, remove it
             loud_counter = [x for x in loud_counter if x > 0]
         print("Loud counter:", len(loud_counter))
-        if loud_counter and len(loud_counter) > LOUD_ALOWED and volume_scale > QUIET:
-            print("TOO LOUD")
-            loud_delay_duration = 2* (len(loud_counter)-LOUD_ALOWED)
-            loud_offset = (max(loud_counter)/OFFSET) +(loud_delay_duration/OFFSET)
-            print("Loud offset:", loud_offset)
-        else:
-            loud_offset = 0
+        if loud_counter and len(loud_counter) >= LOUD_ALOWED and volume_scale > QUIET:
+            # audio_data_adjusted = audio_data_adjusted* (1/len(loud_counter))
+
+
+            if len(loud_counter) > LOUD_ALOWED*4:
+                    # if there is a backlog of loud files, reduce the volume and play normal speed
+                    # otherwise, the track will be 3x long, with the last 2x all the loud files
+                audio_data_adjusted = audio_data_adjusted* (6/(6+len(loud_counter)))
+            else:
+                print("TOO LOUD")
+                loud_delay_duration = 2* (len(loud_counter)-LOUD_ALOWED)
+                loud_offset = (max(loud_counter)/OFFSET) +(loud_delay_duration/OFFSET)
+                print("Loud offset:", loud_offset)
         if volume_scale > QUIET:
-            loud_counter.append(len(audio_data)/sample_rate+loud_delay_duration)
+            loud_counter.append(len(audio_data)/sample_rate)
+            
         # Apply fadeout to the audio data
         apply_fadeout(audio_data_adjusted, sample_rate, fadeout)
         ################
@@ -550,9 +577,9 @@ def main():
         gc.collect()
     
     # Normalize the final audio to prevent clipping
-    max_amplitude = np.max(np.abs(combined_audio))
-    if max_amplitude > 1.0:
-        combined_audio /= max_amplitude
+    # max_amplitude = np.max(np.abs(combined_audio))
+    # if max_amplitude > 1.0:
+    #     combined_audio /= max_amplitude
     
     # Write the final output file
     sf.write(output_file, combined_audio, TARGET_SAMPLE_RATE, format='wav')
