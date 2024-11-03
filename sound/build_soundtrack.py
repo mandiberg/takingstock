@@ -68,7 +68,10 @@ FADEOUT = 7
 FADE_TIME = 1
 QUIET =.5
 LOUD_ALOWED = 2
+LOUD_RESET = 7
 loud_counter = []
+fake_loud = False
+channel_counter = 0
 KEYS = {
     0: ["sport", "exercis", "activ", "athlet", "fit", "train", "workout", "lifestyl", "healthi", "yoga"],
     1: ["outsid", "think", "sceneri", "landscap", "calm", "contempl", "peac", "retir", "pension", "blur"],
@@ -230,6 +233,7 @@ def scale_volume(row, cycler, audio_data, sample_rate):
         else: return False
 
     global loud_counter
+    global fake_loud
     volume_fit = float(row['topic_fit'])  # Using topic_fit as the volume level 
     # defaults
     fadein = 0
@@ -239,8 +243,8 @@ def scale_volume(row, cycler, audio_data, sample_rate):
     key_index,desc_count=search_for_keys(row)
     if volume_fit < QUIET:
         # vol = scale_volume_exp(volume_fit, 3)
-        vol = scale_volume_linear(volume_fit, 0,.1)*cycler[0]
-        vol = .001
+        vol = scale_volume_linear(volume_fit, .02,.08)*cycler[0]
+        # vol = .001
     elif len(key_index)>0:
         # if keys are found, set the volume and fade in out based on the keys found
         fadein,fadeout=calculate_fades(key_index,desc_count, audio_data, sample_rate)
@@ -253,24 +257,36 @@ def scale_volume(row, cycler, audio_data, sample_rate):
             if vol > QUIET/2:
                 # vol = vol - len(loud_counter)*.1
                 if len(loud_counter) == 0:
-                    vol = scale_volume_linear(volume_fit,.4 ,.8)
+                    if not fake_loud:
+                        # trying to only trigger this once per loud_counter cycle
+                        fake_loud = True
+                        print("ffffffff    Fake loud set")
+
+                        # if there are no loud files, scale the volume between .4 and .8
+                        # to fill silence
+                        vol = scale_volume_linear(volume_fit,0 ,.8)
+                    else:
+                        vol = (vol*.35) *cycler[1]
+                        # vol = vol / (len(loud_counter)*.5+1)
+                        # vol = .001
                 else:
+                    # reduce the volume of the audio based on the number of loud files
                     vol = vol / (len(loud_counter)*.5+1)
                 if np.max(np.abs(audio_data)) > .8: vol = vol/3
                 # if vol > .8: vol = .8
-                vol = .001
+                # vol = .001
             else:
-                vol = (vol*.5) *cycler[1]
-                vol = .001
+                vol = (vol*.45) *cycler[1]
+                # vol = .001
         elif is_bark_loud(row):
             if np.max(np.abs(audio_data)) > QUIET: vol = vol/3
         # else: vol = .001
     else:
-        vol = scale_volume_linear(volume_fit, .04,.08)*cycler[1]
+        vol = scale_volume_linear(volume_fit, .04,.15)*cycler[1]
         # if vol > .1: vol = .1
         # vol = vol*cycler[1]
         print("cylcerl vol",vol)
-        vol = .001
+        # vol = .001
     return vol, fadeout,fadein
 
 # def search_for_keys(row):
@@ -334,6 +350,8 @@ def process_audio_chunk(chunk_df, existing_files, input_folder, start_index, chu
     right_channel_data = []
     max_end_time = 0
     global loud_counter
+    global channel_counter
+    global fake_loud
     last_description = ""
     for i, row in chunk_df.iterrows():
         print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
@@ -424,15 +442,23 @@ def process_audio_chunk(chunk_df, existing_files, input_folder, start_index, chu
             print("Loud counter:", loud_counter)
             # if any value in the loud counter is less than 0, remove it
             loud_counter = [x for x in loud_counter if x > 0]
-        print("Loud counter:", len(loud_counter))
+            print("Loud counter:", len(loud_counter))
+            if fake_loud and len(loud_counter) == 0:
+                # if loud_counter cycle is complete, reset fake_loud
+                fake_loud = False
+                print("rrrrrrrrrrrrr    Fake loud reset")
+            if len(loud_counter) > LOUD_ALOWED*LOUD_RESET:
+                # reset the loud counter if it gets too long
+                loud_counter = []
         if loud_counter and len(loud_counter) >= LOUD_ALOWED and volume_scale > QUIET:
             # audio_data_adjusted = audio_data_adjusted* (1/len(loud_counter))
 
 
-            if len(loud_counter) > LOUD_ALOWED*4:
+            if len(loud_counter) > LOUD_ALOWED*2:
                     # if there is a backlog of loud files, reduce the volume and play normal speed
                     # otherwise, the track will be 3x long, with the last 2x all the loud files
-                audio_data_adjusted = audio_data_adjusted* (6/(6+len(loud_counter)))
+                # loud_divisor = min(len(loud_counter), 10)
+                audio_data_adjusted = audio_data_adjusted * (1 / (2 + len(loud_counter)))
             else:
                 print("TOO LOUD")
                 loud_delay_duration = 2* (len(loud_counter)-LOUD_ALOWED)
@@ -440,7 +466,14 @@ def process_audio_chunk(chunk_df, existing_files, input_folder, start_index, chu
                 print("Loud offset:", loud_offset)
         if volume_scale > QUIET:
             loud_counter.append(len(audio_data)/sample_rate)
-            
+            # if len(loud_counter) is odd pan left, if even pan right
+            # trying to alternate the loud audio from side to side
+            if channel_counter % 2 == 1:
+                pan = np.random.uniform(-1, -0)
+            else: 
+                pan = np.random.uniform(0, 1)
+            channel_counter += 1
+
         # Apply fadeout to the audio data
         apply_fadeout(audio_data_adjusted, sample_rate, fadeout)
         ################
