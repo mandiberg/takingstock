@@ -46,7 +46,7 @@ class SortPose:
         self.BRUTEFORCE = False
         self.use_3D = use_3D
         print("init use_3D",self.use_3D)
-        self.CUTOFF = 5000 # DOES factor if ONE_SHOT
+        self.CUTOFF = 100 # DOES factor if ONE_SHOT
 
         self.CHECK_DESC_DIST = 30
         self.CLUSTER_TYPE = "BodyPoses" # defaults
@@ -63,6 +63,13 @@ class SortPose:
             self.MULTIPLIER = self.HSVMULTIPLIER * (self.MINBODYDIST / self.MINFACEDIST)
             self.DUPED = self.BODY_DUPE_DIST
         elif self.SORT_TYPE == "planar_body": 
+            self.MIND = self.MINBODYDIST
+            self.MAXD = self.MAXBODYDIST * 4
+            self.MULTIPLIER = self.HSVMULTIPLIER * (self.MINBODYDIST / self.MINFACEDIST)
+            self.DUPED = self.BODY_DUPE_DIST
+            self.FACE_DIST_TEST = .02
+            self.CHECK_DESC_DIST = 45
+        elif self.SORT_TYPE == "planar_hands": 
             self.MIND = self.MINBODYDIST
             self.MAXD = self.MAXBODYDIST * 4
             self.MULTIPLIER = self.HSVMULTIPLIER * (self.MINBODYDIST / self.MINFACEDIST)
@@ -128,6 +135,9 @@ class SortPose:
         # adding pointer finger tip
         # self.SUBSET_LANDMARKS.extend(self.FINGER_LMS) # this should match what is in Clustering
         # only use wrist and finger
+
+        # Hands Positions/Gestures
+        self.HANDS_POSITIONS_LMS = self.make_subset_landmarks(0,20)
 
         self.SUBSET_LANDMARKS = self.HAND_LMS
 
@@ -317,7 +327,8 @@ class SortPose:
         if self.CLUSTER_TYPE == "FingertipsPositions":
             self.SUBSET_LANDMARKS = self.HAND_LMS_POINTER
         if self.CLUSTER_TYPE in ["HandsPositions","HandsGestures"]:
-            self.SUBSET_LANDMARKS = None
+            self.SUBSET_LANDMARKS = self.HANDS_POSITIONS_LMS
+            self.SORT_TYPE = "planar_hands"
         else:
             self.SUBSET_LANDMARKS = self.HAND_LMS
 
@@ -1175,6 +1186,7 @@ class SortPose:
 
             if self.SORT_TYPE == "128d": sort_column = "face_encodings68"
             elif self.SORT_TYPE == "planar_body": sort_column = "body_landmarks_array"
+            elif self.SORT_TYPE == "planar_hands": sort_column = "hand_landmarks"
 
             print("sort_column", sort_column)
             print(df_enc[sort_column].head())
@@ -1199,6 +1211,7 @@ class SortPose:
             print(df_enc.head)
             if self.SORT_TYPE == "128d": sort_column = "face_encodings68"
             elif self.SORT_TYPE == "planar_body": sort_column = "body_landmarks_array"
+            elif self.SORT_TYPE == "planar_hands": sort_column = "hand_landmarks"
             # set enc1 = df_enc value in the self.SORT_TYPE column, for the row where column image_id = self.counter_dict["start_site_image_id"]
             # enc1 = df_enc.loc[df_enc['image_id'] == self.counter_dict["start_site_image_id"], sort_column].to_list()
             # enc1 = df_enc.loc[df_enc['image_id'] == self.counter_dict["start_site_image_id"], sort_column].to_list()
@@ -1222,6 +1235,7 @@ class SortPose:
             enc1 = self.counter_dict["start_site_image_id"]
             print("start_face_encodings", enc1)
         elif self.SORT_TYPE == "planar_body":
+            # THIS MAY NOT BE OPERANT
             # print("get_start_enc planar_body start_img key is (this is what we are comparing to):")
             # print(start_img)
             try:
@@ -1303,28 +1317,48 @@ class SortPose:
         return subset
                 
     def get_landmarks_2d(self, Lms, selected_Lms, structure="dict"):
+        def append_lms(idx, x,y,z, structure, Lms2d, Lms1d, Lms1d3):
+            if structure == "dict":
+                Lms2d[idx] =([x, y])
+            elif structure == "list":
+                Lms1d.append(x)
+                Lms1d.append(y)
+            elif structure == "list3":
+                Lms1d3.append(x)
+                Lms1d3.append(y)
+                Lms1d3.append(z)
+            # return Lms2d, Lms1d, Lms1d3
+
         # print("get_landmarks_2d", selected_Lms)
         # this is redundantly in io also
         Lms2d = {}
         Lms1d = []
         Lms1d3 = []
-        for idx, lm in enumerate(Lms.landmark):
-            if idx in selected_Lms:
-                # print("idx", idx)
-                # x, y = int(lm.x * img_w), int(lm.y * img_h)
-                # print("lm.x, lm.y", lm.x, lm.y)
-                if structure == "dict":
-                    Lms2d[idx] =([lm.x, lm.y])
-                elif structure == "list":
-                    Lms1d.append(lm.x)
-                    Lms1d.append(lm.y)
-                elif structure == "list3":
-                    Lms1d3.append(lm.x)
-                    Lms1d3.append(lm.y)
-                    Lms1d3.append(lm.visibility)
-        # print("Lms2d", Lms2d)
-        # print("Lms1d", Lms1d)
-        # print("Lms1d3", Lms1d3)
+
+        if type(Lms) is list and len(Lms[0])==3:
+            print("lms is a list of xyz lists")
+            for idx, lm in enumerate(Lms):
+                x, y, z = Lms[idx]
+                append_lms(idx, x,y,z, structure, Lms2d, Lms1d, Lms1d3)
+            
+        else:
+            for idx, lm in enumerate(Lms.landmark):
+                if idx in selected_Lms:
+                    # print("idx", idx)
+                    # x, y = int(lm.x * img_w), int(lm.y * img_h)
+                    # print("lm.x, lm.y", lm.x, lm.y)
+                    if structure == "dict":
+                        Lms2d[idx] =([lm.x, lm.y])
+                    elif structure == "list":
+                        Lms1d.append(lm.x)
+                        Lms1d.append(lm.y)
+                    elif structure == "list3":
+                        Lms1d3.append(lm.x)
+                        Lms1d3.append(lm.y)
+                        Lms1d3.append(lm.visibility)
+        print("Lms2d", Lms2d)
+        print("Lms1d", Lms1d)
+        print("Lms1d3", Lms1d3)
 
         if Lms1d:
             return Lms1d
@@ -1417,6 +1451,7 @@ class SortPose:
             if hsv_sort == True: enc1 = df.iloc[-1]["hsvll"]
             elif self.SORT_TYPE == "128d": enc1 = df.iloc[-1]["face_encodings68"]
             elif self.SORT_TYPE == "planar": enc1 = df.iloc[-1]["face_landmarks"]
+            elif self.SORT_TYPE == "planar_hands" and "hand_landmarks" in df.columns: enc1 = df.iloc[-1]["hand_landmarks"]
             elif self.SORT_TYPE == "planar_body" and "body_landmarks_array" in df.columns: enc1 = df.iloc[-1]["body_landmarks_array"]
             elif self.SORT_TYPE == "planar_body": enc1 = df.iloc[-1]["body_landmarks_normalized"]
             # setting obj_bbox1
@@ -1564,6 +1599,8 @@ class SortPose:
             sortcol = 'face_encodings68'
         elif knn_sort == "planar":
             sortcol = 'face_landmarks'
+        elif knn_sort == "planar_hands":
+            sortcol = 'hand_landmarks'
         elif knn_sort == "planar_body":
             sortcol = 'body_landmarks_array'
             sourcecol = 'body_landmarks_normalized'
@@ -1834,7 +1871,12 @@ class SortPose:
         elif self.SORT_TYPE == "planar": 
             knn_sort = "planar"
         elif self.SORT_TYPE == "planar_body": 
-            knn_sort = "planar_body"
+            if self.CLUSTER_TYPE == "HandsPositions":
+                knn_sort = "planar_hands"
+            else:
+                knn_sort = "planar_body"
+        elif self.SORT_TYPE == "planar_hands": 
+            knn_sort = "planar_hands"
         
         print("get_closest_df_NN - pre KNN - enc1", enc1)
         # sort KNN (always for planar) or BRUTEFORCE (optional only for 128d)
@@ -2349,11 +2391,14 @@ class SortPose:
 
     def extract_landmarks(self, landmarks):
         # If no landmarks, return 63 zeros (21 points * 3 dimensions)
-        # print("self.SUBSET_LANDMARKS", self.SUBSET_LANDMARKS)
+        # print("extract_landmarks self.SUBSET_LANDMARKS", self.SUBSET_LANDMARKS)
         if not landmarks:
+            print(f"extract_landmarks no landmarks {landmarks}")
             if self.CLUSTER_TYPE == "FingertipsPositions":
                 return [0.0] * len(self.SUBSET_LANDMARKS)
             else:
+                # print(f"going to return 0s", ([0.0] * 63))
+
                 return [0.0] * 63
                 
         # print("landmarks", landmarks)
@@ -2371,7 +2416,7 @@ class SortPose:
         # assign the subset of landmarks to the flat_landmarks_subset
         if self.CLUSTER_TYPE == "FingertipsPositions":
             flat_landmarks = [flat_landmarks[i] for i in self.SUBSET_LANDMARKS]
-        # print("flat_landmarks_subset", flat_landmarks)
+        print("flat_landmarks_subset", flat_landmarks)
         return flat_landmarks
 
     def split_landmarks_to_columns(self, df, left_col="left_hand_world_landmarks", right_col="right_hand_world_landmarks", structure="cols"):
@@ -2379,7 +2424,7 @@ class SortPose:
         # Extract and flatten landmarks for left and right hands
         left_landmarks = df[left_col].apply(self.extract_landmarks)
         right_landmarks = df[right_col].apply(self.extract_landmarks)
-        
+        print("split_landmarks_to_columns left_landmarks", left_landmarks)
         if structure == "cols":
             if self.CLUSTER_TYPE == "FingertipsPositions":
                 col_num = len(self.SUBSET_LANDMARKS)
@@ -2394,6 +2439,8 @@ class SortPose:
             df = pd.concat([df, left_landmark_cols, right_landmark_cols], axis=1)
         if structure == "list":
             # combine the left and right landmarks into a single list
+            if not left_landmarks.all(): print("left_landmarks is None")
+            if not right_landmarks.all(): print("right_landmarks is None")
             landmarks_list = left_landmarks + right_landmarks
             df['hand_landmarks'] = landmarks_list
         

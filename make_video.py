@@ -63,15 +63,14 @@ IS_HAND_POSE_FUSION = False
 ONLY_ONE = False
 IS_CLUSTER = False
 if IS_HAND_POSE_FUSION or IS_VIDEO_FUSION:
-    # first sort on HandsPosts, then on Hands
+    # first sort on HandsPositions, then on HandsGestures
     CLUSTER_TYPE = "HandsPositions" # Select on 3d hands
     CLUSTER_TYPE_2 = "HandsGestures" # Sort on 2d hands
-    # CLUSTER_TYPE = "HandsPositions" # Select on 3d hands
-    # CLUSTER_TYPE_2 = "HandsGestures" # Sort on 2d hands
+    # CLUSTER_TYPE is passed to sort. below
 else:
     # choose the cluster type manually here
-    # CLUSTER_TYPE = "BodyPoses"
-    CLUSTER_TYPE = "HandsPositions" # 2d hands
+    CLUSTER_TYPE = "BodyPoses"
+    # CLUSTER_TYPE = "HandsPositions" # 2d hands
     # CLUSTER_TYPE = "HandsGestures"
     CLUSTER_TYPE_2 = None
 DROP_LOW_VIS = False
@@ -118,7 +117,7 @@ IS_TOPICS = False
 N_TOPICS = 64
 
 IS_ONE_TOPIC = True
-TOPIC_NO = [23]
+TOPIC_NO = [32]
 #######################
 
 #######################
@@ -133,9 +132,10 @@ TOPIC_NO = [23]
 # 7 is surprise
 #  is yoga << planar,  planar,  fingers crossed
 
-SORT_TYPE = "128d"
+# SORT_TYPE = "128d"
 # SORT_TYPE ="planar"
 # SORT_TYPE = "planar_body"
+SORT_TYPE = "planar_hands"
 NORMED_BODY_LMS = True
 
 MOUTH_GAP = 0
@@ -146,7 +146,7 @@ DO_OBJ_SORT = True
 OBJ_DONT_SUBSELECT = False # False means select for OBJ. this is a flag for selecting a specific object type when not sorting on obj
 PHONE_BBOX_LIMITS = [1] # this is an attempt to control the BBOX placement. I don't think it is going to work, but with non-zero it will make a bigger selection. Fix this hack TK. 
 
-ONE_SHOT = False # take all files, based off the very first sort order.
+ONE_SHOT = True # take all files, based off the very first sort order.
 EXPAND = False # expand with white, as opposed to inpaint and crop
 JUMP_SHOT = True # jump to random file if can't find a run (I don't think this applies to planar?)
 
@@ -165,8 +165,8 @@ if not GENERATE_FUSION_PAIRS:
         # [12,79], [13,106], [13,109], [13,117], [13,2], [13,55], [13,76], [14,45], [14,69], [15,92], [16,110], [21,0], [21,103], [21,109], [21,112], [21,113], [21,116], [21,118], [21,126], [21,13], [21,14], [21,18], [21,2], [21,30], [21,43], [21,52], [21,5], [21,68], [21,73], [21,76], [21,81], [21,83], [21,84], [21,87], [21,97], [24,113], [24,119], [24,11], [24,126], [24,13], [7,57], [9,109], [9,30], [9,68], [9,6], [9,97]
         # [21,13] # single
 
-        #shocked single
-        # [13, 2]
+        # shocked single
+        [13, 2]
 
         # # business singles
         # [23,80]
@@ -501,6 +501,9 @@ UPSCALE_MODEL_PATH=os.path.join(os.getcwd(), "models", "FSRCNN_x4.pb")
 # construct my own objects
 sort = SortPose(motion, face_height_output, image_edge_multiplier,EXPAND, ONE_SHOT, JUMP_SHOT, HSV_BOUNDS, VERBOSE,INPAINT, SORT_TYPE, OBJ_CLS_ID,UPSCALE_MODEL_PATH=UPSCALE_MODEL_PATH)
 
+# CLUSTER_TYPE is passed to sort.
+sort.set_subset_landmarks(CLUSTER_TYPE)
+
 start_img_name = "median"
 start_site_image_id = None
 
@@ -784,7 +787,7 @@ def sort_by_face_dist_NN(df_enc):
             # print(retest_lms)
             # calculate any different between test_lms to retest_lms
 
-
+            print("df_sorted.iloc[-1], " , df_sorted.iloc[-1])
             dist = df_sorted.iloc[-1]['dist_enc1']
             print("sort_by_face_dist_NN _ for loop dist is", dist)
 
@@ -897,21 +900,40 @@ def prep_encodings_NN(df_segment):
         else:
             return [row['lum']*HSV_NORMS["LUM"], row['lum_torso']*HSV_NORMS["LUM"]]    
     
-    print("degugging df_segment prep encodings", df_segment.columns)      
+    def set_sort_col():
+        if SORT_TYPE == "planar_body":
+            if CLUSTER_TYPE == "HandsPositions":
+                source_col = sort_column = "hand_landmarks"
+                # source_col = None
+                # source_col_2 = "right_hand_landmarks_norm"
+            else:
+                sort_column = "body_landmarks_array"
+                source_col = "body_landmarks_normalized"
+                # source_col_2 = None
+        elif SORT_TYPE == "planar_hands":
+            source_col = sort_column = "hand_landmarks"
+            # source_col = None
+            # source_col_2 = "right_hand_landmarks_norm"
+        return sort_column, source_col
+
+    sort_column, source_col = set_sort_col()
+    print(f"degugging df_segment prep encodings for {source_col}:", df_segment.columns)      
     # drop rows where body_landmarks_normalized is None
-    df_segment = df_segment.dropna(subset=['body_landmarks_normalized'])
-    print("df_segment length", len(df_segment.index))
+    # TK this needs to be adapted to handle left vs right hand. 
+    # subset needs to be both of them, if both are na
+    if not sort_column == "hand_landmarks":
+        # hand_landmarks are all giving 0's if null, so no NA
+        df_segment = df_segment.dropna(subset=[source_col])
+        print("df_segment length", len(df_segment.index))
     
-    # print rows where body_landmarks_normalized is None
-    null_encodings = df_segment[df_segment['body_landmarks_normalized'].isnull()]
-    if not null_encodings.empty:
-        print("Rows with invalid body_landmarks_normalized data:")
-        print(null_encodings)
+        # print rows where body_landmarks_normalized is None
+        null_encodings = df_segment[df_segment[source_col].isnull()]
+        if not null_encodings.empty:
+            print("Rows with invalid body_landmarks_normalized data:")
+            print(null_encodings)
         
-    print("debugging biiiiiiig nose landmarks")
     print(df_segment.size)
-    print(df_segment['body_landmarks_normalized'])
-    print(df_segment['body_landmarks'])
+    print(df_segment[source_col])
 
 
     # create a column for the hsv values using df_segment.apply(lambda row: create_hsv_list(row), axis=1)
@@ -929,23 +951,44 @@ def prep_encodings_NN(df_segment):
     print("df_segment length", len(df_segment.index))
 
     # convert body_landmarks_normalized to a list (only for SUBSET_LANDMARKS)
-    if SORT_TYPE == "planar_body":
-        print("prepping body_landmarks_array")
+    # if sort_column == "hand_landmarks_array":
+    #     print(f"prepping {sort_column} for {CLUSTER_TYPE}")
+    #     print(df_segment[source_col].head())
+    #     print(df_segment[source_col][0])
+    #     print(len(df_segment[source_col][0]))
+    #     # df_segment[sort_column] = df_segment["left_hand_landmarks_norm"].apply(lambda x: sort.prep_enc(x, structure="list3")) + df_segment["right_hand_landmarks_norm"].apply(lambda x: sort.prep_enc(x, structure="list")) # swittching to 3d
+    #     df_segment[sort_column] = df_segment[source_col].apply(lambda x: sort.prep_enc(x, structure="list3"))
+    #     print(sort_column, df_segment[sort_column].head())
+
+    if sort_column == "body_landmarks_array":
+        print(f"prepping {sort_column} for {CLUSTER_TYPE}")
         print(df_segment['body_landmarks_normalized'].head())
-        df_segment["body_landmarks_array"] = df_segment["body_landmarks_normalized"].apply(lambda x: sort.prep_enc(x, structure="list")) # swittching to 3d
-        print("body_landmarks_array", df_segment["body_landmarks_array"].head())
-        if USE_HEAD_POSE:
-            df_segment = df_segment.apply(sort.weight_face_pose, axis=1)            
-            head_columns = ['face_x', 'face_y', 'face_z', 'mouth_gap']
+        df_segment[sort_column] = df_segment["body_landmarks_normalized"].apply(lambda x: sort.prep_enc(x, structure="list")) # swittching to 3d
+        print(sort_column, df_segment[sort_column].head())
+            # if USE_HEAD_POSE:
+            #     df_segment = df_segment.apply(sort.weight_face_pose, axis=1)            
+            #     head_columns = ['face_x', 'face_y', 'face_z', 'mouth_gap']
 
-            # Add the face_x, face_y, face_z, and mouth_gap to the body_landmarks_array
-            df_segment["body_landmarks_array"] = df_segment.apply(
-                lambda row: row["body_landmarks_array"] + [row[col] for col in head_columns] if isinstance(row["body_landmarks_array"], list) else row["body_landmarks_array"],
-                axis=1
-            )            
-            # print("body_landmarks_array after adding head pose", df_segment["body_landmarks_array"])
+            #     # Add the face_x, face_y, face_z, and mouth_gap to the body_landmarks_array
+            #     df_segment["body_landmarks_array"] = df_segment.apply(
+            #         lambda row: row["body_landmarks_array"] + [row[col] for col in head_columns] if isinstance(row["body_landmarks_array"], list) else row["body_landmarks_array"],
+            #         axis=1
+            #     )            
+            #     # print("body_landmarks_array after adding head pose", df_segment["body_landmarks_array"])
+        
+    if USE_HEAD_POSE:
+        # not currently in use, so may need debugging
+        df_segment = df_segment.apply(sort.weight_face_pose, axis=1)            
+        head_columns = ['face_x', 'face_y', 'face_z', 'mouth_gap']
 
-    if SORT_TYPE == "planar_body" and DROP_LOW_VIS:
+        # Add the face_x, face_y, face_z, and mouth_gap to the body_landmarks_array
+        df_segment[sort_column] = df_segment.apply(
+            lambda row: row[sort_column] + [row[col] for col in head_columns] if isinstance(row[sort_column], list) else row[sort_column],
+            axis=1
+        )            
+        # print("body_landmarks_array after adding head pose", df_segment["body_landmarks_array"])
+
+    if sort_column == "body_landmarks_array" and DROP_LOW_VIS:
 
         # if planar_body drop rows where self.BODY_LMS are low visibility
         df_segment['hand_visible'] = df_segment.apply(lambda row: any(sort.test_landmarks_vis(row)), axis=1)
@@ -1701,8 +1744,10 @@ def main():
             # if hand_results has any values
             # if not df['hand_results'].isnull().all():
             
-            df[['left_hand_landmarks', 'left_hand_world_landmarks', 'left_hand_landmarks_norm', 'right_hand_landmarks', 'right_hand_world_landmarks', 'left_hand_landmarks_norm']] = pd.DataFrame(df['hand_results'].apply(sort.prep_hand_landmarks).tolist(), index=df.index)
+            df[['left_hand_landmarks', 'left_hand_world_landmarks', 'left_hand_landmarks_norm', 'right_hand_landmarks', 'right_hand_world_landmarks', 'right_hand_landmarks_norm']] = pd.DataFrame(df['hand_results'].apply(sort.prep_hand_landmarks).tolist(), index=df.index)
+            print("about to split_landmarks_to_columns,", df.iloc[0])
             df = sort.split_landmarks_to_columns(df, left_col="left_hand_world_landmarks", right_col="right_hand_world_landmarks", structure="list")
+            print("after split_landmarks_to_columns, ", df.iloc[0])
 
             df['bbox'] = df['bbox'].apply(lambda x: io.unstring_json(x))
             print("df before bboxing,", df.columns)
