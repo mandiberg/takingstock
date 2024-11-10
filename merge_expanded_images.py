@@ -16,12 +16,12 @@ io = DataIO()
 db = io.db
 
 # iterate through folders? 
-IS_CLUSTER = False
+IS_CLUSTER = True
 
 # are we making videos or making merged stills?
-IS_VIDEO = True
-IS_METAS_AUDIO = False
-ALL_ONE_VIDEO = False
+IS_VIDEO = False
+IS_METAS_AUDIO = True
+ALL_ONE_VIDEO = True
 LOWEST_DIMS = True
 SORT_ORDER = "Chronological"
 DO_RATIOS = False
@@ -40,7 +40,7 @@ ROOT_FOLDER_PATH = '/Volumes/OWC4/segment_images'
 # FOLDER_NAME ="cluster20_0_face_cradle_sept26/giga/face_frame"
 # FOLDER_NAME = "topic17_business_fusion_test"
 # FOLDER_NAME = "cluster1_21_phone_sept24production/silverphone_sept24_production/down/giga"
-FOLDER_NAME = "cluster24_13_1730250952.966041"
+FOLDER_NAME = "topic23_128d_FINAL"
 FOLDER_PATH = os.path.join(ROOT_FOLDER_PATH,FOLDER_NAME)
 DIRS = ["1x1", "4x3", "16x10"]
 OUTPUT = os.path.join(io.ROOTSSD, "audioproduction")
@@ -60,7 +60,7 @@ CSV_FILE = f"metas_{TOPIC}.csv"
 # WRITE VIDEO
 # img_array = ['image1.jpg', 'image2.jpg', 'image3.jpg']
 # HOLDER = '/Users/michaelmandiberg/Dropbox/facemap_dropbox/June_tests/'
-FRAMERATE = 10
+FRAMERATE = 12
 # FOLDER = "June4_smilescream_itter_25Ksegment"
 # ROOT = os.path.join(HOLDER,FOLDER)
 # list_of_files= io.get_img_list(ROOT)

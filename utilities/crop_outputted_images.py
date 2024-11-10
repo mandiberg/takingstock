@@ -8,7 +8,7 @@ CROP_BOTTOM = 150
 CROP_LEFT = 75
 
 # Base folder containing subfolders with jpgs
-base_folder = "/Volumes/OWC4/segment_images/topic32_128d_crop"
+base_folder = "/Volumes/OWC4/segment_images/topic23_128d_stress_crop"
 
 def crop_image(image_path):
     # Read the image using OpenCV

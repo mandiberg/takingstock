@@ -56,7 +56,7 @@ http="https://media.gettyimages.com/photos/"
 
 # am I looking on RAID/SSD for a folder? If not, will pull directly from SQL
 # if so, also change the site_name_id etc around line 930
-IS_FOLDER = False
+IS_FOLDER = True
 
 '''
 Oct 13, got up to 109217155
@@ -92,7 +92,7 @@ POSE_ID = 0
 # folder doesn't matter if IS_FOLDER is False. Declared FAR below. 
 # MAIN_FOLDER = "/Volumes/RAID18/images_pond5"
 # MAIN_FOLDER = "/Volumes/SSD4green/images_pixerf"
-MAIN_FOLDER = "/Volumes/SSD4green/images_alamy"
+MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/images_vcg"
 # MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/images_picha"
 # MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/afripics_v2/images"
 
@@ -108,7 +108,7 @@ THESE_FOLDER_PATHS = ["9/9C", "9/9D", "9/9E", "9/9F", "9/90", "9/91", "9/92", "9
 # MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages"
 CSV_FOLDERCOUNT_PATH = os.path.join(MAIN_FOLDER, "folder_countout.csv")
 
-IS_SSD=False
+IS_SSD=True
 
 # set BODY to true, set SSD to false, set TOPIC_ID
 # for silence, start at 103893643

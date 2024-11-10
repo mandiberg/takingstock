@@ -14,7 +14,7 @@ from mp_db_io import DataIO
 
 
 
-TOPIC=32 # what folder are the files in?
+TOPIC=23 # what folder are the files in?
 
 CSV_FILE = f"metas_{TOPIC}.csv"
 SOUND_FOLDER = "tts_files_test"
@@ -56,7 +56,11 @@ CHUNK_SIZE = 500  # Adjust this value based on your system's capabilities
 # meta=16000
 ##########
 # Offset/delay between each sample (in seconds)
-OFFSET = 0.1
+OFFSET = 0.0743 # T23
+
+# OFFSET = 0.071 # T32
+
+# OFFSET = 0.077 # T37
 TRACK_COUNT = len(df)
 #### GENERALLY 3 words per second
 WPS=4
