@@ -17,6 +17,7 @@ CREATE TABLE CountGender_Location (
     manandwoman INT DEFAULT 0,
     intersex INT DEFAULT 0,
     androgynous INT DEFAULT 0,
+    missing INT DEFAULT 0,
     FOREIGN KEY (location_id) REFERENCES Location (location_id)
 );
 
@@ -37,6 +38,7 @@ CREATE TABLE CountGender_Topics (
     manandwoman INT DEFAULT 0,
     intersex INT DEFAULT 0,
     androgynous INT DEFAULT 0,
+    missing INT DEFAULT 0,
     FOREIGN KEY (topic_id) REFERENCES Topics (topic_id)
 );
 
@@ -57,6 +59,7 @@ CREATE TABLE CountEthnicity_Location (
 	southeastasian INT DEFAULT 0,
 	afrolatinx INT DEFAULT 0,
 	personofcolor INT DEFAULT 0,
+    missing INT DEFAULT 0,
 	FOREIGN KEY (location_id) REFERENCES Location (location_id)
 );
 
@@ -75,8 +78,39 @@ CREATE TABLE CountEthnicity_Topics (
 	southeastasian INT DEFAULT 0,
 	afrolatinx INT DEFAULT 0,
 	personofcolor INT DEFAULT 0,
+    missing INT DEFAULT 0,
     FOREIGN KEY (topic_id) REFERENCES Topics (topic_id)
 );
+
+
+
+CREATE TABLE CountAge_Location (
+    location_id INT,
+    baby INT DEFAULT 0,
+    infant INT DEFAULT 0,
+    child INT DEFAULT 0,
+    teenager INT DEFAULT 0,
+    young INT DEFAULT 0,
+    adult INT DEFAULT 0,
+    old INT DEFAULT 0,
+    missing INT DEFAULT 0,
+    FOREIGN KEY (location_id) REFERENCES Location (location_id)
+);
+
+CREATE TABLE CountAge_Topics (
+    topic_id INT,
+    baby INT DEFAULT 0,
+    infant INT DEFAULT 0,
+    child INT DEFAULT 0,
+    teenager INT DEFAULT 0,
+    young INT DEFAULT 0,
+    adult INT DEFAULT 0,
+    old INT DEFAULT 0,
+    missing INT DEFAULT 0,
+    FOREIGN KEY (topic_id) REFERENCES Topics (topic_id)
+);
+
+
 
 
 DELETE 

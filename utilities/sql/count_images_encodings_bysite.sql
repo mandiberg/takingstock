@@ -87,6 +87,38 @@ GROUP BY
 ORDER BY
     so.site_name_id;
 
+ 
+   
+-- count ages per site, segment only
+   
+SELECT 
+    site_name,
+    SUM(CASE WHEN age_id IS NULL THEN image_count ELSE 0 END) AS 'NULL',
+    SUM(CASE WHEN age_id = 1 THEN image_count ELSE 0 END) AS '1',
+    SUM(CASE WHEN age_id = 2 THEN image_count ELSE 0 END) AS '2',
+    SUM(CASE WHEN age_id = 3 THEN image_count ELSE 0 END) AS '3',
+    SUM(CASE WHEN age_id = 4 THEN image_count ELSE 0 END) AS '4',
+    SUM(CASE WHEN age_id = 5 THEN image_count ELSE 0 END) AS '5',
+    SUM(CASE WHEN age_id = 6 THEN image_count ELSE 0 END) AS '6',
+    SUM(CASE WHEN age_id = 7 THEN image_count ELSE 0 END) AS '7'
+FROM 
+(
+    SELECT 
+        so.site_name_id,
+        s.site_name,
+        so.age_id,
+        COUNT(*) AS image_count
+    FROM 
+	    SegmentBig_isface so
+	JOIN Site s ON so.site_name_id = s.site_name_id
+    GROUP BY 
+        so.site_name_id, so.age_id
+) AS counts
+GROUP BY 
+    site_name_id
+ORDER BY 
+    site_name_id;
+
    
    
 -- count ages per site

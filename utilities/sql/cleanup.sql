@@ -93,6 +93,9 @@ AND mongo_hand_landmarks = 1
 ALTER TABLE HandsGestures128 RENAME TO HandsGestures;
 ALTER TABLE ImagesHandsGestures128 RENAME TO ImagesHandsGestures;
 
+ALTER TABLE CountAge_Location 
+    missing INT DEFAULT 0
+    ;
 
 -- then create
 

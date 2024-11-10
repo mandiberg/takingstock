@@ -2,8 +2,11 @@
 
 
 
+
+
 USE stock;
 SET GLOBAL innodb_buffer_pool_size=8053063680;
+
 
 
 UPDATE Images

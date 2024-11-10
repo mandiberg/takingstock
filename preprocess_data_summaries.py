@@ -17,7 +17,7 @@ import cv2
 import shutil
 import pandas as pd
 import json
-from my_declarative_base import Base, Clusters, Location, Ethnicity, ImagesEthnicity, Gender, Images,ImagesTopics, SegmentBig, SegmentTable, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON, Images
+from my_declarative_base import Base, Clusters, Location, Ethnicity, ImagesEthnicity, Gender, Age, Images,ImagesTopics, SegmentBig, SegmentTable, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON, Images
 #from sqlalchemy.ext.declarative import declarative_base
 from mp_sort_pose import SortPose
 
@@ -53,21 +53,25 @@ else:
 
 
 title = 'Please choose your operation: '
-options = ["CountGender_Location_so", "CountGender_Topic_so", "CountEthnicity_Location_so", "CountEthnicity_Topics_so", 
-           "CountGender_Location", "CountGender_Topic", "CountEthnicity_Location", "CountEthnicity_Topics"]
+options = ["CountGender_Location_so", "CountGender_Topic_so", "CountEthnicity_Location_so", "CountEthnicity_Topics_so", "CountAge_Location_so", "CountAge_Topics_so", 
+           "CountGender_Location", "CountGender_Topic", "CountEthnicity_Location", "CountEthnicity_Topics", "CountAge_Location", "CountAge_Topics"]
 option, index = pick(options, title)
 print(f"Selected option: {option}, index: {index}")
-if index <= 3: 
+if index <= 5: 
     gender_location = "CountGender_Location_so"
     gender_topic = "CountGender_Topics_so"
     ethnicity_location = "CountEthnicity_Location_so"
     ethnicity_topic = "CountEthnicity_Topics_so"
+    age_location = "CountAge_Location_so"
+    age_topic = "CountAge_Topics_so"
 else: 
     print(f"setting tables for option: {option}, index: {index}")
     gender_location = "CountGender_Location"
     gender_topic = "CountGender_Topics" # placeholder, not functional
     ethnicity_location = "CountEthnicity_Location"
     ethnicity_topic = "CountEthnicity_Topics" # placeholder, not functional
+    age_location = "CountAge_Location"
+    age_topic = "CountAge_Topics"
 
 # Initialize the counter
 counter = 0
@@ -87,6 +91,8 @@ class Location(Base):
     gender_location_counts = relationship("CountGender_Location_so", back_populates="location")
     # Define the relationship with CountEthnicity_Location_so
     ethnicity_location_counts = relationship("CountEthnicity_Location_so", back_populates="location")
+    # Define the relationship with CountAge_Location_so
+    age_location_counts = relationship("CountAge_Location_so", back_populates="location")
 
 class CountGender_Location_so(Base):
     __tablename__ = gender_location
@@ -130,12 +136,27 @@ class CountEthnicity_Location_so(Base):
     # Define a relationship with the Location table
     location = relationship("Location", back_populates="ethnicity_location_counts")
 
+class CountAge_Location_so(Base):
+    __tablename__ = age_location
+
+    location_id = Column(Integer, ForeignKey('Location.location_id'), primary_key=True)
+    baby = Column(Integer, default=0)
+    infant = Column(Integer, default=0)
+    child = Column(Integer, default=0)
+    teenager = Column(Integer, default=0)
+    young = Column(Integer, default=0)
+    adult = Column(Integer, default=0)
+    old = Column(Integer, default=0)
+
+    # Define a relationship with the Location table
+    location = relationship("Location", back_populates="age_location_counts")
 
 class Topics(Base):
     __tablename__ = 'Topics'
     topic_id = Column(Integer, primary_key=True)
     # Relationships
     ethnicity_topic_counts = relationship("CountEthnicity_Topics_so", back_populates="topics")
+    age_topic_counts = relationship("CountAge_Topics_so", back_populates="topics")
 
 class CountGender_Topics(Base):
     __tablename__ = gender_topic
@@ -179,9 +200,24 @@ class CountEthnicity_Topics_so(Base):
     # Define a relationship back to Topics
     topics = relationship("Topics", back_populates="ethnicity_topic_counts")
 
+class CountAge_Topics_so(Base):
+    __tablename__ = age_topic
+    topic_id = Column(Integer, ForeignKey('Topics.topic_id'), primary_key=True)
+    # Age columns
+    baby = Column(Integer, default=0)
+    infant = Column(Integer, default=0)
+    child = Column(Integer, default=0)
+    teenager = Column(Integer, default=0)
+    young = Column(Integer, default=0)
+    adult = Column(Integer, default=0)
+    old = Column(Integer, default=0)
+    # Define a relationship back to Topics
+    topics = relationship("Topics", back_populates="age_topic_counts")
+
 # Define a relationship with the CountGender_Location_so table
 Location.gender_location_counts = relationship("CountGender_Location_so", back_populates="location")
 Topics.gender_topics_counts = relationship("CountGender_Topics", back_populates="topics")
+
 
 class HelperTable(Base):
     __tablename__ = HelperTable_name
@@ -240,6 +276,40 @@ def save_gender(id_dimension_counts, id_type):
                 manandwoman=dimension_counts.get('manandwoman', 0),
                 intersex=dimension_counts.get('intersex', 0),
                 androgynous=dimension_counts.get('androgynous', 0)
+            )
+
+        # Execute the INSERT query
+        session.execute(insert_query)
+        print(f"executed {this_id} successfully.")
+    # Commit the changes
+    session.commit()
+
+def save_age(id_dimension_counts, id_type):
+    # Iterate through the id_dimension_counts dictionary
+    for this_id, dimension_counts in id_dimension_counts.items():
+        # Construct the INSERT query
+        if id_type == "location_id":
+            insert_query = insert(CountAge_Location_so).values(
+                location_id=this_id,
+                baby = dimension_counts.get('baby', 0),
+                infant = dimension_counts.get('infant', 0),
+                child = dimension_counts.get('child', 0),
+                teenager = dimension_counts.get('teenager', 0),
+                young = dimension_counts.get('young', 0),
+                adult = dimension_counts.get('adult', 0),
+                old = dimension_counts.get('old', 0),
+
+            )
+        elif id_type == "topic_id":
+            insert_query = insert(CountAge_Topics).values(
+                topic_id=this_id,
+                baby = dimension_counts.get('baby', 0),
+                infant = dimension_counts.get('infant', 0),
+                child = dimension_counts.get('child', 0),
+                teenager = dimension_counts.get('teenager', 0),
+                young = dimension_counts.get('young', 0),
+                adult = dimension_counts.get('adult', 0),
+                old = dimension_counts.get('old', 0),
             )
 
         # Execute the INSERT query
@@ -404,6 +474,36 @@ def count_ethnicity_topic(this_table):
     print(id_dimension_counts)
     save_ethnicity(id_dimension_counts, "topic_id")
 
+def count_age_location(this_table):
+    select_query = select(
+        Location.location_id,
+        Age.age,
+        func.count().label('age_count')
+    ).\
+    join(this_table, Location.location_id == this_table.location_id).\
+    join(Age, this_table.age_id == Age.age_id).\
+    group_by(Location.location_id, Age.age)
+
+    id_dimension_counts = query(select_query)
+    save_age(id_dimension_counts, "location_id")
+
+def count_age_topic(this_table):
+
+    select_query = select(
+        Topics.topic_id,
+        Age.age,
+        func.count().label('age_count')
+    ).\
+    join(ImagesTopics, Topics.topic_id == ImagesTopics.topic_id).\
+    join(this_table, ImagesTopics.image_id == this_table.image_id).\
+    join(Age, this_table.age_id == Age.age_id).\
+    group_by(Topics.topic_id, Age.age)
+
+    id_dimension_counts = query(select_query)
+    save_age(id_dimension_counts, "topic_id")
+
+
+
 #######MULTI THREADING##################
 # Create a lock for thread synchronization
 lock = threading.Lock()
@@ -424,17 +524,25 @@ elif index == 2:
     count_ethnicity_location(SegmentTable)
 elif index == 3:
     count_ethnicity_topic(SegmentTable)
+elif index == 4:
+    count_age_location(SegmentTable)
+elif index == 5:
+    count_age_topic(SegmentTable)
 
 # full Images table queries
-elif index == 4:
+elif index == 6:
     count_gender_location(SegmentBig)
-elif index == 5:
+elif index == 7:
     count_gender_topic(SegmentBig)
-elif index == 6:    
+elif index == 8:    
     # get_bg_database()
     count_ethnicity_location(SegmentBig)
-elif index == 7:
+elif index == 9:
     count_ethnicity_topic(SegmentBig)
+elif index == 10:
+    count_age_location(SegmentBig)
+elif index == 12:
+    count_age_topic(SegmentBig)
         
 def threaded_fetching():
     while not work_queue.empty():
