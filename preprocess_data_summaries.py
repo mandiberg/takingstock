@@ -30,6 +30,8 @@ VERBOSE = False
 # 7K for topic 7
 HelperTable_name = "SegmentBig_isface"
 
+#TK need to ALTER and ADD     missing INT DEFAULT 0,
+
 # MM controlling which folder to use
 IS_SSD = False
 
@@ -301,7 +303,7 @@ def save_age(id_dimension_counts, id_type):
 
             )
         elif id_type == "topic_id":
-            insert_query = insert(CountAge_Topics).values(
+            insert_query = insert(CountAge_Topics_so).values(
                 topic_id=this_id,
                 baby = dimension_counts.get('baby', 0),
                 infant = dimension_counts.get('infant', 0),

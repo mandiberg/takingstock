@@ -55,14 +55,14 @@ WHERE sbi.mongo_tokens IS NOT NULL
 -- 44374493
 
 SELECT *
-FROM PhoneBbox sbi 
-WHERE sbi.image_id = 5994696
+FROM Images i 
+WHERE i.site_image_id = 1386225770
+AND i.site_name_id = 10
 ;
 
 SELECT *
-FROM Images i
-WHERE i.site_image_id = 1279105214
-AND i.site_name_id = 1
+FROM Encodings e 
+WHERE e.image_id = 123560730
 ;
 
 

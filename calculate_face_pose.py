@@ -56,7 +56,7 @@ http="https://media.gettyimages.com/photos/"
 
 # am I looking on RAID/SSD for a folder? If not, will pull directly from SQL
 # if so, also change the site_name_id etc around line 930
-IS_FOLDER = True
+IS_FOLDER = False
 
 '''
 Oct 13, got up to 109217155
@@ -84,7 +84,7 @@ switching to topic targeted
 18	afripics
 '''
 # I think this only matters for IS_FOLDER mode, and the old SQL way
-SITE_NAME_ID = 1
+SITE_NAME_ID = 10
 # 2, shutter. 4, istock
 # 7 pond5
 POSE_ID = 0
@@ -108,18 +108,18 @@ THESE_FOLDER_PATHS = ["9/9C", "9/9D", "9/9E", "9/9F", "9/90", "9/91", "9/92", "9
 # MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages"
 CSV_FOLDERCOUNT_PATH = os.path.join(MAIN_FOLDER, "folder_countout.csv")
 
-IS_SSD=True
+IS_SSD=False
 
 # set BODY to true, set SSD to false, set TOPIC_ID
 # for silence, start at 103893643
 # for HDD topic, start at 28714744
-BODYLMS = True # only matters if IS_FOLDER is False
+BODYLMS = True 
 HANDLMS = True
 TOPIC_ID = None
 # TOPIC_ID = [24, 29] # adding a TOPIC_ID forces it to work from SegmentBig_isface, currently at 7412083
 DO_INVERSE = True
 SEGMENT = 0 # topic_id set to 0 or False if using HelperTable or not using a segment
-HelperTable_name = "SegmentHelper_oct13_T32_forwardish" # set to False if not using a HelperTable
+HelperTable_name = "SegmentHelper_nov23_T22_forwardish" # set to False if not using a HelperTable
 # HelperTable_name = False    
 # SegmentTable_name = 'SegmentOct20'
 SegmentTable_name = 'SegmentBig_isface'
@@ -1101,6 +1101,7 @@ def process_image_bodylms(task):
                     # print("hand_landmarks", hand_landmarks)
                     update_hand = False
                 else:
+                    print(" ------ >>>>>  YES HANDS for ", image_id)
                     update_hand = True
 
         for _ in range(io.max_retries):
@@ -1268,8 +1269,8 @@ def process_image_bodylms(task):
 
 
 def process_image(task):
-    #print("process_image this is where the action is")
-    # print("processing task:", task)
+    print("process_image this is where the action is")
+    print("processing task:", task)
     pr_split = time.time()
     def save_image_triage(image,df):
         #saves a CV2 image elsewhere -- used in setting up test segment of images
