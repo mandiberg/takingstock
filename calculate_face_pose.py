@@ -119,10 +119,12 @@ TOPIC_ID = None
 # TOPIC_ID = [24, 29] # adding a TOPIC_ID forces it to work from SegmentBig_isface, currently at 7412083
 DO_INVERSE = True
 SEGMENT = 0 # topic_id set to 0 or False if using HelperTable or not using a segment
-HelperTable_name = "SegmentHelper_nov23_T22_forwardish" # set to False if not using a HelperTable
+HelperTable_name = "SegmentHelper_nov23_T37_forwardish" # set to False if not using a HelperTable
 # HelperTable_name = False    
 # SegmentTable_name = 'SegmentOct20'
 SegmentTable_name = 'SegmentBig_isface'
+# if HelperTable_name, set start point
+START_IMAGE_ID = 24257650
 
 if BODYLMS is True or HANDLMS is True:
 
@@ -158,6 +160,7 @@ if BODYLMS is True or HANDLMS is True:
             SUBQUERY = " "
         if HelperTable_name:
             FROM += f" INNER JOIN {HelperTable_name} ht ON seg1.image_id = ht.image_id "
+            QUERY += f" AND seg1.image_id > {START_IMAGE_ID}"
     
     elif HANDLMS:
         QUERY = " seg1.mongo_hand_landmarks IS NULL and seg1.no_image IS NULL"
@@ -754,7 +757,7 @@ def calc_encodings(image, faceLms,bbox):## changed parameters and rebuilt
     return np.array(encodings).tolist()
 
 def find_body(image):
-    #print("find_body")
+    if VERBOSE: print("find_body")
     with mp_pose.Pose(
         static_image_mode=True, min_detection_confidence=0.5) as pose:
       # for idx, file in enumerate(file_list):
@@ -763,7 +766,8 @@ def find_body(image):
             image_height, image_width, _ = image.shape
             # Convert the BGR image to RGB before processing.
             bodyLms = pose.process(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
-            # print("bodyLms, ", bodyLms)
+            if VERBOSE: print("bodyLms, ", bodyLms)
+            if VERBOSE: print("bodyLms.pose_landmarks, ", bodyLms.pose_landmarks)
             # bodyLms = results.pose_landmarks.landmark
             if not bodyLms.pose_landmarks:
                 is_body = False
@@ -963,7 +967,7 @@ def process_image_bodylms(task):
     init_session()
     init_mongo()
     nose_pixel_pos = None
-    n_landmarks = None
+    body_landmarks = n_landmarks = None
     hand_landmarks = None
     is_body = False
 
@@ -997,12 +1001,14 @@ def process_image_bodylms(task):
             else:
                 is_body, body_landmarks = find_body(image)
                 if is_body:
+                    print("body landmarks found for ", image_id)
                     ### NORMALIZE LANDMARKS ###
                     nose_pixel_pos = sort.set_nose_pixel_pos(body_landmarks, image.shape)
                     if VERBOSE: print("nose_pixel_pos", nose_pixel_pos)
                     face_height = sort.convert_bbox_to_face_height(bbox)
+                    if VERBOSE: print("face_height", face_height)
                     n_landmarks = sort.normalize_landmarks(body_landmarks, nose_pixel_pos, face_height, image.shape)
-                    # print("n_landmarks", n_landmarks)
+                    if VERBOSE: print("n_landmarks", n_landmarks)
                     # sort.insert_n_landmarks(bboxnormed_collection, target_image_id, n_landmarks)
                     ### Save normalized landmarks to MongoDB
                     bboxnormed_collection.update_one(

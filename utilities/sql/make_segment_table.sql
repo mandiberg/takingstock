@@ -8,7 +8,7 @@ DROP TABLE SegmentHelperAug16_SegOct20_preAlamy ;
 DELETE FROM SegmentHelper_sept4_all_adults_facing_forward;
 
 -- create helper segment table
-CREATE TABLE SegmentHelper_oct13_T32_forwardish (
+CREATE TABLE SegmentHelper_nov23_T32_forwardish (
     seg_image_id int NOT NULL AUTO_INCREMENT PRIMARY KEY,
     image_id INTEGER,
     FOREIGN KEY (image_id) REFERENCES Images(image_id)
@@ -199,7 +199,7 @@ WHERE k.keyword_text LIKE "%quiet%"
 -- this skips existing so you can rerun ontop of existing data
 -- seg big is -45 to -3, with yz at 10
 
-INSERT INTO SegmentHelper_oct13_T32_forwardish (image_id)
+INSERT INTO SegmentHelper_nov23_T32_forwardish (image_id)
 SELECT DISTINCT e.image_id
 FROM Encodings e
 JOIN Images i ON i.image_id = e.image_id
@@ -207,7 +207,7 @@ JOIN Images i ON i.image_id = e.image_id
 JOIN ImagesTopics it ON it.image_id = e.image_id 
 WHERE e.mongo_encodings = 1 
 	AND e.mongo_body_landmarks IS NULL
-	AND it.topic_id = 32
+	AND it.topic_id = 22
 --	AND ik.keyword_id IN (9758, 76667, 83610, 100134, 102145, 22126, 99525, 115178, 116993, 125891)
 --	AND i.age_id IS NULL
 	AND e.face_x > -45 AND e.face_x < -3
