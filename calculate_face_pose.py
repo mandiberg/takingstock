@@ -56,7 +56,7 @@ http="https://media.gettyimages.com/photos/"
 
 # am I looking on RAID/SSD for a folder? If not, will pull directly from SQL
 # if so, also change the site_name_id etc around line 930
-IS_FOLDER = False
+IS_FOLDER = True
 
 '''
 Oct 13, got up to 109217155
@@ -124,7 +124,7 @@ HelperTable_name = "SegmentHelper_nov23_T37_forwardish" # set to False if not us
 # SegmentTable_name = 'SegmentOct20'
 SegmentTable_name = 'SegmentBig_isface'
 # if HelperTable_name, set start point
-START_IMAGE_ID = 35873254
+START_IMAGE_ID = 39225317
 
 if BODYLMS is True or HANDLMS is True:
 
@@ -1189,7 +1189,9 @@ def find_and_save_body(image_id, image, bbox, mongo_body_landmarks, hand_landmar
             hue_bb = sat_bb = val_bb = lum_bb = lum_torso_bb = None
         selfie_bbox=sort.get_selfie_bbox(segmentation_mask)
         if VERBOSE: print("selfie_bbox",selfie_bbox)
-
+    elif BODYLMS and mongo_body_landmarks:
+        # this was for some error handling. to handle exisitin mongo_body_landmarks will require refactoring
+        print("doing body, mongo_body_landmarks is not None", mongo_body_landmarks)
     ### save object bbox info
     # session = sort.parse_bbox_dict(session, image_id, PhoneBbox, OBJ_CLS_LIST, bbox_dict)
     is_hands = None
@@ -1212,16 +1214,20 @@ def process_image_bodylms(task):
     # df = pd.DataFrame(columns=['image_id','bbox'])
     if VERBOSE: print("task is: ",task)
     image_id = task[0] ### is it enc or image_id
-    bbox = io.unstring_json(task[4])
+    if task[4] is not None:
+        bbox = io.unstring_json(task[4])
+    else:
+        print("no bbox for this task", task)
+        bbox = None
     cap_path = capitalize_directory(task[1])
-    mongo_face_landmarks = task[2]
+    # mongo_face_landmarks = task[2]
     mongo_body_landmarks = task[3]
     init_session()
     init_mongo()
-    nose_pixel_pos = None
-    body_landmarks = n_landmarks = None
+    # nose_pixel_pos = None
+    # body_landmarks = n_landmarks = None
     hand_landmarks = None
-    is_body = False
+    # is_body = False
 
     # df = pd.DataFrame(columns=['image_id','is_face','is_body','is_face_distant','face_x','face_y','face_z','mouth_gap','face_landmarks','bbox','face_encodings','face_encodings68_J','body_landmarks'])
     # df.at['1', 'image_id'] = image_id
@@ -1240,53 +1246,6 @@ def process_image_bodylms(task):
 
         find_and_save_body(image_id, image, bbox, mongo_body_landmarks, hand_landmarks)
         
-        # if BODYLMS and mongo_body_landmarks is None:
-        #     print("doing body, mongo_body_landmarks is None")
-        #     # find body landmarks and normalize them using function
-        #     is_body, n_landmarks, body_landmarks, face_height, nose_pixel_pos = process_image_find_body_subroutine(image_id, image, bbox)
-            
-        #     ### detect object info, 
-        #     print("detecting objects")
-        #     bbox_dict=sort.return_bbox(YOLO_MODEL,image, OBJ_CLS_LIST)
-        #     if VERBOSE: print("detected objects")
-
-        #     ### normed object bbox
-        #     bbox_dict = process_image_normalize_object_bbox(bbox_dict, nose_pixel_pos, face_height, image.shape)
-
-        #     ### do imagebackground calcs
-
-        #     segmentation_mask=sort.get_segmentation_mask(get_bg_segment,image,None,None)
-        #     is_left_shoulder,is_right_shoulder=sort.test_shoulders(segmentation_mask)
-        #     if VERBOSE: print("shoulders",is_left_shoulder,is_right_shoulder)
-        #     hue,sat,val,lum, lum_torso=sort.get_bg_hue_lum(image,segmentation_mask,bbox)  
-        #     if VERBOSE: print("sat values before insert", hue,sat,val,lum,lum_torso)
-
-        #     if bbox:
-        #         #will do a second round for bbox with same cv2 image
-        #         hue_bb,sat_bb, val_bb, lum_bb, lum_torso_bb =sort.get_bg_hue_lum(image,segmentation_mask,bbox)  
-        #         if VERBOSE: print("sat values before insert", hue_bb,sat_bb, val_bb, lum_bb, lum_torso_bb)
-        #     else:
-        #         hue_bb = sat_bb = val_bb = lum_bb = lum_torso_bb = None
-        #     selfie_bbox=sort.get_selfie_bbox(segmentation_mask)
-        #     if VERBOSE: print("selfie_bbox",selfie_bbox)
-
-        # ### save object bbox info
-        # # session = sort.parse_bbox_dict(session, image_id, PhoneBbox, OBJ_CLS_LIST, bbox_dict)
-        # is_hands = None
-        # if HANDLMS:
-        #     pose, is_hands, hand_landmarks, update_hand = process_image_hands_subroutine(image_id, image)
-
-        # for _ in range(io.max_retries):
-        #     try:
-        #         # try to save using function:
-        #         save_body_hands_mysql_and_mongo(session, image_id, image, bbox_dict, body_landmarks, n_landmarks, hue_bb, lum_bb, sat_bb, val_bb, lum_torso_bb, hue, lum, sat, val, lum_torso, is_left_shoulder, is_right_shoulder, selfie_bbox, is_body, mongo_body_landmarks, is_hands, update_hand, hand_landmarks, pose)
-        #         # if sql hiccups it will try again, if not, it will hit break on next line
-        #         break  # Transaction succeeded, exit the loop
-        #     except OperationalError as e:
-        #         print(e)
-        #         print(f"[process_image]session.query failed: {task}")
-        #         time.sleep(io.retry_delay)
-
     else:
         no_image = True
         # store no_image in Images table
@@ -1632,7 +1591,11 @@ def main():
                         try:
                             print(f"Processing batch {i//BATCH_SIZE + 1}...")
                             init_session()
-                            batch_query = session.query(Images.image_id, Images.site_image_id, Encodings.encoding_id) \
+                            # task = (image_id,imagepath,row["mongo_face_landmarks"], row["mongo_body_landmarks"],row["bbox"])
+                            # batch_query = session.query(Images.image_id, Images.site_image_id, Encodings.encoding_id) \
+
+                            # adding in mongo stuff. should return NULL if not there
+                            batch_query = session.query(Images.image_id, Images.site_image_id, Images.imagename, Encodings.encoding_id, Encodings.mongo_face_landmarks, Encodings.mongo_body_landmarks, Encodings.bbox) \
                                                 .outerjoin(Encodings, Images.image_id == Encodings.image_id) \
                                                 .filter(Images.site_image_id.in_(batch_site_image_ids), Images.site_name_id == site_name_id)
                             batch_results = batch_query.all()
@@ -1674,14 +1637,21 @@ def main():
                             result = results_dict[site_image_id]
                             # print("in results", result)
                             # print("in results encoding_id", result.encoding_id)
+                            imagepath = os.path.join(folder, img)
                             if not result.encoding_id:
                                 # if it hasn't been encoded yet, add it to the tasks
-                                imagepath = os.path.join(folder, img)
                                 task = (result.image_id, imagepath)
-                                print(task)
+                            elif result.mongo_face_landmarks and result.mongo_body_landmarks is None:
+                                # if face has been encoded but not body, add it to the tasks
+                                task = (result.image_id, imagepath, result.mongo_face_landmarks, result.mongo_body_landmarks, result.bbox)
+                            else:
+                                # skips BOTH 1) face and body have been encoded 2) no face was detected -- these should be rerun to find the body only
+                                print(">>>> something is wacky, skipping:", result.image_id, imagepath, result.mongo_face_landmarks, result.mongo_body_landmarks, result.bbox)
+                                task = None
+                            print(task)
+                            if task:
                                 tasks_to_accomplish.put(task)
                                 this_count += 1
-
                         else: 
                             print("not in results_dict, will process: ", site_image_id)
                         images_left_to_process = images_left_to_process -1 
