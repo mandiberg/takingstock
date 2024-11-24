@@ -1052,47 +1052,6 @@ def process_image_bodylms(task):
             print("doing body, mongo_body_landmarks is None")
             # find body landmarks and normalize them using function
             is_body, n_landmarks, body_landmarks, face_height, nose_pixel_pos = process_image_find_body_subroutine(image_id, image, bbox)
-
-            # # Check if body landmarks are already in the normalized collection
-            # existing_norm = bboxnormed_collection.find_one({"image_id": image_id})
-            # if existing_norm:
-            #     print(f"Normalized landmarks already exist for image_id: {image_id}")
-            #     is_body = True
-            #     n_landmarks = pickle.loads(existing_norm["nlms"])
-            # else:
-            #     is_body, body_landmarks = find_body(image)
-            #     if is_body:
-            #         print("body landmarks found for ", image_id)
-            #         ### NORMALIZE LANDMARKS ###
-            #         nose_pixel_pos = sort.set_nose_pixel_pos(body_landmarks, image.shape)
-            #         if VERBOSE: print("nose_pixel_pos", nose_pixel_pos)
-            #         face_height = sort.convert_bbox_to_face_height(bbox)
-            #         if VERBOSE: print("face_height", face_height)
-            #         n_landmarks = sort.normalize_landmarks(body_landmarks, nose_pixel_pos, face_height, image.shape)
-            #         if VERBOSE: print("n_landmarks", n_landmarks)
-            #         # sort.insert_n_landmarks(bboxnormed_collection, target_image_id, n_landmarks)
-            #         ### Save normalized landmarks to MongoDB
-            #         bboxnormed_collection.update_one(
-            #             {"image_id": image_id},
-            #             {"$set": {"nlms": pickle.dumps(n_landmarks)}},
-            #             upsert=True
-            #         )
-            #         print(f"Normalized landmarks stored for image_id: {image_id}")
-            #     else:
-            #         print("No body landmarks found")
-            #         n_landmarks = None
-
-
-            #     ### NORMALIZE LANDMARKS ###
-            #     nose_pixel_pos = sort.set_nose_pixel_pos(body_landmarks,image.shape)
-            #     if VERBOSE: print("nose_pixel_pos",nose_pixel_pos)
-            #     face_height = sort.convert_bbox_to_face_height(bbox)
-            #     n_landmarks=sort.normalize_landmarks(body_landmarks,nose_pixel_pos,face_height,image.shape)
-            #     # print("n_landmarks",n_landmarks)
-            #     # sort.insert_n_landmarks(bboxnormed_collection, target_image_id,n_landmarks)
-            # else:
-            #     print("no body")
-            #     n_landmarks = None
             
             ### detect object info, 
             print("detecting objects")
@@ -1100,33 +1059,7 @@ def process_image_bodylms(task):
             if VERBOSE: print("detected objects")
 
             ### normed object bbox
-            for OBJ_CLS_ID in OBJ_CLS_LIST:
-                if VERBOSE: print("OBJ_CLS_ID to norm", OBJ_CLS_ID)
-                bbox_key = "bbox"
-                # conf_key = "conf_{0}".format(OBJ_CLS_ID)
-                bbox_n_key = "bbox_{0}_norm".format(OBJ_CLS_ID)
-                if VERBOSE: print("OBJ_CLS_ID", OBJ_CLS_ID)
-                try: 
-                    if VERBOSE: print("trying to get bbox", OBJ_CLS_ID)
-                    bbox_dict_value = bbox_dict[OBJ_CLS_ID]["bbox"]
-                    bbox_dict_value = io.unstring_json(bbox_dict_value)
-                except: 
-                    if VERBOSE: print("no bbox", OBJ_CLS_ID)
-                    bbox_dict_value = None
-                if bbox_dict_value and not nose_pixel_pos:
-                    print("normalized bbox but no nose_pixel_pos for ", image_id)
-                elif bbox_dict_value:
-                    if VERBOSE: print("setting normed bbox for OBJ_CLS_ID", OBJ_CLS_ID)
-                    if VERBOSE: print("bbox_dict_value", bbox_dict_value)
-                    if VERBOSE: print("bbox_n_key", bbox_n_key)
-
-                    n_phone_bbox=sort.normalize_phone_bbox(bbox_dict_value,nose_pixel_pos,face_height,image.shape)
-                    bbox_dict[bbox_n_key]=n_phone_bbox
-                    print("normed bbox", bbox_dict[bbox_n_key])
-                else:
-                    pass
-                    if VERBOSE: print(f"NO {bbox_key} for", image_id)
-    
+            bbox_dict = process_image_normalize_object_bbox(bbox_dict, nose_pixel_pos, face_height, image.shape)
 
             ### do imagebackground calcs
 
