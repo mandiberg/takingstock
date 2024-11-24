@@ -124,7 +124,7 @@ HelperTable_name = "SegmentHelper_nov23_T37_forwardish" # set to False if not us
 # SegmentTable_name = 'SegmentOct20'
 SegmentTable_name = 'SegmentBig_isface'
 # if HelperTable_name, set start point
-START_IMAGE_ID = 24258682
+START_IMAGE_ID = 29690029
 
 if BODYLMS is True or HANDLMS is True:
 
@@ -1016,6 +1016,26 @@ def process_image_normalize_object_bbox(bbox_dict, nose_pixel_pos, face_height, 
             if VERBOSE: print(f"NO {bbox_key} for",)
     return bbox_dict
 
+def process_image_hands_subroutine(image_id, image):
+
+    existing_hand = mongo_hand_collection.find_one({"image_id": image_id})
+    if existing_hand:
+        print(f"hand landmarks already exist for image_id: {image_id}")
+        update_hand = False
+        is_hands = True
+        pose = None
+    else:
+        # do hand stuff
+        pose = SelectPose(image)
+        is_hands, hand_landmarks = find_hands(image, pose)
+        if not is_hands:
+            print(" ------ >>>>>  NO HANDS for ", image_id)
+            update_hand = False
+        else:
+            print(" ------ >>>>>  YES HANDS for ", image_id)
+            update_hand = True
+    return pose, is_hands, hand_landmarks, update_hand
+
 def process_image_bodylms(task):
     # df = pd.DataFrame(columns=['image_id','bbox'])
     if VERBOSE: print("task is: ",task)
@@ -1071,13 +1091,10 @@ def process_image_bodylms(task):
 
             if bbox:
                 #will do a second round for bbox with same cv2 image
-                # bbox,face_landmarks=get_bbox(target_image_id)
                 hue_bb,sat_bb, val_bb, lum_bb, lum_torso_bb =sort.get_bg_hue_lum(image,segmentation_mask,bbox)  
                 if VERBOSE: print("sat values before insert", hue_bb,sat_bb, val_bb, lum_bb, lum_torso_bb)
-                # hue_bb,sat_bb, val_bb, lum_bb, lum_torso_bb =get_bg_hue_lum(img,bbox,facelandmark)
             else:
                 hue_bb = sat_bb = val_bb = lum_bb = lum_torso_bb = None
-
             selfie_bbox=sort.get_selfie_bbox(segmentation_mask)
             if VERBOSE: print("selfie_bbox",selfie_bbox)
 
@@ -1085,24 +1102,25 @@ def process_image_bodylms(task):
         # session = sort.parse_bbox_dict(session, image_id, PhoneBbox, OBJ_CLS_LIST, bbox_dict)
         is_hands = None
         if HANDLMS:
-            existing_hand = mongo_hand_collection.find_one({"image_id": image_id})
-            if existing_hand:
-                print(f"hand landmarks already exist for image_id: {image_id}")
-                update_hand = False
-                is_hands = True
-            else:
-                # do hand stuff
-                # print("doing HANDLMS, bc is ", HANDLMS)
-                pose = SelectPose(image)
-                is_hands, hand_landmarks = find_hands(image, pose)
-                # print("is_hands", is_hands)
-                if not is_hands:
-                    print(" ------ >>>>>  NO HANDS for ", image_id)
-                    # print("hand_landmarks", hand_landmarks)
-                    update_hand = False
-                else:
-                    print(" ------ >>>>>  YES HANDS for ", image_id)
-                    update_hand = True
+            pose, is_hands, hand_landmarks, update_hand = process_image_hands_subroutine(image_id, image)
+            # existing_hand = mongo_hand_collection.find_one({"image_id": image_id})
+            # if existing_hand:
+            #     print(f"hand landmarks already exist for image_id: {image_id}")
+            #     update_hand = False
+            #     is_hands = True
+            # else:
+            #     # do hand stuff
+            #     # print("doing HANDLMS, bc is ", HANDLMS)
+            #     pose = SelectPose(image)
+            #     is_hands, hand_landmarks = find_hands(image, pose)
+            #     # print("is_hands", is_hands)
+            #     if not is_hands:
+            #         print(" ------ >>>>>  NO HANDS for ", image_id)
+            #         # print("hand_landmarks", hand_landmarks)
+            #         update_hand = False
+            #     else:
+            #         print(" ------ >>>>>  YES HANDS for ", image_id)
+            #         update_hand = True
 
         for _ in range(io.max_retries):
             try:
