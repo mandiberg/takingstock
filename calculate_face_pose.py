@@ -11,6 +11,7 @@ import sys # can delete for production
 from sys import platform
 import json
 import base64
+import gc
 
 import numpy as np
 import mediapipe as mp
@@ -84,15 +85,15 @@ switching to topic targeted
 18	afripics
 '''
 # I think this only matters for IS_FOLDER mode, and the old SQL way
-SITE_NAME_ID = 10
+SITE_NAME_ID = 2
 # 2, shutter. 4, istock
-# 7 pond5
+# 7 pond5, 8 123rf
 POSE_ID = 0
 
 # folder doesn't matter if IS_FOLDER is False. Declared FAR below. 
 # MAIN_FOLDER = "/Volumes/RAID18/images_pond5"
-# MAIN_FOLDER = "/Volumes/SSD4green/images_pixerf"
-MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/images_vcg"
+# MAIN_FOLDER = "/Volumes/SSD4/images_getty"
+MAIN_FOLDER = "/Volumes/SSD4green/images_shutterstock"
 # MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/images_picha"
 # MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/afripics_v2/images"
 
@@ -312,6 +313,12 @@ def init_session():
 def close_session():
     session.close()
     engine.dispose()
+
+def collect_the_garbage():
+    if 'image' in locals():
+        del image
+    gc.collect()
+    print("garbage collected")
 
 def init_mongo():
     # init session
@@ -1232,6 +1239,24 @@ def process_image_bodylms(task):
     # df = pd.DataFrame(columns=['image_id','is_face','is_body','is_face_distant','face_x','face_y','face_z','mouth_gap','face_landmarks','bbox','face_encodings','face_encodings68_J','body_landmarks'])
     # df.at['1', 'image_id'] = image_id
 
+    # # attempt to rw the imread to avoid memory leak
+    # if not os.path.exists(cap_path):
+    #     print(f"Error: File does not exist at path: {cap_path}")
+    #     image = None
+    # else:
+    #     try:
+    #         image = cv2.imread(cap_path)
+    #         if image is None:
+    #             raise ValueError(f"Failed to load image: {cap_path}")
+    #         # Process the image
+    #     except Exception as e:
+    #         print('Error:', str(e))
+    #         print(f"[process_image]this imread failed, even after uppercasing: {task}")
+    #     finally:
+    #         if 'image' in locals():
+    #             del image
+    #         gc.collect()
+
     try:
         image = cv2.imread(cap_path)        
         # this is for when you need to move images into a testing folder structure
@@ -1262,6 +1287,10 @@ def process_image_bodylms(task):
     # Close the session and dispose of the engine before the worker process exits
     close_mongo()
     close_session()
+    # collect_the_garbage()
+    if 'image' in locals():
+        del image
+    gc.collect()
 
     # store data
 
@@ -1474,6 +1503,7 @@ def process_image(task):
     # Close the session and dispose of the engine before the worker process exits
     close_mongo()
     close_session()
+    collect_the_garbage()
     # print(f"finished session {image_id}")
 
         # save image based on is_face

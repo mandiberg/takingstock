@@ -7,7 +7,7 @@ from sqlalchemy.ext.declarative import declarative_base
 # my ORM
 # from my_declarative_base import Base, Clusters, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON, Images
 
-from my_declarative_base import Base,Images, ImagesTopics, SegmentBig, SegmentTable, BagOfKeywords,Keywords,ImagesKeywords,ImagesEthnicity, Encodings, Column, Integer, String, DECIMAL, BLOB, ForeignKey, JSON  # Replace 'your_module' with the actual module where your SQLAlchemy models are defined
+from my_declarative_base import Base,Images, ImagesTopics, SegmentBig, Encodings_Site2, SegmentTable, BagOfKeywords,Keywords,ImagesKeywords,ImagesEthnicity, Encodings, Column, Integer, String, DECIMAL, BLOB, ForeignKey, JSON  # Replace 'your_module' with the actual module where your SQLAlchemy models are defined
 from mp_db_io import DataIO
 import pickle
 import numpy as np
@@ -78,7 +78,9 @@ session = scoped_session(sessionmaker(bind=engine))
 # Connect to MongoDB
 mongo_client = pymongo.MongoClient("mongodb://localhost:27017/")
 mongo_db = mongo_client["stock"]
-mongo_collection = mongo_db["tokens"]
+# mongo_collection = mongo_db["tokens"]
+# currently set up to do the segmentbig_isnoface
+mongo_collection = mongo_db["tokens_noface"]
 
 # create a stemmer object for preprocessing
 stemmer = SnowballStemmer('english')
@@ -120,8 +122,10 @@ options = ['Create helper table', 'Fetch keywords list and make tokens', 'Fetch 
            ]
 option, index = pick(options, title)
 
-LIMIT= 30000000
-START_ID = 117757281
+LIMIT= 100000
+START_ID = 0
+MAXID = 150000000
+
 # Initialize the counter
 counter = 0
 
@@ -526,7 +530,7 @@ def preprocess_keywords(target_image_id, lock,session):
             is_mongo_tokens = True
             token_list = True
             # tokenized_keyword_list = pickle.loads(doc["tokenized_keyword_list"])
-            # print("tokenized_keyword_list: ", tokenized_keyword_list)
+            print("tokenized_keyword_list: ", tokenized_keyword_list)
         else:
             is_mongo_tokens = False
             print("tokenized_keyword_list not found in the document, will process keywords.")
@@ -570,8 +574,8 @@ def preprocess_keywords(target_image_id, lock,session):
             print(f"Keywords entry for image_id {target_image_id} not found.")
 
             select_description_query = (
-                select(SegmentTable.description)
-                .filter(SegmentTable.image_id == target_image_id)
+                select(SegmentBig.description)
+                .filter(SegmentBig.image_id == target_image_id)
             )
 
             # Execute the query and fetch the result as a list of keyword_ids
@@ -592,7 +596,7 @@ def preprocess_keywords(target_image_id, lock,session):
         keyword_list_pickle = pickle.dumps(token_list)
 
     # do this regardless of whether is_mongo_tokens is True or False    
-    # create a SegmentBig entry
+    # create a SegmentBig entry object
     SegmentBig_entry = (
         session.query(SegmentBig)
         .filter(SegmentBig.image_id == target_image_id)
@@ -621,6 +625,7 @@ def preprocess_keywords(target_image_id, lock,session):
             insert_mongo = True
             # print(f"Keyword list for image_id {target_image_id} will be updated.")
         SegmentBig_entry.mongo_tokens = 1
+        # print("assigned mongo_tokens to 1 for ", target_image_id)
         if is_in_segment_table:
             existing_segment_entry.mongo_tokens = 1
     else:
@@ -642,6 +647,7 @@ def preprocess_keywords(target_image_id, lock,session):
         if counter % 1000 == 0: 
             print(f"Keyword list updated: {counter} at {target_image_id}" )
         session.commit()
+        # print("committed mongo_tokens to 1 for ", target_image_id)
 
     if counter % 10000 == 0:
         print(f"Keyword list updated: {counter}")
@@ -702,33 +708,50 @@ if index == 0:
 
     # select_query = select(Images.image_id, Images.description, Images.gender_id, Images.age_id, Images.location_id).\
     #     select_from(Images).outerjoin(BagOfKeywords, Images.image_id == BagOfKeywords.image_id).filter(BagOfKeywords.image_id == None, Images.site_name_id.in_([2,4])).limit(LIMIT)
-    
+
+    # 12/27/2024, to work with isnotface, change declarative_base to SegmentBig_isnotface, and set IS_ENCODINGS2 = True
+    IS_ENCODINGS2 = True
+
     # select max image_id from SegmentBig
-    select_query = select(func.max(SegmentBig.image_id))
-    result = session.execute(select_query).fetchone()
+    if IS_ENCODINGS2: max_image_id_query = select(func.max(SegmentBig.image_id)).join(Encodings_Site2, SegmentBig.image_id == Encodings_Site2.image_id)
+    else: max_image_id_query = select(func.max(SegmentBig.image_id))
+    result = session.execute(max_image_id_query).fetchone()
     max_image_id = result[0]
-    print("max image_id: ", max_image_id)
+    print("max image_id, to start from: ", max_image_id)
 
     # this is the regular one to use
-    select_query = (
-        select(Encodings.image_id, Encodings.bbox, Encodings.face_x, Encodings.face_y, Encodings.face_z, Encodings.mouth_gap, Encodings.face_landmarks, Encodings.face_encodings68, Encodings.body_landmarks)
-        # select(Encodings.image_id)
-        .select_from(Encodings)
-        .outerjoin(SegmentBig, Encodings.image_id == SegmentBig.image_id)
-        .filter(SegmentBig.image_id == None)
-        .filter(and_(
-            Encodings.image_id >= max_image_id,
-            Encodings.face_x > -45,
-            Encodings.face_x < -20,
-            Encodings.face_y > -10,
-            Encodings.face_y < 10,
-            Encodings.face_z > -10,
-            Encodings.face_z < 10
-        ))
-        .limit(LIMIT)
-    )
-            # there are NULL image_ids in the Encodings table!!!
-            # Encodings.image_id.isnot(None),
+    if IS_ENCODINGS2:
+        print("IS_ENCODINGS2 is True")
+        select_query = select(
+            distinct(Images.image_id), Images.site_name_id, Images.site_image_id, 
+                Images.contentUrl, Images.imagename, Images.description, Images.age_id, Images.gender_id, Images.location_id,
+                Encodings_Site2.face_x, Encodings_Site2.face_y, Encodings_Site2.face_z, Encodings_Site2.mouth_gap, 
+                Encodings_Site2.bbox).\
+            select_from(Images).\
+            outerjoin(Encodings_Site2, Images.image_id == Encodings_Site2.image_id).\
+            filter(Images.image_id > max_image_id, Images.image_id < MAXID, Encodings_Site2.is_face == 0).\
+            limit(LIMIT)
+
+    else:
+        select_query = (
+            select(Encodings.image_id, Encodings.bbox, Encodings.face_x, Encodings.face_y, Encodings.face_z, Encodings.mouth_gap, Encodings.face_landmarks, Encodings.face_encodings68, Encodings.body_landmarks)
+            # select(Encodings.image_id)
+            .select_from(Encodings)
+            .outerjoin(SegmentBig, Encodings.image_id == SegmentBig.image_id)
+            .filter(SegmentBig.image_id == None)
+            .filter(and_(
+                Encodings.image_id >= max_image_id,
+                Encodings.face_x > -45,
+                Encodings.face_x < -20,
+                Encodings.face_y > -10,
+                Encodings.face_y < 10,
+                Encodings.face_z > -10,
+                Encodings.face_z < 10
+            ))
+            .limit(LIMIT)
+        )
+                # there are NULL image_ids in the Encodings table!!!
+                # Encodings.image_id.isnot(None),
 
 
     # # this is for one specific topic
@@ -791,6 +814,9 @@ if index == 0:
 
 elif index == 1:
     function=preprocess_keywords
+
+    # 12/27/2024, to work with isnotface, change declarative_base to SegmentBig_isnotface
+
     ################FETCHING KEYWORDS AND CREATING TOKENS #################
     distinct_image_ids_query = select(SegmentBig.image_id.distinct()).filter(SegmentBig.mongo_tokens == None, SegmentBig.image_id > START_ID).limit(LIMIT)
     distinct_image_ids = [row[0] for row in session.execute(distinct_image_ids_query).fetchall()]

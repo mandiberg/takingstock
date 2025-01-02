@@ -20,6 +20,8 @@ if sys.platform == "darwin": sys.path.insert(1, '/Users/michaelmandiberg/Documen
 elif sys.platform == "win32": sys.path.insert(1, 'C:/Users/jhash/Documents/GitHub/facemap2/')
 from mp_db_io import DataIO
 
+# after you make_video, you to need put them in a folder and merge_expanded_images to produce a metas file. 
+
 title = 'Please choose your operation: '
 options = ['meta', 'bark', 'openai_or_eleven_labs']  # Combine OpenAI and ElevenLabs
 OPTION, MODE = pick(options, title)
@@ -27,13 +29,13 @@ OPTION, MODE = pick(options, title)
 start = time.time()
 io = DataIO()
 INPUT = os.path.join(io.ROOTSSD, "audioproduction")
-OUTPUT = os.path.join(io.ROOTSSD, "audioproduction/tts_files_test")
+OUTPUT = os.path.join(io.ROOTSSD, "tts_files_test")
 # Brandon paths
 # INPUT = os.path.join(io.ROOTSSD, "sound")
 # OUTPUT = os.path.join(io.ROOTSSD, "sound/tts_files_test")
 WINDOW = [0,1]
 
-TOPIC = 99
+TOPIC = 34
 sourcefile = f"metas_{TOPIC}.csv"
 output_csv = f"output_file_{TOPIC}.csv"
 

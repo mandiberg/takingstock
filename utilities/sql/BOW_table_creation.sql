@@ -25,8 +25,6 @@ CREATE TABLE ImagesTopics (
 
 
 
-
-
 -- this is meta stuff
 
 

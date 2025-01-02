@@ -117,7 +117,7 @@ IS_TOPICS = False
 N_TOPICS = 64
 
 IS_ONE_TOPIC = True
-TOPIC_NO = [32]
+TOPIC_NO = [11]
 #######################
 
 #######################
@@ -155,6 +155,7 @@ if not GENERATE_FUSION_PAIRS:
     FUSION_PAIRS = [
         #CLUSTER_NO, HAND_POSE_NO
 
+
         # # topic 17 selects
         # [1,5]
 
@@ -166,12 +167,17 @@ if not GENERATE_FUSION_PAIRS:
         # [21,13] # single
 
         # shocked single
-        [13, 2]
+        # [13, 2]
 
-        # # business singles
+        # # topic 11 business singles
         # [23,80]
         # [26,10]
-        # [7,57]
+        # [7,57] # arms crossed
+        # [30,10], [30,86] # thumbs up
+        # [2,80], [7,51], [7,54], [7,57], [7,120], [12,27], [12,118] # arms crossed
+
+        # 34 Success
+        [11,3], [15,25], [15,28], [15,37], [15,38], [15,53], [15,55], [15,92], [1,113], [21,0], [21,116], [21,68], [30,110], [30,28], [30,37], [30,38], [30,53], [30,55], [30,6], [30,81], [6,115], [6,37], [6,38], [6,6], [6,81], [9,30]
 
         # Stressed single
         # [21, 30],

@@ -127,6 +127,18 @@ class Encodings(Base):
     mongo_hand_landmarks   = Column(Boolean)
     mongo_hand_landmarks_norm   = Column(Boolean)
 
+class Encodings_Site2(Base):
+    __tablename__ = 'Encodings_Site2'
+    encoding_id         = Column(Integer, primary_key=True, autoincrement=True)
+    image_id            = Column(Integer, ForeignKey('images.image_id'))
+    is_face             = Column(Boolean)
+    is_body             = Column(Boolean)
+    face_x              = Column(DECIMAL(6, 3))
+    face_y              = Column(DECIMAL(6, 3))
+    face_z              = Column(DECIMAL(6, 3))
+    mouth_gap           = Column(DECIMAL(6, 3))
+    bbox                = Column(JSON)
+
 class Clusters(Base):
     __tablename__ = 'Clusters'
 
@@ -275,7 +287,7 @@ class SegmentTable(Base):
     location = relationship("Location")
 
 class SegmentBig(Base):
-    __tablename__ = 'SegmentBig_isface'
+    __tablename__ = 'SegmentBig_isnotface'
     
     seg_image_id           = Column(Integer, primary_key=True, autoincrement=True)
     image_id               = Column(Integer, primary_key=True)

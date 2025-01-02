@@ -4,11 +4,11 @@ USE stock;
 SET GLOBAL innodb_buffer_pool_size = 8053063680;
 
 -- cleanup
-DROP TABLE SegmentHelperAug16_SegOct20_preAlamy ;
-DELETE FROM SegmentHelper_sept4_all_adults_facing_forward;
+DROP TABLE SegmentHelper_dec27_getty_noface ;
+DELETE FROM SegmentHelper_dec27_getty_noface;
 
 -- create helper segment table
-CREATE TABLE SegmentHelper_nov23_T32_forwardish (
+CREATE TABLE SegmentHelper_dec27_getty_noface (
     seg_image_id int NOT NULL AUTO_INCREMENT PRIMARY KEY,
     image_id INTEGER,
     FOREIGN KEY (image_id) REFERENCES Images(image_id)
@@ -16,7 +16,7 @@ CREATE TABLE SegmentHelper_nov23_T32_forwardish (
 
 
 -- create segment table
-CREATE TABLE SegmentBig_isface (
+CREATE TABLE SegmentBig_isnotface (
     seg_image_id int NOT NULL AUTO_INCREMENT PRIMARY KEY,
     image_id INTEGER,
     FOREIGN KEY (image_id) REFERENCES Images(image_id),
@@ -199,7 +199,7 @@ WHERE k.keyword_text LIKE "%quiet%"
 -- this skips existing so you can rerun ontop of existing data
 -- seg big is -45 to -3, with yz at 10
 
-INSERT INTO SegmentHelper_nov23_T32_forwardish (image_id)
+INSERT INTO SegmentHelper_dec27_shutter_noface (image_id)
 SELECT DISTINCT e.image_id
 FROM Encodings e
 JOIN Images i ON i.image_id = e.image_id
@@ -218,6 +218,55 @@ WHERE e.mongo_encodings = 1
         FROM SegmentOct20 s
         WHERE s.image_id = e.image_id
     );
+
+   
+-- for making an is_face no face segment helper
+INSERT INTO SegmentHelper_dec27_getty_noface (image_id)
+SELECT DISTINCT e.image_id
+FROM Encodings e
+JOIN Images i ON i.image_id = e.image_id
+WHERE e.is_face = 0
+	AND i.site_name_id = 1
+    AND NOT EXISTS (
+        SELECT 1
+        FROM SegmentHelper_dec27_getty_noface s
+        WHERE s.image_id = e.image_id
+    )
+;
+
+
+CREATE TABLE Encodings_Site2 AS
+SELECT e.encoding_id, e.image_id, e.is_face, e.is_body, e.face_x, e.face_y, e.face_z, e.mouth_gap, e.bbox
+FROM Encodings e
+JOIN Images i ON i.image_id = e.image_id
+WHERE i.site_name_id = 2
+;
+
+
+ALTER TABLE Encodings_Site2
+ADD face_x DECIMAL ,
+ADD face_y DECIMAL ,
+ADD face_z DECIMAL ,
+ADD mouth_gap DECIMAL, 
+ADD bbox JSON
+;
+
+
+CREATE INDEX idx_is_face ON Encodings_Site2 (is_face);
+
+
+SELECT DISTINCT image_id
+FROM Encodings_Site2
+WHERE is_face = 0
+LIMIT 10
+;
+
+
+SELECT *
+FROM SegmentBig_isnotface
+WHERE site_name_id = 2
+LIMIT 100
+;
 
 -- this just to build a helper with image_ids. from ibg
 INSERT INTO SegmentHelper_oct3_bg_doover (image_id)
