@@ -60,15 +60,42 @@ WHERE i.site_image_id = 1386225770
 AND i.site_name_id = 10
 ;
 
-SELECT *
-FROM Encodings e 
-WHERE e.image_id = 123560730
+SELECT COUNT(image_id)
+FROM SegmentBig_isface
+WHERE mongo
 ;
 
 
 SELECT *
-FROM ImagesBackground ib 
-WHERE ib.hue IS NULL
+FROM SegmentBig_isnotface sbi 
+WHERE sbi.no_image = 1
+;
+
+SELECT *
+FROM SegmentBig_isface sbi
+WHERE sbi.image_id = 101601405
+;
+
+
+SELECT COUNT(i.image_id)
+FROM Images i
+WHERE i.no_image = 1
+;
+
+
+UPDATE SegmentBig_isnotface
+SET    mongo_tokens = NULL
+WHERE  mongo_tokens = 1;
+
+SELECT *
+FROM Encodings_Site2 es 
+WHERE es.image_id = 26254
+;
+
+
+SELECT *
+FROM ImagesKeywords ik 
+WHERE ik.image_id = 1881
 LIMIT 10
 ;
 

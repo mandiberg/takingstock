@@ -213,6 +213,22 @@ class ImagesTopics(Base):
     topic_id3    = Column(Integer, ForeignKey('Topics.topic_id'))
     topic_score3 = Column(Float)
 
+class Topics_isnotface(Base):
+    __tablename__ = 'Topics_isnotface' 
+    topic_id = Column(Integer, primary_key=True, autoincrement=True)
+    topic    = Column(String(150))
+    
+class ImagesTopics_isnotface(Base):
+    __tablename__ = 'ImagesTopics_isnotface' 
+    image_id    = Column(Integer, ForeignKey('images.image_id'), primary_key=True)
+    topic_id    = Column(Integer, ForeignKey('Topics.topic_id'))
+    topic_score = Column(Float)
+    topic_id2    = Column(Integer, ForeignKey('Topics.topic_id'))
+    topic_score2 = Column(Float)
+    topic_id3    = Column(Integer, ForeignKey('Topics.topic_id'))
+    topic_score3 = Column(Float)
+
+
 class Topics48(Base):
     __tablename__ = 'Topics48' 
     topic_id = Column(Integer, primary_key=True, autoincrement=True)
@@ -287,7 +303,7 @@ class SegmentTable(Base):
     location = relationship("Location")
 
 class SegmentBig(Base):
-    __tablename__ = 'SegmentBig_isnotface'
+    __tablename__ = 'SegmentBig_isface'
     
     seg_image_id           = Column(Integer, primary_key=True, autoincrement=True)
     image_id               = Column(Integer, primary_key=True)
@@ -316,6 +332,45 @@ class SegmentBig(Base):
     age      = relationship("Age")
     gender   = relationship("Gender")
     location = relationship("Location")
+
+class SegmentBig_isnotface(Base):
+    __tablename__ = 'SegmentBig_isnotface'
+    
+    seg_image_id           = Column(Integer, primary_key=True, autoincrement=True)
+    image_id               = Column(Integer, primary_key=True)
+    site_name_id           = Column(Integer, ForeignKey('site.site_name_id'))
+    site_image_id          = Column(String(50))
+    contentUrl             = Column(String(300), nullable=False)
+    imagename              = Column(String(200))
+    description            = Column(String(150))
+    age_id                 = Column(Integer, ForeignKey('age.age_id'))
+    gender_id              = Column(Integer, ForeignKey('gender.gender_id'))
+    location_id            = Column(Integer, ForeignKey('location.location_id'))
+    face_x                 = Column(DECIMAL(6, 3))
+    face_y                 = Column(DECIMAL(6, 3))
+    face_z                 = Column(DECIMAL(6, 3))
+    mouth_gap              = Column(DECIMAL(6, 3))
+    face_landmarks         = Column(BLOB)
+    bbox                   = Column(JSON)
+    face_encodings68       = Column(BLOB)
+    body_landmarks         = Column(BLOB)
+    keyword_list           = Column(BLOB)  # Pickled list
+    tokenized_keyword_list = Column(BLOB)  # Pickled list
+    ethnicity_list         = Column(BLOB)  # Pickled list
+    mongo_tokens           = Column(Boolean)
+    mongo_body_landmarks = Column(Boolean)
+    mongo_face_landmarks = Column(Boolean)
+    mongo_body_landmarks_norm = Column(Boolean)
+    no_image = Column(Boolean)
+    is_dupe_of = Column(Integer, ForeignKey('Images.image_id'))
+    mongo_hand_landmarks = Column(Boolean)
+    mongo_hand_landmarks_norm = Column(Boolean)
+
+    site     = relationship("Site")
+    age      = relationship("Age")
+    gender   = relationship("Gender")
+    location = relationship("Location")
+
 
 class PhoneBbox(Base):
     __tablename__ = 'PhoneBbox' 

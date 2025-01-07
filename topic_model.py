@@ -9,7 +9,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 # my ORM
-from my_declarative_base import Base, Images, SegmentBig, Topics,ImagesTopics, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON, ForeignKey
+from my_declarative_base import Base, Images, SegmentBig, Topics,Topics_isnotface, ImagesTopics, ImagesTopics_isnotface, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON, ForeignKey
 import pymongo
 
 from sqlalchemy.exc import IntegrityError
@@ -73,24 +73,30 @@ options = ['Make Dictionary and BoW Corpus','Model topics', 'Index topics','calc
 io = DataIO()
 db = io.db
 io.db["name"] = "stock"
-io.ROOT = "/Users/michaelmandiberg/Documents/GitHub/facemap/topic_model"
-
-NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
-MODEL_PATH=os.path.join(io.ROOT,"model")
-DICT_PATH=os.path.join(io.ROOT,"dictionary.dict")
-BOW_CORPUS_PATH=os.path.join(io.ROOT,"BOW_lda_corpus.mm")
-TOKEN_PATH=os.path.join(io.ROOT,"tokenized_keyword_list.csv")
-TFIDF_CORPUS_PATH=os.path.join(io.ROOT,"TFIDF_lda_corpus.mm")
+io.ROOT = "/Users/michaelmandiberg/Documents/GitHub/facemap/model_files"
 
 # Satyam, you want to set this to False
 USE_SEGMENT = False
 USE_BIGSEGMENT = True
+IS_NOT_FACE = True # this is to make the model for images that are not one face
 VERBOSE = False
 RANDOM = False
 global_counter = 0
-QUERY_LIMIT = 1000000
-query_start_counter = 80536000
+QUERY_LIMIT = 10000
+query_start_counter = 80536000 # only used in write image topics
 # started at 9:45PM, Feb 17
+
+if IS_NOT_FACE:
+    MODEL_FOLDER = os.path.join(io.ROOT,"model_isnotface")
+else:
+    MODEL_FOLDER = os.path.join(io.ROOT,"model_isface")
+
+NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
+MODEL_PATH=os.path.join(MODEL_FOLDER,"model")
+DICT_PATH=os.path.join(MODEL_FOLDER,"dictionary.dict")
+BOW_CORPUS_PATH=os.path.join(MODEL_FOLDER,"BOW_lda_corpus.mm")
+TOKEN_PATH=os.path.join(MODEL_FOLDER,"tokenized_keyword_list.csv")
+TFIDF_CORPUS_PATH=os.path.join(MODEL_FOLDER,"TFIDF_lda_corpus.mm")
 
 
 MODEL="TF" ## OR TF  ## Bag of words or TF-IDF
@@ -131,11 +137,18 @@ Base = declarative_base()
 
 mongo_client = pymongo.MongoClient(io.dbmongo['host'])
 mongo_db = mongo_client[io.dbmongo['name']]
-mongo_collection = mongo_db['tokens']
+if IS_NOT_FACE:
+    mongo_collection = mongo_db['tokens_noface']
+else:
+    mongo_collection = mongo_db['tokens']
 
 if USE_BIGSEGMENT:
-    SegmentTable = SegmentBig
-    SegmentTable_name = 'SegmentBig_isface'
+    if IS_NOT_FACE:
+        SegmentTable = SegmentBig
+        SegmentTable_name = 'SegmentBig_isnotface'
+    else:
+        SegmentTable = SegmentBig
+        SegmentTable_name = 'SegmentBig_isface'
 else:
     # this is prob redundant, and could be replaced by calling the SegmentTable object from Base
     SegmentTable_name = 'SegmentOct20'
@@ -258,6 +271,7 @@ def LDA_model(num_topics):
     dictionary, corpus = load_corpus()
     print("processing the model now")
     lda_model = gensim.models.LdaMulticore(corpus, num_topics=num_topics, id2word=dictionary, passes=2, workers=NUMBER_OF_PROCESSES)
+    # alpha=(50/num_topics), eta = 0.1,
     lda_model.save(MODEL_PATH)
     print("processed all")
     return lda_model
@@ -267,14 +281,22 @@ def write_topics(lda_model):
     for idx, topic_list in lda_model.print_topics(-1):
         print('Topic: {} \nWords: {}'.format(idx, topic_list))
 
-       # Create a Topics object
-        topics_entry = Topics(
-        topic_id = idx,
-        topic = "".join(topic_list)
-        )
+        if IS_NOT_FACE:
+            # Create a Topics object
+            print("IS_NOT_FACE new topic is", idx)
+            topics_entry = Topics_isnotface(
+            topic_id = idx,
+            topic = "".join(topic_list)
+            )
+        else:
+            # Create a Topics object
+            topics_entry = Topics(
+            topic_id = idx,
+            topic = "".join(topic_list)
+            )
 
     # Add the Topics object to the session
-        session.add(topics_entry)
+        # session.add(topics_entry)
         print("Updated topic_id {}".format(idx))
     session.commit()
     return
@@ -329,15 +351,26 @@ def write_imagetopics(resultsjson,lda_model_tfidf,dictionary):
         else:
             index3, score3 = None, None
 
-        imagestopics_entry=ImagesTopics(
-            image_id=row["image_id"],
-            topic_id=index,
-            topic_score=score,
-            topic_id2=index2,
-            topic_score2=score2,
-            topic_id3=index3,
-            topic_score3=score3
-        )
+        if IS_NOT_FACE:            
+            imagestopics_entry=ImagesTopics_isnotface(
+                image_id=row["image_id"],
+                topic_id=index,
+                topic_score=score,
+                topic_id2=index2,
+                topic_score2=score2,
+                topic_id3=index3,
+                topic_score3=score3
+            )
+        else:
+            imagestopics_entry=ImagesTopics(
+                image_id=row["image_id"],
+                topic_id=index,
+                topic_score=score,
+                topic_id2=index2,
+                topic_score2=score2,
+                topic_id3=index3,
+                topic_score3=score3
+            )
         session.add(imagestopics_entry)
         # print(f'image_id {row["image_id"]} -- topic_id {index} -- topic tokens {topic_list[index][:100]}')
         # print(f"keyword list {keyword_list}")
@@ -382,13 +415,18 @@ def gen_corpus():
     # this takes the tokenized keyword list and generates a corpus saved to disk
     print("generating corpus")
     # query = session.query(SegmentTable.tokenized_keyword_list).filter(SegmentTable.tokenized_keyword_list.isnot(None)).limit(QUERY_LIMIT)
-    query = session.query(SegmentTable.image_id).filter(
-        SegmentTable.mongo_tokens.isnot(None),
-        SegmentTable.face_y > -9,
-        SegmentTable.face_y < 9,
-        SegmentTable.face_z > -9,
-        SegmentTable.face_z < 9
-    ).limit(QUERY_LIMIT)
+    if IS_NOT_FACE:
+        query = session.query(SegmentTable.image_id).filter(
+            SegmentTable.mongo_tokens.isnot(None)
+        ).limit(QUERY_LIMIT)
+    else:
+        query = session.query(SegmentTable.image_id).filter(
+            SegmentTable.mongo_tokens.isnot(None),
+            SegmentTable.face_y > -9,
+            SegmentTable.face_y < 9,
+            SegmentTable.face_z > -9,
+            SegmentTable.face_z < 9
+        ).limit(QUERY_LIMIT)
     results = query.all()
     total_rows = query.count()
     if VERBOSE: 

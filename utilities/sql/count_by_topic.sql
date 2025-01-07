@@ -22,8 +22,6 @@ GROUP BY ik.keyword_id, k.keyword_text;
 
 
 
-<<<<<<< Updated upstream
-=======
 -- take two
 SELECT 
     COALESCE(topic_count, 0) AS topic_count,
@@ -98,4 +96,3 @@ GROUP BY
 USE stock;   
    SELECT DISTINCT seg1.image_id, seg1.site_name_id, seg1.contentUrl, seg1.imagename, e.encoding_id, seg1.site_image_id, e.face_landmarks, e.bbox FROM SegmentOct20 seg1 INNER JOIN SegmentHelperApril4_topic17 ht ON seg1.image_id = ht.image_id LEFT JOIN ImagesTopics it ON seg1.image_id = it.image_id WHERE e.body_landmarks IS NULL  LIMIT 100;
 
->>>>>>> Stashed changes
