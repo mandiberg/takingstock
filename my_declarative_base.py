@@ -362,7 +362,7 @@ class SegmentBig_isnotface(Base):
     mongo_face_landmarks = Column(Boolean)
     mongo_body_landmarks_norm = Column(Boolean)
     no_image = Column(Boolean)
-    is_dupe_of = Column(Integer, ForeignKey('Images.image_id'))
+    is_dupe_of = Column(Integer)
     mongo_hand_landmarks = Column(Boolean)
     mongo_hand_landmarks_norm = Column(Boolean)
 

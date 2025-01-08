@@ -23,7 +23,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.orm import relationship
 from sqlalchemy.ext.declarative import declarative_base
 # my ORM
-from my_declarative_base import Base, Images, Keywords, SegmentTable, ImagesKeywords, ImagesBackground, Encodings, PhoneBbox, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON
+from my_declarative_base import Base, Images, Keywords, SegmentTable, SegmentBig_isnotface, ImagesKeywords, ImagesBackground, Encodings, PhoneBbox, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON
 
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.pool import NullPool
@@ -87,15 +87,15 @@ switching to topic targeted
 18	afripics
 '''
 # I think this only matters for IS_FOLDER mode, and the old SQL way
-SITE_NAME_ID = 2
+SITE_NAME_ID = 1
 # 2, shutter. 4, istock
 # 7 pond5, 8 123rf
 POSE_ID = 0
 
 # folder doesn't matter if IS_FOLDER is False. Declared FAR below. 
 # MAIN_FOLDER = "/Volumes/RAID18/images_pond5"
-# MAIN_FOLDER = "/Volumes/SSD4/images_getty"
-MAIN_FOLDER = "/Volumes/SSD4green/images_shutterstock"
+MAIN_FOLDER = "/Volumes/SSD4/images_getty"
+# MAIN_FOLDER = "/Volumes/SSD4green/images_shutterstock"
 # MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/images_picha"
 # MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/afripics_v2/images"
 
@@ -127,7 +127,7 @@ HelperTable_name = "SegmentHelper_nov23_T37_forwardish" # set to False if not us
 # SegmentTable_name = 'SegmentOct20'
 SegmentTable_name = 'SegmentBig_isnotface'
 # if HelperTable_name, set start point
-START_IMAGE_ID = 80000000
+START_IMAGE_ID = 0
 
 if BODYLMS is True or HANDLMS is True:
 
@@ -207,7 +207,9 @@ else:
     else:
         WHERE = f"e.encoding_id IS NULL AND i.site_name_id = {SITE_NAME_ID}"
     WHERE += f" AND i.image_id >  {START_IMAGE_ID}" if START_IMAGE_ID else ""
-    # QUERY = WHERE
+    WHERE += f" AND i.no_image IS NULL"
+    QUERY = WHERE
+    SUBQUERY = ""
     # AND i.age_id NOT IN (1,2,3,4)
     IS_SSD=False
     #########################################
@@ -470,7 +472,12 @@ def selectORM(session, FILTER, LIMIT):
 def selectSQL(start_id):
     init_session()
     if start_id:
-        selectsql = f"SELECT {SELECT} FROM {FROM} WHERE {QUERY} AND seg1.image_id > {start_id} {SUBQUERY} LIMIT {str(LIMIT)};"
+        # if FROM contains "seg1" or "segment", then assign SegmentTable_name to image_id
+        if "seg1" in FROM or "segment" in FROM:
+            image_id_table = SegmentTable_name
+        else:
+            image_id_table = "i"
+        selectsql = f"SELECT {SELECT} FROM {FROM} WHERE {QUERY} AND {image_id_table}.image_id > {start_id} {SUBQUERY} LIMIT {str(LIMIT)};"
     else:
         selectsql = f"SELECT {SELECT} FROM {FROM} WHERE {WHERE} LIMIT {str(LIMIT)};"
 
@@ -1377,7 +1384,7 @@ def process_image(task):
         is_small = 1
     else:
         print(">> no image", task)
-        # assign no_image = 1 in SegmentBig table
+        # assign no_image = 1 in SegmentBig_isnoface table
         no_image = True
 
         try:
@@ -1392,26 +1399,27 @@ def process_image(task):
         # check SegmentTable.image_id == task[0] to see if entry exists in SegmentTable
 
 
-        existing_entry = session.query(SegmentTable).filter(SegmentTable.image_id == task[0]).all()
+        existing_entry = session.query(SegmentBig_isnotface).filter(SegmentBig_isnotface.image_id == task[0]).all()
         # query existing entry
-
+        print("existing_entry to store no_image:", existing_entry)
+        print(type(existing_entry))
         if existing_entry:
             print("existing_entry to store no_image:", existing_entry)
             # if segment table entry exists, update it
-            # otherwise, will continue on, and store no_image in SegmentTable new entry
-            existing_entry.update({
-                SegmentTable.no_image: no_image
-            }, synchronize_session=False) 
-            print("stored no image in existing SegmentTable entry")
+            # otherwise, will continue on, and store no_image in SegmentBig_isnotface new entry
+            session.query(SegmentBig_isnotface).filter(SegmentBig_isnotface.image_id == task[0]).update({
+                SegmentBig_isnotface.no_image: no_image
+            }, synchronize_session=False)
+            print("stored no image in existing SegmentBig_isnotface entry")
             return
         else:
-            print("creating new no_image entry in SegmentTable")
-            # create new entry in SegmentTable
-            new_segment_entry = SegmentTable(image_id=task[0], no_image=no_image)
+            print("creating new no_image entry in SegmentBig_isnotface")
+            # create new entry in SegmentBig_isnotface
+            new_segment_entry = SegmentBig_isnotface(image_id=task[0], no_image=no_image)
             session.add(new_segment_entry)
             session.commit()
-            print("stored no_image in SegmentTable for ", task[0])
-
+            print("stored no_image in SegmentBig_isnotface for ", task[0])
+            return
             # # store no_image in Images table
             # session.query(Images).filter(Images.image_id == image_id).update({
             #     Images.no_image: no_image
