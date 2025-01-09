@@ -23,7 +23,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.orm import relationship
 from sqlalchemy.ext.declarative import declarative_base
 # my ORM
-from my_declarative_base import Base, Images, Keywords, SegmentTable, SegmentBig_isnotface, ImagesKeywords, ImagesBackground, Encodings, PhoneBbox, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON
+from my_declarative_base import Base, Images, Keywords, Counters, SegmentTable, SegmentBig_isnotface, ImagesKeywords, ImagesBackground, Encodings, PhoneBbox, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON
 
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.pool import NullPool
@@ -101,7 +101,7 @@ MAIN_FOLDER = "/Volumes/SSD4/images_getty"
 
 # MAIN_FOLDER = "/Volumes/SSD4/images_getty_reDL"
 BATCH_SIZE = 1000 # Define how many from each folder in each batch
-LIMIT = 10
+LIMIT = 1000
 
 #temp hack to go 1 subfolder at a time
 # THESE_FOLDER_PATHS = ["8/8A", "8/8B","8/8C", "8/8D", "8/8E", "8/8F", "8/80", "8/81", "8/82", "8/83", "8/84", "8/85", "8/86", "8/87", "8/88", "8/89"]
@@ -1536,6 +1536,7 @@ def process_image(task):
             if commit_this:
                 for _ in range(io.max_retries):
                     try:
+
                         # print("not committing yet")
                         session.commit()
                         print(f"Newly updated/inserted row has encoding_id: {encoding_id} for image_id {image_id} with is_encodings: {is_encodings}")
@@ -1573,6 +1574,13 @@ def process_image(task):
         # insertignore_df(df,"encodings", engine)  ### made it all lower case to avoid discrepancy
     except OperationalError as e:
         print("process_image", image_id, e)
+
+    # autoincrement the counter_value for counter_name == number_of_detections in Counters table
+    session.query(Counters).filter(Counters.counter_name == str(number_of_detections)).update({
+        Counters.counter_value: Counters.counter_value + 1
+    }, synchronize_session=False)
+    print(f"autoincremented counter_value for counter_name: {number_of_detections}")
+    session.commit()
 
     # Close the session and dispose of the engine before the worker process exits
     close_mongo()

@@ -404,3 +404,8 @@ class PhoneBbox(Base):
 #     image_id = Column(Integer, ForeignKey('images.image_id'), primary_key=True)
 #     cluster_id = Column(Integer, ForeignKey('Clusters_May25segment123straight_lessrange.cluster_id'))
 
+class Counters(Base):
+    __tablename__ = 'counters'
+    counter_id = Column(Integer, primary_key=True, autoincrement=True)
+    counter_name = Column(String(50))
+    counter_value = Column(Integer);

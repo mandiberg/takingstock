@@ -214,3 +214,14 @@ CREATE TABLE PhoneBbox (
     PRIMARY KEY (image_id),
     FOREIGN KEY (image_id) REFERENCES images(image_id)
 );
+
+CREATE TABLE Counters (
+    counter_id int NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    counter_name varchar(50),
+    counter_value int
+);
+
+
+
+
+
