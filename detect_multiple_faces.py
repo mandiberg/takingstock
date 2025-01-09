@@ -101,7 +101,7 @@ MAIN_FOLDER = "/Volumes/SSD4/images_getty"
 
 # MAIN_FOLDER = "/Volumes/SSD4/images_getty_reDL"
 BATCH_SIZE = 1000 # Define how many from each folder in each batch
-LIMIT = 1000
+LIMIT = 10
 
 #temp hack to go 1 subfolder at a time
 # THESE_FOLDER_PATHS = ["8/8A", "8/8B","8/8C", "8/8D", "8/8E", "8/8F", "8/80", "8/81", "8/82", "8/83", "8/84", "8/85", "8/86", "8/87", "8/88", "8/89"]
@@ -207,8 +207,8 @@ else:
         # find all images that have not been processed, and have not been declared no image
         WHERE = f"e.encoding_id IS NULL AND i.no_image IS NULL AND i.site_name_id = {SITE_NAME_ID}"
     elif DO_OVER and not FIND_NO_IMAGE:
-        # find all images that have been processed, but have no face found, and aren't no_image
-        WHERE = f"e.encoding_id IS NOT NULL AND e.is_face = 0 AND e.mongo_encodings is NULL AND i.no_image IS NULL AND i.site_name_id = {SITE_NAME_ID}"
+        # find all images that have been processed, but have no face found, and aren't no_image or two_noses
+        WHERE = f"e.encoding_id IS NOT NULL AND e.is_face = 0 AND e.mongo_encodings is NULL AND e.two_noses is NULL AND i.no_image IS NULL AND i.site_name_id = {SITE_NAME_ID}"
     else:
         WHERE = f"e.encoding_id IS NULL AND i.site_name_id = {SITE_NAME_ID}"
     WHERE += f" AND i.image_id >  {START_IMAGE_ID}" if START_IMAGE_ID else ""
