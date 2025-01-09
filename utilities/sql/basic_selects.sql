@@ -56,14 +56,48 @@ WHERE sbi.mongo_tokens IS NOT NULL
 
 SELECT *
 FROM Images i 
-WHERE i.site_image_id = 1386225770
-AND i.site_name_id = 10
+WHERE i.image_id = 372595
 ;
+
+SELECT *
+FROM Images i 
+LIMIT 10
+;
+
+
+WHERE i.no_image = 1
+limit 100
+;
+
+SELECT * 
+FROM Encodings e 
+Where e.image_id = 409962
+;
+
+
+SELECT *
+FROM Encodings e 
+WHERE e.image_id < 100
+;
+
 
 SELECT COUNT(image_id)
 FROM SegmentBig_isface
 WHERE mongo
 ;
+
+
+
+AND i.image_id > 370000
+AND i.image_id < 400000
+
+
+SELECT DISTINCT i.image_id, e.encoding_id, e.is_face, e.face_landmarks,
+e.bbox 
+FROM Images i 
+LEFT JOIN Encodings e ON i.image_id = e.image_id 
+WHERE e.encoding_id IS NOT NULL AND e.is_face = 0 AND e.mongo_encodings is NULL AND i.site_name_id = 1 AND i.no_image IS NULL 
+LIMIT 10;
 
 
 SELECT *
@@ -72,9 +106,21 @@ WHERE sbi.no_image = 1
 ;
 
 SELECT *
-FROM SegmentBig_isface sbi
-WHERE sbi.image_id = 101601405
+FROM SegmentBig_isnotface sbi
+WHERE sbi.image_id = 155159
 ;
+
+SELECT COUNT(i.image_id)
+FROM Images i 
+;
+
+UPDATE Images i 
+SET i.no_image = NULL
+WHERE i.image_id < 400000
+AND i.no_image = 1
+AND i.site_name_id = 1
+;
+
 
 
 SELECT COUNT(i.image_id)

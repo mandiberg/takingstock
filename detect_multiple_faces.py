@@ -60,7 +60,7 @@ http="https://media.gettyimages.com/photos/"
 IS_FOLDER = False
 
 DO_OVER = True
-
+FIND_NO_IMAGE = False
 '''
 Oct 13, got up to 109217155
 switching to topic targeted
@@ -202,8 +202,13 @@ else:
     # WHERE = "e.face_encodings68 IS NULL AND e.face_encodings IS NOT NULL"
     # production
     # WHERE = "e.is_face IS TRUE AND e.face_encodings68 IS NULL"
-    if DO_OVER:
-        WHERE = f"e.encoding_id IS NOT NULL AND e.is_face IS NULL AND i.site_name_id = {SITE_NAME_ID}"
+    if DO_OVER and FIND_NO_IMAGE:
+        # find images with missing files
+        # find all images that have not been processed, and have not been declared no image
+        WHERE = f"e.encoding_id IS NULL AND i.no_image IS NULL AND i.site_name_id = {SITE_NAME_ID}"
+    elif DO_OVER and not FIND_NO_IMAGE:
+        # find all images that have been processed, but have no face found, and aren't no_image
+        WHERE = f"e.encoding_id IS NOT NULL AND e.is_face = 0 AND e.mongo_encodings is NULL AND i.no_image IS NULL AND i.site_name_id = {SITE_NAME_ID}"
     else:
         WHERE = f"e.encoding_id IS NULL AND i.site_name_id = {SITE_NAME_ID}"
     WHERE += f" AND i.image_id >  {START_IMAGE_ID}" if START_IMAGE_ID else ""
@@ -211,7 +216,7 @@ else:
     QUERY = WHERE
     SUBQUERY = ""
     # AND i.age_id NOT IN (1,2,3,4)
-    IS_SSD=False
+    IS_SSD= False
     #########################################
 
 
@@ -543,8 +548,8 @@ def find_face(image, df):
     if results_det.detections:
         faceDet=results_det.detections[0]
         
-        number_of_detection = len(results_det.detections)
-        print("---------------- >>>>>>>>>>>>>>>>> number_of_detection", number_of_detection)
+        number_of_detections = len(results_det.detections)
+        print("---------------- >>>>>>>>>>>>>>>>> number_of_detections", number_of_detections)
 
         bbox = get_bbox(faceDet, height, width)
         # print(">> find_face SPLIT >> get_bbox()")
@@ -642,11 +647,12 @@ def find_face(image, df):
                     df.at['1', 'face_encodings68'] = pickle.dumps(encodings)
     else:
         print("+++++++++++++++++  NO FACE DETECTED +++++++++++++++++++++")
+        number_of_detections = 0
     df.at['1', 'is_face'] = is_face
     # print(">> find_face SPLIT >> prepped dataframe")
     # ff_split = print_get_split(ff_split)
 
-    return df
+    return df, number_of_detections
 
 def calc_encodings(image, faceLms,bbox):## changed parameters and rebuilt
     def get_dlib_all_points(landmark_points):
@@ -1318,7 +1324,7 @@ def process_image_bodylms(task):
 
 def process_image(task):
     print("process_image this is where the action is")
-    print("processing task:", task)
+    # print("processing task:", task)
     pr_split = time.time()
     def save_image_triage(image,df):
         #saves a CV2 image elsewhere -- used in setting up test segment of images
@@ -1360,7 +1366,7 @@ def process_image(task):
         # Do FaceMesh
 
         print(">> SPLIT >> about to find_face")
-        df = find_face(image, df)
+        df, number_of_detections = find_face(image, df)
         is_small = 0
         # pr_split = print_get_split(pr_split)
         print(">> SPLIT >> done find_face")
@@ -1379,7 +1385,7 @@ def process_image(task):
     elif image is not None and image.shape[0]>0 and image.shape[1]>0 :
         print('smallllll but still processing')
         # print(task[0], "shape of image", image.shape)
-        df = find_face(image, df)
+        df, number_of_detections = find_face(image, df)
         # print(df)
         is_small = 1
     else:
@@ -1392,6 +1398,8 @@ def process_image(task):
             session.query(Images).filter(Images.image_id == task[0]).update({
                 Images.no_image: no_image
             }, synchronize_session=False)
+            session.commit()
+            print("stored no image in Images")
         except:
             print("failed to store no_image in Images")
 
@@ -1401,10 +1409,10 @@ def process_image(task):
 
         existing_entry = session.query(SegmentBig_isnotface).filter(SegmentBig_isnotface.image_id == task[0]).all()
         # query existing entry
-        print("existing_entry to store no_image:", existing_entry)
-        print(type(existing_entry))
+        # print("existing_entry to store no_image:", existing_entry)
+        # print(type(existing_entry))
         if existing_entry:
-            print("existing_entry to store no_image:", existing_entry)
+            print("existing_entry to store no_image")
             # if segment table entry exists, update it
             # otherwise, will continue on, and store no_image in SegmentBig_isnotface new entry
             session.query(SegmentBig_isnotface).filter(SegmentBig_isnotface.image_id == task[0]).update({
@@ -1433,7 +1441,7 @@ def process_image(task):
 
     # testing, so quitting before I store data
     # return
-    
+    print(f"number_of_detections: {number_of_detections}, for image_id: {task[0]}")
     try:
         
         # DEBUGGING --> need to change this back to "encodings"
@@ -1480,81 +1488,80 @@ def process_image(task):
             image_id = insert_dict['image_id']
             # can I filter this by site_id? would that make it faster or slower? 
             existing_entry = session.query(Encodings).filter_by(image_id=image_id).first()
-            print("DB: existing_entry", existing_entry)
 
         # print(">> SPLIT >> done query for existing_entry")
         # pr_split = print_get_split(pr_split)
 
-        if IS_FOLDER is True or existing_entry is None:
-            for _ in range(io.max_retries):
-                try:
-                    face_encodings68 = insert_dict.pop('face_encodings68', None)
-                    face_landmarks = insert_dict.pop('face_landmarks', None)
-                    # print(f"trying to store {image_id}")
-                    # update_sql = f"UPDATE Encodings SET bbox = '{bbox_json}' WHERE encoding_id = {encoding_id};"
-                    # engine.connect().execute(text(update_sql))
-                    # Entry does not exist, insert insert_dict into the table
-                    new_entry = Encodings(**insert_dict)
-                    if face_encodings68: is_encodings = 1
-                    else: is_encodings = 0
-                    new_entry.mongo_encodings = is_encodings
-                    new_entry.mongo_face_landmarks = is_encodings
-                    session.add(new_entry)
-                    session.commit()
-                    # print(f"just added to db")
+        two_noses = False
+        if number_of_detections > 1:
+            # there are more than one face detected
+            two_noses = True
+            print("too many faces detected")
+            # store too_many_faces in Encodings table
+            session.query(Encodings).filter(Encodings.image_id == image_id).update({
+                Encodings.two_noses: two_noses
+            }, synchronize_session=False)
+            # print("not committing yet")
+            session.commit()
 
-                    encoding_id = new_entry.encoding_id  # Assuming 'encoding_id' is the name of your primary key column
+        else:    
+            # if there is one face detected
+            face_encodings68 = insert_dict.pop('face_encodings68', None)
+            face_landmarks = insert_dict.pop('face_landmarks', None)
+            if face_encodings68: is_encodings = 1
+            else: is_encodings = 0
 
-                    print(f"Newly inserted row has encoding_id: {encoding_id}")
-                    # Get the last row ID
-                    print("Last Row ID:", encoding_id, "image_id", image_id)
-
-
-                    if is_encodings:
-                        try:
-                            mongo_collection.insert_one({
-                                "encoding_id": encoding_id,
-                                "image_id": image_id,
-                                "face_landmarks": face_landmarks,
-                                "face_encodings68": face_encodings68
-                            })
-                        except DuplicateKeyError as e:
-                            print(f"Duplicate key error for encoding_id: {encoding_id}, image_id: {image_id}")
-                            print(f"Error details: {e}")
-                            continue  # Move to the next iteration of the loop
-                        except Exception as e:
-                            print(f"An unexpected error occurred: {e}")
-                            continue  # Move to the next iteration of the loop
+            if existing_entry is not None and existing_entry.mongo_encodings is None:
+                print(f"existing_entry for image_id: {image_id} with no mongo_encodings")
+                # this is a new face to update an existing encodings entry
+                existing_entry.mongo_encodings = is_encodings
+                existing_entry.mongo_face_landmarks = is_encodings
+                encoding_id = existing_entry.encoding_id  # Assuming 'encoding_id' is the name of your primary key column
+                commit_this = True
 
 
-                # session.query(Encodings).filter(Encodings.image_id == image_id).update({
-                #     Encodings.is_body: is_body,
-                #     # Encodings.body_landmarks: body_landmarks
-                #     Encodings.mongo_body_landmarks: is_body
-                # })
+            elif IS_FOLDER is True or existing_entry is None:
+                print(f"new entry for image_id: {image_id}")
+                new_entry = Encodings(**insert_dict)
+                new_entry.mongo_encodings = is_encodings
+                new_entry.mongo_face_landmarks = is_encodings
+                encoding_id = new_entry.encoding_id  # Assuming 'encoding_id' is the name of your primary key column
+                session.add(new_entry)
+                commit_this = True
 
-                # session.query(SegmentTable).filter(SegmentTable.image_id == image_id).update({
-                #     SegmentTable.mongo_body_landmarks: is_body
-                # })
+            else:
+                print("already exists, nothing to update")
+                commit_this = False
 
-                # # total_processed += 1
+            if commit_this:
+                for _ in range(io.max_retries):
+                    try:
+                        # print("not committing yet")
+                        session.commit()
+                        print(f"Newly updated/inserted row has encoding_id: {encoding_id} for image_id {image_id} with is_encodings: {is_encodings}")
 
-                # if body_landmarks:
-                #     mongo_collection.update_one(
-                #         {"image_id": image_id},
-                #         {"$set": {"body_landmarks": body_landmarks}}
-                #     )
-                #     print("----------- >>>>>>>>   mongo body_landmarks updated:", image_id)
+                        if is_encodings:
+                            try:
+                                mongo_collection.insert_one({
+                                    "encoding_id": encoding_id,
+                                    "image_id": image_id,
+                                    "face_landmarks": face_landmarks,
+                                    "face_encodings68": face_encodings68
+                                })
+                            except DuplicateKeyError as e:
+                                print(f"Duplicate key error for encoding_id: {encoding_id}, image_id: {image_id}")
+                                print(f"Error details: {e}")
+                                continue  # Move to the next iteration of the loop
+                            except Exception as e:
+                                print(f"An unexpected error occurred: {e}")
+                                continue  # Move to the next iteration of the loop
 
+                        break  # Transaction succeeded, exit the loop
+                    except OperationalError as e:
+                        print("exception on new_entry session.commit")
+                        print(e)
+                        time.sleep(io.retry_delay)
 
-                    break  # Transaction succeeded, exit the loop
-                except OperationalError as e:
-                    print("exception on new_entry session.commit")
-                    print(e)
-                    time.sleep(io.retry_delay)
-
-        else:
-            print("already exists, not adding")
 
 
 
