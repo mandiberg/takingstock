@@ -61,6 +61,8 @@ IS_FOLDER = False
 
 DO_OVER = True
 FIND_NO_IMAGE = False
+OVERRIDE_PATH = "/Volumes/SSD4/images_getty"
+
 '''
 Oct 13, got up to 109217155
 switching to topic targeted
@@ -101,7 +103,7 @@ MAIN_FOLDER = "/Volumes/SSD4/images_getty"
 
 # MAIN_FOLDER = "/Volumes/SSD4/images_getty_reDL"
 BATCH_SIZE = 1000 # Define how many from each folder in each batch
-LIMIT = 10
+LIMIT = 10000
 
 #temp hack to go 1 subfolder at a time
 # THESE_FOLDER_PATHS = ["8/8A", "8/8B","8/8C", "8/8D", "8/8E", "8/8F", "8/80", "8/81", "8/82", "8/83", "8/84", "8/85", "8/86", "8/87", "8/88", "8/89"]
@@ -1857,7 +1859,10 @@ def main():
                 # gets folder via the folder list, keyed with site_id integer
                 else:
                     try:
-                        imagepath=os.path.join(io.folder_list[site_id], hashed_path)
+                        if OVERRIDE_PATH:
+                            imagepath = os.path.join(OVERRIDE_PATH, hashed_path)
+                        else:
+                            imagepath=os.path.join(io.folder_list[site_id], hashed_path)
                     except:
                         print("missing folder for site_id", site_id)
                         continue
