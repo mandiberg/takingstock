@@ -35,6 +35,9 @@ HelperTable_name = "SegmentBig_isface"
 # MM controlling which folder to use
 IS_SSD = False
 
+# for running on isnotface table
+IS_NOT_FACE = True
+
 io = DataIO(IS_SSD)
 db = io.db
 io.db["name"] = "stock"

@@ -83,7 +83,7 @@ VERBOSE = False
 RANDOM = False
 global_counter = 0
 QUERY_LIMIT = 10000
-query_start_counter = 80536000 # only used in write image topics
+query_start_counter = 0 # only used in write image topics
 # started at 9:45PM, Feb 17
 
 if IS_NOT_FACE:
@@ -139,8 +139,12 @@ mongo_client = pymongo.MongoClient(io.dbmongo['host'])
 mongo_db = mongo_client[io.dbmongo['name']]
 if IS_NOT_FACE:
     mongo_collection = mongo_db['tokens_noface']
+    topics_table = "topics_isnotface"
+    images_topics_table = "imagestopics_isnotface"
 else:
     mongo_collection = mongo_db['tokens']
+    topics_table = "topics"
+    images_topics_table = "imagestopics"
 
 if USE_BIGSEGMENT:
     if IS_NOT_FACE:
@@ -201,18 +205,18 @@ def set_query():
     if MODE==2 and USE_BIGSEGMENT:
         print("assigning topics via bigsegment")
         # assigning topics
-        WHERE = " mongo_tokens IS NOT NULL AND image_id NOT IN (SELECT image_id FROM imagestopics)"
+        WHERE = f" mongo_tokens IS NOT NULL AND image_id NOT IN (SELECT image_id FROM {images_topics_table})"
     elif MODE==2 and USE_SEGMENT:
         print("assigning topics via small segment")
         WHERE = " face_x > -35 AND face_x < -24 AND face_y > -3 AND face_y < 3 AND face_z > -3 AND face_z < 3 AND "
         # WHERE = " face_x > -40 AND face_x < -20 AND face_y > -5 AND face_y < 5 AND face_z > -5 AND face_z < 5 AND "
-        WHERE += " mongo_tokens IS NOT NULL AND image_id NOT IN (SELECT image_id FROM imagestopics)"
+        WHERE += f" mongo_tokens IS NOT NULL AND image_id NOT IN (SELECT image_id FROM {images_topics_table})"
 
     elif MODE==2:
         print("assigning topics without any segment")
         # assigning topics
         # I'm not sure how this is different from USE_BIGSEGMENT
-        WHERE = " tokenized_keyword_list IS NOT NULL AND image_id NOT IN (SELECT image_id FROM imagestopics)"
+        WHERE = f" tokenized_keyword_list IS NOT NULL AND image_id NOT IN (SELECT image_id FROM {images_topics_table})"
 
     WHERE += f" AND image_id > {query_start_counter} "
 
@@ -296,7 +300,7 @@ def write_topics(lda_model):
             )
 
     # Add the Topics object to the session
-        # session.add(topics_entry)
+        session.add(topics_entry)
         print("Updated topic_id {}".format(idx))
     session.commit()
     return

@@ -61,7 +61,14 @@ IS_FOLDER = False
 
 DO_OVER = True
 FIND_NO_IMAGE = False
-OVERRIDE_PATH = "/Volumes/SSD4/images_getty"
+OVERRIDE_PATH = False
+# OVERRIDE_PATH = "/Volumes/SSD4/images_getty"
+# OVERRIDE_TOPIC = False
+OVERRIDE_TOPIC = [16, 17, 18, 23, 24, 45, 53]
+SHUTTER_SSD_OVERRIDE = False
+if SHUTTER_SSD_OVERRIDE: 
+    OVERRIDE_PATH = "/Volumes/SSD4green/images_shutterstock"
+    SHUTTERFOLDER = "C/C"
 
 '''
 Oct 13, got up to 109217155
@@ -89,7 +96,7 @@ switching to topic targeted
 18	afripics
 '''
 # I think this only matters for IS_FOLDER mode, and the old SQL way
-SITE_NAME_ID = 1
+SITE_NAME_ID = 2
 # 2, shutter. 4, istock
 # 7 pond5, 8 123rf
 POSE_ID = 0
@@ -213,6 +220,10 @@ else:
         WHERE = f"e.encoding_id IS NOT NULL AND e.is_face = 0 AND e.mongo_encodings is NULL AND e.two_noses is NULL AND i.no_image IS NULL AND i.site_name_id = {SITE_NAME_ID}"
     else:
         WHERE = f"e.encoding_id IS NULL AND i.site_name_id = {SITE_NAME_ID}"
+    if OVERRIDE_TOPIC: 
+        FROM += " LEFT JOIN ImagesTopics_isnotface it ON i.image_id = it.image_id"
+        WHERE += f" AND it.topic_id IN {tuple(OVERRIDE_TOPIC)} "
+        # WHERE += f" AND i.topic_id = {OVERRIDE_TOPIC}"
     WHERE += f" AND i.image_id >  {START_IMAGE_ID}" if START_IMAGE_ID else ""
     WHERE += f" AND i.no_image IS NULL"
     QUERY = WHERE
@@ -1848,6 +1859,12 @@ def main():
                 item = row["contentUrl"]
                 hashed_path = row["imagename"]
                 site_id = row["site_name_id"]
+
+                if SHUTTER_SSD_OVERRIDE:
+                    # if SHUTTERPATH is in hashed_path, then pass, else, continue
+                    if SHUTTERFOLDER not in hashed_path:
+                        print(f"skipping {hashed_path}")
+                        continue
                 # if site_id == 1:
                 #     # print("fixing gettyimages hash")
                 #     orig_filename = item.replace(http, "")+".jpg"

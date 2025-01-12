@@ -63,7 +63,9 @@ CREATE TABLE CountEthnicity_Location (
 	FOREIGN KEY (location_id) REFERENCES Location (location_id)
 );
 
-CREATE TABLE CountEthnicity_Topics (
+-- CREATE TABLE CountEthnicity_Topics (
+
+CREATE TABLE CountEthnicity_Topics_isnotface_sites_1_2 (
     topic_id INT,
 	POC INT DEFAULT 0,
 	Black INT DEFAULT 0,

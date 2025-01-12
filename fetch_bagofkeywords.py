@@ -345,7 +345,7 @@ if index == 0:
     # and redefine IS_FACE = 0
     IS_REGULAR = False
     IS_HELPER = True
-    HELPER_SITE = 2
+    # HELPER_SITE = 2
 
     function=create_seg_table
     if IS_HELPER:
