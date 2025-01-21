@@ -7,7 +7,7 @@ from sqlalchemy.ext.declarative import declarative_base
 # my ORM
 # from my_declarative_base import Base, Clusters, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON, Images
 
-from my_declarative_base import Base,Images, ImagesTopics, SegmentBig, Encodings_Site2, SegmentTable, BagOfKeywords,Keywords,ImagesKeywords,ImagesEthnicity, Encodings, Column, Integer, String, DECIMAL, BLOB, ForeignKey, JSON  # Replace 'your_module' with the actual module where your SQLAlchemy models are defined
+from my_declarative_base import Base,Images, ImagesTopics, SegmentBig, SegmentBig_isnotface, Encodings_Site2, SegmentTable, BagOfKeywords,Keywords,ImagesKeywords,ImagesEthnicity, Encodings, Column, Integer, String, DECIMAL, BLOB, ForeignKey, JSON  # Replace 'your_module' with the actual module where your SQLAlchemy models are defined
 from mp_db_io import DataIO
 import pickle
 import numpy as np
@@ -59,7 +59,7 @@ db = io.db
 # io.db["name"] = "ministock"
 
 VERBOSE = True
-SegmentHelper_name = 'SegmentHelperAug16_SegOct20_preAlamy'
+SegmentHelper_name = 'SegmentHelper_jan13_isnotface_getty'
 TOKEN_COUNT_PATH = "token_counts.csv"
 
 # Create a database engine
@@ -92,7 +92,7 @@ def read_csv(file_path):
         data = file.read().replace('\n', '')
     return data
 # removing all keywords that are stored in gender, ethnicity, and age tables
-io.ROOT = "/Users/michaelmandiberg/Documents/GitHub/facemap/topic_model"
+io.ROOT = "/Users/michaelmandiberg/Documents/GitHub/facemap/model_files"
 GENDER_LIST = read_csv(os.path.join(io.ROOT, "stopwords_gender.csv"))
 ETH_LIST = read_csv(os.path.join(io.ROOT, "stopwords_ethnicity.csv"))
 AGE_LIST = read_csv(os.path.join(io.ROOT, "stopwords_age.csv"))                       
@@ -122,7 +122,7 @@ options = ['Create helper table', 'Fetch keywords list and make tokens', 'Fetch 
            ]
 option, index = pick(options, title)
 
-LIMIT= 8000000
+LIMIT= 1000000
 START_ID = 0
 MAXID = 150000000
 
@@ -456,7 +456,9 @@ def prune_table(image_id, lock, session):
         print(f"Created BagOfKeywords number: {counter} for image_id {image_id}")
     # print("processed: ",image_id)
 
-def preprocess_keywords(target_image_id, lock,session):
+def preprocess_keywords(task, lock,session):
+    target_image_id = task[0]
+    IS_NOT_FACE = task[1]
     ambig_key_dict = { "black-and-white": "black_and_white", "black and white background": "black_and_white background", "black and white portrait": "black_and_white portrait", "black amp white": "black_and_white", "white and black": "black_and_white", "black and white film": "black_and_white film", "black and white wallpaper": "black_and_white wallpaper", "black and white cover photos": "black_and_white cover photos", "black and white outfit": "black_and_white outfit", "black and white city": "black_and_white city", "blackandwhite": "black_and_white", "black white": "black_and_white", "black friday": "black_friday", "black magic": "black_magic", "black lives matter": "black_lives_matter black_ethnicity", "black out tuesday": "black_out_tuesday black_ethnicity", "black girl magic": "black_girl_magic black_ethnicity", "beautiful black women": "beautiful black_ethnicity women", "black model": "black_ethnicity model", "black santa": "black_ethnicity santa", "black children": "black_ethnicity children", "black history": "black_ethnicity history", "black family": "black_ethnicity family", "black community": "black_ethnicity community", "black owned business": "black_ethnicity owned business", "black holidays": "black_ethnicity holidays", "black models": "black_ethnicity models", "black girl bullying": "black_ethnicity girl bullying", "black santa claus": "black_ethnicity santa claus", "black hands": "black_ethnicity hands", "black christmas": "black_ethnicity christmas", "white and black girl": "white_ethnicity and black_ethnicity girl", "white woman": "white_ethnicity woman", "white girl": "white_ethnicity girl", "white people": "white_ethnicity", "red white and blue": "red_white_and_blue"}
     def clarify_keyword(text):
         # // if text contains either of the strings "black" or "white", replace with "black_and_white"
@@ -466,10 +468,13 @@ def preprocess_keywords(target_image_id, lock,session):
             # print("clarified text: ",text, text)
         return text
     def lemmatize_stemming(text):
-        return stemmer.stem(lemmatizer.lemmatize(text, pos='v'))
+        stemmed = stemmer.stem(lemmatizer.lemmatize(text, pos='v'))
+        # print("stemmed: ", stemmed)
+        return stemmed
+    
     def preprocess_list(keyword_list):
         result = []
-
+        # print("keyword_list: ", keyword_list)
         # Normalize the phrases to lowercase for consistent comparison
         keyword_list = [phrase.lower() for phrase in keyword_list]
 
@@ -506,14 +511,15 @@ def preprocess_keywords(target_image_id, lock,session):
             return filtered_words
 
         individual_words = check_words_for_stopwords(individual_words)
-
+        # print("individual_words: ", individual_words)
         # Step 4: Process the final list of words
         for token in individual_words:
             # print("this is the token: ", token)
             token = clarify_keyword(token.lower())  # Normalize to lowercase again, if needed
-            if token and token not in MY_STOPWORDS and len(token) > 3:
+            if token and token not in MY_STOPWORDS and len(token) > 2:
+                # print("token: ", token)
                 result.append(lemmatize_stemming(token))
-
+        # print("result: ", result)
         return result
 
     ####
@@ -521,6 +527,7 @@ def preprocess_keywords(target_image_id, lock,session):
     ####
     token_list = []
 
+    # print(f"Processing image_id {target_image_id}.")
     # test to see if tokenized_keyword_list exists in mongo
     query = {"image_id": target_image_id}
     is_mongo_tokens = False
@@ -529,7 +536,7 @@ def preprocess_keywords(target_image_id, lock,session):
         if "tokenized_keyword_list" in doc:
             is_mongo_tokens = True
             token_list = True
-            # tokenized_keyword_list = pickle.loads(doc["tokenized_keyword_list"])
+            tokenized_keyword_list = pickle.loads(doc["tokenized_keyword_list"])
             print("tokenized_keyword_list: ", tokenized_keyword_list)
         else:
             is_mongo_tokens = False
@@ -537,6 +544,7 @@ def preprocess_keywords(target_image_id, lock,session):
 
     # if no tokenized_keyword_list process the keywords
     if not is_mongo_tokens:
+        # print(f"not is_mongo_tokens image_id {target_image_id}.")
         #global session
         # Build a select query to retrieve keyword_ids for the specified image_id
         select_keyword_ids_query = (
@@ -573,15 +581,22 @@ def preprocess_keywords(target_image_id, lock,session):
         else:
             print(f"Keywords entry for image_id {target_image_id} not found.")
 
-            select_description_query = (
-                select(SegmentBig.description)
-                .filter(SegmentBig.image_id == target_image_id)
-            )
+            if IS_NOT_FACE:
+                select_description_query = (
+                    select(SegmentBig_isnotface.description)
+                    .filter(SegmentBig_isnotface.image_id == target_image_id)
+                )
+            else:
+                select_description_query = (
+                    select(SegmentBig.description)
+                    .filter(SegmentBig.image_id == target_image_id)
+                )
 
             # Execute the query and fetch the result as a list of keyword_ids
             result = session.execute(select_description_query).fetchone()
             if result and result[0]:
                 keyword_list = result[0].replace(".","").split()
+                print(f"Description entry for image_id {target_image_id} found. List is {keyword_list}")
             else:
                 print(f"Description entry for image_id {target_image_id} not found.")
                 return
@@ -597,11 +612,18 @@ def preprocess_keywords(target_image_id, lock,session):
 
     # do this regardless of whether is_mongo_tokens is True or False    
     # create a SegmentBig entry object
-    SegmentBig_entry = (
-        session.query(SegmentBig)
-        .filter(SegmentBig.image_id == target_image_id)
-        .first()
-    )
+    if IS_NOT_FACE:
+        SegmentBig_entry = (
+            session.query(SegmentBig_isnotface)
+            .filter(SegmentBig_isnotface.image_id == target_image_id)
+            .first()
+        )
+    else:
+        SegmentBig_entry = (
+            session.query(SegmentBig)
+            .filter(SegmentBig.image_id == target_image_id)
+            .first()
+        )
 
     # use SegmentTable object to test if target_image_id is in the SegmentTable table
     existing_segment_entry = (
@@ -620,12 +642,12 @@ def preprocess_keywords(target_image_id, lock,session):
         # if tokens processed, insert the tokens into the mongo collection
         if is_mongo_tokens:
             insert_mongo = False
-            # print(f"Tokens for image_id {target_image_id} already exist, setting mongo_tokens to 1.")
+            print(f"Tokens for image_id {target_image_id} already exist, setting mongo_tokens to 1.")
         else:
             insert_mongo = True
-            # print(f"Keyword list for image_id {target_image_id} will be updated.")
+            print(f"Keyword list for image_id {target_image_id} will be updated.")
         SegmentBig_entry.mongo_tokens = 1
-        # print("assigned mongo_tokens to 1 for ", target_image_id)
+        print("assigned mongo_tokens to 1 for ", target_image_id)
         if is_in_segment_table:
             existing_segment_entry.mongo_tokens = 1
     else:
@@ -709,27 +731,27 @@ if index == 0:
     # select_query = select(Images.image_id, Images.description, Images.gender_id, Images.age_id, Images.location_id).\
     #     select_from(Images).outerjoin(BagOfKeywords, Images.image_id == BagOfKeywords.image_id).filter(BagOfKeywords.image_id == None, Images.site_name_id.in_([2,4])).limit(LIMIT)
 
-    # 12/27/2024, to work with isnotface, change declarative_base to SegmentBig_isnotface, and set IS_ENCODINGS2 = True
-    IS_ENCODINGS2 = True
+    # 12/27/2024, to work with isnotface, change declarative_base to SegmentBig_isnotface, and set IS_NOT_FACE = True
+    IS_NOT_FACE = True
 
     # select max image_id from SegmentBig
-    if IS_ENCODINGS2: max_image_id_query = select(func.max(SegmentBig.image_id)).join(Encodings_Site2, SegmentBig.image_id == Encodings_Site2.image_id)
+    if IS_NOT_FACE: max_image_id_query = select(func.max(SegmentBig_isnotface.image_id)).join(Encodings, SegmentBig_isnotface.image_id == Encodings.image_id)
     else: max_image_id_query = select(func.max(SegmentBig.image_id))
     result = session.execute(max_image_id_query).fetchone()
     max_image_id = result[0]
     print("max image_id, to start from: ", max_image_id)
 
     # this is the regular one to use
-    if IS_ENCODINGS2:
-        print("IS_ENCODINGS2 is True")
+    if IS_NOT_FACE:
+        print("IS_NOT_FACE is True")
         select_query = select(
             distinct(Images.image_id), Images.site_name_id, Images.site_image_id, 
                 Images.contentUrl, Images.imagename, Images.description, Images.age_id, Images.gender_id, Images.location_id,
-                Encodings_Site2.face_x, Encodings_Site2.face_y, Encodings_Site2.face_z, Encodings_Site2.mouth_gap, 
-                Encodings_Site2.bbox).\
+                Encodings.face_x, Encodings.face_y, Encodings.face_z, Encodings.mouth_gap,
+                Encodings.bbox).\
             select_from(Images).\
-            outerjoin(Encodings_Site2, Images.image_id == Encodings_Site2.image_id).\
-            filter(Images.image_id > max_image_id, Images.image_id < MAXID, Encodings_Site2.is_face == 0).\
+            outerjoin(SegmentBig_isnotface, Images.image_id == SegmentBig_isnotface.image_id).\
+            filter(Images.image_id > max_image_id, Images.image_id < MAXID, SegmentBig_isnotface.is_face == 0).\
             limit(LIMIT)
 
     else:
@@ -815,16 +837,20 @@ if index == 0:
 elif index == 1:
     function=preprocess_keywords
 
-    # 12/27/2024, to work with isnotface, change declarative_base to SegmentBig_isnotface
+    # 1/13/2025, to work with isnotface, use SegmentBig_isnotface, and set IS_NOT_FACE = True
+    IS_NOT_FACE = True
 
     ################FETCHING KEYWORDS AND CREATING TOKENS #################
-    distinct_image_ids_query = select(SegmentBig.image_id.distinct()).filter(SegmentBig.mongo_tokens == None, SegmentBig.image_id > START_ID).limit(LIMIT)
+    if IS_NOT_FACE:
+        distinct_image_ids_query = select(SegmentBig_isnotface.image_id.distinct()).filter(SegmentBig_isnotface.mongo_tokens == None, SegmentBig_isnotface.no_image == None, SegmentBig_isnotface.image_id > START_ID).limit(LIMIT)
+    else:
+        distinct_image_ids_query = select(SegmentBig.image_id.distinct()).filter(SegmentBig.mongo_tokens == None, SegmentBig.image_id > START_ID).limit(LIMIT)
     distinct_image_ids = [row[0] for row in session.execute(distinct_image_ids_query).fetchall()]
 
     # print the length of the result
     print(len(distinct_image_ids), "rows")
     for target_image_id in distinct_image_ids:
-        work_queue.put(target_image_id)
+        work_queue.put([target_image_id, IS_NOT_FACE])
 
        
 elif index == 2:

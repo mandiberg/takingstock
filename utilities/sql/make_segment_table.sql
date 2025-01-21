@@ -8,7 +8,7 @@ DROP TABLE SegmentHelper_dec27_getty_noface ;
 DELETE FROM SegmentHelper_dec27_getty_noface;
 
 -- create helper segment table
-CREATE TABLE SegmentHelper_dec27_getty_noface (
+CREATE TABLE SegmentHelper_jan13_isnotface_getty (
     seg_image_id int NOT NULL AUTO_INCREMENT PRIMARY KEY,
     image_id INTEGER,
     FOREIGN KEY (image_id) REFERENCES Images(image_id)
@@ -16,7 +16,7 @@ CREATE TABLE SegmentHelper_dec27_getty_noface (
 
 
 -- create segment table
-CREATE TABLE SegmentBig_isnotface (
+CREATE TABLE SegmentBig_isnotface_getty (
     seg_image_id int NOT NULL AUTO_INCREMENT PRIMARY KEY,
     image_id INTEGER,
     FOREIGN KEY (image_id) REFERENCES Images(image_id),
@@ -221,15 +221,16 @@ WHERE e.mongo_encodings = 1
 
    
 -- for making an is_face no face segment helper
-INSERT INTO SegmentHelper_dec27_getty_noface (image_id)
+INSERT INTO SegmentHelper_jan13_isnotface_getty (image_id)
 SELECT DISTINCT e.image_id
 FROM Encodings e
 JOIN Images i ON i.image_id = e.image_id
-WHERE e.is_face = 0
+WHERE e.is_face IS NULL
+	-- AND e.mongo_encodings IS NULL
 	AND i.site_name_id = 1
     AND NOT EXISTS (
         SELECT 1
-        FROM SegmentHelper_dec27_getty_noface s
+        FROM SegmentHelper_jan13_isnotface_getty s
         WHERE s.image_id = e.image_id
     )
 ;
@@ -278,29 +279,35 @@ WHERE ib.hue IS NULL
    
 -- DO THIS SECOND
 -- add column for is_new 
-ALTER TABLE SegmentHelper_sept4_all_faces
+ALTER TABLE SegmentHelper_jan13_isnotface_getty
 ADD COLUMN is_new BOOL ;
 -- and set is_new to True for new image_id
-UPDATE SegmentHelper_sept4_all_faces sh
-LEFT JOIN SegmentBig_isface s ON sh.image_id = s.image_id
+UPDATE SegmentHelper_jan13_isnotface_getty sh
+LEFT JOIN SegmentBig_isnotface s ON sh.image_id = s.image_id
 SET sh.is_new = True
 WHERE s.image_id IS NULL;
+
+-- check how many added
+SELECT COUNT(sh.is_new)
+FROM SegmentHelper_jan13_isnotface_getty sh
+WHERE sh.is_new = True
+;
 
 -- DO THIS THIRD
 -- Add info from Images
 -- INSERT INTO SegmentOct20 (image_id, site_name_id, site_image_id, contentUrl, imagename, age_id, age_detail_id, gender_id, location_id, face_x, face_y, face_z, mouth_gap, bbox, mongo_body_landmarks, mongo_face_landmarks)
 -- SELECT DISTINCT i.image_id, i.site_name_id, i.site_image_id, i.contentUrl, i.imagename, i.age_id, i.age_detail_id, i.gender_id, i.location_id, e.face_x, e.face_y, e.face_z, e.mouth_gap, e.bbox, e.mongo_body_landmarks, e.mongo_face_landmarks
 
-INSERT INTO SegmentBig_isface (image_id, site_name_id, site_image_id, contentUrl, imagename, age_id, age_detail_id, gender_id, location_id, face_x, face_y, face_z, mouth_gap, bbox)
+INSERT INTO SegmentBig_isnotface (image_id, site_name_id, site_image_id, contentUrl, imagename, age_id, age_detail_id, gender_id, location_id, face_x, face_y, face_z, mouth_gap, bbox)
 SELECT DISTINCT i.image_id, i.site_name_id, i.site_image_id, i.contentUrl, i.imagename, i.age_id, i.age_detail_id, i.gender_id, i.location_id, e.face_x, e.face_y, e.face_z, e.mouth_gap, e.bbox
 FROM Images i
 LEFT JOIN Encodings e ON i.image_id = e.image_id
-LEFT JOIN SegmentHelper_sept4_all_faces sh ON sh.image_id = i.image_id 
-LEFT JOIN SegmentBig_isface j ON i.image_id = j.image_id
+LEFT JOIN SegmentHelper_jan13_isnotface_getty sh ON sh.image_id = i.image_id 
+LEFT JOIN SegmentBig_isnotface j ON i.image_id = j.image_id
 WHERE sh.is_new IS TRUE
     AND j.image_id IS NULL    
 --	AND i.age_id IS NULL
-LIMIT 50000000; -- Adjust the batch size as needed
+LIMIT 1000000; -- Adjust the batch size as needed
 
 -- DO THIS EXTRA
 -- Add Location_id from Images

@@ -99,7 +99,7 @@ MAIN_FOLDER = "/Volumes/SSD4green/images_shutterstock"
 
 # MAIN_FOLDER = "/Volumes/SSD4/images_getty_reDL"
 BATCH_SIZE = 1000 # Define how many from each folder in each batch
-LIMIT = 1000
+LIMIT = 10000
 
 #temp hack to go 1 subfolder at a time
 # THESE_FOLDER_PATHS = ["8/8A", "8/8B","8/8C", "8/8D", "8/8E", "8/8F", "8/80", "8/81", "8/82", "8/83", "8/84", "8/85", "8/86", "8/87", "8/88", "8/89"]
@@ -1170,8 +1170,11 @@ def find_and_save_body(image_id, image, bbox, mongo_body_landmarks, hand_landmar
     if BODYLMS and mongo_body_landmarks is None:
         print("doing body, mongo_body_landmarks is None")
         # find body landmarks and normalize them using function
-        is_body, n_landmarks, body_landmarks, face_height, nose_pixel_pos = process_image_find_body_subroutine(image_id, image, bbox)
-        
+        if bbox:
+            is_body, n_landmarks, body_landmarks, face_height, nose_pixel_pos = process_image_find_body_subroutine(image_id, image, bbox)
+        else:
+            print("no bbox for this image", image_id)
+            return
         ### detect object info, 
         print("detecting objects")
         bbox_dict=sort.return_bbox(YOLO_MODEL,image, OBJ_CLS_LIST)
@@ -1223,9 +1226,11 @@ def process_image_bodylms(task):
     image_id = task[0] ### is it enc or image_id
     if task[4] is not None:
         bbox = io.unstring_json(task[4])
+        print("gotta bbox for this task, so chewing on it", task)
     else:
-        print("no bbox for this task", task)
+        print("nada bbox for this task, so skipping and returning", task)
         bbox = None
+        return
     cap_path = capitalize_directory(task[1])
     # mongo_face_landmarks = task[2]
     mongo_body_landmarks = task[3]

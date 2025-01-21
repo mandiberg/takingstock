@@ -126,6 +126,7 @@ class Encodings(Base):
     is_dupe_of            = Column(Integer, ForeignKey('images.image_id'))
     mongo_hand_landmarks   = Column(Boolean)
     mongo_hand_landmarks_norm   = Column(Boolean)
+    is_face_no_lms = Column(Boolean)
 
 class Encodings_Site2(Base):
     __tablename__ = 'Encodings_Site2'
@@ -228,6 +229,15 @@ class ImagesTopics_isnotface(Base):
     topic_id3    = Column(Integer, ForeignKey('Topics.topic_id'))
     topic_score3 = Column(Float)
 
+class ImagesTopics_isnotface_isfacemodel(Base):
+    __tablename__ = 'ImagesTopics_isnotface_isfacemodel' 
+    image_id    = Column(Integer, ForeignKey('images.image_id'), primary_key=True)
+    topic_id    = Column(Integer, ForeignKey('Topics.topic_id'))
+    topic_score = Column(Float)
+    topic_id2    = Column(Integer, ForeignKey('Topics.topic_id'))
+    topic_score2 = Column(Float)
+    topic_id3    = Column(Integer, ForeignKey('Topics.topic_id'))
+    topic_score3 = Column(Float)
 
 class Topics48(Base):
     __tablename__ = 'Topics48' 

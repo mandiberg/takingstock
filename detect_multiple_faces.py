@@ -60,11 +60,11 @@ http="https://media.gettyimages.com/photos/"
 IS_FOLDER = False
 
 DO_OVER = True
-FIND_NO_IMAGE = False
-OVERRIDE_PATH = False
-# OVERRIDE_PATH = "/Volumes/SSD4/images_getty"
-# OVERRIDE_TOPIC = False
-OVERRIDE_TOPIC = [16, 17, 18, 23, 24, 45, 53]
+FIND_NO_IMAGE = True
+# OVERRIDE_PATH = False
+OVERRIDE_PATH = "/Volumes/SSD4/images_getty"
+OVERRIDE_TOPIC = False
+# OVERRIDE_TOPIC = [16, 17, 18, 23, 24, 45, 53]
 SHUTTER_SSD_OVERRIDE = False
 if SHUTTER_SSD_OVERRIDE: 
     OVERRIDE_PATH = "/Volumes/SSD4green/images_shutterstock"
@@ -96,7 +96,7 @@ switching to topic targeted
 18	afripics
 '''
 # I think this only matters for IS_FOLDER mode, and the old SQL way
-SITE_NAME_ID = 2
+SITE_NAME_ID = 1
 # 2, shutter. 4, istock
 # 7 pond5, 8 123rf
 POSE_ID = 0
@@ -110,7 +110,7 @@ MAIN_FOLDER = "/Volumes/SSD4/images_getty"
 
 # MAIN_FOLDER = "/Volumes/SSD4/images_getty_reDL"
 BATCH_SIZE = 1000 # Define how many from each folder in each batch
-LIMIT = 10000
+LIMIT = 1000
 
 #temp hack to go 1 subfolder at a time
 # THESE_FOLDER_PATHS = ["8/8A", "8/8B","8/8C", "8/8D", "8/8E", "8/8F", "8/80", "8/81", "8/82", "8/83", "8/84", "8/85", "8/86", "8/87", "8/88", "8/89"]
@@ -214,10 +214,12 @@ else:
     if DO_OVER and FIND_NO_IMAGE:
         # find images with missing files
         # find all images that have not been processed, and have not been declared no image
-        WHERE = f"e.encoding_id IS NULL AND i.no_image IS NULL AND i.site_name_id = {SITE_NAME_ID}"
+        WHERE = f"e.encoding_id IS NULL AND i.no_image IS NULL AND e.two_noses is NULL AND i.site_name_id = {SITE_NAME_ID}"
     elif DO_OVER and not FIND_NO_IMAGE:
         # find all images that have been processed, but have no face found, and aren't no_image or two_noses
-        WHERE = f"e.encoding_id IS NOT NULL AND e.is_face = 0 AND e.mongo_encodings is NULL AND e.two_noses is NULL AND i.no_image IS NULL AND i.site_name_id = {SITE_NAME_ID}"
+        # WHERE = f"e.encoding_id IS NOT NULL AND e.is_face = 0 AND e.mongo_encodings is NULL AND e.two_noses is NULL AND i.no_image IS NULL AND i.site_name_id = {SITE_NAME_ID}"
+        # find all images that have been processed, have encodings, but no bbox to reprocess
+        WHERE = f"e.encoding_id IS NOT NULL AND e.bbox IS NULL AND e.mongo_encodings =1 AND e.is_body IS NULL AND e.two_noses is NULL AND i.no_image IS NULL AND i.site_name_id = {SITE_NAME_ID}"
     else:
         WHERE = f"e.encoding_id IS NULL AND i.site_name_id = {SITE_NAME_ID}"
     if OVERRIDE_TOPIC: 
@@ -557,6 +559,7 @@ def find_face(image, df):
     faces within the range of 5 meters. Though the default value is 0.
     '''
     is_face = False
+    is_face_no_lms = None
 
     if results_det.detections:
         faceDet=results_det.detections[0]
@@ -569,7 +572,7 @@ def find_face(image, df):
         # ff_split = print_get_split(ff_split)
 
         if bbox:
-
+            
             with mp.solutions.face_mesh.FaceMesh(static_image_mode=True,
                                              refine_landmarks=False,
                                              max_num_faces=1,
@@ -658,10 +661,27 @@ def find_face(image, df):
                     df.at['1', 'face_encodings'] = pickle.dumps(encodings)
                 else:
                     df.at['1', 'face_encodings68'] = pickle.dumps(encodings)
+            else:
+                print("+++++++++++++++++  YES FACE but NO FACE LANDMARKS +++++++++++++++++++++")
+                image_id = df.at['1', 'image_id']
+                # no_image_name = f"no_face_landmarks_{image_id}.jpg"
+                no_image_name_bbox = f"no_face_landmarks_{image_id}_bbox.jpg"
+                bbox_image = cv2.cvtColor(image[bbox["top"]:bbox["bottom"], bbox["left"]:bbox["right"]], cv2.COLOR_RGB2BGR)
+                # cv2.imwrite(os.path.join("/Users/michaelmandiberg/Documents/projects-active/facemap_production/face_but_no_landmarks", no_image_name), image)
+                # cv2.imwrite(os.path.join("/Users/michaelmandiberg/Documents/projects-active/facemap_production/face_but_no_landmarks", no_image_name_bbox), bbox_image)
+                is_face_no_lms = True
+        else:
+            print("+++++++++++++++++  NO BBOX DETECTED +++++++++++++++++++++")
+        
     else:
         print("+++++++++++++++++  NO FACE DETECTED +++++++++++++++++++++")
         number_of_detections = 0
+        image_id = df.at['1', 'image_id']
+        no_image_name = f"no_face_landmarks_{image_id}.jpg"
+        # cv2.imwrite(os.path.join("/Users/michaelmandiberg/Documents/projects-active/facemap_production/no_face", no_image_name), cv2.cvtColor(image, cv2.COLOR_RGB2BGR))
+        is_face_no_lms = False
     df.at['1', 'is_face'] = is_face
+    df.at['1', 'is_face_no_lms'] = is_face_no_lms
     # print(">> find_face SPLIT >> prepped dataframe")
     # ff_split = print_get_split(ff_split)
 
@@ -1382,6 +1402,7 @@ def process_image(task):
         df, number_of_detections = find_face(image, df)
         is_small = 0
         # pr_split = print_get_split(pr_split)
+        print(number_of_detections, df)
         print(">> SPLIT >> done find_face")
 
         # Do Body Pose
@@ -1525,8 +1546,27 @@ def process_image(task):
             else: is_encodings = 0
 
             if existing_entry is not None and existing_entry.mongo_encodings is None:
-                print(f"existing_entry for image_id: {image_id} with no mongo_encodings")
+                is_face_no_lms = insert_dict["is_face_no_lms"]
+                print(f"existing_entry for image_id: {image_id} with no existing mongo_encodings. is_face_no_lms is: {is_face_no_lms} Going to add these encodings: {is_encodings}")
                 # this is a new face to update an existing encodings entry
+                # update the existing entry with the insert_dict values
+                for key, value in insert_dict.items():
+                    if key not in ['image_id', 'encoding_id']:
+                        setattr(existing_entry, key, value)
+                existing_entry.mongo_encodings = is_encodings
+                existing_entry.mongo_face_landmarks = is_encodings
+                existing_entry.is_face_no_lms = is_face_no_lms
+                encoding_id = existing_entry.encoding_id  # Assuming 'encoding_id' is the name of your primary key column
+                commit_this = True
+
+            if existing_entry is not None and existing_entry.mongo_encodings == 1 and existing_entry.bbox is None:
+                is_face_no_lms = insert_dict["is_face_no_lms"]
+                print(f"existing_entry for image_id: {image_id} with no existing mongo_encodings. is_face_no_lms is: {is_face_no_lms} Going to add these encodings: {is_encodings}")
+                # this is a new face to update an existing encodings entry
+                # update the existing entry with the insert_dict values
+                for key, value in insert_dict.items():
+                    if key not in ['image_id', 'encoding_id']:
+                        setattr(existing_entry, key, value)
                 existing_entry.mongo_encodings = is_encodings
                 existing_entry.mongo_face_landmarks = is_encodings
                 encoding_id = existing_entry.encoding_id  # Assuming 'encoding_id' is the name of your primary key column
@@ -1551,6 +1591,11 @@ def process_image(task):
                     try:
 
                         # print("not committing yet")
+                        # print the values for the session
+                        for key, value in insert_dict.items():
+                            print(f"{key}: {value}")
+
+
                         session.commit()
                         print(f"Newly updated/inserted row has encoding_id: {encoding_id} for image_id {image_id} with is_encodings: {is_encodings}")
 
@@ -1794,6 +1839,7 @@ def main():
                                 task = None
                             print(task)
                             if task:
+                                
                                 tasks_to_accomplish.put(task)
                                 this_count += 1
                         else: 

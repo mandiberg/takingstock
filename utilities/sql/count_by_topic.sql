@@ -5,9 +5,23 @@ USE Stock;
 SELECT COUNT(image_id) AS count,
        it.topic_id,
        t.topic
-FROM ImagesTopics it
-JOIN Topics t ON it.topic_id = t.topic_id
+FROM ImagesTopics_isnotface it
+JOIN Topics_isnotface t ON it.topic_id = t.topic_id
 GROUP BY it.topic_id, t.topic;
+
+
+-- count by topic, with is_not_face and is_face_no_lms
+SELECT COUNT(it.image_id) AS totalcount,
+	   SUM(e.mongo_face_landmarks = 1) AS is_face_count,
+	   SUM(e.mongo_face_landmarks = 0) AS is_not_face_count,
+	   SUM(e.is_face_no_lms = 1) AS is_face_no_lms_count,
+       it.topic_id,
+       t.topic
+FROM ImagesTopics_isnotface it
+JOIN Topics_isnotface t ON it.topic_id = t.topic_id
+JOIN encodings e ON it.image_id = e.image_id 
+GROUP BY it.topic_id, t.topic
+ORDER BY totalcount DESC;
 
 
 -- count by keyword (basedon helper segment, doing the whole thing is too big)

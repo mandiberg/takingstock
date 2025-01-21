@@ -9,7 +9,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 # my ORM
-from my_declarative_base import Base, Images, SegmentBig, Topics,Topics_isnotface, ImagesTopics, ImagesTopics_isnotface, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON, ForeignKey
+from my_declarative_base import Base, Images, SegmentBig, Topics,Topics_isnotface, ImagesTopics, ImagesTopics_isnotface, ImagesTopics_isnotface_isfacemodel, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON, ForeignKey
 import pymongo
 
 from sqlalchemy.exc import IntegrityError
@@ -79,6 +79,7 @@ io.ROOT = "/Users/michaelmandiberg/Documents/GitHub/facemap/model_files"
 USE_SEGMENT = False
 USE_BIGSEGMENT = True
 IS_NOT_FACE = True # this is to make the model for images that are not one face
+USE_EXISTING_MODEL = True
 VERBOSE = False
 RANDOM = False
 global_counter = 0
@@ -86,7 +87,7 @@ QUERY_LIMIT = 10000
 query_start_counter = 0 # only used in write image topics
 # started at 9:45PM, Feb 17
 
-if IS_NOT_FACE:
+if IS_NOT_FACE and not USE_EXISTING_MODEL:
     MODEL_FOLDER = os.path.join(io.ROOT,"model_isnotface")
 else:
     MODEL_FOLDER = os.path.join(io.ROOT,"model_isface")
@@ -137,10 +138,14 @@ Base = declarative_base()
 
 mongo_client = pymongo.MongoClient(io.dbmongo['host'])
 mongo_db = mongo_client[io.dbmongo['name']]
-if IS_NOT_FACE:
+if IS_NOT_FACE and not USE_EXISTING_MODEL:
     mongo_collection = mongo_db['tokens_noface']
     topics_table = "topics_isnotface"
     images_topics_table = "imagestopics_isnotface"
+elif IS_NOT_FACE and USE_EXISTING_MODEL:
+    mongo_collection = mongo_db['tokens_noface']
+    topics_table = "topics"
+    images_topics_table = "imagestopics_isnotface_isfacemodel"
 else:
     mongo_collection = mongo_db['tokens']
     topics_table = "topics"
@@ -355,8 +360,19 @@ def write_imagetopics(resultsjson,lda_model_tfidf,dictionary):
         else:
             index3, score3 = None, None
 
-        if IS_NOT_FACE:            
+        if IS_NOT_FACE and not USE_EXISTING_MODEL:            
             imagestopics_entry=ImagesTopics_isnotface(
+                image_id=row["image_id"],
+                topic_id=index,
+                topic_score=score,
+                topic_id2=index2,
+                topic_score2=score2,
+                topic_id3=index3,
+                topic_score3=score3
+            )
+        elif IS_NOT_FACE and USE_EXISTING_MODEL:            
+            # print("IS_NOT_FACE and USE_EXISTING_MODEL")
+            imagestopics_entry=ImagesTopics_isnotface_isfacemodel(
                 image_id=row["image_id"],
                 topic_id=index,
                 topic_score=score,

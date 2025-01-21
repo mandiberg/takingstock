@@ -27,7 +27,7 @@ CREATE TABLE Topics_isnotface (
 	topic VARCHAR(250)
 );
 
-CREATE TABLE ImagesTopics_isnotface (
+CREATE TABLE imagestopics_isnotface_isfacemodel (
 	image_id INT,
     topic_id INT,
     topic_score FLOAT,
