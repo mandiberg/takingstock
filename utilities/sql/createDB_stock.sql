@@ -54,7 +54,7 @@ CREATE TABLE Location (
 ); 
 
 
-location_number_getty,getty_name,nation_name,nation_name_alpha,official_nation_name,sovereignty,code_alpha2,code_alpha3,code_numeric,code_iso,population,region,subregion,intermediateregion,WarsawPact
+-- location_number_getty,getty_name,nation_name,nation_name_alpha,official_nation_name,sovereignty,code_alpha2,code_alpha3,code_numeric,code_iso,population,region,subregion,intermediateregion,WarsawPact
 CREATE TABLE Images (
     image_id int NOT NULL AUTO_INCREMENT PRIMARY KEY,
     site_name_id INTEGER,
