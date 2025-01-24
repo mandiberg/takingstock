@@ -47,7 +47,7 @@ SAVE_ORIG = False
 DRAW_BOX = False
 MINSIZE = 500
 SLEEP_TIME=0
-VERBOSE = False
+VERBOSE = True
 
 # only for triage
 sortfolder ="getty_test"
@@ -85,21 +85,21 @@ switching to topic targeted
 18	afripics
 '''
 # I think this only matters for IS_FOLDER mode, and the old SQL way
-SITE_NAME_ID = 1
+SITE_NAME_ID = 2
 # 2, shutter. 4, istock
 # 7 pond5, 8 123rf
 POSE_ID = 0
 
 # folder doesn't matter if IS_FOLDER is False. Declared FAR below. 
 # MAIN_FOLDER = "/Volumes/RAID18/images_pond5"
-MAIN_FOLDER = "/Volumes/SSD4/images_getty"
-# MAIN_FOLDER = "/Volumes/SSD4green/images_shutterstock"
+# MAIN_FOLDER = "/Volumes/SSD4/images_getty"
+MAIN_FOLDER = "/Volumes/SSD4green/images_shutterstock"
 # MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/images_picha"
 # MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/afripics_v2/images"
 
 # MAIN_FOLDER = "/Volumes/SSD4/images_getty_reDL"
 BATCH_SIZE = 1000 # Define how many from each folder in each batch
-LIMIT = 1000
+LIMIT = 10000
 
 #temp hack to go 1 subfolder at a time
 # THESE_FOLDER_PATHS = ["8/8A", "8/8B","8/8C", "8/8D", "8/8E", "8/8F", "8/80", "8/81", "8/82", "8/83", "8/84", "8/85", "8/86", "8/87", "8/88", "8/89"]
@@ -1121,24 +1121,43 @@ def save_body_hands_mysql_and_mongo(session, image_id, image, bbox_dict, body_la
         # Add the new entry to the session
         session.merge(new_entry_ib)
 
-
-        ### save regular landmarks                
+        ### save regular landmarks to mongo, only if lms exist         
         if body_landmarks:
-            mongo_collection.update_one(
-                {"image_id": image_id},
-                {"$set": {"body_landmarks": pickle.dumps(body_landmarks)}},
-                upsert=True
-            )
-            print("----------- >>>>>>>>   mongo body_landmarks updated:", image_id)
+            if VERBOSE: print("storing body_landmarks for image_id", image_id, body_landmarks)
+            existing_entry = mongo_collection.find_one({"image_id": image_id})
+            if VERBOSE: print("encoding_id", encoding_id, "image_id", image_id)
+            if existing_entry:
+                mongo_collection.update_one(
+                    {"image_id": image_id},
+                    {"$set": {"body_landmarks": pickle.dumps(body_landmarks)}}
+                )
+                print("----------- >>>>>>>>   mongo body_landmarks updated:", image_id)
+            else:
+                # get encoding_id for mongo insert_one
+                encoding_id_results = session.query(Encodings.encoding_id).filter(Encodings.image_id == image_id).first()
+                encoding_id = encoding_id_results[0]
+                mongo_collection.insert_one(
+                    {"image_id": image_id, "encoding_id":encoding_id, "body_landmarks": pickle.dumps(body_landmarks)}
+                )
+                print("----------- >>>>>>>>   mongo body_landmarks inserted:", image_id)
 
-        ### save normalized landmarks                
+        ### save normalized landmarks, will always be None if reprocessing, because no nose_pixel_pos?        
         if n_landmarks:
-            bboxnormed_collection.update_one(
-                {"image_id": image_id},
-                {"$set": {"nlms": pickle.dumps(n_landmarks)}},
-                upsert=True
-            )
-            print("----------- >>>>>>>>   mongo n_landmarks updated:", image_id)
+            print("because n_landmarks, storing them", n_landmarks)
+            existing_entry = bboxnormed_collection.find_one({"image_id": image_id})
+            if existing_entry:
+                bboxnormed_collection.update_one(
+                    {"image_id": image_id},
+                    {"$set": {"nlms": pickle.dumps(n_landmarks)}},
+                    upsert=True
+                )
+                print("----------- >>>>>>>>   mongo n_landmarks updated:", image_id)
+            else:
+                bboxnormed_collection.insert_one(
+                    {"image_id": image_id, "nlms": pickle.dumps(n_landmarks)}
+                )
+                print("----------- >>>>>>>>   mongo n_landmarks inserted:", image_id)
+
 
     if is_hands:
         # save hand landmarks
