@@ -47,7 +47,7 @@ SAVE_ORIG = False
 DRAW_BOX = False
 MINSIZE = 500
 SLEEP_TIME=0
-VERBOSE = True
+VERBOSE = False
 
 # only for triage
 sortfolder ="getty_test"
@@ -109,7 +109,7 @@ MAIN_FOLDER = "/Volumes/SSD4green/images_shutterstock"
 # MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/afripics_v2/images"
 
 # MAIN_FOLDER = "/Volumes/SSD4/images_getty_reDL"
-BATCH_SIZE = 1000 # Define how many from each folder in each batch
+BATCH_SIZE = 10000 # Define how many from each folder in each batch
 LIMIT = 1000
 
 #temp hack to go 1 subfolder at a time
@@ -1848,15 +1848,15 @@ def main():
                         # # # extract site_image_id for adobe and pexels and shutterstock and istock and pond5
                             site_image_id = img.split(".")[0]
 
-                        print("site_image_id", site_image_id)
+                        # print("site_image_id", site_image_id)
                         if site_image_id in results_dict:
                             result = results_dict[site_image_id]
-                            print("is in results", result)
+                            # if VERBOSE: print("is in results", result)
                             # print("in results encoding_id", result.encoding_id)
                             imagepath = os.path.join(folder, img)
                             
-                            if result.encoding_id:
-                                print(f" {site_image_id} has mongo face: {result.mongo_face_landmarks} and mongo body: {result.mongo_body_landmarks}")
+                            # if result.encoding_id:
+                            #     print(f" {site_image_id} has mongo face: {result.mongo_face_landmarks} and mongo body: {result.mongo_body_landmarks}")
                                 # print("the type is: ", type(result.encoding_id))
                                 # print("the type batch_results[0] is: ", type(batch_results[0]))
                                 # find the batch result where the first item is the second item in the tuple
@@ -1865,21 +1865,22 @@ def main():
                                 #         if batch_result.encoding_id == result.encoding_id:
                                 #             print("found it at: ", batch_result)
                                 #             break
-                                if result.mongo_face_landmarks is None and result.mongo_body_landmarks is None:
-                                    # processing faces for the first time
-                                    print("************** no face or body landmarks - processing faces for the first time")
-                                    task = (result.image_id, imagepath)
-                                elif result.mongo_face_landmarks == 0 and result.mongo_body_landmarks is None:
-                                    # no face, but need to check for body
-                                    print("************** no face landmarks but going to check for body")
-                                    task = (result.image_id, imagepath, result.mongo_face_landmarks, result.mongo_body_landmarks, None)
-                                else:
-                                    print("************** already has face landmarks")
-                                    task = None
+                                # if result.mongo_face_landmarks is None and result.mongo_body_landmarks is None:
+                                #     # processing faces for the first time
+                                #     print("************** no face or body landmarks - processing faces for the first time")
+                                #     task = (result.image_id, imagepath)
+                                # elif result.mongo_face_landmarks == 0 and result.mongo_body_landmarks is None:
+                                #     # no face, but need to check for body
+                                #     print("************** no face landmarks but going to check for body")
+                                #     task = (result.image_id, imagepath, result.mongo_face_landmarks, result.mongo_body_landmarks, None)
+                                # else:
+                                #     print("************** already has face landmarks")
+                                #     task = None
 
                                 # print(" first item are: ", batch_results[0])
                                 # print(batch_results[result.site_image_id])
-                            elif not result.encoding_id:
+                            
+                            if not result.encoding_id:
                                 # if it hasn't been encoded yet, add it to the tasks
                                 task = (result.image_id, imagepath)
                                 print(">> adding to face queue:", result.image_id, "site_image_id", site_image_id)
@@ -1888,30 +1889,35 @@ def main():
                                 print(">>>> adding to BODY queue:", result.image_id, "site_image_id", site_image_id)
                                 task = (result.image_id, imagepath, result.mongo_face_landmarks, result.mongo_body_landmarks, result.bbox)
                             elif result.mongo_face_landmarks and result.mongo_body_landmarks is not None:
-                                print("xx ALREADY FULLY DONE:", result.image_id)
+                                print("     xx ALREADY FULLY DONE:", result.image_id)
+                                task = None
+                            elif result.mongo_face_landmarks == 0 and result.mongo_body_landmarks == 1:
+                                print("     xxxx ALREADY FULLY DONE:", result.image_id)
+                                task = None
+                            elif result.mongo_face_landmarks == 0 and result.mongo_body_landmarks == 0:
+                                print("     xxxx ALREADY FULLY DONE - nobody here:", result.image_id)
                                 task = None
                             elif result.mongo_face_landmarks is None and result.mongo_body_landmarks is None:
-                                print("~~ no face, needs is_face_no_lms do_over:", result.image_id, imagepath, result.mongo_face_landmarks, result.mongo_body_landmarks, result.bbox)
+                                print("~~ no face, adding to face queue for is_face_no_lms do_over:", result.image_id, imagepath, result.mongo_face_landmarks, result.mongo_body_landmarks, result.bbox)
                                 # for the integrated version, this will do both
-                                # task = (result.image_id, imagepath, result.mongo_face_landmarks, result.mongo_body_landmarks, result.bbox)                            
-                                task = None
+                                task = (result.image_id, imagepath)
                             elif result.mongo_face_landmarks == 0 and result.mongo_body_landmarks is None:
                                 print("~~~~ no face, do body without bbox:", result.image_id, imagepath, result.mongo_face_landmarks, result.mongo_body_landmarks, result.bbox)
                                 # for the integrated version, this will do both
-                                # task = (result.image_id, imagepath, result.mongo_face_landmarks, result.mongo_body_landmarks, result.bbox)                            
-                                task = None
+                                task = (result.image_id, imagepath, result.mongo_face_landmarks, result.mongo_body_landmarks, None)
                             else:
                                 # skips BOTH 1) face and body have been encoded 2) no face was detected -- these should be rerun to find the body only
                                 print(" ?  something is wacky, skipping:", result.image_id, imagepath, result.mongo_face_landmarks, result.mongo_body_landmarks, result.bbox)
                                 task = None
                             # print(task)
-                            if task:
+                            if task is not None:
                                 tasks_to_accomplish.put(task)
                                 this_count += 1
                         else: 
                             print("not in results_dict, WTF: ", site_image_id)
                         images_left_to_process = images_left_to_process -1 
-                        if images_left_to_process < 500: print(f"no. images_left_to_process: {images_left_to_process}")
+                        if VERBOSE: 
+                            if images_left_to_process < 500: print(f"no. images_left_to_process: {images_left_to_process}")
 
                     # print total count for this batch
                     print(f"######### total task count for this batch: {str(this_count)}")
