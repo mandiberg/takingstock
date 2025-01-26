@@ -47,7 +47,7 @@ SAVE_ORIG = False
 DRAW_BOX = False
 MINSIZE = 500
 SLEEP_TIME=0
-VERBOSE = True
+VERBOSE = False
 
 # only for triage
 sortfolder ="getty_test"
@@ -98,7 +98,7 @@ MAIN_FOLDER = "/Volumes/SSD4green/images_shutterstock"
 # MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/afripics_v2/images"
 
 # MAIN_FOLDER = "/Volumes/SSD4/images_getty_reDL"
-BATCH_SIZE = 1000 # Define how many from each folder in each batch
+BATCH_SIZE = 20000 # Define how many from each folder in each batch
 LIMIT = 10000
 
 #temp hack to go 1 subfolder at a time
@@ -1078,7 +1078,7 @@ def save_body_hands_mysql_and_mongo(session, image_id, image, bbox_dict, body_la
                 if VERBOSE: print(f"bbox_dict[OBJ_CLS_ID][bbox]: {bbox_dict[OBJ_CLS_ID]['bbox']}")
                 if VERBOSE: print(f"bbox_dict[OBJ_CLS_ID][conf]: {bbox_dict[OBJ_CLS_ID]['conf']}")
                 if VERBOSE: print("bbox_n_key:", bbox_n_key)
-                if VERBOSE: print(f"bbox_dict[bbox_n_key]: {bbox_dict[bbox_n_key]}")
+                # if VERBOSE: print(f"bbox_dict[bbox_n_key]: {bbox_dict[bbox_n_key]}")
 
                 # Set attributes
                 setattr(new_entry_phonebbox, f"bbox_{OBJ_CLS_ID}", bbox_dict[OBJ_CLS_ID]["bbox"])
@@ -1125,7 +1125,6 @@ def save_body_hands_mysql_and_mongo(session, image_id, image, bbox_dict, body_la
         if body_landmarks:
             if VERBOSE: print("storing body_landmarks for image_id", image_id, body_landmarks)
             existing_entry = mongo_collection.find_one({"image_id": image_id})
-            if VERBOSE: print("encoding_id", encoding_id, "image_id", image_id)
             if existing_entry:
                 mongo_collection.update_one(
                     {"image_id": image_id},
@@ -1136,6 +1135,7 @@ def save_body_hands_mysql_and_mongo(session, image_id, image, bbox_dict, body_la
                 # get encoding_id for mongo insert_one
                 encoding_id_results = session.query(Encodings.encoding_id).filter(Encodings.image_id == image_id).first()
                 encoding_id = encoding_id_results[0]
+                if VERBOSE: print("encoding_id", encoding_id, "image_id", image_id)
                 mongo_collection.insert_one(
                     {"image_id": image_id, "encoding_id":encoding_id, "body_landmarks": pickle.dumps(body_landmarks)}
                 )
@@ -1143,7 +1143,7 @@ def save_body_hands_mysql_and_mongo(session, image_id, image, bbox_dict, body_la
 
         ### save normalized landmarks, will always be None if reprocessing, because no nose_pixel_pos?        
         if n_landmarks:
-            print("because n_landmarks, storing them", n_landmarks)
+            if VERBOSE: print("because n_landmarks, storing them", n_landmarks)
             existing_entry = bboxnormed_collection.find_one({"image_id": image_id})
             if existing_entry:
                 bboxnormed_collection.update_one(
@@ -1686,7 +1686,7 @@ def main():
                         # # # extract site_image_id for adobe and pexels and shutterstock and istock and pond5
                             site_image_id = img.split(".")[0]
 
-                        print("site_image_id", site_image_id)
+                        # print("site_image_id", site_image_id)
                         if site_image_id in results_dict:
                             result = results_dict[site_image_id]
                             # print("in results", result)
@@ -1695,23 +1695,39 @@ def main():
                             if not result.encoding_id:
                                 # if it hasn't been encoded yet, add it to the tasks
                                 task = (result.image_id, imagepath)
+                                print(">> adding to face queue:", result.image_id, "site_image_id", site_image_id)
                             elif result.mongo_face_landmarks and result.mongo_body_landmarks is None:
                                 # if face has been encoded but not body, add it to the tasks
+                                print(">>>> adding to BODY queue:", result.image_id, "site_image_id", site_image_id)
                                 task = (result.image_id, imagepath, result.mongo_face_landmarks, result.mongo_body_landmarks, result.bbox)
+                            elif result.mongo_face_landmarks and result.mongo_body_landmarks is not None:
+                                print("xx ALREADY FULLY DONE:", result.image_id)
+                                task = None
+                            elif result.mongo_face_landmarks is None and result.mongo_body_landmarks is None:
+                                print("~~ no face, needs is_face_no_lms do_over:", result.image_id, imagepath, result.mongo_face_landmarks, result.mongo_body_landmarks, result.bbox)
+                                # for the integrated version, this will do both
+                                # task = (result.image_id, imagepath, result.mongo_face_landmarks, result.mongo_body_landmarks, result.bbox)                            
+                                task = None
+                            elif result.mongo_face_landmarks == 0 and result.mongo_body_landmarks is None:
+                                print("~~~~ no face, do body without bbox:", result.image_id, imagepath, result.mongo_face_landmarks, result.mongo_body_landmarks, result.bbox)
+                                # for the integrated version, this will do both
+                                # task = (result.image_id, imagepath, result.mongo_face_landmarks, result.mongo_body_landmarks, result.bbox)                            
+                                task = None
                             else:
                                 # skips BOTH 1) face and body have been encoded 2) no face was detected -- these should be rerun to find the body only
-                                print(">>>> something is wacky, skipping:", result.image_id, imagepath, result.mongo_face_landmarks, result.mongo_body_landmarks, result.bbox)
+                                print(" ?  something is wacky, skipping:", result.image_id, imagepath, result.mongo_face_landmarks, result.mongo_body_landmarks, result.bbox)
                                 task = None
-                            print(task)
+                            # print(task)
                             if task:
                                 tasks_to_accomplish.put(task)
                                 this_count += 1
                         else: 
-                            print("not in results_dict, will process: ", site_image_id)
+                            print("not in results_dict, WTF: ", site_image_id)
                         images_left_to_process = images_left_to_process -1 
                         if images_left_to_process < 500: print(f"no. images_left_to_process: {images_left_to_process}")
 
-
+                    # print total count for this batch
+                    print(f"######### total task count for this batch: {str(this_count)}")
 
                     for w in range(NUMBER_OF_PROCESSES):
                         p = Process(target=do_job, args=(tasks_to_accomplish, tasks_that_are_done))

@@ -56,8 +56,15 @@ WHERE sbi.mongo_tokens IS NOT NULL
 
 SELECT *
 FROM Images i 
-WHERE i.image_id = 119736667
+WHERE i.site_image_id = 120486602
+AND i.site_name_id = 1
 ;
+
+SELECT *
+FROM Images i 
+WHERE i.image_id = 120486602
+;
+
 
 SELECT *
 FROM ImagesTopics
@@ -73,7 +80,7 @@ limit 100
 
 SELECT * 
 FROM Encodings e 
-Where e.image_id = 342942
+Where e.image_id = 92110735
 ;
 
 
@@ -141,10 +148,13 @@ AND it.topic_id IN (16, 17, 18, 23, 24, 45, 53)  AND i.no_image IS NULL
 LIMIT 10;
 
 
-SELECT DISTINCT i.image_id, i.site_name_id, i.contentUrl, i.imagename, e.encoding_id, i.site_image_id, e.face_landmarks, e.bbox 
+SELECT *
 FROM Images i LEFT JOIN Encodings e ON i.image_id = e.image_id 
 LEFT JOIN ImagesTopics_isnotface it ON i.image_id = it.image_id 
-WHERE e.encoding_id IS NOT NULL AND e.is_face = 0 AND e.mongo_encodings is NULL AND e.two_noses is NULL AND i.no_image IS NULL 
+-- WHERE e.encoding_id IS NOT NULL AND e.is_face = 0 AND e.mongo_encodings is NULL AND e.two_noses is NULL AND i.no_image IS NULL 
+ WHERE e.is_face =0 AND e.mongo_encodings =1
+ AND e.two_noses is NULL AND i.no_image IS NULL
+
 AND i.site_name_id = 1 
 LIMIT 10;
 
@@ -165,18 +175,19 @@ AND it.topic_id IN (16, 17, 18, 23, 24, 45, 53)  AND i.no_image IS NULL
 
 SELECT COUNT(image_id)
 FROM SegmentBig_isnotface
-WHERE site_name_id = 2
+WHERE site_name_id = 1
 ;
 
 SELECT COUNT(i.image_id)
 FROM Images i LEFT JOIN Encodings e ON i.image_id = e.image_id
 -- JOIN ImagesTopics_isnotface it ON i.image_id = it.image_id
--- WHERE e.is_face IS NULL AND e.mongo_encodings IS NULL 
+ WHERE e.mongo_face_landmarks = 0 and e.mongo_body_landmarks =1
+ AND e.two_noses is NULL AND i.no_image IS NULL
 -- WHERE e.encoding_id IS NULL AND i.no_image IS NOT NULL AND i.site_name_id = 1
 -- WHERE e.encoding_id IS NOT NULL AND e.is_face = 0 AND e.mongo_encodings = 0  AND e.mongo_face_landmarks =0 AND e.is_face_no_lms =0  AND i.site_name_id = 2
 -- WHERE e.encoding_id IS NOT NULL AND e.is_face = 0 AND e.mongo_encodings IS NULL  AND e.mongo_face_landmarks IS NULL AND e.is_face_no_lms IS NULL  AND i.site_name_id = 2
-WHERE e.encoding_id IS NOT NULL AND e.bbox IS NULL AND e.mongo_encodings =1 AND e.is_body IS NULL AND  e.two_noses is NULL AND i.no_image IS NULL AND i.site_name_id = 2
-
+-- WHERE e.encoding_id IS NOT NULL AND e.bbox IS NULL AND e.mongo_encodings =1 AND e.is_body IS NULL AND  e.two_noses is NULL AND i.no_image IS NULL AND i.site_name_id = 2
+AND i.site_name_id = 1
 ;
 
 
@@ -209,10 +220,15 @@ AND i.site_name_id = 1 AND i.no_image IS NULL LIMIT 10;
 
 UPDATE Encodings e
 LEFT JOIN Images i ON i.image_id = e.image_id
-SET mongo_encodings = NULL, mongo_face_landmarks = NULL
-WHERE e.encoding_id IS NOT NULL AND e.is_face = 0 AND e.mongo_encodings = 0 AND e.mongo_face_landmarks = 0 AND e.is_face_no_lms IS NULL AND i.site_name_id = 2
-
+SET mongo_body_landmarks = NULL, mongo_body_landmarks_norm = NULL
+WHERE e.image_id IS IN (86303767, 91972371, 110909759, 110670144, 90208240, 102427604, 96938026, 111412588, 99975295, 91909404, 81547830, 81013631, 86718515, 100771829, 83851306, 95276322, 82551708, 82548226, 97666234, 82642022, 91104436, 98469045, 98681345, 85730262, 94355450, 91015131, 93024618, 100159338, 85134075, 98248509, 109287491, 93397406, 94333326, 113050785, 92919166, 88780660, 82507432, 80837394, 86343104, 112276729, 100585240, 96697646, 109711423, 112917132, 101984427, 102921676, 88839942, 109722850, 97058720, 109380372, 114234936, 102948367, 103510282, 113985494, 84115912, 90971409, 91882288, 113284622, 96153969, 89013027, 87053621, 88849079, 113130745, 113085253, 111286693, 97871029, 97094775, 80887432)
 ;
+
+SELECT *
+FROM encodings e 
+WHERE e.image_id = 97666234
+;
+
 
 SELECT COUNT(e.encoding_id)
 FROM encodings
