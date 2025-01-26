@@ -1889,14 +1889,18 @@ def main():
                                 print(">>>> adding to BODY queue:", result.image_id, "site_image_id", site_image_id)
                                 task = (result.image_id, imagepath, result.mongo_face_landmarks, result.mongo_body_landmarks, result.bbox)
                             elif result.mongo_face_landmarks and result.mongo_body_landmarks is not None:
-                                print("     xx ALREADY FULLY DONE:", result.image_id)
+                                if VERBOSE: print("     xx ALREADY FULLY DONE:", result.image_id)
                                 task = None
                             elif result.mongo_face_landmarks == 0 and result.mongo_body_landmarks == 1:
-                                print("     xxxx ALREADY FULLY DONE:", result.image_id)
+                                if VERBOSE: print("     xxxx ALREADY FULLY DONE:", result.image_id)
                                 task = None
                             elif result.mongo_face_landmarks == 0 and result.mongo_body_landmarks == 0:
-                                print("     xxxx ALREADY FULLY DONE - nobody here:", result.image_id)
+                                if VERBOSE: print("     xxxx ALREADY FULLY DONE - nobody here:", result.image_id)
                                 task = None
+                            elif result.mongo_face_landmarks is None and result.mongo_body_landmarks == 1 and result.bbox is not None:
+                                print("~?~ WEIRD no face, but bbox:", result.image_id, imagepath, result.mongo_face_landmarks, result.mongo_body_landmarks, result.bbox)
+                                # for the integrated version, this will do both
+                                task = (result.image_id, imagepath)
                             elif result.mongo_face_landmarks is None and result.mongo_body_landmarks is None:
                                 print("~~ no face, adding to face queue for is_face_no_lms do_over:", result.image_id, imagepath, result.mongo_face_landmarks, result.mongo_body_landmarks, result.bbox)
                                 # for the integrated version, this will do both
