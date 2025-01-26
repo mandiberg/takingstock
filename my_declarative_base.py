@@ -76,6 +76,12 @@ class Images(Base):
         release_name_id = Column(Integer, ForeignKey('model_release.release_name_id'))
         model_release = relationship("Model_Release")
 
+class WanderingImages(Base):
+    __tablename__ = 'wanderingimages'
+    wandering_image_id      = Column(Integer, primary_key=True, autoincrement=True)
+    wandering_name_site_id  = Column(String(50), nullable=False)
+    site_image_id  = Column(String(50))
+    site_name_id  = Column(Integer, ForeignKey('site.site_name_id'))
 
 class Keywords(Base):
     __tablename__ = 'keywords'

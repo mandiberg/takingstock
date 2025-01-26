@@ -23,7 +23,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.orm import relationship
 from sqlalchemy.ext.declarative import declarative_base
 # my ORM
-from my_declarative_base import Base, Images, Keywords, Counters, SegmentTable, SegmentBig_isnotface, ImagesKeywords, ImagesBackground, Encodings, PhoneBbox, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON
+from my_declarative_base import Base, Images, WanderingImages, Keywords, Counters, SegmentTable, SegmentBig_isnotface, ImagesKeywords, ImagesBackground, Encodings, PhoneBbox, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON
 
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.pool import NullPool
@@ -1813,7 +1813,7 @@ def main():
                             # adding in mongo stuff. should return NULL if not there
                             batch_query = session.query(Images.image_id, Images.site_image_id, Images.imagename, Encodings.encoding_id, Encodings.mongo_face_landmarks, Encodings.mongo_body_landmarks, Encodings.bbox) \
                                                 .outerjoin(Encodings, Images.image_id == Encodings.image_id) \
-                                                .filter(Images.site_image_id.in_(batch_site_image_ids), Images.site_name_id == site_name_id)
+                                                .filter(Images.site_image_id.in_(batch_site_image_ids), Images.site_name_id == site_name_id, Images.no_image.isnot(True))
                             batch_results = batch_query.all()
 
                             all_results.extend(batch_results)
@@ -1914,13 +1914,25 @@ def main():
                                 tasks_to_accomplish.put(task)
                                 this_count += 1
                         else: 
-                            print("not in results_dict, WTF: ", site_image_id)
+                            # store site_image_id and SITE_NAME_ID in WanderingImages table
+                            wandering_name_site_id = site_image_id+"."+str(SITE_NAME_ID)
+                            existing_entry = session.query(WanderingImages).filter_by(wandering_name_site_id=wandering_name_site_id).first()
+                            if not existing_entry:
+                                print("wandering image, not in results_dict: ", site_image_id)
+                                new_wandering_entry = WanderingImages(wandering_name_site_id=wandering_name_site_id, site_image_id=site_image_id, site_name_id=SITE_NAME_ID)
+                                session.add(new_wandering_entry)
+                                session.commit()
+                            else:
+                                if VERBOSE: print(f"Entry already exists for wandering_name_site_id: {wandering_name_site_id}")
+                                pass
+
                         images_left_to_process = images_left_to_process -1 
                         if VERBOSE: 
                             if images_left_to_process < 500: print(f"no. images_left_to_process: {images_left_to_process}")
 
                     # print total count for this batch
                     print(f"######### total task count for this batch: {str(this_count)}")
+                    print("just stored wandering images")
 
                     for w in range(NUMBER_OF_PROCESSES):
                         p = Process(target=do_job, args=(tasks_to_accomplish, tasks_that_are_done))
