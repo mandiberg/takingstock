@@ -59,6 +59,7 @@ http="https://media.gettyimages.com/photos/"
 # if so, also change the site_name_id etc around line 930
 IS_FOLDER = True
 
+# these only matter if SQL (not folder)
 DO_OVER = True
 FIND_NO_IMAGE = True
 # OVERRIDE_PATH = False
@@ -1325,7 +1326,13 @@ def process_image_bodylms(task):
     if VERBOSE: print("task is: ",task)
     image_id = task[0] ### is it enc or image_id
     if task[4] is not None:
-        bbox = io.unstring_json(task[4])
+        if type(task[4]) == str:
+            bbox = io.unstring_json(task[4])
+        elif type(task[4]) == dict:
+            bbox = task[4]
+        else:
+            print("no bbox for this task", task)
+            bbox = None
     else:
         print("no bbox for this task", task)
         bbox = None
@@ -1921,11 +1928,14 @@ def main():
                             # store site_image_id and SITE_NAME_ID in WanderingImages table
                             wandering_name_site_id = site_image_id+"."+str(SITE_NAME_ID)
                             existing_entry = session.query(WanderingImages).filter_by(wandering_name_site_id=wandering_name_site_id).first()
-                            if not existing_entry:
+                            if not existing_entry and not ("-id" in wandering_name_site_id):
                                 print("wandering image, not in results_dict: ", site_image_id)
-                                new_wandering_entry = WanderingImages(wandering_name_site_id=wandering_name_site_id, site_image_id=site_image_id, site_name_id=SITE_NAME_ID)
-                                session.add(new_wandering_entry)
-                                session.commit()
+                                try:
+                                    new_wandering_entry = WanderingImages(wandering_name_site_id=wandering_name_site_id, site_image_id=site_image_id, site_name_id=SITE_NAME_ID)
+                                    session.add(new_wandering_entry)
+                                    session.commit()
+                                except:
+                                    print("failed to store wandering image,", wandering_name_site_id)
                             else:
                                 if VERBOSE: print(f"Entry already exists for wandering_name_site_id: {wandering_name_site_id}")
                                 pass
