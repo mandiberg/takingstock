@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, select, delete
+from sqlalchemy import create_engine, select, delete, distinct
 from sqlalchemy.orm import sessionmaker,scoped_session
 from sqlalchemy.pool import NullPool
 from sqlalchemy import and_, or_, func
@@ -58,8 +58,8 @@ io = DataIO()
 db = io.db
 # io.db["name"] = "ministock"
 
-VERBOSE = True
-SegmentHelper_name = 'SegmentHelper_jan13_isnotface_getty'
+VERBOSE = False
+SegmentHelper_name = 'SegmentHelper_jan30_ALLgetty4faces'
 TOKEN_COUNT_PATH = "token_counts.csv"
 
 # Create a database engine
@@ -79,8 +79,12 @@ session = scoped_session(sessionmaker(bind=engine))
 mongo_client = pymongo.MongoClient("mongodb://localhost:27017/")
 mongo_db = mongo_client["stock"]
 # mongo_collection = mongo_db["tokens"]
-# currently set up to do the segmentbig_isnoface
-mongo_collection = mongo_db["tokens_noface"]
+
+# this is for the segmentbig_isnoface
+# mongo_collection = mongo_db["tokens_noface"]
+
+# this is for GETTY only
+mongo_collection = mongo_db["tokens_gettyonly"]
 
 # create a stemmer object for preprocessing
 stemmer = SnowballStemmer('english')
@@ -122,8 +126,8 @@ options = ['Create helper table', 'Fetch keywords list and make tokens', 'Fetch 
            ]
 option, index = pick(options, title)
 
-LIMIT= 1000000
-START_ID = 0
+LIMIT= 3000000
+START_ID = 30000
 MAXID = 150000000
 
 # Initialize the counter
@@ -457,6 +461,7 @@ def prune_table(image_id, lock, session):
     # print("processed: ",image_id)
 
 def preprocess_keywords(task, lock,session):
+    if VERBOSE: print("preprocess_keywords, this task: ", task)
     target_image_id = task[0]
     IS_NOT_FACE = task[1]
     ambig_key_dict = { "black-and-white": "black_and_white", "black and white background": "black_and_white background", "black and white portrait": "black_and_white portrait", "black amp white": "black_and_white", "white and black": "black_and_white", "black and white film": "black_and_white film", "black and white wallpaper": "black_and_white wallpaper", "black and white cover photos": "black_and_white cover photos", "black and white outfit": "black_and_white outfit", "black and white city": "black_and_white city", "blackandwhite": "black_and_white", "black white": "black_and_white", "black friday": "black_friday", "black magic": "black_magic", "black lives matter": "black_lives_matter black_ethnicity", "black out tuesday": "black_out_tuesday black_ethnicity", "black girl magic": "black_girl_magic black_ethnicity", "beautiful black women": "beautiful black_ethnicity women", "black model": "black_ethnicity model", "black santa": "black_ethnicity santa", "black children": "black_ethnicity children", "black history": "black_ethnicity history", "black family": "black_ethnicity family", "black community": "black_ethnicity community", "black owned business": "black_ethnicity owned business", "black holidays": "black_ethnicity holidays", "black models": "black_ethnicity models", "black girl bullying": "black_ethnicity girl bullying", "black santa claus": "black_ethnicity santa claus", "black hands": "black_ethnicity hands", "black christmas": "black_ethnicity christmas", "white and black girl": "white_ethnicity and black_ethnicity girl", "white woman": "white_ethnicity woman", "white girl": "white_ethnicity girl", "white people": "white_ethnicity", "red white and blue": "red_white_and_blue"}
@@ -734,6 +739,9 @@ if index == 0:
     # 12/27/2024, to work with isnotface, change declarative_base to SegmentBig_isnotface, and set IS_NOT_FACE = True
     IS_NOT_FACE = True
 
+    # 1/20/2024 to work with IS_GETTY_ONLY, change declarative_base SegmentBig_isnotface to getty segment name, and set IS_GETTY_ONLY = True
+    IS_GETTY_ONLY = True
+
     # select max image_id from SegmentBig
     if IS_NOT_FACE: max_image_id_query = select(func.max(SegmentBig_isnotface.image_id)).join(Encodings, SegmentBig_isnotface.image_id == Encodings.image_id)
     else: max_image_id_query = select(func.max(SegmentBig.image_id))
@@ -742,7 +750,7 @@ if index == 0:
     print("max image_id, to start from: ", max_image_id)
 
     # this is the regular one to use
-    if IS_NOT_FACE:
+    if IS_NOT_FACE and not IS_GETTY_ONLY:
         print("IS_NOT_FACE is True")
         select_query = select(
             distinct(Images.image_id), Images.site_name_id, Images.site_image_id, 
@@ -752,6 +760,19 @@ if index == 0:
             select_from(Images).\
             outerjoin(SegmentBig_isnotface, Images.image_id == SegmentBig_isnotface.image_id).\
             filter(Images.image_id > max_image_id, Images.image_id < MAXID, SegmentBig_isnotface.is_face == 0).\
+            limit(LIMIT)
+
+    # this is the regular one to use
+    elif IS_GETTY_ONLY:
+        print("IS_GETTY_ONLY is True")
+        select_query = select(
+            distinct(Images.image_id), Images.site_name_id, Images.site_image_id, 
+                Images.contentUrl, Images.imagename, Images.description, Images.age_id, Images.gender_id, Images.location_id,
+                Encodings.face_x, Encodings.face_y, Encodings.face_z, Encodings.mouth_gap,
+                Encodings.bbox).\
+            select_from(Images).\
+            outerjoin(SegmentBig_isnotface, Images.image_id == SegmentBig_isnotface.image_id).\
+            filter(Images.image_id > max_image_id, Images.image_id < MAXID).\
             limit(LIMIT)
 
     else:
@@ -839,9 +860,12 @@ elif index == 1:
 
     # 1/13/2025, to work with isnotface, use SegmentBig_isnotface, and set IS_NOT_FACE = True
     IS_NOT_FACE = True
+    # 1/20/2024 to work with IS_GETTY_ONLY, change declarative_base SegmentBig_isnotface to getty segment name, and set IS_GETTY_ONLY = True
+    IS_GETTY_ONLY = True
 
     ################FETCHING KEYWORDS AND CREATING TOKENS #################
     if IS_NOT_FACE:
+        print("IS_NOT_FACE is True")
         distinct_image_ids_query = select(SegmentBig_isnotface.image_id.distinct()).filter(SegmentBig_isnotface.mongo_tokens == None, SegmentBig_isnotface.no_image == None, SegmentBig_isnotface.image_id > START_ID).limit(LIMIT)
     else:
         distinct_image_ids_query = select(SegmentBig.image_id.distinct()).filter(SegmentBig.mongo_tokens == None, SegmentBig.image_id > START_ID).limit(LIMIT)

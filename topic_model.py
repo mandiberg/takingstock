@@ -9,7 +9,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 # my ORM
-from my_declarative_base import Base, Images, SegmentBig, Topics,Topics_isnotface, ImagesTopics, ImagesTopics_isnotface, ImagesTopics_isnotface_isfacemodel, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON, ForeignKey
+from my_declarative_base import Base, Images, SegmentBig, Topics,Topics_isnotface, ImagesTopics, ImagesTopics_isnotface, ImagesTopics_isnotface_isfacemodel, imagestopics_ALLgetty4faces_isfacemodel, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON, ForeignKey
 import pymongo
 
 from sqlalchemy.exc import IntegrityError
@@ -77,13 +77,14 @@ io.ROOT = "/Users/michaelmandiberg/Documents/GitHub/facemap/model_files"
 
 # Satyam, you want to set this to False
 USE_SEGMENT = False
-USE_BIGSEGMENT = True
-IS_NOT_FACE = True # this is to make the model for images that are not one face
+USE_BIGSEGMENT = False
+IS_GETTYONLY = True
+IS_NOT_FACE = True # this turns of the xyz angle filter for faces pointing forward and returns all images
 USE_EXISTING_MODEL = True
 VERBOSE = False
 RANDOM = False
 global_counter = 0
-QUERY_LIMIT = 10000
+QUERY_LIMIT = 100000 
 query_start_counter = 0 # only used in write image topics
 # started at 9:45PM, Feb 17
 
@@ -142,48 +143,53 @@ if IS_NOT_FACE and not USE_EXISTING_MODEL:
     mongo_collection = mongo_db['tokens_noface']
     topics_table = "topics_isnotface"
     images_topics_table = "imagestopics_isnotface"
+    SegmentTable = SegmentBig
+    SegmentTable_name = 'SegmentBig_isnotface'
+elif IS_GETTYONLY and USE_EXISTING_MODEL:
+    mongo_collection = mongo_db['tokens_gettyonly']
+    topics_table = "topics"
+    images_topics_table = "imagestopics_ALLgetty4faces_isfacemodel"
+    SegmentTable = SegmentBig
+    SegmentTable_name = 'SegmentBig_ALLgetty4faces'
 elif IS_NOT_FACE and USE_EXISTING_MODEL:
     mongo_collection = mongo_db['tokens_noface']
     topics_table = "topics"
     images_topics_table = "imagestopics_isnotface_isfacemodel"
+    SegmentTable = SegmentBig
+    SegmentTable_name = 'SegmentBig_isnotface'
 else:
     mongo_collection = mongo_db['tokens']
     topics_table = "topics"
     images_topics_table = "imagestopics"
-
-if USE_BIGSEGMENT:
-    if IS_NOT_FACE:
-        SegmentTable = SegmentBig
-        SegmentTable_name = 'SegmentBig_isnotface'
-    else:
+    if USE_BIGSEGMENT:
         SegmentTable = SegmentBig
         SegmentTable_name = 'SegmentBig_isface'
-else:
-    # this is prob redundant, and could be replaced by calling the SegmentTable object from Base
-    SegmentTable_name = 'SegmentOct20'
+    else:
+        # this is prob redundant, and could be replaced by calling the SegmentTable object from Base
+        SegmentTable_name = 'SegmentOct20'
 
-    # to create new SegmentTable with variable as name
-    class SegmentTable(Base):
-        __tablename__ = SegmentTable_name
+        # to create new SegmentTable with variable as name
+        class SegmentTable(Base):
+            __tablename__ = SegmentTable_name
 
-        image_id = Column(Integer, primary_key=True)
-        site_name_id = Column(Integer)
-        site_image_id = Column(String(50))
-        contentUrl = Column(String(300), nullable=False)
-        imagename = Column(String(200))
-        description = Column(String(150))
-        face_x = Column(DECIMAL(6, 3))
-        face_y = Column(DECIMAL(6, 3))
-        face_z = Column(DECIMAL(6, 3))
-        mouth_gap = Column(DECIMAL(6, 3))
-        face_landmarks = Column(BLOB)
-        bbox = Column(JSON)
-        face_encodings = Column(BLOB)
-        face_encodings68 = Column(BLOB)
-        site_image_id = Column(String(50), nullable=False)
-        keyword_list = Column(BLOB)  # Pickled list
-        tokenized_keyword_list = Column(BLOB)  # Pickled list
-        ethnicity_list = Column(BLOB)  # Pickled list
+            image_id = Column(Integer, primary_key=True)
+            site_name_id = Column(Integer)
+            site_image_id = Column(String(50))
+            contentUrl = Column(String(300), nullable=False)
+            imagename = Column(String(200))
+            description = Column(String(150))
+            face_x = Column(DECIMAL(6, 3))
+            face_y = Column(DECIMAL(6, 3))
+            face_z = Column(DECIMAL(6, 3))
+            mouth_gap = Column(DECIMAL(6, 3))
+            face_landmarks = Column(BLOB)
+            bbox = Column(JSON)
+            face_encodings = Column(BLOB)
+            face_encodings68 = Column(BLOB)
+            site_image_id = Column(String(50), nullable=False)
+            keyword_list = Column(BLOB)  # Pickled list
+            tokenized_keyword_list = Column(BLOB)  # Pickled list
+            ethnicity_list = Column(BLOB)  # Pickled list
 
 
 ambig_key_dict = { "black-and-white": "black_and_white", "black and white background": "black_and_white background", "black and white portrait": "black_and_white portrait", "black amp white": "black_and_white", "white and black": "black_and_white", "black and white film": "black_and_white film", "black and white wallpaper": "black_and_white wallpaper", "black and white cover photos": "black_and_white cover photos", "black and white outfit": "black_and_white outfit", "black and white city": "black_and_white city", "blackandwhite": "black_and_white", "black white": "black_and_white", "black friday": "black_friday", "black magic": "black_magic", "black lives matter": "black_lives_matter black_ethnicity", "black out tuesday": "black_out_tuesday black_ethnicity", "black girl magic": "black_girl_magic black_ethnicity", "beautiful black women": "beautiful black_ethnicity women", "black model": "black_ethnicity model", "black santa": "black_ethnicity santa", "black children": "black_ethnicity children", "black history": "black_ethnicity history", "black family": "black_ethnicity family", "black community": "black_ethnicity community", "black owned business": "black_ethnicity owned business", "black holidays": "black_ethnicity holidays", "black models": "black_ethnicity models", "black girl bullying": "black_ethnicity girl bullying", "black santa claus": "black_ethnicity santa claus", "black hands": "black_ethnicity hands", "black christmas": "black_ethnicity christmas", "white and black girl": "white_ethnicity and black_ethnicity girl", "white woman": "white_ethnicity woman", "white girl": "white_ethnicity girl", "white people": "white_ethnicity", "red white and blue": "red_white_and_blue"}
@@ -221,7 +227,7 @@ def set_query():
         print("assigning topics without any segment")
         # assigning topics
         # I'm not sure how this is different from USE_BIGSEGMENT
-        WHERE = f" tokenized_keyword_list IS NOT NULL AND image_id NOT IN (SELECT image_id FROM {images_topics_table})"
+        WHERE = f" mongo_tokens = 1 AND image_id NOT IN (SELECT image_id FROM {images_topics_table})"
 
     WHERE += f" AND image_id > {query_start_counter} "
 
@@ -360,7 +366,19 @@ def write_imagetopics(resultsjson,lda_model_tfidf,dictionary):
         else:
             index3, score3 = None, None
 
-        if IS_NOT_FACE and not USE_EXISTING_MODEL:            
+        if IS_GETTYONLY:            
+            if VERBOSE: print("IS_GETTYONLY")
+            imagestopics_entry=imagestopics_ALLgetty4faces_isfacemodel(
+                image_id=row["image_id"],
+                topic_id=index,
+                topic_score=score,
+                topic_id2=index2,
+                topic_score2=score2,
+                topic_id3=index3,
+                topic_score3=score3
+            )
+        elif IS_NOT_FACE and not USE_EXISTING_MODEL:            
+            if VERBOSE: print("IS_NOT_FACE and USE_EXISTING_MODEL")
             imagestopics_entry=ImagesTopics_isnotface(
                 image_id=row["image_id"],
                 topic_id=index,
@@ -371,7 +389,7 @@ def write_imagetopics(resultsjson,lda_model_tfidf,dictionary):
                 topic_score3=score3
             )
         elif IS_NOT_FACE and USE_EXISTING_MODEL:            
-            # print("IS_NOT_FACE and USE_EXISTING_MODEL")
+            if VERBOSE: print("IS_NOT_FACE and USE_EXISTING_MODEL")
             imagestopics_entry=ImagesTopics_isnotface_isfacemodel(
                 image_id=row["image_id"],
                 topic_id=index,
@@ -382,6 +400,7 @@ def write_imagetopics(resultsjson,lda_model_tfidf,dictionary):
                 topic_score3=score3
             )
         else:
+            if VERBOSE: print("REGULAR")
             imagestopics_entry=ImagesTopics(
                 image_id=row["image_id"],
                 topic_id=index,

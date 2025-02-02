@@ -52,7 +52,7 @@ ORDER BY
 
 
 
--- segment only
+-- segment only THIS IS VERY OLD
    
 SELECT
     so.site_name_id,
