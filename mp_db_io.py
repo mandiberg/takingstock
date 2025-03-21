@@ -238,11 +238,18 @@ class DataIO:
         sort = sort.lower()  # Convert to lowercase to make the comparison case-insensitive
         print("getting folders", sort)
         subfolders = [f.path for f in os.scandir(folder) if f.is_dir()]
+        print("subfolders", subfolders)
         if sort == "alphabetical":
             subfolders.sort()  # Sort alphabetically
             print("sorted alphabetically", subfolders)
         elif sort == "chronological":
-            subfolders.sort(key=os.path.getmtime)
+            subfolders_dict = {}
+            # subfolders.sort(key=os.path.getmtime)
+            for i in range(len(subfolders)):
+                key = subfolders[i].split("_")[-1]
+                subfolders_dict[key] = subfolders[i]
+            keys = sorted(subfolders_dict.keys())
+            subfolders = [subfolders_dict[key] for key in keys]
             print("sorted by date", subfolders)
         return subfolders
 

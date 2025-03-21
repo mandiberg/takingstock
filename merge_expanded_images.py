@@ -6,6 +6,8 @@ import pandas as pd
 # mine
 from mp_db_io import DataIO
 import re
+from moviepy import *
+from moviepy import VideoFileClip, AudioFileClip
 
 
 
@@ -19,7 +21,7 @@ db = io.db
 IS_CLUSTER = True
 
 # are we making videos or making merged stills?
-IS_VIDEO = False
+IS_VIDEO = True
 IS_METAS_AUDIO = True
 ALL_ONE_VIDEO = True
 LOWEST_DIMS = True
@@ -40,7 +42,7 @@ ROOT_FOLDER_PATH = '/Volumes/OWC4/segment_images'
 # FOLDER_NAME ="cluster20_0_face_cradle_sept26/giga/face_frame"
 # FOLDER_NAME = "topic17_business_fusion_test"
 # FOLDER_NAME = "cluster1_21_phone_sept24production/silverphone_sept24_production/down/giga"
-FOLDER_NAME = "topic34_success_dec29run"
+FOLDER_NAME = "topic32_128d_FINAL"
 FOLDER_PATH = os.path.join(ROOT_FOLDER_PATH,FOLDER_NAME)
 DIRS = ["1x1", "4x3", "16x10"]
 OUTPUT = os.path.join(io.ROOTSSD, "audioproduction")
@@ -201,6 +203,7 @@ def save_merge(merged_image, count, cluster_no, handpose_no, FOLDER_PATH):
 def get_img_list_subfolders(subfolders):
     all_img_path_list = []
     for subfolder_path in subfolders:
+        print("subfolder_path", subfolder_path)
         img_list = io.get_img_list(subfolder_path)
         img_list.sort()
         img_path_list = []
@@ -272,31 +275,37 @@ def crop_images(img_array, subfolder_path=None):
 
 
 def write_video(img_array, FRAMERATE=15, subfolder_path=None):
-    # Check if the ROOT folder exists, create it if not
-    # print("subfolder_path")
-    # print(subfolder_path)
-    # img_array = io.get_img_list(subfolder_path)
-    # print(img_array)
-
     # Get the dimensions of the first image in the array
     cluster_no, image_path = get_path(subfolder_path, img_array)
     img = cv2.imread(image_path)
     height, width, _ = img.shape
 
-    # IS_METAS_AUDIO
-    audio_file = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/audioproduction/multitrack_mixdown_offset_32.wav"
-
     # Define the codec and create VideoWriter object
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
     video_path = os.path.join(FOLDER_PATH, FOLDER_NAME.replace("/","_")+cluster_no+".mp4")
+    print("video_path", video_path)
     video_writer = cv2.VideoWriter(video_path, fourcc, FRAMERATE, (width, height))
 
-    # Iterate over the image array and write frames to the video
+    # Write frames to the video - this should happen in all cases
+    for filename in img_array:
+        if subfolder_path:
+            image_path = os.path.join(subfolder_path, filename)
+        else:
+            image_path = filename
+        print(image_path)
+        img = cv2.imread(image_path)
+        video_writer.write(img)
 
+    # Release the video writer and close the video file
+    video_writer.release()
+    print(f"Video saved at: {video_path}")
+
+    # Add audio to the video if needed
     if IS_METAS_AUDIO:
-
-        # Add audio to the video
-        audio_file = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/audioproduction/multitrack_mixdown_offset_32.wav"
+        audio_file = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/audioproduction/multitrack_mixdown_offset_32.71.wav"
+        print("Adding audio to video...")
+        print("video_path", video_path)
+        print("audio_file", audio_file)
         
         # Load video and audio using moviepy
         video_clip = VideoFileClip(video_path)
@@ -309,24 +318,10 @@ def write_video(img_array, FRAMERATE=15, subfolder_path=None):
         final_video_path = video_path.replace(".mp4", "_with_audio.mp4")
         final_clip.write_videofile(final_video_path, codec="libx264", audio_codec="aac")
         
-        print(f"Video saved at: {final_video_path}")
-        
-    else:
-        for filename in img_array:
-            if subfolder_path:
-                image_path = os.path.join(subfolder_path, filename)
-            else:
-                image_path = filename
-            print(image_path)
-            img = cv2.imread(image_path)
-            video_writer.write(img)
-
-        # Release the video writer and close the video file
-        video_writer.release()
-
-        print(f"Video saved at: {video_path}")
-
-
+        print(f"Video with audio saved at: {final_video_path}")
+        return final_video_path
+    
+    return video_path
 
 def main():
     print("starting merge_expanded_images.py")
@@ -334,6 +329,7 @@ def main():
         subfolders = io.get_folders(FOLDER_PATH, SORT_ORDER)
         print("subfolders", subfolders)
         if IS_VIDEO is True and ALL_ONE_VIDEO is True:
+            print("making regular combined video")
             all_img_path_list = get_img_list_subfolders(subfolders)
             write_video(all_img_path_list, FRAMERATE)
 
