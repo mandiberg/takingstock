@@ -2,15 +2,39 @@ import cv2
 import numpy as np
 import os
 import math
+import sys
+
+# mine
+sys.path.insert(1, '/Users/michaelmandiberg/Documents/GitHub/facemap/')
+from mp_db_io import DataIO
+
+# I/O utils
+io = DataIO()
+SORT_ORDER = "Chronological"
+ROOT_FOLDER_PATH = '/Volumes/OWC4/segment_images'
+FOLDER_NAME = "topic32_128d_FINAL"
+FOLDER_PATH = os.path.join(ROOT_FOLDER_PATH,FOLDER_NAME)
+
 
 def get_image_paths(root_folder):
     """Get all jpg image paths from the root folder and its subfolders."""
-    image_paths = []
-    for root, _, files in os.walk(root_folder):
+    all_image_paths = []
+    folder_image_paths = []
+    subfolders = io.get_folders(root_folder, SORT_ORDER)
+    print(f"subfolders: {subfolders}")
+    # for root, _, files in os.walk(root_folder):
+    for folder in subfolders:
+        print(f"Scanning folder: {folder}")
+        files = os.listdir(folder)
+        # print(f"Files: {files}")
+        # print(f"type of files: {type(files)}")
         for file in files:
             if file.lower().endswith('.jpg'):
-                image_paths.append(os.path.join(root, file))
-    return sorted(image_paths)
+                folder_image_paths.append(os.path.join(root_folder, folder, file))
+        all_image_paths.extend(sorted(folder_image_paths))
+        folder_image_paths = []
+    # return sorted(image_paths)
+    return all_image_paths
 
 def process_image(image_path, target_size):
     """Open and resize an image using cv2."""
@@ -44,19 +68,19 @@ def create_composite(images, rows, cols, img_size):
 
 def main():
     # Constants
-    ROOT_FOLDER = '/Volumes/OWC4/segment_images/topic32_128d_FINAL'
-    IMG_SIZE = 200
-    ROWS = 80
-    COLS = 65
+    # FOLDER_PATH = '/Volumes/OWC4/segment_images/topic32_128d_FINAL'
+    IMG_SIZE = 100
+    ROWS = 66
+    COLS = 112
     IMAGES_PER_COMPOSITE = ROWS * COLS
-    OUTPUT_DIR = os.path.join(ROOT_FOLDER,'composite_output')
+    OUTPUT_DIR = os.path.join(FOLDER_PATH,'composite_output')
     
     # Create output directory if it doesn't exist
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     
     # Get all image paths
     print("Scanning for images...")
-    image_paths = get_image_paths(ROOT_FOLDER)
+    image_paths = get_image_paths(FOLDER_PATH)
     total_images = len(image_paths)
     print(f"Found {total_images} images")
     
@@ -76,6 +100,7 @@ def main():
             if i % 100 == 0:  # Progress update every 100 images
                 print(f"Processing image {i + 1} of {end_idx - start_idx}")
             processed_img = process_image(path, IMG_SIZE)
+            print(f"Processed {path}")
             if processed_img is not None:
                 processed_images.append(processed_img)
         
