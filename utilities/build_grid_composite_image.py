@@ -69,9 +69,9 @@ def create_composite(images, rows, cols, img_size):
 def main():
     # Constants
     # FOLDER_PATH = '/Volumes/OWC4/segment_images/topic32_128d_FINAL'
-    IMG_SIZE = 100
-    ROWS = 66
-    COLS = 112
+    IMG_SIZE = 400
+    ROWS = 15
+    COLS = 20
     IMAGES_PER_COMPOSITE = ROWS * COLS
     OUTPUT_DIR = os.path.join(FOLDER_PATH,'composite_output')
     

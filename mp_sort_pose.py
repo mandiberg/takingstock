@@ -31,7 +31,6 @@ class SortPose:
         self.mp_drawing = mp.solutions.drawing_utils
         self.get_bg_segment=mp.solutions.selfie_segmentation.SelfieSegmentation()  
               
-
         #maximum allowable distance between encodings (this accounts for dHSV)
         self.MAXDIST = 1.8
         self.MAXFACEDIST = .8
@@ -76,6 +75,18 @@ class SortPose:
             self.DUPED = self.BODY_DUPE_DIST
             self.FACE_DIST_TEST = .02
             self.CHECK_DESC_DIST = 45
+        elif self.SORT_TYPE == "planar_hands_USE_ALL":
+            # designed to take everything
+            self.MIND = 1000
+            self.MAXD = 1000
+            self.MULTIPLIER = 1
+            self.DUPED = 1
+            self.FACE_DIST_TEST = -1
+            self.CHECK_DESC_DIST = -1
+            self.HSV_DELTA_MAX = 1000            
+            self.FACE_DUPE_DIST = -1
+            self.BODY_DUPE_DIST = -1
+    
 
 
         self.INPAINT=INPAINT
@@ -2393,7 +2404,7 @@ class SortPose:
         # If no landmarks, return 63 zeros (21 points * 3 dimensions)
         # print("extract_landmarks self.SUBSET_LANDMARKS", self.SUBSET_LANDMARKS)
         if not landmarks:
-            print(f"extract_landmarks no landmarks {landmarks}")
+            # print(f"extract_landmarks no landmarks {landmarks}")
             if self.CLUSTER_TYPE == "FingertipsPositions":
                 return [0.0] * len(self.SUBSET_LANDMARKS)
             else:
@@ -2416,7 +2427,7 @@ class SortPose:
         # assign the subset of landmarks to the flat_landmarks_subset
         if self.CLUSTER_TYPE == "FingertipsPositions":
             flat_landmarks = [flat_landmarks[i] for i in self.SUBSET_LANDMARKS]
-        print("flat_landmarks_subset", flat_landmarks)
+        # print("flat_landmarks_subset", flat_landmarks)
         return flat_landmarks
 
     def split_landmarks_to_columns(self, df, left_col="left_hand_world_landmarks", right_col="right_hand_world_landmarks", structure="cols"):

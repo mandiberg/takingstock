@@ -32,8 +32,8 @@ MOVE_DELETE_ORIGINAL = False
 # PATH = "/Volumes/SSD4green/images_shutterstock2"
 # NEWPATH = "/Volumes/RAID54/images_shutterstock"
 
-PATH = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/images_pixcy"
-NEWPATH = "/Volumes/RAID18/images_pixcy"
+PATH = "/Volumes/SSD4/images_getty_reDL_test_redundant"
+NEWPATH = "/Volumes/RAID18/images_getty"
 
 ALL_IN_ONE_FOLDER = False
 
@@ -141,7 +141,8 @@ def threaded_process_files():
         newpathfile = os.path.join(NEWPATH, a, b, newfile)
 
         if os.path.exists(newpathfile):
-            print("file exists, skipping: ", newpathfile)
+            pass
+            # print("file exists, skipping: ", newpathfile)
             # remove newpathfile from hard drive
             # os.remove(newpathfile)
             # print("could remove: ", currentpathfile)
@@ -150,7 +151,7 @@ def threaded_process_files():
                 shutil.move(currentpathfile, newpathfile)
                 print("moved to: ", newpathfile)
             else:
-                shutil.copy(currentpathfile, newpathfile)
+                shutil.copy(currentpathfile,  newpathfile)
                 print("copied (w/o deleting) to: ", newpathfile)
 
 

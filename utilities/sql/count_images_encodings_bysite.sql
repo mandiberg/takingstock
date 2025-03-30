@@ -9,7 +9,6 @@ SET GLOBAL innodb_buffer_pool_size=8053063680;
 SELECT
     i.site_name_id,
     COUNT(i.image_id) AS image_count,
-    COUNT(e.encoding_id) AS encoding_count,
     SUM(e.is_face) AS is_face_count,
 FROM
     Images i
@@ -323,7 +322,8 @@ ORDER BY
    
    
 -- matrix of fusion poses
-   
+-- GOOD GOOD GOOD Mar 22 2025
+-- generates a 32 x 128 grid of position x gesture cluster counts   
    
 SELECT 
     ihp.cluster_id AS ihp_cluster,  -- Row: ImagesHandsPoses cluster_id
@@ -464,7 +464,7 @@ JOIN
 JOIN 
     ImagesHandsGestures ihg ON ihg.image_id = so.image_id
 JOIN ImagesTopics it ON it.image_id = so.image_id
-WHERE it.topic_id = 22
+WHERE it.topic_id = 32
 GROUP BY 
     ihp.cluster_id  -- Group by ImagesHandsPoses cluster_id to create rows
 ORDER BY 
