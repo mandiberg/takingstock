@@ -7,7 +7,7 @@ import math
 # Add facemap to the path
 sys.path.insert(1, '/Users/michaelmandiberg/Documents/GitHub/facemap/')
 from mp_db_io import DataIO
-IS_SSD = True
+IS_SSD = False
 
 def trim_bottom(img, file_path):
     trim = 0
@@ -155,7 +155,7 @@ def read_csv_and_build_paths():
     io = DataIO(IS_SSD)
     
     # Path to the CSV file
-    csv_path = '/Users/michaelmandiberg/Documents/projects-active/facemap_production/image_grids/HEFTbook/image_file_list.csv'
+    csv_path = '/Users/michaelmandiberg/Documents/projects-active/facemap_production/image_grids/HEFTbook/image_file_list_32_bodies.csv'
     
     # List to store full file paths
     full_paths = []

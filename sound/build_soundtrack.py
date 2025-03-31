@@ -14,7 +14,7 @@ from mp_db_io import DataIO
 
 
 
-TOPIC=23 # what folder are the files in?
+TOPIC=32 # what folder are the files in?
 
 CSV_FILE = f"metas_{TOPIC}.csv"
 SOUND_FOLDER = "tts_files_test"
@@ -25,7 +25,7 @@ SOUND_FOLDER = "tts_files_test"
 # start = time.time()
 ######Michael's folders##########
 io = DataIO()
-INPUT = os.path.join(io.ROOTSSD, "audioproduction")
+INPUT = io.ROOTSSD # folder that holds SOUND_FOLDER and audiopduction folders
 #################################
 
 ######Satyam's folders###########
@@ -36,7 +36,7 @@ INPUT = os.path.join(io.ROOTSSD, "audioproduction")
 # prefixed = [filename for filename in os.listdir('.') if filename.startswith("prefix")]
 
 # Read all rows from the CSV file
-df = pd.read_csv(os.path.join(INPUT,CSV_FILE))
+df = pd.read_csv(os.path.join(INPUT, "audioproduction",CSV_FILE))
 # sound_files_dict_image_id = io.get_existing_image_ids_from_wavs(INPUT,full_path=True)
 
 # # Initialize lists to store audio data for each channel
@@ -56,7 +56,13 @@ CHUNK_SIZE = 500  # Adjust this value based on your system's capabilities
 # meta=16000
 ##########
 # Offset/delay between each sample (in seconds)
-OFFSET = 0.0743 # T23
+OFFSET_DICT = {
+    23: 0.0743, # T23
+    32: 0.069, # T32
+    37: 0.077, # T37
+}
+
+OFFSET = OFFSET_DICT.get(TOPIC, 0.0743) # Default to T23 if not found
 
 # OFFSET = 0.071 # T32
 
@@ -563,10 +569,10 @@ def merge_audio(combined_audio, chunk_audio_without_silence):
 
 def main():
     io = DataIO()
-    INPUT = os.path.join(io.ROOTSSD, "audioproduction")
+    # INPUT = os.path.join(io.ROOTSSD, "audioproduction") # commenting out bc defined at top
     
     # Read the CSV file in chunks
-    chunks = pd.read_csv(os.path.join(INPUT, CSV_FILE), chunksize=CHUNK_SIZE)
+    chunks = pd.read_csv(os.path.join(INPUT, "audioproduction", CSV_FILE), chunksize=CHUNK_SIZE)
     
     existing_files = io.get_img_list(os.path.join(INPUT, SOUND_FOLDER))
     existing_files = {os.path.basename(f).split("_")[0]:f for f in existing_files}

@@ -73,6 +73,15 @@ AND (e.is_face = 1 OR e.is_body = 1)
 AND it.topic_id = 32
 ;
 
+-- topic only, bodies as t distance
+SELECT i.site_name_id, i.imagename
+FROM Images i 
+JOIN encodings 	e ON i.image_id = e.image_id
+JOIN ImagesTopics it ON it.image_id = e.image_id
+WHERE i.site_name_id = 1
+AND e.is_face = 1 AND e.is_body = 1
+AND it.topic_id = 32
+LIMIT 100
 
 
 SELECT *
