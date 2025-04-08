@@ -48,6 +48,10 @@ ORDER BY
     so.site_name_id;
 
 
+SELECT COUNT(so.image_id) AS image_count
+FROM Images so 
+;
+
 
 
 

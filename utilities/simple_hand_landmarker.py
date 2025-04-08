@@ -19,7 +19,7 @@ detector = vision.HandLandmarker.create_from_options(options)
 
 # STEP 3: Load the input image.
 # image_path = "/Volumes/OWC4/segment_images/cluster13_2_for_lms_testing/237174.jpg"
-image_path = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/hand_tests/95634.jpg"
+image_path = "/Users/michaelmandiberg/Library/CloudStorage/Dropbox/Mandiberg-Tender/book_assets/pages_32-23/510651670-gigapixel-2x_crop.jpg"
 image = mp.Image.create_from_file(image_path)
 
 # STEP 4: Detect hand landmarks from the input image.
@@ -36,6 +36,7 @@ def draw_landmarks_on_image(rgb_image, detection_result):
     for idx in range(len(hand_landmarks_list)):
         hand_landmarks = hand_landmarks_list[idx]
         handedness = handedness_list[idx]
+        print(f"Handedness: {handedness[0].category_name}")
 
         # Draw the hand landmarks.
         hand_landmarks_proto = landmark_pb2.NormalizedLandmarkList()

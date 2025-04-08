@@ -80,7 +80,6 @@ def process_image(image_path, mode="face", landmark_thickness=1, connection_thic
             h, w = annotated_image.shape[:2]
             for landmarks in landmark_list:
                 cx, cy = int(landmarks.landmark[1].x * w), int(landmarks.landmark[1].y * h)
-                cv2.circle(annotated_image, (cx, cy), nose_circle_radius, (0, 0, 255), -1) # Draw red circle on nose
                 for connection in connections:
                     mp.solutions.drawing_utils.draw_landmarks(
                         image=annotated_image,
@@ -89,15 +88,20 @@ def process_image(image_path, mode="face", landmark_thickness=1, connection_thic
                         landmark_drawing_spec=None,
                         connection_drawing_spec=drawing_spec,
                     )
+                cv2.circle(annotated_image, (cx, cy), nose_circle_radius, (0, 0, 255), -1) # Draw red circle on nose
         else:
             for landmarks in [landmark_list] if mode == "body" else landmark_list:
                 for connection in connections:
+                    connection_drawing_spec = mp.solutions.drawing_utils.DrawingSpec(
+                        thickness=connection_thickness,
+                        color=(0, 0, 0)  # Green color for edges
+                    )
                     mp.solutions.drawing_utils.draw_landmarks(
                         image=annotated_image,
                         landmark_list=landmarks,
                         connections=connection,
                         landmark_drawing_spec=None,
-                        connection_drawing_spec=drawing_spec,
+                        connection_drawing_spec=connection_drawing_spec,
                     )
 
     base_name, extension = os.path.splitext(image_path)
@@ -113,11 +117,11 @@ def process_image(image_path, mode="face", landmark_thickness=1, connection_thic
         landmark_processor.close()
 
 if __name__ == "__main__":
-    image_path = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/hand_tests/19882612.jpg"  # Replace with your image path
+    image_path = "/Users/michaelmandiberg/Library/CloudStorage/Dropbox/Mandiberg-Tender/book_assets/pages_54-55/X-40--20_Y-5-5_Z-5-5_ct56055_00001_102539874_giga2x.jpg"  # Replace with your image path
     mode = "face"  # Choose "face", "body", or "hands"
     landmark_thickness = 20
-    connection_thickness = 2
-    nose_circle_radius = 5
+    connection_thickness = 3
+    nose_circle_radius = 15
 
     if os.path.exists(image_path):
         process_image(image_path, mode, landmark_thickness, connection_thickness, nose_circle_radius)

@@ -81,7 +81,7 @@ JOIN ImagesTopics it ON it.image_id = e.image_id
 WHERE i.site_name_id = 1
 AND e.is_face = 1 AND e.is_body = 1
 AND it.topic_id = 32
-LIMIT 100
+LIMIT 5000
 
 
 SELECT *

@@ -12,7 +12,7 @@ from mp_db_io import DataIO
 io = DataIO()
 SORT_ORDER = "Chronological"
 ROOT_FOLDER_PATH = '/Volumes/OWC4/segment_images'
-FOLDER_NAME = "topic32_128d_FINAL"
+FOLDER_NAME = "cluster13_2_1417"
 FOLDER_PATH = os.path.join(ROOT_FOLDER_PATH,FOLDER_NAME)
 
 
@@ -69,9 +69,9 @@ def create_composite(images, rows, cols, img_size):
 def main():
     # Constants
     # FOLDER_PATH = '/Volumes/OWC4/segment_images/topic32_128d_FINAL'
-    IMG_SIZE = 400
-    ROWS = 15
-    COLS = 20
+    IMG_SIZE = 100
+    ROWS = 70
+    COLS = 132
     IMAGES_PER_COMPOSITE = ROWS * COLS
     OUTPUT_DIR = os.path.join(FOLDER_PATH,'composite_output')
     
