@@ -58,7 +58,7 @@ CHUNK_SIZE = 500  # Adjust this value based on your system's capabilities
 # Offset/delay between each sample (in seconds)
 OFFSET_DICT = {
     23: 0.0743, # T23
-    32: 0.069, # T32
+    32: 0.0697, # T32
     37: 0.077, # T37
 }
 
@@ -479,7 +479,7 @@ def process_audio_chunk(chunk_df, existing_files, input_folder, start_index, chu
             # if len(loud_counter) is odd pan left, if even pan right
             # trying to alternate the loud audio from side to side
             if channel_counter % 2 == 1:
-                pan = np.random.uniform(-1, -0)
+                pan = np.random.uniform(-1, 0)
             else: 
                 pan = np.random.uniform(0, 1)
             channel_counter += 1
