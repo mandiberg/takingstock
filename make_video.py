@@ -44,6 +44,7 @@ db = io.db
 # This is for when you only have the segment table. RW SQL query
 IS_SEGONLY= True
 
+
 HSV_CONTROL = False # defining so it doesn't break below, if commented out
 # This tells it to pull luminosity. Comment out if not using
 if HSV_CONTROL: HSV_BOUNDS = {"LUM_MIN": 0, "LUM_MAX": 40, "SAT_MIN": 0, "SAT_MAX": 1000, "HUE_MIN": 0, "HUE_MAX": 360}
@@ -117,7 +118,7 @@ IS_TOPICS = False
 N_TOPICS = 64
 
 IS_ONE_TOPIC = True
-TOPIC_NO = [11]
+TOPIC_NO = [32]
 #######################
 
 #######################
@@ -132,10 +133,20 @@ TOPIC_NO = [11]
 # 7 is surprise
 #  is yoga << planar,  planar,  fingers crossed
 
+ONE_SHOT = True # take all files, based off the very first sort order.
+EXPAND = False # expand with white, as opposed to inpaint and crop
+JUMP_SHOT = True # jump to random file if can't find a run (I don't think this applies to planar?)
+USE_ALL = False # this is for outputting all images from a oneshot, forces ONE_SHOT
+
+
 # SORT_TYPE = "128d"
 # SORT_TYPE ="planar"
 # SORT_TYPE = "planar_body"
 SORT_TYPE = "planar_hands"
+if SORT_TYPE == "planar_hands" and USE_ALL:
+    SORT_TYPE = "planar_hands_USE_ALL"
+    ONE_SHOT = True
+
 NORMED_BODY_LMS = True
 
 MOUTH_GAP = 0
@@ -146,9 +157,6 @@ DO_OBJ_SORT = True
 OBJ_DONT_SUBSELECT = False # False means select for OBJ. this is a flag for selecting a specific object type when not sorting on obj
 PHONE_BBOX_LIMITS = [1] # this is an attempt to control the BBOX placement. I don't think it is going to work, but with non-zero it will make a bigger selection. Fix this hack TK. 
 
-ONE_SHOT = True # take all files, based off the very first sort order.
-EXPAND = False # expand with white, as opposed to inpaint and crop
-JUMP_SHOT = True # jump to random file if can't find a run (I don't think this applies to planar?)
 
 if not GENERATE_FUSION_PAIRS:
     print("not generating FUSION_PAIRS, pulling from list")
@@ -176,12 +184,20 @@ if not GENERATE_FUSION_PAIRS:
         # [30,10], [30,86] # thumbs up
         # [2,80], [7,51], [7,54], [7,57], [7,120], [12,27], [12,118] # arms crossed
 
-        # 34 Success
-        [11,3], [15,25], [15,28], [15,37], [15,38], [15,53], [15,55], [15,92], [1,113], [21,0], [21,116], [21,68], [30,110], [30,28], [30,37], [30,38], [30,53], [30,55], [30,6], [30,81], [6,115], [6,37], [6,38], [6,6], [6,81], [9,30]
+        # # 34 Success
+        # [11,3], [15,25], [15,28], [15,37], [15,38], [15,53], [15,55], [15,92], [1,113], [21,0], [21,116], [21,68], [30,110], [30,28], [30,37], [30,38], [30,53], [30,55], [30,6], [30,81], [6,115], [6,37], [6,38], [6,6], [6,81], [9,30]
 
         # Stressed single
         # [21, 30],
         # [21, 68]
+
+        # # topic 32, T64, ihp128
+        # Book example
+        # [21, 112],
+        # [21, 109],
+        # [21, 84],
+        [21, 55]
+        
 
         # # topic 32, T64, ihp128
         # # hands over face
@@ -916,7 +932,7 @@ def prep_encodings_NN(df_segment):
                 sort_column = "body_landmarks_array"
                 source_col = "body_landmarks_normalized"
                 # source_col_2 = None
-        elif SORT_TYPE == "planar_hands":
+        elif SORT_TYPE == "planar_hands" or SORT_TYPE == "planar_hands_USE_ALL":
             source_col = sort_column = "hand_landmarks"
             # source_col = None
             # source_col_2 = "right_hand_landmarks_norm"

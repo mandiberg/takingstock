@@ -6,8 +6,6 @@ import pandas as pd
 # mine
 from mp_db_io import DataIO
 import re
-from moviepy import *
-from moviepy import VideoFileClip, AudioFileClip
 
 
 
@@ -21,9 +19,15 @@ db = io.db
 IS_CLUSTER = True
 
 # are we making videos or making merged stills?
-IS_VIDEO = True
-IS_METAS_AUDIO = True
-ALL_ONE_VIDEO = True
+IS_METAS_AUDIO = ALL_ONE_VIDEO = False
+IS_VIDEO = False
+if IS_VIDEO:
+    IS_METAS_AUDIO = True
+    from moviepy import *
+    from moviepy import VideoFileClip, AudioFileClip
+    ALL_ONE_VIDEO = True
+
+
 LOWEST_DIMS = True
 SORT_ORDER = "Chronological"
 DO_RATIOS = False
@@ -42,7 +46,7 @@ ROOT_FOLDER_PATH = '/Volumes/OWC4/segment_images'
 # FOLDER_NAME ="cluster20_0_face_cradle_sept26/giga/face_frame"
 # FOLDER_NAME = "topic17_business_fusion_test"
 # FOLDER_NAME = "cluster1_21_phone_sept24production/silverphone_sept24_production/down/giga"
-FOLDER_NAME = "topic32_128d_FINAL"
+FOLDER_NAME = "heft_book_example_gestures"
 FOLDER_PATH = os.path.join(ROOT_FOLDER_PATH,FOLDER_NAME)
 DIRS = ["1x1", "4x3", "16x10"]
 OUTPUT = os.path.join(io.ROOTSSD, "audioproduction")
@@ -361,7 +365,7 @@ def main():
             cat_metas.to_csv(output_path, index=False)
         else:
             for subfolder_path in subfolders:
-                # print(subfolder_path)
+                print("images subfolder_path", subfolder_path)
                 merged_image, count, cluster_no, handpose_no = merge_images(subfolder_path)
                 if count == 0:
                     print("no images here")
