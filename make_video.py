@@ -133,7 +133,7 @@ TOPIC_NO = [22,15,47,20,11,31]
 # 7 is surprise
 #  is yoga << planar,  planar,  fingers crossed
 
-ONE_SHOT = True # take all files, based off the very first sort order.
+ONE_SHOT = False # take all files, based off the very first sort order.
 EXPAND = False # expand with white, as opposed to inpaint and crop
 JUMP_SHOT = True # jump to random file if can't find a run (I don't think this applies to planar?)
 USE_ALL = False # this is for outputting all images from a oneshot, forces ONE_SHOT
@@ -431,7 +431,7 @@ elif IS_SEGONLY and io.platform == "darwin":
     # WHERE += " AND e.encoding_id > 2612275"
 
     # WHERE = "s.site_name_id != 1"
-    LIMIT = 250
+    LIMIT = 25
 
     # TEMP TK TESTING
     # WHERE += " AND s.site_name_id = 8"
@@ -1459,6 +1459,7 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
         # print(parent_row)
 
         print('-- linear_test_df [-] in loop, index is', str(index))
+        print("row", row)
         # if VERBOSE: print(row["body_landmarks"])
         # select the row in df_segment where the imagename == row['filename']
         try:
@@ -1469,12 +1470,32 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
             # print(outpath, open_path)
             try:
                 img = cv2.imread(open_path)
+
+                # for testing, draw in points
+                # list(range(20)
+                landmarks_2d = sort.get_landmarks_2d(row['left_hand_landmarks'], list(range(21)), "list")
+                landmarks_2d2 = sort.get_landmarks_2d(row['right_hand_landmarks'], list(range(21)), "list")
+                landmarks_2d = landmarks_2d + landmarks_2d2
+                print("landmarks_2d before drawing", landmarks_2d)
+                # transpose x and y in the landmarks    
+                img = sort.draw_point(img, landmarks_2d, index = 0)
+                # img = sort.draw_point(img, [.25,.25,.5,.5], index = 0)
+                
+                # cv2.imshow("img", img)
+
+                # cv2.waitKey(0)
+                # cv2.destroyAllWindows()
+
                 if row["site_name_id"] in [2,9]: 
                     if VERBOSE: print("shutter alamy trimming at the bottom")
                     img = trim_bottom(img, row["site_name_id"])
             except:
                 print("trim failed")
                 continue
+
+
+
+
             if row['dist'] < sort.MAXD:
                 # compare_images to make sure they are face and not the same
                 # last_image is cv2 np.array

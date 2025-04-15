@@ -147,12 +147,14 @@ class SortPose:
             # just fingertips
             self.CLUSTER_TYPE = "fingertips_positions" # fingertips_positions
             self.SUBSET_LANDMARKS = self.HAND_LMS_POINTER
+            self.SORT_TYPE = "planar_hands"
         elif "hands" in self.SORT_TYPE:
             # catches any hands
             self.CLUSTER_TYPE = "planar_hands"
             self.SUBSET_LANDMARKS = self.HAND_LMS
         else:
             self.CLUSTER_TYPE = "BodyPoses" # defaults
+            self.SUBSET_LANDMARKS = self.BODY_LMS
             # TBD for DEFAULT LMS SUBSET
 
         print("final set of subset landmarks", self.SUBSET_LANDMARKS)
@@ -1802,11 +1804,14 @@ class SortPose:
         # nose_2d = self.get_face_2d_point(faceLms,1)
         print("landmarks_2d", landmarks_2d)
         img_h, img_w = image.shape[:2]
+        img_h2, img_w2 = int(img_h/2), int(img_w/2)
         points = zip(landmarks_2d[1::2],landmarks_2d[::2])
+        # cv2.circle(image,(img_w2,img_h2),14,(0,0,255),-1)
 
         for point in points:
-            x, y = int(point[0]*(img_w-300)), int(point[1]*(img_h-300))
-            cv2.circle(image,(y,x),4,(255,0,0),-1)
+            y, x = int(point[0]*(img_h)), int(point[1]*(img_w))
+            # x, y = int(point[0]*(img_w-300)), int(point[1]*(img_h-300))
+            cv2.circle(image,(x,y),4,(255,0,0),-1)
         return image
     
     def get_closest_df_NN(self, df_enc, df_sorted):
@@ -2433,7 +2438,7 @@ class SortPose:
         # assign the subset of landmarks to the flat_landmarks_subset
         if self.CLUSTER_TYPE == "fingertips_positions":
             flat_landmarks = [flat_landmarks[i] for i in self.SUBSET_LANDMARKS]
-            print("flat_landmarks", flat_landmarks)
+            # print("flat_landmarks", flat_landmarks)
         print("flat_landmarks_subset", flat_landmarks) 
         return flat_landmarks
 
