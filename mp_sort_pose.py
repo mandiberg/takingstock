@@ -48,7 +48,7 @@ class SortPose:
         self.CUTOFF = 10000 # DOES factor if ONE_SHOT
 
         self.CHECK_DESC_DIST = 30
-        self.CLUSTER_TYPE = "BodyPoses" # defaults
+
         self.SORT_TYPE = SORT_TYPE
         if self.SORT_TYPE == "128d":
             self.MIND = self.MINFACEDIST * 1.5
@@ -61,14 +61,7 @@ class SortPose:
             self.MAXD = self.MAXBODYDIST
             self.MULTIPLIER = self.HSVMULTIPLIER * (self.MINBODYDIST / self.MINFACEDIST)
             self.DUPED = self.BODY_DUPE_DIST
-        elif self.SORT_TYPE == "planar_body": 
-            self.MIND = self.MINBODYDIST
-            self.MAXD = self.MAXBODYDIST * 4
-            self.MULTIPLIER = self.HSVMULTIPLIER * (self.MINBODYDIST / self.MINFACEDIST)
-            self.DUPED = self.BODY_DUPE_DIST
-            self.FACE_DIST_TEST = .02
-            self.CHECK_DESC_DIST = 45
-        elif self.SORT_TYPE == "planar_hands": 
+        elif self.SORT_TYPE in ["planar_body", "planar_hands", "fingertips_positions"]: 
             self.MIND = self.MINBODYDIST
             self.MAXD = self.MAXBODYDIST * 4
             self.MULTIPLIER = self.HSVMULTIPLIER * (self.MINBODYDIST / self.MINFACEDIST)
@@ -150,8 +143,19 @@ class SortPose:
         # Hands Positions/Gestures
         self.HANDS_POSITIONS_LMS = self.make_subset_landmarks(0,20)
 
-        self.SUBSET_LANDMARKS = self.HAND_LMS
+        if self.SORT_TYPE == "fingertips_positions":
+            # just fingertips
+            self.CLUSTER_TYPE = "fingertips_positions" # fingertips_positions
+            self.SUBSET_LANDMARKS = self.HAND_LMS_POINTER
+        elif "hands" in self.SORT_TYPE:
+            # catches any hands
+            self.CLUSTER_TYPE = "planar_hands"
+            self.SUBSET_LANDMARKS = self.HAND_LMS
+        else:
+            self.CLUSTER_TYPE = "BodyPoses" # defaults
+            # TBD for DEFAULT LMS SUBSET
 
+        print("final set of subset landmarks", self.SUBSET_LANDMARKS)
         # self.SUBSET_LANDMARKS = self.choose_hand(self.HAND_LMS,"right")
         
 
@@ -333,15 +337,17 @@ class SortPose:
         }
 
 
-    def set_subset_landmarks(self,CLUSTER_TYPE):
-        self.CLUSTER_TYPE = CLUSTER_TYPE
-        if self.CLUSTER_TYPE == "FingertipsPositions":
-            self.SUBSET_LANDMARKS = self.HAND_LMS_POINTER
-        if self.CLUSTER_TYPE in ["HandsPositions","HandsGestures"]:
-            self.SUBSET_LANDMARKS = self.HANDS_POSITIONS_LMS
-            self.SORT_TYPE = "planar_hands"
-        else:
-            self.SUBSET_LANDMARKS = self.HAND_LMS
+    # def set_subset_landmarks(self,CLUSTER_TYPE):
+    #     # called directly from make_video
+    #     self.CLUSTER_TYPE = CLUSTER_TYPE
+    #     if self.CLUSTER_TYPE == "fingertips_positions":
+    #         self.SUBSET_LANDMARKS = self.HAND_LMS_POINTER
+    #     if self.CLUSTER_TYPE in ["HandsPositions","HandsGestures"]:
+    #         self.SUBSET_LANDMARKS = self.HANDS_POSITIONS_LMS
+    #         self.SORT_TYPE = "planar_hands"
+    #     else:
+    #         self.SUBSET_LANDMARKS = self.HAND_LMS
+    #     print(self.CLUSTER_TYPE, "set_subset_landmarks set of subset landmarks", self.SUBSET_LANDMARKS)
 
     def set_cluster_medians(self,cluster_medians):
         self.cluster_medians = cluster_medians
@@ -2405,7 +2411,7 @@ class SortPose:
         # print("extract_landmarks self.SUBSET_LANDMARKS", self.SUBSET_LANDMARKS)
         if not landmarks:
             # print(f"extract_landmarks no landmarks {landmarks}")
-            if self.CLUSTER_TYPE == "FingertipsPositions":
+            if self.CLUSTER_TYPE == "fingertips_positions":
                 return [0.0] * len(self.SUBSET_LANDMARKS)
             else:
                 # print(f"going to return 0s", ([0.0] * 63))
@@ -2425,9 +2431,10 @@ class SortPose:
         # print("flat_landmarks", flat_landmarks)
 
         # assign the subset of landmarks to the flat_landmarks_subset
-        if self.CLUSTER_TYPE == "FingertipsPositions":
+        if self.CLUSTER_TYPE == "fingertips_positions":
             flat_landmarks = [flat_landmarks[i] for i in self.SUBSET_LANDMARKS]
-        # print("flat_landmarks_subset", flat_landmarks)
+            print("flat_landmarks", flat_landmarks)
+        print("flat_landmarks_subset", flat_landmarks) 
         return flat_landmarks
 
     def split_landmarks_to_columns(self, df, left_col="left_hand_world_landmarks", right_col="right_hand_world_landmarks", structure="cols"):
@@ -2437,7 +2444,7 @@ class SortPose:
         right_landmarks = df[right_col].apply(self.extract_landmarks)
         print("split_landmarks_to_columns left_landmarks", left_landmarks)
         if structure == "cols":
-            if self.CLUSTER_TYPE == "FingertipsPositions":
+            if self.CLUSTER_TYPE == "fingertips_positions":
                 col_num = len(self.SUBSET_LANDMARKS)
             else:
                 col_num = 63

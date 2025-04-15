@@ -118,7 +118,7 @@ IS_TOPICS = False
 N_TOPICS = 64
 
 IS_ONE_TOPIC = True
-TOPIC_NO = [32]
+TOPIC_NO = [22,15,47,20,11,31]
 #######################
 
 #######################
@@ -143,6 +143,7 @@ USE_ALL = False # this is for outputting all images from a oneshot, forces ONE_S
 # SORT_TYPE ="planar"
 # SORT_TYPE = "planar_body"
 SORT_TYPE = "planar_hands"
+# SORT_TYPE = "fingertips_positions"
 if SORT_TYPE == "planar_hands" and USE_ALL:
     SORT_TYPE = "planar_hands_USE_ALL"
     ONE_SHOT = True
@@ -163,6 +164,9 @@ if not GENERATE_FUSION_PAIRS:
     FUSION_PAIRS = [
         #CLUSTER_NO, HAND_POSE_NO
 
+
+        # <3 
+        [16,101] #hands making heart shape
 
         # # topic 17 selects
         # [1,5]
@@ -196,7 +200,7 @@ if not GENERATE_FUSION_PAIRS:
         # [21, 112],
         # [21, 109],
         # [21, 84],
-        [21, 55]
+        # [21, 55]
         
 
         # # topic 32, T64, ihp128
@@ -427,7 +431,7 @@ elif IS_SEGONLY and io.platform == "darwin":
     # WHERE += " AND e.encoding_id > 2612275"
 
     # WHERE = "s.site_name_id != 1"
-    LIMIT = 25000
+    LIMIT = 250
 
     # TEMP TK TESTING
     # WHERE += " AND s.site_name_id = 8"
@@ -523,8 +527,8 @@ UPSCALE_MODEL_PATH=os.path.join(os.getcwd(), "models", "FSRCNN_x4.pb")
 # construct my own objects
 sort = SortPose(motion, face_height_output, image_edge_multiplier,EXPAND, ONE_SHOT, JUMP_SHOT, HSV_BOUNDS, VERBOSE,INPAINT, SORT_TYPE, OBJ_CLS_ID,UPSCALE_MODEL_PATH=UPSCALE_MODEL_PATH)
 
-# CLUSTER_TYPE is passed to sort.
-sort.set_subset_landmarks(CLUSTER_TYPE)
+# CLUSTER_TYPE is passed to sort. THIS SEEMS REDUNDANT!!!
+# sort.set_subset_landmarks(CLUSTER_TYPE)
 
 start_img_name = "median"
 start_site_image_id = None
@@ -932,7 +936,7 @@ def prep_encodings_NN(df_segment):
                 sort_column = "body_landmarks_array"
                 source_col = "body_landmarks_normalized"
                 # source_col_2 = None
-        elif SORT_TYPE == "planar_hands" or SORT_TYPE == "planar_hands_USE_ALL":
+        elif SORT_TYPE == "planar_hands" or SORT_TYPE == "planar_hands_USE_ALL" or SORT_TYPE == "fingertips_positions":
             source_col = sort_column = "hand_landmarks"
             # source_col = None
             # source_col_2 = "right_hand_landmarks_norm"
