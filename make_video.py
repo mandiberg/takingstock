@@ -57,10 +57,11 @@ HSV_NORMS = {"LUM": .01, "SAT": 1,  "HUE": 0.002777777778, "VAL": 1}
 
 # this is for controlling if it is using
 # all clusters, 
-IS_VIDEO_FUSION = True
-GENERATE_FUSION_PAIRS = False
+IS_VIDEO_FUSION = True # used for constructing SQL query
+GENERATE_FUSION_PAIRS = False # if true it will query based on MIN_VIDEO_FUSION_COUNT and create pairs
+                                # if false, it will grab the list of pair lists below
 MIN_VIDEO_FUSION_COUNT = 100
-IS_HAND_POSE_FUSION = False
+IS_HAND_POSE_FUSION = False # i'm not sure how this is different from the IS_VIDEO_FUSION
 ONLY_ONE = False
 IS_CLUSTER = False
 if IS_HAND_POSE_FUSION or IS_VIDEO_FUSION:
@@ -133,11 +134,11 @@ TOPIC_NO = [22,15,47,20,11,31]
 # 7 is surprise
 #  is yoga << planar,  planar,  fingers crossed
 
-ONE_SHOT = False # take all files, based off the very first sort order.
+ONE_SHOT = True # take all files, based off the very first sort order.
 EXPAND = False # expand with white, as opposed to inpaint and crop
 JUMP_SHOT = True # jump to random file if can't find a run (I don't think this applies to planar?)
 USE_ALL = False # this is for outputting all images from a oneshot, forces ONE_SHOT
-
+DRAW_TEST_LMS = False # this is for testing the landmarks
 
 # SORT_TYPE = "128d"
 # SORT_TYPE ="planar"
@@ -431,7 +432,7 @@ elif IS_SEGONLY and io.platform == "darwin":
     # WHERE += " AND e.encoding_id > 2612275"
 
     # WHERE = "s.site_name_id != 1"
-    LIMIT = 25
+    LIMIT = 25000
 
     # TEMP TK TESTING
     # WHERE += " AND s.site_name_id = 8"
@@ -530,11 +531,11 @@ sort = SortPose(motion, face_height_output, image_edge_multiplier,EXPAND, ONE_SH
 # CLUSTER_TYPE is passed to sort. THIS SEEMS REDUNDANT!!!
 # sort.set_subset_landmarks(CLUSTER_TYPE)
 
-start_img_name = "median"
-start_site_image_id = None
+# start_img_name = "median"
+# start_site_image_id = None
 
-# start_img_name = "start_image_id"
-# start_site_image_id = 56159379
+start_img_name = "start_image_id"
+start_site_image_id = 3354646
 
 # 9774337 screaming hands to head 10
 # 10528975 phone right hand pose 4
@@ -937,7 +938,8 @@ def prep_encodings_NN(df_segment):
                 source_col = "body_landmarks_normalized"
                 # source_col_2 = None
         elif SORT_TYPE == "planar_hands" or SORT_TYPE == "planar_hands_USE_ALL" or SORT_TYPE == "fingertips_positions":
-            source_col = sort_column = "hand_landmarks"
+            # source_col = sort_column = "hand_landmarks"
+            source_col = sort_column = "right_hand_landmarks_norm"
             # source_col = None
             # source_col_2 = "right_hand_landmarks_norm"
         return sort_column, source_col
@@ -1471,20 +1473,21 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
             try:
                 img = cv2.imread(open_path)
 
-                # for testing, draw in points
-                # list(range(20)
-                landmarks_2d = sort.get_landmarks_2d(row['left_hand_landmarks'], list(range(21)), "list")
-                landmarks_2d2 = sort.get_landmarks_2d(row['right_hand_landmarks'], list(range(21)), "list")
-                landmarks_2d = landmarks_2d + landmarks_2d2
-                print("landmarks_2d before drawing", landmarks_2d)
-                # transpose x and y in the landmarks    
-                img = sort.draw_point(img, landmarks_2d, index = 0)
-                # img = sort.draw_point(img, [.25,.25,.5,.5], index = 0)
-                
-                # cv2.imshow("img", img)
+                if DRAW_TEST_LMS:
+                    # for testing, draw in points
+                    # list(range(20)
+                    landmarks_2d = sort.get_landmarks_2d(row['left_hand_landmarks'], list(range(21)), "list")
+                    landmarks_2d2 = sort.get_landmarks_2d(row['right_hand_landmarks'], list(range(21)), "list")
+                    landmarks_2d = landmarks_2d + landmarks_2d2
+                    print("landmarks_2d before drawing", landmarks_2d)
+                    # transpose x and y in the landmarks    
+                    img = sort.draw_point(img, landmarks_2d, index = 0)
+                    # img = sort.draw_point(img, [.25,.25,.5,.5], index = 0)
+                    
+                    # cv2.imshow("img", img)
 
-                # cv2.waitKey(0)
-                # cv2.destroyAllWindows()
+                    # cv2.waitKey(0)
+                    # cv2.destroyAllWindows()
 
                 if row["site_name_id"] in [2,9]: 
                     if VERBOSE: print("shutter alamy trimming at the bottom")
@@ -1793,7 +1796,8 @@ def main():
             
             df[['left_hand_landmarks', 'left_hand_world_landmarks', 'left_hand_landmarks_norm', 'right_hand_landmarks', 'right_hand_world_landmarks', 'right_hand_landmarks_norm']] = pd.DataFrame(df['hand_results'].apply(sort.prep_hand_landmarks).tolist(), index=df.index)
             print("about to split_landmarks_to_columns,", df.iloc[0])
-            df = sort.split_landmarks_to_columns(df, left_col="left_hand_world_landmarks", right_col="right_hand_world_landmarks", structure="list")
+            # df = sort.split_landmarks_to_columns(df, left_col="left_hand_world_landmarks", right_col="right_hand_world_landmarks", structure="list")
+            df = sort.split_landmarks_to_columns(df, left_col="left_hand_landmarks_norm", right_col="right_hand_landmarks_norm", structure="list")
             print("after split_landmarks_to_columns, ", df.iloc[0])
 
             df['bbox'] = df['bbox'].apply(lambda x: io.unstring_json(x))

@@ -1205,17 +1205,57 @@ class SortPose:
 
             if self.SORT_TYPE == "128d": sort_column = "face_encodings68"
             elif self.SORT_TYPE == "planar_body": sort_column = "body_landmarks_array"
+            # elif self.SORT_TYPE == "planar_hands": sort_column = "hand_landmarks"
             elif self.SORT_TYPE == "planar_hands": sort_column = "hand_landmarks"
 
             print("sort_column", sort_column)
             print(df_enc[sort_column].head())
+            print("lengtth of first value", len(df_enc[sort_column].iloc[0]))
             # Round each value in the face_encodings68 column to 2 decimal places            
             # df_enc['face_encodings68'] = df_enc['face_encodings68'].apply(self.safe_round)
-            df_enc[sort_column] = df_enc[sort_column].apply(lambda x: np.round(x, 1))
+            # df_enc[sort_column] = df_enc[sort_column].apply(lambda x: np.round(x, 1))
 
             # Convert the face_encodings68 column to a list of lists
-            flattened_array = df_enc[sort_column].tolist()            
-            
+            flattened_array = df_enc[sort_column].tolist()     
+            # round each value in flattened_array to 2 decimal places
+            flattened_array = [np.round(x, 1) for x in flattened_array]
+
+
+            # print("flattened_array 0", flattened_array[0])
+            # print("flattened_array 0", type(flattened_array[0]))
+            # print("flattened_array", flattened_array)
+
+            # if type(flattened_array[0]) in [np.ndarray] and len(flattened_array[0][0]) > 1:
+            #     # catching normalized 
+            #     # Flatten the list of lists
+            #     # flattened_array = [item for sublist in flattened_array for item in sublist]
+            #     item_length = None
+            #     formerly_numpy_array = []
+            #     for item in flattened_array:
+            #         formerly_numpy_item = []
+            #         for subitem in item:
+            #             item_length = len(subitem)
+            #             if isinstance(subitem, list):
+            #                 formerly_numpy_item.extend(subitem)
+            #             elif isinstance(subitem, np.ndarray):
+            #                 formerly_numpy_item.extend(subitem.flatten())
+            #             else:
+            #                 formerly_numpy_item.append(subitem)
+            #         # print("flattened_array 1", formerly_numpy_item)
+            #         formerly_numpy_array.append(formerly_numpy_item)
+            #     # print("flattened_array 1", formerly_numpy_array[0])
+            #     # print("flattened_array 1", flattened_array[0])
+            #     # print("flattened_array 1", type(flattened_array[0]))
+            #     # print("flattened_array",flattened_array)
+            #     enc1 = self.most_common_row(formerly_numpy_array)
+            #     # break enc1 back up into numpy arrays of the length item_length
+            #     enc1 = np.array(enc1).reshape(-1, item_length)
+            #     print("enc1", type (enc1)) 
+            #     print("enc1", enc1)
+            #     # quit()
+            #     # now take that list and convert it to a list of lists
+            # else:
+            #     enc1 = self.most_common_row(flattened_array)
             enc1 = self.most_common_row(flattened_array)
             print("get_start_enc_NN most_common_row", enc1)
             # print(dfmode)
@@ -1230,6 +1270,7 @@ class SortPose:
             print(df_enc.head)
             if self.SORT_TYPE == "128d": sort_column = "face_encodings68"
             elif self.SORT_TYPE == "planar_body": sort_column = "body_landmarks_array"
+            # elif self.SORT_TYPE == "planar_hands": sort_column = "hand_landmarks"
             elif self.SORT_TYPE == "planar_hands": sort_column = "hand_landmarks"
             # set enc1 = df_enc value in the self.SORT_TYPE column, for the row where column image_id = self.counter_dict["start_site_image_id"]
             # enc1 = df_enc.loc[df_enc['image_id'] == self.counter_dict["start_site_image_id"], sort_column].to_list()
@@ -1470,6 +1511,7 @@ class SortPose:
             if hsv_sort == True: enc1 = df.iloc[-1]["hsvll"]
             elif self.SORT_TYPE == "128d": enc1 = df.iloc[-1]["face_encodings68"]
             elif self.SORT_TYPE == "planar": enc1 = df.iloc[-1]["face_landmarks"]
+            # elif self.SORT_TYPE == "planar_hands" and "hand_landmarks" in df.columns: enc1 = df.iloc[-1]["hand_landmarks"]
             elif self.SORT_TYPE == "planar_hands" and "hand_landmarks" in df.columns: enc1 = df.iloc[-1]["hand_landmarks"]
             elif self.SORT_TYPE == "planar_body" and "body_landmarks_array" in df.columns: enc1 = df.iloc[-1]["body_landmarks_array"]
             elif self.SORT_TYPE == "planar_body": enc1 = df.iloc[-1]["body_landmarks_normalized"]
@@ -1620,6 +1662,7 @@ class SortPose:
             sortcol = 'face_landmarks'
         elif knn_sort == "planar_hands":
             sortcol = 'hand_landmarks'
+            # sortcol = 'hand_landmarks'
         elif knn_sort == "planar_body":
             sortcol = 'body_landmarks_array'
             sourcecol = 'body_landmarks_normalized'
@@ -2399,7 +2442,7 @@ class SortPose:
         return cluster_medians, N_CLUSTERS
     
     def prep_hand_landmarks(self, hand_results):  
-        left_hand_landmarks = left_hand_world_landmarks = left_hand_landmarks_norm = right_hand_landmarks = right_hand_world_landmarks = right_hand_landmarks_norm = []
+        left_hand_landmarks = left_hand_world_landmarks = left_hand_landmarks_norm = right_hand_landmarks = right_hand_world_landmarks = hand_landmarks = []
         if hand_results:
             if 'left_hand' in hand_results:
                 left_hand_landmarks = hand_results['left_hand'].get('image_landmarks', [])
@@ -2408,8 +2451,8 @@ class SortPose:
             if 'right_hand' in hand_results:
                 right_hand_landmarks = hand_results['right_hand'].get('image_landmarks', [])
                 right_hand_world_landmarks = hand_results['right_hand'].get('world_landmarks', [])
-                right_hand_landmarks_norm = hand_results['right_hand'].get('hand_landmarks_norm', [])
-        return left_hand_landmarks, left_hand_world_landmarks, left_hand_landmarks_norm, right_hand_landmarks, right_hand_world_landmarks, right_hand_landmarks_norm
+                hand_landmarks = hand_results['right_hand'].get('hand_landmarks_norm', [])
+        return left_hand_landmarks, left_hand_world_landmarks, left_hand_landmarks_norm, right_hand_landmarks, right_hand_world_landmarks, hand_landmarks
 
     def extract_landmarks(self, landmarks):
         # If no landmarks, return 63 zeros (21 points * 3 dimensions)
