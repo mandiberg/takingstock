@@ -45,7 +45,7 @@ class SortPose:
         self.BRUTEFORCE = False
         self.use_3D = use_3D
         print("init use_3D",self.use_3D)
-        self.CUTOFF = 10000 # DOES factor if ONE_SHOT
+        self.CUTOFF = 100 # DOES factor if ONE_SHOT
 
         self.CHECK_DESC_DIST = 30
 
@@ -1205,8 +1205,7 @@ class SortPose:
 
             if self.SORT_TYPE == "128d": sort_column = "face_encodings68"
             elif self.SORT_TYPE == "planar_body": sort_column = "body_landmarks_array"
-            # elif self.SORT_TYPE == "planar_hands": sort_column = "hand_landmarks"
-            elif self.SORT_TYPE == "planar_hands": sort_column = "hand_landmarks"
+            elif self.SORT_TYPE == "planar_hands": sort_column = "hand_landmarks" # hand_landmarks are left and right hands flat list of 126 values
 
             print("sort_column", sort_column)
             print(df_enc[sort_column].head())
@@ -2482,7 +2481,7 @@ class SortPose:
         if self.CLUSTER_TYPE == "fingertips_positions":
             flat_landmarks = [flat_landmarks[i] for i in self.SUBSET_LANDMARKS]
             # print("flat_landmarks", flat_landmarks)
-        print("flat_landmarks_subset", flat_landmarks) 
+        # print("flat_landmarks_subset", flat_landmarks) 
         return flat_landmarks
 
     def split_landmarks_to_columns(self, df, left_col="left_hand_world_landmarks", right_col="right_hand_world_landmarks", structure="cols"):

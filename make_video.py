@@ -58,9 +58,9 @@ HSV_NORMS = {"LUM": .01, "SAT": 1,  "HUE": 0.002777777778, "VAL": 1}
 # this is for controlling if it is using
 # all clusters, 
 IS_VIDEO_FUSION = True # used for constructing SQL query
-GENERATE_FUSION_PAIRS = False # if true it will query based on MIN_VIDEO_FUSION_COUNT and create pairs
+GENERATE_FUSION_PAIRS = True # if true it will query based on MIN_VIDEO_FUSION_COUNT and create pairs
                                 # if false, it will grab the list of pair lists below
-MIN_VIDEO_FUSION_COUNT = 100
+MIN_VIDEO_FUSION_COUNT = 1000
 IS_HAND_POSE_FUSION = False # i'm not sure how this is different from the IS_VIDEO_FUSION
 ONLY_ONE = False
 IS_CLUSTER = False
@@ -119,7 +119,7 @@ IS_TOPICS = False
 N_TOPICS = 64
 
 IS_ONE_TOPIC = True
-TOPIC_NO = [22,15,47,20,11,31]
+TOPIC_NO = [22]
 #######################
 
 #######################
@@ -531,11 +531,11 @@ sort = SortPose(motion, face_height_output, image_edge_multiplier,EXPAND, ONE_SH
 # CLUSTER_TYPE is passed to sort. THIS SEEMS REDUNDANT!!!
 # sort.set_subset_landmarks(CLUSTER_TYPE)
 
-# start_img_name = "median"
-# start_site_image_id = None
+start_img_name = "median"
+start_site_image_id = None
 
-start_img_name = "start_image_id"
-start_site_image_id = 3354646
+# start_img_name = "start_image_id"
+# start_site_image_id = 3354646
 
 # 9774337 screaming hands to head 10
 # 10528975 phone right hand pose 4
