@@ -530,6 +530,25 @@ def save_images_clusters_DB(df):
 def calc_median_dist(enc1, enc2):
     return np.linalg.norm(enc1 - enc2, axis=0)
 
+def process_landmarks_cluster_dist(df, df_subset_landmarks):
+    # Step 1: Identify columns that contain "_dim_"
+    dim_columns = [col for col in df_subset_landmarks.columns if "dim_" in col]
+    print("dim_columns: ", dim_columns)
+    # Step 2: Combine values from these columns into a list for each row
+    df_subset_landmarks['enc1'] = df_subset_landmarks[dim_columns].values.tolist()
+
+    # Step 3: Print the result to check
+    print("df_subset_landmarks", df_subset_landmarks[['image_id', 'enc1']])
+
+    if df['cluster_id'].isnull().values.any():
+        # df_subset_landmarks["cluster_id"], df_subset_landmarks["cluster_dist"] = zip(*df_subset_landmarks["enc1"].apply(prep_pose_clusters_enc))
+        df_subset_landmarks.loc[df_subset_landmarks['cluster_id'].isnull(), ['cluster_id', 'cluster_dist']] = \
+            zip(*df_subset_landmarks.loc[df_subset_landmarks['cluster_id'].isnull(), 'enc1'].apply(prep_pose_clusters_enc))
+    else:
+        # apply calc_median_dist to enc1 and cluster_median
+        df_subset_landmarks["cluster_dist"] = df_subset_landmarks.apply(lambda row: calc_median_dist(row['enc1'], row['cluster_median']), axis=1)
+    return df_subset_landmarks
+
 def assign_images_clusters_DB(df):
     def prep_pose_clusters_enc(enc1):
         # print("current image enc1", enc1)  
@@ -554,23 +573,8 @@ def assign_images_clusters_DB(df):
     if CLUSTER_TYPE in ["BodyPoses","HandsGestures", "HandsPositions","FingertipsPositions"]:
         # combine all columns that start with left_dim_ or right_dim_ or dim_ into one list in the "enc1" column
 
-        # Step 1: Identify columns that contain "_dim_"
-        dim_columns = [col for col in df_subset_landmarks.columns if "_dim_" in col]
 
-        # Step 2: Combine values from these columns into a list for each row
-        df_subset_landmarks['enc1'] = df_subset_landmarks[dim_columns].values.tolist()
-
-        # Step 3: Print the result to check
-        print("df_subset_landmarks", df_subset_landmarks[['image_id', 'enc1']])
-
-        if df['cluster_id'].isnull().values.any():
-            # df_subset_landmarks["cluster_id"], df_subset_landmarks["cluster_dist"] = zip(*df_subset_landmarks["enc1"].apply(prep_pose_clusters_enc))
-            df_subset_landmarks.loc[df_subset_landmarks['cluster_id'].isnull(), ['cluster_id', 'cluster_dist']] = \
-                zip(*df_subset_landmarks.loc[df_subset_landmarks['cluster_id'].isnull(), 'enc1'].apply(prep_pose_clusters_enc))
-        else:
-            # apply calc_median_dist to enc1 and cluster_median
-            df_subset_landmarks["cluster_dist"] = df_subset_landmarks.apply(lambda row: calc_median_dist(row['enc1'], row['cluster_median']), axis=1)
-
+        df_subset_landmarks = process_landmarks_cluster_dist(df, df_subset_landmarks)
     else:
         # this is for obj_bbox_list
         df_subset_landmarks["cluster_id"] = df_subset_landmarks["obj_bbox_list"].apply(prep_pose_clusters_enc)
@@ -705,7 +709,13 @@ def main():
         #     Base.metadata.create_all(engine)
         median_dict = calculate_cluster_medians(enc_data)
         save_clusters_DB(median_dict)
-        save_images_clusters_DB(enc_data)
+        # add the correct median_dict for each cluster_id to the enc_data
+        enc_data["cluster_median"] = enc_data["cluster_id"].apply(lambda x: median_dict[x])
+        df_subset_landmarks = make_subset_landmarks(enc_data, add_list=True)
+        print("df_subset_landmarks", df_subset_landmarks)
+        df_subset_landmarks = process_landmarks_cluster_dist(enc_data,df_subset_landmarks)
+        print("df_subset_landmarks after process_landmarks", df_subset_landmarks)
+        save_images_clusters_DB(df_subset_landmarks)
         print("saved segment to clusters")
     elif MODE == 1:
 
