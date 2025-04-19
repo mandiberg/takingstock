@@ -45,7 +45,7 @@ class SortPose:
         self.BRUTEFORCE = False
         self.use_3D = use_3D
         print("init use_3D",self.use_3D)
-        self.CUTOFF = 100 # DOES factor if ONE_SHOT
+        self.CUTOFF = 120 # DOES factor if ONE_SHOT
 
         self.CHECK_DESC_DIST = 30
 
@@ -105,7 +105,8 @@ class SortPose:
             self.output_dims = (int(self.face_height_output*(image_edge_multiplier[1]+image_edge_multiplier[3])/2),int(self.face_height_output*(image_edge_multiplier[0]+image_edge_multiplier[2])/2))
         print("output_dims",self.output_dims)
         self.EXPAND = EXPAND
-        self.EXPAND_SIZE = (10000,10000)
+        self.EXPAND_SIZE = (25000,25000) # full body
+        # self.EXPAND_SIZE = (10000,10000) # regular
         # self.EXPAND_SIZE = (6400,6400)
         self.BGCOLOR = [255,255,255]
         # self.BGCOLOR = [0,0,0]
@@ -1397,8 +1398,12 @@ class SortPose:
         if type(Lms) is list and len(Lms[0])==3:
             print("lms is a list of xyz lists")
             for idx, lm in enumerate(Lms):
-                x, y, z = Lms[idx]
-                append_lms(idx, x,y,z, structure, Lms2d, Lms1d, Lms1d3)
+                # even_lms = only even values from selected_Lms 
+                # converting back from xy values, to just the vertex number
+                even_lms = [lm/2 for lm in selected_Lms if lm % 2 == 0]
+                if idx in even_lms:                
+                    x, y, z = Lms[idx]
+                    append_lms(idx, x,y,z, structure, Lms2d, Lms1d, Lms1d3)
             
         else:
             for idx, lm in enumerate(Lms.landmark):
@@ -2516,14 +2521,25 @@ class SortPose:
 # FUSION STUFF
 
     def find_sorted_zero_indices(self, topic_no,min_value):
-        folder_path='utilities/data'
+        folder_path='utilities/data/october_fusion_clusters'
 
         # Construct the file name and path
-        file_name = 'topic' + str(topic_no[0]) + '_rows_handspositions_cols_handsgestures.csv'
+        file_name = 'topic_' + str(topic_no[0]) + '.csv'
         file_path = os.path.join(folder_path, file_name)
         
         # Load the CSV file into a DataFrame
         df = pd.read_csv(file_path, header=None)
+        # Check if the first column of the first row is a string
+
+
+        if df.iloc[0, 0]=="ihp_cluster":
+            # Drop the first column and the first row
+            df = df.iloc[1:, 1:].reset_index(drop=True)
+            # then convert all values to int
+            df = df.astype(float)
+            df = df.astype(int)
+        if isinstance(df.iloc[0, 0], str):
+            print("first column is a string,", print(df.iloc[0, 0]))
         
         # Convert the DataFrame to a NumPy array
         gesture_array = df.to_numpy()

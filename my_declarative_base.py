@@ -133,6 +133,7 @@ class Encodings(Base):
     mongo_hand_landmarks   = Column(Boolean)
     mongo_hand_landmarks_norm   = Column(Boolean)
     is_face_no_lms = Column(Boolean)
+    is_feet              = Column(Boolean)
 
 class Encodings_Site2(Base):
     __tablename__ = 'Encodings_Site2'
@@ -322,6 +323,7 @@ class SegmentTable(Base):
     is_dupe_of            = Column(Integer, ForeignKey('images.image_id'))
     mongo_hand_landmarks   = Column(Boolean)
     mongo_hand_landmarks_norm   = Column(Boolean)
+    is_feet              = Column(Boolean)
 
     site     = relationship("Site")
     age      = relationship("Age")

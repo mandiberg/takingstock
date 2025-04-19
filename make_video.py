@@ -60,7 +60,7 @@ HSV_NORMS = {"LUM": .01, "SAT": 1,  "HUE": 0.002777777778, "VAL": 1}
 IS_VIDEO_FUSION = True # used for constructing SQL query
 GENERATE_FUSION_PAIRS = True # if true it will query based on MIN_VIDEO_FUSION_COUNT and create pairs
                                 # if false, it will grab the list of pair lists below
-MIN_VIDEO_FUSION_COUNT = 1000
+MIN_VIDEO_FUSION_COUNT = 2000
 IS_HAND_POSE_FUSION = False # i'm not sure how this is different from the IS_VIDEO_FUSION
 ONLY_ONE = False
 IS_CLUSTER = False
@@ -119,7 +119,8 @@ IS_TOPICS = False
 N_TOPICS = 64
 
 IS_ONE_TOPIC = True
-TOPIC_NO = [22]
+TOPIC_NO = [47]
+
 #######################
 
 #######################
@@ -135,7 +136,7 @@ TOPIC_NO = [22]
 #  is yoga << planar,  planar,  fingers crossed
 
 ONE_SHOT = True # take all files, based off the very first sort order.
-EXPAND = False # expand with white, as opposed to inpaint and crop
+EXPAND = True # expand with white, as opposed to inpaint and crop
 JUMP_SHOT = True # jump to random file if can't find a run (I don't think this applies to planar?)
 USE_ALL = False # this is for outputting all images from a oneshot, forces ONE_SHOT
 DRAW_TEST_LMS = False # this is for testing the landmarks
@@ -165,9 +166,11 @@ if not GENERATE_FUSION_PAIRS:
     FUSION_PAIRS = [
         #CLUSTER_NO, HAND_POSE_NO
 
+        # T47 handsome
+        [5,121],[5,104], [5,60],[4,124] 
 
         # <3 
-        [16,101] #hands making heart shape
+        # []] #hands making heart shape
 
         # # topic 17 selects
         # [1,5]
@@ -938,8 +941,8 @@ def prep_encodings_NN(df_segment):
                 source_col = "body_landmarks_normalized"
                 # source_col_2 = None
         elif SORT_TYPE == "planar_hands" or SORT_TYPE == "planar_hands_USE_ALL" or SORT_TYPE == "fingertips_positions":
-            # source_col = sort_column = "hand_landmarks"
-            source_col = sort_column = "right_hand_landmarks_norm"
+            source_col = sort_column = "hand_landmarks"
+            # source_col = sort_column = "right_hand_landmarks_norm"
             # source_col = None
             # source_col_2 = "right_hand_landmarks_norm"
         return sort_column, source_col
@@ -1476,8 +1479,9 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
                 if DRAW_TEST_LMS:
                     # for testing, draw in points
                     # list(range(20)
-                    landmarks_2d = sort.get_landmarks_2d(row['left_hand_landmarks'], list(range(21)), "list")
-                    landmarks_2d2 = sort.get_landmarks_2d(row['right_hand_landmarks'], list(range(21)), "list")
+                    print("about to draw landmarks, subset", sort.SUBSET_LANDMARKS)
+                    landmarks_2d = sort.get_landmarks_2d(row['left_hand_landmarks'], sort.SUBSET_LANDMARKS, "list")
+                    landmarks_2d2 = sort.get_landmarks_2d(row['right_hand_landmarks'], sort.SUBSET_LANDMARKS, "list")
                     landmarks_2d = landmarks_2d + landmarks_2d2
                     print("landmarks_2d before drawing", landmarks_2d)
                     # transpose x and y in the landmarks    
