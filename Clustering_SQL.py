@@ -42,8 +42,6 @@ motion = {"side_to_side": False, "forward_smile": True, "laugh": False, "forward
 EXPAND = False
 ONE_SHOT = False # take all files, based off the very first sort order.
 JUMP_SHOT = False # jump to random file if can't find a run
-sort = SortPose(motion, face_height_output, image_edge_multiplier_sm,EXPAND, ONE_SHOT, JUMP_SHOT, None, None, use_3D=True)
-# MM you need to use conda activate mps_torch310 
 
 '''
 tracking time based on items, for speed predictions
@@ -80,11 +78,16 @@ options = ['kmeans cluster and save clusters', 'cluster assignment', 'calculate 
 option, MODE = pick(options, title)
 # MODE = 1
 # CLUSTER_TYPE = "Clusters"
-# CLUSTER_TYPE = "BodyPoses"
-CLUSTER_TYPE = "HandsPositions"
+CLUSTER_TYPE = "BodyPoses"
+# CLUSTER_TYPE = "HandsPositions"
 # CLUSTER_TYPE = "HandsGestures"
 # CLUSTER_TYPE = "FingertipsPositions"
-sort.set_subset_landmarks(CLUSTER_TYPE)
+use_3D=True
+ONE_SHOT= JUMP_SHOT= HSV_CONTROL=  VERBOSE= INPAINT= OBJ_CLS_ID = UPSCALE_MODEL_PATH =None
+# face_height_output, image_edge_multiplier, EXPAND=False, ONE_SHOT=False, JUMP_SHOT=False, HSV_CONTROL=None, VERBOSE=True,INPAINT=False, SORT_TYPE="128d", OBJ_CLS_ID = None,UPSCALE_MODEL_PATH=None, use_3D=False
+sort = SortPose(motion, face_height_output, image_edge_multiplier_sm, EXPAND,  ONE_SHOT,  JUMP_SHOT,  HSV_CONTROL,  VERBOSE, INPAINT,  CLUSTER_TYPE, OBJ_CLS_ID, UPSCALE_MODEL_PATH, use_3D)
+# MM you need to use conda activate mps_torch310 
+# sort.set_subset_landmarks(CLUSTER_TYPE)
 SUBSELECT_ONE_CLUSTER = 0
 
 # SUBSET_LANDMARKS is now set in sort pose init
@@ -116,7 +119,7 @@ if USE_SEGMENT is True and (CLUSTER_TYPE != "Clusters"):
 
     # Basic Query, this works with SegmentOct20
     SELECT = "DISTINCT(s.image_id), s.face_x, s.face_y, s.face_z, s.mouth_gap"
-    if CLUSTER_TYPE == "BodyPoses": WHERE = " s.mongo_body_landmarks = 1 "
+    if CLUSTER_TYPE == "BodyPoses": WHERE = " s.mongo_body_landmarks = 1 and s.is_feet = 1"
     elif CLUSTER_TYPE == "HandsGestures": WHERE = " s.mongo_hand_landmarks = 1 "
     elif CLUSTER_TYPE in ["HandsPositions","FingertipsPositions"] : WHERE = " s.mongo_hand_landmarks_norm = 1 "
     WHERE += " AND s.is_dupe_of IS NULL "
@@ -140,7 +143,7 @@ if USE_SEGMENT is True and (CLUSTER_TYPE != "Clusters"):
             WHERE += " AND ic.cluster_id IS NOT NULL AND ic.cluster_dist IS NULL"
 
     # WHERE += " AND h.is_body = 1"
-    LIMIT = 300000
+    LIMIT = 1000
     OFFSET = 0
 
     '''
@@ -387,8 +390,12 @@ def calc_cluster_median(df, col_list, cluster_id):
 
 def build_col_list(df):
     col_list = {}
-    col_list["left"] = [col for col in df.columns if col.startswith('left_dim_')]
-    col_list["right"] = [col for col in df.columns if col.startswith('right_dim_')]
+    col_list["left"] = col_list["right"] = col_list["body_lms"] = []
+    if CLUSTER_TYPE == "BodyPoses":
+        col_list["body_lms"] = [col for col in df.columns if col.startswith('dim_')]
+    elif CLUSTER_TYPE in ["HandsPositions", "HandsGestures", "FingertipsPositions"]:
+        col_list["left"] = [col for col in df.columns if col.startswith('left_dim_')]
+        col_list["right"] = [col for col in df.columns if col.startswith('right_dim_')]
     return col_list
 
 def zero_out_medians(cluster_median):
@@ -402,22 +409,28 @@ def calculate_cluster_medians(df):
     median_dict = {}
     col_list = build_col_list(df)
 
-    # print(f"Columns used for median calculation: {col_list}")
-    # print(f"All DataFrame columns: {df.columns}")
+    print(f"Columns used for median calculation: {col_list}")
+    print(f"All DataFrame columns: {df.columns}")
 
-    # print(df)
+    print(df)
     unique_clusters = set(df['cluster_id'])
     for cluster_id in unique_clusters:
         # cluster_median = calc_cluster_median(df, col_list, cluster_id)
         cluster_median = {}
-        cluster_median["left"] = calc_cluster_median(df, col_list["left"], cluster_id)
-        cluster_median["right"] = calc_cluster_median(df, col_list["right"], cluster_id)
+        if CLUSTER_TYPE == "BodyPoses":
+            cluster_median["body_lms"] = calc_cluster_median(df, col_list["body_lms"], cluster_id)
+        elif CLUSTER_TYPE in ["HandsPositions", "HandsGestures", "FingertipsPositions"]:
+            cluster_median["left"] = calc_cluster_median(df, col_list["left"], cluster_id)
+            cluster_median["right"] = calc_cluster_median(df, col_list["right"], cluster_id)
         if cluster_median is not None:
             print(f"Recalculated median for cluster {cluster_id}: {cluster_median}")
             # if every value in the cluster median < .01, then set all values to 0.0
             cluster_median = zero_out_medians(cluster_median)
             # add left and right hands
-            flattened_median = np.concatenate((cluster_median["left"], cluster_median["right"]))
+            if CLUSTER_TYPE in ["HandsPositions", "HandsGestures", "FingertipsPositions"]:
+                flattened_median = np.concatenate((cluster_median["left"], cluster_median["right"]))
+            else:
+                flattened_median = cluster_median["body_lms"]
             print(f"compressed cluster_median for {cluster_id}: {flattened_median}")
             median_dict[cluster_id] = flattened_median
         else:
@@ -480,6 +493,8 @@ def save_clusters_DB(median_dict, update=False):
 
 def save_images_clusters_DB(df):
     #save the df to a table
+    print("save_images_clusters_DB df", df)
+    print("columns: ",df.columns)
     for _, row in df.iterrows():
         image_id = row['image_id']
         cluster_id = row['cluster_id']
@@ -512,6 +527,8 @@ def save_images_clusters_DB(df):
         session.rollback()
         print(f"Error occurred during data saving: {str(e)}")
 
+def calc_median_dist(enc1, enc2):
+    return np.linalg.norm(enc1 - enc2, axis=0)
 
 def assign_images_clusters_DB(df):
     def prep_pose_clusters_enc(enc1):
@@ -528,8 +545,6 @@ def assign_images_clusters_DB(df):
         # print(cluster_id)
         return cluster_id, cluster_dist
 
-    def calc_median_dist(enc1, enc2):
-        return np.linalg.norm(enc1 - enc2, axis=0)
     
     #assign clusters to each image's encodings
     print("assigning images to clusters, df at start",df)
@@ -642,6 +657,7 @@ def prepare_df(df):
 
 # defining globally 
 MEDIAN_DICT = get_cluster_medians()
+print("MEDIAN_DICT: ",MEDIAN_DICT)
 
 def main():
     # create_my_engine(db)
