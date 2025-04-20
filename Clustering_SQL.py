@@ -93,7 +93,7 @@ SUBSELECT_ONE_CLUSTER = 0
 # SUBSET_LANDMARKS is now set in sort pose init
 USE_HEAD_POSE = False
 
-SHORTRANGE = True
+SHORTRANGE = False
 ANGLES = []
 STRUCTURE = "list3"
 print("STRUCTURE: ",STRUCTURE)
@@ -143,7 +143,7 @@ if USE_SEGMENT is True and (CLUSTER_TYPE != "Clusters"):
             WHERE += " AND ic.cluster_id IS NOT NULL AND ic.cluster_dist IS NULL"
 
     # WHERE += " AND h.is_body = 1"
-    LIMIT = 1000
+    LIMIT = 5000000
     OFFSET = 0
 
     '''
