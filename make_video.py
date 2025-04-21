@@ -55,19 +55,33 @@ HSV_BOUNDS["LUM_WEIGHT"] = 1
 # converts everything to a 0-1 scale
 HSV_NORMS = {"LUM": .01, "SAT": 1,  "HUE": 0.002777777778, "VAL": 1}
 
+# controls which type of sorting/column sorted on
+SORT_TYPE = "128d"
+# SORT_TYPE ="planar"
+# SORT_TYPE = "planar_body"
+# SORT_TYPE = "planar_hands"
+# SORT_TYPE = "fingertips_positions"
+FULL_BODY = False # this requires is_feet
+
 # this is for controlling if it is using
 # all clusters, 
 IS_VIDEO_FUSION = True # used for constructing SQL query
-GENERATE_FUSION_PAIRS = True # if true it will query based on MIN_VIDEO_FUSION_COUNT and create pairs
+GENERATE_FUSION_PAIRS = False # if true it will query based on MIN_VIDEO_FUSION_COUNT and create pairs
                                 # if false, it will grab the list of pair lists below
-MIN_VIDEO_FUSION_COUNT = 2000
+MIN_VIDEO_FUSION_COUNT = 750
 IS_HAND_POSE_FUSION = False # i'm not sure how this is different from the IS_VIDEO_FUSION
 ONLY_ONE = False
-IS_CLUSTER = False
+IS_CLUSTER = True
 if IS_HAND_POSE_FUSION or IS_VIDEO_FUSION:
-    # first sort on HandsPositions, then on HandsGestures
-    CLUSTER_TYPE = "HandsPositions" # Select on 3d hands
-    CLUSTER_TYPE_2 = "HandsGestures" # Sort on 2d hands
+    if SORT_TYPE in ["planar_hands", "fingertips_positions", "128d"]:
+        # first sort on HandsPositions, then on HandsGestures
+        CLUSTER_TYPE = "HandsPositions" # Select on 3d hands
+        CLUSTER_TYPE_2 = "HandsGestures" # Sort on 2d hands
+    elif SORT_TYPE == "planar_body":
+        # if fusion, select on body and gesture, sort on hands positions
+        SORT_TYPE = "planar_hands"
+        CLUSTER_TYPE = "BodyPoses"
+        CLUSTER_TYPE_2 = "HandsGestures"
     # CLUSTER_TYPE is passed to sort. below
 else:
     # choose the cluster type manually here
@@ -119,7 +133,7 @@ IS_TOPICS = False
 N_TOPICS = 64
 
 IS_ONE_TOPIC = True
-TOPIC_NO = [47]
+TOPIC_NO = [0]
 
 #######################
 
@@ -136,16 +150,11 @@ TOPIC_NO = [47]
 #  is yoga << planar,  planar,  fingers crossed
 
 ONE_SHOT = True # take all files, based off the very first sort order.
-EXPAND = True # expand with white, as opposed to inpaint and crop
+EXPAND = False # expand with white, as opposed to inpaint and crop
 JUMP_SHOT = True # jump to random file if can't find a run (I don't think this applies to planar?)
 USE_ALL = False # this is for outputting all images from a oneshot, forces ONE_SHOT
 DRAW_TEST_LMS = False # this is for testing the landmarks
 
-# SORT_TYPE = "128d"
-# SORT_TYPE ="planar"
-# SORT_TYPE = "planar_body"
-SORT_TYPE = "planar_hands"
-# SORT_TYPE = "fingertips_positions"
 if SORT_TYPE == "planar_hands" and USE_ALL:
     SORT_TYPE = "planar_hands_USE_ALL"
     ONE_SHOT = True
@@ -166,8 +175,16 @@ if not GENERATE_FUSION_PAIRS:
     FUSION_PAIRS = [
         #CLUSTER_NO, HAND_POSE_NO
 
+        # T0 sports
+        # selects
+        [19, 61],
+        [22, 2], 
+        # [19, 95], 
+        [9, 2], [9, 13]
+        [8, 13], [19, 66], [19, 95], [21, 116], [24, 13]
+
         # T47 handsome
-        [5,121],[5,104], [5,60],[4,124] 
+        # [5,104], [4,124], [10,62], [21,116], [7,57], [5,121], [5,60]
 
         # <3 
         # []] #hands making heart shape
@@ -403,7 +420,8 @@ elif IS_SEGONLY and io.platform == "darwin":
         if IS_TOPICS or IS_ONE_TOPIC:
             add_topic_select()
 
-
+    if FULL_BODY:
+        WHERE += " AND s.is_feet = 1 "
     if NO_KIDS:
         WHERE += " AND s.age_id NOT IN (1,2,3) "
     if ONLY_KIDS:
@@ -512,20 +530,21 @@ face_height_output = 1000
 # define ratios, in relationship to nose
 # units are ratio of faceheight
 # top, right, bottom, left
-# image_edge_multiplier = [1, 1, 1, 1] # just face
-# image_edge_multiplier = [1.5,1.5,2,1.5] # bigger portrait
-# image_edge_multiplier = [1.5,1.33, 2.5,1.33] # bigger 2x3 portrait
-# image_edge_multiplier = [1.4,2.6,1.9,2.6] # wider for hands
-# image_edge_multiplier = [3,5,3,5] # megawide for testing
-# image_edge_multiplier = [1.4,3.3,3,3.3] # widerest 16:10 for hands -- actual 2:3
-# image_edge_multiplier = [1.3,3.4,2.9,3.4] # slightly less wide 16:10 for hands < Aug 27
-# image_edge_multiplier = [1.3,2,2.9,2] # portrait crop for paris photo images < Aug 30
-# image_edge_multiplier = [1.3,2,2.7,2] # square crop for paris photo videos < Sept 16
-image_edge_multiplier = [1.3,1.85,2.4,1.85] # tighter square crop for paris photo videos < Oct 29
-# image_edge_multiplier = [1.6,3.84,3.2,3.84] # wiiiiiiiidest 16:10 for hands
-# image_edge_multiplier = [1.45,3.84,2.87,3.84] # wiiiiiiiidest 16:9 for hands
-# image_edge_multiplier = [1.2,2.3,1.7,2.3] # medium for hands
-# image_edge_multiplier = [1.2, 1.2, 1.6, 1.2] # standard portrait
+    # image_edge_multiplier = [1, 1, 1, 1] # just face
+    # image_edge_multiplier = [1.5,1.5,2,1.5] # bigger portrait
+    # image_edge_multiplier = [1.5,1.33, 2.5,1.33] # bigger 2x3 portrait
+    # image_edge_multiplier = [1.4,2.6,1.9,2.6] # wider for hands
+    # image_edge_multiplier = [3,5,3,5] # megawide for testing
+    # image_edge_multiplier = [1.4,3.3,3,3.3] # widerest 16:10 for hands -- actual 2:3
+    # image_edge_multiplier = [1.3,3.4,2.9,3.4] # slightly less wide 16:10 for hands < Aug 27
+    # image_edge_multiplier = [1.3,2,2.9,2] # portrait crop for paris photo images < Aug 30
+    # image_edge_multiplier = [1.3,2,2.7,2] # square crop for paris photo videos < Sept 16
+# image_edge_multiplier = [1.3,1.85,2.4,1.85] # tighter square crop for paris photo videos < Oct 29 FINAL VERSION NOV 2024 DO NOT CHANGE
+image_edge_multiplier = [1.4,3.5,5.6,3.5] # yoga square crop for April 2025 videos < 
+    # image_edge_multiplier = [1.6,3.84,3.2,3.84] # wiiiiiiiidest 16:10 for hands
+    # image_edge_multiplier = [1.45,3.84,2.87,3.84] # wiiiiiiiidest 16:9 for hands
+    # image_edge_multiplier = [1.2,2.3,1.7,2.3] # medium for hands
+    # image_edge_multiplier = [1.2, 1.2, 1.6, 1.2] # standard portrait
 # sort.max_image_edge_multiplier is the maximum of the elements
 UPSCALE_MODEL_PATH=os.path.join(os.getcwd(), "models", "FSRCNN_x4.pb")
 # construct my own objects
@@ -945,6 +964,9 @@ def prep_encodings_NN(df_segment):
             # source_col = sort_column = "right_hand_landmarks_norm"
             # source_col = None
             # source_col_2 = "right_hand_landmarks_norm"
+        elif SORT_TYPE == "128d":
+            source_col = sort_column = "face_encodings68"
+
         return sort_column, source_col
 
     sort_column, source_col = set_sort_col()
