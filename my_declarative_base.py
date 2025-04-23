@@ -158,6 +158,8 @@ class ImagesClusters(Base):
 
     image_id   = Column(Integer, ForeignKey('images.image_id'), primary_key=True)
     cluster_id = Column(Integer, ForeignKey('Clusters.cluster_id'))
+    cluster_dist = Column(Float)
+
 
 class Poses(Base):
     __tablename__ = 'Poses'
@@ -170,6 +172,7 @@ class ImagesPoses(Base):
 
     image_id   = Column(Integer, ForeignKey('images.image_id'), primary_key=True)
     cluster_id = Column(Integer, ForeignKey('Poses.cluster_id'))
+    cluster_dist = Column(Float)
 
 class Hands(Base):
     __tablename__ = 'Hands'
@@ -182,6 +185,7 @@ class ImagesHands(Base):
 
     image_id   = Column(Integer, ForeignKey('images.image_id'), primary_key=True)
     cluster_id = Column(Integer, ForeignKey('Hands.cluster_id'))
+    cluster_dist = Column(Float)
 
 class ClustersTemp(Base):
     __tablename__ = 'ClustersTemp'

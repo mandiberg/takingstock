@@ -168,6 +168,7 @@ CREATE TABLE Clusters (
 CREATE TABLE ImagesClusters (
     image_id INTEGER REFERENCES Images (image_id),
     cluster_id INTEGER REFERENCES Clusters (cluster_id),
+    cluster_dist FLOAT DEFAULT NULL,
     PRIMARY KEY (image_id)
 );
 
@@ -181,6 +182,7 @@ CREATE TABLE Poses (
 CREATE TABLE ImagesPoses (
     image_id INTEGER REFERENCES Images (image_id),
     cluster_id INTEGER REFERENCES Clusters (cluster_id),
+    cluster_dist FLOAT DEFAULT NULL,
     PRIMARY KEY (image_id)
 );
 

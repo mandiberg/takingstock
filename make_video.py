@@ -65,7 +65,7 @@ FULL_BODY = False # this requires is_feet
 
 # this is for controlling if it is using
 # all clusters, 
-IS_VIDEO_FUSION = True # used for constructing SQL query
+IS_VIDEO_FUSION = False # used for constructing SQL query
 GENERATE_FUSION_PAIRS = False # if true it will query based on MIN_VIDEO_FUSION_COUNT and create pairs
                                 # if false, it will grab the list of pair lists below
 MIN_VIDEO_FUSION_COUNT = 750
@@ -85,13 +85,13 @@ if IS_HAND_POSE_FUSION or IS_VIDEO_FUSION:
     # CLUSTER_TYPE is passed to sort. below
 else:
     # choose the cluster type manually here
-    CLUSTER_TYPE = "BodyPoses"
+    # CLUSTER_TYPE = "BodyPoses" # usually this one
     # CLUSTER_TYPE = "HandsPositions" # 2d hands
     # CLUSTER_TYPE = "HandsGestures"
+    CLUSTER_TYPE = "Clusters" # manual override for 128d
     CLUSTER_TYPE_2 = None
 DROP_LOW_VIS = False
 USE_HEAD_POSE = False
-# CLUSTER_TYPE = "Clusters"
 N_HANDS = N_CLUSTERS = None # declared here, but set in the SQL query below
 # this is for IS_ONE_CLUSTER to only run on a specific CLUSTER_NO
 IS_ONE_CLUSTER = False
@@ -133,7 +133,7 @@ IS_TOPICS = False
 N_TOPICS = 64
 
 IS_ONE_TOPIC = True
-TOPIC_NO = [0]
+TOPIC_NO = [22]
 
 #######################
 
@@ -177,11 +177,11 @@ if not GENERATE_FUSION_PAIRS:
 
         # T0 sports
         # selects
-        [19, 61],
-        [22, 2], 
-        # [19, 95], 
-        [9, 2], [9, 13]
-        [8, 13], [19, 66], [19, 95], [21, 116], [24, 13]
+        # [19, 61],
+        # [22, 2], 
+        # # [19, 95], 
+        # [9, 2], [9, 13],
+        # [8, 13], [19, 66], [19, 95], [21, 116], [24, 13]
 
         # T47 handsome
         # [5,104], [4,124], [10,62], [21,116], [7,57], [5,121], [5,60]
@@ -189,8 +189,13 @@ if not GENERATE_FUSION_PAIRS:
         # <3 
         # []] #hands making heart shape
 
+        # hands framing corners of photograph
+        [22,15],[24,70]
         # # topic 17 selects
         # [1,5]
+
+        # topic 25 beauty, 750plus selects
+        # [13,103], [24,42], [24,113], [24,126], [26,80], [26,47]
 
         # topic 25 beauty, right hand to face
         # [24, 4], [24, 11], [24, 13], [24, 23], [24, 42], [24, 51], [24, 57], [24, 97], [24, 99], [24, 112], [24, 113], [24, 119], [24, 126]
@@ -453,7 +458,7 @@ elif IS_SEGONLY and io.platform == "darwin":
     # WHERE += " AND e.encoding_id > 2612275"
 
     # WHERE = "s.site_name_id != 1"
-    LIMIT = 25000
+    LIMIT = 2500
 
     # TEMP TK TESTING
     # WHERE += " AND s.site_name_id = 8"
@@ -540,11 +545,11 @@ face_height_output = 1000
     # image_edge_multiplier = [1.3,2,2.9,2] # portrait crop for paris photo images < Aug 30
     # image_edge_multiplier = [1.3,2,2.7,2] # square crop for paris photo videos < Sept 16
 # image_edge_multiplier = [1.3,1.85,2.4,1.85] # tighter square crop for paris photo videos < Oct 29 FINAL VERSION NOV 2024 DO NOT CHANGE
-image_edge_multiplier = [1.4,3.5,5.6,3.5] # yoga square crop for April 2025 videos < 
+# image_edge_multiplier = [1.4,3.5,5.6,3.5] # yoga square crop for April 2025 videos < 
     # image_edge_multiplier = [1.6,3.84,3.2,3.84] # wiiiiiiiidest 16:10 for hands
     # image_edge_multiplier = [1.45,3.84,2.87,3.84] # wiiiiiiiidest 16:9 for hands
     # image_edge_multiplier = [1.2,2.3,1.7,2.3] # medium for hands
-    # image_edge_multiplier = [1.2, 1.2, 1.6, 1.2] # standard portrait
+image_edge_multiplier = [1.2, 1.2, 1.6, 1.2] # standard portrait
 # sort.max_image_edge_multiplier is the maximum of the elements
 UPSCALE_MODEL_PATH=os.path.join(os.getcwd(), "models", "FSRCNN_x4.pb")
 # construct my own objects

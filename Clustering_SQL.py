@@ -77,12 +77,14 @@ title = 'Please choose your operation: '
 options = ['kmeans cluster and save clusters', 'cluster assignment', 'calculate cluster medians, cluster_dist and save clusters']
 option, MODE = pick(options, title)
 # MODE = 1
-# CLUSTER_TYPE = "Clusters"
-CLUSTER_TYPE = "BodyPoses"
+CLUSTER_TYPE = "Clusters"
+# CLUSTER_TYPE = "BodyPoses"
 # CLUSTER_TYPE = "HandsPositions"
 # CLUSTER_TYPE = "HandsGestures"
 # CLUSTER_TYPE = "FingertipsPositions"
 use_3D=True
+OFFSET = 0
+
 ONE_SHOT= JUMP_SHOT= HSV_CONTROL=  VERBOSE= INPAINT= OBJ_CLS_ID = UPSCALE_MODEL_PATH =None
 # face_height_output, image_edge_multiplier, EXPAND=False, ONE_SHOT=False, JUMP_SHOT=False, HSV_CONTROL=None, VERBOSE=True,INPAINT=False, SORT_TYPE="128d", OBJ_CLS_ID = None,UPSCALE_MODEL_PATH=None, use_3D=False
 sort = SortPose(motion, face_height_output, image_edge_multiplier_sm, EXPAND,  ONE_SHOT,  JUMP_SHOT,  HSV_CONTROL,  VERBOSE, INPAINT,  CLUSTER_TYPE, OBJ_CLS_ID, UPSCALE_MODEL_PATH, use_3D)
@@ -93,7 +95,7 @@ SUBSELECT_ONE_CLUSTER = 0
 # SUBSET_LANDMARKS is now set in sort pose init
 USE_HEAD_POSE = False
 
-SHORTRANGE = False
+SHORTRANGE = True
 ANGLES = []
 STRUCTURE = "list3"
 print("STRUCTURE: ",STRUCTURE)
@@ -144,7 +146,6 @@ if USE_SEGMENT is True and (CLUSTER_TYPE != "Clusters"):
 
     # WHERE += " AND h.is_body = 1"
     LIMIT = 5000000
-    OFFSET = 0
 
     '''
     Poses
@@ -171,9 +172,14 @@ elif USE_SEGMENT is True and MODE == 0:
     SELECT = "DISTINCT(s.image_id)"
     FROM = f"{SegmentTable_name} s"
     FROM += f" INNER JOIN {HelperTable_name} h ON h.image_id = s.image_id " 
-    WHERE = " s.mongo_body_landmarks = 1"
+    # WHERE = " s.mongo_body_landmarks = 1"
+    WHERE = " s.mongo_face_landmarks = 1"
+
+    # for selecting a specific topic
+    FROM += f" INNER JOIN ImagesTopics it ON it.image_id = s.image_id " 
+    WHERE += " AND it.topic_id = 22 "
     # WHERE = "face_encodings68 IS NOT NULL AND face_x > -33 AND face_x < -27 AND face_y > -2 AND face_y < 2 AND face_z > -2 AND face_z < 2"
-    LIMIT = 100
+    LIMIT = 100000
 
 
     # # join with SSD tables. Satyam, use the one below
@@ -390,12 +396,14 @@ def calc_cluster_median(df, col_list, cluster_id):
 
 def build_col_list(df):
     col_list = {}
-    col_list["left"] = col_list["right"] = col_list["body_lms"] = []
+    col_list["left"] = col_list["right"] = col_list["body_lms"] = col_list["face"] = []
     if CLUSTER_TYPE == "BodyPoses":
         col_list["body_lms"] = [col for col in df.columns if col.startswith('dim_')]
     elif CLUSTER_TYPE in ["HandsPositions", "HandsGestures", "FingertipsPositions"]:
         col_list["left"] = [col for col in df.columns if col.startswith('left_dim_')]
         col_list["right"] = [col for col in df.columns if col.startswith('right_dim_')]
+    elif CLUSTER_TYPE == "Clusters":
+        col_list["face"] = [col for col in df.columns if col.startswith('dim_')]
     return col_list
 
 def zero_out_medians(cluster_median):
@@ -422,6 +430,8 @@ def calculate_cluster_medians(df):
         elif CLUSTER_TYPE in ["HandsPositions", "HandsGestures", "FingertipsPositions"]:
             cluster_median["left"] = calc_cluster_median(df, col_list["left"], cluster_id)
             cluster_median["right"] = calc_cluster_median(df, col_list["right"], cluster_id)
+        elif CLUSTER_TYPE == "Clusters":
+            cluster_median["face"] = calc_cluster_median(df, col_list["face"], cluster_id)
         if cluster_median is not None:
             print(f"Recalculated median for cluster {cluster_id}: {cluster_median}")
             # if every value in the cluster median < .01, then set all values to 0.0
@@ -429,6 +439,8 @@ def calculate_cluster_medians(df):
             # add left and right hands
             if CLUSTER_TYPE in ["HandsPositions", "HandsGestures", "FingertipsPositions"]:
                 flattened_median = np.concatenate((cluster_median["left"], cluster_median["right"]))
+            elif CLUSTER_TYPE == "Clusters":
+                flattened_median = cluster_median["face"]
             else:
                 flattened_median = cluster_median["body_lms"]
             print(f"compressed cluster_median for {cluster_id}: {flattened_median}")
@@ -603,9 +615,11 @@ def df_list_to_cols(df, col_name):
     return df
 
 def prepare_df(df):
+    print("columns: ",df.columns)
+    print("prepare_df df",df)
     # apply io.convert_decimals_to_float to face_x, face_y, face_z, and mouth_gap 
     # if faxe_x, face_y, face_z, and mouth_gap are not already floats
-    if df['face_x'].dtype != float:
+    if 'face_x' in df.columns and df['face_x'].dtype != float:
         df[['face_x', 'face_y', 'face_z', 'mouth_gap']] = df[['face_x', 'face_y', 'face_z', 'mouth_gap']].astype(float)
     # if cluster_median column is in the df, unpickle it
     if 'cluster_median' in df.columns:
@@ -654,8 +668,10 @@ def prepare_df(df):
         columns_to_drop=['face_landmarks', 'body_landmarks', 'body_landmarks_normalized']
         df_list_to_cols(df, 'face_encodings68')
     if not USE_HEAD_POSE: 
+        print("not using head pose, dropping face_x, face_y, face_z, mouth_gap")
         # add 'face_x', 'face_y', 'face_z', 'mouth_gap' to existing columns_to_drop
-        columns_to_drop += ['face_x', 'face_y', 'face_z', 'mouth_gap']
+        if 'face_x' in df.columns:
+            columns_to_drop += ['face_x', 'face_y', 'face_z', 'mouth_gap']
     df = df.drop(columns=columns_to_drop)
     return df
 
@@ -694,14 +710,13 @@ def main():
         # if body_landmarks_array is one of the df.columns, drop it
         print("df columns: ",enc_data.columns)
         columns_to_drop = ["image_id"]
-        if "body_landmarks_array" in enc_data.columns: columns_to_drop.append("body_landmarks_array")
-        if "left_hand_landmarks_norm" in enc_data.columns: columns_to_drop.append("left_hand_landmarks_norm")
-        if "right_hand_landmarks_norm" in enc_data.columns: columns_to_drop.append("right_hand_landmarks_norm")
+        columns_to_check = ["body_landmarks_array", "left_hand_landmarks_norm", "right_hand_landmarks_norm", "hand_results", "face_encodings68"]
+        columns_to_drop += [col for col in columns_to_check if col in enc_data.columns]
         print("columns to drop: ",columns_to_drop)
         enc_data["cluster_id"] = kmeans_cluster(enc_data.drop(columns=columns_to_drop), n_clusters=N_CLUSTERS)
         
-        print(enc_data)
-        print(set(enc_data["cluster_id"].tolist()))
+        print("enc_data", enc_data)
+        print("as list", set(enc_data["cluster_id"].tolist()))
         # don't need to write a CSV
         # enc_data.to_csv('clusters_clusterID_byImageID.csv')
 
