@@ -112,7 +112,7 @@ GET_OPTIMAL_CLUSTERS=False
 # number of clusters produced. run GET_OPTIMAL_CLUSTERS and add that number here
 # 32 for hand positions
 # 128 for hand gestures
-N_CLUSTERS = 32
+N_CLUSTERS = 128
 SAVE_FIG=False ##### option for saving the visualized data
 
 if USE_SEGMENT is True and (CLUSTER_TYPE != "Clusters"):
@@ -167,20 +167,24 @@ elif USE_SEGMENT is True and MODE == 0:
 
     # 3.8 M large table (for Topic Model)
     HelperTable_name = "SegmentHelperMar23_headon"
+    HelperTable_name = None
 
     # Basic Query, this works with gettytest3
     SELECT = "DISTINCT(s.image_id)"
     FROM = f"{SegmentTable_name} s"
-    FROM += f" INNER JOIN {HelperTable_name} h ON h.image_id = s.image_id " 
+    if HelperTable_name: FROM += f" INNER JOIN {HelperTable_name} h ON h.image_id = s.image_id " 
     # WHERE = " s.mongo_body_landmarks = 1"
     WHERE = " s.mongo_face_landmarks = 1"
 
     # for selecting a specific topic
     FROM += f" INNER JOIN ImagesTopics it ON it.image_id = s.image_id " 
     WHERE += " AND it.topic_id = 22 "
-    # WHERE = "face_encodings68 IS NOT NULL AND face_x > -33 AND face_x < -27 AND face_y > -2 AND face_y < 2 AND face_z > -2 AND face_z < 2"
-    LIMIT = 100000
+    WHERE = "s.face_x > -33 AND s.face_x < -27 AND s.face_y > -2 AND s.face_y < 2 AND s.face_z > -2 AND s.face_z < 2"
+    LIMIT = 500000
 
+    '''
+    350k 1900s
+    '''
 
     # # join with SSD tables. Satyam, use the one below
     # SELECT = "DISTINCT(e.image_id), e.face_encodings68"

@@ -45,7 +45,7 @@ class SortPose:
         self.BRUTEFORCE = False
         self.use_3D = use_3D
         print("init use_3D",self.use_3D)
-        self.CUTOFF = 20 # DOES factor if ONE_SHOT
+        self.CUTOFF = 200 # DOES factor if ONE_SHOT
 
         self.CHECK_DESC_DIST = 30
 
@@ -1136,7 +1136,7 @@ class SortPose:
         # Find the mode using the most_common function from the collections module
         counter = Counter(hashable_rows)
         most_common_row = counter.most_common(1)[0][0]
-        print("Most common face embedding:")
+        print("Most common row in list:")
         print(most_common_row)
         return most_common_row
     
@@ -1156,16 +1156,35 @@ class SortPose:
         if bbox: return [bbox["left"], bbox["top"], bbox["right"], bbox["bottom"]]
         else: return None
 
+    def smart_round_df(self, df_enc, col_to_round):
+        df_rounded = pd.DataFrame()
+        digits = int(math.log10(len(df_enc)))
+        if digits < 3: digits = digits-2
+        else: digits = 1
+        print("digits", digits)
+        # drop all rows where all values in the row are 0.0
+        df_enc = df_enc[df_enc[col_to_round].apply(lambda x: any(abs(val) != 0.0 for val in x))]
+        print("df_enc", df_enc.head(100))
+        # Round each value in the target column to the number of digits in the df
+        # 300 rows = -2 decimal places (hundreds)
+        # 3000 rows = -3 decimal places (thousands)       
+        df_rounded[col_to_round] = df_enc[col_to_round].apply(lambda x: self.safe_round(x, digits))
+            # drop all rows where bbox_col is None
+        df_rounded = df_rounded.dropna(subset=[col_to_round])
+        return df_rounded
+
     def get_start_obj_bbox(self, start_img, df_enc):
         if start_img == "median":
             print("[get_start_obj_bbox] in median", df_enc)
             bbox_col = "obj_bbox_list"
-            df_rounded = pd.DataFrame()
-            # Round each value in the face_encodings68 column to -2 decimal places (hundreds)       
-            df_rounded[bbox_col] = df_enc[bbox_col].apply(lambda x: self.safe_round(x, -2))
+            df_rounded = self.smart_round_df(df_enc, bbox_col)
 
-            # drop all rows where bbox_col is None
-            df_rounded = df_rounded.dropna(subset=[bbox_col])
+            # digits = (int(math.log10(len(df_enc)))+1)*-1
+            # df_enc = df_enc[df_enc[bbox_col].apply(lambda x: any(val != 0.0 for val in x))]
+            # df_rounded = pd.DataFrame()
+            # # Round each value in the face_encodings68 column to -2 decimal places (hundreds)       
+            # df_rounded[bbox_col] = df_enc[bbox_col].apply(lambda x: self.safe_round(x, digits))
+
 
             # Convert the face_encodings68 column to a list of lists
             flattened_array = df_rounded[bbox_col].tolist()        
@@ -1215,11 +1234,12 @@ class SortPose:
             # df_enc['face_encodings68'] = df_enc['face_encodings68'].apply(self.safe_round)
             # df_enc[sort_column] = df_enc[sort_column].apply(lambda x: np.round(x, 1))
 
-            # Convert the face_encodings68 column to a list of lists
-            flattened_array = df_enc[sort_column].tolist()     
-            # round each value in flattened_array to 2 decimal places
-            flattened_array = [np.round(x, 1) for x in flattened_array]
-
+            # # Convert the face_encodings68 column to a list of lists
+            # flattened_array = df_enc[sort_column].tolist()     
+            # # round each value in flattened_array to 2 decimal places
+            # flattened_array = [np.round(x, 1) for x in flattened_array]
+            df_rounded = self.smart_round_df(df_enc, sort_column)
+            flattened_array = df_rounded[sort_column].tolist()
 
             # print("flattened_array 0", flattened_array[0])
             # print("flattened_array 0", type(flattened_array[0]))

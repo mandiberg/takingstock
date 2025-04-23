@@ -56,10 +56,10 @@ HSV_BOUNDS["LUM_WEIGHT"] = 1
 HSV_NORMS = {"LUM": .01, "SAT": 1,  "HUE": 0.002777777778, "VAL": 1}
 
 # controls which type of sorting/column sorted on
-SORT_TYPE = "128d"
+# SORT_TYPE = "128d"
 # SORT_TYPE ="planar"
 # SORT_TYPE = "planar_body"
-# SORT_TYPE = "planar_hands"
+SORT_TYPE = "planar_hands"
 # SORT_TYPE = "fingertips_positions"
 FULL_BODY = False # this requires is_feet
 
@@ -71,7 +71,7 @@ GENERATE_FUSION_PAIRS = False # if true it will query based on MIN_VIDEO_FUSION_
 MIN_VIDEO_FUSION_COUNT = 750
 IS_HAND_POSE_FUSION = False # i'm not sure how this is different from the IS_VIDEO_FUSION
 ONLY_ONE = False
-IS_CLUSTER = True
+IS_CLUSTER = False
 if IS_HAND_POSE_FUSION or IS_VIDEO_FUSION:
     if SORT_TYPE in ["planar_hands", "fingertips_positions", "128d"]:
         # first sort on HandsPositions, then on HandsGestures
@@ -87,15 +87,15 @@ else:
     # choose the cluster type manually here
     # CLUSTER_TYPE = "BodyPoses" # usually this one
     # CLUSTER_TYPE = "HandsPositions" # 2d hands
-    # CLUSTER_TYPE = "HandsGestures"
-    CLUSTER_TYPE = "Clusters" # manual override for 128d
+    CLUSTER_TYPE = "HandsGestures"
+    # CLUSTER_TYPE = "Clusters" # manual override for 128d
     CLUSTER_TYPE_2 = None
 DROP_LOW_VIS = False
 USE_HEAD_POSE = False
 N_HANDS = N_CLUSTERS = None # declared here, but set in the SQL query below
 # this is for IS_ONE_CLUSTER to only run on a specific CLUSTER_NO
 IS_ONE_CLUSTER = False
-CLUSTER_NO = 1 # sort on this one as HAND_POSITION for IS_HAND_POSE_FUSION
+CLUSTER_NO = 0 # sort on this one as HAND_POSITION for IS_HAND_POSE_FUSION
                 # if not IS_HAND_POSE_FUSION, then this is selecting HandsGestures
 START_CLUSTER = 0
 # I started to create a separate track for Hands, but am pausing for the moment
@@ -149,7 +149,7 @@ TOPIC_NO = [22]
 # 7 is surprise
 #  is yoga << planar,  planar,  fingers crossed
 
-ONE_SHOT = True # take all files, based off the very first sort order.
+ONE_SHOT = False # take all files, based off the very first sort order.
 EXPAND = False # expand with white, as opposed to inpaint and crop
 JUMP_SHOT = True # jump to random file if can't find a run (I don't think this applies to planar?)
 USE_ALL = False # this is for outputting all images from a oneshot, forces ONE_SHOT
@@ -424,6 +424,13 @@ elif IS_SEGONLY and io.platform == "darwin":
             FROM += f" JOIN Images{CLUSTER_TYPE} ic ON s.image_id = ic.image_id "
         if IS_TOPICS or IS_ONE_TOPIC:
             add_topic_select()
+            # TEMP OVERRIDE FOR FINGER POINT TESTING
+        # if TOPIC_NO == [22]:
+        #     CLUSTER_TYPE = "Clusters"
+        #     FROM += f" JOIN Images{CLUSTER_TYPE} ic ON s.image_id = ic.image_id "
+        #     WHERE += " AND ic.cluster_id = 126"
+
+
 
     if FULL_BODY:
         WHERE += " AND s.is_feet = 1 "
@@ -448,6 +455,8 @@ elif IS_SEGONLY and io.platform == "darwin":
             
     if SORT_TYPE == "planar_body":
         WHERE += " AND s.mongo_body_landmarks = 1  "
+
+    
     ###############
     # # join to keywords
     # FROM += " JOIN ImagesKeywords ik ON s.image_id = ik.image_id JOIN Keywords k ON ik.keyword_id = k.keyword_id "
@@ -544,16 +553,22 @@ face_height_output = 1000
     # image_edge_multiplier = [1.3,3.4,2.9,3.4] # slightly less wide 16:10 for hands < Aug 27
     # image_edge_multiplier = [1.3,2,2.9,2] # portrait crop for paris photo images < Aug 30
     # image_edge_multiplier = [1.3,2,2.7,2] # square crop for paris photo videos < Sept 16
-# image_edge_multiplier = [1.3,1.85,2.4,1.85] # tighter square crop for paris photo videos < Oct 29 FINAL VERSION NOV 2024 DO NOT CHANGE
+image_edge_multiplier = [1.3,1.85,2.4,1.85] # tighter square crop for paris photo videos < Oct 29 FINAL VERSION NOV 2024 DO NOT CHANGE
 # image_edge_multiplier = [1.4,3.5,5.6,3.5] # yoga square crop for April 2025 videos < 
     # image_edge_multiplier = [1.6,3.84,3.2,3.84] # wiiiiiiiidest 16:10 for hands
     # image_edge_multiplier = [1.45,3.84,2.87,3.84] # wiiiiiiiidest 16:9 for hands
     # image_edge_multiplier = [1.2,2.3,1.7,2.3] # medium for hands
-image_edge_multiplier = [1.2, 1.2, 1.6, 1.2] # standard portrait
+# image_edge_multiplier = [1.2, 1.2, 1.6, 1.2] # standard portrait
 # sort.max_image_edge_multiplier is the maximum of the elements
 UPSCALE_MODEL_PATH=os.path.join(os.getcwd(), "models", "FSRCNN_x4.pb")
 # construct my own objects
 sort = SortPose(motion, face_height_output, image_edge_multiplier,EXPAND, ONE_SHOT, JUMP_SHOT, HSV_BOUNDS, VERBOSE,INPAINT, SORT_TYPE, OBJ_CLS_ID,UPSCALE_MODEL_PATH=UPSCALE_MODEL_PATH)
+
+# # TEMP TK TESTING
+# sort.MIND = .5
+# sort.MAXD = .8
+sort.MIND = sort.MIND*2
+sort.MAXD = sort.MAXD*3
 
 # CLUSTER_TYPE is passed to sort. THIS SEEMS REDUNDANT!!!
 # sort.set_subset_landmarks(CLUSTER_TYPE)
