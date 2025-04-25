@@ -112,7 +112,7 @@ GET_OPTIMAL_CLUSTERS=False
 # number of clusters produced. run GET_OPTIMAL_CLUSTERS and add that number here
 # 32 for hand positions
 # 128 for hand gestures
-N_CLUSTERS = 128
+N_CLUSTERS = 256
 SAVE_FIG=False ##### option for saving the visualized data
 
 if USE_SEGMENT is True and (CLUSTER_TYPE != "Clusters"):
@@ -179,7 +179,7 @@ elif USE_SEGMENT is True and MODE == 0:
     # for selecting a specific topic
     FROM += f" INNER JOIN ImagesTopics it ON it.image_id = s.image_id " 
     WHERE += " AND it.topic_id = 22 "
-    WHERE = "s.face_x > -33 AND s.face_x < -27 AND s.face_y > -2 AND s.face_y < 2 AND s.face_z > -2 AND s.face_z < 2"
+    # WHERE = "s.face_x > -33 AND s.face_x < -27 AND s.face_y > -2 AND s.face_y < 2 AND s.face_z > -2 AND s.face_z < 2"
     LIMIT = 500000
 
     '''

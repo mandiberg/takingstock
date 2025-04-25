@@ -45,7 +45,7 @@ class SortPose:
         self.BRUTEFORCE = False
         self.use_3D = use_3D
         print("init use_3D",self.use_3D)
-        self.CUTOFF = 200 # DOES factor if ONE_SHOT
+        self.CUTOFF = 2000 # DOES factor if ONE_SHOT
 
         self.CHECK_DESC_DIST = 30
 
@@ -1135,9 +1135,13 @@ class SortPose:
 
         # Find the mode using the most_common function from the collections module
         counter = Counter(hashable_rows)
-        most_common_row = counter.most_common(1)[0][0]
-        print("Most common row in list:")
-        print(most_common_row)
+        # most_common_row = counter.most_common(1)[0][0]
+        most_common = counter.most_common(1)
+        if most_common and most_common[0][1] > 1:
+            most_common_row = most_common[0][0]
+        else:
+            most_common_row = None  # or handle the no-mode case however you like
+        print("Most common row in list:", most_common_row)
         return most_common_row
     
     def safe_round(self,x, decimals=1):
@@ -1156,10 +1160,12 @@ class SortPose:
         if bbox: return [bbox["left"], bbox["top"], bbox["right"], bbox["bottom"]]
         else: return None
 
-    def smart_round_df(self, df_enc, col_to_round):
+    def smart_round_df(self, df_enc, col_to_round, round_down):
         df_rounded = pd.DataFrame()
         digits = int(math.log10(len(df_enc)))
-        if digits < 3: digits = digits-2
+        if round_down > digits:
+            return None
+        if digits < 3: digits = digits-round_down
         else: digits = 1
         print("digits", digits)
         # drop all rows where all values in the row are 0.0
@@ -1218,7 +1224,7 @@ class SortPose:
 
     def get_start_enc_NN(self, start_img, df_enc):
         print("get_start_enc")
-
+        enc1 = None
         if start_img == "median" or start_img == "start_bbox":
             # when I want to start from start_bbox, I pass it a median 128d enc
             print("in median")
@@ -1238,46 +1244,22 @@ class SortPose:
             # flattened_array = df_enc[sort_column].tolist()     
             # # round each value in flattened_array to 2 decimal places
             # flattened_array = [np.round(x, 1) for x in flattened_array]
-            df_rounded = self.smart_round_df(df_enc, sort_column)
-            flattened_array = df_rounded[sort_column].tolist()
-
-            # print("flattened_array 0", flattened_array[0])
-            # print("flattened_array 0", type(flattened_array[0]))
-            # print("flattened_array", flattened_array)
-
-            # if type(flattened_array[0]) in [np.ndarray] and len(flattened_array[0][0]) > 1:
-            #     # catching normalized 
-            #     # Flatten the list of lists
-            #     # flattened_array = [item for sublist in flattened_array for item in sublist]
-            #     item_length = None
-            #     formerly_numpy_array = []
-            #     for item in flattened_array:
-            #         formerly_numpy_item = []
-            #         for subitem in item:
-            #             item_length = len(subitem)
-            #             if isinstance(subitem, list):
-            #                 formerly_numpy_item.extend(subitem)
-            #             elif isinstance(subitem, np.ndarray):
-            #                 formerly_numpy_item.extend(subitem.flatten())
-            #             else:
-            #                 formerly_numpy_item.append(subitem)
-            #         # print("flattened_array 1", formerly_numpy_item)
-            #         formerly_numpy_array.append(formerly_numpy_item)
-            #     # print("flattened_array 1", formerly_numpy_array[0])
-            #     # print("flattened_array 1", flattened_array[0])
-            #     # print("flattened_array 1", type(flattened_array[0]))
-            #     # print("flattened_array",flattened_array)
-            #     enc1 = self.most_common_row(formerly_numpy_array)
-            #     # break enc1 back up into numpy arrays of the length item_length
-            #     enc1 = np.array(enc1).reshape(-1, item_length)
-            #     print("enc1", type (enc1)) 
-            #     print("enc1", enc1)
-            #     # quit()
-            #     # now take that list and convert it to a list of lists
-            # else:
-            #     enc1 = self.most_common_row(flattened_array)
-            enc1 = self.most_common_row(flattened_array)
-            print("get_start_enc_NN most_common_row", enc1)
+            round_down = 1
+            while enc1 == None:
+                # this should loop through and round the values down until it finds a mode
+                # if it doesn't find a mode, it will return None
+                # then it will pick a random value from the flattened_array
+                df_rounded = self.smart_round_df(df_enc, sort_column, round_down)
+                if df_rounded is not None:
+                    flattened_array = df_rounded[sort_column].tolist()
+                    enc1 = self.most_common_row(flattened_array)
+                    print("get_start_enc_NN most_common_row", enc1)
+                    round_down += 1
+                else:
+                    # pick a random enc2 from flattened_array
+                    print("get_start_enc_NN - no df_rounded")
+                    flattened_array = df_enc[sort_column].tolist()
+                    enc1 = random.choice(flattened_array)
             # print(dfmode)
             # enc1 = dfmode.iloc[0].to_list()
             # enc1 = df_128_enc.median().to_list()
