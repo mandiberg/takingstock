@@ -71,7 +71,7 @@ GENERATE_FUSION_PAIRS = False # if true it will query based on MIN_VIDEO_FUSION_
 MIN_VIDEO_FUSION_COUNT = 750
 IS_HAND_POSE_FUSION = False # i'm not sure how this is different from the IS_VIDEO_FUSION
 ONLY_ONE = False
-IS_CLUSTER = True
+IS_CLUSTER = False
 if IS_HAND_POSE_FUSION or IS_VIDEO_FUSION:
     if SORT_TYPE in ["planar_hands", "fingertips_positions", "128d"]:
         # first sort on HandsPositions, then on HandsGestures
@@ -467,7 +467,7 @@ elif IS_SEGONLY and io.platform == "darwin":
     # WHERE += " AND e.encoding_id > 2612275"
 
     # WHERE = "s.site_name_id != 1"
-    LIMIT = 2500000
+    LIMIT = 250
 
     # TEMP TK TESTING
     # WHERE += " AND s.site_name_id = 8"
@@ -565,10 +565,10 @@ UPSCALE_MODEL_PATH=os.path.join(os.getcwd(), "models", "FSRCNN_x4.pb")
 sort = SortPose(motion, face_height_output, image_edge_multiplier,EXPAND, ONE_SHOT, JUMP_SHOT, HSV_BOUNDS, VERBOSE,INPAINT, SORT_TYPE, OBJ_CLS_ID,UPSCALE_MODEL_PATH=UPSCALE_MODEL_PATH)
 
 # # TEMP TK TESTING
-sort.MIND = .5
-sort.MAXD = .8
-# sort.MIND = sort.MIND*2
-# sort.MAXD = sort.MAXD*3
+# sort.MIND = .5
+# sort.MAXD = .8
+sort.MIND = sort.MIND*2
+sort.MAXD = sort.MAXD*3
 
 # CLUSTER_TYPE is passed to sort. THIS SEEMS REDUNDANT!!!
 # sort.set_subset_landmarks(CLUSTER_TYPE)
@@ -822,6 +822,12 @@ def sort_by_face_dist_NN(df_enc):
     # create emtpy df_sorted with the same columns as df_enc
     df_sorted = pd.DataFrame(columns = df_enc.columns)
 
+    # debugging -- will save full df_enc to csv
+    df_enc_outpath = os.path.join(sort.counter_dict["outfolder"],"df_enc.csv")
+    # write the dataframe df_enc to csv at df_enc_outpath
+    df_enc.to_csv(df_enc_outpath, index=False)
+
+
     if sort.CUTOFF < len(df_enc.index): itters = sort.CUTOFF
     else: itters = len(df_enc.index)
     
@@ -837,6 +843,9 @@ def sort_by_face_dist_NN(df_enc):
     # test_lms = test_row['body_landmarks']
     # print(test_lms)
 
+
+    ## SATYAM THIS IS WHAT WILL BE REPLACE BY TSP
+    ## df_sorted = sort.get_closest_df_NN(df_enc, df_sorted, start_image_id, end_image_id)
     for i in range(itters):
 
         ## Find closest
@@ -877,6 +886,7 @@ def sort_by_face_dist_NN(df_enc):
             print("exception on going to get closest")
             print(str(e))
             traceback.print_exc()
+    ## SATYAM THIS THE END OF WHAT WILL BE REPLACE BY TSP
 
     # use the colum site_name_id to asign the value of io.folder_list[site_name_id] to the folder column
     df_sorted['folder'] = df_sorted['site_name_id'].apply(lambda x: io.folder_list[x])
@@ -885,6 +895,10 @@ def sort_by_face_dist_NN(df_enc):
     df_sorted.rename(columns={'dist_enc1': 'dist'}, inplace=True)
 
     print("df_sorted", df_sorted)
+
+    # debugging -- will save full df_enc to csv
+    df_sorted_outpath = os.path.join(sort.counter_dict["outfolder"],"df_sorted.csv")
+    df_sorted.to_csv(df_sorted_outpath, index=False)
 
     # make a list of df_sorted dist
     dist_list = df_sorted['dist'].tolist()

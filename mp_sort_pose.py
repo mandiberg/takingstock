@@ -45,7 +45,7 @@ class SortPose:
         self.BRUTEFORCE = False
         self.use_3D = use_3D
         print("init use_3D",self.use_3D)
-        self.CUTOFF = 2000 # DOES factor if ONE_SHOT
+        self.CUTOFF = 250 # DOES factor if ONE_SHOT
 
         self.CHECK_DESC_DIST = 30
 
@@ -1163,20 +1163,21 @@ class SortPose:
     def smart_round_df(self, df_enc, col_to_round, round_down):
         df_rounded = pd.DataFrame()
         digits = int(math.log10(len(df_enc)))
-        if round_down > digits:
+        if round_down > (digits-1):
             return None
         if digits < 3: digits = digits-round_down
         else: digits = 1
         print("digits", digits)
         # drop all rows where all values in the row are 0.0
         df_enc = df_enc[df_enc[col_to_round].apply(lambda x: any(abs(val) != 0.0 for val in x))]
-        print("df_enc", df_enc.head(100))
+        print("df_enc", df_enc.head())
         # Round each value in the target column to the number of digits in the df
         # 300 rows = -2 decimal places (hundreds)
         # 3000 rows = -3 decimal places (thousands)       
         df_rounded[col_to_round] = df_enc[col_to_round].apply(lambda x: self.safe_round(x, digits))
             # drop all rows where bbox_col is None
         df_rounded = df_rounded.dropna(subset=[col_to_round])
+        print("df_rounded", df_rounded.head())
         return df_rounded
 
     def get_start_obj_bbox(self, start_img, df_enc):
@@ -1228,13 +1229,14 @@ class SortPose:
         if start_img == "median" or start_img == "start_bbox":
             # when I want to start from start_bbox, I pass it a median 128d enc
             print("in median")
+            print("df_enc", df_enc)
 
             if self.SORT_TYPE == "128d": sort_column = "face_encodings68"
             elif self.SORT_TYPE == "planar_body": sort_column = "body_landmarks_array"
             elif self.SORT_TYPE == "planar_hands": sort_column = "hand_landmarks" # hand_landmarks are left and right hands flat list of 126 values
 
             print("sort_column", sort_column)
-            print(df_enc[sort_column].head())
+            print("sort_column head", df_enc[sort_column].head())
             print("lengtth of first value", len(df_enc[sort_column].iloc[0]))
             # Round each value in the face_encodings68 column to 2 decimal places            
             # df_enc['face_encodings68'] = df_enc['face_encodings68'].apply(self.safe_round)
@@ -1255,7 +1257,7 @@ class SortPose:
                     enc1 = self.most_common_row(flattened_array)
                     print("get_start_enc_NN most_common_row", enc1)
                     round_down += 1
-                else:
+                elif df_rounded is None or len(df_rounded) == 1:
                     # pick a random enc2 from flattened_array
                     print("get_start_enc_NN - no df_rounded")
                     flattened_array = df_enc[sort_column].tolist()
