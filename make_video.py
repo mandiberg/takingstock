@@ -845,7 +845,9 @@ def sort_by_face_dist_NN(df_enc):
 
 
     ## SATYAM THIS IS WHAT WILL BE REPLACE BY TSP
-    ## df_sorted = sort.get_closest_df_NN(df_enc, df_sorted, start_image_id, end_image_id)
+    ## if TSP_CONDITIONAL is True:
+        ## df_sorted = sort.get_closest_df_NN(df_enc, df_sorted, start_image_id, end_image_id)
+    ## else:
     for i in range(itters):
 
         ## Find closest
