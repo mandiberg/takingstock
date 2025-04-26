@@ -1865,7 +1865,7 @@ class SortPose:
             cv2.circle(image,(x,y),4,(255,0,0),-1)
         return image
     
-    def get_closest_df_NN(self, df_enc, df_sorted):
+    def get_closest_df_NN(self, df_enc, df_sorted,start_image_id=None, end_image_id=None):
   
         def mask_df(df, column, limit, type="lessthan"):
             # Create the mask based on the condition
@@ -1954,6 +1954,7 @@ class SortPose:
         print("get_closest_df_NN - pre KNN - enc1", enc1)
         # sort KNN (always for planar) or BRUTEFORCE (optional only for 128d)
         if self.BRUTEFORCE and knn_sort == "128d": df_dist_enc = self.brute_force(df_enc, enc1)
+        elif start_image_id is not None: self.sort_df_TSP(df_enc, start_image_id, end_image_id)
         else: df_dist_enc = self.sort_df_KNN(df_enc, enc1, knn_sort)
         print("df_shuffled", df_dist_enc[['image_id','dist_enc1']].sort_values(by='dist_enc1'))
         
