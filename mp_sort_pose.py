@@ -84,10 +84,6 @@ class SortPose:
             self.FACE_DUPE_DIST = -1
             self.BODY_DUPE_DIST = -1
     
-        elif self.TSP_SORT:
-            self.SKIP_FRAC = 5/100  # fraction of entries that can be skipped to optimize for distance
-            self.POP_SIZE =200 # larger size leads to more accurate results but more time taken
-            self.SEED=42 # Seed for reproducible sort
 
         self.INPAINT=INPAINT
         if self.INPAINT:self.INPAINT_MODEL=SimpleLama()
@@ -174,6 +170,13 @@ class SortPose:
         # self.BODY_LMS = [15]
         # self.VERBOSE = VERBOSE
         self.VERBOSE = True
+        #____________________TSP SORT________________
+        if self.TSP_SORT==True:
+            if self.VERBOSE:print("using travelling salesman sorting")
+            self.SKIP_FRAC = 5/100  # fraction of entries that can be skipped to optimize for distance
+            self.POP_SIZE =200 # larger size leads to more accurate results but more time taken
+            self.SEED=42 # Seed for reproducible sort
+        #____________________TSP SORT________________
 
         # place to save bad images
         self.not_make_face = []
@@ -377,6 +380,7 @@ class SortPose:
         if self.MAX_SKIP >= total:
             return dists_sorted[-1]
         cutoff_index = total - self.MAX_SKIP
+        if self.VERBOSE:print("cutoff_index",cutoff_index)
         return float(dists_sorted[cutoff_index])
     
     def evaluate_tsp(self,ind):
@@ -422,10 +426,10 @@ class SortPose:
         self.N_POINTS=self.dist_matrix.shape[0]
         if self.VERBOSE:print("Number of Points",self.N_POINTS)
         if START_IDX == None: START_IDX=0
-        if END_IDX == None: END_IDX=self.N_POINTS
+        if END_IDX == None: END_IDX=self.N_POINTS-1
         #______CALC OPTIMAL SKIP DISTANCE____________
-        self.MAX_SKIP=self.SKIP_FRAC*self.N_POINTS
-        self.SKIP_THRESHOLD = self.compute_skip_threshold(self.dist_matrix, self.MAX_SKIP)
+        self.MAX_SKIP=int(np.floor(self.SKIP_FRAC*self.N_POINTS))
+        self.SKIP_THRESHOLD = self.compute_skip_threshold()
         self.SKIP_PENALTY = self.SKIP_THRESHOLD  # penalty per skipped point (tweak as needed)
         print(f"Optimal SKIP_THRESHOLD for skipping {self.MAX_SKIP} distances: {self.SKIP_THRESHOLD:.3f}")
 
@@ -458,8 +462,8 @@ class SortPose:
         self.stats.register("avg", np.mean)
         return
 
-    def TSP_SORT(self,raw_df):
-        pop, log = algorithms.eaSimple(pop, self.toolbox,
+    def do_TSP_SORT(self,raw_df):
+        self.pop, log = algorithms.eaSimple(self.pop, self.toolbox,
                                 cxpb=0.7, mutpb=0.2,
                                 ngen=40, stats=self.stats,
                                 halloffame=self.hof, verbose=self.VERBOSE)
