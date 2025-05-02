@@ -62,7 +62,7 @@ SORT_TYPE = "128d"
 # SORT_TYPE = "planar_hands"
 # SORT_TYPE = "fingertips_positions"
 FULL_BODY = False # this requires is_feet
-
+TSP_SORT=True
 # this is for controlling if it is using
 # all clusters, 
 IS_VIDEO_FUSION = False # used for constructing SQL query
@@ -562,7 +562,7 @@ image_edge_multiplier = [1.2, 1.2, 1.6, 1.2] # standard portrait
 # sort.max_image_edge_multiplier is the maximum of the elements
 UPSCALE_MODEL_PATH=os.path.join(os.getcwd(), "models", "FSRCNN_x4.pb")
 # construct my own objects
-sort = SortPose(motion, face_height_output, image_edge_multiplier,EXPAND, ONE_SHOT, JUMP_SHOT, HSV_BOUNDS, VERBOSE,INPAINT, SORT_TYPE, OBJ_CLS_ID,UPSCALE_MODEL_PATH=UPSCALE_MODEL_PATH)
+sort = SortPose(motion, face_height_output, image_edge_multiplier,EXPAND, ONE_SHOT, JUMP_SHOT, HSV_BOUNDS, VERBOSE,INPAINT, SORT_TYPE, OBJ_CLS_ID,UPSCALE_MODEL_PATH=UPSCALE_MODEL_PATH,TSP_SORT=TSP_SORT)
 
 # # TEMP TK TESTING
 # sort.MIND = .5
@@ -817,6 +817,26 @@ def save_segment_DB(df_segment):
 # need to pass through start_img_enc rather than start_img_name
 # for linear it is in the df_enc, but for itter, the start_img_name is in prev df_enc
 # takes a dataframe of images and encodings and returns a df sorted by distance
+
+def expand_face_encodings(df,encoding_col= "face_encodings68",):
+    """
+    Given a DataFrame with:
+      - a 'face_encodings68' column where each entry is a length-128 list or array,
+    return a new DataFrame of shape (n_rows, 128) where:
+      - Columns 1..128 are the individual encoding dimensions,
+        named 'enc_0', 'enc_1', ..., 'enc_127'.
+    """
+    # Helper: if entries are string representations of lists, eval to real lists
+    def parse_encoding(x):
+        if isinstance(x, str):
+            return list(eval(x))
+        return list(x)
+
+    # Apply parsing and expand into a DataFrame
+    encodings = df[encoding_col].apply(parse_encoding).tolist()
+    enc_df = pd.DataFrame(encodings, columns=[f"enc_{i}" for i in range(128)])
+    return enc_df
+
 def sort_by_face_dist_NN(df_enc):
     
     # create emtpy df_sorted with the same columns as df_enc
@@ -845,49 +865,52 @@ def sort_by_face_dist_NN(df_enc):
 
 
     ## SATYAM THIS IS WHAT WILL BE REPLACE BY TSP
-    ## if TSP_CONDITIONAL is True:
-        ## df_sorted = sort.get_closest_df_NN(df_enc, df_sorted, start_image_id, end_image_id)
-    ## else:
-    for i in range(itters):
+    if TSP_SORT is True:
+        df_clean=expand_face_encodings(df_enc)
+        sort.set_TSP_sort(df_clean,START_IDX=None,END_IDX=None)
+        # df_sorted = sort.get_closest_df_NN(df_enc, df_sorted, start_image_id, end_image_id)
+        df_sorted=sort.TSP_SORT(df_enc)
+    else:
+        for i in range(itters):
 
-        ## Find closest
-        try:
-            # send in both dfs, and return same dfs with 1+ rows sorted
-            print("BEFORE sort_by_face_dist_NN _ for loop df_enc is", df_enc)
+            ## Find closest
+            try:
+                # send in both dfs, and return same dfs with 1+ rows sorted
+                print("BEFORE sort_by_face_dist_NN _ for loop df_enc is", df_enc)
 
-            df_enc, df_sorted = sort.get_closest_df_NN(df_enc, df_sorted)
-    
-            print("AFTER sort_by_face_dist_NN _ for loop df_enc is", df_enc)
-            print("AFTER sort_by_face_dist_NN _ for loop df_sorted is", df_sorted)
+                df_enc, df_sorted = sort.get_closest_df_NN(df_enc, df_sorted)
+        
+                print("AFTER sort_by_face_dist_NN _ for loop df_enc is", df_enc)
+                print("AFTER sort_by_face_dist_NN _ for loop df_sorted is", df_sorted)
 
-            # # test to see if body_landmarks for row with image_id = 5251199 still is the same as test_lms
-            # retest_row = df_enc.loc[df_enc['image_id'] == 10498233]
-            # print("body_landmarks for retest_row")
-            # retest_lms = retest_row['body_landmarks']
-            # print(retest_lms)
-            # calculate any different between test_lms to retest_lms
+                # # test to see if body_landmarks for row with image_id = 5251199 still is the same as test_lms
+                # retest_row = df_enc.loc[df_enc['image_id'] == 10498233]
+                # print("body_landmarks for retest_row")
+                # retest_lms = retest_row['body_landmarks']
+                # print(retest_lms)
+                # calculate any different between test_lms to retest_lms
 
-            print("df_sorted.iloc[-1], " , df_sorted.iloc[-1])
-            dist = df_sorted.iloc[-1]['dist_enc1']
-            print("sort_by_face_dist_NN _ for loop dist is", dist)
+                print("df_sorted.iloc[-1], " , df_sorted.iloc[-1])
+                dist = df_sorted.iloc[-1]['dist_enc1']
+                print("sort_by_face_dist_NN _ for loop dist is", dist)
 
-            # Break out of the loop if greater than MAXDIST
-            if ONE_SHOT:
-                df_sorted = pd.concat([df_sorted, df_enc])
-                # only return the first x rows
-                df_sorted = df_sorted.head(sort.CUTOFF)
-                print("one shot, breaking out", df_sorted)
-                break
-            # commenting out SHOT_CLOCK for now, Sept 28
-            # elif dist > sort.MAXD and sort.SHOT_CLOCK != 0:
-            elif dist > sort.MAXD or df_enc.empty:
-                print("should breakout, dist is", dist)
-                break
+                # Break out of the loop if greater than MAXDIST
+                if ONE_SHOT:
+                    df_sorted = pd.concat([df_sorted, df_enc])
+                    # only return the first x rows
+                    df_sorted = df_sorted.head(sort.CUTOFF)
+                    print("one shot, breaking out", df_sorted)
+                    break
+                # commenting out SHOT_CLOCK for now, Sept 28
+                # elif dist > sort.MAXD and sort.SHOT_CLOCK != 0:
+                elif dist > sort.MAXD or df_enc.empty:
+                    print("should breakout, dist is", dist)
+                    break
 
-        except Exception as e:
-            print("exception on going to get closest")
-            print(str(e))
-            traceback.print_exc()
+            except Exception as e:
+                print("exception on going to get closest")
+                print(str(e))
+                traceback.print_exc()
     ## SATYAM THIS THE END OF WHAT WILL BE REPLACE BY TSP
 
     # use the colum site_name_id to asign the value of io.folder_list[site_name_id] to the folder column
