@@ -16,10 +16,10 @@ io = DataIO()
 db = io.db
 
 # iterate through folders? 
-IS_CLUSTER = True
+IS_CLUSTER = False
 
 # are we making videos or making merged stills?
-IS_VIDEO = False
+IS_VIDEO = True
 if IS_VIDEO:
     from moviepy import *
     from moviepy import VideoFileClip, AudioFileClip
@@ -53,7 +53,7 @@ ROOT_FOLDER_PATH = '/Volumes/OWC4/segment_images'
 # FOLDER_NAME ="cluster20_0_face_cradle_sept26/giga/face_frame"
 # FOLDER_NAME = "topic17_business_fusion_test"
 # FOLDER_NAME = "cluster1_21_phone_sept24production/silverphone_sept24_production/down/giga"
-FOLDER_NAME = "topic09_fusion_oneshot_expand_april30_750plus"
+FOLDER_NAME = "cluster1_65_1746217926.180846"
 FOLDER_PATH = os.path.join(ROOT_FOLDER_PATH,FOLDER_NAME)
 DIRS = ["1x1", "4x3", "16x10"]
 OUTPUT = os.path.join(io.ROOTSSD, "audioproduction")

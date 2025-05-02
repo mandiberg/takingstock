@@ -393,6 +393,9 @@ def main():
     # FOLDER="travelling_salesman/128d_cluster_close_faces"
     FOLDER="travelling_salesman\\128d_cluster_close_faces"
 
+    ROOT = "/Users/michaelmandiberg/Library/CloudStorage/Dropbox/takingstock_dropbox/test_data"
+    FOLDER = "travelling_salesman/128d_cluster_close_faces"
+
     # ─── DATASET & DISTANCES ─────────────────────────────────────────────────
     # np.random.seed(42)
     # points = np.random.rand(N_POINTS, DIM)
@@ -400,6 +403,8 @@ def main():
     OUTPUT_FILE="df_enc_TSPsorted.csv"
     filepath=os.path.join(ROOT,FOLDER,INPUT_FILE)
     
+    #MM only
+
     df_enc = pd.read_csv(filepath)
 
 

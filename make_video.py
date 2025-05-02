@@ -65,7 +65,7 @@ FULL_BODY = False # this requires is_feet
 TSP_SORT=True
 # this is for controlling if it is using
 # all clusters, 
-IS_VIDEO_FUSION = False # used for constructing SQL query
+IS_VIDEO_FUSION = True # used for constructing SQL query
 GENERATE_FUSION_PAIRS = False # if true it will query based on MIN_VIDEO_FUSION_COUNT and create pairs
                                 # if false, it will grab the list of pair lists below
 MIN_VIDEO_FUSION_COUNT = 750
@@ -186,11 +186,15 @@ if not GENERATE_FUSION_PAIRS:
         # T47 handsome
         # [5,104], [4,124], [10,62], [21,116], [7,57], [5,121], [5,60]
 
+        # TSP TESTING
+        [24,99]
+        
+
         # <3 
         # []] #hands making heart shape
 
         # hands framing corners of photograph
-        [22,15],[24,70]
+        # [22,15],[24,70]
         # # topic 17 selects
         # [1,5]
 
@@ -467,7 +471,7 @@ elif IS_SEGONLY and io.platform == "darwin":
     # WHERE += " AND e.encoding_id > 2612275"
 
     # WHERE = "s.site_name_id != 1"
-    LIMIT = 250
+    LIMIT = 25000
 
     # TEMP TK TESTING
     # WHERE += " AND s.site_name_id = 8"
@@ -553,12 +557,12 @@ face_height_output = 1000
     # image_edge_multiplier = [1.3,3.4,2.9,3.4] # slightly less wide 16:10 for hands < Aug 27
     # image_edge_multiplier = [1.3,2,2.9,2] # portrait crop for paris photo images < Aug 30
     # image_edge_multiplier = [1.3,2,2.7,2] # square crop for paris photo videos < Sept 16
-# image_edge_multiplier = [1.3,1.85,2.4,1.85] # tighter square crop for paris photo videos < Oct 29 FINAL VERSION NOV 2024 DO NOT CHANGE
+image_edge_multiplier = [1.3,1.85,2.4,1.85] # tighter square crop for paris photo videos < Oct 29 FINAL VERSION NOV 2024 DO NOT CHANGE
 # image_edge_multiplier = [1.4,3.5,5.6,3.5] # yoga square crop for April 2025 videos < 
     # image_edge_multiplier = [1.6,3.84,3.2,3.84] # wiiiiiiiidest 16:10 for hands
     # image_edge_multiplier = [1.45,3.84,2.87,3.84] # wiiiiiiiidest 16:9 for hands
     # image_edge_multiplier = [1.2,2.3,1.7,2.3] # medium for hands
-image_edge_multiplier = [1.2, 1.2, 1.6, 1.2] # standard portrait
+# image_edge_multiplier = [1.2, 1.2, 1.6, 1.2] # standard portrait
 # sort.max_image_edge_multiplier is the maximum of the elements
 UPSCALE_MODEL_PATH=os.path.join(os.getcwd(), "models", "FSRCNN_x4.pb")
 # construct my own objects
@@ -869,7 +873,7 @@ def sort_by_face_dist_NN(df_enc):
         df_clean=expand_face_encodings(df_enc)
         sort.set_TSP_sort(df_clean,START_IDX=None,END_IDX=None)
         # df_sorted = sort.get_closest_df_NN(df_enc, df_sorted, start_image_id, end_image_id)
-        df_sorted=sort.TSP_SORT(df_enc)
+        df_sorted=sort.do_TSP_SORT(df_enc)
     else:
         for i in range(itters):
 
@@ -925,9 +929,9 @@ def sort_by_face_dist_NN(df_enc):
     df_sorted_outpath = os.path.join(sort.counter_dict["outfolder"],"df_sorted.csv")
     df_sorted.to_csv(df_sorted_outpath, index=False)
 
-    # make a list of df_sorted dist
-    dist_list = df_sorted['dist'].tolist()
-    print("dist_list", dist_list)
+    # # make a list of df_sorted dist
+    # dist_list = df_sorted['dist'].tolist()
+    # print("dist_list", dist_list)
     
     # print all columns in df_sorted
     print("df_sorted.columns", df_sorted.columns)
@@ -1584,7 +1588,11 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
 
 
 
-            if row['dist'] < sort.MAXD:
+            if not TSP_SORT and row['dist'] > sort.MAXD:
+                sort.counter_dict["failed_dist_count"] += 1
+                print("MAXDIST too big:" , str(sort.MAXD))
+                continue
+            else:
                 # compare_images to make sure they are face and not the same
                 # last_image is cv2 np.array
                 cropped_image, face_diff, skip_face = compare_images(sort.counter_dict["last_image"], img, row['face_landmarks'], row['bbox'])
@@ -1697,9 +1705,6 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
                     sort.counter_dict["last_image_id"] = row['image_id']  #last pair in list, second item in pair
                 else:
                     print("cropped_image is None")
-            else:
-                sort.counter_dict["failed_dist_count"] += 1
-                print("MAXDIST too big:" , str(sort.MAXD))
         # print("sort.counter_dict with last_image???")
         # print(sort.counter_dict)
 

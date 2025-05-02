@@ -47,7 +47,7 @@ class SortPose:
         self.BRUTEFORCE = False
         self.use_3D = use_3D
         print("init use_3D",self.use_3D)
-        self.CUTOFF = 250 # DOES factor if ONE_SHOT
+        self.CUTOFF = 2500 # DOES factor if ONE_SHOT
 
         self.CHECK_DESC_DIST = 30
 
@@ -173,7 +173,7 @@ class SortPose:
         #____________________TSP SORT________________
         if self.TSP_SORT==True:
             if self.VERBOSE:print("using travelling salesman sorting")
-            self.SKIP_FRAC = 5/100  # fraction of entries that can be skipped to optimize for distance
+            self.SKIP_FRAC = 35/100  # fraction of entries that can be skipped to optimize for distance
             self.POP_SIZE =200 # larger size leads to more accurate results but more time taken
             self.SEED=42 # Seed for reproducible sort
         #____________________TSP SORT________________
