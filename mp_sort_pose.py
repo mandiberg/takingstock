@@ -21,11 +21,13 @@ import pymongo
 import pickle
 import traceback
 
+from deap import base, creator, tools, algorithms
+
 
 class SortPose:
     # """Sort image files based on head pose"""
 
-    def __init__(self, motion, face_height_output, image_edge_multiplier, EXPAND=False, ONE_SHOT=False, JUMP_SHOT=False, HSV_CONTROL=None, VERBOSE=True,INPAINT=False, SORT_TYPE="128d", OBJ_CLS_ID = None,UPSCALE_MODEL_PATH=None, use_3D=False):
+    def __init__(self, motion, face_height_output, image_edge_multiplier, EXPAND=False, ONE_SHOT=False, JUMP_SHOT=False, HSV_CONTROL=None, VERBOSE=True,INPAINT=False, SORT_TYPE="128d", OBJ_CLS_ID = None,UPSCALE_MODEL_PATH=None, use_3D=False,TSP_SORT=False):
 
         self.mp_face_detection = mp.solutions.face_detection
         self.mp_drawing = mp.solutions.drawing_utils
@@ -50,6 +52,8 @@ class SortPose:
         self.CHECK_DESC_DIST = 30
 
         self.SORT_TYPE = SORT_TYPE
+        self.TSP_SORT = TSP_SORT
+
         if self.SORT_TYPE == "128d":
             self.MIND = self.MINFACEDIST * 1.5
             self.MAXD = self.MAXFACEDIST * 1.3
@@ -80,7 +84,6 @@ class SortPose:
             self.FACE_DUPE_DIST = -1
             self.BODY_DUPE_DIST = -1
     
-
 
         self.INPAINT=INPAINT
         if self.INPAINT:self.INPAINT_MODEL=SimpleLama()
@@ -167,6 +170,13 @@ class SortPose:
         # self.BODY_LMS = [15]
         # self.VERBOSE = VERBOSE
         self.VERBOSE = True
+        #____________________TSP SORT________________
+        if self.TSP_SORT==True:
+            if self.VERBOSE:print("using travelling salesman sorting")
+            self.SKIP_FRAC = 5/100  # fraction of entries that can be skipped to optimize for distance
+            self.POP_SIZE =200 # larger size leads to more accurate results but more time taken
+            self.SEED=42 # Seed for reproducible sort
+        #____________________TSP SORT________________
 
         # place to save bad images
         self.not_make_face = []
@@ -338,8 +348,133 @@ class SortPose:
             "cluster_no":cluster_no
 
         }
+    
+    def compute_skip_threshold(self):
+        """
+        Given a symmetric distance matrix and a desired number of skips,
+        return the distance threshold above which exactly `max_skip` pairwise
+        distances lie.
 
+        Parameters
+        ----------
+        dist_matrix : np.ndarray, shape (n, n)
+            Symmetric matrix of pairwise distances, with zeros on the diagonal.
+        max_skip : int
+            The number of distances you want to skip (the top `max_skip` largest).
+        
+        Returns
+        -------
+        float
+            The distance cutoff so that exactly `max_skip` distances are larger.
+        """
+        # 1) Extract upper-triangle distances (excluding diagonal)
+        triu_idxs = np.triu_indices_from(self.dist_matrix, k=1)
+        dists = self.dist_matrix[triu_idxs]
+        
+        # 2) Sort distances ascending
+        dists_sorted = np.sort(dists)
+        total = len(dists_sorted)
+        
+        # 3) The cutoff is at the (total - max_skip)th value
+        #    If max_skip >= total, return max distance
+        if self.MAX_SKIP >= total:
+            return dists_sorted[-1]
+        cutoff_index = total - self.MAX_SKIP
+        if self.VERBOSE:print("cutoff_index",cutoff_index)
+        return float(dists_sorted[cutoff_index])
+    
+    def evaluate_tsp(self,ind):
+        route = list(ind)
+        skip_cnt = 0
+        for _ in range(int(self.MAX_SKIP)):
+            overheads = []
+            for j in range(1, len(route)-1):
+                p, c, n = route[j-1], route[j], route[j+1]
+                incl = self.dist_matrix[p,c] + self.dist_matrix[c,n]
+                skip = self.dist_matrix[p,n]
+                overheads.append((incl-skip, j))
+            if not overheads:
+                break
+            max_oh, idx = max(overheads, key=lambda x: x[0])
+            if max_oh > self.SKIP_THRESHOLD:
+                route.pop(idx)
+                skip_cnt += 1
+            else:
+                break
+        total = sum(self.dist_matrix[route[i], route[i+1]] for i in range(len(route)-1))
+        return (total + skip_cnt * self.SKIP_PENALTY,)
+    
+    def cxFixedEndsSimpleSwap(self,ind1, ind2):
+        """Swap a random slice only within ind[1:-1], keeping endpoints fixed."""
+        a, b = sorted(random.sample(range(1, self.N_POINTS-1), 2))
+        ind1[a:b], ind2[a:b] = ind2[a:b], ind1[a:b]
+        return ind1, ind2
 
+    def mutFixedEndsShuffle(self,ind, indpb):
+        """Shuffle only inside ind[1:-1], keeping endpoints fixed."""
+        sub = ind[1:-1]
+        tools.mutShuffleIndexes(sub, indpb=indpb)
+        ind[1:-1] = sub
+        return (ind,)
+
+    def set_TSP_sort(self,df,START_IDX=None,END_IDX=None):
+        #____SETTING UP DISTANCE MATRIX_______
+        df_array = df.values
+        df_diffs = df_array[:, None, :] - df_array[None, :, :]
+        self.dist_matrix = np.sqrt((df_diffs**2).sum(axis=2))
+
+        self.N_POINTS=self.dist_matrix.shape[0]
+        if self.VERBOSE:print("Number of Points",self.N_POINTS)
+        if START_IDX == None: START_IDX=0
+        if END_IDX == None: END_IDX=self.N_POINTS-1
+        #______CALC OPTIMAL SKIP DISTANCE____________
+        self.MAX_SKIP=int(np.floor(self.SKIP_FRAC*self.N_POINTS))
+        self.SKIP_THRESHOLD = self.compute_skip_threshold()
+        self.SKIP_PENALTY = self.SKIP_THRESHOLD  # penalty per skipped point (tweak as needed)
+        print(f"Optimal SKIP_THRESHOLD for skipping {self.MAX_SKIP} distances: {self.SKIP_THRESHOLD:.3f}")
+
+        # ─── DEAP SETUP ───────────────────────────────────────────────────────────
+        creator.create("FitnessMin", base.Fitness, weights=(-1.0,))
+        creator.create("Individual", list, fitness=creator.FitnessMin)
+
+        self.toolbox = base.Toolbox()
+        self.toolbox.register("evaluate", self.evaluate_tsp)
+        self.toolbox.register("mate",    self.cxFixedEndsSimpleSwap)
+        self.toolbox.register("mutate",  self.mutFixedEndsShuffle, indpb=0.05)
+        self.toolbox.register("select",  tools.selTournament, tournsize=3)
+        # Individual: full route with fixed endpoints
+        self.toolbox.register(
+            "individual",
+            tools.initIterate,
+            creator.Individual,
+            lambda: [START_IDX]
+                    + random.sample([i for i in range(self.N_POINTS) if i not in (START_IDX, END_IDX)], self.N_POINTS-2)
+                    + [END_IDX]
+        )
+        self.toolbox.register("population", tools.initRepeat, list, self.toolbox.individual)
+
+        #___________SETTING UP SORTING___________________
+        random.seed(42)
+        self.pop = self.toolbox.population(n=200)
+        self.hof = tools.HallOfFame(1)
+        self.stats = tools.Statistics(lambda ind: ind.fitness.values)
+        self.stats.register("min", np.min)
+        self.stats.register("avg", np.mean)
+        return
+
+    def do_TSP_SORT(self,raw_df):
+        self.pop, log = algorithms.eaSimple(self.pop, self.toolbox,
+                                cxpb=0.7, mutpb=0.2,
+                                ngen=40, stats=self.stats,
+                                halloffame=self.hof, verbose=self.VERBOSE)
+
+        best = self.hof[0]
+        if self.VERBOSE:
+            print("Best route:", best)
+            print("Best fitness:", self.evaluate_tsp(best)[0])
+        sorted_df = raw_df.iloc[best].reset_index(drop=True)
+
+        return sorted_df
     # def set_subset_landmarks(self,CLUSTER_TYPE):
     #     # called directly from make_video
     #     self.CLUSTER_TYPE = CLUSTER_TYPE
