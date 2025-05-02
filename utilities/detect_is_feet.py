@@ -29,27 +29,41 @@ session = Session()
 
 # Batch processing parameters
 batch_size = 1000
-last_id = 0
+last_id = 98788320
 
 while True:
-    # 1. Fetch next batch of SegmentTable rows where is_body is True and is_feet is NULL
+    # # 1. Fetch next batch of SegmentTable rows where is_body is True and is_feet is NULL
+    # results = (
+    #     session.query(SegmentTable.seg_image_id, SegmentTable.image_id)
+    #     .filter(
+    #         SegmentTable.mongo_body_landmarks.is_(True),
+    #         SegmentTable.is_feet.is_(None),
+    #         SegmentTable.seg_image_id > last_id
+    #     )
+    #     .order_by(SegmentTable.seg_image_id)
+    #     .limit(batch_size)
+    #     .all()
+    # )
+
+    # 1. switching to encoding table directly
     results = (
-        session.query(SegmentTable.seg_image_id, SegmentTable.image_id)
+        session.query(Encodings.encoding_id, Encodings.image_id)
         .filter(
-            SegmentTable.mongo_body_landmarks.is_(True),
-            SegmentTable.is_feet.is_(None),
-            SegmentTable.seg_image_id > last_id
+            Encodings.mongo_body_landmarks.is_(True),
+            Encodings.is_feet.is_(None),
+            Encodings.encoding_id > last_id
         )
-        .order_by(SegmentTable.seg_image_id)
+        .order_by(Encodings.encoding_id)
         .limit(batch_size)
         .all()
     )
+            # Encodings.is_feet.is_(None),
 
     if not results:
         print("No more rows to process. Exiting.")
         break
 
-    for seg_image_id, image_id in results:
+    for encoding_id, image_id in results:
         # 2. Fetch pickled body_landmarks from Mongo
         mongo_doc = mongo_collection.find_one({"image_id": image_id}, {"body_landmarks": 1})
         is_feet = False
@@ -62,15 +76,17 @@ while True:
             foot_lms = body_landmarks.landmark[27:33]
             # print(f"Foot landmarks: {foot_lms}")
             visible_count = sum(1 for lm in foot_lms if lm.visibility > 0.85)
-            is_feet = (visible_count >= (len(foot_lms) / 2))
+            # is_feet = (visible_count >= (len(foot_lms) / 2))
+            is_feet = (visible_count >= 1) # if any foot landmark is visible, we consider it as feet
             # if is_feet:
-            #     print(" >>> Detected feet landmarks.")
+            # is_feet = (visible_count >= (len(foot_lms) / 2))
             # print(f"Image ID: {image_id}, Visible foot landmarks: {visible_count}, is_feet: {is_feet}")
 
         # 5. Update MySQL tables
-        session.query(SegmentTable).\
-            filter(SegmentTable.seg_image_id == seg_image_id).\
-            update({"is_feet": is_feet})
+        # skipping segment table bc doing it directly in encodings
+        # session.query(SegmentTable).\
+        #     filter(SegmentTable.seg_image_id == seg_image_id).\
+        #     update({"is_feet": is_feet})
         session.query(Encodings).\
             filter(Encodings.image_id == image_id).\
             update({"is_feet": is_feet})

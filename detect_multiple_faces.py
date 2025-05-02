@@ -97,20 +97,20 @@ switching to topic targeted
 18	afripics
 '''
 # I think this only matters for IS_FOLDER mode, and the old SQL way
-SITE_NAME_ID = 1
+SITE_NAME_ID = 3
 # 2, shutter. 4, istock
 # 7 pond5, 8 123rf
 POSE_ID = 0
 
 # folder doesn't matter if IS_FOLDER is False. Declared FAR below. 
-# MAIN_FOLDER = "/Volumes/RAID18/images_pond5"
-MAIN_FOLDER = "/Volumes/SSD4/images_getty"
-# MAIN_FOLDER = "/Volumes/SSD4green/images_shutterstock"
-# MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/images_picha"
+# MAIN_FOLDER = "/Volumes/RAID54/images_shutterstock"
+# MAIN_FOLDER = "/Volumes/SSD4/images_adobe"
+MAIN_FOLDER = "/Volumes/SSD4green/images_adobe"
+# MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/images_vcg"
 # MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/afripics_v2/images"
 
 # MAIN_FOLDER = "/Volumes/SSD4/images_getty_reDL"
-BATCH_SIZE = 1000 # Define how many from each folder in each batch
+BATCH_SIZE = 2000 # Define how many from each folder in each batch
 LIMIT = 1000
 
 #temp hack to go 1 subfolder at a time
@@ -353,7 +353,7 @@ def collect_the_garbage():
 def init_mongo():
     # init session
     # global engine, Session, session
-    global mongo_client, mongo_db, mongo_collection, bboxnormed_collection, mongo_hand_collection
+    global mongo_client, mongo_db, mongo_collection, bboxnormed_collection, body_world_collection, mongo_hand_collection
     # engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}"
     #                                 .format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']), poolclass=NullPool)
     
@@ -371,6 +371,7 @@ def init_mongo():
     mongo_db = mongo_client["stock"]
     mongo_collection = mongo_db["encodings"]
     bboxnormed_collection = mongo_db["body_landmarks_norm"]
+    body_world_collection = mongo_db["body_world_landmarks"]
     mongo_hand_collection = mongo_db["hand_landmarks"]
 
 def close_mongo():
@@ -826,28 +827,26 @@ def calc_encodings(image, faceLms,bbox):## changed parameters and rebuilt
 def find_body(image):
     if VERBOSE: print("find_body")
     with mp_pose.Pose(
-        static_image_mode=True, min_detection_confidence=0.5) as pose:
-      # for idx, file in enumerate(file_list):
+        static_image_mode=True, min_detection_confidence=0.5, enable_segmentation=False) as pose: # enable_segmentation is not strictly needed but good practice for static images
         try:
-            # image = cv2.imread(file)
             image_height, image_width, _ = image.shape
-            # Convert the BGR image to RGB before processing.
             bodyLms = pose.process(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
             if VERBOSE: print("bodyLms, ", bodyLms)
             if VERBOSE: print("bodyLms.pose_landmarks, ", bodyLms.pose_landmarks)
-            # bodyLms = results.pose_landmarks.landmark
+            if VERBOSE: print("bodyLms.pose_world_landmarks, ", bodyLms.pose_world_landmarks) # Check this
+
             if not bodyLms.pose_landmarks:
                 is_body = False
                 body_landmarks = None
-            else: 
+                body_world_landmarks = None # Initialize world_landmarks
+            else:
                 is_body = True
                 body_landmarks = bodyLms.pose_landmarks
+                body_world_landmarks = bodyLms.pose_world_landmarks # Access World Landmarks
 
-            
-        except:
-            print(f"[find_body]this item failed: {image}")
-        return is_body, body_landmarks
-
+        except Exception as e: # It's better to catch specific exceptions if possible
+            print(f"[find_body] this item failed: {image}, Error: {e}")
+        return is_body, body_landmarks, body_world_landmarks # Return world_landmarks
 def find_hands(image, pose):
     #print("find_body")
 
@@ -1032,7 +1031,8 @@ def process_image_find_body_subroutine(image_id, image, bbox):
         is_body = True
         n_landmarks = pickle.loads(existing_norm["nlms"])
     else:
-        is_body, body_landmarks = find_body(image)
+        existing_worldbody = body_world_collection.find_one({"image_id": image_id})
+        is_body, body_landmarks, body_world_landmarks = find_body(image)
         if is_body and bbox:
             ### NORMALIZE LANDMARKS ###
             nose_pixel_pos = sort.set_nose_pixel_pos(body_landmarks, image.shape)
@@ -1045,6 +1045,13 @@ def process_image_find_body_subroutine(image_id, image, bbox):
             bboxnormed_collection.update_one(
                 {"image_id": image_id},
                 {"$set": {"nlms": pickle.dumps(n_landmarks)}},
+                upsert=True
+            )
+            print(f"Normalized landmarks stored for image_id: {image_id}")
+            ### Save normalized landmarks to MongoDB
+            body_world_collection.update_one(
+                {"image_id": image_id},
+                {"$set": {"nlms": pickle.dumps(existing_worldbody)}},
                 upsert=True
             )
             print(f"Normalized landmarks stored for image_id: {image_id}")
@@ -1106,12 +1113,13 @@ def process_image_hands_subroutine(image_id, image):
             update_hand = True
     return pose, is_hands, hand_landmarks, update_hand
 
-def save_body_hands_mysql_and_mongo(session, image_id, image, bbox_dict, body_landmarks, n_landmarks, hue_bb, lum_bb, sat_bb, val_bb, lum_torso_bb, hue, lum, sat, val, lum_torso, is_left_shoulder, is_right_shoulder, selfie_bbox, is_body, mongo_body_landmarks, is_hands, update_hand, hand_landmarks, pose):
+def save_body_hands_mysql_and_mongo(session, image_id, image, bbox_dict, body_landmarks, n_landmarks, hue_bb, lum_bb, sat_bb, val_bb, lum_torso_bb, hue, lum, sat, val, lum_torso, is_left_shoulder, is_right_shoulder, selfie_bbox, is_body, mongo_body_landmarks, is_hands, update_hand, hand_landmarks, pose, is_feet):
     # to add in 0's so these don't reprocesses repeatedly
     if is_body is None: is_body = False
     if is_hands is None: is_hands = False
+    if is_feet is None: is_feet = False
 
-    print("going to save", image_id, "is_body", is_body, "is_hands", is_hands, "mongo_body_landmarks", mongo_body_landmarks)
+    print("going to save", image_id, "is_body", is_body, "is_hands", is_hands, "is_feet", is_feet, "mongo_body_landmarks", mongo_body_landmarks)
     if not mongo_body_landmarks:
         # get encoding_id for mongo insert_one
         encoding_id_results = session.query(Encodings.encoding_id).filter(Encodings.image_id == image_id).first()
@@ -1244,10 +1252,12 @@ def save_body_hands_mysql_and_mongo(session, image_id, image, bbox_dict, body_la
     session.query(Encodings).filter(Encodings.image_id == image_id).update({
         # Encodings.body_landmarks: body_landmarks
         Encodings.mongo_hand_landmarks: is_hands,
+        Encodings.is_feet: is_feet,
     }, synchronize_session=False)
 
     session.query(SegmentTable).filter(SegmentTable.image_id == image_id).update({
         SegmentTable.mongo_hand_landmarks: is_hands,
+        SegmentTable.is_feet: is_feet,
     }, synchronize_session=False)
 
     if update_hand:
@@ -1263,12 +1273,24 @@ def save_body_hands_mysql_and_mongo(session, image_id, image, bbox_dict, body_la
     # for testing, comment out the commit
     session.commit()
 
+def check_is_feet(body_landmarks):
+    # 4. Evaluate visibility for feet landmarks (27-32)
+    foot_lms = body_landmarks.landmark[27:33]
+    # print(f"Foot landmarks: {foot_lms}")
+    visible_count = sum(1 for lm in foot_lms if lm.visibility > 0.85)
+    is_feet = (visible_count >= (len(foot_lms) / 2))
+    return is_feet
+
 def find_and_save_body(image_id, image, bbox, mongo_body_landmarks, hand_landmarks):
+    hue = sat = val = lum = lum_torso = hue_bb = sat_bb = val_bb = lum_bb = lum_torso_bb = selfie_bbox = bbox_dict =is_left_shoulder=is_right_shoulder = is_feet =None
     if BODYLMS and mongo_body_landmarks is None:
         if VERBOSE: print("doing body, mongo_body_landmarks is None")
         # find body landmarks and normalize them using function
         is_body, n_landmarks, body_landmarks, face_height, nose_pixel_pos = process_image_find_body_subroutine(image_id, image, bbox)
-        
+        if body_landmarks is not None:
+            is_feet = check_is_feet(body_landmarks)
+        if VERBOSE: print("is_feet", is_feet)
+
         if face_height:
             # only do this when there is a face. skip for no face -body reprocessing
             ### detect object info, 
@@ -1296,8 +1318,7 @@ def find_and_save_body(image_id, image, bbox, mongo_body_landmarks, hand_landmar
             selfie_bbox=sort.get_selfie_bbox(segmentation_mask)
             if VERBOSE: print("selfie_bbox",selfie_bbox)
         else:
-            print("no face, skipping object detection, just did the body")
-            hue = sat = val = lum = lum_torso = hue_bb = sat_bb = val_bb = lum_bb = lum_torso_bb = selfie_bbox = bbox_dict =is_left_shoulder=is_right_shoulder =None
+            print("no face, skipping object detection, just did the body, all values already are set to None")
     elif BODYLMS and mongo_body_landmarks:
         # this was for some error handling. to handle exisitin mongo_body_landmarks will require refactoring
         print("doing body, mongo_body_landmarks is not None", mongo_body_landmarks)
@@ -1311,7 +1332,7 @@ def find_and_save_body(image_id, image, bbox, mongo_body_landmarks, hand_landmar
         try:
             # try to save using function:
             if VERBOSE: print("saving body and hands")
-            save_body_hands_mysql_and_mongo(session, image_id, image, bbox_dict, body_landmarks, n_landmarks, hue_bb, lum_bb, sat_bb, val_bb, lum_torso_bb, hue, lum, sat, val, lum_torso, is_left_shoulder, is_right_shoulder, selfie_bbox, is_body, mongo_body_landmarks, is_hands, update_hand, hand_landmarks, pose)
+            save_body_hands_mysql_and_mongo(session, image_id, image, bbox_dict, body_landmarks, n_landmarks, hue_bb, lum_bb, sat_bb, val_bb, lum_torso_bb, hue, lum, sat, val, lum_torso, is_left_shoulder, is_right_shoulder, selfie_bbox, is_body, mongo_body_landmarks, is_hands, update_hand, hand_landmarks, pose, is_feet)
             if VERBOSE: print("saved body and hands")
             # if sql hiccups it will try again, if not, it will hit break on next line
             break  # Transaction succeeded, exit the loop
@@ -1322,7 +1343,8 @@ def find_and_save_body(image_id, image, bbox, mongo_body_landmarks, hand_landmar
 
 
 def process_image_bodylms(task):
-    # df = pd.DataFrame(columns=['image_id','bbox'])
+    # this is the main show April 2025
+
     if VERBOSE: print("task is: ",task)
     image_id = task[0] ### is it enc or image_id
     if task[4] is not None:
@@ -1391,7 +1413,7 @@ def process_image_bodylms(task):
             SegmentTable.no_image: no_image
         }, synchronize_session=False)
         session.commit()
-        print('no image or toooooo smallllll, stored in Images table')
+        print('no image or toooooo smallllll, stored in Images table for image_id', image_id)
 
         # I should probably assign no_good here...?
     # Close the session and dispose of the engine before the worker process exits

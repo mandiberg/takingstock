@@ -19,22 +19,29 @@ db = io.db
 IS_CLUSTER = True
 
 # are we making videos or making merged stills?
-IS_METAS_AUDIO = ALL_ONE_VIDEO = False
 IS_VIDEO = False
 if IS_VIDEO:
-    IS_METAS_AUDIO = True
     from moviepy import *
     from moviepy import VideoFileClip, AudioFileClip
-    ALL_ONE_VIDEO = True
-
-
-LOWEST_DIMS = True
+SAVE_METAS_AUDIO = False
+BUILD_WITH_AUDIO = False
+ALL_ONE_VIDEO = False
+LOWEST_DIMS = False # make this False if assembling big images eg full body
+FULLBODY = True # this is for full body images, will change GIGA_DIMS to FULLBODY_DIMS
 SORT_ORDER = "Chronological"
 DO_RATIOS = False
 GIGA_DIMS = 20688
+FULLBODY_DIMS = 32000
 TEST_DIMS = 4000
 REG_DIMS = 3448
-if LOWEST_DIMS: GIGA_DIMS = REG_DIMS
+if LOWEST_DIMS: 
+    GIGA_DIMS = REG_DIMS
+    SCALE_IMGS = True
+elif FULLBODY:
+    GIGA_DIMS = FULLBODY_DIMS
+    SCALE_IMGS = False
+else:
+    SCALE_IMGS = False
 VERBOSE = True
 # MERGE
 # Provide the path to the folder containing the images
@@ -46,7 +53,7 @@ ROOT_FOLDER_PATH = '/Volumes/OWC4/segment_images'
 # FOLDER_NAME ="cluster20_0_face_cradle_sept26/giga/face_frame"
 # FOLDER_NAME = "topic17_business_fusion_test"
 # FOLDER_NAME = "cluster1_21_phone_sept24production/silverphone_sept24_production/down/giga"
-FOLDER_NAME = "heft_book_example_gestures"
+FOLDER_NAME = "topic09_fusion_oneshot_expand_april30_750plus"
 FOLDER_PATH = os.path.join(ROOT_FOLDER_PATH,FOLDER_NAME)
 DIRS = ["1x1", "4x3", "16x10"]
 OUTPUT = os.path.join(io.ROOTSSD, "audioproduction")
@@ -75,15 +82,22 @@ FRAMERATE = 12
 
 
 def iterate_image_list(FOLDER_PATH,image_files, successes):
-    def crop_giga(img1, DIMS=GIGA_DIMS):
-        if VERBOSE: print("cropping image to", DIMS)
-        # height, width = img1.shape[:3]
-        if img1.shape[0] > DIMS or img1.shape[1] > DIMS:
-            height, width, _ = img1.shape
-            start_row = (height - DIMS) // 2
-            start_col = (width - DIMS) // 2
-            print("start_row", start_row, "start_col", start_col)
-            img1 = img1[start_row:start_row + DIMS, start_col:start_col + DIMS]
+    def crop_scale_giga(img1, DIMS=GIGA_DIMS):
+        if SCALE_IMGS:
+            # this is potentially messy, because it was originally designed to crop images when there were small size differences
+            # but now I'm using it to resize gigas during test runs. 
+            # Resize the image to GIGA_DIMS
+            if VERBOSE: print("resizing image to", DIMS)
+            img1 = cv2.resize(img1, (DIMS, DIMS), interpolation=cv2.INTER_AREA)
+        else:
+            if VERBOSE: print("cropping image to", DIMS)
+            # height, width = img1.shape[:3]
+            if img1.shape[0] > DIMS or img1.shape[1] > DIMS:
+                height, width, _ = img1.shape
+                start_row = (height - DIMS) // 2
+                start_col = (width - DIMS) // 2
+                print("start_row", start_row, "start_col", start_col)
+                img1 = img1[start_row:start_row + DIMS, start_col:start_col + DIMS]
         return img1
     
     # Initialize the merged pairs list with the images in pairs
@@ -99,18 +113,19 @@ def iterate_image_list(FOLDER_PATH,image_files, successes):
         if loaded:
             img1 = image_files[i]
         else:
+            print("loading", image_files[i])
             img1 = cv2.imread(os.path.join(FOLDER_PATH, image_files[i]))
 
         # Always resize img1 to GIGA_DIMS
         if img1.shape[0] > TEST_DIMS or img1.shape[1] > TEST_DIMS:
             if VERBOSE: print("image shape >", img1.shape, image_files[i])
-            img1 = crop_giga(img1)
+            img1 = crop_scale_giga(img1)
         elif img1.shape[0] == REG_DIMS and img1.shape[1] == REG_DIMS:
             # not change needed
             pass
         elif img1.shape[0] > REG_DIMS or img1.shape[1] > REG_DIMS:
-            if VERBOSE: print("image shape > ", img1.shape, image_files[i])
-            img1 = crop_giga(img1, REG_DIMS)
+            if VERBOSE: print("image shape < ", img1.shape, image_files[i])
+            img1 = crop_scale_giga(img1, REG_DIMS)
 
         # Check if there is a second image available
         if i + 1 < len(image_files):
@@ -120,15 +135,15 @@ def iterate_image_list(FOLDER_PATH,image_files, successes):
                 img2 = cv2.imread(os.path.join(FOLDER_PATH, image_files[i + 1]))
 
             # Always resize img2 to GIGA_DIMS
-            if img1.shape[0] > TEST_DIMS or img2.shape[0] > TEST_DIMS:
+            if img2.shape[0] > TEST_DIMS or img2.shape[0] > TEST_DIMS:
                 if VERBOSE: print("second image shape > ", img2.shape, image_files[i + 1])
-                img2 = crop_giga(img2)
+                img2 = crop_scale_giga(img2)
             elif img2.shape[0] == REG_DIMS and img2.shape[1] == REG_DIMS:
                 # not change needed
                 pass
-            elif img1.shape[0] > REG_DIMS or img2.shape[1] > REG_DIMS:
+            elif img2.shape[0] > REG_DIMS or img2.shape[1] > REG_DIMS:
                 if VERBOSE: print("second image shape < ", img2.shape, image_files[i + 1])
-                img1 = crop_giga(img1, REG_DIMS)
+                img2 = crop_scale_giga(img2, REG_DIMS)
 
             if len(img1.shape) == 2:  # img1 is grayscale
                 img1 = cv2.cvtColor(img1, cv2.COLOR_GRAY2BGR)
@@ -305,7 +320,7 @@ def write_video(img_array, FRAMERATE=15, subfolder_path=None):
     print(f"Video saved at: {video_path}")
 
     # Add audio to the video if needed
-    if IS_METAS_AUDIO:
+    if BUILD_WITH_AUDIO:
         audio_file = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/audioproduction/multitrack_mixdown_offset_32.71.wav"
         print("Adding audio to video...")
         print("video_path", video_path)
@@ -327,6 +342,26 @@ def write_video(img_array, FRAMERATE=15, subfolder_path=None):
     
     return video_path
 
+def save_concatenated_metas(subfolders, output_path, csv_file):
+    cat_metas = pd.DataFrame(columns=["image_id", "description", "topic_fit"])
+    print(cat_metas)
+    for subfolder_path in subfolders:
+        metas_path = os.path.join(subfolder_path, "metas.csv")
+        if os.path.exists(metas_path):
+            # Load the metas into a DataFrame
+            metas_df = pd.read_csv(metas_path)
+            # Assign columns=["image_id", "description", "topic_fit"] to metas_df
+            metas_df.columns = ["image_id", "description", "topic_fit"]
+
+            print(len(metas_df))
+            # Append metas_df to cat_metas
+            cat_metas = pd.concat([cat_metas, metas_df], ignore_index=True)
+    # Save cat_metas to CSV
+    output_csv_path = os.path.join(output_path, csv_file)
+    print("Output path for CSV:", output_csv_path)
+    cat_metas.to_csv(output_csv_path, index=False)
+
+
 def main():
     print("starting merge_expanded_images.py")
     if IS_CLUSTER is True:
@@ -336,7 +371,9 @@ def main():
             print("making regular combined video")
             all_img_path_list = get_img_list_subfolders(subfolders)
             write_video(all_img_path_list, FRAMERATE)
-
+            if SAVE_METAS_AUDIO is True:
+                print("saving metas")
+                save_concatenated_metas(subfolders, OUTPUT, CSV_FILE)
             # # const_videowriter(subfolder_path, FRAMERATE)
             # for subfolder_path in subfolders:
             #     write_video(subfolder_path, FRAMERATE)
@@ -345,27 +382,11 @@ def main():
                 all_img_path_list = io.get_img_list(subfolder_path)
                 write_video(all_img_path_list, FRAMERATE, subfolder_path)
 
-        elif IS_METAS_AUDIO is True:
-            cat_metas = pd.DataFrame(columns=["image_id", "description", "topic_fit"])
-            print(cat_metas)
-            for subfolder_path in subfolders:
-                metas_path = os.path.join(subfolder_path, "metas.csv")
-                if os.path.exists(metas_path):
-                    # load the metas into df
-                    metas_df = pd.read_csv(metas_path)
-                    # assign columns=["image_id", "description", "topic_fit"] to metas_df
-                    metas_df.columns = ["image_id", "description", "topic_fit"]
-
-                    print(len(metas_df))
-                    # append metas_df to cat_metas
-                    cat_metas = pd.concat([cat_metas, metas_df], ignore_index=True)
-            # save cat_metas to csv
-            output_path = os.path.join(OUTPUT, CSV_FILE)
-            print(output_path)
-            cat_metas.to_csv(output_path, index=False)
+        elif SAVE_METAS_AUDIO is True:
+            save_concatenated_metas(subfolders, OUTPUT, CSV_FILE)
         else:
             for subfolder_path in subfolders:
-                print("images subfolder_path", subfolder_path)
+                # print(subfolder_path)
                 merged_image, count, cluster_no, handpose_no = merge_images(subfolder_path)
                 if count == 0:
                     print("no images here")
