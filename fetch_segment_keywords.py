@@ -61,6 +61,7 @@ db = io.db
 VERBOSE = False
 SegmentHelper_name = 'SegmentHelper_jan30_ALLgetty4faces'
 TOKEN_COUNT_PATH = "token_counts.csv"
+IS_AFFECT = True
 
 # Create a database engine
 if db['unix_socket']:
@@ -84,7 +85,9 @@ mongo_db = mongo_client["stock"]
 # mongo_collection = mongo_db["tokens_noface"]
 
 # this is for GETTY only
-mongo_collection = mongo_db["tokens_gettyonly"]
+# mongo_collection = mongo_db["tokens_gettyonly"]
+# this is for AFFECT only
+mongo_collection = mongo_db["tokens_affect"]
 
 # create a stemmer object for preprocessing
 stemmer = SnowballStemmer('english')
@@ -95,13 +98,8 @@ def read_csv(file_path):
     with open(file_path, 'r') as file:
         data = file.read().replace('\n', '')
     return data
-# removing all keywords that are stored in gender, ethnicity, and age tables
-io.ROOT = "/Users/michaelmandiberg/Documents/GitHub/facemap/model_files"
-GENDER_LIST = read_csv(os.path.join(io.ROOT, "stopwords_gender.csv"))
-ETH_LIST = read_csv(os.path.join(io.ROOT, "stopwords_ethnicity.csv"))
-AGE_LIST = read_csv(os.path.join(io.ROOT, "stopwords_age.csv"))                       
-MY_STOPWORDS = gensim.parsing.preprocessing.STOPWORDS.union(set(GENDER_LIST+ETH_LIST+AGE_LIST))
 
+io.ROOT = "/Users/michaelmandiberg/Documents/GitHub/facemap/model_files"
 def make_key_dict(filepath, type="keywords"):
     keys_dict = {}
     with open(filepath, 'r') as file:
@@ -119,6 +117,40 @@ KEYS_DICT = make_key_dict("/Users/michaelmandiberg/Documents/GitHub/facemap/util
 STOPWORDS_DICT = make_key_dict(os.path.join(io.ROOT, "gender_stopwords_dict.csv"), type="stopwords")     
 STOPWORDS_DICT_SET = set(STOPWORDS_DICT.keys())
 
+if IS_AFFECT:
+    # load ALL keys
+    ALL_KEYWORDS = KEYS_DICT.values()
+    # load only affect keys
+    AFFECT_CSV = os.path.join(io.ROOT, "go_words_affect_april2025.csv")
+    # make a list of the values in the third column
+    AFFECT_LIST = []
+    with open(AFFECT_CSV, 'r') as file:
+        reader = csv.reader(file)
+        for row in reader:
+            if len(row) > 2:
+                AFFECT_LIST.append(row[2])
+    print(AFFECT_LIST)
+    # subtract the affect keys from the ALL keywords
+    NOT_AFFECT_LIST = [word for word in ALL_KEYWORDS if word not in AFFECT_LIST]
+    print("NOT_AFFECT_LIST: ", NOT_AFFECT_LIST[0:50])
+    MY_STOPWORDS = gensim.parsing.preprocessing.STOPWORDS.union(set(NOT_AFFECT_LIST))
+
+    
+else:
+    # # removing all keywords that are stored in gender, ethnicity, and age tables
+    GENDER_LIST = read_csv(os.path.join(io.ROOT, "stopwords_gender.csv"))
+    ETH_LIST = read_csv(os.path.join(io.ROOT, "stopwords_ethnicity.csv"))
+    AGE_LIST = read_csv(os.path.join(io.ROOT, "stopwords_age.csv"))                       
+    MY_STOPWORDS = gensim.parsing.preprocessing.STOPWORDS.union(set(GENDER_LIST+ETH_LIST+AGE_LIST))
+
+
+# # removing all keywords that are stored in gender, ethnicity, and age tables
+# GENDER_LIST = read_csv(os.path.join(io.ROOT, "stopwords_gender.csv"))
+# ETH_LIST = read_csv(os.path.join(io.ROOT, "stopwords_ethnicity.csv"))
+# AGE_LIST = read_csv(os.path.join(io.ROOT, "stopwords_age.csv"))                       
+# MY_STOPWORDS = gensim.parsing.preprocessing.STOPWORDS.union(set(GENDER_LIST+ETH_LIST+AGE_LIST))
+
+
 title = 'Please choose your operation: '
 options = ['Create helper table', 'Fetch keywords list and make tokens', 'Fetch ethnicity list', 'Prune Table where is_face == None', 
            'move new segment image_ids to existing segment','fetch description/Image metas if None','count tokens',
@@ -126,8 +158,8 @@ options = ['Create helper table', 'Fetch keywords list and make tokens', 'Fetch 
            ]
 option, index = pick(options, title)
 
-LIMIT= 3000000
-START_ID = 30000
+LIMIT= 10
+START_ID = 300000
 MAXID = 150000000
 
 # Initialize the counter
@@ -463,7 +495,7 @@ def prune_table(image_id, lock, session):
 def preprocess_keywords(task, lock,session):
     if VERBOSE: print("preprocess_keywords, this task: ", task)
     target_image_id = task[0]
-    IS_NOT_FACE = task[1]
+    routine = task[1]
     ambig_key_dict = { "black-and-white": "black_and_white", "black and white background": "black_and_white background", "black and white portrait": "black_and_white portrait", "black amp white": "black_and_white", "white and black": "black_and_white", "black and white film": "black_and_white film", "black and white wallpaper": "black_and_white wallpaper", "black and white cover photos": "black_and_white cover photos", "black and white outfit": "black_and_white outfit", "black and white city": "black_and_white city", "blackandwhite": "black_and_white", "black white": "black_and_white", "black friday": "black_friday", "black magic": "black_magic", "black lives matter": "black_lives_matter black_ethnicity", "black out tuesday": "black_out_tuesday black_ethnicity", "black girl magic": "black_girl_magic black_ethnicity", "beautiful black women": "beautiful black_ethnicity women", "black model": "black_ethnicity model", "black santa": "black_ethnicity santa", "black children": "black_ethnicity children", "black history": "black_ethnicity history", "black family": "black_ethnicity family", "black community": "black_ethnicity community", "black owned business": "black_ethnicity owned business", "black holidays": "black_ethnicity holidays", "black models": "black_ethnicity models", "black girl bullying": "black_ethnicity girl bullying", "black santa claus": "black_ethnicity santa claus", "black hands": "black_ethnicity hands", "black christmas": "black_ethnicity christmas", "white and black girl": "white_ethnicity and black_ethnicity girl", "white woman": "white_ethnicity woman", "white girl": "white_ethnicity girl", "white people": "white_ethnicity", "red white and blue": "red_white_and_blue"}
     def clarify_keyword(text):
         # // if text contains either of the strings "black" or "white", replace with "black_and_white"
@@ -478,16 +510,24 @@ def preprocess_keywords(task, lock,session):
         return stemmed
     
     def preprocess_list(keyword_list):
-        result = []
-        # print("keyword_list: ", keyword_list)
-        # Normalize the phrases to lowercase for consistent comparison
-        keyword_list = [phrase.lower() for phrase in keyword_list]
-
-        def check_for_stopwords(phrases):
+        def find_words_in_phrases(strings):
+            # Step 1: Create a list of individual strings with stopword replacement
+            individual_strings = []
+            for string in strings:
+                # print(f"this is the string to check for stopwords: {string}")
+                # If the entire string is a stopword, replace it
+                if string in STOPWORDS_DICT_SET:
+                    # print("stopword found: ", string)
+                    string = STOPWORDS_DICT[string]
+                    # print("stopword replaced: ", string)
+                individual_strings.append(string)
+            return individual_strings
+        
+        def check_for_stopwords_bup(phrases):
             # Step 1: Create a list of individual phrases with stopword replacement
             individual_phrases = []
             for phrase in phrases:
-                # print(f"this is the phrase to check for stopwords: {phrase}")
+                print(f"this is the phrase to check for stopwords: {phrase}")
                 # If the entire phrase is a stopword, replace it
                 if phrase in STOPWORDS_DICT_SET:
                     # print("stopword found: ", phrase)
@@ -496,17 +536,10 @@ def preprocess_keywords(task, lock,session):
                 individual_phrases.append(phrase)
             return individual_phrases
 
-        # Step 1: Check for stopwords at the phrase level
-        individual_phrases = check_for_stopwords(keyword_list)
-
-        # Step 2: Split phrases into individual words
-        individual_words = [word for phrase in individual_phrases for word in phrase.split()]
-
-        # Step 3: Check for stopwords at the word level
         def check_words_for_stopwords(words):
             filtered_words = []
             for word in words:
-                # print(f"this is the word to check for stopwords: {word}")
+                print(f"this is the word to check for stopwords: {word}")
                 # Check for stopwords at the word level
                 if word in STOPWORDS_DICT_SET:
                     # print("stopword found: ", word)
@@ -515,9 +548,22 @@ def preprocess_keywords(task, lock,session):
                 filtered_words.append(word)
             return filtered_words
 
-        individual_words = check_words_for_stopwords(individual_words)
+        result = []
+        # print("keyword_list: ", keyword_list)
+        # Normalize the phrases to lowercase for consistent comparison
+        keyword_list = [phrase.lower() for phrase in keyword_list]
+
+        # Step 1: Check for stopwords at the phrase level
+        individual_phrases = find_words_in_phrases(keyword_list)
+
+        # Step 2: Split phrases into individual words
+        individual_words = [word for phrase in individual_phrases for word in phrase.split()]
+
+        # Step 3: Check for stopwords at the word level
+        individual_words = find_words_in_phrases(individual_words)
         # print("individual_words: ", individual_words)
         # Step 4: Process the final list of words
+
         for token in individual_words:
             # print("this is the token: ", token)
             token = clarify_keyword(token.lower())  # Normalize to lowercase again, if needed
@@ -584,9 +630,9 @@ def preprocess_keywords(task, lock,session):
                     print(f"Keyword entry for image_id {target_image_id} not found from")
                     return
         else:
-            print(f"Keywords entry for image_id {target_image_id} not found.")
+            print(f"Keywords entry for image_id {target_image_id} not found, will check for description.")
 
-            if IS_NOT_FACE:
+            if routine == "isnotface":
                 select_description_query = (
                     select(SegmentBig_isnotface.description)
                     .filter(SegmentBig_isnotface.image_id == target_image_id)
@@ -617,7 +663,7 @@ def preprocess_keywords(task, lock,session):
 
     # do this regardless of whether is_mongo_tokens is True or False    
     # create a SegmentBig entry object
-    if IS_NOT_FACE:
+    if routine == "isnotface":
         SegmentBig_entry = (
             session.query(SegmentBig_isnotface)
             .filter(SegmentBig_isnotface.image_id == target_image_id)
@@ -630,18 +676,20 @@ def preprocess_keywords(task, lock,session):
             .first()
         )
 
-    # use SegmentTable object to test if target_image_id is in the SegmentTable table
-    existing_segment_entry = (
-        session.query(SegmentTable)
-        .filter(SegmentTable.image_id == target_image_id)
-        .first()
-    )
-    if existing_segment_entry:
+    # # use SegmentTable object to test if target_image_id is in the SegmentTable table
+    # I'm not sure why this is duplicated
+    # existing_segment_entry = (
+    #     session.query(SegmentTable)
+    #     .filter(SegmentTable.image_id == target_image_id)
+    #     .first()
+    # )
+    # if existing_segment_entry:
+    if SegmentBig_entry:
         is_in_segment_table = True
-        # print(f"image_id {target_image_id} already exists in the SegmentTable.")
+        print(f"image_id {target_image_id} already exists in the SegmentTable.")
     else:
         is_in_segment_table = False
-        # print(f"image_id {target_image_id} does not exist in the SegmentTable.")
+        print(f"image_id {target_image_id} does not exist in the SegmentTable.")
 
     if token_list:
         # if tokens processed, insert the tokens into the mongo collection
@@ -653,8 +701,10 @@ def preprocess_keywords(task, lock,session):
             print(f"Keyword list for image_id {target_image_id} will be updated.")
         SegmentBig_entry.mongo_tokens = 1
         print("assigned mongo_tokens to 1 for ", target_image_id)
-        if is_in_segment_table:
-            existing_segment_entry.mongo_tokens = 1
+        if is_in_segment_table and routine == "affect":
+            SegmentBig_entry.mongo_tokens_affect = 1
+        else:
+            SegmentBig_entry.mongo_tokens = 1
     else:
         insert_mongo = False
         print(f"Keywords entry for image_id {target_image_id} not found.")
@@ -859,22 +909,29 @@ elif index == 1:
     function=preprocess_keywords
 
     # 1/13/2025, to work with isnotface, use SegmentBig_isnotface, and set IS_NOT_FACE = True
-    IS_NOT_FACE = True
+    IS_NOT_FACE = False
     # 1/20/2024 to work with IS_GETTY_ONLY, change declarative_base SegmentBig_isnotface to getty segment name, and set IS_GETTY_ONLY = True
-    IS_GETTY_ONLY = True
+    IS_GETTY_ONLY = False
 
     ################FETCHING KEYWORDS AND CREATING TOKENS #################
     if IS_NOT_FACE:
         print("IS_NOT_FACE is True")
         distinct_image_ids_query = select(SegmentBig_isnotface.image_id.distinct()).filter(SegmentBig_isnotface.mongo_tokens == None, SegmentBig_isnotface.no_image == None, SegmentBig_isnotface.image_id > START_ID).limit(LIMIT)
+        routine = "is_not_face"
+    elif IS_AFFECT:
+        print("IS_AFFECT is True")
+        distinct_image_ids_query = select(SegmentBig.image_id.distinct()).filter(SegmentBig.mongo_tokens_affect == None, SegmentBig.image_id > START_ID).limit(LIMIT)
+        routine = "affect"
     else:
+        print("regular preprocess, no flags")
         distinct_image_ids_query = select(SegmentBig.image_id.distinct()).filter(SegmentBig.mongo_tokens == None, SegmentBig.image_id > START_ID).limit(LIMIT)
+        routine = "regular"
     distinct_image_ids = [row[0] for row in session.execute(distinct_image_ids_query).fetchall()]
 
     # print the length of the result
     print(len(distinct_image_ids), "rows")
     for target_image_id in distinct_image_ids:
-        work_queue.put([target_image_id, IS_NOT_FACE])
+        work_queue.put([target_image_id, routine])
 
        
 elif index == 2:
