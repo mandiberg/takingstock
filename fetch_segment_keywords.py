@@ -138,6 +138,7 @@ if IS_AFFECT:
     
 else:
     # # removing all keywords that are stored in gender, ethnicity, and age tables
+    AFFECT_LIST = None
     GENDER_LIST = read_csv(os.path.join(io.ROOT, "stopwords_gender.csv"))
     ETH_LIST = read_csv(os.path.join(io.ROOT, "stopwords_ethnicity.csv"))
     AGE_LIST = read_csv(os.path.join(io.ROOT, "stopwords_age.csv"))                       
@@ -158,8 +159,8 @@ options = ['Create helper table', 'Fetch keywords list and make tokens', 'Fetch 
            ]
 option, index = pick(options, title)
 
-LIMIT= 10
-START_ID = 300000
+LIMIT= 10000000
+START_ID = 9996000
 MAXID = 150000000
 
 # Initialize the counter
@@ -567,10 +568,15 @@ def preprocess_keywords(task, lock,session):
         for token in individual_words:
             # print("this is the token: ", token)
             token = clarify_keyword(token.lower())  # Normalize to lowercase again, if needed
-            if token and token not in MY_STOPWORDS and len(token) > 2:
-                # print("token: ", token)
+            if AFFECT_LIST:
+                # print("this is the token: ", token)
+                if token in AFFECT_LIST:
+                    # print("this is the token: ", token)
+                    result.append(lemmatize_stemming(token))
+            elif token and token not in MY_STOPWORDS and len(token) > 2:
+                print("token: ", token)
                 result.append(lemmatize_stemming(token))
-        # print("result: ", result)
+        print("result: ", result)
         return result
 
     ####
@@ -686,10 +692,10 @@ def preprocess_keywords(task, lock,session):
     # if existing_segment_entry:
     if SegmentBig_entry:
         is_in_segment_table = True
-        print(f"image_id {target_image_id} already exists in the SegmentTable.")
+        # print(f"image_id {target_image_id} already exists in the SegmentTable.")
     else:
         is_in_segment_table = False
-        print(f"image_id {target_image_id} does not exist in the SegmentTable.")
+        # print(f"image_id {target_image_id} does not exist in the SegmentTable.")
 
     if token_list:
         # if tokens processed, insert the tokens into the mongo collection
@@ -700,14 +706,14 @@ def preprocess_keywords(task, lock,session):
             insert_mongo = True
             print(f"Keyword list for image_id {target_image_id} will be updated.")
         SegmentBig_entry.mongo_tokens = 1
-        print("assigned mongo_tokens to 1 for ", target_image_id)
+        # print("assigned mongo_tokens to 1 for ", target_image_id)
         if is_in_segment_table and routine == "affect":
             SegmentBig_entry.mongo_tokens_affect = 1
         else:
             SegmentBig_entry.mongo_tokens = 1
     else:
         insert_mongo = False
-        print(f"Keywords entry for image_id {target_image_id} not found.")
+        # print(f"Keywords entry for image_id {target_image_id} not found.")
 
     with lock:
         # Increment the counter using the lock to ensure thread safety
@@ -920,7 +926,10 @@ elif index == 1:
         routine = "is_not_face"
     elif IS_AFFECT:
         print("IS_AFFECT is True")
-        distinct_image_ids_query = select(SegmentBig.image_id.distinct()).filter(SegmentBig.mongo_tokens_affect == None, SegmentBig.image_id > START_ID).limit(LIMIT)
+        # distinct_image_ids_query = select(SegmentBig.image_id.distinct()).filter(SegmentBig.mongo_tokens_affect == None, SegmentBig.image_id > START_ID).limit(LIMIT)
+        distinct_image_ids_query = select(SegmentBig.image_id.distinct())\
+            .join(SegmentTable, SegmentBig.image_id == SegmentTable.image_id)\
+            .filter(SegmentBig.mongo_tokens_affect == None, SegmentBig.image_id > START_ID).limit(LIMIT)
         routine = "affect"
     else:
         print("regular preprocess, no flags")

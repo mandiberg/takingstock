@@ -9,7 +9,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 # my ORM
-from my_declarative_base import Base, Images, SegmentBig, Topics,Topics_isnotface, ImagesTopics, ImagesTopics_isnotface, ImagesTopics_isnotface_isfacemodel, imagestopics_ALLgetty4faces_isfacemodel, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON, ForeignKey
+from my_declarative_base import Base, Images, SegmentBig, Topics,Topics_isnotface, Topics_affect, ImagesTopics, ImagesTopics_isnotface, ImagesTopics_isnotface_isfacemodel, ImagesTopics_affect, imagestopics_ALLgetty4faces_isfacemodel, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON, ForeignKey
 import pymongo
 
 from sqlalchemy.exc import IntegrityError
@@ -65,7 +65,7 @@ LDA_model, Aug26
 
 
 
-testing cohoerence for 30,40,50 topics sept 7: 21367s
+testing coherence for 30,40,50 topics sept 7: 21367s
 '''
 
 title = 'Please choose your operation: '
@@ -76,19 +76,22 @@ io.db["name"] = "stock"
 io.ROOT = "/Users/michaelmandiberg/Documents/GitHub/facemap/model_files"
 
 # Satyam, you want to set this to False
-USE_SEGMENT = False
-USE_BIGSEGMENT = False
-IS_GETTYONLY = True
-IS_NOT_FACE = True # this turns of the xyz angle filter for faces pointing forward and returns all images
-USE_EXISTING_MODEL = True
-VERBOSE = False
-RANDOM = False
+USE_SEGMENT = False # only used for indexing
+USE_BIGSEGMENT = True # sets declarative base object. Seem to need to be True for corpus generation. limit with ANGLE instead
+IS_GETTYONLY = False # this is for the NOT FACE to constrain the database to only getty images for testing
+IS_NOT_FACE = False # this turns of the xyz angle filter for faces pointing forward and returns all images
+USE_EXISTING_MODEL = True # this is for the NOT FACE data, to use the FACE model, not used elsewhere
+IS_AFFECT = True # switches to the affect model
+VERBOSE = True
+RANDOM = False # selects random image_ids from the DB. not tested. maybe runs very slow. 
 global_counter = 0
-QUERY_LIMIT = 100000 
+QUERY_LIMIT = 100000000
 query_start_counter = 0 # only used in write image topics
-# started at 9:45PM, Feb 17
+ANGLE = 1 # controls x/y face angle in +/-, set to 9 for building the full model, then indexed
 
-if IS_NOT_FACE and not USE_EXISTING_MODEL:
+if IS_AFFECT:
+    MODEL_FOLDER = os.path.join(io.ROOT,"model_affect")
+elif IS_NOT_FACE and not USE_EXISTING_MODEL:
     MODEL_FOLDER = os.path.join(io.ROOT,"model_isnotface")
 else:
     MODEL_FOLDER = os.path.join(io.ROOT,"model_isface")
@@ -97,12 +100,11 @@ NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 MODEL_PATH=os.path.join(MODEL_FOLDER,"model")
 DICT_PATH=os.path.join(MODEL_FOLDER,"dictionary.dict")
 BOW_CORPUS_PATH=os.path.join(MODEL_FOLDER,"BOW_lda_corpus.mm")
-TOKEN_PATH=os.path.join(MODEL_FOLDER,"tokenized_keyword_list.csv")
 TFIDF_CORPUS_PATH=os.path.join(MODEL_FOLDER,"TFIDF_lda_corpus.mm")
 
 
 MODEL="TF" ## OR TF  ## Bag of words or TF-IDF
-NUM_TOPICS=64
+NUM_TOPICS=8
 
 stemmer = SnowballStemmer('english')
 
@@ -113,13 +115,32 @@ def read_csv(file_path):
         data = file.read().replace('\n', '')
     return data
 
-# removing all keywords that are stored in gender, ethnicity, and age tables
-GENDER_LIST = read_csv(os.path.join(io.ROOT, "stopwords_gender.csv"))
-ETH_LIST = read_csv(os.path.join(io.ROOT, "stopwords_ethnicity.csv"))
-AGE_LIST = read_csv(os.path.join(io.ROOT, "stopwords_age.csv"))                       
-SKIP_TOKEN_LIST = read_csv(os.path.join(io.ROOT, "skip_tokens.csv"))                       
-
-MY_STOPWORDS = gensim.parsing.preprocessing.STOPWORDS.union(set(GENDER_LIST+ETH_LIST+AGE_LIST))
+if IS_AFFECT:
+    # load ALL keys
+    ALL_KEYWORDS = read_csv("/Users/michaelmandiberg/Documents/GitHub/facemap/utilities/keys/Keywords_202408151415.csv")
+    # load only affect keys
+    AFFECT_CSV = os.path.join(io.ROOT, "go_words_affect_april2025.csv")
+    # make a list of the values in the third column
+    AFFECT_LIST = []
+    with open(AFFECT_CSV, 'r') as file:
+        reader = csv.reader(file)
+        for row in reader:
+            if len(row) > 2:
+                AFFECT_LIST.append(row[2])
+    print(AFFECT_LIST)
+    # subtract the affect keys from the ALL keywords
+    NOT_AFFECT_LIST = [word for word in ALL_KEYWORDS if word not in AFFECT_LIST]
+    print("NOT_AFFECT_LIST: ", NOT_AFFECT_LIST[0:50])
+    MY_STOPWORDS = gensim.parsing.preprocessing.STOPWORDS.union(set(NOT_AFFECT_LIST))
+    SKIP_TOKEN_LIST = read_csv(os.path.join(io.ROOT, "skip_tokens.csv"))                       
+    
+else:
+    # removing all keywords that are stored in gender, ethnicity, and age tables
+    GENDER_LIST = read_csv(os.path.join(io.ROOT, "stopwords_gender.csv"))
+    ETH_LIST = read_csv(os.path.join(io.ROOT, "stopwords_ethnicity.csv"))
+    AGE_LIST = read_csv(os.path.join(io.ROOT, "stopwords_age.csv"))                       
+    SKIP_TOKEN_LIST = read_csv(os.path.join(io.ROOT, "skip_tokens.csv"))                       
+    MY_STOPWORDS = gensim.parsing.preprocessing.STOPWORDS.union(set(GENDER_LIST+ETH_LIST+AGE_LIST))
 
 
 if db['unix_socket']:
@@ -157,6 +178,12 @@ elif IS_NOT_FACE and USE_EXISTING_MODEL:
     images_topics_table = "imagestopics_isnotface_isfacemodel"
     SegmentTable = SegmentBig
     SegmentTable_name = 'SegmentBig_isnotface'
+elif IS_AFFECT:
+    mongo_collection = mongo_db['tokens_affect']
+    topics_table = "topics_affect"
+    images_topics_table = "imagestopics_affect"
+    SegmentTable = SegmentBig
+    SegmentTable_name = 'SegmentBig_isface'
 else:
     mongo_collection = mongo_db['tokens']
     topics_table = "topics"
@@ -281,10 +308,48 @@ def load_corpus():
     corpus = corpora.MmCorpus(TFIDF_CORPUS_PATH)
     return dictionary, corpus 
 
-    
+def print_word_counts(dictionary, corpus):
+    # This function will print the word counts for each token in the corpus
+    from collections import defaultdict
+
+    # Initialize a dictionary to store token counts
+    token_counts = defaultdict(int)
+
+    # Iterate through each document in the corpus
+    for doc in corpus:
+        print(len(doc),doc)
+        # Each doc is a list of (token_id, count) tuples
+        for token_id, count in doc:
+            token_counts[token_id] += count
+
+    # Now output each word with its count
+    for token_id, count in token_counts.items():
+        word = dictionary[token_id]
+        print(f"{word},{count}")
+
+    # Optionally, sort by count (descending) for better insights
+    sorted_counts = sorted(token_counts.items(), key=lambda x: x[1], reverse=True)
+    print("\nTop 20 most frequent words:")
+    for token_id, count in sorted_counts[:20]:
+        word = dictionary[token_id]
+        print(f"Word: {word}, Count: {count}")
+
+    # This will give you the document frequency (number of documents containing each word)
+    for token_id in dictionary.keys():
+        word = dictionary[token_id]
+        doc_freq = dictionary.dfs[token_id]  # Number of documents this word appears in
+        print(f"Word: {word}, Document Frequency: {doc_freq}")
+            
 def LDA_model(num_topics):
     dictionary, corpus = load_corpus()
+    print_word_counts(dictionary, corpus)    
     print("processing the model now")
+
+    filtered_corpus = [doc for doc in corpus if len(doc) >= 3]
+    # Print stats before and after filtering
+    print(f"Original corpus size: {len(corpus)} documents")
+    print(f"Filtered corpus size: {len(filtered_corpus)} documents")
+    print(f"Removed {len(corpus) - len(filtered_corpus)} documents with fewer than 2 tokens")
     lda_model = gensim.models.LdaMulticore(corpus, num_topics=num_topics, id2word=dictionary, passes=2, workers=NUMBER_OF_PROCESSES)
     # alpha=(50/num_topics), eta = 0.1,
     lda_model.save(MODEL_PATH)
@@ -300,6 +365,13 @@ def write_topics(lda_model):
             # Create a Topics object
             print("IS_NOT_FACE new topic is", idx)
             topics_entry = Topics_isnotface(
+            topic_id = idx,
+            topic = "".join(topic_list)
+            )
+        elif IS_AFFECT:
+            # Create a Topics object
+            print("IS_AFFECT new topic is", idx)
+            topics_entry = Topics_affect(
             topic_id = idx,
             topic = "".join(topic_list)
             )
@@ -452,19 +524,23 @@ def calc_optimum_topics():
 
 def gen_corpus():
     # this takes the tokenized keyword list and generates a corpus saved to disk
-    print("generating corpus")
+    print("generating corpus, will save here:", DICT_PATH)
     # query = session.query(SegmentTable.tokenized_keyword_list).filter(SegmentTable.tokenized_keyword_list.isnot(None)).limit(QUERY_LIMIT)
     if IS_NOT_FACE:
         query = session.query(SegmentTable.image_id).filter(
             SegmentTable.mongo_tokens.isnot(None)
         ).limit(QUERY_LIMIT)
+    elif IS_AFFECT:
+        query = session.query(SegmentTable.image_id).filter(
+            SegmentTable.mongo_tokens_affect.isnot(None)
+        ).limit(QUERY_LIMIT)
     else:
         query = session.query(SegmentTable.image_id).filter(
             SegmentTable.mongo_tokens.isnot(None),
-            SegmentTable.face_y > -9,
-            SegmentTable.face_y < 9,
-            SegmentTable.face_z > -9,
-            SegmentTable.face_z < 9
+            SegmentTable.face_y > ANGLE*-1,
+            SegmentTable.face_y < ANGLE,
+            SegmentTable.face_z > ANGLE*-1,
+            SegmentTable.face_z < ANGLE
         ).limit(QUERY_LIMIT)
     results = query.all()
     total_rows = query.count()
@@ -551,7 +627,6 @@ def topic_model():
     # gen_corpus(processed_txt,MODEL)
     
     lda_model=LDA_model(NUM_TOPICS)
-
     write_topics(lda_model)
     
     return

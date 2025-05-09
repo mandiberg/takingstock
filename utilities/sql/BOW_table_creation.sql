@@ -22,12 +22,12 @@ CREATE TABLE ImagesTopics (
 );
 
 
-CREATE TABLE Topics_isnotface (
+CREATE TABLE Topics_affect (
 	topic_id INT,
 	topic VARCHAR(250)
 );
 
-CREATE TABLE imagestopics_isnotface_isfacemodel (
+CREATE TABLE imagestopics_affect (
 	image_id INT,
     topic_id INT,
     topic_score FLOAT,

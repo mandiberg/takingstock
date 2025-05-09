@@ -134,6 +134,7 @@ class Encodings(Base):
     mongo_hand_landmarks_norm   = Column(Boolean)
     is_face_no_lms = Column(Boolean)
     is_feet              = Column(Boolean)
+    mongo_body_landmarks_3D   = Column(Boolean)
 
 class Encodings_Site2(Base):
     __tablename__ = 'Encodings_Site2'
@@ -260,19 +261,19 @@ class imagestopics_ALLgetty4faces_isfacemodel(Base):
     topic_id3    = Column(Integer, ForeignKey('Topics.topic_id'))
     topic_score3 = Column(Float)
 
-class Topics48(Base):
-    __tablename__ = 'Topics48' 
+class Topics_affect(Base):
+    __tablename__ = 'Topics_affect' 
     topic_id = Column(Integer, primary_key=True, autoincrement=True)
     topic    = Column(String(150))
     
-class ImagesTopics48(Base):
-    __tablename__ = 'ImagesTopics48' 
+class ImagesTopics_affect(Base):
+    __tablename__ = 'ImagesTopics_affect' 
     image_id    = Column(Integer, ForeignKey('images.image_id'), primary_key=True)
-    topic_id    = Column(Integer, ForeignKey('Topics48.topic_id'))
+    topic_id    = Column(Integer, ForeignKey('Topics.topic_id'))
     topic_score = Column(Float)
-    topic_id2    = Column(Integer, ForeignKey('Topics48.topic_id'))
+    topic_id2    = Column(Integer, ForeignKey('Topics.topic_id'))
     topic_score2 = Column(Float)
-    topic_id3    = Column(Integer, ForeignKey('Topics48.topic_id'))
+    topic_id3    = Column(Integer, ForeignKey('Topics.topic_id'))
     topic_score3 = Column(Float)
 
 class ImagesBackground(Base):
@@ -328,6 +329,7 @@ class SegmentTable(Base):
     mongo_hand_landmarks   = Column(Boolean)
     mongo_hand_landmarks_norm   = Column(Boolean)
     is_feet              = Column(Boolean)
+    mongo_body_landmarks_3D   = Column(Boolean)
 
     site     = relationship("Site")
     age      = relationship("Age")
@@ -359,6 +361,7 @@ class SegmentBig(Base):
     tokenized_keyword_list = Column(BLOB)  # Pickled list
     ethnicity_list         = Column(BLOB)  # Pickled list
     mongo_tokens           = Column(Boolean)
+    mongo_tokens_affect    = Column(Boolean)
 
     site     = relationship("Site")
     age      = relationship("Age")
