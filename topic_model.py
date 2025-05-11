@@ -88,6 +88,7 @@ global_counter = 0
 QUERY_LIMIT = 100000000
 query_start_counter = 0 # only used in write image topics
 ANGLE = 1 # controls x/y face angle in +/-, set to 9 for building the full model, then indexed
+MIN_TOKEN_LENGTH = 2 # minimum token length for the model
 
 if IS_AFFECT:
     MODEL_FOLDER = os.path.join(io.ROOT,"model_affect")
@@ -104,7 +105,7 @@ TFIDF_CORPUS_PATH=os.path.join(MODEL_FOLDER,"TFIDF_lda_corpus.mm")
 
 
 MODEL="TF" ## OR TF  ## Bag of words or TF-IDF
-NUM_TOPICS=8
+NUM_TOPICS=10
 
 stemmer = SnowballStemmer('english')
 
@@ -129,10 +130,10 @@ if IS_AFFECT:
                 AFFECT_LIST.append(row[2])
     print(AFFECT_LIST)
     # subtract the affect keys from the ALL keywords
-    NOT_AFFECT_LIST = [word for word in ALL_KEYWORDS if word not in AFFECT_LIST]
-    print("NOT_AFFECT_LIST: ", NOT_AFFECT_LIST[0:50])
-    MY_STOPWORDS = gensim.parsing.preprocessing.STOPWORDS.union(set(NOT_AFFECT_LIST))
-    SKIP_TOKEN_LIST = read_csv(os.path.join(io.ROOT, "skip_tokens.csv"))                       
+    # NOT_AFFECT_LIST = [word for word in ALL_KEYWORDS if word not in AFFECT_LIST]
+    # print("NOT_AFFECT_LIST: ", NOT_AFFECT_LIST[0:50])
+    # MY_STOPWORDS = gensim.parsing.preprocessing.STOPWORDS.union(set(NOT_AFFECT_LIST))
+    SKIP_TOKEN_LIST = read_csv(os.path.join(io.ROOT, "skip_tokens_affect.csv"))                       
     
 else:
     # removing all keywords that are stored in gender, ethnicity, and age tables
@@ -140,7 +141,7 @@ else:
     ETH_LIST = read_csv(os.path.join(io.ROOT, "stopwords_ethnicity.csv"))
     AGE_LIST = read_csv(os.path.join(io.ROOT, "stopwords_age.csv"))                       
     SKIP_TOKEN_LIST = read_csv(os.path.join(io.ROOT, "skip_tokens.csv"))                       
-    MY_STOPWORDS = gensim.parsing.preprocessing.STOPWORDS.union(set(GENDER_LIST+ETH_LIST+AGE_LIST))
+    # MY_STOPWORDS = gensim.parsing.preprocessing.STOPWORDS.union(set(GENDER_LIST+ETH_LIST+AGE_LIST))
 
 
 if db['unix_socket']:
@@ -289,7 +290,7 @@ def selectSQL():
 
 def lemmatize_stemming(text):
     return stemmer.stem(WordNetLemmatizer().lemmatize(text, pos='v'))
-def preprocess(text):
+def preprocess(text, MY_STOPWORDS):
     global global_counter
     result = []
     if global_counter % 10000 == 0:
@@ -345,11 +346,11 @@ def LDA_model(num_topics):
     print_word_counts(dictionary, corpus)    
     print("processing the model now")
 
-    filtered_corpus = [doc for doc in corpus if len(doc) >= 3]
+    filtered_corpus = [doc for doc in corpus if len(doc) >= MIN_TOKEN_LENGTH]
     # Print stats before and after filtering
     print(f"Original corpus size: {len(corpus)} documents")
     print(f"Filtered corpus size: {len(filtered_corpus)} documents")
-    print(f"Removed {len(corpus) - len(filtered_corpus)} documents with fewer than 2 tokens")
+    print(f"Removed {len(corpus) - len(filtered_corpus)} documents with fewer than {MIN_TOKEN_LENGTH} tokens")
     lda_model = gensim.models.LdaMulticore(corpus, num_topics=num_topics, id2word=dictionary, passes=2, workers=NUMBER_OF_PROCESSES)
     # alpha=(50/num_topics), eta = 0.1,
     lda_model.save(MODEL_PATH)
@@ -388,7 +389,7 @@ def write_topics(lda_model):
     session.commit()
     return
 
-def write_imagetopics(resultsjson,lda_model_tfidf,dictionary):
+def write_imagetopics(resultsjson,lda_model_tfidf,dictionary,MY_STOPWORDS):
     global query_start_counter
     print("writing data to the imagetopic table")
     idx_list, topic_list = zip(*lda_model_tfidf.print_topics(-1))
@@ -638,6 +639,14 @@ def topic_index(resultsjson):
     #dictionary = corpora.Dictionary.load(DICT_PATH)
     lda_model_tfidf = gensim.models.LdaModel.load(MODEL_PATH)
     lda_dict = corpora.Dictionary.load(MODEL_PATH+'.id2word')
+    if IS_AFFECT:
+        # subtract the affect keys from the ALL keywords
+        NOT_AFFECT_LIST = [word for word in ALL_KEYWORDS if word not in AFFECT_LIST]
+        print("NOT_AFFECT_LIST: ", NOT_AFFECT_LIST[0:50])
+        MY_STOPWORDS = gensim.parsing.preprocessing.STOPWORDS.union(set(NOT_AFFECT_LIST))        
+    else:
+        MY_STOPWORDS = gensim.parsing.preprocessing.STOPWORDS.union(set(GENDER_LIST+ETH_LIST+AGE_LIST))
+
     print("model loaded successfully")
     while True:
         # go get LIMIT number of items (will duplicate initial select, but only the initial one)
@@ -648,7 +657,7 @@ def topic_index(resultsjson):
         if len(resultsjson) == 0:
             break
 
-        write_imagetopics(resultsjson,lda_model_tfidf,lda_dict)
+        write_imagetopics(resultsjson,lda_model_tfidf,lda_dict,MY_STOPWORDS)
         print("updated cells")
     print("DONE")
 

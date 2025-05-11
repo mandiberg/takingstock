@@ -62,6 +62,7 @@ VERBOSE = False
 SegmentHelper_name = 'SegmentHelper_jan30_ALLgetty4faces'
 TOKEN_COUNT_PATH = "token_counts.csv"
 IS_AFFECT = True
+IS_DO_OVER = False
 
 # Create a database engine
 if db['unix_socket']:
@@ -92,6 +93,43 @@ mongo_collection = mongo_db["tokens_affect"]
 # create a stemmer object for preprocessing
 stemmer = SnowballStemmer('english')
 lemmatizer = WordNetLemmatizer()
+
+special_cases = {
+    'hope': 'hope',
+    'hopeless': 'hopeless',
+    'hopelessness': 'hopeless',
+    'relief': 'relief',
+    'ill': 'ill',
+    'silly': 'silly',
+    'Mental Illness': 'ill',
+    'thrill': 'thrill',
+    'painkillers': 'pain',
+    'painkil': 'pain',
+    'chilling out': 'calm',
+    'happy village': 'happy',
+    'rage-filled': 'angry',
+    'happy hill': 'happy',
+    'happy millennial': 'happy',
+    'mentally ill': 'ill',
+    'painkilling pills': 'pain',
+    'painkilling pills': 'pain',
+    'thrilled individual': 'thrill',
+    'displeased': 'angry',
+    'pleased': 'happy',
+    'dissatisfied': 'angry',
+    'satisfied': 'happy',
+    'displeasure': 'angry',
+    'pleasure': 'happy',
+    'displeased': 'angry',
+    'discontent': 'angry',
+    'content': 'happy',
+    'happy': 'happy',
+    'unhappy': 'sad',
+    'uncertainty': 'anxious',
+    "unwell": "ill"
+
+    # Add other special cases here
+}
 
 # open and read a csv file, and assign each row as an element in a list
 def read_csv(file_path):
@@ -129,10 +167,10 @@ if IS_AFFECT:
         for row in reader:
             if len(row) > 2:
                 AFFECT_LIST.append(row[2])
-    print(AFFECT_LIST)
+    # print(AFFECT_LIST)
     # subtract the affect keys from the ALL keywords
     NOT_AFFECT_LIST = [word for word in ALL_KEYWORDS if word not in AFFECT_LIST]
-    print("NOT_AFFECT_LIST: ", NOT_AFFECT_LIST[0:50])
+    # print("NOT_AFFECT_LIST: ", NOT_AFFECT_LIST[0:50])
     MY_STOPWORDS = gensim.parsing.preprocessing.STOPWORDS.union(set(NOT_AFFECT_LIST))
 
     
@@ -159,8 +197,9 @@ options = ['Create helper table', 'Fetch keywords list and make tokens', 'Fetch 
            ]
 option, index = pick(options, title)
 
-LIMIT= 10000000
-START_ID = 9996000
+LIMIT= 20441554
+# START_ID = 0
+START_ID = 27431000
 MAXID = 150000000
 
 # Initialize the counter
@@ -506,9 +545,12 @@ def preprocess_keywords(task, lock,session):
             # print("clarified text: ",text, text)
         return text
     def lemmatize_stemming(text):
-        stemmed = stemmer.stem(lemmatizer.lemmatize(text, pos='v'))
-        # print("stemmed: ", stemmed)
-        return stemmed
+        if text.lower() in special_cases:
+            return special_cases[text.lower()]
+        else:
+            # Apply regular stemming
+            return stemmer.stem(lemmatizer.lemmatize(text, pos='v'))
+    
     
     def preprocess_list(keyword_list):
         def find_words_in_phrases(strings):
@@ -524,30 +566,30 @@ def preprocess_keywords(task, lock,session):
                 individual_strings.append(string)
             return individual_strings
         
-        def check_for_stopwords_bup(phrases):
-            # Step 1: Create a list of individual phrases with stopword replacement
-            individual_phrases = []
-            for phrase in phrases:
-                print(f"this is the phrase to check for stopwords: {phrase}")
-                # If the entire phrase is a stopword, replace it
-                if phrase in STOPWORDS_DICT_SET:
-                    # print("stopword found: ", phrase)
-                    phrase = STOPWORDS_DICT[phrase]
-                    # print("stopword replaced: ", phrase)
-                individual_phrases.append(phrase)
-            return individual_phrases
+        # def check_for_stopwords_bup(phrases):
+        #     # Step 1: Create a list of individual phrases with stopword replacement
+        #     individual_phrases = []
+        #     for phrase in phrases:
+        #         print(f"this is the phrase to check for stopwords: {phrase}")
+        #         # If the entire phrase is a stopword, replace it
+        #         if phrase in STOPWORDS_DICT_SET:
+        #             # print("stopword found: ", phrase)
+        #             phrase = STOPWORDS_DICT[phrase]
+        #             # print("stopword replaced: ", phrase)
+        #         individual_phrases.append(phrase)
+        #     return individual_phrases
 
-        def check_words_for_stopwords(words):
-            filtered_words = []
-            for word in words:
-                print(f"this is the word to check for stopwords: {word}")
-                # Check for stopwords at the word level
-                if word in STOPWORDS_DICT_SET:
-                    # print("stopword found: ", word)
-                    word = STOPWORDS_DICT[word]
-                    # print("stopword replaced: ", word)
-                filtered_words.append(word)
-            return filtered_words
+        # def check_words_for_stopwords(words):
+        #     filtered_words = []
+        #     for word in words:
+        #         print(f"this is the word to check for stopwords: {word}")
+        #         # Check for stopwords at the word level
+        #         if word in STOPWORDS_DICT_SET:
+        #             # print("stopword found: ", word)
+        #             word = STOPWORDS_DICT[word]
+        #             # print("stopword replaced: ", word)
+        #         filtered_words.append(word)
+        #     return filtered_words
 
         result = []
         # print("keyword_list: ", keyword_list)
@@ -569,9 +611,8 @@ def preprocess_keywords(task, lock,session):
             # print("this is the token: ", token)
             token = clarify_keyword(token.lower())  # Normalize to lowercase again, if needed
             if AFFECT_LIST:
-                # print("this is the token: ", token)
                 if token in AFFECT_LIST:
-                    # print("this is the token: ", token)
+                    print("this is the unstemmed word: ", token)
                     result.append(lemmatize_stemming(token))
             elif token and token not in MY_STOPWORDS and len(token) > 2:
                 print("token: ", token)
@@ -590,7 +631,7 @@ def preprocess_keywords(task, lock,session):
     is_mongo_tokens = False
     result = mongo_collection.find(query)
     for doc in result:
-        if "tokenized_keyword_list" in doc:
+        if "tokenized_keyword_list" in doc and not IS_DO_OVER:
             is_mongo_tokens = True
             token_list = True
             tokenized_keyword_list = pickle.loads(doc["tokenized_keyword_list"])
@@ -699,7 +740,7 @@ def preprocess_keywords(task, lock,session):
 
     if token_list:
         # if tokens processed, insert the tokens into the mongo collection
-        if is_mongo_tokens:
+        if is_mongo_tokens and not IS_DO_OVER:
             insert_mongo = False
             print(f"Tokens for image_id {target_image_id} already exist, setting mongo_tokens to 1.")
         else:
@@ -918,24 +959,55 @@ elif index == 1:
     IS_NOT_FACE = False
     # 1/20/2024 to work with IS_GETTY_ONLY, change declarative_base SegmentBig_isnotface to getty segment name, and set IS_GETTY_ONLY = True
     IS_GETTY_ONLY = False
+    distinct_image_ids = None
 
     ################FETCHING KEYWORDS AND CREATING TOKENS #################
     if IS_NOT_FACE:
         print("IS_NOT_FACE is True")
         distinct_image_ids_query = select(SegmentBig_isnotface.image_id.distinct()).filter(SegmentBig_isnotface.mongo_tokens == None, SegmentBig_isnotface.no_image == None, SegmentBig_isnotface.image_id > START_ID).limit(LIMIT)
         routine = "is_not_face"
+    elif IS_AFFECT and IS_DO_OVER:
+        print("IS_AFFECT is True and IS_DO_OVER is True")
+
+        # use the mongodb to query mongo_tokens_affect collection to find all documents
+        distinct_image_ids_query = select(SegmentBig.image_id.distinct()).filter(SegmentBig.mongo_tokens_affect.isnot(None)).limit(LIMIT)
+        distinct_image_ids_all = [row[0] for row in session.execute(distinct_image_ids_query).fetchall()]
+
+        batch_size = 100  # Set your desired batch size
+        all_results = []  # To accumulate all results
+
+        # Break distinct_image_ids_query results into batches
+        for batch_start in range(0, len(distinct_image_ids_all), batch_size):
+            batch = distinct_image_ids_all[batch_start:batch_start + batch_size]
+            
+            # Perform a query for the current batch
+            query = mongo_collection.find({"image_id": {"$in": batch}})
+            
+            # Convert the cursor to a list and append to the accumulated results
+            batch_results = list(query)
+            all_results.extend(batch_results)
+        distinct_image_ids = []
+        for row in all_results:
+            tokens = pickle.loads(row["tokenized_keyword_list"])
+            if any(token in special_cases for token in tokens):
+                distinct_image_ids.append(row["image_id"])
+        # print the length of the result
+        print(len(distinct_image_ids), "rows with special cases")
+        routine = "affect"
+
     elif IS_AFFECT:
         print("IS_AFFECT is True")
-        # distinct_image_ids_query = select(SegmentBig.image_id.distinct()).filter(SegmentBig.mongo_tokens_affect == None, SegmentBig.image_id > START_ID).limit(LIMIT)
-        distinct_image_ids_query = select(SegmentBig.image_id.distinct())\
-            .join(SegmentTable, SegmentBig.image_id == SegmentTable.image_id)\
-            .filter(SegmentBig.mongo_tokens_affect == None, SegmentBig.image_id > START_ID).limit(LIMIT)
+        distinct_image_ids_query = select(SegmentBig.image_id.distinct()).filter(SegmentBig.mongo_tokens_affect == None, SegmentBig.image_id > START_ID).limit(LIMIT)
+        # use this one to use SegmentOct20
+        # distinct_image_ids_query = select(SegmentBig.image_id.distinct())\
+        #     .join(SegmentTable, SegmentBig.image_id == SegmentTable.image_id)\
+        #     .filter(SegmentBig.mongo_tokens_affect == None, SegmentBig.image_id > START_ID).limit(LIMIT)
         routine = "affect"
     else:
         print("regular preprocess, no flags")
         distinct_image_ids_query = select(SegmentBig.image_id.distinct()).filter(SegmentBig.mongo_tokens == None, SegmentBig.image_id > START_ID).limit(LIMIT)
         routine = "regular"
-    distinct_image_ids = [row[0] for row in session.execute(distinct_image_ids_query).fetchall()]
+    if distinct_image_ids is None: distinct_image_ids = [row[0] for row in session.execute(distinct_image_ids_query).fetchall()]
 
     # print the length of the result
     print(len(distinct_image_ids), "rows")
