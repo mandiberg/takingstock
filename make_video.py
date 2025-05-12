@@ -62,10 +62,10 @@ SORT_TYPE = "128d"
 # SORT_TYPE = "planar_hands"
 # SORT_TYPE = "fingertips_positions"
 FULL_BODY = False # this requires is_feet
-TSP_SORT=True
+TSP_SORT=False
 # this is for controlling if it is using
 # all clusters, 
-IS_VIDEO_FUSION = True # used for constructing SQL query
+IS_VIDEO_FUSION = False # used for constructing SQL query
 GENERATE_FUSION_PAIRS = False # if true it will query based on MIN_VIDEO_FUSION_COUNT and create pairs
                                 # if false, it will grab the list of pair lists below
 MIN_VIDEO_FUSION_COUNT = 750
@@ -129,11 +129,17 @@ SAVE_IMG_PROCESS = False
 IS_ANGLE_SORT = False
 
 # this control whether sorting by topics
-IS_TOPICS = False
-N_TOPICS = 64
+IS_TOPICS = True
+N_TOPICS = 14
 
 IS_ONE_TOPIC = True
-TOPIC_NO = [22]
+TOPIC_NO = [34] # if doing an affect topic fusion, this is the wrapper topic
+# groupings of affect topics
+NEG_TOPICS = [0,1,3,5,8,9,13]
+POS_TOPICS = [4,6,7,10,11,12]
+NEUTRAL_TOPICS = [2]
+AFFECT_GROUPS_LISTS = [NEG_TOPICS, POS_TOPICS, NEUTRAL_TOPICS]
+USE_AFFECT_GROUPS = True
 
 #######################
 
@@ -149,7 +155,7 @@ TOPIC_NO = [22]
 # 7 is surprise
 #  is yoga << planar,  planar,  fingers crossed
 
-ONE_SHOT = False # take all files, based off the very first sort order.
+ONE_SHOT = True # take all files, based off the very first sort order.
 EXPAND = False # expand with white, as opposed to inpaint and crop
 JUMP_SHOT = True # jump to random file if can't find a run (I don't think this applies to planar?)
 USE_ALL = False # this is for outputting all images from a oneshot, forces ONE_SHOT
@@ -191,7 +197,7 @@ if not GENERATE_FUSION_PAIRS:
         
 
         # <3 
-        # []] #hands making heart shape
+        # [16,101] #hands making heart shape
 
         # hands framing corners of photograph
         # [22,15],[24,70]
@@ -409,9 +415,15 @@ elif IS_SEGONLY and io.platform == "darwin":
     # WHERE += " AND k.keyword_text LIKE 'shout%' "
 
     def add_topic_select():
-        global FROM, WHERE, SELECT
-        FROM += " JOIN ImagesTopics it ON s.image_id = it.image_id "
-        WHERE += " AND it.topic_score > .3"
+        global FROM, WHERE, SELECT, WrapperTopicTable
+        if N_TOPICS == 14: 
+            ImagesTopics = "ImagesTopics_affect"
+            WrapperTopicTable = "ImagesTopics" # use this to narrow down an interative search through the affect topic(s)
+        elif N_TOPICS == 64: 
+            ImagesTopics = "ImagesTopics"
+            WrapperTopicTable = None
+        FROM += f" JOIN {ImagesTopics} it ON s.image_id = it.image_id "
+        WHERE += " AND it.topic_score > .1"
         SELECT += ", it.topic_score" # add description here, after resegmenting
 
     if IS_HAND_POSE_FUSION or IS_VIDEO_FUSION:
@@ -471,7 +483,7 @@ elif IS_SEGONLY and io.platform == "darwin":
     # WHERE += " AND e.encoding_id > 2612275"
 
     # WHERE = "s.site_name_id != 1"
-    LIMIT = 25000
+    LIMIT = 250
 
     # TEMP TK TESTING
     # WHERE += " AND s.site_name_id = 8"
@@ -733,6 +745,8 @@ if IS_HANDS or IS_ONE_HAND or IS_VIDEO_FUSION:
 ###################
 
 def selectSQL(cluster_no=None, topic_no=None):
+    global SELECT, FROM, WHERE, LIMIT, WrapperTopicTable
+    from_affect = where_affect = None
     def cluster_topic_select(cluster_topic_table, cluster_topic_no):
         if isinstance(cluster_topic_no, list):
             # Convert the list into a comma-separated string
@@ -763,6 +777,11 @@ def selectSQL(cluster_no=None, topic_no=None):
         #     # If topic_no is not a list, simply check for equality
         #     if IS_ONE_TOPIC: cluster += f"AND ic.cluster_id = {str(cluster_no)} "            
     if IS_TOPICS or IS_ONE_TOPIC:
+        if IS_TOPICS and IS_ONE_TOPIC and USE_AFFECT_GROUPS:
+
+            # topic fusion, so join to a second topics table
+            from_affect = f" JOIN {WrapperTopicTable} iwt ON s.image_id = iwt.image_id "
+            where_affect = f" AND iwt.topic_id = {TOPIC_NO[0]} AND iwt.topic_score > .3"
         # cluster +=f"AND it.topic_id = {str(topic_no)} "
         if isinstance(topic_no, list):
             # Convert the list into a comma-separated string
@@ -773,7 +792,7 @@ def selectSQL(cluster_no=None, topic_no=None):
             # If topic_no is not a list, simply check for equality
             cluster += f"AND it.topic_id = {str(topic_no)} "            
     # print(f"cluster SELECT is {cluster}")
-    selectsql = f"SELECT {SELECT} FROM {FROM} WHERE {WHERE} {cluster} LIMIT {str(LIMIT)};"
+    selectsql = f"SELECT {SELECT} FROM {FROM + from_affect} WHERE {WHERE + where_affect} {cluster} LIMIT {str(LIMIT)};"
     print("actual SELECT is: ",selectsql)
     result = engine.connect().execute(text(selectsql))
     resultsjson = ([dict(row) for row in result.mappings()])
@@ -2050,8 +2069,10 @@ def main():
             print(f"resultsjson contains {len(resultsjson)} images")
             map_images(resultsjson, cluster_no)
     elif IS_TOPICS:
+        if USE_AFFECT_GROUPS: N_CLUSTERS = len(AFFECT_GROUPS_LISTS) # redefine for affect groups
         print(f"IS_TOPICS is {IS_TOPICS} with {N_TOPICS}")
         for topic_no in range(N_TOPICS):
+            if USE_AFFECT_GROUPS: topic_no = AFFECT_GROUPS_LISTS[topic_no] # redefine cluster_no with affect group list
             print(f"SELECTing cluster {topic_no} of {N_TOPICS}")
             resultsjson = selectSQL(None, topic_no)
             print(f"resultsjson contains {len(resultsjson)} images")
