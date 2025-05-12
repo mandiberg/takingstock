@@ -197,9 +197,9 @@ options = ['Create helper table', 'Fetch keywords list and make tokens', 'Fetch 
            ]
 option, index = pick(options, title)
 
-LIMIT= 20441554
+LIMIT= 30441554
 # START_ID = 0
-START_ID = 27431000
+START_ID = 56371062
 MAXID = 150000000
 
 # Initialize the counter

@@ -82,10 +82,10 @@ IS_GETTYONLY = False # this is for the NOT FACE to constrain the database to onl
 IS_NOT_FACE = False # this turns of the xyz angle filter for faces pointing forward and returns all images
 USE_EXISTING_MODEL = True # this is for the NOT FACE data, to use the FACE model, not used elsewhere
 IS_AFFECT = True # switches to the affect model
-VERBOSE = True
+VERBOSE = False
 RANDOM = False # selects random image_ids from the DB. not tested. maybe runs very slow. 
 global_counter = 0
-QUERY_LIMIT = 100000000
+QUERY_LIMIT = 10000
 query_start_counter = 0 # only used in write image topics
 ANGLE = 1 # controls x/y face angle in +/-, set to 9 for building the full model, then indexed
 MIN_TOKEN_LENGTH = 2 # minimum token length for the model
@@ -105,7 +105,7 @@ TFIDF_CORPUS_PATH=os.path.join(MODEL_FOLDER,"TFIDF_lda_corpus.mm")
 
 
 MODEL="TF" ## OR TF  ## Bag of words or TF-IDF
-NUM_TOPICS=10
+NUM_TOPICS=14
 
 stemmer = SnowballStemmer('english')
 
@@ -161,6 +161,7 @@ Base = declarative_base()
 
 mongo_client = pymongo.MongoClient(io.dbmongo['host'])
 mongo_db = mongo_client[io.dbmongo['name']]
+mongo_tokens = "mongo_tokens" # default
 if IS_NOT_FACE and not USE_EXISTING_MODEL:
     mongo_collection = mongo_db['tokens_noface']
     topics_table = "topics_isnotface"
@@ -185,6 +186,7 @@ elif IS_AFFECT:
     images_topics_table = "imagestopics_affect"
     SegmentTable = SegmentBig
     SegmentTable_name = 'SegmentBig_isface'
+    mongo_tokens = "mongo_tokens_affect" # redefine for affect
 else:
     mongo_collection = mongo_db['tokens']
     topics_table = "topics"
@@ -236,26 +238,25 @@ def set_query():
     # mongofy, for indexing:
     SELECT = "DISTINCT(image_id),description"
     FROM = SegmentTable_name
-    WHERE = f" mongo_tokens IS NOT NULL "
+    WHERE = f" {mongo_tokens} IS NOT NULL "
     WHERE += " AND face_x > -35 AND face_x < -24 AND face_y > -3 AND face_y < 3 AND face_z > -3 AND face_z < 3 "
-    if RANDOM: 
-        WHERE += "AND image_id >= (SELECT FLOOR(MAX(image_id) * RAND()) FROM bagofkeywords)"
+    if RANDOM: WHERE += "AND image_id >= (SELECT FLOOR(MAX(image_id) * RAND()) FROM bagofkeywords)"
     LIMIT = QUERY_LIMIT
     if MODE==2 and USE_BIGSEGMENT:
         print("assigning topics via bigsegment")
         # assigning topics
-        WHERE = f" mongo_tokens IS NOT NULL AND image_id NOT IN (SELECT image_id FROM {images_topics_table})"
+        WHERE = f" {mongo_tokens} IS NOT NULL AND image_id NOT IN (SELECT image_id FROM {images_topics_table})"
     elif MODE==2 and USE_SEGMENT:
         print("assigning topics via small segment")
         WHERE = " face_x > -35 AND face_x < -24 AND face_y > -3 AND face_y < 3 AND face_z > -3 AND face_z < 3 AND "
         # WHERE = " face_x > -40 AND face_x < -20 AND face_y > -5 AND face_y < 5 AND face_z > -5 AND face_z < 5 AND "
-        WHERE += f" mongo_tokens IS NOT NULL AND image_id NOT IN (SELECT image_id FROM {images_topics_table})"
+        WHERE += f" {mongo_tokens} IS NOT NULL AND image_id NOT IN (SELECT image_id FROM {images_topics_table})"
 
     elif MODE==2:
         print("assigning topics without any segment")
         # assigning topics
         # I'm not sure how this is different from USE_BIGSEGMENT
-        WHERE = f" mongo_tokens = 1 AND image_id NOT IN (SELECT image_id FROM {images_topics_table})"
+        WHERE = f" {mongo_tokens} = 1 AND image_id NOT IN (SELECT image_id FROM {images_topics_table})"
 
     WHERE += f" AND image_id > {query_start_counter} "
 
@@ -413,7 +414,7 @@ def write_imagetopics(resultsjson,lda_model_tfidf,dictionary,MY_STOPWORDS):
         # else:
         #     word_list = row["description"]
 
-        bow_vector = dictionary.doc2bow(preprocess(keyword_list))
+        bow_vector = dictionary.doc2bow(preprocess(keyword_list,MY_STOPWORDS))
 
         # #index,score=sorted(lda_model_tfidf[bow_corpus[i]], key=lambda tup: -1*tup[1])[0]
         # index, score = sorted(lda_model_tfidf[bow_vector], key=lambda tup: -1*tup[1])[0]
@@ -464,6 +465,18 @@ def write_imagetopics(resultsjson,lda_model_tfidf,dictionary,MY_STOPWORDS):
         elif IS_NOT_FACE and USE_EXISTING_MODEL:            
             if VERBOSE: print("IS_NOT_FACE and USE_EXISTING_MODEL")
             imagestopics_entry=ImagesTopics_isnotface_isfacemodel(
+                image_id=row["image_id"],
+                topic_id=index,
+                topic_score=score,
+                topic_id2=index2,
+                topic_score2=score2,
+                topic_id3=index3,
+                topic_score3=score3
+            )
+        elif IS_AFFECT:            
+            if VERBOSE: print("IS_AFFECT")
+            print(f"image_id: {row['image_id']}, {keyword_list} topic_id: {index}, topic_score: {score}")
+            imagestopics_entry=ImagesTopics_affect(
                 image_id=row["image_id"],
                 topic_id=index,
                 topic_score=score,
@@ -640,8 +653,9 @@ def topic_index(resultsjson):
     lda_model_tfidf = gensim.models.LdaModel.load(MODEL_PATH)
     lda_dict = corpora.Dictionary.load(MODEL_PATH+'.id2word')
     if IS_AFFECT:
+        print(f"IS_AFFECT, AFFECT_LIST: {AFFECT_LIST[0]} ALL_KEYWORDS: {ALL_KEYWORDS[0]}")
         # subtract the affect keys from the ALL keywords
-        NOT_AFFECT_LIST = [word for word in ALL_KEYWORDS if word not in AFFECT_LIST]
+        NOT_AFFECT_LIST = [word for word in ALL_KEYWORDS.split(',') if word not in AFFECT_LIST]
         print("NOT_AFFECT_LIST: ", NOT_AFFECT_LIST[0:50])
         MY_STOPWORDS = gensim.parsing.preprocessing.STOPWORDS.union(set(NOT_AFFECT_LIST))        
     else:

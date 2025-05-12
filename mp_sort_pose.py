@@ -47,7 +47,7 @@ class SortPose:
         self.BRUTEFORCE = False
         self.use_3D = use_3D
         print("init use_3D",self.use_3D)
-        self.CUTOFF = 2500 # DOES factor if ONE_SHOT
+        self.CUTOFF = 250 # DOES factor if ONE_SHOT
 
         self.CHECK_DESC_DIST = 30
 
