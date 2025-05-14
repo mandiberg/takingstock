@@ -20,10 +20,13 @@ logger = logging.getLogger(__name__)
 
 # Import project-specific models
 sys.path.insert(1, '/Users/michaelmandiberg/Documents/GitHub/facemap/')
-from my_declarative_base import SegmentTable, Encodings, Base
+from my_declarative_base import SegmentTable, Encodings, Base, ImagesTopics
 
 # MongoDB setup
 import pymongo
+
+USE_SEGMENT_TABLE = False  # Set to True if using SegmentTable
+TOPIC_ID = 35  # Set the topic ID to filter by
 
 def get_mongo_client():
     """Create and return a MongoDB client"""
@@ -57,38 +60,37 @@ def process_batch(task_queue, result_queue, db_config):
                     logger.info(f"Worker {pid} received termination signal")
                     break
                 
-                batch_results = []
-                for encoding_id, image_id in batch:
-                    # Fetch pickled hand_landmarks from Mongo
-                    mongo_doc = mongo_collection.find_one({"image_id": image_id})
-                    is_hand_left = False
-                    is_hand_right = False
-                    
-                    hands = ["left_hand", "right_hand"]
-                    for hand in hands:
-                        if mongo_doc and mongo_doc.get(hand):
-                            # Unpickle to MediaPipe object if needed
-                            hand_landmarks = mongo_doc.get(hand)
-                            is_hand = True
-                            logger.debug(f"{image_id} hand: {hand}, is_hand: {is_hand}")
-                        else:
-                            is_hand = False
-                            logger.debug(f"{image_id} hand: {hand}, is_hand: {is_hand}")
+                image_ids = [image_id for _, image_id in batch]
+
+                # 🔁 Batch MongoDB query
+                mongo_docs = {
+                    doc["image_id"]: doc
+                    for doc in mongo_collection.find({"image_id": {"$in": image_ids}})
+                }
+
+                update_data = []
+                for enc_seg_image_id, image_id in batch:
+                    mongo_doc = mongo_docs.get(image_id, {})
+                    is_hand_left = bool(mongo_doc.get("left_hand"))
+                    is_hand_right = bool(mongo_doc.get("right_hand"))
+
+                    update_data.append({
+                        "image_id": image_id,
+                        "is_hand_left": is_hand_left,
+                        "is_hand_right": is_hand_right
+                    })
+                    if USE_SEGMENT_TABLE:
+                        update_data[-1].update({ "seg_image_id": enc_seg_image_id,})
+                    else:
+                        update_data[-1].update({ "encoding_id": enc_seg_image_id,})
                         
-                        if hand == "left_hand":
-                            is_hand_left = is_hand
-                        elif hand == "right_hand":
-                            is_hand_right = is_hand
-                    
-                    # Store results to be committed in bulk
-                    batch_results.append((image_id, is_hand_left, is_hand_right))
-                
-                # Bulk update in a single transaction
-                for image_id, is_hand_left, is_hand_right in batch_results:
-                    session.query(Encodings).\
-                        filter(Encodings.image_id == image_id).\
-                        update({"is_hand_left": is_hand_left, "is_hand_right": is_hand_right})
-                
+
+                # 🔁 Bulk SQL update
+                if USE_SEGMENT_TABLE:
+                    session.bulk_update_mappings(SegmentTable, update_data)
+                else:
+                    session.bulk_update_mappings(Encodings, update_data)
+
                 session.commit()
                 
                 # Report the maximum ID processed in this batch
@@ -145,25 +147,38 @@ def main():
     session = Session()
     
     # Batch processing parameters
-    batch_size = 1000 * num_processes  # Scale batch size with number of processes
-    batch_per_worker = 1000  # Records per worker
+    batch_per_worker = 10000  # Records per worker
+    batch_size = batch_per_worker * num_processes  # Scale batch size with number of processes
     last_id = 0
     total_processed = 0
     
     try:
         while True:
             # Fetch next batch from database
-            results = (
-                session.query(Encodings.encoding_id, Encodings.image_id)
-                .filter(
-                    Encodings.mongo_hand_landmarks.is_(True),
-                    Encodings.is_feet.is_(None),
-                    Encodings.encoding_id > last_id
+            if USE_SEGMENT_TABLE:
+                results = (
+                    session.query(SegmentTable.seg_image_id, SegmentTable.image_id)
+                    .filter(
+                        SegmentTable.mongo_hand_landmarks.is_(True),
+                        SegmentTable.is_hand_left.is_(None),
+                        SegmentTable.seg_image_id > last_id
+                    )
+                    .order_by(SegmentTable.seg_image_id)
+                    .limit(batch_size)
+                    .all()
                 )
-                .order_by(Encodings.encoding_id)
-                .limit(batch_size)
-                .all()
-            )
+            else:
+                results = (
+                    session.query(Encodings.encoding_id, Encodings.image_id)
+                    .filter(
+                        Encodings.mongo_hand_landmarks.is_(True),
+                        Encodings.is_hand_left.is_(None),
+                        Encodings.encoding_id > last_id
+                    )
+                    .order_by(Encodings.encoding_id)
+                    .limit(batch_size)
+                    .all()
+                )
             
             if not results:
                 logger.info("No more rows to process. Exiting.")
