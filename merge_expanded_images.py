@@ -20,14 +20,22 @@ IS_CLUSTER = False
 
 # are we making videos or making merged stills?
 IS_VIDEO = True
+IS_VIDEO_MERGE = True
+FRAMERATE = 12
+PERIOD = 20 # how many images in each merge cycle
+MERGE_COUNT = 4 # largest number of merged images 
+START_MERGE = 1 # number of images merged into the first image. Can be 1 (no merges) or >1 (two or more images merged)
+if IS_VIDEO_MERGE: FRAMERATE = PERIOD
+
 if IS_VIDEO:
     from moviepy import *
     from moviepy import VideoFileClip, AudioFileClip
+
 SAVE_METAS_AUDIO = False
 BUILD_WITH_AUDIO = False
 ALL_ONE_VIDEO = False
-LOWEST_DIMS = False # make this False if assembling big images eg full body
-FULLBODY = True # this is for full body images, will change GIGA_DIMS to FULLBODY_DIMS
+LOWEST_DIMS = True # make this False if assembling big images eg full body # False if doing Paris Photo faces
+FULLBODY = False # this is for full body images, will change GIGA_DIMS to FULLBODY_DIMS
 SORT_ORDER = "Chronological"
 DO_RATIOS = False
 GIGA_DIMS = 20688
@@ -43,17 +51,12 @@ elif FULLBODY:
 else:
     SCALE_IMGS = False
 VERBOSE = True
-# MERGE
 # Provide the path to the folder containing the images
 ROOT_FOLDER_PATH = '/Volumes/OWC4/segment_images'
-# ROOT_FOLDER_PATH = '/Users/michaelmandiberg/Documents/projects-active/facemap_production/Aug29_composites'
 # if IS_CLUSTER this should be the folder holding all the cluster folders
 # if not, this should be the individual folder holding the images
 # will not accept clusterNone -- change to cluster00
-# FOLDER_NAME ="cluster20_0_face_cradle_sept26/giga/face_frame"
-# FOLDER_NAME = "topic17_business_fusion_test"
-# FOLDER_NAME = "cluster1_21_phone_sept24production/silverphone_sept24_production/down/giga"
-FOLDER_NAME = "cluster1_65_1746217926.180846"
+FOLDER_NAME = "videomergetest_may17"
 FOLDER_PATH = os.path.join(ROOT_FOLDER_PATH,FOLDER_NAME)
 DIRS = ["1x1", "4x3", "16x10"]
 OUTPUT = os.path.join(io.ROOTSSD, "audioproduction")
@@ -66,19 +69,6 @@ else:
     TOPIC = None
     print("TOPIC", TOPIC)
 CSV_FILE = f"metas_{TOPIC}.csv"
-
-#temporary
-# FOLDER_PATH = "/Users/michaelmandiberg/Library/CloudStorage/Dropbox/takingstock_dropbox/excite_small_portrait_jumpshot15after_3D_wgt1_max1.4_delta.5"
-
-# WRITE VIDEO
-# img_array = ['image1.jpg', 'image2.jpg', 'image3.jpg']
-# HOLDER = '/Users/michaelmandiberg/Dropbox/facemap_dropbox/June_tests/'
-FRAMERATE = 12
-# FOLDER = "June4_smilescream_itter_25Ksegment"
-# ROOT = os.path.join(HOLDER,FOLDER)
-# list_of_files= io.get_img_list(ROOT)
-# print(list_of_files)
-# list_of_files.sort()
 
 
 def iterate_image_list(FOLDER_PATH,image_files, successes):
@@ -294,6 +284,8 @@ def crop_images(img_array, subfolder_path=None):
 
 
 def write_video(img_array, FRAMERATE=15, subfolder_path=None):
+    img_array = [img for img in img_array if img.endswith(".jpg")]
+    print("img_array", img_array)
     # Get the dimensions of the first image in the array
     cluster_no, image_path = get_path(subfolder_path, img_array)
     img = cv2.imread(image_path)
@@ -301,19 +293,82 @@ def write_video(img_array, FRAMERATE=15, subfolder_path=None):
 
     # Define the codec and create VideoWriter object
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-    video_path = os.path.join(FOLDER_PATH, FOLDER_NAME.replace("/","_")+cluster_no+".mp4")
+    if IS_VIDEO_MERGE: merge_info = f"_p{PERIOD}_st{START_MERGE}_ct{MERGE_COUNT}"
+    else: merge_info = ""
+    video_path = os.path.join(FOLDER_PATH, FOLDER_NAME.replace("/","_")+cluster_no+merge_info+".mp4")
     print("video_path", video_path)
     video_writer = cv2.VideoWriter(video_path, fourcc, FRAMERATE, (width, height))
 
-    # Write frames to the video - this should happen in all cases
-    for filename in img_array:
-        if subfolder_path:
-            image_path = os.path.join(subfolder_path, filename)
+    if IS_VIDEO_MERGE:
+        # Validate and adjust parameters for edge cases
+        total_images = len(img_array)
+        
+        # Calculate images_per_cycle and check if MERGE_COUNT needs adjustment
+        images_per_cycle = PERIOD + (MERGE_COUNT - START_MERGE * 2)
+        if images_per_cycle < MERGE_COUNT * 2:
+            adjusted_merge_count = images_per_cycle // 2
+            print(f"Warning: Adjusting MERGE_COUNT from {MERGE_COUNT} to {adjusted_merge_count} based on PERIOD and START_MERGE")
+            merge_count = adjusted_merge_count
         else:
-            image_path = filename
-        print(image_path)
-        img = cv2.imread(image_path)
-        video_writer.write(img)
+            merge_count = MERGE_COUNT
+            
+        # Process only if there are enough images to complete at least one cycle
+        if total_images >= PERIOD:
+            current_pos = 0
+            
+            while current_pos + PERIOD <= total_images:
+                # Phase 1: Increase merge count from START_MERGE to merge_count
+                for i in range(START_MERGE, merge_count + 1):
+                    # Load and merge images from current_pos to current_pos + i
+                    merged_img = load_and_merge_images(img_array[current_pos:current_pos + i], subfolder_path)
+                    video_writer.write(merged_img)
+                
+                # Phase 2: Slide through the array maintaining merge_count images merged
+                for i in range(1, PERIOD - merge_count + 1):
+                    # Load and merge images from current_pos + i to current_pos + i + merge_count
+                    merged_img = load_and_merge_images(img_array[current_pos + i:current_pos + i + merge_count], subfolder_path)
+                    video_writer.write(merged_img)
+                
+                # Phase 3: Decrease merge count back to START_MERGE
+                for i in range(merge_count - 1, START_MERGE - 1, -1):
+                    # Load and merge images from PERIOD - i to PERIOD
+                    end_idx = min(current_pos + PERIOD, total_images)
+                    start_idx = end_idx - i
+                    merged_img = load_and_merge_images(img_array[start_idx:end_idx], subfolder_path)
+                    video_writer.write(merged_img)
+                
+                # Move to the next cycle
+                current_pos += PERIOD
+                print("current_pos", current_pos)
+            
+            # Handle remaining images if there are not enough for a full cycle
+            remaining = total_images - current_pos
+            if remaining > 0:
+                for i in range(START_MERGE, min(merge_count + 1, remaining + 1)):
+                    merged_img = load_and_merge_images(img_array[current_pos:current_pos + i], subfolder_path)
+                    video_writer.write(merged_img)
+                
+                if remaining > merge_count:
+                    for i in range(1, remaining - merge_count + 1):
+                        merged_img = load_and_merge_images(img_array[current_pos + i:current_pos + i + merge_count], subfolder_path)
+                        video_writer.write(merged_img)
+                    
+                    for i in range(merge_count - 1, START_MERGE - 1, -1):
+                        end_idx = total_images
+                        start_idx = end_idx - i
+                        if start_idx < end_idx:
+                            merged_img = load_and_merge_images(img_array[start_idx:end_idx], subfolder_path)
+                            video_writer.write(merged_img)
+    else:
+        # Original behavior - write each frame directly
+        for filename in img_array:
+            if subfolder_path:
+                image_path = os.path.join(subfolder_path, filename)
+            else:
+                image_path = filename
+            print(image_path)
+            img = cv2.imread(image_path)
+            video_writer.write(img)
 
     # Release the video writer and close the video file
     video_writer.release()
@@ -341,6 +396,66 @@ def write_video(img_array, FRAMERATE=15, subfolder_path=None):
         return final_video_path
     
     return video_path
+
+def load_and_merge_images(image_list, subfolder_path=None):
+    """
+    Load and merge a list of images using cv2.addWeighted
+    
+    Args:
+        image_list: List of image paths to merge
+        subfolder_path: Optional subfolder path containing the images
+    
+    Returns:
+        Merged image
+    """
+    if len(image_list) == 0:
+        raise ValueError("Empty image list provided")
+    
+    # Load the first image
+    if subfolder_path:
+        image_path = os.path.join(subfolder_path, image_list[0])
+    else:
+        image_path = image_list[0]
+    
+    result = cv2.imread(image_path)
+    
+    # If only one image, return it
+    if len(image_list) == 1:
+        return result
+    
+    # Merge multiple images with equal weighting
+    weight_per_image = 1.0 / len(image_list)
+    
+    # Start with the first image at full weight
+    result = result.copy()
+    
+    # Gradually blend in the other images
+    for i in range(1, len(image_list)):
+        if subfolder_path:
+            image_path = os.path.join(subfolder_path, image_list[i])
+        else:
+            image_path = image_list[i]
+        
+        img = cv2.imread(image_path)
+        
+        # Handle grayscale images
+        if len(result.shape) == 2:  # result is grayscale
+            result = cv2.cvtColor(result, cv2.COLOR_GRAY2BGR)
+        if len(img.shape) == 2:  # img is grayscale
+            img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
+        
+        # Ensure dimensions match
+        if img.shape != result.shape:
+            img = cv2.resize(img, (result.shape[1], result.shape[0]), interpolation=cv2.INTER_AREA)
+        
+        # Calculate weights to maintain proper blending
+        alpha = (len(image_list) - i) / len(image_list)
+        beta = 1.0 / len(image_list)
+        
+        # Blend current result with new image
+        result = cv2.addWeighted(result, alpha, img, beta, 0.0)
+    
+    return result
 
 def save_concatenated_metas(subfolders, output_path, csv_file):
     cat_metas = pd.DataFrame(columns=["image_id", "description", "topic_fit"])
@@ -380,6 +495,7 @@ def main():
         elif IS_VIDEO is True and ALL_ONE_VIDEO is False:
             for subfolder_path in subfolders:
                 all_img_path_list = io.get_img_list(subfolder_path)
+                # only inlcude jpgs in the list
                 write_video(all_img_path_list, FRAMERATE, subfolder_path)
 
         elif SAVE_METAS_AUDIO is True:
