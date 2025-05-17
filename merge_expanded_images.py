@@ -22,8 +22,8 @@ IS_CLUSTER = False
 IS_VIDEO = True
 IS_VIDEO_MERGE = True
 FRAMERATE = 12
-PERIOD = 20 # how many images in each merge cycle
-MERGE_COUNT = 16 # largest number of merged images MUST BE BASE^2
+PERIOD = 30 # how many images in each merge cycle
+MERGE_COUNT = 12 # largest number of merged images 
 START_MERGE = 1 # number of images merged into the first image. Can be 1 (no merges) or >1 (two or more images merged)
 
 if IS_VIDEO:
@@ -55,7 +55,7 @@ ROOT_FOLDER_PATH = '/Volumes/OWC4/segment_images'
 # if IS_CLUSTER this should be the folder holding all the cluster folders
 # if not, this should be the individual folder holding the images
 # will not accept clusterNone -- change to cluster00
-FOLDER_NAME = "videomergetest_may17"
+FOLDER_NAME = "bettertester2"
 FOLDER_PATH = os.path.join(ROOT_FOLDER_PATH,FOLDER_NAME)
 DIRS = ["1x1", "4x3", "16x10"]
 OUTPUT = os.path.join(io.ROOTSSD, "audioproduction")
@@ -80,9 +80,9 @@ def merge_images_numpy(image_list):
         Merged image as a cv2/numpy array
     """
     if not image_list:
-        raise ValueError("Empty image list provided")
-    
-    if len(image_list) == 1:
+        print("No images to merge")
+        return None
+    elif len(image_list) == 1:
         return image_list[0]
     
     # Get dimensions of the first image
@@ -372,15 +372,15 @@ def write_video(img_array, FRAMERATE=15, subfolder_path=None):
                     # Load and merge images from current_pos to current_pos + i
                 # if i % 2 == 0:
                     merged_img = merge_images_numpy(images_to_build[current_pos:current_pos + i])
-                    print("merged_img", merged_img.shape)
-                    print("type merged_img", type(merged_img))
-                    video_writer.write(merged_img)
+                    # print("merged_img", merged_img.shape)
+                    # print("type merged_img", type(merged_img))
+                    if merged_img is not None: video_writer.write(merged_img)
                 
                 # Phase 2: Slide through the array maintaining merge_count images merged
                 for i in range(1, PERIOD - merge_count + 1):
                     # Load and merge images from current_pos + i to current_pos + i + merge_count
                     merged_img = merge_images_numpy(images_to_build[current_pos + i:current_pos + i + merge_count])
-                    video_writer.write(merged_img)
+                    if merged_img is not None: video_writer.write(merged_img)
                 
                 # Phase 3: Decrease merge count back to START_MERGE
                 # not subtracting 1 from start_merge to not include the final image
@@ -391,7 +391,7 @@ def write_video(img_array, FRAMERATE=15, subfolder_path=None):
                     start_idx = end_idx - i
                     # if i % 2 == 0:
                     merged_img = merge_images_numpy(images_to_build[start_idx:end_idx])
-                    video_writer.write(merged_img)
+                    if merged_img is not None: video_writer.write(merged_img)
                 
                 # Move to the next cycle
                 current_pos += PERIOD
@@ -402,19 +402,19 @@ def write_video(img_array, FRAMERATE=15, subfolder_path=None):
             if remaining > 0:
                 for i in range(START_MERGE, min(merge_count + 1, remaining + 1)):
                     merged_img = merge_images_numpy(images_to_build[current_pos:current_pos + i])
-                    video_writer.write(merged_img)
+                    if merged_img is not None: video_writer.write(merged_img)
                 
                 if remaining > merge_count:
                     for i in range(1, remaining - merge_count + 1):
                         merged_img = merge_images_numpy(images_to_build[current_pos + i:current_pos + i + merge_count])
-                        video_writer.write(merged_img)
+                        if merged_img is not None: video_writer.write(merged_img)
                     
                     for i in range(merge_count - 1, START_MERGE - 1, -1):
                         end_idx = total_images
                         start_idx = end_idx - i
                         if start_idx < end_idx:
                             merged_img = merge_images_numpy(images_to_build[start_idx:end_idx])
-                            video_writer.write(merged_img)
+                            if merged_img is not None: video_writer.write(merged_img)
     else:
         # Original behavior - write each frame directly
         for img in images_to_build:
