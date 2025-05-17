@@ -14,7 +14,8 @@ from pathlib import Path
 class DataIO:
     """Store key database and file IO info for use across codebase"""
 
-    def __init__(self, IS_SSD=False):
+    def __init__(self, IS_SSD=False, VERBOSE=False):
+        self.VERBOSE = VERBOSE
         self.max_retries = 3
         self.retry_delay = 5
         self.query_face = True
@@ -224,8 +225,8 @@ class DataIO:
                     img_list.append(file)
         if sort is True:
             img_list.sort()
-        print(len(img_list))
-        print("got image list")
+        # if self.VERBOSE:print(len(img_list))
+        # if self.VERBOSE:print("got image list")
         return img_list
 
     def get_existing_image_ids_from_wavs(self,folder):

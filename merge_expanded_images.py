@@ -23,9 +23,8 @@ IS_VIDEO = True
 IS_VIDEO_MERGE = True
 FRAMERATE = 12
 PERIOD = 20 # how many images in each merge cycle
-MERGE_COUNT = 4 # largest number of merged images 
+MERGE_COUNT = 8 # largest number of merged images MUST BE BASE^2
 START_MERGE = 1 # number of images merged into the first image. Can be 1 (no merges) or >1 (two or more images merged)
-if IS_VIDEO_MERGE: FRAMERATE = PERIOD
 
 if IS_VIDEO:
     from moviepy import *
@@ -89,6 +88,27 @@ def iterate_image_list(FOLDER_PATH,image_files, successes):
                 print("start_row", start_row, "start_col", start_col)
                 img1 = img1[start_row:start_row + DIMS, start_col:start_col + DIMS]
         return img1
+
+    def handle_giga_dims(img1):
+        # Always resize img1 to GIGA_DIMS
+        if img1.shape[0] > TEST_DIMS or img1.shape[1] > TEST_DIMS:
+            # if VERBOSE: print("image shape >", img1.shape, image_files[i])
+            img1 = crop_scale_giga(img1)
+        elif img1.shape[0] == REG_DIMS and img1.shape[1] == REG_DIMS:
+            # not change needed
+            pass
+        elif img1.shape[0] > REG_DIMS or img1.shape[1] > REG_DIMS:
+            # if VERBOSE: print("image shape < ", img1.shape, image_files[i])
+            img1 = crop_scale_giga(img1, REG_DIMS)
+        return img1
+    
+    def load_image(img_file_or_path):
+        if type(img_file_or_path) is np.ndarray:
+            img1 = img_file_or_path
+        else:
+            print("loading", img_file_or_path)
+            img1 = cv2.imread(os.path.join(FOLDER_PATH, img_file_or_path))
+        return img1
     
     # Initialize the merged pairs list with the images in pairs
     merged_pairs = []
@@ -96,44 +116,16 @@ def iterate_image_list(FOLDER_PATH,image_files, successes):
         loaded = True
     else:
         loaded = False
-    print(loaded)
+    print("loaded", loaded)
     # Iterate through the image files and merge them in pairs
     for i in range(0, len(image_files), 2):
-        # Load the first image
-        if loaded:
-            img1 = image_files[i]
-        else:
-            print("loading", image_files[i])
-            img1 = cv2.imread(os.path.join(FOLDER_PATH, image_files[i]))
-
-        # Always resize img1 to GIGA_DIMS
-        if img1.shape[0] > TEST_DIMS or img1.shape[1] > TEST_DIMS:
-            if VERBOSE: print("image shape >", img1.shape, image_files[i])
-            img1 = crop_scale_giga(img1)
-        elif img1.shape[0] == REG_DIMS and img1.shape[1] == REG_DIMS:
-            # not change needed
-            pass
-        elif img1.shape[0] > REG_DIMS or img1.shape[1] > REG_DIMS:
-            if VERBOSE: print("image shape < ", img1.shape, image_files[i])
-            img1 = crop_scale_giga(img1, REG_DIMS)
+        img1 = load_image(image_files[i])
+        img1 = handle_giga_dims(img1)
 
         # Check if there is a second image available
         if i + 1 < len(image_files):
-            if loaded:
-                img2 = image_files[i+1]
-            else:
-                img2 = cv2.imread(os.path.join(FOLDER_PATH, image_files[i + 1]))
-
-            # Always resize img2 to GIGA_DIMS
-            if img2.shape[0] > TEST_DIMS or img2.shape[0] > TEST_DIMS:
-                if VERBOSE: print("second image shape > ", img2.shape, image_files[i + 1])
-                img2 = crop_scale_giga(img2)
-            elif img2.shape[0] == REG_DIMS and img2.shape[1] == REG_DIMS:
-                # not change needed
-                pass
-            elif img2.shape[0] > REG_DIMS or img2.shape[1] > REG_DIMS:
-                if VERBOSE: print("second image shape < ", img2.shape, image_files[i + 1])
-                img2 = crop_scale_giga(img2, REG_DIMS)
+            img2 = load_image(image_files[i+1])
+            img2 = handle_giga_dims(img2)
 
             if len(img1.shape) == 2:  # img1 is grayscale
                 img1 = cv2.cvtColor(img1, cv2.COLOR_GRAY2BGR)
@@ -149,20 +141,28 @@ def iterate_image_list(FOLDER_PATH,image_files, successes):
             except:
                 print("failed to merge", image_files[i], image_files[i+1])
         else:
-            print("skipping image key number", str(i))
+            if IS_VIDEO_MERGE:
+                merged_pairs.append(img1)
+                successes += 1
+            else:
+                print("skipping image key number", str(i))
             # Only one image left, add it to the merged pairs list directly
             # merged_pairs.append(img1)
     print("len(merged_pairs)", len(merged_pairs))
     # quit()
     return merged_pairs, successes
 
-def merge_images(FOLDER_PATH):
+def merge_images(images_to_build, FOLDER_PATH):
+    print("merging images, this many images_to_build", len(images_to_build))
+    if len(images_to_build) % 2 != 0:
+        print("odd number of images, skipping last image")
     # Get a list of image files in the folder
     image_files = io.get_img_list(FOLDER_PATH)
-    if VERBOSE: print(image_files)
+    # if VERBOSE: print(image_files)
     cluster_no = handpose_no = None
     successes = 0
     if len(image_files) > 1:
+        # this is legacy stuff to get the cluster number and handpose number from the folder name
         image_folder = FOLDER_PATH.split("/")[-1]
         if "cluster" in image_folder:
             print("cluster found", image_folder)
@@ -170,16 +170,21 @@ def merge_images(FOLDER_PATH):
             try: handpose_no = int(image_folder.split("_")[1])
             except: print("handpose_no = None")
         count = len(image_files)
-        print(count)
-        merged_pairs, successes = iterate_image_list(FOLDER_PATH,image_files,successes)
-        print(type(merged_pairs[0]))
+        print("about to iterate_image_list with ", len(images_to_build), "images")
+        if len(images_to_build) == 0: 
+            print("no images to build")
+            return None, 0, cluster_no, handpose_no
+        merged_pairs, successes = iterate_image_list(FOLDER_PATH,images_to_build,successes)
+        if merged_pairs is not None: 
+            print("len merged pairs are", len(merged_pairs))
+            # Continue merging until there is only one merged image left
+            while len(merged_pairs) >= 2:
+                merged_pairs, successes = iterate_image_list(FOLDER_PATH,merged_pairs,successes)
 
-        # Continue merging until there is only one merged image left
-        while len(merged_pairs) >= 2:
-            merged_pairs, successes = iterate_image_list(FOLDER_PATH,merged_pairs,successes)
-
-        final_merged = merged_pairs[0]
-
+            final_merged = merged_pairs[0]
+        else:
+            print("no merged pairs found")
+            final_merged = None
         return final_merged, successes, cluster_no, handpose_no
     else:
         return None, 0, cluster_no, handpose_no
@@ -285,7 +290,9 @@ def crop_images(img_array, subfolder_path=None):
 
 def write_video(img_array, FRAMERATE=15, subfolder_path=None):
     img_array = [img for img in img_array if img.endswith(".jpg")]
-    print("img_array", img_array)
+    images_to_build = load_images(img_array, subfolder_path)
+    # print("img_array", img_array)
+    print("len images_to_build", len(images_to_build))
     # Get the dimensions of the first image in the array
     cluster_no, image_path = get_path(subfolder_path, img_array)
     img = cv2.imread(image_path)
@@ -318,15 +325,19 @@ def write_video(img_array, FRAMERATE=15, subfolder_path=None):
             
             while current_pos + PERIOD <= total_images:
                 # Phase 1: Increase merge count from START_MERGE to merge_count
+                # video_writer.write(images_to_build[current_pos])
                 for i in range(START_MERGE, merge_count + 1):
                     # Load and merge images from current_pos to current_pos + i
-                    merged_img = load_and_merge_images(img_array[current_pos:current_pos + i], subfolder_path)
+                # if i % 2 == 0:
+                    merged_img, _, _, _ = merge_images(images_to_build[current_pos:current_pos + i], subfolder_path)
+                    print("merged_img", merged_img.shape)
+                    print("type merged_img", type(merged_img))
                     video_writer.write(merged_img)
                 
                 # Phase 2: Slide through the array maintaining merge_count images merged
                 for i in range(1, PERIOD - merge_count + 1):
                     # Load and merge images from current_pos + i to current_pos + i + merge_count
-                    merged_img = load_and_merge_images(img_array[current_pos + i:current_pos + i + merge_count], subfolder_path)
+                    merged_img, _, _, _ = merge_images(images_to_build[current_pos + i:current_pos + i + merge_count], subfolder_path)
                     video_writer.write(merged_img)
                 
                 # Phase 3: Decrease merge count back to START_MERGE
@@ -334,7 +345,8 @@ def write_video(img_array, FRAMERATE=15, subfolder_path=None):
                     # Load and merge images from PERIOD - i to PERIOD
                     end_idx = min(current_pos + PERIOD, total_images)
                     start_idx = end_idx - i
-                    merged_img = load_and_merge_images(img_array[start_idx:end_idx], subfolder_path)
+                    # if i % 2 == 0:
+                    merged_img, _, _, _ = merge_images(images_to_build[start_idx:end_idx], subfolder_path)
                     video_writer.write(merged_img)
                 
                 # Move to the next cycle
@@ -345,19 +357,19 @@ def write_video(img_array, FRAMERATE=15, subfolder_path=None):
             remaining = total_images - current_pos
             if remaining > 0:
                 for i in range(START_MERGE, min(merge_count + 1, remaining + 1)):
-                    merged_img = load_and_merge_images(img_array[current_pos:current_pos + i], subfolder_path)
+                    merged_img, _, _, _ = merge_images(images_to_build[current_pos:current_pos + i], subfolder_path)
                     video_writer.write(merged_img)
                 
                 if remaining > merge_count:
                     for i in range(1, remaining - merge_count + 1):
-                        merged_img = load_and_merge_images(img_array[current_pos + i:current_pos + i + merge_count], subfolder_path)
+                        merged_img, _, _, _ = merge_images(images_to_build[current_pos + i:current_pos + i + merge_count], subfolder_path)
                         video_writer.write(merged_img)
                     
                     for i in range(merge_count - 1, START_MERGE - 1, -1):
                         end_idx = total_images
                         start_idx = end_idx - i
                         if start_idx < end_idx:
-                            merged_img = load_and_merge_images(img_array[start_idx:end_idx], subfolder_path)
+                            merged_img, _, _, _ = merge_images(images_to_build[start_idx:end_idx], subfolder_path)
                             video_writer.write(merged_img)
     else:
         # Original behavior - write each frame directly
@@ -397,7 +409,49 @@ def write_video(img_array, FRAMERATE=15, subfolder_path=None):
     
     return video_path
 
-def load_and_merge_images(image_list, subfolder_path=None):
+def blend_multiple(images):
+    """Blends multiple images using specified weights.
+
+    Args:
+        images: A list of images (NumPy arrays).
+        weights: A list of weights corresponding to each image.
+
+    Returns:
+        The blended image (NumPy array).
+    """
+
+    # if len(images) != len(weights):
+    #     raise ValueError("Number of images and weights must be the same.")
+
+    if not images:
+      return None
+
+    # weights = [1.0 / len(images)] * len(images)  # Equal weights for all images
+    each_weight = 1.0 / len(images)  # Equal weights for all images
+    weights = [each_weight] * len(images)
+
+    blended = images[0].astype(np.float32) * weights[0]
+    for i in range(1, len(images)):
+        blended = cv2.addWeighted(blended, 1.0, images[i].astype(np.float32), weights[i], 0.0)
+    return blended.astype(np.uint8)
+
+# # Example usage:
+# img1 = cv2.imread('image1.jpg')
+# img2 = cv2.imread('image2.jpg')
+# img3 = cv2.imread('image3.jpg')
+
+# images_to_blend = [img1, img2, img3]
+# weights = [0.3, 0.4, 0.3] # Example weights, must add up to 1 (or less)
+
+
+# if blended_image is not None:
+#   cv2.imshow('Blended Image', blended_image)
+#   cv2.waitKey(0)
+#   cv2.destroyAllWindows()
+# else:
+#   print("No images to blend.")
+
+def load_images(image_list, subfolder_path=None):
     """
     Load and merge a list of images using cv2.addWeighted
     
@@ -429,6 +483,7 @@ def load_and_merge_images(image_list, subfolder_path=None):
     # Start with the first image at full weight
     result = result.copy()
     
+    images_to_build = []
     # Gradually blend in the other images
     for i in range(1, len(image_list)):
         if subfolder_path:
@@ -448,14 +503,21 @@ def load_and_merge_images(image_list, subfolder_path=None):
         if img.shape != result.shape:
             img = cv2.resize(img, (result.shape[1], result.shape[0]), interpolation=cv2.INTER_AREA)
         
-        # Calculate weights to maintain proper blending
-        alpha = (len(image_list) - i) / len(image_list)
-        beta = 1.0 / len(image_list)
+        # # Calculate weights to maintain proper blending
+        # alpha = (len(image_list) - i) / len(image_list)
+        # beta = 1.0 / (len(image_list) - i)
         
-        # Blend current result with new image
-        result = cv2.addWeighted(result, alpha, img, beta, 0.0)
+        # alpha = 1.0 / (i + 1)
+        # beta = 1.0 - alpha
+
+        # # Blend current result with new image
+        # result = cv2.addWeighted(result, alpha, img, beta, 0.0)
+
+        images_to_build.append(img)
+
+    # blended_image = blend_multiple(images_to_build)
     
-    return result
+    return images_to_build
 
 def save_concatenated_metas(subfolders, output_path, csv_file):
     cat_metas = pd.DataFrame(columns=["image_id", "description", "topic_fit"])
