@@ -23,7 +23,7 @@ IS_VIDEO = True
 IS_VIDEO_MERGE = True
 FRAMERATE = 12
 PERIOD = 20 # how many images in each merge cycle
-MERGE_COUNT = 8 # largest number of merged images MUST BE BASE^2
+MERGE_COUNT = 16 # largest number of merged images MUST BE BASE^2
 START_MERGE = 1 # number of images merged into the first image. Can be 1 (no merges) or >1 (two or more images merged)
 
 if IS_VIDEO:
@@ -69,6 +69,48 @@ else:
     print("TOPIC", TOPIC)
 CSV_FILE = f"metas_{TOPIC}.csv"
 
+def merge_images_numpy(image_list):
+    """
+    Merge multiple cv2 images with equal weighting using pure NumPy operations.
+    
+    Args:
+        image_list: List of cv2 images (already loaded with cv2.imread)
+    
+    Returns:
+        Merged image as a cv2/numpy array
+    """
+    if not image_list:
+        raise ValueError("Empty image list provided")
+    
+    if len(image_list) == 1:
+        return image_list[0]
+    
+    # Get dimensions of the first image
+    h, w = image_list[0].shape[:2]
+    
+    # Ensure all images are the same size and format
+    processed_images = []
+    for img in image_list:
+        # Handle grayscale images
+        if len(img.shape) == 2:
+            img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
+        
+        # Resize if needed
+        if img.shape[0] != h or img.shape[1] != w:
+            img = cv2.resize(img, (w, h), interpolation=cv2.INTER_AREA)
+        
+        processed_images.append(img.astype(np.float32))
+    
+    # Stack all images along a new axis
+    stacked = np.stack(processed_images, axis=0)
+    
+    # Take the mean along the stacking axis
+    merged_img = np.mean(stacked, axis=0)
+    
+    # Convert back to uint8
+    merged_img = np.clip(merged_img, 0, 255).astype(np.uint8)
+    
+    return merged_img
 
 def iterate_image_list(FOLDER_PATH,image_files, successes):
     def crop_scale_giga(img1, DIMS=GIGA_DIMS):
@@ -329,7 +371,7 @@ def write_video(img_array, FRAMERATE=15, subfolder_path=None):
                 for i in range(START_MERGE, merge_count + 1):
                     # Load and merge images from current_pos to current_pos + i
                 # if i % 2 == 0:
-                    merged_img, _, _, _ = merge_images(images_to_build[current_pos:current_pos + i], subfolder_path)
+                    merged_img = merge_images_numpy(images_to_build[current_pos:current_pos + i])
                     print("merged_img", merged_img.shape)
                     print("type merged_img", type(merged_img))
                     video_writer.write(merged_img)
@@ -337,16 +379,18 @@ def write_video(img_array, FRAMERATE=15, subfolder_path=None):
                 # Phase 2: Slide through the array maintaining merge_count images merged
                 for i in range(1, PERIOD - merge_count + 1):
                     # Load and merge images from current_pos + i to current_pos + i + merge_count
-                    merged_img, _, _, _ = merge_images(images_to_build[current_pos + i:current_pos + i + merge_count], subfolder_path)
+                    merged_img = merge_images_numpy(images_to_build[current_pos + i:current_pos + i + merge_count])
                     video_writer.write(merged_img)
                 
                 # Phase 3: Decrease merge count back to START_MERGE
-                for i in range(merge_count - 1, START_MERGE - 1, -1):
+                # not subtracting 1 from start_merge to not include the final image
+                # adding 1 to PERIOD to include the first image of the next cycle
+                for i in range(merge_count - 1, START_MERGE , -1):
                     # Load and merge images from PERIOD - i to PERIOD
-                    end_idx = min(current_pos + PERIOD, total_images)
+                    end_idx = min(current_pos + PERIOD + 1, total_images)
                     start_idx = end_idx - i
                     # if i % 2 == 0:
-                    merged_img, _, _, _ = merge_images(images_to_build[start_idx:end_idx], subfolder_path)
+                    merged_img = merge_images_numpy(images_to_build[start_idx:end_idx])
                     video_writer.write(merged_img)
                 
                 # Move to the next cycle
@@ -357,29 +401,23 @@ def write_video(img_array, FRAMERATE=15, subfolder_path=None):
             remaining = total_images - current_pos
             if remaining > 0:
                 for i in range(START_MERGE, min(merge_count + 1, remaining + 1)):
-                    merged_img, _, _, _ = merge_images(images_to_build[current_pos:current_pos + i], subfolder_path)
+                    merged_img = merge_images_numpy(images_to_build[current_pos:current_pos + i])
                     video_writer.write(merged_img)
                 
                 if remaining > merge_count:
                     for i in range(1, remaining - merge_count + 1):
-                        merged_img, _, _, _ = merge_images(images_to_build[current_pos + i:current_pos + i + merge_count], subfolder_path)
+                        merged_img = merge_images_numpy(images_to_build[current_pos + i:current_pos + i + merge_count])
                         video_writer.write(merged_img)
                     
                     for i in range(merge_count - 1, START_MERGE - 1, -1):
                         end_idx = total_images
                         start_idx = end_idx - i
                         if start_idx < end_idx:
-                            merged_img, _, _, _ = merge_images(images_to_build[start_idx:end_idx], subfolder_path)
+                            merged_img = merge_images_numpy(images_to_build[start_idx:end_idx])
                             video_writer.write(merged_img)
     else:
         # Original behavior - write each frame directly
-        for filename in img_array:
-            if subfolder_path:
-                image_path = os.path.join(subfolder_path, filename)
-            else:
-                image_path = filename
-            print(image_path)
-            img = cv2.imread(image_path)
+        for img in images_to_build:
             video_writer.write(img)
 
     # Release the video writer and close the video file
