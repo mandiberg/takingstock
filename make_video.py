@@ -64,19 +64,18 @@ HSV_NORMS = {"LUM": .01, "SAT": 1,  "HUE": 0.002777777778, "VAL": 1}
 SORT_TYPE = "planar_hands"
 # SORT_TYPE = "fingertips_positions"
 FULL_BODY = False # this requires is_feet
-VISIBLE_HAND_LEFT = True
-VISIBLE_HAND_RIGHT = True
+VISIBLE_HAND_LEFT = False
+VISIBLE_HAND_RIGHT = False
 TSP_SORT=False
 # this is for controlling if it is using
 # all clusters, 
-IS_VIDEO_FUSION = True # used for constructing SQL query
+IS_HAND_POSE_FUSION = False # do we use fusion clusters
+ONLY_ONE = False # only one cluster, or False for video fusion
 GENERATE_FUSION_PAIRS = False # if true it will query based on MIN_VIDEO_FUSION_COUNT and create pairs
                                 # if false, it will grab the list of pair lists below
 MIN_VIDEO_FUSION_COUNT = 750
-IS_HAND_POSE_FUSION = False # i'm not sure how this is different from the IS_VIDEO_FUSION
-ONLY_ONE = False
 IS_CLUSTER = False
-if IS_HAND_POSE_FUSION or IS_VIDEO_FUSION:
+if IS_HAND_POSE_FUSION:
     if SORT_TYPE in ["planar_hands", "fingertips_positions", "128d"]:
         # first sort on HandsPositions, then on HandsGestures
         CLUSTER_TYPE = "HandsPositions" # Select on 3d hands
@@ -136,14 +135,14 @@ IS_ANGLE_SORT = False
 IS_TOPICS = True
 N_TOPICS = 64 # changing this to 14 triggers the affect topic fusion
 
-IS_ONE_TOPIC = True
+IS_ONE_TOPIC = False
 TOPIC_NO = [35] # if doing an affect topic fusion, this is the wrapper topic
 # groupings of affect topics
 NEG_TOPICS = [0,1,3,5,8,9,13]
 POS_TOPICS = [4,6,7,10,11,12]
 NEUTRAL_TOPICS = [2]
 AFFECT_GROUPS_LISTS = [NEG_TOPICS, POS_TOPICS, NEUTRAL_TOPICS]
-USE_AFFECT_GROUPS = True
+USE_AFFECT_GROUPS = False
 
 #######################
 
@@ -159,8 +158,8 @@ USE_AFFECT_GROUPS = True
 # 7 is surprise
 #  is yoga << planar,  planar,  fingers crossed
 
-ONE_SHOT = True # take all files, based off the very first sort order.
-EXPAND = True # expand with white, as opposed to inpaint and crop
+ONE_SHOT = False # take all files, based off the very first sort order.
+EXPAND = False # expand with white, as opposed to inpaint and crop
 JUMP_SHOT = True # jump to random file if can't find a run (I don't think this applies to planar?)
 USE_ALL = False # this is for outputting all images from a oneshot, forces ONE_SHOT
 DRAW_TEST_LMS = False # this is for testing the landmarks
@@ -196,14 +195,14 @@ if not GENERATE_FUSION_PAIRS:
         # T47 handsome
         # [5,104], [4,124], [10,62], [21,116], [7,57], [5,121], [5,60]
 
-        # TSP TESTING
-        # [24,99]
+        # Topic 22 Finger
+        [24,99] #silence finger
 
         # David Michael custom
         # [21,112]
         
         # topic 35 skin care, 750plus selects
-        [21, 0]
+        # [21, 0]
         # both hands
         # [21, 116]
         # [13, 116], [21, 0], [21, 116], [24, 51], [24, 126]
@@ -247,125 +246,31 @@ if not GENERATE_FUSION_PAIRS:
         # [11,3], [15,25], [15,28], [15,37], [15,38], [15,53], [15,55], [15,92], [1,113], [21,0], [21,116], [21,68], [30,110], [30,28], [30,37], [30,38], [30,53], [30,55], [30,6], [30,81], [6,115], [6,37], [6,38], [6,6], [6,81], [9,30]
 
         # Stressed single
-        # [21, 30],
-        # [21, 68]
+        # [21, 30], [21, 68]
 
         # # topic 32, T64, ihp128
         # Book example
-        # [21, 112],
-        # [21, 109],
-        # [21, 84],
-        # [21, 55]
-        
+        # [21, 112], [21, 109], [21, 84], [21, 55]
 
         # # topic 32, T64, ihp128
         # # hands over face
-        # [1, 65],
-        # [1, 88],
-        # [1, 125],
-        # [8, 125],
-        # [13, 2],
-        # [13, 24],
-        # [13, 65],
-        # [13, 85],
-        # [13, 117],
-        # [18, 88],
-        # [18, 125],
-        # [24, 11],
-        # [24, 13],
-        # [24, 57],
-        # [25, 65],
-        # [25, 88],
-        # [25, 125]
+        # [1, 65], [1, 88], [1, 125], [8, 125], [13, 2], [13, 24], [13, 65], [13, 85], [13, 117], [18, 88], [18, 125], [24, 11], [24, 13], [24, 57], [25, 65], [25, 88], [25, 125]
 
         # topic 32, T64, ihp128
         # open mouth
-        # [4,124],
-        # [5,104],
-        # [6,14],
-        # [6,37],
-        # [6,38],
-        # [6,72],
-        # [6,115],
-        # [9,30],
-        # [9,68],
-        # [9,109],
-        # [10,31],
-        # [11,108],
-        # [13,76],
-        # [13,116],
-        # [15,37],
-        # [15,38],
-        # [15,53],
-        # [15,92],
-        # [18,7],
-        # [21,30],
-        # [21,37],
-        # [21,68],
-        # [21,76],
-        # [21,116],
-        # [22,127],
-        # [30,37],
-        # [30,38]
+        # [4,124], [5,104], [6,14], [6,37], [6,38], [6,72], [6,115], [9,30], [9,68], [9,109], [10,31], [11,108], [13,76], [13,116], [15,37], [15,38], [15,53], [15,92], [18,7], [21,30], [21,37], [21,68], [21,76], [21,116], [22,127], [30,37], [30,38]
 
         # # topic 32, T64
-        # [13, 11],
-        # [13, 29],
-        # [13, 47],
-        # [1, 37],
-        # [24, 12],
-        # [24, 8],
-        # [25, 25],
-        # [13, 37],
-        # [1, 53],
-        # [24, 33],
-        # [25, 11],
-        # [25, 37],
-        # [13, 28],
-        # [1, 25],
-        # [1, 60],
-        # [24, 37]
+        # [13, 11], [13, 29], [13, 47], [1, 37], [24, 12], [24, 8], [25, 25], [13, 37], [1, 53], [24, 33], [25, 11], [25, 37], [13, 28], [1, 25], [1, 60], [24, 37]
 
         # # topic 23 reselects
-        # [1,65],
-        # [1,88],
-        # [1,125],        
-        # [13,109],
-        # [13,24],
-        # [13,33],
-        # [13,85],
-        # [24,13],
-        # [24,85],
-        # [25,65],
-        # [13,117],
-        # [13,2],
-        # [13,65],
-        # [24,11],
-        # [24,7],
-        # [25,125],
-        # [25,88]        
+        # [1,65], [1,88], [1,125], [13,109], [13,24], [13,33], [13,85], [24,13], [24,85], [25,65], [13,117], [13,2], [13,65], [24,11], [24,7], [25,125], [25,88]
 
         # # topic 23 selects
-        # [13,13],
-        # [13,15],
-        # [13,17],
-        # [13,23],
-        # [13,29],
-        # [13,7],
-        # [18,2],
-        # [1,13],
-        # [24,12],
-        # [24,24],
-        # [25,13]
+        # [13,13], [13,15], [13,17], [13,23], [13,29], [13,7], [18,2], [1,13], [24,12], [24,24], [25,13]
 
         # no topics
-        # [0,68],
-        # [35,11],
-        # [35,13],
-        # [59,30],
-        # [74,10],
-        # [113,2],
-        # [113,117]
+        # [0,68], [35,11], [35,13], [59,30], [74,10], [113,2], [113,117]
 
         # 300 largest below
         # [1,21],[115,97],[53,21],[47,21],[47,67],[4,103],[5,115],[7,57],[52,8],[11,17],[112,57],[3,24],[11,71],[11,48],[120,115],[121,29],[15,74],[1,67],[121,123],[3,27],[115,112],[121,8],[74,67],[17,94],[99,62],[56,102],[126,102],[20,0],[31,24],[28,111],[0,68],[121,7],[35,99],[4,76],[18,97],[52,29],[84,25],[109,8],[66,54],[4,3],[38,48],[52,123],[2,64],[2,56],[94,19],[50,21],[68,21],[20,116],[5,78],[52,99],[1,80],
@@ -451,11 +356,11 @@ elif IS_SEGONLY and io.platform == "darwin":
         WHERE += " AND it.topic_score > .1"
         SELECT += ", it.topic_score" # add description here, after resegmenting
 
-    if IS_HAND_POSE_FUSION or IS_VIDEO_FUSION:
+    if IS_HAND_POSE_FUSION:
         FROM += f" JOIN Images{CLUSTER_TYPE} ihp ON s.image_id = ihp.image_id "
         FROM += f" JOIN Images{CLUSTER_TYPE_2} ih ON s.image_id = ih.image_id "
         # WHERE += " AND ihp.cluster_dist < 2.5" # isn't really working how I want it
-        if IS_VIDEO_FUSION: add_topic_select()
+        if IS_HAND_POSE_FUSION: add_topic_select()
     elif IS_ONE_CLUSTER and IS_ONE_TOPIC:
         FROM += f" JOIN Images{CLUSTER_TYPE} ic ON s.image_id = ic.image_id "
         add_topic_select()
@@ -733,8 +638,8 @@ def prep_cluster_medians():
             # print("cluster_medians", i, cluster_median)
             N_CLUSTERS = i # will be the last cluster_id which is count of clusters
 
-# TK IS_VIDEO_FUSION ??
-if IS_CLUSTER or IS_ONE_CLUSTER or IS_HAND_POSE_FUSION or IS_VIDEO_FUSION:
+# TK IS_HAND_POSE_FUSION ??
+if IS_CLUSTER or IS_ONE_CLUSTER or IS_HAND_POSE_FUSION:
     # select cluster_median from Clusters
     results = session.execute(select(Clusters.cluster_id, Clusters.cluster_median)).fetchall()
     cluster_medians, N_CLUSTERS = sort.prep_cluster_medians(results)
@@ -745,7 +650,7 @@ if IS_CLUSTER or IS_ONE_CLUSTER or IS_HAND_POSE_FUSION or IS_VIDEO_FUSION:
     if cluster_medians is None:
     # if not any(cluster_medians):
         print("cluster results are empty", cluster_medians)
-if IS_HANDS or IS_ONE_HAND or IS_VIDEO_FUSION:
+if IS_HANDS or IS_ONE_HAND:
     results = session.execute(select(Hands.cluster_id, Hands.cluster_median)).fetchall()
     hands_medians, N_HANDS = sort.prep_cluster_medians(results)
     sort.hands_medians = hands_medians
@@ -797,8 +702,9 @@ def selectSQL(cluster_no=None, topic_no=None):
 
     cluster = " "
     print(f"cluster_no is {cluster_no} and topic_no is {topic_no}")
-    if IS_HAND_POSE_FUSION or IS_VIDEO_FUSION:
+    if IS_HAND_POSE_FUSION:
         if isinstance(cluster_no, list):
+            print("cluster_no is a list", cluster_no)
             # we have two values, C1 and C2. C1 should be IHP, C2 should be IH
             cluster += f" AND ihp.cluster_id = {str(cluster_no[0])} "            
             cluster += f" AND ih.cluster_id = {str(cluster_no[1])} "            
@@ -826,7 +732,7 @@ def selectSQL(cluster_no=None, topic_no=None):
             topic_ids = ', '.join(map(str, topic_no))
             # Use the IN operator to check if topic_id is in the list of values
             cluster += f"AND it.topic_id IN ({topic_ids}) "
-        else:
+        elif topic_no is not None:
             # If topic_no is not a list, simply check for equality
             cluster += f"AND it.topic_id = {str(topic_no)} "            
     # print(f"cluster SELECT is {cluster}")
@@ -1904,7 +1810,7 @@ def main():
         # for FUSION, CLUSTER_NO is HAND_POSITION and is the first value
         if isinstance(cluster_no, list):
             print("cluster_no is a list", cluster_no)
-            if IS_ONE_TOPIC and not IS_VIDEO_FUSION:
+            if IS_ONE_TOPIC and not IS_HAND_POSE_FUSION:
                 pose_no = None
             else:
                 pose_no = cluster_no[1]
@@ -1990,7 +1896,7 @@ def main():
 
             ### Get cluster_median encodings for cluster_no ###
 
-            if cluster_no is not None and cluster_no !=0 and (IS_CLUSTER or IS_VIDEO_FUSION) and not ONLY_ONE:
+            if cluster_no is not None and cluster_no !=0 and (IS_CLUSTER) and not ONLY_ONE:
                 # skips cluster 0 for pulling median because it was returning NULL
                 # cluster_median = select_cluster_median(cluster_no)
                 # image_id = insert_dict['image_id']
@@ -2051,87 +1957,59 @@ def main():
     #creating my objects
     start = time.time()
 
+    first_loop = this_topic = this_cluster = n_cluster_topics = second_cluster_topic = None
     # to loop or not to loop that is the cluster
+    if IS_HAND_POSE_FUSION or IS_CLUSTER or IS_TOPICS: first_loop = True
+
+    if IS_ONE_CLUSTER:
+        print(f"setting SELECT for IS_ONE_CLUSTER {CLUSTER_NO}")
+        this_cluster = CLUSTER_NO
+    if IS_ONE_TOPIC:
+        print(f"setting SELECT for IS_ONE_TOPIC {TOPIC_NO}")
+        this_topic = TOPIC_NO
+
+    # selectSQL takes a cluster_no and topic_no
     if IS_HAND_POSE_FUSION and ONLY_ONE:
         print("IS_HAND_POSE_FUSION is True")
         # select on both, sort on CLUSTER_NO 
         # this sends pose and gesture in as a list, and an empty topic
-        CLUSTER_PAIR = [CLUSTER_NO, HAND_POSE_NO]
-        resultsjson = selectSQL(CLUSTER_PAIR)
-        map_images(resultsjson, CLUSTER_PAIR)
-    elif (IS_HAND_POSE_FUSION and not ONLY_ONE) or IS_VIDEO_FUSION:
-        if IS_VIDEO_FUSION: 
-            this_topic = TOPIC_NO
-            if GENERATE_FUSION_PAIRS:
-                FUSION_PAIRS = sort.find_sorted_zero_indices(TOPIC_NO,MIN_VIDEO_FUSION_COUNT)
-                print("FUSION_PAIRS", FUSION_PAIRS)
+        this_cluster = [CLUSTER_NO, HAND_POSE_NO]
+    elif IS_HAND_POSE_FUSION and not ONLY_ONE:
+        this_topic = TOPIC_NO
+        if GENERATE_FUSION_PAIRS:
+            n_cluster_topics = sort.find_sorted_zero_indices(TOPIC_NO,MIN_VIDEO_FUSION_COUNT)
         else: 
-            this_topic = None
-        for CLUSTER_PAIR in FUSION_PAIRS:
-            print(f"IS_HAND_POSE_FUSION is True, with {CLUSTER_PAIR}")
-            resultsjson = selectSQL(CLUSTER_PAIR, this_topic)
-            map_images(resultsjson, CLUSTER_PAIR)
-    # elif IS_VIDEO_FUSION:
-    #     print(f"IS_VIDEO_FUSION is True, and topic {TOPIC_NO}")
-    #     for hand_pose_no in range(N_HANDS):
-    #         for cluster_no in range(N_CLUSTERS):
-    #             print(f"SELECTing cluster {cluster_no} and hand_pose {hand_pose_no}")
-    #             # select on both, sort on CLUSTER_NO 
-    #             # this sends pose and gesture in as a list, and an empty topic
-    #             CLUSTER_PAIR = [cluster_no, hand_pose_no]
-    #             resultsjson = selectSQL(CLUSTER_PAIR, TOPIC_NO)
-    #             if len(resultsjson) > MIN_VIDEO_FUSION_COUNT:
-    #                 map_images(resultsjson, CLUSTER_PAIR)
-    #             else:
-    #                 print(f"resultsjson contains {len(resultsjson)} images, skipping")
-    elif IS_ONE_CLUSTER and IS_ONE_TOPIC:
-        print(f"IS_ONE_CLUSTER is {IS_ONE_CLUSTER} with {CLUSTER_NO}, and topic {TOPIC_NO}")
-        resultsjson = selectSQL(CLUSTER_NO, TOPIC_NO)
-        map_images(resultsjson, [CLUSTER_NO, TOPIC_NO])
-    elif IS_CLUSTER and not IS_ONE_TOPIC:
-        print(f"IS_CLUSTER is {IS_CLUSTER} with {N_CLUSTERS}")
-        for cluster_no in range(N_CLUSTERS):
-            # temp hack
-            # print(f"SELECTing cluster {cluster_no} of {N_CLUSTERS}")
-            if cluster_no < START_CLUSTER: 
-                continue
-            else:
-                print(f"SELECTing cluster {cluster_no} of {N_CLUSTERS}")
-                resultsjson = selectSQL(cluster_no, None)
-                print(f"resultsjson contains {len(resultsjson)} images")
-                map_images(resultsjson, cluster_no)
-    elif IS_CLUSTER and IS_ONE_TOPIC:
-        print(f"IS_CLUSTER is {IS_CLUSTER} with {N_CLUSTERS}, and topic {TOPIC_NO}")
-        for cluster_no in range(N_CLUSTERS):
-            if cluster_no < START_CLUSTER: 
-                continue
-            print(f"SELECTing cluster {cluster_no} of {N_CLUSTERS}")
-            resultsjson = selectSQL(cluster_no, TOPIC_NO)
-            print(f"resultsjson contains {len(resultsjson)} images")
-            map_images(resultsjson, cluster_no)
+            n_cluster_topics = FUSION_PAIRS
+        print("fusion_pairs", n_cluster_topics)
+    elif IS_CLUSTER:
+        n_cluster_topics = range(N_CLUSTERS)
+        if IS_ONE_TOPIC: second_cluster_topic = this_topic
+        print(f"IS_CLUSTER is {IS_CLUSTER} with {n_cluster_topics}, and second_cluster_topic {second_cluster_topic}")
     elif IS_TOPICS:
-        if USE_AFFECT_GROUPS: N_CLUSTERS = len(AFFECT_GROUPS_LISTS) # redefine for affect groups
-        print(f"IS_TOPICS is {IS_TOPICS} with {N_TOPICS}")
-        for topic_no in range(N_TOPICS):
-            if USE_AFFECT_GROUPS: topic_no = AFFECT_GROUPS_LISTS[topic_no] # redefine cluster_no with affect group list
-            print(f"SELECTing cluster {topic_no} of {N_TOPICS}")
-            resultsjson = selectSQL(None, topic_no)
-            print(f"resultsjson contains {len(resultsjson)} images")
-            map_images(resultsjson, topic_no)
-    elif IS_ONE_CLUSTER:
-        print(f"SELECTing cluster {CLUSTER_NO}")
-        resultsjson = selectSQL(CLUSTER_NO, None)
-        print(f"resultsjson contains {len(resultsjson)} images")
-        map_images(resultsjson, CLUSTER_NO)
-    elif IS_ONE_TOPIC:
-        print(f"SELECTing topic {TOPIC_NO}")
-        resultsjson = selectSQL(None, TOPIC_NO)
-        print(f"resultsjson contains {len(resultsjson)} images")
-        map_images(resultsjson, TOPIC_NO) # passing in TOPIC_NO to use in saving folder name
+        if USE_AFFECT_GROUPS: n_cluster_topics = len(AFFECT_GROUPS_LISTS) # redefine for affect groups
+        else: n_cluster_topics = range(N_TOPICS)
+        # if USE_AFFECT_GROUPS: N_CLUSTERS = len(AFFECT_GROUPS_LISTS) # redefine for affect groups
+        print(f"IS_TOPICS is {IS_TOPICS} with {n_cluster_topics}")
+
+    def select_map_images(this_cluster, this_topic):
+        resultsjson = selectSQL(this_cluster, this_topic)
+        folder_name = this_topic if this_topic else this_cluster
+        map_images(resultsjson, folder_name)
+
+    if first_loop:
+        print("first loop is ", first_loop)
+        for cluster_topic_no in n_cluster_topics:
+            if IS_CLUSTER and cluster_topic_no < START_CLUSTER:continue
+            if USE_AFFECT_GROUPS: cluster_topic_no = AFFECT_GROUPS_LISTS[cluster_topic_no] # redefine cluster_no with affect group list
+            print(f"SELECTing cluster_topic {cluster_topic_no} of {n_cluster_topics}")
+            if IS_TOPICS: select_map_images(second_cluster_topic, cluster_topic_no)
+            elif IS_CLUSTER: select_map_images(cluster_topic_no, second_cluster_topic)
+            elif IS_HAND_POSE_FUSION: select_map_images(cluster_topic_no,this_topic)
+            # resultsjson = selectSQL(select_list)
+            # map_images(resultsjson, cluster_topic_no)
     else:
         print("doing regular linear")
-        resultsjson = selectSQL() 
-        map_images(resultsjson)
+        select_map_images(this_cluster, this_topic)
 
     print("got results, count is: ",len(resultsjson))
 

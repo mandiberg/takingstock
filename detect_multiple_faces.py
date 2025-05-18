@@ -105,8 +105,8 @@ POSE_ID = 0
 # folder doesn't matter if IS_FOLDER is False. Declared FAR below. 
 # MAIN_FOLDER = "/Volumes/RAID54/images_shutterstock"
 # MAIN_FOLDER = "/Volumes/SSD4/images_adobe"
-MAIN_FOLDER = "/Volumes/SSD4green/images_adobe"
-# MAIN_FOLDER = "/Volumes/OWC4/segment_images/images_adobe"
+# MAIN_FOLDER = "/Volumes/SSD4green/images_adobe"
+MAIN_FOLDER = "/Volumes/OWC4/segment_images/images_adobe"
 # MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/afripics_v2/images"
 
 # MAIN_FOLDER = "/Volumes/SSD4/images_getty_reDL"
@@ -114,14 +114,13 @@ BATCH_SIZE = 2000 # Define how many from each folder in each batch
 LIMIT = 1000
 
 #temp hack to go 1 subfolder at a time
-# THESE_FOLDER_PATHS = ["8/8A", "8/8B","8/8C", "8/8D", "8/8E", "8/8F", "8/80", "8/81", "8/82", "8/83", "8/84", "8/85", "8/86", "8/87", "8/88", "8/89"]
 THESE_FOLDER_PATHS = ["9/9C", "9/9D", "9/9E", "9/9F", "9/90", "9/91", "9/92", "9/93", "9/94", "9/95", "9/96", "9/97", "9/98", "9/99"]
 
 # MAIN_FOLDER = "/Volumes/SSD4/adobeStockScraper_v3/images"
 # MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages"
 CSV_FOLDERCOUNT_PATH = os.path.join(MAIN_FOLDER, "folder_countout.csv")
 
-IS_SSD=False
+IS_SSD=True
 
 # set BODY to true, set SSD to false, set TOPIC_ID
 # for silence, start at 103893643
@@ -141,11 +140,9 @@ SegmentTable_name = 'SegmentBig_isnotface'
 START_IMAGE_ID = 0
 
 if BODYLMS is True or HANDLMS is True:
-
     # prep for image background object
     get_background_mp = mp.solutions.selfie_segmentation
     get_bg_segment = get_background_mp.SelfieSegmentation()
-
 
     ############# Reencodings #############
 
@@ -1056,7 +1053,7 @@ def process_image_find_body_subroutine(image_id, image, bbox):
                 {"$set": {"nlms": pickle.dumps(n_landmarks)}},
                 upsert=True
             )
-            print(f"Normalized landmarks stored for image_id: {image_id}")
+            if VERBOSE: print(f"Normalized landmarks stored for image_id: {image_id}")
         elif is_body and not bbox:
             print("Body landmarks found but no bbox, no normalization")
             n_landmarks = None
@@ -1310,40 +1307,6 @@ def find_and_save_body(image_id, image, bbox, mongo_body_landmarks, hand_landmar
     print("find_and_save_body", mongo_body_landmarks)
     hue = sat = val = lum = lum_torso = hue_bb = sat_bb = val_bb = lum_bb = lum_torso_bb = selfie_bbox = bbox_dict = None
     is_left_shoulder=is_right_shoulder = is_feet = pose = is_hands = hand_landmarks = update_hand = None
-    # if REDO_BODYLMS_3D:
-    #     print("REDO_BODYLMS_3D, going to get all the values from the db")
-    #     # need to try to get all these things from the databases
-    #     # query the db by image_id, retrieve, and store values in these variables: hue, sat, val, lum, lum_torso, hue_bb, sat_bb, val_bb, lum_bb, lum_torso_bb, selfie_bbox, bbox_dict, is_left_shoulder, is_right_shoulder, is_feet
-    #     try:
-    #         init_session()
-    #         result = session.query(
-    #         ImagesBackground.hue, ImagesBackground.sat, ImagesBackground.val, ImagesBackground.lum, ImagesBackground.lum_torso,
-    #         ImagesBackground.hue_bb, ImagesBackground.sat_bb, ImagesBackground.val_bb, ImagesBackground.lum_bb, ImagesBackground.lum_torso_bb,
-    #         ImagesBackground.selfie_bbox, PhoneBbox.bbox_67, PhoneBbox.bbox_67_norm, PhoneBbox.bbox_63, PhoneBbox.bbox_63_norm,
-    #         PhoneBbox.bbox_26, PhoneBbox.bbox_26_norm, PhoneBbox.bbox_27, PhoneBbox.bbox_27_norm, PhoneBbox.bbox_32, PhoneBbox.bbox_32_norm,
-    #         ImagesBackground.is_left_shoulder, ImagesBackground.is_right_shoulder, Encodings.is_feet, Encodings.mongo_hand_landmarks
-    #         ).outerjoin(PhoneBbox, ImagesBackground.image_id == PhoneBbox.image_id) \
-    #          .outerjoin(Encodings, ImagesBackground.image_id == Encodings.image_id) \
-    #          .filter(ImagesBackground.image_id == image_id).first()
-
-    #         if result:
-    #             hue, sat, val, lum, lum_torso = result[:5]
-    #             hue_bb, sat_bb, val_bb, lum_bb, lum_torso_bb = result[5:10]
-    #             selfie_bbox = result[10]
-    #             bbox_dict = {
-    #                 67: {"bbox": result[11], "bbox_norm": result[12]},
-    #                 63: {"bbox": result[13], "bbox_norm": result[14]},
-    #                 26: {"bbox": result[15], "bbox_norm": result[16]},
-    #                 27: {"bbox": result[17], "bbox_norm": result[18]},
-    #                 32: {"bbox": result[19], "bbox_norm": result[20]},
-    #             }
-    #             is_left_shoulder, is_right_shoulder, is_feet, is_hands = result[21:]
-    #         else:
-    #             print(f"No existing data found for image_id: {image_id}")
-    #     except Exception as e:
-    #         print(f"Error querying database for image_id {image_id}: {e}")
-    #     finally:
-    #         close_session()
 
     if BODYLMS and mongo_body_landmarks is None or REDO_BODYLMS_3D:
         if VERBOSE: print("doing body, mongo_body_landmarks is None")
