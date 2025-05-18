@@ -8,7 +8,7 @@ DROP TABLE SegmentHelper_dec27_getty_noface ;
 DELETE FROM SegmentHelper_dec27_getty_noface;
 
 -- create helper segment table
-CREATE TABLE SegmentHelper_jan30_ALLgetty4faces (
+CREATE TABLE SegmentHelper_may2025_4x4faces (
     seg_image_id int NOT NULL AUTO_INCREMENT PRIMARY KEY,
     image_id INTEGER,
     FOREIGN KEY (image_id) REFERENCES Images(image_id)
@@ -220,19 +220,20 @@ WHERE e.mongo_encodings = 1
     );
 
    
--- for making an is_face no face segment helper
-INSERT INTO SegmentHelper_jan30_ALLgetty4faces (image_id)
+-- for making a helper from segmentbig
+INSERT INTO SegmentHelper_may2025_4x4faces (image_id)
 SELECT DISTINCT e.image_id
-FROM Encodings e
+FROM SegmentBig_isface e
 JOIN Images i ON i.image_id = e.image_id
-WHERE e.is_face IS NULL
-	-- AND e.mongo_encodings IS NULL
-	AND i.site_name_id = 1
+WHERE e.face_x > -45 AND e.face_x < -6
+    AND e.face_y > -4 AND e.face_y < 4
+    AND e.face_z > -4 AND e.face_z < 4
     AND NOT EXISTS (
         SELECT 1
-        FROM SegmentHelper_jan30_ALLgetty4faces s
+        FROM SegmentHelper_may2025_4x4faces s
         WHERE s.image_id = e.image_id
     )
+LIMIT 10000
 ;
 
 

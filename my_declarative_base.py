@@ -135,6 +135,10 @@ class Encodings(Base):
     is_face_no_lms = Column(Boolean)
     is_feet              = Column(Boolean)
     mongo_body_landmarks_3D   = Column(Boolean)
+    is_hand_left              = Column(Boolean)
+    is_hand_right             = Column(Boolean)
+    is_bodyhand_left              = Column(Boolean)
+    is_bodyhand_right             = Column(Boolean)
 
 class Encodings_Site2(Base):
     __tablename__ = 'Encodings_Site2'
@@ -330,6 +334,10 @@ class SegmentTable(Base):
     mongo_hand_landmarks_norm   = Column(Boolean)
     is_feet              = Column(Boolean)
     mongo_body_landmarks_3D   = Column(Boolean)
+    is_hand_left              = Column(Boolean)
+    is_hand_right             = Column(Boolean)
+    is_bodyhand_left              = Column(Boolean)
+    is_bodyhand_right             = Column(Boolean)
 
     site     = relationship("Site")
     age      = relationship("Age")

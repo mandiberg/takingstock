@@ -25,8 +25,10 @@ from my_declarative_base import SegmentTable, Encodings, Base, ImagesTopics
 # MongoDB setup
 import pymongo
 
+USE_BODYHANDS = True  # Set to True if using BodyHands
+
 USE_SEGMENT_TABLE = False  # Set to True if using SegmentTable
-TOPIC_ID = 35  # Set the topic ID to filter by
+TOPIC_ID = 0  # Set the topic ID to filter by
 
 def get_mongo_client():
     """Create and return a MongoDB client"""
@@ -37,7 +39,16 @@ def process_batch(task_queue, result_queue, db_config):
     # Each process gets its own database connections
     mongo_client = get_mongo_client()
     mongo_db = mongo_client["stock"]
-    mongo_collection = mongo_db["hand_landmarks"]
+    if USE_BODYHANDS:
+        mongo_collection = mongo_db["encodings"]
+        LEFT_HAND_NAME = "is_bodyhand_left"
+        RIGHT_HAND_NAME = "is_bodyhand_right"
+        UID = "encoding_id"
+    else:
+        mongo_collection = mongo_db["hand_landmarks"]
+        LEFT_HAND_NAME = "is_hand_left"
+        RIGHT_HAND_NAME = "is_hand_right"
+        UID = "seg_image_id"
     
     # Create database engine for this process
     engine = create_engine(
@@ -50,6 +61,12 @@ def process_batch(task_queue, result_queue, db_config):
     pid = os.getpid()
     logger.info(f"Worker {pid} started")
     
+    def evaluate_body_visibility(these_lms):        
+        visible_count = sum(1 for lm in these_lms if lm.visibility > 0.85)
+        # is_feet = (visible_count >= (len(foot_lms) / 2))
+        visibility = (visible_count >= 1) # if any foot landmark is visible, we consider it as feet
+        return visibility
+
     try:
         while True:
             try:
@@ -62,7 +79,7 @@ def process_batch(task_queue, result_queue, db_config):
                 
                 image_ids = [image_id for _, image_id in batch]
 
-                # 🔁 Batch MongoDB query
+                #  Batch MongoDB query
                 mongo_docs = {
                     doc["image_id"]: doc
                     for doc in mongo_collection.find({"image_id": {"$in": image_ids}})
@@ -71,21 +88,36 @@ def process_batch(task_queue, result_queue, db_config):
                 update_data = []
                 for enc_seg_image_id, image_id in batch:
                     mongo_doc = mongo_docs.get(image_id, {})
-                    is_hand_left = bool(mongo_doc.get("left_hand"))
-                    is_hand_right = bool(mongo_doc.get("right_hand"))
-
+                    # print(f"Processing image_id: {image_id}, mongo_doc: {mongo_doc} ")
+                    if USE_BODYHANDS:
+                        body_pickle = mongo_doc.get("body_landmarks", None)
+                        if body_pickle:
+                            body_landmarks = pickle.loads(body_pickle)
+                            # print(f"Body landmarks for {image_id}: {body_landmarks}")
+                            # body_landmarks = pickle.loads(mongo_doc["body_landmarks"])
+                            # 4. Evaluate visibility for feet landmarks (27-32)
+                            is_hand_left = evaluate_body_visibility([body_landmarks.landmark[i] for i in [15, 17, 19, 21]])
+                            is_hand_right = evaluate_body_visibility([body_landmarks.landmark[i] for i in [16, 18, 20, 22]])
+                        else:
+                            is_hand_left = False
+                            is_hand_right = False
+                    else:
+                        is_hand_left = bool(mongo_doc.get("left_hand"))
+                        is_hand_right = bool(mongo_doc.get("right_hand"))
+                    # print(f"Left hand: {is_hand_left}, Right hand: {is_hand_right}")
                     update_data.append({
                         "image_id": image_id,
-                        "is_hand_left": is_hand_left,
-                        "is_hand_right": is_hand_right
+                        LEFT_HAND_NAME: is_hand_left,
+                        RIGHT_HAND_NAME: is_hand_right,
+                        UID: enc_seg_image_id
                     })
-                    if USE_SEGMENT_TABLE:
-                        update_data[-1].update({ "seg_image_id": enc_seg_image_id,})
-                    else:
-                        update_data[-1].update({ "encoding_id": enc_seg_image_id,})
+                    # if USE_SEGMENT_TABLE:
+                    #     update_data[-1].update({ "seg_image_id": enc_seg_image_id,})
+                    # else:
+                    #     update_data[-1].update({ "encoding_id": enc_seg_image_id,})
                         
 
-                # 🔁 Bulk SQL update
+                # Bulk SQL update
                 if USE_SEGMENT_TABLE:
                     session.bulk_update_mappings(SegmentTable, update_data)
                 else:
@@ -147,7 +179,7 @@ def main():
     session = Session()
     
     # Batch processing parameters
-    batch_per_worker = 10000  # Records per worker
+    batch_per_worker = 1000  # Records per worker
     batch_size = batch_per_worker * num_processes  # Scale batch size with number of processes
     last_id = 0
     total_processed = 0
@@ -159,8 +191,9 @@ def main():
                 results = (
                     session.query(SegmentTable.seg_image_id, SegmentTable.image_id)
                     .filter(
-                        SegmentTable.mongo_hand_landmarks.is_(True),
-                        SegmentTable.is_hand_left.is_(None),
+                        SegmentTable.mongo_body_landmarks.is_(True),
+                        SegmentTable.is_hand_left.is_(True),
+                        SegmentTable.is_bodyhand_left.is_(None),
                         SegmentTable.seg_image_id > last_id
                     )
                     .order_by(SegmentTable.seg_image_id)
@@ -171,9 +204,11 @@ def main():
                 results = (
                     session.query(Encodings.encoding_id, Encodings.image_id)
                     .filter(
-                        Encodings.mongo_hand_landmarks.is_(True),
-                        Encodings.is_hand_left.is_(None),
-                        Encodings.encoding_id > last_id
+                        Encodings.mongo_body_landmarks.is_(True),
+                        Encodings.is_hand_left.is_(True),
+                        Encodings.is_bodyhand_left.is_(None),
+                        Encodings.encoding_id > last_id,
+                        
                     )
                     .order_by(Encodings.encoding_id)
                     .limit(batch_size)

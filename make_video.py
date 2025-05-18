@@ -27,8 +27,10 @@ VIDEO = False
 CYCLECOUNT = 1
 
 # keep this live, even if not SSD
-SegmentTable_name = 'SegmentOct20'
-
+# SegmentTable_name = 'SegmentOct20'
+# SegmentHelper_name = None
+SegmentTable_name = 'SegmentBig_isface'
+SegmentHelper_name = 'SegmentHelper_may2025_4x4faces'
 # SATYAM, this is MM specific
 # for when I'm using files on my SSD vs RAID
 IS_SSD = True
@@ -56,16 +58,18 @@ HSV_BOUNDS["LUM_WEIGHT"] = 1
 HSV_NORMS = {"LUM": .01, "SAT": 1,  "HUE": 0.002777777778, "VAL": 1}
 
 # controls which type of sorting/column sorted on
-SORT_TYPE = "128d"
+# SORT_TYPE = "128d"
 # SORT_TYPE ="planar"
 # SORT_TYPE = "planar_body"
-# SORT_TYPE = "planar_hands"
+SORT_TYPE = "planar_hands"
 # SORT_TYPE = "fingertips_positions"
 FULL_BODY = False # this requires is_feet
+VISIBLE_HAND_LEFT = True
+VISIBLE_HAND_RIGHT = True
 TSP_SORT=False
 # this is for controlling if it is using
 # all clusters, 
-IS_VIDEO_FUSION = False # used for constructing SQL query
+IS_VIDEO_FUSION = True # used for constructing SQL query
 GENERATE_FUSION_PAIRS = False # if true it will query based on MIN_VIDEO_FUSION_COUNT and create pairs
                                 # if false, it will grab the list of pair lists below
 MIN_VIDEO_FUSION_COUNT = 750
@@ -106,7 +110,7 @@ HAND_POSE_NO = 5
 # 80,74 fails between 300-400
 
 # cut the kids
-NO_KIDS = True
+NO_KIDS = False
 ONLY_KIDS = False
 USE_PAINTED = True
 OUTPAINT = False
@@ -130,10 +134,10 @@ IS_ANGLE_SORT = False
 
 # this control whether sorting by topics
 IS_TOPICS = True
-N_TOPICS = 14
+N_TOPICS = 64 # changing this to 14 triggers the affect topic fusion
 
 IS_ONE_TOPIC = True
-TOPIC_NO = [34] # if doing an affect topic fusion, this is the wrapper topic
+TOPIC_NO = [35] # if doing an affect topic fusion, this is the wrapper topic
 # groupings of affect topics
 NEG_TOPICS = [0,1,3,5,8,9,13]
 POS_TOPICS = [4,6,7,10,11,12]
@@ -156,7 +160,7 @@ USE_AFFECT_GROUPS = True
 #  is yoga << planar,  planar,  fingers crossed
 
 ONE_SHOT = True # take all files, based off the very first sort order.
-EXPAND = False # expand with white, as opposed to inpaint and crop
+EXPAND = True # expand with white, as opposed to inpaint and crop
 JUMP_SHOT = True # jump to random file if can't find a run (I don't think this applies to planar?)
 USE_ALL = False # this is for outputting all images from a oneshot, forces ONE_SHOT
 DRAW_TEST_LMS = False # this is for testing the landmarks
@@ -193,10 +197,25 @@ if not GENERATE_FUSION_PAIRS:
         # [5,104], [4,124], [10,62], [21,116], [7,57], [5,121], [5,60]
 
         # TSP TESTING
-        [24,99]
-        
+        # [24,99]
 
-        # <3 
+        # David Michael custom
+        # [21,112]
+        
+        # topic 35 skin care, 750plus selects
+        [21, 0]
+        # both hands
+        # [21, 116]
+        # [13, 116], [21, 0], [21, 116], [24, 51], [24, 126]
+        # both hands staring from 79236398
+        # [24,51]
+        # [13,3]
+        # left hand
+        # [13,76], [24, 126], [13,3]
+        # right hand
+        # [21,112], [24,112],[13, 0]
+
+        #         # <3 
         # [16,101] #hands making heart shape
 
         # hands framing corners of photograph
@@ -397,7 +416,13 @@ elif IS_SEGONLY and io.platform == "darwin":
     SELECT = "DISTINCT(s.image_id), s.site_name_id, s.contentUrl, s.imagename, s.description, s.face_x, s.face_y, s.face_z, s.mouth_gap, s.bbox, s.site_image_id"
 
     FROM =f"{SegmentTable_name} s "
-    WHERE = " s.is_dupe_of IS NULL "
+    dupe_table_pre  = "s"
+    if SegmentTable_name == "SegmentBig_isface": 
+         # handles segmentbig which doesn't have is_dupe_of?
+        FROM += f" JOIN Encodings e ON s.image_id = e.image_id "
+        dupe_table_pre = "e"
+
+    WHERE = f" {dupe_table_pre}.is_dupe_of IS NULL "
     # this is the standard segment topics/clusters query for June 2024
     if PHONE_BBOX_LIMITS:
         WHERE += " AND s.face_x > -50 "
@@ -446,8 +471,21 @@ elif IS_SEGONLY and io.platform == "darwin":
         #     FROM += f" JOIN Images{CLUSTER_TYPE} ic ON s.image_id = ic.image_id "
         #     WHERE += " AND ic.cluster_id = 126"
 
+    if SegmentHelper_name is not None:
+        FROM += f" JOIN {SegmentHelper_name} sh ON s.image_id = sh.image_id "
 
-
+    if VISIBLE_HAND_LEFT or VISIBLE_HAND_RIGHT:
+        if SegmentTable_name == "SegmentBig_isface":
+            # handles segmentbig which doesn't have is_dupe_of?
+            this_seg = "e"
+        else:
+            this_seg = "s"
+        if VISIBLE_HAND_LEFT and VISIBLE_HAND_RIGHT:
+            WHERE += f" AND {this_seg}.is_bodyhand_left = 1 AND {this_seg}.is_bodyhand_right = 1 "
+        elif VISIBLE_HAND_LEFT: 
+            WHERE += f" AND {this_seg}.is_bodyhand_left = 1 AND {this_seg}.is_bodyhand_right = 0 "  
+        elif VISIBLE_HAND_RIGHT: 
+            WHERE += f" AND {this_seg}.is_bodyhand_right = 1 AND {this_seg}.is_bodyhand_left = 0 "
     if FULL_BODY:
         WHERE += " AND s.is_feet = 1 "
     if NO_KIDS:
@@ -483,7 +521,7 @@ elif IS_SEGONLY and io.platform == "darwin":
     # WHERE += " AND e.encoding_id > 2612275"
 
     # WHERE = "s.site_name_id != 1"
-    LIMIT = 250
+    LIMIT = 25000
 
     # TEMP TK TESTING
     # WHERE += " AND s.site_name_id = 8"
@@ -593,7 +631,7 @@ start_img_name = "median"
 start_site_image_id = None
 
 # start_img_name = "start_image_id"
-# start_site_image_id = 3354646
+# start_site_image_id = 103808861
 
 # 9774337 screaming hands to head 10
 # 10528975 phone right hand pose 4
@@ -746,7 +784,7 @@ if IS_HANDS or IS_ONE_HAND or IS_VIDEO_FUSION:
 
 def selectSQL(cluster_no=None, topic_no=None):
     global SELECT, FROM, WHERE, LIMIT, WrapperTopicTable
-    from_affect = where_affect = None
+    from_affect = where_affect = ""
     def cluster_topic_select(cluster_topic_table, cluster_topic_no):
         if isinstance(cluster_topic_no, list):
             # Convert the list into a comma-separated string
@@ -777,7 +815,7 @@ def selectSQL(cluster_no=None, topic_no=None):
         #     # If topic_no is not a list, simply check for equality
         #     if IS_ONE_TOPIC: cluster += f"AND ic.cluster_id = {str(cluster_no)} "            
     if IS_TOPICS or IS_ONE_TOPIC:
-        if IS_TOPICS and IS_ONE_TOPIC and USE_AFFECT_GROUPS:
+        if IS_TOPICS and IS_ONE_TOPIC and USE_AFFECT_GROUPS and WrapperTopicTable is not None:
 
             # topic fusion, so join to a second topics table
             from_affect = f" JOIN {WrapperTopicTable} iwt ON s.image_id = iwt.image_id "
@@ -886,6 +924,9 @@ def sort_by_face_dist_NN(df_enc):
     # test_lms = test_row['body_landmarks']
     # print(test_lms)
 
+    # print("row from df_enc with image_id = 893")
+    # test_row = df_enc.loc[df_enc['image_id'] == 893]
+    # print(test_row)    
 
     ## SATYAM THIS IS WHAT WILL BE REPLACE BY TSP
     if TSP_SORT is True:

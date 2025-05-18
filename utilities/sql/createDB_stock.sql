@@ -153,7 +153,11 @@ CREATE TABLE Encodings (
     FOREIGN KEY (is_dupe_of) REFERENCES Images(image_id),
     mongo_hand_landmarks boolean,
     mongo_hand_landmarks_norm boolean,
-     boolean,
+    is_face_no_lms boolean,
+    is_feet boolean,
+    mongo_body_landmarks_3D boolean,
+    is_hand_left boolean,
+    is_hand_right boolean,
     UNIQUE (image_id)
 ); 
 

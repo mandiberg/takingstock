@@ -106,7 +106,7 @@ POSE_ID = 0
 # MAIN_FOLDER = "/Volumes/RAID54/images_shutterstock"
 # MAIN_FOLDER = "/Volumes/SSD4/images_adobe"
 MAIN_FOLDER = "/Volumes/SSD4green/images_adobe"
-# MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/images_vcg"
+# MAIN_FOLDER = "/Volumes/OWC4/segment_images/images_adobe"
 # MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/afripics_v2/images"
 
 # MAIN_FOLDER = "/Volumes/SSD4/images_getty_reDL"
@@ -126,7 +126,8 @@ IS_SSD=False
 # set BODY to true, set SSD to false, set TOPIC_ID
 # for silence, start at 103893643
 # for HDD topic, start at 28714744
-BODYLMS = True 
+BODYLMS = True
+REDO_BODYLMS_3D = True
 HANDLMS = True
 TOPIC_ID = None
 # TOPIC_ID = [24, 29] # adding a TOPIC_ID forces it to work from SegmentBig_isface, currently at 7412083
@@ -161,9 +162,15 @@ if BODYLMS is True or HANDLMS is True:
     if BODYLMS or (BODYLMS and HANDLMS):
         QUERY = " "
         if SegmentTable_name == 'SegmentOct20':
-            QUERY = " seg1.mongo_body_landmarks IS NULL and seg1.no_image IS NULL"
+            if REDO_BODYLMS_3D:
+                QUERY += " seg1.mongo_body_landmarks IS NOT NULL and seg1.no_image IS NULL and seg1.mongo_body_landmarks_3D IS NULL"
+            else:
+                QUERY = " seg1.mongo_body_landmarks IS NULL and seg1.no_image IS NULL"
         elif SegmentTable_name == 'SegmentBig_isface':
-            QUERY = " e.mongo_body_landmarks IS NULL "
+            if REDO_BODYLMS_3D:
+                QUERY += " e.mongo_body_landmarks IS NOT NULL and seg1.no_image IS NULL and e.mongo_body_landmarks_3D IS NULL"
+            else:
+                QUERY = " e.mongo_body_landmarks IS NULL "
 
         # if doing both BODYLMS and HANDLMS, query as if BODY, and also do HAND on those image_ids
         if TOPIC_ID:
@@ -175,7 +182,8 @@ if BODYLMS is True or HANDLMS is True:
         if HelperTable_name:
             FROM += f" INNER JOIN {HelperTable_name} ht ON seg1.image_id = ht.image_id "
             QUERY += f" AND seg1.image_id > {START_IMAGE_ID}"
-    
+
+
     elif HANDLMS:
         QUERY = " seg1.mongo_hand_landmarks IS NULL and seg1.no_image IS NULL"
         # SUBQUERY = " "
@@ -1026,12 +1034,13 @@ def process_image_find_body_subroutine(image_id, image, bbox):
     is_body = body_landmarks = face_height = nose_pixel_pos = None
     # Check if body landmarks are already in the normalized collection
     existing_norm = bboxnormed_collection.find_one({"image_id": image_id})
-    if existing_norm:
+    if existing_norm and not REDO_BODYLMS_3D:
         print(f"Normalized landmarks already exist for image_id: {image_id}")
         is_body = True
         n_landmarks = pickle.loads(existing_norm["nlms"])
     else:
-        existing_worldbody = body_world_collection.find_one({"image_id": image_id})
+        # existing_worldbody = body_world_collection.find_one({"image_id": image_id})
+        # print("existing_worldbody", existing_worldbody)
         is_body, body_landmarks, body_world_landmarks = find_body(image)
         if is_body and bbox:
             ### NORMALIZE LANDMARKS ###
@@ -1048,20 +1057,13 @@ def process_image_find_body_subroutine(image_id, image, bbox):
                 upsert=True
             )
             print(f"Normalized landmarks stored for image_id: {image_id}")
-            ### Save normalized landmarks to MongoDB
-            body_world_collection.update_one(
-                {"image_id": image_id},
-                {"$set": {"nlms": pickle.dumps(existing_worldbody)}},
-                upsert=True
-            )
-            print(f"Normalized landmarks stored for image_id: {image_id}")
         elif is_body and not bbox:
             print("Body landmarks found but no bbox, no normalization")
             n_landmarks = None
         else:
             print("No body landmarks found")
             n_landmarks = None
-    return is_body, n_landmarks, body_landmarks, face_height, nose_pixel_pos
+    return is_body, n_landmarks, body_landmarks, body_world_landmarks, face_height, nose_pixel_pos
 
 def process_image_normalize_object_bbox(bbox_dict, nose_pixel_pos, face_height, image_shape):
     ### normed object bbox
@@ -1113,14 +1115,18 @@ def process_image_hands_subroutine(image_id, image):
             update_hand = True
     return pose, is_hands, hand_landmarks, update_hand
 
-def save_body_hands_mysql_and_mongo(session, image_id, image, bbox_dict, body_landmarks, n_landmarks, hue_bb, lum_bb, sat_bb, val_bb, lum_torso_bb, hue, lum, sat, val, lum_torso, is_left_shoulder, is_right_shoulder, selfie_bbox, is_body, mongo_body_landmarks, is_hands, update_hand, hand_landmarks, pose, is_feet):
+def save_body_hands_mysql_and_mongo(session, image_id, image, bbox_dict, body_landmarks, body_world_landmarks, n_landmarks, hue_bb, lum_bb, sat_bb, val_bb, lum_torso_bb, hue, lum, sat, val, lum_torso, is_left_shoulder, is_right_shoulder, selfie_bbox, is_body, mongo_body_landmarks, is_hands, update_hand, hand_landmarks, pose, is_feet):
+    # if REDO_BODYLMS_3D, it will only add body_world_landmarks to mongo and updated SQL mongo_body_landmarks_3D and is_feet
     # to add in 0's so these don't reprocesses repeatedly
     if is_body is None: is_body = False
     if is_hands is None: is_hands = False
     if is_feet is None: is_feet = False
+    if body_world_landmarks is not None: mongo_body_landmarks_3D = True
+    else: mongo_body_landmarks_3D = False
 
-    print("going to save", image_id, "is_body", is_body, "is_hands", is_hands, "is_feet", is_feet, "mongo_body_landmarks", mongo_body_landmarks)
-    if not mongo_body_landmarks:
+    print("going to save", image_id, "is_body", is_body, "is_hands", is_hands, "is_feet", is_feet, "mongo_body_landmarks", mongo_body_landmarks, "mongo_body_landmarks_3D", mongo_body_landmarks_3D)
+    if not mongo_body_landmarks and not REDO_BODYLMS_3D:
+        # skip this if REDO_BODYLMS_3D
         # get encoding_id for mongo insert_one
         encoding_id_results = session.query(Encodings.encoding_id).filter(Encodings.image_id == image_id).first()
         encoding_id = encoding_id_results[0]
@@ -1134,7 +1140,7 @@ def save_body_hands_mysql_and_mongo(session, image_id, image, bbox_dict, body_la
             Encodings.is_body: is_body,
             # Encodings.body_landmarks: body_landmarks
             Encodings.mongo_body_landmarks: is_body,
-            Encodings.mongo_body_landmarks_norm: mongo_body_landmarks_norm
+            Encodings.mongo_body_landmarks_norm: mongo_body_landmarks_norm # is it saving all of that norm lms data to sql???
         }, synchronize_session=False)
 
         session.query(SegmentTable).filter(SegmentTable.image_id == image_id).update({
@@ -1248,25 +1254,44 @@ def save_body_hands_mysql_and_mongo(session, image_id, image, bbox_dict, body_la
     # save hand landmarks
     if VERBOSE: print("storing hand_landmarks for image_id", image_id)
 
+    if not REDO_BODYLMS_3D:
+        session.query(Encodings).filter(Encodings.image_id == image_id).update({
+            # Encodings.body_landmarks: body_landmarks
+            Encodings.mongo_hand_landmarks: is_hands,
+        }, synchronize_session=False)
 
+        session.query(SegmentTable).filter(SegmentTable.image_id == image_id).update({
+            SegmentTable.mongo_hand_landmarks: is_hands,
+        }, synchronize_session=False)
+
+        if update_hand:
+            try:
+                pose.store_hand_landmarks(image_id, hand_landmarks, mongo_hand_collection)
+                print("----------- >>>>>>>>   mongo hand_landmarks updated:", image_id)
+            except:
+                print("----------- XXXXXXXX   mongo hand_landmarks FAILED TO UPDATE:", image_id)
+
+    # save is_feet and mongo_body_landmarks_3D regardless of REDO_BODYLMS_3D
+    ### Save normalized landmarks to MongoDB
+    body_world_collection.update_one(
+        {"image_id": image_id},
+        {"$set": {"body_world_landmarks": pickle.dumps(body_world_landmarks)}},
+        upsert=True
+    )
+    print(f"body_world_landmarks stored for image_id: {image_id}")
     session.query(Encodings).filter(Encodings.image_id == image_id).update({
         # Encodings.body_landmarks: body_landmarks
-        Encodings.mongo_hand_landmarks: is_hands,
         Encodings.is_feet: is_feet,
+        Encodings.mongo_body_landmarks_3D: mongo_body_landmarks_3D,
     }, synchronize_session=False)
 
     session.query(SegmentTable).filter(SegmentTable.image_id == image_id).update({
-        SegmentTable.mongo_hand_landmarks: is_hands,
         SegmentTable.is_feet: is_feet,
+        SegmentTable.mongo_body_landmarks_3D: mongo_body_landmarks_3D,
     }, synchronize_session=False)
 
-    if update_hand:
-        try:
-            pose.store_hand_landmarks(image_id, hand_landmarks, mongo_hand_collection)
-            print("----------- >>>>>>>>   mongo hand_landmarks updated:", image_id)
-        except:
-            print("----------- XXXXXXXX   mongo hand_landmarks FAILED TO UPDATE:", image_id)
 
+    
     # Check if the current batch is ready for commit
     # if total_processed % BATCH_SIZE == 0:
 
@@ -1282,16 +1307,53 @@ def check_is_feet(body_landmarks):
     return is_feet
 
 def find_and_save_body(image_id, image, bbox, mongo_body_landmarks, hand_landmarks):
-    hue = sat = val = lum = lum_torso = hue_bb = sat_bb = val_bb = lum_bb = lum_torso_bb = selfie_bbox = bbox_dict =is_left_shoulder=is_right_shoulder = is_feet =None
-    if BODYLMS and mongo_body_landmarks is None:
+    print("find_and_save_body", mongo_body_landmarks)
+    hue = sat = val = lum = lum_torso = hue_bb = sat_bb = val_bb = lum_bb = lum_torso_bb = selfie_bbox = bbox_dict = None
+    is_left_shoulder=is_right_shoulder = is_feet = pose = is_hands = hand_landmarks = update_hand = None
+    # if REDO_BODYLMS_3D:
+    #     print("REDO_BODYLMS_3D, going to get all the values from the db")
+    #     # need to try to get all these things from the databases
+    #     # query the db by image_id, retrieve, and store values in these variables: hue, sat, val, lum, lum_torso, hue_bb, sat_bb, val_bb, lum_bb, lum_torso_bb, selfie_bbox, bbox_dict, is_left_shoulder, is_right_shoulder, is_feet
+    #     try:
+    #         init_session()
+    #         result = session.query(
+    #         ImagesBackground.hue, ImagesBackground.sat, ImagesBackground.val, ImagesBackground.lum, ImagesBackground.lum_torso,
+    #         ImagesBackground.hue_bb, ImagesBackground.sat_bb, ImagesBackground.val_bb, ImagesBackground.lum_bb, ImagesBackground.lum_torso_bb,
+    #         ImagesBackground.selfie_bbox, PhoneBbox.bbox_67, PhoneBbox.bbox_67_norm, PhoneBbox.bbox_63, PhoneBbox.bbox_63_norm,
+    #         PhoneBbox.bbox_26, PhoneBbox.bbox_26_norm, PhoneBbox.bbox_27, PhoneBbox.bbox_27_norm, PhoneBbox.bbox_32, PhoneBbox.bbox_32_norm,
+    #         ImagesBackground.is_left_shoulder, ImagesBackground.is_right_shoulder, Encodings.is_feet, Encodings.mongo_hand_landmarks
+    #         ).outerjoin(PhoneBbox, ImagesBackground.image_id == PhoneBbox.image_id) \
+    #          .outerjoin(Encodings, ImagesBackground.image_id == Encodings.image_id) \
+    #          .filter(ImagesBackground.image_id == image_id).first()
+
+    #         if result:
+    #             hue, sat, val, lum, lum_torso = result[:5]
+    #             hue_bb, sat_bb, val_bb, lum_bb, lum_torso_bb = result[5:10]
+    #             selfie_bbox = result[10]
+    #             bbox_dict = {
+    #                 67: {"bbox": result[11], "bbox_norm": result[12]},
+    #                 63: {"bbox": result[13], "bbox_norm": result[14]},
+    #                 26: {"bbox": result[15], "bbox_norm": result[16]},
+    #                 27: {"bbox": result[17], "bbox_norm": result[18]},
+    #                 32: {"bbox": result[19], "bbox_norm": result[20]},
+    #             }
+    #             is_left_shoulder, is_right_shoulder, is_feet, is_hands = result[21:]
+    #         else:
+    #             print(f"No existing data found for image_id: {image_id}")
+    #     except Exception as e:
+    #         print(f"Error querying database for image_id {image_id}: {e}")
+    #     finally:
+    #         close_session()
+
+    if BODYLMS and mongo_body_landmarks is None or REDO_BODYLMS_3D:
         if VERBOSE: print("doing body, mongo_body_landmarks is None")
         # find body landmarks and normalize them using function
-        is_body, n_landmarks, body_landmarks, face_height, nose_pixel_pos = process_image_find_body_subroutine(image_id, image, bbox)
+        is_body, n_landmarks, body_landmarks, body_world_landmarks, face_height, nose_pixel_pos = process_image_find_body_subroutine(image_id, image, bbox)
         if body_landmarks is not None:
             is_feet = check_is_feet(body_landmarks)
         if VERBOSE: print("is_feet", is_feet)
 
-        if face_height:
+        if face_height and not REDO_BODYLMS_3D:
             # only do this when there is a face. skip for no face -body reprocessing
             ### detect object info, 
             print("detecting objects")
@@ -1317,6 +1379,8 @@ def find_and_save_body(image_id, image, bbox, mongo_body_landmarks, hand_landmar
                 hue_bb = sat_bb = val_bb = lum_bb = lum_torso_bb = None
             selfie_bbox=sort.get_selfie_bbox(segmentation_mask)
             if VERBOSE: print("selfie_bbox",selfie_bbox)
+        elif REDO_BODYLMS_3D:
+            print("got 3D bodylms in a DOOVER, skipped the rest")
         else:
             print("no face, skipping object detection, just did the body, all values already are set to None")
     elif BODYLMS and mongo_body_landmarks:
@@ -1324,15 +1388,21 @@ def find_and_save_body(image_id, image, bbox, mongo_body_landmarks, hand_landmar
         print("doing body, mongo_body_landmarks is not None", mongo_body_landmarks)
     ### save object bbox info
     # session = sort.parse_bbox_dict(session, image_id, PhoneBbox, OBJ_CLS_LIST, bbox_dict)
-    is_hands = None
-    if HANDLMS:
-        pose, is_hands, hand_landmarks, update_hand = process_image_hands_subroutine(image_id, image)
+    if not REDO_BODYLMS_3D:
+        is_hands = None
+        if HANDLMS:
+            # I need to check carefully to see make sure i do not update hand to none
+            pose, is_hands, hand_landmarks, update_hand = process_image_hands_subroutine(image_id, image)
+        else: 
+            update_hand = False
+    else:
+        update_hand = False
 
     for _ in range(io.max_retries):
         try:
             # try to save using function:
             if VERBOSE: print("saving body and hands")
-            save_body_hands_mysql_and_mongo(session, image_id, image, bbox_dict, body_landmarks, n_landmarks, hue_bb, lum_bb, sat_bb, val_bb, lum_torso_bb, hue, lum, sat, val, lum_torso, is_left_shoulder, is_right_shoulder, selfie_bbox, is_body, mongo_body_landmarks, is_hands, update_hand, hand_landmarks, pose, is_feet)
+            save_body_hands_mysql_and_mongo(session, image_id, image, bbox_dict, body_landmarks, body_world_landmarks, n_landmarks, hue_bb, lum_bb, sat_bb, val_bb, lum_torso_bb, hue, lum, sat, val, lum_torso, is_left_shoulder, is_right_shoulder, selfie_bbox, is_body, mongo_body_landmarks, is_hands, update_hand, hand_landmarks, pose, is_feet)
             if VERBOSE: print("saved body and hands")
             # if sql hiccups it will try again, if not, it will hit break on next line
             break  # Transaction succeeded, exit the loop
@@ -1367,27 +1437,6 @@ def process_image_bodylms(task):
     # body_landmarks = n_landmarks = None
     hand_landmarks = None
     # is_body = False
-
-    # df = pd.DataFrame(columns=['image_id','is_face','is_body','is_face_distant','face_x','face_y','face_z','mouth_gap','face_landmarks','bbox','face_encodings','face_encodings68_J','body_landmarks'])
-    # df.at['1', 'image_id'] = image_id
-
-    # # attempt to rw the imread to avoid memory leak
-    # if not os.path.exists(cap_path):
-    #     print(f"Error: File does not exist at path: {cap_path}")
-    #     image = None
-    # else:
-    #     try:
-    #         image = cv2.imread(cap_path)
-    #         if image is None:
-    #             raise ValueError(f"Failed to load image: {cap_path}")
-    #         # Process the image
-    #     except Exception as e:
-    #         print('Error:', str(e))
-    #         print(f"[process_image]this imread failed, even after uppercasing: {task}")
-    #     finally:
-    #         if 'image' in locals():
-    #             del image
-    #         gc.collect()
 
     try:
         image = cv2.imread(cap_path)        
@@ -1741,7 +1790,7 @@ def do_job(tasks_to_accomplish, tasks_that_are_done):
             '''
             if len(task) > 2:
                 
-                if BODYLMS is True or HANDLMS is True:
+                if BODYLMS is True or HANDLMS is True or REDO_BODYLMS_3D is True:
                     if VERBOSE: print("do_job via process_image_bodylms:")
                     process_image_bodylms(task)
                 else:
@@ -1793,8 +1842,7 @@ def main():
                     print(str(folder_count), folder)
 
                 img_list = io.get_img_list(folder)
-                print("len(img_list)")
-                print(len(img_list))
+                print("len(img_list)", len(img_list))
 
 
                 # Initialize an empty list to store all the results
@@ -1811,7 +1859,6 @@ def main():
                     # ALSO site_image_id DOWN BELOW 
                     # Collect site_image_id values from the image filenames
                     if SITE_NAME_ID == 8:
-                    
                     # 123rf
                         batch_site_image_ids = [img.split("-")[0] for img in batch_img_list]
                     elif SITE_NAME_ID == 5:
@@ -1840,7 +1887,7 @@ def main():
 
                             # get Images and Encodings values for each site_image_id in the batch
                             # adding in mongo stuff. should return NULL if not there
-                            batch_query = session.query(Images.image_id, Images.site_image_id, Images.imagename, Encodings.encoding_id, Encodings.mongo_face_landmarks, Encodings.mongo_body_landmarks, Encodings.bbox) \
+                            batch_query = session.query(Images.image_id, Images.site_image_id, Images.imagename, Encodings.encoding_id, Encodings.mongo_face_landmarks, Encodings.mongo_body_landmarks, Encodings.bbox, Encodings.mongo_body_landmarks_3D) \
                                                 .outerjoin(Encodings, Images.image_id == Encodings.image_id) \
                                                 .filter(Images.site_image_id.in_(batch_site_image_ids), Images.site_name_id == site_name_id, Images.no_image.isnot(True))
                             batch_results = batch_query.all()
@@ -1883,36 +1930,15 @@ def main():
                             # if VERBOSE: print("is in results", result)
                             # print("in results encoding_id", result.encoding_id)
                             imagepath = os.path.join(folder, img)
-                            
-                            # if result.encoding_id:
-                            #     print(f" {site_image_id} has mongo face: {result.mongo_face_landmarks} and mongo body: {result.mongo_body_landmarks}")
-                                # print("the type is: ", type(result.encoding_id))
-                                # print("the type batch_results[0] is: ", type(batch_results[0]))
-                                # find the batch result where the first item is the second item in the tuple
-                                # for i in range(len(batch_results)):
-                                #     for batch_result in batch_results:
-                                #         if batch_result.encoding_id == result.encoding_id:
-                                #             print("found it at: ", batch_result)
-                                #             break
-                                # if result.mongo_face_landmarks is None and result.mongo_body_landmarks is None:
-                                #     # processing faces for the first time
-                                #     print("************** no face or body landmarks - processing faces for the first time")
-                                #     task = (result.image_id, imagepath)
-                                # elif result.mongo_face_landmarks == 0 and result.mongo_body_landmarks is None:
-                                #     # no face, but need to check for body
-                                #     print("************** no face landmarks but going to check for body")
-                                #     task = (result.image_id, imagepath, result.mongo_face_landmarks, result.mongo_body_landmarks, None)
-                                # else:
-                                #     print("************** already has face landmarks")
-                                #     task = None
-
-                                # print(" first item are: ", batch_results[0])
-                                # print(batch_results[result.site_image_id])
-                            
+                                                        
                             if not result.encoding_id:
                                 # if it hasn't been encoded yet, add it to the tasks
                                 task = (result.image_id, imagepath)
                                 print(">> adding to face queue:", result.image_id, "site_image_id", site_image_id)
+                            elif result.mongo_body_landmarks and result.mongo_body_landmarks_3D is None and REDO_BODYLMS_3D is True:
+                                # if body has been found but not 3D, add it to the tasks
+                                print(">>>> adding to 3D BODY queue:", result.image_id, "site_image_id", site_image_id)
+                                task = (result.image_id, imagepath, result.mongo_face_landmarks, result.mongo_body_landmarks, result.bbox)
                             elif result.mongo_face_landmarks and result.mongo_body_landmarks is None:
                                 # if face has been encoded but not body, add it to the tasks
                                 print(">>>> adding to BODY queue:", result.image_id, "site_image_id", site_image_id)

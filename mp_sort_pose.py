@@ -47,7 +47,7 @@ class SortPose:
         self.BRUTEFORCE = False
         self.use_3D = use_3D
         print("init use_3D",self.use_3D)
-        self.CUTOFF = 250 # DOES factor if ONE_SHOT
+        self.CUTOFF = 2500 # DOES factor if ONE_SHOT
 
         self.CHECK_DESC_DIST = 30
 
@@ -168,8 +168,8 @@ class SortPose:
         self.OBJ_CLS_ID = OBJ_CLS_ID
 
         # self.BODY_LMS = [15]
-        # self.VERBOSE = VERBOSE
-        self.VERBOSE = True
+        self.VERBOSE = VERBOSE
+        # self.VERBOSE = True
         #____________________TSP SORT________________
         if self.TSP_SORT==True:
             if self.VERBOSE:print("using travelling salesman sorting")
@@ -1361,18 +1361,16 @@ class SortPose:
     def get_start_enc_NN(self, start_img, df_enc):
         print("get_start_enc")
         enc1 = None
+        if self.SORT_TYPE == "128d": sort_column = "face_encodings68"
+        elif self.SORT_TYPE == "planar_body": sort_column = "body_landmarks_array"
+        elif self.SORT_TYPE == "planar_hands": sort_column = "hand_landmarks" # hand_landmarks are left and right hands flat list of 126 values
+        print("sort_column", sort_column)
+        print("sort_column head", df_enc[sort_column].head())
+        print("lengtth of first value", len(df_enc[sort_column].iloc[0]))
         if start_img == "median" or start_img == "start_bbox":
             # when I want to start from start_bbox, I pass it a median 128d enc
             print("in median")
             print("df_enc", df_enc)
-
-            if self.SORT_TYPE == "128d": sort_column = "face_encodings68"
-            elif self.SORT_TYPE == "planar_body": sort_column = "body_landmarks_array"
-            elif self.SORT_TYPE == "planar_hands": sort_column = "hand_landmarks" # hand_landmarks are left and right hands flat list of 126 values
-
-            print("sort_column", sort_column)
-            print("sort_column head", df_enc[sort_column].head())
-            print("lengtth of first value", len(df_enc[sort_column].iloc[0]))
             # Round each value in the face_encodings68 column to 2 decimal places            
             # df_enc['face_encodings68'] = df_enc['face_encodings68'].apply(self.safe_round)
             # df_enc[sort_column] = df_enc[sort_column].apply(lambda x: np.round(x, 1))
@@ -1403,24 +1401,22 @@ class SortPose:
 
         elif start_img == "start_image_id":
             print("start_image_id (this is what we are comparing to)")
-            # print(start_site_image_id)
-            print(self.counter_dict["start_site_image_id"])
-            print(df_enc.columns)
-            print(df_enc.head)
-            if self.SORT_TYPE == "128d": sort_column = "face_encodings68"
-            elif self.SORT_TYPE == "planar_body": sort_column = "body_landmarks_array"
-            # elif self.SORT_TYPE == "planar_hands": sort_column = "hand_landmarks"
-            elif self.SORT_TYPE == "planar_hands": sort_column = "hand_landmarks"
             # set enc1 = df_enc value in the self.SORT_TYPE column, for the row where column image_id = self.counter_dict["start_site_image_id"]
             # enc1 = df_enc.loc[df_enc['image_id'] == self.counter_dict["start_site_image_id"], sort_column].to_list()
             # enc1 = df_enc.loc[df_enc['image_id'] == self.counter_dict["start_site_image_id"], sort_column].to_list()
             enc1_image_id = self.counter_dict["start_site_image_id"]
             print("enc1_image_id", enc1_image_id)
-            enc1 = df_enc.loc[df_enc['image_id'] == enc1_image_id, sort_column].values[0]
-            print("enc1 set from sort_column", sort_column, enc1)
-            # if self.SORT_TYPE == "planar_body":
-            #     enc1 = self.get_landmarks_2d(enc1, self.SUBSET_LANDMARKS, "list")
-            print("enc1 set from sort_column", enc1)
+            try:
+                enc1 = df_enc.loc[df_enc['image_id'] == enc1_image_id, sort_column].values[0]
+                print("enc1 set from sort_column", sort_column, enc1)
+                # if self.SORT_TYPE == "planar_body":
+                #     enc1 = self.get_landmarks_2d(enc1, self.SUBSET_LANDMARKS, "list")
+            except:
+                print("get_start_enc_NN - no enc1_image_id")
+                quit()
+                # # pick a random enc2 from flattened_array
+                # flattened_array = df_enc[sort_column].tolist()
+                # enc1 = random.choice(flattened_array)
 # TK needs to be refactored NN June 8
 
         elif start_img == "start_site_image_id":
