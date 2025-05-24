@@ -47,9 +47,9 @@ class SortPose:
         self.BRUTEFORCE = False
         self.use_3D = use_3D
         print("init use_3D",self.use_3D)
-        self.CUTOFF = 100 # DOES factor if ONE_SHOT
+        self.CUTOFF = 25000 # DOES factor if ONE_SHOT
         self.ORIGIN = 0
-        self.NOSE_BRIDGE_DIST = None # to be set in first loop
+        self.this_nose_bridge_dist = self.NOSE_BRIDGE_DIST = None # to be set in first loop, and sort.this_nose_bridge_dist each time
 
         self.CHECK_DESC_DIST = 30
 
@@ -894,7 +894,8 @@ class SortPose:
 
         # if topcrop >= 0 and width-rightcrop >= 0 and height-botcrop>= 0 and leftcrop>= 0:
         if any([topcrop < 0, width-rightcrop < 0, height-botcrop < 0, leftcrop < 0]):
-            print("one is negative")
+            print("one is negative: topcrop",topcrop,"rightcrop",width-rightcrop,"botcrop",height-botcrop,"leftcrop",leftcrop)
+            print("width",width,"height", height)
             toobig = True
             self.negmargin_count += 1
         else:
@@ -951,23 +952,23 @@ class SortPose:
         #it would prob be better to do this with a dict and a loop
         # Instead of hard-coding the index 1, you can use a variable or constant for the point index
         
-        try:
-            # self.NOSE_BRIDGE_DIST
-            self.nose_2d = self.get_face_2d_point(1)
-            print("nose_2d",self.nose_2d)
-            if self.ORIGIN == 6:
-                this_nose_bridge_dist = self.calc_nose_bridge_dist(faceLms)
-                print("NOSE_BRIDGE_DIST, this_nose_bridge_dist", self.NOSE_BRIDGE_DIST, this_nose_bridge_dist)
-                nose_delta = self.NOSE_BRIDGE_DIST - this_nose_bridge_dist
-                print("nose_delta", nose_delta)
-                self.nose_2d = (self.nose_2d[0], self.nose_2d[1] + (nose_delta*self.face_height))
-            print("nose_2d",self.nose_2d)
-
-            # cv2.circle(self.image, tuple(map(int, self.nose_2d)), 5, (0, 0,0), 5)
-            print("get_image_face_data nose_2d",self.nose_2d)
-        except:
-            print("couldn't get nose_2d via faceLms")
-
+        if self.this_nose_bridge_dist is None:
+            try:
+                # self.NOSE_BRIDGE_DIST
+                self.nose_2d = self.get_face_2d_point(1)
+                print("nose_2d",self.nose_2d)
+                if self.ORIGIN == 6:
+                    self.this_nose_bridge_dist = self.calc_nose_bridge_dist(faceLms)
+                    print("NOSE_BRIDGE_DIST, self.this_nose_bridge_dist", self.NOSE_BRIDGE_DIST, self.this_nose_bridge_dist)
+                    nose_delta = self.NOSE_BRIDGE_DIST - self.this_nose_bridge_dist
+                    print("nose_delta", nose_delta)
+                    self.nose_2d = (math.floor(self.nose_2d[0]), math.floor(self.nose_2d[1] + (nose_delta*self.face_height)))
+                # cv2.circle(self.image, tuple(map(int, self.nose_2d)), 5, (0, 0,0), 5)
+                print("get_image_face_data new nose_2d",self.nose_2d)
+            except:
+                print("couldn't get nose_2d via faceLms")
+        else:
+            print("self.this_nose_bridge_dist already set, skipping")
 
 
         try:
@@ -988,23 +989,6 @@ class SortPose:
             # self.get_crop_data(sinY)
 
         
-        # if not self.nose_2d:
-        #     nose_point_index = 1
-        #     self.nose_2d = self.get_face_2d_point(nose_point_index)
-
-        # try:
-        #     if faceLms is None:
-        #         # calculate face height based on bbox dimensions
-        #         # TK I dont think this is accurate....????
-        #         self.face_height = (self.bbox['bottom'] - self.bbox['top'])*1
-        #     elif faceLms.landmark:
-        #         # get self.face_height
-        #         self.get_faceheight_data()
-        #     else:
-        #         print("no faceLms, and not None")
-        #         # calculate face height based on bbox dimensions
-        #         # TK I dont think this is accurate....????
-
 
 
 
@@ -1088,6 +1072,7 @@ class SortPose:
         
         if self.VERBOSE: print("calculating extension pixels")
         p1 = (int(self.nose_2d[0]), int(self.nose_2d[1]))
+        print("get_extension_pixels nose_2d",self.nose_2d)
         topcrop = int(p1[1]-self.face_height*self.MAX_IMAGE_EDGE_MULTIPLIER[0])
         rightcrop = int(p1[0]+self.face_height*self.MAX_IMAGE_EDGE_MULTIPLIER[1])
         botcrop = int(p1[1]+self.face_height*self.MAX_IMAGE_EDGE_MULTIPLIER[2])
@@ -1198,6 +1183,7 @@ class SortPose:
         return sr
 
     def crop_image(self,image, faceLms, bbox, sinY=0,SAVE=False):
+        print("crop_image, going to get_image_face_data")
         self.get_image_face_data(image, faceLms, bbox) 
         is_inpaint = False
         cropped_image = None

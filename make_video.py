@@ -116,7 +116,7 @@ ONLY_KIDS = False
 USE_PAINTED = True
 OUTPAINT = False
 INPAINT= True
-INPAINT_BLACK = False
+INPAINT_BLACK = True
 INPAINT_MAX_SHOULDERS = {"top":.4,"right":.15,"bottom":.2,"left":.15}
 if INPAINT_BLACK: INPAINT_MAX_SHOULDERS = INPAINT_MAX = {"top":3.4,"right":3.4,"bottom":3.075,"left":3.4}
 else: INPAINT_MAX = {"top":.4,"right":.4,"bottom":.075,"left":.4}
@@ -433,7 +433,7 @@ elif IS_SEGONLY and io.platform == "darwin":
     # WHERE += " AND e.encoding_id > 2612275"
 
     # WHERE = "s.site_name_id != 1"
-    LIMIT = 1000
+    LIMIT = 50
 
     # TEMP TK TESTING
     # WHERE += " AND s.site_name_id = 8"
@@ -1147,13 +1147,13 @@ def compare_images(last_image, img, face_landmarks, bbox):
                     height = max(last_image.shape[0], cropped_image.shape[0])
                     last_image = cv2.resize(last_image, (last_image.shape[1], height))
                     cropped_image = cv2.resize(cropped_image, (cropped_image.shape[1], height))
-                    #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@#
-                    # Concatenate images horizontally
-                    combined_image = cv2.hconcat([last_image, cropped_image])
-                    outpath_notface = os.path.join(sort.counter_dict["outfolder"],"notface",sort.counter_dict['last_description'][:30]+".jpg")
-                    # sort.not_make_face.append(outpath_notfacecombined_image) ########## variable name error
-                    # Save the new image
-                    #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@#
+                    # #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@#
+                    # # Concatenate images horizontally
+                    # combined_image = cv2.hconcat([last_image, cropped_image])
+                    # outpath_notface = os.path.join(sort.counter_dict["outfolder"],"notface",sort.counter_dict['last_description'][:30]+".jpg")
+                    # # sort.not_make_face.append(outpath_notfacecombined_image) ########## variable name error
+                    # # Save the new image
+                    # #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@#
 
             else:
                 print("first round, skipping the pair test")
@@ -1346,32 +1346,15 @@ def shift_bbox(bbox, extension_pixels):
     bbox['right']  = bbox['right']  + x0
     bbox['top']    = bbox['top']    + y0
     bbox['bottom'] = bbox['bottom'] + y0
+    # shift sort.nose_2d by the same amount
+    nose_2d_list = list(sort.nose_2d)
+    nose_2d_list[0] = nose_2d_list[0] + x0
+    nose_2d_list[1] = nose_2d_list[1] + y0
+    sort.nose_2d = tuple(nose_2d_list)
     if sort.VERBOSE:print("after shifting",bbox)
     return bbox
 
 def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
-    def set_nose_bridge_dist(df_sorted):
-        # sort.NOSE_BRIDGE_DIST = the vertical distance between landmark 1 and 6 for the first row in df_sorted
-        # Calculate the vertical distance between landmark 1 and 6 for the first row in df_sorted
-        try:
-            face_landmarks = df_sorted.iloc[0]['face_landmarks']
-            if face_landmarks is not None and len(face_landmarks) > 6:
-                # Each landmark is expected to be a dict or list with at least y coordinate at index 1
-                # Try to support both dict and list/tuple
-                def get_y(lm):
-                    if isinstance(lm, dict):
-                        return lm.get('y', None)
-                    elif isinstance(lm, (list, tuple)) and len(lm) > 1:
-                        return lm[1]
-                    else:
-                        return None
-                y1 = get_y(face_landmarks[1])
-                y6 = get_y(face_landmarks[6])
-                if y1 is not None and y6 is not None:
-                    sort.NOSE_BRIDGE_DIST = abs(y6 - y1)
-                    print("NOSE_BRIDGE_DIST set to", sort.NOSE_BRIDGE_DIST)
-        except Exception as e:
-            print("Could not set NOSE_BRIDGE_DIST:", e)
 
     def save_image_metas(row):
         print("row", row)
@@ -1440,7 +1423,7 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
             ##################
             selfie_bbox, is_left_shoulder,is_right_shoulder=fetch_selfie_bbox(row['image_id'])
             print("selfie_bbox", selfie_bbox)
-            if selfie_bbox is not None and selfie_bbox["left"]==0: 
+            if selfie_bbox is not None and selfie_bbox["left"]==0 and not INPAINT_BLACK: 
                 if VERBOSE: print("head hits the top of the image, skipping -------------------> bailout !!!!!!!!!!!!!!!!!")
                 do_inpaint = False
                 bailout=True
@@ -1473,7 +1456,7 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
                     # Fill the extended area with black instead of inpainting
                     inpaint_image = extended_img.copy()
                     # Set the masked (extended) area to black
-                    inpaint_image[mask > 0] = 0
+                    # inpaint_image[mask > 0] = 0
                     print("just inpaint black", inpaint_image.shape)
                 else:
 
@@ -1549,7 +1532,7 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
         return img
     
     #itter is a cap, to stop the process after a certain number of rounds
-    print('linear_test_df writing images')
+    print('linear_test_df writing images for this many images:', len(df_sorted))
     imgfileprefix = f"X{str(sort.XLOW)}-{str(sort.XHIGH)}_Y{str(sort.YLOW)}-{str(sort.YHIGH)}_Z{str(sort.ZLOW)}-{str(sort.ZHIGH)}_ct{str(df_sorted.size)}"
     print(imgfileprefix)
     if sort.ORIGIN == 6: sort.NOSE_BRIDGE_DIST = sort.calc_nose_bridge_dist(df_sorted.iloc[0]['face_landmarks'])    
@@ -1566,6 +1549,7 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
 
         print('-- linear_test_df [-] in loop, index is', str(index))
         print("row", row)
+        sort.this_nose_bridge_dist = None
         # if VERBOSE: print(row["body_landmarks"])
         # select the row in df_segment where the imagename == row['filename']
         try:
@@ -1601,6 +1585,8 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
                 print("trim failed")
                 continue
 
+            # establish the origin
+            sort.get_image_face_data(img, row['face_landmarks'], row['bbox'])
             if not TSP_SORT and row['dist'] > sort.MAXD:
                 sort.counter_dict["failed_dist_count"] += 1
                 print("MAXDIST too big:" , str(sort.MAXD))
