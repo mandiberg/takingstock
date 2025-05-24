@@ -66,14 +66,16 @@ SORT_TYPE = "planar_hands"
 FULL_BODY = False # this requires is_feet
 VISIBLE_HAND_LEFT = False
 VISIBLE_HAND_RIGHT = False
+USE_NOSEBRIDGE = True 
 TSP_SORT=False
 # this is for controlling if it is using
 # all clusters, 
-IS_HAND_POSE_FUSION = False # do we use fusion clusters
-ONLY_ONE = False # only one cluster, or False for video fusion
+IS_HAND_POSE_FUSION = True # do we use fusion clusters
+ONLY_ONE = False # only one cluster, or False for video fusion, this_cluster = [CLUSTER_NO, HAND_POSE_NO]
 GENERATE_FUSION_PAIRS = False # if true it will query based on MIN_VIDEO_FUSION_COUNT and create pairs
                                 # if false, it will grab the list of pair lists below
-MIN_VIDEO_FUSION_COUNT = 750
+MIN_VIDEO_FUSION_COUNT = 500
+MIN_CYCLE_COUNT = 10
 IS_CLUSTER = False
 if IS_HAND_POSE_FUSION:
     if SORT_TYPE in ["planar_hands", "fingertips_positions", "128d"]:
@@ -98,13 +100,13 @@ USE_HEAD_POSE = False
 N_HANDS = N_CLUSTERS = None # declared here, but set in the SQL query below
 # this is for IS_ONE_CLUSTER to only run on a specific CLUSTER_NO
 IS_ONE_CLUSTER = False
-CLUSTER_NO = 0 # sort on this one as HAND_POSITION for IS_HAND_POSE_FUSION
+CLUSTER_NO = 21 # sort on this one as HAND_POSITION for IS_HAND_POSE_FUSION
                 # if not IS_HAND_POSE_FUSION, then this is selecting HandsGestures
 START_CLUSTER = 0
 # I started to create a separate track for Hands, but am pausing for the moment
 IS_HANDS = False
 IS_ONE_HAND = False
-HAND_POSE_NO = 5
+HAND_POSE_NO = 0
 
 # 80,74 fails between 300-400
 
@@ -114,8 +116,10 @@ ONLY_KIDS = False
 USE_PAINTED = True
 OUTPAINT = False
 INPAINT= True
-INPAINT_MAX = {"top":.4,"right":.4,"bottom":.075,"left":.4}
+INPAINT_BLACK = False
 INPAINT_MAX_SHOULDERS = {"top":.4,"right":.15,"bottom":.2,"left":.15}
+if INPAINT_BLACK: INPAINT_MAX_SHOULDERS = INPAINT_MAX = {"top":3.4,"right":3.4,"bottom":3.075,"left":3.4}
+else: INPAINT_MAX = {"top":.4,"right":.4,"bottom":.075,"left":.4}
 OUTPAINT_MAX = {"top":.7,"right":.7,"bottom":.2,"left":.7}
 
 BLUR_THRESH_MAX={"top":50,"right":100,"bottom":10,"left":100}
@@ -126,7 +130,7 @@ BLUR_RADIUS = io.oddify(BLUR_RADIUS)
 
 MASK_OFFSET = [50,50,50,50]
 if OUTPAINT: from outpainting_modular import outpaint, image_resize
-VERBOSE = False
+VERBOSE = True
 SAVE_IMG_PROCESS = False
 # this controls whether it is using the linear or angle process
 IS_ANGLE_SORT = False
@@ -136,7 +140,7 @@ IS_TOPICS = True
 N_TOPICS = 64 # changing this to 14 triggers the affect topic fusion
 
 IS_ONE_TOPIC = False
-TOPIC_NO = [35] # if doing an affect topic fusion, this is the wrapper topic
+TOPIC_NO = [22] # if doing an affect topic fusion, this is the wrapper topic
 # groupings of affect topics
 NEG_TOPICS = [0,1,3,5,8,9,13]
 POS_TOPICS = [4,6,7,10,11,12]
@@ -201,6 +205,9 @@ if not GENERATE_FUSION_PAIRS:
         # David Michael custom
         # [21,112]
         
+        # topic 25 beauty for video blur
+        # [13, 2], [13, 3], [13, 76], [13, 103], [13, 106], [13, 117], [16, 21], [21, 0], [21, 52], [21, 58], [21, 68], [21, 84], [21, 87], [21, 97], [21, 112], [21, 116], [22, 27], [24, 11], [24, 13], [24, 42], [24, 51], [24, 57], [24, 97], [24, 99], [24, 112], [24, 113], [24, 126]
+
         # topic 35 skin care, 750plus selects
         # [21, 0]
         # both hands
@@ -426,7 +433,7 @@ elif IS_SEGONLY and io.platform == "darwin":
     # WHERE += " AND e.encoding_id > 2612275"
 
     # WHERE = "s.site_name_id != 1"
-    LIMIT = 25000
+    LIMIT = 1000
 
     # TEMP TK TESTING
     # WHERE += " AND s.site_name_id = 8"
@@ -527,7 +534,9 @@ sort = SortPose(motion, face_height_output, image_edge_multiplier,EXPAND, ONE_SH
 # sort.MIND = .5
 # sort.MAXD = .8
 sort.MIND = sort.MIND*2
-sort.MAXD = sort.MAXD*3
+sort.MAXD = sort.MAXD*30
+
+if USE_NOSEBRIDGE: sort.ORIGIN = 6
 
 # CLUSTER_TYPE is passed to sort. THIS SEEMS REDUNDANT!!!
 # sort.set_subset_landmarks(CLUSTER_TYPE)
@@ -1341,6 +1350,29 @@ def shift_bbox(bbox, extension_pixels):
     return bbox
 
 def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
+    def set_nose_bridge_dist(df_sorted):
+        # sort.NOSE_BRIDGE_DIST = the vertical distance between landmark 1 and 6 for the first row in df_sorted
+        # Calculate the vertical distance between landmark 1 and 6 for the first row in df_sorted
+        try:
+            face_landmarks = df_sorted.iloc[0]['face_landmarks']
+            if face_landmarks is not None and len(face_landmarks) > 6:
+                # Each landmark is expected to be a dict or list with at least y coordinate at index 1
+                # Try to support both dict and list/tuple
+                def get_y(lm):
+                    if isinstance(lm, dict):
+                        return lm.get('y', None)
+                    elif isinstance(lm, (list, tuple)) and len(lm) > 1:
+                        return lm[1]
+                    else:
+                        return None
+                y1 = get_y(face_landmarks[1])
+                y6 = get_y(face_landmarks[6])
+                if y1 is not None and y6 is not None:
+                    sort.NOSE_BRIDGE_DIST = abs(y6 - y1)
+                    print("NOSE_BRIDGE_DIST set to", sort.NOSE_BRIDGE_DIST)
+        except Exception as e:
+            print("Could not set NOSE_BRIDGE_DIST:", e)
+
     def save_image_metas(row):
         print("row", row)
         print("save_image_metas for use in TTS")
@@ -1393,7 +1425,10 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
         # inpaint_file=os.path.join(os.path.join(os.path.dirname(row['folder']), "inpaint", os.path.basename(row['folder'])),row['filename'])
         # aspect_ratio = '_'.join(image_edge_multiplier)
         aspect_ratio = '_'.join(str(v) for v in image_edge_multiplier)
-        inpaint_file=os.path.join(os.path.dirname(row['folder']), os.path.basename(row['folder'])+"_inpaint_"+aspect_ratio,row['imagename'])
+        if INPAINT_BLACK:
+            inpaint_file=os.path.join(os.path.dirname(row['folder']), os.path.basename(row['folder'])+"_inpaint_black_"+aspect_ratio,row['imagename'])
+        else:
+            inpaint_file=os.path.join(os.path.dirname(row['folder']), os.path.basename(row['folder'])+"_inpaint_"+aspect_ratio,row['imagename'])
         print("inpaint_file", inpaint_file)
         if USE_PAINTED and os.path.exists(inpaint_file):
             if sort.VERBOSE: print("path exists, loading image",inpaint_file)
@@ -1429,38 +1464,51 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
                 if not os.path.exists(directory):
                     os.makedirs(directory)
                 # maxkey = max(extension_pixels, key=lambda y: abs(extension_pixels[y]))
-                print("inpainting small extension")
-                # extimg is 50px smaller and mask is 10px bigger
                 extended_img,mask,cornermask=sort.prepare_mask(img,extension_pixels)
-                if SAVE_IMG_PROCESS:
-                    cv2.imwrite(inpaint_file+"1_prepmask.jpg",extended_img)
-                    cv2.imwrite(inpaint_file+"2_mask.jpg",mask)
-                    cv2.imwrite(inpaint_file+"2.5_cornermask.jpg",cornermask)
-                extended_img=extend_cv2(extended_img,mask,iR=3,method="NS")
-                if SAVE_IMG_PROCESS: cv2.imwrite(inpaint_file+"3_extendcv2.jpg",extended_img)
-                
-                extended_img=extend_cv2(extended_img,cornermask,iR=3,method="TELEA")
-                if SAVE_IMG_PROCESS: cv2.imwrite(inpaint_file+"3.5_extendcv2_corners.jpg",extended_img)
 
-                inpaint_image=sort.extend_lama(extended_img, mask, downsampling_scale = 8)
-                # print("inpaint_image shape after lama extend",np.shape(inpaint_image))
-                # inpaint_image = inpaint_image[y:y+h, x:x+w]
-                inpaint_image = inpaint_image[0:np.shape(extended_img)[0],0:np.shape(extended_img)[1]]
-                # inpaint_image = cv2.crop(inpaint_image, (np.shape(extended_img)[1],np.shape(extended_img)[0]))
-                # print("inpaint_image shape after transform",np.shape(inpaint_image))
-                # print("extended_img shape after transform",np.shape(extended_img))                
-                if SAVE_IMG_PROCESS: cv2.imwrite(inpaint_file+"4_premerge.jpg",inpaint_image)
+                if INPAINT_BLACK:
+                    print("going to inpaint black")
+                    # if the image is black, then use the black image as the inpaint
+                    # this is to avoid using a white image for the inpaint
+                    # Fill the extended area with black instead of inpainting
+                    inpaint_image = extended_img.copy()
+                    # Set the masked (extended) area to black
+                    inpaint_image[mask > 0] = 0
+                    print("just inpaint black", inpaint_image.shape)
+                else:
 
-                ### use inpainting for the extended part, but use original for non extend to keep image sharp ###
-                # inpaint_image[extension_pixels["top"]:extension_pixels["top"]+np.shape(img)[0],extension_pixels["left"]:extension_pixels["left"]+np.shape(img)[1]]=img
-                # move the boundary of the blur in 50px
-                ########
-                # inpaint_image=merge_inpaint(inpaint_image,img,extended_img,extension_pixels)
-                inpaint_image, blurmask = merge_inpaint(inpaint_image,img,extended_img,extension_pixels,selfie_bbox)
-                # cv2.imwrite(inpaint_file+"5_aftmerge.jpg",inpaint_image)
-                # cv2.imshow('inpaint_image', inpaint_image)
-                # cv2.waitKey(0)
-                # cv2.destroyAllWindows()
+                    print("inpainting small extension")
+                    # extimg is 50px smaller and mask is 10px bigger
+                    extended_img,mask,cornermask=sort.prepare_mask(img,extension_pixels)
+                    if SAVE_IMG_PROCESS:
+                        cv2.imwrite(inpaint_file+"1_prepmask.jpg",extended_img)
+                        cv2.imwrite(inpaint_file+"2_mask.jpg",mask)
+                        cv2.imwrite(inpaint_file+"2.5_cornermask.jpg",cornermask)
+                    extended_img=extend_cv2(extended_img,mask,iR=3,method="NS")
+                    if SAVE_IMG_PROCESS: cv2.imwrite(inpaint_file+"3_extendcv2.jpg",extended_img)
+                    
+                    extended_img=extend_cv2(extended_img,cornermask,iR=3,method="TELEA")
+                    if SAVE_IMG_PROCESS: cv2.imwrite(inpaint_file+"3.5_extendcv2_corners.jpg",extended_img)
+
+                    inpaint_image=sort.extend_lama(extended_img, mask, downsampling_scale = 8)
+                    print("inpaint_image shape after black OR lama extend",np.shape(inpaint_image))
+                    # inpaint_image = inpaint_image[y:y+h, x:x+w]
+                    inpaint_image = inpaint_image[0:np.shape(extended_img)[0],0:np.shape(extended_img)[1]]
+                    # inpaint_image = cv2.crop(inpaint_image, (np.shape(extended_img)[1],np.shape(extended_img)[0]))
+                    print("inpaint_image shape after transform",np.shape(inpaint_image))
+                    print("extended_img shape after transform",np.shape(extended_img))                
+                    if SAVE_IMG_PROCESS: cv2.imwrite(inpaint_file+"4_premerge.jpg",inpaint_image)
+
+                    ### use inpainting for the extended part, but use original for non extend to keep image sharp ###
+                    # inpaint_image[extension_pixels["top"]:extension_pixels["top"]+np.shape(img)[0],extension_pixels["left"]:extension_pixels["left"]+np.shape(img)[1]]=img
+                    # move the boundary of the blur in 50px
+                    ########
+                    # inpaint_image=merge_inpaint(inpaint_image,img,extended_img,extension_pixels)
+                    inpaint_image, blurmask = merge_inpaint(inpaint_image,img,extended_img,extension_pixels,selfie_bbox)
+                    # cv2.imwrite(inpaint_file+"5_aftmerge.jpg",inpaint_image)
+                    # cv2.imshow('inpaint_image', inpaint_image)
+                    # cv2.waitKey(0)
+                    # cv2.destroyAllWindows()
                 if inpaint_image is not None:
                     print("we have an inpaint_image")
                     if SAVE_IMG_PROCESS:  cv2.imwrite(inpaint_file+"6_blurmask.jpg",blurmask)
@@ -1504,6 +1552,8 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
     print('linear_test_df writing images')
     imgfileprefix = f"X{str(sort.XLOW)}-{str(sort.XHIGH)}_Y{str(sort.YLOW)}-{str(sort.YHIGH)}_Z{str(sort.ZLOW)}-{str(sort.ZHIGH)}_ct{str(df_sorted.size)}"
     print(imgfileprefix)
+    if sort.ORIGIN == 6: sort.NOSE_BRIDGE_DIST = sort.calc_nose_bridge_dist(df_sorted.iloc[0]['face_landmarks'])    
+    # print("nose bridge dist", sort.NOSE_BRIDGE_DIST)
     good = 0
     # img_list = []
     metas_list = []
@@ -1550,9 +1600,6 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
             except:
                 print("trim failed")
                 continue
-
-
-
 
             if not TSP_SORT and row['dist'] > sort.MAXD:
                 sort.counter_dict["failed_dist_count"] += 1
@@ -1802,22 +1849,26 @@ def main():
 
     # this is the key function, which is called for each cluster
     # or only once if no clusters
-    def map_images(resultsjson, cluster_no=None):
+    def map_images(resultsjson, this_cluster=None, this_topic=None):
+        pose_no = cluster_no = None
+        print("map_images cluster_no", cluster_no)
         # print(df_sql)
-        # if cluster_no is a list, then assign the first one to cluster_no
+        # if this_cluster is a list, then assign the first one to cluster_no
         # temp fix, to deal with passing in two values for FUSION
         # select on both, sort on CLUSTER_NO
         # for FUSION, CLUSTER_NO is HAND_POSITION and is the first value
-        if isinstance(cluster_no, list):
-            print("cluster_no is a list", cluster_no)
-            if IS_ONE_TOPIC and not IS_HAND_POSE_FUSION:
-                pose_no = None
+        if isinstance(this_cluster, list):
+            print("cluster_no is a list", this_cluster)
+            if len(this_cluster) == 2:
+                cluster_no = this_cluster[0]
+                pose_no = this_cluster[1]
+            elif len(this_cluster) == 1:
+                cluster_no = this_cluster[0]
             else:
-                pose_no = cluster_no[1]
-                cluster_no = cluster_no[0]
+                print(" >> SOMETHINGS WRONG: cluster_no is a list, but len > 2", this_cluster)
             print(f"cluster_no: {cluster_no}, pose_no: {pose_no}")
         else:
-            pose_no = None
+            print(" >> SOMETHINGS WRONG: cluster_no is not a list", this_cluster)
 
         # read the csv and construct dataframe
         try:
@@ -1887,7 +1938,9 @@ def main():
 
             ### Set counter_dict ###
             if pose_no is not None: cluster_string = f"{cluster_no}_{pose_no}"
-            else: cluster_string = str(cluster_no)
+            elif cluster_no is not None: cluster_string = str(cluster_no)
+            elif this_topic is not None: cluster_string = str(this_topic)
+            else: cluster_string = None
             sort.set_counters(io.ROOT,cluster_string, start_img_name,start_site_image_id)
 
             print("set sort.counter_dict:" )
@@ -1974,7 +2027,8 @@ def main():
         # select on both, sort on CLUSTER_NO 
         # this sends pose and gesture in as a list, and an empty topic
         this_cluster = [CLUSTER_NO, HAND_POSE_NO]
-    elif IS_HAND_POSE_FUSION and not ONLY_ONE:
+    
+    if IS_HAND_POSE_FUSION and not ONLY_ONE:
         this_topic = TOPIC_NO
         if GENERATE_FUSION_PAIRS:
             n_cluster_topics = sort.find_sorted_zero_indices(TOPIC_NO,MIN_VIDEO_FUSION_COUNT)
@@ -1988,13 +2042,21 @@ def main():
     elif IS_TOPICS:
         if USE_AFFECT_GROUPS: n_cluster_topics = len(AFFECT_GROUPS_LISTS) # redefine for affect groups
         else: n_cluster_topics = range(N_TOPICS)
+        if this_cluster is not None: second_cluster_topic = this_cluster
         # if USE_AFFECT_GROUPS: N_CLUSTERS = len(AFFECT_GROUPS_LISTS) # redefine for affect groups
         print(f"IS_TOPICS is {IS_TOPICS} with {n_cluster_topics}")
 
     def select_map_images(this_cluster, this_topic):
+        if VERBOSE: print("select_map_images this_cluster", this_cluster)
+        if VERBOSE: print("select_map_images this_topic", this_topic)
         resultsjson = selectSQL(this_cluster, this_topic)
-        folder_name = this_topic if this_topic else this_cluster
-        map_images(resultsjson, folder_name)
+        print("got results, count is: ",len(resultsjson))
+        if len(resultsjson) < MIN_CYCLE_COUNT:
+            print(f"less than {MIN_CYCLE_COUNT} resultsjson, skipping this {this_cluster} and {this_topic}")
+            return
+        else:
+            # folder_name = this_topic[0] if this_topic else this_cluster
+            map_images(resultsjson, this_cluster, this_topic)
 
     if first_loop:
         print("first loop is ", first_loop)
@@ -2002,7 +2064,7 @@ def main():
             if IS_CLUSTER and cluster_topic_no < START_CLUSTER:continue
             if USE_AFFECT_GROUPS: cluster_topic_no = AFFECT_GROUPS_LISTS[cluster_topic_no] # redefine cluster_no with affect group list
             print(f"SELECTing cluster_topic {cluster_topic_no} of {n_cluster_topics}")
-            if IS_TOPICS: select_map_images(second_cluster_topic, cluster_topic_no)
+            if IS_TOPICS and not IS_HAND_POSE_FUSION: select_map_images(second_cluster_topic, cluster_topic_no)
             elif IS_CLUSTER: select_map_images(cluster_topic_no, second_cluster_topic)
             elif IS_HAND_POSE_FUSION: select_map_images(cluster_topic_no,this_topic)
             # resultsjson = selectSQL(select_list)
@@ -2011,7 +2073,6 @@ def main():
         print("doing regular linear")
         select_map_images(this_cluster, this_topic)
 
-    print("got results, count is: ",len(resultsjson))
 
 
 if __name__ == '__main__':

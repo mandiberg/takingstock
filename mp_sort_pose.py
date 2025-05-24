@@ -47,7 +47,9 @@ class SortPose:
         self.BRUTEFORCE = False
         self.use_3D = use_3D
         print("init use_3D",self.use_3D)
-        self.CUTOFF = 2500 # DOES factor if ONE_SHOT
+        self.CUTOFF = 100 # DOES factor if ONE_SHOT
+        self.ORIGIN = 0
+        self.NOSE_BRIDGE_DIST = None # to be set in first loop
 
         self.CHECK_DESC_DIST = 30
 
@@ -869,8 +871,7 @@ class SortPose:
 
 
     def get_crop_data_scalable(self):
-
-        # p1 is tip of nose
+        # self.nose_2d accounts for self.NOSE_BRIDGE_DIST
         p1 = (int(self.nose_2d[0]), int(self.nose_2d[1]))
         
         toobig = False  # Default value
@@ -902,6 +903,39 @@ class SortPose:
 
         return toobig
 
+    def calc_nose_bridge_dist(self, face_landmarks):
+        """
+        Calculate the vertical distance between landmark 1 and 6
+        for a mediapipe.framework.formats.landmark_pb2.NormalizedLandmarkList.
+        """
+        print("calc_nose_bridge_dist, face_landmarks type", type(face_landmarks))
+        nose_bridge_dist = None
+        try:
+            # Handle mediapipe NormalizedLandmarkList
+            if hasattr(face_landmarks, "landmark") and len(face_landmarks.landmark) > 6:
+                y1 = face_landmarks.landmark[1].y
+                y6 = face_landmarks.landmark[6].y
+                nose_bridge_dist = abs(y6 - y1)
+                print("nose_bridge_dist is", nose_bridge_dist)
+            # Fallback for list/tuple/dict (legacy)
+            elif isinstance(face_landmarks, (list, tuple)) and len(face_landmarks) > 6:
+                def get_y(lm):
+                    if isinstance(lm, dict):
+                        return lm.get('y', None)
+                    elif isinstance(lm, (list, tuple)) and len(lm) > 1:
+                        return lm[1]
+                    else:
+                        return None
+                y1 = get_y(face_landmarks[1])
+                y6 = get_y(face_landmarks[6])
+                if y1 is not None and y6 is not None:
+                    nose_bridge_dist = abs(y6 - y1)
+                    print("nose_bridge_dist is", nose_bridge_dist)
+        except Exception as e:
+            print("Could not set nose_bridge_dist:", e)
+            nose_bridge_dist = None
+        return nose_bridge_dist
+
     def get_image_face_data(self,image, faceLms, bbox):
         
         self.image = image
@@ -918,8 +952,17 @@ class SortPose:
         # Instead of hard-coding the index 1, you can use a variable or constant for the point index
         
         try:
-            nose_point_index = 1
-            self.nose_2d = self.get_face_2d_point(nose_point_index)
+            # self.NOSE_BRIDGE_DIST
+            self.nose_2d = self.get_face_2d_point(1)
+            print("nose_2d",self.nose_2d)
+            if self.ORIGIN == 6:
+                this_nose_bridge_dist = self.calc_nose_bridge_dist(faceLms)
+                print("NOSE_BRIDGE_DIST, this_nose_bridge_dist", self.NOSE_BRIDGE_DIST, this_nose_bridge_dist)
+                nose_delta = self.NOSE_BRIDGE_DIST - this_nose_bridge_dist
+                print("nose_delta", nose_delta)
+                self.nose_2d = (self.nose_2d[0], self.nose_2d[1] + (nose_delta*self.face_height))
+            print("nose_2d",self.nose_2d)
+
             # cv2.circle(self.image, tuple(map(int, self.nose_2d)), 5, (0, 0,0), 5)
             print("get_image_face_data nose_2d",self.nose_2d)
         except:
@@ -1168,7 +1211,7 @@ class SortPose:
 
 
         if not toobig:
-            if self.VERBOSE: print("crop_image: going to crop because too big is ", toobig)
+            if self.VERBOSE: print("crop_image is GOOD: going to crop")
             # print (self.padding_points)
             #set main points for drawing/cropping
 
