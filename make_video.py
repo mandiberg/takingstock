@@ -43,10 +43,8 @@ db = io.db
 # io.db["name"] = "stock"
 # io.db["name"] = "ministock"
 
-# This is for when you only have the segment table. RW SQL query
-IS_SEGONLY= True
 
-
+IS_SEGONLY= True # This is for when you only have the segment table. RW SQL query
 HSV_CONTROL = False # defining so it doesn't break below, if commented out
 # This tells it to pull luminosity. Comment out if not using
 if HSV_CONTROL: HSV_BOUNDS = {"LUM_MIN": 0, "LUM_MAX": 40, "SAT_MIN": 0, "SAT_MAX": 1000, "HUE_MIN": 0, "HUE_MAX": 360}
@@ -75,6 +73,7 @@ ONLY_ONE = False # only one cluster, or False for video fusion, this_cluster = [
 GENERATE_FUSION_PAIRS = False # if true it will query based on MIN_VIDEO_FUSION_COUNT and create pairs
                                 # if false, it will grab the list of pair lists below
 MIN_VIDEO_FUSION_COUNT = 500
+LIMIT = 50000 # this is the limit for the SQL query
 MIN_CYCLE_COUNT = 10
 IS_CLUSTER = False
 if IS_HAND_POSE_FUSION:
@@ -116,9 +115,9 @@ ONLY_KIDS = False
 USE_PAINTED = True
 OUTPAINT = False
 INPAINT= True
-INPAINT_BLACK = True
+INPAINT_COLOR = "white" # "white" or "black" or None
 INPAINT_MAX_SHOULDERS = {"top":.4,"right":.15,"bottom":.2,"left":.15}
-if INPAINT_BLACK: INPAINT_MAX_SHOULDERS = INPAINT_MAX = {"top":3.4,"right":3.4,"bottom":3.075,"left":3.4}
+if INPAINT_COLOR: INPAINT_MAX_SHOULDERS = INPAINT_MAX = {"top":3.4,"right":3.4,"bottom":3.075,"left":3.4}
 else: INPAINT_MAX = {"top":.4,"right":.4,"bottom":.075,"left":.4}
 OUTPAINT_MAX = {"top":.7,"right":.7,"bottom":.2,"left":.7}
 
@@ -140,7 +139,7 @@ IS_TOPICS = True
 N_TOPICS = 64 # changing this to 14 triggers the affect topic fusion
 
 IS_ONE_TOPIC = False
-TOPIC_NO = [22] # if doing an affect topic fusion, this is the wrapper topic
+TOPIC_NO = [25] # if doing an affect topic fusion, this is the wrapper topic
 # groupings of affect topics
 NEG_TOPICS = [0,1,3,5,8,9,13]
 POS_TOPICS = [4,6,7,10,11,12]
@@ -200,13 +199,19 @@ if not GENERATE_FUSION_PAIRS:
         # [5,104], [4,124], [10,62], [21,116], [7,57], [5,121], [5,60]
 
         # Topic 22 Finger
-        [24,99] #silence finger
+        # [24,99] #silence finger
 
-        # David Michael custom
-        # [21,112]
-        
+        # Phone
+        # [16, 21],  [22, 24], [22, 27], [23, 21], [23, 67]
+        # Phone to ear
+        # [13, 103], [21, 97] 
         # topic 25 beauty for video blur
-        # [13, 2], [13, 3], [13, 76], [13, 103], [13, 106], [13, 117], [16, 21], [21, 0], [21, 52], [21, 58], [21, 68], [21, 84], [21, 87], [21, 97], [21, 112], [21, 116], [22, 27], [24, 11], [24, 13], [24, 42], [24, 51], [24, 57], [24, 97], [24, 99], [24, 112], [24, 113], [24, 126]
+        # face frame
+        [13, 76],  [21, 0], [21, 116],
+        # glasses
+        [21, 58], [21, 84], [21,52],
+        # hand to chin
+        [24, 126]
 
         # topic 35 skin care, 750plus selects
         # [21, 0]
@@ -318,7 +323,7 @@ if IS_SEGONLY is not True:
     # this is for gettytest3 table
     FROM ="Images i JOIN ImagesKeywords ik ON i.image_id = ik.image_id JOIN Keywords k on ik.keyword_id = k.keyword_id LEFT JOIN Encodings e ON i.image_id = e.image_id JOIN ImagesClusters ic ON i.image_id = ic.image_id"
     WHERE = "e.is_face IS TRUE AND e.bbox IS NOT NULL AND i.site_name_id = 1 AND k.keyword_text LIKE 'smil%'"
-    LIMIT = 500
+    LIMIT = LIMIT
 
 ##################MICHAEL#####################
 elif IS_SEGONLY and io.platform == "darwin":
@@ -433,7 +438,7 @@ elif IS_SEGONLY and io.platform == "darwin":
     # WHERE += " AND e.encoding_id > 2612275"
 
     # WHERE = "s.site_name_id != 1"
-    LIMIT = 50
+    LIMIT = LIMIT
 
     # TEMP TK TESTING
     # WHERE += " AND s.site_name_id = 8"
@@ -487,7 +492,7 @@ elif IS_SEGONLY and io.platform == "win32":
     # WHERE += " AND k.keyword_text LIKE 'surpris%' "
 
     # WHERE = "s.site_name_id != 1"
-    LIMIT = 1000
+    LIMIT = LIMIT
 
     # TEMP TK TESTING
     # WHERE += " AND s.site_name_id = 8"
@@ -1408,8 +1413,8 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
         # inpaint_file=os.path.join(os.path.join(os.path.dirname(row['folder']), "inpaint", os.path.basename(row['folder'])),row['filename'])
         # aspect_ratio = '_'.join(image_edge_multiplier)
         aspect_ratio = '_'.join(str(v) for v in image_edge_multiplier)
-        if INPAINT_BLACK:
-            inpaint_file=os.path.join(os.path.dirname(row['folder']), os.path.basename(row['folder'])+"_inpaint_black_"+aspect_ratio,row['imagename'])
+        if INPAINT_COLOR:
+            inpaint_file=os.path.join(os.path.dirname(row['folder']), os.path.basename(row['folder'])+"_inpaint_"+INPAINT_COLOR+"_"+aspect_ratio,row['imagename'])
         else:
             inpaint_file=os.path.join(os.path.dirname(row['folder']), os.path.basename(row['folder'])+"_inpaint_"+aspect_ratio,row['imagename'])
         print("inpaint_file", inpaint_file)
@@ -1423,7 +1428,7 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
             ##################
             selfie_bbox, is_left_shoulder,is_right_shoulder=fetch_selfie_bbox(row['image_id'])
             print("selfie_bbox", selfie_bbox)
-            if selfie_bbox is not None and selfie_bbox["left"]==0 and not INPAINT_BLACK: 
+            if selfie_bbox is not None and selfie_bbox["left"]==0 and not INPAINT_COLOR: 
                 if VERBOSE: print("head hits the top of the image, skipping -------------------> bailout !!!!!!!!!!!!!!!!!")
                 do_inpaint = False
                 bailout=True
@@ -1447,10 +1452,10 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
                 if not os.path.exists(directory):
                     os.makedirs(directory)
                 # maxkey = max(extension_pixels, key=lambda y: abs(extension_pixels[y]))
-                extended_img,mask,cornermask=sort.prepare_mask(img,extension_pixels)
 
-                if INPAINT_BLACK:
+                if INPAINT_COLOR:
                     print("going to inpaint black")
+                    extended_img,mask,cornermask=sort.prepare_mask(img,extension_pixels,color=INPAINT_COLOR)
                     # if the image is black, then use the black image as the inpaint
                     # this is to avoid using a white image for the inpaint
                     # Fill the extended area with black instead of inpainting
@@ -1459,7 +1464,6 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
                     # inpaint_image[mask > 0] = 0
                     print("just inpaint black", inpaint_image.shape)
                 else:
-
                     print("inpainting small extension")
                     # extimg is 50px smaller and mask is 10px bigger
                     extended_img,mask,cornermask=sort.prepare_mask(img,extension_pixels)

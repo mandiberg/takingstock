@@ -47,7 +47,7 @@ class SortPose:
         self.BRUTEFORCE = False
         self.use_3D = use_3D
         print("init use_3D",self.use_3D)
-        self.CUTOFF = 25000 # DOES factor if ONE_SHOT
+        self.CUTOFF = 50000 # DOES factor if ONE_SHOT
         self.ORIGIN = 0
         self.this_nose_bridge_dist = self.NOSE_BRIDGE_DIST = None # to be set in first loop, and sort.this_nose_bridge_dist each time
 
@@ -1133,14 +1133,23 @@ class SortPose:
 
         return is_consistent
 
-    def prepare_mask(self,image,extension_pixels):
+    def prepare_mask(self,image,extension_pixels,color):
         if self.VERBOSE:print("starting mask preparation")
         height, width = image.shape[:2]
         top, bottom, left, right = extension_pixels["top"], extension_pixels["bottom"], extension_pixels["left"],extension_pixels["right"] 
-        extended_img = np.zeros((height + top+bottom, width+left+right, 3), dtype=np.uint8)
+        if color == "white":
+            print("color is white")
+            extended_img = np.ones((height + top+bottom, width+left+right, 3), dtype=np.uint8) * 255
+
+        if color == "black":
+            print("color is black")
+            extended_img = np.zeros((height + top+bottom, width+left+right, 3), dtype=np.uint8)
         extended_img[top:height+top, left:width+left,:] = image
 
         # main mask
+        #     mask = np.zeros_like(extended_img[:, :, 0])
+        #     mask = np.ones_like(extended_img[:, :, 0]) * 255
+        # else:
         mask = np.zeros_like(extended_img[:, :, 0])
         mask[:top,:] = 255
         mask[:,:left] = 255
@@ -1345,10 +1354,16 @@ class SortPose:
         return df_rounded
 
     def get_start_obj_bbox(self, start_img, df_enc):
+        enc1 = None
         if start_img == "median":
             print("[get_start_obj_bbox] in median", df_enc)
-            bbox_col = "obj_bbox_list"
-            df_rounded = self.smart_round_df(df_enc, bbox_col)
+            sort_column = "obj_bbox_list"
+            # df_rounded = self.smart_round_df(df_enc, bbox_col)
+            round_down = 1
+            while enc1 == None:
+                # this should loop through and round the values down until it finds a mode
+                df_rounded = self.smart_round_df(df_enc, sort_column, round_down)
+                enc1, round_down = self.test_smart_round_df(df_rounded, df_enc, sort_column, round_down)
 
             # digits = (int(math.log10(len(df_enc)))+1)*-1
             # df_enc = df_enc[df_enc[bbox_col].apply(lambda x: any(val != 0.0 for val in x))]
@@ -1357,13 +1372,13 @@ class SortPose:
             # df_rounded[bbox_col] = df_enc[bbox_col].apply(lambda x: self.safe_round(x, digits))
 
 
-            # Convert the face_encodings68 column to a list of lists
-            flattened_array = df_rounded[bbox_col].tolist()        
-            print("flattened_array", flattened_array)    
-            try:
-                enc1 = self.most_common_row(flattened_array)
-            except:
-                enc1 = random.choice(flattened_array)
+            # # Convert the face_encodings68 column to a list of lists
+            # flattened_array = df_rounded[bbox_col].tolist()        
+            # print("flattened_array", flattened_array)    
+            # try:
+            #     enc1 = self.most_common_row(flattened_array)
+            # except:
+            #     enc1 = random.choice(flattened_array)
             print("get_start_obj_bbox", enc1)
             return enc1
         elif start_img == "start_bbox":
@@ -1386,6 +1401,24 @@ class SortPose:
         else:
             print("[get_start_obj_bbox] - not median")
             return None
+
+    def test_smart_round_df(self,df_rounded, df_enc, sort_column, round_down):
+        # if it doesn't find a mode, it will return None
+        # then it will pick a random value from the flattened_array
+        if df_rounded is not None:
+            flattened_array = df_rounded[sort_column].tolist()
+            enc1 = self.most_common_row(flattened_array)
+            print("get_start_enc_NN most_common_row", enc1)
+            round_down += 1
+        elif df_rounded is None or len(df_rounded) == 1:
+            # pick a random enc2 from flattened_array
+            print("get_start_enc_NN - no df_rounded")
+            flattened_array = df_enc[sort_column].tolist()
+            enc1 = random.choice(flattened_array)
+        else:
+            print("get_start_enc_NN - no df_rounded")
+            enc1 = None
+        return enc1, round_down
 
     def get_start_enc_NN(self, start_img, df_enc):
         print("get_start_enc")
@@ -1411,19 +1444,8 @@ class SortPose:
             round_down = 1
             while enc1 == None:
                 # this should loop through and round the values down until it finds a mode
-                # if it doesn't find a mode, it will return None
-                # then it will pick a random value from the flattened_array
                 df_rounded = self.smart_round_df(df_enc, sort_column, round_down)
-                if df_rounded is not None:
-                    flattened_array = df_rounded[sort_column].tolist()
-                    enc1 = self.most_common_row(flattened_array)
-                    print("get_start_enc_NN most_common_row", enc1)
-                    round_down += 1
-                elif df_rounded is None or len(df_rounded) == 1:
-                    # pick a random enc2 from flattened_array
-                    print("get_start_enc_NN - no df_rounded")
-                    flattened_array = df_enc[sort_column].tolist()
-                    enc1 = random.choice(flattened_array)
+                enc1, round_down = self.test_smart_round_df(df_rounded, df_enc, sort_column, round_down)
             # print(dfmode)
             # enc1 = dfmode.iloc[0].to_list()
             # enc1 = df_128_enc.median().to_list()
