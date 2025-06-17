@@ -38,16 +38,30 @@ CREATE TABLE imagestopics_affect (
 );
 
 
+UPDATE SegmentBig_isface
+SET mongo_tokens_affect = NULL
+WHERE mongo_tokens_affect = 1
+AND image_id < 400000
+;
 
+ 
+SELECT image_id
+FROM SegmentBig_isface
+WHERE mongo_tokens_affect = 1
+AND image_id < 400000
+LIMIT 30
+;
 
 -- this is meta stuff
-
+SELECT COUNT(*)
+FROM imagestopics_affect ia 
+;
 
 -- to delete topics (in this order)
 DELETE FROM ImagesTopics;
 DELETE FROM CountGender_Topics_so t ;
 DELETE FROM CountEthnicity_Topics_so t ;
-DELETE FROM Topics t ;
+DELETE FROM Topics_affect t ;
 
 
 DELETE FROM ImagesPoses ;
@@ -61,8 +75,8 @@ SELECT t.topic_id,
        SUM(CASE WHEN i.gender_id = 8 THEN 1 ELSE 0 END) AS gender_8_count,
        (SUM(CASE WHEN i.gender_id = 8 THEN 1 ELSE 0 END) / COUNT(it.image_id)) * 100 AS gender_8_percentage,
        t.topic       
-FROM Topics t
-LEFT JOIN ImagesTopics it ON t.topic_id = it.topic_id
+FROM Topics_affect t
+LEFT JOIN ImagesTopics_affect it ON t.topic_id = it.topic_id
 LEFT JOIN Images i ON it.image_id = i.image_id
 GROUP BY t.topic_id, t.topic
 ORDER BY total_images DESC;

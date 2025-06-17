@@ -5,12 +5,14 @@ from pathlib import Path
 import pandas as pd
 
 # Define the source and target folders
-source_folder = "/Volumes/OWC4/segment_images/topic25_position24_righthandface/cluster24_112_1745983435.270151"
-target_folder = "/Volumes/OWC4/segment_images/Topic25_p21_g112_May13build"
-folder_name = "_righthand"
+# where you are making your list of files you want to match to the target folder
+source_folder = "/Volumes/OWC4/segment_images/cluster21_0_1747365897sorted"
+# this is the folder where files get moved out of, into new folder_name
+target_folder = "/Volumes/OWC4/segment_images/cluster21_0_1747505897fresh"
+folder_name = "_x"
 
-USE_DF_CSV = True  # Set to True if using metas.csv, False if using metas.json
-df_enc_filepath = "/Volumes/OWC4/segment_images/cluster21_112_1747238624.5962188/df_sorted.csv"
+USE_DF_CSV = False  # Set to True if using metas.csv, False if using metas.json
+df_enc_filepath = "/Volumes/OWC4/segment_images/cluster21_112_1747250587.244954/df_sorted.csv"
 
 source_folder = os.path.join(source_folder, folder_name)
 moved_folder = os.path.join(target_folder, folder_name)

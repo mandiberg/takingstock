@@ -14,7 +14,7 @@ from mp_db_io import DataIO
 
 
 
-TOPIC=32 # what folder are the files in?
+TOPIC=37 # what folder are the files in?
 
 CSV_FILE = f"metas_{TOPIC}.csv"
 SOUND_FOLDER = "tts_files_test"
@@ -57,9 +57,9 @@ CHUNK_SIZE = 500  # Adjust this value based on your system's capabilities
 ##########
 # Offset/delay between each sample (in seconds)
 OFFSET_DICT = {
-    23: 0.0743, # T23
+    23: 0.075, # T23
     32: 0.0697, # T32
-    37: 0.077, # T37
+    37: 0.0755, # T37
 }
 
 OFFSET = OFFSET_DICT.get(TOPIC, 0.0743) # Default to T23 if not found
@@ -625,6 +625,9 @@ def main():
     #     combined_audio /= max_amplitude
     
     # Write the final output file
+    print("Combined audio shape before writing:", combined_audio.shape)
+    print("writing to file", output_file)
+
     sf.write(output_file, combined_audio, TARGET_SAMPLE_RATE, format='wav')
 
 if __name__ == "__main__":

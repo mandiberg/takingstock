@@ -83,6 +83,11 @@ class WanderingImages(Base):
     site_image_id  = Column(String(50))
     site_name_id  = Column(Integer, ForeignKey('site.site_name_id'))
 
+class NMLImages(Base):
+    __tablename__ = 'nmlimages'
+    image_id   = Column(Integer, ForeignKey('images.image_id'), primary_key=True)
+    is_nml_db  = Column(Boolean)
+
 class Keywords(Base):
     __tablename__ = 'keywords'
     keyword_id          = Column(Integer, primary_key=True, autoincrement=True)

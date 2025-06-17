@@ -233,7 +233,7 @@ WHERE e.face_x > -45 AND e.face_x < -6
         FROM SegmentHelper_may2025_4x4faces s
         WHERE s.image_id = e.image_id
     )
-LIMIT 10000
+LIMIT 2000000
 ;
 
 

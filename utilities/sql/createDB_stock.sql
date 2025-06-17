@@ -91,6 +91,13 @@ CREATE TABLE WanderingImages (
     INDEX idx_wandering_name_site_id (wandering_name_site_id)
     );
 
+CREATE TABLE NMLImages (
+    image_id INT NOT NULL,
+    is_nml_db BOOLEAN,
+    PRIMARY KEY (image_id),
+    FOREIGN KEY (image_id) REFERENCES images(image_id)
+);
+
 CREATE TABLE Allmaps (
     Allmaps_id int NOT NULL AUTO_INCREMENT PRIMARY KEY,
     site_image_id varchar(50) NOT NULL,

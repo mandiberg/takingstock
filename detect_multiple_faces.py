@@ -13,6 +13,33 @@ import json
 import base64
 import gc
 
+import sys
+import re
+
+class StderrFilter:
+    def __init__(self, patterns):
+        if isinstance(patterns, str):
+            patterns = [patterns]
+        self.patterns = [re.compile(pattern) for pattern in patterns]
+        self.original_stderr = sys.stderr
+        self.filtered_err = None
+    
+    def write(self, data):
+        # Only write if none of the patterns match
+        if not any(pattern.search(data) for pattern in self.patterns):
+            self.original_stderr.write(data)
+    
+    def flush(self):
+        self.original_stderr.flush()
+    
+    def __enter__(self):
+        self.filtered_err = sys.stderr
+        sys.stderr = self
+        return self
+    
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        sys.stderr = self.original_stderr
+        
 import numpy as np
 import mediapipe as mp
 import pandas as pd
@@ -23,7 +50,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.orm import relationship
 from sqlalchemy.ext.declarative import declarative_base
 # my ORM
-from my_declarative_base import Base, Images, WanderingImages, Keywords, Counters, SegmentTable, SegmentBig_isnotface, ImagesKeywords, ImagesBackground, Encodings, PhoneBbox, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON
+from my_declarative_base import Base, Images, WanderingImages, NMLImages, Keywords, Counters, SegmentTable, SegmentBig_isnotface, ImagesKeywords, ImagesBackground, Encodings, PhoneBbox, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON
 
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.pool import NullPool
@@ -78,22 +105,22 @@ switching to topic targeted
 
 '''
 1   getty
-2   shutterstock
+2   shutterstock - IP
 3   adobe
 4   istock
-5   pexels
+5   pexels - all wandering?
 6   unsplash
-7   pond5
+7   pond5 - all wandering?
 8   123rf
-9   alamy - WIP
-10  visualchinagroup - done
-11	picxy - done
-12	pixerf - done
-13	imagesbazaar - done
-14	indiapicturebudget - done
-15	iwaria - done
-16	nappy  - done
-17	picha - done
+9   alamy
+10  visualchinagroup
+11	picxy
+12	pixerf
+13	imagesbazaar
+14	indiapicturebudget
+15	iwaria
+16	nappy 
+17	picha
 18	afripics
 '''
 # I think this only matters for IS_FOLDER mode, and the old SQL way
@@ -105,8 +132,8 @@ POSE_ID = 0
 # folder doesn't matter if IS_FOLDER is False. Declared FAR below. 
 # MAIN_FOLDER = "/Volumes/RAID54/images_shutterstock"
 # MAIN_FOLDER = "/Volumes/SSD4/images_adobe"
-# MAIN_FOLDER = "/Volumes/SSD4green/images_adobe"
-MAIN_FOLDER = "/Volumes/OWC4/segment_images/images_adobe"
+MAIN_FOLDER = "/Volumes/SSD4green/images_adobe"
+# MAIN_FOLDER = "/Volumes/OWC4/segment_images/images_shutterstock"
 # MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/afripics_v2/images"
 
 # MAIN_FOLDER = "/Volumes/SSD4/images_getty_reDL"
@@ -126,7 +153,7 @@ IS_SSD=True
 # for silence, start at 103893643
 # for HDD topic, start at 28714744
 BODYLMS = True
-REDO_BODYLMS_3D = True
+REDO_BODYLMS_3D = True # this makes it skip hands and YOLO
 HANDLMS = True
 TOPIC_ID = None
 # TOPIC_ID = [24, 29] # adding a TOPIC_ID forces it to work from SegmentBig_isface, currently at 7412083
@@ -1028,13 +1055,30 @@ def process_image_enc_only(task):
         print(e)
 
 def process_image_find_body_subroutine(image_id, image, bbox):
-    is_body = body_landmarks = face_height = nose_pixel_pos = None
+    is_body = body_landmarks = body_world_landmarks = n_landmarks = face_height = nose_pixel_pos = None
     # Check if body landmarks are already in the normalized collection
     existing_norm = bboxnormed_collection.find_one({"image_id": image_id})
-    if existing_norm and not REDO_BODYLMS_3D:
-        print(f"Normalized landmarks already exist for image_id: {image_id}")
+    existing_worldbody = body_world_collection.find_one({"image_id": image_id})
+    existing_body = mongo_collection.find_one({"image_id": image_id})
+    if existing_norm is not None: n_landmarks = pickle.loads(existing_norm["nlms"])
+    if existing_body is not None and "body_landmarks" in existing_body: 
+        try:
+            # this is to check to see if there are body lms, or if it is just face lms
+            body_landmarks = pickle.loads(existing_body["body_landmarks"])
+        except:
+            print("no body_landmarks", image_id)
+    if existing_worldbody is not None and "body_world_landmarks" in existing_worldbody: 
+        body_world_landmarks = pickle.loads(existing_worldbody["body_world_landmarks"])
+    if VERBOSE:
+        print("n_landmarks", image_id, n_landmarks)
+        print("body_landmarks", image_id,  body_landmarks)
+        print("body_world_landmarks", image_id, body_world_landmarks)
+    if None not in (body_landmarks, body_world_landmarks, n_landmarks, bbox):
+        print(f"body_landmarks, body_world_landmarks, n_landmarks already exist for image_id: {image_id}")
         is_body = True
-        n_landmarks = pickle.loads(existing_norm["nlms"])
+    elif None not in (body_landmarks, body_world_landmarks) and None in (n_landmarks, bbox):
+        print(f"body_landmarks, body_world_landmarks BUT NO BBOX SO NO NLMS already exist for image_id: {image_id}")
+        is_body = True
     else:
         # existing_worldbody = body_world_collection.find_one({"image_id": image_id})
         # print("existing_worldbody", existing_worldbody)
@@ -1060,6 +1104,10 @@ def process_image_find_body_subroutine(image_id, image, bbox):
         else:
             print("No body landmarks found")
             n_landmarks = None
+    if VERBOSE:
+        print("n_landmarks", image_id, n_landmarks)
+        print("body_landmarks", image_id,  body_landmarks)
+        print("body_world_landmarks", image_id, body_world_landmarks)
     return is_body, n_landmarks, body_landmarks, body_world_landmarks, face_height, nose_pixel_pos
 
 def process_image_normalize_object_bbox(bbox_dict, nose_pixel_pos, face_height, image_shape):
@@ -1115,14 +1163,50 @@ def process_image_hands_subroutine(image_id, image):
 def save_body_hands_mysql_and_mongo(session, image_id, image, bbox_dict, body_landmarks, body_world_landmarks, n_landmarks, hue_bb, lum_bb, sat_bb, val_bb, lum_torso_bb, hue, lum, sat, val, lum_torso, is_left_shoulder, is_right_shoulder, selfie_bbox, is_body, mongo_body_landmarks, is_hands, update_hand, hand_landmarks, pose, is_feet):
     # if REDO_BODYLMS_3D, it will only add body_world_landmarks to mongo and updated SQL mongo_body_landmarks_3D and is_feet
     # to add in 0's so these don't reprocesses repeatedly
-    if is_body is None: is_body = False
-    if is_hands is None: is_hands = False
-    if is_feet is None: is_feet = False
-    if body_world_landmarks is not None: mongo_body_landmarks_3D = True
-    else: mongo_body_landmarks_3D = False
+    
+    if body_world_landmarks is not None:
+    # Catches the landmarks
+        mongo_body_landmarks_3D = True
+        # for landmark in body_world_landmarks.landmark:
+        #     # Do something with the landmark coordinates
+        #     print(landmark.x, landmark.y)
+    else:
+        print("No body_world_landmarks detected.", body_world_landmarks)
+        mongo_body_landmarks_3D = False
+
+
+    #   print("save_body_hands_mysql_and_mongo body_world_landmarks", body_world_landmarks)
+    # world_body_landmarks is a landmark list. test to see if it is none or has values:
+    # if body_world_landmarks is not None:
+    #     print("body_world_landmarks is not None")
+    #     if body_world_landmarks.landmark:
+    #         print("body_world_landmarks.landmark is not None")
+    #         if len(body_world_landmarks.landmark) > 0:
+    #             mongo_body_landmarks = True
+    #             print("body_world_landmarks.landmark has values")
+    #         else:
+    #             mongo_body_landmarks = False
+    #             print("body_world_landmarks.landmark has no values")
+    #     else:
+    #         mongo_body_landmarks = False
+    #         print("body_world_landmarks.landmark is None")
+
+
+    if is_body is None or is_body is False: 
+        is_body = False 
+        mongo_body_landmarks = False
+    else: 
+        is_body = True
+        mongo_body_landmarks = True
+    if is_hands is None or is_hands is False: is_hands = False
+    else: is_hands = True
+    if is_feet is None or is_feet is False: is_feet = False
+    else: is_feet = True
+    # if body_world_landmarks is not None: mongo_body_landmarks_3D = True
+    # else: mongo_body_landmarks_3D = False
 
     print("going to save", image_id, "is_body", is_body, "is_hands", is_hands, "is_feet", is_feet, "mongo_body_landmarks", mongo_body_landmarks, "mongo_body_landmarks_3D", mongo_body_landmarks_3D)
-    if not mongo_body_landmarks and not REDO_BODYLMS_3D:
+    if mongo_body_landmarks is not None and not REDO_BODYLMS_3D:
         # skip this if REDO_BODYLMS_3D
         # get encoding_id for mongo insert_one
         encoding_id_results = session.query(Encodings.encoding_id).filter(Encodings.image_id == image_id).first()
@@ -1288,6 +1372,22 @@ def save_body_hands_mysql_and_mongo(session, image_id, image, bbox_dict, body_la
     }, synchronize_session=False)
 
 
+    # # store image_id in NMLImages table - is_nml_db is boolean. 0 means mac, 1 means nml pc db
+    if io.platform == "darwin": is_nml_db = 0
+    else: is_nml_db = 1
+    existing_NML_entry = session.query(NMLImages).filter_by(image_id=image_id).first()
+    if not existing_NML_entry:
+        print("   #########    new image, not in NML results_dict: ", image_id)
+        try:
+            new_NML_entry = NMLImages(image_id=image_id, is_nml_db=is_nml_db)
+            session.add(new_NML_entry)
+            session.commit()
+        except:
+            print("failed to store wandering image,", image_id)
+    else:
+        if VERBOSE: print(f"Entry already exists for image_id: {image_id}")
+        pass
+
     
     # Check if the current batch is ready for commit
     # if total_processed % BATCH_SIZE == 0:
@@ -1314,7 +1414,7 @@ def find_and_save_body(image_id, image, bbox, mongo_body_landmarks, hand_landmar
         is_body, n_landmarks, body_landmarks, body_world_landmarks, face_height, nose_pixel_pos = process_image_find_body_subroutine(image_id, image, bbox)
         if body_landmarks is not None:
             is_feet = check_is_feet(body_landmarks)
-        if VERBOSE: print("is_feet", is_feet)
+        if VERBOSE: print("is_feet", image_id, is_feet)
 
         if face_height and not REDO_BODYLMS_3D:
             # only do this when there is a face. skip for no face -body reprocessing
@@ -1343,9 +1443,9 @@ def find_and_save_body(image_id, image, bbox, mongo_body_landmarks, hand_landmar
             selfie_bbox=sort.get_selfie_bbox(segmentation_mask)
             if VERBOSE: print("selfie_bbox",selfie_bbox)
         elif REDO_BODYLMS_3D:
-            print("got 3D bodylms in a DOOVER, skipped the rest")
+            print("got 3D bodylms in a DOOVER, skipped the rest", image_id)
         else:
-            print("no face, skipping object detection, just did the body, all values already are set to None")
+            print("no face, skipping object detection, just did the body, all values already are set to None", image_id)
     elif BODYLMS and mongo_body_landmarks:
         # this was for some error handling. to handle exisitin mongo_body_landmarks will require refactoring
         print("doing body, mongo_body_landmarks is not None", mongo_body_landmarks)
@@ -1364,7 +1464,7 @@ def find_and_save_body(image_id, image, bbox, mongo_body_landmarks, hand_landmar
     for _ in range(io.max_retries):
         try:
             # try to save using function:
-            if VERBOSE: print("saving body and hands")
+            if VERBOSE: print("saving body and hands", image_id, "is_body", is_body, "is_hands", is_hands, "is_feet", is_feet)
             save_body_hands_mysql_and_mongo(session, image_id, image, bbox_dict, body_landmarks, body_world_landmarks, n_landmarks, hue_bb, lum_bb, sat_bb, val_bb, lum_torso_bb, hue, lum, sat, val, lum_torso, is_left_shoulder, is_right_shoulder, selfie_bbox, is_body, mongo_body_landmarks, is_hands, update_hand, hand_landmarks, pose, is_feet)
             if VERBOSE: print("saved body and hands")
             # if sql hiccups it will try again, if not, it will hit break on next line
@@ -1401,6 +1501,34 @@ def process_image_bodylms(task):
     hand_landmarks = None
     # is_body = False
 
+    # check if the image exists in mongo_3D collection?
+    # prob need to check hands too
+    # if REDO_BODYLMS_3D:
+    #     existing_world_landmarks = body_world_collection.find_one({"image_id": image_id})
+    #     if existing_world_landmarks:
+    #         print(f"Image already processed: {image_id}")
+    #         return
+    #         # set Encodings.mongo_body_landmarks_3D to True
+    #         session.query(Encodings).filter(Encodings.image_id == image_id).update({
+    #             Encodings.mongo_body_landmarks_3D: True
+    #         }, synchronize_session=False)
+    #         session.query(SegmentTable).filter(SegmentTable.image_id == image_id).update({
+    #             SegmentTable.mongo_body_landmarks_3D: True
+    #         }, synchronize_session=False)
+    #         session.commit()
+    #         print(f"Image {image_id} already processed, skipping further processing.")
+    #         # Close the session and dispose of the engine before the worker process exits
+    #         close_mongo()
+    #         close_session()
+    #         # collect_the_garbage()
+    #         if 'image' in locals():
+    #             del image
+    #         gc.collect()            
+
+    #         # If the image is already processed, skip further processing
+    #         close_mongo()
+    #         close_session()
+    #         return
     try:
         image = cv2.imread(cap_path)        
         # this is for when you need to move images into a testing folder structure

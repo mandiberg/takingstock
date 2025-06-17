@@ -23,6 +23,8 @@ import pymongo
 from mp_sort_pose import SortPose
 from mp_db_io import DataIO
 
+# this was used to export all the images in a segment cluster,not just the ones that made it into the final selection
+
 VIDEO = False
 CYCLECOUNT = 1
 
@@ -1172,7 +1174,7 @@ def merge_inpaint(inpaint_image,img,extended_img,extension_pixels,selfie_bbox,bl
     try: 
         selfie_top, selfie_bottom, selfie_left, selfie_right = selfie_bbox["top"], selfie_bbox["top"]+height, selfie_bbox["left"],selfie_bbox["left"]+width
     except: 
-        print("selfie_bbox is None, returning None,None")
+        print(f"selfie_bbox is None, or problem with img.shape[:2]: {img.shape[:2]} returning None,None")
         return None, None
     # test to see if top strip is consistent -- eg a seamless background
     area = [0,selfie_top],[0,width]
@@ -1244,7 +1246,8 @@ def merge_inpaint(inpaint_image,img,extended_img,extension_pixels,selfie_bbox,bl
         mask=mask-mask_top_invert
         mask = np.where(mask < 0, 0, mask) # zero out any negative numbers
     elif not is_inpaint_UL_consistent and not is_inpaint_top_consistent:
-        return None, None
+        print("is_inpaint_UL_consistent and is_inpaint_top_consistent are both false, SKIPPING returning None")
+        # return None, None
     # increase the white values by 4x, while keeping the black at 0
     # did this get lost???????
     
@@ -1389,6 +1392,9 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
                 # print("extended_img shape after transform",np.shape(extended_img))                
                 if SAVE_IMG_PROCESS: cv2.imwrite(inpaint_file+"4_premerge.jpg",inpaint_image)
                 premerge = inpaint_image
+
+                # transform the dimensions of inpaint_image to match the extended_img
+                inpaint_image = cv2.resize(inpaint_image, (np.shape(extended_img)[1],np.shape(extended_img)[0]))
 
                 ### use inpainting for the extended part, but use original for non extend to keep image sharp ###
                 # inpaint_image[extension_pixels["top"]:extension_pixels["top"]+np.shape(img)[0],extension_pixels["left"]:extension_pixels["left"]+np.shape(img)[1]]=img

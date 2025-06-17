@@ -12,6 +12,7 @@ from mp_db_io import DataIO
 io = DataIO()
 SORT_ORDER = "Chronological"
 ROOT_FOLDER_PATH = '/Volumes/OWC4/segment_images'
+# this script looks through folders inside this folder, so put all images inside a subfolder in this folder:
 FOLDER_NAME = "cluster13_2_1417"
 FOLDER_PATH = os.path.join(ROOT_FOLDER_PATH,FOLDER_NAME)
 

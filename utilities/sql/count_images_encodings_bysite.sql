@@ -654,8 +654,8 @@ JOIN
 JOIN 
     ImagesHandsGestures ihg ON ihg.image_id = so.image_id
 JOIN ImagesTopics it ON it.image_id = so.image_id
-WHERE ihp.cluster_id = 22
-AND ihg.cluster_id = 24
+WHERE ihp.cluster_id = 24
+AND ihg.cluster_id = 99
 GROUP BY 
     it.topic_id  -- Group by ImagesHandsPoses cluster_id to create rows
 ORDER BY 
