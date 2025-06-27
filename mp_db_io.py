@@ -215,18 +215,31 @@ class DataIO:
             writer=csv.writer(csvfile, delimiter=',')
             writer.writerow(value_list)
 
-    def get_img_list(self, folder, sort=True):
+    def save_img_list(self, folder):
         img_list = []
-        for count, file in enumerate(os.listdir(folder)):
-            if not file.startswith('.') and os.path.isfile(os.path.join(folder, file)):
-                if not file.endswith(('.csv', '.txt', '.json')):
-                    filepath = os.path.join(folder, file)
-                    filepath = filepath.replace('\\', '/')
-                    img_list.append(file)
-        if sort is True:
+        print("Saving image list for folder:", folder)
+        for root, dirs, files in os.walk(folder):
+            filtered = [
+                f.replace('\\', '/')
+                for f in files
+                if not f.startswith('.') and not f.endswith(('.csv', '.txt', '.json'))
+            ]
+            img_list.extend(filtered)
+        json_path = os.path.join(folder, 'img_list.json')
+        with open(json_path, 'w') as f:
+            json.dump(img_list, f)
+        print(f"Image list saved to {json_path}")
+        return img_list
+
+    def get_img_list(self, folder, sort=True):
+        json_path = os.path.join(folder, 'img_list.json')
+        if os.path.exists(json_path):
+            with open(json_path, 'r') as f:
+                img_list = json.load(f)
+        else:
+            img_list = self.save_img_list(folder)
+        if sort:
             img_list.sort()
-        # if self.VERBOSE:print(len(img_list))
-        # if self.VERBOSE:print("got image list")
         return img_list
 
     def get_existing_image_ids_from_wavs(self,folder):

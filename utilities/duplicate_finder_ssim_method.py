@@ -8,15 +8,17 @@ import time
 from skimage.metrics import structural_similarity as ssim
 
 # Constants for the folder path and settings
-BASE_FOLDER_PATH = '/Volumes/OWC4/segment_images/Topic25_p24_g112_May12build'
-DEDUPE_FOLDER = 'dedupe_folder'
+BASE_FOLDER_PATH = '/Volumes/OWC4/images_to_assemble/'
+DEDUPE_FOLDER = 'Topic11_video_starttest'
 CLUSTER_FOLDER = os.path.join(BASE_FOLDER_PATH, DEDUPE_FOLDER)
-FOLDER_LIST = [f for f in os.listdir(CLUSTER_FOLDER) if not f.startswith('.') and not f.endswith('.csv')]
+FOLDER_LIST = [f for f in os.listdir(CLUSTER_FOLDER) if not f.startswith('.') and not f.endswith('.csv') and not f.endswith('.jpg')]
 print(FOLDER_LIST)
   # Base folder path change to your path
 
 THRESHOLD = 0.9  # Similarity threshold to use for SSIM comparison
 TARGET_SIZE = (128, 128)  # Size to temporarily resize images for comparison
+
+MOVE_ORIGINAL_INTO_DUPES = True  # Set to True to move the original image into the duplicates folder
 
 def calculate_ssim(image1, image2):
     """Calculate the SSIM between two images."""
@@ -87,10 +89,23 @@ def organize_duplicates_from_csv(csv_output, folder_path):
         for row in reader:
             original_image = row['Original Image']
             duplicates = row['Duplicate Image'].split(', ')  # Split duplicates into a list
-            
-            # Create a subfolder for the original image
-            original_name = os.path.splitext(os.path.basename(original_image))[0]
-            subfolder_path = os.path.join(folder_path, f"{original_name}_duplicates")
+
+
+            # dupefolder = "duplicates"  # Folder name for duplicates
+            # if MOVE_ORIGINAL_INTO_DUPES:
+            #     # Create a subfolder for the original image
+            #     original_name = os.path.splitext(os.path.basename(original_image))[0]
+            #     subfolder_path = os.path.join(folder_path, dupefolder, f"{original_name}_duplicates")  # Use a single duplicates folder
+            # else:
+            #     subfolder_path = os.path.join(folder_path, dupefolder)  # Use a single duplicates folder
+
+
+            # # Create a subfolder for the original image
+            # original_name = os.path.splitext(os.path.basename(original_image))[0]
+            # subfolder_path = os.path.join(folder_path, f"{original_name}_duplicates")
+
+            subfolder_path = os.path.join(CLUSTER_FOLDER, 'duplicates', os.path.basename(folder_path))  # Use a single duplicates folder
+            # subfolder_path = os.path.join(folder_path, 'duplicates')  # Use a single duplicates folder
             os.makedirs(subfolder_path, exist_ok=True)
 
             for duplicate in duplicates:

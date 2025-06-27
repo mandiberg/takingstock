@@ -72,10 +72,11 @@ IS_HAND_POSE_FUSION = True # do we use fusion clusters
 ONLY_ONE = False # only one cluster, or False for video fusion, this_cluster = [CLUSTER_NO, HAND_POSE_NO]
 GENERATE_FUSION_PAIRS = False # if true it will query based on MIN_VIDEO_FUSION_COUNT and create pairs
                                 # if false, it will grab the list of pair lists below
-MIN_VIDEO_FUSION_COUNT = 500
+MIN_VIDEO_FUSION_COUNT = 300
 LIMIT = 50000 # this is the limit for the SQL query
 MIN_CYCLE_COUNT = 10
 IS_CLUSTER = False
+USE_POSE_CROP_DICT = True
 if IS_HAND_POSE_FUSION:
     if SORT_TYPE in ["planar_hands", "fingertips_positions", "128d"]:
         # first sort on HandsPositions, then on HandsGestures
@@ -115,9 +116,10 @@ ONLY_KIDS = False
 USE_PAINTED = True
 OUTPAINT = False
 INPAINT= True
-INPAINT_COLOR = "white" # "white" or "black" or None
+INPAINT_COLOR = "white" # "white" or "black" or None (none means generative inpainting with size limits)
 INPAINT_MAX_SHOULDERS = {"top":.4,"right":.15,"bottom":.2,"left":.15}
-if INPAINT_COLOR: INPAINT_MAX_SHOULDERS = INPAINT_MAX = {"top":3.4,"right":3.4,"bottom":3.075,"left":3.4}
+# if INPAINT_COLOR: INPAINT_MAX_SHOULDERS = INPAINT_MAX = {"top":3.4,"right":3.4,"bottom":3.075,"left":3.4}
+if INPAINT_COLOR: INPAINT_MAX_SHOULDERS = INPAINT_MAX = {"top":10,"right":10,"bottom":10,"left":10}
 else: INPAINT_MAX = {"top":.4,"right":.4,"bottom":.075,"left":.4}
 OUTPAINT_MAX = {"top":.7,"right":.7,"bottom":.2,"left":.7}
 
@@ -139,11 +141,11 @@ IS_TOPICS = True
 N_TOPICS = 64 # changing this to 14 triggers the affect topic fusion
 
 IS_ONE_TOPIC = False
-TOPIC_NO = [25] # if doing an affect topic fusion, this is the wrapper topic
+TOPIC_NO = [11] # if doing an affect topic fusion, this is the wrapper topic
 # groupings of affect topics
 NEG_TOPICS = [0,1,3,5,8,9,13]
 POS_TOPICS = [4,6,7,10,11,12]
-NEUTRAL_TOPICS = [2]
+NEUTRAL_TOPICS = [16]
 AFFECT_GROUPS_LISTS = [NEG_TOPICS, POS_TOPICS, NEUTRAL_TOPICS]
 USE_AFFECT_GROUPS = False
 
@@ -161,8 +163,8 @@ USE_AFFECT_GROUPS = False
 # 7 is surprise
 #  is yoga << planar,  planar,  fingers crossed
 
-ONE_SHOT = False # take all files, based off the very first sort order.
-EXPAND = False # expand with white, as opposed to inpaint and crop
+ONE_SHOT = True # take all files, based off the very first sort order.
+EXPAND = False # expand with white for prints, as opposed to inpaint and crop. (not video, which is controlled by INPAINT_COLOR) 
 JUMP_SHOT = True # jump to random file if can't find a run (I don't think this applies to planar?)
 USE_ALL = False # this is for outputting all images from a oneshot, forces ONE_SHOT
 DRAW_TEST_LMS = False # this is for testing the landmarks
@@ -194,9 +196,41 @@ if not GENERATE_FUSION_PAIRS:
         # # [19, 95], 
         # [9, 2], [9, 13],
         # [8, 13], [19, 66], [19, 95], [21, 116], [24, 13]
+        # from fusion analysis
+        # [19, 66], [8, 13], [29, 37], [17, 22], [19, 9], [4, 49], [6, 22], [6, 122], [21, 116], [24, 113], [26, 47], [26, 67]
 
-        # T47 handsome
-        # [5,104], [4,124], [10,62], [21,116], [7,57], [5,121], [5,60]
+
+        # T34 achieve scream
+        # [30,6],[30,55],[30,81],[6,81],[15,38],[30,28],[15,28],[30,53],[15,53],[15,37],[30,110],[6,115],[1,113],[6,38],[21,72],[15,25],[15,92],[15,55],[6,6],[30,38],[30,37],[6,37]
+        #T1 outside, think
+        # [21,73]
+        #T9 make up
+        # [24,112]
+        # T 15 muscl	romant
+        # [6, 122], [16, 101]
+        #T16 food
+        # [1, 4],[16, 69]
+        #T23 depressed
+        # [21, 30], [9, 109]
+        #T32 shock suprise
+        # [13, 109],        [13, 24],        [13, 85]
+        # [1, 125], [25, 125], [15, 37], [15, 91], [13, 116], [30, 37], [1, 65]
+        #T35 skin care
+        # [24, 51],[21, 13],[13, 118]
+        #T59 Xmas
+        # [8, 90],[8, 105],[23, 45],[16, 28],[22, 63],
+        #T63 second
+        # [8, 57],[22, 27]
+
+        #T11 Business semi-unique
+        # [25,64], [14,45], [23,47], [7,120], [12,33], [7,105], [26,10], [23,80], [12,100], [21,126], [7,64], [8,41], [7,57], [8,64], [12,19], [23,10], [12,24], [7,51], [12,118], [12,27], [12,93], [2,80], [23,110], [5,60], [26,60], [26,31], [23,45], [21,58], [16,110], [14,28], [14,110], [1,56], [21,5], [17,22], [7,54], [1,64], [18,8], [8,105], [8,90], [8,57], [7,41], [22,27], [13,106], [22,33], [7,1], [1,4], [14,86], [11,48], [18,29], [16,10], [20,102], [3,94], [8,54], [11,71], [6,81], [10,31], [30,86]
+        #T22 finger point semi-unique
+        # [30,36], [30,111], [30,114], [15,35], [1,29], [6,98], [6,78], [14,114], [13,71], [1,8], [18,99], [15,111], [30,89], [30,98], [1,123], [11,106], [11,33], [30,77], [15,78], [1,42], [15,74], [14,10], [16,114], [14,9], [6,74], [3,114], [30,78], [21,48], [18,40], [15,114], [24,70], [30,9], [11,108], [30,94], [24,56], [14,60], [28,19], [15,89], [24,64], [21,99], [16,86], [15,9], [22,15], [21,15], [13,48], [6,36], [8,111], [10,99], [4,48], [10,8], [30,74], [18,123], [11,17], [21,8], [1,54], [15,98], [15,115], [22,19], [30,10], [24,54], [30,115], [6,72], [1,99], [15,22], [1,56], [30,44], [3,77], [16,44], [15,86], [30,46], [21,83], [21,52], [15,55], [31,25], [18,8], [11,48], [6,115], [11,71], [18,29], [1,64], [20,102], [3,94], [21,72], [6,22], [30,55], [14,86], [30,86], [16,101], [22,33], [16,10], [8,54], [2,44], [10,31]
+        #T22 finger point semi-unique TEST
+        # [1,8],[1,56],[6,22],[14,9],[14,86],[20,102]
+        # T47 handsome semi-unique
+        # [21,84],[21,96],[21,18],[29,32],[21,14],[1,119],[16,6],[5,47],[21,103],[13,27],[16,85],[12,75],[11,127],[21,40],[21,81],[25,59],[7,57],[5,60],[12,24],[12,19],[12,27],[26,60],[15,38],[21,52],[30,74],[8,64],[21,58],[2,80],[21,5],[12,118],[18,123],[6,72],[23,10],[15,115],[30,10],[16,28],[21,83],[11,17],[30,115],[23,110],[12,93],[21,8],[7,51],[30,6],[16,110],[21,73],[1,54],[24,54],[15,98],[15,22],[30,81],[3,77],[22,19],[10,75],[21,30],[14,110],[15,91],[31,25],[14,28],[13,109],[26,31],[1,113],[30,38],[15,86],[16,44],[30,46],[30,44],[18,8],[6,115],[13,106],[7,54],[21,72],[11,48],[1,4],
+        [22,27],[1,64],[20,102],[15,37],[8,57],[18,29],[30,55],[6,122],[6,22],[8,105],[3,94],[7,41],[10,31],[11,71],[7,1],[16,10],[22,33],[14,86],[6,81],[16,101],[8,90],[8,54],[24,4],[30,37],[2,44],[13,116],[30,86]
 
         # Topic 22 Finger
         # [24,99] #silence finger
@@ -207,11 +241,11 @@ if not GENERATE_FUSION_PAIRS:
         # [13, 103], [21, 97] 
         # topic 25 beauty for video blur
         # face frame
-        [13, 76],  [21, 0], [21, 116],
+        # [13, 76],  [21, 0], [21, 116],
         # glasses
-        [21, 58], [21, 84], [21,52],
+        # [21, 58], [21, 84], [21,52],
         # hand to chin
-        [24, 126]
+        # [24, 126]
 
         # topic 35 skin care, 750plus selects
         # [21, 0]
@@ -239,6 +273,8 @@ if not GENERATE_FUSION_PAIRS:
 
         # topic 25 beauty, right hand to face
         # [24, 4], [24, 11], [24, 13], [24, 23], [24, 42], [24, 51], [24, 57], [24, 97], [24, 99], [24, 112], [24, 113], [24, 119], [24, 126]
+        # June 24 semi-unique
+        # [10,75],[4,49],[7,1],[7,54],[13,106],[7,41]
 
         #depressed topic 23
         # [12,79], [13,106], [13,109], [13,117], [13,2], [13,55], [13,76], [14,45], [14,69], [15,92], [16,110], [21,0], [21,103], [21,109], [21,112], [21,113], [21,116], [21,118], [21,126], [21,13], [21,14], [21,18], [21,2], [21,30], [21,43], [21,52], [21,5], [21,68], [21,73], [21,76], [21,81], [21,83], [21,84], [21,87], [21,97], [24,113], [24,119], [24,11], [24,126], [24,13], [7,57], [9,109], [9,30], [9,68], [9,6], [9,97]
@@ -404,7 +440,8 @@ elif IS_SEGONLY and io.platform == "darwin":
         elif VISIBLE_HAND_RIGHT: 
             WHERE += f" AND {this_seg}.is_bodyhand_right = 1 AND {this_seg}.is_bodyhand_left = 0 "
     if FULL_BODY:
-        WHERE += " AND s.is_feet = 1 "
+        if "Encodings" not in FROM: FROM += f" JOIN Encodings e ON s.image_id = e.image_id "
+        WHERE += " AND e.is_feet = 1 "
     if NO_KIDS:
         WHERE += " AND s.age_id NOT IN (1,2,3) "
     if ONLY_KIDS:
@@ -512,25 +549,33 @@ motion = {
 face_height_output = 1000
 # face_height_output = 250
 
-# define ratios, in relationship to nose
+# define crop ratios, in relationship to nose
 # units are ratio of faceheight
 # top, right, bottom, left
-    # image_edge_multiplier = [1, 1, 1, 1] # just face
-    # image_edge_multiplier = [1.5,1.5,2,1.5] # bigger portrait
-    # image_edge_multiplier = [1.5,1.33, 2.5,1.33] # bigger 2x3 portrait
-    # image_edge_multiplier = [1.4,2.6,1.9,2.6] # wider for hands
-    # image_edge_multiplier = [3,5,3,5] # megawide for testing
-    # image_edge_multiplier = [1.4,3.3,3,3.3] # widerest 16:10 for hands -- actual 2:3
-    # image_edge_multiplier = [1.3,3.4,2.9,3.4] # slightly less wide 16:10 for hands < Aug 27
-    # image_edge_multiplier = [1.3,2,2.9,2] # portrait crop for paris photo images < Aug 30
-    # image_edge_multiplier = [1.3,2,2.7,2] # square crop for paris photo videos < Sept 16
+pose_crop_dict = {
+    0: 6, 1: 1, 2: 5, 3: 2, 4: 1, 5: 7, 6: 2, 7: 5, 8: 5, 9: 2, 10: 3, 11: 1, 12: 5, 13: 1, 14: 0,
+    15: 2, 16: 1, 17: 8, 18: 4, 19: 9, 20: 2, 21: 1, 22: 4, 23: 0, 24: 1, 25: 2, 26: 5, 27: 6, 28: 1, 29: 2,
+    30: 1, 31: 2
+}
+multiplier_list = [
+    [1.5,3,3.3,3], # 0 2x3 but go lower
+    [1.3,1.85,2.4,1.85], # 1 SQ
+    [1.5,3,2.5,3], # 2 # 2x3 landscape 2025
+    [1.5,2,4.5,2], # 3 # 3x2 portrait 2025
+    [1.5,2.5,2.6,2.5], # 4 # 4x5 landscape 2025
+    [1.5,2,3.5,2], # 5 # 5x4 portrait 2025
+    [1.3,1.85,2.4,1.85], # 6 -- placeholder to test if SQ
+    [1.5,2,4.5,2], # 7 ~6x2 full length portrait 2025 
+    [3.5,2.6,3.5,2.6], # 8 arms raised 2025 
+    [1.5,3.5,5.5,3.5], # 9 seated lotus
+    [3.5,3.5,5.5,3.5] # 9 seated lotus
+]
+# initializing default square crop
 image_edge_multiplier = [1.3,1.85,2.4,1.85] # tighter square crop for paris photo videos < Oct 29 FINAL VERSION NOV 2024 DO NOT CHANGE
+    # image_edge_multiplier = [1.4,2.6,1.9,2.6] # wider for hands (2023 finger point)
 # image_edge_multiplier = [1.4,3.5,5.6,3.5] # yoga square crop for April 2025 videos < 
-    # image_edge_multiplier = [1.6,3.84,3.2,3.84] # wiiiiiiiidest 16:10 for hands
-    # image_edge_multiplier = [1.45,3.84,2.87,3.84] # wiiiiiiiidest 16:9 for hands
-    # image_edge_multiplier = [1.2,2.3,1.7,2.3] # medium for hands
-# image_edge_multiplier = [1.2, 1.2, 1.6, 1.2] # standard portrait
 # sort.max_image_edge_multiplier is the maximum of the elements
+
 UPSCALE_MODEL_PATH=os.path.join(os.getcwd(), "models", "FSRCNN_x4.pb")
 # construct my own objects
 sort = SortPose(motion, face_height_output, image_edge_multiplier,EXPAND, ONE_SHOT, JUMP_SHOT, HSV_BOUNDS, VERBOSE,INPAINT, SORT_TYPE, OBJ_CLS_ID,UPSCALE_MODEL_PATH=UPSCALE_MODEL_PATH,TSP_SORT=TSP_SORT)
@@ -576,6 +621,8 @@ start_site_image_id = None
 # for PFP
 # start_img_name = "start_face_encodings"
 # start_site_image_id = [-0.13242901861667633, 0.09738104045391083, 0.003530653193593025, -0.04780442640185356, -0.13073976337909698, 0.07189705967903137, -0.006513072177767754, -0.051335446536540985, 0.1768932193517685, -0.03729865700006485, 0.1137416809797287, 0.13994133472442627, -0.23849385976791382, -0.08209677785634995, 0.06067033112049103, 0.07974598556756973, -0.1882513463497162, -0.24926315248012543, -0.011344537138938904, -0.10508193075656891, 0.010317208245396614, 0.06348179280757904, 0.02852417528629303, 0.06981766223907471, -0.14760875701904297, -0.34729471802711487, -0.014949701726436615, -0.09429284185171127, 0.08592978119850159, -0.11939340829849243, 0.04517041891813278, 0.06180906295776367, -0.1773814857006073, 0.011621855199337006, 0.010536111891269684, 0.12963438034057617, -0.07557092607021332, 0.0027374476194381714, 0.2890719771385193, 0.0692337155342102, -0.17323020100593567, 0.0724603682756424, 0.021229337900877, 0.361629843711853, 0.250482439994812, 0.021974680945277214, 0.018878426402807236, -0.022722169756889343, 0.09668144583702087, -0.29601603746414185, 0.11375367641448975, 0.2568872570991516, 0.11404240131378174, 0.04999732971191406, 0.02831254154443741, -0.15830034017562866, -0.031099170446395874, 0.028748074546456337, -0.180643692612648, 0.13169123232364655, 0.058790236711502075, -0.0858338251709938, 0.029470380395650864, -0.002784252166748047, 0.2532877027988434, 0.07375448942184448, -0.11085735261440277, -0.12285713106393814, 0.11346398293972015, -0.19246435165405273, -0.1447266787290573, 0.054258447140455246, -0.1335202157497406, -0.1264294683933258, -0.23741140961647034, 0.07753928005695343, 0.3753989636898041, 0.08984167128801346, -0.18434450030326843, 0.042485352605581284, -0.08978638052940369, -0.03871896490454674, 0.06451354175806046, 0.08044029772281647, -0.11364202201366425, -0.1158837378025055, -0.10755209624767303, 0.044953495264053345, 0.2573489546775818, 0.049939051270484924, -0.07680445909500122, 0.20810386538505554, 0.09711501002311707, 0.05330953001976013, 0.08986716717481613, 0.0984266921877861, -0.036112621426582336, -0.011795245110988617, -0.15438663959503174, -0.027118921279907227, -0.012514196336269379, -0.11667540669441223, 0.04242435097694397, 0.13383115828037262, -0.18503828346729279, 0.19057676196098328, 0.017584845423698425, -0.005235005170106888, 0.010936722159385681, 0.08952657878398895, -0.1809171438217163, -0.07223983108997345, 0.16210225224494934, -0.264881432056427, 0.3121953308582306, 0.21528613567352295, 0.02137373574078083, 0.12006716430187225, 0.08322857320308685, 0.0802738219499588, -0.013485163450241089, 0.005497157573699951, -0.0893208310008049, -0.06330209970474243, 0.017513029277324677, -0.007281661033630371, 0.06451432406902313, 0.10179871320724487]
+# start_site_image_id = [-0.10581238567829132, 0.07088741660118103, 0.013263327069580555, -0.08114208281040192, -0.13992470502853394, 0.012888573110103607, -0.009552985429763794, -0.05837436020374298, 0.026127614080905914, 0.001093447208404541, 0.15341515839099884, 0.044287052005529404, -0.2721121311187744, -0.13441239297389984, -0.0026458948850631714, 0.11877364665269852, -0.15712828934192657, -0.1471686214208603, -0.10886535793542862, -0.09967300295829773, -0.011542147025465965, 0.0059587229043245316, -0.047813788056373596, 0.04775381088256836, -0.1761886328458786, -0.3028424084186554, -0.03370347619056702, -0.15713511407375336, 0.0005495026707649231, -0.1361989825963974, -0.015080012381076813, 0.025705486536026, -0.12947367131710052, -0.03306383639574051, 0.018395066261291504, 0.0488845556974411, -0.092781201004982, -0.1401013731956482, 0.15860462188720703, 0.08463308960199356, -0.14735937118530273, -0.009462594985961914, 0.08969609439373016, 0.30084139108657837, 0.2646666169166565, 0.036240506917238235, 0.06943795830011368, -0.026887238025665283, 0.1546226292848587, -0.23532000184059143, 0.08313022553920746, 0.1324366182088852, 0.11709924787282944, 0.08266870677471161, 0.05900813639163971, -0.20212897658348083, 0.10378697514533997, 0.057002242654561996, -0.29036426544189453, 0.057467326521873474, 0.027950018644332886, -0.12515060603618622, -0.10928650200366974, -0.020537540316581726, 0.20214180648326874, 0.09844112396240234, -0.14632004499435425, -0.11949113011360168, 0.11953604221343994, -0.19659164547920227, -0.08529043942689896, 0.018321029841899872, -0.12027868628501892, -0.17337237298488617, -0.2806975543498993, 0.08081948757171631, 0.3730350434780121, 0.24808505177497864, -0.23414771258831024, 0.015145592391490936, -0.059556588530540466, -0.029826462268829346, 0.1383151412010193, 0.14856243133544922, -0.05812269449234009, -0.06512188911437988, -0.11708509922027588, -0.02537207305431366, 0.11158326268196106, 0.013382695615291595, -0.06716612726449966, 0.19349130988121033, 0.04249662160873413, -0.045811235904693604, 0.07281351834535599, 0.06558635830879211, -0.19487519562244415, 0.01120009645819664, -0.013865187764167786, -0.09125098586082458, 0.11730070412158966, -0.1202155202627182, 0.03125461935997009, 0.08074315637350082, -0.12886971235275269, 0.21560832858085632, -0.00488397479057312, 0.0329570397734642, 0.0005348101258277893, -0.12098219245672226, -0.07969430088996887, -0.015188425779342651, 0.11801530420780182, -0.2579388916492462, 0.18724043667316437, 0.18778195977210999, 0.0005423035472631454, 0.15530824661254883, 0.13494034111499786, 0.05073530972003937, -0.027213752269744873, -0.024363964796066284, -0.15827980637550354, -0.08806312084197998, 0.039876870810985565, -0.03350042551755905, 0.12625662982463837, 0.010933175683021545]
+# start_site_image_id = [-0.19413329660892487, 0.12061071395874023, 0.05011634901165962, -0.08183299750089645, -0.07337753474712372, -0.01627560332417488, -0.0838925838470459, -0.08846378326416016, 0.050066739320755005, -0.04880788177251816, 0.2662230134010315, -0.005381084978580475, -0.2440241426229477, -0.07016980648040771, -0.032612159848213196, 0.14663562178611755, -0.12449649721384048, -0.07680836319923401, -0.16958947479724884, -0.041098661720752716, -0.032985441386699677, 0.08393426239490509, 0.06522658467292786, 0.027064107358455658, -0.0450870618224144, -0.2766939699649811, -0.09460555762052536, -0.020049870014190674, 0.18320757150650024, -0.07277096807956696, 0.03758329153060913, 0.020734600722789764, -0.16676828265190125, -0.008788809180259705, 0.06788013875484467, 0.14876432716846466, -0.05156975984573364, -0.08320155739784241, 0.23632089793682098, -0.03169070929288864, -0.14393861591815948, 0.007112100720405579, 0.039216622710227966, 0.24194732308387756, 0.20701384544372559, 0.014645536430180073, 0.00043237628415226936, -0.11287529766559601, 0.049542635679244995, -0.20981638133525848, 0.15882457792758942, 0.12680980563163757, 0.09500034153461456, 0.07604669779539108, 0.06692805886268616, -0.11759510636329651, 0.029098421335220337, 0.2152121663093567, -0.17994603514671326, 0.007263883948326111, 0.08920442312955856, -0.06217777729034424, -0.12775185704231262, -0.13567441701889038, 0.11721442639827728, 0.11643578112125397, -0.16315968334674835, -0.20449669659137726, 0.1373467743396759, -0.16275277733802795, -0.042377498000860214, 0.13762398064136505, -0.06410378217697144, -0.08502615243196487, -0.30058538913726807, 0.0696333795785904, 0.33976882696151733, 0.1762707233428955, -0.15098142623901367, 0.009935759007930756, 0.016703439876437187, -0.06178131699562073, 0.01687360554933548, 0.026908770203590393, -0.16367696225643158, -0.09296569228172302, -0.03673135116696358, 0.011298641562461853, 0.12101420015096664, 0.07616612315177917, -0.03630882874131203, 0.2021653950214386, 0.022061089053750038, 0.01185181736946106, 0.034367188811302185, 0.06430231779813766, -0.02623981237411499, -0.08930035680532455, -0.06906800717115402, -0.016731463372707367, 0.06791259348392487, -0.12447217106819153, 0.006740108132362366, 0.0978136956691742, -0.13495850563049316, 0.19274848699569702, -0.0044151246547698975, 0.05091022700071335, 0.116733118891716, 0.016980648040771484, -0.10611657053232193, -0.016641631722450256, 0.1956191062927246, -0.26104623079299927, 0.20304137468338013, 0.15483921766281128, 0.04521116614341736, 0.07446543127298355, 0.19201408326625824, 0.1501380205154419, -0.011784471571445465, 0.00905616581439972, -0.16708143055438995, -0.11018393188714981, 0.05920220538973808, -0.07374550402164459, 0.09465853869915009, 0.056482456624507904]
 
 # start_img_name = "start_bbox"
 # start_site_image_id = [94, 428, 428,0]
@@ -823,15 +870,15 @@ def sort_by_face_dist_NN(df_enc):
     # create emtpy df_sorted with the same columns as df_enc
     df_sorted = pd.DataFrame(columns = df_enc.columns)
 
-    # debugging -- will save full df_enc to csv
-    df_enc_outpath = os.path.join(sort.counter_dict["outfolder"],"df_enc.csv")
-    # write the dataframe df_enc to csv at df_enc_outpath
-    df_enc.to_csv(df_enc_outpath, index=False)
+    # # debugging -- will save full df_enc to csv
+    # df_enc_outpath = os.path.join(sort.counter_dict["outfolder"],"df_enc.csv")
+    # # write the dataframe df_enc to csv at df_enc_outpath
+    # df_enc.to_csv(df_enc_outpath, index=False)
 
 
     if sort.CUTOFF < len(df_enc.index): itters = sort.CUTOFF
     else: itters = len(df_enc.index)
-    
+    # print("sort_by_face_dist_NN itters is", itters, "sort.CUTOFF is", sort.CUTOFF)
 
     # input enc1, df_128_enc, df_33_lmsNN
     # df = pd.DataFrame(face_distances, columns =['dist', 'folder', 'filename','site_name_id','face_landmarks', 'bbox'])
@@ -856,7 +903,7 @@ def sort_by_face_dist_NN(df_enc):
         df_sorted=sort.do_TSP_SORT(df_enc)
     else:
         for i in range(itters):
-
+            # print("sort_by_face_dist_NN _ for loop itters i is", i)
             ## Find closest
             try:
                 # send in both dfs, and return same dfs with 1+ rows sorted
@@ -905,9 +952,9 @@ def sort_by_face_dist_NN(df_enc):
 
     print("df_sorted", df_sorted)
 
-    # debugging -- will save full df_enc to csv
-    df_sorted_outpath = os.path.join(sort.counter_dict["outfolder"],"df_sorted.csv")
-    df_sorted.to_csv(df_sorted_outpath, index=False)
+    # # debugging -- will save full df_enc to csv
+    # df_sorted_outpath = os.path.join(sort.counter_dict["outfolder"],"df_sorted.csv")
+    # df_sorted.to_csv(df_sorted_outpath, index=False)
 
     # # make a list of df_sorted dist
     # dist_list = df_sorted['dist'].tolist()
@@ -1106,6 +1153,8 @@ def compare_images(last_image, img, face_landmarks, bbox):
 
     if sort.EXPAND:
         cropped_image = sort.expand_image(img, face_landmarks, bbox)
+        # cropp the 25K image back down to 10K
+        if not FULL_BODY: cropped_image = sort.crop_whitespace(cropped_image)
         is_inpaint = False
     else:
         cropped_image, is_inpaint = sort.crop_image(img, face_landmarks, bbox)
@@ -1411,8 +1460,8 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
         extension_pixels=sort.get_extension_pixels(img)
         if sort.VERBOSE:print("extension_pixels",extension_pixels)
         # inpaint_file=os.path.join(os.path.join(os.path.dirname(row['folder']), "inpaint", os.path.basename(row['folder'])),row['filename'])
-        # aspect_ratio = '_'.join(image_edge_multiplier)
-        aspect_ratio = '_'.join(str(v) for v in image_edge_multiplier)
+        # aspect_ratio = '_'.join(sort.image_edge_multiplier)
+        aspect_ratio = '_'.join(str(v) for v in sort.image_edge_multiplier)
         if INPAINT_COLOR:
             inpaint_file=os.path.join(os.path.dirname(row['folder']), os.path.basename(row['folder'])+"_inpaint_"+INPAINT_COLOR+"_"+aspect_ratio,row['imagename'])
         else:
@@ -1841,7 +1890,8 @@ def main():
     # or only once if no clusters
     def map_images(resultsjson, this_cluster=None, this_topic=None):
         pose_no = cluster_no = None
-        print("map_images cluster_no", cluster_no)
+        
+
         # print(df_sql)
         # if this_cluster is a list, then assign the first one to cluster_no
         # temp fix, to deal with passing in two values for FUSION
@@ -1859,6 +1909,18 @@ def main():
             print(f"cluster_no: {cluster_no}, pose_no: {pose_no}")
         else:
             print(" >> SOMETHINGS WRONG: cluster_no is not a list", this_cluster)
+        print("map_images cluster_no", cluster_no)
+
+        # if topic, overide sort.image_edge_multiplier based on topic
+        if pose_no is not None and USE_POSE_CROP_DICT:
+            # this_topic is a list of topics, so we need to get the first one
+            # topic_key = this_topic[0] if isinstance(this_topic, list) else this_topic
+            pose_type = pose_crop_dict.get(cluster_no, 1)
+            sort.image_edge_multiplier = multiplier_list[pose_crop_dict[cluster_no]]
+            if VERBOSE: print(f"using pose {cluster_no} getting pose_crop_dict value {pose_type} for image_edge_multiplier", sort.image_edge_multiplier)
+        # use image_edge_multiplier to crop for each
+        sort.set_output_dims()
+
 
         # read the csv and construct dataframe
         try:

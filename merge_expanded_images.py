@@ -16,14 +16,14 @@ io = DataIO()
 db = io.db
 
 # iterate through folders? 
-IS_CLUSTER = False
+IS_CLUSTER = True
 
 # are we making videos or making merged stills?
 IS_VIDEO = True
 IS_VIDEO_MERGE = True
 FRAMERATE = 12
-PERIOD = 100 # how many images in each merge cycle
-MERGE_COUNT = 6 # largest number of merged images 
+PERIOD = 30 # how many images in each merge cycle
+MERGE_COUNT = 12 # largest number of merged images 
 START_MERGE = 1 # number of images merged into the first image. Can be 1 (no merges) or >1 (two or more images merged)
 
 if IS_VIDEO:
@@ -52,11 +52,11 @@ else:
     SCALE_IMGS = False
 VERBOSE = True
 # Provide the path to the folder containing the images
-ROOT_FOLDER_PATH = '/Volumes/OWC4/takingstock_process_exports'
+ROOT_FOLDER_PATH = '/Volumes/OWC4/images_to_assemble'
 # if IS_CLUSTER this should be the folder holding all the cluster folders
 # if not, this should be the individual folder holding the images
 # will not accept clusterNone -- change to cluster00
-FOLDER_NAME = "_blur_animation_tests/Topic23_stress/cluster13_117_1730526091.849752"
+FOLDER_NAME = "Topic11_video_starttest"
 FOLDER_PATH = os.path.join(ROOT_FOLDER_PATH,FOLDER_NAME)
 DIRS = ["1x1", "4x3", "16x10"]
 OUTPUT = os.path.join(io.ROOTSSD, "audioproduction")
@@ -548,9 +548,12 @@ def main():
         elif SAVE_METAS_AUDIO is True:
             save_concatenated_metas(subfolders, OUTPUT, CSV_FILE)
         else:
+            # for merging images into stills
             for subfolder_path in subfolders:
                 # print(subfolder_path)
-                merged_image, count, cluster_no, handpose_no = merge_images(subfolder_path)
+                all_img_path_list = io.get_img_list(subfolder_path)
+                images_to_build = load_images(all_img_path_list, subfolder_path)
+                merged_image, count, cluster_no, handpose_no = merge_images(images_to_build, subfolder_path)
                 if count == 0:
                     print("no images here")
                     continue

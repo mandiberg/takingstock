@@ -47,7 +47,7 @@ class SortPose:
         self.BRUTEFORCE = False
         self.use_3D = use_3D
         print("init use_3D",self.use_3D)
-        self.CUTOFF = 50000 # DOES factor if ONE_SHOT
+        self.CUTOFF = 100 # DOES factor if ONE_SHOT
         self.ORIGIN = 0
         self.this_nose_bridge_dist = self.NOSE_BRIDGE_DIST = None # to be set in first loop, and sort.this_nose_bridge_dist each time
 
@@ -90,7 +90,6 @@ class SortPose:
         self.INPAINT=INPAINT
         if self.INPAINT:self.INPAINT_MODEL=SimpleLama()
         # self.MAX_IMAGE_EDGE_MULTIPLIER=[1.5,2.6,2,2.6] #maximum of the elements
-        self.MAX_IMAGE_EDGE_MULTIPLIER = image_edge_multiplier #testing
 
         self.knn = NearestNeighbors(metric='euclidean', algorithm='ball_tree')
 
@@ -100,15 +99,7 @@ class SortPose:
         self.resize_increment = 345
         self.USE_INCREMENTAL_RESIZE = True
         self.image_edge_multiplier = image_edge_multiplier
-        if image_edge_multiplier == [1.3,1.85,2.4,1.85]:
-            print("setting face_height_output to 1.925/1.85")
-            self.face_height_output = face_height_output*(1.925/1.85)
-            self.output_dims = (1920,1920)
-        else:            
-            self.face_height_output = face_height_output
-            # takes base image size and multiplies by avg of multiplier
-            self.output_dims = (int(self.face_height_output*(image_edge_multiplier[1]+image_edge_multiplier[3])/2),int(self.face_height_output*(image_edge_multiplier[0]+image_edge_multiplier[2])/2))
-        print("output_dims",self.output_dims)
+        self.face_height_output = face_height_output
         self.EXPAND = EXPAND
         self.EXPAND_SIZE = (25000,25000) # full body
         # self.EXPAND_SIZE = (10000,10000) # regular
@@ -323,6 +314,18 @@ class SortPose:
             self.MAXMOUTHGAP = 10
             self.SORT = 'face_x'
             self.ROUND = 1
+
+    def set_output_dims(self):
+        if self.image_edge_multiplier == [1.3,1.85,2.4,1.85]:
+            print("setting face_height_output to 1.925/1.85")
+            self.face_height_output = self.face_height_output*(1.925/1.85)
+            self.output_dims = (1920,1920)
+        else:            
+            # self.face_height_output = face_height_output
+            # takes base image size and multiplies by avg of multiplier
+            self.output_dims = (int(self.face_height_output*(self.image_edge_multiplier[1]+self.image_edge_multiplier[3])/2),int(self.face_height_output*(self.image_edge_multiplier[0]+self.image_edge_multiplier[2])/2))
+        self.MAX_IMAGE_EDGE_MULTIPLIER = self.image_edge_multiplier #testing
+        print("output_dims",self.output_dims)
 
     def set_counters(self,ROOT,cluster_no,start_img_name,start_site_image_id):
         self.negmargin_count = 0
@@ -989,6 +992,27 @@ class SortPose:
             # self.get_crop_data(sinY)
 
         
+    def crop_whitespace(self, img):
+        crop_dict = {
+            8288: 3448,
+            16576: 6898,
+            24866: 10344,
+            33154: 13792
+        }
+        cropped_img = None
+        height, width, _ = img.shape
+        if width not in crop_dict:
+            print(f"Width {width} not found in crop_dict, returning original image.")
+            return img
+        crop_width = crop_dict.get(width, 0)
+        # crop the image to the crop_width keeping the image centered
+        CROP_LEFT = (width - crop_width) // 2
+        CROP_RIGHT = width - CROP_LEFT - crop_width
+        CROP_TOP = (height - crop_width) // 2
+        CROP_BOTTOM = height - CROP_TOP - crop_width
+        # Define the cropped area
+        cropped_img = img[CROP_TOP:height - CROP_BOTTOM, CROP_LEFT:width - CROP_RIGHT]
+        return cropped_img
 
 
 
@@ -1065,6 +1089,9 @@ class SortPose:
             print("not expand_image loop failed")
             print('Error:', str(e))
             sys.exit(1)
+
+        # add cropdown here
+
         # quit() 
         return new_image
 

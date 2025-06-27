@@ -124,15 +124,15 @@ switching to topic targeted
 18	afripics
 '''
 # I think this only matters for IS_FOLDER mode, and the old SQL way
-SITE_NAME_ID = 3
+SITE_NAME_ID = 2
 # 2, shutter. 4, istock
 # 7 pond5, 8 123rf
 POSE_ID = 0
 
 # folder doesn't matter if IS_FOLDER is False. Declared FAR below. 
 # MAIN_FOLDER = "/Volumes/RAID54/images_shutterstock"
-# MAIN_FOLDER = "/Volumes/SSD4/images_adobe"
-MAIN_FOLDER = "/Volumes/SSD4green/images_adobe"
+MAIN_FOLDER = "/Volumes/OWC5/images_shutterstock"
+# MAIN_FOLDER = "/Volumes/SSD4green/images_adobe"
 # MAIN_FOLDER = "/Volumes/OWC4/segment_images/images_shutterstock"
 # MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/afripics_v2/images"
 
@@ -348,7 +348,7 @@ image_edge_multiplier_sm = [2.2, 2.2, 2.6, 2.2] # standard portrait
 face_height_output = 500
 motion = {"side_to_side": False, "forward_smile": True, "laugh": False, "forward_nosmile":  False, "static_pose":  False, "simple": False}
 EXPAND = False
-ONE_SHOT = False # take all files, based off the very first sort order.
+ONE_SHOT = True # take all files, based off the very first sort order.
 JUMP_SHOT = False # jump to random file if can't find a run
 
 sort = SortPose(motion, face_height_output, image_edge_multiplier_sm,EXPAND, ONE_SHOT, JUMP_SHOT, None, VERBOSE)

@@ -336,7 +336,7 @@ def find_face(image, df):
     return df
 
 
-task=[1001,"/Users/michaelmandiberg/Documents/projects-active/facemap_production/PFP/misha_PFP.jpg"]
+task=[1001,"/Users/michaelmandiberg/Documents/projects-active/facemap_production/RLH/MJM.jpg"]
 
 df = pd.DataFrame(columns=['image_id','is_face','is_body','is_face_distant','face_x','face_y','face_z','mouth_gap','face_landmarks','bbox','face_encodings','face_encodings68_J','body_landmarks'])
 # print(task)
