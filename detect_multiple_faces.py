@@ -15,33 +15,11 @@ import gc
 
 import sys
 import re
-
-class StderrFilter:
-    def __init__(self, patterns):
-        if isinstance(patterns, str):
-            patterns = [patterns]
-        self.patterns = [re.compile(pattern) for pattern in patterns]
-        self.original_stderr = sys.stderr
-        self.filtered_err = None
-    
-    def write(self, data):
-        # Only write if none of the patterns match
-        if not any(pattern.search(data) for pattern in self.patterns):
-            self.original_stderr.write(data)
-    
-    def flush(self):
-        self.original_stderr.flush()
-    
-    def __enter__(self):
-        self.filtered_err = sys.stderr
-        sys.stderr = self
-        return self
-    
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        sys.stderr = self.original_stderr
         
 import numpy as np
 import mediapipe as mp
+from mediapipe.tasks import python
+from mediapipe.tasks.python import vision
 import pandas as pd
 from ultralytics import YOLO
 
@@ -124,20 +102,20 @@ switching to topic targeted
 18	afripics
 '''
 # I think this only matters for IS_FOLDER mode, and the old SQL way
-SITE_NAME_ID = 2
+SITE_NAME_ID = 3
 # 2, shutter. 4, istock
 # 7 pond5, 8 123rf
 POSE_ID = 0
 
 # folder doesn't matter if IS_FOLDER is False. Declared FAR below. 
 # MAIN_FOLDER = "/Volumes/RAID54/images_shutterstock"
-MAIN_FOLDER = "/Volumes/OWC5/images_shutterstock"
-# MAIN_FOLDER = "/Volumes/SSD4green/images_adobe"
+# MAIN_FOLDER = "/Volumes/OWC5/images_shutterstock"
+MAIN_FOLDER = "/Volumes/ExFAT_SSD4_/images_adobe"
 # MAIN_FOLDER = "/Volumes/OWC4/segment_images/images_shutterstock"
 # MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/afripics_v2/images"
 
 # MAIN_FOLDER = "/Volumes/SSD4/images_getty_reDL"
-BATCH_SIZE = 2000 # Define how many from each folder in each batch
+BATCH_SIZE = 500 # Define how many from each folder in each batch
 LIMIT = 1000
 
 #temp hack to go 1 subfolder at a time
@@ -296,6 +274,36 @@ ROOT = io.ROOT
 NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 # overriding DB for testing
 # io.db["name"] = "gettytest3"
+
+# --- Initialize MediaPipe objects with GPU delegate ---
+FACE_DETECTOR_MODEL_PATH = '/Users/michaelmandiberg/Documents/GitHub/facemap/models/blaze_face_short_range.tflite'
+FACE_LANDMARKER_MODEL_PATH = '/Users/michaelmandiberg/Documents/GitHub/facemap/models/face_landmarker.task'
+
+# Base options for GPU
+base_options_detector_gpu = python.BaseOptions(
+    delegate=python.BaseOptions.Delegate.GPU,
+    model_asset_path=FACE_DETECTOR_MODEL_PATH
+)
+# Face Detector options
+face_detector_options = vision.FaceDetectorOptions(
+    base_options=base_options_detector_gpu,
+    running_mode=vision.RunningMode.IMAGE, # Specifies the input data type (IMAGE, VIDEO, or LIVE_STREAM)
+    min_detection_confidence=0.7 # Minimum confidence score for a face to be considered detected
+)
+
+# # Face Landmarker options (formerly Face Mesh)
+base_options_landmarker_gpu = python.BaseOptions(
+    delegate=python.BaseOptions.Delegate.GPU,
+    model_asset_path=FACE_LANDMARKER_MODEL_PATH
+)
+face_landmarker_options = vision.FaceLandmarkerOptions(
+    base_options=base_options_landmarker_gpu,
+    running_mode=vision.RunningMode.IMAGE, # Or .VIDEO, .LIVE_STREAM
+)
+
+# Create the detector and landmarker objects outside the loop for efficiency
+face_detector = vision.FaceDetector.create_from_options(face_detector_options)
+face_landmarker = vision.FaceLandmarker.create_from_options(face_landmarker_options)
 
 
 #creating my objects
@@ -574,62 +582,92 @@ def retro_bbox(image):
 
 
 def find_face(image, df):
-    # image is RGB
-    find_face_start = time.time()
-    height, width, _ = image.shape
-    with mp.solutions.face_detection.FaceDetection(model_selection=1, min_detection_confidence=0.7) as face_det: 
-        # print(">> find_face SPLIT >> with mp.solutions constructed")
-        # ff_split = print_get_split(find_face_start)
+    # image is SRGBA mp.Image (for mp task GPU implementation)
+    # find_face_start = time.time()
 
-        results_det=face_det.process(image)  ## [:,:,::-1] is the shortcut for converting BGR to RGB
+    # height, width, _ = image.shape
+    number_of_detections = 0
 
-        # print(">> find_face SPLIT >> face_det.process(image)")
-        # ff_split = print_get_split(ff_split)
+    # with mp.solutions.face_detection.FaceDetection(model_selection=1, min_detection_confidence=0.7) as face_det: 
+    #     # print(">> find_face SPLIT >> with mp.solutions constructed")
+    #     # ff_split = print_get_split(find_face_start)
+
+    #     results_det=face_det.process(image)  ## [:,:,::-1] is the shortcut for converting BGR to RGB
+
+    #     # print(">> find_face SPLIT >> face_det.process(image)")
+    #     # ff_split = print_get_split(ff_split)
         
-    '''
-    0 type model: When we will select the 0 type model then our face detection model will be able to detect the 
-    faces within the range of 2 meters from the camera.
-    1 type model: When we will select the 1 type model then our face detection model will be able to detect the 
-    faces within the range of 5 meters. Though the default value is 0.
-    '''
+    # '''
+    # 0 type model: When we will select the 0 type model then our face detection model will be able to detect the 
+    # faces within the range of 2 meters from the camera.
+    # 1 type model: When we will select the 1 type model then our face detection model will be able to detect the 
+    # faces within the range of 5 meters. Though the default value is 0.
+    # '''
     is_face = False
     is_face_no_lms = None
 
-    if results_det.detections:
-        faceDet=results_det.detections[0]
-        
-        number_of_detections = len(results_det.detections)
+    # Perform face detection
+    detection_result = face_detector.detect(image)
+
+    if detection_result.detections:
+        number_of_detections = len(detection_result.detections)
         print("---------------- >>>>>>>>>>>>>>>>> number_of_detections", number_of_detections)
 
-        bbox = get_bbox(faceDet, height, width)
-        # print(">> find_face SPLIT >> get_bbox()")
-        # ff_split = print_get_split(ff_split)
+        # Assuming you take the first detected face for simplicity
+        faceDet = detection_result.detections[0]
+        # The bounding box format from FaceDetector is different.
+        # You'll need to convert it to your bbox format if `get_bbox` expects something specific.
+        bbox_mp = faceDet.bounding_box
+        bbox = {
+            "left": bbox_mp.origin_x,
+            "top": bbox_mp.origin_y,
+            "right": bbox_mp.origin_x + bbox_mp.width,
+            "bottom": bbox_mp.origin_y + bbox_mp.height
+        }
+
+    # if results_det.detections:
+    #     faceDet=results_det.detections[0]
+        
+    #     number_of_detections = len(results_det.detections)
+    #     print("---------------- >>>>>>>>>>>>>>>>> number_of_detections", number_of_detections)
+
+    #     bbox = get_bbox(faceDet, height, width)
+    #     # print(">> find_face SPLIT >> get_bbox()")
+    #     # ff_split = print_get_split(ff_split)
 
         if bbox:
             
-            with mp.solutions.face_mesh.FaceMesh(static_image_mode=True,
-                                             refine_landmarks=False,
-                                             max_num_faces=1,
-                                             min_detection_confidence=0.5
-                                             ) as face_mesh:
-            # Convert the BGR image to RGB and cropping it around face boundary and process it with MediaPipe Face Mesh.
-                                # crop_img = img[y:y+h, x:x+w]
-                # print(">> find_face SPLIT >> const face_mesh")
-                # ff_split = print_get_split(ff_split)
+            # Extract the region of interest from the underlying numpy array
+            roi_np = image.numpy_view()[bbox["top"]:bbox["bottom"], bbox["left"]:bbox["right"]]
+            # Create a new mediapipe.Image from the cropped numpy array
+            roi_np_uint8 = roi_np.astype(np.uint8)
+            roi_mp_image = mp.Image(image_format=image.image_format, data=roi_np_uint8)
+            landmarker_result = face_landmarker.detect(roi_mp_image)
+            # with mp.solutions.face_mesh.FaceMesh(static_image_mode=True,
+            #                                  refine_landmarks=False,
+            #                                  max_num_faces=1,
+            #                                  min_detection_confidence=0.5
+            #                                  ) as face_mesh:
+            # # Convert the BGR image to RGB and cropping it around face boundary and process it with MediaPipe Face Mesh.
+            #                     # crop_img = img[y:y+h, x:x+w]
+            #     # print(">> find_face SPLIT >> const face_mesh")
+            #     # ff_split = print_get_split(ff_split)
 
-                results = face_mesh.process(image[bbox["top"]:bbox["bottom"],bbox["left"]:bbox["right"]])   
-                # print(">> find_face SPLIT >> face_mesh.process")
-                # ff_split = print_get_split(ff_split)
+            #     landmarker_result = face_landmarker.detect(image[bbox["top"]:bbox["bottom"],bbox["left"]:bbox["right"]])   
+            #     # print(">> find_face SPLIT >> face_mesh.process")
+            #     # ff_split = print_get_split(ff_split)
  
             #read any image containing a face
-            if results.multi_face_landmarks:
+            if landmarker_result.face_landmarks:
                 
                 #construct pose object to solve pose
                 is_face = True
                 pose = SelectPose(image)
 
+
                 #get landmarks
-                faceLms = pose.get_face_landmarks(results, image,bbox)
+                faceLms = pose.get_face_landmarks(landmarker_result,bbox)
+                # faceLms = pose.get_face_landmarks(results, image,bbox)
 
                 # print(">> find_face SPLIT >> got lms")
                 # ff_split = print_get_split(ff_split)
@@ -722,14 +760,21 @@ def find_face(image, df):
     return df, number_of_detections
 
 def calc_encodings(image, faceLms,bbox):## changed parameters and rebuilt
+    # convert image back to numpy array if it's a mediapipe image
+    if isinstance(image, mp.Image):
+        image = image.numpy_view()
+    # Ensure image is 3-channel (RGB) and uint8 for dlib
+    if image.shape[2] == 4:
+        image = cv2.cvtColor(image, cv2.COLOR_RGBA2RGB)
+    image = image.astype(np.uint8)
     def get_dlib_all_points(landmark_points):
         raw_landmark_set = []
         for index in landmark_points:                       ######### CORRECTION: landmark_points_5_3 is the correct one for sure
-            # print(faceLms.landmark[index].x)
+            # print(faceLms[index].x)
 
             # second attempt, tries to project faceLms from bbox origin
-            x = int(faceLms.landmark[index].x * width + bbox["left"])
-            y = int(faceLms.landmark[index].y * height + bbox["top"])
+            x = int(faceLms[index].x * width + bbox["left"])
+            y = int(faceLms[index].y * height + bbox["top"])
 
             landmark_point=dlib.point([x,y])
             raw_landmark_set.append(landmark_point)
@@ -1589,17 +1634,24 @@ def process_image(task):
     no_image = False
 
     df = pd.DataFrame(columns=['image_id','is_face','is_body','is_face_distant','face_x','face_y','face_z','mouth_gap','face_landmarks','bbox','face_encodings','face_encodings68_J','body_landmarks'])
-    # print(task)
     df.at['1', 'image_id'] = task[0]
+    image_test = cv2.imread(task[1])
+    print(">> SPLIT >> image_test shape", image_test.shape)
     cap_path = capitalize_directory(task[1])
     # print(">> SPLIT >> made DF, about to imread")
     # pr_split = print_get_split(pr_split)
 
     try:
+        print(">> SPLIT >> trying to read image:", cap_path)
         # i think i'm doing this twice. I should just do it here. 
-        image = cv2.imread(cap_path)
-        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)   
-        # image is RGB now 
+        image = cv2.imread(task[1])
+        
+        h,w,_ = image.shape
+        print(">> SPLIT >> image shape", h, w, image.shape)
+        # h, w, _ = image.shape
+        # image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)   
+        mp_image = mp.Image(image_format=mp.ImageFormat.SRGBA, data=cv2.cvtColor(image, cv2.COLOR_BGR2RGBA))
+        # mp_image is RGB now 
         # this is for when you need to move images into a testing folder structure
         # save_image_elsewhere(image, task)
     except:
@@ -1608,11 +1660,11 @@ def process_image(task):
     # print(">> SPLIT >> done imread, about to find face")
     # pr_split = print_get_split(pr_split)
 
-    if image is not None and image.shape[0]>MINSIZE and image.shape[1]>MINSIZE:
+    if mp_image is not None and h > MINSIZE and w > MINSIZE:
         # Do FaceMesh
 
         print(">> SPLIT >> about to find_face")
-        df, number_of_detections = find_face(image, df)
+        df, number_of_detections = find_face(mp_image, df)
         is_small = 0
         # pr_split = print_get_split(pr_split)
         print(number_of_detections, df)
@@ -1621,7 +1673,7 @@ def process_image(task):
         # Do Body Pose
         # temporarily commenting this out
         # to reactivate, will have to accept return of is_body, body_landmarks
-        # df = find_body(image, df)
+        # df = find_body(mp_image, df)
 
         # print(">> SPLIT >> done find_body")
         # pr_split = print_get_split(pr_split)
@@ -1629,10 +1681,10 @@ def process_image(task):
         # for testing: this will save images into folders for is_face, is_body, and none. 
         # only save images that aren't too smallllll
         # save_image_triage(image,df)
-    elif image is not None and image.shape[0]>0 and image.shape[1]>0 :
+    elif mp_image is not None and h>0 and w>0 :
         print('smallllll but still processing')
         # print(task[0], "shape of image", image.shape)
-        df, number_of_detections = find_face(image, df)
+        df, number_of_detections = find_face(mp_image, df)
         # print(df)
         is_small = 1
     else:

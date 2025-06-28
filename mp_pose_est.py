@@ -8,10 +8,11 @@ class SelectPose:
     """Estimate head pose according to the facial landmarks"""
 
     def __init__(self, image):
+        # image is mp.Image
         self.image = image
-        self.size = (image.shape[0], image.shape[1])
-        self.h = image.shape[0]
-        self.w = image.shape[1]
+        self.size = (image.height, image.width)
+        self.h = image.height
+        self.w = image.width
 
         # self.image = image
         # self.size = (image.shape[0], image.shape[1])
@@ -54,21 +55,21 @@ class SelectPose:
 
 
 
-    def get_face_landmarks(self,results, image,bbox):
+    def get_face_landmarks(self,landmarker_result,bbox):
 
         height = self.h
         width = self.w
         center = (self.size[1] / 2, self.size[0] / 2)
 
         dist=[]
-        for faceNum, faceLms in enumerate(results.multi_face_landmarks):                            # loop through all matches
+        for faceNum, faceLms in enumerate(landmarker_result.face_landmarks):                            # loop through all matches
             faceXY = []
-            for id,lm in enumerate(faceLms.landmark):                           # loop over all land marks of one face
+            for id,lm in enumerate(faceLms):                           # loop over all land marks of one face
                 # ih, iw, _ = self.image.shape
                 # gone direct to obj dimensions
                 # x,y = int(lm.x*self.w), int(lm.y*self.h)
 
-                #this is just for the faceXY -- it isn't returned with faceLms
+                #this scales the bbox sliced face back up to full image pixel
                 x,y=int(lm.x * (bbox["right"]-bbox["left"])+bbox["left"]),int(lm.y * (bbox["bottom"]-bbox["top"])+bbox["top"]) 
                 # print(lm)
                 faceXY.append((x, y)) # put all xy points in neat array
@@ -108,7 +109,7 @@ class SelectPose:
 
     def draw_face_landmarks(self, image, faceLms, bbox):
         # Draw the landmarks
-        for id, lm in enumerate(faceLms.landmark):
+        for id, lm in enumerate(faceLms):
             # print(bbox)
             bbox_width = bbox["right"]-bbox["left"]
             bbox_height = bbox["bottom"]-bbox["top"]
@@ -260,7 +261,7 @@ class SelectPose:
         # I don't think i need all of this. but putting it here.
         img_h = self.h
         img_w = self.w
-        for idx, lm in enumerate(faceLms.landmark):
+        for idx, lm in enumerate(faceLms):
             if idx == point:
                 pointXY = (lm.x * img_w, lm.y * img_h)
         return pointXY
@@ -271,7 +272,7 @@ class SelectPose:
         img_w = self.w
         face_3d = []
         face_2d = []
-        for idx, lm in enumerate(faceLms.landmark):
+        for idx, lm in enumerate(faceLms):
             if idx == 33 or idx == 263 or idx == 1 or idx == 61 or idx == 291 or idx == 199 or idx == 10 or idx == 152:
                 x, y = int(lm.x * img_w), int(lm.y * img_h)
 
