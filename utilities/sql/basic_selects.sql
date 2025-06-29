@@ -87,7 +87,14 @@ LIMIT 5000
 
 SELECT *
 FROM Encodings i 
-WHERE i.image_id = 31678563
+WHERE i.image_id = 24940154
+
+SELECT *
+FROM Encodings i 
+WHERE i.mongo_hand_landmarks = 1
+AND i.mongo_hand_landmarks_norm = NULL
+AND i.is_face = 1
+LIMIT 10
 ;
 
 SELECT COUNT(*)
@@ -175,12 +182,26 @@ Where e.image_id = 92362382
 ;
 
 SELECT * 
-FROM Images e 
-Where e.image_id = 92362382
+FROM Encodings e 
+Where e.image_id = 42190674
+;
+
+DELETE FROM NMLImages
 ;
 
 
+SELECT MAX(n.nml_id)
+FROM NMLImages n 
+;
 
+-- This ith nml_id to start the adobe mp.task refactor test
+-- 4191363
+
+
+ALTER TABLE NMLImages
+    DROP PRIMARY KEY,
+    ADD COLUMN nml_id INT AUTO_INCREMENT PRIMARY KEY FIRST,
+    ADD UNIQUE (image_id);
 
 SELECT *
 FROM Images i
@@ -189,9 +210,11 @@ AND i.site_name_id = 2
 ;
 
 
-SELECT COUNT(image_id)
-FROM imagestopics_ALLgetty4faces_isfacemodel
-
+SELECT COUNT(s.image_id)
+FROM Images s
+JOIN Encodings e ON s.image_id = e.image_id
+WHERE s.site_name_id = 2
+AND e.is_body = 1
 ;
 
 ALTER TABLE encodings

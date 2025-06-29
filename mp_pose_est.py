@@ -2,17 +2,19 @@
 import cv2
 import numpy as np
 import math
+import mediapipe as mp
 
 
 class SelectPose:
     """Estimate head pose according to the facial landmarks"""
 
     def __init__(self, image):
+
         # image is mp.Image
-        self.image = image
-        self.size = (image.height, image.width)
-        self.h = image.height
-        self.w = image.width
+        self.image = self.ensure_image_mp(image)
+        self.size = (self.image.height, self.image.width)
+        self.h = self.image.height
+        self.w = self.image.width
 
         # self.image = image
         # self.size = (image.shape[0], image.shape[1])
@@ -47,6 +49,22 @@ class SelectPose:
         # self.r_vec = None
         # self.t_vec = None
 
+
+    def ensure_image_cv2(self,image):
+        # convert image back to numpy array if it's a mediapipe image
+        if isinstance(image, mp.Image):
+            image = image.numpy_view()
+        # Ensure image is 3-channel (RGB) and uint8 for dlib
+        if image.shape[2] == 4:
+            image = cv2.cvtColor(image, cv2.COLOR_RGBA2RGB)
+        image = image.astype(np.uint8)
+        return image
+
+    def ensure_image_mp(self,image):
+        # convert image back to mediapipe image if it's a numpy array
+        if isinstance(image, np.ndarray):
+            image = mp.Image(image_format=mp.ImageFormat.SRGBA, data=cv2.cvtColor(image, cv2.COLOR_BGR2RGBA))
+        return image
 
     def x_element(self, elem):
         return elem[0]
@@ -655,18 +673,21 @@ class SelectPose:
         hands_data = []
 
         # Loop through each hand detected and extract the necessary details
-        if detection_result.multi_hand_landmarks:
-            for idx, hand_landmarks in enumerate(detection_result.multi_hand_landmarks):
+        if detection_result.hand_landmarks:
+            for idx, hand_landmarks in enumerate(detection_result.hand_landmarks):
                 # Extract landmarks in image coordinates (x, y, z)
-                image_landmarks = [(lm.x, lm.y, lm.z) for lm in hand_landmarks.landmark]
+                # Each 'hand_landmarks' is a list of NormalizedLandmark objects
+                image_landmarks = [(lm.x, lm.y, lm.z) for lm in hand_landmarks]
 
                 # Extract landmarks in world coordinates (for 3D space)
-                world_landmarks = [(lm.x, lm.y, lm.z) for lm in detection_result.multi_hand_world_landmarks[idx].landmark]
+                # Access the corresponding world landmarks for this hand using idx
+                world_landmarks = [(lm.x, lm.y, lm.z) for lm in detection_result.hand_world_landmarks[idx]]
 
                 # Extract confidence score and handedness (left or right hand)
-                handedness = detection_result.multi_handedness[idx].classification[0]
-                confidence_score = handedness.score
-                hand_label = handedness.label  # "Left" or "Right"
+                # handedness is a List[Category], so we take the first category
+                handedness_category = detection_result.handedness[idx][0]
+                confidence_score = handedness_category.score
+                hand_label = handedness_category.category_name  # "Left" or "Right"
 
                 # Create a dictionary to store all information for this hand
                 hand_data = {

@@ -109,13 +109,13 @@ POSE_ID = 0
 
 # folder doesn't matter if IS_FOLDER is False. Declared FAR below. 
 # MAIN_FOLDER = "/Volumes/RAID54/images_shutterstock"
-# MAIN_FOLDER = "/Volumes/OWC5/images_shutterstock"
-MAIN_FOLDER = "/Volumes/ExFAT_SSD4_/images_adobe"
+MAIN_FOLDER = "/Volumes/OWC5/images_adobe"
+# MAIN_FOLDER = "/Volumes/ExFAT_SSD4_/images_adobe"
 # MAIN_FOLDER = "/Volumes/OWC4/segment_images/images_shutterstock"
 # MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/afripics_v2/images"
 
 # MAIN_FOLDER = "/Volumes/SSD4/images_getty_reDL"
-BATCH_SIZE = 500 # Define how many from each folder in each batch
+BATCH_SIZE = 2000 # Define how many from each folder in each batch
 LIMIT = 1000
 
 #temp hack to go 1 subfolder at a time
@@ -131,7 +131,7 @@ IS_SSD=True
 # for silence, start at 103893643
 # for HDD topic, start at 28714744
 BODYLMS = True
-REDO_BODYLMS_3D = True # this makes it skip hands and YOLO
+REDO_BODYLMS_3D = False # this makes it skip hands and YOLO
 HANDLMS = True
 TOPIC_ID = None
 # TOPIC_ID = [24, 29] # adding a TOPIC_ID forces it to work from SegmentBig_isface, currently at 7412083
@@ -278,6 +278,8 @@ NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 # --- Initialize MediaPipe objects with GPU delegate ---
 FACE_DETECTOR_MODEL_PATH = '/Users/michaelmandiberg/Documents/GitHub/facemap/models/blaze_face_short_range.tflite'
 FACE_LANDMARKER_MODEL_PATH = '/Users/michaelmandiberg/Documents/GitHub/facemap/models/face_landmarker.task'
+HAND_LANDMARKER_MODEL_PATH = '/Users/michaelmandiberg/Documents/GitHub/facemap/models/hand_landmarker.task'
+POSE_LANDMARKER_MODEL_PATH = '/Users/michaelmandiberg/Documents/GitHub/facemap/models/pose_landmarker_full.task'
 
 # Base options for GPU
 base_options_detector_gpu = python.BaseOptions(
@@ -301,18 +303,47 @@ face_landmarker_options = vision.FaceLandmarkerOptions(
     running_mode=vision.RunningMode.IMAGE, # Or .VIDEO, .LIVE_STREAM
 )
 
+# Hand Landmarker options
+base_options_hand_gpu = python.BaseOptions(
+    delegate=python.BaseOptions.Delegate.GPU,
+    model_asset_path=HAND_LANDMARKER_MODEL_PATH
+)
+hand_landmarker_options = vision.HandLandmarkerOptions(
+    base_options=base_options_hand_gpu,
+    running_mode=vision.RunningMode.IMAGE,
+    num_hands=2,
+    min_hand_detection_confidence=0.4,
+    min_hand_presence_confidence=0.5, # Corresponds to min_detection_confidence in old API
+    min_tracking_confidence=0.5
+)
+
+# Base options for GPU delegate for PoseLandmarker
+base_options_pose_gpu = python.BaseOptions(
+    delegate=python.BaseOptions.Delegate.GPU,
+    model_asset_path=POSE_LANDMARKER_MODEL_PATH
+)
+pose_landmarker_options = vision.PoseLandmarkerOptions(
+    base_options=base_options_pose_gpu,
+    running_mode=vision.RunningMode.IMAGE,
+    min_pose_detection_confidence=0.5,
+    min_pose_presence_confidence=0.5,
+    min_tracking_confidence=0.5,
+    output_segmentation_masks=False # Set to True if you need segmentation masks
+)
+
 # Create the detector and landmarker objects outside the loop for efficiency
 face_detector = vision.FaceDetector.create_from_options(face_detector_options)
 face_landmarker = vision.FaceLandmarker.create_from_options(face_landmarker_options)
-
+hand_landmarker = vision.HandLandmarker.create_from_options(hand_landmarker_options)
+pose_landmarker = vision.PoseLandmarker.create_from_options(pose_landmarker_options)
 
 #creating my objects
-mp_face_mesh = mp.solutions.face_mesh
-face_mesh = mp_face_mesh.FaceMesh(min_detection_confidence=1, static_image_mode=True)
-mp_pose = mp.solutions.pose
+# mp_face_mesh = mp.solutions.face_mesh
+# face_mesh = mp_face_mesh.FaceMesh(min_detection_confidence=1, static_image_mode=True)
+# mp_pose = mp.solutions.pose
 mp_drawing = mp.solutions.drawing_utils
 drawing_spec = mp_drawing.DrawingSpec(thickness=1, circle_radius=1)
-mp_hands = mp.solutions.hands
+# mp_hands = mp.    solutions.hands
 
 ####### new imports and models ########
 mp_face_detection = mp.solutions.face_detection #### added face detection
@@ -445,7 +476,21 @@ def print_get_split(split):
     print(duration)
     return now
 
+def ensure_image_cv2(image):
+    # convert image back to numpy array if it's a mediapipe image
+    if isinstance(image, mp.Image):
+        image = image.numpy_view()
+    # Ensure image is 3-channel (RGB) and uint8 for dlib
+    if image.shape[2] == 4:
+        image = cv2.cvtColor(image, cv2.COLOR_RGBA2RGB)
+    image = image.astype(np.uint8)
+    return image
 
+def ensure_image_mp(image):
+    # convert image back to mediapipe image if it's a numpy array
+    if isinstance(image, np.ndarray):
+        image = mp.Image(image_format=mp.ImageFormat.SRGBA, data=cv2.cvtColor(image, cv2.COLOR_BGR2RGBA))
+    return image
 def save_image_elsewhere(image, path):
     #saves a CV2 image elsewhere -- used in setting up test segment of images
     oldfolder = "newimages"
@@ -549,6 +594,13 @@ def selectSQL(start_id):
     close_session()
     return(resultsjson)
 
+def slice_mp_image(image, bbox):
+    slice_np = image.numpy_view()[bbox["top"]:bbox["bottom"], bbox["left"]:bbox["right"]]
+    # Create a new mediapipe.Image from the cropped numpy array
+    slice_np_uint8 = slice_np.astype(np.uint8)
+    slice_mp_image = mp.Image(image_format=image.image_format, data=slice_np_uint8)
+    return slice_mp_image
+
 def get_bbox(faceDet, height, width):
     bbox = {}
     bbox_obj = faceDet.location_data.relative_bounding_box
@@ -583,6 +635,7 @@ def retro_bbox(image):
 
 def find_face(image, df):
     # image is SRGBA mp.Image (for mp task GPU implementation)
+    ensure_image_mp(image)
     # find_face_start = time.time()
 
     # height, width, _ = image.shape
@@ -636,13 +689,9 @@ def find_face(image, df):
     #     # ff_split = print_get_split(ff_split)
 
         if bbox:
-            
-            # Extract the region of interest from the underlying numpy array
-            roi_np = image.numpy_view()[bbox["top"]:bbox["bottom"], bbox["left"]:bbox["right"]]
-            # Create a new mediapipe.Image from the cropped numpy array
-            roi_np_uint8 = roi_np.astype(np.uint8)
-            roi_mp_image = mp.Image(image_format=image.image_format, data=roi_np_uint8)
-            landmarker_result = face_landmarker.detect(roi_mp_image)
+            # take just the bbox slice of the mp.Image and detect on that slice
+            mp_image_face = slice_mp_image(image, bbox)
+            landmarker_result = face_landmarker.detect(mp_image_face)
             # with mp.solutions.face_mesh.FaceMesh(static_image_mode=True,
             #                                  refine_landmarks=False,
             #                                  max_num_faces=1,
@@ -737,8 +786,8 @@ def find_face(image, df):
                 print("+++++++++++++++++  YES FACE but NO FACE LANDMARKS +++++++++++++++++++++")
                 image_id = df.at['1', 'image_id']
                 # no_image_name = f"no_face_landmarks_{image_id}.jpg"
-                no_image_name_bbox = f"no_face_landmarks_{image_id}_bbox.jpg"
-                bbox_image = cv2.cvtColor(image[bbox["top"]:bbox["bottom"], bbox["left"]:bbox["right"]], cv2.COLOR_RGB2BGR)
+                # no_image_name_bbox = f"no_face_landmarks_{image_id}_bbox.jpg"
+                # bbox_image = cv2.cvtColor(image[bbox["top"]:bbox["bottom"], bbox["left"]:bbox["right"]], cv2.COLOR_RGB2BGR)
                 # cv2.imwrite(os.path.join("/Users/michaelmandiberg/Documents/projects-active/facemap_production/face_but_no_landmarks", no_image_name), image)
                 # cv2.imwrite(os.path.join("/Users/michaelmandiberg/Documents/projects-active/facemap_production/face_but_no_landmarks", no_image_name_bbox), bbox_image)
                 is_face_no_lms = True
@@ -759,14 +808,10 @@ def find_face(image, df):
 
     return df, number_of_detections
 
+
+
 def calc_encodings(image, faceLms,bbox):## changed parameters and rebuilt
-    # convert image back to numpy array if it's a mediapipe image
-    if isinstance(image, mp.Image):
-        image = image.numpy_view()
-    # Ensure image is 3-channel (RGB) and uint8 for dlib
-    if image.shape[2] == 4:
-        image = cv2.cvtColor(image, cv2.COLOR_RGBA2RGB)
-    image = image.astype(np.uint8)
+    image = ensure_image_cv2(image)
     def get_dlib_all_points(landmark_points):
         raw_landmark_set = []
         for index in landmark_points:                       ######### CORRECTION: landmark_points_5_3 is the correct one for sure
@@ -903,55 +948,85 @@ def calc_encodings(image, faceLms,bbox):## changed parameters and rebuilt
 
 def find_body(image):
     if VERBOSE: print("find_body")
-    with mp_pose.Pose(
-        static_image_mode=True, min_detection_confidence=0.5, enable_segmentation=False) as pose: # enable_segmentation is not strictly needed but good practice for static images
-        try:
-            image_height, image_width, _ = image.shape
-            bodyLms = pose.process(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
-            if VERBOSE: print("bodyLms, ", bodyLms)
-            if VERBOSE: print("bodyLms.pose_landmarks, ", bodyLms.pose_landmarks)
-            if VERBOSE: print("bodyLms.pose_world_landmarks, ", bodyLms.pose_world_landmarks) # Check this
+    mp_image = ensure_image_mp(image)  # Ensure image is in the correct format for MediaPipe
+    is_body = body_landmarks = body_world_landmarks = None # Initialize world_landmarks
+    try:
+        # Process the image to detect pose landmarks
+        detection_result = pose_landmarker.detect(mp_image)
 
-            if not bodyLms.pose_landmarks:
-                is_body = False
-                body_landmarks = None
-                body_world_landmarks = None # Initialize world_landmarks
-            else:
-                is_body = True
-                body_landmarks = bodyLms.pose_landmarks
-                body_world_landmarks = bodyLms.pose_world_landmarks # Access World Landmarks
+        # PoseLandmarkerResult has 'pose_landmarks' and 'pose_world_landmarks' directly
+        # These are List[NormalizedLandmark] and List[Landmark] respectively,
+        # where each list contains the 33 landmarks for the detected pose.
+        # If no pose is detected, these lists will be empty.
+        if detection_result.pose_landmarks:
+            is_body = True
+            # The pose_landmarks and pose_world_landmarks are already lists of landmarks
+            # for the *single* detected pose (or the first one if multiple were allowed).
+            # If you configured num_poses > 1, you'd iterate detection_result.pose_landmarks
+            # and detection_result.pose_world_landmarks as lists of lists.
+            # With default num_poses=1, they are directly the list of 33 landmarks.
+            body_landmarks = detection_result.pose_landmarks[0] # Access the first (and likely only) pose
+            body_world_landmarks = detection_result.pose_world_landmarks[0] # Access the first (and likely only) pose
+            if VERBOSE: print(f"Body detected with {len(body_landmarks)} landmarks.")
+        else:
+            print("No body detected.")
 
-        except Exception as e: # It's better to catch specific exceptions if possible
-            print(f"[find_body] this item failed: {image}, Error: {e}")
-        return is_body, body_landmarks, body_world_landmarks # Return world_landmarks
+    except Exception as e:
+        print(f"[find_body] An error occurred: {e}")
+
+    return is_body, body_landmarks, body_world_landmarks
+    # with mp_pose.Pose(
+    #     static_image_mode=True, min_detection_confidence=0.5, enable_segmentation=False) as pose: # enable_segmentation is not strictly needed but good practice for static images
+    #     try:
+    #         image_height, image_width, _ = image.shape
+    #         bodyLms = pose.process(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+    #         if VERBOSE: print("bodyLms, ", bodyLms)
+    #         if VERBOSE: print("bodyLms.pose_landmarks, ", bodyLms.pose_landmarks)
+    #         if VERBOSE: print("bodyLms.pose_world_landmarks, ", bodyLms.pose_world_landmarks) # Check this
+
+    #         if not bodyLms.pose_landmarks:
+    #             is_body = False
+    #             body_landmarks = None
+    #             body_world_landmarks = None # Initialize world_landmarks
+    #         else:
+    #             is_body = True
+    #             body_landmarks = bodyLms.pose_landmarks
+    #             body_world_landmarks = bodyLms.pose_world_landmarks # Access World Landmarks
+
+    #     except Exception as e: # It's better to catch specific exceptions if possible
+    #         print(f"[find_body] this item failed: {image}, Error: {e}")
+    #     return is_body, body_landmarks, body_world_landmarks # Return world_landmarks
 def find_hands(image, pose):
     #print("find_body")
+    mp_image = ensure_image_mp(image)  # Ensure image is in the correct format for MediaPipe
 
-    with mp_hands.Hands(
-        static_image_mode=True,          # If True, hand detection will be performed every frame.
-        max_num_hands=2,                 # Detect a maximum of 2 hands.
-        min_detection_confidence=0.4,    # Minimum confidence to detect hands.
-        min_tracking_confidence=0.5      # Minimum confidence for hand landmarks tracking.
-    ) as hands_detector:
+    # with mp_hands.Hands(
+    #     static_image_mode=True,          # If True, hand detection will be performed every frame.
+    #     max_num_hands=2,                 # Detect a maximum of 2 hands.
+    #     min_detection_confidence=0.4,    # Minimum confidence to detect hands.
+    #     min_tracking_confidence=0.5      # Minimum confidence for hand landmarks tracking.
+    # ) as hands_detector:
+    try:
+        detection_result = hand_landmarker.detect(mp_image)
+        # try:
 
-        try:
+        #     # Assuming image is in BGR format, as typically used in OpenCV.
+        #     image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
 
-            # Assuming image is in BGR format, as typically used in OpenCV.
-            image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-
-            # Process the image to detect hand landmarks.
-            detection_result = hands_detector.process(image_rgb)
-            if not detection_result.multi_handedness:
-                # print("   >>>>>   No hands detected:", )
-                return None, None
-            else:
-                hand_landmarks_list = pose.extract_hand_landmarks(detection_result)
-                # print(f"Detected hands: {hand_landmarks_list}")
-                return True, hand_landmarks_list
-
-        except:
-            print(f"[find_hands] this item failed: {image}")
+        #     # Process the image to detect hand landmarks.
+        #     detection_result = hands_detector.process(image_rgb)
+        if not detection_result.hand_landmarks:
+            # print("   >>>>>   No hands detected:", )
             return None, None
+        else:
+            hand_landmarks_list = pose.extract_hand_landmarks(detection_result)
+            # print(f"Detected hands: {hand_landmarks_list}")
+            return True, hand_landmarks_list
+
+    except Exception as e:
+        print(f"[find_hands] An error occurred: {e}")
+        print(f"[find_hands] this item failed: {mp_image}")
+        return None, None
         # # Extract the hand landmarks and handedness.
         # hand_landmarks_list = detection_result.multi_hand_landmarks
         # handedness_list = detection_result.multi_handedness
@@ -1128,6 +1203,7 @@ def process_image_find_body_subroutine(image_id, image, bbox):
         # existing_worldbody = body_world_collection.find_one({"image_id": image_id})
         # print("existing_worldbody", existing_worldbody)
         is_body, body_landmarks, body_world_landmarks = find_body(image)
+        image = ensure_image_cv2(image)  # sort expects cv2 image
         if is_body and bbox:
             ### NORMALIZE LANDMARKS ###
             nose_pixel_pos = sort.set_nose_pixel_pos(body_landmarks, image.shape)
@@ -1144,7 +1220,7 @@ def process_image_find_body_subroutine(image_id, image, bbox):
             )
             if VERBOSE: print(f"Normalized landmarks stored for image_id: {image_id}")
         elif is_body and not bbox:
-            print("Body landmarks found but no bbox, no normalization")
+            if VERBOSE: print("Body landmarks found but no bbox, no normalization")
             n_landmarks = None
         else:
             print("No body landmarks found")
@@ -1440,12 +1516,19 @@ def save_body_hands_mysql_and_mongo(session, image_id, image, bbox_dict, body_la
     # for testing, comment out the commit
     session.commit()
 
+
 def check_is_feet(body_landmarks):
+    is_feet = None
+    if body_landmarks is not None:
+        if VERBOSE: print("checking is_feet")
+        if hasattr(body_landmarks, "landmark"):
+            body_landmarks = list(body_landmarks.landmark)
+        if VERBOSE: print(f"Body landmarks length: {len(body_landmarks)}")
     # 4. Evaluate visibility for feet landmarks (27-32)
-    foot_lms = body_landmarks.landmark[27:33]
-    # print(f"Foot landmarks: {foot_lms}")
-    visible_count = sum(1 for lm in foot_lms if lm.visibility > 0.85)
-    is_feet = (visible_count >= (len(foot_lms) / 2))
+        foot_lms = body_landmarks[27:33]
+        # print(f"Foot landmarks: {foot_lms}")
+        visible_count = sum(1 for lm in foot_lms if lm.visibility > 0.85)
+        is_feet = (visible_count >= (len(foot_lms) / 2))
     return is_feet
 
 def find_and_save_body(image_id, image, bbox, mongo_body_landmarks, hand_landmarks):
@@ -1457,7 +1540,7 @@ def find_and_save_body(image_id, image, bbox, mongo_body_landmarks, hand_landmar
         if VERBOSE: print("doing body, mongo_body_landmarks is None")
         # find body landmarks and normalize them using function
         is_body, n_landmarks, body_landmarks, body_world_landmarks, face_height, nose_pixel_pos = process_image_find_body_subroutine(image_id, image, bbox)
-        if body_landmarks is not None:
+        if is_body and body_landmarks is not None:
             is_feet = check_is_feet(body_landmarks)
         if VERBOSE: print("is_feet", image_id, is_feet)
 
@@ -1650,12 +1733,14 @@ def process_image(task):
         print(">> SPLIT >> image shape", h, w, image.shape)
         # h, w, _ = image.shape
         # image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)   
-        mp_image = mp.Image(image_format=mp.ImageFormat.SRGBA, data=cv2.cvtColor(image, cv2.COLOR_BGR2RGBA))
+        mp_image = ensure_image_mp(image)
+        # mp_image = mp.Image(image_format=mp.ImageFormat.SRGBA, data=cv2.cvtColor(image, cv2.COLOR_BGR2RGBA))
         # mp_image is RGB now 
         # this is for when you need to move images into a testing folder structure
         # save_image_elsewhere(image, task)
-    except:
-        print(f"[process_image]this item failed: {task}")
+    except Exception as e:
+        print('Error:', str(e))
+        print(f"[process_image] this item failed: {task}")
 
     # print(">> SPLIT >> done imread, about to find face")
     # pr_split = print_get_split(pr_split)

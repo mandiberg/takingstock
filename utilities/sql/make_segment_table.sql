@@ -5,10 +5,10 @@ SET GLOBAL innodb_buffer_pool_size = 8053063680;
 
 -- cleanup
 DROP TABLE SegmentHelper_dec27_getty_noface ;
-DELETE FROM SegmentHelper_dec27_getty_noface;
+DELETE FROM SegmentHelper_june2025_nmlGPU300k;
 
 -- create helper segment table
-CREATE TABLE SegmentHelper_may2025_4x4faces (
+CREATE TABLE SegmentHelper_june2025_nmlGPU300k (
     seg_image_id int NOT NULL AUTO_INCREMENT PRIMARY KEY,
     image_id INTEGER,
     FOREIGN KEY (image_id) REFERENCES Images(image_id)
@@ -221,18 +221,21 @@ WHERE e.mongo_encodings = 1
 
    
 -- for making a helper from segmentbig
-INSERT INTO SegmentHelper_may2025_4x4faces (image_id)
+INSERT INTO SegmentHelper_june2025_nmlGPU300k (image_id)
 SELECT DISTINCT e.image_id
 FROM SegmentBig_isface e
-JOIN Images i ON i.image_id = e.image_id
+JOIN Images i 
+ON i.image_id = e.image_id
+JOIN NMLImages n ON n.image_id = e.image_id
 WHERE e.face_x > -45 AND e.face_x < -6
     AND e.face_y > -4 AND e.face_y < 4
     AND e.face_z > -4 AND e.face_z < 4
     AND NOT EXISTS (
         SELECT 1
-        FROM SegmentHelper_may2025_4x4faces s
+        FROM SegmentHelper_june2025_nmlGPU300k s
         WHERE s.image_id = e.image_id
     )
+    AND n.nml_id > 4191363
 LIMIT 2000000
 ;
 

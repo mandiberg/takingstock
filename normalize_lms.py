@@ -17,7 +17,7 @@ import mediapipe as mp
 import shutil
 import pandas as pd
 import json
-from my_declarative_base import Base, Clusters, Encodings, Images,PhoneBbox, SegmentTable, Images
+from my_declarative_base import Base, Clusters, Encodings, Images,PhoneBbox, SegmentTable, SegmentBig, Images
 #from sqlalchemy.ext.declarative import declarative_base
 from mp_sort_pose import SortPose
 import pymongo
@@ -31,14 +31,15 @@ NOSE_ID=0
 
 
 Base = declarative_base()
-VERBOSE = False
-IS_SSD = True
+VERBOSE = True
+IS_SSD = False
 
 SKIP_EXISTING = False # Skips images with a normed bbox but that have Images.h
 USE_OBJ = 0 # select the bbox to work with
 SKIP_BODY = False # skip body landmarks. mostly you want to skip when doing obj bbox
                 # or are just redoing hands
-REPROCESS_HANDS = False # do hands
+REPROCESS_HANDS = True # do hands
+IS_SEGMENT_BIG = True # use SegmentBig table
 
 io = DataIO(IS_SSD)
 db = io.db
@@ -99,13 +100,13 @@ EXPAND = False
 ONE_SHOT = False # take all files, based off the very first sort order.
 JUMP_SHOT = False # jump to random file if can't find a run
 
-sort = SortPose(motion, face_height_output, image_edge_multiplier_sm,EXPAND, ONE_SHOT, JUMP_SHOT, None, VERBOSE, False, None, 0)
+sort = SortPose(motion, face_height_output, image_edge_multiplier_sm,EXPAND, ONE_SHOT, JUMP_SHOT, None, VERBOSE, False, "planar_hands", 0)
 # sort = SortPose(motion, face_height_output, image_edge_multiplier,EXPAND, ONE_SHOT, JUMP_SHOT, HSV_BOUNDS, VERBOSE,INPAINT, SORT_TYPE, OBJ_CLS_ID)
 
 # Create a session
 session = scoped_session(sessionmaker(bind=engine))
 
-LIMIT= 1000000
+LIMIT= 10
 # Initialize the counter
 counter = 0
 
@@ -117,15 +118,22 @@ if VERBOSE: print("objects created")
 
 
 import cv2
+from sqlalchemy import Column, Integer, ForeignKey
 
 def get_shape(target_image_id):
     ## get the image somehow
     if VERBOSE: print("get_shape target_image_id", target_image_id)
     
-    select_image_ids_query = (
-        select(SegmentTable.site_name_id, SegmentTable.imagename)
-        .filter(SegmentTable.image_id == target_image_id)
-    )
+    if IS_SEGMENT_BIG:
+        select_image_ids_query = (
+            select(SegmentBig.site_name_id, SegmentBig.imagename)
+            .filter(SegmentBig.image_id == target_image_id)
+        )
+    else:
+        select_image_ids_query = (
+            select(SegmentTable.site_name_id, SegmentTable.imagename)
+            .filter(SegmentTable.image_id == target_image_id)
+        )
     
     result = session.execute(select_image_ids_query).fetchall()
     site_name_id, imagename = result[0]
@@ -291,10 +299,16 @@ def get_face_height_face_lms(target_image_id,bbox, face_landmarks=None):
         return None
 
 def get_face_height_bbox(target_image_id):
-    select_image_ids_query = (
-        select(SegmentTable.bbox)
-        .filter(SegmentTable.image_id == target_image_id)
-    )
+    if IS_SEGMENT_BIG:
+        select_image_ids_query = (
+            select(SegmentBig.bbox)
+            .filter(SegmentBig.image_id == target_image_id)
+        )
+    else:
+        select_image_ids_query = (
+            select(SegmentTable.bbox)
+            .filter(SegmentTable.image_id == target_image_id)
+        )
     result = session.execute(select_image_ids_query).fetchall()
     bbox=result[0][0]
 
@@ -364,6 +378,7 @@ def calc_nlm(image_id_to_shape, lock, session):
     if sort.VERBOSE: print("nose_pixel_pos from face",nose_pixel_pos_face)
     # only do this if the io.get_encodings_mongo didn't return the body landmarks
     if not body_landmarks: body_landmarks=get_landmarks_mongo(target_image_id)
+    print("body_landmarks",type(body_landmarks))
     if body_landmarks:
         nose_pixel_pos_body_withviz = sort.set_nose_pixel_pos(body_landmarks,[height,width])
     else:
@@ -428,7 +443,7 @@ def calc_nlm(image_id_to_shape, lock, session):
         cv2.destroyAllWindows()
     # set the nose pixel position in the expected dictionary format
 
-    # visualize_landmarks(target_image_id, nose_pixel_pos_face, nose_pixel_pos_body, body_landmarks)
+    visualize_landmarks(target_image_id, nose_pixel_pos_face, nose_pixel_pos_body, body_landmarks)
     
     ## end testing stuff
 
@@ -444,9 +459,11 @@ def calc_nlm(image_id_to_shape, lock, session):
         session.query(Encodings).filter(Encodings.image_id == target_image_id).update({
                 Encodings.two_noses: 1
             }, synchronize_session=False)
-        session.query(SegmentTable).filter(SegmentTable.image_id == target_image_id).update({
-                SegmentTable.two_noses: 1
-            }, synchronize_session=False)
+        if not IS_SEGMENT_BIG:
+            # skip this if using SegmentBig, no two_noses column
+            session.query(SegmentTable).filter(SegmentTable.image_id == target_image_id).update({
+                    SegmentTable.two_noses: 1
+                }, synchronize_session=False)
         session.commit()
         return
 
@@ -461,9 +478,11 @@ def calc_nlm(image_id_to_shape, lock, session):
         session.query(Encodings).filter(Encodings.image_id == target_image_id).update({
                 Encodings.mongo_hand_landmarks_norm: 1
             }, synchronize_session=False)
-        session.query(SegmentTable).filter(SegmentTable.image_id == target_image_id).update({
-                SegmentTable.mongo_hand_landmarks_norm: 1
-            }, synchronize_session=False)
+        if not IS_SEGMENT_BIG:
+            # skip this if using SegmentBig, no mongo_hand_landmarks_norm column
+            session.query(SegmentTable).filter(SegmentTable.image_id == target_image_id).update({
+                    SegmentTable.mongo_hand_landmarks_norm: 1
+                }, synchronize_session=False)
         # session.commit()    
         
     if body_landmarks:
@@ -489,9 +508,11 @@ def calc_nlm(image_id_to_shape, lock, session):
             session.query(Encodings).filter(Encodings.image_id == target_image_id).update({
                     Encodings.mongo_body_landmarks_norm: 1
                 }, synchronize_session=False)
-            session.query(SegmentTable).filter(SegmentTable.image_id == target_image_id).update({
-                    SegmentTable.mongo_body_landmarks_norm: 1
-                }, synchronize_session=False)
+            if not IS_SEGMENT_BIG:
+                # skip this if using SegmentBig, no mongo_body_landmarks_norm column
+                session.query(SegmentTable).filter(SegmentTable.image_id == target_image_id).update({
+                        SegmentTable.mongo_body_landmarks_norm: 1
+                    }, synchronize_session=False)
             # session.commit()
 
             if VERBOSE: print("did insert_n_landmarks, going to get phone bbox")
@@ -563,6 +584,24 @@ else:
         filter(SegmentTable.mongo_body_landmarks_norm.is_(None)).\
         limit(LIMIT)
 
+# define SegmentHelper 
+
+class SegmentHelper(Base):
+    __tablename__ = 'SegmentHelper_june2025_nmlGPU300k'
+    seg_image_id = Column(Integer, primary_key=True, autoincrement=True)
+    image_id = Column(Integer, ForeignKey('Images.image_id'))
+
+# TESTING OVERRIDE seghelper is for testing
+distinct_image_ids_query = select(Images.image_id.distinct(), Images.h, Images.w, SegmentBig.bbox).\
+    outerjoin(SegmentBig,Images.image_id == SegmentBig.image_id).\
+    outerjoin(SegmentHelper,Images.image_id == SegmentHelper.image_id).\
+    outerjoin(Encodings, Encodings.image_id == SegmentBig.image_id).\
+    filter(Encodings.bbox != None).\
+    filter(Encodings.two_noses.is_(None)).\
+    filter(Encodings.mongo_body_landmarks == 1).\
+    filter(Encodings.mongo_body_landmarks_norm.is_(None)).\
+    limit(LIMIT)
+
 # put this back in at future date if needed
         # filter(Images.h == None).\
         # filter(SegmentTable.image_id >= 9942966).\
@@ -589,16 +628,17 @@ if SKIP_EXISTING:
 
 if VERBOSE: print("about to execute query")
 results = session.execute(distinct_image_ids_query).fetchall()
-
+if VERBOSE: print("query executed, results length", len(results))
 # make a dictionary of image_id to shape
 for result in results:
+    if VERBOSE: print("result", result)
     image_id_to_shape = {}
     image_id, height, width, bbox = result
     image_id_to_shape[image_id] = (height, width, bbox)
 
     ### temp single thread for debugging
     # calc_nlm(image_id_to_shape, lock=None, session=session)
-    # print("done with single thread")
+    if VERBOSE: print("done with single thread", image_id_to_shape)
     # print(" ")
     # print(" ")
     work_queue.put(image_id_to_shape)        

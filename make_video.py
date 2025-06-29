@@ -30,7 +30,8 @@ CYCLECOUNT = 1
 # SegmentTable_name = 'SegmentOct20'
 # SegmentHelper_name = None
 SegmentTable_name = 'SegmentBig_isface'
-SegmentHelper_name = 'SegmentHelper_may2025_4x4faces'
+# SegmentHelper_name = 'SegmentHelper_may2025_4x4faces'
+SegmentHelper_name = 'SegmentHelper_june2025_nmlGPU300k'
 # SATYAM, this is MM specific
 # for when I'm using files on my SSD vs RAID
 IS_SSD = True
@@ -68,7 +69,7 @@ USE_NOSEBRIDGE = True
 TSP_SORT=False
 # this is for controlling if it is using
 # all clusters, 
-IS_HAND_POSE_FUSION = True # do we use fusion clusters
+IS_HAND_POSE_FUSION = False # do we use fusion clusters
 ONLY_ONE = False # only one cluster, or False for video fusion, this_cluster = [CLUSTER_NO, HAND_POSE_NO]
 GENERATE_FUSION_PAIRS = False # if true it will query based on MIN_VIDEO_FUSION_COUNT and create pairs
                                 # if false, it will grab the list of pair lists below
@@ -137,11 +138,11 @@ SAVE_IMG_PROCESS = False
 IS_ANGLE_SORT = False
 
 # this control whether sorting by topics
-IS_TOPICS = True
+IS_TOPICS = False
 N_TOPICS = 64 # changing this to 14 triggers the affect topic fusion
 
 IS_ONE_TOPIC = False
-TOPIC_NO = [11] # if doing an affect topic fusion, this is the wrapper topic
+TOPIC_NO = [0] # if doing an affect topic fusion, this is the wrapper topic
 # groupings of affect topics
 NEG_TOPICS = [0,1,3,5,8,9,13]
 POS_TOPICS = [4,6,7,10,11,12]
@@ -191,13 +192,12 @@ if not GENERATE_FUSION_PAIRS:
 
         # T0 sports
         # selects
-        # [19, 61],
-        # [22, 2], 
-        # # [19, 95], 
-        # [9, 2], [9, 13],
-        # [8, 13], [19, 66], [19, 95], [21, 116], [24, 13]
+        [19, 61],
+        [22, 2], 
+        [9, 2], [9, 13],
+        [19, 95],  [24, 13],
         # from fusion analysis
-        # [19, 66], [8, 13], [29, 37], [17, 22], [19, 9], [4, 49], [6, 22], [6, 122], [21, 116], [24, 113], [26, 47], [26, 67]
+        [19, 66], [8, 13], [29, 37], [17, 22], [19, 9], [4, 49], [6, 22], [6, 122], [21, 116], [24, 113], [26, 47], [26, 67]
 
 
         # T34 achieve scream
@@ -223,8 +223,7 @@ if not GENERATE_FUSION_PAIRS:
         # [8, 57],[22, 27]
 
         #T11 Business semi-unique
-        # [25,64], [14,45], [23,47], [7,120], [12,33], [7,105], [26,10], [23,80], [12,100], [21,126], [7,64], [8,41], [7,57], [8,64], [12,19], [23,10], [12,24], [7,51], [12,118], [12,27], [12,93], [2,80], [23,110], 
-        [5,60], [26,60], [26,31], [23,45], [21,58], [16,110], [14,28], [14,110], [1,56], [21,5], [17,22], [7,54], [1,64], [18,8], [8,105], [8,90], [8,57], [7,41], [22,27], [13,106], [22,33], [7,1], [1,4], [14,86], [11,48], [18,29], [16,10], [20,102], [3,94], [8,54], [11,71], [6,81], [10,31], [30,86]
+        # [25,64], [14,45], [23,47], [7,120], [12,33], [7,105], [26,10], [23,80], [12,100], [21,126], [7,64], [8,41], [7,57], [8,64], [12,19], [23,10], [12,24], [7,51], [12,118], [12,27], [12,93], [2,80], [23,110], [5,60], [26,60], [26,31], [23,45], [21,58], [16,110], [14,28], [14,110], [1,56], [21,5], [17,22], [7,54], [1,64], [18,8], [8,105], [8,90], [8,57], [7,41], [22,27], [13,106], [22,33], [7,1], [1,4], [14,86], [11,48], [18,29], [16,10], [20,102], [3,94], [8,54], [11,71], [6,81], [10,31], [30,86]
         #T22 finger point semi-unique
         # [30,36], [30,111], [30,114], [15,35], [1,29], [6,98], [6,78], [14,114], [13,71], [1,8], [18,99], [15,111], [30,89], [30,98], [1,123], [11,106], [11,33], [30,77], [15,78], [1,42], [15,74], [14,10], [16,114], [14,9], [6,74], [3,114], [30,78], [21,48], [18,40], [15,114], [24,70], [30,9], [11,108], [30,94], [24,56], [14,60], [28,19], [15,89], [24,64], [21,99], [16,86], [15,9], [22,15], [21,15], [13,48], [6,36], [8,111], [10,99], [4,48], [10,8], [30,74], [18,123], [11,17], [21,8], [1,54], [15,98], [15,115], [22,19], [30,10], [24,54], [30,115], [6,72], [1,99], [15,22], [1,56], [30,44], [3,77], [16,44], [15,86], [30,46], [21,83], [21,52], [15,55], [31,25], [18,8], [11,48], [6,115], [11,71], [18,29], [1,64], [20,102], [3,94], [21,72], [6,22], [30,55], [14,86], [30,86], [16,101], [22,33], [16,10], [8,54], [2,44], [10,31]
         #T22 finger point semi-unique TEST
@@ -553,9 +552,9 @@ face_height_output = 1000
 # units are ratio of faceheight
 # top, right, bottom, left
 pose_crop_dict = {
-    0: 6, 1: 1, 2: 5, 3: 2, 4: 1, 5: 7, 6: 2, 7: 5, 8: 5, 9: 2, 10: 3, 11: 1, 12: 5, 13: 1, 14: 0,
-    15: 2, 16: 1, 17: 8, 18: 4, 19: 9, 20: 2, 21: 1, 22: 4, 23: 0, 24: 1, 25: 2, 26: 5, 27: 6, 28: 1, 29: 2,
-    30: 1, 31: 2
+    0: 11, 1: 1, 2: 5, 3: 2, 4: 1, 5: 7, 6: 2, 7: 5, 8: 5, 9: 2, 10: 3, 11: 1, 12: 5, 13: 1, 14: 0,
+    15: 2, 16: 1, 17: 10, 18: 4, 19: 9, 20: 2, 21: 1, 22: 4, 23: 0, 24: 1, 25: 2, 26: 5, 27: 11, 28: 1, 29: 11,
+    30: 5, 31: 2
 }
 multiplier_list = [
     [1.5,3,3.3,3], # 0 2x3 but go lower
@@ -564,11 +563,12 @@ multiplier_list = [
     [1.5,2,4.5,2], # 3 # 3x2 portrait 2025
     [1.5,2.5,2.6,2.5], # 4 # 4x5 landscape 2025
     [1.5,2,3.5,2], # 5 # 5x4 portrait 2025
-    [1.3,1.85,2.4,1.85], # 6 -- placeholder to test if SQ
+    [1.5,2.2,4,2.2], # 6 5x4 but go lower and wider 
     [1.5,2,4.5,2], # 7 ~6x2 full length portrait 2025 
     [3.5,2.6,3.5,2.6], # 8 arms raised 2025 
     [1.5,3.5,5.5,3.5], # 9 seated lotus
-    [3.5,3.5,5.5,3.5] # 9 seated lotus
+    [3.5,3.5,3.5,3.5], # 10 arms raised and gunshow 2025 
+    [1.3,1.85,2.4,1.85], # 11 -- placeholder to test if SQ
 ]
 # initializing default square crop
 image_edge_multiplier = [1.3,1.85,2.4,1.85] # tighter square crop for paris photo videos < Oct 29 FINAL VERSION NOV 2024 DO NOT CHANGE

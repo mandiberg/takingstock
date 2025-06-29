@@ -92,9 +92,9 @@ CREATE TABLE WanderingImages (
     );
 
 CREATE TABLE NMLImages (
-    image_id INT NOT NULL,
+    nml_id INT AUTO_INCREMENT PRIMARY KEY,
+    image_id INT NOT NULL UNIQUE,
     is_nml_db BOOLEAN,
-    PRIMARY KEY (image_id),
     FOREIGN KEY (image_id) REFERENCES images(image_id)
 );
 

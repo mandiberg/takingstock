@@ -56,7 +56,7 @@ ROOT_FOLDER_PATH = '/Volumes/OWC4/images_to_assemble'
 # if IS_CLUSTER this should be the folder holding all the cluster folders
 # if not, this should be the individual folder holding the images
 # will not accept clusterNone -- change to cluster00
-FOLDER_NAME = "Topic11_fullsort_video_fulltest_pt1"
+FOLDER_NAME = "Topic0_short_vidtest"
 FOLDER_PATH = os.path.join(ROOT_FOLDER_PATH,FOLDER_NAME)
 DIRS = ["1x1", "4x3", "16x10"]
 OUTPUT = os.path.join(io.ROOTSSD, "audioproduction")
