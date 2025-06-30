@@ -73,16 +73,16 @@ class SelectPose:
 
 
 
-    def get_face_landmarks(self,landmarker_result,bbox):
+    def get_face_landmarks(self,results,bbox):
 
         height = self.h
         width = self.w
         center = (self.size[1] / 2, self.size[0] / 2)
 
         dist=[]
-        for faceNum, faceLms in enumerate(landmarker_result.face_landmarks):                            # loop through all matches
+        for faceNum, faceLms in enumerate(results.multi_face_landmarks):                            # loop through all matches
             faceXY = []
-            for id,lm in enumerate(faceLms):                           # loop over all land marks of one face
+            for id,lm in enumerate(faceLms.landmark):                           # loop over all land marks of one face
                 # ih, iw, _ = self.image.shape
                 # gone direct to obj dimensions
                 # x,y = int(lm.x*self.w), int(lm.y*self.h)
@@ -127,7 +127,7 @@ class SelectPose:
 
     def draw_face_landmarks(self, image, faceLms, bbox):
         # Draw the landmarks
-        for id, lm in enumerate(faceLms):
+        for id, lm in enumerate(faceLms.landmark):
             # print(bbox)
             bbox_width = bbox["right"]-bbox["left"]
             bbox_height = bbox["bottom"]-bbox["top"]
@@ -279,7 +279,7 @@ class SelectPose:
         # I don't think i need all of this. but putting it here.
         img_h = self.h
         img_w = self.w
-        for idx, lm in enumerate(faceLms):
+        for idx, lm in enumerate(faceLms.landmark):
             if idx == point:
                 pointXY = (lm.x * img_w, lm.y * img_h)
         return pointXY
@@ -290,7 +290,7 @@ class SelectPose:
         img_w = self.w
         face_3d = []
         face_2d = []
-        for idx, lm in enumerate(faceLms):
+        for idx, lm in enumerate(faceLms.landmark):
             if idx == 33 or idx == 263 or idx == 1 or idx == 61 or idx == 291 or idx == 199 or idx == 10 or idx == 152:
                 x, y = int(lm.x * img_w), int(lm.y * img_h)
 
@@ -673,21 +673,18 @@ class SelectPose:
         hands_data = []
 
         # Loop through each hand detected and extract the necessary details
-        if detection_result.hand_landmarks:
-            for idx, hand_landmarks in enumerate(detection_result.hand_landmarks):
+        if detection_result.multi_hand_landmarks:
+            for idx, hand_landmarks in enumerate(detection_result.multi_hand_landmarks):
                 # Extract landmarks in image coordinates (x, y, z)
-                # Each 'hand_landmarks' is a list of NormalizedLandmark objects
-                image_landmarks = [(lm.x, lm.y, lm.z) for lm in hand_landmarks]
+                image_landmarks = [(lm.x, lm.y, lm.z) for lm in hand_landmarks.landmark]
 
                 # Extract landmarks in world coordinates (for 3D space)
-                # Access the corresponding world landmarks for this hand using idx
-                world_landmarks = [(lm.x, lm.y, lm.z) for lm in detection_result.hand_world_landmarks[idx]]
+                world_landmarks = [(lm.x, lm.y, lm.z) for lm in detection_result.multi_hand_world_landmarks[idx].landmark]
 
                 # Extract confidence score and handedness (left or right hand)
-                # handedness is a List[Category], so we take the first category
-                handedness_category = detection_result.handedness[idx][0]
-                confidence_score = handedness_category.score
-                hand_label = handedness_category.category_name  # "Left" or "Right"
+                handedness = detection_result.multi_handedness[idx].classification[0]
+                confidence_score = handedness.score
+                hand_label = handedness.label  # "Left" or "Right"
 
                 # Create a dictionary to store all information for this hand
                 hand_data = {

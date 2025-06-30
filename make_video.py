@@ -30,8 +30,8 @@ CYCLECOUNT = 1
 # SegmentTable_name = 'SegmentOct20'
 # SegmentHelper_name = None
 SegmentTable_name = 'SegmentBig_isface'
-# SegmentHelper_name = 'SegmentHelper_may2025_4x4faces'
-SegmentHelper_name = 'SegmentHelper_june2025_nmlGPU300k'
+SegmentHelper_name = 'SegmentHelper_may2025_4x4faces'
+# SegmentHelper_name = 'SegmentHelper_june2025_nmlGPU300k'
 # SATYAM, this is MM specific
 # for when I'm using files on my SSD vs RAID
 IS_SSD = True
@@ -69,7 +69,7 @@ USE_NOSEBRIDGE = True
 TSP_SORT=False
 # this is for controlling if it is using
 # all clusters, 
-IS_HAND_POSE_FUSION = False # do we use fusion clusters
+IS_HAND_POSE_FUSION = True # do we use fusion clusters
 ONLY_ONE = False # only one cluster, or False for video fusion, this_cluster = [CLUSTER_NO, HAND_POSE_NO]
 GENERATE_FUSION_PAIRS = False # if true it will query based on MIN_VIDEO_FUSION_COUNT and create pairs
                                 # if false, it will grab the list of pair lists below
@@ -138,7 +138,7 @@ SAVE_IMG_PROCESS = False
 IS_ANGLE_SORT = False
 
 # this control whether sorting by topics
-IS_TOPICS = False
+IS_TOPICS = True
 N_TOPICS = 64 # changing this to 14 triggers the affect topic fusion
 
 IS_ONE_TOPIC = False

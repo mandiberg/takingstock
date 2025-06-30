@@ -15,11 +15,14 @@ import gc
 
 import sys
 import re
+import types # Import types for SimpleNamespace
         
 import numpy as np
 import mediapipe as mp
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
+from mediapipe.framework.formats import landmark_pb2 # Needed for NormalizedLandmarkList and LandmarkList
+from mediapipe.framework.formats import classification_pb2 # Needed for ClassificationList and Classification
 import pandas as pd
 from ultralytics import YOLO
 
@@ -632,6 +635,65 @@ def retro_bbox(image):
         print("no results???")
     return bbox_json
 
+def convert_landmarker_to_facemesh(landmarker_result: vision.FaceLandmarkerResult):
+    """
+    Converts a mediapipe.tasks.python.vision.FaceLandmarkerResult object
+    to mimic the structure of the results object from the older
+    mp.solutions.face_mesh.FaceMesh().process() method.
+
+    Args:
+        landmarker_result (vision.FaceLandmarkerResult): The result object
+                                                        from face_landmarker.detect().
+
+    Returns:
+        types.SimpleNamespace: A mock results object with 'multi_face_landmarks',
+                            'multi_face_blendshapes', and 'multi_face_transformations'
+                            attributes, structured like the old API.
+    """
+    # Create a mock results object
+    results = types.SimpleNamespace()
+    results.multi_face_landmarks = []
+    results.multi_face_blendshapes = []
+    results.multi_face_transformations = []
+
+    if landmarker_result.face_landmarks:
+        for face_lms_list in landmarker_result.face_landmarks:
+            # Create a NormalizedLandmarkList for each face
+            normalized_landmark_list = landmark_pb2.NormalizedLandmarkList()
+            # Convert each item to a NormalizedLandmark protobuf message
+            for lm in face_lms_list:
+                normalized_landmark = landmark_pb2.NormalizedLandmark()
+                normalized_landmark.x = lm.x
+                normalized_landmark.y = lm.y
+                normalized_landmark.z = lm.z
+                if hasattr(lm, "visibility"):
+                    normalized_landmark.visibility = lm.visibility
+                if hasattr(lm, "presence"):
+                    normalized_landmark.presence = lm.presence
+                normalized_landmark_list.landmark.append(normalized_landmark)
+            results.multi_face_landmarks.append(normalized_landmark_list)
+
+    if landmarker_result.face_blendshapes:
+        for blendshapes_list in landmarker_result.face_blendshapes:
+            # Create a ClassificationList (which is how blendshapes were structured in old API)
+            classification_list = classification_pb2.ClassificationList()
+            for category in blendshapes_list:
+                # Create a Classification object for each blendshape category
+                classification = classification_pb2.Classification(
+                    index=category.index,
+                    score=category.score,
+                    label=category.category_name # Use category_name as label
+                )
+                classification_list.classification.append(classification)
+            # The old API's multi_face_blendshapes was a list of ClassificationList objects
+            results.multi_face_blendshapes.append(classification_list)
+
+    if landmarker_result.facial_transformation_matrixes:
+        # The transformation matrices are already numpy arrays in the new API,
+        # and the old API also expected a list of numpy arrays.
+        results.multi_face_transformations = landmarker_result.facial_transformation_matrixes
+
+    return results
 
 def find_face(image, df):
     # image is SRGBA mp.Image (for mp task GPU implementation)
@@ -713,9 +775,10 @@ def find_face(image, df):
                 is_face = True
                 pose = SelectPose(image)
 
+                results = convert_landmarker_to_facemesh(landmarker_result)
 
                 #get landmarks
-                faceLms = pose.get_face_landmarks(landmarker_result,bbox)
+                faceLms = pose.get_face_landmarks(results,bbox)
                 # faceLms = pose.get_face_landmarks(results, image,bbox)
 
                 # print(">> find_face SPLIT >> got lms")
@@ -818,8 +881,8 @@ def calc_encodings(image, faceLms,bbox):## changed parameters and rebuilt
             # print(faceLms[index].x)
 
             # second attempt, tries to project faceLms from bbox origin
-            x = int(faceLms[index].x * width + bbox["left"])
-            y = int(faceLms[index].y * height + bbox["top"])
+            x = int(faceLms.landmark[index].x * width + bbox["left"])
+            y = int(faceLms.landmark[index].y * height + bbox["top"])
 
             landmark_point=dlib.point([x,y])
             raw_landmark_set.append(landmark_point)
@@ -946,7 +1009,106 @@ def calc_encodings(image, faceLms,bbox):## changed parameters and rebuilt
     # print(len(encodings))
     return np.array(encodings).tolist()
 
+def convert_landmarker_to_bodyLms(detection_result: vision.PoseLandmarkerResult):
+    """
+    Converts a mediapipe.tasks.python.vision.PoseLandmarkerResult object
+    to mimic the structure of the results object (bodyLms) from the older
+    mp.solutions.pose.Pose().process() method.
+
+    Args:
+        detection_result (vision.PoseLandmarkerResult): The result object
+                                                        from pose_landmarker.detect().
+
+    Returns:
+        types.SimpleNamespace: A mock results object with 'pose_landmarks' and
+                            'pose_world_landmarks' attributes, structured like the old API.
+    """
+    bodyLms = types.SimpleNamespace()
+    bodyLms.pose_landmarks = [] # Initialize as a list
+    bodyLms.pose_world_landmarks = [] # Initialize as a list
+    # segmentation_mask is not included as enable_segmentation was False in old code
+
+    if detection_result.pose_landmarks:
+        normalized_landmark_list = landmark_pb2.NormalizedLandmarkList()
+        # Iterate and append each landmark individually to avoid TypeError
+        for lm in detection_result.pose_landmarks[0]:
+            new_lm = landmark_pb2.NormalizedLandmark(x=lm.x, y=lm.y, z=lm.z, visibility=lm.visibility, presence=lm.presence)
+            normalized_landmark_list.landmark.append(new_lm)
+        bodyLms.pose_landmarks.append(normalized_landmark_list) # Append the protobuf object to the list
+
+    if detection_result.pose_world_landmarks:
+        world_landmark_list = landmark_pb2.LandmarkList()
+        # Iterate and append each landmark individually to avoid TypeError
+        for lm in detection_result.pose_world_landmarks[0]:
+            new_lm = landmark_pb2.Landmark(x=lm.x, y=lm.y, z=lm.z, visibility=lm.visibility, presence=lm.presence)
+            world_landmark_list.landmark.append(new_lm)
+        bodyLms.pose_world_landmarks.append(world_landmark_list) # Append the protobuf object to the list
+
+    return bodyLms
+
+def convert_landmarker_to_handLms(detection_result: vision.HandLandmarkerResult):
+    """
+    Converts a mediapipe.tasks.python.vision.HandLandmarkerResult object
+    to mimic the structure of the results object from the older
+    mp.solutions.hands.Hands().process() method.
+
+    Args:
+        detection_result (vision.HandLandmarkerResult): The result object
+                                                        from hand_landmarker.detect().
+
+    Returns:
+        types.SimpleNamespace: A mock results object with 'multi_hand_landmarks',
+                            'multi_hand_world_landmarks', and 'multi_handedness'
+                            attributes, structured like the old API.
+    """
+    results = types.SimpleNamespace()
+    results.multi_hand_landmarks = []
+    results.multi_hand_world_landmarks = []
+    results.multi_handedness = []
+
+    if detection_result.hand_landmarks:
+        for idx, hand_lms_list in enumerate(detection_result.hand_landmarks):
+            # Convert hand_landmarks (List[NormalizedLandmark]) to NormalizedLandmarkList
+            normalized_landmark_list = landmark_pb2.NormalizedLandmarkList()
+            # Iterate and append each landmark individually to avoid TypeError
+            for lm in hand_lms_list:
+                new_lm = landmark_pb2.NormalizedLandmark(x=lm.x, y=lm.y, z=lm.z, visibility=lm.visibility, presence=lm.presence)
+                normalized_landmark_list.landmark.append(new_lm)
+            results.multi_hand_landmarks.append(normalized_landmark_list)
+
+            # Convert hand_world_landmarks (List[Landmark]) to LandmarkList
+            if detection_result.hand_world_landmarks and idx < len(detection_result.hand_world_landmarks):
+                world_landmark_list = landmark_pb2.LandmarkList()
+                # Iterate and append each landmark individually to avoid TypeError
+                for lm in detection_result.hand_world_landmarks[idx]:
+                    new_lm = landmark_pb2.Landmark(x=lm.x, y=lm.y, z=lm.z, visibility=lm.visibility, presence=lm.presence)
+                    world_landmark_list.landmark.append(new_lm)
+                results.multi_hand_world_landmarks.append(world_landmark_list)
+            else:
+                results.multi_hand_world_landmarks.append(landmark_pb2.LandmarkList())
+
+
+            # Convert handedness (List[Category]) to ClassificationList
+            if detection_result.handedness and idx < len(detection_result.handedness):
+                classification_list = classification_pb2.ClassificationList()
+                # Iterate and append each category individually to avoid TypeError
+                for category in detection_result.handedness[idx]:
+                    classification = classification_pb2.Classification(
+                        index=category.index,
+                        score=category.score,
+                        label=category.category_name
+                    )
+                    classification_list.classification.append(classification)
+                results.multi_handedness.append(classification_list)
+            else:
+                results.multi_handedness.append(classification_pb2.ClassificationList())
+
+    return results
+
 def find_body(image):
+
+
+
     if VERBOSE: print("find_body")
     mp_image = ensure_image_mp(image)  # Ensure image is in the correct format for MediaPipe
     is_body = body_landmarks = body_world_landmarks = None # Initialize world_landmarks
@@ -959,6 +1121,8 @@ def find_body(image):
         # where each list contains the 33 landmarks for the detected pose.
         # If no pose is detected, these lists will be empty.
         if detection_result.pose_landmarks:
+
+            # print("got bodyLms", detection_result )
             is_body = True
             # The pose_landmarks and pose_world_landmarks are already lists of landmarks
             # for the *single* detected pose (or the first one if multiple were allowed).
@@ -967,7 +1131,6 @@ def find_body(image):
             # With default num_poses=1, they are directly the list of 33 landmarks.
             body_landmarks = detection_result.pose_landmarks[0] # Access the first (and likely only) pose
             body_world_landmarks = detection_result.pose_world_landmarks[0] # Access the first (and likely only) pose
-            if VERBOSE: print(f"Body detected with {len(body_landmarks)} landmarks.")
         else:
             print("No body detected.")
 
@@ -996,7 +1159,43 @@ def find_body(image):
     #     except Exception as e: # It's better to catch specific exceptions if possible
     #         print(f"[find_body] this item failed: {image}, Error: {e}")
     #     return is_body, body_landmarks, body_world_landmarks # Return world_landmarks
-def find_hands(image, pose):
+def find_hands(image, pose):    
+    def extract_hand_landmarks_new_api(detection_result):
+        """
+        Extracts hand landmarks and related data from the new MediaPipe HandLandmarkerResult.
+        This function produces a data structure similar to the old API's output.
+
+        Args:
+            detection_result (mediapipe.tasks.python.vision.HandLandmarkerResult):
+                The result object from hand_landmarker.detect().
+
+        Returns:
+            list: A list of dictionaries, where each dictionary contains:
+                - "image_landmarks": List of (x, y, z) tuples for image coordinates.
+                - "world_landmarks": List of (x, y, z) tuples for world coordinates.
+                - "handedness": String label ("Left" or "Right").
+                - "confidence_score": Float confidence score for handedness.
+        """
+        hands_data = []
+
+        if detection_result.hand_landmarks:
+            for idx, hand_landmarks in enumerate(detection_result.hand_landmarks):
+                image_landmarks = [(lm.x, lm.y, lm.z) for lm in hand_landmarks]
+                world_landmarks = [(lm.x, lm.y, lm.z) for lm in detection_result.hand_world_landmarks[idx]]
+
+                handedness_category = detection_result.handedness[idx][0]
+                confidence_score = handedness_category.score
+                hand_label = handedness_category.category_name
+
+                hand_data = {
+                    "image_landmarks": image_landmarks,
+                    "world_landmarks": world_landmarks,
+                    "handedness": hand_label,
+                    "confidence_score": confidence_score
+                }
+                hands_data.append(hand_data)
+
+        return hands_data
     #print("find_body")
     mp_image = ensure_image_mp(image)  # Ensure image is in the correct format for MediaPipe
 
@@ -1008,6 +1207,7 @@ def find_hands(image, pose):
     # ) as hands_detector:
     try:
         detection_result = hand_landmarker.detect(mp_image)
+
         # try:
 
         #     # Assuming image is in BGR format, as typically used in OpenCV.
@@ -1019,7 +1219,8 @@ def find_hands(image, pose):
             # print("   >>>>>   No hands detected:", )
             return None, None
         else:
-            hand_landmarks_list = pose.extract_hand_landmarks(detection_result)
+            hand_landmarks_list = extract_hand_landmarks_new_api(detection_result)
+            # hand_landmarks_legacy = convert_landmarker_to_handLms(detection_result)
             # print(f"Detected hands: {hand_landmarks_list}")
             return True, hand_landmarks_list
 
@@ -1202,9 +1403,31 @@ def process_image_find_body_subroutine(image_id, image, bbox):
     else:
         # existing_worldbody = body_world_collection.find_one({"image_id": image_id})
         # print("existing_worldbody", existing_worldbody)
-        is_body, body_landmarks, body_world_landmarks = find_body(image)
+        is_body, body_lms_new_api, body_world_lms_new_api = find_body(image)
+
+        
+        # CONVERT HERE
+        if is_body is not None:
+            pose_detection_result_conversion_object = types.SimpleNamespace(
+                pose_landmarks=[body_lms_new_api],
+                pose_world_landmarks=[body_world_lms_new_api]
+            )
+            converted_body_landmarks = convert_landmarker_to_bodyLms(pose_detection_result_conversion_object)
+            if converted_body_landmarks.pose_landmarks:
+                body_landmarks = converted_body_landmarks.pose_landmarks[0]
+            else:
+                body_landmarks = None
+            if converted_body_landmarks.pose_world_landmarks:
+                body_world_landmarks = converted_body_landmarks.pose_world_landmarks[0]
+            else:
+                body_world_landmarks = None
+        else:
+            if VERBOSE: print("No body landmarks found, setting body_landmarks and body_world_landmarks to None")
+            body_landmarks = None
+            body_world_landmarks = None
+
         image = ensure_image_cv2(image)  # sort expects cv2 image
-        if is_body and bbox:
+        if is_body and bbox and body_landmarks is not None:
             ### NORMALIZE LANDMARKS ###
             nose_pixel_pos = sort.set_nose_pixel_pos(body_landmarks, image.shape)
             if VERBOSE: print("nose_pixel_pos", nose_pixel_pos)
@@ -1223,7 +1446,7 @@ def process_image_find_body_subroutine(image_id, image, bbox):
             if VERBOSE: print("Body landmarks found but no bbox, no normalization")
             n_landmarks = None
         else:
-            print("No body landmarks found")
+            print("No body landmarks found, though is_body is " + str(is_body))
             n_landmarks = None
     if VERBOSE:
         print("n_landmarks", image_id, n_landmarks)
@@ -1519,16 +1742,16 @@ def save_body_hands_mysql_and_mongo(session, image_id, image, bbox_dict, body_la
 
 def check_is_feet(body_landmarks):
     is_feet = None
-    if body_landmarks is not None:
-        if VERBOSE: print("checking is_feet")
-        if hasattr(body_landmarks, "landmark"):
-            body_landmarks = list(body_landmarks.landmark)
-        if VERBOSE: print(f"Body landmarks length: {len(body_landmarks)}")
+    # if body_landmarks is not None:
+    #     if VERBOSE: print("checking is_feet")
+    #     if hasattr(body_landmarks, "landmark"):
+    #         body_landmarks = list(body_landmarks.landmark)
+    #     if VERBOSE: print(f"Body landmarks length: {len(body_landmarks)}")
     # 4. Evaluate visibility for feet landmarks (27-32)
-        foot_lms = body_landmarks[27:33]
-        # print(f"Foot landmarks: {foot_lms}")
-        visible_count = sum(1 for lm in foot_lms if lm.visibility > 0.85)
-        is_feet = (visible_count >= (len(foot_lms) / 2))
+    foot_lms = body_landmarks.landmark[27:33]
+    # print(f"Foot landmarks: {foot_lms}")
+    visible_count = sum(1 for lm in foot_lms if lm.visibility > 0.85)
+    is_feet = (visible_count >= (len(foot_lms) / 2))
     return is_feet
 
 def find_and_save_body(image_id, image, bbox, mongo_body_landmarks, hand_landmarks):
@@ -1540,7 +1763,7 @@ def find_and_save_body(image_id, image, bbox, mongo_body_landmarks, hand_landmar
         if VERBOSE: print("doing body, mongo_body_landmarks is None")
         # find body landmarks and normalize them using function
         is_body, n_landmarks, body_landmarks, body_world_landmarks, face_height, nose_pixel_pos = process_image_find_body_subroutine(image_id, image, bbox)
-        if is_body and body_landmarks is not None:
+        if body_landmarks is not None:
             is_feet = check_is_feet(body_landmarks)
         if VERBOSE: print("is_feet", image_id, is_feet)
 
@@ -2355,4 +2578,13 @@ if __name__ == '__main__':
     main()
 
 
+    if hand_landmarker:
+        hand_landmarker.close()
+        print("HandLandmarker model closed.")
+    if pose_landmarker:
+        pose_landmarker.close()
+        print("PoseLandmarker model closed.")
+    if face_landmarker:
+        face_landmarker.close()
+        print("FaceLandmarker model closed.")
 

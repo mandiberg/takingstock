@@ -47,7 +47,7 @@ class SortPose:
         self.BRUTEFORCE = False
         self.use_3D = use_3D
         print("init use_3D",self.use_3D)
-        self.CUTOFF = 125 # DOES factor if ONE_SHOT
+        self.CUTOFF = 12500 # DOES factor if ONE_SHOT
         self.ORIGIN = 0
         self.this_nose_bridge_dist = self.NOSE_BRIDGE_DIST = None # to be set in first loop, and sort.this_nose_bridge_dist each time
 
@@ -354,10 +354,10 @@ class SortPose:
 
         }
 
-    def ensure_lms_list(self, lms):
-        # convert NormalizedLandmarkList to list of tuples
-        if isinstance(lms, landmark_pb2.NormalizedLandmarkList):
-            return [(lm.x, lm.y, lm.z) for lm in lms.landmark]
+    # def ensure_lms_list(self, lms):
+    #     # convert NormalizedLandmarkList to list of tuples
+    #     if isinstance(lms, landmark_pb2.NormalizedLandmarkList):
+    #         return [(lm.x, lm.y, lm.z) for lm in lms.landmark]
 
     def compute_skip_threshold(self):
         """
@@ -1624,7 +1624,15 @@ class SortPose:
                     append_lms(idx, x,y,z, structure, Lms2d, Lms1d, Lms1d3)
             
         else:
-            print("lms is a type", type(Lms))
+            # print("lms is a type", type(Lms))
+            # # If Lms is bytes, unpickle it
+            # if isinstance(Lms, bytes):
+            #     try:
+            #         Lms = pickle.loads(Lms)
+            #         print("Unpickled Lms, new type:", type(Lms))
+            #     except Exception as e:
+            #         print("Failed to unpickle Lms:", e)
+            #         return Lms2d if structure == "dict" else (Lms1d if structure == "list" else Lms1d3)
             for idx, lm in enumerate(Lms.landmark):
                 if idx in selected_Lms:
                     # print("idx", idx)
@@ -2391,7 +2399,7 @@ class SortPose:
     def normalize_landmarks(self,landmarks,nose_pos,face_height,shape):
         height,width = shape[:2]
         translated_landmarks = landmark_pb2.NormalizedLandmarkList()
-        for landmark in landmarks:
+        for landmark in landmarks.landmark:
             # print("normalize_landmarks", nose_pos["x"], landmark.x, width, face_height)
             translated_landmark = landmark_pb2.NormalizedLandmark()
             translated_landmark.x = (nose_pos["x"]-landmark.x*width )/face_height
@@ -2432,7 +2440,7 @@ class SortPose:
 
 
     def set_nose_pixel_pos(self,body_landmarks,shape):
-        body_landmarks = self.ensure_lms_list(body_landmarks)  # Ensure body_landmarks is a list
+        # body_landmarks = self.ensure_lms_list(body_landmarks)  # Ensure body_landmarks is a list
         # if body_landmarks is pickled, unpickle it
         if type(body_landmarks)==bytes:
             body_landmarks=pickle.loads(body_landmarks)
@@ -2447,19 +2455,14 @@ class SortPose:
         # nose_pixel_pos <- 864, 442 (stay as a separate variable)
         # nose_normalized_pos 0,0
         # nose_pos=body_landmarks.landmark[NOSE_ID]
-        if body_landmarks and len(body_landmarks) > 0: # Ensure landmarks exist
-            nose_landmark = body_landmarks[0] # Changed from body_landmarks.landmark[0]
-            if self.VERBOSE: print("unprojected bodylms: ", nose_landmark.x, nose_landmark.y)
-            nose_pixel_pos["x"]+=nose_landmark.x*width
-            nose_pixel_pos["y"]+=nose_landmark.y*height
-            nose_pixel_pos["visibility"]+=nose_landmark.visibility
-        else:
-            if self.VERBOSE: print("No body landmarks provided to set_nose_pixel_pos.")
-
+        if self.VERBOSE: print("unprojected bodylms: ", body_landmarks.landmark[0].x, body_landmarks.landmark[0].y)
+        nose_pixel_pos["x"]+=body_landmarks.landmark[0].x*width
+        nose_pixel_pos["y"]+=body_landmarks.landmark[0].y*height
         if self.VERBOSE: print ("set_nose_pixel_pos bodylms nose_pixel_pos", nose_pixel_pos)
         self.nose_2d = nose_pixel_pos # this could be a problem
         if self.VERBOSE: print("set_nose_pixel_pos nose_pixel_pos",nose_pixel_pos)
         if self.VERBOSE: print("set_nose_pixel_pos self.nose_2d",self.nose_2d)
+        nose_pixel_pos["visibility"]+=body_landmarks.landmark[0].visibility
         # nose_3d has visibility
         self.nose_3d = nose_pixel_pos
         return nose_pixel_pos
