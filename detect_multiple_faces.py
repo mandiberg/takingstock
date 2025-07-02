@@ -341,26 +341,11 @@ face_landmarker = vision.FaceLandmarker.create_from_options(face_landmarker_opti
 hand_landmarker = vision.HandLandmarker.create_from_options(hand_landmarker_options)
 pose_landmarker = vision.PoseLandmarker.create_from_options(pose_landmarker_options)
 
-#creating my objects
-# mp_face_mesh = mp.solutions.face_mesh
-# face_mesh = mp_face_mesh.FaceMesh(min_detection_confidence=1, static_image_mode=True)
-# mp_pose = mp.solutions.pose
-mp_drawing = mp.solutions.drawing_utils
-drawing_spec = mp_drawing.DrawingSpec(thickness=1, circle_radius=1)
-# mp_hands = mp.    solutions.hands
+#not currently in use, so commented out
+# mp_drawing = mp.solutions.drawing_utils
+# drawing_spec = mp_drawing.DrawingSpec(thickness=1, circle_radius=1)
 
 ####### new imports and models ########
-mp_face_detection = mp.solutions.face_detection #### added face detection
-face_detection = mp_face_detection.FaceDetection(min_detection_confidence=0.7)
-
-# predictor_path = "shape_predictor_68_face_landmarks.dat"
-# sp = dlib.shape_predictor(predictor_path)
-
-# # dlib hack
-# face_rec_model_path = "dlib_face_recognition_resnet_model_v1.dat"
-# facerec = dlib.face_recognition_model_v1(face_rec_model_path)
-# detector = dlib.get_frontal_face_detector()
-
 face_recognition_model = face_recognition_models.face_recognition_model_location()
 face_encoder = dlib.face_recognition_model_v1(face_recognition_model)
 YOLO_MODEL = YOLO("yolov8m.pt")   #MEDIUM
@@ -429,18 +414,6 @@ def init_mongo():
     # init session
     # global engine, Session, session
     global mongo_client, mongo_db, mongo_collection, bboxnormed_collection, body_world_collection, mongo_hand_collection
-    # engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}"
-    #                                 .format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']), poolclass=NullPool)
-    
-    # engine = create_engine("mysql+pymysql://{user}:{pw}@/{db}?unix_socket={socket}".format(
-    #     user=db['user'], pw=db['pass'], db=db['name'], socket=db['unix_socket']
-    # ), poolclass=NullPool)
-
-    # # metadata = MetaData(engine)
-    # metadata = MetaData() # apparently don't pass engine
-    # Session = sessionmaker(bind=engine)
-    # session = Session()
-    # Base = declarative_base()
 
     mongo_client = pymongo.MongoClient("mongodb://localhost:27017/")
     mongo_db = mongo_client["stock"]
@@ -620,21 +593,6 @@ def get_bbox(faceDet, height, width):
         print("no results???")
     return(bbox)
 
-def retro_bbox(image):
-    height, width, _ = image.shape
-    with mp.solutions.face_detection.FaceDetection(model_selection=1, min_detection_confidence=0.7) as face_det: 
-        results_det=face_det.process(image)  ## [:,:,::-1] is the shortcut for converting BGR to RGB
-        
-    # is_face = False
-    bbox_json = None
-    if results_det.detections:
-        faceDet=results_det.detections[0]
-        bbox = get_bbox(faceDet, height, width)
-        if bbox:
-            bbox_json = json.dumps(bbox, indent = 4)
-    else:
-        print("no results???")
-    return bbox_json
 
 def convert_landmarker_to_facemesh(landmarker_result: vision.FaceLandmarkerResult):
     """
@@ -698,27 +656,9 @@ def convert_landmarker_to_facemesh(landmarker_result: vision.FaceLandmarkerResul
 
 def find_face(image, df):
     # image is SRGBA mp.Image (for mp task GPU implementation)
-    ensure_image_mp(image)
+    image = ensure_image_mp(image)
     # find_face_start = time.time()
-
-    # height, width, _ = image.shape
     number_of_detections = 0
-
-    # with mp.solutions.face_detection.FaceDetection(model_selection=1, min_detection_confidence=0.7) as face_det: 
-    #     # print(">> find_face SPLIT >> with mp.solutions constructed")
-    #     # ff_split = print_get_split(find_face_start)
-
-    #     results_det=face_det.process(image)  ## [:,:,::-1] is the shortcut for converting BGR to RGB
-
-    #     # print(">> find_face SPLIT >> face_det.process(image)")
-    #     # ff_split = print_get_split(ff_split)
-        
-    # '''
-    # 0 type model: When we will select the 0 type model then our face detection model will be able to detect the 
-    # faces within the range of 2 meters from the camera.
-    # 1 type model: When we will select the 1 type model then our face detection model will be able to detect the 
-    # faces within the range of 5 meters. Though the default value is 0.
-    # '''
     is_face = False
     is_face_no_lms = None
 
@@ -740,34 +680,10 @@ def find_face(image, df):
             "right": bbox_mp.origin_x + bbox_mp.width,
             "bottom": bbox_mp.origin_y + bbox_mp.height
         }
-
-    # if results_det.detections:
-    #     faceDet=results_det.detections[0]
-        
-    #     number_of_detections = len(results_det.detections)
-    #     print("---------------- >>>>>>>>>>>>>>>>> number_of_detections", number_of_detections)
-
-    #     bbox = get_bbox(faceDet, height, width)
-    #     # print(">> find_face SPLIT >> get_bbox()")
-    #     # ff_split = print_get_split(ff_split)
-
         if bbox:
             # take just the bbox slice of the mp.Image and detect on that slice
             mp_image_face = slice_mp_image(image, bbox)
             landmarker_result = face_landmarker.detect(mp_image_face)
-            # with mp.solutions.face_mesh.FaceMesh(static_image_mode=True,
-            #                                  refine_landmarks=False,
-            #                                  max_num_faces=1,
-            #                                  min_detection_confidence=0.5
-            #                                  ) as face_mesh:
-            # # Convert the BGR image to RGB and cropping it around face boundary and process it with MediaPipe Face Mesh.
-            #                     # crop_img = img[y:y+h, x:x+w]
-            #     # print(">> find_face SPLIT >> const face_mesh")
-            #     # ff_split = print_get_split(ff_split)
-
-            #     landmarker_result = face_landmarker.detect(image[bbox["top"]:bbox["bottom"],bbox["left"]:bbox["right"]])   
-            #     # print(">> find_face SPLIT >> face_mesh.process")
-            #     # ff_split = print_get_split(ff_split)
  
             #read any image containing a face
             if landmarker_result.face_landmarks:
@@ -780,11 +696,6 @@ def find_face(image, df):
 
                 #get landmarks
                 faceLms = pose.get_face_landmarks(results,bbox)
-                # faceLms = pose.get_face_landmarks(results, image,bbox)
-
-                # print(">> find_face SPLIT >> got lms")
-                # ff_split = print_get_split(ff_split)
-
 
                 #calculate base data from landmarks
                 pose.calc_face_data(faceLms)
@@ -793,45 +704,10 @@ def find_face(image, df):
                 # angles are meta. there are other meta --- size and resize or something.
                 angles = pose.rotationMatrixToEulerAnglesToDegrees()
                 mouth_gap = pose.get_mouth_data(faceLms)
-                             ##### calculated face detection results
-                # old version, encodes everything
-
-                # print(">> find_face SPLIT >> done face calcs")
-                # ff_split = print_get_split(ff_split)
-
 
                 if is_face:
-
-                # # new version, attempting to filter the amount that get encoded
-                # if is_face  and -20 < angles[0] < 10 and np.abs(angles[1]) < 4 and np.abs(angles[2]) < 3 :
-                    # Calculate Face Encodings if is_face = True
-                    # print("in encodings conditional")
-                    # turning off to debug
                     encodings = calc_encodings(image, faceLms,bbox) ## changed parameters
                     print(">> find_face SPLIT >> calc_encodings")
-                    # ff_split = print_get_split(ff_split)
-
-                    # # image is currently BGR so converting back to RGB
-                    # image_rgb = cv2.cvtColor(image, cv2.COLOR_RGB2BGR) 
-                    
-                    # # gets bg hue and lum without bbox
-                    # hue,sat,val,lum, lum_torso=sort.get_bg_hue_lum(image_rgb)
-                    # print("HSV", hue, sat, val)
-
-                    # gets bg hue and lum with bbox
-                    # hue_bb,sat_bb, val_bb, lum_bb, lum_torso_bb =sort.get_bg_hue_lum(image,bbox,faceLms)
-                    # print("HSV", hue_bb,sat_bb, val_bb)
-                    # quit()
-                #     print(encodings)
-                #     exit()
-                # #df.at['1', 'is_face'] = is_face
-
-                # # debug
-                # else:
-                #     print("bad angles")
-                #     print(angles[0])
-                #     print(angles[1])
-                #     print(angles[2])
 
                 #df.at['1', 'is_face_distant'] = is_face_distant
                 bbox_json = json.dumps(bbox, indent = 4) 
@@ -849,11 +725,6 @@ def find_face(image, df):
             else:
                 print("+++++++++++++++++  YES FACE but NO FACE LANDMARKS +++++++++++++++++++++")
                 image_id = df.at['1', 'image_id']
-                # no_image_name = f"no_face_landmarks_{image_id}.jpg"
-                # no_image_name_bbox = f"no_face_landmarks_{image_id}_bbox.jpg"
-                # bbox_image = cv2.cvtColor(image[bbox["top"]:bbox["bottom"], bbox["left"]:bbox["right"]], cv2.COLOR_RGB2BGR)
-                # cv2.imwrite(os.path.join("/Users/michaelmandiberg/Documents/projects-active/facemap_production/face_but_no_landmarks", no_image_name), image)
-                # cv2.imwrite(os.path.join("/Users/michaelmandiberg/Documents/projects-active/facemap_production/face_but_no_landmarks", no_image_name_bbox), bbox_image)
                 is_face_no_lms = True
         else:
             print("+++++++++++++++++  NO BBOX DETECTED +++++++++++++++++++++")
@@ -863,12 +734,9 @@ def find_face(image, df):
         number_of_detections = 0
         image_id = df.at['1', 'image_id']
         no_image_name = f"no_face_landmarks_{image_id}.jpg"
-        # cv2.imwrite(os.path.join("/Users/michaelmandiberg/Documents/projects-active/facemap_production/no_face", no_image_name), cv2.cvtColor(image, cv2.COLOR_RGB2BGR))
         is_face_no_lms = False
     df.at['1', 'is_face'] = is_face
     df.at['1', 'is_face_no_lms'] = is_face_no_lms
-    # print(">> find_face SPLIT >> prepped dataframe")
-    # ff_split = print_get_split(ff_split)
 
     return df, number_of_detections
 
@@ -913,101 +781,17 @@ def calc_encodings(image, faceLms,bbox):## changed parameters and rebuilt
                     
     if SMALL_MODEL is True:landmark_points=landmark_points_5
     else:landmark_points=landmark_points_68
-    
-    # dlib_all_points = get_dlib_all_points(landmark_points)
-
-    # temp test hack
-    # dlib_all_points5 = get_dlib_all_points(landmark_points_5)
     dlib_all_points68 = get_dlib_all_points(landmark_points_68)
 
     # ymin ("top") would be y value for top left point.
     bbox_rect= dlib.rectangle(left=bbox["left"], top=bbox["top"], right=bbox["right"], bottom=bbox["bottom"])
 
-
-    # if (dlib_all_points is None) or (bbox is None):return 
-    # full_object_detection=dlib.full_object_detection(bbox_rect,dlib_all_points)
-    # encodings=face_encoder.compute_face_descriptor(image, full_object_detection, num_jitters=NUM_JITTERS)
-
     if (dlib_all_points68 is None) or (bbox is None):return 
     
-    # full_object_detection5=dlib.full_object_detection(bbox_rect,dlib_all_points5)
-    # encodings5=face_encoder.compute_face_descriptor(image, full_object_detection5, num_jitters=NUM_JITTERS)
-    # encodings5j=face_encoder.compute_face_descriptor(image, full_object_detection5, num_jitters=3)
-    # encodings5v2=facerec.compute_face_descriptor(image, full_object_detection5, num_jitters=NUM_JITTERS)
-
     full_object_detection68=dlib.full_object_detection(bbox_rect,dlib_all_points68)
     encodings68=face_encoder.compute_face_descriptor(image, full_object_detection68, num_jitters=NUM_JITTERS)
-    # encodings68j=face_encoder.compute_face_descriptor(image, full_object_detection68, num_jitters=3)
-    # encodings68v2=facerec.compute_face_descriptor(image, full_object_detection68, num_jitters=NUM_JITTERS)
-
-    # # hack of full dlib
-    # dets = detector(image, 1)
-    # for k, d in enumerate(dets):
-    #     print("Detection {}: Left: {} Top: {} Right: {} Bottom: {}".format(
-    #         k, d.left(), d.top(), d.right(), d.bottom()))
-    #     # Get the landmarks/parts for the face in box d.
-    #     shape = sp(image, d)
-    #     # print("shape")
-    #     # print(shape.pop())
-    #     face_descriptor = facerec.compute_face_descriptor(image, shape)
-    #     # print(face_descriptor)
-    #     encD=np.array(face_descriptor)
-
 
     encodings = encodings68
-
-    # enc1=np.array(encodings5)
-    # enc2=np.array(encodings68)
-    # d=np.linalg.norm(enc1 - enc2, axis=0)
-
-    # # distance = pose.get_d(encodings5, encodings68)
-    # print("distance between 5 and 68 ")    
-    # print(d)    
-
-
-    # d=np.linalg.norm(encD - enc2, axis=0)
-
-    # # distance = pose.get_d(encodings5, encodings68)
-    # print("distance between dlib and mp hack - 68 ")    
-    # print(d)    
-
-
-    # # enc12=np.array(encodings5v2)
-    # # enc22=np.array(encodings68v2)
-    # # d=np.linalg.norm(enc12 - enc22, axis=0)
-
-    # # # distance = pose.get_d(encodings5, encodings68)
-    # # print("distance between 5v2 and 68v2 ")    
-    # # print(d)    
-
-
-    # enc1j=np.array(encodings5j)
-    # enc2j=np.array(encodings68j)
-    # d=np.linalg.norm(enc1j - enc2j, axis=0)
-
-    # # distance = pose.get_d(encodings5, encodings68)
-    # print("distance between 5j and 68j ")    
-    # print(d)    
-
-    # d=np.linalg.norm(enc1j - enc1, axis=0)
-    # # distance = pose.get_d(encodings5, encodings68)
-    # print("distance between 5 and 5j ")    
-    # print(d)    
-
-
-    # d=np.linalg.norm(enc2j - enc2, axis=0)
-    # # distance = pose.get_d(encodings5, encodings68)
-    # print("distance between 68 and 68j ")    
-    # print(d)    
-
-
-    # # d=np.linalg.norm(enc2 - enc22, axis=0)
-    # # # distance = pose.get_d(encodings5, encodings68)
-    # # print("distance between 68v and 68v2 ")    
-    # # print(d)    
-
-
-    # print(len(encodings))
     return np.array(encodings).tolist()
 
 def convert_landmarker_to_bodyLms(detection_result: vision.PoseLandmarkerResult):
@@ -1139,27 +923,7 @@ def find_body(image):
         print(f"[find_body] An error occurred: {e}")
 
     return is_body, body_landmarks, body_world_landmarks
-    # with mp_pose.Pose(
-    #     static_image_mode=True, min_detection_confidence=0.5, enable_segmentation=False) as pose: # enable_segmentation is not strictly needed but good practice for static images
-    #     try:
-    #         image_height, image_width, _ = image.shape
-    #         bodyLms = pose.process(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
-    #         if VERBOSE: print("bodyLms, ", bodyLms)
-    #         if VERBOSE: print("bodyLms.pose_landmarks, ", bodyLms.pose_landmarks)
-    #         if VERBOSE: print("bodyLms.pose_world_landmarks, ", bodyLms.pose_world_landmarks) # Check this
 
-    #         if not bodyLms.pose_landmarks:
-    #             is_body = False
-    #             body_landmarks = None
-    #             body_world_landmarks = None # Initialize world_landmarks
-    #         else:
-    #             is_body = True
-    #             body_landmarks = bodyLms.pose_landmarks
-    #             body_world_landmarks = bodyLms.pose_world_landmarks # Access World Landmarks
-
-    #     except Exception as e: # It's better to catch specific exceptions if possible
-    #         print(f"[find_body] this item failed: {image}, Error: {e}")
-    #     return is_body, body_landmarks, body_world_landmarks # Return world_landmarks
 def find_hands(image, pose):    
     def extract_hand_landmarks_new_api(detection_result):
         """
@@ -1197,50 +961,21 @@ def find_hands(image, pose):
                 hands_data.append(hand_data)
 
         return hands_data
-    #print("find_body")
+
     mp_image = ensure_image_mp(image)  # Ensure image is in the correct format for MediaPipe
 
-    # with mp_hands.Hands(
-    #     static_image_mode=True,          # If True, hand detection will be performed every frame.
-    #     max_num_hands=2,                 # Detect a maximum of 2 hands.
-    #     min_detection_confidence=0.4,    # Minimum confidence to detect hands.
-    #     min_tracking_confidence=0.5      # Minimum confidence for hand landmarks tracking.
-    # ) as hands_detector:
     try:
         detection_result = hand_landmarker.detect(mp_image)
-
-        # try:
-
-        #     # Assuming image is in BGR format, as typically used in OpenCV.
-        #     image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-
-        #     # Process the image to detect hand landmarks.
-        #     detection_result = hands_detector.process(image_rgb)
         if not detection_result.hand_landmarks:
-            # print("   >>>>>   No hands detected:", )
             return None, None
         else:
             hand_landmarks_list = extract_hand_landmarks_new_api(detection_result)
-            # hand_landmarks_legacy = convert_landmarker_to_handLms(detection_result)
-            # print(f"Detected hands: {hand_landmarks_list}")
             return True, hand_landmarks_list
 
     except Exception as e:
         print(f"[find_hands] An error occurred: {e}")
         print(f"[find_hands] this item failed: {mp_image}")
         return None, None
-        # # Extract the hand landmarks and handedness.
-        # hand_landmarks_list = detection_result.multi_hand_landmarks
-        # handedness_list = detection_result.multi_handedness
-
-        # # If hands are detected
-        # if hand_landmarks_list:
-        #     for hand_landmarks, handedness in zip(hand_landmarks_list, handedness_list):
-        #         print(f"Handedness: {handedness.classification[0].label}")
-        #         for idx, landmark in enumerate(hand_landmarks.landmark):
-        #             print(f"Landmark {idx}: (x={landmark.x}, y={landmark.y}, z={landmark.z})")
-
-
 
 def capitalize_directory(path):
     dirname, filename = os.path.split(path)
@@ -1248,44 +983,6 @@ def capitalize_directory(path):
     capitalized_parts = [part if i < len(parts) - 2 else part.upper() for i, part in enumerate(parts)]
     capitalized_dirname = '/'.join(capitalized_parts)
     return os.path.join(capitalized_dirname, filename)
-
-# this was for reprocessing the missing bbox
-def process_image_bbox(task):
-    # df = pd.DataFrame(columns=['image_id','bbox'])
-    # print("task is: ",task)
-    encoding_id = task[0]
-    cap_path = capitalize_directory(task[1])
-    try:
-        image = cv2.imread(cap_path)        
-        # this is for when you need to move images into a testing folder structure
-        # save_image_elsewhere(image, task)
-    except:
-        print(f"[process_image]this item failed, even after uppercasing: {task}")
-    # print("processing: ")
-    # print(encoding_id)
-    if image is not None and image.shape[0]>MINSIZE and image.shape[1]>MINSIZE:
-        # Do FaceMesh
-        bbox_json = retro_bbox(image)
-        # print(bbox_json)
-        if bbox_json: 
-            for _ in range(io.max_retries):
-                try:
-                    update_sql = f"UPDATE Encodings SET bbox = '{bbox_json}' WHERE encoding_id = {encoding_id};"
-                    engine.connect().execute(text(update_sql))
-                    print("bboxxin:")
-                    print(encoding_id)
-                    break  # Transaction succeeded, exit the loop
-                except OperationalError as e:
-                    print(e)
-                    time.sleep(io.retry_delay)
-        else:
-            print("no bbox")
-
-    else:
-        print('toooooo smallllll')
-        # I should probably assign no_good here...?
-
-    # store data
 
 
 def process_image_enc_only(task):
@@ -1312,22 +1009,7 @@ def process_image_enc_only(task):
     pickled_encodings = pickle.dumps(face_encodings)
     df = pd.DataFrame(columns=['encoding_id'])
     df.at['1', 'encoding_id'] = encoding_id
-    # df.at['1', 'face_encodings'] = pickled_encodings
 
-    # set name of df and table column, based on model and jitters
-    # df_table_column = "face_encodings"
-    # if SMALL_MODEL is not True:
-    #     df_table_column = df_table_column+"68"
-    # if NUM_JITTERS > 1:
-    #     df_table_column = df_table_column+"_J"+str(NUM_JITTERS)
-
-    # df.at['1', df_table_column] = pickled_encodings
-    # sql = """
-    # UPDATE Encodings SET df_table_column = :df_table_column
-    # WHERE encoding_id = :encoding_id
-    # """
-
-    # else:
     if SMALL_MODEL is True and NUM_JITTERS == 1:
         df.at['1', 'face_encodings'] = pickled_encodings
         sql = """
@@ -1510,32 +1192,10 @@ def save_body_hands_mysql_and_mongo(session, image_id, image, bbox_dict, body_la
     # to add in 0's so these don't reprocesses repeatedly
     
     if body_world_landmarks is not None:
-    # Catches the landmarks
         mongo_body_landmarks_3D = True
-        # for landmark in body_world_landmarks.landmark:
-        #     # Do something with the landmark coordinates
-        #     print(landmark.x, landmark.y)
     else:
         print("No body_world_landmarks detected.", body_world_landmarks)
         mongo_body_landmarks_3D = False
-
-
-    #   print("save_body_hands_mysql_and_mongo body_world_landmarks", body_world_landmarks)
-    # world_body_landmarks is a landmark list. test to see if it is none or has values:
-    # if body_world_landmarks is not None:
-    #     print("body_world_landmarks is not None")
-    #     if body_world_landmarks.landmark:
-    #         print("body_world_landmarks.landmark is not None")
-    #         if len(body_world_landmarks.landmark) > 0:
-    #             mongo_body_landmarks = True
-    #             print("body_world_landmarks.landmark has values")
-    #         else:
-    #             mongo_body_landmarks = False
-    #             print("body_world_landmarks.landmark has no values")
-    #     else:
-    #         mongo_body_landmarks = False
-    #         print("body_world_landmarks.landmark is None")
-
 
     if is_body is None or is_body is False: 
         is_body = False 
@@ -1547,8 +1207,6 @@ def save_body_hands_mysql_and_mongo(session, image_id, image, bbox_dict, body_la
     else: is_hands = True
     if is_feet is None or is_feet is False: is_feet = False
     else: is_feet = True
-    # if body_world_landmarks is not None: mongo_body_landmarks_3D = True
-    # else: mongo_body_landmarks_3D = False
 
     print("going to save", image_id, "is_body", is_body, "is_hands", is_hands, "is_feet", is_feet, "mongo_body_landmarks", mongo_body_landmarks, "mongo_body_landmarks_3D", mongo_body_landmarks_3D)
     if mongo_body_landmarks is not None and not REDO_BODYLMS_3D:
@@ -1743,11 +1401,6 @@ def save_body_hands_mysql_and_mongo(session, image_id, image, bbox_dict, body_la
 
 def check_is_feet(body_landmarks):
     is_feet = None
-    # if body_landmarks is not None:
-    #     if VERBOSE: print("checking is_feet")
-    #     if hasattr(body_landmarks, "landmark"):
-    #         body_landmarks = list(body_landmarks.landmark)
-    #     if VERBOSE: print(f"Body landmarks length: {len(body_landmarks)}")
     # 4. Evaluate visibility for feet landmarks (27-32)
     foot_lms = body_landmarks.landmark[27:33]
     # print(f"Foot landmarks: {foot_lms}")
@@ -1848,39 +1501,8 @@ def process_image_bodylms(task):
     mongo_body_landmarks = task[3]
     init_session()
     init_mongo()
-    # nose_pixel_pos = None
-    # body_landmarks = n_landmarks = None
     hand_landmarks = None
-    # is_body = False
 
-    # check if the image exists in mongo_3D collection?
-    # prob need to check hands too
-    # if REDO_BODYLMS_3D:
-    #     existing_world_landmarks = body_world_collection.find_one({"image_id": image_id})
-    #     if existing_world_landmarks:
-    #         print(f"Image already processed: {image_id}")
-    #         return
-    #         # set Encodings.mongo_body_landmarks_3D to True
-    #         session.query(Encodings).filter(Encodings.image_id == image_id).update({
-    #             Encodings.mongo_body_landmarks_3D: True
-    #         }, synchronize_session=False)
-    #         session.query(SegmentTable).filter(SegmentTable.image_id == image_id).update({
-    #             SegmentTable.mongo_body_landmarks_3D: True
-    #         }, synchronize_session=False)
-    #         session.commit()
-    #         print(f"Image {image_id} already processed, skipping further processing.")
-    #         # Close the session and dispose of the engine before the worker process exits
-    #         close_mongo()
-    #         close_session()
-    #         # collect_the_garbage()
-    #         if 'image' in locals():
-    #             del image
-    #         gc.collect()            
-
-    #         # If the image is already processed, skip further processing
-    #         close_mongo()
-    #         close_session()
-    #         return
     try:
         image = cv2.imread(cap_path)        
         # this is for when you need to move images into a testing folder structure
@@ -2096,9 +1718,6 @@ def process_image(task):
         image_id = insert_dict['image_id']
         # can I filter this by site_id? would that make it faster or slower? 
         existing_entry = session.query(Encodings).filter_by(image_id=image_id).first()
-        # print(f"existing_entry for image_id: {image_id} is: {existing_entry.image_id}")
-        # print(">> SPLIT >> done query for existing_entry")
-        # pr_split = print_get_split(pr_split)
 
         two_noses = False
         if number_of_detections > 1:
@@ -2196,15 +1815,6 @@ def process_image(task):
                         print(e)
                         time.sleep(io.retry_delay)
 
-
-
-
-        # print(">> SPLIT >> done commit new_entry")
-        # pr_split = print_get_split(pr_split)
-
-
-
-        # insertignore_df(df,"encodings", engine)  ### made it all lower case to avoid discrepancy
     except OperationalError as e:
         print("process_image", image_id, e)
 
@@ -2561,11 +2171,6 @@ def main():
             # Close the session and dispose of the engine before the worker process exits
             close_session()
 
-
-        # # print the output
-        # while not tasks_that_are_done.empty():
-        #     print("tasks are done")
-        #     print(tasks_that_are_done.get())
             count += len(resultsjson)
             print("completed round, total results processed is: ",count)
 

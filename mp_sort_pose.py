@@ -485,17 +485,6 @@ class SortPose:
         sorted_df = raw_df.iloc[best].reset_index(drop=True)
 
         return sorted_df
-    # def set_subset_landmarks(self,CLUSTER_TYPE):
-    #     # called directly from make_video
-    #     self.CLUSTER_TYPE = CLUSTER_TYPE
-    #     if self.CLUSTER_TYPE == "fingertips_positions":
-    #         self.SUBSET_LANDMARKS = self.HAND_LMS_POINTER
-    #     if self.CLUSTER_TYPE in ["HandsPositions","HandsGestures"]:
-    #         self.SUBSET_LANDMARKS = self.HANDS_POSITIONS_LMS
-    #         self.SORT_TYPE = "planar_hands"
-    #     else:
-    #         self.SUBSET_LANDMARKS = self.HAND_LMS
-    #     print(self.CLUSTER_TYPE, "set_subset_landmarks set of subset landmarks", self.SUBSET_LANDMARKS)
 
     def set_cluster_medians(self,cluster_medians):
         self.cluster_medians = cluster_medians
@@ -787,29 +776,6 @@ class SortPose:
 
         error, diff = mse(img1, img2)
         
-        # cv2.imshow("difference", diff)
-        # cv2.waitKey(0)
-        # cv2.destroyAllWindows()
-
-        # # i don't know what number to use
-        # if error == 0:
-        #     print(f"unique_face: {error} Fail, images identical")
-        #     return False
-        # elif error < 15:
-        #     print(f"unique_face: {error} Fail, images less than 15 diff")
-        #     # preview_img(diff)
-        #     # preview_img(img1)
-        #     # preview_img(img2)
-        #     return False
-        # elif error < 25:
-        #     print(f"unique_face: {error} Fail, images 15-25 diff")
-        #     preview_img(diff)
-        #     preview_img(img1)
-        #     preview_img(img2)
-        #     return False
-        # else:
-        #     return True
-
         return error
 
 
@@ -835,9 +801,6 @@ class SortPose:
     def get_face_2d_point(self, point):
         # print("get_face_2d_point")
 
-        # print(self.bbox)
-        # print(type(self.bbox))
-        # print(self.bbox['left'])
         # set bbox dimensions
         img_h = self.h
         img_w = self.w
@@ -854,10 +817,6 @@ class SortPose:
                 if self.VERBOSE: print("unprojected face lms",lm.x,lm.y)
                 pointXY = (lm.x * img_w, lm.y * img_h)
                 pointXY = (lm.x * bbox_w + bbox_x, lm.y * bbox_h + bbox_y)
-                # print("landmarkkkkkkkkkkkkkkkkkk",lm.x,lm.y,point)
-                # print(pointXY)
-                # pointXYonly = (lm.x, lm.y)
-                # print(pointXYonly)
         return pointXY
 
 
@@ -1624,15 +1583,6 @@ class SortPose:
                     append_lms(idx, x,y,z, structure, Lms2d, Lms1d, Lms1d3)
             
         else:
-            # print("lms is a type", type(Lms))
-            # # If Lms is bytes, unpickle it
-            # if isinstance(Lms, bytes):
-            #     try:
-            #         Lms = pickle.loads(Lms)
-            #         print("Unpickled Lms, new type:", type(Lms))
-            #     except Exception as e:
-            #         print("Failed to unpickle Lms:", e)
-            #         return Lms2d if structure == "dict" else (Lms1d if structure == "list" else Lms1d3)
             for idx, lm in enumerate(Lms.landmark):
                 if idx in selected_Lms:
                     # print("idx", idx)
@@ -1883,8 +1833,8 @@ class SortPose:
 
 
     def sort_df_KNN(self, df_enc, enc1, knn_sort="128d"):
-        print("df_enc at the start of sort_df_KNN")
-        print(df_enc)
+        if self.VERBOSE: print("df_enc at the start of sort_df_KNN")
+        if self.VERBOSE: print(df_enc)
 
         output_cols = 'dist_enc1'
         if knn_sort == "128d":
@@ -1899,30 +1849,30 @@ class SortPose:
             sourcecol = 'body_landmarks_normalized'
             # if type(enc1) is not list:
             #     enc1 = self.prep_enc(enc1, structure="list") # switching to 3d
-            print("body_landmarks elif")
+            if self.VERBOSE: print("body_landmarks elif")
             # test to see if df_enc contains the sortcol column
             if sortcol not in df_enc.columns:
-                print("sortcol not in df_enc.columns - body_landmarks enc1 pre prep_enc", enc1)
+                if self.VERBOSE: print("sortcol not in df_enc.columns - body_landmarks enc1 pre prep_enc", enc1)
                 # # if enc1 is not a numpy array, convert it to a list
                 # # create enc list with x/y position and angles and visibility
-                # print("enc1 before prep_enc", enc1)
-                # print("enc1 after prep_enc", enc1)
+                # if self.VERBOSE: print("enc1 before prep_enc", enc1)
+                # if self.VERBOSE: print("enc1 after prep_enc", enc1)
                 # # apply prep_enc to the sortcol column 
-                # print("applying prep_enc to the sortcol column")
-                # print("df_enc[sourcecol]", df_enc[sourcecol])
+                # if self.VERBOSE: print("applying prep_enc to the sortcol column")
+                # if self.VERBOSE: print("df_enc[sourcecol]", df_enc[sourcecol])
                 # # do I need to reduce the number of landmarks I'm tracking at this point? 
                 # # moving to pre_enc in makevid
                 # # df_enc[sortcol] = df_enc[sourcecol].apply(lambda x: self.prep_enc(x, structure="list")) # swittching to 3d
-                # print("df_enc[sortcol]", df_enc[sortcol])
+                # if self.VERBOSE: print("df_enc[sortcol]", df_enc[sortcol])
         elif knn_sort == "HSV":
-            print("knn_sort is HSV")
+            if self.VERBOSE: print("knn_sort is HSV")
             sortcol = 'hsvll'
             output_cols = 'dist_HSV'
-            print(type(enc1))
-            print(enc1)
-            # print(df_enc.loc[0])
-            print(type(df_enc.head(1)['lum'].values[0]))
-            print(df_enc.head(1)['lum'].values[0])
+            if self.VERBOSE: print(type(enc1))
+            if self.VERBOSE: print(enc1)
+            # if self.VERBOSE: print(df_enc.loc[0])
+            if self.VERBOSE: print(type(df_enc.head(1)['lum'].values[0]))
+            if self.VERBOSE: print(df_enc.head(1)['lum'].values[0])
         elif knn_sort == "obj":
             # overriding for object detection
             sortcol = 'obj_bbox_list'
@@ -2137,7 +2087,7 @@ class SortPose:
                 # print("dupe_score", dupe_score)
 
                 if dupe_score > 2:
-                    print("de_duping score", dupe_score, last_image['image_id'], "is a duplicate of", row['image_id'])
+                    if self.VERBOSE: print("de_duping score", dupe_score, last_image['image_id'], "is a duplicate of", row['image_id'])
                     # add the index of the duplicate to the list of indexes to drop
                     dupe_index.append(index)
                 elif is_run:
@@ -2147,20 +2097,20 @@ class SortPose:
 
             return df_dist_hsv
 
-        print("debugging df_enc", df_enc.columns)
-        print("debugging df_sorted", df_sorted.columns)
+        if self.VERBOSE: print("debugging df_enc", df_enc.columns)
+        if self.VERBOSE: print("debugging df_sorted", df_sorted.columns)
         if len(df_sorted) == 0: 
             FIRST_ROUND = True
             enc1, obj_bbox1 = self.get_enc1(df_enc, FIRST_ROUND)
-            print("first round enc1, obj_bbox1", enc1, obj_bbox1)
+            if self.VERBOSE: print("first round enc1, obj_bbox1", enc1, obj_bbox1)
             # drop all rows where obj_bbox_list is None
             if self.OBJ_CLS_ID > 0: df_enc = df_enc.dropna(subset=["obj_bbox_list"])
         else: 
             FIRST_ROUND = False
             enc1, obj_bbox1 = self.get_enc1(df_sorted, FIRST_ROUND)
-            print("LATER round enc1, obj_bbox1", enc1, obj_bbox1)
+            if self.VERBOSE: print("LATER round enc1, obj_bbox1", enc1, obj_bbox1)
 
-        print(f"get_closest_df_NN, self.SORT_TYPE is {self.SORT_TYPE} FIRST_ROUND is {FIRST_ROUND}")
+        if self.VERBOSE: print(f"get_closest_df_NN, self.SORT_TYPE is {self.SORT_TYPE} FIRST_ROUND is {FIRST_ROUND}")
         # define self.SORT_TYPE for KNN
         if self.SORT_TYPE == "128d" or (self.SORT_TYPE == "planar" and FIRST_ROUND) or (self.SORT_TYPE == "planar_body" and len(enc1) > 66): 
             knn_sort = "128d"      
@@ -2174,41 +2124,41 @@ class SortPose:
         elif self.SORT_TYPE == "planar_hands": 
             knn_sort = "planar_hands"
         
-        print("get_closest_df_NN - pre KNN - enc1", enc1)
+        if self.VERBOSE: print("get_closest_df_NN - pre KNN - enc1", enc1)
         # sort KNN (always for planar) or BRUTEFORCE (optional only for 128d)
         if self.BRUTEFORCE and knn_sort == "128d": df_dist_enc = self.brute_force(df_enc, enc1)
         elif start_image_id is not None: self.sort_df_TSP(df_enc, start_image_id, end_image_id)
         else: df_dist_enc = self.sort_df_KNN(df_enc, enc1, knn_sort)
-        print("df_shuffled", df_dist_enc[['image_id','dist_enc1']].sort_values(by='dist_enc1'))
+        if self.VERBOSE: print("df_shuffled", df_dist_enc[['image_id','dist_enc1']].sort_values(by='dist_enc1'))
         
-        print("self.OBJ_CLS_ID", self.OBJ_CLS_ID)
+        if self.VERBOSE: print("self.OBJ_CLS_ID", self.OBJ_CLS_ID)
         # sort KNN for OBJ_CLS_ID
         if self.OBJ_CLS_ID > 0: 
-            print("get_closest_df_NN - pre KNN - obj_bbox1", obj_bbox1)
+            if self.VERBOSE: print("get_closest_df_NN - pre KNN - obj_bbox1", obj_bbox1)
             if type(obj_bbox1) is dict:
                 # turn the obj_bbox1 json dict into a list
                 obj_bbox1 = self.json_to_list(obj_bbox1)
             df_dist_enc = self.sort_df_KNN(df_enc, obj_bbox1, "obj")
-            print("df_shuffled obj", df_dist_enc[['image_id','dist_obj']].sort_values(by='dist_obj')) 
+            if self.VERBOSE: print("df_shuffled obj", df_dist_enc[['image_id','dist_obj']].sort_values(by='dist_obj')) 
 
         # set HSV start enc and add HSV dist
         if not self.ONE_SHOT:
             if not 'dist_HSV' in df_sorted.columns:  
-                print("not dist_HSV")
+                if self.VERBOSE: print("not dist_HSV")
                 enc1, obj_bbox1 = self.get_enc1(df_enc, FIRST_ROUND=True, hsv_sort=True)
             else: 
-                print("else is dist_HSV")
+                if self.VERBOSE: print("else is dist_HSV")
                 enc1, obj_bbox1 = self.get_enc1(df_sorted, FIRST_ROUND=False, hsv_sort=True)
-            print("enc1", enc1)
-            print("df_dist_enc before normalize_hsv", df_dist_enc)
-            print("columns", df_dist_enc.columns)
-            print("first row", df_dist_enc.iloc[0])
+            if self.VERBOSE: print("enc1", enc1)
+            if self.VERBOSE: print("df_dist_enc before normalize_hsv", df_dist_enc)
+            if self.VERBOSE: print("columns", df_dist_enc.columns)
+            if self.VERBOSE: print("first row", df_dist_enc.iloc[0])
             df_dist_hsv = self.normalize_hsv(enc1, df_dist_enc)
-            print("df_dist_enc after normalize_hsv, before sort", df_dist_enc)
-            print("first row", df_dist_enc.iloc[0])
+            if self.VERBOSE: print("df_dist_enc after normalize_hsv, before sort", df_dist_enc)
+            if self.VERBOSE: print("first row", df_dist_enc.iloc[0])
             df_dist_hsv = self.sort_df_KNN(df_dist_hsv, enc1, "HSV")
-            print("columns", df_dist_enc.columns)
-            print("df_shuffled HSV", df_dist_hsv[['image_id','dist_enc1','dist_HSV']].head())
+            if self.VERBOSE: print("columns", df_dist_enc.columns)
+            if self.VERBOSE: print("df_shuffled HSV", df_dist_hsv[['image_id','dist_enc1','dist_HSV']].head())
         else:
             # skip HSV if ONE_SHOT (which is for still images, so N/A)
             # assign 0 to dist_HSV for first round
@@ -2223,24 +2173,24 @@ class SortPose:
                 df_enc = df_dist_hsv
             
             if not self.ONE_SHOT:
-                print("df_enc if not self.ONE_SHOT", df_enc)
+                if self.VERBOSE: print("df_enc if not self.ONE_SHOT", df_enc)
                 # np.set_printoptions(threshold = np.inf)
                 # enc_values_list = df_enc['dist_enc1'].values
                 # print("dist_enc1 values:", enc_values_list)
                 # temporarily removes items for this round
                 df_dist_noflash = mask_df(df_dist_hsv, 'dist_HSV', self.HSV_DELTA_MAX, "lessthan")
-                print("df_dist_noflash if not self.ONE_SHOT",df_dist_noflash)
+                if self.VERBOSE: print("df_dist_noflash if not self.ONE_SHOT",df_dist_noflash)
                 # print all values in the dist_enc1 column
                 # print("dist_enc1 values:", df_dist_noflash['dist_enc1'].values)
                 # replacing dist_HSV with dist_enc1 here, Sept 27
                 df_dist_close = mask_df(df_dist_noflash, 'dist_enc1', self.MAXD, "lessthan")
-                print("df_dist_close if not self.ONE_SHOT",df_dist_close)
+                if self.VERBOSE: print("df_dist_close if not self.ONE_SHOT",df_dist_close)
 
                 if df_dist_close.empty:
-                    print("No rows in the DataFrame met the filtering criteria, returning empty df and the untouched df_sorted.")
+                    if self.VERBOSE: print("No rows in the DataFrame met the filtering criteria, returning empty df and the untouched df_sorted.")
                     return df_dist_close, df_sorted
                 else:
-                    print("Filtered DataFrame:", df_dist_close)
+                    if self.VERBOSE: print("Filtered DataFrame:", df_dist_close)
                 # implementing these masks for now
                     df_shuffled = df_dist_close
                 
@@ -2252,28 +2202,28 @@ class SortPose:
                 # df_shuffled['sum_dist'] = df_shuffled['dist_obj'] 
 
                 df_shuffled = df_shuffled.sort_values(by='sum_dist').reset_index(drop=True)
-                print("df_shuffled pre_run", df_shuffled[['image_id','dist_enc1','dist_HSV','sum_dist']])
+                if self.VERBOSE: print("df_shuffled pre_run", df_shuffled[['image_id','dist_enc1','dist_HSV','sum_dist']])
             else:
                 # if ONE_SHOT, skip the mask, and keep all data
                 df_shuffled = df_dist_hsv
 
             try: runmask = df_shuffled['sum_dist'] < self.MIND
             except: runmask = None
-            print("runmask", runmask)
+            if self.VERBOSE: print("runmask", runmask)
 
             # if self.ONE_SHOT and not runmask:
 
             if self.ONE_SHOT:
-                print("ONE_SHOT going to assign all and try to drop everything")
+                if self.VERBOSE: print("ONE_SHOT going to assign all and try to drop everything")
                 df_run = df_shuffled
                 # drop all rows from df_shuffled
                 df_enc = df_enc.drop(df_run.index).reset_index(drop=True)
-                print("df_run", df_run)
-                print("df_enc", len(df_enc))
+                if self.VERBOSE: print("df_run", df_run)
+                if self.VERBOSE: print("df_enc", len(df_enc))
 
             elif runmask.any():
                 num_true_values = runmask.sum()
-                print("we have a run ---->>>>", num_true_values)
+                if self.VERBOSE: print("we have a run ---->>>>", num_true_values)
                 self.SHOT_CLOCK = 0 # reset the shot clock
                 # if there is a run < MINFACEDIST
                 df_run = df_shuffled[runmask]
@@ -2293,7 +2243,7 @@ class SortPose:
                 df_run = df_shuffled.iloc[[0]]  # Select the first row
                 # increment the shot clock
                 self.SHOT_CLOCK += 1
-                print(f"NO run, shot clock is {self.SHOT_CLOCK} <<<< ", df_run)
+                if self.VERBOSE: print(f"NO run, shot clock is {self.SHOT_CLOCK} <<<< ", df_run)
 
                 # Locate the rows in df_enc with matching image_id
                 index_names = df_enc[df_enc['image_id'].isin(df_run['image_id'])].index
@@ -2301,40 +2251,40 @@ class SortPose:
                 # Drop rows with matching image_id from df_enc
                 if len(index_names) > 0:
                     df_enc = df_enc.drop(index_names).reset_index(drop=True)
-                    print("df_run", df_run)
-                    print("df_enc", len(df_enc))
+                    if self.VERBOSE: print("df_run", df_run)
+                    if self.VERBOSE: print("df_enc", len(df_enc))
                 else:
-                    print("No matching image_id found in df_enc for df_run")
+                    if self.VERBOSE: print("No matching image_id found in df_enc for df_run")
             
 
             elif self.JUMP_SHOT is True and self.SHOT_CLOCK >= self.SHOT_CLOCK_MAX:
-                    print("SHOT_CLOCK has reached the maximum value, resetting to 0.")
+                    if self.VERBOSE: print("SHOT_CLOCK has reached the maximum value, resetting to 0.")
                     self.SHOT_CLOCK = 0
 
                     #jump somewhere else
-                    print("JUMPING AROUND ^^^^ ", df_shuffled)
+                    if self.VERBOSE: print("JUMPING AROUND ^^^^ ", df_shuffled)
                     random_index = random.randint(0, len(df_shuffled) - 1)                
-                    print("JUMPING TO ---> ", random_index)
+                    if self.VERBOSE: print("JUMPING TO ---> ", random_index)
                     df_run = df_shuffled.iloc[[random_index]]
-                    print("df_run new start point", df_run)
+                    if self.VERBOSE: print("df_run new start point", df_run)
 
                     df_enc = df_enc.drop(df_run.index).reset_index(drop=True)
 
 
             else:
-                print("df_shuffled is empty")
+                if self.VERBOSE: print("df_shuffled is empty")
                 return df_enc, df_sorted
 
-            print("df_run", df_run)
-            # print("df_run", df_run[['image_id','dist_enc1','dist_HSV','sum_dist']])
+            if self.VERBOSE: print("df_run", df_run)
+            # if self.VERBOSE: print("df_run", df_run[['image_id','dist_enc1','dist_HSV','sum_dist']])
 
 
             df_sorted = pd.concat([df_sorted, df_run])
-            print("df_sorted containing all good items", len(df_sorted))
+            if self.VERBOSE: print("df_sorted containing all good items", len(df_sorted))
             
-            print("df_enc", len(df_enc))
+            if self.VERBOSE: print("df_enc", len(df_enc))
         else:
-            print("df_shuffled is empty")
+            if self.VERBOSE: print("df_shuffled is empty")
 
         return df_enc, df_sorted
 

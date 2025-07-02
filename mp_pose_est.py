@@ -227,24 +227,6 @@ class SelectPose:
         # # this is for returning degrees
         return np.array([newx, self.eulerToDegree(y), self.eulerToDegree(z)])
 
-    # def get_angles(self):
-    #     # Get rotational matrix
-    #     rmat, jac = cv2.Rodrigues(self.r_vec)
-    #     # print(rmat)
-    #     # Get angles
-    #     angles, mtxR, mtxQ, Qx, Qy, Qz = cv2.RQDecomp3x3(rmat)
-    #     print(angles)
-
-    #     # Get the y rotation degree
-    #     x = self.eulerToDegree(angles[0])
-    #     y = self.eulerToDegree(angles[1])
-    #     z = self.eulerToDegree(angles[2])
-
-    #     angles_degrees =[x,y,z]
-    #     print(angles_degrees)
-    #     return angles_degrees
-
-    #     #needs to return a set of angles. This is the meta. 
 
     def point(self,coords):
         newpoint = (int(coords[0]), int(coords[1]))
