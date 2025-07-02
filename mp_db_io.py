@@ -76,6 +76,7 @@ class DataIO:
             self.ROOT4 = "/Volumes/SSD4"
             self.ROOT18 = "/Volumes/RAID18"
             self.NUMBER_OF_PROCESSES = 8
+            self.NUMBER_OF_PROCESSES_GPU = 16
         elif platform == "win32":
             self.platform = "win32"
             ######## Satyam's WIN Credentials #########
@@ -117,6 +118,7 @@ class DataIO:
             self.ROOT_PROD= self.ROOT
             self.ROOTSSD = self.ROOT
             self.NUMBER_OF_PROCESSES = 4
+            self.NUMBER_OF_PROCESSES_GPU = 4
 
         if IS_SSD:
             self.folder_list = [

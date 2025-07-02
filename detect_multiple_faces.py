@@ -274,7 +274,8 @@ else:
 io = DataIO(IS_SSD)
 db = io.db
 ROOT = io.ROOT 
-NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
+# GPU OVERRIDE = 
+io.NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES_GPU
 # overriding DB for testing
 # io.db["name"] = "gettytest3"
 
@@ -2447,7 +2448,7 @@ def main():
                     print(f"######### total task count for this batch: {str(this_count)}")
                     print("just stored wandering images")
 
-                    for w in range(NUMBER_OF_PROCESSES):
+                    for w in range(io.NUMBER_OF_PROCESSES):
                         p = Process(target=do_job, args=(tasks_to_accomplish, tasks_that_are_done))
                         processes.append(p)
                         p.start()
@@ -2546,7 +2547,7 @@ def main():
                     # print("tasks_to_accomplish.put(task) ",imagepath)
 
             # creating processes
-            for w in range(NUMBER_OF_PROCESSES):
+            for w in range(io.NUMBER_OF_PROCESSES):
                 p = Process(target=do_job, args=(tasks_to_accomplish, tasks_that_are_done))
                 processes.append(p)
                 p.start()

@@ -12,7 +12,7 @@ db = io.db
 
 
 
-ROOT_FOLDER = '/Volumes/ExFAT_SSD4_/images_adobe'
+ROOT_FOLDER = '/Volumes/RAID54/images_adobe'
 
 # walk through the root folder and get all folder paths
 def get_all_folder_paths(root_folder):
@@ -20,8 +20,9 @@ def get_all_folder_paths(root_folder):
     for dirpath, dirnames, filenames in os.walk(root_folder):
         if dirnames:  # Only add directories that have subdirectories
             for dirname in dirnames:
-                print(f"Found folder: {dirname} in {dirpath}")
-                folder_paths.append(os.path.join(dirpath,dirname))
+                if len(dirname) == 2:
+                    print(f"Found folder: {dirname} in {dirpath}")
+                    folder_paths.append(os.path.join(dirpath,dirname))
     return folder_paths
 
 print("Getting all folder paths...")

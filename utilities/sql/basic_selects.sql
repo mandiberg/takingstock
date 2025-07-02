@@ -175,23 +175,55 @@ CREATE TABLE WanderingImages (
 );
 
 
-
-SELECT * 
-FROM SegmentBig_isface e 
-Where e.image_id = 92362382
+SELECT i.image_id
+FROM Images i 
+WHERE i.site_name_id = 3
+AND i.site_image_id = 219788407
 ;
+
 
 SELECT * 
 FROM Encodings e 
-Where e.image_id = 42190674
+Where e.image_id = 20263718
+;
+
+USE stock;
+SELECT * 
+FROM Encodings e 
+Where e.mongo_hand_landmarks_norm IS NOT NULL
+LIMIT 100
 ;
 
 DELETE FROM NMLImages
 ;
 
 
-SELECT MAX(n.nml_id)
+
+SELECT DISTINCT(s.image_id), s.site_name_id, s.contentUrl, s.imagename, s.description, s.face_x, s.face_y, s.face_z, s.mouth_gap, s.bbox, s.site_image_id, it.topic_score, ibg.lum, ibg.lum_bb, ibg.hue, ibg.hue_bb, ibg.sat, ibg.sat_bb, ibg.val, ibg.val_bb, ibg.lum_torso, ibg.lum_torso_bb  
+FROM SegmentBig_isface s  JOIN Encodings e ON s.image_id = e.image_id  
+JOIN ImagesHandsPositions ihp ON s.image_id = ihp.image_id  JOIN ImagesHandsGestures ih ON s.image_id = ih.image_id  
+JOIN ImagesTopics it ON s.image_id = it.image_id  JOIN SegmentHelper_may2025_4x4faces sh ON s.image_id = sh.image_id  
+JOIN ImagesBackground ibg ON s.image_id = ibg.image_id  
+WHERE  e.is_dupe_of IS NULL  AND s.face_x > -50  AND it.topic_score > .1   
+AND ihp.cluster_id = 19  AND ih.cluster_id = 61 AND it.topic_id IN (0)  LIMIT 50000;
+
+
+SELECT DISTINCT(s.image_id), e.mongo_hand_landmarks, e.mongo_hand_landmarks_norm, s.site_name_id, s.contentUrl, s.imagename, s.description, s.face_x, s.face_y, s.face_z, s.mouth_gap, s.bbox, s.site_image_id, 
+ibg.lum, ibg.lum_bb, ibg.hue, ibg.hue_bb, ibg.sat, ibg.sat_bb, ibg.val, ibg.val_bb, ibg.lum_torso, ibg.lum_torso_bb  
+FROM SegmentBig_isface s  JOIN Encodings e ON s.image_id = e.image_id  JOIN SegmentHelper_june2025_nmlGPU300k sh ON s.image_id = sh.image_id  
+JOIN ImagesBackground ibg ON s.image_id = ibg.image_id  WHERE  e.is_dupe_of IS NULL  AND s.face_x > -50    
+AND e.mongo_hand_landmarks_norm = 1
+LIMIT 50000;
+
+
+SELECT COUNT(n.nml_id)
 FROM NMLImages n 
+WHERE n.nml_id > 4191363
+;
+
+DELETE 
+FROM NMLImages 
+WHERE nml_id > 4191363
 ;
 
 -- This ith nml_id to start the adobe mp.task refactor test

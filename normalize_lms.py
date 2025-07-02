@@ -17,7 +17,7 @@ import mediapipe as mp
 import shutil
 import pandas as pd
 import json
-from my_declarative_base import Base, Clusters, Encodings, Images,PhoneBbox, SegmentTable, SegmentBig, Images
+from my_declarative_base import Base, Clusters, Encodings, NMLImages, Images,PhoneBbox, SegmentTable, SegmentBig, Images
 #from sqlalchemy.ext.declarative import declarative_base
 from mp_sort_pose import SortPose
 import pymongo
@@ -31,12 +31,12 @@ NOSE_ID=0
 
 
 Base = declarative_base()
-VERBOSE = True
+VERBOSE = False
 IS_SSD = False
 
 SKIP_EXISTING = False # Skips images with a normed bbox but that have Images.h
 USE_OBJ = 0 # select the bbox to work with
-SKIP_BODY = False # skip body landmarks. mostly you want to skip when doing obj bbox
+SKIP_BODY = True # skip body landmarks. mostly you want to skip when doing obj bbox
                 # or are just redoing hands
 REPROCESS_HANDS = True # do hands
 IS_SEGMENT_BIG = True # use SegmentBig table
@@ -106,7 +106,7 @@ sort = SortPose(motion, face_height_output, image_edge_multiplier_sm,EXPAND, ONE
 # Create a session
 session = scoped_session(sessionmaker(bind=engine))
 
-LIMIT= 10
+LIMIT= 200000
 # Initialize the counter
 counter = 0
 
@@ -378,7 +378,7 @@ def calc_nlm(image_id_to_shape, lock, session):
     if sort.VERBOSE: print("nose_pixel_pos from face",nose_pixel_pos_face)
     # only do this if the io.get_encodings_mongo didn't return the body landmarks
     if not body_landmarks: body_landmarks=get_landmarks_mongo(target_image_id)
-    print("body_landmarks",type(body_landmarks))
+    # print("body_landmarks",type(body_landmarks))
     if body_landmarks:
         nose_pixel_pos_body_withviz = sort.set_nose_pixel_pos(body_landmarks,[height,width])
     else:
@@ -443,7 +443,7 @@ def calc_nlm(image_id_to_shape, lock, session):
         cv2.destroyAllWindows()
     # set the nose pixel position in the expected dictionary format
 
-    visualize_landmarks(target_image_id, nose_pixel_pos_face, nose_pixel_pos_body, body_landmarks)
+    # visualize_landmarks(target_image_id, nose_pixel_pos_face, nose_pixel_pos_body, body_landmarks)
     
     ## end testing stuff
 
@@ -596,10 +596,12 @@ distinct_image_ids_query = select(Images.image_id.distinct(), Images.h, Images.w
     outerjoin(SegmentBig,Images.image_id == SegmentBig.image_id).\
     outerjoin(SegmentHelper,Images.image_id == SegmentHelper.image_id).\
     outerjoin(Encodings, Encodings.image_id == SegmentBig.image_id).\
+    outerjoin(NMLImages, NMLImages.image_id == SegmentBig.image_id).\
     filter(Encodings.bbox != None).\
     filter(Encodings.two_noses.is_(None)).\
-    filter(Encodings.mongo_body_landmarks == 1).\
-    filter(Encodings.mongo_body_landmarks_norm.is_(None)).\
+    filter(Encodings.mongo_hand_landmarks == 1).\
+    filter(Encodings.mongo_hand_landmarks_norm.is_(None)).\
+    filter(NMLImages.nml_id > 4191363).\
     limit(LIMIT)
 
 # put this back in at future date if needed

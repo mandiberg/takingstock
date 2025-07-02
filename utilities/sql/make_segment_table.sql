@@ -239,6 +239,25 @@ WHERE e.face_x > -45 AND e.face_x < -6
 LIMIT 2000000
 ;
 
+-- for making a helper from segmentbig
+INSERT INTO SegmentHelper_june2025_nmlGPU300k (image_id)
+SELECT DISTINCT e.image_id
+FROM SegmentBig_isface e
+JOIN Images i 
+ON i.image_id = e.image_id
+JOIN NMLImages n ON n.image_id = e.image_id
+WHERE e.face_x > -45 AND e.face_x < 0
+    AND e.face_y > -8 AND e.face_y < 8
+    AND e.face_z > -8 AND e.face_z < 8
+    AND NOT EXISTS (
+        SELECT 1
+        FROM SegmentHelper_june2025_nmlGPU300k s
+        WHERE s.image_id = e.image_id
+    )
+    AND n.nml_id > 4191363
+LIMIT 2000000
+;
+
 
 -- for making a complete site_name_id segment helper
 INSERT INTO SegmentHelper_jan30_ALLgetty4faces (image_id)

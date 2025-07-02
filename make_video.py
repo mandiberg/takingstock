@@ -104,6 +104,7 @@ IS_ONE_CLUSTER = False
 CLUSTER_NO = 21 # sort on this one as HAND_POSITION for IS_HAND_POSE_FUSION
                 # if not IS_HAND_POSE_FUSION, then this is selecting HandsGestures
 START_CLUSTER = 0
+
 # I started to create a separate track for Hands, but am pausing for the moment
 IS_HANDS = False
 IS_ONE_HAND = False
@@ -132,7 +133,7 @@ BLUR_RADIUS = io.oddify(BLUR_RADIUS)
 
 MASK_OFFSET = [50,50,50,50]
 if OUTPAINT: from outpainting_modular import outpaint, image_resize
-VERBOSE = True
+VERBOSE = False
 SAVE_IMG_PROCESS = False
 # this controls whether it is using the linear or angle process
 IS_ANGLE_SORT = False
@@ -182,8 +183,15 @@ MOUTH_GAP = 0
 OBJ_CLS_ID = 0
 DO_OBJ_SORT = True
 OBJ_DONT_SUBSELECT = False # False means select for OBJ. this is a flag for selecting a specific object type when not sorting on obj
-PHONE_BBOX_LIMITS = [1] # this is an attempt to control the BBOX placement. I don't think it is going to work, but with non-zero it will make a bigger selection. Fix this hack TK. 
+PHONE_BBOX_LIMITS = [0] # this is an attempt to control the BBOX placement. I don't think it is going to work, but with non-zero it will make a bigger selection. Fix this hack TK. 
 
+if SegmentHelper_name != 'SegmentHelper_may2025_4x4faces':
+    # OVERRIDES FOR TESTING
+    # SET IS_SSD = False ABOVE
+    IS_HAND_POSE_FUSION = False # this is for testing the planar hands
+    IS_TOPICS = False # this is for testing the planar hands
+    PHONE_BBOX_LIMITS = None
+    ONE_SHOT = True
 
 if not GENERATE_FUSION_PAIRS:
     print("not generating FUSION_PAIRS, pulling from list")
@@ -192,10 +200,12 @@ if not GENERATE_FUSION_PAIRS:
 
         # T0 sports
         # selects
-        [19, 61],
-        [22, 2], 
-        [9, 2], [9, 13],
-        [19, 95],  [24, 13],
+        # [19, 61],
+        # [22, 2], 
+        # [9, 2], 
+        # [9, 13],
+        # [19, 95],  
+        # [24, 13], # this one crashes the code after about 950
         # from fusion analysis
         [19, 66], [8, 13], [29, 37], [17, 22], [19, 9], [4, 49], [6, 22], [6, 122], [21, 116], [24, 113], [26, 47], [26, 67]
 
@@ -379,7 +389,9 @@ elif IS_SEGONLY and io.platform == "darwin":
     if PHONE_BBOX_LIMITS:
         WHERE += " AND s.face_x > -50 "
     else:
-        WHERE += " AND s.face_x > -33 AND s.face_x < -27 AND s.face_y > -2 AND s.face_y < 2 AND s.face_z > -2 AND s.face_z < 2"
+        # WHERE += " AND s.face_x > -33 AND s.face_x < -27 AND s.face_y > -2 AND s.face_y < 2 AND s.face_z > -2 AND s.face_z < 2"
+# OVERRIDE FOR TESTING
+        WHERE += " AND s.face_x > -27 AND s.face_x < 0 AND s.face_y > -5 AND s.face_y < 5 AND s.face_z > -5 AND s.face_z < 5"
     # HIGHER
     # WHERE = "s.site_name_id != 1 AND face_encodings68 IS NOT NULL AND face_x > -27 AND face_x < -23 AND face_y > -2 AND face_y < 2 AND face_z > -2 AND face_z < 2"
 
@@ -552,10 +564,12 @@ face_height_output = 1000
 # units are ratio of faceheight
 # top, right, bottom, left
 pose_crop_dict = {
-    0: 11, 1: 1, 2: 5, 3: 2, 4: 1, 5: 7, 6: 2, 7: 5, 8: 5, 9: 2, 10: 3, 11: 1, 12: 5, 13: 1, 14: 0,
-    15: 2, 16: 1, 17: 10, 18: 4, 19: 9, 20: 2, 21: 1, 22: 4, 23: 0, 24: 1, 25: 2, 26: 5, 27: 11, 28: 1, 29: 11,
+    0: 11, 1: 1, 2: 5, 3: 2, 4: 9, 5: 7, 6: 2, 7: 5, 8: 9, 9: 8, 10: 3, 11: 1, 12: 5, 13: 1, 14: 0,
+    15: 2, 16: 1, 17: 10, 18: 4, 19: 9, 20: 2, 21: 1, 22: 9, 23: 0, 24: 9, 25: 2, 26: 9, 27: 11, 28: 1, 29: 12,
     30: 5, 31: 2
 }
+# 9 includes standing. 
+
 multiplier_list = [
     [1.5,3,3.3,3], # 0 2x3 but go lower
     [1.3,1.85,2.4,1.85], # 1 SQ
@@ -565,10 +579,11 @@ multiplier_list = [
     [1.5,2,3.5,2], # 5 # 5x4 portrait 2025
     [1.5,2.2,4,2.2], # 6 5x4 but go lower and wider 
     [1.5,2,4.5,2], # 7 ~6x2 full length portrait 2025 
-    [3.5,2.6,3.5,2.6], # 8 arms raised 2025 
+    [4.5,3.5,5.5,3.5], # 8 arms raised lotus 
     [1.5,3.5,5.5,3.5], # 9 seated lotus
     [3.5,3.5,3.5,3.5], # 10 arms raised and gunshow 2025 
     [1.3,1.85,2.4,1.85], # 11 -- placeholder to test if SQ
+    [1.5,3.75,3.5,3.75], # 12 extra wide 2x3 landscape (shruggie "why" pose)
 ]
 # initializing default square crop
 image_edge_multiplier = [1.3,1.85,2.4,1.85] # tighter square crop for paris photo videos < Oct 29 FINAL VERSION NOV 2024 DO NOT CHANGE
@@ -595,7 +610,7 @@ start_img_name = "median"
 start_site_image_id = None
 
 # start_img_name = "start_image_id"
-# start_site_image_id = 103808861
+# start_site_image_id = 57987995
 
 # 9774337 screaming hands to head 10
 # 10528975 phone right hand pose 4
