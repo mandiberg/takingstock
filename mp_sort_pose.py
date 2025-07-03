@@ -29,10 +29,13 @@ class SortPose:
 
     def __init__(self, motion, face_height_output, image_edge_multiplier, EXPAND=False, ONE_SHOT=False, JUMP_SHOT=False, HSV_CONTROL=None, VERBOSE=True,INPAINT=False, SORT_TYPE="128d", OBJ_CLS_ID = None,UPSCALE_MODEL_PATH=None, use_3D=False,TSP_SORT=False):
 
+        # need to refactor this for GPU
         self.mp_face_detection = mp.solutions.face_detection
         self.mp_drawing = mp.solutions.drawing_utils
         self.get_bg_segment=mp.solutions.selfie_segmentation.SelfieSegmentation()  
               
+        self.VERBOSE = VERBOSE
+
         #maximum allowable distance between encodings (this accounts for dHSV)
         self.MAXDIST = 1.8
         self.MAXFACEDIST = .8
@@ -46,7 +49,7 @@ class SortPose:
         self.NORM_BODY_MULTIPLIER = 4
         self.BRUTEFORCE = False
         self.use_3D = use_3D
-        print("init use_3D",self.use_3D)
+        # print("init use_3D",self.use_3D)
         self.CUTOFF = 50000 # DOES factor if ONE_SHOT
         self.ORIGIN = 0
         self.this_nose_bridge_dist = self.NOSE_BRIDGE_DIST = None # to be set in first loop, and sort.this_nose_bridge_dist each time
@@ -154,15 +157,13 @@ class SortPose:
             self.SUBSET_LANDMARKS = self.BODY_LMS
             # TBD for DEFAULT LMS SUBSET
 
-        print("final set of subset landmarks", self.SUBSET_LANDMARKS)
+        # print("final set of subset landmarks", self.SUBSET_LANDMARKS)
         # self.SUBSET_LANDMARKS = self.choose_hand(self.HAND_LMS,"right")
         
 
         self.OBJ_CLS_ID = OBJ_CLS_ID
 
         # self.BODY_LMS = [15]
-        self.VERBOSE = VERBOSE
-        # self.VERBOSE = True
         #____________________TSP SORT________________
         if self.TSP_SORT==True:
             if self.VERBOSE:print("using travelling salesman sorting")
@@ -1547,10 +1548,10 @@ class SortPose:
     def make_subset_landmarks(self, first, last, dim=2):
         # takes number of lms and multiplies them by dim
         # add 1 to last to make it inclusive of final landmark
-        print("am I using 3D?", self.use_3D)
+        if self.VERBOSE: print("am I using 3D?", self.use_3D)
         if self.use_3D == True: dim = 3
         subset = list(range(first*dim, (last+1)*dim))
-        print(f"first {first} last {last} subset {subset}")
+        if self.VERBOSE: print(f"first {first} last {last} subset {subset}")
         return subset
                 
     def get_landmarks_2d(self, Lms, selected_Lms, structure="dict"):

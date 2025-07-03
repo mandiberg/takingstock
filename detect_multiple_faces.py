@@ -105,20 +105,20 @@ switching to topic targeted
 18	afripics
 '''
 # I think this only matters for IS_FOLDER mode, and the old SQL way
-SITE_NAME_ID = 3
+SITE_NAME_ID = 2
 # 2, shutter. 4, istock
 # 7 pond5, 8 123rf
 POSE_ID = 0
 
 # folder doesn't matter if IS_FOLDER is False. Declared FAR below. 
 # MAIN_FOLDER = "/Volumes/RAID54/images_shutterstock"
-MAIN_FOLDER = "/Volumes/OWC5/images_adobe"
+# MAIN_FOLDER = "/Volumes/OWC5/images_adobe"
 # MAIN_FOLDER = "/Volumes/ExFAT_SSD4_/images_adobe"
-# MAIN_FOLDER = "/Volumes/OWC4/segment_images/images_shutterstock"
+MAIN_FOLDER = "/Volumes/OWC5/images_shutterstock"
 # MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/afripics_v2/images"
 
 # MAIN_FOLDER = "/Volumes/SSD4/images_getty_reDL"
-BATCH_SIZE = 2000 # Define how many from each folder in each batch
+BATCH_SIZE = 1000 # Define how many from each folder in each batch
 LIMIT = 1000
 
 #temp hack to go 1 subfolder at a time
@@ -134,8 +134,9 @@ IS_SSD=True
 # for silence, start at 103893643
 # for HDD topic, start at 28714744
 BODYLMS = True
-REDO_BODYLMS_3D = False # this makes it skip hands and YOLO
 HANDLMS = True
+REDO_BODYLMS_3D = True # this makes it skip hands and YOLO
+if REDO_BODYLMS_3D: HANDLMS = False # if doing 3D redo, don't do hands
 TOPIC_ID = None
 # TOPIC_ID = [24, 29] # adding a TOPIC_ID forces it to work from SegmentBig_isface, currently at 7412083
 DO_INVERSE = True
@@ -148,7 +149,7 @@ SegmentTable_name = 'SegmentBig_isnotface'
 START_IMAGE_ID = 0
 
 if BODYLMS is True or HANDLMS is True:
-    # prep for image background object
+    # THIS NEEDS TO BE REFACTORED FOR GPU
     get_background_mp = mp.solutions.selfie_segmentation
     get_bg_segment = get_background_mp.SelfieSegmentation()
 
@@ -1171,7 +1172,7 @@ def process_image_hands_subroutine(image_id, image):
 
     existing_hand = mongo_hand_collection.find_one({"image_id": image_id})
     if existing_hand:
-        print(f"hand landmarks already exist for image_id: {image_id}")
+        if VERBOSE:print(f"hand landmarks already exist for image_id: {image_id}")
         update_hand = False
         is_hands = True
         pose = hand_landmarks = None
@@ -1180,10 +1181,10 @@ def process_image_hands_subroutine(image_id, image):
         pose = SelectPose(image)
         is_hands, hand_landmarks = find_hands(image, pose)
         if not is_hands:
-            print(" ------ >>>>>  NO HANDS for ", image_id)
+            if VERBOSE:print(" ------ >>>>>  NO HANDS for ", image_id)
             update_hand = False
         else:
-            print(" ------ >>>>>  YES HANDS for ", image_id)
+            if VERBOSE:print(" ------ >>>>>  YES HANDS for ", image_id)
             update_hand = True
     return pose, is_hands, hand_landmarks, update_hand
 
@@ -1194,7 +1195,7 @@ def save_body_hands_mysql_and_mongo(session, image_id, image, bbox_dict, body_la
     if body_world_landmarks is not None:
         mongo_body_landmarks_3D = True
     else:
-        print("No body_world_landmarks detected.", body_world_landmarks)
+        if VERBOSE: print("No body_world_landmarks detected.", body_world_landmarks)
         mongo_body_landmarks_3D = False
 
     if is_body is None or is_body is False: 
@@ -1362,7 +1363,7 @@ def save_body_hands_mysql_and_mongo(session, image_id, image, bbox_dict, body_la
         {"$set": {"body_world_landmarks": pickle.dumps(body_world_landmarks)}},
         upsert=True
     )
-    print(f"body_world_landmarks stored for image_id: {image_id}")
+    if VERBOSE: print(f"body_world_landmarks stored for image_id: {image_id}")
     session.query(Encodings).filter(Encodings.image_id == image_id).update({
         # Encodings.body_landmarks: body_landmarks
         Encodings.is_feet: is_feet,
@@ -1380,7 +1381,7 @@ def save_body_hands_mysql_and_mongo(session, image_id, image, bbox_dict, body_la
     else: is_nml_db = 1
     existing_NML_entry = session.query(NMLImages).filter_by(image_id=image_id).first()
     if not existing_NML_entry:
-        print("   #########    new image, not in NML results_dict: ", image_id)
+        if VERBOSE: print("   #########    new image, not in NML results_dict: ", image_id)
         try:
             new_NML_entry = NMLImages(image_id=image_id, is_nml_db=is_nml_db)
             session.add(new_NML_entry)
@@ -1409,7 +1410,7 @@ def check_is_feet(body_landmarks):
     return is_feet
 
 def find_and_save_body(image_id, image, bbox, mongo_body_landmarks, hand_landmarks):
-    print("find_and_save_body", mongo_body_landmarks)
+    if VERBOSE: print("find_and_save_body", mongo_body_landmarks)
     hue = sat = val = lum = lum_torso = hue_bb = sat_bb = val_bb = lum_bb = lum_torso_bb = selfie_bbox = bbox_dict = None
     is_left_shoulder=is_right_shoulder = is_feet = pose = is_hands = hand_landmarks = update_hand = None
 
@@ -1424,7 +1425,7 @@ def find_and_save_body(image_id, image, bbox, mongo_body_landmarks, hand_landmar
         if face_height and not REDO_BODYLMS_3D:
             # only do this when there is a face. skip for no face -body reprocessing
             ### detect object info, 
-            print("detecting objects")
+            if VERBOSE:print("detecting objects")
             bbox_dict=sort.return_bbox(YOLO_MODEL,image, OBJ_CLS_LIST)
             if VERBOSE: print("detected objects")
 
@@ -1448,9 +1449,9 @@ def find_and_save_body(image_id, image, bbox, mongo_body_landmarks, hand_landmar
             selfie_bbox=sort.get_selfie_bbox(segmentation_mask)
             if VERBOSE: print("selfie_bbox",selfie_bbox)
         elif REDO_BODYLMS_3D:
-            print("got 3D bodylms in a DOOVER, skipped the rest", image_id)
+            if VERBOSE: print("got 3D bodylms in a DOOVER, skipped the rest", image_id)
         else:
-            print("no face, skipping object detection, just did the body, all values already are set to None", image_id)
+            if VERBOSE: print("no face, skipping object detection, just did the body, all values already are set to None", image_id)
     elif BODYLMS and mongo_body_landmarks:
         # this was for some error handling. to handle exisitin mongo_body_landmarks will require refactoring
         print("doing body, mongo_body_landmarks is not None", mongo_body_landmarks)
@@ -1871,7 +1872,7 @@ def do_job(tasks_to_accomplish, tasks_that_are_done):
 
 
 def main():
-    print("main")
+    # print("main")
 
 
     tasks_to_accomplish = Queue()
@@ -1887,9 +1888,9 @@ def main():
     if IS_FOLDER is True:
         print("in IS_FOLDER")
         folder_paths = io.make_hash_folders(MAIN_FOLDER, as_list=True)
-        print(len(folder_paths))
+        # print(len(folder_paths))
         completed_folders = io.get_csv_aslist(CSV_FOLDERCOUNT_PATH)
-        print(len(completed_folders))
+        # print(len(completed_folders))
         for folder_path in folder_paths:
             
             # if folder_path in THESE_FOLDER_PATHS:
@@ -1898,13 +1899,13 @@ def main():
                 folder = os.path.join(MAIN_FOLDER,folder_path)
                 folder_count += 1
                 if not os.path.exists(folder):
-                    print(str(folder_count), "no folder here:",folder)
+                    # print(str(folder_count), "no folder here:",folder)
                     continue
                 else:
                     print(str(folder_count), folder)
 
                 img_list = io.get_img_list(folder)
-                print("len(img_list)", len(img_list))
+                # print("len(img_list)", len(img_list))
 
 
                 # Initialize an empty list to store all the results
@@ -1934,15 +1935,15 @@ def main():
                         batch_site_image_ids = [img.split(".")[0] for img in batch_img_list]
                     site_name_id = SITE_NAME_ID
 
-                    print("batch_site_image_ids", len(batch_site_image_ids))
-                    print("batch_site_image_ids", batch_site_image_ids[:5])
+                    if VERBOSE: print("batch_site_image_ids", len(batch_site_image_ids))
+                    if VERBOSE: print("batch_site_image_ids", batch_site_image_ids[:5])
 
 
                     # query the database for the current batch and return image_id and encoding_id
                     for _ in range(io.max_retries):
 
                         try:
-                            print(f"Processing batch {i//BATCH_SIZE + 1}...")
+                            if VERBOSE: print(f"Processing batch {i//BATCH_SIZE + 1}...")
                             init_session()
                             # task = (image_id,imagepath,row["mongo_face_landmarks"], row["mongo_body_landmarks"],row["bbox"])
                             # batch_query = session.query(Images.image_id, Images.site_image_id, Encodings.encoding_id) \
@@ -1955,7 +1956,7 @@ def main():
                             batch_results = batch_query.all()
 
                             all_results.extend(batch_results)
-                            print("about to close_session()")
+                            if VERBOSE: print("about to close_session()")
                             # Close the session and dispose of the engine before the worker process exits
                             close_session()
 
@@ -1963,7 +1964,7 @@ def main():
                             print("error getting batch results")
                             print(e)
                             time.sleep(io.retry_delay)
-                    print(f"no. all_results: {len(all_results)}")
+                    if VERBOSE: print(f"no. all_results: {len(all_results)}")
 
                     # print("results:", all_results)
                     results_dict = {result.site_image_id: result for result in batch_results}
