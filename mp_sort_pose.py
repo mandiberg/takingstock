@@ -50,7 +50,7 @@ class SortPose:
         self.BRUTEFORCE = False
         self.use_3D = use_3D
         # print("init use_3D",self.use_3D)
-        self.CUTOFF = 90 # DOES factor if ONE_SHOT
+        self.CUTOFF = 20 # DOES factor if ONE_SHOT
         self.ORIGIN = 0
         self.this_nose_bridge_dist = self.NOSE_BRIDGE_DIST = None # to be set in first loop, and sort.this_nose_bridge_dist each time
 
@@ -100,11 +100,11 @@ class SortPose:
         # maximum allowable scale up
         self.resize_max = 5.99
         self.resize_increment = 345
-        self.USE_INCREMENTAL_RESIZE = True
+        self.USE_INCREMENTAL_RESIZE = False
         self.image_edge_multiplier = image_edge_multiplier
         self.face_height_output = face_height_output
         self.EXPAND = EXPAND
-        self.EXPAND_SIZE = (40000,40000) # full body
+        self.EXPAND_SIZE = (25000,25000) # full body
         # self.EXPAND_SIZE = (10000,10000) # regular
         # self.EXPAND_SIZE = (6400,6400)
         self.BGCOLOR = [255,255,255]
@@ -997,13 +997,14 @@ class SortPose:
                 resize_factor = None
                 resize = self.face_height_output/self.face_height
                 face_incremental_output_size = None
-            print("expand_image resize")
+            print("expand_image resize", str(resize))
             if resize < 15:
                 print("expand_image [-] resize", str(resize))
                 # image.shape is height[0] and width[1]
                 resize_dims = (int(self.image.shape[1]*resize),int(self.image.shape[0]*resize))
                 # resize_nose.shape is  width[0] and height[1]
                 resize_nose = (int(self.nose_2d[0]*resize),int(self.nose_2d[1]*resize))
+                # resize_nose is scaled up nose position, but not expanded/cropped
                 print(f"resize_factor {resize_factor} resize_dims {resize_dims}")
                 # print("resize_nose", resize_nose)
                 # this wants width and height
@@ -1014,6 +1015,8 @@ class SortPose:
                 # NEW WAY
                 upsized_image = self.upscale_model.upsample(self.image)
                 resized_image = cv2.resize(upsized_image, (resize_dims))
+                # for non-incremental, resized_image and resize_dims are scaled, but not expanded/cropped
+                # resize dims is the size of the image before expanding/cropping
 
                 if face_incremental_output_size:
                     image_incremental_output_ratio = face_incremental_output_size/self.face_height_output
@@ -1021,33 +1024,93 @@ class SortPose:
                     print("this_expand_size", image_incremental_output_ratio, this_expand_size)
                 else:
                     this_expand_size = (self.EXPAND_SIZE[0],self.EXPAND_SIZE[1])
-                # self.preview_img(resized_image)
+                    # for non-incremental, this_expand_size is now 25000
 
                 # calculate boder size by comparing scaled image dimensions to EXPAND_SIZE
-                # nose as center
-                # set top, bottom, left, right
-                top_border = int(this_expand_size[1]/2 - resize_nose[1])
-                bottom_border = int(this_expand_size[1]/2 - (resize_dims[1]-resize_nose[1]))
-                left_border = int(this_expand_size[0]/2 - resize_nose[0])
-                right_border = int(this_expand_size[0]/2 - (resize_dims[0]-resize_nose[0]))
+                # resize dims is the size of the image before expanding/cropping
+                # resize_nose is scaled up nose position, but not expanded/cropped
+                final_height_unit_from_nose = int(this_expand_size[1]/2) # 12500 default (or another set increment if incremental)
+                final_width_unit_from_nose = int(this_expand_size[0]/2)
+                existing_height = int(resize_dims[1]) # each image will be different
+                existing_width = int(resize_dims[0])
+                existing_pixels_above_nose = int(resize_nose[1])
+                existing_pixels_below_nose = int(resize_dims[1]-existing_pixels_above_nose)
+                existing_pixels_left_of_nose = int(resize_nose[0])
+                existing_pixels_right_of_nose = int(resize_dims[0]-existing_pixels_left_of_nose)
 
-                print([top_border, bottom_border, left_border, right_border])
-                print([top_border, resize_dims[0]/2-right_border, resize_dims[1]/2-bottom_border, left_border])
-                print([top_border, this_expand_size[0]/2-right_border, this_expand_size[1]/2-bottom_border, left_border])
 
-                # expand image with borders
-                if top_border >= 0 and right_border >= 0 and this_expand_size[0]/2-right_border >= 0 and bottom_border >= 0 and this_expand_size [1]/2-bottom_border>= 0 and left_border>= 0:
+                top_border = int(final_height_unit_from_nose - existing_pixels_above_nose)
+                bottom_border = int(final_height_unit_from_nose - (existing_height-existing_pixels_above_nose))
+                left_border = int(final_width_unit_from_nose - existing_pixels_left_of_nose)
+                right_border = int(final_width_unit_from_nose - (existing_width-existing_pixels_left_of_nose))
+
+                border_list = [top_border, bottom_border, left_border, right_border]
+                existing_list = [existing_pixels_above_nose, existing_pixels_below_nose, existing_pixels_left_of_nose, existing_pixels_right_of_nose]
+                print("borders to expand to", border_list)
+                print("existing pixels", existing_list)
+                # if all borders are positive, then we can expand the image
+                expand_list =[]
+                crop_list = []
+                if all(x >= 0 for x in border_list):
+                    expand_list = border_list
+                    print("expand is good")
+                # top_border = int(this_expand_size[1]/2 - resize_nose[1])
+                # bottom_border = int(this_expand_size[1]/2 - (resize_dims[1]-resize_nose[1]))
+                # left_border = int(this_expand_size[0]/2 - resize_nose[0])
+                # right_border = int(this_expand_size[0]/2 - (resize_dims[0]-resize_nose[0]))
+
+                # print([top_border, bottom_border, left_border, right_border])
+                # print([top_border, resize_dims[0]/2-right_border, resize_dims[1]/2-bottom_border, left_border])
+                # print([top_border, this_expand_size[0]/2-right_border, this_expand_size[1]/2-bottom_border, left_border])
+
+                # OOOOOLD expand image with borders
+                # if top_border >= 0 and right_border >= 0 and this_expand_size[0]/2-right_border >= 0 and bottom_border >= 0 and this_expand_size [1]/2-bottom_border>= 0 and left_border>= 0:
                 # if topcrop >= 0 and self.w-rightcrop >= 0 and self.h-botcrop>= 0 and leftcrop>= 0:
-                    print("crop is good")
-                    new_image = cv2.copyMakeBorder(resized_image, top_border, bottom_border, left_border, right_border, borderType, None, self.BGCOLOR)
                 else:
-                    print("crop failed")
+                    for i, border in enumerate(border_list):
+                        if border > 0:
+                            expand_list.append(border)
+                            crop_list.append(0)
+                        else:
+                            expand_list.append(0)
+                            crop_list.append(abs(border))
+                    print("expand failed, at least one is crop")
                     new_image = None
                     self.negmargin_count += 1                # self.preview_img(new_image)
                 # quit()
+                print("going to expand image with borders", expand_list)
+                # Use border_list for the border sizes
+                new_image = cv2.copyMakeBorder(
+                    resized_image,
+                    expand_list[0],  # top
+                    expand_list[1],  # bottom
+                    expand_list[2],  # left
+                    expand_list[3],  # right
+                    borderType,
+                    None,
+                    self.BGCOLOR
+                )
+                print("new_image shape after expanding:", new_image.shape)
+                if any(x != 0 for x in crop_list):
+                    print("some borders are negative, cropping")
+                    # crop the image to the crop_list keeping the image centered
+                    # start at top and left with the extra pixels the image extends beyond the output dimensions
+                    # then go from there the distance of the output dimensions (final_height_unit_from_nose * 2, etc)
+                    CROP_TOP = crop_list[0] 
+                    CROP_BOTTOM = crop_list[0] + this_expand_size[1]
+                    CROP_LEFT = crop_list[2]
+                    CROP_RIGHT = crop_list[2] + this_expand_size[0] 
+                    # CROP_LEFT = (new_image.shape[1] - crop_list[2]) // 2
+                    # CROP_RIGHT = new_image.shape[1] - CROP_LEFT - crop_list[2]
+                    # CROP_TOP = (new_image.shape[0] - crop_list[0]) // 2
+                    # CROP_BOTTOM = new_image.shape[0] - CROP_TOP - crop_list[0]
+                    print("CROP_LEFT, CROP_RIGHT, CROP_TOP, CROP_BOTTOM", CROP_LEFT, CROP_RIGHT, CROP_TOP, CROP_BOTTOM)
+                    # Define the cropped area
+                    new_image = new_image[CROP_TOP:CROP_BOTTOM, CROP_LEFT:CROP_RIGHT]
+                    print("cropped image to", crop_list)
             else:
                 new_image = None
-                print("failed expand loop")
+                print("failed expand loop, with resize", str(resize), "too big, skipping")
 
 
         except Exception as e:
