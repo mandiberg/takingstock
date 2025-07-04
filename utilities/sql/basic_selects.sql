@@ -199,22 +199,24 @@ DELETE FROM NMLImages
 
 
 
-SELECT DISTINCT(s.image_id), s.site_name_id, s.contentUrl, s.imagename, s.description, s.face_x, s.face_y, s.face_z, s.mouth_gap, s.bbox, s.site_image_id, it.topic_score, ibg.lum, ibg.lum_bb, ibg.hue, ibg.hue_bb, ibg.sat, ibg.sat_bb, ibg.val, ibg.val_bb, ibg.lum_torso, ibg.lum_torso_bb  
-FROM SegmentBig_isface s  JOIN Encodings e ON s.image_id = e.image_id  
-JOIN ImagesHandsPositions ihp ON s.image_id = ihp.image_id  JOIN ImagesHandsGestures ih ON s.image_id = ih.image_id  
-JOIN ImagesTopics it ON s.image_id = it.image_id  JOIN SegmentHelper_may2025_4x4faces sh ON s.image_id = sh.image_id  
-JOIN ImagesBackground ibg ON s.image_id = ibg.image_id  
-WHERE  e.is_dupe_of IS NULL  AND s.face_x > -50  AND it.topic_score > .1   
-AND ihp.cluster_id = 19  AND ih.cluster_id = 61 AND it.topic_id IN (0)  LIMIT 50000;
+CREATE TABLE BodyPoses3D (
+    cluster_id int NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    cluster_median BLOB
+);
 
+-- This is the poses junction table.
+CREATE TABLE ImagesBodyPoses3D (
+    image_id INTEGER REFERENCES Images (image_id),
+    cluster_id INTEGER REFERENCES BodyPoses3D (cluster_id),
+    cluster_dist FLOAT DEFAULT NULL,
+    PRIMARY KEY (image_id)
+);
 
-SELECT DISTINCT(s.image_id), e.mongo_hand_landmarks, e.mongo_hand_landmarks_norm, s.site_name_id, s.contentUrl, s.imagename, s.description, s.face_x, s.face_y, s.face_z, s.mouth_gap, s.bbox, s.site_image_id, 
-ibg.lum, ibg.lum_bb, ibg.hue, ibg.hue_bb, ibg.sat, ibg.sat_bb, ibg.val, ibg.val_bb, ibg.lum_torso, ibg.lum_torso_bb  
-FROM SegmentBig_isface s  JOIN Encodings e ON s.image_id = e.image_id  JOIN SegmentHelper_june2025_nmlGPU300k sh ON s.image_id = sh.image_id  
-JOIN ImagesBackground ibg ON s.image_id = ibg.image_id  WHERE  e.is_dupe_of IS NULL  AND s.face_x > -50    
-AND e.mongo_hand_landmarks_norm = 1
-LIMIT 50000;
+SELECT * FROM BodyPoses3D ;
+SELECT * FROM ImagesBodyPoses3D ;
 
+DELETE FROM BodyPoses3D ;
+DELETE FROM ImagesBodyPoses3D ;
 
 SELECT COUNT(n.nml_id)
 FROM NMLImages n 

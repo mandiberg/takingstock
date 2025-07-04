@@ -12,6 +12,9 @@ from sys import platform
 import json
 import base64
 import gc
+import traceback
+import threading
+import psutil
 
 import sys
 import re
@@ -1480,6 +1483,13 @@ def find_and_save_body(image_id, image, bbox, mongo_body_landmarks, hand_landmar
             print(f"[process_image]session.query failed: {image_id}")
             time.sleep(io.retry_delay)
 
+def check_open_files():
+    process = psutil.Process(os.getpid())
+    open_files = process.open_files()
+    print(f"Currently open files: {len(open_files)}")
+    if len(open_files) > 100:  # arbitrary threshold
+        for f in open_files[-10:]:  # show last 10
+            print(f"  {f.path}")
 
 def process_image_bodylms(task):
     # this is the main show April 2025
@@ -1504,40 +1514,52 @@ def process_image_bodylms(task):
     init_mongo()
     hand_landmarks = None
 
+    thread_id = threading.get_ident()
     try:
-        image = cv2.imread(cap_path)        
-        # this is for when you need to move images into a testing folder structure
-        # save_image_elsewhere(image, task)
-    except Exception as e:
-        print('Error:', str(e))
-        print(f"[process_image]this imread failed, even after uppercasing: {task}")
-    # print("processing: ")
-    # print(image_id)
-    if image is not None and image.shape[0]>MINSIZE and image.shape[1]>MINSIZE:
-        # Do findbody
-
-        find_and_save_body(image_id, image, bbox, mongo_body_landmarks, hand_landmarks)
+        # print(f"Thread {thread_id}: Processing {cap_path}")
+        image = cv2.imread(cap_path)
         
-    else:
-        no_image = True
-        # store no_image in Images table
-        session.query(Images).filter(Images.image_id == image_id).update({
-            Images.no_image: no_image
-        }, synchronize_session=False)
-        session.query(SegmentTable).filter(SegmentTable.image_id == image_id).update({
-            SegmentTable.no_image: no_image
-        }, synchronize_session=False)
-        session.commit()
-        print('no image or toooooo smallllll, stored in Images table for image_id', image_id)
+        if image is None:
+            # print(f"Thread {thread_id}: Failed to load image: {cap_path}")
+            return
+            
+        # Your processing here
+        
+        if image is not None and image.shape[0]>MINSIZE and image.shape[1]>MINSIZE:
+            # Do findbody
 
-        # I should probably assign no_good here...?
-    # Close the session and dispose of the engine before the worker process exits
-    close_mongo()
-    close_session()
-    # collect_the_garbage()
-    if 'image' in locals():
-        del image
-    gc.collect()
+            find_and_save_body(image_id, image, bbox, mongo_body_landmarks, hand_landmarks)
+            
+        else:
+            no_image = True
+            # store no_image in Images table
+            session.query(Images).filter(Images.image_id == image_id).update({
+                Images.no_image: no_image
+            }, synchronize_session=False)
+            session.query(SegmentTable).filter(SegmentTable.image_id == image_id).update({
+                SegmentTable.no_image: no_image
+            }, synchronize_session=False)
+            session.commit()
+            print('no image or toooooo smallllll, stored in Images table for image_id', image_id)
+
+
+    except OSError as e:
+        if e.errno == 24:  # Too many open files
+            print(f"Thread {thread_id}: Too many open files error!")
+            check_open_files()  # From code above
+        traceback.print_exc()
+    except Exception as e:
+        print(f'Thread {thread_id}: Error: {str(e)}')
+        traceback.print_exc()
+    finally:
+        # Cleanup
+        # Close the session and dispose of the engine before the worker process exits
+        close_mongo()
+        close_session()
+        # collect_the_garbage()
+        if 'image' in locals():
+            del image
+        gc.collect()
 
     # store data
 

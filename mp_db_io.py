@@ -63,6 +63,7 @@ class DataIO:
             self.mongo_db = self.mongo_client[self.dbmongo['name']]
             self.mongo_collection_face = self.mongo_db['encodings']
             self.mongo_collection_body = self.mongo_db["body_landmarks_norm"]
+            self.mongo_collection_body3D = self.mongo_db["body_world_landmarks"]
             self.mongo_collection_hands = self.mongo_db["hand_landmarks"]
 
             # self.ROOT_PROD= os.path.join(os.environ['HOME'], "Documents/projects-active/facemap_production/segment_images") ## only on Mac
@@ -195,7 +196,7 @@ class DataIO:
     def get_csv_aslist(self,CSV_COUNTOUT_PATH):
         list_of_lines = []
         try:
-            print("trying to get list of saved")
+            print("trying to get list of saved from ", CSV_COUNTOUT_PATH)
             with open(CSV_COUNTOUT_PATH, encoding="utf-8", newline="") as in_file:
                 reader = csv.reader(in_file, delimiter=",")
                 # next(reader)  # Header row
@@ -235,10 +236,13 @@ class DataIO:
 
     def get_img_list(self, folder, sort=True):
         json_path = os.path.join(folder, 'img_list.json')
+        print("getting image list from", json_path)
         if os.path.exists(json_path):
+            print("Image list exists, loading from", json_path)
             with open(json_path, 'r') as f:
                 img_list = json.load(f)
         else:
+            print("Image list does not exist, saving new list")
             img_list = self.save_img_list(folder)
         if sort:
             img_list.sort()
@@ -332,15 +336,20 @@ class DataIO:
         # print("self.query_body: ", self.query_body)
         results_face = results_body = results_hands = None
         if image_id:
-            if self.query_face: results_face = self.mongo_collection_face.find_one({"image_id": image_id})
-            if self.query_body: results_body = self.mongo_collection_body.find_one({"image_id": image_id})
-            if self.query_hands: results_hands = self.mongo_collection_hands.find_one({"image_id": image_id})
+            if self.query_face: 
+                results_face = self.mongo_collection_face.find_one({"image_id": image_id})
+            if self.query_body: 
+                results_body = self.mongo_collection_body.find_one({"image_id": image_id})
+                results_body3D = self.mongo_collection_body3D.find_one({"image_id": image_id})
+            if self.query_hands: 
+                results_hands = self.mongo_collection_hands.find_one({"image_id": image_id})
             # print("got results from mongo, types are: ", type(results_face), type(results_body))
             # print("results_face: ", results_face)
             # print("results_body: ", results_body)
             face_encodings68 = face_landmarks = body_landmarks = body_landmarks_normalized = None
             if results_body:
                 body_landmarks_normalized = results_body["nlms"]
+                body_landmarks_3D = results_body3D["body_world_landmarks"] if results_body3D is not None else None
             if results_face:
                 try:
                     face_encodings68 = results_face['face_encodings68']
@@ -353,7 +362,7 @@ class DataIO:
                 # left_hand = results_hands['left_hand']
                 # right_hand = results_hands['right_hand']
                 # print("got encodings from mongo, types are: ", type(face_encodings68), type(face_landmarks), type(body_landmarks))
-        return pd.Series([face_encodings68, face_landmarks, body_landmarks, body_landmarks_normalized, results_hands])
+        return pd.Series([face_encodings68, face_landmarks, body_landmarks, body_landmarks_normalized,  body_landmarks_3D, results_hands])
         #     # else:
         #     #     return pd.Series([None, None, None])
         # else:

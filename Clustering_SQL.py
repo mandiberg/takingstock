@@ -77,8 +77,9 @@ title = 'Please choose your operation: '
 options = ['kmeans cluster and save clusters', 'cluster assignment', 'calculate cluster medians, cluster_dist and save clusters']
 option, MODE = pick(options, title)
 # MODE = 1
-CLUSTER_TYPE = "Clusters"
+# CLUSTER_TYPE = "Clusters"
 # CLUSTER_TYPE = "BodyPoses"
+CLUSTER_TYPE = "BodyPoses3D"
 # CLUSTER_TYPE = "HandsPositions"
 # CLUSTER_TYPE = "HandsGestures"
 # CLUSTER_TYPE = "FingertipsPositions"
@@ -95,11 +96,11 @@ SUBSELECT_ONE_CLUSTER = 0
 # SUBSET_LANDMARKS is now set in sort pose init
 USE_HEAD_POSE = False
 
-SHORTRANGE = True
+SHORTRANGE = False # controls a short range query for the face x,y,z and mouth gap
 ANGLES = []
-STRUCTURE = "list3"
+STRUCTURE = "list3D" # 2d "dict", 2d "list", 2d plus visibility "list3", 3d plus visibility "list3D"
 print("STRUCTURE: ",STRUCTURE)
-if STRUCTURE == "list3": 
+if "list3" in STRUCTURE: 
     print("setting 3D to True")
     sort.use_3D = True
 
@@ -112,7 +113,7 @@ GET_OPTIMAL_CLUSTERS=False
 # number of clusters produced. run GET_OPTIMAL_CLUSTERS and add that number here
 # 32 for hand positions
 # 128 for hand gestures
-N_CLUSTERS = 256
+N_CLUSTERS = 64
 SAVE_FIG=False ##### option for saving the visualized data
 
 if USE_SEGMENT is True and (CLUSTER_TYPE != "Clusters"):
@@ -122,6 +123,7 @@ if USE_SEGMENT is True and (CLUSTER_TYPE != "Clusters"):
     # Basic Query, this works with SegmentOct20
     SELECT = "DISTINCT(s.image_id), s.face_x, s.face_y, s.face_z, s.mouth_gap"
     if CLUSTER_TYPE == "BodyPoses": WHERE = " s.mongo_body_landmarks = 1 and s.is_feet = 1"
+    elif CLUSTER_TYPE == "BodyPoses3D": WHERE = " s.mongo_body_landmarks_3D = 1 and s.is_feet = 1"
     elif CLUSTER_TYPE == "HandsGestures": WHERE = " s.mongo_hand_landmarks = 1 "
     elif CLUSTER_TYPE in ["HandsPositions","FingertipsPositions"] : WHERE = " s.mongo_hand_landmarks_norm = 1 "
     WHERE += " AND s.is_dupe_of IS NULL "
@@ -401,7 +403,7 @@ def calc_cluster_median(df, col_list, cluster_id):
 def build_col_list(df):
     col_list = {}
     col_list["left"] = col_list["right"] = col_list["body_lms"] = col_list["face"] = []
-    if CLUSTER_TYPE == "BodyPoses":
+    if CLUSTER_TYPE in ("BodyPoses", "BodyPoses3D"):
         col_list["body_lms"] = [col for col in df.columns if col.startswith('dim_')]
     elif CLUSTER_TYPE in ["HandsPositions", "HandsGestures", "FingertipsPositions"]:
         col_list["left"] = [col for col in df.columns if col.startswith('left_dim_')]
@@ -429,7 +431,7 @@ def calculate_cluster_medians(df):
     for cluster_id in unique_clusters:
         # cluster_median = calc_cluster_median(df, col_list, cluster_id)
         cluster_median = {}
-        if CLUSTER_TYPE == "BodyPoses":
+        if CLUSTER_TYPE in ("BodyPoses", "BodyPoses3D"):
             cluster_median["body_lms"] = calc_cluster_median(df, col_list["body_lms"], cluster_id)
         elif CLUSTER_TYPE in ["HandsPositions", "HandsGestures", "FingertipsPositions"]:
             cluster_median["left"] = calc_cluster_median(df, col_list["left"], cluster_id)
@@ -611,8 +613,11 @@ def df_list_to_cols(df, col_name):
     df_data = df.drop("image_id", axis=1)
     # Create new columns for each coordinate
     num_coords = len(df_data[col_name].iloc[0])
-    for i in range(num_coords):
-        df[f'dim_{i}'] = df[col_name].apply(lambda x: x[i])
+    # for i in range(num_coords):
+    #     df[f'dim_{i}'] = df[col_name].apply(lambda x: x[i])
+    # Create all new columns at once to avoid fragmentation
+    new_cols = pd.DataFrame(df[col_name].tolist(), index=df.index, columns=[f'dim_{i}' for i in range(num_coords)])
+    df = pd.concat([df, new_cols], axis=1)
 
     # Drop the original col_name column
     df = df.drop(col_name, axis=1)
@@ -621,6 +626,7 @@ def df_list_to_cols(df, col_name):
 def prepare_df(df):
     print("columns: ",df.columns)
     print("prepare_df df",df)
+    print("prepare df first row",df.iloc[0])
     # apply io.convert_decimals_to_float to face_x, face_y, face_z, and mouth_gap 
     # if faxe_x, face_y, face_z, and mouth_gap are not already floats
     if 'face_x' in df.columns and df['face_x'].dtype != float:
@@ -628,19 +634,26 @@ def prepare_df(df):
     # if cluster_median column is in the df, unpickle it
     if 'cluster_median' in df.columns:
         df['cluster_median'] = df['cluster_median'].apply(io.unpickle_array)
-    if CLUSTER_TYPE == "BodyPoses":
-        df = df.dropna(subset=['body_landmarks_normalized'])
-        df['body_landmarks_normalized'] = df['body_landmarks_normalized'].apply(io.unpickle_array)
+    if CLUSTER_TYPE in ("BodyPoses", "BodyPoses3D"):
+        if CLUSTER_TYPE == "BodyPoses3D":
+            keep_col = "body_landmarks_3D"
+            drop_col = "body_landmarks_normalized"
+        else:
+            keep_col = "body_landmarks_normalized"
+            drop_col = "body_landmarks"
+
+        df = df.dropna(subset=[keep_col])
+        df[keep_col] = df[keep_col].apply(io.unpickle_array)
         # body = self.get_landmarks_2d(enc1, list(range(33)), structure)
-        df['body_landmarks_array'] = df['body_landmarks_normalized'].apply(lambda x: sort.get_landmarks_2d(x, list(range(33)), structure=STRUCTURE))
+        print("df before get_landmarks_2d", df)
+        df['body_landmarks_array'] = df[keep_col].apply(lambda x: sort.get_landmarks_2d(x, list(range(33)), structure=STRUCTURE))
 
         # apply io.convert_decimals_to_float to face_x, face_y, face_z, and mouth_gap 
         # df['body_landmarks_array'] = df.apply(lambda row: io.convert_decimals_to_float(row['body_landmarks_array'] + [row['face_x'], row['face_y'], row['face_z'], row['mouth_gap']]), axis=1)
         # drop the columns that are not needed
         # if not USE_HEAD_POSE: df = df.drop(columns=['face_x', 'face_y', 'face_z', 'mouth_gap']) 
-        columns_to_drop=['face_encodings68', 'face_landmarks', 'body_landmarks', 'body_landmarks_normalized']
+        columns_to_drop=['face_encodings68', 'face_landmarks', 'body_landmarks', keep_col, drop_col]
         print("before cols",df)
-
         df_list_to_cols(df, 'body_landmarks_array')
         print("after cols",df)
     # elif CLUSTER_TYPE == "HandsPositions":
@@ -693,17 +706,18 @@ def main():
     df = pd.json_normalize(resultsjson)
     print(df)
     # tell sort_pose which columns to NOT query
-    if CLUSTER_TYPE == "BodyPoses": io.query_face = sort.query_face = io.query_hands = sort.query_hands = False
+    if CLUSTER_TYPE in ("BodyPoses", "BodyPoses3D"): io.query_face = sort.query_face = io.query_hands = sort.query_hands = False
     elif CLUSTER_TYPE == "HandsGestures": io.query_body = sort.query_body = io.query_face = sort.query_face = False
     elif CLUSTER_TYPE == "Clusters": io.query_body = sort.query_body = io.query_hands = sort.query_hands = False
     if not USE_HEAD_POSE: io.query_head_pose = sort.query_head_pose = False
-    df[['face_encodings68', 'face_landmarks', 'body_landmarks', 'body_landmarks_normalized', 'hand_results']] = df['image_id'].apply(io.get_encodings_mongo)
+    df[['face_encodings68', 'face_landmarks', 'body_landmarks', 'body_landmarks_normalized', 'body_landmarks_3D', 'hand_results']] = df['image_id'].apply(io.get_encodings_mongo)
     # face_encodings68, face_landmarks, body_landmarks, body_landmarks_normalized = sort.get_encodings_mongo(mongo_db,row["image_id"], is_body=True, is_face=False)
     enc_data = prepare_df(df)
     
     # choose if you want optimal cluster size or custom cluster size using the parameter GET_OPTIMAL_CLUSTERS
     if MODE == 0:
         if GET_OPTIMAL_CLUSTERS is True: 
+            # this is mostly defunct/deprecated. would need refactoring to work with norm/3D/etc
             OPTIMAL_CLUSTERS = best_score(enc_data.drop(["image_id", "body_landmarks_array"], axis=1))   #### Input ONLY encodings into clustering algorithm
             print(OPTIMAL_CLUSTERS)
             N_CLUSTERS = OPTIMAL_CLUSTERS

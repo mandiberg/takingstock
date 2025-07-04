@@ -60,7 +60,8 @@ HSV_NORMS = {"LUM": .01, "SAT": 1,  "HUE": 0.002777777778, "VAL": 1}
 # SORT_TYPE = "128d"
 # SORT_TYPE ="planar"
 # SORT_TYPE = "planar_body"
-SORT_TYPE = "planar_hands"
+SORT_TYPE = "body3D" 
+# SORT_TYPE = "planar_hands"
 # SORT_TYPE = "fingertips_positions"
 FULL_BODY = False # this requires is_feet
 VISIBLE_HAND_LEFT = False
@@ -69,14 +70,14 @@ USE_NOSEBRIDGE = True
 TSP_SORT=False
 # this is for controlling if it is using
 # all clusters, 
-IS_HAND_POSE_FUSION = True # do we use fusion clusters
+IS_HAND_POSE_FUSION = False # do we use fusion clusters
 ONLY_ONE = False # only one cluster, or False for video fusion, this_cluster = [CLUSTER_NO, HAND_POSE_NO]
 GENERATE_FUSION_PAIRS = False # if true it will query based on MIN_VIDEO_FUSION_COUNT and create pairs
                                 # if false, it will grab the list of pair lists below
 MIN_VIDEO_FUSION_COUNT = 300
 LIMIT = 50000 # this is the limit for the SQL query
 MIN_CYCLE_COUNT = 10
-IS_CLUSTER = False
+IS_CLUSTER = True
 USE_POSE_CROP_DICT = True
 if IS_HAND_POSE_FUSION:
     if SORT_TYPE in ["planar_hands", "fingertips_positions", "128d"]:
@@ -88,13 +89,20 @@ if IS_HAND_POSE_FUSION:
         SORT_TYPE = "planar_hands"
         CLUSTER_TYPE = "BodyPoses"
         CLUSTER_TYPE_2 = "HandsGestures"
+    elif SORT_TYPE == "body3D":
+        # if fusion, select on body3D and gesture, sort on hands positions
+        SORT_TYPE = "planar_hands"
+        CLUSTER_TYPE = "BodyPoses3D"
+        CLUSTER_TYPE_2 = "HandsGestures"
+    
     # CLUSTER_TYPE is passed to sort. below
 else:
     # choose the cluster type manually here
     # CLUSTER_TYPE = "BodyPoses" # usually this one
+    CLUSTER_TYPE = "BodyPoses3D" # 
     # CLUSTER_TYPE = "HandsPositions" # 2d hands
     # CLUSTER_TYPE = "HandsGestures"
-    CLUSTER_TYPE = "Clusters" # manual override for 128d
+    # CLUSTER_TYPE = "Clusters" # manual override for 128d
     CLUSTER_TYPE_2 = None
 DROP_LOW_VIS = False
 USE_HEAD_POSE = False
@@ -133,13 +141,13 @@ BLUR_RADIUS = io.oddify(BLUR_RADIUS)
 
 MASK_OFFSET = [50,50,50,50]
 if OUTPAINT: from outpainting_modular import outpaint, image_resize
-VERBOSE = False
+VERBOSE = True
 SAVE_IMG_PROCESS = False
 # this controls whether it is using the linear or angle process
 IS_ANGLE_SORT = False
 
 # this control whether sorting by topics
-IS_TOPICS = True
+IS_TOPICS = False # if using Clusters only, must set this to False
 N_TOPICS = 64 # changing this to 14 triggers the affect topic fusion
 
 IS_ONE_TOPIC = False
@@ -165,8 +173,8 @@ USE_AFFECT_GROUPS = False
 # 7 is surprise
 #  is yoga << planar,  planar,  fingers crossed
 
-ONE_SHOT = False # take all files, based off the very first sort order.
-EXPAND = False # expand with white for prints, as opposed to inpaint and crop. (not video, which is controlled by INPAINT_COLOR) 
+ONE_SHOT = True # take all files, based off the very first sort order.
+EXPAND = True # expand with white for prints, as opposed to inpaint and crop. (not video, which is controlled by INPAINT_COLOR) 
 JUMP_SHOT = True # jump to random file if can't find a run (I don't think this applies to planar?)
 USE_ALL = False # this is for outputting all images from a oneshot, forces ONE_SHOT
 DRAW_TEST_LMS = False # this is for testing the landmarks
@@ -389,9 +397,9 @@ elif IS_SEGONLY and io.platform == "darwin":
     if PHONE_BBOX_LIMITS:
         WHERE += " AND s.face_x > -50 "
     else:
-        # WHERE += " AND s.face_x > -33 AND s.face_x < -27 AND s.face_y > -2 AND s.face_y < 2 AND s.face_z > -2 AND s.face_z < 2"
+        WHERE += " AND s.face_x > -33 AND s.face_x < -27 AND s.face_y > -2 AND s.face_y < 2 AND s.face_z > -2 AND s.face_z < 2"
 # OVERRIDE FOR TESTING
-        WHERE += " AND s.face_x > -27 AND s.face_x < 0 AND s.face_y > -5 AND s.face_y < 5 AND s.face_z > -5 AND s.face_z < 5"
+        # WHERE += " AND s.face_x > -27 AND s.face_x < 0 AND s.face_y > -5 AND s.face_y < 5 AND s.face_z > -5 AND s.face_z < 5"
     # HIGHER
     # WHERE = "s.site_name_id != 1 AND face_encodings68 IS NOT NULL AND face_x > -27 AND face_x < -23 AND face_y > -2 AND face_y < 2 AND face_z > -2 AND face_z < 2"
 
@@ -1055,7 +1063,10 @@ def prep_encodings_NN(df_segment):
             return [row['lum']*HSV_NORMS["LUM"], row['lum_torso']*HSV_NORMS["LUM"]]    
     
     def set_sort_col():
-        if SORT_TYPE == "planar_body":
+        if SORT_TYPE == "body3D" or CLUSTER_TYPE == "BodyPoses3D":
+            # have to handle both, because handposefusion redefines SORT_TYPE 
+            source_col = sort_column = "body_landmarks_3D"
+        elif SORT_TYPE == "planar_body":
             if CLUSTER_TYPE == "HandsPositions":
                 source_col = sort_column = "hand_landmarks"
                 # source_col = None
@@ -1074,6 +1085,7 @@ def prep_encodings_NN(df_segment):
 
         return sort_column, source_col
 
+    print("prep_encodings_NN df_segment columns", df_segment.columns)
     sort_column, source_col = set_sort_col()
     print(f"degugging df_segment prep encodings for {source_col}:", df_segment.columns)      
     # drop rows where body_landmarks_normalized is None
@@ -1196,14 +1208,14 @@ def compare_images(last_image, img, face_landmarks, bbox):
             if not sort.counter_dict["first_run"]:
                 if VERBOSE:  print("testing is_face")
 
-                if SORT_TYPE != "planar_body":
+                if SORT_TYPE not in ("planar_body", "body3D"):
                 #     # skipping test_pair for body, b/c it is meant for face
                 #     is_face = True
                 # else:
                     is_face = sort.test_pair(last_image, cropped_image)
 
 
-                if is_face or SORT_TYPE == "planar_body":
+                if is_face or SORT_TYPE in ("planar_body", "body3D"):
                     if VERBOSE: print("testing mse to see if same image")
                     face_diff = sort.unique_face(last_image,cropped_image)
                     if VERBOSE: print("compare_images face_diff ", face_diff)
@@ -1949,7 +1961,7 @@ def main():
             print("going to get mongo encodings")
             print("size",df.size)
             # use the image_id to query the mongoDB for face_encodings68, face_landmarks, body_landmarks
-            df[['face_encodings68', 'face_landmarks', 'body_landmarks', 'body_landmarks_normalized','hand_results']] = df['image_id'].apply(io.get_encodings_mongo)
+            df[['face_encodings68', 'face_landmarks', 'body_landmarks', 'body_landmarks_normalized', 'body_landmarks_3D', 'hand_results']] = df['image_id'].apply(io.get_encodings_mongo)
             print("got mongo encodings", df.columns)
             print("first row", df.iloc[0])
 
@@ -1964,15 +1976,17 @@ def main():
             df['face_encodings68'] = df['face_encodings68'].apply(io.unpickle_array)
             df['face_landmarks'] = df['face_landmarks'].apply(io.unpickle_array)
             df['body_landmarks'] = df['body_landmarks'].apply(io.unpickle_array)
+            df['body_landmarks_3D'] = df['body_landmarks_3D'].apply(io.unpickle_array)
             df['body_landmarks_normalized'] = df['body_landmarks_normalized'].apply(io.unpickle_array)
             # if hand_results has any values
             # if not df['hand_results'].isnull().all():
             
             df[['left_hand_landmarks', 'left_hand_world_landmarks', 'left_hand_landmarks_norm', 'right_hand_landmarks', 'right_hand_world_landmarks', 'right_hand_landmarks_norm']] = pd.DataFrame(df['hand_results'].apply(sort.prep_hand_landmarks).tolist(), index=df.index)
-            print("about to split_landmarks_to_columns,", df.iloc[0])
-            # df = sort.split_landmarks_to_columns(df, left_col="left_hand_world_landmarks", right_col="right_hand_world_landmarks", structure="list")
-            df = sort.split_landmarks_to_columns(df, left_col="left_hand_landmarks_norm", right_col="right_hand_landmarks_norm", structure="list")
-            print("after split_landmarks_to_columns, ", df.iloc[0])
+            print("about to split_landmarks_to_columns_or_list,", df.iloc[0])
+            # df = sort.split_landmarks_to_columns_or_list(df, left_col="left_hand_world_landmarks", right_col="right_hand_world_landmarks", structure="list")
+            df = sort.split_landmarks_to_columns_or_list(df, first_col="left_hand_landmarks_norm", second_col="right_hand_landmarks_norm", structure="list")
+            df = sort.split_landmarks_to_columns_or_list(df, first_col="body_landmarks_3D", second_col=None, structure="list")
+            print("after split_landmarks_to_columns_or_list, ", df.iloc[0])
 
             df['bbox'] = df['bbox'].apply(lambda x: io.unstring_json(x))
             print("df before bboxing,", df.columns)

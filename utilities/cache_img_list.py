@@ -12,7 +12,7 @@ db = io.db
 
 
 
-ROOT_FOLDER = '/Volumes/OWC5/images_shutterstock'
+ROOT_FOLDER = '/Volumes/RAID54/images_shutterstock'
 
 # walk through the root folder and get all folder paths
 def get_all_folder_paths(root_folder):
@@ -33,7 +33,9 @@ print("Folder paths:", folder_paths)
 for folder in folder_paths:
     img_list_path = os.path.join(folder, 'img_list.json')
     if os.path.exists(img_list_path):
-        print(f"Image list already exists for folder: {folder}, skipping...")
-        continue
+        img_list = io.get_img_list(folder, sort=False)
+        if len(img_list) > 0:
+            print(f"Image list already exists for folder: {folder}, skipping...")
+            continue 
     img_list = io.save_img_list(folder)
     print(f"Saved image list for folder: {folder} with {len(img_list)} images.")
