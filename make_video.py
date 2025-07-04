@@ -1945,6 +1945,8 @@ def main():
             pose_type = pose_crop_dict.get(cluster_no, 1)
             sort.image_edge_multiplier = multiplier_list[pose_crop_dict[cluster_no]]
             if VERBOSE: print(f"using pose {cluster_no} getting pose_crop_dict value {pose_type} for image_edge_multiplier", sort.image_edge_multiplier)
+        # reset face_height_output for each round, in case it gets redefined inside loop
+        sort.face_height_output = face_height_output
         # use image_edge_multiplier to crop for each
         sort.set_output_dims()
 

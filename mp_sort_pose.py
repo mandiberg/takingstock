@@ -50,7 +50,7 @@ class SortPose:
         self.BRUTEFORCE = False
         self.use_3D = use_3D
         # print("init use_3D",self.use_3D)
-        self.CUTOFF = 20 # DOES factor if ONE_SHOT
+        self.CUTOFF = 10 # DOES factor if ONE_SHOT
         self.ORIGIN = 0
         self.this_nose_bridge_dist = self.NOSE_BRIDGE_DIST = None # to be set in first loop, and sort.this_nose_bridge_dist each time
 
@@ -833,7 +833,7 @@ class SortPose:
         # print("face_top",self.ptop,"face_bottom",self.pbot)
         # print(self.pbot)
         self.face_height = self.dist(self.point(self.pbot), self.point(self.ptop))
-        # print("face_height", str(self.face_height))
+        print("face_height", str(self.face_height))
         # return ptop, pbot, face_height
 
 
@@ -982,7 +982,9 @@ class SortPose:
 
 
     def expand_image(self,image, faceLms, bbox, sinY=0):
+        # print("expand_image going to get self.face_height", str(self.face_height))
         self.get_image_face_data(image, faceLms, bbox)    
+        # print("expand_image just got self.face_height", str(self.face_height))
         try:
             # print(type(self.image))
             borderType = cv2.BORDER_CONSTANT
@@ -990,8 +992,11 @@ class SortPose:
 
             if self.USE_INCREMENTAL_RESIZE:
                 resize_factor = math.ceil(self.face_height/self.resize_increment)
+                print("expand_image resize_factor", str(resize_factor))
                 face_incremental_output_size = resize_factor*self.resize_increment
+                print("expand_image face_incremental_output_size", str(face_incremental_output_size))
                 resize = face_incremental_output_size/self.face_height
+                print("expand_image resize", str(resize))
             else:
                 # scale image to match face heights
                 resize_factor = None
@@ -1020,6 +1025,7 @@ class SortPose:
 
                 if face_incremental_output_size:
                     image_incremental_output_ratio = face_incremental_output_size/self.face_height_output
+                    print("face_incremental_output_size self.EXPAND_SIZE, face_incremental_output_size, self.face_height_output", self.EXPAND_SIZE, face_incremental_output_size, self.face_height_output)
                     this_expand_size = (int(self.EXPAND_SIZE[0]*image_incremental_output_ratio),int(self.EXPAND_SIZE[1]*image_incremental_output_ratio))
                     print("this_expand_size", image_incremental_output_ratio, this_expand_size)
                 else:
