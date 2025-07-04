@@ -100,7 +100,7 @@ class SortPose:
         # maximum allowable scale up
         self.resize_max = 5.99
         self.resize_increment = 345
-        self.USE_INCREMENTAL_RESIZE = False
+        self.USE_INCREMENTAL_RESIZE = True
         self.image_edge_multiplier = image_edge_multiplier
         self.face_height_output = face_height_output
         self.EXPAND = EXPAND
@@ -1020,7 +1020,7 @@ class SortPose:
 
                 if face_incremental_output_size:
                     image_incremental_output_ratio = face_incremental_output_size/self.face_height_output
-                    this_expand_size = (self.EXPAND_SIZE[0]*image_incremental_output_ratio,self.EXPAND_SIZE[1]*image_incremental_output_ratio)
+                    this_expand_size = (int(self.EXPAND_SIZE[0]*image_incremental_output_ratio),int(self.EXPAND_SIZE[1]*image_incremental_output_ratio))
                     print("this_expand_size", image_incremental_output_ratio, this_expand_size)
                 else:
                     this_expand_size = (self.EXPAND_SIZE[0],self.EXPAND_SIZE[1])
