@@ -50,7 +50,7 @@ class SortPose:
         self.BRUTEFORCE = False
         self.use_3D = use_3D
         # print("init use_3D",self.use_3D)
-        self.CUTOFF = 10 # DOES factor if ONE_SHOT
+        self.CUTOFF = 80 # DOES factor if ONE_SHOT
         self.ORIGIN = 0
         self.this_nose_bridge_dist = self.NOSE_BRIDGE_DIST = None # to be set in first loop, and sort.this_nose_bridge_dist each time
 
@@ -1644,7 +1644,8 @@ class SortPose:
         Lms1d = []
         Lms1d3 = []
 
-        if type(Lms) is list and len(Lms[0])==3:
+        print(type(Lms))
+        if type(Lms) is list and len(Lms) > 0 and isinstance(Lms[0], (list, tuple)) and len(Lms[0]) == 3:
             print("lms is a list of xyz lists")
             for idx, lm in enumerate(Lms):
                 # even_lms = only even values from selected_Lms 
@@ -1653,8 +1654,39 @@ class SortPose:
                 if idx in even_lms:                
                     x, y, z = Lms[idx]
                     append_lms(idx, x,y,z, structure, Lms2d, Lms1d, Lms1d3)
-            
-        else:
+        if type(Lms) is list and len(Lms)==33:
+            # handle erronous new API 3D body landmarks, 
+            print("lms is a list of 33 landmarks")
+            print("Lms", Lms)
+            for idx, lm in enumerate(Lms):
+                if idx in selected_Lms:
+                    # If lm is a Landmark object, access attributes directly
+                    if hasattr(lm, "x") and hasattr(lm, "y"):
+                        x = lm.x
+                        y = lm.y
+                        z = getattr(lm, "z", 0.0)
+                        visibility = getattr(lm, "visibility", 0.0)
+                    else:
+                        # fallback for tuple/list
+                        x = lm[0]
+                        y = lm[1]
+                        z = lm[2] if len(lm) > 2 else 0.0
+                        visibility = lm[3] if len(lm) > 3 else 0.0
+                    if structure == "dict":
+                        Lms2d[idx] =([x, y])
+                    elif structure == "list":
+                        Lms1d.append(x)
+                        Lms1d.append(y)
+                    elif structure == "list3":
+                        Lms1d3.append(x)
+                        Lms1d3.append(y)
+                        Lms1d3.append(z)
+                    elif structure == "list3D":
+                        Lms1d3.append(x)
+                        Lms1d3.append(y)
+                        Lms1d3.append(z)
+                        Lms1d3.append(visibility)
+        elif hasattr(Lms, 'landmark') and len(Lms.landmark) > 0:
             for idx, lm in enumerate(Lms.landmark):
                 if idx in selected_Lms:
                     # print("idx", idx)
@@ -1674,9 +1706,14 @@ class SortPose:
                         Lms1d3.append(lm.y)
                         Lms1d3.append(lm.z)
                         Lms1d3.append(lm.visibility)
-        print("Lms2d", Lms2d)
-        print("Lms1d", Lms1d)
-        print("Lms1d3", Lms1d3)
+        else:
+            print("get_landmarks_2d: Lms is not a list or has no landmark attribute")
+            print("Lms", Lms)
+            print("selected_Lms", selected_Lms)
+            return None
+        # print("Lms2d", Lms2d)
+        # print("Lms1d", Lms1d)
+        # print("Lms1d3", Lms1d3)
 
         if Lms1d:
             return Lms1d

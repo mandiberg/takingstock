@@ -86,6 +86,15 @@ CLUSTER_TYPE = "BodyPoses3D"
 use_3D=True
 OFFSET = 0
 
+# WHICH TABLE TO USE?
+# SegmentTable_name = 'SegmentOct20'
+SegmentTable_name = 'SegmentBig_isface'
+
+# number of clusters produced. run GET_OPTIMAL_CLUSTERS and add that number here
+# 32 for hand positions
+# 128 for hand gestures
+N_CLUSTERS = 128
+
 ONE_SHOT= JUMP_SHOT= HSV_CONTROL=  VERBOSE= INPAINT= OBJ_CLS_ID = UPSCALE_MODEL_PATH =None
 # face_height_output, image_edge_multiplier, EXPAND=False, ONE_SHOT=False, JUMP_SHOT=False, HSV_CONTROL=None, VERBOSE=True,INPAINT=False, SORT_TYPE="128d", OBJ_CLS_ID = None,UPSCALE_MODEL_PATH=None, use_3D=False
 sort = SortPose(motion, face_height_output, image_edge_multiplier_sm, EXPAND,  ONE_SHOT,  JUMP_SHOT,  HSV_CONTROL,  VERBOSE, INPAINT,  CLUSTER_TYPE, OBJ_CLS_ID, UPSCALE_MODEL_PATH, use_3D)
@@ -110,25 +119,26 @@ USE_SEGMENT = True
 # get the best fit for clusters
 GET_OPTIMAL_CLUSTERS=False
 
-# number of clusters produced. run GET_OPTIMAL_CLUSTERS and add that number here
-# 32 for hand positions
-# 128 for hand gestures
-N_CLUSTERS = 64
 SAVE_FIG=False ##### option for saving the visualized data
 
 if USE_SEGMENT is True and (CLUSTER_TYPE != "Clusters"):
     print("setting Poses SQL")
-    SegmentTable_name = 'SegmentOct20'
-
+    dupe_table_pre  = "s" # set default dupe_table_pre to s
+    FROM =f"{SegmentTable_name} s " # set base FROM
+    if SegmentTable_name == "SegmentBig_isface": 
+        # handles segmentbig which doesn't have is_dupe_of, etc
+        FROM += f" JOIN Encodings e ON s.image_id = e.image_id "
+        dupe_table_pre = "e"
     # Basic Query, this works with SegmentOct20
     SELECT = "DISTINCT(s.image_id), s.face_x, s.face_y, s.face_z, s.mouth_gap"
-    if CLUSTER_TYPE == "BodyPoses": WHERE = " s.mongo_body_landmarks = 1 and s.is_feet = 1"
-    elif CLUSTER_TYPE == "BodyPoses3D": WHERE = " s.mongo_body_landmarks_3D = 1 and s.is_feet = 1"
-    elif CLUSTER_TYPE == "HandsGestures": WHERE = " s.mongo_hand_landmarks = 1 "
-    elif CLUSTER_TYPE in ["HandsPositions","FingertipsPositions"] : WHERE = " s.mongo_hand_landmarks_norm = 1 "
-    WHERE += " AND s.is_dupe_of IS NULL "
+    WHERE = f" {dupe_table_pre}.is_dupe_of IS NULL "
+
+    if CLUSTER_TYPE == "BodyPoses": WHERE += f" AND {dupe_table_pre}.mongo_body_landmarks = 1 and {dupe_table_pre}.is_feet = 1"
+    elif CLUSTER_TYPE == "BodyPoses3D": WHERE += f" AND {dupe_table_pre}.mongo_body_landmarks_3D = 1 and {dupe_table_pre}.is_feet = 1"
+    elif CLUSTER_TYPE == "HandsGestures": WHERE += f" AND {dupe_table_pre}.mongo_hand_landmarks = 1 "
+    elif CLUSTER_TYPE in ["HandsPositions","FingertipsPositions"] : WHERE += f" AND {dupe_table_pre}.mongo_hand_landmarks_norm = 1 "
+
     if MODE == 0:
-        FROM = f"{SegmentTable_name} s"
         if SHORTRANGE: WHERE += " AND s.face_x > -35 AND s.face_x < -24 AND s.face_y > -3 AND s.face_y < 3 AND s.face_z > -3 AND s.face_z < 3 "
     # FROM += f" INNER JOIN Encodings h ON h.image_id = s.image_id " 
     # FROM += f" INNER JOIN {HelperTable_name} h ON h.image_id = s.image_id " 
@@ -138,7 +148,7 @@ if USE_SEGMENT is True and (CLUSTER_TYPE != "Clusters"):
             FROM += f" INNER JOIN {subselect_cluster} sc ON sc.image_id = s.image_id " 
             WHERE += f" AND sc.cluster_id = {SUBSELECT_ONE_CLUSTER} "
     elif MODE in (1,2):
-        FROM = f"{SegmentTable_name} s LEFT JOIN Images{CLUSTER_TYPE} ic ON s.image_id = ic.image_id"
+        FROM += f" LEFT JOIN Images{CLUSTER_TYPE} ic ON s.image_id = ic.image_id"
         if MODE == 1: 
             WHERE += " AND ic.cluster_id IS NULL "
         elif MODE == 2: 
@@ -613,11 +623,8 @@ def df_list_to_cols(df, col_name):
     df_data = df.drop("image_id", axis=1)
     # Create new columns for each coordinate
     num_coords = len(df_data[col_name].iloc[0])
-    # for i in range(num_coords):
-    #     df[f'dim_{i}'] = df[col_name].apply(lambda x: x[i])
-    # Create all new columns at once to avoid fragmentation
-    new_cols = pd.DataFrame(df[col_name].tolist(), index=df.index, columns=[f'dim_{i}' for i in range(num_coords)])
-    df = pd.concat([df, new_cols], axis=1)
+    for i in range(num_coords):
+        df[f'dim_{i}'] = df[col_name].apply(lambda x: x[i])
 
     # Drop the original col_name column
     df = df.drop(col_name, axis=1)

@@ -75,7 +75,7 @@ ONLY_ONE = False # only one cluster, or False for video fusion, this_cluster = [
 GENERATE_FUSION_PAIRS = False # if true it will query based on MIN_VIDEO_FUSION_COUNT and create pairs
                                 # if false, it will grab the list of pair lists below
 MIN_VIDEO_FUSION_COUNT = 300
-LIMIT = 500 # this is the limit for the SQL query
+LIMIT = 50000 # this is the limit for the SQL query
 MIN_CYCLE_COUNT = 10
 IS_CLUSTER = True
 USE_POSE_CROP_DICT = True
@@ -121,7 +121,7 @@ HAND_POSE_NO = 0
 # 80,74 fails between 300-400
 
 # cut the kids
-NO_KIDS = False
+NO_KIDS = True
 ONLY_KIDS = False
 USE_PAINTED = True
 OUTPAINT = False

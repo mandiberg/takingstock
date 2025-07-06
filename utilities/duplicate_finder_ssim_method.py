@@ -9,7 +9,7 @@ from skimage.metrics import structural_similarity as ssim
 
 # Constants for the folder path and settings
 BASE_FOLDER_PATH = '/Volumes/OWC4/images_to_assemble/'
-DEDUPE_FOLDER = 'Topic0_fullvideo_july2'
+DEDUPE_FOLDER = 'body3D_testssim'
 CLUSTER_FOLDER = os.path.join(BASE_FOLDER_PATH, DEDUPE_FOLDER)
 FOLDER_LIST = [f for f in os.listdir(CLUSTER_FOLDER) if not f.startswith('.') and not f.endswith('.csv') and not f.endswith('.jpg')]
 print(FOLDER_LIST)
@@ -20,12 +20,38 @@ TARGET_SIZE = (128, 128)  # Size to temporarily resize images for comparison
 
 MOVE_ORIGINAL_INTO_DUPES = True  # Set to True to move the original image into the duplicates folder
 
+start_time = time.time()  # Start timer for performance measurement
+
+def crop_whitespace(img):
+    crop_dict = {
+        8288: 3448,
+        16576: 6898,
+        24866: 10344,
+        33154: 13792
+    }
+    cropped_img = None
+    height, width, _ = img.shape
+    if width not in crop_dict:
+        print(f"Width {width} not found in crop_dict, returning original image.")
+        return img
+    crop_width = crop_dict.get(width, 0)
+    # crop the image to the crop_width keeping the image centered
+    CROP_LEFT = (width - crop_width) // 2
+    CROP_RIGHT = width - CROP_LEFT - crop_width
+    CROP_TOP = (height - crop_width) // 2
+    CROP_BOTTOM = height - CROP_TOP - crop_width
+    # Define the cropped area
+    cropped_img = img[CROP_TOP:height - CROP_BOTTOM, CROP_LEFT:width - CROP_RIGHT]
+    return cropped_img
+
+
 def calculate_ssim(image1, image2):
     """Calculate the SSIM between two images."""
     gray1 = cv2.cvtColor(image1, cv2.COLOR_BGR2GRAY)  # Convert photo 1 to grayscale
     gray2 = cv2.cvtColor(image2, cv2.COLOR_BGR2GRAY)  # Convert photo 2 to grayscale
     score, _ = ssim(gray1, gray2, full=True)
     return score  # Return the SSIM score
+
 
 def find_duplicates_with_ssim(folder_path, duplicate_output, csv_output, threshold=THRESHOLD, target_size=TARGET_SIZE):
     """Find duplicate images using SSIM and copy them for review."""
@@ -39,9 +65,11 @@ def find_duplicates_with_ssim(folder_path, duplicate_output, csv_output, thresho
 
     for i, image_path in enumerate(image_files):
         try:
+            # it is faster to open the images each time, than to keep them in memory
             img1 = processed_images.get(image_path)  # Get image1 processed to grayscale
             if img1 is None:
                 img1 = cv2.imread(image_path)
+                img1 = crop_whitespace(img1)  # Crop whitespace if needed
                 img1 = cv2.resize(img1, target_size)  # Resize temp for comparison
                 processed_images[image_path] = img1  # Store resized image
 
@@ -51,6 +79,7 @@ def find_duplicates_with_ssim(folder_path, duplicate_output, csv_output, thresho
 
                 if img2 is None:
                     img2 = cv2.imread(img2_path)
+                    img2 = crop_whitespace(img2)  # Crop whitespace if needed
                     img2 = cv2.resize(img2, target_size)  # Resize temp for comparison
                     processed_images[img2_path] = img2  # Store resized duplicate
 
@@ -137,3 +166,8 @@ for FOLDER in FOLDER_LIST:
 
     # Organize duplicates into folders and move them directly above the possible original
     organize_duplicates_from_csv(CSV_OUTPUT, FOLDER_PATH)
+
+# Print total time taken for processing
+end_time = time.time()
+print(f"Total time taken: {end_time - start_time:.2f} seconds")
+print("Duplicate finding and organization complete.")
