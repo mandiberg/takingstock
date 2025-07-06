@@ -19,7 +19,7 @@ db = io.db
 IS_CLUSTER = True
 
 # are we making videos or making merged stills?
-IS_VIDEO = True
+IS_VIDEO = False
 IS_VIDEO_MERGE = True
 FRAMERATE = 12
 PERIOD = 30 # how many images in each merge cycle
@@ -51,12 +51,13 @@ elif FULLBODY:
 else:
     SCALE_IMGS = False
 VERBOSE = True
+None_counter = 0
 # Provide the path to the folder containing the images
 ROOT_FOLDER_PATH = '/Volumes/OWC4/images_to_assemble'
 # if IS_CLUSTER this should be the folder holding all the cluster folders
 # if not, this should be the individual folder holding the images
 # will not accept clusterNone -- change to cluster00
-FOLDER_NAME = "topic0"
+FOLDER_NAME = "body3D_segmentbig_128"
 FOLDER_PATH = os.path.join(ROOT_FOLDER_PATH,FOLDER_NAME)
 DIRS = ["1x1", "4x3", "16x10"]
 OUTPUT = os.path.join(io.ROOTSSD, "audioproduction")
@@ -196,6 +197,7 @@ def iterate_image_list(FOLDER_PATH,image_files, successes):
     return merged_pairs, successes
 
 def merge_images(images_to_build, FOLDER_PATH):
+    global None_counter
     print("merging images, this many images_to_build", len(images_to_build))
     if len(images_to_build) % 2 != 0:
         print("odd number of images, skipping last image")
@@ -208,10 +210,15 @@ def merge_images(images_to_build, FOLDER_PATH):
         # this is legacy stuff to get the cluster number and handpose number from the folder name
         image_folder = FOLDER_PATH.split("/")[-1]
         if "cluster" in image_folder:
-            print("cluster found", image_folder)
-            cluster_no = int(image_folder.split("_")[0].replace("cluster",""))
-            try: handpose_no = int(image_folder.split("_")[1])
-            except: print("handpose_no = None")
+            if "None" in image_folder:
+                cluster_no = None_counter
+                None_counter += 1
+                print("cluster_no is None, incrementing None_counter to", None_counter)
+            else:
+                print("cluster found", image_folder)
+                cluster_no = int(image_folder.split("_")[0].replace("cluster",""))
+                try: handpose_no = int(image_folder.split("_")[1])
+                except: print("handpose_no = None")
         count = len(image_files)
         print("about to iterate_image_list with ", len(images_to_build), "images")
         if len(images_to_build) == 0: 

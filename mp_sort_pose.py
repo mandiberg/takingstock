@@ -50,7 +50,7 @@ class SortPose:
         self.BRUTEFORCE = False
         self.use_3D = use_3D
         # print("init use_3D",self.use_3D)
-        self.CUTOFF = 80 # DOES factor if ONE_SHOT
+        self.CUTOFF = 100 # DOES factor if ONE_SHOT
         self.ORIGIN = 0
         self.this_nose_bridge_dist = self.NOSE_BRIDGE_DIST = None # to be set in first loop, and sort.this_nose_bridge_dist each time
 
@@ -2776,9 +2776,30 @@ class SortPose:
         # pointers = self.get_landmarks_2d(enc1, landmarks, structure)
 
         # Flatten the list of (x, y, z) for each landmark
-        print("type of landmarks", type(landmarks))
-        if isinstance(landmarks, list):
-            flat_landmarks = [coord for point in landmarks for coord in point]
+        if self.VERBOSE: print("type of landmarks", type(landmarks))
+        if type(landmarks) is list:
+            if len(landmarks) > 0 and isinstance(landmarks[0], (list, tuple)):
+                if self.VERBOSE: print("landmarks[0] type", type(landmarks[0]))
+                flat_landmarks = [coord for point in landmarks for coord in point]
+            else:
+                print("landmarks is a list but not a list of lists, handling the erronous new AP stuff. ")
+                # flat_landmarks = None
+                # handle erronous new API 3D body landmarks, 
+                flat_landmarks = []
+                for idx, lm in enumerate(landmarks):
+                    # If lm is a Landmark object, access attributes directly
+                    if hasattr(lm, "x") and hasattr(lm, "y"):
+                        x = lm.x
+                        y = lm.y
+                        z = getattr(lm, "z", 0.0)
+                        visibility = getattr(lm, "visibility", 0.0)
+                    else:
+                        # fallback for tuple/list
+                        x = lm[0]
+                        y = lm[1]
+                        z = lm[2] if len(lm) > 2 else 0.0
+                        visibility = lm[3] if len(lm) > 3 else 0.0
+                    flat_landmarks.extend([lm.x, lm.y, getattr(lm, 'z', 0.0), lm.visibility])
         else:
             # Handle mediapipe NormalizedLandmarkList
             flat_landmarks = []

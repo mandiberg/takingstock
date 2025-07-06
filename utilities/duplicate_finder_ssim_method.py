@@ -9,13 +9,13 @@ from skimage.metrics import structural_similarity as ssim
 
 # Constants for the folder path and settings
 BASE_FOLDER_PATH = '/Volumes/OWC4/images_to_assemble/'
-DEDUPE_FOLDER = 'body3D_testssim'
+DEDUPE_FOLDER = 'body3D_segmentbig_128'
 CLUSTER_FOLDER = os.path.join(BASE_FOLDER_PATH, DEDUPE_FOLDER)
 FOLDER_LIST = [f for f in os.listdir(CLUSTER_FOLDER) if not f.startswith('.') and not f.endswith('.csv') and not f.endswith('.jpg')]
 print(FOLDER_LIST)
   # Base folder path change to your path
 
-THRESHOLD = 0.9  # Similarity threshold to use for SSIM comparison
+THRESHOLD = 0.8  # Similarity threshold to use for SSIM comparison .85 and above are all dupes. .75 has false positives
 TARGET_SIZE = (128, 128)  # Size to temporarily resize images for comparison
 
 MOVE_ORIGINAL_INTO_DUPES = True  # Set to True to move the original image into the duplicates folder
@@ -34,6 +34,9 @@ def crop_whitespace(img):
     if width not in crop_dict:
         print(f"Width {width} not found in crop_dict, returning original image.")
         return img
+    elif height != 8288:
+        # temp resize to standard tighter height
+        img = cv2.resize(img, (8288, 8288))  # Resize to standard height if not already
     crop_width = crop_dict.get(width, 0)
     # crop the image to the crop_width keeping the image centered
     CROP_LEFT = (width - crop_width) // 2

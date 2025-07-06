@@ -30,7 +30,8 @@ CYCLECOUNT = 1
 # SegmentTable_name = 'SegmentOct20'
 # SegmentHelper_name = None
 SegmentTable_name = 'SegmentBig_isface'
-SegmentHelper_name = 'SegmentHelper_may2025_4x4faces'
+# SegmentHelper_name = 'SegmentHelper_may2025_4x4faces'
+SegmentHelper_name = None
 # SegmentHelper_name = 'SegmentHelper_june2025_nmlGPU300k'
 # SATYAM, this is MM specific
 # for when I'm using files on my SSD vs RAID
@@ -141,7 +142,7 @@ BLUR_RADIUS = io.oddify(BLUR_RADIUS)
 
 MASK_OFFSET = [50,50,50,50]
 if OUTPAINT: from outpainting_modular import outpaint, image_resize
-VERBOSE = True
+VERBOSE = False
 SAVE_IMG_PROCESS = False
 # this controls whether it is using the linear or angle process
 IS_ANGLE_SORT = False
@@ -193,7 +194,7 @@ DO_OBJ_SORT = True
 OBJ_DONT_SUBSELECT = False # False means select for OBJ. this is a flag for selecting a specific object type when not sorting on obj
 PHONE_BBOX_LIMITS = [0] # this is an attempt to control the BBOX placement. I don't think it is going to work, but with non-zero it will make a bigger selection. Fix this hack TK. 
 
-if SegmentHelper_name != 'SegmentHelper_may2025_4x4faces':
+if SegmentHelper_name != 'SegmentHelper_may2025_4x4faces' or SegmentHelper_name is None:
     # OVERRIDES FOR TESTING
     # SET IS_SSD = False ABOVE
     IS_HAND_POSE_FUSION = False # this is for testing the planar hands
@@ -394,7 +395,9 @@ elif IS_SEGONLY and io.platform == "darwin":
 
     WHERE = f" {dupe_table_pre}.is_dupe_of IS NULL "
     # this is the standard segment topics/clusters query for June 2024
-    if PHONE_BBOX_LIMITS:
+    if SegmentHelper_name is None:
+        pass
+    elif PHONE_BBOX_LIMITS:
         WHERE += " AND s.face_x > -50 "
     else:
         WHERE += " AND s.face_x > -33 AND s.face_x < -27 AND s.face_y > -2 AND s.face_y < 2 AND s.face_z > -2 AND s.face_z < 2"

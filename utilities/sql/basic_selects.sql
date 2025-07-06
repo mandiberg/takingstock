@@ -218,6 +218,13 @@ SELECT * FROM ImagesBodyPoses3D ;
 DELETE FROM BodyPoses3D ;
 DELETE FROM ImagesBodyPoses3D ;
 
+SELECT COUNT(s.image_id) 
+FROM SegmentBig_isnotface s  JOIN Encodings e ON s.image_id = e.image_id  
+WHERE  e.is_dupe_of IS NULL  
+AND e.mongo_body_landmarks_3D = 1 and e.is_feet = 1
+ ;
+
+
 SELECT COUNT(n.nml_id)
 FROM NMLImages n 
 WHERE n.nml_id > 4191363
