@@ -50,7 +50,7 @@ class SortPose:
         self.BRUTEFORCE = False
         self.use_3D = use_3D
         # print("init use_3D",self.use_3D)
-        self.CUTOFF = 100 # DOES factor if ONE_SHOT
+        self.CUTOFF = 80 # DOES factor if ONE_SHOT
         self.ORIGIN = 0
         self.this_nose_bridge_dist = self.NOSE_BRIDGE_DIST = None # to be set in first loop, and sort.this_nose_bridge_dist each time
 
@@ -313,6 +313,20 @@ class SortPose:
             self.FRAMERATE = 15
             self.SECOND_SORT = 'mouth_gap'
             self.MAXMOUTHGAP = 10
+            self.SORT = 'face_x'
+            self.ROUND = 1
+        elif motion['use_all'] == True:
+            self.XLOW = -180
+            self.XHIGH = 180
+            self.YLOW = -180
+            self.YHIGH = 180
+            self.ZLOW = -180
+            self.ZHIGH = 180
+            self.MINCROP = 1
+            self.MAXRESIZE = .5
+            self.FRAMERATE = 15
+            self.SECOND_SORT = 'mouth_gap'
+            self.MAXMOUTHGAP = 1000
             self.SORT = 'face_x'
             self.ROUND = 1
 
@@ -877,7 +891,7 @@ class SortPose:
         Calculate the vertical distance between landmark 1 and 6
         for a mediapipe.framework.formats.landmark_pb2.NormalizedLandmarkList.
         """
-        print("calc_nose_bridge_dist, face_landmarks type", type(face_landmarks))
+        if self.VERBOSE: print("calc_nose_bridge_dist, face_landmarks type", type(face_landmarks))
         nose_bridge_dist = None
         try:
             # Handle mediapipe NormalizedLandmarkList
@@ -885,7 +899,7 @@ class SortPose:
                 y1 = face_landmarks.landmark[1].y
                 y6 = face_landmarks.landmark[6].y
                 nose_bridge_dist = abs(y6 - y1)
-                print("nose_bridge_dist is", nose_bridge_dist)
+                if self.VERBOSE: print("nose_bridge_dist is", nose_bridge_dist)
             # Fallback for list/tuple/dict (legacy)
             elif isinstance(face_landmarks, (list, tuple)) and len(face_landmarks) > 6:
                 def get_y(lm):
@@ -899,7 +913,7 @@ class SortPose:
                 y6 = get_y(face_landmarks[6])
                 if y1 is not None and y6 is not None:
                     nose_bridge_dist = abs(y6 - y1)
-                    print("nose_bridge_dist is", nose_bridge_dist)
+                    if self.VERBOSE: print("nose_bridge_dist is", nose_bridge_dist)
         except Exception as e:
             print("Could not set nose_bridge_dist:", e)
             nose_bridge_dist = None
@@ -924,24 +938,25 @@ class SortPose:
             try:
                 # self.NOSE_BRIDGE_DIST
                 self.nose_2d = self.get_face_2d_point(1)
-                print("nose_2d",self.nose_2d)
+                if self.VERBOSE: print("nose_2d",self.nose_2d)
                 if self.ORIGIN == 6:
                     self.this_nose_bridge_dist = self.calc_nose_bridge_dist(faceLms)
-                    print("NOSE_BRIDGE_DIST, self.this_nose_bridge_dist", self.NOSE_BRIDGE_DIST, self.this_nose_bridge_dist)
+                    if self.VERBOSE: print("NOSE_BRIDGE_DIST, self.this_nose_bridge_dist", self.NOSE_BRIDGE_DIST, self.this_nose_bridge_dist)
                     nose_delta = self.NOSE_BRIDGE_DIST - self.this_nose_bridge_dist
-                    print("nose_delta", nose_delta)
+                    if self.VERBOSE: print("nose_delta", nose_delta)
                     self.nose_2d = (math.floor(self.nose_2d[0]), math.floor(self.nose_2d[1] + (nose_delta*self.face_height)))
                 # cv2.circle(self.image, tuple(map(int, self.nose_2d)), 5, (0, 0,0), 5)
-                print("get_image_face_data new nose_2d",self.nose_2d)
+                if self.VERBOSE: print("get_image_face_data new nose_2d",self.nose_2d)
             except:
                 print("couldn't get nose_2d via faceLms")
         else:
-            print("self.this_nose_bridge_dist already set, skipping")
+            pass
+            if self.VERBOSE: print("self.this_nose_bridge_dist already set, skipping")
 
 
         try:
             if faceLms is not None and faceLms.landmark:
-                print("get_image_face_data - faceLms is not None, using faceLms")
+                if self.VERBOSE: print("get_image_face_data - faceLms is not None, using faceLms")
                 # get self.face_height
                 self.get_faceheight_data()
             else:
@@ -992,25 +1007,25 @@ class SortPose:
 
             if self.USE_INCREMENTAL_RESIZE:
                 resize_factor = math.ceil(self.face_height/self.resize_increment)
-                print("expand_image resize_factor", str(resize_factor))
+                if self.VERBOSE: print("expand_image resize_factor", str(resize_factor))
                 face_incremental_output_size = resize_factor*self.resize_increment
-                print("expand_image face_incremental_output_size", str(face_incremental_output_size))
+                if self.VERBOSE: print("expand_image face_incremental_output_size", str(face_incremental_output_size))
                 resize = face_incremental_output_size/self.face_height
-                print("expand_image resize", str(resize))
+                if self.VERBOSE: print("expand_image resize", str(resize))
             else:
                 # scale image to match face heights
                 resize_factor = None
                 resize = self.face_height_output/self.face_height
                 face_incremental_output_size = None
-            print("expand_image resize", str(resize))
+            if self.VERBOSE: print("expand_image resize", str(resize))
             if resize < 15:
-                print("expand_image [-] resize", str(resize))
+                if self.VERBOSE: print("expand_image [-] resize", str(resize))
                 # image.shape is height[0] and width[1]
                 resize_dims = (int(self.image.shape[1]*resize),int(self.image.shape[0]*resize))
                 # resize_nose.shape is  width[0] and height[1]
                 resize_nose = (int(self.nose_2d[0]*resize),int(self.nose_2d[1]*resize))
                 # resize_nose is scaled up nose position, but not expanded/cropped
-                print(f"resize_factor {resize_factor} resize_dims {resize_dims}")
+                if self.VERBOSE: print(f"resize_factor {resize_factor} resize_dims {resize_dims}")
                 # print("resize_nose", resize_nose)
                 # this wants width and height
 
@@ -1025,9 +1040,9 @@ class SortPose:
 
                 if face_incremental_output_size:
                     image_incremental_output_ratio = face_incremental_output_size/self.face_height_output
-                    print("face_incremental_output_size self.EXPAND_SIZE, face_incremental_output_size, self.face_height_output", self.EXPAND_SIZE, face_incremental_output_size, self.face_height_output)
+                    if self.VERBOSE: print("face_incremental_output_size self.EXPAND_SIZE, face_incremental_output_size, self.face_height_output", self.EXPAND_SIZE, face_incremental_output_size, self.face_height_output)
                     this_expand_size = (int(self.EXPAND_SIZE[0]*image_incremental_output_ratio),int(self.EXPAND_SIZE[1]*image_incremental_output_ratio))
-                    print("this_expand_size", image_incremental_output_ratio, this_expand_size)
+                    if self.VERBOSE: print("this_expand_size", image_incremental_output_ratio, this_expand_size)
                 else:
                     this_expand_size = (self.EXPAND_SIZE[0],self.EXPAND_SIZE[1])
                     # for non-incremental, this_expand_size is now 25000
@@ -1052,14 +1067,14 @@ class SortPose:
 
                 border_list = [top_border, bottom_border, left_border, right_border]
                 existing_list = [existing_pixels_above_nose, existing_pixels_below_nose, existing_pixels_left_of_nose, existing_pixels_right_of_nose]
-                print("borders to expand to", border_list)
-                print("existing pixels", existing_list)
+                if self.VERBOSE: print("borders to expand to", border_list)
+                if self.VERBOSE: print("existing pixels", existing_list)
                 # if all borders are positive, then we can expand the image
                 expand_list =[]
                 crop_list = []
                 if all(x >= 0 for x in border_list):
                     expand_list = border_list
-                    print("expand is good")
+                    if self.VERBOSE: print("expand is good")
                 # top_border = int(this_expand_size[1]/2 - resize_nose[1])
                 # bottom_border = int(this_expand_size[1]/2 - (resize_dims[1]-resize_nose[1]))
                 # left_border = int(this_expand_size[0]/2 - resize_nose[0])
@@ -1080,11 +1095,11 @@ class SortPose:
                         else:
                             expand_list.append(0)
                             crop_list.append(abs(border))
-                    print("expand failed, at least one is crop")
+                    if self.VERBOSE: print("expand failed, at least one is crop")
                     new_image = None
                     self.negmargin_count += 1                # self.preview_img(new_image)
                 # quit()
-                print("going to expand image with borders", expand_list)
+                if self.VERBOSE: print("going to expand image with borders", expand_list)
                 # Use border_list for the border sizes
                 new_image = cv2.copyMakeBorder(
                     resized_image,
@@ -1096,9 +1111,9 @@ class SortPose:
                     None,
                     self.BGCOLOR
                 )
-                print("new_image shape after expanding:", new_image.shape)
+                if self.VERBOSE: print("new_image shape after expanding:", new_image.shape)
                 if any(x != 0 for x in crop_list):
-                    print("some borders are negative, cropping")
+                    if self.VERBOSE: print("some borders are negative, cropping")
                     # crop the image to the crop_list keeping the image centered
                     # start at top and left with the extra pixels the image extends beyond the output dimensions
                     # then go from there the distance of the output dimensions (final_height_unit_from_nose * 2, etc)
@@ -1110,13 +1125,13 @@ class SortPose:
                     # CROP_RIGHT = new_image.shape[1] - CROP_LEFT - crop_list[2]
                     # CROP_TOP = (new_image.shape[0] - crop_list[0]) // 2
                     # CROP_BOTTOM = new_image.shape[0] - CROP_TOP - crop_list[0]
-                    print("CROP_LEFT, CROP_RIGHT, CROP_TOP, CROP_BOTTOM", CROP_LEFT, CROP_RIGHT, CROP_TOP, CROP_BOTTOM)
+                    if self.VERBOSE: print("CROP_LEFT, CROP_RIGHT, CROP_TOP, CROP_BOTTOM", CROP_LEFT, CROP_RIGHT, CROP_TOP, CROP_BOTTOM)
                     # Define the cropped area
                     new_image = new_image[CROP_TOP:CROP_BOTTOM, CROP_LEFT:CROP_RIGHT]
-                    print("cropped image to", crop_list)
+                    if self.VERBOSE: print("cropped image to", crop_list)
             else:
                 new_image = None
-                print("failed expand loop, with resize", str(resize), "too big, skipping")
+                if self.VERBOSE: print("failed expand loop, with resize", str(resize), "too big, skipping")
 
 
         except Exception as e:

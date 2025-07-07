@@ -35,7 +35,7 @@ SegmentHelper_name = None
 # SegmentHelper_name = 'SegmentHelper_june2025_nmlGPU300k'
 # SATYAM, this is MM specific
 # for when I'm using files on my SSD vs RAID
-IS_SSD = True
+IS_SSD = False
 #IS_MOVE is in move_toSSD_files.py
 
 # I/O utils
@@ -177,7 +177,7 @@ USE_AFFECT_GROUPS = False
 ONE_SHOT = True # take all files, based off the very first sort order.
 EXPAND = True # expand with white for prints, as opposed to inpaint and crop. (not video, which is controlled by INPAINT_COLOR) 
 JUMP_SHOT = True # jump to random file if can't find a run (I don't think this applies to planar?)
-USE_ALL = False # this is for outputting all images from a oneshot, forces ONE_SHOT
+USE_ALL = True # this is for outputting all images from a oneshot, forces ONE_SHOT, skips face comparison
 DRAW_TEST_LMS = False # this is for testing the landmarks
 
 if SORT_TYPE == "planar_hands" and USE_ALL:
@@ -557,18 +557,29 @@ elif IS_SEGONLY and io.platform == "win32":
     # WHERE += " AND s.site_name_id = 8"
 ######################################
 
+# construct the motion dictionary all false
 motion = {
     "side_to_side": False,
     "forward_smile": False,
-    "forward_wider": True,
+    "forward_wider": False,
     "laugh": False,
     "forward_nosmile":  False,
     "static_pose":  False,
     "simple": False,
+    "use_all": False,
 }
+
+if USE_ALL:
+    # if USE_ALL is True, set "use_all": True
+    motion["use_all"] = True
+else:
+    motion["forward_wider"] = True
+
+
 
 # face_height_output is how large each face will be. default is 750
 face_height_output = 1000
+
 # face_height_output = 250
 
 # define crop ratios, in relationship to nose
@@ -1441,8 +1452,8 @@ def shift_bbox(bbox, extension_pixels):
 def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
 
     def save_image_metas(row):
-        print("row", row)
-        print("save_image_metas for use in TTS")
+        if sort.VERBOSE: print("row", row)
+        if sort.VERBOSE: print("save_image_metas for use in TTS")
         # parent_row = df_segment[df_segment['image_id'] == row['image_id']]
         # image_id = parent_row['image_id'].values[0] #NON NN
         image_id = row['image_id']
@@ -1608,7 +1619,7 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
         return cropped_image, face_diff
 
     def trim_bottom(img, site_name_id):
-        print("trimming bottom")
+        if VERBOSE: print("trimming bottom")
         if site_name_id == 2: trim = 100
         elif site_name_id == 9: trim = 90
         img = img[0:img.shape[0]-trim, 0:img.shape[1]]
@@ -1616,7 +1627,7 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
     
     #itter is a cap, to stop the process after a certain number of rounds
     print('linear_test_df writing images for this many images:', len(df_sorted))
-    imgfileprefix = f"X{str(sort.XLOW)}-{str(sort.XHIGH)}_Y{str(sort.YLOW)}-{str(sort.YHIGH)}_Z{str(sort.ZLOW)}-{str(sort.ZHIGH)}_ct{str(df_sorted.size)}"
+    imgfileprefix = f"X{str(sort.XLOW)}-{str(sort.XHIGH)}_Y{str(sort.YLOW)}-{str(sort.YHIGH)}_Z{str(sort.ZLOW)}-{str(sort.ZHIGH)}_ct{str(len(df_segment))}"
     print(imgfileprefix)
     if sort.ORIGIN == 6: sort.NOSE_BRIDGE_DIST = sort.calc_nose_bridge_dist(df_sorted.iloc[0]['face_landmarks'])    
     # print("nose bridge dist", sort.NOSE_BRIDGE_DIST)
@@ -1631,7 +1642,7 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
         # print(parent_row)
 
         print('-- linear_test_df [-] in loop, index is', str(index))
-        print("row", row)
+        if sort.VERBOSE: print("row", row)
         sort.this_nose_bridge_dist = None
         # if VERBOSE: print(row["body_landmarks"])
         # select the row in df_segment where the imagename == row['filename']
@@ -1680,28 +1691,23 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
                 cropped_image, face_diff, skip_face = compare_images(sort.counter_dict["last_image"], img, row['face_landmarks'], row['bbox'])
                 
                 if cropped_image is not None:
-                    print("type of cropped_image", type(cropped_image))
-                    print("shape of cropped image", cropped_image.shape)
+                    pass
+                    if VERBOSE: print("type of cropped_image", type(cropped_image))
+                    if VERBOSE: print("shape of cropped image", cropped_image.shape)
                 if cropped_image is None and skip_face:
-                    print("face_diff", face_diff)
+                    if VERBOSE: print("face_diff", face_diff)
                     if face_diff == 0:
                         is_dupe_of = True
                     elif SORT_TYPE == "planar_body" and face_diff < 10:
-                        print("face_diff is small, so will check description face_diff is small, so will check description")
-                        print(" ")
-                        print(" ")
+                        if VERBOSE: print("face_diff is small, so will check description")
                         if description == sort.counter_dict["last_description"]: 
-                            print("same description, going to record as a dupe")
-                            print(" ")
+                            if VERBOSE: print("same description, going to record as a dupe")
                             is_dupe_of = True
                         else:
-                            print(" ")
-                            print("different description, not a dupe")
-                            print(" ")
-                            print("description", description)
-                            print(" ")
-                            print("sort.counter_dict[last_description]", sort.counter_dict["last_description"])
-                            print(" ")
+                            pass
+                            if VERBOSE: print("different description, not a dupe")
+                            if VERBOSE: print("description", description)
+                            if VERBOSE: print("sort.counter_dict[last_description]", sort.counter_dict["last_description"])
 
                             is_dupe_of = False
                     ## TK NEED TO ADD IN CONDITIONAL FOR FACE DUPE DIST
@@ -1719,13 +1725,13 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
                             }, synchronize_session=False)
                         session.commit()
 
-                if skip_face:
+                if skip_face and not USE_ALL:
                     print("skipping face")
                     continue
                 # if cropped_image[0][0] == -10:
                 #     print("-10 is returned from compare_images, so resize is too big, skipping")
                 #     continue
-                elif cropped_image is None and not skip_face:
+                elif cropped_image is None:
                 # if len(cropped_image)==1 and (OUTPAINT or INPAINT):
                     print("gotta paint that shizzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz")
                     cropped_image, face_diff = in_out_paint(img, row)
@@ -1740,23 +1746,24 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
 
 
                 ### testing
-                print("linear_test_df face_diff", face_diff)
+                if VERBOSE: print("linear_test_df face_diff", face_diff)
                 # cv2.imshow(str(face_diff), cropped_image)
                 # cv2.waitKey(0)
                 # cv2.destroyAllWindows()
 
                 temp_first_run = sort.counter_dict["first_run"]
-                print("temp_first_run", temp_first_run)
+                if VERBOSE: print("temp_first_run", temp_first_run)
                 if sort.counter_dict["first_run"]:
                     sort.counter_dict["last_description"] = description
-                    print("first run, setting last_description")
+                    if VERBOSE: print("first run, setting last_description")
                 elif face_diff and face_diff < sort.CHECK_DESC_DIST:
-                    print("face_diff is small, so will check descriface_diffption:", face_diff)
+                    if VERBOSE: print("face_diff is small, so will check description:", face_diff)
                     # temp, until resegmenting
-                    print("description", description)
-                    print("sort.counter_dict[last_description]", sort.counter_dict["last_description"])
+                    if VERBOSE: print("description", description)
+                    if VERBOSE: print("sort.counter_dict[last_description]", sort.counter_dict["last_description"])
                     if description == sort.counter_dict["last_description"]:
                         print("same description!!!")
+                        
 
 
                 if cropped_image is not None:
@@ -1889,8 +1896,8 @@ def process_linear(start_img_name, df_segment, cluster_no, sort):
     # preps the encodings for sort
     # df_enc, df_128_enc, df_33_lms = prep_encodings(df_segment)
     df_enc = prep_encodings_NN(df_segment)
-    print("sort.counter_dict after prep_encodings_NN", sort.counter_dict)
-    
+    if VERBOSE: print("sort.counter_dict after prep_encodings_NN", sort.counter_dict)
+
     # if results in df_enc, then sort by face distance
     if not df_enc.empty:
         # # get dataframe sorted by distance
@@ -1938,6 +1945,7 @@ def main():
                 print(" >> SOMETHINGS WRONG: cluster_no is a list, but len > 2", this_cluster)
             print(f"cluster_no: {cluster_no}, pose_no: {pose_no}")
         else:
+            cluster_no = this_cluster
             print(" >> SOMETHINGS WRONG: cluster_no is not a list", this_cluster)
         print("map_images cluster_no", cluster_no)
 
@@ -1968,7 +1976,7 @@ def main():
             # use the image_id to query the mongoDB for face_encodings68, face_landmarks, body_landmarks
             df[['face_encodings68', 'face_landmarks', 'body_landmarks', 'body_landmarks_normalized', 'body_landmarks_3D', 'hand_results']] = df['image_id'].apply(io.get_encodings_mongo)
             print("got mongo encodings", df.columns)
-            print("first row", df.iloc[0])
+            if VERBOSE: print("first row", df.iloc[0])
 
             # drop all rows where face_encodings68 is None TK revist this after migration to mongo
             df = df.dropna(subset=['face_encodings68'])
@@ -1987,14 +1995,14 @@ def main():
             # if not df['hand_results'].isnull().all():
             
             df[['left_hand_landmarks', 'left_hand_world_landmarks', 'left_hand_landmarks_norm', 'right_hand_landmarks', 'right_hand_world_landmarks', 'right_hand_landmarks_norm']] = pd.DataFrame(df['hand_results'].apply(sort.prep_hand_landmarks).tolist(), index=df.index)
-            print("about to split_landmarks_to_columns_or_list,", df.iloc[0])
+            if VERBOSE: print("about to split_landmarks_to_columns_or_list,", df.iloc[0])
             # df = sort.split_landmarks_to_columns_or_list(df, left_col="left_hand_world_landmarks", right_col="right_hand_world_landmarks", structure="list")
             df = sort.split_landmarks_to_columns_or_list(df, first_col="left_hand_landmarks_norm", second_col="right_hand_landmarks_norm", structure="list")
             df = sort.split_landmarks_to_columns_or_list(df, first_col="body_landmarks_3D", second_col=None, structure="list")
-            print("after split_landmarks_to_columns_or_list, ", df.iloc[0])
+            if VERBOSE: print("after split_landmarks_to_columns_or_list, ", df.iloc[0])
 
             df['bbox'] = df['bbox'].apply(lambda x: io.unstring_json(x))
-            print("df before bboxing,", df.columns)
+            if VERBOSE: print("df before bboxing,", df.columns)
 
             if OBJ_CLS_ID > 0: df["bbox_"+str(OBJ_CLS_ID)] = df["bbox_"+str(OBJ_CLS_ID)].apply(lambda x: io.unstring_json(x))
 
@@ -2014,7 +2022,7 @@ def main():
 
 
             # this is to save files from a segment to the SSD
-            print("will I save segment? ", SAVE_SEGMENT)
+            if VERBOSE: print("will I save segment? ", SAVE_SEGMENT)
             if SAVE_SEGMENT:
                 Base.metadata.create_all(engine)
                 print(df_segment.size)
@@ -2027,10 +2035,11 @@ def main():
             elif cluster_no is not None: cluster_string = str(cluster_no)
             elif this_topic is not None: cluster_string = str(this_topic)
             else: cluster_string = None
+            print("cluster_string", cluster_string)
             sort.set_counters(io.ROOT,cluster_string, start_img_name,start_site_image_id)
 
-            print("set sort.counter_dict:" )
-            print(sort.counter_dict)
+            if VERBOSE: print("set sort.counter_dict:" )
+            if VERBOSE: print(sort.counter_dict)
 
 
             ### Get cluster_median encodings for cluster_no ###
@@ -2045,7 +2054,7 @@ def main():
                 results = session.query(Clusters).filter(Clusters.cluster_id==cluster_no).first()
 
 
-                print(results)
+                if VERBOSE: print(results)
                 cluster_median = io.unpickle_array(results.cluster_median)
                 sort.counter_dict["last_image_enc"]=cluster_median
 
