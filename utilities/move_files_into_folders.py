@@ -5,6 +5,7 @@ import re
 import threading
 import queue
 import sys
+import csv
 
 # caution: path[0] is reserved for script path (or '' in REPL)
 sys.path.insert(1, '/Users/michaelmandiberg/Documents/GitHub/facemap/')
@@ -32,11 +33,12 @@ MOVE_DELETE_ORIGINAL = False
 # PATH = "/Volumes/SSD4green/images_shutterstock2"
 # NEWPATH = "/Volumes/RAID54/images_shutterstock"
 
-PATH = "/Volumes/SSD4/images_getty_reDL_test_redundant"
-NEWPATH = "/Volumes/RAID18/images_getty"
+PATH = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/test_orig"
+NEWPATH = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/test_moved"
 
-ALL_IN_ONE_FOLDER = False
+ALL_IN_ONE_FOLDER = False # if False it will walk through all folders inside of PATH
 
+IMAGE_ID_FILENAMES = True # if True it will convert the filename to an image id (e.g. 12345678.jpg) instead of the original filename
 # folder ="5GB_testimages"
 # CSV="/Users/michaelmandiberg/Dropbox/facemap_dropbox/test_data/Images_202302101516_30K.csv"
 
@@ -138,6 +140,7 @@ work_queue = queue.Queue()
 def threaded_process_files():
     while not work_queue.empty():
         currentpathfile, newfile, a, b = work_queue.get()
+        if IMAGE_ID_FILENAMES: newfile = convert_filename_to_id(newfile)
         newpathfile = os.path.join(NEWPATH, a, b, newfile)
 
         if os.path.exists(newpathfile):
@@ -175,8 +178,30 @@ def threaded_processing():
     # Set the event to signal that threads are completed
     threads_completed.set()
 
+def convert_filename_to_id(filename):
+    # split the filename on "_" and take the last part
+    # e.g. "name_picture_12345678.jpg" -> "12345678.jpg"
+    return filename.split("_")[-1]
+
+def save_list_to_csv(this_path, meta_file_list):
+    # split the path to get the directory name
+    dir_name = os.path.basename(this_path)
+    # remove directory name from the path
+    this_folder = os.path.dirname(this_path)
+    cluster_name = dir_name.split("_")[0]
+    # Save the list of files to a CSV file
+    csv_file = os.path.join(this_folder, cluster_name+'_list.csv')
+    with open(csv_file, 'w', newline='') as f:
+        writer = csv.writer(f)
+        for filename in meta_file_list:
+            elements = filename.split("_")
+
+            writer.writerow([elements[-2], elements[-1]])
+    print(f"File list saved to {csv_file}")
+
 def add_queue(this_path):
     meta_file_list = get_dir_files(this_path)
+    save_list_to_csv(this_path, meta_file_list)
     for newfile in sorted(meta_file_list):
         a, b = get_hash_folders(newfile)
         currentpathfile = os.path.join(this_path, newfile)

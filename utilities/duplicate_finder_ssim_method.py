@@ -9,13 +9,15 @@ from skimage.metrics import structural_similarity as ssim
 
 # Constants for the folder path and settings
 BASE_FOLDER_PATH = '/Volumes/OWC4/images_to_assemble/'
-DEDUPE_FOLDER = 'body3D_segmentbig_128'
+BASE_FOLDER_PATH = '/Users/michaelmandiberg/Documents/projects-active/facemap_production'
+
+DEDUPE_FOLDER = 'body3D_segmentbig_useall256'
 CLUSTER_FOLDER = os.path.join(BASE_FOLDER_PATH, DEDUPE_FOLDER)
 FOLDER_LIST = [f for f in os.listdir(CLUSTER_FOLDER) if not f.startswith('.') and not f.endswith('.csv') and not f.endswith('.jpg')]
 print(FOLDER_LIST)
   # Base folder path change to your path
 
-THRESHOLD = 0.8  # Similarity threshold to use for SSIM comparison .85 and above are all dupes. .75 has false positives
+THRESHOLD = 0.85  # Similarity threshold to use for SSIM comparison .85 and above are all dupes. .75 has false positives
 TARGET_SIZE = (128, 128)  # Size to temporarily resize images for comparison
 
 MOVE_ORIGINAL_INTO_DUPES = True  # Set to True to move the original image into the duplicates folder

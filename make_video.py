@@ -9,8 +9,9 @@ import json
 import ast
 import traceback
 import numpy as np
-from mediapipe.framework.formats import landmark_pb2
+from pick import pick
 
+from mediapipe.framework.formats import landmark_pb2
 from sqlalchemy import create_engine, text,select, MetaData, Table, Column, Numeric, Integer, VARCHAR, update, Float
 from sqlalchemy.pool import NullPool
 from sqlalchemy.orm import sessionmaker
@@ -22,6 +23,12 @@ import pymongo
 #mine
 from mp_sort_pose import SortPose
 from mp_db_io import DataIO
+from mediapipe.framework.formats import landmark_pb2
+import ast
+
+title = 'Please choose your operation: '
+options = ['sequence and save CSV', 'assemble images from CSV']
+option, MODE = pick(options, title)
 
 VIDEO = False
 CYCLECOUNT = 1
@@ -41,6 +48,7 @@ IS_SSD = False
 # I/O utils
 io = DataIO(IS_SSD)
 db = io.db
+CSV_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/test_orig"
 # overriding DB for testing
 # io.db["name"] = "stock"
 # io.db["name"] = "ministock"
@@ -76,7 +84,7 @@ ONLY_ONE = False # only one cluster, or False for video fusion, this_cluster = [
 GENERATE_FUSION_PAIRS = False # if true it will query based on MIN_VIDEO_FUSION_COUNT and create pairs
                                 # if false, it will grab the list of pair lists below
 MIN_VIDEO_FUSION_COUNT = 300
-LIMIT = 50000 # this is the limit for the SQL query
+LIMIT = 100000 # this is the limit for the SQL query
 MIN_CYCLE_COUNT = 10
 IS_CLUSTER = True
 USE_POSE_CROP_DICT = True
@@ -142,7 +150,7 @@ BLUR_RADIUS = io.oddify(BLUR_RADIUS)
 
 MASK_OFFSET = [50,50,50,50]
 if OUTPAINT: from outpainting_modular import outpaint, image_resize
-VERBOSE = False
+VERBOSE = True
 SAVE_IMG_PROCESS = False
 # this controls whether it is using the linear or angle process
 IS_ANGLE_SORT = False
@@ -1449,7 +1457,7 @@ def shift_bbox(bbox, extension_pixels):
     if sort.VERBOSE:print("after shifting",bbox)
     return bbox
 
-def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
+def linear_test_df(df_sorted,segment_count,cluster_no, itter=None):
 
     def save_image_metas(row):
         if sort.VERBOSE: print("row", row)
@@ -1627,8 +1635,9 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
     
     #itter is a cap, to stop the process after a certain number of rounds
     print('linear_test_df writing images for this many images:', len(df_sorted))
-    imgfileprefix = f"X{str(sort.XLOW)}-{str(sort.XHIGH)}_Y{str(sort.YLOW)}-{str(sort.YHIGH)}_Z{str(sort.ZLOW)}-{str(sort.ZHIGH)}_ct{str(len(df_segment))}"
+    imgfileprefix = f"X{str(sort.XLOW)}-{str(sort.XHIGH)}_Y{str(sort.YLOW)}-{str(sort.YHIGH)}_Z{str(sort.ZLOW)}-{str(sort.ZHIGH)}_ct{str(segment_count)}_cl{str(cluster_no)}"
     print(imgfileprefix)
+    print("first row", df_sorted.iloc[0])
     if sort.ORIGIN == 6: sort.NOSE_BRIDGE_DIST = sort.calc_nose_bridge_dist(df_sorted.iloc[0]['face_landmarks'])    
     # print("nose bridge dist", sort.NOSE_BRIDGE_DIST)
     good = 0
@@ -1637,21 +1646,15 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
     description = None
     cropped_image = np.array([-10])
     for index, row in df_sorted.iterrows():
-        # parent_row = df_segment[df_segment['imagename'] == row['filename']]
-        # print("parent_row")
-        # print(parent_row)
-
         print('-- linear_test_df [-] in loop, index is', str(index))
         if sort.VERBOSE: print("row", row)
         sort.this_nose_bridge_dist = None
-        # if VERBOSE: print(row["body_landmarks"])
-        # select the row in df_segment where the imagename == row['filename']
         try:
+            # Open the Image
             imgfilename = const_imgfilename_NN(row['image_id'], df_sorted, imgfileprefix)
             outpath = os.path.join(sort.counter_dict["outfolder"],imgfilename)
             open_path = os.path.join(io.ROOT,row['folder'],row['imagename'])
             description = row['description']
-            # print(outpath, open_path)
             try:
                 img = cv2.imread(open_path)
 
@@ -1681,121 +1684,89 @@ def linear_test_df(df_sorted,df_segment,cluster_no, itter=None):
 
             # establish the origin
             sort.get_image_face_data(img, row['face_landmarks'], row['bbox'])
+
+            # control distance 
             if not TSP_SORT and row['dist'] > sort.MAXD:
                 sort.counter_dict["failed_dist_count"] += 1
                 print("MAXDIST too big:" , str(sort.MAXD))
                 continue
-            else:
-                # compare_images to make sure they are face and not the same
-                # last_image is cv2 np.array
-                cropped_image, face_diff, skip_face = compare_images(sort.counter_dict["last_image"], img, row['face_landmarks'], row['bbox'])
-                
-                if cropped_image is not None:
-                    pass
-                    if VERBOSE: print("type of cropped_image", type(cropped_image))
-                    if VERBOSE: print("shape of cropped image", cropped_image.shape)
-                if cropped_image is None and skip_face:
-                    if VERBOSE: print("face_diff", face_diff)
-                    if face_diff == 0:
+
+            # compare_images to make sure they are face and not the same
+            # last_image is cv2 np.array
+            cropped_image, face_diff, skip_face = compare_images(sort.counter_dict["last_image"], img, row['face_landmarks'], row['bbox'])
+            
+            # test and handle duplicates 
+            if cropped_image is None and skip_face:
+                if VERBOSE: print("face_diff", face_diff)
+                if face_diff == 0:
+                    is_dupe_of = True
+                elif SORT_TYPE == "planar_body" and face_diff < 10:
+                    if VERBOSE: print("face_diff is small, so will check description")
+                    if description == sort.counter_dict["last_description"]: 
+                        if VERBOSE: print("same description, going to record as a dupe")
                         is_dupe_of = True
-                    elif SORT_TYPE == "planar_body" and face_diff < 10:
-                        if VERBOSE: print("face_diff is small, so will check description")
-                        if description == sort.counter_dict["last_description"]: 
-                            if VERBOSE: print("same description, going to record as a dupe")
-                            is_dupe_of = True
-                        else:
-                            pass
-                            if VERBOSE: print("different description, not a dupe")
-                            if VERBOSE: print("description", description)
-                            if VERBOSE: print("sort.counter_dict[last_description]", sort.counter_dict["last_description"])
-
-                            is_dupe_of = False
-                    ## TK NEED TO ADD IN CONDITIONAL FOR FACE DUPE DIST
                     else:
+                        pass
+                        if VERBOSE: print("different description, not a dupe")
+                        if VERBOSE: print("description", description)
+                        if VERBOSE: print("sort.counter_dict[last_description]", sort.counter_dict["last_description"])
+
                         is_dupe_of = False
-
-                    if is_dupe_of:
-                        print(f"identical image, going to record {row['image_id']} as a dupe of ", sort.counter_dict["last_image_id"])
-                        
-                        session.query(Encodings).filter(Encodings.image_id == row['image_id']).update({
-                                Encodings.is_dupe_of: sort.counter_dict["last_image_id"]
-                            }, synchronize_session=False)
-                        session.query(SegmentTable).filter(SegmentTable.image_id == row['image_id']).update({
-                                SegmentTable.is_dupe_of: sort.counter_dict["last_image_id"]
-                            }, synchronize_session=False)
-                        session.commit()
-
-                if skip_face and not USE_ALL:
-                    print("skipping face")
-                    continue
-                # if cropped_image[0][0] == -10:
-                #     print("-10 is returned from compare_images, so resize is too big, skipping")
-                #     continue
-                elif cropped_image is None:
-                # if len(cropped_image)==1 and (OUTPAINT or INPAINT):
-                    print("gotta paint that shizzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz")
-                    cropped_image, face_diff = in_out_paint(img, row)
-
-                # for drawing landmarks on test image
-                # landmarks_2d = sort.get_landmarks_2d(row['face_landmarks'], list(range(33)), "list")
-                # print("landmarks_2d before drawing", landmarks_2d)
-                # cropped_image = sort.draw_point(cropped_image, landmarks_2d, index = 0)                    
-
-                # landmarks_2d = sort.get_landmarks_2d(row['face_landmarks'], list(range(420)), "list")
-                # cropped_image = sort.draw_point(cropped_image, landmarks_2d, index = 0)                    
-
-
-                ### testing
-                if VERBOSE: print("linear_test_df face_diff", face_diff)
-                # cv2.imshow(str(face_diff), cropped_image)
-                # cv2.waitKey(0)
-                # cv2.destroyAllWindows()
-
-                temp_first_run = sort.counter_dict["first_run"]
-                if VERBOSE: print("temp_first_run", temp_first_run)
-                if sort.counter_dict["first_run"]:
-                    sort.counter_dict["last_description"] = description
-                    if VERBOSE: print("first run, setting last_description")
-                elif face_diff and face_diff < sort.CHECK_DESC_DIST:
-                    if VERBOSE: print("face_diff is small, so will check description:", face_diff)
-                    # temp, until resegmenting
-                    if VERBOSE: print("description", description)
-                    if VERBOSE: print("sort.counter_dict[last_description]", sort.counter_dict["last_description"])
-                    if description == sort.counter_dict["last_description"]:
-                        print("same description!!!")
-                        
-
-
-                if cropped_image is not None:
-                    cv2.imwrite(outpath, cropped_image)
-                    # img_list.append((outpath, cropped_image))
-                    # this is done in compare function
-                    # sort.counter_dict["good_count"] += 1
-                    good += 1
-                    # print("going to save image metas")
-                    save_image_metas(row)
-                    # metas_list.append(save_image_metas(row))
-                    # parent_row = df_segment[df_segment['imagename'] == row['filename']]
-                    # print("parent_row")
-                    # print(parent_row)
-
-                    
-                    # print("row['filename']")
-                    # print(row['filename'])
-                    sort.counter_dict["start_img_name"] = row['imagename']
-                    # print(sort.counter_dict["last_image"])
-                    print("saved: ",outpath)
-                    sort.counter_dict["counter"] += 1
-                    if itter and good > itter:
-                        print("breaking after this many itters,", str(good), str(itter))
-                        continue
-                    # sort.counter_dict["last_image"] = img_list[-1][1]  #last pair in list, second item in pair
-                    sort.counter_dict["last_image"] = cropped_image  #last pair in list, second item in pair
-                    sort.counter_dict["last_image_id"] = row['image_id']  #last pair in list, second item in pair
+                ## TK NEED TO ADD IN CONDITIONAL FOR FACE DUPE DIST
                 else:
-                    print("cropped_image is None")
-        # print("sort.counter_dict with last_image???")
-        # print(sort.counter_dict)
+                    is_dupe_of = False
+
+                if is_dupe_of:
+                    print(f"identical image, going to record {row['image_id']} as a dupe of ", sort.counter_dict["last_image_id"])
+                    
+                    session.query(Encodings).filter(Encodings.image_id == row['image_id']).update({
+                            Encodings.is_dupe_of: sort.counter_dict["last_image_id"]
+                        }, synchronize_session=False)
+                    session.query(SegmentTable).filter(SegmentTable.image_id == row['image_id']).update({
+                            SegmentTable.is_dupe_of: sort.counter_dict["last_image_id"]
+                        }, synchronize_session=False)
+                    session.commit()
+
+            # handle USE_ALL and inpainting
+            if skip_face and not USE_ALL:
+                print("skipping face")
+                continue
+            elif cropped_image is None:
+            # if len(cropped_image)==1 and (OUTPAINT or INPAINT):
+                print("gotta paint that shizzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz")
+                cropped_image, face_diff = in_out_paint(img, row)
+
+            # handle/debug counter_dict
+            temp_first_run = sort.counter_dict["first_run"]
+            if VERBOSE: print("temp_first_run", temp_first_run)
+            if sort.counter_dict["first_run"]:
+                sort.counter_dict["last_description"] = description
+                if VERBOSE: print("first run, setting last_description")
+            elif face_diff and face_diff < sort.CHECK_DESC_DIST:
+                # TK this doesn't seem to do anything, but maybe should be in dupe detection
+                if VERBOSE: print("face_diff is small, so will check description:", face_diff)
+                # temp, until resegmenting
+                if VERBOSE: print("description", description)
+                if VERBOSE: print("sort.counter_dict[last_description]", sort.counter_dict["last_description"])
+                if description == sort.counter_dict["last_description"]:
+                    print("same description!!!")
+                    
+
+            # save image
+            if cropped_image is not None:
+                cv2.imwrite(outpath, cropped_image)
+                good += 1
+                save_image_metas(row)
+                sort.counter_dict["start_img_name"] = row['imagename']
+                print("saved: ",outpath)
+                sort.counter_dict["counter"] += 1
+                if itter and good > itter:
+                    print("breaking after this many itters,", str(good), str(itter))
+                    continue
+                sort.counter_dict["last_image"] = cropped_image  #last pair in list, second item in pair
+                sort.counter_dict["last_image_id"] = row['image_id']  #last pair in list, second item in pair
+            else:
+                print("cropped_image is None")
 
         except Exception as e:
             traceback.print_exc()
@@ -1896,6 +1867,7 @@ def process_linear(start_img_name, df_segment, cluster_no, sort):
     # preps the encodings for sort
     # df_enc, df_128_enc, df_33_lms = prep_encodings(df_segment)
     df_enc = prep_encodings_NN(df_segment)
+    segment_count = df_enc.shape[0]
     if VERBOSE: print("sort.counter_dict after prep_encodings_NN", sort.counter_dict)
 
     # if results in df_enc, then sort by face distance
@@ -1904,12 +1876,48 @@ def process_linear(start_img_name, df_segment, cluster_no, sort):
         df_sorted = sort_by_face_dist_NN(df_enc)
         # df_sorted = sort_by_face_dist(df_enc, df_128_enc, df_33_lms)
 
+        # TK this is where i save df_sorted to csv
+        df_sorted.to_csv(f"{CSV_FOLDER}/df_sorted_{cluster_no}_ct{segment_count}.csv", index=False)
+
         # test to see if they make good faces
-        linear_test_df(df_sorted,df_segment,cluster_no)
         # write_images(img_list)
         # write_images(sort.not_make_face)
-        print_counters()
+        # print_counters()
 
+def parse_cluster_no(this_cluster):
+    # if this_cluster is a list, then assign the first one to cluster_no
+    # temp fix, to deal with passing in two values for FUSION
+    # select on both, sort on CLUSTER_NO
+    # for FUSION, CLUSTER_NO is HAND_POSITION and is the first value
+    pose_no = cluster_no = None
+    if isinstance(this_cluster, list):
+        print("cluster_no is a list", this_cluster)
+        if len(this_cluster) == 2:
+            cluster_no = this_cluster[0]
+            pose_no = this_cluster[1]
+        elif len(this_cluster) == 1:
+            cluster_no = this_cluster[0]
+        else:
+            print(" >> SOMETHINGS WRONG: cluster_no is a list, but len > 2", this_cluster)
+        print(f"cluster_no: {cluster_no}, pose_no: {pose_no}")
+    else:
+        cluster_no = this_cluster
+        print(" >> SOMETHINGS WRONG: cluster_no is not a list", this_cluster)
+    print("map_images cluster_no", cluster_no)
+    return cluster_no, pose_no
+
+def set_my_counter_dict(this_topic=None, cluster_no=None, pose_no=None, start_img_name=None, start_site_image_id=None):
+    ### Set counter_dict ###
+    if pose_no is not None: cluster_string = f"{cluster_no}_{pose_no}"
+    elif cluster_no is not None: cluster_string = str(cluster_no)
+    elif this_topic is not None: cluster_string = str(this_topic)
+    else: cluster_string = None
+    print("cluster_string", cluster_string)
+    sort.set_counters(io.ROOT,cluster_string, start_img_name,start_site_image_id)
+
+    if VERBOSE: print("set sort.counter_dict:" )
+    if VERBOSE: print(sort.counter_dict)
+    
 
 ###################
 #  MY MAIN CODE   #
@@ -1926,28 +1934,9 @@ def main():
     # this is the key function, which is called for each cluster
     # or only once if no clusters
     def map_images(resultsjson, this_cluster=None, this_topic=None):
-        pose_no = cluster_no = None
         
-
-        # print(df_sql)
-        # if this_cluster is a list, then assign the first one to cluster_no
-        # temp fix, to deal with passing in two values for FUSION
-        # select on both, sort on CLUSTER_NO
-        # for FUSION, CLUSTER_NO is HAND_POSITION and is the first value
-        if isinstance(this_cluster, list):
-            print("cluster_no is a list", this_cluster)
-            if len(this_cluster) == 2:
-                cluster_no = this_cluster[0]
-                pose_no = this_cluster[1]
-            elif len(this_cluster) == 1:
-                cluster_no = this_cluster[0]
-            else:
-                print(" >> SOMETHINGS WRONG: cluster_no is a list, but len > 2", this_cluster)
-            print(f"cluster_no: {cluster_no}, pose_no: {pose_no}")
-        else:
-            cluster_no = this_cluster
-            print(" >> SOMETHINGS WRONG: cluster_no is not a list", this_cluster)
-        print("map_images cluster_no", cluster_no)
+        # get cluster and pose from this_cluster
+        cluster_no, pose_no = parse_cluster_no(this_cluster)
 
         # if topic, overide sort.image_edge_multiplier based on topic
         if pose_no is not None and USE_POSE_CROP_DICT:
@@ -2031,16 +2020,7 @@ def main():
                 quit()
 
             ### Set counter_dict ###
-            if pose_no is not None: cluster_string = f"{cluster_no}_{pose_no}"
-            elif cluster_no is not None: cluster_string = str(cluster_no)
-            elif this_topic is not None: cluster_string = str(this_topic)
-            else: cluster_string = None
-            print("cluster_string", cluster_string)
-            sort.set_counters(io.ROOT,cluster_string, start_img_name,start_site_image_id)
-
-            if VERBOSE: print("set sort.counter_dict:" )
-            if VERBOSE: print(sort.counter_dict)
-
+            set_my_counter_dict(this_topic, cluster_no, pose_no, start_img_name, start_site_image_id)
 
             ### Get cluster_median encodings for cluster_no ###
 
@@ -2097,77 +2077,128 @@ def main():
             print('dataframe empty, and not IS_CLUSTER so probably bad path or bad SQL')
             sys.exit()
 
+    def save_images_from_csv_folder():
+        def df_sorted_from_csv(csv_file):
+            df = pd.read_csv(csv_file)
+            print("columns", df.columns)
+            print("df head", df.head())
+            if df.empty:
+                print("dataframe is empty, skipping")
+                return
 
+            # Convert face_landmarks from string to mediapipe landmark object
+            if "face_landmarks" in df.columns:
+                df["face_landmarks"] = df["face_landmarks"].apply(io.str_to_landmarks)
+            df['bbox'] = df['bbox'].apply(lambda x: io.unstring_json(x))
+            # Process the dataframe as needed
+            return df
 
-    ###          THE MAIN PART OF MAIN()           ###
-    ### QUERY SQL BASED ON CLUSTERS AND MAP_IMAGES ###
+        
+        cluster_no = pose_no = segment_count = this_topic = None
+        # list the files in the the CSV_FOLDER
+        files_in_folder = os.listdir(CSV_FOLDER)
+        print("files in folder", files_in_folder)
+        for csv_file in files_in_folder:
+            print("csv_file", csv_file)
+            if csv_file.endswith(".csv"):
+                # Extract cluster_no from filename, e.g., df_sorted_{cluster_no}_ct{segment_count}_p{pose_no}.csv
+                parts = csv_file.replace(".csv", "").split("_")
+                if len(parts) >= 3:
+                    cluster_no = parts[2]
+                    for part in parts:
+                        if part.startswith("ct"):
+                            # Extract segment_count from the part that starts with "ct"
+                            # e.g., ct5 -> 5
+                            segment_count = part.split("ct")[1]
+                        elif part.startswith("p"):
+                            # Extract pose_no from the part that starts with "p"
+                            # e.g., p1 -> 1
+                            pose_no = part.split("p")[1]
+                print(f"assembling cluster {cluster_no} from csv file: {csv_file}")
 
-    #creating my objects
-    start = time.time()
+                ### Set counter_dict (without start stuff which is not needed) ###
+                set_my_counter_dict(this_topic, cluster_no, pose_no)
+                df_sorted = df_sorted_from_csv(os.path.join(CSV_FOLDER, csv_file))
+                linear_test_df(df_sorted,segment_count,cluster_no)
 
-    first_loop = this_topic = this_cluster = n_cluster_topics = second_cluster_topic = None
-    # to loop or not to loop that is the cluster
-    if IS_HAND_POSE_FUSION or IS_CLUSTER or IS_TOPICS: first_loop = True
+    if MODE == 1:
+        print("MODE 1, assembling from CSV_FOLDER", CSV_FOLDER)
+        save_images_from_csv_folder()
 
-    if IS_ONE_CLUSTER:
-        print(f"setting SELECT for IS_ONE_CLUSTER {CLUSTER_NO}")
-        this_cluster = CLUSTER_NO
-    if IS_ONE_TOPIC:
-        print(f"setting SELECT for IS_ONE_TOPIC {TOPIC_NO}")
-        this_topic = TOPIC_NO
-
-    # selectSQL takes a cluster_no and topic_no
-    if IS_HAND_POSE_FUSION and ONLY_ONE:
-        print("IS_HAND_POSE_FUSION is True")
-        # select on both, sort on CLUSTER_NO 
-        # this sends pose and gesture in as a list, and an empty topic
-        this_cluster = [CLUSTER_NO, HAND_POSE_NO]
-    
-    if IS_HAND_POSE_FUSION and not ONLY_ONE:
-        this_topic = TOPIC_NO
-        if GENERATE_FUSION_PAIRS:
-            n_cluster_topics = sort.find_sorted_zero_indices(TOPIC_NO,MIN_VIDEO_FUSION_COUNT)
-        else: 
-            n_cluster_topics = FUSION_PAIRS
-        print("fusion_pairs", n_cluster_topics)
-    elif IS_CLUSTER:
-        n_cluster_topics = range(N_CLUSTERS)
-        if IS_ONE_TOPIC: second_cluster_topic = this_topic
-        print(f"IS_CLUSTER is {IS_CLUSTER} with {n_cluster_topics}, and second_cluster_topic {second_cluster_topic}")
-    elif IS_TOPICS:
-        if USE_AFFECT_GROUPS: n_cluster_topics = len(AFFECT_GROUPS_LISTS) # redefine for affect groups
-        else: n_cluster_topics = range(N_TOPICS)
-        if this_cluster is not None: second_cluster_topic = this_cluster
-        # if USE_AFFECT_GROUPS: N_CLUSTERS = len(AFFECT_GROUPS_LISTS) # redefine for affect groups
-        print(f"IS_TOPICS is {IS_TOPICS} with {n_cluster_topics}")
-
-    def select_map_images(this_cluster, this_topic):
-        if VERBOSE: print("select_map_images this_cluster", this_cluster)
-        if VERBOSE: print("select_map_images this_topic", this_topic)
-        resultsjson = selectSQL(this_cluster, this_topic)
-        print("got results, count is: ",len(resultsjson))
-        if len(resultsjson) < MIN_CYCLE_COUNT:
-            print(f"less than {MIN_CYCLE_COUNT} resultsjson, skipping this {this_cluster} and {this_topic}")
-            return
-        else:
-            # folder_name = this_topic[0] if this_topic else this_cluster
-            map_images(resultsjson, this_cluster, this_topic)
-
-    if first_loop:
-        print("first loop is ", first_loop)
-        for cluster_topic_no in n_cluster_topics:
-            if IS_CLUSTER and cluster_topic_no < START_CLUSTER:continue
-            if USE_AFFECT_GROUPS: cluster_topic_no = AFFECT_GROUPS_LISTS[cluster_topic_no] # redefine cluster_no with affect group list
-            print(f"SELECTing cluster_topic {cluster_topic_no} of {n_cluster_topics}")
-            if IS_TOPICS and not IS_HAND_POSE_FUSION: select_map_images(second_cluster_topic, cluster_topic_no)
-            elif IS_CLUSTER: select_map_images(cluster_topic_no, second_cluster_topic)
-            elif IS_HAND_POSE_FUSION: select_map_images(cluster_topic_no,this_topic)
-            # resultsjson = selectSQL(select_list)
-            # map_images(resultsjson, cluster_topic_no)
     else:
-        print("doing regular linear")
-        select_map_images(this_cluster, this_topic)
+        ###          THE MAIN PART OF MAIN()           ###
+        ### QUERY SQL BASED ON CLUSTERS AND MAP_IMAGES ###
+ 
+        print("MODE 0 or 2, sorting and saving CSV", CSV_FOLDER)
+        #creating my objects
+        start = time.time()
 
+        first_loop = this_topic = this_cluster = n_cluster_topics = second_cluster_topic = None
+        # to loop or not to loop that is the cluster
+        if IS_HAND_POSE_FUSION or IS_CLUSTER or IS_TOPICS: first_loop = True
+
+        if IS_ONE_CLUSTER:
+            print(f"setting SELECT for IS_ONE_CLUSTER {CLUSTER_NO}")
+            this_cluster = CLUSTER_NO
+        if IS_ONE_TOPIC:
+            print(f"setting SELECT for IS_ONE_TOPIC {TOPIC_NO}")
+            this_topic = TOPIC_NO
+
+        # selectSQL takes a cluster_no and topic_no
+        if IS_HAND_POSE_FUSION and ONLY_ONE:
+            print("IS_HAND_POSE_FUSION is True")
+            # select on both, sort on CLUSTER_NO 
+            # this sends pose and gesture in as a list, and an empty topic
+            this_cluster = [CLUSTER_NO, HAND_POSE_NO]
+        
+        if IS_HAND_POSE_FUSION and not ONLY_ONE:
+            this_topic = TOPIC_NO
+            if GENERATE_FUSION_PAIRS:
+                n_cluster_topics = sort.find_sorted_zero_indices(TOPIC_NO,MIN_VIDEO_FUSION_COUNT)
+            else: 
+                n_cluster_topics = FUSION_PAIRS
+            print("fusion_pairs", n_cluster_topics)
+        elif IS_CLUSTER:
+            n_cluster_topics = range(N_CLUSTERS)
+            if IS_ONE_TOPIC: second_cluster_topic = this_topic
+            print(f"IS_CLUSTER is {IS_CLUSTER} with {n_cluster_topics}, and second_cluster_topic {second_cluster_topic}")
+        elif IS_TOPICS:
+            if USE_AFFECT_GROUPS: n_cluster_topics = len(AFFECT_GROUPS_LISTS) # redefine for affect groups
+            else: n_cluster_topics = range(N_TOPICS)
+            if this_cluster is not None: second_cluster_topic = this_cluster
+            # if USE_AFFECT_GROUPS: N_CLUSTERS = len(AFFECT_GROUPS_LISTS) # redefine for affect groups
+            print(f"IS_TOPICS is {IS_TOPICS} with {n_cluster_topics}")
+
+        def select_map_images(this_cluster, this_topic):
+            if VERBOSE: print("select_map_images this_cluster", this_cluster)
+            if VERBOSE: print("select_map_images this_topic", this_topic)
+            resultsjson = selectSQL(this_cluster, this_topic)
+            print("got results, count is: ",len(resultsjson))
+            if len(resultsjson) < MIN_CYCLE_COUNT:
+                print(f"less than {MIN_CYCLE_COUNT} resultsjson, skipping this {this_cluster} and {this_topic}")
+                return
+            else:
+                # folder_name = this_topic[0] if this_topic else this_cluster
+                map_images(resultsjson, this_cluster, this_topic)
+
+        if first_loop:
+            print("first loop is ", first_loop)
+            for cluster_topic_no in n_cluster_topics:
+                if IS_CLUSTER and cluster_topic_no < START_CLUSTER:continue
+                if USE_AFFECT_GROUPS: cluster_topic_no = AFFECT_GROUPS_LISTS[cluster_topic_no] # redefine cluster_no with affect group list
+                print(f"SELECTing cluster_topic {cluster_topic_no} of {n_cluster_topics}")
+                if IS_TOPICS and not IS_HAND_POSE_FUSION: select_map_images(second_cluster_topic, cluster_topic_no)
+                elif IS_CLUSTER: select_map_images(cluster_topic_no, second_cluster_topic)
+                elif IS_HAND_POSE_FUSION: select_map_images(cluster_topic_no,this_topic)
+                # resultsjson = selectSQL(select_list)
+                # map_images(resultsjson, cluster_topic_no)
+        else:
+            print("doing regular linear")
+            select_map_images(this_cluster, this_topic)
+
+        if MODE == 2:
+            print("MODE 2, now assembling from CSV_FOLDER", CSV_FOLDER)
+            save_images_from_csv_folder()
 
 
 if __name__ == '__main__':

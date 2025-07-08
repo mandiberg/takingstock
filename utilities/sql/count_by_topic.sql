@@ -10,6 +10,13 @@ JOIN Topics t ON it.topic_id = t.topic_id
 GROUP BY it.topic_id, t.topic;
 
 
+-- count by cluster
+SELECT ibp.cluster_id, COUNT(image_id) AS count
+FROM ImagesBodyPoses3D ibp
+GROUP BY ibp.cluster_id
+ORDER BY count DESC;
+
+
 -- count by topic, with is_not_face and is_face_no_lms
 SELECT COUNT(it.image_id) AS totalcount,
 	   SUM(e.mongo_face_landmarks = 1) AS is_face_count,

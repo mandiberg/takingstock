@@ -10,6 +10,8 @@ import numpy as np
 import pymongo
 from decimal import Decimal
 from pathlib import Path
+from google.protobuf import text_format
+from mediapipe.framework.formats import landmark_pb2
 
 class DataIO:
     """Store key database and file IO info for use across codebase"""
@@ -430,3 +432,59 @@ class DataIO:
         except (ValueError, TypeError):
             return value
 
+
+
+    def str_to_landmarks(self, s):
+        """
+        Convert string representation of MediaPipe landmarks back to NormalizedLandmarkList object.
+        Handles both protobuf text format and JSON-like string formats.
+        """
+        
+        # Handle case where s is already a NormalizedLandmarkList object
+        if hasattr(s, 'landmark'):
+            return s
+        
+        # Handle case where s is not a string
+        if not isinstance(s, str):
+            print(f" ERROR Input is not a string: {type(s)}")
+            return None
+        
+        try:
+            # First, try to parse as protobuf text format
+            lms_obj = landmark_pb2.NormalizedLandmarkList()
+            text_format.Parse(s, lms_obj)
+            if self.VERBOSE:
+                print("Parsed as protobuf text format successfully.")
+            return lms_obj
+        except Exception as e1:
+            print(f"Failed to parse as protobuf text format: {e1}")
+            
+            try:
+                # Fallback: try to parse as JSON/dict format
+                lms_list = ast.literal_eval(s)
+                if not isinstance(lms_list, list):
+                    return None
+                    
+                lms_obj = landmark_pb2.NormalizedLandmarkList()
+                for lm in lms_list:
+                    if isinstance(lm, dict):
+                        l = landmark_pb2.NormalizedLandmark(
+                            x=lm.get("x", 0.0),
+                            y=lm.get("y", 0.0),
+                            z=lm.get("z", 0.0),
+                            visibility=lm.get("visibility", 0.0),
+                        )
+                    elif isinstance(lm, (list, tuple)) and len(lm) >= 3:
+                        l = landmark_pb2.NormalizedLandmark(
+                            x=lm[0], y=lm[1], z=lm[2],
+                            visibility=lm[3] if len(lm) > 3 else 0.0,
+                        )
+                    else:
+                        print(f"Invalid landmark format: {lm}")
+                        continue
+                    lms_obj.landmark.append(l)
+                return lms_obj
+                
+            except Exception as e2:
+                print(f"Failed to parse as JSON format: {e2}")
+                return None
