@@ -48,7 +48,7 @@ IS_SSD = False
 # I/O utils
 io = DataIO(IS_SSD)
 db = io.db
-CSV_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/test_orig"
+CSV_FOLDER = os.path.join(io.ROOT_DBx, "body3D_segmentbig_useall256_CSVs_MMtest")
 # overriding DB for testing
 # io.db["name"] = "stock"
 # io.db["name"] = "ministock"
@@ -150,7 +150,7 @@ BLUR_RADIUS = io.oddify(BLUR_RADIUS)
 
 MASK_OFFSET = [50,50,50,50]
 if OUTPAINT: from outpainting_modular import outpaint, image_resize
-VERBOSE = True
+VERBOSE = False
 SAVE_IMG_PROCESS = False
 # this controls whether it is using the linear or angle process
 IS_ANGLE_SORT = False
@@ -1202,8 +1202,14 @@ def compare_images(last_image, img, face_landmarks, bbox):
 
     if sort.EXPAND:
         cropped_image = sort.expand_image(img, face_landmarks, bbox)
-        # cropp the 25K image back down to 10K
-        if not FULL_BODY: cropped_image = sort.crop_whitespace(cropped_image)
+        
+        if not FULL_BODY: 
+            # cropp the 25K image back down to 10K
+            # does this based on the incremental dimensions
+            cropped_image = sort.crop_whitespace(cropped_image)
+        else: 
+            # trim the top 25% of the image
+            cropped_image = sort.trim_top_crop(cropped_image, 0.25)
         is_inpaint = False
     else:
         cropped_image, is_inpaint = sort.crop_image(img, face_landmarks, bbox)
@@ -1938,10 +1944,8 @@ def main():
         # get cluster and pose from this_cluster
         cluster_no, pose_no = parse_cluster_no(this_cluster)
 
-        # if topic, overide sort.image_edge_multiplier based on topic
+        # if pose_no, overide sort.image_edge_multiplier based on pose_no
         if pose_no is not None and USE_POSE_CROP_DICT:
-            # this_topic is a list of topics, so we need to get the first one
-            # topic_key = this_topic[0] if isinstance(this_topic, list) else this_topic
             pose_type = pose_crop_dict.get(cluster_no, 1)
             sort.image_edge_multiplier = multiplier_list[pose_crop_dict[cluster_no]]
             if VERBOSE: print(f"using pose {cluster_no} getting pose_crop_dict value {pose_type} for image_edge_multiplier", sort.image_edge_multiplier)
@@ -2078,7 +2082,7 @@ def main():
             sys.exit()
 
     def save_images_from_csv_folder():
-        def df_sorted_from_csv(csv_file):
+        def load_df_sorted_from_csv(csv_file):
             df = pd.read_csv(csv_file)
             print("columns", df.columns)
             print("df head", df.head())
@@ -2118,7 +2122,7 @@ def main():
 
                 ### Set counter_dict (without start stuff which is not needed) ###
                 set_my_counter_dict(this_topic, cluster_no, pose_no)
-                df_sorted = df_sorted_from_csv(os.path.join(CSV_FOLDER, csv_file))
+                df_sorted = load_df_sorted_from_csv(os.path.join(CSV_FOLDER, csv_file))
                 linear_test_df(df_sorted,segment_count,cluster_no)
 
     if MODE == 1:

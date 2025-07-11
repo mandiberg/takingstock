@@ -28,13 +28,6 @@ class DataIO:
         self.home = Path.home()
         if platform == "darwin":
             self.platform = "darwin"
-            ####### Michael's OS X Credentials ########
-            # self.db = {
-            #     "host":"localhost",
-            #     "name":"stock",            
-            #     "user":"root",
-            #     "pass":"XFZ5dPJq2"
-            # }
 
             ####### Michael's MAMP Credentials ########
             self.db = {
@@ -46,16 +39,7 @@ class DataIO:
                 "raise_on_warnings": True
             }
 
-            # ####### Michael's MAMP Credentials ########
-            # self.db = {
-            #     "host":"127.0.0.1",
-            #     "name":"stock",            
-            #     "user":"root",
-            #     "pass":"mypassword",
-            #     "unix_socket":"",
-            #     "raise_on_warnings": True
-            # }
-
+            ####### Michael's MAMP Credentials ########
             self.dbmongo = {
                 "host":"mongodb://localhost:27017/",
                 "name":"stock",
@@ -70,6 +54,8 @@ class DataIO:
 
             # self.ROOT_PROD= os.path.join(os.environ['HOME'], "Documents/projects-active/facemap_production/segment_images") ## only on Mac
             # moved images to SSD
+            self.ROOT_DBx = os.path.join(self.home, "Library/CloudStorage/Dropbox/Michael-Tench")
+            self.ROOT_CODE= os.path.join(self.home,"Documents/GitHub/facemap/")
             self.ROOT_PROD=  "/Volumes/OWC4/segment_images" ## only on Mac
             self.ROOTSSD = os.path.join(self.home,"Documents/projects-active/facemap_production")
             self.ROOT54= "/Volumes/RAID54" ## only on 
@@ -80,6 +66,14 @@ class DataIO:
             self.ROOT18 = "/Volumes/RAID18"
             self.NUMBER_OF_PROCESSES = 8
             self.NUMBER_OF_PROCESSES_GPU = 16
+
+            login = os.getlogin()
+            print(f"Running as user: {login}")
+            if login == "change_to_tenchloginname":
+                # redefine any ROOT paths as necessary. 
+                # and specific db dict info, when we get to that point
+                pass
+
         elif platform == "win32":
             self.platform = "win32"
             ######## Satyam's WIN Credentials #########
@@ -287,9 +281,9 @@ class DataIO:
 
     def make_hash_folders(self,path, as_list=False):
         #create depth 0
-        alphabet = 'A B C D E F G H I J K L M N O P Q R S T U V W X Y Z 0 1 2 3 4 5 6 7 8 9'  
+        alphabet = 'A B C D E F 0 1 2 3 4 5 6 7 8 9'  
         # alphabet = '0'  
-        alphabet2 = 'A B C D E F G H I J K L M N O P Q R S T U V W X Y Z 0 1 2 3 4 5 6 7 8 9'  
+        alphabet2 = 'A B C D E F 0 1 2 3 4 5 6 7 8 9'  
         # alphabet = 'A B C 0 1 2'   #short alphabet for testing purposes
         # alphabet2 = 'A B C 0 1 2'   #short alphabet for testing purposes
         alphabet = alphabet.split()
