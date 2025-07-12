@@ -58,7 +58,7 @@ SAVE_ORIG = False
 DRAW_BOX = False
 MINSIZE = 500
 SLEEP_TIME=0
-VERBOSE = False
+VERBOSE = True
 
 # only for triage
 sortfolder ="getty_test"
@@ -435,21 +435,6 @@ class Object:
     def toJSON(self):
         return json.dumps(self, default=lambda o: o.__dict__, 
             sort_keys=True, indent=4)
-
-def get_hash_folders(filename):
-    m = hashlib.md5()
-    m.update(filename.encode('utf-8'))
-    d = m.hexdigest()
-    # csvWriter1.writerow(["https://upload.wikimedia.org/wikipedia/commons/"+d[0]+'/'+d[0:2]+'/'+filename])
-    return d[0], d[0:2]
-
-def read_csv(csv_file):
-    with open(csv_file, encoding="utf-8", newline="") as in_file:
-        reader = csv.reader(in_file, delimiter=",")
-        next(reader)  # Header row
-
-        for row in reader:
-            yield row
 
 def print_get_split(split):
     now = time.time()
@@ -1074,13 +1059,13 @@ def process_image_find_body_subroutine(image_id, image, bbox):
             # this is to check to see if there are body lms, or if it is just face lms
             body_landmarks = pickle.loads(existing_body["body_landmarks"])
         except:
-            print("no body_landmarks", image_id)
+            print("no existing body_landmarks, actually", image_id)
     if existing_worldbody is not None and "body_world_landmarks" in existing_worldbody: 
         body_world_landmarks = pickle.loads(existing_worldbody["body_world_landmarks"])
     if VERBOSE:
-        print("n_landmarks", image_id, n_landmarks)
-        print("body_landmarks", image_id,  body_landmarks)
-        print("body_world_landmarks", image_id, body_world_landmarks)
+        print("existing n_landmarks", image_id, n_landmarks)
+        print("existing body_landmarks", image_id,  body_landmarks)
+        print("existing body_world_landmarks", image_id, body_world_landmarks)
     if None not in (body_landmarks, body_world_landmarks, n_landmarks, bbox):
         print(f"body_landmarks, body_world_landmarks, n_landmarks already exist for image_id: {image_id}")
         is_body = True
@@ -1109,7 +1094,7 @@ def process_image_find_body_subroutine(image_id, image, bbox):
             else:
                 body_world_landmarks = None
         else:
-            if VERBOSE: print("No body landmarks found, setting body_landmarks and body_world_landmarks to None")
+            if VERBOSE: print(f"No body landmarks found, setting body_landmarks and body_world_landmarks to None: {image_id}")
             body_landmarks = None
             body_world_landmarks = None
 
@@ -1213,7 +1198,27 @@ def save_body_hands_mysql_and_mongo(session, image_id, image, bbox_dict, body_la
     else: is_feet = True
 
     print("going to save", image_id, "is_body", is_body, "is_hands", is_hands, "is_feet", is_feet, "mongo_body_landmarks", mongo_body_landmarks, "mongo_body_landmarks_3D", mongo_body_landmarks_3D)
-    if mongo_body_landmarks is not None and not REDO_BODYLMS_3D:
+    
+    # test to see if we have body landmarks, and need to store them ()
+    if mongo_body_landmarks is not None or body_landmarks is not None:
+        existing_entry_encodings = mongo_collection.find_one({"image_id": image_id})
+        if existing_entry_encodings:
+            # check the value of body_landmarks from the existing entry
+            if "body_landmarks" in existing_entry_encodings:
+                if existing_entry_encodings["body_landmarks"] is None:
+                    if VERBOSE: print("mongo_collection does not have body_landmarks, will add them for", image_id)
+                    save_body = True
+                else:
+                    if VERBOSE: print(f"mongo_collection already has body_landmarks for {image_id} with a value in the type of", type(existing_entry_encodings["body_landmarks"]))
+                    save_body = False
+            else:
+                if VERBOSE: print("mongo_collection does not have body_landmarks key, will add them for", image_id)
+                save_body = True
+        else:
+            if VERBOSE: print("mongo_collection does not have an entry for", image_id, "will add body_landmarks")
+            save_body = True
+
+    if mongo_body_landmarks is not None and save_body:
         # skip this if REDO_BODYLMS_3D
         # get encoding_id for mongo insert_one
         encoding_id_results = session.query(Encodings.encoding_id).filter(Encodings.image_id == image_id).first()
@@ -1304,9 +1309,8 @@ def save_body_hands_mysql_and_mongo(session, image_id, image, bbox_dict, body_la
         ### save regular landmarks to mongo, only if lms exist         
         if body_landmarks:
             if VERBOSE: print("storing body_landmarks for image_id", image_id, body_landmarks)
-            existing_entry = mongo_collection.find_one({"image_id": image_id})
             # if VERBOSE: print("encoding_id", encoding_id, "image_id", image_id)
-            if existing_entry:
+            if existing_entry_encodings:
                 mongo_collection.update_one(
                     {"image_id": image_id},
                     {"$set": {"body_landmarks": pickle.dumps(body_landmarks)}}
@@ -1325,8 +1329,8 @@ def save_body_hands_mysql_and_mongo(session, image_id, image, bbox_dict, body_la
         ### save normalized landmarks, will always be None if reprocessing, because no nose_pixel_pos?        
         if n_landmarks:
             if VERBOSE: print("because n_landmarks, storing them", n_landmarks)
-            existing_entry = bboxnormed_collection.find_one({"image_id": image_id})
-            if existing_entry:
+            existing_entry_norm = bboxnormed_collection.find_one({"image_id": image_id})
+            if existing_entry_norm:
                 bboxnormed_collection.update_one(
                     {"image_id": image_id},
                     {"$set": {"nlms": pickle.dumps(n_landmarks)}},
@@ -1340,9 +1344,8 @@ def save_body_hands_mysql_and_mongo(session, image_id, image, bbox_dict, body_la
                 print("----------- >>>>>>>>   mongo n_landmarks inserted:", image_id)
 
     # save hand landmarks
-    if VERBOSE: print("storing hand_landmarks for image_id", image_id)
-
     if not REDO_BODYLMS_3D:
+        if VERBOSE: print("storing hand_landmarks for image_id", image_id)
         session.query(Encodings).filter(Encodings.image_id == image_id).update({
             # Encodings.body_landmarks: body_landmarks
             Encodings.mongo_hand_landmarks: is_hands,
@@ -1475,7 +1478,7 @@ def find_and_save_body(image_id, image, bbox, mongo_body_landmarks, hand_landmar
             # try to save using function:
             if VERBOSE: print("saving body and hands", image_id, "is_body", is_body, "is_hands", is_hands, "is_feet", is_feet)
             save_body_hands_mysql_and_mongo(session, image_id, image, bbox_dict, body_landmarks, body_world_landmarks, n_landmarks, hue_bb, lum_bb, sat_bb, val_bb, lum_torso_bb, hue, lum, sat, val, lum_torso, is_left_shoulder, is_right_shoulder, selfie_bbox, is_body, mongo_body_landmarks, is_hands, update_hand, hand_landmarks, pose, is_feet)
-            if VERBOSE: print("saved body and hands")
+            if VERBOSE: print("saved body and hands,", image_id)
             # if sql hiccups it will try again, if not, it will hit break on next line
             break  # Transaction succeeded, exit the loop
         except OperationalError as e:
@@ -1587,8 +1590,8 @@ def process_image(task):
 
     df = pd.DataFrame(columns=['image_id','is_face','is_body','is_face_distant','face_x','face_y','face_z','mouth_gap','face_landmarks','bbox','face_encodings','face_encodings68_J','body_landmarks'])
     df.at['1', 'image_id'] = task[0]
-    image_test = cv2.imread(task[1])
-    print(">> SPLIT >> image_test shape", image_test.shape)
+    # image_test = cv2.imread(task[1])
+    # print(">> SPLIT >> image_test shape", image_test.shape)
     cap_path = capitalize_directory(task[1])
     # print(">> SPLIT >> made DF, about to imread")
     # pr_split = print_get_split(pr_split)
@@ -1597,12 +1600,15 @@ def process_image(task):
         print(">> SPLIT >> trying to read image:", cap_path)
         # i think i'm doing this twice. I should just do it here. 
         image = cv2.imread(task[1])
-        
-        h,w,_ = image.shape
-        print(">> SPLIT >> image shape", h, w, image.shape)
-        # h, w, _ = image.shape
-        # image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)   
-        mp_image = ensure_image_mp(image)
+        if image is not None:
+            h,w,_ = image.shape
+            print(">> SPLIT >> image shape", h, w, image.shape)
+            # h, w, _ = image.shape
+            # image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)   
+            mp_image = ensure_image_mp(image)
+        else:
+            print(f"[process_image] NO IMAGE HERE: {task}")
+            mp_image = None
         # mp_image = mp.Image(image_format=mp.ImageFormat.SRGBA, data=cv2.cvtColor(image, cv2.COLOR_BGR2RGBA))
         # mp_image is RGB now 
         # this is for when you need to move images into a testing folder structure
@@ -1610,6 +1616,7 @@ def process_image(task):
     except Exception as e:
         print('Error:', str(e))
         print(f"[process_image] this item failed: {task}")
+        mp_image = None
 
     # print(">> SPLIT >> done imread, about to find face")
     # pr_split = print_get_split(pr_split)
@@ -2143,12 +2150,6 @@ def main():
                     if SHUTTERFOLDER not in hashed_path:
                         print(f"skipping {hashed_path}")
                         continue
-                # if site_id == 1:
-                #     # print("fixing gettyimages hash")
-                #     orig_filename = item.replace(http, "")+".jpg"
-                #     orig_filename = orig_filename.replace(".jpg.jpg", ".jpg")
-                #     d0, d02 = get_hash_folders(orig_filename)
-                #     hashed_path = os.path.join(d0, d02, orig_filename)
                 if not image_id or not site_id or not hashed_path: 
                     print("missing image_id or site_id or hashed_path", row)
                 # gets folder via the folder list, keyed with site_id integer
@@ -2168,14 +2169,6 @@ def main():
                     else:
                         task = (image_id, imagepath)
 
-                        # getting rid of isExist test for now
-                        # isExist = os.path.exists(imagepath)
-                        # print(">> SPLIT >> isExist")
-                        # split = print_get_split(split)
-                        # if isExist: 
-                        #     task = (image_id,imagepath)
-                        # else:
-                        #     print("this file is missssssssssing --------> ",imagepath)
                     tasks_to_accomplish.put(task)
                     # print("tasks_to_accomplish.put(task) ",imagepath)
 
