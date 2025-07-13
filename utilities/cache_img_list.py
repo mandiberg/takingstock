@@ -1,7 +1,10 @@
 import os
 import sys
+from pathlib import Path
+
+ROOT_GITHUB = os.path.join(Path.home(), "Documents/GitHub/facemap/")
 # caution: path[0] is reserved for script path (or '' in REPL)
-sys.path.insert(1, '/Users/michaelmandiberg/Documents/GitHub/facemap/')
+sys.path.insert(1, ROOT_GITHUB)
 from mp_db_io import DataIO
 
 ######## Michael's Credentials ########

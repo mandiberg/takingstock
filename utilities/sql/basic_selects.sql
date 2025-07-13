@@ -184,8 +184,29 @@ AND i.site_image_id = 219788407
 
 SELECT * 
 FROM Encodings e 
-Where e.image_id = 20263718
+Where e.image_id = 103077331
 ;
+
+UPDATE *
+FROM Encodings e 
+Where e.mongo_body_landmarks_3D = 1
+and e.mongo_body_landmarks IS NULL
+LIMIT 10
+;
+
+ALTER TABLE encodings
+ADD is_body3D BOOL
+;
+
+UPDATE Encodings
+SET is_body3D = 1
+Where mongo_body_landmarks_3D = 1
+and mongo_body_landmarks IS NULL
+LIMIT 1000000
+;
+
+
+
 
 USE stock;
 SELECT * 

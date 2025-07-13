@@ -50,7 +50,7 @@ class SortPose:
         self.BRUTEFORCE = False
         self.use_3D = use_3D
         # print("init use_3D",self.use_3D)
-        self.CUTOFF = 80 # DOES factor if ONE_SHOT
+        self.CUTOFF = 200 # DOES factor if ONE_SHOT
         self.ORIGIN = 0
         self.this_nose_bridge_dist = self.NOSE_BRIDGE_DIST = None # to be set in first loop, and sort.this_nose_bridge_dist each time
 
@@ -107,7 +107,11 @@ class SortPose:
         self.EXPAND_SIZE = (25000,25000) # full body
         # self.EXPAND_SIZE = (10000,10000) # regular
         # self.EXPAND_SIZE = (6400,6400)
-        self.BGCOLOR = [255,255,255]
+        if self.EXPAND_SIZE[0] == 25000:
+            self.EXISTING_CROPABLE_DIM = 8288
+        else:
+            self.EXISTING_CROPABLE_DIM = None
+            print(f"   XXX ERROR XXX NEED TO SET EXISTING_CROPABLE_DIM for {self.EXPAND_SIZE[0]}")
         # self.BGCOLOR = [0,0,0]
         self.ONE_SHOT = ONE_SHOT
         self.JUMP_SHOT = JUMP_SHOT
@@ -335,7 +339,7 @@ class SortPose:
             print("setting face_height_output to 1.925/1.85")
             self.face_height_output = self.face_height_output*(1.925/1.85)
             self.output_dims = (1920,1920)
-        else:            
+        else:
             # self.face_height_output = face_height_output
             # takes base image size and multiplies by avg of multiplier
             self.output_dims = (int(self.face_height_output*(self.image_edge_multiplier[1]+self.image_edge_multiplier[3])/2),int(self.face_height_output*(self.image_edge_multiplier[0]+self.image_edge_multiplier[2])/2))
@@ -920,7 +924,9 @@ class SortPose:
         return nose_bridge_dist
 
     def get_image_face_data(self,image, faceLms, bbox):
-        
+
+        if self.VERBOSE: print("faceLms type", type(faceLms))
+        if self.VERBOSE: print("bbox type", type(bbox))
         self.image = image
         self.h = self.image.shape[0]
         self.w = self.image.shape[1]
@@ -2914,3 +2920,20 @@ class SortPose:
 
         # Return the sorted list of zero indices
         return sorted_zero_indices_list
+
+
+# Mass Build file management stuff
+
+    def trim_top_crop(self, image, amount=.25):
+        height, width = image.shape[:2]
+        output_trim = int(self.EXISTING_CROPABLE_DIM * amount)
+        if height == (self.EXISTING_CROPABLE_DIM-output_trim) and width == self.EXISTING_CROPABLE_DIM:
+            print(f"Already cropped:")
+            return None
+        elif height == self.EXISTING_CROPABLE_DIM and width == self.EXISTING_CROPABLE_DIM:
+            # remove output_trim pixels from the top, no changes to the width
+            cropped_img = image[output_trim:, :width]
+            return cropped_img
+        else:
+            print(f"Image dimensions do not match expected: {height}x{width}")
+            return None

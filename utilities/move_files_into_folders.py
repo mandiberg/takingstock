@@ -6,9 +6,11 @@ import threading
 import queue
 import sys
 import csv
+from pathlib import Path
 
+ROOT_GITHUB = os.path.join(Path.home(), "Documents/GitHub/facemap/")
 # caution: path[0] is reserved for script path (or '' in REPL)
-sys.path.insert(1, '/Users/michaelmandiberg/Documents/GitHub/facemap/')
+sys.path.insert(1, ROOT_GITHUB)
 
 # import file
 
@@ -25,7 +27,7 @@ io = DataIO()
 
 # (does not leave original file in place)
 # if False it will not delete the original file
-MOVE_DELETE_ORIGINAL = False
+MOVE_DELETE_ORIGINAL = True
 
 # testname = "woman-in-a-music-concert-picture-id505111652.jpg"
 # # PATH= os.path.join(os.environ['HOME'], "Documents/projects-active/facemap_production/gettyimages") 
@@ -33,7 +35,7 @@ MOVE_DELETE_ORIGINAL = False
 # PATH = "/Volumes/SSD4green/images_shutterstock2"
 # NEWPATH = "/Volumes/RAID54/images_shutterstock"
 
-PATH = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/test_orig"
+PATH = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/body3D_segmentbig_useall256"
 NEWPATH = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/test_moved"
 
 ALL_IN_ONE_FOLDER = False # if False it will walk through all folders inside of PATH
@@ -84,8 +86,8 @@ def make_hash_folders():
 
     #setup alphabet list
     #long to crate full directory structure
-    alphabet = 'A B C D E F G H I J K L M N O P Q R S T U V W X Y Z 0 1 2 3 4 5 6 7 8 9 0'  
-    alphabet2 = 'A B C D E F G H I J K L M N O P Q R S T U V W X Y Z 0 1 2 3 4 5 6 7 8 9 0'  
+    alphabet = 'A B C D E F 0 1 2 3 4 5 6 7 8 9 0'  
+    alphabet2 = 'A B C D E F 0 1 2 3 4 5 6 7 8 9 0'  
     # alphabet = 'A B C 0 1 2'   #short alphabet for testing purposes
     # alphabet2 = 'A B C 0 1 2'   #short alphabet for testing purposes
     alphabet = alphabet.split()
@@ -115,9 +117,9 @@ make_hash_folders()
 
 #setup alphabet list
 #long to crate full directory structure
-alphabet = 'A B C D E F G H I J K L M N O P Q R S T U V W X Y Z 0 1 2 3 4 5 6 7 8 9 0'  
+alphabet = 'A B C D E F 0 1 2 3 4 5 6 7 8 9 0'  
 # alphabet = '0'  
-alphabet2 = 'A B C D E F G H I J K L M N O P Q R S T U V W X Y Z 0 1 2 3 4 5 6 7 8 9 0'  
+alphabet2 = 'A B C D E F 0 1 2 3 4 5 6 7 8 9 0'  
 # alphabet = 'A B C 0 1 2'   #short alphabet for testing purposes
 # alphabet2 = 'A B C 0 1 2'   #short alphabet for testing purposes
 alphabet = alphabet.split()
@@ -152,10 +154,10 @@ def threaded_process_files():
         else:
             if MOVE_DELETE_ORIGINAL:
                 shutil.move(currentpathfile, newpathfile)
-                print("moved to: ", newpathfile)
+                print(f"moved {currentpathfile} to: {newpathfile}")
             else:
                 shutil.copy(currentpathfile,  newpathfile)
-                print("copied (w/o deleting) to: ", newpathfile)
+                print(f"copied {currentpathfile} (w/o deleting) to: {newpathfile}")
 
 
         with lock:

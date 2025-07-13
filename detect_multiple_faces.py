@@ -58,7 +58,7 @@ SAVE_ORIG = False
 DRAW_BOX = False
 MINSIZE = 500
 SLEEP_TIME=0
-VERBOSE = True
+VERBOSE = False
 
 # only for triage
 sortfolder ="getty_test"
@@ -117,7 +117,7 @@ POSE_ID = 0
 # MAIN_FOLDER = "/Volumes/RAID54/images_shutterstock"
 # MAIN_FOLDER = "/Volumes/OWC5/images_adobe"
 # MAIN_FOLDER = "/Volumes/ExFAT_SSD4_/images_adobe"
-MAIN_FOLDER = "/Volumes/OWC5/images_shutterstock"
+MAIN_FOLDER = "/Volumes/OWC4/images_shutterstock"
 # MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/afripics_v2/images"
 
 # MAIN_FOLDER = "/Volumes/SSD4/images_getty_reDL"
@@ -1059,7 +1059,8 @@ def process_image_find_body_subroutine(image_id, image, bbox):
             # this is to check to see if there are body lms, or if it is just face lms
             body_landmarks = pickle.loads(existing_body["body_landmarks"])
         except:
-            print("no existing body_landmarks, actually", image_id)
+            pass
+            if VERBOSE: print("no existing body_landmarks, actually", image_id)
     if existing_worldbody is not None and "body_world_landmarks" in existing_worldbody: 
         body_world_landmarks = pickle.loads(existing_worldbody["body_world_landmarks"])
     if VERBOSE:
@@ -1315,7 +1316,7 @@ def save_body_hands_mysql_and_mongo(session, image_id, image, bbox_dict, body_la
                     {"image_id": image_id},
                     {"$set": {"body_landmarks": pickle.dumps(body_landmarks)}}
                 )
-                print("----------- >>>>>>>>   mongo body_landmarks updated:", image_id)
+                if VERBOSE: print("----------- >>>>>>>>   mongo body_landmarks updated:", image_id)
             else:
                 # get encoding_id for mongo insert_one
                 encoding_id_results = session.query(Encodings.encoding_id).filter(Encodings.image_id == image_id).first()
@@ -1324,7 +1325,7 @@ def save_body_hands_mysql_and_mongo(session, image_id, image, bbox_dict, body_la
                 mongo_collection.insert_one(
                     {"image_id": image_id, "encoding_id":encoding_id, "body_landmarks": pickle.dumps(body_landmarks)}
                 )
-                print("----------- >>>>>>>>   mongo body_landmarks inserted:", image_id)
+                if VERBOSE: print("----------- >>>>>>>>   mongo body_landmarks inserted:", image_id)
 
         ### save normalized landmarks, will always be None if reprocessing, because no nose_pixel_pos?        
         if n_landmarks:
@@ -1569,7 +1570,7 @@ def process_image_bodylms(task):
 
 
 def process_image(task):
-    print("process_image this is where the action is")
+    if VERBOSE: print("process_image this is where the action is")
     # print("processing task:", task)
     pr_split = time.time()
     def save_image_triage(image,df):
@@ -1597,17 +1598,17 @@ def process_image(task):
     # pr_split = print_get_split(pr_split)
 
     try:
-        print(">> SPLIT >> trying to read image:", cap_path)
+        if VERBOSE: print(">> SPLIT >> trying to read image:", cap_path)
         # i think i'm doing this twice. I should just do it here. 
         image = cv2.imread(task[1])
         if image is not None:
             h,w,_ = image.shape
-            print(">> SPLIT >> image shape", h, w, image.shape)
+            if VERBOSE: print(">> SPLIT >> image shape", h, w, image.shape)
             # h, w, _ = image.shape
             # image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)   
             mp_image = ensure_image_mp(image)
         else:
-            print(f"[process_image] NO IMAGE HERE: {task}")
+            if VERBOSE: print(f"[process_image] NO IMAGE HERE: {task}")
             mp_image = None
         # mp_image = mp.Image(image_format=mp.ImageFormat.SRGBA, data=cv2.cvtColor(image, cv2.COLOR_BGR2RGBA))
         # mp_image is RGB now 

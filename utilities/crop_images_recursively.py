@@ -2,12 +2,28 @@ import os
 import cv2
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
-ROOT_FOLDER_PATH = '/Volumes/OWC4/segment_images'
-FOLDER_NAME = "cluster24_126_1745979928.328164"
+ROOT_FOLDER_PATH = '/Users/michaelmandiberg/Documents/projects-active/facemap_production/'
+FOLDER_NAME = "body3D_testcrop"
 FOLDER_PATH = os.path.join(ROOT_FOLDER_PATH, FOLDER_NAME)
 
 OUTPUT_DIMS = 4000
 
+OUTPUT_TRIM = 2072
+EXISTING_DIM = 8288
+
+def trim_top_crop(image):
+    height, width = image.shape[:2]
+    if height == (EXISTING_DIM-OUTPUT_TRIM) and width == EXISTING_DIM:
+        print(f"Already cropped:")
+        return None
+    elif height == EXISTING_DIM and width == EXISTING_DIM:
+        # remove OUTPUT_TRIM pixels from the top, no changes to the width
+        cropped_img = image[OUTPUT_TRIM:, :width]
+        return cropped_img
+    else:
+        print(f"Image dimensions do not match expected: {height}x{width}")
+        return None
+    
 def center_crop(image, output_size):
     height, width = image.shape[:2]
     start_x = (width - output_size) // 2
@@ -21,7 +37,24 @@ def process_image(image_path):
             return f"Could not read: {image_path}"
 
         height, width = img.shape[:2]
-        if width > OUTPUT_DIMS and height > OUTPUT_DIMS:
+        # return f"Processing {image_path}: {width}x{height}"
+        if height == EXISTING_DIM or width == EXISTING_DIM:
+            # If the image is already at the expected dimension, we can trim the top
+            img = trim_top_crop(img)
+            if img is None:
+                return f"already cropped or bad dims: {image_path}"
+            else:
+                cv2.imwrite(image_path, img)
+            return f"Cropped and saved: {image_path}"
+        # if height == (EXISTING_DIM-OUTPUT_TRIM) and width == EXISTING_DIM:
+        #     return f"Already cropped: {image_path}"
+        # elif height == EXISTING_DIM and width == EXISTING_DIM:
+        #     # remove OUTPUT_TRIM pixels from the top, no changes to the width
+        #     cropped_img = img[OUTPUT_TRIM:, :width]
+        #     cv2.imwrite(image_path, cropped_img)
+        #     return f"Cropped and saved: {image_path}"
+
+        elif width > OUTPUT_DIMS and height > OUTPUT_DIMS:
             cropped_img = center_crop(img, OUTPUT_DIMS)
             cv2.imwrite(image_path, cropped_img)
             return f"Cropped and saved: {image_path}"
