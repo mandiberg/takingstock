@@ -67,6 +67,14 @@ class DataIO:
             self.NUMBER_OF_PROCESSES = 8
             self.NUMBER_OF_PROCESSES_GPU = 16
 
+            NML_GITHUB = "/Users/michaelmandiberg/Documents/GitHub/takingstock/"
+            # check to see which one exists
+            if os.path.exists(NML_GITHUB):
+                self.db["pass"] = "password"
+                self.db["unix_socket"] = "/tmp/mysql.sock"
+                self.NUMBER_OF_PROCESSES = 24
+                self.NUMBER_OF_PROCESSES_GPU = 60
+
             login = os.getlogin()
             print(f"Running as user: {login}")
             if login == "change_to_tenchloginname":
