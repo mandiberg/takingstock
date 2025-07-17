@@ -1,16 +1,31 @@
+# Python virtual environments
+.venv/
+venv/
+ENV/
+env/
+py310env/
+env.bak/
+venv.bak/
+
+# Ignore scratch, outputs, and input_csvs folders
+scratch/
+outputs/
+input_csvs/
+
+# macOS system files
+.DS_Store
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
 *$py.class
-API.py
 
-# ML models , it downloads automiatically anyway
-yolov8*
 # C extensions
 *.so
 
 # Distribution / packaging
 .Python
+env/
 build/
 develop-eggs/
 dist/
@@ -22,13 +37,16 @@ lib64/
 parts/
 sdist/
 var/
-wheels/
-pip-wheel-metadata/
-share/python-wheels/
 *.egg-info/
 .installed.cfg
 *.egg
-MANIFEST
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env.bak/
+venv.bak/
 
 # PyInstaller
 #  Usually these files are written by a python script from a template
@@ -37,6 +55,7 @@ MANIFEST
 *.spec
 
 # Installer logs
+debug.log
 pip-log.txt
 pip-delete-this-directory.txt
 
@@ -50,122 +69,70 @@ htmlcov/
 nosetests.xml
 coverage.xml
 *.cover
-*.py,cover
 .hypothesis/
 .pytest_cache/
 
-# Translations
-*.mo
-*.pot
-
-# Django stuff:
-*.log
-local_settings.py
-db.sqlite3
-db.sqlite3-journal
-
-# Flask stuff:
-instance/
-.webassets-cache
-
-# Scrapy stuff:
-.scrapy
-
-# Sphinx documentation
-docs/_build/
-
-# PyBuilder
-target/
-
 # Jupyter Notebook
 .ipynb_checkpoints
-
-# IPython
-profile_default/
-ipython_config.py
 
 # pyenv
 .python-version
 
 # pipenv
-#   According to pypa/pipenv#598, it is recommended to include Pipfile.lock in version control.
-#   However, in case of collaboration, if having platform-specific dependencies or dependencies
-#   having no cross-platform support, pipenv may install dependencies that don't work, or not
-#   install all needed dependencies.
-#Pipfile.lock
-
-# PEP 582; used by e.g. github.com/David-OConnor/pyflow
-__pypackages__/
-
-# Celery stuff
-celerybeat-schedule
-celerybeat.pid
-
-# SageMath parsed files
-*.sage.py
-
-# Environments
-.env
-.venv
-env/
-venv/
-ENV/
-env.bak/
-venv.bak/
-
-# Spyder project settings
-.spyderproject
-.spyproject
-
-# Rope project settings
-.ropeproject
-
-# mkdocs documentation
-/site
+Pipfile.lock
 
 # mypy
 .mypy_cache/
 .dmypy.json
-dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# pytype static type analyzer
+.pytype/
+
+# Cython debug symbols
+cython_debug/
+
+# VS Code
+.vscode/
+
+# macOS
 .DS_Store
-scratch.py
-image.png
-countout.csv
-db_backup_stock_june18.sql
-performance_notes.txt
-*.wav
-utilities/sql/Scripts alias
-sound/barks/output_file.csv
-sound/barks/output_file.csv
-upscale.py
-upscale4x.py
-sound/API_11labs.py
-topic_model/BOW_lda_corpus.mm.index
-topic_model/BOW_lda_corpus.mm
-topic_model/dictionary.dict
-topic_model/TFIDF_lda_corpus.mm
-topic_model/TFIDF_lda_corpus.mm.index
-*.id2word
-*.index
-*.state
-*.npy
-*.mm
-*.dict
-model_files/model_affect/model
-model_files/model_isface/display64.txt
-model_files/model_isface/display64.xlsx
-model_files/model_isface/model
-model_files/model_isface/topics64_topicnames.csv
-model_files/model_isnotface/count_isnotface_model.xlsx
-model_files/model_isnotface/model
-model_files/model_isnotface/reset_these_no_image.txt
-model_files/model_isnotface/topics_isnotface_16.txt
-model_files/model_isnotface/topics_isnotface_64.csv
-model_files/model_isnotface/topics_isnotface_64.txt
-model_files/model_isnotface/topics_isnotface_64_jan10_tempworking.csv
-model_files/model_isnotface/topics_isnotface_96.txt
-*.tflite
-*.task
+.AppleDouble
+.LSOverride
+
+# Thumbnails
+._*
+
+# Files that might appear in the root of a volume
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+
+# Directories potentially created on remote AFP share
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
+
+# Data, models, and outputs
+outputs/
+model_files/
+model_files 2/
+input_csvs/
+analysis/plots/
+
+# Misc
+*.bak
+*.tmp
+*.swp
+*.swo
+*.orig
+
+# Ignore secret/config files
+config.py
