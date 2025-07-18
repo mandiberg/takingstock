@@ -16,10 +16,10 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 
 #global vars
-input_path = "input_csvs/"
+input_path = "../input_csvs/list/"
 
 #CSV Vars
-inputCSV = 'input_csvs/topic_13_counts.csv'
+inputCSV = '../input_csvs/list/topic_13_counts.csv'
 number_of_topics = 37*2 #37 lines per page, 2 pages per spread, one spread per csv
 csv_list = {}
 
@@ -31,7 +31,7 @@ BLACK_COUNT = 10000
 
 # div count by 1000, if count_color > 1 count_color = 1
 # PDF Vars
-outputPDF = 'outputs/list/output.pdf'
+outputPDF = '../outputs/list/output.pdf'
 page_size = [432, 648] #in points, 72 points = 1 inch
 #margin settings (in points) (72 points = 1 inch)
 INNER_MARGIN = 90  # 1.25 inch
@@ -39,8 +39,8 @@ OUTER_MARGIN = 54  # 0.75 inch
 TOP_MARGIN = 54
 BOTTOM_MARGIN = 54
 font_size = 12
-font_file = 'fonts/CrimsonText-Regular.ttf'
-footer_font_file = 'fonts/CrimsonText-SemiBold.ttf'
+font_file = '../fonts/CrimsonText-Regular.ttf'
+footer_font_file = '../fonts/CrimsonText-SemiBold.ttf'
 footer_text = "TOPIC: "  # Base text, topic number will be added dynamically
 
 # take the top number_of_topics and put them in a new dataframe

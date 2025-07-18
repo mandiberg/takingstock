@@ -20,20 +20,19 @@ from gensim import corpora
 from nltk.stem import WordNetLemmatizer, SnowballStemmer
 
 # ---------- CONFIG -----------------------------------------------------------
-INPUT_CSV   = "word_cloud_inputs/topic_57_counts.csv"
-INPUT_PATH  = "word_cloud_inputs/"
-STOPWORD_PATH = "stopword_files/"
-MODEL_PATH = 'model/'
-OUTPUT_PATH = "outputs/word_cloud/"
+INPUT_PATH  = "../input_csvs/word_cloud/"
+STOPWORD_PATH = "../model_files/"
+MODEL_PATH = '../model_files/'
+OUTPUT_PATH = "../outputs/word_cloud/"
 
 PDF_DATA = {}
-OUT_PDF     = "outputs/word_cloud/wordcloud"  # final file
-FONT_FILE   = "fonts/CrimsonText-Regular.ttf"
+OUT_PDF     = "../outputs/word_cloud/wordcloud"  # final file
+FONT_FILE   = "../fonts/CrimsonText-Regular.ttf"
 FONT_NAME   = "CrimsonText"
 PAGE_SIZE   = [432, 648]  
 
 #batch Processing
-BATCH_PROCESS = True
+BATCH_PROCESS = False
 PROCESS_SELECT = [27]
 CSV_LIST = {}
 
@@ -371,6 +370,8 @@ for csv in CSV_LIST:
     temp_out = OUT_PDF+CSV_NUMBER+'.pdf'
     c = canvas.Canvas(OUT_PDF+CSV_NUMBER+'.pdf', pagesize=PAGE_SIZE)
     img = ImageReader(tmp_png.name)
+    print("c:" ,c)
+    print("c type", type(c))
 
     # Fit image to page (keep aspect ratio, centred)
     img_width, img_height = wc.to_image().size
