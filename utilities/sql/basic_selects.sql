@@ -75,7 +75,7 @@ AND it.topic_id = 32
 ;
 
 -- topic only, bodies as t distance
-SELECT i.site_name_id, i.imagename, i.description
+SELECT i.site_name_id, i.imagename
 FROM Images i 
 JOIN encodings 	e ON i.image_id = e.image_id
 JOIN ImagesTopics it ON it.image_id = e.image_id
@@ -87,16 +87,36 @@ LIMIT 5000
 
 SELECT *
 FROM Encodings i 
-WHERE i.image_id = 24940154
+WHERE i.image_id = 1442
 
-SELECT i.site_name_id, i.imagename
+SELECT *
+FROM NMLimages
+WHERE image_id = 94116465
+;
+
+
+SELECT i.site_name_id, i.imagename, i.description
 FROM Images i 
 JOIN encodings 	e ON i.image_id = e.image_id
-AND e.is_face = 0 AND e.is_feet = 1
+AND e.is_face = 0 AND e.is_feet = 1 AND e.is_face_no_lms = 1
 LIMIT 100
 
 ;
 
+
+SELECT Images.image_id, Images.h, Images.w, Encodings.bbox, Encodings.mongo_body_landmarks
+FROM Encodings
+LEFT JOIN Images ON Images.image_id = Encodings.image_id
+WHERE Encodings.bbox IS NOT NULL
+  AND Encodings.two_noses IS NULL
+  AND Encodings.mongo_body_landmarks = 1
+  AND Encodings.mongo_body_landmarks_norm IS NULL
+LIMIT 20;
+
+SELECT COUNT(*)
+FROM  encodings e 
+WHERE e.is_face = 0 AND e.is_body = 1 AND e.is_face_no_lms = 0
+;
 
 
 SELECT *

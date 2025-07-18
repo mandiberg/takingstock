@@ -118,7 +118,7 @@ POSE_ID = 0
 # MAIN_FOLDER = "/Volumes/RAID54/images_shutterstock"
 # MAIN_FOLDER = "/Volumes/LaCie/images_istock"
 # MAIN_FOLDER = "/Volumes/ExFAT_SSD4_/images_adobe"
-MAIN_FOLDER = "/Volumes/OWC5/images_shutterstock"
+MAIN_FOLDER = "/Volumes/OWC4/images_shutterstock"
 # MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/afripics_v2/images"
 
 # MAIN_FOLDER = "/Volumes/SSD4/images_getty_reDL"

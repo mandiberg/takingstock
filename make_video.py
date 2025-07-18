@@ -42,13 +42,14 @@ SegmentHelper_name = None
 # SegmentHelper_name = 'SegmentHelper_june2025_nmlGPU300k'
 # SATYAM, this is MM specific
 # for when I'm using files on my SSD vs RAID
-IS_SSD = False
+IS_SSD = True
 #IS_MOVE is in move_toSSD_files.py
 
 # I/O utils
 io = DataIO(IS_SSD)
 db = io.db
-CSV_FOLDER = os.path.join(io.ROOT_DBx, "body3D_segmentbig_useall256_CSVs_MMtest")
+# CSV_FOLDER = os.path.join(io.ROOT_DBx, "body3D_segmentbig_useall256_CSVs_MMtest")
+CSV_FOLDER = os.path.join(io.ROOT_DBx, "body3D_segmentbig_useall256_CSVs_test")
 # overriding DB for testing
 # io.db["name"] = "stock"
 # io.db["name"] = "ministock"
@@ -1218,9 +1219,9 @@ def compare_images(last_image, img, face_landmarks, bbox):
             # cropp the 25K image back down to 10K
             # does this based on the incremental dimensions
             cropped_image = sort.crop_whitespace(cropped_image)
-        else: 
-            # trim the top 25% of the image
-            cropped_image = sort.trim_top_crop(cropped_image, 0.25)
+        # else: 
+        #     # trim the top 25% of the image
+        #     cropped_image = sort.trim_top_crop(cropped_image, 0.25)
         is_inpaint = False
     else:
         cropped_image, is_inpaint = sort.crop_image(img, face_landmarks, bbox)
@@ -2105,6 +2106,7 @@ def main():
             if "face_landmarks" in df.columns:
                 df["face_landmarks"] = df["face_landmarks"].apply(io.str_to_landmarks)
             df['bbox'] = df['bbox'].apply(lambda x: io.unstring_json(x))
+            df['folder'] = df['folder'].apply(lambda x: os.path.join(io.ROOT, os.path.basename(x)))
             # Process the dataframe as needed
             return df
 
