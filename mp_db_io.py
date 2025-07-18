@@ -77,8 +77,11 @@ class DataIO:
 
             login = os.getlogin()
             print(f"Running as user: {login}")
-            if login == "change_to_tenchloginname":
-                # redefine any ROOT paths as necessary. 
+            if login == "tenchc":
+                self.ROOTSSD = os.path.join(self.home, "Documents/GitHub/taking_stock_production")
+                self.ROOT_PROD = os.path.join(self.home, "Documents/GitHub/taking_stock_production/segment_images")
+                self.ROOT  = self.ROOT4 = self.ROOT18 = self.ROOT54 = self.ROOT_PROD
+                print("io.rootdbx", self.ROOT_DBx)
                 # and specific db dict info, when we get to that point
                 pass
 
@@ -490,3 +493,4 @@ class DataIO:
             except Exception as e2:
                 print(f"Failed to parse as JSON format: {e2}")
                 return None
+

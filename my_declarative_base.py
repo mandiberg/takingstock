@@ -85,8 +85,7 @@ class WanderingImages(Base):
 
 class NMLImages(Base):
     __tablename__ = 'nmlimages'
-    nml_id   = Column(Integer,  primary_key=True)
-    image_id   = Column(Integer, ForeignKey('images.image_id'))
+    image_id   = Column(Integer, ForeignKey('images.image_id'), primary_key=True)
     is_nml_db  = Column(Boolean)
 
 class Keywords(Base):

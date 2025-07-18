@@ -30,8 +30,8 @@ import csv
 #mine
 from mp_db_io import DataIO
 ###########
-import gensim
-from gensim import corpora
+import gensim_test
+from gensim_test import corpora
 from gensim.test.utils import get_tmpfile
 from gensim.utils import simple_preprocess
 from gensim.parsing.preprocessing import STOPWORDS
@@ -41,7 +41,7 @@ from nltk.stem.porter import *
 import os
 
 import nltk
-from gensim import corpora, models
+from gensim_test import corpora, models
 from pprint import pprint
 
 #nltk.download('wordnet') ##only first time
@@ -299,7 +299,7 @@ def preprocess(text, MY_STOPWORDS):
     text = clarify_keywords(text.lower())
     global_counter += 1
 
-    for token in gensim.utils.simple_preprocess(text):
+    for token in gensim_test.utils.simple_preprocess(text):
         if token not in MY_STOPWORDS and len(token) > 3:
             result.append(lemmatize_stemming(token))
     return result
@@ -352,7 +352,7 @@ def LDA_model(num_topics):
     print(f"Original corpus size: {len(corpus)} documents")
     print(f"Filtered corpus size: {len(filtered_corpus)} documents")
     print(f"Removed {len(corpus) - len(filtered_corpus)} documents with fewer than {MIN_TOKEN_LENGTH} tokens")
-    lda_model = gensim.models.LdaMulticore(corpus, num_topics=num_topics, id2word=dictionary, passes=2, workers=NUMBER_OF_PROCESSES)
+    lda_model = gensim_test.models.LdaMulticore(corpus, num_topics=num_topics, id2word=dictionary, passes=2, workers=NUMBER_OF_PROCESSES)
     # alpha=(50/num_topics), eta = 0.1,
     lda_model.save(MODEL_PATH)
     print("processed all")
@@ -530,7 +530,7 @@ def calc_optimum_topics():
     num_topics_list=[30,40,50]
     coher_val_list=np.zeros(len(num_topics_list))
     for i,num_topics in enumerate(num_topics_list):
-        lda_model = gensim.models.LdaMulticore(corpus, num_topics=num_topics, id2word=dictionary, passes=2, workers=NUMBER_OF_PROCESSES)
+        lda_model = gensim_test.models.LdaMulticore(corpus, num_topics=num_topics, id2word=dictionary, passes=2, workers=NUMBER_OF_PROCESSES)
         cm = CoherenceModel(model=lda_model, corpus=corpus, coherence='u_mass')
         coher_val_list[i]=cm.get_coherence()
         print("num_topics: ",num_topics,"coherence: ",coher_val_list[i])
@@ -601,7 +601,7 @@ def gen_corpus():
     token_lists = [[token for token in doc if token not in SKIP_TOKEN_LIST] for doc in token_lists]
 
     if VERBOSE: print("token_lists first entry: ",token_lists[:1])
-    dictionary = gensim.corpora.Dictionary(token_lists)
+    dictionary = gensim_test.corpora.Dictionary(token_lists)
     if VERBOSE: print("gen_corpus: created dictionary")
     dictionary.filter_extremes(no_below=100, no_above=0.5, keep_n=100000)
     if VERBOSE: print("gen_corpus: filtered extremes")
@@ -650,16 +650,16 @@ def topic_index(resultsjson):
     ###########TOPIC INDEXING#########################
     bow_corpus = corpora.MmCorpus(BOW_CORPUS_PATH)
     #dictionary = corpora.Dictionary.load(DICT_PATH)
-    lda_model_tfidf = gensim.models.LdaModel.load(MODEL_PATH)
+    lda_model_tfidf = gensim_test.models.LdaModel.load(MODEL_PATH)
     lda_dict = corpora.Dictionary.load(MODEL_PATH+'.id2word')
     if IS_AFFECT:
         print(f"IS_AFFECT, AFFECT_LIST: {AFFECT_LIST[0]} ALL_KEYWORDS: {ALL_KEYWORDS[0]}")
         # subtract the affect keys from the ALL keywords
         NOT_AFFECT_LIST = [word for word in ALL_KEYWORDS.split(',') if word not in AFFECT_LIST]
         print("NOT_AFFECT_LIST: ", NOT_AFFECT_LIST[0:50])
-        MY_STOPWORDS = gensim.parsing.preprocessing.STOPWORDS.union(set(NOT_AFFECT_LIST))        
+        MY_STOPWORDS = gensim_test.parsing.preprocessing.STOPWORDS.union(set(NOT_AFFECT_LIST))        
     else:
-        MY_STOPWORDS = gensim.parsing.preprocessing.STOPWORDS.union(set(GENDER_LIST+ETH_LIST+AGE_LIST))
+        MY_STOPWORDS = gensim_test.parsing.preprocessing.STOPWORDS.union(set(GENDER_LIST+ETH_LIST+AGE_LIST))
 
     print("model loaded successfully")
     while True:
