@@ -59,6 +59,7 @@ DRAW_BOX = False
 MINSIZE = 500
 SLEEP_TIME=0
 VERBOSE = False
+QUIET = True
 
 # only for triage
 sortfolder ="getty_test"
@@ -108,20 +109,20 @@ switching to topic targeted
 18	afripics
 '''
 # I think this only matters for IS_FOLDER mode, and the old SQL way
-SITE_NAME_ID = 4
+SITE_NAME_ID = 2
 # 2, shutter. 4, istock
 # 7 pond5, 8 123rf
 POSE_ID = 0
 
 # folder doesn't matter if IS_FOLDER is False. Declared FAR below. 
 # MAIN_FOLDER = "/Volumes/RAID54/images_shutterstock"
-MAIN_FOLDER = "/Volumes/LaCie/images_istock"
+# MAIN_FOLDER = "/Volumes/LaCie/images_istock"
 # MAIN_FOLDER = "/Volumes/ExFAT_SSD4_/images_adobe"
-# MAIN_FOLDER = "/Volumes/OWC4/images_shutterstock"
+MAIN_FOLDER = "/Volumes/OWC5/images_shutterstock"
 # MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/afripics_v2/images"
 
 # MAIN_FOLDER = "/Volumes/SSD4/images_getty_reDL"
-BATCH_SIZE = 5000 # Define how many from each folder in each batch
+BATCH_SIZE = 1000 # Define how many from each folder in each batch
 LIMIT = 1000
 
 #temp hack to go 1 subfolder at a time
@@ -138,7 +139,7 @@ IS_SSD=True
 # for HDD topic, start at 28714744
 BODYLMS = True
 HANDLMS = True
-REDO_BODYLMS_3D = False # this makes it skip hands and YOLO
+REDO_BODYLMS_3D = True # this makes it skip hands and YOLO
 if REDO_BODYLMS_3D: HANDLMS = False # if doing 3D redo, don't do hands
 TOPIC_ID = None
 # TOPIC_ID = [24, 29] # adding a TOPIC_ID forces it to work from SegmentBig_isface, currently at 7412083
@@ -1207,7 +1208,7 @@ def save_body_hands_mysql_and_mongo(session, image_id, image, bbox_dict, body_la
     if is_feet is None or is_feet is False: is_feet = False
     else: is_feet = True
 
-    print("going to save", image_id, "is_body", is_body, "is_hands", is_hands, "is_feet", is_feet, "mongo_body_landmarks", mongo_body_landmarks, "mongo_body_landmarks_3D", mongo_body_landmarks_3D)
+    if not QUIET: print("going to save", image_id, "is_body", is_body, "is_hands", is_hands, "is_feet", is_feet, "mongo_body_landmarks", mongo_body_landmarks, "mongo_body_landmarks_3D", mongo_body_landmarks_3D)
     
     # test to see if we have body landmarks, and need to store them ()
     if mongo_body_landmarks is not None or body_landmarks is not None:
@@ -2037,14 +2038,14 @@ def main():
                             if not result.encoding_id:
                                 # if it hasn't been encoded yet, add it to the tasks
                                 task = (result.image_id, imagepath)
-                                print(">> adding to face queue:", result.image_id, "site_image_id", site_image_id)
+                                if not QUIET: print(">> adding to face queue:", result.image_id, "site_image_id", site_image_id)
                             elif result.mongo_body_landmarks and result.mongo_body_landmarks_3D is None and REDO_BODYLMS_3D is True:
                                 # if body has been found but not 3D, add it to the tasks
-                                print(">>>> adding to 3D BODY queue:", result.image_id, "site_image_id", site_image_id)
+                                if not QUIET: print(">>>> adding to 3D BODY queue:", result.image_id, "site_image_id", site_image_id)
                                 task = (result.image_id, imagepath, result.mongo_face_landmarks, result.mongo_body_landmarks, result.bbox)
                             elif result.mongo_face_landmarks and result.mongo_body_landmarks is None:
                                 # if face has been encoded but not body, add it to the tasks
-                                print(">>>> adding to BODY queue:", result.image_id, "site_image_id", site_image_id)
+                                if not QUIET: print(">>>> adding to BODY queue:", result.image_id, "site_image_id", site_image_id)
                                 task = (result.image_id, imagepath, result.mongo_face_landmarks, result.mongo_body_landmarks, result.bbox)
                             elif result.mongo_face_landmarks and result.mongo_body_landmarks is not None:
                                 if VERBOSE: print("     xx ALREADY FULLY DONE:", result.image_id)

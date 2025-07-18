@@ -34,12 +34,12 @@ Base = declarative_base()
 VERBOSE = False
 IS_SSD = False
 
-SKIP_EXISTING = False # Skips images with a normed bbox but that have Images.h
+SKIP_EXISTING = False # Skips images with a normed bbox but that have Images.h - I think only applies to phone bbox
 USE_OBJ = 0 # select the bbox to work with
-SKIP_BODY = True # skip body landmarks. mostly you want to skip when doing obj bbox
+SKIP_BODY = False # skip body landmarks. mostly you want to skip when doing obj bbox
                 # or are just redoing hands
-REPROCESS_HANDS = True # do hands
-IS_SEGMENT_BIG = True # use SegmentBig table
+REPROCESS_HANDS = False # do hands
+IS_SEGMENT_BIG = False # use SegmentBig table. IF False, and IS_SSD is false, it will use Encodings table
 
 io = DataIO(IS_SSD)
 db = io.db
@@ -106,9 +106,9 @@ sort = SortPose(motion, face_height_output, image_edge_multiplier_sm,EXPAND, ONE
 # Create a session
 session = scoped_session(sessionmaker(bind=engine))
 
-LIMIT= 200000
+LIMIT= 2000
 # Initialize the counter
-counter = 0
+counter = 2000
 
 # Number of threads
 #num_threads = io.NUMBER_OF_PROCESSES
@@ -128,6 +128,12 @@ def get_shape(target_image_id):
         select_image_ids_query = (
             select(SegmentBig.site_name_id, SegmentBig.imagename)
             .filter(SegmentBig.image_id == target_image_id)
+        )
+    elif not IS_SEGMENT_BIG and not IS_SSD:
+        # use images table
+        select_image_ids_query = (
+            select(Images.site_name_id, Images.imagename)
+            .filter(Images.image_id == target_image_id)
         )
     else:
         select_image_ids_query = (
@@ -304,6 +310,12 @@ def get_face_height_bbox(target_image_id):
             select(SegmentBig.bbox)
             .filter(SegmentBig.image_id == target_image_id)
         )
+    elif not IS_SEGMENT_BIG and not IS_SSD:
+        # use Encodings table
+        select_image_ids_query = (
+            select(Encodings.bbox)
+            .filter(Encodings.image_id == target_image_id)
+        )
     else:
         select_image_ids_query = (
             select(SegmentTable.bbox)
@@ -326,10 +338,9 @@ def insert_shape(target_image_id,shape):
         Images_entry.w=shape[1]
         if VERBOSE:
             print("image_id:", Images_entry.image_id,"height:", Images_entry.h,"width:", Images_entry.w)
-
-            
     session.commit()
     return
+
 def get_phone_bbox(target_image_id):
     select_image_ids_query = (
         select(PhoneBbox.bbox_26)
@@ -369,10 +380,13 @@ def calc_nlm(image_id_to_shape, lock, session):
 
 
     # get all the landmarks
-    face_encodings68, face_landmarks, body_landmarks, body_landmarks_normalized, hand_results = io.get_encodings_mongo(target_image_id)
+    face_encodings68, face_landmarks, body_landmarks, body_landmarks_normalized, body_landmarks_3D, hand_results = io.get_encodings_mongo(target_image_id)
 
-
+    if face_landmarks is None:
+        print("FACE LANDMARK NOT FOUND 404, bailing for this one ", target_image_id)
+        return
     face_height=get_face_height_face_lms(target_image_id,bbox, face_landmarks)
+    
     if sort.VERBOSE: print("face_height from lms",face_height)
     nose_pixel_pos_face = sort.get_face_2d_point(1)
     if sort.VERBOSE: print("nose_pixel_pos from face",nose_pixel_pos_face)
@@ -567,7 +581,8 @@ if USE_OBJ == 26:
         filter(PhoneBbox.conf_26 != -1).\
         limit(LIMIT)
 
-elif REPROCESS_HANDS == True:
+elif REPROCESS_HANDS == True and IS_SEGMENT_BIG == True:
+    print("doing HANDS using SegmentTable")
     distinct_image_ids_query = select(Images.image_id.distinct(), Images.h, Images.w, SegmentTable.bbox).\
         outerjoin(SegmentTable,Images.image_id == SegmentTable.image_id).\
         filter(SegmentTable.bbox != None).\
@@ -575,7 +590,17 @@ elif REPROCESS_HANDS == True:
         filter(SegmentTable.mongo_hand_landmarks == 1).\
         filter(SegmentTable.mongo_hand_landmarks_norm.is_(None)).\
         limit(LIMIT)
-else:
+elif REPROCESS_HANDS == True and IS_SEGMENT_BIG == False:
+    print("doing HANDS using Encodings")
+    distinct_image_ids_query = select(Images.image_id.distinct(), Images.h, Images.w, Encodings.bbox).\
+        outerjoin(Images, Images.image_id == Encodings.image_id).\
+        filter(Encodings.bbox != None).\
+        filter(Encodings.two_noses.is_(None)).\
+        filter(Encodings.mongo_hand_landmarks == 1).\
+        filter(Encodings.mongo_hand_landmarks_norm.is_(None)).\
+        limit(LIMIT)
+elif not SKIP_BODY and IS_SEGMENT_BIG == True:
+    print("doing BODY using SegmentBig")
     distinct_image_ids_query = select(Images.image_id.distinct(), Images.h, Images.w, SegmentTable.bbox).\
         outerjoin(SegmentTable,Images.image_id == SegmentTable.image_id).\
         filter(SegmentTable.bbox != None).\
@@ -583,6 +608,18 @@ else:
         filter(SegmentTable.mongo_body_landmarks == 1).\
         filter(SegmentTable.mongo_body_landmarks_norm.is_(None)).\
         limit(LIMIT)
+elif not SKIP_BODY and IS_SEGMENT_BIG == False:
+    # use Encodings table
+    print("doing BODY using Encodings")
+    distinct_image_ids_query = select(Images.image_id.distinct(), Images.h, Images.w, Encodings.bbox).\
+        outerjoin(Images, Images.image_id == Encodings.image_id).\
+        filter(Encodings.bbox != None).\
+        filter(Encodings.two_noses.is_(None)).\
+        filter(Encodings.mongo_body_landmarks == 1).\
+        filter(Encodings.mongo_body_landmarks_norm.is_(None)).\
+        limit(LIMIT)
+else:
+    print(f"doing something else that wasn't caught because SKIP_BODY is {SKIP_BODY}, REPROCESS_HANDS is {REPROCESS_HANDS} and IS_SEGMENT_BIG is {IS_SEGMENT_BIG}")
 
 # define SegmentHelper 
 
@@ -591,18 +628,18 @@ class SegmentHelper(Base):
     seg_image_id = Column(Integer, primary_key=True, autoincrement=True)
     image_id = Column(Integer, ForeignKey('Images.image_id'))
 
-# TESTING OVERRIDE seghelper is for testing
-distinct_image_ids_query = select(Images.image_id.distinct(), Images.h, Images.w, SegmentBig.bbox).\
-    outerjoin(SegmentBig,Images.image_id == SegmentBig.image_id).\
-    outerjoin(SegmentHelper,Images.image_id == SegmentHelper.image_id).\
-    outerjoin(Encodings, Encodings.image_id == SegmentBig.image_id).\
-    outerjoin(NMLImages, NMLImages.image_id == SegmentBig.image_id).\
-    filter(Encodings.bbox != None).\
-    filter(Encodings.two_noses.is_(None)).\
-    filter(Encodings.mongo_hand_landmarks == 1).\
-    filter(Encodings.mongo_hand_landmarks_norm.is_(None)).\
-    filter(NMLImages.nml_id > 4191363).\
-    limit(LIMIT)
+# # TESTING OVERRIDE seghelper is for testing
+# distinct_image_ids_query = select(Images.image_id.distinct(), Images.h, Images.w, SegmentBig.bbox).\
+#     outerjoin(SegmentBig,Images.image_id == SegmentBig.image_id).\
+#     outerjoin(SegmentHelper,Images.image_id == SegmentHelper.image_id).\
+#     outerjoin(Encodings, Encodings.image_id == SegmentBig.image_id).\
+#     outerjoin(NMLImages, NMLImages.image_id == SegmentBig.image_id).\
+#     filter(Encodings.bbox != None).\
+#     filter(Encodings.two_noses.is_(None)).\
+#     filter(Encodings.mongo_hand_landmarks == 1).\
+#     filter(Encodings.mongo_hand_landmarks_norm.is_(None)).\
+#     filter(NMLImages.nml_id > 4191363).\
+#     limit(LIMIT)
 
 # put this back in at future date if needed
         # filter(Images.h == None).\

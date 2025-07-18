@@ -350,7 +350,7 @@ class DataIO:
             # print("got results from mongo, types are: ", type(results_face), type(results_body))
             # print("results_face: ", results_face)
             # print("results_body: ", results_body)
-            face_encodings68 = face_landmarks = body_landmarks = body_landmarks_normalized = None
+            face_encodings68 = face_landmarks = body_landmarks = body_landmarks_normalized = body_landmarks_3D = None
             if results_body:
                 body_landmarks_normalized = results_body["nlms"]
                 body_landmarks_3D = results_body3D["body_world_landmarks"] if results_body3D is not None else None
