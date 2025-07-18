@@ -682,205 +682,216 @@ d = None
 # override io.db for testing mode
 # db['name'] = "123test"
 
-if db['unix_socket']:
-    # for MM's MAMP config
-    engine = create_engine("mysql+pymysql://{user}:{pw}@/{db}?unix_socket={socket}".format(
-        user=db['user'], pw=db['pass'], db=db['name'], socket=db['unix_socket']
-    ), poolclass=NullPool)
-else:
-    engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}"
-                                .format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']), poolclass=NullPool)
-# metadata = MetaData(engine)
-Session = sessionmaker(bind=engine)
-session = Session()
-Base = declarative_base()
+######################################################################################
+######################################################################################
+######################## CODE CHANGED FOR IS TENCH####################################
+######################################################################################
+######################################################################################
 
-mongo_client = pymongo.MongoClient(io.dbmongo['host'])
-mongo_db = mongo_client[io.dbmongo['name']]
-io.mongo_db = mongo_db
+if not io.IS_TENCH:
+    if db['unix_socket']:
+        # for MM's MAMP config
+        engine = create_engine("mysql+pymysql://{user}:{pw}@/{db}?unix_socket={socket}".format(
+            user=db['user'], pw=db['pass'], db=db['name'], socket=db['unix_socket']
+        ), poolclass=NullPool)
+    else:
+        engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}"
+                                    .format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']), poolclass=NullPool)
+    # metadata = MetaData(engine)
+    Session = sessionmaker(bind=engine)
+    session = Session()
+    Base = declarative_base()
+
+    mongo_client = pymongo.MongoClient(io.dbmongo['host'])
+    mongo_db = mongo_client[io.dbmongo['name']]
+    io.mongo_db = mongo_db
 
 
 
-# handle the table objects based on CLUSTER_TYPE
-ClustersTable_name = CLUSTER_TYPE
-ImagesClustersTable_name = "Images"+CLUSTER_TYPE
+    # handle the table objects based on CLUSTER_TYPE
+    ClustersTable_name = CLUSTER_TYPE
+    ImagesClustersTable_name = "Images"+CLUSTER_TYPE
 
-class Clusters(Base):
-    __tablename__ = ClustersTable_name
-
-    cluster_id = Column(Integer, primary_key=True, autoincrement=True)
-    cluster_median = Column(BLOB)
-
-class ImagesClusters(Base):
-    __tablename__ = ImagesClustersTable_name
-
-    image_id = Column(Integer, ForeignKey(Images.image_id, ondelete="CASCADE"), primary_key=True)
-    cluster_id = Column(Integer, ForeignKey(f'{ClustersTable_name}.cluster_id', ondelete="CASCADE"))
-
-# not currently in use
-if IS_HAND_POSE_FUSION and CLUSTER_TYPE_2:
-    ClustersTable_name_2 = CLUSTER_TYPE_2
-    ImagesClustersTable_name_2 = "Images"+CLUSTER_TYPE_2
-
-    class Clusters_2(Base):
-        __tablename__ = ClustersTable_name_2
+    class Clusters(Base):
+        __tablename__ = ClustersTable_name
 
         cluster_id = Column(Integer, primary_key=True, autoincrement=True)
         cluster_median = Column(BLOB)
 
-    class ImagesClusters_2(Base):
-        __tablename__ = ImagesClustersTable_name_2
+    class ImagesClusters(Base):
+        __tablename__ = ImagesClustersTable_name
 
         image_id = Column(Integer, ForeignKey(Images.image_id, ondelete="CASCADE"), primary_key=True)
-        cluster_id = Column(Integer, ForeignKey(f'{ClustersTable_name_2}.cluster_id', ondelete="CASCADE"))
+        cluster_id = Column(Integer, ForeignKey(f'{ClustersTable_name}.cluster_id', ondelete="CASCADE"))
 
-def prep_cluster_medians():
-    # store the results in a dictionary where the key is the cluster_id
-    if results:
-        cluster_medians = {}
-        for i, row in enumerate(results, start=1):
-            cluster_median = pickle.loads(row.cluster_median)
-            cluster_medians[i] = cluster_median
-            # print("cluster_medians", i, cluster_median)
-            N_CLUSTERS = i # will be the last cluster_id which is count of clusters
+    # not currently in use
+    if IS_HAND_POSE_FUSION and CLUSTER_TYPE_2:
+        ClustersTable_name_2 = CLUSTER_TYPE_2
+        ImagesClustersTable_name_2 = "Images"+CLUSTER_TYPE_2
 
-# TK IS_HAND_POSE_FUSION ??
-if IS_CLUSTER or IS_ONE_CLUSTER or IS_HAND_POSE_FUSION:
-    # select cluster_median from Clusters
-    results = session.execute(select(Clusters.cluster_id, Clusters.cluster_median)).fetchall()
-    cluster_medians, N_CLUSTERS = sort.prep_cluster_medians(results)
-    sort.cluster_medians = cluster_medians
-    # if any of the cluster_medians are empty, then we need to resegment
-    print("cluster results", len(results))
-    print("cluster_medians", len(cluster_medians))
-    if cluster_medians is None:
-    # if not any(cluster_medians):
-        print("cluster results are empty", cluster_medians)
-if IS_HANDS or IS_ONE_HAND:
-    results = session.execute(select(Hands.cluster_id, Hands.cluster_median)).fetchall()
-    hands_medians, N_HANDS = sort.prep_cluster_medians(results)
-    sort.hands_medians = hands_medians
-    print("hands results len", len(results))
+        class Clusters_2(Base):
+            __tablename__ = ClustersTable_name_2
 
-    # # store the results in a dictionary where the key is the cluster_id
-    # if results:
-    #     cluster_medians = {}
-    #     for i, row in enumerate(results, start=1):
-    #         cluster_median = pickle.loads(row.cluster_median)
-    #         cluster_medians[i] = cluster_median
-    #         # print("cluster_medians", i, cluster_median)
-    #         N_CLUSTERS = i # will be the last cluster_id which is count of clusters
-    #     sort.set_cluster_medians(cluster_medians)
+            cluster_id = Column(Integer, primary_key=True, autoincrement=True)
+            cluster_median = Column(BLOB)
 
+        class ImagesClusters_2(Base):
+            __tablename__ = ImagesClustersTable_name_2
 
+            image_id = Column(Integer, ForeignKey(Images.image_id, ondelete="CASCADE"), primary_key=True)
+            cluster_id = Column(Integer, ForeignKey(f'{ClustersTable_name_2}.cluster_id', ondelete="CASCADE"))
 
+    def prep_cluster_medians():
+        # store the results in a dictionary where the key is the cluster_id
+        if results:
+            cluster_medians = {}
+            for i, row in enumerate(results, start=1):
+                cluster_median = pickle.loads(row.cluster_median)
+                cluster_medians[i] = cluster_median
+                # print("cluster_medians", i, cluster_median)
+                N_CLUSTERS = i # will be the last cluster_id which is count of clusters
 
-# mongo_collection = mongo_db[io.dbmongo['collection']]
+    # TK IS_HAND_POSE_FUSION ??
+    if IS_CLUSTER or IS_ONE_CLUSTER or IS_HAND_POSE_FUSION:
+        # select cluster_median from Clusters
+        results = session.execute(select(Clusters.cluster_id, Clusters.cluster_median)).fetchall()
+        cluster_medians, N_CLUSTERS = sort.prep_cluster_medians(results)
+        sort.cluster_medians = cluster_medians
+        # if any of the cluster_medians are empty, then we need to resegment
+        print("cluster results", len(results))
+        print("cluster_medians", len(cluster_medians))
+        if cluster_medians is None:
+        # if not any(cluster_medians):
+            print("cluster results are empty", cluster_medians)
+    if IS_HANDS or IS_ONE_HAND:
+        results = session.execute(select(Hands.cluster_id, Hands.cluster_median)).fetchall()
+        hands_medians, N_HANDS = sort.prep_cluster_medians(results)
+        sort.hands_medians = hands_medians
+        print("hands results len", len(results))
 
-
-# construct mediapipe objects
-# mp_drawing = mp.solutions.drawing_utils
-
-# mp_face_detection = mp.solutions.face_detection
-# face_detection = mp_face_detection.FaceDetection(min_detection_confidence=0.7)
-
-# mp_face_mesh = mp.solutions.face_mesh
-# face_mesh = mp_face_mesh.FaceMesh(static_image_mode=True, max_num_faces=1,min_detection_confidence=0.5)
-
-
-
-###################
-# SQL  FUNCTIONS  #
-###################
-
-def selectSQL(cluster_no=None, topic_no=None):
-    global SELECT, FROM, WHERE, LIMIT, WrapperTopicTable
-    from_affect = where_affect = ""
-    def cluster_topic_select(cluster_topic_table, cluster_topic_no):
-        if isinstance(cluster_topic_no, list):
-            # Convert the list into a comma-separated string
-            cluster_topic_ids = ', '.join(map(str, cluster_topic_no))
-            # Use the IN operator to check if topic_id is in the list of values
-            return f"AND {cluster_topic_table} IN ({cluster_topic_ids}) "
-        else:
-            # If topic_no is not a list, simply check for equality
-            return f"AND {cluster_topic_table} = {str(cluster_topic_no)} "            
-
-    cluster = " "
-    print(f"cluster_no is {cluster_no} and topic_no is {topic_no}")
-    if IS_HAND_POSE_FUSION:
-        if isinstance(cluster_no, list):
-            print("cluster_no is a list", cluster_no)
-            # we have two values, C1 and C2. C1 should be IHP, C2 should be IH
-            cluster += f" AND ihp.cluster_id = {str(cluster_no[0])} "            
-            cluster += f" AND ih.cluster_id = {str(cluster_no[1])} "            
-    # elif cluster_no is not None or topic_no is not None:
-    elif IS_CLUSTER or IS_ONE_CLUSTER:
-        cluster += cluster_topic_select("ic.cluster_id", cluster_no)
-        # cluster +=f"AND ic.cluster_id = {str(cluster_no)} "
-        # if isinstance(topic_no, list):
-        #     # Convert the list into a comma-separated string
-        #     topic_ids = ', '.join(map(str, cluster_no))
-        #     # Use the IN operator to check if topic_id is in the list of values
-        #     cluster += f"AND ic.cluster_id IN ({topic_ids}) "
-        # else:
-        #     # If topic_no is not a list, simply check for equality
-        #     if IS_ONE_TOPIC: cluster += f"AND ic.cluster_id = {str(cluster_no)} "            
-    if IS_TOPICS or IS_ONE_TOPIC:
-        if IS_TOPICS and IS_ONE_TOPIC and USE_AFFECT_GROUPS and WrapperTopicTable is not None:
-
-            # topic fusion, so join to a second topics table
-            from_affect = f" JOIN {WrapperTopicTable} iwt ON s.image_id = iwt.image_id "
-            where_affect = f" AND iwt.topic_id = {TOPIC_NO[0]} AND iwt.topic_score > .3"
-        # cluster +=f"AND it.topic_id = {str(topic_no)} "
-        if isinstance(topic_no, list):
-            # Convert the list into a comma-separated string
-            topic_ids = ', '.join(map(str, topic_no))
-            # Use the IN operator to check if topic_id is in the list of values
-            cluster += f"AND it.topic_id IN ({topic_ids}) "
-        elif topic_no is not None:
-            # If topic_no is not a list, simply check for equality
-            cluster += f"AND it.topic_id = {str(topic_no)} "            
-    # print(f"cluster SELECT is {cluster}")
-    selectsql = f"SELECT {SELECT} FROM {FROM + from_affect} WHERE {WHERE + where_affect} {cluster} LIMIT {str(LIMIT)};"
-    print("actual SELECT is: ",selectsql)
-    result = engine.connect().execute(text(selectsql))
-    resultsjson = ([dict(row) for row in result.mappings()])
-    return(resultsjson)
-
-
-def select_cluster_median(cluster_no):
-    cluster_selectsql = f"SELECT c.cluster_median FROM Clusters c WHERE cluster_id={cluster_no};"
-    result = engine.connect().execute(text(cluster_selectsql))
-    resultsjson = ([dict(row) for row in result.mappings()])
-    cluster_median = (resultsjson[0]['cluster_median'])
-    return(cluster_median)
+        # # store the results in a dictionary where the key is the cluster_id
+        # if results:
+        #     cluster_medians = {}
+        #     for i, row in enumerate(results, start=1):
+        #         cluster_median = pickle.loads(row.cluster_median)
+        #         cluster_medians[i] = cluster_median
+        #         # print("cluster_medians", i, cluster_median)
+        #         N_CLUSTERS = i # will be the last cluster_id which is count of clusters
+        #     sort.set_cluster_medians(cluster_medians)
 
 
 
 
-def save_segment_DB(df_segment):
-    #save the df to a table
-    # Assuming you have your DataFrame named 'df' containing the query results
-    for _, row in df_segment.iterrows():
-        instance = SegmentTable(
-            image_id=row['image_id'],
-            site_name_id=row['site_name_id'],
-            contentUrl=row['contentUrl'],
-            imagename=row['imagename'],
-            face_x=row['face_x'],
-            face_y=row['face_y'],
-            face_z=row['face_z'],
-            mouth_gap=row['mouth_gap'],
-            face_landmarks=pickle.dumps(row['face_landmarks'], protocol=3),
-            bbox=row['bbox'],
-            face_encodings=pickle.dumps(row['face_encodings'], protocol=3),
-            site_image_id=row['site_image_id']
-        )
-        session.add(instance)
-    session.commit()
+    # mongo_collection = mongo_db[io.dbmongo['collection']]
 
 
+    # construct mediapipe objects
+    # mp_drawing = mp.solutions.drawing_utils
+
+    # mp_face_detection = mp.solutions.face_detection
+    # face_detection = mp_face_detection.FaceDetection(min_detection_confidence=0.7)
+
+    # mp_face_mesh = mp.solutions.face_mesh
+    # face_mesh = mp_face_mesh.FaceMesh(static_image_mode=True, max_num_faces=1,min_detection_confidence=0.5)
+
+
+
+    ###################
+    # SQL  FUNCTIONS  #
+    ###################
+
+    def selectSQL(cluster_no=None, topic_no=None):
+        global SELECT, FROM, WHERE, LIMIT, WrapperTopicTable
+        from_affect = where_affect = ""
+        def cluster_topic_select(cluster_topic_table, cluster_topic_no):
+            if isinstance(cluster_topic_no, list):
+                # Convert the list into a comma-separated string
+                cluster_topic_ids = ', '.join(map(str, cluster_topic_no))
+                # Use the IN operator to check if topic_id is in the list of values
+                return f"AND {cluster_topic_table} IN ({cluster_topic_ids}) "
+            else:
+                # If topic_no is not a list, simply check for equality
+                return f"AND {cluster_topic_table} = {str(cluster_topic_no)} "            
+
+        cluster = " "
+        print(f"cluster_no is {cluster_no} and topic_no is {topic_no}")
+        if IS_HAND_POSE_FUSION:
+            if isinstance(cluster_no, list):
+                print("cluster_no is a list", cluster_no)
+                # we have two values, C1 and C2. C1 should be IHP, C2 should be IH
+                cluster += f" AND ihp.cluster_id = {str(cluster_no[0])} "            
+                cluster += f" AND ih.cluster_id = {str(cluster_no[1])} "            
+        # elif cluster_no is not None or topic_no is not None:
+        elif IS_CLUSTER or IS_ONE_CLUSTER:
+            cluster += cluster_topic_select("ic.cluster_id", cluster_no)
+            # cluster +=f"AND ic.cluster_id = {str(cluster_no)} "
+            # if isinstance(topic_no, list):
+            #     # Convert the list into a comma-separated string
+            #     topic_ids = ', '.join(map(str, cluster_no))
+            #     # Use the IN operator to check if topic_id is in the list of values
+            #     cluster += f"AND ic.cluster_id IN ({topic_ids}) "
+            # else:
+            #     # If topic_no is not a list, simply check for equality
+            #     if IS_ONE_TOPIC: cluster += f"AND ic.cluster_id = {str(cluster_no)} "            
+        if IS_TOPICS or IS_ONE_TOPIC:
+            if IS_TOPICS and IS_ONE_TOPIC and USE_AFFECT_GROUPS and WrapperTopicTable is not None:
+
+                # topic fusion, so join to a second topics table
+                from_affect = f" JOIN {WrapperTopicTable} iwt ON s.image_id = iwt.image_id "
+                where_affect = f" AND iwt.topic_id = {TOPIC_NO[0]} AND iwt.topic_score > .3"
+            # cluster +=f"AND it.topic_id = {str(topic_no)} "
+            if isinstance(topic_no, list):
+                # Convert the list into a comma-separated string
+                topic_ids = ', '.join(map(str, topic_no))
+                # Use the IN operator to check if topic_id is in the list of values
+                cluster += f"AND it.topic_id IN ({topic_ids}) "
+            elif topic_no is not None:
+                # If topic_no is not a list, simply check for equality
+                cluster += f"AND it.topic_id = {str(topic_no)} "            
+        # print(f"cluster SELECT is {cluster}")
+        selectsql = f"SELECT {SELECT} FROM {FROM + from_affect} WHERE {WHERE + where_affect} {cluster} LIMIT {str(LIMIT)};"
+        print("actual SELECT is: ",selectsql)
+        result = engine.connect().execute(text(selectsql))
+        resultsjson = ([dict(row) for row in result.mappings()])
+        return(resultsjson)
+
+
+    def select_cluster_median(cluster_no):
+        cluster_selectsql = f"SELECT c.cluster_median FROM Clusters c WHERE cluster_id={cluster_no};"
+        result = engine.connect().execute(text(cluster_selectsql))
+        resultsjson = ([dict(row) for row in result.mappings()])
+        cluster_median = (resultsjson[0]['cluster_median'])
+        return(cluster_median)
+
+
+
+
+    def save_segment_DB(df_segment):
+        #save the df to a table
+        # Assuming you have your DataFrame named 'df' containing the query results
+        for _, row in df_segment.iterrows():
+            instance = SegmentTable(
+                image_id=row['image_id'],
+                site_name_id=row['site_name_id'],
+                contentUrl=row['contentUrl'],
+                imagename=row['imagename'],
+                face_x=row['face_x'],
+                face_y=row['face_y'],
+                face_z=row['face_z'],
+                mouth_gap=row['mouth_gap'],
+                face_landmarks=pickle.dumps(row['face_landmarks'], protocol=3),
+                bbox=row['bbox'],
+                face_encodings=pickle.dumps(row['face_encodings'], protocol=3),
+                site_image_id=row['site_image_id']
+            )
+            session.add(instance)
+        session.commit()
+
+######################################################################################
+######################################################################################
+######################## END CODE CHANGED FOR IS TENCH################################
+######################################################################################
+######################################################################################
 
 ###################
 # SORT FUNCTIONS  #
