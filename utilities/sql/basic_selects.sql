@@ -75,7 +75,7 @@ AND it.topic_id = 32
 ;
 
 -- topic only, bodies as t distance
-SELECT i.site_name_id, i.imagename
+SELECT i.site_name_id, i.imagename, i.description
 FROM Images i 
 JOIN encodings 	e ON i.image_id = e.image_id
 JOIN ImagesTopics it ON it.image_id = e.image_id
@@ -89,23 +89,14 @@ SELECT *
 FROM Encodings i 
 WHERE i.image_id = 24940154
 
-SELECT *
-FROM Encodings i 
-WHERE i.mongo_hand_landmarks = 1
-AND i.mongo_hand_landmarks_norm = NULL
-AND i.is_face = 1
-LIMIT 10
+SELECT i.site_name_id, i.imagename
+FROM Images i 
+JOIN encodings 	e ON i.image_id = e.image_id
+AND e.is_face = 0 AND e.is_feet = 1
+LIMIT 100
+
 ;
 
-SELECT COUNT(*)
-FROM SegmentOct20 so
-JOIN ImagesTopics it ON it.image_id = so.image_id
-JOIN ImagesHandsPositions ih ON ih.image_id = so.image_id
-JOIN ImagesHandsGestures ig ON ig.image_id = so.image_id
-WHERE ih.cluster_id = 13
-AND ig.cluster_id  = 2
-AND so.face_x > -33 AND so.face_x < -27 AND so.face_y > -2 AND so.face_y < 2 AND so.face_z > -2 AND so.face_z < 2
-;
 
 
 SELECT *
@@ -202,11 +193,22 @@ UPDATE Encodings
 SET is_body3D = 1
 Where mongo_body_landmarks_3D = 1
 and mongo_body_landmarks IS NULL
-LIMIT 1000000
+LIMIT 5000000
 ;
 
+SELECT i.image_id, i.imagename
+FROM Encodings e
+JOIN Images i on i.image_id = e.image_id
+JOIN NMLImages n on n.image_id = e.image_id
+WHERE n.is_nml_db = 0
+AND i.site_name_id = 3
+LIMIT 100
+;
 
-
+SELECT COUNT(*)
+FROM Encodings
+WHERE  is_body3D = 1
+;
 
 USE stock;
 SELECT * 

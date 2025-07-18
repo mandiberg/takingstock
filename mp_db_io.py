@@ -67,13 +67,19 @@ class DataIO:
             self.NUMBER_OF_PROCESSES = 8
             self.NUMBER_OF_PROCESSES_GPU = 16
 
+            NML_GITHUB = "/Users/michaelmandiberg/Documents/GitHub/takingstock/"
+            # check to see which one exists
+            if os.path.exists(NML_GITHUB):
+                self.db["pass"] = "password"
+                self.db["unix_socket"] = "/tmp/mysql.sock"
+                self.NUMBER_OF_PROCESSES = 24
+                self.NUMBER_OF_PROCESSES_GPU = 60
 
-            ##### Check for on Tench's Device #####
             login = os.getlogin()
             print(f"Running as user: {login}")
             if login == "tenchc":
-                self.ROOTSSD = os.path.join(self.home, "Desktop/Work/Mandiberg/taking_stock_production")
-                self.ROOT_PROD = os.path.join(self.home, "Desktop/Work/Mandiberg/taking_stock_production/segment_images")
+                self.ROOTSSD = os.path.join(self.home, "Documents/GitHub/taking_stock_production")
+                self.ROOT_PROD = os.path.join(self.home, "Documents/GitHub/taking_stock_production/segment_images")
                 self.ROOT  = self.ROOT4 = self.ROOT18 = self.ROOT54 = self.ROOT_PROD
                 print("io.rootdbx", self.ROOT_DBx)
                 # and specific db dict info, when we get to that point
@@ -347,7 +353,7 @@ class DataIO:
             # print("got results from mongo, types are: ", type(results_face), type(results_body))
             # print("results_face: ", results_face)
             # print("results_body: ", results_body)
-            face_encodings68 = face_landmarks = body_landmarks = body_landmarks_normalized = None
+            face_encodings68 = face_landmarks = body_landmarks = body_landmarks_normalized = body_landmarks_3D = None
             if results_body:
                 body_landmarks_normalized = results_body["nlms"]
                 body_landmarks_3D = results_body3D["body_world_landmarks"] if results_body3D is not None else None

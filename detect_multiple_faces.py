@@ -59,6 +59,7 @@ DRAW_BOX = False
 MINSIZE = 500
 SLEEP_TIME=0
 VERBOSE = False
+QUIET = True
 
 # only for triage
 sortfolder ="getty_test"
@@ -115,9 +116,9 @@ POSE_ID = 0
 
 # folder doesn't matter if IS_FOLDER is False. Declared FAR below. 
 # MAIN_FOLDER = "/Volumes/RAID54/images_shutterstock"
-# MAIN_FOLDER = "/Volumes/OWC5/images_adobe"
+# MAIN_FOLDER = "/Volumes/LaCie/images_istock"
 # MAIN_FOLDER = "/Volumes/ExFAT_SSD4_/images_adobe"
-MAIN_FOLDER = "/Volumes/OWC4/images_shutterstock"
+MAIN_FOLDER = "/Volumes/OWC5/images_shutterstock"
 # MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/afripics_v2/images"
 
 # MAIN_FOLDER = "/Volumes/SSD4/images_getty_reDL"
@@ -284,10 +285,19 @@ io.NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES_GPU
 # io.db["name"] = "gettytest3"
 
 # --- Initialize MediaPipe objects with GPU delegate ---
-FACE_DETECTOR_MODEL_PATH = '/Users/michaelmandiberg/Documents/GitHub/facemap/models/blaze_face_short_range.tflite'
-FACE_LANDMARKER_MODEL_PATH = '/Users/michaelmandiberg/Documents/GitHub/facemap/models/face_landmarker.task'
-HAND_LANDMARKER_MODEL_PATH = '/Users/michaelmandiberg/Documents/GitHub/facemap/models/hand_landmarker.task'
-POSE_LANDMARKER_MODEL_PATH = '/Users/michaelmandiberg/Documents/GitHub/facemap/models/pose_landmarker_full.task'
+
+NML_GITHUB = "/Users/michaelmandiberg/Documents/GitHub/takingstock/"
+HOME_GITHUB = "/Users/michaelmandiberg/Documents/GitHub/facemap/"
+# check to see which one exists
+if os.path.exists(NML_GITHUB):
+    ROOT_GITHUB = NML_GITHUB
+elif os.path.exists(HOME_GITHUB):
+    ROOT_GITHUB = HOME_GITHUB
+
+FACE_DETECTOR_MODEL_PATH = os.path.join(ROOT_GITHUB, 'models', 'blaze_face_short_range.tflite')
+FACE_LANDMARKER_MODEL_PATH = os.path.join(ROOT_GITHUB, 'models', 'face_landmarker.task')
+HAND_LANDMARKER_MODEL_PATH = os.path.join(ROOT_GITHUB, 'models', 'hand_landmarker.task')
+POSE_LANDMARKER_MODEL_PATH = os.path.join(ROOT_GITHUB, 'models', 'pose_landmarker_full.task')
 
 # Base options for GPU
 base_options_detector_gpu = python.BaseOptions(
@@ -412,7 +422,7 @@ def collect_the_garbage():
     if 'image' in locals():
         del image
     gc.collect()
-    print("garbage collected")
+    if VERBOSE: print("garbage collected")
 
 def init_mongo():
     # init session
@@ -656,7 +666,7 @@ def find_face(image, df):
 
     if detection_result.detections:
         number_of_detections = len(detection_result.detections)
-        print("---------------- >>>>>>>>>>>>>>>>> number_of_detections", number_of_detections)
+        if VERBOSE: print("---------------- >>>>>>>>>>>>>>>>> number_of_detections", number_of_detections)
 
         # Assuming you take the first detected face for simplicity
         faceDet = detection_result.detections[0]
@@ -696,7 +706,7 @@ def find_face(image, df):
 
                 if is_face:
                     encodings = calc_encodings(image, faceLms,bbox) ## changed parameters
-                    print(">> find_face SPLIT >> calc_encodings")
+                    if VERBOSE: print(">> find_face SPLIT >> calc_encodings")
 
                 #df.at['1', 'is_face_distant'] = is_face_distant
                 bbox_json = json.dumps(bbox, indent = 4) 
@@ -712,14 +722,14 @@ def find_face(image, df):
                 else:
                     df.at['1', 'face_encodings68'] = pickle.dumps(encodings)
             else:
-                print("+++++++++++++++++  YES FACE but NO FACE LANDMARKS +++++++++++++++++++++")
+                if VERBOSE: print("+++++++++++++++++  YES FACE but NO FACE LANDMARKS +++++++++++++++++++++")
                 image_id = df.at['1', 'image_id']
                 is_face_no_lms = True
         else:
-            print("+++++++++++++++++  NO BBOX DETECTED +++++++++++++++++++++")
+            if VERBOSE: print("+++++++++++++++++  NO BBOX DETECTED +++++++++++++++++++++")
         
     else:
-        print("+++++++++++++++++  NO FACE DETECTED +++++++++++++++++++++")
+        if VERBOSE: print("+++++++++++++++++  NO FACE DETECTED +++++++++++++++++++++")
         number_of_detections = 0
         image_id = df.at['1', 'image_id']
         no_image_name = f"no_face_landmarks_{image_id}.jpg"
@@ -906,7 +916,7 @@ def find_body(image):
             body_landmarks = detection_result.pose_landmarks[0] # Access the first (and likely only) pose
             body_world_landmarks = detection_result.pose_world_landmarks[0] # Access the first (and likely only) pose
         else:
-            print("No body detected.")
+            if VERBOSE: print("No body detected.")
 
     except Exception as e:
         print(f"[find_body] An error occurred: {e}")
@@ -1119,7 +1129,7 @@ def process_image_find_body_subroutine(image_id, image, bbox):
             if VERBOSE: print("Body landmarks found but no bbox, no normalization")
             n_landmarks = None
         else:
-            print("No body landmarks found, though is_body is " + str(is_body))
+            if VERBOSE: print("No body landmarks found, though is_body is " + str(is_body))
             n_landmarks = None
     if VERBOSE:
         print("n_landmarks", image_id, n_landmarks)
@@ -1198,7 +1208,7 @@ def save_body_hands_mysql_and_mongo(session, image_id, image, bbox_dict, body_la
     if is_feet is None or is_feet is False: is_feet = False
     else: is_feet = True
 
-    print("going to save", image_id, "is_body", is_body, "is_hands", is_hands, "is_feet", is_feet, "mongo_body_landmarks", mongo_body_landmarks, "mongo_body_landmarks_3D", mongo_body_landmarks_3D)
+    if not QUIET: print("going to save", image_id, "is_body", is_body, "is_hands", is_hands, "is_feet", is_feet, "mongo_body_landmarks", mongo_body_landmarks, "mongo_body_landmarks_3D", mongo_body_landmarks_3D)
     
     # test to see if we have body landmarks, and need to store them ()
     if mongo_body_landmarks is not None or body_landmarks is not None:
@@ -1337,12 +1347,12 @@ def save_body_hands_mysql_and_mongo(session, image_id, image, bbox_dict, body_la
                     {"$set": {"nlms": pickle.dumps(n_landmarks)}},
                     upsert=True
                 )
-                print("----------- >>>>>>>>   mongo n_landmarks updated:", image_id)
+                if VERBOSE: print("----------- >>>>>>>>   mongo n_landmarks updated:", image_id)
             else:
                 bboxnormed_collection.insert_one(
                     {"image_id": image_id, "nlms": pickle.dumps(n_landmarks)}
                 )
-                print("----------- >>>>>>>>   mongo n_landmarks inserted:", image_id)
+                if VERBOSE: print("----------- >>>>>>>>   mongo n_landmarks inserted:", image_id)
 
     # save hand landmarks
     if not REDO_BODYLMS_3D:
@@ -1359,9 +1369,9 @@ def save_body_hands_mysql_and_mongo(session, image_id, image, bbox_dict, body_la
         if update_hand:
             try:
                 pose.store_hand_landmarks(image_id, hand_landmarks, mongo_hand_collection)
-                print("----------- >>>>>>>>   mongo hand_landmarks updated:", image_id)
+                if VERBOSE: print("----------- >>>>>>>>   mongo hand_landmarks updated:", image_id)
             except:
-                print("----------- XXXXXXXX   mongo hand_landmarks FAILED TO UPDATE:", image_id)
+                if VERBOSE: print("----------- XXXXXXXX   mongo hand_landmarks FAILED TO UPDATE:", image_id)
 
     # save is_feet and mongo_body_landmarks_3D regardless of REDO_BODYLMS_3D
     ### Save normalized landmarks to MongoDB
@@ -1506,10 +1516,10 @@ def process_image_bodylms(task):
         elif type(task[4]) == dict:
             bbox = task[4]
         else:
-            print("no bbox for this task", task)
+            if VERBOSE: print("no bbox for this task", task)
             bbox = None
     else:
-        print("no bbox for this task", task)
+        if VERBOSE: print("no bbox for this task", task)
         bbox = None
     cap_path = capitalize_directory(task[1])
     # mongo_face_landmarks = task[2]
@@ -1625,12 +1635,12 @@ def process_image(task):
     if mp_image is not None and h > MINSIZE and w > MINSIZE:
         # Do FaceMesh
 
-        print(">> SPLIT >> about to find_face")
+        if VERBOSE: print(">> SPLIT >> about to find_face")
         df, number_of_detections = find_face(mp_image, df)
         is_small = 0
         # pr_split = print_get_split(pr_split)
-        print(number_of_detections, df)
-        print(">> SPLIT >> done find_face")
+        if VERBOSE: print(number_of_detections, df)
+        if VERBOSE: print(">> SPLIT >> done find_face")
 
         # Do Body Pose
         # temporarily commenting this out
@@ -1673,21 +1683,21 @@ def process_image(task):
         # print("existing_entry to store no_image:", existing_entry)
         # print(type(existing_entry))
         if existing_entry:
-            print("existing_entry to store no_image")
+            if VERBOSE: print("existing_entry to store no_image")
             # if segment table entry exists, update it
             # otherwise, will continue on, and store no_image in SegmentBig_isnotface new entry
             session.query(SegmentBig_isnotface).filter(SegmentBig_isnotface.image_id == task[0]).update({
                 SegmentBig_isnotface.no_image: no_image
             }, synchronize_session=False)
-            print("stored no image in existing SegmentBig_isnotface entry")
+            if VERBOSE: print("stored no image in existing SegmentBig_isnotface entry")
             return
         else:
-            print("creating new no_image entry in SegmentBig_isnotface")
+            if VERBOSE: print("creating new no_image entry in SegmentBig_isnotface")
             # create new entry in SegmentBig_isnotface
             new_segment_entry = SegmentBig_isnotface(image_id=task[0], no_image=no_image)
             session.add(new_segment_entry)
             session.commit()
-            print("stored no_image in SegmentBig_isnotface for ", task[0])
+            if VERBOSE: print("stored no_image in SegmentBig_isnotface for ", task[0])
             return
             # # store no_image in Images table
             # session.query(Images).filter(Images.image_id == image_id).update({
@@ -1702,7 +1712,7 @@ def process_image(task):
 
     # testing, so quitting before I store data
     # return
-    print(f"number_of_detections: {number_of_detections}, for image_id: {task[0]}")
+    if VERBOSE: print(f"number_of_detections: {number_of_detections}, for image_id: {task[0]}")
     try:
         
         # DEBUGGING --> need to change this back to "encodings"
@@ -1817,12 +1827,13 @@ def process_image(task):
 
                         if VERBOSE: print("about to commit")
                         # print the values for the session
-                        for key, value in insert_dict.items():
-                            print(f"{key}: {value}")
+                        if VERBOSE:
+                            for key, value in insert_dict.items():
+                                print(f"{key}: {value}")
 
 
                         session.commit()
-                        print(f"Newly updated/inserted row has encoding_id: {encoding_id} for image_id {image_id} with is_encodings: {is_encodings}")
+                        if VERBOSE: print(f"Newly updated/inserted row has encoding_id: {encoding_id} for image_id {image_id} with is_encodings: {is_encodings}")
 
                         if is_encodings:
                             try:
@@ -1853,7 +1864,7 @@ def process_image(task):
     session.query(Counters).filter(Counters.counter_name == str(number_of_detections)).update({
         Counters.counter_value: Counters.counter_value + 1
     }, synchronize_session=False)
-    print(f"autoincremented counter_value for counter_name: {number_of_detections}")
+    if VERBOSE: print(f"autoincremented counter_value for counter_name: {number_of_detections}")
     session.commit()
 
     # Close the session and dispose of the engine before the worker process exits
@@ -2027,14 +2038,14 @@ def main():
                             if not result.encoding_id:
                                 # if it hasn't been encoded yet, add it to the tasks
                                 task = (result.image_id, imagepath)
-                                print(">> adding to face queue:", result.image_id, "site_image_id", site_image_id)
+                                if not QUIET: print(">> adding to face queue:", result.image_id, "site_image_id", site_image_id)
                             elif result.mongo_body_landmarks and result.mongo_body_landmarks_3D is None and REDO_BODYLMS_3D is True:
                                 # if body has been found but not 3D, add it to the tasks
-                                print(">>>> adding to 3D BODY queue:", result.image_id, "site_image_id", site_image_id)
+                                if not QUIET: print(">>>> adding to 3D BODY queue:", result.image_id, "site_image_id", site_image_id)
                                 task = (result.image_id, imagepath, result.mongo_face_landmarks, result.mongo_body_landmarks, result.bbox)
                             elif result.mongo_face_landmarks and result.mongo_body_landmarks is None:
                                 # if face has been encoded but not body, add it to the tasks
-                                print(">>>> adding to BODY queue:", result.image_id, "site_image_id", site_image_id)
+                                if not QUIET: print(">>>> adding to BODY queue:", result.image_id, "site_image_id", site_image_id)
                                 task = (result.image_id, imagepath, result.mongo_face_landmarks, result.mongo_body_landmarks, result.bbox)
                             elif result.mongo_face_landmarks and result.mongo_body_landmarks is not None:
                                 if VERBOSE: print("     xx ALREADY FULLY DONE:", result.image_id)

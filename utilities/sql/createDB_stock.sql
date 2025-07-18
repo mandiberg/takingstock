@@ -1,4 +1,4 @@
-USE stocktest;
+USE Stock;
 
 -- These remove repeated values and reduce repetition
 
@@ -245,6 +245,14 @@ CREATE TABLE Counters (
 );
 
 
-
-
-
+CREATE TABLE LocationHandsFeet (
+    image_id INT PRIMARY KEY,
+    left_hand_x FLOAT,
+    left_hand_y FLOAT,
+    right_hand_x FLOAT,
+    right_hand_y FLOAT,
+    left_foot_x FLOAT,
+    left_foot_y FLOAT,
+    right_foot_x FLOAT,
+    right_foot_y FLOAT
+);
