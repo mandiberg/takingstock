@@ -112,7 +112,7 @@ class SortPose:
         else:
             self.EXISTING_CROPABLE_DIM = None
             print(f"   XXX ERROR XXX NEED TO SET EXISTING_CROPABLE_DIM for {self.EXPAND_SIZE[0]}")
-        # self.BGCOLOR = [0,0,0]
+        self.BGCOLOR = [0,0,0]
         self.ONE_SHOT = ONE_SHOT
         self.JUMP_SHOT = JUMP_SHOT
         self.SHOT_CLOCK = 0
@@ -775,11 +775,77 @@ class SortPose:
         cv2.waitKey(0)
         cv2.destroyAllWindows()
 
+    def check_metadata_for_duplicate(self, df_sorted, index):
+        face_embeddings_distance, body_landmarks_distance, same_description, same_site_name_id = None, None, False, None
+        print("checking metadata for duplicate at index", index)
+        # Check for duplicate metadata in the DataFrame
+        df_sorted['description'] = df_sorted['description'].apply(lambda x: x if pd.notna(x) else None)
+        current_row = df_sorted.iloc[index]
+        current_image_id = current_row.get('image_id', None)
+        enc1 = current_row.get('face_encodings68', None)
+        body_lms1 = current_row.get('body_landmarks_normalized_array', None)
+        if current_row['description'] is not None: current_description = current_row['description'][:100] 
+        else: current_description = "No description"
+        if self.VERBOSE: print("this is the current row", current_row)
+        # print("this is the current row", current_row)
+        count_of_comparisons = 10  # Number of rows to compare with the current row
+        df_slice = df_sorted.iloc[index-1:index+count_of_comparisons]
+        #Nan to None for 'description' column
+        # Iterate over a slice of df_sorted: 10 rows starting from 'index'
+        # print("this is the slice of df_sorted", df_slice)
+        for i, row in df_slice.iterrows():
+            if i != index:
+                row_image_id = row.get('image_id', None)
+                enc2 = row.get('face_encodings68', None)
+                body_lms2 = row.get('body_landmarks_normalized_array', None)
+                if self.VERBOSE: print(f"comparing index {index} {current_image_id} to slice index {i} {row_image_id}")
+                # print("row description is", row['description'])
+
+                if row['description'] is not None: row_description = row['description'][:100]  # Limit to first 100 characters for display
+                else: row_description = "No description"
+                # print(current_description, row_description)
+                # print(current_row['site_name_id'], row['site_name_id'])
+                
+                # Test dimension of each row
+                if (enc1 is not None) and (enc2 is not None):
+                    face_embeddings_distance = self.get_d(enc1, enc2)
+                    if face_embeddings_distance < .4: print(f"face_embeddings_distance for index {index} and slice index {i}: {face_embeddings_distance}")
+                if (body_lms1 is not None) and (body_lms2 is not None):
+                    body_landmarks_distance = self.get_d(body_lms1, body_lms2)
+                    if body_landmarks_distance < .2: print(f"body_landmarks_distance for index {index} and slice index {i}: {body_landmarks_distance}")
+                if (current_description == row_description) and row_description != "No description": 
+                    print(f"Duplicate found slice index {i}: {current_description} is a duplicate of {row_description}")
+                    same_description = True
+
+                if (current_row['site_name_id'] == row['site_name_id']): 
+                    # this is hacky -- I'm checking to see how far apart the site_image_id is
+                    # if they are from the same shoot and same upload, they will be close together
+                    # these close together ones are likely to be subtly DIFFERENT images from the same shoot
+                    # if they were uploaded at different times, they will be far apart
+                    # 1000 is a random guess. It probabaly will be bigger. Maybe 10000 or more. 
+                    if abs(current_row['site_image_id'] - row['site_image_id']) < 1000:
+                        print(f"FALSE: Same site_image_id slice index {i}: {current_image_id} & {row_image_id} but far apart site_image_id {current_row['site_image_id']} & {row['site_image_id']}")
+                        same_site_name_id = False
+                    else:
+                        if self.VERBOSE: print(f"SAME site_name_id slice index {i}: {current_image_id} & {row_image_id}")
+                        same_site_name_id = True
+                else:
+                    if self.VERBOSE: print(f"Different site_name_id slice index {i}: {current_image_id} & {row_image_id}")
+                    same_site_name_id = False
+        return face_embeddings_distance, body_landmarks_distance, same_description, same_site_name_id
+
     def unique_face(self,img1,img2):
         # convert the images to grayscale
         img1 = cv2.cvtColor(img1, cv2.COLOR_BGR2GRAY)
         img2 = cv2.cvtColor(img2, cv2.COLOR_BGR2GRAY)
-
+        if self.VERBOSE: print("img1 shape", img1.shape)
+        if self.VERBOSE: print("img2 shape", img2.shape)
+        # check if the images have the same dimensions
+        if img1.shape != img2.shape:
+            # find the most common dimension and assign that to all other dimensions
+            common_dim = statistics.mode([img1.shape[0], img1.shape[1], img2.shape[0], img2.shape[1]])
+            if img1.shape != (common_dim, common_dim): img1 = cv2.resize(img1, (common_dim, common_dim))
+            if img2.shape != (common_dim, common_dim): img2 = cv2.resize(img2, (common_dim, common_dim))
         # define the function to compute MSE between two images
         def mse(img1, img2):
             h, w = img1.shape
@@ -796,7 +862,6 @@ class SortPose:
         error, diff = mse(img1, img2)
         
         return error
-
 
 
     def point(self,coords):
@@ -851,7 +916,7 @@ class SortPose:
         # print("face_top",self.ptop,"face_bottom",self.pbot)
         # print(self.pbot)
         self.face_height = self.dist(self.point(self.pbot), self.point(self.ptop))
-        print("face_height", str(self.face_height))
+        if self.VERBOSE: print("face_height", str(self.face_height))
         # return ptop, pbot, face_height
 
 
@@ -862,30 +927,30 @@ class SortPose:
         
         toobig = False  # Default value
         width,height=self.w,self.h
-        print("checkig boundaries")
-        print("width",width,"height", height)
-        print("nose_2d",p1)
-        print("face_height",self.face_height)
+        if self.VERBOSE: print("checkig boundaries")
+        if self.VERBOSE: print("width",width,"height", height)
+        if self.VERBOSE: print("nose_2d",p1)
+        if self.VERBOSE: print("face_height",self.face_height)
 
         if not self.image_edge_multiplier[1] == self.image_edge_multiplier[3]:
-            print("self.image_edge_multiplier left and right are not symmetrical breaking out", self.image_edge_multiplier[1], self.image_edge_multiplier[3])
+            if self.VERBOSE: print("self.image_edge_multiplier left and right are not symmetrical breaking out", self.image_edge_multiplier[1], self.image_edge_multiplier[3])
             return
         topcrop = int(p1[1]-self.face_height*self.image_edge_multiplier[0])
         rightcrop = int(p1[0]+self.face_height*self.image_edge_multiplier[1])
         botcrop = int(p1[1]+self.face_height*self.image_edge_multiplier[2])
         leftcrop = int(p1[0]-self.face_height*self.image_edge_multiplier[3])
         self.simple_crop = [topcrop, rightcrop, botcrop, leftcrop]
-        print("crop top, right, bot, left")
-        print(self.simple_crop)
+        if self.VERBOSE: print("crop top, right, bot, left")
+        if self.VERBOSE: print(self.simple_crop)
 
         # if topcrop >= 0 and width-rightcrop >= 0 and height-botcrop>= 0 and leftcrop>= 0:
         if any([topcrop < 0, width-rightcrop < 0, height-botcrop < 0, leftcrop < 0]):
-            print("one is negative: topcrop",topcrop,"rightcrop",width-rightcrop,"botcrop",height-botcrop,"leftcrop",leftcrop)
-            print("width",width,"height", height)
+            if self.VERBOSE: print("one is negative: topcrop",topcrop,"rightcrop",width-rightcrop,"botcrop",height-botcrop,"leftcrop",leftcrop)
+            if self.VERBOSE: print("width",width,"height", height)
             toobig = True
             self.negmargin_count += 1
         else:
-            print("all positive")
+            if self.VERBOSE: print("all positive")
             toobig = False
 
         return toobig
@@ -1051,7 +1116,8 @@ class SortPose:
                     if self.VERBOSE: print("this_expand_size", image_incremental_output_ratio, this_expand_size)
                 else:
                     this_expand_size = (self.EXPAND_SIZE[0],self.EXPAND_SIZE[1])
-                    # for non-incremental, this_expand_size is now 25000
+                    # for non-incremental, this_expand_size is now 2500
+
 
                 # calculate boder size by comparing scaled image dimensions to EXPAND_SIZE
                 # resize dims is the size of the image before expanding/cropping
@@ -1665,7 +1731,7 @@ class SortPose:
         Lms1d = []
         Lms1d3 = []
 
-        print(type(Lms))
+        if self.VERBOSE: print(type(Lms))
         if type(Lms) is list and len(Lms) > 0 and isinstance(Lms[0], (list, tuple)) and len(Lms[0]) == 3:
             print("lms is a list of xyz lists")
             for idx, lm in enumerate(Lms):
@@ -1677,8 +1743,8 @@ class SortPose:
                     append_lms(idx, x,y,z, structure, Lms2d, Lms1d, Lms1d3)
         if type(Lms) is list and len(Lms)==33:
             # handle erronous new API 3D body landmarks, 
-            print("lms is a list of 33 landmarks")
-            print("Lms", Lms)
+            if self.VERBOSE: print("lms is a list of 33 landmarks")
+            if self.VERBOSE: print("Lms", Lms)
             for idx, lm in enumerate(Lms):
                 if idx in selected_Lms:
                     # If lm is a Landmark object, access attributes directly
@@ -1962,7 +2028,7 @@ class SortPose:
         # enc_angles_list = angles_pointers + angles_thumbs + body + visibility
         enc_angles_list =  pointers 
         enc1 = np.array(enc_angles_list)
-        print("enc1++ final np array", enc1)
+        if self.VERBOSE: print("enc1++ final np array", enc1)
         return enc1
     
 
