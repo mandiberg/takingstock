@@ -112,7 +112,7 @@ class SortPose:
         else:
             self.EXISTING_CROPABLE_DIM = None
             print(f"   XXX ERROR XXX NEED TO SET EXISTING_CROPABLE_DIM for {self.EXPAND_SIZE[0]}")
-        # self.BGCOLOR = [0,0,0]
+        self.BGCOLOR = [0,0,0]
         self.ONE_SHOT = ONE_SHOT
         self.JUMP_SHOT = JUMP_SHOT
         self.SHOT_CLOCK = 0
