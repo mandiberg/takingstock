@@ -30,6 +30,7 @@ import sys
 sys.path.insert(1, '/Users/michaelmandiberg/Documents/GitHub/facemap/')
 from my_declarative_base import Encodings, Base
 from mp_db_io import DataIO
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 IS_SSD = False
 VERBOSE = True
@@ -79,6 +80,24 @@ def export_bson(collection, query, filename):
         if VERBOSE:
             print(f"No document found for {query}")
 
+def export_task(row, EXPORT_DIR):
+    image_id = row.image_id
+    results = []
+    # encodings, body_landmarks, face_landmarks
+    if any([row.mongo_encodings, row.mongo_body_landmarks, row.mongo_face_landmarks]):
+        export_bson(mongo_collection, {"image_id": image_id}, f"{EXPORT_DIR}/{image_id}_encodings.bson")
+        results.append("encodings")
+    if row.mongo_body_landmarks_norm:
+        export_bson(bboxnormed_collection, {"image_id": image_id}, f"{EXPORT_DIR}/{image_id}_body_landmarks_norm.bson")
+        results.append("body_landmarks_norm")
+    if any([row.mongo_hand_landmarks, row.mongo_hand_landmarks_norm]):
+        export_bson(mongo_hand_collection, {"image_id": image_id}, f"{EXPORT_DIR}/{image_id}_hand_landmarks.bson")
+        results.append("hand_landmarks")
+    if row.mongo_body_landmarks_3D:
+        export_bson(body_world_collection, {"image_id": image_id}, f"{EXPORT_DIR}/{image_id}_body_landmarks_3D.bson")
+        results.append("body_landmarks_3D")
+    return image_id
+
 def main():
     init_session()
     init_mongo()
@@ -110,27 +129,19 @@ def main():
             print("No (more) records to process.")
             break
 
-        for row in results:
-            # print(row)
-            image_id = row.image_id
-            encoding_id = row.encoding_id
 
-            # Step 2: Export BSON from MongoDB collections
-            # encodings, body_landmarks, face_landmarks
-            if any([row.mongo_encodings, row.mongo_body_landmarks, row.mongo_face_landmarks]):
-                export_bson(mongo_collection, {"image_id": image_id}, f"{EXPORT_DIR}/{image_id}_encodings.bson")
-            if row.mongo_body_landmarks_norm:
-                export_bson(bboxnormed_collection, {"image_id": image_id}, f"{EXPORT_DIR}/{image_id}_body_landmarks_norm.bson")
-            if any([row.mongo_hand_landmarks, row.mongo_hand_landmarks_norm]):
-                export_bson(mongo_hand_collection, {"image_id": image_id}, f"{EXPORT_DIR}/{image_id}_hand_landmarks.bson")
-            if row.mongo_body_landmarks_3D:
-                export_bson(body_world_collection, {"image_id": image_id}, f"{EXPORT_DIR}/{image_id}_body_landmarks_3D.bson")
+        # Step 2: Parallel export BSON from MongoDB collections
+        image_ids_exported = []
+        with ThreadPoolExecutor(max_workers=io.NUMBER_OF_PROCESSES) as executor:  # Adjust max_workers as needed
+            future_to_row = {executor.submit(export_task, row, EXPORT_DIR): row for row in results}
+            for future in as_completed(future_to_row):
+                image_id = future.result()
+                image_ids_exported.append(image_id)
 
-            # Step 3: Update migrated_Mongo status
-            session.query(Encodings_Migration).filter(
-                Encodings_Migration.image_id == image_id
-            ).update({"migrated_Mongo": 0})
-
+        # Step 3: Update migrated_Mongo status for all exported image_ids in this batch
+        session.query(Encodings_Migration).filter(
+            Encodings_Migration.image_id.in_(image_ids_exported)
+        ).update({"migrated_Mongo": 0}, synchronize_session=False)
         session.commit()
         offset += BATCH_SIZE
         gc.collect()
