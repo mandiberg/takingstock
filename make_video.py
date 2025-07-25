@@ -1267,7 +1267,7 @@ def compare_images(last_image, img, df_sorted, index):
                     # # sort.not_make_face.append(outpath_notfacecombined_image) ########## variable name error
                     # # Save the new image
                     # #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@#
-                face_embeddings_distance, body_landmarks_distance, same_description, same_site_name_id = sort.check_metadata_for_duplicate(df_sorted, index)
+              #  face_embeddings_distance, body_landmarks_distance, same_description, same_site_name_id = sort.check_metadata_for_duplicate(df_sorted, index)
 
             else:
                 print("first round, skipping the pair test")
@@ -2141,6 +2141,12 @@ def main():
                 ### Set counter_dict (without start stuff which is not needed) ###
                 set_my_counter_dict(this_topic, cluster_no, pose_no)
                 df_sorted = load_df_sorted_from_csv(os.path.join(CSV_FOLDER, csv_file))
+
+                #Dedupe sorting here!
+                df_sorted = sort.dedupe_full_df(df_sorted)
+                quit()
+
+
                 linear_test_df(df_sorted,segment_count,cluster_no)
 
     if MODE == 1:

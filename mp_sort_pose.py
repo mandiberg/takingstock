@@ -802,12 +802,23 @@ class SortPose:
         return visibility_diffs
 
 
-    def check_hand_landmarks_for_duplicate(self, df_sorted, index):
-        print("checking hand landmarks for duplicates at index", index)
-        current_row = df_sorted.iloc[index]
-        hand_landmark_1 = current_row.get('land')
+    # def check_hand_landmarks_for_duplicate(self, df_sorted, index):
+    #     print("checking hand landmarks for duplicates at index", index)
+    #     current_row = df_sorted.iloc[index]
+    #     hand_landmark_1 = current_row.get('land')
 
 
+    def dedupe_full_df(self, df_sorted):
+        #pass 1, wrist & ankles, face XYZ
+        #just focus on getting it to execute first pass
+        
+        #pass 2, face embeddings, desc, site, bbox
+
+
+
+
+        return df_sorted
+        
     def check_metadata_for_duplicate(self, df_sorted, index):
         face_embeddings_distance, body_landmarks_distance, same_description, same_site_name_id = None, None, False, None
         print("checking metadata for duplicate at index", index)
