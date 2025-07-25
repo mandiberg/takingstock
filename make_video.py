@@ -2106,6 +2106,8 @@ def main():
             df["body_landmarks_normalized"] = df["body_landmarks_normalized"].apply(io.str_to_landmarks)
             df["body_landmarks_normalized_array"] = df["body_landmarks_normalized"].apply(lambda x: sort.prep_enc(x, structure="list")) # convert mp lms to list
             df["body_landmarks_normalized_visible_array"] = df["body_landmarks_normalized"].apply(lambda x: sort.prep_enc(x, structure="visible")) # convert mp lms to list
+            df["wrist_ankle_landmarks_normalized_array"] = df["body_landmarks_normalized"].apply(lambda x: sort.prep_enc(x, structure="wrists_and_ankles")) # convert mp lms to list
+
 
             # conver face_x	face_y	face_z	mouth_gap site_image_id to float
             columns_to_convert = ['face_x', 'face_y', 'face_z', 'mouth_gap', 'site_image_id']

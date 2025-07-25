@@ -141,6 +141,7 @@ class SortPose:
         self.FINGER_LMS = self.make_subset_landmarks(19,20)
         self.THUMB_POINTER_LMS = self.make_subset_landmarks(19,22)
         self.WRIST_LMS = self.make_subset_landmarks(15,16)
+        self.ANKLES_LMS = self.make_subset_landmarks(27,28)
         self.HAND_LMS_POINTER = self.make_subset_landmarks(8,8)
         # adding pointer finger tip
         # self.SUBSET_LANDMARKS.extend(self.FINGER_LMS) # this should match what is in Clustering
@@ -777,6 +778,36 @@ class SortPose:
         cv2.waitKey(0)
         cv2.destroyAllWindows()
 
+
+    def check_body_landmarks_visibility_for_duplicate(self, df_sorted, index):
+        #function to check body landmarks visibility for dupes, ie if one of two images has legs and the other doesn't, cant be dupe. first pass for dupe detection
+        print("checking body landmark visibility for duplicates at index", index)
+        current_row = df_sorted.iloc[index]
+        visibility_enc_1 = current_row.get('body_landmarks_normalized_visible_array', None)
+        visibility_enc_1 = [round(value) for value in visibility_enc_1]
+        count_of_comparisons = 10  # Number of rows to compare with the current row
+        df_slice = df_sorted.iloc[index-1:index+count_of_comparisons]
+        visibility_diffs = []
+        for i, row in df_slice.iterrows():
+            if i != index:
+                visibility_enc_2 = row.get('body_landmarks_normalized_visible_array', None)
+                visibility_enc_2 = [round(value) for value in visibility_enc_2]
+                if (visibility_enc_1 is not None) and (visibility_enc_2 is not None):
+                    visibility_diff = sum(abs(a - b) for a, b in zip(visibility_enc_1, visibility_enc_2))
+                   
+                    #highest diffs so far have been 4, going to have it ping for any higher
+                    if visibility_diff > 4:
+                        print("!!!HIGH VIS DIFF!!!", visibility_diff)
+                    visibility_diffs.append(visibility_diff)
+        return visibility_diffs
+
+
+    def check_hand_landmarks_for_duplicate(self, df_sorted, index):
+        print("checking hand landmarks for duplicates at index", index)
+        current_row = df_sorted.iloc[index]
+        hand_landmark_1 = current_row.get('land')
+
+
     def check_metadata_for_duplicate(self, df_sorted, index):
         face_embeddings_distance, body_landmarks_distance, same_description, same_site_name_id = None, None, False, None
         print("checking metadata for duplicate at index", index)
@@ -785,7 +816,12 @@ class SortPose:
         current_row = df_sorted.iloc[index]
         current_image_id = current_row.get('image_id', None)
         enc1 = current_row.get('face_encodings68', None)
+    
+
         body_lms1 = current_row.get('body_landmarks_normalized_array', None)
+        print("going to get ankles")
+        wrist_ankle_lms1 = current_row.get('wrist_ankle_landmarks_normalized_array', None)
+        print("got anklkes",wrist_ankle_lms1 )
         if current_row['description'] is not None: current_description = current_row['description'][:100] 
         else: current_description = "No description"
         if self.VERBOSE: print("this is the current row", current_row)
@@ -800,6 +836,7 @@ class SortPose:
                 row_image_id = row.get('image_id', None)
                 enc2 = row.get('face_encodings68', None)
                 body_lms2 = row.get('body_landmarks_normalized_array', None)
+                wrist_ankle_lms2 = row.get('wrist_ankle_landmarks_normalized_array', None)
                 if self.VERBOSE: print(f"comparing index {index} {current_image_id} to slice index {i} {row_image_id}")
                 # print("row description is", row['description'])
 
@@ -807,13 +844,15 @@ class SortPose:
                 else: row_description = "No description"
                 # print(current_description, row_description)
                 # print(current_row['site_name_id'], row['site_name_id'])
-                
+               
                 # Test dimension of each row
                 if (enc1 is not None) and (enc2 is not None):
                     face_embeddings_distance = self.get_d(enc1, enc2)
                     if face_embeddings_distance < .4: print(f"face_embeddings_distance for index {index} and slice index {i}: {face_embeddings_distance}")
                 if (body_lms1 is not None) and (body_lms2 is not None):
                     body_landmarks_distance = self.get_d(body_lms1, body_lms2)
+                    wrist_ankle_landmarks_distance = self.get_d(wrist_ankle_lms1, wrist_ankle_lms2)
+                    print(f"wrist ankle dist {wrist_ankle_landmarks_distance}")
                     if body_landmarks_distance < .2: print(f"body_landmarks_distance for index {index} and slice index {i}: {body_landmarks_distance}")
                 if (current_description == row_description) and row_description != "No description": 
                     print(f"Duplicate found slice index {i}: {current_description} is a duplicate of {row_description}")
@@ -2004,7 +2043,12 @@ class SortPose:
             # take the even landmarks and divide by 2
             for lm in self.SUBSET_LANDMARKS:
                 if self.VERBOSE: print("lm", lm)
+                if structure == "wrists_and_ankles" and lm not in [15,16,27,28]:
+                    print('skipping this landmark', lm)
+                    
+                    continue
                 landmarks.append(lm)
+
 
                 # July 2025 WTF is going on with dividin g by 2?
                 # if lm % 2 == 0:
@@ -2020,6 +2064,8 @@ class SortPose:
             visible_values = values[3::4]
             values = visible_values
         else:
+            #redefining structure so that it will return values from get_landmarks
+            if structure == "wrists_and_ankles": structure = "list"
             values = self.get_landmarks_2d(enc1, landmarks, structure)
 
         # pointers = self.get_landmarks_2d(enc1, self.SUBSET_LANDMARKS, structure)
