@@ -50,7 +50,7 @@ class SortPose:
         self.BRUTEFORCE = False
         self.use_3D = use_3D
         # print("init use_3D",self.use_3D)
-        self.CUTOFF = 200 # DOES factor if ONE_SHOT
+        self.CUTOFF = 20 # DOES factor if ONE_SHOT
         self.ORIGIN = 0
         self.this_nose_bridge_dist = self.NOSE_BRIDGE_DIST = None # to be set in first loop, and sort.this_nose_bridge_dist each time
 
@@ -117,7 +117,9 @@ class SortPose:
         self.JUMP_SHOT = JUMP_SHOT
         self.SHOT_CLOCK = 0
         self.SHOT_CLOCK_MAX = 10
-        self.BODY_LMS = list(range(13, 23)) # 0 is nose, 13-22 are left and right hands and elbows
+        # self.BODY_LMS = list(range(13, 23)) # 0 is nose, 13-22 are left and right hands and elbows
+        # this was set to 13,23 as of July 2025, prior to assigning clusters on BodyPoses3D
+        self.BODY_LMS = list(range(33)) # 0 is nose, 13-22 are left and right hands and elbows
         
         ## clustering parameters
         self.query_face = True # set to true. Clusturing code will set some to false
@@ -1990,20 +1992,36 @@ class SortPose:
 
 
     def prep_enc(self, enc1, structure="dict"):
-        # print("prep_enc enc1", enc1)
-        # print("prep_enc enc1", type(enc1))
-        if enc1 is list or enc1 is tuple:
+        if self.VERBOSE: print("prep_enc enc1", enc1)
+        if self.VERBOSE: print("prep_enc enc1", type(enc1))
+        if self.VERBOSE: print("self.SUBSET_LANDMARKS", self.SUBSET_LANDMARKS)
+        if enc1 is list or enc1 is tuple or enc1 == "list":
             landmarks = self.SUBSET_LANDMARKS
         else:
-            # print("prep_enc enc1 is dict, so devolving SUBSET")
+            if self.VERBOSE: print("prep_enc enc1 is NormalizedLandmarkList, so devolving SUBSET")
             # devolve the x y landmarks back to index
             landmarks = []
             # take the even landmarks and divide by 2
             for lm in self.SUBSET_LANDMARKS:
-                if lm % 2 == 0:
-                    landmarks.append(int(lm / 2))
+                if self.VERBOSE: print("lm", lm)
+                landmarks.append(lm)
 
-        pointers = self.get_landmarks_2d(enc1, landmarks, structure)
+                # July 2025 WTF is going on with dividin g by 2?
+                # if lm % 2 == 0:
+                #     landmarks.append(int(lm / 2))
+
+        # july 2025 was set to pointers
+        # pointers = self.get_landmarks_2d(enc1, landmarks, structure)
+
+        if structure == "visible":
+            if self.VERBOSE: print("structure is visible")
+            values = self.get_landmarks_2d(enc1, landmarks, "list3D")
+            # extract only the visible ones
+            visible_values = values[3::4]
+            values = visible_values
+        else:
+            values = self.get_landmarks_2d(enc1, landmarks, structure)
+
         # pointers = self.get_landmarks_2d(enc1, self.SUBSET_LANDMARKS, structure)
         # print("prep_enc enc after get_landmarks_2d", type(enc1))
 
@@ -2026,8 +2044,8 @@ class SortPose:
 
         # print("enc1++ pointers", pointers, angles_pointers)
         # enc_angles_list = angles_pointers + angles_thumbs + body + visibility
-        enc_angles_list =  pointers 
-        enc1 = np.array(enc_angles_list)
+        # enc_angles_list =  values 
+        enc1 = np.array(values)
         if self.VERBOSE: print("enc1++ final np array", enc1)
         return enc1
     

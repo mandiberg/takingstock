@@ -37,6 +37,7 @@ CYCLECOUNT = 1
 # SegmentTable_name = 'SegmentOct20'
 # SegmentHelper_name = None
 SegmentTable_name = 'SegmentBig_isface'
+SegmentTable_name = 'SegmentBig_isnotface'
 # SegmentHelper_name = 'SegmentHelper_may2025_4x4faces'
 SegmentHelper_name = None
 # SegmentHelper_name = 'SegmentHelper_june2025_nmlGPU300k'
@@ -85,7 +86,7 @@ ONLY_ONE = False # only one cluster, or False for video fusion, this_cluster = [
 GENERATE_FUSION_PAIRS = False # if true it will query based on MIN_VIDEO_FUSION_COUNT and create pairs
                                 # if false, it will grab the list of pair lists below
 MIN_VIDEO_FUSION_COUNT = 300
-LIMIT = 100000 # this is the limit for the SQL query
+LIMIT = 1000 # this is the limit for the SQL query
 MIN_CYCLE_COUNT = 10
 IS_CLUSTER = True
 USE_POSE_CROP_DICT = True
@@ -121,6 +122,7 @@ N_HANDS = N_CLUSTERS = None # declared here, but set in the SQL query below
 IS_ONE_CLUSTER = False
 CLUSTER_NO = 21 # sort on this one as HAND_POSITION for IS_HAND_POSE_FUSION
                 # if not IS_HAND_POSE_FUSION, then this is selecting HandsGestures
+                # I think this is pose number from BodyPoses3D if SORT_TYPE == "body3D"
 START_CLUSTER = 0
 
 # I started to create a separate track for Hands, but am pausing for the moment
@@ -151,7 +153,7 @@ BLUR_RADIUS = io.oddify(BLUR_RADIUS)
 
 MASK_OFFSET = [50,50,50,50]
 if OUTPAINT: from outpainting_modular import outpaint, image_resize
-VERBOSE = False
+VERBOSE = True
 SAVE_IMG_PROCESS = False
 # this controls whether it is using the linear or angle process
 IS_ANGLE_SORT = False
@@ -397,7 +399,7 @@ elif IS_SEGONLY and io.platform == "darwin":
 
     FROM =f"{SegmentTable_name} s "
     dupe_table_pre  = "s"
-    if SegmentTable_name == "SegmentBig_isface": 
+    if "SegmentBig_" in SegmentTable_name:
          # handles segmentbig which doesn't have is_dupe_of?
         FROM += f" JOIN Encodings e ON s.image_id = e.image_id "
         dupe_table_pre = "e"
@@ -582,6 +584,7 @@ if USE_ALL:
     # if USE_ALL is True, set "use_all": True
     motion["use_all"] = True
 else:
+    # this sets the range of face xyz narrower
     motion["forward_wider"] = True
 
 
@@ -2102,6 +2105,7 @@ def main():
             df["body_landmarks_array"] = df["body_landmarks_array"].apply(lambda x: eval(x) if isinstance(x, str) else x)
             df["body_landmarks_normalized"] = df["body_landmarks_normalized"].apply(io.str_to_landmarks)
             df["body_landmarks_normalized_array"] = df["body_landmarks_normalized"].apply(lambda x: sort.prep_enc(x, structure="list")) # convert mp lms to list
+            df["body_landmarks_normalized_visible_array"] = df["body_landmarks_normalized"].apply(lambda x: sort.prep_enc(x, structure="visible")) # convert mp lms to list
 
             # conver face_x	face_y	face_z	mouth_gap site_image_id to float
             columns_to_convert = ['face_x', 'face_y', 'face_z', 'mouth_gap', 'site_image_id']
