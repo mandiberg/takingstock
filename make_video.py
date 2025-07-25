@@ -1205,13 +1205,14 @@ def prep_encodings_NN(df_segment):
     return df_segment
 
 
-def compare_images(last_image, img, face_landmarks, bbox):
+def compare_images(last_image, img, df_sorted, index):
+    face_landmarks, bbox = df_sorted.iloc[index]['face_landmarks'], df_sorted.iloc[index]['bbox']
     is_face = None
     face_diff = 100 # declaring full value, for first round
     skip_face = False
     #crop image here:
     
-
+    # this is where the image gets cropped or expanded
     if sort.EXPAND:
         cropped_image = sort.expand_image(img, face_landmarks, bbox)
         
@@ -1227,44 +1228,32 @@ def compare_images(last_image, img, face_landmarks, bbox):
         cropped_image, is_inpaint = sort.crop_image(img, face_landmarks, bbox)
 
 
-    # print("cropped_image: ",cropped_image)
-    # if cropped_image is not None and len(cropped_image)>1 :
-    #     print(" >> have a cropped image trying to save", cropped_image.shape)
-    # elif cropped_image is not None and len(cropped_image)==1 :
-    #     print(" >> bad crop, will try inpainting and try again")
-    # elif cropped_image is None:
-    #     print(" >> no image here, trying next")
-
     # this code takes image i, and blends it with the subsequent image
     # next step is to test to see if mp can recognize a face in the image
     # if no face, a bad blend, try again with i+2, etc. 
     if cropped_image is not None and not is_inpaint:
         if VERBOSE: print("have a cropped image trying to save", cropped_image.shape)
-        # try:
-        #     print("last_image is ", type(last_image))
-        # except:
-        #     print("couldn't test last_image")
         try:
             if not sort.counter_dict["first_run"]:
                 if VERBOSE:  print("testing is_face")
 
                 if SORT_TYPE not in ("planar_body", "body3D"):
                 #     # skipping test_pair for body, b/c it is meant for face
-                #     is_face = True
-                # else:
                     is_face = sort.test_pair(last_image, cropped_image)
-
 
                 if is_face or SORT_TYPE in ("planar_body", "body3D"):
                     if VERBOSE: print("testing mse to see if same image")
                     face_diff = sort.unique_face(last_image,cropped_image)
+                    # if face diff is less than something very low (.04), then it is a duplicate and we are done
+                    # elif face diff is less than some other larger value, run additional tests
+                    # these tests will will check 
                     if VERBOSE: print("compare_images face_diff ", face_diff)
                     # if VERBOSE: print ("mse ", mse) ########## mse not a variable
                 else:
                     print("failed is_face test")
                     # use cv2 to place last_image and cropped_image side by side in a new image
 
-
+                    # I'm not 100% sure what this is doing, given that this is the FAIL loop
                     height = max(last_image.shape[0], cropped_image.shape[0])
                     last_image = cv2.resize(last_image, (last_image.shape[1], height))
                     cropped_image = cv2.resize(cropped_image, (cropped_image.shape[1], height))
@@ -1275,6 +1264,7 @@ def compare_images(last_image, img, face_landmarks, bbox):
                     # # sort.not_make_face.append(outpath_notfacecombined_image) ########## variable name error
                     # # Save the new image
                     # #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@#
+                face_embeddings_distance, body_landmarks_distance, same_description, same_site_name_id = sort.check_metadata_for_duplicate(df_sorted, index)
 
             else:
                 print("first round, skipping the pair test")
@@ -1282,13 +1272,13 @@ def compare_images(last_image, img, face_landmarks, bbox):
             print("last_image try failed")
         # if is_face or first_run and sort.resize_factor < sort.resize_max:
         if face_diff > sort.FACE_DUPE_DIST or sort.counter_dict["first_run"]:
+            # if successful, prepare for the next round
             sort.counter_dict["first_run"] = False
             last_image = cropped_image
             sort.counter_dict["good_count"] += 1
         else: 
             sort.counter_dict["isnot_face_count"] += 1
             print("pair do not make a face, skipping <<< is this really true? Isn't this for dupes?")
-
             return None, face_diff, True
         
     elif cropped_image is None and sort.counter_dict["first_run"]:
@@ -1711,7 +1701,7 @@ def linear_test_df(df_sorted,segment_count,cluster_no, itter=None):
 
             # compare_images to make sure they are face and not the same
             # last_image is cv2 np.array
-            cropped_image, face_diff, skip_face = compare_images(sort.counter_dict["last_image"], img, row['face_landmarks'], row['bbox'])
+            cropped_image, face_diff, skip_face = compare_images(sort.counter_dict["last_image"], img, df_sorted, index)
             
             # test and handle duplicates 
             if cropped_image is None and skip_face:
@@ -1789,10 +1779,10 @@ def linear_test_df(df_sorted,segment_count,cluster_no, itter=None):
         except Exception as e:
             traceback.print_exc()
             print(str(e))
-        print("metas_list")
-        print(metas_list)
-    return 
-    
+        if VERBOSE: print("metas_list")
+        if VERBOSE: print(metas_list)
+    return
+
 def write_images(img_list):
     for path_img in img_list:
         cv2.imwrite(path_img[0],path_img[1])
@@ -2107,6 +2097,15 @@ def main():
                 df["face_landmarks"] = df["face_landmarks"].apply(io.str_to_landmarks)
             df['bbox'] = df['bbox'].apply(lambda x: io.unstring_json(x))
             df['folder'] = df['folder'].apply(lambda x: os.path.join(io.ROOT, os.path.basename(x)))
+            # convert 'face_encodings68' from string to list
+            df["face_encodings68"] = df["face_encodings68"].apply(lambda x: eval(x) if isinstance(x, str) else x)
+            df["body_landmarks_array"] = df["body_landmarks_array"].apply(lambda x: eval(x) if isinstance(x, str) else x)
+            df["body_landmarks_normalized"] = df["body_landmarks_normalized"].apply(io.str_to_landmarks)
+            df["body_landmarks_normalized_array"] = df["body_landmarks_normalized"].apply(lambda x: sort.prep_enc(x, structure="list")) # convert mp lms to list
+
+            # conver face_x	face_y	face_z	mouth_gap site_image_id to float
+            columns_to_convert = ['face_x', 'face_y', 'face_z', 'mouth_gap', 'site_image_id']
+            df[columns_to_convert] = df[columns_to_convert].applymap(io.make_float)
             # Process the dataframe as needed
             return df
 

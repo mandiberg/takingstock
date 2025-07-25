@@ -48,7 +48,7 @@ class DataIO:
             self.mongo_client = pymongo.MongoClient(self.dbmongo['host'])
             self.mongo_db = self.mongo_client[self.dbmongo['name']]
             self.mongo_collection_face = self.mongo_db['encodings']
-            self.mongo_collection_body = self.mongo_db["body_landmarks_norm"]
+            self.mongo_collection_body_norm = self.mongo_db["body_landmarks_norm"]
             self.mongo_collection_body3D = self.mongo_db["body_world_landmarks"]
             self.mongo_collection_hands = self.mongo_db["hand_landmarks"]
 
@@ -341,22 +341,22 @@ class DataIO:
 
         # print("self.query_face: ", self.query_face)
         # print("self.query_body: ", self.query_body)
-        results_face = results_body = results_hands = None
+        results_face = results_body_norm = results_hands = None
         if image_id:
             if self.query_face: 
                 results_face = self.mongo_collection_face.find_one({"image_id": image_id})
             if self.query_body: 
-                results_body = self.mongo_collection_body.find_one({"image_id": image_id})
+                results_body_norm = self.mongo_collection_body_norm.find_one({"image_id": image_id})
                 results_body3D = self.mongo_collection_body3D.find_one({"image_id": image_id})
             if self.query_hands: 
                 results_hands = self.mongo_collection_hands.find_one({"image_id": image_id})
             # print("got results from mongo, types are: ", type(results_face), type(results_body))
             # print("results_face: ", results_face)
             # print("results_body: ", results_body)
+            # print("results_body3D: ", results_body3D)
             face_encodings68 = face_landmarks = body_landmarks = body_landmarks_normalized = body_landmarks_3D = None
-            if results_body:
-                body_landmarks_normalized = results_body["nlms"]
-                body_landmarks_3D = results_body3D["body_world_landmarks"] if results_body3D is not None else None
+            if results_body_norm: body_landmarks_normalized = results_body_norm["nlms"]
+            if results_body3D: body_landmarks_3D = results_body3D["body_world_landmarks"] if results_body3D is not None else None
             if results_face:
                 try:
                     face_encodings68 = results_face['face_encodings68']
@@ -493,3 +493,35 @@ class DataIO:
             except Exception as e2:
                 print(f"Failed to parse as JSON format: {e2}")
                 return None
+
+
+    def create_class_from_reflection(self, engine, original_table_name, new_table_name):
+        """
+        Create a migration class by reflecting the structure of an existing table
+        """
+        from sqlalchemy import Table, MetaData
+        from sqlalchemy.ext.automap import automap_base
+
+        # Create metadata and reflect the existing table
+        metadata = MetaData()
+        original_table = Table(original_table_name, metadata, autoload_with=engine)
+        
+        # Create new table with same structure but different name
+        migration_table = Table(new_table_name, metadata)
+        
+        # Copy all columns from original table
+        for column in original_table.columns:
+            new_column = column.copy()
+            migration_table.append_column(new_column)
+        
+        # Create the table in database if it doesn't exist
+        migration_table.create(engine, checkfirst=True)
+        
+        # Create automap base and prepare
+        AutomapBase = automap_base(metadata=metadata)
+        AutomapBase.prepare()
+        
+        # Get the reflected class
+        migration_class = getattr(AutomapBase.classes, new_table_name)
+        
+        return migration_class

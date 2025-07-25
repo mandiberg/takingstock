@@ -145,7 +145,9 @@ class Encodings(Base):
     is_hand_right             = Column(Boolean)
     is_bodyhand_left              = Column(Boolean)
     is_bodyhand_right             = Column(Boolean)
-
+    migrated_Mongo             = Column(Boolean)
+    migrated_SQL               = Column(Boolean)
+    
 class Encodings_Site2(Base):
     __tablename__ = 'Encodings_Site2'
     encoding_id         = Column(Integer, primary_key=True, autoincrement=True)
