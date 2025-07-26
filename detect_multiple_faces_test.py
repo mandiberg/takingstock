@@ -59,7 +59,7 @@ DRAW_BOX = False
 MINSIZE = 500
 SLEEP_TIME=0
 VERBOSE = False
-QUIET = False
+QUIET = True
 
 # only for triage
 sortfolder ="getty_test"
@@ -109,7 +109,7 @@ switching to topic targeted
 18	afripics - where are these?
 '''
 # I think this only matters for IS_FOLDER mode, and the old SQL way
-SITE_NAME_ID = 9
+SITE_NAME_ID = 4
 # 2, shutter. 4, istock
 # 7 pond5, 8 123rf
 POSE_ID = 0
@@ -122,20 +122,20 @@ POSE_ID = 0
 
 # for sites with files spread over several SSDs, you can add addtional folders
 # you will also have to add the MAIN_FOLDER2 variable below, etc
-# MAIN_FOLDER1 = "/Volumes/TK-EX_FAT/images_istock"
-# MAIN_FOLDER2 = "/Volumes/LaCie/images_istock"
-# MAIN_FOLDER3 = "/Volumes/OWC5/images_istock"
+MAIN_FOLDER1 = "/Volumes/LaCie/images_istock"
+MAIN_FOLDER2 = "/Volumes/ExFAT_4TBgr/images_istock"
+MAIN_FOLDER3 = "/Volumes/OWC5/images_istock"
 
 # #testing locally with two
-MAIN_FOLDER1 = "/Volumes/OWC4/images_alamy"
+# MAIN_FOLDER1 = "/Volumes/OWC4/images_alamy"
 # MAIN_FOLDER2 = "/Volumes/OWC4/images_unsplash9"
 # MAIN_FOLDERS = [MAIN_FOLDER1, MAIN_FOLDER2]
 
 
-MAIN_FOLDERS = [MAIN_FOLDER1]
-# MAIN_FOLDERS = [MAIN_FOLDER1, MAIN_FOLDER2, MAIN_FOLDER3]
+# MAIN_FOLDERS = [MAIN_FOLDER1]
+MAIN_FOLDERS = [MAIN_FOLDER1, MAIN_FOLDER2, MAIN_FOLDER3]
 
-BATCH_SIZE = 10 # Define how many from each folder in each batch
+BATCH_SIZE = 5000 # Define how many from each folder in each batch
 LIMIT = 1000
 
 #temp hack to go 1 subfolder at a time
@@ -1944,8 +1944,10 @@ def main():
 
     if IS_FOLDER is True:
         for main_folder in MAIN_FOLDERS:
+            first_pass = True
             for csv_foldercount_name in CSV_FOLDERCOUNT_NAMES:
-                print(f"in IS_FOLDER: {main_folder} doing csv_foldercount_name: {csv_foldercount_name}")
+                if csv_foldercount_name == "folder_countout2.csv": first_pass = False
+                print(f"in IS_FOLDER: {main_folder} doing csv_foldercount_name: {csv_foldercount_name}, first_pass: {first_pass}")
                 folder_paths = io.make_hash_folders(main_folder, as_list=True)
                 csv_foldercount_path = os.path.join(main_folder, csv_foldercount_name)
                 completed_folders = io.get_csv_aslist(csv_foldercount_path)
@@ -2052,7 +2054,7 @@ def main():
                                     # print("in results encoding_id", result.encoding_id)
                                     imagepath = os.path.join(folder, img)
                                                                 
-                                    if not result.encoding_id:
+                                    if not result.encoding_id and first_pass is True:
                                         # if it hasn't been encoded yet, add it to the tasks
                                         task = (result.image_id, imagepath)
                                         if not QUIET: print(">> adding to face queue:", result.image_id, "site_image_id", site_image_id)
@@ -2073,21 +2075,21 @@ def main():
                                     elif result.mongo_face_landmarks == 0 and result.mongo_body_landmarks == 0:
                                         if VERBOSE: print("     xxxx ALREADY FULLY DONE - nobody here:", result.image_id)
                                         task = None
-                                    elif result.mongo_face_landmarks is None and result.mongo_body_landmarks == 1 and result.bbox is not None:
+                                    elif result.mongo_face_landmarks is None and result.mongo_body_landmarks == 1 and result.bbox is not None and first_pass is True:
                                         print("~?~ WEIRD no face, but bbox:", result.image_id, imagepath, result.mongo_face_landmarks, result.mongo_body_landmarks, result.bbox)
                                         # for the integrated version, this will do both
                                         task = (result.image_id, imagepath)
-                                    elif result.mongo_face_landmarks is None and result.mongo_body_landmarks is None:
+                                    elif result.mongo_face_landmarks is None and result.mongo_body_landmarks is None and first_pass is True:
                                         print("~~ no face, adding to face queue for is_face_no_lms do_over:", result.image_id, imagepath, result.mongo_face_landmarks, result.mongo_body_landmarks, result.bbox)
                                         # for the integrated version, this will do both
                                         task = (result.image_id, imagepath)
-                                    elif result.mongo_face_landmarks == 0 and result.mongo_body_landmarks is None:
+                                    elif result.mongo_face_landmarks == 0 and result.mongo_body_landmarks is None :
                                         print("~~~~ no face, do body without bbox:", result.image_id, imagepath, result.mongo_face_landmarks, result.mongo_body_landmarks, result.bbox)
                                         # for the integrated version, this will do both
                                         task = (result.image_id, imagepath, result.mongo_face_landmarks, result.mongo_body_landmarks, None)
                                     else:
                                         # skips BOTH 1) face and body have been encoded 2) no face was detected -- these should be rerun to find the body only
-                                        print(" ?  something is wacky, skipping:", result.image_id, imagepath, result.mongo_face_landmarks, result.mongo_body_landmarks, result.bbox)
+                                        if first_pass: print(" ?  something is wacky, skipping:", result.image_id, imagepath, result.mongo_face_landmarks, result.mongo_body_landmarks, result.bbox)
                                         task = None
                                     # print(task)
                                     if task is not None:
