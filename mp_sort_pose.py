@@ -21,6 +21,9 @@ import pymongo
 import pickle
 import traceback
 
+from scipy.spatial.distance import cosine
+
+
 from deap import base, creator, tools, algorithms
 
 
@@ -802,22 +805,249 @@ class SortPose:
         return visibility_diffs
 
 
-    # def check_hand_landmarks_for_duplicate(self, df_sorted, index):
-    #     print("checking hand landmarks for duplicates at index", index)
-    #     current_row = df_sorted.iloc[index]
-    #     hand_landmark_1 = current_row.get('land')
+    ###########################################################################
+    ################### TENCH CODE FOR DEDUPE ANALYSIS ########################
+    # CLAUDE LINK https://claude.ai/chat/15ff9f07-2387-4018-8005-49e44a9e1ad5 #
+    ###########################################################################
 
-
-    def dedupe_full_df(self, df_sorted):
-        #pass 1, wrist & ankles, face XYZ
-        #just focus on getting it to execute first pass
+    def remove_duplicates(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Main method to remove duplicates from the dataframe.
+        Returns sorted_df with all duplicates removed (keeping first occurrence).
+        """
+        self.pass1_face_threshold = .15  # Lower = more similar (cosine distance)
+        self.pass1_bbox_threshold = .9   # Higher = more similar
+        self.pass2_threshold = 1.9   # Combined similarity threshold
+        to_remove = set()
+        n_rows = len(df)
         
-        #pass 2, face embeddings, desc, site, bbox
+        if self.VERBOSE: print(f"Processing {n_rows} images for duplicate detection...")
+
+        for i in range(n_rows):
+            if i in to_remove:
+                continue
+                
+            
+            for j in range(i + 1, n_rows):
+                if j in to_remove:
+                    continue
+                
+                # Pass 1: Fast screening
+                if self._pass1_comparison(df.iloc[i], df.iloc[j]):
+                    to_remove.add(j)
+                    if self.VERBOSE: print(f"remove_duplicates, pass one triggered at {i},{j}.  removing {j}")
+                    continue
+
+                pass2_score = self._pass2_comparison(df.iloc[i], df.iloc[j])
+                pass2_sum = sum(score for score in pass2_score if score is not None)
+               
+                # Pass 2: Deep analysis for potential matches
+                if pass2_sum >= self.pass2_threshold:
+                    to_remove.add(j)
+                    if self.VERBOSE: print(f"remove_duplicates, pass two triggered at {i}, {j}. total score: {pass2_sum}, individual scores: {pass2_score}.  removing {j}")
+
+        
+        if self.VERBOSE: print(f"remove_duplicates, Found {len(to_remove)} duplicates to remove")
+        if self.VERBOSE: print(to_remove)
+
+        # Create sorted_df with all duplicates removed
+        sorted_df = df.drop(df.index[list(to_remove)]).reset_index(drop=True)
+        print(f'remove_duplicates sorted_df: {sorted_df}')
+        return sorted_df
+    
+    def _pass1_comparison(self, row1: pd.Series, row2: pd.Series) -> bool:
+        """
+        Pass 1: Fast screening using face encodings and bbox similarity.
+        Returns True if images are likely duplicates.
+        """
+        # Face encoding similarity
+        face_similar = self._compare_face_encodings(row1, row2)
+        
+        # Bbox similarity
+        bbox_similar = self._compare_bbox(row1, row2)
+        
+        # Both conditions must be met for Pass 1 duplicate detection
+        return face_similar and bbox_similar
+    
+    def _pass2_comparison(self, row1: pd.Series, row2: pd.Series) -> bool:
+        """
+        Pass 2: Deep analysis using landmarks and multi-feature scoring.
+        Returns True if images are likely duplicates based on combined score.
+        """
+
+        scores = []
+        # Refined face encoding analysis
+        face_score = self._detailed_face_analysis(row1, row2)
+        scores.append(face_score)
+        
+        # Body landmarks similarity
+        body_score = self._compare_body_landmarks(row1, row2)
+        scores.append(body_score)
+        
+        # Face landmarks similarity
+        face_landmarks_score = self._compare_face_landmarks(row1, row2)
+        scores.append(face_landmarks_score)
+        
+        # Hand landmarks similarity
+        hand_score = self._compare_hand_landmarks(row1, row2)
+        scores.append(hand_score)
+        
+        # if self.VERBOSE: print(f'duplicate_detection_pass2_comparison {combined_score}')
+        return scores
+    
+    def _compare_face_encodings(self, row1: pd.Series, row2: pd.Series) -> bool:
+        """Compare face encodings using cosine distance."""
+        try:
+            enc1 = row1.get('face_encodings68', None)
+            enc2 = row2.get('face_encodings68', None)
+
+            if enc1 is None or enc2 is None:
+                if self.VERBOSE: print(f'remove_duplicates_pass_1_face_enc unable to process: {row1}, {row2}')
+                return False
+            
+            distance = cosine(enc1, enc2)
+            return distance <= self.pass1_face_threshold
+        except:
+            return False
+    
+    def _compare_bbox(self, row1: pd.Series, row2: pd.Series) -> bool:
+        """Compare bounding box similarity."""
+        try:
+            bbox1 = self._parse_bbox(row1['bbox'])
+            bbox2 = self._parse_bbox(row2['bbox'])
+            
+            if bbox1 is None or bbox2 is None:
+                if self.VERBOSE: print(f"remove_duplicates_pass_1_bbox unable to process {row1}, {row2}")
+                return False
+            
+            # Calculate IoU (Intersection over Union)
+            iou = self._calculate_iou(bbox1, bbox2)
+            return iou >= self.pass1_bbox_threshold
+        except:
+            return False
+    
+    def _detailed_face_analysis(self, row1: pd.Series, row2: pd.Series) -> float:
+        """More detailed face encoding analysis for Pass 2."""
+        try:
+            enc1 = row1.get('face_encodings68', None)
+            enc2 = row2.get('face_encodings68', None)
+            
+            if enc1 is None or enc2 is None:
+                return None
+            
+            # Convert cosine distance to similarity score (0-1)
+            distance = cosine(enc1, enc2)
+            similarity = 1 - distance
+            return max(0, similarity)  # Ensure non-negative
+        except:
+            return None
+    
+    def _compare_body_landmarks(self, row1: pd.Series, row2: pd.Series) -> float:
+        """Compare body landmarks arrays."""
+        try:
+            landmarks1 = row1.get('body_landmarks_array', None)
+            landmarks2 = row2.get('body_landmarks_array', None)
+            
+            if landmarks1 is None or landmarks2 is None:
+                return None
+            
+            # Use normalized correlation
+            correlation = np.corrcoef(landmarks1, landmarks2)[0, 1]
+            return max(0, correlation) if not np.isnan(correlation) else None
+        except:
+            return None
+    
+    def _compare_face_landmarks(self, row1: pd.Series, row2: pd.Series) -> float:
+        """Compare face landmarks. Currently Unfunctional"""
+        try:
+            # This would need custom parsing based on the landmark format
+            # For now, return None to skip this comparison
+            return None
+        except:
+            return None
+    
+    def _compare_hand_landmarks(self, row1: pd.Series, row2: pd.Series) -> float:
+        """Compare hand landmarks arrays."""
+        try:
+            # Compare right hand landmarks (most likely to have data)
+            hand1right = row1.get('right_hand_landmarks_norm', None)
+            hand2right = row2.get('right_hand_landmarks_norm', None)
+            hand1left = row1.get('left_hand_landmarks_norm', None)
+            hand2left = row2.get('left_hand_landmarks_norm', None)
+            
+            if any in (hand1right, hand2right, hand1left, hand2left) is None:
+                print('remove_duplicates no hand landmarks')
+                return None
+            
+            # # Flatten if nested lists and compare
+            # if len(hand1) > 0 and isinstance(hand1[0], list):
+            #     hand1 = np.array(hand1).flatten()
+            # if len(hand2) > 0 and isinstance(hand2[0], list):
+            #     hand2 = np.array(hand2).flatten()
+            
+           
+            
+            if len(hand1right) != len(hand2right) or len(hand1right) == 0:
+                if self.VERBOSE: print('remove_duplicates right hands have diff number of encodings')
+                return None
+            if len(hand1left) != len(hand2left) or len(hand1left) == 0:
+                if self.VERBOSE: print('remove_duplicates left hands have diff number of encodings')
+                return None
+            
+            distance_right = cosine(hand1right, hand2right)
+            distance_left = cosine(hand1left, hand2left)
+            distance = distance_left + distance_right
+            return distance
+        except:
+            return None
+    
+    def _parse_bbox(self, bbox_str) -> dict:
+        """Parse bbox string into dictionary."""
+        if pd.isna(bbox_str):
+            return None
+        
+        try:
+            if isinstance(bbox_str, str):
+                return eval(bbox_str)
+            elif isinstance(bbox_str, dict):
+                return bbox_str
+            else:
+                return None
+        except:
+            return None
+    
+    def _calculate_iou(self, bbox1: dict, bbox2: dict) -> float:
+        """Calculate Intersection over Union for two bounding boxes."""
+        try:
+            # Extract coordinates
+            x1_min, y1_min = bbox1['left'], bbox1['top']
+            x1_max, y1_max = bbox1['right'], bbox1['bottom']
+            x2_min, y2_min = bbox2['left'], bbox2['top']
+            x2_max, y2_max = bbox2['right'], bbox2['bottom']
+            
+            # Calculate intersection
+            inter_x_min = max(x1_min, x2_min)
+            inter_y_min = max(y1_min, y2_min)
+            inter_x_max = min(x1_max, x2_max)
+            inter_y_max = min(y1_max, y2_max)
+            
+            if inter_x_max <= inter_x_min or inter_y_max <= inter_y_min:
+                return 0.0
+            
+            intersection = (inter_x_max - inter_x_min) * (inter_y_max - inter_y_min)
+            
+            # Calculate union
+            area1 = (x1_max - x1_min) * (y1_max - y1_min)
+            area2 = (x2_max - x2_min) * (y2_max - y2_min)
+            union = area1 + area2 - intersection
+            
+            return intersection / union if union > 0 else 0.0
+        except:
+            return 0.0
 
 
 
 
-        return df_sorted
         
     def check_metadata_for_duplicate(self, df_sorted, index):
         face_embeddings_distance, body_landmarks_distance, same_description, same_site_name_id = None, None, False, None
@@ -885,6 +1115,12 @@ class SortPose:
                     if self.VERBOSE: print(f"Different site_name_id slice index {i}: {current_image_id} & {row_image_id}")
                     same_site_name_id = False
         return face_embeddings_distance, body_landmarks_distance, same_description, same_site_name_id
+
+
+###########################################################################
+################### END TENCH CODE FOR DUPE DETECTION #####################
+###########################################################################
+
 
     def unique_face(self,img1,img2):
         # convert the images to grayscale

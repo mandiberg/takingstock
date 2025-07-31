@@ -2142,12 +2142,19 @@ def main():
                 set_my_counter_dict(this_topic, cluster_no, pose_no)
                 df_sorted = load_df_sorted_from_csv(os.path.join(CSV_FOLDER, csv_file))
 
+
+                #can delete this line after, using it to check dupe detection
+                #first run use it to see the images to double check, then can comment out for speed
+                # linear_test_df(df_sorted,segment_count,cluster_no)
+                
                 #Dedupe sorting here!
-                df_sorted = sort.dedupe_full_df(df_sorted)
+                df_sorted = sort.remove_duplicates(df_sorted)
+                df_sorted.to_csv(os.path.join(io.ROOT_DBx, f"df_sorted_{cluster_no}_ct{segment_count}_p{pose_no}.csv"), index=False)
+                # linear_test_df(df_sorted,segment_count,cluster_no)
                 quit()
-
-
                 linear_test_df(df_sorted,segment_count,cluster_no)
+
+
 
     if MODE == 1:
         print("MODE 1, assembling from CSV_FOLDER", CSV_FOLDER)
