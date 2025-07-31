@@ -88,21 +88,22 @@ OFFSET = 0
 
 # WHICH TABLE TO USE?
 # SegmentTable_name = 'SegmentOct20'
-SegmentTable_name = 'SegmentBig_isface'
+# SegmentTable_name = 'SegmentBig_isface'
+SegmentTable_name = 'SegmentBig_isnotface'
 
 # number of clusters produced. run GET_OPTIMAL_CLUSTERS and add that number here
 # 32 for hand positions
 # 128 for hand gestures
-N_CLUSTERS = 256
+N_CLUSTERS = 64
 
 ONE_SHOT= JUMP_SHOT= HSV_CONTROL=  VERBOSE= INPAINT= OBJ_CLS_ID = UPSCALE_MODEL_PATH =None
 # face_height_output, image_edge_multiplier, EXPAND=False, ONE_SHOT=False, JUMP_SHOT=False, HSV_CONTROL=None, VERBOSE=True,INPAINT=False, SORT_TYPE="128d", OBJ_CLS_ID = None,UPSCALE_MODEL_PATH=None, use_3D=False
 sort = SortPose(motion, face_height_output, image_edge_multiplier_sm, EXPAND,  ONE_SHOT,  JUMP_SHOT,  HSV_CONTROL,  VERBOSE, INPAINT,  CLUSTER_TYPE, OBJ_CLS_ID, UPSCALE_MODEL_PATH, use_3D)
 # MM you need to use conda activate mps_torch310 
-# sort.set_subset_landmarks(CLUSTER_TYPE)
 SUBSELECT_ONE_CLUSTER = 0
 
 # SUBSET_LANDMARKS is now set in sort pose init
+if CLUSTER_TYPE == "BodyPoses3D": sort.SUBSET_LANDMARKS = None
 USE_HEAD_POSE = False
 
 SHORTRANGE = False # controls a short range query for the face x,y,z and mouth gap
@@ -125,7 +126,7 @@ if USE_SEGMENT is True and (CLUSTER_TYPE != "Clusters"):
     print("setting Poses SQL")
     dupe_table_pre  = "s" # set default dupe_table_pre to s
     FROM =f"{SegmentTable_name} s " # set base FROM
-    if SegmentTable_name == "SegmentBig_isface": 
+    if "SegmentBig_" in SegmentTable_name:
         # handles segmentbig which doesn't have is_dupe_of, etc
         FROM += f" JOIN Encodings e ON s.image_id = e.image_id "
         dupe_table_pre = "e"
@@ -157,7 +158,7 @@ if USE_SEGMENT is True and (CLUSTER_TYPE != "Clusters"):
             WHERE += " AND ic.cluster_id IS NOT NULL AND ic.cluster_dist IS NULL"
 
     # WHERE += " AND h.is_body = 1"
-    LIMIT = 5000000
+    LIMIT = 5
 
     '''
     Poses
@@ -568,7 +569,13 @@ def process_landmarks_cluster_dist(df, df_subset_landmarks):
     # Step 3: Print the result to check
     print("df_subset_landmarks", df_subset_landmarks[['image_id', 'enc1']])
 
-    if df['cluster_id'].isnull().values.any():
+    if 'cluster_id' not in df.columns:
+        # assign clusters to all rows
+        # df_subset_landmarks.loc[:, ['cluster_id', 'cluster_dist']] = zip(*df_subset_landmarks['enc1'].apply(prep_pose_clusters_enc))
+        cluster_results = df_subset_landmarks['enc1'].apply(prep_pose_clusters_enc)
+        # df_subset_landmarks['cluster_id'], df_subset_landmarks['cluster_dist'] = zip(*cluster_results)
+        df_subset_landmarks[['cluster_id', 'cluster_dist']] = pd.DataFrame(cluster_results.tolist(), index=df_subset_landmarks.index)
+    elif df['cluster_id'].isnull().values.any():
         # df_subset_landmarks["cluster_id"], df_subset_landmarks["cluster_dist"] = zip(*df_subset_landmarks["enc1"].apply(prep_pose_clusters_enc))
         df_subset_landmarks.loc[df_subset_landmarks['cluster_id'].isnull(), ['cluster_id', 'cluster_dist']] = \
             zip(*df_subset_landmarks.loc[df_subset_landmarks['cluster_id'].isnull(), 'enc1'].apply(prep_pose_clusters_enc))
@@ -577,28 +584,30 @@ def process_landmarks_cluster_dist(df, df_subset_landmarks):
         df_subset_landmarks["cluster_dist"] = df_subset_landmarks.apply(lambda row: calc_median_dist(row['enc1'], row['cluster_median']), axis=1)
     return df_subset_landmarks
 
-def assign_images_clusters_DB(df):
-    def prep_pose_clusters_enc(enc1):
-        # print("current image enc1", enc1)  
-        enc1 = np.array(enc1)
-        this_dist_dict = {}
-        for cluster_id in MEDIAN_DICT:
-            enc2 = MEDIAN_DICT[cluster_id]
-            # print("cluster_id enc2: ", cluster_id,enc2)
-            this_dist_dict[cluster_id] = np.linalg.norm(enc1 - enc2, axis=0)
-        
-        cluster_id, cluster_dist = min(this_dist_dict.items(), key=lambda x: x[1])
+def prep_pose_clusters_enc(enc1):
+    print("current image enc1", enc1)  
+    enc1 = np.array(enc1)
+    
+    this_dist_dict = {}
+    for cluster_id in MEDIAN_DICT:
+        enc2 = MEDIAN_DICT[cluster_id]
+        print("cluster_id enc2: ", cluster_id,enc2)
+        this_dist_dict[cluster_id] = np.linalg.norm(enc1 - enc2, axis=0)
+    
+    cluster_id, cluster_dist = min(this_dist_dict.items(), key=lambda x: x[1])
 
-        # print(cluster_id)
-        return cluster_id, cluster_dist
+    # print(cluster_id)
+    return cluster_id, cluster_dist
+
+def assign_images_clusters_DB(df):
 
     
     #assign clusters to each image's encodings
     print("assigning images to clusters, df at start",df)
     df_subset_landmarks = make_subset_landmarks(df, add_list=True)
+    print("df_subset_landmarks after make_subset_landmarks", df_subset_landmarks)
 
-
-    if CLUSTER_TYPE in ["BodyPoses","HandsGestures", "HandsPositions","FingertipsPositions"]:
+    if CLUSTER_TYPE in ["BodyPoses","BodyPoses3D","HandsGestures", "HandsPositions","FingertipsPositions"]:
         # combine all columns that start with left_dim_ or right_dim_ or dim_ into one list in the "enc1" column
 
 
@@ -613,8 +622,8 @@ def assign_images_clusters_DB(df):
     # print all rows where cluster_id is 68
     # print(df_subset_landmarks[df_subset_landmarks["cluster_id"] == 68])
 
-    save_images_clusters_DB(df_subset_landmarks)
-    print ("saved to imagesclusters")
+    # save_images_clusters_DB(df_subset_landmarks)
+    # print ("saved to imagesclusters")
 
 def df_list_to_cols(df, col_name):
 
