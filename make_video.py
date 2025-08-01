@@ -9,6 +9,7 @@ import json
 import ast
 import traceback
 import numpy as np
+from operator import add
 from pick import pick
 
 from mediapipe.framework.formats import landmark_pb2
@@ -2089,7 +2090,6 @@ def main():
     def save_images_from_csv_folder():
         def load_df_sorted_from_csv(csv_file):
             df = pd.read_csv(csv_file)
-            print("columns", df.columns)
             print("df head", df.head())
             if df.empty:
                 print("dataframe is empty, skipping")
@@ -2107,8 +2107,10 @@ def main():
             df["body_landmarks_normalized_array"] = df["body_landmarks_normalized"].apply(lambda x: sort.prep_enc(x, structure="list")) # convert mp lms to list
             df["body_landmarks_normalized_visible_array"] = df["body_landmarks_normalized"].apply(lambda x: sort.prep_enc(x, structure="visible")) # convert mp lms to list
             df["wrist_ankle_landmarks_normalized_array"] = df["body_landmarks_normalized"].apply(lambda x: sort.prep_enc(x, structure="wrists_and_ankles")) # convert mp lms to list
+            df["face_xyz"] = df[['face_x','face_y', 'face_z']].apply(lambda x: [x[0], x[1], x[2]], axis=1)
+            df['bbox_array'] = df['bbox'].apply(lambda x: list(x.values()))
 
-
+            if VERBOSE: print("list of columns", df.columns)
             # conver face_x	face_y	face_z	mouth_gap site_image_id to float
             columns_to_convert = ['face_x', 'face_y', 'face_z', 'mouth_gap', 'site_image_id']
             df[columns_to_convert] = df[columns_to_convert].applymap(io.make_float)
@@ -2145,7 +2147,7 @@ def main():
 
                 #can delete this line after, using it to check dupe detection
                 #first run use it to see the images to double check, then can comment out for speed
-                # linear_test_df(df_sorted,segment_count,cluster_no)
+                #linear_test_df(df_sorted,segment_count,cluster_no)
                 
                 #Dedupe sorting here!
                 df_sorted = sort.remove_duplicates(df_sorted)
