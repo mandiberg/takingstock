@@ -58,8 +58,8 @@ SAVE_ORIG = False
 DRAW_BOX = False
 MINSIZE = 500
 SLEEP_TIME=0
-VERBOSE = False
-QUIET = True
+VERBOSE = True
+QUIET = False
 
 # only for triage
 sortfolder ="getty_test"
@@ -109,7 +109,7 @@ switching to topic targeted
 18	afripics - where are these?
 '''
 # I think this only matters for IS_FOLDER mode, and the old SQL way
-SITE_NAME_ID = 4
+SITE_NAME_ID = 9
 # 2, shutter. 4, istock
 # 7 pond5, 8 123rf
 POSE_ID = 0
@@ -122,20 +122,20 @@ POSE_ID = 0
 
 # for sites with files spread over several SSDs, you can add addtional folders
 # you will also have to add the MAIN_FOLDER2 variable below, etc
-MAIN_FOLDER1 = "/Volumes/LaCie/images_istock"
-MAIN_FOLDER2 = "/Volumes/ExFAT_4TBgr/images_istock"
-MAIN_FOLDER3 = "/Volumes/OWC5/images_istock"
+# MAIN_FOLDER1 = "/Volumes/LaCie/images_istock"
+# MAIN_FOLDER2 = "/Volumes/ExFAT_4TBgr/images_istock"
+# MAIN_FOLDER3 = "/Volumes/OWC5/images_istock"
 
 # #testing locally with two
-# MAIN_FOLDER1 = "/Volumes/OWC4/images_alamy"
+MAIN_FOLDER1 = "/Volumes/OWC4/images_alamy"
 # MAIN_FOLDER2 = "/Volumes/OWC4/images_unsplash9"
 # MAIN_FOLDERS = [MAIN_FOLDER1, MAIN_FOLDER2]
 
 
-# MAIN_FOLDERS = [MAIN_FOLDER1]
-MAIN_FOLDERS = [MAIN_FOLDER1, MAIN_FOLDER2, MAIN_FOLDER3]
+MAIN_FOLDERS = [MAIN_FOLDER1]
+# MAIN_FOLDERS = [MAIN_FOLDER1, MAIN_FOLDER2, MAIN_FOLDER3]
 
-BATCH_SIZE = 5000 # Define how many from each folder in each batch
+BATCH_SIZE = 1000 # Define how many from each folder in each batch
 LIMIT = 1000
 
 #temp hack to go 1 subfolder at a time
@@ -155,6 +155,7 @@ BODYLMS = True
 HANDLMS = True
 REDO_BODYLMS_3D = False # this makes it skip hands and YOLO
 if REDO_BODYLMS_3D: HANDLMS = False # if doing 3D redo, don't do hands
+SAVE_NML_ANYWAY = True
 TOPIC_ID = None
 # TOPIC_ID = [24, 29] # adding a TOPIC_ID forces it to work from SegmentBig_isface, currently at 7412083
 DO_INVERSE = True
@@ -1093,6 +1094,8 @@ def process_image_find_body_subroutine(image_id, image, bbox):
         print("existing body_world_landmarks", image_id, body_world_landmarks)
     if None not in (body_landmarks, body_world_landmarks, n_landmarks, bbox):
         print(f"body_landmarks, body_world_landmarks, n_landmarks already exist for image_id: {image_id}")
+        face_height = sort.convert_bbox_to_face_height(bbox)
+        nose_pixel_pos = sort.set_nose_pixel_pos(body_landmarks, image.shape)
         is_body = True
     elif None not in (body_landmarks, body_world_landmarks) and None in (n_landmarks, bbox):
         print(f"body_landmarks, body_world_landmarks BUT NO BBOX SO NO NLMS already exist for image_id: {image_id}")
@@ -1235,7 +1238,15 @@ def save_body_hands_mysql_and_mongo(session, image_id, image, bbox_dict, body_la
                     save_body = True
                 else:
                     if VERBOSE: print(f"mongo_collection already has body_landmarks for {image_id} with a value in the type of", type(existing_entry_encodings["body_landmarks"]))
-                    save_body = False
+                    # check MySQL to see if is_body is True
+                    results = session.query(Encodings.is_body).filter(Encodings.image_id == image_id).first()
+                    if VERBOSE: print("is_body query results", results)
+                    if results and (results[0] is False or results[0] is None):
+                        if VERBOSE: print(image_id, "is_body is False, will update")
+                        save_body = True
+                    else:
+                        if VERBOSE: print(image_id, "is_body is True, will SKIP and NOT update")
+                        save_body = False
             else:
                 if VERBOSE: print("mongo_collection does not have body_landmarks key, will add them for", image_id)
                 save_body = True
@@ -1419,6 +1430,14 @@ def save_body_hands_mysql_and_mongo(session, image_id, image, bbox_dict, body_la
             session.commit()
         except:
             print("failed to store wandering image,", image_id)
+    elif SAVE_NML_ANYWAY:
+        # upsert if it already exists
+        if VERBOSE: print("   #########    image already exists in NML results_dict: ", image_id)
+        session.query(NMLImages).filter_by(image_id=image_id).update({
+            NMLImages.is_nml_db: is_nml_db
+        })
+        session.commit()
+
     else:
         if VERBOSE: print(f"Entry already exists for image_id: {image_id}")
         pass
@@ -1452,6 +1471,7 @@ def find_and_save_body(image_id, image, bbox, mongo_body_landmarks, hand_landmar
         if body_landmarks is not None:
             is_feet = check_is_feet(body_landmarks)
         if VERBOSE: print("is_feet", image_id, is_feet)
+        if VERBOSE: print("face_height", image_id, face_height)
 
         if face_height and not REDO_BODYLMS_3D:
             # only do this when there is a face. skip for no face -body reprocessing
