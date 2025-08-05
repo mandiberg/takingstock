@@ -2103,7 +2103,7 @@ def main():
                                         print("~~ no face, adding to face queue for is_face_no_lms do_over:", result.image_id, imagepath, result.mongo_face_landmarks, result.mongo_body_landmarks, result.bbox)
                                         # for the integrated version, this will do both
                                         task = (result.image_id, imagepath)
-                                    elif result.mongo_face_landmarks == 0 and result.mongo_body_landmarks is None :
+                                    elif result.mongo_face_landmarks == 0 and result.mongo_body_landmarks is None and first_pass is True:
                                         print("~~~~ no face, do body without bbox:", result.image_id, imagepath, result.mongo_face_landmarks, result.mongo_body_landmarks, result.bbox)
                                         # for the integrated version, this will do both
                                         task = (result.image_id, imagepath, result.mongo_face_landmarks, result.mongo_body_landmarks, None)
