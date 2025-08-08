@@ -805,85 +805,146 @@ class SortPose:
         return visibility_diffs
 
 
+
     ###########################################################################
     ################### TENCH CODE FOR DEDUPE ANALYSIS ########################
     # CLAUDE LINK https://claude.ai/chat/15ff9f07-2387-4018-8005-49e44a9e1ad5 #
     ###########################################################################
-    #get_d()
 
     def remove_duplicates(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Main method to remove duplicates from the dataframe.
         Returns sorted_df with all duplicates removed (keeping first occurrence).
         """
-        self.pass1_face_threshold = .15  # Lower = more similar (cosine distance)
-        self.pass1_bbox_threshold = .9   # Higher = more similar
-        self.pass2_threshold = 1.9   # Combined similarity threshold
         to_remove = set()
         n_rows = len(df)
-        
+
+        # df = self.split_landmarks_to_columns_or_list(df, first_col="left_hand_world_landmarks", second_col="right_hand_world_landmarks", structure="list")
+
         if self.VERBOSE: print(f"Processing {n_rows} images for duplicate detection...")
 
-       
+        wrist_ankle_triggers = 0
+        face_xyz_triggers = 0
+        bbox_array_triggers = 0
+        face_encodings_triggers = 0
+        hand_landmarks_triggers = 0
+        description_triggers = 0
+        site_name_id_triggers = 0
+
+        pass1_look_closer = []
+        pass2_look_closer = []
+        pass3_remove = []
         for i in range(n_rows):
-            if i in to_remove:
-                continue
                 
             
             for j in range(i + 1, n_rows):
-                if j in to_remove:
-                    continue
+              
                 
-                # Pass 1: Fast screening
-                if self.dupe_comparison(i, j, 'wrist_ankle_landmarks_normalized_array', df, .4):
-                    to_remove.add(j)
-                    if self.VERBOSE: print(f"dupe_detection col:wrist_ankle_landmakrs_normalized_array triggered at {i},{j}. Removing {j}")
+                # Pass 1: Fast screening, if it fails a test, add it into the look_closer list to be checked in pass 2
+                if self.dupe_comparison(i, j, 'wrist_ankle_landmarks_normalized_array', df, .8, "less"):
+                    pass1_look_closer.append([i,j])
+                    wrist_ankle_triggers += 1
+                    if self.VERBOSE: print(f"dupe_detection_pass_1_wrist_ankle_landmakrs_normalized_array triggered at {i},{j}. Removing {j}")
                     continue
-                if self.dupe_comparison(i, j, 'face_xyz', df, .1):
-                    to_remove.add(j)
-                    if self.VERBOSE: print(f"dupe_detection col:face_xyz triggered at {i},{j}. Removing {j}")
+                if self.dupe_comparison(i, j, 'face_xyz', df, 8, "less"):
+                    pass1_look_closer.append([i,j])
+                    face_xyz_triggers += 1
+                    if self.VERBOSE: print(f"dupe_detection_pass_1_face_xyz triggered at {i},{j}. Removing {j}")
                     continue
-                if self.dupe_comparison(i, j, 'bbox_array', df, .1):
-                    to_remove.add(j)
-                    if self.VERBOSE: print(f"dupe_detection col:bbox_array triggered at {i},{j}. Removing {j}")
+                if self.dupe_comparison(i, j, 'bbox_array', df, 60, "less"):
+                    pass1_look_closer.append([i,j])
+                    bbox_array_triggers += 1
+                    if self.VERBOSE: print(f"dupe_detection_pass_1_bbox_array triggered at {i},{j}. Removing {j}")
                     continue
+    
+        #pass 2
+        for i,j in pass1_look_closer:
+            if self.dupe_comparison(i, j, 'face_encodings68', df, .3, "less"):
+                face_encodings_triggers += 1
 
+                pass2_look_closer.append([i,j])
+                if self.VERBOSE: print(f"dupe_detection_pass_2_face_encodings triggered at {i},{j}. Removing {j}")
+                continue
 
-                #pass 2
-                if self.dupe_comparison(i, j, 'face_encodings68', df, .07):
-                    to_remove.add(j)
-                    if self.VERBOSE: print(f"dupe_detection_face_encodings triggered at {i},{j}. Removing {j}")
-                    continue
-
-
-        to_remove = sorted(to_remove)
-        if self.VERBOSE: print(f"remove_duplicates, Found {len(to_remove)} duplicates to remove")
-        if self.VERBOSE: print(to_remove)
+    
+         #pass 3 hand gesture, description, site name id
+        for i,j in pass2_look_closer:
+            pass3check = 0
+            if self.dupe_comparison(i, j, 'hand_landmarks', df, 1, "less"):
+                if self.VERBOSE: print(f"dupe_detection_pass_3_hand_gesture triggered at {i},{j}. Removing {j}")
+                pass3check += 1
+                hand_landmarks_triggers += 1
+            if self.dupe_comparison_metadata(i, j, 'description', df):
+                if self.VERBOSE: print(f"dupe_detection_pass_3_description triggered at {i},{j}. Removing {j}")
+                pass3check += 1
+                description_triggers += 1
+            if self.dupe_comparison_metadata(i, j, 'site_name_id', df):
+                if self.VERBOSE: print(f"dupe_detection_pass_3_site_name_id triggered at {i},{j}. Removing {j}")
+                pass3check += 1
+                site_name_id_triggers += 1
+            if pass3check >= 2:
+                pass3_remove.append(j)
+           
+        if self.VERBOSE: print("--------------------------------dupe_detection analysis--------------------------------")
+        if self.VERBOSE: print(f"dupe_detection pass 1 caught: {len(pass1_look_closer)}, first pass % triggers: {len(pass1_look_closer)/19900}")
+        if self.VERBOSE: print(f'dupe_detection pass 1 triggers: wrist-ankles:{wrist_ankle_triggers}, face xyz: {face_xyz_triggers}, bbox: {bbox_array_triggers}\n')
+        if self.VERBOSE: print(f"dupe_detection pass 2 caught {len(pass2_look_closer)}, second pass % triggers: {len(pass2_look_closer)/len(pass1_look_closer)}")
+        if self.VERBOSE: print(f"dupe_detection pass 2 array: {pass2_look_closer}\n")
+        if self.VERBOSE: print(f"dupe_detection pass 3 caught {len(pass3_remove)}, third pass % triggers: {len(pass3_remove)/len(pass2_look_closer)}")
+        if self.VERBOSE: print(f'dupe_detection pass 3 triggers: hand_landmarks:{hand_landmarks_triggers}, description: {description_triggers}, site_name_id: {site_name_id_triggers}')
+        if self.VERBOSE: print(f"dupe_detection pass 3 array: {pass3_remove}\n")
 
         # Create sorted_df with all duplicates removed
         sorted_df = df.drop(df.index[list(to_remove)]).reset_index(drop=True)
-        print(f'remove_duplicates sorted_df: {sorted_df}')
         return sorted_df
     
 
-    def dupe_comparison(self, row1, row2, column, df , threshold):
+    def dupe_comparison(self, row1, row2, column, df , threshold, operator):
         """Compare two different rows in df for dupe detection"""
         enc1 = df.iloc[row1].get(column, None)
         enc2 = df.iloc[row2].get(column, None)
+
+        if column == 'hand_landmarks':
+            if type(enc1) == str:
+                enc1 = json.loads(enc1)
+            if type(enc2) == str:
+                enc2 = json.loads(enc2)
+            # print(f'hand landmark debugging after json load enc1, type: {type(enc1)}', enc1)
+            # print(f'hand landmark debugging after json load enc2, type: {type(enc2)}', enc2)
+
         if enc1 is None or enc2 is None:
             if self.VERBOSE: print(f'remove_duplicates_{column} unable to process: {row1}, {row2}')
             return False
         
+        # print(f"hand results: {df.iloc[row1].get('hand_results', None)}")
+        # print(f"hand results: {df.iloc[row2].get('hand_results', None)}")
         try:
             distance = self.get_d(enc1, enc2)
             print(f'dupe_detection col:{column}, row: {row1},{row2}, dist:{distance}')
-            return distance < threshold
+            if operator == "less":
+                return distance < threshold
+            elif operator == "greater":
+                return distance > threshold
         except:
             print(f'dupe_detect_{column}_type: {type(enc1)}, val{enc1}')
             return None
 
-
-
+    def dupe_comparison_metadata(self, row1, row2, column, df):
+        enc1 = df.iloc[row1].get(column, None)
+        enc2 = df.iloc[row2].get(column, None)
+        if column == 'description':
+            if enc1 is None or enc2 is None:
+                if self.VERBOSE: print(f'remove_duplicates_{column} unable to process: {row1}, {row2}')
+                return False
+            return enc1 == enc2
+        elif column == 'site_name_id':
+             if enc1 == enc2: 
+                    if abs(df.iloc[row1].get('site_image_id', None) - df.iloc[row2].get('site_image_id', None)) < 1000:
+                        return False
+                    else:
+                        return True
+             else:
+                return True
 
 
     def check_metadata_for_duplicate(self, df_sorted, index):
@@ -987,6 +1048,45 @@ class SortPose:
         error, diff = mse(img1, img2)
         
         return error
+
+    def split_landmarks_to_columns_or_list(self, df, first_col="left_hand_world_landmarks", second_col="right_hand_world_landmarks", structure="cols"):
+        # converts world landmarks for hand and body to list for knn. 
+        # legacy code to convert hands to cols. not sure if it is used anymore.
+        if "left_hand" in first_col and "right_hand" in second_col:
+            destination_col = "hand_landmarks"
+        elif first_col=="body_landmarks_3D" and second_col is None:
+            destination_col = "body_landmarks_array"
+        else: 
+            print("split_landmarks_to_columns_or_list:", first_col, second_col, "not supported")
+        # Extract and flatten landmarks for left and right hands
+        first_landmarks = df[first_col].apply(self.extract_landmarks)
+        if destination_col == "hand_landmarks": second_landmarks = df[second_col].apply(self.extract_landmarks)
+        print("split_landmarks_to_columns_or_list first_landmarks", first_landmarks)
+        if structure == "cols":
+            if self.CLUSTER_TYPE == "fingertips_positions":
+                col_num = len(self.SUBSET_LANDMARKS)
+            else:
+                col_num = 63
+            # col_num = 
+            # Create new columns for each dimension (21 points * 3 = 63 columns for each hand)
+            first_landmark_cols = pd.DataFrame(first_landmarks.tolist(), columns=[f'left_dim_{i+1}' for i in range(col_num)])
+            first_landmark_cols = pd.DataFrame(second_landmarks.tolist(), columns=[f'right_dim_{i+1}' for i in range(col_num)])
+            
+            # Concatenate the original DataFrame with the new columns
+            df = pd.concat([df, first_landmark_cols, first_landmark_cols], axis=1)
+        if structure == "list":
+            # combine the left and right landmarks into a single list
+            if not first_landmarks.all(): 
+                print("first_landmarks is None")
+            if destination_col == "hand_landmarks": 
+                if not second_landmarks.all(): 
+                    print("second_landmarks is None")
+                landmarks_list = first_landmarks + second_landmarks
+            else:
+                landmarks_list = first_landmarks
+            df[destination_col] = landmarks_list
+        
+        return df
 
 
     def point(self,coords):
@@ -3045,46 +3145,6 @@ class SortPose:
             # print("flat_landmarks", flat_landmarks)
         # print("flat_landmarks_subset", flat_landmarks) 
         return flat_landmarks
-
-    def split_landmarks_to_columns_or_list(self, df, first_col="left_hand_world_landmarks", second_col="right_hand_world_landmarks", structure="cols"):
-        # converts world landmarks for hand and body to list for knn. 
-        # legacy code to convert hands to cols. not sure if it is used anymore.
-        if "left_hand" in first_col and "right_hand" in second_col:
-            destination_col = "hand_landmarks"
-        elif first_col=="body_landmarks_3D" and second_col is None:
-            destination_col = "body_landmarks_array"
-        else: 
-            print("split_landmarks_to_columns_or_list:", first_col, second_col, "not supported")
-        # Extract and flatten landmarks for left and right hands
-        first_landmarks = df[first_col].apply(self.extract_landmarks)
-        if destination_col == "hand_landmarks": second_landmarks = df[second_col].apply(self.extract_landmarks)
-        print("split_landmarks_to_columns_or_list first_landmarks", first_landmarks)
-        if structure == "cols":
-            if self.CLUSTER_TYPE == "fingertips_positions":
-                col_num = len(self.SUBSET_LANDMARKS)
-            else:
-                col_num = 63
-            # col_num = 
-            # Create new columns for each dimension (21 points * 3 = 63 columns for each hand)
-            first_landmark_cols = pd.DataFrame(first_landmarks.tolist(), columns=[f'left_dim_{i+1}' for i in range(col_num)])
-            first_landmark_cols = pd.DataFrame(second_landmarks.tolist(), columns=[f'right_dim_{i+1}' for i in range(col_num)])
-            
-            # Concatenate the original DataFrame with the new columns
-            df = pd.concat([df, first_landmark_cols, first_landmark_cols], axis=1)
-        if structure == "list":
-            # combine the left and right landmarks into a single list
-            if not first_landmarks.all(): 
-                print("first_landmarks is None")
-            if destination_col == "hand_landmarks": 
-                if not second_landmarks.all(): 
-                    print("second_landmarks is None")
-                landmarks_list = first_landmarks + second_landmarks
-            else:
-                landmarks_list = first_landmarks
-            df[destination_col] = landmarks_list
-        
-        return df
-
 
 
 # FUSION STUFF
