@@ -21,8 +21,6 @@ import pymongo
 import pickle
 import traceback
 
-from scipy.spatial.distance import cosine
-
 
 from deap import base, creator, tools, algorithms
 
