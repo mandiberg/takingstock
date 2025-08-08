@@ -2152,8 +2152,6 @@ def main():
                 #Dedupe sorting here!
                 df_sorted = sort.remove_duplicates(df_sorted)
                 df_sorted.to_csv(os.path.join(io.ROOT_DBx, f"df_sorted_{cluster_no}_ct{segment_count}_p{pose_no}.csv"), index=False)
-                # linear_test_df(df_sorted,segment_count,cluster_no)
-                quit()
                 linear_test_df(df_sorted,segment_count,cluster_no)
 
 
