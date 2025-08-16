@@ -9,6 +9,7 @@ import json
 import ast
 import traceback
 import numpy as np
+from operator import add
 from pick import pick
 
 from mediapipe.framework.formats import landmark_pb2
@@ -1267,7 +1268,7 @@ def compare_images(last_image, img, df_sorted, index):
                     # # sort.not_make_face.append(outpath_notfacecombined_image) ########## variable name error
                     # # Save the new image
                     # #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@#
-                face_embeddings_distance, body_landmarks_distance, same_description, same_site_name_id = sort.check_metadata_for_duplicate(df_sorted, index)
+              #  face_embeddings_distance, body_landmarks_distance, same_description, same_site_name_id = sort.check_metadata_for_duplicate(df_sorted, index)
 
             else:
                 print("first round, skipping the pair test")
@@ -2089,7 +2090,6 @@ def main():
     def save_images_from_csv_folder():
         def load_df_sorted_from_csv(csv_file):
             df = pd.read_csv(csv_file)
-            print("columns", df.columns)
             print("df head", df.head())
             if df.empty:
                 print("dataframe is empty, skipping")
@@ -2106,7 +2106,11 @@ def main():
             df["body_landmarks_normalized"] = df["body_landmarks_normalized"].apply(io.str_to_landmarks)
             df["body_landmarks_normalized_array"] = df["body_landmarks_normalized"].apply(lambda x: sort.prep_enc(x, structure="list")) # convert mp lms to list
             df["body_landmarks_normalized_visible_array"] = df["body_landmarks_normalized"].apply(lambda x: sort.prep_enc(x, structure="visible")) # convert mp lms to list
+            df["wrist_ankle_landmarks_normalized_array"] = df["body_landmarks_normalized"].apply(lambda x: sort.prep_enc(x, structure="wrists_and_ankles")) # convert mp lms to list
+            df["face_xyz"] = df[['face_x','face_y', 'face_z']].apply(lambda x: [x[0], x[1], x[2]], axis=1)
+            df['bbox_array'] = df['bbox'].apply(lambda x: list(x.values()))
 
+            if VERBOSE: print("list of columns", df.columns)
             # conver face_x	face_y	face_z	mouth_gap site_image_id to float
             columns_to_convert = ['face_x', 'face_y', 'face_z', 'mouth_gap', 'site_image_id']
             df[columns_to_convert] = df[columns_to_convert].applymap(io.make_float)
@@ -2139,7 +2143,18 @@ def main():
                 ### Set counter_dict (without start stuff which is not needed) ###
                 set_my_counter_dict(this_topic, cluster_no, pose_no)
                 df_sorted = load_df_sorted_from_csv(os.path.join(CSV_FOLDER, csv_file))
+
+
+                #can delete this line after, using it to check dupe detection
+                #first run use it to see the images to double check, then can comment out for speed
+                #linear_test_df(df_sorted,segment_count,cluster_no)
+                
+                #Dedupe sorting here!
+                # df_sorted.to_csv(os.path.join(io.ROOT_DBx, f"df_sorted_{cluster_no}_ct{segment_count}_p{pose_no}.csv"), index=False)
+                df_sorted = sort.remove_duplicates(df_sorted)
                 linear_test_df(df_sorted,segment_count,cluster_no)
+
+
 
     if MODE == 1:
         print("MODE 1, assembling from CSV_FOLDER", CSV_FOLDER)
