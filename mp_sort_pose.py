@@ -1,6 +1,8 @@
 import math
+import shutil
 import statistics
 import os
+from turtle import distance
 import cv2
 import pandas as pd
 import mediapipe as mp
@@ -809,7 +811,8 @@ class SortPose:
     # CLAUDE LINK https://claude.ai/chat/15ff9f07-2387-4018-8005-49e44a9e1ad5 #
     ###########################################################################
 
-    def remove_duplicates(self, df: pd.DataFrame) -> pd.DataFrame:
+
+    def remove_duplicates(self, folder_list, df: pd.DataFrame) -> pd.DataFrame:
         """
         Main method to remove duplicates from the dataframe.
         Returns sorted_df with all duplicates removed (keeping first occurrence).
@@ -820,84 +823,121 @@ class SortPose:
         # df = self.split_landmarks_to_columns_or_list(df, first_col="left_hand_world_landmarks", second_col="right_hand_world_landmarks", structure="list")
 
         if self.VERBOSE: print(f"Processing {n_rows} images for duplicate detection...")
+        look_closer_dict = {}
+        AUTO_CHECK = .2
+        THRESH1 = 2
+        SITE_NAME_ID_THRESH = 100000
+        THRESHOLD = 0.85  # Similarity threshold to use for SSIM comparison .85 and above are all dupes. .75 has false positives
+        TARGET_SIZE = (128, 128)  # Size to temporarily resize images for comparison
 
-        wrist_ankle_triggers = 0
-        face_xyz_triggers = 0
-        bbox_array_triggers = 0
-        face_encodings_triggers = 0
-        hand_landmarks_triggers = 0
-        description_triggers = 0
-        site_name_id_triggers = 0
+        threshold_dict = {
+            'wrist_ankle_landmarks_normalized_array': [.8, "less"],
+            'face_xyz': [15, "less"],
+            'bbox_array': [80, "less"],
+            'face_encodings68': [.5, "less"],
+            'hand_landmarks': [1, "less"]
+        }
 
-        pass1_look_closer = []
-        pass2_look_closer = []
-        pass3_remove = []
+        def norm_dist(this_dist, threshold):
+            return this_dist / threshold
+        
+        def save_dupes_look_closer(i, j, this_dist_list, df):
+            # Treat True as 1 and False as 0 for summing
+            sum_this_dist_list = round(sum(float(f"{x:.2f}") if isinstance(x, (float, int)) else int(x) for x in this_dist_list), 2)
+            rounded_dist_list = [f"{x:.2f}" if isinstance(x, (float, int)) else str(x) for x in this_dist_list]
+            foldername = f"{sum_this_dist_list}_{i}_{j}" + "_" + "_".join(rounded_dist_list)
+            save_folder = os.path.join(self.outfolder, foldername)
+            for key in [i,j]:
+                filename = df.iloc[key]['imagename']
+                site_name_id = df.iloc[key]['site_name_id']
+                filepath = os.path.join(folder_list[site_name_id], filename)
+                # print(f"Saving duplicate look closer images to {save_folder} for {filepath} from site {site_name_id}")
+                # save the images to the folder
+                os.makedirs(save_folder, exist_ok=True)
+                shutil.copy(filepath, save_folder)
+
+        # Pass 1: Fast screening, if it sum(norm_dist) < threshold, add it into the look_closer list to be checked in pass 2
         for i in range(n_rows):
-                
-            
             for j in range(i + 1, n_rows):
-              
+                this_dist_list = []
+                for key, (threshold, operator) in threshold_dict.items():
+                    if key not in ['wrist_ankle_landmarks_normalized_array', 'face_xyz', 'bbox_array']: continue
+                    # calculate distance and add to list
+                    this_dist = self.dupe_comparison(i, j, key, df)
+                    normed_dist = norm_dist(this_dist, threshold)
+                    this_dist_list.append(normed_dist)
                 
-                # Pass 1: Fast screening, if it fails a test, add it into the look_closer list to be checked in pass 2
-                if self.dupe_comparison(i, j, 'wrist_ankle_landmarks_normalized_array', df, .8, "less"):
-                    pass1_look_closer.append([i,j])
-                    wrist_ankle_triggers += 1
-                    if self.VERBOSE: print(f"dupe_detection_pass_1_wrist_ankle_landmakrs_normalized_array triggered at {i},{j}. Removing {j}")
+                if sum(this_dist_list) <= THRESH1 or any(d < AUTO_CHECK for d in this_dist_list):
+                    # if the normed dist is low enough, look closer
+                    look_closer_dict[(i,j)] = this_dist_list
+                    if self.VERBOSE: 
+                        print(f"dupe_detection_pass_1 triggered at {i},{j}. with NORMED distances {this_dist_list}")
+                else:
+                    print(f"tossing {i},{j}. with n_d {this_dist_list}")
+                    
                     continue
-                if self.dupe_comparison(i, j, 'face_xyz', df, 8, "less"):
-                    pass1_look_closer.append([i,j])
-                    face_xyz_triggers += 1
-                    if self.VERBOSE: print(f"dupe_detection_pass_1_face_xyz triggered at {i},{j}. Removing {j}")
-                    continue
-                if self.dupe_comparison(i, j, 'bbox_array', df, 60, "less"):
-                    pass1_look_closer.append([i,j])
-                    bbox_array_triggers += 1
-                    if self.VERBOSE: print(f"dupe_detection_pass_1_bbox_array triggered at {i},{j}. Removing {j}")
-                    continue
-    
+                      # If only one of the checks passed, skip to next pair
         #pass 2
-        for i,j in pass1_look_closer:
-            if self.dupe_comparison(i, j, 'face_encodings68', df, .3, "less"):
-                face_encodings_triggers += 1
-
-                pass2_look_closer.append([i,j])
-                if self.VERBOSE: print(f"dupe_detection_pass_2_face_encodings triggered at {i},{j}. Removing {j}")
+        keys_to_remove = []
+        for (i,j), this_dist_list in look_closer_dict.items():
+            key = "face_encodings68"
+            threshold, _ = threshold_dict[key]
+            this_dist = self.dupe_comparison(i, j, key, df)
+            normed_dist = norm_dist(this_dist, threshold)
+            if normed_dist < 1:
+                this_dist_list.append(normed_dist)
+                # update look_closer_dict
+                look_closer_dict[(i,j)] = this_dist_list
+                if self.VERBOSE: print(f"{normed_dist}   >>  so FACEMATCH {i},{j}. this_dist_list {this_dist_list}")
+            else:
+                if self.VERBOSE: print(f"{normed_dist} noface {i},{j}. this_dist_list {this_dist_list}")
+                # mark for removal after iteration
+                keys_to_remove.append((i,j))
                 continue
+        for key in keys_to_remove:
+            look_closer_dict.pop(key, None)
+        
+        #pass 3 hand gesture, description, site name id
+        for (i,j), this_dist_list in look_closer_dict.items():
+            key = "hand_landmarks"
+            threshold, operator = threshold_dict[key]
+            this_dist = self.dupe_comparison(i, j, key, df)
+            normed_dist = norm_dist(this_dist, threshold)
 
-    
-         #pass 3 hand gesture, description, site name id
-        for i,j in pass2_look_closer:
-            pass3check = 0
-            if self.dupe_comparison(i, j, 'hand_landmarks', df, 1, "less"):
-                if self.VERBOSE: print(f"dupe_detection_pass_3_hand_gesture triggered at {i},{j}. Removing {j}")
-                pass3check += 1
-                hand_landmarks_triggers += 1
-            if self.dupe_comparison_metadata(i, j, 'description', df):
-                if self.VERBOSE: print(f"dupe_detection_pass_3_description triggered at {i},{j}. Removing {j}")
-                pass3check += 1
-                description_triggers += 1
-            if self.dupe_comparison_metadata(i, j, 'site_name_id', df):
-                if self.VERBOSE: print(f"dupe_detection_pass_3_site_name_id triggered at {i},{j}. Removing {j}")
-                pass3check += 1
-                site_name_id_triggers += 1
-            if pass3check >= 2:
-                pass3_remove.append(j)
-           
+            desc_dist = self.dupe_comparison_metadata(i, j, 'description', df)
+            # 0 means diff sites, >0 means difference between ids for given site -- closer means same shoot
+            # .5 means same site but ids contain strings, so can't compare
+            site_name_id_dist = self.dupe_comparison_metadata(i, j, 'site_name_id', df)
+            # print(f"site_name_id_dist for {i},{j} is {site_name_id_dist}")
+            # normed_site_name_id_dist = norm_dist(site_name_id_dist, SITE_NAME_ID_THRESH)
+            # if normed_site_name_id_dist < 5: normed_site_name_id_dist = 5
+
+            # inverse relationship between distance and likelihood of duplicates
+            if site_name_id_dist > 0:
+                normed_site_name_id_dist = SITE_NAME_ID_THRESH / site_name_id_dist
+            else:
+                normed_site_name_id_dist = site_name_id_dist
+
+            this_dist_list.extend([normed_dist, desc_dist, normed_site_name_id_dist])
+            look_closer_dict[(i,j)] = this_dist_list
+
+        # print(f"  >>> look_closer_dict is {look_closer_dict}")
         if self.VERBOSE: print("--------------------------------dupe_detection analysis--------------------------------")
-        if self.VERBOSE: print(f"dupe_detection pass 1 caught: {len(pass1_look_closer)}, first pass % triggers: {len(pass1_look_closer)/19900}")
-        if self.VERBOSE: print(f'dupe_detection pass 1 triggers: wrist-ankles:{wrist_ankle_triggers}, face xyz: {face_xyz_triggers}, bbox: {bbox_array_triggers}\n')
-        if self.VERBOSE: print(f"dupe_detection pass 2 caught {len(pass2_look_closer)}, second pass % triggers: {len(pass2_look_closer)/len(pass1_look_closer)}")
-        if self.VERBOSE: print(f"dupe_detection pass 2 array: {pass2_look_closer}\n")
-        if self.VERBOSE: print(f"dupe_detection pass 3 caught {len(pass3_remove)}, third pass % triggers: {len(pass3_remove)/len(pass2_look_closer)}")
-        if self.VERBOSE: print(f'dupe_detection pass 3 triggers: hand_landmarks:{hand_landmarks_triggers}, description: {description_triggers}, site_name_id: {site_name_id_triggers}')
-        if self.VERBOSE: print(f"dupe_detection pass 3 array: {pass3_remove}\n")
+        for (i,j), this_dist_list in look_closer_dict.items():
+            print(f"  >>> closest_look {i},{j} with distances {this_dist_list}")
+
+
+            # save i and j to a shared folder
+            if self.VERBOSE: save_dupes_look_closer(i, j, this_dist_list, df)
+
+        # ADD all good j's to to_remove HERE !!!
 
         # Create sorted_df with all duplicates removed
         sorted_df = df.drop(df.index[list(to_remove)]).reset_index(drop=True)
         return sorted_df
     
 
-    def dupe_comparison(self, row1, row2, column, df , threshold, operator):
+    def dupe_comparison(self, row1, row2, column, df):
         """Compare two different rows in df for dupe detection"""
         enc1 = df.iloc[row1].get(column, None)
         enc2 = df.iloc[row2].get(column, None)
@@ -918,32 +958,37 @@ class SortPose:
         # print(f"hand results: {df.iloc[row2].get('hand_results', None)}")
         try:
             distance = self.get_d(enc1, enc2)
-            print(f'dupe_detection col:{column}, row: {row1},{row2}, dist:{distance}')
-            if operator == "less":
-                return distance < threshold
-            elif operator == "greater":
-                return distance > threshold
+            # print(f'dupe_detection col:{column}, row: {row1},{row2}, dist:{distance}')
+            return distance
         except:
-            print(f'dupe_detect_{column}_type: {type(enc1)}, val{enc1}')
+            # print(f'dupe_detect_{column}_type: {type(enc1)}, val{enc1}')
             return None
 
     def dupe_comparison_metadata(self, row1, row2, column, df):
         enc1 = df.iloc[row1].get(column, None)
         enc2 = df.iloc[row2].get(column, None)
+        score = 1 # default to negative outcome
         if column == 'description':
             if enc1 is None or enc2 is None:
-                if self.VERBOSE: print(f'remove_duplicates_{column} unable to process: {row1}, {row2}')
-                return False
-            return enc1 == enc2
+                if self.VERBOSE: print(f'remove_duplicates_{column} one {column} is None: {row1}, {row2}')
+                if enc1 == enc2: score = .5 # halfway for a None None match
+            elif enc1 == enc2: 
+                score = 0
         elif column == 'site_name_id':
              if enc1 == enc2: 
-                    if abs(df.iloc[row1].get('site_image_id', None) - df.iloc[row2].get('site_image_id', None)) < 1000:
-                        return False
-                    else:
-                        return True
+                    try:
+                        
+                        id1 = df.iloc[row1].get('site_image_id', None)
+                        id2 = df.iloc[row2].get('site_image_id', None)
+                        # print(f"comparing site_image_id for {row1}, {row2}: {id1}, {id2}")
+                        # assign diff between ids to score 
+                        score = abs(id1 - id2)
+                    except:
+                        score = .5
              else:
-                return True
-
+                # different sites, likely different images
+                score = 0 # default to negative outcome
+        return score
 
     def check_metadata_for_duplicate(self, df_sorted, index):
         face_embeddings_distance, body_landmarks_distance, same_description, same_site_name_id = None, None, False, None
@@ -2213,9 +2258,9 @@ class SortPose:
 
 
     def prep_enc(self, enc1, structure="dict"):
-        if self.VERBOSE: print("prep_enc enc1", enc1)
-        if self.VERBOSE: print("prep_enc enc1", type(enc1))
-        if self.VERBOSE: print("self.SUBSET_LANDMARKS", self.SUBSET_LANDMARKS)
+        # if self.VERBOSE: print("prep_enc enc1", enc1)
+        # if self.VERBOSE: print("prep_enc enc1", type(enc1))
+        # if self.VERBOSE: print("self.SUBSET_LANDMARKS", self.SUBSET_LANDMARKS)
         if enc1 is list or enc1 is tuple or enc1 == "list":
             landmarks = self.SUBSET_LANDMARKS
         else:
