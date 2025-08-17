@@ -1640,12 +1640,12 @@ def linear_test_df(df_sorted,segment_count,cluster_no, itter=None):
 
         return cropped_image, face_diff
 
-    def trim_bottom(img, site_name_id):
-        if VERBOSE: print("trimming bottom")
-        if site_name_id == 2: trim = 100
-        elif site_name_id == 9: trim = 90
-        img = img[0:img.shape[0]-trim, 0:img.shape[1]]
-        return img
+    # def trim_bottom(img, site_name_id):
+    #     if VERBOSE: print("trimming bottom")
+    #     if site_name_id == 2: trim = 100
+    #     elif site_name_id == 9: trim = 90
+    #     img = img[0:img.shape[0]-trim, 0:img.shape[1]]
+    #     return img
     
     #itter is a cap, to stop the process after a certain number of rounds
     print('linear_test_df writing images for this many images:', len(df_sorted))
@@ -1691,7 +1691,7 @@ def linear_test_df(df_sorted,segment_count,cluster_no, itter=None):
 
                 if row["site_name_id"] in [2,9]: 
                     if VERBOSE: print("shutter alamy trimming at the bottom")
-                    img = trim_bottom(img, row["site_name_id"])
+                    img = sort.trim_bottom(img, row["site_name_id"])
             except:
                 print("trim failed")
                 continue
