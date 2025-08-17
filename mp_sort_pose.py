@@ -116,6 +116,7 @@ class SortPose:
         else:
             self.EXISTING_CROPABLE_DIM = None
             print(f"   XXX ERROR XXX NEED TO SET EXISTING_CROPABLE_DIM for {self.EXPAND_SIZE[0]}")
+        self.TARGET_SIZE = (384, 384)  # Size to temporarily resize images for SSIM comparison
         self.BGCOLOR = [0,0,0]
         self.ONE_SHOT = ONE_SHOT
         self.JUMP_SHOT = JUMP_SHOT
@@ -806,7 +807,7 @@ class SortPose:
         return visibility_diffs
 
     def trim_bottom(self, img, site_name_id):
-        if self.VERBOSE: print("trimming bottom")
+        # if self.VERBOSE: print("trimming bottom")
         if site_name_id == 2: trim = 100
         elif site_name_id == 9: trim = 90
         img = img[0:img.shape[0]-trim, 0:img.shape[1]]
@@ -844,7 +845,8 @@ class SortPose:
         THRESH1 = 2
         SITE_NAME_ID_THRESH = 100000
         THRESHOLD = 0.85  # Similarity threshold to use for SSIM comparison .85 and above are all dupes. .75 has false positives
-        self.TARGET_SIZE = (128, 128)  # Size to temporarily resize images for comparison
+        # self.TARGET_SIZE = (128, 128)  # Size to temporarily resize images for comparison
+        self.TARGET_SIZE = (384, 384)  # Size to temporarily resize images for comparison
 
         threshold_dict = {
             'wrist_ankle_landmarks_normalized_array': [.8, "less"],
@@ -869,14 +871,44 @@ class SortPose:
                 img = self.trim_bottom(img, dfrow["site_name_id"])
             return img
 
+        def sort_on_score(ssim_score, this_dist_list):
+            sort_folder =""
+            if ssim_score > 0.95:
+                sort_folder += "ultraSSIM"
+            if ssim_score > 0.85:
+                sort_folder += "highSSIM"
+            elif ssim_score > 0.75:
+                sort_folder += "mediumSSIM"
+            elif ssim_score > 0.65:
+                sort_folder += "ambiguousSSIM"
+            elif ssim_score == 0:
+                sort_folder += "noneSSIM"
+            else:
+                sort_folder += "lowSSIM"
+
+            if sum(this_dist_list[:3]) == 0:
+                sort_folder += "exactMETA"                
+            elif sum(this_dist_list[:3]) < .5:
+                sort_folder += "ultraMETA"                
+            elif sum(this_dist_list[:3]) < 1:
+                sort_folder += "goodMETA"                
+
+            if this_dist_list[-3] > 15:
+                sort_folder += "highHANDS"
+
+            if this_dist_list[-1] > 1:
+                sort_folder += "sameSHOOT"
+            return sort_folder
+        
         def save_dupes_look_closer(i, j, ssim_score, this_dist_list, df):
             # Treat True as 1 and False as 0 for summing
-            sum_this_dist_list = round(sum(float(f"{x:.2f}") if isinstance(x, (float, int)) else int(x) for x in this_dist_list), 2)
+            sum_this_dist_list = round(sum(this_dist_list[:3]), 2)
             rounded_dist_list = [f"{x:.2f}" if isinstance(x, (float, int)) else str(x) for x in this_dist_list]
             foldername = f"{sum_this_dist_list}_{ssim_score:.2f}_{i}_{j}" + "_" + "_".join(rounded_dist_list)
-            save_folder = os.path.join(self.outfolder, foldername)
             for key in [i,j]:
                 filepath = construct_filepath(key, df)
+                sort_folder = sort_on_score(ssim_score, this_dist_list)
+                save_folder = os.path.join(self.outfolder, sort_folder, foldername)
                 # print(f"Saving duplicate look closer images to {save_folder} for {filepath} from site {site_name_id}")
                 # save the images to the folder
                 os.makedirs(save_folder, exist_ok=True)
@@ -925,6 +957,8 @@ class SortPose:
         
         #pass 3 hand gesture, description, site name id
         for (i,j), this_dist_list in look_closer_dict.items():
+
+            # calculate hand dist
             key = "hand_landmarks"
             threshold, operator = threshold_dict[key]
             this_dist = self.dupe_comparison(i, j, key, df)
@@ -955,7 +989,10 @@ class SortPose:
             print(f"  >>> closest_look {i},{j} with distances {this_dist_list}")
             image_i = open_and_crop(i, df)
             image_j = open_and_crop(j, df)
-            ssim_score = self.calculate_ssim(image_i, image_j)
+            if image_i is not None and image_j is not None:
+                ssim_score = self.calculate_ssim(image_i, image_j)
+            else:
+                ssim_score = 0
             # save i and j to a shared folder
             if self.VERBOSE: save_dupes_look_closer(i, j, ssim_score, this_dist_list, df)
 
