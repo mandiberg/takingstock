@@ -103,13 +103,13 @@ switching to topic targeted
 12	pixerf 3D (all too small)
 13	imagesbazaar - buggy
 14	indiapicturebudget 3D
-15	iwaria - buggy mongo dupe error
-16	nappy - buggy mongo dupe error
+15	iwaria 3D
+16	nappy 3D
 17	picha 3D 
 18	afripics - where are these?
 '''
 # I think this only matters for IS_FOLDER mode, and the old SQL way
-SITE_NAME_ID = 15
+SITE_NAME_ID = 13
 # 2, shutter. 4, istock
 # 7 pond5, 8 123rf
 POSE_ID = 0
@@ -118,11 +118,11 @@ POSE_ID = 0
 # MAIN_FOLDER = "/Volumes/RAID54/images_shutterstock"
 # MAIN_FOLDER = "/Volumes/LaCie/images_istock"
 # MAIN_FOLDER = "/Volumes/ExFAT_SSD4_/images_adobe"
-MAIN_FOLDER = "/Volumes/OWC4/images_iwaria"
+MAIN_FOLDER = "/Volumes/OWC4/images_bazzar"
 # MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/afripics_v2/images"
 
 # MAIN_FOLDER = "/Volumes/SSD4/images_getty_reDL"
-BATCH_SIZE = 1000 # Define how many from each folder in each batch
+BATCH_SIZE = 10 # Define how many from each folder in each batch
 LIMIT = 1000
 
 #temp hack to go 1 subfolder at a time

@@ -74,11 +74,11 @@ IS_FOLDER = True
 # these only matter if SQL (not folder)
 DO_OVER = True
 FIND_NO_IMAGE = True
-# OVERRIDE_PATH = False
-OVERRIDE_PATH = "/Volumes/SSD4/images_getty"
+OVERRIDE_PATH = False
+# OVERRIDE_PATH = "/Volumes/SSD4/images_getty"
 OVERRIDE_TOPIC = False
 # OVERRIDE_TOPIC = [16, 17, 18, 23, 24, 45, 53]
-SHUTTER_SSD_OVERRIDE = True
+SHUTTER_SSD_OVERRIDE = False
 if SHUTTER_SSD_OVERRIDE: 
     OVERRIDE_PATH = "/Volumes/SSD4green/images_shutterstock"
     SHUTTERFOLDER = "C/C"
@@ -109,7 +109,7 @@ switching to topic targeted
 18	afripics - where are these?
 '''
 # I think this only matters for IS_FOLDER mode, and the old SQL way
-SITE_NAME_ID = 9
+SITE_NAME_ID = 8
 # 2, shutter. 4, istock
 # 7 pond5, 8 123rf
 POSE_ID = 0
@@ -127,7 +127,7 @@ POSE_ID = 0
 # MAIN_FOLDER3 = "/Volumes/OWC5/images_istock"
 
 # #testing locally with two
-MAIN_FOLDER1 = "/Volumes/OWC4/images_alamy"
+MAIN_FOLDER1 = "/Volumes/SSD2/images_123rf"
 # MAIN_FOLDER2 = "/Volumes/OWC4/images_unsplash9"
 # MAIN_FOLDERS = [MAIN_FOLDER1, MAIN_FOLDER2]
 
@@ -135,7 +135,7 @@ MAIN_FOLDER1 = "/Volumes/OWC4/images_alamy"
 MAIN_FOLDERS = [MAIN_FOLDER1]
 # MAIN_FOLDERS = [MAIN_FOLDER1, MAIN_FOLDER2, MAIN_FOLDER3]
 
-BATCH_SIZE = 1000 # Define how many from each folder in each batch
+BATCH_SIZE = 10 # Define how many from each folder in each batch
 LIMIT = 1000
 
 #temp hack to go 1 subfolder at a time
@@ -155,7 +155,7 @@ BODYLMS = True
 HANDLMS = True
 REDO_BODYLMS_3D = False # this makes it skip hands and YOLO
 if REDO_BODYLMS_3D: HANDLMS = False # if doing 3D redo, don't do hands
-SAVE_NML_ANYWAY = True
+SAVE_NML_ANYWAY = False
 TOPIC_ID = None
 # TOPIC_ID = [24, 29] # adding a TOPIC_ID forces it to work from SegmentBig_isface, currently at 7412083
 DO_INVERSE = True
@@ -1829,7 +1829,7 @@ def process_image(task):
 
             elif existing_entry is not None and existing_entry.mongo_encodings == 1 and existing_entry.bbox is None:
                 is_face_no_lms = insert_dict["is_face_no_lms"]
-                if VERBOSE: print(f"existing_entry for image_id: {image_id} with no existing mongo_encodings. is_face_no_lms is: {is_face_no_lms} Going to add these encodings: {is_encodings}")
+                if VERBOSE: print(f"existing_entry for image_id: {image_id} with existing mongo_encodings. is_face_no_lms is: {is_face_no_lms} Going to add these encodings: {is_encodings}")
                 # this is a new face to update an existing encodings entry
                 # update the existing entry with the insert_dict values
                 for key, value in insert_dict.items():
@@ -1911,7 +1911,7 @@ def process_image(task):
 
         # save image based on is_face
 def do_job(tasks_to_accomplish, tasks_that_are_done):
-    #print("do_job")
+    print("do_job")
     while True:
         try:
             '''
@@ -1923,28 +1923,24 @@ def do_job(tasks_to_accomplish, tasks_that_are_done):
         except queue.Empty:
             # print("queue.Empty")
             break
-        else:
-            '''
-                if no exception has been raised, add the task completion 
-                message to task_that_are_done queue
-            '''
-            if len(task) > 2:
-                
-                if BODYLMS is True or HANDLMS is True or REDO_BODYLMS_3D is True:
-                    if VERBOSE: print("do_job via process_image_bodylms:")
-                    process_image_bodylms(task)
-                else:
-                    # landmarks and bbox, so this is an encodings only
-                    process_image_enc_only(task)
-                    if VERBOSE: print("process_image_enc_only")
-
-
+        if len(task) > 2:
+            
+            if BODYLMS is True or HANDLMS is True or REDO_BODYLMS_3D is True:
+                if VERBOSE: print("do_job via process_image_bodylms:")
+                process_image_bodylms(task)
             else:
-                if VERBOSE: print("do_job via regular process_image:", task)
-                process_image(task)
-                # print(f"done process_image for {task}")
-            # tasks_that_are_done.put(task + ' is done by ' + current_process().name)
-            time.sleep(SLEEP_TIME)
+                # landmarks and bbox, so this is an encodings only
+                process_image_enc_only(task)
+                if VERBOSE: print("process_image_enc_only")
+
+
+        else:
+            print("do_job via regular process_image:", task)
+            if VERBOSE: print("do_job via regular process_image:", task)
+            process_image(task)
+            print(f"done process_image for {task}")
+        # tasks_that_are_done.put(task + ' is done by ' + current_process().name)
+        time.sleep(SLEEP_TIME)
     return True
 
 
@@ -2172,27 +2168,32 @@ def main():
         while True:
             init_session()
 
+            # temp for redoing missing bboxes from NML reshard
+            df = pd.read_csv("/Users/michaelmandiberg/Images_encodings_202508101003.csv")
+            resultsjson = df.to_dict('records')
+            
             # print("about to SQL: ",SELECT,FROM,WHERE,LIMIT)
-            resultsjson = selectSQL(start_id)  
-            print("got results, count is: ",len(resultsjson))
-            if resultsjson:
-                last_result = resultsjson[-1]
-                print("last_result", last_result)
-                start_id = last_result["image_id"]
-            print(">> SPLIT >> jsonsplit")
-            split = print_get_split(jsonsplit)
-            #catches the last round, where it returns less than full results
-            if last_round == True:
-                print("last_round caught, should break")
-                break
-            elif len(resultsjson) != LIMIT:
-                last_round = True
-                print("last_round just assigned")
-            # process resultsjson
+            # resultsjson = selectSQL(start_id)  
+            # print("got results, count is: ",len(resultsjson))
+            # if resultsjson:
+            #     last_result = resultsjson[-1]
+            #     print("last_result", last_result)
+            #     start_id = last_result["image_id"]
+            # print(">> SPLIT >> jsonsplit")
+            # split = print_get_split(jsonsplit)
+            # #catches the last round, where it returns less than full results
+            # if last_round == True:
+            #     print("last_round caught, should break")
+            #     break
+            # elif len(resultsjson) != LIMIT:
+            #     last_round = True
+            #     print("last_round just assigned")
+            # # process resultsjson
             for row in resultsjson:
+                # print(row)
                 # encoding_id = row["encoding_id"]
                 image_id = row["image_id"]
-                item = row["contentUrl"]
+                # item = row["contentUrl"]
                 hashed_path = row["imagename"]
                 site_id = row["site_name_id"]
 
@@ -2221,8 +2222,8 @@ def main():
                         task = (image_id, imagepath)
 
                     tasks_to_accomplish.put(task)
-                    # print("tasks_to_accomplish.put(task) ",imagepath)
-
+                    print("tasks_to_accomplish.put(task) ",imagepath)
+            print(">> SPLIT >> tasks_to_accomplish filled")
             # creating processes
             for w in range(io.NUMBER_OF_PROCESSES):
                 p = Process(target=do_job, args=(tasks_to_accomplish, tasks_that_are_done))
@@ -2231,10 +2232,10 @@ def main():
 
             # completing process
             for p in processes:
-                # print("completing process")
+                print("completing process")
                 p.join()
             print(">> SPLIT >> p.join, done with this query")
-            split = print_get_split(split)
+            # split = print_get_split(split)
             # Close the session and dispose of the engine before the worker process exits
             close_session()
 

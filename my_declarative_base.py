@@ -145,6 +145,7 @@ class Encodings(Base):
     is_hand_right             = Column(Boolean)
     is_bodyhand_left              = Column(Boolean)
     is_bodyhand_right             = Column(Boolean)
+    migrated             = Column(Boolean)
     migrated_Mongo             = Column(Boolean)
     migrated_SQL               = Column(Boolean)
     

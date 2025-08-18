@@ -22,11 +22,12 @@ io = DataIO(IS_SSD)
 # csv_file = '/Users/michaelmandiberg/Documents/projects-active/facemap_production/test_orig/df_sorted_0_ct9422.csv'
 
 
-CSV_FOLDER = os.path.join(io.ROOT_DBx, "body3D_segmentbig_useall256")
-USE_DF_SORTED = True  # if True it will use the df_sorted format from make_video.py
-IS_TEST = True
+CSV_FOLDER = os.path.join(io.ROOT_DBx, "NML_transition")
+USE_DF_SORTED = False  # if True it will use the df_sorted format from make_video.py
+IS_TEST = False
 # ORIGIN = "/Volumes/OWC4/segment_images/images_adobe"
-DEST = os.path.join(io.ROOT_DBx, "segment_images")
+# DEST = os.path.join(io.ROOT_DBx, "NMLdeshard")
+DEST = "/Volumes/OWC4/NMLdeshard"
 if IS_TEST:
     # to run a smaller test
     DEST = DEST + "_test"

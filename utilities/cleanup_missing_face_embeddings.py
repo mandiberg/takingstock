@@ -20,12 +20,12 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 IS_SSD = False
 VERBOSE = True
 BATCH_SIZE = 1000  # Adjust as needed
-SITE_NAME_ID = 15  # Adjust as needed, e.g., 16 for nappy
+SITE_NAME_ID = 9  # Adjust as needed, e.g., 16 for nappy
 
 io = DataIO(IS_SSD)
 db = io.db
-EXPORT_DIR = os.path.join(io.ROOT_PROD,"mongo_exports_fromlist")  # Directory to save BSON files
-print(f"Export directory: {EXPORT_DIR}")
+# EXPORT_DIR = os.path.join(io.ROOT_PROD,"mongo_exports_fromlist")  # Directory to save BSON files
+print(f"site_name_id: {SITE_NAME_ID}")
 
 def init_session():
     global engine, session
@@ -91,7 +91,8 @@ def main():
         .filter(
             Encodings.is_face.is_(True),
             Encodings.is_body.is_(True),
-            Images.site_name_id == SITE_NAME_ID
+            Images.site_name_id == SITE_NAME_ID,
+            Images.imagename.startswith('4') # fine tuning the place to look based on folder
         )
         .order_by(Encodings.image_id)
     )

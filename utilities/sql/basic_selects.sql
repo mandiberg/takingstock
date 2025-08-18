@@ -9,97 +9,42 @@ SET GLOBAL innodb_buffer_pool_size=8053063680;
 
 
 
-UPDATE Images
-SET w = NULL
-WHERE image_id < 5000;
-
-DELETE 
-FROM CountGender_Topics
-;
-
-SELECT COUNT(i.image_id) 
-FROM Images i
-JOIN Encodings e ON e.image_id = i.image_id 
--- WHERE i.site_image_id = "___638KPrmA"
-WHERE i.site_name_id in (6,12)
-AND e.is_face = 1
-    AND e.face_x > -40 AND e.face_x < -3
-    AND e.face_y > -4 AND e.face_y < 4
-    AND e.face_z > -4 AND e.face_z < 4
-   	AND NOT i.age_id <= 3)
-
-;
-
-SELECT COUNT(e.image_id)
-FROM Encodings e 
-LEFT JOIN 
-    SegmentBig_isface sb 
-ON 
-    e.image_id = sb.image_id
-WHERE 
-    sb.image_id IS NULL
-    AND e.image_id IS NOT NULL
-    AND e.face_x > -45
-    AND e.face_x < -20
-    AND e.face_y > -10
-    AND e.face_y < 10
-    AND e.face_z > -10
-    AND e.face_z < 10
-;
-
-SELECT MAX(sbi.image_id)
-FROM SegmentBig_isface sbi 
-WHERE sbi.mongo_tokens IS NOT NULL
-;
 
 -- 44374493
 
--- all topics
-SELECT i.site_name_id, i.imagename
-FROM Images i 
-JOIN encodings e ON i.image_id = e.image_id
-WHERE i.image_id in (303051, 399765)
-AND (e.is_face = 1 OR e.is_body = 1)
-;
-
-
--- topic only
-SELECT i.site_name_id, i.imagename
-FROM Images i 
-JOIN encodings 	e ON i.image_id = e.image_id
-JOIN ImagesTopics it ON it.image_id = e.image_id
-WHERE i.image_id in (4280, 7525, 8886)
-
-AND (e.is_face = 1 OR e.is_body = 1)
-AND it.topic_id = 32
-;
-
--- topic only, bodies as t distance
-SELECT i.site_name_id, i.imagename
-FROM Images i 
-JOIN encodings 	e ON i.image_id = e.image_id
-JOIN ImagesTopics it ON it.image_id = e.image_id
-WHERE i.site_name_id = 1
-AND e.is_face = 1 AND e.is_body = 1
-AND it.topic_id = 32
-LIMIT 5000
 
 
 SELECT *
 FROM Encodings i 
-WHERE i.image_id = 1442
+WHERE i.image_id = 65761606
 
 SELECT *
 FROM NMLimages
 WHERE image_id = 94116465
 ;
 
+UPDATE encodings e
+SET e.migrated_SQL = 1, e.is_face = NULL
+WHERE e.is_face = 1 
+AND e.bbox is NULL
+AND e.migrated = 1
+;
+
+SELECT i.image_id, i.site_name_id, i.imagename, e.is_face, e.bbox, e.migrated
+FROM Images i 
+JOIN encodings 	e ON i.image_id = e.image_id
+WHERE e.migrated_SQL = 1
+
+;
+
 
 SELECT i.site_name_id, i.imagename, i.description
 FROM Images i 
 JOIN encodings 	e ON i.image_id = e.image_id
-AND e.is_face = 0 AND e.is_feet = 1 AND e.is_face_no_lms = 1
-LIMIT 100
+WHERE e.migrated_SQL = 1
+AND e.is_face = NULL
+AND i.site_name_id = 3
+LIMIT 1
 
 ;
 
@@ -125,8 +70,9 @@ WHERE wi.wandering_image_id > 6000000
 LIMIT 5000
 ;
 
-WHERE wi.site_image_id = 1032126784
-AND wi.site_name_id = 3
+SELECT *
+FROM Images i
+WHERE i.image_id = 128532713
 ;
 
 SELECT *

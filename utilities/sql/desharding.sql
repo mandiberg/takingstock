@@ -19,6 +19,10 @@
     --  
     -- PT 3: Upsert Mongo - python
 
+USE stock;
+SET GLOBAL innodb_buffer_pool_size=8053063680;
+
+
 -- export noimages
 CREATE TABLE no_image_migration (
     migration_id int NOT NULL AUTO_INCREMENT PRIMARY KEY,
@@ -82,19 +86,26 @@ CREATE TABLE Encodings_Migration (
 ); 
 
 
+SELECT *
+FROM NMLImages
+WHERE nml_id = 19827792
+;
 
 -- does a merge on NMLImages table to update Encodings Depricated for now
+-- OOPS have to undo this for the settings as below. 
 UPDATE Encodings AS c
 INNER JOIN (
     SELECT o.image_id
     FROM NMLImages AS o
+    WHERE o.nml_id > 19827792
+    AND o.is_nml_db = 0
     ORDER BY o.nml_id DESC
-    LIMIT 10
+    LIMIT 100
 ) AS is_nml_db ON c.image_id = is_nml_db.image_id
 SET c.migrated = 0
 ;
 
-
+-- last non NML image: 19827793 for is_nml_db = 0 before fork
 -- Move all NML data into migration table
 INSERT INTO Encodings_Migration (image_id, encoding_id, is_face, is_body, is_face_distant, face_x, face_y, face_z, mouth_gap, face_landmarks, bbox, face_encodings68, body_landmarks, mongo_encodings, mongo_body_landmarks, mongo_face_landmarks, is_small, mongo_body_landmarks_norm, two_noses, is_dupe_of, mongo_hand_landmarks, mongo_hand_landmarks_norm, is_face_no_lms, is_feet, mongo_body_landmarks_3D, is_hand_left, is_hand_right)
 SELECT DISTINCT  e.image_id, e.encoding_id, e.is_face, e.is_body, e.is_face_distant, e.face_x, e.face_y, e.face_z, e.mouth_gap, e.face_landmarks, e.bbox, e.face_encodings68, e.body_landmarks, e.mongo_encodings, e.mongo_body_landmarks, e.mongo_face_landmarks, e.is_small, e.mongo_body_landmarks_norm, e.two_noses, e.is_dupe_of, e.mongo_hand_landmarks, e.mongo_hand_landmarks_norm, e.is_face_no_lms, e.is_feet, e.mongo_body_landmarks_3D, e.is_hand_left, e.is_hand_right
@@ -102,6 +113,7 @@ FROM Encodings e
 JOIN NMLImages n on e.image_id = n.image_id 
 LEFT JOIN Encodings_Migration em on e.image_id = em.image_id 
 WHERE n.is_nml_db = 0
+
     AND em.image_id IS NULL    
 LIMIT 10; -- Adjust the batch size as needed
 
