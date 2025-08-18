@@ -853,7 +853,9 @@ class SortPose:
             'face_xyz': [15, "less"],
             'bbox_array': [80, "less"],
             'face_encodings68': [.5, "less"],
-            'hand_landmarks': [1, "less"]
+            'hand_landmarks': [1, "less"],
+            'body_landmarks_normalized_array': [1, "less"]
+
         }
 
         def norm_dist(this_dist, threshold):
@@ -873,9 +875,11 @@ class SortPose:
 
         def sort_on_score(ssim_score, this_dist_list):
             sort_folder =""
-            if ssim_score > 0.95:
+            if ssim_score >= 0.99:
+                sort_folder += "exactSSIM"
+            elif ssim_score > 0.95:
                 sort_folder += "ultraSSIM"
-            if ssim_score > 0.85:
+            elif ssim_score > 0.85:
                 sort_folder += "highSSIM"
             elif ssim_score > 0.75:
                 sort_folder += "mediumSSIM"
@@ -891,7 +895,9 @@ class SortPose:
             elif sum(this_dist_list[:3]) < .5:
                 sort_folder += "ultraMETA"                
             elif sum(this_dist_list[:3]) < 1:
-                sort_folder += "goodMETA"                
+                sort_folder += "highMETA"                
+            elif sum(this_dist_list[:3]) < 2:
+                sort_folder += "mediumMETA"                
 
             if this_dist_list[-3] > 15:
                 sort_folder += "highHANDS"
@@ -957,12 +963,19 @@ class SortPose:
         
         #pass 3 hand gesture, description, site name id
         for (i,j), this_dist_list in look_closer_dict.items():
+            # calculate full body lms distance
+            key = "body_landmarks_normalized_array"
+            threshold, operator = threshold_dict[key]
+            body_dist = self.dupe_comparison(i, j, key, df)
+            normed_body_dist = norm_dist(body_dist, threshold)
+            # replace the exising hands/ankles with full body lms
+            this_dist_list[0] = normed_body_dist
 
             # calculate hand dist
             key = "hand_landmarks"
             threshold, operator = threshold_dict[key]
-            this_dist = self.dupe_comparison(i, j, key, df)
-            normed_dist = norm_dist(this_dist, threshold)
+            hand_dist = self.dupe_comparison(i, j, key, df)
+            normed_hand_dist = norm_dist(hand_dist, threshold)
 
             desc_dist = self.dupe_comparison_metadata(i, j, 'description', df)
             # 0 means diff sites, >0 means difference between ids for given site -- closer means same shoot
@@ -978,7 +991,7 @@ class SortPose:
             else:
                 normed_site_name_id_dist = site_name_id_dist
 
-            this_dist_list.extend([normed_dist, desc_dist, normed_site_name_id_dist])
+            this_dist_list.extend([normed_hand_dist, desc_dist, normed_site_name_id_dist])
             look_closer_dict[(i,j)] = this_dist_list
 
         # print(f"  >>> look_closer_dict is {look_closer_dict}")
