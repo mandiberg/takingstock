@@ -15,6 +15,7 @@ class SelectPose:
         self.size = (self.image.height, self.image.width)
         self.h = self.image.height
         self.w = self.image.width
+        self.VERBOSE = False
 
         # self.image = image
         # self.size = (image.shape[0], image.shape[1])
@@ -89,7 +90,7 @@ class SelectPose:
 
                 #this scales the bbox sliced face back up to full image pixel
                 x,y=int(lm.x * (bbox["right"]-bbox["left"])+bbox["left"]),int(lm.y * (bbox["bottom"]-bbox["top"])+bbox["top"]) 
-                # print(lm)
+                # if self.VERBOSE: print(lm)
                 faceXY.append((x, y)) # put all xy points in neat array
 
             image_points = np.array([
@@ -114,11 +115,11 @@ class SelectPose:
 
             dist.append((faceNum, (int(((xcenter-width/2)**2+(ycenter-height/2)**2)**.4)), maxXY, minXY))     # faceID, distance, maxXY, minXY
 
-            # print(image_points)
+            # if self.VERBOSE: print(image_points)
 
             (success, self.r_vec, self.t_vec) = cv2.solvePnP(self.model_points, image_points,  self.camera_matrix, self.dist_coeefs)
             (nose_end_point2D, jacobian) = cv2.projectPoints(np.array([(0.0, 0.0, 1000.0)]), self.r_vec, self.t_vec, self.camera_matrix, self.dist_coeefs)
-            # print(self.r_vec)
+            # if self.VERBOSE: print(self.r_vec)
             p1 = (int(image_points[0][0]), int(image_points[0][1]))
             # p2 = (int(nose_end_point2D[0][0][0]), int(nose_end_point2D[0][0][1]))
 
@@ -128,12 +129,12 @@ class SelectPose:
     def draw_face_landmarks(self, image, faceLms, bbox):
         # Draw the landmarks
         for id, lm in enumerate(faceLms.landmark):
-            # print(bbox)
+            # if self.VERBOSE: print(bbox)
             bbox_width = bbox["right"]-bbox["left"]
             bbox_height = bbox["bottom"]-bbox["top"]
             x = int(bbox["left"] + lm.x * bbox_width)
             y = int(bbox["top"] + lm.y * bbox_height)
-            # print(x,y)
+            # if self.VERBOSE: print(x,y)
             cv2.circle(image, (x, y), 1, (255, 0, 0), -1)
         return image
 
@@ -197,7 +198,7 @@ class SelectPose:
     def rotationMatrixToEulerAnglesToDegrees(self):
         #R is Rotation Matrix
         R, jac = cv2.Rodrigues(self.r_vec)
-        # print("r matrix ",R)
+        # if self.VERBOSE: print("r matrix ",R)
         #make sure it is actually a rmatrix
         assert(self.isRotationMatrix(R))
 
@@ -294,10 +295,10 @@ class SelectPose:
 
     def get_eye_pitch(self, faceLms):
         def get_average_y(landmarks, point1, point2):
-            print("point1, point2",point1,point2)
+            # if self.VERBOSE: print("point1, point2",point1,point2)
             y1 = landmarks.landmark[point1].y
             y2 = landmarks.landmark[point2].y
-            print("y1, y2",y1,y2)
+            if self.VERBOSE: print("y1, y2",y1,y2)
             return (y1 + y2) / 2
         # eye pitch
         left_eye_tops = get_average_y(faceLms, 159,145)
@@ -307,12 +308,12 @@ class SelectPose:
         left_eye_top_delta = left_eye_sides - left_eye_top 
         left_eye_bottom_delta = left_eye_bottom - left_eye_sides
         left_pitch = left_eye_bottom_delta - left_eye_top_delta
-        print("left_eye_top[1]",left_eye_top)
-        print("left_eye_bottom[1]",left_eye_bottom)
-        print("left_eye_sides",left_eye_sides)
-        print("left eye top delta",left_eye_top_delta)
-        print("left eye bottom delta",left_eye_bottom_delta)
-        print("left pitch",left_pitch)
+        if self.VERBOSE: print("left_eye_top[1]",left_eye_top)
+        if self.VERBOSE: print("left_eye_bottom[1]",left_eye_bottom)
+        if self.VERBOSE: print("left_eye_sides",left_eye_sides)
+        if self.VERBOSE: print("left eye top delta",left_eye_top_delta)
+        if self.VERBOSE: print("left eye bottom delta",left_eye_bottom_delta)
+        if self.VERBOSE: print("left pitch",left_pitch)
 
         right_eye_tops = get_average_y(faceLms, 386,374)
         right_eye_top = self.get_face_2d_point(faceLms, 386)
@@ -321,33 +322,33 @@ class SelectPose:
         right_eye_top_delta = right_eye_top[1] - right_eye_sides
         right_eye_bottom_delta = right_eye_bottom[1] - right_eye_sides
         
-        # print(left_eye_top_delta, left_eye_bottom_delta, right_eye_top_delta, right_eye_bottom_delta)
+        # if self.VERBOSE: print(left_eye_top_delta, left_eye_bottom_delta, right_eye_top_delta, right_eye_bottom_delta)
         left_pitch = (left_eye_tops - left_eye_sides) / self.face_height*100
         right_pitch = (right_eye_tops - right_eye_sides) / self.face_height*100
         average_pitch = (left_pitch + right_pitch) / 2
-        # print(average_pitch)
+        # if self.VERBOSE: print(average_pitch)
         return average_pitch
         # left eye left corner 33, rt 133
         # right eye left corner ,  362, rt 263
 
     def get_dist_btwn_landmarks(self, faceLms, point1, point2, style="new"):
-        print("point1, point2",point1,point2)
+        if self.VERBOSE: print("point1, point2",point1,point2)
         # point 1 is the top point, point 2 is the bottom point
         top_point = self.get_face_2d_point(faceLms,point1)
         bot_point = self.get_face_2d_point(faceLms,point2)
-        print("top_point, bot_point",top_point,bot_point)
+        if self.VERBOSE: print("top_point, bot_point",top_point,bot_point)
         #calculate  gap
         if style == "new":
             gap = top_point[1] - bot_point[1]
         else:
             gap = self.dist(self.point(bot_point), self.point(top_point))
-        print("gap",gap)
+        if self.VERBOSE: print("gap",gap)
         # check for face height, and if not exist, then get
         if not hasattr(self, 'face_height'): 
             self.get_faceheight_data(faceLms)
  
         gap_pct = gap/self.face_height*100
-        print(gap_pct)
+        if self.VERBOSE: print(gap_pct)
         return gap_pct
     
     def get_mouth_data(self, faceLms):
@@ -361,7 +362,7 @@ class SelectPose:
         #     self.get_faceheight_data(faceLms)
  
         # mouth_pct = mouth_gap/self.face_height*100
-        # # print(mouth_pct)
+        # # if self.VERBOSE: print(mouth_pct)
         mouth_pct = self.get_dist_btwn_landmarks(faceLms,13,14, style="old")
         return mouth_pct
 
@@ -380,7 +381,7 @@ class SelectPose:
         
         #it would prob be better to do this with a dict and a loop
         nose_2d = self.get_face_2d_point(faceLms,1)
-        # print("self.sinY: ",self.sinY)
+        # if self.VERBOSE: print("self.sinY: ",self.sinY)
         #set main points for drawing/cropping
         #p1 is tip of nose
         p1 = (int(nose_2d[0]), int(nose_2d[1]))
@@ -391,16 +392,16 @@ class SelectPose:
             if p1[0]>(self.face_height*1) and (self.w-p1[0])>(self.face_height*1):
                 self.crop_multiplier = 1
             else:
-                print('face too wiiiiiiiide')
+                if self.VERBOSE: print('face too wiiiiiiiide')
                 self.crop_multiplier = .25
                 toobig=True
 
         else:
             self.crop_multiplier = .25
-            print('face too biiiiigggggg')
+            if self.VERBOSE: print('face too biiiiigggggg')
             toobig=True
 
-        # print(crop_multiplier)
+        # if self.VERBOSE: print(crop_multiplier)
         self.h - p1[1]
         top_overlap = p1[1]-self.face_height
 
@@ -416,7 +417,7 @@ class SelectPose:
     def get_crop_data(self, faceLms, sinY, export_size=2500):
         #it would prob be better to do this with a dict and a loop
         nose_2d = self.get_face_2d_point(faceLms,1)
-        # print("sinY: ",sinY)
+        # if self.VERBOSE: print("sinY: ",sinY)
 
         #cludge to get the new script to not move for neck
         sinY = 0
@@ -424,14 +425,14 @@ class SelectPose:
         #set main points for drawing/cropping
         #p1 is tip of nose
         p1 = (int(nose_2d[0]), int(nose_2d[1]))
-        # print(crop_multiplier)
+        # if self.VERBOSE: print(crop_multiplier)
         # self.h - p1[1]
         top_overlap = p1[1]-self.face_height
         neck_offset = sinY*int(self.face_height)
         #neck is point to crop image off of
         neck = (p1[0]+neck_offset,p1[1])
-        # print("nose ",p1[0])
-        # print("neck ",neck[0])
+        # if self.VERBOSE: print("nose ",p1[0])
+        # if self.VERBOSE: print("neck ",neck[0])
         self.crop =[0,0]
         # determine crop shape/ratio
         # crops = [.75,1,1.5,2,2.5,3]
@@ -451,7 +452,7 @@ class SelectPose:
                 self.crop[1]=ratio
             try:
                 balance = self.crop[0]/self.crop[1]
-                print(balance)
+                if self.VERBOSE: print(balance)
                 #this might not be set right. seems to be weird with < or >
                 if .6 > balance > 1.5:
                     balance = 1
@@ -462,7 +463,7 @@ class SelectPose:
 
         if self.crop[0] == 0 or self.crop[1] == 0:
             toobig = True
-        print("toobig and crop ",toobig,self.crop)
+        if self.VERBOSE: print("toobig and crop ",toobig,self.crop)
 
         #set crop
         # crop_multiplier = 1
@@ -476,10 +477,10 @@ class SelectPose:
         # figures out how far each dimensions is from nose
         # subtracts edge_to_nose from export_size/2
         # crop_multiplier = 1
-        # print("neck, faceheight, crop")
-        # print(neck[0])
-        # print(self.face_height)
-        # print(self.crop[0])
+        # if self.VERBOSE: print("neck, faceheight, crop")
+        # if self.VERBOSE: print(neck[0])
+        # if self.VERBOSE: print(self.face_height)
+        # if self.VERBOSE: print(self.crop[0])
         leftpadding = int(export_size/2 - int(neck[0]))
         rightpadding = int(export_size/2 - (self.w - int(neck[0])))
         toppadding = int(export_size/2 - int(neck[1]))
@@ -509,8 +510,8 @@ class SelectPose:
         top, right, bottom, left = padding_points   
         borderType = cv2.BORDER_CONSTANT
         BLUE = [255,255,255]
-        print(top)
-        print(type(top))
+        if self.VERBOSE: print(top)
+        if self.VERBOSE: print(type(top))
         # width, height = pil_img.size
         # new_width = width + right + left
         # new_height = height + top + bottom
@@ -536,12 +537,12 @@ class SelectPose:
             self.get_crop_data(faceLms, sinY)
 
         
-        # print (self.padding_points)
+        # if self.VERBOSE: print (self.padding_points)
         #set main points for drawing/cropping
         #p1 is tip of nose
         p1 = (int(nose_2d[0]), int(nose_2d[1]))
 
-        # print(crop_multiplier)
+        # if self.VERBOSE: print(crop_multiplier)
         self.h - p1[1]
         top_overlap = p1[1]-self.face_height
 
@@ -560,9 +561,9 @@ class SelectPose:
             cropped_image = cv2.resize(cropped_image[self.crop_points[0]:self.crop_points[2], self.crop_points[3]:self.crop_points[1]], (newsize), interpolation= cv2.INTER_LINEAR)
         except:
             cropped_image = None
-            print("not cropped_image loop")
+            if self.VERBOSE: print("not cropped_image loop")
 
-            print(self.h, self.w)
+            if self.VERBOSE: print(self.h, self.w)
                
         return padded_image, cropped_image, resize
 
@@ -601,9 +602,9 @@ class SelectPose:
 
             score = handedness[0].score
             hand_type = handedness[0].category_name
-            print(f"Hand {idx}:")
-            print(f"    Type: {hand_type}")
-            print(f"    Score: {score}")
+            if self.VERBOSE: print(f"Hand {idx}:")
+            if self.VERBOSE: print(f"    Type: {hand_type}")
+            if self.VERBOSE: print(f"    Score: {score}")
 
             # Pointer finger tip is landmark 8
             pointer_finger_tip = hand_landmarks[8]
@@ -614,7 +615,7 @@ class SelectPose:
 
             # Draw the point on the image
             cv2.circle(annotated_image, (pointer_finger_x, pointer_finger_y), 25, (0, 255, 0), -1)
-            print(f"  >>>  Pointer finger (2D) location: x = {pointer_finger_x}, y = {pointer_finger_y}")
+            if self.VERBOSE: print(f"  >>>  Pointer finger (2D) location: x = {pointer_finger_x}, y = {pointer_finger_y}")
 
             # Display the image with the annotation
             cv2.imshow("marked image", cv2.cvtColor(annotated_image, cv2.COLOR_RGB2BGR))
@@ -642,13 +643,13 @@ class SelectPose:
                 hand_data_dict["left_hand"] = hand_landmarks_data
 
         # Store both left and right hand data in the same MongoDB document
-        # print(f"Storing data for image_id: {image_id}")
+        # if self.VERBOSE: print(f"Storing data for image_id: {image_id}")
         mongo_hand_collection.update_one(
             {"image_id": image_id},
             {"$set": hand_data_dict},
             upsert=True  # Insert if doesn't exist or update if it does
         )
-        # print(f"----------- >>>>>>>>   MongoDB hand data updated for image_id: {image_id}")
+        # if self.VERBOSE: print(f"----------- >>>>>>>>   MongoDB hand data updated for image_id: {image_id}")
 
 
     def extract_hand_landmarks(self, detection_result):
