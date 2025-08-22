@@ -1002,10 +1002,86 @@ class SortPose:
             print(f"  >>> closest_look {i},{j} with distances {this_dist_list}")
             image_i = open_and_crop(i, df)
             image_j = open_and_crop(j, df)
-            if image_i is not None and image_j is not None:
+            if image_i is not None and image_j is not None and j == 20:
+ 
+                
                 ssim_score = self.calculate_ssim(image_i, image_j)
+
+
+                if round(image_i.shape[0]/image_i.shape[1], 2) == round(image_j.shape[0]/image_j.shape[1], 2):
+                    image_resize_j = cv2.resize(image_j, (image_i.shape[1], image_i.shape[0]))
+                    same_shape = True
+                else:
+                    image_resize_j = image_j
+                    same_shape = False
+
+
+                # image_resize_j = image_j
+                 # prep for image background object
+                get_background_mp = mp.solutions.selfie_segmentation
+                get_bg_segment = get_background_mp.SelfieSegmentation()
+                
+                segmentation_mask_i = self.get_segmentation_mask(get_bg_segment, image_i, None, None)
+                # selfie_bbox_i = self.get_selfie_bbox(segmentation_mask_i)
+                # hue_i, sat_i, val_i, lum_i, lum_torso_i = self.get_bg_hue_lum(image_i, segmentation_mask_i, selfie_bbox_i)
+                segmentation_mask_j = self.get_segmentation_mask(get_bg_segment, image_resize_j, None, None)
+                # selfie_bbox_j = self.get_selfie_bbox(segmentation_mask_j)
+                # hue_j, sat_j, val_j, lum_j, lum_torso_j = self.get_bg_hue_lum(image_resize_j, segmentation_mask_j, selfie_bbox_j)
+
+                 #resize to match mask_i
+                # segmentation_mask_j = cv2.resize(segmentation_mask_j, (segmentation_mask_i.shape[1], segmentation_mask_i.shape[0]))
+                
+                segmentation_mask_i = (segmentation_mask_i > 0.1).astype(np.uint8) * 255
+                segmentation_mask_j = (segmentation_mask_j > 0.1).astype(np.uint8) * 255
+
+                segmentation_mask_i = cv2.cvtColor(segmentation_mask_i, cv2.COLOR_GRAY2BGR)
+                segmentation_mask_j = cv2.cvtColor(segmentation_mask_j, cv2.COLOR_GRAY2BGR)
+
+
+                selfie_i = cv2.bitwise_and(image_i, segmentation_mask_i)
+                selfie_j = cv2.bitwise_and(image_resize_j, segmentation_mask_j)
+               
+                bbox_i = df.at[i,"bbox"]
+                bbox_j = df.at[j, "bbox"]
+                print(f'image {i},{j} sizes: {image_i.size}, {image_resize_j.size}')
+                bbox_i["bottom_extend"] = bbox_i["top"]+ ((bbox_i["bottom"]- bbox_i["top"])*2)
+                bbox_j["bottom_extend"] = bbox_j["top"]+ ((bbox_j["bottom"]- bbox_j["top"])*2)
+
+                selfie_i = selfie_i[bbox_i["top"]:bbox_i["bottom_extend"], bbox_i["left"]:bbox_i["right"]]
+                if same_shape:
+                    selfie_j = selfie_j[bbox_i["top"]:bbox_i["bottom_extend"], bbox_i["left"]:bbox_i["right"]]
+                else:
+                    print(f'error comparing segmentation masks, images {i},{j} different sizes, {selfie_i.shape}, {selfie_j.shape}')
+                    selfie_j = selfie_j[bbox_j["top"]:bbox_j["bottom_extend"], bbox_j["left"]:bbox_j["right"]]
+                    selfie_j = cv2.resize(selfie_j, (selfie_i.shape[1], selfie_i.shape[0]))
+                    
+
+                # selfie_j = cv2.resize(selfie_j, (selfie_i.shape[1], selfie_i.shape[0]))
+
+                # cv2.imshow(f'segmentation_mask_i', selfie_i)
+                # cv2.waitKey(0)
+                # cv2.destroyAllWindows()
+
+                # cv2.imshow(f'segmentation_mask_j:', selfie_j)
+                # cv2.waitKey(0)
+                # cv2.destroyAllWindows()
+                
+                # Create diff mask
+               
+                ssim_score = self.calculate_ssim(selfie_i, selfie_j)
+
+
+                # Display the mask_diff mask
+                # selfie_mse_score, mask_diff = self.mse(selfie_i, selfie_j)
+                # cv2.imshow(f'mask mask_diff at {i},{j}, scoring: {selfie_mse_score}', mask_diff)
+                # cv2.waitKey(0)
+                # cv2.destroyAllWindows()
+
+
             else:
                 ssim_score = 0
+                selfie_ssim_score = 0
+            
             # save i and j to a shared folder
             if self.VERBOSE: save_dupes_look_closer(i, j, ssim_score, this_dist_list, df)
 
@@ -1141,7 +1217,18 @@ class SortPose:
 ################### END TENCH CODE FOR DUPE DETECTION #####################
 ###########################################################################
 
+    def mse(self, img1, img2):
+        h, w, _ = img1.shape
+        try:
+            diff = cv2.subtract(img1, img2)
+            err = np.sum(diff**2)
+            mse = err/(float(h*w))
+        except Exception as e:
+            print('failed mse')
+            print('Error:', str(e))
 
+        return mse, diff
+    
     def unique_face(self,img1,img2):
         # convert the images to grayscale
         img1 = cv2.cvtColor(img1, cv2.COLOR_BGR2GRAY)
@@ -1155,19 +1242,9 @@ class SortPose:
             if img1.shape != (common_dim, common_dim): img1 = cv2.resize(img1, (common_dim, common_dim))
             if img2.shape != (common_dim, common_dim): img2 = cv2.resize(img2, (common_dim, common_dim))
         # define the function to compute MSE between two images
-        def mse(img1, img2):
-            h, w = img1.shape
-            try:
-                diff = cv2.subtract(img1, img2)
-                err = np.sum(diff**2)
-                mse = err/(float(h*w))
-            except Exception as e:
-                print('failed mse')
-                print('Error:', str(e))
+    
 
-            return mse, diff
-
-        error, diff = mse(img1, img2)
+        error, diff = self.mse(img1, img2)
         
         return error
 
