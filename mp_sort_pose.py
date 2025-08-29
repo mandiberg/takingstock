@@ -14,7 +14,7 @@ import random
 import numpy as np
 import sys
 from collections import Counter
-# from simple_lama_inpainting import SimpleLama
+from simple_lama_inpainting import SimpleLama
 from sklearn.neighbors import NearestNeighbors
 import re
 import random
@@ -95,7 +95,7 @@ class SortPose:
     
 
         self.INPAINT=INPAINT
-        # if self.INPAINT:self.INPAINT_MODEL=SimpleLama()
+        if self.INPAINT:self.INPAINT_MODEL=SimpleLama()
         # self.MAX_IMAGE_EDGE_MULTIPLIER=[1.5,2.6,2,2.6] #maximum of the elements
 
         self.knn = NearestNeighbors(metric='euclidean', algorithm='ball_tree')
@@ -937,7 +937,7 @@ class SortPose:
                     if self.VERBOSE: 
                         print(f"dupe_detection_pass_1 triggered at {i},{j}. with NORMED distances {this_dist_list}")
                 else:
-                    print(f"tossing {i},{j}. with n_d {this_dist_list}")
+                    #print(f"tossing {i},{j}. with n_d {this_dist_list}")
                     
                     continue
                       # If only one of the checks passed, skip to next pair
@@ -999,10 +999,10 @@ class SortPose:
 
 
         for (i,j), this_dist_list in look_closer_dict.items():
-            print(f"  >>> closest_look {i},{j} with distances {this_dist_list}")
+            # if self.VERBOSE: print(f"  >>> closest_look {i},{j} with distances {this_dist_list}")
             image_i = open_and_crop(i, df)
             image_j = open_and_crop(j, df)
-            if image_i is not None and image_j is not None and j == 20:
+            if image_i is not None and image_j is not None:
  
                 
                 ssim_score = self.calculate_ssim(image_i, image_j)
@@ -1079,6 +1079,7 @@ class SortPose:
 
 
             else:
+                print(f"SSIM detect image {i} or image {j} is None")
                 ssim_score = 0
                 selfie_ssim_score = 0
             
@@ -1695,10 +1696,7 @@ class SortPose:
         pixels = grid.reshape(-1, 3) # Reshape the strip to a 2D array of pixels
         # mean_color = np.mean(pixels, axis=0)
         std_dev = np.std(pixels, axis=0)
-        try:
-            overall_std_dev = np.mean(std_dev)
-        except:
-            print(grid.shape)
+        overall_std_dev = np.mean(std_dev)
         is_consistent = overall_std_dev < threshold
         # if not is_consistent:
             
@@ -1852,11 +1850,7 @@ class SortPose:
         black_pixels_mask_torso = np.all(masked_img_torso == [0, 0, 0], axis=-1)
 
         # Filter out black pixels and compute the mean color of the remaining pixels
-        try:
-            mean_color = np.mean(masked_img[~black_pixels_mask], axis=0)[np.newaxis,np.newaxis,:] # ~ means negate/remove
-        except:
-            print("no background pixels found, mean color set to 0,0,0")
-            mean_color = np.array([[[0,0,0]]], dtype=np.float32)
+        mean_color = np.mean(masked_img[~black_pixels_mask], axis=0)[np.newaxis,np.newaxis,:] # ~ means negate/remove
         self.hue = cv2.cvtColor(mean_color, cv2.COLOR_RGB2HSV)[0,0,0]
         self.sat = cv2.cvtColor(mean_color, cv2.COLOR_RGB2HSV)[0,0,1]
         self.val = cv2.cvtColor(mean_color, cv2.COLOR_RGB2HSV)[0,0,2]
@@ -1874,11 +1868,7 @@ class SortPose:
         #     black_pixels_mask_torso = black_pixels_mask_torso[-bottom_fraction:]
 
         if self.VERBOSE: print("masked_img_torso size", masked_img_torso.shape, black_pixels_mask_torso.shape)
-        try:
-            mean_color = np.mean(masked_img_torso[~black_pixels_mask_torso], axis=0)[np.newaxis,np.newaxis,:] # ~ is negate
-        except:
-            print("no torso pixels found, mean color set to 0,0,0")
-            mean_color = np.array([[[0,0,0]]], dtype=np.float32)
+        mean_color = np.mean(masked_img_torso[~black_pixels_mask_torso], axis=0)[np.newaxis,np.newaxis,:] # ~ is negate
         self.lum_torso=cv2.cvtColor(mean_color, cv2.COLOR_RGB2LAB)[0,0,0]
 
         if self.VERBOSE: print("HSV, lum", self.hue,self.sat,self.val,self.lum, self.lum_torso)
@@ -3149,7 +3139,7 @@ class SortPose:
         return
 
     def return_bbox(self, model, image, OBJ_CLS_LIST):
-        result = model(image,classes=[OBJ_CLS_LIST], verbose=False)[0]
+        result = model(image,classes=[OBJ_CLS_LIST])[0]
         bbox_dict={}
         bbox_count=np.zeros(len(OBJ_CLS_LIST))
         for i,OBJ_CLS_ID in enumerate(OBJ_CLS_LIST):
