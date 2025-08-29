@@ -91,14 +91,14 @@ switching to topic targeted
 '''
 1   getty 3D
 2   shutterstock 3D
-3   adobe NML
-4   istock NML
+3   adobe
+4   istock
 5   pexels - all wandering?
-6   unsplash IP
+6   unsplash
 7   pond5 - all wandering?
-8   123rf - not 3D
+8   123rf
 9   alamy
-10  visualchinagroup - maybe the first few are already done?
+10  visualchinagroup - already done?
 11	picxy 3D
 12	pixerf 3D (all too small)
 13	imagesbazaar - buggy
@@ -109,7 +109,7 @@ switching to topic targeted
 18	afripics - where are these?
 '''
 # I think this only matters for IS_FOLDER mode, and the old SQL way
-SITE_NAME_ID = 13
+SITE_NAME_ID = 4
 # 2, shutter. 4, istock
 # 7 pond5, 8 123rf
 POSE_ID = 0
@@ -118,11 +118,28 @@ POSE_ID = 0
 # MAIN_FOLDER = "/Volumes/RAID54/images_shutterstock"
 # MAIN_FOLDER = "/Volumes/LaCie/images_istock"
 # MAIN_FOLDER = "/Volumes/ExFAT_SSD4_/images_adobe"
-MAIN_FOLDER = "/Volumes/OWC4/images_bazzar"
-# MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/afripics_v2/images"
+# MAIN_FOLDER1 = "/Volumes/OWC4/images_unsplash"
 
-# MAIN_FOLDER = "/Volumes/SSD4/images_getty_reDL"
-BATCH_SIZE = 10 # Define how many from each folder in each batch
+# for sites with files spread over several SSDs, you can add addtional folders
+# you will also have to add the MAIN_FOLDER2 variable below, etc
+# MAIN_FOLDER1 = "/Volumes/LaCie/images_istock"
+# MAIN_FOLDER1 = "/Volumes/ExFAT_4TBgr/images_istock"
+MAIN_FOLDER1 = "/Volumes/LaCie/images_adobe_also"
+MAIN_FOLDER2 = "/Volumes/OWC5/images_adobe"
+MAIN_FOLDER3 = "/Volumes/SSD4_Green/images_adobe"
+MAIN_FOLDER4 = "/Volumes/SSD4_Green/images_123rf"
+MAIN_FOLDER5 = "/Volumes/SSD2/images_123rf"
+
+# #testing locally with two
+# MAIN_FOLDER1 = "/Volumes/OWC4/images_alamy"
+# MAIN_FOLDER2 = "/Volumes/OWC4/images_unsplash9"
+# MAIN_FOLDERS = [MAIN_FOLDER1, MAIN_FOLDER2]
+
+
+# MAIN_FOLDERS = [MAIN_FOLDER1]
+MAIN_FOLDERS = [MAIN_FOLDER1, MAIN_FOLDER2, MAIN_FOLDER3, MAIN_FOLDER4, MAIN_FOLDER5]
+
+BATCH_SIZE = 10000 # Define how many from each folder in each batch
 LIMIT = 1000
 
 #temp hack to go 1 subfolder at a time
@@ -130,7 +147,8 @@ THESE_FOLDER_PATHS = ["9/9C", "9/9D", "9/9E", "9/9F", "9/90", "9/91", "9/92", "9
 
 # MAIN_FOLDER = "/Volumes/SSD4/adobeStockScraper_v3/images"
 # MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/gettyimages/newimages"
-CSV_FOLDERCOUNT_PATH = os.path.join(MAIN_FOLDER, "folder_countout.csv")
+# CSV_FOLDERCOUNT_NAME = "folder_countout.csv"
+CSV_FOLDERCOUNT_NAMES = ["folder_countout1.csv", "folder_countout2.csv"]
 
 IS_SSD=True
 
@@ -1161,7 +1179,7 @@ def process_image_normalize_object_bbox(bbox_dict, nose_pixel_pos, face_height, 
 
             n_phone_bbox=sort.normalize_phone_bbox(bbox_dict_value,nose_pixel_pos,face_height,image_shape)
             bbox_dict[bbox_n_key]=n_phone_bbox
-            print("normed bbox", bbox_dict[bbox_n_key])
+            if VERBOSE: print("normed bbox", bbox_dict[bbox_n_key])
         else:
             pass
             if VERBOSE: print(f"NO {bbox_key} for",)
@@ -1284,7 +1302,7 @@ def save_body_hands_mysql_and_mongo(session, image_id, image, bbox_dict, body_la
                     # Add the new entry to the session
                     session.merge(new_entry_phonebbox)
                     
-                    print(f"New Bbox {OBJ_CLS_ID} session entry for image_id {image_id} created successfully.")
+                    if not QUIET: print(f"New Bbox {OBJ_CLS_ID} session entry for image_id {image_id} created successfully.")
                 else:
                     pass
                     if VERBOSE: print(f"No bbox for {OBJ_CLS_ID} in image_id {image_id}")
@@ -1779,7 +1797,6 @@ def process_image(task):
             if face_encodings68: is_encodings = 1
             else: is_encodings = 0
 
-
             if existing_entry is not None and existing_entry.mongo_encodings is None:
                 is_face_no_lms = insert_dict["is_face_no_lms"]
                 if VERBOSE: print(f"existing_entry for image_id: {image_id} with no existing mongo_encodings. is_face_no_lms is: {is_face_no_lms} Going to add these encodings: {is_encodings}")
@@ -1930,205 +1947,257 @@ def main():
     jsonsplit = time.time()
 
     if IS_FOLDER is True:
-        print("in IS_FOLDER")
-        folder_paths = io.make_hash_folders(MAIN_FOLDER, as_list=True)
-        # print(len(folder_paths))
-        completed_folders = io.get_csv_aslist(CSV_FOLDERCOUNT_PATH)
-        # print(len(completed_folders))
-        for folder_path in folder_paths:
-            
-            # if folder_path in THESE_FOLDER_PATHS:
-            if folder_path not in completed_folders:
+        for main_folder in MAIN_FOLDERS:
+            first_pass = True
+            if "adobe" in main_folder:
+                SITE_NAME_ID = 3
+            elif "123rf" in main_folder:
+                SITE_NAME_ID = 8
 
-                folder = os.path.join(MAIN_FOLDER,folder_path)
-                folder_count += 1
-                if not os.path.exists(folder):
-                    # print(str(folder_count), "no folder here:",folder)
-                    continue
-                else:
-                    print(str(folder_count), folder)
+            # check for redo
+            if "redo" in main_folder:
+                REDO_BODYLMS_3D = True # this makes it skip hands and YOLO
+                HANDLMS = False # if doing 3D redo, don't do hands
+            else:
+                REDO_BODYLMS_3D = False
+                HANDLMS = True # if doing 3D redo, do hands
 
-                img_list = io.get_img_list(folder)
-                # print("len(img_list)", len(img_list))
+            for csv_foldercount_name in CSV_FOLDERCOUNT_NAMES:
+                if csv_foldercount_name == "folder_countout2.csv": first_pass = False
+                print(f"in IS_FOLDER: {main_folder} SITE_NAME_ID = {SITE_NAME_ID} doing csv_foldercount_name: {csv_foldercount_name}, first_pass: {first_pass}")
+                folder_paths = io.make_hash_folders(main_folder, as_list=True)
+                csv_foldercount_path = os.path.join(main_folder, csv_foldercount_name)
+                completed_folders = io.get_csv_aslist(csv_foldercount_path)
+                # print(len(completed_folders))
+                for folder_path in folder_paths:
+                    
+                    # if folder_path in THESE_FOLDER_PATHS:
+                    if folder_path not in completed_folders:
 
-
-                # Initialize an empty list to store all the results
-                all_results = []
-
-                # Split the img_list into smaller batches and process them one by one
-                for i in range(0, len(img_list), BATCH_SIZE):
-
-                    batch_img_list = img_list[i : i + BATCH_SIZE]
-
-                    print(f"total img_list: {len(img_list)} no. processed: {i} no. left: {len(img_list)-i}")
-                    if len(img_list)-i<BATCH_SIZE: print("last_round for img_list")
-                    # CHANGE FOR EACH SITE
-                    # ALSO site_image_id DOWN BELOW 
-                    # Collect site_image_id values from the image filenames
-                    if SITE_NAME_ID == 8:
-                    # 123rf
-                        batch_site_image_ids = [img.split("-")[0] for img in batch_img_list]
-                    elif SITE_NAME_ID == 5:
-                        batch_site_image_ids = [img.split("-")[-1].replace(".jpg","") for img in batch_img_list]
-                    elif SITE_NAME_ID == 1:
-                    # gettyimages
-                        batch_site_image_ids = [img.split("-id")[-1].replace(".jpg", "") for img in batch_img_list]
-                    # site_name_id = 1
-                    else:
-                    # # Adobe and pexels and shutterstock and istock
-                        batch_site_image_ids = [img.split(".")[0] for img in batch_img_list]
-                    site_name_id = SITE_NAME_ID
-
-                    if VERBOSE: print("batch_site_image_ids", len(batch_site_image_ids))
-                    if VERBOSE: print("batch_site_image_ids", batch_site_image_ids[:5])
-
-
-                    # query the database for the current batch and return image_id and encoding_id
-                    for _ in range(io.max_retries):
-
-                        try:
-                            if VERBOSE: print(f"Processing batch {i//BATCH_SIZE + 1}...")
-                            init_session()
-                            # task = (image_id,imagepath,row["mongo_face_landmarks"], row["mongo_body_landmarks"],row["bbox"])
-                            # batch_query = session.query(Images.image_id, Images.site_image_id, Encodings.encoding_id) \
-
-                            # get Images and Encodings values for each site_image_id in the batch
-                            # adding in mongo stuff. should return NULL if not there
-                            batch_query = session.query(Images.image_id, Images.site_image_id, Images.imagename, Encodings.encoding_id, Encodings.mongo_face_landmarks, Encodings.mongo_body_landmarks, Encodings.bbox, Encodings.mongo_body_landmarks_3D) \
-                                                .outerjoin(Encodings, Images.image_id == Encodings.image_id) \
-                                                .filter(Images.site_image_id.in_(batch_site_image_ids), Images.site_name_id == site_name_id, Images.no_image.isnot(True))
-                            batch_results = batch_query.all()
-
-                            all_results.extend(batch_results)
-                            if VERBOSE: print("about to close_session()")
-                            # Close the session and dispose of the engine before the worker process exits
-                            close_session()
-
-                        except OperationalError as e:
-                            print("error getting batch results")
-                            print(e)
-                            time.sleep(io.retry_delay)
-                    if VERBOSE: print(f"no. all_results: {len(all_results)}")
-
-                    # print("results:", all_results)
-                    results_dict = {result.site_image_id: result for result in batch_results}
-
-                    # going back through the img_list, to use as key for the results_dict
-
-                    images_left_to_process = len(batch_img_list)
-                    for img in batch_img_list:
-
-                        # CHANGE FOR EACH SITE
-                        if SITE_NAME_ID == 8:
-                            # extract site_image_id for 213rf
-                            site_image_id = img.split("-")[0]
-
-                        # # extract site_image_id for getty images
-                        # elif SITE_NAME_ID == 1:
-                            # site_image_id = img.split("-id")[-1].replace(".jpg", "")
-
+                        folder = os.path.join(main_folder,folder_path)
+                        folder_count += 1
+                        if not os.path.exists(folder):
+                            # print(str(folder_count), "no folder here:",folder)
+                            continue
                         else:
-                        # # # extract site_image_id for adobe and pexels and shutterstock and istock and pond5
-                            site_image_id = img.split(".")[0]
+                            print(str(folder_count), folder)
 
-                        # print("site_image_id", site_image_id)
-                        if site_image_id in results_dict:
-                            result = results_dict[site_image_id]
-                            # if VERBOSE: print("is in results", result)
-                            # print("in results encoding_id", result.encoding_id)
-                            imagepath = os.path.join(folder, img)
-                                                        
-                            if not result.encoding_id:
-                                # if it hasn't been encoded yet, add it to the tasks
-                                task = (result.image_id, imagepath)
-                                if not QUIET: print(">> adding to face queue:", result.image_id, "site_image_id", site_image_id)
-                            elif result.mongo_body_landmarks and result.mongo_body_landmarks_3D is None and REDO_BODYLMS_3D is True:
-                                # if body has been found but not 3D, add it to the tasks
-                                if not QUIET: print(">>>> adding to 3D BODY queue:", result.image_id, "site_image_id", site_image_id)
-                                task = (result.image_id, imagepath, result.mongo_face_landmarks, result.mongo_body_landmarks, result.bbox)
-                            elif result.mongo_face_landmarks and result.mongo_body_landmarks is None:
-                                # if face has been encoded but not body, add it to the tasks
-                                if not QUIET: print(">>>> adding to BODY queue:", result.image_id, "site_image_id", site_image_id)
-                                task = (result.image_id, imagepath, result.mongo_face_landmarks, result.mongo_body_landmarks, result.bbox)
-                            elif result.mongo_face_landmarks and result.mongo_body_landmarks is not None:
-                                if VERBOSE: print("     xx ALREADY FULLY DONE:", result.image_id)
-                                task = None
-                            elif result.mongo_face_landmarks == 0 and result.mongo_body_landmarks == 1:
-                                if VERBOSE: print("     xxxx ALREADY FULLY DONE:", result.image_id)
-                                task = None
-                            elif result.mongo_face_landmarks == 0 and result.mongo_body_landmarks == 0:
-                                if VERBOSE: print("     xxxx ALREADY FULLY DONE - nobody here:", result.image_id)
-                                task = None
-                            elif result.mongo_face_landmarks is None and result.mongo_body_landmarks == 1 and result.bbox is not None:
-                                print("~?~ WEIRD no face, but bbox:", result.image_id, imagepath, result.mongo_face_landmarks, result.mongo_body_landmarks, result.bbox)
-                                # for the integrated version, this will do both
-                                task = (result.image_id, imagepath)
-                            elif result.mongo_face_landmarks is None and result.mongo_body_landmarks is None:
-                                print("~~ no face, adding to face queue for is_face_no_lms do_over:", result.image_id, imagepath, result.mongo_face_landmarks, result.mongo_body_landmarks, result.bbox)
-                                # for the integrated version, this will do both
-                                task = (result.image_id, imagepath)
-                            elif result.mongo_face_landmarks == 0 and result.mongo_body_landmarks is None:
-                                print("~~~~ no face, do body without bbox:", result.image_id, imagepath, result.mongo_face_landmarks, result.mongo_body_landmarks, result.bbox)
-                                # for the integrated version, this will do both
-                                task = (result.image_id, imagepath, result.mongo_face_landmarks, result.mongo_body_landmarks, None)
+                        img_list = io.get_img_list(folder)
+                        print("len(img_list)", len(img_list))
+
+                        # Initialize an empty list to store all the results
+                        all_results = []
+
+                        # Split the img_list into smaller batches and process them one by one
+                        for i in range(0, len(img_list), BATCH_SIZE):
+                            tasks_in_this_round = 0
+
+                            batch_img_list = img_list[i : i + BATCH_SIZE]
+
+                            print(f"total img_list: {len(img_list)} no. processed: {i} no. left: {len(img_list)-i}")
+                            if len(img_list)-i<BATCH_SIZE: print("last_round for img_list")
+                            # CHANGE FOR EACH SITE
+                            # ALSO site_image_id DOWN BELOW 
+                            # Collect site_image_id values from the image filenames
+                            if SITE_NAME_ID == 8:
+                            # 123rf
+                                batch_site_image_ids = [img.split("-")[0] for img in batch_img_list]
+                            elif SITE_NAME_ID == 5:
+                                batch_site_image_ids = [img.split("-")[-1].replace(".jpg","") for img in batch_img_list]
+                            elif SITE_NAME_ID == 1:
+                            # gettyimages
+                                batch_site_image_ids = [img.split("-id")[-1].replace(".jpg", "") for img in batch_img_list]
+                            # site_name_id = 1
                             else:
-                                # skips BOTH 1) face and body have been encoded 2) no face was detected -- these should be rerun to find the body only
-                                print(" ?  something is wacky, skipping:", result.image_id, imagepath, result.mongo_face_landmarks, result.mongo_body_landmarks, result.bbox)
-                                task = None
-                            # print(task)
-                            if task is not None:
-                                tasks_to_accomplish.put(task)
-                                this_count += 1
-                        else: 
-                            # store site_image_id and SITE_NAME_ID in WanderingImages table
-                            wandering_name_site_id = site_image_id+"."+str(SITE_NAME_ID)
-                            existing_entry = session.query(WanderingImages).filter_by(wandering_name_site_id=wandering_name_site_id).first()
-                            if not existing_entry and not ("-id" in wandering_name_site_id):
-                                print("wandering image, not in results_dict: ", site_image_id)
+                            # # Adobe and pexels and shutterstock and istock
+                                batch_site_image_ids = [img.split(".")[0] for img in batch_img_list]
+                            site_name_id = SITE_NAME_ID
+
+                            if VERBOSE: print("batch_site_image_ids", len(batch_site_image_ids))
+                            if VERBOSE: print("batch_site_image_ids", batch_site_image_ids[:5])
+
+
+                            # query the database for the current batch and return image_id and encoding_id
+                            for _ in range(io.max_retries):
+
                                 try:
-                                    new_wandering_entry = WanderingImages(wandering_name_site_id=wandering_name_site_id, site_image_id=site_image_id, site_name_id=SITE_NAME_ID)
-                                    session.add(new_wandering_entry)
-                                    session.commit()
-                                except:
-                                    print("failed to store wandering image,", wandering_name_site_id)
+                                    if VERBOSE: print(f"Processing batch {i//BATCH_SIZE + 1}...")
+                                    init_session()
+                                    # task = (image_id,imagepath,row["mongo_face_landmarks"], row["mongo_body_landmarks"],row["bbox"])
+                                    # batch_query = session.query(Images.image_id, Images.site_image_id, Encodings.encoding_id) \
+
+                                    # get Images and Encodings values for each site_image_id in the batch
+                                    # adding in mongo stuff. should return NULL if not there
+                                    batch_query = session.query(Images.image_id, Images.site_image_id, Images.imagename, Encodings.encoding_id, Encodings.mongo_face_landmarks, Encodings.mongo_body_landmarks, Encodings.bbox, Encodings.mongo_body_landmarks_3D) \
+                                                        .outerjoin(Encodings, Images.image_id == Encodings.image_id) \
+                                                        .filter(Images.site_image_id.in_(batch_site_image_ids), Images.site_name_id == site_name_id, Images.no_image.isnot(True))
+                                    batch_results = batch_query.all()
+
+                                    all_results.extend(batch_results)
+                                    if VERBOSE: print("about to close_session()")
+                                    # Close the session and dispose of the engine before the worker process exits
+                                    close_session()
+
+                                except OperationalError as e:
+                                    print("error getting batch results")
+                                    print(e)
+                                    time.sleep(io.retry_delay)
+                            if VERBOSE: print(f"no. all_results: {len(all_results)}")
+
+                            # print("results:", all_results)
+                            results_dict = {result.site_image_id: result for result in batch_results}
+
+                            # going back through the img_list, to use as key for the results_dict
+
+                            images_left_to_process = len(batch_img_list)
+                            for img in batch_img_list:
+
+                                # CHANGE FOR EACH SITE
+                                if SITE_NAME_ID == 8:
+                                    # extract site_image_id for 213rf
+                                    site_image_id = img.split("-")[0]
+
+                                # # extract site_image_id for getty images
+                                # elif SITE_NAME_ID == 1:
+                                    # site_image_id = img.split("-id")[-1].replace(".jpg", "")
+
+                                else:
+                                # # # extract site_image_id for adobe and pexels and shutterstock and istock and pond5
+                                    site_image_id = img.split(".")[0]
+
+                                # print("site_image_id", site_image_id)
+                                if site_image_id in results_dict:
+                                    result = results_dict[site_image_id]
+                                    # if VERBOSE: print("is in results", result)
+                                    # print("in results encoding_id", result.encoding_id)
+                                    imagepath = os.path.join(folder, img)
+                                                                
+                                    if not result.encoding_id and first_pass is True:
+                                        # if it hasn't been encoded yet, add it to the tasks
+                                        task = (result.image_id, imagepath)
+                                        if not QUIET: print(">> adding to face queue:", result.image_id, "site_image_id", site_image_id)
+                                    elif result.mongo_body_landmarks and result.mongo_body_landmarks_3D is None and REDO_BODYLMS_3D is True:
+                                        # if body has been found but not 3D, add it to the tasks
+                                        if not QUIET: print(">>>> adding to 3D BODY queue:", result.image_id, "site_image_id", site_image_id)
+                                        task = (result.image_id, imagepath, result.mongo_face_landmarks, result.mongo_body_landmarks, result.bbox)
+                                    elif result.mongo_face_landmarks and result.mongo_body_landmarks is None:
+                                        # if face has been encoded but not body, add it to the tasks
+                                        if not QUIET: print(">>>> adding to BODY queue:", result.image_id, "site_image_id", site_image_id)
+                                        task = (result.image_id, imagepath, result.mongo_face_landmarks, result.mongo_body_landmarks, result.bbox)
+                                    elif result.mongo_face_landmarks and result.mongo_body_landmarks is not None:
+                                        if VERBOSE: print("     xx ALREADY FULLY DONE:", result.image_id)
+                                        task = None
+                                    elif result.mongo_face_landmarks == 0 and result.mongo_body_landmarks == 1:
+                                        if VERBOSE: print("     xxxx ALREADY FULLY DONE:", result.image_id)
+                                        task = None
+                                    elif result.mongo_face_landmarks == 0 and result.mongo_body_landmarks == 0:
+                                        if VERBOSE: print("     xxxx ALREADY FULLY DONE - nobody here:", result.image_id)
+                                        task = None
+                                    elif result.mongo_face_landmarks is None and result.mongo_body_landmarks == 1 and result.bbox is not None and first_pass is True:
+                                        print("~?~ WEIRD no face, but bbox:", result.image_id, imagepath, result.mongo_face_landmarks, result.mongo_body_landmarks, result.bbox)
+                                        # for the integrated version, this will do both
+                                        task = (result.image_id, imagepath)
+                                    elif result.mongo_face_landmarks is None and result.mongo_body_landmarks is None and first_pass is True:
+                                        print("~~ no face, adding to face queue for is_face_no_lms do_over:", result.image_id, imagepath, result.mongo_face_landmarks, result.mongo_body_landmarks, result.bbox)
+                                        # for the integrated version, this will do both
+                                        task = (result.image_id, imagepath)
+                                    elif result.mongo_face_landmarks == 0 and result.mongo_body_landmarks is None and first_pass is True:
+                                        print("~~~~ no face, do body without bbox:", result.image_id, imagepath, result.mongo_face_landmarks, result.mongo_body_landmarks, result.bbox)
+                                        # for the integrated version, this will do both
+                                        task = (result.image_id, imagepath, result.mongo_face_landmarks, result.mongo_body_landmarks, None)
+                                    else:
+                                        # skips BOTH 1) face and body have been encoded 2) no face was detected -- these should be rerun to find the body only
+                                        if first_pass: print(" ?  something is wacky, skipping:", result.image_id, imagepath, result.mongo_face_landmarks, result.mongo_body_landmarks, result.bbox)
+                                        task = None
+                                    # print(task)
+                                    if task is not None:
+                                        tasks_to_accomplish.put(task)
+                                        tasks_in_this_round += 1
+                                        this_count += 1
+                                else: 
+                                    # store site_image_id and SITE_NAME_ID in WanderingImages table
+                                    wandering_name_site_id = site_image_id+"."+str(SITE_NAME_ID)
+                                    existing_entry = session.query(WanderingImages).filter_by(wandering_name_site_id=wandering_name_site_id).first()
+                                    if not existing_entry and not ("-id" in wandering_name_site_id):
+                                        print("wandering image, not in results_dict: ", site_image_id)
+                                        try:
+                                            new_wandering_entry = WanderingImages(wandering_name_site_id=wandering_name_site_id, site_image_id=site_image_id, site_name_id=SITE_NAME_ID)
+                                            session.add(new_wandering_entry)
+                                            session.commit()
+                                        except:
+                                            print("failed to store wandering image,", wandering_name_site_id)
+                                    else:
+                                        if VERBOSE: print(f"Entry already exists for wandering_name_site_id: {wandering_name_site_id}")
+                                        pass
+
+                                images_left_to_process = images_left_to_process -1 
+                                if VERBOSE: 
+                                    if images_left_to_process < 500: print(f"no. images_left_to_process: {images_left_to_process}")
+
+                            # print total count for this batch
+                            print(f"######### total task count for this batch: {str(this_count)}")
+                            print("just stored wandering images")
+                            # Only create processes if there are tasks to process
+                            if tasks_in_this_round > 0:
+                                # Determine optimal number of processes based on task count
+                                optimal_processes = min(io.NUMBER_OF_PROCESSES, tasks_in_this_round)
+                                print(f"Creating {optimal_processes} processes for {tasks_in_this_round} tasks")
+                                
+                                # creating processes
+                                for w in range(optimal_processes):
+                                    p = Process(target=do_job, args=(tasks_to_accomplish, tasks_that_are_done))
+                                    processes.append(p)
+                                    p.start()
+
+                                # completing process
+                                for p in processes:
+                                    # print("completing process")
+                                    p.join()
+                                print(">> SPLIT >> p.join, done with this query")
+                                
+                                # Clear the processes list for next iteration
+                                processes = []
                             else:
-                                if VERBOSE: print(f"Entry already exists for wandering_name_site_id: {wandering_name_site_id}")
-                                pass
+                                print("No tasks to process in this round, skipping process creation")
 
-                        images_left_to_process = images_left_to_process -1 
-                        if VERBOSE: 
-                            if images_left_to_process < 500: print(f"no. images_left_to_process: {images_left_to_process}")
+                            # # Only create processes if there are tasks to accomplish
+                            # if this_count > 0:
+                            #     # Determine optimal number of processes based on task count
+                            #     optimal_processes = min(io.NUMBER_OF_PROCESSES, this_count)
+                            #     print(f"Creating {optimal_processes} processes for {this_count} tasks")
+                                
+                            #     for w in range(optimal_processes):
+                            #         p = Process(target=do_job, args=(tasks_to_accomplish, tasks_that_are_done))
+                            #         processes.append(p)
+                            #         p.start()
 
-                    # print total count for this batch
-                    print(f"######### total task count for this batch: {str(this_count)}")
-                    print("just stored wandering images")
-
-                    for w in range(io.NUMBER_OF_PROCESSES):
-                        p = Process(target=do_job, args=(tasks_to_accomplish, tasks_that_are_done))
-                        processes.append(p)
-                        p.start()
-
-                    # completing process
-                    for p in processes:
-                        # print("completing process")
-                        p.join()
-                    print(">> SPLIT >> p.join,  this folder")
-                    split = print_get_split(jsonsplit)
+                            #     # completing process
+                            #     for p in processes:
+                            #         # print("completing process")
+                            #         p.join()
+                            #     print(">> SPLIT >> p.join,  this folder")
+                                
+                            #     # Clear the processes list for next iteration
+                            #     processes = []
+                            # else:
+                            #     print("No tasks to process, skipping process creation")
+                            
+                            split = print_get_split(jsonsplit)
 
 
-                    print(f"total count for {folder_path}: {str(this_count)}")
-                    # if this_count > 500:
-                    #     quit()
-                    # else:
-                    #     this_count = 0
-                    # quit()
-                count += this_count
-                print(f"completed {str(this_count)} of {str(len(img_list))}")
-                print(f"total count for {folder_path}: {str(count)}")
-                this_count = 0
+                            print(f"total count for {folder_path}: {str(this_count)}")
+                            # if this_count > 500:
+                            #     quit()
+                            # else:
+                            #     this_count = 0
+                            # quit()
+                        count += this_count
+                        print(f"completed {str(this_count)} of {str(len(img_list))}")
+                        print(f"total count for {folder_path}: {str(count)}")
+                        this_count = 0
 
-                # save success to CSV_FOLDERCOUNT_PATH
-                io.write_csv(CSV_FOLDERCOUNT_PATH, [folder_path])
+                        # save success to csv_foldercount_path
+                        io.write_csv(csv_foldercount_path, [folder_path])
 
     else:
         print("old school SQL")
@@ -2153,6 +2222,7 @@ def main():
                 last_round = True
                 print("last_round just assigned")
             # process resultsjson
+            tasks_in_this_round = 0
             for row in resultsjson:
                 # encoding_id = row["encoding_id"]
                 image_id = row["image_id"]
@@ -2185,19 +2255,31 @@ def main():
                         task = (image_id, imagepath)
 
                     tasks_to_accomplish.put(task)
+                    tasks_in_this_round += 1
                     # print("tasks_to_accomplish.put(task) ",imagepath)
 
-            # creating processes
-            for w in range(io.NUMBER_OF_PROCESSES):
-                p = Process(target=do_job, args=(tasks_to_accomplish, tasks_that_are_done))
-                processes.append(p)
-                p.start()
+            # Only create processes if there are tasks to process
+            if tasks_in_this_round > 0:
+                # Determine optimal number of processes based on task count
+                optimal_processes = min(io.NUMBER_OF_PROCESSES, tasks_in_this_round)
+                print(f"Creating {optimal_processes} processes for {tasks_in_this_round} tasks")
+                
+                # creating processes
+                for w in range(optimal_processes):
+                    p = Process(target=do_job, args=(tasks_to_accomplish, tasks_that_are_done))
+                    processes.append(p)
+                    p.start()
 
-            # completing process
-            for p in processes:
-                # print("completing process")
-                p.join()
-            print(">> SPLIT >> p.join, done with this query")
+                # completing process
+                for p in processes:
+                    # print("completing process")
+                    p.join()
+                print(">> SPLIT >> p.join, done with this query")
+                
+                # Clear the processes list for next iteration
+                processes = []
+            else:
+                print("No tasks to process in this round, skipping process creation")
             split = print_get_split(split)
             # Close the session and dispose of the engine before the worker process exits
             close_session()
