@@ -16,11 +16,13 @@ SET GLOBAL innodb_buffer_pool_size=8053063680;
 
 SELECT *
 FROM Encodings i 
-WHERE i.image_id = 65761606
+WHERE i.image_id = 123443380
+;
 
 SELECT *
-FROM NMLimages
-WHERE image_id = 94116465
+FROM Images
+WHERE site_image_id = 1375949586
+AND site_name_id = 10
 ;
 
 UPDATE encodings e
@@ -37,6 +39,12 @@ WHERE e.migrated_SQL = 1
 
 ;
 
+
+SELECT i.site_image_id, ib.lum_torso, ib.lum_torso_bb, ib.selfie_bbox
+FROM ImagesBackground ib
+JOIN Images i ON i.image_id = ib.image_id
+WHERE i.site_image_id IN ('1374307379', '1321070633')
+;
 
 SELECT i.site_name_id, i.imagename, i.description
 FROM Images i 
@@ -65,27 +73,34 @@ WHERE e.is_face = 0 AND e.is_body = 1 AND e.is_face_no_lms = 0
 
 
 SELECT *
+;
+
+DELETE
 FROM WanderingImages wi 
-WHERE wi.wandering_image_id > 6000000
-LIMIT 5000
+WHERE wi.wandering_image_id > 6530880
+;
+
+SELECT MAX(wi.wandering_image_id)
+FROM WanderingImages wi 
 ;
 
 SELECT *
 FROM Images i
-WHERE i.image_id = 128532713
+WHERE i.image_id = 65761606
 ;
 
 SELECT *
 FROM Encodings
-WHERE image_id = 893
+WHERE image_id = 2284907
 ;
 
 
 SELECT *
 FROM Images i 
-WHERE i.site_name_id = 3
-AND i.site_image_id = 1973520
+WHERE i.site_name_id = 10
+AND i.site_image_id = 800181355
 ;
+
 
 
 SELECT DISTINCT(s.image_id), s.site_name_id, s.contentUrl, s.imagename, s.description, s.face_x, s.face_y, s.face_z, s.mouth_gap, s.bbox, s.site_image_id, it.topic_score, ibg.lum, ibg.lum_bb, ibg.hue, ibg.hue_bb, ibg.sat, ibg.sat_bb, ibg.val, ibg.val_bb, ibg.lum_torso, ibg.lum_torso_bb  
@@ -171,10 +186,6 @@ AND i.site_name_id = 3
 LIMIT 100
 ;
 
-SELECT COUNT(*)
-FROM Encodings
-WHERE  is_body3D = 1
-;
 
 USE stock;
 SELECT * 
@@ -239,12 +250,12 @@ WHERE i.site_image_id = 1058475875
 AND i.site_name_id = 2
 ;
 
-
+USE Stock;
 SELECT COUNT(s.image_id)
 FROM Images s
 JOIN Encodings e ON s.image_id = e.image_id
-WHERE s.site_name_id = 2
-AND e.is_body = 1
+WHERE s.site_name_id = 13
+AND e.is_face IS NULL
 ;
 
 ALTER TABLE encodings
@@ -793,15 +804,25 @@ LIMIT 10000;
 
 
 
-SELECT 
-    FLOOR(face_z) AS face_x_unit,
-    COUNT(*) AS row_count
+SELECT i.site_name_id, count(e.is_body), COUNT(e.mongo_body_landmarks_3D)
 FROM 
-    SegmentOct20
-GROUP BY 
-    FLOOR(face_z)
-ORDER BY 
-    face_x_unit;
+    Encodings e
+JOIN Images i ON i.image_id = e.image_id
+WHERE i.site_name_id = 10
+LIMIT 100
+;
+
+
+SELECT i.site_name_id, count(e.image_id)
+FROM  Encodings e
+JOIN Images i ON i.image_id = e.image_id
+WHERE i.site_name_id = 8
+AND e.is_body = 1 
+AND e.mongo_body_landmarks_3D IS NULL
+;
+
+
+
 
 
 SELECT COUNT(i.image_id) 
@@ -895,9 +916,19 @@ WHERE ik.keyword_id = 1762
 AND i.site_name_id = 13
 ;
 
+SELECT COUNT(*)
+FROM ImagesKeywords ik 
+WHERE ik.keyword_id in (827, 1474)		
+;
+
 SELECT *
 FROM Keywords k 
 WHERE k.keyword_id = 1762
+;
+
+SELECT *
+FROM Keywords k 
+WHERE k.keyword_text LIKE '%book%'
 ;
 
 

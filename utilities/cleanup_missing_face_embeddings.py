@@ -20,7 +20,11 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 IS_SSD = False
 VERBOSE = True
 BATCH_SIZE = 1000  # Adjust as needed
-SITE_NAME_ID = 9  # Adjust as needed, e.g., 16 for nappy
+SITE_NAME_ID = 13  # Adjust as needed, e.g., 16 for nappy
+
+# MODE 1 is only is_face
+# MODE 2 is both is_face and is_body
+MODE = 1
 
 io = DataIO(IS_SSD)
 db = io.db
@@ -59,22 +63,21 @@ def do_task(image_id):
     print(f"Processing image_id: {image_id}")
     query = {"image_id": image_id}
     doc = mongo_collection.find_one(query)
-    if doc:
-        if "face_encodings68" in doc.keys():
-            face = doc["face_encodings68"]
-            print(f"{image_id}: {len(face)}")
+    if doc and "face_encodings68" in doc.keys():
+        face = doc["face_encodings68"]
+        print(f"{image_id}: {len(face)}")
+    else:
+        print(f"setting is_face, mongo_encodings, mongo_face_landmarks, to None in Encodings for image_id {image_id}")
+        # this is commented out for testing. uncomment to actually reset the fields
+        encodings = thread_session.query(Encodings).filter(Encodings.image_id == image_id).first()
+        if encodings:
+            encodings.is_face = None
+            encodings.mongo_encodings = None
+            encodings.mongo_face_landmarks = None
+            thread_session.commit()
+            print(f"Updated Encodings for image_id {image_id}")
         else:
-            print(f"setting is_face, mongo_encodings, mongo_face_landmarks, to None in Encodings for image_id {image_id}")
-            # this is commented out for testing. uncomment to actually reset the fields
-            encodings = thread_session.query(Encodings).filter(Encodings.image_id == image_id).first()
-            if encodings:
-                encodings.is_face = None
-                encodings.mongo_encodings = None
-                encodings.mongo_face_landmarks = None
-                thread_session.commit()
-                print(f"Updated Encodings for image_id {image_id}")
-            else:
-                print(f"No Encodings found for image_id {image_id}")
+            print(f"No Encodings found for image_id {image_id}")
     thread_session.close()
 
 
@@ -84,18 +87,34 @@ def main():
     # Encodings_Migration = io.create_class_from_reflection(engine, 'encodings', 'encodings_migration')
     init_session()
 
-    # query mysql for image_ids where encodings.is_face = 1 and encodings.is_body = 1 and images.site_name_id = SITE_NAME_ID
-    results = (
-        session.query(Encodings.image_id)
-        .join(Images, Encodings.image_id == Images.image_id)
-        .filter(
-            Encodings.is_face.is_(True),
-            Encodings.is_body.is_(True),
-            Images.site_name_id == SITE_NAME_ID,
-            Images.imagename.startswith('4') # fine tuning the place to look based on folder
+    if MODE == 1:
+        # query mysql for image_ids where encodings.is_face = 1 and encodings.is_body IS NULL and images.site_name_id = SITE_NAME_ID
+        results = (
+            session.query(Encodings.image_id)
+            .join(Images, Encodings.image_id == Images.image_id)
+            .filter(
+                Encodings.is_face.is_(True),
+                Encodings.is_body.is_(None),
+                Images.site_name_id == SITE_NAME_ID,
+                Images.imagename.startswith('A') # fine tuning the place to look based on folder
+            )
+            .order_by(Encodings.image_id)
         )
-        .order_by(Encodings.image_id)
-    )
+    elif MODE == 2:
+        # query mysql for image_ids where encodings.is_face = 1 and encodings.is_body = 1 and images.site_name_id = SITE_NAME_ID
+        results = (
+            session.query(Encodings.image_id)
+            .join(Images, Encodings.image_id == Images.image_id)
+            .filter(
+                Encodings.is_face.is_(True),
+                Encodings.is_body.is_(True),
+                Images.site_name_id == SITE_NAME_ID,
+            )
+            .order_by(Encodings.image_id)
+        )
+            # add this back in above to filter on folder
+            # Images.imagename.startswith('A') # fine tuning the place to look based on folder
+
     image_ids = [row.image_id for row in results]
     total = len(image_ids)
     offset = 0

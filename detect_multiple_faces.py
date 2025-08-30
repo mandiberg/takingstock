@@ -101,7 +101,7 @@ switching to topic targeted
 10  visualchinagroup - already done?
 11	picxy 3D
 12	pixerf 3D (all too small)
-13	imagesbazaar - buggy
+13	imagesbazaar 3D
 14	indiapicturebudget 3D
 15	iwaria 3D
 16	nappy 3D
@@ -109,7 +109,7 @@ switching to topic targeted
 18	afripics - where are these?
 '''
 # I think this only matters for IS_FOLDER mode, and the old SQL way
-SITE_NAME_ID = 4
+SITE_NAME_ID = 8
 # 2, shutter. 4, istock
 # 7 pond5, 8 123rf
 POSE_ID = 0
@@ -122,24 +122,23 @@ POSE_ID = 0
 
 # for sites with files spread over several SSDs, you can add addtional folders
 # you will also have to add the MAIN_FOLDER2 variable below, etc
-# MAIN_FOLDER1 = "/Volumes/LaCie/images_istock"
-# MAIN_FOLDER1 = "/Volumes/ExFAT_4TBgr/images_istock"
-MAIN_FOLDER1 = "/Volumes/LaCie/images_adobe_also"
-MAIN_FOLDER2 = "/Volumes/OWC5/images_adobe"
-MAIN_FOLDER3 = "/Volumes/SSD4_Green/images_adobe"
-MAIN_FOLDER4 = "/Volumes/SSD4_Green/images_123rf"
-MAIN_FOLDER5 = "/Volumes/SSD2/images_123rf"
+# MAIN_FOLDER1 = "/Volumes/LaCie/images_adobe_also"
+# MAIN_FOLDER2 = "/Volumes/OWC5/images_adobe"
+# MAIN_FOLDER3 = "/Volumes/SSD4_Green/images_adobe"
+# MAIN_FOLDER4 = "/Volumes/SSD4_Green/images_123rf"
+# MAIN_FOLDER5 = "/Volumes/SSD2/images_123rf"
 
 # #testing locally with two
-# MAIN_FOLDER1 = "/Volumes/OWC4/images_alamy"
-# MAIN_FOLDER2 = "/Volumes/OWC4/images_unsplash9"
+MAIN_FOLDER3 = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/images_123rf_redo"
+MAIN_FOLDER1 = "/Volumes/OWC4/images_getty_redo"
+MAIN_FOLDER2 = "/Volumes/SSD2/images_123rf_redo"
 # MAIN_FOLDERS = [MAIN_FOLDER1, MAIN_FOLDER2]
 
 
-# MAIN_FOLDERS = [MAIN_FOLDER1]
-MAIN_FOLDERS = [MAIN_FOLDER1, MAIN_FOLDER2, MAIN_FOLDER3, MAIN_FOLDER4, MAIN_FOLDER5]
+MAIN_FOLDERS = [MAIN_FOLDER1, MAIN_FOLDER2, MAIN_FOLDER3]
+# MAIN_FOLDERS = [MAIN_FOLDER1, MAIN_FOLDER2, MAIN_FOLDER3, MAIN_FOLDER4, MAIN_FOLDER5]
 
-BATCH_SIZE = 10000 # Define how many from each folder in each batch
+BATCH_SIZE = 1000 # Define how many from each folder in each batch
 LIMIT = 1000
 
 #temp hack to go 1 subfolder at a time
@@ -157,7 +156,7 @@ IS_SSD=True
 # for HDD topic, start at 28714744
 BODYLMS = True
 HANDLMS = True
-REDO_BODYLMS_3D = False # this makes it skip hands and YOLO
+REDO_BODYLMS_3D = True # this makes it skip hands and YOLO
 if REDO_BODYLMS_3D: HANDLMS = False # if doing 3D redo, don't do hands
 TOPIC_ID = None
 # TOPIC_ID = [24, 29] # adding a TOPIC_ID forces it to work from SegmentBig_isface, currently at 7412083
@@ -1692,10 +1691,7 @@ def process_image(task):
         except:
             print("failed to store no_image in Images")
 
-
-        # check SegmentTable.image_id == task[0] to see if entry exists in SegmentTable
-
-
+        # save no_image informaiton in the correct table
         existing_entry = session.query(SegmentBig_isnotface).filter(SegmentBig_isnotface.image_id == task[0]).all()
         # query existing entry
         # print("existing_entry to store no_image:", existing_entry)
@@ -1831,9 +1827,11 @@ def process_image(task):
                 new_entry = Encodings(**insert_dict)
                 new_entry.mongo_encodings = is_encodings
                 new_entry.mongo_face_landmarks = is_encodings
-                encoding_id = new_entry.encoding_id  # Assuming 'encoding_id' is the name of your primary key column
                 session.add(new_entry)
+                session.flush()  # flush the session to assign encoding_id
+                encoding_id = new_entry.encoding_id  # Assuming 'encoding_id' is the name of your primary key column
                 commit_this = True
+                print(f"Prepped new entry for image_id: {image_id} encoding_id: {encoding_id} with data: {new_entry}")
 
             else:
                 print("already exists, nothing to update")
@@ -1953,6 +1951,10 @@ def main():
                 SITE_NAME_ID = 3
             elif "123rf" in main_folder:
                 SITE_NAME_ID = 8
+            elif "vcg" in main_folder:
+                SITE_NAME_ID = 10
+            elif "getty" in main_folder:
+                SITE_NAME_ID = 1
 
             # check for redo
             if "redo" in main_folder:

@@ -865,7 +865,7 @@ class SortPose:
             filename = df.iloc[key]['imagename']
             site_name_id = df.iloc[key]['site_name_id']
             return os.path.join(folder_list[site_name_id], filename)
-
+        
         def open_and_crop(key,df):
             img = cv2.imread(construct_filepath(key, df))
             dfrow = df.iloc[key]
@@ -876,34 +876,37 @@ class SortPose:
         def sort_on_score(ssim_score, this_dist_list):
             sort_folder =""
             if ssim_score >= 0.99:
-                sort_folder += "exactSSIM"
-            elif ssim_score > 0.95:
-                sort_folder += "ultraSSIM"
-            elif ssim_score > 0.85:
-                sort_folder += "highSSIM"
-            elif ssim_score > 0.75:
-                sort_folder += "mediumSSIM"
+                sort_folder = "dupe"
+            elif ssim_score > 0.90:
+                sort_folder = "dupe"
+            elif ssim_score > 0.80:
+                sort_folder = "high"
             elif ssim_score > 0.65:
-                sort_folder += "ambiguousSSIM"
+                sort_folder = "medium"
             elif ssim_score == 0:
-                sort_folder += "noneSSIM"
+                sort_folder = "noneSSIM"
             else:
-                sort_folder += "lowSSIM"
+                sort_folder = "nope"
 
-            if sum(this_dist_list[:3]) == 0:
-                sort_folder += "exactMETA"                
-            elif sum(this_dist_list[:3]) < .5:
-                sort_folder += "ultraMETA"                
-            elif sum(this_dist_list[:3]) < 1:
-                sort_folder += "highMETA"                
-            elif sum(this_dist_list[:3]) < 2:
-                sort_folder += "mediumMETA"                
+            if sort_folder == "high":
+                # if both SSIM and meta are close, then dupe
+                if sum(this_dist_list[:3]) < 1:
+                    sort_folder = "dupe"                
 
-            if this_dist_list[-3] > 15:
-                sort_folder += "highHANDS"
-
-            if this_dist_list[-1] > 1:
-                sort_folder += "sameSHOOT"
+            if sort_folder == "medium":
+                if sum(this_dist_list[:3]) == 0:
+                    sort_folder = "dupe"
+                elif sum(this_dist_list[:3]) < .5:
+                    sort_folder = "dupe"
+                elif sum(this_dist_list[:3]) < 1:
+                    sort_folder = "high"                
+            #     elif sum(this_dist_list[:3]) < 2:
+            #         sort_folder = "mediumMETA"                
+            # if sort_folder not in ["nope", "dupe"]:
+            #     if this_dist_list[-3] > 15:
+            #         sort_folder += "highHANDS"
+            #     if this_dist_list[-1] > 1:
+            #         sort_folder += "sameSHOOT"
             return sort_folder
         
         def save_dupes_look_closer(i, j, ssim_score, this_dist_list, df):
@@ -911,14 +914,36 @@ class SortPose:
             sum_this_dist_list = round(sum(this_dist_list[:3]), 2)
             rounded_dist_list = [f"{x:.2f}" if isinstance(x, (float, int)) else str(x) for x in this_dist_list]
             foldername = f"{sum_this_dist_list}_{ssim_score:.2f}_{i}_{j}" + "_" + "_".join(rounded_dist_list)
+                        
+            # copy images to folder to look closer
             for key in [i,j]:
                 filepath = construct_filepath(key, df)
                 sort_folder = sort_on_score(ssim_score, this_dist_list)
-                save_folder = os.path.join(self.outfolder, sort_folder, foldername)
                 # print(f"Saving duplicate look closer images to {save_folder} for {filepath} from site {site_name_id}")
                 # save the images to the folder
-                os.makedirs(save_folder, exist_ok=True)
-                shutil.copy(filepath, save_folder)
+                if sort_folder not in ["nope", "dupe"]:
+                    # if high or medium, removes from df, and adds to sort folder to review
+                    save_folder = os.path.join(os.path.dirname(self.outfolder), "dupe_sorting", os.path.basename(self.outfolder), sort_folder, foldername)
+                    os.makedirs(save_folder, exist_ok=True)
+                    shutil.copy(filepath, save_folder)
+                    to_remove.add(j)
+                    # print(f"Copied {filepath} to {save_folder}")
+                elif sort_folder == "dupe":
+                    # removes dupes and adds SQL to dupe folder
+                    to_remove.add(j)
+                    save_folder = os.path.join(os.path.dirname(self.outfolder),"dupe_sorting", sort_folder, foldername)
+                    os.makedirs(save_folder, exist_ok=True)
+                    # print(f"made SQL {save_folder}")
+                # else:
+                #     save_folder = os.path.join(os.path.dirname(self.outfolder), "dupe_sorting", os.path.basename(self.outfolder), sort_folder, foldername)
+            if sort_folder != "nope":
+                # ignores nope's -- doesn't remove them, never saves them
+                # save txt file with SQL to remove dupe
+                image_id_i = df.iloc[i]['image_id']
+                image_id_j = df.iloc[j]['image_id']
+                sql = f"UPDATE Encodings SET is_dupe_of = {image_id_i} WHERE image_id = {image_id_j};"
+                with open(os.path.join(save_folder, f"dupe_{image_id_j}.sql"), "a") as f:
+                    f.write(sql + "\n")
 
         # Pass 1: Fast screening, if it sum(norm_dist) < threshold, add it into the look_closer list to be checked in pass 2
         for i in range(n_rows):
@@ -1019,8 +1044,12 @@ class SortPose:
                 # image_resize_j = image_j
                  # prep for image background object
                 get_background_mp = mp.solutions.selfie_segmentation
-                get_bg_segment = get_background_mp.SelfieSegmentation()
-                
+                try:
+                    get_bg_segment = get_background_mp.SelfieSegmentation()
+                except Exception as e:
+                    print(f"Error initializing background segmenter: {e} for {i},{j}")
+                    continue
+
                 segmentation_mask_i = self.get_segmentation_mask(get_bg_segment, image_i, None, None)
                 # selfie_bbox_i = self.get_selfie_bbox(segmentation_mask_i)
                 # hue_i, sat_i, val_i, lum_i, lum_torso_i = self.get_bg_hue_lum(image_i, segmentation_mask_i, selfie_bbox_i)
@@ -1083,13 +1112,18 @@ class SortPose:
                 ssim_score = 0
                 selfie_ssim_score = 0
             
-            # save i and j to a shared folder
-            if self.VERBOSE: save_dupes_look_closer(i, j, ssim_score, this_dist_list, df)
+            # save i and j and SQL to a shared folder
+            save_dupes_look_closer(i, j, ssim_score, this_dist_list, df)
 
         # ADD all good j's to to_remove HERE !!!
 
         # Create sorted_df with all duplicates removed
+        print(f"Removing {len(to_remove)} duplicates from {df.shape[0]} images...")
+        print(to_remove)
+        print(df.head())
         sorted_df = df.drop(df.index[list(to_remove)]).reset_index(drop=True)
+        print(f"Resulting dataframe has {sorted_df.shape[0]} images after duplicate removal.")
+        print(sorted_df.head())
         return sorted_df
     
 
