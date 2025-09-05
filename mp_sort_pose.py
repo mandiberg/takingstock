@@ -1252,6 +1252,39 @@ class SortPose:
 ################### END TENCH CODE FOR DUPE DETECTION #####################
 ###########################################################################
 
+###########################################################################
+###################### START TENCH CODE FOR CROP ##########################
+###########################################################################
+
+    def min_max_wrist_ankles_for_crop(self, df):
+        expanded_df = pd.DataFrame(df['wrist_ankle_landmarks_normalized_array'].tolist())
+        data_array = expanded_df.values
+        all_x = data_array[:, ::2].flatten()  # columns 0, 2, 4, 6
+        all_y = data_array[:, 1::2].flatten()  # columns 1, 3, 5, 7
+        lowest_x = math.floor(min(all_x))
+        lowest_y = math.floor(min(all_y))
+        highest_x = math.ceil(max(all_x))
+        highest_y = math.ceil(max(all_y))
+
+        return lowest_x, lowest_y, highest_x, highest_y
+
+        
+    
+    def wrist_ankle_crop_image(self, df, image):
+        x1, y1, x2, y2 = self.min_max_wrist_ankles_for_cluster(df)
+        try:
+            cropped = image[y1:y2, x1:x2]
+        except Exception as e:
+            print(f"wrist_ankle_crop_image: error cropping image: {e}")
+            cropped = image
+        if self.VERBOSE: print(f"wrist_ankle_crop_image: crop_upper_left: {x1},{y1}, crop_lower_right: {x2},{y2}")
+        return cropped
+
+
+###########################################################################
+###################### END TENCH CODE FOR CROP ############################
+###########################################################################
+
     def mse(self, img1, img2):
         h, w, _ = img1.shape
         try:
