@@ -36,7 +36,8 @@ class SortPose:
         # need to refactor this for GPU
         self.mp_face_detection = mp.solutions.face_detection
         self.mp_drawing = mp.solutions.drawing_utils
-        self.get_bg_segment=mp.solutions.selfie_segmentation.SelfieSegmentation()  
+        self.get_bg_segment=mp.solutions.selfie_segmentation.SelfieSegmentation()
+
               
         self.VERBOSE = VERBOSE
 
@@ -54,7 +55,7 @@ class SortPose:
         self.BRUTEFORCE = False
         self.use_3D = use_3D
         # print("init use_3D",self.use_3D)
-        self.CUTOFF = 20 # DOES factor if ONE_SHOT
+        self.CUTOFF = 200 # DOES factor if ONE_SHOT
         self.ORIGIN = 0
         self.this_nose_bridge_dist = self.NOSE_BRIDGE_DIST = None # to be set in first loop, and sort.this_nose_bridge_dist each time
 
@@ -1043,17 +1044,11 @@ class SortPose:
 
                 # image_resize_j = image_j
                  # prep for image background object
-                get_background_mp = mp.solutions.selfie_segmentation
-                try:
-                    get_bg_segment = get_background_mp.SelfieSegmentation()
-                except Exception as e:
-                    print(f"Error initializing background segmenter: {e} for {i},{j}")
-                    continue
 
-                segmentation_mask_i = self.get_segmentation_mask(get_bg_segment, image_i, None, None)
+                segmentation_mask_i = self.get_segmentation_mask(self.get_bg_segment, image_i, None, None)
                 # selfie_bbox_i = self.get_selfie_bbox(segmentation_mask_i)
                 # hue_i, sat_i, val_i, lum_i, lum_torso_i = self.get_bg_hue_lum(image_i, segmentation_mask_i, selfie_bbox_i)
-                segmentation_mask_j = self.get_segmentation_mask(get_bg_segment, image_resize_j, None, None)
+                segmentation_mask_j = self.get_segmentation_mask(self.get_bg_segment, image_resize_j, None, None)
                 # selfie_bbox_j = self.get_selfie_bbox(segmentation_mask_j)
                 # hue_j, sat_j, val_j, lum_j, lum_torso_j = self.get_bg_hue_lum(image_resize_j, segmentation_mask_j, selfie_bbox_j)
 
@@ -3342,10 +3337,10 @@ class SortPose:
         # pointers = self.get_landmarks_2d(enc1, landmarks, structure)
 
         # Flatten the list of (x, y, z) for each landmark
-        if self.VERBOSE: print("type of landmarks", type(landmarks))
+        # if self.VERBOSE: print("type of landmarks", type(landmarks))
         if type(landmarks) is list:
             if len(landmarks) > 0 and isinstance(landmarks[0], (list, tuple)):
-                if self.VERBOSE: print("landmarks[0] type", type(landmarks[0]))
+                # if self.VERBOSE: print("landmarks[0] type", type(landmarks[0]))
                 flat_landmarks = [coord for point in landmarks for coord in point]
             else:
                 print("landmarks is a list but not a list of lists, handling the erronous new AP stuff. ")
