@@ -1270,8 +1270,7 @@ class SortPose:
 
         
     
-    def wrist_ankle_crop_image(self, df, image):
-        x1, y1, x2, y2 = self.min_max_wrist_ankles_for_cluster(df)
+    def wrist_ankle_crop_image(self, x1, y1, x2, y2, image):
         try:
             cropped = image[y1:y2, x1:x2]
         except Exception as e:
