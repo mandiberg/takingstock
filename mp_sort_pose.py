@@ -56,7 +56,7 @@ class SortPose:
         self.BRUTEFORCE = False
         self.use_3D = use_3D
         # print("init use_3D",self.use_3D)
-        self.CUTOFF = 200 # DOES factor if ONE_SHOT
+        self.CUTOFF = 2000 # DOES factor if ONE_SHOT
         self.ORIGIN = 0
         self.this_nose_bridge_dist = self.NOSE_BRIDGE_DIST = None # to be set in first loop, and sort.this_nose_bridge_dist each time
 
@@ -836,6 +836,7 @@ class SortPose:
         Returns sorted_df with all duplicates removed (keeping first occurrence).
         """
         to_remove = set()
+        confirmed_dupes = set()
         n_rows = len(df)
 
         # df = self.split_landmarks_to_columns_or_list(df, first_col="left_hand_world_landmarks", second_col="right_hand_world_landmarks", structure="list")
@@ -915,6 +916,7 @@ class SortPose:
             sum_this_dist_list = round(sum(this_dist_list[:3]), 2)
             rounded_dist_list = [f"{x:.2f}" if isinstance(x, (float, int)) else str(x) for x in this_dist_list]
             foldername = f"{sum_this_dist_list}_{ssim_score:.2f}_{i}_{j}" + "_" + "_".join(rounded_dist_list)
+            is_dupe = False # default to not dupe
                         
             # copy images to folder to look closer
             for key in [i,j]:
@@ -932,6 +934,7 @@ class SortPose:
                 elif sort_folder == "dupe":
                     # removes dupes and adds SQL to dupe folder
                     to_remove.add(j)
+                    is_dupe = True
                     save_folder = os.path.join(os.path.dirname(self.outfolder),"dupe_sorting", sort_folder, foldername)
                     os.makedirs(save_folder, exist_ok=True)
                     # print(f"made SQL {save_folder}")
@@ -945,7 +948,8 @@ class SortPose:
                 sql = f"UPDATE Encodings SET is_dupe_of = {image_id_i} WHERE image_id = {image_id_j};"
                 with open(os.path.join(save_folder, f"dupe_{image_id_j}.sql"), "a") as f:
                     f.write(sql + "\n")
-
+            return is_dupe
+        # i is to be kept, j is to be removed if dupe
         # Pass 1: Fast screening, if it sum(norm_dist) < threshold, add it into the look_closer list to be checked in pass 2
         for i in range(n_rows):
             for j in range(i + 1, n_rows):
@@ -1025,7 +1029,10 @@ class SortPose:
 
 
         for (i,j), this_dist_list in look_closer_dict.items():
-            # if self.VERBOSE: print(f"  >>> closest_look {i},{j} with distances {this_dist_list}")
+            if i in confirmed_dupes:
+                if self.VERBOSE: print(f"  >>> skipping {i},{j} because {i} is already confirmed dupe")
+                continue
+            if self.VERBOSE: print(f"  >>> closest_look {i},{j} with distances {this_dist_list}")
             image_i = open_and_crop(i, df)
             image_j = open_and_crop(j, df)
             if image_i is not None and image_j is not None:
@@ -1108,7 +1115,13 @@ class SortPose:
                 selfie_ssim_score = 0
             
             # save i and j and SQL to a shared folder
-            save_dupes_look_closer(i, j, ssim_score, this_dist_list, df)
+            # return True if dupe, False if not, to remove from this_dist_list
+            # i is to be kept, j is to be removed if dupe
+            # all j's that are confirmed dupe are to be removed from the test cycle, 
+            is_dupe = save_dupes_look_closer(i, j, ssim_score, this_dist_list, df)
+            if is_dupe:
+                if self.VERBOSE: print(f"remove_duplicates: confirmed duplicate {j} of {i} with SSIM {ssim_score} and distances {this_dist_list}")
+                confirmed_dupes.add(j)
 
         # ADD all good j's to to_remove HERE !!!
 

@@ -38,21 +38,23 @@ CYCLECOUNT = 1
 # SegmentTable_name = 'SegmentOct20'
 # SegmentHelper_name = None
 SegmentTable_name = 'SegmentBig_isface'
-SegmentTable_name = 'SegmentBig_isnotface'
+# SegmentTable_name = 'SegmentBig_isnotface'
 # SegmentHelper_name = 'SegmentHelper_may2025_4x4faces'
 SegmentHelper_name = None
 # SegmentHelper_name = 'SegmentHelper_june2025_nmlGPU300k'
 # SATYAM, this is MM specific
 # for when I'm using files on my SSD vs RAID
-IS_SSD = True
+IS_SSD = False
 #IS_MOVE is in move_toSSD_files.py
 
 # I/O utils
 io = DataIO(IS_SSD)
 db = io.db
 # CSV_FOLDER = os.path.join(io.ROOT_DBx, "body3D_segmentbig_useall256_CSVs_MMtest")
-# CSV_FOLDER = os.path.join("/Users/michaelmandiberg/Documents/projects-active/facemap_production/body3D_segmentbig_useall256_CSVs")
-CSV_FOLDER = os.path.join(io.ROOT_DBx, "body3D_segmentbig_useall256_CSVs_test")
+CSV_FOLDER = os.path.join("/Users/michaelmandiberg/Documents/projects-active/facemap_production/body3D_segmentbig_useall256_CSVs")
+# TENCH UNCOMMENT FOR YOUR COMP:
+# CSV_FOLDER = os.path.join(io.ROOT_DBx, "body3D_segmentbig_useall256_CSVs_test")
+
 # CSV_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/body3D_segmentbig_useall256_CSVs"
 # overriding DB for testing
 # io.db["name"] = "stock"
@@ -89,9 +91,16 @@ ONLY_ONE = False # only one cluster, or False for video fusion, this_cluster = [
 GENERATE_FUSION_PAIRS = False # if true it will query based on MIN_VIDEO_FUSION_COUNT and create pairs
                                 # if false, it will grab the list of pair lists below
 MIN_VIDEO_FUSION_COUNT = 300
-LIMIT = 1000 # this is the limit for the SQL query
+LIMIT = 100000 # this is the limit for the SQL query
 MIN_CYCLE_COUNT = 10
-IS_CLUSTER = True
+IS_CLUSTER = False
+# this is for IS_ONE_CLUSTER to only run on a specific CLUSTER_NO
+IS_ONE_CLUSTER = True # make IS_CLUSTER == False
+CLUSTER_NO = 242 # sort on this one as HAND_POSITION for IS_HAND_POSE_FUSION
+                # if not IS_HAND_POSE_FUSION, then this is selecting HandsGestures
+                # I think this is pose number from BodyPoses3D if SORT_TYPE == "body3D"
+START_CLUSTER = 0
+
 USE_POSE_CROP_DICT = True
 if IS_HAND_POSE_FUSION:
     if SORT_TYPE in ["planar_hands", "fingertips_positions", "128d"]:
@@ -121,12 +130,6 @@ else:
 DROP_LOW_VIS = False
 USE_HEAD_POSE = False
 N_HANDS = N_CLUSTERS = None # declared here, but set in the SQL query below
-# this is for IS_ONE_CLUSTER to only run on a specific CLUSTER_NO
-IS_ONE_CLUSTER = False
-CLUSTER_NO = 21 # sort on this one as HAND_POSITION for IS_HAND_POSE_FUSION
-                # if not IS_HAND_POSE_FUSION, then this is selecting HandsGestures
-                # I think this is pose number from BodyPoses3D if SORT_TYPE == "body3D"
-START_CLUSTER = 0
 
 # I started to create a separate track for Hands, but am pausing for the moment
 IS_HANDS = False
@@ -1253,14 +1256,15 @@ def compare_images(last_image, img, df_sorted, index):
                 #     # skipping test_pair for body, b/c it is meant for face
                     is_face = sort.test_pair(last_image, cropped_image)
 
-                if is_face or SORT_TYPE in ("planar_body", "body3D"):
-                    if VERBOSE: print("testing mse to see if same image")
-                    face_diff = sort.unique_face(last_image,cropped_image)
-                    # if face diff is less than something very low (.04), then it is a duplicate and we are done
-                    # elif face diff is less than some other larger value, run additional tests
-                    # these tests will will check 
-                    if VERBOSE: print("compare_images face_diff ", face_diff)
-                    # if VERBOSE: print ("mse ", mse) ########## mse not a variable
+                # sept 2025 removing this, as it is now handled in separate dedupe process
+                # if is_face or SORT_TYPE in ("planar_body", "body3D"):
+                #     if VERBOSE: print("testing mse to see if same image")
+                #     error,face_diff = sort.unique_face(last_image,cropped_image)
+                #     # if face diff is less than something very low (.04), then it is a duplicate and we are done
+                #     # elif face diff is less than some other larger value, run additional tests
+                #     # these tests will will check 
+                #     if VERBOSE: print("compare_images face_diff ", face_diff)
+                #     # if VERBOSE: print ("mse ", mse) ########## mse not a variable
                 else:
                     print("failed is_face test")
                     # use cv2 to place last_image and cropped_image side by side in a new image
@@ -1673,7 +1677,10 @@ def linear_test_df(df_sorted,segment_count,cluster_no, itter=None):
             # Open the Image
             imgfilename = const_imgfilename_NN(row['image_id'], df_sorted, imgfileprefix)
             outpath = os.path.join(sort.counter_dict["outfolder"],imgfilename)
-            open_path = os.path.join(io.ROOT,row['folder'],row['imagename'])
+            open_path = os.path.join(io.folder_list[row['site_name_id']],row['imagename'])
+            print("open_path", open_path)
+            print("open_path constructed from", io.folder_list[row['site_name_id']],row['folder'],row['imagename'])
+            # print("io.folder_list:",row['site_name_id'],io.folder_list[row['site_name_id']])
             description = row['description']
             try:
                 img = cv2.imread(open_path)
