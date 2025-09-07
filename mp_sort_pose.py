@@ -1291,28 +1291,58 @@ class SortPose:
         return enc1
 
 
-    def min_max_body_landmarks_for_crop(self, df):
+    def min_max_body_landmarks_for_crop(self, df, padding = 0):
         """
-        returns image edge multiplier for crop for each cluster.
+        returns image edge multiplier for crop for each cluster. 
+        Needs df and padding for number of bboxes to buffer crop
         """
         landmarks_list = df['body_landmarks_normalized'].tolist()
-        all_x = []
-        all_y = []
+        list_min_xs = []
+        list_max_xs = []
+        list_min_ys = []
+        list_max_ys = []
+
         for landmark_list in landmarks_list:
             if hasattr(landmark_list, 'landmark'):
-                # landmark_list is a NormalizedLandmarkList, iterate through its landmarks
+                current_x_coords = []
+                current_y_coords = []
                 for landmark in landmark_list.landmark:
-                    all_x.append(landmark.x)
-                    all_y.append(landmark.y)
-    
+                    if landmark.x is not None and landmark.y is not None:
+                        current_x_coords.append(landmark.x)
+                        current_y_coords.append(landmark.y)
+                
+                if current_x_coords: # Check if any valid landmarks were found for this specific list
+                    list_min_xs.append(min(current_x_coords))
+                    list_max_xs.append(max(current_x_coords))
+                    list_min_ys.append(min(current_y_coords))
+                    list_max_ys.append(max(current_y_coords))
         
-        lowest_x = math.floor(min(all_x))
-        lowest_y = math.floor(min(all_y))
-        if lowest_y > -1:
-            lowest_y = -1
-        highest_x = math.ceil(max(all_x))
-        highest_y = math.ceil(max(all_y))
+       
+        if list_min_xs: # Ensure there's data to calculate median from
+            median_min_x = statistics.median(list_min_xs)
+            median_max_x = statistics.median(list_max_xs)
+            median_min_y = statistics.median(list_min_ys)
+            median_max_y = statistics.median(list_max_ys)
+        print("medians: ", median_min_x, median_min_y, median_max_x, median_max_y)
 
+        # Apply floor/ceil and the buffer
+        lowest_x = math.floor(median_min_x  - padding)
+        lowest_y = math.floor(median_min_y - padding)
+        if lowest_y > -2:
+            lowest_y = -2
+        highest_x = math.ceil(median_max_x + padding)
+        highest_y = math.ceil(median_max_y + padding)
+
+        # if diff between left and right is less than 2 bboxes, take the bigger one and roll with that.
+        if abs(abs(lowest_x) - abs(highest_x)) <= 2:
+            if abs(highest_x) > abs(lowest_x):
+                lowest_x = highest_x *-1
+            else:
+                highest_x = abs(lowest_x)
+            if self.VERBOSE: print(f"min_max_body_landmarks_for_crop: diff between abs min_x and abs max_x less than 2, changing them to {highest_x}")
+           
+
+        #for left right if the diff is less than 2 take abs and match
 
         if self.VERBOSE: print(f"min_max_body_landmarks_for_crop: {lowest_x},{lowest_y},{highest_x},{highest_y}")
         return [lowest_x, lowest_y, highest_x, highest_y]

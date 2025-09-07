@@ -1228,8 +1228,8 @@ def compare_images(last_image, img, df_sorted, index):
         cropped_image, resize = sort.expand_image(img, face_landmarks, bbox)
         
         if FULL_BODY: 
-            print('running')
-            # cropped_image = sort.auto_edge_crop(df_sorted, index, cropped_image, resize)
+            # print('running')
+            cropped_image = sort.auto_edge_crop(df_sorted, index, cropped_image, resize)
         else:   
             # cropp the 25K image back down to 10K
             # does this based on the incremental dimensions
@@ -2172,7 +2172,7 @@ def main():
                 # df_sorted.to_csv(os.path.join(io.ROOT_DBx, f"df_sorted_{cluster_no}_ct{segment_count}_p{pose_no}.csv"), index=False)
                 # df_sorted = df_sorted.head(10)  # Keep only the top entries
                 # df_sorted = sort.remove_duplicates(io.folder_list, df_sorted)
-                sort.image_edge_multiplier = sort.min_max_body_landmarks_for_crop(df_sorted)     
+                sort.image_edge_multiplier = sort.min_max_body_landmarks_for_crop(df_sorted, 0)     
 
                 if CALIBRATING: continue
                 linear_test_df(df_sorted,segment_count,cluster_no)
