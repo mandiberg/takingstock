@@ -51,7 +51,8 @@ IS_SSD = True
 io = DataIO(IS_SSD)
 db = io.db
 # CSV_FOLDER = os.path.join(io.ROOT_DBx, "body3D_segmentbig_useall256_CSVs_MMtest")
-CSV_FOLDER = os.path.join("/Users/michaelmandiberg/Documents/projects-active/facemap_production/body3D_segmentbig_useall256_CSVs")
+# CSV_FOLDER = os.path.join("/Users/michaelmandiberg/Documents/projects-active/facemap_production/body3D_segmentbig_useall256_CSVs")
+CSV_FOLDER = os.path.join(io.ROOT_DBx, "body3D_segmentbig_useall256_CSVs_test")
 # CSV_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/body3D_segmentbig_useall256_CSVs"
 # overriding DB for testing
 # io.db["name"] = "stock"
@@ -624,6 +625,7 @@ multiplier_list = [
 ]
 # initializing default square crop
 image_edge_multiplier = [1.3,1.85,2.4,1.85] # tighter square crop for paris photo videos < Oct 29 FINAL VERSION NOV 2024 DO NOT CHANGE
+# image_edge_multiplier = [1,1,1,1]
     # image_edge_multiplier = [1.4,2.6,1.9,2.6] # wider for hands (2023 finger point)
 # image_edge_multiplier = [1.4,3.5,5.6,3.5] # yoga square crop for April 2025 videos < 
 # sort.max_image_edge_multiplier is the maximum of the elements
@@ -1222,10 +1224,14 @@ def compare_images(last_image, img, df_sorted, index):
     if sort.EXPAND:
         cropped_image = sort.expand_image(img, face_landmarks, bbox)
         
-        if not FULL_BODY: 
+        if FULL_BODY: 
+
+            cropped_image = sort.auto_edge_crop(df_sorted, index, cropped_image)
+        else:   
             # cropp the 25K image back down to 10K
             # does this based on the incremental dimensions
             cropped_image = sort.crop_whitespace(cropped_image)
+        
         # else: 
         #     # trim the top 25% of the image
         #     cropped_image = sort.trim_top_crop(cropped_image, 0.25)
@@ -1992,6 +1998,8 @@ def main():
             df['body_landmarks'] = df['body_landmarks'].apply(io.unpickle_array)
             df['body_landmarks_3D'] = df['body_landmarks_3D'].apply(io.unpickle_array)
             df['body_landmarks_normalized'] = df['body_landmarks_normalized'].apply(io.unpickle_array)
+            df['body_landmarks_normalized_visible'] = df['body_landmarks_normalized'].apply(lambda x: sort.crop_prep(x))
+         
             # if hand_results has any values
             # if not df['hand_results'].isnull().all():
             
@@ -2155,7 +2163,7 @@ def main():
                 # df_sorted.to_csv(os.path.join(io.ROOT_DBx, f"df_sorted_{cluster_no}_ct{segment_count}_p{pose_no}.csv"), index=False)
                 # df_sorted = df_sorted.head(10)  # Keep only the top entries
                 df_sorted = sort.remove_duplicates(io.folder_list, df_sorted)
-                
+                sort.image_edge_multiplier = sort.min_max_body_landmarks_for_crop(df_sorted)     
 
                 if CALIBRATING: continue
                 linear_test_df(df_sorted,segment_count,cluster_no)
