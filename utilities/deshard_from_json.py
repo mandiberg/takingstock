@@ -7,7 +7,7 @@ import os
 import bson
 import gc
 import pymongo
-from sqlalchemy import create_engine, MetaData
+from sqlalchemy import create_engine, MetaData, text
 from sqlalchemy.dialects.mysql import insert
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import NullPool
@@ -23,10 +23,10 @@ import time
 IS_SSD = False
 VERBOSE = False
 QUIET = True
-CHECK_FIRST = False
+CHECK_FIRST = True
 BATCH_SIZE = 1000  # Adjust as needed
-START_BATCH = 0  # #65 for E. For resuming interrupted processes
-MODE = 3 # 1 for making image_id list, 2 for exporting bson, 3 for importing bson
+START_BATCH = 870000  # #65 for E. For resuming interrupted processes
+MODE = 4 # 1 for making image_id list, 2 for exporting bson, 3 for importing bson, 4 for importing from batch files
 site_name_id = 3
 # 3 is adobe, 4 is istock.
 
@@ -36,7 +36,26 @@ db = io.db
 EXPORT_DIR = os.path.join("/Volumes/OWC4/segment_images","mongo_exports_fromlist_istockAB")  # Directory to save BSON files
 # EXPORT_DIR = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/mongo_exports_fromlist_adobeF"  # Directory to save BSON files
 IMAGE_ID_FILE = os.path.join("/Volumes/OWC4/salvage","image_ids.txt")  # File containing image IDs to process
+BATCHES_FOLDER = os.path.join("/Volumes/OWC5/segment_images","mongo_exports")  # Folder containing batch files
 print(f"Export directory: {EXPORT_DIR}")
+
+collection_names = ['encodings', 'body_landmarks_norm', 'hand_landmarks', 'body_landmarks_3D']
+document_names_dict = {
+    "encodings": ["encoding_id", "face_landmarks", "body_landmarks", "face_encodings68"],
+    "body_landmarks_norm": ["nlms"],
+    "hand_landmarks": ["left_hand", "right_hand"],
+    "body_landmarks_3D": ["body_world_landmarks"]
+}
+
+sql_field_names_dict = {
+    "face_landmarks": "mongo_face_landmarks",
+    "body_landmarks": "mongo_body_landmarks",
+    "face_encodings68": "mongo_encodings",
+    "nlms": "mongo_body_landmarks_norm",
+    "left_hand": "mongo_hand_landmarks",
+    "right_hand": "mongo_hand_landmarks",
+    "body_world_landmarks": "mongo_body_landmarks_3D"
+}
 
 def init_session():
     global engine, session
@@ -83,31 +102,17 @@ def open_bson(filename):
         #     print(f"File {filename} does not exist.")
         return None
     with open(filename, "rb") as f:
-        data = bson.BSON.decode(f.read())
+        try:
+            data = list(bson.decode_file_iter(f))
+        except Exception as e:
+            if VERBOSE:
+                print(f"Trying backup bson decode after Error decoding BSON file {filename}: {e}")
+            data = bson.BSON.decode(f.read())
     return data
 
 def import_bson(image_id):
     # all_mongo_data = {}
     sql_booleans = {}
-    collections = [mongo_collection, bboxnormed_collection, mongo_hand_collection, body_world_collection]
-    collection_names = ['encodings', 'body_landmarks_norm', 'hand_landmarks', 'body_landmarks_3D']
-    document_names_dict = {
-        "encodings": ["encoding_id", "face_landmarks", "body_landmarks", "face_encodings68"],
-        "body_landmarks_norm": ["nlms"],
-        "hand_landmarks": ["left_hand", "right_hand"],
-        "body_landmarks_3D": ["body_world_landmarks"]
-    }
-
-    sql_field_names_dict = {
-        "face_landmarks": "mongo_face_landmarks",
-        "body_landmarks": "mongo_body_landmarks",
-        "face_encodings68": "mongo_encodings",
-        "nlms": "mongo_body_landmarks_norm",
-        "left_hand": "mongo_hand_landmarks",
-        "right_hand": "mongo_hand_landmarks",
-        "body_world_landmarks": "mongo_body_landmarks_3D"
-    }
-
 
     for collection_name, collection in zip(collection_names, collections):
         collection_mongo_data = {}
@@ -156,6 +161,154 @@ def import_bson(image_id):
     # print(f"Processing {collection_name} for image_id {image_id} mongo_data: {all_mongo_data}")
     return sql_booleans
 
+def build_collection_dict(collection_data):
+    """
+    Given a list of BSON objects (dicts), return a dict mapping image_id to the object.
+    """
+    return {item["image_id"]: item for item in collection_data if "image_id" in item}
+
+
+def load_bson_from_batches(counter):
+    # print(f"Loading BSON data from batch {counter}")
+    batch_data = {}
+    image_ids = set()
+    for collection_name in collection_names:
+        bson_path = f"{BATCHES_FOLDER}/{collection_name}_batch_{counter}.bson"
+        # print(f"Looking for BSON file: {bson_path}")
+        data = open_bson(bson_path)
+        if data is not None:
+            collection_data = build_collection_dict(data)
+            batch_data[collection_name] = collection_data
+            print(f"Loaded {len(data)} records from {collection_name}_batch_{counter}.bson")
+            for image_id in collection_data.keys():
+                # print(f"Found image_id {image_id} in {collection_name}")
+                image_ids.add(image_id)
+        else:
+            if VERBOSE: print(f"No data found for {collection_name} in batch {counter}")
+    # get all image_ids in this batch
+    # for collection_name, data in batch_data.items():
+    #     for item in data:
+    #         if "image_id" in item:
+    #             print(f"Found image_id {item['image_id']} in {collection_name}")
+    #             image_ids.add(item["image_id"])
+
+    # print(f"Built list of {len(image_ids)} image IDs from {BATCHES_FOLDER}")
+    return image_ids, batch_data
+
+def import_bson_batch(image_ids, batch_data, session):
+    # all_mongo_data = {}
+    sql_booleans = {}
+
+    for image_id in image_ids:
+        # if image_id != 60751883: continue
+        this_success = False
+        this_sql_booleans = {}
+        for collection_name, collection in zip(collection_names, collections):
+            collection_mongo_data = {}
+            collection_do_upsert = False
+            collection_data = batch_data.get(collection_name, [])
+            # print(type(collection_data))
+            # print(f"collection_data for {collection_name}: {collection_data[0]}")
+            data = collection_data.get(image_id)
+            # print(f"Importing {collection_name} for image_id {image_id} with data: {data is not None}")
+            
+            if VERBOSE: print(f"Processing {collection_name} for image_id {image_id}")
+            # print(data.keys())
+            # if collection_name == 'hand_landmarks': print(data)
+            for fieldname in document_names_dict[collection_name]:
+                if VERBOSE: print(f"Processing {fieldname} for image_id {image_id}")
+                if data is not None and fieldname in data.keys():
+                    if data[fieldname] in (b'\x80\x04N', b'\x80\x04N.'):
+                        if VERBOSE: print(f"Found pickled None for {fieldname} in {collection_name} for image_id {image_id}")
+                        collection_mongo_data[fieldname] = None
+                        if fieldname != "encoding_id":  # encoding_id should not be None
+                            this_sql_booleans[sql_field_names_dict[fieldname]] = False
+                    else:
+                        # if collection_name == 'hand_landmarks': print(data[fieldname])
+                        # print(pickle.loads(data[fieldname]))
+                        collection_mongo_data[fieldname] = data[fieldname]
+                        collection_do_upsert = True
+                        if fieldname != "encoding_id":  # encoding_id should not be None
+                            this_sql_booleans[sql_field_names_dict[fieldname]] = True
+                    if VERBOSE:
+                        print(f"Found {fieldname} for image_id {image_id}")
+                elif fieldname != "encoding_id":  # skip encoding_id
+                    # data is None or fieldname not in data
+                    if VERBOSE: print(f"NO DATA or {fieldname} not found for image_id {image_id}")
+                    this_sql_booleans[sql_field_names_dict[fieldname]] = False
+                    if VERBOSE:
+                        print(f"No {fieldname} found for image_id {image_id}")
+            # if any(this_sql_booleans.values()) is True and collection_name == 'hand_landmarks':
+            if collection_do_upsert:
+                # print(f"Going to upsert {collection_name} with image_id {image_id} mongo_data: {collection_mongo_data.keys()}")
+                # upsert collection_mongo_data in collection
+                # print(f"  -----  Before Upserting this_success is {this_success} for image_id {image_id}")
+                try:
+                    collection.update_one({"image_id": image_id}, {"$set": collection_mongo_data}, upsert=True)
+                    if VERBOSE: print(f"  +++++  Upserted {collection_name} for image_id {image_id}:{collection_mongo_data['encoding_id']}")
+                    this_success = True
+                except Exception as e:
+                    if "E11000" not in str(e):
+                        # if the error is E11000 duplicate key error collection:
+                        print(f" ~~~ unknown error ~~~ {e}")
+                    # print(f"  -----  E11000 duplicate key error upserting {collection_name} for image_id {image_id}:{collection_mongo_data['encoding_id']}")
+
+                    # check to see if it exists in the collection and delete. named check_ to avoid overwriting collection in loop
+                    for check_collection_name, check_collection in zip(collection_names, collections):
+                        # print(f"  -----  Checking image/enc combo in Collection: {collection_name}")
+                        # Check if the image_id and encoding_id combo exists in the collection
+                        if check_collection.find_one({"image_id": image_id, "encoding_id": collection_mongo_data['encoding_id']}):
+                            print(f"  /////  Found matching combo in Collection: {check_collection_name}")
+                            # delete the document to test re-upsert
+                            check_collection.delete_one({"image_id": image_id, "encoding_id": collection_mongo_data['encoding_id']})
+                            print(f"  \\\\\  Deleted matching combo in Collection: {check_collection_name} for re-upsert test")
+
+                    # check to see if image_id exists in mysql encodings table
+                    
+                    existing_encoding = session.query(Encodings.encoding_id).filter(
+                        Encodings.image_id == image_id
+                    ).one_or_none()
+
+                    # existing_encoding = session.execute(text("SELECT * FROM encodings WHERE image_id = :image_id")).params(image_id=image_id).fetchone()
+                    if existing_encoding:
+                        new_encoding_id = existing_encoding[0]
+                        # print(f"  >>>>>  Existing encoding_id for image_id {image_id} is {new_encoding_id}")
+                    else:
+                        # insert image_id and collection_mongo_data['encoding_id'] into mysql encodings table
+                        try:
+                            enc = Encodings(image_id=image_id)
+                            session.add(enc)
+                            session.commit()
+                            new_encoding_id = enc.encoding_id
+                            # print(f"  >>>>>  Inserted image_id {image_id} and NO encoding_id into MySQL, and it now has encoding_id {new_encoding_id}")
+                        except Exception as e:
+                            print(f"  !!!!!  Error inserting image_id {image_id} and encoding_id {collection_mongo_data['encoding_id']} into MySQL: {e}")
+                    try:
+                        # print(f"  -----  Trying Re-Upsert of {collection_name} for image_id {image_id} with new encoding_id {new_encoding_id}")
+                        collection_mongo_data['encoding_id'] = new_encoding_id
+                        # print(f"  -----  collection_mongo_data now has encoding_id {collection_mongo_data['encoding_id']}")
+                        collection.update_one({"image_id": image_id}, {"$set": collection_mongo_data},upsert=True)
+                        print(f"  +++++  Re-Upserted {collection_name} for image_id {image_id}:{collection_mongo_data['encoding_id']}")
+                        this_success = True
+                    except Exception as e:
+                        print(f"   XXX    Second Error upserting {collection_name} for image_id {image_id}:{collection_mongo_data['encoding_id']}: {e}")
+                        this_success = False
+
+                    # print(f"Mongo data: {collection_mongo_data}")
+
+            # handle is_face and is_body booleans
+            this_sql_booleans["is_face"] = this_sql_booleans.get("mongo_face_landmarks", False)
+            this_sql_booleans["is_body"] = this_sql_booleans.get("mongo_body_landmarks", False)
+            this_sql_booleans["migrated_Mongo"] = True
+            # originaly thought I would store them, but not using.
+            # all_mongo_data[collection_name] = collection_mongo_data
+        # print(f"Finished processing image_id {image_id} with success: {this_success}")
+        if this_success is True: sql_booleans[image_id] = this_sql_booleans
+        # print(len(sql_booleans))
+    # print(f"Processed {collection_name} for image_id {image_id}: {sql_booleans}")
+    # print(f"Processing {collection_name} for image_id {image_id} mongo_data: {all_mongo_data}")
+    return sql_booleans
+
 def export_task(image_id, EXPORT_DIR,):
     export_bson(mongo_collection, {"image_id": image_id}, f"{EXPORT_DIR}/{image_id}_encodings.bson")
     export_bson(bboxnormed_collection, {"image_id": image_id}, f"{EXPORT_DIR}/{image_id}_body_landmarks_norm.bson")
@@ -172,13 +325,15 @@ def upsert_sql_data(session, results):
     # print(f"Results keys: {results.keys()}")
     # print(f"Results values: {results.values()}")
 
+    # get the column names from results
     all_columns = set()
     for sql_booleans in results.values():
         all_columns.update(sql_booleans.keys())
     all_columns = sorted(all_columns)
     # columns = ['image_id'] + all_columns
+    print(f"Columns to upsert: {all_columns}")
 
-    # print(f"Columns to upsert: {all_columns}")
+    # build the list of dicts for upsert, with image_id included as pkey
     values = []
     for image_id, sql_booleans in results.items():
         row = {'image_id': image_id}
@@ -195,6 +350,9 @@ def upsert_sql_data(session, results):
 
 def main():
     init_mongo()
+    global collections
+    collections = [mongo_collection, bboxnormed_collection, mongo_hand_collection, body_world_collection]
+
     ensure_export_dir()
     # Encodings_Migration = io.create_class_from_reflection(engine, 'encodings', 'encodings_migration')
 
@@ -310,8 +468,44 @@ def main():
         # print(f"Exported {len(results)} image IDs to /Volumes/OWC4/salvage/image_ids.txt")
         close_session()
 
+    elif MODE == 4:
+        # import from batch files
+        init_session()
+        counter = START_BATCH
+        while True:
+            start_time = time.time()
+
+            # load batch file
+            image_ids, batch_data = load_bson_from_batches(counter)
+            print(f"Loaded {len(image_ids)} image IDs from batch {counter}")
+
+            if CHECK_FIRST:
+                already_migrated = session.query(Encodings.image_id).filter(
+                    Encodings.migrated_Mongo.is_(True),
+                    Encodings.image_id.in_(image_ids)
+                ).all()
+                already_migrated = {image_id[0] for image_id in already_migrated}
+                print(f"Already migrated {len(already_migrated)} image IDs.")
+                image_ids = [image_id for image_id in image_ids if image_id not in already_migrated]
+                print(f"After filtering, {len(image_ids)} image IDs to process.")
+
+            sql_booleans = import_bson_batch(image_ids, batch_data, session)
+            print(f"Processed batch {counter} with {len(sql_booleans)} sql_booleans, a dict of dicts.")
+            # print(sql_booleans)
 
 
+            # store booleans in sql
+            print(f"Upserting {len(sql_booleans)} image_ids in the database.")
+            upsert_sql_data(session, sql_booleans)
+            end_time = time.time()
+            print(f"Batch {counter} processed in {end_time - start_time:.2f} seconds.")
+            print("- ")
+            print("- ")
+
+            # break # temporary for testing
+            counter += 10000
+            
+    close_session()
     close_mongo()
     print("Export complete.")
 
