@@ -1367,7 +1367,7 @@ class SortPose:
         except Exception as e:
             print(f"auto_edge_crop: error cropping image: {e}")
             cropped = image
-        print(f"auto_edge_crop: image edge mult {self.image_edge_multiplier}, bbox dimensions:{bbox_dimensions}, cropped to ({top_left_x},{top_left_y}),({bottom_right_x},{bottom_right_y})")
+        print(f"auto_edge_crop: image edge mult {self.image_edge_multiplier}, bbox dimensions:{bbox_dimensions}, cropped to ({left},{top}),({right},{bottom})")
         return cropped
 
 ###########################################################################
