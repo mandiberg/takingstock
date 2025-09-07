@@ -1345,6 +1345,9 @@ class SortPose:
         """
         x1, y1, x2, y2 = self.image_edge_multiplier
         bbox_dimensions = self.bbox_to_pixel_conversion(df, index)
+        bbox_dimensions["horizontal"] = bbox_dimensions["horizontal"]*resize
+        bbox_dimensions["vertical"] = bbox_dimensions["vertical"]*resize
+        
         # top_left_x = int((8624/2) - (bbox_dimensions['horizontal']))
         # top_left_y = int((8624/2) - (bbox_dimensions['vertical']))
         # bottom_right_x = int((8624/2) + (bbox_dimensions['horizontal']))
@@ -1356,10 +1359,10 @@ class SortPose:
         # I think that you need to account for the fact that the image has been scaled (before it is expanded)
         # I have returned that float from the resize function and it is available here as resize
         print("auto_edge_crop: resize factor", resize)
-        left = int((image.shape[1]/2) + (bbox_dimensions['horizontal']* (x1)))
-        top = int((image.shape[0]/2) + (bbox_dimensions['vertical']* (y1)))
-        right = int((image.shape[1]/2) + (bbox_dimensions['horizontal']* (x2)))
-        bottom = int((image.shape[0]/2) + (bbox_dimensions['vertical']* (y2)))
+        left = int((image.shape[1]/2) + (bbox_dimensions['horizontal']*x1))
+        top = int((image.shape[0]/2) + (bbox_dimensions['vertical']*y1))
+        right = int((image.shape[1]/2) + (bbox_dimensions['horizontal']*x2))
+        bottom = int((image.shape[0]/2) + (bbox_dimensions['vertical']*y2))
 
         try:
             cropped = image[top:bottom, left:right]
