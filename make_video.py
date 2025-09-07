@@ -1225,11 +1225,11 @@ def compare_images(last_image, img, df_sorted, index):
     
     # this is where the image gets cropped or expanded
     if sort.EXPAND:
-        cropped_image = sort.expand_image(img, face_landmarks, bbox)
+        cropped_image, resize = sort.expand_image(img, face_landmarks, bbox)
         
         if FULL_BODY: 
 
-            cropped_image = sort.auto_edge_crop(df_sorted, index, cropped_image)
+            cropped_image = sort.auto_edge_crop(df_sorted, index, cropped_image, resize)
         else:   
             # cropp the 25K image back down to 10K
             # does this based on the incremental dimensions
@@ -2005,8 +2005,6 @@ def main():
             df['body_landmarks'] = df['body_landmarks'].apply(io.unpickle_array)
             df['body_landmarks_3D'] = df['body_landmarks_3D'].apply(io.unpickle_array)
             df['body_landmarks_normalized'] = df['body_landmarks_normalized'].apply(io.unpickle_array)
-            df['body_landmarks_normalized_visible'] = df['body_landmarks_normalized'].apply(lambda x: sort.crop_prep(x))
-         
             # if hand_results has any values
             # if not df['hand_results'].isnull().all():
             
@@ -2125,7 +2123,9 @@ def main():
             df["body_landmarks_normalized_visible_array"] = df["body_landmarks_normalized"].apply(lambda x: sort.prep_enc(x, structure="visible")) # convert mp lms to list
             df["wrist_ankle_landmarks_normalized_array"] = df["body_landmarks_normalized"].apply(lambda x: sort.prep_enc(x, structure="wrists_and_ankles")) # convert mp lms to list
             df["face_xyz"] = df[['face_x','face_y', 'face_z']].apply(lambda x: [x[0], x[1], x[2]], axis=1)
-            df['bbox_array'] = df['bbox'].apply(lambda x: list(x.values()))
+            df['bbox_array'] = df['bbox'].apply(lambda x: list(x.values()))            
+            df['body_landmarks_normalized_visible'] = df['body_landmarks_normalized'].apply(lambda x: sort.crop_prep(x))
+            if VERBOSE: print("after unpickle_array, first row", df.iloc[0]['body_landmarks_normalized_visible'])
 
             if VERBOSE: print("list of columns", df.columns)
             # conver face_x	face_y	face_z	mouth_gap site_image_id to float

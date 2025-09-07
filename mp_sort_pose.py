@@ -1268,9 +1268,26 @@ class SortPose:
         """
         prepares the body landmarks for crop.
         """
-        if enc1['visibility'] > .9:
-            enc1['x'] = 0
-            enc1['y'] = 0
+        print("crop_prep: enc1 before", enc1)
+        # enc1 is a list of landmark dicts or objects with x, y, visibility
+        # Handle both list of landmarks and NormalizedLandmarkList
+        if hasattr(enc1, 'landmark'):
+            landmarks_iter = enc1.landmark
+        else:
+            landmarks_iter = enc1
+
+        for lms in landmarks_iter:
+            # If lms is a dict
+            if isinstance(lms, dict):
+                if lms.get('visibility', 0) < 0.9:
+                    lms['x'] = 0
+                    lms['y'] = 0
+            # If lms is a mediapipe landmark object
+            elif hasattr(lms, 'visibility') and hasattr(lms, 'x') and hasattr(lms, 'y'):
+                if getattr(lms, 'visibility', 0) < 0.9:
+                    lms.x = 0
+                    lms.y = 0
+        print("crop_prep: enc1 after", enc1)
         return enc1
 
 
@@ -1313,13 +1330,16 @@ class SortPose:
             print(f"bbox_to_pixel_conversion: bbox is none")
             pass
         #get the dimensions of bbox, have those be a unit, 
+        print(f"bbox_to_pixel_conversion: bbox is {bbox}")
         dimensions = {
             'horizontal': abs(bbox['right'] - bbox['left']),
             'vertical': abs(bbox['bottom'] - bbox['top'])
         }
+        print(f"bbox_to_pixel_conversion: dimensions are {dimensions}")
+        # convert to pixels
         return dimensions
     
-    def auto_edge_crop(self, df, index, image):
+    def auto_edge_crop(self, df, index, image, resize):
         """
         Tench's body landmark crop
         """
@@ -1329,14 +1349,20 @@ class SortPose:
         # top_left_y = int((8624/2) - (bbox_dimensions['vertical']))
         # bottom_right_x = int((8624/2) + (bbox_dimensions['horizontal']))
         # bottom_right_y = int((8624/2) + (bbox_dimensions['vertical']))
-        print("auto_edge_crop: image shape", self.w, self.h, type(self))
-        top_left_x = int((8624/2) + (bbox_dimensions['horizontal']* (x1-.5)))
-        top_left_y = int((8624/2) + (bbox_dimensions['vertical']* (y1-.5)))
-        bottom_right_x = int((8624/2) + (bbox_dimensions['horizontal']* (x2+.5)))
-        bottom_right_y = int((8624/2) + (bbox_dimensions['vertical']* (y2+.5)))
+
+        print("auto_edge_crop: orig image shape", self.w, self.h, type(self)) # this is the dimensions of the original image
+        print("auto_edge_crop: current image shape", image.shape) # this is the dimensions of the current image
+
+        # I think that you need to account for the fact that the image has been scaled (before it is expanded)
+        # I have returned that float from the resize function and it is available here as resize
+        print("auto_edge_crop: resize factor", resize)
+        left = int((image.shape[1]/2) + (bbox_dimensions['horizontal']* (x1)))
+        top = int((image.shape[0]/2) + (bbox_dimensions['vertical']* (y1)))
+        right = int((image.shape[1]/2) + (bbox_dimensions['horizontal']* (x2)))
+        bottom = int((image.shape[0]/2) + (bbox_dimensions['vertical']* (y2)))
 
         try:
-            cropped = image[top_left_y:bottom_right_y, top_left_x:bottom_right_x]
+            cropped = image[top:bottom, left:right]
             print(f"auto_edge_crop: cropped image shape {cropped.shape}")
         except Exception as e:
             print(f"auto_edge_crop: error cropping image: {e}")
@@ -1769,7 +1795,7 @@ class SortPose:
         # add cropdown here
 
         # quit() 
-        return new_image
+        return new_image, resize
 
     def get_extension_pixels(self,image):
         
