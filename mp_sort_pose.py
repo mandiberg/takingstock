@@ -14,6 +14,7 @@ import random
 import numpy as np
 import sys
 from collections import Counter
+from pandas.core.frame import dataclasses_to_dicts
 from simple_lama_inpainting import SimpleLama
 from sklearn.neighbors import NearestNeighbors
 import re
@@ -815,8 +816,7 @@ class SortPose:
 
 
     ###########################################################################
-    ################### TENCH CODE FOR DEDUPE ANALYSIS ########################
-    # CLAUDE LINK https://claude.ai/chat/15ff9f07-2387-4018-8005-49e44a9e1ad5 #
+    ######################## START TENCH_DUPE_DETECTION #######################
     ###########################################################################
 
     def calculate_ssim(self, image1, image2):
@@ -1249,39 +1249,95 @@ class SortPose:
 
 
 ###########################################################################
-################### END TENCH CODE FOR DUPE DETECTION #####################
+################### END TENCH_DUPE_DETECTION ##############################
 ###########################################################################
 
 ###########################################################################
-###################### START TENCH CODE FOR CROP ##########################
+############################# START TENCH_CROP ############################
 ###########################################################################
 
-    def min_max_wrist_ankles_for_crop(self, df):
-        expanded_df = pd.DataFrame(df['wrist_ankle_landmarks_normalized_array'].tolist())
-        data_array = expanded_df.values
-        all_x = data_array[:, ::2].flatten()  # columns 0, 2, 4, 6
-        all_y = data_array[:, 1::2].flatten()  # columns 1, 3, 5, 7
+    def crop_prep(self, enc1):
+        """
+        prepares the body landmarks for crop.
+        """
+        if enc1['visibility'] > .9:
+            enc1['x'] = 0
+            enc1['y'] = 0
+        return enc1
+
+
+    def min_max_body_landmarks_for_crop(self, df):
+        """
+        returns image edge multiplier for crop for each cluster.
+        """
+        landmarks_list = df['body_landmarks_normalized'].tolist()
+        all_x = []
+        all_y = []
+        for landmark_list in landmarks_list:
+            if hasattr(landmark_list, 'landmark'):
+                # landmark_list is a NormalizedLandmarkList, iterate through its landmarks
+                for landmark in landmark_list.landmark:
+                    all_x.append(landmark.x)
+                    all_y.append(landmark.y)
+    
+        
         lowest_x = math.floor(min(all_x))
         lowest_y = math.floor(min(all_y))
+        if lowest_y > -1:
+            lowest_y = -1
         highest_x = math.ceil(max(all_x))
         highest_y = math.ceil(max(all_y))
 
-        return lowest_x, lowest_y, highest_x, highest_y
 
-        
+        if self.VERBOSE: print(f"min_max_body_landmarks_for_crop: {lowest_x},{lowest_y},{highest_x},{highest_y}")
+        return [lowest_x, lowest_y, highest_x, highest_y]
+
+    def bbox_to_pixel_conversion(self, df, index):
+        """
+        Converts bbox/image edge mult to pixels for crop
+        """
+        bbox = df.iloc[index].get('bbox', None)
+      
+        if type(bbox) == "string":
+            #parse into dict
+            bbox = json.loads(bbox)
+        if bbox is None:
+            print(f"bbox_to_pixel_conversion: bbox is none")
+            pass
+        #get the dimensions of bbox, have those be a unit, 
+        dimensions = {
+            'horizontal': abs(bbox['right'] - bbox['left']),
+            'vertical': abs(bbox['bottom'] - bbox['top'])
+        }
+        return dimensions
     
-    def wrist_ankle_crop_image(self, x1, y1, x2, y2, image):
+    def auto_edge_crop(self, df, index, image):
+        """
+        Tench's body landmark crop
+        """
+        x1, y1, x2, y2 = self.image_edge_multiplier
+        bbox_dimensions = self.bbox_to_pixel_conversion(df, index)
+        # top_left_x = int((8624/2) - (bbox_dimensions['horizontal']))
+        # top_left_y = int((8624/2) - (bbox_dimensions['vertical']))
+        # bottom_right_x = int((8624/2) + (bbox_dimensions['horizontal']))
+        # bottom_right_y = int((8624/2) + (bbox_dimensions['vertical']))
+        print("auto_edge_crop: image shape", self.w, self.h, type(self))
+        top_left_x = int((8624/2) + (bbox_dimensions['horizontal']* (x1-.5)))
+        top_left_y = int((8624/2) + (bbox_dimensions['vertical']* (y1-.5)))
+        bottom_right_x = int((8624/2) + (bbox_dimensions['horizontal']* (x2+.5)))
+        bottom_right_y = int((8624/2) + (bbox_dimensions['vertical']* (y2+.5)))
+
         try:
-            cropped = image[y1:y2, x1:x2]
+            cropped = image[top_left_y:bottom_right_y, top_left_x:bottom_right_x]
+            print(f"auto_edge_crop: cropped image shape {cropped.shape}")
         except Exception as e:
-            print(f"wrist_ankle_crop_image: error cropping image: {e}")
+            print(f"auto_edge_crop: error cropping image: {e}")
             cropped = image
-        if self.VERBOSE: print(f"wrist_ankle_crop_image: crop_upper_left: {x1},{y1}, crop_lower_right: {x2},{y2}")
+        print(f"auto_edge_crop: image edge mult {self.image_edge_multiplier}, bbox dimensions:{bbox_dimensions}, cropped to ({top_left_x},{top_left_y}),({bottom_right_x},{bottom_right_y})")
         return cropped
 
-
 ###########################################################################
-###################### END TENCH CODE FOR CROP ############################
+############################# END TENCH_CROP ##############################
 ###########################################################################
 
     def mse(self, img1, img2):
@@ -1831,6 +1887,7 @@ class SortPose:
         return sr
 
     def crop_image(self,image, faceLms, bbox, sinY=0,SAVE=False):
+        print(f'Crop image image type {type(image)}')
         print("crop_image, going to get_image_face_data")
         self.get_image_face_data(image, faceLms, bbox) 
         is_inpaint = False
