@@ -72,7 +72,11 @@ WHERE e.is_face = 0 AND e.is_body = 1 AND e.is_face_no_lms = 0
 ;
 
 
-SELECT *
+
+
+
+SELECT COUNT(image_id)
+FROM SegmentBig_isface 
 ;
 
 DELETE

@@ -113,8 +113,7 @@ FROM Encodings e
 JOIN NMLImages n on e.image_id = n.image_id 
 LEFT JOIN Encodings_Migration em on e.image_id = em.image_id 
 WHERE n.is_nml_db = 0
-
-    AND em.image_id IS NULL    
+AND em.image_id IS NULL    
 LIMIT 10; -- Adjust the batch size as needed
 
 

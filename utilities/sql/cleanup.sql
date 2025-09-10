@@ -1,6 +1,7 @@
 
 
 USE stock;
+SET GLOBAL innodb_buffer_pool_size=8053063680;
 
 
 
@@ -150,4 +151,5 @@ WHERE is_dupe_of IN (36384061, 4934107, 127134921, 83517166, 14879779, 62041012,
 SELECT DISTINCT is_dupe_of
 FROM Encodings
 ORDER BY is_dupe_of;
+
 

@@ -19,25 +19,28 @@ from mp_db_io import DataIO
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import pickle
 import time
+import re
+import json
 
 IS_SSD = False
 VERBOSE = False
 QUIET = True
 CHECK_FIRST = True
-BATCH_SIZE = 1000  # Adjust as needed
-START_BATCH = 870000  # #65 for E. For resuming interrupted processes
-MODE = 4 # 1 for making image_id list, 2 for exporting bson, 3 for importing bson, 4 for importing from batch files
+BATCH_SIZE = 10000  # Adjust as needed
+START_BATCH = 0  # #65 for E. For resuming interrupted processes
+MODE = 4 # 1 for making image_id list, 2 for exporting bson, 3 for importing bson, 4 for importing from batch files, 5 for importing MySQL
 site_name_id = 3
 # 3 is adobe, 4 is istock.
 
 io = DataIO(IS_SSD)
 db = io.db
-# EXPORT_DIR = os.path.join(io.ROOT_PROD,"mongo_exports_fromlist")  # Directory to save BSON files
-EXPORT_DIR = os.path.join("/Volumes/OWC4/segment_images","mongo_exports_fromlist_istockAB")  # Directory to save BSON files
-# EXPORT_DIR = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/mongo_exports_fromlist_adobeF"  # Directory to save BSON files
-IMAGE_ID_FILE = os.path.join("/Volumes/OWC4/salvage","image_ids.txt")  # File containing image IDs to process
-BATCHES_FOLDER = os.path.join("/Volumes/OWC5/segment_images","mongo_exports")  # Folder containing batch files
-print(f"Export directory: {EXPORT_DIR}")
+if MODE != 5:
+    # EXPORT_DIR = os.path.join(io.ROOT_PROD,"mongo_exports_fromlist")  # Directory to save BSON files
+    EXPORT_DIR = os.path.join("/Volumes/OWC4/segment_images","mongo_exports_fromlist_istockAB")  # Directory to save BSON files
+    # EXPORT_DIR = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/mongo_exports_fromlist_adobeF"  # Directory to save BSON files
+    IMAGE_ID_FILE = os.path.join("/Volumes/OWC4/salvage","image_ids.txt")  # File containing image IDs to process
+    BATCHES_FOLDER = os.path.join("/Volumes/OWC5/segment_images","mongo_exports")  # Folder containing batch files
+    print(f"Export directory: {EXPORT_DIR}")
 
 collection_names = ['encodings', 'body_landmarks_norm', 'hand_landmarks', 'body_landmarks_3D']
 document_names_dict = {
@@ -340,11 +343,13 @@ def upsert_sql_data(session, results):
         for col in all_columns:
             row[col] = sql_booleans.get(col, None)
         values.append(row)
-    # print(f"Values to upsert: {values}...")  # Print first 5 for verification
+    print(f"Example of Values to upsert: {values[0]}...")  # Print first 5 for verification
 
     stmt = insert(Encodings).values(values)
     update_dict = {col: stmt.inserted[col] for col in all_columns}
     upsert_stmt = stmt.on_duplicate_key_update(**update_dict)
+    print(f"Upsert statement prepared for {len(values)} records")
+    # print(f"Example upsert statement: {str(upsert_stmt)[:500]}...")  # Print first 500 chars for verification
     session.execute(upsert_stmt)
     session.commit()
 
@@ -353,7 +358,7 @@ def main():
     global collections
     collections = [mongo_collection, bboxnormed_collection, mongo_hand_collection, body_world_collection]
 
-    ensure_export_dir()
+    if MODE != 5: ensure_export_dir()
     # Encodings_Migration = io.create_class_from_reflection(engine, 'encodings', 'encodings_migration')
 
     if MODE == 1:
@@ -478,32 +483,267 @@ def main():
             # load batch file
             image_ids, batch_data = load_bson_from_batches(counter)
             print(f"Loaded {len(image_ids)} image IDs from batch {counter}")
+            for image_id in image_ids:
+                for collection_name, collection in zip(collection_names, collections):
+                    collection_mongo_data = {}
+                    collection_do_upsert = False
+                    collection_data = batch_data.get(collection_name, [])
+                    # print(type(collection_data))
+                    # print(f"collection_data for {collection_name}: {collection_data[0]}")
+                    data = collection_data.get(image_id)
+                    print(f"Importing {collection_name} for image_id {image_id} with data: {data}")
+                break
 
-            if CHECK_FIRST:
-                already_migrated = session.query(Encodings.image_id).filter(
-                    Encodings.migrated_Mongo.is_(True),
-                    Encodings.image_id.in_(image_ids)
-                ).all()
-                already_migrated = {image_id[0] for image_id in already_migrated}
-                print(f"Already migrated {len(already_migrated)} image IDs.")
-                image_ids = [image_id for image_id in image_ids if image_id not in already_migrated]
-                print(f"After filtering, {len(image_ids)} image IDs to process.")
+            # if CHECK_FIRST:
+            #     already_migrated = session.query(Encodings.image_id).filter(
+            #         Encodings.migrated_Mongo.is_(True),
+            #         Encodings.image_id.in_(image_ids)
+            #     ).all()
+            #     already_migrated = {image_id[0] for image_id in already_migrated}
+            #     print(f"Already migrated {len(already_migrated)} image IDs.")
+            #     image_ids = [image_id for image_id in image_ids if image_id not in already_migrated]
+            #     print(f"After filtering, {len(image_ids)} image IDs to process.")
 
-            sql_booleans = import_bson_batch(image_ids, batch_data, session)
-            print(f"Processed batch {counter} with {len(sql_booleans)} sql_booleans, a dict of dicts.")
-            # print(sql_booleans)
+            # sql_booleans = import_bson_batch(image_ids, batch_data, session)
+            # print(f"Processed batch {counter} with {len(sql_booleans)} sql_booleans, a dict of dicts.")
+            # # print(sql_booleans)
 
 
-            # store booleans in sql
-            print(f"Upserting {len(sql_booleans)} image_ids in the database.")
-            upsert_sql_data(session, sql_booleans)
+            # # store booleans in sql
+            # print(f"Upserting {len(sql_booleans)} image_ids in the database.")
+            # upsert_sql_data(session, sql_booleans)
             end_time = time.time()
             print(f"Batch {counter} processed in {end_time - start_time:.2f} seconds.")
             print("- ")
             print("- ")
 
-            # break # temporary for testing
-            counter += 10000
+            break # temporary for testing
+            counter += BATCH_SIZE
+    elif MODE == 5:
+        # import SQL data
+        init_session()
+        counter = 0
+        start_time = time.time()
+        sql_table_dump_file = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/ultra_sql/Encodings_Migration_Ultra.sql"
+        '''
+        # this is the SQL to create the Encodings_Migration table:        
+        CREATE TABLE `Encodings_Migration` (
+        `migration_id` int NOT NULL AUTO_INCREMENT,
+        `encoding_id` int DEFAULT NULL,
+        `image_id` int DEFAULT NULL,
+        `is_face` tinyint(1) DEFAULT NULL,
+        `is_body` tinyint(1) DEFAULT NULL,
+        `is_face_distant` tinyint(1) DEFAULT NULL,
+        `face_x` decimal(6,3) DEFAULT NULL,
+        `face_y` decimal(6,3) DEFAULT NULL,
+        `face_z` decimal(6,3) DEFAULT NULL,
+        `mouth_gap` decimal(6,3) DEFAULT NULL,
+        `face_landmarks` blob,
+        `bbox` json DEFAULT NULL,
+        `face_encodings68` blob,
+        `body_landmarks` blob,
+        `mongo_encodings` tinyint(1) DEFAULT NULL,
+        `mongo_body_landmarks` tinyint(1) DEFAULT NULL,
+        `mongo_face_landmarks` tinyint(1) DEFAULT NULL,
+        `is_small` tinyint(1) DEFAULT NULL,
+        `mongo_body_landmarks_norm` tinyint(1) DEFAULT NULL,
+        `two_noses` tinyint(1) DEFAULT NULL,
+        `is_dupe_of` int DEFAULT NULL,
+        `mongo_hand_landmarks` tinyint(1) DEFAULT NULL,
+        `mongo_hand_landmarks_norm` tinyint(1) DEFAULT NULL,
+        `is_face_no_lms` tinyint(1) DEFAULT NULL,
+        `is_feet` tinyint(1) DEFAULT NULL,
+        `mongo_body_landmarks_3D` tinyint(1) DEFAULT NULL,
+        `is_hand_left` tinyint(1) DEFAULT NULL,
+        `is_hand_right` tinyint(1) DEFAULT NULL,
+        `migrated_SQL` tinyint(1) DEFAULT NULL,
+        `migrated_Mongo` tinyint(1) DEFAULT NULL,
+        PRIMARY KEY (`migration_id`),
+        UNIQUE KEY `image_id` (`image_id`),
+        UNIQUE KEY `encoding_id` (`encoding_id`),
+        KEY `is_dupe_of` (`is_dupe_of`),
+        CONSTRAINT `encodings_migration_ibfk_1` FOREIGN KEY (`encoding_id`) REFERENCES `Encodings` (`encoding_id`),
+        CONSTRAINT `encodings_migration_ibfk_2` FOREIGN KEY (`image_id`) REFERENCES `Images` (`image_id`),
+        CONSTRAINT `encodings_migration_ibfk_3` FOREIGN KEY (`is_dupe_of`) REFERENCES `Images` (`image_id`)
+        ) ENGINE=InnoDB AUTO_INCREMENT=22988877 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+        
+        
+        '''
+
+        def extract_json_from_string(bbox_match):
+            # Look for JSON pattern: starts with '{' and ends with '}'
+            bbox_json_string = bbox_match.group(1)
+            
+            # Method 2: Using eval (be careful with this approach)
+            try:
+                # This works because the outer structure is a Python string literal
+                unescaped = eval(bbox_json_string)
+                json_obj2 = json.loads(unescaped)
+                # print(f"Parsed JSON object: {json_obj2}")
+                return json_obj2
+            except Exception as e:
+                print(f"Error with eval method: {e}")
+                return None
+
+
+        with open(sql_table_dump_file, "r") as f:
+            # only read lines that start with INSERT INTO `Encodings_Migration` VALUES
+            lines = [line for line in f.readlines() if line.startswith("INSERT INTO")]
+            for line in lines:
+                # imaged_ids holds the ids for each line (about 5000)
+                image_ids = []
+                row_dict = {}
+                item_counter = 0
+                # split line into individual value tuples
+                tuples = line.split("VALUES")[1].strip().rstrip(";").split("),(")
+
+                tuples[0] = tuples[0].lstrip("(")
+                tuples[-1] = tuples[-1].rstrip(")")
+                # print first tuple for verification
+                # print(f"First tuple: {tuples[0]}")
+
+                # for each tuple/row, build a dict with image_id as key
+                for t in tuples:
+
+                    # this is what a line tuple looks like:
+                    # First tuple: 1,77108103,68354647,1,1,NULL,-26.314,-31.326,12.182,7.932,NULL,'"{\n    \"left\": 957,\n    \"right\": 1239,\n    \"top\": 424,\n    \"bottom\": 706\n}"',NULL,NULL,1,1,1,NULL,1,NULL,NULL,NULL,NULL,NULL,0,1,NULL,NULL,NULL,0
+                    bbox_json = None
+                    # Look for bbox JSON pattern: starts with '"{ and ends with }"'
+                    # bbox_match = re.search(r"(\'\\\"{.*?}\\\"\')", t)
+                    bbox_match = re.search(r"(\'\\\"{.*?}\\\"\')", t)
+                    # print(f"bbox_match: {bbox_match}")
+                    if bbox_match:
+                        # find the bad one and get rid of it
+                        bbox_json = bbox_match.group(0)
+                        # print(f"Found bbox_json: {bbox_json}")
+                        # Replace bbox_json in t with a placeholder
+                        t_clean = t.replace(bbox_json, '__BBOX__')
+                        # print(f"t_clean: {t_clean}")
+                        values = t_clean.split(",")
+
+                        # this is the good one
+                        loaded_bbox_json = extract_json_from_string(bbox_match)
+                        # print(f"Loaded bbox_json: {loaded_bbox_json}")
+
+                        # Place bbox_json back into the correct position (index 11)
+                        # values[11] = loaded_bbox_json
+
+                        # print(f"Values with bbox_json restored: {values} and values[11]: {values[11]}")
+                    else:
+                        values = t.split(",")
+
+
+                    # First tuple: 1,77108103,68354647,1,1,NULL,-26.314,-31.326,12.182,7.932,NULL,'\"{\\n    \\\"left\\\": 957,\\n    \\\"right\\\": 1239,\\n    \\\"top\\\": 424,\\n    \\\"bottom\\\": 706\\n}\"',NULL,NULL,1,1,1,NULL,1,NULL,NULL,NULL,NULL,NULL,0,1,NULL,NULL,NULL,0
+                    # values = t.split(",")
+                    # print(f"Values before building: {values}")
+                    if len(values) > 1:
+                        try:
+                            def parse_int(val):
+                                # print(f"Parsing int from value: {val}")
+                                return int(val) if val != 'NULL' else None
+                            def parse_float(val):
+                                # print(f"Parsing float from value: {val}")
+                                return float(val) if val != 'NULL' else None
+                            def parse_json(val):
+                                print(f"Parsing json from value: {val}")
+                                if val == 'NULL':
+                                    return None
+                                # Remove outer single and double quotes if present
+                                if val.startswith("'") and val.endswith("'"):
+                                    val = val[1:-1]
+                                # Unescape all \" to "
+                                val = val.replace('\\"', '"')
+                                val = val.replace('\"', '"')
+                                val = val.replace('\"', '"')
+                                # Unescape
+                                val = val.encode('utf-8').decode('unicode_escape')
+                                print(f"unloaded json string: {val}")
+                                jsonval = json.loads(val)
+                                print(f"Parsed json: {jsonval}")
+                                return jsonval                            
+                            
+                            # if any of values 5,26,27 is 1 then print all of those values with their lables
+                            if values[5] == '1':
+                                print(f" ~~ 'is_face_distant': {parse_int(values[5])}")
+
+                            image_id = parse_int(values[2])
+                            # print(f"Processing image_id: {image_id}")
+                            row_dict[image_id] = {
+                                # 'migration_id': parse_int(values[0]),
+                                # 'encoding_id': parse_int(values[1]),
+                                'image_id': parse_int(values[2]),
+                                'is_face': parse_int(values[3]),
+                                'is_body': parse_int(values[4]),
+                                'is_face_distant': parse_int(values[5]),
+                                'face_x': parse_float(values[6]),
+                                'face_y': parse_float(values[7]),
+                                'face_z': parse_float(values[8]),
+                                'mouth_gap': parse_float(values[9]),
+                                'bbox': loaded_bbox_json,
+                                'mongo_encodings': parse_int(values[14]),
+                                'mongo_body_landmarks': parse_int(values[15]),
+                                'mongo_face_landmarks': parse_int(values[16]),
+                                'is_small': parse_int(values[17]),
+                                'mongo_body_landmarks_norm': parse_int(values[18]),
+                                'two_noses': parse_int(values[19]),
+                                'is_dupe_of': parse_int(values[20]),
+                                'mongo_hand_landmarks': parse_int(values[21]),
+                                'mongo_hand_landmarks_norm': parse_int(values[22]),
+                                'is_face_no_lms': parse_int(values[23]),
+                                'is_feet': parse_int(values[24]),
+                                'mongo_body_landmarks_3D': parse_int(values[25]),
+                                'is_hand_left': parse_int(values[26]),
+                                'is_hand_right': parse_int(values[27]),
+                                'migrated_SQL': 1,
+                            }
+                        except ValueError:
+                            print(f"Could not build dict for image_id: {values[1]}")
+                    item_counter += 1
+                    # if item_counter % 100 == 0:
+                    #     print(f"  Processed {item_counter} tuples so far...")
+                    # if item_counter >= 4:
+                    #     break # temporary for testing
+                # image_ids.extend(list(row_dict.keys()))
+                # print(row_dict)
+                image_ids = list(row_dict.keys())
+                print(f"Processed {len(tuples)} tuples, to make a {len(row_dict)} item row dict which matches total image_ids: {len(image_ids)}")
+
+                def remove_list_from_dict(to_remove, row_dict):
+                    for to_remove_id in to_remove:
+                        if to_remove_id in row_dict:
+                            del row_dict[to_remove_id]
+                    return row_dict
+                if CHECK_FIRST:
+                    # remove already migrated from row_dict
+                    already_migrated = session.query(Encodings.image_id).filter(
+                        Encodings.migrated_SQL.is_(True),
+                        Encodings.image_id.in_(image_ids)
+                    ).all()
+                    already_migrated = {image_id[0] for image_id in already_migrated}
+                    row_dict = remove_list_from_dict(already_migrated, row_dict)
+                    print(f"Removed {len(already_migrated)} Already migrated, to make a {len(row_dict)} item row dict")
+
+                    # only site 3,4 in rowdict
+                    site_image_ids_in_dict = session.query(Images.image_id).filter(
+                        Images.site_name_id.in_([3,4]),
+                        Images.image_id.in_(list(row_dict.keys()))
+                    ).all()
+                    site_image_ids_in_dict = {image_id[0] for image_id in site_image_ids_in_dict}
+                    # print(f"site_image_ids_in_dict has {len(site_image_ids_in_dict)} image IDs.")
+                    # removce any image_ids not in site 3,4 from row_dict (passing through set difference)
+                    row_dict = remove_list_from_dict(set(row_dict.keys()) - site_image_ids_in_dict, row_dict)
+                    print(f"After filtering to site 3,4, row_dict has {len(row_dict)} image IDs.")
+
+                # store booleans in sql
+                # print(f"Upserting {len(sql_booleans)} image_ids in the database.")
+                upsert_sql_data(session, row_dict)
+                end_time = time.time()
+                print(f"Batch {counter} processed in {end_time - start_time:.2f} seconds.")
+                print("- ")
+                print("- ")
+
+                # break # temporary for testing
+                counter += 1
             
     close_session()
     close_mongo()
