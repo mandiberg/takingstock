@@ -46,7 +46,28 @@ mongo_collection = mongo_db["body_landmarks_norm"]
 
 # Define the batch size
 batch_size = 10000
-last_id = 0
+
+# select max encoding_id to start from
+Base = declarative_base()
+
+class CompareSqlMongoResults(Base):
+    __tablename__ = 'compare_sql_mongo_results'
+    encoding_id = Column(Integer, primary_key=True)
+    image_id = Column(Integer)
+    is_body = Column(Boolean)
+    is_face = Column(Boolean)
+    face_landmarks = Column(Integer)
+    body_landmarks = Column(Integer)
+    face_encodings68 = Column(Integer)
+    nlms = Column(Integer)
+    left_hand = Column(Integer)
+    right_hand = Column(Integer)
+    body_world_landmarks = Column(Integer)
+Base.metadata.create_all(engine)
+last_id = session.query(sqlalchemy.func.max(CompareSqlMongoResults.encoding_id)).scalar()
+if last_id is None:
+    last_id = 0
+print(f"Starting from last_id: {last_id}")
 
 # variables to filter encodings on
 migrated_SQL = 1
@@ -100,7 +121,7 @@ If there is data in Mongo but not in SQL, print it out
 
 while True:
     results = (
-        session.query(Encodings.encoding_id, Encodings.image_id, Encodings.mongo_encodings, Encodings.mongo_body_landmarks, Encodings.mongo_face_landmarks, Encodings.mongo_body_landmarks_norm, Encodings.mongo_hand_landmarks, Encodings.mongo_body_landmarks_3D)
+        session.query(Encodings.encoding_id, Encodings.image_id, Encodings.mongo_encodings, Encodings.mongo_body_landmarks, Encodings.mongo_face_landmarks, Encodings.mongo_body_landmarks_norm, Encodings.mongo_hand_landmarks, Encodings.mongo_body_landmarks_3D, Encodings.is_body, Encodings.is_face)
         .filter(
             # Encodings.migrated_SQL == migrated_SQL,
             # Encodings.migrated == migrated,
@@ -118,8 +139,7 @@ while True:
     if not results:
         print("No more rows to process. Exiting.")
         break
-
-    for encoding_id, image_id, mongo_encodings, mongo_body_landmarks, mongo_face_landmarks, mongo_body_landmarks_norm, mongo_hand_landmarks, mongo_body_landmarks_3D in results:
+    for encoding_id, image_id, mongo_encodings, mongo_body_landmarks, mongo_face_landmarks, mongo_body_landmarks_norm, mongo_hand_landmarks, mongo_body_landmarks_3D, is_body, is_face in results:
         last_id = encoding_id  # Update last_id for the next batch
         # print(f"Processing encoding_id: {encoding_id}, image_id: {image_id}")
 
@@ -129,7 +149,11 @@ while True:
             collection = mongo_db[collection_name]
             doc = collection.find_one({"image_id": image_id})
             mongo_docs[collection_name] = doc
-
+        # print all the boolean values
+        # print(f"SQL booleans for encoding_id {encoding_id}, image_id {image_id}:")
+        # for field_name in sql_field_names_dict.values():
+        #     print(f"  {field_name}: {locals().get(field_name)}")
+        #     print(f"MongoDB documents for image_id {image_id}:")
         # Compare SQL booleans to Mongo data presence
         for collection_name in collection_names:
             doc = mongo_docs[collection_name]
@@ -138,6 +162,7 @@ while True:
                 sql_field_name = sql_field_names_dict[document_name]
                 sql_boolean = locals().get(sql_field_name)  # Get the SQL boolean value dynamically
                 mongo_data_present = doc is not None and document_name in doc and doc[document_name] is not None
+                # print(f"  {collection_name}.{document_name}: Mongo data present: {mongo_data_present}")
 
 
                 # # Inside the loop, increment counters instead of printing
@@ -153,11 +178,15 @@ while True:
     # print(f"Processed batch up to encoding_id {last_id}:")
     # for key, value in counts.items():
     #     print(f"  {key}: {value}")
-
+        if encoding_id is None or image_id is None:
+            print(f" -- skip encoding_id {encoding_id} no image_id")
+            continue
         # initialize the result row
         this_row = {
             "encoding_id": encoding_id,
-            "image_id": image_id
+            "image_id": image_id,
+            "is_body": is_body,
+            "is_face": is_face
         }
 
         # Compare SQL booleans to Mongo data presence
@@ -180,7 +209,7 @@ while True:
                 # for each document, create a new row in results_rows
                 this_row[document_name] = value
 
-        if any(v is not None for k, v in this_row.items() if k not in ["encoding_id", "image_id"]):
+        if any(v is not None for k, v in this_row.items() if k not in ["encoding_id", "image_id", "is_body", "is_face"]):
             results_rows.append(this_row)
 
     # At the end of each batch, create a DataFrame and (optionally) save or process it

@@ -153,3 +153,81 @@ FROM Encodings
 ORDER BY is_dupe_of;
 
 
+
+-- I am trying to figure out the intersection of migrated_SQL and migrated_Mongo
+
+SELECT COUNT(*)
+FROM Encodings
+WHERE migrated_SQL = 1
+;
+-- returns 22089785
+
+SELECT COUNT(*)
+FROM Encodings
+WHERE migrated_Mongo = 1
+;
+-- returns 9676336
+
+SELECT COUNT(*)
+FROM Encodings
+WHERE migrated_SQL = 1
+AND migrated_Mongo = 1
+;
+-- returns 9465922
+
+-- this implies that 9676336 - 9465922 = 210414 migrated to Mongo but not SQL
+-- and 22089785 - 9465922 = 12623863 migrated to SQL but not Mongo
+-- But I want to verify this, but both of these queries return 0
+
+
+SELECT *
+FROM Encodings
+WHERE migrated_SQL = 1
+AND migrated_Mongo is NULL
+LIMIT 100
+;
+
+
+SELECT *
+FROM Encodings
+WHERE migrated_SQL is NULL
+AND migrated_Mongo = 1
+LIMIT 100
+;
+
+-- so I am confused. What is going on here?
+
+
+CREATE TABLE compare_sql_mongo_results (
+    encoding_id INT NOT NULL,
+    image_id INT NOT NULL,
+    face_landmarks BOOL,
+    body_landmarks BOOL,
+    face_encodings68 BOOL,
+    nlms BOOL,
+    left_hand BOOL,
+    right_hand BOOL,
+    body_world_landmarks BOOL,
+    is_face BOOL,
+    is_body BOOL,
+    PRIMARY KEY (encoding_id, image_id)
+);
+
+/* 
+I have 30M rows in compare_sql_mongo_results.
+None of them have is_face or is_body
+I need to move that data from Encodings to here.
+I need to move all of the is_face and is_body data from Encodings to compare_sql_mongo_results.
+*/
+
+INSERT INTO compare_sql_mongo_results (encoding_id, image_id, is_face, is_body)
+SELECT encoding_id, image_id, is_face, is_body
+FROM Encodings
+WHERE is_face IS NOT NULL OR is_body IS NOT NULL
+AND encoding_id > 1000000
+AND encoding_id < 37318635
+LIMIT 10000000
+ON DUPLICATE KEY UPDATE
+    is_face = VALUES(is_face),
+    is_body = VALUES(is_body)
+;
