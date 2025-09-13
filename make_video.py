@@ -44,7 +44,7 @@ SegmentHelper_name = None
 # SegmentHelper_name = 'SegmentHelper_june2025_nmlGPU300k'
 # SATYAM, this is MM specific
 # for when I'm using files on my SSD vs RAID
-IS_SSD = True
+IS_SSD = False
 #IS_MOVE is in move_toSSD_files.py
 
 # I/O utils
@@ -52,8 +52,9 @@ io = DataIO(IS_SSD)
 db = io.db
 # CSV_FOLDER = os.path.join(io.ROOT_DBx, "body3D_segmentbig_useall256_CSVs_MMtest")
 CSV_FOLDER = os.path.join("/Users/michaelmandiberg/Documents/projects-active/facemap_production/body3D_segmentbig_useall256_CSVs")
+# CSV_FOLDER = os.path.join("/Users/michaelmandiberg/Documents/projects-active/facemap_production/heft_keyword_fusion_clusters")
 # TENCH UNCOMMENT FOR YOUR COMP:
-CSV_FOLDER = os.path.join(io.ROOT_DBx, "body3D_segmentbig_useall256_CSVs_test")
+# CSV_FOLDER = os.path.join(io.ROOT_DBx, "body3D_segmentbig_useall256_CSVs_test")
 
 # CSV_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/body3D_segmentbig_useall256_CSVs"
 # overriding DB for testing
@@ -440,9 +441,13 @@ elif IS_SEGONLY and io.platform == "darwin":
         elif N_TOPICS == 64: 
             ImagesTopics = "ImagesTopics"
             WrapperTopicTable = None
+        elif N_TOPICS == 100:
+            ImagesTopics = "ImagesKeywords"
+            WrapperTopicTable = None
         FROM += f" JOIN {ImagesTopics} it ON s.image_id = it.image_id "
-        WHERE += " AND it.topic_score > .1"
-        SELECT += ", it.topic_score" # add description here, after resegmenting
+        if not N_TOPICS == 100:
+            WHERE += " AND it.topic_score > .1"
+            SELECT += ", it.topic_score" # add description here, after resegmenting
 
     if IS_HAND_POSE_FUSION:
         FROM += f" JOIN Images{CLUSTER_TYPE} ihp ON s.image_id = ihp.image_id "
@@ -2171,7 +2176,7 @@ def main():
                 #Dedupe sorting here!
                 # df_sorted.to_csv(os.path.join(io.ROOT_DBx, f"df_sorted_{cluster_no}_ct{segment_count}_p{pose_no}.csv"), index=False)
                 # df_sorted = df_sorted.head(10)  # Keep only the top entries
-                # df_sorted = sort.remove_duplicates(io.folder_list, df_sorted)
+                df_sorted = sort.remove_duplicates(io.folder_list, df_sorted)
                 sort.image_edge_multiplier = sort.min_max_body_landmarks_for_crop(df_sorted, 0)     
 
                 if CALIBRATING: continue

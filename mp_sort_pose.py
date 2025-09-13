@@ -56,7 +56,7 @@ class SortPose:
         self.BRUTEFORCE = False
         self.use_3D = use_3D
         # print("init use_3D",self.use_3D)
-        self.CUTOFF = 2000 # DOES factor if ONE_SHOT
+        self.CUTOFF = 20 # DOES factor if ONE_SHOT
         self.ORIGIN = 0
         self.this_nose_bridge_dist = self.NOSE_BRIDGE_DIST = None # to be set in first loop, and sort.this_nose_bridge_dist each time
 
@@ -119,7 +119,7 @@ class SortPose:
             self.EXISTING_CROPABLE_DIM = None
             print(f"   XXX ERROR XXX NEED TO SET EXISTING_CROPABLE_DIM for {self.EXPAND_SIZE[0]}")
         self.TARGET_SIZE = (384, 384)  # Size to temporarily resize images for SSIM comparison
-        self.BGCOLOR = [0,0,0]
+        self.BGCOLOR = [255,255,255]
         self.ONE_SHOT = ONE_SHOT
         self.JUMP_SHOT = JUMP_SHOT
         self.SHOT_CLOCK = 0
@@ -1328,13 +1328,15 @@ class SortPose:
         # Apply floor/ceil and the buffer
         lowest_x = math.floor(median_min_x  - padding)
         lowest_y = math.floor(median_min_y - padding)
-        if lowest_y > -2:
-            lowest_y = -2
         highest_x = math.ceil(median_max_x + padding)
         highest_y = math.ceil(median_max_y + padding)
-
+        # set min dims to 2 units
+        lowest_y = min(lowest_y, -2)
+        lowest_x = min(lowest_x, -2)
+        highest_y = max(highest_y, 2)
+        highest_x = max(highest_x, 2)
         # if diff between left and right is less than 2 bboxes, take the bigger one and roll with that.
-        if abs(abs(lowest_x) - abs(highest_x)) <= 2:
+        if abs(lowest_x) != abs(highest_x) and abs(abs(lowest_x) - abs(highest_x)) <= 1:
             if abs(highest_x) > abs(lowest_x):
                 lowest_x = highest_x *-1
             else:
@@ -1389,10 +1391,10 @@ class SortPose:
         # I think that you need to account for the fact that the image has been scaled (before it is expanded)
         # I have returned that float from the resize function and it is available here as resize
         print("auto_edge_crop: resize factor", resize)
-        left = int((image.shape[1]/2) + (bbox_dimensions['horizontal']*x1))
-        top = int((image.shape[0]/2) + (bbox_dimensions['vertical']*y1))
-        right = int((image.shape[1]/2) + (bbox_dimensions['horizontal']*x2))
-        bottom = int((image.shape[0]/2) + (bbox_dimensions['vertical']*y2))
+        left = int((image.shape[1]/2) + (bbox_dimensions['horizontal']*(x1*1.3)))
+        top = int((image.shape[0]/2) + (bbox_dimensions['vertical']*(y1*1.3)))
+        right = int((image.shape[1]/2) + (bbox_dimensions['horizontal']*(x2*1.3)))
+        bottom = int((image.shape[0]/2) + (bbox_dimensions['vertical']*(y2*1.3)))
 
         try:
             cropped = image[top:bottom, left:right]
