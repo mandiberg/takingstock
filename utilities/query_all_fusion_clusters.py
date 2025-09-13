@@ -18,7 +18,10 @@ ROOT = io.ROOT
 NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 #######################################
 
-ROOT_FOLDER_PATH = '/Users/michaelmandiberg/Documents/projects-active/facemap_production/october_fusion_clusters'
+ROOT_FOLDER_PATH = '/Users/michaelmandiberg/Documents/projects-active/facemap_production/heft_keyword_fusion_clusters'
+
+MODE = "Keywords" # Topics or Keywords
+MODE_ID = "topic_id" if MODE == "Topics" else "keyword_id"
 
 # Create engine and session
 engine = create_engine("mysql+pymysql://{user}:{pw}@/{db}?unix_socket={socket}".format(
@@ -28,11 +31,15 @@ engine = create_engine("mysql+pymysql://{user}:{pw}@/{db}?unix_socket={socket}".
 Session = sessionmaker(bind=engine)
 session = Session()
 
+# first 100
+KEYWORDS = [22137, 184, 502, 135, 22411, 1991, 11801, 22101, 273, 220, 2150, 22269, 22233, 5271, 22040, 133, 22324, 23100, 827, 22499, 278, 1070, 13057, 22412, 5728, 404, 444, 22191, 23084, 22333, 2472, 22665, 22042, 420, 553, 1227, 22228, 665, 23403, 671, 16045, 272, 437, 293, 2514, 22222, 22961, 27381, 23029, 2467, 5279, 4265, 1127, 407, 790, 3856, 133680, 1204, 703, 1224, 729, 11549, 737, 6286, 133300, 2151, 807, 1585, 133777, 699, 1644, 2756, 786, 698, 730, 133819, 22692, 2188, 1223, 1807, 10765, 24705, 24593, 22247, 133705, 5310, 24233, 1511, 24511, 1515, 5912, 1277, 7787, 22502, 206, 4115, 24190, 18137, 23163, 763]
+
+# second 100
+KEYWORDS = [232, 22251, 1575, 758, 22600, 424, 410, 1919, 25287, 5516, 2567, 3961, 9940, 22861, 25155, 919, 115, 8911, 818, 1263, 1222, 22617, 6970, 22139, 486, 5115, 22298, 13539, 697, 23512, 24327, 23825, 1073, 22217, 22910, 133822, 22105, 1421, 212, 4589, 133768, 4572, 805, 227, 133724, 13, 295, 24552, 13300, 133816, 5953, 2747, 24041, 1217, 133685, 24472, 514, 292, 22336, 761, 9028, 4361, 433, 223, 696, 13534, 327, 7266, 22851, 11605, 1121, 12472, 25083, 18066, 297, 830, 24399, 3977, 732, 736, 4667, 296, 753, 22628, 22968, 133834, 11203, 8962, 3706, 215, 12572, 5342, 2599, 23853, 5824, 2421, 1772, 6045, 789, 4714]
 # SQL query template
 sql_query_template = """
 SELECT 
     ihp.cluster_id AS ihp_cluster,
-
     SUM(CASE WHEN ihg.cluster_id = 0 THEN 1 ELSE 0 END) AS ihg_0,
     SUM(CASE WHEN ihg.cluster_id = 1 THEN 1 ELSE 0 END) AS ihg_1,
     SUM(CASE WHEN ihg.cluster_id = 2 THEN 1 ELSE 0 END) AS ihg_2,
@@ -161,7 +168,6 @@ SELECT
     SUM(CASE WHEN ihg.cluster_id =  125 THEN 1 ELSE 0 END) AS ihg_125 ,
     SUM(CASE WHEN ihg.cluster_id =  126 THEN 1 ELSE 0 END) AS ihg_126 ,
     SUM(CASE WHEN ihg.cluster_id =  127 THEN 1 ELSE 0 END) AS ihg_127 
-    
 FROM 
     SegmentOct20 so
 JOIN 
@@ -169,29 +175,42 @@ JOIN
 JOIN 
     ImagesHandsGestures ihg ON ihg.image_id = so.image_id
 JOIN 
-    ImagesTopics it ON it.image_id = so.image_id
-WHERE it.topic_id = {topic_id}
-GROUP BY 
+    Images{MODE} it ON it.image_id = so.image_id
+WHERE it.{MODE_ID} = {THIS_MODE_ID}
+GROUP BY
     ihp.cluster_id
 ORDER BY 
     ihp_cluster;
 """
 
-# Loop through each topic_id (0 to 63) and save results to CSV
-for topic_id in range(64):
-    query = sql_query_template.format(topic_id=topic_id)
-
-    print(f"about to query for topic_id {topic_id}")
+def save_query_results_to_csv(query, topic_id):
+    print(f"about to query for {MODE} {topic_id}")
 
     # Execute query and fetch data into a DataFrame
     df = pd.read_sql(query, engine)
     
     # Define file name for the CSV
-    csv_file_path = f"{ROOT_FOLDER_PATH}/topic_{topic_id}.csv"
+    csv_file_path = f"{ROOT_FOLDER_PATH}/{MODE}_{topic_id}.csv"
     
     # Save to CSV
     df.to_csv(csv_file_path, index=False)
-    print(f"Saved results for topic_id {topic_id} to {csv_file_path}")
+    print(f"Saved results for {MODE} {topic_id} to {csv_file_path}")
+
+
+# Adjust the query template based on MODE
+if MODE == "Keywords":
+    # Loop through each keyword_id and save results to CSV
+    for keyword_id in KEYWORDS:
+        sql_query_template = sql_query_template.replace("{MODE}", MODE).replace("{MODE_ID}", MODE_ID).replace("{THIS_MODE_ID}", str(keyword_id))
+        # print(sql_query_template)
+        query = sql_query_template.format(keyword_id=keyword_id)
+        save_query_results_to_csv(query, keyword_id)
+elif MODE == "Topics":
+    # Loop through each topic_id (0 to 63) and save results to CSV
+    for topic_id in range(64):
+        sql_query_template = sql_query_template.replace("{MODE}", MODE).replace("{MODE_ID}", MODE_ID).replace("{THIS_MODE_ID}", str(topic_id))
+        query = sql_query_template.format(topic_id=topic_id)
+        save_query_results_to_csv(query, topic_id)
 
 # Close the session
 session.close()

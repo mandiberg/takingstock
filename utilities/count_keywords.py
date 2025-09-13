@@ -2,49 +2,28 @@ import csv
 import re
 import os
 from collections import Counter
+import pandas as pd
 
-FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/alamyCSV"
-# FOLDER = "/Users/michaelmandiberg/Library/CloudStorage/Dropbox/takingstock_dropbox/INDIA-PB"
-# FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/ImagesBazzar"
-# FOLDER = "/Users/michaelmandiberg/Downloads/pixcy_v2"
-# FOLDER = "/Users/michaelmandiberg/Library/CloudStorage/Dropbox/takingstock_dropbox/PIXERF"
-# FOLDER = "/Users/michaelmandiberg/Library/CloudStorage/Dropbox/takingstock_dropbox/iwaria"
-# FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/nappy_v3_w-data"
-# FOLDER = "/Users/michaelmandiberg/Library/CloudStorage/Dropbox/takingstock_dropbox/PICHA-STOCK"
-# FOLDER = "/Users/michaelmandiberg/Library/CloudStorage/Dropbox/takingstock_dropbox/AFRIPICS"
-FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/VCG2/"
-
-
-# input_file = '/Users/michaelmandiberg/Documents/projects-active/facemap_production/ImagesBazzar/CSV_NOKEYS.csv'
-# output_file = '/Users/michaelmandiberg/Documents/projects-active/facemap_production/ImagesBazzar/CSV_NOKEYSunique.csv'
-
-# input_file = '/Users/michaelmandiberg/Library/CloudStorage/Dropbox/takingstock_dropbox/INDIA-PB/CSV_NOKEYS.csv'
-# output_file = '/Users/michaelmandiberg/Library/CloudStorage/Dropbox/takingstock_dropbox/INDIA-PB/CSV_NOKEYSunique.csv'
-
-input_file = os.path.join(FOLDER,'CSV_NOKEYS.csv')
+FOLDER = "/Users/michaelmandiberg/Documents/GitHub/facemap/utilities/keys/"
+KEYS = os.path.join(FOLDER,'ImagesKeywords_Keywords_SegmentOct20_202509121921.csv')
+NOUNS = os.path.join(FOLDER,'objects1000.csv')
 output_file = os.path.join(FOLDER,'CSV_NOKEYSunique.csv')
 
-# Read the CSV file and extract the second column
-keywords = []
-with open(input_file, 'r', newline='', encoding='utf-8') as f:
+# read the nouns into a set for quick lookup
+nouns_set = set()
+with open(NOUNS, 'r', newline='', encoding='utf-8') as f:
     reader = csv.reader(f)
     for row in reader:
-        if len(row) >= 2:  # Make sure the row has at least two columns
-            keyword = row[1].strip()  # Remove leading/trailing whitespaces
-            # Exclude keywords that are only numbers or start with "y\d"
-            if not (keyword.isdigit() or re.match(r'^y\d', keyword)):
-                keywords.append(keyword)
+        if row:
+            noun = row[0].strip()  # Remove leading/trailing whitespaces
+            nouns_set.add(noun) # Add noun to the set
 
-# Count the occurrences of each valid keyword
-keyword_counts = Counter(keywords)
+# open the CSV file into a df
+df = pd.read_csv(KEYS, dtype=str)
 
-# Sort the keyword counts in descending order
-sorted_keyword_counts = sorted(keyword_counts.items(), key=lambda x: x[1], reverse=True)
+df_nouns = df[df['keyword_text'].isin(nouns_set)]
+df_non_nouns = df[~df['keyword_text'].isin(nouns_set)]
 
-# Write the sorted results to a new CSV file
-with open(output_file, 'w', newline='', encoding='utf-8') as f:
-    writer = csv.writer(f)
-    writer.writerow(['Count', 'Keyword'])  # Write the header row
-    for keyword, count in sorted_keyword_counts:
-        print(count, keyword)
-        writer.writerow([count, keyword])
+# save both to the FOLDER
+df_nouns.to_csv(os.path.join(FOLDER,'CSV_NOUNS.csv'), index=False)
+df_non_nouns.to_csv(os.path.join(FOLDER,'CSV_NOT_NOUNS.csv'), index=False)

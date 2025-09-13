@@ -224,10 +224,56 @@ INSERT INTO compare_sql_mongo_results (encoding_id, image_id, is_face, is_body)
 SELECT encoding_id, image_id, is_face, is_body
 FROM Encodings
 WHERE is_face IS NOT NULL OR is_body IS NOT NULL
-AND encoding_id > 1000000
+AND encoding_id > 9000000
 AND encoding_id < 37318635
-LIMIT 10000000
 ON DUPLICATE KEY UPDATE
     is_face = VALUES(is_face),
     is_body = VALUES(is_body)
 ;
+
+-- select count of each BOOL column in compare_sql_mongo_results that is TRUE
+SELECT 
+    SUM(CASE WHEN face_landmarks = 1 THEN 1 ELSE 0 END) AS face_landmarks_true,
+    SUM(CASE WHEN body_landmarks = 1 THEN 1 ELSE 0 END) AS body_landmarks_true,
+    SUM(CASE WHEN face_encodings68 = 1 THEN 1 ELSE 0 END) AS face_encodings68_true,
+    SUM(CASE WHEN nlms = 1 THEN 1 ELSE 0 END) AS nlms_true,
+    SUM(CASE WHEN left_hand = 1 THEN 1 ELSE 0 END) AS left_hand_true,
+    SUM(CASE WHEN right_hand = 1 THEN 1 ELSE 0 END) AS right_hand_true,
+    SUM(CASE WHEN body_world_landmarks = 1 THEN 1 ELSE 0 END) AS body_world_landmarks_true,
+    SUM(CASE WHEN is_face = 1 THEN 1 ELSE 0 END) AS is_face_true,
+    SUM(CASE WHEN is_body = 1 THEN 1 ELSE 0 END) AS is_body_true
+FROM compare_sql_mongo_results
+;
+
+
+-- select count of each BOOL column in compare_sql_mongo_results that is FALSE  
+SELECT 
+    SUM(CASE WHEN face_landmarks = 0 THEN 1 ELSE 0 END) AS face_landmarks_false,
+    SUM(CASE WHEN body_landmarks = 0 THEN 1 ELSE 0 END) AS body_landmarks_false,
+    SUM(CASE WHEN face_encodings68 = 0 THEN 1 ELSE 0 END) AS face_encodings68_false,
+    SUM(CASE WHEN nlms = 0 THEN 1 ELSE 0 END) AS nlms_false,
+    SUM(CASE WHEN left_hand = 0 THEN 1 ELSE 0 END) AS left_hand_false,
+    SUM(CASE WHEN right_hand = 0 THEN 1 ELSE 0 END) AS right_hand_false,
+    SUM(CASE WHEN body_world_landmarks = 0 THEN 1 ELSE 0 END) AS body_world_landmarks_false,
+    SUM(CASE WHEN is_face = 0 THEN 1 ELSE 0 END) AS is_face_false,
+    SUM(CASE WHEN is_body = 0 THEN 1 ELSE 0 END) AS is_body_false
+FROM compare_sql_mongo_results
+WHERE is_face = 1
+AND is_body = 1
+;
+
+
+SELECT *
+FROM Encodings e
+JOIN compare_sql_mongo_results c
+ON e.encoding_id = c.encoding_id
+WHERE c.face_encodings68 =0 
+AND c.is_face = 1
+AND e.two_noses IS NULL
+AND e.is_small IS NULL
+LIMIT 100
+;
+
+-- I need to delete from compareresults where two noses and is small are 1
+
+
