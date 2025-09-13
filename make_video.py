@@ -44,7 +44,7 @@ SegmentHelper_name = None
 # SegmentHelper_name = 'SegmentHelper_june2025_nmlGPU300k'
 # SATYAM, this is MM specific
 # for when I'm using files on my SSD vs RAID
-IS_SSD = True
+IS_SSD = False
 #IS_MOVE is in move_toSSD_files.py
 
 # I/O utils
@@ -71,6 +71,9 @@ CURRENT_MODE = MODES[MODE_CHOICE]
 
 # set defaults, including for all modes to False
 FULL_BODY = IS_HAND_POSE_FUSION = ONLY_ONE = GENERATE_FUSION_PAIRS = IS_CLUSTER = IS_ONE_CLUSTER = USE_POSE_CROP_DICT = IS_TOPICS= IS_ONE_TOPIC = USE_AFFECT_GROUPS = False
+EXPAND = ONE_SHOT = JUMP_SHOT = USE_ALL = False
+USE_PAINTED = OUTPAINT = INPAINT= False
+image_edge_multiplier = None
 N_TOPICS = 64 # changing this to 14 triggers the affect topic fusion, 100 is keywords. 64 is default
 if CURRENT_MODE == 'paris_photo_torso_images_topics':
     # controls which type of sorting/column sorted on
@@ -84,6 +87,16 @@ elif CURRENT_MODE == 'paris_photo_torso_videos_topics':
     # this control whether sorting by topics
     # IS_TOPICS = True # if using Clusters only, must set this to False
 
+    JUMP_SHOT = True # jump to random file if can't find a run (I don't think this applies to planar?)
+
+    # initializing default square crop
+    # if this is defined, then it will not call min_max_body_landmarks_for_crop
+    image_edge_multiplier = [1.3,1.85,2.4,1.85] # tighter square crop for paris photo videos < Oct 29 FINAL VERSION NOV 2024 DO NOT CHANGE
+
+    USE_PAINTED = False
+    INPAINT= True
+    INPAINT_COLOR = None # "white" or "black" or None (none means generative inpainting with size limits)
+
     # when doing IS_HAND_POSE_FUSION code currently only supports one topic at a time
     IS_ONE_TOPIC = True
     TOPIC_NO = [32] # if doing an affect topic fusion, this is the wrapper topic
@@ -93,6 +106,12 @@ elif CURRENT_MODE == '3D_bodies_topics':
     FULL_BODY = True # this requires is_feet
     ONLY_ONE = False # only one cluster, or False for video fusion, this_cluster = [CLUSTER_NO, HAND_POSE_NO]
     USE_POSE_CROP_DICT = True
+
+    ONE_SHOT = True # take all files, based off the very first sort order.
+    EXPAND = True # expand with white for prints, as opposed to inpaint and crop. (not video, which is controlled by INPAINT_COLOR) 
+    USE_ALL = True # this is for outputting all images from a oneshot, forces ONE_SHOT, skips face comparison
+
+    INPAINT_COLOR = "white" # "white" or "black" or None (none means generative inpainting with size limits)
 
     IS_CLUSTER = False
     # this is for IS_ONE_CLUSTER to only run on a specific CLUSTER_NO
@@ -184,24 +203,21 @@ HAND_POSE_NO = 0
 # cut the kids
 NO_KIDS = True
 ONLY_KIDS = False
-USE_PAINTED = True
-OUTPAINT = False
-INPAINT= True
-INPAINT_COLOR = "white" # "white" or "black" or None (none means generative inpainting with size limits)
+
+# in/out paint constants
 INPAINT_MAX_SHOULDERS = {"top":.4,"right":.15,"bottom":.2,"left":.15}
 # if INPAINT_COLOR: INPAINT_MAX_SHOULDERS = INPAINT_MAX = {"top":3.4,"right":3.4,"bottom":3.075,"left":3.4}
 if INPAINT_COLOR: INPAINT_MAX_SHOULDERS = INPAINT_MAX = {"top":10,"right":10,"bottom":10,"left":10}
 else: INPAINT_MAX = {"top":.4,"right":.4,"bottom":.075,"left":.4}
 OUTPAINT_MAX = {"top":.7,"right":.7,"bottom":.2,"left":.7}
-
 BLUR_THRESH_MAX={"top":50,"right":100,"bottom":10,"left":100}
 BLUR_THRESH_MIN={"top":0,"right":20,"bottom":10,"left":20}
-
 BLUR_RADIUS = 1  ##computationally more expensive
 BLUR_RADIUS = io.oddify(BLUR_RADIUS)
-
 MASK_OFFSET = [50,50,50,50]
 if OUTPAINT: from outpainting_modular import outpaint, image_resize
+
+# process stuff
 VERBOSE = True
 CALIBRATING = False
 SAVE_IMG_PROCESS = False
@@ -225,10 +241,6 @@ IS_ANGLE_SORT = False
 # 7 is surprise
 #  is yoga << planar,  planar,  fingers crossed
 
-ONE_SHOT = True # take all files, based off the very first sort order.
-EXPAND = True # expand with white for prints, as opposed to inpaint and crop. (not video, which is controlled by INPAINT_COLOR) 
-JUMP_SHOT = True # jump to random file if can't find a run (I don't think this applies to planar?)
-USE_ALL = True # this is for outputting all images from a oneshot, forces ONE_SHOT, skips face comparison
 DRAW_TEST_LMS = False # this is for testing the landmarks
 
 if SORT_TYPE == "planar_hands" and USE_ALL:
@@ -668,8 +680,6 @@ multiplier_list = [
     [1.3,1.85,2.4,1.85], # 11 -- placeholder to test if SQ
     [1.5,3.75,3.5,3.75], # 12 extra wide 2x3 landscape (shruggie "why" pose)
 ]
-# initializing default square crop
-image_edge_multiplier = [1.3,1.85,2.4,1.85] # tighter square crop for paris photo videos < Oct 29 FINAL VERSION NOV 2024 DO NOT CHANGE
 # image_edge_multiplier = [1,1,1,1]
     # image_edge_multiplier = [1.4,2.6,1.9,2.6] # wider for hands (2023 finger point)
 # image_edge_multiplier = [1.4,3.5,5.6,3.5] # yoga square crop for April 2025 videos < 
@@ -1257,14 +1267,23 @@ def prep_encodings_NN(df_segment):
 
     return df_segment
 
+def compare_images(last_image, img, face_landmarks_or_df, bbox_or_index):
+    # for some reason the function is called with either a df and index, or face_landmarks and bbox
+    # rw to handle both here. 
+    if isinstance(face_landmarks_or_df, pd.DataFrame):
+        df_sorted = face_landmarks_or_df
+        index = bbox_or_index
+        face_landmarks, bbox = df_sorted.iloc[index]['face_landmarks'], df_sorted.iloc[index]['bbox']
+    else:
+        face_landmarks = face_landmarks_or_df
+        bbox = bbox_or_index
 
-def compare_images(last_image, img, df_sorted, index):
-    face_landmarks, bbox = df_sorted.iloc[index]['face_landmarks'], df_sorted.iloc[index]['bbox']
     is_face = None
     face_diff = 100 # declaring full value, for first round
     skip_face = False
     #crop image here:
     
+    print(f". ---  compare_images for {SORT_TYPE} with EXPAND {sort.EXPAND} and FULL_BODY {FULL_BODY} and self.image_edge_multiplier {sort.image_edge_multiplier}")
     # this is where the image gets cropped or expanded
     if sort.EXPAND:
         cropped_image, resize = sort.expand_image(img, face_landmarks, bbox)
@@ -2203,6 +2222,8 @@ def main():
                     cluster_no = part.split("c")[1]
             return segment_count, pose_no, topic_no, cluster_no
 
+        sort.set_output_dims()
+
         cluster_no = pose_no = segment_count = this_topic = None
         # list the files in the the CSV_FOLDER
         files_in_folder = os.listdir(CSV_FOLDER)
@@ -2234,7 +2255,8 @@ def main():
                 # df_sorted.to_csv(os.path.join(io.ROOT_DBx, f"df_sorted_{cluster_no}_ct{segment_count}_p{pose_no}.csv"), index=False)
                 # df_sorted = df_sorted.head(10)  # Keep only the top entries
                 df_sorted = sort.remove_duplicates(io.folder_list, df_sorted)
-                sort.image_edge_multiplier = sort.min_max_body_landmarks_for_crop(df_sorted, 0)     
+                if image_edge_multiplier is None:
+                    sort.image_edge_multiplier = sort.min_max_body_landmarks_for_crop(df_sorted, 0)     
 
                 if CALIBRATING: continue
                 linear_test_df(df_sorted)

@@ -1269,7 +1269,7 @@ class SortPose:
         """
         prepares the body landmarks for crop.
         """
-        print("crop_prep: enc1 before", enc1)
+        # print("crop_prep: enc1 before", enc1)
         # enc1 is a list of landmark dicts or objects with x, y, visibility
         # Handle both list of landmarks and NormalizedLandmarkList
         if hasattr(enc1, 'landmark'):
@@ -1288,7 +1288,7 @@ class SortPose:
                 if getattr(lms, 'visibility', 0) < 0.9:
                     lms.x = 0
                     lms.y = 0
-        print("crop_prep: enc1 after", enc1)
+        # print("crop_prep: enc1 after", enc1)
         return enc1
 
 
@@ -1900,7 +1900,7 @@ class SortPose:
 
         return is_consistent
 
-    def prepare_mask(self,image,extension_pixels,color):
+    def prepare_mask(self,image,extension_pixels,color=None):
         if self.VERBOSE:print("starting mask preparation")
         height, width = image.shape[:2]
         top, bottom, left, right = extension_pixels["top"], extension_pixels["bottom"], extension_pixels["left"],extension_pixels["right"] 
@@ -1908,9 +1908,10 @@ class SortPose:
             print("color is white")
             extended_img = np.ones((height + top+bottom, width+left+right, 3), dtype=np.uint8) * 255
 
-        if color == "black":
-            print("color is black")
+        else:
+            print("color is black or None: ", color)
             extended_img = np.zeros((height + top+bottom, width+left+right, 3), dtype=np.uint8)
+
         extended_img[top:height+top, left:width+left,:] = image
 
         # main mask
@@ -2351,7 +2352,7 @@ class SortPose:
         Lms1d = []
         Lms1d3 = []
 
-        if self.VERBOSE: print(type(Lms))
+        # if self.VERBOSE: print(type(Lms))
         if type(Lms) is list and len(Lms) > 0 and isinstance(Lms[0], (list, tuple)) and len(Lms[0]) == 3:
             print("lms is a list of xyz lists")
             for idx, lm in enumerate(Lms):
@@ -2616,7 +2617,7 @@ class SortPose:
         if enc1 is list or enc1 is tuple or enc1 == "list":
             landmarks = self.SUBSET_LANDMARKS
         else:
-            if self.VERBOSE: print("prep_enc enc1 is NormalizedLandmarkList, so devolving SUBSET")
+            # if self.VERBOSE: print("prep_enc enc1 is NormalizedLandmarkList, so devolving SUBSET")
             # devolve the x y landmarks back to index
             landmarks = []
             # take the even landmarks and divide by 2
@@ -2668,7 +2669,7 @@ class SortPose:
         # enc_angles_list = angles_pointers + angles_thumbs + body + visibility
         # enc_angles_list =  values 
         enc1 = np.array(values)
-        if self.VERBOSE: print("enc1++ final np array", enc1)
+        # if self.VERBOSE: print("enc1++ final np array", enc1)
         return enc1
     
 
@@ -3623,8 +3624,8 @@ class SortPose:
             # First, try to parse as protobuf text format
             lms_obj = landmark_pb2.NormalizedLandmarkList()
             text_format.Parse(s, lms_obj)
-            if self.VERBOSE:
-                print("Parsed as protobuf text format successfully.")
+            # if self.VERBOSE:
+            #     print("Parsed as protobuf text format successfully.")
             return lms_obj
         except Exception as e1:
             print(f"Failed to parse as protobuf text format: {e1}")
