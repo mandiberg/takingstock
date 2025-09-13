@@ -7,6 +7,7 @@ import cv2
 import pandas as pd
 import mediapipe as mp
 from mediapipe.framework.formats import landmark_pb2
+from google.protobuf import text_format
 import hashlib
 import time
 import json
@@ -56,7 +57,7 @@ class SortPose:
         self.BRUTEFORCE = False
         self.use_3D = use_3D
         # print("init use_3D",self.use_3D)
-        self.CUTOFF = 20 # DOES factor if ONE_SHOT
+        self.CUTOFF = 2000 # DOES factor if ONE_SHOT
         self.ORIGIN = 0
         self.this_nose_bridge_dist = self.NOSE_BRIDGE_DIST = None # to be set in first loop, and sort.this_nose_bridge_dist each time
 
@@ -1335,17 +1336,19 @@ class SortPose:
         lowest_x = min(lowest_x, -2)
         highest_y = max(highest_y, 2)
         highest_x = max(highest_x, 2)
-        # if diff between left and right is less than 2 bboxes, take the bigger one and roll with that.
+        # if diff between left and right is less/equal to 1 bboxes, take the bigger one and roll with that.
         if abs(lowest_x) != abs(highest_x) and abs(abs(lowest_x) - abs(highest_x)) <= 1:
             if abs(highest_x) > abs(lowest_x):
                 lowest_x = highest_x *-1
             else:
                 highest_x = abs(lowest_x)
             if self.VERBOSE: print(f"min_max_body_landmarks_for_crop: diff between abs min_x and abs max_x less than 2, changing them to {highest_x}")
-           
 
-        #for left right if the diff is less than 2 take abs and match
-
+        # if the ratio of height to width is greater than 2, make it a 3:2 by expanding the width
+        if abs(highest_y - lowest_y) / abs(highest_x - lowest_x) > 2:
+            # height is much larger than width, make width match height
+            highest_x = math.floor(highest_y * 3 / 2)
+            lowest_x = math.ceil(lowest_x * 3 / 2)
         if self.VERBOSE: print(f"min_max_body_landmarks_for_crop: {lowest_x},{lowest_y},{highest_x},{highest_y}")
         return [lowest_x, lowest_y, highest_x, highest_y]
 
@@ -3600,3 +3603,58 @@ class SortPose:
         else:
             print(f"Image dimensions do not match expected: {height}x{width}")
             return None
+
+    def str_to_landmarks(self, s):
+        """
+        Convert string representation of MediaPipe landmarks back to NormalizedLandmarkList object.
+        Handles both protobuf text format and JSON-like string formats.
+        """
+        
+        # Handle case where s is already a NormalizedLandmarkList object
+        if hasattr(s, 'landmark'):
+            return s
+        
+        # Handle case where s is not a string
+        if not isinstance(s, str):
+            print(f" ERROR Input is not a string: {type(s)}")
+            return None
+        
+        try:
+            # First, try to parse as protobuf text format
+            lms_obj = landmark_pb2.NormalizedLandmarkList()
+            text_format.Parse(s, lms_obj)
+            if self.VERBOSE:
+                print("Parsed as protobuf text format successfully.")
+            return lms_obj
+        except Exception as e1:
+            print(f"Failed to parse as protobuf text format: {e1}")
+            
+            try:
+                # Fallback: try to parse as JSON/dict format
+                lms_list = ast.literal_eval(s)
+                if not isinstance(lms_list, list):
+                    return None
+                    
+                lms_obj = landmark_pb2.NormalizedLandmarkList()
+                for lm in lms_list:
+                    if isinstance(lm, dict):
+                        l = landmark_pb2.NormalizedLandmark(
+                            x=lm.get("x", 0.0),
+                            y=lm.get("y", 0.0),
+                            z=lm.get("z", 0.0),
+                            visibility=lm.get("visibility", 0.0),
+                        )
+                    elif isinstance(lm, (list, tuple)) and len(lm) >= 3:
+                        l = landmark_pb2.NormalizedLandmark(
+                            x=lm[0], y=lm[1], z=lm[2],
+                            visibility=lm[3] if len(lm) > 3 else 0.0,
+                        )
+                    else:
+                        print(f"Invalid landmark format: {lm}")
+                        continue
+                    lms_obj.landmark.append(l)
+                return lms_obj
+                
+            except Exception as e2:
+                print(f"Failed to parse as JSON format: {e2}")
+                return None
