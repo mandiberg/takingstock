@@ -44,7 +44,7 @@ SegmentHelper_name = None
 # SegmentHelper_name = 'SegmentHelper_june2025_nmlGPU300k'
 # SATYAM, this is MM specific
 # for when I'm using files on my SSD vs RAID
-IS_SSD = False
+IS_SSD = True
 #IS_MOVE is in move_toSSD_files.py
 
 # I/O utils
@@ -53,7 +53,7 @@ db = io.db
 # CSV_FOLDER = os.path.join(io.ROOT_DBx, "body3D_segmentbig_useall256_CSVs_MMtest")
 CSV_FOLDER = os.path.join("/Users/michaelmandiberg/Documents/projects-active/facemap_production/body3D_segmentbig_useall256_CSVs")
 # TENCH UNCOMMENT FOR YOUR COMP:
-# CSV_FOLDER = os.path.join(io.ROOT_DBx, "body3D_segmentbig_useall256_CSVs_test")
+CSV_FOLDER = os.path.join(io.ROOT_DBx, "body3D_segmentbig_useall256_CSVs_test")
 
 # CSV_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/body3D_segmentbig_useall256_CSVs"
 # overriding DB for testing
@@ -1228,7 +1228,7 @@ def compare_images(last_image, img, df_sorted, index):
         cropped_image, resize = sort.expand_image(img, face_landmarks, bbox)
         
         if FULL_BODY: 
-
+            # print('running')
             cropped_image = sort.auto_edge_crop(df_sorted, index, cropped_image, resize)
         else:   
             # cropp the 25K image back down to 10K
@@ -1270,9 +1270,11 @@ def compare_images(last_image, img, df_sorted, index):
                     # use cv2 to place last_image and cropped_image side by side in a new image
 
                     # I'm not 100% sure what this is doing, given that this is the FAIL loop
-                    height = max(last_image.shape[0], cropped_image.shape[0])
-                    last_image = cv2.resize(last_image, (last_image.shape[1], height))
-                    cropped_image = cv2.resize(cropped_image, (cropped_image.shape[1], height))
+
+                    #Tench commented out 09.07.25 due to auto_edge_crop incompatability 
+                    # height = max(last_image.shape[0], cropped_image.shape[0])
+                    # last_image = cv2.resize(last_image, (last_image.shape[1], height))
+                    # cropped_image = cv2.resize(cropped_image, (cropped_image.shape[1], height))
                     # #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@#
                     # # Concatenate images horizontally
                     # combined_image = cv2.hconcat([last_image, cropped_image])
@@ -2169,8 +2171,8 @@ def main():
                 #Dedupe sorting here!
                 # df_sorted.to_csv(os.path.join(io.ROOT_DBx, f"df_sorted_{cluster_no}_ct{segment_count}_p{pose_no}.csv"), index=False)
                 # df_sorted = df_sorted.head(10)  # Keep only the top entries
-                df_sorted = sort.remove_duplicates(io.folder_list, df_sorted)
-                sort.image_edge_multiplier = sort.min_max_body_landmarks_for_crop(df_sorted)     
+                # df_sorted = sort.remove_duplicates(io.folder_list, df_sorted)
+                sort.image_edge_multiplier = sort.min_max_body_landmarks_for_crop(df_sorted, 0)     
 
                 if CALIBRATING: continue
                 linear_test_df(df_sorted,segment_count,cluster_no)
@@ -2259,4 +2261,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
