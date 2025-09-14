@@ -25,6 +25,7 @@ CURRENT_MODE = MODES[MODE_CHOICE]
 # iterate through folders? 
 IS_CLUSTER = False
 
+LOOPING = False # defaults
 if "merge_images" in CURRENT_MODE:
 # are we making videos or making merged stills?
     IS_VIDEO = False
@@ -46,9 +47,10 @@ elif "make_video" in CURRENT_MODE:
     START_MERGE = 1 # number of images merged into the first image. Can be 1 (no merges) or >1 (two or more images merged)
 
     if "keyword_fusion" in CURRENT_MODE:
+        LOOPING = True
         PERIOD = 30 # how many images in each merge cycle
         MERGE_COUNT = 10 # largest number of merged images 
-        START_MERGE = 1 # number of images merged into the first image. Can be 1 (no merges) or >1 (two or more images merged)
+        START_MERGE = 0 # number of images merged into the first image. Can be 1 (no merges) or >1 (two or more images merged)
 
 # import moviepy only if making videos
 if IS_VIDEO:
@@ -87,7 +89,7 @@ ROOT_FOLDER_PATH = '/Volumes/OWC4/images_to_assemble'
 # will not accept clusterNone -- change to cluster00
 FOLDER_NAME = "256_crop_test_20ct"
 FOLDER_PATH = os.path.join(ROOT_FOLDER_PATH,FOLDER_NAME)
-FOLDER_PATH = "/Volumes/OWC4/segment_images/clustercc11_p127_tNone_1757857265.346438" # temp override for testing
+FOLDER_PATH = "/Volumes/OWC4/segment_images/clustercc16_p21_tNone_1757879430.pink" # temp override for testing
 DIRS = ["1x1", "4x3", "16x10"]
 OUTPUT = os.path.join(io.ROOTSSD, "audioproduction")
 # Extract the topic number from the folder name
@@ -382,15 +384,52 @@ def crop_images(img_array, subfolder_path=None):
                 cv2.imwrite(os.path.join(dir_path, filename), crop_img)
             else:
                 print("no image found at", image_path)
-        write_video(io.get_img_list(dir_path), FRAMERATE, dir_path)
+        write_video(io.get_img_list(dir_path), dir_path)
 
-        
-def process_images(images_to_build, video_writer, total_images, current_pos=0, merge_count=MERGE_COUNT):
-    if total_images - current_pos < PERIOD:
+def shift_video_frames(video_path):
+    # I want to start the video at the MERGE_COUNT frame, so that it starts with the fully merged image
+    # and add the removed frames to the end of the video
+    print("reordering video frames to start at MERGE_COUNT frame")
+    # get dimensions of video
+    cap = cv2.VideoCapture(video_path)
+    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+    cap.release()
+    temp_video_path = video_path.replace(".mp4", "_temp.mp4")
+    temp_video_writer = cv2.VideoWriter(temp_video_path, fourcc, FRAMERATE, (width, height))
+    
+    cap = cv2.VideoCapture(video_path)
+    frames = []
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
+        frames.append(frame)
+    cap.release()
+    
+    # Write frames starting from MERGE_COUNT to end
+    for i in range(MERGE_COUNT - 1, len(frames)):
+        temp_video_writer.write(frames[i])
+    # Then write frames from start to MERGE_COUNT - 1
+    for i in range(0, MERGE_COUNT - 1):
+        temp_video_writer.write(frames[i])
+    
+    temp_video_writer.release()
+    
+    # Replace original video with reordered video
+    os.remove(video_path)
+    os.rename(temp_video_path, video_path)
+    print("reordered video saved")
+                
+def process_images(images_to_build, video_writer, total_images, period, current_pos=0, merge_count=MERGE_COUNT):
+    if total_images - current_pos < period:
         this_period = total_images - current_pos
-        print(f"adjusting this_period to {this_period} because {total_images} - {current_pos} < {PERIOD}")
+        last_cycle = True
+        print(f"adjusting this_period to {this_period} because {total_images} - {current_pos} < {period}")
     else:
-        this_period = PERIOD
+        this_period = period
+        last_cycle = False
     # Phase 1: Increase merge count from START_MERGE to merge_count
     # video_writer.write(images_to_build[current_pos])
     for i in range(START_MERGE, merge_count + 1):
@@ -402,10 +441,10 @@ def process_images(images_to_build, video_writer, total_images, current_pos=0, m
         print("merged starting img {current_pos+i}", current_pos+i, "len images_to_build", len(images_to_build), merge_count)
 
     # if the remaining images are greater than merge_count, then write the middle even section
-    if total_images - (current_pos + i) > merge_count:
+    if total_images - (current_pos) > merge_count:
         print(f"going to write the middle even section because {total_images} - ({current_pos} + {i}) > {merge_count}")
         # Phase 2: Slide through the array maintaining merge_count images merged
-        for i in range(1, this_period - merge_count + 1):
+        for i in range(merge_count + 1, this_period - merge_count + 1):
             # Load and merge images from current_pos + i to current_pos + i + merge_count
             merged_img = merge_images_numpy(images_to_build[current_pos + i:current_pos + i + merge_count])
             if merged_img is not None: video_writer.write(merged_img)
@@ -417,25 +456,50 @@ def process_images(images_to_build, video_writer, total_images, current_pos=0, m
     # Phase 3: Decrease merge count back to START_MERGE
     # not subtracting 1 from start_merge to not include the final image
     # adding 1 to PERIOD to include the first image of the next cycle
-    for i in range(merge_count - 1, START_MERGE , -1):
+
+    # this range statement means start at first one, go to second and decrease by 1 to get there
+    for i in range(merge_count, START_MERGE , -1):
         # Load and merge images from PERIOD - i to PERIOD
         end_idx = min(current_pos + this_period + 1, total_images)
         start_idx = end_idx - i
         # if i % 2 == 0:
         merged_img = merge_images_numpy(images_to_build[start_idx:end_idx])
         print(i, "{current_pos+i}", current_pos+i, "start_idx", start_idx, "end_idx", end_idx, "len images_to_build", len(images_to_build), merge_count)
-        if this_period != PERIOD and i >= 3:
+        print(f"last_cycle is {last_cycle}, i is {i}")
+        # if last_cycle is not True :
+        if i >= 3:
+            print("writing descending image")
+            # if it isn't the last cycle, do the regular write
             if merged_img is not None: video_writer.write(merged_img)
+        # elif last_cycle is True and i >= 3:
         else:
             print("skipping last image to avoid duplicate of first image")
 
+def calculate_period(images_to_build):
+    image_count = len(images_to_build)
+    clean_reps = image_count // PERIOD
+    leftover = image_count - clean_reps * PERIOD
+    diff = leftover/clean_reps
+    print("image_count", image_count, "clean_reps", clean_reps, "leftover", leftover, "diff", diff)
+    if PERIOD - leftover > PERIOD / 2:
+        # eg. 25 leftover, shrink period to come out even
+        calculated_period = math.floor(PERIOD - diff)
+    else:
+        # eg. 15 leftover, expand period to come out even
+        calculated_period = math.ceil(PERIOD + diff)
+    return calculated_period
 
-def write_video(img_array, FRAMERATE=15, subfolder_path=None):
+def write_video(img_array, subfolder_path=None):
     img_array = [img for img in img_array if img.endswith(".jpg")]
     if IS_VIDEO_MERGE: img_array.append(img_array[0]) # add the first image to the end to make a loop
     images_to_build = load_images(img_array, subfolder_path)
     # print("img_array", img_array)
     print("len images_to_build", len(images_to_build))
+    if LOOPING:
+        period = calculate_period(images_to_build)
+    else:
+        period = PERIOD
+    print("using period of", period)
     # Get the dimensions of the first image in the array
     cluster_no, image_path = get_path(subfolder_path, img_array)
     img = cv2.imread(image_path)
@@ -443,7 +507,7 @@ def write_video(img_array, FRAMERATE=15, subfolder_path=None):
 
     # Define the codec and create VideoWriter object
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-    if IS_VIDEO_MERGE: merge_info = f"_p{PERIOD}_st{START_MERGE}_ct{MERGE_COUNT}"
+    if IS_VIDEO_MERGE: merge_info = f"_p{period}_st{START_MERGE}_ct{MERGE_COUNT}"
     else: merge_info = ""
     video_path = os.path.join(FOLDER_PATH, FOLDER_NAME.replace("/","_")+cluster_no+merge_info+".mp4")
     print("video_path", video_path)
@@ -455,22 +519,22 @@ def write_video(img_array, FRAMERATE=15, subfolder_path=None):
         total_images = len(img_array)
         
         # Calculate images_per_cycle and check if MERGE_COUNT needs adjustment
-        images_per_cycle = PERIOD + (MERGE_COUNT - START_MERGE * 2)
+        images_per_cycle = period + (MERGE_COUNT - START_MERGE * 2)
         if images_per_cycle < MERGE_COUNT * 2:
             adjusted_merge_count = images_per_cycle // 2
-            print(f"Warning: Adjusting MERGE_COUNT from {MERGE_COUNT} to {adjusted_merge_count} based on PERIOD and START_MERGE")
+            print(f"Warning: Adjusting MERGE_COUNT from {MERGE_COUNT} to {adjusted_merge_count} based on period and START_MERGE")
             merge_count = adjusted_merge_count
         else:
             merge_count = MERGE_COUNT
             
         # Process only if there are enough images to complete at least one cycle
-        if total_images >= PERIOD:
+        if total_images >= period:
             current_pos = 0
             
-            while current_pos + PERIOD <= total_images:
-                process_images(images_to_build, video_writer, total_images, current_pos, merge_count)
+            while current_pos + period <= total_images:
+                process_images(images_to_build, video_writer, total_images, period, current_pos, merge_count)
                 # Move to the next cycle
-                current_pos += PERIOD
+                current_pos += period
                 print("current_pos", current_pos)
 
             # Handle remaining images because there are not enough for a full cycle
@@ -484,7 +548,7 @@ def write_video(img_array, FRAMERATE=15, subfolder_path=None):
                         print("adjusted merge_count to", merge_count)
                     # remaining_merge_count = math.floor(remaining // 2)
                     # merge_count = min(merge_count, remaining_merge_count)
-                    process_images(images_to_build, video_writer, total_images, current_pos, merge_count)
+                    process_images(images_to_build, video_writer, total_images, period, current_pos, merge_count)
 
                     # take the total remaining, and make one full cycle with it
                     # it should start with START_MERGE, go up to merge_count, then slide through, then go back down to START_MERGE
@@ -515,9 +579,15 @@ def write_video(img_array, FRAMERATE=15, subfolder_path=None):
         for img in images_to_build:
             video_writer.write(img)
 
+
     # Release the video writer and close the video file
     video_writer.release()
     print(f"Video saved at: {video_path}")
+
+
+
+
+    if LOOPING:shift_video_frames(video_path)
 
     # Add audio to the video if needed
     if BUILD_WITH_AUDIO:
@@ -639,18 +709,18 @@ def main():
         if IS_VIDEO is True and ALL_ONE_VIDEO is True:
             print("making regular combined video")
             all_img_path_list = get_img_list_subfolders(subfolders)
-            write_video(all_img_path_list, FRAMERATE)
+            write_video(all_img_path_list)
             if SAVE_METAS_AUDIO is True:
                 print("saving metas")
                 save_concatenated_metas(subfolders, OUTPUT, CSV_FILE)
-            # # const_videowriter(subfolder_path, FRAMERATE)
+            # # const_videowriter(subfolder_path)
             # for subfolder_path in subfolders:
-            #     write_video(subfolder_path, FRAMERATE)
+            #     write_video(subfolder_path)
         elif IS_VIDEO is True and ALL_ONE_VIDEO is False:
             for subfolder_path in subfolders:
                 all_img_path_list = io.get_img_list(subfolder_path)
                 # only inlcude jpgs in the list
-                write_video(all_img_path_list, FRAMERATE, subfolder_path)
+                write_video(all_img_path_list, subfolder_path)
 
         elif SAVE_METAS_AUDIO is True:
             save_concatenated_metas(subfolders, OUTPUT, CSV_FILE)
@@ -677,7 +747,7 @@ def main():
         all_img_path_list = io.get_img_list(FOLDER_PATH)
         if IS_VIDEO is True:
             if DO_RATIOS: crop_images(all_img_path_list, FOLDER_PATH)
-            write_video(all_img_path_list, FRAMERATE, FOLDER_PATH)
+            write_video(all_img_path_list, FOLDER_PATH)
         else:
             print("going to merge images to make still")
             images_to_build = load_images(all_img_path_list, FOLDER_PATH)
