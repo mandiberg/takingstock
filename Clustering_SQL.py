@@ -88,13 +88,13 @@ OFFSET = 0
 
 # WHICH TABLE TO USE?
 # SegmentTable_name = 'SegmentOct20'
-# SegmentTable_name = 'SegmentBig_isface'
-SegmentTable_name = 'SegmentBig_isnotface'
+SegmentTable_name = 'SegmentBig_isface'
+# SegmentTable_name = 'SegmentBig_isnotface'
 
 # number of clusters produced. run GET_OPTIMAL_CLUSTERS and add that number here
 # 32 for hand positions
 # 128 for hand gestures
-N_CLUSTERS = 64
+N_CLUSTERS = 256
 
 ONE_SHOT= JUMP_SHOT= HSV_CONTROL=  VERBOSE= INPAINT= OBJ_CLS_ID = UPSCALE_MODEL_PATH =None
 # face_height_output, image_edge_multiplier, EXPAND=False, ONE_SHOT=False, JUMP_SHOT=False, HSV_CONTROL=None, VERBOSE=True,INPAINT=False, SORT_TYPE="128d", OBJ_CLS_ID = None,UPSCALE_MODEL_PATH=None, use_3D=False
@@ -158,7 +158,7 @@ if USE_SEGMENT is True and (CLUSTER_TYPE != "Clusters"):
             WHERE += " AND ic.cluster_id IS NOT NULL AND ic.cluster_dist IS NULL"
 
     # WHERE += " AND h.is_body = 1"
-    LIMIT = 5
+    LIMIT = 10000000
 
     '''
     Poses

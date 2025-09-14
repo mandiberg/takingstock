@@ -129,9 +129,9 @@ POSE_ID = 0
 # MAIN_FOLDER5 = "/Volumes/SSD2/images_123rf"
 
 # #testing locally with two
-MAIN_FOLDER3 = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/images_123rf_redo"
-MAIN_FOLDER1 = "/Volumes/OWC4/images_getty_redo"
-MAIN_FOLDER2 = "/Volumes/SSD2/images_123rf_redo"
+MAIN_FOLDER1 = "/Volumes/OWC4/images_123rf_redo"
+MAIN_FOLDER2 = "/Volumes/OWC4/images_123rf_redo2"
+MAIN_FOLDER3 = "/Volumes/SSD2/images_123rf_redo"
 # MAIN_FOLDERS = [MAIN_FOLDER1, MAIN_FOLDER2]
 
 

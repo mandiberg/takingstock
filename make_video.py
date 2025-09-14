@@ -66,13 +66,15 @@ CSV_FOLDER = os.path.join("/Users/michaelmandiberg/Documents/projects-active/fac
 # io.db["name"] = "ministock"
 
 MODES = ['paris_photo_torso_images_topics', 'paris_photo_torso_videos_topics', '3D_bodies_topics', 'heft_torso_keywords']
-MODE_CHOICE = 1
+MODE_CHOICE = 3
 CURRENT_MODE = MODES[MODE_CHOICE]
 
 # set defaults, including for all modes to False
 FULL_BODY = IS_HAND_POSE_FUSION = ONLY_ONE = GENERATE_FUSION_PAIRS = IS_CLUSTER = IS_ONE_CLUSTER = USE_POSE_CROP_DICT = IS_TOPICS= IS_ONE_TOPIC = USE_AFFECT_GROUPS = False
 EXPAND = ONE_SHOT = JUMP_SHOT = USE_ALL = False
 USE_PAINTED = OUTPAINT = INPAINT= False
+FUSION_FOLDER = None
+
 image_edge_multiplier = None
 N_TOPICS = 64 # changing this to 14 triggers the affect topic fusion, 100 is keywords. 64 is default
 if CURRENT_MODE == 'paris_photo_torso_images_topics':
@@ -122,11 +124,33 @@ elif CURRENT_MODE == '3D_bodies_topics':
     START_CLUSTER = 0
 
 elif CURRENT_MODE == 'heft_torso_keywords':
+    SegmentTable_name = 'SegmentOct20'
+    SORT_TYPE = "planar_hands"
     IS_HAND_POSE_FUSION = True # do we use fusion clusters
     GENERATE_FUSION_PAIRS = True # if true it will query based on MIN_VIDEO_FUSION_COUNT and create pairs
                                     # if false, it will grab the list of pair lists below
-    MIN_VIDEO_FUSION_COUNT = 300
-    USE_POSE_CROP_DICT = True
+    MIN_VIDEO_FUSION_COUNT = 100
+    # this control whether sorting by topics
+    # IS_TOPICS = True # if using Clusters only, must set this to False
+
+    ONE_SHOT = True # take all files, based off the very first sort order.
+    JUMP_SHOT = True # jump to random file if can't find a run (I don't think this applies to planar?)
+
+    # initializing default square crop
+    # if this is defined, then it will not call min_max_body_landmarks_for_crop
+    image_edge_multiplier = [1.3,1.85,2.4,1.85] # tighter square crop for paris photo videos < Oct 29 FINAL VERSION NOV 2024 DO NOT CHANGE
+
+    USE_PAINTED = False
+    INPAINT= True
+    INPAINT_COLOR = None # "white" or "black" or None (none means generative inpainting with size limits)
+
+    # when doing IS_HAND_POSE_FUSION code currently only supports one topic at a time
+    IS_ONE_TOPIC = True
+    N_TOPICS = 100
+    TOPIC_NO = [22411] # if doing an affect topic fusion, this is the wrapper topic
+    FUSION_FOLDER = "utilities/data/heft_keyword_fusion_clusters"
+    CSV_FOLDER = os.path.join("/Users/michaelmandiberg/Documents/projects-active/facemap_production/heft_keyword_fusion_clusters")
+
     print(f"doing {CURRENT_MODE}: SORT_TYPE {SORT_TYPE}, IS_HAND_POSE_FUSION {IS_HAND_POSE_FUSION}, GENERATE_FUSION_PAIRS {GENERATE_FUSION_PAIRS}, MIN_VIDEO_FUSION_COUNT {MIN_VIDEO_FUSION_COUNT}, IS_TOPICS {IS_TOPICS}, IS_ONE_TOPIC {IS_ONE_TOPIC}, TOPIC_NO {TOPIC_NO}, USE_AFFECT_GROUPS {USE_AFFECT_GROUPS}")
 else:
     print("unknown mode, exiting")
@@ -162,7 +186,7 @@ TSP_SORT=False
 # this is for controlling if it is using
 # all clusters, 
 LIMIT = 100000 # this is the limit for the SQL query
-MIN_CYCLE_COUNT = 10
+MIN_CYCLE_COUNT = 75
 
 # this is set dynamically based on SORT_TYPE set above
 if IS_HAND_POSE_FUSION:
@@ -487,12 +511,15 @@ elif IS_SEGONLY and io.platform == "darwin":
         if N_TOPICS == 14: 
             ImagesTopics = "ImagesTopics_affect"
             WrapperTopicTable = "ImagesTopics" # use this to narrow down an interative search through the affect topic(s)
+            topic_keyword_id = "topic_id"
         elif N_TOPICS == 64: 
             ImagesTopics = "ImagesTopics"
             WrapperTopicTable = None
+            topic_keyword_id = "topic_id"
         elif N_TOPICS == 100:
             ImagesTopics = "ImagesKeywords"
             WrapperTopicTable = None
+            topic_keyword_id = "keyword_id"
         FROM += f" JOIN {ImagesTopics} it ON s.image_id = it.image_id "
         if not N_TOPICS == 100:
             WHERE += " AND it.topic_score > .1"
@@ -905,13 +932,15 @@ if not io.IS_TENCH:
                 where_affect = f" AND iwt.topic_id = {TOPIC_NO[0]} AND iwt.topic_score > .3"
             # cluster +=f"AND it.topic_id = {str(topic_no)} "
             if isinstance(topic_no, list):
+                if N_TOPICS == 100: this_id = "keyword_id"
+                else: this_id = "topic_id"
                 # Convert the list into a comma-separated string
                 topic_ids = ', '.join(map(str, topic_no))
                 # Use the IN operator to check if topic_id is in the list of values
-                cluster += f"AND it.topic_id IN ({topic_ids}) "
+                cluster += f"AND it.{this_id} IN ({topic_ids}) "
             elif topic_no is not None:
                 # If topic_no is not a list, simply check for equality
-                cluster += f"AND it.topic_id = {str(topic_no)} "            
+                cluster += f"AND it.{this_id} = {str(topic_no)} "
         # print(f"cluster SELECT is {cluster}")
         selectsql = f"SELECT {SELECT} FROM {FROM + from_affect} WHERE {WHERE + where_affect} {cluster} LIMIT {str(LIMIT)};"
         print("actual SELECT is: ",selectsql)
@@ -2006,7 +2035,7 @@ def set_my_counter_dict(this_topic=None, cluster_no=None, pose_no=None, start_im
     if VERBOSE: print(sort.counter_dict)
 
 def const_prefix(this_topic, cluster_no, pose_no):
-    topic_string = str(this_topic) if this_topic is not None else "None"
+    topic_string = ''.join([str(x) for x in this_topic]) if this_topic is not None else "None"
     file_prefix = f"c{cluster_no}_p{pose_no}_t{topic_string}"
     return file_prefix
 
@@ -2192,9 +2221,10 @@ def main():
             df["face_xyz"] = df[['face_x','face_y', 'face_z']].apply(lambda x: [x[0], x[1], x[2]], axis=1)
             df['bbox_array'] = df['bbox'].apply(lambda x: list(x.values()))            
             df['body_landmarks_normalized_visible'] = df['body_landmarks_normalized'].apply(lambda x: sort.crop_prep(x))
-            if VERBOSE: print("after unpickle_array, first row", df.iloc[0]['body_landmarks_normalized_visible'])
-
-            if VERBOSE: print("list of columns", df.columns)
+            if VERBOSE: 
+                print("after unpickle_array, first row", df.iloc[0]['body_landmarks_normalized_visible'])
+                print("list of columns", df.columns)
+                print(df.iloc[0])
             # conver face_x	face_y	face_z	mouth_gap site_image_id to float
             columns_to_convert = ['face_x', 'face_y', 'face_z', 'mouth_gap', 'site_image_id']
             df[columns_to_convert] = df[columns_to_convert].applymap(io.make_float)
@@ -2299,7 +2329,7 @@ def main():
             print("doing GENERATE_FUSION_PAIRS")
             this_topic = TOPIC_NO
             if GENERATE_FUSION_PAIRS:
-                n_cluster_topics = sort.find_sorted_zero_indices(TOPIC_NO,MIN_VIDEO_FUSION_COUNT)
+                n_cluster_topics = sort.find_sorted_zero_indices(TOPIC_NO,MIN_VIDEO_FUSION_COUNT,FUSION_FOLDER)
             else: 
                 n_cluster_topics = FUSION_PAIRS
             print("fusion_pairs", n_cluster_topics)

@@ -6,10 +6,11 @@ import pandas as pd
 # mine
 from mp_db_io import DataIO
 import re
+from pymediainfo import MediaInfo
 
 
 
-# Conda minimal_ds or env37 but not base
+# Conda use mps_torch310 -- requires  or env37 but not base
 
 # I/O utils
 io = DataIO()
@@ -30,35 +31,39 @@ if IS_VIDEO:
     # need conda activate minimal_ds
     from moviepy import *
     from moviepy import VideoFileClip, AudioFileClip
+from statistics import mode
 
 SAVE_METAS_AUDIO = False
 BUILD_WITH_AUDIO = False
 ALL_ONE_VIDEO = False
 LOWEST_DIMS = True # make this False if assembling big images eg full body # False if doing Paris Photo faces
 FULLBODY = False # this is for full body images, will change GIGA_DIMS to FULLBODY_DIMS
+ALREADY_CROPPED = True # images are already cropped to ratio for each subfolder, and need to be scaled
 SORT_ORDER = "Chronological"
 DO_RATIOS = False
-GIGA_DIMS = 20688
-FULLBODY_DIMS = 32000
-TEST_DIMS = 4000
-REG_DIMS = 3448
+GIGA_DIMS = [20688,20648]
+FULLBODY_DIMS = [32000,32000]
+TEST_DIMS = [4000,4000] 
+REG_DIMS = [3448,3448]
 if LOWEST_DIMS: 
     GIGA_DIMS = REG_DIMS
     SCALE_IMGS = True
 elif FULLBODY:
     GIGA_DIMS = FULLBODY_DIMS
     SCALE_IMGS = False
+elif ALREADY_CROPPED:
+    SCALE_IMGS = True
 else:
     SCALE_IMGS = False
 VERBOSE = True
 None_counter = 0
 # Provide the path to the folder containing the images
 ROOT_FOLDER_PATH = '/Volumes/OWC4/images_to_assemble'
-ROOT_FOLDER_PATH = '/Users/michaelmandiberg/Documents/projects-active/facemap_production'
+# ROOT_FOLDER_PATH = '/Users/michaelmandiberg/Documents/projects-active/facemap_production'
 # if IS_CLUSTER this should be the folder holding all the cluster folders
 # if not, this should be the individual folder holding the images
 # will not accept clusterNone -- change to cluster00
-FOLDER_NAME = "body3D_segmentbig_useall256"
+FOLDER_NAME = "256_crop_test_20ct"
 FOLDER_PATH = os.path.join(ROOT_FOLDER_PATH,FOLDER_NAME)
 DIRS = ["1x1", "4x3", "16x10"]
 OUTPUT = os.path.join(io.ROOTSSD, "audioproduction")
@@ -115,7 +120,35 @@ def merge_images_numpy(image_list):
     
     return merged_img
 
-def iterate_image_list(FOLDER_PATH,image_files, successes):
+def get_median_image_dimensions(all_img_path_list, subfolder_path=None):
+    # all_img_path_list is a list of paths to images
+    # use pymediainfo to get median dimensions withouth opening all the files
+    # just check the metadata
+    heights = []
+    widths = []
+    counter = 0
+    for image_path in all_img_path_list:
+        # print("checking image for dimensions", image_path)
+        if subfolder_path:
+            image_path = os.path.join(subfolder_path, image_path)
+        metadata = MediaInfo.parse(image_path)
+        if metadata is None or metadata.tracks is None: continue
+        for track in metadata.tracks:   
+            if track.track_type == 'Image':
+                # if VERBOSE: print("track.height, track.width", track.height, track.width)
+                if track.height is not None and track.width is not None:
+                    heights.append(track.height)
+                    widths.append(track.width)
+        counter += 1
+        if counter > 20: break
+    if len(heights) == 0 or len(widths) == 0:
+        print("no heights or widths found, need to skip this one")
+        return None
+    median_height = np.median(heights)
+    median_width = np.median(widths)
+    return int(median_height), int(median_width)
+
+def iterate_image_list(FOLDER_PATH,image_files, successes, output_dims=None):
     def crop_scale_giga(img1, DIMS=GIGA_DIMS):
         if SCALE_IMGS:
             # this is potentially messy, because it was originally designed to crop images when there were small size differences
@@ -126,23 +159,29 @@ def iterate_image_list(FOLDER_PATH,image_files, successes):
         else:
             if VERBOSE: print("cropping image to", DIMS)
             # height, width = img1.shape[:3]
-            if img1.shape[0] > DIMS or img1.shape[1] > DIMS:
+            if img1.shape[0] > DIMS[0] or img1.shape[1] > DIMS[1]:
                 height, width, _ = img1.shape
-                start_row = (height - DIMS) // 2
-                start_col = (width - DIMS) // 2
+                start_row = (height - DIMS[0]) // 2
+                start_col = (width - DIMS[1]) // 2
                 print("start_row", start_row, "start_col", start_col)
-                img1 = img1[start_row:start_row + DIMS, start_col:start_col + DIMS]
+                img1 = img1[start_row:start_row + DIMS[0], start_col:start_col + DIMS[1]]
         return img1
 
-    def handle_giga_dims(img1):
+    def handle_giga_dims(img1, output_dims=None):
         # Always resize img1 to GIGA_DIMS
-        if img1.shape[0] > TEST_DIMS or img1.shape[1] > TEST_DIMS:
+        if output_dims is not None:
+            print("resizing to output_dims", output_dims)
+            output_height, output_width = output_dims
+            # need to flip these for cv2
+            img1 = cv2.resize(img1, (output_width, output_height), interpolation=cv2.INTER_AREA)
+            print("img1.shape after resize to output_dims", img1.shape)
+        elif img1.shape[0] > TEST_DIMS[0] or img1.shape[1] > TEST_DIMS[1]:
             # if VERBOSE: print("image shape >", img1.shape, image_files[i])
             img1 = crop_scale_giga(img1)
-        elif img1.shape[0] == REG_DIMS and img1.shape[1] == REG_DIMS:
+        elif img1.shape[0] == REG_DIMS[0] and img1.shape[1] == REG_DIMS[1]:
             # not change needed
             pass
-        elif img1.shape[0] > REG_DIMS or img1.shape[1] > REG_DIMS:
+        elif img1.shape[0] > REG_DIMS[0] or img1.shape[1] > REG_DIMS[1]:
             # if VERBOSE: print("image shape < ", img1.shape, image_files[i])
             img1 = crop_scale_giga(img1, REG_DIMS)
         return img1
@@ -165,12 +204,12 @@ def iterate_image_list(FOLDER_PATH,image_files, successes):
     # Iterate through the image files and merge them in pairs
     for i in range(0, len(image_files), 2):
         img1 = load_image(image_files[i])
-        img1 = handle_giga_dims(img1)
+        img1 = handle_giga_dims(img1, output_dims)
         print("starting round", i, "img1.shape", img1.shape)
         # Check if there is a second image available
         if i + 1 < len(image_files):
             img2 = load_image(image_files[i+1])
-            img2 = handle_giga_dims(img2)
+            img2 = handle_giga_dims(img2, output_dims)
 
             if len(img1.shape) == 2:  # img1 is grayscale
                 img1 = cv2.cvtColor(img1, cv2.COLOR_GRAY2BGR)
@@ -197,7 +236,7 @@ def iterate_image_list(FOLDER_PATH,image_files, successes):
     # quit()
     return merged_pairs, successes
 
-def merge_images(images_to_build, FOLDER_PATH):
+def merge_images(images_to_build, FOLDER_PATH, output_dims=None):
     global None_counter
     print("merging images, this many images_to_build", len(images_to_build))
     if len(images_to_build) % 2 != 0:
@@ -225,12 +264,12 @@ def merge_images(images_to_build, FOLDER_PATH):
         if len(images_to_build) == 0: 
             print("no images to build")
             return None, 0, cluster_no, handpose_no
-        merged_pairs, successes = iterate_image_list(FOLDER_PATH,images_to_build,successes)
-        if merged_pairs is not None: 
+        merged_pairs, successes = iterate_image_list(FOLDER_PATH,images_to_build,successes, output_dims)
+        if merged_pairs is not None and len(merged_pairs) > 0: 
             print("len merged pairs are", len(merged_pairs))
             # Continue merging until there is only one merged image left
             while len(merged_pairs) >= 2:
-                merged_pairs, successes = iterate_image_list(FOLDER_PATH,merged_pairs,successes)
+                merged_pairs, successes = iterate_image_list(FOLDER_PATH,merged_pairs,successes, output_dims)
 
             final_merged = merged_pairs[0]
         else:
@@ -456,15 +495,17 @@ def load_images(image_list, subfolder_path=None):
     """
     if len(image_list) == 0:
         raise ValueError("Empty image list provided")
-    
-    # Load the first image
-    if subfolder_path:
-        image_path = os.path.join(subfolder_path, image_list[0])
-    else:
-        image_path = image_list[0]
-    
-    result = cv2.imread(image_path)
-    
+
+    def construct_image_path(subfolder_path, image_list, index):
+        # Load the image at the specified index
+        if subfolder_path:
+            image_path = os.path.join(subfolder_path, image_list[index])
+        else:
+            image_path = image_list[index]
+        return image_path
+
+    result = cv2.imread(construct_image_path(subfolder_path, image_list, 0))
+
     # If only one image, return it
     if len(image_list) == 1:
         return result
@@ -478,13 +519,10 @@ def load_images(image_list, subfolder_path=None):
     images_to_build = []
     # Gradually blend in the other images
     for i in range(1, len(image_list)):
-        if subfolder_path:
-            image_path = os.path.join(subfolder_path, image_list[i])
-        else:
-            image_path = image_list[i]
-        
-        img = cv2.imread(image_path)
-        
+
+        image_path = construct_image_path(subfolder_path, image_list, i)        
+        img = cv2.imread(image_path)        
+
         # Handle grayscale images
         if len(result.shape) == 2:  # result is grayscale
             result = cv2.cvtColor(result, cv2.COLOR_GRAY2BGR)
@@ -560,8 +598,14 @@ def main():
             for subfolder_path in subfolders:
                 # print(subfolder_path)
                 all_img_path_list = io.get_img_list(subfolder_path)
+                output_dims = get_median_image_dimensions(all_img_path_list, subfolder_path)
+                if output_dims is not None:
+                    print(" ", output_dims)
+                else:
+                    print("no output_dims found, skipping this folder", subfolder_path)
+                    continue
                 images_to_build = load_images(all_img_path_list, subfolder_path)
-                merged_image, count, cluster_no, handpose_no = merge_images(images_to_build, subfolder_path)
+                merged_image, count, cluster_no, handpose_no = merge_images(images_to_build, subfolder_path, output_dims)
                 if count == 0:
                     print("no images here")
                     continue

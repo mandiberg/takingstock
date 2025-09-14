@@ -862,6 +862,7 @@ class SortPose:
         }
 
         def norm_dist(this_dist, threshold):
+            print("this_dist, threshold", this_dist, threshold)
             return this_dist / threshold
 
         def construct_filepath(key, df):
@@ -952,12 +953,24 @@ class SortPose:
             return is_dupe
         # i is to be kept, j is to be removed if dupe
         # Pass 1: Fast screening, if it sum(norm_dist) < threshold, add it into the look_closer list to be checked in pass 2
+        # ankle_lists = df['wrist_ankle_landmarks_normalized_array'].tolist()
+        
         for i in range(n_rows):
             for j in range(i + 1, n_rows):
                 this_dist_list = []
+                keys_to_check = ['wrist_ankle_landmarks_normalized_array', 'face_xyz', 'bbox_array']
+                # check to see if there are any where 'wrist_ankle_landmarks_normalized_array' is None, if so, skip it
+                # print(" ankle lists")
+                # print(df.iloc[i]['wrist_ankle_landmarks_normalized_array'])
+                # print(len(df.iloc[i]['wrist_ankle_landmarks_normalized_array']))
+                if len(df.iloc[i]['wrist_ankle_landmarks_normalized_array']) == 0 or len(df.iloc[j]['wrist_ankle_landmarks_normalized_array']) == 0:
+                    # pop it off the list
+                    keys_to_check.remove('wrist_ankle_landmarks_normalized_array')
+                    # TK should probably adjust threshold if removing this key
                 for key, (threshold, operator) in threshold_dict.items():
-                    if key not in ['wrist_ankle_landmarks_normalized_array', 'face_xyz', 'bbox_array']: continue
+                    if key not in keys_to_check: continue
                     # calculate distance and add to list
+                    print(f"Pass 1 checking {key} for {i},{j}")
                     this_dist = self.dupe_comparison(i, j, key, df)
                     normed_dist = norm_dist(this_dist, threshold)
                     this_dist_list.append(normed_dist)
@@ -3545,11 +3558,15 @@ class SortPose:
 
 # FUSION STUFF
 
-    def find_sorted_zero_indices(self, topic_no,min_value):
-        folder_path='utilities/data/october_fusion_clusters'
+    def find_sorted_zero_indices(self, topic_no,min_value, folder_path=None):
+        if folder_path is None:
+            folder_path='utilities/data/october_fusion_clusters'
+            prefix = 'topic_'
+        elif "keyword" in folder_path:
+            prefix = 'Keywords_'
 
         # Construct the file name and path
-        file_name = 'topic_' + str(topic_no[0]) + '.csv'
+        file_name = prefix + str(topic_no[0]) + '.csv'
         file_path = os.path.join(folder_path, file_name)
         
         # Load the CSV file into a DataFrame
