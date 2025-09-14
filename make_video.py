@@ -74,12 +74,15 @@ FULL_BODY = IS_HAND_POSE_FUSION = ONLY_ONE = GENERATE_FUSION_PAIRS = IS_CLUSTER 
 EXPAND = ONE_SHOT = JUMP_SHOT = USE_ALL = False
 USE_PAINTED = OUTPAINT = INPAINT= False
 FUSION_FOLDER = None
+MIN_CYCLE_COUNT = 300
 
 image_edge_multiplier = None
 N_TOPICS = 64 # changing this to 14 triggers the affect topic fusion, 100 is keywords. 64 is default
 if CURRENT_MODE == 'paris_photo_torso_images_topics':
     # controls which type of sorting/column sorted on
     SORT_TYPE = "planar_hands"
+    image_edge_multiplier = [1.3,2,2.9,2] # portrait crop for paris photo images < Aug 30
+
 elif CURRENT_MODE == 'paris_photo_torso_videos_topics':
     SORT_TYPE = "128d"
     IS_HAND_POSE_FUSION = True # do we use fusion clusters
@@ -130,24 +133,27 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     GENERATE_FUSION_PAIRS = True # if true it will query based on MIN_VIDEO_FUSION_COUNT and create pairs
                                     # if false, it will grab the list of pair lists below
     MIN_VIDEO_FUSION_COUNT = 100
+    MIN_CYCLE_COUNT = 75
+
     # this control whether sorting by topics
     # IS_TOPICS = True # if using Clusters only, must set this to False
 
-    ONE_SHOT = True # take all files, based off the very first sort order.
+    ONE_SHOT = False # take all files, based off the very first sort order.
     JUMP_SHOT = True # jump to random file if can't find a run (I don't think this applies to planar?)
 
     # initializing default square crop
     # if this is defined, then it will not call min_max_body_landmarks_for_crop
-    image_edge_multiplier = [1.3,1.85,2.4,1.85] # tighter square crop for paris photo videos < Oct 29 FINAL VERSION NOV 2024 DO NOT CHANGE
+    # image_edge_multiplier = [1.3,1.85,2.4,1.85] # tighter square crop for paris photo videos < Oct 29 FINAL VERSION NOV 2024 DO NOT CHANGE
+    image_edge_multiplier = [1.3,2,2.9,2] # portrait crop for paris photo images < Aug 30
 
     USE_PAINTED = False
     INPAINT= True
-    INPAINT_COLOR = None # "white" or "black" or None (none means generative inpainting with size limits)
+    INPAINT_COLOR = "white" # "white" or "black" or None (none means generative inpainting with size limits)
 
     # when doing IS_HAND_POSE_FUSION code currently only supports one topic at a time
     IS_ONE_TOPIC = True
     N_TOPICS = 100
-    TOPIC_NO = [22411] # if doing an affect topic fusion, this is the wrapper topic
+    TOPIC_NO = [22411,22101,444,22191,16045,11549,133300,133777] # if doing an affect topic fusion, this is the wrapper topic
     FUSION_FOLDER = "utilities/data/heft_keyword_fusion_clusters"
     CSV_FOLDER = os.path.join("/Users/michaelmandiberg/Documents/projects-active/facemap_production/heft_keyword_fusion_clusters")
 
@@ -186,7 +192,6 @@ TSP_SORT=False
 # this is for controlling if it is using
 # all clusters, 
 LIMIT = 100000 # this is the limit for the SQL query
-MIN_CYCLE_COUNT = 75
 
 # this is set dynamically based on SORT_TYPE set above
 if IS_HAND_POSE_FUSION:
@@ -2036,7 +2041,7 @@ def set_my_counter_dict(this_topic=None, cluster_no=None, pose_no=None, start_im
 
 def const_prefix(this_topic, cluster_no, pose_no):
     topic_string = ''.join([str(x) for x in this_topic]) if this_topic is not None else "None"
-    file_prefix = f"c{cluster_no}_p{pose_no}_t{topic_string}"
+    file_prefix = f"c{cluster_no}_p{pose_no}_t{topic_string[:5]}"
     return file_prefix
 
 
@@ -2257,6 +2262,8 @@ def main():
         cluster_no = pose_no = segment_count = this_topic = None
         # list the files in the the CSV_FOLDER
         files_in_folder = os.listdir(CSV_FOLDER)
+        # sort files alphabetically
+        files_in_folder.sort()
         print("files in folder", files_in_folder)
         for csv_file in files_in_folder:
             print("csv_file", csv_file)
