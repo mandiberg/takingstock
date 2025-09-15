@@ -26,6 +26,9 @@ CURRENT_MODE = MODES[MODE_CHOICE]
 IS_CLUSTER = False
 
 LOOPING = False # defaults
+last_image_written = None
+run_counter = 0
+
 if "merge_images" in CURRENT_MODE:
 # are we making videos or making merged stills?
     IS_VIDEO = False
@@ -40,13 +43,15 @@ elif "make_video" in CURRENT_MODE:
     IS_VIDEO = True
 
     # control default merging behavior
-    IS_VIDEO_MERGE = True
     FRAMERATE = 12
     PERIOD = 30 # how many images in each merge cycle
     MERGE_COUNT = 12 # largest number of merged images 
     START_MERGE = 1 # number of images merged into the first image. Can be 1 (no merges) or >1 (two or more images merged)
 
     if "keyword_fusion" in CURRENT_MODE:
+        IS_VIDEO_MERGE = True
+        SMOOTH_MERGE = True # if true, will do a smooth merge from MERGE_COUNT down to START_MERGE
+        if SMOOTH_MERGE: FRAMERATE = 30
         LOOPING = True
         PERIOD = 30 # how many images in each merge cycle
         MERGE_COUNT = 10 # largest number of merged images 
@@ -89,7 +94,8 @@ ROOT_FOLDER_PATH = '/Volumes/OWC4/images_to_assemble'
 # will not accept clusterNone -- change to cluster00
 FOLDER_NAME = "256_crop_test_20ct"
 FOLDER_PATH = os.path.join(ROOT_FOLDER_PATH,FOLDER_NAME)
-FOLDER_PATH = "/Volumes/OWC4/segment_images/clustercc16_p21_tNone_1757879430.pink" # temp override for testing
+# FOLDER_PATH = "/Volumes/OWC4/segment_images/phone_heft_test" # temp override for testing
+FOLDER_PATH = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/pink_phone_test"
 DIRS = ["1x1", "4x3", "16x10"]
 OUTPUT = os.path.join(io.ROOTSSD, "audioproduction")
 # Extract the topic number from the folder name
@@ -103,6 +109,7 @@ else:
 CSV_FILE = f"metas_{TOPIC}.csv"
 
 def merge_images_numpy(image_list):
+    global last_image_written
     """
     Merge multiple cv2 images with equal weighting using pure NumPy operations.
     
@@ -112,17 +119,24 @@ def merge_images_numpy(image_list):
     Returns:
         Merged image as a cv2/numpy array
     """
+    print("merge_images_numpy merging", len(image_list), "images with numpy")
     if not image_list:
         print("No images to merge")
         return None
-    elif len(image_list) == 1:
-        return image_list[0]
+    elif len(image_list) == 1 and last_image_written is None:
+        print("only one image, returning it directly AS LIST, shape is", image_list[0].shape)
+        return [image_list[0]]
     
+    if len(image_list[0].shape) == 2:
+        # remove item 0 from the list
+        image_list.pop(0)
     # Get dimensions of the first image
     h, w = image_list[0].shape[:2]
     
     # Ensure all images are the same size and format
     processed_images = []
+    images_to_return = []
+    print(f"last_image_written before processing: {last_image_written.shape if last_image_written is not None else 'None'}")
     for img in image_list:
         # Handle grayscale images
         if len(img.shape) == 2:
@@ -134,16 +148,31 @@ def merge_images_numpy(image_list):
         
         processed_images.append(img.astype(np.float32))
     
+    # old route, two images to one:
     # Stack all images along a new axis
     stacked = np.stack(processed_images, axis=0)
     
     # Take the mean along the stacking axis
     merged_img = np.mean(stacked, axis=0)
-    
+        
     # Convert back to uint8
     merged_img = np.clip(merged_img, 0, 255).astype(np.uint8)
+    merged_img_float = merged_img.astype(np.float32)
+    this_last_image_written = last_image_written.astype(np.float32) if last_image_written is not None else None
     
-    return merged_img
+    if SMOOTH_MERGE:
+        print("doing smooth merge with this many images", len(processed_images))
+        transition_image1 = cv2.addWeighted(this_last_image_written, 0.67, merged_img_float, 0.33, 0)
+        transition_image2 = cv2.addWeighted(this_last_image_written, 0.33, merged_img_float, 0.67, 0)
+        # Convert to uint8 for output
+        transition_image1 = np.clip(transition_image1, 0, 255).astype(np.uint8)
+        transition_image2 = np.clip(transition_image2, 0, 255).astype(np.uint8)
+        merged_img_uint8 = np.clip(merged_img, 0, 255).astype(np.uint8)
+        images_to_return = [transition_image1, transition_image2, merged_img_uint8]
+    else:
+        merged_img_uint8 = np.clip(merged_img, 0, 255).astype(np.uint8)
+        images_to_return.append(merged_img_uint8)
+    return images_to_return
 
 def get_median_image_dimensions(all_img_path_list, subfolder_path=None):
     # all_img_path_list is a list of paths to images
@@ -423,6 +452,20 @@ def shift_video_frames(video_path):
     print("reordered video saved")
                 
 def process_images(images_to_build, video_writer, total_images, period, current_pos=0, merge_count=MERGE_COUNT):
+    global last_image_written
+    def save_images_to_video(images_to_return, video_writer):
+        global last_image_written
+        global run_counter
+        print("save_images_to_video called with", len(images_to_return) if images_to_return is not None else 0, "images")
+        if images_to_return is not None: 
+            for img in images_to_return:
+                run_counter += 1
+                # save this image for testing
+                cv2.imwrite(os.path.join(FOLDER_PATH, f"test_{run_counter}.png"), img)
+                print(f"save_images_to_video test_{run_counter}.png", img.shape)
+                video_writer.write(img)
+            last_image_written = images_to_return[-1]
+
     if total_images - current_pos < period:
         this_period = total_images - current_pos
         last_cycle = True
@@ -435,10 +478,12 @@ def process_images(images_to_build, video_writer, total_images, period, current_
     for i in range(START_MERGE, merge_count + 1):
         # Load and merge images from current_pos to current_pos + i
     # if i % 2 == 0:
-        merged_img = merge_images_numpy(images_to_build[current_pos:current_pos + i])
+        images_to_return = merge_images_numpy(images_to_build[current_pos:current_pos + i])
         # print("type merged_img", type(merged_img))
-        if merged_img is not None: video_writer.write(merged_img)
-        print("merged starting img {current_pos+i}", current_pos+i, "len images_to_build", len(images_to_build), merge_count)
+        save_images_to_video(images_to_return, video_writer)
+        # Print the current number of frames written so far
+        print(f"{video_writer.get(cv2.CAP_PROP_POS_FRAMES)} frames written so far")
+        print(f"merged starting img {current_pos+i}", current_pos+i, "len images_to_build", len(images_to_build), merge_count)
 
     # if the remaining images are greater than merge_count, then write the middle even section
     if total_images - (current_pos) > merge_count:
@@ -446,8 +491,8 @@ def process_images(images_to_build, video_writer, total_images, period, current_
         # Phase 2: Slide through the array maintaining merge_count images merged
         for i in range(merge_count + 1, this_period - merge_count + 1):
             # Load and merge images from current_pos + i to current_pos + i + merge_count
-            merged_img = merge_images_numpy(images_to_build[current_pos + i:current_pos + i + merge_count])
-            if merged_img is not None: video_writer.write(merged_img)
+            images_to_return = merge_images_numpy(images_to_build[current_pos + i:current_pos + i + merge_count])
+            save_images_to_video(images_to_return, video_writer)
             print("merged middle img {current_pos+i}", current_pos+i, "len images_to_build", len(images_to_build), merge_count)
 
     else:
@@ -463,17 +508,17 @@ def process_images(images_to_build, video_writer, total_images, period, current_
         end_idx = min(current_pos + this_period + 1, total_images)
         start_idx = end_idx - i
         # if i % 2 == 0:
-        merged_img = merge_images_numpy(images_to_build[start_idx:end_idx])
+        images_to_return = merge_images_numpy(images_to_build[start_idx:end_idx])
         print(i, "{current_pos+i}", current_pos+i, "start_idx", start_idx, "end_idx", end_idx, "len images_to_build", len(images_to_build), merge_count)
         print(f"last_cycle is {last_cycle}, i is {i}")
         # if last_cycle is not True :
-        if i >= 3:
+        if last_cycle is True and i >= 3:
+            print("skipping last image to avoid duplicate of first image")
+        else:
             print("writing descending image")
             # if it isn't the last cycle, do the regular write
-            if merged_img is not None: video_writer.write(merged_img)
-        # elif last_cycle is True and i >= 3:
-        else:
-            print("skipping last image to avoid duplicate of first image")
+            save_images_to_video(images_to_return, video_writer)
+            # if merged_img is not None: video_writer.write(merged_img)
 
 def calculate_period(images_to_build):
     image_count = len(images_to_build)
@@ -491,6 +536,7 @@ def calculate_period(images_to_build):
 
 def write_video(img_array, subfolder_path=None):
     img_array = [img for img in img_array if img.endswith(".jpg")]
+    print("len img_array before cropping", len(img_array))
     if IS_VIDEO_MERGE: img_array.append(img_array[0]) # add the first image to the end to make a loop
     images_to_build = load_images(img_array, subfolder_path)
     # print("img_array", img_array)
@@ -519,11 +565,11 @@ def write_video(img_array, subfolder_path=None):
         total_images = len(img_array)
         
         # Calculate images_per_cycle and check if MERGE_COUNT needs adjustment
-        images_per_cycle = period + (MERGE_COUNT - START_MERGE * 2)
-        if images_per_cycle < MERGE_COUNT * 2:
-            adjusted_merge_count = images_per_cycle // 2
-            print(f"Warning: Adjusting MERGE_COUNT from {MERGE_COUNT} to {adjusted_merge_count} based on period and START_MERGE")
-            merge_count = adjusted_merge_count
+        # this is when the period is shorter than the merge up and down cycle
+        # images_per_cycle = period + (MERGE_COUNT - START_MERGE * 2)
+        if period < MERGE_COUNT * 2:
+            merge_count = period // 2
+            print(f"Warning: Adjusting MERGE_COUNT from {MERGE_COUNT} to {merge_count} based on period and START_MERGE")
         else:
             merge_count = MERGE_COUNT
             
@@ -639,7 +685,7 @@ def load_images(image_list, subfolder_path=None):
 
     # If only one image, return it
     if len(image_list) == 1:
-        return result
+        return [result]
     
     # Merge multiple images with equal weighting
     weight_per_image = 1.0 / len(image_list)
@@ -647,7 +693,7 @@ def load_images(image_list, subfolder_path=None):
     # Start with the first image at full weight
     result = result.copy()
     
-    images_to_build = []
+    images_to_build = [result]
     # Gradually blend in the other images
     for i in range(1, len(image_list)):
 
