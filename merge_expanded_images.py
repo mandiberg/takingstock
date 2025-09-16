@@ -23,7 +23,7 @@ CURRENT_MODE = MODES[MODE_CHOICE]
 
 
 # iterate through folders? 
-IS_CLUSTER = False
+IS_CLUSTER = True
 
 LOOPING = False # defaults
 last_image_written = None
@@ -94,8 +94,8 @@ ROOT_FOLDER_PATH = '/Volumes/OWC4/images_to_assemble'
 # will not accept clusterNone -- change to cluster00
 FOLDER_NAME = "256_crop_test_20ct"
 FOLDER_PATH = os.path.join(ROOT_FOLDER_PATH,FOLDER_NAME)
-# FOLDER_PATH = "/Volumes/OWC4/segment_images/phone_heft_test" # temp override for testing
-FOLDER_PATH = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/pink_phone_test"
+FOLDER_PATH = "/Volumes/OWC4/segment_images/money_heft_test" # temp override for testing
+# FOLDER_PATH = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/pink_phone_test"
 DIRS = ["1x1", "4x3", "16x10"]
 OUTPUT = os.path.join(io.ROOTSSD, "audioproduction")
 # Extract the topic number from the folder name
@@ -461,8 +461,8 @@ def process_images(images_to_build, video_writer, total_images, period, current_
             for img in images_to_return:
                 run_counter += 1
                 # save this image for testing
-                cv2.imwrite(os.path.join(FOLDER_PATH, f"test_{run_counter}.png"), img)
-                print(f"save_images_to_video test_{run_counter}.png", img.shape)
+                # cv2.imwrite(os.path.join(FOLDER_PATH, f"test_{run_counter}.png"), img)
+                # print(f"save_images_to_video test_{run_counter}.png", img.shape)
                 video_writer.write(img)
             last_image_written = images_to_return[-1]
 
@@ -513,6 +513,8 @@ def process_images(images_to_build, video_writer, total_images, period, current_
         print(f"last_cycle is {last_cycle}, i is {i}")
         # if last_cycle is not True :
         if last_cycle is True and i >= 3:
+            print("skipping last image to avoid duplicate of first image")
+        elif last_cycle is False and i == 1:
             print("skipping last image to avoid duplicate of first image")
         else:
             print("writing descending image")
