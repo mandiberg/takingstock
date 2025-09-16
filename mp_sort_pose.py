@@ -77,7 +77,7 @@ class SortPose:
             self.MAXD = self.MAXBODYDIST
             self.MULTIPLIER = self.HSVMULTIPLIER * (self.MINBODYDIST / self.MINFACEDIST)
             self.DUPED = self.BODY_DUPE_DIST
-        elif self.SORT_TYPE in ["planar_body", "planar_hands", "fingertips_positions", "body3D"]: 
+        elif self.SORT_TYPE in ["planar_body", "planar_hands", "fingertips_positions", "body3D", "ArmPoses3D"]: 
             self.MIND = self.MINBODYDIST
             self.MAXD = self.MAXBODYDIST * 4
             self.MULTIPLIER = self.HSVMULTIPLIER * (self.MINBODYDIST / self.MINFACEDIST)
@@ -151,6 +151,7 @@ class SortPose:
         self.WRIST_LMS = self.make_subset_landmarks(15,16)
         self.ANKLES_LMS = self.make_subset_landmarks(27,28)
         self.HAND_LMS_POINTER = self.make_subset_landmarks(8,8)
+        self.ARMS_HEAD_LMS = self.make_subset_landmarks(0,22)
         # adding pointer finger tip
         # self.SUBSET_LANDMARKS.extend(self.FINGER_LMS) # this should match what is in Clustering
         # only use wrist and finger
@@ -167,6 +168,10 @@ class SortPose:
             # catches any hands
             self.CLUSTER_TYPE = "planar_hands"
             self.SUBSET_LANDMARKS = self.HAND_LMS
+        elif self.SORT_TYPE == "ArmPoses3D":
+            # use 3D sorting with a smaller set of landmarks (head, shoulders and arms)
+            self.CLUSTER_TYPE = "BodyPoses3D"
+            self.SUBSET_LANDMARKS = self.ARMS_HEAD_LMS
         else:
             self.CLUSTER_TYPE = "BodyPoses" # defaults
             self.SUBSET_LANDMARKS = self.BODY_LMS

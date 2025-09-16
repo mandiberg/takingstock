@@ -44,7 +44,7 @@ SegmentHelper_name = None
 # SegmentHelper_name = 'SegmentHelper_june2025_nmlGPU300k'
 # SATYAM, this is MM specific
 # for when I'm using files on my SSD vs RAID
-IS_SSD = False
+IS_SSD = True
 #IS_MOVE is in move_toSSD_files.py
 
 # I/O utils
@@ -65,8 +65,8 @@ CSV_FOLDER = os.path.join("/Users/michaelmandiberg/Documents/projects-active/fac
 # io.db["name"] = "stock"
 # io.db["name"] = "ministock"
 
-MODES = ['paris_photo_torso_images_topics', 'paris_photo_torso_videos_topics', '3D_bodies_topics', 'heft_torso_keywords']
-MODE_CHOICE = 3
+MODES = ['paris_photo_torso_images_topics', 'paris_photo_torso_videos_topics', '3D_bodies_topics','3D_arms', 'heft_torso_keywords']
+MODE_CHOICE = 2
 CURRENT_MODE = MODES[MODE_CHOICE]
 
 # set defaults, including for all modes to False
@@ -106,9 +106,13 @@ elif CURRENT_MODE == 'paris_photo_torso_videos_topics':
     IS_ONE_TOPIC = True
     TOPIC_NO = [32] # if doing an affect topic fusion, this is the wrapper topic
     print(f"doing {CURRENT_MODE}: SORT_TYPE {SORT_TYPE}, IS_HAND_POSE_FUSION {IS_HAND_POSE_FUSION}, GENERATE_FUSION_PAIRS {GENERATE_FUSION_PAIRS}, MIN_VIDEO_FUSION_COUNT {MIN_VIDEO_FUSION_COUNT}, IS_TOPICS {IS_TOPICS}, IS_ONE_TOPIC {IS_ONE_TOPIC}, TOPIC_NO {TOPIC_NO}, USE_AFFECT_GROUPS {USE_AFFECT_GROUPS}")
-elif CURRENT_MODE == '3D_bodies_topics':
-    SORT_TYPE = "body3D" 
-    FULL_BODY = True # this requires is_feet
+elif "3D" in CURRENT_MODE:
+    if CURRENT_MODE == '3D_bodies_topics':
+        SORT_TYPE = "body3D"
+        FULL_BODY = True # this requires is_feet
+    elif CURRENT_MODE == '3D_arms_topics':
+        SORT_TYPE = "arms3D"
+        FULL_BODY = False 
     ONLY_ONE = False # only one cluster, or False for video fusion, this_cluster = [CLUSTER_NO, HAND_POSE_NO]
     USE_POSE_CROP_DICT = True
 
@@ -118,9 +122,9 @@ elif CURRENT_MODE == '3D_bodies_topics':
 
     INPAINT_COLOR = "white" # "white" or "black" or None (none means generative inpainting with size limits)
 
-    IS_CLUSTER = False
+    IS_CLUSTER = True
     # this is for IS_ONE_CLUSTER to only run on a specific CLUSTER_NO
-    IS_ONE_CLUSTER = True # make IS_CLUSTER == False
+    IS_ONE_CLUSTER = False # make IS_CLUSTER == False
     CLUSTER_NO = 242 # sort on this one as HAND_POSITION for IS_HAND_POSE_FUSION
                     # if not IS_HAND_POSE_FUSION, then this is selecting HandsGestures
                     # I think this is pose number from BodyPoses3D if SORT_TYPE == "body3D"
@@ -129,11 +133,12 @@ elif CURRENT_MODE == '3D_bodies_topics':
 elif CURRENT_MODE == 'heft_torso_keywords':
     SegmentTable_name = 'SegmentOct20'
     SORT_TYPE = "planar_hands"
+    # SORT_TYPE = "arms3D"
     IS_HAND_POSE_FUSION = True # do we use fusion clusters
     GENERATE_FUSION_PAIRS = True # if true it will query based on MIN_VIDEO_FUSION_COUNT and create pairs
                                     # if false, it will grab the list of pair lists below
-    MIN_VIDEO_FUSION_COUNT = 100
-    MIN_CYCLE_COUNT = 75
+    MIN_VIDEO_FUSION_COUNT = 300
+    MIN_CYCLE_COUNT = 300
 
     # this control whether sorting by topics
     # IS_TOPICS = True # if using Clusters only, must set this to False
@@ -153,9 +158,9 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     # when doing IS_HAND_POSE_FUSION code currently only supports one topic at a time
     IS_ONE_TOPIC = True
     N_TOPICS = 100
-    TOPIC_NO = [22411,22101,444,22191,16045,11549,133300,133777] # if doing an affect topic fusion, this is the wrapper topic
+    TOPIC_NO = [23084] # if doing an affect topic fusion, this is the wrapper topic
     FUSION_FOLDER = "utilities/data/heft_keyword_fusion_clusters"
-    CSV_FOLDER = os.path.join("/Users/michaelmandiberg/Documents/projects-active/facemap_production/heft_keyword_fusion_clusters")
+    CSV_FOLDER = os.path.join("/Users/michaelmandiberg/Documents/projects-active/facemap_production/heft_keyword_fusion_clusters/banner_planar")
 
     print(f"doing {CURRENT_MODE}: SORT_TYPE {SORT_TYPE}, IS_HAND_POSE_FUSION {IS_HAND_POSE_FUSION}, GENERATE_FUSION_PAIRS {GENERATE_FUSION_PAIRS}, MIN_VIDEO_FUSION_COUNT {MIN_VIDEO_FUSION_COUNT}, IS_TOPICS {IS_TOPICS}, IS_ONE_TOPIC {IS_ONE_TOPIC}, TOPIC_NO {TOPIC_NO}, USE_AFFECT_GROUPS {USE_AFFECT_GROUPS}")
 else:
@@ -208,6 +213,11 @@ if IS_HAND_POSE_FUSION:
         # if fusion, select on body3D and gesture, sort on hands positions
         SORT_TYPE = "planar_hands"
         CLUSTER_TYPE = "BodyPoses3D"
+        CLUSTER_TYPE_2 = "HandsGestures"
+    elif SORT_TYPE == "arms3D":
+        # if fusion, select on arms3D and gesture, sort on hands positions
+        SORT_TYPE = "planar_hands"
+        CLUSTER_TYPE = "ArmsPoses3D"
         CLUSTER_TYPE_2 = "HandsGestures"
     # CLUSTER_TYPE is passed to sort. below
 else:
@@ -2040,8 +2050,8 @@ def set_my_counter_dict(this_topic=None, cluster_no=None, pose_no=None, start_im
     if VERBOSE: print(sort.counter_dict)
 
 def const_prefix(this_topic, cluster_no, pose_no):
-    topic_string = ''.join([str(x) for x in this_topic]) if this_topic is not None else "None"
-    file_prefix = f"c{cluster_no}_p{pose_no}_t{topic_string[:5]}"
+    # topic_string = ''.join([str(x) for x in this_topic]) if this_topic is not None else "None"
+    file_prefix = f"c{cluster_no}_p{pose_no}_t{this_topic[0]}" if this_topic is not None else f"c{cluster_no}_p{pose_no}_tNone"
     return file_prefix
 
 
@@ -2064,15 +2074,6 @@ def main():
         # get cluster and pose from this_cluster
         cluster_no, pose_no = parse_cluster_no(this_cluster)
 
-        # if pose_no, overide sort.image_edge_multiplier based on pose_no
-        if pose_no is not None and USE_POSE_CROP_DICT:
-            pose_type = pose_crop_dict.get(cluster_no, 1)
-            sort.image_edge_multiplier = multiplier_list[pose_crop_dict[cluster_no]]
-            if VERBOSE: print(f"using pose {cluster_no} getting pose_crop_dict value {pose_type} for image_edge_multiplier", sort.image_edge_multiplier)
-        # reset face_height_output for each round, in case it gets redefined inside loop
-        sort.face_height_output = face_height_output
-        # use image_edge_multiplier to crop for each
-        sort.set_output_dims()
 
 
         # read the csv and construct dataframe
@@ -2142,6 +2143,19 @@ def main():
                 save_segment_DB(df_segment)
                 print("saved segment to segmentTable")
                 quit()
+
+            # if pose_no, overide sort.image_edge_multiplier based on pose_no
+            if pose_no is not None and USE_POSE_CROP_DICT:
+                pose_type = pose_crop_dict.get(cluster_no, 1)
+                sort.image_edge_multiplier = multiplier_list[pose_crop_dict[cluster_no]]
+                if VERBOSE: print(f"using pose {cluster_no} getting pose_crop_dict value {pose_type} for image_edge_multiplier", sort.image_edge_multiplier)
+            elif image_edge_multiplier is None:
+                # if dynamic, set the first one here
+                sort.image_edge_multiplier = sort.min_max_body_landmarks_for_crop(df_segment, 0)     
+            # reset face_height_output for each round, in case it gets redefined inside loop
+            sort.face_height_output = face_height_output
+            # use image_edge_multiplier to crop for each
+            sort.set_output_dims()
 
             ### Set counter_dict ###
             set_my_counter_dict(this_topic, cluster_no, pose_no, start_img_name, start_site_image_id)
