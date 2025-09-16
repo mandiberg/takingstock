@@ -77,7 +77,7 @@ class SortPose:
             self.MAXD = self.MAXBODYDIST
             self.MULTIPLIER = self.HSVMULTIPLIER * (self.MINBODYDIST / self.MINFACEDIST)
             self.DUPED = self.BODY_DUPE_DIST
-        elif self.SORT_TYPE in ["planar_body", "planar_hands", "fingertips_positions", "body3D", "ArmPoses3D"]: 
+        elif self.SORT_TYPE in ["planar_body", "planar_hands", "fingertips_positions", "body3D", "arms3D"]: 
             self.MIND = self.MINBODYDIST
             self.MAXD = self.MAXBODYDIST * 4
             self.MULTIPLIER = self.HSVMULTIPLIER * (self.MINBODYDIST / self.MINFACEDIST)
@@ -170,7 +170,7 @@ class SortPose:
             self.SUBSET_LANDMARKS = self.HAND_LMS
         elif self.SORT_TYPE == "ArmPoses3D":
             # use 3D sorting with a smaller set of landmarks (head, shoulders and arms)
-            self.CLUSTER_TYPE = "BodyPoses3D"
+            # self.CLUSTER_TYPE = "BodyPoses3D"
             self.SUBSET_LANDMARKS = self.ARMS_HEAD_LMS
         else:
             self.CLUSTER_TYPE = "BodyPoses" # defaults
@@ -2213,7 +2213,7 @@ class SortPose:
         enc1 = None
         if self.SORT_TYPE == "128d": sort_column = "face_encodings68"
         elif self.SORT_TYPE == "planar_body": sort_column = "body_landmarks_array"
-        elif self.SORT_TYPE == "body3D": sort_column = "body_landmarks_array"
+        elif self.SORT_TYPE == "body3D" or self.SORT_TYPE == "arms3D": sort_column = "body_landmarks_array"
         elif self.SORT_TYPE == "planar_hands": sort_column = "hand_landmarks" # hand_landmarks are left and right hands flat list of 126 values
         print("sort_column", sort_column)
         print("sort_column head", df_enc[sort_column].head())
@@ -2984,7 +2984,7 @@ class SortPose:
                 knn_sort = "planar_hands"
             else:
                 knn_sort = "planar_body"
-        elif self.SORT_TYPE == "body3D":
+        elif self.SORT_TYPE in ["body3D", "arms3D"]:
             knn_sort = "body3D"
         elif self.SORT_TYPE == "planar_hands": 
             knn_sort = "planar_hands"

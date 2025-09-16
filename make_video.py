@@ -56,7 +56,7 @@ N_CLUSTERS = N_HANDS = SORT_TYPE = FULL_BODY = IS_HAND_POSE_FUSION = ONLY_ONE = 
 
 # CSV_FOLDER = os.path.join(io.ROOT_DBx, "body3D_segmentbig_useall256_CSVs_MMtest")
 # CSV_FOLDER = os.path.join("/Users/michaelmandiberg/Documents/projects-active/facemap_production/body3D_segmentbig_useall256_CSVs")
-CSV_FOLDER = os.path.join("/Users/michaelmandiberg/Documents/projects-active/facemap_production/heft_keyword_fusion_clusters")
+CSV_FOLDER = os.path.join("/Users/michaelmandiberg/Documents/projects-active/facemap_production/heft_keyword_fusion_clusters/armstest")
 # TENCH UNCOMMENT FOR YOUR COMP:
 # CSV_FOLDER = os.path.join(io.ROOT_DBx, "body3D_segmentbig_useall256_CSVs_test")
 
@@ -66,7 +66,7 @@ CSV_FOLDER = os.path.join("/Users/michaelmandiberg/Documents/projects-active/fac
 # io.db["name"] = "ministock"
 
 MODES = ['paris_photo_torso_images_topics', 'paris_photo_torso_videos_topics', '3D_bodies_topics','3D_arms', 'heft_torso_keywords']
-MODE_CHOICE = 2
+MODE_CHOICE = 3
 CURRENT_MODE = MODES[MODE_CHOICE]
 
 # set defaults, including for all modes to False
@@ -110,11 +110,11 @@ elif "3D" in CURRENT_MODE:
     if CURRENT_MODE == '3D_bodies_topics':
         SORT_TYPE = "body3D"
         FULL_BODY = True # this requires is_feet
-    elif CURRENT_MODE == '3D_arms_topics':
+    elif CURRENT_MODE == '3D_arms':
         SORT_TYPE = "arms3D"
         FULL_BODY = False 
     ONLY_ONE = False # only one cluster, or False for video fusion, this_cluster = [CLUSTER_NO, HAND_POSE_NO]
-    USE_POSE_CROP_DICT = True
+    USE_POSE_CROP_DICT = False
 
     ONE_SHOT = True # take all files, based off the very first sort order.
     EXPAND = True # expand with white for prints, as opposed to inpaint and crop. (not video, which is controlled by INPAINT_COLOR) 
@@ -221,13 +221,19 @@ if IS_HAND_POSE_FUSION:
         CLUSTER_TYPE_2 = "HandsGestures"
     # CLUSTER_TYPE is passed to sort. below
 else:
-    # choose the cluster type manually here
-    # CLUSTER_TYPE = "BodyPoses" # usually this one
-    CLUSTER_TYPE = "BodyPoses3D" # 
-    # CLUSTER_TYPE = "HandsPositions" # 2d hands
-    # CLUSTER_TYPE = "HandsGestures"
-    # CLUSTER_TYPE = "Clusters" # manual override for 128d
+    if SORT_TYPE == "arms3D":
+        # if fusion, select on arms3D and gesture, sort on hands positions
+        # SORT_TYPE = "planar_hands"
+        CLUSTER_TYPE = "ArmsPoses3D"
+    else:
+        # choose the cluster type manually here
+        # CLUSTER_TYPE = "BodyPoses" # usually this one
+        CLUSTER_TYPE = "BodyPoses3D" # 
+        # CLUSTER_TYPE = "HandsPositions" # 2d hands
+        # CLUSTER_TYPE = "HandsGestures"
+        # CLUSTER_TYPE = "Clusters" # manual override for 128d
     CLUSTER_TYPE_2 = None
+print(f"SORT_TYPE {SORT_TYPE}, CLUSTER_TYPE {CLUSTER_TYPE}, CLUSTER_TYPE_2 {CLUSTER_TYPE_2}")
 DROP_LOW_VIS = False
 USE_HEAD_POSE = False
 N_HANDS = N_CLUSTERS = None # declared here, but set in the SQL query below
@@ -1204,7 +1210,7 @@ def prep_encodings_NN(df_segment):
             return [row['lum']*HSV_NORMS["LUM"], row['lum_torso']*HSV_NORMS["LUM"]]    
     
     def set_sort_col():
-        if SORT_TYPE == "body3D" or CLUSTER_TYPE == "BodyPoses3D":
+        if SORT_TYPE in ["body3D", "arms3D"] or CLUSTER_TYPE in ["BodyPoses3D", "ArmsPoses3D"]:
             # have to handle both, because handposefusion redefines SORT_TYPE 
             source_col = sort_column = "body_landmarks_3D"
         elif SORT_TYPE == "planar_body":
@@ -2062,6 +2068,19 @@ def const_prefix(this_topic, cluster_no, pose_no):
 def main():
     # IDK why I need to declare this a global, but it borks otherwise
     global FUSION_PAIRS
+    def set_multiplier_and_dims(df_segment, cluster_no=None, pose_no=None):
+        # if pose_no, overide sort.image_edge_multiplier based on pose_no
+        if pose_no is not None and USE_POSE_CROP_DICT:
+            pose_type = pose_crop_dict.get(cluster_no, 1)
+            sort.image_edge_multiplier = multiplier_list[pose_crop_dict[cluster_no]]
+            if VERBOSE: print(f"using pose {cluster_no} getting pose_crop_dict value {pose_type} for image_edge_multiplier", sort.image_edge_multiplier)
+        elif image_edge_multiplier is None:
+            # if dynamic, set the first one here
+            sort.image_edge_multiplier = sort.min_max_body_landmarks_for_crop(df_segment, 0)     
+        # reset face_height_output for each round, in case it gets redefined inside loop
+        sort.face_height_output = face_height_output
+        # use image_edge_multiplier to crop for each
+        sort.set_output_dims()
 
     ###################
     #  MAP THE IMGS   #
@@ -2144,18 +2163,7 @@ def main():
                 print("saved segment to segmentTable")
                 quit()
 
-            # if pose_no, overide sort.image_edge_multiplier based on pose_no
-            if pose_no is not None and USE_POSE_CROP_DICT:
-                pose_type = pose_crop_dict.get(cluster_no, 1)
-                sort.image_edge_multiplier = multiplier_list[pose_crop_dict[cluster_no]]
-                if VERBOSE: print(f"using pose {cluster_no} getting pose_crop_dict value {pose_type} for image_edge_multiplier", sort.image_edge_multiplier)
-            elif image_edge_multiplier is None:
-                # if dynamic, set the first one here
-                sort.image_edge_multiplier = sort.min_max_body_landmarks_for_crop(df_segment, 0)     
-            # reset face_height_output for each round, in case it gets redefined inside loop
-            sort.face_height_output = face_height_output
-            # use image_edge_multiplier to crop for each
-            sort.set_output_dims()
+            set_multiplier_and_dims(df_segment, cluster_no, pose_no)
 
             ### Set counter_dict ###
             set_my_counter_dict(this_topic, cluster_no, pose_no, start_img_name, start_site_image_id)
@@ -2271,7 +2279,6 @@ def main():
                     cluster_no = part.split("c")[1]
             return segment_count, pose_no, topic_no, cluster_no
 
-        sort.set_output_dims()
 
         cluster_no = pose_no = segment_count = this_topic = None
         # list the files in the the CSV_FOLDER
@@ -2306,8 +2313,9 @@ def main():
                 # df_sorted.to_csv(os.path.join(io.ROOT_DBx, f"df_sorted_{cluster_no}_ct{segment_count}_p{pose_no}.csv"), index=False)
                 # df_sorted = df_sorted.head(10)  # Keep only the top entries
                 df_sorted = sort.remove_duplicates(io.folder_list, df_sorted)
-                if image_edge_multiplier is None:
-                    sort.image_edge_multiplier = sort.min_max_body_landmarks_for_crop(df_sorted, 0)     
+
+                # wrapping the multiplier in a function that sets dims too
+                set_multiplier_and_dims(df_sorted, cluster_no, pose_no)
 
                 if CALIBRATING: continue
                 linear_test_df(df_sorted)

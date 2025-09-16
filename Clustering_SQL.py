@@ -80,7 +80,7 @@ option, MODE = pick(options, title)
 # CLUSTER_TYPE = "Clusters"
 # CLUSTER_TYPE = "BodyPoses"
 # CLUSTER_TYPE = "BodyPoses3D"
-CLUSTER_TYPE = "ArmPoses3D"
+CLUSTER_TYPE = "ArmsPoses3D"
 # CLUSTER_TYPE = "HandsPositions"
 # CLUSTER_TYPE = "HandsGestures"
 # CLUSTER_TYPE = "FingertipsPositions"
@@ -137,7 +137,7 @@ if USE_SEGMENT is True and (CLUSTER_TYPE != "Clusters"):
 
     if CLUSTER_TYPE == "BodyPoses": WHERE += f" AND {dupe_table_pre}.mongo_body_landmarks = 1 and {dupe_table_pre}.is_feet = 1"
     elif CLUSTER_TYPE == "BodyPoses3D": WHERE += f" AND {dupe_table_pre}.mongo_body_landmarks_3D = 1 and {dupe_table_pre}.is_feet = 1"
-    elif CLUSTER_TYPE == "ArmPoses3D": WHERE += f" AND {dupe_table_pre}.mongo_body_landmarks_3D = 1"
+    elif CLUSTER_TYPE == "ArmsPoses3D": WHERE += f" AND {dupe_table_pre}.mongo_body_landmarks_3D = 1"
     elif CLUSTER_TYPE == "HandsGestures": WHERE += f" AND {dupe_table_pre}.mongo_hand_landmarks = 1 "
     elif CLUSTER_TYPE in ["HandsPositions","FingertipsPositions"] : WHERE += f" AND {dupe_table_pre}.mongo_hand_landmarks_norm = 1 "
 
@@ -160,7 +160,7 @@ if USE_SEGMENT is True and (CLUSTER_TYPE != "Clusters"):
             WHERE += " AND ic.cluster_id IS NOT NULL AND ic.cluster_dist IS NULL"
 
     # WHERE += " AND h.is_body = 1"
-    LIMIT = 10000
+    LIMIT = 5000000
 
     '''
     Poses
@@ -416,7 +416,7 @@ def calc_cluster_median(df, col_list, cluster_id):
 def build_col_list(df):
     col_list = {}
     col_list["left"] = col_list["right"] = col_list["body_lms"] = col_list["face"] = []
-    if CLUSTER_TYPE in ("BodyPoses", "BodyPoses3D", "ArmPoses3D"):
+    if CLUSTER_TYPE in ("BodyPoses", "BodyPoses3D", "ArmsPoses3D"):
         col_list["body_lms"] = [col for col in df.columns if col.startswith('dim_')]
     elif CLUSTER_TYPE in ["HandsPositions", "HandsGestures", "FingertipsPositions"]:
         col_list["left"] = [col for col in df.columns if col.startswith('left_dim_')]
@@ -444,7 +444,7 @@ def calculate_cluster_medians(df):
     for cluster_id in unique_clusters:
         # cluster_median = calc_cluster_median(df, col_list, cluster_id)
         cluster_median = {}
-        if CLUSTER_TYPE in ("BodyPoses", "BodyPoses3D", "ArmPoses3D"):
+        if CLUSTER_TYPE in ("BodyPoses", "BodyPoses3D", "ArmsPoses3D"):
             cluster_median["body_lms"] = calc_cluster_median(df, col_list["body_lms"], cluster_id)
         elif CLUSTER_TYPE in ["HandsPositions", "HandsGestures", "FingertipsPositions"]:
             cluster_median["left"] = calc_cluster_median(df, col_list["left"], cluster_id)
@@ -609,7 +609,7 @@ def assign_images_clusters_DB(df):
     df_subset_landmarks = make_subset_landmarks(df, add_list=True)
     print("df_subset_landmarks after make_subset_landmarks", df_subset_landmarks)
 
-    if CLUSTER_TYPE in ["BodyPoses","BodyPoses3D","ArmPoses3D", "HandsGestures", "HandsPositions","FingertipsPositions"]:
+    if CLUSTER_TYPE in ["BodyPoses","BodyPoses3D","ArmsPoses3D", "HandsGestures", "HandsPositions","FingertipsPositions"]:
         # combine all columns that start with left_dim_ or right_dim_ or dim_ into one list in the "enc1" column
 
 
@@ -652,8 +652,8 @@ def prepare_df(df):
     # if cluster_median column is in the df, unpickle it
     if 'cluster_median' in df.columns:
         df['cluster_median'] = df['cluster_median'].apply(io.unpickle_array)
-    if CLUSTER_TYPE in ("BodyPoses", "BodyPoses3D", "ArmPoses3D"):
-        if CLUSTER_TYPE in ("BodyPoses3D", "ArmPoses3D"):
+    if CLUSTER_TYPE in ("BodyPoses", "BodyPoses3D", "ArmsPoses3D"):
+        if CLUSTER_TYPE in ("BodyPoses3D", "ArmsPoses3D"):
             keep_col = "body_landmarks_3D"
             drop_col = "body_landmarks_normalized"
         else:
@@ -724,7 +724,7 @@ def main():
     df = pd.json_normalize(resultsjson)
     print(df)
     # tell sort_pose which columns to NOT query
-    if CLUSTER_TYPE in ("BodyPoses", "BodyPoses3D", "ArmPoses3D"): io.query_face = sort.query_face = io.query_hands = sort.query_hands = False
+    if CLUSTER_TYPE in ("BodyPoses", "BodyPoses3D", "ArmsPoses3D"): io.query_face = sort.query_face = io.query_hands = sort.query_hands = False
     elif CLUSTER_TYPE == "HandsGestures": io.query_body = sort.query_body = io.query_face = sort.query_face = False
     elif CLUSTER_TYPE == "Clusters": io.query_body = sort.query_body = io.query_hands = sort.query_hands = False
     if not USE_HEAD_POSE: io.query_head_pose = sort.query_head_pose = False
