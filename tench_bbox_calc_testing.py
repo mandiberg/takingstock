@@ -2315,6 +2315,48 @@ def main():
                 # df_sorted.to_csv(os.path.join(io.ROOT_DBx, f"df_sorted_{cluster_no}_ct{segment_count}_p{pose_no}.csv"), index=False)
                 # df_sorted = df_sorted.head(10)  # Keep only the top entries
                 df_sorted = sort.remove_duplicates(io.folder_list, df_sorted)
+
+                #calculating bboxes from interpolated data and outputting information about calcs
+                n_rows = len(df_sorted)
+                bbox_to_body_ratios = []
+                median_bbox_info = []
+                deleted_bboxes = sort.delete_odd_bboxes(df_sorted)
+                for i in range(n_rows):
+                    ratio = sort.calculate_bbox_landmark_ratio(df_sorted, i)
+                    if ratio is not None:
+                        bbox_to_body_ratios.append(ratio)
+
+                median_bbox_ratio = statistics.median(bbox_to_body_ratios)
+
+                for i in range(n_rows):
+                    bbox = df_sorted.iloc[i].get('bbox', None)
+                    if bbox is None:
+                        new_bbox_value = sort.calc_bbox_from_median(df_sorted, i, median_bbox_ratio)
+                        df_sorted.at[i, 'bbox'] = new_bbox_value
+                        
+                        if deleted_bboxes: # Check if the list is not empty
+                            # Get and remove the next value from the deleted_bboxes list
+                            next_deleted_bbox = deleted_bboxes.pop(0)
+                            bbox = {
+                                    'original bbox': next_deleted_bbox,
+                                    'new bbox': new_bbox_value,
+                                    'diff bottom': abs(new_bbox_value['bottom'] - next_deleted_bbox['bottom']),
+                                    'diff top': abs(new_bbox_value['top'] - next_deleted_bbox['top']),
+                                    'normalized diff bottom': abs(new_bbox_value['bottom'] - next_deleted_bbox['bottom']) / next_deleted_bbox['bottom'],
+                                    'normalized diff top':  abs(new_bbox_value['top'] - next_deleted_bbox['top']) / next_deleted_bbox['top']
+                                }
+                            median_bbox_info.append(bbox)
+                median_bbox_diff_top = []
+                median_bbox_diff_bottom = []
+                for i in range(len(median_bbox_info)):
+                    print(f"median_bbox_info \n {median_bbox_info[i]}\n")
+                    median_bbox_diff_top.append(median_bbox_info[i]['normalized diff top'])
+                    median_bbox_diff_bottom.append(median_bbox_info[i]['normalized diff bottom'])
+
+                print(f'Final results! \n median bbox to body ratio: {median_bbox_ratio} \n median normalized diff between calculated and original \n top:{statistics.median(median_bbox_diff_top)}, bottom {statistics.median(median_bbox_diff_top)}')
+                
+                
+
                 
                 # wrapping the multiplier in a function that sets dims too
                 set_multiplier_and_dims(df_sorted, cluster_no, pose_no)
