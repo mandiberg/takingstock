@@ -44,7 +44,7 @@ SegmentHelper_name = None
 # SegmentHelper_name = 'SegmentHelper_june2025_nmlGPU300k'
 # SATYAM, this is MM specific
 # for when I'm using files on my SSD vs RAID
-IS_SSD = True
+IS_SSD = False
 #IS_MOVE is in move_toSSD_files.py
 
 # I/O utils
@@ -56,7 +56,7 @@ N_CLUSTERS = N_HANDS = SORT_TYPE = FULL_BODY = IS_HAND_POSE_FUSION = ONLY_ONE = 
 
 # CSV_FOLDER = os.path.join(io.ROOT_DBx, "body3D_segmentbig_useall256_CSVs_MMtest")
 # CSV_FOLDER = os.path.join("/Users/michaelmandiberg/Documents/projects-active/facemap_production/body3D_segmentbig_useall256_CSVs")
-CSV_FOLDER = os.path.join("/Users/michaelmandiberg/Documents/projects-active/facemap_production/heft_keyword_fusion_clusters/armstest")
+CSV_FOLDER = os.path.join("/Users/michaelmandiberg/Documents/projects-active/facemap_production/heft_keyword_fusion_clusters/body3D_512")
 # TENCH UNCOMMENT FOR YOUR COMP:
 # CSV_FOLDER = os.path.join(io.ROOT_DBx, "body3D_segmentbig_useall256_CSVs_test")
 
@@ -74,7 +74,8 @@ FULL_BODY = IS_HAND_POSE_FUSION = ONLY_ONE = GENERATE_FUSION_PAIRS = IS_CLUSTER 
 EXPAND = ONE_SHOT = JUMP_SHOT = USE_ALL = False
 USE_PAINTED = OUTPAINT = INPAINT= False
 FUSION_FOLDER = None
-MIN_CYCLE_COUNT = 300
+MIN_CYCLE_COUNT = 10
+AUTO_EDGE_CROP = False # this triggers the dynamic cropping based on min_max_body_landmarks_for_crop
 
 image_edge_multiplier = None
 N_TOPICS = 64 # changing this to 14 triggers the affect topic fusion, 100 is keywords. 64 is default
@@ -110,14 +111,22 @@ elif "3D" in CURRENT_MODE:
     if CURRENT_MODE == '3D_bodies_topics':
         SORT_TYPE = "body3D"
         FULL_BODY = True # this requires is_feet
+        EXPAND = True # expand with white for prints, as opposed to inpaint and crop. (not video, which is controlled by INPAINT_COLOR) 
     elif CURRENT_MODE == '3D_arms':
-        SORT_TYPE = "arms3D"
+        # SORT_TYPE = "arms3D"
+        SORT_TYPE = "body3D"
         FULL_BODY = False 
+        # either AUTO_EDGE_CROP or image_edge_multiplier must be set. Not both
+        AUTO_EDGE_CROP = True # this triggers the dynamic cropping based on min_max_body_landmarks_for_crop
+        if AUTO_EDGE_CROP:
+            EXPAND = True
+        else:
+            image_edge_multiplier = [1.3,2,2.9,2] # portrait crop for paris photo images < Aug 30
+
     ONLY_ONE = False # only one cluster, or False for video fusion, this_cluster = [CLUSTER_NO, HAND_POSE_NO]
     USE_POSE_CROP_DICT = False
 
     ONE_SHOT = True # take all files, based off the very first sort order.
-    EXPAND = True # expand with white for prints, as opposed to inpaint and crop. (not video, which is controlled by INPAINT_COLOR) 
     USE_ALL = True # this is for outputting all images from a oneshot, forces ONE_SHOT, skips face comparison
 
     INPAINT_COLOR = "white" # "white" or "black" or None (none means generative inpainting with size limits)
@@ -143,7 +152,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     # this control whether sorting by topics
     # IS_TOPICS = True # if using Clusters only, must set this to False
 
-    ONE_SHOT = False # take all files, based off the very first sort order.
+    ONE_SHOT = True # take all files, based off the very first sort order.
     JUMP_SHOT = True # jump to random file if can't find a run (I don't think this applies to planar?)
 
     # initializing default square crop
@@ -158,7 +167,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     # when doing IS_HAND_POSE_FUSION code currently only supports one topic at a time
     IS_ONE_TOPIC = True
     N_TOPICS = 100
-    TOPIC_NO = [23084] # if doing an affect topic fusion, this is the wrapper topic
+    TOPIC_NO = [1644] # if doing an affect topic fusion, this is the wrapper topic
     FUSION_FOLDER = "utilities/data/heft_keyword_fusion_clusters"
     CSV_FOLDER = os.path.join("/Users/michaelmandiberg/Documents/projects-active/facemap_production/heft_keyword_fusion_clusters/banner_planar")
 
@@ -870,8 +879,8 @@ if not io.IS_TENCH:
         cluster_medians, N_CLUSTERS = sort.prep_cluster_medians(results)
         sort.cluster_medians = cluster_medians
         # if any of the cluster_medians are empty, then we need to resegment
-        print("cluster results", len(results))
-        print("cluster_medians", len(cluster_medians))
+        # print("cluster results", len(results))
+        # print("cluster_medians", len(cluster_medians))
         if cluster_medians is None:
         # if not any(cluster_medians):
             print("cluster results are empty", cluster_medians)
@@ -1338,8 +1347,8 @@ def compare_images(last_image, img, face_landmarks_or_df, bbox_or_index):
     if sort.EXPAND:
         cropped_image, resize = sort.expand_image(img, face_landmarks, bbox)
         
-        if FULL_BODY: 
-            # print('running')
+        if FULL_BODY or AUTO_EDGE_CROP: 
+            print('running AUTO_EDGE_CROP')
             cropped_image = sort.auto_edge_crop(df_sorted, index, cropped_image, resize)
         else:   
             # cropp the 25K image back down to 10K
