@@ -71,7 +71,7 @@ CURRENT_MODE = MODES[MODE_CHOICE]
 
 # set defaults, including for all modes to False
 FULL_BODY = IS_HAND_POSE_FUSION = ONLY_ONE = GENERATE_FUSION_PAIRS = IS_CLUSTER = IS_ONE_CLUSTER = USE_POSE_CROP_DICT = IS_TOPICS= IS_ONE_TOPIC = USE_AFFECT_GROUPS = False
-EXPAND = ONE_SHOT = JUMP_SHOT = USE_ALL = False
+EXPAND = ONE_SHOT = JUMP_SHOT = USE_ALL = CHOP_FIRST = False
 USE_PAINTED = OUTPAINT = INPAINT= False
 FUSION_FOLDER = None
 MIN_CYCLE_COUNT = 300
@@ -126,6 +126,7 @@ elif "3D" in CURRENT_MODE:
     ONLY_ONE = False # only one cluster, or False for video fusion, this_cluster = [CLUSTER_NO, HAND_POSE_NO]
     USE_POSE_CROP_DICT = False
 
+    CHOP_FIRST = True
     ONE_SHOT = True # take all files, based off the very first sort order.
     USE_ALL = True # this is for outputting all images from a oneshot, forces ONE_SHOT, skips face comparison
 
@@ -1090,6 +1091,44 @@ def sort_by_face_dist_NN(df_enc):
     # print("row from df_enc with image_id = 893")
     # test_row = df_enc.loc[df_enc['image_id'] == 893]
     # print(test_row)    
+    def get_closest_knn_or_break(df_enc, df_sorted):
+        # send in both dfs, and return same dfs with 1+ rows sorted
+        print("BEFORE sort_by_face_dist_NN _ for loop df_enc is", df_enc)
+        is_break = False
+        df_enc, df_sorted = sort.get_closest_df_NN(df_enc, df_sorted)
+
+        print("AFTER sort_by_face_dist_NN _ for loop df_enc is", df_enc)
+        print("AFTER sort_by_face_dist_NN _ for loop df_sorted is", df_sorted)
+
+        # # test to see if body_landmarks for row with image_id = 5251199 still is the same as test_lms
+        # retest_row = df_enc.loc[df_enc['image_id'] == 10498233]
+        # print("body_landmarks for retest_row")
+        # retest_lms = retest_row['body_landmarks']
+        # print(retest_lms)
+        # calculate any different between test_lms to retest_lms
+
+        print("df_sorted.iloc[-1], " , df_sorted.iloc[-1])
+        dist = df_sorted.iloc[-1]['dist_enc1']
+        print("sort_by_face_dist_NN _ for loop dist is", dist)
+
+        # Break out of the loop if greater than MAXDIST
+        if ONE_SHOT:
+            df_sorted = pd.concat([df_sorted, df_enc])
+            # only return the first x rows
+            df_sorted = df_sorted.head(sort.CUTOFF)
+            print("one shot, breaking out", df_sorted)
+            is_break = True
+        # commenting out SHOT_CLOCK for now, Sept 28
+        # elif dist > sort.MAXD and sort.SHOT_CLOCK != 0:
+        elif dist > sort.MAXD or df_enc.empty:
+            print("should breakout, dist is", dist)
+            is_break = True
+        return df_enc, df_sorted, is_break
+
+    if CHOP_FIRST:
+        df_enc, df_sorted, is_break = get_closest_knn_or_break(df_enc, df_sorted)
+        df_enc = df_enc.head(sort.CUTOFF)
+
 
     ## SATYAM THIS IS WHAT WILL BE REPLACE BY TSP
     if TSP_SORT is True:
@@ -1102,38 +1141,8 @@ def sort_by_face_dist_NN(df_enc):
             # print("sort_by_face_dist_NN _ for loop itters i is", i)
             ## Find closest
             try:
-                # send in both dfs, and return same dfs with 1+ rows sorted
-                print("BEFORE sort_by_face_dist_NN _ for loop df_enc is", df_enc)
-
-                df_enc, df_sorted = sort.get_closest_df_NN(df_enc, df_sorted)
-        
-                print("AFTER sort_by_face_dist_NN _ for loop df_enc is", df_enc)
-                print("AFTER sort_by_face_dist_NN _ for loop df_sorted is", df_sorted)
-
-                # # test to see if body_landmarks for row with image_id = 5251199 still is the same as test_lms
-                # retest_row = df_enc.loc[df_enc['image_id'] == 10498233]
-                # print("body_landmarks for retest_row")
-                # retest_lms = retest_row['body_landmarks']
-                # print(retest_lms)
-                # calculate any different between test_lms to retest_lms
-
-                print("df_sorted.iloc[-1], " , df_sorted.iloc[-1])
-                dist = df_sorted.iloc[-1]['dist_enc1']
-                print("sort_by_face_dist_NN _ for loop dist is", dist)
-
-                # Break out of the loop if greater than MAXDIST
-                if ONE_SHOT:
-                    df_sorted = pd.concat([df_sorted, df_enc])
-                    # only return the first x rows
-                    df_sorted = df_sorted.head(sort.CUTOFF)
-                    print("one shot, breaking out", df_sorted)
-                    break
-                # commenting out SHOT_CLOCK for now, Sept 28
-                # elif dist > sort.MAXD and sort.SHOT_CLOCK != 0:
-                elif dist > sort.MAXD or df_enc.empty:
-                    print("should breakout, dist is", dist)
-                    break
-
+                df_enc, df_sorted, is_break = get_closest_knn_or_break(df_enc, df_sorted)
+                if is_break: break
             except Exception as e:
                 print("exception on going to get closest")
                 print(str(e))
