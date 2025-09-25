@@ -149,6 +149,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     IS_HAND_POSE_FUSION = True # do we use fusion clusters
     GENERATE_FUSION_PAIRS = False # if true it will query based on MIN_VIDEO_FUSION_COUNT and create pairs
                                     # if false, it will grab the list of pair lists below
+    USE_FUSION_PAIR_DICT = True
     # if TESTING: IS_HAND_POSE_FUSION = GENERATE_FUSION_PAIRS = False
     MIN_VIDEO_FUSION_COUNT = 1300 # this is the cut off for the CSV fusion pairs
     MIN_CYCLE_COUNT = 1000 # this is the cut off for the SQL query results
@@ -212,7 +213,7 @@ USE_NOSEBRIDGE = True
 TSP_SORT=False
 # this is for controlling if it is using
 # all clusters, 
-LIMIT = 1500 # this is the limit for the SQL query
+LIMIT = 100000 # this is the limit for the SQL query
 
 # this is set dynamically based on SORT_TYPE set above
 if IS_HAND_POSE_FUSION:
@@ -282,7 +283,7 @@ MASK_OFFSET = [50,50,50,50]
 if OUTPAINT: from outpainting_modular import outpaint, image_resize
 
 # process stuff
-VERBOSE = True
+VERBOSE = False
 CALIBRATING = False
 SAVE_IMG_PROCESS = False
 # this controls whether it is using the linear or angle process
@@ -332,6 +333,19 @@ PHONE_BBOX_LIMITS = [0] # this is an attempt to control the BBOX placement. I do
 
 if not GENERATE_FUSION_PAIRS:
     print("not generating FUSION_PAIRS, pulling from list")
+    FUSION_PAIR_DICT = {
+        220: [[101, 0], [124, 0], [184, 0], [216, 0], [302, 0], [448, 0], [457,0]],
+        553: [[216, 0], [230, 0], [89,0]],
+        807: [[140, 0], [168, 0], [216, 0], [273, 0], [63,0]],
+        827: [[191, 0], [229, 0], [322, 0], [340, 0], [396, 0], [423, 0], [447, 0], [448, 0], [51,0]],
+        1070: [[122, 0], [14, 0], [22, 0], [342, 0], [391, 0], [53,0]],
+        1644: [[158, 0], [161, 0], [345,0]],
+        5310: [[180, 0], [245, 0], [265, 0], [315, 0], [324, 0], [445, 0], [451, 0], [476, 0], [498,0]],
+        22269: [[351, 0], [449, 0], [53,0]],
+        22411: [[158, 0], [240, 0], [304, 0], [306, 0], [342, 0], [391, 0], [40, 0], [423, 0], [449,0]],
+        22412: [[89, 0], [101, 0], [140, 0], [184, 0], [273, 0], [391, 0], [396, 0], [426, 0], [430, 0], [446, 0], [449, 0], [481,0]]
+    }
+
     FUSION_PAIRS = [
 
         # Sept 2025 kludge
@@ -979,9 +993,12 @@ if not io.IS_TENCH:
                 from_affect = f" JOIN {WrapperTopicTable} iwt ON s.image_id = iwt.image_id "
                 where_affect = f" AND iwt.topic_id = {TOPIC_NO[0]} AND iwt.topic_score > .3"
             # cluster +=f"AND it.topic_id = {str(topic_no)} "
+            if N_TOPICS == 100: this_id = "keyword_id"
+            else: this_id = "topic_id"
             if isinstance(topic_no, list):
-                if N_TOPICS == 100: this_id = "keyword_id"
-                else: this_id = "topic_id"
+                # this is for handling multiple keywords together. I switched to pulling keys from the DICT
+                # when I go back to incorporating related keywords in one query, I will need to create a new dict KEYWORD_SYNONYM_DICT
+                # and. I will need to call it here, using the topic_no as key
                 # Convert the list into a comma-separated string
                 topic_ids = ', '.join(map(str, topic_no))
                 # Use the IN operator to check if topic_id is in the list of values
@@ -2109,6 +2126,7 @@ def const_prefix(this_topic, cluster_no, pose_no):
 def main():
     # IDK why I need to declare this a global, but it borks otherwise
     global FUSION_PAIRS
+    global FUSION_PAIR_DICT
     def set_multiplier_and_dims(df_segment, cluster_no=None, pose_no=None):
         # if pose_no, overide sort.image_edge_multiplier based on pose_no
         if pose_no is not None and USE_POSE_CROP_DICT:
@@ -2364,87 +2382,105 @@ def main():
 
 
 
+    # this is the start of the main part of main()
+
     if MODE == 1:
         print("MODE 1, assembling from CSV_FOLDER", CSV_FOLDER)
         save_images_from_csv_folder()
 
     else:
-        ###          THE MAIN PART OF MAIN()           ###
-        ### QUERY SQL BASED ON CLUSTERS AND MAP_IMAGES ###
- 
-        print("MODE 0 or 2, sorting and saving CSV", CSV_FOLDER)
-        #creating my objects
-        start = time.time()
-
+        # mode zero (and 2, though 2 isn't really functional
         first_loop = this_topic = this_cluster = n_cluster_topics = second_cluster_topic = None
-        # to loop or not to loop that is the cluster
-        print(f"doing {CURRENT_MODE}: SORT_TYPE {SORT_TYPE}, IS_HAND_POSE_FUSION {IS_HAND_POSE_FUSION}, GENERATE_FUSION_PAIRS {GENERATE_FUSION_PAIRS}, MIN_VIDEO_FUSION_COUNT {MIN_VIDEO_FUSION_COUNT}, IS_TOPICS {IS_TOPICS}, IS_ONE_TOPIC {IS_ONE_TOPIC}, TOPIC_NO {TOPIC_NO}, USE_AFFECT_GROUPS {USE_AFFECT_GROUPS}")
-        if IS_HAND_POSE_FUSION or IS_CLUSTER or IS_TOPICS: first_loop = True
-        if VERBOSE: print("first_loop", first_loop)
 
-        if IS_ONE_CLUSTER:
-            print(f"setting SELECT for IS_ONE_CLUSTER {CLUSTER_NO}")
-            this_cluster = CLUSTER_NO
-        if IS_ONE_TOPIC:
-            print(f"setting SELECT for IS_ONE_TOPIC {TOPIC_NO}")
-            this_topic = TOPIC_NO
+        # make a list out of the topic no for looping
+        if FUSION_PAIR_DICT is None:
+            if IS_ONE_TOPIC:
+                print(f"setting SELECT for IS_ONE_TOPIC {TOPIC_NO}")
+                this_topic = TOPIC_NO
+                TOPIC_KEYWORD_LIST = {TOPIC_NO: "no_pairs"}
 
-        # selectSQL takes a cluster_no and topic_no
-        if IS_HAND_POSE_FUSION and ONLY_ONE:
-            print("IS_HAND_POSE_FUSION is True")
-            # select on both, sort on CLUSTER_NO 
-            # this sends pose and gesture in as a list, and an empty topic
-            this_cluster = [CLUSTER_NO, HAND_POSE_NO]
-        
-        if IS_HAND_POSE_FUSION and not ONLY_ONE:
-            print("doing GENERATE_FUSION_PAIRS")
-            this_topic = TOPIC_NO
-            if GENERATE_FUSION_PAIRS:
-                n_cluster_topics = sort.find_sorted_zero_indices(TOPIC_NO,MIN_VIDEO_FUSION_COUNT,FUSION_FOLDER)
-            else: 
-                n_cluster_topics = FUSION_PAIRS
-            print("fusion_pairs", n_cluster_topics)
-        elif IS_CLUSTER:
-            n_cluster_topics = range(N_CLUSTERS)
-            if IS_ONE_TOPIC: second_cluster_topic = this_topic
-            print(f"IS_CLUSTER is {IS_CLUSTER} with {n_cluster_topics}, and second_cluster_topic {second_cluster_topic}")
-        elif IS_TOPICS:
-            if USE_AFFECT_GROUPS: n_cluster_topics = len(AFFECT_GROUPS_LISTS) # redefine for affect groups
-            else: n_cluster_topics = range(N_TOPICS)
-            if this_cluster is not None: second_cluster_topic = this_cluster
-            # if USE_AFFECT_GROUPS: N_CLUSTERS = len(AFFECT_GROUPS_LISTS) # redefine for affect groups
-            print(f"IS_TOPICS is {IS_TOPICS} with {n_cluster_topics}")
+        # pulls keys from the FUSION_PAIR_DICT, which are the topics/keywords
+        # topic_keyword_list = FUSION_PAIR_DICT.keys()
+        topic_keyword_list = []
+        for key, value in FUSION_PAIR_DICT.items():
+            topic_keyword_list.append(key)
+        # print(type(topic_keyword_list))
+        # print((topic_keyword_list[0]))
+        for this_topic in topic_keyword_list:
 
-        def select_map_images(this_cluster, this_topic):
-            if VERBOSE: print("select_map_images this_cluster", this_cluster)
-            if VERBOSE: print("select_map_images this_topic", this_topic)
-            resultsjson = selectSQL(this_cluster, this_topic)
-            print("got results, count is: ",len(resultsjson))
-            if len(resultsjson) < MIN_CYCLE_COUNT:
-                print(f"less than {MIN_CYCLE_COUNT} resultsjson, skipping this {this_cluster} and {this_topic}")
-                return
+            ###          THE MAIN PART OF MAIN()           ###
+            ### QUERY SQL BASED ON CLUSTERS AND MAP_IMAGES ###
+    
+            print(f"MODE 0 or 2, for this_topic {this_topic} sorting and saving CSV", CSV_FOLDER)
+            #creating my objects
+            start = time.time()
+
+            # to loop or not to loop that is the cluster
+            print(f"doing {CURRENT_MODE}: SORT_TYPE {SORT_TYPE}, IS_HAND_POSE_FUSION {IS_HAND_POSE_FUSION}, GENERATE_FUSION_PAIRS {GENERATE_FUSION_PAIRS}, MIN_VIDEO_FUSION_COUNT {MIN_VIDEO_FUSION_COUNT}, IS_TOPICS {IS_TOPICS}, IS_ONE_TOPIC {IS_ONE_TOPIC}, this_topic {this_topic}, USE_AFFECT_GROUPS {USE_AFFECT_GROUPS}")
+            if IS_HAND_POSE_FUSION or IS_CLUSTER or IS_TOPICS: first_loop = True
+            if VERBOSE: print("first_loop", first_loop)
+
+            if IS_ONE_CLUSTER:
+                print(f"setting SELECT for IS_ONE_CLUSTER {CLUSTER_NO}")
+                this_cluster = CLUSTER_NO
+
+            # selectSQL takes a cluster_no and this_topic
+            if IS_HAND_POSE_FUSION and ONLY_ONE:
+                print("IS_HAND_POSE_FUSION is True")
+                # select on both, sort on CLUSTER_NO 
+                # this sends pose and gesture in as a list, and an empty topic
+                this_cluster = [CLUSTER_NO, HAND_POSE_NO]
+            
+            if IS_HAND_POSE_FUSION and not ONLY_ONE:
+                print("doing GENERATE_FUSION_PAIRS")
+                if GENERATE_FUSION_PAIRS:
+                    n_cluster_topics = sort.find_sorted_zero_indices(this_topic,MIN_VIDEO_FUSION_COUNT,FUSION_FOLDER)
+                elif USE_FUSION_PAIR_DICT:
+                    n_cluster_topics = FUSION_PAIR_DICT[this_topic]
+                else: 
+                    n_cluster_topics = FUSION_PAIRS
+                print("fusion_pairs", n_cluster_topics)
+            elif IS_CLUSTER:
+                n_cluster_topics = range(N_CLUSTERS)
+                if IS_ONE_TOPIC: second_cluster_topic = this_topic
+                print(f"IS_CLUSTER is {IS_CLUSTER} with {n_cluster_topics}, and second_cluster_topic {second_cluster_topic}")
+            elif IS_TOPICS:
+                if USE_AFFECT_GROUPS: n_cluster_topics = len(AFFECT_GROUPS_LISTS) # redefine for affect groups
+                else: n_cluster_topics = range(N_TOPICS)
+                if this_cluster is not None: second_cluster_topic = this_cluster
+                # if USE_AFFECT_GROUPS: N_CLUSTERS = len(AFFECT_GROUPS_LISTS) # redefine for affect groups
+                print(f"IS_TOPICS is {IS_TOPICS} with {n_cluster_topics}")
+
+            def select_map_images(this_cluster, this_topic):
+                if VERBOSE: print("select_map_images this_cluster", this_cluster)
+                if VERBOSE: print("select_map_images this_topic", this_topic)
+                resultsjson = selectSQL(this_cluster, this_topic)
+                print("got results, count is: ",len(resultsjson))
+                if len(resultsjson) < MIN_CYCLE_COUNT:
+                    print(f"less than {MIN_CYCLE_COUNT} resultsjson, skipping this {this_cluster} and {this_topic}")
+                    return
+                else:
+                    # folder_name = this_topic[0] if this_topic else this_cluster
+                    map_images(resultsjson, this_cluster, this_topic)
+
+            if first_loop:
+                print("first loop is ", first_loop)
+                for cluster_topic_no in n_cluster_topics:
+                    if IS_CLUSTER and cluster_topic_no < START_CLUSTER:continue
+                    if USE_AFFECT_GROUPS: cluster_topic_no = AFFECT_GROUPS_LISTS[cluster_topic_no] # redefine cluster_no with affect group list
+                    print(f"SELECTing cluster_topic {cluster_topic_no} of {n_cluster_topics}")
+                    if IS_TOPICS and not IS_HAND_POSE_FUSION: select_map_images(second_cluster_topic, cluster_topic_no)
+                    elif IS_CLUSTER: select_map_images(cluster_topic_no, second_cluster_topic)
+                    elif IS_HAND_POSE_FUSION: select_map_images(cluster_topic_no,this_topic)
+                    # resultsjson = selectSQL(select_list)
+                    # map_images(resultsjson, cluster_topic_no)
             else:
-                # folder_name = this_topic[0] if this_topic else this_cluster
-                map_images(resultsjson, this_cluster, this_topic)
+                print("doing regular linear")
+                select_map_images(this_cluster, this_topic)
 
-        if first_loop:
-            print("first loop is ", first_loop)
-            for cluster_topic_no in n_cluster_topics:
-                if IS_CLUSTER and cluster_topic_no < START_CLUSTER:continue
-                if USE_AFFECT_GROUPS: cluster_topic_no = AFFECT_GROUPS_LISTS[cluster_topic_no] # redefine cluster_no with affect group list
-                print(f"SELECTing cluster_topic {cluster_topic_no} of {n_cluster_topics}")
-                if IS_TOPICS and not IS_HAND_POSE_FUSION: select_map_images(second_cluster_topic, cluster_topic_no)
-                elif IS_CLUSTER: select_map_images(cluster_topic_no, second_cluster_topic)
-                elif IS_HAND_POSE_FUSION: select_map_images(cluster_topic_no,this_topic)
-                # resultsjson = selectSQL(select_list)
-                # map_images(resultsjson, cluster_topic_no)
-        else:
-            print("doing regular linear")
-            select_map_images(this_cluster, this_topic)
-
-        if MODE == 2:
-            print("MODE 2, now assembling from CSV_FOLDER", CSV_FOLDER)
-            save_images_from_csv_folder()
+            if MODE == 2:
+                print("MODE 2, now assembling from CSV_FOLDER", CSV_FOLDER)
+                save_images_from_csv_folder()
 
 
 if __name__ == '__main__':
