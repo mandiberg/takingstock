@@ -5,10 +5,10 @@ SET GLOBAL innodb_buffer_pool_size = 8053063680;
 
 -- cleanup
 DROP TABLE SegmentHelper_dec27_getty_noface ;
-DELETE FROM SegmentHelper_june2025_nmlGPU300k;
+DELETE FROM SegmentHelper_sept2025_heft_keywords;
 
 -- create helper segment table
-CREATE TABLE SegmentHelper_june2025_nmlGPU300k (
+CREATE TABLE SegmentHelper_sept2025_heft_keywords (
     seg_image_id int NOT NULL AUTO_INCREMENT PRIMARY KEY,
     image_id INTEGER,
     FOREIGN KEY (image_id) REFERENCES Images(image_id)
@@ -240,24 +240,24 @@ LIMIT 2000000
 ;
 
 -- for making a helper from segmentbig
-INSERT INTO SegmentHelper_june2025_nmlGPU300k (image_id)
+INSERT INTO SegmentHelper_sept2025_heft_keywords (image_id)
 SELECT DISTINCT e.image_id
 FROM SegmentBig_isface e
-JOIN Images i 
-ON i.image_id = e.image_id
-JOIN NMLImages n ON n.image_id = e.image_id
-WHERE e.face_x > -45 AND e.face_x < 0
-    AND e.face_y > -8 AND e.face_y < 8
-    AND e.face_z > -8 AND e.face_z < 8
+JOIN ImagesKeywords ik 
+ON ik.image_id = e.image_id
+WHERE ik.keyword_id IN (22411,220,22269,827,1070,22412,553,807,1644,5310)
     AND NOT EXISTS (
         SELECT 1
-        FROM SegmentHelper_june2025_nmlGPU300k s
+        FROM SegmentHelper_sept2025_heft_keywords s
         WHERE s.image_id = e.image_id
     )
-    AND n.nml_id > 4191363
 LIMIT 2000000
 ;
 
+SELECT COUNT(*)
+FROM SegmentHelper_sept2025_heft_keywords
+where image_id > 55732013
+;
 
 -- for making a complete site_name_id segment helper
 INSERT INTO SegmentHelper_jan30_ALLgetty4faces (image_id)

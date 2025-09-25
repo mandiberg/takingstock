@@ -74,28 +74,36 @@ db = io.db
 
 NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 title = 'Please choose your operation: '
-options = ['kmeans cluster and save clusters', 'cluster assignment', 'calculate cluster medians, cluster_dist and save clusters']
+options = ['kmeans cluster and save clusters', 'cluster assignment', 'calculate cluster medians, cluster_dist and save clusters', 'make meta clusters']
 option, MODE = pick(options, title)
 # MODE = 1
 # CLUSTER_TYPE = "Clusters"
 # CLUSTER_TYPE = "BodyPoses"
-# CLUSTER_TYPE = "BodyPoses3D"
-CLUSTER_TYPE = "ArmsPoses3D"
+CLUSTER_TYPE = "BodyPoses3D"
+# CLUSTER_TYPE = "ArmsPoses3D"
 # CLUSTER_TYPE = "HandsPositions"
 # CLUSTER_TYPE = "HandsGestures"
 # CLUSTER_TYPE = "FingertipsPositions"
 use_3D=True
 OFFSET = 0
+START_ID = 108329049 # only used in MODE 1
 
 # WHICH TABLE TO USE?
-SegmentTable_name = 'SegmentOct20'
-# SegmentTable_name = 'SegmentBig_isface'
+# SegmentTable_name = 'SegmentOct20'
+SegmentTable_name = 'SegmentBig_isface'
 # SegmentTable_name = 'SegmentBig_isnotface'
+
+# if doing MODE == 2, use SegmentHelper_name to subselect SQL query
+# unless you know what you are doing, leave this as None
+# SegmentHelper_name = None
+SegmentHelper_name = 'SegmentHelper_sept2025_heft_keywords'
 
 # number of clusters produced. run GET_OPTIMAL_CLUSTERS and add that number here
 # 32 for hand positions
 # 128 for hand gestures
-N_CLUSTERS = 32
+N_CLUSTERS = 512
+N_META_CLUSTERS = 4
+if MODE == 3: N_CLUSTERS = N_META_CLUSTERS
 
 ONE_SHOT= JUMP_SHOT= HSV_CONTROL=  VERBOSE= INPAINT= OBJ_CLS_ID = UPSCALE_MODEL_PATH =None
 # face_height_output, image_edge_multiplier, EXPAND=False, ONE_SHOT=False, JUMP_SHOT=False, HSV_CONTROL=None, VERBOSE=True,INPAINT=False, SORT_TYPE="128d", OBJ_CLS_ID = None,UPSCALE_MODEL_PATH=None, use_3D=False
@@ -136,7 +144,8 @@ if USE_SEGMENT is True and (CLUSTER_TYPE != "Clusters"):
     WHERE = f" {dupe_table_pre}.is_dupe_of IS NULL "
 
     if CLUSTER_TYPE == "BodyPoses": WHERE += f" AND {dupe_table_pre}.mongo_body_landmarks = 1 and {dupe_table_pre}.is_feet = 1"
-    elif CLUSTER_TYPE == "BodyPoses3D": WHERE += f" AND {dupe_table_pre}.mongo_body_landmarks_3D = 1 and {dupe_table_pre}.is_feet = 1"
+    # elif CLUSTER_TYPE == "BodyPoses3D": WHERE += f" AND {dupe_table_pre}.mongo_body_landmarks_3D = 1 and {dupe_table_pre}.is_feet = 1"
+    elif CLUSTER_TYPE == "BodyPoses3D": WHERE += f" AND {dupe_table_pre}.mongo_body_landmarks_3D = 1"
     elif CLUSTER_TYPE == "ArmsPoses3D": WHERE += f" AND {dupe_table_pre}.mongo_body_landmarks_3D = 1"
     elif CLUSTER_TYPE == "HandsGestures": WHERE += f" AND {dupe_table_pre}.mongo_hand_landmarks = 1 "
     elif CLUSTER_TYPE in ["HandsPositions","FingertipsPositions"] : WHERE += f" AND {dupe_table_pre}.mongo_hand_landmarks_norm = 1 "
@@ -154,13 +163,24 @@ if USE_SEGMENT is True and (CLUSTER_TYPE != "Clusters"):
         FROM += f" LEFT JOIN Images{CLUSTER_TYPE} ic ON s.image_id = ic.image_id"
         if MODE == 1: 
             WHERE += " AND ic.cluster_id IS NULL "
+            if SegmentHelper_name:
+                FROM += f" INNER JOIN {SegmentHelper_name} h ON h.image_id = s.image_id " 
+                # WHERE += " AND h.is_body = 1"
+            if START_ID:
+                WHERE += f" AND s.image_id >= {START_ID} "
         elif MODE == 2: 
+            # if doing MODE == 2, use SegmentHelper_name to subselect SQL query
             FROM += f" INNER JOIN {CLUSTER_TYPE} c ON c.cluster_id = ic.cluster_id"
             SELECT += ",ic.cluster_id, ic.cluster_dist, c.cluster_median"
             WHERE += " AND ic.cluster_id IS NOT NULL AND ic.cluster_dist IS NULL"
+    elif MODE == 3:
+        # make meta clusters. redefining as a simple full select of the clusters table
+        SELECT = "*"
+        FROM = CLUSTER_TYPE
+        WHERE = " cluster_id IS NOT NULL "
 
     # WHERE += " AND h.is_body = 1"
-    LIMIT = 5000000
+    LIMIT = 1000000
 
     '''
     Poses
@@ -195,7 +215,7 @@ elif USE_SEGMENT is True and MODE == 0:
     FROM += f" INNER JOIN ImagesTopics it ON it.image_id = s.image_id " 
     WHERE += " AND it.topic_id = 22 "
     # WHERE = "s.face_x > -33 AND s.face_x < -27 AND s.face_y > -2 AND s.face_y < 2 AND s.face_z > -2 AND s.face_z < 2"
-    LIMIT = 500000
+    LIMIT = 5000
 
     '''
     350k 1900s
@@ -242,8 +262,11 @@ Base = declarative_base()
 # handle the table objects based on CLUSTER_TYPE
 ClustersTable_name = CLUSTER_TYPE
 ImagesClustersTable_name = "Images"+CLUSTER_TYPE
+MetaClustersTable_name = "Meta"+CLUSTER_TYPE
+ClustersMetaClustersTable_name = "Clusters"+MetaClustersTable_name
 
 class Clusters(Base):
+    # this doubles as MetaClusters
     __tablename__ = ClustersTable_name
 
     cluster_id = Column(Integer, primary_key=True, autoincrement=True)
@@ -255,6 +278,20 @@ class ImagesClusters(Base):
     image_id = Column(Integer, ForeignKey(Images.image_id, ondelete="CASCADE"), primary_key=True)
     cluster_id = Column(Integer, ForeignKey(f'{ClustersTable_name}.cluster_id', ondelete="CASCADE"))
     cluster_dist = Column(Float)
+
+class MetaClusters(Base):
+    __tablename__ = MetaClustersTable_name
+
+    cluster_id = Column(Integer, primary_key=True, autoincrement=True)
+    cluster_median = Column(BLOB)
+
+class ClustersMetaClusters(Base):
+    __tablename__ = ClustersMetaClustersTable_name
+    # cluster_id is pkey, and meta_cluster_id will appear multiple times for multiple clusters
+    cluster_id = Column(Integer, ForeignKey(f'{ClustersTable_name}.cluster_id', ondelete="CASCADE"), primary_key=True)
+    meta_cluster_id = Column(Integer, ForeignKey(f'{MetaClustersTable_name}.cluster_id', ondelete="CASCADE"))
+    cluster_dist = Column(Float)
+
 
 def get_cluster_medians():
 
@@ -320,7 +357,13 @@ def selectSQL():
     return(resultsjson)
 
 def make_subset_landmarks(df,add_list=False):
-    numerical_columns = [col for col in df.columns if col.startswith('dim_')]
+    first_col = df.columns[1]
+    print("first col: ",first_col)
+    # if the first column is an int, then the columns are integers
+    if isinstance(first_col, int):
+        numerical_columns = [col for col in df.columns if isinstance(col, int)]
+    elif any(isinstance(col, str) and col.startswith('dim_') for col in df.columns):
+        numerical_columns = [col for col in df.columns if col.startswith('dim_')]
     # set hand_columns = to the numerical_columns in sort.SUBSET_LANDMARKS
     print("subset df columns: ",df.columns)
     if sort.SUBSET_LANDMARKS:
@@ -414,10 +457,18 @@ def calc_cluster_median(df, col_list, cluster_id):
     return cluster_median
 
 def build_col_list(df):
+    print("building col list for df columns: ", df.columns)
     col_list = {}
     col_list["left"] = col_list["right"] = col_list["body_lms"] = col_list["face"] = []
     if CLUSTER_TYPE in ("BodyPoses", "BodyPoses3D", "ArmsPoses3D"):
-        col_list["body_lms"] = [col for col in df.columns if col.startswith('dim_')]
+        second_column_name = df.columns[1]
+        # if the second column == 0, then compress the columsn into a list:
+        if second_column_name == 0:
+            print("compressing body_lms columns into a list")
+            # If columns are integers, convert them to strings before checking prefix
+            col_list["body_lms"] = [col for col in df.columns]
+        else:
+            col_list["body_lms"] = [col for col in df.columns if col.startswith('dim_')]
     elif CLUSTER_TYPE in ["HandsPositions", "HandsGestures", "FingertipsPositions"]:
         col_list["left"] = [col for col in df.columns if col.startswith('left_dim_')]
         col_list["right"] = [col for col in df.columns if col.startswith('right_dim_')]
@@ -469,7 +520,15 @@ def calculate_cluster_medians(df):
     return median_dict
 
 
-
+def set_cluster_metacluster():
+    if MODE == 3:
+        this_Cluster = MetaClusters
+        this_CrosswalkClusters = ClustersMetaClusters
+    else:
+        this_Cluster = Clusters
+        this_CrosswalkClusters = ImagesClusters
+    return this_Cluster, this_CrosswalkClusters
+        
 
 def save_clusters_DB(median_dict, update=False):
     # Convert to set and Save the df to a table
@@ -477,6 +536,8 @@ def save_clusters_DB(median_dict, update=False):
     print("save_clusters_DB median_dict", median_dict)
     cluster_ids = median_dict.keys()
     print("save_clusters_DB cluster_ids", cluster_ids)
+    this_cluster, this_crosswalk = set_cluster_metacluster()
+    print("this_cluster: ", this_cluster)
     for cluster_id in cluster_ids:
         cluster_median = median_dict[cluster_id]
         
@@ -489,12 +550,18 @@ def save_clusters_DB(median_dict, update=False):
 
         print("Checking for existing record with cluster_id ", cluster_id)
         # Check if the record already exists
-        existing_record = session.query(Clusters).filter_by(cluster_id=cluster_id).first()
+
+        # this is where the timeout error is happening:
+        '''
+        sqlalchemy.exc.OperationalError: (pymysql.err.OperationalError) (2006, "MySQL server has gone away (BrokenPipeError(32, 'Broken pipe'))")
+[SQL: SELECT `BodyPoses3D`.cluster_id AS `BodyPoses3D_cluster_id`, `BodyPoses3D`.cluster_median AS `BodyPoses3D_cluster_median` 
+FROM `BodyPoses3D`'''
+        existing_record = session.query(this_cluster).filter_by(cluster_id=cluster_id).first()
 
         if existing_record is None:
             # Save the geometric median into the database
             print(f"Saving new record with cluster_id {cluster_id}")
-            instance = Clusters(
+            instance = this_cluster(
                 cluster_id=cluster_id,
                 cluster_median=pickle.dumps(cluster_median)  # Serialize the geometric median
             )
@@ -502,7 +569,7 @@ def save_clusters_DB(median_dict, update=False):
             session.flush()  # Force database insertion to catch issues early
             if cluster_id == 0:
 
-                saved_record = session.query(Clusters).filter_by(cluster_id=0).first()
+                saved_record = session.query(this_cluster).filter_by(cluster_id=0).first()
                 if saved_record:
                     print(f"Successfully saved cluster_id 0: {saved_record}")
                 else:
@@ -515,6 +582,9 @@ def save_clusters_DB(median_dict, update=False):
             print(f"Skipping duplicate record with cluster_id {cluster_id}")
 
     try:
+        print("Attempting to commit session with the following data:")
+        for cluster_id, cluster_median in median_dict.items():
+            print(f"Cluster ID: {cluster_id}, Median: {cluster_median}")
         session.commit()
         print("Data saved successfully.")
     except IntegrityError as e:
@@ -526,19 +596,38 @@ def save_images_clusters_DB(df):
     #save the df to a table
     print("save_images_clusters_DB df", df)
     print("columns: ",df.columns)
+    this_cluster, this_crosswalk = set_cluster_metacluster()
+    print("this_crosswalk: ", this_crosswalk)
     for _, row in df.iterrows():
         image_id = row['image_id']
         cluster_id = row['cluster_id']
         cluster_dist = row['cluster_dist']
-        existing_record = session.query(ImagesClusters).filter_by(image_id=image_id).first()
+
+        if this_crosswalk == ImagesClusters:
+            image_id = row['image_id']
+            cluster_id = row['cluster_id']
+            cluster_dist = row['cluster_dist']
+            if any(pd.isna([image_id, cluster_id, cluster_dist])):
+                print(f"Skipping row with NaN values: image_id={image_id}, cluster_id={cluster_id}, cluster_dist={cluster_dist}")
+                continue
+            existing_record = session.query(ImagesClusters).filter_by(image_id=image_id).first()
+        elif this_crosswalk == ClustersMetaClusters:
+            existing_record = session.query(ClustersMetaClusters).filter_by(cluster_id=cluster_id).first()
 
         if existing_record is None:
             # it may be easier to define this locally, and assign the name via CLUSTER_TYPE
-            instance = ImagesClusters(
-                image_id=image_id,
-                cluster_id=cluster_id,
-                cluster_dist=cluster_dist
-            )
+            if this_crosswalk == ImagesClusters:
+                instance = ImagesClusters(
+                    image_id=image_id,
+                    cluster_id=cluster_id,
+                    cluster_dist=cluster_dist
+                )
+            elif this_crosswalk == ClustersMetaClusters:
+                instance = ClustersMetaClusters(
+                    cluster_id=cluster_id,
+                    meta_cluster_id=image_id,  # here image_id is actually meta_cluster_id
+                    cluster_dist=cluster_dist
+                )
             session.add(instance)
         
         elif existing_record is not None:
@@ -552,6 +641,9 @@ def save_images_clusters_DB(df):
             print(f"Skipping duplicate record with image_id {image_id}")
 
     try:
+        print("Attempting to commit session with the following data:")
+        for _, row in df.iterrows():
+            print(f"Image ID: {row['image_id']}, Cluster ID: {row['cluster_id']}, Cluster Dist: {row['cluster_dist']}")
         session.commit()
         print("Data saved successfully.")
     except IntegrityError as e:
@@ -559,17 +651,26 @@ def save_images_clusters_DB(df):
         print(f"Error occurred during data saving: {str(e)}")
 
 def calc_median_dist(enc1, enc2):
+    print("calc_median_dist enc1, enc2", enc1, enc2)
+    print("type enc1, enc2", type(enc1), type(enc2))
+    print("len enc1, enc2", len(enc1), len(enc2))
     return np.linalg.norm(enc1 - enc2, axis=0)
 
 def process_landmarks_cluster_dist(df, df_subset_landmarks):
+    first_col = df.columns[1]
+    print("first col: ",first_col)
+    # if the first column is an int, then the columns are integers
+    if isinstance(first_col, int):
+        dim_columns = [col for col in df_subset_landmarks.columns if isinstance(col, int)]
+    elif any(isinstance(col, str) and col.startswith('dim_') for col in df_subset_landmarks.columns):
     # Step 1: Identify columns that contain "_dim_"
-    dim_columns = [col for col in df_subset_landmarks.columns if "dim_" in col]
+        dim_columns = [col for col in df_subset_landmarks.columns if "dim_" in col]
     print("dim_columns: ", dim_columns)
     # Step 2: Combine values from these columns into a list for each row
     df_subset_landmarks['enc1'] = df_subset_landmarks[dim_columns].values.tolist()
 
     # Step 3: Print the result to check
-    print("df_subset_landmarks", df_subset_landmarks[['image_id', 'enc1']])
+    # print("df_subset_landmarks", df_subset_landmarks[['image_id', 'enc1']])
 
     if 'cluster_id' not in df.columns:
         # assign clusters to all rows
@@ -587,13 +688,13 @@ def process_landmarks_cluster_dist(df, df_subset_landmarks):
     return df_subset_landmarks
 
 def prep_pose_clusters_enc(enc1):
-    print("current image enc1", enc1)  
+    # print("current image enc1", enc1)  
     enc1 = np.array(enc1)
     
     this_dist_dict = {}
     for cluster_id in MEDIAN_DICT:
         enc2 = MEDIAN_DICT[cluster_id]
-        print("cluster_id enc2: ", cluster_id,enc2)
+        # print("cluster_id enc2: ", cluster_id,enc2)
         this_dist_dict[cluster_id] = np.linalg.norm(enc1 - enc2, axis=0)
     
     cluster_id, cluster_dist = min(this_dist_dict.items(), key=lambda x: x[1])
@@ -624,19 +725,28 @@ def assign_images_clusters_DB(df):
     # print all rows where cluster_id is 68
     # print(df_subset_landmarks[df_subset_landmarks["cluster_id"] == 68])
 
-    # save_images_clusters_DB(df_subset_landmarks)
-    # print ("saved to imagesclusters")
+    save_images_clusters_DB(df_subset_landmarks)
+    print ("saved to imagesclusters")
 
 def df_list_to_cols(df, col_name):
 
     # Convert the string representation of lists to actual lists
     # df[col_name] = df[col_name].apply(eval)
     df_data = df.drop("image_id", axis=1)
-    # Create new columns for each coordinate
-    num_coords = len(df_data[col_name].iloc[0])
-    for i in range(num_coords):
-        df[f'dim_{i}'] = df[col_name].apply(lambda x: x[i])
 
+    # drop any rows where col_name is None or NaN
+    df_data = df_data.dropna(subset=[col_name])
+    try:
+        # Create new columns for each coordinate
+        num_coords = len(df_data[col_name].iloc[0])
+    except Exception as e:
+        print(f"Error determining number of coordinates in column '{col_name}': {e}")
+        print("df_data", df_data)
+        print("df_data", df_data[col_name])
+        print("df_data", df_data[col_name].iloc[0])
+        return df  # Return the original DataFrame if there's an error  
+    for i in range(num_coords):
+        df[f'dim_{i}'] = df[col_name].apply(lambda x: x[i] if x is not None else None)
     # Drop the original col_name column
     df = df.drop(col_name, axis=1)
     return df
@@ -663,7 +773,10 @@ def prepare_df(df):
         df = df.dropna(subset=[keep_col])
         df[keep_col] = df[keep_col].apply(io.unpickle_array)
         # body = self.get_landmarks_2d(enc1, list(range(33)), structure)
-        print("df before get_landmarks_2d", df)
+        print(f"df size {len(df)} before get_landmarks_2d", df)
+        # getting errors here. I think it is because I have accumulated so many None's that it fills the whole df
+        # this is because a lot of the is_body do not actually have mongo data
+        # workaround is to update the start_id to skip the bad data
         df['body_landmarks_array'] = df[keep_col].apply(lambda x: sort.get_landmarks_2d(x, list(range(33)), structure=STRUCTURE))
 
         # apply io.convert_decimals_to_float to face_x, face_y, face_z, and mouth_gap 
@@ -712,25 +825,62 @@ def prepare_df(df):
 
 # defining globally 
 MEDIAN_DICT = get_cluster_medians()
-print("MEDIAN_DICT: ",MEDIAN_DICT)
+print("MEDIAN_DICT len: ",len(MEDIAN_DICT))
 
 def main():
+    global MEDIAN_DICT
+
+    def calculate_clusters_and_save(enc_data):
+        # I drop image_id, etc as I pass it to knn bc I need it later, but knn can't handle strings
+        print("df columns: ",enc_data.columns)
+        columns_to_drop = []
+        columns_to_check = ["image_id", "cluster_id", "body_landmarks_array", "left_hand_landmarks_norm", "right_hand_landmarks_norm", "hand_results", "face_encodings68"]
+        columns_to_drop += [col for col in columns_to_check if col in enc_data.columns]
+        print("columns to drop: ",columns_to_drop)
+        enc_data["cluster_id"] = kmeans_cluster(enc_data.drop(columns=columns_to_drop), n_clusters=N_CLUSTERS)
+        
+        print("enc_data", enc_data)
+        print("as list", set(enc_data["cluster_id"].tolist()))
+        median_dict = calculate_cluster_medians(enc_data)
+        save_clusters_DB(median_dict)
+        # add the correct median_dict for each cluster_id to the enc_data
+        enc_data["cluster_median"] = enc_data["cluster_id"].apply(lambda x: median_dict[x])
+        df_subset_landmarks = make_subset_landmarks(enc_data, add_list=True)
+        print("df_subset_landmarks", df_subset_landmarks)
+        df_subset_landmarks = process_landmarks_cluster_dist(enc_data,df_subset_landmarks)
+        print("df_subset_landmarks after process_landmarks", df_subset_landmarks)
+        save_images_clusters_DB(df_subset_landmarks)
+        print("saved segment to clusters")
+
     # create_my_engine(db)
     global N_CLUSTERS
-    print("about to SQL: ",SELECT,FROM,WHERE,LIMIT)
-    resultsjson = selectSQL()
-    print("got results, count is: ",len(resultsjson))
-    enc_data=pd.DataFrame()
-    df = pd.json_normalize(resultsjson)
-    print(df)
-    # tell sort_pose which columns to NOT query
-    if CLUSTER_TYPE in ("BodyPoses", "BodyPoses3D", "ArmsPoses3D"): io.query_face = sort.query_face = io.query_hands = sort.query_hands = False
-    elif CLUSTER_TYPE == "HandsGestures": io.query_body = sort.query_body = io.query_face = sort.query_face = False
-    elif CLUSTER_TYPE == "Clusters": io.query_body = sort.query_body = io.query_hands = sort.query_hands = False
-    if not USE_HEAD_POSE: io.query_head_pose = sort.query_head_pose = False
-    df[['face_encodings68', 'face_landmarks', 'body_landmarks', 'body_landmarks_normalized', 'body_landmarks_3D', 'hand_results']] = df['image_id'].apply(io.get_encodings_mongo)
-    # face_encodings68, face_landmarks, body_landmarks, body_landmarks_normalized = sort.get_encodings_mongo(mongo_db,row["image_id"], is_body=True, is_face=False)
-    enc_data = prepare_df(df)
+    if MODE == 3: 
+        print("making meta clusters from existing clusters")
+        if len(MEDIAN_DICT) < 2:
+            print("Not enough clusters to form meta-clusters. Exiting.")
+            return False
+        n_meta_clusters = max(2, len(MEDIAN_DICT) // 5)  # Ensure at least 2 meta-clusters
+        print(f"Number of meta-clusters to create: {n_meta_clusters}")
+        # convert MEDIAN_DICT to a dataframe
+        enc_data = pd.DataFrame.from_dict(MEDIAN_DICT, orient='index')
+        enc_data.reset_index(inplace=True)
+        enc_data.rename(columns={'index': 'cluster_id'}, inplace=True)
+
+    else:
+        print("about to SQL: ",SELECT,FROM,WHERE,LIMIT)
+        resultsjson = selectSQL()
+        print("got results, count is: ",len(resultsjson))
+        enc_data=pd.DataFrame()
+        df = pd.json_normalize(resultsjson)
+        print(df)
+        # tell sort_pose which columns to NOT query
+        if CLUSTER_TYPE in ("BodyPoses", "BodyPoses3D", "ArmsPoses3D"): io.query_face = sort.query_face = io.query_hands = sort.query_hands = False
+        elif CLUSTER_TYPE == "HandsGestures": io.query_body = sort.query_body = io.query_face = sort.query_face = False
+        elif CLUSTER_TYPE == "Clusters": io.query_body = sort.query_body = io.query_hands = sort.query_hands = False
+        if not USE_HEAD_POSE: io.query_head_pose = sort.query_head_pose = False
+        df[['face_encodings68', 'face_landmarks', 'body_landmarks', 'body_landmarks_normalized', 'body_landmarks_3D', 'hand_results']] = df['image_id'].apply(io.get_encodings_mongo)
+        # face_encodings68, face_landmarks, body_landmarks, body_landmarks_normalized = sort.get_encodings_mongo(mongo_db,row["image_id"], is_body=True, is_face=False)
+        enc_data = prepare_df(df)
     
     # choose if you want optimal cluster size or custom cluster size using the parameter GET_OPTIMAL_CLUSTERS
     if MODE == 0:
@@ -742,32 +892,14 @@ def main():
         print(enc_data)
         
 
-        # I drop image_id as I pass it to knn bc I need it later, but knn can't handle strings
         # if body_landmarks_array is one of the df.columns, drop it
-        print("df columns: ",enc_data.columns)
-        columns_to_drop = ["image_id"]
-        columns_to_check = ["body_landmarks_array", "left_hand_landmarks_norm", "right_hand_landmarks_norm", "hand_results", "face_encodings68"]
-        columns_to_drop += [col for col in columns_to_check if col in enc_data.columns]
-        print("columns to drop: ",columns_to_drop)
-        enc_data["cluster_id"] = kmeans_cluster(enc_data.drop(columns=columns_to_drop), n_clusters=N_CLUSTERS)
-        
-        print("enc_data", enc_data)
-        print("as list", set(enc_data["cluster_id"].tolist()))
         # don't need to write a CSV
         # enc_data.to_csv('clusters_clusterID_byImageID.csv')
 
         # if USE_SEGMENT:
         #     Base.metadata.create_all(engine)
-        median_dict = calculate_cluster_medians(enc_data)
-        save_clusters_DB(median_dict)
-        # add the correct median_dict for each cluster_id to the enc_data
-        enc_data["cluster_median"] = enc_data["cluster_id"].apply(lambda x: median_dict[x])
-        df_subset_landmarks = make_subset_landmarks(enc_data, add_list=True)
-        print("df_subset_landmarks", df_subset_landmarks)
-        df_subset_landmarks = process_landmarks_cluster_dist(enc_data,df_subset_landmarks)
-        print("df_subset_landmarks after process_landmarks", df_subset_landmarks)
-        save_images_clusters_DB(df_subset_landmarks)
-        print("saved segment to clusters")
+        calculate_clusters_and_save(enc_data)
+        
     elif MODE == 1:
 
         assign_images_clusters_DB(enc_data)
@@ -793,6 +925,11 @@ def main():
         # median_dict = calculate_cluster_medians(enc_data)
         # save_clusters_DB(median_dict, update=True)
         print("assigned and saved segment to clusters")
+    elif MODE == 3:
+        # make meta clusters using MEDIAN_DICT
+        calculate_clusters_and_save(enc_data)
+        print("made and saved meta clusters")
+
 
     end = time.time()
     print (end - start)

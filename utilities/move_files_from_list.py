@@ -8,6 +8,8 @@ from pathlib import Path
 # create a csv file with the original path and the destination path
 # this script will copy the files from the original path to the destination path
 
+# WORKS WITH df_sorted format from make_video.py FALL 2025 !!
+
 ROOT_GITHUB = os.path.join(Path.home(), "Documents/GitHub/facemap/")
 # caution: path[0] is reserved for script path (or '' in REPL)
 sys.path.insert(1, ROOT_GITHUB)
@@ -23,13 +25,14 @@ io = DataIO(IS_SSD)
 
 
 CSV_FOLDER = os.path.join(io.ROOT_DBx, "NML_transition")
-USE_DF_SORTED = False  # if True it will use the df_sorted format from make_video.py
+CSV_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/heft_keyword_fusion_clusters/body3D_512_keywords_2_full/focus_clusters" # for testing
+USE_DF_SORTED = True  # if True it will use the df_sorted format from make_video.py
 IS_TEST = False
 # ORIGIN = "/Volumes/OWC4/segment_images/images_adobe"
 # DEST = os.path.join(io.ROOT_DBx, "NMLdeshard")
-DEST = "/Volumes/OWC4/NMLdeshard"
+DEST = "/Volumes/OWC4/segment_images_focus_clusters"
 if IS_TEST:
-    # to run a smaller test
+    # to run a smaller test, put a few files in the test folder
     DEST = DEST + "_test"
     CSV_FOLDER = CSV_FOLDER + "_test"
     print(f"Running in test mode. Using DEST: {DEST} and CSV_FOLDER: {CSV_FOLDER}")

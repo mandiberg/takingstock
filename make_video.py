@@ -40,11 +40,11 @@ CYCLECOUNT = 1
 SegmentTable_name = 'SegmentBig_isface'
 # SegmentTable_name = 'SegmentBig_isnotface'
 # SegmentHelper_name = 'SegmentHelper_may2025_4x4faces'
-SegmentHelper_name = None
-# SegmentHelper_name = 'SegmentHelper_june2025_nmlGPU300k'
+# SegmentHelper_name = None
+SegmentHelper_name = 'SegmentHelper_sept2025_heft_keywords'
 # SATYAM, this is MM specific
 # for when I'm using files on my SSD vs RAID
-IS_SSD = False
+IS_SSD = True
 #IS_MOVE is in move_toSSD_files.py
 
 # I/O utils
@@ -66,7 +66,7 @@ CSV_FOLDER = os.path.join("/Users/michaelmandiberg/Documents/projects-active/fac
 # io.db["name"] = "ministock"
 
 MODES = ['paris_photo_torso_images_topics', 'paris_photo_torso_videos_topics', '3D_bodies_topics','3D_arms', 'heft_torso_keywords']
-MODE_CHOICE = 3
+MODE_CHOICE = 4
 CURRENT_MODE = MODES[MODE_CHOICE]
 
 # set defaults, including for all modes to False
@@ -74,7 +74,7 @@ FULL_BODY = IS_HAND_POSE_FUSION = ONLY_ONE = GENERATE_FUSION_PAIRS = IS_CLUSTER 
 EXPAND = ONE_SHOT = JUMP_SHOT = USE_ALL = False
 USE_PAINTED = OUTPAINT = INPAINT= False
 FUSION_FOLDER = None
-MIN_CYCLE_COUNT = 10
+MIN_CYCLE_COUNT = 300
 AUTO_EDGE_CROP = False # this triggers the dynamic cropping based on min_max_body_landmarks_for_crop
 
 image_edge_multiplier = None
@@ -140,25 +140,31 @@ elif "3D" in CURRENT_MODE:
     START_CLUSTER = 0
 
 elif CURRENT_MODE == 'heft_torso_keywords':
-    SegmentTable_name = 'SegmentOct20'
-    SORT_TYPE = "planar_hands"
-    # SORT_TYPE = "arms3D"
+    # SegmentTable_name = 'SegmentOct20'
+    SegmentTable_name = 'SegmentBig_isface'
+    # SORT_TYPE = "planar_hands"
+    SORT_TYPE = "arms3D"
+    TESTING = True
     IS_HAND_POSE_FUSION = True # do we use fusion clusters
-    GENERATE_FUSION_PAIRS = True # if true it will query based on MIN_VIDEO_FUSION_COUNT and create pairs
+    GENERATE_FUSION_PAIRS = False # if true it will query based on MIN_VIDEO_FUSION_COUNT and create pairs
                                     # if false, it will grab the list of pair lists below
-    MIN_VIDEO_FUSION_COUNT = 300
-    MIN_CYCLE_COUNT = 300
+    # if TESTING: IS_HAND_POSE_FUSION = GENERATE_FUSION_PAIRS = False
+    MIN_VIDEO_FUSION_COUNT = 1300 # this is the cut off for the CSV fusion pairs
+    MIN_CYCLE_COUNT = 1000 # this is the cut off for the SQL query results
 
     # this control whether sorting by topics
     # IS_TOPICS = True # if using Clusters only, must set this to False
 
-    ONE_SHOT = True # take all files, based off the very first sort order.
+    
+    ONE_SHOT = False # take all files, based off the very first sort order.
     JUMP_SHOT = True # jump to random file if can't find a run (I don't think this applies to planar?)
 
     # initializing default square crop
     # if this is defined, then it will not call min_max_body_landmarks_for_crop
     # image_edge_multiplier = [1.3,1.85,2.4,1.85] # tighter square crop for paris photo videos < Oct 29 FINAL VERSION NOV 2024 DO NOT CHANGE
     image_edge_multiplier = [1.3,2,2.9,2] # portrait crop for paris photo images < Aug 30
+
+    USE_ALL = True # turns off face xyz and mouthgap filters && if SORT_TYPE == "planar_hands" forces ONE_SHOT
 
     USE_PAINTED = False
     INPAINT= True
@@ -167,9 +173,9 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     # when doing IS_HAND_POSE_FUSION code currently only supports one topic at a time
     IS_ONE_TOPIC = True
     N_TOPICS = 100
-    TOPIC_NO = [1644] # if doing an affect topic fusion, this is the wrapper topic
+    TOPIC_NO = [22412] # if doing an affect topic fusion, this is the wrapper topic
     FUSION_FOLDER = "utilities/data/heft_keyword_fusion_clusters"
-    CSV_FOLDER = os.path.join("/Users/michaelmandiberg/Documents/projects-active/facemap_production/heft_keyword_fusion_clusters/banner_planar")
+    CSV_FOLDER = os.path.join("/Users/michaelmandiberg/Documents/projects-active/facemap_production/heft_keyword_fusion_clusters/body3D_512_TSP")
 
     print(f"doing {CURRENT_MODE}: SORT_TYPE {SORT_TYPE}, IS_HAND_POSE_FUSION {IS_HAND_POSE_FUSION}, GENERATE_FUSION_PAIRS {GENERATE_FUSION_PAIRS}, MIN_VIDEO_FUSION_COUNT {MIN_VIDEO_FUSION_COUNT}, IS_TOPICS {IS_TOPICS}, IS_ONE_TOPIC {IS_ONE_TOPIC}, TOPIC_NO {TOPIC_NO}, USE_AFFECT_GROUPS {USE_AFFECT_GROUPS}")
 else:
@@ -205,7 +211,7 @@ USE_NOSEBRIDGE = True
 TSP_SORT=False
 # this is for controlling if it is using
 # all clusters, 
-LIMIT = 100000 # this is the limit for the SQL query
+LIMIT = 1500 # this is the limit for the SQL query
 
 # this is set dynamically based on SORT_TYPE set above
 if IS_HAND_POSE_FUSION:
@@ -225,9 +231,12 @@ if IS_HAND_POSE_FUSION:
         CLUSTER_TYPE_2 = "HandsGestures"
     elif SORT_TYPE == "arms3D":
         # if fusion, select on arms3D and gesture, sort on hands positions
-        SORT_TYPE = "planar_hands"
+        SORT_TYPE = "arms3D"
         CLUSTER_TYPE = "ArmsPoses3D"
         CLUSTER_TYPE_2 = "HandsGestures"
+        if TESTING:
+            CLUSTER_TYPE = "BodyPoses3D"
+            CLUSTER_TYPE_2 = None
     # CLUSTER_TYPE is passed to sort. below
 else:
     if SORT_TYPE == "arms3D":
@@ -323,6 +332,13 @@ PHONE_BBOX_LIMITS = [0] # this is an attempt to control the BBOX placement. I do
 if not GENERATE_FUSION_PAIRS:
     print("not generating FUSION_PAIRS, pulling from list")
     FUSION_PAIRS = [
+
+        # Sept 2025 kludge
+        # [198, 0], [206, 0], [208, 0], [215, 0], [216, 0], [219, 0], [220, 0], [229, 0], [234, 0], [240, 0], [244, 0], [250, 0], [257, 0], [264, 0], [265, 0], [273, 0], [277, 0], [279, 0], [288, 0], [302, 0], [304, 0], [305, 0], [306, 0], [316, 0], [317, 0], [322, 0], [324, 0], [331, 0], [340, 0], [342, 0], [351, 0], [352, 0], [364, 0], [370, 0], [390, 0], [391, 0], [396, 0], [412, 0], [422, 0], [423, 0], [425, 0], [426, 0], [445, 0], [446, 0], [448, 0], [449, 0], [457, 0], [464, 0], [470, 0], [472, 0], [476, 0], [479, 0], [481, 0], [482, 0], [485, 0], [487, 0], [498, 0], [500, 0], [507, 0]
+
+        # Sept 2025, keyword money
+        [89, 0], [101, 0], [140, 0], [184, 0], [273, 0], [391, 0], [396, 0], [426, 0], [430, 0], [446, 0], [449, 0], [481]
+
         #CLUSTER_NO, HAND_POSE_NO
 
         # T0 sports
@@ -438,7 +454,7 @@ if not GENERATE_FUSION_PAIRS:
 
         # topic 32, T64, ihp128 -- REWORK TESTING SEPT 13 2025
         # hands over face
-        [1, 65], [1, 88], [1, 125] 
+        # [1, 65], [1, 88], [1, 125] 
      
         # # topic 32, T64, ihp128
         # # hands over face
@@ -520,7 +536,8 @@ elif IS_SEGONLY and io.platform == "darwin":
     if SegmentHelper_name is None:
         pass
     elif PHONE_BBOX_LIMITS:
-        WHERE += " AND s.face_x > -50 "
+        pass
+        # WHERE += " AND s.face_x > -50 "
     else:
         WHERE += " AND s.face_x > -33 AND s.face_x < -27 AND s.face_y > -2 AND s.face_y < 2 AND s.face_z > -2 AND s.face_z < 2"
 # OVERRIDE FOR TESTING
@@ -557,7 +574,7 @@ elif IS_SEGONLY and io.platform == "darwin":
 
     if IS_HAND_POSE_FUSION:
         FROM += f" JOIN Images{CLUSTER_TYPE} ihp ON s.image_id = ihp.image_id "
-        FROM += f" JOIN Images{CLUSTER_TYPE_2} ih ON s.image_id = ih.image_id "
+        if CLUSTER_TYPE_2: FROM += f" JOIN Images{CLUSTER_TYPE_2} ih ON s.image_id = ih.image_id "
         # WHERE += " AND ihp.cluster_dist < 2.5" # isn't really working how I want it
         if IS_HAND_POSE_FUSION: add_topic_select()
     elif IS_ONE_CLUSTER and IS_ONE_TOPIC:
@@ -941,7 +958,7 @@ if not io.IS_TENCH:
                 print("cluster_no is a list", cluster_no)
                 # we have two values, C1 and C2. C1 should be IHP, C2 should be IH
                 cluster += f" AND ihp.cluster_id = {str(cluster_no[0])} "            
-                cluster += f" AND ih.cluster_id = {str(cluster_no[1])} "            
+                if cluster_no[1]: cluster += f" AND ih.cluster_id = {str(cluster_no[1])} "            
         # elif cluster_no is not None or topic_no is not None:
         elif IS_CLUSTER or IS_ONE_CLUSTER:
             cluster += cluster_topic_select("ic.cluster_id", cluster_no)
@@ -2057,6 +2074,7 @@ def parse_cluster_no(this_cluster):
 
 def set_my_counter_dict(this_topic=None, cluster_no=None, pose_no=None, start_img_name=None, start_site_image_id=None):
     ### Set counter_dict ###
+    print("set_my_counter_dict this_topic, cluster_no, pose_no, start_img_name, start_site_image_id", this_topic, cluster_no, pose_no, start_img_name, start_site_image_id)
     cluster_string = const_prefix(this_topic, cluster_no, pose_no)
     print("cluster_string", cluster_string)
     sort.set_counters(io.ROOT,cluster_string, start_img_name,start_site_image_id)
@@ -2066,7 +2084,12 @@ def set_my_counter_dict(this_topic=None, cluster_no=None, pose_no=None, start_im
 
 def const_prefix(this_topic, cluster_no, pose_no):
     # topic_string = ''.join([str(x) for x in this_topic]) if this_topic is not None else "None"
-    file_prefix = f"c{cluster_no}_p{pose_no}_t{this_topic[0]}" if this_topic is not None else f"c{cluster_no}_p{pose_no}_tNone"
+    # if topic is a list, then just use the first value
+    if this_topic is not None and isinstance(this_topic, list):
+        if VERBOSE: print("this_topic is a list", this_topic)
+        this_topic = [this_topic[0]]
+
+    file_prefix = f"c{cluster_no}_p{pose_no}_t{this_topic}" if this_topic is not None else f"c{cluster_no}_p{pose_no}_tNone"
     return file_prefix
 
 
@@ -2268,6 +2291,7 @@ def main():
             return df
         
         def find_parts(parts):
+            if VERBOSE: print("finding parts in", parts)
             cluster_no = pose_no = segment_count = topic_no = None
             for part in parts:
                 if part.startswith("ct"):
@@ -2281,7 +2305,7 @@ def main():
                 elif part.startswith("t"):
                     # Extract topic from the part that starts with "t"
                     # e.g., t3 -> 3
-                    topic = part.split("t")[1]
+                    topic_no = part.split("t")[1]
                 elif part.startswith("c"):
                     # Extract cluster_no from the part that starts with "c"
                     # e.g., c2 -> 2
@@ -2289,7 +2313,7 @@ def main():
             return segment_count, pose_no, topic_no, cluster_no
 
 
-        cluster_no = pose_no = segment_count = this_topic = None
+        cluster_no = pose_no = segment_count = topic_no = None
         # list the files in the the CSV_FOLDER
         files_in_folder = os.listdir(CSV_FOLDER)
         # sort files alphabetically
@@ -2310,7 +2334,7 @@ def main():
                 print(f"assembling cluster {cluster_no}, topic {topic_no}, pose {pose_no} from csv file: {csv_file}")
 
                 ### Set counter_dict (without start stuff which is not needed) ###
-                set_my_counter_dict(this_topic, cluster_no, pose_no)
+                set_my_counter_dict(topic_no, cluster_no, pose_no)
                 df_sorted = load_df_sorted_from_csv(os.path.join(CSV_FOLDER, csv_file))
 
 

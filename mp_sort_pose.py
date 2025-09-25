@@ -57,7 +57,7 @@ class SortPose:
         self.BRUTEFORCE = False
         self.use_3D = use_3D
         # print("init use_3D",self.use_3D)
-        self.CUTOFF = 2000 # DOES factor if ONE_SHOT
+        self.CUTOFF = 20 # DOES factor if ONE_SHOT
         self.ORIGIN = 0
         self.this_nose_bridge_dist = self.NOSE_BRIDGE_DIST = None # to be set in first loop, and sort.this_nose_bridge_dist each time
 
@@ -151,7 +151,7 @@ class SortPose:
         self.WRIST_LMS = self.make_subset_landmarks(15,16)
         self.ANKLES_LMS = self.make_subset_landmarks(27,28)
         self.HAND_LMS_POINTER = self.make_subset_landmarks(8,8)
-        self.ARMS_HEAD_LMS = self.make_subset_landmarks(0,22)
+        self.ARMS_HEAD_LMS = self.make_subset_landmarks(11,22)
         # adding pointer finger tip
         # self.SUBSET_LANDMARKS.extend(self.FINGER_LMS) # this should match what is in Clustering
         # only use wrist and finger
@@ -867,7 +867,7 @@ class SortPose:
         }
 
         def norm_dist(this_dist, threshold):
-            print("this_dist, threshold", this_dist, threshold)
+            if self.VERBOSE: print("this_dist, threshold", this_dist, threshold)
             return this_dist / threshold
 
         def construct_filepath(key, df):
@@ -975,7 +975,7 @@ class SortPose:
                 for key, (threshold, operator) in threshold_dict.items():
                     if key not in keys_to_check: continue
                     # calculate distance and add to list
-                    print(f"Pass 1 checking {key} for {i},{j}")
+                    if self.VERBOSE: print(f"Pass 1 checking {key} for {i},{j}")
                     this_dist = self.dupe_comparison(i, j, key, df)
                     normed_dist = norm_dist(this_dist, threshold)
                     this_dist_list.append(normed_dist)
@@ -2214,7 +2214,7 @@ class SortPose:
         if self.SORT_TYPE == "128d": sort_column = "face_encodings68"
         elif self.SORT_TYPE == "planar_body": sort_column = "body_landmarks_array"
         elif self.SORT_TYPE == "body3D" or self.SORT_TYPE == "arms3D": sort_column = "body_landmarks_array"
-        elif self.SORT_TYPE == "planar_hands": sort_column = "hand_landmarks" # hand_landmarks are left and right hands flat list of 126 values
+        elif self.SORT_TYPE == "planar_hands" or self.SORT_TYPE == "planar_hands_USE_ALL": sort_column = "hand_landmarks" # hand_landmarks are left and right hands flat list of 126 values
         print("sort_column", sort_column)
         print("sort_column head", df_enc[sort_column].head())
         # print("lengtth of first value", len(df_enc[sort_column].iloc[0]))
@@ -2534,7 +2534,7 @@ class SortPose:
             elif self.SORT_TYPE == "planar": enc1 = df.iloc[-1]["face_landmarks"]
             # elif self.SORT_TYPE == "planar_hands" and "hand_landmarks" in df.columns: enc1 = df.iloc[-1]["hand_landmarks"]
             elif self.SORT_TYPE == "planar_hands" and "hand_landmarks" in df.columns: enc1 = df.iloc[-1]["hand_landmarks"]
-            elif self.SORT_TYPE == "planar_body" and "body_landmarks_array" in df.columns: enc1 = df.iloc[-1]["body_landmarks_array"]
+            elif self.SORT_TYPE in ("planar_body", "arms3D", "body3D") and "body_landmarks_array" in df.columns: enc1 = df.iloc[-1]["body_landmarks_array"]
             elif self.SORT_TYPE == "planar_body": enc1 = df.iloc[-1]["body_landmarks_normalized"]
             # setting obj_bbox1
             if self.SORT_TYPE == "planar_body" and "obj_bbox_list" in df.columns: obj_bbox1 = df.iloc[-1]["obj_bbox_list"]
@@ -2764,6 +2764,7 @@ class SortPose:
 
         encodings_array = df_enc[sortcol].to_numpy().tolist()
         # print("encodings_array to_numpy().tolist", (encodings_array))
+        print(f"before knn, this is enc1 {enc1}")
 
         if knn_sort == "obj":
             print("encodings_array length", len(encodings_array))
@@ -3148,6 +3149,7 @@ class SortPose:
             if self.VERBOSE: print("df_sorted containing all good items", len(df_sorted))
             
             if self.VERBOSE: print("df_enc", len(df_enc))
+            if self.VERBOSE: print("enc1", len(enc1))
         else:
             if self.VERBOSE: print("df_shuffled is empty")
 
@@ -3592,11 +3594,14 @@ class SortPose:
         gesture_array = df.to_numpy()
 
         # Optionally, you can check the shape of the array
-        # print("Shape of the array:", gesture_array.shape)
-        # print(gesture_array)  # Print the array to verify its contents
+        print("Shape of the array:", gesture_array.shape)
+        print(gesture_array)  # Print the array to verify its contents
 
         # Find the indices where elements are zero
         zero_indices = np.argwhere(gesture_array >min_value)
+        
+        for idx, (row, col) in enumerate(zero_indices):
+            print(f"Element greater than {min_value} found at row {row}, column {col}: {gesture_array[row, col]}")
         
         # Convert the list of zero indices to a NumPy array
         zero_indices_array = np.array(zero_indices)
