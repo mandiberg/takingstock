@@ -1486,7 +1486,7 @@ class SortPose:
         bbox = df.iloc[index].get('bbox', None)
         if not bbox:
             body_landmarks = df.iloc[index].get('body_landmarks', None)
-            if body_landmarks:
+            if isinstance(body_landmarks, str) and body_landmarks:
                 min_max_landmark = {
                     'min_x': 1,
                     'min_y': 1,
@@ -1582,7 +1582,10 @@ class SortPose:
                 }
                 print(f'calc_bbox_from_median: {bbox}')
                 return bbox
-        
+            else:
+                print(f'Error Body landmarks type {type(body_landmarks)}')
+                return None
+                
 ###########################################################################
 ############################# END TENCH_CALC_BBOX #########################
 ###########################################################################

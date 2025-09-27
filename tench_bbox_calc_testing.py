@@ -61,6 +61,7 @@ N_CLUSTERS = N_HANDS = SORT_TYPE = FULL_BODY = IS_HAND_POSE_FUSION = ONLY_ONE = 
 # CSV_FOLDER = os.path.join("/Users/michaelmandiberg/Documents/projects-active/facemap_production/heft_keyword_fusion_clusters/armstest")
 # TENCH UNCOMMENT FOR YOUR COMP:
 CSV_FOLDER = os.path.join(io.ROOT_DBx, "body3D_segmentbig_useall256_CSVs_test")
+CSV_FOLDER = os.path.join(io.ROOT_DBx, "body3D_segmentbig_useall256_CSVs_FULL LIST")
 
 # CSV_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/body3D_segmentbig_useall256_CSVs"
 # overriding DB for testing
@@ -2314,7 +2315,7 @@ def main():
                 #Dedupe sorting here!
                 # df_sorted.to_csv(os.path.join(io.ROOT_DBx, f"df_sorted_{cluster_no}_ct{segment_count}_p{pose_no}.csv"), index=False)
                 # df_sorted = df_sorted.head(10)  # Keep only the top entries
-                df_sorted = sort.remove_duplicates(io.folder_list, df_sorted)
+                # df_sorted = sort.remove_duplicates(io.folder_list, df_sorted)
 
                 #calculating bboxes from interpolated data and outputting information about calcs
                 n_rows = len(df_sorted)
@@ -2334,10 +2335,14 @@ def main():
                         new_bbox_value = sort.calc_bbox_from_median(df_sorted, i, median_bbox_ratio)
                         df_sorted.at[i, 'bbox'] = new_bbox_value
                         
-                        if deleted_bboxes: # Check if the list is not empty
+                        if deleted_bboxes and new_bbox_value: # Check if the list is not empty
                             # Get and remove the next value from the deleted_bboxes list
                             next_deleted_bbox = deleted_bboxes.pop(0)
+                            image_id = df_sorted.iloc[i].get('image_id', None)
                             bbox = {
+                                    'image_id': image_id,
+                                    'cluster_no': cluster_no,
+                                    'pose_no': pose_no,
                                     'original bbox': next_deleted_bbox,
                                     'new bbox': new_bbox_value,
                                     'diff bottom': abs(new_bbox_value['bottom'] - next_deleted_bbox['bottom']),
@@ -2346,6 +2351,17 @@ def main():
                                     'normalized diff top':  abs(new_bbox_value['top'] - next_deleted_bbox['top']) / next_deleted_bbox['top']
                                 }
                             median_bbox_info.append(bbox)
+                
+                # Create a DataFrame from median_bbox_info if any entries exist
+                if median_bbox_info:
+                    median_bbox_df = pd.json_normalize(median_bbox_info)
+                    print("median_bbox_df head:\n", median_bbox_df.head())
+                    
+                    # Export to CSV
+                    csv_filename = f"../taking_stock_production/bbox_calc/median_bbox_info_cluster_{cluster_no}.csv"
+                    median_bbox_df.to_csv(csv_filename, index=False)
+                    print(f"Exported median_bbox_info to {csv_filename}")
+                
                 median_bbox_diff_top = []
                 median_bbox_diff_bottom = []
                 for i in range(len(median_bbox_info)):
@@ -2353,6 +2369,7 @@ def main():
                     median_bbox_diff_top.append(median_bbox_info[i]['normalized diff top'])
                     median_bbox_diff_bottom.append(median_bbox_info[i]['normalized diff bottom'])
 
+                
                 print(f'Final results! \n median bbox to body ratio: {median_bbox_ratio} \n median normalized diff between calculated and original \n top:{statistics.median(median_bbox_diff_top)}, bottom {statistics.median(median_bbox_diff_top)}')
                 
                 
@@ -2360,7 +2377,7 @@ def main():
                 
                 # wrapping the multiplier in a function that sets dims too
                 set_multiplier_and_dims(df_sorted, cluster_no, pose_no)
-
+                CALIBRATING = True
                 if CALIBRATING: continue
                 linear_test_df(df_sorted)
 
