@@ -65,12 +65,12 @@ def calculate_iou(boxA, boxB):
 def generate_graphs_for_csv(filepath):
     """
     Generates informational graphs comparing original and new bounding boxes
-    from a single CSV file, grouped by cluster if a 'cluster_id' column exists.
+    from a single CSV file, grouped by cluster if a 'cluster_no' column exists.
     All graphs for a cluster are saved into a single PNG.
 
     Assumes the CSV contains columns 'bbox' (original) and 'new_bbox' (new),
     where bounding boxes are stored as string representations of lists, e.g., "[x, y, w, h]".
-    An optional 'cluster_id' column can be used for grouping.
+    An optional 'cluster_no' column can be used for grouping.
     """
     try:
         df = pd.read_csv(filepath)
@@ -130,15 +130,17 @@ def generate_graphs_for_csv(filepath):
     df['orig_height'] = df['orig_height']
     df['new_height'] = df['new_height']
 
-    # Group by 'cluster_id' if the column exists, otherwise treat the whole file as one group
-    if 'cluster_id' in df.columns:
-        groups = df.groupby('cluster_id')
+    # Group by 'cluster_no' if the column exists, otherwise treat the whole file as one group
+    if 'cluster_no' in df.columns:
+        groups = df.groupby('cluster_no')
         print(f"Found {len(groups)} clusters in {filename}.")
+        # Convert groupby object to dictionary for iteration
+        groups_dict = {name: group for name, group in groups}
     else:
-        groups = {'all_data': df} # Treat entire file as one group
-        print(f"No 'cluster_id' column found in {filename}. Generating graphs for the entire file.")
+        groups_dict = {'all_data': df} # Treat entire file as one group
+        print(f"No 'cluster_no' column found in {filename}. Generating graphs for the entire file.")
 
-    for cluster_name, group_df in groups.items():
+    for cluster_name, group_df in groups_dict.items():
         if group_df.empty:
             print(f"Cluster {cluster_name} is empty, skipping.")
             continue
@@ -293,12 +295,11 @@ def generate_cluster_comparison_graphs(csv_folder_path):
         cluster_data = combined_df[combined_df['cluster_no'] == cluster]
         axes[0, 1].scatter(cluster_data['normalized diff top'], 
                           cluster_data['normalized diff bottom'], 
-                          alpha=0.6, label=f'Cluster {cluster}', color=colors[i])
+                          alpha=0.6, color=colors[i])
     
     axes[0, 1].set_xlabel('Normalized Difference Top')
     axes[0, 1].set_ylabel('Normalized Difference Bottom')
     axes[0, 1].set_title('Normalized Differences: Top vs Bottom by Cluster')
-    axes[0, 1].legend(bbox_to_axes=(1.05, 1), loc='upper left')
     axes[0, 1].grid(True, alpha=0.3)
 
     # --- Plot 3: Box Plot of Normalized Differences by Cluster ---
@@ -331,22 +332,23 @@ def generate_cluster_comparison_graphs(csv_folder_path):
                       Patch(facecolor='orange', alpha=0.7, label='Bottom')]
     axes[1, 0].legend(handles=legend_elements)
 
-    # --- Plot 4: Cluster Size vs Median Normalized Difference ---
-    axes[1, 1].scatter(cluster_stats['count'], cluster_stats['normalized diff top'], 
-                      alpha=0.7, s=100, color='skyblue', label='Top')
-    axes[1, 1].scatter(cluster_stats['count'], cluster_stats['normalized diff bottom'], 
-                      alpha=0.7, s=100, color='orange', label='Bottom')
+    # --- Plot 4: Top vs Bottom Normalized Difference Comparison ---
+    axes[1, 1].scatter(cluster_stats['normalized diff top'], cluster_stats['normalized diff bottom'], 
+                      alpha=0.7, s=100, color='purple')
     
     # Add cluster labels to points
     for cluster, row in cluster_stats.iterrows():
-        axes[1, 1].annotate(f'C{cluster}', (row['count'], row['normalized diff top']), 
-                           xytext=(5, 5), textcoords='offset points', fontsize=8)
-        axes[1, 1].annotate(f'C{cluster}', (row['count'], row['normalized diff bottom']), 
+        axes[1, 1].annotate(f'C{cluster}', (row['normalized diff top'], row['normalized diff bottom']), 
                            xytext=(5, 5), textcoords='offset points', fontsize=8)
     
-    axes[1, 1].set_xlabel('Number of Images in Cluster')
-    axes[1, 1].set_ylabel('Median Normalized Difference')
-    axes[1, 1].set_title('Cluster Size vs Median Normalized Difference')
+    # Add diagonal line for reference (perfect correlation)
+    max_val = max(cluster_stats['normalized diff top'].max(), cluster_stats['normalized diff bottom'].max())
+    min_val = min(cluster_stats['normalized diff top'].min(), cluster_stats['normalized diff bottom'].min())
+    axes[1, 1].plot([min_val, max_val], [min_val, max_val], 'r--', alpha=0.5, label='Perfect Correlation')
+    
+    axes[1, 1].set_xlabel('Median Normalized Difference Top')
+    axes[1, 1].set_ylabel('Median Normalized Difference Bottom')
+    axes[1, 1].set_title('Top vs Bottom Accuracy by Cluster')
     axes[1, 1].legend()
     axes[1, 1].grid(True, alpha=0.3)
 
