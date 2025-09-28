@@ -48,14 +48,15 @@ mongo_collection = mongo_db["body_landmarks_norm"]
 # Define the batch size
 batch_size = 10000
 MODE = 1 #0 for overall compare, 1 to recheck against entry and bson dump
-IS_FACE = 1
+IS_FACE = 0
 IS_BODY = 1
 
 # select max encoding_id to start from
 Base = declarative_base()
 
+table_name = 'compare_sql_mongo_results_isbody1_isface0'
 class CompareSqlMongoResults(Base):
-    __tablename__ = 'compare_sql_mongo_results'
+    __tablename__ = table_name
     encoding_id = Column(Integer, primary_key=True)
     image_id = Column(Integer)
     is_body = Column(Boolean)
@@ -239,7 +240,7 @@ for batch_start in range(min_id, max_id + 1, batch_size * num_threads):
     print(f"Processed batch up to encoding_id {batch_ranges[-1][1]-1}: discrepancies found this batch: {len(batch_df)}")
     if not batch_df.empty:
         batch_df.to_sql(
-            name="compare_sql_mongo_results",
+            name=table_name,
             con=engine,
             if_exists="append",
             index=False,

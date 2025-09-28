@@ -232,13 +232,43 @@ None of them have is_face or is_body
 I need to move that data from Encodings to here.
 I need to move all of the is_face and is_body data from Encodings to compare_sql_mongo_results.
 */
+Use STOCK;
 
-INSERT INTO compare_sql_mongo_results (encoding_id, image_id, is_face, is_body)
+SELECT COUNT(e.face_landmarks), COUNT(e.body_landmarks), COUNT(e.face_encodings68), COUNT(e.nlms), COUNT(e.body_world_landmarks)
+FROM compare_sql_mongo_results e
+WHERE e.encoding_id < 46000000
+AND (e.face_landmarks = 0
+OR e.body_landmarks = 0
+OR e.face_encodings68 = 0
+OR e.nlms = 0
+OR e.body_world_landmarks = 0)
+;
+
+
+SELECT i.site_name_id, COUNT(e.face_landmarks), COUNT(e.body_landmarks), COUNT(e.face_encodings68), COUNT(e.nlms), COUNT(e.right_hand), COUNT(e.left_hand), COUNT(e.body_world_landmarks)
+FROM compare_sql_mongo_results e
+JOIN Images i ON e.image_id = i.image_id
+WHERE e.encoding_id > 0
+AND e.encoding_id < 57300000
+AND (e.face_landmarks = 0
+OR e.body_landmarks = 0
+OR e.face_encodings68 = 0
+OR e.right_hand = 0
+OR e.left_hand = 0
+OR e.nlms = 0
+OR e.body_world_landmarks = 0)
+GROUP BY i.site_name_id
+ORDER BY i.site_name_id DESC;
+
+;
+
+
+INSERT INTO compare_sql_mongo_results_isbody1_isface1 (encoding_id, image_id, is_face, is_body)
 SELECT encoding_id, image_id, is_face, is_body
 FROM Encodings
-WHERE is_face IS NOT NULL OR is_body IS NOT NULL
-AND encoding_id > 9000000
-AND encoding_id < 37318635
+WHERE is_face =1 AND is_body =1
+AND encoding_id > 0
+AND encoding_id < 1000
 ON DUPLICATE KEY UPDATE
     is_face = VALUES(is_face),
     is_body = VALUES(is_body)
