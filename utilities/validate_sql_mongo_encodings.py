@@ -78,7 +78,7 @@ Base.metadata.create_all(engine)
 # last_id = session.query(sqlalchemy.func.max(CompareSqlMongoResults.encoding_id)).scalar()
 # if last_id is None:
 #     last_id = 0
-last_id = 850000
+last_id = 59000000
 print(f"Starting from last_id: {last_id}")
 
 # variables to filter encodings on
@@ -359,15 +359,29 @@ def validate_zero_columns_against_mongo_prereshard(engine, mongo_db, document_na
                 collection = mongo_db[col_to_collection[col]]
                 doc = collection.find_one({"image_id": image_id})
                 if doc and col in doc and doc[col] is not None:
+                    if col_to_collection[col] == "encodings":
+                        this_result_dict["encoding_id"] = encoding_id
+                        # print(f" collection is encodings for {col} ")
                     # if there is a result, save it in a dict to write out later
                     print(f"Discrepancy: encoding_id={encoding_id}, image_id={image_id}, column={col}")
                     this_result_dict[col] = (doc[col])
                     collections_found.add(col_to_collection[col])
+        if this_result_dict.get("body_world_landmarks", None) is not None and "body_landmarks" not in (this_result_dict, col_to_collection):
+            # print("body_landmarks missing but body_world_landmarks present, going to investigate further")
+            # check to see if a document exists in encodings collection that has body_landmarks
+            enc_doc = encodings_collection.find_one({"image_id": image_id})
+            if enc_doc and "body_landmarks" in enc_doc and enc_doc["body_landmarks"] is not None:
+                # print(f" >> enc_doc = {enc_doc['body_landmarks']}")
+                this_result_dict["body_landmarks"] = enc_doc["body_landmarks"]
+                # print(f" ++ found body_landmarks in encodings collection for image_id {image_id}")
+                collections_found.add("encodings")
+                # print(f"collections_found now: {collections_found}")
+                # print(f"this_result_dict now: {this_result_dict}")
+            else:
+                print(f" ~~ did not find body_landmarks in encodings collection for image_id {image_id}")
 
-        # print(this_result_dict)
         if this_result_dict:
             # print(this_result_dict)
-            this_result_dict["encoding_id"] = encoding_id
             this_batch_dict[image_id] = this_result_dict
             # for key in this_result_dict:
             #     print(f"++ found data for {encoding_id} column {key} with length {len(this_result_dict[key])}")
@@ -434,7 +448,7 @@ if __name__ == "__main__":
             results_rows = []
             with concurrent.futures.ThreadPoolExecutor(max_workers=num_threads) as executor:
                 futures = [executor.submit(process_batch, start, end) for start, end in batch_ranges]
-            break  # temporary for testing
+            # break  # temporary for testing
 
     elif MODE == 1:
         # read from BSON and write to mongo and sql

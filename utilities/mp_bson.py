@@ -95,7 +95,11 @@ class MongoBSONExporter:
         # print(f" first_key = {first_key}")
         # print(f" batch_bson[first_key].keys() = {batch_bson[first_key].keys()}")
         # check if 'encoding_id' is in the keys of batch_bson[first_key]
-        if 'encoding_id' in batch_bson[first_key].keys():
+        # print(f" first_key = {first_key}, type = {type(first_key)}")
+        # print(f" batch_bson[first_key] = {batch_bson[first_key]}, type = {type(batch_bson[first_key])}")
+
+        if isinstance(first_key, int) and isinstance(batch_bson[first_key], dict):
+        # if 'encoding_id' in batch_bson[first_key].keys():
             batch_dict = batch_bson
             batch_collection_data= {}
             for collection in self.document_names_dict.keys():
