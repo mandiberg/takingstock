@@ -78,7 +78,7 @@ Base.metadata.create_all(engine)
 # last_id = session.query(sqlalchemy.func.max(CompareSqlMongoResults.encoding_id)).scalar()
 # if last_id is None:
 #     last_id = 0
-last_id = 59000000
+last_id = 66200000
 print(f"Starting from last_id: {last_id}")
 
 # variables to filter encodings on
@@ -347,12 +347,12 @@ def validate_zero_columns_against_mongo_prereshard(engine, mongo_db, document_na
 
     this_batch_dict = {}
     # offset += batch_size
-    # print(f"Retrieved {len(df)} rows from {table_name} for validation")
+    print(f"Retrieved {len(df)} rows from {table_name} for validation")
     df_existing_documents = pd.DataFrame()
     for idx, row in df.iterrows():
         this_result_dict = {}
-        encoding_id = row['encoding_id']
-        image_id = row['image_id']
+        encoding_id = int(row['encoding_id'])
+        image_id = int(row['image_id'])
         # print(f"encoding_id={encoding_id}, image_id={image_id}")
         for col in col_to_collection:
             if col in row and row[col] == 0:
