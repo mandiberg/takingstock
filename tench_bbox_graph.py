@@ -2,11 +2,13 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import os
 import ast # For safely evaluating string representations of lists/tuples
+import numpy as np
+from matplotlib.patches import Patch
 
 # Define the folder path for CSV files.
 # IMPORTANT: Please update this variable with the actual path to your CSV files.
 CSV_FOLDER_PATH = "/Users/tenchc/Documents/GitHub/taking_stock_production/bbox_calc" # Example: "/Users/youruser/Documents/my_csv_data"
-OUTPUT_DIR = "/Users/tenchc/Documents/GitHub/taking_stock_production/bbox_output" # Centralized output directory for graphs
+OUTPUT_DIR = "/Users/tenchc/Documents/GitHub/taking_stock_production/bbox_output_graphs" # Centralized output directory for graphs
 
 def parse_bbox_string(bbox_str):
     """Parses a bbox string like '[x, y, w, h]' into a tuple of floats."""
@@ -158,15 +160,64 @@ def generate_graphs_for_csv(filepath):
         axes[0].set_ylabel('Difference in Bottom (New - Original)')
         axes[0].grid(True, linestyle='--', alpha=0.7)
 
-        # --- Plot 2: Height Comparison (Box Plot) ---
+        # --- Plot 2: Height Comparison (Box Plot) + annotate outliers with image_id ---
         data_to_plot_height = [
             group_df['orig_height'].dropna(), group_df['new_height'].dropna()
         ]
         labels_height = ['Original Height', 'New Height']
-        axes[1].boxplot(data_to_plot_height, labels=labels_height, patch_artist=True, medianprops={'color': 'black'})
+        bp = axes[1].boxplot(data_to_plot_height, labels=labels_height, patch_artist=True, medianprops={'color': 'black'})
         axes[1].set_title(f'Height Comparison (Cluster: {cluster_name})')
         axes[1].set_ylabel('Height Value (Pixels)')
         axes[1].grid(axis='y', alpha=0.75)
+
+        # Identify IQR outliers and annotate with image_id if available
+        if 'image_id' in group_df.columns:
+            # Use aligned Series
+            orig_series = group_df['orig_height']
+            new_series = group_df['new_height']
+            ids_series = group_df['image_id']
+
+            # Compute IQR thresholds for each series (ignoring NaNs)
+            def iqr_bounds(values):
+                vals = values.dropna().to_numpy()
+                if len(vals) == 0:
+                    return None, None
+                q1 = np.percentile(vals, 25)
+                q3 = np.percentile(vals, 75)
+                iqr = q3 - q1
+                return q1 - 1.5 * iqr, q3 + 1.5 * iqr
+
+            lower_o, upper_o = iqr_bounds(orig_series)
+            lower_n, upper_n = iqr_bounds(new_series)
+
+            if lower_o is not None and lower_n is not None:
+                # Boolean masks per row
+                out_o = (orig_series < lower_o) | (orig_series > upper_o)
+                out_n = (new_series < lower_n) | (new_series > upper_n)
+
+                # Exclusive outliers
+                only_o = out_o & ~out_n
+                only_n = out_n & ~out_o
+
+                # Plot and annotate exclusive outliers for Original (x=1)
+                if only_o.any():
+                    y_vals = orig_series[only_o]
+                    ids = ids_series[only_o]
+                    jitter = (np.random.rand(len(y_vals)) - 0.5) * 0.1
+                    x_vals = 1.0 + jitter
+                    axes[1].scatter(x_vals, y_vals, color='black', s=15, zorder=3)
+                    for xv, (idx, yv) in zip(x_vals, y_vals.items()):
+                        axes[1].annotate(str(ids_series.loc[idx]), (xv, yv), xytext=(4, 2), textcoords='offset points', fontsize=7, rotation=15)
+
+                # Plot and annotate exclusive outliers for New (x=2)
+                if only_n.any():
+                    y_vals = new_series[only_n]
+                    ids = ids_series[only_n]
+                    jitter = (np.random.rand(len(y_vals)) - 0.5) * 0.1
+                    x_vals = 2.0 + jitter
+                    axes[1].scatter(x_vals, y_vals, color='black', s=15, zorder=3)
+                    for xv, (idx, yv) in zip(x_vals, y_vals.items()):
+                        axes[1].annotate(str(ids_series.loc[idx]), (xv, yv), xytext=(4, 2), textcoords='offset points', fontsize=7, rotation=15)
 
         # --- Plot 3: Histogram of Height Difference ---
         axes[2].hist(group_df['diff_height'].dropna(), bins=20, color='lightgreen', edgecolor='black')
@@ -175,9 +226,26 @@ def generate_graphs_for_csv(filepath):
         axes[2].set_ylabel('Frequency')
         axes[2].grid(axis='y', alpha=0.75)
 
-        # --- Plot 4: Top vs Bottom Position Changes ---
+        # --- Plot 4: Top vs Bottom Position Changes with correlation lines ---
         axes[3].scatter(group_df['orig_top'], group_df['new_top'], alpha=0.6, color='red', label='Top')
         axes[3].scatter(group_df['orig_bottom'], group_df['new_bottom'], alpha=0.6, color='blue', label='Bottom')
+
+        # Perfect correlation line (y = x) across the combined range
+        x_min = float(min(group_df['orig_top'].min(), group_df['orig_bottom'].min(),
+                          group_df['new_top'].min(), group_df['new_bottom'].min()))
+        x_max = float(max(group_df['orig_top'].max(), group_df['orig_bottom'].max(),
+                          group_df['new_top'].max(), group_df['new_bottom'].max()))
+        line_x = np.linspace(x_min, x_max, 100)
+        axes[3].plot(line_x, line_x, 'k--', alpha=0.6, label='Perfect correlation')
+
+        # Fitted regression lines for Top and Bottom
+        if len(group_df[['orig_top', 'new_top']].dropna()) >= 2:
+            coeffs_top = np.polyfit(group_df['orig_top'], group_df['new_top'], 1)
+            axes[3].plot(line_x, coeffs_top[0] * line_x + coeffs_top[1], color='red', alpha=0.8, linestyle='-', label='Top fit')
+        if len(group_df[['orig_bottom', 'new_bottom']].dropna()) >= 2:
+            coeffs_bottom = np.polyfit(group_df['orig_bottom'], group_df['new_bottom'], 1)
+            axes[3].plot(line_x, coeffs_bottom[0] * line_x + coeffs_bottom[1], color='blue', alpha=0.8, linestyle='-', label='Bottom fit')
+
         axes[3].set_title(f'Position Comparison (Cluster: {cluster_name})')
         axes[3].set_xlabel('Original Position')
         axes[3].set_ylabel('New Position')
@@ -187,7 +255,7 @@ def generate_graphs_for_csv(filepath):
         plt.tight_layout()
         # Sanitize cluster_name for filename if it's not a simple number
         safe_cluster_name = str(cluster_name).replace(os.sep, '_').replace(':', '_')
-        output_path = os.path.join(OUTPUT_DIR, f"{base_filename}_cluster_{safe_cluster_name}_bbox_comparison.png")
+        output_path = os.path.join(OUTPUT_DIR, f"cluster_{safe_cluster_name}_bbox_comparison.png")
         plt.savefig(output_path)
         plt.close(fig) # Close the figure to free memory
         print(f"Saved comparison graphs for cluster {cluster_name} to {output_path}")
@@ -258,6 +326,18 @@ def generate_cluster_comparison_graphs(csv_folder_path):
 
     # Combine all data
     combined_df = pd.concat(all_data, ignore_index=True)
+
+    # Export entries where either normalized diff exceeds threshold
+    THRESHOLD = 2.5
+    outlier_mask = (combined_df['normalized diff top'] > THRESHOLD) | (combined_df['normalized diff bottom'] > THRESHOLD)
+    outliers_df = combined_df.loc[outlier_mask].copy()
+    if not outliers_df.empty:
+        outliers_df = outliers_df.sort_values(by='cluster_no')
+        out_csv = os.path.join(OUTPUT_DIR, f"normalized_diff_outliers_gt_{THRESHOLD}.csv")
+        outliers_df.to_csv(out_csv, index=False)
+        print(f"Saved outlier entries (normalized diff > {THRESHOLD}) to {out_csv}")
+    else:
+        print(f"No outlier entries found with normalized diff > {THRESHOLD}")
     
     # Calculate median normalized differences per cluster
     cluster_stats = combined_df.groupby('cluster_no').agg({
@@ -269,6 +349,70 @@ def generate_cluster_comparison_graphs(csv_folder_path):
     if len(cluster_stats) < 2:
         print(f"Need at least 2 clusters for comparison. Found {len(cluster_stats)} clusters across all files.")
         return
+
+    # --- Compute correlation/slope per cluster (Top and Bottom) and flag significant deviations ---
+    required_pos_cols = ['original bbox.top', 'new bbox.top', 'original bbox.bottom', 'new bbox.bottom']
+    have_position_cols = all(col in combined_df.columns for col in required_pos_cols)
+    significant_rows = []
+    if not have_position_cols:
+        print("Warning: Position columns not found; skipping correlation deviation analysis.")
+    else:
+        # Thresholds for significance
+        R_THRESHOLD = 0.9            # flag if Pearson r < 0.9
+        SLOPE_DELTA_THRESHOLD = 0.1  # flag if |slope - 1| > 0.1
+
+        for cluster, group in combined_df.groupby('cluster_no'):
+            # Drop NaNs for safety per measurement
+            # Top
+            top_df = group[['original bbox.top', 'new bbox.top']].dropna()
+            top_result = {
+                'cluster_no': cluster,
+                'which': 'top',
+                'pearson_r': None,
+                'slope': None,
+                'flagged': False
+            }
+            if len(top_df) >= 2:
+                x = top_df['original bbox.top'].to_numpy()
+                y = top_df['new bbox.top'].to_numpy()
+                # Pearson r
+                r = float(np.corrcoef(x, y)[0, 1]) if np.std(x) > 0 and np.std(y) > 0 else 0.0
+                # Slope from linear regression y = a*x + b
+                slope, intercept = np.polyfit(x, y, 1)
+                top_result['pearson_r'] = r
+                top_result['slope'] = float(slope)
+                top_result['flagged'] = (r < R_THRESHOLD) or (abs(slope - 1.0) > SLOPE_DELTA_THRESHOLD)
+            significant_rows.append(top_result)
+
+            # Bottom
+            bottom_df = group[['original bbox.bottom', 'new bbox.bottom']].dropna()
+            bottom_result = {
+                'cluster_no': cluster,
+                'which': 'bottom',
+                'pearson_r': None,
+                'slope': None,
+                'flagged': False
+            }
+            if len(bottom_df) >= 2:
+                x = bottom_df['original bbox.bottom'].to_numpy()
+                y = bottom_df['new bbox.bottom'].to_numpy()
+                r = float(np.corrcoef(x, y)[0, 1]) if np.std(x) > 0 and np.std(y) > 0 else 0.0
+                slope, intercept = np.polyfit(x, y, 1)
+                bottom_result['pearson_r'] = r
+                bottom_result['slope'] = float(slope)
+                bottom_result['flagged'] = (r < R_THRESHOLD) or (abs(slope - 1.0) > SLOPE_DELTA_THRESHOLD)
+            significant_rows.append(bottom_result)
+
+        corr_df = pd.DataFrame(significant_rows)
+        if not corr_df.empty:
+            # Create a filtered view of significantly deviating clusters
+            deviating = corr_df[corr_df['flagged'] == True].copy()
+            deviating.sort_values(by=['cluster_no', 'which'], inplace=True)
+            out_csv = os.path.join(OUTPUT_DIR, 'clusters_with_significant_corr_deviation.csv')
+            deviating.to_csv(out_csv, index=False)
+            print(f"Saved clusters showing significant deviation from perfect correlation to {out_csv}")
+        else:
+            print("No correlation metrics computed; skipping deviation export.")
 
     # Create cluster comparison figure
     fig, axes = plt.subplots(2, 2, figsize=(15, 12))
@@ -327,7 +471,6 @@ def generate_cluster_comparison_graphs(csv_folder_path):
     axes[1, 0].grid(axis='y', alpha=0.3)
     
     # Add legend for box plots
-    from matplotlib.patches import Patch
     legend_elements = [Patch(facecolor='skyblue', alpha=0.7, label='Top'),
                       Patch(facecolor='orange', alpha=0.7, label='Bottom')]
     axes[1, 0].legend(handles=legend_elements)

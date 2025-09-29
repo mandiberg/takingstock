@@ -2377,9 +2377,38 @@ def main():
                 
                 # wrapping the multiplier in a function that sets dims too
                 set_multiplier_and_dims(df_sorted, cluster_no, pose_no)
-                CALIBRATING = True
-                if CALIBRATING: continue
-                linear_test_df(df_sorted)
+                # CALIBRATING = True
+
+
+
+                #This chunk of code does not curently work
+                # outlier_csv_path = "/Users/tenchc/Documents/GitHub/taking_stock_production/bbox_output/normalized_diff_outliers_gt_2.5.csv"
+                
+                # df_to_test_linearly = pd.DataFrame() # Initialize as an empty DataFrame
+                # if os.path.exists(outlier_csv_path):
+                #     try:
+                #         outliers_df = pd.read_csv(outlier_csv_path)
+                #         if 'image_id' in outliers_df.columns:
+                #             outlier_image_ids = outliers_df['image_id'].tolist()
+                            
+                #             # Filter df_sorted based on image_ids from the outlier CSV
+                #             temp_filtered_df = df_sorted[df_sorted['image_id'].isin(outlier_image_ids)].copy()
+                            
+                #             if not temp_filtered_df.empty:
+                #                 print(f"Found {len(temp_filtered_df)} outlier images from cluster {cluster_no} matching {outlier_csv_path}.")
+                #                 df_to_test_linearly = temp_filtered_df
+                #             else:
+                #                 print(f"No outlier images from {outlier_csv_path} found in current df_sorted for cluster {cluster_no}. Skipping linear_test_df.")
+                #     except Exception as e:
+                #         print(f"Error reading or processing {outlier_csv_path}: {e}. Skipping linear_test_df.")
+                # else:
+                #     print(f"Warning: Outlier CSV file not found at {outlier_csv_path}. Skipping linear_test_df.")
+                
+                # # Perform the linear_test_df call only if df_to_test_linearly is not empty
+                # if not df_to_test_linearly.empty:
+                #     print(f'Running Linear test, first 5 col of df_to_test: {df_to_test_linearly.head(10)}')
+                #     linear_test_df(df_to_test_linearly)
+                # # linear_test_df(df_sorted)
 
 
 
