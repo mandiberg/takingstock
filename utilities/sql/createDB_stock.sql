@@ -256,3 +256,13 @@ CREATE TABLE LocationHandsFeet (
     right_foot_x FLOAT,
     right_foot_y FLOAT
 );
+
+
+-- This is the junction table.
+CREATE TABLE IsNotDupeOf (
+    image_id_i int REFERENCES Images (image_id),
+    image_id_j int REFERENCES Encodings (encoding_id),
+    PRIMARY KEY (image_id_i, image_id_j)
+);
+
+

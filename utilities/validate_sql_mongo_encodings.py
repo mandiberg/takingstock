@@ -46,14 +46,19 @@ mongo_client = pymongo.MongoClient("mongodb://localhost:27017/")
 mongo_db = mongo_client["stock"]
 # mongo_collection = mongo_db["encodings"]
 mongo_collection = mongo_db["body_landmarks_norm"]
+exporter = MongoBSONExporter(mongo_db)
 
 # Define the batch size
-batch_size = 100000
-MODE = 1 #0 for overall compare, 1 to recheck against entry and bson dump
+batch_size = 2
 IS_FACE = 0
 IS_BODY = 1
-MODE = 0 
-EXPORT_DIR = os.path.join(io.ROOT_PROD,"mongo_exports_sept28")  # Directory to save BSON files
+MODE = 1
+#0 validate_zero_columns_against_mongo_prereshard (outputs bson) 
+# 1 read_and_store_bson
+# 2 find entries present in mongo, but not recorded in sql table
+last_id = 120000000
+print(f"Starting from last_id: {last_id}")
+EXPORT_DIR = os.path.join(io.ROOT_PROD,"mongo_exports_sept29")  # Directory to save BSON files
 # touch the directory if it does not exist
 os.makedirs(EXPORT_DIR, exist_ok=True)
 print(f"Export directory: {EXPORT_DIR}")
@@ -78,8 +83,6 @@ Base.metadata.create_all(engine)
 # last_id = session.query(sqlalchemy.func.max(CompareSqlMongoResults.encoding_id)).scalar()
 # if last_id is None:
 #     last_id = 0
-last_id = 66200000
-print(f"Starting from last_id: {last_id}")
 
 # variables to filter encodings on
 migrated_SQL = 1
@@ -131,62 +134,6 @@ If there is data in Mongo but not in SQL, print it out
 
 '''
 
-def process_batch(batch_start, batch_end):
-    # Each thread needs its own session and mongo client
-    thread_engine = create_engine("mysql+pymysql://{user}:{pw}@/{db}?unix_socket={socket}".format(
-        user=db['user'], pw=db['pass'], db=db['name'], socket=db['unix_socket']
-    ), poolclass=NullPool)
-    ThreadSession = sessionmaker(bind=thread_engine)
-    thread_session = ThreadSession()
-    thread_mongo_client = pymongo.MongoClient("mongodb://localhost:27017/")
-    thread_mongo_db = thread_mongo_client["stock"]
-
-    calculated_batch_size = (batch_end - batch_start) # adding one to make sure there is not gap even if it creates an overlap of one 
-    # validate_zero_columns_against_mongo(thread_engine, thread_mongo_db, document_names_dict, batch_start, calculated_batch_size) # for checking first round validation
-
-    validate_zero_columns_against_mongo_prereshard(thread_engine, thread_mongo_db, document_names_dict, batch_start, calculated_batch_size)
-    # results_rows = []
-
-    # results = get_mysql_results(batch_start, batch_end, thread_session)
-    # print(f"Thread processing batch {batch_start} to {batch_end}, got {len(results)} results")
-    # print(f"First 5 results: {results[:5]}")
-
-    # for encoding_id, image_id, mongo_encodings, mongo_body_landmarks, mongo_face_landmarks, mongo_body_landmarks_norm, mongo_hand_landmarks, mongo_body_landmarks_3D, is_body, is_face in results:
-    #     if encoding_id is None or image_id is None:
-    #         continue
-    #     mongo_docs = {}
-    #     for collection_name in collection_names:
-    #         collection = thread_mongo_db[collection_name]
-    #         doc = collection.find_one({"image_id": image_id})
-    #         mongo_docs[collection_name] = doc
-
-    #     this_row = {
-    #         "encoding_id": encoding_id,
-    #         "image_id": image_id,
-    #         "is_body": is_body,
-    #         "is_face": is_face
-    #     }
-    #     for collection_name in collection_names:
-    #         doc = mongo_docs[collection_name]
-    #         document_names = document_names_dict[collection_name]
-    #         for document_name in document_names:
-    #             sql_field_name = sql_field_names_dict[document_name]
-    #             sql_boolean = locals().get(sql_field_name)
-    #             mongo_data_present = doc is not None and document_name in doc and doc[document_name] is not None
-    #             if sql_boolean and not mongo_data_present:
-    #                 value = 0
-    #             elif not sql_boolean and mongo_data_present:
-    #                 value = 1
-    #             else:
-    #                 value = None
-    #             this_row[document_name] = value
-
-    #     if any(v is not None for k, v in this_row.items() if k not in ["encoding_id", "image_id", "is_body", "is_face"]):
-    #         results_rows.append(this_row)
-
-    thread_session.close()
-    thread_mongo_client.close()
-    return results_rows
 
 def get_mysql_results(batch_start, batch_end, thread_session):
     if MODE == 0:
@@ -306,7 +253,6 @@ def validate_zero_columns_against_mongo(engine, mongo_db, document_names_dict, b
             print(f"Checked encoding_id {encoding_id}")
 
 def validate_zero_columns_against_mongo_prereshard(engine, mongo_db, document_names_dict, batch_start, batch_size = 1000, table_name="compare_sql_mongo_results"):
-    import pandas as pd
     # define collection names from collection_names list
     for collection_name in collection_names:
         globals()[f"{collection_name}_collection"] = mongo_db[collection_name]
@@ -323,43 +269,34 @@ def validate_zero_columns_against_mongo_prereshard(engine, mongo_db, document_na
             col_to_collection[docname] = collection
     col_to_collection = exporter.col_to_collection
 
-    face_cols = ["face_landmarks", "face_encodings68"]
-    body_cols = ["body_landmarks", "nlms", "body_world_landmarks"]
-
     # Get total rows
     # total_rows = pd.read_sql(f"SELECT COUNT(*) as cnt FROM {table_name}", engine).iloc[0,0]
     # offset = 0
 
     # while offset < total_rows:
-    docname_cols = [col for docnames in document_names_dict.values() for col in docnames]
-    where_clause = "(" + " OR ".join([f"{col} IS NOT NULL" for col in docname_cols]) + f") AND encoding_id >= {batch_start} AND encoding_id < {batch_start + batch_size}"
-    # print(f"Querying {table_name} with WHERE {where_clause} LIMIT {batch_size}")
-    # print(f"Querying {table_name} with WHERE {where_clause} LIMIT {batch_size}")
-    try:
-        df = pd.read_sql(
-            f"SELECT * FROM {table_name} WHERE {where_clause} LIMIT {batch_size}",
-            engine
-        )
-    except Exception as e:
-        print(f"Error reading from SQL table {table_name}: {e}")
-        df = pd.DataFrame()
-
+    df = query_sql(engine, document_names_dict, batch_start, batch_size, table_name)
 
     this_batch_dict = {}
     # offset += batch_size
     print(f"Retrieved {len(df)} rows from {table_name} for validation")
-    df_existing_documents = pd.DataFrame()
     for idx, row in df.iterrows():
         this_result_dict = {}
         encoding_id = int(row['encoding_id'])
         image_id = int(row['image_id'])
-        # print(f"encoding_id={encoding_id}, image_id={image_id}")
         for col in col_to_collection:
             if col in row and row[col] == 0:
+                # print(f"encoding_id={encoding_id}, image_id={image_id}")
                 collection = mongo_db[col_to_collection[col]]
                 doc = collection.find_one({"image_id": image_id})
+                
+                # if encoding_id == 849111:
+                #     print("debug breakpoint")
+                #     print(doc)
+                #     print(row)
+                #     break
                 if doc and col in doc and doc[col] is not None:
                     if col_to_collection[col] == "encodings":
+                        print(f" -- found data in encodings collection for {col} for encoding_id={encoding_id}")
                         this_result_dict["encoding_id"] = encoding_id
                         # print(f" collection is encodings for {col} ")
                     # if there is a result, save it in a dict to write out later
@@ -394,52 +331,134 @@ def validate_zero_columns_against_mongo_prereshard(engine, mongo_db, document_na
     if this_batch_dict:
         print(f"going to write {len(this_batch_dict)} documents to BSON files for batch starting at {batch_start}")
         exporter.write_bson_batches(this_batch_dict, batch_start, EXPORT_DIR, collections_found)
+
+def query_sql(engine, document_names_dict, batch_start, batch_size, table_name):
+    docname_cols = [col for docnames in document_names_dict.values() for col in docnames]
+    where_clause = "(" + " OR ".join([f"{col} IS NOT NULL" for col in docname_cols]) + f") AND encoding_id >= {batch_start} AND encoding_id < {batch_start + batch_size}"
+    # print(f"Querying {table_name} with WHERE {where_clause} LIMIT {batch_size}")
+    # print(f"Querying {table_name} with WHERE {where_clause} LIMIT {batch_size}")
+    try:
+        df = pd.read_sql(
+            f"SELECT * FROM {table_name} WHERE {where_clause} LIMIT {batch_size}",
+            engine
+        )
+    except Exception as e:
+        print(f"Error reading from SQL table {table_name}: {e}")
+        df = pd.DataFrame()
+    return df
     # print(f"Wrote missing columns to missing_columns_batch_{batch_start}.bson")
 
-def read_and_store_bson(engine, mongo_db, document_names_dict, table_name="compare_sql_mongo_results"):
-    import pandas as pd
-    # define collection names from collection_names list
+
+def record_mysql_NULL_booleans_present_in_mongo(engine, mongo_db, document_names_dict, batch_start, batch_size = 1000, table_name="compare_sql_mongo_results"):
     for collection_name in collection_names:
         globals()[f"{collection_name}_collection"] = mongo_db[collection_name]
 
     exporter = MongoBSONExporter(encodings_collection, body_landmarks_norm_collection, hand_landmarks_collection, body_world_landmarks_collection)
-    print(f"reading and writing bson data from EXPORT_DIR {EXPORT_DIR} to SQL table {table_name}")
-    
+
+    # print(f"recording MYSQL NULL booleans for data present in MongoDB for batch starting at {batch_start} with size {batch_size}")
     # Flatten all document names and map to their collection
-    batch_size = 2
-    col_to_collection = exporter.col_to_collection
+    collections_found = set()
+    # col_to_collection = exporter.col_to_collection
 
-    list_of_bson_files = [f for f in os.listdir(EXPORT_DIR) if f.endswith('.bson')]
-    print(f"Found {len(list_of_bson_files)} BSON files in {EXPORT_DIR}")
+    df = query_sql(engine, document_names_dict, batch_start, batch_size, table_name)
 
-    this_collection_docs = []
+    this_batch_dict = {}
+    # offset += batch_size
+    print(f"Retrieved {len(df)} rows from {table_name} for validation")
+    for idx, row in df.iterrows():
+        this_result_dict = {}
+        encoding_id = int(row['encoding_id'])
+        image_id = int(row['image_id'])
+        # print(f"encoding_id={encoding_id}, image_id={image_id}")
+        for col in exporter.col_to_collection:
+            if col in row and row[col] == 1:
+                collection = mongo_db[exporter.col_to_collection[col]]
+                doc = collection.find_one({"image_id": image_id})
+                if doc and col in doc and doc[col] is not None:
+                    print(f"Discrepancy: mongo data found encoding_id={encoding_id}, image_id={image_id}, column={col}")
 
-    # get full filepaths for each file in list_of_bson_files
-    collection_files_dict = exporter.build_batch_list(EXPORT_DIR, batch_size)
-    for collection_name, batches_list in collection_files_dict.items():
-        for batch in batches_list:
-            all_docs = exporter.read_batch(batch)
-            this_collection_docs.extend(all_docs)
-        print(f"Processing batch of {len(this_collection_docs)} documents for collection {collection_name}")
+                    # update booleans in mysql tables
+                    exporter.write_MySQL_value(engine, "encodings", "image_id", image_id, exporter.sql_field_names_dict[col], cell_value=1)
+                    # exporter.write_MySQL_value(engine, "segmentBig_isface", "image_id", image_id, exporter.sql_field_names_dict[col], cell_value=1)
 
-        for doc in this_collection_docs:
-            print(doc)
+                    # # set table_name value to NULL
+                    exporter.write_MySQL_value(engine, table_name, "encoding_id", encoding_id, col, cell_value="NULL")
+
+def process_batch(batch_start, batch_end, function):
+    # Each thread needs its own session and mongo client
+    thread_engine = create_engine("mysql+pymysql://{user}:{pw}@/{db}?unix_socket={socket}".format(
+        user=db['user'], pw=db['pass'], db=db['name'], socket=db['unix_socket']
+    ), poolclass=NullPool)
+    ThreadSession = sessionmaker(bind=thread_engine)
+    thread_session = ThreadSession()
+    thread_mongo_client = pymongo.MongoClient("mongodb://localhost:27017/")
+    thread_mongo_db = thread_mongo_client["stock"]
+    exporter = MongoBSONExporter(thread_mongo_db)
+
+    # this catches whether this function is called with encoding_id/image_id or a file list
+    if isinstance(batch_start, int) and isinstance(batch_end, int):
+        calculated_batch_size = (batch_end - batch_start) # adding one to make sure there is not gap even if it creates an overlap of one 
+    # validate_zero_columns_against_mongo(thread_engine, thread_mongo_db, document_names_dict, batch_start, calculated_batch_size) # for checking first round validation
+        if function == "validate_zero_columns_against_mongo_prereshard":
+            validate_zero_columns_against_mongo_prereshard(thread_engine, thread_mongo_db, document_names_dict, batch_start, calculated_batch_size)
+        elif function == "record_mysql_NULL_booleans_present_in_mongo":
+            # print(f"Processing batch from {batch_start} to {batch_end} with size {calculated_batch_size} using {function}")
+            record_mysql_NULL_booleans_present_in_mongo(thread_engine, thread_mongo_db, document_names_dict, batch_start, calculated_batch_size)
+        else:
+            print("Unknown function:", function)
+    elif isinstance(batch_start, list) and isinstance(batch_end,str):
+        batch_list = batch_start
+        collection = batch_end
+        # calculated_batch_size = len(batch_start) # list of tuples
+        if function == "read_and_store_bson_batch":
+            exporter.read_and_store_bson_batch(thread_engine, thread_mongo_db, batch_list, collection, table_name)
+        else:
+            print("unknown function:", function)
+    thread_session.close()
+    thread_mongo_client.close()
+    return results_rows
+
+def process_in_batches(min_id, max_id, batch_size, num_threads, this_process, this_function, break_after_first=False):
+    for batch_start in range(min_id, max_id + 1, batch_size * num_threads):
+        batch_ranges = [
+            (start, min(start + batch_size, max_id + 1))
+            for start in range(batch_start, min(batch_start + batch_size * num_threads, max_id + 1), batch_size)
+        ]
+        print(f"Processing batch ranges: {batch_ranges}")
+        with concurrent.futures.ThreadPoolExecutor(max_workers=num_threads) as executor:
+            futures = [executor.submit(this_process, start, end, this_function) for start, end in batch_ranges]
+            if break_after_first:
+                return  
+
+def process_batch_list_in_batches(batch_list, num_threads, this_process, this_function, break_after_first=False):
+    collections = batch_list.keys()
+    for collection in collections:
+        print(f"Collection: {collection} has {len(batch_list[collection])} batches to process")
+        for batch in batch_list[collection]:
+            print(f"This Batch Collection: {collection} has batch len: {len(batch)}")
+    # batch_list = [(collection, batch) for collection in collections for batch in batch_list[collection]]
+    # print(f"Processing {len(batch_list)} batches in batch_list with {num_threads} threads")
+    # print(batch_list)
+
+    # for collection, batch in batch_list:
+        # print(f"Processing {collection} batch : {batch_list[collection]}")
+            with concurrent.futures.ThreadPoolExecutor(max_workers=num_threads) as executor:
+                # passing in a list of files as first argument, None as second argument triggers read_and_store_bson
+                executor.submit(this_process, batch, collection, this_function)
+                if break_after_first:
+                    return  
+
 
 if __name__ == "__main__":
 
     # Get min and max encoding_id for batching
-    # min_id = session.query(sqlalchemy.func.min(Encodings.encoding_id)).scalar() or 0
     min_id = last_id + 1
     max_id = session.query(sqlalchemy.func.max(Encodings.encoding_id)).scalar() or 0
-
     num_threads = 8  # Adjust based on your CPU and IO
 
-    # for batch_start in range(min_id, max_id + 1, batch_size):
-    #     # print(f"Processing batch starting at {batch_start}")
-    #     validate_zero_columns_against_mongo(engine, mongo_db, document_names_dict, batch_start, batch_size)
-
-    if MODE ==0:
+    if MODE == 0:
         # export to BSON in multithreaded way from pre-reshard mongo db
+        function = "validate_zero_columns_against_mongo_prereshard"
         for batch_start in range(min_id, max_id + 1, batch_size * num_threads):
             batch_ranges = [
                 (start, min(start + batch_size, max_id + 1))
@@ -447,13 +466,25 @@ if __name__ == "__main__":
             ]
             results_rows = []
             with concurrent.futures.ThreadPoolExecutor(max_workers=num_threads) as executor:
-                futures = [executor.submit(process_batch, start, end) for start, end in batch_ranges]
+                futures = [executor.submit(process_batch, start, end, function) for start, end in batch_ranges]
             # break  # temporary for testing
 
     elif MODE == 1:
+        # build batch dict + list of files - dict.keys() are collection names
+        # each value is a list of lists of files. The sublists are the batchs, of len=batch_size
         # read from BSON and write to mongo and sql
-        table_name = 'compare_sql_mongo_results'
-        read_and_store_bson(engine, mongo_db, document_names_dict, table_name)
+        # table_name = 'compare_sql_mongo_results'
+        function = "read_and_store_bson_batch"
+        collection_files_dict = exporter.build_batch_list(EXPORT_DIR, batch_size)
+        print("collection_files_dict number of collections: ", len(collection_files_dict))
+        process_batch_list_in_batches(collection_files_dict, num_threads, process_batch, function)
+        # read_and_store_bson(engine, mongo_db, document_names_dict, table_name)
+
+    elif MODE == 2:
+        # find entries present in mongo, but not recorded in sql table
+        break_after_first = False  # for testing
+        function = "record_mysql_NULL_booleans_present_in_mongo"
+        process_in_batches(min_id, max_id, batch_size, num_threads, process_batch, function, break_after_first)
 
     session.close()
 
