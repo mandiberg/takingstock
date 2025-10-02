@@ -47,14 +47,16 @@ mongo_collection = mongo_db["body_landmarks_norm"]
 
 # Define the batch size
 batch_size = 10000
-MODE = 1 #0 for overall compare, 1 to recheck against entry and bson dump
+num_threads = 8  # Adjust based on your CPU and IO
+MODE = 0 #0 for overall compare, 1 to recheck against entry and bson dump
+# MODE 0 ignores is_body and is_face, MODE 1 filters on those
 IS_FACE = 0
 IS_BODY = 1
 
 # select max encoding_id to start from
 Base = declarative_base()
 
-table_name = 'compare_sql_mongo_results_isbody1_isface0'
+table_name = 'compare_sql_mongo_results2'
 class CompareSqlMongoResults(Base):
     __tablename__ = table_name
     encoding_id = Column(Integer, primary_key=True)
@@ -72,7 +74,7 @@ Base.metadata.create_all(engine)
 # last_id = session.query(sqlalchemy.func.max(CompareSqlMongoResults.encoding_id)).scalar()
 # if last_id is None:
 #     last_id = 0
-last_id = 0
+last_id = 74560000
 print(f"Starting from last_id: {last_id}")
 
 # variables to filter encodings on
@@ -102,6 +104,9 @@ sql_field_names_dict = {
     "body_world_landmarks": "mongo_body_landmarks_3D"
 }
 
+
+is_face_fields = ["face_landmarks", "face_encodings68"]
+is_body_fields = ["body_landmarks", "body_landmarks_norm", "hand_landmarks", "body_landmarks_3D"]
 
 # Initialize counters outside the loop (at the top of your script, before the while loop)
 if 'counts' not in locals():
@@ -139,40 +144,48 @@ def process_batch(batch_start, batch_end):
 
     results = get_mysql_results(batch_start, batch_end, thread_session)
     print(f"Thread processing batch {batch_start} to {batch_end}, got {len(results)} results")
-    print(f"First 5 results: {results[:5]}")
+    # print(f"First 5 results: {results[:5]}")
 
-    # for encoding_id, image_id, mongo_encodings, mongo_body_landmarks, mongo_face_landmarks, mongo_body_landmarks_norm, mongo_hand_landmarks, mongo_body_landmarks_3D, is_body, is_face in results:
-    #     if encoding_id is None or image_id is None:
-    #         continue
-    #     mongo_docs = {}
-    #     for collection_name in collection_names:
-    #         collection = thread_mongo_db[collection_name]
-    #         doc = collection.find_one({"image_id": image_id})
-    #         mongo_docs[collection_name] = doc
+    for encoding_id, image_id, mongo_encodings, mongo_body_landmarks, mongo_face_landmarks, mongo_body_landmarks_norm, mongo_hand_landmarks, mongo_body_landmarks_3D, is_body, is_face in results:
+        if encoding_id is None or image_id is None:
+            continue
+        mongo_docs = {}
+        for collection_name in collection_names:
+            collection = thread_mongo_db[collection_name]
+            doc = collection.find_one({"image_id": image_id})
+            mongo_docs[collection_name] = doc
 
-    #     this_row = {
-    #         "encoding_id": encoding_id,
-    #         "image_id": image_id,
-    #         "is_body": is_body,
-    #         "is_face": is_face
-    #     }
-    #     for collection_name in collection_names:
-    #         doc = mongo_docs[collection_name]
-    #         document_names = document_names_dict[collection_name]
-    #         for document_name in document_names:
-    #             sql_field_name = sql_field_names_dict[document_name]
-    #             sql_boolean = locals().get(sql_field_name)
-    #             mongo_data_present = doc is not None and document_name in doc and doc[document_name] is not None
-    #             if sql_boolean and not mongo_data_present:
-    #                 value = 0
-    #             elif not sql_boolean and mongo_data_present:
-    #                 value = 1
-    #             else:
-    #                 value = None
-    #             this_row[document_name] = value
+        this_row = {
+            "encoding_id": encoding_id,
+            "image_id": image_id,
+            "is_body": is_body,
+            "is_face": is_face
+        }
+        for collection_name in collection_names:
+            doc = mongo_docs[collection_name]
+            document_names = document_names_dict[collection_name]
+            for document_name in document_names:
+                if is_face != 1 and document_name in is_face_fields:
+                    # print("skipping face field because is_face is 0")
+                    continue
+                if is_body != 1 and document_name in is_body_fields:
+                    # print("skipping body field because is_body is 0")
+                    continue
+                # print(f"Processing encoding_id {encoding_id}, image_id {image_id}, is_body {is_body}, is_face {is_face}")
+                # print(f"  Checking {image_id} {document_name} where is_body {is_body}, is_face {is_face}")
+                sql_field_name = sql_field_names_dict[document_name]
+                sql_boolean = locals().get(sql_field_name)
+                mongo_data_present = doc is not None and document_name in doc and doc[document_name] is not None
+                if sql_boolean and not mongo_data_present:
+                    value = 0
+                elif not sql_boolean and mongo_data_present:
+                    value = 1
+                else:
+                    value = None
+                this_row[document_name] = value
 
-    #     if any(v is not None for k, v in this_row.items() if k not in ["encoding_id", "image_id", "is_body", "is_face"]):
-    #         results_rows.append(this_row)
+        if any(v is not None for k, v in this_row.items() if k not in ["encoding_id", "image_id", "is_body", "is_face"]):
+            results_rows.append(this_row)
 
     thread_session.close()
     thread_mongo_client.close()
@@ -222,8 +235,6 @@ def get_mysql_results(batch_start, batch_end, thread_session):
 min_id = last_id + 1
 max_id = session.query(sqlalchemy.func.max(Encodings.encoding_id)).scalar() or 0
 
-batch_size = 1000
-num_threads = 8  # Adjust based on your CPU and IO
 
 for batch_start in range(min_id, max_id + 1, batch_size * num_threads):
     batch_ranges = [

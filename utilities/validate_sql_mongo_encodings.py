@@ -55,8 +55,9 @@ IS_BODY = 1
 MODE = 1
 #0 validate_zero_columns_against_mongo_prereshard (outputs bson) 
 # 1 read_and_store_bson
+FOLDER_MODE = 1 # 0 is the first way, 1 is by filepath, limit 1
 # 2 find entries present in mongo, but not recorded in sql table
-last_id = 120000000
+last_id = 0
 print(f"Starting from last_id: {last_id}")
 EXPORT_DIR = os.path.join(io.ROOT_PROD,"mongo_exports_sept29")  # Directory to save BSON files
 # touch the directory if it does not exist
@@ -65,7 +66,7 @@ print(f"Export directory: {EXPORT_DIR}")
 # select max encoding_id to start from
 Base = declarative_base()
 
-table_name = 'compare_sql_mongo_results'
+table_name = 'compare_sql_mongo_results2'
 class CompareSqlMongoResults(Base):
     __tablename__ = table_name
     encoding_id = Column(Integer, primary_key=True)
@@ -406,14 +407,19 @@ def process_batch(batch_start, batch_end, function):
             record_mysql_NULL_booleans_present_in_mongo(thread_engine, thread_mongo_db, document_names_dict, batch_start, calculated_batch_size)
         else:
             print("Unknown function:", function)
-    elif isinstance(batch_start, list) and isinstance(batch_end,str):
-        batch_list = batch_start
-        collection = batch_end
+    elif function == "read_and_store_bson_batch":
+        # handle list vs single file
+        if isinstance(batch_start, list) and isinstance(batch_end,str):
+            batch_list = batch_start
+            collection = batch_end
+        elif isinstance(batch_start, str) and batch_end is None:
+            batch_list = [batch_start]
+            collection = None
         # calculated_batch_size = len(batch_start) # list of tuples
-        if function == "read_and_store_bson_batch":
-            exporter.read_and_store_bson_batch(thread_engine, thread_mongo_db, batch_list, collection, table_name)
-        else:
-            print("unknown function:", function)
+        exporter.read_and_store_bson_batch(thread_engine, thread_mongo_db, batch_list, collection, table_name)
+    else:
+        print("unknown function:", function)
+
     thread_session.close()
     thread_mongo_client.close()
     return results_rows
@@ -449,6 +455,35 @@ def process_batch_list_in_batches(batch_list, num_threads, this_process, this_fu
                     return  
 
 
+def process_file_list_in_batches(batch_list, num_threads, this_process, this_function, break_after_first=False):
+    print(f"Processing {len(batch_list)} files with {num_threads} threads")
+    print(batch_list)
+    for file in batch_list:
+        # print(f"This is the file to process : {file}")
+        with concurrent.futures.ThreadPoolExecutor(max_workers=num_threads) as executor:
+            # passing in a list of files as first argument, None as second argument triggers read_and_store_bson
+            executor.submit(this_process, file, None, this_function)
+            if break_after_first:
+                return  
+
+def remove_already_completed_files(session, collection_files_dict):
+    completed_files = session.execute(sqlalchemy.text("SELECT DISTINCT completed_bson_file FROM BsonFileLog")).fetchall()
+    completed_files = [item[0] for item in completed_files]
+    print(f"Skipping {len(completed_files)} completed files")
+    if isinstance(collection_files_dict, list):
+        print("len before removing:", len(collection_files_dict))
+        collection_files_dict = [file for file in collection_files_dict if file not in completed_files]
+        print("len after removing:", len(collection_files_dict))
+        return collection_files_dict
+    else:
+        for collection in collection_files_dict:
+            original_count = len(collection_files_dict[collection])
+            collection_files_dict[collection] = [batch for batch in collection_files_dict[collection] if batch[0] not in completed_files]
+            skipped_count = original_count - len(collection_files_dict[collection])
+            if skipped_count > 0:
+                print(f"Skipping {skipped_count} completed batches for collection {collection}, {len(collection_files_dict[collection])} remaining")
+        return collection_files_dict
+
 if __name__ == "__main__":
 
     # Get min and max encoding_id for batching
@@ -475,9 +510,17 @@ if __name__ == "__main__":
         # read from BSON and write to mongo and sql
         # table_name = 'compare_sql_mongo_results'
         function = "read_and_store_bson_batch"
-        collection_files_dict = exporter.build_batch_list(EXPORT_DIR, batch_size)
-        print("collection_files_dict number of collections: ", len(collection_files_dict))
-        process_batch_list_in_batches(collection_files_dict, num_threads, process_batch, function)
+        if FOLDER_MODE == 0:
+            # use batch list builder
+            collection_files_dict = exporter.build_batch_list(EXPORT_DIR, batch_size)
+            process_batch_list_in_batches(collection_files_dict, num_threads, process_batch, function)
+        else:
+            # use file list builder
+            collection_files_dict = exporter.build_folder_bson_file_list_full_paths(EXPORT_DIR)
+            # select all completed_bson_file from BsonFileLog to skip those
+            collection_files_dict = remove_already_completed_files(session, collection_files_dict)
+            print("collection_files_dict number of collections: ", len(collection_files_dict))
+            process_file_list_in_batches(collection_files_dict, num_threads, process_batch, function, break_after_first=False)
         # read_and_store_bson(engine, mongo_db, document_names_dict, table_name)
 
     elif MODE == 2:
