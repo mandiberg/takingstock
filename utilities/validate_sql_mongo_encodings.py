@@ -59,7 +59,7 @@ FOLDER_MODE = 1 # 0 is the first way, 1 is by filepath, limit 1
 # 2 find entries present in mongo, but not recorded in sql table
 last_id = 0
 print(f"Starting from last_id: {last_id}")
-EXPORT_DIR = os.path.join(io.ROOT_PROD,"mongo_exports_sept29")  # Directory to save BSON files
+EXPORT_DIR = os.path.join(io.ROOT_PROD,"mongo_exports_sept29/body_world_landmarks_sm")  # Directory to save BSON files
 # touch the directory if it does not exist
 os.makedirs(EXPORT_DIR, exist_ok=True)
 print(f"Export directory: {EXPORT_DIR}")
@@ -397,7 +397,7 @@ def process_batch(batch_start, batch_end, function):
     exporter = MongoBSONExporter(thread_mongo_db)
 
     # this catches whether this function is called with encoding_id/image_id or a file list
-    if isinstance(batch_start, int) and isinstance(batch_end, int):
+    if isinstance(batch_start, int) and isinstance(batch_end, int) and FOLDER_MODE == 0:
         calculated_batch_size = (batch_end - batch_start) # adding one to make sure there is not gap even if it creates an overlap of one 
     # validate_zero_columns_against_mongo(thread_engine, thread_mongo_db, document_names_dict, batch_start, calculated_batch_size) # for checking first round validation
         if function == "validate_zero_columns_against_mongo_prereshard":
@@ -409,11 +409,11 @@ def process_batch(batch_start, batch_end, function):
             print("Unknown function:", function)
     elif function == "read_and_store_bson_batch":
         # handle list vs single file
-        if isinstance(batch_start, list) and isinstance(batch_end,str):
+        if FOLDER_MODE == 0:
             batch_list = batch_start
             collection = batch_end
-        elif isinstance(batch_start, str) and batch_end is None:
-            batch_list = [batch_start]
+        elif FOLDER_MODE == 1:
+            batch_list = batch_start
             collection = None
         # calculated_batch_size = len(batch_start) # list of tuples
         exporter.read_and_store_bson_batch(thread_engine, thread_mongo_db, batch_list, collection, table_name)
@@ -459,7 +459,7 @@ def process_file_list_in_batches(batch_list, num_threads, this_process, this_fun
     print(f"Processing {len(batch_list)} files with {num_threads} threads")
     print(batch_list)
     for file in batch_list:
-        # print(f"This is the file to process : {file}")
+        print(f"This is the file to process : {file}")
         with concurrent.futures.ThreadPoolExecutor(max_workers=num_threads) as executor:
             # passing in a list of files as first argument, None as second argument triggers read_and_store_bson
             executor.submit(this_process, file, None, this_function)
@@ -471,10 +471,13 @@ def remove_already_completed_files(session, collection_files_dict):
     completed_files = [item[0] for item in completed_files]
     print(f"Skipping {len(completed_files)} completed files")
     if isinstance(collection_files_dict, list):
-        print("len before removing:", len(collection_files_dict))
-        collection_files_dict = [file for file in collection_files_dict if file not in completed_files]
-        print("len after removing:", len(collection_files_dict))
-        return collection_files_dict
+        full_list =[]
+        for batch in collection_files_dict:
+            print("len before removing:", len(batch))
+            batch = [file for file in batch if file not in completed_files]
+            print("len after removing:", len(batch))
+            full_list.append(batch)
+        return full_list
     else:
         for collection in collection_files_dict:
             original_count = len(collection_files_dict[collection])
@@ -516,11 +519,11 @@ if __name__ == "__main__":
             process_batch_list_in_batches(collection_files_dict, num_threads, process_batch, function)
         else:
             # use file list builder
-            collection_files_dict = exporter.build_folder_bson_file_list_full_paths(EXPORT_DIR)
+            list_of_bson_files = exporter.build_folder_bson_file_list_full_paths(EXPORT_DIR, batch_size=num_threads)
             # select all completed_bson_file from BsonFileLog to skip those
-            collection_files_dict = remove_already_completed_files(session, collection_files_dict)
-            print("collection_files_dict number of collections: ", len(collection_files_dict))
-            process_file_list_in_batches(collection_files_dict, num_threads, process_batch, function, break_after_first=False)
+            list_of_bson_files = remove_already_completed_files(session, list_of_bson_files)
+            print("list_of_bson_files number of collections: ", len(list_of_bson_files))
+            process_file_list_in_batches(list_of_bson_files, num_threads, process_batch, function, break_after_first=False)
         # read_and_store_bson(engine, mongo_db, document_names_dict, table_name)
 
     elif MODE == 2:
