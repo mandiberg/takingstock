@@ -440,10 +440,19 @@ def geometric_median(X, eps=1e-5, zero_threshold=1e-6):
 
 def calc_cluster_median(df, col_list, cluster_id):
     cluster_df = df[df['cluster_id'] == cluster_id]
-    # print(f"Cluster {cluster_id} data: {cluster_df}")
+    if MODE == 3 and len(col_list) == 133:
+        # this is a hacky attempt to handle weird scenario when making metaclusters
+        # it reads in the cluster_id from mysql into df, etc. 
+        print('remove cluster_id column from cluster_df and col_list', col_list)
+        print(len(col_list))
+        col_list.remove(col_list[0])
+        print('removeDDDDD cluster_id column from cluster_df and col_list', col_list)
+        print(len(col_list))
+        cluster_df = cluster_df.drop(columns=['cluster_id'])
+    print(f"Cluster {cluster_id} data: {cluster_df}")
     # Convert the selected dimensions into a NumPy array
     cluster_points = cluster_df[col_list].values
-    
+    print("cluster_points",(cluster_points[0]))
     # Check if there are valid points in the cluster
     if len(cluster_points) == 0 or np.isnan(cluster_points).any():
         print(f"No valid points for cluster {cluster_id}, skipping median calculation.")
@@ -598,10 +607,9 @@ def save_images_clusters_DB(df):
     print("columns: ",df.columns)
     this_cluster, this_crosswalk = set_cluster_metacluster()
     print("this_crosswalk: ", this_crosswalk)
-    for _, row in df.iterrows():
-        image_id = row['image_id']
-        cluster_id = row['cluster_id']
-        cluster_dist = row['cluster_dist']
+    for idx, row in df.iterrows():
+        # cluster_id = row['cluster_id']
+        # cluster_dist = row['cluster_dist']
 
         if this_crosswalk == ImagesClusters:
             image_id = row['image_id']
@@ -612,7 +620,11 @@ def save_images_clusters_DB(df):
                 continue
             existing_record = session.query(ImagesClusters).filter_by(image_id=image_id).first()
         elif this_crosswalk == ClustersMetaClusters:
-            existing_record = session.query(ClustersMetaClusters).filter_by(cluster_id=cluster_id).first()
+            this_cluster_id = idx
+            meta_cluster_id = row['cluster_id']
+            cluster_dist = row['cluster_dist']
+            # look up the body3D cluster_id
+            existing_record = session.query(ClustersMetaClusters).filter_by(cluster_id=this_cluster_id).first()
 
         if existing_record is None:
             # it may be easier to define this locally, and assign the name via CLUSTER_TYPE
@@ -624,8 +636,8 @@ def save_images_clusters_DB(df):
                 )
             elif this_crosswalk == ClustersMetaClusters:
                 instance = ClustersMetaClusters(
-                    cluster_id=cluster_id,
-                    meta_cluster_id=image_id,  # here image_id is actually meta_cluster_id
+                    cluster_id=this_cluster_id,
+                    meta_cluster_id=meta_cluster_id,  # here image_id is actually meta_cluster_id
                     cluster_dist=cluster_dist
                 )
             session.add(instance)
@@ -643,7 +655,8 @@ def save_images_clusters_DB(df):
     try:
         print("Attempting to commit session with the following data:")
         for _, row in df.iterrows():
-            print(f"Image ID: {row['image_id']}, Cluster ID: {row['cluster_id']}, Cluster Dist: {row['cluster_dist']}")
+            # print(f"Image ID: {row['image_id']}, Cluster ID: {row['cluster_id']}, Cluster Dist: {row['cluster_dist']}")
+            print(row)
         session.commit()
         print("Data saved successfully.")
     except IntegrityError as e:
