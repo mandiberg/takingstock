@@ -56,7 +56,7 @@ IS_BODY = 1
 # select max encoding_id to start from
 Base = declarative_base()
 
-table_name = 'compare_sql_mongo_results4'
+table_name = 'compare_sql_mongo_results3'
 class CompareSqlMongoResults(Base):
     __tablename__ = table_name
     encoding_id = Column(Integer, primary_key=True)
@@ -74,7 +74,7 @@ Base.metadata.create_all(engine)
 # last_id = session.query(sqlalchemy.func.max(CompareSqlMongoResults.encoding_id)).scalar()
 # if last_id is None:
 #     last_id = 0
-last_id = 58375000
+last_id = 23760000
 print(f"Starting from last_id: {last_id}")
 
 # variables to filter encodings on
@@ -161,16 +161,6 @@ def process_batch(batch_start, batch_end):
             "is_body": is_body,
             "is_face": is_face
         }
-        # Build a dict for the row at the start of the loop:
-        row_dict = {
-            "mongo_encodings": mongo_encodings,
-            "mongo_body_landmarks": mongo_body_landmarks,
-            "mongo_face_landmarks": mongo_face_landmarks,
-            "mongo_body_landmarks_norm": mongo_body_landmarks_norm,
-            "mongo_hand_landmarks": mongo_hand_landmarks,
-            "mongo_body_landmarks_3D": mongo_body_landmarks_3D,
-        }
-
         for collection_name in collection_names:
             doc = mongo_docs[collection_name]
             document_names = document_names_dict[collection_name]
@@ -184,7 +174,7 @@ def process_batch(batch_start, batch_end):
                 # print(f"Processing encoding_id {encoding_id}, image_id {image_id}, is_body {is_body}, is_face {is_face}")
                 # print(f"  Checking {image_id} {document_name} where is_body {is_body}, is_face {is_face}")
                 sql_field_name = sql_field_names_dict[document_name]
-                sql_boolean = row_dict.get(sql_field_name)
+                sql_boolean = locals().get(sql_field_name)
                 mongo_data_present = doc is not None and document_name in doc and doc[document_name] is not None
                 if sql_boolean and not mongo_data_present:
                     value = 0

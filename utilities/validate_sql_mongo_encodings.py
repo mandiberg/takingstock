@@ -59,7 +59,7 @@ FOLDER_MODE = 1 # 0 is the first way, 1 is by filepath, limit 1
 # 2 find entries present in mongo, but not recorded in sql table
 last_id = 0
 print(f"Starting from last_id: {last_id}")
-EXPORT_DIR = os.path.join(io.ROOT_PROD,"mongo_exports_sept29/body_world_landmarks_sm")  # Directory to save BSON files
+EXPORT_DIR = os.path.join(io.ROOT_PROD,"mongo_exports_sept29/encodings")  # Directory to save BSON files
 # touch the directory if it does not exist
 os.makedirs(EXPORT_DIR, exist_ok=True)
 print(f"Export directory: {EXPORT_DIR}")
