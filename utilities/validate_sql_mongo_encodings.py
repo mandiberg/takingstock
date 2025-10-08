@@ -49,17 +49,20 @@ mongo_collection = mongo_db["body_landmarks_norm"]
 exporter = MongoBSONExporter(mongo_db)
 
 # Define the batch size
-batch_size = 2
+batch_size = 5000
 IS_FACE = 0
 IS_BODY = 1
-MODE = 1
+MODE = 0
 #0 validate_zero_columns_against_mongo_prereshard (outputs bson) 
 # 1 read_and_store_bson
-FOLDER_MODE = 1 # 0 is the first way, 1 is by filepath, limit 1
+if MODE == 0: FOLDER_MODE = 0 # 0 is the first way, 1 is by filepath, limit 1
+else: FOLDER_MODE = 1 # 0 is the first way, 1 is by filepath, limit 1
+
 # 2 find entries present in mongo, but not recorded in sql table
-last_id = 0
+last_id = 74535000
 print(f"Starting from last_id: {last_id}")
-EXPORT_DIR = os.path.join(io.ROOT_PROD,"mongo_exports_sept29/encodings")  # Directory to save BSON files
+# EXPORT_DIR = os.path.join(io.ROOT_PROD,"mongo_exports_sept29/encodings")  # Directory to save BSON files
+EXPORT_DIR = os.path.join("/Volumes/OWC5/segment_images/mongo_exports_oct7")  # Directory to save BSON files
 # touch the directory if it does not exist
 os.makedirs(EXPORT_DIR, exist_ok=True)
 print(f"Export directory: {EXPORT_DIR}")
@@ -235,7 +238,8 @@ def validate_zero_columns_against_mongo(engine, mongo_db, document_names_dict, b
                             # print(f" -- just set to NULL {col} for encoding_id={encoding_id} because doc exists and is len({len(doc[col])}) > 0")
 
                         else:
-                            print(f"Discrepancy: encoding_id={encoding_id}, image_id={image_id}, column={col}")
+                            pass
+                            # print(f"Discrepancy: encoding_id={encoding_id}, image_id={image_id}, column={col}")
                     else:
                         if "hand" in col:
                             # print(f"Validated zero: encoding_id={encoding_id}, image_id={image_id}, column={col} (hand landmarks often missing)")
@@ -254,11 +258,12 @@ def validate_zero_columns_against_mongo(engine, mongo_db, document_names_dict, b
             print(f"Checked encoding_id {encoding_id}")
 
 def validate_zero_columns_against_mongo_prereshard(engine, mongo_db, document_names_dict, batch_start, batch_size = 1000, table_name="compare_sql_mongo_results"):
+    print(f"validate_zero_columns_against_mongo_prereshard batch starting at {batch_start} with size {batch_size}")
     # define collection names from collection_names list
     for collection_name in collection_names:
         globals()[f"{collection_name}_collection"] = mongo_db[collection_name]
 
-    exporter = MongoBSONExporter(encodings_collection, body_landmarks_norm_collection, hand_landmarks_collection, body_world_landmarks_collection)
+    exporter = MongoBSONExporter(mongo_db)
 
     print(f"Validating missing columns against MongoDB for batch starting at {batch_start} with size {batch_size}")
     
@@ -297,12 +302,20 @@ def validate_zero_columns_against_mongo_prereshard(engine, mongo_db, document_na
                 #     break
                 if doc and col in doc and doc[col] is not None:
                     if col_to_collection[col] == "encodings":
-                        print(f" -- found data in encodings collection for {col} for encoding_id={encoding_id}")
+                        # this is a special case to just search for encoding_id in encodings collection,
+                        # because it has a different schema that includes encoding_id
+
+                        ### commented out for production run
+                        # print(f" -- found data in encodings collection for {col} for encoding_id={encoding_id}")
                         this_result_dict["encoding_id"] = encoding_id
                         # print(f" collection is encodings for {col} ")
+                    # this is the general case where it saves all of them??
                     # if there is a result, save it in a dict to write out later
-                    print(f"Discrepancy: encoding_id={encoding_id}, image_id={image_id}, column={col}")
+                    ### commented out for production run
+                    # print(f"Discrepancy: encoding_id={encoding_id}, image_id={image_id}, column={col}")
+                    # set the column value for this result
                     this_result_dict[col] = (doc[col])
+                    # note that we found this collection has data, to write out later
                     collections_found.add(col_to_collection[col])
         if this_result_dict.get("body_world_landmarks", None) is not None and "body_landmarks" not in (this_result_dict, col_to_collection):
             # print("body_landmarks missing but body_world_landmarks present, going to investigate further")
@@ -354,9 +367,9 @@ def record_mysql_NULL_booleans_present_in_mongo(engine, mongo_db, document_names
     for collection_name in collection_names:
         globals()[f"{collection_name}_collection"] = mongo_db[collection_name]
 
-    exporter = MongoBSONExporter(encodings_collection, body_landmarks_norm_collection, hand_landmarks_collection, body_world_landmarks_collection)
+    exporter = MongoBSONExporter(mongo_db)
 
-    # print(f"recording MYSQL NULL booleans for data present in MongoDB for batch starting at {batch_start} with size {batch_size}")
+    print(f"recording MYSQL NULL booleans for data present in MongoDB for batch starting at {batch_start} with size {batch_size}")
     # Flatten all document names and map to their collection
     collections_found = set()
     # col_to_collection = exporter.col_to_collection
@@ -396,17 +409,20 @@ def process_batch(batch_start, batch_end, function):
     thread_mongo_db = thread_mongo_client["stock"]
     exporter = MongoBSONExporter(thread_mongo_db)
 
+    # print(f"Thread processing batch from {batch_start} of type {type(batch_start)} to {batch_end} of type {type(batch_end)} using {function}")
     # this catches whether this function is called with encoding_id/image_id or a file list
     if isinstance(batch_start, int) and isinstance(batch_end, int) and FOLDER_MODE == 0:
+        print(f"this is a start end of encoding_id range: {batch_start} to {batch_end}")
         calculated_batch_size = (batch_end - batch_start) # adding one to make sure there is not gap even if it creates an overlap of one 
     # validate_zero_columns_against_mongo(thread_engine, thread_mongo_db, document_names_dict, batch_start, calculated_batch_size) # for checking first round validation
+        # print(f"Processing batch from {batch_start} to {batch_end} with size {calculated_batch_size} using {function}")
         if function == "validate_zero_columns_against_mongo_prereshard":
             validate_zero_columns_against_mongo_prereshard(thread_engine, thread_mongo_db, document_names_dict, batch_start, calculated_batch_size)
         elif function == "record_mysql_NULL_booleans_present_in_mongo":
             # print(f"Processing batch from {batch_start} to {batch_end} with size {calculated_batch_size} using {function}")
             record_mysql_NULL_booleans_present_in_mongo(thread_engine, thread_mongo_db, document_names_dict, batch_start, calculated_batch_size)
         else:
-            print("Unknown function:", function)
+            print("if isinstance, Unknown function:", function)
     elif function == "read_and_store_bson_batch":
         # handle list vs single file
         if FOLDER_MODE == 0:
@@ -497,6 +513,7 @@ if __name__ == "__main__":
     if MODE == 0:
         # export to BSON in multithreaded way from pre-reshard mongo db
         function = "validate_zero_columns_against_mongo_prereshard"
+        print(f"Processing encoding_id from {min_id} to {max_id} in batches of {batch_size} with function {function}")
         for batch_start in range(min_id, max_id + 1, batch_size * num_threads):
             batch_ranges = [
                 (start, min(start + batch_size, max_id + 1))
