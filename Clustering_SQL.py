@@ -102,7 +102,7 @@ SegmentHelper_name = 'SegmentHelper_sept2025_heft_keywords'
 # 32 for hand positions
 # 128 for hand gestures
 N_CLUSTERS = 512
-N_META_CLUSTERS = 4
+N_META_CLUSTERS = 32
 if MODE == 3: N_CLUSTERS = N_META_CLUSTERS
 
 ONE_SHOT= JUMP_SHOT= HSV_CONTROL=  VERBOSE= INPAINT= OBJ_CLS_ID = UPSCALE_MODEL_PATH =None
@@ -112,7 +112,13 @@ sort = SortPose(motion, face_height_output, image_edge_multiplier_sm, EXPAND,  O
 SUBSELECT_ONE_CLUSTER = 0
 
 # SUBSET_LANDMARKS is now set in sort pose init
-if CLUSTER_TYPE == "BodyPoses3D": sort.SUBSET_LANDMARKS = None
+if CLUSTER_TYPE == "BodyPoses3D": 
+    if MODE == 3:
+        sort.SUBSET_LANDMARKS = None
+        print("sort.SUBSET_LANDMARKS", sort.SUBSET_LANDMARKS)
+        # sort.SUBSET_LANDMARKS = 
+    else:
+        sort.SUBSET_LANDMARKS = None
 USE_HEAD_POSE = False
 
 SHORTRANGE = False # controls a short range query for the face x,y,z and mouth gap
@@ -356,12 +362,49 @@ def selectSQL():
     resultsjson = ([dict(row) for row in result.mappings()])
     return(resultsjson)
 
+def make_head_arms_shoulders_list():
+    # # drop column if column name is a number greater than 88
+    # enc_data = enc_data.loc[:, :88]
+    head_arms_shoulders = list(range(0, 88))
+    vis_columns = list(range(3, 88 + 4, 4))
+    print("head_arms_shoulders", head_arms_shoulders)
+    print("vis_columns", vis_columns)
+    # remove vis_columns from head_arms_shoulders
+    head_arms_shoulders = [col for col in head_arms_shoulders if col not in vis_columns]
+    print("after removing vis_columns, head_arms_shoulders", head_arms_shoulders)
+    # subset df to head_arms_shoulders
+    return head_arms_shoulders
+
+def make_meta_landmarks(df):
+    first_col = df.columns[1]
+    print("make_meta_landmarks first col: ",first_col, len(df.columns))
+    # if isinstance(first_col, int) and len(df.columns) == 132:
+    if isinstance(first_col, int):
+        print(f"we are working with {len(df.columns)} numerical body_landmarks_3D, but we don't care bc we are going ot subselect from list")
+        head_arms_shoulders = make_head_arms_shoulders_list()
+        enc_data = df[head_arms_shoulders]
+        print(f"enc_data for {len(enc_data.columns)} meta clusters", enc_data.columns)
+        # print(enc_data.iloc[0])
+        return enc_data
+        # print("vis_columns", vis_columns)
+        # # remove vis_columns from enc_data
+        # enc_data = enc_data.drop(columns=vis_columns)
+        # print("after drop vis_columns", enc_data)
+        # print("enc_data for meta clusters", enc_data.columns)
+        # print(enc_data.iloc[0])
+
 def make_subset_landmarks(df,add_list=False):
     first_col = df.columns[1]
-    print("first col: ",first_col)
+    print("make_subset_landmarks first col: ",first_col)
     # if the first column is an int, then the columns are integers
     if isinstance(first_col, int):
-        numerical_columns = [col for col in df.columns if isinstance(col, int)]
+        if MODE == 3: 
+            print("df before MODE 3 make_meta_landmarks", df.columns)
+            meta_df = make_meta_landmarks(df)
+            print("df after MODE 3 make_meta_landmarks", meta_df.columns)
+            return meta_df
+        else:
+            numerical_columns = [col for col in df.columns if isinstance(col, int)]
     elif any(isinstance(col, str) and col.startswith('dim_') for col in df.columns):
         numerical_columns = [col for col in df.columns if col.startswith('dim_')]
     # set hand_columns = to the numerical_columns in sort.SUBSET_LANDMARKS
@@ -383,11 +426,15 @@ def make_subset_landmarks(df,add_list=False):
     return numerical_data
 
 def kmeans_cluster(df, n_clusters=32):
+    print("df type: ", type(df))
     # Select only the numerical columns (dim_0 to dim_65)
     print(" : ",sort.SUBSET_LANDMARKS)
     if CLUSTER_TYPE == "BodyPoses":
         print("CLUSTER_TYPE == BodyPoses", df)
         numerical_data = make_subset_landmarks(df)
+    elif MODE == 3:
+        print("MODE == 3", df)
+        numerical_data = make_meta_landmarks(df)
     else:
         numerical_data = df
     print("clustering subset data", numerical_data)
@@ -443,10 +490,10 @@ def calc_cluster_median(df, col_list, cluster_id):
     if MODE == 3 and len(col_list) == 133:
         # this is a hacky attempt to handle weird scenario when making metaclusters
         # it reads in the cluster_id from mysql into df, etc. 
-        print('remove cluster_id column from cluster_df and col_list', col_list)
-        print(len(col_list))
+        # print('remove cluster_id column from cluster_df and col_list', col_list)
+        # print(len(col_list))
         col_list.remove(col_list[0])
-        print('removeDDDDD cluster_id column from cluster_df and col_list', col_list)
+        # print('removeDDDDD cluster_id column from cluster_df and col_list', col_list)
         print(len(col_list))
         cluster_df = cluster_df.drop(columns=['cluster_id'])
     print(f"Cluster {cluster_id} data: {cluster_df}")
@@ -472,7 +519,10 @@ def build_col_list(df):
     if CLUSTER_TYPE in ("BodyPoses", "BodyPoses3D", "ArmsPoses3D"):
         second_column_name = df.columns[1]
         # if the second column == 0, then compress the columsn into a list:
-        if second_column_name == 0:
+        if MODE == 3:
+            # if we are doing metaclusters then make the selection
+            col_list["body_lms"] = make_head_arms_shoulders_list()
+        elif second_column_name == 0:
             print("compressing body_lms columns into a list")
             # If columns are integers, convert them to strings before checking prefix
             col_list["body_lms"] = [col for col in df.columns]
@@ -505,6 +555,9 @@ def calculate_cluster_medians(df):
         # cluster_median = calc_cluster_median(df, col_list, cluster_id)
         cluster_median = {}
         if CLUSTER_TYPE in ("BodyPoses", "BodyPoses3D", "ArmsPoses3D"):
+            print('col_list["body_lms"]', col_list["body_lms"])
+            if MODE == 3: col_list["body_lms"] = make_head_arms_shoulders_list()
+            print('col_list["body_lms"]', col_list["body_lms"])
             cluster_median["body_lms"] = calc_cluster_median(df, col_list["body_lms"], cluster_id)
         elif CLUSTER_TYPE in ["HandsPositions", "HandsGestures", "FingertipsPositions"]:
             cluster_median["left"] = calc_cluster_median(df, col_list["left"], cluster_id)
@@ -671,7 +724,7 @@ def calc_median_dist(enc1, enc2):
 
 def process_landmarks_cluster_dist(df, df_subset_landmarks):
     first_col = df.columns[1]
-    print("first col: ",first_col)
+    print("process_landmarks_cluster_dist first col: ",first_col)
     # if the first column is an int, then the columns are integers
     if isinstance(first_col, int):
         dim_columns = [col for col in df_subset_landmarks.columns if isinstance(col, int)]
@@ -869,15 +922,13 @@ def main():
     global N_CLUSTERS
     if MODE == 3: 
         print("making meta clusters from existing clusters")
-        if len(MEDIAN_DICT) < 2:
-            print("Not enough clusters to form meta-clusters. Exiting.")
-            return False
         n_meta_clusters = max(2, len(MEDIAN_DICT) // 5)  # Ensure at least 2 meta-clusters
         print(f"Number of meta-clusters to create: {n_meta_clusters}")
         # convert MEDIAN_DICT to a dataframe
         enc_data = pd.DataFrame.from_dict(MEDIAN_DICT, orient='index')
         enc_data.reset_index(inplace=True)
         enc_data.rename(columns={'index': 'cluster_id'}, inplace=True)
+        
 
     else:
         print("about to SQL: ",SELECT,FROM,WHERE,LIMIT)
