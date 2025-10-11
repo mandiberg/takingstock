@@ -56,7 +56,7 @@ N_CLUSTERS = N_HANDS = SORT_TYPE = FULL_BODY = IS_HAND_POSE_FUSION = ONLY_ONE = 
 
 # CSV_FOLDER = os.path.join(io.ROOT_DBx, "body3D_segmentbig_useall256_CSVs_MMtest")
 # CSV_FOLDER = os.path.join("/Users/michaelmandiberg/Documents/projects-active/facemap_production/body3D_segmentbig_useall256_CSVs")
-CSV_FOLDER = os.path.join("/Users/michaelmandiberg/Documents/projects-active/facemap_production/heft_keyword_fusion_clusters/body3D_512")
+CSV_FOLDER = os.path.join("/Users/michaelmandiberg/Documents/projects-active/facemap_production/heft_keyword_fusion_clusters/meta_clusters_test_build")
 # TENCH UNCOMMENT FOR YOUR COMP:
 # CSV_FOLDER = os.path.join(io.ROOT_DBx, "body3D_segmentbig_useall256_CSVs_test")
 
@@ -145,7 +145,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     SegmentTable_name = 'SegmentBig_isface'
     # SORT_TYPE = "planar_hands"
     SORT_TYPE = "arms3D"
-    TESTING = True
+    TESTING = False
     IS_HAND_POSE_FUSION = True # do we use fusion clusters
     GENERATE_FUSION_PAIRS = False # if true it will query based on MIN_VIDEO_FUSION_COUNT and create pairs
                                     # if false, it will grab the list of pair lists below
@@ -158,7 +158,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     # IS_TOPICS = True # if using Clusters only, must set this to False
 
     
-    ONE_SHOT = False # take all files, based off the very first sort order.
+    ONE_SHOT = True # take all files, based off the very first sort order.
     JUMP_SHOT = True # jump to random file if can't find a run (I don't think this applies to planar?)
 
     # initializing default square crop
@@ -177,7 +177,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     N_TOPICS = 100
     TOPIC_NO = [22412] # if doing an affect topic fusion, this is the wrapper topic
     FUSION_FOLDER = "utilities/data/heft_keyword_fusion_clusters"
-    CSV_FOLDER = os.path.join("/Users/michaelmandiberg/Documents/projects-active/facemap_production/heft_keyword_fusion_clusters/body3D_512_TSP")
+    CSV_FOLDER = os.path.join("/Users/michaelmandiberg/Documents/projects-active/facemap_production/heft_keyword_fusion_clusters/body3D_512_TSP/")
 
     print(f"doing {CURRENT_MODE}: SORT_TYPE {SORT_TYPE}, IS_HAND_POSE_FUSION {IS_HAND_POSE_FUSION}, GENERATE_FUSION_PAIRS {GENERATE_FUSION_PAIRS}, MIN_VIDEO_FUSION_COUNT {MIN_VIDEO_FUSION_COUNT}, IS_TOPICS {IS_TOPICS}, IS_ONE_TOPIC {IS_ONE_TOPIC}, TOPIC_NO {TOPIC_NO}, USE_AFFECT_GROUPS {USE_AFFECT_GROUPS}")
 else:
@@ -213,7 +213,7 @@ USE_NOSEBRIDGE = True
 TSP_SORT=False
 # this is for controlling if it is using
 # all clusters, 
-LIMIT = 100000 # this is the limit for the SQL query
+LIMIT = 1000 # this is the limit for the SQL query
 
 # this is set dynamically based on SORT_TYPE set above
 if IS_HAND_POSE_FUSION:
@@ -234,11 +234,11 @@ if IS_HAND_POSE_FUSION:
     elif SORT_TYPE == "arms3D":
         # if fusion, select on arms3D and gesture, sort on hands positions
         SORT_TYPE = "arms3D"
-        CLUSTER_TYPE = "ArmsPoses3D"
+        CLUSTER_TYPE = "MetaBodyPoses3D"
         CLUSTER_TYPE_2 = "HandsGestures"
-        if TESTING:
-            CLUSTER_TYPE = "BodyPoses3D"
-            CLUSTER_TYPE_2 = None
+        # if TESTING:
+        #     CLUSTER_TYPE = "BodyPoses3D"
+        #     CLUSTER_TYPE_2 = None
     # CLUSTER_TYPE is passed to sort. below
 else:
     if SORT_TYPE == "arms3D":
@@ -332,18 +332,26 @@ PHONE_BBOX_LIMITS = [0] # this is an attempt to control the BBOX placement. I do
 #     ONE_SHOT = True
 
 if not GENERATE_FUSION_PAIRS:
+    # from 512 testing
+    # print("not generating FUSION_PAIRS, pulling from list")
+    # FUSION_PAIR_DICT = {
+    #     220: [[101, 0], [124, 0], [184, 0], [216, 0], [302, 0], [448, 0], [457,0]],
+    #     553: [[216, 0], [230, 0], [89,0]],
+    #     807: [[140, 0], [168, 0], [216, 0], [273, 0], [63,0]],
+    #     827: [[191, 0], [229, 0], [322, 0], [340, 0], [396, 0], [423, 0], [447, 0], [448, 0], [51,0]],
+    #     1070: [[122, 0], [14, 0], [22, 0], [342, 0], [391, 0], [53,0]],
+    #     1644: [[158, 0], [161, 0], [345,0]],
+    #     5310: [[180, 0], [245, 0], [265, 0], [315, 0], [324, 0], [445, 0], [451, 0], [476, 0], [498,0]],
+    #     22269: [[351, 0], [449, 0], [53,0]],
+    #     22411: [[158, 0], [240, 0], [304, 0], [306, 0], [342, 0], [391, 0], [40, 0], [423, 0], [449,0]],
+    #     22412: [[89, 0], [101, 0], [140, 0], [184, 0], [273, 0], [391, 0], [396, 0], [426, 0], [430, 0], [446, 0], [449, 0], [481,0]]
+    # }
+
+    # meta clusters testing oct 11
     print("not generating FUSION_PAIRS, pulling from list")
     FUSION_PAIR_DICT = {
-        220: [[101, 0], [124, 0], [184, 0], [216, 0], [302, 0], [448, 0], [457,0]],
-        553: [[216, 0], [230, 0], [89,0]],
-        807: [[140, 0], [168, 0], [216, 0], [273, 0], [63,0]],
-        827: [[191, 0], [229, 0], [322, 0], [340, 0], [396, 0], [423, 0], [447, 0], [448, 0], [51,0]],
-        1070: [[122, 0], [14, 0], [22, 0], [342, 0], [391, 0], [53,0]],
-        1644: [[158, 0], [161, 0], [345,0]],
-        5310: [[180, 0], [245, 0], [265, 0], [315, 0], [324, 0], [445, 0], [451, 0], [476, 0], [498,0]],
-        22269: [[351, 0], [449, 0], [53,0]],
-        22411: [[158, 0], [240, 0], [304, 0], [306, 0], [342, 0], [391, 0], [40, 0], [423, 0], [449,0]],
-        22412: [[89, 0], [101, 0], [140, 0], [184, 0], [273, 0], [391, 0], [396, 0], [426, 0], [430, 0], [446, 0], [449, 0], [481,0]]
+        22412: [[4,0]]
+                # , [6,0], [8,0], [9,0], [12,0], [13,0], [15,0], [16,0], [21,0], [22,0], [23,0], [24,0], [25,0], [26,0], [30,0]],
     }
 
     FUSION_PAIRS = [
@@ -588,7 +596,19 @@ elif IS_SEGONLY and io.platform == "darwin":
             SELECT += ", it.topic_score" # add description here, after resegmenting
 
     if IS_HAND_POSE_FUSION:
-        FROM += f" JOIN Images{CLUSTER_TYPE} ihp ON s.image_id = ihp.image_id "
+        # handle META situation, where arms3D needs to look for meta clusters
+        if SORT_TYPE == "arms3D": 
+            cluster_table = f"ImagesBodyPoses3D"
+            # ihp as ClustersMetaBodyPoses3D - selecting the meta clusters id below
+            # join Segment to ImagesBodyPoses3D
+            # join ImagesBodyPoses3D to ClustersMetaBodyPoses3D
+
+            # FROM += f" JOIN ClustersMetaBodyPoses3D ihp ON s.image_id = ihp.image_id "    
+            FROM += f" JOIN ImagesBodyPoses3D ihp ON s.image_id = ihp.image_id "
+            FROM += f" JOIN ClustersMetaBodyPoses3D cmp ON ihp.cluster_id = cmp.cluster_id "
+        else: 
+            cluster_table = f"Images{CLUSTER_TYPE}"
+            FROM += f" JOIN {cluster_table} ihp ON s.image_id = ihp.image_id "
         if CLUSTER_TYPE_2: FROM += f" JOIN Images{CLUSTER_TYPE_2} ih ON s.image_id = ih.image_id "
         # WHERE += " AND ihp.cluster_dist < 2.5" # isn't really working how I want it
         if IS_HAND_POSE_FUSION: add_topic_select()
@@ -971,8 +991,12 @@ if not io.IS_TENCH:
         if IS_HAND_POSE_FUSION:
             if isinstance(cluster_no, list):
                 print("cluster_no is a list", cluster_no)
+                # set target column based on SORT_TYPE, arms3D means we have a meta_cluster_id
+                if SORT_TYPE == "arms3D": cluster_target_col = "cmp.meta_cluster_id"
+                else: cluster_target_col = "ihp.cluster_id"
+
                 # we have two values, C1 and C2. C1 should be IHP, C2 should be IH
-                cluster += f" AND ihp.cluster_id = {str(cluster_no[0])} "            
+                cluster += f" AND {cluster_target_col} = {str(cluster_no[0])} "            
                 if cluster_no[1]: cluster += f" AND ih.cluster_id = {str(cluster_no[1])} "            
         # elif cluster_no is not None or topic_no is not None:
         elif IS_CLUSTER or IS_ONE_CLUSTER:
