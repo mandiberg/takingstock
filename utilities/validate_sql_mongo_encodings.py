@@ -58,11 +58,14 @@ MODE = 1
 if MODE == 0: FOLDER_MODE = 0 # 0 is the first way, 1 is by filepath, limit 1
 else: FOLDER_MODE = 1 # 0 is the first way, 1 is by filepath, limit 1
 
+## OVERRIDE for NML PC doover ##
+# FOLDER_MODE = 0
+
 # 2 find entries present in mongo, but not recorded in sql table
 last_id = 0
 print(f"Starting from last_id: {last_id}")
-EXPORT_DIR = os.path.join(io.ROOT_PROD,"mongo_exports_sept29/encodings_sm")  # Directory to save BSON files
-# EXPORT_DIR = os.path.join("/Volumes/OWC5/segment_images/mongo_exports_oct7")  # Directory to save BSON files
+EXPORT_DIR = os.path.join(io.ROOT_PROD,"mongo_exports_sept29/encodings")  # Directory to save BSON files
+# EXPORT_DIR = os.path.join("/Volumes/OWC4/segment_images_deshardJSON_aug2_toArchive/mongo_exports_fromlist_adobeE")  # Directory to save BSON files
 # touch the directory if it does not exist
 os.makedirs(EXPORT_DIR, exist_ok=True)
 print(f"Export directory: {EXPORT_DIR}")
@@ -482,26 +485,6 @@ def process_file_list_in_batches(batch_list, num_threads, this_process, this_fun
             if break_after_first:
                 return  
 
-def remove_already_completed_files(session, collection_files_dict):
-    completed_files = session.execute(sqlalchemy.text("SELECT DISTINCT completed_bson_file FROM BsonFileLog")).fetchall()
-    completed_files = [item[0] for item in completed_files]
-    print(f"Skipping {len(completed_files)} completed files")
-    if isinstance(collection_files_dict, list):
-        full_list =[]
-        for batch in collection_files_dict:
-            print("len before removing:", len(batch))
-            batch = [file for file in batch if file not in completed_files]
-            print("len after removing:", len(batch))
-            full_list.append(batch)
-        return full_list
-    else:
-        for collection in collection_files_dict:
-            original_count = len(collection_files_dict[collection])
-            collection_files_dict[collection] = [batch for batch in collection_files_dict[collection] if batch[0] not in completed_files]
-            skipped_count = original_count - len(collection_files_dict[collection])
-            if skipped_count > 0:
-                print(f"Skipping {skipped_count} completed batches for collection {collection}, {len(collection_files_dict[collection])} remaining")
-        return collection_files_dict
 
 if __name__ == "__main__":
 
@@ -531,14 +514,14 @@ if __name__ == "__main__":
         # table_name = 'compare_sql_mongo_results'
         function = "read_and_store_bson_batch"
         if FOLDER_MODE == 0:
-            # use batch list builder
-            collection_files_dict = exporter.build_batch_list(EXPORT_DIR, batch_size)
+            # use batch list builder -- where each doc is its own bson file
+            collection_files_dict = exporter.build_batch_list(session, EXPORT_DIR, batch_size)
             process_batch_list_in_batches(collection_files_dict, num_threads, process_batch, function)
         else:
             # use file list builder
-            list_of_bson_files = exporter.build_folder_bson_file_list_full_paths(EXPORT_DIR, batch_size=num_threads)
+            list_of_bson_files = exporter.build_folder_bson_file_list_full_paths(session, EXPORT_DIR, batch_size=num_threads)
             # select all completed_bson_file from BsonFileLog to skip those
-            list_of_bson_files = remove_already_completed_files(session, list_of_bson_files)
+            # list_of_bson_files = exporter.remove_already_completed_files(session, list_of_bson_files)
             print("list_of_bson_files number of collections: ", len(list_of_bson_files))
             process_file_list_in_batches(list_of_bson_files, num_threads, process_batch, function, break_after_first=False)
         # read_and_store_bson(engine, mongo_db, document_names_dict, table_name)

@@ -23,6 +23,7 @@ import bson
 import gc
 import pymongo
 from sqlalchemy import create_engine, MetaData, select, text
+import sqlalchemy
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import NullPool
 
@@ -156,8 +157,7 @@ class MongoBSONExporter:
                         print(f"Wrote {len(batch_bson[key])} docs to {batch_file}")
 
     def read_and_store_bson_batch(self, engine, mongo_db, batch_list, passed_collection, table_name="compare_sql_mongo_results", ):
-        writing_individual_files = False
-        DO_ONLY_ONE = True
+        writing_individual_files = True
         for file in batch_list:
             print(f"Processing BSON file: {file}")
             try:
@@ -177,13 +177,13 @@ class MongoBSONExporter:
                         # collection = self.col_to_collection[key]                        
                         collection = key
                         # collection = f"self.{collection_name}_collection"
-                        writing_individual_files = True
+                        # writing_individual_files = True
                         # print(f"Determined collection as {collection} from filename {file}")
                         break
                 # if collection is still None, use the first part of the filename before the first underscore
                 if collection is None:
                     collection = filename.split("_")[0]
-                    writing_individual_files = True
+                    # writing_individual_files = True
 
                 print(f"Determined collection as {collection} from filename {file}")
             else:
@@ -193,7 +193,7 @@ class MongoBSONExporter:
             print(f"read {len(docs)} documents from BSON file {file} to write to {table_name}")
             for doc in docs:
                 if not bool(doc):
-                    # print(f"Skipping None document in file {file}")
+                    print(f"Skipping None document in file {file}")
                     continue
                 image_id = doc.get("image_id", None)
                 encoding_id = doc.get("encoding_id", None)
@@ -223,7 +223,7 @@ class MongoBSONExporter:
 
             # after finishing the file, save as completed...
             if writing_individual_files:
-                # print("writing individual files is true, saving file to BsonFileLog")
+                print("writing individual files is true, saving file to BsonFileLog")
                 # Insert file to completed_bson_file field in BsonFileLog table.
                 stmt = f"INSERT INTO BsonFileLog (completed_bson_file) VALUES ('{file}');"
                 try:
@@ -248,14 +248,64 @@ class MongoBSONExporter:
 
 
     def build_folder_bson_file_list(self, export_dir):
-        list_of_bson_files = [f for f in os.listdir(export_dir) if f.endswith('.bson')]
+        # try to open bson_file_list.txt
+        # if it exists, read it and return batches from that
+        if os.path.exists(os.path.join(export_dir, "bson_file_list.txt")):
+            with open(os.path.join(export_dir, "bson_file_list.txt"), "r") as f:
+                list_of_bson_files = [line.strip() for line in f.readlines()]
+        else:
+            list_of_bson_files = [f for f in os.listdir(export_dir) if f.endswith('.bson')]
+            # list_of_bson_files = self.build_folder_bson_file_list(export_dir)
+            # save list_of_bson_files_full_paths to export_dir/bson_file_list.txt
+            with open(os.path.join(export_dir, "bson_file_list.txt"), "w") as f:
+                for item in list_of_bson_files:
+                    f.write(f"{item}\n")
+        # list_of_bson_files = [f for f in os.listdir(export_dir) if f.endswith('.bson')]
         return list_of_bson_files
 
-    def build_folder_bson_file_list_full_paths(self, export_dir, batch_size=8):
+    def build_folder_bson_file_list_full_paths(self, session, export_dir, batch_size=8):
         list_of_bson_files = self.build_folder_bson_file_list(export_dir)
+        print(f"Found {(list_of_bson_files)} BSON files in {export_dir}")
         list_of_bson_files_full_paths = [os.path.join(export_dir, f) for f in list_of_bson_files]
-        all_batches = self.split_into_batches(batch_size, list_of_bson_files_full_paths)
+        list_of_new_bson_files_full_paths = self.remove_already_completed_files(session, list_of_bson_files_full_paths)
+        print(f"Remaining {(list_of_new_bson_files_full_paths)} BSON files in {export_dir}")
+        all_batches = self.split_into_batches(batch_size, list_of_new_bson_files_full_paths)
+        print(f"Split into {(all_batches)} batches of size {batch_size}")
         return all_batches
+
+    def remove_already_completed_files(self, session, collection_files_dict):
+        completed_files = session.execute(sqlalchemy.text("SELECT DISTINCT completed_bson_file FROM BsonFileLog")).fetchall()
+        completed_files = [item[0] for item in completed_files]
+        print(f"Skipping {len(completed_files)} completed files")
+        if isinstance(collection_files_dict, list):
+            trimmed_full_list =[]
+            print("batch before removing:", collection_files_dict)
+            print("len before removing:", len(collection_files_dict))
+            for file in collection_files_dict:
+                if file not in completed_files:
+                    trimmed_full_list.append(file)
+            print("batch after removing:", trimmed_full_list)
+            print("len after removing:", len(trimmed_full_list))
+            # for batch in collection_files_dict:
+            #     print("batch before removing:", batch)
+            #     print("len before removing:", len(batch))
+            #     if isinstance(batch, str):
+            #         if batch in completed_files:
+            #             continue
+            #     else:
+            #         batch = [file for file in batch if file not in completed_files]
+            #     print("batch after removing:", batch)
+            #     print("len after removing:", len(batch))
+            #     full_list.append(batch)
+            return trimmed_full_list
+        else:
+            for collection in collection_files_dict:
+                original_count = len(collection_files_dict[collection])
+                collection_files_dict[collection] = [batch for batch in collection_files_dict[collection] if batch[0] not in completed_files]
+                skipped_count = original_count - len(collection_files_dict[collection])
+                if skipped_count > 0:
+                    print(f"Skipping {skipped_count} completed batches for collection {collection}, {len(collection_files_dict[collection])} remaining")
+            return collection_files_dict
 
     def split_into_batches(self, batch_size, list_of_bson_files):
         all_batches = []
@@ -264,7 +314,7 @@ class MongoBSONExporter:
             all_batches.append(this_batch)
         return all_batches
 
-    def build_batch_list(self, export_dir, batch_size):
+    def build_batch_list(self, session, export_dir, batch_size):
         list_of_bson_files = self.build_folder_bson_file_list(export_dir)
         # print(f"Found {len(list_of_bson_files)} BSON files in {export_dir}")
         collection_files_dict = {}
@@ -278,6 +328,7 @@ class MongoBSONExporter:
             # go through the files in batches of batch_size
             all_batches = self.split_into_batches(batch_size, collection_bson_files)
             collection_files_dict[collection_name] = all_batches
+        collection_files_dict = self.remove_already_completed_files(session, collection_files_dict)
         return collection_files_dict
 
     def read_batch(self, batch_file, verbose=True):
@@ -319,7 +370,9 @@ class MongoBSONExporter:
         if key and id and col:
             collection = mongo_db[collection_name]
             mongo_results = collection.find_one({"image_id": id})
+            # print(f"mongo_results for image_id {id} in collection {collection_name}: {mongo_results}")
             if mongo_results[col] is not None and mongo_results[col] == cell_value:
+                # if mongo_results["encoding_id"] is not None:
                 if mongo_results["encoding_id"] is not None and mongo_results["encoding_id"] % 100 == 0:
                     print(f" === processed {collection_name} up to encoding {mongo_results['encoding_id']} as {col} is already up to date.")
                 return True

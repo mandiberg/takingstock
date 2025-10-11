@@ -52,17 +52,21 @@ MODE = 0 #0 for overall compare, 1 to recheck against entry and bson dump
 # MODE 0 ignores is_body and is_face, MODE 1 filters on those
 IS_FACE = 0
 IS_BODY = 1
+JOIN_COMPARE_TABLE = True
+last_id = 1050000
+print(f"Starting from last_id: {last_id}")
 
 # select max encoding_id to start from
 Base = declarative_base()
 
-table_name = 'compare_sql_mongo_results4'
+table_name = 'compare_sql_mongo_results_ultradone'
 class CompareSqlMongoResults(Base):
     __tablename__ = table_name
     encoding_id = Column(Integer, primary_key=True)
     image_id = Column(Integer)
     is_body = Column(Boolean)
     is_face = Column(Boolean)
+    site_name_id = Column(Integer)
     face_landmarks = Column(Integer)
     body_landmarks = Column(Integer)
     face_encodings68 = Column(Integer)
@@ -70,12 +74,18 @@ class CompareSqlMongoResults(Base):
     left_hand = Column(Integer)
     right_hand = Column(Integer)
     body_world_landmarks = Column(Integer)
+
+if JOIN_COMPARE_TABLE:
+    # this should create a table from the above definition if it doesn't exist
+    CompareSqlMongoResults_extant = io.create_class_from_reflection(engine, table_name, "compare_sql_mongo_results2")
+
+
 Base.metadata.create_all(engine)
+
+
 # last_id = session.query(sqlalchemy.func.max(CompareSqlMongoResults.encoding_id)).scalar()
 # if last_id is None:
 #     last_id = 0
-last_id = 58375000
-print(f"Starting from last_id: {last_id}")
 
 # variables to filter encodings on
 migrated_SQL = 1
@@ -146,7 +156,7 @@ def process_batch(batch_start, batch_end):
     print(f"Thread processing batch {batch_start} to {batch_end}, got {len(results)} results")
     # print(f"First 5 results: {results[:5]}")
 
-    for encoding_id, image_id, mongo_encodings, mongo_body_landmarks, mongo_face_landmarks, mongo_body_landmarks_norm, mongo_hand_landmarks, mongo_body_landmarks_3D, is_body, is_face in results:
+    for encoding_id, image_id, mongo_encodings, mongo_body_landmarks, mongo_face_landmarks, mongo_body_landmarks_norm, mongo_hand_landmarks, mongo_body_landmarks_3D, is_body, is_face, site_name_id in results:
         if encoding_id is None or image_id is None:
             continue
         mongo_docs = {}
@@ -159,7 +169,8 @@ def process_batch(batch_start, batch_end):
             "encoding_id": encoding_id,
             "image_id": image_id,
             "is_body": is_body,
-            "is_face": is_face
+            "is_face": is_face,
+            "site_name_id": site_name_id
         }
         # Build a dict for the row at the start of the loop:
         row_dict = {
@@ -194,7 +205,7 @@ def process_batch(batch_start, batch_end):
                     value = None
                 this_row[document_name] = value
 
-        if any(v is not None for k, v in this_row.items() if k not in ["encoding_id", "image_id", "is_body", "is_face"]):
+        if any(v is not None for k, v in this_row.items() if k not in ["encoding_id", "image_id", "is_body", "is_face", "site_name_id"]):
             results_rows.append(this_row)
 
     thread_session.close()
@@ -203,19 +214,57 @@ def process_batch(batch_start, batch_end):
 
 def get_mysql_results(batch_start, batch_end, thread_session):
     if MODE == 0:
-        results = (
-            thread_session.query(
-                Encodings.encoding_id, Encodings.image_id, Encodings.mongo_encodings, Encodings.mongo_body_landmarks,
-                Encodings.mongo_face_landmarks, Encodings.mongo_body_landmarks_norm, Encodings.mongo_hand_landmarks,
-                Encodings.mongo_body_landmarks_3D, Encodings.is_body, Encodings.is_face
+        if JOIN_COMPARE_TABLE:
+            results = (
+                thread_session.query(
+                    Encodings.encoding_id, Encodings.image_id, Encodings.mongo_encodings, Encodings.mongo_body_landmarks,
+                    Encodings.mongo_face_landmarks, Encodings.mongo_body_landmarks_norm, Encodings.mongo_hand_landmarks,
+                    Encodings.mongo_body_landmarks_3D, Encodings.is_body, Encodings.is_face, Images.site_name_id
+                )
+                .join(
+                    Images, 
+                    Encodings.image_id == Images.image_id
+                )
+                .join(
+                    CompareSqlMongoResults_extant,
+                    Encodings.encoding_id == CompareSqlMongoResults_extant.encoding_id
+                )
+                .filter(
+                    Encodings.encoding_id >= batch_start,
+                    Encodings.encoding_id < batch_end,
+                    (
+                        (CompareSqlMongoResults_extant.face_landmarks.isnot(None)) |
+                        (CompareSqlMongoResults_extant.body_landmarks.isnot(None)) |
+                        (CompareSqlMongoResults_extant.face_encodings68.isnot(None)) |
+                        (CompareSqlMongoResults_extant.nlms.isnot(None)) |
+                        (CompareSqlMongoResults_extant.left_hand.isnot(None)) |
+                        (CompareSqlMongoResults_extant.right_hand.isnot(None)) |
+                        (CompareSqlMongoResults_extant.body_world_landmarks.isnot(None))
+                    )
+                )
+                .order_by(Encodings.encoding_id)
+                .all()
             )
-            .filter(
-                Encodings.encoding_id >= batch_start,
-                Encodings.encoding_id < batch_end
+        else:
+            results = (
+                thread_session.query(
+                    Encodings.encoding_id, Encodings.image_id, Encodings.mongo_encodings, Encodings.mongo_body_landmarks,
+                    Encodings.mongo_face_landmarks, Encodings.mongo_body_landmarks_norm, Encodings.mongo_hand_landmarks,
+                    Encodings.mongo_body_landmarks_3D, Encodings.is_body, Encodings.is_face, Images.site_name_id
+                )
+                .join(
+                    Images,
+                    Encodings.image_id == Images.image_id
+                )
+                .filter(
+                    Encodings.encoding_id >= batch_start,
+                    Encodings.encoding_id < batch_end,
+                )
+                .order_by(Encodings.encoding_id)
+                .all()
             )
-            .order_by(Encodings.encoding_id)
-            .all()
-        )
+
+
     elif MODE == 1:
         results = (
             thread_session.query(
