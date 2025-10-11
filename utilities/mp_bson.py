@@ -22,7 +22,7 @@ import os
 import bson
 import gc
 import pymongo
-from sqlalchemy import create_engine, MetaData, select
+from sqlalchemy import create_engine, MetaData, select, text
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import NullPool
 
@@ -30,11 +30,8 @@ from sqlalchemy.pool import NullPool
 
 # Class to handle BSON export tasks
 class MongoBSONExporter:
-    def __init__(self, mongo_collection, bboxnormed_collection, mongo_hand_collection, body_world_collection):
-        self.mongo_collection = mongo_collection
-        self.bboxnormed_collection = bboxnormed_collection
-        self.mongo_hand_collection = mongo_hand_collection
-        self.body_world_collection = body_world_collection
+    def __init__(self, mongo_db):
+        self.mongo_db = mongo_db
 
         self.collection_names = ['encodings', 'body_landmarks_norm', 'hand_landmarks', 'body_world_landmarks']
         self.document_names_dict = {
@@ -52,6 +49,10 @@ class MongoBSONExporter:
             "right_hand": "mongo_hand_landmarks",
             "body_world_landmarks": "mongo_body_landmarks_3D"
         }
+
+        # setting collection objects from dict
+        for collection_name in self.collection_names:
+            globals()[f"self.{collection_name}_collection"] = mongo_db[collection_name]
 
         # Map document names to their corresponding collection
         self.col_to_collection = {}
@@ -154,8 +155,117 @@ class MongoBSONExporter:
                     if verbose:
                         print(f"Wrote {len(batch_bson[key])} docs to {batch_file}")
 
-    def build_batch_list(self, export_dir, batch_size):
+    def read_and_store_bson_batch(self, engine, mongo_db, batch_list, passed_collection, table_name="compare_sql_mongo_results", ):
+        writing_individual_files = False
+        DO_ONLY_ONE = True
+        for file in batch_list:
+            print(f"Processing BSON file: {file}")
+            try:
+                docs = self.read_bson(file)
+            except Exception as e:
+                print(f"Error reading BSON file {file}: {e}")
+                continue
+            # print(f"Opened BSON file: {docs}")
+            print(f"collection before if  = {passed_collection}")
+            if passed_collection is None:
+                filename = os.path.basename(file)
+                # look for self.col_to_collection.keys() in filename to determine collection
+                # print(f"filename = {filename}")
+                for key in self.collection_names:
+                    # print(f"checking key: {key} in filename")
+                    if key in filename:
+                        # collection = self.col_to_collection[key]                        
+                        collection = key
+                        # collection = f"self.{collection_name}_collection"
+                        writing_individual_files = True
+                        # print(f"Determined collection as {collection} from filename {file}")
+                        break
+                # if collection is still None, use the first part of the filename before the first underscore
+                if collection is None:
+                    collection = filename.split("_")[0]
+                    writing_individual_files = True
+
+                print(f"Determined collection as {collection} from filename {file}")
+            else:
+                collection = passed_collection
+
+            this_field_list = self.document_names_dict[collection]
+            print(f"read {len(docs)} documents from BSON file {file} to write to {table_name}")
+            for doc in docs:
+                if not bool(doc):
+                    # print(f"Skipping None document in file {file}")
+                    continue
+                image_id = doc.get("image_id", None)
+                encoding_id = doc.get("encoding_id", None)
+                # print(f"Processing document with image_id {image_id} encoding_id {encoding_id}")
+                if not image_id and encoding_id is not None:
+                    print(f"NO image_id but has encoding_id {encoding_id} in file {file}") # but has encoding_id
+                if not image_id and not encoding_id:
+                    print(f"Skipping document without image_id or encoding_id in file {file}: {doc}")
+                    continue
+                # check for each value in this_field_list in the doc
+                for field in this_field_list:
+                    if field in doc:
+                        collection = self.col_to_collection.get(field, None)
+
+                        # print(f"Found field {collection}:{field} len: {len(doc[field])} in document for image_id {image_id} encoding_id {encoding_id}")
+                        # continue
+                        if collection:
+                            # pass in encoding_id. if is None, it will be handled by write_Mongo_value
+                            success = self.write_Mongo_value(engine, mongo_db, collection, "image_id", image_id, field, doc[field], encoding_id)
+                            if not success:
+                                print(f"Failed to write Mongo value for image_id {image_id}, field {field}")
+                            else:
+                                if encoding_id is None:
+                                    encoding_id = self.lookup_encoding_id(engine, image_id)
+                                # print(f"Updating encoding_id {encoding_id} setting {field} to NULL")
+                                self.write_MySQL_value(engine, table_name, "encoding_id", encoding_id, field, "NULL")
+
+            # after finishing the file, save as completed...
+            if writing_individual_files:
+                # print("writing individual files is true, saving file to BsonFileLog")
+                # Insert file to completed_bson_file field in BsonFileLog table.
+                stmt = f"INSERT INTO BsonFileLog (completed_bson_file) VALUES ('{file}');"
+                try:
+                    with engine.connect() as connection:
+                        connection.execute(text(stmt))
+                        connection.commit()
+                except Exception as e:
+                    print(f"Error updating BsonFileLog: {e}")
+                print(f"Completed and wrote to BsonFileLog: {filename}")
+
+    def lookup_encoding_id(self, engine, image_id):
+        stmt = f"SELECT encoding_id FROM Encodings WHERE image_id = {image_id};"
+        # print(f"Retrieving encoding_id for image_id {image_id} using query: {stmt}")
+        try:
+            with engine.connect() as connection:
+                result = connection.execute(text(stmt))
+                encoding_id = result.scalar()
+                # print("encoding_id", encoding_id)
+        except Exception as e:
+            print(f"Error retrieving encoding_id: {e}")
+        return encoding_id
+
+
+    def build_folder_bson_file_list(self, export_dir):
         list_of_bson_files = [f for f in os.listdir(export_dir) if f.endswith('.bson')]
+        return list_of_bson_files
+
+    def build_folder_bson_file_list_full_paths(self, export_dir, batch_size=8):
+        list_of_bson_files = self.build_folder_bson_file_list(export_dir)
+        list_of_bson_files_full_paths = [os.path.join(export_dir, f) for f in list_of_bson_files]
+        all_batches = self.split_into_batches(batch_size, list_of_bson_files_full_paths)
+        return all_batches
+
+    def split_into_batches(self, batch_size, list_of_bson_files):
+        all_batches = []
+        for i in range(0, len(list_of_bson_files), batch_size):
+            this_batch = list_of_bson_files[i:i + batch_size]
+            all_batches.append(this_batch)
+        return all_batches
+
+    def build_batch_list(self, export_dir, batch_size):
+        list_of_bson_files = self.build_folder_bson_file_list(export_dir)
         # print(f"Found {len(list_of_bson_files)} BSON files in {export_dir}")
         collection_files_dict = {}
         for collection_name in self.collection_names:
@@ -166,10 +276,7 @@ class MongoBSONExporter:
             collection_bson_files = [os.path.join(export_dir, f) for f in collection_bson_files]
             # print(f" -- Found {len(collection_bson_files)} BSON files for collection {collection_name}")
             # go through the files in batches of batch_size
-            all_batches = []
-            for i in range(0, len(collection_bson_files), batch_size):
-                this_batch = collection_bson_files[i:i + batch_size]
-                all_batches.append(this_batch)
+            all_batches = self.split_into_batches(batch_size, collection_bson_files)
             collection_files_dict[collection_name] = all_batches
         return collection_files_dict
 
@@ -207,3 +314,102 @@ class MongoBSONExporter:
             Encodings_Migration.image_id.in_(image_ids_exported)
         ).update({"migrated_Mongo": 0}, synchronize_session=False)
         session.commit()
+
+    def write_Mongo_value(self, engine, mongo_db, collection_name, key, id, col, cell_value, mongo_encoding_id=None):
+        if key and id and col:
+            collection = mongo_db[collection_name]
+            mongo_results = collection.find_one({"image_id": id})
+            if mongo_results[col] is not None and mongo_results[col] == cell_value:
+                if mongo_results["encoding_id"] is not None and mongo_results["encoding_id"] % 100 == 0:
+                    print(f" === processed {collection_name} up to encoding {mongo_results['encoding_id']} as {col} is already up to date.")
+                return True
+            # print(f"this col results = {mongo_results[col]}", col)
+            if collection_name == "encodings" and key == "image_id":
+                # deal with None values, which are also often values where the encoding_id is wrong in mongo
+                if mongo_encoding_id is not None:
+                    # FOR REDOING THE RESHARD TO CATCH NONES
+                    # print(f"have a eid: {mongo_encoding_id} so going to continue as it probably wrote correctly last time")
+                    # return False
+
+                    # FOR REGULAR --- >>>>
+                    # print("got an mongo_encoding_id", mongo_encoding_id)
+                    query = {key: id, "encoding_id": mongo_encoding_id}
+                else:
+                    # print(f"this col results = {mongo_results['encoding_id']}")
+                    # print(f"No encoding_id provided for image_id {id}, looking up encoding_id from Mongo and MySQL")
+                    # mongo_encoding_id_results = collection.find_one({"image_id": id}, {"encoding_id": 1})
+                    if mongo_results and "encoding_id" in mongo_results:
+                        # print(f"mongo_results = {mongo_results}")
+                        mongo_encoding_id = mongo_results["encoding_id"]
+                        # print(f"Found image_id {id} with mongo_encoding_id {mongo_encoding_id}")
+                        print(f"Found image_id {id} with mongo_encoding_id {mongo_encoding_id}")
+                    else:
+                        print(f" ~ Could not find mongo_encoding_id for image_id {id} in MongoDB collection {collection_name}")
+                        mongo_encoding_id = None
+                    # if no encoding_id use engine to get corect encoding_id from encodings table in mysql
+                    # print("going to lookup encoding_id from MySQL from id", id)
+                    mysql_encoding_id = self.lookup_encoding_id(engine, id)
+                    # print(f"Found image_id {id} with mongo_encoding_id {mongo_encoding_id} and SQL encoding_id: {mysql_encoding_id}")
+                    if mongo_encoding_id != mysql_encoding_id:
+                        print(f" XXX Mismatch for image_id {id}: mongo_encoding_id {mongo_encoding_id} vs mysql_encoding_id {mysql_encoding_id}")
+                        # replace mongo_encoding_id with mysql_encoding_id in the mongodb collection
+                        replace_encoding_id_query = {key: id, "encoding_id": mongo_encoding_id}
+                        replace_encoding_id_update = {"$set": {"encoding_id": mysql_encoding_id}}
+                        # print("going to do this:", replace_encoding_id_query, replace_encoding_id_update)
+                        result = collection.update_one(replace_encoding_id_query, replace_encoding_id_update)
+                        # print("result is ", result)
+                        # query = {key: id, "encoding_id": mysql_encoding_id}
+                    else:
+                        print(f" --- no mismatch for image_id {id}: mongo_encoding_id {mongo_encoding_id} vs mysql_encoding_id {mysql_encoding_id}")
+                    query = {key: id, "encoding_id": mysql_encoding_id}
+
+            else:
+                query = {key: id}
+            update = {"$set": {col: cell_value}}
+            try:
+                # print(f"Upserting into Mongo collection {collection_name} for {query} setting {col} to value of length {len(str(cell_value)) if cell_value else 0}")
+                result = collection.update_one(query, update, upsert=True)
+                if result.matched_count > 0 or result.upserted_id is not None:
+                    # print(f"Success for {id} {key} set {col} to {str(cell_value)[:20]}")
+                    return True
+                else:
+                    print(f"No document found or upserted for {query}")
+            except Exception as e:
+                if "E11000" in str(e):
+                    print(f"Duplicate key error: {e}")
+                    # isolate the duplicate key value from the error message
+                    # and print it
+                    duplicate_key_value = str(e).split("key: ")[1].split(" dup key")[0]
+                    # print(f"Duplicate key value: {duplicate_key_value}")
+                    # isolate image_id from duplicate_key_value that has this pattern: { image_id: 73726720 }
+                    if "image_id" in duplicate_key_value:
+                        image_id_str = duplicate_key_value.split("image_id: ")[1].split(" }")[0]
+                        image_id_int = int(image_id_str)
+                        print(f"Found image_id {image_id_int} with mysql_encoding_id {mysql_encoding_id} and mongo_encoding_id: {mongo_encoding_id}")
+                else:
+                    print(f"Error writing Mongo value: {e}")
+                
+        else:
+            print("Missing parameters for write_Mongo_value")
+        return False
+
+    def write_MySQL_value(self, engine, table_name, key, id, col, cell_value):
+        # print("writing MySQL")
+        if key and id and col:
+            from sqlalchemy import text
+            stmt = f"UPDATE {table_name} SET {col}={cell_value} WHERE {key} = {id};"
+            # print(f"Executing SQL: {stmt}")
+            # execute the statement here using your database connection
+            # For example, using a SQLAlchemy session:
+            try:
+                with engine.connect() as connection:
+                    connection.execute(text(stmt))
+                    connection.commit()
+                # print(f"Success for     {id} {key} set {col} to {cell_value}")
+            except Exception as e:
+                print(f"Error writing MySQL value: {e}")
+        else:
+            print("Missing parameters for write_MySQL_value")
+        
+
+
