@@ -60,7 +60,7 @@ def build_not_dupe_sql(removed_files):
                             if m:
                                 image_id_i = m.group(1)
                                 image_id_j = m.group(2)
-                                outfile.write(f"INSERT IGNORE INTO is_dupe_of (image_id_i, image_id_j) VALUES ({image_id_i},{image_id_j});\n")
+                                outfile.write(f"INSERT IGNORE INTO IsNotDupeOf (image_id_i, image_id_j) VALUES ({image_id_i},{image_id_j});\n")
                         total_files += 1
     print(f"Merged all .sql files into {IS_NOT_DUPES_FILE} with total {total_files} files.")
 

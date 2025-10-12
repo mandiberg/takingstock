@@ -835,15 +835,16 @@ class SortPose:
         score, _ = ssim(gray1, gray2, full=True)
         return score  # Return the SSIM score
 
-
-    def remove_duplicates(self, folder_list, df: pd.DataFrame) -> pd.DataFrame:
+    def remove_duplicates(self, folder_list, df: pd.DataFrame, session, not_dupe_list) -> pd.DataFrame:
         """
         Main method to remove duplicates from the dataframe.
         Returns sorted_df with all duplicates removed (keeping first occurrence).
         """
         to_remove = set()
         confirmed_dupes = set()
+        none_images = set()
         n_rows = len(df)
+        not_dupes = set(not_dupe_list)
 
         # df = self.split_landmarks_to_columns_or_list(df, first_col="left_hand_world_landmarks", second_col="right_hand_world_landmarks", structure="list")
 
@@ -959,7 +960,15 @@ class SortPose:
         # i is to be kept, j is to be removed if dupe
         # Pass 1: Fast screening, if it sum(norm_dist) < threshold, add it into the look_closer list to be checked in pass 2
         # ankle_lists = df['wrist_ankle_landmarks_normalized_array'].tolist()
+        def pop_look_closer_dict(look_closer_dict, keys_to_remove):
+            for key in keys_to_remove:
+                look_closer_dict.pop(key, None)
+            return look_closer_dict
         
+        def check_mysql_for_dupes(session, ij):
+            print(ij)
+            return None
+
         for i in range(n_rows):
             for j in range(i + 1, n_rows):
                 this_dist_list = []
@@ -990,8 +999,17 @@ class SortPose:
                     
                     continue
                       # If only one of the checks passed, skip to next pair
+        if not_dupes is not None:
+            #interlude 1, check to see if any are in not_dupes list, if so, remove from look_closer_dic
+            not_dupes_to_remove = []
+            for (i,j), this_dist_list in look_closer_dict.items():
+                if (i,j) in not_dupes or (j,i) in not_dupes:
+                    not_dupes_to_remove.append((i,j))
+                    continue
+            look_closer_dict = pop_look_closer_dict(look_closer_dict, not_dupes_to_remove)
+
         #pass 2
-        keys_to_remove = []
+        keys_to_remove_prob_not_dupes = []
         for (i,j), this_dist_list in look_closer_dict.items():
             key = "face_encodings68"
             threshold, _ = threshold_dict[key]
@@ -1005,11 +1023,10 @@ class SortPose:
             else:
                 if self.VERBOSE: print(f"{normed_dist} noface {i},{j}. this_dist_list {this_dist_list}")
                 # mark for removal after iteration
-                keys_to_remove.append((i,j))
+                keys_to_remove_prob_not_dupes.append((i,j))
                 continue
-        for key in keys_to_remove:
-            look_closer_dict.pop(key, None)
-        
+        keys_to_remove_prob_not_dupes = pop_look_closer_dict(look_closer_dict, keys_to_remove_prob_not_dupes)
+
         #pass 3 hand gesture, description, site name id
         for (i,j), this_dist_list in look_closer_dict.items():
             # calculate full body lms distance
@@ -1046,14 +1063,27 @@ class SortPose:
         # print(f"  >>> look_closer_dict is {look_closer_dict}")
         if self.VERBOSE: print("--------------------------------dupe_detection analysis--------------------------------")
 
+        def open_image_remove_if_error(i, df):
+            try:
+                image_i = open_and_crop(i, df)
+            except Exception as e:
+                print(f"Error opening image {i}: {e}")
+                image_i = None
+                # remove all entries with i as well
+            return image_i
 
         for (i,j), this_dist_list in look_closer_dict.items():
             if i in confirmed_dupes:
                 if self.VERBOSE: print(f"  >>> skipping {i},{j} because {i} is already confirmed dupe")
                 continue
             if self.VERBOSE: print(f"  >>> closest_look {i},{j} with distances {this_dist_list}")
-            image_i = open_and_crop(i, df)
-            image_j = open_and_crop(j, df)
+
+            # open images i and j, crop to bbox. if can't open, remove from df and continue
+            image_i = open_image_remove_if_error(i, df)
+            if image_i is None: none_images.add(i)
+            image_j = open_image_remove_if_error(j, df)
+            if image_j is None: none_images.add(j)
+
             if image_i is not None and image_j is not None:
  
                 
@@ -1128,24 +1158,30 @@ class SortPose:
                 # cv2.destroyAllWindows()
 
 
+                is_dupe = save_dupes_look_closer(i, j, ssim_score, this_dist_list, df)
+                if is_dupe:
+                    if self.VERBOSE: print(f"remove_duplicates: confirmed duplicate {j} of {i} with SSIM {ssim_score} and distances {this_dist_list}")
+                    confirmed_dupes.add(j)
+
             else:
-                print(f"SSIM detect image {i} or image {j} is None")
+                print(f"SSIM detect image {i} or image {j} is None, continuing...")
                 ssim_score = 0
                 selfie_ssim_score = 0
+                continue
             
             # save i and j and SQL to a shared folder
             # return True if dupe, False if not, to remove from this_dist_list
             # i is to be kept, j is to be removed if dupe
             # all j's that are confirmed dupe are to be removed from the test cycle, 
-            is_dupe = save_dupes_look_closer(i, j, ssim_score, this_dist_list, df)
-            if is_dupe:
-                if self.VERBOSE: print(f"remove_duplicates: confirmed duplicate {j} of {i} with SSIM {ssim_score} and distances {this_dist_list}")
-                confirmed_dupes.add(j)
 
         # ADD all good j's to to_remove HERE !!!
 
         # Create sorted_df with all duplicates removed
-        print(f"Removing {len(to_remove)} duplicates from {df.shape[0]} images...")
+        print(f"Removing {len(none_images)} duplicates from {df.shape[0]} images...")
+        print(none_images)
+        to_remove = to_remove.union(none_images).union(confirmed_dupes)
+
+        print(f"Removing {len(to_remove)} duplicates (includes nones) from {df.shape[0]} images...")
         print(to_remove)
         print(df.head())
         sorted_df = df.drop(df.index[list(to_remove)]).reset_index(drop=True)
@@ -3502,6 +3538,12 @@ class SortPose:
                 right_hand_world_landmarks = hand_results['right_hand'].get('world_landmarks', [])
                 hand_landmarks = hand_results['right_hand'].get('hand_landmarks_norm', [])
         return left_hand_landmarks, left_hand_world_landmarks, left_hand_landmarks_norm, right_hand_landmarks, right_hand_world_landmarks, hand_landmarks
+
+    def prep_hsv(self, hue):
+        if hue is not None:
+            return hue/360
+        else:
+            return np.nan
 
     def extract_landmarks(self, landmarks):
         # If no landmarks, return 63 zeros (21 points * 3 dimensions)

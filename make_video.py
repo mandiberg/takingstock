@@ -55,7 +55,7 @@ db = io.db
 N_CLUSTERS = N_HANDS = SORT_TYPE = FULL_BODY = IS_HAND_POSE_FUSION = ONLY_ONE = GENERATE_FUSION_PAIRS = MIN_VIDEO_FUSION_COUNT = IS_CLUSTER = IS_ONE_CLUSTER = CLUSTER_NO = START_CLUSTER = USE_POSE_CROP_DICT = IS_SEGONLY = HSV_CONTROL = VISIBLE_HAND_LEFT = VISIBLE_HAND_RIGHT = USE_NOSEBRIDGE = TSP_SORT = LIMIT = MIN_CYCLE_COUNT = IS_HANDS = IS_ONE_HAND = HAND_POSE_NO = NO_KIDS = ONLY_KIDS = USE_PAINTED = OUTPAINT = INPAINT= INPAINT_COLOR= INPAINT_MAX_SHOULDERS= OUTPAINT_MAX= BLUR_THRESH_MAX= BLUR_THRESH_MIN= BLUR_RADIUS= MASK_OFFSET= VERBOSE= CALIBRATING= SAVE_IMG_PROCESS= IS_ANGLE_SORT= IS_TOPICS= N_TOPICS= IS_ONE_TOPIC= TOPIC_NO= NEG_TOPICS= POS_TOPICS= NEUTRAL_TOPICS= AFFECT_GROUPS_LISTS= USE_AFFECT_GROUPS= None
 
 # CSV_FOLDER = os.path.join(io.ROOT_DBx, "body3D_segmentbig_useall256_CSVs_MMtest")
-# CSV_FOLDER = os.path.join("/Users/michaelmandiberg/Documents/projects-active/facemap_production/body3D_segmentbig_useall256_CSVs")
+# CSV_FOLDER = os.path.join("/Users/michaelmandiberg/Documents/projects-active/facemap_production/body3D_segmentbig_useall256_CSVs_test")
 CSV_FOLDER = os.path.join("/Users/michaelmandiberg/Documents/projects-active/facemap_production/heft_keyword_fusion_clusters/meta_clusters_test_build")
 # TENCH UNCOMMENT FOR YOUR COMP:
 # CSV_FOLDER = os.path.join(io.ROOT_DBx, "body3D_segmentbig_useall256_CSVs_test")
@@ -90,6 +90,7 @@ elif CURRENT_MODE == 'paris_photo_torso_videos_topics':
     GENERATE_FUSION_PAIRS = False # if true it will query based on MIN_VIDEO_FUSION_COUNT and create pairs
                                     # if false, it will grab the list of pair lists below
     MIN_VIDEO_FUSION_COUNT = 300
+    N_HSV = 0 # don't do HSV clusters
     # this control whether sorting by topics
     # IS_TOPICS = True # if using Clusters only, must set this to False
 
@@ -150,6 +151,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     GENERATE_FUSION_PAIRS = False # if true it will query based on MIN_VIDEO_FUSION_COUNT and create pairs
                                     # if false, it will grab the list of pair lists below
     USE_FUSION_PAIR_DICT = True
+    N_HSV = 16
     # if TESTING: IS_HAND_POSE_FUSION = GENERATE_FUSION_PAIRS = False
     MIN_VIDEO_FUSION_COUNT = 1300 # this is the cut off for the CSV fusion pairs
     MIN_CYCLE_COUNT = 1000 # this is the cut off for the SQL query results
@@ -177,7 +179,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     N_TOPICS = 100
     TOPIC_NO = [22412] # if doing an affect topic fusion, this is the wrapper topic
     FUSION_FOLDER = "utilities/data/heft_keyword_fusion_clusters"
-    CSV_FOLDER = os.path.join("/Users/michaelmandiberg/Documents/projects-active/facemap_production/heft_keyword_fusion_clusters/body3D_512_TSP/")
+    CSV_FOLDER = os.path.join("/Users/michaelmandiberg/Documents/projects-active/facemap_production/heft_keyword_fusion_clusters/meta_clusters_test_build/")
 
     print(f"doing {CURRENT_MODE}: SORT_TYPE {SORT_TYPE}, IS_HAND_POSE_FUSION {IS_HAND_POSE_FUSION}, GENERATE_FUSION_PAIRS {GENERATE_FUSION_PAIRS}, MIN_VIDEO_FUSION_COUNT {MIN_VIDEO_FUSION_COUNT}, IS_TOPICS {IS_TOPICS}, IS_ONE_TOPIC {IS_ONE_TOPIC}, TOPIC_NO {TOPIC_NO}, USE_AFFECT_GROUPS {USE_AFFECT_GROUPS}")
 else:
@@ -350,7 +352,7 @@ if not GENERATE_FUSION_PAIRS:
     # meta clusters testing oct 11
     print("not generating FUSION_PAIRS, pulling from list")
     FUSION_PAIR_DICT = {
-        22412: [[4,0]]
+        22411: [[4,0]]
                 # , [6,0], [8,0], [9,0], [12,0], [13,0], [15,0], [16,0], [21,0], [22,0], [23,0], [24,0], [25,0], [26,0], [30,0]],
     }
 
@@ -973,9 +975,9 @@ if not io.IS_TENCH:
     # SQL  FUNCTIONS  #
     ###################
 
-    def selectSQL(cluster_no=None, topic_no=None):
+    def selectSQL(cluster_no=None, topic_no=None, hsv_cluster=None):
         global SELECT, FROM, WHERE, LIMIT, WrapperTopicTable
-        from_affect = where_affect = ""
+        from_affect = where_affect = from_hsv = where_hsv = " "
         def cluster_topic_select(cluster_topic_table, cluster_topic_no):
             if isinstance(cluster_topic_no, list):
                 # Convert the list into a comma-separated string
@@ -1030,8 +1032,11 @@ if not io.IS_TENCH:
             elif topic_no is not None:
                 # If topic_no is not a list, simply check for equality
                 cluster += f"AND it.{this_id} = {str(topic_no)} "
+        if hsv_cluster > 0:
+            from_hsv = " JOIN ImagesHSV ihsv ON s.image_id = ihsv.image_id "
+            where_hsv = f" AND ihsv.cluster_id = {str(hsv_cluster)} "
         # print(f"cluster SELECT is {cluster}")
-        selectsql = f"SELECT {SELECT} FROM {FROM + from_affect} WHERE {WHERE + where_affect} {cluster} LIMIT {str(LIMIT)};"
+        selectsql = f"SELECT {SELECT} FROM {FROM + from_affect + from_hsv} WHERE {WHERE + where_affect + where_hsv} {cluster} LIMIT {str(LIMIT)};"
         print("actual SELECT is: ",selectsql)
         result = engine.connect().execute(text(selectsql))
         resultsjson = ([dict(row) for row in result.mappings()])
@@ -2309,6 +2314,40 @@ def main():
 
 
     def save_images_from_csv_folder():
+
+        def recheck_is_dupe_of(session, df):
+            '''
+            Query the database to recheck if an image is a duplicate of another.
+            '''
+            if VERBOSE: print("Rechecking is_dupe_of in database for potential duplicates...")
+            print("before dropping", df)
+            image_id_list = df['image_id'].tolist()
+            query = session.query(Encodings.image_id, Encodings.is_dupe_of).filter(Encodings.image_id.in_(image_id_list), Encodings.is_dupe_of.isnot(None)).all()
+            image_dict = {image.image_id: image.is_dupe_of for image in query}
+            print("image_dict", image_dict)
+            if bool(image_dict):
+                # if there are any values:
+                # TK this needs to be refine when image_dict is not empty
+                df['is_dupe_of'] = df['image_id'].map(image_dict)
+                # Drop rows where is_dupe_of is None
+                df = df.dropna(subset=['is_dupe_of'])
+                print("after dropping", df)
+            return df
+
+        def get_not_dupes_sql(session):
+
+            # Define the IsNotDupeOf ORM class for querying the table
+            class IsNotDupeOf(Base):
+                __tablename__ = 'IsNotDupeOf'
+                image_id_i = Column(Integer, ForeignKey('Images.image_id'), primary_key=True)
+                image_id_j = Column(Integer, ForeignKey('Encodings.encoding_id'), primary_key=True)
+
+            # Query the IsNotDupeOf table and return all values as list of tuples
+            query = session.query(IsNotDupeOf.image_id_i, IsNotDupeOf.image_id_j).all()
+            not_dupe_list = {(row.image_id_i, row.image_id_j): True for row in query}
+            return not_dupe_list
+
+
         def load_df_sorted_from_csv(csv_file):
             df = pd.read_csv(csv_file)
             print("df head", df.head())
@@ -2396,7 +2435,15 @@ def main():
                 #Dedupe sorting here!
                 # df_sorted.to_csv(os.path.join(io.ROOT_DBx, f"df_sorted_{cluster_no}_ct{segment_count}_p{pose_no}.csv"), index=False)
                 # df_sorted = df_sorted.head(10)  # Keep only the top entries
-                df_sorted = sort.remove_duplicates(io.folder_list, df_sorted)
+
+                # don't pass in session if IS_TENCH
+                if io.IS_TENCH == True: 
+                    not_dupe_list = maybe_session = None
+                else: 
+                    maybe_session = session
+                    df_sorted = recheck_is_dupe_of(maybe_session, df_sorted)  # recheck is_dupe_of from DB to catch any new dupes since CSV was made
+                    not_dupe_list = get_not_dupes_sql(maybe_session)  # get list of image_ids that are not dupes
+                df_sorted = sort.remove_duplicates(io.folder_list, df_sorted, maybe_session, not_dupe_list)
 
                 # wrapping the multiplier in a function that sets dims too
                 set_multiplier_and_dims(df_sorted, cluster_no, pose_no)
@@ -2475,10 +2522,15 @@ def main():
                 # if USE_AFFECT_GROUPS: N_CLUSTERS = len(AFFECT_GROUPS_LISTS) # redefine for affect groups
                 print(f"IS_TOPICS is {IS_TOPICS} with {n_cluster_topics}")
 
-            def select_map_images(this_cluster, this_topic):
+            if N_HSV > 0:
+                n_hsv_clusters = range(1,N_HSV+1)
+            else:
+                n_hsv_clusters = [0]
+
+            def select_map_images(this_cluster, this_topic, hsv_cluster):
                 if VERBOSE: print("select_map_images this_cluster", this_cluster)
                 if VERBOSE: print("select_map_images this_topic", this_topic)
-                resultsjson = selectSQL(this_cluster, this_topic)
+                resultsjson = selectSQL(this_cluster, this_topic, hsv_cluster)
                 print("got results, count is: ",len(resultsjson))
                 if len(resultsjson) < MIN_CYCLE_COUNT:
                     print(f"less than {MIN_CYCLE_COUNT} resultsjson, skipping this {this_cluster} and {this_topic}")
@@ -2487,20 +2539,22 @@ def main():
                     # folder_name = this_topic[0] if this_topic else this_cluster
                     map_images(resultsjson, this_cluster, this_topic)
 
-            if first_loop:
-                print("first loop is ", first_loop)
-                for cluster_topic_no in n_cluster_topics:
-                    if IS_CLUSTER and cluster_topic_no < START_CLUSTER:continue
-                    if USE_AFFECT_GROUPS: cluster_topic_no = AFFECT_GROUPS_LISTS[cluster_topic_no] # redefine cluster_no with affect group list
-                    print(f"SELECTing cluster_topic {cluster_topic_no} of {n_cluster_topics}")
-                    if IS_TOPICS and not IS_HAND_POSE_FUSION: select_map_images(second_cluster_topic, cluster_topic_no)
-                    elif IS_CLUSTER: select_map_images(cluster_topic_no, second_cluster_topic)
-                    elif IS_HAND_POSE_FUSION: select_map_images(cluster_topic_no,this_topic)
-                    # resultsjson = selectSQL(select_list)
-                    # map_images(resultsjson, cluster_topic_no)
-            else:
-                print("doing regular linear")
-                select_map_images(this_cluster, this_topic)
+            for hsv_cluster in n_hsv_clusters:
+                print(f"hsv_cluster: {hsv_cluster}")
+                if first_loop:
+                    print("first loop is ", first_loop)
+                    for cluster_topic_no in n_cluster_topics:
+                        if IS_CLUSTER and cluster_topic_no < START_CLUSTER:continue
+                        if USE_AFFECT_GROUPS: cluster_topic_no = AFFECT_GROUPS_LISTS[cluster_topic_no] # redefine cluster_no with affect group list
+                        print(f"SELECTing cluster_topic {cluster_topic_no} of {n_cluster_topics}")
+                        if IS_TOPICS and not IS_HAND_POSE_FUSION: select_map_images(second_cluster_topic, cluster_topic_no, hsv_cluster)
+                        elif IS_CLUSTER: select_map_images(cluster_topic_no, second_cluster_topic, hsv_cluster)
+                        elif IS_HAND_POSE_FUSION: select_map_images(cluster_topic_no,this_topic, hsv_cluster)
+                        # resultsjson = selectSQL(select_list)
+                        # map_images(resultsjson, cluster_topic_no)
+                else:
+                    print("doing regular linear")
+                    select_map_images(this_cluster, this_topic, hsv_cluster)
 
             if MODE == 2:
                 print("MODE 2, now assembling from CSV_FOLDER", CSV_FOLDER)
