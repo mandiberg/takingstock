@@ -2168,10 +2168,10 @@ def parse_cluster_no(this_cluster):
     print("map_images cluster_no", cluster_no)
     return cluster_no, pose_no
 
-def set_my_counter_dict(this_topic=None, cluster_no=None, pose_no=None, start_img_name=None, start_site_image_id=None):
+def set_my_counter_dict(this_topic=None, cluster_no=None, pose_no=None, hsv_no=None, start_img_name=None, start_site_image_id=None):
     ### Set counter_dict ###
-    print("set_my_counter_dict this_topic, cluster_no, pose_no, start_img_name, start_site_image_id", this_topic, cluster_no, pose_no, start_img_name, start_site_image_id)
-    cluster_string = const_prefix(this_topic, cluster_no, pose_no)
+    print("set_my_counter_dict this_topic, cluster_no, pose_no, hsv_no, start_img_name, start_site_image_id", this_topic, cluster_no, pose_no, hsv_no, start_img_name, start_site_image_id)
+    cluster_string = const_prefix(this_topic, cluster_no, pose_no, hsv_cluster=hsv_no)
     print("cluster_string", cluster_string)
     sort.set_counters(io.ROOT,cluster_string, start_img_name,start_site_image_id)
 
@@ -2439,10 +2439,14 @@ def main():
                     # Extract cluster_no from the part that starts with "c"
                     # e.g., c2 -> 2
                     cluster_no = part.split("c")[1]
-            return segment_count, pose_no, topic_no, cluster_no
+                elif part.startswith("h"):
+                    # Extract hsv_no from the part that starts with "h"
+                    # e.g., h2 -> 2
+                    hsv_no = part.split("h")[1]
+            return segment_count, pose_no, topic_no, cluster_no, hsv_no
 
 
-        cluster_no = pose_no = segment_count = topic_no = None
+        cluster_no = pose_no = segment_count = topic_no = hsv_no = None
         # list the files in the the CSV_FOLDER
         files_in_folder = os.listdir(CSV_FOLDER)
         # sort files alphabetically
@@ -2455,15 +2459,15 @@ def main():
                 parts = csv_file.replace(".csv", "").split("_")
                 file_prefix = csv_file.replace("df_sorted_", "").replace(".csv", "")
                 print("file_prefix", file_prefix)
-                
-                segment_count, pose_no, topic_no, cluster_no = find_parts(parts)                
+
+                segment_count, pose_no, topic_no, cluster_no, hsv_no = find_parts(parts)
                 if len(parts) >= 3:
                     # legacy for Tench's older file structure. delete on next file refresh. TK
                     cluster_no = parts[2]
-                print(f"assembling cluster {cluster_no}, topic {topic_no}, pose {pose_no} from csv file: {csv_file}")
+                print(f"assembling cluster {cluster_no}, topic {topic_no}, pose {pose_no}, hsv {hsv_no} from csv file: {csv_file}")
 
                 ### Set counter_dict (without start stuff which is not needed) ###
-                set_my_counter_dict(topic_no, cluster_no, pose_no)
+                set_my_counter_dict(topic_no, cluster_no, pose_no, hsv_no)
                 df_sorted = load_df_sorted_from_csv(os.path.join(CSV_FOLDER, csv_file))
 
 

@@ -22,7 +22,7 @@ ROOT_FOLDER_PATH = '/Users/michaelmandiberg/Documents/projects-active/facemap_pr
 
 MODE = "Keywords" # Topics or Keywords
 MODE_ID = "topic_id" if MODE == "Topics" else "keyword_id"
-CLUSTER_TYPE = "body3D" # "body3D" or "hand_gesture_position" - determines whether it checks hand poses or body3D
+CLUSTER_TYPE = "MetaBodyPoses3D" # "MetaBodyPoses3D" or "body3D" or "hand_gesture_position" - determines whether it checks hand poses or body3D
 
 # Create engine and session
 engine = create_engine("mysql+pymysql://{user}:{pw}@/{db}?unix_socket={socket}".format(
@@ -208,6 +208,41 @@ ORDER BY
 
 """
 
+sql_query_template_HSV_MetaBody3D = """
+SELECT 
+    ihp.meta_cluster_id AS ihp_cluster,
+    SUM(CASE WHEN ihsv.cluster_id = 0 THEN 1 ELSE 0 END) AS hsv_0,
+    SUM(CASE WHEN ihsv.cluster_id = 1 THEN 1 ELSE 0 END) AS hsv_1,
+    SUM(CASE WHEN ihsv.cluster_id = 2 THEN 1 ELSE 0 END) AS hsv_2,
+    SUM(CASE WHEN ihsv.cluster_id = 3 THEN 1 ELSE 0 END) AS hsv_3,
+    SUM(CASE WHEN ihsv.cluster_id = 4 THEN 1 ELSE 0 END) AS hsv_4,
+    SUM(CASE WHEN ihsv.cluster_id = 5 THEN 1 ELSE 0 END) AS hsv_5,
+    SUM(CASE WHEN ihsv.cluster_id = 6 THEN 1 ELSE 0 END) AS hsv_6,
+    SUM(CASE WHEN ihsv.cluster_id = 7 THEN 1 ELSE 0 END) AS hsv_7,
+    SUM(CASE WHEN ihsv.cluster_id = 8 THEN 1 ELSE 0 END) AS hsv_8,
+    SUM(CASE WHEN ihsv.cluster_id = 9 THEN 1 ELSE 0 END) AS hsv_9,
+    SUM(CASE WHEN ihsv.cluster_id = 10 THEN 1 ELSE 0 END) AS hsv_10,
+    SUM(CASE WHEN ihsv.cluster_id = 11 THEN 1 ELSE 0 END) AS hsv_11,
+    SUM(CASE WHEN ihsv.cluster_id = 12 THEN 1 ELSE 0 END) AS hsv_12,
+    SUM(CASE WHEN ihsv.cluster_id = 13 THEN 1 ELSE 0 END) AS hsv_13,
+    SUM(CASE WHEN ihsv.cluster_id = 14 THEN 1 ELSE 0 END) AS hsv_14,
+    SUM(CASE WHEN ihsv.cluster_id = 15 THEN 1 ELSE 0 END) AS hsv_15,
+    SUM(CASE WHEN ihsv.cluster_id = 16 THEN 1 ELSE 0 END) AS hsv_16
+  
+FROM SegmentBig_isface so
+JOIN SegmentHelper_sept2025_heft_keywords sh ON sh.image_id = so.image_id
+JOIN ImagesBodyPoses3D ibp ON ibp.image_id = so.image_id
+JOIN ClustersMetaBodyPoses3D ihp ON ihp.cluster_id = ibp.cluster_id
+JOIN ImagesHSV ihsv ON ihsv.image_id = so.image_id
+JOIN Images{MODE} it ON it.image_id = so.image_id
+WHERE it.{MODE_ID} = {THIS_MODE_ID}
+GROUP BY
+    ihp.meta_cluster_id
+ORDER BY 
+    ihp.meta_cluster_id;
+"""
+
+
 def save_query_results_to_csv(query, topic_id):
     print(f"about to query for {MODE} {topic_id}")
 
@@ -217,6 +252,7 @@ def save_query_results_to_csv(query, topic_id):
     # add zero values for any missing rows in the ihp_cluster column
     if "body3D" in CLUSTER_TYPE: cluster_count = 512
     elif "hand_gesture_position" in CLUSTER_TYPE: cluster_count = 128
+    elif "MetaBodyPoses3D" in CLUSTER_TYPE: cluster_count = 32
     else: raise ValueError("Unknown CLUSTER_TYPE")
     for i in range(cluster_count):
         print(f"checking for ihp_cluster {i}")
@@ -246,6 +282,8 @@ if MODE == "Keywords":
     for keyword_id in KEYWORDS:
         if CLUSTER_TYPE == "body3D":
             sql_query_template = sql_query_template_body3D
+        elif CLUSTER_TYPE == "MetaBodyPoses3D":
+            sql_query_template = sql_query_template_HSV_MetaBody3D
         sql_query_template = sql_query_template.replace("{MODE}", MODE).replace("{MODE_ID}", MODE_ID).replace("{THIS_MODE_ID}", str(keyword_id))
         # print(sql_query_template)
         query = sql_query_template.format(keyword_id=keyword_id)
