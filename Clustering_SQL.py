@@ -164,7 +164,7 @@ if USE_SEGMENT is True and (CLUSTER_TYPE != "Clusters"):
     this_data_column = CLUSTER_DATA[CLUSTER_TYPE]["data_column"]
     if isinstance(this_data_column, list):
         if "HSV" in CLUSTER_TYPE:
-            SELECT += f", ib.hue, ib.sat, ib.val "
+            SELECT = SELECT.replace(f"s.face_x, s.face_y, s.face_z, s.mouth_gap", f"ib.hue, ib.sat, ib.val ")
             FROM += f" JOIN ImagesBackground ib ON s.image_id = ib.image_id "
             WHERE += f" AND ib.hue IS NOT NULL AND ib.sat IS NOT NULL AND ib.val IS NOT NULL "
     else:
@@ -648,9 +648,9 @@ FROM `BodyPoses3D`'''
             print(f"Skipping duplicate record with cluster_id {cluster_id}")
 
     try:
-        print("Attempting to commit session with the following data:")
-        for cluster_id, cluster_median in median_dict.items():
-            print(f"Cluster ID: {cluster_id}, Median: {cluster_median}")
+        print(f"Attempting to commit session with {len(median_dict)}:")
+        # for cluster_id, cluster_median in median_dict.items():
+        #     print(f"Cluster ID: {cluster_id}, Median: {cluster_median}")
         session.commit()
         print("Data saved successfully.")
     except IntegrityError as e:
@@ -710,10 +710,10 @@ def save_images_clusters_DB(df):
             print(f"Skipping duplicate record with image_id {image_id}")
 
     try:
-        print("Attempting to commit session with the following data:")
-        for _, row in df.iterrows():
-            # print(f"Image ID: {row['image_id']}, Cluster ID: {row['cluster_id']}, Cluster Dist: {row['cluster_dist']}")
-            print(row)
+        print(f"Attempting to commit session with {len(df)}:")
+        # for _, row in df.iterrows():
+        #     # print(f"Image ID: {row['image_id']}, Cluster ID: {row['cluster_id']}, Cluster Dist: {row['cluster_dist']}")
+        #     print(row)
         session.commit()
         print("Data saved successfully.")
     except IntegrityError as e:
@@ -721,9 +721,9 @@ def save_images_clusters_DB(df):
         print(f"Error occurred during data saving: {str(e)}")
 
 def calc_median_dist(enc1, enc2):
-    print("calc_median_dist enc1, enc2", enc1, enc2)
-    print("type enc1, enc2", type(enc1), type(enc2))
-    print("len enc1, enc2", len(enc1), len(enc2))
+    # print("calc_median_dist enc1, enc2", enc1, enc2)
+    # print("type enc1, enc2", type(enc1), type(enc2))
+    # print("len enc1, enc2", len(enc1), len(enc2))
     return np.linalg.norm(enc1 - enc2, axis=0)
 
 def process_landmarks_cluster_dist(df, df_subset_landmarks):
