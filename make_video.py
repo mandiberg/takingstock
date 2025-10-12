@@ -22,10 +22,17 @@ from my_declarative_base import Base, Encodings, SegmentTable,ImagesBackground, 
 import pymongo 
 
 #mine
-from mp_sort_pose import SortPose
+from mp_sort_pose import SortPose, TSPSorterTwoPhase
 from mp_db_io import DataIO
 from mediapipe.framework.formats import landmark_pb2
 import ast
+
+# Initialize sorter
+sorter = TSPSorterTwoPhase(
+    skip_frac=0.25,     # Skip 25% of points
+    verbose=True,
+    iterations=2        # 2-3 iterations recommended
+)
 
 title = 'Please choose your operation: '
 options = ['sequence and save CSV', 'assemble images from CSV']
@@ -154,12 +161,13 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     USE_FUSION_PAIR_DICT = True
     N_HSV = 16
     TSP_SORT = True
+    if TSP_SORT: CHOP_FIRST = False # TSP does the chopping
     # if TESTING: IS_HAND_POSE_FUSION = GENERATE_FUSION_PAIRS = False
     MIN_VIDEO_FUSION_COUNT = 1300 # this is the cut off for the CSV fusion pairs
     MIN_CYCLE_COUNT = 1000 # this is the cut off for the SQL query results
 
-    MIN_VIDEO_FUSION_COUNT = 40 # this is the cut off for the CSV fusion pairs
-    MIN_CYCLE_COUNT = 30 # this is the cut off for the SQL query results
+    MIN_VIDEO_FUSION_COUNT = 400 # this is the cut off for the CSV fusion pairs
+    MIN_CYCLE_COUNT = 300 # this is the cut off for the SQL query results
 
     # this control whether sorting by topics
     # IS_TOPICS = True # if using Clusters only, must set this to False
@@ -182,7 +190,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     # when doing IS_HAND_POSE_FUSION code currently only supports one topic at a time
     IS_ONE_TOPIC = True
     N_TOPICS = 100
-    TOPIC_NO = [22412] # if doing an affect topic fusion, this is the wrapper topic
+    TOPIC_NO = [22411] # if doing an affect topic fusion, this is the wrapper topic
     FUSION_FOLDER = "utilities/data/heft_keyword_fusion_clusters"
     CSV_FOLDER = os.path.join("/Users/michaelmandiberg/Documents/projects-active/facemap_production/heft_keyword_fusion_clusters/meta_clusters_test_build/")
 
@@ -238,7 +246,8 @@ if IS_HAND_POSE_FUSION:
         # if fusion, select on arms3D and gesture, sort on hands positions
         SORT_TYPE = "arms3D"
         CLUSTER_TYPE = "MetaBodyPoses3D"
-        CLUSTER_TYPE_2 = "HandsGestures"
+        # CLUSTER_TYPE_2 = "HandsGestures" # commenting this out for now TK
+        CLUSTER_TYPE_2 = None
         # if TESTING:
         #     CLUSTER_TYPE = "BodyPoses3D"
         #     CLUSTER_TYPE_2 = None
@@ -286,7 +295,7 @@ MASK_OFFSET = [50,50,50,50]
 if OUTPAINT: from outpainting_modular import outpaint, image_resize
 
 # process stuff
-VERBOSE = False
+VERBOSE = True
 CALIBRATING = False
 SAVE_IMG_PROCESS = False
 # this controls whether it is using the linear or angle process
@@ -353,8 +362,7 @@ if not GENERATE_FUSION_PAIRS:
     # meta clusters testing oct 11
     print("not generating FUSION_PAIRS, pulling from list")
     FUSION_PAIR_DICT = {
-        22411: [[4,0]]
-                # , [6,0], [8,0], [9,0], [12,0], [13,0], [15,0], [16,0], [21,0], [22,0], [23,0], [24,0], [25,0], [26,0], [30,0]],
+        22412: [[1,0], [2,0], [3,0], [4,0], [5,0], [6,0], [7,0], [8,0], [9,0], [10,0], [11,0], [12,0], [13,0], [14,0], [15,0], [16,0], [17,0], [18,0], [19,0], [20,0], [21,0], [22,0], [23,0], [24,0], [25,0], [26,0], [27,0], [28,0], [29,0], [30,0], [31,0], [32,0]],
     }
 
     FUSION_PAIRS = [
@@ -1178,16 +1186,42 @@ def sort_by_face_dist_NN(df_enc):
         return df_enc, df_sorted, is_break
 
     if CHOP_FIRST:
+        
         df_enc, df_sorted, is_break = get_closest_knn_or_break(df_enc, df_sorted)
         df_enc = df_enc.head(sort.CUTOFF)
+        print("AFTER CHOP_FIRST df_enc is", df_enc)
+        print("AFTER CHOP_FIRST df_sorted is", df_sorted)
 
 
     ## SATYAM THIS IS WHAT WILL BE REPLACE BY TSP
     if TSP_SORT is True:
-        df_clean=expand_face_encodings(df_enc)
-        sort.set_TSP_sort(df_clean,START_IDX=None,END_IDX=None)
-        # df_sorted = sort.get_closest_df_NN(df_enc, df_sorted, start_image_id, end_image_id)
-        df_sorted=sort.do_TSP_SORT(df_enc)
+    
+
+        # # Option 1: Work entirely with expanded dataframe
+        # df_clean = expand_face_encodings(df_enc)
+        # sorter.set_TSP_sort(df_clean, START_IDX=None, END_IDX=None)
+        # df_sorted = sorter.do_TSP_SORT(df_clean)  # Same df!
+
+        # Option 2: If you need to maintain link to original df_enc
+        # You'll need to track the mapping yourself
+        df_clean = expand_face_encodings(df_enc)
+        df_clean['original_index'] = df_clean.index  # or however they map
+
+        sorter.set_TSP_sort(df_clean, START_IDX=None, END_IDX=None)
+        df_sorted_clean = sorter.do_TSP_SORT(df_clean)
+
+        # Then map back if needed
+        df_sorted = df_enc.iloc[df_sorted_clean['original_index']].reset_index(drop=True)
+
+        # # Prepare and sort
+        # df_clean = expand_face_encodings(df_enc)
+        # sorter.set_TSP_sort(df_clean, START_IDX=None, END_IDX=None)
+        # df_sorted = sorter.do_TSP_SORT(df_enc)
+
+        # df_clean=expand_face_encodings(df_enc)
+        # sort.set_TSP_sort(df_clean,START_IDX=None,END_IDX=None)
+        # # df_sorted = sort.get_closest_df_NN(df_enc, df_sorted, start_image_id, end_image_id)
+        # df_sorted=sort.do_TSP_SORT(df_enc)
     else:
         for i in range(itters):
             # print("sort_by_face_dist_NN _ for loop itters i is", i)
@@ -1913,7 +1947,8 @@ def linear_test_df(df_sorted, itter=None):
             sort.get_image_face_data(img, row['face_landmarks'], row['bbox'])
 
             # control distance 
-            if not TSP_SORT and row['dist'] > sort.MAXD:
+            this_dist = row.get('dist', None)
+            if this_dist is not None and this_dist > sort.MAXD:
                 sort.counter_dict["failed_dist_count"] += 1
                 print("MAXDIST too big:" , str(sort.MAXD))
                 continue
@@ -2375,7 +2410,7 @@ def main():
             df['bbox_array'] = df['bbox'].apply(lambda x: list(x.values()))            
             df['body_landmarks_normalized_visible'] = df['body_landmarks_normalized'].apply(lambda x: sort.crop_prep(x))
             if VERBOSE: 
-                print("after unpickle_array, first row", df.iloc[0]['body_landmarks_normalized_visible'])
+                # print("after unpickle_array, first row", df.iloc[0]['body_landmarks_normalized_visible'])
                 print("list of columns", df.columns)
                 print(df.iloc[0])
             # conver face_x	face_y	face_z	mouth_gap site_image_id to float
@@ -2442,12 +2477,14 @@ def main():
 
                 # don't pass in session if IS_TENCH
                 if io.IS_TENCH == True: 
-                    not_dupe_list = maybe_session = None
+                    not_dupe_list = None
                 else: 
-                    maybe_session = session
-                    df_sorted = recheck_is_dupe_of(maybe_session, df_sorted)  # recheck is_dupe_of from DB to catch any new dupes since CSV was made
-                    not_dupe_list = get_not_dupes_sql(maybe_session)  # get list of image_ids that are not dupes
-                df_sorted = sort.remove_duplicates(io.folder_list, df_sorted, maybe_session, not_dupe_list)
+                    if VERBOSE: print("before recheck_is_dupe_of, df_sorted size", df_sorted.size)
+                    df_sorted = recheck_is_dupe_of(session, df_sorted)  # recheck is_dupe_of from DB to catch any new dupes since CSV was made
+                    if VERBOSE: print("after recheck_is_dupe_of, df_sorted size", df_sorted.size)
+                    not_dupe_list = get_not_dupes_sql(session)  # get list of image_ids that are not dupes
+                    if VERBOSE: print("not_dupe_list size", len(not_dupe_list))
+                df_sorted = sort.remove_duplicates(io.folder_list, df_sorted, not_dupe_list)
 
                 # wrapping the multiplier in a function that sets dims too
                 set_multiplier_and_dims(df_sorted, cluster_no, pose_no)

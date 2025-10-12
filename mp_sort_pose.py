@@ -57,7 +57,7 @@ class SortPose:
         self.BRUTEFORCE = False
         self.use_3D = use_3D
         # print("init use_3D",self.use_3D)
-        self.CUTOFF = 300 # DOES factor if ONE_SHOT
+        self.CUTOFF = 200 # DOES factor if ONE_SHOT
         self.ORIGIN = 0
         self.this_nose_bridge_dist = self.NOSE_BRIDGE_DIST = None # to be set in first loop, and sort.this_nose_bridge_dist each time
 
@@ -835,7 +835,7 @@ class SortPose:
         score, _ = ssim(gray1, gray2, full=True)
         return score  # Return the SSIM score
 
-    def remove_duplicates(self, folder_list, df: pd.DataFrame, session, not_dupe_list) -> pd.DataFrame:
+    def remove_duplicates(self, folder_list, df: pd.DataFrame, not_dupe_list) -> pd.DataFrame:
         """
         Main method to remove duplicates from the dataframe.
         Returns sorted_df with all duplicates removed (keeping first occurrence).
@@ -868,7 +868,7 @@ class SortPose:
         }
 
         def norm_dist(this_dist, threshold):
-            if self.VERBOSE: print("this_dist, threshold", this_dist, threshold)
+            # if self.VERBOSE: print("this_dist, threshold", this_dist, threshold)
             return this_dist / threshold
 
         def construct_filepath(key, df):
@@ -984,7 +984,7 @@ class SortPose:
                 for key, (threshold, operator) in threshold_dict.items():
                     if key not in keys_to_check: continue
                     # calculate distance and add to list
-                    if self.VERBOSE: print(f"Pass 1 checking {key} for {i},{j}")
+                    # if self.VERBOSE: print(f"Pass 1 checking {key} for {i},{j}")
                     this_dist = self.dupe_comparison(i, j, key, df)
                     normed_dist = norm_dist(this_dist, threshold)
                     this_dist_list.append(normed_dist)
@@ -1211,7 +1211,7 @@ class SortPose:
         # print(f"hand results: {df.iloc[row2].get('hand_results', None)}")
         try:
             distance = self.get_d(enc1, enc2)
-            # print(f'dupe_detection col:{column}, row: {row1},{row2}, dist:{distance}')
+            print(f'dupe_detection col:{column}, row: {row1},{row2}, dist:{distance}')
             return distance
         except:
             # print(f'dupe_detect_{column}_type: {type(enc1)}, val{enc1}')
@@ -3728,3 +3728,468 @@ class SortPose:
             except Exception as e2:
                 print(f"Failed to parse as JSON format: {e2}")
                 return None
+
+
+
+import numpy as np
+import random
+from deap import base, creator, tools, algorithms
+
+
+class TSPSorterTwoPhase:
+    """
+    Two-Phase Iterative TSP Solver with Point Skipping
+    
+    Phase 1: Solve TSP for current point set
+    Phase 2: Greedily remove high-overhead points
+    Iterate: Re-optimize TSP on remaining points
+    """
+    
+    def __init__(self, skip_frac=0.25, verbose=True, iterations=2):
+        """
+        Parameters
+        ----------
+        skip_frac : float
+            Fraction of points to skip (e.g., 0.25 for 25%)
+        verbose : bool
+            Print progress information
+        iterations : int
+            Number of skip-and-reoptimize iterations (1-3 recommended)
+        """
+        self.SKIP_FRAC = skip_frac
+        self.VERBOSE = verbose
+        self.ITERATIONS = iterations
+        
+        # Will be set during processing
+        self.dist_matrix = None
+        self.N_POINTS = None
+        self.START_IDX = None
+        self.END_IDX = None
+        self.original_indices = None  # Track original df indices
+        
+    def compute_distance_matrix(self, df):
+        """Compute pairwise distance matrix from dataframe."""
+        df_array = df.values
+        df_diffs = df_array[:, None, :] - df_array[None, :, :]
+        return np.sqrt((df_diffs**2).sum(axis=2))
+    
+    def evaluate_tsp(self, ind, dist_matrix):
+        """
+        Simple TSP fitness: total path distance.
+        No skipping logic here - just pure TSP optimization.
+        """
+        route = list(ind)
+        total = sum(dist_matrix[route[i], route[i+1]] 
+                   for i in range(len(route)-1))
+        return (total,)
+    
+    def create_toolbox(self, n_points, start_idx, end_idx, dist_matrix):
+        """Create DEAP toolbox for TSP optimization."""
+        # Clean up any existing creator classes
+        if hasattr(creator, "FitnessMin"):
+            del creator.FitnessMin
+        if hasattr(creator, "Individual"):
+            del creator.Individual
+            
+        creator.create("FitnessMin", base.Fitness, weights=(-1.0,))
+        creator.create("Individual", list, fitness=creator.FitnessMin)
+        
+        toolbox = base.Toolbox()
+        toolbox.register("evaluate", lambda ind: self.evaluate_tsp(ind, dist_matrix))
+        toolbox.register("mate", self.cx_fixed_ends_swap)
+        toolbox.register("mutate", self.mut_fixed_ends_shuffle, indpb=0.05)
+        toolbox.register("select", tools.selTournament, tournsize=3)
+        
+        # Create individuals with fixed start/end
+        def create_individual():
+            middle = [i for i in range(n_points) 
+                     if i not in (start_idx, end_idx)]
+            random.shuffle(middle)
+            return [start_idx] + middle + [end_idx]
+        
+        toolbox.register("individual", tools.initIterate, 
+                        creator.Individual, create_individual)
+        toolbox.register("population", tools.initRepeat, 
+                        list, toolbox.individual)
+        
+        # Add validation decorator
+        def validate_individual(func):
+            def wrapper(*args, **kwargs):
+                result = func(*args, **kwargs)
+                if isinstance(result, tuple):
+                    for ind in result:
+                        if len(ind) != len(set(ind)):
+                            # Fix duplicates
+                            seen = set()
+                            fixed = []
+                            for val in ind:
+                                if val not in seen:
+                                    fixed.append(val)
+                                    seen.add(val)
+                            # Add missing
+                            for i in range(n_points):
+                                if i not in seen:
+                                    fixed.insert(-1, i)
+                            ind[:] = fixed
+                    return result
+                return result
+            return wrapper
+        
+        toolbox.decorate("mate", validate_individual)
+        toolbox.decorate("mutate", validate_individual)
+        
+        return toolbox
+    
+    def cx_fixed_ends_swap(self, ind1, ind2):
+        """Crossover: ordered crossover (OX) keeping endpoints fixed."""
+        if len(ind1) <= 2:
+            return ind1, ind2
+        
+        # Work only on the middle section (exclude first and last)
+        size = len(ind1) - 2
+        if size < 2:
+            return ind1, ind2
+            
+        # Select crossover points in middle section
+        a, b = sorted(random.sample(range(size), 2))
+        
+        # Extract middle sections (offset by 1 for fixed start)
+        mid1 = ind1[1:-1]
+        mid2 = ind2[1:-1]
+        
+        # Perform ordered crossover on middle sections
+        def ox_middle(p1, p2, start, end):
+            child = [None] * len(p1)
+            # Copy segment
+            child[start:end] = p1[start:end]
+            # Fill remaining from p2
+            p2_idx = end
+            child_idx = end
+            while None in child:
+                if p2[p2_idx % len(p2)] not in child:
+                    child[child_idx % len(child)] = p2[p2_idx % len(p2)]
+                    child_idx += 1
+                p2_idx += 1
+            return child
+        
+        new_mid1 = ox_middle(mid1, mid2, a, b)
+        new_mid2 = ox_middle(mid2, mid1, a, b)
+        
+        # Reconstruct with fixed endpoints
+        ind1[1:-1] = new_mid1
+        ind2[1:-1] = new_mid2
+        
+        return ind1, ind2
+    
+    def mut_fixed_ends_shuffle(self, ind, indpb):
+        """Mutation: shuffle middle section, keep endpoints fixed."""
+        if len(ind) <= 2:
+            return (ind,)
+        sub = ind[1:-1]
+        for i in range(len(sub)):
+            if random.random() < indpb:
+                j = random.randint(0, len(sub)-1)
+                sub[i], sub[j] = sub[j], sub[i]
+        ind[1:-1] = sub
+        return (ind,)
+    
+    def solve_tsp(self, dist_matrix, start_idx, end_idx, 
+                  pop_size=200, generations=50):
+        """
+        Solve TSP using genetic algorithm.
+        
+        Returns
+        -------
+        list
+            Best route as list of indices (0 to n-1, permutation with no duplicates)
+        """
+        n_points = dist_matrix.shape[0]
+        
+        if self.VERBOSE:
+            print(f"  Solving TSP for {n_points} points...")
+        
+        toolbox = self.create_toolbox(n_points, start_idx, end_idx, dist_matrix)
+        
+        random.seed(42)
+        pop = toolbox.population(n=pop_size)
+        hof = tools.HallOfFame(1)
+        stats = tools.Statistics(lambda ind: ind.fitness.values)
+        stats.register("min", np.min)
+        stats.register("avg", np.mean)
+        
+        pop, log = algorithms.eaSimple(
+            pop, toolbox,
+            cxpb=0.7, mutpb=0.2,
+            ngen=generations,
+            stats=stats,
+            halloffame=hof,
+            verbose=False
+        )
+        
+        best_route = list(hof[0])
+        best_distance = self.evaluate_tsp(best_route, dist_matrix)[0]
+        
+        # VALIDATION: Check for duplicates in route
+        if len(best_route) != len(set(best_route)):
+            print(f"  ERROR: Route has duplicates! Length={len(best_route)}, Unique={len(set(best_route))}")
+            print(f"  Route: {best_route[:20]}...")
+            # Fix by creating a valid permutation
+            seen = set()
+            fixed_route = []
+            for idx in best_route:
+                if idx not in seen:
+                    fixed_route.append(idx)
+                    seen.add(idx)
+            # Add missing indices
+            for idx in range(n_points):
+                if idx not in seen:
+                    fixed_route.insert(-1, idx)  # Insert before last element
+            best_route = fixed_route
+            print(f"  Fixed route length: {len(best_route)}")
+        
+        if self.VERBOSE:
+            print(f"  Best distance: {best_distance:.3f}")
+        
+        return best_route
+    
+    def identify_points_to_skip(self, route, dist_matrix, max_skip):
+        """
+        Greedily identify which points to skip based on overhead.
+        
+        Overhead = cost of including point - cost of skipping it
+        
+        Returns
+        -------
+        list
+            Indices (positions in route) to skip, sorted descending
+        """
+        if len(route) <= 2 or max_skip <= 0:
+            return []
+        
+        # Calculate overhead for each skippable point
+        overheads = []
+        for j in range(1, len(route)-1):  # Skip first and last
+            prev_idx = route[j-1]
+            curr_idx = route[j]
+            next_idx = route[j+1]
+            
+            cost_include = (dist_matrix[prev_idx, curr_idx] + 
+                          dist_matrix[curr_idx, next_idx])
+            cost_skip = dist_matrix[prev_idx, next_idx]
+            overhead = cost_include - cost_skip
+            
+            overheads.append((overhead, j, curr_idx))
+        
+        # Sort by overhead (highest first) and take top max_skip
+        overheads.sort(reverse=True, key=lambda x: x[0])
+        
+        # Only skip points with positive overhead
+        to_skip = []
+        for overhead, pos, idx in overheads[:max_skip]:
+            if overhead > 0:
+                to_skip.append((pos, idx, overhead))
+        
+        if self.VERBOSE and to_skip:
+            print(f"  Skipping {len(to_skip)} points with overhead "
+                  f"{to_skip[0][2]:.3f} to {to_skip[-1][2]:.3f}")
+        
+        return to_skip
+    
+    def set_TSP_sort(self, df, START_IDX=None, END_IDX=None):
+        """
+        Set up the TSP problem.
+        
+        Parameters
+        ----------
+        df : DataFrame
+            DataFrame with numeric columns representing point features
+            IMPORTANT: This must be the same dataframe passed to do_TSP_SORT()
+        START_IDX : int, optional
+            Index of starting point (default: 0)
+        END_IDX : int, optional
+            Index of ending point (default: last point)
+        """
+        # Store reference dataframe
+        self.reference_df = df
+        
+        # Compute distance matrix
+        self.dist_matrix = self.compute_distance_matrix(df)
+        self.N_POINTS = self.dist_matrix.shape[0]
+        
+        if START_IDX is None:
+            START_IDX = 0
+        if END_IDX is None:
+            END_IDX = self.N_POINTS - 1
+            
+        self.START_IDX = START_IDX
+        self.END_IDX = END_IDX
+        
+        # Store original indices to track which rows we're working with
+        self.original_indices = list(range(self.N_POINTS))
+        
+        if self.VERBOSE:
+            print(f"TSP Setup: {self.N_POINTS} points, "
+                  f"will skip ~{int(self.SKIP_FRAC * self.N_POINTS)} points "
+                  f"over {self.ITERATIONS} iterations")
+            print(f"WARNING: Must pass the SAME dataframe to do_TSP_SORT() "
+                  f"that was passed to set_TSP_sort()")
+    
+    def do_TSP_SORT(self, raw_df):
+        """
+        Execute two-phase iterative TSP with skipping.
+        
+        Parameters
+        ----------
+        raw_df : DataFrame
+            DataFrame to sort - MUST be the same one passed to set_TSP_sort()
+            
+        Returns
+        -------
+        DataFrame
+            Sorted dataframe with skipped points removed
+        """
+        if self.dist_matrix is None:
+            raise ValueError("Must call set_TSP_sort() first")
+        
+        # Verify dataframe matches
+        if len(raw_df) != self.N_POINTS:
+            raise ValueError(
+                f"Dataframe size mismatch: set_TSP_sort() was called with "
+                f"{self.N_POINTS} rows, but do_TSP_SORT() received {len(raw_df)} rows. "
+                f"You must pass the SAME dataframe to both methods."
+            )
+        
+        # Track current working set
+        current_indices = self.original_indices[:]
+        current_dist_matrix = self.dist_matrix.copy()
+        current_start = 0
+        current_end = len(current_indices) - 1
+        
+        # Calculate skip budget
+        total_to_skip = int(np.floor(self.SKIP_FRAC * self.N_POINTS))
+        skips_per_iteration = total_to_skip // self.ITERATIONS
+        remaining_skips = total_to_skip
+        
+        all_skipped = []
+        
+        for iteration in range(self.ITERATIONS):
+            if self.VERBOSE:
+                print(f"\n--- Iteration {iteration + 1}/{self.ITERATIONS} ---")
+                print(f"Current points: {len(current_indices)}")
+            
+            # Phase 1: Solve TSP on current point set
+            route = self.solve_tsp(
+                current_dist_matrix, 
+                current_start, 
+                current_end,
+                pop_size=200,
+                generations=50
+            )
+            
+            # Phase 2: Identify points to skip
+            skip_budget = min(skips_per_iteration, remaining_skips)
+            # Don't skip too many in early iterations
+            if iteration < self.ITERATIONS - 1:
+                skip_budget = min(skip_budget, len(current_indices) // 4)
+            
+            to_skip = self.identify_points_to_skip(
+                route, current_dist_matrix, skip_budget
+            )
+            
+            if not to_skip:
+                if self.VERBOSE:
+                    print("  No beneficial skips found, stopping early")
+                break
+            
+            # IMPORTANT: route is a permutation of indices 0 to n-1
+            # route[pos] gives us the local index (into current_dist_matrix)
+            # current_indices[local_idx] gives us the original dataframe index
+            
+            # Track which original indices we're skipping
+            skip_positions = set(pos for pos, idx, overhead in to_skip)
+            for pos, idx, overhead in to_skip:
+                # pos is position in route, route[pos] is local index
+                original_idx = current_indices[route[pos]]
+                all_skipped.append(original_idx)
+            remaining_skips -= len(to_skip)
+            
+            # Build new set of kept indices
+            # Keep points whose position in route is NOT in skip_positions
+            kept_original_indices = []
+            for pos in range(len(route)):
+                if pos not in skip_positions:
+                    local_idx = route[pos]
+                    orig_idx = current_indices[local_idx]
+                    kept_original_indices.append(orig_idx)
+            
+            current_indices = kept_original_indices
+            
+            # Rebuild distance matrix for remaining points
+            n = len(current_indices)
+            new_dist = np.zeros((n, n))
+            for i in range(n):
+                for j in range(n):
+                    new_dist[i, j] = self.dist_matrix[
+                        current_indices[i], 
+                        current_indices[j]
+                    ]
+            current_dist_matrix = new_dist
+            current_start = 0
+            current_end = n - 1
+            
+            if remaining_skips <= 0 or len(current_indices) <= 2:
+                break
+        
+        # Final optimization on remaining points
+        if self.VERBOSE:
+            print(f"\n--- Final Optimization ---")
+            print(f"Optimizing final {len(current_indices)} points")
+        
+        final_route = self.solve_tsp(
+            current_dist_matrix,
+            current_start,
+            current_end,
+            pop_size=300,
+            generations=100
+        )
+        
+        # Map back to original dataframe indices
+        final_original_indices = [current_indices[i] for i in final_route]
+        
+        # Create sorted dataframe
+        sorted_df = raw_df.iloc[final_original_indices].reset_index(drop=True)
+        
+        if self.VERBOSE:
+            print(f"\n=== Complete ===")
+            print(f"Final route length: {len(final_original_indices)} points")
+            print(f"Skipped: {len(all_skipped)} points")
+            final_dist = sum(
+                current_dist_matrix[final_route[i], final_route[i+1]]
+                for i in range(len(final_route)-1)
+            )
+            print(f"Final tour distance: {final_dist:.3f}")
+        
+        for idx, row in sorted_df.iterrows():
+            # print original_index
+            print(row['original_index'])
+        return sorted_df
+
+
+# Example usage:
+"""
+# Initialize sorter
+sorter = TSPSorterTwoPhase(
+    skip_frac=0.25,    # Skip 25% of points
+    verbose=True,
+    iterations=2        # Do 2 skip-and-reoptimize cycles
+)
+
+# Prepare data
+df_clean = expand_face_encodings(df_enc)
+
+# Set up problem
+sorter.set_TSP_sort(df_clean, START_IDX=None, END_IDX=None)
+
+# Execute sorting with skipping
+df_sorted = sorter.do_TSP_SORT(df_enc)
+"""
