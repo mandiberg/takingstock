@@ -35,9 +35,9 @@ VIDEO = False
 CYCLECOUNT = 1
 
 # keep this live, even if not SSD
-# SegmentTable_name = 'SegmentOct20'
+SegmentTable_name = 'SegmentOct20'
 # SegmentHelper_name = None
-SegmentTable_name = 'SegmentBig_isface'
+# SegmentTable_name = 'SegmentBig_isface'
 # SegmentTable_name = 'SegmentBig_isnotface'
 # SegmentHelper_name = 'SegmentHelper_may2025_4x4faces'
 # SegmentHelper_name = None
@@ -52,7 +52,7 @@ io = DataIO(IS_SSD)
 db = io.db
 
 # declare all the globals as None in one line
-N_CLUSTERS = N_HANDS = SORT_TYPE = FULL_BODY = IS_HAND_POSE_FUSION = ONLY_ONE = GENERATE_FUSION_PAIRS = MIN_VIDEO_FUSION_COUNT = IS_CLUSTER = IS_ONE_CLUSTER = CLUSTER_NO = START_CLUSTER = USE_POSE_CROP_DICT = IS_SEGONLY = HSV_CONTROL = VISIBLE_HAND_LEFT = VISIBLE_HAND_RIGHT = USE_NOSEBRIDGE = TSP_SORT = LIMIT = MIN_CYCLE_COUNT = IS_HANDS = IS_ONE_HAND = HAND_POSE_NO = NO_KIDS = ONLY_KIDS = USE_PAINTED = OUTPAINT = INPAINT= INPAINT_COLOR= INPAINT_MAX_SHOULDERS= OUTPAINT_MAX= BLUR_THRESH_MAX= BLUR_THRESH_MIN= BLUR_RADIUS= MASK_OFFSET= VERBOSE= CALIBRATING= SAVE_IMG_PROCESS= IS_ANGLE_SORT= IS_TOPICS= N_TOPICS= IS_ONE_TOPIC= TOPIC_NO= NEG_TOPICS= POS_TOPICS= NEUTRAL_TOPICS= AFFECT_GROUPS_LISTS= USE_AFFECT_GROUPS= None
+N_CLUSTERS = N_HANDS = SORT_TYPE = FULL_BODY = IS_HAND_POSE_FUSION = ONLY_ONE = GENERATE_FUSION_PAIRS = MIN_VIDEO_FUSION_COUNT = IS_CLUSTER = IS_ONE_CLUSTER = CLUSTER_NO = START_CLUSTER = USE_POSE_CROP_DICT = IS_SEGONLY = HSV_CONTROL = VISIBLE_HAND_LEFT = VISIBLE_HAND_RIGHT = USE_NOSEBRIDGE = LIMIT = MIN_CYCLE_COUNT = IS_HANDS = IS_ONE_HAND = HAND_POSE_NO = NO_KIDS = ONLY_KIDS = USE_PAINTED = OUTPAINT = INPAINT= INPAINT_COLOR= INPAINT_MAX_SHOULDERS= OUTPAINT_MAX= BLUR_THRESH_MAX= BLUR_THRESH_MIN= BLUR_RADIUS= MASK_OFFSET= VERBOSE= CALIBRATING= SAVE_IMG_PROCESS= IS_ANGLE_SORT= IS_TOPICS= N_TOPICS= IS_ONE_TOPIC= TOPIC_NO= NEG_TOPICS= POS_TOPICS= NEUTRAL_TOPICS= AFFECT_GROUPS_LISTS= USE_AFFECT_GROUPS= None
 
 # CSV_FOLDER = os.path.join(io.ROOT_DBx, "body3D_segmentbig_useall256_CSVs_MMtest")
 # CSV_FOLDER = os.path.join("/Users/michaelmandiberg/Documents/projects-active/facemap_production/body3D_segmentbig_useall256_CSVs_test")
@@ -68,10 +68,11 @@ CSV_FOLDER = os.path.join("/Users/michaelmandiberg/Documents/projects-active/fac
 MODES = ['paris_photo_torso_images_topics', 'paris_photo_torso_videos_topics', '3D_bodies_topics','3D_arms', 'heft_torso_keywords']
 MODE_CHOICE = 4
 CURRENT_MODE = MODES[MODE_CHOICE]
+LIMIT = 10000 # this is the limit for the SQL query
 
 # set defaults, including for all modes to False
 FULL_BODY = IS_HAND_POSE_FUSION = ONLY_ONE = GENERATE_FUSION_PAIRS = IS_CLUSTER = IS_ONE_CLUSTER = USE_POSE_CROP_DICT = IS_TOPICS= IS_ONE_TOPIC = USE_AFFECT_GROUPS = False
-EXPAND = ONE_SHOT = JUMP_SHOT = USE_ALL = CHOP_FIRST = False
+EXPAND = ONE_SHOT = JUMP_SHOT = USE_ALL = CHOP_FIRST = TSP_SORT = False
 USE_PAINTED = OUTPAINT = INPAINT= False
 FUSION_FOLDER = None
 MIN_CYCLE_COUNT = 300
@@ -152,9 +153,13 @@ elif CURRENT_MODE == 'heft_torso_keywords':
                                     # if false, it will grab the list of pair lists below
     USE_FUSION_PAIR_DICT = True
     N_HSV = 16
+    TSP_SORT = True
     # if TESTING: IS_HAND_POSE_FUSION = GENERATE_FUSION_PAIRS = False
     MIN_VIDEO_FUSION_COUNT = 1300 # this is the cut off for the CSV fusion pairs
     MIN_CYCLE_COUNT = 1000 # this is the cut off for the SQL query results
+
+    MIN_VIDEO_FUSION_COUNT = 40 # this is the cut off for the CSV fusion pairs
+    MIN_CYCLE_COUNT = 30 # this is the cut off for the SQL query results
 
     # this control whether sorting by topics
     # IS_TOPICS = True # if using Clusters only, must set this to False
@@ -212,10 +217,6 @@ HSV_NORMS = {"LUM": .01, "SAT": 1,  "HUE": 0.002777777778, "VAL": 1}
 VISIBLE_HAND_LEFT = False
 VISIBLE_HAND_RIGHT = False
 USE_NOSEBRIDGE = True 
-TSP_SORT=False
-# this is for controlling if it is using
-# all clusters, 
-LIMIT = 1000 # this is the limit for the SQL query
 
 # this is set dynamically based on SORT_TYPE set above
 if IS_HAND_POSE_FUSION:
@@ -898,6 +899,11 @@ if not io.IS_TENCH:
 
         image_id = Column(Integer, ForeignKey(Images.image_id, ondelete="CASCADE"), primary_key=True)
         cluster_id = Column(Integer, ForeignKey(f'{ClustersTable_name}.cluster_id', ondelete="CASCADE"))
+
+    class IsNotDupeOf(Base):
+        __tablename__ = 'IsNotDupeOf'
+        image_id_i = Column(Integer, ForeignKey('Images.image_id'), primary_key=True)
+        image_id_j = Column(Integer, ForeignKey('Encodings.encoding_id'), primary_key=True)
 
     # not currently in use
     if IS_HAND_POSE_FUSION and CLUSTER_TYPE_2:
@@ -2137,7 +2143,7 @@ def set_my_counter_dict(this_topic=None, cluster_no=None, pose_no=None, start_im
     if VERBOSE: print("set sort.counter_dict:" )
     if VERBOSE: print(sort.counter_dict)
 
-def const_prefix(this_topic, cluster_no, pose_no):
+def const_prefix(this_topic, cluster_no, pose_no, hsv_cluster=None):
     # topic_string = ''.join([str(x) for x in this_topic]) if this_topic is not None else "None"
     # if topic is a list, then just use the first value
     if this_topic is not None and isinstance(this_topic, list):
@@ -2145,6 +2151,11 @@ def const_prefix(this_topic, cluster_no, pose_no):
         this_topic = [this_topic[0]]
 
     file_prefix = f"c{cluster_no}_p{pose_no}_t{this_topic}" if this_topic is not None else f"c{cluster_no}_p{pose_no}_tNone"
+    if hsv_cluster is not None:
+        file_prefix = f"{file_prefix}_h{hsv_cluster}"
+        print("file_prefix with hsv", file_prefix)
+    else:
+        print("file_prefix without hsv", file_prefix)
     return file_prefix
 
 
@@ -2176,7 +2187,7 @@ def main():
 
     # this is the key function, which is called for each cluster
     # or only once if no clusters
-    def map_images(resultsjson, this_cluster=None, this_topic=None):
+    def map_images(resultsjson, this_cluster=None, this_topic=None, this_hsv_cluster=None):
         
         # get cluster and pose from this_cluster
         cluster_no, pose_no = parse_cluster_no(this_cluster)
@@ -2302,7 +2313,7 @@ def main():
             else:   
                 # hard coding override to just start from median
                 # sort.counter_dict["start_img_name"] = "median"
-                file_prefix = const_prefix(this_topic, cluster_no, pose_no)
+                file_prefix = const_prefix(this_topic, cluster_no, pose_no, this_hsv_cluster)
                 # build file prefix for cluster, pose, and topic
                 process_linear(start_img_name,df_segment, file_prefix, sort)
         elif df.empty and IS_CLUSTER:
@@ -2335,13 +2346,6 @@ def main():
             return df
 
         def get_not_dupes_sql(session):
-
-            # Define the IsNotDupeOf ORM class for querying the table
-            class IsNotDupeOf(Base):
-                __tablename__ = 'IsNotDupeOf'
-                image_id_i = Column(Integer, ForeignKey('Images.image_id'), primary_key=True)
-                image_id_j = Column(Integer, ForeignKey('Encodings.encoding_id'), primary_key=True)
-
             # Query the IsNotDupeOf table and return all values as list of tuples
             query = session.query(IsNotDupeOf.image_id_i, IsNotDupeOf.image_id_j).all()
             not_dupe_list = {(row.image_id_i, row.image_id_j): True for row in query}
@@ -2537,7 +2541,7 @@ def main():
                     return
                 else:
                     # folder_name = this_topic[0] if this_topic else this_cluster
-                    map_images(resultsjson, this_cluster, this_topic)
+                    map_images(resultsjson, this_cluster, this_topic, hsv_cluster)
 
             for hsv_cluster in n_hsv_clusters:
                 print(f"hsv_cluster: {hsv_cluster}")

@@ -1,10 +1,10 @@
 import os
 
 ONLY_DUPES = False  # Set to True to only include files with "dupes" in the filename
-BASE_FOLDER = "/Users/michaelmandiberg/Library/CloudStorage/Dropbox/Michael-Tench/dedupe_this/dupe_sorting_arms_test_debug"  # Change this to your folder
+BASE_FOLDER = "/Users/michaelmandiberg/Library/CloudStorage/Dropbox/Michael-Tench/deduped"  # Change this to your folder
 DUPES_FILE = os.path.join(BASE_FOLDER, "dupes.sql")
 IS_NOT_DUPES_FILE = os.path.join(BASE_FOLDER, "is_not_dupe_of.sql")
-MODE = 1 # 0 is for is_dupe, 1 is for is_not_dupe
+MODE = 0 # 0 is for is_dupe, 1 is for is_not_dupe
 
 def concatenate_sql_files(base_folder, merged_file):
 	total_files = 0

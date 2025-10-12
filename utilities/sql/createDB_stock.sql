@@ -266,3 +266,17 @@ CREATE TABLE IsNotDupeOf (
 );
 
 
+-- calculations that will come later
+CREATE TABLE HSV (
+    cluster_id int NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    cluster_median BLOB
+);
+
+-- This is the clusters junction table.
+CREATE TABLE ImagesHSV (
+    image_id INTEGER REFERENCES Images (image_id),
+    cluster_id INTEGER REFERENCES HSV (cluster_id),
+    cluster_dist FLOAT DEFAULT NULL,
+    PRIMARY KEY (image_id)
+);
+
