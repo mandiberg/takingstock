@@ -3541,7 +3541,7 @@ class SortPose:
 
     def prep_hsv(self, hue):
         if hue is not None:
-            return hue/360
+            return (hue/360)*2
         else:
             return np.nan
 
@@ -3607,7 +3607,7 @@ class SortPose:
 
 # FUSION STUFF
 
-    def find_sorted_zero_indices(self, topic_no,min_value, folder_path=None):
+    def find_sorted_suitable_indices(self, topic_no,min_value, folder_path=None):
         if folder_path is None:
             folder_path='utilities/data/october_fusion_clusters'
             prefix = 'topic_'
@@ -3636,26 +3636,26 @@ class SortPose:
         gesture_array = df.to_numpy()
 
         # Optionally, you can check the shape of the array
-        print("Shape of the array:", gesture_array.shape)
+        # print("Shape of the array:", gesture_array.shape)
         print(gesture_array)  # Print the array to verify its contents
 
         # Find the indices where elements are zero
-        zero_indices = np.argwhere(gesture_array >min_value)
+        suitable_indices = np.argwhere(gesture_array >min_value)
         
-        for idx, (row, col) in enumerate(zero_indices):
-            print(f"Element greater than {min_value} found at row {row}, column {col}: {gesture_array[row, col]}")
+        # for idx, (row, col) in enumerate(suitable_indices):
+            # print(f"Element greater than {min_value} found at row {row}, column {col}: {gesture_array[row, col]}")
         
         # Convert the list of zero indices to a NumPy array
-        zero_indices_array = np.array(zero_indices)
+        suitable_indices_array = np.array(suitable_indices)
 
         # Sort first by axis 0 (rows), then by axis 1 (columns)
-        sorted_zero_indices = zero_indices_array[np.lexsort((zero_indices_array[:,1], zero_indices_array[:,0]))]
+        sorted_suitable_indices = suitable_indices_array[np.lexsort((suitable_indices_array[:,1], suitable_indices_array[:,0]))]
 
         # Convert back to a list (if required)
-        sorted_zero_indices_list = sorted_zero_indices.tolist()
+        sorted_suitable_indices_list = sorted_suitable_indices.tolist()
 
         # Return the sorted list of zero indices
-        return sorted_zero_indices_list
+        return sorted_suitable_indices_list
 
 
 # Mass Build file management stuff
