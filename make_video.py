@@ -1059,9 +1059,15 @@ if not io.IS_TENCH:
             elif topic_no is not None:
                 # If topic_no is not a list, simply check for equality
                 cluster += f"AND it.{this_id} = {str(topic_no)} "
-        if hsv_cluster > 0 or bool(hsv_cluster):
-            from_hsv = " JOIN ImagesHSV ihsv ON s.image_id = ihsv.image_id "
+        if (isinstance(hsv_cluster, int) and hsv_cluster > 0):
             where_hsv = f" AND ihsv.cluster_id = {str(hsv_cluster)} "
+        elif (isinstance(hsv_cluster, list) and bool(hsv_cluster)):
+            # handle if hsv_cluster is a list of ints
+            where_hsv = f" AND ihsv.cluster_id IN ({', '.join(map(str, hsv_cluster))}) "
+
+        if len(where_hsv) > 2:
+            # if hsv is not " ", then we need to join the table
+            from_hsv = " JOIN ImagesHSV ihsv ON s.image_id = ihsv.image_id "
             # set cluster_no here, as it doesn't catch any of the other condtionals. (admittedly messy)
             local_where += f" AND cmp.meta_cluster_id = {str(cluster_no)} "
         # print(f"cluster SELECT is {cluster}")
@@ -1214,7 +1220,7 @@ def sort_by_face_dist_NN(df_enc):
 
     ## SATYAM THIS IS WHAT WILL BE REPLACE BY TSP
     if TSP_SORT is True:
-    
+        
 
         # # Option 1: Work entirely with expanded dataframe
         # df_clean = expand_face_encodings(df_enc)
