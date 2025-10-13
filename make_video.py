@@ -161,7 +161,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     USE_FUSION_PAIR_DICT = True
     N_HSV = 16
     TSP_SORT = True
-    if TSP_SORT: CHOP_FIRST = False # TSP does the chopping
+    CHOP_FIRST = True
     # if TESTING: IS_HAND_POSE_FUSION = GENERATE_FUSION_PAIRS = False
     MIN_VIDEO_FUSION_COUNT = 1300 # this is the cut off for the CSV fusion pairs
     MIN_CYCLE_COUNT = 1000 # this is the cut off for the SQL query results
@@ -1201,9 +1201,13 @@ def sort_by_face_dist_NN(df_enc):
         return df_enc, df_sorted, is_break
 
     if CHOP_FIRST:
-        
+        print(f"CHOP_FIRST is true with sort.counter_dict['start_img_name'], {sort.counter_dict['start_img_name']}")
+        if sort.counter_dict["start_img_name"] is None:
+            sort.counter_dict["start_img_name"] = start_img_name
+        print(f"CHOP_FIRST is true with sort.counter_dict['start_img_name'], {sort.counter_dict['start_img_name']}")
+
         df_enc, df_sorted, is_break = get_closest_knn_or_break(df_enc, df_sorted)
-        df_enc = df_enc.head(sort.CUTOFF)
+        df_enc = df_sorted.head(sort.CUTOFF)
         print("AFTER CHOP_FIRST df_enc is", df_enc)
         print("AFTER CHOP_FIRST df_sorted is", df_sorted)
 
@@ -2619,13 +2623,30 @@ def main():
                     map_images(resultsjson, this_cluster, this_topic, hsv_cluster)
 
             def sub_select_clusters_by_hsv(cluster_topic_no, n_cluster_topics):
+                # N_HSV
+                # make a list where the first value matches cluster_topic_no and the second value is assigned from range(1,N_HSV+1)
+                all_potential_hsv_clusters = [[cluster_topic_no, i] for i in range(1, N_HSV + 1)]
+                # print(f"all_potential_hsv_clusters for cluster_topic_no {cluster_topic_no} is {all_potential_hsv_clusters}")
                 this_n_hsv_clusters = []
-                for this_cluster in n_cluster_topics:
-                    # print(f"checking cluster_topic_no {cluster_topic_no} against hsv cluster {this_cluster[0]}")
-                    if this_cluster[0] == cluster_topic_no:
-                        # print(f"appending cluster_topic_no {this_cluster} to this_n_hsv_clusters")
+                all_other_hsv_clusters = []
+                for this_cluster in all_potential_hsv_clusters:
+                    # print(f"checking cluster_topic_no {this_cluster} against hsv cluster {all_potential_hsv_clusters}")
+                    if this_cluster in n_cluster_topics:
                         this_n_hsv_clusters.append(this_cluster)
-                # print(f"this_n_hsv_clusters for cluster_topic_no {cluster_topic_no} is {this_n_hsv_clusters}")
+                    else:
+                        all_other_hsv_clusters.append(this_cluster[1])
+                # if VERBOSE: print(f"all_other_hsv_clusters for cluster_topic_no {cluster_topic_no} is {all_other_hsv_clusters}")
+                # if VERBOSE: print(f"all_potential_hsv_clusters for cluster_topic_no {cluster_topic_no} is {all_potential_hsv_clusters}")
+                all_other_pair_list = [cluster_topic_no, all_other_hsv_clusters]
+                this_n_hsv_clusters.append(all_other_pair_list)
+                # if VERBOSE: print(f"this_n_hsv_clusters for cluster_topic_no {cluster_topic_no} is {this_n_hsv_clusters}")
+
+                # for this_cluster in n_cluster_topics:
+                #     # print(f"checking cluster_topic_no {cluster_topic_no} against hsv cluster {this_cluster[0]}")
+                #     if this_cluster[0] == cluster_topic_no:
+                #         # print(f"appending cluster_topic_no {this_cluster} to this_n_hsv_clusters")
+                #         this_n_hsv_clusters.append(this_cluster)
+                # # print(f"this_n_hsv_clusters for cluster_topic_no {cluster_topic_no} is {this_n_hsv_clusters}")
                 return this_n_hsv_clusters
 
             

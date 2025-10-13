@@ -2535,7 +2535,7 @@ class SortPose:
             #     enc1 = self.cluster_medians[self.counter_dict["cluster_no"]]
             #     print("set enc1 from cluster median")
             #     print("enc1", enc1)
-                
+            print("this_start", this_start)
             if this_start not in ["median", "start_site_image_id", "start_image_id", "start_face_encodings", "start_bbox"]:
             # elif this_start not in ["median", "start_site_image_id", "start_face_encodings", "start_bbox"]:
                 # this is the first round for clusters/itter where last_image_enc is true
