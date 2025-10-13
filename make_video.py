@@ -1004,17 +1004,17 @@ if not io.IS_TENCH:
                 return f"AND {cluster_topic_table} = {str(cluster_topic_no)} "            
 
         def handle_hsv_cluster_lists(cluster_topic_no, hsv_cluster):
-            if isinstance(cluster_topic_no, list) and cluster_topic_no[1] == hsv_cluster:
+            if isinstance(hsv_cluster, list) and hsv_cluster[0] == cluster_topic_no:
                 # cluster_topic_no is a list that contains [metacluster, hsv]
                 # remove the hsv from the list for passing into select_map_images
-                cluster_topic_no = cluster_topic_no[0]
-            return cluster_topic_no
+                hsv_cluster = hsv_cluster[1]
+            return hsv_cluster
 
         cluster = " "
-        print(f"cluster_no is {cluster_no} and topic_no is {topic_no}")
+        print(f"cluster_no is {cluster_no} and topic_no is {topic_no} and hsv_cluster is {hsv_cluster}")
         # handle the case where hsv_cluster is passed in as part of a list with cluster_no
-        if hsv_cluster and isinstance(cluster_no, list) and len(cluster_no) == 2:
-            cluster_no = handle_hsv_cluster_lists(cluster_no, hsv_cluster)
+        if hsv_cluster and isinstance(hsv_cluster, list) and len(hsv_cluster) == 2:
+            hsv_cluster = handle_hsv_cluster_lists(cluster_no, hsv_cluster)
             print(f"after handling hsv, cluster_no is {cluster_no} and hsv_cluster is {hsv_cluster}")
             
         if IS_HAND_POSE_FUSION:
@@ -1059,7 +1059,7 @@ if not io.IS_TENCH:
             elif topic_no is not None:
                 # If topic_no is not a list, simply check for equality
                 cluster += f"AND it.{this_id} = {str(topic_no)} "
-        if hsv_cluster > 0:
+        if hsv_cluster > 0 or bool(hsv_cluster):
             from_hsv = " JOIN ImagesHSV ihsv ON s.image_id = ihsv.image_id "
             where_hsv = f" AND ihsv.cluster_id = {str(hsv_cluster)} "
             # set cluster_no here, as it doesn't catch any of the other condtionals. (admittedly messy)
@@ -2618,28 +2618,41 @@ def main():
                     # folder_name = this_topic[0] if this_topic else this_cluster
                     map_images(resultsjson, this_cluster, this_topic, hsv_cluster)
 
-            def sub_select_clusters_by_hsv(hsv_cluster, n_cluster_topics):
-                this_n_cluster_topics = []
-                for cluster_topic_no in n_cluster_topics:
-                    if cluster_topic_no[1] == hsv_cluster:
-                        this_n_cluster_topics.append(cluster_topic_no[0])
-                print(f"this_n_cluster_topics for hsv_cluster {hsv_cluster} is {this_n_cluster_topics}")
-                return this_n_cluster_topics
+            def sub_select_clusters_by_hsv(cluster_topic_no, n_cluster_topics):
+                this_n_hsv_clusters = []
+                for this_cluster in n_cluster_topics:
+                    # print(f"checking cluster_topic_no {cluster_topic_no} against hsv cluster {this_cluster[0]}")
+                    if this_cluster[0] == cluster_topic_no:
+                        # print(f"appending cluster_topic_no {this_cluster} to this_n_hsv_clusters")
+                        this_n_hsv_clusters.append(this_cluster)
+                # print(f"this_n_hsv_clusters for cluster_topic_no {cluster_topic_no} is {this_n_hsv_clusters}")
+                return this_n_hsv_clusters
+
             
-            for hsv_cluster in n_hsv_clusters:
-                # if n_cluster_topics is a list of lists, then make a subset based on hsv_cluster 
-                if isinstance(n_cluster_topics, list) and len(n_cluster_topics[0]) > 1:
-                    this_n_cluster_topics = sub_select_clusters_by_hsv(hsv_cluster, n_cluster_topics)
+            for cluster_topic_no in range(N_CLUSTERS):
+                print(f"cluster_topic_no range(N_CLUSTERS): {cluster_topic_no}")
+                if isinstance(n_cluster_topics, list) and len(n_cluster_topics) > 1:
+                    # print(f"cluster_topic_no: {cluster_topic_no}, this_n_hsv_clusters: {n_cluster_topics}")
+                    this_n_hsv_clusters = sub_select_clusters_by_hsv(cluster_topic_no, n_cluster_topics)
                 else: 
-                    this_n_cluster_topics = n_cluster_topics
-                print(f"hsv_cluster: {hsv_cluster}")
+                    this_n_hsv_clusters = n_cluster_topics
+                print(f"cluster_topic_no: {cluster_topic_no}, this_n_hsv_clusters: {this_n_hsv_clusters}")
+
+            # for hsv_cluster in n_hsv_clusters:
+            #     # if n_cluster_topics is a list of lists, then make a subset based on hsv_cluster 
+            #     if isinstance(n_cluster_topics, list) and len(n_cluster_topics[0]) > 1:
+            #         this_n_cluster_topics = sub_select_clusters_by_hsv(hsv_cluster, n_cluster_topics)
+            #     else: 
+            #         this_n_cluster_topics = n_cluster_topics
+            #     print(f"hsv_cluster: {hsv_cluster}")
                 if first_loop:
                     print("first loop is ", first_loop)
-                    for cluster_topic_no in this_n_cluster_topics:
+                    # for cluster_topic_no in this_n_cluster_topics:
+                    for hsv_cluster in this_n_hsv_clusters:
                         print(f"cluster_topic_no: {cluster_topic_no}, hsv_cluster: {hsv_cluster}")
                         if IS_CLUSTER and cluster_topic_no < START_CLUSTER:continue
                         if USE_AFFECT_GROUPS: cluster_topic_no = AFFECT_GROUPS_LISTS[cluster_topic_no] # redefine cluster_no with affect group list
-                        print(f"SELECTing cluster_topic {cluster_topic_no} of {this_n_cluster_topics}")
+                        # print(f"SELECTing cluster_topic {cluster_topic_no} of {this_n_cluster_topics}")
                         if IS_TOPICS and not IS_HAND_POSE_FUSION: select_map_images(second_cluster_topic, cluster_topic_no, hsv_cluster)
                         elif IS_CLUSTER: select_map_images(cluster_topic_no, second_cluster_topic, hsv_cluster)
                         elif IS_HAND_POSE_FUSION: select_map_images(cluster_topic_no,this_topic, hsv_cluster)
