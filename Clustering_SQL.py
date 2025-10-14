@@ -91,8 +91,8 @@ OFFSET = 0
 START_ID = 108329049 # only used in MODE 1
 
 # WHICH TABLE TO USE?
-SegmentTable_name = 'SegmentOct20'
-# SegmentTable_name = 'SegmentBig_isface'
+# SegmentTable_name = 'SegmentOct20'
+SegmentTable_name = 'SegmentBig_isface'
 # SegmentTable_name = 'SegmentBig_isnotface'
 
 # if doing MODE == 2, use SegmentHelper_name to subselect SQL query
@@ -211,7 +211,7 @@ if USE_SEGMENT is True and (CLUSTER_TYPE != "Clusters"):
         WHERE = " cluster_id IS NOT NULL "
 
     # WHERE += " AND h.is_body = 1"
-    LIMIT = 10000000
+    LIMIT = 100000000
 
     '''
     Poses
@@ -640,7 +640,7 @@ FROM `BodyPoses3D`'''
                     print(f"Successfully saved cluster_id 0: {saved_record}")
                 else:
                     print("Failed to save cluster_id 0.")
-        if existing_record is not None and update:
+        elif existing_record is not None and update:
             print(f"Updating existing record with cluster_id {cluster_id} and median {cluster_median}")
             existing_record.cluster_median = pickle.dumps(cluster_median)
             

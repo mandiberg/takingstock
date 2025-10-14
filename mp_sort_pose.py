@@ -2136,7 +2136,12 @@ class SortPose:
         if most_common and most_common[0][1] > 1:
             most_common_row = most_common[0][0]
         else:
-            most_common_row = None  # or handle the no-mode case however you like
+            # if there is no mode, find the median row
+            try:
+                most_common_row = tuple(np.median(np.array(hashable_rows), axis=0).astype(int))
+            except:
+                print("    X X X X X X X X X NO MEDIAN OR MODE X X X X X X X X X ")
+                most_common_row = None  # 
         print("Most common row in list:", most_common_row)
         return most_common_row
     
@@ -3541,7 +3546,7 @@ class SortPose:
 
     def prep_hsv(self, hue):
         if hue is not None:
-            return (hue/360)*2
+            return (hue/360)
         else:
             return np.nan
 

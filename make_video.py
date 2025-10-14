@@ -48,7 +48,7 @@ SegmentTable_name = 'SegmentOct20'
 # SegmentTable_name = 'SegmentBig_isface'
 # SegmentTable_name = 'SegmentBig_isnotface'
 # SegmentHelper_name = 'SegmentHelper_may2025_4x4faces'
-SegmentHelper_name = 'SegmentHelper_sept2025_heft_keywords'
+# SegmentHelper_name = 'SegmentHelper_sept2025_heft_keywords'
 SegmentHelper_name = None
 # SATYAM, this is MM specific
 # for when I'm using files on my SSD vs RAID
@@ -60,7 +60,8 @@ io = DataIO(IS_SSD)
 db = io.db
 
 # declare all the globals as None in one line
-N_CLUSTERS = N_HANDS = SORT_TYPE = FULL_BODY = IS_HAND_POSE_FUSION = ONLY_ONE = GENERATE_FUSION_PAIRS = MIN_VIDEO_FUSION_COUNT = FUSION_PAIR_DICT = IS_CLUSTER = IS_ONE_CLUSTER = CLUSTER_NO = START_CLUSTER = USE_POSE_CROP_DICT = IS_SEGONLY = HSV_CONTROL = VISIBLE_HAND_LEFT = VISIBLE_HAND_RIGHT = USE_NOSEBRIDGE = LIMIT = MIN_CYCLE_COUNT = IS_HANDS = IS_ONE_HAND = HAND_POSE_NO = NO_KIDS = ONLY_KIDS = USE_PAINTED = OUTPAINT = INPAINT= INPAINT_COLOR= INPAINT_MAX_SHOULDERS= OUTPAINT_MAX= BLUR_THRESH_MAX= BLUR_THRESH_MIN= BLUR_RADIUS= MASK_OFFSET= VERBOSE= CALIBRATING= SAVE_IMG_PROCESS= IS_ANGLE_SORT= IS_TOPICS= N_TOPICS= IS_ONE_TOPIC= TOPIC_NO= NEG_TOPICS= POS_TOPICS= NEUTRAL_TOPICS= AFFECT_GROUPS_LISTS= USE_AFFECT_GROUPS= None
+N_CLUSTERS = N_HANDS = SORT_TYPE = FULL_BODY = IS_HAND_POSE_FUSION = ONLY_ONE = GENERATE_FUSION_PAIRS = MIN_VIDEO_FUSION_COUNT = FUSION_PAIR_DICT = IS_CLUSTER = IS_ONE_CLUSTER = CLUSTER_NO = START_CLUSTER = USE_POSE_CROP_DICT = IS_SEGONLY = HSV_CONTROL = VISIBLE_HAND_LEFT = VISIBLE_HAND_RIGHT = USE_NOSEBRIDGE = LIMIT = MIN_CYCLE_COUNT = IS_HANDS = IS_ONE_HAND = NO_KIDS = ONLY_KIDS = USE_PAINTED = OUTPAINT = INPAINT= INPAINT_COLOR= INPAINT_MAX_SHOULDERS= OUTPAINT_MAX= BLUR_THRESH_MAX= BLUR_THRESH_MIN= BLUR_RADIUS= MASK_OFFSET= VERBOSE= CALIBRATING= SAVE_IMG_PROCESS= IS_ANGLE_SORT= IS_TOPICS= N_TOPICS= IS_ONE_TOPIC= TOPIC_NO= NEG_TOPICS= POS_TOPICS= NEUTRAL_TOPICS= AFFECT_GROUPS_LISTS= USE_AFFECT_GROUPS= None
+N_HSV = HAND_POSE_NO = 0 # defaults to no HSV clusters
 
 # CSV_FOLDER = os.path.join(io.ROOT_DBx, "body3D_segmentbig_useall256_CSVs_MMtest")
 # CSV_FOLDER = os.path.join("/Users/michaelmandiberg/Documents/projects-active/facemap_production/body3D_segmentbig_useall256_CSVs_test")
@@ -74,9 +75,9 @@ CSV_FOLDER = os.path.join("/Users/michaelmandiberg/Documents/projects-active/fac
 # io.db["name"] = "ministock"
 
 MODES = ['paris_photo_torso_images_topics', 'paris_photo_torso_videos_topics', '3D_bodies_topics','3D_arms', 'heft_torso_keywords']
-MODE_CHOICE = 1
+MODE_CHOICE = 2
 CURRENT_MODE = MODES[MODE_CHOICE]
-LIMIT = 10000 # this is the limit for the SQL query
+LIMIT = 1000 # this is the limit for the SQL query
 
 # set defaults, including for all modes to False
 FULL_BODY = IS_HAND_POSE_FUSION = ONLY_ONE = GENERATE_FUSION_PAIRS = USE_FUSION_PAIR_DICT = IS_CLUSTER = IS_ONE_CLUSTER = USE_POSE_CROP_DICT = IS_TOPICS= IS_ONE_TOPIC = USE_AFFECT_GROUPS = False
@@ -88,34 +89,37 @@ AUTO_EDGE_CROP = False # this triggers the dynamic cropping based on min_max_bod
 
 image_edge_multiplier = None
 N_TOPICS = 64 # changing this to 14 triggers the affect topic fusion, 100 is keywords. 64 is default
-if CURRENT_MODE == 'paris_photo_torso_images_topics':
-    # controls which type of sorting/column sorted on
-    SORT_TYPE = "planar_hands"
-    image_edge_multiplier = [1.3,2,2.9,2] # portrait crop for paris photo images < Aug 30
-
-elif CURRENT_MODE == 'paris_photo_torso_videos_topics':
-    SORT_TYPE = "128d"
+if "paris" in CURRENT_MODE:
     IS_HAND_POSE_FUSION = True # do we use fusion clusters
     GENERATE_FUSION_PAIRS = False # if true it will query based on MIN_VIDEO_FUSION_COUNT and create pairs
                                     # if false, it will grab the list of pair lists below
-    MIN_VIDEO_FUSION_COUNT = 300
+    USE_FUSION_PAIR_DICT = True
+    FUSION_PAIR_DICT_NAME = "FUSION_PAIR_DICT_TOPICS_64"
     N_HSV = 0 # don't do HSV clusters
     # this control whether sorting by topics
     # IS_TOPICS = True # if using Clusters only, must set this to False
+    if CURRENT_MODE == 'paris_photo_torso_images_topics':
+        # controls which type of sorting/column sorted on
+        SORT_TYPE = "planar_hands"
+        image_edge_multiplier = [1.3,2,2.9,2] # portrait crop for paris photo images < Aug 30
 
-    JUMP_SHOT = True # jump to random file if can't find a run (I don't think this applies to planar?)
+    elif CURRENT_MODE == 'paris_photo_torso_videos_topics':
+        SORT_TYPE = "128d"
+        MIN_VIDEO_FUSION_COUNT = 300
 
-    # initializing default square crop
-    # if this is defined, then it will not call min_max_body_landmarks_for_crop
-    image_edge_multiplier = [1.3,1.85,2.4,1.85] # tighter square crop for paris photo videos < Oct 29 FINAL VERSION NOV 2024 DO NOT CHANGE
+        JUMP_SHOT = True # jump to random file if can't find a run (I don't think this applies to planar?)
 
-    USE_PAINTED = False
-    INPAINT= True
-    INPAINT_COLOR = None # "white" or "black" or None (none means generative inpainting with size limits)
+        # initializing default square crop
+        # if this is defined, then it will not call min_max_body_landmarks_for_crop
+        image_edge_multiplier = [1.3,1.85,2.4,1.85] # tighter square crop for paris photo videos < Oct 29 FINAL VERSION NOV 2024 DO NOT CHANGE
 
-    # when doing IS_HAND_POSE_FUSION code currently only supports one topic at a time
-    IS_ONE_TOPIC = True
-    TOPIC_NO = [32] # if doing an affect topic fusion, this is the wrapper topic
+        USE_PAINTED = False
+        INPAINT= True
+        INPAINT_COLOR = None # "white" or "black" or None (none means generative inpainting with size limits)
+
+        # when doing IS_HAND_POSE_FUSION code currently only supports one topic at a time
+        IS_ONE_TOPIC = True
+        TOPIC_NO = [32] # if doing an affect topic fusion, this is the wrapper topic
 elif "3D" in CURRENT_MODE:
     if CURRENT_MODE == '3D_bodies_topics':
         SORT_TYPE = "body3D"
@@ -132,8 +136,12 @@ elif "3D" in CURRENT_MODE:
         else:
             image_edge_multiplier = [1.3,2,2.9,2] # portrait crop for paris photo images < Aug 30
 
+    SegmentTable_name = 'SegmentBig_isface'
     ONLY_ONE = False # only one cluster, or False for video fusion, this_cluster = [CLUSTER_NO, HAND_POSE_NO]
     USE_POSE_CROP_DICT = False
+    # GENERATE_FUSION_PAIRS = True # if true it will query based on MIN_VIDEO_FUSION_COUNT and create pairs
+    USE_FUSION_PAIR_DICT = True
+    FUSION_PAIR_DICT_NAME = "FUSION_PAIR_DICT_TOPICS_64"
 
     CHOP_FIRST = True
     ONE_SHOT = True # take all files, based off the very first sort order.
@@ -152,6 +160,7 @@ elif "3D" in CURRENT_MODE:
 elif CURRENT_MODE == 'heft_torso_keywords':
     # SegmentTable_name = 'SegmentOct20'
     SegmentTable_name = 'SegmentBig_isface'
+    SegmentHelper_name = 'SegmentHelper_sept2025_heft_keywords' # TK revisit this for prodution run
     # SORT_TYPE = "planar_hands"
     SORT_TYPE = "arms3D"
     TESTING = False
@@ -159,9 +168,12 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     GENERATE_FUSION_PAIRS = True # if true it will query based on MIN_VIDEO_FUSION_COUNT and create pairs
                                     # if false, it will grab the list of pair lists below
     USE_FUSION_PAIR_DICT = True
-    N_HSV = 16
+    FUSION_PAIR_DICT_NAME = "FUSION_PAIR_DICT_KEYWORDS_512"
+    # N_HSV = 16
+    N_HSV = 0 # don't do HSV clusters
+    
     # TSP_SORT = True
-    CHOP_FIRST = True
+    # CHOP_FIRST = True
     # if TESTING: IS_HAND_POSE_FUSION = GENERATE_FUSION_PAIRS = False
     MIN_VIDEO_FUSION_COUNT = 1300 # this is the cut off for the CSV fusion pairs
     MIN_CYCLE_COUNT = 1000 # this is the cut off for the SQL query results
@@ -172,7 +184,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     # this control whether sorting by topics
     # IS_TOPICS = True # if using Clusters only, must set this to False
 
-    ONE_SHOT = False # take all files, based off the very first sort order.
+    ONE_SHOT = True # take all files, based off the very first sort order.
     JUMP_SHOT = True # jump to random file if can't find a run (I don't think this applies to planar?)
 
     # initializing default square crop
@@ -189,7 +201,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     # when doing IS_HAND_POSE_FUSION code currently only supports one topic at a time
     IS_ONE_TOPIC = True
     N_TOPICS = 100
-    TOPIC_NO = [22412.24705] # if doing an affect topic fusion, this is the wrapper topic
+    TOPIC_NO = [22411] # if doing an affect topic fusion, this is the wrapper topic
     FUSION_FOLDER = "utilities/data/heft_keyword_fusion_clusters_hsv_meta"
     CSV_FOLDER = os.path.join("/Users/michaelmandiberg/Documents/projects-active/facemap_production/heft_keyword_fusion_clusters/meta_clusters_fusion_build/")
 
@@ -268,14 +280,6 @@ else:
 print(f"SORT_TYPE {SORT_TYPE}, CLUSTER_TYPE {CLUSTER_TYPE}, CLUSTER_TYPE_2 {CLUSTER_TYPE_2}")
 DROP_LOW_VIS = False
 USE_HEAD_POSE = False
-N_HANDS = N_CLUSTERS = None # declared here, but set in the SQL query below
-
-# I started to create a separate track for Hands, but am pausing for the moment
-IS_HANDS = False
-IS_ONE_HAND = False
-HAND_POSE_NO = 0
-
-# 80,74 fails between 300-400
 
 # cut the kids
 NO_KIDS = True
@@ -353,6 +357,38 @@ KEYWORD_DICT = {
 
 }
 
+
+FUSION_PAIR_DICT_TOPICS_64 = {
+    32: [[13, 109], [13, 24], [13, 85]]
+}
+
+FUSION_PAIR_DICT_3DBODIES_TOPICS_512 = {
+    220: [[101, 0], [124, 0], [184, 0], [216, 0], [302, 0], [448, 0], [457,0]]
+}
+FUSION_PAIR_DICT_KEYWORDS_512 = {
+    220: [[101, 0], [124, 0], [184, 0], [216, 0], [302, 0], [448, 0], [457,0]],
+    553: [[216, 0], [230, 0], [89,0]],
+    807: [[140, 0], [168, 0], [216, 0], [273, 0], [63,0]],
+    827: [[191, 0], [229, 0], [322, 0], [340, 0], [396, 0], [423, 0], [447, 0], [448, 0], [51,0]],
+    1070: [[122, 0], [14, 0], [22, 0], [342, 0], [391, 0], [53,0]],
+    1644: [[158, 0], [161, 0], [345,0]],
+    5310: [[180, 0], [245, 0], [265, 0], [315, 0], [324, 0], [445, 0], [451, 0], [476, 0], [498,0]],
+    22269: [[351, 0], [449, 0], [53,0]],
+    22411: [[158, 0], [240, 0], [304, 0], [306, 0], [342, 0], [391, 0], [40, 0], [423, 0], [449,0]],
+    22412: [[89, 0], [101, 0], [140, 0], [184, 0], [273, 0], [391, 0], [396, 0], [426, 0], [430, 0], [446, 0], [449, 0], [481,0]]
+}
+
+
+ALL_FUSION_PAIRS_DICTS = {
+    "FUSION_PAIR_DICT_TOPICS_64": FUSION_PAIR_DICT_TOPICS_64,
+    "FUSION_PAIR_DICT_KEYWORDS_512": FUSION_PAIR_DICT_KEYWORDS_512,
+    "FUSION_PAIR_DICT_3DBODIES_TOPICS_512": FUSION_PAIR_DICT_3DBODIES_TOPICS_512
+    }
+if USE_FUSION_PAIR_DICT:
+    #set the actual dict from the name
+    FUSION_PAIR_DICT = ALL_FUSION_PAIRS_DICTS[FUSION_PAIR_DICT_NAME]
+
+
 if not GENERATE_FUSION_PAIRS:
     # from 512 testing
     # print("not generating FUSION_PAIRS, pulling from list")
@@ -410,7 +446,7 @@ if not GENERATE_FUSION_PAIRS:
         #T23 depressed
         # [21, 30], [9, 109]
         #T32 shock suprise
-        [13, 109],        [13, 24],        [13, 85]
+        # [13, 109],        [13, 24],        [13, 85]
         # [1, 125], [25, 125], [15, 37], [15, 91], [13, 116], [30, 37], [1, 65]
         #T35 skin care
         # [24, 51],[21, 13],[13, 118]
@@ -1039,8 +1075,8 @@ if not io.IS_TENCH:
         def cluster_topic_select(cluster_topic_table, cluster_topic_no):
             # convert topic_no to a query string
             IN_or_equal_query_string = is_query_list_string(cluster_topic_no)
-            cluster += f"AND {cluster_topic_table} {IN_or_equal_query_string} "
-
+            cluster = f"AND {cluster_topic_table} {IN_or_equal_query_string} "
+            return cluster
             # if isinstance(cluster_topic_no, list):
             #     # Convert the list into a comma-separated string
             #     cluster_topic_ids = ', '.join(map(str, cluster_topic_no))
@@ -1057,12 +1093,12 @@ if not io.IS_TENCH:
                 hsv_cluster = hsv_cluster[1]
             return hsv_cluster
 
-        cluster = " "
-        print(f"cluster_no is {cluster_no} and topic_no is {topic_no} and hsv_cluster is {hsv_cluster}")
+        cluster = " " #declare as empty string
+        print(f"[selectSQL] cluster_no {cluster_no} and topic_no {topic_no} and hsv_cluster {hsv_cluster}")
         # handle the case where hsv_cluster is passed in as part of a list with cluster_no
         if hsv_cluster and isinstance(hsv_cluster, list) and len(hsv_cluster) == 2:
             hsv_cluster = handle_hsv_cluster_lists(cluster_no, hsv_cluster)
-            print(f"after handling hsv, cluster_no is {cluster_no} and hsv_cluster is {hsv_cluster}")
+            print(f"after handling hsv, cluster_no {cluster_no} and hsv_cluster {hsv_cluster}")
             
         if IS_HAND_POSE_FUSION:
             if isinstance(cluster_no, list):
@@ -2748,6 +2784,18 @@ def main():
                     else:
                         print("doing regular linear")
                         select_map_images(this_cluster, this_topic, hsv_cluster)
+
+            if "3D" in CURRENT_MODE:
+                # do 3D bodies processing
+                print("doing 3D bodies specific processing")
+                if first_loop:
+                    print("first loop is ", first_loop)
+                    for cluster_topic_no in n_cluster_topics:
+                        do_first_select_map_images(cluster_topic_no, second_cluster_topic)
+                    else:
+                        print("doing regular linear")
+                        select_map_images(this_cluster, this_topic)
+
             if "paris" in CURRENT_MODE:
                 print("doing Paris specific processing")
                 if first_loop:
