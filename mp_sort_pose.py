@@ -3615,7 +3615,8 @@ class SortPose:
             prefix = 'Keywords_'
 
         # Construct the file name and path
-        file_name = prefix + str(topic_no[0]) + '.csv'
+        isolated_topic = str(topic_no[0]).split('.')[0]  # Get the integer part before the decimal
+        file_name = prefix + isolated_topic + '.csv'
         file_path = os.path.join(folder_path, file_name)
         
         # Load the CSV file into a DataFrame
