@@ -58,7 +58,7 @@ SAVE_ORIG = False
 DRAW_BOX = False
 MINSIZE = 500
 SLEEP_TIME=0
-VERBOSE = False
+VERBOSE = True
 QUIET = False
 
 # only for triage
@@ -69,20 +69,25 @@ http="https://media.gettyimages.com/photos/"
 
 # am I looking on RAID/SSD for a folder? If not, will pull directly from SQL
 # if so, also change the site_name_id etc around line 930
-IS_FOLDER = True
+IS_FOLDER = False
 
 # these only matter if SQL (not folder)
 DO_OVER = True
 FIND_NO_IMAGE = True
-# OVERRIDE_PATH = False
-OVERRIDE_PATH = "/Volumes/SSD4/images_getty"
+
+# OVERRIDE_PATH will force it to look in a specific folder
+OVERRIDE_PATH = False
+# OVERRIDE_PATH = "/Volumes/SSD4/images_getty"
 OVERRIDE_TOPIC = False
 # OVERRIDE_TOPIC = [16, 17, 18, 23, 24, 45, 53]
-SHUTTER_SSD_OVERRIDE = True
+
+# further restricts to a specific subfolder
+SHUTTER_SSD_OVERRIDE = False
 if SHUTTER_SSD_OVERRIDE: 
     OVERRIDE_PATH = "/Volumes/SSD4green/images_shutterstock"
     SHUTTERFOLDER = "C/C"
 
+REPROCESS_MISSING_MONGO_DATA_OVERRIDE = True
 '''
 Oct 13, got up to 109217155
 switching to topic targeted
@@ -139,7 +144,7 @@ MAIN_FOLDERS = [MAIN_FOLDER1, MAIN_FOLDER2, MAIN_FOLDER3]
 # MAIN_FOLDERS = [MAIN_FOLDER1, MAIN_FOLDER2, MAIN_FOLDER3, MAIN_FOLDER4, MAIN_FOLDER5]
 
 BATCH_SIZE = 1000 # Define how many from each folder in each batch
-LIMIT = 1000
+LIMIT = 10
 
 #temp hack to go 1 subfolder at a time
 THESE_FOLDER_PATHS = ["9/9C", "9/9D", "9/9E", "9/9F", "9/90", "9/91", "9/92", "9/93", "9/94", "9/95", "9/96", "9/97", "9/98", "9/99"]
@@ -149,7 +154,7 @@ THESE_FOLDER_PATHS = ["9/9C", "9/9D", "9/9E", "9/9F", "9/90", "9/91", "9/92", "9
 # CSV_FOLDERCOUNT_NAME = "folder_countout.csv"
 CSV_FOLDERCOUNT_NAMES = ["folder_countout1.csv", "folder_countout2.csv"]
 
-IS_SSD=True
+IS_SSD=False
 
 # set BODY to true, set SSD to false, set TOPIC_ID
 # for silence, start at 103893643
@@ -162,14 +167,15 @@ TOPIC_ID = None
 # TOPIC_ID = [24, 29] # adding a TOPIC_ID forces it to work from SegmentBig_isface, currently at 7412083
 DO_INVERSE = True
 SEGMENT = 0 # topic_id set to 0 or False if using HelperTable or not using a segment
-HelperTable_name = "SegmentHelper_nov23_T37_forwardish" # set to False if not using a HelperTable
+HelperTable_name = "SegmentHelper_oct2025_missing_face_encodings" # set to False if not using a HelperTable
 # HelperTable_name = False    
 # SegmentTable_name = 'SegmentOct20'
-SegmentTable_name = 'SegmentBig_isnotface'
+SegmentTable_name = 'SegmentBig_isface'
 # if HelperTable_name, set start point
 START_IMAGE_ID = 0
 
 if BODYLMS is True or HANDLMS is True:
+    # for SQL, it needs SegmentTable_name to be SegmentOct20 or SegmentBig_isface
     # THIS NEEDS TO BE REFACTORED FOR GPU
     get_background_mp = mp.solutions.selfie_segmentation
     get_bg_segment = get_background_mp.SelfieSegmentation()
@@ -190,15 +196,17 @@ if BODYLMS is True or HANDLMS is True:
         QUERY = " "
         if SegmentTable_name == 'SegmentOct20':
             if REDO_BODYLMS_3D:
-                QUERY += " seg1.mongo_body_landmarks IS NOT NULL and seg1.no_image IS NULL and seg1.mongo_body_landmarks_3D IS NULL"
+                QUERY += " seg1.mongo_body_landmarks IS NOT NULL  and seg1.mongo_body_landmarks_3D IS NULL"
             else:
-                QUERY = " seg1.mongo_body_landmarks IS NULL and seg1.no_image IS NULL"
+                QUERY = " seg1.mongo_body_landmarks IS NULL "
         elif SegmentTable_name == 'SegmentBig_isface':
-            if REDO_BODYLMS_3D:
-                QUERY += " e.mongo_body_landmarks IS NOT NULL and seg1.no_image IS NULL and e.mongo_body_landmarks_3D IS NULL"
+            if REPROCESS_MISSING_MONGO_DATA_OVERRIDE:
+                # this is a placeholder that will always return true, bc the main filter is in the helper table
+                QUERY = " seg1.image_id IS NOT NULL "
+            elif REDO_BODYLMS_3D:
+                QUERY += " e.mongo_body_landmarks IS NOT NULL  and e.mongo_body_landmarks_3D IS NULL"
             else:
                 QUERY = " e.mongo_body_landmarks IS NULL "
-
         # if doing both BODYLMS and HANDLMS, query as if BODY, and also do HAND on those image_ids
         if TOPIC_ID:
             # FROM = " SegmentBig_isface seg1 "
@@ -209,7 +217,6 @@ if BODYLMS is True or HANDLMS is True:
         if HelperTable_name:
             FROM += f" INNER JOIN {HelperTable_name} ht ON seg1.image_id = ht.image_id "
             QUERY += f" AND seg1.image_id > {START_IMAGE_ID}"
-
 
     elif HANDLMS:
         QUERY = " seg1.mongo_hand_landmarks IS NULL and seg1.no_image IS NULL"
@@ -2202,12 +2209,12 @@ def main():
                         io.write_csv(csv_foldercount_path, [folder_path])
 
     else:
-        print("old school SQL")
+        print("IS_FOLDER is False so old school SQL")
         start_id = 0
         while True:
             init_session()
 
-            # print("about to SQL: ",SELECT,FROM,WHERE,LIMIT)
+            print("about to SQL: ",SELECT,FROM,WHERE,LIMIT)
             resultsjson = selectSQL(start_id)  
             print("got results, count is: ",len(resultsjson))
             if resultsjson:

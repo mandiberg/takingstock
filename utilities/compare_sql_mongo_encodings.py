@@ -46,20 +46,21 @@ mongo_db = mongo_client["stock"]
 mongo_collection = mongo_db["body_landmarks_norm"]
 
 # Define the batch size
-batch_size = 10000
+batch_size = 10
 num_threads = 8  # Adjust based on your CPU and IO
 MODE = 0 #0 for overall compare, 1 to recheck against entry and bson dump
 # MODE 0 ignores is_body and is_face, MODE 1 filters on those
 IS_FACE = 0
 IS_BODY = 1
-JOIN_COMPARE_TABLE = True
-last_id = 1050000
+JOIN_COMPARE_TABLE = False
+LOOK_CLOSER_AGAINST_HELPER = True
+last_id = 55000000
 print(f"Starting from last_id: {last_id}")
 
 # select max encoding_id to start from
 Base = declarative_base()
 
-table_name = 'compare_sql_mongo_results_ultradone'
+table_name = 'compare_sql_mongo_results_ultradone_look_closer'
 class CompareSqlMongoResults(Base):
     __tablename__ = table_name
     encoding_id = Column(Integer, primary_key=True)
@@ -74,6 +75,13 @@ class CompareSqlMongoResults(Base):
     left_hand = Column(Integer)
     right_hand = Column(Integer)
     body_world_landmarks = Column(Integer)
+
+HelperTable_name = "SegmentHelper_oct2025_missing_face_encodings"
+
+class HelperTable(Base):
+    __tablename__ = HelperTable_name
+    seg_image_id=Column(Integer,primary_key=True, autoincrement=True)
+    image_id = Column(Integer, primary_key=True, autoincrement=True)
 
 if JOIN_COMPARE_TABLE:
     # this should create a table from the above definition if it doesn't exist
@@ -164,6 +172,7 @@ def process_batch(batch_start, batch_end):
             collection = thread_mongo_db[collection_name]
             doc = collection.find_one({"image_id": image_id})
             mongo_docs[collection_name] = doc
+        print(f"for encoding_id {encoding_id}, this is the {mongo_docs} found in Mongo for image_id {image_id}")
 
         this_row = {
             "encoding_id": encoding_id,
@@ -192,8 +201,8 @@ def process_batch(batch_start, batch_end):
                 if is_body != 1 and document_name in is_body_fields:
                     # print("skipping body field because is_body is 0")
                     continue
-                # print(f"Processing encoding_id {encoding_id}, image_id {image_id}, is_body {is_body}, is_face {is_face}")
-                # print(f"  Checking {image_id} {document_name} where is_body {is_body}, is_face {is_face}")
+                print(f"Processing encoding_id {encoding_id}, image_id {image_id}, is_body {is_body}, is_face {is_face}")
+                print(f"  Checking {image_id} {document_name} where is_body {is_body}, is_face {is_face}")
                 sql_field_name = sql_field_names_dict[document_name]
                 sql_boolean = row_dict.get(sql_field_name)
                 mongo_data_present = doc is not None and document_name in doc and doc[document_name] is not None
@@ -214,7 +223,25 @@ def process_batch(batch_start, batch_end):
 
 def get_mysql_results(batch_start, batch_end, thread_session):
     if MODE == 0:
-        if JOIN_COMPARE_TABLE:
+        if isinstance(batch_start, list) and batch_end is None:
+            results = (
+                thread_session.query(
+                    Encodings.encoding_id, Encodings.image_id, Encodings.mongo_encodings, Encodings.mongo_body_landmarks,
+                    Encodings.mongo_face_landmarks, Encodings.mongo_body_landmarks_norm, Encodings.mongo_hand_landmarks,
+                    Encodings.mongo_body_landmarks_3D, Encodings.is_body, Encodings.is_face, Images.site_name_id
+                )
+                .join(
+                    Images,
+                    Encodings.image_id == Images.image_id
+                )
+                .filter(
+                    Encodings.encoding_id.in_(batch_start)
+                )
+                .order_by(Encodings.encoding_id)
+                .all()
+            )
+        
+        elif JOIN_COMPARE_TABLE:
             results = (
                 thread_session.query(
                     Encodings.encoding_id, Encodings.image_id, Encodings.mongo_encodings, Encodings.mongo_body_landmarks,
@@ -289,34 +316,80 @@ def get_mysql_results(batch_start, batch_end, thread_session):
     
     return results
 
-# Get min and max encoding_id for batching
-# min_id = session.query(sqlalchemy.func.min(Encodings.encoding_id)).scalar() or 0
-min_id = last_id + 1
-max_id = session.query(sqlalchemy.func.max(Encodings.encoding_id)).scalar() or 0
+if LOOK_CLOSER_AGAINST_HELPER:
+    query_all_encoding_ids_via_helper = (
+        session.query(Encodings.encoding_id)
+        .join(HelperTable, Encodings.image_id == HelperTable.image_id)
+        .filter(Encodings.encoding_id > last_id)
+        .order_by(Encodings.encoding_id)
+        .limit(1000)
+        .all()
+    )
+    helper_encoding_ids = [row[0] for row in query_all_encoding_ids_via_helper]
+    print(f"Filtering to {len(helper_encoding_ids)} image_ids from {HelperTable_name}")
+    if helper_encoding_ids:
+        min_id = min(helper_encoding_ids)
+        max_id = max(helper_encoding_ids)
 
+    print(f"Processing encoding_id from {min_id} to {max_id}")
 
-for batch_start in range(min_id, max_id + 1, batch_size * num_threads):
-    batch_ranges = [
-        (start, min(start + batch_size, max_id + 1))
-        for start in range(batch_start, min(batch_start + batch_size * num_threads, max_id + 1), batch_size)
+    # make batches of batch_size
+    encoding_id_batches = [
+        helper_encoding_ids[i:i + batch_size]
+        for i in range(0, len(helper_encoding_ids), batch_size)
     ]
-    results_rows = []
-    with concurrent.futures.ThreadPoolExecutor(max_workers=num_threads) as executor:
-        futures = [executor.submit(process_batch, start, end) for start, end in batch_ranges]
-        for future in concurrent.futures.as_completed(futures):
-            results_rows.extend(future.result())
+    print(f"Total batches to process: {len(encoding_id_batches)}")
+    print(f"First batch example: {encoding_id_batches[0][:5]} ... {encoding_id_batches[0][-5:]}")
 
-    batch_df = pd.DataFrame(results_rows)
-    print(f"Processed batch up to encoding_id {batch_ranges[-1][1]-1}: discrepancies found this batch: {len(batch_df)}")
-    if not batch_df.empty:
-        batch_df.to_sql(
-            name=table_name,
-            con=engine,
-            if_exists="append",
-            index=False,
-            method="multi"
-        )
-    results_rows.clear()
-    # break  # temporary for testing
+    for batch_num, encoding_id_batch in enumerate(encoding_id_batches):
+
+        results_rows = []
+        with concurrent.futures.ThreadPoolExecutor(max_workers=num_threads) as executor:
+            futures = [executor.submit(process_batch, encoding_id_batch, None)]
+            for future in concurrent.futures.as_completed(futures):
+                results_rows.extend(future.result())
+
+        batch_df = pd.DataFrame(results_rows)
+        print(f"Processed batch {batch_num}: discrepancies found this batch: {len(batch_df)}")
+        break
+        if not batch_df.empty:
+            batch_df.to_sql(
+                name=table_name,
+                con=engine,
+                if_exists="append",
+                index=False,
+                method="multi"
+            )
+        results_rows.clear()
+        break  # temporary for testing
+else:
+    # Get min and max encoding_id for batching
+    # min_id = session.query(sqlalchemy.func.min(Encodings.encoding_id)).scalar() or 0
+    min_id = last_id + 1
+    max_id = session.query(sqlalchemy.func.max(Encodings.encoding_id)).scalar() or 0
+
+    for batch_start in range(min_id, max_id + 1, batch_size * num_threads):
+        batch_ranges = [
+            (start, min(start + batch_size, max_id + 1))
+            for start in range(batch_start, min(batch_start + batch_size * num_threads, max_id + 1), batch_size)
+        ]
+        results_rows = []
+        with concurrent.futures.ThreadPoolExecutor(max_workers=num_threads) as executor:
+            futures = [executor.submit(process_batch, start, end) for start, end in batch_ranges]
+            for future in concurrent.futures.as_completed(futures):
+                results_rows.extend(future.result())
+
+        batch_df = pd.DataFrame(results_rows)
+        print(f"Processed batch up to encoding_id {batch_ranges[-1][1]-1}: discrepancies found this batch: {len(batch_df)}")
+        if not batch_df.empty:
+            batch_df.to_sql(
+                name=table_name,
+                con=engine,
+                if_exists="append",
+                index=False,
+                method="multi"
+            )
+        results_rows.clear()
+        # break  # temporary for testing
 
 session.close()
