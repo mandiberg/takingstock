@@ -52,7 +52,7 @@ exporter = MongoBSONExporter(mongo_db)
 batch_size = 5000
 IS_FACE = 0
 IS_BODY = 1
-MODE = 0  # 0 validate_zero_columns_against_mongo_prereshard (outputs bson)s
+MODE = 1  # 0 validate_zero_columns_against_mongo_prereshard (outputs bson)s
 #0 validate_zero_columns_against_mongo_prereshard (outputs bson) 
 # 1 read_and_store_bson
 if MODE == 0: FOLDER_MODE = 0 # 0 is the first way, 1 is by filepath, limit 1
@@ -65,7 +65,7 @@ else: FOLDER_MODE = 1 # 0 is the first way, 1 is by filepath, limit 1
 # 57607900
 last_id = 0
 print(f"Starting from last_id: {last_id}")
-EXPORT_DIR = os.path.join(io.ROOT_PROD,"mongo_exports_oct14_SSD4green/encodings")  # Directory to save BSON files
+EXPORT_DIR = os.path.join(io.ROOT_PROD,"mongo_exports_oct14_SSD4green/body_world_landmarks")  # Directory to save BSON files
 # EXPORT_DIR = os.path.join("/Volumes/OWC4/segment_images_deshardJSON_aug2_toArchive/mongo_exports_fromlist_adobeE")  # Directory to save BSON files
 # touch the directory if it does not exist
 os.makedirs(EXPORT_DIR, exist_ok=True)
@@ -490,7 +490,7 @@ def process_batch(batch_start, batch_end, function):
     thread_mongo_db = thread_mongo_client["stock"]
     exporter = MongoBSONExporter(thread_mongo_db)
 
-    # print(f"Thread processing batch from {batch_start} of type {type(batch_start)} to {batch_end} of type {type(batch_end)} using {function}")
+    print(f"Thread processing batch from {batch_start} of type {type(batch_start)} to {batch_end} of type {type(batch_end)} using {function}")
     # this catches whether this function is called with encoding_id/image_id or a file list
     if isinstance(batch_start, int) and isinstance(batch_end, int) and FOLDER_MODE == 0:
         # print(f"this is a start end of encoding_id range: {batch_start} to {batch_end}")
@@ -505,6 +505,7 @@ def process_batch(batch_start, batch_end, function):
         else:
             print("if isinstance, Unknown function:", function)
     elif function == "read_and_store_bson_batch":
+        # print(f"this is a list of files or batches of files: {batch_start} to {batch_end}")
         # handle list vs single file
         if FOLDER_MODE == 0:
             batch_list = batch_start
@@ -554,7 +555,7 @@ def process_batch_list_in_batches(batch_list, num_threads, this_process, this_fu
 
 def process_file_list_in_batches(batch_list, num_threads, this_process, this_function, break_after_first=False):
     print(f"Processing {len(batch_list)} files with {num_threads} threads")
-    print(batch_list)
+    # print(batch_list)
     for file in batch_list:
         print(f"This is the file to process : {file}")
         with concurrent.futures.ThreadPoolExecutor(max_workers=num_threads) as executor:

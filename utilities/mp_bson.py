@@ -32,6 +32,7 @@ from sqlalchemy.pool import NullPool
 # Class to handle BSON export tasks
 class MongoBSONExporter:
     def __init__(self, mongo_db):
+        self.VERBOSE = False
         self.mongo_db = mongo_db
 
         self.collection_names = ['encodings', 'body_landmarks_norm', 'hand_landmarks', 'body_world_landmarks']
@@ -190,14 +191,15 @@ class MongoBSONExporter:
                 collection = passed_collection
 
             this_field_list = self.document_names_dict[collection]
-            print(f"read {len(docs)} documents from BSON file {file} to write to {table_name}")
+            if self.VERBOSE: print(f"read {len(docs)} documents from BSON file {file} to write to {table_name}")
             for doc in docs:
+                # if self.VERBOSE: print(f"Processing document: {doc}")
                 if not bool(doc):
-                    print(f"Skipping None document in file {file}")
+                    # print(f"Skipping None document in file {file}")
                     continue
                 image_id = doc.get("image_id", None)
                 encoding_id = doc.get("encoding_id", None)
-                # print(f"Processing document with image_id {image_id} encoding_id {encoding_id}")
+                if self.VERBOSE: print(f"Processing document with image_id {image_id} encoding_id {encoding_id}")
                 if not image_id and encoding_id is not None:
                     print(f"NO image_id but has encoding_id {encoding_id} in file {file}") # but has encoding_id
                 if not image_id and not encoding_id:
@@ -208,18 +210,22 @@ class MongoBSONExporter:
                     if field in doc:
                         collection = self.col_to_collection.get(field, None)
 
-                        # print(f"Found field {collection}:{field} len: {len(doc[field])} in document for image_id {image_id} encoding_id {encoding_id}")
+                        if self.VERBOSE: print(f"Found field {collection}:{field} len: {len(doc[field])} in document for image_id {image_id} encoding_id {encoding_id}")
                         # continue
                         if collection:
                             # pass in encoding_id. if is None, it will be handled by write_Mongo_value
+                            if self.VERBOSE: print(f"Writing Mongo value for image_id {image_id}, field {field}, encoding_id {encoding_id}")
                             success = self.write_Mongo_value(engine, mongo_db, collection, "image_id", image_id, field, doc[field], encoding_id)
                             if not success:
                                 print(f"Failed to write Mongo value for image_id {image_id}, field {field}")
                             else:
                                 if encoding_id is None:
                                     encoding_id = self.lookup_encoding_id(engine, image_id)
-                                # print(f"Updating encoding_id {encoding_id} setting {field} to NULL")
+                                if self.VERBOSE: print(f"Updating encoding_id {encoding_id} setting {field} to NULL")
                                 self.write_MySQL_value(engine, table_name, "encoding_id", encoding_id, field, "NULL")
+                        else:
+                            print(f"Collection not found for field {field} in document for image_id {image_id} encoding_id {encoding_id}")
+                            continue
 
             # after finishing the file, save as completed...
             if writing_individual_files:
@@ -265,12 +271,12 @@ class MongoBSONExporter:
 
     def build_folder_bson_file_list_full_paths(self, session, export_dir, batch_size=8):
         list_of_bson_files = self.build_folder_bson_file_list(export_dir)
-        print(f"Found {(list_of_bson_files)} BSON files in {export_dir}")
+        print(f"Found {len(list_of_bson_files)} BSON files in {export_dir}")
         list_of_bson_files_full_paths = [os.path.join(export_dir, f) for f in list_of_bson_files]
         list_of_new_bson_files_full_paths = self.remove_already_completed_files(session, list_of_bson_files_full_paths)
-        print(f"Remaining {(list_of_new_bson_files_full_paths)} BSON files in {export_dir}")
+        print(f"Remaining {len(list_of_new_bson_files_full_paths)} BSON files in {export_dir}")
         all_batches = self.split_into_batches(batch_size, list_of_new_bson_files_full_paths)
-        print(f"Split into {(all_batches)} batches of size {batch_size}")
+        print(f"Split into {len(all_batches)} batches of size {batch_size}")
         return all_batches
 
     def remove_already_completed_files(self, session, collection_files_dict):
@@ -279,12 +285,12 @@ class MongoBSONExporter:
         print(f"Skipping {len(completed_files)} completed files")
         if isinstance(collection_files_dict, list):
             trimmed_full_list =[]
-            print("batch before removing:", collection_files_dict)
+            # print("batch before removing:", collection_files_dict)
             print("len before removing:", len(collection_files_dict))
             for file in collection_files_dict:
                 if file not in completed_files:
                     trimmed_full_list.append(file)
-            print("batch after removing:", trimmed_full_list)
+            # print("batch after removing:", trimmed_full_list)
             print("len after removing:", len(trimmed_full_list))
             # for batch in collection_files_dict:
             #     print("batch before removing:", batch)
@@ -370,32 +376,40 @@ class MongoBSONExporter:
         if key and id and col:
             collection = mongo_db[collection_name]
             mongo_results = collection.find_one({"image_id": id})
-            # print(f"mongo_results for image_id {id} in collection {collection_name}: {mongo_results}")
+            if mongo_results is None: 
+                print(f" ><>< None mongo_results for image_id {id} in collection {collection_name}")
+                return False
+            if self.VERBOSE: print(f"mongo_results for image_id {id} in collection {collection_name}: {mongo_results}")
             if mongo_results[col] is not None and mongo_results[col] == cell_value:
                 # if mongo_results["encoding_id"] is not None:
-                if mongo_results["encoding_id"] is not None and mongo_results["encoding_id"] % 100 == 0:
-                    print(f" === processed {collection_name} up to encoding {mongo_results['encoding_id']} as {col} is already up to date.")
+                # handle case where encoding_id is None (non-encodings collection)
+                this_encoding_id = mongo_results.get("encoding_id", None)
+                this_image_id = mongo_results.get("image_id", None)
+                if this_encoding_id is not None: this_id = this_encoding_id
+                else: this_id = id
+
+                if this_id is not None and this_id % 100 == 0:
+                    print(f" === scanning through {collection_name} up to this_id {this_id} _without_updating_ as {col} is already up to date.")
                 return True
-            # print(f"this col results = {mongo_results[col]}", col)
+            if self.VERBOSE: print(f"this col results = {mongo_results[col]}", col)
             if collection_name == "encodings" and key == "image_id":
                 # deal with None values, which are also often values where the encoding_id is wrong in mongo
                 if mongo_encoding_id is not None:
                     # FOR REDOING THE RESHARD TO CATCH NONES
-                    # print(f"have a eid: {mongo_encoding_id} so going to continue as it probably wrote correctly last time")
+                    if self.VERBOSE:  print(f"have a eid: {mongo_encoding_id} so going to continue as it probably wrote correctly last time")
                     # return False
 
                     # FOR REGULAR --- >>>>
-                    # print("got an mongo_encoding_id", mongo_encoding_id)
+                    if self.VERBOSE:  print("got an mongo_encoding_id", mongo_encoding_id)
                     query = {key: id, "encoding_id": mongo_encoding_id}
                 else:
-                    # print(f"this col results = {mongo_results['encoding_id']}")
+                    if self.VERBOSE:  print(f"this col results = {mongo_results['encoding_id']}")
                     # print(f"No encoding_id provided for image_id {id}, looking up encoding_id from Mongo and MySQL")
                     # mongo_encoding_id_results = collection.find_one({"image_id": id}, {"encoding_id": 1})
                     if mongo_results and "encoding_id" in mongo_results:
-                        # print(f"mongo_results = {mongo_results}")
+                        if self.VERBOSE:  print(f"mongo_results = {mongo_results}")
                         mongo_encoding_id = mongo_results["encoding_id"]
-                        # print(f"Found image_id {id} with mongo_encoding_id {mongo_encoding_id}")
-                        print(f"Found image_id {id} with mongo_encoding_id {mongo_encoding_id}")
+                        if self.VERBOSE: print(f"Found image_id {id} with mongo_encoding_id {mongo_encoding_id}")
                     else:
                         print(f" ~ Could not find mongo_encoding_id for image_id {id} in MongoDB collection {collection_name}")
                         mongo_encoding_id = None
@@ -451,14 +465,14 @@ class MongoBSONExporter:
         if key and id and col:
             from sqlalchemy import text
             stmt = f"UPDATE {table_name} SET {col}={cell_value} WHERE {key} = {id};"
-            # print(f"Executing SQL: {stmt}")
+            if self.VERBOSE: print(f"Executing SQL: {stmt}")
             # execute the statement here using your database connection
             # For example, using a SQLAlchemy session:
             try:
                 with engine.connect() as connection:
                     connection.execute(text(stmt))
                     connection.commit()
-                # print(f"Success for     {id} {key} set {col} to {cell_value}")
+                if self.VERBOSE: print(f"Success for     {id} {key} set {col} to {cell_value}")
             except Exception as e:
                 print(f"Error writing MySQL value: {e}")
         else:
