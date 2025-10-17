@@ -50,8 +50,8 @@ SegmentTable_name = 'SegmentOct20'
 # SegmentTable_name = 'SegmentBig_isface'
 # SegmentTable_name = 'SegmentBig_isnotface'
 # SegmentHelper_name = 'SegmentHelper_may2025_4x4faces'
-# SegmentHelper_name = 'SegmentHelper_sept2025_heft_keywords'
-SegmentHelper_name = None
+SegmentHelper_name = 'SegmentHelper_sept2025_heft_keywords'
+# SegmentHelper_name = None
 # SATYAM, this is MM specific
 # for when I'm using files on my SSD vs RAID
 IS_SSD = True
@@ -79,14 +79,14 @@ CSV_FOLDER = os.path.join(io.ROOT_DBx, "body3D_segmentbig_useall256_CSVs_test")
 # io.db["name"] = "ministock"
 
 MODES = ['paris_photo_torso_images_topics', 'paris_photo_torso_videos_topics', '3D_bodies_topics','3D_arms', 'heft_torso_keywords']
-MODE_CHOICE = 2
+MODE_CHOICE = 3
 CURRENT_MODE = MODES[MODE_CHOICE]
-LIMIT = 1000 # this is the limit for the SQL query
+LIMIT = 10000 # this is the limit for the SQL query
 
 # set defaults, including for all modes to False
 FULL_BODY = IS_HAND_POSE_FUSION = ONLY_ONE = GENERATE_FUSION_PAIRS = USE_FUSION_PAIR_DICT = IS_CLUSTER = IS_ONE_CLUSTER = USE_POSE_CROP_DICT = IS_TOPICS= IS_ONE_TOPIC = USE_AFFECT_GROUPS = False
 EXPAND = ONE_SHOT = JUMP_SHOT = USE_ALL = CHOP_FIRST = TSP_SORT = False
-USE_PAINTED = OUTPAINT = INPAINT= False
+USE_PAINTED = OUTPAINT = INPAINT= META = False
 FUSION_FOLDER = None
 MIN_CYCLE_COUNT = 300
 AUTO_EDGE_CROP = False # this triggers the dynamic cropping based on min_max_body_landmarks_for_crop
@@ -130,8 +130,9 @@ elif "3D" in CURRENT_MODE:
         FULL_BODY = True # this requires is_feet
         EXPAND = True # expand with white for prints, as opposed to inpaint and crop. (not video, which is controlled by INPAINT_COLOR) 
     elif CURRENT_MODE == '3D_arms':
-        # SORT_TYPE = "arms3D"
-        SORT_TYPE = "body3D"
+        META = True
+        SORT_TYPE = "arms3D"
+        # SORT_TYPE = "body3D"
         FULL_BODY = False 
         # either AUTO_EDGE_CROP or image_edge_multiplier must be set. Not both
         AUTO_EDGE_CROP = True # this triggers the dynamic cropping based on min_max_body_landmarks_for_crop
@@ -166,7 +167,8 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     SegmentTable_name = 'SegmentBig_isface'
     SegmentHelper_name = 'SegmentHelper_sept2025_heft_keywords' # TK revisit this for prodution run
     # SORT_TYPE = "planar_hands"
-    SORT_TYPE = "arms3D"
+    SORT_TYPE = "arms3D" # this triggers meta body poses 3D
+    META = True
     TESTING = False
     IS_HAND_POSE_FUSION = True # do we use fusion clusters
     GENERATE_FUSION_PAIRS = True # if true it will query based on MIN_VIDEO_FUSION_COUNT and create pairs
@@ -269,10 +271,10 @@ if IS_HAND_POSE_FUSION:
         #     CLUSTER_TYPE_2 = None
     # CLUSTER_TYPE is passed to sort. below
 else:
-    if SORT_TYPE == "arms3D":
+    if SORT_TYPE == "arms3D" and META:
         # if fusion, select on arms3D and gesture, sort on hands positions
         # SORT_TYPE = "planar_hands"
-        CLUSTER_TYPE = "ArmsPoses3D"
+        CLUSTER_TYPE = "MetaBodyPoses3D"
     else:
         # choose the cluster type manually here
         # CLUSTER_TYPE = "BodyPoses" # usually this one
@@ -668,17 +670,25 @@ elif IS_SEGONLY and io.platform == "darwin":
             FROM += f" JOIN ImagesBodyPoses3D ihp ON s.image_id = ihp.image_id "
             FROM += f" JOIN ClustersMetaBodyPoses3D cmp ON ihp.cluster_id = cmp.cluster_id "
         else: 
+            print("[setting junction] IS_HAND_POSE_FUSION normal")
             cluster_table = f"Images{CLUSTER_TYPE}"
             FROM += f" JOIN {cluster_table} ihp ON s.image_id = ihp.image_id "
         if CLUSTER_TYPE_2: FROM += f" JOIN Images{CLUSTER_TYPE_2} ih ON s.image_id = ih.image_id "
         # WHERE += " AND ihp.cluster_dist < 2.5" # isn't really working how I want it
         if IS_HAND_POSE_FUSION: add_topic_select()
     elif IS_ONE_CLUSTER and IS_ONE_TOPIC:
+        print("[setting junction] if IS_ONE_CLUSTER and IS_ONE_TOPIC")
         FROM += f" JOIN Images{CLUSTER_TYPE} ic ON s.image_id = ic.image_id "
         add_topic_select()
         print(f"SELECTING ONE CLUSTER {CLUSTER_NO} AND ONE TOPIC {TOPIC_NO}. This is my WHERE: {WHERE}")
     else:
-        if IS_CLUSTER or IS_ONE_CLUSTER:
+        # when doing 3D bodies
+        if META:
+            print("[setting junction] META")
+            FROM += f" JOIN ImagesBodyPoses3D ihp ON s.image_id = ihp.image_id "
+            FROM += f" JOIN ClustersMetaBodyPoses3D cmp ON ihp.cluster_id = cmp.cluster_id "
+        elif IS_CLUSTER or IS_ONE_CLUSTER:
+            print("[setting junction] if IS_CLUSTER or IS_ONE_CLUSTER")
             FROM += f" JOIN Images{CLUSTER_TYPE} ic ON s.image_id = ic.image_id "
         if IS_TOPICS or IS_ONE_TOPIC:
             add_topic_select()
@@ -941,12 +951,18 @@ if not io.IS_TENCH:
     io.mongo_db = mongo_db
 
 
-
     # handle the table objects based on CLUSTER_TYPE
-    ClustersTable_name = CLUSTER_TYPE
-    ImagesClustersTable_name = "Images"+CLUSTER_TYPE
+    if META:table_cluster_type = "BodyPoses3D"
+    else:table_cluster_type = CLUSTER_TYPE
+    ClustersTable_name = table_cluster_type
+    ImagesClustersTable_name = "Images"+table_cluster_type
+    MetaClustersTable_name = "Meta"+table_cluster_type
+    ClustersMetaClustersTable_name = "Clusters"+MetaClustersTable_name
+
+    print("ClustersTable_name: ",ClustersTable_name, " ImagesClustersTable_name: ",ImagesClustersTable_name, " MetaClustersTable_name: ",MetaClustersTable_name, " ClustersMetaClustersTable_name: ",ClustersMetaClustersTable_name)
 
     class Clusters(Base):
+        # this doubles as MetaClusters
         __tablename__ = ClustersTable_name
 
         cluster_id = Column(Integer, primary_key=True, autoincrement=True)
@@ -957,6 +973,44 @@ if not io.IS_TENCH:
 
         image_id = Column(Integer, ForeignKey(Images.image_id, ondelete="CASCADE"), primary_key=True)
         cluster_id = Column(Integer, ForeignKey(f'{ClustersTable_name}.cluster_id', ondelete="CASCADE"))
+        cluster_dist = Column(Float)
+
+    class MetaClusters(Base):
+        __tablename__ = MetaClustersTable_name
+
+        cluster_id = Column(Integer, primary_key=True, autoincrement=True)
+        cluster_median = Column(BLOB)
+
+    class ClustersMetaClusters(Base):
+        __tablename__ = ClustersMetaClustersTable_name
+        # cluster_id is pkey, and meta_cluster_id will appear multiple times for multiple clusters
+        cluster_id = Column(Integer, ForeignKey(f'{ClustersTable_name}.cluster_id', ondelete="CASCADE"), primary_key=True)
+        meta_cluster_id = Column(Integer, ForeignKey(f'{MetaClustersTable_name}.cluster_id', ondelete="CASCADE"))
+        cluster_dist = Column(Float)
+
+
+    # # handle the table objects based on CLUSTER_TYPE
+    # if CLUSTER_TYPE == "ArmsPoses3D": 
+    #     ClustersTable_name = "MetaBodyPoses3D" # need to handle Meta cases, this is clumsy
+    #     JunctionTable_name = "Clusters"
+    # else:
+    #     ClustersTable_name = CLUSTER_TYPE
+    #     JunctionTable_name = "Images"
+    # ImagesClustersTable_name = JunctionTable_name+ClustersTable_name
+    # print("ClustersTable_name", ClustersTable_name, ImagesClustersTable_name)
+
+
+    # class Clusters(Base):
+    #     __tablename__ = ClustersTable_name
+
+    #     cluster_id = Column(Integer, primary_key=True, autoincrement=True)
+    #     cluster_median = Column(BLOB)
+
+    # class ImagesClusters(Base):
+    #     __tablename__ = ImagesClustersTable_name
+
+    #     image_id = Column(Integer, ForeignKey(Images.image_id, ondelete="CASCADE"), primary_key=True)
+    #     cluster_id = Column(Integer, ForeignKey(f'{ClustersTable_name}.cluster_id', ondelete="CASCADE"))
 
     class IsNotDupeOf(Base):
         __tablename__ = 'IsNotDupeOf'
@@ -1116,7 +1170,10 @@ if not io.IS_TENCH:
                 if cluster_no[1]: cluster += f" AND ih.cluster_id = {str(cluster_no[1])} "            
         # elif cluster_no is not None or topic_no is not None:
         elif IS_CLUSTER or IS_ONE_CLUSTER:
-            cluster += cluster_topic_select("ic.cluster_id", cluster_no)
+            print("setting cluster_no in selectSQL via IS_CLUSTER or IS_ONE_CLUSTER:", cluster_no)
+            if META: cluster_column = "cmp.meta_cluster_id"
+            else: cluster_column = "ic.cluster_id"
+            cluster += cluster_topic_select(cluster_column, cluster_no)
         if IS_TOPICS or IS_ONE_TOPIC:
             if IS_TOPICS and IS_ONE_TOPIC and USE_AFFECT_GROUPS and WrapperTopicTable is not None:
 
@@ -1263,8 +1320,8 @@ def sort_by_face_dist_NN(df_enc):
         is_break = False
         df_enc, df_sorted = sort.get_closest_df_NN(df_enc, df_sorted)
 
-        print("AFTER sort_by_face_dist_NN _ for loop df_enc is", df_enc)
-        print("AFTER sort_by_face_dist_NN _ for loop df_sorted is", df_sorted)
+        print("AFTER sort_by_face_dist_NN _ for loop df_enc is", len(df_enc))
+        print("AFTER sort_by_face_dist_NN _ for loop df_sorted is", len(df_sorted))
 
         # # test to see if body_landmarks for row with image_id = 5251199 still is the same as test_lms
         # retest_row = df_enc.loc[df_enc['image_id'] == 10498233]
@@ -1302,8 +1359,8 @@ def sort_by_face_dist_NN(df_enc):
 
         df_enc, df_sorted, is_break = get_closest_knn_or_break(df_enc, df_sorted)
         df_enc = df_sorted.head(sort.CUTOFF)
-        print("AFTER CHOP_FIRST df_enc is", df_enc)
-        print("AFTER CHOP_FIRST df_sorted is", df_sorted)
+        print("AFTER CHOP_FIRST df_enc is", len(df_enc))
+        print("AFTER CHOP_FIRST df_sorted is", len(df_sorted))
 
 
     ## SATYAM THIS IS WHAT WILL BE REPLACE BY TSP
