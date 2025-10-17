@@ -79,8 +79,8 @@ option, MODE = pick(options, title)
 # MODE = 1
 # CLUSTER_TYPE = "Clusters"
 # CLUSTER_TYPE = "BodyPoses"
-# CLUSTER_TYPE = "BodyPoses3D"
-CLUSTER_TYPE = "ArmsPoses3D" # use this for META 3D body clusters
+CLUSTER_TYPE = "BodyPoses3D" # use this for META 3D body clusters, Arms will start build but messed up because of subset landmarks
+# CLUSTER_TYPE = "ArmsPoses3D" 
 # CLUSTER_TYPE = "HandsPositions"
 # CLUSTER_TYPE = "HandsGestures"
 # CLUSTER_TYPE = "FingertipsPositions"
@@ -358,6 +358,7 @@ def get_cluster_medians():
         
         if sort.SUBSET_LANDMARKS:
             # handles body lms subsets
+            print("handling body lms subsets in get_cluster_medians for these subset landmarks: ",sort.SUBSET_LANDMARKS)
             subset_cluster_median = []
             for i in range(len(cluster_median)):
                 print("i: ",i)

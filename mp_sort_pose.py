@@ -176,6 +176,7 @@ class SortPose:
         else:
             self.CLUSTER_TYPE = "BodyPoses" # defaults
             self.SUBSET_LANDMARKS = self.BODY_LMS
+            print("using BodyPoses cluster type, ", self.SUBSET_LANDMARKS)
             # TBD for DEFAULT LMS SUBSET
 
         # print("final set of subset landmarks", self.SUBSET_LANDMARKS)
