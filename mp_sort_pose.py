@@ -172,6 +172,7 @@ class SortPose:
             # use 3D sorting with a smaller set of landmarks (head, shoulders and arms)
             # self.CLUSTER_TYPE = "BodyPoses3D"
             self.SUBSET_LANDMARKS = self.ARMS_HEAD_LMS
+            print("using ArmPoses3D cluster type, ", self.SUBSET_LANDMARKS)
         else:
             self.CLUSTER_TYPE = "BodyPoses" # defaults
             self.SUBSET_LANDMARKS = self.BODY_LMS
@@ -1514,6 +1515,7 @@ class SortPose:
             if self.CLUSTER_TYPE == "fingertips_positions":
                 col_num = len(self.SUBSET_LANDMARKS)
             else:
+                print("split_landmarks_to_columns_or_list: only fingertips_positions supported for cols structure, so col_num set to 63")
                 col_num = 63
             # col_num = 
             # Create new columns for each dimension (21 points * 3 = 63 columns for each hand)

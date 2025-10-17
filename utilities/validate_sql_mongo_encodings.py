@@ -52,7 +52,7 @@ exporter = MongoBSONExporter(mongo_db)
 batch_size = 5000
 IS_FACE = 0
 IS_BODY = 1
-MODE = 1  # 0 validate_zero_columns_against_mongo_prereshard (outputs bson)s
+MODE = 0  # 0 validate_zero_columns_against_mongo_prereshard (outputs bson)s
 #0 validate_zero_columns_against_mongo_prereshard (outputs bson) 
 # 1 read_and_store_bson
 if MODE == 0: FOLDER_MODE = 0 # 0 is the first way, 1 is by filepath, limit 1
@@ -63,9 +63,9 @@ else: FOLDER_MODE = 1 # 0 is the first way, 1 is by filepath, limit 1
 
 # 2 find entries present in mongo, but not recorded in sql table
 # 57607900
-last_id = 0
+last_id = 1500000
 print(f"Starting from last_id: {last_id}")
-EXPORT_DIR = os.path.join(io.ROOT_PROD,"mongo_exports_oct14_SSD4green/body_world_landmarks")  # Directory to save BSON files
+EXPORT_DIR = os.path.join(io.ROOT_PROD,"mongo_exports_oct17_NMLPC_XXX")  # Directory to save BSON files
 # EXPORT_DIR = os.path.join("/Volumes/OWC4/segment_images_deshardJSON_aug2_toArchive/mongo_exports_fromlist_adobeE")  # Directory to save BSON files
 # touch the directory if it does not exist
 os.makedirs(EXPORT_DIR, exist_ok=True)

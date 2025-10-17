@@ -80,11 +80,11 @@ option, MODE = pick(options, title)
 # CLUSTER_TYPE = "Clusters"
 # CLUSTER_TYPE = "BodyPoses"
 # CLUSTER_TYPE = "BodyPoses3D"
-# CLUSTER_TYPE = "ArmsPoses3D"
+CLUSTER_TYPE = "ArmsPoses3D" # use this for META 3D body clusters
 # CLUSTER_TYPE = "HandsPositions"
 # CLUSTER_TYPE = "HandsGestures"
 # CLUSTER_TYPE = "FingertipsPositions"
-CLUSTER_TYPE = "HSV"
+# CLUSTER_TYPE = "HSV"
 
 use_3D=True
 OFFSET = 0
@@ -104,7 +104,7 @@ SegmentHelper_name = 'SegmentHelper_sept2025_heft_keywords'
 # 32 for hand positions
 # 128 for hand gestures
 N_CLUSTERS = 16
-N_META_CLUSTERS = 32
+N_META_CLUSTERS = 192
 if MODE == 3: 
     META = True
     N_CLUSTERS = N_META_CLUSTERS
@@ -118,8 +118,8 @@ SUBSELECT_ONE_CLUSTER = 0
 
 # SUBSET_LANDMARKS is now set in sort pose init
 if CLUSTER_TYPE == "BodyPoses3D": 
-    if META: sort.SUBSET_LANDMARKS = None
-    else: sort.SUBSET_LANDMARKS = sort.ARMS_HEAD_LMS
+    if META: sort.SUBSET_LANDMARKS = sort.ARMS_HEAD_LMS
+    else: sort.SUBSET_LANDMARKS = None
 USE_HEAD_POSE = False
 
 SHORTRANGE = False # controls a short range query for the face x,y,z and mouth gap
@@ -291,10 +291,14 @@ Base = declarative_base()
 
 
 # handle the table objects based on CLUSTER_TYPE
-ClustersTable_name = CLUSTER_TYPE
-ImagesClustersTable_name = "Images"+CLUSTER_TYPE
-MetaClustersTable_name = "Meta"+CLUSTER_TYPE
+if META:table_cluster_type = "BodyPoses3D"
+else:table_cluster_type = CLUSTER_TYPE
+ClustersTable_name = table_cluster_type
+ImagesClustersTable_name = "Images"+table_cluster_type
+MetaClustersTable_name = "Meta"+table_cluster_type
 ClustersMetaClustersTable_name = "Clusters"+MetaClustersTable_name
+
+print("ClustersTable_name: ",ClustersTable_name, " ImagesClustersTable_name: ",ImagesClustersTable_name, " MetaClustersTable_name: ",MetaClustersTable_name, " ClustersMetaClustersTable_name: ",ClustersMetaClustersTable_name)
 
 class Clusters(Base):
     # this doubles as MetaClusters
@@ -325,32 +329,19 @@ class ClustersMetaClusters(Base):
 
 
 def get_cluster_medians():
-
-
-    # store the results in a dictionary where the key is the cluster_id
-    # if results:
-    #     cluster_medians = {}
-    #     for i, row in enumerate(results, start=1):
-    #         cluster_median = pickle.loads(row.cluster_median)
-    #         cluster_medians[i] = cluster_median
-    #         # print("cluster_medians", i, cluster_median)
-    #         N_CLUSTERS = i # will be the last cluster_id which is count of clusters
-
-    ####################################
-    # this has a LIMIT on it, that I didn't see before
-    # hmm... wait, that just limits to 1000 clusters. I don't have that many
-    ####################################
-
+    print("getting cluster medians")
     # Create a SQLAlchemy select statement
-    select_query = select(Clusters.cluster_id, Clusters.cluster_median).limit(1000)
+    select_query = select(Clusters.cluster_id, Clusters.cluster_median)
 
     # Execute the query using your SQLAlchemy session
     results = session.execute(select_query)
     median_dict = {}
 
     # Process the results as needed
+    # print(f'Found {len(results)} clusters with medians.')
+    # print("results is a sqlalchemy.engine.result.ChunkedIteratorResult object at 0x3233d5400. this is how many: ",len(results))
     for row in results:
-        # print(row)
+        print(row)
         cluster_id, cluster_median_pickle = row
         # print("cluster_id: ",cluster_id)
 
@@ -375,7 +366,7 @@ def get_cluster_medians():
                     subset_cluster_median.append(cluster_median[i])
             cluster_median = subset_cluster_median
         median_dict[cluster_id] = cluster_median
-    # print("median dict: ",median_dict)
+    print("median dict: ",median_dict)
     return median_dict 
 
 
