@@ -483,6 +483,7 @@ def main():
             # load batch file
             image_ids, batch_data = load_bson_from_batches(counter)
             print(f"Loaded {len(image_ids)} image IDs from batch {counter}")
+            # find this ID in the data: 71434242
             for image_id in image_ids:
                 for collection_name, collection in zip(collection_names, collections):
                     collection_mongo_data = {}

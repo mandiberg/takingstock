@@ -1,4 +1,5 @@
-from tkinter import N
+
+import math
 import cv2
 import pandas as pd
 import os
@@ -24,10 +25,17 @@ from my_declarative_base import Base, Encodings, SegmentTable,ImagesBackground, 
 import pymongo 
 
 #mine
-from mp_sort_pose import SortPose
+from mp_sort_pose import SortPose, TSPSorterTwoPhase
 from mp_db_io import DataIO
 from mediapipe.framework.formats import landmark_pb2
 import ast
+
+# Initialize sorter
+sorter = TSPSorterTwoPhase(
+    skip_frac=0.25,     # Skip 25% of points
+    verbose=True,
+    iterations=2        # 2-3 iterations recommended
+)
 
 title = 'Please choose your operation: '
 options = ['sequence and save CSV', 'assemble images from CSV']
@@ -37,13 +45,13 @@ VIDEO = False
 CYCLECOUNT = 1
 
 # keep this live, even if not SSD
-# SegmentTable_name = 'SegmentOct20'
+SegmentTable_name = 'SegmentOct20'
 # SegmentHelper_name = None
-SegmentTable_name = 'SegmentBig_isface'
+# SegmentTable_name = 'SegmentBig_isface'
 # SegmentTable_name = 'SegmentBig_isnotface'
 # SegmentHelper_name = 'SegmentHelper_may2025_4x4faces'
+# SegmentHelper_name = 'SegmentHelper_sept2025_heft_keywords'
 SegmentHelper_name = None
-# SegmentHelper_name = 'SegmentHelper_june2025_nmlGPU300k'
 # SATYAM, this is MM specific
 # for when I'm using files on my SSD vs RAID
 IS_SSD = True
@@ -54,11 +62,14 @@ io = DataIO(IS_SSD)
 db = io.db
 
 # declare all the globals as None in one line
-N_CLUSTERS = N_HANDS = SORT_TYPE = FULL_BODY = IS_HAND_POSE_FUSION = ONLY_ONE = GENERATE_FUSION_PAIRS = MIN_VIDEO_FUSION_COUNT = IS_CLUSTER = IS_ONE_CLUSTER = CLUSTER_NO = START_CLUSTER = USE_POSE_CROP_DICT = IS_SEGONLY = HSV_CONTROL = VISIBLE_HAND_LEFT = VISIBLE_HAND_RIGHT = USE_NOSEBRIDGE = TSP_SORT = LIMIT = MIN_CYCLE_COUNT = IS_HANDS = IS_ONE_HAND = HAND_POSE_NO = NO_KIDS = ONLY_KIDS = USE_PAINTED = OUTPAINT = INPAINT= INPAINT_COLOR= INPAINT_MAX_SHOULDERS= OUTPAINT_MAX= BLUR_THRESH_MAX= BLUR_THRESH_MIN= BLUR_RADIUS= MASK_OFFSET= VERBOSE= CALIBRATING= SAVE_IMG_PROCESS= IS_ANGLE_SORT= IS_TOPICS= N_TOPICS= IS_ONE_TOPIC= TOPIC_NO= NEG_TOPICS= POS_TOPICS= NEUTRAL_TOPICS= AFFECT_GROUPS_LISTS= USE_AFFECT_GROUPS= None
+N_CLUSTERS = N_HANDS = SORT_TYPE = FULL_BODY = IS_HAND_POSE_FUSION = ONLY_ONE = GENERATE_FUSION_PAIRS = MIN_VIDEO_FUSION_COUNT = FUSION_PAIR_DICT = IS_CLUSTER = IS_ONE_CLUSTER = CLUSTER_NO = START_CLUSTER = USE_POSE_CROP_DICT = IS_SEGONLY = HSV_CONTROL = VISIBLE_HAND_LEFT = VISIBLE_HAND_RIGHT = USE_NOSEBRIDGE = LIMIT = MIN_CYCLE_COUNT = IS_HANDS = IS_ONE_HAND = NO_KIDS = ONLY_KIDS = USE_PAINTED = OUTPAINT = INPAINT= INPAINT_COLOR= INPAINT_MAX_SHOULDERS= OUTPAINT_MAX= BLUR_THRESH_MAX= BLUR_THRESH_MIN= BLUR_RADIUS= MASK_OFFSET= VERBOSE= CALIBRATING= SAVE_IMG_PROCESS= IS_ANGLE_SORT= IS_TOPICS= N_TOPICS= IS_ONE_TOPIC= TOPIC_NO= NEG_TOPICS= POS_TOPICS= NEUTRAL_TOPICS= AFFECT_GROUPS_LISTS= USE_AFFECT_GROUPS= None
+N_HSV = HAND_POSE_NO = 0 # defaults to no HSV clusters
 
 # CSV_FOLDER = os.path.join(io.ROOT_DBx, "body3D_segmentbig_useall256_CSVs_MMtest")
-# CSV_FOLDER = os.path.join("/Users/michaelmandiberg/Documents/projects-active/facemap_production/body3D_segmentbig_useall256_CSVs")
-# CSV_FOLDER = os.path.join("/Users/michaelmandiberg/Documents/projects-active/facemap_production/heft_keyword_fusion_clusters/armstest")
+
+# CSV_FOLDER = os.path.join("/Users/michaelmandiberg/Documents/projects-active/facemap_production/body3D_segmentbig_useall256_CSVs_test")
+CSV_FOLDER = os.path.join("/Users/michaelmandiberg/Documents/projects-active/facemap_production/heft_keyword_fusion_clusters/meta_clusters_test_build")
+
 # TENCH UNCOMMENT FOR YOUR COMP:
 CSV_FOLDER = os.path.join(io.ROOT_DBx, "body3D_segmentbig_useall256_CSVs_test")
 
@@ -68,58 +79,76 @@ CSV_FOLDER = os.path.join(io.ROOT_DBx, "body3D_segmentbig_useall256_CSVs_test")
 # io.db["name"] = "ministock"
 
 MODES = ['paris_photo_torso_images_topics', 'paris_photo_torso_videos_topics', '3D_bodies_topics','3D_arms', 'heft_torso_keywords']
-MODE_CHOICE = 3
+MODE_CHOICE = 2
 CURRENT_MODE = MODES[MODE_CHOICE]
+LIMIT = 1000 # this is the limit for the SQL query
 
 # set defaults, including for all modes to False
-FULL_BODY = IS_HAND_POSE_FUSION = ONLY_ONE = GENERATE_FUSION_PAIRS = IS_CLUSTER = IS_ONE_CLUSTER = USE_POSE_CROP_DICT = IS_TOPICS= IS_ONE_TOPIC = USE_AFFECT_GROUPS = False
-EXPAND = ONE_SHOT = JUMP_SHOT = USE_ALL = False
+FULL_BODY = IS_HAND_POSE_FUSION = ONLY_ONE = GENERATE_FUSION_PAIRS = USE_FUSION_PAIR_DICT = IS_CLUSTER = IS_ONE_CLUSTER = USE_POSE_CROP_DICT = IS_TOPICS= IS_ONE_TOPIC = USE_AFFECT_GROUPS = False
+EXPAND = ONE_SHOT = JUMP_SHOT = USE_ALL = CHOP_FIRST = TSP_SORT = False
 USE_PAINTED = OUTPAINT = INPAINT= False
 FUSION_FOLDER = None
 MIN_CYCLE_COUNT = 300
+AUTO_EDGE_CROP = False # this triggers the dynamic cropping based on min_max_body_landmarks_for_crop
 
 image_edge_multiplier = None
 N_TOPICS = 64 # changing this to 14 triggers the affect topic fusion, 100 is keywords. 64 is default
-if CURRENT_MODE == 'paris_photo_torso_images_topics':
-    # controls which type of sorting/column sorted on
-    SORT_TYPE = "planar_hands"
-    image_edge_multiplier = [1.3,2,2.9,2] # portrait crop for paris photo images < Aug 30
-
-elif CURRENT_MODE == 'paris_photo_torso_videos_topics':
-    SORT_TYPE = "128d"
+if "paris" in CURRENT_MODE:
     IS_HAND_POSE_FUSION = True # do we use fusion clusters
     GENERATE_FUSION_PAIRS = False # if true it will query based on MIN_VIDEO_FUSION_COUNT and create pairs
                                     # if false, it will grab the list of pair lists below
-    MIN_VIDEO_FUSION_COUNT = 300
+    USE_FUSION_PAIR_DICT = True
+    FUSION_PAIR_DICT_NAME = "FUSION_PAIR_DICT_TOPICS_64"
+    N_HSV = 0 # don't do HSV clusters
     # this control whether sorting by topics
     # IS_TOPICS = True # if using Clusters only, must set this to False
+    if CURRENT_MODE == 'paris_photo_torso_images_topics':
+        # controls which type of sorting/column sorted on
+        SORT_TYPE = "planar_hands"
+        image_edge_multiplier = [1.3,2,2.9,2] # portrait crop for paris photo images < Aug 30
 
-    JUMP_SHOT = True # jump to random file if can't find a run (I don't think this applies to planar?)
+    elif CURRENT_MODE == 'paris_photo_torso_videos_topics':
+        SORT_TYPE = "128d"
+        MIN_VIDEO_FUSION_COUNT = 300
 
-    # initializing default square crop
-    # if this is defined, then it will not call min_max_body_landmarks_for_crop
-    image_edge_multiplier = [1.3,1.85,2.4,1.85] # tighter square crop for paris photo videos < Oct 29 FINAL VERSION NOV 2024 DO NOT CHANGE
+        JUMP_SHOT = True # jump to random file if can't find a run (I don't think this applies to planar?)
 
-    USE_PAINTED = False
-    INPAINT= True
-    INPAINT_COLOR = None # "white" or "black" or None (none means generative inpainting with size limits)
+        # initializing default square crop
+        # if this is defined, then it will not call min_max_body_landmarks_for_crop
+        image_edge_multiplier = [1.3,1.85,2.4,1.85] # tighter square crop for paris photo videos < Oct 29 FINAL VERSION NOV 2024 DO NOT CHANGE
 
-    # when doing IS_HAND_POSE_FUSION code currently only supports one topic at a time
-    IS_ONE_TOPIC = True
-    TOPIC_NO = [32] # if doing an affect topic fusion, this is the wrapper topic
-    print(f"doing {CURRENT_MODE}: SORT_TYPE {SORT_TYPE}, IS_HAND_POSE_FUSION {IS_HAND_POSE_FUSION}, GENERATE_FUSION_PAIRS {GENERATE_FUSION_PAIRS}, MIN_VIDEO_FUSION_COUNT {MIN_VIDEO_FUSION_COUNT}, IS_TOPICS {IS_TOPICS}, IS_ONE_TOPIC {IS_ONE_TOPIC}, TOPIC_NO {TOPIC_NO}, USE_AFFECT_GROUPS {USE_AFFECT_GROUPS}")
+        USE_PAINTED = False
+        INPAINT= True
+        INPAINT_COLOR = None # "white" or "black" or None (none means generative inpainting with size limits)
+
+        # when doing IS_HAND_POSE_FUSION code currently only supports one topic at a time
+        IS_ONE_TOPIC = True
+        TOPIC_NO = [32] # if doing an affect topic fusion, this is the wrapper topic
 elif "3D" in CURRENT_MODE:
     if CURRENT_MODE == '3D_bodies_topics':
         SORT_TYPE = "body3D"
         FULL_BODY = True # this requires is_feet
+        EXPAND = True # expand with white for prints, as opposed to inpaint and crop. (not video, which is controlled by INPAINT_COLOR) 
     elif CURRENT_MODE == '3D_arms':
-        SORT_TYPE = "arms3D"
+        # SORT_TYPE = "arms3D"
+        SORT_TYPE = "body3D"
         FULL_BODY = False 
+        # either AUTO_EDGE_CROP or image_edge_multiplier must be set. Not both
+        AUTO_EDGE_CROP = True # this triggers the dynamic cropping based on min_max_body_landmarks_for_crop
+        if AUTO_EDGE_CROP:
+            EXPAND = True
+        else:
+            image_edge_multiplier = [1.3,2,2.9,2] # portrait crop for paris photo images < Aug 30
+
+    SegmentTable_name = 'SegmentBig_isface'
     ONLY_ONE = False # only one cluster, or False for video fusion, this_cluster = [CLUSTER_NO, HAND_POSE_NO]
     USE_POSE_CROP_DICT = False
+    # GENERATE_FUSION_PAIRS = True # if true it will query based on MIN_VIDEO_FUSION_COUNT and create pairs
+    USE_FUSION_PAIR_DICT = True
+    FUSION_PAIR_DICT_NAME = "FUSION_PAIR_DICT_TOPICS_64"
 
+    CHOP_FIRST = True
     ONE_SHOT = True # take all files, based off the very first sort order.
-    EXPAND = True # expand with white for prints, as opposed to inpaint and crop. (not video, which is controlled by INPAINT_COLOR) 
     USE_ALL = True # this is for outputting all images from a oneshot, forces ONE_SHOT, skips face comparison
 
     INPAINT_COLOR = "white" # "white" or "black" or None (none means generative inpainting with size limits)
@@ -133,25 +162,41 @@ elif "3D" in CURRENT_MODE:
     START_CLUSTER = 0
 
 elif CURRENT_MODE == 'heft_torso_keywords':
-    SegmentTable_name = 'SegmentOct20'
-    SORT_TYPE = "planar_hands"
-    # SORT_TYPE = "arms3D"
+    # SegmentTable_name = 'SegmentOct20'
+    SegmentTable_name = 'SegmentBig_isface'
+    SegmentHelper_name = 'SegmentHelper_sept2025_heft_keywords' # TK revisit this for prodution run
+    # SORT_TYPE = "planar_hands"
+    SORT_TYPE = "arms3D"
+    TESTING = False
     IS_HAND_POSE_FUSION = True # do we use fusion clusters
     GENERATE_FUSION_PAIRS = True # if true it will query based on MIN_VIDEO_FUSION_COUNT and create pairs
                                     # if false, it will grab the list of pair lists below
-    MIN_VIDEO_FUSION_COUNT = 300
-    MIN_CYCLE_COUNT = 300
+    USE_FUSION_PAIR_DICT = True
+    FUSION_PAIR_DICT_NAME = "FUSION_PAIR_DICT_KEYWORDS_512"
+    # N_HSV = 16
+    N_HSV = 0 # don't do HSV clusters
+    
+    # TSP_SORT = True
+    # CHOP_FIRST = True
+    # if TESTING: IS_HAND_POSE_FUSION = GENERATE_FUSION_PAIRS = False
+    MIN_VIDEO_FUSION_COUNT = 1300 # this is the cut off for the CSV fusion pairs
+    MIN_CYCLE_COUNT = 1000 # this is the cut off for the SQL query results
+
+    MIN_VIDEO_FUSION_COUNT = 400 # this is the cut off for the CSV fusion pairs
+    MIN_CYCLE_COUNT = 300 # this is the cut off for the SQL query results
 
     # this control whether sorting by topics
     # IS_TOPICS = True # if using Clusters only, must set this to False
 
-    ONE_SHOT = False # take all files, based off the very first sort order.
+    ONE_SHOT = True # take all files, based off the very first sort order.
     JUMP_SHOT = True # jump to random file if can't find a run (I don't think this applies to planar?)
 
     # initializing default square crop
     # if this is defined, then it will not call min_max_body_landmarks_for_crop
     # image_edge_multiplier = [1.3,1.85,2.4,1.85] # tighter square crop for paris photo videos < Oct 29 FINAL VERSION NOV 2024 DO NOT CHANGE
     image_edge_multiplier = [1.3,2,2.9,2] # portrait crop for paris photo images < Aug 30
+
+    USE_ALL = True # turns off face xyz and mouthgap filters && if SORT_TYPE == "planar_hands" forces ONE_SHOT
 
     USE_PAINTED = False
     INPAINT= True
@@ -160,11 +205,10 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     # when doing IS_HAND_POSE_FUSION code currently only supports one topic at a time
     IS_ONE_TOPIC = True
     N_TOPICS = 100
-    TOPIC_NO = [23084] # if doing an affect topic fusion, this is the wrapper topic
-    FUSION_FOLDER = "utilities/data/heft_keyword_fusion_clusters"
-    CSV_FOLDER = os.path.join("/Users/michaelmandiberg/Documents/projects-active/facemap_production/heft_keyword_fusion_clusters/banner_planar")
+    TOPIC_NO = [22411] # if doing an affect topic fusion, this is the wrapper topic
+    FUSION_FOLDER = "utilities/data/heft_keyword_fusion_clusters_hsv_meta"
+    CSV_FOLDER = os.path.join("/Users/michaelmandiberg/Documents/projects-active/facemap_production/heft_keyword_fusion_clusters/meta_clusters_fusion_build/")
 
-    print(f"doing {CURRENT_MODE}: SORT_TYPE {SORT_TYPE}, IS_HAND_POSE_FUSION {IS_HAND_POSE_FUSION}, GENERATE_FUSION_PAIRS {GENERATE_FUSION_PAIRS}, MIN_VIDEO_FUSION_COUNT {MIN_VIDEO_FUSION_COUNT}, IS_TOPICS {IS_TOPICS}, IS_ONE_TOPIC {IS_ONE_TOPIC}, TOPIC_NO {TOPIC_NO}, USE_AFFECT_GROUPS {USE_AFFECT_GROUPS}")
 else:
     print("unknown mode, exiting")
     pass
@@ -172,6 +216,8 @@ else:
     # SORT_TYPE = "planar_body"
     # SORT_TYPE = "fingertips_positions"
     USE_AFFECT_GROUPS = False
+
+print(f"doing {CURRENT_MODE}: SORT_TYPE {SORT_TYPE}, IS_HAND_POSE_FUSION {IS_HAND_POSE_FUSION}, GENERATE_FUSION_PAIRS {GENERATE_FUSION_PAIRS}, MIN_VIDEO_FUSION_COUNT {MIN_VIDEO_FUSION_COUNT}, IS_TOPICS {IS_TOPICS}, IS_ONE_TOPIC {IS_ONE_TOPIC}, TOPIC_NO {TOPIC_NO}, USE_AFFECT_GROUPS {USE_AFFECT_GROUPS}")
 
 if USE_AFFECT_GROUPS:
     # groupings of affect topics
@@ -195,10 +241,6 @@ HSV_NORMS = {"LUM": .01, "SAT": 1,  "HUE": 0.002777777778, "VAL": 1}
 VISIBLE_HAND_LEFT = False
 VISIBLE_HAND_RIGHT = False
 USE_NOSEBRIDGE = True 
-TSP_SORT=False
-# this is for controlling if it is using
-# all clusters, 
-LIMIT = 100000 # this is the limit for the SQL query
 
 # this is set dynamically based on SORT_TYPE set above
 if IS_HAND_POSE_FUSION:
@@ -218,9 +260,13 @@ if IS_HAND_POSE_FUSION:
         CLUSTER_TYPE_2 = "HandsGestures"
     elif SORT_TYPE == "arms3D":
         # if fusion, select on arms3D and gesture, sort on hands positions
-        SORT_TYPE = "planar_hands"
-        CLUSTER_TYPE = "ArmsPoses3D"
-        CLUSTER_TYPE_2 = "HandsGestures"
+        SORT_TYPE = "arms3D"
+        CLUSTER_TYPE = "MetaBodyPoses3D"
+        # CLUSTER_TYPE_2 = "HandsGestures" # commenting this out for now TK
+        CLUSTER_TYPE_2 = None
+        # if TESTING:
+        #     CLUSTER_TYPE = "BodyPoses3D"
+        #     CLUSTER_TYPE_2 = None
     # CLUSTER_TYPE is passed to sort. below
 else:
     if SORT_TYPE == "arms3D":
@@ -238,14 +284,6 @@ else:
 print(f"SORT_TYPE {SORT_TYPE}, CLUSTER_TYPE {CLUSTER_TYPE}, CLUSTER_TYPE_2 {CLUSTER_TYPE_2}")
 DROP_LOW_VIS = False
 USE_HEAD_POSE = False
-N_HANDS = N_CLUSTERS = None # declared here, but set in the SQL query below
-
-# I started to create a separate track for Hands, but am pausing for the moment
-IS_HANDS = False
-IS_ONE_HAND = False
-HAND_POSE_NO = 0
-
-# 80,74 fails between 300-400
 
 # cut the kids
 NO_KIDS = True
@@ -313,9 +351,78 @@ PHONE_BBOX_LIMITS = [0] # this is an attempt to control the BBOX placement. I do
 #     PHONE_BBOX_LIMITS = None
 #     ONE_SHOT = True
 
+
+KEYWORD_DICT = {
+    22411: {"label":"phone", "OR":[22101,444,22191,16045,11549,133300,133777], "AND":[], "NOT":[]},
+    22412: {"label":"money", "OR":[23029,25287,133768,24593], "AND":[], "NOT":[]},
+    22412.24705: {"label":"money AND dollars", "OR":[23029,25287,133768,24593], "AND":[24705,25155], "NOT":[]},
+    26270: {"label":"money AND euros", "OR":[23029,25287,133768,24593], "AND":[22412], "NOT":[]},
+    5310: {"label":"gun", "OR":[], "AND":[], "NOT":[184]},
+
+}
+
+
+FUSION_PAIR_DICT_TOPICS_64 = {
+    32: [[13, 109], [13, 24], [13, 85]]
+}
+
+FUSION_PAIR_DICT_3DBODIES_TOPICS_512 = {
+    220: [[101, 0], [124, 0], [184, 0], [216, 0], [302, 0], [448, 0], [457,0]]
+}
+FUSION_PAIR_DICT_KEYWORDS_512 = {
+    220: [[101, 0], [124, 0], [184, 0], [216, 0], [302, 0], [448, 0], [457,0]],
+    553: [[216, 0], [230, 0], [89,0]],
+    807: [[140, 0], [168, 0], [216, 0], [273, 0], [63,0]],
+    827: [[191, 0], [229, 0], [322, 0], [340, 0], [396, 0], [423, 0], [447, 0], [448, 0], [51,0]],
+    1070: [[122, 0], [14, 0], [22, 0], [342, 0], [391, 0], [53,0]],
+    1644: [[158, 0], [161, 0], [345,0]],
+    5310: [[180, 0], [245, 0], [265, 0], [315, 0], [324, 0], [445, 0], [451, 0], [476, 0], [498,0]],
+    22269: [[351, 0], [449, 0], [53,0]],
+    22411: [[158, 0], [240, 0], [304, 0], [306, 0], [342, 0], [391, 0], [40, 0], [423, 0], [449,0]],
+    22412: [[89, 0], [101, 0], [140, 0], [184, 0], [273, 0], [391, 0], [396, 0], [426, 0], [430, 0], [446, 0], [449, 0], [481,0]]
+}
+
+
+ALL_FUSION_PAIRS_DICTS = {
+    "FUSION_PAIR_DICT_TOPICS_64": FUSION_PAIR_DICT_TOPICS_64,
+    "FUSION_PAIR_DICT_KEYWORDS_512": FUSION_PAIR_DICT_KEYWORDS_512,
+    "FUSION_PAIR_DICT_3DBODIES_TOPICS_512": FUSION_PAIR_DICT_3DBODIES_TOPICS_512
+    }
+if USE_FUSION_PAIR_DICT:
+    #set the actual dict from the name
+    FUSION_PAIR_DICT = ALL_FUSION_PAIRS_DICTS[FUSION_PAIR_DICT_NAME]
+
+
 if not GENERATE_FUSION_PAIRS:
-    print("not generating FUSION_PAIRS, pulling from list")
+    # from 512 testing
+    # print("not generating FUSION_PAIRS, pulling from list")
+    # FUSION_PAIR_DICT = {
+    #     220: [[101, 0], [124, 0], [184, 0], [216, 0], [302, 0], [448, 0], [457,0]],
+    #     553: [[216, 0], [230, 0], [89,0]],
+    #     807: [[140, 0], [168, 0], [216, 0], [273, 0], [63,0]],
+    #     827: [[191, 0], [229, 0], [322, 0], [340, 0], [396, 0], [423, 0], [447, 0], [448, 0], [51,0]],
+    #     1070: [[122, 0], [14, 0], [22, 0], [342, 0], [391, 0], [53,0]],
+    #     1644: [[158, 0], [161, 0], [345,0]],
+    #     5310: [[180, 0], [245, 0], [265, 0], [315, 0], [324, 0], [445, 0], [451, 0], [476, 0], [498,0]],
+    #     22269: [[351, 0], [449, 0], [53,0]],
+    #     22411: [[158, 0], [240, 0], [304, 0], [306, 0], [342, 0], [391, 0], [40, 0], [423, 0], [449,0]],
+    #     22412: [[89, 0], [101, 0], [140, 0], [184, 0], [273, 0], [391, 0], [396, 0], [426, 0], [430, 0], [446, 0], [449, 0], [481,0]]
+    # }
+
+    # meta clusters testing oct 11
+    # print("not generating FUSION_PAIRS, pulling from list")
+    # FUSION_PAIR_DICT = {
+    #     22412: [[1,0], [2,0], [3,0], [4,0], [5,0], [6,0], [7,0], [8,0], [9,0], [10,0], [11,0], [12,0], [13,0], [14,0], [15,0], [16,0], [17,0], [18,0], [19,0], [20,0], [21,0], [22,0], [23,0], [24,0], [25,0], [26,0], [27,0], [28,0], [29,0], [30,0], [31,0], [32,0]],
+    # }
+
     FUSION_PAIRS = [
+
+        # Sept 2025 kludge
+        # [198, 0], [206, 0], [208, 0], [215, 0], [216, 0], [219, 0], [220, 0], [229, 0], [234, 0], [240, 0], [244, 0], [250, 0], [257, 0], [264, 0], [265, 0], [273, 0], [277, 0], [279, 0], [288, 0], [302, 0], [304, 0], [305, 0], [306, 0], [316, 0], [317, 0], [322, 0], [324, 0], [331, 0], [340, 0], [342, 0], [351, 0], [352, 0], [364, 0], [370, 0], [390, 0], [391, 0], [396, 0], [412, 0], [422, 0], [423, 0], [425, 0], [426, 0], [445, 0], [446, 0], [448, 0], [449, 0], [457, 0], [464, 0], [470, 0], [472, 0], [476, 0], [479, 0], [481, 0], [482, 0], [485, 0], [487, 0], [498, 0], [500, 0], [507, 0]
+
+        # Sept 2025, keyword money
+        # [89, 0], [101, 0], [140, 0], [184, 0], [273, 0], [391, 0], [396, 0], [426, 0], [430, 0], [446, 0], [449, 0], [481]
+
         #CLUSTER_NO, HAND_POSE_NO
 
         # T0 sports
@@ -431,7 +538,7 @@ if not GENERATE_FUSION_PAIRS:
 
         # topic 32, T64, ihp128 -- REWORK TESTING SEPT 13 2025
         # hands over face
-        [1, 65], [1, 88], [1, 125] 
+        # [1, 65], [1, 88], [1, 125] 
      
         # # topic 32, T64, ihp128
         # # hands over face
@@ -513,7 +620,8 @@ elif IS_SEGONLY and io.platform == "darwin":
     if SegmentHelper_name is None:
         pass
     elif PHONE_BBOX_LIMITS:
-        WHERE += " AND s.face_x > -50 "
+        pass
+        # WHERE += " AND s.face_x > -50 "
     else:
         WHERE += " AND s.face_x > -33 AND s.face_x < -27 AND s.face_y > -2 AND s.face_y < 2 AND s.face_z > -2 AND s.face_z < 2"
 # OVERRIDE FOR TESTING
@@ -549,8 +657,20 @@ elif IS_SEGONLY and io.platform == "darwin":
             SELECT += ", it.topic_score" # add description here, after resegmenting
 
     if IS_HAND_POSE_FUSION:
-        FROM += f" JOIN Images{CLUSTER_TYPE} ihp ON s.image_id = ihp.image_id "
-        FROM += f" JOIN Images{CLUSTER_TYPE_2} ih ON s.image_id = ih.image_id "
+        # handle META situation, where arms3D needs to look for meta clusters
+        if SORT_TYPE == "arms3D": 
+            cluster_table = f"ImagesBodyPoses3D"
+            # ihp as ClustersMetaBodyPoses3D - selecting the meta clusters id below
+            # join Segment to ImagesBodyPoses3D
+            # join ImagesBodyPoses3D to ClustersMetaBodyPoses3D
+
+            # FROM += f" JOIN ClustersMetaBodyPoses3D ihp ON s.image_id = ihp.image_id "    
+            FROM += f" JOIN ImagesBodyPoses3D ihp ON s.image_id = ihp.image_id "
+            FROM += f" JOIN ClustersMetaBodyPoses3D cmp ON ihp.cluster_id = cmp.cluster_id "
+        else: 
+            cluster_table = f"Images{CLUSTER_TYPE}"
+            FROM += f" JOIN {cluster_table} ihp ON s.image_id = ihp.image_id "
+        if CLUSTER_TYPE_2: FROM += f" JOIN Images{CLUSTER_TYPE_2} ih ON s.image_id = ih.image_id "
         # WHERE += " AND ihp.cluster_dist < 2.5" # isn't really working how I want it
         if IS_HAND_POSE_FUSION: add_topic_select()
     elif IS_ONE_CLUSTER and IS_ONE_TOPIC:
@@ -838,6 +958,11 @@ if not io.IS_TENCH:
         image_id = Column(Integer, ForeignKey(Images.image_id, ondelete="CASCADE"), primary_key=True)
         cluster_id = Column(Integer, ForeignKey(f'{ClustersTable_name}.cluster_id', ondelete="CASCADE"))
 
+    class IsNotDupeOf(Base):
+        __tablename__ = 'IsNotDupeOf'
+        image_id_i = Column(Integer, ForeignKey('Images.image_id'), primary_key=True)
+        image_id_j = Column(Integer, ForeignKey('Encodings.encoding_id'), primary_key=True)
+
     # not currently in use
     if IS_HAND_POSE_FUSION and CLUSTER_TYPE_2:
         ClustersTable_name_2 = CLUSTER_TYPE_2
@@ -872,8 +997,8 @@ if not io.IS_TENCH:
         cluster_medians, N_CLUSTERS = sort.prep_cluster_medians(results)
         sort.cluster_medians = cluster_medians
         # if any of the cluster_medians are empty, then we need to resegment
-        print("cluster results", len(results))
-        print("cluster_medians", len(cluster_medians))
+        # print("cluster results", len(results))
+        # print("cluster_medians", len(cluster_medians))
         if cluster_medians is None:
         # if not any(cluster_medians):
             print("cluster results are empty", cluster_medians)
@@ -914,39 +1039,84 @@ if not io.IS_TENCH:
     # SQL  FUNCTIONS  #
     ###################
 
-    def selectSQL(cluster_no=None, topic_no=None):
+    def selectSQL(cluster_no=None, topic_no=None, hsv_cluster=None):
         global SELECT, FROM, WHERE, LIMIT, WrapperTopicTable
-        from_affect = where_affect = ""
-        def cluster_topic_select(cluster_topic_table, cluster_topic_no):
-            if isinstance(cluster_topic_no, list):
-                # Convert the list into a comma-separated string
-                cluster_topic_ids = ', '.join(map(str, cluster_topic_no))
-                # Use the IN operator to check if topic_id is in the list of values
-                return f"AND {cluster_topic_table} IN ({cluster_topic_ids}) "
-            else:
-                # If topic_no is not a list, simply check for equality
-                return f"AND {cluster_topic_table} = {str(cluster_topic_no)} "            
+        local_where = WHERE
+        from_affect = where_affect = from_hsv = where_hsv = " "
+        cluster_dict_AND = cluster_dict_NOT = None
 
-        cluster = " "
-        print(f"cluster_no is {cluster_no} and topic_no is {topic_no}")
+        def is_query_list_string(topic_no, inclusion=True):
+            if inclusion:
+                list_comparison = "IN"
+                int_comparison = "="
+            else:
+                list_comparison = "NOT IN"
+                int_comparison = "!="
+
+            if isinstance(topic_no, list):
+                # Convert the list into a comma-separated string
+                topic_ids = ', '.join(map(str, topic_no))
+                query_string = f" {list_comparison} ({topic_ids})"
+            else:
+                query_string = f" {int_comparison} {str(topic_no)}"
+            return query_string
+
+        def access_keyword_dict(cluster_topic_no):
+            # check if the topic_no has related keywords in the KEYWORD_DICT
+            cluster_topic_no = int(math.floor(float(cluster_topic_no)))
+            cluster_dict_values = KEYWORD_DICT.get(cluster_topic_no, None)
+            if cluster_dict_values is not None:
+                cluster_topic_OR = cluster_dict_values.get("OR", None)
+                cluster_dict_AND = cluster_dict_values.get("AND", None)
+                cluster_dict_NOT = cluster_dict_values.get("NOT", None)
+                # merge the OR values and the cluster_topic_no
+                if cluster_topic_OR is not None:
+                    cluster_topic_OR.append(cluster_topic_no)
+                    cluster_topic_no = cluster_topic_OR
+                # AND and NOT will be handled below
+            return cluster_topic_no, cluster_dict_AND, cluster_dict_NOT
+
+        def cluster_topic_select(cluster_topic_table, cluster_topic_no):
+            # convert topic_no to a query string
+            IN_or_equal_query_string = is_query_list_string(cluster_topic_no)
+            cluster = f"AND {cluster_topic_table} {IN_or_equal_query_string} "
+            return cluster
+            # if isinstance(cluster_topic_no, list):
+            #     # Convert the list into a comma-separated string
+            #     cluster_topic_ids = ', '.join(map(str, cluster_topic_no))
+            #     # Use the IN operator to check if topic_id is in the list of values
+            #     return f"AND {cluster_topic_table} IN ({cluster_topic_ids}) "
+            # else:
+            #     # If topic_no is not a list, simply check for equality
+            #     return f"AND {cluster_topic_table} = {str(cluster_topic_no)} "            
+
+        def handle_hsv_cluster_lists(cluster_topic_no, hsv_cluster):
+            if isinstance(hsv_cluster, list) and hsv_cluster[0] == cluster_topic_no:
+                # cluster_topic_no is a list that contains [metacluster, hsv]
+                # remove the hsv from the list for passing into select_map_images
+                hsv_cluster = hsv_cluster[1]
+            return hsv_cluster
+
+        cluster = " " #declare as empty string
+        print(f"[selectSQL] cluster_no {cluster_no} and topic_no {topic_no} and hsv_cluster {hsv_cluster}")
+        # handle the case where hsv_cluster is passed in as part of a list with cluster_no
+        if hsv_cluster and isinstance(hsv_cluster, list) and len(hsv_cluster) == 2:
+            hsv_cluster = handle_hsv_cluster_lists(cluster_no, hsv_cluster)
+            print(f"after handling hsv, cluster_no {cluster_no} and hsv_cluster {hsv_cluster}")
+            
         if IS_HAND_POSE_FUSION:
             if isinstance(cluster_no, list):
                 print("cluster_no is a list", cluster_no)
+                # set target column based on SORT_TYPE, arms3D means we have a meta_cluster_id
+                if SORT_TYPE == "arms3D": cluster_target_col = "cmp.meta_cluster_id"
+                else: cluster_target_col = "ihp.cluster_id"
+
                 # we have two values, C1 and C2. C1 should be IHP, C2 should be IH
-                cluster += f" AND ihp.cluster_id = {str(cluster_no[0])} "            
-                cluster += f" AND ih.cluster_id = {str(cluster_no[1])} "            
+                cluster += f" AND {cluster_target_col} = {str(cluster_no[0])} "            
+                if cluster_no[1]: cluster += f" AND ih.cluster_id = {str(cluster_no[1])} "            
         # elif cluster_no is not None or topic_no is not None:
         elif IS_CLUSTER or IS_ONE_CLUSTER:
             cluster += cluster_topic_select("ic.cluster_id", cluster_no)
-            # cluster +=f"AND ic.cluster_id = {str(cluster_no)} "
-            # if isinstance(topic_no, list):
-            #     # Convert the list into a comma-separated string
-            #     topic_ids = ', '.join(map(str, cluster_no))
-            #     # Use the IN operator to check if topic_id is in the list of values
-            #     cluster += f"AND ic.cluster_id IN ({topic_ids}) "
-            # else:
-            #     # If topic_no is not a list, simply check for equality
-            #     if IS_ONE_TOPIC: cluster += f"AND ic.cluster_id = {str(cluster_no)} "            
         if IS_TOPICS or IS_ONE_TOPIC:
             if IS_TOPICS and IS_ONE_TOPIC and USE_AFFECT_GROUPS and WrapperTopicTable is not None:
 
@@ -954,18 +1124,39 @@ if not io.IS_TENCH:
                 from_affect = f" JOIN {WrapperTopicTable} iwt ON s.image_id = iwt.image_id "
                 where_affect = f" AND iwt.topic_id = {TOPIC_NO[0]} AND iwt.topic_score > .3"
             # cluster +=f"AND it.topic_id = {str(topic_no)} "
-            if isinstance(topic_no, list):
-                if N_TOPICS == 100: this_id = "keyword_id"
-                else: this_id = "topic_id"
-                # Convert the list into a comma-separated string
-                topic_ids = ', '.join(map(str, topic_no))
-                # Use the IN operator to check if topic_id is in the list of values
-                cluster += f"AND it.{this_id} IN ({topic_ids}) "
-            elif topic_no is not None:
-                # If topic_no is not a list, simply check for equality
-                cluster += f"AND it.{this_id} = {str(topic_no)} "
-        # print(f"cluster SELECT is {cluster}")
-        selectsql = f"SELECT {SELECT} FROM {FROM + from_affect} WHERE {WHERE + where_affect} {cluster} LIMIT {str(LIMIT)};"
+            if N_TOPICS == 100: 
+                this_id = "keyword_id"
+                # check if the topic_no has related keywords in the KEYWORD_DICT
+                # if it doesn't, it just returns the same topic_no
+                topic_no, cluster_dict_AND, cluster_dict_NOT = access_keyword_dict(topic_no)
+                print(f"after accessing keyword dict, topic_no is {topic_no}")
+            else: 
+                this_id = "topic_id"
+
+            # convert topic_no to a query string
+            IN_or_equal_topic_ids_string = is_query_list_string(topic_no)
+            cluster += f"AND it.{this_id} {IN_or_equal_topic_ids_string} "
+
+        if hsv_cluster is not None:
+            IN_or_equal_hsv_string = is_query_list_string(hsv_cluster)
+            where_hsv = f" AND ihsv.cluster_id {IN_or_equal_hsv_string} "
+
+        if len(where_hsv) > 2:
+            # if hsv is not " ", then we need to join the table
+            from_hsv = " JOIN ImagesHSV ihsv ON s.image_id = ihsv.image_id "
+            # set cluster_no here, as it doesn't catch any of the other condtionals. (admittedly messy)
+            local_where += f" AND cmp.meta_cluster_id = {str(cluster_no)} "
+
+        if bool(cluster_dict_AND):
+            IN_or_equal_hsv_string = is_query_list_string(cluster_dict_AND)
+            cluster +=  f" AND it.{this_id} {IN_or_equal_hsv_string} "
+        if bool(cluster_dict_NOT):
+            IN_or_equal_hsv_string = is_query_list_string(cluster_dict_NOT, inclusion=False)
+            cluster +=  f" AND it.{this_id} {IN_or_equal_hsv_string} "
+
+        print(f"cluster SELECT is {cluster}")
+
+        selectsql = f"SELECT {SELECT} FROM {FROM + from_affect + from_hsv} WHERE {local_where + where_affect + where_hsv} {cluster} LIMIT {str(LIMIT)};"
         print("actual SELECT is: ",selectsql)
         result = engine.connect().execute(text(selectsql))
         resultsjson = ([dict(row) for row in result.mappings()])
@@ -1066,50 +1257,91 @@ def sort_by_face_dist_NN(df_enc):
     # print("row from df_enc with image_id = 893")
     # test_row = df_enc.loc[df_enc['image_id'] == 893]
     # print(test_row)    
+    def get_closest_knn_or_break(df_enc, df_sorted):
+        # send in both dfs, and return same dfs with 1+ rows sorted
+        print("BEFORE sort_by_face_dist_NN _ for loop df_enc is", df_enc)
+        is_break = False
+        df_enc, df_sorted = sort.get_closest_df_NN(df_enc, df_sorted)
+
+        print("AFTER sort_by_face_dist_NN _ for loop df_enc is", df_enc)
+        print("AFTER sort_by_face_dist_NN _ for loop df_sorted is", df_sorted)
+
+        # # test to see if body_landmarks for row with image_id = 5251199 still is the same as test_lms
+        # retest_row = df_enc.loc[df_enc['image_id'] == 10498233]
+        # print("body_landmarks for retest_row")
+        # retest_lms = retest_row['body_landmarks']
+        # print(retest_lms)
+        # calculate any different between test_lms to retest_lms
+
+
+        # Break out of the loop if greater than MAXDIST
+        if df_enc.empty:
+            is_break = True            
+        elif ONE_SHOT:
+            df_sorted = pd.concat([df_sorted, df_enc])
+            # only return the first x rows
+            df_sorted = df_sorted.head(sort.CUTOFF)
+            print("one shot, breaking out", df_sorted)
+            is_break = True
+        # commenting out SHOT_CLOCK for now, Sept 28
+        # elif dist > sort.MAXD and sort.SHOT_CLOCK != 0:
+        else:
+            print("df_sorted.iloc[-1], " , df_sorted.iloc[-1])
+            dist = df_sorted.iloc[-1]['dist_enc1']
+            print("sort_by_face_dist_NN _ for loop dist is", dist)
+            if dist > sort.MAXD or df_enc.empty:
+                print("should breakout, dist is", dist)
+                is_break = True
+        return df_enc, df_sorted, is_break
+
+    if CHOP_FIRST:
+        print(f"CHOP_FIRST is true with sort.counter_dict['start_img_name'], {sort.counter_dict['start_img_name']}")
+        if sort.counter_dict["start_img_name"] is None:
+            sort.counter_dict["start_img_name"] = start_img_name
+        print(f"CHOP_FIRST is true with sort.counter_dict['start_img_name'], {sort.counter_dict['start_img_name']}")
+
+        df_enc, df_sorted, is_break = get_closest_knn_or_break(df_enc, df_sorted)
+        df_enc = df_sorted.head(sort.CUTOFF)
+        print("AFTER CHOP_FIRST df_enc is", df_enc)
+        print("AFTER CHOP_FIRST df_sorted is", df_sorted)
+
 
     ## SATYAM THIS IS WHAT WILL BE REPLACE BY TSP
     if TSP_SORT is True:
-        df_clean=expand_face_encodings(df_enc)
-        sort.set_TSP_sort(df_clean,START_IDX=None,END_IDX=None)
-        # df_sorted = sort.get_closest_df_NN(df_enc, df_sorted, start_image_id, end_image_id)
-        df_sorted=sort.do_TSP_SORT(df_enc)
+        
+
+        # # Option 1: Work entirely with expanded dataframe
+        # df_clean = expand_face_encodings(df_enc)
+        # sorter.set_TSP_sort(df_clean, START_IDX=None, END_IDX=None)
+        # df_sorted = sorter.do_TSP_SORT(df_clean)  # Same df!
+
+        # Option 2: If you need to maintain link to original df_enc
+        # You'll need to track the mapping yourself
+        df_clean = expand_face_encodings(df_enc)
+        df_clean['original_index'] = df_clean.index  # or however they map
+
+        sorter.set_TSP_sort(df_clean, START_IDX=None, END_IDX=None)
+        df_sorted_clean = sorter.do_TSP_SORT(df_clean)
+
+        # Then map back if needed
+        df_sorted = df_enc.iloc[df_sorted_clean['original_index']].reset_index(drop=True)
+
+        # # Prepare and sort
+        # df_clean = expand_face_encodings(df_enc)
+        # sorter.set_TSP_sort(df_clean, START_IDX=None, END_IDX=None)
+        # df_sorted = sorter.do_TSP_SORT(df_enc)
+
+        # df_clean=expand_face_encodings(df_enc)
+        # sort.set_TSP_sort(df_clean,START_IDX=None,END_IDX=None)
+        # # df_sorted = sort.get_closest_df_NN(df_enc, df_sorted, start_image_id, end_image_id)
+        # df_sorted=sort.do_TSP_SORT(df_enc)
     else:
         for i in range(itters):
             # print("sort_by_face_dist_NN _ for loop itters i is", i)
             ## Find closest
             try:
-                # send in both dfs, and return same dfs with 1+ rows sorted
-                print("BEFORE sort_by_face_dist_NN _ for loop df_enc is", df_enc)
-
-                df_enc, df_sorted = sort.get_closest_df_NN(df_enc, df_sorted)
-        
-                print("AFTER sort_by_face_dist_NN _ for loop df_enc is", df_enc)
-                print("AFTER sort_by_face_dist_NN _ for loop df_sorted is", df_sorted)
-
-                # # test to see if body_landmarks for row with image_id = 5251199 still is the same as test_lms
-                # retest_row = df_enc.loc[df_enc['image_id'] == 10498233]
-                # print("body_landmarks for retest_row")
-                # retest_lms = retest_row['body_landmarks']
-                # print(retest_lms)
-                # calculate any different between test_lms to retest_lms
-
-                print("df_sorted.iloc[-1], " , df_sorted.iloc[-1])
-                dist = df_sorted.iloc[-1]['dist_enc1']
-                print("sort_by_face_dist_NN _ for loop dist is", dist)
-
-                # Break out of the loop if greater than MAXDIST
-                if ONE_SHOT:
-                    df_sorted = pd.concat([df_sorted, df_enc])
-                    # only return the first x rows
-                    df_sorted = df_sorted.head(sort.CUTOFF)
-                    print("one shot, breaking out", df_sorted)
-                    break
-                # commenting out SHOT_CLOCK for now, Sept 28
-                # elif dist > sort.MAXD and sort.SHOT_CLOCK != 0:
-                elif dist > sort.MAXD or df_enc.empty:
-                    print("should breakout, dist is", dist)
-                    break
-
+                df_enc, df_sorted, is_break = get_closest_knn_or_break(df_enc, df_sorted)
+                if is_break: break
             except Exception as e:
                 print("exception on going to get closest")
                 print(str(e))
@@ -1340,8 +1572,8 @@ def compare_images(last_image, img, face_landmarks_or_df, bbox_or_index):
     if sort.EXPAND:
         cropped_image, resize = sort.expand_image(img, face_landmarks, bbox)
         
-        if FULL_BODY: 
-            # print('running')
+        if FULL_BODY or AUTO_EDGE_CROP: 
+            print('running AUTO_EDGE_CROP')
             cropped_image = sort.auto_edge_crop(df_sorted, index, cropped_image, resize)
         else:   
             # cropp the 25K image back down to 10K
@@ -1828,7 +2060,8 @@ def linear_test_df(df_sorted, itter=None):
             sort.get_image_face_data(img, row['face_landmarks'], row['bbox'])
 
             # control distance 
-            if not TSP_SORT and row['dist'] > sort.MAXD:
+            this_dist = row.get('dist', None)
+            if this_dist is not None and this_dist > sort.MAXD:
                 sort.counter_dict["failed_dist_count"] += 1
                 print("MAXDIST too big:" , str(sort.MAXD))
                 continue
@@ -2019,6 +2252,8 @@ def process_linear(start_img_name, df_segment, file_prefix, sort):
         # df_sorted = sort_by_face_dist(df_enc, df_128_enc, df_33_lms)
 
         # TK this is where i save df_sorted to csv
+        # check to see if CSV_FOLDER exists and create if not
+        if not os.path.exists(CSV_FOLDER): os.makedirs(CSV_FOLDER)
         df_sorted.to_csv(f"{CSV_FOLDER}/df_sorted_{file_prefix}_ct{segment_count}.csv", index=False)
 
         # test to see if they make good faces
@@ -2048,18 +2283,36 @@ def parse_cluster_no(this_cluster):
     print("map_images cluster_no", cluster_no)
     return cluster_no, pose_no
 
-def set_my_counter_dict(this_topic=None, cluster_no=None, pose_no=None, start_img_name=None, start_site_image_id=None):
+def set_my_counter_dict(this_topic=None, cluster_no=None, pose_no=None, hsv_no=None, start_img_name=None, start_site_image_id=None):
     ### Set counter_dict ###
-    cluster_string = const_prefix(this_topic, cluster_no, pose_no)
+    print("set_my_counter_dict this_topic, cluster_no, pose_no, hsv_no, start_img_name, start_site_image_id", this_topic, cluster_no, pose_no, hsv_no, start_img_name, start_site_image_id)
+    cluster_string = const_prefix(this_topic, cluster_no, pose_no, hsv_cluster=hsv_no)
     print("cluster_string", cluster_string)
     sort.set_counters(io.ROOT,cluster_string, start_img_name,start_site_image_id)
 
     if VERBOSE: print("set sort.counter_dict:" )
     if VERBOSE: print(sort.counter_dict)
 
-def const_prefix(this_topic, cluster_no, pose_no):
+def const_prefix(this_topic, cluster_no, pose_no, hsv_cluster=None):
     # topic_string = ''.join([str(x) for x in this_topic]) if this_topic is not None else "None"
-    file_prefix = f"c{cluster_no}_p{pose_no}_t{this_topic[0]}" if this_topic is not None else f"c{cluster_no}_p{pose_no}_tNone"
+    # if topic is a list, then just use the first value
+    if this_topic is not None and isinstance(this_topic, list):
+        if VERBOSE: print("this_topic is a list", this_topic)
+        this_topic = [this_topic[0]]
+
+    file_prefix = f"c{cluster_no}_p{pose_no}_t{this_topic}" if this_topic is not None else f"c{cluster_no}_p{pose_no}_tNone"
+    print("file_prefix before hsv", file_prefix)
+    print("hsv_cluster", hsv_cluster)
+    if hsv_cluster is not None:
+        if isinstance(hsv_cluster, int) or isinstance(hsv_cluster, str):
+            hsv_cluster = str(hsv_cluster)
+        elif isinstance(hsv_cluster[1], list):
+            if VERBOSE: print("hsv_cluster is a list", hsv_cluster)
+            hsv_cluster = '_'.join([str(x) for x in hsv_cluster[1]])
+        file_prefix = f"{file_prefix}_h{hsv_cluster}"
+        print("file_prefix with hsv", file_prefix)
+    else:
+        print("file_prefix without hsv", file_prefix)
     return file_prefix
 
 
@@ -2070,6 +2323,7 @@ def const_prefix(this_topic, cluster_no, pose_no):
 def main():
     # IDK why I need to declare this a global, but it borks otherwise
     global FUSION_PAIRS
+    global FUSION_PAIR_DICT
     def set_multiplier_and_dims(df_segment, cluster_no=None, pose_no=None):
         # if pose_no, overide sort.image_edge_multiplier based on pose_no
         if pose_no is not None and USE_POSE_CROP_DICT:
@@ -2090,7 +2344,7 @@ def main():
 
     # this is the key function, which is called for each cluster
     # or only once if no clusters
-    def map_images(resultsjson, this_cluster=None, this_topic=None):
+    def map_images(resultsjson, this_cluster=None, this_topic=None, this_hsv_cluster=None):
         
         # get cluster and pose from this_cluster
         cluster_no, pose_no = parse_cluster_no(this_cluster)
@@ -2104,8 +2358,6 @@ def main():
         except:
             print('you forgot to change the filename DUH')
         if not df.empty:
-
-
             print("going to get mongo encodings")
             print("size",df.size)
             # use the image_id to query the mongoDB for face_encodings68, face_landmarks, body_landmarks
@@ -2167,8 +2419,8 @@ def main():
 
             set_multiplier_and_dims(df_segment, cluster_no, pose_no)
 
-            ### Set counter_dict ###
-            set_my_counter_dict(this_topic, cluster_no, pose_no, start_img_name, start_site_image_id)
+            ### Set counter_dict with hsv_no=None ###
+            set_my_counter_dict(this_topic, cluster_no, pose_no, None, start_img_name, start_site_image_id)
 
             ### Get cluster_median encodings for cluster_no ###
 
@@ -2216,7 +2468,7 @@ def main():
             else:   
                 # hard coding override to just start from median
                 # sort.counter_dict["start_img_name"] = "median"
-                file_prefix = const_prefix(this_topic, cluster_no, pose_no)
+                file_prefix = const_prefix(this_topic, cluster_no, pose_no, this_hsv_cluster)
                 # build file prefix for cluster, pose, and topic
                 process_linear(start_img_name,df_segment, file_prefix, sort)
         elif df.empty and IS_CLUSTER:
@@ -2228,6 +2480,33 @@ def main():
 
 
     def save_images_from_csv_folder():
+
+        def recheck_is_dupe_of(session, df):
+            '''
+            Query the database to recheck if an image is a duplicate of another.
+            '''
+            if VERBOSE: print("Rechecking is_dupe_of in database for potential duplicates...")
+            print("before dropping", df)
+            image_id_list = df['image_id'].tolist()
+            query = session.query(Encodings.image_id, Encodings.is_dupe_of).filter(Encodings.image_id.in_(image_id_list), Encodings.is_dupe_of.isnot(None)).all()
+            image_dict = {image.image_id: image.is_dupe_of for image in query}
+            print("image_dict", image_dict)
+            if bool(image_dict):
+                # if there are any values:
+                # TK this needs to be refine when image_dict is not empty
+                df['is_dupe_of'] = df['image_id'].map(image_dict)
+                # Drop rows where is_dupe_of is None
+                df = df.dropna(subset=['is_dupe_of'])
+                print("after dropping", df)
+            return df
+
+        def get_not_dupes_sql(session):
+            # Query the IsNotDupeOf table and return all values as list of tuples
+            query = session.query(IsNotDupeOf.image_id_i, IsNotDupeOf.image_id_j).all()
+            not_dupe_list = {(row.image_id_i, row.image_id_j): True for row in query}
+            return not_dupe_list
+
+
         def load_df_sorted_from_csv(csv_file):
             df = pd.read_csv(csv_file)
             print("df head", df.head())
@@ -2251,7 +2530,7 @@ def main():
             df['bbox_array'] = df['bbox'].apply(lambda x: list(x.values()))            
             df['body_landmarks_normalized_visible'] = df['body_landmarks_normalized'].apply(lambda x: sort.crop_prep(x))
             if VERBOSE: 
-                print("after unpickle_array, first row", df.iloc[0]['body_landmarks_normalized_visible'])
+                # print("after unpickle_array, first row", df.iloc[0]['body_landmarks_normalized_visible'])
                 print("list of columns", df.columns)
                 print(df.iloc[0])
             # conver face_x	face_y	face_z	mouth_gap site_image_id to float
@@ -2261,6 +2540,7 @@ def main():
             return df
         
         def find_parts(parts):
+            if VERBOSE: print("finding parts in", parts)
             cluster_no = pose_no = segment_count = topic_no = None
             for part in parts:
                 if part.startswith("ct"):
@@ -2274,15 +2554,19 @@ def main():
                 elif part.startswith("t"):
                     # Extract topic from the part that starts with "t"
                     # e.g., t3 -> 3
-                    topic = part.split("t")[1]
+                    topic_no = part.split("t")[1]
                 elif part.startswith("c"):
                     # Extract cluster_no from the part that starts with "c"
                     # e.g., c2 -> 2
                     cluster_no = part.split("c")[1]
-            return segment_count, pose_no, topic_no, cluster_no
+                elif part.startswith("h"):
+                    # Extract hsv_no from the part that starts with "h"
+                    # e.g., h2 -> 2
+                    hsv_no = part.split("h")[1]
+            return segment_count, pose_no, topic_no, cluster_no, hsv_no
 
 
-        cluster_no = pose_no = segment_count = this_topic = None
+        cluster_no = pose_no = segment_count = topic_no = hsv_no = None
         # list the files in the the CSV_FOLDER
         files_in_folder = os.listdir(CSV_FOLDER)
         # sort files alphabetically
@@ -2295,15 +2579,15 @@ def main():
                 parts = csv_file.replace(".csv", "").split("_")
                 file_prefix = csv_file.replace("df_sorted_", "").replace(".csv", "")
                 print("file_prefix", file_prefix)
-                
-                segment_count, pose_no, topic_no, cluster_no = find_parts(parts)                
+
+                segment_count, pose_no, topic_no, cluster_no, hsv_no = find_parts(parts)
                 if len(parts) >= 3:
                     # legacy for Tench's older file structure. delete on next file refresh. TK
                     cluster_no = parts[2]
-                print(f"assembling cluster {cluster_no}, topic {topic_no}, pose {pose_no} from csv file: {csv_file}")
+                print(f"assembling cluster {cluster_no}, topic {topic_no}, pose {pose_no}, hsv {hsv_no} from csv file: {csv_file}")
 
                 ### Set counter_dict (without start stuff which is not needed) ###
-                set_my_counter_dict(this_topic, cluster_no, pose_no)
+                set_my_counter_dict(topic_no, cluster_no, pose_no, hsv_no)
                 df_sorted = load_df_sorted_from_csv(os.path.join(CSV_FOLDER, csv_file))
 
 
@@ -2314,8 +2598,19 @@ def main():
                 #Dedupe sorting here!
                 # df_sorted.to_csv(os.path.join(io.ROOT_DBx, f"df_sorted_{cluster_no}_ct{segment_count}_p{pose_no}.csv"), index=False)
                 # df_sorted = df_sorted.head(10)  # Keep only the top entries
-                df_sorted = sort.remove_duplicates(io.folder_list, df_sorted)
-                
+
+
+                # don't pass in session if IS_TENCH
+                if io.IS_TENCH == True: 
+                    not_dupe_list = None
+                else: 
+                    if VERBOSE: print("before recheck_is_dupe_of, df_sorted size", df_sorted.size)
+                    df_sorted = recheck_is_dupe_of(session, df_sorted)  # recheck is_dupe_of from DB to catch any new dupes since CSV was made
+                    if VERBOSE: print("after recheck_is_dupe_of, df_sorted size", df_sorted.size)
+                    not_dupe_list = get_not_dupes_sql(session)  # get list of image_ids that are not dupes
+                    if VERBOSE: print("not_dupe_list size", len(not_dupe_list))
+                df_sorted = sort.remove_duplicates(io.folder_list, df_sorted, not_dupe_list)
+
                 # wrapping the multiplier in a function that sets dims too
                 set_multiplier_and_dims(df_sorted, cluster_no, pose_no)
 
@@ -2324,87 +2619,201 @@ def main():
 
 
 
+    # this is the start of the main part of main()
+
     if MODE == 1:
         print("MODE 1, assembling from CSV_FOLDER", CSV_FOLDER)
         save_images_from_csv_folder()
 
     else:
-        ###          THE MAIN PART OF MAIN()           ###
-        ### QUERY SQL BASED ON CLUSTERS AND MAP_IMAGES ###
- 
-        print("MODE 0 or 2, sorting and saving CSV", CSV_FOLDER)
-        #creating my objects
-        start = time.time()
-
+        # mode zero (and 2, though 2 isn't really functional
         first_loop = this_topic = this_cluster = n_cluster_topics = second_cluster_topic = None
-        # to loop or not to loop that is the cluster
-        print(f"doing {CURRENT_MODE}: SORT_TYPE {SORT_TYPE}, IS_HAND_POSE_FUSION {IS_HAND_POSE_FUSION}, GENERATE_FUSION_PAIRS {GENERATE_FUSION_PAIRS}, MIN_VIDEO_FUSION_COUNT {MIN_VIDEO_FUSION_COUNT}, IS_TOPICS {IS_TOPICS}, IS_ONE_TOPIC {IS_ONE_TOPIC}, TOPIC_NO {TOPIC_NO}, USE_AFFECT_GROUPS {USE_AFFECT_GROUPS}")
-        if IS_HAND_POSE_FUSION or IS_CLUSTER or IS_TOPICS: first_loop = True
-        if VERBOSE: print("first_loop", first_loop)
 
-        if IS_ONE_CLUSTER:
-            print(f"setting SELECT for IS_ONE_CLUSTER {CLUSTER_NO}")
-            this_cluster = CLUSTER_NO
-        if IS_ONE_TOPIC:
-            print(f"setting SELECT for IS_ONE_TOPIC {TOPIC_NO}")
-            this_topic = TOPIC_NO
+        # make a list out of the topic no for looping
+        if FUSION_PAIR_DICT is None:
+            if IS_ONE_TOPIC:
+                if GENERATE_FUSION_PAIRS:
+                    print("doing GENERATE_FUSION_PAIRS and storing in FUSION_PAIR_DICT")
+                    n_cluster_topics = sort.find_sorted_suitable_indices(TOPIC_NO,MIN_VIDEO_FUSION_COUNT,FUSION_FOLDER)
+                    print("fusion_pairs", n_cluster_topics)
+                    if N_HSV > 0:
+                        print("N_HSV > 0, so making FUSION_PAIR_DICT with keyword: [metacluster, hsv] structure")
+                        FUSION_PAIR_DICT = {str(TOPIC_NO[0]): n_cluster_topics}
+                    else:
+                        # this is how it was before. It doesn't make sense to me b/c key is fusion cluster and all have "no_pairs"
+                        FUSION_PAIR_DICT = {str(TOPIC_NO[0]): "no_pairs" for topic in n_cluster_topics}
+                    print("FUSION_PAIR_DICT", FUSION_PAIR_DICT)
+                else:
+                    # doing GENERATE_FUSION_PAIRS where no actual fusion document 
+                    print(f"setting SELECT for IS_ONE_TOPIC {TOPIC_NO}")
+                    this_topic = TOPIC_NO[0] if isinstance(TOPIC_NO, list) else TOPIC_NO
+                    FUSION_PAIR_DICT = {this_topic: "no_pairs"}
 
-        # selectSQL takes a cluster_no and topic_no
-        if IS_HAND_POSE_FUSION and ONLY_ONE:
-            print("IS_HAND_POSE_FUSION is True")
-            # select on both, sort on CLUSTER_NO 
-            # this sends pose and gesture in as a list, and an empty topic
-            this_cluster = [CLUSTER_NO, HAND_POSE_NO]
-        
-        if IS_HAND_POSE_FUSION and not ONLY_ONE:
-            print("doing GENERATE_FUSION_PAIRS")
-            this_topic = TOPIC_NO
-            if GENERATE_FUSION_PAIRS:
-                n_cluster_topics = sort.find_sorted_zero_indices(TOPIC_NO,MIN_VIDEO_FUSION_COUNT,FUSION_FOLDER)
-            else: 
-                n_cluster_topics = FUSION_PAIRS
-            print("fusion_pairs", n_cluster_topics)
-        elif IS_CLUSTER:
-            n_cluster_topics = range(N_CLUSTERS)
-            if IS_ONE_TOPIC: second_cluster_topic = this_topic
-            print(f"IS_CLUSTER is {IS_CLUSTER} with {n_cluster_topics}, and second_cluster_topic {second_cluster_topic}")
-        elif IS_TOPICS:
-            if USE_AFFECT_GROUPS: n_cluster_topics = len(AFFECT_GROUPS_LISTS) # redefine for affect groups
-            else: n_cluster_topics = range(N_TOPICS)
-            if this_cluster is not None: second_cluster_topic = this_cluster
-            # if USE_AFFECT_GROUPS: N_CLUSTERS = len(AFFECT_GROUPS_LISTS) # redefine for affect groups
-            print(f"IS_TOPICS is {IS_TOPICS} with {n_cluster_topics}")
+        # pulls keys from the FUSION_PAIR_DICT, which are the topics/keywords
+        # topic_keyword_list = FUSION_PAIR_DICT.keys()
+        topic_keyword_list = []
+        for key, value in FUSION_PAIR_DICT.items():
+            topic_keyword_list.append(key)
+        print("topic_keyword_list type", type(topic_keyword_list))
+        print("topic_keyword_list[0]", topic_keyword_list[0])
+        for this_topic in topic_keyword_list:
 
-        def select_map_images(this_cluster, this_topic):
-            if VERBOSE: print("select_map_images this_cluster", this_cluster)
-            if VERBOSE: print("select_map_images this_topic", this_topic)
-            resultsjson = selectSQL(this_cluster, this_topic)
-            print("got results, count is: ",len(resultsjson))
-            if len(resultsjson) < MIN_CYCLE_COUNT:
-                print(f"less than {MIN_CYCLE_COUNT} resultsjson, skipping this {this_cluster} and {this_topic}")
-                return
+            ###          THE MAIN PART OF MAIN()           ###
+            ### QUERY SQL BASED ON CLUSTERS AND MAP_IMAGES ###
+    
+            print(f"MODE 0 or 2, for this_topic {this_topic} sorting and saving CSV", CSV_FOLDER)
+            #creating my objects
+            start = time.time()
+
+            # to loop or not to loop that is the cluster
+            print(f"doing {CURRENT_MODE}: SORT_TYPE {SORT_TYPE}, IS_HAND_POSE_FUSION {IS_HAND_POSE_FUSION}, GENERATE_FUSION_PAIRS {GENERATE_FUSION_PAIRS}, MIN_VIDEO_FUSION_COUNT {MIN_VIDEO_FUSION_COUNT}, IS_TOPICS {IS_TOPICS}, IS_ONE_TOPIC {IS_ONE_TOPIC}, this_topic {this_topic}, USE_AFFECT_GROUPS {USE_AFFECT_GROUPS}")
+            if IS_HAND_POSE_FUSION or IS_CLUSTER or IS_TOPICS: first_loop = True
+            if VERBOSE: print("first_loop", first_loop)
+
+            if IS_ONE_CLUSTER:
+                print(f"setting SELECT for IS_ONE_CLUSTER {CLUSTER_NO}")
+                this_cluster = CLUSTER_NO
+
+            # selectSQL takes a cluster_no and this_topic
+            if IS_HAND_POSE_FUSION and ONLY_ONE:
+                print("IS_HAND_POSE_FUSION is True")
+                # select on both, sort on CLUSTER_NO 
+                # this sends pose and gesture in as a list, and an empty topic
+                this_cluster = [CLUSTER_NO, HAND_POSE_NO]
+            
+            if IS_HAND_POSE_FUSION and not ONLY_ONE:
+                # print("IS_HAND_POSE_FUSION and not ONLY_ONE")
+                if GENERATE_FUSION_PAIRS and FUSION_PAIR_DICT is None:
+                    print("FUSION_PAIR_DICT is None so doing GENERATE_FUSION_PAIRS and storing in FUSION_PAIR_DICT")
+                    n_cluster_topics = sort.find_sorted_suitable_indices(this_topic,MIN_VIDEO_FUSION_COUNT,FUSION_FOLDER)
+                elif GENERATE_FUSION_PAIRS and FUSION_PAIR_DICT is not None:
+                    print("FUSION_PAIR_DICT is not None so using existing FUSION_PAIR_DICT")
+                    n_cluster_topics = FUSION_PAIR_DICT[this_topic]
+                    print("set n_cluster_topics from FUSION_PAIR_DICT", n_cluster_topics)
+                elif USE_FUSION_PAIR_DICT:
+                    n_cluster_topics = FUSION_PAIR_DICT[this_topic]
+                else: 
+                    n_cluster_topics = FUSION_PAIRS
+                print("IS_HAND_POSE_FUSION and not ONLY_ONE: fusion_pairs", n_cluster_topics)
+            elif IS_CLUSTER:
+                n_cluster_topics = range(N_CLUSTERS)
+                if IS_ONE_TOPIC: second_cluster_topic = this_topic
+                print(f"IS_CLUSTER is {IS_CLUSTER} with {n_cluster_topics}, and second_cluster_topic {second_cluster_topic}")
+            elif IS_TOPICS:
+                if USE_AFFECT_GROUPS: n_cluster_topics = len(AFFECT_GROUPS_LISTS) # redefine for affect groups
+                else: n_cluster_topics = range(N_TOPICS)
+                if this_cluster is not None: second_cluster_topic = this_cluster
+                # if USE_AFFECT_GROUPS: N_CLUSTERS = len(AFFECT_GROUPS_LISTS) # redefine for affect groups
+                print(f"IS_TOPICS is {IS_TOPICS} with {n_cluster_topics}")
+
+            if N_HSV > 0:
+                n_hsv_clusters = range(1,N_HSV+1)
             else:
-                # folder_name = this_topic[0] if this_topic else this_cluster
-                map_images(resultsjson, this_cluster, this_topic)
+                n_hsv_clusters = [0]
 
-        if first_loop:
-            print("first loop is ", first_loop)
-            for cluster_topic_no in n_cluster_topics:
-                if IS_CLUSTER and cluster_topic_no < START_CLUSTER:continue
-                if USE_AFFECT_GROUPS: cluster_topic_no = AFFECT_GROUPS_LISTS[cluster_topic_no] # redefine cluster_no with affect group list
-                print(f"SELECTing cluster_topic {cluster_topic_no} of {n_cluster_topics}")
-                if IS_TOPICS and not IS_HAND_POSE_FUSION: select_map_images(second_cluster_topic, cluster_topic_no)
-                elif IS_CLUSTER: select_map_images(cluster_topic_no, second_cluster_topic)
-                elif IS_HAND_POSE_FUSION: select_map_images(cluster_topic_no,this_topic)
-                # resultsjson = selectSQL(select_list)
-                # map_images(resultsjson, cluster_topic_no)
-        else:
-            print("doing regular linear")
-            select_map_images(this_cluster, this_topic)
+            def select_map_images(this_cluster, this_topic, hsv_cluster):
+                if VERBOSE: print("select_map_images this_cluster", this_cluster)
+                if VERBOSE: print("select_map_images this_topic", this_topic)
+                if VERBOSE: print("select_map_images hsv_cluster", hsv_cluster)
+                resultsjson = selectSQL(this_cluster, this_topic, hsv_cluster)
+                print("got results, count is: ",len(resultsjson))
+                if len(resultsjson) < MIN_CYCLE_COUNT:
+                    print(f"less than {MIN_CYCLE_COUNT} resultsjson, skipping this {this_cluster} and {this_topic}")
+                    return
+                else:
+                    # folder_name = this_topic[0] if this_topic else this_cluster
+                    map_images(resultsjson, this_cluster, this_topic, hsv_cluster)
 
-        if MODE == 2:
-            print("MODE 2, now assembling from CSV_FOLDER", CSV_FOLDER)
-            save_images_from_csv_folder()
+            def sub_select_clusters_by_hsv(cluster_topic_no, n_cluster_topics):
+                # N_HSV
+                # make a list where the first value matches cluster_topic_no and the second value is assigned from range(1,N_HSV+1)
+                all_potential_hsv_clusters = [[cluster_topic_no, i] for i in range(1, N_HSV + 1)]
+                print(f"all_potential_hsv_clusters for cluster_topic_no {cluster_topic_no} is {all_potential_hsv_clusters}")
+                this_n_hsv_clusters = []
+                all_other_hsv_clusters = []
+                for this_cluster in all_potential_hsv_clusters:
+                    # print(f"checking cluster_topic_no {this_cluster} against hsv cluster {all_potential_hsv_clusters}")
+                    if this_cluster in n_cluster_topics:
+                        this_n_hsv_clusters.append(this_cluster)
+                    else:
+                        all_other_hsv_clusters.append(this_cluster[1])
+                if VERBOSE: print(f"all_other_hsv_clusters for cluster_topic_no {cluster_topic_no} is {all_other_hsv_clusters}")
+                if VERBOSE: print(f"all_potential_hsv_clusters for cluster_topic_no {cluster_topic_no} is {all_potential_hsv_clusters}")
+                all_other_pair_list = [cluster_topic_no, all_other_hsv_clusters]
+                this_n_hsv_clusters.append(all_other_pair_list)
+                if VERBOSE: print(f"this_n_hsv_clusters for cluster_topic_no {cluster_topic_no} is {this_n_hsv_clusters}")
+
+                # for this_cluster in n_cluster_topics:
+                #     # print(f"checking cluster_topic_no {cluster_topic_no} against hsv cluster {this_cluster[0]}")
+                #     if this_cluster[0] == cluster_topic_no:
+                #         # print(f"appending cluster_topic_no {this_cluster} to this_n_hsv_clusters")
+                #         this_n_hsv_clusters.append(this_cluster)
+                # # print(f"this_n_hsv_clusters for cluster_topic_no {cluster_topic_no} is {this_n_hsv_clusters}")
+                return this_n_hsv_clusters
+
+            def do_first_select_map_images(cluster_topic_no, second_cluster_topic, hsv_cluster=None):
+                print(f"cluster_topic_no: {cluster_topic_no}, hsv_cluster: {hsv_cluster}")
+                if IS_CLUSTER and cluster_topic_no < START_CLUSTER: return
+                if USE_AFFECT_GROUPS: 
+                    cluster_topic_no = AFFECT_GROUPS_LISTS[cluster_topic_no] # redefine cluster_no with affect group list
+                if IS_TOPICS and not IS_HAND_POSE_FUSION: 
+                    print(f"IS_TOPICS and not IS_HAND_POSE_FUSION, passing in second_cluster_topic: {second_cluster_topic}, cluster_topic_no: {cluster_topic_no}, hsv_cluster: {hsv_cluster}")
+                    select_map_images(second_cluster_topic, cluster_topic_no, hsv_cluster)
+                elif IS_CLUSTER: 
+                    print(f"IS_CLUSTER, passing in cluster_topic_no: {cluster_topic_no}, second_cluster_topic: {second_cluster_topic}, hsv_cluster: {hsv_cluster}")
+                    select_map_images(cluster_topic_no, second_cluster_topic, hsv_cluster)
+                elif IS_HAND_POSE_FUSION: 
+                    # I think this is for one topic with pose/gesture fusion
+                    print(f"IS_HAND_POSE_FUSION, passing in cluster_topic_no: {cluster_topic_no}, this_topic: {this_topic}, hsv_cluster: {hsv_cluster}")
+                    select_map_images(cluster_topic_no,this_topic, hsv_cluster)
+
+            if CURRENT_MODE == 'heft_torso_keywords' and N_HSV > 0:
+                print("doing heft_torso_keywords with N_HSV > 0, so Keyword -> MetaClusters -> HSV")
+                for cluster_topic_no in range(N_CLUSTERS):
+                    print(f"cluster_topic_no range(N_CLUSTERS): {cluster_topic_no}, n_hsv_clusters: {n_hsv_clusters}")
+                    if isinstance(n_cluster_topics, list) and len(n_cluster_topics) > 1:
+                        print(f"cluster_topic_no: {cluster_topic_no}, this_n_hsv_clusters: {n_cluster_topics}")
+                        this_n_hsv_clusters = sub_select_clusters_by_hsv(cluster_topic_no, n_cluster_topics)
+                    elif not isinstance(n_cluster_topics, list) and n_cluster_topics is not None:
+                        this_n_hsv_clusters = n_cluster_topics
+                    else:
+                        # when there are no hsv from fusion pairs, make a list containing one entry for all hsv values
+                        this_n_hsv_clusters = [list(n_hsv_clusters)]
+                    print(f"cluster_topic_no: {cluster_topic_no}, this_n_hsv_clusters: {this_n_hsv_clusters}")
+
+                    if first_loop:
+                        print("first loop is ", first_loop)
+                        # for cluster_topic_no in this_n_cluster_topics:
+                        for hsv_cluster in this_n_hsv_clusters:
+                            do_first_select_map_images(cluster_topic_no, second_cluster_topic, hsv_cluster)
+                    else:
+                        print("doing regular linear")
+                        select_map_images(this_cluster, this_topic, hsv_cluster)
+
+            if "3D" in CURRENT_MODE:
+                # do 3D bodies processing
+                print("doing 3D bodies specific processing")
+                if first_loop:
+                    print("first loop is ", first_loop)
+                    for cluster_topic_no in n_cluster_topics:
+                        do_first_select_map_images(cluster_topic_no, second_cluster_topic)
+                    else:
+                        print("doing regular linear")
+                        select_map_images(this_cluster, this_topic)
+
+            if "paris" in CURRENT_MODE:
+                print("doing Paris specific processing")
+                if first_loop:
+                    print("first loop is ", first_loop)
+                    for cluster_topic_no in n_cluster_topics:
+                        do_first_select_map_images(cluster_topic_no, second_cluster_topic)
+                else:
+                    print("doing regular linear")
+                    select_map_images(this_cluster, this_topic)
+
+            if MODE == 2:
+                print("MODE 2, now assembling from CSV_FOLDER", CSV_FOLDER)
+                save_images_from_csv_folder()
 
 
 if __name__ == '__main__':

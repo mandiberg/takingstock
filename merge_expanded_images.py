@@ -29,6 +29,8 @@ LOOPING = False # defaults
 last_image_written = None
 run_counter = 0
 
+MERGE_COUNT = START_MERGE = PERIOD = FRAMERATE = None
+IS_VIDEO = IS_VIDEO_MERGE = SMOOTH_MERGE = False
 if "merge_images" in CURRENT_MODE:
 # are we making videos or making merged stills?
     IS_VIDEO = False
@@ -92,9 +94,9 @@ ROOT_FOLDER_PATH = '/Volumes/OWC4/images_to_assemble'
 # if IS_CLUSTER this should be the folder holding all the cluster folders
 # if not, this should be the individual folder holding the images
 # will not accept clusterNone -- change to cluster00
-FOLDER_NAME = "256_crop_test_20ct"
+FOLDER_NAME = "body3D_512_"
 FOLDER_PATH = os.path.join(ROOT_FOLDER_PATH,FOLDER_NAME)
-FOLDER_PATH = "/Volumes/OWC4/segment_images/money_heft_test" # temp override for testing
+FOLDER_PATH = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/keyword_body3D_tests/body3D_512" # temp override for testing
 # FOLDER_PATH = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/pink_phone_test"
 DIRS = ["1x1", "4x3", "16x10"]
 OUTPUT = os.path.join(io.ROOTSSD, "audioproduction")
@@ -537,6 +539,8 @@ def calculate_period(images_to_build):
     return calculated_period
 
 def write_video(img_array, subfolder_path=None):
+    global last_image_written
+    last_image_written = None
     img_array = [img for img in img_array if img.endswith(".jpg")]
     print("len img_array before cropping", len(img_array))
     if IS_VIDEO_MERGE: img_array.append(img_array[0]) # add the first image to the end to make a loop

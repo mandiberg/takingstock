@@ -22,6 +22,7 @@ ROOT_FOLDER_PATH = '/Users/michaelmandiberg/Documents/projects-active/facemap_pr
 
 MODE = "Keywords" # Topics or Keywords
 MODE_ID = "topic_id" if MODE == "Topics" else "keyword_id"
+CLUSTER_TYPE = "MetaBodyPoses3D" # "MetaBodyPoses3D" or "body3D" or "hand_gesture_position" - determines whether it checks hand poses or body3D
 
 # Create engine and session
 engine = create_engine("mysql+pymysql://{user}:{pw}@/{db}?unix_socket={socket}".format(
@@ -32,10 +33,13 @@ Session = sessionmaker(bind=engine)
 session = Session()
 
 # first 100
-KEYWORDS = [22137, 184, 502, 135, 22411, 1991, 11801, 22101, 273, 220, 2150, 22269, 22233, 5271, 22040, 133, 22324, 23100, 827, 22499, 278, 1070, 13057, 22412, 5728, 404, 444, 22191, 23084, 22333, 2472, 22665, 22042, 420, 553, 1227, 22228, 665, 23403, 671, 16045, 272, 437, 293, 2514, 22222, 22961, 27381, 23029, 2467, 5279, 4265, 1127, 407, 790, 3856, 133680, 1204, 703, 1224, 729, 11549, 737, 6286, 133300, 2151, 807, 1585, 133777, 699, 1644, 2756, 786, 698, 730, 133819, 22692, 2188, 1223, 1807, 10765, 24705, 24593, 22247, 133705, 5310, 24233, 1511, 24511, 1515, 5912, 1277, 7787, 22502, 206, 4115, 24190, 18137, 23163, 763]
+# KEYWORDS = [22137, 184, 502, 135, 22411, 1991, 11801, 22101, 273, 220, 2150, 22269, 22233, 5271, 22040, 133, 22324, 23100, 827, 22499, 278, 1070, 13057, 22412, 5728, 404, 444, 22191, 23084, 22333, 2472, 22665, 22042, 420, 553, 1227, 22228, 665, 23403, 671, 16045, 272, 437, 293, 2514, 22222, 22961, 27381, 23029, 2467, 5279, 4265, 1127, 407, 790, 3856, 133680, 1204, 703, 1224, 729, 11549, 737, 6286, 133300, 2151, 807, 1585, 133777, 699, 1644, 2756, 786, 698, 730, 133819, 22692, 2188, 1223, 1807, 10765, 24705, 24593, 22247, 133705, 5310, 24233, 1511, 24511, 1515, 5912, 1277, 7787, 22502, 206, 4115, 24190, 18137, 23163, 763]
 
 # second 100
-KEYWORDS = [232, 22251, 1575, 758, 22600, 424, 410, 1919, 25287, 5516, 2567, 3961, 9940, 22861, 25155, 919, 115, 8911, 818, 1263, 1222, 22617, 6970, 22139, 486, 5115, 22298, 13539, 697, 23512, 24327, 23825, 1073, 22217, 22910, 133822, 22105, 1421, 212, 4589, 133768, 4572, 805, 227, 133724, 13, 295, 24552, 13300, 133816, 5953, 2747, 24041, 1217, 133685, 24472, 514, 292, 22336, 761, 9028, 4361, 433, 223, 696, 13534, 327, 7266, 22851, 11605, 1121, 12472, 25083, 18066, 297, 830, 24399, 3977, 732, 736, 4667, 296, 753, 22628, 22968, 133834, 11203, 8962, 3706, 215, 12572, 5342, 2599, 23853, 5824, 2421, 1772, 6045, 789, 4714]
+# KEYWORDS = [232, 22251, 1575, 758, 22600, 424, 410, 1919, 25287, 5516, 2567, 3961, 9940, 22861, 25155, 919, 115, 8911, 818, 1263, 1222, 22617, 6970, 22139, 486, 5115, 22298, 13539, 697, 23512, 24327, 23825, 1073, 22217, 22910, 133822, 22105, 1421, 212, 4589, 133768, 4572, 805, 227, 133724, 13, 295, 24552, 13300, 133816, 5953, 2747, 24041, 1217, 133685, 24472, 514, 292, 22336, 761, 9028, 4361, 433, 223, 696, 13534, 327, 7266, 22851, 11605, 1121, 12472, 25083, 18066, 297, 830, 24399, 3977, 732, 736, 4667, 296, 753, 22628, 22968, 133834, 11203, 8962, 3706, 215, 12572, 5342, 2599, 23853, 5824, 2421, 1772, 6045, 789, 4714
+KEYWORDS = [22411,220,22269,827,1070,22412,553,807,1644,5310] # helper segment
+# KEYWORDS = [5310] # helper segment
+
 # SQL query template
 sql_query_template = """
 SELECT 
@@ -183,12 +187,87 @@ ORDER BY
     ihp_cluster;
 """
 
+
+sql_query_template_body3D = """
+SELECT 
+    ihp.cluster_id AS ihp_cluster,
+	COUNT(so.image_id)
+FROM 
+    SegmentBig_isface so
+JOIN 
+    SegmentHelper_sept2025_heft_keywords sh ON sh.image_id = so.image_id
+JOIN 
+    ImagesBodyPoses3D ihp ON ihp.image_id = so.image_id
+JOIN 
+    Images{MODE} it ON it.image_id = so.image_id
+WHERE it.{MODE_ID} = {THIS_MODE_ID}
+GROUP BY
+    ihp.cluster_id
+ORDER BY 
+    ihp_cluster;
+
+"""
+
+sql_query_template_HSV_MetaBody3D = """
+SELECT 
+    ihp.meta_cluster_id AS ihp_cluster,
+    SUM(CASE WHEN ihsv.cluster_id = 0 THEN 1 ELSE 0 END) AS hsv_0,
+    SUM(CASE WHEN ihsv.cluster_id = 1 THEN 1 ELSE 0 END) AS hsv_1,
+    SUM(CASE WHEN ihsv.cluster_id = 2 THEN 1 ELSE 0 END) AS hsv_2,
+    SUM(CASE WHEN ihsv.cluster_id = 3 THEN 1 ELSE 0 END) AS hsv_3,
+    SUM(CASE WHEN ihsv.cluster_id = 4 THEN 1 ELSE 0 END) AS hsv_4,
+    SUM(CASE WHEN ihsv.cluster_id = 5 THEN 1 ELSE 0 END) AS hsv_5,
+    SUM(CASE WHEN ihsv.cluster_id = 6 THEN 1 ELSE 0 END) AS hsv_6,
+    SUM(CASE WHEN ihsv.cluster_id = 7 THEN 1 ELSE 0 END) AS hsv_7,
+    SUM(CASE WHEN ihsv.cluster_id = 8 THEN 1 ELSE 0 END) AS hsv_8,
+    SUM(CASE WHEN ihsv.cluster_id = 9 THEN 1 ELSE 0 END) AS hsv_9,
+    SUM(CASE WHEN ihsv.cluster_id = 10 THEN 1 ELSE 0 END) AS hsv_10,
+    SUM(CASE WHEN ihsv.cluster_id = 11 THEN 1 ELSE 0 END) AS hsv_11,
+    SUM(CASE WHEN ihsv.cluster_id = 12 THEN 1 ELSE 0 END) AS hsv_12,
+    SUM(CASE WHEN ihsv.cluster_id = 13 THEN 1 ELSE 0 END) AS hsv_13,
+    SUM(CASE WHEN ihsv.cluster_id = 14 THEN 1 ELSE 0 END) AS hsv_14,
+    SUM(CASE WHEN ihsv.cluster_id = 15 THEN 1 ELSE 0 END) AS hsv_15,
+    SUM(CASE WHEN ihsv.cluster_id = 16 THEN 1 ELSE 0 END) AS hsv_16
+  
+FROM SegmentBig_isface so
+JOIN SegmentHelper_sept2025_heft_keywords sh ON sh.image_id = so.image_id
+JOIN ImagesBodyPoses3D ibp ON ibp.image_id = so.image_id
+JOIN ClustersMetaBodyPoses3D ihp ON ihp.cluster_id = ibp.cluster_id
+JOIN ImagesHSV ihsv ON ihsv.image_id = so.image_id
+JOIN Images{MODE} it ON it.image_id = so.image_id
+WHERE it.{MODE_ID} = {THIS_MODE_ID}
+GROUP BY
+    ihp.meta_cluster_id
+ORDER BY 
+    ihp.meta_cluster_id;
+"""
+
+
 def save_query_results_to_csv(query, topic_id):
     print(f"about to query for {MODE} {topic_id}")
 
     # Execute query and fetch data into a DataFrame
     df = pd.read_sql(query, engine)
+
+    # add zero values for any missing rows in the ihp_cluster column
+    if "body3D" in CLUSTER_TYPE: cluster_count = 512
+    elif "hand_gesture_position" in CLUSTER_TYPE: cluster_count = 128
+    elif "MetaBodyPoses3D" in CLUSTER_TYPE: cluster_count = 32
+    else: raise ValueError("Unknown CLUSTER_TYPE")
+    for i in range(cluster_count):
+        print(f"checking for ihp_cluster {i}")
+        if i not in df['ihp_cluster'].values:
+            print(f"adding missing ihp_cluster {i}")
+            new_row = {'ihp_cluster': i}
+            for col in df.columns:
+                if col != 'ihp_cluster':
+                    new_row[col] = 0
+            print(f"new_row: {new_row}")
+            df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
     
+    # resort by ihp_cluster
+    df = df.sort_values(by='ihp_cluster').reset_index(drop=True)
+
     # Define file name for the CSV
     csv_file_path = f"{ROOT_FOLDER_PATH}/{MODE}_{topic_id}.csv"
     
@@ -201,6 +280,10 @@ def save_query_results_to_csv(query, topic_id):
 if MODE == "Keywords":
     # Loop through each keyword_id and save results to CSV
     for keyword_id in KEYWORDS:
+        if CLUSTER_TYPE == "body3D":
+            sql_query_template = sql_query_template_body3D
+        elif CLUSTER_TYPE == "MetaBodyPoses3D":
+            sql_query_template = sql_query_template_HSV_MetaBody3D
         sql_query_template = sql_query_template.replace("{MODE}", MODE).replace("{MODE_ID}", MODE_ID).replace("{THIS_MODE_ID}", str(keyword_id))
         # print(sql_query_template)
         query = sql_query_template.format(keyword_id=keyword_id)

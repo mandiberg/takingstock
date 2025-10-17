@@ -256,3 +256,27 @@ CREATE TABLE LocationHandsFeet (
     right_foot_x FLOAT,
     right_foot_y FLOAT
 );
+
+
+-- This is the junction table.
+CREATE TABLE IsNotDupeOf (
+    image_id_i int REFERENCES Images (image_id),
+    image_id_j int REFERENCES Encodings (encoding_id),
+    PRIMARY KEY (image_id_i, image_id_j)
+);
+
+
+-- calculations that will come later
+CREATE TABLE HSV (
+    cluster_id int NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    cluster_median BLOB
+);
+
+-- This is the clusters junction table.
+CREATE TABLE ImagesHSV (
+    image_id INTEGER REFERENCES Images (image_id),
+    cluster_id INTEGER REFERENCES HSV (cluster_id),
+    cluster_dist FLOAT DEFAULT NULL,
+    PRIMARY KEY (image_id)
+);
+

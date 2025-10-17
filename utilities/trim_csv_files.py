@@ -1,12 +1,13 @@
 import os
 import re
 
-ROOT_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/body3D_segmentbig_useall256_CSVs"  # Change this to your folder
-TRIM_LENGTH = 80000  # Change this to the number of lines you want to keep
-# note that the make_video CSVs have multiline elements, so 80000 lines is about 20 entries
+# THIS IS A DESTRUCTIVE OPERATION. DUPLICATE YOUR FILES FIRST, to keep an intact copy.
+ROOT_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/heft_keyword_fusion_clusters/body3D_512_keywords_1"  # Change this to your folder
 TRIM_ON_SPLIT = True
 SPLIT_PATTERN = r"^[0-9,A-Z,a-z]+,\d+,http"
-NTH_PATTERN = 20
+NTH_PATTERN = 20 # Change this to the number of entries you want to keep
+TRIM_LENGTH = 4200 * NTH_PATTERN  # about 4000-4200 lines per entry
+# note that the make_video CSVs have multiline elements, so 80000 lines is about 20 entries
 
 def trim_csv_files(root_folder, trim_length):
     for filename in os.listdir(root_folder):

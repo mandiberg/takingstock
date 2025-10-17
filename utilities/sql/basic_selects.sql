@@ -12,6 +12,12 @@ SET GLOBAL innodb_buffer_pool_size=8053063680;
 
 -- 44374493
 
+SELECT *
+FROM Encodings
+WHERE migrated_SQL = 1
+AND migrated_Mongo is NULL
+LIMIT 10
+;
 
 
 SELECT *
@@ -203,21 +209,38 @@ DELETE FROM NMLImages
 
 
 
-CREATE TABLE BodyPoses3D (
+CREATE TABLE ArmsPoses3D (
     cluster_id int NOT NULL AUTO_INCREMENT PRIMARY KEY,
     cluster_median BLOB
 );
 
 -- This is the poses junction table.
-CREATE TABLE ImagesBodyPoses3D (
+CREATE TABLE ImagesArmsPoses3D (
     image_id INTEGER REFERENCES Images (image_id),
-    cluster_id INTEGER REFERENCES BodyPoses3D (cluster_id),
+    cluster_id INTEGER REFERENCES ArmsPoses3D (cluster_id),
     cluster_dist FLOAT DEFAULT NULL,
     PRIMARY KEY (image_id)
 );
 
-SELECT * FROM BodyPoses3D ;
-SELECT * FROM ImagesBodyPoses3D ;
+
+CREATE TABLE MetaBodyPoses3D (
+    cluster_id int NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    cluster_median BLOB
+);
+
+-- This is the poses junction table.
+CREATE TABLE ClustersBodyMetaPoses3D (
+    cluster_id INTEGER REFERENCES BodyPoses3D (cluster_id),
+    meta_cluster_id INTEGER REFERENCES MetaBodyPoses3D (cluster_id),
+    cluster_dist FLOAT DEFAULT NULL,
+    PRIMARY KEY (cluster_id)
+);
+
+SELECT * FROM ArmsPoses3D ;
+SELECT * FROM ImagesArmsPoses3D ;
+
+DELETE FROM ArmsPoses3D ;
+DELETE FROM ImagesArmsPoses3D ;
 
 DELETE FROM BodyPoses3D ;
 DELETE FROM ImagesBodyPoses3D ;

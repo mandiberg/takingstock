@@ -46,20 +46,28 @@ mongo_db = mongo_client["stock"]
 mongo_collection = mongo_db["body_landmarks_norm"]
 
 # Define the batch size
-batch_size = 10000
-MODE = 1 #0 for overall compare, 1 to recheck against entry and bson dump
-IS_FACE = 1
+batch_size = 10
+num_threads = 8  # Adjust based on your CPU and IO
+MODE = 0 #0 for overall compare, 1 to recheck against entry and bson dump
+# MODE 0 ignores is_body and is_face, MODE 1 filters on those
+IS_FACE = 0
 IS_BODY = 1
+JOIN_COMPARE_TABLE = False
+LOOK_CLOSER_AGAINST_HELPER = True
+last_id = 55000000
+print(f"Starting from last_id: {last_id}")
 
 # select max encoding_id to start from
 Base = declarative_base()
 
+table_name = 'compare_sql_mongo_results_ultradone_look_closer'
 class CompareSqlMongoResults(Base):
-    __tablename__ = 'compare_sql_mongo_results'
+    __tablename__ = table_name
     encoding_id = Column(Integer, primary_key=True)
     image_id = Column(Integer)
     is_body = Column(Boolean)
     is_face = Column(Boolean)
+    site_name_id = Column(Integer)
     face_landmarks = Column(Integer)
     body_landmarks = Column(Integer)
     face_encodings68 = Column(Integer)
@@ -67,12 +75,25 @@ class CompareSqlMongoResults(Base):
     left_hand = Column(Integer)
     right_hand = Column(Integer)
     body_world_landmarks = Column(Integer)
+
+HelperTable_name = "SegmentHelper_oct2025_missing_face_encodings"
+
+class HelperTable(Base):
+    __tablename__ = HelperTable_name
+    seg_image_id=Column(Integer,primary_key=True, autoincrement=True)
+    image_id = Column(Integer, primary_key=True, autoincrement=True)
+
+if JOIN_COMPARE_TABLE:
+    # this should create a table from the above definition if it doesn't exist
+    CompareSqlMongoResults_extant = io.create_class_from_reflection(engine, table_name, "compare_sql_mongo_results2")
+
+
 Base.metadata.create_all(engine)
+
+
 # last_id = session.query(sqlalchemy.func.max(CompareSqlMongoResults.encoding_id)).scalar()
 # if last_id is None:
 #     last_id = 0
-last_id = 0
-print(f"Starting from last_id: {last_id}")
 
 # variables to filter encodings on
 migrated_SQL = 1
@@ -101,6 +122,9 @@ sql_field_names_dict = {
     "body_world_landmarks": "mongo_body_landmarks_3D"
 }
 
+
+is_face_fields = ["face_landmarks", "face_encodings68"]
+is_body_fields = ["body_landmarks", "body_landmarks_norm", "hand_landmarks", "body_landmarks_3D"]
 
 # Initialize counters outside the loop (at the top of your script, before the while loop)
 if 'counts' not in locals():
@@ -138,40 +162,60 @@ def process_batch(batch_start, batch_end):
 
     results = get_mysql_results(batch_start, batch_end, thread_session)
     print(f"Thread processing batch {batch_start} to {batch_end}, got {len(results)} results")
-    print(f"First 5 results: {results[:5]}")
+    # print(f"First 5 results: {results[:5]}")
 
-    # for encoding_id, image_id, mongo_encodings, mongo_body_landmarks, mongo_face_landmarks, mongo_body_landmarks_norm, mongo_hand_landmarks, mongo_body_landmarks_3D, is_body, is_face in results:
-    #     if encoding_id is None or image_id is None:
-    #         continue
-    #     mongo_docs = {}
-    #     for collection_name in collection_names:
-    #         collection = thread_mongo_db[collection_name]
-    #         doc = collection.find_one({"image_id": image_id})
-    #         mongo_docs[collection_name] = doc
+    for encoding_id, image_id, mongo_encodings, mongo_body_landmarks, mongo_face_landmarks, mongo_body_landmarks_norm, mongo_hand_landmarks, mongo_body_landmarks_3D, is_body, is_face, site_name_id in results:
+        if encoding_id is None or image_id is None:
+            continue
+        mongo_docs = {}
+        for collection_name in collection_names:
+            collection = thread_mongo_db[collection_name]
+            doc = collection.find_one({"image_id": image_id})
+            mongo_docs[collection_name] = doc
+        print(f"for encoding_id {encoding_id}, this is the {mongo_docs} found in Mongo for image_id {image_id}")
 
-    #     this_row = {
-    #         "encoding_id": encoding_id,
-    #         "image_id": image_id,
-    #         "is_body": is_body,
-    #         "is_face": is_face
-    #     }
-    #     for collection_name in collection_names:
-    #         doc = mongo_docs[collection_name]
-    #         document_names = document_names_dict[collection_name]
-    #         for document_name in document_names:
-    #             sql_field_name = sql_field_names_dict[document_name]
-    #             sql_boolean = locals().get(sql_field_name)
-    #             mongo_data_present = doc is not None and document_name in doc and doc[document_name] is not None
-    #             if sql_boolean and not mongo_data_present:
-    #                 value = 0
-    #             elif not sql_boolean and mongo_data_present:
-    #                 value = 1
-    #             else:
-    #                 value = None
-    #             this_row[document_name] = value
+        this_row = {
+            "encoding_id": encoding_id,
+            "image_id": image_id,
+            "is_body": is_body,
+            "is_face": is_face,
+            "site_name_id": site_name_id
+        }
+        # Build a dict for the row at the start of the loop:
+        row_dict = {
+            "mongo_encodings": mongo_encodings,
+            "mongo_body_landmarks": mongo_body_landmarks,
+            "mongo_face_landmarks": mongo_face_landmarks,
+            "mongo_body_landmarks_norm": mongo_body_landmarks_norm,
+            "mongo_hand_landmarks": mongo_hand_landmarks,
+            "mongo_body_landmarks_3D": mongo_body_landmarks_3D,
+        }
 
-    #     if any(v is not None for k, v in this_row.items() if k not in ["encoding_id", "image_id", "is_body", "is_face"]):
-    #         results_rows.append(this_row)
+        for collection_name in collection_names:
+            doc = mongo_docs[collection_name]
+            document_names = document_names_dict[collection_name]
+            for document_name in document_names:
+                if is_face != 1 and document_name in is_face_fields:
+                    # print("skipping face field because is_face is 0")
+                    continue
+                if is_body != 1 and document_name in is_body_fields:
+                    # print("skipping body field because is_body is 0")
+                    continue
+                print(f"Processing encoding_id {encoding_id}, image_id {image_id}, is_body {is_body}, is_face {is_face}")
+                print(f"  Checking {image_id} {document_name} where is_body {is_body}, is_face {is_face}")
+                sql_field_name = sql_field_names_dict[document_name]
+                sql_boolean = row_dict.get(sql_field_name)
+                mongo_data_present = doc is not None and document_name in doc and doc[document_name] is not None
+                if sql_boolean and not mongo_data_present:
+                    value = 0
+                elif not sql_boolean and mongo_data_present:
+                    value = 1
+                else:
+                    value = None
+                this_row[document_name] = value
+
+        if any(v is not None for k, v in this_row.items() if k not in ["encoding_id", "image_id", "is_body", "is_face", "site_name_id"]):
+            results_rows.append(this_row)
 
     thread_session.close()
     thread_mongo_client.close()
@@ -179,19 +223,75 @@ def process_batch(batch_start, batch_end):
 
 def get_mysql_results(batch_start, batch_end, thread_session):
     if MODE == 0:
-        results = (
-            thread_session.query(
-                Encodings.encoding_id, Encodings.image_id, Encodings.mongo_encodings, Encodings.mongo_body_landmarks,
-                Encodings.mongo_face_landmarks, Encodings.mongo_body_landmarks_norm, Encodings.mongo_hand_landmarks,
-                Encodings.mongo_body_landmarks_3D, Encodings.is_body, Encodings.is_face
+        if isinstance(batch_start, list) and batch_end is None:
+            results = (
+                thread_session.query(
+                    Encodings.encoding_id, Encodings.image_id, Encodings.mongo_encodings, Encodings.mongo_body_landmarks,
+                    Encodings.mongo_face_landmarks, Encodings.mongo_body_landmarks_norm, Encodings.mongo_hand_landmarks,
+                    Encodings.mongo_body_landmarks_3D, Encodings.is_body, Encodings.is_face, Images.site_name_id
+                )
+                .join(
+                    Images,
+                    Encodings.image_id == Images.image_id
+                )
+                .filter(
+                    Encodings.encoding_id.in_(batch_start)
+                )
+                .order_by(Encodings.encoding_id)
+                .all()
             )
-            .filter(
-                Encodings.encoding_id >= batch_start,
-                Encodings.encoding_id < batch_end
+        
+        elif JOIN_COMPARE_TABLE:
+            results = (
+                thread_session.query(
+                    Encodings.encoding_id, Encodings.image_id, Encodings.mongo_encodings, Encodings.mongo_body_landmarks,
+                    Encodings.mongo_face_landmarks, Encodings.mongo_body_landmarks_norm, Encodings.mongo_hand_landmarks,
+                    Encodings.mongo_body_landmarks_3D, Encodings.is_body, Encodings.is_face, Images.site_name_id
+                )
+                .join(
+                    Images, 
+                    Encodings.image_id == Images.image_id
+                )
+                .join(
+                    CompareSqlMongoResults_extant,
+                    Encodings.encoding_id == CompareSqlMongoResults_extant.encoding_id
+                )
+                .filter(
+                    Encodings.encoding_id >= batch_start,
+                    Encodings.encoding_id < batch_end,
+                    (
+                        (CompareSqlMongoResults_extant.face_landmarks.isnot(None)) |
+                        (CompareSqlMongoResults_extant.body_landmarks.isnot(None)) |
+                        (CompareSqlMongoResults_extant.face_encodings68.isnot(None)) |
+                        (CompareSqlMongoResults_extant.nlms.isnot(None)) |
+                        (CompareSqlMongoResults_extant.left_hand.isnot(None)) |
+                        (CompareSqlMongoResults_extant.right_hand.isnot(None)) |
+                        (CompareSqlMongoResults_extant.body_world_landmarks.isnot(None))
+                    )
+                )
+                .order_by(Encodings.encoding_id)
+                .all()
             )
-            .order_by(Encodings.encoding_id)
-            .all()
-        )
+        else:
+            results = (
+                thread_session.query(
+                    Encodings.encoding_id, Encodings.image_id, Encodings.mongo_encodings, Encodings.mongo_body_landmarks,
+                    Encodings.mongo_face_landmarks, Encodings.mongo_body_landmarks_norm, Encodings.mongo_hand_landmarks,
+                    Encodings.mongo_body_landmarks_3D, Encodings.is_body, Encodings.is_face, Images.site_name_id
+                )
+                .join(
+                    Images,
+                    Encodings.image_id == Images.image_id
+                )
+                .filter(
+                    Encodings.encoding_id >= batch_start,
+                    Encodings.encoding_id < batch_end,
+                )
+                .order_by(Encodings.encoding_id)
+                .all()
+            )
+
+
     elif MODE == 1:
         results = (
             thread_session.query(
@@ -216,36 +316,80 @@ def get_mysql_results(batch_start, batch_end, thread_session):
     
     return results
 
-# Get min and max encoding_id for batching
-# min_id = session.query(sqlalchemy.func.min(Encodings.encoding_id)).scalar() or 0
-min_id = last_id + 1
-max_id = session.query(sqlalchemy.func.max(Encodings.encoding_id)).scalar() or 0
+if LOOK_CLOSER_AGAINST_HELPER:
+    query_all_encoding_ids_via_helper = (
+        session.query(Encodings.encoding_id)
+        .join(HelperTable, Encodings.image_id == HelperTable.image_id)
+        .filter(Encodings.encoding_id > last_id)
+        .order_by(Encodings.encoding_id)
+        .limit(1000)
+        .all()
+    )
+    helper_encoding_ids = [row[0] for row in query_all_encoding_ids_via_helper]
+    print(f"Filtering to {len(helper_encoding_ids)} image_ids from {HelperTable_name}")
+    if helper_encoding_ids:
+        min_id = min(helper_encoding_ids)
+        max_id = max(helper_encoding_ids)
 
-batch_size = 1000
-num_threads = 8  # Adjust based on your CPU and IO
+    print(f"Processing encoding_id from {min_id} to {max_id}")
 
-for batch_start in range(min_id, max_id + 1, batch_size * num_threads):
-    batch_ranges = [
-        (start, min(start + batch_size, max_id + 1))
-        for start in range(batch_start, min(batch_start + batch_size * num_threads, max_id + 1), batch_size)
+    # make batches of batch_size
+    encoding_id_batches = [
+        helper_encoding_ids[i:i + batch_size]
+        for i in range(0, len(helper_encoding_ids), batch_size)
     ]
-    results_rows = []
-    with concurrent.futures.ThreadPoolExecutor(max_workers=num_threads) as executor:
-        futures = [executor.submit(process_batch, start, end) for start, end in batch_ranges]
-        for future in concurrent.futures.as_completed(futures):
-            results_rows.extend(future.result())
+    print(f"Total batches to process: {len(encoding_id_batches)}")
+    print(f"First batch example: {encoding_id_batches[0][:5]} ... {encoding_id_batches[0][-5:]}")
 
-    batch_df = pd.DataFrame(results_rows)
-    print(f"Processed batch up to encoding_id {batch_ranges[-1][1]-1}: discrepancies found this batch: {len(batch_df)}")
-    if not batch_df.empty:
-        batch_df.to_sql(
-            name="compare_sql_mongo_results",
-            con=engine,
-            if_exists="append",
-            index=False,
-            method="multi"
-        )
-    results_rows.clear()
-    # break  # temporary for testing
+    for batch_num, encoding_id_batch in enumerate(encoding_id_batches):
+
+        results_rows = []
+        with concurrent.futures.ThreadPoolExecutor(max_workers=num_threads) as executor:
+            futures = [executor.submit(process_batch, encoding_id_batch, None)]
+            for future in concurrent.futures.as_completed(futures):
+                results_rows.extend(future.result())
+
+        batch_df = pd.DataFrame(results_rows)
+        print(f"Processed batch {batch_num}: discrepancies found this batch: {len(batch_df)}")
+        break
+        if not batch_df.empty:
+            batch_df.to_sql(
+                name=table_name,
+                con=engine,
+                if_exists="append",
+                index=False,
+                method="multi"
+            )
+        results_rows.clear()
+        break  # temporary for testing
+else:
+    # Get min and max encoding_id for batching
+    # min_id = session.query(sqlalchemy.func.min(Encodings.encoding_id)).scalar() or 0
+    min_id = last_id + 1
+    max_id = session.query(sqlalchemy.func.max(Encodings.encoding_id)).scalar() or 0
+
+    for batch_start in range(min_id, max_id + 1, batch_size * num_threads):
+        batch_ranges = [
+            (start, min(start + batch_size, max_id + 1))
+            for start in range(batch_start, min(batch_start + batch_size * num_threads, max_id + 1), batch_size)
+        ]
+        results_rows = []
+        with concurrent.futures.ThreadPoolExecutor(max_workers=num_threads) as executor:
+            futures = [executor.submit(process_batch, start, end) for start, end in batch_ranges]
+            for future in concurrent.futures.as_completed(futures):
+                results_rows.extend(future.result())
+
+        batch_df = pd.DataFrame(results_rows)
+        print(f"Processed batch up to encoding_id {batch_ranges[-1][1]-1}: discrepancies found this batch: {len(batch_df)}")
+        if not batch_df.empty:
+            batch_df.to_sql(
+                name=table_name,
+                con=engine,
+                if_exists="append",
+                index=False,
+                method="multi"
+            )
+        results_rows.clear()
+        # break  # temporary for testing
 
 session.close()

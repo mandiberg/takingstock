@@ -20,10 +20,10 @@ s
 
 #################################
 
+import sys
 from sqlalchemy import create_engine, text,func, select, delete, and_
 from sqlalchemy.orm import sessionmaker,scoped_session, declarative_base
 from sqlalchemy.pool import NullPool
-# from my_declarative_base import Images,ImagesBackground, SegmentTable, Site 
 from mp_db_io import DataIO
 import pickle
 import numpy as np
@@ -37,7 +37,7 @@ import mediapipe as mp
 import shutil
 import pandas as pd
 import json
-from my_declarative_base import Base, Clusters, Images,ImagesBackground, ImagesTopics, SegmentTable, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON, Images
+from my_declarative_base import Base, Clusters, Images,ImagesBackground, ImagesTopics, SegmentTable, SegmentBig, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON, Images
 #from sqlalchemy.ext.declarative import declarative_base
 from mp_sort_pose import SortPose
 import pymongo
@@ -46,7 +46,7 @@ Base = declarative_base()
 USE_BBOX=True
 VERBOSE = False
 TOPIC = 0
-START_ID = 91034671
+START_ID = 91034671 # only used for one query below
 # 3.8 M large table (for Topic Model)
 # HelperTable_name = "SegmentHelperMar23_headon"
 SHOULDER_THRESH=.75
@@ -55,9 +55,9 @@ SHOULDER_THRESH=.75
 # HelperTable_name = "SegmentHelperApril12_2x2x33x27"
 
 # for fingerpoint
-HelperTable_name = "SegmentHelper_oct3_bg_doover"
+HelperTable_name = "SegmentBig_isface"
 # MM controlling which folder to use
-IS_SSD = True
+IS_SSD = False
 
 io = DataIO(IS_SSD)
 db = io.db
@@ -89,7 +89,13 @@ EXPAND = False
 ONE_SHOT = False # take all files, based off the very first sort order.
 JUMP_SHOT = False # jump to random file if can't find a run
 
-sort = SortPose(motion, face_height_output, image_edge_multiplier_sm,EXPAND, ONE_SHOT, JUMP_SHOT, None, VERBOSE, False, None, 0)
+HSV_BOUNDS = UPSCALE_MODEL_PATH = None
+SORT_TYPE = "planar_hands"
+INPAINT = TSP_SORT = False
+OBJ_CLS_ID = 0
+# sort = SortPose(motion, face_height_output, image_edge_multiplier_sm,EXPAND, ONE_SHOT, JUMP_SHOT, None, VERBOSE, False, None, 0)
+sort = SortPose(motion, face_height_output, image_edge_multiplier_sm,EXPAND, ONE_SHOT, JUMP_SHOT, HSV_BOUNDS, VERBOSE,INPAINT, SORT_TYPE, OBJ_CLS_ID,UPSCALE_MODEL_PATH=UPSCALE_MODEL_PATH,TSP_SORT=TSP_SORT)
+
 sort.VERBOSE = VERBOSE
 # sort = SortPose(motion, face_height_output, image_edge_multiplier,EXPAND, ONE_SHOT, JUMP_SHOT, HSV_BOUNDS, VERBOSE,INPAINT, SORT_TYPE, OBJ_CLS_ID)
 
@@ -110,7 +116,7 @@ title = 'Please choose your operation: '
 options = ['Create table', 'Fetch BG color stats',"test sorting"]
 option, index = pick(options, title)
 
-LIMIT= 10000000
+LIMIT= 1000000
 # Initialize the counter
 counter = 0
 
@@ -341,6 +347,7 @@ def get_bbox(target_image_id):
 #     return is_left_shoulder,is_right_shoulder
     
 def fetch_BG_stat(target_image_id, lock, session):
+    print(f"fetch_BG_stat image_id: {target_image_id}")
     ImagesBG_entry = (
         session.query(ImagesBackground)
         .filter(ImagesBackground.image_id == target_image_id)
@@ -367,7 +374,9 @@ def fetch_BG_stat(target_image_id, lock, session):
     ########This specific case is for image with apostrophe in their name like "hand's"#############
     ########It messes with reading/writing somehow, os.exists says it exists
     ########cv.imread reads it and produces None, because it reads "hands" not "hand's"
-    if img is None:return
+    if img is None:
+        print(f"image not found (cv2 failed) {target_image_id} {file}")
+        return
     #####################
     # hue,sat,val,lum, lum_torso=get_bg_hue_lum(img,bbox,facelandmark)
     segmentation_mask=sort.get_segmentation_mask(get_bg_segment,img,bbox,face_landmarks)
@@ -424,9 +433,6 @@ def fetch_BG_stat(target_image_id, lock, session):
             print("val:", ImagesBG_entry.val)
             print("lum_torso:", ImagesBG_entry.lum_torso)
             print("selfie bbox",selfie_bbox)
-
-        #session.commit()
-        if VERBOSE: print(f"BG stat for image_id {target_image_id} updated successfully.")
     else:
         print(f"BG stat entry for image_id {target_image_id} not found.")
     
@@ -434,7 +440,9 @@ def fetch_BG_stat(target_image_id, lock, session):
         # Increment the counter using the lock to ensure thread safety
         global counter
         counter -= 1
+        # print("skipping commit for now for testing")
         session.commit()
+        if VERBOSE: print(f"BG stat for image_id {target_image_id} updated successfully.")
     if counter % 100 == 0:
         print(f"This many left: {counter}")
     return
@@ -518,23 +526,35 @@ if index == 0:
     # print(result)
     # print the length of the result
     print(len(result), "rows")
+    print(result[0:5])
+    # sys.exit()
+    print("starting to create table entries")
     for row in result:
+        if row[0] is None:continue
         work_queue.put(row)
         
 elif index == 1:
     function=fetch_BG_stat
     #################FETCHING BG stat####################################
+
+    # OCT 2025 effort to process remaining images missing from ibg. reconstructing query from pieces/mess
+    if USE_BBOX:distinct_image_ids_query = select(ImagesBackground.image_id.distinct()).\
+        outerjoin(HelperTable, ImagesBackground.image_id == HelperTable.image_id).\
+        filter(HelperTable.image_id != None).\
+        filter(ImagesBackground.hue == None).limit(LIMIT)
+
+
     # # for reprocessing bad bboxes with sm portrait, joined to helper table (note the offset)
     # if USE_BBOX:distinct_image_ids_query = select(ImagesBackground.image_id.distinct()).\
     #     outerjoin(HelperTable, ImagesBackground.image_id == HelperTable.image_id).\
     #     filter(HelperTable.image_id != None).\
     #     filter(ImagesBackground.hue_bb == -1).limit(LIMIT).offset(3000)
 
-    # for reprocessing torso+row only for subsegment through join to helper table
-    if USE_BBOX:distinct_image_ids_query = select(ImagesBackground.image_id.distinct()).\
-        outerjoin(HelperTable, ImagesBackground.image_id == HelperTable.image_id).\
-        filter(HelperTable.image_id != None).\
-        filter(ImagesBackground.lum_torso == None).limit(LIMIT)
+    # # for reprocessing torso+row only for subsegment through join to helper table
+    # if USE_BBOX:distinct_image_ids_query = select(ImagesBackground.image_id.distinct()).\
+    #     outerjoin(HelperTable, ImagesBackground.image_id == HelperTable.image_id).\
+    #     filter(HelperTable.image_id != None).\
+    #     filter(ImagesBackground.lum_torso == None).limit(LIMIT)
 
     # # for helpertable
     # if USE_BBOX:distinct_image_ids_query = select(HelperTable.image_id.distinct()).\
