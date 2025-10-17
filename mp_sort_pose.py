@@ -1418,7 +1418,7 @@ class SortPose:
             bbox = json.loads(bbox)
         if bbox is None:
             print(f"bbox_to_pixel_conversion: bbox is none")
-            pass
+            return None
         #get the dimensions of bbox, have those be a unit, 
         print(f"bbox_to_pixel_conversion: bbox is {bbox}")
         dimensions = {
@@ -1465,6 +1465,166 @@ class SortPose:
 
 ###########################################################################
 ############################# END TENCH_CROP ##############################
+###########################################################################
+
+###########################################################################
+############################# START TENCH_CALC_BBOX #######################
+###########################################################################
+
+   
+    def delete_odd_bboxes(self, df):
+        """
+        Used for testing reverse bbox calculations using median ratio
+        """
+        print()
+        print("\n \n \n \n \n DELETING ODD BBOXES FOR TESTING\n \n \n \n \n")
+        deleted_bboxes = []
+        if not df.empty:
+            # Get the bboxes that are about to be deleted
+            deleted_bboxes = df.loc[df.index[1::2], 'bbox'].tolist()
+            # Set the 'bbox' column to None for odd-indexed rows
+            df.loc[df.index[1::2], 'bbox'] = None
+        if self.VERBOSE: print("delete_odd_bboxes: First 10 bbox values:", df['bbox'].head(10).tolist())
+        return deleted_bboxes
+
+    def calculate_bbox_landmark_ratio(self, df, index):
+        """
+        Calculates the ratio between the bbox bounds and the edges of the body
+        """
+        body_landmarks = df.iloc[index].get('body_landmarks_normalized', None)
+        bbox_dimensions = self.bbox_to_pixel_conversion(df, index)
+        if body_landmarks and bbox_dimensions:
+            min_max_landmark = {
+                'min_x': 0,
+                'min_y': 0,
+                'max_x': 0,
+                'max_y': 0 
+            }
+            for landmark in body_landmarks.landmark:
+                if landmark.x < min_max_landmark['min_x']: min_max_landmark['min_x'] = landmark.x
+                if landmark.x > min_max_landmark['max_x']: min_max_landmark['max_x'] = landmark.x
+                if landmark.y < min_max_landmark['min_y']: min_max_landmark['min_y'] = landmark.y
+                if landmark.y > min_max_landmark['max_y']: min_max_landmark['max_y'] = landmark.y
+
+            print(f'calculate_bbox_landmark_ratio: min max landmarks {min_max_landmark}')
+            
+            for key in min_max_landmark.keys():
+                min_max_landmark[key] = min_max_landmark[key] * bbox_dimensions['vertical']
+            print(f'calculate_bbox_landmark_ratio: min max landmarks in pixels {min_max_landmark}')
+            bbox_to_body_ratio = bbox_dimensions['vertical']/(abs(min_max_landmark['min_y'] - min_max_landmark['max_y']))
+            print(f'calculate_bbox_landmark_ratio: bbox to body ratio {bbox_to_body_ratio}')
+
+            return bbox_to_body_ratio
+        
+        else:
+            print(f"calculate_bbox_landmark_ratio: Something None: bbox {bbox_dimensions}, landmarks {body_landmarks}")
+
+    def calc_bbox_from_median(self, df, index, median):
+        bbox = df.iloc[index].get('bbox', None)
+        if not bbox:
+            body_landmarks = df.iloc[index].get('body_landmarks', None)
+            if isinstance(body_landmarks, str) and body_landmarks:
+                min_max_landmark = {
+                    'min_x': 1,
+                    'min_y': 1,
+                    'max_x': 0,
+                    'max_y': 0
+                }
+
+                
+                parsed_landmarks_list = []
+                
+                # Regex to find each landmark block.
+                # It looks for 'landmark {' followed by any characters (non-greedy) until a closing '}'.
+                # re.DOTALL allows '.' to match newlines.
+                landmark_blocks = []
+                start_idx = 0
+                while True:
+                    block_start_tag = body_landmarks.find('landmark {', start_idx)
+                    if block_start_tag == -1:
+                        break # No more landmark blocks found
+
+                    # Find the end of the 'landmark {' tag
+                    content_start_idx = block_start_tag + len('landmark {')
+
+                    # Find the closing '}' for this landmark block
+                    block_end_tag = body_landmarks.find('}', content_start_idx)
+                    if block_end_tag == -1:
+                        # Malformed string, closing '}' not found for an opened block
+                        # For robustness, we can break or log an error.
+                        # Breaking here assumes subsequent parsing would also fail.
+                        break
+
+                    # Extract the content between 'landmark {' and '}'
+                    block_content = body_landmarks[content_start_idx:block_end_tag].strip()
+                    landmark_blocks.append(block_content)
+
+                    # Continue searching from after the current block's closing '}'
+                    start_idx = block_end_tag + 1
+
+                for block_content in landmark_blocks:
+                    landmark_dict = {}
+                    
+                    # Parse each line within the block to extract the landmark properties
+                    for line in block_content.split('\n'):
+                        line = line.strip() # Remove leading/trailing whitespace
+                        if line.startswith('x:'):
+                            landmark_dict['x'] = float(line.split(':')[1].strip())
+                        elif line.startswith('y:'):
+                            landmark_dict['y'] = float(line.split(':')[1].strip())
+                        elif line.startswith('z:'):
+                            landmark_dict['z'] = float(line.split(':')[1].strip())
+                        elif line.startswith('visibility:'):
+                            landmark_dict['visibility'] = float(line.split(':')[1].strip())
+                    
+                    # If the dictionary is not empty (meaning at least one property was parsed), add it to the list
+                    if landmark_dict:
+                        parsed_landmarks_list.append(landmark_dict)
+                
+                # Replace the original string `body_landmarks` with the newly parsed list of dictionaries.
+                body_landmarks = parsed_landmarks_list
+                
+                for landmark in body_landmarks:
+                    if landmark['x'] < min_max_landmark['min_x']: min_max_landmark['min_x'] = landmark['x']
+                    if landmark['x'] > min_max_landmark['max_x']: min_max_landmark['max_x'] = landmark['x']
+                    if landmark['y'] < min_max_landmark['min_y']: min_max_landmark['min_y'] = landmark['y']
+                    if landmark['y'] > min_max_landmark['max_y']: min_max_landmark['max_y'] = landmark['y']
+                print(f"calc_bbox_from_median: body landmarks in image ratio : {min_max_landmark}")
+                image_folder = df.iloc[index].get('folder', None)
+                image_name = df.iloc[index].get('imagename', None)
+                image_path = os.path.join(image_folder, image_name)
+                img = cv2.imread(image_path)
+                if img is not None:
+                    height, width, _ = img.shape
+                    print(f"Image dimensions: width={width}, height={height}")
+                else:
+                    print(f"Could not load image: {image_path}")
+                min_max_landmark["min_x"] =  min_max_landmark["min_x"]*width
+                min_max_landmark["max_x"] =  min_max_landmark["max_x"]*width
+                min_max_landmark["min_y"] =  min_max_landmark["min_y"]*height
+                min_max_landmark["max_y"] =  min_max_landmark["max_y"]*height
+                min_max_landmark['width'] = min_max_landmark["max_x"] - min_max_landmark["min_x"]
+                min_max_landmark['height'] = min_max_landmark["max_y"] - min_max_landmark["min_y"]
+
+                for key in min_max_landmark.keys():
+                    min_max_landmark[key] = int(min_max_landmark[key])
+
+
+                print(f"calc_bbox_from_median: body landmarks pixels : {min_max_landmark}")
+                bbox = {
+                    'left' : None,
+                    'right' : None,
+                    'top' : min_max_landmark['min_y'],
+                    'bottom' : int(min_max_landmark['min_y'] + (min_max_landmark['height']*median))
+                }
+                print(f'calc_bbox_from_median: {bbox}')
+                return bbox
+            else:
+                print(f'Error Body landmarks type {type(body_landmarks)}')
+                return None
+                
+###########################################################################
+############################# END TENCH_CALC_BBOX #########################
 ###########################################################################
 
     def mse(self, img1, img2):
