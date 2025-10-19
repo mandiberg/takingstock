@@ -71,7 +71,7 @@ N_HSV = HAND_POSE_NO = 0 # defaults to no HSV clusters
 CSV_FOLDER = os.path.join("/Users/michaelmandiberg/Documents/projects-active/facemap_production/heft_keyword_fusion_clusters/meta_clusters_test_build")
 
 # TENCH UNCOMMENT FOR YOUR COMP:
-CSV_FOLDER = os.path.join(io.ROOT_DBx, "body3D_segmentbig_useall256_CSVs_test")
+# CSV_FOLDER = os.path.join(io.ROOT_DBx, "body3D_segmentbig_useall256_CSVs_test")
 
 # CSV_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/body3D_segmentbig_useall256_CSVs"
 # overriding DB for testing
@@ -1286,7 +1286,44 @@ def expand_face_encodings(df,encoding_col= "face_encodings68",):
     return enc_df
 
 def sort_by_face_dist_NN(df_enc):
+    def get_closest_knn_or_break(df_enc, df_sorted):
+        # send in both dfs, and return same dfs with 1+ rows sorted
+        print(" -- BEFORE sort_by_face_dist_NN _ for loop df_enc is", df_enc)
+        is_break = False
+        df_enc, df_sorted = sort.get_closest_df_NN(df_enc, df_sorted)
+
+        print(" -- AFTER sort_by_face_dist_NN _ for loop df_enc is", len(df_enc))
+        print(" -- AFTER sort_by_face_dist_NN _ for loop df_sorted is", len(df_sorted))
+
+        # # test to see if body_landmarks for row with image_id = 5251199 still is the same as test_lms
+        # retest_row = df_enc.loc[df_enc['image_id'] == 10498233]
+        # print("body_landmarks for retest_row")
+        # retest_lms = retest_row['body_landmarks']
+        # print(retest_lms)
+        # calculate any different between test_lms to retest_lms
+
+
+        # Break out of the loop if greater than MAXDIST
+        if ONE_SHOT:
+            df_sorted = pd.concat([df_sorted, df_enc])
+            # only return the first x rows
+            df_sorted = df_sorted.head(sort.CUTOFF)
+            print("one shot, breaking out", df_sorted)
+            is_break = True
+        # commenting out SHOT_CLOCK for now, Sept 28
+        # elif dist > sort.MAXD and sort.SHOT_CLOCK != 0:
+        elif df_enc.empty:
+            is_break = True            
+        else:
+            print("df_sorted.iloc[-1], " , df_sorted.iloc[-1])
+            dist = df_sorted.iloc[-1]['dist_enc1']
+            print("sort_by_face_dist_NN _ for loop dist is", dist)
+            if dist > sort.MAXD or df_enc.empty:
+                print("should breakout, dist is", dist)
+                is_break = True
+        return df_enc, df_sorted, is_break
     
+    # start here
     # create emtpy df_sorted with the same columns as df_enc
     df_sorted = pd.DataFrame(columns = df_enc.columns)
 
@@ -1298,58 +1335,8 @@ def sort_by_face_dist_NN(df_enc):
 
     if sort.CUTOFF < len(df_enc.index): itters = sort.CUTOFF
     else: itters = len(df_enc.index)
-    # print("sort_by_face_dist_NN itters is", itters, "sort.CUTOFF is", sort.CUTOFF)
+    print("sort_by_face_dist_NN itters is", itters, "sort.CUTOFF is", sort.CUTOFF)
 
-    # input enc1, df_128_enc, df_33_lmsNN
-    # df = pd.DataFrame(face_distances, columns =['dist', 'folder', 'filename','site_name_id','face_landmarks', 'bbox'])
-
-
-    # find the df_enc row with image_id = 10498233
-    # test_row = df_enc.loc[df_enc['image_id'] == 10498233]
-    # # print body_landmarks for this row
-    # print("body_landmarks for test_row")
-    # test_lms = test_row['body_landmarks']
-    # print(test_lms)
-
-    # print("row from df_enc with image_id = 893")
-    # test_row = df_enc.loc[df_enc['image_id'] == 893]
-    # print(test_row)    
-    def get_closest_knn_or_break(df_enc, df_sorted):
-        # send in both dfs, and return same dfs with 1+ rows sorted
-        print("BEFORE sort_by_face_dist_NN _ for loop df_enc is", df_enc)
-        is_break = False
-        df_enc, df_sorted = sort.get_closest_df_NN(df_enc, df_sorted)
-
-        print("AFTER sort_by_face_dist_NN _ for loop df_enc is", len(df_enc))
-        print("AFTER sort_by_face_dist_NN _ for loop df_sorted is", len(df_sorted))
-
-        # # test to see if body_landmarks for row with image_id = 5251199 still is the same as test_lms
-        # retest_row = df_enc.loc[df_enc['image_id'] == 10498233]
-        # print("body_landmarks for retest_row")
-        # retest_lms = retest_row['body_landmarks']
-        # print(retest_lms)
-        # calculate any different between test_lms to retest_lms
-
-
-        # Break out of the loop if greater than MAXDIST
-        if df_enc.empty:
-            is_break = True            
-        elif ONE_SHOT:
-            df_sorted = pd.concat([df_sorted, df_enc])
-            # only return the first x rows
-            df_sorted = df_sorted.head(sort.CUTOFF)
-            print("one shot, breaking out", df_sorted)
-            is_break = True
-        # commenting out SHOT_CLOCK for now, Sept 28
-        # elif dist > sort.MAXD and sort.SHOT_CLOCK != 0:
-        else:
-            print("df_sorted.iloc[-1], " , df_sorted.iloc[-1])
-            dist = df_sorted.iloc[-1]['dist_enc1']
-            print("sort_by_face_dist_NN _ for loop dist is", dist)
-            if dist > sort.MAXD or df_enc.empty:
-                print("should breakout, dist is", dist)
-                is_break = True
-        return df_enc, df_sorted, is_break
 
     if CHOP_FIRST:
         print(f"CHOP_FIRST is true with sort.counter_dict['start_img_name'], {sort.counter_dict['start_img_name']}")
@@ -1362,48 +1349,51 @@ def sort_by_face_dist_NN(df_enc):
         print("AFTER CHOP_FIRST df_enc is", len(df_enc))
         print("AFTER CHOP_FIRST df_sorted is", len(df_sorted))
 
-
-    ## SATYAM THIS IS WHAT WILL BE REPLACE BY TSP
-    if TSP_SORT is True:
-        
-
-        # # Option 1: Work entirely with expanded dataframe
-        # df_clean = expand_face_encodings(df_enc)
-        # sorter.set_TSP_sort(df_clean, START_IDX=None, END_IDX=None)
-        # df_sorted = sorter.do_TSP_SORT(df_clean)  # Same df!
-
-        # Option 2: If you need to maintain link to original df_enc
-        # You'll need to track the mapping yourself
-        df_clean = expand_face_encodings(df_enc)
-        df_clean['original_index'] = df_clean.index  # or however they map
-
-        sorter.set_TSP_sort(df_clean, START_IDX=None, END_IDX=None)
-        df_sorted_clean = sorter.do_TSP_SORT(df_clean)
-
-        # Then map back if needed
-        df_sorted = df_enc.iloc[df_sorted_clean['original_index']].reset_index(drop=True)
-
-        # # Prepare and sort
-        # df_clean = expand_face_encodings(df_enc)
-        # sorter.set_TSP_sort(df_clean, START_IDX=None, END_IDX=None)
-        # df_sorted = sorter.do_TSP_SORT(df_enc)
-
-        # df_clean=expand_face_encodings(df_enc)
-        # sort.set_TSP_sort(df_clean,START_IDX=None,END_IDX=None)
-        # # df_sorted = sort.get_closest_df_NN(df_enc, df_sorted, start_image_id, end_image_id)
-        # df_sorted=sort.do_TSP_SORT(df_enc)
+    if CHOP_FIRST and ONE_SHOT and not TSP_SORT:
+        print("CHOP_FIRST and ONE_SHOT both true, and using regular sort, so skipping the main TSP/NN sort")
     else:
-        for i in range(itters):
-            # print("sort_by_face_dist_NN _ for loop itters i is", i)
-            ## Find closest
-            try:
-                df_enc, df_sorted, is_break = get_closest_knn_or_break(df_enc, df_sorted)
-                if is_break: break
-            except Exception as e:
-                print("exception on going to get closest")
-                print(str(e))
-                traceback.print_exc()
-    ## SATYAM THIS THE END OF WHAT WILL BE REPLACE BY TSP
+        ## SATYAM THIS IS WHAT WILL BE REPLACE BY TSP
+        if TSP_SORT is True:
+            
+
+            # # Option 1: Work entirely with expanded dataframe
+            # df_clean = expand_face_encodings(df_enc)
+            # sorter.set_TSP_sort(df_clean, START_IDX=None, END_IDX=None)
+            # df_sorted = sorter.do_TSP_SORT(df_clean)  # Same df!
+
+            # Option 2: If you need to maintain link to original df_enc
+            # You'll need to track the mapping yourself
+            df_clean = expand_face_encodings(df_enc)
+            df_clean['original_index'] = df_clean.index  # or however they map
+
+            sorter.set_TSP_sort(df_clean, START_IDX=None, END_IDX=None)
+            df_sorted_clean = sorter.do_TSP_SORT(df_clean)
+
+            # Then map back if needed
+            df_sorted = df_enc.iloc[df_sorted_clean['original_index']].reset_index(drop=True)
+
+            # # Prepare and sort
+            # df_clean = expand_face_encodings(df_enc)
+            # sorter.set_TSP_sort(df_clean, START_IDX=None, END_IDX=None)
+            # df_sorted = sorter.do_TSP_SORT(df_enc)
+
+            # df_clean=expand_face_encodings(df_enc)
+            # sort.set_TSP_sort(df_clean,START_IDX=None,END_IDX=None)
+            # # df_sorted = sort.get_closest_df_NN(df_enc, df_sorted, start_image_id, end_image_id)
+            # df_sorted=sort.do_TSP_SORT(df_enc)
+        else:
+            for i in range(itters):
+                print("sort_by_face_dist_NN _ for loop itters i is", i)
+                ## Find closest
+                try:
+                    df_enc, df_sorted, is_break = get_closest_knn_or_break(df_enc, df_sorted)
+                    print(f"break for itters {i} is {is_break}")
+                    if is_break: break
+                except Exception as e:
+                    print("exception on going to get closest")
+                    print(str(e))
+                    traceback.print_exc()
+        ## SATYAM THIS THE END OF WHAT WILL BE REPLACE BY TSP
 
     # use the colum site_name_id to asign the value of io.folder_list[site_name_id] to the folder column
     df_sorted['folder'] = df_sorted['site_name_id'].apply(lambda x: io.folder_list[x])
@@ -2598,7 +2588,7 @@ def main():
         
         def find_parts(parts):
             if VERBOSE: print("finding parts in", parts)
-            cluster_no = pose_no = segment_count = topic_no = None
+            cluster_no = pose_no = segment_count = topic_no = hsv_no = None
             for part in parts:
                 if part.startswith("ct"):
                     # Extract segment_count from the part that starts with "ct"

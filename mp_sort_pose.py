@@ -1213,7 +1213,7 @@ class SortPose:
         # print(f"hand results: {df.iloc[row2].get('hand_results', None)}")
         try:
             distance = self.get_d(enc1, enc2)
-            print(f'dupe_detection col:{column}, row: {row1},{row2}, dist:{distance}')
+            # print(f'dupe_detection col:{column}, row: {row1},{row2}, dist:{distance}')
             return distance
         except:
             # print(f'dupe_detect_{column}_type: {type(enc1)}, val{enc1}')
@@ -3165,8 +3165,8 @@ class SortPose:
 
             return df_dist_hsv
 
-        if self.VERBOSE: print("debugging df_enc", df_enc.columns)
-        if self.VERBOSE: print("debugging df_sorted", df_sorted.columns)
+        # if self.VERBOSE: print("debugging df_enc", df_enc.columns)
+        # if self.VERBOSE: print("debugging df_sorted", df_sorted.columns)
         if len(df_sorted) == 0: 
             FIRST_ROUND = True
             enc1, obj_bbox1 = self.get_enc1(df_enc, FIRST_ROUND)
@@ -3273,13 +3273,16 @@ class SortPose:
 
                 df_shuffled = df_shuffled.sort_values(by='sum_dist').reset_index(drop=True)
                 if self.VERBOSE: print("df_shuffled pre_run", df_shuffled[['image_id','dist_enc1','dist_HSV','sum_dist']])
+
+                # runmask is only relevant if not ONE_SHOT
+                try: runmask = df_shuffled['sum_dist'] < self.MIND
+                except: runmask = None
+                if self.VERBOSE: print("runmask", runmask)
             else:
                 # if ONE_SHOT, skip the mask, and keep all data
                 df_shuffled = df_dist_hsv
+                runmask = None
 
-            try: runmask = df_shuffled['sum_dist'] < self.MIND
-            except: runmask = None
-            if self.VERBOSE: print("runmask", runmask)
 
             # if self.ONE_SHOT and not runmask:
 
