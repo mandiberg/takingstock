@@ -480,3 +480,20 @@ class MongoBSONExporter:
         
 
 
+    def get_mongo_index(self, mongo_db, collection_name):
+        collection = mongo_db[collection_name]
+        mongo_index = list(collection.find({}, {"image_id": 1, "_id": 0}))
+        return mongo_index
+    def get_sql_index(self, engine, table_name, where=None):
+        if where:
+            stmt = f"SELECT image_id FROM {table_name} WHERE {where};"
+        else:
+            stmt = f"SELECT image_id FROM {table_name};"
+        sql_index = []
+        try:
+            with engine.connect() as connection:
+                result = connection.execute(text(stmt))
+                sql_index = [row[0] for row in result.fetchall()]
+        except Exception as e:
+            print(f"Error retrieving SQL index: {e}")
+        return sql_index

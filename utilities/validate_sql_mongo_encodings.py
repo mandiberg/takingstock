@@ -52,10 +52,10 @@ exporter = MongoBSONExporter(mongo_db)
 batch_size = 5000
 IS_FACE = 0
 IS_BODY = 1
-MODE = 0  # 0 validate_zero_columns_against_mongo_prereshard (outputs bson)s
+MODE = 4  # 0 validate_zero_columns_against_mongo_prereshard (outputs bson)s
 #0 validate_zero_columns_against_mongo_prereshard (outputs bson) 
 # 1 read_and_store_bson
-if MODE == 0: FOLDER_MODE = 0 # 0 is the first way, 1 is by filepath, limit 1
+if MODE == 0 or MODE == 4: FOLDER_MODE = 0 # 0 is the first way, 1 is by filepath, limit 1
 else: FOLDER_MODE = 1 # 0 is the first way, 1 is by filepath, limit 1
 
 ## OVERRIDE for NML PC doover ##
@@ -63,9 +63,10 @@ else: FOLDER_MODE = 1 # 0 is the first way, 1 is by filepath, limit 1
 
 # 2 find entries present in mongo, but not recorded in sql table
 # 57607900
-last_id = 1500000
+
+last_id = 32920000  # starting from encoding_id 32920000
 print(f"Starting from last_id: {last_id}")
-EXPORT_DIR = os.path.join(io.ROOT_PROD,"mongo_exports_oct17_NMLPC_XXX")  # Directory to save BSON files
+EXPORT_DIR = os.path.join(io.ROOT_PROD,"mongo_exports_oct19_sets")  # Directory to save BSON files
 # EXPORT_DIR = os.path.join("/Volumes/OWC4/segment_images_deshardJSON_aug2_toArchive/mongo_exports_fromlist_adobeE")  # Directory to save BSON files
 # touch the directory if it does not exist
 os.makedirs(EXPORT_DIR, exist_ok=True)
@@ -398,43 +399,23 @@ def validate_zero_columns_against_mongo_prereshard(engine, mongo_db, document_na
         print(f"going to write {len(this_batch_dict)} documents to BSON files for batch starting at {batch_start}")
         exporter.write_bson_batches(this_batch_dict, batch_start, EXPORT_DIR, collections_found)
 
-def query_sql(engine, document_names_dict, batch_start, batch_size, table_name):
+def query_sql(engine, document_names_dict_or_string, batch_start, batch_size, table_name):
+    print(f"query_sql batch for {document_names_dict_or_string} starting at {batch_start} with size {batch_size}")
+    if isinstance(document_names_dict_or_string, str):
+        # this is only when I am looking for encodings
+        document_names_dict = {document_names_dict_or_string: [document_names_dict_or_string]}
+        select = f"image_id, encoding_id, {document_names_dict_or_string}"
+    else:
+        document_names_dict = document_names_dict_or_string
+        select = "*"
+
     docname_cols = [col for docnames in document_names_dict.values() for col in docnames]
     where_clause = "(" + " OR ".join([f"{col} IS NOT NULL" for col in docname_cols]) + f") AND encoding_id >= {batch_start} AND encoding_id < {batch_start + batch_size}"
-    query = f"SELECT * FROM {table_name} WHERE {where_clause} LIMIT {batch_size}"
-    
-    # print(f"Querying {table_name} with WHERE {where_clause} LIMIT {batch_size}")
-    # print(f"Querying {table_name} with WHERE {where_clause} LIMIT {batch_size}")
-    # try:
-    #     with engine.connect() as conn:
-    #         result = conn.execute(text(query))
-    #         rows = result.fetchall()
-    #         columns = result.keys()
-    #         # print(f"Fetched {len(rows)} rows from SQL")
-    #         # print(f"rows: {rows[:2]}")  # Print first 2 rows for inspection
-    #         # find the row with encoding_id 57624173
-    #         for row in rows:
-    #             # row is a tuple, convert to dict for easier access
-    #             row = dict(zip(columns, row))
-    #             # print(row)
-    #             if row['encoding_id'] == 57624173:
-    #                 print(f"Found SQL row with encoding_id 57624173: {row}")
-    #                 break
-    #         # Convert to DataFrame
-    #         df = pd.DataFrame(rows, columns=columns)
-    #         # Explicitly set dtypes for integer columns that may have NULLs
-    #         int_cols = [
-    #             'encoding_id', 'image_id', 'face_landmarks', 'body_landmarks',
-    #             'face_encodings68', 'nlms', 'left_hand', 'right_hand',
-    #             'body_world_landmarks', 'is_face', 'is_body'
-    #         ]
-    #         for col in int_cols:
-    #             if col in df.columns:
-    #                 df[col] = df[col].astype('Int64')
-
+    query = f"SELECT {select} FROM {table_name} WHERE {where_clause} LIMIT {batch_size}"
+    print(f"Executing query: {query}")
     try:
         df = pd.read_sql(
-            f"SELECT * FROM {table_name} WHERE {where_clause} LIMIT {batch_size}",
+            query,
             engine
         )
     except Exception as e:
@@ -478,6 +459,59 @@ def record_mysql_NULL_booleans_present_in_mongo(engine, mongo_db, document_names
                     # # set table_name value to NULL
                     exporter.write_MySQL_value(engine, table_name, "encoding_id", encoding_id, col, cell_value="NULL")
 
+
+def record_mysql_NULL_booleans_from_set(engine, mongo_db, document_names_dict, batch_start, table_name, batch_size = 1000):
+    # access the global set of image_id pairs
+    global image_ids_set_global
+    global global_collection_file
+
+    exporter = MongoBSONExporter(mongo_db)
+
+    print(f"recording MYSQL NULL booleans based on queried set for batch starting at {batch_start} with size {batch_size}")
+    # Flatten all document names and map to their collection
+    # collections_found = set()
+    # col_to_collection = exporter.col_to_collection
+    print(f"table name before loop: {table_name}")
+
+    encodings_table_name = "encodings"
+    if "hand_landmarks" in global_collection_file:
+        encodings_field_name = "mongo_hand_landmarks"
+    else:
+        print("unknown global_collection_file:", global_collection_file)
+        return
+    # to get the mysql table from the global_collection_file
+    # go through the document_names_dict to find which collection it is
+    df = query_sql(engine, encodings_field_name, batch_start, batch_size, encodings_table_name)
+    print(f"Retrieved {len(df)} rows from {encodings_table_name} for validation")
+    this_batch_dict = {}
+    # offset += batch_size
+    print(f"Retrieved {len(df)} rows from {table_name} for validation")
+    print(df)
+    for idx, row in df.iterrows():
+        this_result_dict = {}
+        encoding_id = int(row['encoding_id'])
+        image_id = int(row['image_id'])
+        # print(f"encoding_id={encoding_id}, image_id={image_id}")
+        if image_id in image_ids_set_global:
+            print(f"image_id {image_id} found in global set, checking columns")
+        else:
+            # print(f"image_id {image_id} NOT found in global set, skipping")
+            continue
+        # for col in exporter.col_to_collection:
+        #     if col in row and row[col] == 1:
+        #         collection = mongo_db[exporter.col_to_collection[col]]
+        #         doc = collection.find_one({"image_id": image_id})
+        #         if doc and col in doc and doc[col] is not None:
+        #             print(f"Discrepancy: mongo data found encoding_id={encoding_id}, image_id={image_id}, column={col}")
+
+        #             # update booleans in mysql tables
+        #             exporter.write_MySQL_value(engine, "encodings", "image_id", image_id, exporter.sql_field_names_dict[col], cell_value=1)
+        #             # exporter.write_MySQL_value(engine, "segmentBig_isface", "image_id", image_id, exporter.sql_field_names_dict[col], cell_value=1)
+
+        #             # # set table_name value to NULL
+        #             exporter.write_MySQL_value(engine, table_name, "encoding_id", encoding_id, col, cell_value="NULL")
+
+
 def process_batch(batch_start, batch_end, function):
     global table_name
     # Each thread needs its own session and mongo client
@@ -502,6 +536,9 @@ def process_batch(batch_start, batch_end, function):
         elif function == "record_mysql_NULL_booleans_present_in_mongo":
             # print(f"Processing batch from {batch_start} to {batch_end} with size {calculated_batch_size} using {function}")
             record_mysql_NULL_booleans_present_in_mongo(thread_engine, thread_mongo_db, document_names_dict, batch_start, table_name, calculated_batch_size)
+        elif function == "record_mysql_NULL_booleans_from_set":
+            # print(f"Processing batch from {batch_start} to {batch_end} with size {calculated_batch_size} using {function}")
+            record_mysql_NULL_booleans_from_set(thread_engine, thread_mongo_db, document_names_dict, batch_start, table_name, calculated_batch_size)
         else:
             print("if isinstance, Unknown function:", function)
     elif function == "read_and_store_bson_batch":
@@ -565,6 +602,52 @@ def process_file_list_in_batches(batch_list, num_threads, this_process, this_fun
                 return  
 
 
+def get_both_indexes(engine, mongo_db, exporter, document_names_dict, sql_field_names_dict, collection_name):
+    document_names= document_names_dict[collection_name]
+    for doc_name in document_names:
+        sql_field_name = sql_field_names_dict[doc_name]
+        print(f"Checking collection: {collection_name}, document: {doc_name}, SQL field: {sql_field_name}")
+        if sql_field_name == "mongo_hand_landmarks": continue
+    print(f"Checking collection: {collection_name}, document: {doc_name}, SQL field: {sql_field_name}")
+
+    mongo_index = exporter.get_mongo_index(mongo_db, collection_name)
+    print(f"MongoDB index for collection {collection_name} contains len: {len(mongo_index)} entries")
+    print(mongo_index[:5])  # print first 5 entries
+    mongo_index_simple = [doc['image_id'] for doc in mongo_index]
+    print(f"MongoDB index as simple list: {mongo_index_simple[:5]}")
+    mongo_index_set = set(mongo_index_simple)        # compare with SQL index
+
+    where = f"{sql_field_name} = 1"
+    sql_index = exporter.get_sql_index(engine, "Encodings", where)
+    print(f"SQL index for collection {collection_name} contains len: {len(sql_index)} entries")
+    print(sql_index[:5])  # print first 5 entries
+    sql_index_set = set(sql_index)
+    # find discrepancies
+    only_in_mongo = mongo_index_set - sql_index_set
+    only_in_sql = sql_index_set - mongo_index_set
+    in_both = mongo_index_set & sql_index_set
+
+
+    return only_in_mongo, only_in_sql, in_both
+
+def save_sets(collection_name, only_in_mongo, only_in_sql, in_both):
+    with open(os.path.join(EXPORT_DIR, f"mongo_only_{collection_name}.txt"), "w") as f:
+        f.write(f"Entries only in MongoDB ({len(only_in_mongo)}):\n")
+        for entry in only_in_mongo:
+            f.write(f"{entry}\n")
+
+        # Save only_in_sql
+    with open(os.path.join(EXPORT_DIR, f"sql_only_{collection_name}.txt"), "w") as f:
+        f.write(f"Entries only in SQL ({len(only_in_sql)}):\n")
+        for entry in only_in_sql:
+            f.write(f"{entry}\n")
+
+        # Save in_both
+    with open(os.path.join(EXPORT_DIR, f"in_both_{collection_name}.txt"), "w") as f:
+        f.write(f"Entries in both ({len(in_both)}):\n")
+        for entry in in_both:
+            f.write(f"{entry}\n")
+
 if __name__ == "__main__":
 
     # Get min and max encoding_id for batching
@@ -610,6 +693,41 @@ if __name__ == "__main__":
         break_after_first = False  # for testing
         function = "record_mysql_NULL_booleans_present_in_mongo"
         process_in_batches(min_id, max_id, batch_size, num_threads, process_batch, function, break_after_first)
+    
+    elif MODE == 3:
+        # compare mongo index to sql index
+        collection_name = "hand_landmarks"
+        mongo_only, sql_only, in_both = get_both_indexes(engine, mongo_db, exporter, document_names_dict, sql_field_names_dict, collection_name)
+
+        print(f"Entries only in MongoDB ({len(mongo_only)}): {list(mongo_only)[:10]}")
+        print(f"Entries only in SQL ({len(sql_only)}): {list(sql_only)[:10]}")
+        print(f"Entries in both ({len(in_both)}): {list(in_both)[:10]}")
+
+        # save the results for each mongo_only only_insql in_both to their own text file
+        # Save mongo_only
+        save_sets(collection_name, mongo_only, sql_only, in_both)
+
+    elif MODE == 4:
+        # open the sets saved in MODE 3 to update MYSQL table
+        global global_collection_file
+        global_collection_file = "hand_landmarks_right_hand" # this will probably need to be updated mannually
+
+        set_name = "in_both"
+        # set_name = "mongo_only"
+        with open(os.path.join(EXPORT_DIR, f"{set_name}_{global_collection_file}.txt"), "r") as f:
+            lines = f.readlines()[1:]  # skip header
+            this_set = set(line.strip() for line in lines)
+        print(f"Loaded set {set_name} for collection {global_collection_file} with {len(this_set)} entries")
+        print(f"Sample entries: {list(this_set)[:10]}")
+
+        # make this_set a global variable to be used in process_batch
+        global image_ids_set_global
+        image_ids_set_global = this_set
+
+        break_after_first = False  # for testing
+        function = "record_mysql_NULL_booleans_from_set"
+        process_in_batches(min_id, max_id, batch_size, num_threads, process_batch, function, break_after_first)
+
 
     session.close()
 
