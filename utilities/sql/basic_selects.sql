@@ -209,22 +209,22 @@ DELETE FROM NMLImages
 
 
 
-CREATE TABLE ArmsPoses3D (
-    cluster_id int NOT NULL AUTO_INCREMENT PRIMARY KEY,
+CREATE TABLE BodyPoses3D (
+    cluster_id int NOT NULL PRIMARY KEY,
     cluster_median BLOB
 );
 
 -- This is the poses junction table.
-CREATE TABLE ImagesArmsPoses3D (
+CREATE TABLE ImagesBodyPoses3DD (
     image_id INTEGER REFERENCES Images (image_id),
-    cluster_id INTEGER REFERENCES ArmsPoses3D (cluster_id),
+    cluster_id INTEGER REFERENCES BodyPoses3D (cluster_id),
     cluster_dist FLOAT DEFAULT NULL,
     PRIMARY KEY (image_id)
 );
 
 
 CREATE TABLE MetaBodyPoses3D (
-    cluster_id int NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    cluster_id int NOT NULL PRIMARY KEY,
     cluster_median BLOB
 );
 
@@ -239,11 +239,12 @@ CREATE TABLE ClustersBodyMetaPoses3D (
 SELECT * FROM ArmsPoses3D ;
 SELECT * FROM ImagesArmsPoses3D ;
 
-DELETE FROM ArmsPoses3D ;
-DELETE FROM ImagesArmsPoses3D ;
+DELETE FROM HSV ;
+DELETE FROM ImagesHSV ;
 
-DELETE FROM BodyPoses3D ;
-DELETE FROM ImagesBodyPoses3D ;
+Use Stock;
+DELETE FROM MetaBodyPoses3D ;
+DELETE FROM ClustersMetaBodyPoses3D  ;
 
 SELECT COUNT(s.image_id) 
 FROM SegmentBig_isnotface s  JOIN Encodings e ON s.image_id = e.image_id  
@@ -251,6 +252,70 @@ WHERE  e.is_dupe_of IS NULL
 AND e.mongo_body_landmarks_3D = 1 and e.is_feet = 1
  ;
 
+SELECT cmb.meta_cluster_id, COUNT(cmb.cluster_id)
+FROM ClustersMetaBodyPoses3D cmb
+GROUP BY cmb.meta_cluster_id
+ORDER BY cmb.meta_cluster_id
+;
+
+SELECT cmb.meta_cluster_id, cmb.cluster_id
+FROM ClustersMetaBodyPoses3D cmb
+WHERE cmb.meta_cluster_id = 8
+;
+
+
+SELECT cmb.meta_cluster_id, cmb.cluster_id
+FROM ClustersMetaBodyPoses3D cmb
+WHERE cmb.cluster_id = 27
+;
+
+-- 193, 149
+
+-- Try inserting a row with cluster_id=0 directly in MySQL.
+INSERT INTO MetaBodyPoses3D 
+(cluster_id, cluster_median) VALUES (0, X'00');
+
+
+SELECT DISTINCT(s.image_id), s.site_name_id, s.contentUrl, s.imagename, s.description, s.face_x, s.face_y, s.face_z, s.mouth_gap, s.bbox, s.site_image_id, ibg.lum, ibg.lum_bb, ibg.hue, ibg.hue_bb, ibg.sat, ibg.sat_bb, ibg.val, ibg.val_bb, ibg.lum_torso, ibg.lum_torso_bb  
+FROM SegmentBig_isface s  JOIN Encodings e ON s.image_id = e.image_id  
+JOIN ImagesBodyPoses3D ic ON s.image_id = ic.image_id  
+JOIN ImagesBackground ibg ON s.image_id = ibg.image_id    
+WHERE  e.is_dupe_of IS NULL  AND e.is_feet = 1  AND s.age_id NOT IN (1,2,3)     
+AND ic.cluster_id  = 0  LIMIT 1000;
+
+
+SELECT *
+FROM  ImagesBackground
+WHERE image_id = 113981059
+;
+
+SELECT *
+FROM  ImagesBackground
+WHERE hue IS NULL 
+LIMIT 10
+;
+
+
+-- 48472426 ibg
+-- 75467375 isface
+
+/*
+ * 
+ *
+ *  
+409962
+48405335
+58261345
+58472397
+58472933
+58472935
+58473257
+61047375
+80765791
+80767664
+ * 
+ * 
+ */
 
 SELECT COUNT(n.nml_id)
 FROM NMLImages n 

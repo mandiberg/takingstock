@@ -86,9 +86,10 @@ CLUSTER_TYPE = "BodyPoses3D" # use this for META 3D body clusters, Arms will sta
 # CLUSTER_TYPE = "FingertipsPositions"
 # CLUSTER_TYPE = "HSV"
 
-use_3D=True
+LMS_DIMENSIONS = 3
 OFFSET = 0
 START_ID = 108329049 # only used in MODE 1
+VERBOSE = True
 
 # WHICH TABLE TO USE?
 # SegmentTable_name = 'SegmentOct20'
@@ -104,22 +105,25 @@ SegmentHelper_name = 'SegmentHelper_sept2025_heft_keywords'
 # 32 for hand positions
 # 128 for hand gestures
 N_CLUSTERS = 16
-N_META_CLUSTERS = 192
+N_META_CLUSTERS = 16
 if MODE == 3: 
     META = True
     N_CLUSTERS = N_META_CLUSTERS
+    LMS_DIMENSIONS = 4
 else: META = False
 
-ONE_SHOT= JUMP_SHOT= HSV_CONTROL=  VERBOSE= INPAINT= OBJ_CLS_ID = UPSCALE_MODEL_PATH =None
+ONE_SHOT= JUMP_SHOT= HSV_CONTROL=  INPAINT= OBJ_CLS_ID = UPSCALE_MODEL_PATH =None
 # face_height_output, image_edge_multiplier, EXPAND=False, ONE_SHOT=False, JUMP_SHOT=False, HSV_CONTROL=None, VERBOSE=True,INPAINT=False, SORT_TYPE="128d", OBJ_CLS_ID = None,UPSCALE_MODEL_PATH=None, use_3D=False
-sort = SortPose(motion, face_height_output, image_edge_multiplier_sm, EXPAND,  ONE_SHOT,  JUMP_SHOT,  HSV_CONTROL,  VERBOSE, INPAINT,  CLUSTER_TYPE, OBJ_CLS_ID, UPSCALE_MODEL_PATH, use_3D)
+sort = SortPose(motion, face_height_output, image_edge_multiplier_sm, EXPAND,  ONE_SHOT,  JUMP_SHOT,  HSV_CONTROL,  VERBOSE, INPAINT,  CLUSTER_TYPE, OBJ_CLS_ID, UPSCALE_MODEL_PATH, LMS_DIMENSIONS)
 # MM you need to use conda activate mps_torch310 
 SUBSELECT_ONE_CLUSTER = 0
 
 # SUBSET_LANDMARKS is now set in sort pose init
 if CLUSTER_TYPE == "BodyPoses3D": 
-    if META: sort.SUBSET_LANDMARKS = sort.ARMS_HEAD_LMS
+    if META: 
+        sort.SUBSET_LANDMARKS = sort.make_subset_landmarks(15,16)  
     else: sort.SUBSET_LANDMARKS = None
+    print("OVERRIDE after construction setting sort.SUBSET_LANDMARKS to: ",sort.SUBSET_LANDMARKS)
 USE_HEAD_POSE = False
 
 SHORTRANGE = False # controls a short range query for the face x,y,z and mouth gap
@@ -345,29 +349,30 @@ def get_cluster_medians():
         cluster_id, cluster_median_pickle = row
         # print("cluster_id: ",cluster_id)
 
-        import pprint
-        pp = pprint.PrettyPrinter(indent=4)
+        # import pprint
+        # pp = pprint.PrettyPrinter(indent=4)
         # print the pickle using pprint
         # pp.pprint(cluster_median_pickle)
 
         cluster_median = pickle.loads(cluster_median_pickle)
-        # print("cluster_median: ", cluster_id, cluster_median)
+        print(f"cluster_median {cluster_id}: ", cluster_median)
         # Check the type and content of the deserialized object
         if not isinstance(cluster_median, np.ndarray):
             print(f"Deserialized object is not a numpy array, it's of type: {type(cluster_median)}")
         
-        if sort.SUBSET_LANDMARKS:
+        if META and sort.SUBSET_LANDMARKS:
             # handles body lms subsets
-            print("handling body lms subsets in get_cluster_medians for these subset landmarks: ",sort.SUBSET_LANDMARKS)
+            # print("handling body lms subsets in get_cluster_medians for these subset landmarks: ",sort.SUBSET_LANDMARKS)
             subset_cluster_median = []
             for i in range(len(cluster_median)):
-                print("i: ",i)
+                # print("i: ",i)
                 if i in sort.SUBSET_LANDMARKS:
-                    print("adding i: ",i)
+                    # print("adding i: ",i)
                     subset_cluster_median.append(cluster_median[i])
             cluster_median = subset_cluster_median
+            print(f"subset cluster median {cluster_id}: ",cluster_median)
         median_dict[cluster_id] = cluster_median
-    print("median dict: ",median_dict)
+    # print("median dict: ",median_dict)
     return median_dict 
 
 
@@ -470,22 +475,22 @@ def geometric_median(X, eps=1e-5, zero_threshold=1e-6):
 
 def calc_cluster_median(df, col_list, cluster_id):
     cluster_df = df[df['cluster_id'] == cluster_id]
-    if META:
-        # for some reason the meta clusters have the cluster_id in the first column
-        # need to remove it
-        if len(col_list)/len(sort.SUBSET_LANDMARKS) % 1 != 0:
-            print(" \/\/\/\/ imbalance in col_list and subset_landmarks")
-            if (len(col_list)-1)/len(sort.SUBSET_LANDMARKS) % 1 == 0:
-                # if removing one column makes it balanced, then do that
+    # if META:
+    #     # for some reason the meta clusters have the cluster_id in the first column
+    #     # need to remove it
+    #     if len(col_list)/len(sort.SUBSET_LANDMARKS) % 1 != 0:
+    #         print(" \/\/\/\/ imbalance in col_list and subset_landmarks")
+    #         if (len(col_list)-1)/len(sort.SUBSET_LANDMARKS) % 1 == 0:
+    #             # if removing one column makes it balanced, then do that
 
-                # this is a hacky attempt to handle weird scenario when making metaclusters
-                # it reads in the cluster_id from mysql into df, etc. 
-                print('remove cluster_id column from cluster_df and col_list', col_list)
-                print(len(col_list))
-                col_list.remove(col_list[0])
-                print('removeDDDDD cluster_id column from cluster_df and col_list', col_list)
-                print(len(col_list))
-                cluster_df = cluster_df.drop(columns=['cluster_id'])
+    #             # this is a hacky attempt to handle weird scenario when making metaclusters
+    #             # it reads in the cluster_id from mysql into df, etc. 
+    #             print('remove cluster_id column from cluster_df and col_list', col_list)
+    #             print(len(col_list))
+    #             col_list.remove(col_list[0])
+    #             print('removeDDDDD cluster_id column from cluster_df and col_list', col_list)
+    #             print(len(col_list))
+    #             cluster_df = cluster_df.drop(columns=['cluster_id'])
     print(f"Cluster {cluster_id} data: {cluster_df}")
     # Convert the selected dimensions into a NumPy array
     cluster_points = cluster_df[col_list].values
@@ -625,6 +630,7 @@ FROM `BodyPoses3D`'''
             )
             session.add(instance)
             session.flush()  # Force database insertion to catch issues early
+            session.commit()  
             if cluster_id == 0:
 
                 saved_record = session.query(this_cluster).filter_by(cluster_id=0).first()
@@ -671,7 +677,8 @@ def save_images_clusters_DB(df):
         elif this_crosswalk == ClustersMetaClusters:
             this_cluster_id = idx
             meta_cluster_id = row['cluster_id']
-            cluster_dist = row['cluster_dist']
+            cluster_dist = None
+            print("this_cluster_id: ",this_cluster_id, " meta_cluster_id: ",meta_cluster_id)
             # look up the body3D cluster_id
             existing_record = session.query(ClustersMetaClusters).filter_by(cluster_id=this_cluster_id).first()
 
@@ -920,8 +927,9 @@ def main():
         else:
             df_subset_landmarks = enc_data
         print("df_subset_landmarks", df_subset_landmarks)
-        df_subset_landmarks = process_landmarks_cluster_dist(enc_data,df_subset_landmarks)
-        print("df_subset_landmarks after process_landmarks", df_subset_landmarks)
+        if not META:
+            df_subset_landmarks = process_landmarks_cluster_dist(enc_data,df_subset_landmarks)
+            print("df_subset_landmarks after process_landmarks", df_subset_landmarks)
         save_images_clusters_DB(df_subset_landmarks)
         print("saved segment to clusters")
 
@@ -929,14 +937,10 @@ def main():
     global N_CLUSTERS
     if META:
         print("making meta clusters from existing clusters")
-        if len(MEDIAN_DICT) < 2:
-            print("Not enough clusters to form meta-clusters. Exiting.")
-            return False
-        n_meta_clusters = max(2, len(MEDIAN_DICT) // 5)  # Ensure at least 2 meta-clusters
-        print(f"Number of meta-clusters to create: {n_meta_clusters}")
         # convert MEDIAN_DICT to a dataframe
         enc_data = pd.DataFrame.from_dict(MEDIAN_DICT, orient='index')
         enc_data.reset_index(inplace=True)
+        # this is where the weird cluster_id column comes from. could remove this here and the correction elsewhere
         enc_data.rename(columns={'index': 'cluster_id'}, inplace=True)
 
     else:
@@ -964,7 +968,7 @@ def main():
             OPTIMAL_CLUSTERS = best_score(enc_data.drop(["image_id", "body_landmarks_array"], axis=1))   #### Input ONLY encodings into clustering algorithm
             print(OPTIMAL_CLUSTERS)
             N_CLUSTERS = OPTIMAL_CLUSTERS
-        print(enc_data)
+        print("enc_data", enc_data)
         
 
         # if body_landmarks_array is one of the df.columns, drop it
