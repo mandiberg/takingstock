@@ -50,11 +50,12 @@ SegmentTable_name = 'SegmentOct20'
 # SegmentTable_name = 'SegmentBig_isface'
 # SegmentTable_name = 'SegmentBig_isnotface'
 # SegmentHelper_name = 'SegmentHelper_may2025_4x4faces'
-SegmentHelper_name = 'SegmentHelper_sept2025_heft_keywords'
+# SegmentHelper_name = 'SegmentHelper_sept2025_heft_keywords'
+SegmentHelper_name = 'SegmentHelper_oct2025_every40'
 # SegmentHelper_name = None
 # SATYAM, this is MM specific
 # for when I'm using files on my SSD vs RAID
-IS_SSD = True
+IS_SSD = False
 #IS_MOVE is in move_toSSD_files.py
 
 # I/O utils
@@ -68,7 +69,7 @@ N_HSV = HAND_POSE_NO = 0 # defaults to no HSV clusters
 # CSV_FOLDER = os.path.join(io.ROOT_DBx, "body3D_segmentbig_useall256_CSVs_MMtest")
 
 # CSV_FOLDER = os.path.join("/Users/michaelmandiberg/Documents/projects-active/facemap_production/body3D_segmentbig_useall256_CSVs_test")
-CSV_FOLDER = os.path.join("/Users/michaelmandiberg/Documents/projects-active/facemap_production/heft_keyword_fusion_clusters/meta_clusters_test_build")
+CSV_FOLDER = os.path.join("/Users/michaelmandiberg/Documents/projects-active/facemap_production/heft_keyword_fusion_clusters/body3D_768_CSVs_test")
 
 # TENCH UNCOMMENT FOR YOUR COMP:
 # CSV_FOLDER = os.path.join(io.ROOT_DBx, "body3D_segmentbig_useall256_CSVs_test")
@@ -78,8 +79,10 @@ CSV_FOLDER = os.path.join("/Users/michaelmandiberg/Documents/projects-active/fac
 # io.db["name"] = "stock"
 # io.db["name"] = "ministock"
 
-MODES = ['paris_photo_torso_images_topics', 'paris_photo_torso_videos_topics', '3D_bodies_topics','3D_arms', 'heft_torso_keywords']
-MODE_CHOICE = 3
+MODES = {0:'paris_photo_torso_images_topics', 1:'paris_photo_torso_videos_topics', 
+         2:'3D_bodies_topics', 3:'3D_full_bodies_topics', 4:'3D_arms_meta', 
+         5:'heft_torso_keywords'}
+MODE_CHOICE = 2
 CURRENT_MODE = MODES[MODE_CHOICE]
 LIMIT = 10000 # this is the limit for the SQL query
 
@@ -88,7 +91,7 @@ FULL_BODY = IS_HAND_POSE_FUSION = ONLY_ONE = GENERATE_FUSION_PAIRS = USE_FUSION_
 EXPAND = ONE_SHOT = JUMP_SHOT = USE_ALL = CHOP_FIRST = TSP_SORT = False
 USE_PAINTED = OUTPAINT = INPAINT= META = False
 FUSION_FOLDER = None
-MIN_CYCLE_COUNT = 300
+MIN_CYCLE_COUNT = 1
 AUTO_EDGE_CROP = False # this triggers the dynamic cropping based on min_max_body_landmarks_for_crop
 
 image_edge_multiplier = None
@@ -125,9 +128,13 @@ if "paris" in CURRENT_MODE:
         IS_ONE_TOPIC = True
         TOPIC_NO = [32] # if doing an affect topic fusion, this is the wrapper topic
 elif "3D" in CURRENT_MODE:
-    if CURRENT_MODE == '3D_bodies_topics':
+    AUTO_EDGE_CROP = True
+    if "bod" in CURRENT_MODE:
         SORT_TYPE = "body3D"
-        FULL_BODY = True # this requires is_feet
+        if "full" in CURRENT_MODE:
+            FULL_BODY = True # this requires is_feet
+        else:
+            FULL_BODY = False
         EXPAND = True # expand with white for prints, as opposed to inpaint and crop. (not video, which is controlled by INPAINT_COLOR) 
     elif CURRENT_MODE == '3D_arms':
         META = True
@@ -135,7 +142,7 @@ elif "3D" in CURRENT_MODE:
         # SORT_TYPE = "body3D"
         FULL_BODY = False 
         # either AUTO_EDGE_CROP or image_edge_multiplier must be set. Not both
-        AUTO_EDGE_CROP = True # this triggers the dynamic cropping based on min_max_body_landmarks_for_crop
+        # AUTO_EDGE_CROP = True # this triggers the dynamic cropping based on min_max_body_landmarks_for_crop
         if AUTO_EDGE_CROP:
             EXPAND = True
         else:

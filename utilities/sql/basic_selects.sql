@@ -204,8 +204,8 @@ Where e.mongo_hand_landmarks_norm IS NOT NULL
 LIMIT 100
 ;
 
-DELETE FROM NMLImages
-;
+DELETE FROM BodyPoses3D;
+DELETE FROM ImagesBodyPoses3D;
 
 
 
@@ -215,7 +215,7 @@ CREATE TABLE BodyPoses3D (
 );
 
 -- This is the poses junction table.
-CREATE TABLE ImagesBodyPoses3DD (
+CREATE TABLE ImagesBodyPoses3D (
     image_id INTEGER REFERENCES Images (image_id),
     cluster_id INTEGER REFERENCES BodyPoses3D (cluster_id),
     cluster_dist FLOAT DEFAULT NULL,

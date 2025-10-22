@@ -33,7 +33,7 @@ from deap import base, creator, tools, algorithms
 class SortPose:
     # """Sort image files based on head pose"""
 
-    def __init__(self, motion, face_height_output, image_edge_multiplier, EXPAND=False, ONE_SHOT=False, JUMP_SHOT=False, HSV_CONTROL=None, VERBOSE=True,INPAINT=False, SORT_TYPE="128d", OBJ_CLS_ID = None,UPSCALE_MODEL_PATH=None, use_3D=False,TSP_SORT=False):
+    def __init__(self, motion, face_height_output, image_edge_multiplier, EXPAND=False, ONE_SHOT=False, JUMP_SHOT=False, HSV_CONTROL=None, VERBOSE=True,INPAINT=False, SORT_TYPE="128d", OBJ_CLS_ID = None,UPSCALE_MODEL_PATH=None, LMS_DIMENSIONS=2,TSP_SORT=False):
 
         # need to refactor this for GPU
         self.mp_face_detection = mp.solutions.face_detection
@@ -55,8 +55,8 @@ class SortPose:
         self.HSVMULTIPLIER = 3
         self.NORM_BODY_MULTIPLIER = 4
         self.BRUTEFORCE = False
-        self.use_3D = use_3D
-        # print("init use_3D",self.use_3D)
+        self.LMS_DIMENSIONS = LMS_DIMENSIONS
+        if self.VERBOSE: print("init LMS_DIMENSIONS",self.LMS_DIMENSIONS)
         self.CUTOFF = 200 # DOES factor if ONE_SHOT
         self.ORIGIN = 0
         self.this_nose_bridge_dist = self.NOSE_BRIDGE_DIST = None # to be set in first loop, and sort.this_nose_bridge_dist each time
@@ -2549,10 +2549,15 @@ class SortPose:
     def make_subset_landmarks(self, first, last, dim=2):
         # takes number of lms and multiplies them by dim
         # add 1 to last to make it inclusive of final landmark
-        if self.VERBOSE: print("am I using 3D?", self.use_3D)
-        if self.use_3D == True: dim = 3
-        subset = list(range(first*dim, (last+1)*dim))
-        if self.VERBOSE: print(f"first {first} last {last} subset {subset}")
+        if self.VERBOSE: print("am I using 2D, 3D or 4D?", self.LMS_DIMENSIONS)
+        # if self.LMS_DIMENSIONS == 4: dim = 4
+        # elif self.LMS_DIMENSIONS == 3: dim = 3
+
+        # need to account for starting with lms 0 in the math. 
+        start = first * self.LMS_DIMENSIONS # 
+        end = (last * self.LMS_DIMENSIONS) + self.LMS_DIMENSIONS # 
+        subset = list(range(start, end))
+        if self.VERBOSE: print(f"first {first} last {last} start {start} end {end} subset {subset}")
         return subset
                 
     def get_landmarks_2d(self, Lms, selected_Lms, structure="dict"):

@@ -99,12 +99,13 @@ SegmentTable_name = 'SegmentBig_isface'
 # if doing MODE == 2, use SegmentHelper_name to subselect SQL query
 # unless you know what you are doing, leave this as None
 # SegmentHelper_name = None
-SegmentHelper_name = 'SegmentHelper_sept2025_heft_keywords'
+# SegmentHelper_name = 'SegmentHelper_sept2025_heft_keywords'
+SegmentHelper_name = 'SegmentHelper_oct2025_every40'
 
 # number of clusters produced. run GET_OPTIMAL_CLUSTERS and add that number here
 # 32 for hand positions
 # 128 for hand gestures
-N_CLUSTERS = 16
+N_CLUSTERS = 768
 N_META_CLUSTERS = 16
 if MODE == 3: 
     META = True
@@ -194,6 +195,8 @@ if USE_SEGMENT is True and (CLUSTER_TYPE != "Clusters"):
             elif CLUSTER_TYPE == "HandsPositions": subselect_cluster = "ImagesHandsGestures"
             FROM += f" INNER JOIN {subselect_cluster} sc ON sc.image_id = s.image_id " 
             WHERE += f" AND sc.cluster_id = {SUBSELECT_ONE_CLUSTER} "
+        if SegmentHelper_name:
+            FROM += f" INNER JOIN {SegmentHelper_name} h ON h.image_id = s.image_id " 
     elif MODE in (1,2):
         FROM += f" LEFT JOIN Images{CLUSTER_TYPE} ic ON s.image_id = ic.image_id"
         if MODE == 1: 
@@ -215,7 +218,7 @@ if USE_SEGMENT is True and (CLUSTER_TYPE != "Clusters"):
         WHERE = " cluster_id IS NOT NULL "
 
     # WHERE += " AND h.is_body = 1"
-    LIMIT = 100000000
+    LIMIT = 3000000
 
     '''
     Poses
@@ -420,12 +423,13 @@ def make_subset_landmarks(df,add_list=False):
 def kmeans_cluster(df, n_clusters=32):
     # Select only the numerical columns (dim_0 to dim_65)
     print("kmeans_cluster sort.SUBSET_LANDMARKS: ",sort.SUBSET_LANDMARKS)
-    if CLUSTER_TYPE == "BodyPoses":
+    if CLUSTER_TYPE in ["BodyPoses", "BodyPoses3D"]:
         print("CLUSTER_TYPE == BodyPoses", df)
         numerical_data = make_subset_landmarks(df)
     else:
         numerical_data = df
     print("clustering subset data", numerical_data)
+    print("frist row of numerical data: ", numerical_data.iloc[0])
     kmeans = KMeans(n_clusters=n_clusters, n_init=10, init='k-means++', random_state=42, max_iter=300, verbose=1)
     kmeans.fit(numerical_data)
     clusters = kmeans.predict(numerical_data)

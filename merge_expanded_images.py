@@ -11,14 +11,14 @@ from pymediainfo import MediaInfo
 
 
 
-# Conda use mps_torch310 -- requires  or env37 but not base
+# conda activate minimal_ds -- requires mps_torch310 or minimal_ds but not base. minimal_ds for video
 
 # I/O utils
 io = DataIO()
 db = io.db
 
 MODES = ["merge_images_paris_photo", "merge_images_body_autocrop", "make_video", "make_video_heft_keyword_fusion"]
-MODE_CHOICE = 3
+MODE_CHOICE = 1
 CURRENT_MODE = MODES[MODE_CHOICE]
 
 
@@ -96,8 +96,8 @@ ROOT_FOLDER_PATH = '/Volumes/OWC4/images_to_assemble'
 # will not accept clusterNone -- change to cluster00
 FOLDER_NAME = "body3D_512_"
 FOLDER_PATH = os.path.join(ROOT_FOLDER_PATH,FOLDER_NAME)
-FOLDER_PATH = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/keyword_body3D_tests/body3D_512" # temp override for testing
-# FOLDER_PATH = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/pink_phone_test"
+# FOLDER_PATH = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/keyword_body3D_tests/body3D_512" # temp override for testing
+FOLDER_PATH = "/Volumes/OWC4/segment_images/Bodies3D_768_80ct_testbuild_pt1"
 DIRS = ["1x1", "4x3", "16x10"]
 OUTPUT = os.path.join(io.ROOTSSD, "audioproduction")
 # Extract the topic number from the folder name
@@ -210,8 +210,18 @@ def iterate_image_list(FOLDER_PATH,image_files, successes, output_dims=None):
             # this is potentially messy, because it was originally designed to crop images when there were small size differences
             # but now I'm using it to resize gigas during test runs. 
             # Resize the image to GIGA_DIMS
-            if VERBOSE: print("resizing image to", DIMS)
-            img1 = cv2.resize(img1, (DIMS, DIMS), interpolation=cv2.INTER_AREA)
+            if abs(img1.shape[0] - img1.shape[1]) > img1.shape[0] // 10:
+                # if the image is not square, establish a DIMS ratio based on the larger dimension
+                if img1.shape[0] > img1.shape[1]:
+                    ratio = DIMS[0] / img1.shape[0]
+                    resize_width = int(img1.shape[1] * ratio)
+                    resize_height = DIMS[0]
+                else:
+                    ratio = DIMS[1] / img1.shape[1]
+                    resize_height = int(img1.shape[0] * ratio)
+                    resize_width = DIMS[1]
+            if VERBOSE: print("resizing image to", resize_width, resize_height)
+            img1 = cv2.resize(img1, (resize_width, resize_height), interpolation=cv2.INTER_AREA)
         else:
             if VERBOSE: print("cropping image to", DIMS)
             # height, width = img1.shape[:3]
@@ -238,7 +248,7 @@ def iterate_image_list(FOLDER_PATH,image_files, successes, output_dims=None):
             # not change needed
             pass
         elif img1.shape[0] > REG_DIMS[0] or img1.shape[1] > REG_DIMS[1]:
-            # if VERBOSE: print("image shape < ", img1.shape, image_files[i])
+            if VERBOSE: print(f"image shape {img1.shape} > {REG_DIMS}, {image_files[i]}")
             img1 = crop_scale_giga(img1, REG_DIMS)
         return img1
     
@@ -306,15 +316,41 @@ def merge_images(images_to_build, FOLDER_PATH, output_dims=None):
         # this is legacy stuff to get the cluster number and handpose number from the folder name
         image_folder = FOLDER_PATH.split("/")[-1]
         if "cluster" in image_folder:
-            if "None" in image_folder:
-                cluster_no = None_counter
-                None_counter += 1
-                print("cluster_no is None, incrementing None_counter to", None_counter)
-            else:
-                print("cluster found", image_folder)
-                cluster_no = int(image_folder.split("_")[0].replace("cluster",""))
-                try: handpose_no = int(image_folder.split("_")[1])
-                except: print("handpose_no = None")
+            filters = image_folder.split("_")
+            for f in filters:
+                if f.startswith("cluster"):
+                    try:
+                        cluster_no = int(f.replace("cluster",""))
+                    except:
+                        try:
+                            cluster_no = int(f.replace("clustercc",""))
+                        except:
+                            print("could not parse cluster number from", f)
+                            cluster_no = None_counter
+                            None_counter += 1
+                if f.startswith("p"):
+                    try:
+                        handpose_no = int(f.replace("p",""))
+                    except:
+                        print("could not parse handpose number from", f)
+                        handpose_no = None
+                if f.startswith("t"):
+                    try:
+                        topic_no = int(f.replace("t",""))
+                    except:
+                        print("could not parse topic number from", f)
+                        topic_no = None
+            print("FOUND cluster_no", cluster_no, "handpose_no", handpose_no, "topic_no", topic_no)
+                
+            # if "None" in image_folder:
+            #     cluster_no = None_counter
+            #     None_counter += 1
+            #     print("cluster_no is None, incrementing None_counter to", None_counter)
+            # else:
+            #     print("cluster found", image_folder)
+            #     cluster_no = int(image_folder.split("_")[0].replace("cluster",""))
+            #     try: handpose_no = int(image_folder.split("_")[1])
+            #     except: print("handpose_no = None")
         count = len(image_files)
         print("about to iterate_image_list with ", len(images_to_build), "images")
         if len(images_to_build) == 0: 
@@ -351,6 +387,8 @@ def get_img_list_subfolders(subfolders):
     for subfolder_path in subfolders:
         print("subfolder_path", subfolder_path)
         img_list = io.get_img_list(subfolder_path)
+        # if any file ends with .json, remove it
+        img_list = [img for img in img_list if not img.endswith(".json")]
         img_list.sort()
         img_path_list = []
         for img in img_list:
@@ -543,6 +581,9 @@ def write_video(img_array, subfolder_path=None):
     last_image_written = None
     img_array = [img for img in img_array if img.endswith(".jpg")]
     print("len img_array before cropping", len(img_array))
+    if len(img_array) == 0:
+        print("no jpg images found, skipping this folder")
+        return
     if IS_VIDEO_MERGE: img_array.append(img_array[0]) # add the first image to the end to make a loop
     images_to_build = load_images(img_array, subfolder_path)
     # print("img_array", img_array)
@@ -779,7 +820,7 @@ def main():
         else:
             # for merging images into stills
             for subfolder_path in subfolders:
-                # print(subfolder_path)
+                # print("subfolder_path", subfolder_path)
                 all_img_path_list = io.get_img_list(subfolder_path)
                 output_dims = get_median_image_dimensions(all_img_path_list, subfolder_path)
                 if output_dims is not None:
