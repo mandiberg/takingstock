@@ -464,20 +464,29 @@ class MongoBSONExporter:
         # print("writing MySQL")
         if key and id and col:
             from sqlalchemy import text
+            import time
             stmt = f"UPDATE {table_name} SET {col}={cell_value} WHERE {key} = {id};"
             if self.VERBOSE: print(f"Executing SQL: {stmt}")
-            # execute the statement here using your database connection
-            # For example, using a SQLAlchemy session:
-            try:
-                with engine.connect() as connection:
-                    connection.execute(text(stmt))
-                    connection.commit()
-                if self.VERBOSE: print(f"Success for     {id} {key} set {col} to {cell_value}")
-            except Exception as e:
-                print(f"Error writing MySQL value: {e}")
+            max_attempts = 5
+            for attempt in range(1, max_attempts + 1):
+                try:
+                    with engine.connect() as connection:
+                        connection.execute(text(stmt))
+                        connection.commit()
+                    if self.VERBOSE: print(f"Success for     {id} {key} set {col} to {cell_value}")
+                    return True
+                except Exception as e:
+                    err_str = str(e)
+                    # retry on connection-related errors
+                    if attempt < max_attempts and ("MySQL server has gone away" in err_str or "Broken pipe" in err_str or "2006" in err_str):
+                        print(f"MySQL write failed (attempt {attempt}/{max_attempts}): {e} — retrying in {attempt}s")
+                        time.sleep(attempt)  # backoff: 1s, 2s, 3s, ...
+                        continue
+                    print(f"Error writing MySQL value, attempt {attempt} of {max_attempts} will retry: {e}")
+                    return False
         else:
             print("Missing parameters for write_MySQL_value")
-        
+            return False
 
 
     def get_mongo_index(self, mongo_db, collection_name):
