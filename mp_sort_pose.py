@@ -1122,49 +1122,33 @@ class SortPose:
 
                 selfie_i = cv2.bitwise_and(image_i, segmentation_mask_i)
                 selfie_j = cv2.bitwise_and(image_resize_j, segmentation_mask_j)
-               
-                bbox_i = df.at[i,"bbox"]
-                bbox_j = df.at[j, "bbox"]
-                print(f'image {i},{j} sizes: {image_i.size}, {image_resize_j.size}')
-                bbox_i["bottom_extend"] = bbox_i["top"]+ ((bbox_i["bottom"]- bbox_i["top"])*2)
-                bbox_j["bottom_extend"] = bbox_j["top"]+ ((bbox_j["bottom"]- bbox_j["top"])*2)
-
-                selfie_i = selfie_i[bbox_i["top"]:bbox_i["bottom_extend"], bbox_i["left"]:bbox_i["right"]]
-                if same_shape:
-                    selfie_j = selfie_j[bbox_i["top"]:bbox_i["bottom_extend"], bbox_i["left"]:bbox_i["right"]]
-                else:
-                    print(f'error comparing segmentation masks, images {i},{j} different sizes, {selfie_i.shape}, {selfie_j.shape}')
-                    selfie_j = selfie_j[bbox_j["top"]:bbox_j["bottom_extend"], bbox_j["left"]:bbox_j["right"]]
-                    selfie_j = cv2.resize(selfie_j, (selfie_i.shape[1], selfie_i.shape[0]))
-                    
-
-                # selfie_j = cv2.resize(selfie_j, (selfie_i.shape[1], selfie_i.shape[0]))
-
-                # cv2.imshow(f'segmentation_mask_i', selfie_i)
-                # cv2.waitKey(0)
-                # cv2.destroyAllWindows()
-
-                # cv2.imshow(f'segmentation_mask_j:', selfie_j)
-                # cv2.waitKey(0)
-                # cv2.destroyAllWindows()
                 
-                # Create diff mask
-               
-                ssim_score = self.calculate_ssim(selfie_i, selfie_j)
+                try:
+                    bbox_i = df.at[i,"bbox"]
+                    bbox_j = df.at[j, "bbox"]
+                    print(f'image {i},{j} sizes: {image_i.size}, {image_resize_j.size}')
+                    bbox_i["bottom_extend"] = bbox_i["top"]+ ((bbox_i["bottom"]- bbox_i["top"])*2)
+                    bbox_j["bottom_extend"] = bbox_j["top"]+ ((bbox_j["bottom"]- bbox_j["top"])*2)
 
+                    selfie_i = selfie_i[bbox_i["top"]:bbox_i["bottom_extend"], bbox_i["left"]:bbox_i["right"]]
+                    if same_shape:
+                        selfie_j = selfie_j[bbox_i["top"]:bbox_i["bottom_extend"], bbox_i["left"]:bbox_i["right"]]
+                    else:
+                        print(f'error comparing segmentation masks, images {i},{j} different sizes, {selfie_i.shape}, {selfie_j.shape}')
+                        selfie_j = selfie_j[bbox_j["top"]:bbox_j["bottom_extend"], bbox_j["left"]:bbox_j["right"]]
+                        selfie_j = cv2.resize(selfie_j, (selfie_i.shape[1], selfie_i.shape[0]))
+                        
+                    ssim_score = self.calculate_ssim(selfie_i, selfie_j)
 
-                # Display the mask_diff mask
-                # selfie_mse_score, mask_diff = self.mse(selfie_i, selfie_j)
-                # cv2.imshow(f'mask mask_diff at {i},{j}, scoring: {selfie_mse_score}', mask_diff)
-                # cv2.waitKey(0)
-                # cv2.destroyAllWindows()
-
-
-                is_dupe = save_dupes_look_closer(i, j, ssim_score, this_dist_list, df)
-                if is_dupe:
-                    if self.VERBOSE: print(f"remove_duplicates: confirmed duplicate {j} of {i} with SSIM {ssim_score} and distances {this_dist_list}")
-                    confirmed_dupes.add(j)
-
+                    is_dupe = save_dupes_look_closer(i, j, ssim_score, this_dist_list, df)
+                    if is_dupe:
+                        if self.VERBOSE: print(f"remove_duplicates: confirmed duplicate {j} of {i} with SSIM {ssim_score} and distances {this_dist_list}")
+                        confirmed_dupes.add(j)
+                except Exception as e:
+                    print(f"Error processing segmentation masks for images {i} and {j}: {e}")
+                    ssim_score = 0
+                    selfie_ssim_score = 0
+                    continue
             else:
                 print(f"SSIM detect image {i} or image {j} is None, continuing...")
                 ssim_score = 0

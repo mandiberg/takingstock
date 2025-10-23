@@ -22,7 +22,8 @@ ROOT_FOLDER_PATH = '/Users/michaelmandiberg/Documents/projects-active/facemap_pr
 
 MODE = "Keywords" # Topics or Keywords
 MODE_ID = "topic_id" if MODE == "Topics" else "keyword_id"
-CLUSTER_TYPE = "MetaBodyPoses3D" # "MetaBodyPoses3D" or "body3D" or "hand_gesture_position" - determines whether it checks hand poses or body3D
+CLUSTER_TYPE = "BodyPoses3D_HSV" # "MetaBodyPoses3D" or "BodyPoses3D_HSV" or "body3D" or "hand_gesture_position" - determines whether it checks hand poses or body3D
+# MetaBodyPoses3D right now does HSV plus body3D, not META
 
 # Create engine and session
 engine = create_engine("mysql+pymysql://{user}:{pw}@/{db}?unix_socket={socket}".format(
@@ -208,10 +209,12 @@ ORDER BY
 
 """
 
-sql_query_template_HSV_MetaBody3D = """
+#  NEED TO MAKE THIS WORK WITH NONAUTO INCREMENTING change to table
+    # SUM(CASE WHEN ihsv.cluster_id = 0 THEN 1 ELSE 0 END) AS hsv_0,
+
+sql_query_template_HSV_Body3D = """
 SELECT 
-    ihp.meta_cluster_id AS ihp_cluster,
-    SUM(CASE WHEN ihsv.cluster_id = 0 THEN 1 ELSE 0 END) AS hsv_0,
+    ibp.cluster_id AS ihp_cluster,
     SUM(CASE WHEN ihsv.cluster_id = 1 THEN 1 ELSE 0 END) AS hsv_1,
     SUM(CASE WHEN ihsv.cluster_id = 2 THEN 1 ELSE 0 END) AS hsv_2,
     SUM(CASE WHEN ihsv.cluster_id = 3 THEN 1 ELSE 0 END) AS hsv_3,
@@ -227,7 +230,36 @@ SELECT
     SUM(CASE WHEN ihsv.cluster_id = 13 THEN 1 ELSE 0 END) AS hsv_13,
     SUM(CASE WHEN ihsv.cluster_id = 14 THEN 1 ELSE 0 END) AS hsv_14,
     SUM(CASE WHEN ihsv.cluster_id = 15 THEN 1 ELSE 0 END) AS hsv_15,
-    SUM(CASE WHEN ihsv.cluster_id = 16 THEN 1 ELSE 0 END) AS hsv_16
+    SUM(CASE WHEN ihsv.cluster_id = 16 THEN 1 ELSE 0 END) AS hsv_16,
+    SUM(CASE WHEN ihsv.cluster_id = 525 THEN 1 ELSE 0 END) AS hsv_525
+  
+FROM SegmentBig_isface so
+JOIN SegmentHelper_sept2025_heft_keywords sh ON sh.image_id = so.image_id
+JOIN ImagesBodyPoses3D ibp ON ibp.image_id = so.image_id
+JOIN ImagesHSV ihsv ON ihsv.image_id = so.image_id
+JOIN Images{MODE} it ON it.image_id = so.image_id
+WHERE it.{MODE_ID} = {THIS_MODE_ID}
+GROUP BY
+    ibp.cluster_id
+ORDER BY 
+    ibp.cluster_id;
+"""
+
+
+sql_query_template_HSV_MetaBody3D = """
+SELECT 
+    ihp.meta_cluster_id AS ihp_cluster,
+    SUM(CASE WHEN ihsv.cluster_id = 1 THEN 1 ELSE 0 END) AS hsv_1,
+    SUM(CASE WHEN ihsv.cluster_id = 2 THEN 1 ELSE 0 END) AS hsv_2,
+    SUM(CASE WHEN ihsv.cluster_id = 3 THEN 1 ELSE 0 END) AS hsv_3,
+    SUM(CASE WHEN ihsv.cluster_id = 4 THEN 1 ELSE 0 END) AS hsv_4,
+    SUM(CASE WHEN ihsv.cluster_id = 5 THEN 1 ELSE 0 END) AS hsv_5,
+    SUM(CASE WHEN ihsv.cluster_id = 6 THEN 1 ELSE 0 END) AS hsv_6,
+    SUM(CASE WHEN ihsv.cluster_id = 7 THEN 1 ELSE 0 END) AS hsv_7,
+    SUM(CASE WHEN ihsv.cluster_id = 8 THEN 1 ELSE 0 END) AS hsv_8,
+    SUM(CASE WHEN ihsv.cluster_id = 9 THEN 1 ELSE 0 END) AS hsv_9,
+    SUM(CASE WHEN ihsv.cluster_id = 10 THEN 1 ELSE 0 END) AS hsv_10,
+    SUM(CASE WHEN ihsv.cluster_id = 11 THEN 1 ELSE 0 END) AS hsv_11
   
 FROM SegmentBig_isface so
 JOIN SegmentHelper_sept2025_heft_keywords sh ON sh.image_id = so.image_id
@@ -250,7 +282,9 @@ def save_query_results_to_csv(query, topic_id):
     df = pd.read_sql(query, engine)
 
     # add zero values for any missing rows in the ihp_cluster column
+    
     if "body3D" in CLUSTER_TYPE: cluster_count = 512
+    elif "BodyPoses3D" in CLUSTER_TYPE: cluster_count = 768
     elif "hand_gesture_position" in CLUSTER_TYPE: cluster_count = 128
     elif "MetaBodyPoses3D" in CLUSTER_TYPE: cluster_count = 32
     else: raise ValueError("Unknown CLUSTER_TYPE")
@@ -278,10 +312,13 @@ def save_query_results_to_csv(query, topic_id):
 
 # Adjust the query template based on MODE
 if MODE == "Keywords":
+    print("Querying by Keywords with CLUSTER_TYPE:", CLUSTER_TYPE)
     # Loop through each keyword_id and save results to CSV
     for keyword_id in KEYWORDS:
         if CLUSTER_TYPE == "body3D":
             sql_query_template = sql_query_template_body3D
+        elif CLUSTER_TYPE == "BodyPoses3D_HSV":
+            sql_query_template = sql_query_template_HSV_Body3D
         elif CLUSTER_TYPE == "MetaBodyPoses3D":
             sql_query_template = sql_query_template_HSV_MetaBody3D
         sql_query_template = sql_query_template.replace("{MODE}", MODE).replace("{MODE_ID}", MODE_ID).replace("{THIS_MODE_ID}", str(keyword_id))

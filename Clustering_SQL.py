@@ -99,8 +99,8 @@ SegmentTable_name = 'SegmentBig_isface'
 # if doing MODE == 2, use SegmentHelper_name to subselect SQL query
 # unless you know what you are doing, leave this as None
 # SegmentHelper_name = None
-# SegmentHelper_name = 'SegmentHelper_sept2025_heft_keywords'
-SegmentHelper_name = 'SegmentHelper_oct2025_every40'
+SegmentHelper_name = 'SegmentHelper_sept2025_heft_keywords'
+# SegmentHelper_name = 'SegmentHelper_oct2025_every40'
 
 # number of clusters produced. run GET_OPTIMAL_CLUSTERS and add that number here
 # 32 for hand positions
@@ -662,6 +662,7 @@ FROM `BodyPoses3D`'''
 
 def save_images_clusters_DB(df):
     #save the df to a table
+    image_id = cluster_id = cluster_dist = this_cluster_id = meta_cluster_id = None
     print("save_images_clusters_DB df", df)
     print("columns: ",df.columns)
     this_cluster, this_crosswalk = set_cluster_metacluster()
@@ -704,7 +705,7 @@ def save_images_clusters_DB(df):
         
         elif existing_record is not None:
             if existing_record.cluster_dist is None:
-                if image_id % 100 == 0:
+                if (image_id is not None and image_id % 100 == 0) or (this_cluster_id and this_cluster_id % 100 == 0):
                     print(f"Updating existing record with image_id {image_id} to cluster_dist {cluster_dist}")
                 existing_record.cluster_dist = cluster_dist
             else:

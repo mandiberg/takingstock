@@ -45,12 +45,12 @@ VIDEO = False
 CYCLECOUNT = 1
 
 # keep this live, even if not SSD
-SegmentTable_name = 'SegmentOct20'
+# SegmentTable_name = 'SegmentOct20'
 # SegmentHelper_name = None
-# SegmentTable_name = 'SegmentBig_isface'
+SegmentTable_name = 'SegmentBig_isface'
 # SegmentTable_name = 'SegmentBig_isnotface'
 # SegmentHelper_name = 'SegmentHelper_may2025_4x4faces'
-# SegmentHelper_name = 'SegmentHelper_sept2025_heft_keywords'
+SegmentHelper_name = 'SegmentHelper_sept2025_heft_keywords'
 SegmentHelper_name = 'SegmentHelper_oct2025_every40'
 # SegmentHelper_name = None
 # SATYAM, this is MM specific
@@ -84,7 +84,7 @@ MODES = {0:'paris_photo_torso_images_topics', 1:'paris_photo_torso_videos_topics
          5:'heft_torso_keywords'}
 MODE_CHOICE = 2
 CURRENT_MODE = MODES[MODE_CHOICE]
-LIMIT = 10000 # this is the limit for the SQL query
+LIMIT = 1000 # this is the limit for the SQL query
 
 # set defaults, including for all modes to False
 FULL_BODY = IS_HAND_POSE_FUSION = ONLY_ONE = GENERATE_FUSION_PAIRS = USE_FUSION_PAIR_DICT = IS_CLUSTER = IS_ONE_CLUSTER = USE_POSE_CROP_DICT = IS_TOPICS= IS_ONE_TOPIC = USE_AFFECT_GROUPS = False
@@ -170,20 +170,22 @@ elif "3D" in CURRENT_MODE:
     START_CLUSTER = 0
 
 elif CURRENT_MODE == 'heft_torso_keywords':
-    # SegmentTable_name = 'SegmentOct20'
-    SegmentTable_name = 'SegmentBig_isface'
+    SegmentTable_name = 'SegmentOct20'
+    # SegmentTable_name = 'SegmentBig_isface'
     SegmentHelper_name = 'SegmentHelper_sept2025_heft_keywords' # TK revisit this for prodution run
     # SORT_TYPE = "planar_hands"
     SORT_TYPE = "arms3D" # this triggers meta body poses 3D
     META = True
     TESTING = False
     IS_HAND_POSE_FUSION = True # do we use fusion clusters
+
+    # either you use a FUSION_PAIR_DICT or GENERATE_FUSION_PAIRS. 
     GENERATE_FUSION_PAIRS = True # if true it will query based on MIN_VIDEO_FUSION_COUNT and create pairs
                                     # if false, it will grab the list of pair lists below
-    USE_FUSION_PAIR_DICT = True
-    FUSION_PAIR_DICT_NAME = "FUSION_PAIR_DICT_KEYWORDS_512"
+    USE_FUSION_PAIR_DICT = False
+    FUSION_PAIR_DICT_NAME = "FUSION_PAIR_DICT_KEYWORDS_768"
     # N_HSV = 16
-    N_HSV = 0 # don't do HSV clusters
+    N_HSV = 16 # don't do HSV clusters
     
     # TSP_SORT = True
     # CHOP_FIRST = True
@@ -191,8 +193,8 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     MIN_VIDEO_FUSION_COUNT = 1300 # this is the cut off for the CSV fusion pairs
     MIN_CYCLE_COUNT = 1000 # this is the cut off for the SQL query results
 
-    MIN_VIDEO_FUSION_COUNT = 400 # this is the cut off for the CSV fusion pairs
-    MIN_CYCLE_COUNT = 300 # this is the cut off for the SQL query results
+    MIN_VIDEO_FUSION_COUNT = 100 # this is the cut off for the CSV fusion pairs
+    MIN_CYCLE_COUNT = 100 # this is the cut off for the SQL query results
 
     # this control whether sorting by topics
     # IS_TOPICS = True # if using Clusters only, must set this to False
@@ -214,8 +216,8 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     # when doing IS_HAND_POSE_FUSION code currently only supports one topic at a time
     IS_ONE_TOPIC = True
     N_TOPICS = 100
-    TOPIC_NO = [22411] # if doing an affect topic fusion, this is the wrapper topic
-    FUSION_FOLDER = "utilities/data/heft_keyword_fusion_clusters_hsv_meta"
+    TOPIC_NO = [22412] # if doing an affect topic fusion, this is the wrapper topic
+    FUSION_FOLDER = "utilities/data/heft_keyword_fusion_clusters_768_hsv"
     CSV_FOLDER = os.path.join("/Users/michaelmandiberg/Documents/projects-active/facemap_production/heft_keyword_fusion_clusters/meta_clusters_fusion_build/")
 
 else:
@@ -375,9 +377,6 @@ FUSION_PAIR_DICT_TOPICS_64 = {
     32: [[13, 109], [13, 24], [13, 85]]
 }
 
-FUSION_PAIR_DICT_3DBODIES_TOPICS_512 = {
-    220: [[101, 0], [124, 0], [184, 0], [216, 0], [302, 0], [448, 0], [457,0]]
-}
 FUSION_PAIR_DICT_KEYWORDS_512 = {
     220: [[101, 0], [124, 0], [184, 0], [216, 0], [302, 0], [448, 0], [457,0]],
     553: [[216, 0], [230, 0], [89,0]],
@@ -391,11 +390,28 @@ FUSION_PAIR_DICT_KEYWORDS_512 = {
     22412: [[89, 0], [101, 0], [140, 0], [184, 0], [273, 0], [391, 0], [396, 0], [426, 0], [430, 0], [446, 0], [449, 0], [481,0]]
 }
 
+FUSION_PAIR_DICT_KEYWORDS_768 = {
+    220: [[101, 0], [124, 0], [184, 0], [216, 0], [302, 0], [448, 0], [457,0]],
+    553: [[216, 0], [230, 0], [89,0]],
+    807: [[140, 0], [168, 0], [216, 0], [273, 0], [63,0]],
+    827: [[191, 0], [229, 0], [322, 0], [340, 0], [396, 0], [423, 0], [447, 0], [448, 0], [51,0]],
+    1070: [[122, 0], [14, 0], [22, 0], [342, 0], [391, 0], [53,0]],
+    1644: [[158, 0], [161, 0], [345,0]],
+    5310: [[180, 0], [245, 0], [265, 0], [315, 0], [324, 0], [445, 0], [451, 0], [476, 0], [498,0]],
+    22269: [[351, 0], [449, 0], [53,0]],
+    22411: [[158, 0], [240, 0], [304, 0], [306, 0], [342, 0], [391, 0], [40, 0], [423, 0], [449,0]],
+    22412: [[89, 0], [101, 0], [140, 0], [184, 0], [273, 0], [391, 0], [396, 0], [426, 0], [430, 0], [446, 0], [449, 0], [481,0]]
+}
+
+FUSION_PAIR_DICT_3DBODIES_TOPICS_512 = {
+    220: [[101, 0], [124, 0], [184, 0], [216, 0], [302, 0], [448, 0], [457,0]]
+}
 
 ALL_FUSION_PAIRS_DICTS = {
     "FUSION_PAIR_DICT_TOPICS_64": FUSION_PAIR_DICT_TOPICS_64,
     "FUSION_PAIR_DICT_KEYWORDS_512": FUSION_PAIR_DICT_KEYWORDS_512,
-    "FUSION_PAIR_DICT_3DBODIES_TOPICS_512": FUSION_PAIR_DICT_3DBODIES_TOPICS_512
+    "FUSION_PAIR_DICT_KEYWORDS_768": FUSION_PAIR_DICT_KEYWORDS_768,
+    "FUSION_PAIR_DICT_3DBODIES_TOPICS_512": FUSION_PAIR_DICT_3DBODIES_TOPICS_512,
     }
 if USE_FUSION_PAIR_DICT:
     #set the actual dict from the name
@@ -2549,8 +2565,8 @@ def main():
                 # if there are any values:
                 # TK this needs to be refine when image_dict is not empty
                 df['is_dupe_of'] = df['image_id'].map(image_dict)
-                # Drop rows where is_dupe_of is None
-                df = df.dropna(subset=['is_dupe_of'])
+                # Drop rows where is_dupe_of is 1
+                df = df[df['is_dupe_of'] != 1]
                 print("after dropping", df)
             return df
 

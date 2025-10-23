@@ -50,7 +50,7 @@ exporter = MongoBSONExporter(mongo_db)
 
 # Define the batch size
 batch_size = 5000
-last_id = 31500000  # starting from encoding_id 25180000
+last_id = 45540000  # starting from encoding_id 45540000
 print(f"Starting from last_id: {last_id}")
 EXPORT_DIR = os.path.join(io.ROOT_PROD,"mongo_exports_oct19_sets")  # Directory to save BSON files
 # EXPORT_DIR = os.path.join("/Volumes/OWC4/segment_images_deshardJSON_aug2_toArchive/mongo_exports_fromlist_adobeE")  # Directory to save BSON files

@@ -18,7 +18,7 @@ io = DataIO()
 db = io.db
 
 MODES = ["merge_images_paris_photo", "merge_images_body_autocrop", "make_video", "make_video_heft_keyword_fusion"]
-MODE_CHOICE = 1
+MODE_CHOICE = 2
 CURRENT_MODE = MODES[MODE_CHOICE]
 
 
@@ -97,7 +97,7 @@ ROOT_FOLDER_PATH = '/Volumes/OWC4/images_to_assemble'
 FOLDER_NAME = "body3D_512_"
 FOLDER_PATH = os.path.join(ROOT_FOLDER_PATH,FOLDER_NAME)
 # FOLDER_PATH = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/keyword_body3D_tests/body3D_512" # temp override for testing
-FOLDER_PATH = "/Volumes/OWC4/segment_images/Bodies3D_768_80ct_testbuild_pt1"
+FOLDER_PATH = "/Volumes/OWC4/segment_images/Oct22_HSV_768_test"
 DIRS = ["1x1", "4x3", "16x10"]
 OUTPUT = os.path.join(io.ROOTSSD, "audioproduction")
 # Extract the topic number from the folder name
