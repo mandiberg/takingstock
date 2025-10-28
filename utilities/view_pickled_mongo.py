@@ -18,12 +18,14 @@ mongo_client = pymongo.MongoClient(io.dbmongo['host'])
 mongo_db = mongo_client[io.dbmongo['name']]
 # mongo_collection = mongo_db[io.dbmongo['collection']]
 
-bboxnormed_collection = mongo_db["body_landmarks_norm"]
+world_body_collection = mongo_db["body_world_landmarks"]
+
+# bboxnormed_collection = mongo_db["body_landmarks_norm"]
 # n_phonebbox_collection= mongo_db["bboxnormed_phone"]
 
 SUBSET_LANDMARKS = [i for i in range(13,22)]
 
-image_id = 10576048
+image_id = 47040
 #
 #
 # 10152053
@@ -37,10 +39,18 @@ image_id2 = 10145859
 
 # X-33--27_Y-2-2_Z-2-2_ct3200_0013_4618383
 def get_landmarks(image_id):
-    cursor = bboxnormed_collection.find({"image_id": image_id})
+
+    # for normed bbox version
+    # cursor = bboxnormed_collection.find({"image_id": image_id})
+    # for doc in cursor: 
+    #     nlms = pickle.loads(doc["nlms"])
+    #     return nlms
+
+    # for world landmarks version
+    cursor = world_body_collection.find({"image_id": image_id})
     for doc in cursor: 
-        nlms = pickle.loads(doc["nlms"])
-        return nlms
+        lms3D = pickle.loads(doc["body_world_landmarks"])
+        return lms3D
 
 
 lms1 = get_landmarks(image_id)
@@ -56,8 +66,8 @@ print(type(lms2))
 #     raise ValueError("Both landmark sets must have the same number of landmarks.")
 
 for idx, lm1 in enumerate(lms1.landmark):
+    print(f"{image_id} Landmark {idx}: ({lm1.x}, {lm1.y}, {lm1.z}, {lm1.visibility})")
     if idx in SUBSET_LANDMARKS:
-    
         lm2 = lms2.landmark[idx]
         # Calculate the Euclidean distance between the x and y coordinates
         distance = math.sqrt((lm2.x - lm1.x) ** 2 + (lm2.y - lm1.y) ** 2)

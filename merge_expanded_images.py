@@ -18,7 +18,7 @@ io = DataIO()
 db = io.db
 
 MODES = ["merge_images_paris_photo", "merge_images_body_autocrop", "make_video", "make_video_heft_keyword_fusion"]
-MODE_CHOICE = 2
+MODE_CHOICE = 1
 CURRENT_MODE = MODES[MODE_CHOICE]
 
 
@@ -76,6 +76,8 @@ GIGA_DIMS = [20688,20648]
 FULLBODY_DIMS = [32000,32000]
 TEST_DIMS = [4000,4000] 
 REG_DIMS = [3448,3448]
+SKIP_PREFIX = "_x"
+FORCE_LS = True
 if LOWEST_DIMS: 
     GIGA_DIMS = REG_DIMS
     SCALE_IMGS = True
@@ -97,7 +99,7 @@ ROOT_FOLDER_PATH = '/Volumes/OWC4/images_to_assemble'
 FOLDER_NAME = "body3D_512_"
 FOLDER_PATH = os.path.join(ROOT_FOLDER_PATH,FOLDER_NAME)
 # FOLDER_PATH = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/keyword_body3D_tests/body3D_512" # temp override for testing
-FOLDER_PATH = "/Volumes/OWC4/segment_images/Oct22_HSV_768_test"
+FOLDER_PATH = '/Volumes/OWC4/segment_images/oct26_misc250_final'
 DIRS = ["1x1", "4x3", "16x10"]
 OUTPUT = os.path.join(io.ROOTSSD, "audioproduction")
 # Extract the topic number from the folder name
@@ -308,15 +310,16 @@ def merge_images(images_to_build, FOLDER_PATH, output_dims=None):
     if len(images_to_build) % 2 != 0:
         print("odd number of images, skipping last image")
     # Get a list of image files in the folder
-    image_files = io.get_img_list(FOLDER_PATH)
+    image_files = io.get_img_list(FOLDER_PATH, FORCE_LS)
     # if VERBOSE: print(image_files)
-    cluster_no = handpose_no = None
+    cluster_no = handpose_no = hsv_no = topic_no = None
     successes = 0
     if len(image_files) > 1:
         # this is legacy stuff to get the cluster number and handpose number from the folder name
         image_folder = FOLDER_PATH.split("/")[-1]
         if "cluster" in image_folder:
             filters = image_folder.split("_")
+            print(f"filters: {filters}")
             for f in filters:
                 if f.startswith("cluster"):
                     try:
@@ -334,13 +337,19 @@ def merge_images(images_to_build, FOLDER_PATH, output_dims=None):
                     except:
                         print("could not parse handpose number from", f)
                         handpose_no = None
+                if f.startswith("h"):
+                        try:
+                            hsv_no = (f.replace("h",""))
+                        except:
+                            print("could not parse hue number from", f)
+                            hsv_no = None
                 if f.startswith("t"):
                     try:
                         topic_no = int(f.replace("t",""))
                     except:
                         print("could not parse topic number from", f)
                         topic_no = None
-            print("FOUND cluster_no", cluster_no, "handpose_no", handpose_no, "topic_no", topic_no)
+            print("FOUND cluster_no", cluster_no, "handpose_no", handpose_no, "hsv_no", hsv_no, "topic_no", topic_no)
                 
             # if "None" in image_folder:
             #     cluster_no = None_counter
@@ -355,7 +364,7 @@ def merge_images(images_to_build, FOLDER_PATH, output_dims=None):
         print("about to iterate_image_list with ", len(images_to_build), "images")
         if len(images_to_build) == 0: 
             print("no images to build")
-            return None, 0, cluster_no, handpose_no
+            return None, 0, cluster_no, handpose_no, hsv_no
         merged_pairs, successes = iterate_image_list(FOLDER_PATH,images_to_build,successes, output_dims)
         if merged_pairs is not None and len(merged_pairs) > 0: 
             print("len merged pairs are", len(merged_pairs))
@@ -367,13 +376,13 @@ def merge_images(images_to_build, FOLDER_PATH, output_dims=None):
         else:
             print("no merged pairs found")
             final_merged = None
-        return final_merged, successes, cluster_no, handpose_no
+        return final_merged, successes, cluster_no, handpose_no, hsv_no, topic_no
     else:
-        return None, 0, cluster_no, handpose_no
+        return None, 0, cluster_no, handpose_no, hsv_no, topic_no
 
-def save_merge(merged_image, count, cluster_no, handpose_no, FOLDER_PATH):
+def save_merge(merged_image, count, cluster_no, handpose_no, hsv_no, topic_no, FOLDER_PATH):
     if cluster_no is not None:
-        savename = 'merged_cluster_' + str(cluster_no)+ "_"+ str(handpose_no)+ "_"+ str(count*2)+'.jpg'
+        savename = 'merged_cluster_' + str(cluster_no)+ "_"+ str(handpose_no)+ "_"+ str(hsv_no)+ "_"+ str(topic_no)+ "_"+ str(count*2)+'.jpg'
     else:
         savename = 'merged_image'+str(count)+'.jpg'
     output_path = os.path.join(FOLDER_PATH, savename)
@@ -386,7 +395,7 @@ def get_img_list_subfolders(subfolders):
     all_img_path_list = []
     for subfolder_path in subfolders:
         print("subfolder_path", subfolder_path)
-        img_list = io.get_img_list(subfolder_path)
+        img_list = io.get_img_list(subfolder_path, FORCE_LS)
         # if any file ends with .json, remove it
         img_list = [img for img in img_list if not img.endswith(".json")]
         img_list.sort()
@@ -798,6 +807,8 @@ def main():
     print("starting merge_expanded_images.py")
     if IS_CLUSTER is True:
         subfolders = io.get_folders(FOLDER_PATH, SORT_ORDER)
+        # skip any folder with SKIP_PREFIX in it
+        subfolders = [subfolder for subfolder in subfolders if SKIP_PREFIX not in subfolder]
         print("subfolders", subfolders)
         if IS_VIDEO is True and ALL_ONE_VIDEO is True:
             print("making regular combined video")
@@ -811,7 +822,7 @@ def main():
             #     write_video(subfolder_path)
         elif IS_VIDEO is True and ALL_ONE_VIDEO is False:
             for subfolder_path in subfolders:
-                all_img_path_list = io.get_img_list(subfolder_path)
+                all_img_path_list = io.get_img_list(subfolder_path, FORCE_LS)
                 # only inlcude jpgs in the list
                 write_video(all_img_path_list, subfolder_path)
 
@@ -821,7 +832,7 @@ def main():
             # for merging images into stills
             for subfolder_path in subfolders:
                 # print("subfolder_path", subfolder_path)
-                all_img_path_list = io.get_img_list(subfolder_path)
+                all_img_path_list = io.get_img_list(subfolder_path, FORCE_LS)
                 output_dims = get_median_image_dimensions(all_img_path_list, subfolder_path)
                 if output_dims is not None:
                     print(" ", output_dims)
@@ -829,12 +840,12 @@ def main():
                     print("no output_dims found, skipping this folder", subfolder_path)
                     continue
                 images_to_build = load_images(all_img_path_list, subfolder_path)
-                merged_image, count, cluster_no, handpose_no = merge_images(images_to_build, subfolder_path, output_dims)
+                merged_image, count, cluster_no, handpose_no, hsv_no, topic_no = merge_images(images_to_build, subfolder_path, output_dims)
                 if count == 0:
                     print("no images here")
                     continue
                 else:
-                    save_merge(merged_image, count, cluster_no, handpose_no, FOLDER_PATH)
+                    save_merge(merged_image, count, cluster_no, handpose_no, hsv_no, topic_no, FOLDER_PATH)
     else:
         print("going to get folder ls", FOLDER_PATH)
         all_img_path_list = io.get_img_list(FOLDER_PATH)
@@ -845,12 +856,8 @@ def main():
             print("going to merge images to make still")
             images_to_build = load_images(all_img_path_list, FOLDER_PATH)
             print("len images_to_build", len(images_to_build))
-            merged_image, count, cluster_no, handpose_no = merge_images(images_to_build, FOLDER_PATH)
-            save_merge(merged_image, count, cluster_no, handpose_no, FOLDER_PATH)
-     
-
-
-
+            merged_image, count, cluster_no, handpose_no, hsv_no, topic_no = merge_images(images_to_build, FOLDER_PATH)
+            save_merge(merged_image, count, cluster_no, handpose_no, hsv_no, topic_no, FOLDER_PATH)
 
 
 

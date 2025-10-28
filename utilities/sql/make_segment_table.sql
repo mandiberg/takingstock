@@ -8,11 +8,18 @@ DROP TABLE SegmentHelper_dec27_getty_noface ;
 DELETE FROM SegmentHelper_sept2025_heft_keywords;
 
 -- create helper segment table
-CREATE TABLE SegmentHelper_oct2025_needs_validation (
+CREATE TABLE SegmentHelper_oct2025_every40 (
     seg_image_id int NOT NULL AUTO_INCREMENT PRIMARY KEY,
     image_id INTEGER,
     FOREIGN KEY (image_id) REFERENCES Images(image_id)
 );
+
+
+INSERT INTO SegmentHelper_oct2025_every40 (image_id)
+SELECT image_id 
+FROM Images
+WHERE image_id % 40 = 0
+ORDER BY image_id;
 
 
 -- create segment table

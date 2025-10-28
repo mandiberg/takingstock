@@ -2546,6 +2546,7 @@ class SortPose:
                 
     def get_landmarks_2d(self, Lms, selected_Lms, structure="dict"):
         def append_lms(idx, x,y,z, structure, Lms2d, Lms1d, Lms1d3):
+            # only gets called if lms is a list of xyz lists (condition 1 below)
             if structure == "dict":
                 Lms2d[idx] =([x, y])
             elif structure == "list":
@@ -2563,7 +2564,7 @@ class SortPose:
         Lms1d = []
         Lms1d3 = []
 
-        # if self.VERBOSE: print(type(Lms))
+        # if self.VERBOSE: print("type(Lms)", type(Lms))
         if type(Lms) is list and len(Lms) > 0 and isinstance(Lms[0], (list, tuple)) and len(Lms[0]) == 3:
             print("lms is a list of xyz lists")
             for idx, lm in enumerate(Lms):
@@ -2581,6 +2582,7 @@ class SortPose:
                 if idx in selected_Lms:
                     # If lm is a Landmark object, access attributes directly
                     if hasattr(lm, "x") and hasattr(lm, "y"):
+                        print("lm is a Landmark object", lm)
                         x = lm.x
                         y = lm.y
                         z = getattr(lm, "z", 0.0)
@@ -2607,6 +2609,7 @@ class SortPose:
                         Lms1d3.append(visibility)
         elif hasattr(Lms, 'landmark') and len(Lms.landmark) > 0:
             for idx, lm in enumerate(Lms.landmark):
+                # print("idx", idx, "lm", lm)
                 if idx in selected_Lms:
                     # print("idx", idx)
                     # x, y = int(lm.x * img_w), int(lm.y * img_h)
@@ -2620,11 +2623,13 @@ class SortPose:
                         Lms1d3.append(lm.x)
                         Lms1d3.append(lm.y)
                         Lms1d3.append(lm.visibility)
-                    elif structure == "list3D":
+                    elif structure == "list3D" or self.LMS_DIMENSIONS == 4:
+                        # print("getting 4D lms")
                         Lms1d3.append(lm.x)
                         Lms1d3.append(lm.y)
                         Lms1d3.append(lm.z)
                         Lms1d3.append(lm.visibility)
+                        # print("Lms1d3", Lms1d3)
         else:
             print("get_landmarks_2d: Lms is not a list or has no landmark attribute")
             print("Lms", Lms)

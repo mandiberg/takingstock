@@ -228,6 +228,8 @@ class DataIO:
         img_list = []
         print("Saving image list for folder:", folder)
         for root, dirs, files in os.walk(folder):
+            if "_x" in root:
+                continue  # skip any _x folders
             filtered = [
                 f.replace('\\', '/')
                 for f in files
@@ -240,10 +242,10 @@ class DataIO:
         print(f"Image list saved to {json_path}")
         return img_list
 
-    def get_img_list(self, folder, sort=True):
+    def get_img_list(self, folder, force_ls, sort=True):
         json_path = os.path.join(folder, 'img_list.json')
         print("getting image list from", json_path)
-        if os.path.exists(json_path):
+        if os.path.exists(json_path) and not force_ls:
             print("Image list exists, loading from", json_path)
             with open(json_path, 'r') as f:
                 img_list = json.load(f)

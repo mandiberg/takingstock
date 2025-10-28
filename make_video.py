@@ -51,7 +51,7 @@ SegmentTable_name = 'SegmentBig_isface'
 # SegmentTable_name = 'SegmentBig_isnotface'
 # SegmentHelper_name = 'SegmentHelper_may2025_4x4faces'
 SegmentHelper_name = 'SegmentHelper_sept2025_heft_keywords'
-SegmentHelper_name = 'SegmentHelper_oct2025_every40'
+# SegmentHelper_name = 'SegmentHelper_oct2025_every40'
 # SegmentHelper_name = None
 # SATYAM, this is MM specific
 # for when I'm using files on my SSD vs RAID
@@ -82,15 +82,15 @@ CSV_FOLDER = os.path.join("/Users/michaelmandiberg/Documents/projects-active/fac
 MODES = {0:'paris_photo_torso_images_topics', 1:'paris_photo_torso_videos_topics', 
          2:'3D_bodies_topics', 3:'3D_full_bodies_topics', 4:'3D_arms_meta', 
          5:'heft_torso_keywords'}
-MODE_CHOICE = 2
+MODE_CHOICE = 5
 CURRENT_MODE = MODES[MODE_CHOICE]
-LIMIT = 1000 # this is the limit for the SQL query
+LIMIT = 100000 # this is the limit for the SQL query
 
 # set defaults, including for all modes to False
 FULL_BODY = IS_HAND_POSE_FUSION = ONLY_ONE = GENERATE_FUSION_PAIRS = USE_FUSION_PAIR_DICT = IS_CLUSTER = IS_ONE_CLUSTER = USE_POSE_CROP_DICT = IS_TOPICS= IS_ONE_TOPIC = USE_AFFECT_GROUPS = False
 EXPAND = ONE_SHOT = JUMP_SHOT = USE_ALL = CHOP_FIRST = TSP_SORT = False
-USE_PAINTED = OUTPAINT = INPAINT= META = False
-FUSION_FOLDER = None
+USE_PAINTED = OUTPAINT = INPAINT= META = USE_HSV = False
+FUSION_FOLDER = FOCUS_CLUSTER_HACK_LIST = None
 MIN_CYCLE_COUNT = 1
 AUTO_EDGE_CROP = False # this triggers the dynamic cropping based on min_max_body_landmarks_for_crop
 
@@ -170,8 +170,8 @@ elif "3D" in CURRENT_MODE:
     START_CLUSTER = 0
 
 elif CURRENT_MODE == 'heft_torso_keywords':
-    SegmentTable_name = 'SegmentOct20'
-    # SegmentTable_name = 'SegmentBig_isface'
+    # SegmentTable_name = 'SegmentOct20'
+    SegmentTable_name = 'SegmentBig_isface'
     SegmentHelper_name = 'SegmentHelper_sept2025_heft_keywords' # TK revisit this for prodution run
     # SORT_TYPE = "planar_hands"
     SORT_TYPE = "arms3D" # this triggers meta body poses 3D
@@ -183,19 +183,23 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     GENERATE_FUSION_PAIRS = True # if true it will query based on MIN_VIDEO_FUSION_COUNT and create pairs
                                     # if false, it will grab the list of pair lists below
     USE_FUSION_PAIR_DICT = False
-    FUSION_PAIR_DICT_NAME = "FUSION_PAIR_DICT_KEYWORDS_768"
-    # N_HSV = 16
-    N_HSV = 16 # don't do HSV clusters
+    FUSION_PAIR_DICT_NAME = "FUSION_PAIR_DICT_KEYWORDS_768_META"
+    # USE_HSV = True
+    N_HSV = 96
+    # N_HSV = 0 # don't do HSV clusters
     
     # TSP_SORT = True
     # CHOP_FIRST = True
     # if TESTING: IS_HAND_POSE_FUSION = GENERATE_FUSION_PAIRS = False
-    MIN_VIDEO_FUSION_COUNT = 1300 # this is the cut off for the CSV fusion pairs
-    MIN_CYCLE_COUNT = 1000 # this is the cut off for the SQL query results
 
-    MIN_VIDEO_FUSION_COUNT = 100 # this is the cut off for the CSV fusion pairs
-    MIN_CYCLE_COUNT = 100 # this is the cut off for the SQL query results
-
+    if not USE_HSV:
+        # this is for testing all cluster-poses for a keyword
+        MIN_VIDEO_FUSION_COUNT = 2000 # this is the cut off for the CSV fusion pairs
+        MIN_CYCLE_COUNT = 1500 # this is the cut off for the SQL query results
+    else:
+        # smaller numbers when using HSV clusters
+        MIN_VIDEO_FUSION_COUNT = 1 # this is the cut off for the CSV fusion pairs
+        MIN_CYCLE_COUNT = 1 # this is the cut off for the SQL query results
     # this control whether sorting by topics
     # IS_TOPICS = True # if using Clusters only, must set this to False
 
@@ -216,9 +220,19 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     # when doing IS_HAND_POSE_FUSION code currently only supports one topic at a time
     IS_ONE_TOPIC = True
     N_TOPICS = 100
+    FOCUS_CLUSTER_HACK_LIST = [57,69, 92,98,117]
+    # FOCUS_CLUSTER_HACK_LIST = [181]
+    # XYZ_FILTER_OCT2025_HEFT_KEYWORDS = " AND s.face_x > -33 AND s.face_x < -27 AND s.face_y > -2 AND s.face_y < 2 AND s.face_z > -2 AND s.face_z < 2"
+    XYZ_FILTER_OCT2025_HEFT_KEYWORDS = " AND s.face_x IS NOT NULL "
+    # XYZ_FILTER_OCT2025_HEFT_KEYWORDS = " AND s.face_x > -45 AND s.face_x < -5 AND s.face_y > -10 AND s.face_y < 10 AND s.face_z > -10 AND s.face_z < 10"
+
     TOPIC_NO = [22412] # if doing an affect topic fusion, this is the wrapper topic
-    FUSION_FOLDER = "utilities/data/heft_keyword_fusion_clusters_768_hsv"
-    CSV_FOLDER = os.path.join("/Users/michaelmandiberg/Documents/projects-active/facemap_production/heft_keyword_fusion_clusters/meta_clusters_fusion_build/")
+    if META:
+        FUSION_FOLDER = "utilities/data/heft_keyword_fusion_clusters_hsv_meta"
+        CSV_FOLDER = os.path.join("/Users/michaelmandiberg/Documents/projects-active/facemap_production/heft_keyword_fusion_clusters/meta_clusters_fusion_build/")
+    else:
+        FUSION_FOLDER = "utilities/data/heft_keyword_fusion_clusters_768_hsv"
+        CSV_FOLDER = os.path.join("/Users/michaelmandiberg/Documents/projects-active/facemap_production/heft_keyword_fusion_clusters/body3D_768_CSVs_test/")
 
 else:
     print("unknown mode, exiting")
@@ -369,6 +383,7 @@ KEYWORD_DICT = {
     22412.24705: {"label":"money AND dollars", "OR":[23029,25287,133768,24593], "AND":[24705,25155], "NOT":[]},
     26270: {"label":"money AND euros", "OR":[23029,25287,133768,24593], "AND":[22412], "NOT":[]},
     5310: {"label":"gun", "OR":[], "AND":[], "NOT":[184]},
+    184: {"label":"blank sign", "OR":[], "AND":[7969], "NOT":[]},
 
 }
 
@@ -389,18 +404,21 @@ FUSION_PAIR_DICT_KEYWORDS_512 = {
     22411: [[158, 0], [240, 0], [304, 0], [306, 0], [342, 0], [391, 0], [40, 0], [423, 0], [449,0]],
     22412: [[89, 0], [101, 0], [140, 0], [184, 0], [273, 0], [391, 0], [396, 0], [426, 0], [430, 0], [446, 0], [449, 0], [481,0]]
 }
-
 FUSION_PAIR_DICT_KEYWORDS_768 = {
-    220: [[101, 0], [124, 0], [184, 0], [216, 0], [302, 0], [448, 0], [457,0]],
-    553: [[216, 0], [230, 0], [89,0]],
-    807: [[140, 0], [168, 0], [216, 0], [273, 0], [63,0]],
-    827: [[191, 0], [229, 0], [322, 0], [340, 0], [396, 0], [423, 0], [447, 0], [448, 0], [51,0]],
-    1070: [[122, 0], [14, 0], [22, 0], [342, 0], [391, 0], [53,0]],
-    1644: [[158, 0], [161, 0], [345,0]],
-    5310: [[180, 0], [245, 0], [265, 0], [315, 0], [324, 0], [445, 0], [451, 0], [476, 0], [498,0]],
-    22269: [[351, 0], [449, 0], [53,0]],
-    22411: [[158, 0], [240, 0], [304, 0], [306, 0], [342, 0], [391, 0], [40, 0], [423, 0], [449,0]],
-    22412: [[89, 0], [101, 0], [140, 0], [184, 0], [273, 0], [391, 0], [396, 0], [426, 0], [430, 0], [446, 0], [449, 0], [481,0]]
+    553: [[57, 0], [117,0]]
+}
+
+FUSION_PAIR_DICT_KEYWORDS_768_META128 = {
+    # 220: [[101, 0], [124, 0], [184, 0], [216, 0], [302, 0], [448, 0], [457,0]],
+    553: [[57, 0], [117,0]],
+    807: [[92, 0], [117, 0]],
+    # 827: [[191, 0], [229, 0], [322, 0], [340, 0], [396, 0], [423, 0], [447, 0], [448, 0], [51,0]],
+    # 1070: [[122, 0], [14, 0], [22, 0], [342, 0], [391, 0], [53,0]],
+    # 1644: [[158, 0], [161, 0], [345,0]],
+    # 5310: [[180, 0], [245, 0], [265, 0], [315, 0], [324, 0], [445, 0], [451, 0], [476, 0], [498,0]],
+    # 22269: [[351, 0], [449, 0], [53,0]],
+    # 22411: [[158, 0], [240, 0], [304, 0], [306, 0], [342, 0], [391, 0], [40, 0], [423, 0], [449,0]],
+    22412: [[92, 0], [117, 0]]
 }
 
 FUSION_PAIR_DICT_3DBODIES_TOPICS_512 = {
@@ -411,6 +429,7 @@ ALL_FUSION_PAIRS_DICTS = {
     "FUSION_PAIR_DICT_TOPICS_64": FUSION_PAIR_DICT_TOPICS_64,
     "FUSION_PAIR_DICT_KEYWORDS_512": FUSION_PAIR_DICT_KEYWORDS_512,
     "FUSION_PAIR_DICT_KEYWORDS_768": FUSION_PAIR_DICT_KEYWORDS_768,
+    "FUSION_PAIR_DICT_KEYWORDS_768_META128": FUSION_PAIR_DICT_KEYWORDS_768_META128,
     "FUSION_PAIR_DICT_3DBODIES_TOPICS_512": FUSION_PAIR_DICT_3DBODIES_TOPICS_512,
     }
 if USE_FUSION_PAIR_DICT:
@@ -644,6 +663,8 @@ elif IS_SEGONLY and io.platform == "darwin":
     # this is the standard segment topics/clusters query for June 2024
     if SegmentHelper_name is None:
         pass
+    if SegmentHelper_name == "SegmentHelper_sept2025_heft_keywords":
+        WHERE += XYZ_FILTER_OCT2025_HEFT_KEYWORDS
     elif PHONE_BBOX_LIMITS:
         pass
         # WHERE += " AND s.face_x > -50 "
@@ -1140,6 +1161,7 @@ if not io.IS_TENCH:
 
         def access_keyword_dict(cluster_topic_no):
             # check if the topic_no has related keywords in the KEYWORD_DICT
+            cluster_dict_OR = cluster_dict_AND = cluster_dict_NOT = None
             cluster_topic_no = int(math.floor(float(cluster_topic_no)))
             cluster_dict_values = KEYWORD_DICT.get(cluster_topic_no, None)
             if cluster_dict_values is not None:
@@ -1150,6 +1172,8 @@ if not io.IS_TENCH:
                 if cluster_topic_OR is not None:
                     cluster_topic_OR.append(cluster_topic_no)
                     cluster_topic_no = cluster_topic_OR
+                if cluster_dict_AND is not None:
+                    print(f"cluster_dict_AND for topic {cluster_topic_no} is {cluster_dict_AND}")
                 # AND and NOT will be handled below
             return cluster_topic_no, cluster_dict_AND, cluster_dict_NOT
 
@@ -1228,8 +1252,12 @@ if not io.IS_TENCH:
             local_where += f" AND cmp.meta_cluster_id = {str(cluster_no)} "
 
         if bool(cluster_dict_AND):
+            print(f"cluster_dict_AND for topic in SQL is {cluster_dict_AND}")
             IN_or_equal_hsv_string = is_query_list_string(cluster_dict_AND)
-            cluster +=  f" AND it.{this_id} {IN_or_equal_hsv_string} "
+            join_and = " JOIN ImagesKeywords and_ik ON and_ik.image_id = s.image_id "
+            if join_and not in FROM:
+                FROM += join_and
+            cluster +=  f" AND and_ik.{this_id} {IN_or_equal_hsv_string} "
         if bool(cluster_dict_NOT):
             IN_or_equal_hsv_string = is_query_list_string(cluster_dict_NOT, inclusion=False)
             cluster +=  f" AND it.{this_id} {IN_or_equal_hsv_string} "
@@ -2450,7 +2478,7 @@ def main():
             df['body_landmarks_normalized'] = df['body_landmarks_normalized'].apply(io.unpickle_array)
             # if hand_results has any values
             # if not df['hand_results'].isnull().all():
-            
+            print("body_landmarks_3D", df['body_landmarks_3D'][0])
             df[['left_hand_landmarks', 'left_hand_world_landmarks', 'left_hand_landmarks_norm', 'right_hand_landmarks', 'right_hand_world_landmarks', 'right_hand_landmarks_norm']] = pd.DataFrame(df['hand_results'].apply(sort.prep_hand_landmarks).tolist(), index=df.index)
             if VERBOSE: print("about to split_landmarks_to_columns_or_list,", df.iloc[0])
             # df = sort.split_landmarks_to_columns_or_list(df, left_col="left_hand_world_landmarks", right_col="right_hand_world_landmarks", structure="list")
@@ -2538,6 +2566,7 @@ def main():
             else:   
                 # hard coding override to just start from median
                 # sort.counter_dict["start_img_name"] = "median"
+                if not USE_HSV: this_hsv_cluster = None
                 file_prefix = const_prefix(this_topic, cluster_no, pose_no, this_hsv_cluster)
                 # build file prefix for cluster, pose, and topic
                 process_linear(start_img_name,df_segment, file_prefix, sort)
@@ -2710,6 +2739,7 @@ def main():
                         print("N_HSV > 0, so making FUSION_PAIR_DICT with keyword: [metacluster, hsv] structure")
                         FUSION_PAIR_DICT = {str(TOPIC_NO[0]): n_cluster_topics}
                     else:
+                        print(f"N_HSV == 0, so making FUSION_PAIR_DICT for {TOPIC_NO} with keyword: no_pairs structure")
                         # this is how it was before. It doesn't make sense to me b/c key is fusion cluster and all have "no_pairs"
                         FUSION_PAIR_DICT = {str(TOPIC_NO[0]): "no_pairs" for topic in n_cluster_topics}
                     print("FUSION_PAIR_DICT", FUSION_PAIR_DICT)
@@ -2782,6 +2812,10 @@ def main():
                 n_hsv_clusters = [0]
 
             def select_map_images(this_cluster, this_topic, hsv_cluster):
+                # TEMP HACK FIX
+                if FOCUS_CLUSTER_HACK_LIST is not None and this_cluster not in FOCUS_CLUSTER_HACK_LIST:
+                    print(f"skipping cluster {this_cluster} b/c not in hack list")
+                    return
                 if VERBOSE: print("select_map_images this_cluster", this_cluster)
                 if VERBOSE: print("select_map_images this_topic", this_topic)
                 if VERBOSE: print("select_map_images hsv_cluster", hsv_cluster)
@@ -2797,12 +2831,13 @@ def main():
             def sub_select_clusters_by_hsv(cluster_topic_no, n_cluster_topics):
                 # N_HSV
                 # make a list where the first value matches cluster_topic_no and the second value is assigned from range(1,N_HSV+1)
-                all_potential_hsv_clusters = [[cluster_topic_no, i] for i in range(1, N_HSV + 1)]
+                if USE_HSV: all_potential_hsv_clusters = [[cluster_topic_no, i] for i in range(0, N_HSV + 1)]
+                else: all_potential_hsv_clusters = [[cluster_topic_no, 0]]
                 print(f"all_potential_hsv_clusters for cluster_topic_no {cluster_topic_no} is {all_potential_hsv_clusters}")
                 this_n_hsv_clusters = []
                 all_other_hsv_clusters = []
                 for this_cluster in all_potential_hsv_clusters:
-                    # print(f"checking cluster_topic_no {this_cluster} against hsv cluster {all_potential_hsv_clusters}")
+                    print(f"checking cluster_topic_no {this_cluster} against hsv cluster {all_potential_hsv_clusters}")
                     if this_cluster in n_cluster_topics:
                         this_n_hsv_clusters.append(this_cluster)
                     else:

@@ -22,7 +22,7 @@ ROOT_FOLDER_PATH = '/Users/michaelmandiberg/Documents/projects-active/facemap_pr
 
 MODE = "Keywords" # Topics or Keywords
 MODE_ID = "topic_id" if MODE == "Topics" else "keyword_id"
-CLUSTER_TYPE = "BodyPoses3D_HSV" # "MetaBodyPoses3D" or "BodyPoses3D_HSV" or "body3D" or "hand_gesture_position" - determines whether it checks hand poses or body3D
+CLUSTER_TYPE = "MetaBodyPoses3D" # "MetaBodyPoses3D" or "BodyPoses3D_HSV" or "body3D" or "hand_gesture_position" - determines whether it checks hand poses or body3D
 # MetaBodyPoses3D right now does HSV plus body3D, not META
 
 # Create engine and session
@@ -33,13 +33,13 @@ engine = create_engine("mysql+pymysql://{user}:{pw}@/{db}?unix_socket={socket}".
 Session = sessionmaker(bind=engine)
 session = Session()
 
-# first 100
-# KEYWORDS = [22137, 184, 502, 135, 22411, 1991, 11801, 22101, 273, 220, 2150, 22269, 22233, 5271, 22040, 133, 22324, 23100, 827, 22499, 278, 1070, 13057, 22412, 5728, 404, 444, 22191, 23084, 22333, 2472, 22665, 22042, 420, 553, 1227, 22228, 665, 23403, 671, 16045, 272, 437, 293, 2514, 22222, 22961, 27381, 23029, 2467, 5279, 4265, 1127, 407, 790, 3856, 133680, 1204, 703, 1224, 729, 11549, 737, 6286, 133300, 2151, 807, 1585, 133777, 699, 1644, 2756, 786, 698, 730, 133819, 22692, 2188, 1223, 1807, 10765, 24705, 24593, 22247, 133705, 5310, 24233, 1511, 24511, 1515, 5912, 1277, 7787, 22502, 206, 4115, 24190, 18137, 23163, 763]
+# first 87
+# KEYWORDS = [22137,184,502,135,22411,1991,11801,273,220,2150,22269,22233,5271,22040,133,22324,23100,827,22499,278,1070,13057,22412,5728,404,23084,22333,2472,22665,22042,420,553,1227,22228,665,23403,671,272,437,293,2514,22222,22961,27381,2467,5279,4265,1127,407,790,3856,133680,1204,703,1224,729,737,6286,2151,807,1585,699,1644,2756,786,698,730,133819,22692,2188,1223,1807,10765,24705,22247,133705,5310]
 
 # second 100
 # KEYWORDS = [232, 22251, 1575, 758, 22600, 424, 410, 1919, 25287, 5516, 2567, 3961, 9940, 22861, 25155, 919, 115, 8911, 818, 1263, 1222, 22617, 6970, 22139, 486, 5115, 22298, 13539, 697, 23512, 24327, 23825, 1073, 22217, 22910, 133822, 22105, 1421, 212, 4589, 133768, 4572, 805, 227, 133724, 13, 295, 24552, 13300, 133816, 5953, 2747, 24041, 1217, 133685, 24472, 514, 292, 22336, 761, 9028, 4361, 433, 223, 696, 13534, 327, 7266, 22851, 11605, 1121, 12472, 25083, 18066, 297, 830, 24399, 3977, 732, 736, 4667, 296, 753, 22628, 22968, 133834, 11203, 8962, 3706, 215, 12572, 5342, 2599, 23853, 5824, 2421, 1772, 6045, 789, 4714
-KEYWORDS = [22411,220,22269,827,1070,22412,553,807,1644,5310] # helper segment
-# KEYWORDS = [5310] # helper segment
+# KEYWORDS = [22411,220,22269,827,1070,22412,553,807,1644,5310] # helper segment
+KEYWORDS = [21463,4222,13130,23084,79920,8874,736,8136] # helper segment
 
 # SQL query template
 sql_query_template = """
@@ -249,6 +249,7 @@ ORDER BY
 sql_query_template_HSV_MetaBody3D = """
 SELECT 
     ihp.meta_cluster_id AS ihp_cluster,
+    SUM(CASE WHEN ihsv.cluster_id = 0 THEN 1 ELSE 0 END) AS hsv_0,
     SUM(CASE WHEN ihsv.cluster_id = 1 THEN 1 ELSE 0 END) AS hsv_1,
     SUM(CASE WHEN ihsv.cluster_id = 2 THEN 1 ELSE 0 END) AS hsv_2,
     SUM(CASE WHEN ihsv.cluster_id = 3 THEN 1 ELSE 0 END) AS hsv_3,
@@ -259,8 +260,93 @@ SELECT
     SUM(CASE WHEN ihsv.cluster_id = 8 THEN 1 ELSE 0 END) AS hsv_8,
     SUM(CASE WHEN ihsv.cluster_id = 9 THEN 1 ELSE 0 END) AS hsv_9,
     SUM(CASE WHEN ihsv.cluster_id = 10 THEN 1 ELSE 0 END) AS hsv_10,
-    SUM(CASE WHEN ihsv.cluster_id = 11 THEN 1 ELSE 0 END) AS hsv_11
-  
+    SUM(CASE WHEN ihsv.cluster_id = 11 THEN 1 ELSE 0 END) AS hsv_11,
+    SUM(CASE WHEN ihsv.cluster_id = 12 THEN 1 ELSE 0 END) AS hsv_12,
+    SUM(CASE WHEN ihsv.cluster_id = 13 THEN 1 ELSE 0 END) AS hsv_13,
+    SUM(CASE WHEN ihsv.cluster_id = 14 THEN 1 ELSE 0 END) AS hsv_14,
+    SUM(CASE WHEN ihsv.cluster_id = 15 THEN 1 ELSE 0 END) AS hsv_15,
+    SUM(CASE WHEN ihsv.cluster_id = 16 THEN 1 ELSE 0 END) AS hsv_16,
+    SUM(CASE WHEN ihsv.cluster_id = 17 THEN 1 ELSE 0 END) AS hsv_17,
+    SUM(CASE WHEN ihsv.cluster_id = 18 THEN 1 ELSE 0 END) AS hsv_18,
+    SUM(CASE WHEN ihsv.cluster_id = 19 THEN 1 ELSE 0 END) AS hsv_19,    
+    SUM(CASE WHEN ihsv.cluster_id = 20 THEN 1 ELSE 0 END) AS hsv_20,
+    SUM(CASE WHEN ihsv.cluster_id = 21 THEN 1 ELSE 0 END) AS hsv_21,
+    SUM(CASE WHEN ihsv.cluster_id = 22 THEN 1 ELSE 0 END) AS hsv_22,
+    SUM(CASE WHEN ihsv.cluster_id = 23 THEN 1 ELSE 0 END) AS hsv_23,
+    SUM(CASE WHEN ihsv.cluster_id = 24 THEN 1 ELSE 0 END) AS hsv_24,
+    SUM(CASE WHEN ihsv.cluster_id = 25 THEN 1 ELSE 0 END) AS hsv_25,
+    SUM(CASE WHEN ihsv.cluster_id = 26 THEN 1 ELSE 0 END) AS hsv_26,
+    SUM(CASE WHEN ihsv.cluster_id = 27 THEN 1 ELSE 0 END) AS hsv_27,
+    SUM(CASE WHEN ihsv.cluster_id = 28 THEN 1 ELSE 0 END) AS hsv_28,
+    SUM(CASE WHEN ihsv.cluster_id = 29 THEN 1 ELSE 0 END) AS hsv_29,
+    SUM(CASE WHEN ihsv.cluster_id = 30 THEN 1 ELSE 0 END) AS hsv_30,
+    SUM(CASE WHEN ihsv.cluster_id = 31 THEN 1 ELSE 0 END) AS hsv_31,
+    SUM(CASE WHEN ihsv.cluster_id = 32 THEN 1 ELSE 0 END) AS hsv_32,
+    SUM(CASE WHEN ihsv.cluster_id = 33 THEN 1 ELSE 0 END) AS hsv_33,
+    SUM(CASE WHEN ihsv.cluster_id = 34 THEN 1 ELSE 0 END) AS hsv_34,
+    SUM(CASE WHEN ihsv.cluster_id = 35 THEN 1 ELSE 0 END) AS hsv_35,
+    SUM(CASE WHEN ihsv.cluster_id = 36 THEN 1 ELSE 0 END) AS hsv_36,
+    SUM(CASE WHEN ihsv.cluster_id = 37 THEN 1 ELSE 0 END) AS hsv_37,
+    SUM(CASE WHEN ihsv.cluster_id = 38 THEN 1 ELSE 0 END) AS hsv_38,
+    SUM(CASE WHEN ihsv.cluster_id = 39 THEN 1 ELSE 0 END) AS hsv_39,
+    SUM(CASE WHEN ihsv.cluster_id = 40 THEN 1 ELSE 0 END) AS hsv_40,
+    SUM(CASE WHEN ihsv.cluster_id = 41 THEN 1 ELSE 0 END) AS hsv_41,
+    SUM(CASE WHEN ihsv.cluster_id = 42 THEN 1 ELSE 0 END) AS hsv_42,
+    SUM(CASE WHEN ihsv.cluster_id = 43 THEN 1 ELSE 0 END) AS hsv_43,
+    SUM(CASE WHEN ihsv.cluster_id = 44 THEN 1 ELSE 0 END) AS hsv_44,
+    SUM(CASE WHEN ihsv.cluster_id = 45 THEN 1 ELSE 0 END) AS hsv_45,
+    SUM(CASE WHEN ihsv.cluster_id = 46 THEN 1 ELSE 0 END) AS hsv_46,
+    SUM(CASE WHEN ihsv.cluster_id = 47 THEN 1 ELSE 0 END) AS hsv_47,
+    SUM(CASE WHEN ihsv.cluster_id = 48 THEN 1 ELSE 0 END) AS hsv_48,
+    SUM(CASE WHEN ihsv.cluster_id = 49 THEN 1 ELSE 0 END) AS hsv_49,
+    SUM(CASE WHEN ihsv.cluster_id = 50 THEN 1 ELSE 0 END) AS hsv_50,
+    SUM(CASE WHEN ihsv.cluster_id = 51 THEN 1 ELSE 0 END) AS hsv_51,
+    SUM(CASE WHEN ihsv.cluster_id = 52 THEN 1 ELSE 0 END) AS hsv_52,
+    SUM(CASE WHEN ihsv.cluster_id = 53 THEN 1 ELSE 0 END) AS hsv_53,
+    SUM(CASE WHEN ihsv.cluster_id = 54 THEN 1 ELSE 0 END) AS hsv_54,
+    SUM(CASE WHEN ihsv.cluster_id = 55 THEN 1 ELSE 0 END) AS hsv_55,
+    SUM(CASE WHEN ihsv.cluster_id = 56 THEN 1 ELSE 0 END) AS hsv_56,
+    SUM(CASE WHEN ihsv.cluster_id = 57 THEN 1 ELSE 0 END) AS hsv_57,
+    SUM(CASE WHEN ihsv.cluster_id = 58 THEN 1 ELSE 0 END) AS hsv_58,
+    SUM(CASE WHEN ihsv.cluster_id = 59 THEN 1 ELSE 0 END) AS hsv_59,
+    SUM(CASE WHEN ihsv.cluster_id = 60 THEN 1 ELSE 0 END) AS hsv_60,
+    SUM(CASE WHEN ihsv.cluster_id = 61 THEN 1 ELSE 0 END) AS hsv_61,
+    SUM(CASE WHEN ihsv.cluster_id = 62 THEN 1 ELSE 0 END) AS hsv_62,
+    SUM(CASE WHEN ihsv.cluster_id = 63 THEN 1 ELSE 0 END) AS hsv_63,
+    SUM(CASE WHEN ihsv.cluster_id = 64 THEN 1 ELSE 0 END) AS hsv_64,
+    SUM(CASE WHEN ihsv.cluster_id = 65 THEN 1 ELSE 0 END) AS hsv_65,
+    SUM(CASE WHEN ihsv.cluster_id = 66 THEN 1 ELSE 0 END) AS hsv_66,
+    SUM(CASE WHEN ihsv.cluster_id = 67 THEN 1 ELSE 0 END) AS hsv_67,
+    SUM(CASE WHEN ihsv.cluster_id = 68 THEN 1 ELSE 0 END) AS hsv_68,
+    SUM(CASE WHEN ihsv.cluster_id = 69 THEN 1 ELSE 0 END) AS hsv_69,
+    SUM(CASE WHEN ihsv.cluster_id = 70 THEN 1 ELSE 0 END) AS hsv_70,
+    SUM(CASE WHEN ihsv.cluster_id = 71 THEN 1 ELSE 0 END) AS hsv_71,
+    SUM(CASE WHEN ihsv.cluster_id = 72 THEN 1 ELSE 0 END) AS hsv_72,
+    SUM(CASE WHEN ihsv.cluster_id = 73 THEN 1 ELSE 0 END) AS hsv_73,
+    SUM(CASE WHEN ihsv.cluster_id = 74 THEN 1 ELSE 0 END) AS hsv_74,
+    SUM(CASE WHEN ihsv.cluster_id = 75 THEN 1 ELSE 0 END) AS hsv_75,
+    SUM(CASE WHEN ihsv.cluster_id = 76 THEN 1 ELSE 0 END) AS hsv_76,
+    SUM(CASE WHEN ihsv.cluster_id = 77 THEN 1 ELSE 0 END) AS hsv_77,
+    SUM(CASE WHEN ihsv.cluster_id = 78 THEN 1 ELSE 0 END) AS hsv_78,
+    SUM(CASE WHEN ihsv.cluster_id = 79 THEN 1 ELSE 0 END) AS hsv_79,
+    SUM(CASE WHEN ihsv.cluster_id = 80 THEN 1 ELSE 0 END) AS hsv_80,
+    SUM(CASE WHEN ihsv.cluster_id = 81 THEN 1 ELSE 0 END) AS hsv_81,
+    SUM(CASE WHEN ihsv.cluster_id = 82 THEN 1 ELSE 0 END) AS hsv_82,
+    SUM(CASE WHEN ihsv.cluster_id = 83 THEN 1 ELSE 0 END) AS hsv_83,
+    SUM(CASE WHEN ihsv.cluster_id = 84 THEN 1 ELSE 0 END) AS hsv_84,
+    SUM(CASE WHEN ihsv.cluster_id = 85 THEN 1 ELSE 0 END) AS hsv_85,
+    SUM(CASE WHEN ihsv.cluster_id = 86 THEN 1 ELSE 0 END) AS hsv_86,
+    SUM(CASE WHEN ihsv.cluster_id = 87 THEN 1 ELSE 0 END) AS hsv_87,
+    SUM(CASE WHEN ihsv.cluster_id = 88 THEN 1 ELSE 0 END) AS hsv_88,
+    SUM(CASE WHEN ihsv.cluster_id = 89 THEN 1 ELSE 0 END) AS hsv_89,
+    SUM(CASE WHEN ihsv.cluster_id = 90 THEN 1 ELSE 0 END) AS hsv_90,
+    SUM(CASE WHEN ihsv.cluster_id = 91 THEN 1 ELSE 0 END) AS hsv_91,
+    SUM(CASE WHEN ihsv.cluster_id = 92 THEN 1 ELSE 0 END) AS hsv_92,
+    SUM(CASE WHEN ihsv.cluster_id = 93 THEN 1 ELSE 0 END) AS hsv_93,
+    SUM(CASE WHEN ihsv.cluster_id = 94 THEN 1 ELSE 0 END) AS hsv_94,
+    SUM(CASE WHEN ihsv.cluster_id = 95 THEN 1 ELSE 0 END) AS hsv_95,
+    SUM(CASE WHEN ihsv.cluster_id = 96 THEN 1 ELSE 0 END) AS hsv_96
+
 FROM SegmentBig_isface so
 JOIN SegmentHelper_sept2025_heft_keywords sh ON sh.image_id = so.image_id
 JOIN ImagesBodyPoses3D ibp ON ibp.image_id = so.image_id
@@ -283,10 +369,11 @@ def save_query_results_to_csv(query, topic_id):
 
     # add zero values for any missing rows in the ihp_cluster column
     
+    # THIS SHOULD BE DEFINED IN DICT ABOVE
     if "body3D" in CLUSTER_TYPE: cluster_count = 512
     elif "BodyPoses3D" in CLUSTER_TYPE: cluster_count = 768
     elif "hand_gesture_position" in CLUSTER_TYPE: cluster_count = 128
-    elif "MetaBodyPoses3D" in CLUSTER_TYPE: cluster_count = 32
+    elif "MetaBodyPoses3D" in CLUSTER_TYPE: cluster_count = 64
     else: raise ValueError("Unknown CLUSTER_TYPE")
     for i in range(cluster_count):
         print(f"checking for ihp_cluster {i}")

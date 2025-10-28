@@ -171,7 +171,7 @@ CREATE TABLE Encodings (
 
 -- calculations that will come later
 CREATE TABLE Clusters (
-    cluster_id int NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    cluster_id int NOT NULL PRIMARY KEY,
     cluster_median BLOB
 );
 
@@ -185,7 +185,7 @@ CREATE TABLE ImagesClusters (
 
 
 CREATE TABLE Poses (
-    cluster_id int NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    cluster_id int NOT NULL PRIMARY KEY,
     cluster_median BLOB
 );
 
@@ -268,7 +268,7 @@ CREATE TABLE IsNotDupeOf (
 
 -- calculations that will come later
 CREATE TABLE HSV (
-    cluster_id int NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    cluster_id int NOT NULL PRIMARY KEY,
     cluster_median BLOB
 );
 

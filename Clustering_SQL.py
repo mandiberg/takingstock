@@ -84,9 +84,12 @@ CLUSTER_TYPE = "BodyPoses3D" # use this for META 3D body clusters, Arms will sta
 # CLUSTER_TYPE = "HandsPositions"
 # CLUSTER_TYPE = "HandsGestures"
 # CLUSTER_TYPE = "FingertipsPositions"
-# CLUSTER_TYPE = "HSV"
+# CLUSTER_TYPE = "HSV" # only works with cluster save, not with assignment
 
-LMS_DIMENSIONS = 3
+if "3D" in CLUSTER_TYPE:
+    LMS_DIMENSIONS = 4
+else:
+    LMS_DIMENSIONS = 3
 OFFSET = 0
 START_ID = 108329049 # only used in MODE 1
 VERBOSE = True
@@ -99,14 +102,14 @@ SegmentTable_name = 'SegmentBig_isface'
 # if doing MODE == 2, use SegmentHelper_name to subselect SQL query
 # unless you know what you are doing, leave this as None
 # SegmentHelper_name = None
-SegmentHelper_name = 'SegmentHelper_sept2025_heft_keywords'
-# SegmentHelper_name = 'SegmentHelper_oct2025_every40'
+# SegmentHelper_name = 'SegmentHelper_sept2025_heft_keywords'
+SegmentHelper_name = 'SegmentHelper_oct2025_every40'
 
 # number of clusters produced. run GET_OPTIMAL_CLUSTERS and add that number here
 # 32 for hand positions
 # 128 for hand gestures
-N_CLUSTERS = 768
-N_META_CLUSTERS = 16
+N_CLUSTERS = 32
+N_META_CLUSTERS = 256
 if MODE == 3: 
     META = True
     N_CLUSTERS = N_META_CLUSTERS
@@ -122,7 +125,8 @@ SUBSELECT_ONE_CLUSTER = 0
 # SUBSET_LANDMARKS is now set in sort pose init
 if CLUSTER_TYPE == "BodyPoses3D": 
     if META: 
-        sort.SUBSET_LANDMARKS = sort.make_subset_landmarks(15,16)  
+        # sort.SUBSET_LANDMARKS = sort.make_subset_landmarks(15,16)  # just wrists
+        sort.SUBSET_LANDMARKS = sort.make_subset_landmarks(11,22)  
     else: sort.SUBSET_LANDMARKS = None
     print("OVERRIDE after construction setting sort.SUBSET_LANDMARKS to: ",sort.SUBSET_LANDMARKS)
 USE_HEAD_POSE = False
@@ -144,12 +148,12 @@ GET_OPTIMAL_CLUSTERS=False
 SAVE_FIG=False ##### option for saving the visualized data
 
 CLUSTER_DATA = {
-    "BodyPoses": {"data_column": "mongo_body_landmarks", "is_feet": 1},
-    "BodyPoses3D": {"data_column": "mongo_body_landmarks_3D", "is_feet": None},
-    "ArmsPoses3D": {"data_column": "mongo_body_landmarks_3D", "is_feet": None},
-    "HandsGestures": {"data_column": "mongo_hand_landmarks", "is_feet": None},
-    "HandsPositions": {"data_column": "mongo_hand_landmarks_norm", "is_feet": None},
-    "FingertipsPositions": {"data_column": "mongo_hand_landmarks_norm", "is_feet": None},
+    "BodyPoses": {"data_column": "mongo_body_landmarks", "is_feet": 1, "mongo_hand_landmarks": None},
+    "BodyPoses3D": {"data_column": "mongo_body_landmarks_3D", "is_feet": None, "mongo_hand_landmarks": 1},
+    "ArmsPoses3D": {"data_column": "mongo_body_landmarks_3D", "is_feet": None, "mongo_hand_landmarks": 1},
+    "HandsGestures": {"data_column": "mongo_hand_landmarks", "is_feet": None, "mongo_hand_landmarks": 1},
+    "HandsPositions": {"data_column": "mongo_hand_landmarks_norm", "is_feet": None, "mongo_hand_landmarks": 1},
+    "FingertipsPositions": {"data_column": "mongo_hand_landmarks_norm", "is_feet": None, "mongo_hand_landmarks": 1},
     "HSV": {"data_column": ["hue", "sat", "val"], "is_feet": None},
 }
 
@@ -177,7 +181,8 @@ if USE_SEGMENT is True and (CLUSTER_TYPE != "Clusters"):
 
     if CLUSTER_DATA[CLUSTER_TYPE]["is_feet"] is not None:
         WHERE += f" AND {dupe_table_pre}.is_feet = {CLUSTER_DATA[CLUSTER_TYPE]['is_feet']} "
-    
+    if CLUSTER_DATA[CLUSTER_TYPE].get("mongo_hand_landmarks") is not None:
+        WHERE += f" AND {dupe_table_pre}.mongo_hand_landmarks = {CLUSTER_DATA[CLUSTER_TYPE]['mongo_hand_landmarks']} "    
     # refactoring the above to use the dict Oct 11
     # if CLUSTER_TYPE == "BodyPoses": WHERE += f" AND {dupe_table_pre}.mongo_body_landmarks = 1 and {dupe_table_pre}.is_feet = 1"
     # # elif CLUSTER_TYPE == "BodyPoses3D": WHERE += f" AND {dupe_table_pre}.mongo_body_landmarks_3D = 1 and {dupe_table_pre}.is_feet = 1"
@@ -218,7 +223,7 @@ if USE_SEGMENT is True and (CLUSTER_TYPE != "Clusters"):
         WHERE = " cluster_id IS NOT NULL "
 
     # WHERE += " AND h.is_body = 1"
-    LIMIT = 3000000
+    LIMIT = 300
 
     '''
     Poses
@@ -840,7 +845,8 @@ def prepare_df(df):
         df['cluster_median'] = df['cluster_median'].apply(io.unpickle_array)
     if "body" in CLUSTER_DATA[CLUSTER_TYPE]["data_column"]:
     # if CLUSTER_TYPE in ("BodyPoses", "BodyPoses3D", "ArmsPoses3D"):
-        if CLUSTER_DATA[CLUSTER_TYPE]["data_column"] == "BodyPoses3D":
+        print(f"processing body landmarks for CLUSTER_TYPE: {CLUSTER_TYPE}: CLUSTER_DATA[CLUSTER_TYPE]['data_column']: {CLUSTER_DATA[CLUSTER_TYPE]['data_column']}")
+        if "3D" in CLUSTER_DATA[CLUSTER_TYPE]["data_column"]:
             keep_col = "body_landmarks_3D"
             drop_col = "body_landmarks_normalized"
         else:
@@ -850,7 +856,7 @@ def prepare_df(df):
         df = df.dropna(subset=[keep_col])
         df[keep_col] = df[keep_col].apply(io.unpickle_array)
         # body = self.get_landmarks_2d(enc1, list(range(33)), structure)
-        print(f"df size {len(df)} before get_landmarks_2d", df)
+        print(f"df size {len(df)} before get_landmarks_2d with {keep_col}", df)
         # getting errors here. I think it is because I have accumulated so many None's that it fills the whole df
         # this is because a lot of the is_body do not actually have mongo data
         # workaround is to update the start_id to skip the bad data
@@ -861,9 +867,10 @@ def prepare_df(df):
         # drop the columns that are not needed
         # if not USE_HEAD_POSE: df = df.drop(columns=['face_x', 'face_y', 'face_z', 'mouth_gap']) 
         columns_to_drop=['face_encodings68', 'face_landmarks', 'body_landmarks', keep_col, drop_col]
-        print("before cols",df)
+        print("before cols",df.iloc[0])
+        print("before cols",df.iloc[0]['body_landmarks_array'])
         df_list_to_cols(df, 'body_landmarks_array')
-        print("after cols",df)
+        print("after cols",df.iloc[0])
     # elif CLUSTER_TYPE == "HandsPositions":
     elif CLUSTER_TYPE in ["HandsPositions","FingertipsPositions"]:
         print("first row of df",df.iloc[0])
