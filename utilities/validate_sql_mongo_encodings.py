@@ -52,7 +52,7 @@ exporter = MongoBSONExporter(mongo_db)
 batch_size = 5000
 IS_FACE = 0
 IS_BODY = 1
-MODE = 4  # 0 validate_zero_columns_against_mongo_prereshard (outputs bson)s
+MODE = 3  # 0 validate_zero_columns_against_mongo_prereshard (outputs bson)s
 #0 validate_zero_columns_against_mongo_prereshard (outputs bson) 
 # 1 read_and_store_bson
 if MODE == 0 or MODE == 4: FOLDER_MODE = 0 # 0 is the first way, 1 is by filepath, limit 1
@@ -696,7 +696,7 @@ if __name__ == "__main__":
     
     elif MODE == 3:
         # compare mongo index to sql index
-        collection_name = "hand_landmarks"
+        collection_name = "encodings"
         mongo_only, sql_only, in_both = get_both_indexes(engine, mongo_db, exporter, document_names_dict, sql_field_names_dict, collection_name)
 
         print(f"Entries only in MongoDB ({len(mongo_only)}): {list(mongo_only)[:10]}")

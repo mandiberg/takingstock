@@ -101,14 +101,14 @@ SegmentTable_name = 'SegmentBig_isface'
 
 # if doing MODE == 2, use SegmentHelper_name to subselect SQL query
 # unless you know what you are doing, leave this as None
-# SegmentHelper_name = None
+SegmentHelper_name = None
 # SegmentHelper_name = 'SegmentHelper_sept2025_heft_keywords'
-SegmentHelper_name = 'SegmentHelper_oct2025_every40'
+# SegmentHelper_name = 'SegmentHelper_oct2025_every40'
 
 # number of clusters produced. run GET_OPTIMAL_CLUSTERS and add that number here
 # 32 for hand positions
 # 128 for hand gestures
-N_CLUSTERS = 32
+N_CLUSTERS = 256
 N_META_CLUSTERS = 256
 if MODE == 3: 
     META = True
@@ -149,7 +149,7 @@ SAVE_FIG=False ##### option for saving the visualized data
 
 CLUSTER_DATA = {
     "BodyPoses": {"data_column": "mongo_body_landmarks", "is_feet": 1, "mongo_hand_landmarks": None},
-    "BodyPoses3D": {"data_column": "mongo_body_landmarks_3D", "is_feet": None, "mongo_hand_landmarks": 1},
+    "BodyPoses3D": {"data_column": "mongo_body_landmarks_3D", "is_feet": 1, "mongo_hand_landmarks": None}, # changed this for testing
     "ArmsPoses3D": {"data_column": "mongo_body_landmarks_3D", "is_feet": None, "mongo_hand_landmarks": 1},
     "HandsGestures": {"data_column": "mongo_hand_landmarks", "is_feet": None, "mongo_hand_landmarks": 1},
     "HandsPositions": {"data_column": "mongo_hand_landmarks_norm", "is_feet": None, "mongo_hand_landmarks": 1},
@@ -223,7 +223,7 @@ if USE_SEGMENT is True and (CLUSTER_TYPE != "Clusters"):
         WHERE = " cluster_id IS NOT NULL "
 
     # WHERE += " AND h.is_body = 1"
-    LIMIT = 300
+    LIMIT = 3000000
 
     '''
     Poses
@@ -435,6 +435,8 @@ def kmeans_cluster(df, n_clusters=32):
         numerical_data = df
     print("clustering subset data", numerical_data)
     print("frist row of numerical data: ", numerical_data.iloc[0])
+
+
     kmeans = KMeans(n_clusters=n_clusters, n_init=10, init='k-means++', random_state=42, max_iter=300, verbose=1)
     kmeans.fit(numerical_data)
     clusters = kmeans.predict(numerical_data)
@@ -909,6 +911,12 @@ def prepare_df(df):
         if 'face_x' in df.columns:
             columns_to_drop += ['face_x', 'face_y', 'face_z', 'mouth_gap']
     df = df.drop(columns=columns_to_drop)
+    # if body_landmarks_array is in the df columns,
+    # drop any rows where body_landmarks_array is None or NaN
+    if 'body_landmarks_array' in df.columns:
+        df = df.dropna(subset=['body_landmarks_array'])
+
+    print("final prepared df len", len(df))
     return df
 
 # defining globally 

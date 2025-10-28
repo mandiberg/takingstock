@@ -25,7 +25,7 @@ world_body_collection = mongo_db["body_world_landmarks"]
 
 SUBSET_LANDMARKS = [i for i in range(13,22)]
 
-image_id = 47040
+image_id = 125829255
 #
 #
 # 10152053
