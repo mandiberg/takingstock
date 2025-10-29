@@ -99,7 +99,7 @@ ROOT_FOLDER_PATH = '/Volumes/OWC4/images_to_assemble'
 FOLDER_NAME = "body3D_512_"
 FOLDER_PATH = os.path.join(ROOT_FOLDER_PATH,FOLDER_NAME)
 # FOLDER_PATH = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/keyword_body3D_tests/body3D_512" # temp override for testing
-FOLDER_PATH = '/Volumes/OWC4/segment_images/oct26_misc250_final'
+FOLDER_PATH = '/Volumes/OWC4/segment_images/oct28_actual3D_256_70ct'
 DIRS = ["1x1", "4x3", "16x10"]
 OUTPUT = os.path.join(io.ROOTSSD, "audioproduction")
 # Extract the topic number from the folder name

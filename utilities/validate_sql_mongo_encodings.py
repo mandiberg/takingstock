@@ -602,18 +602,14 @@ def process_file_list_in_batches(batch_list, num_threads, this_process, this_fun
                 return  
 
 
-def get_both_indexes(engine, mongo_db, exporter, document_names_dict, sql_field_names_dict, collection_name):
-    document_names= document_names_dict[collection_name]
-    for doc_name in document_names:
-        sql_field_name = sql_field_names_dict[doc_name]
-        print(f"Checking collection: {collection_name}, document: {doc_name}, SQL field: {sql_field_name}")
-        if sql_field_name == "mongo_hand_landmarks": continue
+def get_both_indexes(engine, mongo_db, exporter, collection_name, doc_name, sql_field_name):
     print(f"Checking collection: {collection_name}, document: {doc_name}, SQL field: {sql_field_name}")
 
-    mongo_index = exporter.get_mongo_index(mongo_db, collection_name)
+    mongo_index = exporter.get_mongo_index(mongo_db, collection_name, doc_name)
     print(f"MongoDB index for collection {collection_name} contains len: {len(mongo_index)} entries")
     print(mongo_index[:5])  # print first 5 entries
-    mongo_index_simple = [doc['image_id'] for doc in mongo_index]
+    # mongo_index_simple = [doc['image_id'] for doc in mongo_index]
+    mongo_index_simple = mongo_index
     print(f"MongoDB index as simple list: {mongo_index_simple[:5]}")
     mongo_index_set = set(mongo_index_simple)        # compare with SQL index
 
@@ -630,20 +626,20 @@ def get_both_indexes(engine, mongo_db, exporter, document_names_dict, sql_field_
 
     return only_in_mongo, only_in_sql, in_both
 
-def save_sets(collection_name, only_in_mongo, only_in_sql, in_both):
-    with open(os.path.join(EXPORT_DIR, f"mongo_only_{collection_name}.txt"), "w") as f:
+def save_sets(doc_name, only_in_mongo, only_in_sql, in_both):
+    with open(os.path.join(EXPORT_DIR, f"mongo_only_{doc_name}.txt"), "w") as f:
         f.write(f"Entries only in MongoDB ({len(only_in_mongo)}):\n")
         for entry in only_in_mongo:
             f.write(f"{entry}\n")
 
         # Save only_in_sql
-    with open(os.path.join(EXPORT_DIR, f"sql_only_{collection_name}.txt"), "w") as f:
+    with open(os.path.join(EXPORT_DIR, f"sql_only_{doc_name}.txt"), "w") as f:
         f.write(f"Entries only in SQL ({len(only_in_sql)}):\n")
         for entry in only_in_sql:
             f.write(f"{entry}\n")
 
         # Save in_both
-    with open(os.path.join(EXPORT_DIR, f"in_both_{collection_name}.txt"), "w") as f:
+    with open(os.path.join(EXPORT_DIR, f"in_both_{doc_name}.txt"), "w") as f:
         f.write(f"Entries in both ({len(in_both)}):\n")
         for entry in in_both:
             f.write(f"{entry}\n")
@@ -697,15 +693,22 @@ if __name__ == "__main__":
     elif MODE == 3:
         # compare mongo index to sql index
         collection_name = "encodings"
-        mongo_only, sql_only, in_both = get_both_indexes(engine, mongo_db, exporter, document_names_dict, sql_field_names_dict, collection_name)
 
-        print(f"Entries only in MongoDB ({len(mongo_only)}): {list(mongo_only)[:10]}")
-        print(f"Entries only in SQL ({len(sql_only)}): {list(sql_only)[:10]}")
-        print(f"Entries in both ({len(in_both)}): {list(in_both)[:10]}")
+        document_names= document_names_dict[collection_name]
+        for doc_name in document_names:
+            sql_field_name = sql_field_names_dict[doc_name]
+            print(f"Checking collection: {collection_name}, document: {doc_name}, SQL field: {sql_field_name}")
+            if sql_field_name == "mongo_hand_landmarks": continue
 
-        # save the results for each mongo_only only_insql in_both to their own text file
-        # Save mongo_only
-        save_sets(collection_name, mongo_only, sql_only, in_both)
+            mongo_only, sql_only, in_both = get_both_indexes(engine, mongo_db, exporter, collection_name, doc_name, sql_field_name)
+
+            print(f"Entries only in MongoDB ({len(mongo_only)}): {list(mongo_only)[:10]}")
+            print(f"Entries only in SQL ({len(sql_only)}): {list(sql_only)[:10]}")
+            print(f"Entries in both ({len(in_both)}): {list(in_both)[:10]}")
+
+            # save the results for each mongo_only only_insql in_both to their own text file
+            # Save mongo_only
+            save_sets(doc_name, mongo_only, sql_only, in_both)
 
     elif MODE == 4:
         # open the sets saved in MODE 3 to update MYSQL table

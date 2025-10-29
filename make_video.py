@@ -50,9 +50,9 @@ CYCLECOUNT = 1
 SegmentTable_name = 'SegmentBig_isface'
 # SegmentTable_name = 'SegmentBig_isnotface'
 # SegmentHelper_name = 'SegmentHelper_may2025_4x4faces'
-SegmentHelper_name = 'SegmentHelper_sept2025_heft_keywords'
+# SegmentHelper_name = 'SegmentHelper_sept2025_heft_keywords'
 # SegmentHelper_name = 'SegmentHelper_oct2025_every40'
-# SegmentHelper_name = None
+SegmentHelper_name = None
 # SATYAM, this is MM specific
 # for when I'm using files on my SSD vs RAID
 IS_SSD = False
@@ -82,9 +82,9 @@ CSV_FOLDER = os.path.join("/Users/michaelmandiberg/Documents/projects-active/fac
 MODES = {0:'paris_photo_torso_images_topics', 1:'paris_photo_torso_videos_topics', 
          2:'3D_bodies_topics', 3:'3D_full_bodies_topics', 4:'3D_arms_meta', 
          5:'heft_torso_keywords'}
-MODE_CHOICE = 5
+MODE_CHOICE = 1
 CURRENT_MODE = MODES[MODE_CHOICE]
-LIMIT = 100000 # this is the limit for the SQL query
+LIMIT = 20 # this is the limit for the SQL query
 
 # set defaults, including for all modes to False
 FULL_BODY = IS_HAND_POSE_FUSION = ONLY_ONE = GENERATE_FUSION_PAIRS = USE_FUSION_PAIR_DICT = IS_CLUSTER = IS_ONE_CLUSTER = USE_POSE_CROP_DICT = IS_TOPICS= IS_ONE_TOPIC = USE_AFFECT_GROUPS = False
@@ -112,6 +112,8 @@ if "paris" in CURRENT_MODE:
 
     elif CURRENT_MODE == 'paris_photo_torso_videos_topics':
         SORT_TYPE = "128d"
+        #TEMP TESTING
+        SORT_TYPE = "obj_bbox"
         MIN_VIDEO_FUSION_COUNT = 300
 
         JUMP_SHOT = True # jump to random file if can't find a run (I don't think this applies to planar?)
@@ -126,7 +128,7 @@ if "paris" in CURRENT_MODE:
 
         # when doing IS_HAND_POSE_FUSION code currently only supports one topic at a time
         IS_ONE_TOPIC = True
-        TOPIC_NO = [32] # if doing an affect topic fusion, this is the wrapper topic
+        TOPIC_NO = [63] # if doing an affect topic fusion, this is the wrapper topic
 elif "3D" in CURRENT_MODE:
     AUTO_EDGE_CROP = True
     if "bod" in CURRENT_MODE:
@@ -293,6 +295,10 @@ if IS_HAND_POSE_FUSION:
         #     CLUSTER_TYPE = "BodyPoses3D"
         #     CLUSTER_TYPE_2 = None
     # CLUSTER_TYPE is passed to sort. below
+    elif SORT_TYPE == "obj_bbox":
+        CLUSTER_TYPE = "HandsPositions" # Select on 3d hands
+        CLUSTER_TYPE_2 = "HandsGestures" # Sort on 2d hands
+
 else:
     if SORT_TYPE == "arms3D" and META:
         # if fusion, select on arms3D and gesture, sort on hands positions
@@ -362,10 +368,13 @@ NORMED_BODY_LMS = True
 MOUTH_GAP = 0
 # if planar_body set OBJ_CLS_ID for each object type
 # 67 is phone, 63 is laptop, 26: 'handbag', 27: 'tie', 32: 'sports ball'
-OBJ_CLS_ID = 0
+OBJ_CLS_ID = 67
 DO_OBJ_SORT = True
 OBJ_DONT_SUBSELECT = False # False means select for OBJ. this is a flag for selecting a specific object type when not sorting on obj
 PHONE_BBOX_LIMITS = [0] # this is an attempt to control the BBOX placement. I don't think it is going to work, but with non-zero it will make a bigger selection. Fix this hack TK. 
+if SORT_TYPE == "obj_bbox" and OBJ_CLS_ID == 0:
+    print("WARNING: OBJ_CLS_ID is 0 for obj_bbox SORT_TYPE, quitting")
+    sys.exit()
 
 # commenting this out Sept 2025
 # if SegmentHelper_name != 'SegmentHelper_may2025_4x4faces' or SegmentHelper_name is None:
@@ -389,7 +398,8 @@ KEYWORD_DICT = {
 
 
 FUSION_PAIR_DICT_TOPICS_64 = {
-    32: [[13, 109], [13, 24], [13, 85]]
+    # 32: [[13, 109], [13, 24], [13, 85]],
+    63: [[16, 21]]
 }
 
 FUSION_PAIR_DICT_KEYWORDS_512 = {
@@ -663,7 +673,8 @@ elif IS_SEGONLY and io.platform == "darwin":
     # this is the standard segment topics/clusters query for June 2024
     if SegmentHelper_name is None:
         pass
-    if SegmentHelper_name == "SegmentHelper_sept2025_heft_keywords":
+    if SegmentHelper_name == "SegmentHelper_sept2025_heft_keywords" and MODE == 5:
+        # hacky thing to narrow the XYZ face space for heft keywords
         WHERE += XYZ_FILTER_OCT2025_HEFT_KEYWORDS
     elif PHONE_BBOX_LIMITS:
         pass
@@ -1341,7 +1352,7 @@ def sort_by_face_dist_NN(df_enc):
         # send in both dfs, and return same dfs with 1+ rows sorted
         print(" -- BEFORE sort_by_face_dist_NN _ for loop df_enc is", df_enc)
         is_break = False
-        df_enc, df_sorted = sort.get_closest_df_NN(df_enc, df_sorted)
+        df_enc, df_sorted, output_cols = sort.get_closest_df_NN(df_enc, df_sorted)
 
         print(" -- AFTER sort_by_face_dist_NN _ for loop df_enc is", len(df_enc))
         print(" -- AFTER sort_by_face_dist_NN _ for loop df_sorted is", len(df_sorted))
@@ -1367,12 +1378,12 @@ def sort_by_face_dist_NN(df_enc):
             is_break = True            
         else:
             print("df_sorted.iloc[-1], " , df_sorted.iloc[-1])
-            dist = df_sorted.iloc[-1]['dist_enc1']
+            dist = df_sorted.iloc[-1][output_cols]
             print("sort_by_face_dist_NN _ for loop dist is", dist)
             if dist > sort.MAXD or df_enc.empty:
                 print("should breakout, dist is", dist)
                 is_break = True
-        return df_enc, df_sorted, is_break
+        return df_enc, df_sorted, is_break, output_cols
     
     # start here
     # create emtpy df_sorted with the same columns as df_enc
@@ -1395,7 +1406,7 @@ def sort_by_face_dist_NN(df_enc):
             sort.counter_dict["start_img_name"] = start_img_name
         print(f"CHOP_FIRST is true with sort.counter_dict['start_img_name'], {sort.counter_dict['start_img_name']}")
 
-        df_enc, df_sorted, is_break = get_closest_knn_or_break(df_enc, df_sorted)
+        df_enc, df_sorted, is_break, output_cols = get_closest_knn_or_break(df_enc, df_sorted)
         df_enc = df_sorted.head(sort.CUTOFF)
         print("AFTER CHOP_FIRST df_enc is", len(df_enc))
         print("AFTER CHOP_FIRST df_sorted is", len(df_sorted))
@@ -1437,7 +1448,7 @@ def sort_by_face_dist_NN(df_enc):
                 print("sort_by_face_dist_NN _ for loop itters i is", i)
                 ## Find closest
                 try:
-                    df_enc, df_sorted, is_break = get_closest_knn_or_break(df_enc, df_sorted)
+                    df_enc, df_sorted, is_break, output_cols = get_closest_knn_or_break(df_enc, df_sorted)
                     print(f"break for itters {i} is {is_break}")
                     if is_break: break
                 except Exception as e:
@@ -1450,7 +1461,7 @@ def sort_by_face_dist_NN(df_enc):
     df_sorted['folder'] = df_sorted['site_name_id'].apply(lambda x: io.folder_list[x])
     
     # rename the distance column to dist
-    df_sorted.rename(columns={'dist_enc1': 'dist'}, inplace=True)
+    df_sorted.rename(columns={output_cols: 'dist'}, inplace=True)
 
     print("df_sorted", df_sorted)
 
@@ -1561,6 +1572,8 @@ def prep_encodings_NN(df_segment):
             # source_col_2 = "right_hand_landmarks_norm"
         elif SORT_TYPE == "128d":
             source_col = sort_column = "face_encodings68"
+        elif SORT_TYPE == "obj_bbox":
+            source_col = sort_column = "bbox_"+str(OBJ_CLS_ID)
 
         return sort_column, source_col
 
@@ -2478,7 +2491,7 @@ def main():
             df['body_landmarks_normalized'] = df['body_landmarks_normalized'].apply(io.unpickle_array)
             # if hand_results has any values
             # if not df['hand_results'].isnull().all():
-            print("body_landmarks_3D", df['body_landmarks_3D'][0])
+            # print("body_landmarks_3D", df['body_landmarks_3D'][0])
             df[['left_hand_landmarks', 'left_hand_world_landmarks', 'left_hand_landmarks_norm', 'right_hand_landmarks', 'right_hand_world_landmarks', 'right_hand_landmarks_norm']] = pd.DataFrame(df['hand_results'].apply(sort.prep_hand_landmarks).tolist(), index=df.index)
             if VERBOSE: print("about to split_landmarks_to_columns_or_list,", df.iloc[0])
             # df = sort.split_landmarks_to_columns_or_list(df, left_col="left_hand_world_landmarks", right_col="right_hand_world_landmarks", structure="list")
@@ -2489,7 +2502,12 @@ def main():
             df['bbox'] = df['bbox'].apply(lambda x: io.unstring_json(x))
             if VERBOSE: print("df before bboxing,", df.columns)
 
-            if OBJ_CLS_ID > 0: df["bbox_"+str(OBJ_CLS_ID)] = df["bbox_"+str(OBJ_CLS_ID)].apply(lambda x: io.unstring_json(x))
+            if OBJ_CLS_ID > 0: 
+                obj_bbox_col = "bbox_"+str(OBJ_CLS_ID)
+                df[obj_bbox_col] = df[obj_bbox_col].apply(lambda x: io.unstring_json(x))
+                # # convert obj_bbox_col to list using convert_bbox_to_list
+                # df[obj_bbox_col] = df[obj_bbox_col].apply(lambda x: sort.convert_bbox_to_list(x))
+
 
 
 
@@ -2811,7 +2829,7 @@ def main():
             else:
                 n_hsv_clusters = [0]
 
-            def select_map_images(this_cluster, this_topic, hsv_cluster):
+            def select_map_images(this_cluster, this_topic, hsv_cluster=None):
                 # TEMP HACK FIX
                 if FOCUS_CLUSTER_HACK_LIST is not None and this_cluster not in FOCUS_CLUSTER_HACK_LIST:
                     print(f"skipping cluster {this_cluster} b/c not in hack list")

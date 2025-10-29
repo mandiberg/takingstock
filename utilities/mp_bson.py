@@ -489,10 +489,21 @@ class MongoBSONExporter:
             return False
 
 
-    def get_mongo_index(self, mongo_db, collection_name):
+    def get_mongo_index(self, mongo_db, collection_name, doc_name=None):
         collection = mongo_db[collection_name]
-        mongo_index = list(collection.find({}, {"image_id": 1, "_id": 0}))
-        return mongo_index
+        try:
+            if doc_name is not None:
+                # only return documents where the field exists and is not null
+                query = {doc_name: {"$exists": True, "$ne": None}}
+            else:
+                query = {}
+            cursor = collection.find(query, {"image_id": 1, "_id": 0})
+            # return a simple list of image_id values
+            mongo_index = [doc.get("image_id") for doc in cursor]
+            return mongo_index
+        except Exception as e:
+            print(f"Error retrieving Mongo index for {collection_name}: {e}")
+            return []
     def get_sql_index(self, engine, table_name, where=None):
         if where:
             stmt = f"SELECT image_id FROM {table_name} WHERE {where};"
