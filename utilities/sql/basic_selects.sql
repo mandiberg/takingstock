@@ -19,10 +19,14 @@ AND migrated_Mongo is NULL
 LIMIT 10
 ;
 
+Select *
+FROM Images
+WHERE image_id = 74173690
+;
 
 SELECT *
 FROM Encodings i 
-WHERE i.image_id = 123443380
+WHERE i.encoding_id = 125652553
 ;
 
 SELECT *
@@ -108,6 +112,7 @@ CREATE TABLE SegmentHelper_may2025_4x4faces (
 DELETE FROM BodyPoses3D;
 DELETE FROM ImagesBodyPoses3D;
 
+USE stock;
 SELECT cluster_id, COUNT(image_id) 
 FROM ImagesBodyPoses3D
 GROUP BY cluster_id
@@ -128,6 +133,9 @@ CREATE TABLE ImagesBodyPoses3D (
     PRIMARY KEY (image_id)
 );
 
+SELECT COUNT(image_id)
+FROM ImagesBodyPoses3D
+;
 
 CREATE TABLE MetaBodyPoses3D (
     cluster_id int NOT NULL PRIMARY KEY,
@@ -148,6 +156,7 @@ CREATE TABLE ClustersMetaHSV (
     cluster_id INTEGER REFERENCES HSV (cluster_id),
     meta_cluster_id INTEGER,
     cluster_dist FLOAT DEFAULT NULL,
+    cluster_name varchar(40),
     PRIMARY KEY (cluster_id)
 );
 
@@ -184,6 +193,23 @@ GROUP BY cmb.meta_cluster_id
 ORDER BY cmb.meta_cluster_id
 ;
 
+
+SELECT cmb.cluster_id, COUNT(cmb.image_id)
+FROM ImagesBodyPoses3D cmb
+JOIN Encodings e ON cmb.image_id = e.image_id
+WHERE e.is_feet = 0
+GROUP BY cmb.cluster_id
+ORDER BY cmb.cluster_id
+;
+
+-- delete rows from ImagesBodyPoses3D where the joined Encodings row matches criteria
+-- MySQL syntax: DELETE <alias> FROM <table> <alias> JOIN ... WHERE ...
+DELETE cmb
+FROM ImagesBodyPoses3D cmb
+JOIN Encodings e ON cmb.image_id = e.image_id
+WHERE e.is_feet = 1 AND e.mongo_hand_landmarks = 1;
+
+
 USE stock;
 SELECT cmb.meta_cluster_id, cmb.cluster_id
 FROM ClustersMetaBodyPoses3D cmb
@@ -206,6 +232,15 @@ AND i.is_feet = 1
 GROUP BY ib.cluster_id
 ORDER BY ib.cluster_id
 ;
+
+-- select count of HSV for heft keywords
+SELECT  ik.cluster_id, COUNT(ik.image_id)
+FROM SegmentHelper_sept2025_heft_keywords h
+JOIN ImagesHSV ik ON h.image_id = ik.image_id 
+GROUP BY ik.cluster_id
+ORDER BY ik.cluster_id
+;
+
 
 SELECT  ik.keyword_id, k.keyword_text, COUNT(ik.image_id)
 FROM SegmentHelper_sept2025_heft_keywords h

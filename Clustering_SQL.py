@@ -1,4 +1,5 @@
 #sklearn imports
+import gc
 from sklearn.decomposition import PCA #Principal Component Analysis
 from sklearn.cluster import KMeans #K-Means Clustering
 from sklearn.metrics import silhouette_score
@@ -91,7 +92,9 @@ if "3D" in CLUSTER_TYPE:
 else:
     LMS_DIMENSIONS = 3
 OFFSET = 0
-START_ID = 108329049 # only used in MODE 1
+# SELECT MAX(cmb.image_id) FROM ImagesBodyPoses3D cmb JOIN Encodings e ON cmb.image_id = e.image_id WHERE e.is_feet = 0;
+# START_ID = 114468990 # only used in MODE 1
+START_ID = 121211285 # only used in MODE 1
 VERBOSE = True
 
 # WHICH TABLE TO USE?
@@ -102,13 +105,14 @@ SegmentTable_name = 'SegmentBig_isface'
 # if doing MODE == 2, use SegmentHelper_name to subselect SQL query
 # unless you know what you are doing, leave this as None
 SegmentHelper_name = None
-# SegmentHelper_name = 'SegmentHelper_sept2025_heft_keywords'
+if CLUSTER_TYPE == "ArmsPoses3D":
+    SegmentHelper_name = 'SegmentHelper_sept2025_heft_keywords'
 # SegmentHelper_name = 'SegmentHelper_oct2025_every40'
 
 # number of clusters produced. run GET_OPTIMAL_CLUSTERS and add that number here
 # 32 for hand positions
 # 128 for hand gestures
-N_CLUSTERS = 256
+N_CLUSTERS = 768
 N_META_CLUSTERS = 256
 if MODE == 3: 
     META = True
@@ -122,12 +126,22 @@ sort = SortPose(motion, face_height_output, image_edge_multiplier_sm, EXPAND,  O
 # MM you need to use conda activate mps_torch310 
 SUBSELECT_ONE_CLUSTER = 0
 
-# SUBSET_LANDMARKS is now set in sort pose init
+# overrides SUBSET_LANDMARKS which is now set in sort pose init
 if CLUSTER_TYPE == "BodyPoses3D": 
     if META: 
         # sort.SUBSET_LANDMARKS = sort.make_subset_landmarks(15,16)  # just wrists
-        sort.SUBSET_LANDMARKS = sort.make_subset_landmarks(11,22)  
-    else: sort.SUBSET_LANDMARKS = None
+        sort.SUBSET_LANDMARKS = sort.make_subset_landmarks(11,22)
+        USE_SUBSET_MEDIANS = True
+    # else: sort.SUBSET_LANDMARKS = None
+    else:
+        # setting SUBSET_LANDMARKS for to nose [0] and ears+mouth+rest of body [7-32]
+        sort.SUBSET_LANDMARKS = sort.make_subset_landmarks(0,0) + sort.make_subset_landmarks(7,32)
+        USE_SUBSET_MEDIANS = True
+elif CLUSTER_TYPE == "ArmsPoses3D":
+    # print("OVERRIDE setting CLUSTER_TYPE to BodyPoses3D for ArmsPoses3D subset median calculation: ",CLUSTER_TYPE, sort.CLUSTER_TYPE)
+    sort.SUBSET_LANDMARKS = sort.make_subset_landmarks(0,0) + sort.make_subset_landmarks(7,22)
+    USE_SUBSET_MEDIANS = True
+
     print("OVERRIDE after construction setting sort.SUBSET_LANDMARKS to: ",sort.SUBSET_LANDMARKS)
 USE_HEAD_POSE = False
 
@@ -157,6 +171,17 @@ CLUSTER_DATA = {
     "HSV": {"data_column": ["hue", "sat", "val"], "is_feet": None},
 }
 
+# set cluster_table_type for ArmsPoses3D, so it pulls from BodyPoses3D table
+# this allows the ArmsPoses3D value to set the Dict and subset landmarks.
+if CLUSTER_TYPE == "ArmsPoses3D":
+    table_cluster_type = "BodyPoses3D"
+else:
+    if META:table_cluster_type = "BodyPoses3D"
+    else:table_cluster_type = CLUSTER_TYPE
+
+# setting the data column and is_feet based on CLUSTER_TYPE from dict
+this_data_column = CLUSTER_DATA[CLUSTER_TYPE]["data_column"]
+
 if USE_SEGMENT is True and (CLUSTER_TYPE != "Clusters"):
     print("setting Poses SQL")
     dupe_table_pre  = "s" # set default dupe_table_pre to s
@@ -169,8 +194,6 @@ if USE_SEGMENT is True and (CLUSTER_TYPE != "Clusters"):
     SELECT = "DISTINCT(s.image_id), s.face_x, s.face_y, s.face_z, s.mouth_gap"
     WHERE = f" {dupe_table_pre}.is_dupe_of IS NULL "
 
-    # setting the data column and is_feet based on CLUSTER_TYPE from dict
-    this_data_column = CLUSTER_DATA[CLUSTER_TYPE]["data_column"]
     if isinstance(this_data_column, list):
         if "HSV" in CLUSTER_TYPE:
             SELECT = SELECT.replace(f"s.face_x, s.face_y, s.face_z, s.mouth_gap", f"ib.hue, ib.sat, ib.val ")
@@ -203,7 +226,7 @@ if USE_SEGMENT is True and (CLUSTER_TYPE != "Clusters"):
         if SegmentHelper_name:
             FROM += f" INNER JOIN {SegmentHelper_name} h ON h.image_id = s.image_id " 
     elif MODE in (1,2):
-        FROM += f" LEFT JOIN Images{CLUSTER_TYPE} ic ON s.image_id = ic.image_id"
+        FROM += f" LEFT JOIN Images{table_cluster_type} ic ON s.image_id = ic.image_id"
         if MODE == 1: 
             WHERE += " AND ic.cluster_id IS NULL "
             if SegmentHelper_name:
@@ -213,17 +236,18 @@ if USE_SEGMENT is True and (CLUSTER_TYPE != "Clusters"):
                 WHERE += f" AND s.image_id >= {START_ID} "
         elif MODE == 2: 
             # if doing MODE == 2, use SegmentHelper_name to subselect SQL query
-            FROM += f" INNER JOIN {CLUSTER_TYPE} c ON c.cluster_id = ic.cluster_id"
+            FROM += f" INNER JOIN {table_cluster_type} c ON c.cluster_id = ic.cluster_id"
             SELECT += ",ic.cluster_id, ic.cluster_dist, c.cluster_median"
             WHERE += " AND ic.cluster_id IS NOT NULL AND ic.cluster_dist IS NULL"
     elif MODE == 3:
         # make meta clusters. redefining as a simple full select of the clusters table
         SELECT = "*"
-        FROM = CLUSTER_TYPE
+        FROM = table_cluster_type
         WHERE = " cluster_id IS NOT NULL "
 
     # WHERE += " AND h.is_body = 1"
-    LIMIT = 3000000
+    LIMIT = 1000000
+    BATCH_LIMIT = 10000
 
     '''
     Poses
@@ -303,8 +327,6 @@ Base = declarative_base()
 
 
 # handle the table objects based on CLUSTER_TYPE
-if META:table_cluster_type = "BodyPoses3D"
-else:table_cluster_type = CLUSTER_TYPE
 ClustersTable_name = table_cluster_type
 ImagesClustersTable_name = "Images"+table_cluster_type
 MetaClustersTable_name = "Meta"+table_cluster_type
@@ -367,8 +389,8 @@ def get_cluster_medians():
         # Check the type and content of the deserialized object
         if not isinstance(cluster_median, np.ndarray):
             print(f"Deserialized object is not a numpy array, it's of type: {type(cluster_median)}")
-        
-        if META and sort.SUBSET_LANDMARKS:
+
+        if USE_SUBSET_MEDIANS:
             # handles body lms subsets
             # print("handling body lms subsets in get_cluster_medians for these subset landmarks: ",sort.SUBSET_LANDMARKS)
             subset_cluster_median = []
@@ -405,24 +427,35 @@ def make_subset_landmarks(df,add_list=False):
         numerical_columns = [col for col in df.columns if col.startswith('dim_')]
         prefix_dim = True
     # set hand_columns = to the numerical_columns in sort.SUBSET_LANDMARKS
-    print("subset df columns: ",df.columns)
+    print("lms df columns: ",df.columns)
     if sort.SUBSET_LANDMARKS and (len(numerical_columns)/len(sort.SUBSET_LANDMARKS)) % 1 != 0:
         # only do this if the number of numerical columns is not a multiple of the subset landmarks
         # which is to say: the lms have already been subsetted
         if prefix_dim: subset_columns = [f'dim_{i}' for i in sort.SUBSET_LANDMARKS]
         else: subset_columns = [i for i in sort.SUBSET_LANDMARKS]
-        print("subset columns: ",subset_columns)
+        print("subset lms columns: ",subset_columns)
         if USE_HEAD_POSE:
             df = df.apply(sort.weight_face_pose, axis=1)
             head_columns = ['face_x', 'face_y', 'face_z', 'mouth_gap']
             subset_columns += head_columns
     else:
         subset_columns = numerical_columns
+
+    numerical_data = df[['image_id'] + subset_columns]
+
     if add_list:
-        numerical_data = df
+        print("make_subset_landmarks adding obj_bbox_list column")
         numerical_data["obj_bbox_list"] = df[subset_columns].values.tolist()
-    else:
-        numerical_data = df[subset_columns]
+
+    # this is the old way before Arms3D subsetting. I'm not sure if there is an actual scenario where i want to assign the whole df
+    # if add_list:
+    #     print("make_subset_landmarks adding obj_bbox_list column")
+    #     numerical_data = df
+    #     numerical_data["obj_bbox_list"] = df[subset_columns].values.tolist()
+    # else:
+    #     numerical_data = df[subset_columns]
+
+    print("make_subset_landmarks at the end these are the columns: ", numerical_data.columns)
     return numerical_data
 
 def kmeans_cluster(df, n_clusters=32):
@@ -739,7 +772,7 @@ def calc_median_dist(enc1, enc2):
 
 def process_landmarks_cluster_dist(df, df_subset_landmarks):
     first_col = df.columns[1]
-    print("first col: ",first_col)
+    print("process_landmarks_cluster_dist first col: ",first_col)
     # if the first column is an int, then the columns are integers
     if isinstance(first_col, int):
         dim_columns = [col for col in df_subset_landmarks.columns if isinstance(col, int)]
@@ -748,7 +781,7 @@ def process_landmarks_cluster_dist(df, df_subset_landmarks):
         dim_columns = [col for col in df_subset_landmarks.columns if "dim_" in col]
     elif CLUSTER_TYPE == "HSV":
         dim_columns = CLUSTER_DATA[CLUSTER_TYPE]["data_column"]
-    print("dim_columns: ", dim_columns)
+    print("process_landmarks_cluster_dist dim_columns: ", dim_columns)
     # Step 2: Combine values from these columns into a list for each row
     df_subset_landmarks['enc1'] = df_subset_landmarks[dim_columns].values.tolist()
 
@@ -802,6 +835,7 @@ def assign_images_clusters_DB(df):
         df_subset_landmarks["cluster_id"] = df_subset_landmarks["obj_bbox_list"].apply(prep_pose_clusters_enc)
 
     print("df_subset_landmarks clustered after apply")
+    print(df_subset_landmarks)
     print(df_subset_landmarks[["image_id", "cluster_id","cluster_dist"]])
 
     # print all rows where cluster_id is 68
@@ -817,7 +851,10 @@ def df_list_to_cols(df, col_name):
     df_data = df.drop("image_id", axis=1)
 
     # drop any rows where col_name is None or NaN
+    print(f"Dropping rows with NaN in column '{col_name}'")
+    print("Before dropna, df_data len:", len(df_data))
     df_data = df_data.dropna(subset=[col_name])
+    print("After dropna, df_data len:", len(df_data))
     try:
         # Create new columns for each coordinate
         num_coords = len(df_data[col_name].iloc[0])
@@ -966,6 +1003,9 @@ def main():
     else:
         print("about to SQL: ",SELECT,FROM,WHERE,LIMIT)
         resultsjson = selectSQL()
+        if resultsjson is None or len(resultsjson) == 0:
+            print("No results found from SQL query.")
+            return False
         print("got results, count is: ",len(resultsjson))
         enc_data=pd.DataFrame()
         df = pd.json_normalize(resultsjson)
@@ -997,11 +1037,36 @@ def main():
 
         # if USE_SEGMENT:
         #     Base.metadata.create_all(engine)
-        calculate_clusters_and_save(enc_data)
+        
+        # Process in batches if dataset is large to avoid crashing the shell
+        total_rows = len(enc_data)
+        if total_rows <= BATCH_LIMIT:
+            calculate_clusters_and_save(enc_data)
+        else:
+            print(f"Large dataset ({total_rows} rows) — processing in batches of {BATCH_LIMIT}")
+            for start in range(0, total_rows, BATCH_LIMIT):
+                end = min(start + BATCH_LIMIT, total_rows)
+                print(f"Processing batch rows {start} to {end}...")
+                batch_df = enc_data.iloc[start:end].copy()
+                calculate_clusters_and_save(batch_df)
+                # Free memory between batches
+                gc.collect()
         
     elif MODE == 1:
+        total_rows = len(enc_data)
+        if total_rows <= BATCH_LIMIT:
+            assign_images_clusters_DB(enc_data)
+        else:
+            print(f"Large dataset ({total_rows} rows) — processing in batches of {BATCH_LIMIT}")
+            for start in range(0, total_rows, BATCH_LIMIT):
+                end = min(start + BATCH_LIMIT, total_rows)
+                print(f"Processing batch rows {start} to {end}...")
+                batch_df = enc_data.iloc[start:end].copy()
+                assign_images_clusters_DB(batch_df)
+                # Free memory between batches
+                gc.collect()
 
-        assign_images_clusters_DB(enc_data)
+        # assign_images_clusters_DB(enc_data)
         print("assigned and saved segment to clusters")
 
     elif MODE == 2:

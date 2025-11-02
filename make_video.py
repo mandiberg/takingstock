@@ -69,7 +69,7 @@ N_HSV = HAND_POSE_NO = 0 # defaults to no HSV clusters
 # CSV_FOLDER = os.path.join(io.ROOT_DBx, "body3D_segmentbig_useall256_CSVs_MMtest")
 
 # CSV_FOLDER = os.path.join("/Users/michaelmandiberg/Documents/projects-active/facemap_production/body3D_segmentbig_useall256_CSVs_test")
-CSV_FOLDER = os.path.join("/Users/michaelmandiberg/Documents/projects-active/facemap_production/heft_keyword_fusion_clusters/body3D_768_CSVs_test")
+CSV_FOLDER = os.path.join("/Users/michaelmandiberg/Documents/projects-active/facemap_production/heft_keyword_fusion_clusters/oct30_actual3D768_75ct/")
 
 # TENCH UNCOMMENT FOR YOUR COMP:
 # CSV_FOLDER = os.path.join(io.ROOT_DBx, "body3D_segmentbig_useall256_CSVs_test")
@@ -82,9 +82,9 @@ CSV_FOLDER = os.path.join("/Users/michaelmandiberg/Documents/projects-active/fac
 MODES = {0:'paris_photo_torso_images_topics', 1:'paris_photo_torso_videos_topics', 
          2:'3D_bodies_topics', 3:'3D_full_bodies_topics', 4:'3D_arms_meta', 
          5:'heft_torso_keywords'}
-MODE_CHOICE = 1
+MODE_CHOICE = 5
 CURRENT_MODE = MODES[MODE_CHOICE]
-LIMIT = 20 # this is the limit for the SQL query
+LIMIT = 500 # this is the limit for the SQL query
 
 # set defaults, including for all modes to False
 FULL_BODY = IS_HAND_POSE_FUSION = ONLY_ONE = GENERATE_FUSION_PAIRS = USE_FUSION_PAIR_DICT = IS_CLUSTER = IS_ONE_CLUSTER = USE_POSE_CROP_DICT = IS_TOPICS= IS_ONE_TOPIC = USE_AFFECT_GROUPS = False
@@ -131,6 +131,7 @@ if "paris" in CURRENT_MODE:
         TOPIC_NO = [63] # if doing an affect topic fusion, this is the wrapper topic
 elif "3D" in CURRENT_MODE:
     AUTO_EDGE_CROP = True
+    # FOCUS_CLUSTER_HACK_LIST = [24,42,71,93,167,204,294,301,358,398,443,526,532,590,623,658,708,729] #768
     if "bod" in CURRENT_MODE:
         SORT_TYPE = "body3D"
         if "full" in CURRENT_MODE:
@@ -176,18 +177,19 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     SegmentTable_name = 'SegmentBig_isface'
     SegmentHelper_name = 'SegmentHelper_sept2025_heft_keywords' # TK revisit this for prodution run
     # SORT_TYPE = "planar_hands"
-    SORT_TYPE = "arms3D" # this triggers meta body poses 3D
-    META = True
+    # SORT_TYPE = "arms3D" # this triggers meta body poses 3D
+    SORT_TYPE = "obj_bbox" # make sure OBJ_CLS_ID is set below
+    # META = True
     TESTING = False
     IS_HAND_POSE_FUSION = True # do we use fusion clusters
 
     # either you use a FUSION_PAIR_DICT or GENERATE_FUSION_PAIRS. 
     GENERATE_FUSION_PAIRS = True # if true it will query based on MIN_VIDEO_FUSION_COUNT and create pairs
                                     # if false, it will grab the list of pair lists below
-    USE_FUSION_PAIR_DICT = False
+    USE_FUSION_PAIR_DICT = False # if True, it will use the FUSION_PAIR_DICT_NAME below
     FUSION_PAIR_DICT_NAME = "FUSION_PAIR_DICT_KEYWORDS_768_META"
-    # USE_HSV = True
-    N_HSV = 96
+    USE_HSV = True
+    N_HSV = 23 # 0-22 metaclusters of 96 HSV clusters
     # N_HSV = 0 # don't do HSV clusters
     
     # TSP_SORT = True
@@ -200,8 +202,8 @@ elif CURRENT_MODE == 'heft_torso_keywords':
         MIN_CYCLE_COUNT = 1500 # this is the cut off for the SQL query results
     else:
         # smaller numbers when using HSV clusters
-        MIN_VIDEO_FUSION_COUNT = 1 # this is the cut off for the CSV fusion pairs
-        MIN_CYCLE_COUNT = 1 # this is the cut off for the SQL query results
+        MIN_VIDEO_FUSION_COUNT = 1000 # this is the cut off for the CSV fusion pairs
+        MIN_CYCLE_COUNT = 150 # this is the cut off for the SQL query results
     # this control whether sorting by topics
     # IS_TOPICS = True # if using Clusters only, must set this to False
 
@@ -222,13 +224,14 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     # when doing IS_HAND_POSE_FUSION code currently only supports one topic at a time
     IS_ONE_TOPIC = True
     N_TOPICS = 100
-    FOCUS_CLUSTER_HACK_LIST = [57,69, 92,98,117]
+    # FOCUS_CLUSTER_HACK_LIST = [57,69, 92,98,117] #256
     # FOCUS_CLUSTER_HACK_LIST = [181]
+    FOCUS_CLUSTER_HACK_LIST = [24,42,71,93,167,204,294,301,358,398,443,526,532,590,623,658,708,729] #768
     # XYZ_FILTER_OCT2025_HEFT_KEYWORDS = " AND s.face_x > -33 AND s.face_x < -27 AND s.face_y > -2 AND s.face_y < 2 AND s.face_z > -2 AND s.face_z < 2"
     XYZ_FILTER_OCT2025_HEFT_KEYWORDS = " AND s.face_x IS NOT NULL "
     # XYZ_FILTER_OCT2025_HEFT_KEYWORDS = " AND s.face_x > -45 AND s.face_x < -5 AND s.face_y > -10 AND s.face_y < 10 AND s.face_z > -10 AND s.face_z < 10"
 
-    TOPIC_NO = [22412] # if doing an affect topic fusion, this is the wrapper topic
+    TOPIC_NO = [22411] # if doing an affect topic fusion, this is the wrapper topic
     if META:
         FUSION_FOLDER = "utilities/data/heft_keyword_fusion_clusters_hsv_meta"
         CSV_FOLDER = os.path.join("/Users/michaelmandiberg/Documents/projects-active/facemap_production/heft_keyword_fusion_clusters/meta_clusters_fusion_build/")
@@ -296,8 +299,11 @@ if IS_HAND_POSE_FUSION:
         #     CLUSTER_TYPE_2 = None
     # CLUSTER_TYPE is passed to sort. below
     elif SORT_TYPE == "obj_bbox":
-        CLUSTER_TYPE = "HandsPositions" # Select on 3d hands
-        CLUSTER_TYPE_2 = "HandsGestures" # Sort on 2d hands
+        CLUSTER_TYPE = "BodyPoses3D"
+        CLUSTER_TYPE_2 = None
+
+        # CLUSTER_TYPE = "HandsPositions" # Select on 3d hands
+        # CLUSTER_TYPE_2 = "HandsGestures" # Sort on 2d hands
 
 else:
     if SORT_TYPE == "arms3D" and META:
@@ -1181,12 +1187,14 @@ if not io.IS_TENCH:
                 cluster_dict_NOT = cluster_dict_values.get("NOT", None)
                 # merge the OR values and the cluster_topic_no
                 if cluster_topic_OR is not None:
-                    cluster_topic_OR.append(cluster_topic_no)
-                    cluster_topic_no = cluster_topic_OR
+                    if cluster_topic_no not in cluster_topic_OR:
+                        cluster_topic_OR.append(cluster_topic_no)
+                    this_cluster_topic_no = cluster_topic_OR
                 if cluster_dict_AND is not None:
                     print(f"cluster_dict_AND for topic {cluster_topic_no} is {cluster_dict_AND}")
                 # AND and NOT will be handled below
-            return cluster_topic_no, cluster_dict_AND, cluster_dict_NOT
+            print(f"accessed keyword dict for topic_no {cluster_topic_no}: OR {cluster_topic_OR}, AND {cluster_dict_AND}, NOT {cluster_dict_NOT}")
+            return this_cluster_topic_no, cluster_dict_AND, cluster_dict_NOT
 
         def cluster_topic_select(cluster_topic_table, cluster_topic_no):
             # convert topic_no to a query string
@@ -1217,15 +1225,19 @@ if not io.IS_TENCH:
             print(f"after handling hsv, cluster_no {cluster_no} and hsv_cluster {hsv_cluster}")
             
         if IS_HAND_POSE_FUSION:
+            if META: cluster_target_col = "cmp.meta_cluster_id"
+            else: cluster_target_col = "ihp.cluster_id"
             if isinstance(cluster_no, list):
                 print("cluster_no is a list", cluster_no)
                 # set target column based on SORT_TYPE, arms3D means we have a meta_cluster_id
-                if SORT_TYPE == "arms3D": cluster_target_col = "cmp.meta_cluster_id"
-                else: cluster_target_col = "ihp.cluster_id"
 
                 # we have two values, C1 and C2. C1 should be IHP, C2 should be IH
                 cluster += f" AND {cluster_target_col} = {str(cluster_no[0])} "            
-                if cluster_no[1]: cluster += f" AND ih.cluster_id = {str(cluster_no[1])} "            
+                if cluster_no[1]: cluster += f" AND ih.cluster_id = {str(cluster_no[1])} " 
+            else:
+                print("cluster_no is a single value", cluster_no)
+                # set target column based on SORT_TYPE, arms3D means we have a meta_cluster_id
+                cluster += f" AND {cluster_target_col} = {str(cluster_no)} "           
         # elif cluster_no is not None or topic_no is not None:
         elif IS_CLUSTER or IS_ONE_CLUSTER:
             print("setting cluster_no in selectSQL via IS_CLUSTER or IS_ONE_CLUSTER:", cluster_no)
@@ -1260,7 +1272,7 @@ if not io.IS_TENCH:
             # if hsv is not " ", then we need to join the table
             from_hsv = " JOIN ImagesHSV ihsv ON s.image_id = ihsv.image_id "
             # set cluster_no here, as it doesn't catch any of the other condtionals. (admittedly messy)
-            local_where += f" AND cmp.meta_cluster_id = {str(cluster_no)} "
+            if META: local_where += f" AND cmp.meta_cluster_id = {str(cluster_no)} "
 
         if bool(cluster_dict_AND):
             print(f"cluster_dict_AND for topic in SQL is {cluster_dict_AND}")
@@ -2174,7 +2186,7 @@ def linear_test_df(df_sorted, itter=None):
             this_dist = row.get('dist', None)
             if this_dist is not None and this_dist > sort.MAXD:
                 sort.counter_dict["failed_dist_count"] += 1
-                print("MAXDIST too big:" , str(sort.MAXD))
+                print(f"this_dist {this_dist} > MAXDIST" , str(sort.MAXD))
                 continue
 
             # compare_images to make sure they are face and not the same

@@ -22,7 +22,7 @@ ROOT_FOLDER_PATH = '/Users/michaelmandiberg/Documents/projects-active/facemap_pr
 
 MODE = "Keywords" # Topics or Keywords
 MODE_ID = "topic_id" if MODE == "Topics" else "keyword_id"
-CLUSTER_TYPE = "MetaBodyPoses3D" # "MetaBodyPoses3D" or "BodyPoses3D_HSV" or "body3D" or "hand_gesture_position" - determines whether it checks hand poses or body3D
+CLUSTER_TYPE = "BodyPoses3D_MetaHSV" # "BodyPoses3D_MetaHSV" or "MetaBodyPoses3D" or "BodyPoses3D_HSV" or "body3D" or "hand_gesture_position" - determines whether it checks hand poses or body3D
 # MetaBodyPoses3D right now does HSV plus body3D, not META
 
 # Create engine and session
@@ -39,7 +39,8 @@ session = Session()
 # second 100
 # KEYWORDS = [232, 22251, 1575, 758, 22600, 424, 410, 1919, 25287, 5516, 2567, 3961, 9940, 22861, 25155, 919, 115, 8911, 818, 1263, 1222, 22617, 6970, 22139, 486, 5115, 22298, 13539, 697, 23512, 24327, 23825, 1073, 22217, 22910, 133822, 22105, 1421, 212, 4589, 133768, 4572, 805, 227, 133724, 13, 295, 24552, 13300, 133816, 5953, 2747, 24041, 1217, 133685, 24472, 514, 292, 22336, 761, 9028, 4361, 433, 223, 696, 13534, 327, 7266, 22851, 11605, 1121, 12472, 25083, 18066, 297, 830, 24399, 3977, 732, 736, 4667, 296, 753, 22628, 22968, 133834, 11203, 8962, 3706, 215, 12572, 5342, 2599, 23853, 5824, 2421, 1772, 6045, 789, 4714
 # KEYWORDS = [22411,220,22269,827,1070,22412,553,807,1644,5310] # helper segment
-KEYWORDS = [21463,4222,13130,23084,79920,8874,736,8136] # helper segment
+# KEYWORDS = [21463,4222,13130,23084,79920,8874,736,8136] # helper segment
+KEYWORDS = [22411]
 
 # SQL query template
 sql_query_template = """
@@ -246,6 +247,40 @@ ORDER BY
 """
 
 
+sql_query_template_HSV_Body3D = """
+SELECT 
+    ibp.cluster_id AS ihp_cluster,
+    SUM(CASE WHEN ihsv.cluster_id = 1 THEN 1 ELSE 0 END) AS hsv_1,
+    SUM(CASE WHEN ihsv.cluster_id = 2 THEN 1 ELSE 0 END) AS hsv_2,
+    SUM(CASE WHEN ihsv.cluster_id = 3 THEN 1 ELSE 0 END) AS hsv_3,
+    SUM(CASE WHEN ihsv.cluster_id = 4 THEN 1 ELSE 0 END) AS hsv_4,
+    SUM(CASE WHEN ihsv.cluster_id = 5 THEN 1 ELSE 0 END) AS hsv_5,
+    SUM(CASE WHEN ihsv.cluster_id = 6 THEN 1 ELSE 0 END) AS hsv_6,
+    SUM(CASE WHEN ihsv.cluster_id = 7 THEN 1 ELSE 0 END) AS hsv_7,
+    SUM(CASE WHEN ihsv.cluster_id = 8 THEN 1 ELSE 0 END) AS hsv_8,
+    SUM(CASE WHEN ihsv.cluster_id = 9 THEN 1 ELSE 0 END) AS hsv_9,
+    SUM(CASE WHEN ihsv.cluster_id = 10 THEN 1 ELSE 0 END) AS hsv_10,
+    SUM(CASE WHEN ihsv.cluster_id = 11 THEN 1 ELSE 0 END) AS hsv_11,
+    SUM(CASE WHEN ihsv.cluster_id = 12 THEN 1 ELSE 0 END) AS hsv_12,
+    SUM(CASE WHEN ihsv.cluster_id = 13 THEN 1 ELSE 0 END) AS hsv_13,
+    SUM(CASE WHEN ihsv.cluster_id = 14 THEN 1 ELSE 0 END) AS hsv_14,
+    SUM(CASE WHEN ihsv.cluster_id = 15 THEN 1 ELSE 0 END) AS hsv_15,
+    SUM(CASE WHEN ihsv.cluster_id = 16 THEN 1 ELSE 0 END) AS hsv_16,
+    SUM(CASE WHEN ihsv.cluster_id = 525 THEN 1 ELSE 0 END) AS hsv_525
+  
+FROM SegmentBig_isface so
+JOIN SegmentHelper_sept2025_heft_keywords sh ON sh.image_id = so.image_id
+JOIN ImagesBodyPoses3D ibp ON ibp.image_id = so.image_id
+JOIN ImagesHSV ihsv ON ihsv.image_id = so.image_id
+JOIN Images{MODE} it ON it.image_id = so.image_id
+WHERE it.{MODE_ID} = {THIS_MODE_ID}
+GROUP BY
+    ibp.cluster_id
+ORDER BY 
+    ibp.cluster_id;
+"""
+
+
 sql_query_template_HSV_MetaBody3D = """
 SELECT 
     ihp.meta_cluster_id AS ihp_cluster,
@@ -361,6 +396,89 @@ ORDER BY
 """
 
 
+sql_query_template_MetaHSV_MetaBody3D = """
+SELECT 
+    ihp.meta_cluster_id AS ihp_cluster,
+    SUM(CASE WHEN cmhsv.meta_cluster_id = 0 THEN 1 ELSE 0 END) AS hsv_0,
+    SUM(CASE WHEN cmhsv.meta_cluster_id = 1 THEN 1 ELSE 0 END) AS hsv_1,
+    SUM(CASE WHEN cmhsv.meta_cluster_id = 2 THEN 1 ELSE 0 END) AS hsv_2,
+    SUM(CASE WHEN cmhsv.meta_cluster_id = 3 THEN 1 ELSE 0 END) AS hsv_3,
+    SUM(CASE WHEN cmhsv.meta_cluster_id = 4 THEN 1 ELSE 0 END) AS hsv_4,
+    SUM(CASE WHEN cmhsv.meta_cluster_id = 5 THEN 1 ELSE 0 END) AS hsv_5,
+    SUM(CASE WHEN cmhsv.meta_cluster_id = 6 THEN 1 ELSE 0 END) AS hsv_6,
+    SUM(CASE WHEN cmhsv.meta_cluster_id = 7 THEN 1 ELSE 0 END) AS hsv_7,
+    SUM(CASE WHEN cmhsv.meta_cluster_id = 8 THEN 1 ELSE 0 END) AS hsv_8,
+    SUM(CASE WHEN cmhsv.meta_cluster_id = 9 THEN 1 ELSE 0 END) AS hsv_9,
+    SUM(CASE WHEN cmhsv.meta_cluster_id = 10 THEN 1 ELSE 0 END) AS hsv_10,
+    SUM(CASE WHEN cmhsv.meta_cluster_id = 11 THEN 1 ELSE 0 END) AS hsv_11,
+    SUM(CASE WHEN cmhsv.meta_cluster_id = 12 THEN 1 ELSE 0 END) AS hsv_12,
+    SUM(CASE WHEN cmhsv.meta_cluster_id = 13 THEN 1 ELSE 0 END) AS hsv_13,
+    SUM(CASE WHEN cmhsv.meta_cluster_id = 14 THEN 1 ELSE 0 END) AS hsv_14,
+    SUM(CASE WHEN cmhsv.meta_cluster_id = 15 THEN 1 ELSE 0 END) AS hsv_15,
+    SUM(CASE WHEN cmhsv.meta_cluster_id = 16 THEN 1 ELSE 0 END) AS hsv_16,
+    SUM(CASE WHEN cmhsv.meta_cluster_id = 17 THEN 1 ELSE 0 END) AS hsv_17,
+    SUM(CASE WHEN cmhsv.meta_cluster_id = 18 THEN 1 ELSE 0 END) AS hsv_18,
+    SUM(CASE WHEN cmhsv.meta_cluster_id = 19 THEN 1 ELSE 0 END) AS hsv_19,    
+    SUM(CASE WHEN cmhsv.meta_cluster_id = 20 THEN 1 ELSE 0 END) AS hsv_20,
+    SUM(CASE WHEN cmhsv.meta_cluster_id = 21 THEN 1 ELSE 0 END) AS hsv_21,
+    SUM(CASE WHEN cmhsv.meta_cluster_id = 22 THEN 1 ELSE 0 END) AS hsv_22
+
+FROM SegmentBig_isface so
+JOIN SegmentHelper_sept2025_heft_keywords sh ON sh.image_id = so.image_id
+JOIN ImagesBodyPoses3D ibp ON ibp.image_id = so.image_id
+JOIN ClustersMetaBodyPoses3D ihp ON ihp.cluster_id = ibp.cluster_id
+JOIN ImagesHSV ihsv ON ihsv.image_id = so.image_id
+JOIN ClustersMetaHSV cmhsv ON cmhsv.cluster_id = ihsv.cluster_id
+JOIN Images{MODE} it ON it.image_id = so.image_id
+WHERE it.{MODE_ID} = {THIS_MODE_ID}
+GROUP BY
+    ihp.meta_cluster_id
+ORDER BY 
+    ihp.meta_cluster_id;
+"""
+
+
+sql_query_template_MetaHSV_Body3D = """
+SELECT 
+    ibp.cluster_id AS ihp_cluster,
+    SUM(CASE WHEN cmhsv.meta_cluster_id = 0 THEN 1 ELSE 0 END) AS hsv_0,
+    SUM(CASE WHEN cmhsv.meta_cluster_id = 1 THEN 1 ELSE 0 END) AS hsv_1,
+    SUM(CASE WHEN cmhsv.meta_cluster_id = 2 THEN 1 ELSE 0 END) AS hsv_2,
+    SUM(CASE WHEN cmhsv.meta_cluster_id = 3 THEN 1 ELSE 0 END) AS hsv_3,
+    SUM(CASE WHEN cmhsv.meta_cluster_id = 4 THEN 1 ELSE 0 END) AS hsv_4,
+    SUM(CASE WHEN cmhsv.meta_cluster_id = 5 THEN 1 ELSE 0 END) AS hsv_5,
+    SUM(CASE WHEN cmhsv.meta_cluster_id = 6 THEN 1 ELSE 0 END) AS hsv_6,
+    SUM(CASE WHEN cmhsv.meta_cluster_id = 7 THEN 1 ELSE 0 END) AS hsv_7,
+    SUM(CASE WHEN cmhsv.meta_cluster_id = 8 THEN 1 ELSE 0 END) AS hsv_8,
+    SUM(CASE WHEN cmhsv.meta_cluster_id = 9 THEN 1 ELSE 0 END) AS hsv_9,
+    SUM(CASE WHEN cmhsv.meta_cluster_id = 10 THEN 1 ELSE 0 END) AS hsv_10,
+    SUM(CASE WHEN cmhsv.meta_cluster_id = 11 THEN 1 ELSE 0 END) AS hsv_11,
+    SUM(CASE WHEN cmhsv.meta_cluster_id = 12 THEN 1 ELSE 0 END) AS hsv_12,
+    SUM(CASE WHEN cmhsv.meta_cluster_id = 13 THEN 1 ELSE 0 END) AS hsv_13,
+    SUM(CASE WHEN cmhsv.meta_cluster_id = 14 THEN 1 ELSE 0 END) AS hsv_14,
+    SUM(CASE WHEN cmhsv.meta_cluster_id = 15 THEN 1 ELSE 0 END) AS hsv_15,
+    SUM(CASE WHEN cmhsv.meta_cluster_id = 16 THEN 1 ELSE 0 END) AS hsv_16,
+    SUM(CASE WHEN cmhsv.meta_cluster_id = 17 THEN 1 ELSE 0 END) AS hsv_17,
+    SUM(CASE WHEN cmhsv.meta_cluster_id = 18 THEN 1 ELSE 0 END) AS hsv_18,
+    SUM(CASE WHEN cmhsv.meta_cluster_id = 19 THEN 1 ELSE 0 END) AS hsv_19,    
+    SUM(CASE WHEN cmhsv.meta_cluster_id = 20 THEN 1 ELSE 0 END) AS hsv_20,
+    SUM(CASE WHEN cmhsv.meta_cluster_id = 21 THEN 1 ELSE 0 END) AS hsv_21,
+    SUM(CASE WHEN cmhsv.meta_cluster_id = 22 THEN 1 ELSE 0 END) AS hsv_22
+
+FROM SegmentBig_isface so
+JOIN SegmentHelper_sept2025_heft_keywords sh ON sh.image_id = so.image_id
+JOIN ImagesBodyPoses3D ibp ON ibp.image_id = so.image_id
+JOIN ImagesHSV ihsv ON ihsv.image_id = so.image_id
+JOIN ClustersMetaHSV cmhsv ON cmhsv.cluster_id = ihsv.cluster_id
+JOIN Images{MODE} it ON it.image_id = so.image_id
+WHERE it.{MODE_ID} = {THIS_MODE_ID}
+GROUP BY
+    ibp.cluster_id
+ORDER BY 
+    ibp.cluster_id;
+"""
+
+
 def save_query_results_to_csv(query, topic_id):
     print(f"about to query for {MODE} {topic_id}")
 
@@ -389,6 +507,14 @@ def save_query_results_to_csv(query, topic_id):
     # resort by ihp_cluster
     df = df.sort_values(by='ihp_cluster').reset_index(drop=True)
 
+    # create new column that is the sum of hsv_3 to hsv_22
+    if 'hsv_3' in df.columns and 'hsv_22' in df.columns:
+        hsv_columns = [f'hsv_{i}' for i in range(3, 23)]
+        df['hsv_3_to_22_sum'] = df[hsv_columns].sum(axis=1)
+
+    # create add a total column that is the sum of all columns
+    df['total'] = df.sum(axis=1)
+
     # Define file name for the CSV
     csv_file_path = f"{ROOT_FOLDER_PATH}/{MODE}_{topic_id}.csv"
     
@@ -408,6 +534,8 @@ if MODE == "Keywords":
             sql_query_template = sql_query_template_HSV_Body3D
         elif CLUSTER_TYPE == "MetaBodyPoses3D":
             sql_query_template = sql_query_template_HSV_MetaBody3D
+        elif CLUSTER_TYPE == "BodyPoses3D_MetaHSV":
+            sql_query_template = sql_query_template_MetaHSV_Body3D
         sql_query_template = sql_query_template.replace("{MODE}", MODE).replace("{MODE_ID}", MODE_ID).replace("{THIS_MODE_ID}", str(keyword_id))
         # print(sql_query_template)
         query = sql_query_template.format(keyword_id=keyword_id)

@@ -57,7 +57,7 @@ class SortPose:
         self.BRUTEFORCE = False
         self.LMS_DIMENSIONS = LMS_DIMENSIONS
         if self.VERBOSE: print("init LMS_DIMENSIONS",self.LMS_DIMENSIONS)
-        self.CUTOFF = 150 # DOES factor if ONE_SHOT
+        self.CUTOFF = 75 # DOES factor if ONE_SHOT
         self.ORIGIN = 0
         self.this_nose_bridge_dist = self.NOSE_BRIDGE_DIST = None # to be set in first loop, and sort.this_nose_bridge_dist each time
 
@@ -77,6 +77,8 @@ class SortPose:
             self.MAXD = self.MAXBODYDIST
             self.MULTIPLIER = self.HSVMULTIPLIER * (self.MINBODYDIST / self.MINFACEDIST)
             self.DUPED = self.BODY_DUPE_DIST
+            if self.SORT_TYPE == "obj_bbox":
+                self.MAXD = self.MAXDIST = 200  # override max distance for obj_bbox bc it much bigger
         elif self.SORT_TYPE in ["planar_body", "planar_hands", "fingertips_positions", "body3D", "arms3D"]: 
             self.MIND = self.MINBODYDIST
             self.MAXD = self.MAXBODYDIST * 4
@@ -2393,6 +2395,36 @@ class SortPose:
             print("[get_start_obj_bbox] - not median")
             return None
 
+    def get_median_value(self, df_enc, sort_column):
+        # Get list of bbox rows and filter out invalid entries (None, wrong length, non-numeric)
+        flattened_array = df_enc[sort_column].tolist()
+        if self.VERBOSE: print("flattened_array", flattened_array)
+
+        clean_rows = []
+        for row in flattened_array:
+            # skip None or falsy
+            if not row:
+                continue
+            # accept lists or tuples of length 4
+            if isinstance(row, (list, tuple)):
+                try:
+                    nums = [float(x) for x in row]
+                except Exception:
+                    # non-numeric entry, skip
+                    continue
+                clean_rows.append(nums)
+
+        if len(clean_rows) == 0:
+            if self.VERBOSE: print("No valid bbox rows to compute median")
+            return None
+
+        arr = np.array(clean_rows, dtype=float)
+        # compute median per column and round to nearest int
+        med = np.median(arr, axis=0)
+        median_row = tuple(np.rint(med).astype(int).tolist())
+        if self.VERBOSE: print("median_row", median_row)
+        return median_row
+
     def test_smart_round_df(self,df_rounded, df_enc, sort_column, round_down):
         # if it doesn't find a mode, it will return None
         # then it will pick a random value from the flattened_array
@@ -2426,7 +2458,10 @@ class SortPose:
         if start_img == "median" or start_img == "start_bbox":
             # when I want to start from start_bbox, I pass it a median 128d enc
             print("in median")
-            print("df_enc", df_enc)
+            # print("df_enc", df_enc)
+
+            # get the median value from the sort_column
+            enc1 = self.get_median_value( df_enc, sort_column)
             # Round each value in the face_encodings68 column to 2 decimal places            
             # df_enc['face_encodings68'] = df_enc['face_encodings68'].apply(self.safe_round)
             # df_enc[sort_column] = df_enc[sort_column].apply(lambda x: np.round(x, 1))
@@ -2435,11 +2470,14 @@ class SortPose:
             # flattened_array = df_enc[sort_column].tolist()     
             # # round each value in flattened_array to 2 decimal places
             # flattened_array = [np.round(x, 1) for x in flattened_array]
-            round_down = 1
-            while enc1 == None:
-                # this should loop through and round the values down until it finds a mode
-                df_rounded = self.smart_round_df(df_enc, sort_column, round_down)
-                enc1, round_down = self.test_smart_round_df(df_rounded, df_enc, sort_column, round_down)
+            # round_down = 1
+
+            
+            # while enc1 == None:
+
+            #     # this should loop through and round the values down until it finds a mode
+            #     df_rounded = self.smart_round_df(df_enc, sort_column, round_down)
+            #     enc1, round_down = self.test_smart_round_df(df_rounded, df_enc, sort_column, round_down)
             # print(dfmode)
             # enc1 = dfmode.iloc[0].to_list()
             # enc1 = df_128_enc.median().to_list()
@@ -2729,8 +2767,9 @@ class SortPose:
                 enc1 = [0,0,1,1,.5]
             else:
                 #this is the first??? round, set via df, defaults to face_encodings68
-                print(f"trying get_start_enc() from {this_start} which corresponds to {self.counter_dict}")
+                print(f"trying get_start_enc() from {this_start} with this OBJ_CLS_ID {self.OBJ_CLS_ID} which corresponds to {self.counter_dict}")
                 enc1 = self.get_start_enc_NN(this_start, df)
+                print("returned enc1 from get_start_enc()", enc1)
                 if self.OBJ_CLS_ID > 0: 
                     print("setting obj_bbox1 from this_start", this_start)
                     obj_bbox1 = self.get_start_obj_bbox(this_start, df)
@@ -3791,6 +3830,18 @@ class SortPose:
 
 
         if df.iloc[0, 0]=="ihp_cluster":
+            print("checking columns", df.columns)
+            # if hsv_3_to_22_sum is present, move it to a separate df
+            if df.iloc[0, 24]=='hsv_3_to_22_sum':
+                # move column 'hsv_3_to_22_sum' to a separate df
+                hsv_sum_df = df.iloc[:, 24].copy()
+                # drop column 24 from df
+                df = df.drop(df.columns[24], axis=1)
+            # because I drop a column, I look for n-1 now (25-1 = 24)
+            if df.iloc[0, 24]=='total':
+                total_df = df.iloc[:, 24].copy()
+                # drop hsv_3_to_22_sum and total from df
+                df = df.drop(df.columns[24], axis=1)    
             # Drop the first column and the first row
             df = df.iloc[1:, 1:].reset_index(drop=True)
             # then convert all values to int
