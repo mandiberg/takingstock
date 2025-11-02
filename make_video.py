@@ -84,7 +84,7 @@ MODES = {0:'paris_photo_torso_images_topics', 1:'paris_photo_torso_videos_topics
          5:'heft_torso_keywords'}
 MODE_CHOICE = 5
 CURRENT_MODE = MODES[MODE_CHOICE]
-LIMIT = 500 # this is the limit for the SQL query
+LIMIT = 2000 # this is the limit for the SQL query
 
 # set defaults, including for all modes to False
 FULL_BODY = IS_HAND_POSE_FUSION = ONLY_ONE = GENERATE_FUSION_PAIRS = USE_FUSION_PAIR_DICT = IS_CLUSTER = IS_ONE_CLUSTER = USE_POSE_CROP_DICT = IS_TOPICS= IS_ONE_TOPIC = USE_AFFECT_GROUPS = False
@@ -1264,26 +1264,26 @@ if not io.IS_TENCH:
             IN_or_equal_topic_ids_string = is_query_list_string(topic_no)
             cluster += f"AND it.{this_id} {IN_or_equal_topic_ids_string} "
 
-        if hsv_cluster is not None:
+        if bool(hsv_cluster):
+            print("hsv_cluster is not empty:", hsv_cluster)
             IN_or_equal_hsv_string = is_query_list_string(hsv_cluster)
-            where_hsv = f" AND ihsv.cluster_id {IN_or_equal_hsv_string} "
-
-        if len(where_hsv) > 2:
+            # if len(where_hsv) > 2:
             # if hsv is not " ", then we need to join the table
-            from_hsv = " JOIN ImagesHSV ihsv ON s.image_id = ihsv.image_id "
+            from_hsv = " JOIN ImagesHSV ihsv ON s.image_id = ihsv.image_id JOIN ClustersMetaHSV cmhsv ON ihsv.cluster_id = cmhsv.cluster_id "
+            where_hsv = f" AND cmhsv.meta_cluster_id {IN_or_equal_hsv_string} "
             # set cluster_no here, as it doesn't catch any of the other condtionals. (admittedly messy)
             if META: local_where += f" AND cmp.meta_cluster_id = {str(cluster_no)} "
-
+        print(f"after HSV from/where: where_hsv {where_hsv} from_hsv {from_hsv} local_where: {local_where}")
         if bool(cluster_dict_AND):
             print(f"cluster_dict_AND for topic in SQL is {cluster_dict_AND}")
-            IN_or_equal_hsv_string = is_query_list_string(cluster_dict_AND)
+            extra_boolean_keyword_string = is_query_list_string(cluster_dict_AND)
             join_and = " JOIN ImagesKeywords and_ik ON and_ik.image_id = s.image_id "
             if join_and not in FROM:
                 FROM += join_and
-            cluster +=  f" AND and_ik.{this_id} {IN_or_equal_hsv_string} "
+            cluster +=  f" AND and_ik.{this_id} {extra_boolean_keyword_string} "
         if bool(cluster_dict_NOT):
-            IN_or_equal_hsv_string = is_query_list_string(cluster_dict_NOT, inclusion=False)
-            cluster +=  f" AND it.{this_id} {IN_or_equal_hsv_string} "
+            extra_boolean_keyword_string = is_query_list_string(cluster_dict_NOT, inclusion=False)
+            cluster +=  f" AND it.{this_id} {extra_boolean_keyword_string} "
 
         print(f"cluster SELECT is {cluster}")
 
