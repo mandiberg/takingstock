@@ -3811,24 +3811,7 @@ class SortPose:
 
 
 # FUSION STUFF
-
-    def find_sorted_suitable_indices(self, topic_no,min_value, folder_path=None):
-        if folder_path is None:
-            folder_path='utilities/data/october_fusion_clusters'
-            prefix = 'topic_'
-        elif "keyword" in folder_path:
-            prefix = 'Keywords_'
-
-        # Construct the file name and path
-        isolated_topic = str(topic_no[0]).split('.')[0]  # Get the integer part before the decimal
-        file_name = prefix + isolated_topic + '.csv'
-        file_path = os.path.join(folder_path, file_name)
-        
-        # Load the CSV file into a DataFrame
-        df = pd.read_csv(file_path, header=None)
-        # Check if the first column of the first row is a string
-
-
+    def prep_fusion_df(self, df):
         if df.iloc[0, 0]=="ihp_cluster":
             print("checking columns", df.columns)
             # if hsv_3_to_22_sum is present, move it to a separate df
@@ -3849,6 +3832,26 @@ class SortPose:
             df = df.astype(int)
         if isinstance(df.iloc[0, 0], str):
             print("first column is a string,", print(df.iloc[0, 0]))
+        return df, hsv_sum_df, total_df
+
+    def find_sorted_suitable_indices(self, topic_no,min_value, folder_path=None):
+        if folder_path is None:
+            folder_path='utilities/data/october_fusion_clusters'
+            prefix = 'topic_'
+        elif "keyword" in folder_path:
+            prefix = 'Keywords_'
+
+        # Construct the file name and path
+        isolated_topic = str(topic_no[0]).split('.')[0]  # Get the integer part before the decimal
+        file_name = prefix + isolated_topic + '.csv'
+        file_path = os.path.join(folder_path, file_name)
+        
+        # Load the CSV file into a DataFrame
+        df = pd.read_csv(file_path, header=None)
+        # Check if the first column of the first row is a string
+
+        # strip out headers and convert to int
+        df, hsv_sum_df, total_df = self.prep_fusion_df(df)
         
         # Convert the DataFrame to a NumPy array
         gesture_array = df.to_numpy()
@@ -3874,6 +3877,7 @@ class SortPose:
 
         # Return the sorted list of zero indices
         return sorted_suitable_indices_list
+
 
 
 # Mass Build file management stuff
