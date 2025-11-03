@@ -97,7 +97,7 @@ else:
 OFFSET = 0
 # SELECT MAX(cmb.image_id) FROM ImagesBodyPoses3D cmb JOIN Encodings e ON cmb.image_id = e.image_id WHERE e.is_feet = 0;
 # START_ID = 114468990 # only used in MODE 1
-START_ID = 0 # only used in MODE 1
+START_ID = 102670214 # only used in MODE 1
 VERBOSE = True
 
 # WHICH TABLE TO USE?
@@ -109,8 +109,8 @@ SegmentTable_name = 'SegmentBig_isface'
 # unless you know what you are doing, leave this as None
 SegmentHelper_name = None
 # if CLUSTER_TYPE == "ArmsPoses3D":
-#     SegmentHelper_name = 'SegmentHelper_sept2025_heft_keywords'
-SegmentHelper_name = 'SegmentHelper_oct2025_every40'
+SegmentHelper_name = 'SegmentHelper_sept2025_heft_keywords'
+# SegmentHelper_name = 'SegmentHelper_oct2025_every40'
 
 # number of clusters produced. run GET_OPTIMAL_CLUSTERS and add that number here
 # 32 for hand positions
@@ -250,7 +250,7 @@ if USE_SEGMENT is True and (CLUSTER_TYPE != "Clusters"):
         WHERE = " cluster_id IS NOT NULL "
 
     # WHERE += " AND h.is_body = 1"
-    LIMIT = 3000000
+    LIMIT = 100000
     BATCH_LIMIT = 10000
 
     '''
@@ -1011,7 +1011,19 @@ def main():
         if not META:
             df_subset_landmarks = process_landmarks_cluster_dist(enc_data,df_subset_landmarks)
             print("df_subset_landmarks after process_landmarks", df_subset_landmarks)
-        save_images_clusters_DB(df_subset_landmarks)
+
+        if len(df_subset_landmarks) <= BATCH_LIMIT:
+            save_images_clusters_DB(df_subset_landmarks)
+        else:
+            print(f"Large dataset ({len(df_subset_landmarks)} rows) — processing in batches of {BATCH_LIMIT}")
+            for start in range(0, len(df_subset_landmarks), BATCH_LIMIT):
+                end = min(start + BATCH_LIMIT, len(df_subset_landmarks))
+                print(f"Processing batch rows {start} to {end}...")
+                batch_df = df_subset_landmarks.iloc[start:end].copy()
+                save_images_clusters_DB(batch_df)
+                # Free memory between batches
+                gc.collect()
+        # save_images_clusters_DB(df_subset_landmarks)
         print("saved segment to clusters")
 
     # create_my_engine(db)
@@ -1064,17 +1076,7 @@ def main():
         
         # Process in batches if dataset is large to avoid crashing the shell
         total_rows = len(enc_data)
-        if total_rows <= BATCH_LIMIT:
-            calculate_clusters_and_save(enc_data)
-        else:
-            print(f"Large dataset ({total_rows} rows) — processing in batches of {BATCH_LIMIT}")
-            for start in range(0, total_rows, BATCH_LIMIT):
-                end = min(start + BATCH_LIMIT, total_rows)
-                print(f"Processing batch rows {start} to {end}...")
-                batch_df = enc_data.iloc[start:end].copy()
-                calculate_clusters_and_save(batch_df)
-                # Free memory between batches
-                gc.collect()
+        calculate_clusters_and_save(enc_data)
         
     elif MODE == 1:
         total_rows = len(enc_data)
