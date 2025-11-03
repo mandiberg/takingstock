@@ -82,9 +82,9 @@ CSV_FOLDER = os.path.join("/Users/michaelmandiberg/Documents/projects-active/fac
 MODES = {0:'paris_photo_torso_images_topics', 1:'paris_photo_torso_videos_topics', 
          2:'3D_bodies_topics', 3:'3D_full_bodies_topics', 4:'3D_arms', 5:'3D_arms_meta',
          6:'heft_torso_keywords'}
-MODE_CHOICE = 4
+MODE_CHOICE = 6
 CURRENT_MODE = MODES[MODE_CHOICE]
-LIMIT = 5000 # this is the limit for the SQL query
+LIMIT = 500 # this is the limit for the SQL query
 
 # set defaults, including for all modes to False
 FULL_BODY = IS_HAND_POSE_FUSION = ONLY_ONE = GENERATE_FUSION_PAIRS = USE_FUSION_PAIR_DICT = IS_CLUSTER = IS_ONE_CLUSTER = USE_POSE_CROP_DICT = IS_TOPICS= IS_ONE_TOPIC = USE_AFFECT_GROUPS = False
@@ -93,6 +93,16 @@ USE_PAINTED = OUTPAINT = INPAINT= META = USE_HSV = False
 FUSION_FOLDER = FOCUS_CLUSTER_HACK_LIST = None
 MIN_CYCLE_COUNT = 1
 AUTO_EDGE_CROP = False # this triggers the dynamic cropping based on min_max_body_landmarks_for_crop
+
+OBJ_DICT = {22411:67,1991:63}
+
+FOCUS_CLUSTER_DICT = {
+    "ArmsPoses3D": 
+        {22411: [239, 299, 443]},
+    "BodyPoses3D": 
+        {22411: [24,42,71,93,167,204,294,301,358,398,443,526,532,590,623,658,708,729]}
+}
+
 
 image_edge_multiplier = None
 N_TOPICS = 64 # changing this to 14 triggers the affect topic fusion, 100 is keywords. 64 is default
@@ -113,7 +123,7 @@ if "paris" in CURRENT_MODE:
     elif CURRENT_MODE == 'paris_photo_torso_videos_topics':
         SORT_TYPE = "128d"
         #TEMP TESTING
-        SORT_TYPE = "obj_bbox"
+        # SORT_TYPE = "obj_bbox"
         MIN_VIDEO_FUSION_COUNT = 300
 
         JUMP_SHOT = True # jump to random file if can't find a run (I don't think this applies to planar?)
@@ -178,8 +188,8 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     SegmentTable_name = 'SegmentBig_isface'
     SegmentHelper_name = 'SegmentHelper_sept2025_heft_keywords' # TK revisit this for prodution run
     # SORT_TYPE = "planar_hands"
-    # SORT_TYPE = "ArmsPoses3D" # this triggers meta body poses 3D
-    SORT_TYPE = "obj_bbox" # make sure OBJ_CLS_ID is set below
+    SORT_TYPE = "ArmsPoses3D" # this triggers meta body poses 3D
+    # SORT_TYPE = "obj_bbox" # make sure OBJ_CLS_ID is set below
     # META = True
     TESTING = False
     IS_HAND_POSE_FUSION = True # do we use fusion clusters
@@ -227,18 +237,18 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     N_TOPICS = 100
     # FOCUS_CLUSTER_HACK_LIST = [57,69, 92,98,117] #256
     # FOCUS_CLUSTER_HACK_LIST = [181]
-    FOCUS_CLUSTER_HACK_LIST = [24,42,71,93,167,204,294,301,358,398,443,526,532,590,623,658,708,729] #768
+    # FOCUS_CLUSTER_HACK_LIST = [24,42,71,93,167,204,294,301,358,398,443,526,532,590,623,658,708,729] #768
+    FOCUS_CLUSTER_HACK_LIST = [239, 299, 443]
+
     # XYZ_FILTER_OCT2025_HEFT_KEYWORDS = " AND s.face_x > -33 AND s.face_x < -27 AND s.face_y > -2 AND s.face_y < 2 AND s.face_z > -2 AND s.face_z < 2"
     XYZ_FILTER_OCT2025_HEFT_KEYWORDS = " AND s.face_x IS NOT NULL "
     # XYZ_FILTER_OCT2025_HEFT_KEYWORDS = " AND s.face_x > -45 AND s.face_x < -5 AND s.face_y > -10 AND s.face_y < 10 AND s.face_z > -10 AND s.face_z < 10"
 
     TOPIC_NO = [22411] # if doing an affect topic fusion, this is the wrapper topic
-    if META:
-        FUSION_FOLDER = "utilities/data/heft_keyword_fusion_clusters_hsv_meta"
-        CSV_FOLDER = os.path.join("/Users/michaelmandiberg/Documents/projects-active/facemap_production/heft_keyword_fusion_clusters/meta_clusters_fusion_build/")
-    else:
-        FUSION_FOLDER = "utilities/data/heft_keyword_fusion_clusters_768_hsv"
-        CSV_FOLDER = os.path.join("/Users/michaelmandiberg/Documents/projects-active/facemap_production/heft_keyword_fusion_clusters/body3D_768_CSVs_test/")
+    if META: folder = "heft_keyword_fusion_clusters_hsv_meta"
+    else: folder = "heft_keyword_ArmsPoses3D_512"
+    FUSION_FOLDER = os.path.join("utilities/data/", folder)
+    CSV_FOLDER = os.path.join("/Users/michaelmandiberg/Documents/projects-active/facemap_production/heft_keyword_fusion_clusters/", folder)
 
 else:
     print("unknown mode, exiting")
@@ -352,6 +362,8 @@ SAVE_IMG_PROCESS = False
 IS_ANGLE_SORT = False
 
 
+# gets focus cluster list from the FOCUS_CLUSTER_DICT via CLUSTER_TYPE and TOPIC_NO (which is a list of one keyword)
+FOCUS_CLUSTER_HACK_LIST = FOCUS_CLUSTER_DICT.get(CLUSTER_TYPE, {}).get(TOPIC_NO[0], None)
 
 
 #######################
@@ -379,7 +391,9 @@ NORMED_BODY_LMS = True
 MOUTH_GAP = 0
 # if planar_body set OBJ_CLS_ID for each object type
 # 67 is phone, 63 is laptop, 26: 'handbag', 27: 'tie', 32: 'sports ball'
-OBJ_CLS_ID = 67
+if "key" in CURRENT_MODE: OBJ_CLS_ID = OBJ_DICT.get(TOPIC_NO[0], 0)
+else: OBJ_CLS_ID = 0
+
 DO_OBJ_SORT = True
 OBJ_DONT_SUBSELECT = False # False means select for OBJ. this is a flag for selecting a specific object type when not sorting on obj
 PHONE_BBOX_LIMITS = [0] # this is an attempt to control the BBOX placement. I don't think it is going to work, but with non-zero it will make a bigger selection. Fix this hack TK. 

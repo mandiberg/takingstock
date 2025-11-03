@@ -22,8 +22,18 @@ ROOT_FOLDER_PATH = '/Users/michaelmandiberg/Documents/projects-active/facemap_pr
 
 MODE = "Keywords" # Topics or Keywords
 MODE_ID = "topic_id" if MODE == "Topics" else "keyword_id"
-CLUSTER_TYPE = "BodyPoses3D_MetaHSV" # "BodyPoses3D_MetaHSV" or "MetaBodyPoses3D" or "BodyPoses3D_HSV" or "body3D" or "hand_gesture_position" - determines whether it checks hand poses or body3D
-# MetaBodyPoses3D right now does HSV plus body3D, not META
+
+    # if "body3D" in CLUSTER_TYPE: cluster_count = 512
+    # elif "BodyPoses3D" in CLUSTER_TYPE: cluster_count = 768
+    # elif "hand_gesture_position" in CLUSTER_TYPE: cluster_count = 128
+    # elif "MetaBodyPoses3D" in CLUSTER_TYPE: cluster_count = 64
+
+CLUSTER_DATA = {
+    "ArmsPoses3D_MetaHSV": {"sql_template": "sql_query_template_MetaHSV_Body3D", "cluster_table_name": "ImagesArmsPoses3D", "hsv_type": "ClustersMetaHSV", "cluster_count": 512}
+}
+CLUSTER_TYPE = "ArmsPoses3D_MetaHSV" # key to CLUSTER_DATA dict
+# "ArmsPoses3D_MetaHSV" or "BodyPoses3D_MetaHSV" or "MetaBodyPoses3D" or "BodyPoses3D_HSV" or "body3D" or "hand_gesture_position" - determines whether it checks hand poses or body3D
+
 
 # Create engine and session
 engine = create_engine("mysql+pymysql://{user}:{pw}@/{db}?unix_socket={socket}".format(
@@ -247,7 +257,7 @@ ORDER BY
 """
 
 
-sql_query_template_HSV_Body3D = """
+sql_query_template_HSV_Arms_or_Body3D = """
 SELECT 
     ibp.cluster_id AS ihp_cluster,
     SUM(CASE WHEN ihsv.cluster_id = 1 THEN 1 ELSE 0 END) AS hsv_1,
@@ -467,7 +477,7 @@ SELECT
 
 FROM SegmentBig_isface so
 JOIN SegmentHelper_sept2025_heft_keywords sh ON sh.image_id = so.image_id
-JOIN ImagesBodyPoses3D ibp ON ibp.image_id = so.image_id
+JOIN {CLUSTER_TABLE} ibp ON ibp.image_id = so.image_id
 JOIN ImagesHSV ihsv ON ihsv.image_id = so.image_id
 JOIN ClustersMetaHSV cmhsv ON cmhsv.cluster_id = ihsv.cluster_id
 JOIN Images{MODE} it ON it.image_id = so.image_id
@@ -488,11 +498,12 @@ def save_query_results_to_csv(query, topic_id):
     # add zero values for any missing rows in the ihp_cluster column
     
     # THIS SHOULD BE DEFINED IN DICT ABOVE
-    if "body3D" in CLUSTER_TYPE: cluster_count = 512
-    elif "BodyPoses3D" in CLUSTER_TYPE: cluster_count = 768
-    elif "hand_gesture_position" in CLUSTER_TYPE: cluster_count = 128
-    elif "MetaBodyPoses3D" in CLUSTER_TYPE: cluster_count = 64
-    else: raise ValueError("Unknown CLUSTER_TYPE")
+    # if "body3D" in CLUSTER_TYPE: cluster_count = 512
+    # elif "BodyPoses3D" in CLUSTER_TYPE: cluster_count = 768
+    # elif "hand_gesture_position" in CLUSTER_TYPE: cluster_count = 128
+    # elif "MetaBodyPoses3D" in CLUSTER_TYPE: cluster_count = 64
+    # else: raise ValueError("Unknown CLUSTER_TYPE")
+    cluster_count = CLUSTER_DATA.get(CLUSTER_TYPE, {}).get('cluster_count', 0)
     for i in range(cluster_count):
         print(f"checking for ihp_cluster {i}")
         if i not in df['ihp_cluster'].values:
@@ -528,15 +539,20 @@ if MODE == "Keywords":
     print("Querying by Keywords with CLUSTER_TYPE:", CLUSTER_TYPE)
     # Loop through each keyword_id and save results to CSV
     for keyword_id in KEYWORDS:
-        if CLUSTER_TYPE == "body3D":
-            sql_query_template = sql_query_template_body3D
-        elif CLUSTER_TYPE == "BodyPoses3D_HSV":
-            sql_query_template = sql_query_template_HSV_Body3D
-        elif CLUSTER_TYPE == "MetaBodyPoses3D":
-            sql_query_template = sql_query_template_HSV_MetaBody3D
-        elif CLUSTER_TYPE == "BodyPoses3D_MetaHSV":
-            sql_query_template = sql_query_template_MetaHSV_Body3D
-        sql_query_template = sql_query_template.replace("{MODE}", MODE).replace("{MODE_ID}", MODE_ID).replace("{THIS_MODE_ID}", str(keyword_id))
+        # if CLUSTER_TYPE == "body3D":
+        #     sql_query_template = sql_query_template_body3D
+        # elif CLUSTER_TYPE == "BodyPoses3D_HSV":
+        #     sql_query_template = sql_query_template_HSV_Body3D
+        # elif CLUSTER_TYPE == "MetaBodyPoses3D":
+        #     sql_query_template = sql_query_template_HSV_MetaBody3D
+        # elif CLUSTER_TYPE == "BodyPoses3D_MetaHSV":
+        #     sql_query_template = sql_query_template_MetaHSV_Body3D
+        sql_query_template_variable_name = CLUSTER_DATA.get(CLUSTER_TYPE, {}).get('sql_template', None)
+        sql_query_template = globals().get(sql_query_template_variable_name, None)
+        this_cluster_table = CLUSTER_DATA.get(CLUSTER_TYPE, {}).get('cluster_table_name', None)
+        if sql_query_template is None or this_cluster_table is None:
+            raise ValueError(f"SQL template or cluster table name not defined for CLUSTER_TYPE: {CLUSTER_TYPE}")
+        sql_query_template = sql_query_template.replace("{MODE}", MODE).replace("{MODE_ID}", MODE_ID).replace("{THIS_MODE_ID}", str(keyword_id)).replace("{CLUSTER_TABLE}", this_cluster_table)
         # print(sql_query_template)
         query = sql_query_template.format(keyword_id=keyword_id)
         save_query_results_to_csv(query, keyword_id)
