@@ -112,6 +112,10 @@ CREATE TABLE SegmentHelper_may2025_4x4faces (
 DELETE FROM BodyPoses3D;
 DELETE FROM ImagesBodyPoses3D;
 
+DELETE FROM ArmsPoses3D;
+DELETE FROM ImagesArmsPoses3D;
+
+
 USE stock;
 SELECT cluster_id, COUNT(image_id) 
 FROM ImagesBodyPoses3D
@@ -129,6 +133,20 @@ CREATE TABLE BodyPoses3D (
 CREATE TABLE ImagesBodyPoses3D (
     image_id INTEGER REFERENCES Images (image_id),
     cluster_id INTEGER REFERENCES BodyPoses3D (cluster_id),
+    cluster_dist FLOAT DEFAULT NULL,
+    PRIMARY KEY (image_id)
+);
+
+
+CREATE TABLE ArmsPoses3D (
+    cluster_id int NOT NULL PRIMARY KEY,
+    cluster_median BLOB
+);
+
+-- This is the poses junction table.
+CREATE TABLE ImagesArmsPoses3D (
+    image_id INTEGER REFERENCES Images (image_id),
+    cluster_id INTEGER REFERENCES ArmsPoses3D (cluster_id),
     cluster_dist FLOAT DEFAULT NULL,
     PRIMARY KEY (image_id)
 );

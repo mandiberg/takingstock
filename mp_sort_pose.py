@@ -2678,6 +2678,12 @@ class SortPose:
                         Lms1d3.append(lm.x)
                         Lms1d3.append(lm.y)
                         Lms1d3.append(lm.visibility)
+                    elif self.LMS_DIMENSIONS == 3:
+                        # print("getting 4D lms")
+                        Lms1d3.append(lm.x)
+                        Lms1d3.append(lm.y)
+                        Lms1d3.append(lm.z)
+                        # Lms1d3.append(lm.visibility)
                     elif structure == "list3D" or self.LMS_DIMENSIONS == 4:
                         # print("getting 4D lms")
                         Lms1d3.append(lm.x)
@@ -3808,6 +3814,16 @@ class SortPose:
             # print("flat_landmarks", flat_landmarks)
         # print("flat_landmarks_subset", flat_landmarks) 
         return flat_landmarks
+
+    def make_subset_df_lms(self,df):
+        print("make_subset_df_lms df columns", df.columns)
+        # select only columns that are in SUBSET_LANDMARKS
+        for col in df.columns:
+            if col.startswith("dim_"):
+                col_index = int(col.split('_')[1])  # assuming columns are named like 'landmark_0', 'landmark_1', etc.
+                if col_index not in self.SUBSET_LANDMARKS:
+                    df = df.drop(columns=[col])
+        return df
 
 
 # FUSION STUFF

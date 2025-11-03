@@ -60,7 +60,6 @@ items, seconds
 1.1M, ???
 '''
 
-start = time.time()
 
 io = DataIO()
 db = io.db
@@ -80,21 +79,25 @@ option, MODE = pick(options, title)
 # MODE = 1
 # CLUSTER_TYPE = "Clusters"
 # CLUSTER_TYPE = "BodyPoses"
-CLUSTER_TYPE = "BodyPoses3D" # use this for META 3D body clusters, Arms will start build but messed up because of subset landmarks
-# CLUSTER_TYPE = "ArmsPoses3D" 
+# CLUSTER_TYPE = "BodyPoses3D" # use this for META 3D body clusters, Arms will start build but messed up because of subset landmarks
+CLUSTER_TYPE = "ArmsPoses3D" 
 # CLUSTER_TYPE = "HandsPositions"
 # CLUSTER_TYPE = "HandsGestures"
 # CLUSTER_TYPE = "FingertipsPositions"
 # CLUSTER_TYPE = "HSV" # only works with cluster save, not with assignment
 
 if "3D" in CLUSTER_TYPE:
-    LMS_DIMENSIONS = 4
+    if CLUSTER_TYPE == "ArmsPoses3D":
+        # this is a hacky way of saying I want XYZ but not Vis
+        LMS_DIMENSIONS = 3
+    else:
+        LMS_DIMENSIONS = 4
 else:
     LMS_DIMENSIONS = 3
 OFFSET = 0
 # SELECT MAX(cmb.image_id) FROM ImagesBodyPoses3D cmb JOIN Encodings e ON cmb.image_id = e.image_id WHERE e.is_feet = 0;
 # START_ID = 114468990 # only used in MODE 1
-START_ID = 121211285 # only used in MODE 1
+START_ID = 0 # only used in MODE 1
 VERBOSE = True
 
 # WHICH TABLE TO USE?
@@ -105,14 +108,14 @@ SegmentTable_name = 'SegmentBig_isface'
 # if doing MODE == 2, use SegmentHelper_name to subselect SQL query
 # unless you know what you are doing, leave this as None
 SegmentHelper_name = None
-if CLUSTER_TYPE == "ArmsPoses3D":
-    SegmentHelper_name = 'SegmentHelper_sept2025_heft_keywords'
-# SegmentHelper_name = 'SegmentHelper_oct2025_every40'
+# if CLUSTER_TYPE == "ArmsPoses3D":
+#     SegmentHelper_name = 'SegmentHelper_sept2025_heft_keywords'
+SegmentHelper_name = 'SegmentHelper_oct2025_every40'
 
 # number of clusters produced. run GET_OPTIMAL_CLUSTERS and add that number here
 # 32 for hand positions
 # 128 for hand gestures
-N_CLUSTERS = 768
+N_CLUSTERS = 512
 N_META_CLUSTERS = 256
 if MODE == 3: 
     META = True
@@ -139,7 +142,8 @@ if CLUSTER_TYPE == "BodyPoses3D":
         USE_SUBSET_MEDIANS = True
 elif CLUSTER_TYPE == "ArmsPoses3D":
     # print("OVERRIDE setting CLUSTER_TYPE to BodyPoses3D for ArmsPoses3D subset median calculation: ",CLUSTER_TYPE, sort.CLUSTER_TYPE)
-    sort.SUBSET_LANDMARKS = sort.make_subset_landmarks(0,0) + sort.make_subset_landmarks(7,22)
+    # sort.SUBSET_LANDMARKS = sort.make_subset_landmarks(0,0) + sort.make_subset_landmarks(7,22)
+    sort.SUBSET_LANDMARKS = sort.make_subset_landmarks(0,22)
     USE_SUBSET_MEDIANS = True
 
     print("OVERRIDE after construction setting sort.SUBSET_LANDMARKS to: ",sort.SUBSET_LANDMARKS)
@@ -174,7 +178,7 @@ CLUSTER_DATA = {
 # set cluster_table_type for ArmsPoses3D, so it pulls from BodyPoses3D table
 # this allows the ArmsPoses3D value to set the Dict and subset landmarks.
 if CLUSTER_TYPE == "ArmsPoses3D":
-    table_cluster_type = "BodyPoses3D"
+    table_cluster_type = CLUSTER_TYPE
 else:
     if META:table_cluster_type = "BodyPoses3D"
     else:table_cluster_type = CLUSTER_TYPE
@@ -246,7 +250,7 @@ if USE_SEGMENT is True and (CLUSTER_TYPE != "Clusters"):
         WHERE = " cluster_id IS NOT NULL "
 
     # WHERE += " AND h.is_body = 1"
-    LIMIT = 1000000
+    LIMIT = 3000000
     BATCH_LIMIT = 10000
 
     '''
@@ -441,7 +445,10 @@ def make_subset_landmarks(df,add_list=False):
     else:
         subset_columns = numerical_columns
 
-    numerical_data = df[['image_id'] + subset_columns]
+    if "image_id" in df.columns:
+        numerical_data = df[['image_id'] + subset_columns]
+    else:
+        numerical_data = df[subset_columns]
 
     if add_list:
         print("make_subset_landmarks adding obj_bbox_list column")
@@ -461,8 +468,8 @@ def make_subset_landmarks(df,add_list=False):
 def kmeans_cluster(df, n_clusters=32):
     # Select only the numerical columns (dim_0 to dim_65)
     print("kmeans_cluster sort.SUBSET_LANDMARKS: ",sort.SUBSET_LANDMARKS)
-    if CLUSTER_TYPE in ["BodyPoses", "BodyPoses3D"]:
-        print("CLUSTER_TYPE == BodyPoses", df)
+    if CLUSTER_TYPE in ["BodyPoses", "BodyPoses3D", "ArmsPoses3D"]:
+        print("CLUSTER_TYPE == BodyPoses || ArmsPoses3D", df)
         numerical_data = make_subset_landmarks(df)
     else:
         numerical_data = df
@@ -556,7 +563,7 @@ def build_col_list(df):
     col_list = {}
     col_list["left"] = col_list["right"] = col_list["body_lms"] = col_list["face"] = []
     if "body" in CLUSTER_DATA[CLUSTER_TYPE]["data_column"]:
-    # if CLUSTER_TYPE in ("BodyPoses", "BodyPoses3D", "ArmsPoses3D"):
+        # tests data_column, so works for ArmsPoses3D too
         second_column_name = df.columns[1]
         # if the second column == 0, then compress the columsn into a list:
         if second_column_name == 0:
@@ -767,7 +774,7 @@ def save_images_clusters_DB(df):
 def calc_median_dist(enc1, enc2):
     # print("calc_median_dist enc1, enc2", enc1, enc2)
     # print("type enc1, enc2", type(enc1), type(enc2))
-    # print("len enc1, enc2", len(enc1), len(enc2))
+    print("len enc1, enc2", len(enc1), len(enc2))
     return np.linalg.norm(enc1 - enc2, axis=0)
 
 def process_landmarks_cluster_dist(df, df_subset_landmarks):
@@ -786,8 +793,9 @@ def process_landmarks_cluster_dist(df, df_subset_landmarks):
     df_subset_landmarks['enc1'] = df_subset_landmarks[dim_columns].values.tolist()
 
     # Step 3: Print the result to check
-    # print("df_subset_landmarks", df_subset_landmarks[['image_id', 'enc1']])
-
+    print("df_subset_landmarks", df_subset_landmarks[['image_id', 'enc1']])
+    print("df_subset_landmarks columns", df_subset_landmarks.columns)
+    print("df first row", df.iloc[0])
     if 'cluster_id' not in df.columns:
         # assign clusters to all rows
         # df_subset_landmarks.loc[:, ['cluster_id', 'cluster_dist']] = zip(*df_subset_landmarks['enc1'].apply(prep_pose_clusters_enc))
@@ -799,6 +807,18 @@ def process_landmarks_cluster_dist(df, df_subset_landmarks):
         df_subset_landmarks.loc[df_subset_landmarks['cluster_id'].isnull(), ['cluster_id', 'cluster_dist']] = \
             zip(*df_subset_landmarks.loc[df_subset_landmarks['cluster_id'].isnull(), 'enc1'].apply(prep_pose_clusters_enc))
     else:
+        # Ensure cluster_median is present on df_subset_landmarks by merging on image_id
+        if 'cluster_median' not in df_subset_landmarks.columns:
+            if 'image_id' in df_subset_landmarks.columns and 'image_id' in df.columns and 'cluster_median' in df.columns:
+                # merge cluster_median from df into df_subset_landmarks
+                df_subset_landmarks = df_subset_landmarks.merge(df[['image_id', 'cluster_id','cluster_median']], on='image_id', how='left')
+            else:
+                # fallback: try to copy if same index alignment
+                try:
+                    df_subset_landmarks['cluster_median'] = df['cluster_median']
+                except Exception:
+                    print('Could not attach cluster_median to df_subset_landmarks')
+        print("df_subset_landmarks before calc_median_dist", df_subset_landmarks.columns)
         # apply calc_median_dist to enc1 and cluster_median
         df_subset_landmarks["cluster_dist"] = df_subset_landmarks.apply(lambda row: calc_median_dist(row['enc1'], row['cluster_median']), axis=1)
     return df_subset_landmarks
@@ -910,6 +930,9 @@ def prepare_df(df):
         print("before cols",df.iloc[0]['body_landmarks_array'])
         df_list_to_cols(df, 'body_landmarks_array')
         print("after cols",df.iloc[0])
+        if CLUSTER_TYPE == "ArmsPoses3D":
+            df = sort.make_subset_df_lms(df)
+            print("after make_subset_df_lms",df)
     # elif CLUSTER_TYPE == "HandsPositions":
     elif CLUSTER_TYPE in ["HandsPositions","FingertipsPositions"]:
         print("first row of df",df.iloc[0])
@@ -961,6 +984,7 @@ MEDIAN_DICT = get_cluster_medians()
 print("MEDIAN_DICT len: ",len(MEDIAN_DICT))
 
 def main():
+    start = time.time()
     global MEDIAN_DICT
 
     def calculate_clusters_and_save(enc_data):
