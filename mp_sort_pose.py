@@ -44,7 +44,6 @@ class SortPose:
         self.VERBOSE = VERBOSE
 
         #maximum allowable distance between encodings (this accounts for dHSV)
-        self.MAXDIST = 1.8
         self.MAXFACEDIST = .8
         self.MINFACEDIST = .5 #TK
         self.MAXBODYDIST = 1.5
@@ -78,14 +77,16 @@ class SortPose:
             self.MULTIPLIER = self.HSVMULTIPLIER * (self.MINBODYDIST / self.MINFACEDIST)
             self.DUPED = self.BODY_DUPE_DIST
             if self.SORT_TYPE == "obj_bbox":
-                self.MAXD = self.MAXDIST = 200  # override max distance for obj_bbox bc it much bigger
-        elif self.SORT_TYPE in ["planar_body", "planar_hands", "fingertips_positions", "body3D", "arms3D"]: 
+                self.MAXD = 200  # override max distance for obj_bbox bc it much bigger
+        elif self.SORT_TYPE in ["planar_body", "planar_hands", "fingertips_positions", "body3D", "ArmsPoses3D"]: 
             self.MIND = self.MINBODYDIST
             self.MAXD = self.MAXBODYDIST * 4
             self.MULTIPLIER = self.HSVMULTIPLIER * (self.MINBODYDIST / self.MINFACEDIST)
             self.DUPED = self.BODY_DUPE_DIST
             self.FACE_DIST_TEST = .02
             self.CHECK_DESC_DIST = 45
+            if self.SORT_TYPE == "ArmsPoses3D":
+                self.MAXD = self.MAXBODYDIST * 300
         elif self.SORT_TYPE == "planar_hands_USE_ALL":
             # designed to take everything
             self.MIND = 1000
@@ -2449,7 +2450,7 @@ class SortPose:
         enc1 = None
         if self.SORT_TYPE == "128d": sort_column = "face_encodings68"
         elif self.SORT_TYPE == "planar_body": sort_column = "body_landmarks_array"
-        elif self.SORT_TYPE == "body3D" or self.SORT_TYPE == "arms3D": sort_column = "body_landmarks_array"
+        elif self.SORT_TYPE == "body3D" or self.SORT_TYPE == "ArmsPoses3D": sort_column = "body_landmarks_array"
         elif self.SORT_TYPE == "planar_hands" or self.SORT_TYPE == "planar_hands_USE_ALL": sort_column = "hand_landmarks" # hand_landmarks are left and right hands flat list of 126 values
         elif self.SORT_TYPE == "obj_bbox": sort_column = "obj_bbox_list"
         print("sort_column", sort_column)
@@ -2797,7 +2798,7 @@ class SortPose:
             elif self.SORT_TYPE == "planar": enc1 = df.iloc[-1]["face_landmarks"]
             # elif self.SORT_TYPE == "planar_hands" and "hand_landmarks" in df.columns: enc1 = df.iloc[-1]["hand_landmarks"]
             elif self.SORT_TYPE == "planar_hands" and "hand_landmarks" in df.columns: enc1 = df.iloc[-1]["hand_landmarks"]
-            elif self.SORT_TYPE in ("planar_body", "arms3D", "body3D") and "body_landmarks_array" in df.columns: enc1 = df.iloc[-1]["body_landmarks_array"]
+            elif self.SORT_TYPE in ("planar_body", "ArmsPoses3D", "body3D") and "body_landmarks_array" in df.columns: enc1 = df.iloc[-1]["body_landmarks_array"]
             elif self.SORT_TYPE == "planar_body": enc1 = df.iloc[-1]["body_landmarks_normalized"]
             elif self.SORT_TYPE == "obj_bbox" and "obj_bbox_list" in df.columns: enc1 = df.iloc[-1]["obj_bbox_list"]
             else:
@@ -3224,7 +3225,7 @@ class SortPose:
                 knn_sort = "planar_hands"
             else:
                 knn_sort = "planar_body"
-        elif self.SORT_TYPE in ["body3D", "arms3D"]:
+        elif self.SORT_TYPE in ["body3D", "ArmsPoses3D"]:
             knn_sort = "body3D"
         elif self.SORT_TYPE == "planar_hands": 
             knn_sort = "planar_hands"
@@ -3876,13 +3877,13 @@ class SortPose:
         # print("Shape of the array:", gesture_array.shape)
         print(gesture_array)  # Print the array to verify its contents
 
-        # Find the indices where elements are zero
-        suitable_indices = np.argwhere(gesture_array >min_value)
-        
+        # Find the indices where elements are sufficiently large
+        suitable_indices = np.argwhere(gesture_array > min_value)
+
         # for idx, (row, col) in enumerate(suitable_indices):
             # print(f"Element greater than {min_value} found at row {row}, column {col}: {gesture_array[row, col]}")
         
-        # Convert the list of zero indices to a NumPy array
+        # Convert the list of sufficiently large indices to a NumPy array
         suitable_indices_array = np.array(suitable_indices)
 
         # Sort first by axis 0 (rows), then by axis 1 (columns)
@@ -3891,7 +3892,7 @@ class SortPose:
         # Convert back to a list (if required)
         sorted_suitable_indices_list = sorted_suitable_indices.tolist()
 
-        # Return the sorted list of zero indices
+        # Return the sorted list of sufficiently large indices
         return sorted_suitable_indices_list
 
 

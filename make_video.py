@@ -80,11 +80,11 @@ CSV_FOLDER = os.path.join("/Users/michaelmandiberg/Documents/projects-active/fac
 # io.db["name"] = "ministock"
 
 MODES = {0:'paris_photo_torso_images_topics', 1:'paris_photo_torso_videos_topics', 
-         2:'3D_bodies_topics', 3:'3D_full_bodies_topics', 4:'3D_arms_meta', 
-         5:'heft_torso_keywords'}
-MODE_CHOICE = 5
+         2:'3D_bodies_topics', 3:'3D_full_bodies_topics', 4:'3D_arms', 5:'3D_arms_meta',
+         6:'heft_torso_keywords'}
+MODE_CHOICE = 4
 CURRENT_MODE = MODES[MODE_CHOICE]
-LIMIT = 2000 # this is the limit for the SQL query
+LIMIT = 5000 # this is the limit for the SQL query
 
 # set defaults, including for all modes to False
 FULL_BODY = IS_HAND_POSE_FUSION = ONLY_ONE = GENERATE_FUSION_PAIRS = USE_FUSION_PAIR_DICT = IS_CLUSTER = IS_ONE_CLUSTER = USE_POSE_CROP_DICT = IS_TOPICS= IS_ONE_TOPIC = USE_AFFECT_GROUPS = False
@@ -132,6 +132,7 @@ if "paris" in CURRENT_MODE:
 elif "3D" in CURRENT_MODE:
     AUTO_EDGE_CROP = True
     # FOCUS_CLUSTER_HACK_LIST = [24,42,71,93,167,204,294,301,358,398,443,526,532,590,623,658,708,729] #768
+    FOCUS_CLUSTER_HACK_LIST = [239, 299, 443]
     if "bod" in CURRENT_MODE:
         SORT_TYPE = "body3D"
         if "full" in CURRENT_MODE:
@@ -140,8 +141,8 @@ elif "3D" in CURRENT_MODE:
             FULL_BODY = False
         EXPAND = True # expand with white for prints, as opposed to inpaint and crop. (not video, which is controlled by INPAINT_COLOR) 
     elif CURRENT_MODE == '3D_arms':
-        META = True
-        SORT_TYPE = "arms3D"
+        # META = True
+        SORT_TYPE = "ArmsPoses3D"
         # SORT_TYPE = "body3D"
         FULL_BODY = False 
         # either AUTO_EDGE_CROP or image_edge_multiplier must be set. Not both
@@ -177,7 +178,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     SegmentTable_name = 'SegmentBig_isface'
     SegmentHelper_name = 'SegmentHelper_sept2025_heft_keywords' # TK revisit this for prodution run
     # SORT_TYPE = "planar_hands"
-    # SORT_TYPE = "arms3D" # this triggers meta body poses 3D
+    # SORT_TYPE = "ArmsPoses3D" # this triggers meta body poses 3D
     SORT_TYPE = "obj_bbox" # make sure OBJ_CLS_ID is set below
     # META = True
     TESTING = False
@@ -202,8 +203,8 @@ elif CURRENT_MODE == 'heft_torso_keywords':
         MIN_CYCLE_COUNT = 1500 # this is the cut off for the SQL query results
     else:
         # smaller numbers when using HSV clusters
-        MIN_VIDEO_FUSION_COUNT = 1000 # this is the cut off for the CSV fusion pairs
-        MIN_CYCLE_COUNT = 150 # this is the cut off for the SQL query results
+        MIN_VIDEO_FUSION_COUNT = 300 # this is the cut off for the CSV fusion pairs
+        MIN_CYCLE_COUNT = 200 # this is the cut off for the SQL query results
     # this control whether sorting by topics
     # IS_TOPICS = True # if using Clusters only, must set this to False
 
@@ -288,10 +289,11 @@ if IS_HAND_POSE_FUSION:
         SORT_TYPE = "planar_hands"
         CLUSTER_TYPE = "BodyPoses3D"
         CLUSTER_TYPE_2 = "HandsGestures"
-    elif SORT_TYPE == "arms3D":
-        # if fusion, select on arms3D and gesture, sort on hands positions
-        SORT_TYPE = "arms3D"
-        CLUSTER_TYPE = "MetaBodyPoses3D"
+    elif SORT_TYPE == "ArmsPoses3D":
+        # if fusion, select on ArmsPoses3D and gesture, sort on hands positions
+        SORT_TYPE = "ArmsPoses3D"
+        # CLUSTER_TYPE = "MetaBodyPoses3D"
+        CLUSTER_TYPE = "ArmsPoses3D"
         # CLUSTER_TYPE_2 = "HandsGestures" # commenting this out for now TK
         CLUSTER_TYPE_2 = None
         # if TESTING:
@@ -306,10 +308,13 @@ if IS_HAND_POSE_FUSION:
         # CLUSTER_TYPE_2 = "HandsGestures" # Sort on 2d hands
 
 else:
-    if SORT_TYPE == "arms3D" and META:
-        # if fusion, select on arms3D and gesture, sort on hands positions
-        # SORT_TYPE = "planar_hands"
-        CLUSTER_TYPE = "MetaBodyPoses3D"
+    if SORT_TYPE == "ArmsPoses3D":
+        if META:
+            # if fusion, select on ArmsPoses3D and gesture, sort on hands positions
+            # SORT_TYPE = "planar_hands"
+            CLUSTER_TYPE = "MetaBodyPoses3D"
+        else:
+            CLUSTER_TYPE = "ArmsPoses3D"
     else:
         # choose the cluster type manually here
         # CLUSTER_TYPE = "BodyPoses" # usually this one
@@ -720,8 +725,9 @@ elif IS_SEGONLY and io.platform == "darwin":
             SELECT += ", it.topic_score" # add description here, after resegmenting
 
     if IS_HAND_POSE_FUSION:
-        # handle META situation, where arms3D needs to look for meta clusters
-        if SORT_TYPE == "arms3D": 
+        # handle META situation, where ArmsPoses3D needs to look for meta clusters
+        if SORT_TYPE == "ArmsPoses3D" and META:
+            # this is for META 
             cluster_table = f"ImagesBodyPoses3D"
             # ihp as ClustersMetaBodyPoses3D - selecting the meta clusters id below
             # join Segment to ImagesBodyPoses3D
@@ -1229,14 +1235,14 @@ if not io.IS_TENCH:
             else: cluster_target_col = "ihp.cluster_id"
             if isinstance(cluster_no, list):
                 print("cluster_no is a list", cluster_no)
-                # set target column based on SORT_TYPE, arms3D means we have a meta_cluster_id
+                # set target column based on SORT_TYPE, ArmsPoses3D means we have a meta_cluster_id
 
                 # we have two values, C1 and C2. C1 should be IHP, C2 should be IH
                 cluster += f" AND {cluster_target_col} = {str(cluster_no[0])} "            
                 if cluster_no[1]: cluster += f" AND ih.cluster_id = {str(cluster_no[1])} " 
             else:
                 print("cluster_no is a single value", cluster_no)
-                # set target column based on SORT_TYPE, arms3D means we have a meta_cluster_id
+                # set target column based on SORT_TYPE, ArmsPoses3D means we have a meta_cluster_id
                 cluster += f" AND {cluster_target_col} = {str(cluster_no)} "           
         # elif cluster_no is not None or topic_no is not None:
         elif IS_CLUSTER or IS_ONE_CLUSTER:
@@ -1565,7 +1571,7 @@ def prep_encodings_NN(df_segment):
             return [row['lum']*HSV_NORMS["LUM"], row['lum_torso']*HSV_NORMS["LUM"]]    
     
     def set_sort_col():
-        if SORT_TYPE in ["body3D", "arms3D"] or CLUSTER_TYPE in ["BodyPoses3D", "ArmsPoses3D"]:
+        if SORT_TYPE in ["body3D", "ArmsPoses3D"] or CLUSTER_TYPE in ["BodyPoses3D", "ArmsPoses3D"]:
             # have to handle both, because handposefusion redefines SORT_TYPE 
             source_col = sort_column = "body_landmarks_3D"
         elif SORT_TYPE == "planar_body":
@@ -2186,7 +2192,7 @@ def linear_test_df(df_sorted, itter=None):
             this_dist = row.get('dist', None)
             if this_dist is not None and this_dist > sort.MAXD:
                 sort.counter_dict["failed_dist_count"] += 1
-                print(f"this_dist {this_dist} > MAXDIST" , str(sort.MAXD))
+                print(f"this_dist {this_dist} > MAXD" , str(sort.MAXD))
                 continue
 
             # compare_images to make sure they are face and not the same
