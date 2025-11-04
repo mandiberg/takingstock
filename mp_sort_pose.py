@@ -56,7 +56,7 @@ class SortPose:
         self.BRUTEFORCE = False
         self.LMS_DIMENSIONS = LMS_DIMENSIONS
         if self.VERBOSE: print("init LMS_DIMENSIONS",self.LMS_DIMENSIONS)
-        self.CUTOFF = 75 # DOES factor if ONE_SHOT
+        self.CUTOFF = 300 # DOES factor if ONE_SHOT
         self.ORIGIN = 0
         self.this_nose_bridge_dist = self.NOSE_BRIDGE_DIST = None # to be set in first loop, and sort.this_nose_bridge_dist each time
 
@@ -3862,7 +3862,8 @@ class SortPose:
         self.HSV_CLUSTER_GROUPS = [
             [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22],
             [[3, 4], [5, 6, 7], [8, 9, 10, 11], [12, 13], [15, 16], [17, 18, 19, 20], [21, 22]],
-            [[3, 4, 5, 6, 7, 22], [8, 9, 10, 11, 12, 13], [15, 16, 17, 18, 19, 20, 21]]
+            [[3, 4, 5, 6, 7, 22], [8, 9, 10, 11, 12, 13], [15, 16, 17, 18, 19, 20, 21]],
+            [[0,1,2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 19, 20, 21, 22]]
         ]
         # Construct the file name and path
         isolated_topic = str(topic_no[0]).split('.')[0]  # Get the integer part before the decimal
@@ -3898,7 +3899,7 @@ class SortPose:
 
             # Work on a view so modifications (zeroing) affect caller's gesture_array
             gesture_array = gesture_array
-
+            print(f"gesture array for index 239 before any sorting:", gesture_array[239,:])
             # check the type of column_list to determine mode
             if column_list is None: do_simple = True
             elif any(not isinstance(y, int) for y in column_list): do_simple = False
@@ -3914,6 +3915,7 @@ class SortPose:
 
                 if suitable_indices.size == 0:
                     return []
+                print(f"gesture array for index 239 after simple sort:", gesture_array[239,:])
 
                 # Sort by row then column
                 suitable_indices_array = np.array(suitable_indices)
@@ -3960,6 +3962,7 @@ class SortPose:
 
             # if len(results) == 0:
             #     return []
+                print(f"gesture array for index 239 after list sort:", gesture_array[239,:])
 
             # # Sort by row then group index
             # results_arr = np.array(results)
@@ -3970,7 +3973,7 @@ class SortPose:
             all_suitable_indices = []
             # if we are dealing with HSV, then itterate over the HSV_CLUSTER_GROUPS
             for column_list in self.HSV_CLUSTER_GROUPS:
-                print(f" column_list", column_list)
+                # print(f" column_list", column_list)
                 these_suitable_indices, gesture_array = find_indices(gesture_array, min_value, column_list=column_list)
                 all_suitable_indices.extend(these_suitable_indices)
             # Now sort all_suitable_indices by row then group index
