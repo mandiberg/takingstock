@@ -84,7 +84,7 @@ MODES = {0:'paris_photo_torso_images_topics', 1:'paris_photo_torso_videos_topics
          6:'heft_torso_keywords'}
 MODE_CHOICE = 6
 CURRENT_MODE = MODES[MODE_CHOICE]
-LIMIT = 500 # this is the limit for the SQL query
+LIMIT = 2000 # this is the limit for the SQL query
 
 # set defaults, including for all modes to False
 FULL_BODY = IS_HAND_POSE_FUSION = ONLY_ONE = GENERATE_FUSION_PAIRS = USE_FUSION_PAIR_DICT = IS_CLUSTER = IS_ONE_CLUSTER = USE_POSE_CROP_DICT = IS_TOPICS= IS_ONE_TOPIC = USE_AFFECT_GROUPS = False
@@ -142,7 +142,7 @@ if "paris" in CURRENT_MODE:
 elif "3D" in CURRENT_MODE:
     AUTO_EDGE_CROP = True
     # FOCUS_CLUSTER_HACK_LIST = [24,42,71,93,167,204,294,301,358,398,443,526,532,590,623,658,708,729] #768
-    FOCUS_CLUSTER_HACK_LIST = [239, 299, 443]
+    # FOCUS_CLUSTER_HACK_LIST = [239, 299, 443]
     if "bod" in CURRENT_MODE:
         SORT_TYPE = "body3D"
         if "full" in CURRENT_MODE:
@@ -238,7 +238,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     # FOCUS_CLUSTER_HACK_LIST = [57,69, 92,98,117] #256
     # FOCUS_CLUSTER_HACK_LIST = [181]
     # FOCUS_CLUSTER_HACK_LIST = [24,42,71,93,167,204,294,301,358,398,443,526,532,590,623,658,708,729] #768
-    FOCUS_CLUSTER_HACK_LIST = [239, 299, 443]
+    # FOCUS_CLUSTER_HACK_LIST = [239, 299, 443]
 
     # XYZ_FILTER_OCT2025_HEFT_KEYWORDS = " AND s.face_x > -33 AND s.face_x < -27 AND s.face_y > -2 AND s.face_y < 2 AND s.face_z > -2 AND s.face_z < 2"
     XYZ_FILTER_OCT2025_HEFT_KEYWORDS = " AND s.face_x IS NOT NULL "
@@ -363,7 +363,8 @@ IS_ANGLE_SORT = False
 
 
 # gets focus cluster list from the FOCUS_CLUSTER_DICT via CLUSTER_TYPE and TOPIC_NO (which is a list of one keyword)
-FOCUS_CLUSTER_HACK_LIST = FOCUS_CLUSTER_DICT.get(CLUSTER_TYPE, {}).get(TOPIC_NO[0], None)
+if TOPIC_NO is not None and IS_ONE_TOPIC and IS_HAND_POSE_FUSION:
+    FOCUS_CLUSTER_HACK_LIST = FOCUS_CLUSTER_DICT.get(CLUSTER_TYPE, {}).get(TOPIC_NO[0], None)
 
 
 #######################
@@ -2449,9 +2450,12 @@ def const_prefix(this_topic, cluster_no, pose_no, hsv_cluster=None):
     if hsv_cluster is not None:
         if isinstance(hsv_cluster, int) or isinstance(hsv_cluster, str):
             hsv_cluster = str(hsv_cluster)
-        elif isinstance(hsv_cluster[1], list):
-            if VERBOSE: print("hsv_cluster is a list", hsv_cluster)
-            hsv_cluster = '_'.join([str(x) for x in hsv_cluster[1]])
+        elif isinstance(hsv_cluster, list):
+            # if VERBOSE: print("hsv_cluster is a list", hsv_cluster)
+            if isinstance(hsv_cluster[1], int):
+                hsv_cluster = str(hsv_cluster[1])
+            elif isinstance(hsv_cluster[1], list):
+                hsv_cluster = f"{hsv_cluster[1][0]}-{hsv_cluster[1][-1]}"
         file_prefix = f"{file_prefix}_h{hsv_cluster}"
         print("file_prefix with hsv", file_prefix)
     else:
@@ -2883,19 +2887,25 @@ def main():
                 # make a list where the first value matches cluster_topic_no and the second value is assigned from range(1,N_HSV+1)
                 if USE_HSV: all_potential_hsv_clusters = [[cluster_topic_no, i] for i in range(0, N_HSV + 1)]
                 else: all_potential_hsv_clusters = [[cluster_topic_no, 0]]
-                print(f"all_potential_hsv_clusters for cluster_topic_no {cluster_topic_no} is {all_potential_hsv_clusters}")
+                # print(f"all_potential_hsv_clusters for cluster_topic_no {cluster_topic_no} is {all_potential_hsv_clusters}")
                 this_n_hsv_clusters = []
                 all_other_hsv_clusters = []
-                for this_cluster in all_potential_hsv_clusters:
-                    print(f"checking cluster_topic_no {this_cluster} against hsv cluster {all_potential_hsv_clusters}")
-                    if this_cluster in n_cluster_topics:
-                        this_n_hsv_clusters.append(this_cluster)
-                    else:
-                        all_other_hsv_clusters.append(this_cluster[1])
-                if VERBOSE: print(f"all_other_hsv_clusters for cluster_topic_no {cluster_topic_no} is {all_other_hsv_clusters}")
-                if VERBOSE: print(f"all_potential_hsv_clusters for cluster_topic_no {cluster_topic_no} is {all_potential_hsv_clusters}")
-                all_other_pair_list = [cluster_topic_no, all_other_hsv_clusters]
-                this_n_hsv_clusters.append(all_other_pair_list)
+                this_cluster_topics = [x for x in n_cluster_topics if x[0] == cluster_topic_no]
+                # print(f"this_cluster_topics for cluster_topic_no {cluster_topic_no} is {this_cluster_topics}")
+                if any(isinstance(x, list) and x[0] == cluster_topic_no for x in n_cluster_topics):
+                    # print(f"n_cluster_topics contains lists with cluster_topic_no {cluster_topic_no}")
+                    this_n_hsv_clusters = this_cluster_topics
+                else:
+                    for this_cluster in all_potential_hsv_clusters:
+                        # print(f"checking cluster_topic_no {this_cluster} against hsv cluster {all_potential_hsv_clusters}")
+                        if this_cluster in n_cluster_topics:
+                            this_n_hsv_clusters.append(this_cluster)
+                        else:
+                            all_other_hsv_clusters.append(this_cluster[1])
+                    # if VERBOSE: print(f"all_other_hsv_clusters for cluster_topic_no {cluster_topic_no} is {all_other_hsv_clusters}")
+                    # if VERBOSE: print(f"all_potential_hsv_clusters for cluster_topic_no {cluster_topic_no} is {all_potential_hsv_clusters}")
+                    all_other_pair_list = [cluster_topic_no, all_other_hsv_clusters]
+                    this_n_hsv_clusters.append(all_other_pair_list)
                 if VERBOSE: print(f"this_n_hsv_clusters for cluster_topic_no {cluster_topic_no} is {this_n_hsv_clusters}")
 
                 # for this_cluster in n_cluster_topics:

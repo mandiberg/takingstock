@@ -3829,6 +3829,7 @@ class SortPose:
 
 # FUSION STUFF
     def prep_fusion_df(self, df):
+        hsv_sum_df = total_df = None
         if df.iloc[0, 0]=="ihp_cluster":
             print("checking columns", df.columns)
             # if hsv_3_to_22_sum is present, move it to a separate df
@@ -3858,6 +3859,11 @@ class SortPose:
         elif "keyword" in folder_path:
             prefix = 'Keywords_'
 
+        self.HSV_CLUSTER_GROUPS = [
+            [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22],
+            [[3, 4], [5, 6, 7], [8, 9, 10, 11], [12, 13], [15, 16], [17, 18, 19, 20], [21, 22]],
+            [[3, 4, 5, 6, 7, 22], [8, 9, 10, 11, 12, 13], [15, 16, 17, 18, 19, 20, 21]]
+        ]
         # Construct the file name and path
         isolated_topic = str(topic_no[0]).split('.')[0]  # Get the integer part before the decimal
         file_name = prefix + isolated_topic + '.csv'
@@ -3866,7 +3872,7 @@ class SortPose:
         # Load the CSV file into a DataFrame
         df = pd.read_csv(file_path, header=None)
         # Check if the first column of the first row is a string
-
+        
         # strip out headers and convert to int
         df, hsv_sum_df, total_df = self.prep_fusion_df(df)
         
@@ -3877,24 +3883,124 @@ class SortPose:
         # print("Shape of the array:", gesture_array.shape)
         print(gesture_array)  # Print the array to verify its contents
 
-        # Find the indices where elements are sufficiently large
-        suitable_indices = np.argwhere(gesture_array > min_value)
+        def find_indices(gesture_array, min_value, column_list=None):
+            """Find (row, hsv_group) pairs where values exceed min_value.
 
-        # for idx, (row, col) in enumerate(suitable_indices):
-            # print(f"Element greater than {min_value} found at row {row}, column {col}: {gesture_array[row, col]}")
-        
-        # Convert the list of sufficiently large indices to a NumPy array
-        suitable_indices_array = np.array(suitable_indices)
+            If column_list is None, operate on individual columns (original behavior).
+            If column_list is provided, it can be either a list of ints (treated as
+            individual single-column groups) or a list of lists (each sub-list is a
+            group of column indices). The function returns a list of [row, group_idx]
+            pairs where group_idx is the index of the group in the provided
+            column_list (0-based). Selected group member columns are zeroed out to
+            avoid duplicate matches across groups.
+            """
+            results = []
 
-        # Sort first by axis 0 (rows), then by axis 1 (columns)
-        sorted_suitable_indices = suitable_indices_array[np.lexsort((suitable_indices_array[:,1], suitable_indices_array[:,0]))]
+            # Work on a view so modifications (zeroing) affect caller's gesture_array
+            gesture_array = gesture_array
 
-        # Convert back to a list (if required)
-        sorted_suitable_indices_list = sorted_suitable_indices.tolist()
+            # check the type of column_list to determine mode
+            if column_list is None: do_simple = True
+            elif any(not isinstance(y, int) for y in column_list): do_simple = False
+            else: do_simple = True
 
-        # Return the sorted list of sufficiently large indices
-        return sorted_suitable_indices_list
+            if do_simple:
+                print(f"doing simple with {column_list}")
+                # original per-column behavior
+                suitable_indices = np.argwhere(gesture_array > min_value)
+                # zero out selected cells to avoid re-use
+                for row, col in suitable_indices:
+                    gesture_array[row, col] = 0
 
+                if suitable_indices.size == 0:
+                    return []
+
+                # Sort by row then column
+                suitable_indices_array = np.array(suitable_indices)
+                sorted_idx = suitable_indices_array[np.lexsort((suitable_indices_array[:,1], suitable_indices_array[:,0]))]
+                return sorted_idx.tolist(), gesture_array
+
+            # Normalize column_list into list-of-groups (each group is a list of ints)
+            # groups = []
+            # for el in column_list:
+            #     if isinstance(el, (list, tuple)):
+            #         groups.append([int(x) for x in el])
+            #     else:
+            #         groups.append([int(el)])
+
+            n_rows = gesture_array.shape[0]
+            print(f"doing grouped with {column_list} on array shape {gesture_array.shape}")
+
+            # For each group, compute row-wise group sum and select rows exceeding min_value
+            for g_idx, group_cols in enumerate(column_list):
+                print(f" Processing group {g_idx} with columns {group_cols}")
+                col_idx = np.array(group_cols, dtype=int)
+                # guard in case group columns are out of bounds
+                col_idx = col_idx[(col_idx >= 0) & (col_idx < gesture_array.shape[1])]
+                if col_idx.size == 0:
+                    continue
+
+                # Sum across the group's columns for each row
+                try:
+                    group_vals = gesture_array[:, col_idx].sum(axis=1)
+                except Exception:
+                    # Defensive fallback: iterate rows if slicing fails
+                    group_vals = np.array([gesture_array[r, col_idx].sum() for r in range(n_rows)])
+                
+                print(f" group_vals: {group_vals}")
+                rows_idx = np.where(group_vals > min_value)[0]
+                for r in rows_idx:
+                    print(f"  Found row {r} exceeding min_value in group {g_idx} col_idx {col_idx} columns {group_cols}")
+                    results.append([int(r), group_cols])
+                    # zero out all member columns for this row so subsequent groups won't reuse them
+                    gesture_array[r, col_idx] = 0
+            # print(f"gesture_array shape after processing: {gesture_array.shape}")
+            # print(f"gesture_array after processing: {gesture_array}")
+            # print(f"results: {results}")
+
+            # if len(results) == 0:
+            #     return []
+
+            # # Sort by row then group index
+            # results_arr = np.array(results)
+            # sorted_results = results_arr[np.lexsort((results_arr[:,1], results_arr[:,0]))]
+            return results, gesture_array
+
+        if hsv_sum_df is not None:
+            all_suitable_indices = []
+            # if we are dealing with HSV, then itterate over the HSV_CLUSTER_GROUPS
+            for column_list in self.HSV_CLUSTER_GROUPS:
+                print(f" column_list", column_list)
+                these_suitable_indices, gesture_array = find_indices(gesture_array, min_value, column_list=column_list)
+                all_suitable_indices.extend(these_suitable_indices)
+            # Now sort all_suitable_indices by row then group index
+            if len(all_suitable_indices) == 0:
+                return []
+
+            # doing this the hard ugly way, because the smooth way wasn't working
+            # results is a list of [row, group_cols], get all row values in a list
+            sorted_suitable_indices = []
+            all_rows = [item[0] for item in all_suitable_indices]
+            # sort all rows from smallest to largest
+            all_rows = sorted(list(set(all_rows)))
+            # print(f"all_suitable_indices after sorting: {all_suitable_indices}")
+
+            # print(f"all_rows for sorting: {all_rows}")
+            for row in all_rows:
+                for item in all_suitable_indices:
+                    # find ALL items with this row value
+                    if item[0]==row:
+                        sorted_suitable_indices.append(item)
+            # print(f"all_suitable_indices after sorting: {sorted_suitable_indices}")
+            # all_suitable_indices_arr = np.array(all_suitable_indices)
+            # sorted_idx = all_suitable_indices_arr[np.lexsort((all_suitable_indices_arr[:,1], all_suitable_indices_arr[:,0]))]
+            # sorted_suitable_indices = sorted_idx.tolist()
+            return sorted_suitable_indices
+            # the fancy way of sorting is failing, so I'm going to do it the simple way
+                
+        else:
+            sorted_suitable_indices, gesture_array = find_indices(gesture_array, min_value)
+        return sorted_suitable_indices
 
 
 # Mass Build file management stuff
