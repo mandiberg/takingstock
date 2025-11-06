@@ -84,7 +84,7 @@ MODES = {0:'paris_photo_torso_images_topics', 1:'paris_photo_torso_videos_topics
          6:'heft_torso_keywords'}
 MODE_CHOICE = 6
 CURRENT_MODE = MODES[MODE_CHOICE]
-LIMIT = 500 # this is the limit for the SQL query
+LIMIT = 2000 # this is the limit for the SQL query
 
 # set defaults, including for all modes to False
 FULL_BODY = IS_HAND_POSE_FUSION = ONLY_ONE = GENERATE_FUSION_PAIRS = USE_FUSION_PAIR_DICT = IS_CLUSTER = IS_ONE_CLUSTER = USE_POSE_CROP_DICT = IS_TOPICS= IS_ONE_TOPIC = USE_AFFECT_GROUPS = False
@@ -227,12 +227,15 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     # FOCUS_CLUSTER_HACK_LIST = [239, 299, 443]
 
     # XYZ_FILTER_OCT2025_HEFT_KEYWORDS = " AND s.face_x > -33 AND s.face_x < -27 AND s.face_y > -2 AND s.face_y < 2 AND s.face_z > -2 AND s.face_z < 2"
-    XYZ_FILTER_OCT2025_HEFT_KEYWORDS = " AND s.face_x IS NOT NULL "
-    # XYZ_FILTER_OCT2025_HEFT_KEYWORDS = " AND s.face_x > -45 AND s.face_x < -5 AND s.face_y > -10 AND s.face_y < 10 AND s.face_z > -10 AND s.face_z < 10"
+    # XYZ_FILTER_OCT2025_HEFT_KEYWORDS = " AND s.face_x IS NOT NULL "
+    # this gets added in the sql select function, based on whether cluster in in the XYZ_FILTER_LIST_10DEGREES list
+    XYZ_FILTER_10DEGREES = " AND s.face_x > -45 AND s.face_x < -5 AND s.face_y > -10 AND s.face_y < 10 AND s.face_z > -10 AND s.face_z < 10"
 
-    TOPIC_NO = [553] # if doing an affect topic fusion, this is the wrapper topic
+    TOPIC_NO = [553.01] # if doing an affect topic fusion, this is the wrapper topic
+    KEYWORD_OBJECT = 999 #set to 999 to get only unsorted images
+    KEYWORD_ORIENTATION = 0
     if META: folder = "heft_keyword_fusion_clusters_hsv_meta"
-    else: folder = "heft_keyword_ArmsPoses3D_512"
+    else: folder = "heft_keyword_ArmsPoses3D_256"
     FUSION_FOLDER = os.path.join("utilities/data/", folder)
     CSV_FOLDER = os.path.join("/Users/michaelmandiberg/Documents/projects-active/facemap_production/heft_keyword_fusion_clusters/", folder)
 
@@ -449,9 +452,9 @@ elif IS_SEGONLY and io.platform == "darwin":
     # this is the standard segment topics/clusters query for June 2024
     if SegmentHelper_name is None:
         pass
-    if SegmentHelper_name == "SegmentHelper_sept2025_heft_keywords" and MODE == 5:
-        # hacky thing to narrow the XYZ face space for heft keywords
-        WHERE += XYZ_FILTER_OCT2025_HEFT_KEYWORDS
+    # if SegmentHelper_name == "SegmentHelper_sept2025_heft_keywords" and MODE == 5:
+    #     # hacky thing to narrow the XYZ face space for heft keywords
+    #     WHERE += XYZ_FILTER_OCT2025_HEFT_KEYWORDS
     elif PHONE_BBOX_LIMITS:
         pass
         # WHERE += " AND s.face_x > -50 "
@@ -566,7 +569,18 @@ elif IS_SEGONLY and io.platform == "darwin":
         # for some reason I have to set OBJ_CLS_ID to 0 if I'm doing planar_body
         # but I want to store the value in OBJ_SUBSELECT to use in SQL
         if SORT_TYPE == "planar_body" and not DO_OBJ_SORT: OBJ_CLS_ID = 0
-            
+    if KEYWORD_OBJECT is not None:
+        # this is for filtering by object keyword
+        print(f"filtering by keyword object {KEYWORD_OBJECT} and orientation {KEYWORD_ORIENTATION}")
+        # math floor to get rid of the decimal that is used to access dict values
+        FROM += f" LEFT JOIN Images{int(math.floor(TOPIC_NO[0]))} ik_obj ON s.image_id = ik_obj.image_id "
+        if KEYWORD_OBJECT == 999:
+            # this is for testing, to return only unsorted images
+            WHERE += f" AND ik_obj.object_id IS NULL "
+        else:
+            WHERE += f" AND ik_obj.object_id = {KEYWORD_OBJECT} "
+            if KEYWORD_ORIENTATION is not None:
+                WHERE += f" AND ik_obj.orientation = {KEYWORD_ORIENTATION} "
     if SORT_TYPE == "planar_body":
         WHERE += " AND s.mongo_body_landmarks = 1  "
 
@@ -926,11 +940,15 @@ if not io.IS_TENCH:
             return query_string
 
         def access_keyword_dict(cluster_topic_no):
+            if isinstance(cluster_topic_no, str):
+                cluster_topic_no = float(cluster_topic_no)
             # check if the topic_no has related keywords in the KEYWORD_DICT
+            print(f"accessing keyword dict for topic_no {cluster_topic_no}: {KEYWORD_DICT[cluster_topic_no]}")
+        
             cluster_dict_OR = cluster_dict_AND = cluster_dict_NOT = None
             # cluster_topic_OR = cluster_dict_AND = cluster_dict_NOT = this_cluster_topic_no = None
-            cluster_topic_no = int(math.floor(float(cluster_topic_no)))
             cluster_dict_values = KEYWORD_DICT.get(cluster_topic_no, None)
+            cluster_topic_no = int(math.floor(float(cluster_topic_no)))
             if cluster_dict_values is not None:
                 cluster_topic_OR = cluster_dict_values.get("OR", None)
                 cluster_dict_AND = cluster_dict_values.get("AND", None)
@@ -973,7 +991,12 @@ if not io.IS_TENCH:
         if hsv_cluster and isinstance(hsv_cluster, list) and len(hsv_cluster) == 2:
             hsv_cluster = handle_hsv_cluster_lists(cluster_no, hsv_cluster)
             print(f"after handling hsv, cluster_no {cluster_no} and hsv_cluster {hsv_cluster}")
-            
+
+        if SegmentHelper_name == "SegmentHelper_sept2025_heft_keywords" and MODE == 5:
+            # hacky thing to narrow the XYZ face space for heft keywords
+            if cluster_no in XYZ_FILTER_LIST_10DEGREES: 
+                WHERE += XYZ_FILTER_10DEGREES
+
         if IS_HAND_POSE_FUSION:
             if META: cluster_target_col = "cmp.meta_cluster_id"
             else: cluster_target_col = "ihp.cluster_id"

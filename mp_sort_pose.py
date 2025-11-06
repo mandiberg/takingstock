@@ -56,7 +56,7 @@ class SortPose:
         self.BRUTEFORCE = False
         self.LMS_DIMENSIONS = LMS_DIMENSIONS
         if self.VERBOSE: print("init LMS_DIMENSIONS",self.LMS_DIMENSIONS)
-        self.CUTOFF = 300 # DOES factor if ONE_SHOT
+        self.CUTOFF = 1000 # DOES factor if ONE_SHOT
         self.ORIGIN = 0
         self.this_nose_bridge_dist = self.NOSE_BRIDGE_DIST = None # to be set in first loop, and sort.this_nose_bridge_dist each time
 
@@ -3860,9 +3860,9 @@ class SortPose:
             prefix = 'Keywords_'
 
         self.HSV_CLUSTER_GROUPS = [
-            [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22],
-            [[3, 4], [5, 6, 7], [8, 9, 10, 11], [12, 13], [15, 16], [17, 18, 19, 20], [21, 22]],
-            [[3, 4, 5, 6, 7, 22], [8, 9, 10, 11, 12, 13], [15, 16, 17, 18, 19, 20, 21]],
+            # [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22],
+            # [[3, 4], [5, 6, 7], [8, 9, 10, 11], [12, 13], [15, 16], [17, 18, 19, 20], [21, 22]],
+            # [[0],[1],[2],[3, 4, 5, 6, 7, 22], [8, 9, 10, 11, 12, 13], [14],[15, 16, 17, 18, 19, 20, 21]],
             [[0,1,2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 19, 20, 21, 22]]
         ]
         # Construct the file name and path
@@ -3905,6 +3905,8 @@ class SortPose:
             elif any(not isinstance(y, int) for y in column_list): do_simple = False
             else: do_simple = True
 
+            #temp TK override
+            do_simple = False
             if do_simple:
                 print(f"doing simple with {column_list}")
                 # original per-column behavior

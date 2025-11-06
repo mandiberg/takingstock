@@ -265,6 +265,17 @@ CREATE TABLE IsNotDupeOf (
     PRIMARY KEY (image_id_i, image_id_j)
 );
 
+USE Stock;
+-- This is a object tracking junction table.
+-- object is 0 for none, 1 for US, 2 for Pride, 3 for other
+-- orientation: 0 is left, 1 is right
+CREATE TABLE Images553 (
+    image_id int REFERENCES Images (image_id),
+    object_id int,
+    orientation int,
+    PRIMARY KEY (image_id)
+);
+
 
 -- calculations that will come later
 CREATE TABLE HSV (
