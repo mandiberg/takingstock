@@ -84,13 +84,13 @@ MODES = {0:'paris_photo_torso_images_topics', 1:'paris_photo_torso_videos_topics
          6:'heft_torso_keywords'}
 MODE_CHOICE = 6
 CURRENT_MODE = MODES[MODE_CHOICE]
-LIMIT = 2000 # this is the limit for the SQL query
+LIMIT = 3000 # this is the limit for the SQL query
 
 # set defaults, including for all modes to False
 FULL_BODY = IS_HAND_POSE_FUSION = ONLY_ONE = GENERATE_FUSION_PAIRS = USE_FUSION_PAIR_DICT = IS_CLUSTER = IS_ONE_CLUSTER = USE_POSE_CROP_DICT = IS_TOPICS= IS_ONE_TOPIC = USE_AFFECT_GROUPS = False
 EXPAND = ONE_SHOT = JUMP_SHOT = USE_ALL = CHOP_FIRST = TSP_SORT = False
 USE_PAINTED = OUTPAINT = INPAINT= META = USE_HSV = False
-FUSION_FOLDER = FOCUS_CLUSTER_HACK_LIST = None
+FUSION_FOLDER = FOCUS_CLUSTER_HACK_LIST = FORCE_TARGET_COUNT = None
 MIN_CYCLE_COUNT = 1
 AUTO_EDGE_CROP = False # this triggers the dynamic cropping based on min_max_body_landmarks_for_crop
 
@@ -179,7 +179,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     SegmentHelper_name = 'SegmentHelper_sept2025_heft_keywords' # TK revisit this for prodution run
     # SORT_TYPE = "planar_hands"
     SORT_TYPE = "ArmsPoses3D" # this triggers meta body poses 3D
-    # SORT_TYPE = "obj_bbox" # make sure OBJ_CLS_ID is set below
+    SORT_TYPE = "obj_bbox" # make sure OBJ_CLS_ID is set below
     # META = True
     TESTING = False
     IS_HAND_POSE_FUSION = True # do we use fusion clusters
@@ -194,6 +194,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     # N_HSV = 0 # don't do HSV clusters
     
     # TSP_SORT = True
+    FORCE_TARGET_COUNT = 90
     # CHOP_FIRST = True
     # if TESTING: IS_HAND_POSE_FUSION = GENERATE_FUSION_PAIRS = False
 
@@ -204,7 +205,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     else:
         # smaller numbers when using HSV clusters
         MIN_VIDEO_FUSION_COUNT = 300 # this is the cut off for the CSV fusion pairs
-        MIN_CYCLE_COUNT = 150 # this is the cut off for the SQL query results
+        MIN_CYCLE_COUNT = 90 # this is the cut off for the SQL query results
     # this control whether sorting by topics
     # IS_TOPICS = True # if using Clusters only, must set this to False
 
@@ -229,11 +230,11 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     # XYZ_FILTER_OCT2025_HEFT_KEYWORDS = " AND s.face_x > -33 AND s.face_x < -27 AND s.face_y > -2 AND s.face_y < 2 AND s.face_z > -2 AND s.face_z < 2"
     # XYZ_FILTER_OCT2025_HEFT_KEYWORDS = " AND s.face_x IS NOT NULL "
     # this gets added in the sql select function, based on whether cluster in in the XYZ_FILTER_LIST_10DEGREES list
-    XYZ_FILTER_10DEGREES = " AND s.face_x > -45 AND s.face_x < -5 AND s.face_y > -10 AND s.face_y < 10 AND s.face_z > -10 AND s.face_z < 10"
+    XYZ_FILTER_10DEGREES = " AND s.face_x > -45 AND s.face_x < -5 AND s.face_y > -15 AND s.face_y < 15 AND s.face_z > -15 AND s.face_z < 15"
 
-    TOPIC_NO = [553.01] # if doing an affect topic fusion, this is the wrapper topic
-    KEYWORD_OBJECT = 999 #set to 999 to get only unsorted images
-    KEYWORD_ORIENTATION = 0
+    TOPIC_NO = [22411] # if doing an affect topic fusion, this is the wrapper topic, OR keyword. add .01, .1 etc for sub selects from KEYWORD_DICT
+    KEYWORD_OBJECT = None #set to 999 to get only unsorted images
+    KEYWORD_ORIENTATION = None
     if META: folder = "heft_keyword_fusion_clusters_hsv_meta"
     else: folder = "heft_keyword_ArmsPoses3D_256"
     FUSION_FOLDER = os.path.join("utilities/data/", folder)
@@ -305,7 +306,7 @@ if IS_HAND_POSE_FUSION:
         #     CLUSTER_TYPE_2 = None
     # CLUSTER_TYPE is passed to sort. below
     elif SORT_TYPE == "obj_bbox":
-        CLUSTER_TYPE = "BodyPoses3D"
+        CLUSTER_TYPE = "ArmsPoses3D"
         CLUSTER_TYPE_2 = None
 
         # CLUSTER_TYPE = "HandsPositions" # Select on 3d hands
@@ -358,7 +359,7 @@ IS_ANGLE_SORT = False
 
 # gets focus cluster list from the FOCUS_CLUSTER_DICT via CLUSTER_TYPE and TOPIC_NO (which is a list of one keyword)
 if TOPIC_NO is not None and IS_ONE_TOPIC and IS_HAND_POSE_FUSION:
-    FOCUS_CLUSTER_HACK_LIST = FOCUS_CLUSTER_DICT.get(CLUSTER_TYPE, {}).get(TOPIC_NO[0], None)
+    FOCUS_CLUSTER_HACK_LIST = FOCUS_CLUSTER_DICT.get(CLUSTER_TYPE, {}).get(int(math.floor(TOPIC_NO[0])), None)
 
 
 #######################
@@ -920,7 +921,7 @@ if not io.IS_TENCH:
     def selectSQL(cluster_no=None, topic_no=None, hsv_cluster=None):
         global SELECT, FROM, WHERE, LIMIT, WrapperTopicTable
         local_where = WHERE
-        from_affect = where_affect = from_hsv = where_hsv = " "
+        from_affect = where_affect = from_hsv = where_hsv = xyz_where = " "
         cluster_dict_AND = cluster_dict_NOT = None
 
         def is_query_list_string(topic_no, inclusion=True):
@@ -992,10 +993,14 @@ if not io.IS_TENCH:
             hsv_cluster = handle_hsv_cluster_lists(cluster_no, hsv_cluster)
             print(f"after handling hsv, cluster_no {cluster_no} and hsv_cluster {hsv_cluster}")
 
-        if SegmentHelper_name == "SegmentHelper_sept2025_heft_keywords" and MODE == 5:
+        print(f"checking SegmentHelper_name {SegmentHelper_name} for heft keywords and MODES {MODES[MODE_CHOICE]}")
+        if SegmentHelper_name == "SegmentHelper_sept2025_heft_keywords" and "heft" in MODES[MODE_CHOICE]:
+            print("checking heft keyword filter for cluster_no:", cluster_no)
             # hacky thing to narrow the XYZ face space for heft keywords
             if cluster_no in XYZ_FILTER_LIST_10DEGREES: 
-                WHERE += XYZ_FILTER_10DEGREES
+                print("applying 10 degrees filter for heft keywords")
+                xyz_where += XYZ_FILTER_10DEGREES
+                print(f"updated WHERE clause for heft keywords: {xyz_where}")
 
         if IS_HAND_POSE_FUSION:
             if META: cluster_target_col = "cmp.meta_cluster_id"
@@ -1060,7 +1065,7 @@ if not io.IS_TENCH:
 
         print(f"cluster SELECT is {cluster}")
 
-        selectsql = f"SELECT {SELECT} FROM {FROM + from_affect + from_hsv} WHERE {local_where + where_affect + where_hsv} {cluster} LIMIT {str(LIMIT)};"
+        selectsql = f"SELECT {SELECT} FROM {FROM + from_affect + from_hsv} WHERE {local_where + where_affect + where_hsv + xyz_where} {cluster} LIMIT {str(LIMIT)};"
         print("actual SELECT is: ",selectsql)
         result = engine.connect().execute(text(selectsql))
         resultsjson = ([dict(row) for row in result.mappings()])
@@ -1212,8 +1217,8 @@ def sort_by_face_dist_NN(df_enc):
             # You'll need to track the mapping yourself
             df_clean = expand_face_encodings(df_enc)
             df_clean['original_index'] = df_clean.index  # or however they map
-
-            sorter.set_TSP_sort(df_clean, START_IDX=None, END_IDX=None)
+            START_IDX = END_IDX = None
+            sorter.set_TSP_sort(df_clean, START_IDX, END_IDX, FORCE_TARGET_COUNT)
             df_sorted_clean = sorter.do_TSP_SORT(df_clean)
 
             # Then map back if needed
@@ -1240,14 +1245,13 @@ def sort_by_face_dist_NN(df_enc):
                     print("exception on going to get closest")
                     print(str(e))
                     traceback.print_exc()
+            # rename the distance column to dist -- there is no dist for TSP
+            df_sorted.rename(columns={output_cols: 'dist'}, inplace=True)
         ## SATYAM THIS THE END OF WHAT WILL BE REPLACE BY TSP
 
     # use the colum site_name_id to asign the value of io.folder_list[site_name_id] to the folder column
     df_sorted['folder'] = df_sorted['site_name_id'].apply(lambda x: io.folder_list[x])
     
-    # rename the distance column to dist
-    df_sorted.rename(columns={output_cols: 'dist'}, inplace=True)
-
     print("df_sorted", df_sorted)
 
     # # debugging -- will save full df_enc to csv
@@ -2224,7 +2228,10 @@ def main():
     global FUSION_PAIRS
     global FUSION_PAIR_DICT
     def set_multiplier_and_dims(df_segment, cluster_no=None, pose_no=None):
-        FOCUS_CLUSTER_HACK_LIST = FOCUS_CLUSTER_DICT.get(CLUSTER_TYPE, {}).get(TOPIC_NO[0], None)
+        print(f"set_multiplier_and_dims cluster_no: {cluster_no}, pose_no: {pose_no}")
+        if isinstance(cluster_no, str) and cluster_no.startswith('c'):
+            cluster_no = int(cluster_no[1:])
+        FOCUS_CLUSTER_HACK_LIST = FOCUS_CLUSTER_DICT.get(CLUSTER_TYPE, {}).get(int(math.floor(TOPIC_NO[0])), None)
 
         # if pose_no, overide sort.image_edge_multiplier based on pose_no
         if pose_no is not None and USE_POSE_CROP_DICT:
@@ -2232,6 +2239,7 @@ def main():
             sort.image_edge_multiplier = MULTIPLIER_LIST[POSE_CROP_DICT[cluster_no]]
             if VERBOSE: print(f"using pose {cluster_no} getting POSE_CROP_DICT value {pose_type} for image_edge_multiplier", sort.image_edge_multiplier)
         elif cluster_no is not None:
+            # for ArmsPoses etc
             crop_dict_index = CLUSTER_CROP_DICT.get(CLUSTER_TYPE, {}).get(cluster_no, None)
             if crop_dict_index is not None: sort.image_edge_multiplier = MULTIPLIER_LIST[crop_dict_index]
             if VERBOSE: print(f"using cluster_no {cluster_no} for image_edge_multiplier", sort.image_edge_multiplier)

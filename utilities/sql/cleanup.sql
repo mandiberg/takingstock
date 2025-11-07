@@ -106,31 +106,24 @@ UPDATE Encodings e SET e.is_dupe_of = 1 JOIN Images i ON i.image_id = e.image_id
 
 AND i.site_image_id
 
+USE Stock;
 UPDATE Encodings 
 SET is_dupe_of = 1
 WHERE image_id IN (
-5468774,
-105453287,
-109130286,
-101761963,
-36249935,
-92518570,
-101165235,
-45959782,
-101557700,
-15832307,
-97164287,
-102603247,
-83728936,
-36303026
+110661171
 );
 
 
+UPDATE Images22412
+SET object_id = 0
+WHERE image_id in (110199012)
+;
 
-
-SELECT COUNT(*) 
-FROM Encodings 
-WHERE is_dupe_of IN (36384061, 4934107, 127134921, 83517166, 14879779, 62041012, 33089599, 37863650, 7849564, 36335990, 14981836, 42217662, 125086145, 27585264);
+UPDATE Images22412
+SET object_id = 0
+orientation = 1
+WHERE image_id in (110199012)
+;
 
 
 -- >>> 66

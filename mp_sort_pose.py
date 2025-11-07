@@ -108,7 +108,7 @@ class SortPose:
 
         # if edge_multiplier_name:self.edge_multiplier_name=edge_multiplier_name
         # maximum allowable scale up
-        self.resize_max = 5.99
+        self.resize_max = 55.99 # effectively turning this off
         self.resize_increment = 345
         self.USE_INCREMENTAL_RESIZE = True
         self.image_edge_multiplier = image_edge_multiplier
@@ -1762,8 +1762,8 @@ class SortPose:
         if self.VERBOSE: print("face_height",self.face_height)
 
         if not self.image_edge_multiplier[1] == self.image_edge_multiplier[3]:
-            if self.VERBOSE: print("self.image_edge_multiplier left and right are not symmetrical breaking out", self.image_edge_multiplier[1], self.image_edge_multiplier[3])
-            return
+            if self.VERBOSE: print(" --- WARNING --- self.image_edge_multiplier left and right are not symmetrical breaking out", self.image_edge_multiplier[1], self.image_edge_multiplier[3])
+            # return
         topcrop = int(p1[1]-self.face_height*self.image_edge_multiplier[0])
         rightcrop = int(p1[0]+self.face_height*self.image_edge_multiplier[1])
         botcrop = int(p1[1]+self.face_height*self.image_edge_multiplier[2])
@@ -3863,7 +3863,8 @@ class SortPose:
             # [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22],
             # [[3, 4], [5, 6, 7], [8, 9, 10, 11], [12, 13], [15, 16], [17, 18, 19, 20], [21, 22]],
             # [[0],[1],[2],[3, 4, 5, 6, 7, 22], [8, 9, 10, 11, 12, 13], [14],[15, 16, 17, 18, 19, 20, 21]],
-            [[0,1,2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 19, 20, 21, 22]]
+            [[2],[3, 4, 5, 6, 7, 22]],
+            # [[0,1,2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 19, 20, 21, 22]]
         ]
         # Construct the file name and path
         isolated_topic = str(topic_no[0]).split('.')[0]  # Get the integer part before the decimal
@@ -4345,7 +4346,7 @@ class TSPSorterTwoPhase:
         
         return to_skip
     
-    def set_TSP_sort(self, df, START_IDX=None, END_IDX=None):
+    def set_TSP_sort(self, df, START_IDX=None, END_IDX=None, FORCE_TARGET_COUNT=None):
         """
         Set up the TSP problem.
         
@@ -4361,7 +4362,8 @@ class TSPSorterTwoPhase:
         """
         # Store reference dataframe
         self.reference_df = df
-        
+        self.FORCE_TARGET_COUNT = FORCE_TARGET_COUNT
+        print(f"setting FORCE_TARGET_COUNT to {self.FORCE_TARGET_COUNT}")
         # Compute distance matrix
         self.dist_matrix = self.compute_distance_matrix(df)
         self.N_POINTS = self.dist_matrix.shape[0]
@@ -4416,7 +4418,12 @@ class TSPSorterTwoPhase:
         current_end = len(current_indices) - 1
         
         # Calculate skip budget
-        total_to_skip = int(np.floor(self.SKIP_FRAC * self.N_POINTS))
+        if self.FORCE_TARGET_COUNT is not None:
+            print(f"Forcing target count: {self.FORCE_TARGET_COUNT} points")
+            total_to_skip = self.N_POINTS - self.FORCE_TARGET_COUNT  # Ensure FORCE_TARGET_COUNT points in final set
+        else:
+            total_to_skip = int(np.floor(self.SKIP_FRAC * self.N_POINTS))
+        print(f"Total points to skip: {total_to_skip} from {self.N_POINTS} points, leaving {self.N_POINTS - total_to_skip} points")
         skips_per_iteration = total_to_skip // self.ITERATIONS
         remaining_skips = total_to_skip
         

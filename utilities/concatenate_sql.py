@@ -8,6 +8,7 @@ ONLY_DUPES = False  # Set to True to only include files with "dupes" in the file
 # MODE = 1 # 0 is for is_dupe, 1 is for is_not_dupe
 
 ROOT_FOLDER = "/Users/michaelmandiberg/Library/CloudStorage/Dropbox/Michael-Tench/"
+ROOT_FOLDER = "/Volumes/OWC4/segment_images/dupe_sorting"
 dedupe_this = os.path.join(ROOT_FOLDER, 'dedupe_this')
 duped = os.path.join(ROOT_FOLDER, 'deduped')
 removed_files = os.path.join(ROOT_FOLDER, 'removed_files')
