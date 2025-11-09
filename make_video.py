@@ -84,12 +84,12 @@ MODES = {0:'paris_photo_torso_images_topics', 1:'paris_photo_torso_videos_topics
          6:'heft_torso_keywords'}
 MODE_CHOICE = 6
 CURRENT_MODE = MODES[MODE_CHOICE]
-LIMIT = 3000 # this is the limit for the SQL query
+LIMIT = 30000 # this is the limit for the SQL query
 
 # set defaults, including for all modes to False
 FULL_BODY = IS_HAND_POSE_FUSION = ONLY_ONE = GENERATE_FUSION_PAIRS = USE_FUSION_PAIR_DICT = IS_CLUSTER = IS_ONE_CLUSTER = USE_POSE_CROP_DICT = IS_TOPICS= IS_ONE_TOPIC = USE_AFFECT_GROUPS = False
 EXPAND = ONE_SHOT = JUMP_SHOT = USE_ALL = CHOP_FIRST = TSP_SORT = False
-USE_PAINTED = OUTPAINT = INPAINT= META = USE_HSV = False
+USE_PAINTED = OUTPAINT = INPAINT= META = USE_HSV = PURGING_DUPES = False
 FUSION_FOLDER = FOCUS_CLUSTER_HACK_LIST = FORCE_TARGET_COUNT = None
 MIN_CYCLE_COUNT = 1
 AUTO_EDGE_CROP = False # this triggers the dynamic cropping based on min_max_body_landmarks_for_crop
@@ -173,13 +173,18 @@ elif "3D" in CURRENT_MODE:
                     # I think this is pose number from BodyPoses3D if SORT_TYPE == "body3D"
     START_CLUSTER = 0
 
+###########################################################
+################## HEFT KEYWORD SETTINGS ##################
+###########################################################
+
 elif CURRENT_MODE == 'heft_torso_keywords':
     # SegmentTable_name = 'SegmentOct20'
     SegmentTable_name = 'SegmentBig_isface'
     SegmentHelper_name = 'SegmentHelper_sept2025_heft_keywords' # TK revisit this for prodution run
+    # SegmentHelper_name = 'SegmentHelper_nov2025_placard' # TK revisit this for prodution run
     # SORT_TYPE = "planar_hands"
     SORT_TYPE = "ArmsPoses3D" # this triggers meta body poses 3D
-    SORT_TYPE = "obj_bbox" # make sure OBJ_CLS_ID is set below
+    # SORT_TYPE = "obj_bbox" # make sure OBJ_CLS_ID is set below
     # META = True
     TESTING = False
     IS_HAND_POSE_FUSION = True # do we use fusion clusters
@@ -194,6 +199,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     # N_HSV = 0 # don't do HSV clusters
     
     # TSP_SORT = True
+    PURGING_DUPES = True
     FORCE_TARGET_COUNT = 90
     # CHOP_FIRST = True
     # if TESTING: IS_HAND_POSE_FUSION = GENERATE_FUSION_PAIRS = False
@@ -202,10 +208,14 @@ elif CURRENT_MODE == 'heft_torso_keywords':
         # this is for testing all cluster-poses for a keyword
         MIN_VIDEO_FUSION_COUNT = 2000 # this is the cut off for the CSV fusion pairs
         MIN_CYCLE_COUNT = 1500 # this is the cut off for the SQL query results
+    elif PURGING_DUPES:
+        MIN_VIDEO_FUSION_COUNT = 10
+        MIN_CYCLE_COUNT = 2
     else:
         # smaller numbers when using HSV clusters
         MIN_VIDEO_FUSION_COUNT = 300 # this is the cut off for the CSV fusion pairs
-        MIN_CYCLE_COUNT = 90 # this is the cut off for the SQL query results
+        if TSP_SORT: MIN_CYCLE_COUNT = FORCE_TARGET_COUNT
+        else: MIN_CYCLE_COUNT = 150 # this is the cut off for the SQL query results
     # this control whether sorting by topics
     # IS_TOPICS = True # if using Clusters only, must set this to False
 
@@ -232,11 +242,12 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     # this gets added in the sql select function, based on whether cluster in in the XYZ_FILTER_LIST_10DEGREES list
     XYZ_FILTER_10DEGREES = " AND s.face_x > -45 AND s.face_x < -5 AND s.face_y > -15 AND s.face_y < 15 AND s.face_z > -15 AND s.face_z < 15"
 
-    TOPIC_NO = [22411] # if doing an affect topic fusion, this is the wrapper topic, OR keyword. add .01, .1 etc for sub selects from KEYWORD_DICT
+    TOPIC_NO = [22412] # if doing an affect topic fusion, this is the wrapper topic, OR keyword. add .01, .1 etc for sub selects from KEYWORD_DICT
     KEYWORD_OBJECT = None #set to 999 to get only unsorted images
     KEYWORD_ORIENTATION = None
+    KEYWORD_EXCLUDE = False # this accesses the ik_obj.exclude column
     if META: folder = "heft_keyword_fusion_clusters_hsv_meta"
-    else: folder = "heft_keyword_ArmsPoses3D_256"
+    else: folder = "heft_keyword_ArmsPoses3D_256/"
     FUSION_FOLDER = os.path.join("utilities/data/", folder)
     CSV_FOLDER = os.path.join("/Users/michaelmandiberg/Documents/projects-active/facemap_production/heft_keyword_fusion_clusters/", folder)
 
@@ -1015,7 +1026,13 @@ if not io.IS_TENCH:
             else:
                 print("cluster_no is a single value", cluster_no)
                 # set target column based on SORT_TYPE, ArmsPoses3D means we have a meta_cluster_id
-                cluster += f" AND {cluster_target_col} = {str(cluster_no)} "           
+                cluster += f" AND {cluster_target_col} = {str(cluster_no)} "  
+            if KEYWORD_EXCLUDE:
+                print("adding KEYWORD_EXCLUDE to selectSQL")
+                if KEYWORD_OBJECT is None and "ik_obj" not in FROM:
+                    # do the join if not being done elsewhere
+                    FROM += f" LEFT JOIN Images{topic_no} ik_obj ON s.image_id = ik_obj.image_id "
+                cluster += f" AND (ik_obj.exclude_cluster IS NULL OR ik_obj.exclude_cluster != {cluster_no}) "         
         # elif cluster_no is not None or topic_no is not None:
         elif IS_CLUSTER or IS_ONE_CLUSTER:
             print("setting cluster_no in selectSQL via IS_CLUSTER or IS_ONE_CLUSTER:", cluster_no)
@@ -2188,7 +2205,9 @@ def set_my_counter_dict(this_topic=None, cluster_no=None, pose_no=None, hsv_no=N
     print("set_my_counter_dict this_topic, cluster_no, pose_no, hsv_no, start_img_name, start_site_image_id", this_topic, cluster_no, pose_no, hsv_no, start_img_name, start_site_image_id)
     cluster_string = const_prefix(this_topic, cluster_no, pose_no, hsv_cluster=hsv_no)
     print("cluster_string", cluster_string)
-    sort.set_counters(io.ROOT,cluster_string, start_img_name,start_site_image_id)
+    if MODE == 0 or (PURGING_DUPES and MODE == 1): mkdir = False
+    else: mkdir = True
+    sort.set_counters(io.ROOT,cluster_string, start_img_name,start_site_image_id, mkdir)
 
     if VERBOSE: print("set sort.counter_dict:" )
     if VERBOSE: print(sort.counter_dict)
@@ -2529,7 +2548,10 @@ def main():
                     if VERBOSE: print("after recheck_is_dupe_of, df_sorted size", df_sorted.size)
                     not_dupe_list = get_not_dupes_sql(session)  # get list of image_ids that are not dupes
                     if VERBOSE: print("not_dupe_list size", len(not_dupe_list))
-                df_sorted = sort.remove_duplicates(io.folder_list, df_sorted, not_dupe_list)
+                df_sorted = sort.remove_duplicates(io.folder_list, df_sorted, not_dupe_list, PURGING_DUPES)
+                if PURGING_DUPES: 
+                    print("PURGING_DUPES is True, so bailing out")
+                    continue
 
                 # wrapping the multiplier in a function that sets dims too
                 set_multiplier_and_dims(df_sorted, cluster_no, pose_no)

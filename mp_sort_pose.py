@@ -56,7 +56,7 @@ class SortPose:
         self.BRUTEFORCE = False
         self.LMS_DIMENSIONS = LMS_DIMENSIONS
         if self.VERBOSE: print("init LMS_DIMENSIONS",self.LMS_DIMENSIONS)
-        self.CUTOFF = 1000 # DOES factor if ONE_SHOT
+        self.CUTOFF = 10000 # DOES factor if ONE_SHOT
         self.ORIGIN = 0
         self.this_nose_bridge_dist = self.NOSE_BRIDGE_DIST = None # to be set in first loop, and sort.this_nose_bridge_dist each time
 
@@ -367,11 +367,11 @@ class SortPose:
         self.MAX_IMAGE_EDGE_MULTIPLIER = self.image_edge_multiplier #testing
         print("output_dims",self.output_dims)
 
-    def set_counters(self,ROOT,cluster_no,start_img_name,start_site_image_id):
+    def set_counters(self,ROOT,cluster_no,start_img_name,start_site_image_id,mkdir=True):
         self.negmargin_count = 0
         self.toosmall_count = 0 
         self.outfolder = os.path.join(ROOT,"cluster"+str(cluster_no)+"_"+str(time.time()))
-        if not os.path.exists(self.outfolder):      
+        if mkdir and not os.path.exists(self.outfolder):      
             os.mkdir(self.outfolder)
         self.counter_dict = {
             "counter": 1,
@@ -840,7 +840,7 @@ class SortPose:
         score, _ = ssim(gray1, gray2, full=True)
         return score  # Return the SSIM score
 
-    def remove_duplicates(self, folder_list, df: pd.DataFrame, not_dupe_list) -> pd.DataFrame:
+    def remove_duplicates(self, folder_list, df: pd.DataFrame, not_dupe_list, PURGING_DUPES=False) -> pd.DataFrame:
         """
         Main method to remove duplicates from the dataframe.
         Returns sorted_df with all duplicates removed (keeping first occurrence).
@@ -975,7 +975,11 @@ class SortPose:
             return None
 
         for i in range(n_rows):
+            # only check within check_range frames for speed
+            if i < 1000: check_range = 300
+            else: check_range = 150 
             for j in range(i + 1, n_rows):
+                if abs(i - j) > check_range: continue
                 this_dist_list = []
                 keys_to_check = ['wrist_ankle_landmarks_normalized_array', 'face_xyz', 'bbox_array']
                 # check to see if there are any where 'wrist_ankle_landmarks_normalized_array' is None, if so, skip it
@@ -2347,7 +2351,7 @@ class SortPose:
             # sort_column contains a 4 items lists of int values
             # get the median value from the sort_column
             flattened_array = df_enc[sort_column].tolist()     
-            print("flattened_array", flattened_array)    
+            # print("flattened_array", flattened_array)    
             try:
                 enc1 = self.most_common_row(flattened_array)
             except:
@@ -3862,9 +3866,9 @@ class SortPose:
         self.HSV_CLUSTER_GROUPS = [
             # [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22],
             # [[3, 4], [5, 6, 7], [8, 9, 10, 11], [12, 13], [15, 16], [17, 18, 19, 20], [21, 22]],
-            # [[0],[1],[2],[3, 4, 5, 6, 7, 22], [8, 9, 10, 11, 12, 13], [14],[15, 16, 17, 18, 19, 20, 21]],
-            [[2],[3, 4, 5, 6, 7, 22]],
-            # [[0,1,2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 19, 20, 21, 22]]
+            [[0],[1],[2],[3, 4, 5, 6, 7, 22], [8, 9, 10, 11, 12, 13], [14],[15, 16, 17, 18, 19, 20, 21]], # ALSO USE FOR DEDUPING
+            # [[2],[3, 4, 5, 6, 7, 22]],
+            [[0,1,2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 19, 20, 21, 22]]
         ]
         # Construct the file name and path
         isolated_topic = str(topic_no[0]).split('.')[0]  # Get the integer part before the decimal

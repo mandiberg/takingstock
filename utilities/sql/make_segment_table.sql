@@ -8,7 +8,7 @@ DROP TABLE SegmentHelper_dec27_getty_noface ;
 DELETE FROM SegmentHelper_sept2025_heft_keywords;
 
 -- create helper segment table
-CREATE TABLE SegmentHelper_oct2025_every40 (
+CREATE TABLE SegmentHelper_nov2025_placard (
     seg_image_id int NOT NULL AUTO_INCREMENT PRIMARY KEY,
     image_id INTEGER,
     FOREIGN KEY (image_id) REFERENCES Images(image_id)
@@ -246,71 +246,38 @@ WHERE e.face_x > -45 AND e.face_x < -6
 LIMIT 2000000
 ;
 
--- for making a helper from segmentbig
-INSERT INTO SegmentHelper_sept2025_heft_keywords (image_id)
+-- for making a helper from segmentbig based on keywords
+INSERT INTO SegmentHelper_nov2025_placard (image_id)
 SELECT DISTINCT e.image_id
 FROM SegmentBig_isface e
 JOIN ImagesKeywords ik 
 ON ik.image_id = e.image_id
-WHERE ik.keyword_id IN (22411,220,22269,827,1070,22412,553,807,1644,5310)
+WHERE ik.keyword_id IN (23375,13130,21463,184,23726,4222,8874,8136,133749,26241,22814,133787,4587,133627)
     AND NOT EXISTS (
         SELECT 1
-        FROM SegmentHelper_sept2025_heft_keywords s
+        FROM SegmentHelper_nov2025_placard s
         WHERE s.image_id = e.image_id
     )
-LIMIT 2000000
+LIMIT 400000
 ;
 
-SELECT COUNT(*)
-FROM SegmentHelper_sept2025_heft_keywords
-where image_id > 55732013
-;
 
--- for making a complete site_name_id segment helper
-INSERT INTO SegmentHelper_jan30_ALLgetty4faces (image_id)
-SELECT DISTINCT i.image_id
-FROM Images i 
-WHERE i.site_name_id = 1
+
+SELECT ik.keyword_id, COUNT(e.image_id)
+FROM SegmentBig_isface e
+JOIN ImagesKeywords ik 
+ON ik.image_id = e.image_id
+WHERE ik.keyword_id IN (23375,13130,21463,184,23726,4222,8874,8136,133749,26241,22814,133787,4587,133627)
     AND NOT EXISTS (
         SELECT 1
-        FROM SegmentHelper_jan30_ALLgetty4faces s
-        WHERE s.image_id = i.image_id
+        FROM SegmentHelper_nov2025_placard s
+        WHERE s.image_id = e.image_id
     )
+GROUP BY ik.keyword_id
 ;
 
 
-CREATE TABLE Encodings_Site2 AS
-SELECT e.encoding_id, e.image_id, e.is_face, e.is_body, e.face_x, e.face_y, e.face_z, e.mouth_gap, e.bbox
-FROM Encodings e
-JOIN Images i ON i.image_id = e.image_id
-WHERE i.site_name_id = 2
-;
 
-
-ALTER TABLE Encodings_Site2
-ADD face_x DECIMAL ,
-ADD face_y DECIMAL ,
-ADD face_z DECIMAL ,
-ADD mouth_gap DECIMAL, 
-ADD bbox JSON
-;
-
-
-CREATE INDEX idx_is_face ON Encodings_Site2 (is_face);
-
-
-SELECT DISTINCT image_id
-FROM Encodings_Site2
-WHERE is_face = 0
-LIMIT 10
-;
-
-
-SELECT *
-FROM SegmentBig_isnotface
-WHERE site_name_id = 2
-LIMIT 100
-;
 
 -- this just to build a helper with image_ids. from ibg
 INSERT INTO SegmentHelper_oct3_bg_doover (image_id)
@@ -403,216 +370,4 @@ WHERE sb.image_id IN (
         LIMIT 1000  -- Adjust the batch size as needed
     ) AS tmp
 );
-
-
-
--- CLEANUP TO ADD MISSING DATA FROM IMAGES TABLE
--- run this tomorrow
-
-UPDATE SegmentBig_isface sb
-JOIN Images i ON sb.image_id = i.image_id
-SET 
-    sb.site_name_id = i.site_name_id,
-    sb.site_image_id = i.site_image_id,
-    sb.contentUrl = i.contentUrl,
-    sb.imagename = i.imagename,
-    sb.description = i.description,
-    sb.age_id = i.age_id,
-    sb.age_detail_id = i.age_detail_id,
-    sb.gender_id = i.gender_id,
-    sb.location_id = i.location_id
-WHERE sb.imagename IS NULL 
-	AND sb.image_id >= 103748034;
-
-
-
-
-SELECT MAX(seg_image_id)
-FROM SegmentBig_isface
-;
-
-SELECT *
-FROM SegmentBig_isface
-WHERE  image_id = 107737723
-;
-
-SELECT MAX(seg_image_id)
-FROM SegmentBig_isface
-;
-
--- to test the last row inserted
-SELECT * FROM SegmentBig_isface so ORDER BY so.seg_image_id DESC LIMIT 1
-
-
-
-SELECT 
-    COUNT(*) AS total_rows, -- Total number of rows in the table
-    COUNT(image_id) AS image_id_count,
-    COUNT(site_name_id) AS site_name_id_count,
-    COUNT(site_image_id) AS site_image_id_count,
-    COUNT(contentUrl) AS contentUrl_count,
-    COUNT(imagename) AS imagename_count,
-    COUNT(description) AS description_count,
-    COUNT(age_id) AS age_id_count,
-    COUNT(age_detail_id) AS age_detail_id_count,
-    COUNT(gender_id) AS gender_id_count,
-    COUNT(location_id) AS location_id_count,
-    COUNT(face_x) AS face_x_count,
-    COUNT(face_y) AS face_y_count,
-    COUNT(face_z) AS face_z_count,
-    COUNT(mouth_gap) AS mouth_gap_count,
-    COUNT(face_landmarks) AS face_landmarks_count,
-    COUNT(bbox) AS bbox_count,
-    COUNT(face_encodings68) AS face_encodings68_count,
-    COUNT(body_landmarks) AS body_landmarks_count,
-    COUNT(keyword_list) AS keyword_list_count,
-    COUNT(tokenized_keyword_list) AS tokenized_keyword_list_count,
-    COUNT(ethnicity_list) AS ethnicity_list_count,
-    COUNT(mongo_tokens) AS mongo_tokens_count
-FROM SegmentBig_isface;
-
-
--- rows missing descriptions that have images.desc
-SELECT 
-    COUNT(*) AS total_rows_missing_desc -- Total number of rows in the table
-FROM SegmentBig_isface sbi
-LEFT JOIN Images i on i.image_id = sbi.image_id
-WHERE i.description IS  NULL
-AND sbi.description IS NULL
-;
-
-
--- count the above insert, before doing it
-SELECT count(DISTINCT e.encoding_id) 
-FROM Encodings e
-WHERE e.mongo_encodings = 1 
-	AND e.face_x > -40 AND e.face_x < -3
-    AND e.face_y > -4 AND e.face_y < 4
-    AND e.face_z > -4 AND e.face_z < 4
-; -- 
-
--- count the above UPDATE, before doing it
-SELECT count(DISTINCT i.image_id) 
-FROM Images i
-LEFT JOIN Encodings e ON i.image_id = e.image_id
-LEFT JOIN SegmentHelper_Aug25_6and12 sh ON sh.image_id = i.image_id 
-LEFT JOIN SegmentOct20 j ON i.image_id = j.image_id
-WHERE  j.location_id IS NULL
-    AND i.location_id IS NOT NULL
-    AND i.age_id > 3
-; -- 
-
-
-SELECT MAX(so.seg_image_id)
-FROM SegmentOct20 so 
-;
-
--- modifying to only do image_id etc, and from e
-INSERT INTO SegmentMar21  (image_id)
-SELECT DISTINCT e.image_id
-FROM Encodings e
-WHERE e.face_encodings68 IS NOT NULL 
-	AND e.face_x > -33 AND e.face_x < -27
-    AND e.face_y > -2 AND e.face_y < 2
-    AND e.face_z > -2 AND e.face_z < 2
-LIMIT 50000; -- Adjust the batch size as needed
-
-
--- modifying to only do image_id etc, and from e
-INSERT INTO SegmentMar20  (image_id, face_x, face_y, face_z, mouth_gap, face_landmarks, bbox, face_encodings68,body_landmarks)
-SELECT DISTINCT e.image_id, e.face_x, e.face_y, e.face_z, e.mouth_gap, e.face_landmarks, e.bbox, e.face_encodings68, e.body_landmarks
-FROM Encodings e
-LEFT JOIN SegmentMar20 j ON e.image_id = j.image_id
-WHERE e.face_encodings68 IS NOT NULL 
-	AND e.face_x > -33 AND e.face_x < -27
-    AND e.face_y > -5 AND e.face_y < 5
-    AND e.face_z > -5 AND e.face_z < 5
-    AND j.image_id IS NULL
-LIMIT 2000; -- Adjust the batch size as needed
-
-
-
-
-
-
-
--- create temporary ImagesKeywordsMini table. this will be renamed after export/import
--- This is the junction table.
-CREATE TABLE ImagesKeywordsMini (
-    image_id int REFERENCES Images (image_id),
-    keyword_id int REFERENCES Keywords (keyword_id),
-    PRIMARY KEY (image_id, keyword_id)
-);
-
--- NEED TO DO THIS WITH IMAGES AS WELL!
--- Insert rows into ImagesKeywordsMini, excluding existing entries
-INSERT IGNORE INTO ImagesKeywordsMini (image_id, keyword_id)
-SELECT ik.image_id, ik.keyword_id
-FROM ImagesKeywords AS ik
-WHERE ik.image_id IN (SELECT st.image_id FROM SegmentDec20 AS st);
-
-LIMIT 10;
-
-
-SELECT COUNT(ikm.image_id) FROM ImagesKeywordsMini ikm;
-
-
-
-
--- get count of data for segment table
--- SELECT DISTINCT i.image_id, i.site_name_id, i.site_image_id, i.contentUrl, i.imagename, e.face_x, e.face_y, e.face_z, e.mouth_gap, e.face_landmarks, e.bbox, e.face_encodings68
-SELECT COUNT(i.image_id)
-FROM Images i
-LEFT JOIN Encodings e ON i.image_id = e.image_id
--- WHERE e.face_encodings68 IS NOT NULL
-WHERE e.is_face IS TRUE AND e.face_encodings68 IS NOT NULL AND e.bbox IS NOT NULL AND i.site_name_id = 8
-AND i.age_id NOT IN (1,2,3,4)
-AND e.face_x > -40 AND e.face_x < -25 
--- AND e.face_x > -40 AND e.face_x < -24 
-AND e.face_y > -4 AND e.face_y < 4 
-AND e.face_z > -3 AND e.face_z < 3 
-;
-
-USE Stock;
--- get count of data for segment table JUST Encodings
--- SELECT DISTINCT i.image_id, i.site_name_id, i.site_image_id, i.contentUrl, i.imagename, e.face_x, e.face_y, e.face_z, e.mouth_gap, e.face_landmarks, e.bbox, e.face_encodings68
-SELECT e.image_id
-FROM Encodings e
--- WHERE e.face_encodings68 IS NOT NULL
-WHERE e.is_face IS TRUE AND e.face_encodings68 IS NOT NULL 
-AND e.face_x > -40 AND e.face_x < -24 
-AND e.face_y > -4 AND e.face_y < 4 
-AND e.face_z > -3 AND e.face_z < 3 
-LIMIT 100
-;
-
-
-
-
-
-
--- MINISTOCK STUFF
-
-USE ministock1023;
-
-SELECT COUNT(image_id)
-FROM Images ;
-
-DELETE FROM ImagesKeywords 
-WHERE image_id NOT IN (SELECT image_id FROM SegmentDec20)
-LIMIT 1000; -- Adjust the limit as needed for testing
-
-DELETE FROM Images
-WHERE image_id NOT IN (SELECT image_id FROM SegmentDec20)
-AND image_id IS NOT NULL
-LIMIT 1000000;
-
-DELETE FROM Clusters ;
-
-
-
-UPDATE Encodings 
-SET is_dupe_of = NULL
-WHERE is_dupe_of IS NOT NULL;
-
 
