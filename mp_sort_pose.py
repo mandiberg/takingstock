@@ -56,7 +56,7 @@ class SortPose:
         self.BRUTEFORCE = False
         self.LMS_DIMENSIONS = LMS_DIMENSIONS
         if self.VERBOSE: print("init LMS_DIMENSIONS",self.LMS_DIMENSIONS)
-        self.CUTOFF = 10000 # DOES factor if ONE_SHOT
+        self.CUTOFF = 250 # DOES factor if ONE_SHOT
         self.ORIGIN = 0
         self.this_nose_bridge_dist = self.NOSE_BRIDGE_DIST = None # to be set in first loop, and sort.this_nose_bridge_dist each time
 
@@ -531,13 +531,13 @@ class SortPose:
 
     def make_segment(self, df):
 
-        print(df.size)
+        print(len(df))
         segment = df.loc[((df['face_y'] < self.YHIGH) & (df['face_y'] > self.YLOW))]
-        print(segment.size)
+        print(f"after filtering by face_y, len(segment): {len(segment)}")
         segment = segment.loc[((segment['face_x'] < self.XHIGH) & (segment['face_x'] > self.XLOW))]
-        print(segment.size)
+        print(f"after filtering by face_x, len(segment): {len(segment)}")
         segment = segment.loc[((segment['face_z'] < self.ZHIGH) & (segment['face_z'] > self.ZLOW))]
-        print(segment.size)
+        print(f"after filtering by face_z, len(segment): {len(segment)}")
 
         if self.LUM_MIN:
             segment = segment.loc[((segment['lum'] < self.LUM_MAX) & (segment['lum'] > self.LUM_MIN))]
@@ -545,6 +545,7 @@ class SortPose:
             segment = segment.loc[((segment['sat'] < self.SAT_MAX) & (segment['sat'] > self.SAT_MIN))]
         if self.HUE_MIN:
             segment = segment.loc[((segment['hue'] < self.HUE_MAX) & (segment['hue'] > self.HUE_MIN))]
+        print(f"after filtering by hue, len(segment): {len(segment)}")
 
         
         # removing cropX for now. Need to add that back into the data
@@ -555,7 +556,7 @@ class SortPose:
         segment = segment.loc[segment['mouth_gap'] >= self.MINMOUTHGAP]
         segment = segment.loc[segment['mouth_gap'] <= self.MAXMOUTHGAP]
         # segment = segment.loc[segment['mouth_gap'] <= MAXMOUTHGAP]
-        print(segment.size)
+        print(f"after filtering by mouth_gap, len(segment): {len(segment)}")
         # segment = segment.loc[segment['resize'] < MAXRESIZE]
         print(segment)
         return segment
@@ -2353,8 +2354,15 @@ class SortPose:
             flattened_array = df_enc[sort_column].tolist()     
             # print("flattened_array", flattened_array)    
             try:
-                enc1 = self.most_common_row(flattened_array)
+                enc1 = self.get_median_value( df_enc, sort_column)
+                # enc1 = self.most_common_row(flattened_array)
             except:
+                enc1 = random.choice(flattened_array)
+
+            if enc1 is None:
+                print(".  ><><><><     ")
+                print(".  ><><><><   no median found, picking random   ><><><><  ")
+                print(".  ><><><><     ")
                 enc1 = random.choice(flattened_array)
             print("get_start_obj_bbox most_common_row", enc1)
             # round_down = 1

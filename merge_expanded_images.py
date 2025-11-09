@@ -57,7 +57,7 @@ elif "make_video" in CURRENT_MODE:
         LOOPING = True
         PERIOD = 30 # how many images in each merge cycle
         MERGE_COUNT = 10 # largest number of merged images 
-        START_MERGE = 0 # number of images merged into the first image. Can be 1 (no merges) or >1 (two or more images merged)
+        START_MERGE = 1 # number of images merged into the first image. Can be 1 (no merges) or >1 (two or more images merged)
 
 # import moviepy only if making videos
 if IS_VIDEO:
@@ -132,7 +132,7 @@ def merge_images_numpy(image_list):
         return [image_list[0]]
     
     if len(image_list[0].shape) == 2:
-        # remove item 0 from the list
+        print("removed item 0 from the list - i think for non-images?")
         image_list.pop(0)
     # Get dimensions of the first image
     h, w = image_list[0].shape[:2]
@@ -140,16 +140,13 @@ def merge_images_numpy(image_list):
     # Ensure all images are the same size and format
     processed_images = []
     images_to_return = []
-    print(f"last_image_written before processing: {last_image_written.shape if last_image_written is not None else 'None'}")
+    # print(f"last_image_written before processing: {last_image_written.shape if last_image_written is not None else 'None'}")
     for img in image_list:
         # Handle grayscale images
-        if len(img.shape) == 2:
-            img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
-        
+        if len(img.shape) == 2: img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
         # Resize if needed
         if img.shape[0] != h or img.shape[1] != w:
             img = cv2.resize(img, (w, h), interpolation=cv2.INTER_AREA)
-        
         processed_images.append(img.astype(np.float32))
     
     # old route, two images to one:
@@ -165,7 +162,7 @@ def merge_images_numpy(image_list):
     this_last_image_written = last_image_written.astype(np.float32) if last_image_written is not None else None
     
     if SMOOTH_MERGE:
-        print("doing smooth merge with this many images", len(processed_images))
+        # print("doing smooth merge with this many images", len(processed_images))
         transition_image1 = cv2.addWeighted(this_last_image_written, 0.67, merged_img_float, 0.33, 0)
         transition_image2 = cv2.addWeighted(this_last_image_written, 0.33, merged_img_float, 0.67, 0)
         # Convert to uint8 for output
@@ -505,7 +502,7 @@ def process_images(images_to_build, video_writer, total_images, period, current_
     def save_images_to_video(images_to_return, video_writer):
         global last_image_written
         global run_counter
-        print("save_images_to_video called with", len(images_to_return) if images_to_return is not None else 0, "images")
+        # print("save_images_to_video called with", len(images_to_return) if images_to_return is not None else 0, "images")
         if images_to_return is not None: 
             for img in images_to_return:
                 run_counter += 1
@@ -527,20 +524,27 @@ def process_images(images_to_build, video_writer, total_images, period, current_
     for i in range(START_MERGE, merge_count + 1):
         # Load and merge images from current_pos to current_pos + i
     # if i % 2 == 0:
-        images_to_return = merge_images_numpy(images_to_build[current_pos:current_pos + i])
+        images_to_return = merge_images_numpy(images_to_build[current_pos:current_pos+i])
         # print("type merged_img", type(merged_img))
         save_images_to_video(images_to_return, video_writer)
         # Print the current number of frames written so far
-        print(f"{video_writer.get(cv2.CAP_PROP_POS_FRAMES)} frames written so far")
-        print(f"merged starting img {current_pos+i}", current_pos+i, "len images_to_build", len(images_to_build), merge_count)
+        # print(f"{video_writer.get(cv2.CAP_PROP_POS_FRAMES)} frames written so far")
+        print(f"merged starting img current_pos+i", current_pos+i, "len images_to_build", len(images_to_build), merge_count)
 
+    print("finished phase 1, does i carry over?", i)
     # if the remaining images are greater than merge_count, then write the middle even section
     if total_images - (current_pos) > merge_count:
         print(f"going to write the middle even section because {total_images} - ({current_pos} + {i}) > {merge_count}")
         # Phase 2: Slide through the array maintaining merge_count images merged
+        # this_period - merge_count allows for a flexible number of middle images
+        # for heft, it this_period - merge_count == merge_count*2
         for i in range(merge_count + 1, this_period - merge_count + 1):
             # Load and merge images from current_pos + i to current_pos + i + merge_count
-            images_to_return = merge_images_numpy(images_to_build[current_pos + i:current_pos + i + merge_count])
+            # start counting at the second image in the set, because I want to only add on one new image at a time
+            # as I enter the middle section
+            # (START_MERGE-1)+(i - merge_count):(START_MERGE-1)+(i)
+            # current_pos + i:current_pos + i + merge_count
+            images_to_return = merge_images_numpy(images_to_build[(current_pos)+(i - merge_count):(current_pos)+(i)])
             save_images_to_video(images_to_return, video_writer)
             print("merged middle img {current_pos+i}", current_pos+i, "len images_to_build", len(images_to_build), merge_count)
 
@@ -554,8 +558,17 @@ def process_images(images_to_build, video_writer, total_images, period, current_
     # this range statement means start at first one, go to second and decrease by 1 to get there
     for i in range(merge_count, START_MERGE , -1):
         # Load and merge images from PERIOD - i to PERIOD
-        end_idx = min(current_pos + this_period + 1, total_images)
+        # end_idx = min(current_pos + this_period + 1, total_images)
+        # start_idx = end_idx - i
+
+        # merge_count - (merge_count - i) starts at full merge_count and goes down to 1
+        # this starts the lookback at the full merge count and then goes down to end at single image
+        # lookback_offset needs to end at 1, so subtract 1 as kludge
+        lookback_offset = merge_count - (merge_count - i) - 1
+        end_idx = min(current_pos + this_period + 1 -lookback_offset, total_images)
         start_idx = end_idx - i
+
+        print("start_idx", start_idx, "end_idx", end_idx, "i", i, "lookback_offset", lookback_offset)
         # if i % 2 == 0:
         images_to_return = merge_images_numpy(images_to_build[start_idx:end_idx])
         print(i, "{current_pos+i}", current_pos+i, "start_idx", start_idx, "end_idx", end_idx, "len images_to_build", len(images_to_build), merge_count)
@@ -572,7 +585,7 @@ def process_images(images_to_build, video_writer, total_images, period, current_
             # if merged_img is not None: video_writer.write(merged_img)
 
 def calculate_period(images_to_build):
-    image_count = len(images_to_build)
+    image_count = len(images_to_build)-1 # subtract one for the duplicate first image at the end
     clean_reps = image_count // PERIOD
     leftover = image_count - clean_reps * PERIOD
     diff = leftover/clean_reps
@@ -643,7 +656,7 @@ def write_video(img_array, subfolder_path=None):
             # make sure to merge up to the last image, and then discard it, since it's a duplicate of the first image
             remaining = total_images - current_pos
             if "heft_keyword_fusion" in CURRENT_MODE:
-                if remaining > 0:
+                if remaining > START_MERGE:
                     print("remaining", remaining)
                     if merge_count *2 > remaining:
                         merge_count = math.floor(remaining / 2)

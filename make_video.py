@@ -183,8 +183,8 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     SegmentHelper_name = 'SegmentHelper_sept2025_heft_keywords' # TK revisit this for prodution run
     # SegmentHelper_name = 'SegmentHelper_nov2025_placard' # TK revisit this for prodution run
     # SORT_TYPE = "planar_hands"
-    SORT_TYPE = "ArmsPoses3D" # this triggers meta body poses 3D
-    # SORT_TYPE = "obj_bbox" # make sure OBJ_CLS_ID is set below
+    # SORT_TYPE = "ArmsPoses3D" # this triggers meta body poses 3D
+    SORT_TYPE = "obj_bbox" # make sure OBJ_CLS_ID is set below
     # META = True
     TESTING = False
     IS_HAND_POSE_FUSION = True # do we use fusion clusters
@@ -198,10 +198,10 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     N_HSV = 23 # 0-22 metaclusters of 96 HSV clusters
     # N_HSV = 0 # don't do HSV clusters
     
-    # TSP_SORT = True
-    PURGING_DUPES = True
+    TSP_SORT = True
+    CHOP_FIRST = True
+    # PURGING_DUPES = True
     FORCE_TARGET_COUNT = 90
-    # CHOP_FIRST = True
     # if TESTING: IS_HAND_POSE_FUSION = GENERATE_FUSION_PAIRS = False
 
     if not USE_HSV:
@@ -223,7 +223,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     JUMP_SHOT = True # jump to random file if can't find a run (I don't think this applies to planar?)
 
 
-    USE_ALL = True # turns off face xyz and mouthgap filters && if SORT_TYPE == "planar_hands" forces ONE_SHOT
+    USE_ALL = True # do this for HEFT bc it turns off face xyz and mouthgap filters && if SORT_TYPE == "planar_hands" forces ONE_SHOT
 
     USE_PAINTED = False
     INPAINT= True
@@ -242,7 +242,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     # this gets added in the sql select function, based on whether cluster in in the XYZ_FILTER_LIST_10DEGREES list
     XYZ_FILTER_10DEGREES = " AND s.face_x > -45 AND s.face_x < -5 AND s.face_y > -15 AND s.face_y < 15 AND s.face_z > -15 AND s.face_z < 15"
 
-    TOPIC_NO = [22412] # if doing an affect topic fusion, this is the wrapper topic, OR keyword. add .01, .1 etc for sub selects from KEYWORD_DICT
+    TOPIC_NO = [22411] # if doing an affect topic fusion, this is the wrapper topic, OR keyword. add .01, .1 etc for sub selects from KEYWORD_DICT
     KEYWORD_OBJECT = None #set to 999 to get only unsorted images
     KEYWORD_ORIENTATION = None
     KEYWORD_EXCLUDE = False # this accesses the ik_obj.exclude column
@@ -1201,6 +1201,7 @@ def sort_by_face_dist_NN(df_enc):
     # # write the dataframe df_enc to csv at df_enc_outpath
     # df_enc.to_csv(df_enc_outpath, index=False)
 
+    print(f"CHOP_FIRST is true with sort.counter_dict['start_img_name'], {sort.counter_dict['start_img_name']}")
 
     if sort.CUTOFF < len(df_enc.index): itters = sort.CUTOFF
     else: itters = len(df_enc.index)
@@ -2315,14 +2316,15 @@ def main():
             # if not df['hand_results'].isnull().all():
             # print("body_landmarks_3D", df['body_landmarks_3D'][0])
             df[['left_hand_landmarks', 'left_hand_world_landmarks', 'left_hand_landmarks_norm', 'right_hand_landmarks', 'right_hand_world_landmarks', 'right_hand_landmarks_norm']] = pd.DataFrame(df['hand_results'].apply(sort.prep_hand_landmarks).tolist(), index=df.index)
-            if VERBOSE: print("about to split_landmarks_to_columns_or_list,", df.iloc[0])
+            # if VERBOSE: print("about to split_landmarks_to_columns_or_list,", df.iloc[0])
             # df = sort.split_landmarks_to_columns_or_list(df, left_col="left_hand_world_landmarks", right_col="right_hand_world_landmarks", structure="list")
             df = sort.split_landmarks_to_columns_or_list(df, first_col="left_hand_landmarks_norm", second_col="right_hand_landmarks_norm", structure="list")
             df = sort.split_landmarks_to_columns_or_list(df, first_col="body_landmarks_3D", second_col=None, structure="list")
-            if VERBOSE: print("after split_landmarks_to_columns_or_list, ", df.iloc[0])
-
+            # if VERBOSE: print("after split_landmarks_to_columns_or_list, ", df.iloc[0])
+            if VERBOSE: print("df len after unpickling and split columns,", len(df))
             df['bbox'] = df['bbox'].apply(lambda x: io.unstring_json(x))
-            if VERBOSE: print("df before bboxing,", df.columns)
+            # if VERBOSE: print("df before bboxing,", df.columns)
+            if VERBOSE: print("df len before bboxing,", len(df))
 
             if OBJ_CLS_ID > 0: 
                 obj_bbox_col = "bbox_"+str(OBJ_CLS_ID)
@@ -2340,10 +2342,10 @@ def main():
             ### SEGMENT THE DATA ###
 
             # make the segment based on settings
-            print("going to segment")
+            print("going to segment - current len(df):", len(df))
             # need to make sure has HSV here
             df_segment = sort.make_segment(df)
-            print("made segment")
+            print("made segment - len(df_segment):", len(df_segment))
 
 
             # this is to save files from a segment to the SSD
