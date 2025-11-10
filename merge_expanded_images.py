@@ -496,21 +496,69 @@ def shift_video_frames(video_path):
     os.remove(video_path)
     os.rename(temp_video_path, video_path)
     print("reordered video saved")
-                
+
+def construct_incrementor(merge_count, current_pos, this_period, total_images):
+    '''
+    the leading image speeds through the remaining merge_count images in half the time
+    the trailing image super-speeds through the images to get to the last this_second_merge_count images
+    once it gets to there, it will do normal increments to the end
+    '''
+    print(f"constructing incrementor from merge_count, current_pos, this_period, total_images")
+    print(f"{merge_count}, {current_pos}, {this_period}, {total_images}")
+    this_first_merge_count = math.floor(merge_count / 2)
+    this_second_merge_count = merge_count - this_first_merge_count
+    print("this_first_merge_count", this_first_merge_count, "this_second_merge_count", this_second_merge_count)
+    leading_incrementor = []
+    trailing_incrementor = []
+    end_image = min(current_pos + this_period + 1, total_images)
+    current_image_no = current_pos+(merge_count*2)
+    trailing_start_image = current_pos + merge_count + 1
+    print("trailing_start_image", trailing_start_image, "current_image_no", current_image_no, "end_image", end_image)
+
+    # construct leading incrementor to cover the full distance in 1/2 of the merge_count (this_first_merge_count)
+    leading_increment = (end_image - current_image_no) // this_first_merge_count # might need to be merge_count -1 TBD
+    leading_remainder = (end_image - current_image_no) - (leading_increment * this_first_merge_count)
+    print("leading_increment", leading_increment, "leading_remainder", leading_remainder)
+    # first append remainder
+    leading_incrementor.append(leading_increment+leading_remainder)
+    for i in range(this_first_merge_count-1):
+        leading_incrementor.append(leading_increment)
+    print(f"len {len(leading_incrementor)} leading_incrementor:", this_first_merge_count)
+
+    # construct trailing incrementor to cover 
+    images_to_speed_through = (end_image-trailing_start_image) - this_first_merge_count
+    print("images_to_speed_through", images_to_speed_through)
+    trailing_increment_speedy = images_to_speed_through // this_second_merge_count
+    trailing_remainder = images_to_speed_through - (trailing_increment_speedy * this_second_merge_count)
+    print("trailing_increment_speedy", trailing_increment_speedy, "trailing_remainder", trailing_remainder)
+    # first append remainder
+    trailing_incrementor.append(trailing_increment_speedy + trailing_remainder)
+    for i in range(this_second_merge_count - 1):
+        trailing_incrementor.append(trailing_increment_speedy)
+    print(f"len {len(trailing_incrementor)} trailing_incrementor:", this_second_merge_count)
+    for i in range(end_image - (trailing_start_image + sum(trailing_incrementor))):
+        trailing_incrementor.append(1)
+    print(f"final len {len(trailing_incrementor)} trailing_incrementor:", len(trailing_incrementor))
+
+    return leading_incrementor, trailing_incrementor, trailing_start_image, current_image_no
+
+     
+
+def save_images_to_video(images_to_return, video_writer):
+    global last_image_written
+    global run_counter
+    # print("save_images_to_video called with", len(images_to_return) if images_to_return is not None else 0, "images")
+    if images_to_return is not None: 
+        for img in images_to_return:
+            run_counter += 1
+            # save this image for testing
+            # cv2.imwrite(os.path.join(FOLDER_PATH, f"test_{run_counter}.png"), img)
+            # print(f"save_images_to_video test_{run_counter}.png", img.shape)
+            video_writer.write(img)
+        last_image_written = images_to_return[-1]
+
 def process_images(images_to_build, video_writer, total_images, period, current_pos=0, merge_count=MERGE_COUNT):
     global last_image_written
-    def save_images_to_video(images_to_return, video_writer):
-        global last_image_written
-        global run_counter
-        # print("save_images_to_video called with", len(images_to_return) if images_to_return is not None else 0, "images")
-        if images_to_return is not None: 
-            for img in images_to_return:
-                run_counter += 1
-                # save this image for testing
-                # cv2.imwrite(os.path.join(FOLDER_PATH, f"test_{run_counter}.png"), img)
-                # print(f"save_images_to_video test_{run_counter}.png", img.shape)
-                video_writer.write(img)
-            last_image_written = images_to_return[-1]
 
     if total_images - current_pos < period:
         this_period = total_images - current_pos
@@ -555,21 +603,26 @@ def process_images(images_to_build, video_writer, total_images, period, current_
     # not subtracting 1 from start_merge to not include the final image
     # adding 1 to PERIOD to include the first image of the next cycle
 
-    # this range statement means start at first one, go to second and decrease by 1 to get there
-    for i in range(merge_count, START_MERGE , -1):
-        # Load and merge images from PERIOD - i to PERIOD
-        # end_idx = min(current_pos + this_period + 1, total_images)
-        # start_idx = end_idx - i
+    leading_incrementor, trailing_incrementor, trailing_start_image, current_image_no = construct_incrementor(merge_count, current_pos, this_period, total_images)
+    print("leading_incrementor", leading_incrementor)
+    print("trailing_incrementor", trailing_incrementor)
 
-        # merge_count - (merge_count - i) starts at full merge_count and goes down to 1
-        # this starts the lookback at the full merge count and then goes down to end at single image
-        # lookback_offset needs to end at 1, so subtract 1 as kludge
-        lookback_offset = merge_count - (merge_count - i) - 1
-        end_idx = min(current_pos + this_period + 1 -lookback_offset, total_images)
-        start_idx = end_idx - i
-
-        print("start_idx", start_idx, "end_idx", end_idx, "i", i, "lookback_offset", lookback_offset)
-        # if i % 2 == 0:
+    trailing_inc = 0
+    leading_inc = 0
+    for i, t_inc, in enumerate(trailing_incrementor):
+        trailing_inc += t_inc
+        if i <= len(leading_incrementor)-1:
+            leading_inc += leading_incrementor[i]
+        print(f"trailing i {i}, trailing_inc {trailing_inc}, leading_inc {leading_inc}")
+        start_idx = trailing_start_image + trailing_inc
+        end_idx = current_image_no + leading_inc
+        print("start_idx", start_idx, "end_idx", end_idx, "i", i, "len images_to_build", len(images_to_build), merge_count)
+        if end_idx == total_images and start_idx >= end_idx:
+            print("skipping this iteration because start_idx >= end_idx")
+            # continue
+        elif start_idx >= end_idx-1:
+            print("IDK why but it seems that non-final ones have an extra frame, so skipping")
+            continue
         images_to_return = merge_images_numpy(images_to_build[start_idx:end_idx])
         print(i, "{current_pos+i}", current_pos+i, "start_idx", start_idx, "end_idx", end_idx, "len images_to_build", len(images_to_build), merge_count)
         print(f"last_cycle is {last_cycle}, i is {i}")
@@ -583,6 +636,8 @@ def process_images(images_to_build, video_writer, total_images, period, current_
             # if it isn't the last cycle, do the regular write
             save_images_to_video(images_to_return, video_writer)
             # if merged_img is not None: video_writer.write(merged_img)
+
+    
 
 def calculate_period(images_to_build):
     image_count = len(images_to_build)-1 # subtract one for the duplicate first image at the end
@@ -670,6 +725,16 @@ def write_video(img_array, subfolder_path=None):
                     # if it can't reach merge_count, it should just go up to the max it can
                     # and it should not add the last image, since it's a duplicate of the first image
 
+                # coda: make one final merge to ease the final image into to the first image in the loop
+                first_img = images_to_build[0]
+                last_img = images_to_build[-1]
+                print("creating final transition merge between last and first image", first_img.shape, last_img.shape)
+                images_to_return = merge_images_numpy([last_img, first_img])
+                print("images_to_return", len(images_to_return), "images_to_return[0].shape", images_to_return[0].shape)
+                if images_to_return is not None: 
+                    # save all but the last image to avoid duplicate of first image
+                    save_images_to_video(images_to_return[:-1], video_writer)
+                    
 
             else:
                 print("handling remaining images the old way")

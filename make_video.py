@@ -183,8 +183,8 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     SegmentHelper_name = 'SegmentHelper_sept2025_heft_keywords' # TK revisit this for prodution run
     # SegmentHelper_name = 'SegmentHelper_nov2025_placard' # TK revisit this for prodution run
     # SORT_TYPE = "planar_hands"
-    # SORT_TYPE = "ArmsPoses3D" # this triggers meta body poses 3D
-    SORT_TYPE = "obj_bbox" # make sure OBJ_CLS_ID is set below
+    SORT_TYPE = "ArmsPoses3D" # this triggers meta body poses 3D
+    # SORT_TYPE = "obj_bbox" # make sure OBJ_CLS_ID is set below
     # META = True
     TESTING = False
     IS_HAND_POSE_FUSION = True # do we use fusion clusters
@@ -198,9 +198,9 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     N_HSV = 23 # 0-22 metaclusters of 96 HSV clusters
     # N_HSV = 0 # don't do HSV clusters
     
-    TSP_SORT = True
+    # TSP_SORT = True
     CHOP_FIRST = True
-    # PURGING_DUPES = True
+    PURGING_DUPES = True
     FORCE_TARGET_COUNT = 90
     # if TESTING: IS_HAND_POSE_FUSION = GENERATE_FUSION_PAIRS = False
 
@@ -241,8 +241,9 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     # XYZ_FILTER_OCT2025_HEFT_KEYWORDS = " AND s.face_x IS NOT NULL "
     # this gets added in the sql select function, based on whether cluster in in the XYZ_FILTER_LIST_10DEGREES list
     XYZ_FILTER_10DEGREES = " AND s.face_x > -45 AND s.face_x < -5 AND s.face_y > -15 AND s.face_y < 15 AND s.face_z > -15 AND s.face_z < 15"
-
-    TOPIC_NO = [22411] # if doing an affect topic fusion, this is the wrapper topic, OR keyword. add .01, .1 etc for sub selects from KEYWORD_DICT
+    XYZ_FILTER_10DEGREES = " "
+    
+    TOPIC_NO = [553] # if doing an affect topic fusion, this is the wrapper topic, OR keyword. add .01, .1 etc for sub selects from KEYWORD_DICT
     KEYWORD_OBJECT = None #set to 999 to get only unsorted images
     KEYWORD_ORIENTATION = None
     KEYWORD_EXCLUDE = False # this accesses the ik_obj.exclude column
