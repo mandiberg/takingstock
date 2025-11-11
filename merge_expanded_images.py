@@ -29,7 +29,7 @@ LOOPING = False # defaults
 last_image_written = None
 run_counter = 0
 
-MERGE_COUNT = START_MERGE = PERIOD = FRAMERATE = None
+MERGE_COUNT = START_MERGE = PERIOD = FRAMERATE = ALREADY_CROPPED = None
 IS_VIDEO = IS_VIDEO_MERGE = SMOOTH_MERGE = False
 if "merge_images" in CURRENT_MODE:
 # are we making videos or making merged stills?
@@ -52,6 +52,7 @@ elif "make_video" in CURRENT_MODE:
 
     if "keyword_fusion" in CURRENT_MODE:
         IS_VIDEO_MERGE = True
+        OSCILATING_MERGE = True # if true, will do an oscillating merge from START_MERGE up to MERGE_COUNT and back down to START_MERGE 
         SMOOTH_MERGE = True # if true, will do a smooth merge from MERGE_COUNT down to START_MERGE
         if SMOOTH_MERGE: FRAMERATE = 30
         LOOPING = True
@@ -76,10 +77,14 @@ GIGA_DIMS = [20688,20648]
 FULLBODY_DIMS = [32000,32000]
 TEST_DIMS = [4000,4000] 
 REG_DIMS = [3448,3448]
+VID_DIMS_HEFTTEST = [1080,1080]
 SKIP_PREFIX = "_x"
 FORCE_LS = True
 if LOWEST_DIMS: 
-    GIGA_DIMS = REG_DIMS
+    if "heft" in CURRENT_MODE:
+        GIGA_DIMS = VID_DIMS_HEFTTEST
+    else:
+        GIGA_DIMS = REG_DIMS
     SCALE_IMGS = True
 elif FULLBODY:
     GIGA_DIMS = FULLBODY_DIMS
@@ -112,7 +117,7 @@ else:
     print("TOPIC", TOPIC)
 CSV_FILE = f"metas_{TOPIC}.csv"
 
-def merge_images_numpy(image_list):
+def merge_images_numpy(image_list, make_first_image=False):
     global last_image_written
     """
     Merge multiple cv2 images with equal weighting using pure NumPy operations.
@@ -123,7 +128,7 @@ def merge_images_numpy(image_list):
     Returns:
         Merged image as a cv2/numpy array
     """
-    print("merge_images_numpy merging", len(image_list), "images with numpy")
+    # print("merge_images_numpy merging", len(image_list), "images with numpy")
     if not image_list:
         print("No images to merge")
         return None
@@ -159,8 +164,16 @@ def merge_images_numpy(image_list):
     # Convert back to uint8
     merged_img = np.clip(merged_img, 0, 255).astype(np.uint8)
     merged_img_float = merged_img.astype(np.float32)
-    this_last_image_written = last_image_written.astype(np.float32) if last_image_written is not None else None
+
+    if make_first_image == True: 
+        print("make_first_image is True, returning merged_img_float as first image, shape", merged_img_float.shape)
+        last_image_written = merged_img_float
+        return last_image_written
     
+    this_last_image_written = last_image_written.astype(np.float32) if last_image_written is not None else None
+
+    # print("this_last_image_written shape", this_last_image_written.shape if this_last_image_written is not None else 'None')
+    # print("merged_img_float shape", merged_img_float.shape)
     if SMOOTH_MERGE:
         # print("doing smooth merge with this many images", len(processed_images))
         transition_image1 = cv2.addWeighted(this_last_image_written, 0.67, merged_img_float, 0.33, 0)
@@ -203,34 +216,39 @@ def get_median_image_dimensions(all_img_path_list, subfolder_path=None):
     median_width = np.median(widths)
     return int(median_height), int(median_width)
 
-def iterate_image_list(FOLDER_PATH,image_files, successes, output_dims=None):
-    def crop_scale_giga(img1, DIMS=GIGA_DIMS):
-        if SCALE_IMGS:
-            # this is potentially messy, because it was originally designed to crop images when there were small size differences
-            # but now I'm using it to resize gigas during test runs. 
-            # Resize the image to GIGA_DIMS
-            if abs(img1.shape[0] - img1.shape[1]) > img1.shape[0] // 10:
-                # if the image is not square, establish a DIMS ratio based on the larger dimension
-                if img1.shape[0] > img1.shape[1]:
-                    ratio = DIMS[0] / img1.shape[0]
-                    resize_width = int(img1.shape[1] * ratio)
-                    resize_height = DIMS[0]
-                else:
-                    ratio = DIMS[1] / img1.shape[1]
-                    resize_height = int(img1.shape[0] * ratio)
-                    resize_width = DIMS[1]
-            if VERBOSE: print("resizing image to", resize_width, resize_height)
-            img1 = cv2.resize(img1, (resize_width, resize_height), interpolation=cv2.INTER_AREA)
+def crop_scale_giga(img1, DIMS=GIGA_DIMS):
+    if SCALE_IMGS:
+        # this is potentially messy, because it was originally designed to crop images when there were small size differences
+        # but now I'm using it to resize gigas during test runs. 
+        # Resize the image to GIGA_DIMS
+        if abs(img1.shape[0] - img1.shape[1]) > img1.shape[0] // 10:
+            # if the image is not square, establish a DIMS ratio based on the larger dimension
+            if img1.shape[0] > img1.shape[1]:
+                ratio = DIMS[0] / img1.shape[0]
+                resize_width = int(img1.shape[1] * ratio)
+                resize_height = DIMS[0]
+            else:
+                ratio = DIMS[1] / img1.shape[1]
+                resize_height = int(img1.shape[0] * ratio)
+                resize_width = DIMS[1]
         else:
-            if VERBOSE: print("cropping image to", DIMS)
-            # height, width = img1.shape[:3]
-            if img1.shape[0] > DIMS[0] or img1.shape[1] > DIMS[1]:
-                height, width, _ = img1.shape
-                start_row = (height - DIMS[0]) // 2
-                start_col = (width - DIMS[1]) // 2
-                print("start_row", start_row, "start_col", start_col)
-                img1 = img1[start_row:start_row + DIMS[0], start_col:start_col + DIMS[1]]
-        return img1
+            resize_width = DIMS[1]
+            resize_height = DIMS[0]
+        if VERBOSE: print("resizing image to", resize_width, resize_height)
+        img1 = cv2.resize(img1, (resize_width, resize_height), interpolation=cv2.INTER_AREA)
+        if VERBOSE: print("img1.shape after resize", img1.shape)
+    else:
+        if VERBOSE: print("cropping image to", DIMS)
+        # height, width = img1.shape[:3]
+        if img1.shape[0] > DIMS[0] or img1.shape[1] > DIMS[1]:
+            height, width, _ = img1.shape
+            start_row = (height - DIMS[0]) // 2
+            start_col = (width - DIMS[1]) // 2
+            print("start_row", start_row, "start_col", start_col)
+            img1 = img1[start_row:start_row + DIMS[0], start_col:start_col + DIMS[1]]
+    return img1
+
+def iterate_image_list(FOLDER_PATH,image_files, successes, output_dims=None):
 
     def handle_giga_dims(img1, output_dims=None):
         # Always resize img1 to GIGA_DIMS
@@ -554,11 +572,45 @@ def save_images_to_video(images_to_return, video_writer):
             # save this image for testing
             # cv2.imwrite(os.path.join(FOLDER_PATH, f"test_{run_counter}.png"), img)
             # print(f"save_images_to_video test_{run_counter}.png", img.shape)
+            # print(img.shape, img.dtype, img.flags['C_CONTIGUOUS'])
+            # print("video_writer.isOpened:", video_writer.isOpened())
             video_writer.write(img)
         last_image_written = images_to_return[-1]
 
-def process_images(images_to_build, video_writer, total_images, period, current_pos=0, merge_count=MERGE_COUNT):
+def process_images(images_to_build, video_writer, total_images, current_pos=0):
     global last_image_written
+
+    last_ten_images = images_to_build[-10:]
+    first_ten_images = images_to_build[:10]
+
+    padded_images_to_build = last_ten_images + images_to_build + first_ten_images
+
+    # no periods for this one. Just merge merge_count images at a time, sliding through the array
+    for i in range(current_pos, total_images + MERGE_COUNT + 1):
+
+        make_first_image = True
+        start_idx = i
+        end_idx = i + MERGE_COUNT
+        if last_image_written is None:
+            print(" ~~~~ making first last_image_written for i", i, "start_idx", start_idx, "end_idx", end_idx)
+            last_image_written = merge_images_numpy(padded_images_to_build[start_idx:end_idx], make_first_image=make_first_image)
+        # print("type images_to_return, last_image_written", type(last_image_written))
+        # Load and merge images from current_pos to current_pos + MERGE_COUNT
+        images_to_return = merge_images_numpy(padded_images_to_build[start_idx:end_idx])
+        print(f"have images for i {i}, start_idx {start_idx}, end_idx {end_idx}, len images_to_build {len(images_to_build)}")
+        if i <= MERGE_COUNT: continue
+        if i + MERGE_COUNT*2 >= len(padded_images_to_build): continue
+        save_images_to_video(images_to_return, video_writer)
+        # Print the current number of frames written so far
+        # print(f"{video_writer.get(cv2.CAP_PROP_POS_FRAMES)} frames written so far")
+        print(f"saved merged img current_pos+i", start_idx, "len images_to_build", len(images_to_build), MERGE_COUNT)
+
+def process_images_osc(images_to_build, video_writer, total_images, period, current_pos=0, merge_count=MERGE_COUNT):
+    global last_image_written
+    # take the total remaining, and make one full cycle with it
+    # it should start with START_MERGE, go up to merge_count, then slide through, then go back down to START_MERGE
+    # if it can't reach merge_count, it should just go up to the max it can
+    # and it should not add the last image, since it's a duplicate of the first image
 
     if total_images - current_pos < period:
         this_period = total_images - current_pos
@@ -586,15 +638,7 @@ def process_images(images_to_build, video_writer, total_images, period, current_
         # Phase 2: Slide through the array maintaining merge_count images merged
         # this_period - merge_count allows for a flexible number of middle images
         # for heft, it this_period - merge_count == merge_count*2
-        for i in range(merge_count + 1, this_period - merge_count + 1):
-            # Load and merge images from current_pos + i to current_pos + i + merge_count
-            # start counting at the second image in the set, because I want to only add on one new image at a time
-            # as I enter the middle section
-            # (START_MERGE-1)+(i - merge_count):(START_MERGE-1)+(i)
-            # current_pos + i:current_pos + i + merge_count
-            images_to_return = merge_images_numpy(images_to_build[(current_pos)+(i - merge_count):(current_pos)+(i)])
-            save_images_to_video(images_to_return, video_writer)
-            print("merged middle img {current_pos+i}", current_pos+i, "len images_to_build", len(images_to_build), merge_count)
+        build_even_merge(images_to_build, video_writer, current_pos, merge_count, this_period)
 
     else:
         print(f"skipping the middle even section because {total_images} - ({current_pos} + {i}) <= {merge_count}")
@@ -635,6 +679,18 @@ def process_images(images_to_build, video_writer, total_images, period, current_
             print("writing descending image")
             # if it isn't the last cycle, do the regular write
             save_images_to_video(images_to_return, video_writer)
+
+def build_even_merge(images_to_build, video_writer, current_pos, merge_count, this_period):
+    for i in range(MERGE_COUNT + 1, this_period - MERGE_COUNT + 1):
+            # Load and merge images from current_pos + i to current_pos + i + MERGE_COUNT
+            # start counting at the second image in the set, because I want to only add on one new image at a time
+            # as I enter the middle section
+            # (START_MERGE-1)+(i - MERGE_COUNT):(START_MERGE-1)+(i)
+            # current_pos + i:current_pos + i + MERGE_COUNT
+        images_to_return = merge_images_numpy(images_to_build[(current_pos)+(i - MERGE_COUNT):(current_pos)+(i)])
+        save_images_to_video(images_to_return, video_writer)
+        print("merged middle img {current_pos+i}", current_pos+i, "len images_to_build", len(images_to_build), MERGE_COUNT)
+    return
             # if merged_img is not None: video_writer.write(merged_img)
 
     
@@ -669,11 +725,17 @@ def write_video(img_array, subfolder_path=None):
         period = calculate_period(images_to_build)
     else:
         period = PERIOD
+
+    if LOWEST_DIMS:
+        # run crop_scale_giga(img1) on all images to ensure they are the same dimensions
+        for i in range(len(images_to_build)):
+            images_to_build[i] = crop_scale_giga(images_to_build[i])
+
     print("using period of", period)
     # Get the dimensions of the first image in the array
     cluster_no, image_path = get_path(subfolder_path, img_array)
-    img = cv2.imread(image_path)
-    height, width, _ = img.shape
+    # img = cv2.imread(image_path)
+    height, width, _ = images_to_build[0].shape
 
     # Define the codec and create VideoWriter object
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
@@ -687,73 +749,72 @@ def write_video(img_array, subfolder_path=None):
     if IS_VIDEO_MERGE:
         # Validate and adjust parameters for edge cases
         total_images = len(img_array)
-        
-        # Calculate images_per_cycle and check if MERGE_COUNT needs adjustment
-        # this is when the period is shorter than the merge up and down cycle
-        # images_per_cycle = period + (MERGE_COUNT - START_MERGE * 2)
-        if period < MERGE_COUNT * 2:
-            merge_count = period // 2
-            print(f"Warning: Adjusting MERGE_COUNT from {MERGE_COUNT} to {merge_count} based on period and START_MERGE")
-        else:
-            merge_count = MERGE_COUNT
-            
-        # Process only if there are enough images to complete at least one cycle
-        if total_images >= period:
-            current_pos = 0
-            
-            while current_pos + period <= total_images:
-                process_images(images_to_build, video_writer, total_images, period, current_pos, merge_count)
-                # Move to the next cycle
-                current_pos += period
-                print("current_pos", current_pos)
+        current_pos = 0
 
-            # Handle remaining images because there are not enough for a full cycle
-            # make sure to merge up to the last image, and then discard it, since it's a duplicate of the first image
-            remaining = total_images - current_pos
-            if "heft_keyword_fusion" in CURRENT_MODE:
-                if remaining > START_MERGE:
-                    print("remaining", remaining)
-                    if merge_count *2 > remaining:
-                        merge_count = math.floor(remaining / 2)
-                        print("adjusted merge_count to", merge_count)
-                    # remaining_merge_count = math.floor(remaining // 2)
-                    # merge_count = min(merge_count, remaining_merge_count)
-                    process_images(images_to_build, video_writer, total_images, period, current_pos, merge_count)
-
-                    # take the total remaining, and make one full cycle with it
-                    # it should start with START_MERGE, go up to merge_count, then slide through, then go back down to START_MERGE
-                    # if it can't reach merge_count, it should just go up to the max it can
-                    # and it should not add the last image, since it's a duplicate of the first image
-
-                # coda: make one final merge to ease the final image into to the first image in the loop
-                first_img = images_to_build[0]
-                last_img = images_to_build[-1]
-                print("creating final transition merge between last and first image", first_img.shape, last_img.shape)
-                images_to_return = merge_images_numpy([last_img, first_img])
-                print("images_to_return", len(images_to_return), "images_to_return[0].shape", images_to_return[0].shape)
-                if images_to_return is not None: 
-                    # save all but the last image to avoid duplicate of first image
-                    save_images_to_video(images_to_return[:-1], video_writer)
-                    
-
+        if OSCILATING_MERGE:
+            # Calculate images_per_cycle and check if MERGE_COUNT needs adjustment
+            # this is when the period is shorter than the merge up and down cycle
+            # images_per_cycle = period + (MERGE_COUNT - START_MERGE * 2)
+            if period < MERGE_COUNT * 2:
+                merge_count = period // 2
+                print(f"Warning: Adjusting MERGE_COUNT from {MERGE_COUNT} to {merge_count} based on period and START_MERGE")
             else:
-                print("handling remaining images the old way")
-                if remaining > 0:
-                    for i in range(START_MERGE, min(merge_count + 1, remaining + 1)):
-                        merged_img = merge_images_numpy(images_to_build[current_pos:current_pos + i])
-                        if merged_img is not None: video_writer.write(merged_img)
-                    
-                    if remaining > merge_count:
-                        for i in range(1, remaining - merge_count + 1):
-                            merged_img = merge_images_numpy(images_to_build[current_pos + i:current_pos + i + merge_count])
+                merge_count = MERGE_COUNT
+                
+            # Process only if there are enough images to complete at least one cycle
+            if total_images >= period:
+                
+                while current_pos + period <= total_images:
+                    process_images_osc(images_to_build, video_writer, total_images, period, current_pos, merge_count)
+                    # Move to the next cycle
+                    current_pos += period
+                    print("current_pos", current_pos)
+
+                # Handle remaining images because there are not enough for a full cycle
+                # make sure to merge up to the last image, and then discard it, since it's a duplicate of the first image
+                remaining = total_images - current_pos
+                if "heft_keyword_fusion" in CURRENT_MODE:
+                    if remaining > START_MERGE:
+                        print("remaining", remaining)
+                        if merge_count *2 > remaining:
+                            merge_count = math.floor(remaining / 2)
+                            print("adjusted merge_count to", merge_count)
+                        # remaining_merge_count = math.floor(remaining // 2)
+                        # merge_count = min(merge_count, remaining_merge_count)
+                        process_images_osc(images_to_build, video_writer, total_images, period, current_pos, merge_count)
+
+                    # coda: make one final merge to ease the final image into to the first image in the loop
+                    first_img = images_to_build[0]
+                    last_img = images_to_build[-1]
+                    print("creating final transition merge between last and first image", first_img.shape, last_img.shape)
+                    images_to_return = merge_images_numpy([last_img, first_img])
+                    print("images_to_return", len(images_to_return), "images_to_return[0].shape", images_to_return[0].shape)
+                    if images_to_return is not None: 
+                        # save all but the last image to avoid duplicate of first image
+                        save_images_to_video(images_to_return[:-1], video_writer)
+                        
+
+                else:
+                    print("handling remaining images the old way")
+                    if remaining > 0:
+                        for i in range(START_MERGE, min(merge_count + 1, remaining + 1)):
+                            merged_img = merge_images_numpy(images_to_build[current_pos:current_pos + i])
                             if merged_img is not None: video_writer.write(merged_img)
                         
-                        for i in range(merge_count - 1, START_MERGE - 1, -1):
-                            end_idx = total_images
-                            start_idx = end_idx - i
-                            if start_idx < end_idx:
-                                merged_img = merge_images_numpy(images_to_build[start_idx:end_idx])
+                        if remaining > merge_count:
+                            for i in range(1, remaining - merge_count + 1):
+                                merged_img = merge_images_numpy(images_to_build[current_pos + i:current_pos + i + merge_count])
                                 if merged_img is not None: video_writer.write(merged_img)
+                            
+                            for i in range(merge_count - 1, START_MERGE - 1, -1):
+                                end_idx = total_images
+                                start_idx = end_idx - i
+                                if start_idx < end_idx:
+                                    merged_img = merge_images_numpy(images_to_build[start_idx:end_idx])
+                                    if merged_img is not None: video_writer.write(merged_img)
+        else:
+            process_images(images_to_build, video_writer, total_images, current_pos)
+
     else:
         # Original behavior - write each frame directly
         for img in images_to_build:
@@ -762,12 +823,14 @@ def write_video(img_array, subfolder_path=None):
 
     # Release the video writer and close the video file
     video_writer.release()
+    print("outfile size", os.path.getsize(video_path))
+
     print(f"Video saved at: {video_path}")
 
 
 
 
-    if LOOPING:shift_video_frames(video_path)
+    if LOOPING: shift_video_frames(video_path)
 
     # Add audio to the video if needed
     if BUILD_WITH_AUDIO:
