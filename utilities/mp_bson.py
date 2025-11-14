@@ -193,9 +193,9 @@ class MongoBSONExporter:
             this_field_list = self.document_names_dict[collection]
             if self.VERBOSE: print(f"read {len(docs)} documents from BSON file {file} to write to {table_name}")
             for doc in docs:
-                # if self.VERBOSE: print(f"Processing document: {doc}")
+                if self.VERBOSE: print(f"Processing document: {doc}")
                 if not bool(doc):
-                    # print(f"Skipping None document in file {file}")
+                    print(f"Skipping None document in file {file}")
                     continue
                 image_id = doc.get("image_id", None)
                 encoding_id = doc.get("encoding_id", None)
@@ -205,6 +205,8 @@ class MongoBSONExporter:
                 if not image_id and not encoding_id:
                     print(f"Skipping document without image_id or encoding_id in file {file}: {doc}")
                     continue
+
+                return # for testing
                 # check for each value in this_field_list in the doc
                 for field in this_field_list:
                     if field in doc:

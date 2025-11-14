@@ -745,29 +745,36 @@ def check_NMLmongo_for_mysql_only_image_ids(engine, mongo_db, document_names_dic
     global global_collection_file # the mongo document and/or collection to check
     global missing_mongo_set # the missing image_ids in mongo for this collection
     
+    if "hand" in global_collection_file:
+        col = "right_hand"
+    elif "body_landmarks_norm" in global_collection_file:
+        col = "nlms"
+    else:
+        col = global_collection_file
     exporter = MongoBSONExporter(mongo_db)
 
     intersecting_image_ids = image_ids_set_global.intersection(missing_mongo_set)
     this_missing_mongo_set = intersecting_image_ids
-    print(f"check_NMLmongo_for_mysql_only_image_ids found {len(this_missing_mongo_set)} missing image_ids for collection {global_collection_file}")
+    print(f"check_NMLmongo_for_mysql_only_image_ids found {len(this_missing_mongo_set)} missing image_ids for collection {col}")
 
-    # construct mongo connection via mongo_db and global_collection_file
-    collection = mongo_db[exporter.col_to_collection.get(global_collection_file, None)]
+    # construct mongo connection via mongo_db and col
+    collection = mongo_db[exporter.col_to_collection.get(col, None)]
     # collections_found = set()
     this_batch_dict = {}
     for image_id in this_missing_mongo_set:
+        print(f"checking image_id {image_id} in mongo collection {col}")
         doc = collection.find_one({"image_id": image_id})
         if doc is not None:
             this_result_dict = {}
-            print(f"  +  {image_id}, found in MongoDB collection {global_collection_file}, doc: {len(doc)} keys")
-            this_doc_values = doc.get(global_collection_file, None)
+            print(f"  +  {image_id}, found in MongoDB collection {col}, doc: {len(doc)} keys")
+            this_doc_values = doc.get(col, None)
             if this_doc_values is not None:
-                this_result_dict[global_collection_file] = this_doc_values
-                # print(f" -- found data in mongo collection {global_collection_file} for image_id={image_id}")
+                this_result_dict[col] = this_doc_values
+                # print(f" -- found data in mongo collection {col} for image_id={image_id}")
                 this_result_dict["image_id"] = image_id
                 this_result_dict["encoding_id"] = doc.get("encoding_id", None)
                 # note that we found this collection has data, to write out later
-                # collections_found.add(exporter.col_to_collection.get(global_collection_file, None))
+                # collections_found.add(exporter.col_to_collection.get(col, None))
 
             if this_result_dict:
                 # print(this_result_dict)
@@ -778,10 +785,10 @@ def check_NMLmongo_for_mysql_only_image_ids(engine, mongo_db, document_names_dic
 
 
         else:
-            print(f" --- image_id {image_id} still missing in MongoDB collection {global_collection_file}")
+            print(f" --- image_id {image_id} still missing in MongoDB collection {col}")
     if this_batch_dict:
         print(f"going to write {len(this_batch_dict)} documents to BSON files for batch ")
-        exporter.write_bson_batches(this_batch_dict, image_id, EXPORT_DIR, [global_collection_file])
+        exporter.write_bson_batches(this_batch_dict, image_id, EXPORT_DIR, [col])
         
 
 def process_batch(batch_start, batch_end, function):
@@ -1037,11 +1044,15 @@ if __name__ == "__main__":
         # These will be helper table output which is a csv. image_id are column index 2
         # which contains all unique image_ids with missing data in mongo
         #
-        global_collection_file = "face_landmarks" # this will probably need to be updated mannually
-
+        global_collection_file = "hand_landmarks_right_hand" # this will probably need to be updated mannually
+        if "hand_landmarks" in global_collection_file:
+            global_collection_file = "hand_landmarks"
+            file_name = "hand_landmarks_right_hand"
+        elif "body_landmarks_norm" in global_collection_file:
+            file_name = global_collection_file
         # set_name = "in_both"
         set_name = "sql_only"
-        with open(os.path.join(EXPORT_DIR, set_name, f"{set_name}_{global_collection_file}.txt"), "r") as f:
+        with open(os.path.join(EXPORT_DIR, set_name, f"{set_name}_{file_name}.txt"), "r") as f:
             first_line = f.readline()  # read header
             if first_line.startswith("Entries"):
                 print(f"skipping header line: {first_line.strip()}")

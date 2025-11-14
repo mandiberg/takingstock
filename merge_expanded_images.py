@@ -222,8 +222,27 @@ def crop_scale_giga(img1, DIMS=GIGA_DIMS):
         # but now I'm using it to resize gigas during test runs. 
         # Resize the image to GIGA_DIMS
         if abs(img1.shape[0] - img1.shape[1]) > img1.shape[0] // 10:
+            aspect_ratio = img1.shape[1] / img1.shape[0]
+            if VERBOSE: print("aspect_ratio", aspect_ratio)
+            if abs((16/9) - aspect_ratio) < 0.1:
+                if VERBOSE: print("scaling to HORIZ 16x9")
+                # make the long side 16 units
+                if DIMS[0] == 1080:
+                    resize_width = 1920
+                    resize_height = DIMS[0]
+                else: print("DIMS not changed for 16x9")
+            elif abs((9/16) - aspect_ratio) < 0.1:
+                if VERBOSE: print("scaling to VERT 9x16")
+                if DIMS[1] == 1080:
+                    resize_height = 1920
+                    resize_width = DIMS[1]
+                else: print("DIMS not changed for 9x16")
+
+                DIMS = [DIMS[1]*9//16, DIMS[1]]
+                print("DIMS set to", DIMS)
+                # DIMS = [DIMS[1]*9//16, DIMS[1]]
             # if the image is not square, establish a DIMS ratio based on the larger dimension
-            if img1.shape[0] > img1.shape[1]:
+            elif img1.shape[0] > img1.shape[1]:
                 ratio = DIMS[0] / img1.shape[0]
                 resize_width = int(img1.shape[1] * ratio)
                 resize_height = DIMS[0]

@@ -198,9 +198,9 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     N_HSV = 23 # 0-22 metaclusters of 96 HSV clusters
     # N_HSV = 0 # don't do HSV clusters
     
-    # TSP_SORT = True
+    TSP_SORT = True
     CHOP_FIRST = True
-    PURGING_DUPES = True
+    # PURGING_DUPES = True
     FORCE_TARGET_COUNT = 90
     # if TESTING: IS_HAND_POSE_FUSION = GENERATE_FUSION_PAIRS = False
 
@@ -241,11 +241,11 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     # XYZ_FILTER_OCT2025_HEFT_KEYWORDS = " AND s.face_x IS NOT NULL "
     # this gets added in the sql select function, based on whether cluster in in the XYZ_FILTER_LIST_10DEGREES list
     XYZ_FILTER_10DEGREES = " AND s.face_x > -45 AND s.face_x < -5 AND s.face_y > -15 AND s.face_y < 15 AND s.face_z > -15 AND s.face_z < 15"
-    XYZ_FILTER_10DEGREES = " "
+    # XYZ_FILTER_10DEGREES = " "
     
     TOPIC_NO = [553] # if doing an affect topic fusion, this is the wrapper topic, OR keyword. add .01, .1 etc for sub selects from KEYWORD_DICT
-    KEYWORD_OBJECT = None #set to 999 to get only unsorted images
-    KEYWORD_ORIENTATION = None
+    KEYWORD_OBJECT = 1 #set to 999 to get only unsorted images
+    KEYWORD_ORIENTATION = 0
     KEYWORD_EXCLUDE = False # this accesses the ik_obj.exclude column
     if META: folder = "heft_keyword_fusion_clusters_hsv_meta"
     else: folder = "heft_keyword_ArmsPoses3D_256/"
