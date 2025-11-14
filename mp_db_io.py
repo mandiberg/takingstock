@@ -83,6 +83,16 @@ class DataIO:
                 # and specific db dict info, when we get to that point
                 pass
 
+            self.IS_MICHELLE = False
+            login = os.getlogin()
+            print(f"Running as user: {login}")
+            if login == "michellewu":
+                self.ROOT4 = self.ROOT18 = self.ROOT54 = self.ROOT_PROD = self.ROOTSSD = self.ROOT_DBx = os.path.join(self.home, "/Users/michellewu/Desktop/taking_stock_production")
+                self.ROOT  = self.ROOT_PROD = os.path.join(self.home, "/Users/michellewu/Desktop/taking_stock_production/segment_images")
+                self.IS_MICHELLE = True
+                # and specific db dict info, when we get to that point
+                pass
+
         elif platform == "win32":
             self.platform = "win32"
             ######## Satyam's WIN Credentials #########
