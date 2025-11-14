@@ -222,7 +222,7 @@ class MongoBSONExporter:
                                 if encoding_id is None:
                                     encoding_id = self.lookup_encoding_id(engine, image_id)
                                 if self.VERBOSE: print(f"Updating encoding_id {encoding_id} setting {field} to NULL")
-                                self.write_MySQL_value(engine, table_name, "encoding_id", encoding_id, field, "NULL")
+                                self.update_MySQL_value(engine, table_name, "encoding_id", encoding_id, field, "NULL")
                         else:
                             print(f"Collection not found for field {field} in document for image_id {image_id} encoding_id {encoding_id}")
                             continue
@@ -460,7 +460,7 @@ class MongoBSONExporter:
             print("Missing parameters for write_Mongo_value")
         return False
 
-    def write_MySQL_value(self, engine, table_name, key, id, col, cell_value):
+    def update_MySQL_value(self, engine, table_name, key, id, col, cell_value):
         # print("writing MySQL")
         if key and id and col:
             from sqlalchemy import text
@@ -485,7 +485,7 @@ class MongoBSONExporter:
                     print(f"Error writing MySQL value, attempt {attempt} of {max_attempts} will retry: {e}")
                     return False
         else:
-            print("Missing parameters for write_MySQL_value")
+            print("Missing parameters for update_MySQL_value")
             return False
 
 

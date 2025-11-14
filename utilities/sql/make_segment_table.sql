@@ -8,7 +8,7 @@ DROP TABLE SegmentHelper_dec27_getty_noface ;
 DELETE FROM SegmentHelper_sept2025_heft_keywords;
 
 -- create helper segment table
-CREATE TABLE SegmentHelper_nov2025_placard (
+CREATE TABLE SegmentHelper_nov2025_SQL_only_test (
     seg_image_id int NOT NULL AUTO_INCREMENT PRIMARY KEY,
     image_id INTEGER,
     FOREIGN KEY (image_id) REFERENCES Images(image_id)
@@ -273,6 +273,14 @@ WHERE ik.keyword_id IN (23375,13130,21463,184,23726,4222,8874,8136,133749,26241,
         FROM SegmentHelper_nov2025_placard s
         WHERE s.image_id = e.image_id
     )
+GROUP BY ik.keyword_id
+;
+
+SELECT ik.keyword_id, COUNT(e.image_id)
+FROM SegmentHelper_nov2025_placard e
+JOIN ImagesKeywords ik 
+ON ik.image_id = e.image_id
+WHERE ik.keyword_id IN (23375,13130,21463,184,23726,4222,8874,8136,133749,26241,22814,133787,4587,133627)
 GROUP BY ik.keyword_id
 ;
 

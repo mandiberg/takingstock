@@ -21,12 +21,12 @@ LIMIT 10
 
 Select *
 FROM Images
-WHERE image_id = 74173690
+WHERE image_id = 53748578
 ;
 
 SELECT *
 FROM Encodings i 
-WHERE i.encoding_id = 125652553
+WHERE i.image_id = 123694200
 ;
 
 SELECT *
@@ -79,33 +79,6 @@ AND i.site_image_id = 800181355
 ;
 
 
-
-SELECT DISTINCT(s.image_id), s.site_name_id, s.contentUrl, s.imagename, s.description, s.face_x, s.face_y, s.face_z, s.mouth_gap, s.bbox, s.site_image_id, ibg.lum, ibg.lum_bb, ibg.hue, 
-ibg.hue_bb, ibg.sat, ibg.sat_bb, ibg.val, ibg.val_bb, ibg.lum_torso, ibg.lum_torso_bb  
-;
-
-SELECT COUNT(*)
-FROM Encodings s  JOIN ImagesBodyPoses3D ihp ON s.image_id = ihp.image_id  
-JOIN ClustersMetaBodyPoses3D cmp ON ihp.cluster_id = cmp.cluster_id  
-JOIN ImagesKeywords it ON s.image_id = it.image_id  JOIN SegmentHelper_sept2025_heft_keywords sh ON s.image_id = sh.image_id  
-JOIN ImagesBackground ibg ON s.image_id = ibg.image_id   JOIN ImagesHSV ihsv ON s.image_id = ihsv.image_id  
-WHERE  s.is_dupe_of IS NULL  AND s.age_id NOT IN (1,2,3)  AND cmp.meta_cluster_id = 2   AND ihsv.cluster_id  = 13   AND 
-it.keyword_id  IN (22101, 444, 22191, 16045, 11549, 133300, 133777, 22411, 22411, 22411, 22411, 22411, 22411, 22411, 22411, 22411, 22411, 22411, 22411, 22411, 22411)  LIMIT 100000;
-
-LIMIT 2500;
-
-UPDATE SegmentBig_isface AS seg
-JOIN Images AS img ON seg.image_id = img.image_id
-SET seg.contentUrl = img.contentUrl, seg.imagename = img.imagename, seg.description = img.description, seg.site_image_id = img.site_image_id
-WHERE seg.contentUrl IS NULL
-AND img.contentUrl IS NOT NULL;
-
-
-CREATE TABLE SegmentHelper_may2025_4x4faces (
-    seg_image_id int NOT NULL AUTO_INCREMENT PRIMARY KEY,
-    image_id INTEGER,
-    FOREIGN KEY (image_id) REFERENCES Images(image_id)
-);
 
 
 
@@ -261,16 +234,6 @@ FROM Encodings
 WHERE image_id = 93164028
 ;
 
-USE Stock;
-SELECT i.site_name_id, i.imagename
-FROM Images i
-JOIN ImagesKeywords ik on i.image_id = ik.image_id
-JOIN SegmentOct20 s on i.image_id = s.image_id
-JOIN SegmentHelper_sept2025_heft_keywords sh on i.image_id = sh.image_id
-WHERE ik.keyword_id = 4222
-LIMIT 5000
-;
-
 -- select count of ArmsPoses3D for heft keywords
 SELECT  ik.cluster_id, COUNT(ik.image_id)
 FROM SegmentHelper_sept2025_heft_keywords h
@@ -296,15 +259,6 @@ GROUP BY ik.keyword_id
 ORDER BY ik.keyword_id
 ;
 
-USE Stock;
-SELECT DISTINCT(s.image_id), s.site_name_id, s.contentUrl, s.imagename, s.description, s.face_x, s.face_y, s.face_z, s.mouth_gap, s.bbox, s.site_image_id, ibg.lum, ibg.lum_bb, 
-ibg.hue, ibg.hue_bb, ibg.sat, ibg.sat_bb, ibg.val, ibg.val_bb, ibg.lum_torso, ibg.lum_torso_bb  
-FROM SegmentBig_isface s  JOIN Encodings e ON s.image_id = e.image_id  JOIN ImagesBodyPoses3D ihp ON s.image_id = ihp.image_id  JOIN 
-ClustersMetaBodyPoses3D cmp ON ihp.cluster_id = cmp.cluster_id  JOIN ImagesKeywords it ON s.image_id = it.image_id  
-JOIN SegmentHelper_sept2025_heft_keywords sh ON s.image_id = sh.image_id  JOIN ImagesBackground ibg ON s.image_id = ibg.image_id   
-JOIN ImagesHSV ihsv ON s.image_id = ihsv.image_id  WHERE  e.is_dupe_of IS NULL  AND s.face_x IS NOT NULL  AND s.age_id NOT IN (1,2,3)  
-AND cmp.meta_cluster_id = 0   
-AND it.keyword_id  IN (184)  AND it.keyword_id  IN (7969)  LIMIT 100;
 
 SELECT DISTINCT a.image_id
 FROM ImagesKeywords a
@@ -324,4 +278,14 @@ LIMIT 100
 
 -- 193, 149
 
+USE Stock;
+-- select count of HSV for heft keywords
+SELECT  i.site_name_id, COUNT(i.image_id)
+FROM Images i
+JOIN SegmentHelper_nov2025_SQL_only ik ON i.image_id = ik.image_id 
+GROUP BY i.site_name_id
+ORDER BY i.site_name_id
+;
 
+
+S
