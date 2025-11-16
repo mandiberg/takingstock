@@ -148,19 +148,10 @@ class Encodings(Base):
     migrated             = Column(Boolean)
     migrated_Mongo             = Column(Boolean)
     migrated_SQL               = Column(Boolean)
+    pitch                = Column(Float)
+    yaw                  = Column(Float)
+    roll                 = Column(Float)
     
-class Encodings_Site2(Base):
-    __tablename__ = 'Encodings_Site2'
-    encoding_id         = Column(Integer, primary_key=True, autoincrement=True)
-    image_id            = Column(Integer, ForeignKey('images.image_id'))
-    is_face             = Column(Boolean)
-    is_body             = Column(Boolean)
-    face_x              = Column(DECIMAL(6, 3))
-    face_y              = Column(DECIMAL(6, 3))
-    face_z              = Column(DECIMAL(6, 3))
-    mouth_gap           = Column(DECIMAL(6, 3))
-    bbox                = Column(JSON)
-
 class Clusters(Base):
     __tablename__ = 'Clusters'
 
@@ -347,6 +338,9 @@ class SegmentTable(Base):
     is_hand_right             = Column(Boolean)
     is_bodyhand_left              = Column(Boolean)
     is_bodyhand_right             = Column(Boolean)
+    pitch                = Column(Float)
+    yaw                  = Column(Float)
+    roll                 = Column(Float)
 
     site     = relationship("Site")
     age      = relationship("Age")

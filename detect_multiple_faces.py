@@ -74,6 +74,7 @@ IS_FOLDER = False
 # these only matter if SQL (not folder)
 DO_OVER = True
 FIND_NO_IMAGE = True
+FIND_MISSING_BBOX_ONLY = True
 
 # OVERRIDE_PATH will force it to look in a specific folder
 OVERRIDE_PATH = False
@@ -703,11 +704,13 @@ def find_face(image, df):
             "right": bbox_mp.origin_x + bbox_mp.width,
             "bottom": bbox_mp.origin_y + bbox_mp.height
         }
-        if bbox:
+        if bbox and not FIND_MISSING_BBOX_ONLY:
             # take just the bbox slice of the mp.Image and detect on that slice
             mp_image_face = slice_mp_image(image, bbox)
             landmarker_result = face_landmarker.detect(mp_image_face)
  
+            bbox_json = json.dumps(bbox, indent = 4) 
+
             #read any image containing a face
             if landmarker_result.face_landmarks:
                 
@@ -732,8 +735,6 @@ def find_face(image, df):
                     encodings = calc_encodings(image, faceLms,bbox) ## changed parameters
                     if VERBOSE: print(">> find_face SPLIT >> calc_encodings")
 
-                #df.at['1', 'is_face_distant'] = is_face_distant
-                bbox_json = json.dumps(bbox, indent = 4) 
 
                 df.at['1', 'face_x'] = angles[0]
                 df.at['1', 'face_y'] = angles[1]
@@ -749,6 +750,10 @@ def find_face(image, df):
                 if VERBOSE: print("+++++++++++++++++  YES FACE but NO FACE LANDMARKS +++++++++++++++++++++")
                 image_id = df.at['1', 'image_id']
                 is_face_no_lms = True
+        elif FIND_MISSING_BBOX_ONLY:
+            # only looking for bbox, so if we found a face, we have a bbox
+            is_face = True
+            df.at['1', 'bbox'] = bbox_json
         else:
             if VERBOSE: print("+++++++++++++++++  NO BBOX DETECTED +++++++++++++++++++++")
         

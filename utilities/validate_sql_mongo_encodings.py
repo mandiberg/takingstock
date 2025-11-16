@@ -53,7 +53,7 @@ exporter = MongoBSONExporter(mongo_db)
 batch_size = 5000
 IS_FACE = 0
 IS_BODY = 1
-MODE = 1  # 0 validate_zero_columns_against_mongo_prereshard (outputs bson)s
+MODE = 6  # 0 validate_zero_columns_against_mongo_prereshard (outputs bson)s
 #0 validate_zero_columns_against_mongo_prereshard (outputs bson) 
 # 1 read_and_store_bson
 # 4 checks output from #3 against actual mysql table and updates
@@ -1104,8 +1104,13 @@ if __name__ == "__main__":
         set_name = "sql_only"
         image_ids_set_global = set()
         bson_image_ids_set = set()
+
+        if global_collection_file == "body_landmarks_norm":
+            file_name = "nlms"
+        else:
+            file_name = global_collection_file
         #open the set file in the set_name folder, and load it into a set
-        with open(os.path.join(EXPORT_DIR, set_name, f"{set_name}_{global_collection_file}.txt"), "r") as f:
+        with open(os.path.join(EXPORT_DIR, set_name, f"{set_name}_{file_name}.txt"), "r") as f:
             first_line = f.readline()  # read header
             if first_line.startswith("Entries"):
                 print(f"skipping header line: {first_line.strip()}")
@@ -1141,6 +1146,13 @@ if __name__ == "__main__":
         # find the difference between image_ids_set_global and bson_image_ids_set
         missing_in_bson = image_ids_set_global - bson_image_ids_set
         print(f"Found {len(missing_in_bson)} image_ids in global set not in BSON files")
+
+        # write the missing_in_bson to a text file
+        still_missing_filename = os.path.join(EXPORT_DIR, f"still_{set_name}_{global_collection_file}.txt")
+        with open(still_missing_filename, "w") as f:
+            for image_id in missing_in_bson:
+                f.write(f"{image_id}\n")
+        print(f"Wrote still missing image_ids to {still_missing_filename}")
 
     # after all potential processing, close session
     session.close()

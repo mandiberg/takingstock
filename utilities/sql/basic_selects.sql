@@ -207,7 +207,6 @@ FROM ClustersMetaBodyPoses3D cmb
 WHERE cmb.meta_cluster_id = 181
 ;
 
-
 SELECT cmb.meta_cluster_id, cmb.cluster_id
 FROM ClustersMetaBodyPoses3D cmb
 WHERE cmb.cluster_id = 27

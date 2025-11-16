@@ -40,3 +40,21 @@ JOIN SegmentHelper_nov2025_SQL_only ik ON i.image_id = ik.image_id
 GROUP BY i.site_name_id, ik.image_path
 ORDER BY i.site_name_id, ik.image_path
 ;
+
+
+
+SELECT *
+FROM Encodings
+WHERE image_id = 39153984
+;
+
+
+
+-- to make a csv that moce files from list will read:
+SELECT i.site_name_id, i.imagename
+FROM Images i
+-- JOIN ImagesKeywords ik on i.image_id = ik.image_id
+JOIN SegmentHelper_nov2025_SQL_only_still s on i.image_id = s.image_id
+-- WHERE ik.keyword_id = 4222
+;
+

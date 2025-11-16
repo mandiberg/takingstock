@@ -165,6 +165,9 @@ CREATE TABLE Encodings (
     mongo_body_landmarks_3D boolean,
     is_hand_left boolean,
     is_hand_right boolean,
+    pitch DECIMAL (6,3),
+    yaw DECIMAL (6,3),
+    roll DECIMAL (6,3),
     UNIQUE (image_id)
 ); 
 

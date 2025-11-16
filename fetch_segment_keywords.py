@@ -7,7 +7,7 @@ from sqlalchemy.ext.declarative import declarative_base
 # my ORM
 # from my_declarative_base import Base, Clusters, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON, Images
 
-from my_declarative_base import Base,Images, ImagesTopics, SegmentBig, SegmentBig_isnotface, Encodings_Site2, SegmentTable, BagOfKeywords,Keywords,ImagesKeywords,ImagesEthnicity, Encodings, Column, Integer, String, DECIMAL, BLOB, ForeignKey, JSON  # Replace 'your_module' with the actual module where your SQLAlchemy models are defined
+from my_declarative_base import Base,Images, ImagesTopics, SegmentBig, SegmentBig_isnotface, SegmentTable, BagOfKeywords,Keywords,ImagesKeywords,ImagesEthnicity, Encodings, Column, Integer, String, DECIMAL, BLOB, ForeignKey, JSON  # Replace 'your_module' with the actual module where your SQLAlchemy models are defined
 from mp_db_io import DataIO
 import pickle
 import numpy as np

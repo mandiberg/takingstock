@@ -386,6 +386,7 @@ if index == 0:
             # filter(Images.image_id > max_image_id, Encodings.bbox.is_(None)).\
     elif not IS_REGULAR and IS_HELPER:
         print("IS_HELPER is True")
+        # will need to refactor this to pull from SegmentHelper, rather than Encodings_Site2 which is deprecated
         select_query = select(
             distinct(Images.image_id), Images.site_name_id, Images.site_image_id, 
                 Images.contentUrl, Images.imagename, Images.description, Images.age_id, Images.gender_id, Images.location_id,
