@@ -82,25 +82,7 @@ class SelectPose:
 
         dist=[]
         for faceNum, faceLms in enumerate(results.multi_face_landmarks):                            # loop through all matches
-            faceXY = []
-            for id,lm in enumerate(faceLms.landmark):                           # loop over all land marks of one face
-                # ih, iw, _ = self.image.shape
-                # gone direct to obj dimensions
-                # x,y = int(lm.x*self.w), int(lm.y*self.h)
-
-                #this scales the bbox sliced face back up to full image pixel
-                x,y=int(lm.x * (bbox["right"]-bbox["left"])+bbox["left"]),int(lm.y * (bbox["bottom"]-bbox["top"])+bbox["top"]) 
-                # if self.VERBOSE: print(lm)
-                faceXY.append((x, y)) # put all xy points in neat array
-
-            image_points = np.array([
-                faceXY[1],      # "nose"
-                faceXY[152],    # "chin"
-                faceXY[226],    # "left eye"
-                faceXY[446],    # "right eye"
-                faceXY[57],     # "left mouth"
-                faceXY[287]     # "right mouth"
-            ], dtype="double")
+            faceXY, image_points = self.extract_key_lms_for_faceXYZ(bbox, faceLms)
 
             # #this is where the face points are written to the image
             # # turning this off for production run
@@ -125,6 +107,34 @@ class SelectPose:
 
             # cv2.line(self.image, p1, p2, (255, 0, 0), 2)
             return faceLms
+
+    # def extract_key_lms_for_faceXYZ(self, bbox, faceLms):
+    #     faceXY = []
+    #     for id, lm in enumerate(faceLms.landmark):
+    #         x = int(lm.x * (bbox["right"]-bbox["left"]) + bbox["left"])
+    #         y = int(lm.y * (bbox["bottom"]-bbox["top"]) + bbox["top"])
+    #         faceXY.append((x, y))
+
+    #     # Use more landmarks for stability
+    #     landmark_indices = [
+    #         1,    # nose tip
+    #         152,  # chin
+    #         33,   # left eye outer
+    #         133,  # left eye inner
+    #         263,  # right eye inner
+    #         362,  # right eye outer
+    #         61,   # left mouth corner
+    #         291,  # right mouth corner
+    #         199,  # lower lip
+    #         10,   # upper lip center (forehead area)
+    #         234,  # left cheek
+    #         454,  # right cheek
+    #     ]
+        
+    #     image_points = np.array([faceXY[i] for i in landmark_indices], dtype="double")
+        
+    #     # Update model_points accordingly with 3D coordinates
+    #     return faceXY, image_points
 
     def draw_face_landmarks(self, image, faceLms, bbox):
         # Draw the landmarks
@@ -188,45 +198,268 @@ class SelectPose:
         n = np.linalg.norm(I - shouldBeIdentity)
         return n < 1e-6
 
-    # pi = 22.0/7.0
-    # def eulerToDegree(euler):
-    #     return ( (euler) / (2 * pi) ) * 360
+    def extract_key_lms_for_faceXYZ(self, bbox, faceLms):
+        """Extract landmark points and convert to image coordinates"""
+        faceXY = []
+        for id, lm in enumerate(faceLms.landmark):
+            x = int(lm.x * (bbox["right"]-bbox["left"]) + bbox["left"])
+            y = int(lm.y * (bbox["bottom"]-bbox["top"]) + bbox["top"]) 
+            faceXY.append((x, y))
 
-    # Calculates rotation matrix to euler angles
-    # The result is the same as MATLAB except the order
-    # of the euler angles ( x and z are swapped ).
-    def rotationMatrixToEulerAnglesToDegrees(self):
-        #R is Rotation Matrix
-        R, jac = cv2.Rodrigues(self.r_vec)
-        # if self.VERBOSE: print("r matrix ",R)
-        #make sure it is actually a rmatrix
-        assert(self.isRotationMatrix(R))
+        # Use 6 proven landmarks
+        landmark_indices = [
+            1,    # nose tip
+            152,  # chin
+            226,  # left eye left corner
+            446,  # right eye right corner  
+            57,   # left mouth corner
+            287,  # right mouth corner
+        ]
+        
+        image_points = np.array([faceXY[i] for i in landmark_indices], dtype="double")
+        return faceXY, image_points
 
-        sy = math.sqrt(R[0,0] * R[0,0] +  R[1,0] * R[1,0])
 
+    def get_model_points_corrected(self):
+        """
+        6-point 3D model with CORRECTED coordinate system.
+        
+        The issue: OpenCV's camera coordinate system has:
+        - X pointing right
+        - Y pointing DOWN (not up!)
+        - Z pointing away from camera (into scene)
+        
+        Most face models assume Y points UP. We need to flip Y coordinates.
+        """
+        # Standard model (Y points up)
+        model_points_standard = np.array([
+            (0.0, 0.0, 0.0),          # Nose tip (origin)
+            (0.0, -330.0, -65.0),     # Chin (below nose)
+            (-225.0, 170.0, -135.0),  # Left eye (above nose)
+            (225.0, 170.0, -135.0),   # Right eye (above nose)
+            (-150.0, -150.0, -125.0), # Left mouth (below nose)
+            (150.0, -150.0, -125.0)   # Right mouth (below nose)
+        ], dtype="double")
+        
+        # Flip Y axis to match OpenCV's camera coordinates (Y down)
+        model_points = model_points_standard.copy()
+        model_points[:, 1] *= -1  # Flip Y
+        
+        return model_points
+
+
+    def solve_head_pose_robust(self, image_points):
+        """
+        Solve for head pose with multiple fallback strategies.
+        """
+        # Strategy 1: Try ITERATIVE first (most stable)
+        try:
+            success, r_vec, t_vec = cv2.solvePnP(
+                self.model_points, 
+                image_points,  
+                self.camera_matrix, 
+                self.dist_coeefs,
+                flags=cv2.SOLVEPNP_ITERATIVE
+            )
+            if success and r_vec is not None:
+                return success, r_vec, t_vec, "ITERATIVE"
+        except cv2.error:
+            pass
+        
+        # Strategy 2: Try EPNP (faster, sometimes more robust)
+        try:
+            success, r_vec, t_vec = cv2.solvePnP(
+                self.model_points, 
+                image_points,  
+                self.camera_matrix, 
+                self.dist_coeefs,
+                flags=cv2.SOLVEPNP_EPNP
+            )
+            if success and r_vec is not None:
+                return success, r_vec, t_vec, "EPNP"
+        except cv2.error:
+            pass
+        
+        # Strategy 3: Try RANSAC as last resort (only if above fail)
+        try:
+            success, r_vec, t_vec, inliers = cv2.solvePnPRansac(
+                self.model_points, 
+                image_points,  
+                self.camera_matrix, 
+                self.dist_coeefs,
+                flags=cv2.SOLVEPNP_ITERATIVE,
+                reprojectionError=8.0,
+                iterationsCount=200,
+                confidence=0.95
+            )
+            if success and r_vec is not None:
+                return success, r_vec, t_vec, "RANSAC"
+        except cv2.error:
+            pass
+        
+        return False, None, None, "FAILED"
+
+
+    def rotationMatrixToEulerAngles(self):
+        """
+        Convert rotation vector to Euler angles in RADIANS.
+        Returns pitch, yaw, roll (X, Y, Z rotations).
+        
+        Standard Euler extraction - angles may be outside [-pi/2, pi/2].
+        """
+        if self.r_vec is None:
+            return np.array([0.0, 0.0, 0.0])
+        
+        # Convert rotation vector to rotation matrix
+        R, _ = cv2.Rodrigues(self.r_vec)
+        
+        # Extract Euler angles using standard decomposition
+        sy = np.sqrt(R[0,0]**2 + R[1,0]**2)
         singular = sy < 1e-6
-
-        if  not singular :
-            x = math.atan2(R[2,1] , R[2,2])
-            y = math.atan2(-R[2,0], sy)
-            z = math.atan2(R[1,0], R[0,0])
-        else :
-            x = math.atan2(-R[1,2], R[1,1])
-            y = math.atan2(-R[2,0], sy)
+        
+        if not singular:
+            x = np.arctan2(R[2,1], R[2,2])   # pitch
+            y = np.arctan2(-R[2,0], sy)       # yaw
+            z = np.arctan2(R[1,0], R[0,0])    # roll
+        else:
+            x = np.arctan2(-R[1,2], R[1,1])
+            y = np.arctan2(-R[2,0], sy)
             z = 0
+        
+        return np.array([x, y, z])
 
-        degreeX = self.eulerToDegree(x)
-        if degreeX > 0:
-            newx = 180-degreeX
-        elif degreeX <0:
-            newx = -180-degreeX
 
-        #swap x and z? 
-        # this is for returning euler
-        # return np.array([x, y, z])
+    def normalize_euler_angles(self, pitch, yaw, roll):
+        """
+        Normalize Euler angles to intuitive ranges.
+        Handles the wrap-around cases.
+        
+        Args:
+            pitch, yaw, roll: angles in degrees
+        
+        Returns:
+            Normalized angles in degrees where:
+            - Pitch: [-90, 90] (negative = down, positive = up)
+            - Yaw: [-90, 90] (negative = left, positive = right)  
+            - Roll: [-90, 90] (negative = tilt left, positive = tilt right)
+        """
+        # Handle roll wrap-around
+        # If roll is near ±180, it's actually a small tilt in opposite direction
+        if roll > 90:
+            roll = roll - 180
+            pitch = 180 - pitch
+            yaw = -yaw
+        elif roll < -90:
+            roll = roll + 180
+            pitch = 180 - pitch
+            yaw = -yaw
+        
+        # Normalize pitch to [-180, 180] then to [-90, 90]
+        while pitch > 180:
+            pitch -= 360
+        while pitch < -180:
+            pitch += 360
+        
+        # If pitch is way off, it might be due to coordinate system flip
+        if pitch > 90:
+            pitch = 180 - pitch
+            yaw = -yaw
+            roll = -roll
+        elif pitch < -90:
+            pitch = -180 - pitch
+            yaw = -yaw
+            roll = -roll
+        
+        # Normalize yaw to [-180, 180]
+        while yaw > 180:
+            yaw -= 360
+        while yaw < -180:
+            yaw += 360
+        
+        return pitch, yaw, roll
 
-        # # this is for returning degrees
-        return np.array([newx, self.eulerToDegree(y), self.eulerToDegree(z)])
+
+    def rotationMatrixToEulerDegrees(self):
+        """Convert rotation vector to normalized Euler angles in DEGREES"""
+        rad = self.rotationMatrixToEulerAngles()
+        deg = np.degrees(rad)
+        
+        # Normalize to intuitive ranges
+        pitch, yaw, roll = self.normalize_euler_angles(deg[0], deg[1], deg[2])
+        
+        return np.array([pitch, yaw, roll])
+
+
+    def get_roll_from_landmarks(self, faceLms):
+        """
+        Estimate roll angle from eye landmarks.
+        This is often more reliable than PnP for roll.
+        Returns angle in DEGREES in range [-90, +90].
+        """
+        # Get eye corners
+        left_eye_outer = faceLms.landmark[33]   # left eye outer
+        right_eye_outer = faceLms.landmark[263] # right eye outer
+        
+        # Calculate angle from eye line
+        dx = right_eye_outer.x - left_eye_outer.x
+        dy = right_eye_outer.y - left_eye_outer.y
+        
+        # Roll angle (positive = head tilted right/clockwise)
+        roll_rad = math.atan2(dy, dx)
+        roll_deg = math.degrees(roll_rad)
+        
+        # Normalize to [-90, 90] range
+        if roll_deg > 90:
+            roll_deg = roll_deg - 180
+        elif roll_deg < -90:
+            roll_deg = roll_deg + 180
+        
+        return roll_deg
+
+
+    def calculate_face_pose_final(self, bbox, faceLms):
+        """
+        Complete face pose calculation with best practices.
+        Returns dict with pitch, yaw, roll in degrees.
+        All angles normalized to reasonable ranges:
+        - Pitch: [-90, +90] negative=down, positive=up
+        - Yaw: [-90, +90] negative=left, positive=right
+        - Roll: [-90, +90] negative=tilt left, positive=tilt right
+        """
+        # Extract landmarks
+        faceXY, image_points = self.extract_key_lms_for_faceXYZ(bbox, faceLms)
+        
+        # Solve for pose
+        success, r_vec, t_vec, method = self.solve_head_pose_robust(image_points)
+        
+        if not success:
+            return None
+        
+        # Store results
+        self.r_vec = r_vec
+        self.t_vec = t_vec
+        
+        # Get PnP angles (now normalized in rotationMatrixToEulerAngles)
+        pnp_angles = self.rotationMatrixToEulerDegrees()
+        
+        # Get roll from eye line (often more stable)
+        eye_roll = self.get_roll_from_landmarks(faceLms)
+        
+        # For roll: Use eye-based estimate as primary, PnP as secondary
+        # Eye-based is more geometric and stable for roll
+        # Weight more heavily toward eye-based (80/20 instead of 70/30)
+        blended_roll = 0.2 * pnp_angles[2] + 0.8 * eye_roll
+        
+        return {
+            'pitch': pnp_angles[0],
+            'yaw': pnp_angles[1],
+            'roll': blended_roll,
+            'roll_pnp': pnp_angles[2],
+            'roll_eyes': eye_roll,
+            'method': method,
+            'r_vec': r_vec,
+            't_vec': t_vec
+        }
 
 
     def point(self,coords):

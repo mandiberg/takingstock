@@ -33,7 +33,7 @@ from deap import base, creator, tools, algorithms
 class SortPose:
     # """Sort image files based on head pose"""
 
-    def __init__(self, motion, face_height_output, image_edge_multiplier, EXPAND=False, ONE_SHOT=False, JUMP_SHOT=False, HSV_CONTROL=None, VERBOSE=True,INPAINT=False, SORT_TYPE="128d", OBJ_CLS_ID = None,UPSCALE_MODEL_PATH=None, LMS_DIMENSIONS=2,TSP_SORT=False):
+    def __init__(self, motion, face_height_output, image_edge_multiplier, EXPAND=False, ONE_SHOT=False, JUMP_SHOT=False, HSV_CONTROL=None, VERBOSE=True,INPAINT=False, SORT_TYPE="128d", OBJ_CLS_ID = None,UPSCALE_MODEL_PATH=None, LMS_DIMENSIONS=2,TSP_SORT=False, USE_HEAD_POSE=False):
 
         # need to refactor this for GPU
         self.mp_face_detection = mp.solutions.face_detection
@@ -59,6 +59,7 @@ class SortPose:
         self.CUTOFF = 250 # DOES factor if ONE_SHOT
         self.ORIGIN = 0
         self.this_nose_bridge_dist = self.NOSE_BRIDGE_DIST = None # to be set in first loop, and sort.this_nose_bridge_dist each time
+        self.USE_HEAD_POSE = USE_HEAD_POSE
 
         self.CHECK_DESC_DIST = 30
 
@@ -529,9 +530,40 @@ class SortPose:
     def set_cluster_medians(self,cluster_medians):
         self.cluster_medians = cluster_medians
 
+    def cols_to_list(self, row, col_list):
+        merged_list = []
+        for col_name in col_list:
+            value = row[col_name]
+            if isinstance(value, list):
+                merged_list.extend(value)
+            else:
+                merged_list.append(value)
+        return merged_list
+
     def make_segment(self, df):
 
         print(len(df))
+
+        if self.USE_HEAD_POSE:
+            xyz = ['face_x', 'face_y', 'face_z']
+            df["xyz"] = df.apply(lambda row: self.cols_to_list(row, xyz), axis=1)
+
+            print("df with xyz columns, will find median of 3D points and set face_x,y,z accordingly")
+            median_xyz = self.get_median_value(df, "xyz")
+            print(" ~~~ median_xyz: ", median_xyz)
+
+            # set XYZ HIGH and LOW based on median
+            margin = 10  # adjustable margin
+            self.XLOW = median_xyz[0] - margin
+            self.XHIGH = median_xyz[0] + margin
+            self.YLOW = median_xyz[1] - margin
+            self.YHIGH = median_xyz[1] + margin
+            self.ZLOW = median_xyz[2] - margin
+            self.ZHIGH = median_xyz[2] + margin
+            print(f"   set XLOW: {self.XLOW}, XHIGH: {self.XHIGH}")
+            print(f"   set YLOW: {self.YLOW}, YHIGH: {self.YHIGH}")
+            print(f"   set ZLOW: {self.ZLOW}, ZHIGH: {self.ZHIGH}")
+
         segment = df.loc[((df['face_y'] < self.YHIGH) & (df['face_y'] > self.YLOW))]
         print(f"after filtering by face_y, len(segment): {len(segment)}")
         segment = segment.loc[((segment['face_x'] < self.XHIGH) & (segment['face_x'] > self.XLOW))]

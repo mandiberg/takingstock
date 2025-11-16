@@ -84,11 +84,11 @@ MODES = {0:'paris_photo_torso_images_topics', 1:'paris_photo_torso_videos_topics
          6:'heft_torso_keywords'}
 MODE_CHOICE = 6
 CURRENT_MODE = MODES[MODE_CHOICE]
-LIMIT = 30000 # this is the limit for the SQL query
+LIMIT = 1000 # this is the limit for the SQL query
 
 # set defaults, including for all modes to False
 FULL_BODY = IS_HAND_POSE_FUSION = ONLY_ONE = GENERATE_FUSION_PAIRS = USE_FUSION_PAIR_DICT = IS_CLUSTER = IS_ONE_CLUSTER = USE_POSE_CROP_DICT = IS_TOPICS= IS_ONE_TOPIC = USE_AFFECT_GROUPS = False
-EXPAND = ONE_SHOT = JUMP_SHOT = USE_ALL = CHOP_FIRST = TSP_SORT = False
+EXPAND = ONE_SHOT = JUMP_SHOT = USE_ALL = CHOP_FIRST = TSP_SORT = USE_HEAD_POSE = False
 USE_PAINTED = OUTPAINT = INPAINT= META = USE_HSV = PURGING_DUPES = False
 FUSION_FOLDER = FOCUS_CLUSTER_HACK_LIST = FORCE_TARGET_COUNT = None
 MIN_CYCLE_COUNT = 1
@@ -188,6 +188,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     # META = True
     TESTING = False
     IS_HAND_POSE_FUSION = True # do we use fusion clusters
+    USE_HEAD_POSE = True
 
     # either you use a FUSION_PAIR_DICT or GENERATE_FUSION_PAIRS. 
     GENERATE_FUSION_PAIRS = True # if true it will query based on MIN_VIDEO_FUSION_COUNT and create pairs
@@ -211,6 +212,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     elif PURGING_DUPES:
         MIN_VIDEO_FUSION_COUNT = 10
         MIN_CYCLE_COUNT = 2
+        USE_HEAD_POSE = False
     else:
         # smaller numbers when using HSV clusters
         MIN_VIDEO_FUSION_COUNT = 300 # this is the cut off for the CSV fusion pairs
@@ -241,11 +243,11 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     # XYZ_FILTER_OCT2025_HEFT_KEYWORDS = " AND s.face_x IS NOT NULL "
     # this gets added in the sql select function, based on whether cluster in in the XYZ_FILTER_LIST_10DEGREES list
     XYZ_FILTER_10DEGREES = " AND s.face_x > -45 AND s.face_x < -5 AND s.face_y > -15 AND s.face_y < 15 AND s.face_z > -15 AND s.face_z < 15"
-    # XYZ_FILTER_10DEGREES = " "
+    XYZ_FILTER_10DEGREES = " "
     
-    TOPIC_NO = [553] # if doing an affect topic fusion, this is the wrapper topic, OR keyword. add .01, .1 etc for sub selects from KEYWORD_DICT
-    KEYWORD_OBJECT = 1 #set to 999 to get only unsorted images
-    KEYWORD_ORIENTATION = 0
+    TOPIC_NO = [22411] # if doing an affect topic fusion, this is the wrapper topic, OR keyword. add .01, .1 etc for sub selects from KEYWORD_DICT
+    KEYWORD_OBJECT = None #set to 999 to get only unsorted images
+    KEYWORD_ORIENTATION = None
     KEYWORD_EXCLUDE = False # this accesses the ik_obj.exclude column
     if META: folder = "heft_keyword_fusion_clusters_hsv_meta"
     else: folder = "heft_keyword_ArmsPoses3D_256/"
@@ -342,7 +344,6 @@ else:
     CLUSTER_TYPE_2 = None
 print(f"SORT_TYPE {SORT_TYPE}, CLUSTER_TYPE {CLUSTER_TYPE}, CLUSTER_TYPE_2 {CLUSTER_TYPE_2}")
 DROP_LOW_VIS = False
-USE_HEAD_POSE = False
 
 # cut the kids
 NO_KIDS = True
@@ -704,7 +705,7 @@ face_height_output = 1000
 
 UPSCALE_MODEL_PATH=os.path.join(os.getcwd(), "models", "FSRCNN_x4.pb")
 # construct my own objects
-sort = SortPose(motion, face_height_output, image_edge_multiplier,EXPAND, ONE_SHOT, JUMP_SHOT, HSV_BOUNDS, VERBOSE,INPAINT, SORT_TYPE, OBJ_CLS_ID,UPSCALE_MODEL_PATH=UPSCALE_MODEL_PATH,TSP_SORT=TSP_SORT)
+sort = SortPose(motion, face_height_output, image_edge_multiplier,EXPAND, ONE_SHOT, JUMP_SHOT, HSV_BOUNDS, VERBOSE,INPAINT, SORT_TYPE, OBJ_CLS_ID,UPSCALE_MODEL_PATH=UPSCALE_MODEL_PATH,TSP_SORT=TSP_SORT, USE_HEAD_POSE=USE_HEAD_POSE)
 
 # # TEMP TK TESTING
 # sort.MIND = .5
@@ -1358,7 +1359,7 @@ def prep_encodings_NN(df_segment):
             # print("create_hsv_list bb", [row['hue_bb'], row['sat_bb'], row['lum_bb']])
             return [row['lum']*HSV_NORMS["LUM"], row['lum_torso_bb']*HSV_NORMS["LUM"]]
         else:
-            return [row['lum']*HSV_NORMS["LUM"], row['lum_torso']*HSV_NORMS["LUM"]]    
+            return [row['lum']*HSV_NORMS["LUM"], row['lum_torso']*HSV_NORMS["LUM"]]   
     
     def set_sort_col():
         if SORT_TYPE in ["body3D", "ArmsPoses3D"] or CLUSTER_TYPE in ["BodyPoses3D", "ArmsPoses3D"]:
@@ -1447,16 +1448,7 @@ def prep_encodings_NN(df_segment):
             #     # print("body_landmarks_array after adding head pose", df_segment["body_landmarks_array"])
         
     if USE_HEAD_POSE:
-        # not currently in use, so may need debugging
-        df_segment = df_segment.apply(sort.weight_face_pose, axis=1)            
-        head_columns = ['face_x', 'face_y', 'face_z', 'mouth_gap']
-
-        # Add the face_x, face_y, face_z, and mouth_gap to the body_landmarks_array
-        df_segment[sort_column] = df_segment.apply(
-            lambda row: row[sort_column] + [row[col] for col in head_columns] if isinstance(row[sort_column], list) else row[sort_column],
-            axis=1
-        )            
-        # print("body_landmarks_array after adding head pose", df_segment["body_landmarks_array"])
+        pass
 
     if sort_column == "body_landmarks_array" and DROP_LOW_VIS:
 

@@ -206,7 +206,7 @@ class MongoBSONExporter:
                     print(f"Skipping document without image_id or encoding_id in file {file}: {doc}")
                     continue
 
-                return # for testing
+                # return # for testing
                 # check for each value in this_field_list in the doc
                 for field in this_field_list:
                     if field in doc:
@@ -230,7 +230,7 @@ class MongoBSONExporter:
                             continue
 
             # after finishing the file, save as completed...
-            if writing_individual_files:
+            if writing_individual_files and success:
                 print("writing individual files is true, saving file to BsonFileLog")
                 # Insert file to completed_bson_file field in BsonFileLog table.
                 stmt = f"INSERT INTO BsonFileLog (completed_bson_file) VALUES ('{file}');"
@@ -375,71 +375,72 @@ class MongoBSONExporter:
         session.commit()
 
     def write_Mongo_value(self, engine, mongo_db, collection_name, key, id, col, cell_value, mongo_encoding_id=None):
+        create_doc = False
         if key and id and col:
             collection = mongo_db[collection_name]
             mongo_results = collection.find_one({"image_id": id})
+            mysql_encoding_id = self.lookup_encoding_id(engine, id)
             if mongo_results is None: 
-                print(f" ><>< None mongo_results for image_id {id} in collection {collection_name}")
-                return False
-            if self.VERBOSE: print(f"mongo_results for image_id {id} in collection {collection_name}: {mongo_results}")
-            if mongo_results[col] is not None and mongo_results[col] == cell_value:
-                # if mongo_results["encoding_id"] is not None:
-                # handle case where encoding_id is None (non-encodings collection)
-                this_encoding_id = mongo_results.get("encoding_id", None)
-                this_image_id = mongo_results.get("image_id", None)
-                if this_encoding_id is not None: this_id = this_encoding_id
-                else: this_id = id
-
-                if this_id is not None and this_id % 100 == 0:
-                    print(f" === scanning through {collection_name} up to this_id {this_id} _without_updating_ as {col} is already up to date.")
-                return True
-            if self.VERBOSE: print(f"this col results = {mongo_results[col]}", col)
-            if collection_name == "encodings" and key == "image_id":
-                # deal with None values, which are also often values where the encoding_id is wrong in mongo
-                if mongo_encoding_id is not None:
-                    # FOR REDOING THE RESHARD TO CATCH NONES
-                    if self.VERBOSE:  print(f"have a eid: {mongo_encoding_id} so going to continue as it probably wrote correctly last time")
-                    # return False
-
-                    # FOR REGULAR --- >>>>
-                    if self.VERBOSE:  print("got an mongo_encoding_id", mongo_encoding_id)
-                    query = {key: id, "encoding_id": mongo_encoding_id}
-                else:
-                    if self.VERBOSE:  print(f"this col results = {mongo_results['encoding_id']}")
-                    # print(f"No encoding_id provided for image_id {id}, looking up encoding_id from Mongo and MySQL")
-                    # mongo_encoding_id_results = collection.find_one({"image_id": id}, {"encoding_id": 1})
-                    if mongo_results and "encoding_id" in mongo_results:
-                        if self.VERBOSE:  print(f"mongo_results = {mongo_results}")
-                        mongo_encoding_id = mongo_results["encoding_id"]
-                        if self.VERBOSE: print(f"Found image_id {id} with mongo_encoding_id {mongo_encoding_id}")
-                    else:
-                        print(f" ~ Could not find mongo_encoding_id for image_id {id} in MongoDB collection {collection_name}")
-                        mongo_encoding_id = None
-                    # if no encoding_id use engine to get corect encoding_id from encodings table in mysql
-                    # print("going to lookup encoding_id from MySQL from id", id)
-                    mysql_encoding_id = self.lookup_encoding_id(engine, id)
-                    # print(f"Found image_id {id} with mongo_encoding_id {mongo_encoding_id} and SQL encoding_id: {mysql_encoding_id}")
-                    if mongo_encoding_id != mysql_encoding_id:
-                        print(f" XXX Mismatch for image_id {id}: mongo_encoding_id {mongo_encoding_id} vs mysql_encoding_id {mysql_encoding_id}")
-                        # replace mongo_encoding_id with mysql_encoding_id in the mongodb collection
-                        replace_encoding_id_query = {key: id, "encoding_id": mongo_encoding_id}
-                        replace_encoding_id_update = {"$set": {"encoding_id": mysql_encoding_id}}
-                        # print("going to do this:", replace_encoding_id_query, replace_encoding_id_update)
-                        result = collection.update_one(replace_encoding_id_query, replace_encoding_id_update)
-                        # print("result is ", result)
-                        # query = {key: id, "encoding_id": mysql_encoding_id}
-                    else:
-                        print(f" --- no mismatch for image_id {id}: mongo_encoding_id {mongo_encoding_id} vs mysql_encoding_id {mysql_encoding_id}")
-                    query = {key: id, "encoding_id": mysql_encoding_id}
-
+                print(f" >>> going to create because None mongo_results for image_id {id} and mysql_encoding_id {mysql_encoding_id} in collection {collection_name}")
+                query = {key: id} 
+                if collection_name == "encodings": query["encoding_id"] = mysql_encoding_id
             else:
-                query = {key: id}
+                if self.VERBOSE: print(f"mongo_results for image_id {id} in collection {collection_name}: {mongo_results.keys()}")
+                this_mongo_results_col_value = mongo_results.get(col, None)
+                if self.VERBOSE: print(f"this col results = {this_mongo_results_col_value}", col)
+                if this_mongo_results_col_value is not None and this_mongo_results_col_value == cell_value:
+                    # if mongo_results["encoding_id"] is not None:
+                    # handle case where encoding_id is None (non-encodings collection)
+                    this_encoding_id = mongo_results.get("encoding_id", None)
+                    this_image_id = mongo_results.get("image_id", None)
+                    if this_encoding_id is not None: this_id = this_encoding_id
+                    else: this_id = id
+
+                    if this_id is not None and this_id % 100 == 0:
+                        print(f" === scanning through {collection_name} up to this_id {this_id} _without_updating_ as {col} is already up to date.")
+                    return True
+                if collection_name == "encodings" and key == "image_id":
+                    # deal with None values, which are also often values where the encoding_id is wrong in mongo
+                    if mongo_encoding_id is not None and mongo_encoding_id == mysql_encoding_id:
+                        # FOR REDOING THE RESHARD TO CATCH NONES
+                        if self.VERBOSE:  print(f"have a eid: {mongo_encoding_id} that matches mysql_encoding_id {mysql_encoding_id}")
+                        # return False
+                        query = {key: id, "encoding_id": mongo_encoding_id}
+                    else:
+                        if self.VERBOSE:  print(f"this col results = {mongo_results['encoding_id']}")
+                        # print(f"No encoding_id provided for image_id {id}, looking up encoding_id from Mongo and MySQL")
+                        # mongo_encoding_id_results = collection.find_one({"image_id": id}, {"encoding_id": 1})
+                        if mongo_results and "encoding_id" in mongo_results:
+                            if self.VERBOSE:  print(f"mongo_results = {mongo_results}")
+                            mongo_encoding_id = mongo_results["encoding_id"]
+                            if self.VERBOSE: print(f"Found image_id {id} with mongo_encoding_id {mongo_encoding_id}")
+                        else:
+                            print(f" ~ Could not find mongo_encoding_id for image_id {id} in MongoDB collection {collection_name}")
+                            mongo_encoding_id = None
+                        # if no encoding_id use engine to get corect encoding_id from encodings table in mysql
+                        # print("going to lookup encoding_id from MySQL from id", id)
+                        # print(f"Found image_id {id} with mongo_encoding_id {mongo_encoding_id} and SQL encoding_id: {mysql_encoding_id}")
+                        if mongo_encoding_id != mysql_encoding_id:
+                            print(f" XXX Mismatch for image_id {id}: mongo_encoding_id {mongo_encoding_id} vs mysql_encoding_id {mysql_encoding_id}")
+                            # replace mongo_encoding_id with mysql_encoding_id in the mongodb collection
+                            replace_encoding_id_query = {key: id, "encoding_id": mongo_encoding_id}
+                            replace_encoding_id_update = {"$set": {"encoding_id": mysql_encoding_id}}
+                            # print("going to do this:", replace_encoding_id_query, replace_encoding_id_update)
+                            result = collection.update_one(replace_encoding_id_query, replace_encoding_id_update)
+                            # print("result is ", result)
+                            # query = {key: id, "encoding_id": mysql_encoding_id}
+                        else:
+                            print(f" --- no mismatch for image_id {id}: mongo_encoding_id {mongo_encoding_id} vs mysql_encoding_id {mysql_encoding_id}")
+                        query = {key: id, "encoding_id": mysql_encoding_id}
+
+                else:
+                    query = {key: id}
             update = {"$set": {col: cell_value}}
             try:
-                # print(f"Upserting into Mongo collection {collection_name} for {query} setting {col} to value of length {len(str(cell_value)) if cell_value else 0}")
                 result = collection.update_one(query, update, upsert=True)
+                # print(f"Mongo update result for image_id {id} in collection {collection_name}: matched_count={result.matched_count}, upserted_id={result.upserted_id}")
                 if result.matched_count > 0 or result.upserted_id is not None:
-                    # print(f"Success for {id} {key} set {col} to {str(cell_value)[:20]}")
+                    print(f"Success for {id} {key} set {col} to {str(cell_value)[:20]}")
                     return True
                 else:
                     print(f"No document found or upserted for {query}")

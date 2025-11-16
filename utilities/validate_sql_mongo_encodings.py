@@ -53,11 +53,12 @@ exporter = MongoBSONExporter(mongo_db)
 batch_size = 5000
 IS_FACE = 0
 IS_BODY = 1
-MODE = 5  # 0 validate_zero_columns_against_mongo_prereshard (outputs bson)s
+MODE = 1  # 0 validate_zero_columns_against_mongo_prereshard (outputs bson)s
 #0 validate_zero_columns_against_mongo_prereshard (outputs bson) 
 # 1 read_and_store_bson
 # 4 checks output from #3 against actual mysql table and updates
 # 5 takes helper table csvs with missing mongo data and checks to see if data exists in mongo, if so outputs bson files
+# 6 compares sql_only image_ids from previous step to mongo bson files
 
 if MODE in [0,4,5]: FOLDER_MODE = 0 # 0 is the first way, 1 is by filepath, limit 1
 else: FOLDER_MODE = 1 # 0 is the first way, 1 is by filepath, limit 1
@@ -766,9 +767,10 @@ def check_NMLmongo_for_mysql_only_image_ids(engine, mongo_db, document_names_dic
         doc = collection.find_one({"image_id": image_id})
         if doc is not None:
             this_result_dict = {}
-            print(f"  +  {image_id}, found in MongoDB collection {col}, doc: {len(doc)} keys")
+            print(f"  +  {image_id}, found document in MongoDB collection {col}, doc: {len(doc)} keys")
             this_doc_values = doc.get(col, None)
             if this_doc_values is not None:
+                print(f" ++  found {col} values for image_id={image_id} with length {len(this_doc_values)}")
                 this_result_dict[col] = this_doc_values
                 # print(f" -- found data in mongo collection {col} for image_id={image_id}")
                 this_result_dict["image_id"] = image_id
@@ -1044,11 +1046,13 @@ if __name__ == "__main__":
         # These will be helper table output which is a csv. image_id are column index 2
         # which contains all unique image_ids with missing data in mongo
         #
-        global_collection_file = "hand_landmarks_right_hand" # this will probably need to be updated mannually
+        global_collection_file = "face_landmarks" # this will probably need to be updated mannually
         if "hand_landmarks" in global_collection_file:
             global_collection_file = "hand_landmarks"
             file_name = "hand_landmarks_right_hand"
         elif "body_landmarks_norm" in global_collection_file:
+            file_name = global_collection_file
+        else:
             file_name = global_collection_file
         # set_name = "in_both"
         set_name = "sql_only"
@@ -1095,6 +1099,48 @@ if __name__ == "__main__":
 
             function = "check_NMLmongo_for_mysql_only_image_ids"
             process_batch(0, 0, function)  # batch_start and batch_end are not used in this function
+    elif MODE == 6:
+        global_collection_file = "body_world_landmarks" # this will probably need to be updated mannually
+        set_name = "sql_only"
+        image_ids_set_global = set()
+        bson_image_ids_set = set()
+        #open the set file in the set_name folder, and load it into a set
+        with open(os.path.join(EXPORT_DIR, set_name, f"{set_name}_{global_collection_file}.txt"), "r") as f:
+            first_line = f.readline()  # read header
+            if first_line.startswith("Entries"):
+                print(f"skipping header line: {first_line.strip()}")
+                first_id = None
+            elif first_line.strip().isdigit():
+                first_id = first_line.strip()
+                print(f"first id: {first_id}")
+            else:
+                print("Unexpected file format, first line:", first_line)
+
+            remaining_lines = f.readlines()  # read the rest of the lines
+            image_ids_set_global = set(line.strip() for line in remaining_lines)
+            if first_id is not None:
+                image_ids_set_global.add(first_id)
+        print(f"Loaded set {set_name} for collection {global_collection_file} with {len(image_ids_set_global)} entries")
+
+        # the bson files live in the EXPORT_DIR / collection_name folder
+        bson_folder = os.path.join(EXPORT_DIR, global_collection_file)
+        bson_files = [os.path.join(bson_folder, f) for f in os.listdir(bson_folder) if f.endswith('.bson')]
+        print(f"Found {len(bson_files)} bson files in folder {bson_folder}")
+        
+        # open each bson file, and read the image_id and store that in a set
+
+        for bson_file in bson_files:
+            # open the bson_file and access the data
+            bson_file_batch_list = exporter.read_bson(bson_file)
+            for bson_file_data in bson_file_batch_list:       
+                bson_image_id = bson_file_data.get("image_id", None)
+                if bson_image_id is not None:
+                    bson_image_ids_set.add(str(bson_image_id))
+        print(f"Collected {len(bson_image_ids_set)} unique image_ids from BSON files")
+
+        # find the difference between image_ids_set_global and bson_image_ids_set
+        missing_in_bson = image_ids_set_global - bson_image_ids_set
+        print(f"Found {len(missing_in_bson)} image_ids in global set not in BSON files")
 
     # after all potential processing, close session
     session.close()
