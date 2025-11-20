@@ -63,7 +63,7 @@ io = DataIO(IS_SSD)
 db = io.db
 
 # declare all the globals as None in one line
-N_CLUSTERS = N_HANDS = SORT_TYPE = FULL_BODY = IS_HAND_POSE_FUSION = ONLY_ONE = GENERATE_FUSION_PAIRS = MIN_VIDEO_FUSION_COUNT = FUSION_PAIR_DICT = IS_CLUSTER = IS_ONE_CLUSTER = CLUSTER_NO = START_CLUSTER = USE_POSE_CROP_DICT = IS_SEGONLY = HSV_CONTROL = VISIBLE_HAND_LEFT = VISIBLE_HAND_RIGHT = USE_NOSEBRIDGE = LIMIT = MIN_CYCLE_COUNT = IS_HANDS = IS_ONE_HAND = NO_KIDS = ONLY_KIDS = USE_PAINTED = OUTPAINT = INPAINT= INPAINT_COLOR= INPAINT_MAX_SHOULDERS= OUTPAINT_MAX= BLUR_THRESH_MAX= BLUR_THRESH_MIN= BLUR_RADIUS= MASK_OFFSET= VERBOSE= CALIBRATING= SAVE_IMG_PROCESS= IS_ANGLE_SORT= IS_TOPICS= N_TOPICS= IS_ONE_TOPIC= TOPIC_NO= NEG_TOPICS= POS_TOPICS= NEUTRAL_TOPICS= AFFECT_GROUPS_LISTS= USE_AFFECT_GROUPS= None
+N_CLUSTERS = N_HANDS = SORT_TYPE = FULL_BODY = IS_HAND_POSE_FUSION = ONLY_ONE = GENERATE_FUSION_PAIRS = MIN_VIDEO_FUSION_COUNT = FUSION_PAIR_DICT = IS_CLUSTER = IS_ONE_CLUSTER = CLUSTER_NO = START_CLUSTER = USE_POSE_CROP_DICT = IS_SEGONLY = HSV_CONTROL = VISIBLE_HAND_LEFT = VISIBLE_HAND_RIGHT = USE_NOSEBRIDGE = LIMIT = MIN_CYCLE_COUNT = IS_HANDS = IS_ONE_HAND = NO_KIDS = ONLY_KIDS = USE_PAINTED = OUTPAINT =  INPAINT_COLOR= INPAINT_MAX_SHOULDERS= OUTPAINT_MAX= BLUR_THRESH_MAX= BLUR_THRESH_MIN= BLUR_RADIUS= MASK_OFFSET= VERBOSE= CALIBRATING= SAVE_IMG_PROCESS= IS_ANGLE_SORT= IS_TOPICS= N_TOPICS= IS_ONE_TOPIC= TOPIC_NO= NEG_TOPICS= POS_TOPICS= NEUTRAL_TOPICS= AFFECT_GROUPS_LISTS= USE_AFFECT_GROUPS= None
 N_HSV = HAND_POSE_NO = 0 # defaults to no HSV clusters
 
 # CSV_FOLDER = os.path.join(io.ROOT_DBx, "body3D_segmentbig_useall256_CSVs_MMtest")
@@ -84,7 +84,7 @@ MODES = {0:'paris_photo_torso_images_topics', 1:'paris_photo_torso_videos_topics
          6:'heft_torso_keywords'}
 MODE_CHOICE = 6
 CURRENT_MODE = MODES[MODE_CHOICE]
-LIMIT = 1000 # this is the limit for the SQL query
+LIMIT = 100 # this is the limit for the SQL query
 
 # set defaults, including for all modes to False
 FULL_BODY = IS_HAND_POSE_FUSION = ONLY_ONE = GENERATE_FUSION_PAIRS = USE_FUSION_PAIR_DICT = IS_CLUSTER = IS_ONE_CLUSTER = USE_POSE_CROP_DICT = IS_TOPICS= IS_ONE_TOPIC = USE_AFFECT_GROUPS = False
@@ -182,8 +182,8 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     SegmentTable_name = 'SegmentBig_isface'
     SegmentHelper_name = 'SegmentHelper_sept2025_heft_keywords' # TK revisit this for prodution run
     # SegmentHelper_name = 'SegmentHelper_nov2025_placard' # TK revisit this for prodution run
-    # SORT_TYPE = "planar_hands"
-    SORT_TYPE = "ArmsPoses3D" # this triggers meta body poses 3D
+    SORT_TYPE = "planar_hands"
+    # SORT_TYPE = "ArmsPoses3D" # this triggers meta body poses 3D
     # SORT_TYPE = "obj_bbox" # make sure OBJ_CLS_ID is set below
     # META = True
     TESTING = False
@@ -199,7 +199,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     N_HSV = 23 # 0-22 metaclusters of 96 HSV clusters
     # N_HSV = 0 # don't do HSV clusters
     
-    TSP_SORT = True
+    TSP_SORT = False
     CHOP_FIRST = True
     # PURGING_DUPES = True
     FORCE_TARGET_COUNT = 90
@@ -221,11 +221,11 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     # this control whether sorting by topics
     # IS_TOPICS = True # if using Clusters only, must set this to False
 
-    ONE_SHOT = True # take all files, based off the very first sort order.
+    ONE_SHOT = False # take all files, based off the very first sort order.
     JUMP_SHOT = True # jump to random file if can't find a run (I don't think this applies to planar?)
 
 
-    USE_ALL = True # do this for HEFT bc it turns off face xyz and mouthgap filters && if SORT_TYPE == "planar_hands" forces ONE_SHOT
+    # USE_ALL = True # do this for HEFT bc it turns off face xyz and mouthgap filters && if SORT_TYPE == "planar_hands" forces ONE_SHOT
 
     USE_PAINTED = False
     INPAINT= True
@@ -453,7 +453,7 @@ elif IS_SEGONLY and io.platform == "darwin":
 
     SAVE_SEGMENT = False
     # no JOIN just Segment table
-    SELECT = "DISTINCT(s.image_id), s.site_name_id, s.contentUrl, s.imagename, s.description, s.face_x, s.face_y, s.face_z, s.mouth_gap, s.bbox, s.site_image_id"
+    SELECT = "DISTINCT(s.image_id), s.site_name_id, s.contentUrl, s.imagename, s.description, s.face_x, s.face_y, s.face_z, s.mouth_gap, s.bbox, s.site_image_id, s.pitch, s.yaw, s.roll"
 
     FROM =f"{SegmentTable_name} s "
     dupe_table_pre  = "s"
@@ -1226,33 +1226,17 @@ def sort_by_face_dist_NN(df_enc):
     else:
         ## SATYAM THIS IS WHAT WILL BE REPLACE BY TSP
         if TSP_SORT is True:
-            
-
-            # # Option 1: Work entirely with expanded dataframe
-            # df_clean = expand_face_encodings(df_enc)
-            # sorter.set_TSP_sort(df_clean, START_IDX=None, END_IDX=None)
-            # df_sorted = sorter.do_TSP_SORT(df_clean)  # Same df!
-
-            # Option 2: If you need to maintain link to original df_enc
-            # You'll need to track the mapping yourself
+        
+            # track the mapping
             df_clean = expand_face_encodings(df_enc)
             df_clean['original_index'] = df_clean.index  # or however they map
             START_IDX = END_IDX = None
             sorter.set_TSP_sort(df_clean, START_IDX, END_IDX, FORCE_TARGET_COUNT)
             df_sorted_clean = sorter.do_TSP_SORT(df_clean)
 
-            # Then map back if needed
+            # Then map back 
             df_sorted = df_enc.iloc[df_sorted_clean['original_index']].reset_index(drop=True)
 
-            # # Prepare and sort
-            # df_clean = expand_face_encodings(df_enc)
-            # sorter.set_TSP_sort(df_clean, START_IDX=None, END_IDX=None)
-            # df_sorted = sorter.do_TSP_SORT(df_enc)
-
-            # df_clean=expand_face_encodings(df_enc)
-            # sort.set_TSP_sort(df_clean,START_IDX=None,END_IDX=None)
-            # # df_sorted = sort.get_closest_df_NN(df_enc, df_sorted, start_image_id, end_image_id)
-            # df_sorted=sort.do_TSP_SORT(df_enc)
         else:
             for i in range(itters):
                 print("sort_by_face_dist_NN _ for loop itters i is", i)
@@ -1413,7 +1397,14 @@ def prep_encodings_NN(df_segment):
     # load the OBJ_CLS_ID bbox as list into obj_bbox_list
     # df_segment['obj_bbox_list'] = df_segment.apply(lambda row: json_to_list(row), axis=1)
     if OBJ_CLS_ID > 0: 
-        df_segment['obj_bbox_list'] = df_segment.apply(sort.json_to_list, axis=1)
+        obj_bbox_col = "bbox_"+str(OBJ_CLS_ID)
+        print(f" prepping {obj_bbox_col} for {CLUSTER_TYPE}")
+        # move all rows with null obj_bbox_col values to a new df_nulls, and drop them from df_segment
+        df_nulls = df_segment[df_segment[obj_bbox_col].isnull()]
+        print("df_nulls length", len(df_nulls.index))
+        df_segment = df_segment.dropna(subset=[obj_bbox_col])
+
+        df_segment['obj_bbox_list'] = df_segment[obj_bbox_col].apply(sort.json_to_list)
         null_bboxes = df_segment[df_segment['obj_bbox_list'].isnull()]
         if not null_bboxes.empty:
             print("Rows with invalid bbox data:")
@@ -2329,7 +2320,7 @@ def main():
 
 
 
-            columns_to_convert = ['face_x', 'face_y', 'face_z', 'mouth_gap']
+            columns_to_convert = ['face_x', 'face_y', 'face_z', 'mouth_gap', 'pitch', 'yaw', 'roll']
             df[columns_to_convert] = df[columns_to_convert].applymap(io.make_float)
 
             ### SEGMENT THE DATA ###

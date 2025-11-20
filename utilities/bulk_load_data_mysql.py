@@ -26,8 +26,7 @@ NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 
 # ADD TO SEGMENTS WHEN SQL/WORKBENCH IS BORKING
 
-HelperTable_name = "SegmentHelper_nov2025_SQL_only_still"
-
+HelperTable_name = "SegmentHelper_nov2025_SQL_only_still_faces"
 
 engine = create_engine("mysql+pymysql://{user}:{pw}@/{db}?unix_socket={socket}".format(
     user=db['user'], pw=db['pass'], db=db['name'], socket=db['unix_socket']
@@ -47,11 +46,13 @@ class HelperTable(Base):
 # engine = create_engine("mysql+pymysql://user:pass@localhost/db?unix_socket=/Applications/MAMP/tmp/mysql/mysql.sock")
 
 chunksize = 50000
-reader = pd.read_csv("/Volumes/OWC4/segment_images/mongo_exports_oct19_sets/still_sql_only_encodings_allunique.txt", names=["image_id"])
-
+reader = pd.read_csv("/Volumes/OWC4/segment_images/mongo_exports_oct19_sets/still_sql_only_face_allunique.txt", names=["image_id"])
+original_reader = reader.copy()
 # if first row in reader first column is "image_id", skip it
 first_row = next(reader.iterrows())[1]
 if first_row[0] == "image_id":
     print("Skipping header row")
-    reader = pd.read_csv("/Users/michaelmandiberg/Documents/projects-active/facemap_production/validating_sql_mongo/Encodings_202511152103_faces_without_bbox_etc.csv", names=["image_id"], skiprows=1)
+    # skip first row
+else:
+    reader = original_reader
 reader.to_sql(HelperTable_name, con=engine, if_exists="append", index=False, chunksize=chunksize)

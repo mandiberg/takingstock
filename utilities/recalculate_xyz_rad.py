@@ -32,7 +32,7 @@ session = Session()
 
 # Batch processing parameters
 batch_size = 1000
-last_id = 0 # this is now image_id, not encoding_id
+last_id = 112245607 # this is now image_id, not encoding_id
 VERBOSE = False
 
 HelperTable_name = "SegmentHelper_sept2025_heft_keywords"
@@ -80,7 +80,7 @@ def debug_face_pose_simple(self, bbox, faceLms, image_id):
 
 while True:
     s = aliased(HelperTable, name='s')
-    ihp = aliased(ImagesArmsPoses3D, name='ihp')
+    # ihp = aliased(ImagesArmsPoses3D, name='ihp')
     results = (
         session.query(
             Encodings.encoding_id,
@@ -93,8 +93,8 @@ while True:
             Images.h,
             Images.w,
         )
-        .join(s, s.image_id == Encodings.image_id)
-        .join(ihp, s.image_id == ihp.image_id)
+        # .join(s, s.image_id == Encodings.image_id)
+        # .join(ihp, s.image_id == ihp.image_id)
         .join(Images, Images.image_id == Encodings.image_id)
         .filter(
             Encodings.mongo_face_landmarks.is_(True),
@@ -102,7 +102,6 @@ while True:
             Encodings.pitch.is_(None),
             Images.h.isnot(None),
             Images.w.isnot(None),
-            ihp.cluster_id == 203,
         )
         .limit(batch_size)
         .all()
@@ -142,7 +141,19 @@ while True:
             # 3. Use SelectPose to estimate pose from blank image
             pose = SelectPose(blank_image)
 
-            bbox = io.unstring_json(bbox)
+            # print(f"Calculating pose for image_id {image_id}..., ", bbox)
+            if bbox is None: continue
+
+            try:
+                bbox = io.unstring_json(bbox)
+            except Exception as e:
+                print(f"Error unstringing JSON for image_id {image_id}: {e}")
+                continue
+            
+            # check to see if faceLms has the expected structure
+            if not hasattr(faceLms, 'landmark') or len(faceLms.landmark) == 0:
+                print(f"Invalid faceLms structure for image_id {image_id}. Skipping this data: {faceLms}.")
+                continue
             pose.calc_face_data(faceLms)
 
             # Initialize once
@@ -175,8 +186,8 @@ while True:
         print(f"Saved {len(batch_success)} pose results to MySQL.")
 
     # session.commit()
-    last_id = results[-1][0]
-    print(f"Processed up to seg_image_id = {last_id}")
+    last_id = results[-1][1]
+    print(f"Processed up to image_id = {last_id}")
 
     # for testing, break after one batch
     # break

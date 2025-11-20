@@ -185,7 +185,7 @@ class DataIO:
                 os.path.join(self.ROOT18,"images_picha"), # 17	picha
                 os.path.join(self.ROOT18,"") # 18	afripics
             ]
-        print("folder_list is ", self.folder_list)
+        # print("folder_list is ", self.folder_list)
 
     def capitalize_directory(self,path):
         dirname, filename = os.path.split(path)
@@ -330,6 +330,10 @@ class DataIO:
             return folder_paths
 
     def unstring_json(self, json_string):
+        # print("unstringing json: ", type(json_string), json_string)
+        if isinstance(json_string, dict):
+            print("json_string is already a dict")
+            return json_string
         eval_string = ast.literal_eval(json_string)
         if isinstance(eval_string, dict):
             return eval_string
@@ -435,13 +439,6 @@ class DataIO:
     #         return Lms2d
 
 
-    def unstring_json(self, json_string):
-        eval_string = ast.literal_eval(json_string)
-        if isinstance(eval_string, dict):
-            return eval_string
-        else:
-            json_dict = json.loads(eval_string)
-            return json_dict
     def make_float(self, value):
         try:
             return float(value)

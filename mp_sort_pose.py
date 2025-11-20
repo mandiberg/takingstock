@@ -14,9 +14,9 @@ import json
 import random
 import numpy as np
 import sys
+import ast
 from collections import Counter
 from pandas.core.frame import dataclasses_to_dicts
-from simple_lama_inpainting import SimpleLama
 from sklearn.neighbors import NearestNeighbors
 import re
 import random
@@ -42,6 +42,27 @@ class SortPose:
 
               
         self.VERBOSE = VERBOSE
+
+        self.KNN_SORT_DICT = {
+            "128d": "128d",
+            "planar": "planar",
+            "planar_body": "planar_body",
+            "planar_hands": "planar_hands",
+            "planar_hands_USE_ALL": "planar_hands",
+            "body3D": "body3D",
+            "ArmsPoses3D": "body3D",
+            "obj_bbox": "obj",
+        }
+
+        self.KNN_COLS = {
+            "128d": ("face_encodings68", "dist_enc1"),
+            "planar": ("face_landmarks", "dist_enc1"),
+            "planar_hands": ("hand_landmarks", "dist_enc1"),
+            "planar_body": ("body_landmarks_array", "dist_enc1"),
+            "body3D": ("body_landmarks_array", "dist_enc1"),
+            "HSV": ("hsvll", "dist_HSV"),
+            "obj": ("obj_bbox_list", "dist_obj"),
+        }
 
         #maximum allowable distance between encodings (this accounts for dHSV)
         self.MAXFACEDIST = .8
@@ -102,7 +123,9 @@ class SortPose:
     
 
         self.INPAINT=INPAINT
-        if self.INPAINT:self.INPAINT_MODEL=SimpleLama()
+        if self.INPAINT:
+            from simple_lama_inpainting import SimpleLama
+            self.INPAINT_MODEL=SimpleLama()
         # self.MAX_IMAGE_EDGE_MULTIPLIER=[1.5,2.6,2,2.6] #maximum of the elements
 
         self.knn = NearestNeighbors(metric='euclidean', algorithm='ball_tree')
@@ -545,7 +568,8 @@ class SortPose:
         print(len(df))
 
         if self.USE_HEAD_POSE:
-            xyz = ['face_x', 'face_y', 'face_z']
+            # xyz = ['face_x', 'face_y', 'face_z']
+            xyz = ['pitch', 'yaw', 'roll']
             df["xyz"] = df.apply(lambda row: self.cols_to_list(row, xyz), axis=1)
 
             print("df with xyz columns, will find median of 3D points and set face_x,y,z accordingly")
@@ -554,44 +578,45 @@ class SortPose:
 
             # set XYZ HIGH and LOW based on median
             margin = 10  # adjustable margin
-            self.XLOW = median_xyz[0] - margin
-            self.XHIGH = median_xyz[0] + margin
-            self.YLOW = median_xyz[1] - margin
-            self.YHIGH = median_xyz[1] + margin
-            self.ZLOW = median_xyz[2] - margin
-            self.ZHIGH = median_xyz[2] + margin
-            print(f"   set XLOW: {self.XLOW}, XHIGH: {self.XHIGH}")
-            print(f"   set YLOW: {self.YLOW}, YHIGH: {self.YHIGH}")
-            print(f"   set ZLOW: {self.ZLOW}, ZHIGH: {self.ZHIGH}")
+            low_high_dict = {}
+            for angle in xyz:
+                low_high_dict[angle] = (median_xyz[xyz.index(angle)] - margin, median_xyz[xyz.index(angle)] + margin)
+            print("   low_high_dict: ", low_high_dict)
 
-        segment = df.loc[((df['face_y'] < self.YHIGH) & (df['face_y'] > self.YLOW))]
-        print(f"after filtering by face_y, len(segment): {len(segment)}")
-        segment = segment.loc[((segment['face_x'] < self.XHIGH) & (segment['face_x'] > self.XLOW))]
-        print(f"after filtering by face_x, len(segment): {len(segment)}")
-        segment = segment.loc[((segment['face_z'] < self.ZHIGH) & (segment['face_z'] > self.ZLOW))]
-        print(f"after filtering by face_z, len(segment): {len(segment)}")
+            # use low_high_dict to filter
+            for angle in xyz:
+                df = df.loc[((df[angle] < low_high_dict[angle][1]) & (df[angle] > low_high_dict[angle][0]))]
+                print(f"after filtering by {angle}, len(df): {len(df)}")
+        else:
+            # use the defaults set in __init__
+            df = df.loc[((df['face_y'] < self.YHIGH) & (df['face_y'] > self.YLOW))]
+            print(f"after filtering by face_y, len(df): {len(df)}")
+            df = df.loc[((df['face_x'] < self.XHIGH) & (df['face_x'] > self.XLOW))]
+            print(f"after filtering by face_x, len(df): {len(df)}")
+            df = df.loc[((df['face_z'] < self.ZHIGH) & (df['face_z'] > self.ZLOW))]
+            print(f"after filtering by face_z, len(df): {len(df)}")
 
         if self.LUM_MIN:
-            segment = segment.loc[((segment['lum'] < self.LUM_MAX) & (segment['lum'] > self.LUM_MIN))]
+            df = df.loc[((df['lum'] < self.LUM_MAX) & (df['lum'] > self.LUM_MIN))]
         if self.SAT_MIN:
-            segment = segment.loc[((segment['sat'] < self.SAT_MAX) & (segment['sat'] > self.SAT_MIN))]
+            df = df.loc[((df['sat'] < self.SAT_MAX) & (df['sat'] > self.SAT_MIN))]
         if self.HUE_MIN:
-            segment = segment.loc[((segment['hue'] < self.HUE_MAX) & (segment['hue'] > self.HUE_MIN))]
-        print(f"after filtering by hue, len(segment): {len(segment)}")
+            df = df.loc[((df['hue'] < self.HUE_MAX) & (df['hue'] > self.HUE_MIN))]
+        print(f"after filtering by hue, len(df): {len(df)}")
 
         
         # removing cropX for now. Need to add that back into the data
-        # segment = segment.loc[segment['cropX'] >= self.MINCROP]
-        # print(segment.size)
+        # df = df.loc[df['cropX'] >= self.MINCROP]
+        # print(df.size)
 
         # COMMENTING OUT MOUTHGAP as it is functioning as a minimum. Needs refactoring
-        segment = segment.loc[segment['mouth_gap'] >= self.MINMOUTHGAP]
-        segment = segment.loc[segment['mouth_gap'] <= self.MAXMOUTHGAP]
-        # segment = segment.loc[segment['mouth_gap'] <= MAXMOUTHGAP]
-        print(f"after filtering by mouth_gap, len(segment): {len(segment)}")
-        # segment = segment.loc[segment['resize'] < MAXRESIZE]
-        print(segment)
-        return segment
+        df = df.loc[df['mouth_gap'] >= self.MINMOUTHGAP]
+        df = df.loc[df['mouth_gap'] <= self.MAXMOUTHGAP]
+        # df = df.loc[df['mouth_gap'] <= MAXMOUTHGAP]
+        print(f"after filtering by mouth_gap, len(df): {len(df)}")
+        # df = df.loc[df['resize'] < MAXRESIZE]
+        print(df)
+        return df
 
 
     def createList(self,segment):
@@ -3002,42 +3027,11 @@ class SortPose:
         # if self.VERBOSE: print("enc1++ final np array", enc1)
         return enc1
     
-    def get_cols(self, knn_sort="128d"):
-        output_cols = 'dist_enc1'
-        if knn_sort == "128d":
-            sortcol = 'face_encodings68'
-        elif knn_sort == "planar":
-            sortcol = 'face_landmarks'
-        elif knn_sort == "planar_hands":
-            sortcol = 'hand_landmarks'
-            # sortcol = 'hand_landmarks'
-        elif knn_sort == "planar_body":
-            sortcol = 'body_landmarks_array'
-            sourcecol = 'body_landmarks_normalized'
-            # if type(enc1) is not list:
-            #     enc1 = self.prep_enc(enc1, structure="list") # switching to 3d
-            # if self.VERBOSE: print("body_landmarks elif")
-            # # test to see if df_enc contains the sortcol column
-            # if sortcol not in df_enc.columns:
-            #     if self.VERBOSE: print("sortcol not in df_enc.columns - body_landmarks enc1 pre prep_enc", enc1)
-        elif knn_sort == "body3D":
-            sortcol = 'body_landmarks_array'
-            # sourcecol = 'body_landmarks_3D'
-        elif knn_sort == "HSV":
-            # if self.VERBOSE: print("knn_sort is HSV")
-            sortcol = 'hsvll'
-            output_cols = 'dist_HSV'
-        elif knn_sort == "obj":
-            # overriding for object detection
-            sortcol = 'obj_bbox_list'
-            output_cols = 'dist_obj'
-        return sortcol, output_cols
-
     def sort_df_KNN(self, df_enc, enc1, knn_sort="128d"):
-        if self.VERBOSE: print(f"df_enc for enc1 {enc1} at the start of sort_df_KNN")
+        if self.VERBOSE: print(f"df_enc for enc1 {enc1} at the start of sort_df_KNN with knn_sort {knn_sort}")
         if self.VERBOSE: print(df_enc)
 
-        sortcol, output_cols = self.get_cols(knn_sort)
+        sortcol, output_cols = self.KNN_COLS.get(knn_sort, (None, None))
 
         #create output column -- do i need to do this?
         df_enc[output_cols] = np.nan
@@ -3071,7 +3065,7 @@ class SortPose:
 
         # Check if the encodings_array contains NaN values
         if contains_nan(encodings_array):
-            print("encodings_array contains NaN values")
+            print("encodings_array of len", len(encodings_array), "contains NaN values")
             
             # Convert encodings_array to a NumPy array
             encodings_array = np.array(encodings_array)
@@ -3244,40 +3238,53 @@ class SortPose:
 
             return df_dist_hsv
 
+        def get_knn_sort(self, enc1):
+        # map most SORT_TYPE values to knn_sort using a dictionary; handle edge-cases below
+            # Edge cases that need conditional logic
+            knn_sort = self.KNN_SORT_DICT.get(self.SORT_TYPE, None)
+            if knn_sort is None:
+                try:
+                    if self.SORT_TYPE == "planar" and FIRST_ROUND:
+                        knn_sort = "128d"
+                    elif self.SORT_TYPE == "planar_body":
+                        # hands cluster prefers planar_hands
+                        if self.CLUSTER_TYPE == "HandsPositions":
+                            knn_sort = "planar_hands"
+                        else:
+                            # if enc1 is long (likely a 128d vector) prefer 128d
+                            if enc1 is not None and hasattr(enc1, "__len__") and len(enc1) > 66:
+                                knn_sort = "128d"
+                            else:
+                                knn_sort = "planar_body"
+                except Exception as e:
+                    print("Error determining knn_sort for edge cases:", e)
+                    knn_sort = None
+            if knn_sort is None:
+                print(" >< Warning: knn_sort could not be determined for SORT_TYPE:", self.SORT_TYPE)
+
+            if self.VERBOSE: print("resolved knn_sort:", knn_sort)
+            # sortcol, output_cols = self.get_cols(knn_sort)
+            return knn_sort
+
         # if self.VERBOSE: print("debugging df_enc", df_enc.columns)
         # if self.VERBOSE: print("debugging df_sorted", df_sorted.columns)
         if len(df_sorted) == 0: 
             FIRST_ROUND = True
             enc1, obj_bbox1 = self.get_enc1(df_enc, FIRST_ROUND)
-            if self.VERBOSE: print("first round enc1, obj_bbox1", enc1, obj_bbox1)
+            if self.VERBOSE: print(f"first round enc1, {enc1}   ....    obj_bbox1", obj_bbox1)
             # drop all rows where obj_bbox_list is None
             if self.OBJ_CLS_ID > 0: df_enc = df_enc.dropna(subset=["obj_bbox_list"])
         else: 
             FIRST_ROUND = False
             print(f"about to send df_sorted through to find last obj_bbox_list, which is :", df_sorted.iloc[-1]['obj_bbox_list'])
             enc1, obj_bbox1 = self.get_enc1(df_sorted, FIRST_ROUND)
-            if self.VERBOSE: print("LATER round enc1, obj_bbox1", enc1, obj_bbox1)
+            if self.VERBOSE: print(f"LATER round enc1, {enc1} obj_bbox1", obj_bbox1)
 
         if self.VERBOSE: print(f"get_closest_df_NN, self.SORT_TYPE is {self.SORT_TYPE} FIRST_ROUND is {FIRST_ROUND}")
-        # define self.SORT_TYPE for KNN
-        if self.SORT_TYPE == "128d" or (self.SORT_TYPE == "planar" and FIRST_ROUND) or (self.SORT_TYPE == "planar_body" and len(enc1) > 66): 
-            knn_sort = "128d"      
-        elif self.SORT_TYPE == "planar": 
-            knn_sort = "planar"
-        elif self.SORT_TYPE == "planar_body": 
-            if self.CLUSTER_TYPE == "HandsPositions":
-                knn_sort = "planar_hands"
-            else:
-                knn_sort = "planar_body"
-        elif self.SORT_TYPE in ["body3D", "ArmsPoses3D"]:
-            knn_sort = "body3D"
-        elif self.SORT_TYPE == "planar_hands": 
-            knn_sort = "planar_hands"
-        elif self.SORT_TYPE == "obj_bbox":
-            knn_sort = "obj"
-        # sortcol, output_cols = self.get_cols(knn_sort)
 
-        if self.VERBOSE: print("get_closest_df_NN - pre first sort_df_KNN - enc1", enc1)
+        knn_sort = get_knn_sort(self, enc1)
+
+        if self.VERBOSE: print(f"get_closest_df_NN - pre first sort_df_KNN knn - {knn_sort} - enc1", enc1)
         # sort KNN (always for planar) or BRUTEFORCE (optional only for 128d)
         if self.BRUTEFORCE and knn_sort == "128d": df_dist_enc = self.brute_force(df_enc, enc1)
         elif start_image_id is not None: self.sort_df_TSP(df_enc, start_image_id, end_image_id)
@@ -3289,12 +3296,13 @@ class SortPose:
         if self.OBJ_CLS_ID > 0 and self.SORT_TYPE != "obj_bbox": 
             # only do this when it isn't doing the direct obj_bbox sort
             # right now this is dormant. could be resurrected later for a hybrid obj + enc sort
-            if self.VERBOSE: print("get_closest_df_NN - pre second sort_df_KNN - obj_bbox1", obj_bbox1)
-            if type(obj_bbox1) is dict:
-                # turn the obj_bbox1 json dict into a list
-                obj_bbox1 = self.json_to_list(obj_bbox1)
-            df_dist_enc, output_cols = self.sort_df_KNN(df_enc, obj_bbox1, "obj")
-            if self.VERBOSE: print("df_shuffled obj", df_dist_enc[['image_id','dist_obj']].sort_values(by='dist_obj')) 
+            pass
+            # if self.VERBOSE: print("get_closest_df_NN - pre second sort_df_KNN - obj_bbox1", obj_bbox1)
+            # if type(obj_bbox1) is dict:
+            #     # turn the obj_bbox1 json dict into a list
+            #     obj_bbox1 = self.json_to_list(obj_bbox1)
+            # df_dist_enc, output_cols = self.sort_df_KNN(df_enc, obj_bbox1, "obj")
+            # if self.VERBOSE: print("df_shuffled obj", df_dist_enc[['image_id','dist_obj']].sort_values(by='dist_obj')) 
 
         # set HSV start enc and add HSV dist
         if not self.ONE_SHOT:
@@ -3343,7 +3351,7 @@ class SortPose:
 
                 if df_dist_close.empty:
                     if self.VERBOSE: print("No rows in the DataFrame met the filtering criteria, returning empty df and the untouched df_sorted.")
-                    return df_dist_close, df_sorted
+                    return df_dist_close, df_sorted, output_cols
                 else:
                     if self.VERBOSE: print("Filtered DataFrame:", df_dist_close)
                 # implementing these masks for now
@@ -3431,7 +3439,7 @@ class SortPose:
 
             else:
                 if self.VERBOSE: print("df_shuffled is empty")
-                return df_enc, df_sorted
+                return df_enc, df_sorted, output_cols
 
             if self.VERBOSE: print("df_run", df_run)
             # if self.VERBOSE: print("df_run", df_run[['image_id','dist_enc1','dist_HSV','sum_dist']])

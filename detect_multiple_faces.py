@@ -14,7 +14,6 @@ import base64
 import gc
 import traceback
 import threading
-import psutil
 
 import sys
 import re
@@ -58,7 +57,7 @@ SAVE_ORIG = False
 DRAW_BOX = False
 MINSIZE = 500
 SLEEP_TIME=0
-VERBOSE = True
+VERBOSE = False
 QUIET = False
 
 # only for triage
@@ -69,12 +68,14 @@ http="https://media.gettyimages.com/photos/"
 
 # am I looking on RAID/SSD for a folder? If not, will pull directly from SQL
 # if so, also change the site_name_id etc around line 930
-IS_FOLDER = False
+IS_FOLDER = True
 
 # these only matter if SQL (not folder)
 DO_OVER = True
 FIND_NO_IMAGE = True
-FIND_MISSING_BBOX_ONLY = True
+FIND_MISSING_BBOX_ONLY = False # use this to skip everything but the bbox
+REDO_MISSING_MONGO = True # use this to find missing faces when mysql bool == 1
+REDO_MISSING_BODIES = True # use this to find missing bodies when mysql bool == 1
 
 # OVERRIDE_PATH will force it to look in a specific folder
 OVERRIDE_PATH = False
@@ -115,7 +116,7 @@ switching to topic targeted
 18	afripics - where are these?
 '''
 # I think this only matters for IS_FOLDER mode, and the old SQL way
-SITE_NAME_ID = 8
+SITE_NAME_ID = 3
 # 2, shutter. 4, istock
 # 7 pond5, 8 123rf
 POSE_ID = 0
@@ -135,17 +136,16 @@ POSE_ID = 0
 # MAIN_FOLDER5 = "/Volumes/SSD2/images_123rf"
 
 # #testing locally with two
-MAIN_FOLDER1 = "/Volumes/OWC4/images_123rf_redo"
-MAIN_FOLDER2 = "/Volumes/OWC4/images_123rf_redo2"
-MAIN_FOLDER3 = "/Volumes/SSD2/images_123rf_redo"
+MAIN_FOLDER1 = "/Volumes/OWC5/segment_images_SQLonly_stillmissing/images_adobe"
+MAIN_FOLDER2 = "/Volumes/OWC5/segment_images_SQLonly_stillmissing/images_istock"
 # MAIN_FOLDERS = [MAIN_FOLDER1, MAIN_FOLDER2]
 
 
-MAIN_FOLDERS = [MAIN_FOLDER1, MAIN_FOLDER2, MAIN_FOLDER3]
+MAIN_FOLDERS = [MAIN_FOLDER1, MAIN_FOLDER2]
 # MAIN_FOLDERS = [MAIN_FOLDER1, MAIN_FOLDER2, MAIN_FOLDER3, MAIN_FOLDER4, MAIN_FOLDER5]
 
 BATCH_SIZE = 1000 # Define how many from each folder in each batch
-LIMIT = 10
+LIMIT = 1000
 
 #temp hack to go 1 subfolder at a time
 THESE_FOLDER_PATHS = ["9/9C", "9/9D", "9/9E", "9/9F", "9/90", "9/91", "9/92", "9/93", "9/94", "9/95", "9/96", "9/97", "9/98", "9/99"]
@@ -162,18 +162,24 @@ IS_SSD=False
 # for HDD topic, start at 28714744
 BODYLMS = True
 HANDLMS = True
-REDO_BODYLMS_3D = True # this makes it skip hands and YOLO
+REDO_BODYLMS_3D = False # this makes it skip hands and YOLO
 if REDO_BODYLMS_3D: HANDLMS = False # if doing 3D redo, don't do hands
 TOPIC_ID = None
 # TOPIC_ID = [24, 29] # adding a TOPIC_ID forces it to work from SegmentBig_isface, currently at 7412083
-DO_INVERSE = True
 SEGMENT = 0 # topic_id set to 0 or False if using HelperTable or not using a segment
-HelperTable_name = "SegmentHelper_oct2025_missing_face_encodings" # set to False if not using a HelperTable
+HelperTable_name = "SegmentHelper_nov2025_faces_without_bbox" # set to False if not using a HelperTable
 # HelperTable_name = False    
 # SegmentTable_name = 'SegmentOct20'
 SegmentTable_name = 'SegmentBig_isface'
 # if HelperTable_name, set start point
 START_IMAGE_ID = 0
+
+# HelperTable_name = "SegmentHelper_nov2025_SQL_only_still_faces"
+# class HelperTable(Base):
+#     __tablename__ = HelperTable_name
+#     seg_image_id=Column(Integer,primary_key=True, autoincrement=True)
+#     image_id = Column(Integer, primary_key=True, autoincrement=True)
+
 
 if BODYLMS is True or HANDLMS is True:
     # for SQL, it needs SegmentTable_name to be SegmentOct20 or SegmentBig_isface
@@ -225,8 +231,6 @@ if BODYLMS is True or HANDLMS is True:
         # temp for testing one pose at a time
         if POSE_ID:
             SUBQUERY = f" AND seg1.image_id IN (SELECT ip.image_id FROM ImagesPoses128 ip WHERE ip.cluster_id = {POSE_ID})"
-        if DO_INVERSE:
-            SUBQUERY = f" AND seg1.image_id NOT IN (SELECT ip.image_id FROM ImagesPoses128 ip)"
         else:
             SUBQUERY = f" AND seg1.image_id IN (SELECT ip.image_id FROM ImagesPoses128 ip)"
             
@@ -704,13 +708,14 @@ def find_face(image, df):
             "right": bbox_mp.origin_x + bbox_mp.width,
             "bottom": bbox_mp.origin_y + bbox_mp.height
         }
+
         if bbox and not FIND_MISSING_BBOX_ONLY:
+            # this is the regular version, where we want landmarks too
             # take just the bbox slice of the mp.Image and detect on that slice
             mp_image_face = slice_mp_image(image, bbox)
             landmarker_result = face_landmarker.detect(mp_image_face)
  
             bbox_json = json.dumps(bbox, indent = 4) 
-
             #read any image containing a face
             if landmarker_result.face_landmarks:
                 
@@ -728,17 +733,19 @@ def find_face(image, df):
 
                 # get angles, using r_vec property stored in class
                 # angles are meta. there are other meta --- size and resize or something.
-                angles = pose.rotationMatrixToEulerAnglesToDegrees()
+                pose.model_points = pose.get_model_points_corrected()
+                results = pose.calculate_face_pose_final(bbox, faceLms)
                 mouth_gap = pose.get_mouth_data(faceLms)
 
                 if is_face:
                     encodings = calc_encodings(image, faceLms,bbox) ## changed parameters
                     if VERBOSE: print(">> find_face SPLIT >> calc_encodings")
 
+                print("results:", results)
 
-                df.at['1', 'face_x'] = angles[0]
-                df.at['1', 'face_y'] = angles[1]
-                df.at['1', 'face_z'] = angles[2]
+                df.at['1', 'pitch'] = results["pitch"]
+                df.at['1', 'yaw'] = results["yaw"]
+                df.at['1', 'roll'] = results["roll"]
                 df.at['1', 'mouth_gap'] = mouth_gap
                 df.at['1', 'face_landmarks'] = pickle.dumps(faceLms)
                 df.at['1', 'bbox'] = bbox_json
@@ -753,6 +760,7 @@ def find_face(image, df):
         elif FIND_MISSING_BBOX_ONLY:
             # only looking for bbox, so if we found a face, we have a bbox
             is_face = True
+            bbox_json = json.dumps(bbox, indent = 4) 
             df.at['1', 'bbox'] = bbox_json
         else:
             if VERBOSE: print("+++++++++++++++++  NO BBOX DETECTED +++++++++++++++++++++")
@@ -763,6 +771,7 @@ def find_face(image, df):
         image_id = df.at['1', 'image_id']
         no_image_name = f"no_face_landmarks_{image_id}.jpg"
         is_face_no_lms = False
+        is_face = False
     df.at['1', 'is_face'] = is_face
     df.at['1', 'is_face_no_lms'] = is_face_no_lms
 
@@ -1460,7 +1469,7 @@ def find_and_save_body(image_id, image, bbox, mongo_body_landmarks, hand_landmar
     hue = sat = val = lum = lum_torso = hue_bb = sat_bb = val_bb = lum_bb = lum_torso_bb = selfie_bbox = bbox_dict = None
     is_left_shoulder=is_right_shoulder = is_feet = pose = is_hands = hand_landmarks = update_hand = None
 
-    if BODYLMS and mongo_body_landmarks is None or REDO_BODYLMS_3D:
+    if BODYLMS and mongo_body_landmarks is None or REDO_BODYLMS_3D or REDO_MISSING_MONGO:
         if VERBOSE: print("doing body, mongo_body_landmarks is None")
         # find body landmarks and normalize them using function
         is_body, n_landmarks, body_landmarks, body_world_landmarks, face_height, nose_pixel_pos = process_image_find_body_subroutine(image_id, image, bbox)
@@ -1526,14 +1535,6 @@ def find_and_save_body(image_id, image, bbox, mongo_body_landmarks, hand_landmar
             print(f"[process_image]session.query failed: {image_id}")
             time.sleep(io.retry_delay)
 
-def check_open_files():
-    process = psutil.Process(os.getpid())
-    open_files = process.open_files()
-    print(f"Currently open files: {len(open_files)}")
-    if len(open_files) > 100:  # arbitrary threshold
-        for f in open_files[-10:]:  # show last 10
-            print(f"  {f.path}")
-
 def process_image_bodylms(task):
     # this is the main show April 2025
 
@@ -1589,7 +1590,6 @@ def process_image_bodylms(task):
     except OSError as e:
         if e.errno == 24:  # Too many open files
             print(f"Thread {thread_id}: Too many open files error!")
-            check_open_files()  # From code above
         traceback.print_exc()
     except Exception as e:
         print(f'Thread {thread_id}: Error: {str(e)}')
@@ -1628,7 +1628,7 @@ def process_image(task):
 
     no_image = False
 
-    df = pd.DataFrame(columns=['image_id','is_face','is_body','is_face_distant','face_x','face_y','face_z','mouth_gap','face_landmarks','bbox','face_encodings','face_encodings68_J','body_landmarks'])
+    df = pd.DataFrame(columns=['image_id','is_face','is_body','is_face_distant','pitch','yaw','roll','mouth_gap','face_landmarks','bbox','face_encodings','face_encodings68_J','body_landmarks'])
     df.at['1', 'image_id'] = task[0]
     # image_test = cv2.imread(task[1])
     # print(">> SPLIT >> image_test shape", image_test.shape)
@@ -1799,13 +1799,25 @@ def process_image(task):
             session.commit()
 
         else:    
+            if FIND_MISSING_BBOX_ONLY and existing_entry is not None:
+                bbox_to_submit = insert_dict.get('bbox', None)
+                if bbox_to_submit is None: 
+                    print(f" >< FIND_MISSING_BBOX_ONLY: no bbox to submit, exiting {image_id}")
+                else:
+                    existing_entry.bbox = insert_dict.get('bbox', existing_entry.bbox)
+                    session.commit()
+                    print(f" [+] FIND_MISSING_BBOX_ONLY: updated bbox for image_id: {image_id}")
+                close_mongo()
+                close_session()
+                collect_the_garbage()
+                return
             # if there is one face detected
             face_encodings68 = insert_dict.pop('face_encodings68', None)
             face_landmarks = insert_dict.pop('face_landmarks', None)
-            if face_encodings68: is_encodings = 1
+            if face_encodings68 is not None: is_encodings = 1
             else: is_encodings = 0
-
-            if existing_entry is not None and existing_entry.mongo_encodings is None:
+            # print(f"image_id: {image_id} is_encodings: {is_encodings} face_encodings68: {face_encodings68} face_landmarks: {face_landmarks}")
+            if (existing_entry is not None and existing_entry.mongo_encodings is None) or REDO_MISSING_MONGO:
                 is_face_no_lms = insert_dict["is_face_no_lms"]
                 if VERBOSE: print(f"existing_entry for image_id: {image_id} with no existing mongo_encodings. is_face_no_lms is: {is_face_no_lms} Going to add these encodings: {is_encodings}")
                 # this is a new face to update an existing encodings entry
@@ -1819,7 +1831,7 @@ def process_image(task):
                 encoding_id = existing_entry.encoding_id  # Assuming 'encoding_id' is the name of your primary key column
                 commit_this = True
 
-            elif existing_entry is not None and existing_entry.mongo_encodings == 1 and existing_entry.bbox is None:
+            elif (existing_entry is not None and existing_entry.mongo_encodings == 1) or REDO_MISSING_MONGO and existing_entry.bbox is None:
                 is_face_no_lms = insert_dict["is_face_no_lms"]
                 if VERBOSE: print(f"existing_entry for image_id: {image_id} with no existing mongo_encodings. is_face_no_lms is: {is_face_no_lms} Going to add these encodings: {is_encodings}")
                 # this is a new face to update an existing encodings entry
@@ -1944,7 +1956,7 @@ def do_job(tasks_to_accomplish, tasks_that_are_done):
 
 def main():
     # print("main")
-
+    this_site_name_id = SITE_NAME_ID
 
     tasks_to_accomplish = Queue()
     tasks_that_are_done = Queue()
@@ -1959,14 +1971,15 @@ def main():
     if IS_FOLDER is True:
         for main_folder in MAIN_FOLDERS:
             first_pass = True
+            print("this_site_name_id:", this_site_name_id)
             if "adobe" in main_folder:
-                SITE_NAME_ID = 3
+                this_site_name_id = 3
             elif "123rf" in main_folder:
-                SITE_NAME_ID = 8
+                this_site_name_id = 8
             elif "vcg" in main_folder:
-                SITE_NAME_ID = 10
+                this_site_name_id = 10
             elif "getty" in main_folder:
-                SITE_NAME_ID = 1
+                this_site_name_id = 1
 
             # check for redo
             if "redo" in main_folder:
@@ -1978,7 +1991,7 @@ def main():
 
             for csv_foldercount_name in CSV_FOLDERCOUNT_NAMES:
                 if csv_foldercount_name == "folder_countout2.csv": first_pass = False
-                print(f"in IS_FOLDER: {main_folder} SITE_NAME_ID = {SITE_NAME_ID} doing csv_foldercount_name: {csv_foldercount_name}, first_pass: {first_pass}")
+                print(f"in IS_FOLDER: {main_folder} this_site_name_id = {this_site_name_id} doing csv_foldercount_name: {csv_foldercount_name}, first_pass: {first_pass}")
                 folder_paths = io.make_hash_folders(main_folder, as_list=True)
                 csv_foldercount_path = os.path.join(main_folder, csv_foldercount_name)
                 completed_folders = io.get_csv_aslist(csv_foldercount_path)
@@ -1996,7 +2009,7 @@ def main():
                         else:
                             print(str(folder_count), folder)
 
-                        img_list = io.get_img_list(folder)
+                        img_list = io.get_img_list(folder, force_ls=True)
                         print("len(img_list)", len(img_list))
 
                         # Initialize an empty list to store all the results
@@ -2013,19 +2026,19 @@ def main():
                             # CHANGE FOR EACH SITE
                             # ALSO site_image_id DOWN BELOW 
                             # Collect site_image_id values from the image filenames
-                            if SITE_NAME_ID == 8:
+                            if this_site_name_id == 8:
                             # 123rf
                                 batch_site_image_ids = [img.split("-")[0] for img in batch_img_list]
-                            elif SITE_NAME_ID == 5:
+                            elif this_site_name_id == 5:
                                 batch_site_image_ids = [img.split("-")[-1].replace(".jpg","") for img in batch_img_list]
-                            elif SITE_NAME_ID == 1:
+                            elif this_site_name_id == 1:
                             # gettyimages
                                 batch_site_image_ids = [img.split("-id")[-1].replace(".jpg", "") for img in batch_img_list]
-                            # site_name_id = 1
+                            # this_site_name_id = 1
                             else:
                             # # Adobe and pexels and shutterstock and istock
                                 batch_site_image_ids = [img.split(".")[0] for img in batch_img_list]
-                            site_name_id = SITE_NAME_ID
+                            # site_name_id = this_site_name_id
 
                             if VERBOSE: print("batch_site_image_ids", len(batch_site_image_ids))
                             if VERBOSE: print("batch_site_image_ids", batch_site_image_ids[:5])
@@ -2042,9 +2055,12 @@ def main():
 
                                     # get Images and Encodings values for each site_image_id in the batch
                                     # adding in mongo stuff. should return NULL if not there
+
+                                
                                     batch_query = session.query(Images.image_id, Images.site_image_id, Images.imagename, Encodings.encoding_id, Encodings.mongo_face_landmarks, Encodings.mongo_body_landmarks, Encodings.bbox, Encodings.mongo_body_landmarks_3D) \
                                                         .outerjoin(Encodings, Images.image_id == Encodings.image_id) \
-                                                        .filter(Images.site_image_id.in_(batch_site_image_ids), Images.site_name_id == site_name_id, Images.no_image.isnot(True))
+                                                        .filter(Images.site_image_id.in_(batch_site_image_ids), Images.site_name_id == this_site_name_id, Images.no_image.isnot(True))
+                                                                                                                
                                     batch_results = batch_query.all()
 
                                     all_results.extend(batch_results)
@@ -2067,7 +2083,7 @@ def main():
                             for img in batch_img_list:
 
                                 # CHANGE FOR EACH SITE
-                                if SITE_NAME_ID == 8:
+                                if this_site_name_id == 8:
                                     # extract site_image_id for 213rf
                                     site_image_id = img.split("-")[0]
 
@@ -2085,8 +2101,35 @@ def main():
                                     # if VERBOSE: print("is in results", result)
                                     # print("in results encoding_id", result.encoding_id)
                                     imagepath = os.path.join(folder, img)
-                                                                
-                                    if not result.encoding_id and first_pass is True:
+                                    if REDO_MISSING_MONGO:
+                                        # check to see if it is actually in mongo
+                                        if result.image_id:
+                                            print("REDO_MISSING_MONGO checking mongo for image_id:", result.image_id, "site_image_id", site_image_id)
+                                            init_mongo()
+                                            mongo_entry = mongo_collection.find_one({"image_id": result.image_id})
+                                            found_mongo_body_landmarks = mongo_entry.get("body_landmarks") if mongo_entry else None
+                                            found_mongo_face_landmarks = mongo_entry.get("face_landmarks") if mongo_entry else None
+                                            found_mongo_face_encodings = mongo_entry.get("face_encodings68") if mongo_entry else None
+                                            close_mongo()
+                                            if found_mongo_face_landmarks is not None: print(f" ~~Fl~~ found_mongo_face_landmarks {result.image_id} {site_image_id}")
+                                            else: print(f" ++Fl++ MISSING found_mongo_face_landmarks {result.image_id} {site_image_id}")
+                                            if found_mongo_face_encodings is not None: print(f" ~~Fe~~ found_mongo_face_encodings {result.image_id} {site_image_id}")
+                                            else: print(f" ++Fe++ MISSING found_mongo_face_encodings {result.image_id} {site_image_id}")
+                                            if found_mongo_body_landmarks is not None: print(f" ~~Bl~~ found_mongo_body_landmarks {result.image_id} {site_image_id}")
+                                            else: print(f" ++Bl++ MISSING found_mongo_body_landmarks {result.image_id} {site_image_id}")
+
+                                        else:
+                                            print(" >-< REDO_MISSING_MONGO no encoding_id for image_id:", result.image_id, "site_image_id", site_image_id)
+                                        # if it is missing in mongo, add it to the tasks
+                                        if found_mongo_face_landmarks is None or found_mongo_face_encodings is None:
+                                            task = (result.image_id, imagepath)
+                                            if not QUIET: print(" ~~ REDO_MISSING_MONGO adding to face queue:", result.image_id, "site_image_id", site_image_id)
+                                        elif found_mongo_body_landmarks is None:
+                                            task = (result.image_id, imagepath, result.mongo_face_landmarks, result.mongo_body_landmarks, result.bbox)
+                                            if not QUIET: print(" ~~ REDO_MISSING_MONGO adding to BODY queue:", result.image_id, "site_image_id", site_image_id)
+                                        else:
+                                            task = None
+                                    elif (not result.encoding_id and first_pass is True) or (FIND_MISSING_BBOX_ONLY is True):
                                         # if it hasn't been encoded yet, add it to the tasks
                                         task = (result.image_id, imagepath)
                                         if not QUIET: print(">> adding to face queue:", result.image_id, "site_image_id", site_image_id)
@@ -2130,12 +2173,12 @@ def main():
                                         this_count += 1
                                 else: 
                                     # store site_image_id and SITE_NAME_ID in WanderingImages table
-                                    wandering_name_site_id = site_image_id+"."+str(SITE_NAME_ID)
+                                    wandering_name_site_id = site_image_id+"."+str(this_site_name_id)
                                     existing_entry = session.query(WanderingImages).filter_by(wandering_name_site_id=wandering_name_site_id).first()
                                     if not existing_entry and not ("-id" in wandering_name_site_id):
                                         print("wandering image, not in results_dict: ", site_image_id)
                                         try:
-                                            new_wandering_entry = WanderingImages(wandering_name_site_id=wandering_name_site_id, site_image_id=site_image_id, site_name_id=SITE_NAME_ID)
+                                            new_wandering_entry = WanderingImages(wandering_name_site_id=wandering_name_site_id, site_image_id=site_image_id, site_name_id=this_site_name_id)
                                             session.add(new_wandering_entry)
                                             session.commit()
                                         except:
