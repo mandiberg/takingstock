@@ -645,67 +645,6 @@ class SortPose:
             self.angle_list = res
             return res
 
-    def get_divisor(self, segment):
-
-        divisor = eval(f"1e{self.ROUND}")
-        self.d = {}
-        for angle in self.angle_list:
-            # print(angle)
-            self.d[angle] = segment.loc[((segment[self.SORT] > angle) & (segment[self.SORT] < angle+(1/divisor)))]
-            # print(self.d[angle].size)
-        
-
-    def get_median(self):
-
-        median = None
-        print(self.angle_list)
-        angle_list_median = round(statistics.median(self.angle_list))
-        print('angle_list_median: ',angle_list_median)
-
-        print(self.d)
-        # this is an empty set
-        print('angle_list_median[SECOND_SORT]',self.d[angle_list_median])
-
-        if not self.d[angle_list_median][self.SECOND_SORT].empty:
-            median = self.d[angle_list_median][self.SECOND_SORT].median()
-        else:
-            newmedian = angle_list_median+1
-            while newmedian < max(self.angle_list):
-                if self.d[newmedian][self.SECOND_SORT].empty:
-                    newmedian += 1
-                else:
-                    median = self.d[newmedian][self.SECOND_SORT].median()
-                    print('good newmedian is: ',newmedian)
-                    print('good new median is: ', median)
-                    print(self.d[newmedian][self.SECOND_SORT].size)
-                    break
-        if not median:
-            print("median is none --------- this is a problem")
-            median = None
-
-        return median
-        print("starting from this median: ",median)
-
-    def get_metamedian(self):
-        medians = []
-        print('anglelist: ',self.angle_list)
-
-        for angle in self.angle_list:
-            # print('angle: ',angle)
-            # print ('d angle size: ',self.d[angle].size)
-            try:
-                print("not empty set!")
-                print(self.d[angle].iloc[1]['imagename'])
-                this_median = self.d[angle]['face_x'].median()
-                medians.append(this_median)
-            except:
-                print("empty set, moving on")
-        print("all medians: ",medians)
-        print("median of all medians: ",statistics.median(medians))
-        self.metamedian = statistics.mean(medians)
-        print("mean of all medians: ",self.metamedian)
-        return self.metamedian
-
     def is_face(self, image):
         # For static images:
         IMAGE_FILES = []
@@ -2468,7 +2407,7 @@ class SortPose:
     def get_median_value(self, df_enc, sort_column):
         # Get list of bbox rows and filter out invalid entries (None, wrong length, non-numeric)
         flattened_array = df_enc[sort_column].tolist()
-        if self.VERBOSE: print("flattened_array", flattened_array)
+        if self.VERBOSE: print("first item in flattened_array", flattened_array[0])
 
         clean_rows = []
         for row in flattened_array:

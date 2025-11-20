@@ -45,9 +45,9 @@ VIDEO = False
 CYCLECOUNT = 1
 
 # keep this live, even if not SSD
-# SegmentTable_name = 'SegmentOct20'
+SegmentTable_name = 'SegmentOct20'
 # SegmentHelper_name = None
-SegmentTable_name = 'SegmentBig_isface'
+# SegmentTable_name = 'SegmentBig_isface'
 # SegmentTable_name = 'SegmentBig_isnotface'
 # SegmentHelper_name = 'SegmentHelper_may2025_4x4faces'
 # SegmentHelper_name = 'SegmentHelper_sept2025_heft_keywords'
@@ -84,7 +84,7 @@ MODES = {0:'paris_photo_torso_images_topics', 1:'paris_photo_torso_videos_topics
          6:'heft_torso_keywords'}
 MODE_CHOICE = 6
 CURRENT_MODE = MODES[MODE_CHOICE]
-LIMIT = 100 # this is the limit for the SQL query
+LIMIT = 1000 # this is the limit for the SQL query
 
 # set defaults, including for all modes to False
 FULL_BODY = IS_HAND_POSE_FUSION = ONLY_ONE = GENERATE_FUSION_PAIRS = USE_FUSION_PAIR_DICT = IS_CLUSTER = IS_ONE_CLUSTER = USE_POSE_CROP_DICT = IS_TOPICS= IS_ONE_TOPIC = USE_AFFECT_GROUPS = False
@@ -182,9 +182,9 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     SegmentTable_name = 'SegmentBig_isface'
     SegmentHelper_name = 'SegmentHelper_sept2025_heft_keywords' # TK revisit this for prodution run
     # SegmentHelper_name = 'SegmentHelper_nov2025_placard' # TK revisit this for prodution run
-    SORT_TYPE = "planar_hands"
+    # SORT_TYPE = "planar_hands"
     # SORT_TYPE = "ArmsPoses3D" # this triggers meta body poses 3D
-    # SORT_TYPE = "obj_bbox" # make sure OBJ_CLS_ID is set below
+    SORT_TYPE = "obj_bbox" # make sure OBJ_CLS_ID is set below
     # META = True
     TESTING = False
     IS_HAND_POSE_FUSION = True # do we use fusion clusters
@@ -199,7 +199,8 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     N_HSV = 23 # 0-22 metaclusters of 96 HSV clusters
     # N_HSV = 0 # don't do HSV clusters
     
-    TSP_SORT = False
+    TSP_SORT = True
+    ONE_SHOT = True # take all files, based off the very first sort order.
     CHOP_FIRST = True
     # PURGING_DUPES = True
     FORCE_TARGET_COUNT = 90
@@ -221,28 +222,23 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     # this control whether sorting by topics
     # IS_TOPICS = True # if using Clusters only, must set this to False
 
-    ONE_SHOT = False # take all files, based off the very first sort order.
-    JUMP_SHOT = True # jump to random file if can't find a run (I don't think this applies to planar?)
+    # JUMP_SHOT = True # jump to random file if can't find a run (I don't think this applies to planar?)
 
 
     # USE_ALL = True # do this for HEFT bc it turns off face xyz and mouthgap filters && if SORT_TYPE == "planar_hands" forces ONE_SHOT
 
-    USE_PAINTED = False
+    USE_PAINTED = True
     INPAINT= True
     INPAINT_COLOR = "white" # "white" or "black" or None (none means generative inpainting with size limits)
 
     # when doing IS_HAND_POSE_FUSION code currently only supports one topic at a time
     IS_ONE_TOPIC = True
-    N_TOPICS = 100
-    # FOCUS_CLUSTER_HACK_LIST = [57,69, 92,98,117] #256
-    # FOCUS_CLUSTER_HACK_LIST = [181]
-    # FOCUS_CLUSTER_HACK_LIST = [24,42,71,93,167,204,294,301,358,398,443,526,532,590,623,658,708,729] #768
-    # FOCUS_CLUSTER_HACK_LIST = [239, 299, 443]
+    N_TOPICS = 100 # turns topic into keyword
 
     # XYZ_FILTER_OCT2025_HEFT_KEYWORDS = " AND s.face_x > -33 AND s.face_x < -27 AND s.face_y > -2 AND s.face_y < 2 AND s.face_z > -2 AND s.face_z < 2"
     # XYZ_FILTER_OCT2025_HEFT_KEYWORDS = " AND s.face_x IS NOT NULL "
     # this gets added in the sql select function, based on whether cluster in in the XYZ_FILTER_LIST_10DEGREES list
-    XYZ_FILTER_10DEGREES = " AND s.face_x > -45 AND s.face_x < -5 AND s.face_y > -15 AND s.face_y < 15 AND s.face_z > -15 AND s.face_z < 15"
+    # XYZ_FILTER_10DEGREES = " AND s.face_x > -45 AND s.face_x < -5 AND s.face_y > -15 AND s.face_y < 15 AND s.face_z > -15 AND s.face_z < 15"
     XYZ_FILTER_10DEGREES = " "
     
     TOPIC_NO = [22411] # if doing an affect topic fusion, this is the wrapper topic, OR keyword. add .01, .1 etc for sub selects from KEYWORD_DICT
@@ -372,6 +368,7 @@ IS_ANGLE_SORT = False
 
 # gets focus cluster list from the FOCUS_CLUSTER_DICT via CLUSTER_TYPE and TOPIC_NO (which is a list of one keyword)
 if TOPIC_NO is not None and IS_ONE_TOPIC and IS_HAND_POSE_FUSION:
+    print("setting FOCUS_CLUSTER_HACK_LIST for TOPIC_NO", TOPIC_NO, "with CLUSTER_TYPE", CLUSTER_TYPE)
     FOCUS_CLUSTER_HACK_LIST = FOCUS_CLUSTER_DICT.get(CLUSTER_TYPE, {}).get(int(math.floor(TOPIC_NO[0])), None)
 
 
@@ -2057,81 +2054,6 @@ def write_images(img_list):
         cv2.imwrite(path_img[0],path_img[1])
 
 
-def process_iterr_angles(start_img_name, df_segment, cluster_no, sort):
-    #cycling patch
-    img_list = []
-    cycle = 0 
-    metamedian = sort.metamedian
-    d = sort.d
-
-    print("CYCLE to test: ",cycle, start_img_name)
-    while cycle < CYCLECOUNT:
-        print("CYCLE: ",cycle)
-        for angle in sort.angle_list:
-            print("angle: ",str(angle))
-            # print(d[angle].iloc[(d[angle][sort.SECOND_SORT]-metamedian).abs().argsort()[:2]])
-            if(d[angle].size) != 0:
-                try:
-                    print("sort.counter_dict[start_img_name] before sort_by_face_dist_NN")
-                    print(sort.counter_dict["start_img_name"] )
-                    if sort.counter_dict["start_img_name"] != "median":
-                        try:
-                            last_row = df_segment.loc[sort.counter_dict["start_img_name"]]
-                            print("last_row")
-                            print(last_row)
-                        except Exception as e:
-                            traceback.print_exc()
-                            print(str(e))
-                    df_enc, df_128_enc = prep_encodings(d[angle])
-                    # # get dataframe sorted by distance
-                    df_sorted = sort_by_face_dist_NN(df_enc, df_128_enc)
-                    # print("df_sorted")
-                    # print(df_sorted)
-                    # print("sort.counter_dict before linear_test_df")
-                    # print(sort.counter_dict)
-                    if sort.counter_dict["last_image"] is None:
-                        try:
-                            sort.counter_dict["last_image"] = cv2.imread(sort.counter_dict["start_img_name"])
-                        except:
-                            print("failed to open sort.counter_dict[start_img_name]")
-                    else:
-                        print("sort.counter_dict has a last_image")
-                    # write_images(df_sorted, cluster_no)
-                    # print("df_sorted before linear_test_df")
-
-                    # print(type(df_sorted.size))
-                    # print(df_sorted.size)
-                    # print(df_sorted)
-                    # print("sort.counter_dict after linear_test_df")
-                    # print(sort.counter_dict)
-                    # print("img_list")
-                    # print(img_list[0])
-                    # print(len(img_list))
-                    # # only write the first, closest one
-                    # # in the future, prob want to assign each image list to
-                    # # a list/df keyed by angle, so can iterate through it? 
-                    if angle > 15 and motion['forward_smile'] == True:
-                        img_list = linear_test_df(df_sorted,cluster_no)
-                        write_images(img_list)
-                    else:
-                        print("sending in an itter cap")
-                        img_list = linear_test_df(df_sorted,cluster_no, 1)
-                        cv2.imwrite(img_list[0][0],img_list[0][1])
-                    
-
-
-                except:
-                    print('failed cycle angle:')
-                    # print('failed:',row['imagename'])
-            else:
-                print("skipping empty angle")
-        print('finished a cycle')
-        sort.angle_list.reverse()
-        cycle = cycle +1
-        # # print(angle_list)
-
-    print_counters()
-
 
 def process_linear(start_img_name, df_segment, file_prefix, sort):
     # linear sort by encoding distance
@@ -2235,6 +2157,7 @@ def main():
         print(f"set_multiplier_and_dims cluster_no: {cluster_no}, pose_no: {pose_no}")
         if isinstance(cluster_no, str) and cluster_no.startswith('c'):
             cluster_no = int(cluster_no[1:])
+
         FOCUS_CLUSTER_HACK_LIST = FOCUS_CLUSTER_DICT.get(CLUSTER_TYPE, {}).get(int(math.floor(TOPIC_NO[0])), None)
 
         # if pose_no, overide sort.image_edge_multiplier based on pose_no
@@ -2370,25 +2293,7 @@ def main():
                 # this is old, hasn't been refactored.
                 img_list, size = cycling_order(CYCLECOUNT, sort)
                 # size = sort.get_cv2size(ROOT, img_list[0])
-            elif IS_ANGLE_SORT is True:
-                # get list of all angles in segment
-                angle_list = sort.createList(df_segment)
-
-                # sort segment by angle list
-                # creates sort.d attribute: a dataframe organized (indexed?) by angle list
-                sort.get_divisor(df_segment)
-
-                # # is this used anywhere? 
-                # angle_list_pop = angle_list.pop()
-
-                # get median for first sort
-                median = sort.get_median()
-
-                # get metamedian for second sort, creates sort.metamedian attribute
-                sort.get_metamedian()
-                # print(df_segment)
-
-                process_iterr_angles(start_img_name,df_segment, cluster_no, sort)
+            # ANGLE SORT USED TO BE HERE in an elif. Removed Nov 20, 2205
             else:   
                 # hard coding override to just start from median
                 # sort.counter_dict["start_img_name"] = "median"
@@ -2681,7 +2586,7 @@ def main():
                     # if VERBOSE: print(f"all_potential_hsv_clusters for cluster_topic_no {cluster_topic_no} is {all_potential_hsv_clusters}")
                     all_other_pair_list = [cluster_topic_no, all_other_hsv_clusters]
                     this_n_hsv_clusters.append(all_other_pair_list)
-                if VERBOSE: print(f"this_n_hsv_clusters for cluster_topic_no {cluster_topic_no} is {this_n_hsv_clusters}")
+                # if VERBOSE: print(f"this_n_hsv_clusters for cluster_topic_no {cluster_topic_no} is {this_n_hsv_clusters}")
 
                 # for this_cluster in n_cluster_topics:
                 #     # print(f"checking cluster_topic_no {cluster_topic_no} against hsv cluster {this_cluster[0]}")
@@ -2692,7 +2597,7 @@ def main():
                 return this_n_hsv_clusters
 
             def do_first_select_map_images(cluster_topic_no, second_cluster_topic, hsv_cluster=None):
-                print(f"cluster_topic_no: {cluster_topic_no}, hsv_cluster: {hsv_cluster}")
+                # print(f"cluster_topic_no: {cluster_topic_no}, hsv_cluster: {hsv_cluster}")
                 if IS_CLUSTER and cluster_topic_no < START_CLUSTER: return
                 if USE_AFFECT_GROUPS: 
                     cluster_topic_no = AFFECT_GROUPS_LISTS[cluster_topic_no] # redefine cluster_no with affect group list
@@ -2710,9 +2615,9 @@ def main():
             if CURRENT_MODE == 'heft_torso_keywords' and N_HSV > 0:
                 print("doing heft_torso_keywords with N_HSV > 0, so Keyword -> MetaClusters -> HSV")
                 for cluster_topic_no in range(N_CLUSTERS):
-                    print(f"cluster_topic_no range(N_CLUSTERS): {cluster_topic_no}, n_hsv_clusters: {n_hsv_clusters}")
+                    # print(f"cluster_topic_no range(N_CLUSTERS): {cluster_topic_no}, n_hsv_clusters: {n_hsv_clusters}")
                     if isinstance(n_cluster_topics, list) and len(n_cluster_topics) > 1:
-                        print(f"cluster_topic_no: {cluster_topic_no}, this_n_hsv_clusters: {n_cluster_topics}")
+                        # print(f"cluster_topic_no: {cluster_topic_no}, len this_n_hsv_clusters: {len(n_cluster_topics)}")
                         this_n_hsv_clusters = sub_select_clusters_by_hsv(cluster_topic_no, n_cluster_topics)
                     elif not isinstance(n_cluster_topics, list) and n_cluster_topics is not None:
                         this_n_hsv_clusters = n_cluster_topics
