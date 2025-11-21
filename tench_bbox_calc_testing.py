@@ -737,8 +737,23 @@ multiplier_list = [
 # sort.max_image_edge_multiplier is the maximum of the elements
 
 UPSCALE_MODEL_PATH=os.path.join(os.getcwd(), "models", "FSRCNN_x4.pb")
-# construct my own objects
-sort = SortPose(motion, face_height_output, image_edge_multiplier,EXPAND, ONE_SHOT, JUMP_SHOT, HSV_BOUNDS, VERBOSE,INPAINT, SORT_TYPE, OBJ_CLS_ID,UPSCALE_MODEL_PATH=UPSCALE_MODEL_PATH,TSP_SORT=TSP_SORT)
+# construct my own objects via config dict
+cfg = {
+    'motion': motion,
+    'face_height_output': face_height_output,
+    'image_edge_multiplier': image_edge_multiplier,
+    'EXPAND': EXPAND,
+    'ONE_SHOT': ONE_SHOT,
+    'JUMP_SHOT': JUMP_SHOT,
+    'HSV_CONTROL': HSV_BOUNDS,
+    'VERBOSE': VERBOSE,
+    'INPAINT': INPAINT,
+    'SORT_TYPE': SORT_TYPE,
+    'OBJ_CLS_ID': OBJ_CLS_ID,
+    'UPSCALE_MODEL_PATH': UPSCALE_MODEL_PATH,
+    'TSP_SORT': TSP_SORT
+}
+sort = SortPose(config=cfg)
 
 # # TEMP TK TESTING
 # sort.MIND = .5

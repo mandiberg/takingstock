@@ -51,7 +51,16 @@ EXPAND = False
 ONE_SHOT = False # take all files, based off the very first sort order.
 JUMP_SHOT = False # jump to random file if can't find a run
 
-sort = SortPose(motion, face_height_output, image_edge_multiplier_sm)
+cfg = {
+    'motion': motion,
+    'face_height_output': face_height_output,
+    'image_edge_multiplier': image_edge_multiplier_sm,
+    'EXPAND': EXPAND,
+    'ONE_SHOT': ONE_SHOT,
+    'JUMP_SHOT': JUMP_SHOT,
+    'VERBOSE': VERBOSE
+}
+sort = SortPose(config=cfg)
 
 LIMIT= 200000
 # Initialize the counter

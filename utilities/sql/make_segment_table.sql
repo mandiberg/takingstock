@@ -8,7 +8,7 @@ DROP TABLE SegmentHelper_dec27_getty_noface ;
 DELETE FROM SegmentHelper_sept2025_heft_keywords;
 
 -- create helper segment table
-CREATE TABLE SegmentHelper_nov2025_SQL_only_test (
+CREATE TABLE SegmentHelper_nov2025_SQL_only_still_faces (
     seg_image_id int NOT NULL AUTO_INCREMENT PRIMARY KEY,
     image_id INTEGER,
     FOREIGN KEY (image_id) REFERENCES Images(image_id)

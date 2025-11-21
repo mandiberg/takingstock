@@ -95,7 +95,21 @@ EXPAND = False
 ONE_SHOT = False # take all files, based off the very first sort order.
 JUMP_SHOT = False # jump to random file if can't find a run
 
-sort = SortPose(motion, face_height_output, image_edge_multiplier_sm,EXPAND, ONE_SHOT, JUMP_SHOT, None, VERBOSE, False, None, 0)
+# construct SortPose with config dict
+cfg = {
+    'motion': motion,
+    'face_height_output': face_height_output,
+    'image_edge_multiplier': image_edge_multiplier_sm,
+    'EXPAND': EXPAND,
+    'ONE_SHOT': ONE_SHOT,
+    'JUMP_SHOT': JUMP_SHOT,
+    'HSV_CONTROL': None,
+    'VERBOSE': VERBOSE,
+    'INPAINT': False,
+    'SORT_TYPE': None,
+    'OBJ_CLS_ID': 0
+}
+sort = SortPose(config=cfg)
 # sort = SortPose(motion, face_height_output, image_edge_multiplier,EXPAND, ONE_SHOT, JUMP_SHOT, HSV_BOUNDS, VERBOSE,INPAINT, SORT_TYPE, OBJ_CLS_ID)
 
 placeholder_image = np.ones((10, 10, 3), dtype=np.uint8) * 255

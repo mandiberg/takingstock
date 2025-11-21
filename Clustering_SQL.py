@@ -126,7 +126,22 @@ else: META = False
 
 ONE_SHOT= JUMP_SHOT= HSV_CONTROL=  INPAINT= OBJ_CLS_ID = UPSCALE_MODEL_PATH =None
 # face_height_output, image_edge_multiplier, EXPAND=False, ONE_SHOT=False, JUMP_SHOT=False, HSV_CONTROL=None, VERBOSE=True,INPAINT=False, SORT_TYPE="128d", OBJ_CLS_ID = None,UPSCALE_MODEL_PATH=None, use_3D=False
-sort = SortPose(motion, face_height_output, image_edge_multiplier_sm, EXPAND,  ONE_SHOT,  JUMP_SHOT,  HSV_CONTROL,  VERBOSE, INPAINT,  CLUSTER_TYPE, OBJ_CLS_ID, UPSCALE_MODEL_PATH, LMS_DIMENSIONS)
+cfg = {
+    'motion': motion,
+    'face_height_output': face_height_output,
+    'image_edge_multiplier': image_edge_multiplier_sm,
+    'EXPAND': EXPAND,
+    'ONE_SHOT': ONE_SHOT,
+    'JUMP_SHOT': JUMP_SHOT,
+    'HSV_CONTROL': HSV_CONTROL,
+    'VERBOSE': VERBOSE,
+    'INPAINT': INPAINT,
+    'SORT_TYPE': CLUSTER_TYPE,
+    'OBJ_CLS_ID': OBJ_CLS_ID,
+    'UPSCALE_MODEL_PATH': UPSCALE_MODEL_PATH,
+    'LMS_DIMENSIONS': LMS_DIMENSIONS
+}
+sort = SortPose(config=cfg)
 # MM you need to use conda activate mps_torch310 
 SUBSELECT_ONE_CLUSTER = 0
 

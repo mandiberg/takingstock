@@ -41,9 +41,6 @@ title = 'Please choose your operation: '
 options = ['sequence and save CSV', 'assemble images from CSV']
 option, MODE = pick(options, title)
 
-VIDEO = False
-CYCLECOUNT = 1
-
 # keep this live, even if not SSD
 SegmentTable_name = 'SegmentOct20'
 # SegmentHelper_name = None
@@ -62,9 +59,6 @@ IS_SSD = False
 io = DataIO(IS_SSD)
 db = io.db
 
-# declare all the globals as None in one line
-N_CLUSTERS = N_HANDS = SORT_TYPE = FULL_BODY = IS_HAND_POSE_FUSION = ONLY_ONE = GENERATE_FUSION_PAIRS = MIN_VIDEO_FUSION_COUNT = FUSION_PAIR_DICT = IS_CLUSTER = IS_ONE_CLUSTER = CLUSTER_NO = START_CLUSTER = USE_POSE_CROP_DICT = IS_SEGONLY = HSV_CONTROL = VISIBLE_HAND_LEFT = VISIBLE_HAND_RIGHT = USE_NOSEBRIDGE = LIMIT = MIN_CYCLE_COUNT = IS_HANDS = IS_ONE_HAND = NO_KIDS = ONLY_KIDS = USE_PAINTED = OUTPAINT =  INPAINT_COLOR= INPAINT_MAX_SHOULDERS= OUTPAINT_MAX= BLUR_THRESH_MAX= BLUR_THRESH_MIN= BLUR_RADIUS= MASK_OFFSET= VERBOSE= CALIBRATING= SAVE_IMG_PROCESS= IS_ANGLE_SORT= IS_TOPICS= N_TOPICS= IS_ONE_TOPIC= TOPIC_NO= NEG_TOPICS= POS_TOPICS= NEUTRAL_TOPICS= AFFECT_GROUPS_LISTS= USE_AFFECT_GROUPS= None
-N_HSV = HAND_POSE_NO = 0 # defaults to no HSV clusters
 
 # CSV_FOLDER = os.path.join(io.ROOT_DBx, "body3D_segmentbig_useall256_CSVs_MMtest")
 
@@ -86,13 +80,6 @@ MODE_CHOICE = 6
 CURRENT_MODE = MODES[MODE_CHOICE]
 LIMIT = 1000 # this is the limit for the SQL query
 
-# set defaults, including for all modes to False
-FULL_BODY = IS_HAND_POSE_FUSION = ONLY_ONE = GENERATE_FUSION_PAIRS = USE_FUSION_PAIR_DICT = IS_CLUSTER = IS_ONE_CLUSTER = USE_POSE_CROP_DICT = IS_TOPICS= IS_ONE_TOPIC = USE_AFFECT_GROUPS = False
-EXPAND = ONE_SHOT = JUMP_SHOT = USE_ALL = CHOP_FIRST = TSP_SORT = USE_HEAD_POSE = False
-USE_PAINTED = OUTPAINT = INPAINT= META = USE_HSV = PURGING_DUPES = False
-FUSION_FOLDER = FOCUS_CLUSTER_HACK_LIST = FORCE_TARGET_COUNT = None
-MIN_CYCLE_COUNT = 1
-AUTO_EDGE_CROP = False # this triggers the dynamic cropping based on min_max_body_landmarks_for_crop
 
 image_edge_multiplier = None
 N_TOPICS = 64 # changing this to 14 triggers the affect topic fusion, 100 is keywords. 64 is default
@@ -183,8 +170,8 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     SegmentHelper_name = 'SegmentHelper_sept2025_heft_keywords' # TK revisit this for prodution run
     # SegmentHelper_name = 'SegmentHelper_nov2025_placard' # TK revisit this for prodution run
     # SORT_TYPE = "planar_hands"
-    # SORT_TYPE = "ArmsPoses3D" # this triggers meta body poses 3D
-    SORT_TYPE = "obj_bbox" # make sure OBJ_CLS_ID is set below
+    SORT_TYPE = "ArmsPoses3D" # this triggers meta body poses 3D
+    # SORT_TYPE = "obj_bbox" # make sure OBJ_CLS_ID is set below
     # META = True
     TESTING = False
     IS_HAND_POSE_FUSION = True # do we use fusion clusters
@@ -198,12 +185,14 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     USE_HSV = True
     N_HSV = 23 # 0-22 metaclusters of 96 HSV clusters
     # N_HSV = 0 # don't do HSV clusters
-    
-    TSP_SORT = True
-    ONE_SHOT = True # take all files, based off the very first sort order.
-    CHOP_FIRST = True
+
+    # turning all three off to do old style non tsp sort    
+    # TSP_SORT = True
+    # ONE_SHOT = True # take all files, based off the very first sort order.
+    # CHOP_FIRST = True
+
     # PURGING_DUPES = True
-    FORCE_TARGET_COUNT = 90
+    FORCE_TARGET_COUNT = 60
     # if TESTING: IS_HAND_POSE_FUSION = GENERATE_FUSION_PAIRS = False
 
     if not USE_HSV:
@@ -219,6 +208,9 @@ elif CURRENT_MODE == 'heft_torso_keywords':
         MIN_VIDEO_FUSION_COUNT = 300 # this is the cut off for the CSV fusion pairs
         if TSP_SORT: MIN_CYCLE_COUNT = FORCE_TARGET_COUNT
         else: MIN_CYCLE_COUNT = 150 # this is the cut off for the SQL query results
+    
+    # HAAAAACK
+    MIN_CYCLE_COUNT = 60
     # this control whether sorting by topics
     # IS_TOPICS = True # if using Clusters only, must set this to False
 
@@ -241,10 +233,19 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     # XYZ_FILTER_10DEGREES = " AND s.face_x > -45 AND s.face_x < -5 AND s.face_y > -15 AND s.face_y < 15 AND s.face_z > -15 AND s.face_z < 15"
     XYZ_FILTER_10DEGREES = " "
     
-    TOPIC_NO = [22411] # if doing an affect topic fusion, this is the wrapper topic, OR keyword. add .01, .1 etc for sub selects from KEYWORD_DICT
-    KEYWORD_OBJECT = None #set to 999 to get only unsorted images
-    KEYWORD_ORIENTATION = None
-    KEYWORD_EXCLUDE = False # this accesses the ik_obj.exclude column
+    TOPIC_NO = [553.1] # if doing an affect topic fusion, this is the wrapper topic, OR keyword. add .01, .1 etc for sub selects from KEYWORD_DICT
+
+    # this needs to be integrated into the search for each cluster, but doing here for the moment when doing single topic/cluster testing
+    KEYWORD_OBJECT = KEYWORD_ORIENTATION = None
+    KEYWORD_EXCLUDE = False
+    cluster_map_key = CLUSTER_MAP.get(SORT_TYPE, (None, None))[0]
+    OBJ_ORIENTATION_VALS = OBJ_ORIENTATION_DICT.get(TOPIC_NO[0],None)
+    if OBJ_ORIENTATION_VALS is not None:
+        CLUSTER_ORIENTATION_VALS = OBJ_ORIENTATION_VALS.get(FOCUS_CLUSTER_DICT[cluster_map_key].get(math.floor(TOPIC_NO[0]), None)[0]) 
+        if CLUSTER_ORIENTATION_VALS is not None:
+            KEYWORD_OBJECT, KEYWORD_ORIENTATION = CLUSTER_ORIENTATION_VALS
+        
+
     if META: folder = "heft_keyword_fusion_clusters_hsv_meta"
     else: folder = "heft_keyword_ArmsPoses3D_256/"
     FUSION_FOLDER = os.path.join("utilities/data/", folder)
@@ -290,37 +291,7 @@ USE_NOSEBRIDGE = True
 
 # this is set dynamically based on SORT_TYPE set above
 if IS_HAND_POSE_FUSION:
-    if SORT_TYPE in ["planar_hands", "fingertips_positions", "128d"]:
-        # first sort on HandsPositions, then on HandsGestures
-        CLUSTER_TYPE = "HandsPositions" # Select on 3d hands
-        CLUSTER_TYPE_2 = "HandsGestures" # Sort on 2d hands
-    elif SORT_TYPE == "planar_body":
-        # if fusion, select on body and gesture, sort on hands positions
-        SORT_TYPE = "planar_hands"
-        CLUSTER_TYPE = "BodyPoses"
-        CLUSTER_TYPE_2 = "HandsGestures"
-    elif SORT_TYPE == "body3D":
-        # if fusion, select on body3D and gesture, sort on hands positions
-        SORT_TYPE = "planar_hands"
-        CLUSTER_TYPE = "BodyPoses3D"
-        CLUSTER_TYPE_2 = "HandsGestures"
-    elif SORT_TYPE == "ArmsPoses3D":
-        # if fusion, select on ArmsPoses3D and gesture, sort on hands positions
-        SORT_TYPE = "ArmsPoses3D"
-        # CLUSTER_TYPE = "MetaBodyPoses3D"
-        CLUSTER_TYPE = "ArmsPoses3D"
-        # CLUSTER_TYPE_2 = "HandsGestures" # commenting this out for now TK
-        CLUSTER_TYPE_2 = None
-        # if TESTING:
-        #     CLUSTER_TYPE = "BodyPoses3D"
-        #     CLUSTER_TYPE_2 = None
-    # CLUSTER_TYPE is passed to sort. below
-    elif SORT_TYPE == "obj_bbox":
-        CLUSTER_TYPE = "ArmsPoses3D"
-        CLUSTER_TYPE_2 = None
-
-        # CLUSTER_TYPE = "HandsPositions" # Select on 3d hands
-        # CLUSTER_TYPE_2 = "HandsGestures" # Sort on 2d hands
+    CLUSTER_TYPE, CLUSTER_TYPE_2 = CLUSTER_MAP.get(SORT_TYPE, (None, None))
 
 else:
     if SORT_TYPE == "ArmsPoses3D":
@@ -372,20 +343,6 @@ if TOPIC_NO is not None and IS_ONE_TOPIC and IS_HAND_POSE_FUSION:
     FOCUS_CLUSTER_HACK_LIST = FOCUS_CLUSTER_DICT.get(CLUSTER_TYPE, {}).get(int(math.floor(TOPIC_NO[0])), None)
 
 
-#######################
-
-#######################
-
-#  is isolated,  is business,  babies, 17 pointing
-#  is doctor <<  covid
-#  is hands
-#  phone = 15
-#  feeling frustrated
-#  is hands to face
-#  shout
-# 7 is surprise
-#  is yoga << planar,  planar,  fingers crossed
-
 DRAW_TEST_LMS = False # this is for testing the landmarks
 
 if SORT_TYPE == "planar_hands" and USE_ALL:
@@ -397,7 +354,7 @@ NORMED_BODY_LMS = True
 MOUTH_GAP = 0
 # if planar_body set OBJ_CLS_ID for each object type
 # 67 is phone, 63 is laptop, 26: 'handbag', 27: 'tie', 32: 'sports ball'
-if "key" in CURRENT_MODE: OBJ_CLS_ID = OBJ_DICT.get(TOPIC_NO[0], 0)
+if "key" in CURRENT_MODE: OBJ_CLS_ID = OBJ_DICT.get(math.floor(TOPIC_NO[0]), 0)
 else: OBJ_CLS_ID = 0
 
 DO_OBJ_SORT = True
@@ -423,6 +380,7 @@ NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 # else:
 #     io.ROOT = io.ROOT36
 
+########################## BEGIN SQL CONSTRUCTION ##############################
 
 if IS_SEGONLY is not True:
     print("production run. IS_SSD is", IS_SSD)
@@ -471,7 +429,7 @@ elif IS_SEGONLY and io.platform == "darwin":
         # WHERE += " AND s.face_x > -50 "
     else:
         WHERE += " AND s.face_x > -33 AND s.face_x < -27 AND s.face_y > -2 AND s.face_y < 2 AND s.face_z > -2 AND s.face_z < 2"
-# OVERRIDE FOR TESTING
+        # OVERRIDE FOR TESTING
         # WHERE += " AND s.face_x > -27 AND s.face_x < 0 AND s.face_y > -5 AND s.face_y < 5 AND s.face_z > -5 AND s.face_z < 5"
     # HIGHER
     # WHERE = "s.site_name_id != 1 AND face_encodings68 IS NOT NULL AND face_x > -27 AND face_x < -23 AND face_y > -2 AND face_y < 2 AND face_z > -2 AND face_z < 2"
@@ -570,7 +528,7 @@ elif IS_SEGONLY and io.platform == "darwin":
         FROM += " JOIN ImagesBackground ibg ON s.image_id = ibg.image_id "
         # WHERE += " AND ibg.lum > .3"
         SELECT += ", ibg.lum, ibg.lum_bb, ibg.hue, ibg.hue_bb, ibg.sat, ibg.sat_bb, ibg.val, ibg.val_bb, ibg.lum_torso, ibg.lum_torso_bb " # add description here, after resegmenting
-    ###############
+    ###
     if OBJ_CLS_ID > 0 and not OBJ_DONT_SUBSELECT:
         FROM += " JOIN PhoneBbox pb ON s.image_id = pb.image_id "
         # SELECT += ", pb.bbox_67, pb.conf_67, pb.bbox_63, pb.conf_63, pb.bbox_26, pb.conf_26, pb.bbox_27, pb.conf_27, pb.bbox_32, pb.conf_32 "
@@ -593,24 +551,9 @@ elif IS_SEGONLY and io.platform == "darwin":
             if KEYWORD_ORIENTATION is not None:
                 WHERE += f" AND ik_obj.orientation = {KEYWORD_ORIENTATION} "
     if SORT_TYPE == "planar_body":
-        WHERE += " AND s.mongo_body_landmarks = 1  "
-
-    
-    ###############
-    # # join to keywords
-    # FROM += " JOIN ImagesKeywords ik ON s.image_id = ik.image_id JOIN Keywords k ON ik.keyword_id = k.keyword_id "
-    # WHERE += " AND k.keyword_text LIKE 'surpris%' "
-
-    # # testing mongo
-    # FROM += " JOIN Encodings e ON s.image_id = e.image_id "
-    # WHERE += " AND e.encoding_id > 2612275"
-
-    # WHERE = "s.site_name_id != 1"
+        WHERE += " AND s.mongo_body_landmarks = 1  " 
     LIMIT = LIMIT
 
-    # TEMP TK TESTING
-    # WHERE += " AND s.site_name_id = 8"
-######################################
 ############SATYAM##################
 elif IS_SEGONLY and io.platform == "win32":
 
@@ -648,13 +591,11 @@ elif IS_SEGONLY and io.platform == "win32":
         # WHERE += " AND ibg.lum > .3"
         WHERE +=" AND ibg.selfie_bbox IS NOT NULL "
         SELECT += ", ibg.lum, ibg.lum_bb, ibg.hue, ibg.hue_bb, ibg.sat, ibg.sat_bb, ibg.val, ibg.val_bb, ibg.lum_torso, ibg.lum_torso_bb, ibg.selfie_bbox " # add description here, after resegmenting
-    ###############
     if OBJ_CLS_ID:
         FROM += " JOIN PhoneBbox pb ON s.image_id = pb.image_id "
         SELECT += ", pb.bbox_67, pb.conf_67, pb.bbox_63, pb.conf_63, pb.bbox_26, pb.conf_26, pb.bbox_27, pb.conf_27, pb.bbox_32, pb.conf_32 "
     if SORT_TYPE == "planar_body":
         WHERE += " AND s.mongo_body_landmarks = 1 "
-    ###############
     # # join to keywords
     # FROM += " JOIN ImagesKeywords ik ON s.image_id = ik.image_id JOIN Keywords k ON ik.keyword_id = k.keyword_id "
     # WHERE += " AND k.keyword_text LIKE 'surpris%' "
@@ -664,19 +605,9 @@ elif IS_SEGONLY and io.platform == "win32":
 
     # TEMP TK TESTING
     # WHERE += " AND s.site_name_id = 8"
-######################################
 
-# construct the motion dictionary all false
-motion = {
-    "side_to_side": False,
-    "forward_smile": False,
-    "forward_wider": False,
-    "laugh": False,
-    "forward_nosmile":  False,
-    "static_pose":  False,
-    "simple": False,
-    "use_all": False,
-}
+########################## END SQL CONSTRUCTION ##############################
+
 
 if USE_ALL:
     # if USE_ALL is True, set "use_all": True
@@ -702,7 +633,23 @@ face_height_output = 1000
 
 UPSCALE_MODEL_PATH=os.path.join(os.getcwd(), "models", "FSRCNN_x4.pb")
 # construct my own objects
-sort = SortPose(motion, face_height_output, image_edge_multiplier,EXPAND, ONE_SHOT, JUMP_SHOT, HSV_BOUNDS, VERBOSE,INPAINT, SORT_TYPE, OBJ_CLS_ID,UPSCALE_MODEL_PATH=UPSCALE_MODEL_PATH,TSP_SORT=TSP_SORT, USE_HEAD_POSE=USE_HEAD_POSE)
+cfg = {
+    'motion': motion,
+    'face_height_output': face_height_output,
+    'image_edge_multiplier': image_edge_multiplier,
+    'EXPAND': EXPAND,
+    'ONE_SHOT': ONE_SHOT,
+    'JUMP_SHOT': JUMP_SHOT,
+    'HSV_CONTROL': HSV_BOUNDS,
+    'VERBOSE': VERBOSE,
+    'INPAINT': INPAINT,
+    'SORT_TYPE': SORT_TYPE,
+    'OBJ_CLS_ID': OBJ_CLS_ID,
+    'UPSCALE_MODEL_PATH': UPSCALE_MODEL_PATH,
+    'TSP_SORT': TSP_SORT,
+    'USE_HEAD_POSE': USE_HEAD_POSE
+}
+sort = SortPose(config=cfg)
 
 # # TEMP TK TESTING
 # sort.MIND = .5
@@ -718,41 +665,6 @@ if USE_NOSEBRIDGE: sort.ORIGIN = 6
 start_img_name = "median"
 start_site_image_id = None
 
-# start_img_name = "start_image_id"
-# start_site_image_id = 57987995
-
-# 9774337 screaming hands to head 10
-# 10528975 phone right hand pose 4
-# 15940552 two fingers up pose 4
-# 107124684 hands to mouth shock pose 16
-# 56159379 holding phone belly pose 8
-# 105444295 right hand pointing up pose 11
-# 4004183 whisper finger to lips pose 5
-# 9875985 fingers pointing up
-# 121076470 eyes closed mouth open, arms raised victory
-# 38217385 mouth open pointing at phone
-# 2752224 scream, hands on head
-# 3279908 hands to face excited
-# 6050372 hands to mouth in shock
-# 126993730 87210848 43008591 11099323 phone held up
-
-# start_site_image_id is not working Aug 2024
-# start_img_name = "start_site_image_id"
-# start_site_image_id = "F/F4/538577009.jpg"
-# start_site_image_id = "0/02/159079944-hopeful-happy-young-woman-looking-amazed-winning-prize-standing-white-background.jpg"
-# start_site_image_id = "0/08/158083627-man-in-white-t-shirt-gesturing-with-his-hands-studio-cropped.jpg"
-
-# for PFP
-# start_img_name = "start_face_encodings"
-# start_site_image_id = [-0.13242901861667633, 0.09738104045391083, 0.003530653193593025, -0.04780442640185356, -0.13073976337909698, 0.07189705967903137, -0.006513072177767754, -0.051335446536540985, 0.1768932193517685, -0.03729865700006485, 0.1137416809797287, 0.13994133472442627, -0.23849385976791382, -0.08209677785634995, 0.06067033112049103, 0.07974598556756973, -0.1882513463497162, -0.24926315248012543, -0.011344537138938904, -0.10508193075656891, 0.010317208245396614, 0.06348179280757904, 0.02852417528629303, 0.06981766223907471, -0.14760875701904297, -0.34729471802711487, -0.014949701726436615, -0.09429284185171127, 0.08592978119850159, -0.11939340829849243, 0.04517041891813278, 0.06180906295776367, -0.1773814857006073, 0.011621855199337006, 0.010536111891269684, 0.12963438034057617, -0.07557092607021332, 0.0027374476194381714, 0.2890719771385193, 0.0692337155342102, -0.17323020100593567, 0.0724603682756424, 0.021229337900877, 0.361629843711853, 0.250482439994812, 0.021974680945277214, 0.018878426402807236, -0.022722169756889343, 0.09668144583702087, -0.29601603746414185, 0.11375367641448975, 0.2568872570991516, 0.11404240131378174, 0.04999732971191406, 0.02831254154443741, -0.15830034017562866, -0.031099170446395874, 0.028748074546456337, -0.180643692612648, 0.13169123232364655, 0.058790236711502075, -0.0858338251709938, 0.029470380395650864, -0.002784252166748047, 0.2532877027988434, 0.07375448942184448, -0.11085735261440277, -0.12285713106393814, 0.11346398293972015, -0.19246435165405273, -0.1447266787290573, 0.054258447140455246, -0.1335202157497406, -0.1264294683933258, -0.23741140961647034, 0.07753928005695343, 0.3753989636898041, 0.08984167128801346, -0.18434450030326843, 0.042485352605581284, -0.08978638052940369, -0.03871896490454674, 0.06451354175806046, 0.08044029772281647, -0.11364202201366425, -0.1158837378025055, -0.10755209624767303, 0.044953495264053345, 0.2573489546775818, 0.049939051270484924, -0.07680445909500122, 0.20810386538505554, 0.09711501002311707, 0.05330953001976013, 0.08986716717481613, 0.0984266921877861, -0.036112621426582336, -0.011795245110988617, -0.15438663959503174, -0.027118921279907227, -0.012514196336269379, -0.11667540669441223, 0.04242435097694397, 0.13383115828037262, -0.18503828346729279, 0.19057676196098328, 0.017584845423698425, -0.005235005170106888, 0.010936722159385681, 0.08952657878398895, -0.1809171438217163, -0.07223983108997345, 0.16210225224494934, -0.264881432056427, 0.3121953308582306, 0.21528613567352295, 0.02137373574078083, 0.12006716430187225, 0.08322857320308685, 0.0802738219499588, -0.013485163450241089, 0.005497157573699951, -0.0893208310008049, -0.06330209970474243, 0.017513029277324677, -0.007281661033630371, 0.06451432406902313, 0.10179871320724487]
-# start_site_image_id = [-0.10581238567829132, 0.07088741660118103, 0.013263327069580555, -0.08114208281040192, -0.13992470502853394, 0.012888573110103607, -0.009552985429763794, -0.05837436020374298, 0.026127614080905914, 0.001093447208404541, 0.15341515839099884, 0.044287052005529404, -0.2721121311187744, -0.13441239297389984, -0.0026458948850631714, 0.11877364665269852, -0.15712828934192657, -0.1471686214208603, -0.10886535793542862, -0.09967300295829773, -0.011542147025465965, 0.0059587229043245316, -0.047813788056373596, 0.04775381088256836, -0.1761886328458786, -0.3028424084186554, -0.03370347619056702, -0.15713511407375336, 0.0005495026707649231, -0.1361989825963974, -0.015080012381076813, 0.025705486536026, -0.12947367131710052, -0.03306383639574051, 0.018395066261291504, 0.0488845556974411, -0.092781201004982, -0.1401013731956482, 0.15860462188720703, 0.08463308960199356, -0.14735937118530273, -0.009462594985961914, 0.08969609439373016, 0.30084139108657837, 0.2646666169166565, 0.036240506917238235, 0.06943795830011368, -0.026887238025665283, 0.1546226292848587, -0.23532000184059143, 0.08313022553920746, 0.1324366182088852, 0.11709924787282944, 0.08266870677471161, 0.05900813639163971, -0.20212897658348083, 0.10378697514533997, 0.057002242654561996, -0.29036426544189453, 0.057467326521873474, 0.027950018644332886, -0.12515060603618622, -0.10928650200366974, -0.020537540316581726, 0.20214180648326874, 0.09844112396240234, -0.14632004499435425, -0.11949113011360168, 0.11953604221343994, -0.19659164547920227, -0.08529043942689896, 0.018321029841899872, -0.12027868628501892, -0.17337237298488617, -0.2806975543498993, 0.08081948757171631, 0.3730350434780121, 0.24808505177497864, -0.23414771258831024, 0.015145592391490936, -0.059556588530540466, -0.029826462268829346, 0.1383151412010193, 0.14856243133544922, -0.05812269449234009, -0.06512188911437988, -0.11708509922027588, -0.02537207305431366, 0.11158326268196106, 0.013382695615291595, -0.06716612726449966, 0.19349130988121033, 0.04249662160873413, -0.045811235904693604, 0.07281351834535599, 0.06558635830879211, -0.19487519562244415, 0.01120009645819664, -0.013865187764167786, -0.09125098586082458, 0.11730070412158966, -0.1202155202627182, 0.03125461935997009, 0.08074315637350082, -0.12886971235275269, 0.21560832858085632, -0.00488397479057312, 0.0329570397734642, 0.0005348101258277893, -0.12098219245672226, -0.07969430088996887, -0.015188425779342651, 0.11801530420780182, -0.2579388916492462, 0.18724043667316437, 0.18778195977210999, 0.0005423035472631454, 0.15530824661254883, 0.13494034111499786, 0.05073530972003937, -0.027213752269744873, -0.024363964796066284, -0.15827980637550354, -0.08806312084197998, 0.039876870810985565, -0.03350042551755905, 0.12625662982463837, 0.010933175683021545]
-# start_site_image_id = [-0.19413329660892487, 0.12061071395874023, 0.05011634901165962, -0.08183299750089645, -0.07337753474712372, -0.01627560332417488, -0.0838925838470459, -0.08846378326416016, 0.050066739320755005, -0.04880788177251816, 0.2662230134010315, -0.005381084978580475, -0.2440241426229477, -0.07016980648040771, -0.032612159848213196, 0.14663562178611755, -0.12449649721384048, -0.07680836319923401, -0.16958947479724884, -0.041098661720752716, -0.032985441386699677, 0.08393426239490509, 0.06522658467292786, 0.027064107358455658, -0.0450870618224144, -0.2766939699649811, -0.09460555762052536, -0.020049870014190674, 0.18320757150650024, -0.07277096807956696, 0.03758329153060913, 0.020734600722789764, -0.16676828265190125, -0.008788809180259705, 0.06788013875484467, 0.14876432716846466, -0.05156975984573364, -0.08320155739784241, 0.23632089793682098, -0.03169070929288864, -0.14393861591815948, 0.007112100720405579, 0.039216622710227966, 0.24194732308387756, 0.20701384544372559, 0.014645536430180073, 0.00043237628415226936, -0.11287529766559601, 0.049542635679244995, -0.20981638133525848, 0.15882457792758942, 0.12680980563163757, 0.09500034153461456, 0.07604669779539108, 0.06692805886268616, -0.11759510636329651, 0.029098421335220337, 0.2152121663093567, -0.17994603514671326, 0.007263883948326111, 0.08920442312955856, -0.06217777729034424, -0.12775185704231262, -0.13567441701889038, 0.11721442639827728, 0.11643578112125397, -0.16315968334674835, -0.20449669659137726, 0.1373467743396759, -0.16275277733802795, -0.042377498000860214, 0.13762398064136505, -0.06410378217697144, -0.08502615243196487, -0.30058538913726807, 0.0696333795785904, 0.33976882696151733, 0.1762707233428955, -0.15098142623901367, 0.009935759007930756, 0.016703439876437187, -0.06178131699562073, 0.01687360554933548, 0.026908770203590393, -0.16367696225643158, -0.09296569228172302, -0.03673135116696358, 0.011298641562461853, 0.12101420015096664, 0.07616612315177917, -0.03630882874131203, 0.2021653950214386, 0.022061089053750038, 0.01185181736946106, 0.034367188811302185, 0.06430231779813766, -0.02623981237411499, -0.08930035680532455, -0.06906800717115402, -0.016731463372707367, 0.06791259348392487, -0.12447217106819153, 0.006740108132362366, 0.0978136956691742, -0.13495850563049316, 0.19274848699569702, -0.0044151246547698975, 0.05091022700071335, 0.116733118891716, 0.016980648040771484, -0.10611657053232193, -0.016641631722450256, 0.1956191062927246, -0.26104623079299927, 0.20304137468338013, 0.15483921766281128, 0.04521116614341736, 0.07446543127298355, 0.19201408326625824, 0.1501380205154419, -0.011784471571445465, 0.00905616581439972, -0.16708143055438995, -0.11018393188714981, 0.05920220538973808, -0.07374550402164459, 0.09465853869915009, 0.056482456624507904]
-
-# start_img_name = "start_bbox"
-# start_site_image_id = [94, 428, 428,0]
-
-# no gap
-# start_site_image_id = "5/58/95516714-happy-well-dressed-man-holding-a-gift-on-white-background.jpg"
 
 
 d = None

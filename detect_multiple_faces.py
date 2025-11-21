@@ -137,11 +137,11 @@ POSE_ID = 0
 
 # #testing locally with two
 MAIN_FOLDER1 = "/Volumes/OWC5/segment_images_SQLonly_stillmissing/images_adobe"
-MAIN_FOLDER2 = "/Volumes/OWC5/segment_images_SQLonly_stillmissing/images_istock"
+# MAIN_FOLDER2 = "/Volumes/OWC5/segment_images_SQLonly_stillmissing/images_istock"
 # MAIN_FOLDERS = [MAIN_FOLDER1, MAIN_FOLDER2]
 
 
-MAIN_FOLDERS = [MAIN_FOLDER1, MAIN_FOLDER2]
+MAIN_FOLDERS = [MAIN_FOLDER1]
 # MAIN_FOLDERS = [MAIN_FOLDER1, MAIN_FOLDER2, MAIN_FOLDER3, MAIN_FOLDER4, MAIN_FOLDER5]
 
 BATCH_SIZE = 1000 # Define how many from each folder in each batch
@@ -422,7 +422,17 @@ EXPAND = False
 ONE_SHOT = True # take all files, based off the very first sort order.
 JUMP_SHOT = False # jump to random file if can't find a run
 
-sort = SortPose(motion, face_height_output, image_edge_multiplier_sm,EXPAND, ONE_SHOT, JUMP_SHOT, None, VERBOSE)
+cfg = {
+    'motion': motion,
+    'face_height_output': face_height_output,
+    'image_edge_multiplier': image_edge_multiplier_sm,
+    'EXPAND': EXPAND,
+    'ONE_SHOT': ONE_SHOT,
+    'JUMP_SHOT': JUMP_SHOT,
+    'HSV_CONTROL': None,
+    'VERBOSE': VERBOSE
+}
+sort = SortPose(config=cfg)
 
 
 start = time.time()

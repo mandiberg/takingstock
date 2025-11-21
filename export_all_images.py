@@ -515,8 +515,22 @@ image_edge_multiplier = [1.3,1.85,2.4,1.85] # tighter square crop for paris phot
 # image_edge_multiplier = [1.2, 1.2, 1.6, 1.2] # standard portrait
 # sort.max_image_edge_multiplier is the maximum of the elements
 UPSCALE_MODEL_PATH=os.path.join(os.getcwd(), "models", "FSRCNN_x4.pb")
-# construct my own objects
-sort = SortPose(motion, face_height_output, image_edge_multiplier,EXPAND, ONE_SHOT, JUMP_SHOT, HSV_BOUNDS, VERBOSE,INPAINT, SORT_TYPE, OBJ_CLS_ID,UPSCALE_MODEL_PATH=UPSCALE_MODEL_PATH)
+# construct my own objects via config dict
+cfg = {
+    'motion': motion,
+    'face_height_output': face_height_output,
+    'image_edge_multiplier': image_edge_multiplier,
+    'EXPAND': EXPAND,
+    'ONE_SHOT': ONE_SHOT,
+    'JUMP_SHOT': JUMP_SHOT,
+    'HSV_CONTROL': HSV_BOUNDS,
+    'VERBOSE': VERBOSE,
+    'INPAINT': INPAINT,
+    'SORT_TYPE': SORT_TYPE,
+    'OBJ_CLS_ID': OBJ_CLS_ID,
+    'UPSCALE_MODEL_PATH': UPSCALE_MODEL_PATH
+}
+sort = SortPose(config=cfg)
 
 # CLUSTER_TYPE is passed to sort.
 sort.set_subset_landmarks(CLUSTER_TYPE)

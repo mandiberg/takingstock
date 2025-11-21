@@ -361,8 +361,22 @@ face_height_output = 1000
 image_edge_multiplier = [1.2, 1.2, 1.6, 1.2] # standard portrait
 # sort.max_image_edge_multiplier is the maximum of the elements
 # UPSCALE_MODEL_PATH=os.path.join(os.getcwd(), "models", "FSRCNN_x4.pb")
-# construct my own objects
-sort = SortPose(motion, face_height_output, image_edge_multiplier,EXPAND, ONE_SHOT, JUMP_SHOT, HSV_BOUNDS, VERBOSE,INPAINT, SORT_TYPE, OBJ_CLS_ID,TSP_SORT=TSP_SORT)
+# construct my own objects via config dict
+cfg = {
+    'motion': motion,
+    'face_height_output': face_height_output,
+    'image_edge_multiplier': image_edge_multiplier,
+    'EXPAND': EXPAND,
+    'ONE_SHOT': ONE_SHOT,
+    'JUMP_SHOT': JUMP_SHOT,
+    'HSV_CONTROL': HSV_BOUNDS,
+    'VERBOSE': VERBOSE,
+    'INPAINT': INPAINT,
+    'SORT_TYPE': SORT_TYPE,
+    'OBJ_CLS_ID': OBJ_CLS_ID,
+    'TSP_SORT': TSP_SORT
+}
+sort = SortPose(config=cfg)
 print("class inititalised")
 
 def expand_face_encodings(df,encoding_col= "face_encodings68",):

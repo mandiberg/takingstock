@@ -29,7 +29,7 @@ session = Session()
 
 # Batch processing parameters
 batch_size = 1000
-last_id = 98788320
+last_id = 0
 
 while True:
     # # 1. Fetch next batch of SegmentTable rows where is_body is True and is_feet is NULL

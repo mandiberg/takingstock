@@ -94,8 +94,23 @@ SORT_TYPE = "planar_hands"
 INPAINT = TSP_SORT = False
 OBJ_CLS_ID = 0
 # sort = SortPose(motion, face_height_output, image_edge_multiplier_sm,EXPAND, ONE_SHOT, JUMP_SHOT, None, VERBOSE, False, None, 0)
-sort = SortPose(motion, face_height_output, image_edge_multiplier_sm,EXPAND, ONE_SHOT, JUMP_SHOT, HSV_BOUNDS, VERBOSE,INPAINT, SORT_TYPE, OBJ_CLS_ID,UPSCALE_MODEL_PATH=UPSCALE_MODEL_PATH,TSP_SORT=TSP_SORT)
-
+# build config dict and instantiate SortPose via config
+cfg = {
+    'motion': motion,
+    'face_height_output': face_height_output,
+    'image_edge_multiplier': image_edge_multiplier_sm,
+    'EXPAND': EXPAND,
+    'ONE_SHOT': ONE_SHOT,
+    'JUMP_SHOT': JUMP_SHOT,
+    'HSV_CONTROL': HSV_BOUNDS,
+    'VERBOSE': VERBOSE,
+    'INPAINT': INPAINT,
+    'SORT_TYPE': SORT_TYPE,
+    'OBJ_CLS_ID': OBJ_CLS_ID,
+    'UPSCALE_MODEL_PATH': UPSCALE_MODEL_PATH,
+    'TSP_SORT': TSP_SORT
+}
+sort = SortPose(config=cfg)
 sort.VERBOSE = VERBOSE
 # sort = SortPose(motion, face_height_output, image_edge_multiplier,EXPAND, ONE_SHOT, JUMP_SHOT, HSV_BOUNDS, VERBOSE,INPAINT, SORT_TYPE, OBJ_CLS_ID)
 

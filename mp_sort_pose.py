@@ -33,7 +33,32 @@ from deap import base, creator, tools, algorithms
 class SortPose:
     # """Sort image files based on head pose"""
 
-    def __init__(self, motion, face_height_output, image_edge_multiplier, EXPAND=False, ONE_SHOT=False, JUMP_SHOT=False, HSV_CONTROL=None, VERBOSE=True,INPAINT=False, SORT_TYPE="128d", OBJ_CLS_ID = None,UPSCALE_MODEL_PATH=None, LMS_DIMENSIONS=2,TSP_SORT=False, USE_HEAD_POSE=False):
+    def __init__(self, motion=None, face_height_output=None, image_edge_multiplier=None, EXPAND=False, ONE_SHOT=False, JUMP_SHOT=False, HSV_CONTROL=None, VERBOSE=True,INPAINT=False, SORT_TYPE="128d", OBJ_CLS_ID = None,UPSCALE_MODEL_PATH=None, LMS_DIMENSIONS=2,TSP_SORT=False, USE_HEAD_POSE=False, config=None):
+
+        # allow construction via a single config dict for safer parameter passing
+        # keep backward-compatible positional signature; if `config` is provided
+        # it will override individual parameters
+        if config is not None and isinstance(config, dict):
+            # map config keys to local parameter variables (use existing values as defaults)
+            motion = config.get('motion', motion)
+            face_height_output = config.get('face_height_output', face_height_output)
+            image_edge_multiplier = config.get('image_edge_multiplier', image_edge_multiplier)
+            EXPAND = config.get('EXPAND', EXPAND)
+            ONE_SHOT = config.get('ONE_SHOT', ONE_SHOT)
+            JUMP_SHOT = config.get('JUMP_SHOT', JUMP_SHOT)
+            HSV_CONTROL = config.get('HSV_CONTROL', HSV_CONTROL)
+            VERBOSE = config.get('VERBOSE', VERBOSE)
+            INPAINT = config.get('INPAINT', INPAINT)
+            SORT_TYPE = config.get('SORT_TYPE', SORT_TYPE)
+            OBJ_CLS_ID = config.get('OBJ_CLS_ID', OBJ_CLS_ID)
+            UPSCALE_MODEL_PATH = config.get('UPSCALE_MODEL_PATH', UPSCALE_MODEL_PATH)
+            LMS_DIMENSIONS = config.get('LMS_DIMENSIONS', LMS_DIMENSIONS)
+            TSP_SORT = config.get('TSP_SORT', TSP_SORT)
+            USE_HEAD_POSE = config.get('USE_HEAD_POSE', USE_HEAD_POSE)
+
+        # After applying config overrides, ensure required core params are present
+        if motion is None or face_height_output is None or image_edge_multiplier is None:
+            raise TypeError("SortPose.__init__() requires 'motion', 'face_height_output', and 'image_edge_multiplier' either as positional args or inside the 'config' dict")
 
         # need to refactor this for GPU
         self.mp_face_detection = mp.solutions.face_detection
@@ -3244,7 +3269,7 @@ class SortPose:
             # if self.VERBOSE: print("df_shuffled obj", df_dist_enc[['image_id','dist_obj']].sort_values(by='dist_obj')) 
 
         # set HSV start enc and add HSV dist
-        if not self.ONE_SHOT:
+        if not self.ONE_SHOT or not self.SKIP_HSV:
             if not 'dist_HSV' in df_sorted.columns:  
                 if self.VERBOSE: print("not dist_HSV")
                 enc1, obj_bbox1 = self.get_enc1(df_enc, FIRST_ROUND=True, hsv_sort=True)
