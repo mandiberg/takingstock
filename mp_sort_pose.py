@@ -55,6 +55,7 @@ class SortPose:
             LMS_DIMENSIONS = config.get('LMS_DIMENSIONS', LMS_DIMENSIONS)
             TSP_SORT = config.get('TSP_SORT', TSP_SORT)
             USE_HEAD_POSE = config.get('USE_HEAD_POSE', USE_HEAD_POSE)
+            self.DO_HSV_KNN = config.get('DO_HSV_KNN', False)
 
         # After applying config overrides, ensure required core params are present
         if motion is None or face_height_output is None or image_edge_multiplier is None:
@@ -258,6 +259,7 @@ class SortPose:
             self.upscale_model= self.set_upscale_model(UPSCALE_MODEL_PATH)
         # luminosity parameters
         if HSV_CONTROL:
+            print("using HSV_CONTROL settings, ", HSV_CONTROL)
             self.LUM_MIN = HSV_CONTROL['LUM_MIN']
             self.LUM_MAX = HSV_CONTROL['LUM_MAX']
             self.SAT_MIN = HSV_CONTROL['SAT_MIN']
@@ -3240,7 +3242,7 @@ class SortPose:
             if self.OBJ_CLS_ID > 0: df_enc = df_enc.dropna(subset=["obj_bbox_list"])
         else: 
             FIRST_ROUND = False
-            print(f"about to send df_sorted through to find last obj_bbox_list, which is :", df_sorted.iloc[-1]['obj_bbox_list'])
+            print(f"about to send df_sorted through to find last obj_bbox_list, which is :", df_sorted.iloc[-1])
             enc1, obj_bbox1 = self.get_enc1(df_sorted, FIRST_ROUND)
             if self.VERBOSE: print(f"LATER round enc1, {enc1} obj_bbox1", obj_bbox1)
 
@@ -3269,24 +3271,17 @@ class SortPose:
             # if self.VERBOSE: print("df_shuffled obj", df_dist_enc[['image_id','dist_obj']].sort_values(by='dist_obj')) 
 
         # set HSV start enc and add HSV dist
-        if not self.ONE_SHOT or not self.SKIP_HSV:
+        if self.DO_HSV_KNN:
             if not 'dist_HSV' in df_sorted.columns:  
                 if self.VERBOSE: print("not dist_HSV")
                 enc1, obj_bbox1 = self.get_enc1(df_enc, FIRST_ROUND=True, hsv_sort=True)
             else: 
                 if self.VERBOSE: print("else is dist_HSV")
                 enc1, obj_bbox1 = self.get_enc1(df_sorted, FIRST_ROUND=False, hsv_sort=True)
-            # if self.VERBOSE: print("enc1", enc1)
-            # if self.VERBOSE: print("df_dist_enc before normalize_hsv", df_dist_enc)
-            # if self.VERBOSE: print("columns", df_dist_enc.columns)
-            # if self.VERBOSE: print("first row", df_dist_enc.iloc[0])
             df_dist_hsv = self.normalize_hsv(enc1, df_dist_enc)
-            # if self.VERBOSE: print("df_dist_enc after normalize_hsv, before sort", df_dist_enc)
-            # if self.VERBOSE: print("first row", df_dist_enc.iloc[0])
             df_dist_hsv, output_cols = self.sort_df_KNN(df_dist_hsv, enc1, "HSV")
-            # if self.VERBOSE: print("columns", df_dist_enc.columns)
-            # if self.VERBOSE: print("df_shuffled HSV", df_dist_hsv[['image_id','dist_enc1','dist_HSV']].head())
         else:
+            if self.VERBOSE: print("Skipping HSV normalization and sorting due to self.DO_HSV_KNN settings.")
             # skip HSV if ONE_SHOT (which is for still images, so N/A)
             # assign 0 to dist_HSV for first round
             df_dist_hsv = df_dist_enc
@@ -3299,37 +3294,45 @@ class SortPose:
                 # assign backto main df_enc to permanently rm dupes. 
                 df_enc = df_dist_hsv
             
-            if not self.ONE_SHOT:
-                if self.VERBOSE: print("df_enc if not self.ONE_SHOT", df_enc)
-                # np.set_printoptions(threshold = np.inf)
-                # enc_values_list = df_enc['dist_enc1'].values
-                # print("dist_enc1 values:", enc_values_list)
+            if self.DO_HSV_KNN:
+                if self.VERBOSE: print("df_enc self.DO_HSV_KNN", df_enc)
                 # temporarily removes items for this round
                 df_dist_noflash = mask_df(df_dist_hsv, 'dist_HSV', self.HSV_DELTA_MAX, "lessthan")
-                if self.VERBOSE: print("df_dist_noflash if not self.ONE_SHOT",df_dist_noflash)
+                if self.VERBOSE: print("df_dist_noflash self.DO_HSV_KNN",df_dist_noflash)
+            else:
+                # assign an empty df if not doing HSV
+                df_dist_noflash = df_dist_hsv
+
+            if not self.ONE_SHOT:
                 # print all values in the dist_enc1 column
                 # print("dist_enc1 values:", df_dist_noflash['dist_enc1'].values)
                 # replacing dist_HSV with dist_enc1 here, Sept 27
-                df_dist_close = mask_df(df_dist_noflash, output_cols, self.MAXD, "lessthan")
-                if self.VERBOSE: print("df_dist_close if not self.ONE_SHOT",df_dist_close)
+                df_shuffled = mask_df(df_dist_noflash, output_cols, self.MAXD, "lessthan")
+                if self.VERBOSE: print("df_shuffled if not self.ONE_SHOT",df_shuffled)
 
-                if df_dist_close.empty:
+                if df_shuffled.empty:
                     if self.VERBOSE: print("No rows in the DataFrame met the filtering criteria, returning empty df and the untouched df_sorted.")
-                    return df_dist_close, df_sorted, output_cols
-                else:
-                    if self.VERBOSE: print("Filtered DataFrame:", df_dist_close)
-                # implementing these masks for now
-                    df_shuffled = df_dist_close
+                    return df_shuffled, df_sorted, output_cols
+                # else:
+                #     if self.VERBOSE: print("Filtered DataFrame:", df_shuffled)
+                #     # implementing these masks for now
+                #     df_shuffled = df_shuffled
                 
-                # sort df_shuffled by the sum of dist_enc1 and dist_HSV
-                df_shuffled['sum_dist'] = df_dist_noflash[output_cols] + self.MULTIPLIER * df_shuffled['dist_HSV']
-                # print("df_shuffled columns", df_shuffled.columns)
-
+                if "dist_HSV" in df_shuffled.columns:
+                    if self.VERBOSE: print("df_shuffled contains dist_HSV column")
+                    # sort df_shuffled by the sum of dist_enc1 and dist_HSV
+                    df_shuffled['sum_dist'] = df_dist_noflash[output_cols] + self.MULTIPLIER * df_shuffled['dist_HSV']
+                    # print("df_shuffled columns", df_shuffled.columns)
+                else:
+                    if self.VERBOSE: print("df_shuffled does not contain dist_HSV column")
+                    df_shuffled['sum_dist'] = df_shuffled[output_cols]
                 # of OBJ sort kludge but throws errors for non object, non ONE SHOT. If so, use above
                 # df_shuffled['sum_dist'] = df_shuffled['dist_obj'] 
 
                 df_shuffled = df_shuffled.sort_values(by='sum_dist').reset_index(drop=True)
-                if self.VERBOSE: print("df_shuffled pre_run", df_shuffled[['image_id',output_cols,'dist_HSV','sum_dist']])
+                if self.VERBOSE: 
+                    if "dist_HSV" in df_shuffled.columns: print("df_shuffled pre_run", df_shuffled[['image_id',output_cols,'dist_HSV','sum_dist']])
+                    else: print("df_shuffled pre_run", df_shuffled[['image_id',output_cols,'sum_dist']])
 
                 # runmask is only relevant if not ONE_SHOT
                 try: runmask = df_shuffled['sum_dist'] < self.MIND
@@ -3341,8 +3344,7 @@ class SortPose:
                 runmask = None
 
 
-            # if self.ONE_SHOT and not runmask:
-
+            print("df_shuffled at the end of get_closest_df_NN", df_shuffled)            
             if self.ONE_SHOT:
                 if self.VERBOSE: print("ONE_SHOT going to assign all and try to drop everything")
                 df_run = df_shuffled
@@ -3367,8 +3369,8 @@ class SortPose:
                 # remove the run from df_enc where image_id = image_id in df_run
                 df_enc = df_enc.drop(index_names).reset_index(drop=True)
 
-            elif len(df_shuffled) > 0 and (self.JUMP_SHOT is True and self.SHOT_CLOCK < self.SHOT_CLOCK_MAX):
-
+            elif len(df_shuffled) > 0 and (self.JUMP_SHOT is False or (self.JUMP_SHOT is True and self.SHOT_CLOCK < self.SHOT_CLOCK_MAX)):
+                if self.VERBOSE: print("NO run, but still in the game ---->>>>")
                 # df_run = first row of df_shuffled based on image_id
                 df_run = df_shuffled.iloc[[0]]  # Select the first row
                 # increment the shot clock
@@ -3388,17 +3390,17 @@ class SortPose:
             
 
             elif self.JUMP_SHOT is True and self.SHOT_CLOCK >= self.SHOT_CLOCK_MAX:
-                    if self.VERBOSE: print("SHOT_CLOCK has reached the maximum value, resetting to 0.")
-                    self.SHOT_CLOCK = 0
+                if self.VERBOSE: print("SHOT_CLOCK has reached the maximum value, resetting to 0.")
+                self.SHOT_CLOCK = 0
 
-                    #jump somewhere else
-                    if self.VERBOSE: print("JUMPING AROUND ^^^^ ", df_shuffled)
-                    random_index = random.randint(0, len(df_shuffled) - 1)                
-                    if self.VERBOSE: print("JUMPING TO ---> ", random_index)
-                    df_run = df_shuffled.iloc[[random_index]]
-                    if self.VERBOSE: print("df_run new start point", df_run)
+                #jump somewhere else
+                if self.VERBOSE: print("JUMPING AROUND ^^^^ ", df_shuffled)
+                random_index = random.randint(0, len(df_shuffled) - 1)                
+                if self.VERBOSE: print("JUMPING TO ---> ", random_index)
+                df_run = df_shuffled.iloc[[random_index]]
+                if self.VERBOSE: print("df_run new start point", df_run)
 
-                    df_enc = df_enc.drop(df_run.index).reset_index(drop=True)
+                df_enc = df_enc.drop(df_run.index).reset_index(drop=True)
 
 
             else:

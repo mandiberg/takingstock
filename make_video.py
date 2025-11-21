@@ -52,7 +52,7 @@ SegmentTable_name = 'SegmentOct20'
 SegmentHelper_name = None
 # SATYAM, this is MM specific
 # for when I'm using files on my SSD vs RAID
-IS_SSD = False
+IS_SSD = True
 #IS_MOVE is in move_toSSD_files.py
 
 # I/O utils
@@ -90,6 +90,7 @@ if "paris" in CURRENT_MODE:
     USE_FUSION_PAIR_DICT = True
     FUSION_PAIR_DICT_NAME = "FUSION_PAIR_DICT_TOPICS_64"
     N_HSV = 0 # don't do HSV clusters
+    DO_HSV_KNN = True
     # this control whether sorting by topics
     # IS_TOPICS = True # if using Clusters only, must set this to False
     if CURRENT_MODE == 'paris_photo_torso_images_topics':
@@ -190,6 +191,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     # TSP_SORT = True
     # ONE_SHOT = True # take all files, based off the very first sort order.
     # CHOP_FIRST = True
+    
 
     # PURGING_DUPES = True
     FORCE_TARGET_COUNT = 60
@@ -274,15 +276,7 @@ if USE_AFFECT_GROUPS:
     AFFECT_GROUPS_LISTS = [NEG_TOPICS, POS_TOPICS, NEUTRAL_TOPICS]
 
 IS_SEGONLY= True # This is for when you only have the segment table. RW SQL query
-HSV_CONTROL = False # defining so it doesn't break below, if commented out
-# This tells it to pull luminosity. Comment out if not using
-if HSV_CONTROL: HSV_BOUNDS = {"LUM_MIN": 0, "LUM_MAX": 40, "SAT_MIN": 0, "SAT_MAX": 1000, "HUE_MIN": 0, "HUE_MAX": 360}
-else: HSV_BOUNDS = {"LUM_MIN": 0, "LUM_MAX": 100, "SAT_MIN": 0, "SAT_MAX": 1000, "HUE_MIN": 0, "HUE_MAX": 360}
-HSV_BOUNDS["d128_WEIGHT"] = 1
-HSV_BOUNDS["HSV_WEIGHT"] = 1
-HSV_BOUNDS["LUM_WEIGHT"] = 1
-# converts everything to a 0-1 scale
-HSV_NORMS = {"LUM": .01, "SAT": 1,  "HUE": 0.002777777778, "VAL": 1}
+
 
 
 VISIBLE_HAND_LEFT = False
@@ -328,6 +322,18 @@ BLUR_RADIUS = 1  ##computationally more expensive
 BLUR_RADIUS = io.oddify(BLUR_RADIUS)
 MASK_OFFSET = [50,50,50,50]
 if OUTPAINT: from outpainting_modular import outpaint, image_resize
+
+# Manual control over HSV. Only affects initial segment filtering. Currently turned off. 
+HSV_CONTROL = False # defining so it doesn't break below, if commented out
+# This tells it to pull luminosity. Comment out if not using
+if HSV_CONTROL: HSV_BOUNDS = {"LUM_MIN": 0, "LUM_MAX": 40, "SAT_MIN": 0, "SAT_MAX": 1000, "HUE_MIN": 0, "HUE_MAX": 360}
+else: HSV_BOUNDS = {"LUM_MIN": 0, "LUM_MAX": 100, "SAT_MIN": 0, "SAT_MAX": 1000, "HUE_MIN": 0, "HUE_MAX": 360}
+HSV_BOUNDS["d128_WEIGHT"] = 1
+HSV_BOUNDS["HSV_WEIGHT"] = 1
+HSV_BOUNDS["LUM_WEIGHT"] = 1
+# converts everything to a 0-1 scale
+HSV_NORMS = {"LUM": .01, "SAT": 1,  "HUE": 0.002777777778, "VAL": 1}
+
 
 # process stuff
 VERBOSE = True
@@ -647,7 +653,8 @@ cfg = {
     'OBJ_CLS_ID': OBJ_CLS_ID,
     'UPSCALE_MODEL_PATH': UPSCALE_MODEL_PATH,
     'TSP_SORT': TSP_SORT,
-    'USE_HEAD_POSE': USE_HEAD_POSE
+    'USE_HEAD_POSE': USE_HEAD_POSE,
+    'DO_HSV_KNN': DO_HSV_KNN,
 }
 sort = SortPose(config=cfg)
 
