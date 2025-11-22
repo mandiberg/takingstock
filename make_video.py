@@ -42,9 +42,9 @@ options = ['sequence and save CSV', 'assemble images from CSV']
 option, MODE = pick(options, title)
 
 # keep this live, even if not SSD
-SegmentTable_name = 'SegmentOct20'
+# SegmentTable_name = 'SegmentOct20'
 # SegmentHelper_name = None
-# SegmentTable_name = 'SegmentBig_isface'
+SegmentTable_name = 'SegmentBig_isface'
 # SegmentTable_name = 'SegmentBig_isnotface'
 # SegmentHelper_name = 'SegmentHelper_may2025_4x4faces'
 # SegmentHelper_name = 'SegmentHelper_sept2025_heft_keywords'
@@ -52,7 +52,7 @@ SegmentTable_name = 'SegmentOct20'
 SegmentHelper_name = None
 # SATYAM, this is MM specific
 # for when I'm using files on my SSD vs RAID
-IS_SSD = True
+IS_SSD = False
 #IS_MOVE is in move_toSSD_files.py
 
 # I/O utils
@@ -191,6 +191,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     # TSP_SORT = True
     # ONE_SHOT = True # take all files, based off the very first sort order.
     # CHOP_FIRST = True
+    CHOP_ITTER_TSP_SORT = True
     
 
     # PURGING_DUPES = True
@@ -210,7 +211,9 @@ elif CURRENT_MODE == 'heft_torso_keywords':
         MIN_VIDEO_FUSION_COUNT = 300 # this is the cut off for the CSV fusion pairs
         if TSP_SORT: MIN_CYCLE_COUNT = FORCE_TARGET_COUNT
         else: MIN_CYCLE_COUNT = 150 # this is the cut off for the SQL query results
-    
+        
+
+        
     # HAAAAACK
     MIN_CYCLE_COUNT = 60
     # this control whether sorting by topics
@@ -235,7 +238,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     # XYZ_FILTER_10DEGREES = " AND s.face_x > -45 AND s.face_x < -5 AND s.face_y > -15 AND s.face_y < 15 AND s.face_z > -15 AND s.face_z < 15"
     XYZ_FILTER_10DEGREES = " "
     
-    TOPIC_NO = [553.1] # if doing an affect topic fusion, this is the wrapper topic, OR keyword. add .01, .1 etc for sub selects from KEYWORD_DICT
+    TOPIC_NO = [22412] # if doing an affect topic fusion, this is the wrapper topic, OR keyword. add .01, .1 etc for sub selects from KEYWORD_DICT
 
     # this needs to be integrated into the search for each cluster, but doing here for the moment when doing single topic/cluster testing
     KEYWORD_OBJECT = KEYWORD_ORIENTATION = None
@@ -266,7 +269,7 @@ else:
     # SORT_TYPE = "fingertips_positions"
     USE_AFFECT_GROUPS = False
 
-print(f"doing {CURRENT_MODE}: SORT_TYPE {SORT_TYPE}, IS_HAND_POSE_FUSION {IS_HAND_POSE_FUSION}, GENERATE_FUSION_PAIRS {GENERATE_FUSION_PAIRS}, MIN_VIDEO_FUSION_COUNT {MIN_VIDEO_FUSION_COUNT}, IS_TOPICS {IS_TOPICS}, IS_ONE_TOPIC {IS_ONE_TOPIC}, TOPIC_NO {TOPIC_NO}, USE_AFFECT_GROUPS {USE_AFFECT_GROUPS}")
+print(f"doing {CURRENT_MODE}: SORT_TYPE {SORT_TYPE}, IS_HAND_POSE_FUSION {IS_HAND_POSE_FUSION}, GENERATE_FUSION_PAIRS {GENERATE_FUSION_PAIRS}, MIN_VIDEO_FUSION_COUNT {MIN_VIDEO_FUSION_COUNT}, IS_TOPICS {IS_TOPICS}, IS_ONE_TOPIC {IS_ONE_TOPIC}, TOPIC_NO {TOPIC_NO}, USE_AFFECT_GROUPS {USE_AFFECT_GROUPS}, CHOP_FIRST {CHOP_FIRST}, ONE_SHOT {ONE_SHOT}, TSP_SORT {TSP_SORT}, CHOP_ITTER_TSP_SORT {CHOP_ITTER_TSP_SORT}")
 
 if USE_AFFECT_GROUPS:
     # groupings of affect topics
@@ -1072,132 +1075,148 @@ def expand_face_encodings(df,encoding_col= "face_encodings68",):
     enc_df = pd.DataFrame(encodings, columns=[f"enc_{i}" for i in range(128)])
     return enc_df
 
-def sort_by_face_dist_NN(df_enc):
-    def get_closest_knn_or_break(df_enc, df_sorted):
-        # send in both dfs, and return same dfs with 1+ rows sorted
-        print(" -- BEFORE sort_by_face_dist_NN _ for loop df_enc is", df_enc)
-        is_break = False
-        df_enc, df_sorted, output_cols = sort.get_closest_df_NN(df_enc, df_sorted)
+def get_closest_knn_or_break(df_enc, df_sorted):
+    # send in both dfs, and return same dfs with 1+ rows sorted
+    print(" -- BEFORE sort_by_face_dist_NN _ for loop df_enc is", df_enc)
+    is_break = False
+    df_enc, df_sorted, output_cols = sort.get_closest_df_NN(df_enc, df_sorted)
 
-        print(" -- AFTER sort_by_face_dist_NN _ for loop df_enc is", len(df_enc))
-        print(" -- AFTER sort_by_face_dist_NN _ for loop df_sorted is", len(df_sorted))
+    print(" -- AFTER sort_by_face_dist_NN _ for loop df_enc is", len(df_enc))
+    print(" -- AFTER sort_by_face_dist_NN _ for loop df_sorted is", len(df_sorted))
 
-        # # test to see if body_landmarks for row with image_id = 5251199 still is the same as test_lms
-        # retest_row = df_enc.loc[df_enc['image_id'] == 10498233]
-        # print("body_landmarks for retest_row")
-        # retest_lms = retest_row['body_landmarks']
-        # print(retest_lms)
-        # calculate any different between test_lms to retest_lms
+    # # test to see if body_landmarks for row with image_id = 5251199 still is the same as test_lms
+    # retest_row = df_enc.loc[df_enc['image_id'] == 10498233]
+    # print("body_landmarks for retest_row")
+    # retest_lms = retest_row['body_landmarks']
+    # print(retest_lms)
+    # calculate any different between test_lms to retest_lms
 
 
-        # Break out of the loop if greater than MAXDIST
-        if ONE_SHOT:
-            df_sorted = pd.concat([df_sorted, df_enc])
-            # only return the first x rows
-            df_sorted = df_sorted.head(sort.CUTOFF)
-            print("one shot, breaking out", df_sorted)
+    # Break out of the loop if greater than MAXDIST
+    if ONE_SHOT:
+        df_sorted = pd.concat([df_sorted, df_enc])
+        # only return the first x rows
+        df_sorted = df_sorted.head(sort.CUTOFF)
+        print("one shot, breaking out", df_sorted)
+        is_break = True
+    # commenting out SHOT_CLOCK for now, Sept 28
+    # elif dist > sort.MAXD and sort.SHOT_CLOCK != 0:
+    elif df_enc.empty:
+        is_break = True            
+    else:
+        print("df_sorted.iloc[-1], " , df_sorted.iloc[-1])
+        dist = df_sorted.iloc[-1][output_cols]
+        print("sort_by_face_dist_NN _ for loop dist is", dist)
+        if dist > sort.MAXD or df_enc.empty:
+            print("should breakout, dist is", dist)
             is_break = True
-        # commenting out SHOT_CLOCK for now, Sept 28
-        # elif dist > sort.MAXD and sort.SHOT_CLOCK != 0:
-        elif df_enc.empty:
-            is_break = True            
-        else:
-            print("df_sorted.iloc[-1], " , df_sorted.iloc[-1])
-            dist = df_sorted.iloc[-1][output_cols]
-            print("sort_by_face_dist_NN _ for loop dist is", dist)
-            if dist > sort.MAXD or df_enc.empty:
-                print("should breakout, dist is", dist)
-                is_break = True
-        return df_enc, df_sorted, is_break, output_cols
+    return df_enc, df_sorted, is_break, output_cols
+
+
+def sort_by_face_dist_NN(df_enc):
     
     # start here
     # create emtpy df_sorted with the same columns as df_enc
-    df_sorted = pd.DataFrame(columns = df_enc.columns)
 
     # # debugging -- will save full df_enc to csv
     # df_enc_outpath = os.path.join(sort.counter_dict["outfolder"],"df_enc.csv")
     # # write the dataframe df_enc to csv at df_enc_outpath
     # df_enc.to_csv(df_enc_outpath, index=False)
 
-    print(f"CHOP_FIRST is true with sort.counter_dict['start_img_name'], {sort.counter_dict['start_img_name']}")
-
-    if sort.CUTOFF < len(df_enc.index): itters = sort.CUTOFF
-    else: itters = len(df_enc.index)
-    print("sort_by_face_dist_NN itters is", itters, "sort.CUTOFF is", sort.CUTOFF)
-
-
-    if CHOP_FIRST:
-        print(f"CHOP_FIRST is true with sort.counter_dict['start_img_name'], {sort.counter_dict['start_img_name']}")
-        if sort.counter_dict["start_img_name"] is None:
-            sort.counter_dict["start_img_name"] = start_img_name
-        print(f"CHOP_FIRST is true with sort.counter_dict['start_img_name'], {sort.counter_dict['start_img_name']}")
-
-        df_enc, df_sorted, is_break, output_cols = get_closest_knn_or_break(df_enc, df_sorted)
-        df_enc = df_sorted.head(sort.CUTOFF)
-        print("AFTER CHOP_FIRST df_enc is", len(df_enc))
-        print("AFTER CHOP_FIRST df_sorted is", len(df_sorted))
-
-    if CHOP_FIRST and ONE_SHOT and not TSP_SORT:
-        print("CHOP_FIRST and ONE_SHOT both true, and using regular sort, so skipping the main TSP/NN sort")
+    if CHOP_ITTER_TSP_SORT:
+        sort.CUTOFF = min(MIN_CYCLE_COUNT * 4, len(df_enc.index))
+        itters = min(math.floor(MIN_CYCLE_COUNT * 1.7), len(df_enc.index))
     else:
-        ## SATYAM THIS IS WHAT WILL BE REPLACE BY TSP
-        if TSP_SORT is True:
-        
-            # track the mapping
-            df_clean = expand_face_encodings(df_enc)
-            df_clean['original_index'] = df_clean.index  # or however they map
-            START_IDX = END_IDX = None
-            sorter.set_TSP_sort(df_clean, START_IDX, END_IDX, FORCE_TARGET_COUNT)
-            df_sorted_clean = sorter.do_TSP_SORT(df_clean)
+        if sort.CUTOFF < len(df_enc.index): itters = sort.CUTOFF
+        else: itters = len(df_enc.index)
+        print("sort_by_face_dist_NN itters is", itters, "sort.CUTOFF is", sort.CUTOFF)
 
-            # Then map back 
-            df_sorted = df_enc.iloc[df_sorted_clean['original_index']].reset_index(drop=True)
+    if CHOP_FIRST or CHOP_ITTER_TSP_SORT:
+        sort.ONE_SHOT = True # force it to chop
+        df_enc = sort_and_chop(df_enc)
+    
+    if CHOP_ITTER_TSP_SORT or not TSP_SORT:
+        sort.ONE_SHOT = False # force it to do full itters
+        print("CHOP_ITTER_TSP_SORT is true or not TSP_SORT, so doing itter_sort")
+        df_enc = itter_sort(df_enc, itters)
+    
+    if CHOP_ITTER_TSP_SORT or TSP_SORT:
+        print("CHOP_ITTER_TSP_SORT is true or TSP_SORT, so doing TSP_sort")
+        df_enc = tsp_sort(df_enc)
 
-        else:
-            for i in range(itters):
-                print("sort_by_face_dist_NN _ for loop itters i is", i)
-                ## Find closest
-                try:
-                    df_enc, df_sorted, is_break, output_cols = get_closest_knn_or_break(df_enc, df_sorted)
-                    print(f"break for itters {i} is {is_break}")
-                    if is_break: break
-                except Exception as e:
-                    print("exception on going to get closest")
-                    print(str(e))
-                    traceback.print_exc()
-            # rename the distance column to dist -- there is no dist for TSP
-            df_sorted.rename(columns={output_cols: 'dist'}, inplace=True)
-        ## SATYAM THIS THE END OF WHAT WILL BE REPLACE BY TSP
 
     # use the colum site_name_id to asign the value of io.folder_list[site_name_id] to the folder column
-    df_sorted['folder'] = df_sorted['site_name_id'].apply(lambda x: io.folder_list[x])
+    df_enc['folder'] = df_enc['site_name_id'].apply(lambda x: io.folder_list[x])
     
-    print("df_sorted", df_sorted)
+    print("df_enc", df_enc)
 
     # # debugging -- will save full df_enc to csv
-    # df_sorted_outpath = os.path.join(sort.counter_dict["outfolder"],"df_sorted.csv")
-    # df_sorted.to_csv(df_sorted_outpath, index=False)
+    # df_enc_outpath = os.path.join(sort.counter_dict["outfolder"],"df_enc.csv")
+    # df_enc.to_csv(df_enc_outpath, index=False)
 
-    # # make a list of df_sorted dist
-    # dist_list = df_sorted['dist'].tolist()
+    # # make a list of df_enc dist
+    # dist_list = df_enc['dist'].tolist()
     # print("dist_list", dist_list)
     
-    # print all columns in df_sorted
-    print("df_sorted.columns", df_sorted.columns)
+    # print all columns in df_enc
+    print("df_enc.columns", df_enc.columns)
     
     ## Set a start_img_name for next round --> for clusters
     try:
-        #last_file = imagename from last row in df_sorted
-        last_file = df_sorted.iloc[-1]['imagename']
+        #last_file = imagename from last row in df_enc
+        last_file = df_enc.iloc[-1]['imagename']
         print("last_file ",last_file)
     except:
+        # not sure what is going on here, but this_start is undefined
         last_file = this_start
         print("last_file is this_start",last_file)
     sort.counter_dict["start_img_name"] = last_file
 
+    return df_enc
+
+def itter_sort(df_enc, itters):
+    df_sorted = pd.DataFrame(columns = df_enc.columns)
+    for i in range(itters):
+        print("sort_by_face_dist_NN _ for loop itters i is", i)
+                ## Find closest
+        try:
+            df_enc, df_sorted, is_break, output_cols = get_closest_knn_or_break(df_enc, df_sorted)
+            if len(df_sorted) >= itters: is_break = True
+            print(f"break for itters {i} is {is_break} because len(df_sorted) is {len(df_sorted)} and itters is {itters}")
+            if is_break: break
+        except Exception as e:
+            print("exception on going to get closest")
+            print(str(e))
+            traceback.print_exc()
+            # rename the distance column to dist -- there is no dist for TSP
+    df_sorted.rename(columns={output_cols: 'dist'}, inplace=True)
+    return df_sorted
+
+def sort_and_chop(df_enc):
+    df_sorted = pd.DataFrame(columns = df_enc.columns)
+    # print(f"CHOP_FIRST is true with sort.counter_dict['start_img_name'], {sort.counter_dict['start_img_name']}")
+    if sort.counter_dict["start_img_name"] is None:
+        sort.counter_dict["start_img_name"] = start_img_name
+    print(f"CHOP_FIRST at {sort.CUTOFF} is true with sort.counter_dict['start_img_name'], {sort.counter_dict['start_img_name']}")
+
+    df_enc, df_sorted, is_break, output_cols = get_closest_knn_or_break(df_enc, df_sorted)
+    df_sorted = df_sorted.head(sort.CUTOFF)
+    print("AFTER CHOP_FIRST df_enc is", len(df_enc))
+    print("AFTER CHOP_FIRST df_sorted is", len(df_sorted))
     return df_sorted
 
 
+def tsp_sort(df_enc):
+    # track the mapping
+    df_clean = expand_face_encodings(df_enc)
+    df_clean['original_index'] = df_clean.index  # or however they map
+    START_IDX = END_IDX = None
+    sorter.set_TSP_sort(df_clean, START_IDX, END_IDX, FORCE_TARGET_COUNT)
+    df_sorted_clean = sorter.do_TSP_SORT(df_clean)
+
+    # Then map back 
+    df_sorted = df_enc.iloc[df_sorted_clean['original_index']].reset_index(drop=True)
+    return df_sorted
 
 def cycling_order(CYCLECOUNT, sort):
     img_array = []

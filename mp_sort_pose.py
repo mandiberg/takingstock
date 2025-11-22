@@ -2434,7 +2434,7 @@ class SortPose:
     def get_median_value(self, df_enc, sort_column):
         # Get list of bbox rows and filter out invalid entries (None, wrong length, non-numeric)
         flattened_array = df_enc[sort_column].tolist()
-        if self.VERBOSE: print("first item in flattened_array", flattened_array[0])
+        # if self.VERBOSE: print("first item in flattened_array", flattened_array[0])
 
         clean_rows = []
         for row in flattened_array:
@@ -2457,8 +2457,8 @@ class SortPose:
         arr = np.array(clean_rows, dtype=float)
         # compute median per column and round to nearest int
         med = np.median(arr, axis=0)
-        median_row = tuple(np.rint(med).astype(int).tolist())
-        if self.VERBOSE: print("median_row", median_row)
+        median_row = tuple(med.tolist())
+        # if self.VERBOSE: print("median_row", median_row)
         return median_row
 
     def test_smart_round_df(self,df_rounded, df_enc, sort_column, round_down):
@@ -2819,7 +2819,7 @@ class SortPose:
                     if self.SORT_TYPE == "obj_bbox":
                         # make both enc1 and obj_bbox1 the same
                         enc1 = obj_bbox1
-                print(f"set enc1 from get_start_enc() to {enc1}")
+                # print(f"set enc1 from get_start_enc() to {enc1}")
         else: 
             # if not first round -- is this for round 2+ ?
             # or is this when it is a cluster/topics pass through? 
@@ -2994,20 +2994,20 @@ class SortPose:
         return enc1
     
     def sort_df_KNN(self, df_enc, enc1, knn_sort="128d"):
-        if self.VERBOSE: print(f"df_enc for enc1 {enc1} at the start of sort_df_KNN with knn_sort {knn_sort}")
-        if self.VERBOSE: print(df_enc)
+        if self.VERBOSE: print(f"df_enc for enc1 len{len(enc1)} at the start of sort_df_KNN with knn_sort {knn_sort}")
+        # if self.VERBOSE: print(df_enc)
 
         sortcol, output_cols = self.KNN_COLS.get(knn_sort, (None, None))
 
         #create output column -- do i need to do this?
         df_enc[output_cols] = np.nan
-        print("sort_df_KNN, knn_sort is", knn_sort, "enc1", enc1)
+        # print("sort_df_KNN, knn_sort is", knn_sort, "enc1", enc1)
         # Extract the face encodings from the dataframe
         print("df_enc[sortcol]", df_enc[sortcol])
 
         encodings_array = df_enc[sortcol].to_numpy().tolist()
         # print("encodings_array to_numpy().tolist", (encodings_array))
-        print(f"before knn, this is enc1 {enc1}")
+        # print(f"before knn, this is enc1 {enc1}")
 
         if knn_sort == "obj":
             print("encodings_array length", len(encodings_array))
@@ -3164,45 +3164,45 @@ class SortPose:
 
             return df
         
-        def de_dupe(df_dist_hsv, df_sorted, column, is_run = False):
-            # remove duplicates (where dist is less than BODY_DUPE_DIST)
-            def json_to_list(json):
-                return [v for k, v in json.items()]
+        # def de_dupe(df_dist_hsv, df_sorted, column, is_run = False):
+        #     # remove duplicates (where dist is less than BODY_DUPE_DIST)
+        #     def json_to_list(json):
+        #         return [v for k, v in json.items()]
             
-            df_dist_hsv = mask_df(df_dist_hsv, column, self.DUPED, "greaterthan")
-            df_close_ones = mask_df(df_dist_hsv, column, self.MIND, "lessthan")
-            last_image = df_sorted.iloc[-1].to_dict()
-            dupe_index = []
-            hsvll_dist = face_dist = bbox_dist = 1 # so it doesn't trigger the dupe_score
-            # print("de_duping from", last_image['image_id'], last_image['dist_enc1'], last_image['description'], last_image['bbox'])
-            for index, row in df_close_ones.iterrows():
+        #     df_dist_hsv = mask_df(df_dist_hsv, column, self.DUPED, "greaterthan")
+        #     df_close_ones = mask_df(df_dist_hsv, column, self.MIND, "lessthan")
+        #     last_image = df_sorted.iloc[-1].to_dict()
+        #     dupe_index = []
+        #     hsvll_dist = face_dist = bbox_dist = 1 # so it doesn't trigger the dupe_score
+        #     # print("de_duping from", last_image['image_id'], last_image['dist_enc1'], last_image['description'], last_image['bbox'])
+        #     for index, row in df_close_ones.iterrows():
                 
-                # print("de_duping aginst", row['image_id'], row['dist_enc1'], row['description'], last_image['bbox'])
-                # print(last_image['bbox'].items(), row['bbox'].items())
-                hsvll_dist = self.get_d(last_image['hsvll'], row['hsvll'])
-                face_dist = self.get_d(last_image['face_encodings68'], row['face_encodings68'])
-                # should also test body_landmarks, (for 128d sort), and then bump dupe_score threshold to 3
-                bbox_dist = self.get_d(json_to_list(last_image['bbox']), json_to_list(row['bbox']))
-                # print("hsvll_dist", hsvll_dist, "face_dist", face_dist, "bbox_dist", bbox_dist)
+        #         # print("de_duping aginst", row['image_id'], row['dist_enc1'], row['description'], last_image['bbox'])
+        #         # print(last_image['bbox'].items(), row['bbox'].items())
+        #         hsvll_dist = self.get_d(last_image['hsvll'], row['hsvll'])
+        #         face_dist = self.get_d(last_image['face_encodings68'], row['face_encodings68'])
+        #         # should also test body_landmarks, (for 128d sort), and then bump dupe_score threshold to 3
+        #         bbox_dist = self.get_d(json_to_list(last_image['bbox']), json_to_list(row['bbox']))
+        #         # print("hsvll_dist", hsvll_dist, "face_dist", face_dist, "bbox_dist", bbox_dist)
 
-                # tally up the dupe_score
-                dupe_score = 0
-                if row['description'] == last_image['description']: dupe_score += 1
-                if hsvll_dist < .1 :  dupe_score += 1
-                if face_dist < .4 : dupe_score += 1
-                if bbox_dist < 5 : dupe_score += 1
-                # print("dupe_score", dupe_score)
+        #         # tally up the dupe_score
+        #         dupe_score = 0
+        #         if row['description'] == last_image['description']: dupe_score += 1
+        #         if hsvll_dist < .1 :  dupe_score += 1
+        #         if face_dist < .4 : dupe_score += 1
+        #         if bbox_dist < 5 : dupe_score += 1
+        #         # print("dupe_score", dupe_score)
 
-                if dupe_score > 2:
-                    if self.VERBOSE: print("de_duping score", dupe_score, last_image['image_id'], "is a duplicate of", row['image_id'])
-                    # add the index of the duplicate to the list of indexes to drop
-                    dupe_index.append(index)
-                elif is_run:
-                    last_image = row
+        #         if dupe_score > 2:
+        #             if self.VERBOSE: print("de_duping score", dupe_score, last_image['image_id'], "is a duplicate of", row['image_id'])
+        #             # add the index of the duplicate to the list of indexes to drop
+        #             dupe_index.append(index)
+        #         elif is_run:
+        #             last_image = row
 
-            df_dist_hsv = df_dist_hsv.drop(dupe_index).reset_index(drop=True)
+        #     df_dist_hsv = df_dist_hsv.drop(dupe_index).reset_index(drop=True)
 
-            return df_dist_hsv
+        #     return df_dist_hsv
 
         def get_knn_sort(self, enc1):
         # map most SORT_TYPE values to knn_sort using a dictionary; handle edge-cases below
@@ -3237,7 +3237,7 @@ class SortPose:
         if len(df_sorted) == 0: 
             FIRST_ROUND = True
             enc1, obj_bbox1 = self.get_enc1(df_enc, FIRST_ROUND)
-            if self.VERBOSE: print(f"first round enc1, {enc1}   ....    obj_bbox1", obj_bbox1)
+            # if self.VERBOSE: print(f"first round enc1, {enc1}   ....    obj_bbox1", obj_bbox1)
             # drop all rows where obj_bbox_list is None
             if self.OBJ_CLS_ID > 0: df_enc = df_enc.dropna(subset=["obj_bbox_list"])
         else: 
@@ -3250,7 +3250,7 @@ class SortPose:
 
         knn_sort = get_knn_sort(self, enc1)
 
-        if self.VERBOSE: print(f"get_closest_df_NN - pre first sort_df_KNN knn - {knn_sort} - enc1", enc1)
+        if self.VERBOSE: print(f"get_closest_df_NN - pre first sort_df_KNN knn - {knn_sort} - enc1 len", len(enc1))
         # sort KNN (always for planar) or BRUTEFORCE (optional only for 128d)
         if self.BRUTEFORCE and knn_sort == "128d": df_dist_enc = self.brute_force(df_enc, enc1)
         elif start_image_id is not None: self.sort_df_TSP(df_enc, start_image_id, end_image_id)
@@ -3287,12 +3287,12 @@ class SortPose:
             df_dist_hsv = df_dist_enc
 
         if len(df_dist_hsv) > 0:
-            if not FIRST_ROUND:
-                # remove duplicates (where dist is less than BODY_DUPE_DIST)
-                df_dist_hsv = de_dupe(df_dist_hsv, df_sorted, output_cols)
+            # if not FIRST_ROUND:
+            #     # remove duplicates (where dist is less than BODY_DUPE_DIST)
+            #     df_dist_hsv = de_dupe(df_dist_hsv, df_sorted, output_cols)
 
-                # assign backto main df_enc to permanently rm dupes. 
-                df_enc = df_dist_hsv
+            #     # assign backto main df_enc to permanently rm dupes. 
+            #     df_enc = df_dist_hsv
             
             if self.DO_HSV_KNN:
                 if self.VERBOSE: print("df_enc self.DO_HSV_KNN", df_enc)
@@ -3361,7 +3361,7 @@ class SortPose:
                 df_run = df_shuffled[runmask]
 
                 # need to dedupe run if not first round
-                if not FIRST_ROUND: df_run = de_dupe(df_run, df_sorted, output_cols, is_run=True)
+                # if not FIRST_ROUND: df_run = de_dupe(df_run, df_sorted, output_cols, is_run=True)
 
                 # locate the index of df_enc where image_id = image_id in df_run
                 index_names = df_enc[df_enc['image_id'].isin(df_run['image_id'])].index
@@ -3369,7 +3369,7 @@ class SortPose:
                 # remove the run from df_enc where image_id = image_id in df_run
                 df_enc = df_enc.drop(index_names).reset_index(drop=True)
 
-            elif len(df_shuffled) > 0 and (self.JUMP_SHOT is False or (self.JUMP_SHOT is True and self.SHOT_CLOCK < self.SHOT_CLOCK_MAX)):
+            elif len(df_shuffled) > 0 and not self.ONE_SHOT and (self.JUMP_SHOT is False or (self.JUMP_SHOT is True and self.SHOT_CLOCK < self.SHOT_CLOCK_MAX)):
                 if self.VERBOSE: print("NO run, but still in the game ---->>>>")
                 # df_run = first row of df_shuffled based on image_id
                 df_run = df_shuffled.iloc[[0]]  # Select the first row
@@ -3383,8 +3383,7 @@ class SortPose:
                 # Drop rows with matching image_id from df_enc
                 if len(index_names) > 0:
                     df_enc = df_enc.drop(index_names).reset_index(drop=True)
-                    if self.VERBOSE: print("df_run", df_run)
-                    if self.VERBOSE: print("df_enc", len(df_enc))
+                    if self.VERBOSE: print("sequencing this many in df_run", len(df_run), "with this many left in df_enc", len(df_enc))
                 else:
                     if self.VERBOSE: print("No matching image_id found in df_enc for df_run")
             
@@ -3407,7 +3406,7 @@ class SortPose:
                 if self.VERBOSE: print("df_shuffled is empty")
                 return df_enc, df_sorted, output_cols
 
-            if self.VERBOSE: print("df_run", df_run)
+            # if self.VERBOSE: print("df_run", df_run)
             # if self.VERBOSE: print("df_run", df_run[['image_id','dist_enc1','dist_HSV','sum_dist']])
 
 
@@ -3415,7 +3414,7 @@ class SortPose:
             if self.VERBOSE: print("df_sorted containing all good items", len(df_sorted))
             
             if self.VERBOSE: print("df_enc", len(df_enc))
-            if self.VERBOSE: print("enc1", len(enc1))
+            # if self.VERBOSE: print("enc1", len(enc1))
         else:
             if self.VERBOSE: print("df_shuffled is empty")
 
@@ -4437,8 +4436,12 @@ class TSPSorterTwoPhase:
         
         # Calculate skip budget
         if self.FORCE_TARGET_COUNT is not None:
-            print(f"Forcing target count: {self.FORCE_TARGET_COUNT} points")
-            total_to_skip = self.N_POINTS - self.FORCE_TARGET_COUNT  # Ensure FORCE_TARGET_COUNT points in final set
+            if self.N_POINTS > self.FORCE_TARGET_COUNT:
+                print(f"Forcing target count: {self.FORCE_TARGET_COUNT} points")
+                total_to_skip = self.N_POINTS - self.FORCE_TARGET_COUNT  # Ensure FORCE_TARGET_COUNT points in final set
+            else:
+                print(f"FORCE_TARGET_COUNT {self.FORCE_TARGET_COUNT} >= N_POINTS {self.N_POINTS}, no skipping will occur")
+                total_to_skip = 0
         else:
             total_to_skip = int(np.floor(self.SKIP_FRAC * self.N_POINTS))
         print(f"Total points to skip: {total_to_skip} from {self.N_POINTS} points, leaving {self.N_POINTS - total_to_skip} points")
