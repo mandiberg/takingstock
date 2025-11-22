@@ -195,7 +195,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     
 
     # PURGING_DUPES = True
-    FORCE_TARGET_COUNT = 60
+    FORCE_TARGET_COUNT = 90
     # if TESTING: IS_HAND_POSE_FUSION = GENERATE_FUSION_PAIRS = False
 
     if not USE_HSV:
@@ -215,7 +215,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
 
         
     # HAAAAACK
-    MIN_CYCLE_COUNT = 60
+    # MIN_CYCLE_COUNT = 60
     # this control whether sorting by topics
     # IS_TOPICS = True # if using Clusters only, must set this to False
 
@@ -1124,8 +1124,8 @@ def sort_by_face_dist_NN(df_enc):
     # df_enc.to_csv(df_enc_outpath, index=False)
 
     if CHOP_ITTER_TSP_SORT:
-        sort.CUTOFF = min(MIN_CYCLE_COUNT * 4, len(df_enc.index))
-        itters = min(math.floor(MIN_CYCLE_COUNT * 1.7), len(df_enc.index))
+        sort.CUTOFF = min(FORCE_TARGET_COUNT * 4, len(df_enc.index))
+        itters = min(math.floor(FORCE_TARGET_COUNT * 1.1), len(df_enc.index))
     else:
         if sort.CUTOFF < len(df_enc.index): itters = sort.CUTOFF
         else: itters = len(df_enc.index)
