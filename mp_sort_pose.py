@@ -772,16 +772,15 @@ class SortPose:
 
 
     # test if new and old make a face, calls is_face
-    def test_pair(self, last_file, new_file):
+    def test_pair(self, last_img, img):
+
         print(img.shape,"@@@@@@@@@@@@@@@@@@@@")
         print(last_img.shape,"^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^")
         try:
-            img = new_file
             height, width, layers = img.shape
             size = (width, height)
             # print('loaded img 1')
 
-            last_img = last_file
             last_height, last_width, last_layers = last_img.shape
             last_size = (last_width, last_height)
             # print('loaded img 2')

@@ -95,13 +95,13 @@ if "paris" in CURRENT_MODE:
     # IS_TOPICS = True # if using Clusters only, must set this to False
     if CURRENT_MODE == 'paris_photo_torso_images_topics':
         # controls which type of sorting/column sorted on
-        SELECT_TYPE = SORT_TYPE = "planar_hands"
+        CLUSTER_TYPE = SORT_TYPE = "planar_hands"
         image_edge_multiplier = [1.3,2,2.9,2] # portrait crop for paris photo images < Aug 30
 
     elif CURRENT_MODE == 'paris_photo_torso_videos_topics':
-        SELECT_TYPE = SORT_TYPE = "128d"
+        CLUSTER_TYPE = SORT_TYPE = "128d"
         #TEMP TESTING
-        # SELECT_TYPE = SORT_TYPE = "obj_bbox"
+        # CLUSTER_TYPE = SORT_TYPE = "obj_bbox"
         MIN_VIDEO_FUSION_COUNT = 300
 
         JUMP_SHOT = True # jump to random file if can't find a run (I don't think this applies to planar?)
@@ -122,7 +122,7 @@ elif "3D" in CURRENT_MODE:
     # FOCUS_CLUSTER_HACK_LIST = [24,42,71,93,167,204,294,301,358,398,443,526,532,590,623,658,708,729] #768
     # FOCUS_CLUSTER_HACK_LIST = [239, 299, 443]
     if "bod" in CURRENT_MODE:
-        SELECT_TYPE = SORT_TYPE = "body3D"
+        CLUSTER_TYPE = SORT_TYPE = "body3D"
         if "full" in CURRENT_MODE:
             FULL_BODY = True # this requires is_feet
         else:
@@ -130,8 +130,8 @@ elif "3D" in CURRENT_MODE:
         EXPAND = True # expand with white for prints, as opposed to inpaint and crop. (not video, which is controlled by INPAINT_COLOR) 
     elif CURRENT_MODE == '3D_arms':
         # META = True
-        SELECT_TYPE = SORT_TYPE = "ArmsPoses3D"
-        # SELECT_TYPE = SORT_TYPE = "body3D"
+        CLUSTER_TYPE = SORT_TYPE = "ArmsPoses3D"
+        # CLUSTER_TYPE = SORT_TYPE = "body3D"
         FULL_BODY = False 
         # either AUTO_EDGE_CROP or image_edge_multiplier must be set. Not both
         # AUTO_EDGE_CROP = True # this triggers the dynamic cropping based on min_max_body_landmarks_for_crop
@@ -158,7 +158,7 @@ elif "3D" in CURRENT_MODE:
     IS_ONE_CLUSTER = False # make IS_CLUSTER == False
     CLUSTER_NO = 242 # sort on this one as HAND_POSITION for IS_HAND_POSE_FUSION
                     # if not IS_HAND_POSE_FUSION, then this is selecting HandsGestures
-                    # I think this is pose number from BodyPoses3D if SELECT_TYPE = SORT_TYPE == "body3D"
+                    # I think this is pose number from BodyPoses3D if CLUSTER_TYPE = SORT_TYPE == "body3D"
     START_CLUSTER = 0
 
 ###########################################################
@@ -170,10 +170,10 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     SegmentTable_name = 'SegmentBig_isface'
     SegmentHelper_name = 'SegmentHelper_sept2025_heft_keywords' # TK revisit this for prodution run
     # SegmentHelper_name = 'SegmentHelper_nov2025_placard' # TK revisit this for prodution run
-    # SELECT_TYPE = "ArmsPoses3D"
+    # CLUSTER_TYPE = "ArmsPoses3D"
     # SORT_TYPE = "planar_hands"
-    SELECT_TYPE = SORT_TYPE = "ArmsPoses3D" # this triggers meta body poses 3D
-    # SELECT_TYPE = SORT_TYPE = "obj_bbox" # make sure OBJ_CLS_ID is set below
+    CLUSTER_TYPE = SORT_TYPE = "ArmsPoses3D" # this triggers meta body poses 3D
+    # CLUSTER_TYPE = SORT_TYPE = "obj_bbox" # make sure OBJ_CLS_ID is set below
     # META = True
     TESTING = False
     IS_HAND_POSE_FUSION = True # do we use fusion clusters
@@ -213,16 +213,11 @@ elif CURRENT_MODE == 'heft_torso_keywords':
         if TSP_SORT: MIN_CYCLE_COUNT = FORCE_TARGET_COUNT
         else: MIN_CYCLE_COUNT = 150 # this is the cut off for the SQL query results
         
-
-        
     # HAAAAACK
     # MIN_CYCLE_COUNT = 60
     # this control whether sorting by topics
     # IS_TOPICS = True # if using Clusters only, must set this to False
-
     # JUMP_SHOT = True # jump to random file if can't find a run (I don't think this applies to planar?)
-
-
     # USE_ALL = True # do this for HEFT bc it turns off face xyz and mouthgap filters && if SORT_TYPE == "planar_hands" forces ONE_SHOT
 
     USE_PAINTED = True
@@ -242,10 +237,10 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     TOPIC_NO = [553.1] # if doing an affect topic fusion, this is the wrapper topic, OR keyword. add .01, .1 etc for sub selects from KEYWORD_DICT
 
     # this needs to be integrated into the search for each cluster, but doing here for the moment when doing single topic/cluster testing
-    # this is SELECT_TYPE
+    # this is CLUSTER_TYPE
     KEYWORD_OBJECT = KEYWORD_ORIENTATION = None
     KEYWORD_EXCLUDE = False
-    cluster_map_key = CLUSTER_MAP.get(SELECT_TYPE, (None, None))[0]
+    cluster_map_key = CLUSTER_MAP.get(CLUSTER_TYPE, (None, None))[0]
     OBJ_ORIENTATION_VALS = OBJ_ORIENTATION_DICT.get(TOPIC_NO[0],None)
     if OBJ_ORIENTATION_VALS is not None:
         CLUSTER_ORIENTATION_VALS = OBJ_ORIENTATION_VALS.get(FOCUS_CLUSTER_DICT[cluster_map_key].get(math.floor(TOPIC_NO[0]), None)[0]) 
@@ -271,7 +266,7 @@ else:
     # SORT_TYPE = "fingertips_positions"
     USE_AFFECT_GROUPS = False
 
-print(f"doing {CURRENT_MODE}: SELECT_TYPE {SELECT_TYPE}, SORT_TYPE {SORT_TYPE}, IS_HAND_POSE_FUSION {IS_HAND_POSE_FUSION}, GENERATE_FUSION_PAIRS {GENERATE_FUSION_PAIRS}, MIN_VIDEO_FUSION_COUNT {MIN_VIDEO_FUSION_COUNT}, IS_TOPICS {IS_TOPICS}, IS_ONE_TOPIC {IS_ONE_TOPIC}, TOPIC_NO {TOPIC_NO}, USE_AFFECT_GROUPS {USE_AFFECT_GROUPS}, CHOP_FIRST {CHOP_FIRST}, ONE_SHOT {ONE_SHOT}, TSP_SORT {TSP_SORT}, CHOP_ITTER_TSP_SORT {CHOP_ITTER_TSP_SORT}")
+print(f"doing {CURRENT_MODE}: CLUSTER_TYPE {CLUSTER_TYPE}, SORT_TYPE {SORT_TYPE}, IS_HAND_POSE_FUSION {IS_HAND_POSE_FUSION}, GENERATE_FUSION_PAIRS {GENERATE_FUSION_PAIRS}, MIN_VIDEO_FUSION_COUNT {MIN_VIDEO_FUSION_COUNT}, IS_TOPICS {IS_TOPICS}, IS_ONE_TOPIC {IS_ONE_TOPIC}, TOPIC_NO {TOPIC_NO}, USE_AFFECT_GROUPS {USE_AFFECT_GROUPS}, CHOP_FIRST {CHOP_FIRST}, ONE_SHOT {ONE_SHOT}, TSP_SORT {TSP_SORT}, CHOP_ITTER_TSP_SORT {CHOP_ITTER_TSP_SORT}")
 
 if USE_AFFECT_GROUPS:
     # groupings of affect topics
@@ -288,27 +283,27 @@ VISIBLE_HAND_LEFT = False
 VISIBLE_HAND_RIGHT = False
 USE_NOSEBRIDGE = True 
 
-# this is set dynamically based on SORT_TYPE set above
+# this is for selecting, set dynamically based on CLUSTER_TYPE set above
 if IS_HAND_POSE_FUSION:
-    CLUSTER_TYPE, CLUSTER_TYPE_2 = CLUSTER_MAP.get(SORT_TYPE, (None, None))
+    CLUSTER1, CLUSTER2 = CLUSTER_MAP.get(CLUSTER_TYPE, (None, None))
 
 else:
-    if SORT_TYPE == "ArmsPoses3D":
+    if CLUSTER_TYPE == "ArmsPoses3D":
         if META:
             # if fusion, select on ArmsPoses3D and gesture, sort on hands positions
             # SORT_TYPE = "planar_hands"
-            CLUSTER_TYPE = "MetaBodyPoses3D"
+            CLUSTER1 = "MetaBodyPoses3D"
         else:
-            CLUSTER_TYPE = "ArmsPoses3D"
+            CLUSTER1 = "ArmsPoses3D"
     else:
         # choose the cluster type manually here
-        # CLUSTER_TYPE = "BodyPoses" # usually this one
-        CLUSTER_TYPE = "BodyPoses3D" # 
-        # CLUSTER_TYPE = "HandsPositions" # 2d hands
-        # CLUSTER_TYPE = "HandsGestures"
-        # CLUSTER_TYPE = "Clusters" # manual override for 128d
-    CLUSTER_TYPE_2 = None
-print(f"SORT_TYPE {SORT_TYPE}, CLUSTER_TYPE {CLUSTER_TYPE}, CLUSTER_TYPE_2 {CLUSTER_TYPE_2}")
+        # CLUSTER1 = "BodyPoses" # usually this one
+        CLUSTER1 = "BodyPoses3D" # 
+        # CLUSTER1 = "HandsPositions" # 2d hands
+        # CLUSTER1 = "HandsGestures"
+        # CLUSTER1 = "Clusters" # manual override for 128d
+    CLUSTER2 = None
+print(f"CLUSTER_TYPE {CLUSTER_TYPE}, CLUSTER1 {CLUSTER1}, CLUSTER2 {CLUSTER2}")
 DROP_LOW_VIS = False
 
 # cut the kids
@@ -348,17 +343,16 @@ SAVE_IMG_PROCESS = False
 IS_ANGLE_SORT = False
 
 
-# gets focus cluster list from the FOCUS_CLUSTER_DICT via CLUSTER_TYPE and TOPIC_NO (which is a list of one keyword)
+# gets focus cluster list from the FOCUS_CLUSTER_DICT via CLUSTER1 and TOPIC_NO (which is a list of one keyword)
 if TOPIC_NO is not None and IS_ONE_TOPIC and IS_HAND_POSE_FUSION:
-    print("setting FOCUS_CLUSTER_HACK_LIST for TOPIC_NO", TOPIC_NO, "with CLUSTER_TYPE", CLUSTER_TYPE)
-    FOCUS_CLUSTER_HACK_LIST = FOCUS_CLUSTER_DICT.get(CLUSTER_TYPE, {}).get(int(math.floor(TOPIC_NO[0])), None)
+    print("setting FOCUS_CLUSTER_HACK_LIST for TOPIC_NO", TOPIC_NO, "with CLUSTER1", CLUSTER1)
+    FOCUS_CLUSTER_HACK_LIST = FOCUS_CLUSTER_DICT.get(CLUSTER1, {}).get(int(math.floor(TOPIC_NO[0])), None)
 
 
 DRAW_TEST_LMS = False # this is for testing the landmarks
 
-if SORT_TYPE == "planar_hands" and USE_ALL:
-    SORT_TYPE = "planar_hands_USE_ALL"
-    ONE_SHOT = True
+#TK not sure, but leaving as is
+if SORT_TYPE == "planar_hands" and USE_ALL: ONE_SHOT = True
 
 NORMED_BODY_LMS = True
 
@@ -371,8 +365,8 @@ else: OBJ_CLS_ID = 0
 DO_OBJ_SORT = True
 OBJ_DONT_SUBSELECT = False # False means select for OBJ. this is a flag for selecting a specific object type when not sorting on obj
 PHONE_BBOX_LIMITS = [0] # this is an attempt to control the BBOX placement. I don't think it is going to work, but with non-zero it will make a bigger selection. Fix this hack TK. 
-if SORT_TYPE == "obj_bbox" and OBJ_CLS_ID == 0:
-    print("WARNING: OBJ_CLS_ID is 0 for obj_bbox SORT_TYPE, quitting")
+if "obj_bbox" in [SORT_TYPE, CLUSTER_TYPE] and OBJ_CLS_ID == 0:
+    print("WARNING: OBJ_CLS_ID is 0 for obj_bbox SORT_TYPE/CLUSTER_TYPE, quitting")
     sys.exit()
 
 if USE_FUSION_PAIR_DICT:
@@ -474,7 +468,7 @@ elif IS_SEGONLY and io.platform == "darwin":
 
     if IS_HAND_POSE_FUSION:
         # handle META situation, where ArmsPoses3D needs to look for meta clusters
-        if SORT_TYPE == "ArmsPoses3D" and META:
+        if CLUSTER_TYPE == "ArmsPoses3D" and META:
             # this is for META 
             cluster_table = f"ImagesBodyPoses3D"
             # ihp as ClustersMetaBodyPoses3D - selecting the meta clusters id below
@@ -486,14 +480,14 @@ elif IS_SEGONLY and io.platform == "darwin":
             FROM += f" JOIN ClustersMetaBodyPoses3D cmp ON ihp.cluster_id = cmp.cluster_id "
         else: 
             print("[setting junction] IS_HAND_POSE_FUSION normal")
-            cluster_table = f"Images{CLUSTER_TYPE}"
+            cluster_table = f"Images{CLUSTER1}"
             FROM += f" JOIN {cluster_table} ihp ON s.image_id = ihp.image_id "
-        if CLUSTER_TYPE_2: FROM += f" JOIN Images{CLUSTER_TYPE_2} ih ON s.image_id = ih.image_id "
+        if CLUSTER2: FROM += f" JOIN Images{CLUSTER2} ih ON s.image_id = ih.image_id "
         # WHERE += " AND ihp.cluster_dist < 2.5" # isn't really working how I want it
         if IS_HAND_POSE_FUSION: add_topic_select()
     elif IS_ONE_CLUSTER and IS_ONE_TOPIC:
         print("[setting junction] if IS_ONE_CLUSTER and IS_ONE_TOPIC")
-        FROM += f" JOIN Images{CLUSTER_TYPE} ic ON s.image_id = ic.image_id "
+        FROM += f" JOIN Images{CLUSTER1} ic ON s.image_id = ic.image_id "
         add_topic_select()
         print(f"SELECTING ONE CLUSTER {CLUSTER_NO} AND ONE TOPIC {TOPIC_NO}. This is my WHERE: {WHERE}")
     else:
@@ -504,13 +498,13 @@ elif IS_SEGONLY and io.platform == "darwin":
             FROM += f" JOIN ClustersMetaBodyPoses3D cmp ON ihp.cluster_id = cmp.cluster_id "
         elif IS_CLUSTER or IS_ONE_CLUSTER:
             print("[setting junction] if IS_CLUSTER or IS_ONE_CLUSTER")
-            FROM += f" JOIN Images{CLUSTER_TYPE} ic ON s.image_id = ic.image_id "
+            FROM += f" JOIN Images{CLUSTER1} ic ON s.image_id = ic.image_id "
         if IS_TOPICS or IS_ONE_TOPIC:
             add_topic_select()
             # TEMP OVERRIDE FOR FINGER POINT TESTING
         # if TOPIC_NO == [22]:
-        #     CLUSTER_TYPE = "Clusters"
-        #     FROM += f" JOIN Images{CLUSTER_TYPE} ic ON s.image_id = ic.image_id "
+        #     CLUSTER1 = "Clusters"
+        #     FROM += f" JOIN Images{CLUSTER1} ic ON s.image_id = ic.image_id "
         #     WHERE += " AND ic.cluster_id = 126"
 
     if SegmentHelper_name is not None:
@@ -548,6 +542,7 @@ elif IS_SEGONLY and io.platform == "darwin":
 
         # for some reason I have to set OBJ_CLS_ID to 0 if I'm doing planar_body
         # but I want to store the value in OBJ_SUBSELECT to use in SQL
+        #TK not sure if SORT or SELECT but I think it is moot bc planar_body is kind of deprecated
         if SORT_TYPE == "planar_body" and not DO_OBJ_SORT: OBJ_CLS_ID = 0
     if KEYWORD_OBJECT is not None:
         # this is for filtering by object keyword
@@ -562,6 +557,7 @@ elif IS_SEGONLY and io.platform == "darwin":
             if KEYWORD_ORIENTATION is not None:
                 WHERE += f" AND ik_obj.orientation = {KEYWORD_ORIENTATION} "
     if SORT_TYPE == "planar_body":
+        # sort because selecting data to sort on, not for clustering
         WHERE += " AND s.mongo_body_landmarks = 1  " 
     LIMIT = LIMIT
 
@@ -590,7 +586,7 @@ elif IS_SEGONLY and io.platform == "win32":
     # WHERE += " AND k.keyword_text LIKE 'shout%' "
 
     if IS_CLUSTER or IS_ONE_CLUSTER:
-        FROM += f" JOIN Images{CLUSTER_TYPE} ic ON s.image_id = ic.image_id "
+        FROM += f" JOIN Images{CLUSTER1} ic ON s.image_id = ic.image_id "
     if IS_TOPICS or IS_ONE_TOPIC:
         FROM += " JOIN ImagesTopics it ON s.image_id = it.image_id "
         WHERE += " AND it.topic_score > .3"
@@ -606,6 +602,7 @@ elif IS_SEGONLY and io.platform == "win32":
         FROM += " JOIN PhoneBbox pb ON s.image_id = pb.image_id "
         SELECT += ", pb.bbox_67, pb.conf_67, pb.bbox_63, pb.conf_63, pb.bbox_26, pb.conf_26, pb.bbox_27, pb.conf_27, pb.bbox_32, pb.conf_32 "
     if SORT_TYPE == "planar_body":
+        # sort because selecting data to sort on, not for clustering
         WHERE += " AND s.mongo_body_landmarks = 1 "
     # # join to keywords
     # FROM += " JOIN ImagesKeywords ik ON s.image_id = ik.image_id JOIN Keywords k ON ik.keyword_id = k.keyword_id "
@@ -671,8 +668,8 @@ sort.MAXD = sort.MAXD*30
 
 if USE_NOSEBRIDGE: sort.ORIGIN = 6
 
-# CLUSTER_TYPE is passed to sort. THIS SEEMS REDUNDANT!!!
-# sort.set_subset_landmarks(CLUSTER_TYPE)
+# CLUSTER1 is passed to sort. THIS SEEMS REDUNDANT!!!
+# sort.set_subset_landmarks(CLUSTER1)
 
 start_img_name = "median"
 start_site_image_id = None
@@ -710,9 +707,9 @@ if not io.IS_TENCH:
     io.mongo_db = mongo_db
 
 
-    # handle the table objects based on CLUSTER_TYPE
+    # handle the table objects based on CLUSTER1
     if META:table_cluster_type = "BodyPoses3D"
-    else:table_cluster_type = CLUSTER_TYPE
+    else:table_cluster_type = CLUSTER1
     ClustersTable_name = table_cluster_type
     ImagesClustersTable_name = "Images"+table_cluster_type
     MetaClustersTable_name = "Meta"+table_cluster_type
@@ -748,12 +745,12 @@ if not io.IS_TENCH:
         cluster_dist = Column(Float)
 
 
-    # # handle the table objects based on CLUSTER_TYPE
-    # if CLUSTER_TYPE == "ArmsPoses3D": 
+    # # handle the table objects based on CLUSTER1
+    # if CLUSTER1 == "ArmsPoses3D": 
     #     ClustersTable_name = "MetaBodyPoses3D" # need to handle Meta cases, this is clumsy
     #     JunctionTable_name = "Clusters"
     # else:
-    #     ClustersTable_name = CLUSTER_TYPE
+    #     ClustersTable_name = CLUSTER1
     #     JunctionTable_name = "Images"
     # ImagesClustersTable_name = JunctionTable_name+ClustersTable_name
     # print("ClustersTable_name", ClustersTable_name, ImagesClustersTable_name)
@@ -777,9 +774,9 @@ if not io.IS_TENCH:
         image_id_j = Column(Integer, ForeignKey('Encodings.encoding_id'), primary_key=True)
 
     # not currently in use
-    if IS_HAND_POSE_FUSION and CLUSTER_TYPE_2:
-        ClustersTable_name_2 = CLUSTER_TYPE_2
-        ImagesClustersTable_name_2 = "Images"+CLUSTER_TYPE_2
+    if IS_HAND_POSE_FUSION and CLUSTER2:
+        ClustersTable_name_2 = CLUSTER2
+        ImagesClustersTable_name_2 = "Images"+CLUSTER2
 
         class Clusters_2(Base):
             __tablename__ = ClustersTable_name_2
@@ -941,14 +938,14 @@ if not io.IS_TENCH:
             else: cluster_target_col = "ihp.cluster_id"
             if isinstance(cluster_no, list):
                 print("cluster_no is a list", cluster_no)
-                # set target column based on SORT_TYPE, ArmsPoses3D means we have a meta_cluster_id
+                # set target column based on CLUSTER_TYPE, ArmsPoses3D means we have a meta_cluster_id
 
                 # we have two values, C1 and C2. C1 should be IHP, C2 should be IH
                 cluster += f" AND {cluster_target_col} = {str(cluster_no[0])} "            
                 if cluster_no[1]: cluster += f" AND ih.cluster_id = {str(cluster_no[1])} " 
             else:
                 print("cluster_no is a single value", cluster_no)
-                # set target column based on SORT_TYPE, ArmsPoses3D means we have a meta_cluster_id
+                # set target column based on CLUSTER_TYPE, ArmsPoses3D means we have a meta_cluster_id
                 cluster += f" AND {cluster_target_col} = {str(cluster_no)} "  
             if KEYWORD_EXCLUDE:
                 print("adding KEYWORD_EXCLUDE to selectSQL")
@@ -1284,11 +1281,12 @@ def prep_encodings_NN(df_segment):
             return [row['lum']*HSV_NORMS["LUM"], row['lum_torso']*HSV_NORMS["LUM"]]   
     
     def set_sort_col():
-        if SORT_TYPE in ["body3D", "ArmsPoses3D"] or CLUSTER_TYPE in ["BodyPoses3D", "ArmsPoses3D"]:
+        # these are all properly SORT_TYPE
+        if SORT_TYPE in ["body3D", "ArmsPoses3D"]:
             # have to handle both, because handposefusion redefines SORT_TYPE 
             source_col = sort_column = "body_landmarks_3D"
         elif SORT_TYPE == "planar_body":
-            if CLUSTER_TYPE == "HandsPositions":
+            if CLUSTER1 == "HandsPositions":
                 source_col = sort_column = "hand_landmarks"
                 # source_col = None
                 # source_col_2 = "right_hand_landmarks_norm"
@@ -1296,7 +1294,7 @@ def prep_encodings_NN(df_segment):
                 sort_column = "body_landmarks_array"
                 source_col = "body_landmarks_normalized"
                 # source_col_2 = None
-        elif SORT_TYPE == "planar_hands" or SORT_TYPE == "planar_hands_USE_ALL" or SORT_TYPE == "fingertips_positions":
+        elif SORT_TYPE == "planar_hands" or (SORT_TYPE == "planar_hands" and USE_ALL) or SORT_TYPE == "fingertips_positions":
             source_col = sort_column = "hand_landmarks"
             # source_col = sort_column = "right_hand_landmarks_norm"
             # source_col = None
@@ -1336,7 +1334,7 @@ def prep_encodings_NN(df_segment):
     # df_segment['obj_bbox_list'] = df_segment.apply(lambda row: json_to_list(row), axis=1)
     if OBJ_CLS_ID > 0: 
         obj_bbox_col = "bbox_"+str(OBJ_CLS_ID)
-        print(f" prepping {obj_bbox_col} for {CLUSTER_TYPE}")
+        print(f" prepping {obj_bbox_col} for {CLUSTER1}")
         # move all rows with null obj_bbox_col values to a new df_nulls, and drop them from df_segment
         df_nulls = df_segment[df_segment[obj_bbox_col].isnull()]
         print("df_nulls length", len(df_nulls.index))
@@ -1352,7 +1350,7 @@ def prep_encodings_NN(df_segment):
 
     # convert body_landmarks_normalized to a list (only for SUBSET_LANDMARKS)
     # if sort_column == "hand_landmarks_array":
-    #     print(f"prepping {sort_column} for {CLUSTER_TYPE}")
+    #     print(f"prepping {sort_column} for {CLUSTER1}")
     #     print(df_segment[source_col].head())
     #     print(df_segment[source_col][0])
     #     print(len(df_segment[source_col][0]))
@@ -1361,7 +1359,7 @@ def prep_encodings_NN(df_segment):
     #     print(sort_column, df_segment[sort_column].head())
 
     if sort_column == "body_landmarks_array":
-        print(f"prepping {sort_column} for {CLUSTER_TYPE}")
+        print(f"prepping {sort_column} for {CLUSTER1}")
         print(df_segment['body_landmarks_normalized'].head())
         df_segment[sort_column] = df_segment["body_landmarks_normalized"].apply(lambda x: sort.prep_enc(x, structure="list")) # swittching to 3d
         print(sort_column, df_segment[sort_column].head())
@@ -1406,7 +1404,8 @@ def compare_images(last_image, img, face_landmarks_or_df, bbox_or_index):
     skip_face = False
     #crop image here:
     
-    print(f". ---  compare_images for {SORT_TYPE} with EXPAND {sort.EXPAND} and FULL_BODY {FULL_BODY} and self.image_edge_multiplier {sort.image_edge_multiplier}")
+    print(f". ---  compare_images for {SORT_TYPE} with EXPAND {sort.EXPAND} and FULL_BODY {FULL_BODY} and self.mult {sort.image_edge_multiplier}")
+    if sort.counter_dict["first_run"] is False and last_image is None: print(" ><><>< YIKES, last_image is None ><><>< ")
     # this is where the image gets cropped or expanded
     if sort.EXPAND:
         cropped_image, resize = sort.expand_image(img, face_landmarks, bbox)
@@ -1433,12 +1432,16 @@ def compare_images(last_image, img, face_landmarks_or_df, bbox_or_index):
     if cropped_image is not None and not is_inpaint:
         if VERBOSE: print("have a cropped image trying to save", cropped_image.shape)
         try:
-            if not sort.counter_dict["first_run"]:
+            if sort.counter_dict["first_run"] is False:
                 if VERBOSE:  print("testing is_face")
                 if SORT_TYPE not in ("planar_body", "body3D"):
                 #     # check to see if the two faces make one
+                    # if VERBOSE:
+                    #     print("testing is_face to see if the two make a face")
+                    #     print("last_image shape:", last_image.shape)
+                    #     print("cropped_image shape:", cropped_image.shape)
                     is_face = sort.test_pair(last_image, cropped_image)
-                    print("is_face result:", is_face)
+                    # print("is_face result:", is_face)
                 # sept 2025 dedupe used to happen here, but removing this, as it is now handled in separate dedupe process
                 else:
                     print("failed is_face test")
@@ -1804,7 +1807,7 @@ def linear_test_df(df_sorted, itter=None):
         if not bailout:
             print("not bailing out, going to compare_images")
             bbox=shift_bbox(row['bbox'],extension_pixels)
-            cropped_image, face_diff, skip_face = compare_images(sort.counter_dict["last_image"], inpaint_image,row['face_landmarks'], bbox)
+            cropped_image, skip_face = compare_images(sort.counter_dict["last_image"], inpaint_image,row['face_landmarks'], bbox)
             if sort.VERBOSE:print("inpainting done","shape:",np.shape(cropped_image))
             if skip_face:print("still 1x1 image , you're probably shifting both landmarks and bbox, only bbox needs to be shifted")
 
@@ -1881,39 +1884,40 @@ def linear_test_df(df_sorted, itter=None):
 
             # compare_images to make sure they are face and not the same
             # last_image is cv2 np.array
-            cropped_image, face_diff, skip_face = compare_images(sort.counter_dict["last_image"], img, df_sorted, index)
+            cropped_image, skip_face = compare_images(sort.counter_dict["last_image"], img, df_sorted, index)
             
-            # test and handle duplicates 
-            if cropped_image is None and skip_face:
-                if VERBOSE: print("face_diff", face_diff)
-                if face_diff == 0:
-                    is_dupe_of = True
-                elif SORT_TYPE == "planar_body" and face_diff < 10:
-                    if VERBOSE: print("face_diff is small, so will check description")
-                    if description == sort.counter_dict["last_description"]: 
-                        if VERBOSE: print("same description, going to record as a dupe")
-                        is_dupe_of = True
-                    else:
-                        pass
-                        if VERBOSE: print("different description, not a dupe")
-                        if VERBOSE: print("description", description)
-                        if VERBOSE: print("sort.counter_dict[last_description]", sort.counter_dict["last_description"])
+            # deduping is done elsehwere now
+            # # test and handle duplicates 
+            # if cropped_image is None and skip_face:
+            #     if VERBOSE: print("face_diff", face_diff)
+            #     if face_diff == 0:
+            #         is_dupe_of = True
+            #     elif SORT_TYPE == "planar_body" and face_diff < 10:
+            #         if VERBOSE: print("face_diff is small, so will check description")
+            #         if description == sort.counter_dict["last_description"]: 
+            #             if VERBOSE: print("same description, going to record as a dupe")
+            #             is_dupe_of = True
+            #         else:
+            #             pass
+            #             if VERBOSE: print("different description, not a dupe")
+            #             if VERBOSE: print("description", description)
+            #             if VERBOSE: print("sort.counter_dict[last_description]", sort.counter_dict["last_description"])
 
-                        is_dupe_of = False
-                ## TK NEED TO ADD IN CONDITIONAL FOR FACE DUPE DIST
-                else:
-                    is_dupe_of = False
+            #             is_dupe_of = False
+            #     ## TK NEED TO ADD IN CONDITIONAL FOR FACE DUPE DIST
+            #     else:
+            #         is_dupe_of = False
 
-                if is_dupe_of:
-                    print(f"identical image, going to record {row['image_id']} as a dupe of ", sort.counter_dict["last_image_id"])
+            #     if is_dupe_of:
+            #         print(f"identical image, going to record {row['image_id']} as a dupe of ", sort.counter_dict["last_image_id"])
                     
-                    session.query(Encodings).filter(Encodings.image_id == row['image_id']).update({
-                            Encodings.is_dupe_of: sort.counter_dict["last_image_id"]
-                        }, synchronize_session=False)
-                    session.query(SegmentTable).filter(SegmentTable.image_id == row['image_id']).update({
-                            SegmentTable.is_dupe_of: sort.counter_dict["last_image_id"]
-                        }, synchronize_session=False)
-                    session.commit()
+            #         session.query(Encodings).filter(Encodings.image_id == row['image_id']).update({
+            #                 Encodings.is_dupe_of: sort.counter_dict["last_image_id"]
+            #             }, synchronize_session=False)
+            #         session.query(SegmentTable).filter(SegmentTable.image_id == row['image_id']).update({
+            #                 SegmentTable.is_dupe_of: sort.counter_dict["last_image_id"]
+            #             }, synchronize_session=False)
+            #         session.commit()
 
             # handle USE_ALL and inpainting
             if skip_face and not USE_ALL:
@@ -1930,14 +1934,14 @@ def linear_test_df(df_sorted, itter=None):
             if sort.counter_dict["first_run"]:
                 sort.counter_dict["last_description"] = description
                 if VERBOSE: print("first run, setting last_description")
-            elif face_diff and face_diff < sort.CHECK_DESC_DIST:
-                # TK this doesn't seem to do anything, but maybe should be in dupe detection
-                if VERBOSE: print("face_diff is small, so will check description:", face_diff)
-                # temp, until resegmenting
-                if VERBOSE: print("description", description)
-                if VERBOSE: print("sort.counter_dict[last_description]", sort.counter_dict["last_description"])
-                if description == sort.counter_dict["last_description"]:
-                    print("same description!!!")
+            # elif face_diff and face_diff < sort.CHECK_DESC_DIST:
+            #     # TK this doesn't seem to do anything, but maybe should be in dupe detection
+            #     if VERBOSE: print("face_diff is small, so will check description:", face_diff)
+            #     # temp, until resegmenting
+            #     if VERBOSE: print("description", description)
+            #     if VERBOSE: print("sort.counter_dict[last_description]", sort.counter_dict["last_description"])
+            #     if description == sort.counter_dict["last_description"]:
+            #         print("same description!!!")
                     
 
             # save image
@@ -2072,7 +2076,7 @@ def main():
         if isinstance(cluster_no, str) and cluster_no.startswith('c'):
             cluster_no = int(cluster_no[1:])
 
-        FOCUS_CLUSTER_HACK_LIST = FOCUS_CLUSTER_DICT.get(CLUSTER_TYPE, {}).get(int(math.floor(TOPIC_NO[0])), None)
+        FOCUS_CLUSTER_HACK_LIST = FOCUS_CLUSTER_DICT.get(CLUSTER1, {}).get(int(math.floor(TOPIC_NO[0])), None)
 
         # if pose_no, overide sort.image_edge_multiplier based on pose_no
         if pose_no is not None and USE_POSE_CROP_DICT:
@@ -2081,7 +2085,7 @@ def main():
             if VERBOSE: print(f"using pose {cluster_no} getting POSE_CROP_DICT value {pose_type} for image_edge_multiplier", sort.image_edge_multiplier)
         elif cluster_no is not None:
             # for ArmsPoses etc
-            crop_dict_index = CLUSTER_CROP_DICT.get(CLUSTER_TYPE, {}).get(cluster_no, None)
+            crop_dict_index = CLUSTER_CROP_DICT.get(CLUSTER1, {}).get(cluster_no, None)
             if crop_dict_index is not None: sort.image_edge_multiplier = MULTIPLIER_LIST[crop_dict_index]
             if VERBOSE: print(f"using cluster_no {cluster_no} for image_edge_multiplier", sort.image_edge_multiplier)
 
