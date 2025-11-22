@@ -4,6 +4,9 @@
 VIDEO = False
 CYCLECOUNT = 1
 
+# control the cutoff and number of itters for TSP sorting
+FORCE_TARGET_MULTIPLIER = 1.1
+FORCE_CUTOFF_MULTIPLIER = 4
 
 # map SORT_TYPE to [CLUSTER_TYPE, CLUSTER_TYPE_2]
 CLUSTER_MAP = {

@@ -42,9 +42,9 @@ options = ['sequence and save CSV', 'assemble images from CSV']
 option, MODE = pick(options, title)
 
 # keep this live, even if not SSD
-# SegmentTable_name = 'SegmentOct20'
+SegmentTable_name = 'SegmentOct20'
 # SegmentHelper_name = None
-SegmentTable_name = 'SegmentBig_isface'
+# SegmentTable_name = 'SegmentBig_isface'
 # SegmentTable_name = 'SegmentBig_isnotface'
 # SegmentHelper_name = 'SegmentHelper_may2025_4x4faces'
 # SegmentHelper_name = 'SegmentHelper_sept2025_heft_keywords'
@@ -78,7 +78,7 @@ MODES = {0:'paris_photo_torso_images_topics', 1:'paris_photo_torso_videos_topics
          6:'heft_torso_keywords'}
 MODE_CHOICE = 6
 CURRENT_MODE = MODES[MODE_CHOICE]
-LIMIT = 1000 # this is the limit for the SQL query
+LIMIT = 10000 # this is the limit for the SQL query
 
 
 image_edge_multiplier = None
@@ -95,13 +95,13 @@ if "paris" in CURRENT_MODE:
     # IS_TOPICS = True # if using Clusters only, must set this to False
     if CURRENT_MODE == 'paris_photo_torso_images_topics':
         # controls which type of sorting/column sorted on
-        SORT_TYPE = "planar_hands"
+        SELECT_TYPE = SORT_TYPE = "planar_hands"
         image_edge_multiplier = [1.3,2,2.9,2] # portrait crop for paris photo images < Aug 30
 
     elif CURRENT_MODE == 'paris_photo_torso_videos_topics':
-        SORT_TYPE = "128d"
+        SELECT_TYPE = SORT_TYPE = "128d"
         #TEMP TESTING
-        # SORT_TYPE = "obj_bbox"
+        # SELECT_TYPE = SORT_TYPE = "obj_bbox"
         MIN_VIDEO_FUSION_COUNT = 300
 
         JUMP_SHOT = True # jump to random file if can't find a run (I don't think this applies to planar?)
@@ -122,7 +122,7 @@ elif "3D" in CURRENT_MODE:
     # FOCUS_CLUSTER_HACK_LIST = [24,42,71,93,167,204,294,301,358,398,443,526,532,590,623,658,708,729] #768
     # FOCUS_CLUSTER_HACK_LIST = [239, 299, 443]
     if "bod" in CURRENT_MODE:
-        SORT_TYPE = "body3D"
+        SELECT_TYPE = SORT_TYPE = "body3D"
         if "full" in CURRENT_MODE:
             FULL_BODY = True # this requires is_feet
         else:
@@ -130,8 +130,8 @@ elif "3D" in CURRENT_MODE:
         EXPAND = True # expand with white for prints, as opposed to inpaint and crop. (not video, which is controlled by INPAINT_COLOR) 
     elif CURRENT_MODE == '3D_arms':
         # META = True
-        SORT_TYPE = "ArmsPoses3D"
-        # SORT_TYPE = "body3D"
+        SELECT_TYPE = SORT_TYPE = "ArmsPoses3D"
+        # SELECT_TYPE = SORT_TYPE = "body3D"
         FULL_BODY = False 
         # either AUTO_EDGE_CROP or image_edge_multiplier must be set. Not both
         # AUTO_EDGE_CROP = True # this triggers the dynamic cropping based on min_max_body_landmarks_for_crop
@@ -158,7 +158,7 @@ elif "3D" in CURRENT_MODE:
     IS_ONE_CLUSTER = False # make IS_CLUSTER == False
     CLUSTER_NO = 242 # sort on this one as HAND_POSITION for IS_HAND_POSE_FUSION
                     # if not IS_HAND_POSE_FUSION, then this is selecting HandsGestures
-                    # I think this is pose number from BodyPoses3D if SORT_TYPE == "body3D"
+                    # I think this is pose number from BodyPoses3D if SELECT_TYPE = SORT_TYPE == "body3D"
     START_CLUSTER = 0
 
 ###########################################################
@@ -170,9 +170,10 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     SegmentTable_name = 'SegmentBig_isface'
     SegmentHelper_name = 'SegmentHelper_sept2025_heft_keywords' # TK revisit this for prodution run
     # SegmentHelper_name = 'SegmentHelper_nov2025_placard' # TK revisit this for prodution run
+    # SELECT_TYPE = "ArmsPoses3D"
     # SORT_TYPE = "planar_hands"
-    SORT_TYPE = "ArmsPoses3D" # this triggers meta body poses 3D
-    # SORT_TYPE = "obj_bbox" # make sure OBJ_CLS_ID is set below
+    SELECT_TYPE = SORT_TYPE = "ArmsPoses3D" # this triggers meta body poses 3D
+    # SELECT_TYPE = SORT_TYPE = "obj_bbox" # make sure OBJ_CLS_ID is set below
     # META = True
     TESTING = False
     IS_HAND_POSE_FUSION = True # do we use fusion clusters
@@ -188,10 +189,10 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     # N_HSV = 0 # don't do HSV clusters
 
     # turning all three off to do old style non tsp sort    
-    # TSP_SORT = True
+    TSP_SORT = True
     # ONE_SHOT = True # take all files, based off the very first sort order.
-    # CHOP_FIRST = True
-    CHOP_ITTER_TSP_SORT = True
+    CHOP_FIRST = True
+    # CHOP_ITTER_TSP_SORT = True
     
 
     # PURGING_DUPES = True
@@ -208,7 +209,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
         USE_HEAD_POSE = False
     else:
         # smaller numbers when using HSV clusters
-        MIN_VIDEO_FUSION_COUNT = 300 # this is the cut off for the CSV fusion pairs
+        MIN_VIDEO_FUSION_COUNT = 200 # this is the cut off for the CSV fusion pairs
         if TSP_SORT: MIN_CYCLE_COUNT = FORCE_TARGET_COUNT
         else: MIN_CYCLE_COUNT = 150 # this is the cut off for the SQL query results
         
@@ -238,12 +239,13 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     # XYZ_FILTER_10DEGREES = " AND s.face_x > -45 AND s.face_x < -5 AND s.face_y > -15 AND s.face_y < 15 AND s.face_z > -15 AND s.face_z < 15"
     XYZ_FILTER_10DEGREES = " "
     
-    TOPIC_NO = [22412] # if doing an affect topic fusion, this is the wrapper topic, OR keyword. add .01, .1 etc for sub selects from KEYWORD_DICT
+    TOPIC_NO = [553.1] # if doing an affect topic fusion, this is the wrapper topic, OR keyword. add .01, .1 etc for sub selects from KEYWORD_DICT
 
     # this needs to be integrated into the search for each cluster, but doing here for the moment when doing single topic/cluster testing
+    # this is SELECT_TYPE
     KEYWORD_OBJECT = KEYWORD_ORIENTATION = None
     KEYWORD_EXCLUDE = False
-    cluster_map_key = CLUSTER_MAP.get(SORT_TYPE, (None, None))[0]
+    cluster_map_key = CLUSTER_MAP.get(SELECT_TYPE, (None, None))[0]
     OBJ_ORIENTATION_VALS = OBJ_ORIENTATION_DICT.get(TOPIC_NO[0],None)
     if OBJ_ORIENTATION_VALS is not None:
         CLUSTER_ORIENTATION_VALS = OBJ_ORIENTATION_VALS.get(FOCUS_CLUSTER_DICT[cluster_map_key].get(math.floor(TOPIC_NO[0]), None)[0]) 
@@ -269,7 +271,7 @@ else:
     # SORT_TYPE = "fingertips_positions"
     USE_AFFECT_GROUPS = False
 
-print(f"doing {CURRENT_MODE}: SORT_TYPE {SORT_TYPE}, IS_HAND_POSE_FUSION {IS_HAND_POSE_FUSION}, GENERATE_FUSION_PAIRS {GENERATE_FUSION_PAIRS}, MIN_VIDEO_FUSION_COUNT {MIN_VIDEO_FUSION_COUNT}, IS_TOPICS {IS_TOPICS}, IS_ONE_TOPIC {IS_ONE_TOPIC}, TOPIC_NO {TOPIC_NO}, USE_AFFECT_GROUPS {USE_AFFECT_GROUPS}, CHOP_FIRST {CHOP_FIRST}, ONE_SHOT {ONE_SHOT}, TSP_SORT {TSP_SORT}, CHOP_ITTER_TSP_SORT {CHOP_ITTER_TSP_SORT}")
+print(f"doing {CURRENT_MODE}: SELECT_TYPE {SELECT_TYPE}, SORT_TYPE {SORT_TYPE}, IS_HAND_POSE_FUSION {IS_HAND_POSE_FUSION}, GENERATE_FUSION_PAIRS {GENERATE_FUSION_PAIRS}, MIN_VIDEO_FUSION_COUNT {MIN_VIDEO_FUSION_COUNT}, IS_TOPICS {IS_TOPICS}, IS_ONE_TOPIC {IS_ONE_TOPIC}, TOPIC_NO {TOPIC_NO}, USE_AFFECT_GROUPS {USE_AFFECT_GROUPS}, CHOP_FIRST {CHOP_FIRST}, ONE_SHOT {ONE_SHOT}, TSP_SORT {TSP_SORT}, CHOP_ITTER_TSP_SORT {CHOP_ITTER_TSP_SORT}")
 
 if USE_AFFECT_GROUPS:
     # groupings of affect topics
@@ -1124,10 +1126,11 @@ def sort_by_face_dist_NN(df_enc):
     # df_enc.to_csv(df_enc_outpath, index=False)
 
     if CHOP_ITTER_TSP_SORT:
-        sort.CUTOFF = min(FORCE_TARGET_COUNT * 4, len(df_enc.index))
-        itters = min(math.floor(FORCE_TARGET_COUNT * 1.1), len(df_enc.index))
+        sort.CUTOFF = min(FORCE_TARGET_COUNT * FORCE_CUTOFF_MULTIPLIER, len(df_enc.index))
+        itters = min(math.floor(FORCE_TARGET_COUNT * FORCE_TARGET_MULTIPLIER), len(df_enc.index))
     else:
-        if sort.CUTOFF < len(df_enc.index): itters = sort.CUTOFF
+        if FORCE_TARGET_COUNT > 0 and FORCE_TARGET_COUNT < len(df_enc.index): itters = math.floor(FORCE_TARGET_COUNT * FORCE_TARGET_MULTIPLIER)
+        elif sort.CUTOFF < len(df_enc.index): itters = sort.CUTOFF
         else: itters = len(df_enc.index)
         print("sort_by_face_dist_NN itters is", itters, "sort.CUTOFF is", sort.CUTOFF)
 
@@ -1400,7 +1403,6 @@ def compare_images(last_image, img, face_landmarks_or_df, bbox_or_index):
         bbox = bbox_or_index
 
     is_face = None
-    face_diff = 100 # declaring full value, for first round
     skip_face = False
     #crop image here:
     
@@ -1433,45 +1435,19 @@ def compare_images(last_image, img, face_landmarks_or_df, bbox_or_index):
         try:
             if not sort.counter_dict["first_run"]:
                 if VERBOSE:  print("testing is_face")
-
                 if SORT_TYPE not in ("planar_body", "body3D"):
-                #     # skipping test_pair for body, b/c it is meant for face
+                #     # check to see if the two faces make one
                     is_face = sort.test_pair(last_image, cropped_image)
-
-                # sept 2025 removing this, as it is now handled in separate dedupe process
-                # if is_face or SORT_TYPE in ("planar_body", "body3D"):
-                #     if VERBOSE: print("testing mse to see if same image")
-                #     error,face_diff = sort.unique_face(last_image,cropped_image)
-                #     # if face diff is less than something very low (.04), then it is a duplicate and we are done
-                #     # elif face diff is less than some other larger value, run additional tests
-                #     # these tests will will check 
-                #     if VERBOSE: print("compare_images face_diff ", face_diff)
-                #     # if VERBOSE: print ("mse ", mse) ########## mse not a variable
+                    print("is_face result:", is_face)
+                # sept 2025 dedupe used to happen here, but removing this, as it is now handled in separate dedupe process
                 else:
                     print("failed is_face test")
-                    # use cv2 to place last_image and cropped_image side by side in a new image
-
-                    # I'm not 100% sure what this is doing, given that this is the FAIL loop
-
-                    #Tench commented out 09.07.25 due to auto_edge_crop incompatability 
-                    # height = max(last_image.shape[0], cropped_image.shape[0])
-                    # last_image = cv2.resize(last_image, (last_image.shape[1], height))
-                    # cropped_image = cv2.resize(cropped_image, (cropped_image.shape[1], height))
-                    # #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@#
-                    # # Concatenate images horizontally
-                    # combined_image = cv2.hconcat([last_image, cropped_image])
-                    # outpath_notface = os.path.join(sort.counter_dict["outfolder"],"notface",sort.counter_dict['last_description'][:30]+".jpg")
-                    # # sort.not_make_face.append(outpath_notfacecombined_image) ########## variable name error
-                    # # Save the new image
-                    # #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@#
-              #  face_embeddings_distance, body_landmarks_distance, same_description, same_site_name_id = sort.check_metadata_for_duplicate(df_sorted, index)
-
             else:
                 print("first round, skipping the pair test")
         except:
             print("last_image try failed")
         # if is_face or first_run and sort.resize_factor < sort.resize_max:
-        if face_diff > sort.FACE_DUPE_DIST or sort.counter_dict["first_run"]:
+        if is_face or sort.counter_dict["first_run"]:
             # if successful, prepare for the next round
             sort.counter_dict["first_run"] = False
             last_image = cropped_image
@@ -1479,7 +1455,7 @@ def compare_images(last_image, img, face_landmarks_or_df, bbox_or_index):
         else: 
             sort.counter_dict["isnot_face_count"] += 1
             print("pair do not make a face, skipping <<< is this really true? Isn't this for dupes?")
-            return None, face_diff, True
+            return None, True
         
     elif cropped_image is None and sort.counter_dict["first_run"]:
         print("first run, but bad first image")
@@ -1494,7 +1470,7 @@ def compare_images(last_image, img, face_landmarks_or_df, bbox_or_index):
         skip_face = True
     # print(type(cropped_image),"$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$")
 
-    return cropped_image, face_diff, skip_face
+    return cropped_image, skip_face
 
 
 def print_counters():

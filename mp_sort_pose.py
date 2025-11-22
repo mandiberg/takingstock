@@ -3003,7 +3003,7 @@ class SortPose:
         df_enc[output_cols] = np.nan
         # print("sort_df_KNN, knn_sort is", knn_sort, "enc1", enc1)
         # Extract the face encodings from the dataframe
-        print("df_enc[sortcol]", df_enc[sortcol])
+        print("sort_df_KNN df_enc[sortcol]", df_enc[sortcol])
 
         encodings_array = df_enc[sortcol].to_numpy().tolist()
         # print("encodings_array to_numpy().tolist", (encodings_array))
@@ -3095,7 +3095,7 @@ class SortPose:
                 print(f"Index {idx} not found in id_dict")
                 
 
-        print("df_enc after adding distance")
+        # print("df_enc after adding distance")
         # print(df_enc.index)
         # print(df_enc[sortcol])
         # print(df_enc[output_cols])

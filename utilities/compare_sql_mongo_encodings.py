@@ -42,8 +42,8 @@ Base = declarative_base()
 # Connect to MongoDB
 mongo_client = pymongo.MongoClient("mongodb://localhost:27017/")
 mongo_db = mongo_client["stock"]
-# mongo_collection = mongo_db["encodings"]
-mongo_collection = mongo_db["body_landmarks_norm"]
+mongo_collection = mongo_db["encodings"]
+# mongo_collection = mongo_db["body_landmarks_norm"]
 
 # Define the batch size
 batch_size = 10
@@ -54,7 +54,7 @@ IS_FACE = 0
 IS_BODY = 1
 JOIN_COMPARE_TABLE = False
 LOOK_CLOSER_AGAINST_HELPER = True
-last_id = 55000000
+last_id = 0
 print(f"Starting from last_id: {last_id}")
 
 # select max encoding_id to start from
@@ -76,7 +76,7 @@ class CompareSqlMongoResults(Base):
     right_hand = Column(Integer)
     body_world_landmarks = Column(Integer)
 
-HelperTable_name = "SegmentHelper_oct2025_missing_face_encodings"
+HelperTable_name = "SegmentHelper_nov2025_SQL_only_still"
 
 class HelperTable(Base):
     __tablename__ = HelperTable_name

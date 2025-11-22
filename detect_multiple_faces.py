@@ -137,7 +137,7 @@ POSE_ID = 0
 
 # #testing locally with two
 MAIN_FOLDER1 = "/Volumes/OWC5/segment_images_SQLonly_stillmissing/images_adobe"
-# MAIN_FOLDER2 = "/Volumes/OWC5/segment_images_SQLonly_stillmissing/images_istock"
+# MAIN_FOLDER1 = "/Volumes/OWC5/segment_images_SQLonly_stillmissing/images_istock"
 # MAIN_FOLDERS = [MAIN_FOLDER1, MAIN_FOLDER2]
 
 
