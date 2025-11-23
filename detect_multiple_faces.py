@@ -1370,11 +1370,30 @@ def save_body_hands_mysql_and_mongo(session, image_id, image, bbox_dict, body_la
             if VERBOSE: print("storing body_landmarks for image_id", image_id, body_landmarks)
             # if VERBOSE: print("encoding_id", encoding_id, "image_id", image_id)
             if existing_entry_encodings:
-                mongo_collection.update_one(
-                    {"image_id": image_id},
-                    {"$set": {"body_landmarks": pickle.dumps(body_landmarks)}}
-                )
-                if VERBOSE: print("----------- >>>>>>>>   mongo body_landmarks updated:", image_id)
+
+                try:
+                    mongo_collection.update_one(
+                        {"encoding_id": encoding_id, "image_id": image_id},
+                        {"$set": {"body_landmarks": pickle.dumps(body_landmarks)}
+                         },                        upsert=True
+                    )
+                    if VERBOSE: print("----------- >>>>>>>>   mongo body_landmarks updated:", image_id)
+                except DuplicateKeyError as e:
+                    print(f"Duplicate key error for encoding_id: {encoding_id}, image_id: {image_id}")
+                    print(f"Error details: {e}")
+                    # the image_id is correct. update the document's encoding_id to the correct one stored in variable encoding_id
+                    mongo_collection.update_one(
+                        {"image_id": image_id},
+                        {"$set": {
+                            "encoding_id": encoding_id,
+                            "body_landmarks": pickle.dumps(body_landmarks)
+                            }
+                        },
+                        upsert=True
+                    )
+                    print(f"Updated existing mongo document for image_id: {image_id} with correct encoding_id: {encoding_id}")
+                except Exception as e:
+                    print(f"An unexpected error occurred: {e}")
             else:
                 # get encoding_id for mongo insert_one
                 encoding_id_results = session.query(Encodings.encoding_id).filter(Encodings.image_id == image_id).first()
@@ -1898,7 +1917,18 @@ def process_image(task):
                             except DuplicateKeyError as e:
                                 print(f"Duplicate key error for encoding_id: {encoding_id}, image_id: {image_id}")
                                 print(f"Error details: {e}")
-                                continue  # Move to the next iteration of the loop
+                                # the image_id is correct. update the document's encoding_id to the correct one stored in variable encoding_id
+                                mongo_collection.update_one(
+                                    {"image_id": image_id},
+                                    {"$set": {
+                                        "encoding_id": encoding_id,
+                                        "face_landmarks": face_landmarks,
+                                        "face_encodings68": face_encodings68
+                                     }
+                                    },
+                                    upsert=True
+                                )
+                                print(f"Updated existing mongo document for image_id: {image_id} with correct encoding_id: {encoding_id}")
                             except Exception as e:
                                 print(f"An unexpected error occurred: {e}")
                                 continue  # Move to the next iteration of the loop
