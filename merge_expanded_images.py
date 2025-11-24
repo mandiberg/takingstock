@@ -552,6 +552,7 @@ def construct_incrementor(merge_count, current_pos, this_period, total_images):
     trailing_start_image = current_pos + merge_count + 1
     print("trailing_start_image", trailing_start_image, "current_image_no", current_image_no, "end_image", end_image)
 
+    print(f"this_first_merge_count: {this_first_merge_count}, this_second_merge_count: {this_second_merge_count}")
     # construct leading incrementor to cover the full distance in 1/2 of the merge_count (this_first_merge_count)
     leading_increment = (end_image - current_image_no) // this_first_merge_count # might need to be merge_count -1 TBD
     leading_remainder = (end_image - current_image_no) - (leading_increment * this_first_merge_count)

@@ -42,7 +42,7 @@ def build_sql(folderpath, keyword_id, image_ids, object_id, orientation=None):
 
 # ROOT= "/Volumes/OWC4/segment_images/phone_tests_nov4_money1000"
 ROOT= "/Users/michaelmandiberg/Documents/projects-active/facemap_production/heft_keyword_fusion_clusters/clustercc332_pNone_t553_h0_FOR_SQLinput"
-ROOT = "/Volumes/OWC4/segment_images/clustercc242_pNone_t22411_h3-22_1762545800.8543491"
+ROOT = "/Volumes/OWC4/segment_images/clustercc0_pNone_t22412_h8-13_1763918558.459959"
 keyword_id = ROOT.split("_t")[1].split("_")[0]
 for foldername in os.listdir(ROOT):
     # foldername is 
