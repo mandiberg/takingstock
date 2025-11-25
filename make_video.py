@@ -42,9 +42,9 @@ options = ['sequence and save CSV', 'assemble images from CSV']
 option, MODE = pick(options, title)
 
 # keep this live, even if not SSD
-SegmentTable_name = 'SegmentOct20'
+# SegmentTable_name = 'SegmentOct20'
 # SegmentHelper_name = None
-# SegmentTable_name = 'SegmentBig_isface'
+SegmentTable_name = 'SegmentBig_isface'
 # SegmentTable_name = 'SegmentBig_isnotface'
 # SegmentHelper_name = 'SegmentHelper_may2025_4x4faces'
 # SegmentHelper_name = 'SegmentHelper_sept2025_heft_keywords'
@@ -78,7 +78,7 @@ MODES = {0:'paris_photo_torso_images_topics', 1:'paris_photo_torso_videos_topics
          6:'heft_torso_keywords'}
 MODE_CHOICE = 6
 CURRENT_MODE = MODES[MODE_CHOICE]
-LIMIT = 10000 # this is the limit for the SQL query
+LIMIT = 20000 # this is the limit for the SQL query
 
 
 image_edge_multiplier = None
@@ -170,9 +170,10 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     SegmentTable_name = 'SegmentBig_isface'
     SegmentHelper_name = 'SegmentHelper_sept2025_heft_keywords' # TK revisit this for prodution run
     # SegmentHelper_name = 'SegmentHelper_nov2025_placard' # TK revisit this for prodution run
-    # CLUSTER_TYPE = "ArmsPoses3D"
+    CLUSTER_TYPE = "ArmsPoses3D"
     # SORT_TYPE = "planar_hands"
-    CLUSTER_TYPE = SORT_TYPE = "ArmsPoses3D" # this triggers meta body poses 3D
+    SORT_TYPE = "obj_bbox"
+    # CLUSTER_TYPE = SORT_TYPE = "ArmsPoses3D" # this triggers meta body poses 3D
     # CLUSTER_TYPE = SORT_TYPE = "obj_bbox" # make sure OBJ_CLS_ID is set below
     # META = True
     TESTING = False
@@ -189,10 +190,10 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     # N_HSV = 0 # don't do HSV clusters
 
     # turning all three off to do old style non tsp sort    
-    TSP_SORT = True
     # ONE_SHOT = True # take all files, based off the very first sort order.
     CHOP_FIRST = True
-    # CHOP_ITTER_TSP_SORT = True
+    # TSP_SORT = True
+    CHOP_ITTER_TSP_SORT = True
     
 
     # PURGING_DUPES = True
@@ -234,7 +235,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     # XYZ_FILTER_10DEGREES = " AND s.face_x > -45 AND s.face_x < -5 AND s.face_y > -15 AND s.face_y < 15 AND s.face_z > -15 AND s.face_z < 15"
     XYZ_FILTER_10DEGREES = " "
     
-    TOPIC_NO = [553.1] # if doing an affect topic fusion, this is the wrapper topic, OR keyword. add .01, .1 etc for sub selects from KEYWORD_DICT
+    TOPIC_NO = [22411] # if doing an affect topic fusion, this is the wrapper topic, OR keyword. add .01, .1 etc for sub selects from KEYWORD_DICT
 
     # this needs to be integrated into the search for each cluster, but doing here for the moment when doing single topic/cluster testing
     # this is CLUSTER_TYPE
@@ -537,8 +538,8 @@ elif IS_SEGONLY and io.platform == "darwin":
     if OBJ_CLS_ID > 0 and not OBJ_DONT_SUBSELECT:
         FROM += " JOIN PhoneBbox pb ON s.image_id = pb.image_id "
         # SELECT += ", pb.bbox_67, pb.conf_67, pb.bbox_63, pb.conf_63, pb.bbox_26, pb.conf_26, pb.bbox_27, pb.conf_27, pb.bbox_32, pb.conf_32 "
-        SELECT += ", pb.bbox_"+str(OBJ_CLS_ID)+", pb.conf_"+str(OBJ_CLS_ID)
-        WHERE += " AND pb.bbox_"+str(OBJ_CLS_ID)+" IS NOT NULL "
+        SELECT += ", pb.bbox_"+str(OBJ_CLS_ID)+"_norm, pb.conf_"+str(OBJ_CLS_ID)
+        WHERE += " AND pb.bbox_"+str(OBJ_CLS_ID)+"_norm IS NOT NULL "
 
         # for some reason I have to set OBJ_CLS_ID to 0 if I'm doing planar_body
         # but I want to store the value in OBJ_SUBSELECT to use in SQL
@@ -600,7 +601,7 @@ elif IS_SEGONLY and io.platform == "win32":
         SELECT += ", ibg.lum, ibg.lum_bb, ibg.hue, ibg.hue_bb, ibg.sat, ibg.sat_bb, ibg.val, ibg.val_bb, ibg.lum_torso, ibg.lum_torso_bb, ibg.selfie_bbox " # add description here, after resegmenting
     if OBJ_CLS_ID:
         FROM += " JOIN PhoneBbox pb ON s.image_id = pb.image_id "
-        SELECT += ", pb.bbox_67, pb.conf_67, pb.bbox_63, pb.conf_63, pb.bbox_26, pb.conf_26, pb.bbox_27, pb.conf_27, pb.bbox_32, pb.conf_32 "
+        SELECT += ", pb.bbox_67_norm, pb.conf_67, pb.bbox_63_norm, pb.conf_63, pb.bbox_26_norm, pb.conf_26, pb.bbox_27_norm, pb.conf_27, pb.bbox_32_norm, pb.conf_32 "
     if SORT_TYPE == "planar_body":
         # sort because selecting data to sort on, not for clustering
         WHERE += " AND s.mongo_body_landmarks = 1 "
@@ -1302,7 +1303,7 @@ def prep_encodings_NN(df_segment):
         elif SORT_TYPE == "128d":
             source_col = sort_column = "face_encodings68"
         elif SORT_TYPE == "obj_bbox":
-            source_col = sort_column = "bbox_"+str(OBJ_CLS_ID)
+            source_col = sort_column = "bbox_"+str(OBJ_CLS_ID)+"_norm"
 
         return sort_column, source_col
 
@@ -1333,7 +1334,7 @@ def prep_encodings_NN(df_segment):
     # load the OBJ_CLS_ID bbox as list into obj_bbox_list
     # df_segment['obj_bbox_list'] = df_segment.apply(lambda row: json_to_list(row), axis=1)
     if OBJ_CLS_ID > 0: 
-        obj_bbox_col = "bbox_"+str(OBJ_CLS_ID)
+        obj_bbox_col = "bbox_"+str(OBJ_CLS_ID)+"_norm"
         print(f" prepping {obj_bbox_col} for {CLUSTER1}")
         # move all rows with null obj_bbox_col values to a new df_nulls, and drop them from df_segment
         df_nulls = df_segment[df_segment[obj_bbox_col].isnull()]
@@ -2152,7 +2153,7 @@ def main():
             if VERBOSE: print("df len before bboxing,", len(df))
 
             if OBJ_CLS_ID > 0: 
-                obj_bbox_col = "bbox_"+str(OBJ_CLS_ID)
+                obj_bbox_col = "bbox_"+str(OBJ_CLS_ID)+"_norm"
                 df[obj_bbox_col] = df[obj_bbox_col].apply(lambda x: io.unstring_json(x))
                 # # convert obj_bbox_col to list using convert_bbox_to_list
                 # df[obj_bbox_col] = df[obj_bbox_col].apply(lambda x: sort.convert_bbox_to_list(x))
