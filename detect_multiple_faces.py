@@ -116,7 +116,7 @@ switching to topic targeted
 18	afripics - where are these?
 '''
 # I think this only matters for IS_FOLDER mode, and the old SQL way
-SITE_NAME_ID = 5
+SITE_NAME_ID = 1
 # 2, shutter. 4, istock
 # 7 pond5, 8 123rf
 POSE_ID = 0
@@ -136,15 +136,15 @@ POSE_ID = 0
 # MAIN_FOLDER5 = "/Volumes/SSD2/images_123rf"
 
 # #testing locally with two
-MAIN_FOLDER1 = "/Volumes/OWC5/segment_images_SQLonly_stillmissing/images_pexels"
-# MAIN_FOLDER1 = "/Volumes/OWC5/segment_images_SQLonly_stillmissing/images_alamy"
+# MAIN_FOLDER1 = "/Volumes/OWC5/segment_images_SQLonly_stillmissing/images_pexels"
+MAIN_FOLDER1 = "/Volumes/OWC5/segment_images_SQLonly_stillmissing/images_getty"
 # MAIN_FOLDERS = [MAIN_FOLDER1, MAIN_FOLDER2]
 
 
 MAIN_FOLDERS = [MAIN_FOLDER1]
 # MAIN_FOLDERS = [MAIN_FOLDER1, MAIN_FOLDER2, MAIN_FOLDER3, MAIN_FOLDER4, MAIN_FOLDER5]
 
-BATCH_SIZE = 1000 # Define how many from each folder in each batch
+BATCH_SIZE = 10 # Define how many from each folder in each batch
 LIMIT = 1000
 
 #temp hack to go 1 subfolder at a time
@@ -1641,11 +1641,6 @@ def process_image(task):
     if VERBOSE: print("process_image this is where the action is")
     print("processing task:", task)
 
-    if "pexels" in task[1]:
-        task_items = task[1].split("/")
-        task_items[-1] = "pexels-photo-" + task_items[-1] + ".jpg"
-        image_path = "/".join(task_items)
-        task = (task[0], image_path)  # Update task to be a tuple with the new image path
 
     pr_split = time.time()
     def save_image_triage(image,df):
@@ -1661,6 +1656,21 @@ def process_image(task):
 
     init_session()
     init_mongo()
+
+    if "pexels" in task[1]:
+        task_items = task[1].split("/")
+        task_items[-1] = "pexels-photo-" + task_items[-1] + ".jpg"
+        image_path = "/".join(task_items)
+        task = (task[0], image_path)  # Update task to be a tuple with the new image path
+    elif "getty" in task[1]:
+        task_items = task[1].split("/")
+        # pop the last item
+        task_items.pop()
+        image_path = "/".join(task_items)
+        # use session to get the images.imagename from mysql using image_id which is task[0]
+        imagename = session.query(Images.imagename).filter(Images.image_id == task[0]).first()
+        this_imagename = os.path.join(image_path, imagename[0].split("/")[-1])
+        task = (task[0], this_imagename)  # Update task to be a tuple with the new image path
 
     no_image = False
 
