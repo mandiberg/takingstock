@@ -57,7 +57,7 @@ SAVE_ORIG = False
 DRAW_BOX = False
 MINSIZE = 500
 SLEEP_TIME=0
-VERBOSE = False
+VERBOSE = True
 QUIET = False
 
 # only for triage
@@ -116,7 +116,7 @@ switching to topic targeted
 18	afripics - where are these?
 '''
 # I think this only matters for IS_FOLDER mode, and the old SQL way
-SITE_NAME_ID = 9
+SITE_NAME_ID = 5
 # 2, shutter. 4, istock
 # 7 pond5, 8 123rf
 POSE_ID = 0
@@ -136,8 +136,8 @@ POSE_ID = 0
 # MAIN_FOLDER5 = "/Volumes/SSD2/images_123rf"
 
 # #testing locally with two
-# MAIN_FOLDER1 = "/Volumes/OWC5/segment_images_SQLonly_stillmissing/images_123rf"
-MAIN_FOLDER1 = "/Volumes/OWC5/segment_images_SQLonly_stillmissing/images_alamy"
+MAIN_FOLDER1 = "/Volumes/OWC5/segment_images_SQLonly_stillmissing/images_pexels"
+# MAIN_FOLDER1 = "/Volumes/OWC5/segment_images_SQLonly_stillmissing/images_alamy"
 # MAIN_FOLDERS = [MAIN_FOLDER1, MAIN_FOLDER2]
 
 
@@ -1639,7 +1639,14 @@ def process_image_bodylms(task):
 
 def process_image(task):
     if VERBOSE: print("process_image this is where the action is")
-    # print("processing task:", task)
+    print("processing task:", task)
+
+    if "pexels" in task[1]:
+        task_items = task[1].split("/")
+        task_items[-1] = "pexels-photo-" + task_items[-1] + ".jpg"
+        image_path = "/".join(task_items)
+        task = (task[0], image_path)  # Update task to be a tuple with the new image path
+
     pr_split = time.time()
     def save_image_triage(image,df):
         #saves a CV2 image elsewhere -- used in setting up test segment of images
@@ -2102,6 +2109,7 @@ def main():
                                 batch_site_image_ids = [img.split("-")[0] for img in batch_img_list]
                             elif this_site_name_id == 5:
                                 batch_site_image_ids = [img.split("-")[-1].replace(".jpg","") for img in batch_img_list]
+                                print("pexels batch_site_image_ids", batch_site_image_ids[:5])
                             elif this_site_name_id == 1:
                             # gettyimages
                                 batch_site_image_ids = [img.split("-id")[-1].replace(".jpg", "") for img in batch_img_list]
@@ -2150,8 +2158,8 @@ def main():
 
                             # going back through the img_list, to use as key for the results_dict
 
-                            images_left_to_process = len(batch_img_list)
-                            for img in batch_img_list:
+                            images_left_to_process = len(batch_site_image_ids)
+                            for img in batch_site_image_ids:
 
                                 # CHANGE FOR EACH SITE
                                 if this_site_name_id == 8:
