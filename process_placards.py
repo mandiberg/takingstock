@@ -26,19 +26,21 @@ import re
 from spellchecker import SpellChecker
 from openai import OpenAI
 from openaiAPI import api_key
+from ocr_tools import OCRTools
 
 spell = SpellChecker()
 
-client = OpenAI(
+openai_client = OpenAI(
     # defaults to os.environ.get("OPENAI_API_KEY")
     api_key=api_key,
 )
 
-ocr = PaddleOCR(
+ocr_engine = PaddleOCR(
     use_doc_orientation_classify=False, 
     use_doc_unwarping=False, 
     use_textline_orientation=False) # text detection + text recognition
 
+ocr = OCRTools(DEBUGGING=True)
 
 root_folder = "/Users/michaelmandiberg/Library/CloudStorage/Dropbox/labeled_images_nov19/"
 iamges_folder = root_folder + "images_testing/"
@@ -100,63 +102,6 @@ def get_image_bbox_hsv(image, label_data):
     # cv2.destroyAllWindows()
     return average_hsv, cropped_image_bbox
 
-def ocr_on_cropped_image(cropped_image_bbox, ocr, image_filename):
-    result = ocr.predict(cropped_image_bbox)
-    for res in result:
-        # Extract polygons and recognized texts from the OCR result
-        dt_polys = res.get('dt_polys') or []
-        found_texts = res.get('rec_texts') or []
-        good_texts = []
-        # Debug: show counts to ensure zip will iterate
-        # print(f"dt_polys count: {len(dt_polys)}, rec_texts count: {len(found_texts)}")
-
-        # Iterate pairs; if lengths mismatch, iterate by index to avoid empty zip
-        pair_count = min(len(dt_polys), len(found_texts))
-        for i in range(pair_count):
-            poly = dt_polys[i]
-            text = found_texts[i]
-            # print(f"Detected text: {text}")
-            angle = (poly[1][1] - poly[0][1]) / (poly[1][0] - poly[0][0] + 1e-6)
-            # print(f"Detected text: {text} with angle: {angle}")
-            if abs(angle) < 0.5:  # filter out highly tilted text
-                good_texts.append(text)
-        if DEBUGGING: res.save_to_img(os.path.join("output", image_filename))
-    return good_texts
-
-
-def normalize(s):
-    s = s.upper()
-    s = re.sub(r"[^A-Z0-9\s!?'.,-]", "", s)
-    s = re.sub(r"\s+", " ", s)
-    return s.strip()
-
-# def correct_words(text):
-#     corrected = []
-#     for word in text.split():
-#         fixed = spell.correction(word)
-#         corrected.append(fixed.upper())
-#     return " ".join(corrected)
-
-def refine_phrase(phrase):
-    prompt = f"Correct this noisy OCR text into a meaningful English phrase:\n'{phrase}'\nCorrected:"
-    response = client.chat.completions.create(
-        model="gpt-5-nano",
-        messages=[{"role": "user", "content": prompt}]
-    )
-    return response.choices[0].message.content.strip()
-
-def clean_ocr_text(tokens):
-    if not tokens:
-        return None
-    # tokens = ['WOMAN','OWER'] etc.
-    raw = " ".join(tokens)
-    raw = normalize(raw)
-    # Step 1: Basic spell correction of individual words
-    # word_fixed = correct_words(raw)
-    # print("Spell Corrected Text:", word_fixed)
-    # Step 2: Language model refinement (contextual)
-    final = refine_phrase(raw)    
-    return final
 
 # load all images in images_folder
 image_filenames = [f for f in os.listdir(iamges_folder) if f.endswith('.jpg')]
@@ -180,8 +125,8 @@ for image_filename in image_filenames:
             label_data = file.readlines()
 
     average_hsv, cropped_image_bbox = get_image_bbox_hsv(image, label_data)
-    found_texts = ocr_on_cropped_image(cropped_image_bbox, ocr, image_filename)
+    found_texts = ocr.ocr_on_cropped_image(cropped_image_bbox, ocr_engine, image_filename)
     # print("Final Average HSV:", average_hsv)
     print("Found Texts:", found_texts)
-    refined_text = clean_ocr_text(found_texts)
+    refined_text = ocr.clean_ocr_text(openai_client, found_texts)
     print("Refined Text:", refined_text)
