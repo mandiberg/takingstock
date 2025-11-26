@@ -169,3 +169,4 @@ model_files/model_isnotface/topics_isnotface_64_jan10_tempworking.csv
 model_files/model_isnotface/topics_isnotface_96.txt
 *.tflite
 *.task
+openaiAPI.py
