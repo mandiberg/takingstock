@@ -36,6 +36,7 @@ from sys import platform
 #mine
 from mp_db_io import DataIO
 from mp_sort_pose import SortPose
+from tools_clustering import ToolsClustering
 
 image_edge_multiplier_sm = [2.2, 2.2, 2.6, 2.2] # standard portrait
 face_height_output = 500
@@ -80,14 +81,16 @@ option, MODE = pick(options, title)
 # CLUSTER_TYPE = "Clusters"
 # CLUSTER_TYPE = "BodyPoses"
 # CLUSTER_TYPE = "BodyPoses3D" # use this for META 3D body clusters, Arms will start build but messed up because of subset landmarks
-CLUSTER_TYPE = "ArmsPoses3D" 
+# CLUSTER_TYPE = "ArmsPoses3D" 
 # CLUSTER_TYPE = "HandsPositions"
 # CLUSTER_TYPE = "HandsGestures"
 # CLUSTER_TYPE = "FingertipsPositions"
-# CLUSTER_TYPE = "HSV" # only works with cluster save, not with assignment
+CLUSTER_TYPE = "HSV" # only works with cluster save, not with assignment
+VERBOSE = True
+cl = ToolsClustering(CLUSTER_TYPE, VERBOSE=VERBOSE)
 
-if "3D" in CLUSTER_TYPE:
-    if CLUSTER_TYPE == "ArmsPoses3D":
+if "3D" in cl.CLUSTER_TYPE:
+    if cl.CLUSTER_TYPE == "ArmsPoses3D":
         # this is a hacky way of saying I want XYZ but not Vis
         LMS_DIMENSIONS = 3
     else:
@@ -98,7 +101,6 @@ OFFSET = 0
 # SELECT MAX(cmb.image_id) FROM ImagesBodyPoses3D cmb JOIN Encodings e ON cmb.image_id = e.image_id WHERE e.is_feet = 0;
 # START_ID = 114468990 # only used in MODE 1
 START_ID = 0 # only used in MODE 1
-VERBOSE = True
 
 # WHICH TABLE TO USE?
 # SegmentTable_name = 'SegmentOct20'
@@ -108,7 +110,7 @@ SegmentTable_name = 'SegmentBig_isface'
 # if doing MODE == 2, use SegmentHelper_name to subselect SQL query
 # unless you know what you are doing, leave this as None
 SegmentHelper_name = None
-# if CLUSTER_TYPE == "ArmsPoses3D":
+# if cl.CLUSTER_TYPE == "ArmsPoses3D":
 # SegmentHelper_name = 'SegmentHelper_sept2025_heft_keywords'
 # SegmentHelper_name = 'SegmentHelper_oct2025_every40'
 SegmentHelper_name = 'SegmentHelper_nov2025_placard'
@@ -136,7 +138,7 @@ cfg = {
     'HSV_CONTROL': HSV_CONTROL,
     'VERBOSE': VERBOSE,
     'INPAINT': INPAINT,
-    'SORT_TYPE': CLUSTER_TYPE,
+    'SORT_TYPE': cl.CLUSTER_TYPE,
     'OBJ_CLS_ID': OBJ_CLS_ID,
     'UPSCALE_MODEL_PATH': UPSCALE_MODEL_PATH,
     'LMS_DIMENSIONS': LMS_DIMENSIONS
@@ -146,7 +148,7 @@ sort = SortPose(config=cfg)
 SUBSELECT_ONE_CLUSTER = 0
 
 # overrides SUBSET_LANDMARKS which is now set in sort pose init
-if CLUSTER_TYPE == "BodyPoses3D": 
+if cl.CLUSTER_TYPE == "BodyPoses3D": 
     if META: 
         # sort.SUBSET_LANDMARKS = sort.make_subset_landmarks(15,16)  # just wrists
         sort.SUBSET_LANDMARKS = sort.make_subset_landmarks(11,22)
@@ -156,13 +158,15 @@ if CLUSTER_TYPE == "BodyPoses3D":
         # setting SUBSET_LANDMARKS for to nose [0] and ears+mouth+rest of body [7-32]
         sort.SUBSET_LANDMARKS = sort.make_subset_landmarks(0,0) + sort.make_subset_landmarks(7,32)
         USE_SUBSET_MEDIANS = True
-elif CLUSTER_TYPE == "ArmsPoses3D":
-    # print("OVERRIDE setting CLUSTER_TYPE to BodyPoses3D for ArmsPoses3D subset median calculation: ",CLUSTER_TYPE, sort.CLUSTER_TYPE)
+elif cl.CLUSTER_TYPE == "ArmsPoses3D":
+    # print("OVERRIDE setting cl.CLUSTER_TYPE to BodyPoses3D for ArmsPoses3D subset median calculation: ",cl.CLUSTER_TYPE, sort.CLUSTER_TYPE)
     # sort.SUBSET_LANDMARKS = sort.make_subset_landmarks(0,0) + sort.make_subset_landmarks(7,22)
     sort.SUBSET_LANDMARKS = sort.make_subset_landmarks(0,22)
     USE_SUBSET_MEDIANS = True
-
     print("OVERRIDE after construction setting sort.SUBSET_LANDMARKS to: ",sort.SUBSET_LANDMARKS)
+else:
+    sort.SUBSET_LANDMARKS = None
+    USE_SUBSET_MEDIANS = False
 USE_HEAD_POSE = False
 
 SHORTRANGE = False # controls a short range query for the face x,y,z and mouth gap
@@ -181,28 +185,14 @@ GET_OPTIMAL_CLUSTERS=False
 
 SAVE_FIG=False ##### option for saving the visualized data
 
-CLUSTER_DATA = {
-    "BodyPoses": {"data_column": "mongo_body_landmarks", "is_feet": 1, "mongo_hand_landmarks": None},
-    "BodyPoses3D": {"data_column": "mongo_body_landmarks_3D", "is_feet": 1, "mongo_hand_landmarks": None}, # changed this for testing
-    "ArmsPoses3D": {"data_column": "mongo_body_landmarks_3D", "is_feet": None, "mongo_hand_landmarks": 1},
-    "HandsGestures": {"data_column": "mongo_hand_landmarks", "is_feet": None, "mongo_hand_landmarks": 1},
-    "HandsPositions": {"data_column": "mongo_hand_landmarks_norm", "is_feet": None, "mongo_hand_landmarks": 1},
-    "FingertipsPositions": {"data_column": "mongo_hand_landmarks_norm", "is_feet": None, "mongo_hand_landmarks": 1},
-    "HSV": {"data_column": ["hue", "sat", "val"], "is_feet": None},
-}
+# TK 4 HSV
+# table_cluster_type is used in SQL queries and table class defs
+table_cluster_type = cl.set_table_cluster_type(META)
 
-# set cluster_table_type for ArmsPoses3D, so it pulls from BodyPoses3D table
-# this allows the ArmsPoses3D value to set the Dict and subset landmarks.
-if CLUSTER_TYPE == "ArmsPoses3D":
-    table_cluster_type = CLUSTER_TYPE
-else:
-    if META:table_cluster_type = "BodyPoses3D"
-    else:table_cluster_type = CLUSTER_TYPE
+# setting the data column and is_feet based on cl.CLUSTER_TYPE from dict
+this_data_column = cl.CLUSTER_DATA[cl.CLUSTER_TYPE]["data_column"]
 
-# setting the data column and is_feet based on CLUSTER_TYPE from dict
-this_data_column = CLUSTER_DATA[CLUSTER_TYPE]["data_column"]
-
-if USE_SEGMENT is True and (CLUSTER_TYPE != "Clusters"):
+if USE_SEGMENT is True and (cl.CLUSTER_TYPE != "Clusters"):
     print("setting Poses SQL")
     dupe_table_pre  = "s" # set default dupe_table_pre to s
     FROM =f"{SegmentTable_name} s " # set base FROM
@@ -215,32 +205,32 @@ if USE_SEGMENT is True and (CLUSTER_TYPE != "Clusters"):
     WHERE = f" {dupe_table_pre}.is_dupe_of IS NULL "
 
     if isinstance(this_data_column, list):
-        if "HSV" in CLUSTER_TYPE:
+        if "HSV" in cl.CLUSTER_TYPE:
             SELECT = SELECT.replace(f"s.face_x, s.face_y, s.face_z, s.mouth_gap", f"ib.hue, ib.sat, ib.val ")
             FROM += f" JOIN ImagesBackground ib ON s.image_id = ib.image_id "
             WHERE += f" AND ib.hue IS NOT NULL AND ib.sat IS NOT NULL AND ib.val IS NOT NULL "
     else:
         WHERE += f" AND {dupe_table_pre}.{this_data_column} = 1 "
 
-    if CLUSTER_DATA[CLUSTER_TYPE]["is_feet"] is not None:
-        WHERE += f" AND {dupe_table_pre}.is_feet = {CLUSTER_DATA[CLUSTER_TYPE]['is_feet']} "
-    if CLUSTER_DATA[CLUSTER_TYPE].get("mongo_hand_landmarks") is not None:
-        WHERE += f" AND {dupe_table_pre}.mongo_hand_landmarks = {CLUSTER_DATA[CLUSTER_TYPE]['mongo_hand_landmarks']} "    
+    if cl.CLUSTER_DATA[cl.CLUSTER_TYPE]["is_feet"] is not None:
+        WHERE += f" AND {dupe_table_pre}.is_feet = {cl.CLUSTER_DATA[cl.CLUSTER_TYPE]['is_feet']} "
+    if cl.CLUSTER_DATA[cl.CLUSTER_TYPE].get("mongo_hand_landmarks") is not None:
+        WHERE += f" AND {dupe_table_pre}.mongo_hand_landmarks = {cl.CLUSTER_DATA[cl.CLUSTER_TYPE]['mongo_hand_landmarks']} "    
     # refactoring the above to use the dict Oct 11
-    # if CLUSTER_TYPE == "BodyPoses": WHERE += f" AND {dupe_table_pre}.mongo_body_landmarks = 1 and {dupe_table_pre}.is_feet = 1"
-    # # elif CLUSTER_TYPE == "BodyPoses3D": WHERE += f" AND {dupe_table_pre}.mongo_body_landmarks_3D = 1 and {dupe_table_pre}.is_feet = 1"
-    # elif CLUSTER_TYPE == "BodyPoses3D": WHERE += f" AND {dupe_table_pre}.mongo_body_landmarks_3D = 1"
-    # elif CLUSTER_TYPE == "ArmsPoses3D": WHERE += f" AND {dupe_table_pre}.mongo_body_landmarks_3D = 1"
-    # elif CLUSTER_TYPE == "HandsGestures": WHERE += f" AND {dupe_table_pre}.mongo_hand_landmarks = 1 "
-    # elif CLUSTER_TYPE in ["HandsPositions","FingertipsPositions"] : WHERE += f" AND {dupe_table_pre}.mongo_hand_landmarks_norm = 1 "
+    # if cl.CLUSTER_TYPE == "BodyPoses": WHERE += f" AND {dupe_table_pre}.mongo_body_landmarks = 1 and {dupe_table_pre}.is_feet = 1"
+    # # elif cl.CLUSTER_TYPE == "BodyPoses3D": WHERE += f" AND {dupe_table_pre}.mongo_body_landmarks_3D = 1 and {dupe_table_pre}.is_feet = 1"
+    # elif cl.CLUSTER_TYPE == "BodyPoses3D": WHERE += f" AND {dupe_table_pre}.mongo_body_landmarks_3D = 1"
+    # elif cl.CLUSTER_TYPE == "ArmsPoses3D": WHERE += f" AND {dupe_table_pre}.mongo_body_landmarks_3D = 1"
+    # elif cl.CLUSTER_TYPE == "HandsGestures": WHERE += f" AND {dupe_table_pre}.mongo_hand_landmarks = 1 "
+    # elif cl.CLUSTER_TYPE in ["HandsPositions","FingertipsPositions"] : WHERE += f" AND {dupe_table_pre}.mongo_hand_landmarks_norm = 1 "
 
     if MODE == 0:
         if SHORTRANGE: WHERE += " AND s.face_x > -35 AND s.face_x < -24 AND s.face_y > -3 AND s.face_y < 3 AND s.face_z > -3 AND s.face_z < 3 "
     # FROM += f" INNER JOIN Encodings h ON h.image_id = s.image_id " 
     # FROM += f" INNER JOIN {HelperTable_name} h ON h.image_id = s.image_id " 
         if SUBSELECT_ONE_CLUSTER:
-            if CLUSTER_TYPE == "HandsGestures": subselect_cluster = "ImagesHandsPositions"
-            elif CLUSTER_TYPE == "HandsPositions": subselect_cluster = "ImagesHandsGestures"
+            if cl.CLUSTER_TYPE == "HandsGestures": subselect_cluster = "ImagesHandsPositions"
+            elif cl.CLUSTER_TYPE == "HandsPositions": subselect_cluster = "ImagesHandsGestures"
             FROM += f" INNER JOIN {subselect_cluster} sc ON sc.image_id = s.image_id " 
             WHERE += f" AND sc.cluster_id = {SUBSELECT_ONE_CLUSTER} "
         if SegmentHelper_name:
@@ -266,7 +256,7 @@ if USE_SEGMENT is True and (CLUSTER_TYPE != "Clusters"):
         WHERE = " cluster_id IS NOT NULL "
 
     # WHERE += " AND h.is_body = 1"
-    LIMIT = 5000000
+    LIMIT = 50
     BATCH_LIMIT = 10000
 
     '''
@@ -320,7 +310,7 @@ elif USE_SEGMENT is True and MODE == 1:
     SegmentTable_name = 'SegmentOct20'
     # Basic Query, this works with gettytest3
     SELECT = "DISTINCT(s.image_id),s.face_encodings68"
-    FROM = f"{SegmentTable_name} s LEFT JOIN Images{CLUSTER_TYPE} ic ON s.image_id = ic.image_id"
+    FROM = f"{SegmentTable_name} s LEFT JOIN Images{cl.CLUSTER_TYPE} ic ON s.image_id = ic.image_id"
     WHERE = "ic.cluster_id IS NULL"
     LIMIT = "100"
  
@@ -345,87 +335,8 @@ Session = sessionmaker(bind=engine)
 session = Session()
 Base = declarative_base()
 
-
-# handle the table objects based on CLUSTER_TYPE
-ClustersTable_name = table_cluster_type
-ImagesClustersTable_name = "Images"+table_cluster_type
-MetaClustersTable_name = "Meta"+table_cluster_type
-ClustersMetaClustersTable_name = "Clusters"+MetaClustersTable_name
-
-print("ClustersTable_name: ",ClustersTable_name, " ImagesClustersTable_name: ",ImagesClustersTable_name, " MetaClustersTable_name: ",MetaClustersTable_name, " ClustersMetaClustersTable_name: ",ClustersMetaClustersTable_name)
-
-class Clusters(Base):
-    # this doubles as MetaClusters
-    __tablename__ = ClustersTable_name
-
-    cluster_id = Column(Integer, primary_key=True, autoincrement=True)
-    cluster_median = Column(BLOB)
-
-class ImagesClusters(Base):
-    __tablename__ = ImagesClustersTable_name
-
-    image_id = Column(Integer, ForeignKey(Images.image_id, ondelete="CASCADE"), primary_key=True)
-    cluster_id = Column(Integer, ForeignKey(f'{ClustersTable_name}.cluster_id', ondelete="CASCADE"))
-    cluster_dist = Column(Float)
-
-class MetaClusters(Base):
-    __tablename__ = MetaClustersTable_name
-
-    cluster_id = Column(Integer, primary_key=True, autoincrement=True)
-    cluster_median = Column(BLOB)
-
-class ClustersMetaClusters(Base):
-    __tablename__ = ClustersMetaClustersTable_name
-    # cluster_id is pkey, and meta_cluster_id will appear multiple times for multiple clusters
-    cluster_id = Column(Integer, ForeignKey(f'{ClustersTable_name}.cluster_id', ondelete="CASCADE"), primary_key=True)
-    meta_cluster_id = Column(Integer, ForeignKey(f'{MetaClustersTable_name}.cluster_id', ondelete="CASCADE"))
-    cluster_dist = Column(Float)
-
-
-def get_cluster_medians():
-    print("getting cluster medians")
-    # Create a SQLAlchemy select statement
-    select_query = select(Clusters.cluster_id, Clusters.cluster_median)
-
-    # Execute the query using your SQLAlchemy session
-    results = session.execute(select_query)
-    median_dict = {}
-
-    # Process the results as needed
-    # print(f'Found {len(results)} clusters with medians.')
-    # print("results is a sqlalchemy.engine.result.ChunkedIteratorResult object at 0x3233d5400. this is how many: ",len(results))
-    for row in results:
-        print(row)
-        cluster_id, cluster_median_pickle = row
-        # print("cluster_id: ",cluster_id)
-
-        # import pprint
-        # pp = pprint.PrettyPrinter(indent=4)
-        # print the pickle using pprint
-        # pp.pprint(cluster_median_pickle)
-
-        cluster_median = pickle.loads(cluster_median_pickle)
-        print(f"cluster_median {cluster_id}: ", cluster_median)
-        # Check the type and content of the deserialized object
-        if not isinstance(cluster_median, np.ndarray):
-            print(f"Deserialized object is not a numpy array, it's of type: {type(cluster_median)}")
-
-        if USE_SUBSET_MEDIANS:
-            # handles body lms subsets
-            # print("handling body lms subsets in get_cluster_medians for these subset landmarks: ",sort.SUBSET_LANDMARKS)
-            subset_cluster_median = []
-            for i in range(len(cluster_median)):
-                # print("i: ",i)
-                if i in sort.SUBSET_LANDMARKS:
-                    # print("adding i: ",i)
-                    subset_cluster_median.append(cluster_median[i])
-            cluster_median = subset_cluster_median
-            print(f"subset cluster median {cluster_id}: ",cluster_median)
-        median_dict[cluster_id] = cluster_median
-    # print("median dict: ",median_dict)
-    return median_dict 
-
-
+# TK 4 HSV
+Clusters, ImagesClusters, MetaClusters, ClustersMetaClusters = cl.construct_table_classes(table_cluster_type)
 
 def selectSQL():
     if OFFSET: offset = f" OFFSET {str(OFFSET)}"
@@ -458,6 +369,8 @@ def make_subset_landmarks(df,add_list=False):
             df = df.apply(sort.weight_face_pose, axis=1)
             head_columns = ['face_x', 'face_y', 'face_z', 'mouth_gap']
             subset_columns += head_columns
+    elif cl.CLUSTER_TYPE == "HSV":
+        subset_columns = ["hue", "sat", "val"]
     else:
         subset_columns = numerical_columns
 
@@ -484,8 +397,8 @@ def make_subset_landmarks(df,add_list=False):
 def kmeans_cluster(df, n_clusters=32):
     # Select only the numerical columns (dim_0 to dim_65)
     print("kmeans_cluster sort.SUBSET_LANDMARKS: ",sort.SUBSET_LANDMARKS)
-    if CLUSTER_TYPE in ["BodyPoses", "BodyPoses3D", "ArmsPoses3D"]:
-        print("CLUSTER_TYPE == BodyPoses || ArmsPoses3D", df)
+    if cl.CLUSTER_TYPE in ["BodyPoses", "BodyPoses3D", "ArmsPoses3D"]:
+        print("cl.CLUSTER_TYPE == BodyPoses || ArmsPoses3D", df)
         numerical_data = make_subset_landmarks(df)
     else:
         numerical_data = df
@@ -578,7 +491,7 @@ def build_col_list(df):
     print("building col list for df columns: ", df.columns)
     col_list = {}
     col_list["left"] = col_list["right"] = col_list["body_lms"] = col_list["face"] = []
-    if "body" in CLUSTER_DATA[CLUSTER_TYPE]["data_column"]:
+    if "body" in cl.CLUSTER_DATA[cl.CLUSTER_TYPE]["data_column"]:
         # tests data_column, so works for ArmsPoses3D too
         second_column_name = df.columns[1]
         # if the second column == 0, then compress the columsn into a list:
@@ -588,13 +501,13 @@ def build_col_list(df):
             col_list["body_lms"] = [col for col in df.columns]
         else:
             col_list["body_lms"] = [col for col in df.columns if col.startswith('dim_')]
-    elif "hand" in CLUSTER_DATA[CLUSTER_TYPE]["data_column"]:
-    # elif CLUSTER_TYPE in ["HandsPositions", "HandsGestures", "FingertipsPositions"]:
+    elif "hand" in cl.CLUSTER_DATA[cl.CLUSTER_TYPE]["data_column"]:
+    # elif cl.CLUSTER_TYPE in ["HandsPositions", "HandsGestures", "FingertipsPositions"]:
         col_list["left"] = [col for col in df.columns if col.startswith('left_dim_')]
         col_list["right"] = [col for col in df.columns if col.startswith('right_dim_')]
-    elif CLUSTER_TYPE == "HSV":
+    elif cl.CLUSTER_TYPE == "HSV":
         col_list["HSV"] = ["hue", "sat", "val"]
-    elif CLUSTER_TYPE == "Clusters":
+    elif cl.CLUSTER_TYPE == "Clusters":
         col_list["face"] = [col for col in df.columns if col.startswith('dim_')]
     return col_list
 
@@ -617,16 +530,16 @@ def calculate_cluster_medians(df):
     for cluster_id in unique_clusters:
         # cluster_median = calc_cluster_median(df, col_list, cluster_id)
         cluster_median = {}
-        if "body" in CLUSTER_DATA[CLUSTER_TYPE]["data_column"]:
-        # if CLUSTER_TYPE in ("BodyPoses", "BodyPoses3D", "ArmsPoses3D"):
+        if "body" in cl.CLUSTER_DATA[cl.CLUSTER_TYPE]["data_column"]:
+        # if cl.CLUSTER_TYPE in ("BodyPoses", "BodyPoses3D", "ArmsPoses3D"):
             cluster_median["body_lms"] = calc_cluster_median(df, col_list["body_lms"], cluster_id)
-        elif "hand" in CLUSTER_DATA[CLUSTER_TYPE]["data_column"]:
-        # elif CLUSTER_TYPE in ["HandsPositions", "HandsGestures", "FingertipsPositions"]:
+        elif "hand" in cl.CLUSTER_DATA[cl.CLUSTER_TYPE]["data_column"]:
+        # elif cl.CLUSTER_TYPE in ["HandsPositions", "HandsGestures", "FingertipsPositions"]:
             cluster_median["left"] = calc_cluster_median(df, col_list["left"], cluster_id)
             cluster_median["right"] = calc_cluster_median(df, col_list["right"], cluster_id)
-        elif CLUSTER_TYPE == "HSV":
+        elif cl.CLUSTER_TYPE == "HSV":
             cluster_median["HSV"] = calc_cluster_median(df, col_list["HSV"], cluster_id)
-        elif CLUSTER_TYPE == "Clusters":
+        elif cl.CLUSTER_TYPE == "Clusters":
             cluster_median["face"] = calc_cluster_median(df, col_list["face"], cluster_id)
             
         if cluster_median is not None:
@@ -634,14 +547,14 @@ def calculate_cluster_medians(df):
             # if every value in the cluster median < .01, then set all values to 0.0
             cluster_median = zero_out_medians(cluster_median)
             # add left and right hands
-            if "hand" in CLUSTER_DATA[CLUSTER_TYPE]["data_column"]:
-            # if CLUSTER_TYPE in ["HandsPositions", "HandsGestures", "FingertipsPositions"]:
+            if "hand" in cl.CLUSTER_DATA[cl.CLUSTER_TYPE]["data_column"]:
+            # if cl.CLUSTER_TYPE in ["HandsPositions", "HandsGestures", "FingertipsPositions"]:
                 flattened_median = np.concatenate((cluster_median["left"], cluster_median["right"]))
-            elif "body" in CLUSTER_DATA[CLUSTER_TYPE]["data_column"]:
+            elif "body" in cl.CLUSTER_DATA[cl.CLUSTER_TYPE]["data_column"]:
                 flattened_median = cluster_median["body_lms"]
-            elif CLUSTER_TYPE == "HSV":
+            elif cl.CLUSTER_TYPE == "HSV":
                 flattened_median = cluster_median["HSV"]
-            elif CLUSTER_TYPE == "Clusters":
+            elif cl.CLUSTER_TYPE == "Clusters":
                 flattened_median = cluster_median["face"]
             print(f"compressed cluster_median for {cluster_id}: {flattened_median}")
             median_dict[cluster_id] = flattened_median
@@ -649,7 +562,7 @@ def calculate_cluster_medians(df):
             print(f"Cluster {cluster_id} has no valid points or data.")
     return median_dict
 
-
+# TK 4 HSV
 def set_cluster_metacluster():
     if META:
         this_Cluster = MetaClusters
@@ -751,7 +664,7 @@ def save_images_clusters_DB(df):
             existing_record = session.query(ClustersMetaClusters).filter_by(cluster_id=this_cluster_id).first()
 
         if existing_record is None:
-            # it may be easier to define this locally, and assign the name via CLUSTER_TYPE
+            # it may be easier to define this locally, and assign the name via cl.CLUSTER_TYPE
             if this_crosswalk == ImagesClusters:
                 instance = ImagesClusters(
                     image_id=image_id,
@@ -802,8 +715,8 @@ def process_landmarks_cluster_dist(df, df_subset_landmarks):
     elif any(isinstance(col, str) and col.startswith('dim_') for col in df_subset_landmarks.columns):
     # Step 1: Identify columns that contain "_dim_"
         dim_columns = [col for col in df_subset_landmarks.columns if "dim_" in col]
-    elif CLUSTER_TYPE == "HSV":
-        dim_columns = CLUSTER_DATA[CLUSTER_TYPE]["data_column"]
+    elif cl.CLUSTER_TYPE == "HSV":
+        dim_columns = cl.CLUSTER_DATA[cl.CLUSTER_TYPE]["data_column"]
     print("process_landmarks_cluster_dist dim_columns: ", dim_columns)
     # Step 2: Combine values from these columns into a list for each row
     df_subset_landmarks['enc1'] = df_subset_landmarks[dim_columns].values.tolist()
@@ -862,13 +775,17 @@ def assign_images_clusters_DB(df):
     df_subset_landmarks = make_subset_landmarks(df, add_list=True)
     print("df_subset_landmarks after make_subset_landmarks", df_subset_landmarks)
 
-    # if CLUSTER_TYPE in ["BodyPoses","BodyPoses3D","ArmsPoses3D", "HandsGestures", "HandsPositions","FingertipsPositions"]:
-    if "hand" in CLUSTER_DATA[CLUSTER_TYPE]["data_column"] or "body" in CLUSTER_DATA[CLUSTER_TYPE]["data_column"]:
+    # if cl.CLUSTER_TYPE in ["BodyPoses","BodyPoses3D","ArmsPoses3D", "HandsGestures", "HandsPositions","FingertipsPositions"]:
+    if "hand" in cl.CLUSTER_DATA[cl.CLUSTER_TYPE]["data_column"] or "body" in cl.CLUSTER_DATA[cl.CLUSTER_TYPE]["data_column"]:
         # combine all columns that start with left_dim_ or right_dim_ or dim_ into one list in the "enc1" column
         df_subset_landmarks = process_landmarks_cluster_dist(df, df_subset_landmarks)
     else:
         # this is for obj_bbox_list
         df_subset_landmarks["cluster_id"] = df_subset_landmarks["obj_bbox_list"].apply(prep_pose_clusters_enc)
+
+    # if the cluster_id column contains tuples or lists, unpack them
+    if isinstance(df_subset_landmarks["cluster_id"].iloc[0], (list, tuple)):
+        df_subset_landmarks[['cluster_id', 'cluster_dist']] = pd.DataFrame(df_subset_landmarks['cluster_id'].tolist(), index=df_subset_landmarks.index)
 
     print("df_subset_landmarks clustered after apply")
     print(df_subset_landmarks)
@@ -918,10 +835,10 @@ def prepare_df(df):
     # if cluster_median column is in the df, unpickle it
     if 'cluster_median' in df.columns:
         df['cluster_median'] = df['cluster_median'].apply(io.unpickle_array)
-    if "body" in CLUSTER_DATA[CLUSTER_TYPE]["data_column"]:
-    # if CLUSTER_TYPE in ("BodyPoses", "BodyPoses3D", "ArmsPoses3D"):
-        print(f"processing body landmarks for CLUSTER_TYPE: {CLUSTER_TYPE}: CLUSTER_DATA[CLUSTER_TYPE]['data_column']: {CLUSTER_DATA[CLUSTER_TYPE]['data_column']}")
-        if "3D" in CLUSTER_DATA[CLUSTER_TYPE]["data_column"]:
+    if "body" in cl.CLUSTER_DATA[cl.CLUSTER_TYPE]["data_column"]:
+    # if cl.CLUSTER_TYPE in ("BodyPoses", "BodyPoses3D", "ArmsPoses3D"):
+        print(f"processing body landmarks for cl.CLUSTER_TYPE: {cl.CLUSTER_TYPE}: cl.CLUSTER_DATA[cl.CLUSTER_TYPE]['data_column']: {cl.CLUSTER_DATA[cl.CLUSTER_TYPE]['data_column']}")
+        if "3D" in cl.CLUSTER_DATA[cl.CLUSTER_TYPE]["data_column"]:
             keep_col = "body_landmarks_3D"
             drop_col = "body_landmarks_normalized"
         else:
@@ -946,11 +863,11 @@ def prepare_df(df):
         print("before cols",df.iloc[0]['body_landmarks_array'])
         df_list_to_cols(df, 'body_landmarks_array')
         print("after cols",df.iloc[0])
-        if CLUSTER_TYPE == "ArmsPoses3D":
+        if cl.CLUSTER_TYPE == "ArmsPoses3D":
             df = sort.make_subset_df_lms(df)
             print("after make_subset_df_lms",df)
-    # elif CLUSTER_TYPE == "HandsPositions":
-    elif CLUSTER_TYPE in ["HandsPositions","FingertipsPositions"]:
+    # elif cl.CLUSTER_TYPE == "HandsPositions":
+    elif cl.CLUSTER_TYPE in ["HandsPositions","FingertipsPositions"]:
         print("first row of df",df.iloc[0])
         df[['left_hand_landmarks', 'left_hand_world_landmarks', 'left_hand_landmarks_norm', 'right_hand_landmarks', 'right_hand_world_landmarks', 'right_hand_landmarks_norm']] = pd.DataFrame(df['hand_results'].apply(sort.prep_hand_landmarks).tolist(), index=df.index)
         print("after prep",df)
@@ -961,18 +878,18 @@ def prepare_df(df):
                            'left_hand_world_landmarks', 'right_hand_world_landmarks',
                            'left_hand_landmarks_norm', 'right_hand_landmarks_norm']
 
-    elif CLUSTER_TYPE == "HandsGestures":
+    elif cl.CLUSTER_TYPE == "HandsGestures":
         df[['left_hand_landmarks', 'left_hand_world_landmarks', 'left_hand_landmarks_norm', 'right_hand_landmarks', 'right_hand_world_landmarks', 'right_hand_landmarks_norm']] = pd.DataFrame(df['hand_results'].apply(sort.prep_hand_landmarks).tolist(), index=df.index)
         df = sort.split_landmarks_to_columns(df, left_col="left_hand_world_landmarks", right_col="right_hand_world_landmarks")
         # drop the columns that are not needed
         columns_to_drop = ['face_encodings68', 'face_landmarks', 'body_landmarks', 'body_landmarks_normalized', 
                            'hand_results', 'left_hand_landmarks', 'right_hand_landmarks', 'left_hand_world_landmarks', 'right_hand_world_landmarks']
-    elif CLUSTER_TYPE == "HSV":
+    elif cl.CLUSTER_TYPE == "HSV":
         df['hue'] = pd.DataFrame(df["hue"].apply(sort.prep_hsv).tolist(), index=df.index)
         # df[['hsv']] = pd.DataFrame(df.apply(sort.prep_hsv, axis=1), index=df.index)
         # columns_to_drop = ['hue']
 
-    elif CLUSTER_TYPE == "Clusters":
+    elif cl.CLUSTER_TYPE == "Clusters":
         df = df.dropna(subset=['face_encodings68'])
 
         # Apply the unpickling function to the 'face_encodings' column
@@ -995,8 +912,8 @@ def prepare_df(df):
     print("final prepared df len", len(df))
     return df
 
-# defining globally 
-MEDIAN_DICT = get_cluster_medians()
+# defining globally # TK 4 HSV
+MEDIAN_DICT = cl.get_cluster_medians(session, Clusters, USE_SUBSET_MEDIANS, sort.SUBSET_LANDMARKS)
 print("MEDIAN_DICT len: ",len(MEDIAN_DICT))
 
 def main():
@@ -1018,7 +935,7 @@ def main():
         save_clusters_DB(median_dict)
         # add the correct median_dict for each cluster_id to the enc_data
         enc_data["cluster_median"] = enc_data["cluster_id"].apply(lambda x: median_dict[x])
-        if CLUSTER_TYPE != "HSV":
+        if cl.CLUSTER_TYPE != "HSV":
             # this is specific to lms, not hsv
             df_subset_landmarks = make_subset_landmarks(enc_data, add_list=True)
         else:
@@ -1063,11 +980,11 @@ def main():
         df = pd.json_normalize(resultsjson)
         print(df)
         # tell sort_pose which columns to NOT query
-        if CLUSTER_TYPE in ("BodyPoses", "BodyPoses3D", "ArmsPoses3D"): io.query_face = sort.query_face = io.query_hands = sort.query_hands = False
-        elif CLUSTER_TYPE == "HandsGestures": io.query_body = sort.query_body = io.query_face = sort.query_face = False
-        elif CLUSTER_TYPE == "Clusters": io.query_body = sort.query_body = io.query_hands = sort.query_hands = False
+        if cl.CLUSTER_TYPE in ("BodyPoses", "BodyPoses3D", "ArmsPoses3D"): io.query_face = sort.query_face = io.query_hands = sort.query_hands = False
+        elif cl.CLUSTER_TYPE == "HandsGestures": io.query_body = sort.query_body = io.query_face = sort.query_face = False
+        elif cl.CLUSTER_TYPE == "Clusters": io.query_body = sort.query_body = io.query_hands = sort.query_hands = False
         if not USE_HEAD_POSE: io.query_head_pose = sort.query_head_pose = False
-        if CLUSTER_TYPE != "HSV":
+        if cl.CLUSTER_TYPE != "HSV":
             # hsv does not need any encodings from mongo
             df[['face_encodings68', 'face_landmarks', 'body_landmarks', 'body_landmarks_normalized', 'body_landmarks_3D', 'hand_results']] = df['image_id'].apply(io.get_encodings_mongo)
         # face_encodings68, face_landmarks, body_landmarks, body_landmarks_normalized = sort.get_encodings_mongo(mongo_db,row["image_id"], is_body=True, is_face=False)
