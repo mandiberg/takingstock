@@ -440,3 +440,13 @@ class Counters(Base):
     counter_id = Column(Integer, primary_key=True, autoincrement=True)
     counter_name = Column(String(50))
     counter_value = Column(Integer);
+
+class Slogans(Base):
+    __tablename__ = 'Slogans'
+    slogan_id = Column(Integer, primary_key=True)
+    slogan_text = Column(String(200), nullable=False)
+
+class ImagesSlogans(Base):
+    __tablename__ = 'ImagesSlogans'
+    image_id = Column(Integer, ForeignKey('images.image_id'), primary_key=True)
+    slogan_id = Column(Integer, ForeignKey('Slogans.slogan_id'), primary_key=True)

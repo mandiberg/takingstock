@@ -70,3 +70,19 @@ class OCRTools:
         # Step 2: Language model refinement (contextual)
         final = self.refine_phrase(openai_client, raw)    
         return final
+
+    def get_all_slogans(self, session, Slogans):
+        slogans = session.query(Slogans).all()
+        slogan_dict = {slogan.slogan_id: slogan.slogan_text for slogan in slogans}
+        return slogan_dict
+
+    def check_existing_slogans(self, found_texts, slogan_dict):
+        if isinstance(found_texts, list):
+            text = " ".join(found_texts)
+        else:
+            text = found_texts
+        normalized_text = self.normalize(text)
+        for slogan_id, slogan_text in slogan_dict.items():
+            if normalized_text == self.normalize(slogan_text):
+                return slogan_id
+        return None

@@ -4,10 +4,10 @@ this code opens images, segments to bbox, gets hsv
 does ocr, cleans text with openai
 needs to: 
 1. get image list from sql (segmenthelper)
-1.5 load all slogans from slogans table (slogan_id and slogan_text) into a dict
+X 1.5 load all slogans from slogans table (slogan_id and slogan_text) into a dict
 2. match hsv to hsvclusters
 3. save hsvcluster
-3.5 check if unrefined slogan text matches any dict.values
+X 3.5 check if unrefined slogan text matches any dict.values
     - if so, skip the refinement step, and save_placard_text(image_id, slogan_id) to placards table
     - if not, refine with openai
 4. save text info: 
@@ -23,12 +23,29 @@ import numpy as np
 import os
 from paddleocr import PaddleOCR
 import re
-from spellchecker import SpellChecker
 from openai import OpenAI
 from openaiAPI import api_key
 from ocr_tools import OCRTools
 
-spell = SpellChecker()
+import sqlalchemy
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import NullPool
+
+# importing project-specific models
+import sys
+from my_declarative_base import Slogans, ImagesSlogans
+
+# MySQL setup (preserving credentials framework)
+from mp_db_io import DataIO
+io = DataIO()
+db = io.db
+engine = create_engine(
+    f"mysql+pymysql://{db['user']}:{db['pass']}@/{db['name']}?unix_socket={db['unix_socket']}",
+    poolclass=NullPool
+)
+Session = sessionmaker(bind=engine)
+session = Session()
 
 openai_client = OpenAI(
     # defaults to os.environ.get("OPENAI_API_KEY")
@@ -45,16 +62,8 @@ ocr = OCRTools(DEBUGGING=True)
 root_folder = "/Users/michaelmandiberg/Library/CloudStorage/Dropbox/labeled_images_nov19/"
 iamges_folder = root_folder + "images_testing/"
 labels_folder = root_folder + "labels/"
-
+blank = False
 DEBUGGING = True
-# # Load processor + model
-# processor = TrOCRProcessor.from_pretrained("microsoft/trocr-base-handwritten")
-# model = VisionEncoderDecoderModel.from_pretrained("microsoft/trocr-base-handwritten")
-
-
-# # Paths
-# image_path = iamges_folder + "0a1ae152-360973921.jpg"
-# label_path = labels_folder + "0a1ae152-360973921.txt"
 
 def get_image_bbox_hsv(image, label_data):
     # label data looks like: ['1 0.44188750000000004 0.7556818181818181 0.4017159090909091 0.3340909090909092\n']
@@ -103,12 +112,17 @@ def get_image_bbox_hsv(image, label_data):
     return average_hsv, cropped_image_bbox
 
 
+slogan_dict = ocr.get_all_slogans(session, Slogans)
+print("Loaded slogans:", slogan_dict)
+
 # load all images in images_folder
 image_filenames = [f for f in os.listdir(iamges_folder) if f.endswith('.jpg')]
 print("Found image files:", image_filenames)
 
 # loop through each image file
 for image_filename in image_filenames:
+
+    # this is all stuff for the temporary testing with local non DB files
     image_path = os.path.join(iamges_folder, image_filename)
     label_filename = image_filename.replace('.jpg', '.txt')
     label_path = os.path.join(labels_folder, label_filename)
@@ -126,7 +140,30 @@ for image_filename in image_filenames:
 
     average_hsv, cropped_image_bbox = get_image_bbox_hsv(image, label_data)
     found_texts = ocr.ocr_on_cropped_image(cropped_image_bbox, ocr_engine, image_filename)
-    # print("Final Average HSV:", average_hsv)
-    print("Found Texts:", found_texts)
-    refined_text = ocr.clean_ocr_text(openai_client, found_texts)
-    print("Refined Text:", refined_text)
+    print("Found Texts:", found_texts)  
+    if bool(found_texts) is False:
+        print(f"No text found in image {image_filename}, will assign blank = True.")
+        slogan_id = 1 # blank sign - no slogan
+    else:
+        slogan_id = ocr.check_existing_slogans(found_texts, slogan_dict)
+        if slogan_id is None:
+            refined_text = ocr.clean_ocr_text(openai_client, found_texts)
+            print("No match, so refined Text:", refined_text)
+            slogan_id = ocr.check_existing_slogans(refined_text, slogan_dict)
+
+        if slogan_id is not None:
+            print(f"Slogan already exists in DB with slogan_id: {slogan_id}.")
+        else:
+            # Save new slogan to DB
+            slogan_id = ocr.save_slogan_text(session, Slogans, refined_text)
+            slogan_dict[slogan_id] = refined_text
+    # Here, save image_id, slogan_id info to Placards table
+    if slogan_id is not None:
+        print(f"Saving image {image_filename} with slogan_id {slogan_id} to ImagesSlogans table.")
+        # this needs to wait for ImagesSlogans table to be created
+        # ocr.save_placard_text(session, ImagesSlogans, image_filename, slogan_id)
+    else:
+        print(f"Error: slogan_id is None for image {image_filename}, skipping save to Placards table.")
+
+session.close()
+engine.dispose()

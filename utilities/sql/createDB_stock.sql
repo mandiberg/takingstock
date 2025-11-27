@@ -294,3 +294,16 @@ CREATE TABLE ImagesHSV (
     PRIMARY KEY (image_id)
 );
 
+USE Stock;
+CREATE TABLE Slogans (
+    slogan_id int NOT NULL PRIMARY KEY,
+    slogan_text varchar(200) NOT NULL
+);
+
+-- This is the poses junction table.
+CREATE TABLE ImagesSlogans (
+    image_id INTEGER REFERENCES Images (image_id),
+    slogan_id INTEGER REFERENCES Slogans (slogan_id),
+    PRIMARY KEY (image_id)
+);
+
