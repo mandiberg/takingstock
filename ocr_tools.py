@@ -86,3 +86,14 @@ class OCRTools:
             if normalized_text == self.normalize(slogan_text):
                 return slogan_id
         return None
+    
+    def save_slogan_text(self, session, Slogans, slogan_text):
+        new_slogan = Slogans(slogan_text=slogan_text)
+        session.add(new_slogan)
+        session.commit()
+        return new_slogan.slogan_id
+    
+    def save_images_slogans(self, session, ImagesSlogans, image_filename, slogan_id):
+        new_placard = ImagesSlogans(image_filename=image_filename, slogan_id=slogan_id)
+        session.add(new_placard)
+        session.commit()

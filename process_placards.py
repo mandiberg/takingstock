@@ -161,7 +161,7 @@ for image_filename in image_filenames:
     if slogan_id is not None:
         print(f"Saving image {image_filename} with slogan_id {slogan_id} to ImagesSlogans table.")
         # this needs to wait for ImagesSlogans table to be created
-        # ocr.save_placard_text(session, ImagesSlogans, image_filename, slogan_id)
+        # ocr.save_images_slogans(session, ImagesSlogans, image_filename, slogan_id)
     else:
         print(f"Error: slogan_id is None for image {image_filename}, skipping save to Placards table.")
 
