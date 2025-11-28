@@ -291,6 +291,17 @@ class DataIO:
             print("sorted by date", subfolders)
         return subfolders
 
+    def check_site_folders(self, destinaton):
+        for i in range(1, len(self.folder_list)):
+            folder = os.path.join(destinaton, os.path.basename(self.folder_list[i]))
+            if not os.path.exists(folder):
+                print(f"Site folder {i} does not exist, creating: {folder}")
+                os.makedirs(folder)
+            else:
+                if self.VERBOSE:
+                    print(f"Site folder {i} exists: {folder}")
+            self.make_hash_folders(folder)
+
     def get_hash_folders(self,filename):
         m = hashlib.md5()
         m.update(filename.encode('utf-8'))

@@ -287,4 +287,21 @@ ORDER BY i.site_name_id
 ;
 
 
-S
+USE Stock;
+SELECT COUNT(*)
+FROM Images553 i5
+WHERE i5.object_id = 1
+;
+
+
+
+
+
+
+
+
+
+
+
+
+

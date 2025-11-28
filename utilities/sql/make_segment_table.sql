@@ -8,7 +8,7 @@ DROP TABLE SegmentHelper_dec27_getty_noface ;
 DELETE FROM SegmentHelper_sept2025_heft_keywords;
 
 -- create helper segment table
-CREATE TABLE SegmentHelper_nov2025_SQL_only_still_faces (
+CREATE TABLE SegmentHelper_nov2025_SQL_only_still_hands (
     seg_image_id int NOT NULL AUTO_INCREMENT PRIMARY KEY,
     image_id INTEGER,
     FOREIGN KEY (image_id) REFERENCES Images(image_id)
@@ -261,7 +261,24 @@ WHERE ik.keyword_id IN (23375,13130,21463,184,23726,4222,8874,8136,133749,26241,
 LIMIT 400000
 ;
 
+-- for making a helper from segmentbig where mongo_face_landmarks = 1
+INSERT INTO SegmentHelper_nov2025_all_hands (image_id)
+SELECT DISTINCT sb.image_id
+FROM SegmentBig_isface sb
+JOIN Encodings en ON en.image_id = sb.image_id
+WHERE en.mongo_hand_landmarks = 1
+AND sb.image_id > 114516084
+    AND NOT EXISTS (
+        SELECT 1
+        FROM SegmentHelper_nov2025_all_hands s
+        WHERE s.image_id = sb.image_id
+    )
+LIMIT 10000000
+;
 
+SELECT MAX(image_id)
+FROM SegmentHelper_nov2025_all_hands
+;
 
 SELECT ik.keyword_id, COUNT(e.image_id)
 FROM SegmentBig_isface e

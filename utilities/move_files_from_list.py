@@ -41,13 +41,16 @@ USE_HASH_FOLDERS = True  # if True it will create hash folders in the destinatio
 IS_TEST = False
 ORIGIN = "/Volumes/LaCie/images_adobe"
 # DEST = os.path.join(io.ROOT_DBx, "NMLdeshard")
-DEST = "/Volumes/OWC5/segment_images_SQLonly_stillmissing/"
+DEST = "/Volumes/LaCie/segment_images/"
 if IS_TEST:
     # to run a smaller test, put a few files in the test folder
     DEST = DEST + "_test"
     CSV_FOLDER = CSV_FOLDER + "_test"
     print(f"Running in test mode. Using DEST: {DEST} and CSV_FOLDER: {CSV_FOLDER}")
 START = 0
+
+# check for site folders
+io.check_site_folders(DEST)
 
 # make folders
 if USE_DF_SORTED:

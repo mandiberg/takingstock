@@ -46,14 +46,14 @@ Base = declarative_base()
 mongo_client = pymongo.MongoClient("mongodb://localhost:27017/")
 mongo_db = mongo_client["stock"]
 # mongo_collection = mongo_db["encodings"]
-mongo_collection = mongo_db["body_landmarks_norm"]
+# mongo_collection = mongo_db["body_landmarks_norm"]
 exporter = MongoBSONExporter(mongo_db)
 
 # Define the batch size
 batch_size = 5000
 IS_FACE = 0
 IS_BODY = 1
-MODE = 6  # 0 validate_zero_columns_against_mongo_prereshard (outputs bson)s
+MODE = 1  # 0 validate_zero_columns_against_mongo_prereshard (outputs bson)s
 #0 validate_zero_columns_against_mongo_prereshard (outputs bson) 
 # 1 read_and_store_bson
 # 4 checks output from #3 against actual mysql table and updates
@@ -476,127 +476,6 @@ def record_mysql_NULL_booleans_present_in_mongo(engine, mongo_db, document_names
                     # # set table_name value to NULL
                     exporter.update_MySQL_value(engine, table_name, "encoding_id", encoding_id, col, cell_value="NULL")
 
-def record_mysql_NULL_booleans_from_set(engine, mongo_db, document_names_dict, batch_start, table_name, batch_size = 1000):
-    # access the global set of image_id pairs
-    global image_ids_set_global
-    global global_collection_file
-
-    exporter = MongoBSONExporter(mongo_db)
-
-    print(f"recording MYSQL NULL booleans based on image_ids_set_global with size {len(image_ids_set_global)}")
-    # Flatten all document names and map to their collection
-    # collections_found = set()
-    col_to_collection = exporter.col_to_collection
-    # print(f"table name before loop: {table_name}")
-    encodings_table_name = "encodings"
-
-    # kludge to handle body_landmarks_norm case where collection name differs from key
-    if "body_landmarks_norm" in global_collection_file: col = "nlms"
-    else: col = global_collection_file
-
-    collection_name = col_to_collection.get(col, None)
-    print(f"collection_name is: {collection_name} for global_collection_file {global_collection_file}")
-    # print(f"global_collection_file is: {global_collection_file}", "document_names_dict is:", document_names_dict)
-
-    # encodings_field_name = None
-    encodings_field_name = sql_field_names_dict.get(col, None)
-    # # try to set encodings_field_name based on global_collection_file
-    # for key, value in document_names_dict.items():
-    #     if global_collection_file in value:
-    #         for v in value:
-    #             if global_collection_file == v:
-    #                 encodings_field_name = v
-    #         break
-    # print(f"encodings_field_name set to {encodings_field_name} for global_collection_file {global_collection_file}")
-
-
-    if "hand_landmarks" in global_collection_file:
-        encodings_field_name = "mongo_hand_landmarks"
-    elif encodings_field_name is None:
-        print("unknown global_collection_file:", global_collection_file)
-        return
-    # to get the mysql table from the global_collection_file
-    # go through the document_names_dict to find which collection it is
-    df = query_sql(engine, encodings_field_name, batch_start, batch_size, encodings_table_name)
-    print(f"Retrieved {len(df)} rows from {encodings_table_name} for validation")
-    this_batch_dict = {}
-    # offset += batch_size
-    print(f"Retrieved {len(df)} rows from {table_name} for validation")
-    print(df)
-
-    # make sure all image_ids_set_global are integers
-    image_ids_set_global_int = set([int(i) for i in image_ids_set_global])
-
-    # image_ids_set_global that are not in df
-    df_image_ids_set = set(df['image_id'].tolist())
-    print(f"df_image_ids_set has {len(df_image_ids_set)} image_ids")
-    missing_image_ids = image_ids_set_global_int - df_image_ids_set
-    print(f"Found {len(missing_image_ids)} image_ids in global set not in df")
-
-    for image_id in image_ids_set_global_int:
-        if "body" in encodings_field_name: is_boolean = "is_body"
-        elif "face" in encodings_field_name: is_boolean = "is_face"
-        elif "hand" in encodings_field_name: is_boolean = "mongo_hand_landmarks"
-        else: is_boolean = None
-
-        if image_id in df_image_ids_set:
-            existing_value = df.loc[df['image_id'] == image_id, encodings_field_name].values[0]
-            print(f"  +  image_id {image_id} from global set found in df with existing value {existing_value} for field {encodings_field_name}")
-            # do stuff here using image_id as index
-            exporter.update_MySQL_value(engine, encodings_table_name, "image_id", image_id, encodings_field_name, cell_value=1)
-            if is_boolean is not None:
-                # also write is_boolean to 1
-                exporter.update_MySQL_value(engine, encodings_table_name, "image_id", image_id, is_boolean, cell_value=1)
-            # print(f"collection_name is: {collection_name}")
-            if collection_name == "encodings":
-                # check for agreement between encoding_id in mongo and sql
-                # get the encoding_id of this image_id from sql
-                sql_encoding_id = session.query(Encodings).filter_by(image_id=image_id).first().encoding_id
-                # get the encoding_id of this image_id from mongo
-                collection = mongo_db[collection_name]
-                mongo_doc = collection.find_one({"image_id": image_id})
-                if mongo_doc is not None:
-                    mongo_encoding_id = mongo_doc.get("encoding_id", None)
-                    # print(f"image_id {image_id} has sql_encoding_id {sql_encoding_id} and mongo_encoding_id {mongo_encoding_id}")
-                    if mongo_encoding_id != sql_encoding_id:
-                        # print(f"Mismatch encoding_id for image_id {image_id}: SQL has {sql_encoding_id}, Mongo has {mongo_encoding_id}. Updating Mongo.")
-                        # update the mongo document to set encoding_id to sql_encoding_id
-                        result = collection.update_one(
-                            {"image_id": image_id},
-                            {"$set": {"encoding_id": sql_encoding_id}}
-                        )
-                        if result.modified_count > 0:
-                            print(f"Updated MongoDB document for image_id {image_id} with encoding_id {sql_encoding_id}")
-
-        else:
-            print(f" --- image_id {image_id} from global set not found in df >>> inserting new row in encodings table")
-            # insert into encodings table with image_id and set the encodings_field_name to 1
-            new_encoding = Encodings(
-                image_id=image_id,
-                **{encodings_field_name: 1}
-            )
-            session.add(new_encoding)
-            session.commit()
-            if is_boolean is not None:
-                # also write is_boolean to 1
-                exporter.update_MySQL_value(engine, encodings_table_name, "image_id", image_id, is_boolean, cell_value=1)
-            print(f" >>> Inserted new encoding for image_id {image_id} with {encodings_field_name} set to 1")
-            if collection_name == "encodings":
-                # update the encoding_id, only for the encodings collection
-                # get the encoding_id of the newly inserted row
-                new_encoding_id = session.query(Encodings).filter_by(image_id=image_id).first().encoding_id
-                print(f"Inserted new encoding for image_id {image_id} with encoding_id {new_encoding_id}")
-
-                # update the mongo document to set encoding_id to new_encoding_id
-                collection = mongo_db[collection_name]
-                result = collection.update_one(
-                    {"image_id": image_id},
-                    {"$set": {"encoding_id": new_encoding_id}}
-                )
-                if result.modified_count > 0:
-                    print(f"Updated MongoDB document for image_id {image_id} with encoding_id {new_encoding_id}")
-
-
 
 def record_mysql_NULL_booleans_from_set(engine, mongo_db, document_names_dict, batch_start, table_name, batch_size = 1000):
     # access the global set of image_id pairs
@@ -747,7 +626,7 @@ def check_NMLmongo_for_mysql_only_image_ids(engine, mongo_db, document_names_dic
     global missing_mongo_set # the missing image_ids in mongo for this collection
     
     if "hand" in global_collection_file:
-        col = "right_hand"
+        col = ["left_hand", "right_hand"]
     elif "body_landmarks_norm" in global_collection_file:
         col = "nlms"
     else:
@@ -758,25 +637,47 @@ def check_NMLmongo_for_mysql_only_image_ids(engine, mongo_db, document_names_dic
     this_missing_mongo_set = intersecting_image_ids
     print(f"check_NMLmongo_for_mysql_only_image_ids found {len(this_missing_mongo_set)} missing image_ids for collection {col}")
 
+    def process_image_id(image_id, doc, col, this_result_dict):
+        this_doc_values = doc.get(col, None)
+        if this_doc_values is not None:
+            print(f" ++  found {col} values for image_id={image_id} with length {len(this_doc_values)}")
+            this_result_dict[col] = this_doc_values
+            # print(f" -- found data in mongo collection {col} for image_id={image_id}")
+            this_result_dict["image_id"] = image_id
+            this_result_dict["encoding_id"] = doc.get("encoding_id", None)
+            # note that we found this collection has data, to write out later
+            # collections_found.add(exporter.col_to_collection.get(col, None))
+        return this_result_dict
+
     # construct mongo connection via mongo_db and col
-    collection = mongo_db[exporter.col_to_collection.get(col, None)]
+    if isinstance(col, list):
+        collection_name = exporter.col_to_collection.get(col[0], None)
+    else:
+        collection_name = exporter.col_to_collection.get(col, None)
+    collection = mongo_db[collection_name]
+
     # collections_found = set()
     this_batch_dict = {}
     for image_id in this_missing_mongo_set:
-        print(f"checking image_id {image_id} in mongo collection {col}")
+        print(f"checking image_id {image_id} in mongo collection {collection_name}")
         doc = collection.find_one({"image_id": image_id})
+        this_result_dict = {}
         if doc is not None:
-            this_result_dict = {}
-            print(f"  +  {image_id}, found document in MongoDB collection {col}, doc: {len(doc)} keys")
-            this_doc_values = doc.get(col, None)
-            if this_doc_values is not None:
-                print(f" ++  found {col} values for image_id={image_id} with length {len(this_doc_values)}")
-                this_result_dict[col] = this_doc_values
-                # print(f" -- found data in mongo collection {col} for image_id={image_id}")
-                this_result_dict["image_id"] = image_id
-                this_result_dict["encoding_id"] = doc.get("encoding_id", None)
-                # note that we found this collection has data, to write out later
-                # collections_found.add(exporter.col_to_collection.get(col, None))
+            if isinstance(col, list):
+                for this_col in col:
+                    this_result_dict = process_image_id(image_id, doc, this_col, this_result_dict)
+            else:
+                this_result_dict = process_image_id(image_id, doc, col, this_result_dict)
+            # print(f"  +  {image_id}, found document in MongoDB collection {col}, doc: {len(doc)} keys")
+            # this_doc_values = doc.get(col, None)
+            # if this_doc_values is not None:
+            #     print(f" ++  found {col} values for image_id={image_id} with length {len(this_doc_values)}")
+            #     this_result_dict[col] = this_doc_values
+            #     # print(f" -- found data in mongo collection {col} for image_id={image_id}")
+            #     this_result_dict["image_id"] = image_id
+            #     this_result_dict["encoding_id"] = doc.get("encoding_id", None)
+            #     # note that we found this collection has data, to write out later
+            #     # collections_found.add(exporter.col_to_collection.get(col, None))
 
             if this_result_dict:
                 # print(this_result_dict)
@@ -787,7 +688,7 @@ def check_NMLmongo_for_mysql_only_image_ids(engine, mongo_db, document_names_dic
 
 
         else:
-            print(f" --- image_id {image_id} still missing in MongoDB collection {col}")
+            print(f" --- image_id {image_id} still missing in MongoDB collection {collection_name}")
     if this_batch_dict:
         print(f"going to write {len(this_batch_dict)} documents to BSON files for batch ")
         exporter.write_bson_batches(this_batch_dict, image_id, EXPORT_DIR, [col])
@@ -997,7 +898,7 @@ if __name__ == "__main__":
 
     elif MODE == 4:
         # open the sets saved in MODE 3 to update MYSQL table
-        global_collection_file = "hand_landmarks_right_hand" # this will probably need to be updated mannually
+        global_collection_file = "hand_landmarks_left_hand" # this will probably need to be updated mannually
 
         # set_name = "in_both"
         set_name = "mongo_only"
@@ -1046,7 +947,7 @@ if __name__ == "__main__":
         # These will be helper table output which is a csv. image_id are column index 2
         # which contains all unique image_ids with missing data in mongo
         #
-        global_collection_file = "face_landmarks" # this will probably need to be updated mannually
+        global_collection_file = "hand_landmarks" # this will probably need to be updated mannually
         if "hand_landmarks" in global_collection_file:
             global_collection_file = "hand_landmarks"
             file_name = "hand_landmarks_right_hand"
@@ -1073,23 +974,29 @@ if __name__ == "__main__":
                 missing_mongo_set.add(first_id)
             print(f"Loaded set {set_name} for collection {global_collection_file} with {len(missing_mongo_set)} entries")
             print(f"Sample entries: {list(missing_mongo_set)[:10]}")
-        # build a set of all image_ids from all csv files
-        image_ids_list = []
-        csv_files = [f for f in os.listdir(IMPORT_DIR) if f.endswith('.csv')]
-        for csv_file in csv_files:
-            csv_path = os.path.join(IMPORT_DIR, csv_file)
-            print(f"Processing CSV file: {csv_path}")
-            with open(csv_path, 'r') as f:
-                reader = csv.reader(f)
-                header = next(reader)  # skip header
-                for row in reader:
-                    if len(row) > 1 and row[1].isdigit():
-                        image_id = int(row[1])
-                        image_ids_list.append(image_id)
-        print(f"Total unique image_ids collected from CSV files: {len(image_ids_list)}")
+        # # build a set of all image_ids from all csv files
+        # image_ids_list = []
+        # csv_files = [f for f in os.listdir(IMPORT_DIR) if f.endswith('.csv')]
+        # for csv_file in csv_files:
+        #     csv_path = os.path.join(IMPORT_DIR, csv_file)
+        #     print(f"Processing CSV file: {csv_path}")
+        #     with open(csv_path, 'r') as f:
+        #         reader = csv.reader(f)
+        #         header = next(reader)  # skip header
+        #         for row in reader:
+        #             if len(row) > 1 and row[1].isdigit():
+        #                 image_id = int(row[1])
+        #                 image_ids_list.append(image_id)
+        #             elif len(row) == 1 and row[0].isdigit():
+        #                 image_id = int(row[0])
+        #                 image_ids_list.append(image_id)
 
-        missing_image_ids_by_collection_folder = "/Volumes/OWC4/segment_images/mongo_exports_oct19_sets/sql_only"
+        # print(f"Total unique image_ids collected from CSV files: {len(image_ids_list)}")
 
+        # missing_image_ids_by_collection_folder = "/Volumes/OWC4/segment_images/mongo_exports_oct19_sets/sql_only"
+        
+        # nov 27 haack
+        image_ids_list = list(missing_mongo_set)
 
         for i in range(0, len(image_ids_list), batch_size):
             batch_image_ids = set(image_ids_list[i:i + batch_size])
@@ -1100,13 +1007,15 @@ if __name__ == "__main__":
             function = "check_NMLmongo_for_mysql_only_image_ids"
             process_batch(0, 0, function)  # batch_start and batch_end are not used in this function
     elif MODE == 6:
-        global_collection_file = "body_world_landmarks" # this will probably need to be updated mannually
+        global_collection_file = "hand_landmarks" # this will probably need to be updated mannually
         set_name = "sql_only"
         image_ids_set_global = set()
         bson_image_ids_set = set()
 
         if global_collection_file == "body_landmarks_norm":
             file_name = "nlms"
+        elif "hand_landmarks" in global_collection_file:
+            file_name = "hand_landmarks_right_hand"
         else:
             file_name = global_collection_file
         #open the set file in the set_name folder, and load it into a set

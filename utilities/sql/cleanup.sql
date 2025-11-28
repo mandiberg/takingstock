@@ -227,10 +227,15 @@ AND e.bbox is NULL
 -- LIMIT 10
 ;
 
+SELECT *
+FROM Images
+WHERE image_id = 32219
+;
+
  SELECT *
  FROM Images
- WHERE site_name_id = 4
- AND site_image_id = "1002087854"
+  WHERE site_name_id = 2
+ AND site_image_id = "1090080953"
  ;
  
  SELECT *
@@ -246,6 +251,53 @@ WHERE wi.wandering_image_id > 6544803
  USE Stock;
  SELECT *
  FROM Encodings
- WHERE image_id = 38921748
+ WHERE image_id = 1405531
+--   WHERE encoding_id = 125661925
  ;
 
+ -- 129159642
+ -- 128788809
+ 
+ 
+ SELECT *
+FROM ImagesHSV
+WHERE image_id = 30402
+;
+
+-- gets me HEFT object images for YOLO/bbox testing
+SELECT i.site_name_id, i.imagename
+FROM Images i
+JOIN ImagesKeywords ik on i.image_id = ik.image_id
+JOIN SegmentBig_isface s on i.image_id = s.image_id
+-- WHERE ik.keyword_id in (22411)
+-- WHERE ik.keyword_id in (22101,444,22191,16045,11549,133300,133777)
+-- WHERE ik.keyword_id in (1991,220,133822)
+-- WHERE ik.keyword_id in (22269, 5271)
+-- WHERE ik.keyword_id in (827, 1070, 22412,23029,25287,133768,24593, 404)
+WHERE ik.keyword_id in (553, 22961, 3856,6286,807,1644,5310,22251,8911)
+;
+
+
+SELECT i.site_name_id, i.imagename
+FROM Images i
+-- JOIN I
+magesKeywords ik on i.image_id = ik.image_id
+JOIN SegmentHelper_nov2025_SQL_only_last3K_hands sh on sh.image_id = i.image_id
+;
+-- AND sh.seg_image_id >= 100000000
+
+SELECT i.site_name_id, i.imagename
+FROM Images i
+JOIN ImagesKeywords ik on i.image_id = ik.image_id
+JOIN SegmentOct20 s on i.image_id = s.image_id
+WHERE ik.keyword_id = 4222
+
+
+SELECT COUNT(*)
+FROM SegmentHelper_nov2025_SQL_only_still_hands
+;
+
+UPDATE Images i
+SET i.no_image = NULL
+WHERE i.image_id = 124721420
+;

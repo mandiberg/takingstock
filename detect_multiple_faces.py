@@ -57,7 +57,7 @@ SAVE_ORIG = False
 DRAW_BOX = False
 MINSIZE = 500
 SLEEP_TIME=0
-VERBOSE = True
+VERBOSE = False
 QUIET = False
 
 # only for triage
@@ -116,7 +116,7 @@ switching to topic targeted
 18	afripics - where are these?
 '''
 # I think this only matters for IS_FOLDER mode, and the old SQL way
-SITE_NAME_ID = 1
+SITE_NAME_ID = 3
 # 2, shutter. 4, istock
 # 7 pond5, 8 123rf
 POSE_ID = 0
@@ -136,15 +136,15 @@ POSE_ID = 0
 # MAIN_FOLDER5 = "/Volumes/SSD2/images_123rf"
 
 # #testing locally with two
-# MAIN_FOLDER1 = "/Volumes/OWC5/segment_images_SQLonly_stillmissing/images_pexels"
-MAIN_FOLDER1 = "/Volumes/OWC5/segment_images_SQLonly_stillmissing/images_getty"
+MAIN_FOLDER1 = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/last3K/segment_images/images_adobe"
+# MAIN_FOLDER1 = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/last3K/segment_images/images_alamy"
 # MAIN_FOLDERS = [MAIN_FOLDER1, MAIN_FOLDER2]
 
 
 MAIN_FOLDERS = [MAIN_FOLDER1]
 # MAIN_FOLDERS = [MAIN_FOLDER1, MAIN_FOLDER2, MAIN_FOLDER3, MAIN_FOLDER4, MAIN_FOLDER5]
 
-BATCH_SIZE = 10 # Define how many from each folder in each batch
+BATCH_SIZE = 1000 # Define how many from each folder in each batch
 LIMIT = 1000
 
 #temp hack to go 1 subfolder at a time
@@ -705,7 +705,7 @@ def find_face(image, df):
 
     if detection_result.detections:
         number_of_detections = len(detection_result.detections)
-        if VERBOSE: print("---------------- >>>>>>>>>>>>>>>>> number_of_detections", number_of_detections)
+        if not QUIET: print("---------------- >>>>>>>>>>>>>>>>> number_of_detections", number_of_detections)
 
         # Assuming you take the first detected face for simplicity
         faceDet = detection_result.detections[0]
@@ -749,9 +749,9 @@ def find_face(image, df):
 
                 if is_face:
                     encodings = calc_encodings(image, faceLms,bbox) ## changed parameters
-                    if VERBOSE: print(">> find_face SPLIT >> calc_encodings")
+                    if not QUIET: print(">> find_face SPLIT >> calc_encodings")
 
-                print("results:", results)
+                if not QUIET: print("face pose XYZ results:", len(results))
 
                 df.at['1', 'pitch'] = results["pitch"]
                 df.at['1', 'yaw'] = results["yaw"]
@@ -764,7 +764,7 @@ def find_face(image, df):
                 else:
                     df.at['1', 'face_encodings68'] = pickle.dumps(encodings)
             else:
-                if VERBOSE: print("+++++++++++++++++  YES FACE but NO FACE LANDMARKS +++++++++++++++++++++")
+                if not QUIET: print("+++++++++++++++++  YES FACE but NO FACE LANDMARKS +++++++++++++++++++++")
                 image_id = df.at['1', 'image_id']
                 is_face_no_lms = True
         elif FIND_MISSING_BBOX_ONLY:
@@ -773,10 +773,10 @@ def find_face(image, df):
             bbox_json = json.dumps(bbox, indent = 4) 
             df.at['1', 'bbox'] = bbox_json
         else:
-            if VERBOSE: print("+++++++++++++++++  NO BBOX DETECTED +++++++++++++++++++++")
+            if not QUIET: print("+++++++++++++++++  NO BBOX DETECTED +++++++++++++++++++++")
         
     else:
-        if VERBOSE: print("+++++++++++++++++  NO FACE DETECTED +++++++++++++++++++++")
+        if not QUIET: print("+++++++++++++++++  NO FACE DETECTED +++++++++++++++++++++")
         number_of_detections = 0
         image_id = df.at['1', 'image_id']
         no_image_name = f"no_face_landmarks_{image_id}.jpg"
@@ -1377,7 +1377,7 @@ def save_body_hands_mysql_and_mongo(session, image_id, image, bbox_dict, body_la
                         {"$set": {"body_landmarks": pickle.dumps(body_landmarks)}
                          },                        upsert=True
                     )
-                    if VERBOSE: print("----------- >>>>>>>>   mongo body_landmarks updated:", image_id)
+                    if not QUIET: print("----------- >>>>>>>>   mongo body_landmarks updated:", image_id)
                 except DuplicateKeyError as e:
                     print(f"Duplicate key error for encoding_id: {encoding_id}, image_id: {image_id}")
                     print(f"Error details: {e}")
@@ -1402,7 +1402,7 @@ def save_body_hands_mysql_and_mongo(session, image_id, image, bbox_dict, body_la
                 mongo_collection.insert_one(
                     {"image_id": image_id, "encoding_id":encoding_id, "body_landmarks": pickle.dumps(body_landmarks)}
                 )
-                if VERBOSE: print("----------- >>>>>>>>   mongo body_landmarks inserted:", image_id)
+                if not QUIET: print("----------- >>>>>>>>   mongo body_landmarks inserted:", image_id)
 
         ### save normalized landmarks, will always be None if reprocessing, because no nose_pixel_pos?        
         if n_landmarks:
@@ -1436,9 +1436,9 @@ def save_body_hands_mysql_and_mongo(session, image_id, image, bbox_dict, body_la
         if update_hand:
             try:
                 pose.store_hand_landmarks(image_id, hand_landmarks, mongo_hand_collection)
-                if VERBOSE: print("----------- >>>>>>>>   mongo hand_landmarks updated:", image_id)
+                if not QUIET: print("----------- >>>>>>>>   mongo hand_landmarks updated:", image_id)
             except:
-                if VERBOSE: print("----------- XXXXXXXX   mongo hand_landmarks FAILED TO UPDATE:", image_id)
+                if not QUIET: print("----------- XXXXXXXX   mongo hand_landmarks FAILED TO UPDATE:", image_id)
 
     # save is_feet and mongo_body_landmarks_3D regardless of REDO_BODYLMS_3D
     ### Save normalized landmarks to MongoDB
@@ -1541,7 +1541,7 @@ def find_and_save_body(image_id, image, bbox, mongo_body_landmarks, hand_landmar
         print("doing body, mongo_body_landmarks is not None", mongo_body_landmarks)
     ### save object bbox info
     # session = sort.parse_bbox_dict(session, image_id, PhoneBbox, OBJ_CLS_LIST, bbox_dict)
-    if not REDO_BODYLMS_3D:
+    if HANDLMS:
         is_hands = None
         if HANDLMS:
             # I need to check carefully to see make sure i do not update hand to none
@@ -1550,6 +1550,17 @@ def find_and_save_body(image_id, image, bbox, mongo_body_landmarks, hand_landmar
             update_hand = False
     else:
         update_hand = False
+
+    # print("update_hand is ", update_hand, "for image_id", image_id)
+    # KLUDGE to save no_hands for manual boolean update
+    # save image_id, is_hands, update_hand to "no_hands.csv" located in the MAIN_FOLDER1 directory
+    no_hands_file_path = os.path.join(MAIN_FOLDER1, "no_hands.csv")
+    if update_hand is False and is_hands is None:
+        print("saving no_hands for manual review:", image_id, is_hands, update_hand, no_hands_file_path)
+        with open(no_hands_file_path, mode='a', newline='') as file:
+            writer = csv.writer(file)
+            writer.writerow([image_id, is_hands, update_hand])
+
 
     for _ in range(io.max_retries):
         try:
@@ -1586,6 +1597,9 @@ def process_image_bodylms(task):
     init_session()
     init_mongo()
     hand_landmarks = None
+
+    # fix any path snafus by looking up imagename from mysql
+    image_id, cap_path = check_path(session, image_id, cap_path)
 
     thread_id = threading.get_ident()
     try:
@@ -1636,10 +1650,28 @@ def process_image_bodylms(task):
     # store data
 
 
+def check_path(session, image_id, path):
+
+    print(" unununun current path:", path)
+    if "pexels" in path:
+        task_items = path.split("/")
+        task_items[-1] = "pexels-photo-" + task_items[-1] + ".jpg"
+        image_path = "/".join(task_items)
+        task = (task[0], image_path)  # Update task to be a tuple with the new image path
+    else:
+        task_items = path.split("/")
+        # pop the last item
+        task_items.pop()
+        image_path = "/".join(task_items)
+        # use session to get the images.imagename from mysql using image_id which is task[0]
+        imagename = session.query(Images.imagename).filter(Images.image_id == image_id).first()
+        this_imagename = os.path.join(image_path, imagename[0].split("/")[-1])
+        return image_id, this_imagename  # Update task to be a tuple with the new image path
 
 def process_image(task):
-    if VERBOSE: print("process_image this is where the action is")
-    print("processing task:", task)
+    if VERBOSE: 
+        print("process_image this is where the action is")
+        print("processing task:", task)
 
 
     pr_split = time.time()
@@ -1657,20 +1689,8 @@ def process_image(task):
     init_session()
     init_mongo()
 
-    if "pexels" in task[1]:
-        task_items = task[1].split("/")
-        task_items[-1] = "pexels-photo-" + task_items[-1] + ".jpg"
-        image_path = "/".join(task_items)
-        task = (task[0], image_path)  # Update task to be a tuple with the new image path
-    elif "getty" in task[1]:
-        task_items = task[1].split("/")
-        # pop the last item
-        task_items.pop()
-        image_path = "/".join(task_items)
-        # use session to get the images.imagename from mysql using image_id which is task[0]
-        imagename = session.query(Images.imagename).filter(Images.image_id == task[0]).first()
-        this_imagename = os.path.join(image_path, imagename[0].split("/")[-1])
-        task = (task[0], this_imagename)  # Update task to be a tuple with the new image path
+    image_id, this_imagename = check_path(session, task[0], task[1])
+    task = (image_id, this_imagename)
 
     no_image = False
 
@@ -2196,9 +2216,17 @@ def main():
                                             print("REDO_MISSING_MONGO checking mongo for image_id:", result.image_id, "site_image_id", site_image_id)
                                             init_mongo()
                                             mongo_entry = mongo_collection.find_one({"image_id": result.image_id})
+                                            mongo_hand_entry = mongo_hand_collection.find_one({"image_id": result.image_id})
                                             found_mongo_body_landmarks = mongo_entry.get("body_landmarks") if mongo_entry else None
                                             found_mongo_face_landmarks = mongo_entry.get("face_landmarks") if mongo_entry else None
                                             found_mongo_face_encodings = mongo_entry.get("face_encodings68") if mongo_entry else None
+                                            found_mongo_left_hand_landmarks = mongo_hand_entry.get("left_hand") if mongo_hand_entry else None
+                                            found_mongo_right_hand_landmarks = mongo_hand_entry.get("right_hand") if mongo_hand_entry else None
+                                            if found_mongo_left_hand_landmarks is not None or found_mongo_right_hand_landmarks is not None:
+                                                found_mongo_hand_landmarks = True
+                                            else:
+                                                found_mongo_hand_landmarks = None
+                                            # print(" REDO_MISSING_MONGO mongo_entry:", mongo_hand_entry)
                                             close_mongo()
                                             if found_mongo_face_landmarks is not None: print(f" ~~Fl~~ found_mongo_face_landmarks {result.image_id} {site_image_id}")
                                             else: print(f" ++Fl++ MISSING found_mongo_face_landmarks {result.image_id} {site_image_id}")
@@ -2206,11 +2234,16 @@ def main():
                                             else: print(f" ++Fe++ MISSING found_mongo_face_encodings {result.image_id} {site_image_id}")
                                             if found_mongo_body_landmarks is not None: print(f" ~~Bl~~ found_mongo_body_landmarks {result.image_id} {site_image_id}")
                                             else: print(f" ++Bl++ MISSING found_mongo_body_landmarks {result.image_id} {site_image_id}")
+                                            if found_mongo_hand_landmarks is not None: print(f" ~~Hl~~ found_mongo_hand_landmarks {result.image_id} {site_image_id}")
+                                            else: print(f" ++Hl++ MISSING found_mongo_hand_landmarks {result.image_id} {site_image_id}")
 
                                         else:
                                             print(" >-< REDO_MISSING_MONGO no encoding_id for image_id:", result.image_id, "site_image_id", site_image_id)
                                         # if it is missing in mongo, add it to the tasks
-                                        if found_mongo_face_landmarks is None or found_mongo_face_encodings is None:
+                                        if found_mongo_hand_landmarks is None and HANDLMS is True:
+                                            task = (result.image_id, imagepath, result.mongo_face_landmarks, result.mongo_body_landmarks, result.bbox)
+                                            if not QUIET: print(" ~~ REDO_MISSING_MONGO adding to HAND queue:", result.image_id, "site_image_id", site_image_id)    
+                                        elif found_mongo_face_landmarks is None or found_mongo_face_encodings is None:
                                             task = (result.image_id, imagepath)
                                             if not QUIET: print(" ~~ REDO_MISSING_MONGO adding to face queue:", result.image_id, "site_image_id", site_image_id)
                                         elif found_mongo_body_landmarks is None:

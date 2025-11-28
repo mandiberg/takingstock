@@ -173,13 +173,13 @@ class MongoBSONExporter:
                 # look for self.col_to_collection.keys() in filename to determine collection
                 # print(f"filename = {filename}")
                 for key in self.collection_names:
-                    # print(f"checking key: {key} in filename")
+                    print(f"checking key: {key} in filename")
                     if key in filename:
                         # collection = self.col_to_collection[key]                        
                         collection = key
                         # collection = f"self.{collection_name}_collection"
                         # writing_individual_files = True
-                        # print(f"Determined collection as {collection} from filename {file}")
+                        print(f"Determined collection as {collection} from filename {file}")
                         break
                 # if collection is still None, use the first part of the filename before the first underscore
                 if collection is None:
