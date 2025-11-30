@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer,Float, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON
+from sqlalchemy import Column, Integer,Float, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON, SmallInteger, Index, UniqueConstraint
 from sqlalchemy.orm import relationship, declarative_base
 #from sqlalchemy.ext.declarative import declarative_base
 from sys import platform
@@ -450,3 +450,47 @@ class ImagesSlogans(Base):
     __tablename__ = 'ImagesSlogans'
     image_id = Column(Integer, ForeignKey('images.image_id'), primary_key=True)
     slogan_id = Column(Integer, ForeignKey('Slogans.slogan_id'), primary_key=True)
+
+class YoloClasses(Base):
+    __tablename__ = 'YoloClasses'
+
+    class_id = Column(Integer, primary_key=True)
+    class_name = Column(String(50), nullable=False)
+    model_version = Column(String(20))
+
+    detections = relationship("Detections", back_populates="yolo_class")
+
+
+class Detections(Base):
+    __tablename__ = 'Detections'
+
+    detection_id = Column(Integer, primary_key=True, autoincrement=True)
+    image_id = Column(Integer, ForeignKey('images.image_id'), nullable=False)
+    class_id = Column(Integer, ForeignKey('YoloClasses.class_id'), nullable=False)
+    obj_no = Column(SmallInteger, nullable=False)
+    bbox = Column(JSON, nullable=False)
+    conf = Column(Float, nullable=False)
+    bbox_norm = Column(JSON)
+
+    __table_args__ = (
+        UniqueConstraint('image_id', 'class_id', 'obj_no', name='uq_image_class_obj'),
+        Index('idx_image_class', 'image_id', 'class_id'),
+    )
+
+    image = relationship("Images")
+    yolo_class = relationship("YoloClasses", back_populates="detections")
+
+
+
+
+class SegmentHelperObject(Base):
+    __tablename__ = 'SegmentHelperObjectYOLO'
+    
+    seg_image_id           = Column(Integer, primary_key=True, autoincrement=True)
+    image_id               = Column(Integer, primary_key=True)
+    class_id               = Column(Integer, ForeignKey('YoloClasses.class_id'))
+    site_name_id           = Column(Integer, ForeignKey('site.site_name_id'))
+    imagename              = Column(String(200))
+
+    site     = relationship("Site")
+    yolo_class = relationship("YoloClasses")

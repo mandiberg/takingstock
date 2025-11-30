@@ -26,7 +26,7 @@ sys.path.insert(1, ROOT_GITHUB)
 # import file
 
 from mp_db_io import DataIO
-IS_SSD = False  # if True it will use the SSD path, if False it will use the RAID path
+IS_SSD = True  # if True it will use the SSD path, if False it will use the RAID path
 io = DataIO(IS_SSD)
 
 # Define the path to the CSV file
@@ -38,8 +38,10 @@ CSV_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_producti
 USE_DF_SORTED = False  # if True it will use the df_sorted format from make_video.py, false expects output from SQL query above
 USE_RAW_PATHS = False # this skips the site_name_id and joins the ORIGIN to the filename in the CSV directly
 USE_HASH_FOLDERS = True  # if True it will create hash folders in the destination folder
+FROM_SSD_TO_SSD = True
+ORIGIN_SSD = "Volumes/LaCie/segment_images_ALL"
 IS_TEST = False
-ORIGIN = "/Volumes/LaCie/images_adobe"
+ORIGIN = "segment_images_ALL" # this needs to be path to segment_images/images_*
 # DEST = os.path.join(io.ROOT_DBx, "NMLdeshard")
 DEST = "/Volumes/LaCie/segment_images/"
 if IS_TEST:
@@ -139,9 +141,18 @@ def move_files_from_csv(csv_file, start=0):
                 filepath = row[3] if USE_DF_SORTED else row[1]
                 original_path = os.path.join(site_root,filepath)
                 if USE_HASH_FOLDERS:
-                    destination_path = os.path.join(DEST,last_folder, filepath)
+                    if FROM_SSD_TO_SSD:
+                        destination_path = os.path.join(ORIGIN_SSD,last_folder, filepath)
+                        # check if destination path exists
+                        if not os.path.exists(destination_path):
+                            if "000" in destination_path:
+                                print(f" not exist on SSD: {destination_path}, using RAID path instead.")
+                            continue
+                    else:
+                        destination_path = os.path.join(DEST,last_folder, filepath)
                 else:
                     destination_path = os.path.join(DEST, os.path.basename(filepath))
+                    
             move_file_pair(original_path, destination_path)
             i += 1
 

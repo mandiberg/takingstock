@@ -4,15 +4,29 @@ USE stock;
 SET GLOBAL innodb_buffer_pool_size = 8053063680;
 
 -- cleanup
-DROP TABLE SegmentHelper_dec27_getty_noface ;
+DROP TABLE SegmentHelperObject_book ;
 DELETE FROM SegmentHelper_sept2025_heft_keywords;
 
 -- create helper segment table
-CREATE TABLE SegmentHelper_nov2025_SQL_only_still_hands (
+CREATE TABLE SegmentHelper_nov2025_SQL_only_last3K_hands (
     seg_image_id int NOT NULL AUTO_INCREMENT PRIMARY KEY,
     image_id INTEGER,
     FOREIGN KEY (image_id) REFERENCES Images(image_id)
 );
+
+
+-- create helper segment OBJECT table
+CREATE TABLE SegmentHelperObjectYOLO (
+    seg_image_id int NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    image_id INTEGER,
+    class_id INTEGER,
+    site_name_id INTEGER,
+    imagename varchar(200),
+    FOREIGN KEY (site_name_id) REFERENCES Site (site_name_id),
+    FOREIGN KEY (image_id) REFERENCES Images(image_id),
+    FOREIGN KEY (class_id) REFERENCES YoloClasses(class_id)
+);
+
 
 
 INSERT INTO SegmentHelper_oct2025_every40 (image_id)
@@ -246,19 +260,19 @@ WHERE e.face_x > -45 AND e.face_x < -6
 LIMIT 2000000
 ;
 
--- for making a helper from segmentbig based on keywords
-INSERT INTO SegmentHelper_nov2025_placard (image_id)
-SELECT DISTINCT e.image_id
+-- for making an OBJECT helper from segmentbig based on keywords
+INSERT INTO SegmentHelperObject553 (image_id, site_name_id, imagename)
+SELECT DISTINCT e.image_id, i.site_name_id, i.imagename
 FROM SegmentBig_isface e
-JOIN ImagesKeywords ik 
-ON ik.image_id = e.image_id
-WHERE ik.keyword_id IN (23375,13130,21463,184,23726,4222,8874,8136,133749,26241,22814,133787,4587,133627)
+JOIN ImagesKeywords ik ON ik.image_id = e.image_id
+JOIN Images i ON i.image_id = e.image_id
+WHERE ik.keyword_id IN (827)
     AND NOT EXISTS (
         SELECT 1
-        FROM SegmentHelper_nov2025_placard s
+        FROM SegmentHelperObject553 s
         WHERE s.image_id = e.image_id
     )
-LIMIT 400000
+LIMIT 10
 ;
 
 -- for making a helper from segmentbig where mongo_face_landmarks = 1

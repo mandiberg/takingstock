@@ -1,23 +1,3 @@
-'''
-use testocr environment
-this code opens images, segments to bbox, gets hsv
-does ocr, cleans text with openai
-needs to: 
-1. get image list from sql (segmenthelper)
-X 1.5 load all slogans from slogans table (slogan_id and slogan_text) into a dict
-2. match hsv to hsvclusters
-3. save hsvcluster
-X 3.5 check if unrefined slogan text matches any dict.values
-    - if so, skip the refinement step, and save_placard_text(image_id, slogan_id) to placards table
-    - if not, refine with openai
-4. save text info: 
-    1st check to see if refined slogan text matches any dict.values
-    - if so, save corresponding slogan_id to slogans table
-    - if not, save text to slogans table with slogan_id and slogan_text. 
-        - add slogan_id and slogan_text to dict
-    2nd save_placard_text(image_id, slogan_id) to placards table
-'''
-
 import cv2
 import numpy as np
 import os
@@ -25,7 +5,6 @@ from paddleocr import PaddleOCR
 import re
 from openai import OpenAI
 from openaiAPI import api_key
-from ocr_tools import OCRTools
 
 import sqlalchemy
 from sqlalchemy import create_engine
@@ -35,6 +14,8 @@ from sqlalchemy.pool import NullPool
 # importing project-specific models
 import sys
 from my_declarative_base import Slogans, ImagesSlogans
+from tools_ocr import OCRTools
+from tools_clustering import ToolsClustering
 
 # MySQL setup (preserving credentials framework)
 from mp_db_io import DataIO
@@ -59,11 +40,23 @@ ocr_engine = PaddleOCR(
 
 ocr = OCRTools(DEBUGGING=True)
 
+
 root_folder = "/Users/michaelmandiberg/Library/CloudStorage/Dropbox/labeled_images_nov19/"
 iamges_folder = root_folder + "images_testing/"
 labels_folder = root_folder + "labels/"
 blank = False
 DEBUGGING = True
+
+CLUSTER_TYPE = "HSV" # only works with cluster save, not with assignment
+VERBOSE = True
+META = False
+cl = ToolsClustering(CLUSTER_TYPE, VERBOSE=VERBOSE)
+table_cluster_type = cl.set_table_cluster_type(META)
+
+Clusters, ImagesClusters, MetaClusters, ClustersMetaClusters = cl.construct_table_classes(table_cluster_type)
+this_cluster, this_crosswalk = cl.set_cluster_metacluster(Clusters, ImagesClusters, MetaClusters, ClustersMetaClusters)
+print("this_cluster: ", this_cluster)
+
 
 def get_image_bbox_hsv(image, label_data):
     # label data looks like: ['1 0.44188750000000004 0.7556818181818181 0.4017159090909091 0.3340909090909092\n']
@@ -111,9 +104,11 @@ def get_image_bbox_hsv(image, label_data):
     # cv2.destroyAllWindows()
     return average_hsv, cropped_image_bbox
 
-
 slogan_dict = ocr.get_all_slogans(session, Slogans)
 print("Loaded slogans:", slogan_dict)
+
+median_dict = cl.get_cluster_medians(session, this_cluster)
+print("Loaded cluster medians:", median_dict)
 
 # load all images in images_folder
 image_filenames = [f for f in os.listdir(iamges_folder) if f.endswith('.jpg')]
@@ -139,6 +134,10 @@ for image_filename in image_filenames:
             label_data = file.readlines()
 
     average_hsv, cropped_image_bbox = get_image_bbox_hsv(image, label_data)
+    cluster_id, cluster_dist = cl.prep_pose_clusters_enc(average_hsv)
+    print(f"Image {image_filename} assigned to cluster_id {cluster_id} with distance {cluster_dist}.")
+
+
     found_texts = ocr.ocr_on_cropped_image(cropped_image_bbox, ocr_engine, image_filename)
     print("Found Texts:", found_texts)  
     if bool(found_texts) is False:

@@ -11,6 +11,7 @@ class ToolsClustering:
     def __init__(self, CLUSTER_TYPE, VERBOSE=False):
         self.VERBOSE = VERBOSE
         self.CLUSTER_TYPE = CLUSTER_TYPE
+        self.CLUSTER_MEDIANS = None
         self.CLUSTER_DATA = {
             "BodyPoses": {"data_column": "mongo_body_landmarks", "is_feet": 1, "mongo_hand_landmarks": None},
             "BodyPoses3D": {"data_column": "mongo_body_landmarks_3D", "is_feet": 1, "mongo_hand_landmarks": None}, # changed this for testing
@@ -62,15 +63,17 @@ class ToolsClustering:
                 print(f"subset cluster median {cluster_id}: ",cluster_median)
             median_dict[cluster_id] = cluster_median
         # print("median dict: ",median_dict)
+        self.CLUSTER_MEDIANS = median_dict
         return median_dict 
 
     def set_table_cluster_type(self, META):
+        self.META = META
             # set cluster_table_type for ArmsPoses3D, so it pulls from BodyPoses3D table
         # this allows the ArmsPoses3D value to set the Dict and subset landmarks.
         if self.CLUSTER_TYPE == "ArmsPoses3D":
             table_cluster_type = self.CLUSTER_TYPE
         else:
-            if META:table_cluster_type = "BodyPoses3D"
+            if self.META:table_cluster_type = "BodyPoses3D"
             else:table_cluster_type = self.CLUSTER_TYPE
         return table_cluster_type
     
@@ -110,3 +113,31 @@ class ToolsClustering:
             meta_cluster_id = Column(Integer, ForeignKey(f'{MetaClustersTable_name}.cluster_id', ondelete="CASCADE"))
             cluster_dist = Column(Float)
         return Clusters, ImagesClusters, MetaClusters, ClustersMetaClusters
+    
+    def set_cluster_metacluster(self, Clusters, ImagesClusters, MetaClusters, ClustersMetaClusters):
+        if self.META:
+            this_Cluster = MetaClusters
+            this_CrosswalkClusters = ClustersMetaClusters
+        else:
+            this_Cluster = Clusters
+            this_CrosswalkClusters = ImagesClusters
+        return this_Cluster, this_CrosswalkClusters
+
+    def prep_pose_clusters_enc(self, enc1, median_dict=None):
+        print("prepping pose clusters for enc1: ", enc1, " with median_dict: ", median_dict, " and CLUSTER_MEDIANS: ", self.CLUSTER_MEDIANS)
+        if median_dict is None and self.CLUSTER_MEDIANS is not None:
+            median_dict = self.CLUSTER_MEDIANS
+        # print("current image enc1", enc1)  
+        enc1 = np.array(enc1)
+        
+        this_dist_dict = {}
+        for cluster_id in median_dict:
+            enc2 = median_dict[cluster_id]
+            # print("cluster_id enc2: ", cluster_id,enc2)
+            this_dist_dict[cluster_id] = np.linalg.norm(enc1 - enc2, axis=0)
+        
+        cluster_id, cluster_dist = min(this_dist_dict.items(), key=lambda x: x[1])
+
+        # print(cluster_id)
+        return cluster_id, cluster_dist
+

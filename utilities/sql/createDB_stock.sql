@@ -307,3 +307,24 @@ CREATE TABLE ImagesSlogans (
     PRIMARY KEY (image_id)
 );
 
+
+CREATE TABLE YoloClasses (
+    class_id INT PRIMARY KEY,
+    class_name VARCHAR(50) NOT NULL,
+    model_version VARCHAR(20)
+);
+
+CREATE TABLE Detections (
+    detection_id INT AUTO_INCREMENT PRIMARY KEY,
+    image_id INT NOT NULL,
+    class_id INT NOT NULL,
+    obj_no TINYINT NOT NULL,
+    bbox JSON NOT NULL,
+    conf FLOAT NOT NULL,
+    bbox_norm JSON,
+    UNIQUE KEY (image_id, class_id, obj_no),
+    FOREIGN KEY (image_id) REFERENCES images(image_id),
+    FOREIGN KEY (class_id) REFERENCES YoloClasses(class_id),
+    INDEX idx_image_class (image_id, class_id)
+);
+
