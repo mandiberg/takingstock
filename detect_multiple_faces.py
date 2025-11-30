@@ -33,7 +33,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.orm import relationship
 from sqlalchemy.ext.declarative import declarative_base
 # my ORM
-from my_declarative_base import Base, Images, WanderingImages, NMLImages, Keywords, Counters, SegmentTable, SegmentBig_isnotface, ImagesKeywords, ImagesBackground, Encodings, PhoneBbox, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON
+from my_declarative_base import Base, Images, WanderingImages, NMLImages, Keywords, Counters, SegmentTable, SegmentBig_isnotface, ImagesKeywords, ImagesBackground, Encodings, PhoneBbox, Detections, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON
 
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.pool import NullPool
@@ -44,6 +44,7 @@ from pymongo.errors import DuplicateKeyError
 from mp_pose_est import SelectPose
 from mp_db_io import DataIO
 from mp_sort_pose import SortPose
+from tools_yolo import YOLOTools
 
 #####new imports #####
 from mediapipe.python.solutions.drawing_utils import _normalized_to_pixel_coordinates
@@ -116,7 +117,7 @@ switching to topic targeted
 18	afripics - where are these?
 '''
 # I think this only matters for IS_FOLDER mode, and the old SQL way
-SITE_NAME_ID = 3
+SITE_NAME_ID = 4
 # 2, shutter. 4, istock
 # 7 pond5, 8 123rf
 POSE_ID = 0
@@ -136,7 +137,7 @@ POSE_ID = 0
 # MAIN_FOLDER5 = "/Volumes/SSD2/images_123rf"
 
 # #testing locally with two
-MAIN_FOLDER1 = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/last3K/segment_images/images_adobe"
+MAIN_FOLDER1 = "/Volumes/OWC5/segment_images/images_istock"
 # MAIN_FOLDER1 = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/last3K/segment_images/images_alamy"
 # MAIN_FOLDERS = [MAIN_FOLDER1, MAIN_FOLDER2]
 
@@ -312,6 +313,8 @@ ROOT = io.ROOT
 io.NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES_GPU
 # overriding DB for testing
 # io.db["name"] = "gettytest3"
+
+yo = YOLOTools()
 
 # --- Initialize MediaPipe objects with GPU delegate ---
 
@@ -1185,35 +1188,35 @@ def process_image_find_body_subroutine(image_id, image, bbox):
         print("body_world_landmarks", image_id, body_world_landmarks)
     return is_body, n_landmarks, body_landmarks, body_world_landmarks, face_height, nose_pixel_pos
 
-def process_image_normalize_object_bbox(bbox_dict, nose_pixel_pos, face_height, image_shape):
-    ### normed object bbox
-    for OBJ_CLS_ID in OBJ_CLS_LIST:
-        if VERBOSE: print("OBJ_CLS_ID to norm", OBJ_CLS_ID)
-        bbox_key = "bbox"
-        # conf_key = "conf_{0}".format(OBJ_CLS_ID)
-        bbox_n_key = "bbox_{0}_norm".format(OBJ_CLS_ID)
-        if VERBOSE: print("OBJ_CLS_ID", OBJ_CLS_ID)
-        try: 
-            if VERBOSE: print("trying to get bbox", OBJ_CLS_ID)
-            bbox_dict_value = bbox_dict[OBJ_CLS_ID]["bbox"]
-            bbox_dict_value = io.unstring_json(bbox_dict_value)
-        except: 
-            if VERBOSE: print("no bbox", OBJ_CLS_ID)
-            bbox_dict_value = None
-        if bbox_dict_value and not nose_pixel_pos:
-            print("normalized bbox but no nose_pixel_pos for ")
-        elif bbox_dict_value:
-            if VERBOSE: print("setting normed bbox for OBJ_CLS_ID", OBJ_CLS_ID)
-            if VERBOSE: print("bbox_dict_value", bbox_dict_value)
-            if VERBOSE: print("bbox_n_key", bbox_n_key)
+# def process_image_normalize_object_bbox(bbox_dict, nose_pixel_pos, face_height, image_shape):
+#     ### normed object bbox
+#     for OBJ_CLS_ID in OBJ_CLS_LIST:
+#         if VERBOSE: print("OBJ_CLS_ID to norm", OBJ_CLS_ID)
+#         bbox_key = "bbox"
+#         # conf_key = "conf_{0}".format(OBJ_CLS_ID)
+#         bbox_n_key = "bbox_{0}_norm".format(OBJ_CLS_ID)
+#         if VERBOSE: print("OBJ_CLS_ID", OBJ_CLS_ID)
+#         try: 
+#             if VERBOSE: print("trying to get bbox", OBJ_CLS_ID)
+#             bbox_dict_value = bbox_dict[OBJ_CLS_ID]["bbox"]
+#             bbox_dict_value = io.unstring_json(bbox_dict_value)
+#         except: 
+#             if VERBOSE: print("no bbox", OBJ_CLS_ID)
+#             bbox_dict_value = None
+#         if bbox_dict_value and not nose_pixel_pos:
+#             print("normalized bbox but no nose_pixel_pos for ")
+#         elif bbox_dict_value:
+#             if VERBOSE: print("setting normed bbox for OBJ_CLS_ID", OBJ_CLS_ID)
+#             if VERBOSE: print("bbox_dict_value", bbox_dict_value)
+#             if VERBOSE: print("bbox_n_key", bbox_n_key)
 
-            n_phone_bbox=sort.normalize_phone_bbox(bbox_dict_value,nose_pixel_pos,face_height,image_shape)
-            bbox_dict[bbox_n_key]=n_phone_bbox
-            if VERBOSE: print("normed bbox", bbox_dict[bbox_n_key])
-        else:
-            pass
-            if VERBOSE: print(f"NO {bbox_key} for",)
-    return bbox_dict
+#             n_phone_bbox=yo.normalize_phone_bbox(bbox_dict_value,nose_pixel_pos,face_height,image_shape)
+#             bbox_dict[bbox_n_key]=n_phone_bbox
+#             if VERBOSE: print("normed bbox", bbox_dict[bbox_n_key])
+#         else:
+#             pass
+#             if VERBOSE: print(f"NO {bbox_key} for",)
+#     return bbox_dict
 
 def process_image_hands_subroutine(image_id, image):
 
@@ -1310,33 +1313,7 @@ def save_body_hands_mysql_and_mongo(session, image_id, image, bbox_dict, body_la
         if VERBOSE: print("bbox_dict", bbox_dict, "hue", hue, "for image_id", image_id)
         if bbox_dict is not None:
             ### save bbox_dict (including normed bbox) to PhoneBbox
-            for OBJ_CLS_ID in OBJ_CLS_LIST:
-                bbox_n_key = f"bbox_{OBJ_CLS_ID}_norm"
-                # print(bbox_dict)
-                if bbox_dict[OBJ_CLS_ID]["bbox"]:
-                    # Create a new PhoneBbox entry
-                    new_entry_phonebbox = PhoneBbox(image_id=image_id)
-
-                    if VERBOSE: print(f"bbox_dict[OBJ_CLS_ID][bbox]: {bbox_dict[OBJ_CLS_ID]['bbox']}")
-                    if VERBOSE: print(f"bbox_dict[OBJ_CLS_ID][conf]: {bbox_dict[OBJ_CLS_ID]['conf']}")
-                    if VERBOSE: print("bbox_n_key:", bbox_n_key)
-                    if VERBOSE: print(f"bbox_dict[bbox_n_key]: {bbox_dict[bbox_n_key]}")
-
-                    # Set attributes
-                    setattr(new_entry_phonebbox, f"bbox_{OBJ_CLS_ID}", bbox_dict[OBJ_CLS_ID]["bbox"])
-                    setattr(new_entry_phonebbox, f"conf_{OBJ_CLS_ID}", bbox_dict[OBJ_CLS_ID]["conf"])
-                    try:
-                        setattr(new_entry_phonebbox, bbox_n_key, bbox_dict[bbox_n_key])
-                    except:
-                        print(f"Error setting {bbox_n_key} for {image_id}")
-                    # Add the new entry to the session
-                    session.merge(new_entry_phonebbox)
-                    
-                    if not QUIET: print(f"New Bbox {OBJ_CLS_ID} session entry for image_id {image_id} created successfully.")
-                else:
-                    pass
-                    if VERBOSE: print(f"No bbox for {OBJ_CLS_ID} in image_id {image_id}")
-
+            session = yo.save_obj_bbox(session, image_id, bbox_dict, Detections, OBJ_CLS_LIST)
         if hue is not None:
             ### ImageBackground
 
@@ -1510,11 +1487,11 @@ def find_and_save_body(image_id, image, bbox, mongo_body_landmarks, hand_landmar
             # only do this when there is a face. skip for no face -body reprocessing
             ### detect object info, 
             if VERBOSE:print("detecting objects")
-            bbox_dict=sort.return_bbox(YOLO_MODEL,image, OBJ_CLS_LIST)
+            bbox_dict=yo.return_bbox(YOLO_MODEL,image, OBJ_CLS_LIST)
             if VERBOSE: print("detected objects")
 
             ### normed object bbox
-            bbox_dict = process_image_normalize_object_bbox(bbox_dict, nose_pixel_pos, face_height, image.shape)
+            bbox_dict = yo.process_image_normalize_object_bbox(bbox_dict, nose_pixel_pos, face_height, image.shape)
 
             ### do imagebackground calcs
 
@@ -1599,8 +1576,8 @@ def process_image_bodylms(task):
     hand_landmarks = None
 
     # fix any path snafus by looking up imagename from mysql
-    image_id, cap_path = check_path(session, image_id, cap_path)
-
+    cap_path = check_path(session, image_id, cap_path)
+    print("processing image_id:", image_id, "path:", cap_path)
     thread_id = threading.get_ident()
     try:
         # print(f"Thread {thread_id}: Processing {cap_path}")
@@ -1656,8 +1633,9 @@ def check_path(session, image_id, path):
     if "pexels" in path:
         task_items = path.split("/")
         task_items[-1] = "pexels-photo-" + task_items[-1] + ".jpg"
-        image_path = "/".join(task_items)
-        task = (task[0], image_path)  # Update task to be a tuple with the new image path
+        this_imagename = "/".join(task_items)
+        print(" corrected pexels path to:", this_imagename)
+        
     else:
         task_items = path.split("/")
         # pop the last item
@@ -1666,7 +1644,7 @@ def check_path(session, image_id, path):
         # use session to get the images.imagename from mysql using image_id which is task[0]
         imagename = session.query(Images.imagename).filter(Images.image_id == image_id).first()
         this_imagename = os.path.join(image_path, imagename[0].split("/")[-1])
-        return image_id, this_imagename  # Update task to be a tuple with the new image path
+    return this_imagename  
 
 def process_image(task):
     if VERBOSE: 
@@ -1689,8 +1667,8 @@ def process_image(task):
     init_session()
     init_mongo()
 
-    image_id, this_imagename = check_path(session, task[0], task[1])
-    task = (image_id, this_imagename)
+    this_imagename = check_path(session, task[0], task[1])
+    task = (task[0], this_imagename)
 
     no_image = False
 

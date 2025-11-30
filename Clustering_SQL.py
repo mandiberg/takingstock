@@ -256,7 +256,7 @@ if USE_SEGMENT is True and (cl.CLUSTER_TYPE != "Clusters"):
         WHERE = " cluster_id IS NOT NULL "
 
     # WHERE += " AND h.is_body = 1"
-    LIMIT = 50
+    LIMIT = 5000000
     BATCH_LIMIT = 10000
 
     '''
@@ -635,7 +635,7 @@ FROM `BodyPoses3D`'''
         session.rollback()
         print(f"Error occurred during data saving: {str(e)}")
 
-
+# TK 4 HSV - after calculating cluster distances
 def save_images_clusters_DB(df):
     #save the df to a table
     image_id = cluster_id = cluster_dist = this_cluster_id = meta_cluster_id = None
@@ -727,14 +727,14 @@ def process_landmarks_cluster_dist(df, df_subset_landmarks):
     print("df first row", df.iloc[0])
     if 'cluster_id' not in df.columns:
         # assign clusters to all rows
-        # df_subset_landmarks.loc[:, ['cluster_id', 'cluster_dist']] = zip(*df_subset_landmarks['enc1'].apply(prep_pose_clusters_enc))
-        cluster_results = df_subset_landmarks['enc1'].apply(prep_pose_clusters_enc)
+        # df_subset_landmarks.loc[:, ['cluster_id', 'cluster_dist']] = zip(*df_subset_landmarks['enc1'].apply(cl.prep_pose_clusters_enc))
+        cluster_results = df_subset_landmarks['enc1'].apply(cl.prep_pose_clusters_enc)
         # df_subset_landmarks['cluster_id'], df_subset_landmarks['cluster_dist'] = zip(*cluster_results)
         df_subset_landmarks[['cluster_id', 'cluster_dist']] = pd.DataFrame(cluster_results.tolist(), index=df_subset_landmarks.index)
     elif df['cluster_id'].isnull().values.any():
-        # df_subset_landmarks["cluster_id"], df_subset_landmarks["cluster_dist"] = zip(*df_subset_landmarks["enc1"].apply(prep_pose_clusters_enc))
+        # df_subset_landmarks["cluster_id"], df_subset_landmarks["cluster_dist"] = zip(*df_subset_landmarks["enc1"].apply(cl.prep_pose_clusters_enc))
         df_subset_landmarks.loc[df_subset_landmarks['cluster_id'].isnull(), ['cluster_id', 'cluster_dist']] = \
-            zip(*df_subset_landmarks.loc[df_subset_landmarks['cluster_id'].isnull(), 'enc1'].apply(prep_pose_clusters_enc))
+            zip(*df_subset_landmarks.loc[df_subset_landmarks['cluster_id'].isnull(), 'enc1'].apply(cl.prep_pose_clusters_enc))
     else:
         # Ensure cluster_median is present on df_subset_landmarks by merging on image_id
         if 'cluster_median' not in df_subset_landmarks.columns:
@@ -752,20 +752,20 @@ def process_landmarks_cluster_dist(df, df_subset_landmarks):
         df_subset_landmarks["cluster_dist"] = df_subset_landmarks.apply(lambda row: calc_median_dist(row['enc1'], row['cluster_median']), axis=1)
     return df_subset_landmarks
 
-def prep_pose_clusters_enc(enc1):
-    # print("current image enc1", enc1)  
-    enc1 = np.array(enc1)
+# def prep_pose_clusters_enc(enc1):
+#     # print("current image enc1", enc1)  
+#     enc1 = np.array(enc1)
     
-    this_dist_dict = {}
-    for cluster_id in MEDIAN_DICT:
-        enc2 = MEDIAN_DICT[cluster_id]
-        # print("cluster_id enc2: ", cluster_id,enc2)
-        this_dist_dict[cluster_id] = np.linalg.norm(enc1 - enc2, axis=0)
+#     this_dist_dict = {}
+#     for cluster_id in MEDIAN_DICT:
+#         enc2 = MEDIAN_DICT[cluster_id]
+#         # print("cluster_id enc2: ", cluster_id,enc2)
+#         this_dist_dict[cluster_id] = np.linalg.norm(enc1 - enc2, axis=0)
     
-    cluster_id, cluster_dist = min(this_dist_dict.items(), key=lambda x: x[1])
+#     cluster_id, cluster_dist = min(this_dist_dict.items(), key=lambda x: x[1])
 
-    # print(cluster_id)
-    return cluster_id, cluster_dist
+#     # print(cluster_id)
+#     return cluster_id, cluster_dist
 
 def assign_images_clusters_DB(df):
 
@@ -781,7 +781,7 @@ def assign_images_clusters_DB(df):
         df_subset_landmarks = process_landmarks_cluster_dist(df, df_subset_landmarks)
     else:
         # this is for obj_bbox_list
-        df_subset_landmarks["cluster_id"] = df_subset_landmarks["obj_bbox_list"].apply(prep_pose_clusters_enc)
+        df_subset_landmarks["cluster_id"] = df_subset_landmarks["obj_bbox_list"].apply(cl.prep_pose_clusters_enc)
 
     # if the cluster_id column contains tuples or lists, unpack them
     if isinstance(df_subset_landmarks["cluster_id"].iloc[0], (list, tuple)):

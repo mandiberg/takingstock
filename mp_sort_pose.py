@@ -3477,18 +3477,18 @@ class SortPose:
         return translated_landmark_dict
 
 
-    def normalize_landmarks(self,landmarks,nose_pos,face_height,shape):
-        height,width = shape[:2]
-        translated_landmarks = landmark_pb2.NormalizedLandmarkList()
-        for landmark in landmarks.landmark:
-            # print("normalize_landmarks", nose_pos["x"], landmark.x, width, face_height)
-            translated_landmark = landmark_pb2.NormalizedLandmark()
-            translated_landmark.x = (nose_pos["x"]-landmark.x*width )/face_height
-            translated_landmark.y = (nose_pos["y"]-landmark.y*height)/face_height
-            translated_landmark.visibility = landmark.visibility
-            translated_landmarks.landmark.append(translated_landmark)
+    # def normalize_landmarks(self,landmarks,nose_pos,face_height,shape):
+    #     height,width = shape[:2]
+    #     translated_landmarks = landmark_pb2.NormalizedLandmarkList()
+    #     for landmark in landmarks.landmark:
+    #         # print("normalize_landmarks", nose_pos["x"], landmark.x, width, face_height)
+    #         translated_landmark = landmark_pb2.NormalizedLandmark()
+    #         translated_landmark.x = (nose_pos["x"]-landmark.x*width )/face_height
+    #         translated_landmark.y = (nose_pos["y"]-landmark.y*height)/face_height
+    #         translated_landmark.visibility = landmark.visibility
+    #         translated_landmarks.landmark.append(translated_landmark)
 
-        return translated_landmarks
+    #     return translated_landmarks
 
     def project_normalized_landmarks(self,landmarks,nose_pos,face_height,shape):
         # height,width = shape[:2]
@@ -3547,20 +3547,21 @@ class SortPose:
         # nose_3d has visibility
         self.nose_3d = nose_pixel_pos
         return nose_pixel_pos
-    
-    def normalize_phone_bbox(self,phone_bbox,nose_pos,face_height,shape):
-        height,width = shape[:2]
-        if self.VERBOSE: print("phone_bbox",phone_bbox)
-        if self.VERBOSE: print("type phone_bbox",type(phone_bbox))
 
-        n_phone_bbox=phone_bbox
-        n_phone_bbox["right"] =(nose_pos["x"]-n_phone_bbox["right"] )/face_height
-        n_phone_bbox["left"]  =(nose_pos["x"]-n_phone_bbox["left"]  )/face_height
-        n_phone_bbox["top"]   =(nose_pos["y"]-n_phone_bbox["top"]   )/face_height
-        n_phone_bbox["bottom"]=(nose_pos["y"]-n_phone_bbox["bottom"])/face_height
-        if self.VERBOSE: print("type phone_bbox",type(n_phone_bbox["right"]))
+    # # YOLO MOVED    
+    # def normalize_phone_bbox(self,phone_bbox,nose_pos,face_height,shape):
+    #     height,width = shape[:2]
+    #     if self.VERBOSE: print("phone_bbox",phone_bbox)
+    #     if self.VERBOSE: print("type phone_bbox",type(phone_bbox))
 
-        return n_phone_bbox
+    #     n_phone_bbox=phone_bbox
+    #     n_phone_bbox["right"] =(nose_pos["x"]-n_phone_bbox["right"] )/face_height
+    #     n_phone_bbox["left"]  =(nose_pos["x"]-n_phone_bbox["left"]  )/face_height
+    #     n_phone_bbox["top"]   =(nose_pos["y"]-n_phone_bbox["top"]   )/face_height
+    #     n_phone_bbox["bottom"]=(nose_pos["y"]-n_phone_bbox["bottom"])/face_height
+    #     if self.VERBOSE: print("type phone_bbox",type(n_phone_bbox["right"]))
+
+    #     return n_phone_bbox
 
 
     def insert_n_landmarks(self,bboxnormed_collection, image_id, n_landmarks):
@@ -3618,6 +3619,7 @@ class SortPose:
         # print("Time to insert:", time.time()-start)
         return
 
+### YOLO - moved
     def return_bbox(self, model, image, OBJ_CLS_LIST):
         result = model(image,classes=[OBJ_CLS_LIST])[0]
         bbox_dict={}
