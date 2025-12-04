@@ -26,7 +26,7 @@ sys.path.insert(1, ROOT_GITHUB)
 # import file
 
 from mp_db_io import DataIO
-IS_SSD = True  # if True it will use the SSD path, if False it will use the RAID path
+IS_SSD = False  # if True it will use the SSD path, if False it will use the RAID path
 io = DataIO(IS_SSD)
 
 # Define the path to the CSV file
@@ -38,12 +38,12 @@ CSV_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_producti
 USE_DF_SORTED = False  # if True it will use the df_sorted format from make_video.py, false expects output from SQL query above
 USE_RAW_PATHS = False # this skips the site_name_id and joins the ORIGIN to the filename in the CSV directly
 USE_HASH_FOLDERS = True  # if True it will create hash folders in the destination folder
-FROM_SSD_TO_SSD = True
+FROM_SSD_TO_SSD = False
 ORIGIN_SSD = "Volumes/LaCie/segment_images_ALL"
 IS_TEST = False
 ORIGIN = "segment_images_ALL" # this needs to be path to segment_images/images_*
 # DEST = os.path.join(io.ROOT_DBx, "NMLdeshard")
-DEST = "/Volumes/LaCie/segment_images/"
+DEST = "/Volumes/LaCie/segment_images_mask/"
 if IS_TEST:
     # to run a smaller test, put a few files in the test folder
     DEST = DEST + "_test"
@@ -122,6 +122,7 @@ def move_files_from_csv(csv_file, start=0):
         next(reader)  # Skip the header row
         # Iterate over each row in the CSV file
         for row in reader:
+            # print(f"Processing row: {row}")
             if START > i:
                 continue
             

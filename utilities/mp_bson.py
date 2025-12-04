@@ -52,6 +52,15 @@ class MongoBSONExporter:
             "body_world_landmarks": "mongo_body_landmarks_3D"
         }
 
+        self.sql_cleanup_field_names_dict = {
+            "face_landmarks": "face_landmarks",
+            "body_landmarks": "body_landmarks",
+            "face_encodings68": "face_encodings",
+            "nlms": "body_landmarks_norm",
+            "left_hand": "hand_landmarks",
+            "right_hand": "hand_landmarks",
+            "body_world_landmarks": "body_world_landmarks"
+        }
         # setting collection objects from dict
         for collection_name in self.collection_names:
             globals()[f"self.{collection_name}_collection"] = mongo_db[collection_name]
@@ -224,7 +233,17 @@ class MongoBSONExporter:
                                 if encoding_id is None:
                                     encoding_id = self.lookup_encoding_id(engine, image_id)
                                 if self.VERBOSE: print(f"Updating encoding_id {encoding_id} setting {field} to NULL")
-                                self.update_MySQL_value(engine, table_name, "encoding_id", encoding_id, field, "NULL")
+
+                                # this stores the Booleans in mysql to note that the mongo data exists
+                                mysql_field = self.sql_field_names_dict.get(field, None)
+                                self.update_MySQL_value(engine, "encodings", "encoding_id", encoding_id, mysql_field, 1)
+                                # self.update_MySQL_value(engine, "SegmentBig_isface", "image_id", image_id, mysql_field, 1)
+
+                                # this sets cleanup table to True. Table name is set in main file where class is called
+                                mysql_cleanup_field = self.sql_cleanup_field_names_dict.get(field, None)
+                                self.update_MySQL_value(engine, table_name, "encoding_id", encoding_id, mysql_cleanup_field, 1)
+                                            # stmt = f"UPDATE {table_name} SET {col}={cell_value} WHERE {key} = {id};"
+
                         else:
                             print(f"Collection not found for field {field} in document for image_id {image_id} encoding_id {encoding_id}")
                             continue

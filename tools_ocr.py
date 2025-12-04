@@ -56,7 +56,10 @@ class OCRTools:
             model="gpt-5-nano",
             messages=[{"role": "user", "content": prompt}]
         )
-        return response.choices[0].message.content.strip()
+        corrected_text = response.choices[0].message.content.strip()
+        slogan_text = corrected_text.replace('Corrected: ', '')
+        return slogan_text
+        
 
     def clean_ocr_text(self, openai_client, tokens):
         if not tokens:

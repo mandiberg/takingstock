@@ -117,7 +117,7 @@ switching to topic targeted
 18	afripics - where are these?
 '''
 # I think this only matters for IS_FOLDER mode, and the old SQL way
-SITE_NAME_ID = 4
+SITE_NAME_ID = 8
 # 2, shutter. 4, istock
 # 7 pond5, 8 123rf
 POSE_ID = 0
@@ -137,8 +137,8 @@ POSE_ID = 0
 # MAIN_FOLDER5 = "/Volumes/SSD2/images_123rf"
 
 # #testing locally with two
-MAIN_FOLDER1 = "/Volumes/OWC5/segment_images/images_istock"
-# MAIN_FOLDER1 = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/last3K/segment_images/images_alamy"
+MAIN_FOLDER1 = "/Volumes/LaCie/segment_images_final1M/images_123rf"
+# MAIN_FOLDER1 = "/Volumes/LaCie/segment_images_final1M/images_istock"
 # MAIN_FOLDERS = [MAIN_FOLDER1, MAIN_FOLDER2]
 
 
@@ -1491,7 +1491,7 @@ def find_and_save_body(image_id, image, bbox, mongo_body_landmarks, hand_landmar
             if VERBOSE: print("detected objects")
 
             ### normed object bbox
-            bbox_dict = yo.process_image_normalize_object_bbox(bbox_dict, nose_pixel_pos, face_height, image.shape)
+            bbox_dict = yo.process_image_normalize_object_bbox(bbox_dict, nose_pixel_pos, face_height, image.shape, OBJ_CLS_LIST)
 
             ### do imagebackground calcs
 

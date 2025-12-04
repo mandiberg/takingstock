@@ -293,11 +293,19 @@ FROM Images553 i5
 WHERE i5.object_id = 1
 ;
 
+SELECT *
+FROM Images i
+WHERE i.site_image_id = "1981048862"
+AND i.site_name_id =2
+;
 
 
+SELECT * 
+FROM Encodings e
+WHERE e.image_id = 99136936
+;
 
-
-
+select version();
 
 
 

@@ -66,6 +66,26 @@ class ToolsClustering:
         self.CLUSTER_MEDIANS = median_dict
         return median_dict 
 
+    def get_meta_cluster_dict(self, session, ClustersMetaClusters):
+        print("getting cluster medians")
+        # Create a SQLAlchemy select statement
+        select_query = select(ClustersMetaClusters.cluster_id, ClustersMetaClusters.meta_cluster_id)
+
+        # Execute the query using your SQLAlchemy session
+        results = session.execute(select_query)
+        meta_cluster_dict = {}
+
+        # Process the results as needed
+        # print(f'Found {len(results)} clusters with medians.')
+        # print("results is a sqlalchemy.engine.result.ChunkedIteratorResult object at 0x3233d5400. this is how many: ",len(results))
+        for row in results:
+            # print(row)
+            cluster_id, meta_cluster_id = row
+            meta_cluster_dict[cluster_id] = meta_cluster_id
+
+        return meta_cluster_dict 
+
+
     def set_table_cluster_type(self, META):
         self.META = META
             # set cluster_table_type for ArmsPoses3D, so it pulls from BodyPoses3D table
@@ -124,7 +144,7 @@ class ToolsClustering:
         return this_Cluster, this_CrosswalkClusters
 
     def prep_pose_clusters_enc(self, enc1, median_dict=None):
-        print("prepping pose clusters for enc1: ", enc1, " with median_dict: ", median_dict, " and CLUSTER_MEDIANS: ", self.CLUSTER_MEDIANS)
+        # print("prepping pose clusters for enc1: ", enc1, " with median_dict: ", median_dict, " and CLUSTER_MEDIANS: ", self.CLUSTER_MEDIANS)
         if median_dict is None and self.CLUSTER_MEDIANS is not None:
             median_dict = self.CLUSTER_MEDIANS
         # print("current image enc1", enc1)  

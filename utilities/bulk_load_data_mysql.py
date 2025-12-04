@@ -26,7 +26,7 @@ NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 
 # ADD TO SEGMENTS WHEN SQL/WORKBENCH IS BORKING
 
-HelperTable_name = "SegmentHelper_nov2025_SQL_only_still_faces"
+HelperTable_name = "SegmentHelper_nov2025_SQL_only_last3K_hands"
 
 engine = create_engine("mysql+pymysql://{user}:{pw}@/{db}?unix_socket={socket}".format(
     user=db['user'], pw=db['pass'], db=db['name'], socket=db['unix_socket']
@@ -46,7 +46,7 @@ class HelperTable(Base):
 # engine = create_engine("mysql+pymysql://user:pass@localhost/db?unix_socket=/Applications/MAMP/tmp/mysql/mysql.sock")
 
 chunksize = 50000
-reader = pd.read_csv("/Volumes/OWC4/segment_images/mongo_exports_oct19_sets/still_sql_only_face_allunique.txt", names=["image_id"])
+reader = pd.read_csv("/Volumes/OWC4/segment_images/mongo_exports_oct19_sets/SegmentHelper_nov2025_SQL_only_last3K_hands.txt", names=["image_id"])
 original_reader = reader.copy()
 # if first row in reader first column is "image_id", skip it
 first_row = next(reader.iterrows())[1]

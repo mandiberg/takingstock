@@ -286,18 +286,88 @@ JOIN SegmentHelper_nov2025_SQL_only_last3K_hands sh on sh.image_id = i.image_id
 ;
 -- AND sh.seg_image_id >= 100000000
 
+USE Stock;
 SELECT i.site_name_id, i.imagename
 FROM Images i
 JOIN ImagesKeywords ik on i.image_id = ik.image_id
+JOIN ImagesKeywords ik2 on i.image_id = ik2.image_id
 JOIN SegmentOct20 s on i.image_id = s.image_id
-WHERE ik.keyword_id = 4222
+WHERE ik.keyword_id = 22269
+AND ik2.keyword_id = 21610
+LIMIT 10;
 
 
+USE Stock;
 SELECT COUNT(*)
-FROM SegmentHelper_nov2025_SQL_only_still_hands
+FROM SegmentHelperObjectYOLO
 ;
 
 UPDATE Images i
 SET i.no_image = NULL
-WHERE i.image_id = 124721420
+WHERE i.image_id = 96323620
 ;
+
+SELECT *
+FROM Images
+WHERE image_id = 25983
+;
+
+SELECT *
+FROM SegmentHelperMissing_nov2025 
+Where image_id = 62775971
+
+
+CREATE TABLE SegmentHelperMissing_nov2025 (
+id INT NOT NULL AUTO_INCREMENT,
+encoding_id INT NOT NULL,
+image_id INT NOT NULL,
+body_landmarks TINYINT(1) NULL,
+body_landmarks_norm TINYINT(1) NULL,
+face_landmarks TINYINT(1) NULL,
+face_encodings TINYINT(1) NULL,
+hand_landmarks TINYINT(1) NULL,
+body_world_landmarks TINYINT(1) NULL,
+PRIMARY KEY (id),
+INDEX idx_encoding_id (encoding_id),
+INDEX idx_image_id (image_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+SELECT i.site_name_id, i.imagename
+FROM Images i
+JOIN SegmentHelperMissing_nov2025 s on i.image_id = s.image_id
+WHERE s.body_world_landmarks is NULL
+OR s.body_landmarks_norm is NULL
+OR hand_landmarks is NULL
+;
+
+DELETE FROM BsonFileLog;
+
+
+SELECT COUNT(id)
+FROM SegmentHelperMissing_nov2025
+WHERE body_world_landmarks is NULL
+OR body_landmarks_norm is NULL
+OR hand_landmarks is NULL
+;
+
+
+-- what is in wandering images?
+
+SELECT wi.site_name_id, COUNT(wi.wandering_image_id)
+FROM WanderingImages wi
+GROUP BY (wi.site_name_id)
+ORDER BY (wi.site_name_id)
+;
+
+
+SELECT *
+FROM WanderingImages wi
+WHERE wi.site_name_id = 2
+LIMIT 100
+;
+
+SELECT *
+FROM Images i
+WHERE i.site_image_id = "10009813"
+;
+

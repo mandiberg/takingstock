@@ -95,6 +95,10 @@ class CompareSqlMongoResults(Base):
     right_hand = Column(Integer)
     body_world_landmarks = Column(Integer)
 
+# redefining Table Name for final ingest Nov 30 2025
+# this is only for updating it to note when values stored
+table_name = "SegmentHelperMissing_nov2025"
+
 HelperTable_name = "SegmentHelper_oct2025_missing_face_encodings"
 HelperTable_name = None
 
@@ -947,7 +951,12 @@ if __name__ == "__main__":
         # These will be helper table output which is a csv. image_id are column index 2
         # which contains all unique image_ids with missing data in mongo
         #
-        global_collection_file = "hand_landmarks" # this will probably need to be updated mannually
+        # global_collection_file = "face_landmarks" 
+        # global_collection_file = "face_encodings68" 
+        # global_collection_file = "body_landmarks" 
+        # global_collection_file = "body_landmarks_norm" 
+        global_collection_file = "body_world_landmarks" 
+        # global_collection_file = "hand_landmarks" 
         if "hand_landmarks" in global_collection_file:
             global_collection_file = "hand_landmarks"
             file_name = "hand_landmarks_right_hand"
@@ -955,11 +964,11 @@ if __name__ == "__main__":
             file_name = global_collection_file
         else:
             file_name = global_collection_file
-        # set_name = "in_both"
-        set_name = "sql_only"
+        set_name = "final_sql_only"
+        # set_name = "sql_only"
         with open(os.path.join(EXPORT_DIR, set_name, f"{set_name}_{file_name}.txt"), "r") as f:
             first_line = f.readline()  # read header
-            if first_line.startswith("Entries"):
+            if isinstance(first_line, str):
                 print(f"skipping header line: {first_line.strip()}")
                 first_id = None
             elif first_line.strip().isdigit():
