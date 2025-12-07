@@ -64,6 +64,7 @@ db = io.db
 
 # CSV_FOLDER = os.path.join("/Users/michaelmandiberg/Documents/projects-active/facemap_production/body3D_segmentbig_useall256_CSVs_test")
 CSV_FOLDER = os.path.join("/Users/michaelmandiberg/Documents/projects-active/facemap_production/heft_keyword_fusion_clusters/oct30_actual3D768_75ct/ArmsPoses3D512_pt1")
+CSV_FOLDER = "/Users/michael.mandiberg/Documents/takingstock_production/arms3d_debug"
 
 # TENCH UNCOMMENT FOR YOUR COMP:
 # CSV_FOLDER = os.path.join(io.ROOT_DBx, "body3D_segmentbig_useall256_CSVs_test")
@@ -78,7 +79,7 @@ MODES = {0:'paris_photo_torso_images_topics', 1:'paris_photo_torso_videos_topics
          6:'heft_torso_keywords'}
 MODE_CHOICE = 6
 CURRENT_MODE = MODES[MODE_CHOICE]
-LIMIT = 20000 # this is the limit for the SQL query
+LIMIT = 2000 # this is the limit for the SQL query
 
 
 image_edge_multiplier = None
@@ -171,8 +172,8 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     SegmentHelper_name = 'SegmentHelper_sept2025_heft_keywords' # TK revisit this for prodution run
     # SegmentHelper_name = 'SegmentHelper_nov2025_placard' # TK revisit this for prodution run
     CLUSTER_TYPE = "ArmsPoses3D"
-    # SORT_TYPE = "planar_hands"
-    SORT_TYPE = "obj_bbox"
+    SORT_TYPE = "planar_hands"
+    # SORT_TYPE = "obj_bbox"
     # CLUSTER_TYPE = SORT_TYPE = "ArmsPoses3D" # this triggers meta body poses 3D
     # CLUSTER_TYPE = SORT_TYPE = "obj_bbox" # make sure OBJ_CLS_ID is set below
     # META = True
@@ -196,7 +197,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     CHOP_ITTER_TSP_SORT = True
     
 
-    # PURGING_DUPES = True
+    PURGING_DUPES = True
     FORCE_TARGET_COUNT = 90
     # if TESTING: IS_HAND_POSE_FUSION = GENERATE_FUSION_PAIRS = False
 
@@ -205,9 +206,11 @@ elif CURRENT_MODE == 'heft_torso_keywords':
         MIN_VIDEO_FUSION_COUNT = 2000 # this is the cut off for the CSV fusion pairs
         MIN_CYCLE_COUNT = 1500 # this is the cut off for the SQL query results
     elif PURGING_DUPES:
-        MIN_VIDEO_FUSION_COUNT = 10
+        MIN_VIDEO_FUSION_COUNT = 100
         MIN_CYCLE_COUNT = 2
         USE_HEAD_POSE = False
+        ONE_SHOT = True
+        TSP_SORT = CHOP_ITTER_TSP_SORT = False
     else:
         # smaller numbers when using HSV clusters
         MIN_VIDEO_FUSION_COUNT = 200 # this is the cut off for the CSV fusion pairs
@@ -235,7 +238,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     # XYZ_FILTER_10DEGREES = " AND s.face_x > -45 AND s.face_x < -5 AND s.face_y > -15 AND s.face_y < 15 AND s.face_z > -15 AND s.face_z < 15"
     XYZ_FILTER_10DEGREES = " "
     
-    TOPIC_NO = [22411] # if doing an affect topic fusion, this is the wrapper topic, OR keyword. add .01, .1 etc for sub selects from KEYWORD_DICT
+    TOPIC_NO = [553] # if doing an affect topic fusion, this is the wrapper topic, OR keyword. add .01, .1 etc for sub selects from KEYWORD_DICT
 
     # this needs to be integrated into the search for each cluster, but doing here for the moment when doing single topic/cluster testing
     # this is CLUSTER_TYPE
@@ -250,9 +253,9 @@ elif CURRENT_MODE == 'heft_torso_keywords':
         
 
     if META: folder = "heft_keyword_fusion_clusters_hsv_meta"
-    else: folder = "heft_keyword_ArmsPoses3D_256/"
+    else: folder = "heft_keyword_ArmsPoses3D_128/"
     FUSION_FOLDER = os.path.join("utilities/data/", folder)
-    CSV_FOLDER = os.path.join("/Users/michaelmandiberg/Documents/projects-active/facemap_production/heft_keyword_fusion_clusters/", folder)
+    # CSV_FOLDER = os.path.join("/Users/michaelmandiberg/Documents/projects-active/facemap_production/heft_keyword_fusion_clusters/", folder)
 
     # initializing default square crop
     # if this is defined, then it will not call min_max_body_landmarks_for_crop
@@ -345,7 +348,7 @@ IS_ANGLE_SORT = False
 
 
 # gets focus cluster list from the FOCUS_CLUSTER_DICT via CLUSTER1 and TOPIC_NO (which is a list of one keyword)
-if TOPIC_NO is not None and IS_ONE_TOPIC and IS_HAND_POSE_FUSION:
+if TOPIC_NO is not None and IS_ONE_TOPIC and IS_HAND_POSE_FUSION and not PURGING_DUPES:
     print("setting FOCUS_CLUSTER_HACK_LIST for TOPIC_NO", TOPIC_NO, "with CLUSTER1", CLUSTER1)
     FOCUS_CLUSTER_HACK_LIST = FOCUS_CLUSTER_DICT.get(CLUSTER1, {}).get(int(math.floor(TOPIC_NO[0])), None)
 

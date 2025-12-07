@@ -18,7 +18,10 @@ ROOT = io.ROOT
 NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 #######################################
 
-ROOT_FOLDER_PATH = '/Users/michaelmandiberg/Documents/projects-active/facemap_production/heft_keyword_fusion_clusters'
+# USE THIS TO MAKE THE FILE NECESSARY TO DO KEYWORD BASED MAKE VIDEO OUTPUT
+
+# ROOT_FOLDER_PATH = '/Users/michaelmandiberg/Documents/projects-active/facemap_production/heft_keyword_fusion_clusters'
+ROOT_FOLDER_PATH = '/Users/michael.mandiberg/Documents/takingstock_production/keyword_fusion_output'
 
 MODE = "Keywords" # Topics or Keywords
 MODE_ID = "topic_id" if MODE == "Topics" else "keyword_id"
@@ -28,9 +31,11 @@ MODE_ID = "topic_id" if MODE == "Topics" else "keyword_id"
     # elif "hand_gesture_position" in CLUSTER_TYPE: cluster_count = 128
     # elif "MetaBodyPoses3D" in CLUSTER_TYPE: cluster_count = 64
 
+CLUSTER_COUNT = 128
 CLUSTER_DATA = {
-    "ArmsPoses3D_MetaHSV": {"sql_template": "sql_query_template_MetaHSV_Body3D", "cluster_table_name": "ImagesArmsPoses3D", "hsv_type": "ClustersMetaHSV", "cluster_count": 256}
+    "ArmsPoses3D_MetaHSV": {"sql_template": "sql_query_template_MetaHSV_Body3D", "cluster_table_name": "ImagesArmsPoses3D", "hsv_type": "ClustersMetaHSV", "cluster_count": CLUSTER_COUNT}
 }
+HELPER_TABLE = "SegmentHelper_sept2025_heft_keywords"
 CLUSTER_TYPE = "ArmsPoses3D_MetaHSV" # key to CLUSTER_DATA dict
 # "ArmsPoses3D_MetaHSV" or "BodyPoses3D_MetaHSV" or "MetaBodyPoses3D" or "BodyPoses3D_HSV" or "body3D" or "hand_gesture_position" - determines whether it checks hand poses or body3D
 
@@ -50,7 +55,8 @@ session = Session()
 # KEYWORDS = [232, 22251, 1575, 758, 22600, 424, 410, 1919, 25287, 5516, 2567, 3961, 9940, 22861, 25155, 919, 115, 8911, 818, 1263, 1222, 22617, 6970, 22139, 486, 5115, 22298, 13539, 697, 23512, 24327, 23825, 1073, 22217, 22910, 133822, 22105, 1421, 212, 4589, 133768, 4572, 805, 227, 133724, 13, 295, 24552, 13300, 133816, 5953, 2747, 24041, 1217, 133685, 24472, 514, 292, 22336, 761, 9028, 4361, 433, 223, 696, 13534, 327, 7266, 22851, 11605, 1121, 12472, 25083, 18066, 297, 830, 24399, 3977, 732, 736, 4667, 296, 753, 22628, 22968, 133834, 11203, 8962, 3706, 215, 12572, 5342, 2599, 23853, 5824, 2421, 1772, 6045, 789, 4714
 # KEYWORDS = [22411,220,22269,827,1070,22412,553,807,1644,5310] # helper segment
 # KEYWORDS = [21463,4222,13130,23084,79920,8874,736,8136] # helper segment
-KEYWORDS = [4222,23375,13130,21463,184,23726,8874,8136,133749,26241,22814,133787,4587,133627]
+# KEYWORDS = [4222,23375,13130,21463,184,23726,8874,8136,133749,26241,22814,133787,4587,133627]
+KEYWORDS = [553] 
 
 # SQL query template
 sql_query_template = """
@@ -476,7 +482,7 @@ SELECT
     SUM(CASE WHEN cmhsv.meta_cluster_id = 22 THEN 1 ELSE 0 END) AS hsv_22
 
 FROM SegmentBig_isface so
-JOIN SegmentHelper_nov2025_placard sh ON sh.image_id = so.image_id
+JOIN {HELPER_TABLE} sh ON sh.image_id = so.image_id
 JOIN {CLUSTER_TABLE} ibp ON ibp.image_id = so.image_id
 JOIN ImagesHSV ihsv ON ihsv.image_id = so.image_id
 JOIN ClustersMetaHSV cmhsv ON cmhsv.cluster_id = ihsv.cluster_id
@@ -552,8 +558,8 @@ if MODE == "Keywords":
         this_cluster_table = CLUSTER_DATA.get(CLUSTER_TYPE, {}).get('cluster_table_name', None)
         if sql_query_template is None or this_cluster_table is None:
             raise ValueError(f"SQL template or cluster table name not defined for CLUSTER_TYPE: {CLUSTER_TYPE}")
-        sql_query_template = sql_query_template.replace("{MODE}", MODE).replace("{MODE_ID}", MODE_ID).replace("{THIS_MODE_ID}", str(keyword_id)).replace("{CLUSTER_TABLE}", this_cluster_table)
-        # print(sql_query_template)
+        sql_query_template = sql_query_template.replace("{MODE}", MODE).replace("{MODE_ID}", MODE_ID).replace("{THIS_MODE_ID}", str(keyword_id)).replace("{CLUSTER_TABLE}", this_cluster_table).replace("{HELPER_TABLE}", HELPER_TABLE) 
+        print(sql_query_template)
         query = sql_query_template.format(keyword_id=keyword_id)
         save_query_results_to_csv(query, keyword_id)
 elif MODE == "Topics":

@@ -81,11 +81,11 @@ option, MODE = pick(options, title)
 # CLUSTER_TYPE = "Clusters"
 # CLUSTER_TYPE = "BodyPoses"
 # CLUSTER_TYPE = "BodyPoses3D" # use this for META 3D body clusters, Arms will start build but messed up because of subset landmarks
-# CLUSTER_TYPE = "ArmsPoses3D" 
+CLUSTER_TYPE = "ArmsPoses3D" 
 # CLUSTER_TYPE = "HandsPositions"
 # CLUSTER_TYPE = "HandsGestures"
 # CLUSTER_TYPE = "FingertipsPositions"
-CLUSTER_TYPE = "HSV" # only works with cluster save, not with assignment
+# CLUSTER_TYPE = "HSV" # only works with cluster save, not with assignment
 VERBOSE = True
 cl = ToolsClustering(CLUSTER_TYPE, VERBOSE=VERBOSE)
 
@@ -111,14 +111,14 @@ SegmentTable_name = 'SegmentBig_isface'
 # unless you know what you are doing, leave this as None
 SegmentHelper_name = None
 # if cl.CLUSTER_TYPE == "ArmsPoses3D":
-# SegmentHelper_name = 'SegmentHelper_sept2025_heft_keywords'
+SegmentHelper_name = 'SegmentHelper_sept2025_heft_keywords'
 # SegmentHelper_name = 'SegmentHelper_oct2025_every40'
-SegmentHelper_name = 'SegmentHelper_nov2025_placard'
+# SegmentHelper_name = 'SegmentHelper_nov2025_placard'
 
 # number of clusters produced. run GET_OPTIMAL_CLUSTERS and add that number here
 # 32 for hand positions
 # 128 for hand gestures
-N_CLUSTERS = 256
+N_CLUSTERS = 128
 N_META_CLUSTERS = 256
 if MODE == 3: 
     META = True
@@ -200,8 +200,8 @@ if USE_SEGMENT is True and (cl.CLUSTER_TYPE != "Clusters"):
         # handles segmentbig which doesn't have is_dupe_of, etc
         FROM += f" JOIN Encodings e ON s.image_id = e.image_id "
         dupe_table_pre = "e"
-    # Basic Query, this works with SegmentOct20
-    SELECT = "DISTINCT(s.image_id), s.face_x, s.face_y, s.face_z, s.mouth_gap"
+    # Basic Query, this works with SegmentOct20. Previously included s.face_x, s.face_y, s.face_z, s.mouth_gap
+    SELECT = "DISTINCT(s.image_id)"
     WHERE = f" {dupe_table_pre}.is_dupe_of IS NULL "
 
     if isinstance(this_data_column, list):
@@ -703,7 +703,7 @@ def save_images_clusters_DB(df):
 def calc_median_dist(enc1, enc2):
     # print("calc_median_dist enc1, enc2", enc1, enc2)
     # print("type enc1, enc2", type(enc1), type(enc2))
-    print("len enc1, enc2", len(enc1), len(enc2))
+    # print("len enc1, enc2", len(enc1), len(enc2))
     return np.linalg.norm(enc1 - enc2, axis=0)
 
 def process_landmarks_cluster_dist(df, df_subset_landmarks):

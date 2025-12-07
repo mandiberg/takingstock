@@ -10,6 +10,7 @@ import numpy as np
 import pymongo
 from decimal import Decimal
 from pathlib import Path
+import platform
 
 class DataIO:
     """Store key database and file IO info for use across codebase"""
@@ -24,7 +25,7 @@ class DataIO:
         self.query_head_pose = True
         # platform specific file folder (mac for michael, win for satyam)
         self.home = Path.home()
-        if platform == "darwin":
+        if platform.system() == "Darwin":
             self.platform = "darwin"
 
             ####### Michael's MAMP Credentials ########
@@ -66,8 +67,12 @@ class DataIO:
             self.NUMBER_OF_PROCESSES_GPU = 16
 
             NML_GITHUB = "/Users/michaelmandiberg/Documents/GitHub/takingstock/"
+            if platform.node() == "Michaels-Mac-Studio.local":
+                self.NUMBER_OF_PROCESSES = 20
+                self.NUMBER_OF_PROCESSES_GPU = 60
+                self.db["unix_socket"] = "/tmp/mysql.sock"
             # check to see which one exists
-            if os.path.exists(NML_GITHUB):
+            elif os.path.exists(NML_GITHUB):
                 self.db["pass"] = "password"
                 self.db["unix_socket"] = "/tmp/mysql.sock"
                 self.NUMBER_OF_PROCESSES = 24
@@ -163,8 +168,7 @@ class DataIO:
         else:
             self.folder_list = [
                 "", #0, Empty, there is no site #0 -- starts count at 1
-                os.path.join(self.ROOT18,"images_getty"), #1, Getty
-                # "/Volumes/SSD4/images_getty_reDL", #1, Getty TEMP
+                 # "/Volumes/SSD4/images_getty_reDL", #1, Getty TEMP
                 # temp for testing
                 # os.path.join(self.ROOT54,"gettyimages/testimages"), #1, Getty
                 os.path.join(self.ROOT54,"images_shutterstock"),

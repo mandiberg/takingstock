@@ -3886,8 +3886,8 @@ class SortPose:
         self.HSV_CLUSTER_GROUPS = [
             # [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22],
             # [[3, 4], [5, 6, 7], [8, 9, 10, 11], [12, 13], [15, 16], [17, 18, 19, 20], [21, 22]],
-            # [[0],[1],[2],[3, 4, 5, 6, 22, 7], [8, 9, 10, 11, 12, 13], [14],[15, 16, 17, 18, 19, 20, 21]], # ALSO USE FOR DEDUPING
-            [[3, 4, 5, 6, 22, 7], [8, 9, 10, 11, 12, 13], [14],[15, 16, 17, 18, 19, 20, 21]], # TESTING Nov23
+            [[0],[1],[2],[3, 4, 5, 6, 22, 7], [8, 9, 10, 11, 12, 13], [14],[15, 16, 17, 18, 19, 20, 21]], # ALSO USE FOR DEDUPING
+            # [[3, 4, 5, 6, 22, 7], [8, 9, 10, 11, 12, 13], [14],[15, 16, 17, 18, 19, 20, 21]], # TESTING Nov23
             # [[3, 4, 5, 6, 22, 7, 8, 9, 10, 11, 12, 13], [14, 15, 16, 17, 18, 19, 20, 21]], # TESTING Nov23
             # [[2],[3, 4, 5, 6, 7, 22]],
             [[0,1,2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 19, 20, 21, 22]]
@@ -3926,7 +3926,7 @@ class SortPose:
 
             # Work on a view so modifications (zeroing) affect caller's gesture_array
             gesture_array = gesture_array
-            print(f"gesture array for index 239 before any sorting:", gesture_array[239,:])
+            # print(f"gesture array for index 239 before any sorting:", gesture_array[239,:])
             # check the type of column_list to determine mode
             if column_list is None: do_simple = True
             elif any(not isinstance(y, int) for y in column_list): do_simple = False
@@ -3944,7 +3944,7 @@ class SortPose:
 
                 if suitable_indices.size == 0:
                     return []
-                print(f"gesture array for index 239 after simple sort:", gesture_array[239,:])
+                # print(f"gesture array for index 239 after simple sort:", gesture_array[239,:])
 
                 # Sort by row then column
                 suitable_indices_array = np.array(suitable_indices)
@@ -3991,7 +3991,7 @@ class SortPose:
 
             # if len(results) == 0:
             #     return []
-                print(f"gesture array for index 239 after list sort:", gesture_array[239,:])
+                # print(f"gesture array for index 239 after list sort:", gesture_array[239,:])
 
             # # Sort by row then group index
             # results_arr = np.array(results)
