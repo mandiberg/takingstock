@@ -1607,25 +1607,26 @@ def process_image_bodylms(task):
         if image is None:
             # print(f"Thread {thread_id}: Failed to load image: {cap_path}")
             return
-            
-        # Your processing here
         
         if image is not None and image.shape[0]>MINSIZE and image.shape[1]>MINSIZE:
             # Do findbody
-
             find_and_save_body(image_id, image, bbox, mongo_body_landmarks, hand_landmarks)
-            
+            no_image = False
+            is_small = False
+
+        elif image is not None and image.shape[0]>0 and image.shape[1]>0:
+            print('smallllll, but doing anyway', image_id)
+            # Do findbody
+            find_and_save_body(image_id, image, bbox, mongo_body_landmarks, hand_landmarks)
+            is_small = True
+            no_image = False
         else:
+            print('no image stored in Images table for image_id', image_id)
             no_image = True
-            # store no_image in Images table
-            session.query(Images).filter(Images.image_id == image_id).update({
-                Images.no_image: no_image
-            }, synchronize_session=False)
-            session.query(SegmentTable).filter(SegmentTable.image_id == image_id).update({
-                SegmentTable.no_image: no_image
-            }, synchronize_session=False)
-            session.commit()
-            print('no image or toooooo smallllll, stored in Images table for image_id', image_id)
+            is_small = None
+        # store no_image in Images table
+        save_no_image_is_small(session, image_id, no_image, is_small)
+            
 
 
     except OSError as e:
@@ -1644,6 +1645,20 @@ def process_image_bodylms(task):
         if 'image' in locals():
             del image
         gc.collect()
+
+def save_no_image_is_small(session, image_id, no_image, is_small):
+    if no_image is not None:
+        session.query(Images).filter(Images.image_id == image_id).update({
+                    Images.no_image: no_image
+                }, synchronize_session=False)
+        session.query(SegmentTable).filter(SegmentTable.image_id == image_id).update({
+                    SegmentTable.no_image: no_image
+                }, synchronize_session=False)
+    if is_small is not None:
+        session.query(Encodings).filter(Encodings.image_id == image_id).update({
+                    Encodings.is_small: is_small
+                }, synchronize_session=False)
+    session.commit()
 
     # store data
 
@@ -1729,7 +1744,7 @@ def process_image(task):
 
     if mp_image is not None and h > MINSIZE and w > MINSIZE:
         # Do FaceMesh
-
+        is_small = no_image = False
         if VERBOSE: print(">> SPLIT >> about to find_face")
         df, number_of_detections = find_face(mp_image, df)
         is_small = 0
@@ -1753,52 +1768,57 @@ def process_image(task):
         # print(task[0], "shape of image", image.shape)
         df, number_of_detections = find_face(mp_image, df)
         # print(df)
-        is_small = 1
+        is_small = True
+        no_image = False
     else:
         print(">> no image", task)
         # assign no_image = 1 in SegmentBig_isnoface table
         no_image = True
+        is_small = None
+    # store no_image in Images table
+    save_no_image_is_small(session, image_id, no_image, is_small)
 
-        try:
-            # store no_image in Images table
-            session.query(Images).filter(Images.image_id == task[0]).update({
-                Images.no_image: no_image
-            }, synchronize_session=False)
-            session.commit()
-            print("stored no image in Images")
-        except:
-            print("failed to store no_image in Images")
+        # try:
+        #     # store no_image in Images table
+        #     session.query(Images).filter(Images.image_id == task[0]).update({
+        #         Images.no_image: no_image
+        #     }, synchronize_session=False)
+        #     session.commit()
+        #     print("stored no image in Images")
+        # except:
+        #     print("failed to store no_image in Images")
 
-        try:
-            # save no_image informaiton in the correct table
-            # avoid selecting non-existent columns on this table
-            existing_entry = session.query(SegmentBig_isnotface.image_id).filter(SegmentBig_isnotface.image_id == task[0]).first()
-            if existing_entry:
-                if VERBOSE: print("existing_entry to store no_image")
-                session.query(SegmentBig_isnotface).filter(SegmentBig_isnotface.image_id == task[0]).update({
-                    SegmentBig_isnotface.no_image: no_image
-                }, synchronize_session=False)
-                session.commit()
-                if VERBOSE: print("stored no image in existing SegmentBig_isnotface entry")
-                return
-            else:
-                if VERBOSE: print("creating new no_image entry in SegmentBig_isnotface")
-                new_segment_entry = SegmentBig_isnotface(image_id=task[0], no_image=no_image)
-                session.add(new_segment_entry)
-                session.commit()
-                if VERBOSE: print("stored no_image in SegmentBig_isnotface for ", task[0])
-                return
-                # # store no_image in Images table
-                # session.query(Images).filter(Images.image_id == image_id).update({
-                #     Images.no_image: no_image
-                # }, synchronize_session=False)
-                # session.query(SegmentTable).filter(SegmentTable.image_id == image_id).update({
-                #     SegmentTable.no_image: no_image
-                # }, synchronize_session=False)
-                # session.commit()
-                # print('no image or toooooo smallllll, stored in Images table')
-        except Exception as e:
-            print("failed to store no_image in SegmentBig_isnotface", e)                
+        # try:
+        #     # save no_image informaiton in the correct table
+        #     # avoid selecting non-existent columns on this table
+        #     existing_entry = session.query(SegmentBig_isnotface.image_id).filter(SegmentBig_isnotface.image_id == task[0]).first()
+        #     if existing_entry:
+        #         if VERBOSE: print("existing_entry to store no_image")
+        #         session.query(SegmentBig_isnotface).filter(SegmentBig_isnotface.image_id == task[0]).update({
+        #             SegmentBig_isnotface.no_image: no_image
+        #         }, synchronize_session=False)
+        #         session.commit()
+        #         if VERBOSE: print("stored no image in existing SegmentBig_isnotface entry")
+        #         return
+        #     else:
+        #         if VERBOSE: print("creating new no_image entry in SegmentBig_isnotface")
+        #         new_segment_entry = SegmentBig_isnotface(image_id=task[0], no_image=no_image)
+        #         session.add(new_segment_entry)
+        #         session.commit()
+        #         if VERBOSE: print("stored no_image in SegmentBig_isnotface for ", task[0])
+        #         return
+        #         # # store no_image in Images table
+        #         # session.query(Images).filter(Images.image_id == image_id).update({
+        #         #     Images.no_image: no_image
+        #         # }, synchronize_session=False)
+        #         # session.query(SegmentTable).filter(SegmentTable.image_id == image_id).update({
+        #         #     SegmentTable.no_image: no_image
+        #         # }, synchronize_session=False)
+        #         # session.commit()
+        #         # print('no image or toooooo smallllll, stored in Images table')
+        # except Exception as e:
+        #     print("failed to store no_image in SegmentBig_isnotface", e)                
+
 
     # testing, so quitting before I store data
     # return
