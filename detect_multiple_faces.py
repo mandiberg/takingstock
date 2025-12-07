@@ -2120,7 +2120,10 @@ def main():
                 print(f"in IS_FOLDER: {main_folder} this_site_name_id = {this_site_name_id} doing csv_foldercount_name: {csv_foldercount_name}, first_pass: {first_pass}")
                 folder_paths = io.make_hash_folders(main_folder, as_list=True)
                 csv_foldercount_path = os.path.join(main_folder, csv_foldercount_name)
+                no_hands_path = os.path.join(main_folder, "no_hands.csv")
                 completed_folders = io.get_csv_aslist(csv_foldercount_path)
+                no_hands = io.get_csv_aslist(no_hands_path)
+                print("no_hands", no_hands_path, len(no_hands), no_hands[:5])
                 # print(len(completed_folders))
                 for folder_path in folder_paths:
                     
@@ -2239,12 +2242,16 @@ def main():
                                             found_mongo_body_landmarks = mongo_entry.get("body_landmarks") if mongo_entry else None
                                             found_mongo_face_landmarks = mongo_entry.get("face_landmarks") if mongo_entry else None
                                             found_mongo_face_encodings = mongo_entry.get("face_encodings68") if mongo_entry else None
-                                            found_mongo_left_hand_landmarks = mongo_hand_entry.get("left_hand") if mongo_hand_entry else None
-                                            found_mongo_right_hand_landmarks = mongo_hand_entry.get("right_hand") if mongo_hand_entry else None
-                                            if found_mongo_left_hand_landmarks is not None or found_mongo_right_hand_landmarks is not None:
+                                            if result.image_id in no_hands:
+                                                print(" --- REDO_MISSING_MONGO skipping hands for no_hands image_id:", result.image_id, "site_image_id", site_image_id)
                                                 found_mongo_hand_landmarks = True
                                             else:
-                                                found_mongo_hand_landmarks = None
+                                                found_mongo_left_hand_landmarks = mongo_hand_entry.get("left_hand") if mongo_hand_entry else None
+                                                found_mongo_right_hand_landmarks = mongo_hand_entry.get("right_hand") if mongo_hand_entry else None
+                                                if found_mongo_left_hand_landmarks is not None or found_mongo_right_hand_landmarks is not None:
+                                                    found_mongo_hand_landmarks = True
+                                                else:
+                                                    found_mongo_hand_landmarks = None
                                             # print(" REDO_MISSING_MONGO mongo_entry:", mongo_hand_entry)
                                             close_mongo()
                                             if found_mongo_face_landmarks is not None: print(f" ~~Fl~~ found_mongo_face_landmarks {result.image_id} {site_image_id}")
@@ -2339,7 +2346,7 @@ def main():
                             # Only create processes if there are tasks to process
                             if tasks_in_this_round > 0:
                                 # Determine optimal number of processes based on task count
-                                optimal_processes = min(io.NUMBER_OF_PROCESSES, (math.ceil(math.sqrt(tasks_in_this_round)*.75)))
+                                optimal_processes = min(io.NUMBER_OF_PROCESSES, (math.ceil(math.sqrt(tasks_in_this_round)/2)))
                                 print(f"Creating {optimal_processes} processes for {tasks_in_this_round} tasks")
                                 
                                 # creating processes
