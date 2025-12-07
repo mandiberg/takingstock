@@ -37,6 +37,26 @@ class OCRTools:
         return good_texts
 
 
+    def assign_slogan_id(self, session, openai_client, Slogans, slogan_dict, image_filename, found_texts):
+        slogan_id = None
+        if bool(found_texts) is False:
+            print(f"No text found in image {image_filename}, will assign blank = True.")
+            slogan_id = 1 # blank sign - no slogan
+        else:
+            slogan_id = self.check_existing_slogans(found_texts, slogan_dict)
+            if slogan_id is None:
+                refined_text = self.clean_ocr_text(openai_client, found_texts)
+                print("No match, so refined Text:", refined_text)
+                slogan_id = self.check_existing_slogans(refined_text, slogan_dict)
+
+            if slogan_id is not None:
+                print(f"Slogan already exists in DB with slogan_id: {slogan_id}.")
+            else:
+                # Save new slogan to DB
+                slogan_id = self.save_slogan_text(session, Slogans, refined_text)
+                slogan_dict[slogan_id] = refined_text
+        return slogan_id
+
     def normalize(self, s):
         s = s.upper()
         s = re.sub(r"[^A-Z0-9\s!?'.,-]", "", s)

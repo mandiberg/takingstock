@@ -214,7 +214,12 @@ class YOLOTools:
 
         hue, saturation, value, luminance = self.hsv_on_cropped_image(cropped_image_bbox_hsvslice)
 
-        return hue, saturation, value, luminance, cropped_image_bbox
+        normalized_hue = hue/360
+        normalized_saturation = saturation/255
+        normalized_value = value/255
+        normalized_luminance = luminance/255
+
+        return normalized_hue, normalized_saturation, normalized_value, normalized_luminance, cropped_image_bbox
 
     def compute_mask_hsv(self,image, text_bbox_dict):
         def prep_hsl(hue, saturation, luminance):
