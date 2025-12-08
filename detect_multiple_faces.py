@@ -75,7 +75,7 @@ IS_FOLDER = True
 DO_OVER = True
 FIND_NO_IMAGE = True
 FIND_MISSING_BBOX_ONLY = False # use this to skip everything but the bbox
-REDO_MISSING_MONGO = True # use this to find missing faces when mysql bool == 1
+REDO_MISSING_MONGO = False # use this to find missing faces when mysql bool == 1
 REDO_MISSING_BODIES = True # use this to find missing bodies when mysql bool == 1
 
 # OVERRIDE_PATH will force it to look in a specific folder
@@ -117,7 +117,7 @@ switching to topic targeted
 18	afripics - where are these?
 '''
 # I think this only matters for IS_FOLDER mode, and the old SQL way
-SITE_NAME_ID = 7
+SITE_NAME_ID = 9
 # 2, shutter. 4, istock
 # 7 pond5, 8 123rf
 POSE_ID = 0
@@ -137,7 +137,7 @@ POSE_ID = 0
 # MAIN_FOLDER5 = "/Volumes/SSD2/images_123rf"
 
 # #testing locally with two
-MAIN_FOLDER1 = "/Volumes/LaCie/segment_images_no_images/images_pond5"
+MAIN_FOLDER1 = "/Volumes/LaCie/segment_images_no_images/images_alamy"
 # MAIN_FOLDER1 = "/Volumes/LaCie/segment_images_no_images/images_shutterstock"
 # MAIN_FOLDERS = [MAIN_FOLDER1, MAIN_FOLDER2]
 
@@ -1710,7 +1710,7 @@ def process_image(task):
     number_of_detections = 0
 
     df = pd.DataFrame(columns=['image_id','is_face','is_body','is_face_distant','pitch','yaw','roll','mouth_gap','face_landmarks','bbox','face_encodings','face_encodings68_J','body_landmarks'])
-    df.at['1', 'image_id'] = task[0]
+    df.at['1', 'image_id'] = image_id = task[0]
     # image_test = cv2.imread(task[1])
     # print(">> SPLIT >> image_test shape", image_test.shape)
     cap_path = capitalize_directory(task[1])
@@ -1907,7 +1907,7 @@ def process_image(task):
                 # this is a new face to update an existing encodings entry
                 # update the existing entry with the insert_dict values
                 for key, value in insert_dict.items():
-                    if key not in ['image_id', 'encoding_id']:
+                    if key not in ['image_id', 'encoding_id'] and value is not None:
                         setattr(existing_entry, key, value)
                 existing_entry.mongo_encodings = is_encodings
                 existing_entry.mongo_face_landmarks = is_encodings
@@ -2245,6 +2245,8 @@ def main():
                                             if result.image_id in no_hands:
                                                 print(" --- REDO_MISSING_MONGO skipping hands for no_hands image_id:", result.image_id, "site_image_id", site_image_id)
                                                 found_mongo_hand_landmarks = True
+                                                # set no_image to False in Images and SegmentTable
+                                                save_no_image_is_small(session, result.image_id, no_image=False, is_small=None)
                                             else:
                                                 found_mongo_left_hand_landmarks = mongo_hand_entry.get("left_hand") if mongo_hand_entry else None
                                                 found_mongo_right_hand_landmarks = mongo_hand_entry.get("right_hand") if mongo_hand_entry else None

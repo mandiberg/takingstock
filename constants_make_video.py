@@ -194,7 +194,8 @@ N_HSV = HAND_POSE_NO = 0 # defaults to no HSV clusters
 FULL_BODY = IS_HAND_POSE_FUSION = ONLY_ONE = GENERATE_FUSION_PAIRS = USE_FUSION_PAIR_DICT = IS_CLUSTER = IS_ONE_CLUSTER = USE_POSE_CROP_DICT = IS_TOPICS= IS_ONE_TOPIC = USE_AFFECT_GROUPS = False
 EXPAND = ONE_SHOT = JUMP_SHOT = USE_ALL = CHOP_FIRST = TSP_SORT = USE_HEAD_POSE = False
 USE_PAINTED = OUTPAINT = INPAINT= META = USE_HSV = PURGING_DUPES = DO_HSV_KNN = CHOP_ITTER_TSP_SORT = False
-FUSION_FOLDER = FOCUS_CLUSTER_HACK_LIST = FORCE_TARGET_COUNT = None
+FUSION_FOLDER = FOCUS_CLUSTER_HACK_LIST = FORCE_TARGET_COUNT =     KEYWORD_OBJECT = KEYWORD_ORIENTATION = None
+
 MIN_CYCLE_COUNT = 1
 AUTO_EDGE_CROP = False # this triggers the dynamic cropping based on min_max_body_landmarks_for_crop
 
@@ -213,7 +214,7 @@ motion = {
     "forward_nosmile":  False,
     "static_pose":  False,
     "simple": False,
-    "use_all": False,
+    "use_all": True,
 }
 
 

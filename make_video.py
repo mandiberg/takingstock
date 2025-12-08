@@ -77,12 +77,12 @@ CSV_FOLDER = "/Users/michael.mandiberg/Documents/takingstock_production/arms3d_d
 MODES = {0:'paris_photo_torso_images_topics', 1:'paris_photo_torso_videos_topics', 
          2:'3D_bodies_topics', 3:'3D_full_bodies_topics', 4:'3D_arms', 5:'3D_arms_meta',
          6:'heft_torso_keywords'}
-MODE_CHOICE = 6
+MODE_CHOICE = 4
 CURRENT_MODE = MODES[MODE_CHOICE]
-LIMIT = 2000 # this is the limit for the SQL query
+LIMIT = 10000 # this is the limit for the SQL query
 
 
-image_edge_multiplier = None
+image_edge_multiplier = [1.3,2,2.9,2] # DEFAULT portrait crop for paris photo images < Aug 30 (req by sort_pose)
 N_TOPICS = 64 # changing this to 14 triggers the affect topic fusion, 100 is keywords. 64 is default
 if "paris" in CURRENT_MODE:
     IS_HAND_POSE_FUSION = True # do we use fusion clusters
@@ -350,7 +350,10 @@ IS_ANGLE_SORT = False
 # gets focus cluster list from the FOCUS_CLUSTER_DICT via CLUSTER1 and TOPIC_NO (which is a list of one keyword)
 if TOPIC_NO is not None and IS_ONE_TOPIC and IS_HAND_POSE_FUSION and not PURGING_DUPES:
     print("setting FOCUS_CLUSTER_HACK_LIST for TOPIC_NO", TOPIC_NO, "with CLUSTER1", CLUSTER1)
-    FOCUS_CLUSTER_HACK_LIST = FOCUS_CLUSTER_DICT.get(CLUSTER1, {}).get(int(math.floor(TOPIC_NO[0])), None)
+    # FOCUS_CLUSTER_HACK_LIST = FOCUS_CLUSTER_DICT.get(CLUSTER1, {}).get(int(math.floor(TOPIC_NO[0])), None)
+    FOCUS_CLUSTER_HACK_DICT = FOCUS_CLUSTER_DICT.get(CLUSTER1, {})
+    if FOCUS_CLUSTER_HACK_DICT is not None:
+        FOCUS_CLUSTER_HACK_LIST = FOCUS_CLUSTER_HACK_DICT.get(int(math.floor(TOPIC_NO[0])), None)
 
 
 DRAW_TEST_LMS = False # this is for testing the landmarks
@@ -1130,7 +1133,7 @@ def sort_by_face_dist_NN(df_enc):
         sort.CUTOFF = min(FORCE_TARGET_COUNT * FORCE_CUTOFF_MULTIPLIER, len(df_enc.index))
         itters = min(math.floor(FORCE_TARGET_COUNT * FORCE_TARGET_MULTIPLIER), len(df_enc.index))
     else:
-        if FORCE_TARGET_COUNT > 0 and FORCE_TARGET_COUNT < len(df_enc.index): itters = math.floor(FORCE_TARGET_COUNT * FORCE_TARGET_MULTIPLIER)
+        if FORCE_TARGET_COUNT is not None and FORCE_TARGET_COUNT > 0 and FORCE_TARGET_COUNT < len(df_enc.index): itters = math.floor(FORCE_TARGET_COUNT * FORCE_TARGET_MULTIPLIER)
         elif sort.CUTOFF < len(df_enc.index): itters = sort.CUTOFF
         else: itters = len(df_enc.index)
         print("sort_by_face_dist_NN itters is", itters, "sort.CUTOFF is", sort.CUTOFF)
@@ -2080,8 +2083,12 @@ def main():
         if isinstance(cluster_no, str) and cluster_no.startswith('c'):
             cluster_no = int(cluster_no[1:])
 
-        FOCUS_CLUSTER_HACK_LIST = FOCUS_CLUSTER_DICT.get(CLUSTER1, {}).get(int(math.floor(TOPIC_NO[0])), None)
-
+        # hacky conditional to avoid focus cluster if toic_no is None
+        if TOPIC_NO is not None:
+            FOCUS_CLUSTER_HACK_DICT = FOCUS_CLUSTER_DICT.get(CLUSTER1, {})
+            print("FOCUS_CLUSTER_HACK_DICT", FOCUS_CLUSTER_HACK_DICT)
+            if FOCUS_CLUSTER_HACK_DICT is not None:
+                FOCUS_CLUSTER_HACK_LIST = FOCUS_CLUSTER_HACK_DICT.get(int(math.floor(TOPIC_NO[0])), None)
         # if pose_no, overide sort.image_edge_multiplier based on pose_no
         if pose_no is not None and USE_POSE_CROP_DICT:
             pose_type = POSE_CROP_DICT.get(cluster_no, 1)
