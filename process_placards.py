@@ -7,6 +7,9 @@ from openai import OpenAI
 from openaiAPI import api_key
 import time
 from sqlalchemy.exc import OperationalError
+from ultralytics import YOLO
+import json
+
 
 import sqlalchemy
 from sqlalchemy import create_engine
@@ -15,7 +18,7 @@ from sqlalchemy.pool import NullPool
 
 # importing project-specific models
 import sys
-from my_declarative_base import Images, Slogans, ImagesSlogans
+from my_declarative_base import Encodings, Images, Slogans, ImagesSlogans
 from tools_ocr import OCRTools
 from tools_clustering import ToolsClustering
 from tools_yolo import YOLOTools
@@ -41,6 +44,8 @@ ocr_engine = PaddleOCR(
     use_doc_unwarping=False, 
     use_textline_orientation=False) # text detection + text recognition
 
+yolo_model = YOLO("yolov8n.pt")  # load a pretrained YOLOv8n model
+
 ocr = OCRTools(DEBUGGING=True)
 yolo = YOLOTools(DEBUGGING=True)
 
@@ -48,8 +53,10 @@ yolo = YOLOTools(DEBUGGING=True)
 blank = False
 DEBUGGING = True
 
-FILE_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/segment_images_mask"
-BATCH_SIZE = 10
+FILE_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/segment_images_book_clock_bowl"
+OUTPUT_FOLDER = os.path.join(FILE_FOLDER, "test_output")
+BATCH_SIZE = 100
+MASK_THRESHOLD = .15  # HSV distance threshold for mask detection
 CLUSTER_TYPE = "HSV" # only works with cluster save, not with assignment
 VERBOSE = True
 META = False # to return the meta clusters (out of 23, not 96)
@@ -85,10 +92,154 @@ def format_site_name_ids(folder_index, batch_img_list):
         batch_site_image_ids = [img.split(".")[0] for img in batch_img_list]
     return batch_site_image_ids
 
+def bbox_to_cluster_id(image, bbox=None):
+    if bbox is None: 
+        image_bbox_slice = image
+    else:
+        # slice out the bbox area from the image
+        image_bbox_slice = image[bbox['top']:bbox['bottom'], bbox['left']:bbox['right']]
+    normalized_hue, normalized_saturation, normalized_value, normalized_luminance,image_bbox_slice = yolo.get_image_bbox_hsv(image_bbox_slice)
+    # print(f"Image {image_id} - Hue: {normalized_hue}, Saturation: {normalized_saturation}, Value: {normalized_value}, Luminance: {normalized_luminance}")
+    average_hsl = [normalized_hue, normalized_saturation, normalized_luminance]
+    cluster_id, cluster_dist = cl.prep_pose_clusters_enc(average_hsl)
+    meta_cluster_id = meta_cluster_dict.get(cluster_id, None)
+
+    return meta_cluster_id, cluster_id, cluster_dist
+
+def mask_to_cluster_id(image, face_bbox):
+    width = face_bbox['right'] - face_bbox['left']
+    height = face_bbox['bottom'] - face_bbox['top']
+    mask_bbox = {
+            'left': face_bbox['left'] + width//4,
+            'right': face_bbox['right'] - width//4,
+            'top': face_bbox['top'] + height//2 + height//8,
+            'bottom': face_bbox['bottom'] - height//4
+        }
+    meta_cluster_id, cluster_id, cluster_dist = bbox_to_cluster_id(image, mask_bbox)
+    return meta_cluster_id, cluster_id, cluster_dist
+
 def do_detections(result, folder_index):
+    def save_debug_image(output_image_path, image, imagename):
+        # save image to OUTPUT_FOLDER for review
+        if not os.path.exists(os.path.dirname(output_image_path)):
+            os.makedirs(os.path.dirname(output_image_path))
+        cv2.imwrite(output_image_path, image)
+        print(f"Image {imagename} no detections, saved to {output_image_path}. ")
+    def draw_bbox_on_image(image, bbox):
+        left = bbox['left']
+        right = bbox['right']
+        top = bbox['top']
+        bottom = bbox['bottom']
+        cv2.rectangle(image, (left, top), (right, bottom), (0, 255, 0), 2)
+        return image
+
+    def merge_yolo_detections(detect_results, iou_threshold=0.5, adjacency_threshold_px=20):
+        '''
+        Merge multiple detections of the same class if they overlap (IoU > iou_threshold)
+        or if they are adjacent/touching (gap < adjacency_threshold_px).
+        Use case: stack of books detected as 6 separate objects; merge into 1.
+        
+        Args:
+            detect_results: list of dicts with class_id, obj_no, bbox (JSON str), conf
+            iou_threshold: IoU threshold for overlap merging (default 0.5)
+            adjacency_threshold_px: max gap (pixels) to consider bboxes adjacent (default 20)
+        Returns:
+            refined_results: merged list in same format
+        '''
+        def bboxes_are_adjacent(bbox1, bbox2, adjacency_threshold_px):
+            """Check if two bboxes are adjacent (touching or close)."""
+            left1, right1, top1, bottom1 = bbox1['left'], bbox1['right'], bbox1['top'], bbox1['bottom']
+            left2, right2, top2, bottom2 = bbox2['left'], bbox2['right'], bbox2['top'], bbox2['bottom']
+            
+            # Horizontal adjacency: gap between right1 and left2, or right2 and left1
+            h_gap = min(abs(right1 - left2), abs(right2 - left1))
+            # Vertical adjacency: gap between bottom1 and top2, or bottom2 and top1
+            v_gap = min(abs(bottom1 - top2), abs(bottom2 - top1))
+            
+            # Check if either horizontal or vertical gap is within threshold and they overlap in the other dimension
+            h_overlap = not (right1 < left2 or right2 < left1)  # horizontal overlap exists
+            v_overlap = not (bottom1 < top2 or bottom2 < top1)  # vertical overlap exists
+            
+            # Adjacent if: (h_overlap and small v_gap) or (v_overlap and small h_gap)
+            if h_overlap and v_gap <= adjacency_threshold_px:
+                return True
+            if v_overlap and h_gap <= adjacency_threshold_px:
+                return True
+            return False
+        
+        refined_results = []
+        used_indices = set()
+        
+        for i in range(len(detect_results)):
+            if i in used_indices:
+                continue
+            
+            current = detect_results[i]
+            current_bbox = io.unstring_json(current['bbox'])
+            current_left = current_bbox['left']
+            current_right = current_bbox['right']
+            current_top = current_bbox['top']
+            current_bottom = current_bbox['bottom']
+            
+            for j in range(i+1, len(detect_results)):
+                if j in used_indices:
+                    continue
+                
+                compare = detect_results[j]
+                if compare['class_id'] != current['class_id']:
+                    continue
+                
+                compare_bbox = io.unstring_json(compare['bbox'])
+                
+                # Check for adjacency first (simpler, faster)
+                if bboxes_are_adjacent(current_bbox, compare_bbox, adjacency_threshold_px):
+                    # Merge
+                    current_left = min(current_left, compare_bbox['left'])
+                    current_right = max(current_right, compare_bbox['right'])
+                    current_top = min(current_top, compare_bbox['top'])
+                    current_bottom = max(current_bottom, compare_bbox['bottom'])
+                    used_indices.add(j)
+                    # Update current_bbox for next comparison
+                    current_bbox = {'left': current_left, 'right': current_right, 'top': current_top, 'bottom': current_bottom}
+                else:
+                    # Check for overlap via IoU
+                    inter_left = max(current_left, compare_bbox['left'])
+                    inter_right = min(current_right, compare_bbox['right'])
+                    inter_top = max(current_top, compare_bbox['top'])
+                    inter_bottom = min(current_bottom, compare_bbox['bottom'])
+                    
+                    if inter_left < inter_right and inter_top < inter_bottom:
+                        inter_area = (inter_right - inter_left) * (inter_bottom - inter_top)
+                        current_area = (current_right - current_left) * (current_bottom - current_top)
+                        compare_area = (compare_bbox['right'] - compare_bbox['left']) * (compare_bbox['bottom'] - compare_bbox['top'])
+                        union_area = current_area + compare_area - inter_area
+                        iou = inter_area / union_area
+                        
+                        if iou > iou_threshold:
+                            # Merge
+                            current_left = min(current_left, compare_bbox['left'])
+                            current_right = max(current_right, compare_bbox['right'])
+                            current_top = min(current_top, compare_bbox['top'])
+                            current_bottom = max(current_bottom, compare_bbox['bottom'])
+                            used_indices.add(j)
+                            # Update current_bbox for next comparison
+                            current_bbox = {'left': current_left, 'right': current_right, 'top': current_top, 'bottom': current_bottom}
+            
+            # After checking all others, add the merged bbox to refined results
+            merged_bbox = {
+                'class_id': current['class_id'],
+                'obj_no': current['obj_no'],
+                'bbox': json.dumps({'left': current_left, 'top': current_top, 'right': current_right, 'bottom': current_bottom}),
+                'conf': current['conf']
+            }
+            refined_results.append(merged_bbox)
+        
+        return refined_results
+    
+
     image_id = result.image_id
     imagename = result.imagename
-    
+    face_bbox = io.unstring_json(result.bbox)
     image_path = os.path.join(FILE_FOLDER, os.path.basename(io.folder_list[folder_index]), imagename)
     # Read the image
     image = cv2.imread(image_path)
@@ -97,6 +248,40 @@ def do_detections(result, folder_index):
         return
 
     print(f"Processing image_id: {image_id}, imagename: {imagename}")
+
+    unrefined_detect_results = yolo.detect_objects_return_bbox(yolo_model,image)
+    detect_results = merge_yolo_detections(unrefined_detect_results, iou_threshold=0.3, adjacency_threshold_px=50)
+    # print out a list of classes detected in the yolo detection results
+    # print(f"Detected objects in image {imagename}: {list_of_detected_objects}")
+    # {'class_id': 0, 'obj_no': 2, 'bbox': '{"left": 1121, "top": 393, "right": 1244, "bottom": 642}', 'conf': 0.47} 
+    if not detect_results:
+        output_image_path = os.path.join(OUTPUT_FOLDER, "no_detections",debug_file_name)
+        save_debug_image(output_image_path, image, imagename)
+    else:
+        for result_dict in detect_results:
+            if result_dict['class_id'] == 0: continue # skip person class
+            print(f"Detected class: {result_dict['class_id']} with bbox: {result_dict['bbox']} and confidence: {result_dict['conf']}")
+            # for debugging mask, saving to folders
+            debug_file_name = f"{result_dict['conf']:.2f}_{image_id}_YOLO_debug.jpg"
+            output_image_path = os.path.join(OUTPUT_FOLDER, str(result_dict['class_id']),debug_file_name)
+            image_with_bbox = draw_bbox_on_image(image.copy(), io.unstring_json(result_dict['bbox']))
+            save_debug_image(output_image_path, image_with_bbox, imagename)
+
+    return
+
+    # detect valentine heart
+
+
+    # detect facemask via hsv distance and clustering
+    top_hsl, bot_hsl, hsl_distance = yolo.compute_mask_hsv(image, face_bbox)
+    meta_cluster_id, cluster_id, cluster_dist = mask_to_cluster_id(image, face_bbox)
+   
+    # for debugging mask, saving to folders
+    # debug_file_name = f"{hsl_distance:.2f}_{image_id}_mask_debug.jpg"
+    # if hsl_distance > MASK_THRESHOLD: output_image_path = os.path.join(OUTPUT_FOLDER, str(meta_cluster_id),debug_file_name)
+    # else: output_image_path = os.path.join(OUTPUT_FOLDER, "no_mask",debug_file_name)
+    # # save image to OUTPUT_FOLDER for review
+    # save_debug_image(output_image_path, image, imagename)
 
     return
     # ACTION gets cluster assignment info
@@ -170,8 +355,9 @@ def main():
 
                             # get Images and Encodings values for each site_image_id in the batch
                             # adding in mongo stuff. should return NULL if not there
-                            batch_query = session.query(Images.image_id, Images.site_image_id, Images.imagename) \
-                                                .filter(Images.site_image_id.in_(batch_site_image_ids), Images.site_name_id == folder_index)
+                            batch_query = session.query(Images.image_id, Images.site_image_id, Images.imagename, Encodings.bbox) \
+                                .join(Encodings, Encodings.image_id == Images.image_id) \
+                                .filter(Images.site_image_id.in_(batch_site_image_ids), Images.site_name_id == folder_index)
                                                                                                         
                             batch_results = batch_query.all()
 
@@ -202,7 +388,7 @@ def main():
                         else:
                             print(f"site_image_id: {site_image_id} not found in DB, skipping.")
                             continue
-                # save success to csv_foldercount_path
+                # save  success to csv_foldercount_path
                 io.write_csv(csv_foldercount_path, [folder_path])
 
     session.close()
