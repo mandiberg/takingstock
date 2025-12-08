@@ -168,7 +168,7 @@ class YOLOTools:
 
 
 ### YOLO
-    def detect_objects_return_bbox(self, model, image, OBJ_CLS_LIST=None):
+    def detect_objects_return_bbox(self, model, image, device, conf_thresh=0.45, OBJ_CLS_LIST=None):
         """
         Detect objects and return list of detections, allowing multiple instances per class.
         Returns: list of dicts, each with keys: class_id, obj_no, bbox, conf
@@ -199,8 +199,12 @@ class YOLOTools:
 
         else:
             # the new way - allowing multiple objects per class
-            result = model(image)[0]
-        
+            result = model.predict(
+                        image,
+                        conf=conf_thresh,
+                        device=device,
+                        verbose=False
+                    )[0]        
             # Group detections by class_id and assign obj_no
             detections_by_class = {}
             for box in result.boxes:

@@ -4,6 +4,7 @@ import os
 from paddleocr import PaddleOCR
 import re
 from openai import OpenAI
+import torch
 from openaiAPI import api_key
 import time
 from sqlalchemy.exc import OperationalError
@@ -44,7 +45,10 @@ ocr_engine = PaddleOCR(
     use_doc_unwarping=False, 
     use_textline_orientation=False) # text detection + text recognition
 
-yolo_model = YOLO("yolov8x.pt")  # load a pretrained YOLOv8x model
+device = "mps" if torch.backends.mps.is_available() else "cpu"
+print("Using device:", device)
+yolo_model = YOLO("yolov8x.pt").to(device)  # load a pretrained YOLOv8x model
+yolo_custom_model = YOLO("models/takingstock_yolov8n/weights/best.pt").to(device)
 
 ocr = OCRTools(DEBUGGING=True)
 yolo = YOLOTools(DEBUGGING=True)
@@ -118,20 +122,21 @@ def mask_to_cluster_id(image, face_bbox):
     meta_cluster_id, cluster_id, cluster_dist = bbox_to_cluster_id(image, mask_bbox)
     return meta_cluster_id, cluster_id, cluster_dist
 
+def save_debug_image(output_image_path, image, imagename):
+    # save image to OUTPUT_FOLDER for review
+    if not os.path.exists(os.path.dirname(output_image_path)):
+        os.makedirs(os.path.dirname(output_image_path))
+    cv2.imwrite(output_image_path, image)
+    print(f"Image {imagename} no detections, saved to {output_image_path}. ")
+def draw_bbox_on_image(image, bbox):
+    left = bbox['left']
+    right = bbox['right']
+    top = bbox['top']
+    bottom = bbox['bottom']
+    cv2.rectangle(image, (left, top), (right, bottom), (0, 255, 0), 2)
+    return image
+
 def do_detections(result, folder_index):
-    def save_debug_image(output_image_path, image, imagename):
-        # save image to OUTPUT_FOLDER for review
-        if not os.path.exists(os.path.dirname(output_image_path)):
-            os.makedirs(os.path.dirname(output_image_path))
-        cv2.imwrite(output_image_path, image)
-        print(f"Image {imagename} no detections, saved to {output_image_path}. ")
-    def draw_bbox_on_image(image, bbox):
-        left = bbox['left']
-        right = bbox['right']
-        top = bbox['top']
-        bottom = bbox['bottom']
-        cv2.rectangle(image, (left, top), (right, bottom), (0, 255, 0), 2)
-        return image
 
     
 
@@ -147,36 +152,15 @@ def do_detections(result, folder_index):
 
     print(f"Processing image_id: {image_id}, imagename: {imagename}")
 
-    unrefined_detect_results = yolo.detect_objects_return_bbox(yolo_model,image)
+    # YOLO COCO object detection
+    unrefined_detect_results = yolo.detect_objects_return_bbox(yolo_model,image, device, conf_thresh=0.45)
     detect_results = yolo.merge_yolo_detections(unrefined_detect_results, iou_threshold=0.3, adjacency_threshold_px=50)
-    # print out a list of classes detected in the yolo detection results
-    # print(f"Detected objects in image {imagename}: {list_of_detected_objects}")
-    # {'class_id': 0, 'obj_no': 2, 'bbox': '{"left": 1121, "top": 393, "right": 1244, "bottom": 642}', 'conf': 0.47} 
-    if not detect_results:
-        output_image_path = os.path.join(OUTPUT_FOLDER, "no_detections",debug_file_name)
-        save_debug_image(output_image_path, image, imagename)
-    else:
-        # Group detections by class_id
-        detections_by_class = {}
-        for result_dict in detect_results:
-            class_id = result_dict['class_id']
-            if class_id == 0:  # skip person class
-                continue
-            if class_id not in detections_by_class:
-                detections_by_class[class_id] = []
-            detections_by_class[class_id].append(result_dict)
-        
-        # Process each class
-        for class_id, class_detections in detections_by_class.items():
-            drawable_image = image.copy()
-            print(f"Processing class_id {class_id} with {len(class_detections)} detection(s)")
-            for result_dict in class_detections:
-                print(f"  Detected class: {result_dict['class_id']} with bbox: {result_dict['bbox']} and confidence: {result_dict['conf']}")
-                # for debugging, saving to folders
-                debug_file_name = f"{result_dict['conf']:.2f}_{image_id}_YOLO_debug.jpg"
-                output_image_path = os.path.join(OUTPUT_FOLDER, str(result_dict['class_id']), debug_file_name)
-                drawable_image = draw_bbox_on_image(drawable_image, io.unstring_json(result_dict['bbox']))
-            save_debug_image(output_image_path, drawable_image, imagename)
+    # save_debug_image_yolo_bbox(image_id, imagename, image, detect_results)
+
+    # YOLO COCO object detection
+    unrefined_detect_results = yolo.detect_objects_return_bbox(yolo_custom_model,image, device, conf_thresh=0.45)
+    detect_results = yolo.merge_yolo_detections(unrefined_detect_results, iou_threshold=0.3, adjacency_threshold_px=50)
+    save_debug_image_yolo_bbox(image_id, imagename, image, detect_results)
 
     return
 
@@ -217,6 +201,36 @@ def do_detections(result, folder_index):
         # ocr.save_images_slogans(session, ImagesSlogans, image_id, slogan_id)
     else:
         print(f"Error: slogan_id is None for image {image_id}, skipping save to Placards table.")
+
+def save_debug_image_yolo_bbox(image_id, imagename, image, detect_results):
+    if not detect_results:
+        output_image_path = os.path.join(OUTPUT_FOLDER, "no_detections",imagename)
+        save_debug_image(output_image_path, image, imagename)
+    else:
+        # Group detections by class_id
+        detections_by_class = {}
+        for result_dict in detect_results:
+            class_id = result_dict['class_id']
+            if class_id == 0:  # skip person class
+                continue
+            if class_id not in detections_by_class:
+                detections_by_class[class_id] = []
+            detections_by_class[class_id].append(result_dict)
+        
+        # Process each class
+        for class_id, class_detections in detections_by_class.items():
+            drawable_image = image.copy()
+            print(f"Processing class_id {class_id} with {len(class_detections)} detection(s)")
+            all_class_conf = []
+            for result_dict in class_detections:
+                print(f"  Detected class: {result_dict['class_id']} with bbox: {result_dict['bbox']} and confidence: {result_dict['conf']}")
+                # for debugging, saving to folders
+                drawable_image = draw_bbox_on_image(drawable_image, io.unstring_json(result_dict['bbox']))
+                all_class_conf.append(result_dict['conf'])
+            avg_conf = sum(all_class_conf) / len(all_class_conf)
+            debug_file_name = f"{avg_conf:.2f}_{image_id}_YOLO_debug.jpg"
+            output_image_path = os.path.join(OUTPUT_FOLDER, str(result_dict['class_id']), debug_file_name)
+            save_debug_image(output_image_path, drawable_image, imagename)
 
 def main():
     folder_count = 0
