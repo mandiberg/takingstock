@@ -1487,7 +1487,7 @@ def find_and_save_body(image_id, image, bbox, mongo_body_landmarks, hand_landmar
             # only do this when there is a face. skip for no face -body reprocessing
             ### detect object info, 
             if VERBOSE:print("detecting objects")
-            bbox_dict=yo.return_bbox(YOLO_MODEL,image, OBJ_CLS_LIST)
+            bbox_dict=yo.detect_objects_return_bbox(YOLO_MODEL,image, OBJ_CLS_LIST)
             if VERBOSE: print("detected objects")
 
             ### normed object bbox

@@ -364,3 +364,106 @@ class YOLOTools:
         hsl_distance = np.sqrt( (top_hsl[0]-bot_hsl[0])**2 + (top_hsl[1]-bot_hsl[1])**2 + (top_hsl[2]-bot_hsl[2])**2 )
 
         return top_hsl, bot_hsl, hsl_distance
+
+    def merge_yolo_detections(self,detect_results, iou_threshold=0.5, adjacency_threshold_px=20):
+        '''
+        Merge multiple detections of the same class if they overlap (IoU > iou_threshold)
+        or if they are adjacent/touching (gap < adjacency_threshold_px).
+        Use case: stack of books detected as 6 separate objects; merge into 1.
+        
+        Args:
+            detect_results: list of dicts with class_id, obj_no, bbox (JSON str), conf
+            iou_threshold: IoU threshold for overlap merging (default 0.5)
+            adjacency_threshold_px: max gap (pixels) to consider bboxes adjacent (default 20)
+        Returns:
+            refined_results: merged list in same format
+        '''
+        def bboxes_are_adjacent(bbox1, bbox2, adjacency_threshold_px):
+            """Check if two bboxes are adjacent (touching or close)."""
+            left1, right1, top1, bottom1 = bbox1['left'], bbox1['right'], bbox1['top'], bbox1['bottom']
+            left2, right2, top2, bottom2 = bbox2['left'], bbox2['right'], bbox2['top'], bbox2['bottom']
+            
+            # Horizontal adjacency: gap between right1 and left2, or right2 and left1
+            h_gap = min(abs(right1 - left2), abs(right2 - left1))
+            # Vertical adjacency: gap between bottom1 and top2, or bottom2 and top1
+            v_gap = min(abs(bottom1 - top2), abs(bottom2 - top1))
+            
+            # Check if either horizontal or vertical gap is within threshold and they overlap in the other dimension
+            h_overlap = not (right1 < left2 or right2 < left1)  # horizontal overlap exists
+            v_overlap = not (bottom1 < top2 or bottom2 < top1)  # vertical overlap exists
+            
+            # Adjacent if: (h_overlap and small v_gap) or (v_overlap and small h_gap)
+            if h_overlap and v_gap <= adjacency_threshold_px:
+                return True
+            if v_overlap and h_gap <= adjacency_threshold_px:
+                return True
+            return False
+        
+        refined_results = []
+        used_indices = set()
+        
+        for i in range(len(detect_results)):
+            if i in used_indices:
+                continue
+            
+            current = detect_results[i]
+            current_bbox = self.io.unstring_json(current['bbox'])
+            current_left = current_bbox['left']
+            current_right = current_bbox['right']
+            current_top = current_bbox['top']
+            current_bottom = current_bbox['bottom']
+            
+            for j in range(i+1, len(detect_results)):
+                if j in used_indices:
+                    continue
+                
+                compare = detect_results[j]
+                if compare['class_id'] != current['class_id']:
+                    continue
+                
+                compare_bbox = self.io.unstring_json(compare['bbox'])
+                
+                # Check for adjacency first (simpler, faster)
+                if bboxes_are_adjacent(current_bbox, compare_bbox, adjacency_threshold_px):
+                    # Merge
+                    current_left = min(current_left, compare_bbox['left'])
+                    current_right = max(current_right, compare_bbox['right'])
+                    current_top = min(current_top, compare_bbox['top'])
+                    current_bottom = max(current_bottom, compare_bbox['bottom'])
+                    used_indices.add(j)
+                    # Update current_bbox for next comparison
+                    current_bbox = {'left': current_left, 'right': current_right, 'top': current_top, 'bottom': current_bottom}
+                else:
+                    # Check for overlap via IoU
+                    inter_left = max(current_left, compare_bbox['left'])
+                    inter_right = min(current_right, compare_bbox['right'])
+                    inter_top = max(current_top, compare_bbox['top'])
+                    inter_bottom = min(current_bottom, compare_bbox['bottom'])
+                    
+                    if inter_left < inter_right and inter_top < inter_bottom:
+                        inter_area = (inter_right - inter_left) * (inter_bottom - inter_top)
+                        current_area = (current_right - current_left) * (current_bottom - current_top)
+                        compare_area = (compare_bbox['right'] - compare_bbox['left']) * (compare_bbox['bottom'] - compare_bbox['top'])
+                        union_area = current_area + compare_area - inter_area
+                        iou = inter_area / union_area
+                        
+                        if iou > iou_threshold:
+                            # Merge
+                            current_left = min(current_left, compare_bbox['left'])
+                            current_right = max(current_right, compare_bbox['right'])
+                            current_top = min(current_top, compare_bbox['top'])
+                            current_bottom = max(current_bottom, compare_bbox['bottom'])
+                            used_indices.add(j)
+                            # Update current_bbox for next comparison
+                            current_bbox = {'left': current_left, 'right': current_right, 'top': current_top, 'bottom': current_bottom}
+            
+            # After checking all others, add the merged bbox to refined results
+            merged_bbox = {
+                'class_id': current['class_id'],
+                'obj_no': current['obj_no'],
+                'bbox': json.dumps({'left': current_left, 'top': current_top, 'right': current_right, 'bottom': current_bottom}),
+                'conf': current['conf']
+            }
+            refined_results.append(merged_bbox)
+        
+        return refined_results

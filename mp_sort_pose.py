@@ -2284,7 +2284,10 @@ class SortPose:
 
         # Filter out black pixels and compute the mean color of the remaining pixels
         mean_color = np.mean(masked_img[~black_pixels_mask], axis=0)[np.newaxis,np.newaxis,:] # ~ means negate/remove
-        self.hue,self.sat,self.val,self.lum = self.get_hsvl(mean_color)
+        self.hue = cv2.cvtColor(mean_color, cv2.COLOR_RGB2HSV)[0,0,0]
+        self.sat = cv2.cvtColor(mean_color, cv2.COLOR_RGB2HSV)[0,0,1]
+        self.val = cv2.cvtColor(mean_color, cv2.COLOR_RGB2HSV)[0,0,2]
+        self.lum = cv2.cvtColor(mean_color, cv2.COLOR_RGB2LAB)[0,0,0]
         if self.VERBOSE: print("hue, sat, val, lum", self.hue, self.sat, self.val, self.lum)
         if self.VERBOSE: print("NOTmasked_img_torso size", masked_img_torso.shape, black_pixels_mask_torso.shape)
         if bbox :
@@ -2303,14 +2306,6 @@ class SortPose:
 
         if self.VERBOSE: print("HSV, lum", self.hue,self.sat,self.val,self.lum, self.lum_torso)
         return self.hue,self.sat,self.val,self.lum,self.lum_torso
-
-    def get_hsvl(self, mean_color):
-        # porting this to process placards to keep consistent
-        hue = cv2.cvtColor(mean_color, cv2.COLOR_RGB2HSV)[0,0,0]
-        sat = cv2.cvtColor(mean_color, cv2.COLOR_RGB2HSV)[0,0,1]
-        val = cv2.cvtColor(mean_color, cv2.COLOR_RGB2HSV)[0,0,2]
-        lum = cv2.cvtColor(mean_color, cv2.COLOR_RGB2LAB)[0,0,0]
-        return hue,sat,val,lum
     
 
     def most_common_row(self, flattened_array):

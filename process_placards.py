@@ -44,7 +44,7 @@ ocr_engine = PaddleOCR(
     use_doc_unwarping=False, 
     use_textline_orientation=False) # text detection + text recognition
 
-yolo_model = YOLO("yolov8n.pt")  # load a pretrained YOLOv8n model
+yolo_model = YOLO("yolov8x.pt")  # load a pretrained YOLOv8x model
 
 ocr = OCRTools(DEBUGGING=True)
 yolo = YOLOTools(DEBUGGING=True)
@@ -133,108 +133,6 @@ def do_detections(result, folder_index):
         cv2.rectangle(image, (left, top), (right, bottom), (0, 255, 0), 2)
         return image
 
-    def merge_yolo_detections(detect_results, iou_threshold=0.5, adjacency_threshold_px=20):
-        '''
-        Merge multiple detections of the same class if they overlap (IoU > iou_threshold)
-        or if they are adjacent/touching (gap < adjacency_threshold_px).
-        Use case: stack of books detected as 6 separate objects; merge into 1.
-        
-        Args:
-            detect_results: list of dicts with class_id, obj_no, bbox (JSON str), conf
-            iou_threshold: IoU threshold for overlap merging (default 0.5)
-            adjacency_threshold_px: max gap (pixels) to consider bboxes adjacent (default 20)
-        Returns:
-            refined_results: merged list in same format
-        '''
-        def bboxes_are_adjacent(bbox1, bbox2, adjacency_threshold_px):
-            """Check if two bboxes are adjacent (touching or close)."""
-            left1, right1, top1, bottom1 = bbox1['left'], bbox1['right'], bbox1['top'], bbox1['bottom']
-            left2, right2, top2, bottom2 = bbox2['left'], bbox2['right'], bbox2['top'], bbox2['bottom']
-            
-            # Horizontal adjacency: gap between right1 and left2, or right2 and left1
-            h_gap = min(abs(right1 - left2), abs(right2 - left1))
-            # Vertical adjacency: gap between bottom1 and top2, or bottom2 and top1
-            v_gap = min(abs(bottom1 - top2), abs(bottom2 - top1))
-            
-            # Check if either horizontal or vertical gap is within threshold and they overlap in the other dimension
-            h_overlap = not (right1 < left2 or right2 < left1)  # horizontal overlap exists
-            v_overlap = not (bottom1 < top2 or bottom2 < top1)  # vertical overlap exists
-            
-            # Adjacent if: (h_overlap and small v_gap) or (v_overlap and small h_gap)
-            if h_overlap and v_gap <= adjacency_threshold_px:
-                return True
-            if v_overlap and h_gap <= adjacency_threshold_px:
-                return True
-            return False
-        
-        refined_results = []
-        used_indices = set()
-        
-        for i in range(len(detect_results)):
-            if i in used_indices:
-                continue
-            
-            current = detect_results[i]
-            current_bbox = io.unstring_json(current['bbox'])
-            current_left = current_bbox['left']
-            current_right = current_bbox['right']
-            current_top = current_bbox['top']
-            current_bottom = current_bbox['bottom']
-            
-            for j in range(i+1, len(detect_results)):
-                if j in used_indices:
-                    continue
-                
-                compare = detect_results[j]
-                if compare['class_id'] != current['class_id']:
-                    continue
-                
-                compare_bbox = io.unstring_json(compare['bbox'])
-                
-                # Check for adjacency first (simpler, faster)
-                if bboxes_are_adjacent(current_bbox, compare_bbox, adjacency_threshold_px):
-                    # Merge
-                    current_left = min(current_left, compare_bbox['left'])
-                    current_right = max(current_right, compare_bbox['right'])
-                    current_top = min(current_top, compare_bbox['top'])
-                    current_bottom = max(current_bottom, compare_bbox['bottom'])
-                    used_indices.add(j)
-                    # Update current_bbox for next comparison
-                    current_bbox = {'left': current_left, 'right': current_right, 'top': current_top, 'bottom': current_bottom}
-                else:
-                    # Check for overlap via IoU
-                    inter_left = max(current_left, compare_bbox['left'])
-                    inter_right = min(current_right, compare_bbox['right'])
-                    inter_top = max(current_top, compare_bbox['top'])
-                    inter_bottom = min(current_bottom, compare_bbox['bottom'])
-                    
-                    if inter_left < inter_right and inter_top < inter_bottom:
-                        inter_area = (inter_right - inter_left) * (inter_bottom - inter_top)
-                        current_area = (current_right - current_left) * (current_bottom - current_top)
-                        compare_area = (compare_bbox['right'] - compare_bbox['left']) * (compare_bbox['bottom'] - compare_bbox['top'])
-                        union_area = current_area + compare_area - inter_area
-                        iou = inter_area / union_area
-                        
-                        if iou > iou_threshold:
-                            # Merge
-                            current_left = min(current_left, compare_bbox['left'])
-                            current_right = max(current_right, compare_bbox['right'])
-                            current_top = min(current_top, compare_bbox['top'])
-                            current_bottom = max(current_bottom, compare_bbox['bottom'])
-                            used_indices.add(j)
-                            # Update current_bbox for next comparison
-                            current_bbox = {'left': current_left, 'right': current_right, 'top': current_top, 'bottom': current_bottom}
-            
-            # After checking all others, add the merged bbox to refined results
-            merged_bbox = {
-                'class_id': current['class_id'],
-                'obj_no': current['obj_no'],
-                'bbox': json.dumps({'left': current_left, 'top': current_top, 'right': current_right, 'bottom': current_bottom}),
-                'conf': current['conf']
-            }
-            refined_results.append(merged_bbox)
-        
-        return refined_results
     
 
     image_id = result.image_id
@@ -250,7 +148,7 @@ def do_detections(result, folder_index):
     print(f"Processing image_id: {image_id}, imagename: {imagename}")
 
     unrefined_detect_results = yolo.detect_objects_return_bbox(yolo_model,image)
-    detect_results = merge_yolo_detections(unrefined_detect_results, iou_threshold=0.3, adjacency_threshold_px=50)
+    detect_results = yolo.merge_yolo_detections(unrefined_detect_results, iou_threshold=0.3, adjacency_threshold_px=50)
     # print out a list of classes detected in the yolo detection results
     # print(f"Detected objects in image {imagename}: {list_of_detected_objects}")
     # {'class_id': 0, 'obj_no': 2, 'bbox': '{"left": 1121, "top": 393, "right": 1244, "bottom": 642}', 'conf': 0.47} 
@@ -258,14 +156,27 @@ def do_detections(result, folder_index):
         output_image_path = os.path.join(OUTPUT_FOLDER, "no_detections",debug_file_name)
         save_debug_image(output_image_path, image, imagename)
     else:
+        # Group detections by class_id
+        detections_by_class = {}
         for result_dict in detect_results:
-            if result_dict['class_id'] == 0: continue # skip person class
-            print(f"Detected class: {result_dict['class_id']} with bbox: {result_dict['bbox']} and confidence: {result_dict['conf']}")
-            # for debugging mask, saving to folders
-            debug_file_name = f"{result_dict['conf']:.2f}_{image_id}_YOLO_debug.jpg"
-            output_image_path = os.path.join(OUTPUT_FOLDER, str(result_dict['class_id']),debug_file_name)
-            image_with_bbox = draw_bbox_on_image(image.copy(), io.unstring_json(result_dict['bbox']))
-            save_debug_image(output_image_path, image_with_bbox, imagename)
+            class_id = result_dict['class_id']
+            if class_id == 0:  # skip person class
+                continue
+            if class_id not in detections_by_class:
+                detections_by_class[class_id] = []
+            detections_by_class[class_id].append(result_dict)
+        
+        # Process each class
+        for class_id, class_detections in detections_by_class.items():
+            drawable_image = image.copy()
+            print(f"Processing class_id {class_id} with {len(class_detections)} detection(s)")
+            for result_dict in class_detections:
+                print(f"  Detected class: {result_dict['class_id']} with bbox: {result_dict['bbox']} and confidence: {result_dict['conf']}")
+                # for debugging, saving to folders
+                debug_file_name = f"{result_dict['conf']:.2f}_{image_id}_YOLO_debug.jpg"
+                output_image_path = os.path.join(OUTPUT_FOLDER, str(result_dict['class_id']), debug_file_name)
+                drawable_image = draw_bbox_on_image(drawable_image, io.unstring_json(result_dict['bbox']))
+            save_debug_image(output_image_path, drawable_image, imagename)
 
     return
 
