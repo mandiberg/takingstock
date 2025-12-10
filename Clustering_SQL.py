@@ -111,8 +111,8 @@ SegmentTable_name = 'SegmentBig_isface'
 # unless you know what you are doing, leave this as None
 SegmentHelper_name = None
 # if cl.CLUSTER_TYPE == "ArmsPoses3D":
-SegmentHelper_name = 'SegmentHelper_sept2025_heft_keywords'
-# SegmentHelper_name = 'SegmentHelper_oct2025_every40'
+# SegmentHelper_name = 'SegmentHelper_sept2025_heft_keywords'
+SegmentHelper_name = 'SegmentHelper_oct2025_evens'
 # SegmentHelper_name = 'SegmentHelper_nov2025_placard'
 
 # number of clusters produced. run GET_OPTIMAL_CLUSTERS and add that number here
@@ -256,7 +256,7 @@ if USE_SEGMENT is True and (cl.CLUSTER_TYPE != "Clusters"):
         WHERE = " cluster_id IS NOT NULL "
 
     # WHERE += " AND h.is_body = 1"
-    LIMIT = 5000000
+    LIMIT = 50000000
     BATCH_LIMIT = 10000
 
     '''

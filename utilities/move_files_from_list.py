@@ -17,9 +17,24 @@ FROM Images i
 JOIN ImagesKeywords ik on i.image_id = ik.image_id
 JOIN SegmentOct20 s on i.image_id = s.image_id
 WHERE ik.keyword_id = 4222
+;
 '''
 
-ROOT_GITHUB = os.path.join(Path.home(), "Documents/GitHub/facemap/")
+'''
+-- track MAX seg_image_id before adding to segment
+-- currently 143406
+SELECT MAX(sho.seg_image_id)
+FROM SegmentHelperObject_Placards_HighProbability sho
+;
+
+SELECT sho.site_name_id, sho.imagename
+FROM SegmentHelperObject_Placards_HighProbability sho
+WHERE sho.seg_image_id > 0
+;
+'''
+
+
+ROOT_GITHUB = os.path.join(Path.home(), "Documents/GitHub/takingstock/")
 # caution: path[0] is reserved for script path (or '' in REPL)
 sys.path.insert(1, ROOT_GITHUB)
 
@@ -34,16 +49,16 @@ io = DataIO(IS_SSD)
 
 
 CSV_FOLDER = os.path.join(io.ROOT_DBx, "NML_transition")
-CSV_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/validating_sql_mongo/movethis" # for testing
+CSV_FOLDER = "/Users/michael.mandiberg/Documents/takingstock_production/move_this" # for testing
 USE_DF_SORTED = False  # if True it will use the df_sorted format from make_video.py, false expects output from SQL query above
 USE_RAW_PATHS = False # this skips the site_name_id and joins the ORIGIN to the filename in the CSV directly
 USE_HASH_FOLDERS = True  # if True it will create hash folders in the destination folder
-FROM_SSD_TO_SSD = False
+FROM_SSD_TO_SSD = True
 ORIGIN_SSD = "Volumes/LaCie/segment_images_ALL"
 IS_TEST = False
 ORIGIN = "segment_images_ALL" # this needs to be path to segment_images/images_*
 # DEST = os.path.join(io.ROOT_DBx, "NMLdeshard")
-DEST = "/Volumes/LaCie/segment_images_mask/"
+DEST = "/Volumes/LaCie/segment_images_detected_63_67/"
 if IS_TEST:
     # to run a smaller test, put a few files in the test folder
     DEST = DEST + "_test"
@@ -125,36 +140,38 @@ def move_files_from_csv(csv_file, start=0):
             # print(f"Processing row: {row}")
             if START > i:
                 continue
-            
-            if USE_RAW_PATHS:
-                filename = row[1]
-                original_path = os.path.join(ORIGIN, filename)
-                destination_path = os.path.join(DEST, filename)
-            else:
-                # # this is for moving is_face = NULL files
-                # original_path = os.path.join(ORIGIN,row[1])
-                # destination_path = os.path.join(DEST,row[1])
-
-                # this is for moving make_video df_sorted files
-                site_name_id = int(row[1]) if USE_DF_SORTED else int(row[0])
-                site_root = io.folder_list[site_name_id]
-                last_folder = os.path.basename(site_root)
-                filepath = row[3] if USE_DF_SORTED else row[1]
-                original_path = os.path.join(site_root,filepath)
-                if USE_HASH_FOLDERS:
-                    if FROM_SSD_TO_SSD:
-                        destination_path = os.path.join(ORIGIN_SSD,last_folder, filepath)
-                        # check if destination path exists
-                        if not os.path.exists(destination_path):
-                            if "000" in destination_path:
-                                print(f" not exist on SSD: {destination_path}, using RAID path instead.")
-                            continue
-                    else:
-                        destination_path = os.path.join(DEST,last_folder, filepath)
+            try:
+                if USE_RAW_PATHS:
+                    filename = row[1]
+                    original_path = os.path.join(ORIGIN, filename)
+                    destination_path = os.path.join(DEST, filename)
                 else:
-                    destination_path = os.path.join(DEST, os.path.basename(filepath))
-                    
-            move_file_pair(original_path, destination_path)
+                    # # this is for moving is_face = NULL files
+                    # original_path = os.path.join(ORIGIN,row[1])
+                    # destination_path = os.path.join(DEST,row[1])
+
+                    # this is for moving make_video df_sorted files
+                    site_name_id = int(row[1]) if USE_DF_SORTED else int(row[0])
+                    site_root = io.folder_list[site_name_id]
+                    last_folder = os.path.basename(site_root)
+                    filepath = row[3] if USE_DF_SORTED else row[1]
+                    original_path = os.path.join(site_root,filepath)
+                    if USE_HASH_FOLDERS:
+                        if FROM_SSD_TO_SSD:
+                            destination_path = os.path.join(ORIGIN_SSD,last_folder, filepath)
+                            # check if destination path exists
+                            if not os.path.exists(destination_path):
+                                if "000" in destination_path:
+                                    print(f" not exist on SSD: {destination_path}, using RAID path instead.")
+                                continue
+                        else:
+                            destination_path = os.path.join(DEST,last_folder, filepath)
+                    else:
+                        destination_path = os.path.join(DEST, os.path.basename(filepath))
+                        
+                move_file_pair(original_path, destination_path)
+            except Exception as e:
+                print(f"Error processing row {row}: {e}")
             i += 1
 
             if i % 100 == 0:

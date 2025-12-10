@@ -75,7 +75,7 @@ IS_FOLDER = True
 DO_OVER = True
 FIND_NO_IMAGE = True
 FIND_MISSING_BBOX_ONLY = False # use this to skip everything but the bbox
-REDO_MISSING_MONGO = False # use this to find missing faces when mysql bool == 1
+REDO_MISSING_MONGO = True # use this to find missing faces when mysql bool == 1
 REDO_MISSING_BODIES = True # use this to find missing bodies when mysql bool == 1
 
 # OVERRIDE_PATH will force it to look in a specific folder
@@ -117,16 +117,12 @@ switching to topic targeted
 18	afripics - where are these?
 '''
 # I think this only matters for IS_FOLDER mode, and the old SQL way
-SITE_NAME_ID = 9
+SITE_NAME_ID = 2
 # 2, shutter. 4, istock
 # 7 pond5, 8 123rf
 POSE_ID = 0
 
 # folder doesn't matter if IS_FOLDER is False. Declared FAR below. 
-# MAIN_FOLDER = "/Volumes/RAID54/images_shutterstock"
-# MAIN_FOLDER = "/Volumes/LaCie/images_istock"
-# MAIN_FOLDER = "/Volumes/ExFAT_SSD4_/images_adobe"
-# MAIN_FOLDER1 = "/Volumes/OWC4/images_unsplash"
 
 # for sites with files spread over several SSDs, you can add addtional folders
 # you will also have to add the MAIN_FOLDER2 variable below, etc
@@ -137,7 +133,7 @@ POSE_ID = 0
 # MAIN_FOLDER5 = "/Volumes/SSD2/images_123rf"
 
 # #testing locally with two
-MAIN_FOLDER1 = "/Volumes/LaCie/segment_images_no_images/images_alamy"
+MAIN_FOLDER1 = "/Volumes/LaCie/segment_images_no_images/images_shutterstock"
 # MAIN_FOLDER1 = "/Volumes/LaCie/segment_images_no_images/images_shutterstock"
 # MAIN_FOLDERS = [MAIN_FOLDER1, MAIN_FOLDER2]
 
@@ -1682,6 +1678,47 @@ def check_path(session, image_id, path):
     this_imagename = os.path.join(image_path, imagename[0].split("/")[-1])
     return this_imagename  
 
+def fix_e11000_errors(image_id, face_landmarks, face_encodings68):
+    # get the correct encoding_id for this image_id from mysql
+    encoding_id_results = session.query(Encodings.encoding_id).filter(Encodings.image_id == image_id).first()
+    correct_encoding_id1 = encoding_id_results[0]
+    print(f"Correct encoding_id for image_id {image_id} is {correct_encoding_id1}")
+    # get the current image_id for the mongo document with the duplicate encoding_id
+    current_image_id_result = mongo_collection.find_one({"encoding_id": correct_encoding_id1})
+    current_image_id2 = current_image_id_result["image_id"] if current_image_id_result else None
+    print(f"Current image_id for encoding_id {correct_encoding_id1} is {current_image_id2}")
+
+    # correct encoding_id for current_image_id2 is
+    correct_encoding_id_image_id2 = session.query(Encodings.encoding_id).filter(Encodings.image_id == current_image_id2).first()
+    correct_encoding_id_image_id2 = correct_encoding_id_image_id2[0]
+    print(f"Correct encoding_id for image_id {current_image_id2} is {correct_encoding_id_image_id2}")
+
+    # update the mongo document with the correct encoding_id for current_image_id2
+    mongo_collection.update_one(
+        {"image_id": current_image_id2},
+        {"$set": {
+            "encoding_id": correct_encoding_id_image_id2
+        }
+        },
+        upsert=True
+    )
+    print(f"Updated existing mongo document for image_id: {current_image_id2} with correct encoding_id: {correct_encoding_id_image_id2}")
+    
+
+    # update the mongo document with the correct encoding_id
+    # the image_id is correct. update the document's encoding_id to the correct one stored in variable encoding_id
+    mongo_collection.update_one(
+        {"image_id": image_id},
+        {"$set": {
+            "encoding_id": correct_encoding_id1,
+            "face_landmarks": face_landmarks,
+            "face_encodings68": face_encodings68
+        }
+        },
+        upsert=True
+    )
+    print(f"Updated existing mongo document for image_id: {image_id} with correct encoding_id: {correct_encoding_id1}")
+
 def process_image(task):
     if VERBOSE: 
         print("process_image this is where the action is")
@@ -1974,45 +2011,46 @@ def process_image(task):
                                 print(f"Error details: {e}")
 
                                 if "index: encoding_id" in e.args[0]:
-                                    # get the correct encoding_id for this image_id from mysql
-                                    encoding_id_results = session.query(Encodings.encoding_id).filter(Encodings.image_id == image_id).first()
-                                    correct_encoding_id1 = encoding_id_results[0]
-                                    print(f"Correct encoding_id for image_id {image_id} is {correct_encoding_id1}")
-                                    # get the current image_id for the mongo document with the duplicate encoding_id
-                                    current_image_id_result = mongo_collection.find_one({"encoding_id": correct_encoding_id1})
-                                    current_image_id2 = current_image_id_result["image_id"] if current_image_id_result else None
-                                    print(f"Current image_id for encoding_id {correct_encoding_id1} is {current_image_id2}")
+                                    fix_e11000_errors(image_id, face_landmarks, face_encodings68)
+                                    # # get the correct encoding_id for this image_id from mysql
+                                    # encoding_id_results = session.query(Encodings.encoding_id).filter(Encodings.image_id == image_id).first()
+                                    # correct_encoding_id1 = encoding_id_results[0]
+                                    # print(f"Correct encoding_id for image_id {image_id} is {correct_encoding_id1}")
+                                    # # get the current image_id for the mongo document with the duplicate encoding_id
+                                    # current_image_id_result = mongo_collection.find_one({"encoding_id": correct_encoding_id1})
+                                    # current_image_id2 = current_image_id_result["image_id"] if current_image_id_result else None
+                                    # print(f"Current image_id for encoding_id {correct_encoding_id1} is {current_image_id2}")
 
-                                    # correct encoding_id for current_image_id2 is
-                                    correct_encoding_id_image_id2 = session.query(Encodings.encoding_id).filter(Encodings.image_id == current_image_id2).first()
-                                    correct_encoding_id_image_id2 = correct_encoding_id_image_id2[0]
-                                    print(f"Correct encoding_id for image_id {current_image_id2} is {correct_encoding_id_image_id2}")
+                                    # # correct encoding_id for current_image_id2 is
+                                    # correct_encoding_id_image_id2 = session.query(Encodings.encoding_id).filter(Encodings.image_id == current_image_id2).first()
+                                    # correct_encoding_id_image_id2 = correct_encoding_id_image_id2[0]
+                                    # print(f"Correct encoding_id for image_id {current_image_id2} is {correct_encoding_id_image_id2}")
 
-                                    # update the mongo document with the correct encoding_id for current_image_id2
-                                    mongo_collection.update_one(
-                                        {"image_id": current_image_id2},
-                                        {"$set": {
-                                            "encoding_id": correct_encoding_id_image_id2
-                                        }
-                                        },
-                                        upsert=True
-                                    )
-                                    print(f"Updated existing mongo document for image_id: {current_image_id2} with correct encoding_id: {correct_encoding_id_image_id2}")
+                                    # # update the mongo document with the correct encoding_id for current_image_id2
+                                    # mongo_collection.update_one(
+                                    #     {"image_id": current_image_id2},
+                                    #     {"$set": {
+                                    #         "encoding_id": correct_encoding_id_image_id2
+                                    #     }
+                                    #     },
+                                    #     upsert=True
+                                    # )
+                                    # print(f"Updated existing mongo document for image_id: {current_image_id2} with correct encoding_id: {correct_encoding_id_image_id2}")
                                     
 
-                                    # update the mongo document with the correct encoding_id
-                                    # the image_id is correct. update the document's encoding_id to the correct one stored in variable encoding_id
-                                    mongo_collection.update_one(
-                                        {"image_id": image_id},
-                                        {"$set": {
-                                            "encoding_id": correct_encoding_id1,
-                                            "face_landmarks": face_landmarks,
-                                            "face_encodings68": face_encodings68
-                                        }
-                                        },
-                                        upsert=True
-                                    )
-                                    print(f"Updated existing mongo document for image_id: {image_id} with correct encoding_id: {encoding_id}")
+                                    # # update the mongo document with the correct encoding_id
+                                    # # the image_id is correct. update the document's encoding_id to the correct one stored in variable encoding_id
+                                    # mongo_collection.update_one(
+                                    #     {"image_id": image_id},
+                                    #     {"$set": {
+                                    #         "encoding_id": correct_encoding_id1,
+                                    #         "face_landmarks": face_landmarks,
+                                    #         "face_encodings68": face_encodings68
+                                    #     }
+                                    #     },
+                                    #     upsert=True
+                                    # )
+                                    # print(f"Updated existing mongo document for image_id: {image_id} with correct encoding_id: {encoding_id}")
                                 else:
                                     print(f" ><>< ERROR E11000??? An unexpected DuplicateKeyError occurred: {e}")
                             except Exception as e:

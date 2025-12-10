@@ -8,7 +8,7 @@ DROP TABLE SegmentHelperObject_book ;
 DELETE FROM SegmentHelper_sept2025_heft_keywords;
 
 -- create helper segment table
-CREATE TABLE SegmentHelper_nov2025_SQL_only_last3K_hands (
+CREATE TABLE SegmentHelperObject_Placards_HighProbability (
     seg_image_id int NOT NULL AUTO_INCREMENT PRIMARY KEY,
     image_id INTEGER,
     FOREIGN KEY (image_id) REFERENCES Images(image_id)
@@ -16,7 +16,7 @@ CREATE TABLE SegmentHelper_nov2025_SQL_only_last3K_hands (
 
 
 -- create helper segment OBJECT table
-CREATE TABLE SegmentHelperObjectYOLO (
+CREATE TABLE SegmentHelperObject_Placards_HighProbability (
     seg_image_id int NOT NULL AUTO_INCREMENT PRIMARY KEY,
     image_id INTEGER,
     class_id INTEGER,
@@ -34,6 +34,13 @@ SELECT image_id
 FROM Images
 WHERE image_id % 40 = 0
 ORDER BY image_id;
+
+INSERT INTO SegmentHelper_oct2025_evens (image_id)
+SELECT e.image_id 
+FROM Encodings e
+WHERE e.image_id % 2 = 0
+AND e.mongo_body_landmarks_3D = 1
+ORDER BY e.image_id;
 
 
 -- create segment table
@@ -261,18 +268,19 @@ LIMIT 2000000
 ;
 
 -- for making an OBJECT helper from segmentbig based on keywords
-INSERT INTO SegmentHelperObject553 (image_id, site_name_id, imagename)
+INSERT INTO SegmentHelperObject_Placards_HighProbability (image_id, site_name_id, imagename)
 SELECT DISTINCT e.image_id, i.site_name_id, i.imagename
 FROM SegmentBig_isface e
-JOIN ImagesKeywords ik ON ik.image_id = e.image_id
 JOIN Images i ON i.image_id = e.image_id
-WHERE ik.keyword_id IN (827)
+JOIN ImagesKeywords ik ON ik.image_id = e.image_id
+JOIN ImagesKeywords ikand ON ikand.image_id = e.image_id
+WHERE ik.keyword_id IN (184,23084,6112,2151,23726,23375,24032,32310,25447,24536,30643,30991,64035)
+AND ikand.keyword_id IN (8136,4587,133749,26241,886,133627,23642,24350,4642,23182,9286,23018,10433,9400,30217,29097,26401,186,500,23852,3964,27357,24374,7791,26621,8202,18797,9424,30216,24804,8485,8090,33509,17515,21741,21636,24122,21377,131468,28806,30249,25358,20714,68394,82807,83723,60874)
     AND NOT EXISTS (
         SELECT 1
-        FROM SegmentHelperObject553 s
+        FROM SegmentHelperObject_Placards_HighProbability s
         WHERE s.image_id = e.image_id
     )
-LIMIT 10
 ;
 
 -- for making a helper from segmentbig where mongo_face_landmarks = 1
@@ -307,13 +315,6 @@ WHERE ik.keyword_id IN (23375,13130,21463,184,23726,4222,8874,8136,133749,26241,
 GROUP BY ik.keyword_id
 ;
 
-SELECT ik.keyword_id, COUNT(e.image_id)
-FROM SegmentHelper_nov2025_placard e
-JOIN ImagesKeywords ik 
-ON ik.image_id = e.image_id
-WHERE ik.keyword_id IN (23375,13130,21463,184,23726,4222,8874,8136,133749,26241,22814,133787,4587,133627)
-GROUP BY ik.keyword_id
-;
 
 
 
@@ -336,10 +337,6 @@ LEFT JOIN SegmentBig_ALLgetty4faces s ON sh.image_id = s.image_id
 SET sh.is_new = True
 WHERE s.image_id IS NULL;
 
--- check how many added
-SELECT COUNT(*)
-FROM SegmentHelper_jan30_ALLgetty4faces sh
-;
 
 -- check how many added
 SELECT COUNT(sh.is_new)
@@ -352,8 +349,13 @@ WHERE sh.is_new = True
 -- INSERT INTO SegmentOct20 (image_id, site_name_id, site_image_id, contentUrl, imagename, age_id, age_detail_id, gender_id, location_id, face_x, face_y, face_z, mouth_gap, bbox, mongo_body_landmarks, mongo_face_landmarks)
 -- SELECT DISTINCT i.image_id, i.site_name_id, i.site_image_id, i.contentUrl, i.imagename, i.age_id, i.age_detail_id, i.gender_id, i.location_id, e.face_x, e.face_y, e.face_z, e.mouth_gap, e.bbox, e.mongo_body_landmarks, e.mongo_face_landmarks
 
-INSERT INTO SegmentBig_ALLgetty4faces (image_id, site_name_id, site_image_id, contentUrl, imagename, age_id, age_detail_id, gender_id, location_id, face_x, face_y, face_z, mouth_gap, bbox)
-SELECT DISTINCT i.image_id, i.site_name_id, i.site_image_id, i.contentUrl, i.imagename, i.age_id, i.age_detail_id, i.gender_id, i.location_id, e.face_x, e.face_y, e.face_z, e.mouth_gap, e.bbox
+-- SELECT MAX seg_image_id before run, so you know where to start other updates from
+SELECT MAX(seg_image_id)
+FROM SegmentBig_isface;
+-- MAX is: 
+
+INSERT INTO SegmentBig_isface (image_id, site_name_id, site_image_id, contentUrl, imagename, description, age_id, age_detail_id, gender_id, location_id, mouth_gap, bbox, pitch, yaw, roll)
+SELECT DISTINCT i.image_id, i.site_name_id, i.site_image_id, i.contentUrl, i.imagename, i.description, i.age_id, i.age_detail_id, i.gender_id, i.location_id, e.mouth_gap, e.bbox, e.pitch, e.yaw, e.roll 
 FROM Images i
 LEFT JOIN Encodings e ON i.image_id = e.image_id
 LEFT JOIN SegmentHelper_jan30_ALLgetty4faces sh ON sh.image_id = i.image_id 
