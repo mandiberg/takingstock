@@ -52,18 +52,20 @@ SegmentTable_name = 'SegmentBig_isface'
 SegmentHelper_name = None
 # SATYAM, this is MM specific
 # for when I'm using files on my SSD vs RAID
-IS_SSD = False
+IS_SSD = True
 #IS_MOVE is in move_toSSD_files.py
 
 # I/O utils
 io = DataIO(IS_SSD)
 db = io.db
 
+# OWC4 SNAFU WORKAROUND
+io.ROOT = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/output_folder"
 
 # CSV_FOLDER = os.path.join(io.ROOT_DBx, "body3D_segmentbig_useall256_CSVs_MMtest")
 
 # CSV_FOLDER = os.path.join("/Users/michaelmandiberg/Documents/projects-active/facemap_production/body3D_segmentbig_useall256_CSVs_test")
-CSV_FOLDER = os.path.join("/Users/michaelmandiberg/Documents/projects-active/facemap_production/heft_keyword_fusion_clusters/oct30_actual3D768_75ct/ArmsPoses3D512_pt1")
+CSV_FOLDER = os.path.join("/Volumes/SSD4_Green/arms3D_placard_Dec12_undetected")
 
 # TENCH UNCOMMENT FOR YOUR COMP:
 # CSV_FOLDER = os.path.join(io.ROOT_DBx, "body3D_segmentbig_useall256_CSVs_test")
@@ -76,12 +78,12 @@ CSV_FOLDER = os.path.join("/Users/michaelmandiberg/Documents/projects-active/fac
 MODES = {0:'paris_photo_torso_images_topics', 1:'paris_photo_torso_videos_topics', 
          2:'3D_bodies_topics', 3:'3D_full_bodies_topics', 4:'3D_arms', 5:'3D_arms_meta',
          6:'heft_torso_keywords'}
-MODE_CHOICE = 6
+MODE_CHOICE = 4
 CURRENT_MODE = MODES[MODE_CHOICE]
-LIMIT = 20000 # this is the limit for the SQL query
-
+LIMIT = 1000 # this is the limit for the SQL query
 
 image_edge_multiplier = None
+# image_edge_multiplier = [1.3,2,2.9,2] # [top, right, bottom, left] setting a default. not sure if this will mess up places it looks for None
 N_TOPICS = 64 # changing this to 14 triggers the affect topic fusion, 100 is keywords. 64 is default
 if "paris" in CURRENT_MODE:
     IS_HAND_POSE_FUSION = True # do we use fusion clusters
@@ -107,7 +109,7 @@ if "paris" in CURRENT_MODE:
         JUMP_SHOT = True # jump to random file if can't find a run (I don't think this applies to planar?)
 
         # initializing default square crop
-        # if this is defined, then it will not call min_max_body_landmarks_for_crop
+        # if this is defined, then it will not call calc_dynamic_multiplier_from_min_max_body_landmarks
         image_edge_multiplier = [1.3,1.85,2.4,1.85] # tighter square crop for paris photo videos < Oct 29 FINAL VERSION NOV 2024 DO NOT CHANGE
 
         USE_PAINTED = False
@@ -190,10 +192,10 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     # N_HSV = 0 # don't do HSV clusters
 
     # turning all three off to do old style non tsp sort    
-    # ONE_SHOT = True # take all files, based off the very first sort order.
-    CHOP_FIRST = True
+    ONE_SHOT = True # take all files, based off the very first sort order.
+    # CHOP_FIRST = True
     # TSP_SORT = True
-    CHOP_ITTER_TSP_SORT = True
+    # CHOP_ITTER_TSP_SORT = True
     
 
     # PURGING_DUPES = True
@@ -250,7 +252,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
         
 
     if META: folder = "heft_keyword_fusion_clusters_hsv_meta"
-    else: folder = "heft_keyword_ArmsPoses3D_256/"
+    else: folder = "arms3d_debug_full128/"
     FUSION_FOLDER = os.path.join("utilities/data/", folder)
     CSV_FOLDER = os.path.join("/Users/michaelmandiberg/Documents/projects-active/facemap_production/heft_keyword_fusion_clusters/", folder)
 
@@ -1397,15 +1399,17 @@ def compare_images(last_image, img, face_landmarks_or_df, bbox_or_index):
         df_sorted = face_landmarks_or_df
         index = bbox_or_index
         face_landmarks, bbox = df_sorted.iloc[index]['face_landmarks'], df_sorted.iloc[index]['bbox']
+        is_df = True
     else:
         face_landmarks = face_landmarks_or_df
         bbox = bbox_or_index
+        is_df = False
 
     is_face = None
     skip_face = False
     #crop image here:
     
-    print(f". ---  compare_images for {SORT_TYPE} with EXPAND {sort.EXPAND} and FULL_BODY {FULL_BODY} and self.mult {sort.image_edge_multiplier}")
+    print(f". ---  compare_images with is_df {is_df} for {SORT_TYPE} with EXPAND {sort.EXPAND} and FULL_BODY {FULL_BODY} and self.mult {sort.image_edge_multiplier}")
     if sort.counter_dict["first_run"] is False and last_image is None: print(" ><><>< YIKES, last_image is None ><><>< ")
     # this is where the image gets cropped or expanded
     if sort.EXPAND:
@@ -1413,7 +1417,7 @@ def compare_images(last_image, img, face_landmarks_or_df, bbox_or_index):
         
         if FULL_BODY or AUTO_EDGE_CROP: 
             print('running AUTO_EDGE_CROP')
-            cropped_image = sort.auto_edge_crop(df_sorted, index, cropped_image, resize)
+            cropped_image = sort.auto_edge_crop(bbox, cropped_image, resize)
         else:   
             # cropp the 25K image back down to 10K
             # does this based on the incremental dimensions
@@ -1848,7 +1852,7 @@ def linear_test_df(df_sorted, itter=None):
             description = row['description']
             try:
                 img = cv2.imread(open_path)
-
+                print("just opened image shape", img.shape)
                 if DRAW_TEST_LMS:
                     # for testing, draw in points
                     # list(range(20)
@@ -1886,7 +1890,7 @@ def linear_test_df(df_sorted, itter=None):
             # compare_images to make sure they are face and not the same
             # last_image is cv2 np.array
             cropped_image, skip_face = compare_images(sort.counter_dict["last_image"], img, df_sorted, index)
-            
+            print("after compare_images, cropped_image shape:", None if cropped_image is None else cropped_image.shape)
             # deduping is done elsehwere now
             # # test and handle duplicates 
             # if cropped_image is None and skip_face:
@@ -2076,23 +2080,28 @@ def main():
         print(f"set_multiplier_and_dims cluster_no: {cluster_no}, pose_no: {pose_no}")
         if isinstance(cluster_no, str) and cluster_no.startswith('c'):
             cluster_no = int(cluster_no[1:])
+        if TOPIC_NO is not None and isinstance(TOPIC_NO, list):
+            FOCUS_CLUSTER_HACK_LIST = FOCUS_CLUSTER_DICT.get(CLUSTER1, {}).get(int(math.floor(TOPIC_NO[0])), None)
 
-        FOCUS_CLUSTER_HACK_LIST = FOCUS_CLUSTER_DICT.get(CLUSTER1, {}).get(int(math.floor(TOPIC_NO[0])), None)
-
+        crop_dict_index = CLUSTER_CROP_DICT.get(CLUSTER1, {}).get(cluster_no, None)
         # if pose_no, overide sort.image_edge_multiplier based on pose_no
         if pose_no is not None and USE_POSE_CROP_DICT:
+            print("using pose_no to set image_edge_multiplier", pose_no)
             pose_type = POSE_CROP_DICT.get(cluster_no, 1)
             sort.image_edge_multiplier = MULTIPLIER_LIST[POSE_CROP_DICT[cluster_no]]
             if VERBOSE: print(f"using pose {cluster_no} getting POSE_CROP_DICT value {pose_type} for image_edge_multiplier", sort.image_edge_multiplier)
-        elif cluster_no is not None:
+        elif cluster_no is not None and crop_dict_index is not None:
+            print("using cluster_no to set image_edge_multiplier", cluster_no)
             # for ArmsPoses etc
-            crop_dict_index = CLUSTER_CROP_DICT.get(CLUSTER1, {}).get(cluster_no, None)
+            print("crop_dict_index", crop_dict_index)
             if crop_dict_index is not None: sort.image_edge_multiplier = MULTIPLIER_LIST[crop_dict_index]
+            else: print(" ><>< PROBLEM!! no crop_dict_index found for cluster_no ", cluster_no)
             if VERBOSE: print(f"using cluster_no {cluster_no} for image_edge_multiplier", sort.image_edge_multiplier)
 
         elif image_edge_multiplier is None:
+            print("dynamic image_edge_multiplier called here")
             # if dynamic, set the first one here
-            sort.image_edge_multiplier = sort.min_max_body_landmarks_for_crop(df_segment, 0)     
+            sort.image_edge_multiplier = sort.calc_dynamic_multiplier_from_min_max_body_landmarks(df_segment, 0)     
         # reset face_height_output for each round, in case it gets redefined inside loop
         sort.face_height_output = face_height_output
         # use image_edge_multiplier to crop for each

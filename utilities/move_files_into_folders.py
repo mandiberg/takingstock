@@ -27,20 +27,20 @@ io = DataIO()
 
 # (does not leave original file in place)
 # if False it will not delete the original file
-MOVE_DELETE_ORIGINAL = True
-
+MOVE_DELETE_ORIGINAL = False
+WRITE_CSV_LIST = False
 # testname = "woman-in-a-music-concert-picture-id505111652.jpg"
 # # PATH= os.path.join(os.environ['HOME'], "Documents/projects-active/facemap_production/gettyimages") 
 
 # PATH = "/Volumes/SSD4green/images_shutterstock2"
 # NEWPATH = "/Volumes/RAID54/images_shutterstock"
 
-PATH = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/body3D_segmentbig_useall256"
-NEWPATH = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/test_moved"
+PATH = "/Volumes/OWC4/segment_images/images_alamy"
+NEWPATH = "/Volumes/OWC52/segment_images/images_alamy"
 
 ALL_IN_ONE_FOLDER = False # if False it will walk through all folders inside of PATH
 
-IMAGE_ID_FILENAMES = True # if True it will convert the filename to an image id (e.g. 12345678.jpg) instead of the original filename
+IMAGE_ID_FILENAMES = False # if True it will convert the filename to an image id (e.g. 12345678.jpg) instead of the original filename
 # folder ="5GB_testimages"
 # CSV="/Users/michaelmandiberg/Dropbox/facemap_dropbox/test_data/Images_202302101516_30K.csv"
 
@@ -203,7 +203,8 @@ def save_list_to_csv(this_path, meta_file_list):
 
 def add_queue(this_path):
     meta_file_list = get_dir_files(this_path)
-    save_list_to_csv(this_path, meta_file_list)
+    if WRITE_CSV_LIST:
+        save_list_to_csv(this_path, meta_file_list)
     for newfile in sorted(meta_file_list):
         a, b = get_hash_folders(newfile)
         currentpathfile = os.path.join(this_path, newfile)
