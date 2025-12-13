@@ -168,7 +168,7 @@ class YOLOTools:
 
 
 ### YOLO
-    def detect_objects_return_bbox(self, model, image, device, conf_thresh=0.45, OBJ_CLS_LIST=None):
+    def detect_objects_return_bbox(self, model, image, device=None, conf_thresh=0.45, OBJ_CLS_LIST=None):
         """
         Detect objects and return list of detections, allowing multiple instances per class.
         Returns: list of dicts, each with keys: class_id, obj_no, bbox, conf

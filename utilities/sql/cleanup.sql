@@ -268,13 +268,17 @@ WHERE image_id = 30402
 SELECT i.site_name_id, i.imagename
 FROM Images i
 JOIN ImagesKeywords ik on i.image_id = ik.image_id
-JOIN SegmentBig_isface s on i.image_id = s.image_id
+JOIN ImagesKeywords ik2 on i.image_id = ik2.image_id
+JOIN ImagesKeywords ik3 on i.image_id = ik3.image_id
+JOIN SegmentOct20 s on i.image_id = s.image_id
 -- WHERE ik.keyword_id in (22411)
 -- WHERE ik.keyword_id in (22101,444,22191,16045,11549,133300,133777)
 -- WHERE ik.keyword_id in (1991,220,133822)
 -- WHERE ik.keyword_id in (22269, 5271)
 -- WHERE ik.keyword_id in (827, 1070, 22412,23029,25287,133768,24593, 404)
-WHERE ik.keyword_id in (553, 22961, 3856,6286,807,1644,5310,22251,8911)
+WHERE ik.keyword_id in (32892)
+AND ik3.keyword_id in (22859, 23883)
+AND ik2.keyword_id not in (3748,8094,11092,25891,46110,8094,29700,98975,107639,46531,90881,107640,115069,24806,25886,6474,1946)
 ;
 
 
@@ -371,3 +375,44 @@ FROM Images i
 WHERE i.site_image_id = "10009813"
 ;
 
+USE Stock;
+ALTER TABLE Slogans DROP PRIMARY KEY;
+
+ALTER TABLE Detections
+ADD hue Float,
+ADD sat Float,
+ADD lum Float,
+ADD val Float, 
+
+ALTER TABLE Detections
+ADD 	orientation INT,
+ADD 	exclude TINYINT,
+;
+
+
+ALTER TABLE Detections
+    ADD COLUMN cluster_id INT,
+    ADD COLUMN meta_cluster_id INT,
+    ADD CONSTRAINT fk_detections_cluster
+        FOREIGN KEY (cluster_id) REFERENCES HSV(cluster_id);
+
+INSERT INTO BsonFileLog (completed_bson_file) VALUES ('encodings_batch_7900001.bson');
+
+UPDATE YoloClasses
+INSERT INTO YoloClasses (class_id, class_name, model_version) 
+VALUES
+(80,'Sign','YoloCustom'),
+(81,'Gift','YoloCustom'),
+(82,'money','YoloCustom'),
+(83,'Bag','YoloCustom'),
+(84,'valentine','YoloCustom'),
+(85,'Salad','YoloCustom'),
+(86,'Dumbbell','YoloCustom'),
+(87,'rose','YoloCustom'),
+(88,'Groceries','YoloCustom'),
+(89,'mask','other'),
+(90,'Stethoscope','other'),
+(91,'Gun','other'),
+(92,'Headphones','other'),
+(93,'Clipboard','other)
+;

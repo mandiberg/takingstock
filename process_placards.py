@@ -48,7 +48,7 @@ ocr_engine = PaddleOCR(
 device = "mps" if torch.backends.mps.is_available() else "cpu"
 print("Using device:", device)
 yolo_model = YOLO("yolov8x.pt").to(device)  # load a pretrained YOLOv8x model
-yolo_custom_model = YOLO("models/takingstock_yolov8n/weights/best.pt").to(device)
+yolo_custom_model = YOLO("models/takingstock_yolov8x/weights/best.pt").to(device)
 
 ocr = OCRTools(DEBUGGING=True)
 yolo = YOLOTools(DEBUGGING=True)
@@ -58,9 +58,13 @@ blank = False
 DEBUGGING = True
 
 FILE_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/segment_images_book_clock_bowl"
+# FILE_FOLDER = "/Volumes/OWC52/segment_images_money_cards"
 OUTPUT_FOLDER = os.path.join(FILE_FOLDER, "test_output")
 BATCH_SIZE = 100
 MASK_THRESHOLD = .15  # HSV distance threshold for mask detection
+CONF_THRESHOLD = 0.25
+IS_DRAW_BOX = True
+IS_SAVE_UNDETECTED = True
 CLUSTER_TYPE = "HSV" # only works with cluster save, not with assignment
 VERBOSE = True
 META = False # to return the meta clusters (out of 23, not 96)
@@ -142,7 +146,12 @@ def do_detections(result, folder_index):
 
     image_id = result.image_id
     imagename = result.imagename
-    face_bbox = io.unstring_json(result.bbox)
+    try:
+        face_bbox = io.unstring_json(result.bbox)
+    except Exception as e:
+        print(f"Error parsing label_data JSON for image_id {image_id}: {e}")
+        print("Skipping this face_bbox.", result.bbox)
+        return
     image_path = os.path.join(FILE_FOLDER, os.path.basename(io.folder_list[folder_index]), imagename)
     # Read the image
     image = cv2.imread(image_path)
@@ -153,14 +162,14 @@ def do_detections(result, folder_index):
     print(f"Processing image_id: {image_id}, imagename: {imagename}")
 
     # YOLO COCO object detection
-    unrefined_detect_results = yolo.detect_objects_return_bbox(yolo_model,image, device, conf_thresh=0.45)
+    unrefined_detect_results = yolo.detect_objects_return_bbox(yolo_model,image, device, conf_thresh=CONF_THRESHOLD)
     detect_results = yolo.merge_yolo_detections(unrefined_detect_results, iou_threshold=0.3, adjacency_threshold_px=50)
     # save_debug_image_yolo_bbox(image_id, imagename, image, detect_results)
 
     # YOLO COCO object detection
-    unrefined_detect_results = yolo.detect_objects_return_bbox(yolo_custom_model,image, device, conf_thresh=0.45)
+    unrefined_detect_results = yolo.detect_objects_return_bbox(yolo_custom_model,image, device, conf_thresh=CONF_THRESHOLD)
     detect_results = yolo.merge_yolo_detections(unrefined_detect_results, iou_threshold=0.3, adjacency_threshold_px=50)
-    save_debug_image_yolo_bbox(image_id, imagename, image, detect_results)
+    save_debug_image_yolo_bbox(image_id, imagename, image, detect_results, draw_box=IS_DRAW_BOX, save_undetected=IS_SAVE_UNDETECTED)
 
     return
 
@@ -202,8 +211,8 @@ def do_detections(result, folder_index):
     else:
         print(f"Error: slogan_id is None for image {image_id}, skipping save to Placards table.")
 
-def save_debug_image_yolo_bbox(image_id, imagename, image, detect_results):
-    if not detect_results:
+def save_debug_image_yolo_bbox(image_id, imagename, image, detect_results, draw_box=True, save_undetected=True):
+    if not detect_results and save_undetected:
         output_image_path = os.path.join(OUTPUT_FOLDER, "no_detections",imagename)
         save_debug_image(output_image_path, image, imagename)
     else:
@@ -223,9 +232,11 @@ def save_debug_image_yolo_bbox(image_id, imagename, image, detect_results):
             print(f"Processing class_id {class_id} with {len(class_detections)} detection(s)")
             all_class_conf = []
             for result_dict in class_detections:
+
                 print(f"  Detected class: {result_dict['class_id']} with bbox: {result_dict['bbox']} and confidence: {result_dict['conf']}")
                 # for debugging, saving to folders
-                drawable_image = draw_bbox_on_image(drawable_image, io.unstring_json(result_dict['bbox']))
+                if draw_box:
+                    drawable_image = draw_bbox_on_image(drawable_image, io.unstring_json(result_dict['bbox']))
                 all_class_conf.append(result_dict['conf'])
             avg_conf = sum(all_class_conf) / len(all_class_conf)
             debug_file_name = f"{avg_conf:.2f}_{image_id}_YOLO_debug.jpg"
@@ -255,69 +266,71 @@ def main():
                 else:
                     print(str(folder_count), folder)
                     
-                img_list = io.get_img_list(folder, force_ls=True)
-                print("len(img_list)", len(img_list))
+                detect_from_folder(folder_index, csv_foldercount_path, folder_path, folder)
+
+    session.close()
+    engine.dispose()
+
+def detect_from_folder(folder_index, csv_foldercount_path, folder_path, folder):
+    img_list = io.get_img_list(folder, force_ls=True)
+    print("len(img_list)", len(img_list))
 
                 # Initialize an empty list to store all the results
-                all_results = []
+    all_results = []
 
                 # Split the img_list into smaller batches and process them one by one
-                for i in range(0, len(img_list), BATCH_SIZE):
-                    tasks_in_this_round = 0
+    for i in range(0, len(img_list), BATCH_SIZE):
+        tasks_in_this_round = 0
 
-                    batch_img_list = img_list[i : i + BATCH_SIZE]
-                    batch_site_image_ids = format_site_name_ids(folder_index, batch_img_list)
+        batch_img_list = img_list[i : i + BATCH_SIZE]
+        batch_site_image_ids = format_site_name_ids(folder_index, batch_img_list)
 
-                    print(f"total img_list: {len(img_list)} no. processed: {i} no. left: {len(img_list)-i}")
-                    if len(img_list)-i<BATCH_SIZE: print("last_round for img_list")
+        print(f"total img_list: {len(img_list)} no. processed: {i} no. left: {len(img_list)-i}")
+        if len(img_list)-i<BATCH_SIZE: print("last_round for img_list")
 
                     # query the database for the current batch and return image_id and encoding_id
-                    for _ in range(io.max_retries):
-
-                        try:
-                            if VERBOSE: print(f"Processing batch {i//BATCH_SIZE + 1}...")
+        for _ in range(io.max_retries):
+            try:
+                if VERBOSE: print(f"Processing batch {i//BATCH_SIZE + 1}...")
                             # init_session()
 
                             # get Images and Encodings values for each site_image_id in the batch
                             # adding in mongo stuff. should return NULL if not there
-                            batch_query = session.query(Images.image_id, Images.site_image_id, Images.imagename, Encodings.bbox) \
+                batch_query = session.query(Images.image_id, Images.site_image_id, Images.imagename, Encodings.bbox) \
                                 .join(Encodings, Encodings.image_id == Images.image_id) \
                                 .filter(Images.site_image_id.in_(batch_site_image_ids), Images.site_name_id == folder_index)
                                                                                                         
-                            batch_results = batch_query.all()
+                batch_results = batch_query.all()
 
-                            all_results.extend(batch_results)
-                            if VERBOSE: print("about to close_session()")
+                all_results.extend(batch_results)
+                if VERBOSE: print("about to close_session()")
                             # # Close the session and dispose of the engine before the worker process exits
                             # close_session()
 
-                        except OperationalError as e:
-                            print("error getting batch results")
-                            print(e)
-                            time.sleep(io.retry_delay)
+            except OperationalError as e:
+                print("error getting batch results")
+                print(e)
+                time.sleep(io.retry_delay)
 
-                    if VERBOSE: print(f"no. all_results: {len(all_results)}")
+        if VERBOSE: print(f"no. all_results: {len(all_results)}")
 
                     # print("results:", all_results)
-                    results_dict = {result.site_image_id: result for result in batch_results}
+        results_dict = {result.site_image_id: result for result in batch_results}
 
                     # going back through the img_list, to use as key for the results_dict
 
-                    images_left_to_process = len(batch_site_image_ids)
-                    for site_image_id in batch_site_image_ids:
-                        print(f"image_id to process: {site_image_id}, images left to process in batch: {images_left_to_process}")
-                        images_left_to_process -= 1
-                        if site_image_id in results_dict:
-                            do_detections(results_dict[site_image_id], folder_index)
-                            print(f"Found image_id: {results_dict[site_image_id].image_id} for site_image_id: {site_image_id}, imagename: {results_dict[site_image_id].imagename}")
-                        else:
-                            print(f"site_image_id: {site_image_id} not found in DB, skipping.")
-                            continue
+        images_left_to_process = len(batch_site_image_ids)
+        for site_image_id in batch_site_image_ids:
+            print(f"image_id to process: {site_image_id}, images left to process in batch: {images_left_to_process}")
+            images_left_to_process -= 1
+            if site_image_id in results_dict:
+                do_detections(results_dict[site_image_id], folder_index)
+                print(f"Found image_id: {results_dict[site_image_id].image_id} for site_image_id: {site_image_id}, imagename: {results_dict[site_image_id].imagename}")
+            else:
+                print(f"site_image_id: {site_image_id} not found in DB, skipping.")
+                continue
                 # save  success to csv_foldercount_path
-                io.write_csv(csv_foldercount_path, [folder_path])
-
-    session.close()
-    engine.dispose()
+    io.write_csv(csv_foldercount_path, [folder_path])
 
 if __name__ == "__main__":
     main()

@@ -296,8 +296,8 @@ CREATE TABLE ImagesHSV (
 
 USE Stock;
 CREATE TABLE Slogans (
-    slogan_id int NOT NULL PRIMARY KEY,
-    slogan_text varchar(200) NOT NULL
+    slogan_id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    slogan_text VARCHAR(200) NOT NULL
 );
 
 -- This is the poses junction table.
@@ -322,7 +322,16 @@ CREATE TABLE Detections (
     bbox JSON NOT NULL,
     conf FLOAT NOT NULL,
     bbox_norm JSON,
+	hue Float,
+	sat Float,
+	lum Float,
+	val Float, 
+	cluster_id INT,
+	meta_cluster_id INT,
+	orientation INT,
+	exclude TINYINT,
     UNIQUE KEY (image_id, class_id, obj_no),
+    FOREIGN KEY (cluster_id) REFERENCES HSV(cluster_id),
     FOREIGN KEY (image_id) REFERENCES images(image_id),
     FOREIGN KEY (class_id) REFERENCES YoloClasses(class_id),
     INDEX idx_image_class (image_id, class_id)
