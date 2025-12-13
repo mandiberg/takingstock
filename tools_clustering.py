@@ -35,7 +35,7 @@ class ToolsClustering:
         # print(f'Found {len(results)} clusters with medians.')
         # print("results is a sqlalchemy.engine.result.ChunkedIteratorResult object at 0x3233d5400. this is how many: ",len(results))
         for row in results:
-            print(row)
+            # print(row)
             cluster_id, cluster_median_pickle = row
             # print("cluster_id: ",cluster_id)
 
@@ -45,7 +45,7 @@ class ToolsClustering:
             # pp.pprint(cluster_median_pickle)
 
             cluster_median = pickle.loads(cluster_median_pickle)
-            print(f"cluster_median {cluster_id}: ", cluster_median)
+            # print(f"cluster_median {cluster_id}: ", cluster_median)
             # Check the type and content of the deserialized object
             if not isinstance(cluster_median, np.ndarray):
                 print(f"Deserialized object is not a numpy array, it's of type: {type(cluster_median)}")

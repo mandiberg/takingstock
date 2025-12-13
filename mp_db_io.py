@@ -53,7 +53,7 @@ class DataIO:
 
             # self.ROOT_PROD= os.path.join(os.environ['HOME'], "Documents/projects-active/facemap_production/segment_images") ## only on Mac
             # moved images to SSD
-            self.ROOT_DBx = os.path.join(self.home, "Library/CloudStorage/Dropbox/Michael-Tench")
+            self.ROOT_DBx = os.path.join(self.home, "Library/CloudStorage/Dropbox/takingstock_dropbox/output_folder")
             self.ROOT_CODE= os.path.join(self.home,"Documents/GitHub/facemap/")
             self.ROOT_PROD=  "/Volumes/OWC4/segment_images" ## only on Mac
             self.ROOTSSD = os.path.join(self.home,"Documents/projects-active/facemap_production")
@@ -256,7 +256,7 @@ class DataIO:
         print(f"Image list saved to {json_path}")
         return img_list
 
-    def get_img_list(self, folder, force_ls, sort=True):
+    def get_img_list(self, folder, force_ls=False, sort=True):
         json_path = os.path.join(folder, 'img_list.json')
         print("getting image list from", json_path)
         if os.path.exists(json_path) and not force_ls:

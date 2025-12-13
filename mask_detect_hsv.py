@@ -55,7 +55,15 @@ for img_name in all_images:
     image_shape = image.shape
     print("image shape: ", image_shape)
 
+
+
+    # THIS IS THE ACTION
+    # will need to handle the bbox from the db
     top_hsl, bot_hsl, hsl_distance = yolo.compute_mask_hsv(image, text_bbox_dict)
+
+
+
+
     print("Top Half HSL: ", top_hsl)
     print("Bottom Half HSL: ", bot_hsl)
     # now compute the distance between the two    

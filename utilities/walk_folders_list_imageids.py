@@ -39,11 +39,12 @@ def build_sql(folderpath, keyword_id, image_ids, object_id, orientation=None):
     # USE Stock;
     # INSERT IGNORE INTO IsNotDupeOf (image_id_i, image_id_j) VALUES (112511474,110166102);
 
-
+WALK_FOLDERS = True
 # ROOT= "/Volumes/OWC4/segment_images/phone_tests_nov4_money1000"
 ROOT= "/Users/michaelmandiberg/Documents/projects-active/facemap_production/heft_keyword_fusion_clusters/clustercc332_pNone_t553_h0_FOR_SQLinput"
-ROOT = "/Volumes/OWC4/segment_images/clustercc0_pNone_t22412_h8-13_1763918558.459959"
+ROOT = "/Users/michaelmandiberg/Library/CloudStorage/Dropbox/takingstock_dropbox/dupe_sorting_flags_notsorting_reclusterfirst/clustercc77_pNone_t553_h2-2_1762728693.992975"
 keyword_id = ROOT.split("_t")[1].split("_")[0]
+all_image_ids = []
 for foldername in os.listdir(ROOT):
     # foldername is 
     print(f"Processing folder: {foldername}")
@@ -59,6 +60,14 @@ for foldername in os.listdir(ROOT):
             # subfolderpath is orientation
             # if os.path.isdir(folderpath):
             sub_image_ids = parse_folder(subfolderpath)
+            all_image_ids.extend(sub_image_ids)
             print(keyword_id, sub_image_ids, foldername, subfoldername)
             build_sql(subfolderpath, keyword_id, sub_image_ids, foldername, orientation=subfoldername)
 
+if WALK_FOLDERS:
+    # save __all__ image ids to csv
+    all_image_ids_str = ",".join(all_image_ids)
+    output_filepath = os.path.join(ROOT, "all_image_ids.txt")
+    with open(output_filepath, "w") as f:
+        f.write(all_image_ids_str)
+    print(f"Saved all image IDs to {output_filepath}")

@@ -57,9 +57,12 @@ class SortPose:
             USE_HEAD_POSE = config.get('USE_HEAD_POSE', USE_HEAD_POSE)
             self.DO_HSV_KNN = config.get('DO_HSV_KNN', False)
 
+        if image_edge_multiplier is None:
+            image_edge_multiplier = [1.5,2.6,2,2.6]  # default values if none provided
+
         # After applying config overrides, ensure required core params are present
-        if motion is None or face_height_output is None or image_edge_multiplier is None:
-            raise TypeError("SortPose.__init__() requires 'motion', 'face_height_output', and 'image_edge_multiplier' either as positional args or inside the 'config' dict")
+        if motion is None or face_height_output is None:
+            raise TypeError("SortPose.__init__() requires 'motion' and 'face_height_output' either as positional args or inside the 'config' dict")
 
         # need to refactor this for GPU
         self.mp_face_detection = mp.solutions.face_detection
@@ -774,8 +777,8 @@ class SortPose:
     # test if new and old make a face, calls is_face
     def test_pair(self, last_img, img):
 
-        # print(img.shape,"@@@@@@@@@@@@@@@@@@@@")
-        # print(last_img.shape,"^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^")
+        print(img.shape,"@@@@@@@@@@@@@@@@@@@@")
+        print(last_img.shape,"^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^")
         try:
             height, width, layers = img.shape
             size = (width, height)
@@ -1362,7 +1365,7 @@ class SortPose:
         return enc1
 
 
-    def min_max_body_landmarks_for_crop(self, df, padding = 0):
+    def calc_dynamic_multiplier_from_min_max_body_landmarks(self, df, padding = 0):
         """
         returns image edge multiplier for crop for each cluster. 
         Needs df and padding for number of bboxes to buffer crop
@@ -1401,32 +1404,36 @@ class SortPose:
         lowest_y = math.floor(median_min_y - padding)
         highest_x = math.ceil(median_max_x + padding)
         highest_y = math.ceil(median_max_y + padding)
+        
         # set min dims to 2 units
         lowest_y = min(lowest_y, -2)
         lowest_x = min(lowest_x, -2)
         highest_y = max(highest_y, 2)
         highest_x = max(highest_x, 2)
+
         # if diff between left and right is less/equal to 1 bboxes, take the bigger one and roll with that.
         if abs(lowest_x) != abs(highest_x) and abs(abs(lowest_x) - abs(highest_x)) <= 1:
             if abs(highest_x) > abs(lowest_x):
                 lowest_x = highest_x *-1
             else:
                 highest_x = abs(lowest_x)
-            if self.VERBOSE: print(f"min_max_body_landmarks_for_crop: diff between abs min_x and abs max_x less than 2, changing them to {highest_x}")
+            if self.VERBOSE: print(f"calc_dynamic_multiplier_from_min_max_body_landmarks: diff between abs min_x and abs max_x less than 2, changing them to {highest_x}")
 
         # if the ratio of height to width is greater than 2, make it a 3:2 by expanding the width
         if abs(highest_y - lowest_y) / abs(highest_x - lowest_x) > 2:
             # height is much larger than width, make width match height
             highest_x = math.floor(highest_y * 3 / 2)
             lowest_x = math.ceil(lowest_x * 3 / 2)
-        if self.VERBOSE: print(f"min_max_body_landmarks_for_crop: {lowest_x},{lowest_y},{highest_x},{highest_y}")
-        return [lowest_x, lowest_y, highest_x, highest_y]
-
-    def bbox_to_pixel_conversion(self, df, index):
+        if self.VERBOSE: print(f"calc_dynamic_multiplier_from_min_max_body_landmarks: {lowest_x},{lowest_y},{highest_x},{highest_y}")
+        # return [lowest_x, lowest_y, highest_x, highest_y]
+        # image_edge_multiplier = [top_y_mult, right_x_mult, bottom_y_mult, left_x_mult,]
+        return [lowest_y, highest_x, highest_y, lowest_x]
+    
+    def bbox_to_pixel_conversion(self, bbox):
         """
         Converts bbox/image edge mult to pixels for crop
         """
-        bbox = df.iloc[index].get('bbox', None)
+        # bbox = df.iloc[index].get('bbox', None)
       
         if type(bbox) == "string":
             #parse into dict
@@ -1444,37 +1451,49 @@ class SortPose:
         # convert to pixels
         return dimensions
     
-    def auto_edge_crop(self, df, index, image, resize):
+    def auto_edge_crop(self, bbox, image, resize):
         """
         Tench's body landmark crop
         """
-        x1, y1, x2, y2 = self.image_edge_multiplier
-        bbox_dimensions = self.bbox_to_pixel_conversion(df, index)
+        # x1, y1, x2, y2 = self.image_edge_multiplier
+        y1, x2, y2, x1 = self.image_edge_multiplier
+        bbox_dimensions = self.bbox_to_pixel_conversion(bbox)
+        print(f"auto_edge_crop: initial bbox dimensions {bbox_dimensions} x {resize} == {bbox_dimensions['horizontal']*resize}, {bbox_dimensions['vertical']*resize}")
         bbox_dimensions["horizontal"] = bbox_dimensions["horizontal"]*resize
         bbox_dimensions["vertical"] = bbox_dimensions["vertical"]*resize
         
+        scaled_face_height = self.face_height * resize
+        print(f"auto_edge_crop: should multiply/crop w/ scaled_face_height {self.face_height} x {resize}: {scaled_face_height}")
+        print(f"auto_edge_crop: we {bbox_dimensions}")
+
         # top_left_x = int((8624/2) - (bbox_dimensions['horizontal']))
         # top_left_y = int((8624/2) - (bbox_dimensions['vertical']))
         # bottom_right_x = int((8624/2) + (bbox_dimensions['horizontal']))
         # bottom_right_y = int((8624/2) + (bbox_dimensions['vertical']))
 
-        print("auto_edge_crop: orig image shape", self.w, self.h, type(self)) # this is the dimensions of the original image
+        print("auto_edge_crop: orig image shape", self.w, self.h) # this is the dimensions of the original image
         print("auto_edge_crop: current image shape", image.shape) # this is the dimensions of the current image
 
         # I think that you need to account for the fact that the image has been scaled (before it is expanded)
         # I have returned that float from the resize function and it is available here as resize
         print("auto_edge_crop: resize factor", resize)
-        left = int((image.shape[1]/2) + (bbox_dimensions['horizontal']*(x1*1.3)))
-        top = int((image.shape[0]/2) + (bbox_dimensions['vertical']*(y1*1.3)))
-        right = int((image.shape[1]/2) + (bbox_dimensions['horizontal']*(x2*1.3)))
-        bottom = int((image.shape[0]/2) + (bbox_dimensions['vertical']*(y2*1.3)))
+        print("y1, x2, y2, x1", y1, x2, y2, x1)
+        top = int((image.shape[0]/2) + (scaled_face_height*(y1*1.3)))
+        right = int((image.shape[1]/2) + (scaled_face_height*(x2*1.3)))
+        bottom = int((image.shape[0]/2) + (scaled_face_height*(y2*1.3)))
+        left = int((image.shape[1]/2) + (scaled_face_height*(x1*1.3)))
 
+        print(f"auto_edge_crop: calculated crop coords before bounds check: top:{top}, right:{right}, bottom:{bottom}, left:{left}")
         try:
             cropped = image[top:bottom, left:right]
             print(f"auto_edge_crop: cropped image shape {cropped.shape}")
         except Exception as e:
             print(f"auto_edge_crop: error cropping image: {e}")
             cropped = image
+        # # display the cropped image for debugging
+        # cv2.imshow("Cropped Image", cropped)
+        # cv2.waitKey(1)  # Display the window for 1 ms
+        # cv2.destroyAllWindows()
         print(f"auto_edge_crop: image edge mult {self.image_edge_multiplier}, bbox dimensions:{bbox_dimensions}, cropped to ({left},{top}),({right},{bottom})")
         return cropped
 
@@ -1846,8 +1865,8 @@ class SortPose:
 
     def get_image_face_data(self,image, faceLms, bbox):
 
-        if self.VERBOSE: print("faceLms type", type(faceLms))
-        if self.VERBOSE: print("bbox type", type(bbox))
+        # if self.VERBOSE: print("faceLms type", type(faceLms))
+        # if self.VERBOSE: print("bbox type", type(bbox))
         self.image = image
         self.h = self.image.shape[0]
         self.w = self.image.shape[1]
@@ -1926,13 +1945,14 @@ class SortPose:
     def expand_image(self,image, faceLms, bbox, sinY=0):
         # print("expand_image going to get self.face_height", str(self.face_height))
         self.get_image_face_data(image, faceLms, bbox)    
-        # print("expand_image just got self.face_height", str(self.face_height))
+        print("expand_image just got self.face_height", str(self.face_height))
         try:
             # print(type(self.image))
             borderType = cv2.BORDER_CONSTANT
 
 
             if self.USE_INCREMENTAL_RESIZE:
+                # increment is for doing output for images, which means the different output sizes
                 resize_factor = math.ceil(self.face_height/self.resize_increment)
                 if self.VERBOSE: print("expand_image resize_factor", str(resize_factor))
                 face_incremental_output_size = resize_factor*self.resize_increment
@@ -1946,13 +1966,13 @@ class SortPose:
                 face_incremental_output_size = None
             if self.VERBOSE: print("expand_image resize", str(resize))
             if resize < 15:
-                if self.VERBOSE: print("expand_image [-] resize", str(resize))
                 # image.shape is height[0] and width[1]
                 resize_dims = (int(self.image.shape[1]*resize),int(self.image.shape[0]*resize))
+                if self.VERBOSE: print("expand_image [-] resize", str(resize), "resize_dims", str(resize_dims))
                 # resize_nose.shape is  width[0] and height[1]
                 resize_nose = (int(self.nose_2d[0]*resize),int(self.nose_2d[1]*resize))
                 # resize_nose is scaled up nose position, but not expanded/cropped
-                if self.VERBOSE: print(f"resize_factor {resize_factor} resize_dims {resize_dims}")
+                if self.VERBOSE: print(f"expand_image [-] resize_factor {resize_factor} resize_dims {resize_dims}")
                 # print("resize_nose", resize_nose)
                 # this wants width and height
 
@@ -1962,14 +1982,15 @@ class SortPose:
                 # NEW WAY
                 upsized_image = self.upscale_model.upsample(self.image)
                 resized_image = cv2.resize(upsized_image, (resize_dims))
+                print("expand_image [-] resized_image shape after upscale and resize:", resized_image.shape)
                 # for non-incremental, resized_image and resize_dims are scaled, but not expanded/cropped
                 # resize dims is the size of the image before expanding/cropping
 
                 if face_incremental_output_size:
                     image_incremental_output_ratio = face_incremental_output_size/self.face_height_output
-                    if self.VERBOSE: print("face_incremental_output_size self.EXPAND_SIZE, face_incremental_output_size, self.face_height_output", self.EXPAND_SIZE, face_incremental_output_size, self.face_height_output)
+                    if self.VERBOSE: print("expand_image [-] face_incremental_output_size self.EXPAND_SIZE, face_incremental_output_size, self.face_height_output", self.EXPAND_SIZE, face_incremental_output_size, self.face_height_output)
                     this_expand_size = (int(self.EXPAND_SIZE[0]*image_incremental_output_ratio),int(self.EXPAND_SIZE[1]*image_incremental_output_ratio))
-                    if self.VERBOSE: print("this_expand_size", image_incremental_output_ratio, this_expand_size)
+                    if self.VERBOSE: print("expand_image [-] this_expand_size", image_incremental_output_ratio, this_expand_size)
                 else:
                     this_expand_size = (self.EXPAND_SIZE[0],self.EXPAND_SIZE[1])
                     # for non-incremental, this_expand_size is now 2500
@@ -1995,14 +2016,14 @@ class SortPose:
 
                 border_list = [top_border, bottom_border, left_border, right_border]
                 existing_list = [existing_pixels_above_nose, existing_pixels_below_nose, existing_pixels_left_of_nose, existing_pixels_right_of_nose]
-                if self.VERBOSE: print("borders to expand to", border_list)
+                if self.VERBOSE: print("expand_image [-] borders to expand to", border_list)
                 if self.VERBOSE: print("existing pixels", existing_list)
                 # if all borders are positive, then we can expand the image
                 expand_list =[]
                 crop_list = []
                 if all(x >= 0 for x in border_list):
                     expand_list = border_list
-                    if self.VERBOSE: print("expand is good")
+                    if self.VERBOSE: print("expand_image [-] expand is good")
                 # top_border = int(this_expand_size[1]/2 - resize_nose[1])
                 # bottom_border = int(this_expand_size[1]/2 - (resize_dims[1]-resize_nose[1]))
                 # left_border = int(this_expand_size[0]/2 - resize_nose[0])
@@ -2039,9 +2060,9 @@ class SortPose:
                     None,
                     self.BGCOLOR
                 )
-                if self.VERBOSE: print("new_image shape after expanding:", new_image.shape)
+                if self.VERBOSE: print("expand_image [-] new_image shape after expanding:", new_image.shape)
                 if any(x != 0 for x in crop_list):
-                    if self.VERBOSE: print("some borders are negative, cropping")
+                    if self.VERBOSE: print("expand_image [-]    some borders are negative, cropping")
                     # crop the image to the crop_list keeping the image centered
                     # start at top and left with the extra pixels the image extends beyond the output dimensions
                     # then go from there the distance of the output dimensions (final_height_unit_from_nose * 2, etc)
@@ -2053,13 +2074,13 @@ class SortPose:
                     # CROP_RIGHT = new_image.shape[1] - CROP_LEFT - crop_list[2]
                     # CROP_TOP = (new_image.shape[0] - crop_list[0]) // 2
                     # CROP_BOTTOM = new_image.shape[0] - CROP_TOP - crop_list[0]
-                    if self.VERBOSE: print("CROP_LEFT, CROP_RIGHT, CROP_TOP, CROP_BOTTOM", CROP_LEFT, CROP_RIGHT, CROP_TOP, CROP_BOTTOM)
+                    if self.VERBOSE: print("expand_image [-] CROP_LEFT, CROP_RIGHT, CROP_TOP, CROP_BOTTOM", CROP_LEFT, CROP_RIGHT, CROP_TOP, CROP_BOTTOM)
                     # Define the cropped area
                     new_image = new_image[CROP_TOP:CROP_BOTTOM, CROP_LEFT:CROP_RIGHT]
-                    if self.VERBOSE: print("cropped image to", crop_list)
+                    if self.VERBOSE: print("expand_image [-] cropped image to", crop_list)
             else:
                 new_image = None
-                if self.VERBOSE: print("failed expand loop, with resize", str(resize), "too big, skipping")
+                if self.VERBOSE: print("expand_image [-]failed expand loop, with resize", str(resize), "too big, skipping")
 
 
         except Exception as e:
@@ -2284,7 +2305,10 @@ class SortPose:
 
         # Filter out black pixels and compute the mean color of the remaining pixels
         mean_color = np.mean(masked_img[~black_pixels_mask], axis=0)[np.newaxis,np.newaxis,:] # ~ means negate/remove
-        self.hue,self.sat,self.val,self.lum = self.get_hsvl(mean_color)
+        self.hue = cv2.cvtColor(mean_color, cv2.COLOR_RGB2HSV)[0,0,0]
+        self.sat = cv2.cvtColor(mean_color, cv2.COLOR_RGB2HSV)[0,0,1]
+        self.val = cv2.cvtColor(mean_color, cv2.COLOR_RGB2HSV)[0,0,2]
+        self.lum = cv2.cvtColor(mean_color, cv2.COLOR_RGB2LAB)[0,0,0]
         if self.VERBOSE: print("hue, sat, val, lum", self.hue, self.sat, self.val, self.lum)
         if self.VERBOSE: print("NOTmasked_img_torso size", masked_img_torso.shape, black_pixels_mask_torso.shape)
         if bbox :
@@ -2303,14 +2327,6 @@ class SortPose:
 
         if self.VERBOSE: print("HSV, lum", self.hue,self.sat,self.val,self.lum, self.lum_torso)
         return self.hue,self.sat,self.val,self.lum,self.lum_torso
-
-    def get_hsvl(self, mean_color):
-        # porting this to process placards to keep consistent
-        hue = cv2.cvtColor(mean_color, cv2.COLOR_RGB2HSV)[0,0,0]
-        sat = cv2.cvtColor(mean_color, cv2.COLOR_RGB2HSV)[0,0,1]
-        val = cv2.cvtColor(mean_color, cv2.COLOR_RGB2HSV)[0,0,2]
-        lum = cv2.cvtColor(mean_color, cv2.COLOR_RGB2LAB)[0,0,0]
-        return hue,sat,val,lum
     
 
     def most_common_row(self, flattened_array):
