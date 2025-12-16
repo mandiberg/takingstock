@@ -81,11 +81,11 @@ option, MODE = pick(options, title)
 # CLUSTER_TYPE = "Clusters"
 # CLUSTER_TYPE = "BodyPoses"
 # CLUSTER_TYPE = "BodyPoses3D" # use this for META 3D body clusters, Arms will start build but messed up because of subset landmarks
-# CLUSTER_TYPE = "ArmsPoses3D" 
+CLUSTER_TYPE = "ArmsPoses3D" 
 # CLUSTER_TYPE = "HandsPositions"
 # CLUSTER_TYPE = "HandsGestures"
 # CLUSTER_TYPE = "FingertipsPositions"
-CLUSTER_TYPE = "HSV" # only works with cluster save, not with assignment
+# CLUSTER_TYPE = "HSV" # only works with cluster save, not with assignment
 VERBOSE = True
 cl = ToolsClustering(CLUSTER_TYPE, VERBOSE=VERBOSE)
 
@@ -112,13 +112,14 @@ SegmentTable_name = 'SegmentBig_isface'
 SegmentHelper_name = None
 # if cl.CLUSTER_TYPE == "ArmsPoses3D":
 # SegmentHelper_name = 'SegmentHelper_sept2025_heft_keywords'
-# SegmentHelper_name = 'SegmentHelper_oct2025_every40'
-SegmentHelper_name = 'SegmentHelper_nov2025_placard'
+# SegmentHelper_name = 'SegmentHelper_oct2025_evens'
+# SegmentHelper_name = 'SegmentHelperObject_Placards_HighProbability'
+FORCE_HAND_LANDMARKS = False # when doing ArmsPoses3D, default is True, so mongo_hand_landmarks = 1
 
 # number of clusters produced. run GET_OPTIMAL_CLUSTERS and add that number here
 # 32 for hand positions
 # 128 for hand gestures
-N_CLUSTERS = 256
+N_CLUSTERS = 128
 N_META_CLUSTERS = 256
 if MODE == 3: 
     META = True
@@ -200,8 +201,8 @@ if USE_SEGMENT is True and (cl.CLUSTER_TYPE != "Clusters"):
         # handles segmentbig which doesn't have is_dupe_of, etc
         FROM += f" JOIN Encodings e ON s.image_id = e.image_id "
         dupe_table_pre = "e"
-    # Basic Query, this works with SegmentOct20
-    SELECT = "DISTINCT(s.image_id), s.face_x, s.face_y, s.face_z, s.mouth_gap"
+    # Basic Query, this works with SegmentOct20. Previously included s.face_x, s.face_y, s.face_z, s.mouth_gap
+    SELECT = "DISTINCT(s.image_id)"
     WHERE = f" {dupe_table_pre}.is_dupe_of IS NULL "
 
     if isinstance(this_data_column, list):
@@ -214,7 +215,7 @@ if USE_SEGMENT is True and (cl.CLUSTER_TYPE != "Clusters"):
 
     if cl.CLUSTER_DATA[cl.CLUSTER_TYPE]["is_feet"] is not None:
         WHERE += f" AND {dupe_table_pre}.is_feet = {cl.CLUSTER_DATA[cl.CLUSTER_TYPE]['is_feet']} "
-    if cl.CLUSTER_DATA[cl.CLUSTER_TYPE].get("mongo_hand_landmarks") is not None:
+    if cl.CLUSTER_DATA[cl.CLUSTER_TYPE].get("mongo_hand_landmarks") is not None and FORCE_HAND_LANDMARKS:
         WHERE += f" AND {dupe_table_pre}.mongo_hand_landmarks = {cl.CLUSTER_DATA[cl.CLUSTER_TYPE]['mongo_hand_landmarks']} "    
     # refactoring the above to use the dict Oct 11
     # if cl.CLUSTER_TYPE == "BodyPoses": WHERE += f" AND {dupe_table_pre}.mongo_body_landmarks = 1 and {dupe_table_pre}.is_feet = 1"
@@ -256,7 +257,7 @@ if USE_SEGMENT is True and (cl.CLUSTER_TYPE != "Clusters"):
         WHERE = " cluster_id IS NOT NULL "
 
     # WHERE += " AND h.is_body = 1"
-    LIMIT = 5000000
+    LIMIT = 12000000
     BATCH_LIMIT = 10000
 
     '''
@@ -703,7 +704,7 @@ def save_images_clusters_DB(df):
 def calc_median_dist(enc1, enc2):
     # print("calc_median_dist enc1, enc2", enc1, enc2)
     # print("type enc1, enc2", type(enc1), type(enc2))
-    print("len enc1, enc2", len(enc1), len(enc2))
+    # print("len enc1, enc2", len(enc1), len(enc2))
     return np.linalg.norm(enc1 - enc2, axis=0)
 
 def process_landmarks_cluster_dist(df, df_subset_landmarks):
@@ -912,6 +913,90 @@ def prepare_df(df):
     print("final prepared df len", len(df))
     return df
 
+def fetch_encodings_mongo_batched(df, batch_size=5000, mongo_reconnect_interval=5):
+    """
+    Fetch MongoDB encodings in batches with periodic reconnection to prevent timeouts.
+    Handles missing documents and NumPy type conversions.
+    Note: get_encodings_mongo() returns a pd.Series, not a tuple
+    """
+    print(f"Fetching encodings in batches of {batch_size}...")
+    
+    total_rows = len(df)
+    results_list = []
+    missing_count = 0
+    error_count = 0
+    success_count = 0
+    
+    # Debug: test one call to see what we get
+    if total_rows > 0:
+        test_image_id = int(df.iloc[0]['image_id'])
+        test_result = io.get_encodings_mongo(test_image_id)
+        # print(f"DEBUG: Sample result for image_id {test_image_id}:")
+        # print(f"  Type: {type(test_result)}")
+        # print(f"  Values: {test_result.tolist() if isinstance(test_result, pd.Series) else test_result}")
+        # print(f"  All None?: {test_result.isna().all() if isinstance(test_result, pd.Series) else all(v is None for v in test_result)}")
+    
+    for batch_num, batch_start in enumerate(range(0, total_rows, batch_size)):
+        batch_end = min(batch_start + batch_size, total_rows)
+        batch_size_actual = batch_end - batch_start
+        
+        print(f"[Batch {batch_num + 1}] Fetching rows {batch_start} to {batch_end} ({batch_size_actual} rows)...")
+        
+        batch_df = df.iloc[batch_start:batch_end]
+        batch_results = []
+        
+        for idx, row in batch_df.iterrows():
+            image_id = int(row['image_id'])
+            try:
+                result = io.get_encodings_mongo(image_id)
+                
+                # result is a pd.Series with 6 values
+                # Check if all values are None (missing document)
+                if isinstance(result, pd.Series):
+                    is_all_none = result.isna().all() or all(v is None for v in result.values)
+                else:
+                    is_all_none = all(v is None for v in result)
+                
+                if is_all_none:
+                    missing_count += 1
+                    if missing_count <= 10:
+                        print(f"[Batch {batch_num + 1}] Missing/Empty result for image_id {image_id}")
+                    batch_results.append((None, None, None, None, None, None))
+                else:
+                    success_count += 1
+                    # Convert Series to tuple if needed
+                    if isinstance(result, pd.Series):
+                        batch_results.append(tuple(result.values))
+                    else:
+                        batch_results.append(result)
+                    
+            except Exception as e:
+                error_count += 1
+                if error_count <= 10:
+                    error_msg = str(e)[:150]
+                    print(f"[Batch {batch_num + 1}] ERROR fetching image_id {image_id}: {error_msg}")
+                batch_results.append((None, None, None, None, None, None))
+        
+        results_list.extend(batch_results)
+        gc.collect()
+        batch_summary = f"success={success_count}, missing={missing_count}, errors={error_count}"
+        print(f"[Batch {batch_num + 1}] Completed ({batch_summary})...")
+    
+    # Convert results list to DataFrame columns
+    print(f"\n=== Summary ===")
+    print(f"Total rows processed: {total_rows}")
+    print(f"Successful: {success_count}")
+    print(f"Missing/Empty: {missing_count}")
+    print(f"Errors: {error_count}")
+    print(f"=== End Summary ===\n")
+    
+    results_df = pd.DataFrame(results_list, columns=['face_encodings68', 'face_landmarks', 'body_landmarks', 'body_landmarks_normalized', 'body_landmarks_3D', 'hand_results'])
+    df[['face_encodings68', 'face_landmarks', 'body_landmarks', 'body_landmarks_normalized', 'body_landmarks_3D', 'hand_results']] = results_df
+    
+    print(f"Finished fetching {total_rows} encodings")
+    return df
+
+
 # defining globally # TK 4 HSV
 MEDIAN_DICT = cl.get_cluster_medians(session, Clusters, USE_SUBSET_MEDIANS, sort.SUBSET_LANDMARKS)
 print("MEDIAN_DICT len: ",len(MEDIAN_DICT))
@@ -986,7 +1071,10 @@ def main():
         if not USE_HEAD_POSE: io.query_head_pose = sort.query_head_pose = False
         if cl.CLUSTER_TYPE != "HSV":
             # hsv does not need any encodings from mongo
-            df[['face_encodings68', 'face_landmarks', 'body_landmarks', 'body_landmarks_normalized', 'body_landmarks_3D', 'hand_results']] = df['image_id'].apply(io.get_encodings_mongo)
+            # Use batched MongoDB fetch with automatic reconnection
+            df = fetch_encodings_mongo_batched(df, batch_size=5000, mongo_reconnect_interval=5)        # if cl.CLUSTER_TYPE != "HSV":
+        #     # hsv does not need any encodings from mongo
+        #     df[['face_encodings68', 'face_landmarks', 'body_landmarks', 'body_landmarks_normalized', 'body_landmarks_3D', 'hand_results']] = df['image_id'].apply(io.get_encodings_mongo)
         # face_encodings68, face_landmarks, body_landmarks, body_landmarks_normalized = sort.get_encodings_mongo(mongo_db,row["image_id"], is_body=True, is_face=False)
         enc_data = prepare_df(df)
     

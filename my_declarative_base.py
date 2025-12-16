@@ -365,7 +365,7 @@ class SegmentBig(Base):
     location = relationship("Location")
 
 class SegmentBig_isnotface(Base):
-    __tablename__ = 'SegmentBig_ALLgetty4faces'
+    __tablename__ = 'SegmentBig_isnotface'
     
     seg_image_id           = Column(Integer, primary_key=True, autoincrement=True)
     image_id               = Column(Integer, primary_key=True)
@@ -381,13 +381,7 @@ class SegmentBig_isnotface(Base):
     face_y                 = Column(DECIMAL(6, 3))
     face_z                 = Column(DECIMAL(6, 3))
     mouth_gap              = Column(DECIMAL(6, 3))
-    face_landmarks         = Column(BLOB)
     bbox                   = Column(JSON)
-    face_encodings68       = Column(BLOB)
-    body_landmarks         = Column(BLOB)
-    keyword_list           = Column(BLOB)  # Pickled list
-    tokenized_keyword_list = Column(BLOB)  # Pickled list
-    ethnicity_list         = Column(BLOB)  # Pickled list
     mongo_tokens           = Column(Boolean)
     mongo_body_landmarks = Column(Boolean)
     mongo_face_landmarks = Column(Boolean)

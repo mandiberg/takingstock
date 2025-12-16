@@ -117,16 +117,12 @@ switching to topic targeted
 18	afripics - where are these?
 '''
 # I think this only matters for IS_FOLDER mode, and the old SQL way
-SITE_NAME_ID = 8
+SITE_NAME_ID = 2
 # 2, shutter. 4, istock
 # 7 pond5, 8 123rf
 POSE_ID = 0
 
 # folder doesn't matter if IS_FOLDER is False. Declared FAR below. 
-# MAIN_FOLDER = "/Volumes/RAID54/images_shutterstock"
-# MAIN_FOLDER = "/Volumes/LaCie/images_istock"
-# MAIN_FOLDER = "/Volumes/ExFAT_SSD4_/images_adobe"
-# MAIN_FOLDER1 = "/Volumes/OWC4/images_unsplash"
 
 # for sites with files spread over several SSDs, you can add addtional folders
 # you will also have to add the MAIN_FOLDER2 variable below, etc
@@ -137,15 +133,15 @@ POSE_ID = 0
 # MAIN_FOLDER5 = "/Volumes/SSD2/images_123rf"
 
 # #testing locally with two
-MAIN_FOLDER1 = "/Volumes/LaCie/segment_images_final1M/images_123rf"
-# MAIN_FOLDER1 = "/Volumes/LaCie/segment_images_final1M/images_istock"
+MAIN_FOLDER1 = "/Volumes/LaCie/segment_images_no_images/images_shutterstock"
+# MAIN_FOLDER1 = "/Volumes/LaCie/segment_images_no_images/images_shutterstock"
 # MAIN_FOLDERS = [MAIN_FOLDER1, MAIN_FOLDER2]
 
 
 MAIN_FOLDERS = [MAIN_FOLDER1]
 # MAIN_FOLDERS = [MAIN_FOLDER1, MAIN_FOLDER2, MAIN_FOLDER3, MAIN_FOLDER4, MAIN_FOLDER5]
 
-BATCH_SIZE = 1000 # Define how many from each folder in each batch
+BATCH_SIZE = 5000 # Define how many from each folder in each batch
 LIMIT = 1000
 
 #temp hack to go 1 subfolder at a time
@@ -168,8 +164,8 @@ if REDO_BODYLMS_3D: HANDLMS = False # if doing 3D redo, don't do hands
 TOPIC_ID = None
 # TOPIC_ID = [24, 29] # adding a TOPIC_ID forces it to work from SegmentBig_isface, currently at 7412083
 SEGMENT = 0 # topic_id set to 0 or False if using HelperTable or not using a segment
-HelperTable_name = "SegmentHelper_nov2025_faces_without_bbox" # set to False if not using a HelperTable
-# HelperTable_name = False    
+# HelperTable_name = "SegmentHelper_nov2025_faces_without_bbox" # set to False if not using a HelperTable
+HelperTable_name = False    
 # SegmentTable_name = 'SegmentOct20'
 SegmentTable_name = 'SegmentBig_isface'
 # if HelperTable_name, set start point
@@ -310,7 +306,6 @@ io = DataIO(IS_SSD)
 db = io.db
 ROOT = io.ROOT 
 # GPU OVERRIDE = 
-io.NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES_GPU
 # overriding DB for testing
 # io.db["name"] = "gettytest3"
 
@@ -320,11 +315,21 @@ yo = YOLOTools()
 
 NML_GITHUB = "/Users/michaelmandiberg/Documents/GitHub/takingstock/"
 HOME_GITHUB = "/Users/michaelmandiberg/Documents/GitHub/facemap/"
+ULTRA_GITHUB = "/Users/michael.mandiberg/Documents/GitHub/takingstock/"
 # check to see which one exists
 if os.path.exists(NML_GITHUB):
     ROOT_GITHUB = NML_GITHUB
+
 elif os.path.exists(HOME_GITHUB):
     ROOT_GITHUB = HOME_GITHUB
+    IS_ULTRA = False
+elif os.path.exists(ULTRA_GITHUB):
+    ROOT_GITHUB = ULTRA_GITHUB
+    IS_ULTRA = True
+    io.NUMBER_OF_PROCESSES = 20
+    io.NUMBER_OF_PROCESSES_GPU = 60
+io.NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES_GPU
+
 
 FACE_DETECTOR_MODEL_PATH = os.path.join(ROOT_GITHUB, 'models', 'blaze_face_short_range.tflite')
 FACE_LANDMARKER_MODEL_PATH = os.path.join(ROOT_GITHUB, 'models', 'face_landmarker.task')
@@ -443,12 +448,17 @@ start = time.time()
 def init_session():
     # init session
     global engine, Session, session
-    # engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}"
-    #                                 .format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']), poolclass=NullPool)
-    
-    engine = create_engine("mysql+pymysql://{user}:{pw}@/{db}?unix_socket={socket}".format(
-        user=db['user'], pw=db['pass'], db=db['name'], socket=db['unix_socket']
-    ), poolclass=NullPool)
+    if IS_ULTRA:
+        # regular brew installed mysql
+        engine = create_engine("mysql+pymysql://{user}:{pw}@localhost/{db}"
+                                        .format(db=db['name'], user=db['user'], pw=db['pass']), poolclass=NullPool)
+        # engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}"
+        #                                 .format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']), poolclass=NullPool)
+    else:
+        # macbook pro with unix socket
+        engine = create_engine("mysql+pymysql://{user}:{pw}@/{db}?unix_socket={socket}".format(
+            user=db['user'], pw=db['pass'], db=db['name'], socket=db['unix_socket']
+        ), poolclass=NullPool)
 
     # metadata = MetaData(engine)
     metadata = MetaData() # apparently don't pass engine
@@ -1242,6 +1252,13 @@ def save_body_hands_mysql_and_mongo(session, image_id, image, bbox_dict, body_la
     # if REDO_BODYLMS_3D, it will only add body_world_landmarks to mongo and updated SQL mongo_body_landmarks_3D and is_feet
     # to add in 0's so these don't reprocesses repeatedly
     
+    #if we got this far, let's make sure Images.no_image is NULL
+    # this is for the final reprocessing to clear out no_image flags
+    session.query(Images).filter(Images.image_id == image_id).update({
+        Images.no_image: None
+    }, synchronize_session=False)
+    session.commit()
+
     if body_world_landmarks is not None:
         mongo_body_landmarks_3D = True
     else:
@@ -1586,25 +1603,26 @@ def process_image_bodylms(task):
         if image is None:
             # print(f"Thread {thread_id}: Failed to load image: {cap_path}")
             return
-            
-        # Your processing here
         
         if image is not None and image.shape[0]>MINSIZE and image.shape[1]>MINSIZE:
             # Do findbody
-
             find_and_save_body(image_id, image, bbox, mongo_body_landmarks, hand_landmarks)
-            
+            no_image = False
+            is_small = False
+
+        elif image is not None and image.shape[0]>0 and image.shape[1]>0:
+            print('smallllll, but doing anyway', image_id)
+            # Do findbody
+            find_and_save_body(image_id, image, bbox, mongo_body_landmarks, hand_landmarks)
+            is_small = True
+            no_image = False
         else:
+            print('no image stored in Images table for image_id', image_id)
             no_image = True
-            # store no_image in Images table
-            session.query(Images).filter(Images.image_id == image_id).update({
-                Images.no_image: no_image
-            }, synchronize_session=False)
-            session.query(SegmentTable).filter(SegmentTable.image_id == image_id).update({
-                SegmentTable.no_image: no_image
-            }, synchronize_session=False)
-            session.commit()
-            print('no image or toooooo smallllll, stored in Images table for image_id', image_id)
+            is_small = None
+        # store no_image in Images table
+        save_no_image_is_small(session, image_id, no_image, is_small)
+            
 
 
     except OSError as e:
@@ -1624,27 +1642,82 @@ def process_image_bodylms(task):
             del image
         gc.collect()
 
+def save_no_image_is_small(session, image_id, no_image, is_small):
+    if no_image is not None:
+        session.query(Images).filter(Images.image_id == image_id).update({
+                    Images.no_image: no_image
+                }, synchronize_session=False)
+        session.query(SegmentTable).filter(SegmentTable.image_id == image_id).update({
+                    SegmentTable.no_image: no_image
+                }, synchronize_session=False)
+    if is_small is not None:
+        session.query(Encodings).filter(Encodings.image_id == image_id).update({
+                    Encodings.is_small: is_small
+                }, synchronize_session=False)
+    session.commit()
+
     # store data
 
 
 def check_path(session, image_id, path):
 
     print(" unununun current path:", path)
-    if "pexels" in path:
-        task_items = path.split("/")
-        task_items[-1] = "pexels-photo-" + task_items[-1] + ".jpg"
-        this_imagename = "/".join(task_items)
-        print(" corrected pexels path to:", this_imagename)
+    # if "pexels" in path:
+    #     task_items = path.split("/")
+    #     task_items[-1] = "pexels-photo-" + task_items[-1] + ".jpg"
+    #     this_imagename = "/".join(task_items)
+    #     print(" corrected pexels path to:", this_imagename)
         
-    else:
-        task_items = path.split("/")
-        # pop the last item
-        task_items.pop()
-        image_path = "/".join(task_items)
-        # use session to get the images.imagename from mysql using image_id which is task[0]
-        imagename = session.query(Images.imagename).filter(Images.image_id == image_id).first()
-        this_imagename = os.path.join(image_path, imagename[0].split("/")[-1])
+    # else:
+    task_items = path.split("/")
+    # pop the last item
+    task_items.pop()
+    image_path = "/".join(task_items)
+    # use session to get the images.imagename from mysql using image_id which is task[0]
+    imagename = session.query(Images.imagename).filter(Images.image_id == image_id).first()
+    this_imagename = os.path.join(image_path, imagename[0].split("/")[-1])
     return this_imagename  
+
+def fix_e11000_errors(image_id, face_landmarks, face_encodings68):
+    # get the correct encoding_id for this image_id from mysql
+    encoding_id_results = session.query(Encodings.encoding_id).filter(Encodings.image_id == image_id).first()
+    correct_encoding_id1 = encoding_id_results[0]
+    print(f"Correct encoding_id for image_id {image_id} is {correct_encoding_id1}")
+    # get the current image_id for the mongo document with the duplicate encoding_id
+    current_image_id_result = mongo_collection.find_one({"encoding_id": correct_encoding_id1})
+    current_image_id2 = current_image_id_result["image_id"] if current_image_id_result else None
+    print(f"Current image_id for encoding_id {correct_encoding_id1} is {current_image_id2}")
+
+    # correct encoding_id for current_image_id2 is
+    correct_encoding_id_image_id2 = session.query(Encodings.encoding_id).filter(Encodings.image_id == current_image_id2).first()
+    correct_encoding_id_image_id2 = correct_encoding_id_image_id2[0]
+    print(f"Correct encoding_id for image_id {current_image_id2} is {correct_encoding_id_image_id2}")
+
+    # update the mongo document with the correct encoding_id for current_image_id2
+    mongo_collection.update_one(
+        {"image_id": current_image_id2},
+        {"$set": {
+            "encoding_id": correct_encoding_id_image_id2
+        }
+        },
+        upsert=True
+    )
+    print(f"Updated existing mongo document for image_id: {current_image_id2} with correct encoding_id: {correct_encoding_id_image_id2}")
+    
+
+    # update the mongo document with the correct encoding_id
+    # the image_id is correct. update the document's encoding_id to the correct one stored in variable encoding_id
+    mongo_collection.update_one(
+        {"image_id": image_id},
+        {"$set": {
+            "encoding_id": correct_encoding_id1,
+            "face_landmarks": face_landmarks,
+            "face_encodings68": face_encodings68
+        }
+        },
+        upsert=True
+    )
+    print(f"Updated existing mongo document for image_id: {image_id} with correct encoding_id: {correct_encoding_id1}")
 
 def process_image(task):
     if VERBOSE: 
@@ -1670,10 +1743,11 @@ def process_image(task):
     this_imagename = check_path(session, task[0], task[1])
     task = (task[0], this_imagename)
 
-    no_image = False
+    no_image = is_small = False
+    number_of_detections = 0
 
     df = pd.DataFrame(columns=['image_id','is_face','is_body','is_face_distant','pitch','yaw','roll','mouth_gap','face_landmarks','bbox','face_encodings','face_encodings68_J','body_landmarks'])
-    df.at['1', 'image_id'] = task[0]
+    df.at['1', 'image_id'] = image_id = task[0]
     # image_test = cv2.imread(task[1])
     # print(">> SPLIT >> image_test shape", image_test.shape)
     cap_path = capitalize_directory(task[1])
@@ -1707,7 +1781,7 @@ def process_image(task):
 
     if mp_image is not None and h > MINSIZE and w > MINSIZE:
         # Do FaceMesh
-
+        is_small = no_image = False
         if VERBOSE: print(">> SPLIT >> about to find_face")
         df, number_of_detections = find_face(mp_image, df)
         is_small = 0
@@ -1731,54 +1805,57 @@ def process_image(task):
         # print(task[0], "shape of image", image.shape)
         df, number_of_detections = find_face(mp_image, df)
         # print(df)
-        is_small = 1
+        is_small = True
+        no_image = False
     else:
         print(">> no image", task)
         # assign no_image = 1 in SegmentBig_isnoface table
         no_image = True
+        is_small = None
+    # store no_image in Images table
+    save_no_image_is_small(session, image_id, no_image, is_small)
 
-        try:
-            # store no_image in Images table
-            session.query(Images).filter(Images.image_id == task[0]).update({
-                Images.no_image: no_image
-            }, synchronize_session=False)
-            session.commit()
-            print("stored no image in Images")
-        except:
-            print("failed to store no_image in Images")
+        # try:
+        #     # store no_image in Images table
+        #     session.query(Images).filter(Images.image_id == task[0]).update({
+        #         Images.no_image: no_image
+        #     }, synchronize_session=False)
+        #     session.commit()
+        #     print("stored no image in Images")
+        # except:
+        #     print("failed to store no_image in Images")
 
-        # save no_image informaiton in the correct table
-        existing_entry = session.query(SegmentBig_isnotface).filter(SegmentBig_isnotface.image_id == task[0]).all()
-        # query existing entry
-        # print("existing_entry to store no_image:", existing_entry)
-        # print(type(existing_entry))
-        if existing_entry:
-            if VERBOSE: print("existing_entry to store no_image")
-            # if segment table entry exists, update it
-            # otherwise, will continue on, and store no_image in SegmentBig_isnotface new entry
-            session.query(SegmentBig_isnotface).filter(SegmentBig_isnotface.image_id == task[0]).update({
-                SegmentBig_isnotface.no_image: no_image
-            }, synchronize_session=False)
-            if VERBOSE: print("stored no image in existing SegmentBig_isnotface entry")
-            return
-        else:
-            if VERBOSE: print("creating new no_image entry in SegmentBig_isnotface")
-            # create new entry in SegmentBig_isnotface
-            new_segment_entry = SegmentBig_isnotface(image_id=task[0], no_image=no_image)
-            session.add(new_segment_entry)
-            session.commit()
-            if VERBOSE: print("stored no_image in SegmentBig_isnotface for ", task[0])
-            return
-            # # store no_image in Images table
-            # session.query(Images).filter(Images.image_id == image_id).update({
-            #     Images.no_image: no_image
-            # }, synchronize_session=False)
-            # session.query(SegmentTable).filter(SegmentTable.image_id == image_id).update({
-            #     SegmentTable.no_image: no_image
-            # }, synchronize_session=False)
-            # session.commit()
-            # print('no image or toooooo smallllll, stored in Images table')
-             
+        # try:
+        #     # save no_image informaiton in the correct table
+        #     # avoid selecting non-existent columns on this table
+        #     existing_entry = session.query(SegmentBig_isnotface.image_id).filter(SegmentBig_isnotface.image_id == task[0]).first()
+        #     if existing_entry:
+        #         if VERBOSE: print("existing_entry to store no_image")
+        #         session.query(SegmentBig_isnotface).filter(SegmentBig_isnotface.image_id == task[0]).update({
+        #             SegmentBig_isnotface.no_image: no_image
+        #         }, synchronize_session=False)
+        #         session.commit()
+        #         if VERBOSE: print("stored no image in existing SegmentBig_isnotface entry")
+        #         return
+        #     else:
+        #         if VERBOSE: print("creating new no_image entry in SegmentBig_isnotface")
+        #         new_segment_entry = SegmentBig_isnotface(image_id=task[0], no_image=no_image)
+        #         session.add(new_segment_entry)
+        #         session.commit()
+        #         if VERBOSE: print("stored no_image in SegmentBig_isnotface for ", task[0])
+        #         return
+        #         # # store no_image in Images table
+        #         # session.query(Images).filter(Images.image_id == image_id).update({
+        #         #     Images.no_image: no_image
+        #         # }, synchronize_session=False)
+        #         # session.query(SegmentTable).filter(SegmentTable.image_id == image_id).update({
+        #         #     SegmentTable.no_image: no_image
+        #         # }, synchronize_session=False)
+        #         # session.commit()
+        #         # print('no image or toooooo smallllll, stored in Images table')
+        # except Exception as e:
+        #     print("failed to store no_image in SegmentBig_isnotface", e)                
+
 
     # testing, so quitting before I store data
     # return
@@ -1862,12 +1939,12 @@ def process_image(task):
             else: is_encodings = 0
             # print(f"image_id: {image_id} is_encodings: {is_encodings} face_encodings68: {face_encodings68} face_landmarks: {face_landmarks}")
             if (existing_entry is not None and existing_entry.mongo_encodings is None) or REDO_MISSING_MONGO:
-                is_face_no_lms = insert_dict["is_face_no_lms"]
+                is_face_no_lms = insert_dict.get("is_face_no_lms", None)
                 if VERBOSE: print(f"existing_entry for image_id: {image_id} with no existing mongo_encodings. is_face_no_lms is: {is_face_no_lms} Going to add these encodings: {is_encodings}")
                 # this is a new face to update an existing encodings entry
                 # update the existing entry with the insert_dict values
                 for key, value in insert_dict.items():
-                    if key not in ['image_id', 'encoding_id']:
+                    if key not in ['image_id', 'encoding_id'] and value is not None:
                         setattr(existing_entry, key, value)
                 existing_entry.mongo_encodings = is_encodings
                 existing_entry.mongo_face_landmarks = is_encodings
@@ -1934,45 +2011,46 @@ def process_image(task):
                                 print(f"Error details: {e}")
 
                                 if "index: encoding_id" in e.args[0]:
-                                    # get the correct encoding_id for this image_id from mysql
-                                    encoding_id_results = session.query(Encodings.encoding_id).filter(Encodings.image_id == image_id).first()
-                                    correct_encoding_id1 = encoding_id_results[0]
-                                    print(f"Correct encoding_id for image_id {image_id} is {correct_encoding_id1}")
-                                    # get the current image_id for the mongo document with the duplicate encoding_id
-                                    current_image_id_result = mongo_collection.find_one({"encoding_id": correct_encoding_id1})
-                                    current_image_id2 = current_image_id_result["image_id"] if current_image_id_result else None
-                                    print(f"Current image_id for encoding_id {correct_encoding_id1} is {current_image_id2}")
+                                    fix_e11000_errors(image_id, face_landmarks, face_encodings68)
+                                    # # get the correct encoding_id for this image_id from mysql
+                                    # encoding_id_results = session.query(Encodings.encoding_id).filter(Encodings.image_id == image_id).first()
+                                    # correct_encoding_id1 = encoding_id_results[0]
+                                    # print(f"Correct encoding_id for image_id {image_id} is {correct_encoding_id1}")
+                                    # # get the current image_id for the mongo document with the duplicate encoding_id
+                                    # current_image_id_result = mongo_collection.find_one({"encoding_id": correct_encoding_id1})
+                                    # current_image_id2 = current_image_id_result["image_id"] if current_image_id_result else None
+                                    # print(f"Current image_id for encoding_id {correct_encoding_id1} is {current_image_id2}")
 
-                                    # correct encoding_id for current_image_id2 is
-                                    correct_encoding_id_image_id2 = session.query(Encodings.encoding_id).filter(Encodings.image_id == current_image_id2).first()
-                                    correct_encoding_id_image_id2 = correct_encoding_id_image_id2[0]
-                                    print(f"Correct encoding_id for image_id {current_image_id2} is {correct_encoding_id_image_id2}")
+                                    # # correct encoding_id for current_image_id2 is
+                                    # correct_encoding_id_image_id2 = session.query(Encodings.encoding_id).filter(Encodings.image_id == current_image_id2).first()
+                                    # correct_encoding_id_image_id2 = correct_encoding_id_image_id2[0]
+                                    # print(f"Correct encoding_id for image_id {current_image_id2} is {correct_encoding_id_image_id2}")
 
-                                    # update the mongo document with the correct encoding_id for current_image_id2
-                                    mongo_collection.update_one(
-                                        {"image_id": current_image_id2},
-                                        {"$set": {
-                                            "encoding_id": correct_encoding_id_image_id2
-                                        }
-                                        },
-                                        upsert=True
-                                    )
-                                    print(f"Updated existing mongo document for image_id: {current_image_id2} with correct encoding_id: {correct_encoding_id_image_id2}")
+                                    # # update the mongo document with the correct encoding_id for current_image_id2
+                                    # mongo_collection.update_one(
+                                    #     {"image_id": current_image_id2},
+                                    #     {"$set": {
+                                    #         "encoding_id": correct_encoding_id_image_id2
+                                    #     }
+                                    #     },
+                                    #     upsert=True
+                                    # )
+                                    # print(f"Updated existing mongo document for image_id: {current_image_id2} with correct encoding_id: {correct_encoding_id_image_id2}")
                                     
 
-                                    # update the mongo document with the correct encoding_id
-                                    # the image_id is correct. update the document's encoding_id to the correct one stored in variable encoding_id
-                                    mongo_collection.update_one(
-                                        {"image_id": image_id},
-                                        {"$set": {
-                                            "encoding_id": correct_encoding_id1,
-                                            "face_landmarks": face_landmarks,
-                                            "face_encodings68": face_encodings68
-                                        }
-                                        },
-                                        upsert=True
-                                    )
-                                    print(f"Updated existing mongo document for image_id: {image_id} with correct encoding_id: {encoding_id}")
+                                    # # update the mongo document with the correct encoding_id
+                                    # # the image_id is correct. update the document's encoding_id to the correct one stored in variable encoding_id
+                                    # mongo_collection.update_one(
+                                    #     {"image_id": image_id},
+                                    #     {"$set": {
+                                    #         "encoding_id": correct_encoding_id1,
+                                    #         "face_landmarks": face_landmarks,
+                                    #         "face_encodings68": face_encodings68
+                                    #     }
+                                    #     },
+                                    #     upsert=True
+                                    # )
+                                    # print(f"Updated existing mongo document for image_id: {image_id} with correct encoding_id: {encoding_id}")
                                 else:
                                     print(f" ><>< ERROR E11000??? An unexpected DuplicateKeyError occurred: {e}")
                             except Exception as e:
@@ -2080,7 +2158,10 @@ def main():
                 print(f"in IS_FOLDER: {main_folder} this_site_name_id = {this_site_name_id} doing csv_foldercount_name: {csv_foldercount_name}, first_pass: {first_pass}")
                 folder_paths = io.make_hash_folders(main_folder, as_list=True)
                 csv_foldercount_path = os.path.join(main_folder, csv_foldercount_name)
+                no_hands_path = os.path.join(main_folder, "no_hands.csv")
                 completed_folders = io.get_csv_aslist(csv_foldercount_path)
+                no_hands = io.get_csv_aslist(no_hands_path)
+                print("no_hands", no_hands_path, len(no_hands), no_hands[:5])
                 # print(len(completed_folders))
                 for folder_path in folder_paths:
                     
@@ -2146,7 +2227,8 @@ def main():
                                 
                                     batch_query = session.query(Images.image_id, Images.site_image_id, Images.imagename, Encodings.encoding_id, Encodings.mongo_face_landmarks, Encodings.mongo_body_landmarks, Encodings.bbox, Encodings.mongo_body_landmarks_3D) \
                                                         .outerjoin(Encodings, Images.image_id == Encodings.image_id) \
-                                                        .filter(Images.site_image_id.in_(batch_site_image_ids), Images.site_name_id == this_site_name_id, Images.no_image.isnot(True))
+                                                        .filter(Images.site_image_id.in_(batch_site_image_ids), Images.site_name_id == this_site_name_id)
+                                                        # .filter(Images.site_image_id.in_(batch_site_image_ids), Images.site_name_id == this_site_name_id, Images.no_image.isnot(True))
                                                                                                                 
                                     batch_results = batch_query.all()
 
@@ -2198,12 +2280,18 @@ def main():
                                             found_mongo_body_landmarks = mongo_entry.get("body_landmarks") if mongo_entry else None
                                             found_mongo_face_landmarks = mongo_entry.get("face_landmarks") if mongo_entry else None
                                             found_mongo_face_encodings = mongo_entry.get("face_encodings68") if mongo_entry else None
-                                            found_mongo_left_hand_landmarks = mongo_hand_entry.get("left_hand") if mongo_hand_entry else None
-                                            found_mongo_right_hand_landmarks = mongo_hand_entry.get("right_hand") if mongo_hand_entry else None
-                                            if found_mongo_left_hand_landmarks is not None or found_mongo_right_hand_landmarks is not None:
+                                            if result.image_id in no_hands:
+                                                print(" --- REDO_MISSING_MONGO skipping hands for no_hands image_id:", result.image_id, "site_image_id", site_image_id)
                                                 found_mongo_hand_landmarks = True
+                                                # set no_image to False in Images and SegmentTable
+                                                save_no_image_is_small(session, result.image_id, no_image=False, is_small=None)
                                             else:
-                                                found_mongo_hand_landmarks = None
+                                                found_mongo_left_hand_landmarks = mongo_hand_entry.get("left_hand") if mongo_hand_entry else None
+                                                found_mongo_right_hand_landmarks = mongo_hand_entry.get("right_hand") if mongo_hand_entry else None
+                                                if found_mongo_left_hand_landmarks is not None or found_mongo_right_hand_landmarks is not None:
+                                                    found_mongo_hand_landmarks = True
+                                                else:
+                                                    found_mongo_hand_landmarks = None
                                             # print(" REDO_MISSING_MONGO mongo_entry:", mongo_hand_entry)
                                             close_mongo()
                                             if found_mongo_face_landmarks is not None: print(f" ~~Fl~~ found_mongo_face_landmarks {result.image_id} {site_image_id}")
@@ -2218,12 +2306,13 @@ def main():
                                         else:
                                             print(" >-< REDO_MISSING_MONGO no encoding_id for image_id:", result.image_id, "site_image_id", site_image_id)
                                         # if it is missing in mongo, add it to the tasks
-                                        if found_mongo_hand_landmarks is None and HANDLMS is True:
-                                            task = (result.image_id, imagepath, result.mongo_face_landmarks, result.mongo_body_landmarks, result.bbox)
-                                            if not QUIET: print(" ~~ REDO_MISSING_MONGO adding to HAND queue:", result.image_id, "site_image_id", site_image_id)    
-                                        elif found_mongo_face_landmarks is None or found_mongo_face_encodings is None:
+                                        if (found_mongo_face_landmarks is None or found_mongo_face_encodings is None) and csv_foldercount_name == CSV_FOLDERCOUNT_NAMES[0]:
+                                            # only do this on the first pass
                                             task = (result.image_id, imagepath)
                                             if not QUIET: print(" ~~ REDO_MISSING_MONGO adding to face queue:", result.image_id, "site_image_id", site_image_id)
+                                        elif found_mongo_hand_landmarks is None and HANDLMS is True:
+                                            task = (result.image_id, imagepath, result.mongo_face_landmarks, result.mongo_body_landmarks, result.bbox)
+                                            if not QUIET: print(" ~~ REDO_MISSING_MONGO adding to HAND queue:", result.image_id, "site_image_id", site_image_id)    
                                         elif found_mongo_body_landmarks is None:
                                             task = (result.image_id, imagepath, result.mongo_face_landmarks, result.mongo_body_landmarks, result.bbox)
                                             if not QUIET: print(" ~~ REDO_MISSING_MONGO adding to BODY queue:", result.image_id, "site_image_id", site_image_id)
@@ -2297,7 +2386,7 @@ def main():
                             # Only create processes if there are tasks to process
                             if tasks_in_this_round > 0:
                                 # Determine optimal number of processes based on task count
-                                optimal_processes = min(io.NUMBER_OF_PROCESSES, tasks_in_this_round)
+                                optimal_processes = min(io.NUMBER_OF_PROCESSES, (math.ceil(math.sqrt(tasks_in_this_round)/2)))
                                 print(f"Creating {optimal_processes} processes for {tasks_in_this_round} tasks")
                                 
                                 # creating processes

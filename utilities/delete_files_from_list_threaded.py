@@ -21,7 +21,7 @@ JOIN SegmentOct20 s on i.image_id = s.image_id
 WHERE ik.keyword_id = 4222
 '''
 
-ROOT_GITHUB = os.path.join(Path.home(), "Documents/GitHub/facemap/")
+ROOT_GITHUB = os.path.join(Path.home(), "Documents/GitHub/takingstock/")
 # caution: path[0] is reserved for script path (or '' in REPL)
 sys.path.insert(1, ROOT_GITHUB)
 
@@ -35,7 +35,7 @@ io = DataIO(IS_SSD)
 # csv_file = '/Users/michaelmandiberg/Documents/projects-active/facemap_production/test_orig/df_sorted_0_ct9422.csv'
 
 
-CSV_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/delete_files" # folder containing CSV files
+CSV_FOLDER = os.path.join(Path.home(), "Documents/projects-active/takingstock_production/delete_files") # folder containing CSV files
 DELETE_FOLDER = "/Volumes/LaCie/segment_images_ALL" # segment_images to delete from. 
 USE_DF_SORTED = False  # if True it will use the df_sorted format from make_video.py, false expects output from SQL query above
 IS_TEST = False
@@ -176,7 +176,7 @@ def main():
         csv_file_path = os.path.join(CSV_FOLDER, csv_file)
         print(f"Processing CSV file: {csv_file}")
         i = 0
-        print(f"Starting to delete files from CSV (starting at row {START})...")
+        print(f"Starting to delete files from {DELETE_FOLDER} using CSV (starting at row {START})...")
         delete_files_from_csv(csv_file_path, start=START)
         print(f"Total files processed: {i}")
         print(f"  Deleted: {deleted_count}, not found: {notfound_count}, errors: {error_count}")
