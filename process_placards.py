@@ -57,7 +57,7 @@ yolo = YOLOTools(DEBUGGING=True)
 blank = False
 DEBUGGING = True
 
-FILE_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/segment_images_book_clock_bowl"
+FILE_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/labeling_round2/testing_82_money_cards"
 # FILE_FOLDER = "/Volumes/OWC52/segment_images_money_cards"
 OUTPUT_FOLDER = os.path.join(FILE_FOLDER, "test_output")
 BATCH_SIZE = 100
@@ -88,7 +88,20 @@ print("Processing folders with indexes:", folder_indexes)
 def format_site_name_ids(folder_index, batch_img_list):
     if folder_index == 8:
     # 123rf
-        batch_site_image_ids = [img.split("-")[0] for img in batch_img_list]
+        batch_site_image_ids = []
+        for img in batch_img_list:
+            print("123rf img:", img)
+            
+            if "-id" in img:
+                this_site_image_id = img.split("-id")[-1].replace(".jpg", "")
+                batch_site_image_ids.append(this_site_image_id)
+            elif "-" in img:
+                this_site_image_id = img.split("-")[-1].replace(".jpg", "")
+                batch_site_image_ids.append(this_site_image_id)
+            else:
+                this_site_image_id = img.replace(".jpg", "")
+                batch_site_image_ids.append(this_site_image_id)
+        print("123rf batch_site_image_ids", batch_site_image_ids[:5])
     elif folder_index == 5:
         batch_site_image_ids = [img.split("-")[-1].replace(".jpg","") for img in batch_img_list]
         print("pexels batch_site_image_ids", batch_site_image_ids[:5])
