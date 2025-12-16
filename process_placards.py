@@ -48,7 +48,7 @@ ocr_engine = PaddleOCR(
 device = "mps" if torch.backends.mps.is_available() else "cpu"
 print("Using device:", device)
 yolo_model = YOLO("yolov8x.pt").to(device)  # load a pretrained YOLOv8x model
-yolo_custom_model = YOLO("models/takingstock_yolov8x/weights/best.pt").to(device)
+yolo_custom_model = YOLO("models/takingstock_yolov8m/weights/best.pt").to(device)
 
 ocr = OCRTools(DEBUGGING=True)
 yolo = YOLOTools(DEBUGGING=True)
@@ -57,7 +57,7 @@ yolo = YOLOTools(DEBUGGING=True)
 blank = False
 DEBUGGING = True
 
-FILE_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/segment_images_book_clock_bowl"
+FILE_FOLDER = "/Volumes/LaCie/segment_testing_mix"
 # FILE_FOLDER = "/Volumes/OWC52/segment_images_money_cards"
 OUTPUT_FOLDER = os.path.join(FILE_FOLDER, "test_output")
 BATCH_SIZE = 100
@@ -82,7 +82,7 @@ print("Loaded slogans:", slogan_dict)
 median_dict = cl.get_cluster_medians(session, this_cluster)
 print("Loaded cluster medians:", median_dict)
 
-folder_indexes = range(1, len(io.folder_list))  # adjust as needed
+folder_indexes = range(0, len(io.folder_list))  # adjust as needed
 print("Processing folders with indexes:", folder_indexes)
 
 def format_site_name_ids(folder_index, batch_img_list):
@@ -247,6 +247,7 @@ def main():
     folder_count = 0
     for folder_index in folder_indexes:
         site_folder = os.path.join(FILE_FOLDER, os.path.basename(io.folder_list[folder_index]))
+        print(f"folder_index: {folder_index}, site_folder: {site_folder}")
         folder_paths = io.make_hash_folders(site_folder, as_list=True)
         csv_foldercount_path = os.path.join(site_folder, "foldercount.csv")
         if not os.path.exists(csv_foldercount_path): completed_folders = []
@@ -286,6 +287,7 @@ def detect_from_folder(folder_index, csv_foldercount_path, folder_path, folder):
         batch_site_image_ids = format_site_name_ids(folder_index, batch_img_list)
 
         print(f"total img_list: {len(img_list)} no. processed: {i} no. left: {len(img_list)-i}")
+        print(f"folder_index: {folder_index}, {batch_site_image_ids} images.")
         if len(img_list)-i<BATCH_SIZE: print("last_round for img_list")
 
                     # query the database for the current batch and return image_id and encoding_id
@@ -327,7 +329,7 @@ def detect_from_folder(folder_index, csv_foldercount_path, folder_path, folder):
                 do_detections(results_dict[site_image_id], folder_index)
                 print(f"Found image_id: {results_dict[site_image_id].image_id} for site_image_id: {site_image_id}, imagename: {results_dict[site_image_id].imagename}")
             else:
-                print(f"site_image_id: {site_image_id} not found in DB, skipping.")
+                print(f"site_name_id: {folder_index} site_image_id: {site_image_id} not found in DB, skipping.")
                 continue
                 # save  success to csv_foldercount_path
     io.write_csv(csv_foldercount_path, [folder_path])
