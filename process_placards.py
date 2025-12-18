@@ -89,7 +89,20 @@ print("Processing folders with indexes:", folder_indexes)
 def format_site_name_ids(folder_index, batch_img_list):
     if folder_index == 8:
     # 123rf
-        batch_site_image_ids = [img.split("-")[0] for img in batch_img_list]
+        batch_site_image_ids = []
+        for img in batch_img_list:
+            print("123rf img:", img)
+            
+            if "-id" in img:
+                this_site_image_id = img.split("-id")[-1].replace(".jpg", "")
+                batch_site_image_ids.append(this_site_image_id)
+            elif "-" in img:
+                this_site_image_id = img.split("-")[-1].replace(".jpg", "")
+                batch_site_image_ids.append(this_site_image_id)
+            else:
+                this_site_image_id = img.replace(".jpg", "")
+                batch_site_image_ids.append(this_site_image_id)
+        print("123rf batch_site_image_ids", batch_site_image_ids[:5])
     elif folder_index == 5:
         batch_site_image_ids = [img.split("-")[-1].replace(".jpg","") for img in batch_img_list]
         print("pexels batch_site_image_ids", batch_site_image_ids[:5])
