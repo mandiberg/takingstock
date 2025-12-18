@@ -48,7 +48,7 @@ ocr_engine = PaddleOCR(
 device = "mps" if torch.backends.mps.is_available() else "cpu"
 print("Using device:", device)
 yolo_model = YOLO("yolov8x.pt").to(device)  # load a pretrained YOLOv8x model
-yolo_custom_model = YOLO("models/takingstock_yolov8m/weights/best.pt").to(device)
+yolo_custom_model = YOLO("models/takingstock_yolov8x/weights/best.pt").to(device)
 
 ocr = OCRTools(DEBUGGING=True)
 yolo = YOLOTools(DEBUGGING=True)
@@ -57,7 +57,7 @@ yolo = YOLOTools(DEBUGGING=True)
 blank = False
 DEBUGGING = True
 
-FILE_FOLDER = "/Volumes/LaCie/segment_testing_mix"
+FILE_FOLDER = "/Volumes/OWC52/segment_images_80_sign"
 # FILE_FOLDER = "/Volumes/OWC52/segment_images_money_cards"
 OUTPUT_FOLDER = os.path.join(FILE_FOLDER, "test_output")
 BATCH_SIZE = 100
@@ -65,6 +65,7 @@ MASK_THRESHOLD = .15  # HSV distance threshold for mask detection
 CONF_THRESHOLD = 0.25
 IS_DRAW_BOX = True
 IS_SAVE_UNDETECTED = True
+MOVE_OR_COPY = "copy"  # "move" or "copy"
 CLUSTER_TYPE = "HSV" # only works with cluster save, not with assignment
 VERBOSE = True
 META = False # to return the meta clusters (out of 23, not 96)
@@ -126,12 +127,17 @@ def mask_to_cluster_id(image, face_bbox):
     meta_cluster_id, cluster_id, cluster_dist = bbox_to_cluster_id(image, mask_bbox)
     return meta_cluster_id, cluster_id, cluster_dist
 
-def save_debug_image(output_image_path, image, imagename):
+def save_debug_image(output_image_path, image, imagename, image_path=None, move_or_copy=False):
     # save image to OUTPUT_FOLDER for review
     if not os.path.exists(os.path.dirname(output_image_path)):
         os.makedirs(os.path.dirname(output_image_path))
     cv2.imwrite(output_image_path, image)
-    print(f"Image {imagename} no detections, saved to {output_image_path}. ")
+    if move_or_copy == "move" and image_path is not None:
+        os.remove(image_path)
+        print(f"Image {imagename} no detections, MOVED to {output_image_path}. ")
+    elif move_or_copy == "copy" and image_path is not None:
+        print(f"Image {imagename} no detections, saved to {output_image_path}. ")
+
 def draw_bbox_on_image(image, bbox):
     left = bbox['left']
     right = bbox['right']
@@ -166,10 +172,10 @@ def do_detections(result, folder_index):
     detect_results = yolo.merge_yolo_detections(unrefined_detect_results, iou_threshold=0.3, adjacency_threshold_px=50)
     # save_debug_image_yolo_bbox(image_id, imagename, image, detect_results)
 
-    # YOLO COCO object detection
+    # YOLO CUSTOM object detection
     unrefined_detect_results = yolo.detect_objects_return_bbox(yolo_custom_model,image, device, conf_thresh=CONF_THRESHOLD)
     detect_results = yolo.merge_yolo_detections(unrefined_detect_results, iou_threshold=0.3, adjacency_threshold_px=50)
-    save_debug_image_yolo_bbox(image_id, imagename, image, detect_results, draw_box=IS_DRAW_BOX, save_undetected=IS_SAVE_UNDETECTED)
+    save_debug_image_yolo_bbox(image_id, imagename, image, detect_results, image_path, draw_box=IS_DRAW_BOX, save_undetected=IS_SAVE_UNDETECTED)
 
     return
 
@@ -211,11 +217,13 @@ def do_detections(result, folder_index):
     else:
         print(f"Error: slogan_id is None for image {image_id}, skipping save to Placards table.")
 
-def save_debug_image_yolo_bbox(image_id, imagename, image, detect_results, draw_box=True, save_undetected=True):
+def save_debug_image_yolo_bbox(image_id, imagename, image, detect_results, image_path, draw_box=True, save_undetected=True):
     if not detect_results and save_undetected:
         output_image_path = os.path.join(OUTPUT_FOLDER, "no_detections",imagename)
-        save_debug_image(output_image_path, image, imagename)
-    else:
+        # only undetected get MOVE_OR_COPY option
+        save_debug_image(output_image_path, image, imagename, image_path=image_path, move_or_copy=MOVE_OR_COPY)
+    elif MOVE_OR_COPY != "move":
+        # only save detected if not moving undetected
         # Group detections by class_id
         detections_by_class = {}
         for result_dict in detect_results:
