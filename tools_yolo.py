@@ -147,15 +147,17 @@ class YOLOTools:
                     insert(Detections)
                     .values(
                         image_id=image_id,
-                        class_id=detection["class_id"],
-                        obj_no=detection["obj_no"],
+                        class_id=detection.get("class_id", None),
+                        obj_no=detection.get("obj_no", None),
                         bbox=bbox_str,
-                        conf=detection["conf"],
+                        conf=detection.get("conf", None),
                         bbox_norm=bbox_norm_str,
+                        meta_cluster_id = detection.get("meta_cluster_id", None),
+                        cluster_id = detection.get("cluster_id", None)
                     )
                     .on_duplicate_key_update(
                         bbox=bbox_str,
-                        conf=detection["conf"],
+                        conf=detection.get("conf", None),
                         bbox_norm=bbox_norm_str,
                     )
                 )

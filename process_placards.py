@@ -180,6 +180,15 @@ def save_no_dectections(session,image_id, NoDetectionTable=NoDetections):
     session.commit()
     print(f"Image {image_id} - No detections found, saved to {NoDetectionTable} table.")
 
+def assign_hsv_detect_results(detect_results, image):
+    for result_dict in detect_results:
+        bbox = io.unstring_json(result_dict['bbox'])
+        meta_cluster_id, cluster_id, cluster_dist = bbox_to_cluster_id(image, bbox)
+        result_dict['meta_cluster_id'] = meta_cluster_id
+        result_dict['cluster_id'] = cluster_id
+        # result_dict['cluster_dist'] = cluster_dist
+    return detect_results
+
 def do_yolo_detections(result, image, existing_detections, custom=False):
     if custom: 
         ThisNoDetectionTable=NoDetectionsCustom
@@ -208,6 +217,8 @@ def do_yolo_detections(result, image, existing_detections, custom=False):
         # YOLO object detection
         unrefined_detect_results = yolo.detect_objects_return_bbox(this_yolo_model,image, device, conf_thresh=CONF_THRESHOLD)
         detect_results = yolo.merge_yolo_detections(unrefined_detect_results, iou_threshold=0.3, adjacency_threshold_px=50)
+        detect_results = assign_hsv_detect_results(detect_results, image)
+        print(f"Image {image_id} - YOLO detections: {detect_results}")
         # save_debug_image_yolo_bbox(image_id, imagename, image, detect_results)
         save_debug_image_yolo_bbox(image_id, imagename, image, detect_results, draw_box=IS_DRAW_BOX, save_undetected=IS_SAVE_UNDETECTED)
         if len(detect_results) == 0:
@@ -215,6 +226,7 @@ def do_yolo_detections(result, image, existing_detections, custom=False):
             return
         else:
             yolo.save_obj_bbox(session, image_id, detect_results, Detections)
+    return detect_results
 
 def do_detections(result, folder_index):
 
@@ -236,50 +248,57 @@ def do_detections(result, folder_index):
         return
 
     print(f"Processing image_id: {image_id}, imagename: {imagename}")
-    if DO_COCO: do_yolo_detections(result, image, existing_detections, custom=False)
+    if DO_COCO: 
+        coco_detections = do_yolo_detections(result, image, existing_detections, custom=False)
 
+    if DO_CUSTOM: 
+        custom_detections = do_yolo_detections(result, image, existing_detections, custom=True)
 
-    if DO_CUSTOM: do_yolo_detections(result, image, existing_detections, custom=True)
+    if DO_VALENTINE:
+        pass
 
-    return
+    if DO_MASK:
+        # detect facemask via hsv distance and clustering
+        top_hsl, bot_hsl, hsl_distance = yolo.compute_mask_hsv(image, face_bbox)
+        meta_cluster_id, cluster_id, cluster_dist = mask_to_cluster_id(image, face_bbox)
+    
+        # for debugging mask, saving to folders
+        # debug_file_name = f"{hsl_distance:.2f}_{image_id}_mask_debug.jpg"
+        # if hsl_distance > MASK_THRESHOLD: output_image_path = os.path.join(OUTPUT_FOLDER, str(meta_cluster_id),debug_file_name)
+        # else: output_image_path = os.path.join(OUTPUT_FOLDER, "no_mask",debug_file_name)
+        # # save image to OUTPUT_FOLDER for review
+        # save_debug_image(output_image_path, image, imagename)
 
-    # detect valentine heart
+    if DO_OCR and DO_CUSTOM and custom_detections is not None:
+        sign_detections = [det for det in custom_detections if det['class_id'] == 80]
+        for detection in sign_detections:
+            bbox = io.unstring_json(detection['bbox'])
+            cropped_image_bbox = image[bbox['top']:bbox['bottom'], bbox['left']:bbox['right']]
+            print(f"Image {image_id} - Performing OCR on cropped image with bbox: {bbox}")
 
+            # ACTION gets cluster assignment info
+            # will need to streamline the bbox format
+            # this is now handled in the yolo funciton
+            # normalized_hue, normalized_saturation, normalized_value, normalized_luminance, cropped_image_bbox = yolo.get_image_bbox_hsv(image, label_data)
+            # print(f"Image {image_id} - Hue: {normalized_hue}, Saturation: {normalized_saturation}, Value: {normalized_value}, Luminance: {normalized_luminance}")
+            # average_hsl = [normalized_hue, normalized_saturation, normalized_luminance]
+            # cluster_id, cluster_dist = cl.prep_pose_clusters_enc(average_hsl)
+            # meta_cluster_id = meta_cluster_dict.get(cluster_id, None)
+            # print(f"Image {image_id} assigned to meta_cluster_id {meta_cluster_id} based on cluster_id {cluster_id} with distance {cluster_dist}.")
 
-    # detect facemask via hsv distance and clustering
-    top_hsl, bot_hsl, hsl_distance = yolo.compute_mask_hsv(image, face_bbox)
-    meta_cluster_id, cluster_id, cluster_dist = mask_to_cluster_id(image, face_bbox)
-   
-    # for debugging mask, saving to folders
-    # debug_file_name = f"{hsl_distance:.2f}_{image_id}_mask_debug.jpg"
-    # if hsl_distance > MASK_THRESHOLD: output_image_path = os.path.join(OUTPUT_FOLDER, str(meta_cluster_id),debug_file_name)
-    # else: output_image_path = os.path.join(OUTPUT_FOLDER, "no_mask",debug_file_name)
-    # # save image to OUTPUT_FOLDER for review
-    # save_debug_image(output_image_path, image, imagename)
-
-    return
-    # ACTION gets cluster assignment info
-    # will need to streamline the bbox format
-    normalized_hue, normalized_saturation, normalized_value, normalized_luminance, cropped_image_bbox = yolo.get_image_bbox_hsv(image, label_data)
-    print(f"Image {image_id} - Hue: {normalized_hue}, Saturation: {normalized_saturation}, Value: {normalized_value}, Luminance: {normalized_luminance}")
-    average_hsl = [normalized_hue, normalized_saturation, normalized_luminance]
-    cluster_id, cluster_dist = cl.prep_pose_clusters_enc(average_hsl)
-    meta_cluster_id = meta_cluster_dict.get(cluster_id, None)
-    print(f"Image {image_id} assigned to meta_cluster_id {meta_cluster_id} based on cluster_id {cluster_id} with distance {cluster_dist}.")
-
-    # ACTION OCR on cropped image
-    # return # skip OCR for now
-    found_texts = ocr.ocr_on_cropped_image(cropped_image_bbox, ocr_engine, image_id)
-    print("Found Texts:", found_texts)
-    # assign slogan_id
-    slogan_id = ocr.assign_slogan_id(session, openai_client, Slogans, slogan_dict, image_id, found_texts)
-    # Here, save image_id, slogan_id info to Placards table
-    if slogan_id is not None:
-        print(f"Saving image {image_id} with slogan_id {slogan_id} to ImagesSlogans table.")
-        # this needs to wait for ImagesSlogans table to be created
-        # ocr.save_images_slogans(session, ImagesSlogans, image_id, slogan_id)
-    else:
-        print(f"Error: slogan_id is None for image {image_id}, skipping save to Placards table.")
+            # ACTION OCR on cropped image
+            # return # skip OCR for now
+            found_texts = ocr.ocr_on_cropped_image(cropped_image_bbox, ocr_engine, image_id)
+            print("Found Texts:", found_texts)
+            # assign slogan_id
+            slogan_id = ocr.assign_slogan_id(session, openai_client, Slogans, slogan_dict, image_id, found_texts)
+            # Here, save image_id, slogan_id info to Placards table
+            if slogan_id is not None:
+                print(f"Saving image {image_id} with slogan_id {slogan_id} to ImagesSlogans table.")
+                # this needs to wait for ImagesSlogans table to be created
+                # ocr.save_images_slogans(session, ImagesSlogans, image_id, slogan_id)
+            else:
+                print(f"Error: slogan_id is None for image {image_id}, skipping save to Placards table.")
 
 def save_debug_image_yolo_bbox(image_id, imagename, image, detect_results, draw_box=True, save_undetected=True):
     if not detect_results and save_undetected:
