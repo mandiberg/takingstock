@@ -1,5 +1,6 @@
 import cv2
 import numpy as np
+import pandas as pd
 import os
 from paddleocr import PaddleOCR
 import re
@@ -64,6 +65,7 @@ DO_OCR = False
 
 FILE_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/segment_images_book_clock_bowl"
 # FILE_FOLDER = "/Volumes/OWC52/segment_images_money_cards"
+MAKE_VIDEO_CSVS_PATH = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/heft_keyword_fusion_clusters/object_detection_csvs"
 OUTPUT_FOLDER = os.path.join(FILE_FOLDER, "test_output")
 BATCH_SIZE = 100
 MASK_THRESHOLD = .15  # HSV distance threshold for mask detection
@@ -332,9 +334,35 @@ def save_debug_image_yolo_bbox(image_id, imagename, image, detect_results, draw_
             output_image_path = os.path.join(OUTPUT_FOLDER, str(result_dict['class_id']), debug_file_name)
             save_debug_image(output_image_path, drawable_image, imagename)
 
+def load_csvs(folder_path):
+    # get a list of all files in folder_path
+    folder_files = os.listdir(folder_path)
+    csv_files = [f for f in folder_files if f.endswith('.csv')]
+    print(f"Found {len(csv_files)} CSV files in {folder_path}.")
+    # load each csv into a dataframe and concatenate them
+    df_list = []
+    for csv_file in csv_files:
+        csv_path = os.path.join(folder_path, csv_file)
+        df = pd.read_csv(csv_path)
+        df_list.append(df)
+    df_csvs = pd.concat(df_list, ignore_index=True)
+    print(f"Combined CSVs into a single dataframe with {len(df_csvs)} rows.")
+    return df_csvs
+
 def main():
+    if MAKE_VIDEO_CSVS_PATH is not None:
+        df_csvs = load_csvs(MAKE_VIDEO_CSVS_PATH)
+    else:
+        df_csvs = pd.DataFrame(columns=['site_name_id','site_image_id'])  
+    print("lenth df_csvs:", len(df_csvs))     
     folder_count = 0
     for folder_index in folder_indexes:
+        df_csvs_folder = df_csvs[df_csvs['site_name_id'] == folder_index]
+        if MAKE_VIDEO_CSVS_PATH is not None and len(df_csvs_folder) == 0:
+            print("Skipping folder_index:", folder_index, "no entries in MAKE_VIDEO_CSVS_PATH")
+            continue
+        else:
+            print("meets or ignores MAKE_VIDEO_CSVS_PATH, folder_index:", folder_index, "len df_csvs_folder:", len(df_csvs_folder))
         site_folder = os.path.join(FILE_FOLDER, os.path.basename(io.folder_list[folder_index]))
         print(f"folder_index: {folder_index}, site_folder: {site_folder}")
         folder_paths = io.make_hash_folders(site_folder, as_list=True)
@@ -356,14 +384,17 @@ def main():
                 else:
                     print(str(folder_count), folder)
                     
-                detect_from_folder(folder_index, csv_foldercount_path, folder_path, folder)
+                detect_from_folder(folder_index, csv_foldercount_path, folder_path, folder, df_csvs_folder)
 
     session.close()
     engine.dispose()
 
-def detect_from_folder(folder_index, csv_foldercount_path, folder_path, folder):
+def detect_from_folder(folder_index, csv_foldercount_path, folder_path, folder, df_csvs_folder):
     img_list = io.get_img_list(folder, force_ls=True)
     print("len(img_list)", len(img_list))
+    if len(df_csvs_folder) > 0:
+        img_list = [img for img in img_list if img.split(".")[0] in df_csvs_folder['site_image_id'].values]
+        print("after filtering with MAKE_VIDEO_CSVS_PATH, len(img_list)", len(img_list))
 
                 # Initialize an empty list to store all the results
     all_results = []
