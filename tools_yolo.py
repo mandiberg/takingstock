@@ -137,7 +137,7 @@ class YOLOTools:
             for detection in detections_list:
                 bbox_str = detection.get("bbox")
                 bbox_norm_str = detection.get("bbox_norm")
-                
+                print("detection is", detection)
                 if not bbox_str:
                     if self.VERBOSE: print(f"Skipping empty bbox for class_id {detection['class_id']}, obj_no {detection['obj_no']}")
                     continue
@@ -159,11 +159,29 @@ class YOLOTools:
                         bbox_norm=bbox_norm_str,
                     )
                 )
-                session.execute(stmt)
+                try:
+                    # print the statement first
+                    print(f"Executing upsert for image_id {image_id}, class_id {detection['class_id']}, obj_no {detection['obj_no']}")
+                    result = session.execute(stmt)
+                    rowcount = getattr(result, "rowcount", None)
+                except Exception as e:
+                    if self.VERBOSE: print(f"Upsert failed for image_id {image_id}, class_id {detection['class_id']}, obj_no {detection['obj_no']}: {e}")
+                    raise
                 
                 if self.VERBOSE:
                     print(f"Upserted detection for image_id {image_id}, class_id {detection['class_id']}, obj_no {detection['obj_no']}")
             
+        # Commit the transaction so the upserts are persisted.
+        try:
+            session.commit()
+            if self.VERBOSE:
+                print(f"Committed session for image_id {image_id}")
+        except Exception as e:
+            session.rollback()
+            if self.VERBOSE:
+                print(f"Commit failed for image_id {image_id}: {e}")
+            raise
+
         return session
 
 
@@ -407,7 +425,7 @@ class YOLOTools:
         used_indices = set()
         
         for i in range(len(detect_results)):
-            if i in used_indices:
+            if i in used_indices or detect_results[i]['class_id'] == 0:
                 continue
             
             current = detect_results[i]

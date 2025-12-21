@@ -19,7 +19,7 @@ from sqlalchemy.pool import NullPool
 
 # importing project-specific models
 import sys
-from my_declarative_base import Encodings, Images, Slogans, ImagesSlogans
+from my_declarative_base import Encodings, Images, Slogans, ImagesSlogans, Detections, NoDetections, NoDetectionsCustom
 from tools_ocr import OCRTools
 from tools_clustering import ToolsClustering
 from tools_yolo import YOLOTools
@@ -48,7 +48,7 @@ ocr_engine = PaddleOCR(
 device = "mps" if torch.backends.mps.is_available() else "cpu"
 print("Using device:", device)
 yolo_model = YOLO("yolov8x.pt").to(device)  # load a pretrained YOLOv8x model
-yolo_custom_model = YOLO("models/takingstock_yolov8m/weights/best.pt").to(device)
+yolo_custom_model = YOLO("models/takingstock_yolov8x/weights/best.pt").to(device)
 
 ocr = OCRTools(DEBUGGING=True)
 yolo = YOLOTools(DEBUGGING=True)
@@ -56,8 +56,13 @@ yolo = YOLOTools(DEBUGGING=True)
 
 blank = False
 DEBUGGING = True
+DO_COCO = True
+DO_CUSTOM = False
+DO_MASK = False
+DO_VALENTINE = False
+DO_OCR = False
 
-FILE_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/labeling_round2/testing_82_money_cards"
+FILE_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/segment_images_book_clock_bowl"
 # FILE_FOLDER = "/Volumes/OWC52/segment_images_money_cards"
 OUTPUT_FOLDER = os.path.join(FILE_FOLDER, "test_output")
 BATCH_SIZE = 100
@@ -153,10 +158,68 @@ def draw_bbox_on_image(image, bbox):
     cv2.rectangle(image, (left, top), (right, bottom), (0, 255, 0), 2)
     return image
 
+def get_existing_detections(image_id, class_id=None):
+    if class_id is not None:
+        existing_detections_query = session.query(Detections).filter(Detections.image_id == image_id, Detections.class_id == class_id)
+    else:
+        existing_detections_query = session.query(Detections).filter(Detections.image_id == image_id)
+    existing_detections = existing_detections_query.all()
+    return existing_detections
+
+def get_existing_no_detections(image_id, NoDetectionTable=NoDetections):
+    existing_no_detections_query = session.query(NoDetectionTable).filter(NoDetectionTable.image_id == image_id)
+    existing_no_detections = existing_no_detections_query.all()
+    return existing_no_detections
+
+def save_no_dectections(session,image_id, NoDetectionTable=NoDetections):
+    # save to NoDetections table
+    new_no_detection = NoDetectionTable(
+        image_id=image_id
+    )
+    session.add(new_no_detection)
+    session.commit()
+    print(f"Image {image_id} - No detections found, saved to {NoDetectionTable} table.")
+
+def do_yolo_detections(result, image, existing_detections, custom=False):
+    if custom: 
+        ThisNoDetectionTable=NoDetectionsCustom
+        existing_detection_ids = [det.detection_id for det in existing_detections if det.class_id >= 80]
+        this_yolo_model = yolo_custom_model
+    else:
+        ThisNoDetectionTable=NoDetections
+        existing_detection_ids = [det.detection_id for det in existing_detections if det.class_id < 80]
+        this_yolo_model = yolo_model
+    existing_no_detections = get_existing_no_detections(result.image_id, NoDetectionTable=ThisNoDetectionTable)
+
+    image_id = result.image_id
+    imagename = result.imagename
+    if len(existing_no_detections) > 0:
+        print(f"Skipping image_id {result.image_id} due to existing no detections record.")
+        return
+    elif len(existing_detection_ids) > 0:
+        print(f"Skipping image_id {result.image_id} due to existing detections record.")
+        return
+        # TK uncomment this when no longer testing and handle custom = False
+        # for det_id in existing_detection_ids:
+            # if det_id > 12455146:
+            #     print(f"Skipping image_id {result.image_id} due to first round detection_id {det_id} > 12455146")
+            #     return
+    else:
+        # YOLO object detection
+        unrefined_detect_results = yolo.detect_objects_return_bbox(this_yolo_model,image, device, conf_thresh=CONF_THRESHOLD)
+        detect_results = yolo.merge_yolo_detections(unrefined_detect_results, iou_threshold=0.3, adjacency_threshold_px=50)
+        # save_debug_image_yolo_bbox(image_id, imagename, image, detect_results)
+        save_debug_image_yolo_bbox(image_id, imagename, image, detect_results, draw_box=IS_DRAW_BOX, save_undetected=IS_SAVE_UNDETECTED)
+        if len(detect_results) == 0:
+            save_no_dectections(session,image_id, NoDetectionTable=ThisNoDetectionTable)
+            return
+        else:
+            yolo.save_obj_bbox(session, image_id, detect_results, Detections)
+
 def do_detections(result, folder_index):
 
+    existing_detections = get_existing_detections(result.image_id)
     
-
     image_id = result.image_id
     imagename = result.imagename
     try:
@@ -173,16 +236,10 @@ def do_detections(result, folder_index):
         return
 
     print(f"Processing image_id: {image_id}, imagename: {imagename}")
+    if DO_COCO: do_yolo_detections(result, image, existing_detections, custom=False)
 
-    # YOLO COCO object detection
-    unrefined_detect_results = yolo.detect_objects_return_bbox(yolo_model,image, device, conf_thresh=CONF_THRESHOLD)
-    detect_results = yolo.merge_yolo_detections(unrefined_detect_results, iou_threshold=0.3, adjacency_threshold_px=50)
-    # save_debug_image_yolo_bbox(image_id, imagename, image, detect_results)
 
-    # YOLO COCO object detection
-    unrefined_detect_results = yolo.detect_objects_return_bbox(yolo_custom_model,image, device, conf_thresh=CONF_THRESHOLD)
-    detect_results = yolo.merge_yolo_detections(unrefined_detect_results, iou_threshold=0.3, adjacency_threshold_px=50)
-    save_debug_image_yolo_bbox(image_id, imagename, image, detect_results, draw_box=IS_DRAW_BOX, save_undetected=IS_SAVE_UNDETECTED)
+    if DO_CUSTOM: do_yolo_detections(result, image, existing_detections, custom=True)
 
     return
 
