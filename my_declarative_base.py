@@ -456,7 +456,7 @@ class YoloClasses(Base):
 
 
 class Detections(Base):
-    __tablename__ = 'Detections'
+    __tablename__ = 'DetectionsTest'
 
     detection_id = Column(Integer, primary_key=True, autoincrement=True)
     image_id = Column(Integer, ForeignKey('images.image_id'), nullable=False)
@@ -465,6 +465,8 @@ class Detections(Base):
     bbox = Column(JSON, nullable=False)
     conf = Column(Float, nullable=False)
     bbox_norm = Column(JSON)
+    meta_cluster_id = Column(Integer)
+    cluster_id = Column(Integer)
 
     __table_args__ = (
         UniqueConstraint('image_id', 'class_id', 'obj_no', name='uq_image_class_obj'),
@@ -474,8 +476,17 @@ class Detections(Base):
     image = relationship("Images")
     yolo_class = relationship("YoloClasses", back_populates="detections")
 
+class NoDetections(Base):
+    __tablename__ = 'NoDetections'
+    
+    seg_image_id           = Column(Integer, primary_key=True, autoincrement=True)
+    image_id               = Column(Integer, primary_key=True)
 
-
+class NoDetectionsCustom(Base):
+    __tablename__ = 'NoDetectionsCustom'
+    
+    seg_image_id           = Column(Integer, primary_key=True, autoincrement=True)
+    image_id               = Column(Integer, primary_key=True)
 
 class SegmentHelperObject(Base):
     __tablename__ = 'SegmentHelperObjectYOLO'
