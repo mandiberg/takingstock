@@ -314,7 +314,7 @@ CREATE TABLE YoloClasses (
     model_version VARCHAR(20)
 );
 
-CREATE TABLE Detections (
+CREATE TABLE DetectionsTest (
     detection_id INT AUTO_INCREMENT PRIMARY KEY,
     image_id INT NOT NULL,
     class_id INT NOT NULL,
@@ -336,4 +336,20 @@ CREATE TABLE Detections (
     FOREIGN KEY (class_id) REFERENCES YoloClasses(class_id),
     INDEX idx_image_class (image_id, class_id)
 );
+
+-- create helper segment for tracking images without any objects
+CREATE TABLE NoDetections (
+    seg_image_id int NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    image_id INTEGER,
+    FOREIGN KEY (image_id) REFERENCES Images(image_id)
+);
+-- create helper segment for tracking images without any objects
+CREATE TABLE NoDetectionsCustom (
+    seg_image_id int NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    image_id INTEGER,
+    FOREIGN KEY (image_id) REFERENCES Images(image_id)
+);
+
+
+
 
