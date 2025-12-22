@@ -72,6 +72,7 @@ MASK_THRESHOLD = .15  # HSV distance threshold for mask detection
 CONF_THRESHOLD = 0.25
 IS_DRAW_BOX = True
 IS_SAVE_UNDETECTED = True
+MOVE_OR_COPY = "copy"  # "move" or "copy"
 CLUSTER_TYPE = "HSV" # only works with cluster save, not with assignment
 VERBOSE = True
 META = False # to return the meta clusters (out of 23, not 96)
@@ -146,12 +147,17 @@ def mask_to_cluster_id(image, face_bbox):
     meta_cluster_id, cluster_id, cluster_dist = bbox_to_cluster_id(image, mask_bbox)
     return meta_cluster_id, cluster_id, cluster_dist
 
-def save_debug_image(output_image_path, image, imagename):
+def save_debug_image(output_image_path, image, imagename, image_path=None, move_or_copy=False):
     # save image to OUTPUT_FOLDER for review
     if not os.path.exists(os.path.dirname(output_image_path)):
         os.makedirs(os.path.dirname(output_image_path))
     cv2.imwrite(output_image_path, image)
-    print(f"Image {imagename} no detections, saved to {output_image_path}. ")
+    if move_or_copy == "move" and image_path is not None:
+        os.remove(image_path)
+        print(f"Image {imagename} no detections, MOVED to {output_image_path}. ")
+    elif move_or_copy == "copy" and image_path is not None:
+        print(f"Image {imagename} no detections, saved to {output_image_path}. ")
+
 def draw_bbox_on_image(image, bbox):
     left = bbox['left']
     right = bbox['right']
@@ -302,11 +308,13 @@ def do_detections(result, folder_index):
             else:
                 print(f"Error: slogan_id is None for image {image_id}, skipping save to Placards table.")
 
-def save_debug_image_yolo_bbox(image_id, imagename, image, detect_results, draw_box=True, save_undetected=True):
+def save_debug_image_yolo_bbox(image_id, imagename, image, detect_results, image_path, draw_box=True, save_undetected=True):
     if not detect_results and save_undetected:
         output_image_path = os.path.join(OUTPUT_FOLDER, "no_detections",imagename)
-        save_debug_image(output_image_path, image, imagename)
-    else:
+        # only undetected get MOVE_OR_COPY option
+        save_debug_image(output_image_path, image, imagename, image_path=image_path, move_or_copy=MOVE_OR_COPY)
+    elif MOVE_OR_COPY != "move":
+        # only save detected if not moving undetected
         # Group detections by class_id
         detections_by_class = {}
         for result_dict in detect_results:
