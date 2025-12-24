@@ -185,3 +185,45 @@ SELECT 1 FROM SegmentBig_isface sb
 WHERE sb.image_id = sy.image_id
 )
 LIMIT 10;
+
+
+USE Stock;
+ALTER TABLE Slogans DROP PRIMARY KEY;
+
+ALTER TABLE Detections
+ADD hue Float,
+ADD sat Float,
+ADD lum Float,
+ADD val Float, 
+
+ALTER TABLE Detections
+ADD 	orientation INT,
+ADD 	exclude TINYINT,
+;
+
+
+ALTER TABLE Detections
+    ADD COLUMN cluster_id INT,
+    ADD COLUMN meta_cluster_id INT,
+    ADD CONSTRAINT fk_detections_cluster
+        FOREIGN KEY (cluster_id) REFERENCES HSV(cluster_id);
+
+INSERT INTO BsonFileLog (completed_bson_file) VALUES ('encodings_batch_7900001.bson');
+
+
+INSERT INTO YoloClasses (class_id, class_name, model_version) VALUES
+(80,'Sign','YoloCustom'),
+(81,'Gift','YoloCustom'),
+(82,'money','YoloCustom'),
+(83,'Bag','YoloCustom'),
+(84,'valentine','YoloCustom'),
+(85,'Salad','YoloCustom'),
+(86,'Dumbbell','YoloCustom'),
+(87,'rose','YoloCustom'),
+(88,'Groceries','YoloCustom'),
+(89,'mask','other'),
+(90,'Stethoscope','other'),
+(91,'Gun','other'),
+(92,'Headphones','other'),
+(93,'Clipboard','other')
+;
