@@ -56,28 +56,31 @@ yolo = YOLOTools(DEBUGGING=True)
 
 
 blank = False
-DEBUGGING = True
+DEBUGGING = False
 DO_COCO = True
 DO_CUSTOM = False
 DO_MASK = False
 DO_VALENTINE = False
 DO_OCR = False
 
-FILE_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/segment_images_book_clock_bowl"
-# FILE_FOLDER = "/Volumes/OWC52/segment_images_money_cards"
-MAKE_VIDEO_CSVS_PATH = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/heft_keyword_fusion_clusters/object_detection_csvs"
+# FILE_FOLDER = "/Volumes/OWC5/segment_images_book_clock_bowl"
+FILE_FOLDER = "/Volumes/SSD4_Green/segment_images_67_phone_undetected"
+# MAKE_VIDEO_CSVS_PATH = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/book_csvs"
+MAKE_VIDEO_CSVS_PATH = None  # to process all images in folder
 OUTPUT_FOLDER = os.path.join(FILE_FOLDER, "test_output")
 BATCH_SIZE = 100
 MASK_THRESHOLD = .15  # HSV distance threshold for mask detection
 CONF_THRESHOLD = 0.25
 IS_DRAW_BOX = True
-IS_SAVE_UNDETECTED = True
+IS_SAVE_UNDETECTED = False
 MOVE_OR_COPY = "copy"  # "move" or "copy"
 CLUSTER_TYPE = "HSV" # only works with cluster save, not with assignment
 VERBOSE = True
 META = False # to return the meta clusters (out of 23, not 96)
 cl = ToolsClustering(CLUSTER_TYPE, VERBOSE=VERBOSE)
 table_cluster_type = cl.set_table_cluster_type(META)
+
+custom_ids_to_global_dict = {1:80, 2:82}
 
 Clusters, ImagesClusters, MetaClusters, ClustersMetaClusters = cl.construct_table_classes(table_cluster_type)
 this_cluster, this_crosswalk = cl.set_cluster_metacluster(Clusters, ImagesClusters, MetaClusters, ClustersMetaClusters)
@@ -199,44 +202,54 @@ def assign_hsv_detect_results(detect_results, image):
         # result_dict['cluster_dist'] = cluster_dist
     return detect_results
 
-def do_yolo_detections(result, image, existing_detections, custom=False):
+def map_custom_ids_to_global(detect_results):
+    for result_dict in detect_results:
+        result_dict['class_id'] = custom_ids_to_global_dict.get(result_dict['class_id'], None)
+        if result_dict['class_id'] is None:
+            print(f" ⚠️ Warning: custom class_id {result_dict['class_id']} not found in mapping dictionary, setting to None.")
+            result_dict = None
+        else:
+            print(f" ✅ Mapped custom class_id to global class_id: {result_dict['class_id']}")
+    return detect_results
+
+def do_yolo_detections(result, image, image_path, existing_detections, custom=False):
+    image_id = result.image_id
+    imagename = result.imagename
+
     if custom: 
         ThisNoDetectionTable=NoDetectionsCustom
-        existing_detection_ids = [det.detection_id for det in existing_detections if det.class_id >= 80]
         this_yolo_model = yolo_custom_model
     else:
         ThisNoDetectionTable=NoDetections
-        existing_detection_ids = [det.detection_id for det in existing_detections if det.class_id < 80]
         this_yolo_model = yolo_model
-    existing_no_detections = get_existing_no_detections(result.image_id, NoDetectionTable=ThisNoDetectionTable)
-
-    image_id = result.image_id
-    imagename = result.imagename
-    if len(existing_no_detections) > 0:
-        print(f"Skipping image_id {result.image_id} due to existing no detections record.")
+    # YOLO object detection
+    unrefined_detect_results = yolo.detect_objects_return_bbox(this_yolo_model,image, device, conf_thresh=CONF_THRESHOLD)
+    detect_results = yolo.merge_yolo_detections(unrefined_detect_results, iou_threshold=0.3, adjacency_threshold_px=50)
+    detect_results = assign_hsv_detect_results(detect_results, image)
+    if custom:
+        detect_results = map_custom_ids_to_global(detect_results)
+    print(f"Image {image_id} - YOLO detections: {detect_results}")
+    # save_debug_image_yolo_bbox(image_id, imagename, image, detect_results)
+    if DEBUGGING:
+        save_debug_image_yolo_bbox(image_id, imagename, image, detect_results, image_path, draw_box=IS_DRAW_BOX, save_undetected=IS_SAVE_UNDETECTED)
+    if len(detect_results) == 0:
+        if custom: return # skipp no    detections save for custom
+        save_no_dectections(session,image_id, NoDetectionTable=ThisNoDetectionTable)
         return
-    elif len(existing_detection_ids) > 0:
-        print(f"Skipping image_id {result.image_id} due to existing detections record.")
-        return
-        # TK uncomment this when no longer testing and handle custom = False
-        # for det_id in existing_detection_ids:
-            # if det_id > 12455146:
-            #     print(f"Skipping image_id {result.image_id} due to first round detection_id {det_id} > 12455146")
-            #     return
     else:
-        # YOLO object detection
-        unrefined_detect_results = yolo.detect_objects_return_bbox(this_yolo_model,image, device, conf_thresh=CONF_THRESHOLD)
-        detect_results = yolo.merge_yolo_detections(unrefined_detect_results, iou_threshold=0.3, adjacency_threshold_px=50)
-        detect_results = assign_hsv_detect_results(detect_results, image)
-        print(f"Image {image_id} - YOLO detections: {detect_results}")
-        # save_debug_image_yolo_bbox(image_id, imagename, image, detect_results)
-        save_debug_image_yolo_bbox(image_id, imagename, image, detect_results, draw_box=IS_DRAW_BOX, save_undetected=IS_SAVE_UNDETECTED)
-        if len(detect_results) == 0:
-            save_no_dectections(session,image_id, NoDetectionTable=ThisNoDetectionTable)
-            return
-        else:
-            yolo.save_obj_bbox(session, image_id, detect_results, Detections)
+        yolo.save_obj_bbox(session, image_id, detect_results, Detections)
     return detect_results
+
+def check_for_existing_detections(image_id, existing_detections, custom=False):
+    if custom:
+        existing_detections_image_ids = [det.detection_id for det in existing_detections if det.class_id >= 80]
+        existing_no_detections = get_existing_no_detections(image_id, NoDetectionTable=NoDetectionsCustom)
+    else:
+        all_existing_detections_image_ids = [det.detection_id for det in existing_detections if det.class_id < 80]
+        # only consider detection_ids > 12455146 which are the new ones, not the original ones
+        existing_detections_image_ids = [det_id for det_id in all_existing_detections_image_ids if det_id > 12455146]
+        existing_no_detections = get_existing_no_detections(image_id, NoDetectionTable=NoDetections)
+    return existing_detections_image_ids, existing_no_detections
 
 def do_detections(result, folder_index):
     coco_detections = custom_detections = None
@@ -244,6 +257,25 @@ def do_detections(result, folder_index):
     
     image_id = result.image_id
     imagename = result.imagename
+    existing_coco = existing_custom = False
+    existing_detections = get_existing_detections(result.image_id)
+    existing_detections_image_ids, existing_no_detections = check_for_existing_detections(image_id, existing_detections, custom=False)
+    existing_detections_custom_image_ids, existing_no_detections_custom = check_for_existing_detections(image_id, existing_detections, custom=True)
+    if image_id in existing_detections_image_ids or existing_no_detections: existing_coco = True
+    if image_id in existing_detections_custom_image_ids or existing_no_detections_custom: existing_custom = True
+
+    if (existing_coco and existing_custom) or (existing_coco and not DO_CUSTOM) or (existing_custom and not DO_COCO):
+        print(f"Skipping image_id {image_id} due to existing detections record for this configuration.")
+        return
+    # elif len(existing_detection_ids) > 0:
+    #     print(f"Skipping image_id {result.image_id} due to existing detections record.")
+    #     return
+        # TK uncomment this when no longer testing and handle custom = False
+        # for det_id in existing_detection_ids:
+            # if det_id > 12455146:
+            #     print(f"Skipping image_id {result.image_id} due to first round detection_id {det_id} > 12455146")
+            #     return
+
     try:
         face_bbox = io.unstring_json(result.bbox)
     except Exception as e:
@@ -258,11 +290,11 @@ def do_detections(result, folder_index):
         return
 
     print(f"Processing image_id: {image_id}, imagename: {imagename}")
-    if DO_COCO: 
-        coco_detections = do_yolo_detections(result, image, existing_detections, custom=False)
+    if DO_COCO and not existing_no_detections: 
+        coco_detections = do_yolo_detections(result, image, image_path, existing_detections, custom=False)
 
-    if DO_CUSTOM: 
-        custom_detections = do_yolo_detections(result, image, existing_detections, custom=True)
+    if DO_CUSTOM and not existing_no_detections_custom: 
+        custom_detections = do_yolo_detections(result, image, image_path, existing_detections, custom=True)
 
     if DO_VALENTINE:
         pass

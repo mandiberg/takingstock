@@ -23,8 +23,11 @@ NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 # ROOT_FOLDER_PATH = '/Users/michaelmandiberg/Documents/projects-active/facemap_production/heft_keyword_fusion_clusters'
 ROOT_FOLDER_PATH = '/Users/michael.mandiberg/Documents/takingstock_production/keyword_fusion_output'
 
-MODE = "Keywords" # Topics or Keywords
-MODE_ID = "topic_id" if MODE == "Topics" else "keyword_id"
+MODE = "DetectionsTest" # Topics or Keywords or Detections
+
+if MODE == "Topics": MODE_ID = "topic_id" 
+elif "Detections" in MODE: MODE_ID = "class_id"
+else: MODE_ID =  "keyword_id"
 
     # if "body3D" in CLUSTER_TYPE: cluster_count = 512
     # elif "BodyPoses3D" in CLUSTER_TYPE: cluster_count = 768
@@ -35,7 +38,7 @@ CLUSTER_COUNT = 128
 CLUSTER_DATA = {
     "ArmsPoses3D_MetaHSV": {"sql_template": "sql_query_template_MetaHSV_Body3D", "cluster_table_name": "ImagesArmsPoses3D", "hsv_type": "ClustersMetaHSV", "cluster_count": CLUSTER_COUNT}
 }
-HELPER_TABLE = "SegmentHelper_sept2025_heft_keywords"
+HELPER_TABLE = "SegmentHelperObject_73_book"
 CLUSTER_TYPE = "ArmsPoses3D_MetaHSV" # key to CLUSTER_DATA dict
 # "ArmsPoses3D_MetaHSV" or "BodyPoses3D_MetaHSV" or "MetaBodyPoses3D" or "BodyPoses3D_HSV" or "body3D" or "hand_gesture_position" - determines whether it checks hand poses or body3D
 
@@ -56,7 +59,7 @@ session = Session()
 # KEYWORDS = [22411,220,22269,827,1070,22412,553,807,1644,5310] # helper segment
 # KEYWORDS = [21463,4222,13130,23084,79920,8874,736,8136] # helper segment
 # KEYWORDS = [4222,23375,13130,21463,184,23726,8874,8136,133749,26241,22814,133787,4587,133627]
-KEYWORDS = [553] 
+KEYWORDS = [73] 
 
 # SQL query template
 sql_query_template = """
@@ -455,6 +458,7 @@ ORDER BY
 
 
 sql_query_template_MetaHSV_Body3D = """
+
 SELECT 
     ibp.cluster_id AS ihp_cluster,
     SUM(CASE WHEN cmhsv.meta_cluster_id = 0 THEN 1 ELSE 0 END) AS hsv_0,
@@ -480,10 +484,10 @@ SELECT
     SUM(CASE WHEN cmhsv.meta_cluster_id = 20 THEN 1 ELSE 0 END) AS hsv_20,
     SUM(CASE WHEN cmhsv.meta_cluster_id = 21 THEN 1 ELSE 0 END) AS hsv_21,
     SUM(CASE WHEN cmhsv.meta_cluster_id = 22 THEN 1 ELSE 0 END) AS hsv_22
-
-FROM SegmentBig_isface so
-JOIN {HELPER_TABLE} sh ON sh.image_id = so.image_id
-JOIN {CLUSTER_TABLE} ibp ON ibp.image_id = so.image_id
+    
+FROM {CLUSTER_TABLE} ibp
+JOIN SegmentBig_isface so ON so.image_id = ibp.image_id
+JOIN {HELPER_TABLE} sh ON sh.image_id = ibp.image_id
 JOIN ImagesHSV ihsv ON ihsv.image_id = so.image_id
 JOIN ClustersMetaHSV cmhsv ON cmhsv.cluster_id = ihsv.cluster_id
 JOIN Images{MODE} it ON it.image_id = so.image_id
@@ -493,6 +497,11 @@ GROUP BY
 ORDER BY 
     ibp.cluster_id;
 """
+
+# FROM SegmentBig_isface so
+# JOIN {HELPER_TABLE} sh ON sh.image_id = so.image_id
+# JOIN {CLUSTER_TABLE} ibp ON ibp.image_id = so.image_id
+# JOIN ImagesHSV ihsv ON ihsv.image_id = so.image_id
 
 
 def save_query_results_to_csv(query, topic_id):
@@ -541,7 +550,7 @@ def save_query_results_to_csv(query, topic_id):
 
 
 # Adjust the query template based on MODE
-if MODE == "Keywords":
+if MODE == "Keywords" or "Detections" in MODE:
     print("Querying by Keywords with CLUSTER_TYPE:", CLUSTER_TYPE)
     # Loop through each keyword_id and save results to CSV
     for keyword_id in KEYWORDS:
@@ -558,10 +567,12 @@ if MODE == "Keywords":
         this_cluster_table = CLUSTER_DATA.get(CLUSTER_TYPE, {}).get('cluster_table_name', None)
         if sql_query_template is None or this_cluster_table is None:
             raise ValueError(f"SQL template or cluster table name not defined for CLUSTER_TYPE: {CLUSTER_TYPE}")
+        if "Detections" in MODE: sql_query_template = sql_query_template.replace("Images{MODE}", "{MODE}") # because Detections is a table itself
         sql_query_template = sql_query_template.replace("{MODE}", MODE).replace("{MODE_ID}", MODE_ID).replace("{THIS_MODE_ID}", str(keyword_id)).replace("{CLUSTER_TABLE}", this_cluster_table).replace("{HELPER_TABLE}", HELPER_TABLE) 
         print(sql_query_template)
         query = sql_query_template.format(keyword_id=keyword_id)
         save_query_results_to_csv(query, keyword_id)
+
 elif MODE == "Topics":
     # Loop through each topic_id (0 to 63) and save results to CSV
     for topic_id in range(64):

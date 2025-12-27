@@ -48,8 +48,9 @@ SegmentTable_name = 'SegmentBig_isface'
 # SegmentTable_name = 'SegmentBig_isnotface'
 # SegmentHelper_name = 'SegmentHelper_may2025_4x4faces'
 # SegmentHelper_name = 'SegmentHelper_sept2025_heft_keywords'
-# SegmentHelper_name = 'SegmentHelper_oct2025_every40'
-SegmentHelper_name = None
+# SegmentHelper_name = 'SegmentHelperObject_90_stethoscope'
+SegmentHelper_name = 'SegmentHelperObject_73_book'
+# SegmentHelper_name = None
 # SATYAM, this is MM specific
 # for when I'm using files on my SSD vs RAID
 IS_SSD = True
@@ -60,12 +61,14 @@ io = DataIO(IS_SSD)
 db = io.db
 
 # OWC4 SNAFU WORKAROUND
-io.ROOT = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/output_folder"
+print("Setting io.ROOT to ROOTSSD:", io.ROOTSSD)
+io.ROOT = os.path.join(io.ROOTSSD, "output_folder")
+print("Set io.ROOT to ROOTSSD:", io.ROOT)
 
-# CSV_FOLDER = os.path.join(io.ROOT_DBx, "body3D_segmentbig_useall256_CSVs_MMtest")
+CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs", "steth_csvs_trim")
 
 # CSV_FOLDER = os.path.join("/Users/michaelmandiberg/Documents/projects-active/facemap_production/body3D_segmentbig_useall256_CSVs_test")
-CSV_FOLDER = os.path.join("/Volumes/SSD4_Green/arms3D_placard_Dec12_undetected")
+# CSV_FOLDER = os.path.join("/Volumes/SSD4_Green/arms3D_placard_Dec12_undetected")
 
 # TENCH UNCOMMENT FOR YOUR COMP:
 # CSV_FOLDER = os.path.join(io.ROOT_DBx, "body3D_segmentbig_useall256_CSVs_test")
@@ -78,10 +81,10 @@ CSV_FOLDER = os.path.join("/Volumes/SSD4_Green/arms3D_placard_Dec12_undetected")
 MODES = {0:'paris_photo_torso_images_topics', 1:'paris_photo_torso_videos_topics', 
          2:'3D_bodies_topics', 3:'3D_full_bodies_topics', 4:'3D_arms', 5:'3D_arms_meta',
          6:'heft_torso_keywords'}
-MODE_CHOICE = 4
+MODE_CHOICE = 6
 CURRENT_MODE = MODES[MODE_CHOICE]
 
-LIMIT = 1000 # this is the limit for the SQL query
+LIMIT = 2000 # this is the limit for the SQL query
 
 image_edge_multiplier = None
 # image_edge_multiplier = [1.3,2,2.9,2] # [top, right, bottom, left] setting a default. not sure if this will mess up places it looks for None
@@ -172,11 +175,11 @@ elif "3D" in CURRENT_MODE:
 elif CURRENT_MODE == 'heft_torso_keywords':
     # SegmentTable_name = 'SegmentOct20'
     SegmentTable_name = 'SegmentBig_isface'
-    SegmentHelper_name = 'SegmentHelper_sept2025_heft_keywords' # TK revisit this for prodution run
-    # SegmentHelper_name = 'SegmentHelper_nov2025_placard' # TK revisit this for prodution run
+    # SegmentHelper_name = 'SegmentHelper_sept2025_heft_keywords' # TK revisit this for prodution run
+    SegmentHelper_name = 'SegmentHelperObject_73_book' # TK revisit this for prodution run
     CLUSTER_TYPE = "ArmsPoses3D"
-    SORT_TYPE = "planar_hands"
-    # SORT_TYPE = "obj_bbox"
+    # SORT_TYPE = "planar_hands"
+    SORT_TYPE = "obj_bbox"
     # CLUSTER_TYPE = SORT_TYPE = "ArmsPoses3D" # this triggers meta body poses 3D
     # CLUSTER_TYPE = SORT_TYPE = "obj_bbox" # make sure OBJ_CLS_ID is set below
     # META = True
@@ -194,13 +197,13 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     # N_HSV = 0 # don't do HSV clusters
 
     # turning all three off to do old style non tsp sort    
-    ONE_SHOT = True # take all files, based off the very first sort order.
-    # CHOP_FIRST = True
-    # TSP_SORT = True
-    # CHOP_ITTER_TSP_SORT = True
+    # ONE_SHOT = True # take all files, based off the very first sort order.
+    CHOP_FIRST = True
+    TSP_SORT = True
+    CHOP_ITTER_TSP_SORT = True
     
 
-    PURGING_DUPES = True
+    PURGING_DUPES = False
     FORCE_TARGET_COUNT = 90
     # if TESTING: IS_HAND_POSE_FUSION = GENERATE_FUSION_PAIRS = False
 
@@ -241,7 +244,9 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     # XYZ_FILTER_10DEGREES = " AND s.face_x > -45 AND s.face_x < -5 AND s.face_y > -15 AND s.face_y < 15 AND s.face_z > -15 AND s.face_z < 15"
     XYZ_FILTER_10DEGREES = " "
     
-    TOPIC_NO = [553] # if doing an affect topic fusion, this is the wrapper topic, OR keyword. add .01, .1 etc for sub selects from KEYWORD_DICT
+    # generate the CSV files with /query_all_fusion_clusters.py
+
+    TOPIC_NO = [73] # if doing an affect topic fusion, this is the wrapper topic, OR keyword. add .01, .1 etc for sub selects from KEYWORD_DICT
 
     # this needs to be integrated into the search for each cluster, but doing here for the moment when doing single topic/cluster testing
     # this is CLUSTER_TYPE
@@ -256,7 +261,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
         
 
     if META: folder = "heft_keyword_fusion_clusters_hsv_meta"
-    else: folder = "heft_keyword_ArmsPoses3D_128/"
+    else: folder = "heft_detections_ArmsPoses3D_128/"
 
     FUSION_FOLDER = os.path.join("utilities/data/", folder)
     # CSV_FOLDER = os.path.join("/Users/michaelmandiberg/Documents/projects-active/facemap_production/heft_keyword_fusion_clusters/", folder)
@@ -370,7 +375,12 @@ NORMED_BODY_LMS = True
 MOUTH_GAP = 0
 # if planar_body set OBJ_CLS_ID for each object type
 # 67 is phone, 63 is laptop, 26: 'handbag', 27: 'tie', 32: 'sports ball'
-if "key" in CURRENT_MODE: OBJ_CLS_ID = OBJ_DICT.get(math.floor(TOPIC_NO[0]), 0)
+if "key" in CURRENT_MODE: 
+    # try the old way
+    OBJ_CLS_ID = OBJ_DICT.get(math.floor(TOPIC_NO[0]), 0)
+    if OBJ_CLS_ID == 0 and str(TOPIC_NO[0]) in SegmentHelper_name:
+        # assign directly from name
+        OBJ_CLS_ID = math.floor(TOPIC_NO[0])
 else: OBJ_CLS_ID = 0
 
 DO_OBJ_SORT = True
@@ -546,11 +556,16 @@ elif IS_SEGONLY and io.platform == "darwin":
         SELECT += ", ibg.lum, ibg.lum_bb, ibg.hue, ibg.hue_bb, ibg.sat, ibg.sat_bb, ibg.val, ibg.val_bb, ibg.lum_torso, ibg.lum_torso_bb " # add description here, after resegmenting
     ###
     if OBJ_CLS_ID > 0 and not OBJ_DONT_SUBSELECT:
-        FROM += " JOIN PhoneBbox pb ON s.image_id = pb.image_id "
-        # SELECT += ", pb.bbox_67, pb.conf_67, pb.bbox_63, pb.conf_63, pb.bbox_26, pb.conf_26, pb.bbox_27, pb.conf_27, pb.bbox_32, pb.conf_32 "
-        SELECT += ", pb.bbox_"+str(OBJ_CLS_ID)+"_norm, pb.conf_"+str(OBJ_CLS_ID)
-        WHERE += " AND pb.bbox_"+str(OBJ_CLS_ID)+"_norm IS NOT NULL "
+        # old way
+        # FROM += " JOIN PhoneBbox pb ON s.image_id = pb.image_id "
+        # # SELECT += ", pb.bbox_67, pb.conf_67, pb.bbox_63, pb.conf_63, pb.bbox_26, pb.conf_26, pb.bbox_27, pb.conf_27, pb.bbox_32, pb.conf_32 "
+        # SELECT += ", pb.bbox_"+str(OBJ_CLS_ID)+"_norm, pb.conf_"+str(OBJ_CLS_ID)
+        # WHERE += " AND pb.bbox_"+str(OBJ_CLS_ID)+"_norm IS NOT NULL "
 
+        # new way with object keywords
+        FROM += " JOIN DetectionsTest d ON s.image_id = d.image_id "
+        SELECT += ", d.bbox_norm, d.obj_no, d.orientation, d.meta_cluster_id "
+        WHERE += f" AND d.class_id = {OBJ_CLS_ID} "
         # for some reason I have to set OBJ_CLS_ID to 0 if I'm doing planar_body
         # but I want to store the value in OBJ_SUBSELECT to use in SQL
         #TK not sure if SORT or SELECT but I think it is moot bc planar_body is kind of deprecated
@@ -971,6 +986,7 @@ if not io.IS_TENCH:
             else: cluster_column = "ic.cluster_id"
             cluster += cluster_topic_select(cluster_column, cluster_no)
         if IS_TOPICS or IS_ONE_TOPIC:
+            this_alias = "it"
             if IS_TOPICS and IS_ONE_TOPIC and USE_AFFECT_GROUPS and WrapperTopicTable is not None:
 
                 # topic fusion, so join to a second topics table
@@ -978,17 +994,20 @@ if not io.IS_TENCH:
                 where_affect = f" AND iwt.topic_id = {TOPIC_NO[0]} AND iwt.topic_score > .3"
             # cluster +=f"AND it.topic_id = {str(topic_no)} "
             if N_TOPICS == 100: 
-                this_id = "keyword_id"
                 # check if the topic_no has related keywords in the KEYWORD_DICT
                 # if it doesn't, it just returns the same topic_no
                 topic_no, cluster_dict_AND, cluster_dict_NOT = access_keyword_dict(topic_no)
                 print(f"after accessing keyword dict, topic_no is {topic_no}")
+                if topic_no[0] >= 184: this_id = "keyword_id"
+                else: 
+                    this_id = "class_id"
+                    this_alias = "d" # for Detections table
             else: 
                 this_id = "topic_id"
 
             # convert topic_no to a query string
             IN_or_equal_topic_ids_string = is_query_list_string(topic_no)
-            cluster += f"AND it.{this_id} {IN_or_equal_topic_ids_string} "
+            cluster += f"AND {this_alias}.{this_id} {IN_or_equal_topic_ids_string} "
 
         if bool(hsv_cluster) or hsv_cluster == 0:
             print("hsv_cluster is not empty:", hsv_cluster)
@@ -2045,6 +2064,7 @@ def set_my_counter_dict(this_topic=None, cluster_no=None, pose_no=None, hsv_no=N
     print("cluster_string", cluster_string)
     if MODE == 0 or (PURGING_DUPES and MODE == 1): mkdir = False
     else: mkdir = True
+    print("mkdir", mkdir, "root", io.ROOT)
     sort.set_counters(io.ROOT,cluster_string, start_img_name,start_site_image_id, mkdir)
 
     if VERBOSE: print("set sort.counter_dict:" )

@@ -433,7 +433,7 @@ class Counters(Base):
     __tablename__ = 'counters'
     counter_id = Column(Integer, primary_key=True, autoincrement=True)
     counter_name = Column(String(50))
-    counter_value = Column(Integer);
+    counter_value = Column(Integer)
 
 class Slogans(Base):
     __tablename__ = 'Slogans'
@@ -456,7 +456,7 @@ class YoloClasses(Base):
 
 
 class Detections(Base):
-    __tablename__ = 'DetectionsTest'
+    __tablename__ = 'Detections'
 
     detection_id = Column(Integer, primary_key=True, autoincrement=True)
     image_id = Column(Integer, ForeignKey('images.image_id'), nullable=False)

@@ -106,7 +106,7 @@ class SortPose:
         self.BRUTEFORCE = False
         self.LMS_DIMENSIONS = LMS_DIMENSIONS
         if self.VERBOSE: print("init LMS_DIMENSIONS",self.LMS_DIMENSIONS)
-        self.CUTOFF = 600 # DOES factor if ONE_SHOT
+        self.CUTOFF = 500 # DOES factor if ONE_SHOT
         self.ORIGIN = 0
         self.this_nose_bridge_dist = self.NOSE_BRIDGE_DIST = None # to be set in first loop, and sort.this_nose_bridge_dist each time
         self.USE_HEAD_POSE = USE_HEAD_POSE
@@ -425,7 +425,8 @@ class SortPose:
         self.negmargin_count = 0
         self.toosmall_count = 0 
         self.outfolder = os.path.join(ROOT,"cluster"+str(cluster_no)+"_"+str(time.time()))
-        if mkdir and not os.path.exists(self.outfolder):      
+        if mkdir and not os.path.exists(self.outfolder):
+            print("making outfolder",self.outfolder)
             os.mkdir(self.outfolder)
         self.counter_dict = {
             "counter": 1,
@@ -3898,18 +3899,22 @@ class SortPose:
             prefix = 'topic_'
         elif "keyword" in folder_path:
             prefix = 'Keywords_'
+        elif "detections" in folder_path:
+            prefix = 'Detections_'
 
         self.HSV_CLUSTER_GROUPS = [
             # [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22],
             # [[3, 4], [5, 6, 7], [8, 9, 10, 11], [12, 13], [15, 16], [17, 18, 19, 20], [21, 22]],
-            [[0],[1],[2],[3, 4, 5, 6, 22, 7], [8, 9, 10, 11, 12, 13], [14],[15, 16, 17, 18, 19, 20, 21]], # ALSO USE FOR DEDUPING
+            # [[0],[1],[2],[3, 4, 5, 6, 22, 7], [8, 9, 10, 11, 12, 13], [14],[15, 16, 17, 18, 19, 20, 21]], # ALSO USE FOR DEDUPING
             # [[3, 4, 5, 6, 22, 7], [8, 9, 10, 11, 12, 13], [14],[15, 16, 17, 18, 19, 20, 21]], # TESTING Nov23
             # [[3, 4, 5, 6, 22, 7, 8, 9, 10, 11, 12, 13], [14, 15, 16, 17, 18, 19, 20, 21]], # TESTING Nov23
             # [[2],[3, 4, 5, 6, 7, 22]],
             [[0,1,2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 19, 20, 21, 22]]
         ]
         # Construct the file name and path
+        print("topic_no", topic_no)
         isolated_topic = str(topic_no[0]).split('.')[0]  # Get the integer part before the decimal
+        print("prefix", prefix, "isolated topic", isolated_topic)
         file_name = prefix + isolated_topic + '.csv'
         file_path = os.path.join(folder_path, file_name)
         
