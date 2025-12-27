@@ -17,7 +17,7 @@ import mediapipe as mp
 import shutil
 import pandas as pd
 import json
-from my_declarative_base import Base, Clusters, Encodings, NMLImages, Images,PhoneBbox, SegmentTable, SegmentBig, Images
+from my_declarative_base import Base, Clusters, Encodings, Detections, Images,PhoneBbox, SegmentTable, SegmentBig, Images
 #from sqlalchemy.ext.declarative import declarative_base
 from mp_sort_pose import SortPose
 import pymongo
@@ -31,12 +31,12 @@ NOSE_ID=0
 
 
 Base = declarative_base()
-VERBOSE = False
+VERBOSE = True
 IS_SSD = False
 
 SKIP_EXISTING = False # Skips images with a normed bbox but that have Images.h - I think only applies to phone bbox
-USE_OBJ = 0 # select the bbox to work with
-SKIP_BODY = False # skip body landmarks. mostly you want to skip when doing obj bbox
+USE_OBJ = True # do objet detections?
+SKIP_BODY = True # skip body landmarks. mostly you want to skip when doing obj bbox
                 # or are just redoing hands
 REPROCESS_HANDS = False # do hands
 IS_SEGMENT_BIG = False # use SegmentBig table. IF False, and IS_SSD is false, it will use Encodings table
@@ -119,7 +119,7 @@ sort = SortPose(config=cfg)
 # Create a session
 session = scoped_session(sessionmaker(bind=engine))
 
-LIMIT= 2000
+LIMIT= 20
 # Initialize the counter
 counter = 2000
 
@@ -197,21 +197,21 @@ def get_shape(target_image_id):
     return None, None
 
 
-# def normalize_phone_bbox(phone_bbox,nose_pos,face_height,shape):
-#     height,width = shape[:2]
-#     # print("phone_bbox",phone_bbox)
-#     n_phone_bbox=phone_bbox
-#     n_phone_bbox["right"]=(n_phone_bbox["right"] -nose_pos["x"])/face_height
-#     n_phone_bbox["left"]=(n_phone_bbox["left"] -nose_pos["x"])/face_height
-#     n_phone_bbox["top"]=(n_phone_bbox["top"] -nose_pos["y"])/face_height
-#     n_phone_bbox["bottom"]=(n_phone_bbox["bottom"] -nose_pos["y"])/face_height
-#     # n_phone_bbox["right"]=(n_phone_bbox["right"]*width -nose_pos["x"])/face_height
-#     # n_phone_bbox["left"]=(n_phone_bbox["left"]*width -nose_pos["x"])/face_height
-#     # n_phone_bbox["top"]=(n_phone_bbox["top"]*height -nose_pos["y"])/face_height
-#     # n_phone_bbox["bottom"]=(n_phone_bbox["bottom"]*height -nose_pos["y"])/face_height
-#     # print("n_phone_bbox",n_phone_bbox)
+def normalize_obj_bbox(obj_bbox,nose_pos,face_height,shape):
+    height,width = shape[:2]
+    print("obj_bbox",obj_bbox)
+    n_obj_bbox=obj_bbox
+    n_obj_bbox["right"]=(n_obj_bbox["right"] -nose_pos["x"])/face_height
+    n_obj_bbox["left"]=(n_obj_bbox["left"] -nose_pos["x"])/face_height
+    n_obj_bbox["top"]=(n_obj_bbox["top"] -nose_pos["y"])/face_height
+    n_obj_bbox["bottom"]=(n_obj_bbox["bottom"] -nose_pos["y"])/face_height
+    # n_obj_bbox["right"]=(n_obj_bbox["right"]*width -nose_pos["x"])/face_height
+    # n_obj_bbox["left"]=(n_obj_bbox["left"]*width -nose_pos["x"])/face_height
+    # n_obj_bbox["top"]=(n_obj_bbox["top"]*height -nose_pos["y"])/face_height
+    # n_obj_bbox["bottom"]=(n_obj_bbox["bottom"]*height -nose_pos["y"])/face_height
+    print("n_obj_bbox",n_obj_bbox)
 
-#     return n_phone_bbox
+    return n_phone_bbox
 
 def get_landmarks_mongo(image_id):
     if image_id:
@@ -278,8 +278,18 @@ def insert_n_phone_bbox(image_id,n_phone_bbox):
         phone_bbox_norm_entry.bbox_26_norm = json.dumps(n_phone_bbox)
         if VERBOSE:
             print("image_id:", PhoneBbox.image_id,"bbox_26_norm:", phone_bbox_norm_entry.bbox_26_norm)
+    session.commit()
 
-            
+def insert_detections_norm_bbox(image_id,n_bbox):
+    detections_bbox_norm_entry = (
+        session.query(Detections)
+        .filter(Detections.image_id == image_id)
+        .first()
+    )    
+    if detections_bbox_norm_entry:
+        detections_bbox_norm_entry.bbox_norm = json.dumps(n_bbox)
+        if VERBOSE:
+            print("image_id:", Detections.image_id,"bbox_norm:", detections_bbox_norm_entry.bbox_norm)
     session.commit()
 
 def unpickle_array(pickled_array):
@@ -353,6 +363,14 @@ def insert_shape(target_image_id,shape):
             print("image_id:", Images_entry.image_id,"height:", Images_entry.h,"width:", Images_entry.w)
     session.commit()
     return
+
+def get_obj_bbox(target_image_id):
+    select_image_ids_query = (
+        select(Detections.detection_id, Detections.bbox)
+        .filter(Detections.image_id == target_image_id, Detections.bbox_norm.is_(None))
+    )
+    result = session.execute(select_image_ids_query).fetchall()
+    return result
 
 def get_phone_bbox(target_image_id):
     select_image_ids_query = (
@@ -432,6 +450,7 @@ def calc_nlm(image_id_to_shape, lock, session):
         # gets ride of visiblity
     nose_pixel_pos_body = {'x': xB, 'y': yB}
 
+
     ## begin testing stuff
 
     ## FOR TESTING
@@ -494,7 +513,10 @@ def calc_nlm(image_id_to_shape, lock, session):
         session.commit()
         return
 
-    # print timer
+    else:
+        # DO THIS LATER
+        # TK store face_height and nose_pixel_pos_body in encodings table
+        pass
 
 
     if hand_results:
@@ -546,13 +568,22 @@ def calc_nlm(image_id_to_shape, lock, session):
             # if VERBOSE: print("Time to get insert:", time.time()-start)
             # start = time.time()
         
-        elif USE_OBJ > 0: 
-            phone_bbox=get_phone_bbox(target_image_id)
-            if phone_bbox:
-                n_phone_bbox=sort.normalize_phone_bbox(phone_bbox,nose_pixel_pos_body,face_height,[height,width])
-                insert_n_phone_bbox(target_image_id,n_phone_bbox)
-            else:
-                print("PHONE BBOX NOT FOUND 404", target_image_id)
+        elif USE_OBJ: 
+            obj_results = get_obj_bbox(target_image_id)
+            # itterate through the obj_results
+            for detection_id, obj_bbox in obj_results:
+                if obj_bbox:
+                    n_obj_bbox=sort.normalize_obj_bbox(obj_bbox,nose_pixel_pos_body,face_height,[height,width])
+                    insert_detections_norm_bbox(detection_id,n_obj_bbox)
+                else:
+                    print("PHONE BBOX NOT FOUND 404", target_image_id)
+
+            # phone_bbox=get_phone_bbox(target_image_id)
+            # if phone_bbox:
+            #     n_phone_bbox=sort.normalize_obj_bbox(phone_bbox,nose_pixel_pos_body,face_height,[height,width])
+            #     insert_detections_norm_bbox(target_image_id,n_phone_bbox)
+            # else:
+            #     print("PHONE BBOX NOT FOUND 404", target_image_id)
     else:
         print("BODY LANDMARK NOT FOUND 404", target_image_id)
 
@@ -582,16 +613,30 @@ work_queue = queue.Queue()
 function=calc_nlm
 
 
-if USE_OBJ == 26:
+# old way, with phone bbox
+# if USE_OBJ == 26:
+#     distinct_image_ids_query = select(Images.image_id.distinct(), Images.h, Images.w, SegmentTable.bbox).\
+#         outerjoin(SegmentTable,Images.image_id == SegmentTable.image_id).\
+#         outerjoin(PhoneBbox,PhoneBbox.image_id == SegmentTable.image_id).\
+#         filter(SegmentTable.bbox != None).\
+#         filter(SegmentTable.two_noses.is_(None)).\
+#         filter(SegmentTable.mongo_body_landmarks == 1).\
+#         filter(PhoneBbox.bbox_26 != None).\
+#         filter(PhoneBbox.bbox_26_norm == None).\
+#         filter(PhoneBbox.conf_26 != -1).\
+#         limit(LIMIT)
+
+# new way, with detections
+if USE_OBJ:
     distinct_image_ids_query = select(Images.image_id.distinct(), Images.h, Images.w, SegmentTable.bbox).\
         outerjoin(SegmentTable,Images.image_id == SegmentTable.image_id).\
-        outerjoin(PhoneBbox,PhoneBbox.image_id == SegmentTable.image_id).\
+        outerjoin(Detections,Detections.image_id == SegmentTable.image_id).\
         filter(SegmentTable.bbox != None).\
         filter(SegmentTable.two_noses.is_(None)).\
         filter(SegmentTable.mongo_body_landmarks == 1).\
-        filter(PhoneBbox.bbox_26 != None).\
-        filter(PhoneBbox.bbox_26_norm == None).\
-        filter(PhoneBbox.conf_26 != -1).\
+        filter(Detections.bbox != None).\
+        filter(Detections.bbox_norm == None).\
+        filter(Detections.conf != -1).\
         limit(LIMIT)
 
 elif REPROCESS_HANDS == True and IS_SEGMENT_BIG == True:

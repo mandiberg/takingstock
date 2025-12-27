@@ -86,6 +86,8 @@ print("this_cluster: ", this_cluster)
 
 slogan_dict = ocr.get_all_slogans(session, Slogans)
 print("Loaded slogans:", slogan_dict)
+refined_dict = ocr.get_all_refined(session, RefinedText)
+print("Loaded refined:", refined_dict)
 
 median_dict = cl.get_cluster_medians(session, this_cluster)
 print("Loaded cluster medians:", median_dict)
@@ -237,7 +239,7 @@ def do_yolo_detections(result, image, existing_detections, custom=False):
     return detect_results
 
 def do_detections(result, folder_index):
-
+    coco_detections = custom_detections = None
     existing_detections = get_existing_detections(result.image_id)
     
     image_id = result.image_id
@@ -277,8 +279,16 @@ def do_detections(result, folder_index):
         # # save image to OUTPUT_FOLDER for review
         # save_debug_image(output_image_path, image, imagename)
 
-    if DO_OCR and DO_CUSTOM and custom_detections is not None:
-        sign_detections = [det for det in custom_detections if det['class_id'] == 80]
+    if DO_OCR and DO_CUSTOM:
+        # make a list of sign_detections
+        if custom_detections is not None:
+            sign_detections = [det for det in custom_detections if det['class_id'] == 80]
+        elif existing_detections:
+            sign_detections = [det for det in existing_detections if det['class_id'] == 80]
+        else:
+            print("no sign_detections, returning")
+            return
+        
         for detection in sign_detections:
             bbox = io.unstring_json(detection['bbox'])
             cropped_image_bbox = image[bbox['top']:bbox['bottom'], bbox['left']:bbox['right']]
@@ -298,8 +308,10 @@ def do_detections(result, folder_index):
             # return # skip OCR for now
             found_texts = ocr.ocr_on_cropped_image(cropped_image_bbox, ocr_engine, image_id)
             print("Found Texts:", found_texts)
+            # save found_texts
+
             # assign slogan_id
-            slogan_id = ocr.assign_slogan_id(session, openai_client, Slogans, slogan_dict, image_id, found_texts)
+            slogan_id, slogan_dict, refined_dict = ocr.assign_slogan_id(session, openai_client, Slogans, slogan_dict, refined_dict image_id, found_texts)
             # Here, save image_id, slogan_id info to Placards table
             if slogan_id is not None:
                 print(f"Saving image {image_id} with slogan_id {slogan_id} to ImagesSlogans table.")

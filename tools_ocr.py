@@ -37,7 +37,7 @@ class OCRTools:
         return good_texts
 
 
-    def assign_slogan_id(self, session, openai_client, Slogans, slogan_dict, image_filename, found_texts):
+    def assign_slogan_id(self, session, openai_client, Slogans, slogan_dict, refined_dict, image_filename, found_texts):
         slogan_id = None
         if bool(found_texts) is False:
             print(f"No text found in image {image_filename}, will assign blank = True.")
@@ -45,9 +45,16 @@ class OCRTools:
         else:
             slogan_id = self.check_existing_slogans(found_texts, slogan_dict)
             if slogan_id is None:
-                refined_text = self.clean_ocr_text(openai_client, found_texts)
-                print("No match, so refined Text:", refined_text)
+                #check for ocr_llm_dict
+                refined_text = refined_dict.get(found_texts, None)
+                if refined_text is None:
+                    refined_text = self.clean_ocr_text(openai_client, found_texts)
+                    print("No match, so refined Text:", refined_text)
+                    # save found_texts and refined_text to raw_refined_text table
+
+                    refined_dict[found_texts] = refined_text
                 slogan_id = self.check_existing_slogans(refined_text, slogan_dict)
+
 
             if slogan_id is not None:
                 print(f"Slogan already exists in DB with slogan_id: {slogan_id}.")
@@ -55,7 +62,7 @@ class OCRTools:
                 # Save new slogan to DB
                 slogan_id = self.save_slogan_text(session, Slogans, refined_text)
                 slogan_dict[slogan_id] = refined_text
-        return slogan_id
+        return slogan_id, slogan_dict, refined_dict
 
     def normalize(self, s):
         s = s.upper()
@@ -98,6 +105,11 @@ class OCRTools:
         slogans = session.query(Slogans).all()
         slogan_dict = {slogan.slogan_id: slogan.slogan_text for slogan in slogans}
         return slogan_dict
+
+    def get_all_refined(self, session, RefinedText):
+        slogans = session.query(RefinedText).all()
+        refined_dict = {slogan.found_text: slogan.refined_text for slogan in slogans}
+        return refined_dict
 
     def check_existing_slogans(self, found_texts, slogan_dict):
         if isinstance(found_texts, list):
