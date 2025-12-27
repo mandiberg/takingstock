@@ -63,9 +63,9 @@ DO_MASK = False
 DO_VALENTINE = False
 DO_OCR = False
 
-FILE_FOLDER = "/Volumes/OWC5/segment_images_book_clock_bowl"
-# FILE_FOLDER = "/Volumes/OWC52/segment_images_money_cards"
-MAKE_VIDEO_CSVS_PATH = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/book_csvs"
+# FILE_FOLDER = "/Volumes/OWC5/segment_images_book_clock_bowl"
+FILE_FOLDER = "/Volumes/SSD4_Green/segment_images_67_phone_undetected"
+# MAKE_VIDEO_CSVS_PATH = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/book_csvs"
 MAKE_VIDEO_CSVS_PATH = None  # to process all images in folder
 OUTPUT_FOLDER = os.path.join(FILE_FOLDER, "test_output")
 BATCH_SIZE = 100
@@ -79,6 +79,8 @@ VERBOSE = True
 META = False # to return the meta clusters (out of 23, not 96)
 cl = ToolsClustering(CLUSTER_TYPE, VERBOSE=VERBOSE)
 table_cluster_type = cl.set_table_cluster_type(META)
+
+custom_ids_to_global_dict = {1:80, 2:82}
 
 Clusters, ImagesClusters, MetaClusters, ClustersMetaClusters = cl.construct_table_classes(table_cluster_type)
 this_cluster, this_crosswalk = cl.set_cluster_metacluster(Clusters, ImagesClusters, MetaClusters, ClustersMetaClusters)
@@ -198,6 +200,16 @@ def assign_hsv_detect_results(detect_results, image):
         # result_dict['cluster_dist'] = cluster_dist
     return detect_results
 
+def map_custom_ids_to_global(detect_results):
+    for result_dict in detect_results:
+        result_dict['class_id'] = custom_ids_to_global_dict.get(result_dict['class_id'], None)
+        if result_dict['class_id'] is None:
+            print(f" ⚠️ Warning: custom class_id {result_dict['class_id']} not found in mapping dictionary, setting to None.")
+            result_dict = None
+        else:
+            print(f" ✅ Mapped custom class_id to global class_id: {result_dict['class_id']}")
+    return detect_results
+
 def do_yolo_detections(result, image, image_path, existing_detections, custom=False):
     image_id = result.image_id
     imagename = result.imagename
@@ -212,11 +224,14 @@ def do_yolo_detections(result, image, image_path, existing_detections, custom=Fa
     unrefined_detect_results = yolo.detect_objects_return_bbox(this_yolo_model,image, device, conf_thresh=CONF_THRESHOLD)
     detect_results = yolo.merge_yolo_detections(unrefined_detect_results, iou_threshold=0.3, adjacency_threshold_px=50)
     detect_results = assign_hsv_detect_results(detect_results, image)
+    if custom:
+        detect_results = map_custom_ids_to_global(detect_results)
     print(f"Image {image_id} - YOLO detections: {detect_results}")
     # save_debug_image_yolo_bbox(image_id, imagename, image, detect_results)
     if DEBUGGING:
         save_debug_image_yolo_bbox(image_id, imagename, image, detect_results, image_path, draw_box=IS_DRAW_BOX, save_undetected=IS_SAVE_UNDETECTED)
     if len(detect_results) == 0:
+        if custom: return # skipp no    detections save for custom
         save_no_dectections(session,image_id, NoDetectionTable=ThisNoDetectionTable)
         return
     else:
@@ -228,7 +243,9 @@ def check_for_existing_detections(image_id, existing_detections, custom=False):
         existing_detections_image_ids = [det.detection_id for det in existing_detections if det.class_id >= 80]
         existing_no_detections = get_existing_no_detections(image_id, NoDetectionTable=NoDetectionsCustom)
     else:
-        existing_detections_image_ids = [det.detection_id for det in existing_detections if det.class_id < 80]
+        all_existing_detections_image_ids = [det.detection_id for det in existing_detections if det.class_id < 80]
+        # only consider detection_ids > 12455146 which are the new ones, not the original ones
+        existing_detections_image_ids = [det_id for det_id in all_existing_detections_image_ids if det_id > 12455146]
         existing_no_detections = get_existing_no_detections(image_id, NoDetectionTable=NoDetections)
     return existing_detections_image_ids, existing_no_detections
 
