@@ -20,7 +20,7 @@ from sqlalchemy.pool import NullPool
 
 # importing project-specific models
 import sys
-from my_declarative_base import Encodings, Images, Slogans, ImagesSlogans, Detections, NoDetections, NoDetectionsCustom
+from my_declarative_base import Encodings, Images, Slogans, ImagesSlogans, RefinedText, Detections, NoDetections, NoDetectionsCustom
 from tools_ocr import OCRTools
 from tools_clustering import ToolsClustering
 from tools_yolo import YOLOTools
@@ -57,6 +57,7 @@ yolo = YOLOTools(DEBUGGING=True)
 
 blank = False
 DEBUGGING = False
+TESTING_NO_DB_WRITE = False
 DO_COCO = True
 DO_CUSTOM = False
 DO_MASK = False
@@ -64,7 +65,7 @@ DO_VALENTINE = False
 DO_OCR = False
 
 # FILE_FOLDER = "/Volumes/OWC5/segment_images_book_clock_bowl"
-FILE_FOLDER = "/Volumes/SSD4_Green/segment_images_67_phone_undetected"
+FILE_FOLDER = "/Volumes/LaCie/segment_images_82_money_cards"
 # MAKE_VIDEO_CSVS_PATH = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/book_csvs"
 MAKE_VIDEO_CSVS_PATH = None  # to process all images in folder
 OUTPUT_FOLDER = os.path.join(FILE_FOLDER, "test_output")
@@ -190,7 +191,8 @@ def save_no_dectections(session,image_id, NoDetectionTable=NoDetections):
         image_id=image_id
     )
     session.add(new_no_detection)
-    session.commit()
+    if not TESTING_NO_DB_WRITE:
+        session.commit()
     print(f"Image {image_id} - No detections found, saved to {NoDetectionTable} table.")
 
 def assign_hsv_detect_results(detect_results, image):
@@ -230,12 +232,15 @@ def do_yolo_detections(result, image, image_path, existing_detections, custom=Fa
         detect_results = map_custom_ids_to_global(detect_results)
     print(f"Image {image_id} - YOLO detections: {detect_results}")
     # save_debug_image_yolo_bbox(image_id, imagename, image, detect_results)
+    if TESTING_NO_DB_WRITE:
+        print("TESTING_NO_DB_WRITE is True, skipping DB write.")
+        return detect_results
     if DEBUGGING:
         save_debug_image_yolo_bbox(image_id, imagename, image, detect_results, image_path, draw_box=IS_DRAW_BOX, save_undetected=IS_SAVE_UNDETECTED)
     if len(detect_results) == 0:
         if custom: return # skipp no    detections save for custom
         save_no_dectections(session,image_id, NoDetectionTable=ThisNoDetectionTable)
-        return
+        return detect_results
     else:
         yolo.save_obj_bbox(session, image_id, detect_results, Detections)
     return detect_results
@@ -343,7 +348,7 @@ def do_detections(result, folder_index):
             # save found_texts
 
             # assign slogan_id
-            slogan_id, slogan_dict, refined_dict = ocr.assign_slogan_id(session, openai_client, Slogans, slogan_dict, refined_dict image_id, found_texts)
+            slogan_id, slogan_dict, refined_dict = ocr.assign_slogan_id(session, openai_client, Slogans, slogan_dict, refined_dict, image_id, found_texts)
             # Here, save image_id, slogan_id info to Placards table
             if slogan_id is not None:
                 print(f"Saving image {image_id} with slogan_id {slogan_id} to ImagesSlogans table.")
