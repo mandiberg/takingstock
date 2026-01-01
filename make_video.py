@@ -49,7 +49,7 @@ SegmentTable_name = 'SegmentBig_isface'
 # SegmentHelper_name = 'SegmentHelper_may2025_4x4faces'
 # SegmentHelper_name = 'SegmentHelper_sept2025_heft_keywords'
 # SegmentHelper_name = 'SegmentHelperObject_90_stethoscope'
-SegmentHelper_name = 'SegmentHelperObject_73_book'
+SegmentHelper_name = 'SegmentHelperObject_97_rose'
 # SegmentHelper_name = None
 # SATYAM, this is MM specific
 # for when I'm using files on my SSD vs RAID
@@ -61,11 +61,12 @@ io = DataIO(IS_SSD)
 db = io.db
 
 # OWC4 SNAFU WORKAROUND
+io.ROOT_PROD=  "/Volumes/OWC52/segment_images" ## only on Mac
 print("Setting io.ROOT to ROOTSSD:", io.ROOTSSD)
 io.ROOT = os.path.join(io.ROOTSSD, "output_folder")
 print("Set io.ROOT to ROOTSSD:", io.ROOT)
 
-CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs", "steth_csvs_trim")
+CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs", "rose_csvs")
 
 # CSV_FOLDER = os.path.join("/Users/michaelmandiberg/Documents/projects-active/facemap_production/body3D_segmentbig_useall256_CSVs_test")
 # CSV_FOLDER = os.path.join("/Volumes/SSD4_Green/arms3D_placard_Dec12_undetected")
@@ -81,10 +82,10 @@ CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs", "steth_csvs_trim")
 MODES = {0:'paris_photo_torso_images_topics', 1:'paris_photo_torso_videos_topics', 
          2:'3D_bodies_topics', 3:'3D_full_bodies_topics', 4:'3D_arms', 5:'3D_arms_meta',
          6:'heft_torso_keywords'}
-MODE_CHOICE = 6
+MODE_CHOICE = 4
 CURRENT_MODE = MODES[MODE_CHOICE]
 
-LIMIT = 2000 # this is the limit for the SQL query
+LIMIT = 200000 # this is the limit for the SQL query
 
 image_edge_multiplier = None
 # image_edge_multiplier = [1.3,2,2.9,2] # [top, right, bottom, left] setting a default. not sure if this will mess up places it looks for None
@@ -167,6 +168,7 @@ elif "3D" in CURRENT_MODE:
                     # if not IS_HAND_POSE_FUSION, then this is selecting HandsGestures
                     # I think this is pose number from BodyPoses3D if CLUSTER_TYPE = SORT_TYPE == "body3D"
     START_CLUSTER = 0
+    SUBSELECT_ON_CLASS_ID = 0 # set to 0 to disable. Number will filter class_id
 
 ###########################################################
 ################## HEFT KEYWORD SETTINGS ##################
@@ -555,7 +557,12 @@ elif IS_SEGONLY and io.platform == "darwin":
         # WHERE += " AND ibg.lum > .3"
         SELECT += ", ibg.lum, ibg.lum_bb, ibg.hue, ibg.hue_bb, ibg.sat, ibg.sat_bb, ibg.val, ibg.val_bb, ibg.lum_torso, ibg.lum_torso_bb " # add description here, after resegmenting
     ###
-    if OBJ_CLS_ID > 0 and not OBJ_DONT_SUBSELECT:
+    if SUBSELECT_ON_CLASS_ID > 0:
+        # HACKY TK FIX THIS LATER
+        print(f"subselecting on class id {SUBSELECT_ON_CLASS_ID}")
+        FROM += " JOIN DetectionsTest dsub ON s.image_id = dsub.image_id "
+        WHERE += f" AND dsub.class_id = {SUBSELECT_ON_CLASS_ID} "
+    if (OBJ_CLS_ID > 0 and not OBJ_DONT_SUBSELECT):
         # old way
         # FROM += " JOIN PhoneBbox pb ON s.image_id = pb.image_id "
         # # SELECT += ", pb.bbox_67, pb.conf_67, pb.bbox_63, pb.conf_63, pb.bbox_26, pb.conf_26, pb.bbox_27, pb.conf_27, pb.bbox_32, pb.conf_32 "
@@ -1332,7 +1339,8 @@ def prep_encodings_NN(df_segment):
         elif SORT_TYPE == "128d":
             source_col = sort_column = "face_encodings68"
         elif SORT_TYPE == "obj_bbox":
-            source_col = sort_column = "bbox_"+str(OBJ_CLS_ID)+"_norm"
+            source_col = sort_column = "bbox_norm"
+            # source_col = sort_column = "bbox_"+str(OBJ_CLS_ID)+"_norm"
 
         return sort_column, source_col
 
@@ -1363,7 +1371,7 @@ def prep_encodings_NN(df_segment):
     # load the OBJ_CLS_ID bbox as list into obj_bbox_list
     # df_segment['obj_bbox_list'] = df_segment.apply(lambda row: json_to_list(row), axis=1)
     if OBJ_CLS_ID > 0: 
-        obj_bbox_col = "bbox_"+str(OBJ_CLS_ID)+"_norm"
+        obj_bbox_col = "bbox_norm"
         print(f" prepping {obj_bbox_col} for {CLUSTER1}")
         # move all rows with null obj_bbox_col values to a new df_nulls, and drop them from df_segment
         df_nulls = df_segment[df_segment[obj_bbox_col].isnull()]
@@ -2190,7 +2198,7 @@ def main():
             if VERBOSE: print("df len before bboxing,", len(df))
 
             if OBJ_CLS_ID > 0: 
-                obj_bbox_col = "bbox_"+str(OBJ_CLS_ID)+"_norm"
+                obj_bbox_col = "bbox_norm"
                 df[obj_bbox_col] = df[obj_bbox_col].apply(lambda x: io.unstring_json(x))
                 # # convert obj_bbox_col to list using convert_bbox_to_list
                 # df[obj_bbox_col] = df[obj_bbox_col].apply(lambda x: sort.convert_bbox_to_list(x))
