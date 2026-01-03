@@ -55,7 +55,7 @@ class DataIO:
             # moved images to SSD
             self.ROOT_DBx = os.path.join(self.home, "Library/CloudStorage/Dropbox/takingstock_dropbox/output_folder")
             self.ROOT_CODE= os.path.join(self.home,"Documents/GitHub/facemap/")
-            self.ROOT_PROD=  "/Volumes/OWC5/segment_images" ## only on Mac
+            self.ROOT_PROD=  "/Volumes/OWC52/segment_images" ## only on Mac
             self.ROOTSSD = os.path.join(self.home,"Documents/projects-active/facemap_production")
             self.ROOT54= "/Volumes/RAID54" ## only on 
             # temp migration for
@@ -67,7 +67,7 @@ class DataIO:
             self.NUMBER_OF_PROCESSES_GPU = 16
 
             NML_GITHUB = "/Users/michaelmandiberg/Documents/GitHub/takingstock/"
-            if platform.node() == "Michaels-Mac-Studio.local":
+            if platform.node() == "Michaels-Mac-Studio.local" or "lan" in platform.node():
                 self.NUMBER_OF_PROCESSES = 20
                 self.NUMBER_OF_PROCESSES_GPU = 60
                 self.db["unix_socket"] = "/tmp/mysql.sock"
@@ -77,6 +77,7 @@ class DataIO:
                 self.db["unix_socket"] = "/tmp/mysql.sock"
                 self.NUMBER_OF_PROCESSES = 24
                 self.NUMBER_OF_PROCESSES_GPU = 60
+            print("platform.node() is ", platform.node(), " unix_socket is ", self.db["unix_socket"])
 
             self.IS_TENCH = False
             login = os.getlogin()
@@ -346,17 +347,31 @@ class DataIO:
             return folder_paths
 
     def unstring_json(self, json_string):
-        # print("unstringing json: ", type(json_string), json_string)
+        # Handle None and NaN values
+        print("unstring_json input:", json_string)
+        print("Type of json_string:", type(json_string))
+        if json_string == "null" or json_string is None or (isinstance(json_string, float) and pd.isna(json_string)):
+            return None
+        
+        # Already a dict
         if isinstance(json_string, dict):
             print("json_string is already a dict")
             return json_string
-        eval_string = ast.literal_eval(json_string)
-        if isinstance(eval_string, dict):
-            return eval_string
-        else:
-            json_dict = json.loads(eval_string)
-            return json_dict
-
+        
+        # Not a string (could be other types like int, bool, etc.)
+        if not isinstance(json_string, str):
+            return None
+        
+        try:
+            eval_string = ast.literal_eval(json_string)
+            if isinstance(eval_string, dict):
+                return eval_string
+            else:
+                json_dict = json.loads(eval_string)
+                return json_dict
+        except (ValueError, SyntaxError) as e:
+            print(f"Error parsing json_string: {e}")
+            return None
 
     def oddify(self,x):
         x = int(x)

@@ -49,7 +49,7 @@ SegmentTable_name = 'SegmentBig_isface'
 # SegmentHelper_name = 'SegmentHelper_may2025_4x4faces'
 # SegmentHelper_name = 'SegmentHelper_sept2025_heft_keywords'
 # SegmentHelper_name = 'SegmentHelperObject_90_stethoscope'
-SegmentHelper_name = 'SegmentHelperObject_97_rose'
+SegmentHelper_name = 'SegmentHelperObject_Placards_HighProbability'
 # SegmentHelper_name = None
 # SATYAM, this is MM specific
 # for when I'm using files on my SSD vs RAID
@@ -66,7 +66,7 @@ print("Setting io.ROOT to ROOTSSD:", io.ROOTSSD)
 io.ROOT = os.path.join(io.ROOTSSD, "output_folder")
 print("Set io.ROOT to ROOTSSD:", io.ROOT)
 
-CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs", "rose_csvs")
+CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs", "sign103")
 
 # CSV_FOLDER = os.path.join("/Users/michaelmandiberg/Documents/projects-active/facemap_production/body3D_segmentbig_useall256_CSVs_test")
 # CSV_FOLDER = os.path.join("/Volumes/SSD4_Green/arms3D_placard_Dec12_undetected")
@@ -82,7 +82,7 @@ CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs", "rose_csvs")
 MODES = {0:'paris_photo_torso_images_topics', 1:'paris_photo_torso_videos_topics', 
          2:'3D_bodies_topics', 3:'3D_full_bodies_topics', 4:'3D_arms', 5:'3D_arms_meta',
          6:'heft_torso_keywords'}
-MODE_CHOICE = 4
+MODE_CHOICE = 6
 CURRENT_MODE = MODES[MODE_CHOICE]
 
 LIMIT = 200000 # this is the limit for the SQL query
@@ -178,7 +178,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     # SegmentTable_name = 'SegmentOct20'
     SegmentTable_name = 'SegmentBig_isface'
     # SegmentHelper_name = 'SegmentHelper_sept2025_heft_keywords' # TK revisit this for prodution run
-    SegmentHelper_name = 'SegmentHelperObject_73_book' # TK revisit this for prodution run
+    SegmentHelper_name = 'SegmentHelperObject_Placards_HighProbability' # TK revisit this for prodution run
     CLUSTER_TYPE = "ArmsPoses3D"
     # SORT_TYPE = "planar_hands"
     SORT_TYPE = "obj_bbox"
@@ -193,7 +193,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     GENERATE_FUSION_PAIRS = True # if true it will query based on MIN_VIDEO_FUSION_COUNT and create pairs
                                     # if false, it will grab the list of pair lists below
     USE_FUSION_PAIR_DICT = False # if True, it will use the FUSION_PAIR_DICT_NAME below
-    FUSION_PAIR_DICT_NAME = "FUSION_PAIR_DICT_KEYWORDS_768_META"
+    FUSION_PAIR_DICT_NAME = "FUSION_PAIR_DICT_DETECTIONS_ARMS3D128"
     USE_HSV = True
     N_HSV = 23 # 0-22 metaclusters of 96 HSV clusters
     # N_HSV = 0 # don't do HSV clusters
@@ -248,7 +248,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     
     # generate the CSV files with /query_all_fusion_clusters.py
 
-    TOPIC_NO = [73] # if doing an affect topic fusion, this is the wrapper topic, OR keyword. add .01, .1 etc for sub selects from KEYWORD_DICT
+    TOPIC_NO = [80] # if doing an affect topic fusion, this is the wrapper topic, OR keyword. add .01, .1 etc for sub selects from KEYWORD_DICT
 
     # this needs to be integrated into the search for each cluster, but doing here for the moment when doing single topic/cluster testing
     # this is CLUSTER_TYPE
@@ -436,7 +436,6 @@ elif IS_SEGONLY and io.platform == "darwin":
 
     SAVE_SEGMENT = False
     # no JOIN just Segment table
-    SELECT = "DISTINCT(s.image_id), s.site_name_id, s.contentUrl, s.imagename, s.description, s.face_x, s.face_y, s.face_z, s.mouth_gap, s.bbox, s.site_image_id, s.pitch, s.yaw, s.roll"
 
     FROM =f"{SegmentTable_name} s "
     dupe_table_pre  = "s"
@@ -444,6 +443,8 @@ elif IS_SEGONLY and io.platform == "darwin":
          # handles segmentbig which doesn't have is_dupe_of?
         FROM += f" JOIN Encodings e ON s.image_id = e.image_id "
         dupe_table_pre = "e"
+
+    SELECT = f"DISTINCT(s.image_id), s.site_name_id, s.contentUrl, s.imagename, s.description, s.face_x, s.face_y, s.face_z, s.mouth_gap, s.bbox, s.site_image_id, {dupe_table_pre}.pitch, {dupe_table_pre}.yaw, {dupe_table_pre}.roll"
 
     WHERE = f" {dupe_table_pre}.is_dupe_of IS NULL "
     # this is the standard segment topics/clusters query for June 2024
@@ -560,7 +561,7 @@ elif IS_SEGONLY and io.platform == "darwin":
     if SUBSELECT_ON_CLASS_ID > 0:
         # HACKY TK FIX THIS LATER
         print(f"subselecting on class id {SUBSELECT_ON_CLASS_ID}")
-        FROM += " JOIN DetectionsTest dsub ON s.image_id = dsub.image_id "
+        FROM += " JOIN Detections dsub ON s.image_id = dsub.image_id "
         WHERE += f" AND dsub.class_id = {SUBSELECT_ON_CLASS_ID} "
     if (OBJ_CLS_ID > 0 and not OBJ_DONT_SUBSELECT):
         # old way
@@ -570,7 +571,7 @@ elif IS_SEGONLY and io.platform == "darwin":
         # WHERE += " AND pb.bbox_"+str(OBJ_CLS_ID)+"_norm IS NOT NULL "
 
         # new way with object keywords
-        FROM += " JOIN DetectionsTest d ON s.image_id = d.image_id "
+        FROM += " JOIN Detections d ON s.image_id = d.image_id "
         SELECT += ", d.bbox_norm, d.obj_no, d.orientation, d.meta_cluster_id "
         WHERE += f" AND d.class_id = {OBJ_CLS_ID} "
         # for some reason I have to set OBJ_CLS_ID to 0 if I'm doing planar_body
@@ -908,7 +909,8 @@ if not io.IS_TENCH:
             if isinstance(cluster_topic_no, str):
                 cluster_topic_no = float(cluster_topic_no)
             # check if the topic_no has related keywords in the KEYWORD_DICT
-            print(f"accessing keyword dict for topic_no {cluster_topic_no}: {KEYWORD_DICT[cluster_topic_no]}")
+            print(f" KEYWORD_DICT", KEYWORD_DICT.keys())
+            print(f"accessing keyword dict for topic_no {cluster_topic_no}: {KEYWORD_DICT[cluster_topic_no]} from KEYWORD_DICT", KEYWORD_DICT.keys())
         
             cluster_dict_OR = cluster_dict_AND = cluster_dict_NOT = None
             # cluster_topic_OR = cluster_dict_AND = cluster_dict_NOT = this_cluster_topic_no = None
@@ -1352,6 +1354,7 @@ def prep_encodings_NN(df_segment):
     # subset needs to be both of them, if both are na
     if not sort_column == "hand_landmarks":
         # hand_landmarks are all giving 0's if null, so no NA
+        print("df_segment source_col", df_segment[source_col].to_string())
         df_segment = df_segment.dropna(subset=[source_col])
         print("df_segment length", len(df_segment.index))
     
@@ -2198,10 +2201,15 @@ def main():
             if VERBOSE: print("df len before bboxing,", len(df))
 
             if OBJ_CLS_ID > 0: 
+
                 obj_bbox_col = "bbox_norm"
+                print("before unstringed obj_bbox_col", obj_bbox_col)
+                print("df[obj_bbox_col] example", df[obj_bbox_col].to_string())
                 df[obj_bbox_col] = df[obj_bbox_col].apply(lambda x: io.unstring_json(x))
                 # # convert obj_bbox_col to list using convert_bbox_to_list
                 # df[obj_bbox_col] = df[obj_bbox_col].apply(lambda x: sort.convert_bbox_to_list(x))
+                # print("unstringed obj_bbox_col", obj_bbox_col)
+                # print("df[obj_bbox_col] example", df[obj_bbox_col].to_string())
 
 
 

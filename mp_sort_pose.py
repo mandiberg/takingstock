@@ -106,7 +106,7 @@ class SortPose:
         self.BRUTEFORCE = False
         self.LMS_DIMENSIONS = LMS_DIMENSIONS
         if self.VERBOSE: print("init LMS_DIMENSIONS",self.LMS_DIMENSIONS)
-        self.CUTOFF = 500 # DOES factor if ONE_SHOT
+        self.CUTOFF = 100 # DOES factor if ONE_SHOT
         self.ORIGIN = 0
         self.this_nose_bridge_dist = self.NOSE_BRIDGE_DIST = None # to be set in first loop, and sort.this_nose_bridge_dist each time
         self.USE_HEAD_POSE = USE_HEAD_POSE
@@ -602,10 +602,19 @@ class SortPose:
             # xyz = ['face_x', 'face_y', 'face_z']
             xyz = ['pitch', 'yaw', 'roll']
             df["xyz"] = df.apply(lambda row: self.cols_to_list(row, xyz), axis=1)
+            # drop any rows with missing xyz data
+            df_clean = df[df['xyz'].apply(lambda x: not any(np.isnan(x)))]
+            print(f" finding median Dropped {len(df) - len(df_clean)} rows with NaN values")
+            # print("df with xyz columns (after removing NaNs), will find median of 3D points")
+            # print(df_clean[['xyz']].to_string())
 
-            print("df with xyz columns, will find median of 3D points and set face_x,y,z accordingly")
-            median_xyz = self.get_median_value(df, "xyz")
+            if len(df_clean) == 0:
+                print("No valid data after removing NaNs in head pose angles. Returning empty DataFrame.")
+                return None
+            median_xyz = self.get_median_value(df_clean, "xyz")
             print(" ~~~ median_xyz: ", median_xyz)
+            
+            # Continue with the rest of your code using df_clean instead of df
 
             # set XYZ HIGH and LOW based on median
             margin_dict = {'pitch': 15, 'yaw': 8, 'roll': 8}
