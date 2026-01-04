@@ -1,5 +1,6 @@
 #################################
 
+import sys
 from sqlalchemy import create_engine, text,func, select, delete, and_, or_
 from sqlalchemy.orm import sessionmaker,scoped_session, declarative_base
 from sqlalchemy.pool import NullPool
@@ -42,8 +43,9 @@ SKIP_BODY = True # skip body landmarks. mostly you want to skip when doing obj b
                 # or are just redoing hands
 REPROCESS_HANDS = False # do hands
 IS_SEGMENT_BIG = False # use SegmentBig table. IF False, and IS_SSD is false, it will use Encodings table
-SegmentHelper_name = 'SegmentHelperObject_Placards_HighProbability'
-SegmentFolder = "/Volumes/OWC52/segment_images"
+SegmentHelper_name = 'SegmentHelperObject_74_clock'
+THIS_CLASS_ID = 74 # for object bbox normalization
+SegmentFolder = "/Volumes/OWC5/segment_images"
 io = DataIO(IS_SSD)
 db = io.db
 # io.db["name"] = "stock"
@@ -283,25 +285,27 @@ def insert_n_phone_bbox(image_id,n_phone_bbox):
     # x = n_phonebbox_collection.insert_one(nlms_dict)
     # print("inserted id",x.inserted_id)
     # return
+    from sqlalchemy import cast, JSON as JSON_TYPE
     phone_bbox_norm_entry = (
         session.query(PhoneBbox)
         .filter(PhoneBbox.image_id == image_id)
         .first()
     )    
     if phone_bbox_norm_entry:
-        phone_bbox_norm_entry.bbox_26_norm = json.dumps(n_phone_bbox)
+        phone_bbox_norm_entry.bbox_26_norm = cast(json.dumps(n_phone_bbox), JSON_TYPE)
         if VERBOSE:
             print("image_id:", PhoneBbox.image_id,"bbox_26_norm:", phone_bbox_norm_entry.bbox_26_norm)
     session.commit()
 
 def insert_detections_norm_bbox(detection_id,n_bbox):
+    from sqlalchemy import cast, JSON as JSON_TYPE
     detections_bbox_norm_entry = (
         session.query(Detections)
         .filter(Detections.detection_id == detection_id)
         .first()
     )    
     if detections_bbox_norm_entry:
-        detections_bbox_norm_entry.bbox_norm = json.dumps(n_bbox)
+        detections_bbox_norm_entry.bbox_norm = cast(json.dumps(n_bbox), JSON_TYPE)
         if VERBOSE:
             print("detection_id:", Detections.detection_id,"bbox_norm:", detections_bbox_norm_entry.bbox_norm)
     session.commit()
@@ -379,10 +383,23 @@ def insert_shape(target_image_id,shape):
     return
 
 def get_obj_bbox(target_image_id):
+    predicate = text("""
+    (
+    bbox_norm IS NULL
+    OR NOT (
+        JSON_EXTRACT(bbox_norm, '$.left') IS NOT NULL
+        OR (
+        JSON_TYPE(bbox_norm) = 'STRING'
+        AND JSON_VALID(CAST(JSON_UNQUOTE(bbox_norm) AS JSON)) = 1
+        AND JSON_EXTRACT(CAST(JSON_UNQUOTE(bbox_norm) AS JSON), '$.left') IS NOT NULL
+        )
+    )
+    )
+    """)
     select_image_ids_query = (
         select(Detections.detection_id, Detections.bbox, Detections.class_id, Detections.conf)
         .filter(and_(Detections.image_id == target_image_id))
-        .filter(or_(Detections.bbox_norm.is_(None), text("JSON_VALUE(Detections.bbox_norm, '$.left') IS NULL")))
+        .filter(predicate)
     )
     
     result = session.execute(select_image_ids_query).fetchall()
@@ -439,9 +456,13 @@ def calc_nlm(image_id_to_shape, lock, session):
     if sort.VERBOSE: print("nose_pixel_pos from face",nose_pixel_pos_face)
     # only do this if the io.get_encodings_mongo didn't return the body landmarks
     if not body_landmarks: body_landmarks=get_landmarks_mongo(target_image_id)
-    print("body_landmarks",type(body_landmarks))
-    if body_landmarks and isinstance(body_landmarks, landmark_pb2.NormalizedLandmarkList):
+    print("body_landmarks",type(body_landmarks), " first few lms:", body_landmarks[:5] if body_landmarks else "None")
+    if body_landmarks and type(body_landmarks) == bytes:
         nose_pixel_pos_body_withviz = sort.set_nose_pixel_pos(body_landmarks,[height,width])
+        # exit the whole script
+        print(" ✅ ✅ ✅ Converted and saved lms, with nose pixel", nose_pixel_pos_body_withviz)
+        # sys.exit(0)
+
     else:
         print("BODY LANDMARK NOT FOUND 404, bailing for this one ", target_image_id)
         return
@@ -649,6 +670,22 @@ function=calc_nlm
 # new way, with detections
 if USE_OBJ:
     print("doing OBJ using Detections")
+    predicate_text = """
+    (
+    bbox_norm IS NULL
+    OR NOT (
+        JSON_EXTRACT(bbox_norm, '$.left') IS NOT NULL
+        OR (
+        JSON_TYPE(bbox_norm) = 'STRING'
+        AND JSON_VALID(CAST(JSON_UNQUOTE(bbox_norm) AS JSON)) = 1
+        AND JSON_EXTRACT(CAST(JSON_UNQUOTE(bbox_norm) AS JSON), '$.left') IS NOT NULL
+        )
+    )
+    )
+    """
+
+    # distinct_image_ids_query = select(Detections.detection_id, Detections.bbox, Detections.class_id, Detections.conf).filter(text(predicate_text))
+
     distinct_image_ids_query = select(Images.image_id.distinct(), Images.h, Images.w, Encodings.bbox).\
         outerjoin(Encodings,Images.image_id == Encodings.image_id).\
         outerjoin(Detections,Detections.image_id == Encodings.image_id).\
@@ -656,9 +693,9 @@ if USE_OBJ:
         filter(Encodings.bbox != None).\
         filter(Encodings.two_noses.is_(None)).\
         filter(Encodings.mongo_body_landmarks == 1).\
-        filter(or_(Detections.bbox != None, text("JSON_VALUE(Detections.bbox, '$.left') IS NOT NULL"))).\
-        filter(or_(Detections.bbox_norm.is_(None), text("JSON_VALUE(Detections.bbox_norm, '$.left') IS NULL"))).\
-        filter(Detections.class_id == 80).\
+        filter(Detections.bbox != None).\
+        filter(text(predicate_text)).\
+        filter(Detections.class_id == THIS_CLASS_ID).\
         filter(Detections.conf != -1).\
         limit(LIMIT)
     

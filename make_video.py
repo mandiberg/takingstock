@@ -49,7 +49,7 @@ SegmentTable_name = 'SegmentBig_isface'
 # SegmentHelper_name = 'SegmentHelper_may2025_4x4faces'
 # SegmentHelper_name = 'SegmentHelper_sept2025_heft_keywords'
 # SegmentHelper_name = 'SegmentHelperObject_90_stethoscope'
-SegmentHelper_name = 'SegmentHelperObject_Placards_HighProbability'
+SegmentHelper_name = 'None' # set below for heft keywords
 # SegmentHelper_name = None
 # SATYAM, this is MM specific
 # for when I'm using files on my SSD vs RAID
@@ -178,7 +178,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     # SegmentTable_name = 'SegmentOct20'
     SegmentTable_name = 'SegmentBig_isface'
     # SegmentHelper_name = 'SegmentHelper_sept2025_heft_keywords' # TK revisit this for prodution run
-    SegmentHelper_name = 'SegmentHelperObject_Placards_HighProbability' # TK revisit this for prodution run
+    SegmentHelper_name = 'SegmentHelperObject_74_clock' # TK revisit this for prodution run
     CLUSTER_TYPE = "ArmsPoses3D"
     # SORT_TYPE = "planar_hands"
     SORT_TYPE = "obj_bbox"
@@ -248,8 +248,9 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     
     # generate the CSV files with /query_all_fusion_clusters.py
 
-    TOPIC_NO = [80] # if doing an affect topic fusion, this is the wrapper topic, OR keyword. add .01, .1 etc for sub selects from KEYWORD_DICT
-
+    TOPIC_NO = [74] # if doing an affect topic fusion, this is the wrapper topic, OR keyword. add .01, .1 etc for sub selects from KEYWORD_DICT
+    OBJ_KEYWORD_CUTOFF = 120 # if below this number it is treated as an object_id and not a keyword with AND/NOT
+    
     # this needs to be integrated into the search for each cluster, but doing here for the moment when doing single topic/cluster testing
     # this is CLUSTER_TYPE
     KEYWORD_OBJECT = KEYWORD_ORIENTATION = None
@@ -909,6 +910,10 @@ if not io.IS_TENCH:
             if isinstance(cluster_topic_no, str):
                 cluster_topic_no = float(cluster_topic_no)
             # check if the topic_no has related keywords in the KEYWORD_DICT
+            if cluster_topic_no < OBJ_KEYWORD_CUTOFF:
+                # if below cutoff, just return the int value and no AND/NOT
+                cluster_topic_no = int(math.floor(cluster_topic_no))
+                return [cluster_topic_no], None, None
             print(f" KEYWORD_DICT", KEYWORD_DICT.keys())
             print(f"accessing keyword dict for topic_no {cluster_topic_no}: {KEYWORD_DICT[cluster_topic_no]} from KEYWORD_DICT", KEYWORD_DICT.keys())
         
@@ -1007,7 +1012,7 @@ if not io.IS_TENCH:
                 # if it doesn't, it just returns the same topic_no
                 topic_no, cluster_dict_AND, cluster_dict_NOT = access_keyword_dict(topic_no)
                 print(f"after accessing keyword dict, topic_no is {topic_no}")
-                if topic_no[0] >= 184: this_id = "keyword_id"
+                if topic_no[0] >= OBJ_KEYWORD_CUTOFF: this_id = "keyword_id"
                 else: 
                     this_id = "class_id"
                     this_alias = "d" # for Detections table

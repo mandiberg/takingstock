@@ -3551,13 +3551,12 @@ class SortPose:
 
 
 
-
     def set_nose_pixel_pos(self,body_landmarks,shape):
         # body_landmarks = self.ensure_lms_list(body_landmarks)  # Ensure body_landmarks is a list
         # if body_landmarks is pickled, unpickle it
         if type(body_landmarks)==bytes:
             body_landmarks=pickle.loads(body_landmarks)
-        if self.VERBOSE: print("set_nose_pixel_pos body_landmarks")
+        if self.VERBOSE: print("set_nose_pixel_pos: body_landmarks type", type(body_landmarks))
         height,width = shape[:2]
         if self.VERBOSE: print("set_nose_pixel_pos bodylms height, width", height, width)
         nose_pixel_pos ={
@@ -3565,6 +3564,13 @@ class SortPose:
             "y":0,
             "visibility":0
         }
+        # Handle different body_landmarks formats
+        if isinstance(body_landmarks, list):
+            # New format: list of NormalizedLandmark objects
+            if self.VERBOSE: print("set_nose_pixel_pos: body_landmarks is a list, converting to protobuf format")            
+            # Convert list to landmark_pb2.NormalizedLandmarkList
+            body_landmarks = self.convert_new_mp_to_old_format(body_landmarks)
+
         # nose_pixel_pos <- 864, 442 (stay as a separate variable)
         # nose_normalized_pos 0,0
         # nose_pos=body_landmarks.landmark[NOSE_ID]
@@ -3576,9 +3582,22 @@ class SortPose:
         if self.VERBOSE: print("set_nose_pixel_pos nose_pixel_pos",nose_pixel_pos)
         if self.VERBOSE: print("set_nose_pixel_pos self.nose_2d",self.nose_2d)
         nose_pixel_pos["visibility"]+=body_landmarks.landmark[0].visibility
-        # nose_3d has visibility
+        # nose_3d has visibility 
         self.nose_3d = nose_pixel_pos
         return nose_pixel_pos
+
+    def convert_new_mp_to_old_format(self, body_landmarks):
+        converted_landmark_list = landmark_pb2.NormalizedLandmarkList()
+        for lm in body_landmarks:
+            new_lm = landmark_pb2.NormalizedLandmark(
+                    x=lm.x, 
+                    y=lm.y, 
+                    z=lm.z, 
+                    visibility=lm.visibility, 
+                    presence=lm.presence
+                )
+            converted_landmark_list.landmark.append(new_lm)
+        return converted_landmark_list
 
     # # YOLO MOVED    
     # def normalize_phone_bbox(self,phone_bbox,nose_pos,face_height,shape):

@@ -55,7 +55,7 @@ class DataIO:
             # moved images to SSD
             self.ROOT_DBx = os.path.join(self.home, "Library/CloudStorage/Dropbox/takingstock_dropbox/output_folder")
             self.ROOT_CODE= os.path.join(self.home,"Documents/GitHub/facemap/")
-            self.ROOT_PROD=  "/Volumes/OWC52/segment_images" ## only on Mac
+            self.ROOT_PROD=  "/Volumes/OWC5/segment_images" ## only on Mac
             self.ROOTSSD = os.path.join(self.home,"Documents/projects-active/facemap_production")
             self.ROOT54= "/Volumes/RAID54" ## only on 
             # temp migration for
