@@ -1,5 +1,6 @@
 USE Stock;
 SET GLOBAL innodb_buffer_pool_size=8053063680;
+SET GLOBAL innodb_buffer_pool_size=80530636800;
 
 
 INSERT INTO YoloClasses (yolo_class, class_name, model_version) VALUES
@@ -194,11 +195,11 @@ ALTER TABLE Detections
 ADD hue Float,
 ADD sat Float,
 ADD lum Float,
-ADD val Float, 
+ADD val Float 
 
 ALTER TABLE Detections
 ADD 	orientation INT,
-ADD 	exclude TINYINT,
+ADD 	exclude TINYINT
 ;
 
 
@@ -210,20 +211,62 @@ ALTER TABLE Detections
 
 INSERT INTO BsonFileLog (completed_bson_file) VALUES ('encodings_batch_7900001.bson');
 
+USE Stock;
+Select MAX(detection_id)
+From Detections d
+;
 
-INSERT INTO YoloClasses (class_id, class_name, model_version) VALUES
+-- 15380008 in main
+-- 9694733 in test
+
+SELECT * 
+FROM Detections
+WHERE image_id = 118186199
+;
+
+
+UPDATE YoloClasses
+INSERT INTO YoloClasses (class_id, class_name, model_version) 
+VALUES
 (80,'Sign','YoloCustom'),
 (81,'Gift','YoloCustom'),
-(82,'money','YoloCustom'),
+(82,'Money','YoloCustom'),
 (83,'Bag','YoloCustom'),
-(84,'valentine','YoloCustom'),
+(84,'Valentine','manual'),
 (85,'Salad','YoloCustom'),
 (86,'Dumbbell','YoloCustom'),
-(87,'rose','YoloCustom'),
+(87,'Flag','manual'),
 (88,'Groceries','YoloCustom'),
-(89,'mask','other'),
-(90,'Stethoscope','other'),
-(91,'Gun','other'),
-(92,'Headphones','other'),
-(93,'Clipboard','other')
+(89,'Mask','manual'),
+(90,'Stethoscope','manual'),
+(91,'Gun','manual'),
+(92,'Headphones','manual'),
+(93,'Clipboard','manual'),
+(94,'Piggybank','YoloCustom'),
+(95,'Creditcard','YoloCustom'),
+(96,'Bitcoin','YoloCustom'),
+(97,'Rose','YoloCustom'),
+(98,'Lily','YoloCustom'),
+(99,'Iris','YoloCustom'),
+(100,'Tulip','YoloCustom'),
+(101,'Lisianthus','YoloCustom'),
+(102,'Orchid','YoloCustom'),
+(103,'Peony','YoloCustom')
+;
+
+
+USE Stock;
+-- UPDATE DATE YoloClasses
+INSERT INTO YoloClasses (class_id, class_name, model_version) 
+VALUES
+(94,'Piggybank','YoloCustom'),
+(95,'Creditcard','YoloCustom'),
+(96,'Bitcoin','YoloCustom'),
+(97,'Rose','YoloCustom'),
+(98,'Lily','YoloCustom'),
+(99,'Iris','YoloCustom'),
+(100,'Tulip','YoloCustom'),
+(101,'Lisianthus','YoloCustom'),
+(102,'Orchid','YoloCustom'),
+(103,'Peony','YoloCustom')
 ;

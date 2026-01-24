@@ -81,6 +81,7 @@ class SortPose:
             "body3D": "body3D",
             "ArmsPoses3D": "body3D",
             "obj_bbox": "obj",
+            "obj_bbox_fusion": "obj_bbox_fusion"
         }
 
         self.KNN_COLS = {
@@ -91,6 +92,7 @@ class SortPose:
             "body3D": ("body_landmarks_array", "dist_enc1"),
             "HSV": ("hsvll", "dist_HSV"),
             "obj": ("obj_bbox_list", "dist_obj"),
+            "obj_bbox_fusion": ("obj_bbox_fusion_list", "dist_obj_fusion")
         }
 
         #maximum allowable distance between encodings (this accounts for dHSV)
@@ -122,12 +124,12 @@ class SortPose:
             self.MULTIPLIER = self.HSVMULTIPLIER
             self.DUPED = self.FACE_DUPE_DIST
             self.HSV_DELTA_MAX = self.HSV_DELTA_MAX * 1.5
-        elif self.SORT_TYPE == "planar" or self.SORT_TYPE == "obj_bbox": 
+        elif self.SORT_TYPE == "planar" or "obj_bbox" in self.SORT_TYPE:
             self.MIND = self.MINBODYDIST * 1.5
             self.MAXD = self.MAXBODYDIST
             self.MULTIPLIER = self.HSVMULTIPLIER * (self.MINBODYDIST / self.MINFACEDIST)
             self.DUPED = self.BODY_DUPE_DIST
-            if self.SORT_TYPE == "obj_bbox":
+            if "obj_bbox" in self.SORT_TYPE:
                 self.MAXD = 200  # override max distance for obj_bbox bc it much bigger
         elif self.SORT_TYPE in ["planar_body", "planar_hands", "fingertips_positions", "body3D", "ArmsPoses3D"]: 
             self.MIND = self.MINBODYDIST
@@ -614,19 +616,20 @@ class SortPose:
             median_xyz = self.get_median_value(df_clean, "xyz")
             print(" ~~~ median_xyz: ", median_xyz)
             
-            # Continue with the rest of your code using df_clean instead of df
+            if self.SORT_TYPE != "obj_bbox_fusion":
+                # set XYZ HIGH and LOW based on median
+                margin_dict = {'pitch': 15, 'yaw': 8, 'roll': 8}
+                low_high_dict = {}
+                for angle in xyz:
+                    low_high_dict[angle] = (median_xyz[xyz.index(angle)] - margin_dict[angle], median_xyz[xyz.index(angle)] + margin_dict[angle])
+                print("   low_high_dict: ", low_high_dict)
 
-            # set XYZ HIGH and LOW based on median
-            margin_dict = {'pitch': 15, 'yaw': 8, 'roll': 8}
-            low_high_dict = {}
-            for angle in xyz:
-                low_high_dict[angle] = (median_xyz[xyz.index(angle)] - margin_dict[angle], median_xyz[xyz.index(angle)] + margin_dict[angle])
-            print("   low_high_dict: ", low_high_dict)
-
-            # use low_high_dict to filter
-            for angle in xyz:
-                df = df.loc[((df[angle] < low_high_dict[angle][1]) & (df[angle] > low_high_dict[angle][0]))]
-                print(f"after filtering by {angle}, len(df): {len(df)}")
+                # use low_high_dict to filter
+                for angle in xyz:
+                    df = df.loc[((df[angle] < low_high_dict[angle][1]) & (df[angle] > low_high_dict[angle][0]))]
+                    print(f"after filtering dynamically by {angle}, len(df): {len(df)}")
+            else:
+                print("   obj_bbox_fusion sorting, skipping dynamic head pose filtering")
         else:
             # use the defaults set in __init__
             df = df.loc[((df['face_y'] < self.YHIGH) & (df['face_y'] > self.YLOW))]
@@ -2517,7 +2520,7 @@ class SortPose:
         elif self.SORT_TYPE == "planar_body": sort_column = "body_landmarks_array"
         elif self.SORT_TYPE == "body3D" or self.SORT_TYPE == "ArmsPoses3D": sort_column = "body_landmarks_array"
         elif self.SORT_TYPE == "planar_hands" or self.SORT_TYPE == "planar_hands_USE_ALL": sort_column = "hand_landmarks" # hand_landmarks are left and right hands flat list of 126 values
-        elif self.SORT_TYPE == "obj_bbox": sort_column = "obj_bbox_list"
+        elif "obj_bbox" in self.SORT_TYPE: sort_column = "obj_bbox_list" # handles fusion also
         print("sort_column", sort_column)
         print("sort_column head", df_enc[sort_column].head())
         # print("lengtth of first value", len(df_enc[sort_column].iloc[0]))
@@ -2866,6 +2869,7 @@ class SortPose:
             elif self.SORT_TYPE in ("planar_body", "ArmsPoses3D", "body3D") and "body_landmarks_array" in df.columns: enc1 = df.iloc[-1]["body_landmarks_array"]
             elif self.SORT_TYPE == "planar_body": enc1 = df.iloc[-1]["body_landmarks_normalized"]
             elif self.SORT_TYPE == "obj_bbox" and "obj_bbox_list" in df.columns: enc1 = df.iloc[-1]["obj_bbox_list"]
+            elif self.SORT_TYPE == "obj_bbox_fusion" and "obj_bbox_fusion_list" in df.columns: enc1 = df.iloc[-1]["obj_bbox_fusion_list"]
             else:
                 print("get_enc1: SORT_TYPE not recognized or column missing:", self.SORT_TYPE)
                 enc1 = None
@@ -3078,6 +3082,36 @@ class SortPose:
             df_enc = df_enc[non_nan_mask].reset_index(drop=True)
             print("Cleaned df_enc:", df_enc.shape)
 
+    # print len of each item in encodings_array
+        if "obj_bbox" in self.SORT_TYPE:
+            if len(enc1) != len(encodings_array[0]):
+                # encodings_array_refined = encodings_array.copy()
+                print("Refining encodings_array for obj_bbox KNN")
+                # for potential_enc1 in encodings_array_refined:
+                #     for enc1_dim in enc1:
+                #         if enc1_dim not in potential_enc1:
+                #             # pop potential_enc1 from encodings_array_refined
+                #             print("Removing non-matching enc1 in encodings_array:", enc1, potential_enc1)
+                #             encodings_array_refined.remove(potential_enc1)
+                #             continue
+                refined = []
+                print("enc1: ", enc1)
+                for potential_enc1 in encodings_array:
+                    keep = False
+                    for enc1_dim in enc1:
+                        if enc1_dim in potential_enc1:
+                            print("Removing non-matching enc1 in encodings_array:", enc1_dim, potential_enc1)
+                            keep = True
+                            break
+                    if keep:
+                        print("Found matching enc1 in encodings_array:", enc1, potential_enc1)
+                        refined.append(potential_enc1)
+
+                        # else:
+                        #     print("Found matching enc1 in encodings_array:", enc1, potential_enc1)
+                            # break
+                print("Refined encodings_array length:", len(refined))
+                enc1 = refined[0] if refined else enc1
         self.knn.fit(encodings_array)
 
         
@@ -3379,7 +3413,8 @@ class SortPose:
                 if self.VERBOSE: print("ONE_SHOT going to assign all and try to drop everything")
                 df_run = df_shuffled
                 # drop all rows from df_shuffled
-                df_enc = df_enc.drop(df_run.index).reset_index(drop=True)
+                # df_enc = df_enc.drop(df_run.index).reset_index(drop=True)
+                df_enc = df_enc[~df_enc['image_id'].isin(df_run['image_id'])].reset_index(drop=True)
                 if self.VERBOSE: print("df_run", df_run)
                 if self.VERBOSE: print("df_enc", len(df_enc))
 

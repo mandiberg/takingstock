@@ -49,7 +49,7 @@ ocr_engine = PaddleOCR(
 device = "mps" if torch.backends.mps.is_available() else "cpu"
 print("Using device:", device)
 yolo_model = YOLO("yolov8x.pt").to(device)  # load a pretrained YOLOv8x model
-yolo_custom_model = YOLO("models/takingstock_yolov8x/weights/best.pt").to(device)
+yolo_custom_model = YOLO("models/takingstock_c16v4_yolov8x/weights/best.pt").to(device)
 
 ocr = OCRTools(DEBUGGING=True)
 yolo = YOLOTools(DEBUGGING=True)
@@ -64,14 +64,14 @@ DO_MASK = False
 DO_VALENTINE = False
 DO_OCR = False
 
-# FILE_FOLDER = "/Volumes/OWC5/segment_images_book_clock_bowl"
-FILE_FOLDER = "/Volumes/LaCie/segment_images_82_money_cards"
+# FILE_FOLDER = "/Volumes/LaCie/segment_images_83_bag"
+FILE_FOLDER = "/Volumes/OWC52/segment_images_81_gift"
 # MAKE_VIDEO_CSVS_PATH = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/book_csvs"
 MAKE_VIDEO_CSVS_PATH = None  # to process all images in folder
 OUTPUT_FOLDER = os.path.join(FILE_FOLDER, "test_output")
 BATCH_SIZE = 100
 MASK_THRESHOLD = .15  # HSV distance threshold for mask detection
-CONF_THRESHOLD = 0.25
+CONF_THRESHOLD = 0.4
 IS_DRAW_BOX = True
 IS_SAVE_UNDETECTED = False
 MOVE_OR_COPY = "copy"  # "move" or "copy"
@@ -81,8 +81,34 @@ META = False # to return the meta clusters (out of 23, not 96)
 cl = ToolsClustering(CLUSTER_TYPE, VERBOSE=VERBOSE)
 table_cluster_type = cl.set_table_cluster_type(META)
 
-custom_ids_to_global_dict = {1:80, 2:82}
+custom_ids_to_global_dict = {
+  0: 100,
+  1: 88,
+  2: 97,
+  3: 83,
+  4: 81,
+  5: 82,
+  6: 98,
+  7: 94,
+  8: 95,
+  9: 86,
+  10: 80,
+  11: 102,
+  12: 96,
+  13: 101,
+  14: 99,
+  15: 103
 
+}
+
+# custom_ids_to_global_dict = {
+#   0: 100,
+#   1: 97,
+#   2: 83,
+#   3: 81,
+#   4: 86,
+#   5: 103,
+# }
 Clusters, ImagesClusters, MetaClusters, ClustersMetaClusters = cl.construct_table_classes(table_cluster_type)
 this_cluster, this_crosswalk = cl.set_cluster_metacluster(Clusters, ImagesClusters, MetaClusters, ClustersMetaClusters)
 meta_cluster_dict = cl.get_meta_cluster_dict(session, ClustersMetaClusters)
@@ -110,7 +136,14 @@ def format_site_name_ids(folder_index, batch_img_list):
                 this_site_image_id = img.split("-id")[-1].replace(".jpg", "")
                 batch_site_image_ids.append(this_site_image_id)
             elif "-" in img:
-                this_site_image_id = img.split("-")[-1].replace(".jpg", "")
+                last_position = img.split("-")[-1].replace(".jpg", "")
+                first_position = img.split("-")[0].replace(".jpg", "")
+                if last_position.isdigit():
+                    this_site_image_id = last_position
+                elif first_position.isdigit():
+                    this_site_image_id = first_position
+                else:
+                    print({" ❌ Warning: could not parse site_image_id from filename:", img})
                 batch_site_image_ids.append(this_site_image_id)
             else:
                 this_site_image_id = img.replace(".jpg", "")
@@ -232,11 +265,11 @@ def do_yolo_detections(result, image, image_path, existing_detections, custom=Fa
         detect_results = map_custom_ids_to_global(detect_results)
     print(f"Image {image_id} - YOLO detections: {detect_results}")
     # save_debug_image_yolo_bbox(image_id, imagename, image, detect_results)
+    if DEBUGGING:
+        save_debug_image_yolo_bbox(image_id, imagename, image, detect_results, image_path, draw_box=IS_DRAW_BOX, save_undetected=IS_SAVE_UNDETECTED)
     if TESTING_NO_DB_WRITE:
         print("TESTING_NO_DB_WRITE is True, skipping DB write.")
         return detect_results
-    if DEBUGGING:
-        save_debug_image_yolo_bbox(image_id, imagename, image, detect_results, image_path, draw_box=IS_DRAW_BOX, save_undetected=IS_SAVE_UNDETECTED)
     if len(detect_results) == 0:
         if custom: return # skipp no    detections save for custom
         save_no_dectections(session,image_id, NoDetectionTable=ThisNoDetectionTable)

@@ -99,20 +99,20 @@ else:
     LMS_DIMENSIONS = 3
 OFFSET = 0
 # SELECT MAX(cmb.image_id) FROM ImagesBodyPoses3D cmb JOIN Encodings e ON cmb.image_id = e.image_id WHERE e.is_feet = 0;
-# START_ID = 114468990 # only used in MODE 1
+# START_ID = 129478350 # only used in MODE 1
 START_ID = 0 # only used in MODE 1
 
 # WHICH TABLE TO USE?
 # SegmentTable_name = 'SegmentOct20'
 SegmentTable_name = 'SegmentBig_isface'
-# SegmentTable_name = 'SegmentBig_isnotface'
+SegmentTable_name = 'Encodings'
 
 # if doing MODE == 2, use SegmentHelper_name to subselect SQL query
 # unless you know what you are doing, leave this as None
 SegmentHelper_name = None
 # if cl.CLUSTER_TYPE == "ArmsPoses3D":
 # SegmentHelper_name = 'SegmentHelper_sept2025_heft_keywords'
-# SegmentHelper_name = 'SegmentHelper_oct2025_evens'
+SegmentHelper_name = 'SegmentHelper_dec2025_body3D_outOfSegment'
 # SegmentHelper_name = 'SegmentHelperObject_Placards_HighProbability'
 FORCE_HAND_LANDMARKS = False # when doing ArmsPoses3D, default is True, so mongo_hand_landmarks = 1
 
@@ -201,9 +201,16 @@ if USE_SEGMENT is True and (cl.CLUSTER_TYPE != "Clusters"):
         # handles segmentbig which doesn't have is_dupe_of, etc
         FROM += f" JOIN Encodings e ON s.image_id = e.image_id "
         dupe_table_pre = "e"
+        WHERE = f" {dupe_table_pre}.is_dupe_of IS NULL "
+    elif "Encodings" in SegmentTable_name:
+        # handles segmentbig which doesn't have is_dupe_of, etc
+        # FROM += f" JOIN Encodings e ON s.image_id = e.image_id "
+        dupe_table_pre = "s" # because SegmentTable_name is Encodings and gets aliased as s 
+        WHERE = f"  {dupe_table_pre}.is_dupe_of IS NULL AND {dupe_table_pre}.is_face = 1 " # ensures we are still only using faces
+    else:
+        WHERE = f" {dupe_table_pre}.is_dupe_of IS NULL "
     # Basic Query, this works with SegmentOct20. Previously included s.face_x, s.face_y, s.face_z, s.mouth_gap
     SELECT = "DISTINCT(s.image_id)"
-    WHERE = f" {dupe_table_pre}.is_dupe_of IS NULL "
 
     if isinstance(this_data_column, list):
         if "HSV" in cl.CLUSTER_TYPE:
@@ -257,7 +264,7 @@ if USE_SEGMENT is True and (cl.CLUSTER_TYPE != "Clusters"):
         WHERE = " cluster_id IS NOT NULL "
 
     # WHERE += " AND h.is_body = 1"
-    LIMIT = 12000000
+    LIMIT = 5000000
     BATCH_LIMIT = 10000
 
     '''

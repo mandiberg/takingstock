@@ -66,7 +66,7 @@ print("Setting io.ROOT to ROOTSSD:", io.ROOTSSD)
 io.ROOT = os.path.join(io.ROOTSSD, "output_folder")
 print("Set io.ROOT to ROOTSSD:", io.ROOT)
 
-CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs", "sign103")
+CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs", "sign")
 
 # CSV_FOLDER = os.path.join("/Users/michaelmandiberg/Documents/projects-active/facemap_production/body3D_segmentbig_useall256_CSVs_test")
 # CSV_FOLDER = os.path.join("/Volumes/SSD4_Green/arms3D_placard_Dec12_undetected")
@@ -178,10 +178,11 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     # SegmentTable_name = 'SegmentOct20'
     SegmentTable_name = 'SegmentBig_isface'
     # SegmentHelper_name = 'SegmentHelper_sept2025_heft_keywords' # TK revisit this for prodution run
-    SegmentHelper_name = 'SegmentHelperObject_74_clock' # TK revisit this for prodution run
+    SegmentHelper_name = 'SegmentHelperObject_80_sign' # TK revisit this for prodution run
     CLUSTER_TYPE = "ArmsPoses3D"
     # SORT_TYPE = "planar_hands"
-    SORT_TYPE = "obj_bbox"
+    # SORT_TYPE = "obj_bbox"
+    SORT_TYPE = "obj_bbox_fusion"
     # CLUSTER_TYPE = SORT_TYPE = "ArmsPoses3D" # this triggers meta body poses 3D
     # CLUSTER_TYPE = SORT_TYPE = "obj_bbox" # make sure OBJ_CLS_ID is set below
     # META = True
@@ -248,7 +249,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     
     # generate the CSV files with /query_all_fusion_clusters.py
 
-    TOPIC_NO = [74] # if doing an affect topic fusion, this is the wrapper topic, OR keyword. add .01, .1 etc for sub selects from KEYWORD_DICT
+    TOPIC_NO = [80] # if doing an affect topic fusion, this is the wrapper topic, OR keyword. add .01, .1 etc for sub selects from KEYWORD_DICT
     OBJ_KEYWORD_CUTOFF = 120 # if below this number it is treated as an object_id and not a keyword with AND/NOT
     
     # this needs to be integrated into the search for each cluster, but doing here for the moment when doing single topic/cluster testing
@@ -1345,10 +1346,9 @@ def prep_encodings_NN(df_segment):
             # source_col_2 = "right_hand_landmarks_norm"
         elif SORT_TYPE == "128d":
             source_col = sort_column = "face_encodings68"
-        elif SORT_TYPE == "obj_bbox":
+        elif "obj_bbox" in SORT_TYPE:
+            # does this matter?
             source_col = sort_column = "bbox_norm"
-            # source_col = sort_column = "bbox_"+str(OBJ_CLS_ID)+"_norm"
-
         return sort_column, source_col
 
     print("prep_encodings_NN df_segment columns", df_segment.columns)
@@ -1391,6 +1391,11 @@ def prep_encodings_NN(df_segment):
         if not null_bboxes.empty:
             print("Rows with invalid bbox data:")
             print(null_bboxes)
+        # make a obj_bbox_fusion_list column that combines bbox_norm, meta_cluster_id, 'pitch', 'yaw', 'roll'
+        # start by creating a pitch_yaw_roll_list column
+        df_segment['pitch_yaw_roll_list'] = df_segment.apply(lambda row: [row['pitch'], row['yaw'], row['roll']], axis=1)
+        df_segment['obj_bbox_fusion_list'] = df_segment.apply(lambda row: row['obj_bbox_list'] + [row['meta_cluster_id']] + row['pitch_yaw_roll_list'], axis=1)
+        print("df_segment obj_bbox_fusion_list", df_segment['obj_bbox_fusion_list'].head())
 
     print("df_segment length", len(df_segment.index))
 

@@ -8,7 +8,7 @@ DROP TABLE SegmentHelperObject_book ;
 DELETE FROM SegmentHelper_sept2025_heft_keywords;
 
 -- create helper segment table
-CREATE TABLE SegmentHelperObject_Placards_HighProbability (
+CREATE TABLE SegmentHelper_jan2026_sign103 (
     seg_image_id int NOT NULL AUTO_INCREMENT PRIMARY KEY,
     image_id INTEGER,
     FOREIGN KEY (image_id) REFERENCES Images(image_id)
@@ -16,7 +16,7 @@ CREATE TABLE SegmentHelperObject_Placards_HighProbability (
 
 
 -- create helper segment OBJECT table
-CREATE TABLE SegmentHelperObject_Placards_HighProbability (
+CREATE TABLE SegmentHelperObject_41_cup_glass (
     seg_image_id int NOT NULL AUTO_INCREMENT PRIMARY KEY,
     image_id INTEGER,
     class_id INTEGER,
@@ -267,6 +267,25 @@ WHERE e.face_x > -45 AND e.face_x < -6
 LIMIT 2000000
 ;
 
+
+
+USE Stock;
+-- for making a helper from Segment Object based on arms3d cluster
+INSERT INTO SegmentHelper_jan2026_sign103 (image_id)
+SELECT DISTINCT e.image_id
+FROM SegmentHelperObject_Placards_HighProbability e
+JOIN ImagesArmsPoses3D iap ON iap.image_id = e.image_id
+WHERE iap.cluster_id = 103
+    AND NOT EXISTS (
+        SELECT 1
+        FROM SegmentHelper_jan2026_sign103 s
+        WHERE s.image_id = e.image_id
+    )
+LIMIT 200000
+;
+
+
+USE Stock;
 -- for making an OBJECT helper from segmentbig based on keywords
 INSERT INTO SegmentHelperObject_Placards_HighProbability (image_id, site_name_id, imagename)
 SELECT DISTINCT e.image_id, i.site_name_id, i.imagename
@@ -275,13 +294,85 @@ JOIN Images i ON i.image_id = e.image_id
 JOIN ImagesKeywords ik ON ik.image_id = e.image_id
 JOIN ImagesKeywords ikand ON ikand.image_id = e.image_id
 WHERE ik.keyword_id IN (184,23084,6112,2151,23726,23375,24032,32310,25447,24536,30643,30991,64035)
-AND ikand.keyword_id IN (8136,4587,133749,26241,886,133627,23642,24350,4642,23182,9286,23018,10433,9400,30217,29097,26401,186,500,23852,3964,27357,24374,7791,26621,8202,18797,9424,30216,24804,8485,8090,33509,17515,21741,21636,24122,21377,131468,28806,30249,25358,20714,68394,82807,83723,60874)
+AND ikand.keyword_id IN (8874,22814,133787)
     AND NOT EXISTS (
         SELECT 1
         FROM SegmentHelperObject_Placards_HighProbability s
         WHERE s.image_id = e.image_id
     )
 ;
+
+-- for making an OBJECT helper from BOTH SEG TABLES based on keywords
+INSERT INTO    SegmentHelperObject_41_cup_glass (image_id, site_name_id, imagename)
+SELECT DISTINCT combined.image_id, i.site_name_id, i.imagename
+FROM (
+    SELECT image_id FROM SegmentBig_isface
+    UNION
+    SELECT image_id FROM SegmentHelper_dec2025_body3D_outOfSegment
+) AS combined
+JOIN Images i ON i.image_id = combined.image_id
+JOIN ImagesKeywords ik ON ik.image_id = combined.image_id
+-- JOIN ImagesKeywords ikand ON ikand.image_id = combined.image_id
+-- JOIN ImagesKeywords iknot ON iknot.image_id = combined.image_id
+WHERE ik.keyword_id IN (22040,133,1597,293,22222,703,60,22692,754,1575,758,22600,9940,22617,133685,753,5342,5824,1577,5783,133529,749,22998,429,9133,20174,1583,6787,1586,12590,752,29141,10405,750,23210,10845,4770,24940,5298,6310,9939,24858,8832,5475,22711,22553,10761,9172,20744,5297,11863,27992,119573,27900,12535,8792,24396,28387,9029,18439,6894,9041,8914,25085,25407,19154,24566,7027,23566,23370,2248,25667,8842,28857,31354,32198,28108,24778,8319,31715,8775,7449,16308,21689,29383,24216,30250,14012,14928,21298,33906,96574,20846,27843,9644,21035,27228,9170,11438,25402,46251,26457,15330,11774,23032,114546,9128,96570,100800,32164,46663,30035,6915,13624,11088,29834,84153,119727,8879,27325,105156,30458,10719,15905,33517,92242,108920,113319,46695,88388,32639,112167,114547,12392,24805,104951,112989,127616,30190,31194,95390,26720,18827,25275,27102,27765,96736,109023,56763,56766,62713,24585,60039,56611,63227)
+-- AND ikand.keyword_id IN (404,24181,7250,18739,32916)
+-- AND iknot.keyword_id not IN (22251,22615,2576,23774,26936,24035,10495,24332,24629,25699,26080,27682,33302,67401,91239,121368,96718,15717,2572,17257,6427,106711,7672,90775,116280,26530,30893,4997,38250,98030,23326,2581,31910,31263,31238,88890,84425,97155,62779,97262,15717,5003, 26769, 33874,4961)
+    AND NOT EXISTS (
+        SELECT 1
+        FROM SegmentHelperObject_41_cup_glass s
+        WHERE s.image_id = combined.image_id
+    )
+;
+
+SELECT COUNT(*)
+FROM SegmentHelperObject_45_salad;
+
+-- for making an OBJECT helper based on DISTINCT keyword COUNT
+INSERT INTO SegmentHelperObject_Placards_HighProbability (image_id, site_name_id, imagename)
+SELECT DISTINCT combined.image_id, i.site_name_id, i.imagename
+FROM (
+    SELECT image_id FROM SegmentBig_isface
+    UNION
+    SELECT image_id FROM SegmentHelper_dec2025_body3D_outOfSegment
+) AS combined
+JOIN Images i ON i.image_id = combined.image_id
+JOIN (
+    SELECT image_id, COUNT(DISTINCT keyword_id) as keyword_count
+    FROM ImagesKeywords
+    WHERE keyword_id IN (184,23084,6112,2151,23726,23375,24032,32310,25447,24536,30643,30991,64035)
+    GROUP BY image_id
+    HAVING COUNT(DISTINCT keyword_id) >= 2
+) AS ik ON ik.image_id = combined.image_id
+JOIN ImagesKeywords ikand ON ikand.image_id = combined.image_id
+WHERE NOT EXISTS (
+        SELECT 1
+        FROM SegmentHelperObject_Placards_HighProbability s
+        WHERE s.image_id = combined.image_id
+    )
+;
+
+
+
+-- for making an OBJECT helper from Encodings with Body_3D based on keywords
+INSERT INTO SegmentHelper_dec2025_body3D_outOfSegment (image_id)
+SELECT DISTINCT e.image_id
+FROM Encodings e
+WHERE e.is_face = 1
+AND e.mongo_body_landmarks_3D = 1
+	AND NOT EXISTS (
+        SELECT 1
+        FROM SegmentBig_isface s
+        WHERE s.image_id = e.image_id
+    )
+;
+
+
+SELECT MAX(seg_image_id)
+FROM SegmentHelperObject_Placards_HighProbability
+;
+-- 644598 -- cut off for high-prob
+
+
 
 -- for making a helper from segmentbig where mongo_face_landmarks = 1
 INSERT INTO SegmentHelper_nov2025_all_hands (image_id)

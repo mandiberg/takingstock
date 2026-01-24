@@ -43,8 +43,10 @@ SKIP_BODY = True # skip body landmarks. mostly you want to skip when doing obj b
                 # or are just redoing hands
 REPROCESS_HANDS = False # do hands
 IS_SEGMENT_BIG = False # use SegmentBig table. IF False, and IS_SSD is false, it will use Encodings table
-SegmentHelper_name = 'SegmentHelperObject_74_clock'
-THIS_CLASS_ID = 74 # for object bbox normalization
+SegmentHelper_name = 'SegmentHelperObject_45_salad'
+THIS_CLASS_ID = 45 # for object bbox normalization
+# SegmentHelper_name = 'SegmentHelperObject_80_sign'
+# THIS_CLASS_ID = 80 # for object bbox normalization
 SegmentFolder = "/Volumes/OWC5/segment_images"
 io = DataIO(IS_SSD)
 db = io.db
@@ -124,7 +126,7 @@ sort = SortPose(config=cfg)
 # Create a session
 session = scoped_session(sessionmaker(bind=engine))
 
-LIMIT= 2000000
+LIMIT= 20000000
 # Initialize the counter
 counter = 2000
 
@@ -297,18 +299,19 @@ def insert_n_phone_bbox(image_id,n_phone_bbox):
             print("image_id:", PhoneBbox.image_id,"bbox_26_norm:", phone_bbox_norm_entry.bbox_26_norm)
     session.commit()
 
-def insert_detections_norm_bbox(detection_id,n_bbox):
-    from sqlalchemy import cast, JSON as JSON_TYPE
+def insert_detections_norm_bbox(detection_id, n_bbox):
     detections_bbox_norm_entry = (
         session.query(Detections)
         .filter(Detections.detection_id == detection_id)
         .first()
     )    
     if detections_bbox_norm_entry:
-        detections_bbox_norm_entry.bbox_norm = cast(json.dumps(n_bbox), JSON_TYPE)
+        # Pass the dict directly - SQLAlchemy will handle JSON serialization
+        detections_bbox_norm_entry.bbox_norm = n_bbox
         if VERBOSE:
-            print("detection_id:", Detections.detection_id,"bbox_norm:", detections_bbox_norm_entry.bbox_norm)
+            print("detection_id:", detection_id, "bbox_norm:", detections_bbox_norm_entry.bbox_norm)
     session.commit()
+
 
 def unpickle_array(pickled_array):
     if pickled_array:
@@ -669,36 +672,37 @@ function=calc_nlm
 
 # new way, with detections
 if USE_OBJ:
+
+
     print("doing OBJ using Detections")
     predicate_text = """
-    (
-    bbox_norm IS NULL
-    OR NOT (
-        JSON_EXTRACT(bbox_norm, '$.left') IS NOT NULL
-        OR (
-        JSON_TYPE(bbox_norm) = 'STRING'
-        AND JSON_VALID(CAST(JSON_UNQUOTE(bbox_norm) AS JSON)) = 1
-        AND JSON_EXTRACT(CAST(JSON_UNQUOTE(bbox_norm) AS JSON), '$.left') IS NOT NULL
+        (
+            bbox_norm IS NULL
+            OR JSON_EXTRACT(bbox_norm, '$.left') IS NULL
         )
-    )
-    )
-    """
+        """
 
     # distinct_image_ids_query = select(Detections.detection_id, Detections.bbox, Detections.class_id, Detections.conf).filter(text(predicate_text))
 
-    distinct_image_ids_query = select(Images.image_id.distinct(), Images.h, Images.w, Encodings.bbox).\
-        outerjoin(Encodings,Images.image_id == Encodings.image_id).\
-        outerjoin(Detections,Detections.image_id == Encodings.image_id).\
-        join(SegmentHelper,SegmentHelper.image_id == Encodings.image_id).\
-        filter(Encodings.bbox != None).\
-        filter(Encodings.two_noses.is_(None)).\
-        filter(Encodings.mongo_body_landmarks == 1).\
-        filter(Detections.bbox != None).\
-        filter(text(predicate_text)).\
-        filter(Detections.class_id == THIS_CLASS_ID).\
-        filter(Detections.conf != -1).\
-        limit(LIMIT)
-    
+    distinct_image_ids_query = select(
+        Images.image_id.distinct(), 
+        Images.h, 
+        Images.w, 
+        Encodings.bbox
+    ).select_from(Detections).\
+    join(SegmentHelper, SegmentHelper.image_id == Detections.image_id).\
+    join(Encodings, Encodings.image_id == Detections.image_id).\
+    join(Images, Images.image_id == Detections.image_id).\
+    filter(Encodings.bbox != None).\
+    filter(Encodings.two_noses.is_(None)).\
+    filter(Encodings.mongo_body_landmarks == 1).\
+    filter(Detections.bbox != None).\
+    filter(text(predicate_text)).\
+    filter(Detections.class_id == THIS_CLASS_ID).\
+    filter(Detections.conf != -1).\
+    limit(LIMIT)    
+
+
     # distinct_image_ids_query = select(Images.image_id.distinct(), Images.h, Images.w, Encodings.bbox).\
     #     outerjoin(SegmentTable,Images.image_id == SegmentTable.image_id).\
     #     outerjoin(Detections,Detections.image_id == SegmentTable.image_id).\
@@ -769,6 +773,7 @@ else:
         # filter(SegmentTable.image_id >= 9942966).\
 
 if SKIP_EXISTING:
+    print("skipping existing normalized bboxes")
     # skips the ones that have obj bbox which have already been done
     normed_image_ids_query = select(SegmentTable.image_id.distinct(), Images.h, Images.w).\
         outerjoin(Images, Images.image_id == SegmentTable.image_id).\
@@ -788,7 +793,17 @@ if SKIP_EXISTING:
     distinct_image_ids_query = distinct_image_ids_query.except_(normed_image_ids_query)
 
 
-if VERBOSE: print("about to execute query")
+if VERBOSE: 
+    # Compile the query with literal values for MySQL Workbench
+    compiled_query = distinct_image_ids_query.compile(compile_kwargs={"literal_binds": True})
+    workbench_query = str(compiled_query)
+    print("=" * 100)
+    print("WORKBENCH QUERY (ready to paste into MySQL):")
+    print("=" * 100)
+    print(workbench_query)
+    print("=" * 100)
+
+
 results = session.execute(distinct_image_ids_query).fetchall()
 if VERBOSE: print("query executed, results length", len(results))
 # make a dictionary of image_id to shape

@@ -101,6 +101,11 @@ FOCUS_CLUSTER_DICT = {
         22411: [59],
     },
     "ArmsPoses3D":{
+        # books
+        73:[3,5,42,44,48,50,63,76,81,84,94,100,109,125,126,127],
+        # clock
+        74:[i for i in range(128)],
+
         # signs
         # all of them for the moment
         80:[i for i in range(128)],

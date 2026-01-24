@@ -295,21 +295,62 @@ WHERE i5.object_id = 1
 
 SELECT *
 FROM Images i
-WHERE i.site_image_id = "1981048862"
-AND i.site_name_id =2
+WHERE i.site_image_id = "122043569"
+AND i.site_name_id =3
 ;
 
 
+SELECT MAX(e.seg_image_id) 
+FROM NoDetectionsCustom e
+JOIN Images i ON i.image_id = e.image_id 
+WHERE i.site_name_id = 14
+;
+
+INSERT INTO DetectionsTest
 SELECT * 
-FROM Encodings e
-WHERE e.image_id = 99136936
+FROM Detections dt
+WHERE dt.class_id = 80
+;
+
+DELETE FROM DetectionsTest 
+;
+
+SELECT *
+FROM Images i
+WHERE i.image_id = 119358661
 ;
 
 select version();
 
 
+SELECT DISTINCT(s.image_id), s.site_name_id, s.contentUrl, s.imagename, s.description, s.face_x, s.face_y, s.face_z, 
+s.mouth_gap, s.bbox, s.site_image_id, s.pitch, s.yaw, s.roll, ibg.lum, ibg.lum_bb, ibg.hue, ibg.hue_bb, ibg.sat, ibg.sat_bb, 
+ibg.val, ibg.val_bb, ibg.lum_torso, ibg.lum_torso_bb , pb.bbox_73_norm, pb.conf_73 
+FROM SegmentBig_isface s  JOIN Encodings e ON s.image_id = e.image_id  JOIN ImagesArmsPoses3D ihp ON s.image_id = ihp.image_id  
+JOIN ImagesKeywords it ON s.image_id = it.image_id  JOIN SegmentHelperObject_73_book sh ON s.image_id = sh.image_id  
+JOIN ImagesBackground ibg ON s.image_id = ibg.image_id  JOIN PhoneBbox pb ON s.image_id = pb.image_id   
+JOIN ImagesHSV ihsv ON s.image_id = ihsv.image_id JOIN ClustersMetaHSV cmhsv ON ihsv.cluster_id = cmhsv.cluster_id  
+WHERE  e.is_dupe_of IS NULL  AND s.age_id NOT IN (1,2,3)  AND pb.bbox_73_norm IS NOT NULL   
+AND cmhsv.meta_cluster_id  IN (0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 19, 20, 21, 22)     
+AND ihp.cluster_id = 0 AND it.keyword_id  IN (73)  LIMIT 200000;
+
+
+
+SELECT DISTINCT(s.image_id), s.site_name_id, s.contentUrl, s.imagename, s.description, s.face_x, s.face_y, s.face_z, s.mouth_gap, 
+s.bbox, s.site_image_id, s.pitch, s.yaw, s.roll, ibg.lum, ibg.lum_bb, ibg.hue, ibg.hue_bb, ibg.sat, ibg.sat_bb, ibg.val, ibg.val_bb, 
+ibg.lum_torso, ibg.lum_torso_bb , d.bbox_norm, d.obj_no, d.orientation, d.meta_cluster_id  
+FROM SegmentBig_isface s  JOIN Encodings e ON s.image_id = e.image_id  JOIN ImagesArmsPoses3D ihp ON s.image_id = ihp.image_id  
+JOIN ImagesKeywords it ON s.image_id = it.image_id  JOIN SegmentHelperObject_73_book sh ON s.image_id = sh.image_id  
+JOIN ImagesBackground ibg ON s.image_id = ibg.image_id  JOIN DetectionsTest d ON s.image_id = d.image_id   
+JOIN ImagesHSV ihsv ON s.image_id = ihsv.image_id JOIN ClustersMetaHSV cmhsv ON ihsv.cluster_id = cmhsv.cluster_id  
+WHERE  e.is_dupe_of IS NULL  AND s.age_id NOT IN (1,2,3)  AND d.class_id = 73   
+AND cmhsv.meta_cluster_id  IN (0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 19, 20, 21, 22)     
+AND ihp.cluster_id = 1 AND it.keyword_id  IN (73)  LIMIT 2000;
 
 
 
 
-
+SELECT COUNT(*)
+FROM  Detections it
+WHERE it.class_id = 73
+;
