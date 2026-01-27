@@ -66,7 +66,7 @@ print("Setting io.ROOT to ROOTSSD:", io.ROOTSSD)
 io.ROOT = os.path.join(io.ROOTSSD, "output_folder")
 print("Set io.ROOT to ROOTSSD:", io.ROOT)
 
-CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs", "sign")
+CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden below for heft keywords
 
 # CSV_FOLDER = os.path.join("/Users/michaelmandiberg/Documents/projects-active/facemap_production/body3D_segmentbig_useall256_CSVs_test")
 # CSV_FOLDER = os.path.join("/Volumes/SSD4_Green/arms3D_placard_Dec12_undetected")
@@ -174,46 +174,71 @@ elif "3D" in CURRENT_MODE:
 ################## HEFT KEYWORD SETTINGS ##################
 ###########################################################
 
+
+
+
 elif CURRENT_MODE == 'heft_torso_keywords':
+    class_id = 67
+    class_token = ID_SEGMENT_DICT.get(class_id, None)
+
+    ssd = ID_SSD_DICT.get(class_id, None)
+    if class_id in ID_FOLDER_DICT: folder_token = ID_FOLDER_DICT[class_id]
+    else: folder_token = class_token 
+
     # SegmentTable_name = 'SegmentOct20'
     SegmentTable_name = 'SegmentBig_isface'
-    # SegmentHelper_name = 'SegmentHelper_sept2025_heft_keywords' # TK revisit this for prodution run
-    SegmentHelper_name = 'SegmentHelperObject_80_sign' # TK revisit this for prodution run
+    if class_token:
+        SegmentHelper_name = f'SegmentHelperObject_{class_token}' # TK revisit this for prodution run
+        SegmentFolder = f"/Volumes/{ssd}/segment_images_{folder_token}"
+        CSV_FOLDER = os.path.join(CSV_FOLDER, f"{class_token}_{class_id}")
+        SORT_TYPE = "obj_bbox"
+        # SORT_TYPE = "obj_bbox_fusion"
+    else:
+        SegmentHelper_name = 'SegmentHelper_sept2025_heft_keywords' # TK revisit this for prodution run
+        SegmentFolder = None
+        SORT_TYPE = "planar_hands"
     CLUSTER_TYPE = "ArmsPoses3D"
-    # SORT_TYPE = "planar_hands"
-    # SORT_TYPE = "obj_bbox"
-    SORT_TYPE = "obj_bbox_fusion"
     # CLUSTER_TYPE = SORT_TYPE = "ArmsPoses3D" # this triggers meta body poses 3D
     # CLUSTER_TYPE = SORT_TYPE = "obj_bbox" # make sure OBJ_CLS_ID is set below
     # META = True
-    TESTING = False
-    IS_HAND_POSE_FUSION = True # do we use fusion clusters
     USE_HEAD_POSE = True
+    IS_HAND_POSE_FUSION = True # do we use fusion clusters
+    CHOP_FIRST = True # does a first pass chop before whatever sort happens - this is default now
 
-    # either you use a FUSION_PAIR_DICT or GENERATE_FUSION_PAIRS. 
-    GENERATE_FUSION_PAIRS = True # if true it will query based on MIN_VIDEO_FUSION_COUNT and create pairs
-                                    # if false, it will grab the list of pair lists below
-    USE_FUSION_PAIR_DICT = False # if True, it will use the FUSION_PAIR_DICT_NAME below
+    TESTING = True
+    if TESTING:
+        USE_HSV = False
+        # either you use a FUSION_PAIR_DICT or GENERATE_FUSION_PAIRS. 
+        GENERATE_FUSION_PAIRS = True # if true it will query based on MIN_VIDEO_FUSION_COUNT and create pairs
+                                        # if false, it will grab the list of pair lists below
+        # turning all three off to do old style non tsp sort    
+        # ONE_SHOT = True # take all files, based off the very first sort order.
+        TSP_SORT = False
+        CHOP_ITTER_TSP_SORT = False
+
+    else:
+        USE_HSV = True
+        GENERATE_FUSION_PAIRS = False # if true it will query based on MIN_VIDEO_FUSION_COUNT and create pairs
+        TSP_SORT = True
+        CHOP_ITTER_TSP_SORT = True
+
+    if not GENERATE_FUSION_PAIRS:
+        USE_FUSION_PAIR_DICT = True # if True, it will use the FUSION_PAIR_DICT_NAME below
     FUSION_PAIR_DICT_NAME = "FUSION_PAIR_DICT_DETECTIONS_ARMS3D128"
-    USE_HSV = True
     N_HSV = 23 # 0-22 metaclusters of 96 HSV clusters
     # N_HSV = 0 # don't do HSV clusters
-
-    # turning all three off to do old style non tsp sort    
-    # ONE_SHOT = True # take all files, based off the very first sort order.
-    CHOP_FIRST = True
-    TSP_SORT = True
-    CHOP_ITTER_TSP_SORT = True
-    
 
     PURGING_DUPES = False
     FORCE_TARGET_COUNT = 90
     # if TESTING: IS_HAND_POSE_FUSION = GENERATE_FUSION_PAIRS = False
 
+    # get cutoff for this class_id from constants dict
+    cutoff = ID_CUTOFF_DICT.get(class_id, None)
+
     if not USE_HSV:
         # this is for testing all cluster-poses for a keyword
-        MIN_VIDEO_FUSION_COUNT = 2000 # this is the cut off for the CSV fusion pairs
-        MIN_CYCLE_COUNT = 1500 # this is the cut off for the SQL query results
+        MIN_VIDEO_FUSION_COUNT = cutoff # this is the cut off for the CSV fusion pairs
+        MIN_CYCLE_COUNT = max(int(cutoff/2), FORCE_TARGET_COUNT) # this is the cut off for the SQL query results
     elif PURGING_DUPES:
         MIN_VIDEO_FUSION_COUNT = 100
         MIN_CYCLE_COUNT = 2
@@ -249,7 +274,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     
     # generate the CSV files with /query_all_fusion_clusters.py
 
-    TOPIC_NO = [80] # if doing an affect topic fusion, this is the wrapper topic, OR keyword. add .01, .1 etc for sub selects from KEYWORD_DICT
+    TOPIC_NO = [class_id] if class_token else [0] # if doing an affect topic fusion, this is the wrapper topic, OR keyword. add .01, .1 etc for sub selects from KEYWORD_DICT
     OBJ_KEYWORD_CUTOFF = 120 # if below this number it is treated as an object_id and not a keyword with AND/NOT
     
     # this needs to be integrated into the search for each cluster, but doing here for the moment when doing single topic/cluster testing
@@ -384,6 +409,9 @@ if "key" in CURRENT_MODE:
     OBJ_CLS_ID = OBJ_DICT.get(math.floor(TOPIC_NO[0]), 0)
     if OBJ_CLS_ID == 0 and str(TOPIC_NO[0]) in SegmentHelper_name:
         # assign directly from name
+        OBJ_CLS_ID = math.floor(TOPIC_NO[0])
+    elif OBJ_CLS_ID <= OBJ_KEYWORD_CUTOFF:
+        print(f"ADVISORY: OBJ_CLS_ID {OBJ_CLS_ID} for TOPIC_NO {TOPIC_NO[0]} is below OBJ_KEYWORD_CUTOFF {OBJ_KEYWORD_CUTOFF}, assigning from TOPIC_NO")
         OBJ_CLS_ID = math.floor(TOPIC_NO[0])
 else: OBJ_CLS_ID = 0
 
@@ -1238,14 +1266,15 @@ def itter_sort(df_enc, itters):
     return df_sorted
 
 def sort_and_chop(df_enc):
+    sort_and_chop_cutoff = sort.CUTOFF*FORCE_CUTOFF_MULTIPLIER
     df_sorted = pd.DataFrame(columns = df_enc.columns)
     # print(f"CHOP_FIRST is true with sort.counter_dict['start_img_name'], {sort.counter_dict['start_img_name']}")
     if sort.counter_dict["start_img_name"] is None:
         sort.counter_dict["start_img_name"] = start_img_name
-    print(f"CHOP_FIRST at {sort.CUTOFF} is true with sort.counter_dict['start_img_name'], {sort.counter_dict['start_img_name']}")
+    print(f"CHOP_FIRST is true at {sort_and_chop_cutoff} to yield {sort.CUTOFF} - sort.counter_dict['start_img_name'], {sort.counter_dict['start_img_name']}")
 
     df_enc, df_sorted, is_break, output_cols = get_closest_knn_or_break(df_enc, df_sorted)
-    df_sorted = df_sorted.head(sort.CUTOFF)
+    df_sorted = df_sorted.head(sort_and_chop_cutoff)
     print("AFTER CHOP_FIRST df_enc is", len(df_enc))
     print("AFTER CHOP_FIRST df_sorted is", len(df_sorted))
     return df_sorted
@@ -1893,7 +1922,11 @@ def linear_test_df(df_sorted, itter=None):
             # Open the Image
             imgfilename = const_imgfilename_NN(row['image_id'], df_sorted, imgfileprefix)
             outpath = os.path.join(sort.counter_dict["outfolder"],imgfilename)
-            open_path = os.path.join(io.folder_list[row['site_name_id']],row['imagename'])
+            # this handles SSD vs default RAID paths
+            if IS_SSD and SegmentFolder is not None:
+                open_path = os.path.join(SegmentFolder, os.path.basename(io.folder_list[row['site_name_id']]), row['imagename'])
+            else:
+                open_path = os.path.join(io.folder_list[row['site_name_id']],row['imagename'])
             print("open_path", open_path)
             print("open_path constructed from", io.folder_list[row['site_name_id']],row['folder'],row['imagename'])
             # print("io.folder_list:",row['site_name_id'],io.folder_list[row['site_name_id']])
@@ -1999,6 +2032,7 @@ def linear_test_df(df_sorted, itter=None):
 
             # save image
             if cropped_image is not None:
+
                 cv2.imwrite(outpath, cropped_image)
                 good += 1
                 save_image_metas(row)

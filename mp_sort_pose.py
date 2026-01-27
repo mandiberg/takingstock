@@ -108,7 +108,7 @@ class SortPose:
         self.BRUTEFORCE = False
         self.LMS_DIMENSIONS = LMS_DIMENSIONS
         if self.VERBOSE: print("init LMS_DIMENSIONS",self.LMS_DIMENSIONS)
-        self.CUTOFF = 100 # DOES factor if ONE_SHOT
+        self.CUTOFF = 200 # DOES factor if ONE_SHOT
         self.ORIGIN = 0
         self.this_nose_bridge_dist = self.NOSE_BRIDGE_DIST = None # to be set in first loop, and sort.this_nose_bridge_dist each time
         self.USE_HEAD_POSE = USE_HEAD_POSE
@@ -419,7 +419,13 @@ class SortPose:
         else:
             # self.face_height_output = face_height_output
             # takes base image size and multiplies by avg of multiplier
+            print("setting output dims based on image_edge_multiplier",self.image_edge_multiplier)
+            print(f"face height is based on: self.face_height_output {self.face_height_output} * avg of {self.image_edge_multiplier[1]} and {self.image_edge_multiplier[3]} for height, and {self.image_edge_multiplier[0]} and {self.image_edge_multiplier[2]} for width")
+            print(f"the averages are: height: {(self.image_edge_multiplier[1]+self.image_edge_multiplier[3])/2}, width: {(self.image_edge_multiplier[0]+self.image_edge_multiplier[2])/2}")
             self.output_dims = (int(self.face_height_output*(self.image_edge_multiplier[1]+self.image_edge_multiplier[3])/2),int(self.face_height_output*(self.image_edge_multiplier[0]+self.image_edge_multiplier[2])/2))
+            # # alternative way to set output dims. Multiply sum of multipliers
+            # self.output_dims = (int(self.face_height_output*((self.image_edge_multiplier[1]+self.image_edge_multiplier[3]))),int(self.face_height_output*((self.image_edge_multiplier[0]+self.image_edge_multiplier[2]))))
+
         self.MAX_IMAGE_EDGE_MULTIPLIER = self.image_edge_multiplier #testing
         print("output_dims",self.output_dims)
 
@@ -2270,7 +2276,9 @@ class SortPose:
                 #####UPSCALING#######
                 
                 upsized_image = self.upscale_model.upsample(cropped_actualsize_image)
+                # self.preview_img(upsized_image)
                 cropped_image = cv2.resize(upsized_image, (self.output_dims))
+                # self.preview_img(cropped_image)
                 # print("UPSCALING DONEEEEEEEEEEEEEEEEEEEEEEE")
                 ####################
                 # cropped_image = cv2.resize(cropped_actualsize_image, (self.output_dims), interpolation=cv2.INTER_LINEAR)

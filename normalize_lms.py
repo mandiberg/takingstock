@@ -29,6 +29,7 @@ import time
 import math
 import cv2
 from sqlalchemy import Column, Integer, ForeignKey
+from constants_make_video import *
 
 NOSE_ID=0
 
@@ -43,11 +44,28 @@ SKIP_BODY = True # skip body landmarks. mostly you want to skip when doing obj b
                 # or are just redoing hands
 REPROCESS_HANDS = False # do hands
 IS_SEGMENT_BIG = False # use SegmentBig table. IF False, and IS_SSD is false, it will use Encodings table
-SegmentHelper_name = 'SegmentHelperObject_45_salad'
-THIS_CLASS_ID = 45 # for object bbox normalization
-# SegmentHelper_name = 'SegmentHelperObject_80_sign'
-# THIS_CLASS_ID = 80 # for object bbox normalization
-SegmentFolder = "/Volumes/OWC5/segment_images"
+
+LIMIT= 6000000
+# Initialize the counter
+counter = 2000
+
+THIS_CLASS_ID = 67 # for object bbox normalization
+class_token = ID_SEGMENT_DICT.get(THIS_CLASS_ID, None)
+ssd = ID_SSD_DICT.get(THIS_CLASS_ID, None)
+if THIS_CLASS_ID in ID_FOLDER_DICT: folder_token = ID_FOLDER_DICT[THIS_CLASS_ID]
+else: folder_token = class_token 
+# SegmentTable_name = 'SegmentOct20'
+SegmentTable_name = 'SegmentBig_isface'
+if class_token:
+    SegmentHelper_name = f'SegmentHelperObject_{class_token}' # TK revisit this for prodution run
+    SegmentFolder = f"/Volumes/{ssd}/segment_images_{folder_token}"
+    print("SegmentFolder", SegmentFolder)
+    # SORT_TYPE = "obj_bbox_fusion"
+else: 
+    SegmentHelper_name = 'SegmentHelperObject_45_salad'
+    # SegmentHelper_name = 'SegmentHelperObject_80_sign'
+    # THIS_CLASS_ID = 80 # for object bbox normalization
+    SegmentFolder = "/Volumes/OWC5/segment_images"
 io = DataIO(IS_SSD)
 db = io.db
 # io.db["name"] = "stock"
@@ -126,9 +144,6 @@ sort = SortPose(config=cfg)
 # Create a session
 session = scoped_session(sessionmaker(bind=engine))
 
-LIMIT= 20000000
-# Initialize the counter
-counter = 2000
 
 # Number of threads
 #num_threads = io.NUMBER_OF_PROCESSES
@@ -176,6 +191,7 @@ def get_shape(target_image_id):
         print("using SegmentHelper_name for path with SegmentFolder", file)
     else:
         file = site_specific_root_folder + "/" + imagename  # os.path.join acting weird, so avoided
+        print("using acting weird path", file)
     if VERBOSE: print("get_shape file", file)
 
     try:
@@ -467,7 +483,7 @@ def calc_nlm(image_id_to_shape, lock, session):
         # sys.exit(0)
 
     else:
-        print("BODY LANDMARK NOT FOUND 404, bailing for this one ", target_image_id)
+        print(" ❌ BODY LANDMARK NOT FOUND 404, bailing for this one ", target_image_id)
         return
         nose_pixel_pos_body_withviz = nose_pixel_pos_face
     if sort.VERBOSE: print("nose_pixel_pos from body",nose_pixel_pos_body_withviz)
