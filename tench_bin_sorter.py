@@ -5,6 +5,13 @@ from typing import List, Tuple
 from PIL import Image, ImageDraw, ImageFont
 import math
 
+# Module-level flag for debug prints; set in main() from VERBOSE
+_VERBOSE = False
+
+def _debug_print(*args, **kwargs):
+    if _VERBOSE:
+        print(*args, **kwargs)
+
 
 class BinSorter:
     def __init__(self, num_bins: int, box_size: Tuple[int, int], size_ratios: List[Tuple[int, int, float]], 
@@ -358,7 +365,7 @@ class BinSorter:
         if exclude_ratio_for_first and hasattr(self, '_exclude_ratio_for_first_item'):
             exclude_ratio = self._exclude_ratio_for_first_item
             if exclude_ratio:
-                print(f"[DEBUG] Excluding parent ratio {exclude_ratio} for first nested item")
+                _debug_print(f"[DEBUG] [exclude-parent] _find_largest_placeable_item: bin box_size=({self.box_width},{self.box_height}), exclude_ratio_for_first=True, _exclude_ratio_for_first_item={exclude_ratio}")
 
         # Scale-down schedule: start at "as big as the bin allows", then back off.
         # More values = better fit quality, slower. This is a reasonable compromise.
@@ -389,10 +396,10 @@ class BinSorter:
                 # Main bin: exclude by aspect ratio (ratio that fills box). Nested: exact match.
                 if (self.box_width, self.box_height) == (parent_w, parent_h):
                     if width_ratio * parent_h == height_ratio * parent_w:
-                        print(f"[DEBUG] Skipping excluded ratio ({width_ratio}, {height_ratio}) [box-fill aspect]")
+                        _debug_print(f"[DEBUG] [exclude-parent] Skipping ratio ({width_ratio},{height_ratio}) [main bin box-fill aspect, box=({self.box_width},{self.box_height})]")
                         continue
                 elif (width_ratio == parent_w and height_ratio == parent_h):
-                    print(f"[DEBUG] Skipping excluded ratio ({width_ratio}, {height_ratio})")
+                    _debug_print(f"[DEBUG] [exclude-parent] Skipping ratio ({width_ratio},{height_ratio}) [nested bin: exact match to parent {exclude_ratio}, box=({self.box_width},{self.box_height})]")
                     continue
             
             # Use only the original orientation (no rotation)
@@ -437,7 +444,12 @@ class BinSorter:
                    best_candidate[3], best_candidate[4])
             # Debug ratio selection only for first item or when excluding parent ratio
             if (hasattr(self, '_exclude_ratio_for_first_item') and self._exclude_ratio_for_first_item) or len(bin_items) == 0:
-                print(f"[DEBUG] Selected ratio {best_candidate[4]} with area={best_candidate[6]}, weight={best_candidate[7]}, score={best_candidate[5]:.0f}")
+                sel = best_candidate[4]
+                msg = f"[DEBUG] Selected ratio {sel} with area={best_candidate[6]}, weight={best_candidate[7]}, score={best_candidate[5]:.0f}"
+                # Only label as nested when exclude_ratio != box size (main bin uses box size as exclude for box-fill)
+                if exclude_ratio and (self.box_width, self.box_height) != exclude_ratio:
+                    msg += f" [exclude-parent: first item in nested bin box=({self.box_width},{self.box_height}), excluded parent ratio was {exclude_ratio}]"
+                print(msg)
 
         return best
     
@@ -461,7 +473,7 @@ class BinSorter:
         Args:
             nested_start_item_idx: Starting item index for nested bins (used when this is a nested sorter)
         """
-        print(f"\n[DEBUG] sort() called: nesting_layers={self.nesting_layers}, infinite_items={self.infinite_items}")
+        _debug_print(f"\n[DEBUG] sort() called: nesting_layers={self.nesting_layers}, infinite_items={self.infinite_items}")
         
         max_retries = 10  # Prevent infinite loops
         retry_count = 0
@@ -474,7 +486,7 @@ class BinSorter:
                 self.bins = self.first_fit_decreasing(items)
             
             if self.nesting_layers > 0:
-                print(f"[DEBUG] Initial sorting complete: {len(self.bins)} bins created")
+                _debug_print(f"[DEBUG] Initial sorting complete: {len(self.bins)} bins created")
                 for i, bin_items in enumerate(self.bins):
                     print(f"  Bin {i}: {len(bin_items)} items")
             
@@ -494,14 +506,14 @@ class BinSorter:
         
         # Create nested bins if nesting_layers > 0
         if self.nesting_layers > 0:
-            print(f"[DEBUG] Creating nested bins with {self.nesting_layers} layers")
+            _debug_print(f"[DEBUG] Creating nested bins with {self.nesting_layers} layers")
             # Use provided start_item_idx if this is a nested sorter, otherwise calculate it
             if nested_start_item_idx is not None:
                 self._create_nested_bins(self.nesting_layers, nested_start_item_idx)
             else:
                 self._create_nested_bins(self.nesting_layers)
         
-        print(f"[DEBUG] Final nested_bins count: {len(self.nested_bins)}")
+        _debug_print(f"[DEBUG] Final nested_bins count: {len(self.nested_bins)}")
         return self.bins
     
     def _count_nested_items(self, nested_bins_dict: dict) -> int:
@@ -567,13 +579,11 @@ class BinSorter:
         Returns:
             Total count of main bins + all nested bins
         """
-        # Count main bins
-        main_bins = len(self.bins)
         
         # Count nested bins (recursively)
         nested_bins_count = self._count_nested_bins(self.nested_bins)
         
-        return main_bins + nested_bins_count
+        return nested_bins_count + len(self.bins)
     
     def _create_nested_bin_items_fit_width(self, nested_bin_width: int, nested_bin_height: int, 
                                           target_num_items: int, scale_factor: float = 1.0,
@@ -680,11 +690,17 @@ class BinSorter:
             # We need to find the corresponding remapped index in remapped_items_list
             # Otherwise, assume old_item_idx is an original index and add offset
             if remapped_items_list is not None:
-                print(f"[DEBUG] _remap_nested_bin_data: old_item_idx={old_item_idx}, remapped_items_list indices={[ni for _, _, _, _, ni in remapped_items_list]}")
-                # old_item_idx is already a remapped index from nested_sorter.bins[0]
-                # which matches the indices in remapped_items_list, so use it directly
-                remapped_item_idx = old_item_idx
-                print(f"[DEBUG] _remap_nested_bin_data: using old_item_idx={old_item_idx} directly as remapped_item_idx")
+                # old_item_idx can be either (a) original position 0,1,2,... in the creator's bins[0],
+                # or (b) already a remapped index from a later recursive _create_nested_bins.
+                # (a) Map position -> remapped index via remapped_items_list[i][4].
+                # (b) If old_item_idx is already one of the indices in the list, use it as-is.
+                indices_in_list = [it[4] for it in remapped_items_list]
+                if 0 <= old_item_idx < len(remapped_items_list):
+                    remapped_item_idx = remapped_items_list[old_item_idx][4]
+                elif old_item_idx in indices_in_list:
+                    remapped_item_idx = old_item_idx
+                else:
+                    remapped_item_idx = offset + old_item_idx
             else:
                 remapped_item_idx = offset + old_item_idx
             if parent_path:
@@ -699,10 +715,11 @@ class BinSorter:
                 remapped_items.append((nx, ny, nw, nh, offset + item_idx))
             remapped_data['items'] = remapped_items
             
-            # Recursively remap deeper nested bins
+            # Recursively remap deeper nested bins; pass this level's remapped items so
+            # inner old_item_idx (position in that level's bins) maps to correct remapped index
             if 'nested_bins' in nested_data and nested_data['nested_bins']:
                 remapped_data['nested_bins'] = self._remap_nested_bin_data(
-                    nested_data['nested_bins'], offset, bin_idx, parent_item_idx, remapped_key, remapped_items_list
+                    nested_data['nested_bins'], offset, bin_idx, parent_item_idx, remapped_key, remapped_items
                 )
             
             remapped[remapped_key] = remapped_data
@@ -716,31 +733,31 @@ class BinSorter:
             remaining_layers: Number of nesting layers remaining
             start_item_idx: Starting item index for nested items (None = calculate from main bins)
         """
-        print(f"\n[DEBUG] _create_nested_bins called with remaining_layers={remaining_layers}, start_item_idx={start_item_idx}")
-        print(f"[DEBUG] Total bins: {len(self.bins)}")
+        _debug_print(f"\n[DEBUG] _create_nested_bins called with remaining_layers={remaining_layers}, start_item_idx={start_item_idx}")
+        _debug_print(f"[DEBUG] Total bins: {len(self.bins)}")
         
         # Calculate starting index if not provided
         if start_item_idx is None:
             start_item_idx = sum(len(bin_items) for bin_items in self.bins)
-            print(f"[DEBUG] Calculated start_item_idx: {start_item_idx}")
+            _debug_print(f"[DEBUG] Calculated start_item_idx: {start_item_idx}")
         
         if remaining_layers <= 0:
-            print(f"[DEBUG] No more nesting layers remaining, returning")
+            _debug_print(f"[DEBUG] No more nesting layers remaining, returning")
             return
         
         # Process each bin
         for bin_idx, bin_items in enumerate(self.bins):
-            print(f"\n[DEBUG] Processing bin {bin_idx} with {len(bin_items)} items")
+            _debug_print(f"\n[DEBUG] Processing bin {bin_idx} with {len(bin_items)} items")
             
             if not bin_items:
-                print(f"[DEBUG] Bin {bin_idx} is empty, skipping")
+                _debug_print(f"[DEBUG] Bin {bin_idx} is empty, skipping")
                 continue
             
             # Find the largest items (up to 2)
             items_with_area = [(item, item[2] * item[3]) for item in bin_items]
             items_with_area.sort(key=lambda x: x[1], reverse=True)
             
-            print(f"[DEBUG] Top items by area:")
+            _debug_print(f"[DEBUG] Top items by area:")
             for i, (item, area) in enumerate(items_with_area[:2]):
                 x, y, w, h, idx = item
                 print(f"  {i+1}. Item {idx}: {w}x{h} (area={area})")
@@ -791,15 +808,16 @@ class BinSorter:
             nested_bin_created = False
             for candidate_item, _ in candidates:
                 x, y, w, h, item_idx = candidate_item
-                print(f"[DEBUG] Trying item {item_idx}: size={w}x{h}, all bin item indices: {[ni for _, _, _, _, ni in bin_items]}")
+                _debug_print(f"[DEBUG] Trying item {item_idx}: size={w}x{h}, all bin item indices: {[ni for _, _, _, _, ni in bin_items]}")
                 
                 # Determine parent item's ratio (exact match only, no rotation)
                 parent_ratio = self._get_item_ratio(w, h)
                 if parent_ratio:
                     parent_w_ratio, parent_h_ratio = parent_ratio
-                    print(f"[DEBUG] Parent item ratio: ({parent_w_ratio}, {parent_h_ratio}) - will exclude for first nested item")
+                    _debug_print(f"[DEBUG] [exclude-parent] _create_nested_bins: remaining_layers={remaining_layers}, parent item {w}x{h} -> ratio ({parent_w_ratio},{parent_h_ratio}) via _get_item_ratio")
                 else:
                     parent_w_ratio, parent_h_ratio = None, None
+                    _debug_print(f"[DEBUG] [exclude-parent] _create_nested_bins: remaining_layers={remaining_layers}, parent item {w}x{h} -> no ratio from _get_item_ratio")
                 
                 # Create nested sorter with infinite_items=True
                 # This will fill the nested bin completely using infinite mode
@@ -832,16 +850,19 @@ class BinSorter:
                         if exclude_parent and parent_w_ratio is not None and parent_h_ratio is not None:
                             nested_sorter._exclude_ratio_for_first_item = (parent_w_ratio, parent_h_ratio)
                             exclude_msg = "excluding parent ratio"
+                            _debug_print(f"[DEBUG] [exclude-parent] _create_nested_bins: set nested_sorter._exclude_ratio_for_first_item=({parent_w_ratio},{parent_h_ratio}) for nested box {w}x{h}, remaining_layers={remaining_layers} -> nest depth (before sort)")
                         else:
                             nested_sorter._exclude_ratio_for_first_item = None
                             exclude_msg = "allowing parent ratio"
+                            if not exclude_parent:
+                                _debug_print(f"[DEBUG] [exclude-parent] _create_nested_bins: NOT setting exclude (exclude_parent=False), nested box {w}x{h}")
                         
                         # Sort the nested bin (will use infinite mode to fill the bin)
                         # Pass start_item_idx so nested bins use correct item indices
                         nested_sorter.sort(nested_start_item_idx=start_item_idx)
                         
                         num_nested_items = len(nested_sorter.bins[0]) if nested_sorter.bins and nested_sorter.bins[0] else 0
-                        print(f"[DEBUG] Nested bin sorted: {num_nested_items} items (scale_factor={scale_factor:.2f}, {exclude_msg})")
+                        _debug_print(f"[DEBUG] Nested bin sorted: {num_nested_items} items (scale_factor={scale_factor:.2f}, {exclude_msg})")
                         
                         # If we got at least 2 items, we're done
                         if num_nested_items >= 2:
@@ -864,8 +885,8 @@ class BinSorter:
                 
                 if num_nested_items >= 2:
                     # Success! Store the nested bin
-                    print(f"[DEBUG] Nested bin has {num_nested_items} items, storing at (bin_idx={bin_idx}, item_idx={item_idx})")
-                    print(f"[DEBUG] Nested items will start at index {start_item_idx}")
+                    _debug_print(f"[DEBUG] Nested bin has {num_nested_items} items, storing at (bin_idx={bin_idx}, item_idx={item_idx})")
+                    _debug_print(f"[DEBUG] Nested items will start at index {start_item_idx}")
                     
                     # Remap nested item indices to continue from start_item_idx
                     remapped_bin_items = []
@@ -873,51 +894,31 @@ class BinSorter:
                         # Remap index to continue from start_item_idx
                         new_idx = start_item_idx + nested_item_idx
                         remapped_bin_items.append((nx, ny, nw, nh, new_idx))
-                        print(f"[DEBUG] Remapped nested item {nested_item_idx} -> {new_idx}")
+                        _debug_print(f"[DEBUG] Remapped nested item {nested_item_idx} -> {new_idx}")
                     
-                    # Update nested_sorter with remapped items for recursive nesting
+                    # Update nested_sorter with remapped items (for consistent item indices when remapping keys).
+                    # Do not call _create_nested_bins again here: nesting_layers=remaining_layers-1 was set on
+                    # nested_sorter, so its sort() already ran _create_nested_bins and created exactly one
+                    # nest per level. Calling it again would create extra same-depth nests.
                     nested_sorter.bins = [remapped_bin_items]
-                    
-                    # The nested_sorter.sort() already created nesting for nesting_layers-1 levels
-                    # because we set nesting_layers=remaining_layers-1 when creating the nested_sorter.
-                    # However, if remaining_layers > 1, we need to ensure deeper nesting happens.
-                    # The nested_sorter's sort() should have already created nested bins, but
-                    # those nested bins use the original item indices. We need to:
-                    # 1. Remap the nested bin keys to use the new item indices
-                    # 2. Ensure deeper nesting is created if remaining_layers > 1
-                    
-                    # If remaining_layers > 1, ensure deeper nesting happens
-                    # The nested_sorter should have already created nesting for nesting_layers levels,
-                    # but we need to make sure deeper nesting happens inside those nested bins.
-                    # Calculate next starting index (after current nested items)
-                    next_start_idx = start_item_idx + len(remapped_bin_items)
-                    if remaining_layers > 1:
-                        print(f"[DEBUG] Ensuring deeper nesting: remaining_layers={remaining_layers}, will create {remaining_layers - 1} more levels")
-                        print(f"[DEBUG] Nested sorter currently has {len(nested_sorter.nested_bins)} nested bins")
-                        print(f"[DEBUG] nested_sorter.bins[0] item indices before recursive call: {[ni for _, _, _, _, ni in nested_sorter.bins[0]]}")
-                        # Create deeper nesting inside the nested items
-                        # This will process the remapped items and create nested bins inside them
-                        nested_sorter._create_nested_bins(remaining_layers - 1, next_start_idx)
-                        print(f"[DEBUG] nested_sorter.bins[0] item indices after recursive call: {[ni for _, _, _, _, ni in nested_sorter.bins[0]]}")
-                        print(f"[DEBUG] nested_sorter.nested_bins keys after recursive call: {list(nested_sorter.nested_bins.keys())}")
                     
                     # Translate nested bin keys with remapped indices using recursive helper
                     # This handles the remapping for the parent's nested_bins dictionary
                     # Pass the original nested_sorter.nested_bins (before remapping) so _remap_nested_bin_data
                     # can properly remap all indices including deeper nested bins
                     # Also pass remapped_bin_items so it can map old_item_idx to correct remapped index
-                    print(f"[DEBUG] Before remapping: nested_sorter.nested_bins keys={list(nested_sorter.nested_bins.keys())}")
+                    _debug_print(f"[DEBUG] Before remapping: nested_sorter.nested_bins keys={list(nested_sorter.nested_bins.keys())}")
                     translated_nested_bins = self._remap_nested_bin_data(
                         nested_sorter.nested_bins, start_item_idx, bin_idx, item_idx, (), remapped_bin_items
                     )
-                    print(f"[DEBUG] After remapping: translated_nested_bins keys={list(translated_nested_bins.keys())}")
+                    _debug_print(f"[DEBUG] After remapping: translated_nested_bins keys={list(translated_nested_bins.keys())}")
                     
                     self.nested_bins[(bin_idx, item_idx)] = {
                         'items': remapped_bin_items,
                         'parent_pos': (x, y, w, h),
                         'nested_bins': translated_nested_bins
                     }
-                    print(f"[DEBUG] Nested bin stored successfully. Total nested bins: {len(self.nested_bins)}")
+                    _debug_print(f"[DEBUG] Nested bin stored successfully. Total nested bins: {len(self.nested_bins)}")
                     nested_bin_created = True
                     break  # Success! Move to next bin
                 
@@ -925,7 +926,7 @@ class BinSorter:
                     break  # Found a working candidate
             
             if not nested_bin_created:
-                print(f"[DEBUG] WARNING: Could not create nested bin for bin {bin_idx} after all attempts")
+                _debug_print(f"[DEBUG] WARNING: Could not create nested bin for bin {bin_idx} after all attempts")
     
     def _sort_infinite(self) -> List[List[Tuple]]:
         """Sort items in infinite mode - keep placing until bin is full."""
@@ -959,6 +960,8 @@ class BinSorter:
                     self._exclude_ratio_for_first_item = (self.box_width, self.box_height)  # exclude box-fill ratio
             
             # Place the largest possible item next (greedy by area).
+            if is_first_item and getattr(self, '_exclude_ratio_for_first_item', None) is not None:
+                _debug_print(f"[DEBUG] [exclude-parent] _sort_infinite: placing first item in bin, exclude_ratio_for_first=True, _exclude_ratio_for_first_item={self._exclude_ratio_for_first_item}, box=({self.box_width},{self.box_height})")
             best = self._find_largest_placeable_item(bins[-1] if bins else [], 
                                                     exclude_ratio_for_first=is_first_item)
             if best is None:
@@ -1113,12 +1116,12 @@ class BinSorter:
             global_bin_counter: List with single element [counter] that tracks all bins (main + nested)
             parent_path: Tuple of (bin_idx, item_idx, ...) representing the path to this nested bin
         """
-        print(f"[DEBUG] _draw_nested_bin called with parent_path={parent_path}, parent_pos=({parent_x},{parent_y}), size={parent_w}x{parent_h}")
+        _debug_print(f"[DEBUG] _draw_nested_bin called with parent_path={parent_path}, parent_pos=({parent_x},{parent_y}), size={parent_w}x{parent_h}")
         nested_items = nested_data['items']
         parent_pos = nested_data['parent_pos']
         nested_bins = nested_data.get('nested_bins', {})
         
-        print(f"[DEBUG] Drawing {len(nested_items)} nested items, {len(nested_bins)} nested bins")
+        _debug_print(f"[DEBUG] Drawing {len(nested_items)} nested items, {len(nested_bins)} nested bins")
         
         # First pass: Draw all nested items (without their nested bins)
         for nx, ny, nw, nh, nested_item_idx in nested_items:
@@ -1148,18 +1151,18 @@ class BinSorter:
         
         def collect_all_nested_bins(nested_bins_dict, base_x, base_y, current_path, items_list):
             """Recursively collect all nested bins with their absolute positions."""
-            print(f"[DEBUG] collect_all_nested_bins: current_path={current_path}, nested_bins_dict keys={list(nested_bins_dict.keys())}, items_list indices={[ni for _, _, _, _, ni in items_list]}")
+            _debug_print(f"[DEBUG] collect_all_nested_bins: current_path={current_path}, nested_bins_dict keys={list(nested_bins_dict.keys())}, items_list indices={[ni for _, _, _, _, ni in items_list]}")
             for nested_key, nested_data in nested_bins_dict.items():
                 # Find the item that contains this nested bin
                 # nested_key structure: (..., item_idx) - the last element is the item index
                 if len(nested_key) > len(current_path):
                     item_idx = nested_key[-1]
-                    print(f"[DEBUG] Looking for item_idx={item_idx} in items_list")
+                    _debug_print(f"[DEBUG] Looking for item_idx={item_idx} in items_list")
                     found = False
                     # Find the item in items_list
                     for nx, ny, nw, nh, ni in items_list:
                         if ni == item_idx:
-                            print(f"[DEBUG] Found item {item_idx} at relative_pos=({nx},{ny}), size={nw}x{nh}")
+                            _debug_print(f"[DEBUG] Found item {item_idx} at relative_pos=({nx},{ny}), size={nw}x{nh}")
                             abs_x = base_x + nx
                             abs_y = base_y + ny
                             all_nested_bins_to_draw.append((abs_x, abs_y, nw, nh, nested_data, nested_key))
@@ -1173,7 +1176,7 @@ class BinSorter:
                                 collect_all_nested_bins(deeper_nested_bins, abs_x, abs_y, nested_key, deeper_items)
                             break
                     if not found:
-                        print(f"[DEBUG] WARNING: Could not find item_idx={item_idx} in items_list!")
+                        _debug_print(f"[DEBUG] WARNING: Could not find item_idx={item_idx} in items_list!")
         
         # Collect all nested bins recursively
         collect_all_nested_bins(nested_bins, parent_x, parent_y, parent_path, nested_items)
@@ -1185,13 +1188,29 @@ class BinSorter:
         all_nested_bins_to_draw.sort(key=lambda x: x[2] * x[3], reverse=True)
         
         # Debug: Print all nested bins that will be drawn
-        print(f"[DEBUG] All nested bins to draw (sorted by size, largest first):")
+        _debug_print(f"[DEBUG] All nested bins to draw (sorted by size, largest first):")
         for idx, (x, y, w, h, bin_data, bin_key) in enumerate(all_nested_bins_to_draw):
             area = w * h
             print(f"  {idx+1}. Bin key={bin_key}, position=({x},{y}), size={w}x{h}, area={area}")
         
         # Draw all nested bins in order (largest to smallest)
         for x, y, w, h, bin_data, bin_key in all_nested_bins_to_draw:
+            # Draw items inside this nested bin first (so they appear behind the border).
+            # Skip items for the current level (bin_key == parent_path); those were already drawn in the first pass.
+            if bin_key != parent_path:
+                for nx, ny, nw, nh, item_idx in bin_data.get('items', []):
+                    item_x = x + nx
+                    item_y = y + ny
+                    color = item_colors[item_idx % len(item_colors)]
+                    draw.rectangle([item_x, item_y, item_x + nw, item_y + nh],
+                                  fill=color, outline='darkblue', width=1)
+                    item_label = str(item_idx + 1)
+                    bbox = draw.textbbox((0, 0), item_label, font=font)
+                    text_w, text_h = bbox[2] - bbox[0], bbox[3] - bbox[1]
+                    text_x = item_x + (nw - text_w) // 2
+                    text_y = item_y + (nh - text_h) // 2
+                    if nw > text_w and nh > text_h:
+                        draw.text((text_x, text_y), item_label, fill='white', font=font)
             # Draw the border and label for this nested bin
             nested_bin_rect = [x, y, x + w, y + h]
             draw.rectangle(nested_bin_rect, outline=(0, 255, 255), width=3)  # Cyan border
@@ -1205,14 +1224,14 @@ class BinSorter:
             text_height = bbox[3] - bbox[1]
             draw.text((x + 5, y - text_height - 5), 
                      nested_bin_label, fill=(0, 255, 255), font=font)
-            print(f"[DEBUG] Drew nested bin '{nested_bin_label}' at ({x}, {y}), size={w}x{h}, bin_key={bin_key}")
+            _debug_print(f"[DEBUG] Drew nested bin '{nested_bin_label}' at ({x}, {y}), size={w}x{h}, bin_key={bin_key}")
 
 
 def main():
     """Example usage of the bin sorter."""
     # Customizable parameters
     NUM_BINS = 1
-    BOX_SIZE = ((1920*4), (1920))  # pixels (width, height)
+    BOX_SIZE = ((1080*5),(1080*3))  # pixels (width, height)
     NUM_ITEMS = 7  # Number of items to create (ignored if INFINITE_ITEMS=True)
     # Width:height:weight ratios for items, e.g., (2, 3, 1.0) means width:height = 2:3 with weight 1.0
     # Weight determines selection probability (higher = more likely to be picked)
@@ -1227,14 +1246,20 @@ def main():
         (3,1, 0.05)
     ]
 
-
+    VERBOSE = True
+    global _VERBOSE
+    _VERBOSE = VERBOSE
+    if VERBOSE:
+        print(f"Verbose mode: ON")
+    else:
+        print(f"Verbose mode: OFF")
     
     # Infinite items mode
     INFINITE_ITEMS = True  # Set to True to fill bin completely
     MIN_SPACE_THRESHOLD = 30000  # Minimum space area (in pixels) to consider bin full (used when INFINITE_ITEMS=True)
     
     # Nesting configuration
-    NESTING_LAYERS = 1  # Number of nesting layers (0 = no nesting)
+    NESTING_LAYERS = 2  # Number of nesting layers (0 = no nesting)
     NESTED_MIN_SPACE_THRESHOLD = 1000  # Minimum space threshold for nested bins
     
     # Main bin first-item: chance (0–1) to allow ratio that fills the box; else that ratio is excluded
@@ -1260,7 +1285,10 @@ def main():
     
     # Export image to OUTPUT_PATH
     os.makedirs(OUTPUT_PATH, exist_ok=True)
-    file_name = f"bin_sorting_result_nested_{NESTING_LAYERS}_{MIN_SPACE_THRESHOLD}_{BOX_SIZE[0]}x{BOX_SIZE[1]}.png"
+    box_w, box_h = BOX_SIZE[0], BOX_SIZE[1]
+    g = math.gcd(box_w, box_h)
+    aspect = f"{box_w // g}_{box_h // g}" if g else "1_1"
+    file_name = f"bin_nest_{NESTING_LAYERS}_aspect_{aspect}.png"
     full_path = os.path.join(OUTPUT_PATH, file_name)
     sorter.export_image(full_path, bins_per_row=1, padding=100)
     
@@ -1275,6 +1303,7 @@ def main():
     nested_bins_count = total_bins - main_bins
     
     print(f"\nBin Sorting Complete!")
+    print(f"Nesting layers: {NESTING_LAYERS}")
     print(f"file saved as: {full_path}")
     print(f"Number of bins: {total_bins} (main: {main_bins}, nested: {nested_bins_count})")
     print(f"Box size: {BOX_SIZE[0]}x{BOX_SIZE[1]} pixels")
