@@ -838,7 +838,7 @@ def df_list_to_cols(df, col_name):
 
 def prepare_df(df):
     print("columns: ",df.columns)
-    print("prepare_df df",df)
+    print("prepare_df df with cl.CLUSTER_TYPE ", cl.CLUSTER_TYPE, df)
     print("prepare df first row",df.iloc[0])
     columns_to_drop = []
     # apply io.convert_decimals_to_float to face_x, face_y, face_z, and mouth_gap 
@@ -884,7 +884,7 @@ def prepare_df(df):
         print("first row of df",df.iloc[0])
         df[['left_hand_landmarks', 'left_hand_world_landmarks', 'left_hand_landmarks_norm', 'right_hand_landmarks', 'right_hand_world_landmarks', 'right_hand_landmarks_norm']] = pd.DataFrame(df['hand_results'].apply(sort.prep_hand_landmarks).tolist(), index=df.index)
         print("after prep",df)
-        df = sort.split_landmarks_to_columns(df, left_col="left_hand_landmarks_norm", right_col="right_hand_landmarks_norm")
+        df = sort.split_landmarks_to_columns_or_list(df, first_col="left_hand_landmarks_norm", second_col="right_hand_landmarks_norm", structure="cols")
         print("after split",df)
         columns_to_drop = ['face_encodings68', 'face_landmarks', 'body_landmarks', 'body_landmarks_normalized', 
                            'hand_results', 'left_hand_landmarks', 'right_hand_landmarks', 
@@ -893,7 +893,7 @@ def prepare_df(df):
 
     elif cl.CLUSTER_TYPE == "HandsGestures":
         df[['left_hand_landmarks', 'left_hand_world_landmarks', 'left_hand_landmarks_norm', 'right_hand_landmarks', 'right_hand_world_landmarks', 'right_hand_landmarks_norm']] = pd.DataFrame(df['hand_results'].apply(sort.prep_hand_landmarks).tolist(), index=df.index)
-        df = sort.split_landmarks_to_columns(df, left_col="left_hand_world_landmarks", right_col="right_hand_world_landmarks")
+        df = sort.split_landmarks_to_columns_or_list(df, first_col="left_hand_world_landmarks", second_col="right_hand_world_landmarks", structure="cols")
         # drop the columns that are not needed
         columns_to_drop = ['face_encodings68', 'face_landmarks', 'body_landmarks', 'body_landmarks_normalized', 
                            'hand_results', 'left_hand_landmarks', 'right_hand_landmarks', 'left_hand_world_landmarks', 'right_hand_world_landmarks']
@@ -913,18 +913,30 @@ def prepare_df(df):
         df_list_to_cols(df, 'face_encodings68')
 
     elif cl.CLUSTER_TYPE == "ObjectFusion":
-        print("first row of df",df.iloc[0])
+
+        print("first row of df",df.iloc[0].to_string())
         df[['left_hand_landmarks', 'left_hand_world_landmarks', 'left_hand_landmarks_norm', 'right_hand_landmarks', 'right_hand_world_landmarks', 'right_hand_landmarks_norm']] = pd.DataFrame(df['hand_results'].apply(sort.prep_hand_landmarks).tolist(), index=df.index)
-        print("after prep",df)
-        df = sort.split_landmarks_to_columns(df, left_col="left_hand_landmarks_norm", right_col="right_hand_landmarks_norm")
+        # print("after prep",df.iloc[0].to_string())
+        lhandlms = df["left_hand_landmarks_norm"]
+        print(lhandlms)
+        for lm in lhandlms[0]:
+            print("lm:", lm)
+        df[["left_pointer_knuckle_norm","right_pointer_knuckle_norm"]] = pd.DataFrame(df['hand_results'].apply(sort.prep_knuckle_landmarks).tolist(), index=df.index)
+        print("after getting item 5",df.iloc[0].to_string())
+        # df = sort.split_landmarks_to_columns(df, left_col="left_hand_landmarks_norm", right_col="right_hand_landmarks_norm")
+        # df = sort.split_landmarks_to_columns_or_list(df, first_col="left_hand_landmarks_norm", second_col="right_hand_landmarks_norm", structure="cols")
+    # def split_landmarks_to_columns_or_list(self, df, first_col="left_hand_world_landmarks", second_col="right_hand_world_landmarks", structure="cols"):
         print("after split",df)
-        columns_to_drop = ['face_encodings68', 'face_landmarks', 'body_landmarks', 'body_landmarks_normalized', 
+        columns_to_drop = ['face_encodings68', 'face_landmarks', 'body_landmarks', 'body_landmarks_3D','body_landmarks_normalized', 
                            'hand_results', 'left_hand_landmarks', 'right_hand_landmarks', 
                            'left_hand_world_landmarks', 'right_hand_world_landmarks',
                            'left_hand_landmarks_norm', 'right_hand_landmarks_norm']
     # if "Object" in cl.CLUSTER_TYPE:
+        print("first row before query",df.iloc[0].to_string())
         # apply query_detections to each image_id to get the object data
-        df['image_id'].apply(lambda image_id: query_detections(image_id))
+        # df['image_id'].apply(lambda image_id: query_detections(image_id))
+        df = process_detections_for_df(df)
+
         pass
     
     if not USE_HEAD_POSE: 
@@ -1024,18 +1036,390 @@ def fetch_encodings_mongo_batched(df, batch_size=5000, mongo_reconnect_interval=
     print(f"Finished fetching {total_rows} encodings")
     return df
 
-def query_detections(image_id):
-    # query the detections table for the given image_id
-    detection = session.query(Detections).filter_by(image_id=image_id).\
-        filter(Detections.conf > 0.4).all()
-    if detection:
-        for d in detection:
-            # access the fields of the detection result
-            print(image_id, d.detection_id, d.class_id, d.conf, d.bbox_norm)
-            # print("obj_bbox_list for image_id ", image_id, obj_bbox_list)
-            # df.loc[df['image_id'] == image_id, 'obj_bbox_list'] = [obj_bbox_list]
-    else:   
-        print(f"No detections found for image_id {image_id}")
+# ==================== OBJECT-HAND RELATIONSHIP CONSTANTS ====================
+# Distance threshold for "touching" - knuckle within this distance of bbox edge
+TOUCH_THRESHOLD = 0.25  # face height units
+
+# Overlap threshold for considering two detections as duplicates (IoU)
+OVERLAP_IOU_THRESHOLD = 0.5
+
+# Confidence thresholds for resolving overlapping detections
+HIGH_CONFIDENCE_THRESHOLD = 0.9
+CONFIDENCE_DIFF_THRESHOLD = 0.4
+
+# Minimum confidence for detections (also used in query)
+MIN_DETECTION_CONFIDENCE = 0.4
+
+# Default hand position when no hand detected (far below frame)
+DEFAULT_HAND_POSITION = [0.0, 8.0, 0.0]
+
+# ==================== OBJECT-HAND RELATIONSHIP FUNCTIONS ====================
+
+def parse_bbox_norm(bbox_norm):
+    """Parse bbox_norm from various formats to dict."""
+    if bbox_norm is None:
+        return None
+    if isinstance(bbox_norm, dict):
+        return bbox_norm
+    if isinstance(bbox_norm, str):
+        try:
+            import json
+            # Handle double-encoded JSON
+            parsed = json.loads(bbox_norm)
+            if isinstance(parsed, str):
+                parsed = json.loads(parsed)
+            return parsed
+        except:
+            return None
+    return None
+
+def detection_to_list(detection_dict):
+    """Convert detection dict to 6-element list: [class_id, conf, top, left, right, bottom]."""
+    if detection_dict is None:
+        return None
+    return [
+        detection_dict['class_id'],
+        detection_dict['conf'],
+        detection_dict['top'],
+        detection_dict['left'],
+        detection_dict['right'],
+        detection_dict['bottom']
+    ]
+
+def calc_iou(bbox1, bbox2):
+    """Calculate Intersection over Union between two bboxes."""
+    x_left = max(bbox1['left'], bbox2['left'])
+    x_right = min(bbox1['right'], bbox2['right'])
+    y_top = max(bbox1['top'], bbox2['top'])
+    y_bottom = min(bbox1['bottom'], bbox2['bottom'])
+    
+    if x_right < x_left or y_bottom < y_top:
+        return 0.0
+    
+    intersection = (x_right - x_left) * (y_bottom - y_top)
+    area1 = (bbox1['right'] - bbox1['left']) * (bbox1['bottom'] - bbox1['top'])
+    area2 = (bbox2['right'] - bbox2['left']) * (bbox2['bottom'] - bbox2['top'])
+    union = area1 + area2 - intersection
+    
+    return intersection / union if union > 0 else 0.0
+
+def point_to_bbox_distance(point, bbox):
+    """
+    Calculate minimum distance from a point (x, y) to bbox edges.
+    Returns 0 if point is inside bbox, otherwise returns distance to nearest edge.
+    """
+    px, py = point[0], point[1]  # x, y from knuckle coords
+    
+    # Check if inside bbox
+    if bbox['left'] <= px <= bbox['right'] and bbox['top'] <= py <= bbox['bottom']:
+        return 0.0
+    
+    # Calculate distance to each edge
+    dx = max(bbox['left'] - px, 0, px - bbox['right'])
+    dy = max(bbox['top'] - py, 0, py - bbox['bottom'])
+    
+    return (dx**2 + dy**2)**0.5
+
+def is_touching_hand(knuckle_pos, bbox):
+    """Check if knuckle is within TOUCH_THRESHOLD of bbox."""
+    if knuckle_pos == DEFAULT_HAND_POSITION:
+        return False
+    dist = point_to_bbox_distance(knuckle_pos, bbox)
+    return dist <= TOUCH_THRESHOLD
+
+def is_top_face_object(bbox):
+    """Check if object is on top of face (above nose, spans both sides)."""
+    # Top of bbox is above nose (in this coord system, negative y is above)
+    # AND bbox spans both sides of nose (has both positive and negative x)
+    return bbox['top'] < 0 and bbox['left'] < 0 and bbox['right'] > 0
+
+def is_bottom_face_object(bbox):
+    """Check if object is on bottom of face (below nose, spans both sides)."""
+    # Bottom of bbox is below nose (positive y)
+    # AND bbox spans both sides of nose
+    return bbox['bottom'] > 0 and bbox['left'] < 0 and bbox['right'] > 0
+
+def resolve_overlapping_detections(detections):
+    """
+    Resolve overlapping detections by keeping the best one based on confidence rules.
+    Returns filtered list of detections.
+    """
+    if len(detections) <= 1:
+        return detections
+    
+    filtered = []
+    used_indices = set()
+    
+    for i, det1 in enumerate(detections):
+        if i in used_indices:
+            continue
+            
+        best_det = det1
+        
+        for j, det2 in enumerate(detections):
+            if j <= i or j in used_indices:
+                continue
+                
+            iou = calc_iou(det1['bbox'], det2['bbox'])
+            
+            if iou >= OVERLAP_IOU_THRESHOLD:
+                # Overlapping detections - resolve based on confidence
+                conf1, conf2 = det1['conf'], det2['conf']
+                conf_diff = abs(conf1 - conf2)
+                
+                conf_diff_threshold_scaled_to_iou = CONFIDENCE_DIFF_THRESHOLD - (CONFIDENCE_DIFF_THRESHOLD * iou)
+                # conf_diff_threshold_scaled_to_iou = conf_diff * (1 + iou)
+                if conf1 >= HIGH_CONFIDENCE_THRESHOLD or conf2 >= HIGH_CONFIDENCE_THRESHOLD or conf_diff >= conf_diff_threshold_scaled_to_iou:
+                    # Choose higher confidence
+                    winner = det1 if conf1 >= conf2 else det2
+                    loser = det2 if conf1 >= conf2 else det1
+                    print(f"  ✅ OVERLAP RESOLVED: Chose class {winner['class_id']} (conf={winner['conf']:.2f}) over class {loser['class_id']} (conf={loser['conf']:.2f}), IoU={iou:.2f}, conf_diff={conf_diff:.2f}")
+                    best_det = winner
+                    used_indices.add(j)
+
+                if det1['class_id'] == det2['class_id']:
+                    # same class...
+                    if iou >= OVERLAP_IOU_THRESHOLD*1.5:
+                        # take the union of the boxes
+                        new_bbox = {
+                            'top': min(det1['bbox']['top'], det2['bbox']['top']),
+                            'left': min(det1['bbox']['left'], det2['bbox']['left']),
+                            'right': max(det1['bbox']['right'], det2['bbox']['right']),
+                            'bottom': max(det1['bbox']['bottom'], det2['bbox']['bottom']),
+                        }
+                        best_det['bbox'] = new_bbox
+                        print(f"  🔄 MERGED SAME CLASS OVERLAP: class {det1['class_id']} (conf={det1['conf']:.2f}) and class {det2['class_id']} (conf={det2['conf']:.2f}), IoU={iou:.2f} - merged bbox")
+                    else:
+                        # keep higher confidence
+                        winner = det1 if conf1 >= conf2 else det2
+                        loser = det2 if conf1 >= conf2 else det1
+                        print(f"  ⚠️ SAME CLASS OVERLAP RESOLVED: Chose class {winner['class_id']} (conf={winner['conf']:.2f}) over class {loser['class_id']} (conf={loser['conf']:.2f}), IoU={iou:.2f}, conf_diff={conf_diff:.2f}")
+                        best_det = winner
+                        used_indices.add(j)
+
+                elif conf1 >= MIN_DETECTION_CONFIDENCE*1.5 or conf2 >= MIN_DETECTION_CONFIDENCE*1.5:
+                    # both moderate confidence, keep higher
+                    winner = det1 if conf1 >= conf2 else det2
+                    loser = det2 if conf1 >= conf2 else det1
+                    print(f"  ❌ DIFFERENT CLASS OVERLAP RESOLVED: Chose class {winner['class_id']} (conf={winner['conf']:.2f}) over class {loser['class_id']} (conf={loser['conf']:.2f}), IoU={iou:.2f}, conf_diff={conf_diff:.2f}")
+                    best_det = winner
+                    used_indices.add(j)
+
+
+                else:
+                    # Cannot determine - alert and discard both
+                    print(f"  🚨 OVERLAP CONFLICT: Could not resolve between class {det1['class_id']} (conf={det1['conf']:.2f}) and class {det2['class_id']} (conf={det2['conf']:.2f}), IoU={iou:.2f}, conf_diff={conf_diff:.2f} - discarding both")
+        
+        filtered.append(best_det)
+        used_indices.add(i)
+    
+    return filtered
+
+def classify_object_hand_relationships(detections, left_knuckle, right_knuckle):
+    """
+    Classify each detection based on its relationship to hands and face.
+    Returns dict with keys: both_hands_object, left_hand_object, right_hand_object, 
+                           top_face_object, bottom_face_object
+    Each value is the detection dict or None.
+    """
+    results = {
+        'both_hands_object': None,
+        'left_hand_object': None,
+        'right_hand_object': None,
+        'top_face_object': None,
+        'bottom_face_object': None
+    }
+    
+    if not detections:
+        return results
+    
+    # First, resolve overlapping detections
+    detections = resolve_overlapping_detections(detections)
+    
+    # Track which detections have been assigned
+    assigned = set()
+    
+    # 1. Check for both_hands_object first (highest priority for hand-held objects)
+    for det in detections:
+        bbox = det['bbox']
+        left_touching = is_touching_hand(left_knuckle, bbox)
+        right_touching = is_touching_hand(right_knuckle, bbox)
+        
+        if left_touching and right_touching:
+            if results['both_hands_object'] is None:
+                results['both_hands_object'] = det
+                assigned.add(det['detection_id'])
+            else:
+                # Multiple both-hands objects - pick closest to midpoint of hands
+                existing_dist = point_to_bbox_distance(
+                    [(left_knuckle[0] + right_knuckle[0])/2, (left_knuckle[1] + right_knuckle[1])/2],
+                    results['both_hands_object']['bbox']
+                )
+                new_dist = point_to_bbox_distance(
+                    [(left_knuckle[0] + right_knuckle[0])/2, (left_knuckle[1] + right_knuckle[1])/2],
+                    bbox
+                )
+                if new_dist < existing_dist:
+                    assigned.discard(results['both_hands_object']['detection_id'])
+                    results['both_hands_object'] = det
+                    assigned.add(det['detection_id'])
+    
+    # 2. Check for top_face_object and bottom_face_object
+    for det in detections:
+        if det['detection_id'] in assigned:
+            continue
+        bbox = det['bbox']
+        
+        if is_top_face_object(bbox):
+            if results['top_face_object'] is None:
+                results['top_face_object'] = det
+                assigned.add(det['detection_id'])
+            # Keep the one that's most "on top" (most negative top value)
+            elif bbox['top'] < results['top_face_object']['bbox']['top']:
+                assigned.discard(results['top_face_object']['detection_id'])
+                results['top_face_object'] = det
+                assigned.add(det['detection_id'])
+        
+        if is_bottom_face_object(bbox):
+            if results['bottom_face_object'] is None:
+                results['bottom_face_object'] = det
+                assigned.add(det['detection_id'])
+            # Keep the one that's most "on bottom" (largest bottom value)
+            elif bbox['bottom'] > results['bottom_face_object']['bbox']['bottom']:
+                assigned.discard(results['bottom_face_object']['detection_id'])
+                results['bottom_face_object'] = det
+                assigned.add(det['detection_id'])
+    
+    # 3. Find closest unassigned object to each hand
+    unassigned = [d for d in detections if d['detection_id'] not in assigned]
+    
+    # Left hand - find closest object
+    if left_knuckle != DEFAULT_HAND_POSITION:
+        best_left = None
+        best_left_dist = float('inf')
+        for det in unassigned:
+            dist = point_to_bbox_distance(left_knuckle, det['bbox'])
+            if dist < best_left_dist:
+                best_left_dist = dist
+                best_left = det
+        
+        if best_left is not None and best_left_dist <= TOUCH_THRESHOLD * 2:  # Reasonable proximity
+            results['left_hand_object'] = best_left
+            assigned.add(best_left['detection_id'])
+            unassigned = [d for d in unassigned if d['detection_id'] != best_left['detection_id']]
+    
+    # Right hand - find closest from remaining unassigned
+    if right_knuckle != DEFAULT_HAND_POSITION:
+        best_right = None
+        best_right_dist = float('inf')
+        for det in unassigned:
+            dist = point_to_bbox_distance(right_knuckle, det['bbox'])
+            if dist < best_right_dist:
+                best_right_dist = dist
+                best_right = det
+        
+        if best_right is not None and best_right_dist <= TOUCH_THRESHOLD * 2:
+            results['right_hand_object'] = best_right
+            assigned.add(best_right['detection_id'])
+    
+    # Sanity check: both_hands should not coexist with single-hand assignment for same object
+    if results['both_hands_object'] is not None:
+        if results['left_hand_object'] is not None and results['left_hand_object']['detection_id'] == results['both_hands_object']['detection_id']:
+            print(f"  🚨 DEBUG ALERT: both_hands_object and left_hand_object are the same! det_id={results['both_hands_object']['detection_id']}")
+        if results['right_hand_object'] is not None and results['right_hand_object']['detection_id'] == results['both_hands_object']['detection_id']:
+            print(f"  🚨 DEBUG ALERT: both_hands_object and right_hand_object are the same! det_id={results['both_hands_object']['detection_id']}")
+    
+    return results
+
+def query_and_classify_detections(image_id, left_knuckle, right_knuckle):
+    """
+    Query detections for an image and classify their relationship to hands/face.
+    Returns dict with 5 keys, each containing a 6-element list or None.
+    """
+    # Query detections
+    detection_results = session.query(Detections).filter_by(image_id=image_id).\
+        filter(Detections.conf > MIN_DETECTION_CONFIDENCE).all()
+    
+    if not detection_results:
+        return {
+            'both_hands_object': None,
+            'left_hand_object': None,
+            'right_hand_object': None,
+            'top_face_object': None,
+            'bottom_face_object': None
+        }
+    
+    # Parse detections into standardized format
+    detections = []
+    for d in detection_results:
+        bbox = parse_bbox_norm(d.bbox_norm)
+        if bbox is None:
+            continue
+        detections.append({
+            'detection_id': d.detection_id,
+            'class_id': d.class_id,
+            'conf': d.conf,
+            'bbox': bbox,
+            'top': bbox['top'],
+            'left': bbox['left'],
+            'right': bbox['right'],
+            'bottom': bbox['bottom']
+        })
+    
+    # Classify relationships
+    classified = classify_object_hand_relationships(detections, left_knuckle, right_knuckle)
+    
+    # Convert to 6-element lists for df storage
+    result = {}
+    for key, det in classified.items():
+        if det is None:
+            result[key] = None
+        else:
+            result[key] = [
+                det['class_id'],
+                det['conf'],
+                det['top'],
+                det['left'],
+                det['right'],
+                det['bottom']
+            ]
+    
+    return result
+
+def process_detections_for_df(df):
+    """
+    Process all detections for a dataframe and add object classification columns.
+    Expects df to have: image_id, left_pointer_knuckle_norm, right_pointer_knuckle_norm
+    """
+    # Initialize new columns
+    df['both_hands_object'] = None
+    df['left_hand_object'] = None
+    df['right_hand_object'] = None
+    df['top_face_object'] = None
+    df['bottom_face_object'] = None
+    
+    for idx, row in df.iterrows():
+        image_id = row['image_id']
+        left_knuckle = row.get('left_pointer_knuckle_norm', DEFAULT_HAND_POSITION)
+        right_knuckle = row.get('right_pointer_knuckle_norm', DEFAULT_HAND_POSITION)
+        
+        # Handle case where knuckle data might be None or string
+        if left_knuckle is None or (isinstance(left_knuckle, list) and len(left_knuckle) == 0):
+            left_knuckle = DEFAULT_HAND_POSITION
+        if right_knuckle is None or (isinstance(right_knuckle, list) and len(right_knuckle) == 0):
+            right_knuckle = DEFAULT_HAND_POSITION
+        
+        # Query and classify
+        classifications = query_and_classify_detections(image_id, left_knuckle, right_knuckle)
+        
+        # Assign to df
+        df.at[idx, 'both_hands_object'] = classifications['both_hands_object']
+        df.at[idx, 'left_hand_object'] = classifications['left_hand_object']
+        df.at[idx, 'right_hand_object'] = classifications['right_hand_object']
+        df.at[idx, 'top_face_object'] = classifications['top_face_object']
+        df.at[idx, 'bottom_face_object'] = classifications['bottom_face_object']
+    
+    return df
 
 
 # defining globally # TK 4 HSV

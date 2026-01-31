@@ -3863,6 +3863,23 @@ class SortPose:
                 hand_landmarks = hand_results['right_hand'].get('hand_landmarks_norm', [])
         return left_hand_landmarks, left_hand_world_landmarks, left_hand_landmarks_norm, right_hand_landmarks, right_hand_world_landmarks, hand_landmarks
 
+    def prep_knuckle_landmarks(self, hand_results):  
+        left_pointer_knuckle_norm = right_pointer_knuckle_norm = []
+        if hand_results:
+            if 'left_hand' in hand_results:
+                left_hand_landmarks_norm = hand_results['left_hand'].get('hand_landmarks_norm', [])
+                left_pointer_knuckle_norm = left_hand_landmarks_norm[5]  # 5th landmark (index 5), x,y,z
+            else:
+                left_pointer_knuckle_norm = [0.0, 8.0, 0.0]
+            print("left_pointer_knuckle_norm", left_pointer_knuckle_norm)
+            if 'right_hand' in hand_results:
+                hand_landmarks = hand_results['right_hand'].get('hand_landmarks_norm', [])
+                right_pointer_knuckle_norm = hand_landmarks[5]  # 5th landmark (index 5), x,y,z
+            else:
+                right_pointer_knuckle_norm = [0.0, 8.0, 0.0]
+            print("right_pointer_knuckle_norm", right_pointer_knuckle_norm)
+        return left_pointer_knuckle_norm, right_pointer_knuckle_norm
+
     def prep_hsv(self, hue):
         if hue is not None:
             return (hue/360)
