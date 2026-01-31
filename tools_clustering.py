@@ -4,6 +4,7 @@ from sqlalchemy.pool import NullPool
 from my_declarative_base import Base, Images
 import pickle
 import numpy as np
+import json
 
 class ToolsClustering:
     """Store key clustering info for use across codebase"""
@@ -12,6 +13,13 @@ class ToolsClustering:
         self.VERBOSE = VERBOSE
         self.CLUSTER_TYPE = CLUSTER_TYPE
         self.CLUSTER_MEDIANS = None
+        # Object-hand relationship constants
+        self.TOUCH_THRESHOLD = 0.25  # face height units
+        self.OVERLAP_IOU_THRESHOLD = 0.5
+        self.HIGH_CONFIDENCE_THRESHOLD = 0.9
+        self.CONFIDENCE_DIFF_THRESHOLD = 0.3
+        self.MIN_DETECTION_CONFIDENCE = 0.4
+        self.DEFAULT_HAND_POSITION = [0.0, 8.0, 0.0]
         self.CLUSTER_DATA = {
             "BodyPoses": {"data_column": "mongo_body_landmarks", "is_feet": 1, "mongo_hand_landmarks": None},
             "BodyPoses3D": {"data_column": "mongo_body_landmarks_3D", "is_feet": 1, "mongo_hand_landmarks": None}, # changed this for testing
@@ -161,4 +169,282 @@ class ToolsClustering:
 
         # print(cluster_id)
         return cluster_id, cluster_dist
+
+    # ==================== OBJECT-HAND RELATIONSHIP METHODS ====================
+
+    def parse_bbox_norm(self, bbox_norm):
+        """Parse bbox_norm from various formats to dict."""
+        if bbox_norm is None:
+            return None
+        if isinstance(bbox_norm, dict):
+            return bbox_norm
+        if isinstance(bbox_norm, str):
+            try:
+                # Handle double-encoded JSON
+                parsed = json.loads(bbox_norm)
+                if isinstance(parsed, str):
+                    parsed = json.loads(parsed)
+                return parsed
+            except:
+                return None
+        return None
+
+    def detection_to_list(self, detection_dict):
+        """Convert detection dict to 6-element list: [class_id, conf, top, left, right, bottom]."""
+        if detection_dict is None:
+            return None
+        return [
+            detection_dict['class_id'],
+            detection_dict['conf'],
+            detection_dict['top'],
+            detection_dict['left'],
+            detection_dict['right'],
+            detection_dict['bottom']
+        ]
+
+    def calc_iou(self, bbox1, bbox2):
+        """Calculate Intersection over Union between two bboxes."""
+        x_left = max(bbox1['left'], bbox2['left'])
+        x_right = min(bbox1['right'], bbox2['right'])
+        y_top = max(bbox1['top'], bbox2['top'])
+        y_bottom = min(bbox1['bottom'], bbox2['bottom'])
+        
+        if x_right < x_left or y_bottom < y_top:
+            return 0.0
+        
+        intersection = (x_right - x_left) * (y_bottom - y_top)
+        area1 = (bbox1['right'] - bbox1['left']) * (bbox1['bottom'] - bbox1['top'])
+        area2 = (bbox2['right'] - bbox2['left']) * (bbox2['bottom'] - bbox2['top'])
+        union = area1 + area2 - intersection
+        
+        return intersection / union if union > 0 else 0.0
+
+    def point_to_bbox_distance(self, point, bbox):
+        """
+        Calculate minimum distance from a point (x, y) to bbox edges.
+        Returns 0 if point is inside bbox, otherwise returns distance to nearest edge.
+        """
+        px, py = point[0], point[1]  # x, y from knuckle coords
+        
+        # Check if inside bbox
+        if bbox['left'] <= px <= bbox['right'] and bbox['top'] <= py <= bbox['bottom']:
+            return 0.0
+        
+        # Calculate distance to each edge
+        dx = max(bbox['left'] - px, 0, px - bbox['right'])
+        dy = max(bbox['top'] - py, 0, py - bbox['bottom'])
+        
+        return (dx**2 + dy**2)**0.5
+
+    def is_touching_hand(self, knuckle_pos, bbox):
+        """Check if knuckle is within TOUCH_THRESHOLD of bbox."""
+        if knuckle_pos == self.DEFAULT_HAND_POSITION:
+            return False
+        dist = self.point_to_bbox_distance(knuckle_pos, bbox)
+        return dist <= self.TOUCH_THRESHOLD
+
+    def is_top_face_object(self, bbox):
+        """Check if object is on top of face (above nose, spans both sides)."""
+        # Top of bbox is above nose (in this coord system, negative y is above)
+        # AND bbox spans both sides of nose (has both positive and negative x)
+        return bbox['top'] < 0 and bbox['left'] < 0 and bbox['right'] > 0
+
+    def is_bottom_face_object(self, bbox):
+        """Check if object is on bottom of face (below nose, spans both sides)."""
+        # Bottom of bbox is below nose (positive y)
+        # AND bbox spans both sides of nose
+        return bbox['bottom'] > 0 and bbox['left'] < 0 and bbox['right'] > 0
+
+    def resolve_overlapping_detections(self, detections):
+        """
+        Resolve overlapping detections by keeping the best one based on confidence rules.
+        Returns filtered list of detections.
+        """
+        if len(detections) <= 1:
+            return detections
+        
+        filtered = []
+        used_indices = set()
+        
+        for i, det1 in enumerate(detections):
+            if i in used_indices:
+                continue
+                
+            best_det = det1
+            
+            for j, det2 in enumerate(detections):
+                if j <= i or j in used_indices:
+                    continue
+                    
+                iou = self.calc_iou(det1['bbox'], det2['bbox'])
+                
+                if iou >= self.OVERLAP_IOU_THRESHOLD:
+                    # Overlapping detections - resolve based on confidence
+                    conf1, conf2 = det1['conf'], det2['conf']
+                    conf_diff = abs(conf1 - conf2)
+                    
+                    conf_diff_threshold_scaled_to_iou = self.CONFIDENCE_DIFF_THRESHOLD - (self.CONFIDENCE_DIFF_THRESHOLD * iou)
+                    if conf1 >= self.HIGH_CONFIDENCE_THRESHOLD or conf2 >= self.HIGH_CONFIDENCE_THRESHOLD or conf_diff >= conf_diff_threshold_scaled_to_iou:
+                        winner = det1 if conf1 >= conf2 else det2
+                        loser = det2 if conf1 >= conf2 else det1
+                        if self.VERBOSE:
+                            print(f"  ✅ OVERLAP RESOLVED: Chose class {winner['class_id']} (conf={winner['conf']:.2f}) over class {loser['class_id']} (conf={loser['conf']:.2f}), IoU={iou:.2f}")
+                        best_det = winner
+                        used_indices.add(j)
+                    
+                    if det1['class_id'] == det2['class_id']:
+                        # same class...
+                        if iou >= self.OVERLAP_IOU_THRESHOLD*1.5:
+                            # take the union of the boxes
+                            new_bbox = {
+                                'top': min(det1['bbox']['top'], det2['bbox']['top']),
+                                'left': min(det1['bbox']['left'], det2['bbox']['left']),
+                                'right': max(det1['bbox']['right'], det2['bbox']['right']),
+                                'bottom': max(det1['bbox']['bottom'], det2['bbox']['bottom']),
+                            }
+                            best_det['bbox'] = new_bbox
+                            print(f"  🔄 MERGED SAME CLASS OVERLAP: class {det1['class_id']} (conf={det1['conf']:.2f}) and class {det2['class_id']} (conf={det2['conf']:.2f}), IoU={iou:.2f} - merged bbox")
+                        else:
+                            # keep higher confidence
+                            winner = det1 if conf1 >= conf2 else det2
+                            loser = det2 if conf1 >= conf2 else det1
+                            print(f"  ⚠️ SAME CLASS OVERLAP RESOLVED: Chose class {winner['class_id']} (conf={winner['conf']:.2f}) over class {loser['class_id']} (conf={loser['conf']:.2f}), IoU={iou:.2f}, conf_diff={conf_diff:.2f}")
+                            best_det = winner
+                        used_indices.add(j)
+
+                    elif conf1 >= self.MIN_DETECTION_CONFIDENCE*1.5 or conf2 >= self.MIN_DETECTION_CONFIDENCE*1.5:
+                        # both moderate confidence, keep higher
+                        winner = det1 if conf1 >= conf2 else det2
+                        loser = det2 if conf1 >= conf2 else det1
+                        if self.VERBOSE:
+                            print(f"  ❌ HIGH CONF RESOLVED: Chose class {winner['class_id']} (conf={winner['conf']:.2f}) over class {loser['class_id']} (conf={loser['conf']:.2f}), IoU={iou:.2f}")
+                        best_det = winner
+                        used_indices.add(j)
+
+                    else:
+                        # Cannot determine - alert and discard both
+                        if self.VERBOSE:
+                            print(f"  🚨 OVERLAP UNRESOLVED - DISCARDING: classes {det1['class_id']} (conf={conf1:.2f}) and {det2['class_id']} (conf={conf2:.2f}), IoU={iou:.2f} - keeping both")
+            
+
+            filtered.append(best_det)
+            used_indices.add(i)
+        
+        return filtered
+
+    def classify_object_hand_relationships(self, detections, left_knuckle, right_knuckle):
+        """
+        Classify each detection based on its relationship to hands and face.
+        Returns dict with keys: both_hands_object, left_hand_object, right_hand_object, 
+                               top_face_object, bottom_face_object
+        Each value is the detection dict or None.
+        """
+        results = {
+            'both_hands_object': None,
+            'left_hand_object': None,
+            'right_hand_object': None,
+            'top_face_object': None,
+            'bottom_face_object': None
+        }
+        
+        if not detections:
+            return results
+        
+        # First, resolve overlapping detections
+        detections = self.resolve_overlapping_detections(detections)
+        
+        # Track which detections have been assigned
+        assigned = set()
+        
+        # 1. Check for both_hands_object first (highest priority for hand-held objects)
+        for det in detections:
+            bbox = det['bbox']
+            left_touching = self.is_touching_hand(left_knuckle, bbox)
+            right_touching = self.is_touching_hand(right_knuckle, bbox)
+            
+            if left_touching and right_touching:
+                if results['both_hands_object'] is None:
+                    results['both_hands_object'] = det
+                    assigned.add(det['detection_id'])
+                else:
+                    # Multiple both-hands objects - pick closest to midpoint of hands
+                    existing_dist = self.point_to_bbox_distance(
+                        [(left_knuckle[0] + right_knuckle[0])/2, (left_knuckle[1] + right_knuckle[1])/2],
+                        results['both_hands_object']['bbox']
+                    )
+                    new_dist = self.point_to_bbox_distance(
+                        [(left_knuckle[0] + right_knuckle[0])/2, (left_knuckle[1] + right_knuckle[1])/2],
+                        bbox
+                    )
+                    if new_dist < existing_dist:
+                        assigned.discard(results['both_hands_object']['detection_id'])
+                        results['both_hands_object'] = det
+                        assigned.add(det['detection_id'])
+        
+        # 2. Check for top_face_object and bottom_face_object
+        for det in detections:
+            if det['detection_id'] in assigned:
+                continue
+            bbox = det['bbox']
+            
+            if self.is_top_face_object(bbox):
+                if results['top_face_object'] is None:
+                    results['top_face_object'] = det
+                    assigned.add(det['detection_id'])
+                # Keep the one that's most "on top" (most negative top value)
+                elif bbox['top'] < results['top_face_object']['bbox']['top']:
+                    assigned.discard(results['top_face_object']['detection_id'])
+                    results['top_face_object'] = det
+                    assigned.add(det['detection_id'])
+            
+            if self.is_bottom_face_object(bbox):
+                if results['bottom_face_object'] is None:
+                    results['bottom_face_object'] = det
+                    assigned.add(det['detection_id'])
+                # Keep the one that's most "on bottom" (largest bottom value)
+                elif bbox['bottom'] > results['bottom_face_object']['bbox']['bottom']:
+                    assigned.discard(results['bottom_face_object']['detection_id'])
+                    results['bottom_face_object'] = det
+                    assigned.add(det['detection_id'])
+        
+        # 3. Find closest unassigned object to each hand
+        unassigned = [d for d in detections if d['detection_id'] not in assigned]
+        
+        # Left hand - find closest object
+        if left_knuckle != self.DEFAULT_HAND_POSITION:
+            best_left = None
+            best_left_dist = float('inf')
+            for det in unassigned:
+                dist = self.point_to_bbox_distance(left_knuckle, det['bbox'])
+                if dist < best_left_dist:
+                    best_left_dist = dist
+                    best_left = det
+            
+            if best_left is not None and best_left_dist <= self.TOUCH_THRESHOLD * 2:
+                results['left_hand_object'] = best_left
+                assigned.add(best_left['detection_id'])
+                unassigned = [d for d in unassigned if d['detection_id'] != best_left['detection_id']]
+        
+        # Right hand - find closest from remaining unassigned
+        if right_knuckle != self.DEFAULT_HAND_POSITION:
+            best_right = None
+            best_right_dist = float('inf')
+            for det in unassigned:
+                dist = self.point_to_bbox_distance(right_knuckle, det['bbox'])
+                if dist < best_right_dist:
+                    best_right_dist = dist
+                    best_right = det
+            
+            if best_right is not None and best_right_dist <= self.TOUCH_THRESHOLD * 2:
+                results['right_hand_object'] = best_right
+                assigned.add(best_right['detection_id'])
+        
+        # Sanity check: both_hands should not coexist with single-hand assignment for same object
+        if results['both_hands_object'] is not None:
+            if results['left_hand_object'] is not None and results['left_hand_object']['detection_id'] == results['both_hands_object']['detection_id']:
+                print(f"  🚨 DEBUG ALERT: both_hands_object and left_hand_object are the same! det_id={results['both_hands_object']['detection_id']}")
+            if results['right_hand_object'] is not None and results['right_hand_object']['detection_id'] == results['both_hands_object']['detection_id']:
+                print(f"  🚨 DEBUG ALERT: both_hands_object and right_hand_object are the same! det_id={results['both_hands_object']['detection_id']}")
+        
+        return results
 
