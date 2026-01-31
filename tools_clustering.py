@@ -16,6 +16,7 @@ class ToolsClustering:
             "BodyPoses": {"data_column": "mongo_body_landmarks", "is_feet": 1, "mongo_hand_landmarks": None},
             "BodyPoses3D": {"data_column": "mongo_body_landmarks_3D", "is_feet": 1, "mongo_hand_landmarks": None}, # changed this for testing
             "ArmsPoses3D": {"data_column": "mongo_body_landmarks_3D", "is_feet": None, "mongo_hand_landmarks": 1},
+            "ObjectFusion": {"data_column": "mongo_body_landmarks_3D", "is_feet": None, "mongo_hand_landmarks": None},
             "HandsGestures": {"data_column": "mongo_hand_landmarks", "is_feet": None, "mongo_hand_landmarks": 1},
             "HandsPositions": {"data_column": "mongo_hand_landmarks_norm", "is_feet": None, "mongo_hand_landmarks": 1},
             "FingertipsPositions": {"data_column": "mongo_hand_landmarks_norm", "is_feet": None, "mongo_hand_landmarks": 1},

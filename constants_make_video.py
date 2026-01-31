@@ -335,7 +335,7 @@ ALL_FUSION_PAIRS_DICTS = {
 ID_SEGMENT_DICT = {45: "45_salad", 67: "67_phone", 73: "73_book", 74: "74_clock", 80: "80_sign", 81: "81_gift", 82: "82_money", 83: "83_bag", 84: "84_valentine", 85: "85_salad", 86: "86_dumbbell", 87: "87_flag", 88: "83_bag", 89: "89_mask", 90: "90_stethoscope", 91: "91_gun", 92: "92_headphones", 93: "93_clipboard", 94: "94_piggybank", 95: "82_money", 96: "96_bitcoin", 97: "97_rose", 98: "98_lily", 99: "99_iris", 100: "100_tulip", 101: "101_lisianthus", 102: "102_orchid", 103: "103_peony"}
 ID_SSD_DICT = {45: "OWC5", 67: "SSD4_Green", 73: "OWC5", 74: "OWC5", 80: "OWC52", 81: "OWC52", 82: "LaCie", 83: "LaCie", 84: "LaCie", 85: "85_salad", 86: "OWC52", 87: "87_flag", 88: "LaCie", 89: "LaCie", 90: "90_stethoscope", 91: "91_gun", 92: "92_headphones", 93: "93_clipboard", 94: "LaCie", 95: "LaCie", 96: "LaCie", 97: "LaCie", 98: "LaCie", 99: "LaCie", 100: "LaCie", 101: "LaCie", 102: "LaCie", 103: "LaCie"}
 ID_FOLDER_DICT = {45: "book_clock_bowl", 67: "detected_63_67", 73: "book_clock_bowl", 74: "book_clock_bowl", 82: "82_money_cards", 95:"82_money_cards"}
-ID_CUTOFF_DICT = {45: 800, 67: 2000, 73: 3000, 74: 200, 80: 400, 81: 2000, 82: 800, 83: 800, 84: 400, 85: 800, 86: 800, 87: 200, 88: 400, 89: 400, 90: 2000, 91: 200, 92: 800, 93: 800, 94: 400, 95: 400, 96: 200, 97: 400, 98: 400, 99: 400, 100: 400, 101: 400, 102: 400, 103: 400}
+ID_CUTOFF_DICT = {45: 800, 67: 200, 73: 3000, 74: 200, 80: 400, 81: 2000, 82: 800, 83: 800, 84: 400, 85: 800, 86: 800, 87: 200, 88: 400, 89: 400, 90: 2000, 91: 200, 92: 800, 93: 800, 94: 400, 95: 400, 96: 200, 97: 400, 98: 400, 99: 400, 100: 400, 101: 400, 102: 400, 103: 400}
 
 # detected_63_67
 # 67_phone_undetected

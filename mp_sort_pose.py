@@ -131,15 +131,6 @@ class SortPose:
             self.DUPED = self.BODY_DUPE_DIST
             if "obj_bbox" in self.SORT_TYPE:
                 self.MAXD = 200  # override max distance for obj_bbox bc it much bigger
-        elif self.SORT_TYPE in ["planar_body", "planar_hands", "fingertips_positions", "body3D", "ArmsPoses3D"]: 
-            self.MIND = self.MINBODYDIST
-            self.MAXD = self.MAXBODYDIST * 4
-            self.MULTIPLIER = self.HSVMULTIPLIER * (self.MINBODYDIST / self.MINFACEDIST)
-            self.DUPED = self.BODY_DUPE_DIST
-            self.FACE_DIST_TEST = .02
-            self.CHECK_DESC_DIST = 45
-            if self.SORT_TYPE == "ArmsPoses3D":
-                self.MAXD = self.MAXBODYDIST * 300
         elif self.SORT_TYPE == "planar_hands_USE_ALL":
             # designed to take everything
             self.MIND = 1000
@@ -151,6 +142,15 @@ class SortPose:
             self.HSV_DELTA_MAX = 1000            
             self.FACE_DUPE_DIST = -1
             self.BODY_DUPE_DIST = -1
+        else: 
+            self.MIND = self.MINBODYDIST
+            self.MAXD = self.MAXBODYDIST * 4
+            self.MULTIPLIER = self.HSVMULTIPLIER * (self.MINBODYDIST / self.MINFACEDIST)
+            self.DUPED = self.BODY_DUPE_DIST
+            self.FACE_DIST_TEST = .02
+            self.CHECK_DESC_DIST = 45
+            if self.SORT_TYPE == "ArmsPoses3D":
+                self.MAXD = self.MAXBODYDIST * 300
     
 
         self.INPAINT=INPAINT
@@ -3975,12 +3975,12 @@ class SortPose:
 
         self.HSV_CLUSTER_GROUPS = [
             # [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22],
-            # [[3, 4], [5, 6, 7], [8, 9, 10, 11], [12, 13], [15, 16], [17, 18, 19, 20], [21, 22]],
+            [[3, 4], [5, 6, 7], [8, 9, 10, 11], [12, 13], [15, 16], [17, 18, 19, 20], [21, 22]],
             # [[0],[1],[2],[3, 4, 5, 6, 22, 7], [8, 9, 10, 11, 12, 13], [14],[15, 16, 17, 18, 19, 20, 21]], # ALSO USE FOR DEDUPING
             # [[3, 4, 5, 6, 22, 7], [8, 9, 10, 11, 12, 13], [14],[15, 16, 17, 18, 19, 20, 21]], # TESTING Nov23
             # [[3, 4, 5, 6, 22, 7, 8, 9, 10, 11, 12, 13], [14, 15, 16, 17, 18, 19, 20, 21]], # TESTING Nov23
             # [[2],[3, 4, 5, 6, 7, 22]],
-            [[0,1,2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 19, 20, 21, 22]]
+            # [[0,1,2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 19, 20, 21, 22]]
         ]
         # Construct the file name and path
         print("topic_no", topic_no)

@@ -29,29 +29,29 @@ from tools_yolo import YOLOTools
 from mp_db_io import DataIO
 io = DataIO()
 db = io.db
-engine = create_engine(
-    f"mysql+pymysql://{db['user']}:{db['pass']}@/{db['name']}?unix_socket={db['unix_socket']}",
-    poolclass=NullPool
-)
-Session = sessionmaker(bind=engine)
-session = Session()
+# engine = create_engine(
+#     f"mysql+pymysql://{db['user']}:{db['pass']}@/{db['name']}?unix_socket={db['unix_socket']}",
+#     poolclass=NullPool
+# )
+# Session = sessionmaker(bind=engine)
+# session = Session()
 
-openai_client = OpenAI(
-    # defaults to os.environ.get("OPENAI_API_KEY")
-    api_key=api_key,
-)
+# openai_client = OpenAI(
+#     # defaults to os.environ.get("OPENAI_API_KEY")
+#     api_key=api_key,
+# )
 
-ocr_engine = PaddleOCR(
-    use_doc_orientation_classify=False, 
-    use_doc_unwarping=False, 
-    use_textline_orientation=False) # text detection + text recognition
+# ocr_engine = PaddleOCR(
+#     use_doc_orientation_classify=False, 
+#     use_doc_unwarping=False, 
+#     use_textline_orientation=False) # text detection + text recognition
 
 device = "mps" if torch.backends.mps.is_available() else "cpu"
 print("Using device:", device)
-yolo_model = YOLO("yolov8x.pt").to(device)  # load a pretrained YOLOv8x model
+# yolo_model = YOLO("yolov8x.pt").to(device)  # load a pretrained YOLOv8x model
 yolo_custom_model = YOLO("models/takingstock_steth_head_heart_yolov8m/weights/best.pt").to(device)
 
-ocr = OCRTools(DEBUGGING=True)
+# ocr = OCRTools(DEBUGGING=True)
 yolo = YOLOTools(DEBUGGING=True)
 
 
@@ -67,7 +67,7 @@ use_average_per_row=False # for valentine bbox detection
 DO_OCR = False
 
 # FILE_FOLDER = "/Volumes/LaCie/segment_images_84_valentine"
-FILE_FOLDER = "/Volumes/OWC5/segment_images_90_stethoscope"
+FILE_FOLDER = "/Users/michael.mandiberg/Documents/YOLO_Training_Data/sorted_images/90_stethoscope"
 # MAKE_VIDEO_CSVS_PATH = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/book_csvs"
 MAKE_VIDEO_CSVS_PATH = None  # to process all images in folder
 OUTPUT_FOLDER = os.path.join(FILE_FOLDER, "test_output")
@@ -84,8 +84,8 @@ MOVE_OR_COPY = "copy"  # "move" or "copy"
 CLUSTER_TYPE = "HSV" # only works with cluster save, not with assignment
 VERBOSE = True
 META = False # to return the meta clusters (out of 23, not 96)
-cl = ToolsClustering(CLUSTER_TYPE, VERBOSE=VERBOSE)
-table_cluster_type = cl.set_table_cluster_type(META)
+# cl = ToolsClustering(CLUSTER_TYPE, VERBOSE=VERBOSE)
+# table_cluster_type = cl.set_table_cluster_type(META)
 
 custom_ids_to_global_dict = {
   0: 90,
@@ -121,21 +121,21 @@ custom_ids_to_global_dict = {
 #   4: 86,
 #   5: 103,
 # }
-Clusters, ImagesClusters, MetaClusters, ClustersMetaClusters = cl.construct_table_classes(table_cluster_type)
-this_cluster, this_crosswalk = cl.set_cluster_metacluster(Clusters, ImagesClusters, MetaClusters, ClustersMetaClusters)
-meta_cluster_dict = cl.get_meta_cluster_dict(session, ClustersMetaClusters)
-print("this_cluster: ", this_cluster)
+# Clusters, ImagesClusters, MetaClusters, ClustersMetaClusters = cl.construct_table_classes(table_cluster_type)
+# this_cluster, this_crosswalk = cl.set_cluster_metacluster(Clusters, ImagesClusters, MetaClusters, ClustersMetaClusters)
+# meta_cluster_dict = cl.get_meta_cluster_dict(session, ClustersMetaClusters)
+# print("this_cluster: ", this_cluster)
 
-slogan_dict = ocr.get_all_slogans(session, Slogans)
-print("Loaded slogans:", slogan_dict)
-refined_dict = ocr.get_all_refined(session, RefinedText)
-print("Loaded refined:", refined_dict)
+# slogan_dict = ocr.get_all_slogans(session, Slogans)
+# print("Loaded slogans:", slogan_dict)
+# refined_dict = ocr.get_all_refined(session, RefinedText)
+# print("Loaded refined:", refined_dict)
 
-median_dict = cl.get_cluster_medians(session, this_cluster)
-print("Loaded cluster medians:", median_dict)
+# median_dict = cl.get_cluster_medians(session, this_cluster)
+# print("Loaded cluster medians:", median_dict)
 
-folder_indexes = range(0, len(io.folder_list))  # adjust as needed
-print("Processing folders with indexes:", folder_indexes)
+# folder_indexes = range(0, len(io.folder_list))  # adjust as needed
+# print("Processing folders with indexes:", folder_indexes)
 
 def format_site_name_ids(folder_index, batch_img_list):
     if folder_index == 8:
@@ -359,18 +359,18 @@ def do_yolo_detections(result, image, image_path, existing_detections, custom=Fa
     if custom: 
         ThisNoDetectionTable=NoDetectionsCustom
         this_yolo_model = yolo_custom_model
-    else:
-        ThisNoDetectionTable=NoDetections
-        this_yolo_model = yolo_model
+    # else:
+    #     ThisNoDetectionTable=NoDetections
+    #     this_yolo_model = yolo_model
     # YOLO object detection
     # Test on new image 
-
+    print(f"Image {image_id} - Performing YOLO detections. custom={custom}")
     unrefined_detect_results = yolo.detect_objects_return_bbox(this_yolo_model,image, device, conf_thresh=CONF_THRESHOLD)
     print(f"Image {image_id} - Unrefined YOLO detections: {unrefined_detect_results}")
     if custom:
         unrefined_detect_results = map_custom_ids_to_global(unrefined_detect_results)
     detect_results = yolo.merge_yolo_detections(unrefined_detect_results, iou_threshold=0.3, adjacency_threshold_px=50)
-    detect_results = assign_hsv_detect_results(detect_results, image)
+    # detect_results = assign_hsv_detect_results(detect_results, image)
     print(f"Image {image_id} - YOLO detections: {detect_results}")
     # save_debug_image_yolo_bbox(image_id, imagename, image, detect_results)
     if DEBUGGING:
@@ -381,12 +381,12 @@ def do_yolo_detections(result, image, image_path, existing_detections, custom=Fa
     if TESTING_NO_DB_WRITE:
         print("TESTING_NO_DB_WRITE is True, skipping DB write.")
         return detect_results
-    if len(detect_results) == 0:
-        if custom: return # skipp no    detections save for custom
-        save_no_dectections(session,image_id, NoDetectionTable=ThisNoDetectionTable)
-        return detect_results
-    else:
-        yolo.save_obj_bbox(session, image_id, detect_results, Detections)
+    # if len(detect_results) == 0:
+    #     if custom: return # skipp no    detections save for custom
+    #     save_no_dectections(session,image_id, NoDetectionTable=ThisNoDetectionTable)
+    #     return detect_results
+    # else:
+    #     yolo.save_obj_bbox(session, image_id, detect_results, Detections)
     return detect_results
 
 def check_for_existing_detections(image_id, existing_detections, custom=False):
@@ -460,10 +460,6 @@ def do_detections(result, folder_index):
             # Image 118796150 - YOLO detections: [{'class_id': 27, 'obj_no': 1, 'bbox': '{"left": 1149, "top": 644, "right": 1263, "bottom": 709}', 'conf': 0.79, 'meta_cluster_id': 15, 'cluster_id': 90}]
 
             print(f"Image {image_id} - valentine_detections: {valentine_detections}")
-    if DO_MASK:
-        # detect facemask via hsv distance and clustering
-        top_hsl, bot_hsl, hsl_distance = yolo.compute_mask_hsv(image, face_bbox)
-        meta_cluster_id, cluster_id, cluster_dist = mask_to_cluster_id(image, face_bbox)
     
         # for debugging mask, saving to folders
         # debug_file_name = f"{hsl_distance:.2f}_{image_id}_mask_debug.jpg"
@@ -563,44 +559,67 @@ def load_csvs(folder_path):
     return df_csvs
 
 def main():
-    if MAKE_VIDEO_CSVS_PATH is not None:
-        df_csvs = load_csvs(MAKE_VIDEO_CSVS_PATH)
-    else:
-        df_csvs = pd.DataFrame(columns=['site_name_id','site_image_id'])  
-    print("lenth df_csvs:", len(df_csvs))     
-    folder_count = 0
-    for folder_index in folder_indexes:
-        df_csvs_folder = df_csvs[df_csvs['site_name_id'] == folder_index]
-        if MAKE_VIDEO_CSVS_PATH is not None and len(df_csvs_folder) == 0:
-            print("Skipping folder_index:", folder_index, "no entries in MAKE_VIDEO_CSVS_PATH")
+    # FILE_FOLDER contains images and labels subfolders. 
+    this_folder = os.path.join(FILE_FOLDER, "images")
+    img_list = io.get_img_list(this_folder, force_ls=True)
+    print("len(img_list)", len(img_list))
+    for img_name in img_list:
+        print("processing img_name:", img_name)
+        # load image for processing
+        image_path = os.path.join(this_folder, img_name)
+        image = cv2.imread(image_path)
+        if image is None:
+            print(f"Error: Unable to read image at {image_path}. Skipping.")
             continue
-        else:
-            print("meets or ignores MAKE_VIDEO_CSVS_PATH, folder_index:", folder_index, "len df_csvs_folder:", len(df_csvs_folder))
-        site_folder = os.path.join(FILE_FOLDER, os.path.basename(io.folder_list[folder_index]))
-        print(f"folder_index: {folder_index}, site_folder: {site_folder}")
-        folder_paths = io.make_hash_folders(site_folder, as_list=True)
-        csv_foldercount_path = os.path.join(site_folder, "foldercount.csv")
-        if not os.path.exists(csv_foldercount_path): completed_folders = []
-        else: completed_folders = io.get_csv_aslist(csv_foldercount_path)
-        if not os.path.exists(site_folder):
-            print("no folder here:",site_folder)
-            continue
-        print(site_folder, len(completed_folders))
-        for folder_path in folder_paths:
-            print("checking folder_path: ", folder_path)
-            if folder_path not in completed_folders:
-                folder = os.path.join(site_folder,folder_path)
-                folder_count += 1
-                if not os.path.exists(folder):
-                    print(str(folder_count), "no folder here:",folder)
-                    continue
-                else:
-                    print(str(folder_count), folder)
-                    
-                detect_from_folder(folder_index, csv_foldercount_path, folder_path, folder, df_csvs_folder)
+        image_id = img_name.split(".")[0]
+        '''
+        image_id = result.image_id
+        imagename = result.imagename
 
-    session.close()
-    engine.dispose()
+        '''
+        result = type('obj', (object,), {'image_id': image_id, 'imagename': img_name, 'bbox': '{}'})  # dummy bbox
+        custom_detections = do_yolo_detections(result, image, image_path, existing_detections=None, custom=True)
+        print("custom_detections:", custom_detections)
+
+
+    # if MAKE_VIDEO_CSVS_PATH is not None:
+    #     df_csvs = load_csvs(MAKE_VIDEO_CSVS_PATH)
+    # else:
+    #     df_csvs = pd.DataFrame(columns=['site_name_id','site_image_id'])  
+    # print("lenth df_csvs:", len(df_csvs))     
+    # folder_count = 0
+    # for folder_index in folder_indexes:
+    #     df_csvs_folder = df_csvs[df_csvs['site_name_id'] == folder_index]
+    #     if MAKE_VIDEO_CSVS_PATH is not None and len(df_csvs_folder) == 0:
+    #         print("Skipping folder_index:", folder_index, "no entries in MAKE_VIDEO_CSVS_PATH")
+    #         continue
+    #     else:
+    #         print("meets or ignores MAKE_VIDEO_CSVS_PATH, folder_index:", folder_index, "len df_csvs_folder:", len(df_csvs_folder))
+    #     site_folder = os.path.join(FILE_FOLDER, os.path.basename(io.folder_list[folder_index]))
+    #     print(f"folder_index: {folder_index}, site_folder: {site_folder}")
+    #     folder_paths = io.make_hash_folders(site_folder, as_list=True)
+    #     csv_foldercount_path = os.path.join(site_folder, "foldercount.csv")
+    #     if not os.path.exists(csv_foldercount_path): completed_folders = []
+    #     else: completed_folders = io.get_csv_aslist(csv_foldercount_path)
+    #     if not os.path.exists(site_folder):
+    #         print("no folder here:",site_folder)
+    #         continue
+    #     print(site_folder, len(completed_folders))
+    #     for folder_path in folder_paths:
+    #         print("checking folder_path: ", folder_path)
+    #         if folder_path not in completed_folders:
+    #             folder = os.path.join(site_folder,folder_path)
+    #             folder_count += 1
+    #             if not os.path.exists(folder):
+    #                 print(str(folder_count), "no folder here:",folder)
+    #                 continue
+    #             else:
+    #                 print(str(folder_count), folder)
+                    
+    #             detect_from_folder(folder_index, csv_foldercount_path, folder_path, folder, df_csvs_folder)
+
+    # session.close()
+    # engine.dispose()
 
 def detect_from_folder(folder_index, csv_foldercount_path, folder_path, folder, df_csvs_folder):
     img_list = io.get_img_list(folder, force_ls=True)

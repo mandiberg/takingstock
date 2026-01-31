@@ -11,6 +11,8 @@ import pymongo
 from decimal import Decimal
 from pathlib import Path
 import platform
+from configparser import ConfigParser
+
 
 class DataIO:
     """Store key database and file IO info for use across codebase"""
@@ -23,8 +25,13 @@ class DataIO:
         self.query_hands = True
         self.query_body = True
         self.query_head_pose = True
+
         # platform specific file folder (mac for michael, win for satyam)
         self.home = Path.home()
+        config = ConfigParser()
+        config.read("config.ini")
+
+
         if platform.system() == "Darwin":
             self.platform = "darwin"
 
@@ -55,7 +62,7 @@ class DataIO:
             # moved images to SSD
             self.ROOT_DBx = os.path.join(self.home, "Library/CloudStorage/Dropbox/takingstock_dropbox/output_folder")
             self.ROOT_CODE= os.path.join(self.home,"Documents/GitHub/facemap/")
-            self.ROOT_PROD=  "/Volumes/OWC5/segment_images" ## only on Mac
+            self.ROOT_PROD=  "/Volumes/OWC52/segment_images" ## only on Mac
             self.ROOTSSD = os.path.join(self.home,"Documents/projects-active/facemap_production")
             self.ROOT54= "/Volumes/RAID54" ## only on 
             # temp migration for
@@ -66,17 +73,24 @@ class DataIO:
             self.NUMBER_OF_PROCESSES = 8
             self.NUMBER_OF_PROCESSES_GPU = 16
 
-            NML_GITHUB = "/Users/michaelmandiberg/Documents/GitHub/takingstock/"
-            if platform.node() == "Michaels-Mac-Studio.local" or "lan" in platform.node():
-                self.NUMBER_OF_PROCESSES = 20
-                self.NUMBER_OF_PROCESSES_GPU = 60
-                self.db["unix_socket"] = "/tmp/mysql.sock"
+            # NML_GITHUB = "/Users/michaelmandiberg/Documents/GitHub/takingstock/"
+            if config.has_section('local_settings'):
+                if config.has_option('local_settings', 'unix_socket'):
+                    self.db['unix_socket'] = config.get('local_settings', 'unix_socket')
+                if config.has_option('local_settings', 'number_of_processes'):
+                    self.NUMBER_OF_PROCESSES = config.getint('local_settings', 'number_of_processes')
+                if config.has_option('local_settings', 'number_of_processes_gpu'):
+                    self.NUMBER_OF_PROCESSES_GPU = config.getint('local_settings', 'number_of_processes_gpu')
+            # if platform.node() == "Michaels-Mac-Studio.local" or "lan" in platform.node():
+            #     self.NUMBER_OF_PROCESSES = 20
+            #     self.NUMBER_OF_PROCESSES_GPU = 60
+            #     self.db["unix_socket"] = "/tmp/mysql.sock"
             # check to see which one exists
-            elif os.path.exists(NML_GITHUB):
-                self.db["pass"] = "password"
-                self.db["unix_socket"] = "/tmp/mysql.sock"
-                self.NUMBER_OF_PROCESSES = 24
-                self.NUMBER_OF_PROCESSES_GPU = 60
+            # elif os.path.exists(NML_GITHUB):
+            #     self.db["pass"] = "password"
+            #     self.db["unix_socket"] = "/tmp/mysql.sock"
+            #     self.NUMBER_OF_PROCESSES = 24
+            #     self.NUMBER_OF_PROCESSES_GPU = 60
             print("platform.node() is ", platform.node(), " unix_socket is ", self.db["unix_socket"])
 
             self.IS_TENCH = False
@@ -348,8 +362,8 @@ class DataIO:
 
     def unstring_json(self, json_string):
         # Handle None and NaN values
-        print("unstring_json input:", json_string)
-        print("Type of json_string:", type(json_string))
+        # print("unstring_json input:", json_string)
+        # print("Type of json_string:", type(json_string))
         if json_string == "null" or json_string is None or (isinstance(json_string, float) and pd.isna(json_string)):
             return None
         

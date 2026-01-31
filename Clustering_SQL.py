@@ -16,7 +16,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 # my ORM
-from my_declarative_base import Base, Images, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON, ForeignKey
+from my_declarative_base import Detections, Base, Images, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON, ForeignKey
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import create_engine, text, MetaData, Table, Column, Numeric, Integer, VARCHAR, update, Float
@@ -81,7 +81,8 @@ option, MODE = pick(options, title)
 # CLUSTER_TYPE = "Clusters"
 # CLUSTER_TYPE = "BodyPoses"
 # CLUSTER_TYPE = "BodyPoses3D" # use this for META 3D body clusters, Arms will start build but messed up because of subset landmarks
-CLUSTER_TYPE = "ArmsPoses3D" 
+# CLUSTER_TYPE = "ArmsPoses3D" 
+CLUSTER_TYPE = "ObjectFusion" 
 # CLUSTER_TYPE = "HandsPositions"
 # CLUSTER_TYPE = "HandsGestures"
 # CLUSTER_TYPE = "FingertipsPositions"
@@ -101,25 +102,25 @@ OFFSET = 0
 # SELECT MAX(cmb.image_id) FROM ImagesBodyPoses3D cmb JOIN Encodings e ON cmb.image_id = e.image_id WHERE e.is_feet = 0;
 # START_ID = 129478350 # only used in MODE 1
 START_ID = 0 # only used in MODE 1
-
+ 
 # WHICH TABLE TO USE?
 # SegmentTable_name = 'SegmentOct20'
 SegmentTable_name = 'SegmentBig_isface'
-SegmentTable_name = 'Encodings'
+# SegmentTable_name = 'Encodings'
 
 # if doing MODE == 2, use SegmentHelper_name to subselect SQL query
 # unless you know what you are doing, leave this as None
-SegmentHelper_name = None
+# SegmentHelper_name = None
 # if cl.CLUSTER_TYPE == "ArmsPoses3D":
-# SegmentHelper_name = 'SegmentHelper_sept2025_heft_keywords'
-SegmentHelper_name = 'SegmentHelper_dec2025_body3D_outOfSegment'
-# SegmentHelper_name = 'SegmentHelperObject_Placards_HighProbability'
+SegmentHelper_name = 'SegmentHelper_sept2025_heft_keywords'
+# SegmentHelper_name = 'SegmentHelper_dec2025_body3D_outOfSegment'
+# SegmentHelper_name = 'SegmentHelper_oct2025_every40'
 FORCE_HAND_LANDMARKS = False # when doing ArmsPoses3D, default is True, so mongo_hand_landmarks = 1
 
 # number of clusters produced. run GET_OPTIMAL_CLUSTERS and add that number here
 # 32 for hand positions
 # 128 for hand gestures
-N_CLUSTERS = 128
+N_CLUSTERS = 16
 N_META_CLUSTERS = 256
 if MODE == 3: 
     META = True
@@ -212,6 +213,10 @@ if USE_SEGMENT is True and (cl.CLUSTER_TYPE != "Clusters"):
     # Basic Query, this works with SegmentOct20. Previously included s.face_x, s.face_y, s.face_z, s.mouth_gap
     SELECT = "DISTINCT(s.image_id)"
 
+    # handle ObjectFusion, just get pitch, yaw, roll. Detections handled later:
+    if cl.CLUSTER_TYPE == "ObjectFusion":
+        SELECT += f" , {dupe_table_pre}.pitch, {dupe_table_pre}.yaw, {dupe_table_pre}.roll "
+
     if isinstance(this_data_column, list):
         if "HSV" in cl.CLUSTER_TYPE:
             SELECT = SELECT.replace(f"s.face_x, s.face_y, s.face_z, s.mouth_gap", f"ib.hue, ib.sat, ib.val ")
@@ -264,7 +269,7 @@ if USE_SEGMENT is True and (cl.CLUSTER_TYPE != "Clusters"):
         WHERE = " cluster_id IS NOT NULL "
 
     # WHERE += " AND h.is_body = 1"
-    LIMIT = 5000000
+    LIMIT = 5000
     BATCH_LIMIT = 10000
 
     '''
@@ -280,7 +285,7 @@ if USE_SEGMENT is True and (cl.CLUSTER_TYPE != "Clusters"):
     '''
 
 elif USE_SEGMENT is True and MODE == 0:
-
+    print("setting Poses SQL MODE 0 where using regular Clusters and ImagesClusters tables")
     # where the script is looking for files list
     # do not use this if you are using the regular Clusters and ImagesClusters tables
     SegmentTable_name = 'SegmentOct20'
@@ -906,6 +911,22 @@ def prepare_df(df):
         df['body_landmarks'] = df['body_landmarks'].apply(io.unpickle_array)
         columns_to_drop=['face_landmarks', 'body_landmarks', 'body_landmarks_normalized']
         df_list_to_cols(df, 'face_encodings68')
+
+    elif cl.CLUSTER_TYPE == "ObjectFusion":
+        print("first row of df",df.iloc[0])
+        df[['left_hand_landmarks', 'left_hand_world_landmarks', 'left_hand_landmarks_norm', 'right_hand_landmarks', 'right_hand_world_landmarks', 'right_hand_landmarks_norm']] = pd.DataFrame(df['hand_results'].apply(sort.prep_hand_landmarks).tolist(), index=df.index)
+        print("after prep",df)
+        df = sort.split_landmarks_to_columns(df, left_col="left_hand_landmarks_norm", right_col="right_hand_landmarks_norm")
+        print("after split",df)
+        columns_to_drop = ['face_encodings68', 'face_landmarks', 'body_landmarks', 'body_landmarks_normalized', 
+                           'hand_results', 'left_hand_landmarks', 'right_hand_landmarks', 
+                           'left_hand_world_landmarks', 'right_hand_world_landmarks',
+                           'left_hand_landmarks_norm', 'right_hand_landmarks_norm']
+    # if "Object" in cl.CLUSTER_TYPE:
+        # apply query_detections to each image_id to get the object data
+        df['image_id'].apply(lambda image_id: query_detections(image_id))
+        pass
+    
     if not USE_HEAD_POSE: 
         print("not using head pose, dropping face_x, face_y, face_z, mouth_gap")
         # add 'face_x', 'face_y', 'face_z', 'mouth_gap' to existing columns_to_drop
@@ -1003,6 +1024,19 @@ def fetch_encodings_mongo_batched(df, batch_size=5000, mongo_reconnect_interval=
     print(f"Finished fetching {total_rows} encodings")
     return df
 
+def query_detections(image_id):
+    # query the detections table for the given image_id
+    detection = session.query(Detections).filter_by(image_id=image_id).\
+        filter(Detections.conf > 0.4).all()
+    if detection:
+        for d in detection:
+            # access the fields of the detection result
+            print(image_id, d.detection_id, d.class_id, d.conf, d.bbox_norm)
+            # print("obj_bbox_list for image_id ", image_id, obj_bbox_list)
+            # df.loc[df['image_id'] == image_id, 'obj_bbox_list'] = [obj_bbox_list]
+    else:   
+        print(f"No detections found for image_id {image_id}")
+
 
 # defining globally # TK 4 HSV
 MEDIAN_DICT = cl.get_cluster_medians(session, Clusters, USE_SUBSET_MEDIANS, sort.SUBSET_LANDMARKS)
@@ -1023,6 +1057,8 @@ def main():
         
         print("enc_data", enc_data)
         print("as list", set(enc_data["cluster_id"].tolist()))
+        return
+    
         median_dict = calculate_cluster_medians(enc_data)
         save_clusters_DB(median_dict)
         # add the correct median_dict for each cluster_id to the enc_data
@@ -1071,6 +1107,8 @@ def main():
         enc_data=pd.DataFrame()
         df = pd.json_normalize(resultsjson)
         print(df)
+
+
         # tell sort_pose which columns to NOT query
         if cl.CLUSTER_TYPE in ("BodyPoses", "BodyPoses3D", "ArmsPoses3D"): io.query_face = sort.query_face = io.query_hands = sort.query_hands = False
         elif cl.CLUSTER_TYPE == "HandsGestures": io.query_body = sort.query_body = io.query_face = sort.query_face = False
@@ -1083,6 +1121,7 @@ def main():
         #     # hsv does not need any encodings from mongo
         #     df[['face_encodings68', 'face_landmarks', 'body_landmarks', 'body_landmarks_normalized', 'body_landmarks_3D', 'hand_results']] = df['image_id'].apply(io.get_encodings_mongo)
         # face_encodings68, face_landmarks, body_landmarks, body_landmarks_normalized = sort.get_encodings_mongo(mongo_db,row["image_id"], is_body=True, is_face=False)
+
         enc_data = prepare_df(df)
     
     # choose if you want optimal cluster size or custom cluster size using the parameter GET_OPTIMAL_CLUSTERS

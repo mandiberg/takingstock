@@ -6,10 +6,14 @@ import sqlalchemy
 from sqlalchemy import Float, create_engine, Column, Integer, Boolean, String
 from sqlalchemy.orm import sessionmaker, aliased
 from sqlalchemy.pool import NullPool
+from pathlib import Path
 
 # importing project-specific models
 import sys
-sys.path.insert(1, '/Users/michaelmandiberg/Documents/GitHub/facemap/')
+ROOT_GITHUB = os.path.join(Path.home(), "Documents/GitHub/takingstock/")
+# caution: path[0] is reserved for script path (or '' in REPL)
+sys.path.insert(1, ROOT_GITHUB)
+
 from my_declarative_base import SegmentBig, SegmentTable, Encodings, Base, Images
 from mp_pose_est import SelectPose
 
@@ -32,10 +36,10 @@ session = Session()
 
 # Batch processing parameters
 batch_size = 1000
-last_id = 112245607 # this is now image_id, not encoding_id
+last_id = 0 # this is now image_id, not encoding_id
 VERBOSE = False
 
-HelperTable_name = "SegmentHelper_sept2025_heft_keywords"
+HelperTable_name = "SegmentHelper_oct2025_every40"
 class HelperTable(Base):
     __tablename__ = HelperTable_name
     seg_image_id=Column(Integer,primary_key=True, autoincrement=True)
@@ -79,7 +83,7 @@ def debug_face_pose_simple(self, bbox, faceLms, image_id):
 
 
 while True:
-    s = aliased(HelperTable, name='s')
+    # s = aliased(HelperTable, name='s')
     # ihp = aliased(ImagesArmsPoses3D, name='ihp')
     results = (
         session.query(
@@ -120,6 +124,11 @@ while True:
         batch = results[i:i + batch_size]
         batch_success = []
         for encoding_id, image_id, face_x, face_y, face_z, bbox, is_feet, h, w in batch:
+            if face_x is None or face_y is None or face_z is None:
+                print(f"Skipping image_id {image_id} due to missing face_xyz data.")
+                continue
+            if VERBOSE:
+                print(f"Processing image_id: {image_id}, encoding_id: {encoding_id}")
             # 2. Fetch pickled face_landmarks from Mongo
             mongo_doc = mongo_collection.find_one({"image_id": image_id}, {"face_landmarks": 1})
             is_feet = False
