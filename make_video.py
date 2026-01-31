@@ -61,18 +61,20 @@ io = DataIO(IS_SSD)
 db = io.db
 
 # OWC4 SNAFU WORKAROUND
-io.ROOT_PROD=  "/Volumes/OWC52/segment_images" ## only on Mac
-print("Setting io.ROOT to ROOTSSD:", io.ROOTSSD)
-io.ROOT = os.path.join(io.ROOTSSD, "output_folder")
-print("Set io.ROOT to ROOTSSD:", io.ROOT)
+
+if not (io.IS_TENCH or io.IS_MICHELLE):
+    io.ROOT_PROD=  "/Volumes/OWC52/segment_images" ## only on Mac
+    print("Setting io.ROOT to ROOTSSD:", io.ROOTSSD)
+    io.ROOT = os.path.join(io.ROOT_PROD, "output_folder")
+    print("Set io.ROOT to ROOTSSD:", io.ROOT)
 
 CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden below for heft keywords
 
-# CSV_FOLDER = os.path.join("/Users/michaelmandiberg/Documents/projects-active/facemap_production/body3D_segmentbig_useall256_CSVs_test")
+CSV_FOLDER = os.path.join("/Users/michaelmandiberg/Documents/projects-active/facemap_production/body3D_segmentbig_useall256_CSVs_test")
 # CSV_FOLDER = os.path.join("/Volumes/SSD4_Green/arms3D_placard_Dec12_undetected")
 
 # TENCH UNCOMMENT FOR YOUR COMP:
-# CSV_FOLDER = os.path.join(io.ROOT_DBx, "body3D_segmentbig_useall256_CSVs_test")
+CSV_FOLDER = os.path.join(io.ROOT_DBx, "body3D_segmentbig_useall256_CSVs_test")
 
 # CSV_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/body3D_segmentbig_useall256_CSVs"
 # overriding DB for testing
@@ -178,6 +180,7 @@ elif "3D" in CURRENT_MODE:
 
 
 elif CURRENT_MODE == 'heft_torso_keywords':
+    
     class_id = 67
     class_token = ID_SEGMENT_DICT.get(class_id, None)
 
@@ -190,7 +193,8 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     if class_token:
         SegmentHelper_name = f'SegmentHelperObject_{class_token}' # TK revisit this for prodution run
         SegmentFolder = f"/Volumes/{ssd}/segment_images_{folder_token}"
-        CSV_FOLDER = os.path.join(CSV_FOLDER, f"{class_token}_{class_id}")
+        if MODE == 0:
+            CSV_FOLDER = os.path.join(CSV_FOLDER, f"{class_token}_{class_id}")
         SORT_TYPE = "obj_bbox"
         # SORT_TYPE = "obj_bbox_fusion"
     else:
@@ -198,6 +202,10 @@ elif CURRENT_MODE == 'heft_torso_keywords':
         SegmentFolder = None
         SORT_TYPE = "planar_hands"
     CLUSTER_TYPE = "ArmsPoses3D"
+    if io.IS_TENCH or io.IS_MICHELLE:
+        SegmentFolder = io.ROOT
+        print("IO ROOT", io.ROOT)
+        print("SEGMENT FOLDER", SegmentFolder)
     # CLUSTER_TYPE = SORT_TYPE = "ArmsPoses3D" # this triggers meta body poses 3D
     # CLUSTER_TYPE = SORT_TYPE = "obj_bbox" # make sure OBJ_CLS_ID is set below
     # META = True
@@ -2447,7 +2455,7 @@ def main():
 
 
                 # don't pass in session if IS_TENCH
-                if io.IS_TENCH == True: 
+                if io.IS_TENCH or io.IS_MICHELLE == True: 
                     not_dupe_list = None
                 else: 
                     if VERBOSE: print("before recheck_is_dupe_of, df_sorted size", df_sorted.size)
@@ -2455,7 +2463,7 @@ def main():
                     if VERBOSE: print("after recheck_is_dupe_of, df_sorted size", df_sorted.size)
                     not_dupe_list = get_not_dupes_sql(session)  # get list of image_ids that are not dupes
                     if VERBOSE: print("not_dupe_list size", len(not_dupe_list))
-                df_sorted = sort.remove_duplicates(io.folder_list, df_sorted, not_dupe_list, PURGING_DUPES)
+                    df_sorted = sort.remove_duplicates(io.folder_list, df_sorted, not_dupe_list, PURGING_DUPES)
                 if PURGING_DUPES: 
                     print("PURGING_DUPES is True, so bailing out")
                     continue
