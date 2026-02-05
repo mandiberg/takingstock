@@ -12,41 +12,44 @@ def _debug_print(*args, **kwargs):
     if _VERBOSE:
         print(*args, **kwargs)
 
+def chance_to_do(chance: float) -> bool:
+    """
+    Return True if a random number less than chance is generated.
+    """
+    return random.random() < chance
 
 class BinSorter:
-    def __init__(self, num_bins: int, box_size: Tuple[int, int], size_ratios: List[Tuple[int, int, float]], 
-                 num_items: int, infinite_items: bool = False, min_space_threshold: int = 100,
+    def __init__(self, box_size: Tuple[int, int], size_ratios: List[Tuple[int, int, float]],
+                 min_space_threshold: int = 100,
                  nesting_layers: int = 0, nested_min_space_threshold: int = 100,
-                 main_bin_fill_chance: float = 0.05):
+                 main_bin_fill_chance: float = 0.05,
+                 item_break_scale: float = 0.0, item_break_chance: float = 0.0):
         """
-        Initialize the bin sorter.
-        
+        Initialize the bin sorter. Items are placed until the bin is full (min_space_threshold).
+
         Args:
-            num_bins: Number of bins to create
             box_size: Size of the container box in pixels (width, height)
             size_ratios: List of (width, height, weight) ratios for items to pack, e.g., [(2, 3, 1.0), (1, 1, 1.0), (4, 3, 0.5)]
                          Weight determines how likely the ratio is to be selected (higher = more likely)
-            num_items: Number of items to create (ignored if infinite_items=True)
-            infinite_items: If True, keep placing items until bin is full (based on min_space_threshold)
-            min_space_threshold: Minimum space area required to place new items (used in infinite mode)
+            min_space_threshold: Minimum space area required to place new items; bin is full below this
             nesting_layers: Number of nesting layers to create (0 = no nesting)
             nested_min_space_threshold: Minimum space threshold for nested bins
             main_bin_fill_chance: Probability (0–1) that the main bin's first item may use the ratio that fills
                                  the entire box. E.g. 0.05 = 5% allow full-bin ratio, 95% exclude it.
+            item_break_scale: Fraction (0–1) of the bin's area. If an item's area >= this fraction of the bin, it may be "broken" into a nested bin (see item_break_chance). E.g. 0.25 = 25%. 0 = disabled.
+            item_break_chance: When item area >= item_break_scale * bin_area, probability (0–1) to break it into a nested bin filled with a random subset of size_ratios (excluding the item's ratio).
         """
-        self.num_bins = num_bins
         self.box_width, self.box_height = box_size
         self.size_ratios = size_ratios
-        self.num_items = num_items
-        self.infinite_items = infinite_items
         self.min_space_threshold = min_space_threshold
         self.nesting_layers = nesting_layers
         self.nested_min_space_threshold = nested_min_space_threshold
         self.main_bin_fill_chance = main_bin_fill_chance
+        self.item_break_scale = item_break_scale
+        self.item_break_chance = item_break_chance
         self.bins = []
         self.nested_bins = {}  # Maps (bin_idx, item_idx) -> nested bin data
-        self._retry_scale_factor = 1.0  # Scale factor for retries (reduced on each retry)
-        
+
         # Normalize weights (convert to cumulative probabilities for efficient selection)
         self._normalize_weights()
     
@@ -93,127 +96,88 @@ class BinSorter:
         # Fallback to last ratio (shouldn't happen due to normalization)
         ratio = self.size_ratios[-1]
         return (ratio[0], ratio[1])
-        
-    def create_items(self) -> List[Tuple[float, float, int]]:
+
+    def _get_random_restricted_ratios(self, parent_w_ratio: int, parent_h_ratio: int) -> List[Tuple[int, int, float]]:
+        """Return a random subset of size_ratios for filling a 'break' nested bin, excluding the parent ratio when possible."""
+        other = [r for r in self.size_ratios if (r[0], r[1]) != (parent_w_ratio, parent_h_ratio)]
+        pool = other if other else list(self.size_ratios)
+        if len(pool) <= 2:
+            return pool
+        k = random.randint(2, min(4, len(pool)))
+        return random.sample(pool, k)
+
+    def _fill_break_box_exact(self, box_w: int, box_h: int,
+                              restricted_ratios: List[Tuple[int, int, float]]) -> List[Tuple[int, int, int, int]]:
         """
-        Create items from width:height ratios.
-        Randomly selects from size_ratios to create num_items items.
-        Iteratively scales items down until they all fit in one bin.
-        Returns list of (width, height, index) tuples.
+        Fill a break box with exactly 4 items in a 2x2 layout that tiles the box.
+        Picks 4 ratios from restricted_ratios so the combined aspect matches box_w/box_h (exact fill).
+        Returns list of (x, y, w, h) in box coordinates.
         """
-        if not self.size_ratios:
+        # Ratios as (wr, hr) for convenience
+        ratios_only = [(r[0], r[1]) for r in restricted_ratios]
+        if not ratios_only:
             return []
-            
-        # Calculate single bin area (scale to fill one bin, not all bins)
-        single_bin_area = self.box_width * self.box_height
-        
-        # First pass: randomly select ratios and calculate ratio areas for all items
-        ratio_areas = []
-        max_width_ratio = 0
-        max_height_ratio = 0
-        selected_ratios = []
-        
-        for idx in range(self.num_items):
-            width_ratio, height_ratio = self._select_weighted_ratio()
-            selected_ratios.append((width_ratio, height_ratio))
-            ratio_area = width_ratio * height_ratio
-            ratio_areas.append(ratio_area)
-            max_width_ratio = max(max_width_ratio, width_ratio)
-            max_height_ratio = max(max_height_ratio, height_ratio)
-        
-        # Calculate total ratio area
-        total_ratio_area = sum(ratio_areas)
-        
-        if total_ratio_area == 0:
+        while len(ratios_only) < 4:
+            ratios_only.extend(ratios_only)
+        W, H = float(box_w), float(box_h)
+        target_aspect = W / H  # width/height of box
+        best_err = float('inf')
+        best_quad = None
+        n_ratios = len(ratios_only)
+        for _ in range(80):
+            if n_ratios >= 4:
+                quad = random.sample(ratios_only, 4)
+            else:
+                quad = [random.choice(ratios_only) for _ in range(4)]
+            (w1, h1), (w2, h2), (w3, h3), (w4, h4) = quad
+            if h1 <= 0 or h2 <= 0 or h3 <= 0 or h4 <= 0:
+                continue
+            r1 = w1 / h1 + w2 / h2  # row 1 width in "height units"
+            r2 = w3 / h3 + w4 / h4
+            if r1 <= 0 or r2 <= 0:
+                continue
+            # Exact fill when box_w/box_h = r1*r2/(r1+r2)
+            layout_aspect = r1 * r2 / (r1 + r2)
+            err = abs(layout_aspect - target_aspect)
+            if err < best_err:
+                best_err = err
+                best_quad = (w1, h1, w2, h2, w3, h3, w4, h4, r1, r2)
+        if best_quad is None:
             return []
-        
-        # Start with scale that fills one bin's area
-        scale_by_area = math.sqrt(single_bin_area / total_ratio_area) * self._retry_scale_factor
-        
-        # Also calculate scale to ensure no single item exceeds bin dimensions
-        scale_by_dimension = min(
-            self.box_width / max_width_ratio if max_width_ratio > 0 else float('inf'),
-            self.box_height / max_height_ratio if max_height_ratio > 0 else float('inf')
-        )
-        
-        # Start with the smaller scale
-        scale = min(scale_by_area, scale_by_dimension)
-        
-        # Iteratively scale down until all items fit in one bin
-        max_iterations = 50
-        scale_reduction = 0.95  # Reduce scale by 5% each iteration
-        
-        for iteration in range(max_iterations):
-            # Create items with current scale
-            items = []
-            for idx in range(self.num_items):
-                width_ratio, height_ratio = selected_ratios[idx]
-                
-                width = int(width_ratio * scale)
-                height = int(height_ratio * scale)
-                
-                # Ensure minimum size of 1 pixel
-                if width < 1:
-                    width = 1
-                if height < 1:
-                    height = 1
-                    
-                items.append((width, height, idx))
-            
-            # Try packing items with current scale
-            # Temporarily set num_bins to 1 to test if they fit
-            original_num_bins = self.num_bins
-            self.num_bins = 1
-            test_bins = self.first_fit_decreasing(items)
-            self.num_bins = original_num_bins
-            
-            # If all items fit in one bin, we're done
-            if len(test_bins) <= 1:
-                return items
-            
-            # Otherwise, scale down and try again
-            scale *= scale_reduction
-        
-        # If we couldn't fit in one bin after max iterations, return items with final scale
-        return items
-    
-    def first_fit_decreasing(self, items: List[Tuple[float, float, int]]) -> List[List[Tuple]]:
-        """
-        First Fit Decreasing bin packing algorithm.
-        Sorts items by area (largest first) and places them in the first bin that fits.
-        
-        Returns:
-            List of bins, where each bin is a list of (x, y, width, height, item_idx) tuples
-        """
-        # Sort items by area (decreasing)
-        sorted_items = sorted(items, key=lambda x: x[0] * x[1], reverse=True)
-        
-        bins = []
-        
-        for item_width, item_height, item_idx in sorted_items:
-            placed = False
-            
-            # Try to place in existing bins
-            for bin_idx, bin_items in enumerate(bins):
-                if self._can_place_in_bin(bin_items, item_width, item_height, 
-                                         self.box_width, self.box_height):
-                    x, y = self._find_position(bin_items, item_width, item_height,
-                                             self.box_width, self.box_height)
-                    if x is not None:
-                        bin_items.append((x, y, item_width, item_height, item_idx))
-                        placed = True
-                        break
-            
-            # If couldn't place, create new bin
-            if not placed:
-                if len(bins) < self.num_bins:
-                    bins.append([(0, 0, item_width, item_height, item_idx)])
-                else:
-                    # If we've exceeded num_bins, still try to place (overflow)
-                    bins.append([(0, 0, item_width, item_height, item_idx)])
-        
-        return bins
-    
+        w1, h1, w2, h2, w3, h3, w4, h4, r1, r2 = best_quad
+        # Row heights so both rows have width W: H1*r1 = W, H2*r2 = W => H1 = W/r1, H2 = W/r2. We need H1+H2 = H.
+        H1 = W / r1
+        H2 = W / r2
+        # If aspect wasn't exact, clamp so H1+H2 = H and scale row widths to stay within W
+        if H1 + H2 > 0:
+            scale_h = H / (H1 + H2)
+            H1 *= scale_h
+            H2 *= scale_h
+        # Item dimensions (row 1: two items of height H1; row 2: two of height H2)
+        # Row 1: widths H1*w1/h1, H1*w2/h2. Row 2: H2*w3/h3, H2*w4/h4.
+        w1_px = int(round(H1 * w1 / h1))
+        w2_px = int(round(H1 * w2 / h2))
+        w3_px = int(round(H2 * w3 / h3))
+        w4_px = int(round(H2 * w4 / h4))
+        # Nudge so row widths sum to box_w (avoid gaps) and stay in bounds
+        w1_px = max(1, min(w1_px, box_w - 1))
+        w2_px = max(1, box_w - w1_px)
+        w3_px = max(1, min(w3_px, box_w - 1))
+        w4_px = max(1, box_w - w3_px)
+        H1_int = int(round(H1))
+        H2_int = int(round(H2))
+        if H1_int + H2_int != box_h:
+            H2_int = max(1, box_h - H1_int)
+        H1_int = max(1, min(H1_int, box_h - 1))
+        H2_int = max(1, box_h - H1_int)
+        # Placements: (x, y, w, h)
+        return [
+            (0, 0, w1_px, H1_int),
+            (w1_px, 0, w2_px, H1_int),
+            (0, H1_int, w3_px, H2_int),
+            (w3_px, H1_int, w4_px, H2_int),
+        ]
+
     def _can_place_in_bin(self, bin_items: List[Tuple], item_width: int, 
                           item_height: int, bin_width: int, bin_height: int) -> bool:
         """Check if item can fit in bin (simple check without exact positioning)."""
@@ -419,6 +383,12 @@ class BinSorter:
                 if w < 1 or h < 1:
                     continue
 
+                # Second item in bin: largest side of item must not exceed smallest side of bin
+                if len(bin_items) == 1:
+                    bin_smallest_side = min(self.box_width, self.box_height)
+                    if max(w, h) > bin_smallest_side:
+                        continue
+
                 area = w * h
 
                 if not self._can_place_in_bin(bin_items, w, h, self.box_width, self.box_height):
@@ -468,52 +438,27 @@ class BinSorter:
         return False
     
     def sort(self, nested_start_item_idx: int = None) -> List[List[Tuple]]:
-        """Run the bin sorting algorithm.
-        
+        """Run the bin sorting algorithm: fill one bin until min_space_threshold, then create nested bins if nesting_layers > 0.
+
         Args:
             nested_start_item_idx: Starting item index for nested bins (used when this is a nested sorter)
         """
-        _debug_print(f"\n[DEBUG] sort() called: nesting_layers={self.nesting_layers}, infinite_items={self.infinite_items}")
-        
-        max_retries = 10  # Prevent infinite loops
-        retry_count = 0
-        
-        while retry_count < max_retries:
-            if self.infinite_items:
-                self.bins = self._sort_infinite()
-            else:
-                items = self.create_items()
-                self.bins = self.first_fit_decreasing(items)
-            
-            if self.nesting_layers > 0:
-                _debug_print(f"[DEBUG] Initial sorting complete: {len(self.bins)} bins created")
-                for i, bin_items in enumerate(self.bins):
-                    print(f"  Bin {i}: {len(bin_items)} items")
-            
-            # Check if main bin has only 1 item (only check first bin, and only in non-infinite mode)
-            if not self.infinite_items and self.bins and len(self.bins) == 1:
-                total_items = len(self.bins[0])
-                if total_items == 1:
-                    # 95% chance to retry with scaled down items
-                    if random.random() < 0.95:
-                        retry_count += 1
-                        # Reduce scale factor to make items smaller (allows more items to fit)
-                        self._retry_scale_factor *= 0.7  # Reduce scale by 30% each retry
-                        continue
-            
-            # If we get here, either we have multiple items or we're not retrying
-            break
-        
-        # Create nested bins if nesting_layers > 0
+        _debug_print(f"\n[DEBUG] sort() called: nesting_layers={self.nesting_layers}")
+        self.bins = self._sort_infinite()
+
+        if self.nesting_layers > 0:
+            _debug_print(f"[DEBUG] Initial sorting complete: {len(self.bins)} bins created")
+            for i, bin_items in enumerate(self.bins):
+                _debug_print(f"  Bin {i}: {len(bin_items)} items")
+
         if self.nesting_layers > 0:
             _debug_print(f"[DEBUG] Creating nested bins with {self.nesting_layers} layers")
-            # Use provided start_item_idx if this is a nested sorter, otherwise calculate it
             if nested_start_item_idx is not None:
                 self._create_nested_bins(self.nesting_layers, nested_start_item_idx)
             else:
                 self._create_nested_bins(self.nesting_layers)
-        
-        _debug_print(f"[DEBUG] Final nested_bins count: {len(self.nested_bins)}")
+
+        _debug_print(f"[DEBUG] Final nested_bins count: {len(self.nested_bins)} [box={self.box_width}x{self.box_height}]")
         return self.bins
     
     def _count_nested_items(self, nested_bins_dict: dict) -> int:
@@ -819,7 +764,7 @@ class BinSorter:
                     parent_w_ratio, parent_h_ratio = None, None
                     _debug_print(f"[DEBUG] [exclude-parent] _create_nested_bins: remaining_layers={remaining_layers}, parent item {w}x{h} -> no ratio from _get_item_ratio")
                 
-                # Create nested sorter with infinite_items=True
+                # Create nested sorter (fills bin until min_space_threshold)
                 # This will fill the nested bin completely using infinite mode
                 # Try multiple approaches to ensure multiple items can fit:
                 # 1. Try with parent ratio excluded (preferred)
@@ -836,11 +781,8 @@ class BinSorter:
                         # Create nested sorter with scaled-down threshold to encourage multiple items
                         scaled_threshold = int(self.nested_min_space_threshold * scale_factor)
                         nested_sorter = BinSorter(
-                            num_bins=1,
                             box_size=(w, h),
                             size_ratios=self.size_ratios,
-                            num_items=self.num_items,  # This will be ignored in infinite mode
-                            infinite_items=True,
                             min_space_threshold=scaled_threshold,
                             nesting_layers=remaining_layers - 1,
                             nested_min_space_threshold=self.nested_min_space_threshold
@@ -895,18 +837,7 @@ class BinSorter:
                         new_idx = start_item_idx + nested_item_idx
                         remapped_bin_items.append((nx, ny, nw, nh, new_idx))
                         _debug_print(f"[DEBUG] Remapped nested item {nested_item_idx} -> {new_idx}")
-                    
-                    # Update nested_sorter with remapped items (for consistent item indices when remapping keys).
-                    # Do not call _create_nested_bins again here: nesting_layers=remaining_layers-1 was set on
-                    # nested_sorter, so its sort() already ran _create_nested_bins and created exactly one
-                    # nest per level. Calling it again would create extra same-depth nests.
                     nested_sorter.bins = [remapped_bin_items]
-                    
-                    # Translate nested bin keys with remapped indices using recursive helper
-                    # This handles the remapping for the parent's nested_bins dictionary
-                    # Pass the original nested_sorter.nested_bins (before remapping) so _remap_nested_bin_data
-                    # can properly remap all indices including deeper nested bins
-                    # Also pass remapped_bin_items so it can map old_item_idx to correct remapped index
                     _debug_print(f"[DEBUG] Before remapping: nested_sorter.nested_bins keys={list(nested_sorter.nested_bins.keys())}")
                     translated_nested_bins = self._remap_nested_bin_data(
                         nested_sorter.nested_bins, start_item_idx, bin_idx, item_idx, (), remapped_bin_items
@@ -929,55 +860,75 @@ class BinSorter:
                 _debug_print(f"[DEBUG] WARNING: Could not create nested bin for bin {bin_idx} after all attempts")
     
     def _sort_infinite(self) -> List[List[Tuple]]:
-        """Sort items in infinite mode - keep placing until bin is full."""
+        """Fill a single bin until no item fits or remaining space is below min_space_threshold."""
         if not self.size_ratios:
-            return []
+            return [[]]
 
-        # Start with one empty bin
         bins = [[]]
         item_idx = 0
-        is_first_item = True  # Track if this is the first item in the bin
+        is_first_item = True
 
-        while len(bins) <= self.num_bins:
-            # Check if current bin has enough space before trying to place
-            if bins:
-                largest_rect_area = self._get_largest_fittable_rectangle(bins[-1])
-                if largest_rect_area < self.min_space_threshold:
-                    # Current bin is full enough
-                    if len(bins) < self.num_bins:
-                        bins.append([])
-                        is_first_item = True  # Reset for new bin
-                        continue
-                    else:
-                        # No more bins, we're done
-                        break
-
-            # For first item in main bin: main_bin_fill_chance to allow ratio that fills the box, else exclude it
-            if is_first_item and (not hasattr(self, '_exclude_ratio_for_first_item') or self._exclude_ratio_for_first_item is None):
-                if random.random() < self.main_bin_fill_chance:
-                    self._exclude_ratio_for_first_item = None  # allow full-bin ratio
-                else:
-                    self._exclude_ratio_for_first_item = (self.box_width, self.box_height)  # exclude box-fill ratio
-            
-            # Place the largest possible item next (greedy by area).
-            if is_first_item and getattr(self, '_exclude_ratio_for_first_item', None) is not None:
-                _debug_print(f"[DEBUG] [exclude-parent] _sort_infinite: placing first item in bin, exclude_ratio_for_first=True, _exclude_ratio_for_first_item={self._exclude_ratio_for_first_item}, box=({self.box_width},{self.box_height})")
-            best = self._find_largest_placeable_item(bins[-1] if bins else [], 
-                                                    exclude_ratio_for_first=is_first_item)
-            if best is None:
-                # Nothing can fit; treat as full-enough and advance/stop.
-                if len(bins) < self.num_bins:
-                    bins.append([])
-                    is_first_item = True  # Reset for new bin
-                    continue
+        while True:
+            largest_rect_area = self._get_largest_fittable_rectangle(bins[-1])
+            if largest_rect_area < self.min_space_threshold:
                 break
 
-            x, y, w, h, _ratio = best
-            bins[-1].append((x, y, w, h, item_idx))
-            item_idx += 1
-            is_first_item = False  # After first item, allow all ratios
-        
-        self.bins = bins
+            if is_first_item and (not hasattr(self, '_exclude_ratio_for_first_item') or self._exclude_ratio_for_first_item is None):
+                if chance_to_do(self.main_bin_fill_chance):
+                    self._exclude_ratio_for_first_item = None
+                else:
+                    self._exclude_ratio_for_first_item = (self.box_width, self.box_height)
+
+            if is_first_item and getattr(self, '_exclude_ratio_for_first_item', None) is not None:
+                _debug_print(f"[DEBUG] [exclude-parent] _sort_infinite: placing first item in bin, exclude_ratio_for_first=True, _exclude_ratio_for_first_item={self._exclude_ratio_for_first_item}, box=({self.box_width},{self.box_height})")
+            best = self._find_largest_placeable_item(bins[-1], exclude_ratio_for_first=is_first_item)
+            if best is None:
+                break
+
+            x, y, w, h, (wr, hr) = best
+            area = w * h
+            bin_area = self.box_width * self.box_height
+            break_threshold = self.item_break_scale * bin_area
+            do_break = (
+                self.item_break_scale > 0
+                and area >= break_threshold
+                and chance_to_do(self.item_break_chance)
+            )
+            if do_break:
+                _debug_print(f"[DEBUG] [item-break] Breaking item: pos=({x},{y}) size={w}x{h} area={area} ratio=({wr},{hr}) (threshold={break_threshold:.0f} = {self.item_break_scale*100:.1f}% of bin)")
+                bins[-1].append((x, y, w, h, item_idx))
+                restricted_ratios = self._get_random_restricted_ratios(wr, hr)
+                _debug_print(f"[DEBUG] [item-break] Restricted ratios for nested bin: {[(r[0], r[1]) for r in restricted_ratios]}")
+                placements = self._fill_break_box_exact(w, h, restricted_ratios)
+                if not placements:
+                    # Fallback: use packer to fill the break box
+                    nested_sorter = BinSorter(
+                        box_size=(w, h),
+                        size_ratios=restricted_ratios,
+                        min_space_threshold=0,
+                        nesting_layers=0,
+                        nested_min_space_threshold=self.nested_min_space_threshold,
+                        main_bin_fill_chance=0.05,
+                        item_break_scale=0,
+                        item_break_chance=0.0,
+                    )
+                    nested_sorter._exclude_ratio_for_first_item = (wr, hr)
+                    nested_sorter.sort()
+                    nested_items = nested_sorter.bins[0] if nested_sorter.bins else []
+                    placements = [(nx, ny, nw, nh) for (nx, ny, nw, nh, _) in nested_items]
+                remapped = [(nx, ny, nw, nh, item_idx + 1 + i) for i, (nx, ny, nw, nh) in enumerate(placements)]
+                _debug_print(f"[DEBUG] [item-break] Broken into {len(remapped)} items: {[(nx, ny, nw, nh, idx) for (nx, ny, nw, nh, idx) in remapped]}")
+                self.nested_bins[(0, item_idx)] = {
+                    'items': remapped,
+                    'parent_pos': (x, y, w, h),
+                    'nested_bins': {},
+                }
+                item_idx += 1 + len(remapped)
+            else:
+                bins[-1].append((x, y, w, h, item_idx))
+                item_idx += 1
+            is_first_item = False
+
         return bins
     
     def generate_colors(self, num_colors: int) -> List[Tuple[int, int, int]]:
@@ -1230,9 +1181,7 @@ class BinSorter:
 def main():
     """Example usage of the bin sorter."""
     # Customizable parameters
-    NUM_BINS = 1
-    BOX_SIZE = ((1080*5),(1080*3))  # pixels (width, height)
-    NUM_ITEMS = 7  # Number of items to create (ignored if INFINITE_ITEMS=True)
+    BOX_SIZE = ((1080*4),(1080*2))  # pixels (width, height)
     # Width:height:weight ratios for items, e.g., (2, 3, 1.0) means width:height = 2:3 with weight 1.0
     # Weight determines selection probability (higher = more likely to be picked)
     # Default: equal weights (1.0 each) - customize individual weights as needed
@@ -1254,17 +1203,19 @@ def main():
     else:
         print(f"Verbose mode: OFF")
     
-    # Infinite items mode
-    INFINITE_ITEMS = True  # Set to True to fill bin completely
-    MIN_SPACE_THRESHOLD = 30000  # Minimum space area (in pixels) to consider bin full (used when INFINITE_ITEMS=True)
+    MIN_SPACE_THRESHOLD = 30000  # Minimum space area (in pixels) to consider bin full
     
     # Nesting configuration
-    NESTING_LAYERS = 2  # Number of nesting layers (0 = no nesting)
+    NESTING_LAYERS = 1  # Number of nesting layers (0 = no nesting)
     NESTED_MIN_SPACE_THRESHOLD = 1000  # Minimum space threshold for nested bins
     
     # Main bin first-item: chance (0–1) to allow ratio that fills the box; else that ratio is excluded
     MAIN_BIN_FILL_CHANCE = 0.05  # 5% allow one-item-fill, 95% exclude it
-    
+
+    # Item break: large items can be turned into nested bins of smaller items
+    ITEM_BREAK_SCALE = 0.5  # Fraction (0–1) of bin area; e.g. 0.25 = break when item >= 25% of bin. 0 = disabled
+    ITEM_BREAK_CHANCE = 0.9  # Probability (0–1) to break when item area >= ITEM_BREAK_SCALE * bin_area
+
     # Output folder for exported images (use "." for current directory)
     OUTPUT_PATH = "../taking_stock_production/bin_sorting"
     if not os.path.isdir(OUTPUT_PATH):
@@ -1273,47 +1224,52 @@ def main():
         except OSError as e:
             print(f"Error: could not create output folder {OUTPUT_PATH}: {e}", file=sys.stderr)
             sys.exit(1)
-    
-    # Create and run bin sorter
-    sorter = BinSorter(NUM_BINS, BOX_SIZE, SIZE_RATIOS, NUM_ITEMS, 
-                      infinite_items=INFINITE_ITEMS, 
-                      min_space_threshold=MIN_SPACE_THRESHOLD,
-                      nesting_layers=NESTING_LAYERS,
-                      nested_min_space_threshold=NESTED_MIN_SPACE_THRESHOLD,
-                      main_bin_fill_chance=MAIN_BIN_FILL_CHANCE)
-    sorter.sort()
-    
-    # Export image to OUTPUT_PATH
-    os.makedirs(OUTPUT_PATH, exist_ok=True)
+
+    # Batch exports: run and export this many times
+    BATCH_AMOUNT = 10
     box_w, box_h = BOX_SIZE[0], BOX_SIZE[1]
     g = math.gcd(box_w, box_h)
     aspect = f"{box_w // g}_{box_h // g}" if g else "1_1"
-    file_name = f"bin_nest_{NESTING_LAYERS}_aspect_{aspect}.png"
-    full_path = os.path.join(OUTPUT_PATH, file_name)
-    sorter.export_image(full_path, bins_per_row=1, padding=100)
-    
-    # Count total items placed (including nested items)
-    total_items = sorter.get_total_items_count()
-    main_items = sum(len(bin_items) for bin_items in sorter.bins)
-    nested_items = total_items - main_items
-    
-    # Count total bins (including nested bins)
-    total_bins = sorter.get_total_bins_count()
-    main_bins = len(sorter.bins)
-    nested_bins_count = total_bins - main_bins
-    
-    print(f"\nBin Sorting Complete!")
-    print(f"Nesting layers: {NESTING_LAYERS}")
-    print(f"file saved as: {full_path}")
-    print(f"Number of bins: {total_bins} (main: {main_bins}, nested: {nested_bins_count})")
-    print(f"Box size: {BOX_SIZE[0]}x{BOX_SIZE[1]} pixels")
-    print(f"Infinite items mode: {INFINITE_ITEMS}")
-    if not INFINITE_ITEMS:
-        print(f"Number of items requested: {NUM_ITEMS}")
-    else:
-        print(f"Minimum space threshold: {MIN_SPACE_THRESHOLD} pixels")
-    print(f"Total items placed: {total_items} (main: {main_items}, nested: {nested_items})")
-    print(f"Items placed in {total_bins} bins")
+
+    for batch_idx in range(BATCH_AMOUNT):
+        # Create and run bin sorter
+        sorter = BinSorter(BOX_SIZE, SIZE_RATIOS,
+                          min_space_threshold=MIN_SPACE_THRESHOLD,
+                          nesting_layers=NESTING_LAYERS,
+                          nested_min_space_threshold=NESTED_MIN_SPACE_THRESHOLD,
+                          main_bin_fill_chance=MAIN_BIN_FILL_CHANCE,
+                          item_break_scale=ITEM_BREAK_SCALE,
+                          item_break_chance=ITEM_BREAK_CHANCE)
+        sorter.sort()
+
+        if BATCH_AMOUNT <= 1:
+            file_name = f"bin_nest_{NESTING_LAYERS}_aspect_{aspect}.png"
+        else:
+            file_name = f"bin_nest_{NESTING_LAYERS}_aspect_{aspect}_{batch_idx + 1:04d}.png"
+        full_path = os.path.join(OUTPUT_PATH, file_name)
+        sorter.export_image(full_path, bins_per_row=1, padding=100)
+
+        total_items = sorter.get_total_items_count()
+        main_items = sum(len(bin_items) for bin_items in sorter.bins)
+        nested_items = total_items - main_items
+        total_bins = sorter.get_total_bins_count()
+        main_bins = len(sorter.bins)
+        nested_bins_count = total_bins - main_bins
+
+        if BATCH_AMOUNT > 1:
+            print(f"  [{batch_idx + 1}/{BATCH_AMOUNT}] {file_name}  bins={total_bins}  items={total_items}")
+        else:
+            print(f"\nBin Sorting Complete!")
+            print(f"Nesting layers: {NESTING_LAYERS}")
+            print(f"file saved as: {full_path}")
+            print(f"Number of bins: {total_bins} (main: {main_bins}, nested: {nested_bins_count})")
+            print(f"Box size: {BOX_SIZE[0]}x{BOX_SIZE[1]} pixels")
+            print(f"Minimum space threshold: {MIN_SPACE_THRESHOLD} pixels")
+            print(f"Total items placed: {total_items} (main: {main_items}, nested: {nested_items})")
+            print(f"Items placed in {total_bins} bins")
+
+    if BATCH_AMOUNT > 1:
+        print(f"\nBatch complete: {BATCH_AMOUNT} exports saved to {OUTPUT_PATH}")
 
 
 if __name__ == "__main__":
