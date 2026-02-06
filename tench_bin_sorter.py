@@ -19,7 +19,7 @@ def chance_to_do(chance: float) -> bool:
     return random.random() < chance
 
 class BinSorter:
-    def __init__(self, box_size: Tuple[int, int], size_ratios: List[Tuple[int, int, float]],
+    def __init__(self, box_size: Tuple[int, int], size_ratios: List[Tuple],
                  min_space_threshold: int = 100,
                  nesting_layers: int = 0, nested_min_space_threshold: int = 100,
                  main_bin_fill_chance: float = 0.05,
@@ -29,8 +29,8 @@ class BinSorter:
 
         Args:
             box_size: Size of the container box in pixels (width, height)
-            size_ratios: List of (width, height, weight) ratios for items to pack, e.g., [(2, 3, 1.0), (1, 1, 1.0), (4, 3, 0.5)]
-                         Weight determines how likely the ratio is to be selected (higher = more likely)
+            size_ratios: List of (width, height, weight) or (width, height, weight, expand_x, expand_y) ratios.
+                         expand_x/expand_y (0-1) allow items to grow to fill gaps; omitted or 3-tuple defaults to (0, 0).
             min_space_threshold: Minimum space area required to place new items; bin is full below this
             nesting_layers: Number of nesting layers to create (0 = no nesting)
             nested_min_space_threshold: Minimum space threshold for nested bins
@@ -97,7 +97,105 @@ class BinSorter:
         ratio = self.size_ratios[-1]
         return (ratio[0], ratio[1])
 
-    def _get_random_restricted_ratios(self, parent_w_ratio: int, parent_h_ratio: int) -> List[Tuple[int, int, float]]:
+    def _get_expand_allowances(self, wr: int, hr: int) -> Tuple[float, float]:
+        """Return (expand_x, expand_y) for the ratio (wr, hr) from size_ratios. Default (0.0, 0.0) if not found or 3-tuple."""
+        for ratio in self.size_ratios:
+            if (ratio[0], ratio[1]) == (wr, hr) and len(ratio) >= 5:
+                return (float(ratio[3]), float(ratio[4]))
+        return (0.0, 0.0)
+
+    def _gaps_for_item(self, bin_items: List[Tuple], item: Tuple[int, int, int, int, int],
+                       box_w: int, box_h: int, tolerance: int = 1) -> Tuple[int, int, int, int]:
+        """
+        For one item (x, y, w, h, idx), return (left_gap, right_gap, top_gap, bottom_gap):
+        distance to bin edge or to nearest touching item on that side. Gap <= tolerance is treated as 0.
+        """
+        x, y, w, h, idx = item
+        left_gap = x
+        right_gap = box_w - (x + w)
+        bottom_gap = y
+        top_gap = box_h - (y + h)
+
+        def vertical_overlap(oy: int, oh: int) -> bool:
+            return not (y + h <= oy or oy + oh <= y)
+
+        def horizontal_overlap(ox: int, ow: int) -> bool:
+            return not (x + w <= ox or ox + ow <= x)
+
+        for ox, oy, ow, oh, oidx in bin_items:
+            if oidx == idx:
+                continue
+            if vertical_overlap(oy, oh):
+                if ox + ow <= x:
+                    left_gap = min(left_gap, x - (ox + ow))
+                if ox >= x + w:
+                    right_gap = min(right_gap, ox - (x + w))
+            if horizontal_overlap(ox, ow):
+                if oy + oh <= y:
+                    bottom_gap = min(bottom_gap, y - (oy + oh))
+                if oy >= y + h:
+                    top_gap = min(top_gap, oy - (y + h))
+
+        def clamp(g: int) -> int:
+            return 0 if g <= tolerance else g
+
+        return (clamp(left_gap), clamp(right_gap), clamp(top_gap), clamp(bottom_gap))
+
+    def _touching_check(self, bin_items: List[Tuple], box_w: int, box_h: int, tolerance: int = 1) -> bool:
+        """True if every item has all four sides touching the bin or another item (gap <= tolerance)."""
+        for item in bin_items:
+            left_g, right_g, top_g, bottom_g = self._gaps_for_item(bin_items, item, box_w, box_h, tolerance)
+            if left_g or right_g or top_g or bottom_g:
+                return False
+        return True
+
+    def _gap_fill_pass(self, bin_items: List[Tuple], box_w: int, box_h: int) -> List[Tuple]:
+        """
+        Expand items into gaps within their ratio's expand_x/expand_y allowances.
+        Process items in (y, x) order so updated rects are used for subsequent gap checks.
+        Returns new list of (x, y, w, h, item_idx).
+        """
+        if not bin_items:
+            return list(bin_items)
+        # Work on a mutable copy; process by (y, x) for deterministic order
+        items_list = [list(it) for it in bin_items]
+        sorted_indices = sorted(range(len(items_list)), key=lambda i: (items_list[i][1], items_list[i][0]))
+
+        for i in sorted_indices:
+            x, y, w, h, idx = items_list[i]
+            base_w, base_h = w, h
+            left_g, right_g, top_g, bottom_g = self._gaps_for_item(
+                [tuple(it) for it in items_list], (x, y, w, h, idx), box_w, box_h
+            )
+            ratio_wh = self._get_item_ratio(w, h)
+            expand_x, expand_y = (0.0, 0.0) if ratio_wh is None else self._get_expand_allowances(ratio_wh[0], ratio_wh[1])
+            if expand_x <= 0 and expand_y <= 0:
+                continue
+            dw_left = min(left_g, int(base_w * expand_x))
+            dw_right = min(right_g, int(base_w * expand_x))
+            dh_bottom = min(bottom_g, int(base_h * expand_y))
+            dh_top = min(top_g, int(base_h * expand_y))
+            new_x = x - dw_left
+            new_y = y - dh_top
+            new_w = w + dw_left + dw_right
+            new_h = h + dh_bottom + dh_top
+            # Clamp to bin
+            if new_x < 0:
+                new_w += new_x
+                new_x = 0
+            if new_y < 0:
+                new_h += new_y
+                new_y = 0
+            if new_x + new_w > box_w:
+                new_w = box_w - new_x
+            if new_y + new_h > box_h:
+                new_h = box_h - new_y
+            if new_w >= 1 and new_h >= 1:
+                items_list[i] = [new_x, new_y, new_w, new_h, idx]
+
+        return [tuple(it) for it in items_list]
+
+    def _get_random_restricted_ratios(self, parent_w_ratio: int, parent_h_ratio: int) -> List[Tuple]:
         """Return a random subset of size_ratios for filling a 'break' nested bin, excluding the parent ratio when possible."""
         other = [r for r in self.size_ratios if (r[0], r[1]) != (parent_w_ratio, parent_h_ratio)]
         pool = other if other else list(self.size_ratios)
@@ -457,6 +555,13 @@ class BinSorter:
                 self._create_nested_bins(self.nesting_layers, nested_start_item_idx)
             else:
                 self._create_nested_bins(self.nesting_layers)
+
+        # Gap-fill pass: expand items into gaps within their expand_x/expand_y allowances
+        for i, bin_items in enumerate(self.bins):
+            self.bins[i] = self._gap_fill_pass(bin_items, self.box_width, self.box_height)
+        for nested_data in self.nested_bins.values():
+            pw, ph = nested_data['parent_pos'][2], nested_data['parent_pos'][3]
+            nested_data['items'] = self._gap_fill_pass(nested_data['items'], pw, ph)
 
         _debug_print(f"[DEBUG] Final nested_bins count: {len(self.nested_bins)} [box={self.box_width}x{self.box_height}]")
         return self.bins
@@ -960,11 +1065,55 @@ class BinSorter:
             colors.append((int((r + m) * 255), int((g + m) * 255), int((b + m) * 255)))
         return colors
     
+    def _renumber_items_and_log(self) -> None:
+        """
+        Renumber all item IDs globally to 1..N (main bin first, then nested items) so no two items share an id.
+        Update nested_bins keys to use new main-bin IDs. Then print debug info for each item.
+        """
+        next_id = 1
+        for bin_idx, bin_items in enumerate(self.bins):
+            if not bin_items:
+                continue
+            # Main bin: assign IDs 1, 2, ..., n by position
+            old_to_new = {bin_items[i][4]: next_id + i for i in range(len(bin_items))}
+            self.bins[bin_idx] = [(x, y, w, h, next_id + i) for i, (x, y, w, h, _) in enumerate(bin_items)]
+            next_id += len(bin_items)
+
+            # Update nested_bins keys for this bin; assign global IDs to nested items (deterministic order by parent id)
+            to_drop = []
+            to_add = {}
+            for (b_idx, old_idx), data in sorted(self.nested_bins.items(), key=lambda x: (x[0][0], x[0][1])):
+                if b_idx != bin_idx:
+                    continue
+                if old_idx not in old_to_new:
+                    continue
+                new_idx = old_to_new[old_idx]
+                to_drop.append((b_idx, old_idx))
+                # Renumber nested items with global IDs (continue from next_id)
+                items = data.get('items', [])
+                data['items'] = [(nx, ny, nw, nh, next_id + i) for i, (nx, ny, nw, nh, _) in enumerate(items)]
+                next_id += len(items)
+                to_add[(b_idx, new_idx)] = data
+            for k in to_drop:
+                del self.nested_bins[k]
+            for k, v in to_add.items():
+                self.nested_bins[k] = v
+
+        # Debug log: print each item's id, width, height, location
+        for bin_idx, bin_items in enumerate(self.bins):
+            for x, y, w, h, item_id in bin_items:
+                _debug_print(f"[DEBUG] Item id={item_id} width={w} height={h} location=({x},{y})")
+            for (b_idx, item_id), nested_data in sorted(self.nested_bins.items()):
+                if b_idx != bin_idx:
+                    continue
+                for nx, ny, nw, nh, nested_id in nested_data.get('items', []):
+                    _debug_print(f"[DEBUG] Item id={nested_id} (nested in {item_id}) width={nw} height={nh} location=({nx},{ny})")
+
     def export_image(self, output_path: str = "bin_sorting_result.png", 
                     bins_per_row: int = None, padding: int = 20):
         """
         Export the bin sorting result as a numbered, color-coded image.
-        
+
         Args:
             output_path: Path to save the image
             bins_per_row: Number of bins per row (auto-calculated if None)
@@ -972,6 +1121,7 @@ class BinSorter:
         """
         if not self.bins:
             self.sort()
+        self._renumber_items_and_log()
         
         if bins_per_row is None:
             # Use actual number of bins used, not the parameter
@@ -1043,9 +1193,9 @@ class BinSorter:
                                          self.nested_bins[(bin_idx, item_idx)], 
                                          item_colors, font, global_bin_counter, bin_idx, item_idx)
                 
-                # Draw item number only if it doesn't contain a nested bin
+                # Draw item number only if it doesn't contain a nested bin (ids are 1-based after _renumber_items_and_log)
                 if not has_nested_bin:
-                    item_label = str(item_idx + 1)
+                    item_label = str(item_idx)
                     bbox = draw.textbbox((0, 0), item_label, font=font)
                     text_w = bbox[2] - bbox[0]
                     text_h = bbox[3] - bbox[1]
@@ -1087,8 +1237,8 @@ class BinSorter:
                                nested_item_x + nw, nested_item_y + nh]
             draw.rectangle(nested_item_rect, fill=nested_color, outline='darkblue', width=1)
             
-            # Draw nested item number (smaller font)
-            nested_label = str(nested_item_idx + 1)
+            # Draw nested item number (smaller font; ids are 1-based after _renumber_items_and_log)
+            nested_label = str(nested_item_idx)
             bbox = draw.textbbox((0, 0), nested_label, font=font)
             text_w = bbox[2] - bbox[0]
             text_h = bbox[3] - bbox[1]
@@ -1155,7 +1305,7 @@ class BinSorter:
                     color = item_colors[item_idx % len(item_colors)]
                     draw.rectangle([item_x, item_y, item_x + nw, item_y + nh],
                                   fill=color, outline='darkblue', width=1)
-                    item_label = str(item_idx + 1)
+                    item_label = str(item_idx)
                     bbox = draw.textbbox((0, 0), item_label, font=font)
                     text_w, text_h = bbox[2] - bbox[0], bbox[3] - bbox[1]
                     text_x = item_x + (nw - text_w) // 2
@@ -1181,18 +1331,16 @@ class BinSorter:
 def main():
     """Example usage of the bin sorter."""
     # Customizable parameters
-    BOX_SIZE = ((1080*4),(1080*2))  # pixels (width, height)
-    # Width:height:weight ratios for items, e.g., (2, 3, 1.0) means width:height = 2:3 with weight 1.0
-    # Weight determines selection probability (higher = more likely to be picked)
-    # Default: equal weights (1.0 each) - customize individual weights as needed
+    BOX_SIZE = ((1920),(1080))  # pixels (width, height)
+    # Width:height:weight ratios; optional (wr, hr, weight, expand_x, expand_y) for gap-fill (e.g. 0.1 = 10% expand)
     SIZE_RATIOS = [
-        (1,1, 0.3),
-        (1,2, 0.1),
-        (2,3, 0.2),
-        (1,3, 0.05),
-        (2,1, 0.1),
-        (3,2, 0.2),
-        (3,1, 0.05)
+        (1,1, 0.3, .2, .2),
+        (1,2, 0.1, .2, .2),
+        (2,3, 0.2, .2, .2),
+        (1,3, 0.05, .2, .2),
+        (2,1, 0.1, .2, .2),
+        (3,2, 0.2, .2, .2),
+        (3,1, 0.05, .2, .2)
     ]
 
     VERBOSE = True
@@ -1203,18 +1351,18 @@ def main():
     else:
         print(f"Verbose mode: OFF")
     
-    MIN_SPACE_THRESHOLD = 30000  # Minimum space area (in pixels) to consider bin full
+    MIN_SPACE_THRESHOLD = 0  # Minimum space area (in pixels) to consider bin full
     
     # Nesting configuration
-    NESTING_LAYERS = 1  # Number of nesting layers (0 = no nesting)
-    NESTED_MIN_SPACE_THRESHOLD = 1000  # Minimum space threshold for nested bins
+    NESTING_LAYERS = 1 # Number of nesting layers (0 = no nesting)
+    NESTED_MIN_SPACE_THRESHOLD = 0  # Minimum space threshold for nested bins
     
     # Main bin first-item: chance (0–1) to allow ratio that fills the box; else that ratio is excluded
     MAIN_BIN_FILL_CHANCE = 0.05  # 5% allow one-item-fill, 95% exclude it
 
     # Item break: large items can be turned into nested bins of smaller items
-    ITEM_BREAK_SCALE = 0.5  # Fraction (0–1) of bin area; e.g. 0.25 = break when item >= 25% of bin. 0 = disabled
-    ITEM_BREAK_CHANCE = 0.9  # Probability (0–1) to break when item area >= ITEM_BREAK_SCALE * bin_area
+    ITEM_BREAK_SCALE = 0.45  # Fraction (0–1) of bin area; e.g. 0.25 = break when item >= 25% of bin. 0 = disabled
+    ITEM_BREAK_CHANCE = 0.95  # Probability (0–1) to break when item area >= ITEM_BREAK_SCALE * bin_area
 
     # Output folder for exported images (use "." for current directory)
     OUTPUT_PATH = "../taking_stock_production/bin_sorting"
