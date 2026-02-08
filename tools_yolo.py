@@ -389,7 +389,7 @@ class YOLOTools:
 
         return top_hsl, bot_hsl, hsl_distance
 
-    def merge_yolo_detections(self,detect_results, iou_threshold=0.5, adjacency_threshold_px=20):
+    def merge_yolo_detections(self,detect_results, iou_threshold=0.5, adjacency_threshold_px=20, skip_class_zero=True):
         '''
         Merge multiple detections of the same class if they overlap (IoU > iou_threshold)
         or if they are adjacent/touching (gap < adjacency_threshold_px).
@@ -399,6 +399,7 @@ class YOLOTools:
             detect_results: list of dicts with class_id, obj_no, bbox (JSON str), conf
             iou_threshold: IoU threshold for overlap merging (default 0.5)
             adjacency_threshold_px: max gap (pixels) to consider bboxes adjacent (default 20)
+            skip_class_zero: if True, ignore class_id 0 while merging (useful for COCO persons)
         Returns:
             refined_results: merged list in same format
         '''
@@ -427,7 +428,9 @@ class YOLOTools:
         used_indices = set()
         
         for i in range(len(detect_results)):
-            if i in used_indices or detect_results[i]['class_id'] == 0:
+            if i in used_indices:
+                continue
+            if skip_class_zero and detect_results[i]['class_id'] == 0:
                 continue
             
             current = detect_results[i]
