@@ -17,6 +17,7 @@ CLUSTER_MAP = {
     "body3D": ["BodyPoses3D", "HandsGestures"],
     "ArmsPoses3D": ["ArmsPoses3D", None],
     "obj_bbox": ["ArmsPoses3D", None],
+    "obj_bbox_fusion": ["ObjectFusion", None],
 }
 
 
@@ -353,6 +354,7 @@ EXPAND = ONE_SHOT = JUMP_SHOT = USE_ALL = CHOP_FIRST = TSP_SORT = USE_HEAD_POSE 
 USE_PAINTED = OUTPAINT = INPAINT= META = USE_HSV = PURGING_DUPES = DO_HSV_KNN = CHOP_ITTER_TSP_SORT = False
 FUSION_FOLDER = FOCUS_CLUSTER_HACK_LIST = FORCE_TARGET_COUNT = KEYWORD_OBJECT = KEYWORD_ORIENTATION = None
 
+OBJ_DONT_SUBSELECT = True
 MIN_CYCLE_COUNT = 1
 AUTO_EDGE_CROP = False # this triggers the dynamic cropping based on min_max_body_landmarks_for_crop
 

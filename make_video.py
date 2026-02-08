@@ -70,13 +70,13 @@ if not (io.IS_TENCH or io.IS_MICHELLE):
 
 CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden below for heft keywords
 
-CSV_FOLDER = os.path.join("/Users/michaelmandiberg/Documents/projects-active/facemap_production/body3D_segmentbig_useall256_CSVs_test")
+# CSV_FOLDER = os.path.join("/Users/michaelmandiberg/Documents/projects-active/facemap_production/body3D_segmentbig_useall256_CSVs_test")
 # CSV_FOLDER = os.path.join("/Volumes/SSD4_Green/arms3D_placard_Dec12_undetected")
 
 # TENCH UNCOMMENT FOR YOUR COMP:
-CSV_FOLDER = os.path.join(io.ROOT_DBx, "body3D_segmentbig_useall256_CSVs_test")
+# CSV_FOLDER = os.path.join(io.ROOT_DBx, "body3D_segmentbig_useall256_CSVs_test")
 
-# CSV_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/body3D_segmentbig_useall256_CSVs"
+CSV_FOLDER = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion128_test220K"
 # overriding DB for testing
 # io.db["name"] = "stock"
 # io.db["name"] = "ministock"
@@ -181,33 +181,40 @@ elif "3D" in CURRENT_MODE:
 
 elif CURRENT_MODE == 'heft_torso_keywords':
     
-    class_id = 67
-    class_token = ID_SEGMENT_DICT.get(class_id, None)
+    # set to 0 to disable obj query stuff. this is also for obj_bbox_fusion
+    class_id = 0
 
+    # SORT_TYPE = "obj_bbox"
+    SORT_TYPE = "planar_hands"
+    # SORT_TYPE = "obj_bbox_fusion"
+
+    # CLUSTER_TYPE = "ArmsPoses3D"
+    CLUSTER_TYPE = "obj_bbox_fusion"
+    # CLUSTER_TYPE = SORT_TYPE = "ArmsPoses3D" # this triggers meta body poses 3D
+    # CLUSTER_TYPE = SORT_TYPE = "obj_bbox_fusion" # make sure OBJ_CLS_ID is set below
+
+
+    class_token = ID_SEGMENT_DICT.get(class_id, None)
     ssd = ID_SSD_DICT.get(class_id, None)
     if class_id in ID_FOLDER_DICT: folder_token = ID_FOLDER_DICT[class_id]
     else: folder_token = class_token 
 
     # SegmentTable_name = 'SegmentOct20'
     SegmentTable_name = 'SegmentBig_isface'
-    if class_token:
+    if class_token and "fusion" not in CLUSTER_TYPE+SORT_TYPE:
+        OBJ_DONT_SUBSELECT = False # False means SQL select for OBJ. Set to True by default
         SegmentHelper_name = f'SegmentHelperObject_{class_token}' # TK revisit this for prodution run
         SegmentFolder = f"/Volumes/{ssd}/segment_images_{folder_token}"
         if MODE == 0:
             CSV_FOLDER = os.path.join(CSV_FOLDER, f"{class_token}_{class_id}")
-        SORT_TYPE = "obj_bbox"
-        # SORT_TYPE = "obj_bbox_fusion"
     else:
+        # doesn't use class_token helper/select
         SegmentHelper_name = 'SegmentHelper_sept2025_heft_keywords' # TK revisit this for prodution run
         SegmentFolder = None
-        SORT_TYPE = "planar_hands"
-    CLUSTER_TYPE = "ArmsPoses3D"
     if io.IS_TENCH or io.IS_MICHELLE:
         SegmentFolder = io.ROOT
         print("IO ROOT", io.ROOT)
         print("SEGMENT FOLDER", SegmentFolder)
-    # CLUSTER_TYPE = SORT_TYPE = "ArmsPoses3D" # this triggers meta body poses 3D
-    # CLUSTER_TYPE = SORT_TYPE = "obj_bbox" # make sure OBJ_CLS_ID is set below
     # META = True
     USE_HEAD_POSE = True
     IS_HAND_POSE_FUSION = True # do we use fusion clusters
@@ -216,13 +223,16 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     TESTING = True
     if TESTING:
         USE_HSV = False
-        # either you use a FUSION_PAIR_DICT or GENERATE_FUSION_PAIRS. 
-        GENERATE_FUSION_PAIRS = True # if true it will query based on MIN_VIDEO_FUSION_COUNT and create pairs
-                                        # if false, it will grab the list of pair lists below
         # turning all three off to do old style non tsp sort    
-        # ONE_SHOT = True # take all files, based off the very first sort order.
+        ONE_SHOT = True # take all files, based off the very first sort order.
         TSP_SORT = False
         CHOP_ITTER_TSP_SORT = False
+        if CLUSTER_TYPE == "obj_bbox_fusion":
+            GENERATE_FUSION_PAIRS = False
+        else:
+            # either you use a FUSION_PAIR_DICT or GENERATE_FUSION_PAIRS. 
+            GENERATE_FUSION_PAIRS = True # if true it will query based on MIN_VIDEO_FUSION_COUNT and create pairs
+                                            # if false, it will grab the list of pair lists below
 
     else:
         USE_HSV = True
@@ -243,7 +253,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     # get cutoff for this class_id from constants dict
     cutoff = ID_CUTOFF_DICT.get(class_id, None)
 
-    if not USE_HSV:
+    if not USE_HSV and cutoff is not None:
         # this is for testing all cluster-poses for a keyword
         MIN_VIDEO_FUSION_COUNT = cutoff # this is the cut off for the CSV fusion pairs
         MIN_CYCLE_COUNT = max(int(cutoff/2), FORCE_TARGET_COUNT) # this is the cut off for the SQL query results
@@ -424,7 +434,6 @@ if "key" in CURRENT_MODE:
 else: OBJ_CLS_ID = 0
 
 DO_OBJ_SORT = True
-OBJ_DONT_SUBSELECT = False # False means select for OBJ. this is a flag for selecting a specific object type when not sorting on obj
 PHONE_BBOX_LIMITS = [0] # this is an attempt to control the BBOX placement. I don't think it is going to work, but with non-zero it will make a bigger selection. Fix this hack TK. 
 if "obj_bbox" in [SORT_TYPE, CLUSTER_TYPE] and OBJ_CLS_ID == 0:
     print("WARNING: OBJ_CLS_ID is 0 for obj_bbox SORT_TYPE/CLUSTER_TYPE, quitting")
@@ -1058,7 +1067,7 @@ if not io.IS_TENCH:
 
             # convert topic_no to a query string
             IN_or_equal_topic_ids_string = is_query_list_string(topic_no)
-            cluster += f"AND {this_alias}.{this_id} {IN_or_equal_topic_ids_string} "
+            if not OBJ_DONT_SUBSELECT: cluster += f"AND {this_alias}.{this_id} {IN_or_equal_topic_ids_string} "
 
         if bool(hsv_cluster) or hsv_cluster == 0:
             print("hsv_cluster is not empty:", hsv_cluster)

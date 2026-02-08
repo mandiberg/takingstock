@@ -3867,17 +3867,37 @@ class SortPose:
         left_pointer_knuckle_norm = right_pointer_knuckle_norm = []
         if hand_results:
             if 'left_hand' in hand_results:
-                left_hand_landmarks_norm = hand_results['left_hand'].get('hand_landmarks_norm', [])
-                left_pointer_knuckle_norm = left_hand_landmarks_norm[5]  # 5th landmark (index 5), x,y,z
+                try:
+                    left_hand_landmarks_norm = hand_results['left_hand'].get('hand_landmarks_norm', [])
+                    if len(left_hand_landmarks_norm) > 5:
+                        left_pointer_knuckle_norm = left_hand_landmarks_norm[5]  # 5th landmark (index 5), x,y,z
+                    else:
+                        print(f"⚠️  Warning: left_hand_landmarks_norm has insufficient length ({len(left_hand_landmarks_norm)}), expected > 5. Setting default.")
+                        print(f"    Data: {left_hand_landmarks_norm}")
+                        left_pointer_knuckle_norm = [0.0, 8.0, 0.0]
+                except (IndexError, TypeError) as e:
+                    print(f"⚠️  Error accessing left_hand landmark[5]: {e}")
+                    print(f"    hand_results['left_hand']: {hand_results['left_hand']}")
+                    left_pointer_knuckle_norm = [0.0, 8.0, 0.0]
             else:
                 left_pointer_knuckle_norm = [0.0, 8.0, 0.0]
-            print("left_pointer_knuckle_norm", left_pointer_knuckle_norm)
+            # print("left_pointer_knuckle_norm", left_pointer_knuckle_norm)
             if 'right_hand' in hand_results:
-                hand_landmarks = hand_results['right_hand'].get('hand_landmarks_norm', [])
-                right_pointer_knuckle_norm = hand_landmarks[5]  # 5th landmark (index 5), x,y,z
+                try:
+                    hand_landmarks = hand_results['right_hand'].get('hand_landmarks_norm', [])
+                    if len(hand_landmarks) > 5:
+                        right_pointer_knuckle_norm = hand_landmarks[5]  # 5th landmark (index 5), x,y,z
+                    else:
+                        print(f"⚠️  Warning: right_hand_landmarks_norm has insufficient length ({len(hand_landmarks)}), expected > 5. Setting default.")
+                        print(f"    Data: {hand_landmarks}")
+                        right_pointer_knuckle_norm = [0.0, 8.0, 0.0]
+                except (IndexError, TypeError) as e:
+                    print(f"⚠️  Error accessing right_hand landmark[5]: {e}")
+                    print(f"    hand_results['right_hand']: {hand_results['right_hand']}")
+                    right_pointer_knuckle_norm = [0.0, 8.0, 0.0]
             else:
                 right_pointer_knuckle_norm = [0.0, 8.0, 0.0]
-            print("right_pointer_knuckle_norm", right_pointer_knuckle_norm)
+            # print("right_pointer_knuckle_norm", right_pointer_knuckle_norm)
         return left_pointer_knuckle_norm, right_pointer_knuckle_norm
 
     def prep_hsv(self, hue):
@@ -3992,12 +4012,12 @@ class SortPose:
 
         self.HSV_CLUSTER_GROUPS = [
             # [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22],
-            [[3, 4], [5, 6, 7], [8, 9, 10, 11], [12, 13], [15, 16], [17, 18, 19, 20], [21, 22]],
+            # [[3, 4], [5, 6, 7], [8, 9, 10, 11], [12, 13], [15, 16], [17, 18, 19, 20], [21, 22]],
             # [[0],[1],[2],[3, 4, 5, 6, 22, 7], [8, 9, 10, 11, 12, 13], [14],[15, 16, 17, 18, 19, 20, 21]], # ALSO USE FOR DEDUPING
             # [[3, 4, 5, 6, 22, 7], [8, 9, 10, 11, 12, 13], [14],[15, 16, 17, 18, 19, 20, 21]], # TESTING Nov23
             # [[3, 4, 5, 6, 22, 7, 8, 9, 10, 11, 12, 13], [14, 15, 16, 17, 18, 19, 20, 21]], # TESTING Nov23
             # [[2],[3, 4, 5, 6, 7, 22]],
-            # [[0,1,2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 19, 20, 21, 22]]
+            [[0,1,2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 19, 20, 21, 22]]
         ]
         # Construct the file name and path
         print("topic_no", topic_no)

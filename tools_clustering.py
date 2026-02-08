@@ -20,6 +20,9 @@ class ToolsClustering:
         self.CONFIDENCE_DIFF_THRESHOLD = 0.3
         self.MIN_DETECTION_CONFIDENCE = 0.4
         self.DEFAULT_HAND_POSITION = [0.0, 8.0, 0.0]
+        # Face object constraints to avoid large background objects
+        self.MAX_FACE_WIDTH = 2.0  # max width of left+right to be considered face object
+        self.MAX_FACE_VERT_EXTENSION = 0.75  # max how far object can extend into opposite zone
         self.CLUSTER_DATA = {
             "BodyPoses": {"data_column": "mongo_body_landmarks", "is_feet": 1, "mongo_hand_landmarks": None},
             "BodyPoses3D": {"data_column": "mongo_body_landmarks_3D", "is_feet": 1, "mongo_hand_landmarks": None}, # changed this for testing
@@ -247,13 +250,31 @@ class ToolsClustering:
         """Check if object is on top of face (above nose, spans both sides)."""
         # Top of bbox is above nose (in this coord system, negative y is above)
         # AND bbox spans both sides of nose (has both positive and negative x)
-        return bbox['top'] < 0 and bbox['left'] < 0 and bbox['right'] > 0
+        # AND object is not too wide (max width constraint)
+        # AND object doesn't extend too far into bottom zone
+        width = bbox['right'] - bbox['left']
+        extends_into_bottom = max(0, bbox['bottom'])  # how far does it go into positive y
+        
+        return (bbox['top'] < 0 and 
+                bbox['left'] < 0 and 
+                bbox['right'] > 0 and
+                width <= self.MAX_FACE_WIDTH and
+                extends_into_bottom <= self.MAX_FACE_VERT_EXTENSION)
 
     def is_bottom_face_object(self, bbox):
         """Check if object is on bottom of face (below nose, spans both sides)."""
         # Bottom of bbox is below nose (positive y)
         # AND bbox spans both sides of nose
-        return bbox['bottom'] > 0 and bbox['left'] < 0 and bbox['right'] > 0
+        # AND object is not too wide (max width constraint)
+        # AND object doesn't extend too far into top zone
+        width = bbox['right'] - bbox['left']
+        extends_into_top = max(0, -bbox['top'])  # how far does it go into negative y
+        
+        return (bbox['bottom'] > 0 and 
+                bbox['left'] < 0 and 
+                bbox['right'] > 0 and
+                width <= self.MAX_FACE_WIDTH and
+                extends_into_top <= self.MAX_FACE_VERT_EXTENSION)
 
     def resolve_overlapping_detections(self, detections):
         """

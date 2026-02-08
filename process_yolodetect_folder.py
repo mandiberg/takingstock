@@ -9,25 +9,26 @@ io = DataIO()
 
 device = "mps" if torch.backends.mps.is_available() else "cpu"
 print("Using device:", device)
-yolo_custom_model = YOLO("models/takingstock_steth_head_heart_yolov8m/weights/best.pt").to(device)
+yolo_custom_model = YOLO("models/takingstock_chestpiece_onlyfeb5stethoscope_v4_yolov8m/weights/best.pt").to(device)
 yolo = YOLOTools(DEBUGGING=True)
 
 
 # Configuration
 DEBUGGING = True
 SAVE_NEW_LABELS = True
-FILE_FOLDER = "/Users/michael.mandiberg/Documents/YOLO_Training_Data/sorted_images/90_stethoscope"
+FILE_FOLDER = "/Users/michael.mandiberg/Documents/YOLO_Training_Data/reprocess/none_val_steth_headphones_manual"
 OUTPUT_FOLDER = os.path.join(FILE_FOLDER, "test_output")
-CONF_THRESHOLD = 0.4
-CREATE_YOLO_CLASS_ID = 90
+CONF_THRESHOLD = 0.01
+CREATE_YOLO_CLASS_ID = [90]
 IS_DRAW_BOX = True
 IS_SAVE_UNDETECTED = True
 MOVE_OR_COPY = "copy"
 
 custom_ids_to_global_dict = {
-    0: 90,
-    1: 92,
-    2: 84,
+  0: 89,
+  1: 90,
+  2: 92,
+  3: 84,
 }
 
 
@@ -64,37 +65,46 @@ def save_new_yolo_labels(image_id, image, image_path, results):
     if len(results) == 0:
         return
     
-    new_results = [res for res in results if res['class_id'] == CREATE_YOLO_CLASS_ID]
+    # Save all detections
+    new_results = results
     if len(new_results) == 0:
         return
     
-    this_bbox_dict = io.unstring_json(new_results[0]['bbox'])
-    print(f"Image {image_id} - Saving YOLO label for bbox: {this_bbox_dict} from results: {new_results}")
-    # ensure all values are int
-    this_bbox_dict = {k: int(v) for k, v in this_bbox_dict.items()}
-    print(f"Image {image_id} - Converted bbox to int: {this_bbox_dict}")
-    # use this_bbox_dict to creat a YOLO-style bbox for saving as detection label for training
-    # class_id, x_center, y_center, width, height (all normalized)
-    x_center = (this_bbox_dict['left'] + this_bbox_dict['right']) / 2 / image.shape[1]
-    y_center = (this_bbox_dict['top'] + this_bbox_dict['bottom']) / 2 / image.shape[0]
-    width = (this_bbox_dict['right'] - this_bbox_dict['left']) / image.shape[1]
-    height = (this_bbox_dict['bottom'] - this_bbox_dict['top']) / image.shape[0]
-    yolo_label = f"{CREATE_YOLO_CLASS_ID} {x_center:.6f} {y_center:.6f} {width:.6f} {height:.6f}\n"
-
+    # All labels save to the same folder
     all_yolo_labels_folder = os.path.join(OUTPUT_FOLDER, "sort", "all_yolo_labels")
+
     files_to_move_folder = os.path.join(OUTPUT_FOLDER, "sort", "move_these")
     if not os.path.exists(all_yolo_labels_folder):
         os.makedirs(all_yolo_labels_folder)
     if not os.path.exists(files_to_move_folder):
         os.makedirs(files_to_move_folder)
-    file_basename = f"{new_results[0]['conf']:.2f}_{image_id}_YOLO_debug"
-
-
+    
+    # Calculate average confidence for filename
+    avg_conf = sum(res['conf'] for res in new_results) / len(new_results)
+    file_basename = f"{avg_conf:.2f}_{image_id}_YOLO_debug"
+    
+    # Build YOLO labels for all detections
+    yolo_labels = []
+    for result_dict in new_results:
+        this_bbox_dict = io.unstring_json(result_dict['bbox'])
+        print(f"Image {image_id} - Saving YOLO label for class {result_dict['class_id']}, bbox: {this_bbox_dict}")
+        # ensure all values are int
+        this_bbox_dict = {k: int(v) for k, v in this_bbox_dict.items()}
+        print(f"Image {image_id} - Converted bbox to int: {this_bbox_dict}")
+        # use this_bbox_dict to create a YOLO-style bbox for saving as detection label for training
+        # class_id, x_center, y_center, width, height (all normalized)
+        x_center = (this_bbox_dict['left'] + this_bbox_dict['right']) / 2 / image.shape[1]
+        y_center = (this_bbox_dict['top'] + this_bbox_dict['bottom']) / 2 / image.shape[0]
+        width = (this_bbox_dict['right'] - this_bbox_dict['left']) / image.shape[1]
+        height = (this_bbox_dict['bottom'] - this_bbox_dict['top']) / image.shape[0]
+        yolo_label = f"{result_dict['class_id']} {x_center:.6f} {y_center:.6f} {width:.6f} {height:.6f}\n"
+        yolo_labels.append(yolo_label)
+    
     label_file_path = os.path.join(all_yolo_labels_folder, file_basename + ".txt")
     image_file_path = os.path.join(all_yolo_labels_folder, file_basename + ".jpg")
     print(f"Saving new YOLO label to {label_file_path} and image to {image_file_path}")
     with open(label_file_path, "w") as label_file:
-        label_file.write(yolo_label)
+        label_file.writelines(yolo_labels)
 
     # save a copy of the original image to the yolo folder
     cv2.imwrite(image_file_path, image)
@@ -141,8 +151,32 @@ def save_debug_image_yolo_bbox(image_id, imagename, image, detect_results, image
                 detections_by_class[class_id] = []
             detections_by_class[class_id].append(result_dict)
         
-        # Process each class
+        # Check for both class 89 and 90
+        has_89 = 89 in detections_by_class
+        has_90 = 90 in detections_by_class
+        
+        # If both 89 and 90 are present, save combined image
+        if has_89 and has_90:
+            drawable_image = image.copy()
+            all_conf = []
+            print(f"Processing combined class_id 89 and 90")
+            for class_id in [89, 90]:
+                for result_dict in detections_by_class[class_id]:
+                    print(f"  Detected class: {result_dict['class_id']} with bbox: {result_dict['bbox']} and confidence: {result_dict['conf']}")
+                    if draw_box:
+                        drawable_image = draw_bbox_on_image(drawable_image, io.unstring_json(result_dict['bbox']))
+                    all_conf.append(result_dict['conf'])
+            avg_conf = sum(all_conf) / len(all_conf)
+            debug_file_name = f"{avg_conf:.2f}_{image_id}_YOLO_debug.jpg"
+            output_image_path = os.path.join(OUTPUT_FOLDER, "89_90", debug_file_name)
+            save_debug_image(output_image_path, drawable_image, imagename)
+        
+        # Process each class separately (skip if already handled in combined)
         for class_id, class_detections in detections_by_class.items():
+            # Skip if this was part of a combined 89_90 save
+            if (has_89 and has_90) and class_id in [89, 90]:
+                continue
+                
             drawable_image = image.copy()
             print(f"Processing class_id {class_id} with {len(class_detections)} detection(s)")
             all_class_conf = []
@@ -171,7 +205,14 @@ def main():
         if image is None:
             print(f"Error: Unable to read image at {image_path}. Skipping.")
             continue
-        image_id = img_name.split(".")[0]
+        img_parts = img_name.split(".")
+        if len(img_parts) == 2:
+            image_id = img_parts[0]
+        elif len(img_parts) == 3:
+            image_id = img_parts[1].replace("_YOLO_debug", "")
+        else:
+            print(f"Error: Unexpected image name format: {img_name}. Skipping.")
+            continue
         result = type('obj', (object,), {'image_id': image_id, 'imagename': img_name, 'bbox': '{}'})
         custom_detections = do_yolo_detections(result, image, image_path, existing_detections=None, custom=True)
         print("custom_detections:", custom_detections)
