@@ -75,6 +75,8 @@ class DataIO:
 
             # NML_GITHUB = "/Users/michaelmandiberg/Documents/GitHub/takingstock/"
             if config.has_section('local_settings'):
+                if config.has_option('local_settings', 'name'):
+                    self.name = config.get('local_settings', 'name')
                 if config.has_option('local_settings', 'unix_socket'):
                     self.db['unix_socket'] = config.get('local_settings', 'unix_socket')
                 if config.has_option('local_settings', 'number_of_processes'):
