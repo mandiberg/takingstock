@@ -9,6 +9,7 @@ if sys.platform == "darwin": sys.path.insert(1, '/Users/michaelmandiberg/Documen
 elif sys.platform == "win32": sys.path.insert(1, 'C:/Users/jhash/Documents/GitHub/facemap2/')
 from mp_db_io import DataIO
 from my_declarative_base import Images, Base, SegmentTable, Encodings, Clusters, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON, Float
+from constants_make_video import *
 
 io = DataIO()
 db = io.db
@@ -21,10 +22,10 @@ NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 # USE THIS TO MAKE THE FILE NECESSARY TO DO KEYWORD BASED MAKE VIDEO OUTPUT
 
 # ROOT_FOLDER_PATH = '/Users/michaelmandiberg/Documents/projects-active/facemap_production/heft_keyword_fusion_clusters'
-ROOT_FOLDER_PATH = '/Users/michael.mandiberg/Documents/takingstock_production/keyword_fusion_output'
+ROOT_FOLDER_PATH = '/Users/michael.mandiberg/Documents/GitHub/takingstock/utilities/data/heft_detections_ArmsPoses3D_128'
 
-MODE = "DetectionsTest" # Topics or Keywords or Detections
-
+HACK_LIST_SKIP_DETECTIONS = [87,90,91,92]
+MODE = "Detections" # Topics or Keywords or Detections
 if MODE == "Topics": MODE_ID = "topic_id" 
 elif "Detections" in MODE: MODE_ID = "class_id"
 else: MODE_ID =  "keyword_id"
@@ -38,7 +39,13 @@ CLUSTER_COUNT = 128
 CLUSTER_DATA = {
     "ArmsPoses3D_MetaHSV": {"sql_template": "sql_query_template_MetaHSV_Body3D", "cluster_table_name": "ImagesArmsPoses3D", "hsv_type": "ClustersMetaHSV", "cluster_count": CLUSTER_COUNT}
 }
-HELPER_TABLE = "SegmentHelperObject_73_book"
+
+THIS_CLASS_ID = 67 # for object bbox normalization
+KEYWORDS = [THIS_CLASS_ID] 
+class_token = ID_SEGMENT_DICT.get(THIS_CLASS_ID, None)
+if class_token: HELPER_TABLE = f'SegmentHelperObject_{class_token}' 
+else: HELPER_TABLE = 'SegmentHelperObject_45_salad'
+
 CLUSTER_TYPE = "ArmsPoses3D_MetaHSV" # key to CLUSTER_DATA dict
 # "ArmsPoses3D_MetaHSV" or "BodyPoses3D_MetaHSV" or "MetaBodyPoses3D" or "BodyPoses3D_HSV" or "body3D" or "hand_gesture_position" - determines whether it checks hand poses or body3D
 
@@ -59,7 +66,6 @@ session = Session()
 # KEYWORDS = [22411,220,22269,827,1070,22412,553,807,1644,5310] # helper segment
 # KEYWORDS = [21463,4222,13130,23084,79920,8874,736,8136] # helper segment
 # KEYWORDS = [4222,23375,13130,21463,184,23726,8874,8136,133749,26241,22814,133787,4587,133627]
-KEYWORDS = [73] 
 
 # SQL query template
 sql_query_template = """
@@ -567,7 +573,14 @@ if MODE == "Keywords" or "Detections" in MODE:
         this_cluster_table = CLUSTER_DATA.get(CLUSTER_TYPE, {}).get('cluster_table_name', None)
         if sql_query_template is None or this_cluster_table is None:
             raise ValueError(f"SQL template or cluster table name not defined for CLUSTER_TYPE: {CLUSTER_TYPE}")
-        if "Detections" in MODE: sql_query_template = sql_query_template.replace("Images{MODE}", "{MODE}") # because Detections is a table itself
+        if "Detections" in MODE: 
+            sql_query_template = sql_query_template.replace("Images{MODE}", "{MODE}") # because Detections is a table itself
+            if keyword_id in HACK_LIST_SKIP_DETECTIONS:
+                print(f"removing Detection from query.")
+                print("Before:", sql_query_template)
+                sql_query_template = sql_query_template.replace("WHERE it.{MODE_ID} = {THIS_MODE_ID}", "WHERE 1=1") # remove the where clause for class_id
+                print("After:", sql_query_template)
+                
         sql_query_template = sql_query_template.replace("{MODE}", MODE).replace("{MODE_ID}", MODE_ID).replace("{THIS_MODE_ID}", str(keyword_id)).replace("{CLUSTER_TABLE}", this_cluster_table).replace("{HELPER_TABLE}", HELPER_TABLE) 
         print(sql_query_template)
         query = sql_query_template.format(keyword_id=keyword_id)

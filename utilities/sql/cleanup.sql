@@ -321,7 +321,7 @@ FROM SegmentHelperMissing_nov2025
 Where image_id = 62775971
 
 
-CREATE TABLE SegmentHelperMissing_nov2025 (
+CREATE TABLE SegmentHelperMissing_dec2025 (
 id INT NOT NULL AUTO_INCREMENT,
 encoding_id INT NOT NULL,
 image_id INT NOT NULL,
@@ -346,14 +346,34 @@ OR hand_landmarks is NULL
 
 DELETE FROM BsonFileLog;
 
-
-SELECT COUNT(id)
+INSERT INTO SegmentHelperMissing_dec2025 (encoding_id, image_id)
+SELECT encoding_id, image_id
 FROM SegmentHelperMissing_nov2025
 WHERE body_world_landmarks is NULL
 OR body_landmarks_norm is NULL
 OR hand_landmarks is NULL
 ;
 
+'''
+select from encodings, join to SegmentHelperMissing_nov2025 on image_id
+select image_id
+where mongo_body_landmarks =1
+and normalized landmarks is null
+'''
+USE Stock;
+-- SELECT e.image_id, e.encoding_id
+INSERT INTO SegmentHelper_dec2025_missing_norm_body (image_id)
+SELECT s.image_id 
+FROM Encodings e
+JOIN SegmentHelperMissing_nov2025 s on e.image_id = s.image_id
+WHERE e.mongo_body_landmarks = 1
+AND (e.mongo_body_landmarks_norm is NULL)
+;
+
+SELECT *
+FROM Encodings 
+WHERE image_id = 154
+;
 
 -- what is in wandering images?
 
@@ -375,44 +395,3 @@ FROM Images i
 WHERE i.site_image_id = "10009813"
 ;
 
-USE Stock;
-ALTER TABLE Slogans DROP PRIMARY KEY;
-
-ALTER TABLE Detections
-ADD hue Float,
-ADD sat Float,
-ADD lum Float,
-ADD val Float, 
-
-ALTER TABLE Detections
-ADD 	orientation INT,
-ADD 	exclude TINYINT,
-;
-
-
-ALTER TABLE Detections
-    ADD COLUMN cluster_id INT,
-    ADD COLUMN meta_cluster_id INT,
-    ADD CONSTRAINT fk_detections_cluster
-        FOREIGN KEY (cluster_id) REFERENCES HSV(cluster_id);
-
-INSERT INTO BsonFileLog (completed_bson_file) VALUES ('encodings_batch_7900001.bson');
-
-UPDATE YoloClasses
-INSERT INTO YoloClasses (class_id, class_name, model_version) 
-VALUES
-(80,'Sign','YoloCustom'),
-(81,'Gift','YoloCustom'),
-(82,'money','YoloCustom'),
-(83,'Bag','YoloCustom'),
-(84,'valentine','YoloCustom'),
-(85,'Salad','YoloCustom'),
-(86,'Dumbbell','YoloCustom'),
-(87,'rose','YoloCustom'),
-(88,'Groceries','YoloCustom'),
-(89,'mask','other'),
-(90,'Stethoscope','other'),
-(91,'Gun','other'),
-(92,'Headphones','other'),
-(93,'Clipboard','other)
-;

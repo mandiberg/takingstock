@@ -49,31 +49,37 @@ ocr_engine = PaddleOCR(
 device = "mps" if torch.backends.mps.is_available() else "cpu"
 print("Using device:", device)
 yolo_model = YOLO("yolov8x.pt").to(device)  # load a pretrained YOLOv8x model
-yolo_custom_model = YOLO("models/takingstock_yolov8x/weights/best.pt").to(device)
+yolo_custom_model = YOLO("models/takingstock_steth_head_heart_yolov8m/weights/best.pt").to(device)
 
 ocr = OCRTools(DEBUGGING=True)
 yolo = YOLOTools(DEBUGGING=True)
 
 
 blank = False
-DEBUGGING = False
-TESTING_NO_DB_WRITE = False
-DO_COCO = True
-DO_CUSTOM = False
+DEBUGGING = True # saves debug images (option for bboxes drawn)
+SAVE_NEW_LABELS = True # saves new yolo labels to feed back into training data
+TESTING_NO_DB_WRITE = True # if True, will not write to database
+DO_COCO = False
+DO_CUSTOM = True
 DO_MASK = False
 DO_VALENTINE = False
+use_average_per_row=False # for valentine bbox detection
 DO_OCR = False
 
-# FILE_FOLDER = "/Volumes/OWC5/segment_images_book_clock_bowl"
-FILE_FOLDER = "/Volumes/LaCie/segment_images_82_money_cards"
+# FILE_FOLDER = "/Volumes/LaCie/segment_images_84_valentine"
+FILE_FOLDER = "/Volumes/OWC5/segment_images_90_stethoscope"
 # MAKE_VIDEO_CSVS_PATH = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/book_csvs"
 MAKE_VIDEO_CSVS_PATH = None  # to process all images in folder
 OUTPUT_FOLDER = os.path.join(FILE_FOLDER, "test_output")
 BATCH_SIZE = 100
 MASK_THRESHOLD = .15  # HSV distance threshold for mask detection
-CONF_THRESHOLD = 0.25
+CONF_THRESHOLD = 0.4
+RED_THRESH = 180
+RED_DOM = 100
+VAL_MIN_SIZE = 60
+CREATE_YOLO_CLASS_ID = 90
 IS_DRAW_BOX = True
-IS_SAVE_UNDETECTED = False
+IS_SAVE_UNDETECTED = True
 MOVE_OR_COPY = "copy"  # "move" or "copy"
 CLUSTER_TYPE = "HSV" # only works with cluster save, not with assignment
 VERBOSE = True
@@ -81,8 +87,40 @@ META = False # to return the meta clusters (out of 23, not 96)
 cl = ToolsClustering(CLUSTER_TYPE, VERBOSE=VERBOSE)
 table_cluster_type = cl.set_table_cluster_type(META)
 
-custom_ids_to_global_dict = {1:80, 2:82}
+custom_ids_to_global_dict = {
+  0: 90,
+  1: 92,
+  2: 84,
+}
 
+# custom_ids_to_global_dict = {
+#   0: 100,
+#   1: 88,
+#   2: 97,
+#   3: 83,
+#   4: 81,
+#   5: 82,
+#   6: 98,
+#   7: 94,
+#   8: 95,
+#   9: 86,
+#   10: 80,
+#   11: 102,
+#   12: 96,
+#   13: 101,
+#   14: 99,
+#   15: 103
+
+# }
+
+# custom_ids_to_global_dict = {
+#   0: 100,
+#   1: 97,
+#   2: 83,
+#   3: 81,
+#   4: 86,
+#   5: 103,
+# }
 Clusters, ImagesClusters, MetaClusters, ClustersMetaClusters = cl.construct_table_classes(table_cluster_type)
 this_cluster, this_crosswalk = cl.set_cluster_metacluster(Clusters, ImagesClusters, MetaClusters, ClustersMetaClusters)
 meta_cluster_dict = cl.get_meta_cluster_dict(session, ClustersMetaClusters)
@@ -110,7 +148,14 @@ def format_site_name_ids(folder_index, batch_img_list):
                 this_site_image_id = img.split("-id")[-1].replace(".jpg", "")
                 batch_site_image_ids.append(this_site_image_id)
             elif "-" in img:
-                this_site_image_id = img.split("-")[-1].replace(".jpg", "")
+                last_position = img.split("-")[-1].replace(".jpg", "")
+                first_position = img.split("-")[0].replace(".jpg", "")
+                if last_position.isdigit():
+                    this_site_image_id = last_position
+                elif first_position.isdigit():
+                    this_site_image_id = first_position
+                else:
+                    print({" ❌ Warning: could not parse site_image_id from filename:", img})
                 batch_site_image_ids.append(this_site_image_id)
             else:
                 this_site_image_id = img.replace(".jpg", "")
@@ -214,6 +259,99 @@ def map_custom_ids_to_global(detect_results):
             print(f" ✅ Mapped custom class_id to global class_id: {result_dict['class_id']}")
     return detect_results
 
+def save_new_yolo_labels(image_id, image, image_path, results):
+    if len(results) == 0:
+        print(f"Image {image_id} - No detections to save YOLO labels for.")
+        return
+    new_results = [res for res in results if res['class_id'] == CREATE_YOLO_CLASS_ID]
+    if len(new_results) == 0:
+        print(f"Image {image_id} - No valentine detections to save YOLO labels for.")
+        return
+    this_bbox_dict = io.unstring_json(new_results[0]['bbox'])
+    print(f"Image {image_id} - Saving YOLO label for bbox: {this_bbox_dict} from results: {new_results}")
+    # ensure all values are int
+    this_bbox_dict = {k: int(v) for k, v in this_bbox_dict.items()}
+    print(f"Image {image_id} - Converted bbox to int: {this_bbox_dict}")
+    # use this_bbox_dict to creat a YOLO-style bbox for saving as detection label for training
+    # class_id, x_center, y_center, width, height (all normalized)
+    x_center = (this_bbox_dict['left'] + this_bbox_dict['right']) / 2 / image.shape[1]
+    y_center = (this_bbox_dict['top'] + this_bbox_dict['bottom']) / 2 / image.shape[0]
+    width = (this_bbox_dict['right'] - this_bbox_dict['left']) / image.shape[1]
+    height = (this_bbox_dict['bottom'] - this_bbox_dict['top']) / image.shape[0]
+    yolo_label = f"{CREATE_YOLO_CLASS_ID} {x_center:.6f} {y_center:.6f} {width:.6f} {height:.6f}\n"
+
+    all_yolo_labels_folder = os.path.join(OUTPUT_FOLDER, "sort", "all_yolo_labels")
+    files_to_move_folder = os.path.join(OUTPUT_FOLDER, "sort", "move_these")
+    if not os.path.exists(all_yolo_labels_folder):
+        os.makedirs(all_yolo_labels_folder)
+    if not os.path.exists(files_to_move_folder):
+        os.makedirs(files_to_move_folder)
+    file_basename = f"{new_results[0]['conf']:.2f}_{image_id}_YOLO_debug"
+
+
+    label_file_path = os.path.join(all_yolo_labels_folder, file_basename + ".txt")
+    image_file_path = os.path.join(all_yolo_labels_folder, file_basename + ".jpg")
+    print(f"Saving new YOLO label to {label_file_path} and image to {image_file_path}")
+    with open(label_file_path, "w") as label_file:
+        label_file.write(yolo_label)
+
+    # save a copy of the original image to the yolo folder
+    cv2.imwrite(image_file_path, image)
+
+def do_valentine_detections(result, image, image_path, face_bbox):
+    image_id = result.image_id
+    imagename = result.imagename
+    valentine_bbox = yolo.find_valentine_bbox(face_bbox, image, RED_DOM, RED_THRESH, use_average_per_row=use_average_per_row)
+    # [{'class_id': 27, 'obj_no': 1, 'bbox': '{"left": 1149, "top": 644, "right": 1263, "bottom": 709}', 'conf': 0.79, 'meta_cluster_id': 15, 'cluster_id': 90}]
+
+    if valentine_bbox is None:
+        print(f"Image {image_id} - No valentine bbox detected.")
+        return []
+    else:
+        bbox_height = valentine_bbox[3] - valentine_bbox[1]
+        bbox_width = valentine_bbox[2] - valentine_bbox[0]
+        if bbox_height < VAL_MIN_SIZE or bbox_width < VAL_MIN_SIZE:
+            print(f"Image {image_id} - Detected valentine bbox too small (width: {bbox_width}, height: {bbox_height}), skipping.")
+            return []
+        ratio = bbox_width / bbox_height
+        # if it is too wide or too tall, skip it
+        if ratio < 0.8 or ratio > 1.3:
+            print(f"Image {image_id} - Detected valentine bbox has invalid aspect ratio ({ratio:.2f}), skipping.")
+            return []
+    valentine_bbox_dict = {
+        "left": int(valentine_bbox[0]),
+        "top": int(valentine_bbox[1]),
+        "right": int(valentine_bbox[2]),
+        "bottom": int(valentine_bbox[3])
+    }
+    val_results = []
+    val_results.append({
+        "bbox": valentine_bbox_dict,
+        "class_id": CREATE_YOLO_CLASS_ID,
+     "obj_no": 1,
+        "conf": 1.0
+    })
+    val_results = assign_hsv_detect_results(val_results, image)
+
+    print(f"Image {image_id} - YOLO detections: {val_results}")
+    # save_debug_image_yolo_bbox(image_id, imagename, image, val_results)
+    if DEBUGGING:
+        save_debug_image_yolo_bbox(image_id, imagename, image, val_results, image_path, draw_box=IS_DRAW_BOX, save_undetected=IS_SAVE_UNDETECTED)
+
+    save_new_yolo_labels(image_id, image, image_path, val_results)
+    # save a copy of 
+    if TESTING_NO_DB_WRITE:
+        print("TESTING_NO_DB_WRITE is True, skipping DB write.")
+        return val_results
+    if len(val_results) == 0:
+        # if custom: return # skipp no    detections save for custom
+        # save_no_dectections(session,image_id, NoDetectionTable=ThisNoDetectionTable)
+        return val_results
+    else:
+        yolo.save_obj_bbox(session, image_id, val_results, Detections)
+
+    return val_results
+
 def do_yolo_detections(result, image, image_path, existing_detections, custom=False):
     image_id = result.image_id
     imagename = result.imagename
@@ -225,18 +363,24 @@ def do_yolo_detections(result, image, image_path, existing_detections, custom=Fa
         ThisNoDetectionTable=NoDetections
         this_yolo_model = yolo_model
     # YOLO object detection
+    # Test on new image 
+
     unrefined_detect_results = yolo.detect_objects_return_bbox(this_yolo_model,image, device, conf_thresh=CONF_THRESHOLD)
+    print(f"Image {image_id} - Unrefined YOLO detections: {unrefined_detect_results}")
+    if custom:
+        unrefined_detect_results = map_custom_ids_to_global(unrefined_detect_results)
     detect_results = yolo.merge_yolo_detections(unrefined_detect_results, iou_threshold=0.3, adjacency_threshold_px=50)
     detect_results = assign_hsv_detect_results(detect_results, image)
-    if custom:
-        detect_results = map_custom_ids_to_global(detect_results)
     print(f"Image {image_id} - YOLO detections: {detect_results}")
     # save_debug_image_yolo_bbox(image_id, imagename, image, detect_results)
+    if DEBUGGING:
+        save_debug_image_yolo_bbox(image_id, imagename, image, detect_results, image_path, draw_box=IS_DRAW_BOX, save_undetected=IS_SAVE_UNDETECTED)
+    if SAVE_NEW_LABELS:
+        save_new_yolo_labels(image_id, image, image_path, detect_results)
+
     if TESTING_NO_DB_WRITE:
         print("TESTING_NO_DB_WRITE is True, skipping DB write.")
         return detect_results
-    if DEBUGGING:
-        save_debug_image_yolo_bbox(image_id, imagename, image, detect_results, image_path, draw_box=IS_DRAW_BOX, save_undetected=IS_SAVE_UNDETECTED)
     if len(detect_results) == 0:
         if custom: return # skipp no    detections save for custom
         save_no_dectections(session,image_id, NoDetectionTable=ThisNoDetectionTable)
@@ -255,6 +399,7 @@ def check_for_existing_detections(image_id, existing_detections, custom=False):
         existing_detections_image_ids = [det_id for det_id in all_existing_detections_image_ids if det_id > 12455146]
         existing_no_detections = get_existing_no_detections(image_id, NoDetectionTable=NoDetections)
     return existing_detections_image_ids, existing_no_detections
+
 
 def do_detections(result, folder_index):
     coco_detections = custom_detections = None
@@ -301,9 +446,20 @@ def do_detections(result, folder_index):
     if DO_CUSTOM and not existing_no_detections_custom: 
         custom_detections = do_yolo_detections(result, image, image_path, existing_detections, custom=True)
 
-    if DO_VALENTINE:
+    if DO_VALENTINE and bool(face_bbox):
         pass
+        # if rose class_id = 97 is in custom_detections, skip valentine detections
+        if custom_detections is not None:
+            rose_detections = [det for det in custom_detections if det['class_id'] == 97]
+        else:
+            rose_detections = None
+        if not rose_detections:
 
+            print(f"Image {image_id} - Performing valentine detections. face_bbox: {face_bbox}, boolean: {bool(face_bbox)}")
+            valentine_detections = do_valentine_detections(result, image, image_path, face_bbox)
+            # Image 118796150 - YOLO detections: [{'class_id': 27, 'obj_no': 1, 'bbox': '{"left": 1149, "top": 644, "right": 1263, "bottom": 709}', 'conf': 0.79, 'meta_cluster_id': 15, 'cluster_id': 90}]
+
+            print(f"Image {image_id} - valentine_detections: {valentine_detections}")
     if DO_MASK:
         # detect facemask via hsv distance and clustering
         top_hsl, bot_hsl, hsl_distance = yolo.compute_mask_hsv(image, face_bbox)

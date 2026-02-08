@@ -81,6 +81,7 @@ class SortPose:
             "body3D": "body3D",
             "ArmsPoses3D": "body3D",
             "obj_bbox": "obj",
+            "obj_bbox_fusion": "obj_bbox_fusion"
         }
 
         self.KNN_COLS = {
@@ -91,6 +92,7 @@ class SortPose:
             "body3D": ("body_landmarks_array", "dist_enc1"),
             "HSV": ("hsvll", "dist_HSV"),
             "obj": ("obj_bbox_list", "dist_obj"),
+            "obj_bbox_fusion": ("obj_bbox_fusion_list", "dist_obj_fusion")
         }
 
         #maximum allowable distance between encodings (this accounts for dHSV)
@@ -106,7 +108,7 @@ class SortPose:
         self.BRUTEFORCE = False
         self.LMS_DIMENSIONS = LMS_DIMENSIONS
         if self.VERBOSE: print("init LMS_DIMENSIONS",self.LMS_DIMENSIONS)
-        self.CUTOFF = 500 # DOES factor if ONE_SHOT
+        self.CUTOFF = 200 # DOES factor if ONE_SHOT
         self.ORIGIN = 0
         self.this_nose_bridge_dist = self.NOSE_BRIDGE_DIST = None # to be set in first loop, and sort.this_nose_bridge_dist each time
         self.USE_HEAD_POSE = USE_HEAD_POSE
@@ -122,22 +124,13 @@ class SortPose:
             self.MULTIPLIER = self.HSVMULTIPLIER
             self.DUPED = self.FACE_DUPE_DIST
             self.HSV_DELTA_MAX = self.HSV_DELTA_MAX * 1.5
-        elif self.SORT_TYPE == "planar" or self.SORT_TYPE == "obj_bbox": 
+        elif self.SORT_TYPE == "planar" or "obj_bbox" in self.SORT_TYPE:
             self.MIND = self.MINBODYDIST * 1.5
             self.MAXD = self.MAXBODYDIST
             self.MULTIPLIER = self.HSVMULTIPLIER * (self.MINBODYDIST / self.MINFACEDIST)
             self.DUPED = self.BODY_DUPE_DIST
-            if self.SORT_TYPE == "obj_bbox":
+            if "obj_bbox" in self.SORT_TYPE:
                 self.MAXD = 200  # override max distance for obj_bbox bc it much bigger
-        elif self.SORT_TYPE in ["planar_body", "planar_hands", "fingertips_positions", "body3D", "ArmsPoses3D"]: 
-            self.MIND = self.MINBODYDIST
-            self.MAXD = self.MAXBODYDIST * 4
-            self.MULTIPLIER = self.HSVMULTIPLIER * (self.MINBODYDIST / self.MINFACEDIST)
-            self.DUPED = self.BODY_DUPE_DIST
-            self.FACE_DIST_TEST = .02
-            self.CHECK_DESC_DIST = 45
-            if self.SORT_TYPE == "ArmsPoses3D":
-                self.MAXD = self.MAXBODYDIST * 300
         elif self.SORT_TYPE == "planar_hands_USE_ALL":
             # designed to take everything
             self.MIND = 1000
@@ -149,6 +142,15 @@ class SortPose:
             self.HSV_DELTA_MAX = 1000            
             self.FACE_DUPE_DIST = -1
             self.BODY_DUPE_DIST = -1
+        else: 
+            self.MIND = self.MINBODYDIST
+            self.MAXD = self.MAXBODYDIST * 4
+            self.MULTIPLIER = self.HSVMULTIPLIER * (self.MINBODYDIST / self.MINFACEDIST)
+            self.DUPED = self.BODY_DUPE_DIST
+            self.FACE_DIST_TEST = .02
+            self.CHECK_DESC_DIST = 45
+            if self.SORT_TYPE == "ArmsPoses3D":
+                self.MAXD = self.MAXBODYDIST * 300
     
 
         self.INPAINT=INPAINT
@@ -417,7 +419,13 @@ class SortPose:
         else:
             # self.face_height_output = face_height_output
             # takes base image size and multiplies by avg of multiplier
+            print("setting output dims based on image_edge_multiplier",self.image_edge_multiplier)
+            print(f"face height is based on: self.face_height_output {self.face_height_output} * avg of {self.image_edge_multiplier[1]} and {self.image_edge_multiplier[3]} for height, and {self.image_edge_multiplier[0]} and {self.image_edge_multiplier[2]} for width")
+            print(f"the averages are: height: {(self.image_edge_multiplier[1]+self.image_edge_multiplier[3])/2}, width: {(self.image_edge_multiplier[0]+self.image_edge_multiplier[2])/2}")
             self.output_dims = (int(self.face_height_output*(self.image_edge_multiplier[1]+self.image_edge_multiplier[3])/2),int(self.face_height_output*(self.image_edge_multiplier[0]+self.image_edge_multiplier[2])/2))
+            # # alternative way to set output dims. Multiply sum of multipliers
+            # self.output_dims = (int(self.face_height_output*((self.image_edge_multiplier[1]+self.image_edge_multiplier[3]))),int(self.face_height_output*((self.image_edge_multiplier[0]+self.image_edge_multiplier[2]))))
+
         self.MAX_IMAGE_EDGE_MULTIPLIER = self.image_edge_multiplier #testing
         print("output_dims",self.output_dims)
 
@@ -602,22 +610,32 @@ class SortPose:
             # xyz = ['face_x', 'face_y', 'face_z']
             xyz = ['pitch', 'yaw', 'roll']
             df["xyz"] = df.apply(lambda row: self.cols_to_list(row, xyz), axis=1)
+            # drop any rows with missing xyz data
+            df_clean = df[df['xyz'].apply(lambda x: not any(np.isnan(x)))]
+            print(f" finding median Dropped {len(df) - len(df_clean)} rows with NaN values")
+            # print("df with xyz columns (after removing NaNs), will find median of 3D points")
+            # print(df_clean[['xyz']].to_string())
 
-            print("df with xyz columns, will find median of 3D points and set face_x,y,z accordingly")
-            median_xyz = self.get_median_value(df, "xyz")
+            if len(df_clean) == 0:
+                print("No valid data after removing NaNs in head pose angles. Returning empty DataFrame.")
+                return None
+            median_xyz = self.get_median_value(df_clean, "xyz")
             print(" ~~~ median_xyz: ", median_xyz)
+            
+            if self.SORT_TYPE != "obj_bbox_fusion":
+                # set XYZ HIGH and LOW based on median
+                margin_dict = {'pitch': 15, 'yaw': 8, 'roll': 8}
+                low_high_dict = {}
+                for angle in xyz:
+                    low_high_dict[angle] = (median_xyz[xyz.index(angle)] - margin_dict[angle], median_xyz[xyz.index(angle)] + margin_dict[angle])
+                print("   low_high_dict: ", low_high_dict)
 
-            # set XYZ HIGH and LOW based on median
-            margin_dict = {'pitch': 15, 'yaw': 8, 'roll': 8}
-            low_high_dict = {}
-            for angle in xyz:
-                low_high_dict[angle] = (median_xyz[xyz.index(angle)] - margin_dict[angle], median_xyz[xyz.index(angle)] + margin_dict[angle])
-            print("   low_high_dict: ", low_high_dict)
-
-            # use low_high_dict to filter
-            for angle in xyz:
-                df = df.loc[((df[angle] < low_high_dict[angle][1]) & (df[angle] > low_high_dict[angle][0]))]
-                print(f"after filtering by {angle}, len(df): {len(df)}")
+                # use low_high_dict to filter
+                for angle in xyz:
+                    df = df.loc[((df[angle] < low_high_dict[angle][1]) & (df[angle] > low_high_dict[angle][0]))]
+                    print(f"after filtering dynamically by {angle}, len(df): {len(df)}")
+            else:
+                print("   obj_bbox_fusion sorting, skipping dynamic head pose filtering")
         else:
             # use the defaults set in __init__
             df = df.loc[((df['face_y'] < self.YHIGH) & (df['face_y'] > self.YLOW))]
@@ -2258,7 +2276,9 @@ class SortPose:
                 #####UPSCALING#######
                 
                 upsized_image = self.upscale_model.upsample(cropped_actualsize_image)
+                # self.preview_img(upsized_image)
                 cropped_image = cv2.resize(upsized_image, (self.output_dims))
+                # self.preview_img(cropped_image)
                 # print("UPSCALING DONEEEEEEEEEEEEEEEEEEEEEEE")
                 ####################
                 # cropped_image = cv2.resize(cropped_actualsize_image, (self.output_dims), interpolation=cv2.INTER_LINEAR)
@@ -2508,7 +2528,7 @@ class SortPose:
         elif self.SORT_TYPE == "planar_body": sort_column = "body_landmarks_array"
         elif self.SORT_TYPE == "body3D" or self.SORT_TYPE == "ArmsPoses3D": sort_column = "body_landmarks_array"
         elif self.SORT_TYPE == "planar_hands" or self.SORT_TYPE == "planar_hands_USE_ALL": sort_column = "hand_landmarks" # hand_landmarks are left and right hands flat list of 126 values
-        elif self.SORT_TYPE == "obj_bbox": sort_column = "obj_bbox_list"
+        elif "obj_bbox" in self.SORT_TYPE: sort_column = "obj_bbox_list" # handles fusion also
         print("sort_column", sort_column)
         print("sort_column head", df_enc[sort_column].head())
         # print("lengtth of first value", len(df_enc[sort_column].iloc[0]))
@@ -2857,6 +2877,7 @@ class SortPose:
             elif self.SORT_TYPE in ("planar_body", "ArmsPoses3D", "body3D") and "body_landmarks_array" in df.columns: enc1 = df.iloc[-1]["body_landmarks_array"]
             elif self.SORT_TYPE == "planar_body": enc1 = df.iloc[-1]["body_landmarks_normalized"]
             elif self.SORT_TYPE == "obj_bbox" and "obj_bbox_list" in df.columns: enc1 = df.iloc[-1]["obj_bbox_list"]
+            elif self.SORT_TYPE == "obj_bbox_fusion" and "obj_bbox_fusion_list" in df.columns: enc1 = df.iloc[-1]["obj_bbox_fusion_list"]
             else:
                 print("get_enc1: SORT_TYPE not recognized or column missing:", self.SORT_TYPE)
                 enc1 = None
@@ -3069,6 +3090,36 @@ class SortPose:
             df_enc = df_enc[non_nan_mask].reset_index(drop=True)
             print("Cleaned df_enc:", df_enc.shape)
 
+    # print len of each item in encodings_array
+        if "obj_bbox" in self.SORT_TYPE:
+            if len(enc1) != len(encodings_array[0]):
+                # encodings_array_refined = encodings_array.copy()
+                print("Refining encodings_array for obj_bbox KNN")
+                # for potential_enc1 in encodings_array_refined:
+                #     for enc1_dim in enc1:
+                #         if enc1_dim not in potential_enc1:
+                #             # pop potential_enc1 from encodings_array_refined
+                #             print("Removing non-matching enc1 in encodings_array:", enc1, potential_enc1)
+                #             encodings_array_refined.remove(potential_enc1)
+                #             continue
+                refined = []
+                print("enc1: ", enc1)
+                for potential_enc1 in encodings_array:
+                    keep = False
+                    for enc1_dim in enc1:
+                        if enc1_dim in potential_enc1:
+                            print("Removing non-matching enc1 in encodings_array:", enc1_dim, potential_enc1)
+                            keep = True
+                            break
+                    if keep:
+                        print("Found matching enc1 in encodings_array:", enc1, potential_enc1)
+                        refined.append(potential_enc1)
+
+                        # else:
+                        #     print("Found matching enc1 in encodings_array:", enc1, potential_enc1)
+                            # break
+                print("Refined encodings_array length:", len(refined))
+                enc1 = refined[0] if refined else enc1
         self.knn.fit(encodings_array)
 
         
@@ -3370,7 +3421,8 @@ class SortPose:
                 if self.VERBOSE: print("ONE_SHOT going to assign all and try to drop everything")
                 df_run = df_shuffled
                 # drop all rows from df_shuffled
-                df_enc = df_enc.drop(df_run.index).reset_index(drop=True)
+                # df_enc = df_enc.drop(df_run.index).reset_index(drop=True)
+                df_enc = df_enc[~df_enc['image_id'].isin(df_run['image_id'])].reset_index(drop=True)
                 if self.VERBOSE: print("df_run", df_run)
                 if self.VERBOSE: print("df_enc", len(df_enc))
 
@@ -3542,13 +3594,12 @@ class SortPose:
 
 
 
-
     def set_nose_pixel_pos(self,body_landmarks,shape):
         # body_landmarks = self.ensure_lms_list(body_landmarks)  # Ensure body_landmarks is a list
         # if body_landmarks is pickled, unpickle it
         if type(body_landmarks)==bytes:
             body_landmarks=pickle.loads(body_landmarks)
-        if self.VERBOSE: print("set_nose_pixel_pos body_landmarks")
+        if self.VERBOSE: print("set_nose_pixel_pos: body_landmarks type", type(body_landmarks))
         height,width = shape[:2]
         if self.VERBOSE: print("set_nose_pixel_pos bodylms height, width", height, width)
         nose_pixel_pos ={
@@ -3556,6 +3607,13 @@ class SortPose:
             "y":0,
             "visibility":0
         }
+        # Handle different body_landmarks formats
+        if isinstance(body_landmarks, list):
+            # New format: list of NormalizedLandmark objects
+            if self.VERBOSE: print("set_nose_pixel_pos: body_landmarks is a list, converting to protobuf format")            
+            # Convert list to landmark_pb2.NormalizedLandmarkList
+            body_landmarks = self.convert_new_mp_to_old_format(body_landmarks)
+
         # nose_pixel_pos <- 864, 442 (stay as a separate variable)
         # nose_normalized_pos 0,0
         # nose_pos=body_landmarks.landmark[NOSE_ID]
@@ -3567,9 +3625,22 @@ class SortPose:
         if self.VERBOSE: print("set_nose_pixel_pos nose_pixel_pos",nose_pixel_pos)
         if self.VERBOSE: print("set_nose_pixel_pos self.nose_2d",self.nose_2d)
         nose_pixel_pos["visibility"]+=body_landmarks.landmark[0].visibility
-        # nose_3d has visibility
+        # nose_3d has visibility 
         self.nose_3d = nose_pixel_pos
         return nose_pixel_pos
+
+    def convert_new_mp_to_old_format(self, body_landmarks):
+        converted_landmark_list = landmark_pb2.NormalizedLandmarkList()
+        for lm in body_landmarks:
+            new_lm = landmark_pb2.NormalizedLandmark(
+                    x=lm.x, 
+                    y=lm.y, 
+                    z=lm.z, 
+                    visibility=lm.visibility, 
+                    presence=lm.presence
+                )
+            converted_landmark_list.landmark.append(new_lm)
+        return converted_landmark_list
 
     # # YOLO MOVED    
     # def normalize_phone_bbox(self,phone_bbox,nose_pos,face_height,shape):
@@ -3791,6 +3862,43 @@ class SortPose:
                 right_hand_world_landmarks = hand_results['right_hand'].get('world_landmarks', [])
                 hand_landmarks = hand_results['right_hand'].get('hand_landmarks_norm', [])
         return left_hand_landmarks, left_hand_world_landmarks, left_hand_landmarks_norm, right_hand_landmarks, right_hand_world_landmarks, hand_landmarks
+
+    def prep_knuckle_landmarks(self, hand_results):  
+        left_pointer_knuckle_norm = right_pointer_knuckle_norm = []
+        if hand_results:
+            if 'left_hand' in hand_results:
+                try:
+                    left_hand_landmarks_norm = hand_results['left_hand'].get('hand_landmarks_norm', [])
+                    if len(left_hand_landmarks_norm) > 5:
+                        left_pointer_knuckle_norm = left_hand_landmarks_norm[5]  # 5th landmark (index 5), x,y,z
+                    else:
+                        print(f"⚠️  Warning: left_hand_landmarks_norm has insufficient length ({len(left_hand_landmarks_norm)}), expected > 5. Setting default.")
+                        print(f"    Data: {left_hand_landmarks_norm}")
+                        left_pointer_knuckle_norm = [0.0, 8.0, 0.0]
+                except (IndexError, TypeError) as e:
+                    print(f"⚠️  Error accessing left_hand landmark[5]: {e}")
+                    print(f"    hand_results['left_hand']: {hand_results['left_hand']}")
+                    left_pointer_knuckle_norm = [0.0, 8.0, 0.0]
+            else:
+                left_pointer_knuckle_norm = [0.0, 8.0, 0.0]
+            # print("left_pointer_knuckle_norm", left_pointer_knuckle_norm)
+            if 'right_hand' in hand_results:
+                try:
+                    hand_landmarks = hand_results['right_hand'].get('hand_landmarks_norm', [])
+                    if len(hand_landmarks) > 5:
+                        right_pointer_knuckle_norm = hand_landmarks[5]  # 5th landmark (index 5), x,y,z
+                    else:
+                        print(f"⚠️  Warning: right_hand_landmarks_norm has insufficient length ({len(hand_landmarks)}), expected > 5. Setting default.")
+                        print(f"    Data: {hand_landmarks}")
+                        right_pointer_knuckle_norm = [0.0, 8.0, 0.0]
+                except (IndexError, TypeError) as e:
+                    print(f"⚠️  Error accessing right_hand landmark[5]: {e}")
+                    print(f"    hand_results['right_hand']: {hand_results['right_hand']}")
+                    right_pointer_knuckle_norm = [0.0, 8.0, 0.0]
+            else:
+                right_pointer_knuckle_norm = [0.0, 8.0, 0.0]
+            # print("right_pointer_knuckle_norm", right_pointer_knuckle_norm)
+        return left_pointer_knuckle_norm, right_pointer_knuckle_norm
 
     def prep_hsv(self, hue):
         if hue is not None:

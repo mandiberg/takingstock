@@ -218,6 +218,19 @@ class YOLOTools:
             return bbox_dict
 
         else:
+            # results = model(image)
+
+            # # Show results
+            # results[0].show()
+
+            # # Or get detailed info
+            # for r in results:
+            #     boxes = r.boxes
+            #     for box in boxes:
+            #         cls = int(box.cls[0])
+            #         conf = float(box.conf[0])
+            #         print(f"Class: {r.names[cls]}, Confidence: {conf:.2f}")
+
             # the new way - allowing multiple objects per class
             result = model.predict(
                         image,
@@ -227,7 +240,9 @@ class YOLOTools:
                     )[0]        
             # Group detections by class_id and assign obj_no
             detections_by_class = {}
+            # print("YOLO detection results:", result)
             for box in result.boxes:
+                # print("box info:", box)
                 obj_cls_id = int(box.cls[0].item())
                 bbox = box.xyxy[0].tolist()  # [x1, y1, x2, y2]
                 bbox_dict = {
@@ -237,7 +252,7 @@ class YOLOTools:
                     "bottom": round(bbox[3])
                 }
                 conf = round(box.conf[0].item(), 2)
-                
+                # print(f"Detected class_id {obj_cls_id} with conf {conf} and bbox {bbox_dict}")
                 if obj_cls_id not in detections_by_class:
                     detections_by_class[obj_cls_id] = []
                 
@@ -245,7 +260,7 @@ class YOLOTools:
                     "bbox": bbox_dict,
                     "conf": conf
                 })
-            
+            # print("Detections by class (before obj_no assignment):", detections_by_class)
             # Build final list with obj_no assigned per class
             detections_list = []
             for class_id, class_detections in detections_by_class.items():
@@ -494,3 +509,140 @@ class YOLOTools:
             refined_results.append(merged_bbox)
         
         return refined_results
+
+    def find_valentine_bbox(self, bbox, img, RED_THRESH=200, RED_DOM=150, use_average_per_row=True):
+        """
+        Finds a bounding box tightly enclosing the contiguous red band, using the x values of the bbox to determine the column to check.
+        Searches the full image height (not restricted to bbox's y range), matching is_valentine's behavior.
+
+        Args:
+            bbox: Dictionary with keys 'left', 'top', 'right', 'bottom' of bounding box coordinates
+            img: Image array
+            use_average_per_row: If True, uses average channel values per row. If False, uses pixel-by-pixel detection.
+
+        Returns a tuple (x1, y1_new, x2, y2_new) where y1_new and y2_new correspond to the red region.
+        Returns None if no suitable red area is found.
+        """
+        print("Finding valentine bbox within:", bbox, type(bbox))
+        x1 = bbox['left']
+        y1 = bbox['top']
+        x2 = bbox['right']
+        y2 = bbox['bottom']
+
+        height, width, channels = img.shape
+        x1c = max(int(round(x1)), 0)
+        x2c = min(int(round(x2)), width)
+        # Calculate bbox width for padding
+        bbox_width = x2c - x1c
+        # Pad by one bbox width on either side
+        x1c_padded = max(x1c - bbox_width, 0)
+        x2c_padded = min(x2c + bbox_width, width)
+        # Extract the vertical band using x values from bbox, but search full image height
+        patch = img[:, x1c_padded:x2c_padded, :]
+
+        # Thresholds for valentine-red
+        # Note: OpenCV uses BGR format, so channel 2 is red, channel 1 is green, channel 0 is blue
+
+
+        # Convert to int to prevent uint8 overflow when subtracting
+        red_channel = patch[..., 2].astype(np.int16)
+        green_channel = patch[..., 1].astype(np.int16)
+        blue_channel = patch[..., 0].astype(np.int16)
+        
+        if use_average_per_row:
+            # Average method: compute mean channel values per row
+            mean_red_per_row = red_channel.mean(axis=1)  # shape (patch_height,)
+            mean_green_per_row = green_channel.mean(axis=1)  # shape (patch_height,)
+            mean_blue_per_row = blue_channel.mean(axis=1)  # shape (patch_height,)
+            # Check if row averages meet the red dominance criteria
+            red_per_row = (
+                (mean_red_per_row >= RED_THRESH) &
+                (mean_red_per_row - mean_green_per_row > RED_DOM) &
+                (mean_red_per_row - mean_blue_per_row > RED_DOM)
+            )
+        else:
+            # Pixel-by-pixel method: check each pixel individually
+            red_mask = (
+                (red_channel >= RED_THRESH) &
+                (red_channel - green_channel > RED_DOM) &
+                (red_channel - blue_channel > RED_DOM)
+            )
+            # Combine horizontally -- any pixel in row counts as "red row"
+            red_per_row = red_mask.any(axis=1)  # shape (patch_height,)
+
+        # Find start and end of largest contiguous span of True
+        max_len = 0
+        max_start = None
+        max_end = None
+        curr_start = None
+        curr_len = 0
+        for idx, is_red in enumerate(red_per_row):
+            if is_red:
+                if curr_start is None:
+                    curr_start = idx
+                curr_len += 1
+            else:
+                if curr_len > max_len:
+                    max_len = curr_len
+                    max_start = curr_start
+                    max_end = curr_start + curr_len
+                curr_start = None
+                curr_len = 0
+        # Handle the case where the max run is at the end
+        if curr_len > max_len:
+            max_len = curr_len
+            max_start = curr_start
+            max_end = curr_start + curr_len
+
+        if max_len == 0 or max_start is None:  # No red detected
+            return None
+
+        # max_start and max_end are already in image coordinates (0 to height-1)
+        y1_red = max_start
+        y2_red = max_end
+
+        # Tighten horizontally: find columns with red pixels in the largest red span (rows max_start:max_end)
+        # Get the relevant subpatch
+        relevant_patch = patch[max_start:max_end, :, :]
+
+        # Recompute red detection for the relevant_patch (may be redundant, but ensures correctness)
+        # Note: OpenCV uses BGR format, so channel 2 is red, channel 1 is green, channel 0 is blue
+        # Convert to int to prevent uint8 overflow when subtracting
+        relevant_red_channel = relevant_patch[..., 2].astype(np.int16)
+        relevant_green_channel = relevant_patch[..., 1].astype(np.int16)
+        relevant_blue_channel = relevant_patch[..., 0].astype(np.int16)
+        
+        if use_average_per_row:
+            # Average method: compute mean channel values per column
+            mean_red_per_col = relevant_red_channel.mean(axis=0)  # shape (patch_width,)
+            mean_green_per_col = relevant_green_channel.mean(axis=0)  # shape (patch_width,)
+            mean_blue_per_col = relevant_blue_channel.mean(axis=0)  # shape (patch_width,)
+            # Check if column averages meet the red dominance criteria
+            red_per_col = (
+                (mean_red_per_col >= RED_THRESH) &
+                (mean_red_per_col - mean_green_per_col > RED_DOM) &
+                (mean_red_per_col - mean_blue_per_col > RED_DOM)
+            )
+        else:
+            # Pixel-by-pixel method: check each pixel individually
+            relevant_red_mask = (
+                (relevant_red_channel >= RED_THRESH) &
+                (relevant_red_channel - relevant_green_channel > RED_DOM) &
+                (relevant_red_channel - relevant_blue_channel > RED_DOM)
+            )
+            red_per_col = relevant_red_mask.any(axis=0)  # shape (patch_width,)
+
+        # Find the leftmost and rightmost columns containing at least one red pixel
+        red_cols = red_per_col.nonzero()[0]
+        if len(red_cols) == 0:
+            # Should not happen if vertical band is red, but just in case
+            return (x1, y1_red, x2, y2_red)
+        x1_rel = red_cols[0]
+        x2_rel = red_cols[-1] + 1  # upper bound exclusive
+
+        x1_red = x1c_padded + x1_rel
+        x2_red = x1c_padded + x2_rel
+
+        # Convert back to float coordinates for output, but you may want to round or keep as ints depending on convention
+        return (x1_red, y1_red, x2_red, y2_red)
+

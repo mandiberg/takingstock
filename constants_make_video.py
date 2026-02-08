@@ -17,10 +17,11 @@ CLUSTER_MAP = {
     "body3D": ["BodyPoses3D", "HandsGestures"],
     "ArmsPoses3D": ["ArmsPoses3D", None],
     "obj_bbox": ["ArmsPoses3D", None],
+    "obj_bbox_fusion": ["ObjectFusion", None],
 }
 
 
-OBJ_DICT = {22411:67,1991:63}
+OBJ_DICT = {22411:67,1991:63, 80:80}
 
 POSE_CROP_DICT = {
     0: 11, 1: 1, 2: 5, 3: 2, 4: 9, 5: 7, 6: 2, 7: 5, 8: 9, 9: 8, 10: 3, 11: 1, 12: 5, 13: 1, 14: 0,
@@ -30,6 +31,7 @@ POSE_CROP_DICT = {
 # 9 includes standing. 
 
 MULTIPLIER_LIST = [
+    # [top,right,bottom,left]
     [1.5,3,3.3,3], # 0 2x3 but go lower
     [1.3,1.85,2.4,1.85], # 1 SQ
     [1.5,3,2.5,3], # 2 # 2x3 landscape 2025
@@ -49,26 +51,156 @@ MULTIPLIER_LIST = [
     [3,4.5,6,4.5], # 16 extra big SQ (SQ flag pose)
     [1.6,3.5,3,3.5], # 17 regular 9x16 landscape (regular Miami vids)  
     [1.6,2.35,2.9,2.35], # 18 slightly bigger SQ
-    [1.4,2.55,3.1,2.15], # 19 slightly bigger SQ
+    [1.4,2.55,3.1,2.15], # 19 slightly bigger SQ shift RIGHT
     [2.2,2.5,4,3.9], # 20 selfie shift LEFT - arm out)
+    [1.6,2.1,2.6,2.1], # 21 SM-Medium SQ (for wider arms)
+    [1.4,2.2,3,2.2], # 22 Medium SQ (lower)
+    [1.5,2,2.9,2.4], # 23 Medium SQ (left)
+    [1.5,2.4,2.9,2], # 24 Medium SQ (right)
+
 ]
 
 CLUSTER_CROP_DICT = {
     "ArmsPoses3D":{
-        # holding flags,
-        # 285:2, 332:2, 408:2 #for512
-        57:13, 95:14, 185:15, 186:15,
-        237:20,
-        # phones:
-        59:1, 84:1, 85:1, 101:18, 203:19, 208:16,
-        # money:
-        218:18, 168:1,0:18
+        0:23 ,
+        1:1 ,
+        2:1 ,
+        3:22 ,
+        4:11 ,
+        5:11 ,
+        6:23 ,
+        7:11 ,
+        8:11 ,
+        9:11 ,
+        10:21 ,
+        11:11 ,
+        12:11 ,
+        13:21 ,
+        14:11 ,
+        15:1 ,
+        16:24 ,
+        17:11 ,
+        18:1 ,
+        19:11 ,
+        20:24 ,
+        21:11 ,
+        22:11 ,
+        23:21 ,
+        24:23 ,
+        25:11 ,
+        26:11 ,
+        27:11 ,
+        28:1 ,
+        29:11 ,
+        30:1 ,
+        31:22 ,
+        32:22 ,
+        33:1 ,
+        34:24 ,
+        35:11 ,
+        36:1 ,
+        37:22 ,
+        38:23 ,
+        39:11 ,
+        40:21 ,
+        41:21 ,
+        42:22 ,
+        43:11 ,
+        44:22 ,
+        45:23 ,
+        46:11 ,
+        47:22 ,
+        48:22 ,
+        49:11 ,
+        50:1 ,
+        51:11 ,
+        52:11 ,
+        53:11 ,
+        54:11 ,
+        55:11 ,
+        56:11 ,
+        57:23 ,
+        58:16 ,
+        59:22  ,
+        60:24 ,
+        61:23 ,
+        62:11 ,
+        63:11 ,
+        64:1 ,
+        65:11 ,
+        66:23 ,
+        67:11 ,
+        68:11 ,
+        69:11 ,
+        70:1 ,
+        71:11 ,
+        72:11 ,
+        73:24 ,
+        74:11 ,
+        75:23 ,
+        76:22 ,
+        77:11 ,
+        78:11 ,
+        79:22 ,
+        80:11 ,
+        81:11 ,
+        82:11 ,
+        83:24 ,
+        84:23 ,
+        85:1 ,
+        86:11 ,
+        87:11 ,
+        88:24 ,
+        89:22 ,
+        90:11 ,
+        91:22 ,
+        92:11 ,
+        93:11 ,
+        94:22 ,
+        95:11 ,
+        96:24 ,
+        97:11 ,
+        98:11 ,
+        99:21 ,
+        100:1 ,
+        101:11 ,
+        102:11 ,
+        103:21 ,
+        104:22 ,
+        105:23 ,
+        106:22 ,
+        107:11 ,
+        108:11 ,
+        109:11 ,
+        110:24 ,
+        111:21 ,
+        112:11 ,
+        113:23 ,
+        114:11 ,
+        115:24 ,
+        116:21 ,
+        117:11 ,
+        118:23 ,
+        119:24 ,
+        120:11 ,
+        121:24 ,
+        122:11 ,
+        123:11 ,
+        124:24 ,
+        125:1 ,
+        126:23  ,
+        127:21
 
+
+        # # holding flags,
+        # # 285:2, 332:2, 408:2 #for512
+        # 57:13, 95:14, 185:15, 186:15,
+        # 237:20,
+        # # phones:
+        # 59:1, 84:1, 85:1, 101:18, 203:19, 208:16,
+        # # money:
+        # 218:18, 168:1,0:18
         # 22412:[41,116,154,202, 239, 246,293,299,370,410,411,440,443,445,501]
-    },
-}
-CLUSTER_CROP_DICT = {
-    "ArmsPoses3D":{
     }
 }
 
@@ -101,8 +233,14 @@ FOCUS_CLUSTER_DICT = {
         22411: [59],
     },
     "ArmsPoses3D":{
+        # books
+        73:[3,5,42,44,48,50,63,76,81,84,94,100,109,125,126,127],
+        # clock
+        74:[i for i in range(128)],
+
         # signs
-        80:[127],
+        # all of them for the moment
+        80:[i for i in range(128)],
 
         # 22411: [59, 84, 85, 101, 185, 203, 208, 237],
         22411: [59, 203], #MUD
@@ -139,9 +277,14 @@ KEYWORD_DICT = {
     4222: {"label":"placard", "OR":[184,4587], "AND":[8874, 8136,133787,22814,4587,133627], "NOT":[]},
     23375: {"label":"placard-ambig", "OR":[], "AND":[], "NOT":[]},
     73: {"label":"book", "OR":[], "AND":[], "NOT":[]},
+    80: {"label":"book", "OR":[], "AND":[], "NOT":[]},
 }
 
 
+FUSION_PAIR_DICT_DETECTIONS_ARMS3D128 = {
+    80: [[103, 0]],
+    90: [[7, 0], [9,0], [20, 0], [23,0], [26, 0], [30,0],[31,0],[32,0], [40,0], [45,0], [48,0], [50,0], [54,0], [59,0], [103,0], [127,0]],
+}
 FUSION_PAIR_DICT_TOPICS_64 = {
     # 32: [[13, 109], [13, 24], [13, 85]],
     63: [[16, 21]]
@@ -185,11 +328,18 @@ ALL_FUSION_PAIRS_DICTS = {
     "FUSION_PAIR_DICT_KEYWORDS_512": FUSION_PAIR_DICT_KEYWORDS_512,
     "FUSION_PAIR_DICT_KEYWORDS_768": FUSION_PAIR_DICT_KEYWORDS_768,
     "FUSION_PAIR_DICT_KEYWORDS_768_META128": FUSION_PAIR_DICT_KEYWORDS_768_META128,
+    "FUSION_PAIR_DICT_DETECTIONS_ARMS3D128": FUSION_PAIR_DICT_DETECTIONS_ARMS3D128,
     "FUSION_PAIR_DICT_3DBODIES_TOPICS_512": FUSION_PAIR_DICT_3DBODIES_TOPICS_512,
     }
 
 
+ID_SEGMENT_DICT = {45: "45_salad", 67: "67_phone", 73: "73_book", 74: "74_clock", 80: "80_sign", 81: "81_gift", 82: "82_money", 83: "83_bag", 84: "84_valentine", 85: "85_salad", 86: "86_dumbbell", 87: "87_flag", 88: "83_bag", 89: "89_mask", 90: "90_stethoscope", 91: "91_gun", 92: "92_headphones", 93: "93_clipboard", 94: "94_piggybank", 95: "82_money", 96: "96_bitcoin", 97: "97_rose", 98: "98_lily", 99: "99_iris", 100: "100_tulip", 101: "101_lisianthus", 102: "102_orchid", 103: "103_peony"}
+ID_SSD_DICT = {45: "OWC5", 67: "SSD4_Green", 73: "OWC5", 74: "OWC5", 80: "OWC52", 81: "OWC52", 82: "LaCie", 83: "LaCie", 84: "LaCie", 85: "85_salad", 86: "OWC52", 87: "87_flag", 88: "LaCie", 89: "LaCie", 90: "90_stethoscope", 91: "91_gun", 92: "92_headphones", 93: "93_clipboard", 94: "LaCie", 95: "LaCie", 96: "LaCie", 97: "LaCie", 98: "LaCie", 99: "LaCie", 100: "LaCie", 101: "LaCie", 102: "LaCie", 103: "LaCie"}
+ID_FOLDER_DICT = {45: "book_clock_bowl", 67: "detected_63_67", 73: "book_clock_bowl", 74: "book_clock_bowl", 82: "82_money_cards", 95:"82_money_cards"}
+ID_CUTOFF_DICT = {45: 800, 67: 200, 73: 3000, 74: 200, 80: 400, 81: 2000, 82: 800, 83: 800, 84: 400, 85: 800, 86: 800, 87: 200, 88: 400, 89: 400, 90: 2000, 91: 200, 92: 800, 93: 800, 94: 400, 95: 400, 96: 200, 97: 400, 98: 400, 99: 400, 100: 400, 101: 400, 102: 400, 103: 400}
 
+# detected_63_67
+# 67_phone_undetected
 
 #############################################################################
 #                   THINGS I DON'T CHANGE VERY MUCH                         #
@@ -197,13 +347,14 @@ ALL_FUSION_PAIRS_DICTS = {
 
 # declare all the globals as None in one line
 N_CLUSTERS = N_HANDS = SORT_TYPE = FULL_BODY = IS_HAND_POSE_FUSION = ONLY_ONE = GENERATE_FUSION_PAIRS = MIN_VIDEO_FUSION_COUNT = FUSION_PAIR_DICT = IS_CLUSTER = IS_ONE_CLUSTER = CLUSTER_NO = START_CLUSTER = USE_POSE_CROP_DICT = IS_SEGONLY = HSV_CONTROL = VISIBLE_HAND_LEFT = VISIBLE_HAND_RIGHT = USE_NOSEBRIDGE = LIMIT = MIN_CYCLE_COUNT = IS_HANDS = IS_ONE_HAND = NO_KIDS = ONLY_KIDS = USE_PAINTED = OUTPAINT =  INPAINT_COLOR= INPAINT_MAX_SHOULDERS= OUTPAINT_MAX= BLUR_THRESH_MAX= BLUR_THRESH_MIN= BLUR_RADIUS= MASK_OFFSET= VERBOSE= CALIBRATING= SAVE_IMG_PROCESS= IS_ANGLE_SORT= IS_TOPICS= N_TOPICS= IS_ONE_TOPIC= TOPIC_NO= NEG_TOPICS= POS_TOPICS= NEUTRAL_TOPICS= AFFECT_GROUPS_LISTS= USE_AFFECT_GROUPS= None
-N_HSV = HAND_POSE_NO = 0 # defaults to no HSV clusters
+OBJ_KEYWORD_CUTOFF = SUBSELECT_ON_CLASS_ID = N_HSV = HAND_POSE_NO = 0 # defaults to no HSV clusters
 # set defaults, including for all modes to False
 FULL_BODY = IS_HAND_POSE_FUSION = ONLY_ONE = GENERATE_FUSION_PAIRS = USE_FUSION_PAIR_DICT = IS_CLUSTER = IS_ONE_CLUSTER = USE_POSE_CROP_DICT = IS_TOPICS= IS_ONE_TOPIC = USE_AFFECT_GROUPS = False
 EXPAND = ONE_SHOT = JUMP_SHOT = USE_ALL = CHOP_FIRST = TSP_SORT = USE_HEAD_POSE = False
 USE_PAINTED = OUTPAINT = INPAINT= META = USE_HSV = PURGING_DUPES = DO_HSV_KNN = CHOP_ITTER_TSP_SORT = False
 FUSION_FOLDER = FOCUS_CLUSTER_HACK_LIST = FORCE_TARGET_COUNT = KEYWORD_OBJECT = KEYWORD_ORIENTATION = None
 
+OBJ_DONT_SUBSELECT = True
 MIN_CYCLE_COUNT = 1
 AUTO_EDGE_CROP = False # this triggers the dynamic cropping based on min_max_body_landmarks_for_crop
 

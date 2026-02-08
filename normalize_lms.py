@@ -1,5 +1,6 @@
 #################################
 
+import sys
 from sqlalchemy import create_engine, text,func, select, delete, and_, or_
 from sqlalchemy.orm import sessionmaker,scoped_session, declarative_base
 from sqlalchemy.pool import NullPool
@@ -26,13 +27,16 @@ from pymediainfo import MediaInfo
 import traceback 
 import time
 import math
+import cv2
+from sqlalchemy import Column, Integer, ForeignKey
+from constants_make_video import *
 
 NOSE_ID=0
 
 
 Base = declarative_base()
 VERBOSE = True
-IS_SSD = False
+IS_SSD = True
 
 SKIP_EXISTING = False # Skips images with a normed bbox but that have Images.h - I think only applies to phone bbox
 USE_OBJ = True # do objet detections?
@@ -41,6 +45,27 @@ SKIP_BODY = True # skip body landmarks. mostly you want to skip when doing obj b
 REPROCESS_HANDS = False # do hands
 IS_SEGMENT_BIG = False # use SegmentBig table. IF False, and IS_SSD is false, it will use Encodings table
 
+LIMIT= 6000000
+# Initialize the counter
+counter = 2000
+
+THIS_CLASS_ID = 67 # for object bbox normalization
+class_token = ID_SEGMENT_DICT.get(THIS_CLASS_ID, None)
+ssd = ID_SSD_DICT.get(THIS_CLASS_ID, None)
+if THIS_CLASS_ID in ID_FOLDER_DICT: folder_token = ID_FOLDER_DICT[THIS_CLASS_ID]
+else: folder_token = class_token 
+# SegmentTable_name = 'SegmentOct20'
+SegmentTable_name = 'SegmentBig_isface'
+if class_token:
+    SegmentHelper_name = f'SegmentHelperObject_{class_token}' # TK revisit this for prodution run
+    SegmentFolder = f"/Volumes/{ssd}/segment_images_{folder_token}"
+    print("SegmentFolder", SegmentFolder)
+    # SORT_TYPE = "obj_bbox_fusion"
+else: 
+    SegmentHelper_name = 'SegmentHelperObject_45_salad'
+    # SegmentHelper_name = 'SegmentHelperObject_80_sign'
+    # THIS_CLASS_ID = 80 # for object bbox normalization
+    SegmentFolder = "/Volumes/OWC5/segment_images"
 io = DataIO(IS_SSD)
 db = io.db
 # io.db["name"] = "stock"
@@ -119,19 +144,22 @@ sort = SortPose(config=cfg)
 # Create a session
 session = scoped_session(sessionmaker(bind=engine))
 
-LIMIT= 20
-# Initialize the counter
-counter = 2000
 
 # Number of threads
 #num_threads = io.NUMBER_OF_PROCESSES
 num_threads = 1
 
+# define SegmentHelper 
+
+class SegmentHelper(Base):
+    __tablename__ = SegmentHelper_name
+    seg_image_id = Column(Integer, primary_key=True, autoincrement=True)
+    image_id = Column(Integer, ForeignKey('Images.image_id'))
+
+
 if VERBOSE: print("objects created")
 
 
-import cv2
-from sqlalchemy import Column, Integer, ForeignKey
 
 def get_shape(target_image_id):
     ## get the image somehow
@@ -142,7 +170,7 @@ def get_shape(target_image_id):
             select(SegmentBig.site_name_id, SegmentBig.imagename)
             .filter(SegmentBig.image_id == target_image_id)
         )
-    elif not IS_SEGMENT_BIG and not IS_SSD:
+    elif (not IS_SEGMENT_BIG and not IS_SSD) or (SegmentHelper_name is not None):
         # use images table
         select_image_ids_query = (
             select(Images.site_name_id, Images.imagename)
@@ -155,14 +183,20 @@ def get_shape(target_image_id):
         )
     
     result = session.execute(select_image_ids_query).fetchall()
+    print("result", result)
     site_name_id, imagename = result[0]
     site_specific_root_folder = io.folder_list[site_name_id]
-    file = site_specific_root_folder + "/" + imagename  # os.path.join acting weird, so avoided
+    if SegmentHelper_name is not None and IS_SSD and SegmentFolder is not None:
+        file = os.path.join(SegmentFolder, os.path.basename(site_specific_root_folder), imagename)
+        print("using SegmentHelper_name for path with SegmentFolder", file)
+    else:
+        file = site_specific_root_folder + "/" + imagename  # os.path.join acting weird, so avoided
+        print("using acting weird path", file)
     if VERBOSE: print("get_shape file", file)
 
     try:
         if io.platform == "darwin":
-            media_info = MediaInfo.parse(file, library_file="/opt/homebrew/Cellar/libmediainfo/24.06/lib/libmediainfo.dylib")
+            media_info = MediaInfo.parse(file, library_file="/opt/homebrew/opt/libmediainfo/lib/libmediainfo.dylib")
             if VERBOSE: print("darwin got media_info")
         else:
             media_info = MediaInfo.parse(file)
@@ -199,8 +233,8 @@ def get_shape(target_image_id):
 
 def normalize_obj_bbox(obj_bbox,nose_pos,face_height,shape):
     height,width = shape[:2]
-    print("obj_bbox",obj_bbox)
-    n_obj_bbox=obj_bbox
+    print("obj_bbox type",type(obj_bbox))
+    n_obj_bbox=io.unstring_json(obj_bbox)
     n_obj_bbox["right"]=(n_obj_bbox["right"] -nose_pos["x"])/face_height
     n_obj_bbox["left"]=(n_obj_bbox["left"] -nose_pos["x"])/face_height
     n_obj_bbox["top"]=(n_obj_bbox["top"] -nose_pos["y"])/face_height
@@ -211,7 +245,7 @@ def normalize_obj_bbox(obj_bbox,nose_pos,face_height,shape):
     # n_obj_bbox["bottom"]=(n_obj_bbox["bottom"]*height -nose_pos["y"])/face_height
     print("n_obj_bbox",n_obj_bbox)
 
-    return n_phone_bbox
+    return n_obj_bbox
 
 def get_landmarks_mongo(image_id):
     if image_id:
@@ -269,28 +303,31 @@ def insert_n_phone_bbox(image_id,n_phone_bbox):
     # x = n_phonebbox_collection.insert_one(nlms_dict)
     # print("inserted id",x.inserted_id)
     # return
+    from sqlalchemy import cast, JSON as JSON_TYPE
     phone_bbox_norm_entry = (
         session.query(PhoneBbox)
         .filter(PhoneBbox.image_id == image_id)
         .first()
     )    
     if phone_bbox_norm_entry:
-        phone_bbox_norm_entry.bbox_26_norm = json.dumps(n_phone_bbox)
+        phone_bbox_norm_entry.bbox_26_norm = cast(json.dumps(n_phone_bbox), JSON_TYPE)
         if VERBOSE:
             print("image_id:", PhoneBbox.image_id,"bbox_26_norm:", phone_bbox_norm_entry.bbox_26_norm)
     session.commit()
 
-def insert_detections_norm_bbox(image_id,n_bbox):
+def insert_detections_norm_bbox(detection_id, n_bbox):
     detections_bbox_norm_entry = (
         session.query(Detections)
-        .filter(Detections.image_id == image_id)
+        .filter(Detections.detection_id == detection_id)
         .first()
     )    
     if detections_bbox_norm_entry:
-        detections_bbox_norm_entry.bbox_norm = json.dumps(n_bbox)
+        # Pass the dict directly - SQLAlchemy will handle JSON serialization
+        detections_bbox_norm_entry.bbox_norm = n_bbox
         if VERBOSE:
-            print("image_id:", Detections.image_id,"bbox_norm:", detections_bbox_norm_entry.bbox_norm)
+            print("detection_id:", detection_id, "bbox_norm:", detections_bbox_norm_entry.bbox_norm)
     session.commit()
+
 
 def unpickle_array(pickled_array):
     if pickled_array:
@@ -365,10 +402,25 @@ def insert_shape(target_image_id,shape):
     return
 
 def get_obj_bbox(target_image_id):
-    select_image_ids_query = (
-        select(Detections.detection_id, Detections.bbox)
-        .filter(Detections.image_id == target_image_id, Detections.bbox_norm.is_(None))
+    predicate = text("""
+    (
+    bbox_norm IS NULL
+    OR NOT (
+        JSON_EXTRACT(bbox_norm, '$.left') IS NOT NULL
+        OR (
+        JSON_TYPE(bbox_norm) = 'STRING'
+        AND JSON_VALID(CAST(JSON_UNQUOTE(bbox_norm) AS JSON)) = 1
+        AND JSON_EXTRACT(CAST(JSON_UNQUOTE(bbox_norm) AS JSON), '$.left') IS NOT NULL
+        )
     )
+    )
+    """)
+    select_image_ids_query = (
+        select(Detections.detection_id, Detections.bbox, Detections.class_id, Detections.conf)
+        .filter(and_(Detections.image_id == target_image_id))
+        .filter(predicate)
+    )
+    
     result = session.execute(select_image_ids_query).fetchall()
     return result
 
@@ -423,11 +475,15 @@ def calc_nlm(image_id_to_shape, lock, session):
     if sort.VERBOSE: print("nose_pixel_pos from face",nose_pixel_pos_face)
     # only do this if the io.get_encodings_mongo didn't return the body landmarks
     if not body_landmarks: body_landmarks=get_landmarks_mongo(target_image_id)
-    # print("body_landmarks",type(body_landmarks))
-    if body_landmarks:
+    print("body_landmarks",type(body_landmarks), " first few lms:", body_landmarks[:5] if body_landmarks else "None")
+    if body_landmarks and type(body_landmarks) == bytes:
         nose_pixel_pos_body_withviz = sort.set_nose_pixel_pos(body_landmarks,[height,width])
+        # exit the whole script
+        print(" ✅ ✅ ✅ Converted and saved lms, with nose pixel", nose_pixel_pos_body_withviz)
+        # sys.exit(0)
+
     else:
-        print("BODY LANDMARK NOT FOUND 404, bailing for this one ", target_image_id)
+        print(" ❌ BODY LANDMARK NOT FOUND 404, bailing for this one ", target_image_id)
         return
         nose_pixel_pos_body_withviz = nose_pixel_pos_face
     if sort.VERBOSE: print("nose_pixel_pos from body",nose_pixel_pos_body_withviz)
@@ -571,16 +627,19 @@ def calc_nlm(image_id_to_shape, lock, session):
         elif USE_OBJ: 
             obj_results = get_obj_bbox(target_image_id)
             # itterate through the obj_results
-            for detection_id, obj_bbox in obj_results:
-                if obj_bbox:
-                    n_obj_bbox=sort.normalize_obj_bbox(obj_bbox,nose_pixel_pos_body,face_height,[height,width])
+            print("obj_results",obj_results)
+            for detection_id, obj_bbox, class_id, conf in obj_results:
+                if obj_bbox and (obj_bbox != 'null' or conf > 0):
+                    print("going to normalize obj_bbox",obj_bbox)
+                    n_obj_bbox=normalize_obj_bbox(obj_bbox,nose_pixel_pos_body,face_height,[height,width])
+                    # temp comment
                     insert_detections_norm_bbox(detection_id,n_obj_bbox)
                 else:
                     print("PHONE BBOX NOT FOUND 404", target_image_id)
 
             # phone_bbox=get_phone_bbox(target_image_id)
             # if phone_bbox:
-            #     n_phone_bbox=sort.normalize_obj_bbox(phone_bbox,nose_pixel_pos_body,face_height,[height,width])
+            #     n_phone_bbox=normalize_obj_bbox(phone_bbox,nose_pixel_pos_body,face_height,[height,width])
             #     insert_detections_norm_bbox(target_image_id,n_phone_bbox)
             # else:
             #     print("PHONE BBOX NOT FOUND 404", target_image_id)
@@ -597,6 +656,7 @@ def calc_nlm(image_id_to_shape, lock, session):
         # Increment the counter using the lock to ensure thread safety
         global counter
         counter -= 1
+        # temp comment
         session.commit()
     if counter % 100 == 0:
         print(f"This many left: {counter}")
@@ -628,16 +688,47 @@ function=calc_nlm
 
 # new way, with detections
 if USE_OBJ:
-    distinct_image_ids_query = select(Images.image_id.distinct(), Images.h, Images.w, SegmentTable.bbox).\
-        outerjoin(SegmentTable,Images.image_id == SegmentTable.image_id).\
-        outerjoin(Detections,Detections.image_id == SegmentTable.image_id).\
-        filter(SegmentTable.bbox != None).\
-        filter(SegmentTable.two_noses.is_(None)).\
-        filter(SegmentTable.mongo_body_landmarks == 1).\
-        filter(Detections.bbox != None).\
-        filter(Detections.bbox_norm == None).\
-        filter(Detections.conf != -1).\
-        limit(LIMIT)
+
+
+    print("doing OBJ using Detections")
+    predicate_text = """
+        (
+            bbox_norm IS NULL
+            OR JSON_EXTRACT(bbox_norm, '$.left') IS NULL
+        )
+        """
+
+    # distinct_image_ids_query = select(Detections.detection_id, Detections.bbox, Detections.class_id, Detections.conf).filter(text(predicate_text))
+
+    distinct_image_ids_query = select(
+        Images.image_id.distinct(), 
+        Images.h, 
+        Images.w, 
+        Encodings.bbox
+    ).select_from(Detections).\
+    join(SegmentHelper, SegmentHelper.image_id == Detections.image_id).\
+    join(Encodings, Encodings.image_id == Detections.image_id).\
+    join(Images, Images.image_id == Detections.image_id).\
+    filter(Encodings.bbox != None).\
+    filter(Encodings.two_noses.is_(None)).\
+    filter(Encodings.mongo_body_landmarks == 1).\
+    filter(Detections.bbox != None).\
+    filter(text(predicate_text)).\
+    filter(Detections.class_id == THIS_CLASS_ID).\
+    filter(Detections.conf != -1).\
+    limit(LIMIT)    
+
+
+    # distinct_image_ids_query = select(Images.image_id.distinct(), Images.h, Images.w, Encodings.bbox).\
+    #     outerjoin(SegmentTable,Images.image_id == SegmentTable.image_id).\
+    #     outerjoin(Detections,Detections.image_id == SegmentTable.image_id).\
+    #     filter(SegmentTable.bbox != None).\
+    #     filter(SegmentTable.two_noses.is_(None)).\
+    #     filter(SegmentTable.mongo_body_landmarks == 1).\
+    #     filter(Detections.bbox != None).\
+    #     filter(Detections.bbox_norm == None).\
+    #     filter(Detections.conf != -1).\
+    #     limit(LIMIT)
 
 elif REPROCESS_HANDS == True and IS_SEGMENT_BIG == True:
     print("doing HANDS using SegmentTable")
@@ -679,12 +770,6 @@ elif not SKIP_BODY and IS_SEGMENT_BIG == False:
 else:
     print(f"doing something else that wasn't caught because SKIP_BODY is {SKIP_BODY}, REPROCESS_HANDS is {REPROCESS_HANDS} and IS_SEGMENT_BIG is {IS_SEGMENT_BIG}")
 
-# define SegmentHelper 
-
-class SegmentHelper(Base):
-    __tablename__ = 'SegmentHelper_june2025_nmlGPU300k'
-    seg_image_id = Column(Integer, primary_key=True, autoincrement=True)
-    image_id = Column(Integer, ForeignKey('Images.image_id'))
 
 # # TESTING OVERRIDE seghelper is for testing
 # distinct_image_ids_query = select(Images.image_id.distinct(), Images.h, Images.w, SegmentBig.bbox).\
@@ -704,6 +789,7 @@ class SegmentHelper(Base):
         # filter(SegmentTable.image_id >= 9942966).\
 
 if SKIP_EXISTING:
+    print("skipping existing normalized bboxes")
     # skips the ones that have obj bbox which have already been done
     normed_image_ids_query = select(SegmentTable.image_id.distinct(), Images.h, Images.w).\
         outerjoin(Images, Images.image_id == SegmentTable.image_id).\
@@ -723,7 +809,17 @@ if SKIP_EXISTING:
     distinct_image_ids_query = distinct_image_ids_query.except_(normed_image_ids_query)
 
 
-if VERBOSE: print("about to execute query")
+if VERBOSE: 
+    # Compile the query with literal values for MySQL Workbench
+    compiled_query = distinct_image_ids_query.compile(compile_kwargs={"literal_binds": True})
+    workbench_query = str(compiled_query)
+    print("=" * 100)
+    print("WORKBENCH QUERY (ready to paste into MySQL):")
+    print("=" * 100)
+    print(workbench_query)
+    print("=" * 100)
+
+
 results = session.execute(distinct_image_ids_query).fetchall()
 if VERBOSE: print("query executed, results length", len(results))
 # make a dictionary of image_id to shape
@@ -775,7 +871,8 @@ threads_completed.wait()
 
 print("done")
 # Close the session
-session.commit()
+# temp comment
+# session.commit()
 session.close()
 
 # Print the time taken

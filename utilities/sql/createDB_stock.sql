@@ -307,6 +307,12 @@ CREATE TABLE ImagesSlogans (
     PRIMARY KEY (image_id)
 );
 
+CREATE TABLE RefinedText (
+    refined_id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    found_text VARCHAR(200) NOT NULL,
+    refined_text VARCHAR(200) NOT NULL,
+    UNIQUE (found_text)
+);
 
 CREATE TABLE YoloClasses (
     class_id INT PRIMARY KEY,

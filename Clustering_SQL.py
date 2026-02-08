@@ -16,7 +16,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 # my ORM
-from my_declarative_base import Base, Images, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON, ForeignKey
+from my_declarative_base import Detections, Base, Images, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON, ForeignKey
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import create_engine, text, MetaData, Table, Column, Numeric, Integer, VARCHAR, update, Float
@@ -81,7 +81,8 @@ option, MODE = pick(options, title)
 # CLUSTER_TYPE = "Clusters"
 # CLUSTER_TYPE = "BodyPoses"
 # CLUSTER_TYPE = "BodyPoses3D" # use this for META 3D body clusters, Arms will start build but messed up because of subset landmarks
-CLUSTER_TYPE = "ArmsPoses3D" 
+# CLUSTER_TYPE = "ArmsPoses3D" 
+CLUSTER_TYPE = "ObjectFusion" 
 # CLUSTER_TYPE = "HandsPositions"
 # CLUSTER_TYPE = "HandsGestures"
 # CLUSTER_TYPE = "FingertipsPositions"
@@ -99,21 +100,21 @@ else:
     LMS_DIMENSIONS = 3
 OFFSET = 0
 # SELECT MAX(cmb.image_id) FROM ImagesBodyPoses3D cmb JOIN Encodings e ON cmb.image_id = e.image_id WHERE e.is_feet = 0;
-# START_ID = 114468990 # only used in MODE 1
+# START_ID = 129478350 # only used in MODE 1
 START_ID = 0 # only used in MODE 1
-
+ 
 # WHICH TABLE TO USE?
 # SegmentTable_name = 'SegmentOct20'
 SegmentTable_name = 'SegmentBig_isface'
-# SegmentTable_name = 'SegmentBig_isnotface'
+# SegmentTable_name = 'Encodings'
 
 # if doing MODE == 2, use SegmentHelper_name to subselect SQL query
 # unless you know what you are doing, leave this as None
-SegmentHelper_name = None
+# SegmentHelper_name = None
 # if cl.CLUSTER_TYPE == "ArmsPoses3D":
-# SegmentHelper_name = 'SegmentHelper_sept2025_heft_keywords'
-# SegmentHelper_name = 'SegmentHelper_oct2025_evens'
-# SegmentHelper_name = 'SegmentHelperObject_Placards_HighProbability'
+SegmentHelper_name = 'SegmentHelper_sept2025_heft_keywords'
+# SegmentHelper_name = 'SegmentHelper_dec2025_body3D_outOfSegment'
+# SegmentHelper_name = 'SegmentHelper_oct2025_every40'
 FORCE_HAND_LANDMARKS = False # when doing ArmsPoses3D, default is True, so mongo_hand_landmarks = 1
 
 # number of clusters produced. run GET_OPTIMAL_CLUSTERS and add that number here
@@ -201,9 +202,20 @@ if USE_SEGMENT is True and (cl.CLUSTER_TYPE != "Clusters"):
         # handles segmentbig which doesn't have is_dupe_of, etc
         FROM += f" JOIN Encodings e ON s.image_id = e.image_id "
         dupe_table_pre = "e"
+        WHERE = f" {dupe_table_pre}.is_dupe_of IS NULL "
+    elif "Encodings" in SegmentTable_name:
+        # handles segmentbig which doesn't have is_dupe_of, etc
+        # FROM += f" JOIN Encodings e ON s.image_id = e.image_id "
+        dupe_table_pre = "s" # because SegmentTable_name is Encodings and gets aliased as s 
+        WHERE = f"  {dupe_table_pre}.is_dupe_of IS NULL AND {dupe_table_pre}.is_face = 1 " # ensures we are still only using faces
+    else:
+        WHERE = f" {dupe_table_pre}.is_dupe_of IS NULL "
     # Basic Query, this works with SegmentOct20. Previously included s.face_x, s.face_y, s.face_z, s.mouth_gap
     SELECT = "DISTINCT(s.image_id)"
-    WHERE = f" {dupe_table_pre}.is_dupe_of IS NULL "
+
+    # handle ObjectFusion, just get pitch, yaw, roll. Detections handled later:
+    if cl.CLUSTER_TYPE == "ObjectFusion":
+        SELECT += f" , {dupe_table_pre}.pitch, {dupe_table_pre}.yaw, {dupe_table_pre}.roll "
 
     if isinstance(this_data_column, list):
         if "HSV" in cl.CLUSTER_TYPE:
@@ -257,7 +269,7 @@ if USE_SEGMENT is True and (cl.CLUSTER_TYPE != "Clusters"):
         WHERE = " cluster_id IS NOT NULL "
 
     # WHERE += " AND h.is_body = 1"
-    LIMIT = 12000000
+    LIMIT = 220000
     BATCH_LIMIT = 10000
 
     '''
@@ -273,7 +285,7 @@ if USE_SEGMENT is True and (cl.CLUSTER_TYPE != "Clusters"):
     '''
 
 elif USE_SEGMENT is True and MODE == 0:
-
+    print("setting Poses SQL MODE 0 where using regular Clusters and ImagesClusters tables")
     # where the script is looking for files list
     # do not use this if you are using the regular Clusters and ImagesClusters tables
     SegmentTable_name = 'SegmentOct20'
@@ -348,9 +360,16 @@ def selectSQL():
     resultsjson = ([dict(row) for row in result.mappings()])
     return(resultsjson)
 
-def make_subset_landmarks(df,add_list=False):
+def landmarks_to_df_columnar(df,add_list=False):
     first_col = df.columns[1]
     print("first col: ",first_col)
+    
+    if cl.CLUSTER_TYPE == "ObjectFusion":
+        print("cl.CLUSTER_TYPE == ObjectFusion, doing it via prepare_features_for_knn", df)
+        df_columnar = prepare_features_for_knn(df)
+        # df_columnar = prepared_df.values
+        return df_columnar
+    
     # if the first column is an int, then the columns are integers
     if isinstance(first_col, int):
         numerical_columns = [col for col in df.columns if isinstance(col, int)]
@@ -376,46 +395,102 @@ def make_subset_landmarks(df,add_list=False):
         subset_columns = numerical_columns
 
     if "image_id" in df.columns:
-        numerical_data = df[['image_id'] + subset_columns]
+        df_columnar = df[['image_id'] + subset_columns]
     else:
-        numerical_data = df[subset_columns]
+        df_columnar = df[subset_columns]
 
     if add_list:
-        print("make_subset_landmarks adding obj_bbox_list column")
-        numerical_data["obj_bbox_list"] = df[subset_columns].values.tolist()
+        print("landmarks_to_df_columnar adding obj_bbox_list column")
+        df_columnar["obj_bbox_list"] = df[subset_columns].values.tolist()
 
     # this is the old way before Arms3D subsetting. I'm not sure if there is an actual scenario where i want to assign the whole df
     # if add_list:
-    #     print("make_subset_landmarks adding obj_bbox_list column")
-    #     numerical_data = df
-    #     numerical_data["obj_bbox_list"] = df[subset_columns].values.tolist()
+    #     print("landmarks_to_df_columnar adding obj_bbox_list column")
+    #     df_columnar = df
+    #     df_columnar["obj_bbox_list"] = df[subset_columns].values.tolist()
     # else:
-    #     numerical_data = df[subset_columns]
+    #     df_columnar = df[subset_columns]
 
-    print("make_subset_landmarks at the end these are the columns: ", numerical_data.columns)
-    return numerical_data
+    print("landmarks_to_df_columnar at the end these are the columns: ", df_columnar.columns)
+    return df_columnar
+
+def flatten_object_detections(detection_list):
+    """
+    Flatten a detection list [class_id, conf, top, left, right, bottom] or None into features.
+    Returns a 6-element list, or [0,0,0,0,0,0] if None.
+    """
+    if detection_list is None:
+        return [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+    return list(detection_list)
+
+def prepare_features_for_knn(df):
+    """
+    Flatten all columns into a single feature vector for KNN clustering.
+    Handles numeric columns and object detection lists.
+    Returns df with all features flattened into columns.
+    """
+    # Numeric columns to include
+    numeric_cols = ['pitch', 'yaw', 'roll']
+    
+    # Detection columns (6 values each: class_id, conf, top, left, right, bottom)
+    detection_cols = ['both_hands_object', 'left_hand_object', 'right_hand_object', 
+                      'top_face_object', 'bottom_face_object']
+    detection_fields = ['class_id', 'conf', 'top', 'left', 'right', 'bottom']
+    
+    # Create feature dict by concatenating all values
+    features_dict = {}
+    
+    # Add image_id if it exists
+    if 'image_id' in df.columns:
+        features_dict['image_id'] = df['image_id']
+    else:
+        print("Warning: 'image_id' column not found in DataFrame. It will be missing from the features.")
+
+    # Add numeric columns
+    for col in numeric_cols:
+        if col in df.columns:
+            features_dict[col] = df[col].apply(lambda x: float(x) if pd.notna(x) else 0.0)
+    
+    # Add detection features with descriptive column names
+    for det_col in detection_cols:
+        if det_col in df.columns:
+            for i, field in enumerate(detection_fields):
+                col_name = f"{det_col}_{field}"
+                features_dict[col_name] = df[det_col].apply(
+                    lambda x: flatten_object_detections(x)[i] if x is not None else 0.0
+                )
+    
+    result_df = pd.DataFrame(features_dict)
+    print("prepare_features_for_knn result_df columns: ", result_df.columns)
+    return result_df
 
 def kmeans_cluster(df, n_clusters=32):
     # Select only the numerical columns (dim_0 to dim_65)
     print("kmeans_cluster sort.SUBSET_LANDMARKS: ",sort.SUBSET_LANDMARKS)
-    if cl.CLUSTER_TYPE in ["BodyPoses", "BodyPoses3D", "ArmsPoses3D"]:
+
+
+
+    if cl.CLUSTER_TYPE in ["BodyPoses", "BodyPoses3D", "ArmsPoses3D", "ObjectFusion"]:
         print("cl.CLUSTER_TYPE == BodyPoses || ArmsPoses3D", df)
-        numerical_data = make_subset_landmarks(df)
+        df_columnar = landmarks_to_df_columnar(df)
     else:
-        numerical_data = df
-    print("clustering subset data", numerical_data)
-    print("frist row of numerical data: ", numerical_data.iloc[0])
+        df_columnar = df
+    print("clustering subset data shape: ", df_columnar.shape)
+    if hasattr(df_columnar, 'iloc'):
+        print("first row of numerical data: ", df_columnar.iloc[0])
+    else:
+        print("columnar is not a df: ")
 
 
     kmeans = KMeans(n_clusters=n_clusters, n_init=10, init='k-means++', random_state=42, max_iter=300, verbose=1)
-    kmeans.fit(numerical_data)
-    clusters = kmeans.predict(numerical_data)
+    kmeans.fit(df_columnar)
+    clusters = kmeans.predict(df_columnar)
     return clusters
     
 def best_score(df):
     print("starting best score", df)
     print("about to subset landmarks to thse columns: ",sort.SUBSET_LANDMARKS)
-    df = make_subset_landmarks(df)
+    df = landmarks_to_df_columnar(df)
     print("about to best score with subset data", df)
 
     n_list=np.linspace(4,24,6,dtype='int')
@@ -456,25 +531,22 @@ def geometric_median(X, eps=1e-5, zero_threshold=1e-6):
 
 def calc_cluster_median(df, col_list, cluster_id):
     cluster_df = df[df['cluster_id'] == cluster_id]
-    # if META:
-    #     # for some reason the meta clusters have the cluster_id in the first column
-    #     # need to remove it
-    #     if len(col_list)/len(sort.SUBSET_LANDMARKS) % 1 != 0:
-    #         print(" \/\/\/\/ imbalance in col_list and subset_landmarks")
-    #         if (len(col_list)-1)/len(sort.SUBSET_LANDMARKS) % 1 == 0:
-    #             # if removing one column makes it balanced, then do that
 
-    #             # this is a hacky attempt to handle weird scenario when making metaclusters
-    #             # it reads in the cluster_id from mysql into df, etc. 
-    #             print('remove cluster_id column from cluster_df and col_list', col_list)
-    #             print(len(col_list))
-    #             col_list.remove(col_list[0])
-    #             print('removeDDDDD cluster_id column from cluster_df and col_list', col_list)
-    #             print(len(col_list))
-    #             cluster_df = cluster_df.drop(columns=['cluster_id'])
-    print(f"Cluster {cluster_id} data: {cluster_df}")
-    # Convert the selected dimensions into a NumPy array
-    cluster_points = cluster_df[col_list].values
+    if "top_face_object" in cluster_df.columns:
+        print("flattening object detection columns for cluster median calculation")
+        cluster_df = cluster_df.copy()  # To avoid SettingWithCopyWarning
+        # drop "image_d_id" if it exists, because it will mess with the knn input
+        if 'image_id' in cluster_df.columns:
+            cluster_df = cluster_df.drop(columns=['image_id'])
+        prepared_cluster_df = prepare_features_for_knn(cluster_df)
+        cluster_points = prepared_cluster_df.values
+        print(f"Cluster {cluster_id} data after flattening: {prepared_cluster_df}")
+        print(f"Cluster {cluster_id} points after flattening: {cluster_points}")
+    else:
+        print("calculating cluster median without object detection columns")
+        print(f"Cluster {cluster_id} data: {cluster_df}")
+        # Convert the selected dimensions into a NumPy array
+        cluster_points = cluster_df[col_list].values
     print("cluster_points",(cluster_points[0]))
     # Check if there are valid points in the cluster
     if len(cluster_points) == 0 or np.isnan(cluster_points).any():
@@ -491,7 +563,7 @@ def calc_cluster_median(df, col_list, cluster_id):
 def build_col_list(df):
     print("building col list for df columns: ", df.columns)
     col_list = {}
-    col_list["left"] = col_list["right"] = col_list["body_lms"] = col_list["face"] = []
+    col_list["left"] = col_list["right"] = col_list["body_lms"] = col_list["face"] = col_list["ObjectFusion"] =[]
     if "body" in cl.CLUSTER_DATA[cl.CLUSTER_TYPE]["data_column"]:
         # tests data_column, so works for ArmsPoses3D too
         second_column_name = df.columns[1]
@@ -510,6 +582,10 @@ def build_col_list(df):
         col_list["HSV"] = ["hue", "sat", "val"]
     elif cl.CLUSTER_TYPE == "Clusters":
         col_list["face"] = [col for col in df.columns if col.startswith('dim_')]
+    elif cl.CLUSTER_TYPE == "ObjectFusion":
+        # for ObjectFusion, we need to get pitch, yaw, roll and object detection columns
+        col_list["ObjectFusion"] = ['pitch', 'yaw', 'roll','both_hands_object', 'left_hand_object', 'right_hand_object', 
+                          'top_face_object', 'bottom_face_object']
     return col_list
 
 def zero_out_medians(cluster_median):
@@ -524,14 +600,18 @@ def calculate_cluster_medians(df):
     col_list = build_col_list(df)
 
     print(f"Columns used for median calculation: {col_list}")
-    print(f"All DataFrame columns: {df.columns}")
+    print(f"All DataFrame columns for cl.CLUSTER_TYPE {cl.CLUSTER_TYPE}: {df.columns}")
 
     print(df)
     unique_clusters = set(df['cluster_id'])
     for cluster_id in unique_clusters:
         # cluster_median = calc_cluster_median(df, col_list, cluster_id)
         cluster_median = {}
-        if "body" in cl.CLUSTER_DATA[cl.CLUSTER_TYPE]["data_column"]:
+        if cl.CLUSTER_TYPE == "ObjectFusion":
+            print(f"[first call in elif] Calculating median for ObjectFusion cluster {cluster_id}")
+            cluster_median["ObjectFusion"] = calc_cluster_median(df, col_list["ObjectFusion"], cluster_id)
+            print(f"[first call in elif] Recalculated median for cluster {cluster_id}: {cluster_median}")
+        elif "body" in cl.CLUSTER_DATA[cl.CLUSTER_TYPE]["data_column"]:
         # if cl.CLUSTER_TYPE in ("BodyPoses", "BodyPoses3D", "ArmsPoses3D"):
             cluster_median["body_lms"] = calc_cluster_median(df, col_list["body_lms"], cluster_id)
         elif "hand" in cl.CLUSTER_DATA[cl.CLUSTER_TYPE]["data_column"]:
@@ -547,8 +627,10 @@ def calculate_cluster_medians(df):
             print(f"Recalculated median for cluster {cluster_id}: {cluster_median}")
             # if every value in the cluster median < .01, then set all values to 0.0
             cluster_median = zero_out_medians(cluster_median)
-            # add left and right hands
-            if "hand" in cl.CLUSTER_DATA[cl.CLUSTER_TYPE]["data_column"]:
+            # add left and right hands            
+            if cl.CLUSTER_TYPE == "ObjectFusion":
+                flattened_median = cluster_median["ObjectFusion"]
+            elif "hand" in cl.CLUSTER_DATA[cl.CLUSTER_TYPE]["data_column"]:
             # if cl.CLUSTER_TYPE in ["HandsPositions", "HandsGestures", "FingertipsPositions"]:
                 flattened_median = np.concatenate((cluster_median["left"], cluster_median["right"]))
             elif "body" in cl.CLUSTER_DATA[cl.CLUSTER_TYPE]["data_column"]:
@@ -709,7 +791,8 @@ def calc_median_dist(enc1, enc2):
 
 def process_landmarks_cluster_dist(df, df_subset_landmarks):
     first_col = df.columns[1]
-    print("process_landmarks_cluster_dist first col: ",first_col)
+    # print(f"process_landmarks_cluster_dist df type {type(df)} first col: ",first_col)
+    # print(f"df_subset_landmarks type {type(df_subset_landmarks)} columns", df_subset_landmarks.columns)
     # if the first column is an int, then the columns are integers
     if isinstance(first_col, int):
         dim_columns = [col for col in df_subset_landmarks.columns if isinstance(col, int)]
@@ -718,6 +801,10 @@ def process_landmarks_cluster_dist(df, df_subset_landmarks):
         dim_columns = [col for col in df_subset_landmarks.columns if "dim_" in col]
     elif cl.CLUSTER_TYPE == "HSV":
         dim_columns = cl.CLUSTER_DATA[cl.CLUSTER_TYPE]["data_column"]
+    else:
+        print("process_landmarks_cluster_dist could not identify dim columns, defaulting to all columns except image_id")
+        dim_columns = [col for col in df_subset_landmarks.columns if col != 'image_id']
+        print("process_landmarks_cluster_dist defaulted dim_columns: ", dim_columns)
     print("process_landmarks_cluster_dist dim_columns: ", dim_columns)
     # Step 2: Combine values from these columns into a list for each row
     df_subset_landmarks['enc1'] = df_subset_landmarks[dim_columns].values.tolist()
@@ -750,6 +837,7 @@ def process_landmarks_cluster_dist(df, df_subset_landmarks):
                     print('Could not attach cluster_median to df_subset_landmarks')
         print("df_subset_landmarks before calc_median_dist", df_subset_landmarks.columns)
         # apply calc_median_dist to enc1 and cluster_median
+        print("df_subset_landmarks enc1 and cluster_median", df_subset_landmarks[['enc1', 'cluster_median']].iloc[0])
         df_subset_landmarks["cluster_dist"] = df_subset_landmarks.apply(lambda row: calc_median_dist(row['enc1'], row['cluster_median']), axis=1)
     return df_subset_landmarks
 
@@ -773,8 +861,8 @@ def assign_images_clusters_DB(df):
     
     #assign clusters to each image's encodings
     print("assigning images to clusters, df at start",df)
-    df_subset_landmarks = make_subset_landmarks(df, add_list=True)
-    print("df_subset_landmarks after make_subset_landmarks", df_subset_landmarks)
+    df_subset_landmarks = landmarks_to_df_columnar(df, add_list=True)
+    print("df_subset_landmarks after landmarks_to_df_columnar", df_subset_landmarks)
 
     # if cl.CLUSTER_TYPE in ["BodyPoses","BodyPoses3D","ArmsPoses3D", "HandsGestures", "HandsPositions","FingertipsPositions"]:
     if "hand" in cl.CLUSTER_DATA[cl.CLUSTER_TYPE]["data_column"] or "body" in cl.CLUSTER_DATA[cl.CLUSTER_TYPE]["data_column"]:
@@ -826,7 +914,7 @@ def df_list_to_cols(df, col_name):
 
 def prepare_df(df):
     print("columns: ",df.columns)
-    print("prepare_df df",df)
+    print("prepare_df df with cl.CLUSTER_TYPE ", cl.CLUSTER_TYPE, df)
     print("prepare df first row",df.iloc[0])
     columns_to_drop = []
     # apply io.convert_decimals_to_float to face_x, face_y, face_z, and mouth_gap 
@@ -872,7 +960,7 @@ def prepare_df(df):
         print("first row of df",df.iloc[0])
         df[['left_hand_landmarks', 'left_hand_world_landmarks', 'left_hand_landmarks_norm', 'right_hand_landmarks', 'right_hand_world_landmarks', 'right_hand_landmarks_norm']] = pd.DataFrame(df['hand_results'].apply(sort.prep_hand_landmarks).tolist(), index=df.index)
         print("after prep",df)
-        df = sort.split_landmarks_to_columns(df, left_col="left_hand_landmarks_norm", right_col="right_hand_landmarks_norm")
+        df = sort.split_landmarks_to_columns_or_list(df, first_col="left_hand_landmarks_norm", second_col="right_hand_landmarks_norm", structure="cols")
         print("after split",df)
         columns_to_drop = ['face_encodings68', 'face_landmarks', 'body_landmarks', 'body_landmarks_normalized', 
                            'hand_results', 'left_hand_landmarks', 'right_hand_landmarks', 
@@ -881,7 +969,7 @@ def prepare_df(df):
 
     elif cl.CLUSTER_TYPE == "HandsGestures":
         df[['left_hand_landmarks', 'left_hand_world_landmarks', 'left_hand_landmarks_norm', 'right_hand_landmarks', 'right_hand_world_landmarks', 'right_hand_landmarks_norm']] = pd.DataFrame(df['hand_results'].apply(sort.prep_hand_landmarks).tolist(), index=df.index)
-        df = sort.split_landmarks_to_columns(df, left_col="left_hand_world_landmarks", right_col="right_hand_world_landmarks")
+        df = sort.split_landmarks_to_columns_or_list(df, first_col="left_hand_world_landmarks", second_col="right_hand_world_landmarks", structure="cols")
         # drop the columns that are not needed
         columns_to_drop = ['face_encodings68', 'face_landmarks', 'body_landmarks', 'body_landmarks_normalized', 
                            'hand_results', 'left_hand_landmarks', 'right_hand_landmarks', 'left_hand_world_landmarks', 'right_hand_world_landmarks']
@@ -899,6 +987,34 @@ def prepare_df(df):
         df['body_landmarks'] = df['body_landmarks'].apply(io.unpickle_array)
         columns_to_drop=['face_landmarks', 'body_landmarks', 'body_landmarks_normalized']
         df_list_to_cols(df, 'face_encodings68')
+
+    elif cl.CLUSTER_TYPE == "ObjectFusion":
+
+        print("first row of df",df.iloc[0].to_string())
+        df[['left_hand_landmarks', 'left_hand_world_landmarks', 'left_hand_landmarks_norm', 'right_hand_landmarks', 'right_hand_world_landmarks', 'right_hand_landmarks_norm']] = pd.DataFrame(df['hand_results'].apply(sort.prep_hand_landmarks).tolist(), index=df.index)
+        # print("after prep",df.iloc[0].to_string())
+        lhandlms = df["left_hand_landmarks_norm"]
+        print(lhandlms)
+        for lm in lhandlms[0]:
+            print("lm:", lm)
+        df[["left_pointer_knuckle_norm","right_pointer_knuckle_norm"]] = pd.DataFrame(df['hand_results'].apply(sort.prep_knuckle_landmarks).tolist(), index=df.index)
+        print("after getting item 5",df.iloc[0].to_string())
+        # df = sort.split_landmarks_to_columns(df, left_col="left_hand_landmarks_norm", right_col="right_hand_landmarks_norm")
+        # df = sort.split_landmarks_to_columns_or_list(df, first_col="left_hand_landmarks_norm", second_col="right_hand_landmarks_norm", structure="cols")
+    # def split_landmarks_to_columns_or_list(self, df, first_col="left_hand_world_landmarks", second_col="right_hand_world_landmarks", structure="cols"):
+        print("after split",df)
+        columns_to_drop = ['face_encodings68', 'face_landmarks', 'body_landmarks', 'body_landmarks_3D','body_landmarks_normalized', 
+                           'hand_results', 'left_hand_landmarks', 'right_hand_landmarks', 
+                           'left_hand_world_landmarks', 'right_hand_world_landmarks',
+                           'left_hand_landmarks_norm', 'right_hand_landmarks_norm']
+    # if "Object" in cl.CLUSTER_TYPE:
+        print("first row before query",df.iloc[0].to_string())
+        # apply query_detections to each image_id to get the object data
+        # df['image_id'].apply(lambda image_id: query_detections(image_id))
+        df = process_detections_for_df(df)
+
+        pass
+    
     if not USE_HEAD_POSE: 
         print("not using head pose, dropping face_x, face_y, face_z, mouth_gap")
         # add 'face_x', 'face_y', 'face_z', 'mouth_gap' to existing columns_to_drop
@@ -996,6 +1112,98 @@ def fetch_encodings_mongo_batched(df, batch_size=5000, mongo_reconnect_interval=
     print(f"Finished fetching {total_rows} encodings")
     return df
 
+# ==================== OBJECT-HAND RELATIONSHIP FUNCTIONS (now in ToolsClustering class) ====================
+
+def query_and_classify_detections(image_id, left_knuckle, right_knuckle):
+    """
+    Query detections for an image and classify their relationship to hands/face.
+    Returns dict with 5 keys, each containing a 6-element list or None.
+    """
+    # Query detections
+    detection_results = session.query(Detections).filter_by(image_id=image_id).\
+        filter(Detections.conf > cl.MIN_DETECTION_CONFIDENCE).all()
+    
+    if not detection_results:
+        return {
+            'both_hands_object': None,
+            'left_hand_object': None,
+            'right_hand_object': None,
+            'top_face_object': None,
+            'bottom_face_object': None
+        }
+    
+    # Parse detections into standardized format
+    detections = []
+    for d in detection_results:
+        bbox = cl.parse_bbox_norm(d.bbox_norm)
+        if bbox is None:
+            continue
+        detections.append({
+            'detection_id': d.detection_id,
+            'class_id': d.class_id,
+            'conf': d.conf,
+            'bbox': bbox,
+            'top': bbox['top'],
+            'left': bbox['left'],
+            'right': bbox['right'],
+            'bottom': bbox['bottom']
+        })
+    
+    # Classify relationships using class method
+    classified = cl.classify_object_hand_relationships(detections, left_knuckle, right_knuckle)
+    
+    # Convert to 6-element lists for df storage
+    result = {}
+    for key, det in classified.items():
+        if det is None:
+            result[key] = None
+        else:
+            result[key] = [
+                det['class_id'],
+                det['conf'],
+                det['top'],
+                det['left'],
+                det['right'],
+                det['bottom']
+            ]
+    
+    return result
+
+def process_detections_for_df(df):
+    """
+    Process all detections for a dataframe and add object classification columns.
+    Expects df to have: image_id, left_pointer_knuckle_norm, right_pointer_knuckle_norm
+    """
+    # Initialize new columns
+    df['both_hands_object'] = None
+    df['left_hand_object'] = None
+    df['right_hand_object'] = None
+    df['top_face_object'] = None
+    df['bottom_face_object'] = None
+    
+    for idx, row in df.iterrows():
+        image_id = row['image_id']
+        left_knuckle = row.get('left_pointer_knuckle_norm', cl.DEFAULT_HAND_POSITION)
+        right_knuckle = row.get('right_pointer_knuckle_norm', cl.DEFAULT_HAND_POSITION)
+        
+        # Handle case where knuckle data might be None or string
+        if left_knuckle is None or (isinstance(left_knuckle, list) and len(left_knuckle) == 0):
+            left_knuckle = cl.DEFAULT_HAND_POSITION
+        if right_knuckle is None or (isinstance(right_knuckle, list) and len(right_knuckle) == 0):
+            right_knuckle = cl.DEFAULT_HAND_POSITION
+        
+        # Query and classify
+        classifications = query_and_classify_detections(image_id, left_knuckle, right_knuckle)
+        
+        # Assign to df
+        df.at[idx, 'both_hands_object'] = classifications['both_hands_object']
+        df.at[idx, 'left_hand_object'] = classifications['left_hand_object']
+        df.at[idx, 'right_hand_object'] = classifications['right_hand_object']
+        df.at[idx, 'top_face_object'] = classifications['top_face_object']
+        df.at[idx, 'bottom_face_object'] = classifications['bottom_face_object']
+    
+    return df
+
 
 # defining globally # TK 4 HSV
 MEDIAN_DICT = cl.get_cluster_medians(session, Clusters, USE_SUBSET_MEDIANS, sort.SUBSET_LANDMARKS)
@@ -1016,32 +1224,34 @@ def main():
         
         print("enc_data", enc_data)
         print("as list", set(enc_data["cluster_id"].tolist()))
+    
         median_dict = calculate_cluster_medians(enc_data)
         save_clusters_DB(median_dict)
+        
         # add the correct median_dict for each cluster_id to the enc_data
         enc_data["cluster_median"] = enc_data["cluster_id"].apply(lambda x: median_dict[x])
         if cl.CLUSTER_TYPE != "HSV":
             # this is specific to lms, not hsv
-            df_subset_landmarks = make_subset_landmarks(enc_data, add_list=True)
+            df_columnar = landmarks_to_df_columnar(enc_data, add_list=True)
         else:
-            df_subset_landmarks = enc_data
-        print("df_subset_landmarks", df_subset_landmarks)
+            df_columnar = enc_data
+        print("df_columnar", df_columnar)
         if not META:
-            df_subset_landmarks = process_landmarks_cluster_dist(enc_data,df_subset_landmarks)
-            print("df_subset_landmarks after process_landmarks", df_subset_landmarks)
+            df_columnar = process_landmarks_cluster_dist(enc_data,df_columnar)
+            print("df_columnar after process_landmarks", df_columnar)
 
-        if len(df_subset_landmarks) <= BATCH_LIMIT:
-            save_images_clusters_DB(df_subset_landmarks)
+        if len(df_columnar) <= BATCH_LIMIT:
+            save_images_clusters_DB(df_columnar)
         else:
-            print(f"Large dataset ({len(df_subset_landmarks)} rows) — processing in batches of {BATCH_LIMIT}")
-            for start in range(0, len(df_subset_landmarks), BATCH_LIMIT):
-                end = min(start + BATCH_LIMIT, len(df_subset_landmarks))
+            print(f"Large dataset ({len(df_columnar)} rows) — processing in batches of {BATCH_LIMIT}")
+            for start in range(0, len(df_columnar), BATCH_LIMIT):
+                end = min(start + BATCH_LIMIT, len(df_columnar))
                 print(f"Processing batch rows {start} to {end}...")
-                batch_df = df_subset_landmarks.iloc[start:end].copy()
+                batch_df = df_columnar.iloc[start:end].copy()
                 save_images_clusters_DB(batch_df)
                 # Free memory between batches
                 gc.collect()
-        # save_images_clusters_DB(df_subset_landmarks)
+        # save_images_clusters_DB(df_columnar)
         print("saved segment to clusters")
 
     # create_my_engine(db)
@@ -1064,6 +1274,8 @@ def main():
         enc_data=pd.DataFrame()
         df = pd.json_normalize(resultsjson)
         print(df)
+
+
         # tell sort_pose which columns to NOT query
         if cl.CLUSTER_TYPE in ("BodyPoses", "BodyPoses3D", "ArmsPoses3D"): io.query_face = sort.query_face = io.query_hands = sort.query_hands = False
         elif cl.CLUSTER_TYPE == "HandsGestures": io.query_body = sort.query_body = io.query_face = sort.query_face = False
@@ -1076,6 +1288,7 @@ def main():
         #     # hsv does not need any encodings from mongo
         #     df[['face_encodings68', 'face_landmarks', 'body_landmarks', 'body_landmarks_normalized', 'body_landmarks_3D', 'hand_results']] = df['image_id'].apply(io.get_encodings_mongo)
         # face_encodings68, face_landmarks, body_landmarks, body_landmarks_normalized = sort.get_encodings_mongo(mongo_db,row["image_id"], is_body=True, is_face=False)
+
         enc_data = prepare_df(df)
     
     # choose if you want optimal cluster size or custom cluster size using the parameter GET_OPTIMAL_CLUSTERS

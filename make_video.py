@@ -49,7 +49,7 @@ SegmentTable_name = 'SegmentBig_isface'
 # SegmentHelper_name = 'SegmentHelper_may2025_4x4faces'
 # SegmentHelper_name = 'SegmentHelper_sept2025_heft_keywords'
 # SegmentHelper_name = 'SegmentHelperObject_90_stethoscope'
-SegmentHelper_name = 'SegmentHelperObject_97_rose'
+SegmentHelper_name = 'None' # set below for heft keywords
 # SegmentHelper_name = None
 # SATYAM, this is MM specific
 # for when I'm using files on my SSD vs RAID
@@ -61,12 +61,14 @@ io = DataIO(IS_SSD)
 db = io.db
 
 # OWC4 SNAFU WORKAROUND
-io.ROOT_PROD=  "/Volumes/OWC52/segment_images" ## only on Mac
-print("Setting io.ROOT to ROOTSSD:", io.ROOTSSD)
-io.ROOT = os.path.join(io.ROOTSSD, "output_folder")
-print("Set io.ROOT to ROOTSSD:", io.ROOT)
 
-CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs", "rose_csvs")
+if not (io.IS_TENCH or io.IS_MICHELLE):
+    io.ROOT_PROD=  "/Volumes/OWC52/segment_images" ## only on Mac
+    print("Setting io.ROOT to ROOTSSD:", io.ROOTSSD)
+    io.ROOT = os.path.join(io.ROOT_PROD, "output_folder")
+    print("Set io.ROOT to ROOTSSD:", io.ROOT)
+
+CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden below for heft keywords
 
 # CSV_FOLDER = os.path.join("/Users/michaelmandiberg/Documents/projects-active/facemap_production/body3D_segmentbig_useall256_CSVs_test")
 # CSV_FOLDER = os.path.join("/Volumes/SSD4_Green/arms3D_placard_Dec12_undetected")
@@ -74,7 +76,7 @@ CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs", "rose_csvs")
 # TENCH UNCOMMENT FOR YOUR COMP:
 # CSV_FOLDER = os.path.join(io.ROOT_DBx, "body3D_segmentbig_useall256_CSVs_test")
 
-# CSV_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/body3D_segmentbig_useall256_CSVs"
+CSV_FOLDER = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion128_test220K"
 # overriding DB for testing
 # io.db["name"] = "stock"
 # io.db["name"] = "ministock"
@@ -82,7 +84,7 @@ CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs", "rose_csvs")
 MODES = {0:'paris_photo_torso_images_topics', 1:'paris_photo_torso_videos_topics', 
          2:'3D_bodies_topics', 3:'3D_full_bodies_topics', 4:'3D_arms', 5:'3D_arms_meta',
          6:'heft_torso_keywords'}
-MODE_CHOICE = 4
+MODE_CHOICE = 6
 CURRENT_MODE = MODES[MODE_CHOICE]
 
 LIMIT = 200000 # this is the limit for the SQL query
@@ -174,45 +176,87 @@ elif "3D" in CURRENT_MODE:
 ################## HEFT KEYWORD SETTINGS ##################
 ###########################################################
 
+
+
+
 elif CURRENT_MODE == 'heft_torso_keywords':
+    
+    # set to 0 to disable obj query stuff. this is also for obj_bbox_fusion
+    class_id = 0
+
+    # SORT_TYPE = "obj_bbox"
+    SORT_TYPE = "planar_hands"
+    # SORT_TYPE = "obj_bbox_fusion"
+
+    # CLUSTER_TYPE = "ArmsPoses3D"
+    CLUSTER_TYPE = "obj_bbox_fusion"
+    # CLUSTER_TYPE = SORT_TYPE = "ArmsPoses3D" # this triggers meta body poses 3D
+    # CLUSTER_TYPE = SORT_TYPE = "obj_bbox_fusion" # make sure OBJ_CLS_ID is set below
+
+
+    class_token = ID_SEGMENT_DICT.get(class_id, None)
+    ssd = ID_SSD_DICT.get(class_id, None)
+    if class_id in ID_FOLDER_DICT: folder_token = ID_FOLDER_DICT[class_id]
+    else: folder_token = class_token 
+
     # SegmentTable_name = 'SegmentOct20'
     SegmentTable_name = 'SegmentBig_isface'
-    # SegmentHelper_name = 'SegmentHelper_sept2025_heft_keywords' # TK revisit this for prodution run
-    SegmentHelper_name = 'SegmentHelperObject_73_book' # TK revisit this for prodution run
-    CLUSTER_TYPE = "ArmsPoses3D"
-    # SORT_TYPE = "planar_hands"
-    SORT_TYPE = "obj_bbox"
-    # CLUSTER_TYPE = SORT_TYPE = "ArmsPoses3D" # this triggers meta body poses 3D
-    # CLUSTER_TYPE = SORT_TYPE = "obj_bbox" # make sure OBJ_CLS_ID is set below
+    if class_token and "fusion" not in CLUSTER_TYPE+SORT_TYPE:
+        OBJ_DONT_SUBSELECT = False # False means SQL select for OBJ. Set to True by default
+        SegmentHelper_name = f'SegmentHelperObject_{class_token}' # TK revisit this for prodution run
+        SegmentFolder = f"/Volumes/{ssd}/segment_images_{folder_token}"
+        if MODE == 0:
+            CSV_FOLDER = os.path.join(CSV_FOLDER, f"{class_token}_{class_id}")
+    else:
+        # doesn't use class_token helper/select
+        SegmentHelper_name = 'SegmentHelper_sept2025_heft_keywords' # TK revisit this for prodution run
+        SegmentFolder = None
+    if io.IS_TENCH or io.IS_MICHELLE:
+        SegmentFolder = io.ROOT
+        print("IO ROOT", io.ROOT)
+        print("SEGMENT FOLDER", SegmentFolder)
     # META = True
-    TESTING = False
-    IS_HAND_POSE_FUSION = True # do we use fusion clusters
     USE_HEAD_POSE = True
+    IS_HAND_POSE_FUSION = True # do we use fusion clusters
+    CHOP_FIRST = True # does a first pass chop before whatever sort happens - this is default now
 
-    # either you use a FUSION_PAIR_DICT or GENERATE_FUSION_PAIRS. 
-    GENERATE_FUSION_PAIRS = True # if true it will query based on MIN_VIDEO_FUSION_COUNT and create pairs
-                                    # if false, it will grab the list of pair lists below
-    USE_FUSION_PAIR_DICT = False # if True, it will use the FUSION_PAIR_DICT_NAME below
-    FUSION_PAIR_DICT_NAME = "FUSION_PAIR_DICT_KEYWORDS_768_META"
-    USE_HSV = True
+    TESTING = True
+    if TESTING:
+        USE_HSV = False
+        # turning all three off to do old style non tsp sort    
+        ONE_SHOT = True # take all files, based off the very first sort order.
+        TSP_SORT = False
+        CHOP_ITTER_TSP_SORT = False
+        if CLUSTER_TYPE == "obj_bbox_fusion":
+            GENERATE_FUSION_PAIRS = False
+        else:
+            # either you use a FUSION_PAIR_DICT or GENERATE_FUSION_PAIRS. 
+            GENERATE_FUSION_PAIRS = True # if true it will query based on MIN_VIDEO_FUSION_COUNT and create pairs
+                                            # if false, it will grab the list of pair lists below
+
+    else:
+        USE_HSV = True
+        GENERATE_FUSION_PAIRS = False # if true it will query based on MIN_VIDEO_FUSION_COUNT and create pairs
+        TSP_SORT = True
+        CHOP_ITTER_TSP_SORT = True
+
+    if not GENERATE_FUSION_PAIRS:
+        USE_FUSION_PAIR_DICT = True # if True, it will use the FUSION_PAIR_DICT_NAME below
+    FUSION_PAIR_DICT_NAME = "FUSION_PAIR_DICT_DETECTIONS_ARMS3D128"
     N_HSV = 23 # 0-22 metaclusters of 96 HSV clusters
     # N_HSV = 0 # don't do HSV clusters
-
-    # turning all three off to do old style non tsp sort    
-    # ONE_SHOT = True # take all files, based off the very first sort order.
-    CHOP_FIRST = True
-    TSP_SORT = True
-    CHOP_ITTER_TSP_SORT = True
-    
 
     PURGING_DUPES = False
     FORCE_TARGET_COUNT = 90
     # if TESTING: IS_HAND_POSE_FUSION = GENERATE_FUSION_PAIRS = False
 
-    if not USE_HSV:
+    # get cutoff for this class_id from constants dict
+    cutoff = ID_CUTOFF_DICT.get(class_id, None)
+
+    if not USE_HSV and cutoff is not None:
         # this is for testing all cluster-poses for a keyword
-        MIN_VIDEO_FUSION_COUNT = 2000 # this is the cut off for the CSV fusion pairs
-        MIN_CYCLE_COUNT = 1500 # this is the cut off for the SQL query results
+        MIN_VIDEO_FUSION_COUNT = cutoff # this is the cut off for the CSV fusion pairs
+        MIN_CYCLE_COUNT = max(int(cutoff/2), FORCE_TARGET_COUNT) # this is the cut off for the SQL query results
     elif PURGING_DUPES:
         MIN_VIDEO_FUSION_COUNT = 100
         MIN_CYCLE_COUNT = 2
@@ -248,8 +292,9 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     
     # generate the CSV files with /query_all_fusion_clusters.py
 
-    TOPIC_NO = [73] # if doing an affect topic fusion, this is the wrapper topic, OR keyword. add .01, .1 etc for sub selects from KEYWORD_DICT
-
+    TOPIC_NO = [class_id] if class_token else [0] # if doing an affect topic fusion, this is the wrapper topic, OR keyword. add .01, .1 etc for sub selects from KEYWORD_DICT
+    OBJ_KEYWORD_CUTOFF = 120 # if below this number it is treated as an object_id and not a keyword with AND/NOT
+    
     # this needs to be integrated into the search for each cluster, but doing here for the moment when doing single topic/cluster testing
     # this is CLUSTER_TYPE
     KEYWORD_OBJECT = KEYWORD_ORIENTATION = None
@@ -383,10 +428,12 @@ if "key" in CURRENT_MODE:
     if OBJ_CLS_ID == 0 and str(TOPIC_NO[0]) in SegmentHelper_name:
         # assign directly from name
         OBJ_CLS_ID = math.floor(TOPIC_NO[0])
+    elif OBJ_CLS_ID <= OBJ_KEYWORD_CUTOFF:
+        print(f"ADVISORY: OBJ_CLS_ID {OBJ_CLS_ID} for TOPIC_NO {TOPIC_NO[0]} is below OBJ_KEYWORD_CUTOFF {OBJ_KEYWORD_CUTOFF}, assigning from TOPIC_NO")
+        OBJ_CLS_ID = math.floor(TOPIC_NO[0])
 else: OBJ_CLS_ID = 0
 
 DO_OBJ_SORT = True
-OBJ_DONT_SUBSELECT = False # False means select for OBJ. this is a flag for selecting a specific object type when not sorting on obj
 PHONE_BBOX_LIMITS = [0] # this is an attempt to control the BBOX placement. I don't think it is going to work, but with non-zero it will make a bigger selection. Fix this hack TK. 
 if "obj_bbox" in [SORT_TYPE, CLUSTER_TYPE] and OBJ_CLS_ID == 0:
     print("WARNING: OBJ_CLS_ID is 0 for obj_bbox SORT_TYPE/CLUSTER_TYPE, quitting")
@@ -436,7 +483,6 @@ elif IS_SEGONLY and io.platform == "darwin":
 
     SAVE_SEGMENT = False
     # no JOIN just Segment table
-    SELECT = "DISTINCT(s.image_id), s.site_name_id, s.contentUrl, s.imagename, s.description, s.face_x, s.face_y, s.face_z, s.mouth_gap, s.bbox, s.site_image_id, s.pitch, s.yaw, s.roll"
 
     FROM =f"{SegmentTable_name} s "
     dupe_table_pre  = "s"
@@ -444,6 +490,8 @@ elif IS_SEGONLY and io.platform == "darwin":
          # handles segmentbig which doesn't have is_dupe_of?
         FROM += f" JOIN Encodings e ON s.image_id = e.image_id "
         dupe_table_pre = "e"
+
+    SELECT = f"DISTINCT(s.image_id), s.site_name_id, s.contentUrl, s.imagename, s.description, s.face_x, s.face_y, s.face_z, s.mouth_gap, s.bbox, s.site_image_id, {dupe_table_pre}.pitch, {dupe_table_pre}.yaw, {dupe_table_pre}.roll"
 
     WHERE = f" {dupe_table_pre}.is_dupe_of IS NULL "
     # this is the standard segment topics/clusters query for June 2024
@@ -560,7 +608,7 @@ elif IS_SEGONLY and io.platform == "darwin":
     if SUBSELECT_ON_CLASS_ID > 0:
         # HACKY TK FIX THIS LATER
         print(f"subselecting on class id {SUBSELECT_ON_CLASS_ID}")
-        FROM += " JOIN DetectionsTest dsub ON s.image_id = dsub.image_id "
+        FROM += " JOIN Detections dsub ON s.image_id = dsub.image_id "
         WHERE += f" AND dsub.class_id = {SUBSELECT_ON_CLASS_ID} "
     if (OBJ_CLS_ID > 0 and not OBJ_DONT_SUBSELECT):
         # old way
@@ -570,7 +618,7 @@ elif IS_SEGONLY and io.platform == "darwin":
         # WHERE += " AND pb.bbox_"+str(OBJ_CLS_ID)+"_norm IS NOT NULL "
 
         # new way with object keywords
-        FROM += " JOIN DetectionsTest d ON s.image_id = d.image_id "
+        FROM += " JOIN Detections d ON s.image_id = d.image_id "
         SELECT += ", d.bbox_norm, d.obj_no, d.orientation, d.meta_cluster_id "
         WHERE += f" AND d.class_id = {OBJ_CLS_ID} "
         # for some reason I have to set OBJ_CLS_ID to 0 if I'm doing planar_body
@@ -908,7 +956,12 @@ if not io.IS_TENCH:
             if isinstance(cluster_topic_no, str):
                 cluster_topic_no = float(cluster_topic_no)
             # check if the topic_no has related keywords in the KEYWORD_DICT
-            print(f"accessing keyword dict for topic_no {cluster_topic_no}: {KEYWORD_DICT[cluster_topic_no]}")
+            if cluster_topic_no < OBJ_KEYWORD_CUTOFF:
+                # if below cutoff, just return the int value and no AND/NOT
+                cluster_topic_no = int(math.floor(cluster_topic_no))
+                return [cluster_topic_no], None, None
+            print(f" KEYWORD_DICT", KEYWORD_DICT.keys())
+            print(f"accessing keyword dict for topic_no {cluster_topic_no}: {KEYWORD_DICT[cluster_topic_no]} from KEYWORD_DICT", KEYWORD_DICT.keys())
         
             cluster_dict_OR = cluster_dict_AND = cluster_dict_NOT = None
             # cluster_topic_OR = cluster_dict_AND = cluster_dict_NOT = this_cluster_topic_no = None
@@ -1005,7 +1058,7 @@ if not io.IS_TENCH:
                 # if it doesn't, it just returns the same topic_no
                 topic_no, cluster_dict_AND, cluster_dict_NOT = access_keyword_dict(topic_no)
                 print(f"after accessing keyword dict, topic_no is {topic_no}")
-                if topic_no[0] >= 184: this_id = "keyword_id"
+                if topic_no[0] >= OBJ_KEYWORD_CUTOFF: this_id = "keyword_id"
                 else: 
                     this_id = "class_id"
                     this_alias = "d" # for Detections table
@@ -1014,7 +1067,7 @@ if not io.IS_TENCH:
 
             # convert topic_no to a query string
             IN_or_equal_topic_ids_string = is_query_list_string(topic_no)
-            cluster += f"AND {this_alias}.{this_id} {IN_or_equal_topic_ids_string} "
+            if not OBJ_DONT_SUBSELECT: cluster += f"AND {this_alias}.{this_id} {IN_or_equal_topic_ids_string} "
 
         if bool(hsv_cluster) or hsv_cluster == 0:
             print("hsv_cluster is not empty:", hsv_cluster)
@@ -1230,14 +1283,15 @@ def itter_sort(df_enc, itters):
     return df_sorted
 
 def sort_and_chop(df_enc):
+    sort_and_chop_cutoff = sort.CUTOFF*FORCE_CUTOFF_MULTIPLIER
     df_sorted = pd.DataFrame(columns = df_enc.columns)
     # print(f"CHOP_FIRST is true with sort.counter_dict['start_img_name'], {sort.counter_dict['start_img_name']}")
     if sort.counter_dict["start_img_name"] is None:
         sort.counter_dict["start_img_name"] = start_img_name
-    print(f"CHOP_FIRST at {sort.CUTOFF} is true with sort.counter_dict['start_img_name'], {sort.counter_dict['start_img_name']}")
+    print(f"CHOP_FIRST is true at {sort_and_chop_cutoff} to yield {sort.CUTOFF} - sort.counter_dict['start_img_name'], {sort.counter_dict['start_img_name']}")
 
     df_enc, df_sorted, is_break, output_cols = get_closest_knn_or_break(df_enc, df_sorted)
-    df_sorted = df_sorted.head(sort.CUTOFF)
+    df_sorted = df_sorted.head(sort_and_chop_cutoff)
     print("AFTER CHOP_FIRST df_enc is", len(df_enc))
     print("AFTER CHOP_FIRST df_sorted is", len(df_sorted))
     return df_sorted
@@ -1338,10 +1392,9 @@ def prep_encodings_NN(df_segment):
             # source_col_2 = "right_hand_landmarks_norm"
         elif SORT_TYPE == "128d":
             source_col = sort_column = "face_encodings68"
-        elif SORT_TYPE == "obj_bbox":
+        elif "obj_bbox" in SORT_TYPE:
+            # does this matter?
             source_col = sort_column = "bbox_norm"
-            # source_col = sort_column = "bbox_"+str(OBJ_CLS_ID)+"_norm"
-
         return sort_column, source_col
 
     print("prep_encodings_NN df_segment columns", df_segment.columns)
@@ -1352,6 +1405,7 @@ def prep_encodings_NN(df_segment):
     # subset needs to be both of them, if both are na
     if not sort_column == "hand_landmarks":
         # hand_landmarks are all giving 0's if null, so no NA
+        print("df_segment source_col", df_segment[source_col].to_string())
         df_segment = df_segment.dropna(subset=[source_col])
         print("df_segment length", len(df_segment.index))
     
@@ -1383,6 +1437,11 @@ def prep_encodings_NN(df_segment):
         if not null_bboxes.empty:
             print("Rows with invalid bbox data:")
             print(null_bboxes)
+        # make a obj_bbox_fusion_list column that combines bbox_norm, meta_cluster_id, 'pitch', 'yaw', 'roll'
+        # start by creating a pitch_yaw_roll_list column
+        df_segment['pitch_yaw_roll_list'] = df_segment.apply(lambda row: [row['pitch'], row['yaw'], row['roll']], axis=1)
+        df_segment['obj_bbox_fusion_list'] = df_segment.apply(lambda row: row['obj_bbox_list'] + [row['meta_cluster_id']] + row['pitch_yaw_roll_list'], axis=1)
+        print("df_segment obj_bbox_fusion_list", df_segment['obj_bbox_fusion_list'].head())
 
     print("df_segment length", len(df_segment.index))
 
@@ -1880,7 +1939,11 @@ def linear_test_df(df_sorted, itter=None):
             # Open the Image
             imgfilename = const_imgfilename_NN(row['image_id'], df_sorted, imgfileprefix)
             outpath = os.path.join(sort.counter_dict["outfolder"],imgfilename)
-            open_path = os.path.join(io.folder_list[row['site_name_id']],row['imagename'])
+            # this handles SSD vs default RAID paths
+            if IS_SSD and SegmentFolder is not None:
+                open_path = os.path.join(SegmentFolder, os.path.basename(io.folder_list[row['site_name_id']]), row['imagename'])
+            else:
+                open_path = os.path.join(io.folder_list[row['site_name_id']],row['imagename'])
             print("open_path", open_path)
             print("open_path constructed from", io.folder_list[row['site_name_id']],row['folder'],row['imagename'])
             # print("io.folder_list:",row['site_name_id'],io.folder_list[row['site_name_id']])
@@ -1986,6 +2049,7 @@ def linear_test_df(df_sorted, itter=None):
 
             # save image
             if cropped_image is not None:
+
                 cv2.imwrite(outpath, cropped_image)
                 good += 1
                 save_image_metas(row)
@@ -2198,10 +2262,15 @@ def main():
             if VERBOSE: print("df len before bboxing,", len(df))
 
             if OBJ_CLS_ID > 0: 
+
                 obj_bbox_col = "bbox_norm"
+                print("before unstringed obj_bbox_col", obj_bbox_col)
+                print("df[obj_bbox_col] example", df[obj_bbox_col].to_string())
                 df[obj_bbox_col] = df[obj_bbox_col].apply(lambda x: io.unstring_json(x))
                 # # convert obj_bbox_col to list using convert_bbox_to_list
                 # df[obj_bbox_col] = df[obj_bbox_col].apply(lambda x: sort.convert_bbox_to_list(x))
+                # print("unstringed obj_bbox_col", obj_bbox_col)
+                # print("df[obj_bbox_col] example", df[obj_bbox_col].to_string())
 
 
 
@@ -2395,7 +2464,7 @@ def main():
 
 
                 # don't pass in session if IS_TENCH
-                if io.IS_TENCH == True: 
+                if io.IS_TENCH or io.IS_MICHELLE == True: 
                     not_dupe_list = None
                 else: 
                     if VERBOSE: print("before recheck_is_dupe_of, df_sorted size", df_sorted.size)
@@ -2403,7 +2472,7 @@ def main():
                     if VERBOSE: print("after recheck_is_dupe_of, df_sorted size", df_sorted.size)
                     not_dupe_list = get_not_dupes_sql(session)  # get list of image_ids that are not dupes
                     if VERBOSE: print("not_dupe_list size", len(not_dupe_list))
-                df_sorted = sort.remove_duplicates(io.folder_list, df_sorted, not_dupe_list, PURGING_DUPES)
+                    df_sorted = sort.remove_duplicates(io.folder_list, df_sorted, not_dupe_list, PURGING_DUPES)
                 if PURGING_DUPES: 
                     print("PURGING_DUPES is True, so bailing out")
                     continue
