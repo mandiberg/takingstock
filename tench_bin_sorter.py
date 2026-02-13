@@ -49,7 +49,7 @@ class BinSorter:
                  main_bin_fill_chance: float = 0.05,
                  item_break_scale: float = 0.0, item_break_chance: float = 0.0,
                  break_box_min_items: int = 2, break_box_max_items: int = 6,
-                 break_box_fill_attempts: int = 5):
+                 break_box_fill_attempts: int = 5, break_box_coverage_threshold: float = 0.99):
         """
         Initialize the bin sorter. Items are placed until the bin is full (min_space_threshold).
 
@@ -67,6 +67,7 @@ class BinSorter:
             break_box_min_items: Minimum number of items to place in a break box (default 2)
             break_box_max_items: Maximum number of items to place in a break box (default 6)
             break_box_fill_attempts: Number of attempts to fill break box; accept first that yields valid placements (default 5)
+            break_box_coverage_threshold: Minimum fractional coverage (0-1) for fallback layouts; reject if covered area < threshold (default 0.99)
         """
         self.box_width, self.box_height = box_size
         self.size_ratios = size_ratios
@@ -79,6 +80,7 @@ class BinSorter:
         self.break_box_min_items = break_box_min_items
         self.break_box_max_items = break_box_max_items
         self.break_box_fill_attempts = break_box_fill_attempts
+        self.break_box_coverage_threshold = break_box_coverage_threshold
         self.bins = []
         self.nested_bins = {}  # Maps (bin_idx, item_idx) -> nested bin data
 
@@ -237,6 +239,14 @@ class BinSorter:
             return pool
         k = random.randint(2, min(4, len(pool)))
         return random.sample(pool, k)
+
+    def _coverage_fraction(self, placements: List[Tuple[int, int, int, int]],
+                           box_w: int, box_h: int) -> float:
+        """Return sum of rect areas / box area, capped at 1.0. Used to reject fallback layouts with gaps."""
+        if not placements or box_w <= 0 or box_h <= 0:
+            return 0.0
+        covered = sum(r[2] * r[3] for r in placements)
+        return min(1.0, covered / (box_w * box_h))
 
     def _try_layout_n_items(self, box_w: int, box_h: int, n: int,
                             ratios_only: List[Tuple[int, int]]) -> List[Tuple[int, int, int, int]]:
@@ -1201,8 +1211,9 @@ class BinSorter:
                 ratios_only = [(r[0], r[1]) for r in restricted_ratios]
                 min_n = max(2, min(self.break_box_min_items, self.break_box_max_items))
                 max_n = max(min_n, self.break_box_max_items)
-                # Try with max_n items first, up to break_box_fill_attempts times; then try max_n-1, etc. down to min_n
-                for n in range(max_n, min_n - 1, -1):
+                target = random.randint(min_n, max_n)
+                # Try target count first, then target-1, etc. down to min_n; each n gets break_box_fill_attempts tries
+                for n in range(target, min_n - 1, -1):
                     for attempt in range(self.break_box_fill_attempts):
                         placements = self._try_layout_n_items(w, h, n, ratios_only)
                         if not placements:
@@ -1218,6 +1229,7 @@ class BinSorter:
                                 break_box_min_items=self.break_box_min_items,
                                 break_box_max_items=self.break_box_max_items,
                                 break_box_fill_attempts=self.break_box_fill_attempts,
+                                break_box_coverage_threshold=self.break_box_coverage_threshold,
                             )
                             nested_sorter._exclude_ratio_for_first_item = (wr, hr)
                             nested_sorter.sort()
@@ -1228,6 +1240,11 @@ class BinSorter:
                             else:
                                 placements = []
                         if placements:
+                            coverage = self._coverage_fraction(placements, w, h)
+                            if coverage < self.break_box_coverage_threshold:
+                                _debug_print(f"[DEBUG] [item-break] Rejected fallback: coverage {coverage:.1%} < {self.break_box_coverage_threshold:.1%}")
+                                placements = []
+                                continue
                             placements = self._fix_overlaps(placements, w, h)
                             _debug_print(f"[DEBUG] [item-break] Filled with {n} items (attempt {attempt + 1}/{self.break_box_fill_attempts} for n={n})")
                             break
@@ -1578,7 +1595,7 @@ def main():
     MIN_SPACE_THRESHOLD = 0  # Minimum space area (in pixels) to consider bin full
     
     # Nesting configuration
-    NESTING_LAYERS = 0 # Number of nesting layers (0 = no nesting)
+    NESTING_LAYERS = 1 # Number of nesting layers (0 = no nesting)
     NESTED_MIN_SPACE_THRESHOLD = 0  # Minimum space threshold for nested bins
     
     # Main bin first-item: chance (0–1) to allow ratio that fills the box; else that ratio is excluded
@@ -1590,6 +1607,7 @@ def main():
     BREAK_BOX_MIN_ITEMS = 1  # Minimum number of items to place in a break box
     BREAK_BOX_MAX_ITEMS = 4  # Maximum number of items to place in a break box
     BREAK_BOX_FILL_ATTEMPTS = 5  # Retry fill this many times; accept first that yields valid placements
+    BREAK_BOX_COVERAGE_THRESHOLD = 0.99  # Minimum coverage for fallback layouts; reject if < threshold
 
     # Output folder for exported images (use "." for current directory)
     OUTPUT_PATH = "../taking_stock_production/bin_sorting"
@@ -1601,7 +1619,7 @@ def main():
             sys.exit(1)
 
     # Batch exports: run and export this many times
-    BATCH_AMOUNT = 10
+    BATCH_AMOUNT = 50
     box_w, box_h = BOX_SIZE[0], BOX_SIZE[1]
     g = math.gcd(box_w, box_h)
     aspect = f"{box_w // g}_{box_h // g}" if g else "1_1"
@@ -1617,7 +1635,8 @@ def main():
                           item_break_chance=ITEM_BREAK_CHANCE,
                           break_box_min_items=BREAK_BOX_MIN_ITEMS,
                           break_box_max_items=BREAK_BOX_MAX_ITEMS,
-                          break_box_fill_attempts=BREAK_BOX_FILL_ATTEMPTS)
+                          break_box_fill_attempts=BREAK_BOX_FILL_ATTEMPTS,
+                          break_box_coverage_threshold=BREAK_BOX_COVERAGE_THRESHOLD)
         sorter.sort()
 
         if BATCH_AMOUNT <= 1:
