@@ -12,6 +12,30 @@ def _debug_print(*args, **kwargs):
     if _VERBOSE:
         print(*args, **kwargs)
 
+
+def _check_overlaps(rects: List[Tuple], label: str) -> bool:
+    """
+    Temporary debug helper. rects: list of (x,y,w,h) or (x,y,w,h,idx).
+    Returns True if any two rects overlap. Logs to [DEBUG] [overlap-check].
+    """
+    def _rect(r):
+        return (r[0], r[1], r[2], r[3])  # x,y,w,h
+    n = len(rects)
+    overlaps = []
+    for i in range(n):
+        ax, ay, aw, ah = _rect(rects[i])
+        a_end_x, a_end_y = ax + aw, ay + ah
+        for j in range(i + 1, n):
+            bx, by, bw, bh = _rect(rects[j])
+            b_end_x, b_end_y = bx + bw, by + bh
+            if not (a_end_x <= bx or b_end_x <= ax or a_end_y <= by or b_end_y <= ay):
+                overlaps.append((i, j, (ax, ay, aw, ah), (bx, by, bw, bh)))
+    if overlaps:
+        _debug_print(f"[DEBUG] [overlap-check] {label}: {len(overlaps)} overlap(s) found: {overlaps}")
+        return True
+    _debug_print(f"[DEBUG] [overlap-check] {label}: no overlaps ({n} rects)")
+    return False
+
 def chance_to_do(chance: float) -> bool:
     """
     Return True if a random number less than chance is generated.
@@ -23,7 +47,9 @@ class BinSorter:
                  min_space_threshold: int = 100,
                  nesting_layers: int = 0, nested_min_space_threshold: int = 100,
                  main_bin_fill_chance: float = 0.05,
-                 item_break_scale: float = 0.0, item_break_chance: float = 0.0):
+                 item_break_scale: float = 0.0, item_break_chance: float = 0.0,
+                 break_box_min_items: int = 2, break_box_max_items: int = 6,
+                 break_box_fill_attempts: int = 5):
         """
         Initialize the bin sorter. Items are placed until the bin is full (min_space_threshold).
 
@@ -38,6 +64,9 @@ class BinSorter:
                                  the entire box. E.g. 0.05 = 5% allow full-bin ratio, 95% exclude it.
             item_break_scale: Fraction (0–1) of the bin's area. If an item's area >= this fraction of the bin, it may be "broken" into a nested bin (see item_break_chance). E.g. 0.25 = 25%. 0 = disabled.
             item_break_chance: When item area >= item_break_scale * bin_area, probability (0–1) to break it into a nested bin filled with a random subset of size_ratios (excluding the item's ratio).
+            break_box_min_items: Minimum number of items to place in a break box (default 2)
+            break_box_max_items: Maximum number of items to place in a break box (default 6)
+            break_box_fill_attempts: Number of attempts to fill break box; accept first that yields valid placements (default 5)
         """
         self.box_width, self.box_height = box_size
         self.size_ratios = size_ratios
@@ -47,6 +76,9 @@ class BinSorter:
         self.main_bin_fill_chance = main_bin_fill_chance
         self.item_break_scale = item_break_scale
         self.item_break_chance = item_break_chance
+        self.break_box_min_items = break_box_min_items
+        self.break_box_max_items = break_box_max_items
+        self.break_box_fill_attempts = break_box_fill_attempts
         self.bins = []
         self.nested_bins = {}  # Maps (bin_idx, item_idx) -> nested bin data
 
@@ -191,6 +223,8 @@ class BinSorter:
             if new_y + new_h > box_h:
                 new_h = box_h - new_y
             if new_w >= 1 and new_h >= 1:
+                if (new_x, new_y, new_w, new_h) != (x, y, w, h):
+                    _debug_print(f"[DEBUG] [gap-fill] item idx={idx} changed from ({x},{y}) {w}x{h} -> ({new_x},{new_y}) {new_w}x{new_h}")
                 items_list[i] = [new_x, new_y, new_w, new_h, idx]
 
         return [tuple(it) for it in items_list]
@@ -204,77 +238,222 @@ class BinSorter:
         k = random.randint(2, min(4, len(pool)))
         return random.sample(pool, k)
 
-    def _fill_break_box_exact(self, box_w: int, box_h: int,
-                              restricted_ratios: List[Tuple[int, int, float]]) -> List[Tuple[int, int, int, int]]:
+    def _try_layout_n_items(self, box_w: int, box_h: int, n: int,
+                            ratios_only: List[Tuple[int, int]]) -> List[Tuple[int, int, int, int]]:
         """
-        Fill a break box with exactly 4 items in a 2x2 layout that tiles the box.
-        Picks 4 ratios from restricted_ratios so the combined aspect matches box_w/box_h (exact fill).
-        Returns list of (x, y, w, h) in box coordinates.
+        Try to place n items in a layout that tiles the box. Returns placements or [] if impossible.
+        Supports layouts: 2=1x2 or 2x1, 3=1x3 or 3x1, 4=2x2, 5=5x1 or 1x5, 6=2x3 or 3x2.
         """
-        # Ratios as (wr, hr) for convenience
-        ratios_only = [(r[0], r[1]) for r in restricted_ratios]
-        if not ratios_only:
+        if n < 2 or n > 6 or len(ratios_only) < n:
             return []
-        while len(ratios_only) < 4:
-            ratios_only.extend(ratios_only)
+        
         W, H = float(box_w), float(box_h)
-        target_aspect = W / H  # width/height of box
-        best_err = float('inf')
-        best_quad = None
-        n_ratios = len(ratios_only)
-        for _ in range(80):
-            if n_ratios >= 4:
-                quad = random.sample(ratios_only, 4)
-            else:
-                quad = [random.choice(ratios_only) for _ in range(4)]
-            (w1, h1), (w2, h2), (w3, h3), (w4, h4) = quad
-            if h1 <= 0 or h2 <= 0 or h3 <= 0 or h4 <= 0:
-                continue
-            r1 = w1 / h1 + w2 / h2  # row 1 width in "height units"
-            r2 = w3 / h3 + w4 / h4
-            if r1 <= 0 or r2 <= 0:
-                continue
-            # Exact fill when box_w/box_h = r1*r2/(r1+r2)
-            layout_aspect = r1 * r2 / (r1 + r2)
-            err = abs(layout_aspect - target_aspect)
-            if err < best_err:
-                best_err = err
-                best_quad = (w1, h1, w2, h2, w3, h3, w4, h4, r1, r2)
-        if best_quad is None:
-            return []
-        w1, h1, w2, h2, w3, h3, w4, h4, r1, r2 = best_quad
-        # Row heights so both rows have width W: H1*r1 = W, H2*r2 = W => H1 = W/r1, H2 = W/r2. We need H1+H2 = H.
-        H1 = W / r1
-        H2 = W / r2
-        # If aspect wasn't exact, clamp so H1+H2 = H and scale row widths to stay within W
-        if H1 + H2 > 0:
-            scale_h = H / (H1 + H2)
-            H1 *= scale_h
-            H2 *= scale_h
-        # Item dimensions (row 1: two items of height H1; row 2: two of height H2)
-        # Row 1: widths H1*w1/h1, H1*w2/h2. Row 2: H2*w3/h3, H2*w4/h4.
-        w1_px = int(round(H1 * w1 / h1))
-        w2_px = int(round(H1 * w2 / h2))
-        w3_px = int(round(H2 * w3 / h3))
-        w4_px = int(round(H2 * w4 / h4))
-        # Nudge so row widths sum to box_w (avoid gaps) and stay in bounds
-        w1_px = max(1, min(w1_px, box_w - 1))
-        w2_px = max(1, box_w - w1_px)
-        w3_px = max(1, min(w3_px, box_w - 1))
-        w4_px = max(1, box_w - w3_px)
-        H1_int = int(round(H1))
-        H2_int = int(round(H2))
-        if H1_int + H2_int != box_h:
-            H2_int = max(1, box_h - H1_int)
-        H1_int = max(1, min(H1_int, box_h - 1))
-        H2_int = max(1, box_h - H1_int)
-        # Placements: (x, y, w, h)
-        return [
-            (0, 0, w1_px, H1_int),
-            (w1_px, 0, w2_px, H1_int),
-            (0, H1_int, w3_px, H2_int),
-            (w3_px, H1_int, w4_px, H2_int),
-        ]
+        target_aspect = W / H
+        
+        # Try different layout arrangements based on n
+        layouts_to_try = []
+        if n == 2:
+            layouts_to_try = [(1, 2), (2, 1)]  # 1 row x 2 cols, or 2 rows x 1 col
+        elif n == 3:
+            layouts_to_try = [(1, 3), (3, 1)]
+        elif n == 4:
+            layouts_to_try = [(2, 2)]
+        elif n == 5:
+            layouts_to_try = [(1, 5), (5, 1)]
+        elif n == 6:
+            layouts_to_try = [(2, 3), (3, 2)]
+        
+        for rows, cols in layouts_to_try:
+            for attempt in range(50):  # Try up to 50 random ratio combinations
+                if len(ratios_only) >= n:
+                    selected = random.sample(ratios_only, n)
+                else:
+                    selected = [random.choice(ratios_only) for _ in range(n)]
+                
+                # Arrange ratios into rows x cols grid
+                ratio_grid = []
+                for r in range(rows):
+                    row_start = r * cols
+                    ratio_grid.append(selected[row_start:row_start + cols])
+                
+                # Compute row heights so each row has width W
+                row_heights = []
+                for row_idx, row_ratios in enumerate(ratio_grid):
+                    row_width_rate = sum(wr / hr for wr, hr in row_ratios if hr > 0)
+                    if row_width_rate <= 0:
+                        break
+                    row_height = W / row_width_rate
+                    row_heights.append(row_height)
+                else:
+                    # All rows computed successfully
+                    total_height = sum(row_heights)
+                    if total_height <= 0:
+                        continue
+                    
+                    # Scale to fit box_h
+                    scale_h = H / total_height
+                    row_heights = [h * scale_h for h in row_heights]
+                    
+                    # Convert to integers and compute item dimensions
+                    row_heights_int = [max(1, int(round(h))) for h in row_heights]
+                    if sum(row_heights_int) != box_h:
+                        # Adjust last row
+                        row_heights_int[-1] = max(1, box_h - sum(row_heights_int[:-1]))
+                    
+                    placements = []
+                    y = 0
+                    valid = True
+                    
+                    for row_idx, (row_ratios, row_h) in enumerate(zip(ratio_grid, row_heights_int)):
+                        # Compute widths for this row preserving ratios
+                        item_widths = []
+                        for wr, hr in row_ratios:
+                            if hr <= 0:
+                                valid = False
+                                break
+                            w = max(1, int(round(row_h * wr / hr)))
+                            item_widths.append(w)
+                        if not valid:
+                            break
+                        
+                        # Scale to fit box_w proportionally (preserves ratios)
+                        row_sum = sum(item_widths)
+                        if row_sum > 0 and row_sum != box_w:
+                            scale_w = box_w / row_sum
+                            item_widths = [max(1, int(round(w * scale_w))) for w in item_widths]
+                            # If still not exact, scale again proportionally
+                            if sum(item_widths) != box_w and sum(item_widths) > 0:
+                                scale_w2 = box_w / sum(item_widths)
+                                item_widths = [max(1, int(round(w * scale_w2))) for w in item_widths]
+                                # Only adjust last item if error is tiny (1-2 pixels)
+                                if abs(sum(item_widths) - box_w) <= 2:
+                                    item_widths[-1] = max(1, box_w - sum(item_widths[:-1]))
+                        
+                        # Recalculate widths from exact row_h to ensure all items have same height
+                        # This prevents overlaps while preserving aspect ratios as much as possible
+                        item_widths_from_height = []
+                        for wr, hr in row_ratios:
+                            if hr <= 0:
+                                valid = False
+                                break
+                            w = max(1, int(round(row_h * wr / hr)))
+                            item_widths_from_height.append(w)
+                        if not valid:
+                            break
+                        
+                        # Scale these widths to fit box_w proportionally (preserves ratios)
+                        row_sum_h = sum(item_widths_from_height)
+                        if row_sum_h > 0 and row_sum_h != box_w:
+                            scale_w_h = box_w / row_sum_h
+                            item_widths_from_height = [max(1, int(round(w * scale_w_h))) for w in item_widths_from_height]
+                            if sum(item_widths_from_height) != box_w and sum(item_widths_from_height) > 0:
+                                scale_w_h2 = box_w / sum(item_widths_from_height)
+                                item_widths_from_height = [max(1, int(round(w * scale_w_h2))) for w in item_widths_from_height]
+                                if abs(sum(item_widths_from_height) - box_w) <= 2:
+                                    item_widths_from_height[-1] = max(1, box_w - sum(item_widths_from_height[:-1]))
+                        
+                        # Place items in this row - all with exact height row_h
+                        x = 0
+                        for (wr, hr), w in zip(row_ratios, item_widths_from_height):
+                            h = row_h  # All items in row have same height to prevent overlaps
+                            # Verify item fits
+                            if x + w > box_w or y + h > box_h:
+                                valid = False
+                                break
+                            placements.append((x, y, w, h))
+                            x += w
+                        
+                        if not valid:
+                            break
+                        # All items in row have height row_h, so increment by row_h
+                        y += row_h
+                    
+                    if valid and len(placements) == n:
+                        # Verify aspect ratios, bounds, and row/column sums
+                        y_positions = sorted(set(y for _, y, _, _ in placements))
+                        prev_y_end = -1
+                        total_height = 0
+                        for y_pos in y_positions:
+                            row_items = [(x, w, h) for x, y, w, h in placements if y == y_pos]
+                            row_items.sort()
+                            row_sum = sum(w for _, w, _ in row_items)
+                            row_h = row_items[0][2] if row_items else 0
+                            # Check row sums to box_w (allow 1-2 pixel rounding)
+                            if abs(row_sum - box_w) > 2:
+                                valid = False
+                                break
+                            # Check rows don't overlap
+                            if y_pos < prev_y_end:
+                                valid = False
+                                break
+                            prev_y_end = y_pos + row_h
+                            total_height = max(total_height, y_pos + row_h)
+                        
+                        # Check total height equals box_h
+                        if valid and abs(total_height - box_h) > 2:
+                            valid = False
+                        
+                        # Verify all items fit and have correct aspect ratios
+                        if valid:
+                            for (x, y, w, h), (wr, hr) in zip(placements, selected):
+                                if h == 0 or hr == 0 or x + w > box_w or y + h > box_h:
+                                    valid = False
+                                    break
+                                aspect_curr = w / h
+                                aspect_target = wr / hr
+                                if abs(aspect_curr - aspect_target) / aspect_target > 0.02:
+                                    valid = False
+                                    break
+                        
+                        if valid:
+                            return placements
+        
+        return []  # No valid layout found
+
+    def _fix_overlaps(self, placements: List[Tuple[int, int, int, int]], 
+                     box_w: int, box_h: int) -> List[Tuple[int, int, int, int]]:
+        """
+        Fix overlaps in placements by adjusting y-positions. For items that overlap horizontally,
+        ensures they don't overlap vertically by moving overlapping items down.
+        """
+        if not placements:
+            return placements
+        
+        # Sort items by y-position, then x-position
+        sorted_placements = sorted(placements, key=lambda item: (item[1], item[0]))
+        fixed_placements = []
+        
+        for x, y, w, h in sorted_placements:
+            original_y = y
+            # Check for overlaps with already-placed items
+            max_y_end = 0
+            overlapping_items = []
+            for fx, fy, fw, fh in fixed_placements:
+                # Check if items overlap horizontally
+                if not (x + w <= fx or fx + fw <= x):
+                    # They overlap horizontally - ensure this item starts after the previous one ends
+                    item_y_end = fy + fh
+                    max_y_end = max(max_y_end, item_y_end)
+                    overlapping_items.append((fx, fy, fw, fh))
+            
+            # Move this item down if it would overlap
+            if y < max_y_end:
+                y = max_y_end
+                _debug_print(f"[DEBUG] [fix-overlaps] Moved item ({x},{original_y}) {w}x{h} down to y={y} (max_y_end={max_y_end}, overlapping with {len(overlapping_items)} items)")
+            
+            # Ensure item doesn't exceed box bounds
+            if y + h > box_h:
+                # Item would exceed box - shrink height to fit
+                original_h = h
+                h = max(1, box_h - y)
+                _debug_print(f"[DEBUG] [fix-overlaps] Shrunk item ({x},{y}) height from {original_h} to {h} to fit in box_h={box_h}")
+                if h <= 0:
+                    _debug_print(f"[DEBUG] [fix-overlaps] Skipping item ({x},{y}) {w}x{h} - cannot fit in box")
+                    continue  # Skip this item if it can't fit
+            
+            fixed_placements.append((x, y, w, h))
+        
+        return fixed_placements
 
     def _can_place_in_bin(self, bin_items: List[Tuple], item_width: int, 
                           item_height: int, bin_width: int, bin_height: int) -> bool:
@@ -559,10 +738,24 @@ class BinSorter:
         # Gap-fill pass: expand items into gaps within their expand_x/expand_y allowances
         for i, bin_items in enumerate(self.bins):
             self.bins[i] = self._gap_fill_pass(bin_items, self.box_width, self.box_height)
-        for nested_data in self.nested_bins.values():
+        for bin_key, nested_data in self.nested_bins.items():
             pw, ph = nested_data['parent_pos'][2], nested_data['parent_pos'][3]
-            nested_data['items'] = self._gap_fill_pass(nested_data['items'], pw, ph)
+            nested_items = nested_data['items']
+            _check_overlaps(nested_items, f"nested bin {bin_key} BEFORE gap fill")
+            # Apply gap filling
+            nested_items = self._gap_fill_pass(nested_items, pw, ph)
+            _check_overlaps(nested_items, f"nested bin {bin_key} AFTER gap fill (before overlap fix)")
+            # Fix any overlaps that gap filling may have created
+            # Convert to (x, y, w, h) format for _fix_overlaps
+            placements = [(x, y, w, h) for (x, y, w, h, _) in nested_items]
+            fixed_placements = self._fix_overlaps(placements, pw, ph)
+            # Convert back to (x, y, w, h, idx) format
+            nested_data['items'] = [(x, y, w, h, idx) for (x, y, w, h), (_, _, _, _, idx) in zip(fixed_placements, nested_items)]
+            _check_overlaps(nested_data['items'], f"nested bin {bin_key} AFTER overlap fix")
 
+        # Final overlap check on exact data we're returning (catches any missed path)
+        for bin_key, nested_data in self.nested_bins.items():
+            _check_overlaps(nested_data['items'], f"FINAL nested bin {bin_key} (data used for draw)")
         _debug_print(f"[DEBUG] Final nested_bins count: {len(self.nested_bins)} [box={self.box_width}x{self.box_height}]")
         return self.bins
     
@@ -1004,31 +1197,58 @@ class BinSorter:
                 bins[-1].append((x, y, w, h, item_idx))
                 restricted_ratios = self._get_random_restricted_ratios(wr, hr)
                 _debug_print(f"[DEBUG] [item-break] Restricted ratios for nested bin: {[(r[0], r[1]) for r in restricted_ratios]}")
-                placements = self._fill_break_box_exact(w, h, restricted_ratios)
-                if not placements:
-                    # Fallback: use packer to fill the break box
-                    nested_sorter = BinSorter(
-                        box_size=(w, h),
-                        size_ratios=restricted_ratios,
-                        min_space_threshold=0,
-                        nesting_layers=0,
-                        nested_min_space_threshold=self.nested_min_space_threshold,
-                        main_bin_fill_chance=0.05,
-                        item_break_scale=0,
-                        item_break_chance=0.0,
-                    )
-                    nested_sorter._exclude_ratio_for_first_item = (wr, hr)
-                    nested_sorter.sort()
-                    nested_items = nested_sorter.bins[0] if nested_sorter.bins else []
-                    placements = [(nx, ny, nw, nh) for (nx, ny, nw, nh, _) in nested_items]
-                remapped = [(nx, ny, nw, nh, item_idx + 1 + i) for i, (nx, ny, nw, nh) in enumerate(placements)]
-                _debug_print(f"[DEBUG] [item-break] Broken into {len(remapped)} items: {[(nx, ny, nw, nh, idx) for (nx, ny, nw, nh, idx) in remapped]}")
-                self.nested_bins[(0, item_idx)] = {
-                    'items': remapped,
-                    'parent_pos': (x, y, w, h),
-                    'nested_bins': {},
-                }
-                item_idx += 1 + len(remapped)
+                placements = []
+                ratios_only = [(r[0], r[1]) for r in restricted_ratios]
+                min_n = max(2, min(self.break_box_min_items, self.break_box_max_items))
+                max_n = max(min_n, self.break_box_max_items)
+                # Try with max_n items first, up to break_box_fill_attempts times; then try max_n-1, etc. down to min_n
+                for n in range(max_n, min_n - 1, -1):
+                    for attempt in range(self.break_box_fill_attempts):
+                        placements = self._try_layout_n_items(w, h, n, ratios_only)
+                        if not placements:
+                            nested_sorter = BinSorter(
+                                box_size=(w, h),
+                                size_ratios=restricted_ratios,
+                                min_space_threshold=0,
+                                nesting_layers=0,
+                                nested_min_space_threshold=self.nested_min_space_threshold,
+                                main_bin_fill_chance=0.05,
+                                item_break_scale=0,
+                                item_break_chance=0.0,
+                                break_box_min_items=self.break_box_min_items,
+                                break_box_max_items=self.break_box_max_items,
+                                break_box_fill_attempts=self.break_box_fill_attempts,
+                            )
+                            nested_sorter._exclude_ratio_for_first_item = (wr, hr)
+                            nested_sorter.sort()
+                            nested_items = nested_sorter.bins[0] if nested_sorter.bins else []
+                            raw = [(nx, ny, nw, nh) for (nx, ny, nw, nh, _) in nested_items]
+                            if len(raw) >= n:
+                                placements = raw[:n]
+                            else:
+                                placements = []
+                        if placements:
+                            placements = self._fix_overlaps(placements, w, h)
+                            _debug_print(f"[DEBUG] [item-break] Filled with {n} items (attempt {attempt + 1}/{self.break_box_fill_attempts} for n={n})")
+                            break
+                    if placements:
+                        break
+                if placements:
+                    remapped = [(nx, ny, nw, nh, item_idx + 1 + i) for i, (nx, ny, nw, nh) in enumerate(placements)]
+                    _check_overlaps(remapped, "break-box stored items (remapped)")
+                    _debug_print(f"[DEBUG] [item-break] Broken into {len(remapped)} items: {[(nx, ny, nw, nh, idx) for (nx, ny, nw, nh, idx) in remapped]}")
+                    self.nested_bins[(0, item_idx)] = {
+                        'items': remapped,
+                        'parent_pos': (x, y, w, h),
+                        'nested_bins': {},
+                    }
+                    item_idx += 1 + len(remapped)
+                else:
+                    # Break failed (couldn't place min items) - remove the break box item and don't break
+                    _debug_print(f"[DEBUG] [item-break] Break failed, removing break box item and not breaking")
+                    bins[-1].pop()  # Remove the break box item we just appended
+                    bins[-1].append((x, y, w, h, item_idx))  # Add original item instead
+                    item_idx += 1
             else:
                 bins[-1].append((x, y, w, h, item_idx))
                 item_idx += 1
@@ -1099,15 +1319,19 @@ class BinSorter:
             for k, v in to_add.items():
                 self.nested_bins[k] = v
 
-        # Debug log: print each item's id, width, height, location
+        # Debug log: print each item's id, width, height, aspect as fraction, location
         for bin_idx, bin_items in enumerate(self.bins):
             for x, y, w, h, item_id in bin_items:
-                _debug_print(f"[DEBUG] Item id={item_id} width={w} height={h} location=({x},{y})")
+                g = math.gcd(w, h) if h else 0
+                aspect = f"{w // g}/{h // g}" if g else "n/a"
+                _debug_print(f"[DEBUG] Item id={item_id} width={w} height={h} aspect={aspect} location=({x},{y})")
             for (b_idx, item_id), nested_data in sorted(self.nested_bins.items()):
                 if b_idx != bin_idx:
                     continue
                 for nx, ny, nw, nh, nested_id in nested_data.get('items', []):
-                    _debug_print(f"[DEBUG] Item id={nested_id} (nested in {item_id}) width={nw} height={nh} location=({nx},{ny})")
+                    g = math.gcd(nw, nh) if nh else 0
+                    aspect = f"{nw // g}/{nh // g}" if g else "n/a"
+                    _debug_print(f"[DEBUG] Item id={nested_id} (nested in {item_id}) width={nw} height={nh} aspect={aspect} location=({nx},{ny})")
 
     def export_image(self, output_path: str = "bin_sorting_result.png", 
                     bins_per_row: int = None, padding: int = 20):
@@ -1331,7 +1555,7 @@ class BinSorter:
 def main():
     """Example usage of the bin sorter."""
     # Customizable parameters
-    BOX_SIZE = ((1920),(1080))  # pixels (width, height)
+    BOX_SIZE = ((1920),(1920))  # pixels (width, height)
     # Width:height:weight ratios; optional (wr, hr, weight, expand_x, expand_y) for gap-fill (e.g. 0.1 = 10% expand)
     SIZE_RATIOS = [
         (1,1, 0.3, .2, .2),
@@ -1354,7 +1578,7 @@ def main():
     MIN_SPACE_THRESHOLD = 0  # Minimum space area (in pixels) to consider bin full
     
     # Nesting configuration
-    NESTING_LAYERS = 1 # Number of nesting layers (0 = no nesting)
+    NESTING_LAYERS = 0 # Number of nesting layers (0 = no nesting)
     NESTED_MIN_SPACE_THRESHOLD = 0  # Minimum space threshold for nested bins
     
     # Main bin first-item: chance (0–1) to allow ratio that fills the box; else that ratio is excluded
@@ -1363,6 +1587,9 @@ def main():
     # Item break: large items can be turned into nested bins of smaller items
     ITEM_BREAK_SCALE = 0.45  # Fraction (0–1) of bin area; e.g. 0.25 = break when item >= 25% of bin. 0 = disabled
     ITEM_BREAK_CHANCE = 0.95  # Probability (0–1) to break when item area >= ITEM_BREAK_SCALE * bin_area
+    BREAK_BOX_MIN_ITEMS = 1  # Minimum number of items to place in a break box
+    BREAK_BOX_MAX_ITEMS = 4  # Maximum number of items to place in a break box
+    BREAK_BOX_FILL_ATTEMPTS = 5  # Retry fill this many times; accept first that yields valid placements
 
     # Output folder for exported images (use "." for current directory)
     OUTPUT_PATH = "../taking_stock_production/bin_sorting"
@@ -1387,7 +1614,10 @@ def main():
                           nested_min_space_threshold=NESTED_MIN_SPACE_THRESHOLD,
                           main_bin_fill_chance=MAIN_BIN_FILL_CHANCE,
                           item_break_scale=ITEM_BREAK_SCALE,
-                          item_break_chance=ITEM_BREAK_CHANCE)
+                          item_break_chance=ITEM_BREAK_CHANCE,
+                          break_box_min_items=BREAK_BOX_MIN_ITEMS,
+                          break_box_max_items=BREAK_BOX_MAX_ITEMS,
+                          break_box_fill_attempts=BREAK_BOX_FILL_ATTEMPTS)
         sorter.sort()
 
         if BATCH_AMOUNT <= 1:
