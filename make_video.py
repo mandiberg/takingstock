@@ -90,7 +90,7 @@ MODES = {0:'paris_photo_torso_images_topics', 1:'paris_photo_torso_videos_topics
 MODE_CHOICE = 6
 CURRENT_MODE = MODES[MODE_CHOICE]
 
-LIMIT = 200000 # this is the limit for the SQL query
+LIMIT = 200 # this is the limit for the SQL query
 
 image_edge_multiplier = None
 # image_edge_multiplier = [1.3,2,2.9,2] # [top, right, bottom, left] setting a default. not sure if this will mess up places it looks for None
@@ -205,7 +205,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
 
     # SegmentTable_name = 'SegmentOct20'
     SegmentTable_name = 'SegmentBig_isface'
-    if class_token and "fusion" not in CLUSTER_TYPE+SORT_TYPE:
+    if class_token and "fusion" not in (CLUSTER_TYPE+SORT_TYPE).lower():
         OBJ_DONT_SUBSELECT = False # False means SQL select for OBJ. Set to True by default
         SegmentHelper_name = f'SegmentHelperObject_{class_token}' # TK revisit this for prodution run
         SegmentFolder = f"/Volumes/{ssd}/segment_images_{folder_token}"
@@ -790,6 +790,9 @@ if not io.IS_TENCH:
     Session = sessionmaker(bind=engine)
     session = Session()
     Base = declarative_base()
+
+    # Pass session to ToolsClustering instance for database access
+    cl.session = session
 
     mongo_client = pymongo.MongoClient(io.dbmongo['host'])
     mongo_db = mongo_client[io.dbmongo['name']]
@@ -1403,7 +1406,7 @@ def prep_encodings_NN(df_segment):
         elif "obj_bbox" in SORT_TYPE:
             # does this matter?
             source_col = sort_column = "bbox_norm"
-        elif "fusion" in SORT_TYPE:
+        elif "fusion" in SORT_TYPE.lower():
             sort_column = "obj_bbox_fusion_list"
             source_col = None
         return sort_column, source_col
@@ -1414,7 +1417,7 @@ def prep_encodings_NN(df_segment):
     # drop rows where body_landmarks_normalized is None
     # TK this needs to be adapted to handle left vs right hand. 
     # subset needs to be both of them, if both are na
-    if not sort_column == "hand_landmarks" or not SORT_TYPE == "ObjectFusion":
+    if not sort_column == "hand_landmarks" and not SORT_TYPE == "ObjectFusion":
         # hand_landmarks are all giving 0's if null, so no NA
         # skip for ObjectFusion, as 0's are valid values
         print("df_segment source_col", df_segment[source_col].to_string())
@@ -1426,9 +1429,9 @@ def prep_encodings_NN(df_segment):
         if not null_encodings.empty:
             print("Rows with invalid body_landmarks_normalized data:")
             print(null_encodings)
-        
-    print(df_segment.size)
-    print(df_segment[source_col])
+    if source_col is not None:    
+        print(df_segment.size)
+        print(df_segment[source_col])
 
 
     # create a column for the hsv values using df_segment.apply(lambda row: create_hsv_list(row), axis=1)
@@ -1442,8 +1445,16 @@ def prep_encodings_NN(df_segment):
         df_segment['pitch_yaw_roll_list'] = df_segment.apply(lambda row: [row['pitch'], row['yaw'], row['roll']], axis=1)
 
     if SORT_TYPE == "ObjectFusion" or "fusion" in SORT_TYPE:
-        # set df_segment['obj_bbox_fusion_list']
-        pass
+        # Process detections and classify their relationship to hands/face
+        print("Processing detections for ObjectFusion...")
+        df_segment = cl.process_detections_for_df(df_segment)
+        
+        # Construct obj_bbox_fusion_list using class method
+        df_segment['obj_bbox_fusion_list'] = df_segment.apply(cl.construct_fusion_list, axis=1)
+        if VERBOSE:
+            print("df_segment obj_bbox_fusion_list sample:")
+            print(df_segment[['image_id', 'obj_bbox_fusion_list']].head())
+            print(f"Fusion list length: {len(df_segment['obj_bbox_fusion_list'].iloc[0])} (expected: 33 = 3 pitch/yaw/roll + 5*6 detections)")
     elif OBJ_CLS_ID > 0: 
         obj_bbox_col = "bbox_norm"
         print(f" prepping {obj_bbox_col} for {CLUSTER1}")
@@ -2270,6 +2281,8 @@ def main():
             # if not df['hand_results'].isnull().all():
             # print("body_landmarks_3D", df['body_landmarks_3D'][0])
             df[['left_hand_landmarks', 'left_hand_world_landmarks', 'left_hand_landmarks_norm', 'right_hand_landmarks', 'right_hand_world_landmarks', 'right_hand_landmarks_norm']] = pd.DataFrame(df['hand_results'].apply(sort.prep_hand_landmarks).tolist(), index=df.index)
+            # Get pointer knuckle positions for object-hand relationship detection
+            df[["left_pointer_knuckle_norm","right_pointer_knuckle_norm"]] = pd.DataFrame(df['hand_results'].apply(sort.prep_knuckle_landmarks).tolist(), index=df.index)
             # if VERBOSE: print("about to split_landmarks_to_columns_or_list,", df.iloc[0])
             # df = sort.split_landmarks_to_columns_or_list(df, left_col="left_hand_world_landmarks", right_col="right_hand_world_landmarks", structure="list")
             df = sort.split_landmarks_to_columns_or_list(df, first_col="left_hand_landmarks_norm", second_col="right_hand_landmarks_norm", structure="list")

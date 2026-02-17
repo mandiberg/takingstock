@@ -89,6 +89,7 @@ CLUSTER_TYPE = "ObjectFusion"
 # CLUSTER_TYPE = "HSV" # only works with cluster save, not with assignment
 VERBOSE = True
 cl = ToolsClustering(CLUSTER_TYPE, VERBOSE=VERBOSE)
+# Note: session will be passed to cl after engine/session creation below
 
 if "3D" in cl.CLUSTER_TYPE:
     if cl.CLUSTER_TYPE == "ArmsPoses3D":
@@ -348,6 +349,9 @@ Session = sessionmaker(bind=engine)
 session = Session()
 Base = declarative_base()
 
+# Pass session to ToolsClustering instance for database access
+cl.session = session
+
 # TK 4 HSV
 Clusters, ImagesClusters, MetaClusters, ClustersMetaClusters = cl.construct_table_classes(table_cluster_type)
 
@@ -366,7 +370,7 @@ def landmarks_to_df_columnar(df,add_list=False):
     
     if cl.CLUSTER_TYPE == "ObjectFusion":
         print("cl.CLUSTER_TYPE == ObjectFusion, doing it via prepare_features_for_knn", df)
-        df_columnar = prepare_features_for_knn(df)
+        df_columnar = cl.prepare_features_for_knn(df)
         # df_columnar = prepared_df.values
         return df_columnar
     
@@ -414,55 +418,8 @@ def landmarks_to_df_columnar(df,add_list=False):
     print("landmarks_to_df_columnar at the end these are the columns: ", df_columnar.columns)
     return df_columnar
 
-def flatten_object_detections(detection_list):
-    """
-    Flatten a detection list [class_id, conf, top, left, right, bottom] or None into features.
-    Returns a 6-element list, or [0,0,0,0,0,0] if None.
-    """
-    if detection_list is None:
-        return [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-    return list(detection_list)
-
-def prepare_features_for_knn(df):
-    """
-    Flatten all columns into a single feature vector for KNN clustering.
-    Handles numeric columns and object detection lists.
-    Returns df with all features flattened into columns.
-    """
-    # Numeric columns to include
-    numeric_cols = ['pitch', 'yaw', 'roll']
-    
-    # Detection columns (6 values each: class_id, conf, top, left, right, bottom)
-    detection_cols = ['both_hands_object', 'left_hand_object', 'right_hand_object', 
-                      'top_face_object', 'bottom_face_object']
-    detection_fields = ['class_id', 'conf', 'top', 'left', 'right', 'bottom']
-    
-    # Create feature dict by concatenating all values
-    features_dict = {}
-    
-    # Add image_id if it exists
-    if 'image_id' in df.columns:
-        features_dict['image_id'] = df['image_id']
-    else:
-        print("Warning: 'image_id' column not found in DataFrame. It will be missing from the features.")
-
-    # Add numeric columns
-    for col in numeric_cols:
-        if col in df.columns:
-            features_dict[col] = df[col].apply(lambda x: float(x) if pd.notna(x) else 0.0)
-    
-    # Add detection features with descriptive column names
-    for det_col in detection_cols:
-        if det_col in df.columns:
-            for i, field in enumerate(detection_fields):
-                col_name = f"{det_col}_{field}"
-                features_dict[col_name] = df[det_col].apply(
-                    lambda x: flatten_object_detections(x)[i] if x is not None else 0.0
-                )
-    
-    result_df = pd.DataFrame(features_dict)
-    print("prepare_features_for_knn result_df columns: ", result_df.columns)
-    return result_df
+# flatten_object_detections and prepare_features_for_knn have been moved to ToolsClustering class
+# Use cl.flatten_object_detections() and cl.prepare_features_for_knn() instead
 
 def kmeans_cluster(df, n_clusters=32):
     # Select only the numerical columns (dim_0 to dim_65)
@@ -538,7 +495,7 @@ def calc_cluster_median(df, col_list, cluster_id):
         # drop "image_d_id" if it exists, because it will mess with the knn input
         if 'image_id' in cluster_df.columns:
             cluster_df = cluster_df.drop(columns=['image_id'])
-        prepared_cluster_df = prepare_features_for_knn(cluster_df)
+        prepared_cluster_df = cl.prepare_features_for_knn(cluster_df)
         cluster_points = prepared_cluster_df.values
         print(f"Cluster {cluster_id} data after flattening: {prepared_cluster_df}")
         print(f"Cluster {cluster_id} points after flattening: {cluster_points}")
@@ -1011,7 +968,7 @@ def prepare_df(df):
         print("first row before query",df.iloc[0].to_string())
         # apply query_detections to each image_id to get the object data
         # df['image_id'].apply(lambda image_id: query_detections(image_id))
-        df = process_detections_for_df(df)
+        df = cl.process_detections_for_df(df)
 
         pass
     
@@ -1112,97 +1069,9 @@ def fetch_encodings_mongo_batched(df, batch_size=5000, mongo_reconnect_interval=
     print(f"Finished fetching {total_rows} encodings")
     return df
 
-# ==================== OBJECT-HAND RELATIONSHIP FUNCTIONS (now in ToolsClustering class) ====================
-
-def query_and_classify_detections(image_id, left_knuckle, right_knuckle):
-    """
-    Query detections for an image and classify their relationship to hands/face.
-    Returns dict with 5 keys, each containing a 6-element list or None.
-    """
-    # Query detections
-    detection_results = session.query(Detections).filter_by(image_id=image_id).\
-        filter(Detections.conf > cl.MIN_DETECTION_CONFIDENCE).all()
-    
-    if not detection_results:
-        return {
-            'both_hands_object': None,
-            'left_hand_object': None,
-            'right_hand_object': None,
-            'top_face_object': None,
-            'bottom_face_object': None
-        }
-    
-    # Parse detections into standardized format
-    detections = []
-    for d in detection_results:
-        bbox = cl.parse_bbox_norm(d.bbox_norm)
-        if bbox is None:
-            continue
-        detections.append({
-            'detection_id': d.detection_id,
-            'class_id': d.class_id,
-            'conf': d.conf,
-            'bbox': bbox,
-            'top': bbox['top'],
-            'left': bbox['left'],
-            'right': bbox['right'],
-            'bottom': bbox['bottom']
-        })
-    
-    # Classify relationships using class method
-    classified = cl.classify_object_hand_relationships(detections, left_knuckle, right_knuckle)
-    
-    # Convert to 6-element lists for df storage
-    result = {}
-    for key, det in classified.items():
-        if det is None:
-            result[key] = None
-        else:
-            result[key] = [
-                det['class_id'],
-                det['conf'],
-                det['top'],
-                det['left'],
-                det['right'],
-                det['bottom']
-            ]
-    
-    return result
-
-def process_detections_for_df(df):
-    """
-    Process all detections for a dataframe and add object classification columns.
-    Expects df to have: image_id, left_pointer_knuckle_norm, right_pointer_knuckle_norm
-    """
-    # Initialize new columns
-    df['both_hands_object'] = None
-    df['left_hand_object'] = None
-    df['right_hand_object'] = None
-    df['top_face_object'] = None
-    df['bottom_face_object'] = None
-    
-    for idx, row in df.iterrows():
-        image_id = row['image_id']
-        left_knuckle = row.get('left_pointer_knuckle_norm', cl.DEFAULT_HAND_POSITION)
-        right_knuckle = row.get('right_pointer_knuckle_norm', cl.DEFAULT_HAND_POSITION)
-        
-        # Handle case where knuckle data might be None or string
-        if left_knuckle is None or (isinstance(left_knuckle, list) and len(left_knuckle) == 0):
-            left_knuckle = cl.DEFAULT_HAND_POSITION
-        if right_knuckle is None or (isinstance(right_knuckle, list) and len(right_knuckle) == 0):
-            right_knuckle = cl.DEFAULT_HAND_POSITION
-        
-        # Query and classify
-        classifications = query_and_classify_detections(image_id, left_knuckle, right_knuckle)
-        
-        # Assign to df
-        df.at[idx, 'both_hands_object'] = classifications['both_hands_object']
-        df.at[idx, 'left_hand_object'] = classifications['left_hand_object']
-        df.at[idx, 'right_hand_object'] = classifications['right_hand_object']
-        df.at[idx, 'top_face_object'] = classifications['top_face_object']
-        df.at[idx, 'bottom_face_object'] = classifications['bottom_face_object']
-    
-    return df
+# ==================== OBJECT-HAND RELATIONSHIP FUNCTIONS ====================
+# These functions have been moved to ToolsClustering class.
+# Use cl.query_and_classify_detections() and cl.process_detections_for_df() instead.
 
 
 # defining globally # TK 4 HSV
