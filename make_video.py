@@ -78,7 +78,7 @@ CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden b
 # CSV_FOLDER = os.path.join(io.ROOT_DBx, "body3D_segmentbig_useall256_CSVs_test")
 
 # CSV_FOLDER = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion128_test220K"
-CSV_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion"
+CSV_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion/1k"
 
 # overriding DB for testing
 # io.db["name"] = "stock"
@@ -90,7 +90,7 @@ MODES = {0:'paris_photo_torso_images_topics', 1:'paris_photo_torso_videos_topics
 MODE_CHOICE = 6
 CURRENT_MODE = MODES[MODE_CHOICE]
 
-LIMIT = 200 # this is the limit for the SQL query
+LIMIT = 200000 # this is the limit for the SQL query
 
 image_edge_multiplier = None
 # image_edge_multiplier = [1.3,2,2.9,2] # [top, right, bottom, left] setting a default. not sure if this will mess up places it looks for None
@@ -184,17 +184,17 @@ elif "3D" in CURRENT_MODE:
 
 elif CURRENT_MODE == 'heft_torso_keywords':
     
-    # set to 0 to disable obj query stuff. this is also for ObjectFusion
+    # set to 0 to disable obj query stuff. this is also for object_fusion
     class_id = 0
 
     # SORT_TYPE = "obj_bbox"
     # SORT_TYPE = "planar_hands"
-    # SORT_TYPE = "ObjectFusion"
+    # SORT_TYPE = "object_fusion"
 
     # CLUSTER_TYPE = "ArmsPoses3D"
-    # CLUSTER_TYPE = "ObjectFusion"
+    # CLUSTER_TYPE = "object_fusion"
     # CLUSTER_TYPE = SORT_TYPE = "ArmsPoses3D" # this triggers meta body poses 3D
-    CLUSTER_TYPE = SORT_TYPE = "ObjectFusion" # make sure OBJ_CLS_ID is set below
+    CLUSTER_TYPE = SORT_TYPE = "object_fusion" # make sure OBJ_CLS_ID is set below
     cl = ToolsClustering(CLUSTER_TYPE, VERBOSE=VERBOSE)
 
 
@@ -231,7 +231,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
         ONE_SHOT = True # take all files, based off the very first sort order.
         TSP_SORT = False
         CHOP_ITTER_TSP_SORT = False
-        if CLUSTER_TYPE == "ObjectFusion":
+        if CLUSTER_TYPE == "object_fusion":
             GENERATE_FUSION_PAIRS = False
         else:
             # either you use a FUSION_PAIR_DICT or GENERATE_FUSION_PAIRS. 
@@ -348,7 +348,7 @@ VISIBLE_HAND_RIGHT = False
 USE_NOSEBRIDGE = True 
 
 # this is for selecting, set dynamically based on CLUSTER_TYPE set above
-if CLUSTER_TYPE == "ObjectFusion":
+if CLUSTER_TYPE == "object_fusion":
     CLUSTER1 = "ObjectFusion"
     CLUSTER2 = None
 
@@ -1381,45 +1381,16 @@ def prep_encodings_NN(df_segment):
             return [row['lum']*HSV_NORMS["LUM"], row['lum_torso_bb']*HSV_NORMS["LUM"]]
         else:
             return [row['lum']*HSV_NORMS["LUM"], row['lum_torso']*HSV_NORMS["LUM"]]   
-    
-    def set_sort_col():
-        # these are all properly SORT_TYPE
-        if SORT_TYPE in ["body3D", "ArmsPoses3D"]:
-            # have to handle both, because handposefusion redefines SORT_TYPE 
-            source_col = sort_column = "body_landmarks_3D"
-        elif SORT_TYPE == "planar_body":
-            if CLUSTER1 == "HandsPositions":
-                source_col = sort_column = "hand_landmarks"
-                # source_col = None
-                # source_col_2 = "right_hand_landmarks_norm"
-            else:
-                sort_column = "body_landmarks_array"
-                source_col = "body_landmarks_normalized"
-                # source_col_2 = None
-        elif SORT_TYPE == "planar_hands" or (SORT_TYPE == "planar_hands" and USE_ALL) or SORT_TYPE == "fingertips_positions":
-            source_col = sort_column = "hand_landmarks"
-            # source_col = sort_column = "right_hand_landmarks_norm"
-            # source_col = None
-            # source_col_2 = "right_hand_landmarks_norm"
-        elif SORT_TYPE == "128d":
-            source_col = sort_column = "face_encodings68"
-        elif "obj_bbox" in SORT_TYPE:
-            # does this matter?
-            source_col = sort_column = "bbox_norm"
-        elif "fusion" in SORT_TYPE.lower():
-            sort_column = "obj_bbox_fusion_list"
-            source_col = None
-        return sort_column, source_col
 
     print("prep_encodings_NN df_segment columns", df_segment.columns)
-    sort_column, source_col = set_sort_col()
+    sort_column, source_col = sort.get_sort_column_mapping(SORT_TYPE, CLUSTER1)
     print(f"degugging df_segment prep encodings for {source_col}:", df_segment.columns)      
     # drop rows where body_landmarks_normalized is None
     # TK this needs to be adapted to handle left vs right hand. 
     # subset needs to be both of them, if both are na
-    if not sort_column == "hand_landmarks" and not SORT_TYPE == "ObjectFusion":
+    if not sort_column == "hand_landmarks" and not SORT_TYPE == "object_fusion":
         # hand_landmarks are all giving 0's if null, so no NA
-        # skip for ObjectFusion, as 0's are valid values
+        # skip for object_fusion, as 0's are valid values
         print("df_segment source_col", df_segment[source_col].to_string())
         df_segment = df_segment.dropna(subset=[source_col])
         print("df_segment length", len(df_segment.index))
@@ -1444,9 +1415,9 @@ def prep_encodings_NN(df_segment):
     if "pitch" in df_segment.columns and "yaw" in df_segment.columns and "roll" in df_segment.columns:
         df_segment['pitch_yaw_roll_list'] = df_segment.apply(lambda row: [row['pitch'], row['yaw'], row['roll']], axis=1)
 
-    if SORT_TYPE == "ObjectFusion" or "fusion" in SORT_TYPE:
+    if SORT_TYPE == "object_fusion" or "fusion" in SORT_TYPE:
         # Process detections and classify their relationship to hands/face
-        print("Processing detections for ObjectFusion...")
+        print("Processing detections for object_fusion...")
         df_segment = cl.process_detections_for_df(df_segment)
         
         # Construct obj_bbox_fusion_list using class method

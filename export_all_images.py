@@ -930,24 +930,8 @@ def prep_encodings_NN(df_segment):
             return [row['lum']*HSV_NORMS["LUM"], row['lum_torso_bb']*HSV_NORMS["LUM"]]
         else:
             return [row['lum']*HSV_NORMS["LUM"], row['lum_torso']*HSV_NORMS["LUM"]]    
-    
-    def set_sort_col():
-        if SORT_TYPE == "planar_body":
-            if CLUSTER_TYPE == "HandsPositions":
-                source_col = sort_column = "hand_landmarks"
-                # source_col = None
-                # source_col_2 = "right_hand_landmarks_norm"
-            else:
-                sort_column = "body_landmarks_array"
-                source_col = "body_landmarks_normalized"
-                # source_col_2 = None
-        elif SORT_TYPE == "planar_hands" or SORT_TYPE == "planar_hands_USE_ALL":
-            source_col = sort_column = "hand_landmarks"
-            # source_col = None
-            # source_col_2 = "right_hand_landmarks_norm"
-        return sort_column, source_col
 
-    sort_column, source_col = set_sort_col()
+    sort_column, source_col = sort.get_sort_column_mapping(SORT_TYPE, CLUSTER_TYPE)
     print(f"degugging df_segment prep encodings for {source_col}:", df_segment.columns)      
     # drop rows where body_landmarks_normalized is None
     # TK this needs to be adapted to handle left vs right hand. 
