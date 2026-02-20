@@ -14,7 +14,8 @@ class ToolsClustering:
         self.CLUSTER_TYPE = CLUSTER_TYPE
         self.CLUSTER_MEDIANS = None
         # Object-hand relationship constants
-        self.TOUCH_THRESHOLD = 0.25  # face height units
+        self.TOUCH_THRESHOLD = 0.05  # face height units
+        self.CLASS_ID_WEIGHT = 100  # multiplier to give more weight to class_id in clustering (since it's categorical and we want it to separate well)
         self.OVERLAP_IOU_THRESHOLD = 0.5
         self.HIGH_CONFIDENCE_THRESHOLD = 0.9
         self.CONFIDENCE_DIFF_THRESHOLD = 0.3
@@ -353,6 +354,12 @@ class ToolsClustering:
         
         return filtered
 
+    def weight_detection_for_clustering(self, detections):
+        """Apply weighting to detections features based on class_id for clustering."""
+        for det in detections:
+            det['class_id'] *= self.CLASS_ID_WEIGHT
+        return detections
+    
     def classify_object_hand_relationships(self, detections, left_knuckle, right_knuckle):
         """
         Classify each detection based on its relationship to hands and face.
@@ -360,6 +367,10 @@ class ToolsClustering:
                                top_face_object, bottom_face_object
         Each value is the detection dict or None.
         """
+
+        # weight the class_ids for better clustering separation of classes
+        detections = self.weight_detection_for_clustering(detections)
+        
         results = {
             'both_hands_object': None,
             'left_hand_object': None,

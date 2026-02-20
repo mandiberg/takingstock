@@ -62,11 +62,14 @@ db = io.db
 
 # OWC4 SNAFU WORKAROUND
 
-if not (io.IS_TENCH or io.IS_MICHELLE):
-    io.ROOT_PROD=  "/Volumes/OWC52/segment_images" ## only on Mac
-    print("Setting io.ROOT to ROOTSSD:", io.ROOTSSD)
+if io.name == "mac_studio_60":
+    io.ROOT_PROD=  "/Users/michael.mandiberg/Documents/projects-active/facemap_production"
     io.ROOT = os.path.join(io.ROOT_PROD, "output_folder")
-    print("Set io.ROOT to ROOTSSD:", io.ROOT)
+elif not (io.IS_TENCH or io.IS_MICHELLE):
+    io.ROOT_PROD=  "/Volumes/OWC52/segment_images" ## only on Mac
+    io.ROOT = os.path.join(io.ROOT_PROD, "output_folder")
+print("Setting io.ROOT to ROOTSSD:", io.ROOTSSD)
+print("Set io.ROOT to ROOTSSD:", io.ROOT)
 
 CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden below for heft keywords
 
@@ -76,7 +79,7 @@ CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden b
 # TENCH UNCOMMENT FOR YOUR COMP:
 # CSV_FOLDER = os.path.join(io.ROOT_DBx, "body3D_segmentbig_useall256_CSVs_test")
 
-CSV_FOLDER = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion128_test220K"
+CSV_FOLDER = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/rerunfull"
 # overriding DB for testing
 # io.db["name"] = "stock"
 # io.db["name"] = "ministock"
@@ -220,7 +223,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     IS_HAND_POSE_FUSION = True # do we use fusion clusters
     CHOP_FIRST = True # does a first pass chop before whatever sort happens - this is default now
 
-    TESTING = True
+    TESTING = False
     if TESTING:
         USE_HSV = False
         # turning all three off to do old style non tsp sort    
@@ -269,6 +272,17 @@ elif CURRENT_MODE == 'heft_torso_keywords':
         if TSP_SORT: MIN_CYCLE_COUNT = FORCE_TARGET_COUNT
         else: MIN_CYCLE_COUNT = 150 # this is the cut off for the SQL query results
         
+
+
+    # HAAAAAAACK
+    SegmentHelper_name = 'SegmentHelperObject_67_phone'
+    # SegmentHelper_name = "SegmentHelperObject_82_money"
+    SegmentFolder = "/Volumes/SSD4_Green/segment_images_detected_63_67"
+    # SegmentFolder = "/Volumes/LaCie/segment_images_82_money_cards"
+    # SegmentFolder = "/Volumes/LaCie/segment_images_96_bitcoin"
+    # MIN_CYCLE_COUNT = 200
+    # USE_HSV = True
+
     # HAAAAACK
     # MIN_CYCLE_COUNT = 60
     # this control whether sorting by topics
