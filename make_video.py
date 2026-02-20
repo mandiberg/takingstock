@@ -54,7 +54,7 @@ SegmentHelper_name = 'None' # set below for heft keywords
 # SegmentHelper_name = None
 # SATYAM, this is MM specific
 # for when I'm using files on my SSD vs RAID
-IS_SSD = True
+IS_SSD = False
 #IS_MOVE is in move_toSSD_files.py
 
 # I/O utils
@@ -63,7 +63,7 @@ db = io.db
 
 # OWC4 SNAFU WORKAROUND
 
-if not (io.IS_TENCH or io.IS_MICHELLE):
+if not (io.IS_TENCH or io.IS_MICHELLE) and IS_SSD:
     io.ROOT_PROD=  "/Volumes/OWC5/segment_images" ## only on Mac
     print("Setting io.ROOT to ROOTSSD:", io.ROOTSSD)
     io.ROOT = os.path.join(io.ROOT_PROD, "output_folder")
@@ -78,7 +78,7 @@ CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden b
 # CSV_FOLDER = os.path.join(io.ROOT_DBx, "body3D_segmentbig_useall256_CSVs_test")
 
 # CSV_FOLDER = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion128_test220K"
-CSV_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion/1k"
+CSV_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion"
 
 # overriding DB for testing
 # io.db["name"] = "stock"
@@ -213,7 +213,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
             CSV_FOLDER = os.path.join(CSV_FOLDER, f"{class_token}_{class_id}")
     else:
         # doesn't use class_token helper/select
-        SegmentHelper_name = 'SegmentHelperObject_73_book' # TK revisit this for prodution run
+        SegmentHelper_name = 'SegmentBig_isface' # TK revisit this for prodution run
         SegmentFolder = None
     if io.IS_TENCH or io.IS_MICHELLE:
         SegmentFolder = io.ROOT
