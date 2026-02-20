@@ -1,7 +1,7 @@
 from sqlalchemy import create_engine, select, Column, Integer, Float, ForeignKey, BLOB
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import NullPool
-from my_declarative_base import Base, Images
+from my_declarative_base import Base, Images, Detections
 import pickle
 import numpy as np
 import json
@@ -9,10 +9,11 @@ import json
 class ToolsClustering:
     """Store key clustering info for use across codebase"""
 
-    def __init__(self, CLUSTER_TYPE, VERBOSE=False):
+    def __init__(self, CLUSTER_TYPE, session=None, VERBOSE=False):
         self.VERBOSE = VERBOSE
         self.CLUSTER_TYPE = CLUSTER_TYPE
         self.CLUSTER_MEDIANS = None
+        self.session = session
         # Object-hand relationship constants
         self.TOUCH_THRESHOLD = 0.05  # face height units
         self.CLASS_ID_WEIGHT = 100  # multiplier to give more weight to class_id in clustering (since it's categorical and we want it to separate well)
@@ -480,3 +481,165 @@ class ToolsClustering:
         
         return results
 
+    def query_and_classify_detections(self, image_id, left_knuckle, right_knuckle):
+        """
+        Query detections for an image and classify their relationship to hands/face.
+        Returns dict with 5 keys, each containing a 6-element list or None.
+        """
+        if self.session is None:
+            raise ValueError("Session not initialized. Pass session to ToolsClustering.__init__()")
+        
+        # Query detections
+        detection_results = self.session.query(Detections).filter_by(image_id=image_id).\
+            filter(Detections.conf > self.MIN_DETECTION_CONFIDENCE).all()
+        
+        if not detection_results:
+            return {
+                'both_hands_object': None,
+                'left_hand_object': None,
+                'right_hand_object': None,
+                'top_face_object': None,
+                'bottom_face_object': None
+            }
+        
+        # Parse detections into standardized format
+        detections = []
+        for d in detection_results:
+            bbox = self.parse_bbox_norm(d.bbox_norm)
+            if bbox is None:
+                continue
+            detections.append({
+                'detection_id': d.detection_id,
+                'class_id': d.class_id,
+                'conf': d.conf,
+                'bbox': bbox,
+                'top': bbox['top'],
+                'left': bbox['left'],
+                'right': bbox['right'],
+                'bottom': bbox['bottom']
+            })
+        
+        # Classify relationships using class method
+        classified = self.classify_object_hand_relationships(detections, left_knuckle, right_knuckle)
+        
+        # Convert to 6-element lists for df storage
+        result = {}
+        for key, det in classified.items():
+            if det is None:
+                result[key] = None
+            else:
+                result[key] = [
+                    det['class_id'],
+                    det['conf'],
+                    det['top'],
+                    det['left'],
+                    det['right'],
+                    det['bottom']
+                ]
+        
+        return result
+
+    def process_detections_for_df(self, df):
+        """
+        Process all detections for a dataframe and add object classification columns.
+        Expects df to have: image_id, left_pointer_knuckle_norm, right_pointer_knuckle_norm
+        """
+        # Initialize new columns
+        df['both_hands_object'] = None
+        df['left_hand_object'] = None
+        df['right_hand_object'] = None
+        df['top_face_object'] = None
+        df['bottom_face_object'] = None
+        
+        for idx, row in df.iterrows():
+            image_id = row['image_id']
+            left_knuckle = row.get('left_pointer_knuckle_norm', self.DEFAULT_HAND_POSITION)
+            right_knuckle = row.get('right_pointer_knuckle_norm', self.DEFAULT_HAND_POSITION)
+            
+            # Handle case where knuckle data might be None or string
+            if left_knuckle is None or (isinstance(left_knuckle, list) and len(left_knuckle) == 0):
+                left_knuckle = self.DEFAULT_HAND_POSITION
+            if right_knuckle is None or (isinstance(right_knuckle, list) and len(right_knuckle) == 0):
+                right_knuckle = self.DEFAULT_HAND_POSITION
+            
+            # Query and classify
+            classifications = self.query_and_classify_detections(image_id, left_knuckle, right_knuckle)
+            
+            # Assign to df
+            df.at[idx, 'both_hands_object'] = classifications['both_hands_object']
+            df.at[idx, 'left_hand_object'] = classifications['left_hand_object']
+            df.at[idx, 'right_hand_object'] = classifications['right_hand_object']
+            df.at[idx, 'top_face_object'] = classifications['top_face_object']
+            df.at[idx, 'bottom_face_object'] = classifications['bottom_face_object']
+        
+        return df
+
+    def flatten_object_detections(self, detection_list):
+        """
+        Flatten a detection list [class_id, conf, top, left, right, bottom] or None into features.
+        Returns a 6-element list, or [0,0,0,0,0,0] if None.
+        """
+        if detection_list is None:
+            return [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+        return list(detection_list)
+
+    def prepare_features_for_knn(self, df):
+        """
+        Flatten all columns into a single feature vector for KNN clustering.
+        Handles numeric columns and object detection lists.
+        Returns df with all features flattened into separate columns (columnar format).
+        """
+        import pandas as pd
+        
+        # Numeric columns to include
+        numeric_cols = ['pitch', 'yaw', 'roll']
+        
+        # Detection columns (6 values each: class_id, conf, top, left, right, bottom)
+        detection_cols = ['both_hands_object', 'left_hand_object', 'right_hand_object', 
+                          'top_face_object', 'bottom_face_object']
+        detection_fields = ['class_id', 'conf', 'top', 'left', 'right', 'bottom']
+        
+        # Create feature dict by concatenating all values
+        features_dict = {}
+        
+        # Add image_id if it exists
+        if 'image_id' in df.columns:
+            features_dict['image_id'] = df['image_id']
+        else:
+            print("Warning: 'image_id' column not found in DataFrame. It will be missing from the features.")
+
+        # Add numeric columns
+        for col in numeric_cols:
+            if col in df.columns:
+                features_dict[col] = df[col].apply(lambda x: float(x) if pd.notna(x) else 0.0)
+        
+        # Add detection features with descriptive column names
+        for det_col in detection_cols:
+            if det_col in df.columns:
+                for i, field in enumerate(detection_fields):
+                    col_name = f"{det_col}_{field}"
+                    features_dict[col_name] = df[det_col].apply(
+                        lambda x: self.flatten_object_detections(x)[i] if x is not None else 0.0
+                    )
+        
+        result_df = pd.DataFrame(features_dict)
+        print("prepare_features_for_knn result_df columns: ", result_df.columns)
+        return result_df
+
+    def construct_fusion_list(self, row):
+        """
+        Construct fusion list from a dataframe row for ObjectFusion sorting.
+        Returns list format: [pitch, yaw, roll, both_hands(6), left_hand(6), right_hand(6), top_face(6), bottom_face(6)]
+        Total: 33 elements (3 + 5*6)
+        """
+        fusion_list = row['pitch_yaw_roll_list'].copy()  # Start with [pitch, yaw, roll]
+        
+        # Add detection data (each is 6 elements: class_id, conf, top, left, right, bottom)
+        for col in ['both_hands_object', 'left_hand_object', 'right_hand_object', 'top_face_object', 'bottom_face_object']:
+            detection = row[col]
+            if detection is None:
+                fusion_list.extend([0.0, 0.0, 0.0, 0.0, 0.0, 0.0])  # 6 zeros for None
+            else:
+                fusion_list.extend(detection)  # detection is already a 6-element list
+        
+        return fusion_list

@@ -81,7 +81,7 @@ class SortPose:
             "body3D": "body3D",
             "ArmsPoses3D": "body3D",
             "obj_bbox": "obj",
-            "obj_bbox_fusion": "obj_bbox_fusion"
+            "object_fusion": "object_fusion"
         }
 
         self.KNN_COLS = {
@@ -92,7 +92,7 @@ class SortPose:
             "body3D": ("body_landmarks_array", "dist_enc1"),
             "HSV": ("hsvll", "dist_HSV"),
             "obj": ("obj_bbox_list", "dist_obj"),
-            "obj_bbox_fusion": ("obj_bbox_fusion_list", "dist_obj_fusion")
+            "object_fusion": ("obj_bbox_fusion_list", "dist_obj_fusion")
         }
 
         #maximum allowable distance between encodings (this accounts for dHSV)
@@ -411,6 +411,47 @@ class SortPose:
             self.SORT = 'face_x'
             self.ROUND = 1
 
+    def get_sort_column_mapping(self, SORT_TYPE, CLUSTER1=None):
+        """
+        Centralized mapping of SORT_TYPE to (sort_column, source_col) for data preprocessing.
+        Handles all pose and object sorting types.
+        
+        Args:
+            SORT_TYPE: The type of sorting (e.g., '128d', 'body3D', 'planar_hands', 'object_fusion')
+            CLUSTER1: Optional cluster type for disambiguating multi-column cases
+            
+        Returns:
+            Tuple of (sort_column, source_col) where:
+            - sort_column: Column name or list name for the main sorting feature
+            - source_col: Column name from database (may be None for pre-computed lists)
+        """
+        if SORT_TYPE in ["body3D", "ArmsPoses3D"]:
+            # 3D body poses
+            return ("body_landmarks_3D", "body_landmarks_3D")
+        elif SORT_TYPE == "planar_body":
+            # Planar body sorting, with special case for hand positions
+            if CLUSTER1 == "HandsPositions":
+                return ("hand_landmarks", "hand_landmarks")
+            else:
+                return ("body_landmarks_array", "body_landmarks_normalized")
+        elif SORT_TYPE in ["planar_hands", "planar_hands_USE_ALL", "fingertips_positions"]:
+            # Hand-based sorting
+            return ("hand_landmarks", "hand_landmarks")
+        elif SORT_TYPE == "128d":
+            # Face encoding sorting
+            return ("face_encodings68", "face_encodings68")
+        elif "obj_bbox" in SORT_TYPE:
+            # Object bounding box (non-fusion)
+            return ("bbox_norm", "bbox_norm")
+        elif "fusion" in SORT_TYPE.lower():
+            # Object fusion (combines hand position, face pose, and detections)
+            return ("obj_bbox_fusion_list", None)
+        else:
+            # Default fallback
+            if self.VERBOSE:
+                print(f"Warning: Unknown SORT_TYPE '{SORT_TYPE}', defaulting to 128d")
+            return ("face_encodings68", "face_encodings68")
+
     def set_output_dims(self):
         if self.image_edge_multiplier == [1.3,1.85,2.4,1.85]:
             print("setting face_height_output to 1.925/1.85")
@@ -622,7 +663,7 @@ class SortPose:
             median_xyz = self.get_median_value(df_clean, "xyz")
             print(" ~~~ median_xyz: ", median_xyz)
             
-            if self.SORT_TYPE != "obj_bbox_fusion":
+            if self.SORT_TYPE != "object_fusion":
                 # set XYZ HIGH and LOW based on median
                 margin_dict = {'pitch': 15, 'yaw': 8, 'roll': 8}
                 low_high_dict = {}
@@ -635,7 +676,7 @@ class SortPose:
                     df = df.loc[((df[angle] < low_high_dict[angle][1]) & (df[angle] > low_high_dict[angle][0]))]
                     print(f"after filtering dynamically by {angle}, len(df): {len(df)}")
             else:
-                print("   obj_bbox_fusion sorting, skipping dynamic head pose filtering")
+                print("   object_fusion sorting, skipping dynamic head pose filtering")
         else:
             # use the defaults set in __init__
             df = df.loc[((df['face_y'] < self.YHIGH) & (df['face_y'] > self.YLOW))]
@@ -2524,11 +2565,7 @@ class SortPose:
         print("get_start_enc, for self.SORT_TYPE", self.SORT_TYPE)
         print("first row of df_enc", df_enc.iloc[0])
         enc1 = None
-        if self.SORT_TYPE == "128d": sort_column = "face_encodings68"
-        elif self.SORT_TYPE == "planar_body": sort_column = "body_landmarks_array"
-        elif self.SORT_TYPE == "body3D" or self.SORT_TYPE == "ArmsPoses3D": sort_column = "body_landmarks_array"
-        elif self.SORT_TYPE == "planar_hands" or self.SORT_TYPE == "planar_hands_USE_ALL": sort_column = "hand_landmarks" # hand_landmarks are left and right hands flat list of 126 values
-        elif "obj_bbox" in self.SORT_TYPE: sort_column = "obj_bbox_list" # handles fusion also
+        sort_column, _ = self.get_sort_column_mapping(self.SORT_TYPE, self.CLUSTER_TYPE)
         print("sort_column", sort_column)
         print("sort_column head", df_enc[sort_column].head())
         # print("lengtth of first value", len(df_enc[sort_column].iloc[0]))
@@ -2877,7 +2914,7 @@ class SortPose:
             elif self.SORT_TYPE in ("planar_body", "ArmsPoses3D", "body3D") and "body_landmarks_array" in df.columns: enc1 = df.iloc[-1]["body_landmarks_array"]
             elif self.SORT_TYPE == "planar_body": enc1 = df.iloc[-1]["body_landmarks_normalized"]
             elif self.SORT_TYPE == "obj_bbox" and "obj_bbox_list" in df.columns: enc1 = df.iloc[-1]["obj_bbox_list"]
-            elif self.SORT_TYPE == "obj_bbox_fusion" and "obj_bbox_fusion_list" in df.columns: enc1 = df.iloc[-1]["obj_bbox_fusion_list"]
+            elif self.SORT_TYPE == "object_fusion" and "obj_bbox_fusion_list" in df.columns: enc1 = df.iloc[-1]["obj_bbox_fusion_list"]
             else:
                 print("get_enc1: SORT_TYPE not recognized or column missing:", self.SORT_TYPE)
                 enc1 = None
