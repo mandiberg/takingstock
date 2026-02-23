@@ -113,7 +113,8 @@ SegmentTable_name = 'SegmentBig_isface'
 # unless you know what you are doing, leave this as None
 # SegmentHelper_name = None
 # if cl.CLUSTER_TYPE == "ArmsPoses3D":
-SegmentHelper_name = 'SegmentHelper_sept2025_heft_keywords'
+# SegmentHelper_name = 'SegmentHelper_sept2025_heft_keywords'
+SegmentHelper_name = 'Detections'
 # SegmentHelper_name = 'SegmentHelper_dec2025_body3D_outOfSegment'
 # SegmentHelper_name = 'SegmentHelper_oct2025_every40'
 FORCE_HAND_LANDMARKS = False # when doing ArmsPoses3D, default is True, so mongo_hand_landmarks = 1
@@ -121,7 +122,7 @@ FORCE_HAND_LANDMARKS = False # when doing ArmsPoses3D, default is True, so mongo
 # number of clusters produced. run GET_OPTIMAL_CLUSTERS and add that number here
 # 32 for hand positions
 # 128 for hand gestures
-N_CLUSTERS = 128
+N_CLUSTERS = 512
 N_META_CLUSTERS = 256
 if MODE == 3: 
     META = True
@@ -270,7 +271,7 @@ if USE_SEGMENT is True and (cl.CLUSTER_TYPE != "Clusters"):
         WHERE = " cluster_id IS NOT NULL "
 
     # WHERE += " AND h.is_body = 1"
-    LIMIT = 220000
+    LIMIT = 22000000
     BATCH_LIMIT = 10000
 
     '''
@@ -340,10 +341,10 @@ if db['unix_socket']:
     # for MM's MAMP config
     engine = create_engine("mysql+pymysql://{user}:{pw}@/{db}?unix_socket={socket}".format(
         user=db['user'], pw=db['pass'], db=db['name'], socket=db['unix_socket']
-    ), poolclass=NullPool)
+    ), pool_pre_ping=True, pool_recycle=600, poolclass=NullPool)
 else:
     engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}"
-                                .format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']), poolclass=NullPool)
+                                .format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']), pool_pre_ping=True, pool_recycle=600, poolclass=NullPool)
 # metadata = MetaData(engine)
 Session = sessionmaker(bind=engine)
 session = Session()

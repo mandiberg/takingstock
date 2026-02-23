@@ -31,6 +31,8 @@ io = DataIO()
 db = io.db
 engine = create_engine(
     f"mysql+pymysql://{db['user']}:{db['pass']}@/{db['name']}?unix_socket={db['unix_socket']}",
+    pool_pre_ping=True,
+    pool_recycle=600,
     poolclass=NullPool
 )
 Session = sessionmaker(bind=engine)
@@ -49,7 +51,7 @@ ocr_engine = PaddleOCR(
 device = "mps" if torch.backends.mps.is_available() else "cpu"
 print("Using device:", device)
 yolo_model = YOLO("yolov8x.pt").to(device)  # load a pretrained YOLOv8x model
-yolo_custom_model = YOLO("models/takingstock_c16v4_yolov8x/weights/best.pt").to(device)
+yolo_custom_model = YOLO("models/takingstock_flowers11_v1_yolov8m/weights/best.pt").to(device)
 
 ocr = OCRTools(DEBUGGING=True)
 yolo = YOLOTools(DEBUGGING=True)
@@ -74,7 +76,7 @@ MAKE_VIDEO_CSVS_PATH = None  # to process all images in folder
 OUTPUT_FOLDER = os.path.join(FILE_FOLDER, "test_output")
 BATCH_SIZE = 100
 MASK_THRESHOLD = .15  # HSV distance threshold for mask detection
-CONF_THRESHOLD = 0.01
+CONF_THRESHOLD = 0.35
 RED_THRESH = 180
 RED_DOM = 100
 VAL_MIN_SIZE = 60
@@ -95,24 +97,40 @@ table_cluster_type = cl.set_table_cluster_type(META)
 #   3: 84,
 # }
 
+# full class
+# custom_ids_to_global_dict = {
+#   0: 100,
+#   1: 88,
+#   2: 97,
+#   3: 83,
+#   4: 81,
+#   5: 82,
+#   6: 98,
+#   7: 94,
+#   8: 95,
+#   9: 86,
+#   10: 80,
+#   11: 102,
+#   12: 96,
+#   13: 101,
+#   14: 99,
+#   15: 103
+
+# }
+
+# flowers 11 class
 custom_ids_to_global_dict = {
   0: 100,
-  1: 88,
+  1: 107,
   2: 97,
-  3: 83,
-  4: 81,
-  5: 82,
-  6: 98,
-  7: 94,
-  8: 95,
-  9: 86,
-  10: 80,
-  11: 102,
-  12: 96,
-  13: 101,
-  14: 99,
-  15: 103
-
+  3: 104,
+  4: 98,
+  5: 106,
+  6: 102,
+  7: 101,
+  8: 99,
+  9: 105,
+  10: 103
 }
 
 # custom_ids_to_global_dict = {

@@ -16,7 +16,7 @@ class ToolsClustering:
         self.session = session
         # Object-hand relationship constants
         self.TOUCH_THRESHOLD = 0.05  # face height units
-        self.CLASS_ID_WEIGHT = 100  # multiplier to give more weight to class_id in clustering (since it's categorical and we want it to separate well)
+        self.CLASS_ID_WEIGHT = 10  # multiplier to give more weight to class_id in clustering (since it's categorical and we want it to separate well)
         self.OVERLAP_IOU_THRESHOLD = 0.5
         self.HIGH_CONFIDENCE_THRESHOLD = 0.9
         self.CONFIDENCE_DIFF_THRESHOLD = 0.3
