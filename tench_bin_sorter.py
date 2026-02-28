@@ -1572,7 +1572,7 @@ class BinSorter:
 def main():
     """Example usage of the bin sorter."""
     # Customizable parameters
-    BOX_SIZE = ((1920),(1920))  # pixels (width, height)
+    BOX_SIZE = ((1920),(1080))  # pixels (width, height)
     # Width:height:weight ratios; optional (wr, hr, weight, expand_x, expand_y) for gap-fill (e.g. 0.1 = 10% expand)
     SIZE_RATIOS = [
         (1,1, 0.3, .2, .2),
