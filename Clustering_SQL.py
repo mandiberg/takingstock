@@ -122,7 +122,7 @@ FORCE_HAND_LANDMARKS = False # when doing ArmsPoses3D, default is True, so mongo
 # number of clusters produced. run GET_OPTIMAL_CLUSTERS and add that number here
 # 32 for hand positions
 # 128 for hand gestures
-N_CLUSTERS = 512
+N_CLUSTERS = 1024  # Increased from 768 - need more granularity to break up mega-clusters
 N_META_CLUSTERS = 256
 if MODE == 3: 
     META = True
@@ -365,13 +365,13 @@ def selectSQL():
     resultsjson = ([dict(row) for row in result.mappings()])
     return(resultsjson)
 
-def landmarks_to_df_columnar(df,add_list=False):
+def landmarks_to_df_columnar(df, add_list=False, fit_scaler=False):
     first_col = df.columns[1]
     print("first col: ",first_col)
     
     if cl.CLUSTER_TYPE == "ObjectFusion":
-        print("cl.CLUSTER_TYPE == ObjectFusion, doing it via prepare_features_for_knn", df)
-        df_columnar = cl.prepare_features_for_knn(df)
+        print("cl.CLUSTER_TYPE == ObjectFusion, doing it via prepare_features_for_knn_v2", df)
+        df_columnar = cl.prepare_features_for_knn_v2(df, fit_scaler=fit_scaler)
         # df_columnar = prepared_df.values
         return df_columnar
     
@@ -420,9 +420,9 @@ def landmarks_to_df_columnar(df,add_list=False):
     return df_columnar
 
 # flatten_object_detections and prepare_features_for_knn have been moved to ToolsClustering class
-# Use cl.flatten_object_detections() and cl.prepare_features_for_knn() instead
+# Use cl.flatten_object_detections(), cl.prepare_features_for_knn(), or cl.prepare_features_for_knn_v2() (with StandardScaler)
 
-def kmeans_cluster(df, n_clusters=32):
+def kmeans_cluster(df, n_clusters=32, fit_scaler=True):
     # Select only the numerical columns (dim_0 to dim_65)
     print("kmeans_cluster sort.SUBSET_LANDMARKS: ",sort.SUBSET_LANDMARKS)
 
@@ -430,7 +430,7 @@ def kmeans_cluster(df, n_clusters=32):
 
     if cl.CLUSTER_TYPE in ["BodyPoses", "BodyPoses3D", "ArmsPoses3D", "ObjectFusion"]:
         print("cl.CLUSTER_TYPE == BodyPoses || ArmsPoses3D", df)
-        df_columnar = landmarks_to_df_columnar(df)
+        df_columnar = landmarks_to_df_columnar(df, fit_scaler=fit_scaler)
     else:
         df_columnar = df
     print("clustering subset data shape: ", df_columnar.shape)
@@ -496,7 +496,8 @@ def calc_cluster_median(df, col_list, cluster_id):
         # drop "image_d_id" if it exists, because it will mess with the knn input
         if 'image_id' in cluster_df.columns:
             cluster_df = cluster_df.drop(columns=['image_id'])
-        prepared_cluster_df = cl.prepare_features_for_knn(cluster_df)
+        # Use existing scaler (fit_scaler=False) for median calculation
+        prepared_cluster_df = cl.prepare_features_for_knn_v2(cluster_df, fit_scaler=False)
         cluster_points = prepared_cluster_df.values
         print(f"Cluster {cluster_id} data after flattening: {prepared_cluster_df}")
         print(f"Cluster {cluster_id} points after flattening: {cluster_points}")
@@ -926,12 +927,16 @@ def prepare_df(df):
                            'left_hand_landmarks_norm', 'right_hand_landmarks_norm']
 
     elif cl.CLUSTER_TYPE == "HandsGestures":
+        # Replace NaN values with None before applying prep functions
+        df['hand_results'] = df['hand_results'].apply(lambda x: None if pd.isna(x) else x)
         df[['left_hand_landmarks', 'left_hand_world_landmarks', 'left_hand_landmarks_norm', 'right_hand_landmarks', 'right_hand_world_landmarks', 'right_hand_landmarks_norm']] = pd.DataFrame(df['hand_results'].apply(sort.prep_hand_landmarks).tolist(), index=df.index)
         df = sort.split_landmarks_to_columns_or_list(df, first_col="left_hand_world_landmarks", second_col="right_hand_world_landmarks", structure="cols")
         # drop the columns that are not needed
         columns_to_drop = ['face_encodings68', 'face_landmarks', 'body_landmarks', 'body_landmarks_normalized', 
                            'hand_results', 'left_hand_landmarks', 'right_hand_landmarks', 'left_hand_world_landmarks', 'right_hand_world_landmarks']
     elif cl.CLUSTER_TYPE == "HSV":
+        # Replace NaN values with appropriate default before applying prep functions
+        df['hue'] = df['hue'].apply(lambda x: None if pd.isna(x) else x)
         df['hue'] = pd.DataFrame(df["hue"].apply(sort.prep_hsv).tolist(), index=df.index)
         # df[['hsv']] = pd.DataFrame(df.apply(sort.prep_hsv, axis=1), index=df.index)
         # columns_to_drop = ['hue']
@@ -949,12 +954,13 @@ def prepare_df(df):
     elif cl.CLUSTER_TYPE == "ObjectFusion":
 
         print("first row of df",df.iloc[0].to_string())
+        # Replace NaN values with None before applying prep functions
+        df['hand_results'] = df['hand_results'].apply(lambda x: None if pd.isna(x) else x)
         df[['left_hand_landmarks', 'left_hand_world_landmarks', 'left_hand_landmarks_norm', 'right_hand_landmarks', 'right_hand_world_landmarks', 'right_hand_landmarks_norm']] = pd.DataFrame(df['hand_results'].apply(sort.prep_hand_landmarks).tolist(), index=df.index)
-        # print("after prep",df.iloc[0].to_string())
-        lhandlms = df["left_hand_landmarks_norm"]
-        print(lhandlms)
-        for lm in lhandlms[0]:
-            print("lm:", lm)
+        # Debug: check first row landmarks (using iloc to handle any index)
+        if len(df) > 0 and len(df['left_hand_landmarks_norm'].iloc[0]) > 0:
+            print(f"Sample left_hand_landmarks_norm (first landmark): {df['left_hand_landmarks_norm'].iloc[0][0]}")
+        # hand_results still contains data (or None), safe to apply again
         df[["left_pointer_knuckle_norm","right_pointer_knuckle_norm"]] = pd.DataFrame(df['hand_results'].apply(sort.prep_knuckle_landmarks).tolist(), index=df.index)
         print("after getting item 5",df.iloc[0].to_string())
         # df = sort.split_landmarks_to_columns(df, left_col="left_hand_landmarks_norm", right_col="right_hand_landmarks_norm")
@@ -986,6 +992,57 @@ def prepare_df(df):
 
     print("final prepared df len", len(df))
     return df
+
+def fetch_mongo_for_batch(batch_df):
+    """
+    Fetch MongoDB encodings for a single batch DataFrame.
+    Returns batch_df with MongoDB columns populated.
+    """
+    batch_results = []
+    missing_count = 0
+    error_count = 0
+    success_count = 0
+    
+    for idx, row in batch_df.iterrows():
+        image_id = int(row['image_id'])
+        try:
+            result = io.get_encodings_mongo(image_id)
+            
+            # result is a pd.Series with 6 values
+            # Check if all values are None (missing document)
+            if isinstance(result, pd.Series):
+                is_all_none = result.isna().all() or all(v is None for v in result.values)
+            else:
+                is_all_none = all(v is None for v in result)
+            
+            if is_all_none:
+                missing_count += 1
+                if missing_count <= 5:
+                    print(f"Missing/Empty result for image_id {image_id}")
+                batch_results.append((None, None, None, None, None, None))
+            else:
+                success_count += 1
+                # Convert Series to tuple if needed
+                if isinstance(result, pd.Series):
+                    batch_results.append(tuple(result.values))
+                else:
+                    batch_results.append(result)
+                    
+        except Exception as e:
+            error_count += 1
+            if error_count <= 5:
+                error_msg = str(e)[:150]
+                print(f"ERROR fetching image_id {image_id}: {error_msg}")
+            batch_results.append((None, None, None, None, None, None))
+    
+    # Convert results to DataFrame columns - CRITICAL: match batch_df's index
+    results_df = pd.DataFrame(batch_results, columns=['face_encodings68', 'face_landmarks', 'body_landmarks', 'body_landmarks_normalized', 'body_landmarks_3D', 'hand_results'], index=batch_df.index)
+    batch_df[['face_encodings68', 'face_landmarks', 'body_landmarks', 'body_landmarks_normalized', 'body_landmarks_3D', 'hand_results']] = results_df
+    
+    if missing_count > 0 or error_count > 0:
+        print(f"Batch summary: success={success_count}, missing={missing_count}, errors={error_count}")
+    
+    return batch_df
 
 def fetch_encodings_mongo_batched(df, batch_size=5000, mongo_reconnect_interval=5):
     """
@@ -1074,6 +1131,42 @@ def fetch_encodings_mongo_batched(df, batch_size=5000, mongo_reconnect_interval=
 # These functions have been moved to ToolsClustering class.
 # Use cl.query_and_classify_detections() and cl.process_detections_for_df() instead.
 
+def fetch_and_prepare_batch(batch_df, batch_num):
+    """
+    Fetch MongoDB encodings AND prepare (including MySQL queries) for one batch.
+    Returns prepared DataFrame ready for clustering.
+    Refreshes MySQL connection to prevent timeouts.
+    """
+    global session, engine, cl
+    
+    # Refresh MySQL connection every batch to prevent timeouts
+    print(f"[Batch {batch_num}] Refreshing MySQL connection...")
+    session.close()
+    engine.dispose()
+    
+    if db['unix_socket']:
+        engine = create_engine("mysql+pymysql://{user}:{pw}@/{db}?unix_socket={socket}".format(
+            user=db['user'], pw=db['pass'], db=db['name'], socket=db['unix_socket']
+        ), pool_pre_ping=True, pool_recycle=3600, poolclass=NullPool)
+    else:
+        engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}".format(
+            host=db['host'], db=db['name'], user=db['user'], pw=db['pass']
+        ), pool_pre_ping=True, pool_recycle=3600, poolclass=NullPool)
+    
+    Session = sessionmaker(bind=engine)
+    session = Session()
+    cl.session = session
+    
+    # Fetch MongoDB data for this batch
+    print(f"[Batch {batch_num}] Fetching MongoDB encodings...")
+    batch_df = fetch_mongo_for_batch(batch_df)
+    
+    # Prepare df (includes MySQL Detections query via cl.process_detections_for_df)
+    print(f"[Batch {batch_num}] Preparing data (includes MySQL queries)...")
+    batch_prepared = prepare_df(batch_df)
+    
+    return batch_prepared
+
 
 # defining globally # TK 4 HSV
 MEDIAN_DICT = cl.get_cluster_medians(session, Clusters, USE_SUBSET_MEDIANS, sort.SUBSET_LANDMARKS)
@@ -1090,7 +1183,8 @@ def main():
         columns_to_check = ["image_id", "cluster_id", "body_landmarks_array", "left_hand_landmarks_norm", "right_hand_landmarks_norm", "hand_results", "face_encodings68"]
         columns_to_drop += [col for col in columns_to_check if col in enc_data.columns]
         print("columns to drop: ",columns_to_drop)
-        enc_data["cluster_id"] = kmeans_cluster(enc_data.drop(columns=columns_to_drop), n_clusters=N_CLUSTERS)
+        # fit_scaler=True for MODE 0 (creating clusters from scratch)
+        enc_data["cluster_id"] = kmeans_cluster(enc_data.drop(columns=columns_to_drop), n_clusters=N_CLUSTERS, fit_scaler=True)
         
         print("enc_data", enc_data)
         print("as list", set(enc_data["cluster_id"].tolist()))
@@ -1102,7 +1196,8 @@ def main():
         enc_data["cluster_median"] = enc_data["cluster_id"].apply(lambda x: median_dict[x])
         if cl.CLUSTER_TYPE != "HSV":
             # this is specific to lms, not hsv
-            df_columnar = landmarks_to_df_columnar(enc_data, add_list=True)
+            # Use fit_scaler=False here - scaler already fitted above
+            df_columnar = landmarks_to_df_columnar(enc_data, add_list=True, fit_scaler=False)
         else:
             df_columnar = enc_data
         print("df_columnar", df_columnar)
@@ -1151,15 +1246,36 @@ def main():
         elif cl.CLUSTER_TYPE == "HandsGestures": io.query_body = sort.query_body = io.query_face = sort.query_face = False
         elif cl.CLUSTER_TYPE == "Clusters": io.query_body = sort.query_body = io.query_hands = sort.query_hands = False
         if not USE_HEAD_POSE: io.query_head_pose = sort.query_head_pose = False
+        
         if cl.CLUSTER_TYPE != "HSV":
             # hsv does not need any encodings from mongo
-            # Use batched MongoDB fetch with automatic reconnection
-            df = fetch_encodings_mongo_batched(df, batch_size=5000, mongo_reconnect_interval=5)        # if cl.CLUSTER_TYPE != "HSV":
-        #     # hsv does not need any encodings from mongo
-        #     df[['face_encodings68', 'face_landmarks', 'body_landmarks', 'body_landmarks_normalized', 'body_landmarks_3D', 'hand_results']] = df['image_id'].apply(io.get_encodings_mongo)
-        # face_encodings68, face_landmarks, body_landmarks, body_landmarks_normalized = sort.get_encodings_mongo(mongo_db,row["image_id"], is_body=True, is_face=False)
-
-        enc_data = prepare_df(df)
+            # Use interleaved batch processing: MongoDB + MySQL per batch to prevent connection timeouts
+            print("\n=== Starting interleaved batch processing (MongoDB + MySQL per batch) ===")
+            all_prepared_batches = []
+            total_rows = len(df)
+            
+            for batch_start in range(0, total_rows, 5000):
+                batch_end = min(batch_start + 5000, total_rows)
+                batch_num = batch_start // 5000 + 1
+                
+                print(f"\n=== Processing Batch {batch_num}: rows {batch_start}-{batch_end} ({batch_end - batch_start} rows) ===")
+                batch_df = df.iloc[batch_start:batch_end].copy()
+                
+                # Interleaved: MongoDB + MySQL for this batch
+                batch_prepared = fetch_and_prepare_batch(batch_df, batch_num)
+                
+                all_prepared_batches.append(batch_prepared)
+                gc.collect()
+                
+                print(f"[Batch {batch_num}] Complete. Total batches collected: {len(all_prepared_batches)}")
+            
+            # Combine all prepared batches into one dataset
+            print("\n=== Combining all batches for clustering ===")
+            enc_data = pd.concat(all_prepared_batches, ignore_index=True)
+            print(f"Total prepared rows: {len(enc_data)}")
+        else:
+            # HSV doesn't need MongoDB encodings, just prepare directly
+            enc_data = prepare_df(df)
     
     # choose if you want optimal cluster size or custom cluster size using the parameter GET_OPTIMAL_CLUSTERS
     if MODE == 0:

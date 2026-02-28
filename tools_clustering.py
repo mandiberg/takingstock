@@ -25,6 +25,18 @@ class ToolsClustering:
         # Face object constraints to avoid large background objects
         self.MAX_FACE_WIDTH = 2.0  # max width of left+right to be considered face object
         self.MAX_FACE_VERT_EXTENSION = 0.75  # max how far object can extend into opposite zone
+        
+        # Feature standardization settings for ObjectFusion
+        self.USE_FEATURE_STANDARDIZATION = True  # Use StandardScaler to normalize all features to similar scale
+        self.FEATURE_WEIGHTS = {
+            'face_angle': 0.3,      # pitch, yaw, roll - LOW weight (prevent face-angle mega-clusters)
+            'class_id': 5.0,        # class_id - VERY HIGH weight at RAW SCALE (0-107) to force object-type separation
+            'confidence': 0.2,      # detection confidence - very low weight
+            'bbox': 1.0,            # bbox coordinates - reduced to standard weight
+            'has_object': 3.0,      # binary indicator - high weight but lower than class_id
+        }
+        # Store fitted scaler for inverse transform during median calculation
+        self.feature_scaler = None
         self.CLUSTER_DATA = {
             "BodyPoses": {"data_column": "mongo_body_landmarks", "is_feet": 1, "mongo_hand_landmarks": None},
             "BodyPoses3D": {"data_column": "mongo_body_landmarks_3D", "is_feet": 1, "mongo_hand_landmarks": None}, # changed this for testing
@@ -356,9 +368,20 @@ class ToolsClustering:
         return filtered
 
     def weight_detection_for_clustering(self, detections):
-        """Apply weighting to detections features based on class_id for clustering."""
-        for det in detections:
-            det['class_id'] *= self.CLASS_ID_WEIGHT
+        """
+        Apply weighting to detections features based on class_id for clustering.
+        Note: If USE_FEATURE_STANDARDIZATION=True, this weight is applied BEFORE standardization,
+        then features are standardized, then FEATURE_WEIGHTS are applied after.
+        If USE_FEATURE_STANDARDIZATION=False, only CLASS_ID_WEIGHT is used (legacy behavior).
+        """
+        if not self.USE_FEATURE_STANDARDIZATION:
+            # Legacy behavior: simple multiplication
+            for det in detections:
+                det['class_id'] *= self.CLASS_ID_WEIGHT
+        else:
+            # New behavior: CLASS_ID_WEIGHT is incorporated into FEATURE_WEIGHTS['class_id']
+            # Don't multiply here - let standardization handle it
+            pass
         return detections
     
     def classify_object_hand_relationships(self, detections, left_knuckle, right_knuckle):
@@ -614,8 +637,16 @@ class ToolsClustering:
                 features_dict[col] = df[col].apply(lambda x: float(x) if pd.notna(x) else 0.0)
         
         # Add detection features with descriptive column names
+        # ALSO add binary "has_object" indicators to prevent all-zero clustering
         for det_col in detection_cols:
             if det_col in df.columns:
+                # Add binary indicator: 1.0 if object present, 0.0 if not
+                has_obj_col = f"{det_col}_has_object"
+                features_dict[has_obj_col] = df[det_col].apply(
+                    lambda x: 1.0 if (x is not None and (isinstance(x, list) and x[0] != 0)) else 0.0
+                )
+                
+                # Add standard detection fields
                 for i, field in enumerate(detection_fields):
                     col_name = f"{det_col}_{field}"
                     features_dict[col_name] = df[det_col].apply(
@@ -625,6 +656,92 @@ class ToolsClustering:
         result_df = pd.DataFrame(features_dict)
         print("prepare_features_for_knn result_df columns: ", result_df.columns)
         return result_df
+    
+    def prepare_features_for_knn_v2(self, df, fit_scaler=False):
+        """
+        Enhanced version with optional StandardScaler and per-feature-group weighting.
+        
+        Args:
+            df: DataFrame with ObjectFusion features
+            fit_scaler: If True, fit new scaler on this data. If False, use existing scaler.
+                       Set True for training data, False for new data assignment.
+        
+        Returns:
+            DataFrame with standardized and weighted features, suitable for K-means.
+        """
+        import pandas as pd
+        from sklearn.preprocessing import StandardScaler
+        
+        # First, get base features using original method
+        features_df = self.prepare_features_for_knn(df)
+        
+        if not self.USE_FEATURE_STANDARDIZATION:
+            return features_df
+        
+        # Separate image_id before scaling
+        image_id_col = None
+        if 'image_id' in features_df.columns:
+            image_id_col = features_df['image_id'].copy()
+            features_df = features_df.drop(columns=['image_id'])
+        
+        # Group columns by feature type for weighted scaling
+        face_angle_cols = ['pitch', 'yaw', 'roll']
+        class_id_cols = [col for col in features_df.columns if col.endswith('_class_id')]
+        confidence_cols = [col for col in features_df.columns if col.endswith('_conf')]
+        bbox_cols = [col for col in features_df.columns if col.endswith(('_top', '_left', '_right', '_bottom'))]
+        has_object_cols = [col for col in features_df.columns if col.endswith('_has_object')]
+        
+        # CRITICAL: Extract class_id columns BEFORE standardization (they're categorical, not continuous)
+        class_id_values = features_df[class_id_cols].copy()
+        
+        # Remove class_id from features to be standardized
+        features_to_scale = features_df.drop(columns=class_id_cols)
+        
+        # Standardize only continuous features (mean=0, std=1)
+        if fit_scaler or self.feature_scaler is None:
+            self.feature_scaler = StandardScaler()
+            scaled_features = self.feature_scaler.fit_transform(features_to_scale)
+            if self.VERBOSE:
+                print("Fitted new StandardScaler on features (excluding class_id)")
+                print(f"  Feature means: {self.feature_scaler.mean_[:5]}...")
+                print(f"  Feature stds: {self.feature_scaler.scale_[:5]}...")
+        else:
+            scaled_features = self.feature_scaler.transform(features_to_scale)
+        
+        # Convert back to DataFrame to apply per-group weights
+        scaled_df = pd.DataFrame(scaled_features, columns=features_to_scale.columns, index=features_df.index)
+        
+        # Re-insert class_id columns at their ORIGINAL scale (not standardized)
+        for col in class_id_cols:
+            scaled_df[col] = class_id_values[col]
+        
+        # Apply feature-group-specific weights
+        for col in scaled_df.columns:
+            if col in face_angle_cols:
+                scaled_df[col] *= self.FEATURE_WEIGHTS['face_angle']
+            elif col in class_id_cols:
+                scaled_df[col] *= self.FEATURE_WEIGHTS['class_id']
+            elif col in confidence_cols:
+                scaled_df[col] *= self.FEATURE_WEIGHTS['confidence']
+            elif col in has_object_cols:
+                scaled_df[col] *= self.FEATURE_WEIGHTS['has_object']
+            elif col in bbox_cols:
+                scaled_df[col] *= self.FEATURE_WEIGHTS['bbox']
+        
+        # Re-add image_id if it existed
+        if image_id_col is not None:
+            scaled_df.insert(0, 'image_id', image_id_col)
+        
+        if self.VERBOSE:
+            print("Feature standardization and weighting applied:")
+            print(f"  Face angles: {self.FEATURE_WEIGHTS['face_angle']}x")
+            print(f"  Class IDs: {self.FEATURE_WEIGHTS['class_id']}x")
+            print(f"  Has Object indicators: {self.FEATURE_WEIGHTS['has_object']}x")
+            print(f"  Confidence: {self.FEATURE_WEIGHTS['confidence']}x")
+            print(f"  BBox coords: {self.FEATURE_WEIGHTS['bbox']}x")
+            print(f"  Final feature range: [{scaled_df.min().min():.2f}, {scaled_df.max().max():.2f}]")
+        
+        return scaled_df
 
     def construct_fusion_list(self, row):
         """
