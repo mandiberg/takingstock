@@ -119,10 +119,15 @@ SegmentHelper_name = 'Detections'
 # SegmentHelper_name = 'SegmentHelper_oct2025_every40'
 FORCE_HAND_LANDMARKS = False # when doing ArmsPoses3D, default is True, so mongo_hand_landmarks = 1
 
+# TESTING MODE - reduce dataset size for faster iteration using pre-filtered table
+# Set to True to use SegmentHelper_oct2025_every40 (every 40th image, ~2.5% of full dataset)
+# Set to False for production full dataset processing
+SKIP_TESTING = True
+
 # number of clusters produced. run GET_OPTIMAL_CLUSTERS and add that number here
 # 32 for hand positions
 # 128 for hand gestures
-N_CLUSTERS = 1024  # Increased from 768 - need more granularity to break up mega-clusters
+N_CLUSTERS = 128  # Increased from 768 - need more granularity to break up mega-clusters
 N_META_CLUSTERS = 256
 if MODE == 3: 
     META = True
@@ -353,16 +358,47 @@ Base = declarative_base()
 # Pass session to ToolsClustering instance for database access
 cl.session = session
 
+# Print startup configuration
+print("\n" + "="*70)
+print("CLUSTERING CONFIGURATION")
+print("="*70)
+print(f"MODE: {MODE} ({option})")
+print(f"CLUSTER_TYPE: {cl.CLUSTER_TYPE}")
+print(f"N_CLUSTERS: {N_CLUSTERS}")
+if SKIP_TESTING:
+    print(f"\n⚠️  TESTING MODE ACTIVE: Using SegmentHelper_oct2025_every40 (~2.5% of full dataset)")
+    print(f"   Set SKIP_TESTING = False for production full dataset processing")
+else:
+    print(f"SKIP_TESTING: False (processing full dataset)")
+print("="*70 + "\n")
+
 # TK 4 HSV
 Clusters, ImagesClusters, MetaClusters, ClustersMetaClusters = cl.construct_table_classes(table_cluster_type)
 
 def selectSQL():
     if OFFSET: offset = f" OFFSET {str(OFFSET)}"
     else: offset = ""
-    selectsql = f"SELECT {SELECT} FROM {FROM} WHERE {WHERE} LIMIT {str(LIMIT)} {offset};"
-    print("actual SELECT is: ",selectsql)
+    
+    # Handle SKIP_TESTING for testing mode
+    if SKIP_TESTING:
+        # Add JOIN to pre-filtered testing table (every 40th image)
+        selectsql = f"""
+        SELECT {SELECT} FROM {FROM} 
+        INNER JOIN SegmentHelper_oct2025_every40 test ON s.image_id = test.image_id
+        WHERE {WHERE} LIMIT {str(LIMIT)} {offset};
+        """
+        print(f"TESTING MODE: Using SegmentHelper_oct2025_every40 (~1-2% of full dataset)")
+    else:
+        # Normal query without testing table
+        selectsql = f"SELECT {SELECT} FROM {FROM} WHERE {WHERE} LIMIT {str(LIMIT)} {offset};"
+    
+    print("actual SELECT is: ", selectsql)
     result = engine.connect().execute(text(selectsql))
     resultsjson = ([dict(row) for row in result.mappings()])
+    
+    # Log results
+    print(f"Fetched {len(resultsjson):,} images")
+    
     return(resultsjson)
 
 def landmarks_to_df_columnar(df, add_list=False, fit_scaler=False):
@@ -961,8 +997,10 @@ def prepare_df(df):
         if len(df) > 0 and len(df['left_hand_landmarks_norm'].iloc[0]) > 0:
             print(f"Sample left_hand_landmarks_norm (first landmark): {df['left_hand_landmarks_norm'].iloc[0][0]}")
         # hand_results still contains data (or None), safe to apply again
-        df[["left_pointer_knuckle_norm","right_pointer_knuckle_norm"]] = pd.DataFrame(df['hand_results'].apply(sort.prep_knuckle_landmarks).tolist(), index=df.index)
-        print("after getting item 5",df.iloc[0].to_string())
+        df[["left_pointer_knuckle_norm","right_pointer_knuckle_norm","left_source","right_source"]] = pd.DataFrame(
+            df.apply(lambda row: sort.prep_knuckle_landmarks(row['hand_results'], row['body_landmarks_3D']), axis=1).tolist(), 
+            index=df.index)
+        print("after getting fingertip (landmark 8)",df.iloc[0].to_string())
         # df = sort.split_landmarks_to_columns(df, left_col="left_hand_landmarks_norm", right_col="right_hand_landmarks_norm")
         # df = sort.split_landmarks_to_columns_or_list(df, first_col="left_hand_landmarks_norm", second_col="right_hand_landmarks_norm", structure="cols")
     # def split_landmarks_to_columns_or_list(self, df, first_col="left_hand_world_landmarks", second_col="right_hand_world_landmarks", structure="cols"):
