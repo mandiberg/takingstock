@@ -50,34 +50,34 @@ def extract_hand_fingertip(hand_results, side='left'):
                 # It's in protobuf format - skip
                 return None
             if isinstance(landmarks, (list, tuple)) and len(landmarks) > 8:
-                landmark_8 = landmarks[8]
+                landmark_0 = landmarks[0]
                 # Should be [x, y, z]
-                if isinstance(landmark_8, (list, tuple)) and len(landmark_8) >= 3:
-                    return list(landmark_8[:3])
+                if isinstance(landmark_0, (list, tuple)) and len(landmark_0) >= 3:
+                    return list(landmark_0[:3])
         
         # Fallback to image_landmarks if norm not available
         if 'image_landmarks' in hand_data:
             landmarks = hand_data['image_landmarks']
             if isinstance(landmarks, (list, tuple)) and len(landmarks) > 8:
-                landmark_8 = landmarks[8]
-                if isinstance(landmark_8, (list, tuple)) and len(landmark_8) >= 3:
-                    return list(landmark_8[:3])
+                landmark_0 = landmarks[0]
+                if isinstance(landmark_0, (list, tuple)) and len(landmark_0) >= 3:
+                    return list(landmark_0[:3])
     except (IndexError, TypeError, KeyError, AttributeError) as e:
         pass
     
     return None
 
-def extract_body_fingertip(body_landmarks_3D, io, sort_pose, side='left'):
+def extract_body_fingertip(body_landmarks_norm, io, sort_pose, side='left'):
     """Extract wrist from body landmarks - direct access."""
-    if body_landmarks_3D is None:
+    if body_landmarks_norm is None:
         return None
     
     try:
         # Unpickle if it's bytes
-        if isinstance(body_landmarks_3D, bytes):
-            body_landmarks_3D = io.unpickle_array(body_landmarks_3D)
+        if isinstance(body_landmarks_norm, bytes):
+            body_landmarks_norm = io.unpickle_array(body_landmarks_norm)
         
-        if body_landmarks_3D is None:
+        if body_landmarks_norm is None:
             return None
         
         # MediaPipe body pose has 33 landmarks
@@ -86,16 +86,16 @@ def extract_body_fingertip(body_landmarks_3D, io, sort_pose, side='left'):
         landmark_idx = 16 if side == 'left' else 15
         
         # Direct access to landmark - protobuf objects have .landmark attribute
-        if hasattr(body_landmarks_3D, 'landmark'):
-            landmarks = body_landmarks_3D.landmark
+        if hasattr(body_landmarks_norm, 'landmark'):
+            landmarks = body_landmarks_norm.landmark
             if len(landmarks) > landmark_idx:
                 lm = landmarks[landmark_idx]
                 if hasattr(lm, 'x') and hasattr(lm, 'y') and hasattr(lm, 'z'):
                     return [lm.x, lm.y, lm.z]
         
         # If it's already a list/array
-        elif isinstance(body_landmarks_3D, (list, tuple)) and len(body_landmarks_3D) > landmark_idx:
-            lm = body_landmarks_3D[landmark_idx]
+        elif isinstance(body_landmarks_norm, (list, tuple)) and len(body_landmarks_norm) > landmark_idx:
+            lm = body_landmarks_norm[landmark_idx]
             if isinstance(lm, (list, tuple)) and len(lm) >= 3:
                 return list(lm[:3])
             elif hasattr(lm, 'x') and hasattr(lm, 'y') and hasattr(lm, 'z'):
@@ -154,7 +154,7 @@ def main(sample_size=1000):
         INNER JOIN Encodings e ON s.image_id = e.image_id
         WHERE e.is_dupe_of IS NULL
         AND e.mongo_hand_landmarks_norm = 1
-        AND e.mongo_body_landmarks_3D = 1
+        AND e.mongo_body_landmarks_norm = 1
         ORDER BY RAND()
         LIMIT {sample_size}
     """)
@@ -185,11 +185,12 @@ def main(sample_size=1000):
         # Fetch MongoDB data
         mongo_data = io.get_encodings_mongo(image_id)
         hand_results = mongo_data[5]  # 6th element is hand_results
-        body_landmarks_3D = mongo_data[4]  # 5th element is body_landmarks_3D
+        # body_landmarks_3D = mongo_data[4]  # 5th element is body_landmarks_3D
+        body_landmarks_norm = mongo_data[3]  # 4th element is body_landmarks_norm
         
         # Extract left hand/body fingertips
         left_hand = extract_hand_fingertip(hand_results, 'left')
-        left_body = extract_body_fingertip(body_landmarks_3D, io, sort_pose, 'left')
+        left_body = extract_body_fingertip(body_landmarks_norm, io, sort_pose, 'left')
         
         if left_hand and left_body:
             both_present += 1
@@ -209,7 +210,7 @@ def main(sample_size=1000):
         
         # Extract right hand/body fingertips
         right_hand = extract_hand_fingertip(hand_results, 'right')
-        right_body = extract_body_fingertip(body_landmarks_3D, io, sort_pose, 'right')
+        right_body = extract_body_fingertip(body_landmarks_norm, io, sort_pose, 'right')
         
         if right_hand and right_body:
             both_present += 1
@@ -228,7 +229,7 @@ def main(sample_size=1000):
     # Statistics for left hand
     if left_distances:
         left_distances_arr = np.array(left_distances)
-        print("LEFT HAND/BODY FINGERTIP COMPARISON:")
+        print("LEFT HAND/BODY Wrist COMPARISON:")
         print(f"  Valid comparisons: {len(left_distances)}")
         print(f"  Mean distance: {left_distances_arr.mean():.4f} face height units")
         print(f"  Median distance: {np.median(left_distances_arr):.4f} face height units")
@@ -247,7 +248,7 @@ def main(sample_size=1000):
     # Statistics for right hand
     if right_distances:
         right_distances_arr = np.array(right_distances)
-        print("RIGHT HAND/BODY FINGERTIP COMPARISON:")
+        print("RIGHT HAND/BODY Wrist COMPARISON:")
         print(f"  Valid comparisons: {len(right_distances)}")
         print(f"  Mean distance: {right_distances_arr.mean():.4f} face height units")
         print(f"  Median distance: {np.median(right_distances_arr):.4f} face height units")
