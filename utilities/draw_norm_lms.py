@@ -14,13 +14,13 @@ from sqlalchemy.pool import NullPool
 
 import sys
 sys.path.insert(1, '/Users/michael.mandiberg/Documents/GitHub/takingstock/')
-from my_declarative_base import Encodings, Base
+from my_declarative_base import Encodings, Base, Detections, Images
 from mp_db_io import DataIO
 from mp_sort_pose import SortPose
 
 IS_SSD = False
 VERBOSE = True
-LIMIT = 10
+LIMIT = 100
 SegmentHelper_name = "SegmentHelper_mar2026_hand_body_lms_testing"
 
 io = DataIO(IS_SSD)
@@ -120,24 +120,52 @@ def draw_baseline_info(image):
         bottom_right = (int(sort.nose_x + sort.face_height/2), int(sort.nose_y + sort.face_height/2))
         cv2.rectangle(image, top_left, bottom_right, (255, 0, 0), 2)
 
+def get_class_names(session):
+    # query YoloClasses table to get class_id and class_name
+    result = session.execute(text("SELECT class_id, class_name FROM YoloClasses"))
+    class_names = result.fetchall()
+    return {class_id: class_name for class_id, class_name in class_names}
+
+
+def draw_bbox(image, norm_data, color_map, hand):
+    if norm_data and isinstance(norm_data, list):
+        x_coords = [point[0] for point in norm_data]
+        y_coords = [point[1] for point in norm_data]
+        if x_coords and y_coords:
+            min_x, max_x = int(min(x_coords)), int(max(x_coords))
+            min_y, max_y = int(min(y_coords)), int(max(y_coords))
+            cv2.rectangle(image, (min_x, min_y), (max_x, max_y), color_map[hand], 3)
+        # draw hand label
+        if "conf" in hand:
+            conf = hand.split("conf_0")[1]
+            print(f"Drawing bbox for {hand} with confidence {conf}")
+            x_width = max_x - min_x
+            x_location = int(min_x + x_width - (x_width * float(conf)))
+        else:
+            x_location = min_x
+        cv2.putText(image, hand, (x_location, min_y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, color_map[hand], 2)
+
 def denornm_lms(lms, image):
-    def denorm_landmark(x,y,z, color=(0,255,0)):
-        print(f"Original normalized landmark: ({x}, {y}, {z})")
+    global class_names
+    def denorm_landmark(x,y,z, color=(0,255,0), draw = True):
+        # print(f"Original normalized landmark: ({x}, {y}, {z})")
         x = sort.nose_x + (x * sort.face_height)  # scale by face height and position relative to nose
         y = sort.nose_y + (y * sort.face_height)  # scale by face height and position relative to nose
         if z is not None: z = sort.face_height
         # draw the landmark on the image for visualization
-        cv2.circle(image, (int(x), int(y)), 5, color, -1)
+        if draw:
+            cv2.circle(image, (int(x), int(y)), 5, color, -1)
         # draw line from nose to landmark for visualization
-        print(f"denormed landmark: ({x}, {y}, {z})")
-        if sort.nose_x is not None and sort.nose_y is not None:
-            cv2.line(image, (int(sort.nose_x), int(sort.nose_y)), (int(x), int(y)), color, 1)
+        # print(f"denormed landmark: ({x}, {y}, {z})")
+        # if sort.nose_x is not None and sort.nose_y is not None:
+        #     cv2.line(image, (int(sort.nose_x), int(sort.nose_y)), (int(x), int(y)), color, 1)
+        return x,y,z
 
     print("Denorming landmarks...")
     print(type(lms))
     if hasattr(lms, 'landmark'):
         for lm in lms.landmark:
-            denorm_landmark(lm.x, lm.y, getattr(lm, 'z', None), color=(0,255,0))
+            x, y, z = denorm_landmark(lm.x, lm.y, getattr(lm, 'z', None), color=(0,255,0))
         print("body Denorming complete:" + f"Sample denormed landmark (first landmark): ({lms.landmark[0].x}, {lms.landmark[0].y}, {getattr(lms.landmark[0], 'z', 'N/A')})")
     # handle hand_landmarks which is json object
     elif isinstance(lms, dict):
@@ -147,21 +175,54 @@ def denornm_lms(lms, image):
             hand_data = lms.get(hand, None)
             norm_data = hand_data.get("hand_landmarks_norm", []) if hand_data else []
             if norm_data and isinstance(norm_data, list):
+                denormed_points = []
                 for lm in norm_data:
                     print(f"Processing {hand} landmark list: {lm}")
-                    denorm_landmark(lm[0], lm[1], lm[2], color=color_map[hand])
+                    x, y, z = denorm_landmark(lm[0], lm[1], lm[2], color=color_map[hand], draw = False)
+                    denormed_points.append((x,y,z))
+                draw_bbox(image, denormed_points, color_map, hand)
                 print(f"{hand} Denorming complete)")
             else:
                 print(f"Warning: No valid 'hand_landmarks_norm' data found for {hand}. Skipping denorming for this hand.")
+    elif isinstance(lms, list) and len(lms) == 3:
+        class_id, conf, bbox_norm = lms
+        bbox_norm = io.unstring_json(bbox_norm) if isinstance(bbox_norm, str) else bbox_norm
+        if bbox_norm and isinstance(bbox_norm, dict):
+            denormed_points = []
+            ul = bbox_norm.get('left', None), bbox_norm.get('top', None)
+            ur = bbox_norm.get('right', None), bbox_norm.get('top', None)
+            bl = bbox_norm.get('left', None), bbox_norm.get('bottom', None)
+            br = bbox_norm.get('right', None), bbox_norm.get('bottom', None)
+            norm_points = [ul, ur, bl, br]
+            for point in norm_points:
+                if None not in point:
+                    x, y, z = denorm_landmark(point[0], point[1], None, color=(0,0,255), draw = False)
+                    denormed_points.append((x,y,z))
+            # for key in ['left', 'top', 'right', 'bottom']:
+            #     if key in bbox_norm:
+            #         x = sort.nose_x + (bbox_norm[key] * sort.face_height)  # scale by face height and position relative to nose
+            #         y = sort.nose_y + (bbox_norm[key] * sort.face_height)  # scale by face height and position relative to nose
+            #         denormed_points.append((x,y))
+            if len(denormed_points) == 4:
+                this_class_name = class_names.get(class_id, f"class_{class_id}")
+                det_label=f"{this_class_name} conf_{conf:.2f}"
+
+                draw_bbox(image, denormed_points, color_map={f"{det_label}": (0,0,255)}, hand=det_label)
+                print(f"Detection bbox Denorming complete)")
+
+        # this is the case for detections, where lms is actually [class_id, conf, bbox]
+        print(f"Received detection data: {lms}. Skipping denorming since this is not landmark data.")
     else:
         print("Warning: Landmark data format not recognized. Expected an object with 'landmark' attribute or a dict with hand landmarks. Skipping denorming.")
         print(f"Received landmark data: {lms}")
 
 
 def main():
+    global class_names
     init_session()
     init_mongo()
     ensure_export_dir()
+    class_names = get_class_names(session)
 
     # get list from segment
     print("Querying database for segment data...")
@@ -184,6 +245,9 @@ def main():
         body_world_doc = body_world_collection.find_one({"image_id": image_id})
         hand_doc = mongo_hand_collection.find_one({"image_id": image_id})
 
+        detections = session.query(Detections).filter(Detections.image_id == image_id).all()
+        print(f"Found {len(detections)} detection(s) in MySQL for image ID {image_id}.")
+
         if body_normed_doc or body_world_doc or hand_doc:
             folder_name = io.folder_list[site_name_id]
             print(f"Found MongoDB documents for image ID {image_id} in folder '{folder_name}'. Proceeding with processing.")
@@ -200,16 +264,19 @@ def main():
             if body_normed_doc: denornm_lms(pickle.loads(body_normed_doc["nlms"]), image)
             # if body_world_doc: denornm_lms(pickle.loads(body_world_doc["body_world_landmarks"]), image)
             if hand_doc: denornm_lms(hand_doc, image)
-            print(f"Extracted normed body landmarks for image ID {image_id}")
-            cv2.imshow("Original Image", image)
-            cv2.waitKey(300)  # Display the image for 100 milliseconds
+            if len(detections) > 0: 
+                for det in detections:
+                    denornm_lms([det.class_id, det.conf, det.bbox_norm], image)
+                print(f"Extracted normed body landmarks for image ID {image_id}")
+                cv2.imshow("Original Image", image)
+                cv2.waitKey(120)  # Display the image for 100 milliseconds
 
-            save_path = build_export_path(image_id, imagename)
-            saved = cv2.imwrite(save_path, image)
-            if saved:
-                print(f"Saved image with drawn landmarks: {save_path}")
-            else:
-                print(f"ERROR: cv2.imwrite failed for image ID {image_id} -> {save_path}")
+                save_path = build_export_path(image_id, imagename)
+                saved = cv2.imwrite(save_path, image)
+                if saved:
+                    print(f"Saved image with drawn landmarks: {save_path}")
+                else:
+                    print(f"ERROR: cv2.imwrite failed for image ID {image_id} -> {save_path}")
             # Here you would add the code to draw the landmarks on the image and save it to EXPORT_DIR
             # For example, you could use OpenCV to read the original image, draw the landmarks, and save it.
             # This is where you would implement the drawing logic based on the data in the MongoDB documents.
