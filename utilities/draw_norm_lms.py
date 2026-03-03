@@ -20,7 +20,7 @@ from mp_sort_pose import SortPose
 
 IS_SSD = False
 VERBOSE = True
-LIMIT = 100
+LIMIT = 10000
 SegmentHelper_name = "SegmentHelper_mar2026_hand_body_lms_testing"
 
 io = DataIO(IS_SSD)
@@ -267,16 +267,15 @@ def main():
             if len(detections) > 0: 
                 for det in detections:
                     denornm_lms([det.class_id, det.conf, det.bbox_norm], image)
-                print(f"Extracted normed body landmarks for image ID {image_id}")
-                cv2.imshow("Original Image", image)
-                cv2.waitKey(120)  # Display the image for 100 milliseconds
+            cv2.imshow("Original Image", image)
+            cv2.waitKey(120)  # Display the image for 100 milliseconds
 
-                save_path = build_export_path(image_id, imagename)
-                saved = cv2.imwrite(save_path, image)
-                if saved:
-                    print(f"Saved image with drawn landmarks: {save_path}")
-                else:
-                    print(f"ERROR: cv2.imwrite failed for image ID {image_id} -> {save_path}")
+            save_path = build_export_path(image_id, imagename)
+            saved = cv2.imwrite(save_path, image)
+            if saved:
+                print(f"Saved image with drawn landmarks: {save_path}")
+            else:
+                print(f"ERROR: cv2.imwrite failed for image ID {image_id} -> {save_path}")
             # Here you would add the code to draw the landmarks on the image and save it to EXPORT_DIR
             # For example, you could use OpenCV to read the original image, draw the landmarks, and save it.
             # This is where you would implement the drawing logic based on the data in the MongoDB documents.
