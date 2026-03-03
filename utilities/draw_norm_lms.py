@@ -122,11 +122,16 @@ def draw_baseline_info(image):
 
 def denornm_lms(lms, image):
     def denorm_landmark(x,y,z, color=(0,255,0)):
-        x *= sort.nose_x + (x * sort.face_height)  # scale by face height and position relative to nose
-        y *= sort.nose_y + (y * sort.face_height)  # scale by face height and position relative to nose
-        if z is not None: z *= sort.face_height
+        print(f"Original normalized landmark: ({x}, {y}, {z})")
+        x = sort.nose_x + (x * sort.face_height)  # scale by face height and position relative to nose
+        y = sort.nose_y + (y * sort.face_height)  # scale by face height and position relative to nose
+        if z is not None: z = sort.face_height
         # draw the landmark on the image for visualization
         cv2.circle(image, (int(x), int(y)), 5, color, -1)
+        # draw line from nose to landmark for visualization
+        print(f"denormed landmark: ({x}, {y}, {z})")
+        if sort.nose_x is not None and sort.nose_y is not None:
+            cv2.line(image, (int(sort.nose_x), int(sort.nose_y)), (int(x), int(y)), color, 1)
 
     print("Denorming landmarks...")
     print(type(lms))
