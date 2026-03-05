@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, select, Column, Integer, Float, ForeignKey, BLOB
+from sqlalchemy import create_engine, select, text, bindparam, Column, Integer, Float, ForeignKey, BLOB
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import NullPool
 from my_declarative_base import Base, Images, Detections
@@ -596,6 +596,130 @@ class ToolsClustering:
             df.at[idx, 'bottom_face_object'] = classifications['bottom_face_object']
         
         return df
+
+    def _build_detection_list_from_sql_fields(self, class_id, conf, bbox_norm):
+        """Build 6-element detection list from SQL selected fields."""
+        if class_id is None or conf is None or bbox_norm is None:
+            return None
+
+        bbox = self.parse_bbox_norm(bbox_norm)
+        if bbox is None:
+            return None
+
+        required_keys = ['top', 'left', 'right', 'bottom']
+        if not all(k in bbox for k in required_keys):
+            return None
+
+        return [
+            float(class_id),
+            float(conf),
+            float(bbox['top']),
+            float(bbox['left']),
+            float(bbox['right']),
+            float(bbox['bottom'])
+        ]
+
+    def get_precomputed_detections_by_image_ids(self, image_ids):
+        """
+        Read precomputed detection assignments from ImagesDetections and join to Detections.
+        Returns dict keyed by image_id with values containing the 5 detection-list fields.
+        """
+        if self.session is None:
+            raise ValueError("Session not initialized. Pass session to ToolsClustering.__init__()")
+
+        if not image_ids:
+            return {}
+
+        sql = text("""
+            SELECT
+                idet.image_id,
+
+                bh.class_id AS both_hands_class_id,
+                bh.conf AS both_hands_conf,
+                bh.bbox_norm AS both_hands_bbox_norm,
+
+                lh.class_id AS left_hand_class_id,
+                lh.conf AS left_hand_conf,
+                lh.bbox_norm AS left_hand_bbox_norm,
+
+                rh.class_id AS right_hand_class_id,
+                rh.conf AS right_hand_conf,
+                rh.bbox_norm AS right_hand_bbox_norm,
+
+                tf.class_id AS top_face_class_id,
+                tf.conf AS top_face_conf,
+                tf.bbox_norm AS top_face_bbox_norm,
+
+                bf.class_id AS bottom_face_class_id,
+                bf.conf AS bottom_face_conf,
+                bf.bbox_norm AS bottom_face_bbox_norm
+            FROM ImagesDetections idet
+            LEFT JOIN Detections bh ON idet.both_hands_object_id = bh.detection_id
+            LEFT JOIN Detections lh ON idet.left_hand_object_id = lh.detection_id
+            LEFT JOIN Detections rh ON idet.right_hand_object_id = rh.detection_id
+            LEFT JOIN Detections tf ON idet.top_face_object_id = tf.detection_id
+            LEFT JOIN Detections bf ON idet.bottom_face_object_id = bf.detection_id
+            WHERE idet.image_id IN :image_ids
+        """).bindparams(bindparam("image_ids", expanding=True))
+
+        rows = self.session.execute(sql, {"image_ids": list(image_ids)}).mappings().all()
+
+        result = {}
+        for row in rows:
+            image_id = row['image_id']
+            result[image_id] = {
+                'both_hands_object': self._build_detection_list_from_sql_fields(
+                    row['both_hands_class_id'], row['both_hands_conf'], row['both_hands_bbox_norm']
+                ),
+                'left_hand_object': self._build_detection_list_from_sql_fields(
+                    row['left_hand_class_id'], row['left_hand_conf'], row['left_hand_bbox_norm']
+                ),
+                'right_hand_object': self._build_detection_list_from_sql_fields(
+                    row['right_hand_class_id'], row['right_hand_conf'], row['right_hand_bbox_norm']
+                ),
+                'top_face_object': self._build_detection_list_from_sql_fields(
+                    row['top_face_class_id'], row['top_face_conf'], row['top_face_bbox_norm']
+                ),
+                'bottom_face_object': self._build_detection_list_from_sql_fields(
+                    row['bottom_face_class_id'], row['bottom_face_conf'], row['bottom_face_bbox_norm']
+                ),
+            }
+
+        return result
+
+    def hydrate_detections_from_precomputed_table(self, df):
+        """
+        Fill detection classification columns from ImagesDetections + Detections.
+        Returns (updated_df, missing_image_ids) where missing_image_ids are not found
+        in ImagesDetections at all.
+        """
+        required_cols = [
+            'both_hands_object', 'left_hand_object', 'right_hand_object',
+            'top_face_object', 'bottom_face_object'
+        ]
+        for col in required_cols:
+            if col not in df.columns:
+                df[col] = None
+
+        image_ids = [int(x) for x in df['image_id'].dropna().unique().tolist()]
+        precomputed = self.get_precomputed_detections_by_image_ids(image_ids)
+
+        for idx, row in df.iterrows():
+            image_id = row.get('image_id')
+            if image_id is None:
+                continue
+            payload = precomputed.get(int(image_id))
+            if payload is None:
+                continue
+
+            df.at[idx, 'both_hands_object'] = payload['both_hands_object']
+            df.at[idx, 'left_hand_object'] = payload['left_hand_object']
+            df.at[idx, 'right_hand_object'] = payload['right_hand_object']
+            df.at[idx, 'top_face_object'] = payload['top_face_object']
+            df.at[idx, 'bottom_face_object'] = payload['bottom_face_object']
+
+        missing_image_ids = sorted(list(set(image_ids) - set(precomputed.keys())))
+        return df, missing_image_ids
 
     def flatten_object_detections(self, detection_list):
         """
