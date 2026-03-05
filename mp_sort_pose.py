@@ -3900,72 +3900,54 @@ class SortPose:
                 hand_landmarks = hand_results['right_hand'].get('hand_landmarks_norm', [])
         return left_hand_landmarks, left_hand_world_landmarks, left_hand_landmarks_norm, right_hand_landmarks, right_hand_world_landmarks, hand_landmarks
 
-    def prep_knuckle_landmarks(self, hand_results, body_landmarks_3D=None):  
+    def prep_knuckle_landmarks(self, hand_results, body_landmarks_normalized=None):  
         """
-        Extract hand fingertip position from hand_results, with body landmark fallback.
+        Extract hand/finger position from body landmarks (primary source).
         
-        Using landmark[8] (fingertip) instead of landmark[5] (knuckle) for better 
-        object-in-hand detection. Falls back to body landmarks (ignoring Z coordinate)
-        when hand data unavailable.
+        Uses body pose landmarks 19/20 (left/right index fingers) as the reliable source.
+        Hand landmarks are ignored in favor of body landmarks. Z coordinate set to 0.0
+        since body Z estimates are unreliable.
+        
+        Allows for missing hands (returns default position) to support images like
+        headphone-only photos where hands aren't visible.
         
         Args:
-            hand_results: Dict with 'left_hand' and/or 'right_hand' keys containing hand_landmarks_norm
-            body_landmarks_3D: Body pose landmarks for fallback (Z coordinate ignored)
+            hand_results: Dict with hand data (currently unused, kept for compatibility)
+            body_landmarks_normalized: Body pose landmarks (REQUIRED for body source)
             
         Returns:
-            Tuple: (left_pointer_fingertip_norm, right_pointer_fingertip_norm, left_source, right_source)
+            Tuple: (left_finger_position, right_finger_position, left_source, right_source)
+            - Positions are [x, y, 0.0] in normalized coordinates
+            - Sources: "body" if body landmark available, "default" if hand not visible
+            - Default position: [0.0, 8.0, 0.0] (off-screen, will cluster separately)
         """
         left_pointer_knuckle_norm = right_pointer_knuckle_norm = []
         left_source = right_source = "default"
         
-        # Extract hand landmarks - using landmark 8 (fingertip)
-        if hand_results:
-            if 'left_hand' in hand_results:
-                try:
-                    left_hand_landmarks_norm = hand_results['left_hand'].get('hand_landmarks_norm', [])
-                    if len(left_hand_landmarks_norm) > 8:
-                        left_pointer_knuckle_norm = left_hand_landmarks_norm[8]  # Fingertip
-                        left_source = "hand"
-                except (IndexError, TypeError, KeyError):
-                    pass
-            
-            if 'right_hand' in hand_results:
-                try:
-                    hand_landmarks = hand_results['right_hand'].get('hand_landmarks_norm', [])
-                    if len(hand_landmarks) > 8:
-                        right_pointer_knuckle_norm = hand_landmarks[8]  # Fingertip
-                        right_source = "hand"
-                except (IndexError, TypeError, KeyError):
-                    pass
-        
-        # Fallback to body landmarks if hand data missing (ignore Z coordinate)
-        if not left_pointer_knuckle_norm and body_landmarks_3D:
+        # Primary: Use body landmarks for finger positions
+        if body_landmarks_normalized:
             try:
-                if isinstance(body_landmarks_3D, bytes):
+                if isinstance(body_landmarks_normalized, bytes):
                     from mediapipe.framework.formats import landmark_pb2
                     body_lms = landmark_pb2.LandmarkList()
-                    body_lms.ParseFromString(body_landmarks_3D)
+                    body_lms.ParseFromString(body_landmarks_normalized)
+                    
+                    # Left index finger (landmark 19)
                     if len(body_lms.landmark) > 19:
-                        lm = body_lms.landmark[19]  # Left index finger
+                        lm = body_lms.landmark[19]
                         left_pointer_knuckle_norm = [lm.x, lm.y, 0.0]  # Ignore Z
                         left_source = "body"
-            except Exception:
-                pass
-        
-        if not right_pointer_knuckle_norm and body_landmarks_3D:
-            try:
-                if isinstance(body_landmarks_3D, bytes):
-                    from mediapipe.framework.formats import landmark_pb2
-                    body_lms = landmark_pb2.LandmarkList()
-                    body_lms.ParseFromString(body_landmarks_3D)
+                    
+                    # Right index finger (landmark 20)
                     if len(body_lms.landmark) > 20:
-                        lm = body_lms.landmark[20]  # Right index finger
+                        lm = body_lms.landmark[20]
                         right_pointer_knuckle_norm = [lm.x, lm.y, 0.0]  # Ignore Z
                         right_source = "body"
             except Exception:
                 pass
         
-        # Final default fallback
+        # Default fallback for hands not visible in frame
+        # (e.g., headphone photos showing only head/shoulders)
         if not left_pointer_knuckle_norm:
             left_pointer_knuckle_norm = [0.0, 8.0, 0.0]
         if not right_pointer_knuckle_norm:

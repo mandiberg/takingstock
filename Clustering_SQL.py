@@ -122,12 +122,12 @@ FORCE_HAND_LANDMARKS = False # when doing ArmsPoses3D, default is True, so mongo
 # TESTING MODE - reduce dataset size for faster iteration using pre-filtered table
 # Set to True to use SegmentHelper_oct2025_every40 (every 40th image, ~2.5% of full dataset)
 # Set to False for production full dataset processing
-SKIP_TESTING = True
+SKIP_TESTING = False
 
 # number of clusters produced. run GET_OPTIMAL_CLUSTERS and add that number here
 # 32 for hand positions
 # 128 for hand gestures
-N_CLUSTERS = 128  # Increased from 768 - need more granularity to break up mega-clusters
+N_CLUSTERS = 768  # Increased from 768 - need more granularity to break up mega-clusters
 N_META_CLUSTERS = 256
 if MODE == 3: 
     META = True
@@ -990,17 +990,36 @@ def prepare_df(df):
     elif cl.CLUSTER_TYPE == "ObjectFusion":
 
         print("first row of df",df.iloc[0].to_string())
+        
+        # Filter: Require body_landmarks_normalized (body pose data is mandatory)
+        # This ensures we have reliable finger position data from body landmarks
+        df = df[df['body_landmarks_normalized'].notna()]
+        print(f"After filtering for body_landmarks_normalized: {len(df)} rows remaining")
+        
+        if len(df) == 0:
+            print("WARNING: No rows with body_landmarks_normalized found. Cannot cluster.")
+            return None
+        
         # Replace NaN values with None before applying prep functions
         df['hand_results'] = df['hand_results'].apply(lambda x: None if pd.isna(x) else x)
         df[['left_hand_landmarks', 'left_hand_world_landmarks', 'left_hand_landmarks_norm', 'right_hand_landmarks', 'right_hand_world_landmarks', 'right_hand_landmarks_norm']] = pd.DataFrame(df['hand_results'].apply(sort.prep_hand_landmarks).tolist(), index=df.index)
         # Debug: check first row landmarks (using iloc to handle any index)
         if len(df) > 0 and len(df['left_hand_landmarks_norm'].iloc[0]) > 0:
             print(f"Sample left_hand_landmarks_norm (first landmark): {df['left_hand_landmarks_norm'].iloc[0][0]}")
-        # hand_results still contains data (or None), safe to apply again
+        
+        # Extract finger positions from body landmarks (primary source)
+        # hand_results parameter kept for compatibility but body_landmarks_normalized is used
         df[["left_pointer_knuckle_norm","right_pointer_knuckle_norm","left_source","right_source"]] = pd.DataFrame(
-            df.apply(lambda row: sort.prep_knuckle_landmarks(row['hand_results'], row['body_landmarks_3D']), axis=1).tolist(), 
+            df.apply(lambda row: sort.prep_knuckle_landmarks(row['hand_results'], row['body_landmarks_normalized']), axis=1).tolist(), 
             index=df.index)
-        print("after getting fingertip (landmark 8)",df.iloc[0].to_string())
+        
+        # Log source distribution for monitoring
+        left_source_counts = df['left_source'].value_counts()
+        right_source_counts = df['right_source'].value_counts()
+        print(f"Left finger position sources: {left_source_counts.to_dict()}")
+        print(f"Right finger position sources: {right_source_counts.to_dict()}")
+        
+        print("after getting finger positions from body landmarks",df.iloc[0].to_string())
         # df = sort.split_landmarks_to_columns(df, left_col="left_hand_landmarks_norm", right_col="right_hand_landmarks_norm")
         # df = sort.split_landmarks_to_columns_or_list(df, first_col="left_hand_landmarks_norm", second_col="right_hand_landmarks_norm", structure="cols")
     # def split_landmarks_to_columns_or_list(self, df, first_col="left_hand_world_landmarks", second_col="right_hand_world_landmarks", structure="cols"):
