@@ -16,7 +16,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 # my ORM
-from my_declarative_base import Detections, Base, Images, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON, ForeignKey
+from my_declarative_base import Encodings, Detections, Base, Images, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON, ForeignKey
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import create_engine, text, MetaData, Table, Column, Numeric, Integer, VARCHAR, update, Float
@@ -209,12 +209,12 @@ if USE_SEGMENT is True and (cl.CLUSTER_TYPE != "Clusters"):
         # handles segmentbig which doesn't have is_dupe_of, etc
         FROM += f" JOIN Encodings e ON s.image_id = e.image_id "
         dupe_table_pre = "e"
-        WHERE = f" {dupe_table_pre}.is_dupe_of IS NULL "
+        WHERE = f" {dupe_table_pre}.is_dupe_of IS NULL AND  {dupe_table_pre}.two_noses IS NULL "
     elif "Encodings" in SegmentTable_name:
         # handles segmentbig which doesn't have is_dupe_of, etc
         # FROM += f" JOIN Encodings e ON s.image_id = e.image_id "
         dupe_table_pre = "s" # because SegmentTable_name is Encodings and gets aliased as s 
-        WHERE = f"  {dupe_table_pre}.is_dupe_of IS NULL AND {dupe_table_pre}.is_face = 1 " # ensures we are still only using faces
+        WHERE = f"  {dupe_table_pre}.is_dupe_of IS NULL AND  {dupe_table_pre}.two_noses IS NULL AND {dupe_table_pre}.is_face = 1 " # ensures we are still only using faces
     else:
         WHERE = f" {dupe_table_pre}.is_dupe_of IS NULL "
     # Basic Query, this works with SegmentOct20. Previously included s.face_x, s.face_y, s.face_z, s.mouth_gap
@@ -276,7 +276,7 @@ if USE_SEGMENT is True and (cl.CLUSTER_TYPE != "Clusters"):
         WHERE = " cluster_id IS NOT NULL "
 
     # WHERE += " AND h.is_body = 1"
-    LIMIT = 22000000
+    LIMIT = 4000000
     BATCH_LIMIT = 10000
 
     '''
@@ -797,8 +797,10 @@ def process_landmarks_cluster_dist(df, df_subset_landmarks):
     elif cl.CLUSTER_TYPE == "HSV":
         dim_columns = cl.CLUSTER_DATA[cl.CLUSTER_TYPE]["data_column"]
     else:
-        print("process_landmarks_cluster_dist could not identify dim columns, defaulting to all columns except image_id")
-        dim_columns = [col for col in df_subset_landmarks.columns if col != 'image_id']
+        print("process_landmarks_cluster_dist could not identify dim columns, defaulting to all columns except image_id and metadata")
+        # Exclude image_id and hand position metadata columns from distance calculation
+        exclude_cols = {'image_id', 'left_pointer_knuckle_norm', 'right_pointer_knuckle_norm', 'left_source', 'right_source'}
+        dim_columns = [col for col in df_subset_landmarks.columns if col not in exclude_cols]
         print("process_landmarks_cluster_dist defaulted dim_columns: ", dim_columns)
     print("process_landmarks_cluster_dist dim_columns: ", dim_columns)
     # Step 2: Combine values from these columns into a list for each row
@@ -907,6 +909,192 @@ def df_list_to_cols(df, col_name):
     df = df.drop(col_name, axis=1)
     return df
 
+def extract_face_geometry(df, sort):
+    """
+    Extract face geometry (nose position and face height) from each image.
+    Updates df with nose_x, nose_y, face_height columns.
+    """
+    face_data = []
+    for idx, row in df.iterrows():
+        image_id = row['image_id']
+        
+        # Extract face landmarks and calculate position using SortPose methods
+        try:
+            face_landmarks = row['face_landmarks'] if 'face_landmarks' in row else None
+            if pd.notna(face_landmarks):
+                sort.faceLms = io.unpickle_array(face_landmarks)
+                if sort.faceLms and hasattr(sort.faceLms, 'landmark') and len(sort.faceLms.landmark) > 0:
+                    sort.w = row['w']
+                    sort.h = row['h']
+
+                    # Match utilities/draw_norm_lms.py process_face_doc()
+                    sort.nose_2d = sort.get_face_2d_point(1)
+                    sort.nose_x, sort.nose_y = sort.nose_2d
+                    sort.get_faceheight_data()
+
+                    face_data.append({
+                        'image_id': image_id,
+                        'nose_x': int(sort.nose_x) if sort.nose_x is not None else None,
+                        'nose_y': int(sort.nose_y) if sort.nose_y is not None else None,
+                        'face_height': int(sort.face_height) if sort.face_height is not None else None
+                    })
+                else:
+                    face_data.append({'image_id': image_id, 'nose_x': None, 'nose_y': None, 'face_height': None})
+            else:
+                face_data.append({'image_id': image_id, 'nose_x': None, 'nose_y': None, 'face_height': None})
+        except Exception as e:
+            print(f"Error extracting face geometry for image_id {image_id}: {e}")
+            face_data.append({'image_id': image_id, 'nose_x': None, 'nose_y': None, 'face_height': None})
+    
+    return pd.DataFrame(face_data)
+
+def save_images_detections(df, engine):
+    """
+    Save hand positions and object detections to ImagesDetections table.
+    
+    Args:
+        df: DataFrame with clustered data (must have left_pointer_knuckle_norm, right_pointer_knuckle_norm, 
+                                           left_source, right_source, and detection columns)
+        engine: SQLAlchemy engine for database connection
+    """
+    print("\n[DEBUG] save_images_detections called")
+    print(f"[DEBUG] Input df shape: {df.shape}")
+    print(f"[DEBUG] Columns in df: {list(df.columns)}")
+    
+    # Check if required columns exist
+    required_cols = ['left_pointer_knuckle_norm', 'right_pointer_knuckle_norm', 'left_source', 'right_source']
+    for col in required_cols:
+        if col in df.columns:
+            print(f"[DEBUG] ✓ Column '{col}' present")
+        else:
+            print(f"[DEBUG] ✗ Column '{col}' MISSING")
+    
+    if len(df) > 0:
+        print(f"[DEBUG] Sample row (first image_id={df.iloc[0].get('image_id')}):")
+        print(f"[DEBUG]   left_pointer_knuckle_norm: {df['left_pointer_knuckle_norm'].iloc[0] if 'left_pointer_knuckle_norm' in df.columns else 'N/A'}")
+        print(f"[DEBUG]   right_pointer_knuckle_norm: {df['right_pointer_knuckle_norm'].iloc[0] if 'right_pointer_knuckle_norm' in df.columns else 'N/A'}")
+        print(f"[DEBUG]   left_source: {df['left_source'].iloc[0] if 'left_source' in df.columns else 'N/A'}")
+        print(f"[DEBUG]   right_source: {df['right_source'].iloc[0] if 'right_source' in df.columns else 'N/A'}")
+    
+    images_detections_records = []
+    records_with_hand_data = 0
+    records_with_default_only = 0
+    
+    for idx, row in df.iterrows():
+        image_id = row.get('image_id', 'UNKNOWN')
+        try:
+            left_pos = row.get('left_pointer_knuckle_norm')
+            right_pos = row.get('right_pointer_knuckle_norm')
+            
+            # Helper to extract scalar detection_id from potentially nested structures
+            def extract_detection_id(val):
+                # Check None first
+                if val is None:
+                    return None
+                # Safely check for NaN/empty
+                try:
+                    if isinstance(val, (list, tuple)):
+                        if len(val) == 0:
+                            return None
+                        first = val[0]
+                        if first is None:
+                            return None
+                        return int(first)
+                    elif isinstance(val, np.ndarray):
+                        if val.size == 0:
+                            return None
+                        first = val.flat[0]
+                        if first is None or (isinstance(first, float) and np.isnan(first)):
+                            return None
+                        return int(first)
+                    else:
+                        # Scalar
+                        if isinstance(val, float) and np.isnan(val):
+                            return None
+                        return int(val)
+                except (TypeError, ValueError, IndexError):
+                    return None
+            
+            # Extract position coordinates, handling numpy arrays safely
+            left_x = None
+            left_y = None
+            if left_pos is not None:
+                try:
+                    if hasattr(left_pos, '__len__') and len(left_pos) >= 2:
+                        left_x = float(left_pos[0])
+                        left_y = float(left_pos[1])
+                except (TypeError, ValueError, IndexError) as e:
+                    pass
+            
+            right_x = None
+            right_y = None
+            if right_pos is not None:
+                try:
+                    if hasattr(right_pos, '__len__') and len(right_pos) >= 2:
+                        right_x = float(right_pos[0])
+                        right_y = float(right_pos[1])
+                except (TypeError, ValueError, IndexError) as e:
+                    pass
+            
+            # Track whether this record has actual hand data (non-zero or non-default positions)
+            has_hand_data = (left_x is not None and left_x != 0) or (right_x is not None and right_x != 0)
+            if has_hand_data:
+                records_with_hand_data += 1
+            else:
+                records_with_default_only += 1
+            
+            record = {
+                'image_id': image_id,
+                'left_pointer_x': left_x,
+                'left_pointer_y': left_y,
+                'left_source': row.get('left_source', 'default'),
+                'right_pointer_x': right_x,
+                'right_pointer_y': right_y,
+                'right_source': row.get('right_source', 'default'),
+                'both_hands_object_id': extract_detection_id(row.get('both_hands_object')),
+                'left_hand_object_id': extract_detection_id(row.get('left_hand_object')),
+                'right_hand_object_id': extract_detection_id(row.get('right_hand_object')),
+                'top_face_object_id': extract_detection_id(row.get('top_face_object')),
+                'bottom_face_object_id': extract_detection_id(row.get('bottom_face_object')),
+            }
+            images_detections_records.append(record)
+        except Exception as e:
+            import traceback
+            print(f"[DEBUG] Error processing image_id {image_id}: {type(e).__name__}: {e}")
+            print(f"[DEBUG] Traceback: {traceback.format_exc()}")
+            continue
+    
+    print(f"[DEBUG] Building {len(images_detections_records)} records for ImagesDetections...")
+    print(f"[DEBUG]   Records with actual hand data (left_x or right_x != 0): {records_with_hand_data}")
+    print(f"[DEBUG]   Records with default position only: {records_with_default_only}")
+    
+    if images_detections_records:
+        df_to_insert = pd.DataFrame(images_detections_records)
+        print(f"[DEBUG] DataFrame to insert shape: {df_to_insert.shape}")
+        print(f"[DEBUG] Columns in df_to_insert: {list(df_to_insert.columns)}")
+        
+        # Show sample records with actual hand data
+        hand_data_rows = df_to_insert[(df_to_insert['left_pointer_x'].notna() & (df_to_insert['left_pointer_x'] != 0)) | 
+                                       (df_to_insert['right_pointer_x'].notna() & (df_to_insert['right_pointer_x'] != 0))]
+        if len(hand_data_rows) > 0:
+            print(f"[DEBUG] Sample record WITH hand data:")
+            print(f"[DEBUG]   {hand_data_rows.iloc[0].to_dict()}")
+        else:
+            print(f"[DEBUG] WARNING: No records with actual hand positions found!")
+            if len(df_to_insert) > 0:
+                print(f"[DEBUG] Sample record (default position):")
+                print(f"[DEBUG]   {df_to_insert.iloc[0].to_dict()}")
+        
+        try:
+            df_to_insert.to_sql('ImagesDetections', con=engine, if_exists='append', index=False)
+            print(f"✓ Saved {len(images_detections_records)} records to ImagesDetections table")
+        except IntegrityError as e:
+            print(f"Warning: Some records already exist in ImagesDetections (may be expected): {e}")
+        except Exception as e:
+            print(f"Error saving to ImagesDetections: {e}")
+    else:
+        print("WARNING: No valid records to save to ImagesDetections")
+
 def prepare_df(df):
     print("columns: ",df.columns)
     print("prepare_df df with cl.CLUSTER_TYPE ", cl.CLUSTER_TYPE, df)
@@ -1009,15 +1197,30 @@ def prepare_df(df):
         
         # Extract finger positions from body landmarks (primary source)
         # hand_results parameter kept for compatibility but body_landmarks_normalized is used
+        print("\n[DEBUG] Extracting finger positions from body landmarks...")
+        print(f"[DEBUG] df shape: {df.shape}")
+        
+        # CRITICAL: Unpickle body_landmarks_normalized before using
+        print("[DEBUG] Unpickling body_landmarks_normalized...")
+        df['body_landmarks_normalized'] = df['body_landmarks_normalized'].apply(io.unpickle_array)
+        # print(f"[DEBUG] Sample body_landmarks_normalized (first row, after unpickling): {df['body_landmarks_normalized'].iloc[0] if len(df) > 0 else 'N/A'}")
+        
+        knuckle_results = df.apply(lambda row: sort.prep_knuckle_landmarks(row['hand_results'], row['body_landmarks_normalized']), axis=1).tolist()
+        print(f"[DEBUG] prep_knuckle_landmarks returned {len(knuckle_results)} results")
+        if len(knuckle_results) > 0:
+            print(f"[DEBUG] Sample result (first row): {knuckle_results[0]}")
+        
         df[["left_pointer_knuckle_norm","right_pointer_knuckle_norm","left_source","right_source"]] = pd.DataFrame(
-            df.apply(lambda row: sort.prep_knuckle_landmarks(row['hand_results'], row['body_landmarks_normalized']), axis=1).tolist(), 
+            knuckle_results, 
             index=df.index)
         
         # Log source distribution for monitoring
         left_source_counts = df['left_source'].value_counts()
         right_source_counts = df['right_source'].value_counts()
-        print(f"Left finger position sources: {left_source_counts.to_dict()}")
-        print(f"Right finger position sources: {right_source_counts.to_dict()}")
+        print(f"[DEBUG] Left finger position sources: {left_source_counts.to_dict()}")
+        print(f"[DEBUG] Right finger position sources: {right_source_counts.to_dict()}")
+        print(f"[DEBUG] Sample left_pointer_knuckle_norm (first row): {df['left_pointer_knuckle_norm'].iloc[0] if len(df) > 0 else 'N/A'}")
+        print(f"[DEBUG] Sample right_pointer_knuckle_norm (first row): {df['right_pointer_knuckle_norm'].iloc[0] if len(df) > 0 else 'N/A'}")
         
         print("after getting finger positions from body landmarks",df.iloc[0].to_string())
         # df = sort.split_landmarks_to_columns(df, left_col="left_hand_landmarks_norm", right_col="right_hand_landmarks_norm")
@@ -1041,13 +1244,38 @@ def prepare_df(df):
         # add 'face_x', 'face_y', 'face_z', 'mouth_gap' to existing columns_to_drop
         if 'face_x' in df.columns:
             columns_to_drop += ['face_x', 'face_y', 'face_z', 'mouth_gap']
+    
+    print(f"[DEBUG] Before dropping columns:")
+    print(f"[DEBUG]   df shape: {df.shape}")
+    print(f"[DEBUG]   Columns: {list(df.columns)}")
+    if 'left_pointer_knuckle_norm' in df.columns:
+        print(f"[DEBUG]   ✓ left_pointer_knuckle_norm present")
+    else:
+        print(f"[DEBUG]   ✗ left_pointer_knuckle_norm MISSING")
+    
     df = df.drop(columns=columns_to_drop)
+    
+    print(f"[DEBUG] After dropping columns:")
+    print(f"[DEBUG]   df shape: {df.shape}")
+    print(f"[DEBUG]   Columns: {list(df.columns)}")
+    if 'left_pointer_knuckle_norm' in df.columns:
+        print(f"[DEBUG]   ✓ left_pointer_knuckle_norm present")
+    else:
+        print(f"[DEBUG]   ✗ left_pointer_knuckle_norm MISSING")
+    
     # if body_landmarks_array is in the df columns,
     # drop any rows where body_landmarks_array is None or NaN
     if 'body_landmarks_array' in df.columns:
         df = df.dropna(subset=['body_landmarks_array'])
 
-    print("final prepared df len", len(df))
+    print(f"[DEBUG] Final prepared df:")
+    print(f"[DEBUG]   shape: {len(df)}")
+    print(f"[DEBUG]   Columns: {list(df.columns)}")
+    if 'left_pointer_knuckle_norm' in df.columns:
+        print(f"[DEBUG]   ✓ left_pointer_knuckle_norm present in final df")
+        print(f"[DEBUG]   Sample value: {df['left_pointer_knuckle_norm'].iloc[0] if len(df) > 0 else 'N/A'}")
+    else:
+        print(f"[DEBUG]   ✗ left_pointer_knuckle_norm MISSING from final df!")
     return df
 
 def fetch_mongo_for_batch(batch_df):
@@ -1240,6 +1468,15 @@ def main():
         columns_to_check = ["image_id", "cluster_id", "body_landmarks_array", "left_hand_landmarks_norm", "right_hand_landmarks_norm", "hand_results", "face_encodings68"]
         columns_to_drop += [col for col in columns_to_check if col in enc_data.columns]
         print("columns to drop: ",columns_to_drop)
+        
+        print(f"\n[DEBUG] Before KMeans clustering:")
+        print(f"[DEBUG]   enc_data shape: {enc_data.shape}")
+        print(f"[DEBUG]   Columns: {list(enc_data.columns)}")
+        if 'left_pointer_knuckle_norm' in enc_data.columns:
+            print(f"[DEBUG]   ✓ left_pointer_knuckle_norm present before clustering")
+        else:
+            print(f"[DEBUG]   ✗ left_pointer_knuckle_norm MISSING before clustering")
+        
         # fit_scaler=True for MODE 0 (creating clusters from scratch)
         enc_data["cluster_id"] = kmeans_cluster(enc_data.drop(columns=columns_to_drop), n_clusters=N_CLUSTERS, fit_scaler=True)
         
@@ -1254,7 +1491,38 @@ def main():
         if cl.CLUSTER_TYPE != "HSV":
             # this is specific to lms, not hsv
             # Use fit_scaler=False here - scaler already fitted above
+            print(f"\n[DEBUG] Before landmarks_to_df_columnar:")
+            print(f"[DEBUG]   enc_data shape: {enc_data.shape}")
+            print(f"[DEBUG]   Columns: {list(enc_data.columns)}")
+            if 'left_pointer_knuckle_norm' in enc_data.columns:
+                print(f"[DEBUG]   ✓ left_pointer_knuckle_norm present before landmarks_to_df_columnar")
+            else:
+                print(f"[DEBUG]   ✗ left_pointer_knuckle_norm MISSING before landmarks_to_df_columnar")
+            
+            # CRITICAL: Preserve hand position metadata columns before transformation
+            hand_position_cols = ['image_id', 'left_pointer_knuckle_norm', 'right_pointer_knuckle_norm', 'left_source', 'right_source']
+            hand_position_metadata = enc_data[[col for col in hand_position_cols if col in enc_data.columns]].copy()
+            print(f"[DEBUG] Saving hand position metadata: {list(hand_position_metadata.columns)}")
+            
             df_columnar = landmarks_to_df_columnar(enc_data, add_list=True, fit_scaler=False)
+            
+            print(f"\n[DEBUG] After landmarks_to_df_columnar:")
+            print(f"[DEBUG]   df_columnar shape: {df_columnar.shape}")
+            print(f"[DEBUG]   Columns: {list(df_columnar.columns)}")
+            if 'left_pointer_knuckle_norm' in df_columnar.columns:
+                print(f"[DEBUG]   ✓ left_pointer_knuckle_norm present after landmarks_to_df_columnar")
+            else:
+                print(f"[DEBUG]   ✗ left_pointer_knuckle_norm MISSING after landmarks_to_df_columnar")
+            
+            # CRITICAL: Merge hand position metadata back into df_columnar
+            print(f"\n[DEBUG] Restoring hand position metadata to df_columnar...")
+            df_columnar = df_columnar.merge(hand_position_metadata, on='image_id', how='left')
+            print(f"[DEBUG] After restoring hand position metadata:")
+            print(f"[DEBUG]   df_columnar shape: {df_columnar.shape}")
+            if 'left_pointer_knuckle_norm' in df_columnar.columns:
+                print(f"[DEBUG]   ✓ left_pointer_knuckle_norm RESTORED to df_columnar")
+            else:
+                print(f"[DEBUG]   ✗ left_pointer_knuckle_norm STILL MISSING after restore!")
         else:
             df_columnar = enc_data
         print("df_columnar", df_columnar)
@@ -1273,6 +1541,87 @@ def main():
                 save_images_clusters_DB(batch_df)
                 # Free memory between batches
                 gc.collect()
+        
+        # Save face geometry and hand detection data for ObjectFusion clustering
+        if cl.CLUSTER_TYPE == "ObjectFusion":
+            print("\n=== Saving ImagesDetections table ===")
+            try:
+                # Extract face geometry from original df
+                face_geometry_df = extract_face_geometry(df, sort)
+                
+                print(f"[DEBUG] Before merge:")
+                print(f"[DEBUG]   enc_data shape: {enc_data.shape if 'image_id' in enc_data.columns else 'N/A (will use df_columnar)'}")
+                print(f"[DEBUG]   df_columnar shape: {df_columnar.shape}")
+                print(f"[DEBUG]   face_geometry_df shape: {face_geometry_df.shape}")
+                
+                # Merge face geometry with full ObjectFusion data (contains knuckle/source columns)
+                if 'image_id' in enc_data.columns:
+                    print(f"[DEBUG]   Using enc_data for merge (has image_id)")
+                    print(f"[DEBUG]   enc_data columns: {list(enc_data.columns)}")
+                    df_with_geometry = enc_data.merge(face_geometry_df, on='image_id', how='left')
+                else:
+                    print(f"[DEBUG]   Using df_columnar for merge (enc_data missing image_id)")
+                    print(f"[DEBUG]   df_columnar columns: {list(df_columnar.columns)}")
+                    df_with_geometry = df_columnar.merge(face_geometry_df, on='image_id', how='left')
+                
+                print(f"[DEBUG] After merge:")
+                print(f"[DEBUG]   df_with_geometry shape: {df_with_geometry.shape}")
+                print(f"[DEBUG]   df_with_geometry columns: {list(df_with_geometry.columns)}")
+                
+                # Check for hand position columns
+                hand_cols = ['left_pointer_knuckle_norm', 'right_pointer_knuckle_norm', 'left_source', 'right_source']
+                for col in hand_cols:
+                    if col in df_with_geometry.columns:
+                        print(f"[DEBUG]   ✓ Column '{col}' found in df_with_geometry")
+                    else:
+                        print(f"[DEBUG]   ✗ Column '{col}' MISSING from df_with_geometry")
+
+                # Update Encodings table with face geometry using raw SQL so ORM class can lag schema
+                updated_count = 0
+                try:
+                    col_check_sql = text("""
+                        SELECT COLUMN_NAME
+                        FROM information_schema.COLUMNS
+                        WHERE TABLE_SCHEMA = DATABASE()
+                          AND TABLE_NAME = 'Encodings'
+                          AND COLUMN_NAME IN ('nose_x', 'nose_y', 'face_height')
+                    """)
+                    existing_cols = {row[0] for row in session.execute(col_check_sql)}
+                except Exception as e:
+                    print(f"Error checking Encodings schema: {e}")
+                    existing_cols = set()
+
+                required_cols = {'nose_x', 'nose_y', 'face_height'}
+                if required_cols.issubset(existing_cols):
+                    update_sql = text("""
+                        UPDATE Encodings
+                        SET nose_x = :nose_x,
+                            nose_y = :nose_y,
+                            face_height = :face_height
+                        WHERE image_id = :image_id
+                    """)
+                    for idx, row in face_geometry_df.iterrows():
+                        try:
+                            session.execute(update_sql, {
+                                'image_id': row['image_id'],
+                                'nose_x': row['nose_x'],
+                                'nose_y': row['nose_y'],
+                                'face_height': row['face_height']
+                            })
+                            updated_count += 1
+                        except Exception as e:
+                            print(f"Error updating Encodings for image_id {row['image_id']}: {e}")
+                    session.commit()
+                    print(f"✓ Updated Encodings table with face geometry for {updated_count} images")
+                else:
+                    missing_cols = required_cols - existing_cols
+                    print(f"Skipping Encodings geometry update; missing columns: {sorted(missing_cols)}")
+
+                # Save ImagesDetections table
+                save_images_detections(df_with_geometry, engine)
+            except Exception as e:
+                print(f"Error in ObjectFusion post-processing: {e}")
+        
         # save_images_clusters_DB(df_columnar)
         print("saved segment to clusters")
 

@@ -3926,15 +3926,19 @@ class SortPose:
         
         # Primary: Use body landmarks for finger positions
         if body_landmarks_normalized:
+            # print("body_landmarks_normalized", type(body_landmarks_normalized))
             try:
                 if isinstance(body_landmarks_normalized, bytes):
+                    print("body_landmarks_normalized is bytes, unpickling")
                     from mediapipe.framework.formats import landmark_pb2
                     body_lms = landmark_pb2.LandmarkList()
                     body_lms.ParseFromString(body_landmarks_normalized)
                     
+                    # print("body_lms", body_lms)
                     # Left index finger (landmark 19)
                     if len(body_lms.landmark) > 19:
                         lm = body_lms.landmark[19]
+                        # print("landmark 19", lm)
                         left_pointer_knuckle_norm = [lm.x, lm.y, 0.0]  # Ignore Z
                         left_source = "body"
                     
@@ -3943,8 +3947,26 @@ class SortPose:
                         lm = body_lms.landmark[20]
                         right_pointer_knuckle_norm = [lm.x, lm.y, 0.0]  # Ignore Z
                         right_source = "body"
-            except Exception:
-                pass
+                else:
+                    # Already unpickled - it's a NormalizedLandmarkList object
+                    # print("body_landmarks_normalized is already a MediaPipe object")
+                    # Left index finger (landmark 19)
+                    if len(body_landmarks_normalized.landmark) > 19:
+                        lm = body_landmarks_normalized.landmark[19]
+                        # print(f"landmark 19: x={lm.x}, y={lm.y}")
+                        left_pointer_knuckle_norm = [lm.x, lm.y, 0.0]  # Ignore Z
+                        left_source = "body"
+                    
+                    # Right index finger (landmark 20)
+                    if len(body_landmarks_normalized.landmark) > 20:
+                        lm = body_landmarks_normalized.landmark[20]
+                        # print(f"landmark 20: x={lm.x}, y={lm.y}")
+                        right_pointer_knuckle_norm = [lm.x, lm.y, 0.0]  # Ignore Z
+                        right_source = "body"
+            except Exception as e:
+                print("Error processing body landmarks for knuckle positions:", e)
+                # Fall back to default if there's an error
+                
         
         # Default fallback for hands not visible in frame
         # (e.g., headphone photos showing only head/shoulders)
