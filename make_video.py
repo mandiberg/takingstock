@@ -90,6 +90,7 @@ MODE_CHOICE = 6
 CURRENT_MODE = MODES[MODE_CHOICE]
 
 LIMIT = 100000 # this is the limit for the SQL query
+CROP_MULTIPLIER = 5
 
 image_edge_multiplier = None
 # image_edge_multiplier = [1.3,2,2.9,2] # [top, right, bottom, left] setting a default. not sure if this will mess up places it looks for None
@@ -571,6 +572,7 @@ elif IS_SEGONLY and io.platform == "darwin":
             print("[setting junction] IS_HAND_POSE_FUSION normal")
             cluster_table = f"Images{CLUSTER1}"
             FROM += f" JOIN {cluster_table} ihp ON s.image_id = ihp.image_id "
+        SELECT += ", ihp.cluster_dist "
         if CLUSTER2: FROM += f" JOIN Images{CLUSTER2} ih ON s.image_id = ih.image_id "
         # WHERE += " AND ihp.cluster_dist < 2.5" # isn't really working how I want it
         if IS_HAND_POSE_FUSION: add_topic_select()
@@ -2238,6 +2240,16 @@ def main():
         except:
             print('you forgot to change the filename DUH')
         if not df.empty:
+            if SORT_TYPE == "object_fusion" or "fusion" in SORT_TYPE:
+                simple_crop = int(sort.CUTOFF * CROP_MULTIPLIER)
+                if 'cluster_dist' in df.columns:
+                    original_len = len(df)
+                    df['cluster_dist'] = pd.to_numeric(df['cluster_dist'], errors='coerce')
+                    df = df.sort_values('cluster_dist', ascending=True).head(simple_crop).reset_index(drop=True)
+                    print(f"[object_fusion] cluster_dist crop: kept {len(df)} of {original_len} rows (simple_crop={simple_crop})")
+                else:
+                    print("[object_fusion] cluster_dist not found in SELECT results; skipping pre-crop")
+
             # MODE 0 fast path: load precomputed hand positions + detection assignments from ImagesDetections
             # to avoid re-processing detections from Mongo
             if MODE == 0 and (SORT_TYPE == "object_fusion" or "fusion" in SORT_TYPE):
