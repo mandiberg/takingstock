@@ -219,6 +219,21 @@ class ToolsClustering:
             detection_dict['bottom']
         ]
 
+    def detection_to_payload(self, detection_dict):
+        """Convert detection dict to a compact payload for DataFrame/DB use."""
+        if detection_dict is None:
+            return None
+
+        return {
+            'detection_id': int(detection_dict['detection_id']),
+            'class_id': float(detection_dict['class_id']),
+            'conf': float(detection_dict['conf']),
+            'top': float(detection_dict['top']),
+            'left': float(detection_dict['left']),
+            'right': float(detection_dict['right']),
+            'bottom': float(detection_dict['bottom']),
+        }
+
     def calc_iou(self, bbox1, bbox2):
         """Calculate Intersection over Union between two bboxes."""
         x_left = max(bbox1['left'], bbox2['left'])
@@ -556,7 +571,7 @@ class ToolsClustering:
     def query_and_classify_detections(self, image_id, left_knuckle, right_knuckle, left_shoulder=None, right_shoulder=None):
         """
         Query detections for an image and classify their relationship to hands/face.
-        Returns dict with 5 keys, each containing a 6-element list or None.
+        Returns dict with 5 keys, each containing a detection payload dict or None.
         """
         if self.session is None:
             raise ValueError("Session not initialized. Pass session to ToolsClustering.__init__()")
@@ -600,20 +615,13 @@ class ToolsClustering:
             right_shoulder=right_shoulder,
         )
         
-        # Convert to 6-element lists for df storage
+        # Convert to compact payload dicts for df storage / DB persistence
         result = {}
         for key, det in classified.items():
             if det is None:
                 result[key] = None
             else:
-                result[key] = [
-                    det['class_id'],
-                    det['conf'],
-                    det['top'],
-                    det['left'],
-                    det['right'],
-                    det['bottom']
-                ]
+                result[key] = self.detection_to_payload(det)
         
         return result
 
@@ -660,9 +668,9 @@ class ToolsClustering:
         
         return df
 
-    def _build_detection_list_from_sql_fields(self, class_id, conf, bbox_norm):
-        """Build 6-element detection list from SQL selected fields."""
-        if class_id is None or conf is None or bbox_norm is None:
+    def _build_detection_payload_from_sql_fields(self, detection_id, class_id, conf, bbox_norm):
+        """Build detection payload dict from SQL selected fields."""
+        if detection_id is None or class_id is None or conf is None or bbox_norm is None:
             return None
 
         bbox = self.parse_bbox_norm(bbox_norm)
@@ -673,22 +681,20 @@ class ToolsClustering:
         if not all(k in bbox for k in required_keys):
             return None
 
-        return [
-            float(class_id),
-            float(conf),
-            float(bbox['top']),
-            float(bbox['left']),
-            float(bbox['right']),
-            float(bbox['bottom'])
-        ]
+        return {
+            'detection_id': int(detection_id),
+            'class_id': float(class_id),
+            'conf': float(conf),
+            'top': float(bbox['top']),
+            'left': float(bbox['left']),
+            'right': float(bbox['right']),
+            'bottom': float(bbox['bottom']),
+        }
 
     def get_precomputed_detections_by_image_ids(self, image_ids):
         """
         Read precomputed detection assignments from ImagesDetections and join to Detections.
-        Returns dict keyed by image_id with values containing the 5 detection-list fields.
-        Note: legacy ImagesDetections schema stores bottom_face_object and both_hands_object.
-        We map bottom_face_object -> mouth_object and use both_hands_object as fallback for
-        left/right when either hand-specific field is missing.
+        Returns dict keyed by image_id with values containing the 5 detection payload fields.
         """
         if self.session is None:
             raise ValueError("Session not initialized. Pass session to ToolsClustering.__init__()")
@@ -700,31 +706,36 @@ class ToolsClustering:
             SELECT
                 idet.image_id,
 
-                bh.class_id AS both_hands_class_id,
-                bh.conf AS both_hands_conf,
-                bh.bbox_norm AS both_hands_bbox_norm,
-
+                lh.detection_id AS left_hand_detection_id,
                 lh.class_id AS left_hand_class_id,
                 lh.conf AS left_hand_conf,
                 lh.bbox_norm AS left_hand_bbox_norm,
 
+                rh.detection_id AS right_hand_detection_id,
                 rh.class_id AS right_hand_class_id,
                 rh.conf AS right_hand_conf,
                 rh.bbox_norm AS right_hand_bbox_norm,
 
+                tf.detection_id AS top_face_detection_id,
                 tf.class_id AS top_face_class_id,
                 tf.conf AS top_face_conf,
                 tf.bbox_norm AS top_face_bbox_norm,
 
-                bf.class_id AS bottom_face_class_id,
-                bf.conf AS bottom_face_conf,
-                bf.bbox_norm AS bottom_face_bbox_norm
+                mo.detection_id AS mouth_detection_id,
+                mo.class_id AS mouth_class_id,
+                mo.conf AS mouth_conf,
+                mo.bbox_norm AS mouth_bbox_norm,
+
+                so.detection_id AS shoulder_detection_id,
+                so.class_id AS shoulder_class_id,
+                so.conf AS shoulder_conf,
+                so.bbox_norm AS shoulder_bbox_norm
             FROM ImagesDetections idet
-            LEFT JOIN Detections bh ON idet.both_hands_object_id = bh.detection_id
             LEFT JOIN Detections lh ON idet.left_hand_object_id = lh.detection_id
             LEFT JOIN Detections rh ON idet.right_hand_object_id = rh.detection_id
             LEFT JOIN Detections tf ON idet.top_face_object_id = tf.detection_id
-            LEFT JOIN Detections bf ON idet.bottom_face_object_id = bf.detection_id
+            LEFT JOIN Detections mo ON idet.mouth_object_id = mo.detection_id
+            LEFT JOIN Detections so ON idet.shoulder_object_id = so.detection_id
             WHERE idet.image_id IN :image_ids
         """).bindparams(bindparam("image_ids", expanding=True))
 
@@ -733,31 +744,22 @@ class ToolsClustering:
         result = {}
         for row in rows:
             image_id = row['image_id']
-            both_hands_object = self._build_detection_list_from_sql_fields(
-                row['both_hands_class_id'], row['both_hands_conf'], row['both_hands_bbox_norm']
-            )
-            left_hand_object = self._build_detection_list_from_sql_fields(
-                row['left_hand_class_id'], row['left_hand_conf'], row['left_hand_bbox_norm']
-            )
-            right_hand_object = self._build_detection_list_from_sql_fields(
-                row['right_hand_class_id'], row['right_hand_conf'], row['right_hand_bbox_norm']
-            )
-
-            if left_hand_object is None and both_hands_object is not None:
-                left_hand_object = both_hands_object
-            if right_hand_object is None and both_hands_object is not None:
-                right_hand_object = both_hands_object
-
             result[image_id] = {
-                'left_hand_object': left_hand_object,
-                'right_hand_object': right_hand_object,
-                'top_face_object': self._build_detection_list_from_sql_fields(
-                    row['top_face_class_id'], row['top_face_conf'], row['top_face_bbox_norm']
+                'left_hand_object': self._build_detection_payload_from_sql_fields(
+                    row['left_hand_detection_id'], row['left_hand_class_id'], row['left_hand_conf'], row['left_hand_bbox_norm']
                 ),
-                'mouth_object': self._build_detection_list_from_sql_fields(
-                    row['bottom_face_class_id'], row['bottom_face_conf'], row['bottom_face_bbox_norm']
+                'right_hand_object': self._build_detection_payload_from_sql_fields(
+                    row['right_hand_detection_id'], row['right_hand_class_id'], row['right_hand_conf'], row['right_hand_bbox_norm']
                 ),
-                'shoulder_object': None,
+                'top_face_object': self._build_detection_payload_from_sql_fields(
+                    row['top_face_detection_id'], row['top_face_class_id'], row['top_face_conf'], row['top_face_bbox_norm']
+                ),
+                'mouth_object': self._build_detection_payload_from_sql_fields(
+                    row['mouth_detection_id'], row['mouth_class_id'], row['mouth_conf'], row['mouth_bbox_norm']
+                ),
+                'shoulder_object': self._build_detection_payload_from_sql_fields(
+                    row['shoulder_detection_id'], row['shoulder_class_id'], row['shoulder_conf'], row['shoulder_bbox_norm']
+                ),
             }
 
         return result
@@ -796,14 +798,23 @@ class ToolsClustering:
         missing_image_ids = sorted(list(set(image_ids) - set(precomputed.keys())))
         return df, missing_image_ids
 
-    def flatten_object_detections(self, detection_list):
+    def flatten_object_detections(self, detection_payload):
         """
-        Flatten a detection list [class_id, conf, top, left, right, bottom] or None into features.
+        Flatten a detection payload dict into features.
         Returns a 6-element list, or [0,0,0,0,0,0] if None.
         """
-        if detection_list is None:
+        if detection_payload is None:
             return [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-        return list(detection_list)
+        if isinstance(detection_payload, dict):
+            return [
+                float(detection_payload.get('class_id', 0.0)),
+                float(detection_payload.get('conf', 0.0)),
+                float(detection_payload.get('top', 0.0)),
+                float(detection_payload.get('left', 0.0)),
+                float(detection_payload.get('right', 0.0)),
+                float(detection_payload.get('bottom', 0.0)),
+            ]
+        return list(detection_payload)
 
     def prepare_features_for_knn(self, df):
         """
@@ -842,7 +853,7 @@ class ToolsClustering:
                 # Add binary indicator: 1.0 if object present, 0.0 if not
                 has_obj_col = f"{det_col}_has_object"
                 features_dict[has_obj_col] = df[det_col].apply(
-                    lambda x: 1.0 if (x is not None and (isinstance(x, list) and x[0] != 0)) else 0.0
+                    lambda x: 1.0 if x is not None else 0.0
                 )
                 
                 # Add standard detection fields
@@ -956,6 +967,6 @@ class ToolsClustering:
             if detection is None:
                 fusion_list.extend([0.0, 0.0, 0.0, 0.0, 0.0, 0.0])  # 6 zeros for None
             else:
-                fusion_list.extend(detection)  # detection is already a 6-element list
+                fusion_list.extend(self.flatten_object_detections(detection))
         
         return fusion_list

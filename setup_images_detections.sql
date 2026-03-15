@@ -10,8 +10,10 @@ ADD COLUMN IF NOT EXISTS nose_x INT,
 ADD COLUMN IF NOT EXISTS nose_y INT,
 ADD COLUMN IF NOT EXISTS face_height INT;
 
--- 2. Create ImagesDetections table
-CREATE TABLE IF NOT EXISTS ImagesDetections (
+-- 2. Recreate ImagesDetections table with current ObjectFusion schema
+DROP TABLE IF EXISTS ImagesDetections;
+
+CREATE TABLE ImagesDetections (
     id INT AUTO_INCREMENT PRIMARY KEY,
     image_id INT NOT NULL UNIQUE,
     
@@ -26,11 +28,11 @@ CREATE TABLE IF NOT EXISTS ImagesDetections (
     right_source ENUM('body', 'default') DEFAULT 'default',
     
     -- Object detection associations (foreign keys to Detections table)
-    both_hands_object_id INT,
     left_hand_object_id INT,
     right_hand_object_id INT,
     top_face_object_id INT,
-    bottom_face_object_id INT,
+    mouth_object_id INT,
+    shoulder_object_id INT,
     
     -- Metadata
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -43,11 +45,11 @@ CREATE TABLE IF NOT EXISTS ImagesDetections (
     
     -- Foreign key constraints
     CONSTRAINT fk_img_det_image_id FOREIGN KEY (image_id) REFERENCES Images(image_id),
-    CONSTRAINT fk_img_det_both_hands FOREIGN KEY (both_hands_object_id) REFERENCES Detections(detection_id),
     CONSTRAINT fk_img_det_left_hand FOREIGN KEY (left_hand_object_id) REFERENCES Detections(detection_id),
     CONSTRAINT fk_img_det_right_hand FOREIGN KEY (right_hand_object_id) REFERENCES Detections(detection_id),
     CONSTRAINT fk_img_det_top_face FOREIGN KEY (top_face_object_id) REFERENCES Detections(detection_id),
-    CONSTRAINT fk_img_det_bottom_face FOREIGN KEY (bottom_face_object_id) REFERENCES Detections(detection_id)
+    CONSTRAINT fk_img_det_mouth FOREIGN KEY (mouth_object_id) REFERENCES Detections(detection_id),
+    CONSTRAINT fk_img_det_shoulder FOREIGN KEY (shoulder_object_id) REFERENCES Detections(detection_id)
 );
 
 -- Verify tables

@@ -579,8 +579,8 @@ def build_col_list(df):
         col_list["face"] = [col for col in df.columns if col.startswith('dim_')]
     elif cl.CLUSTER_TYPE == "ObjectFusion":
         # for ObjectFusion, we need to get pitch, yaw, roll and object detection columns
-        col_list["ObjectFusion"] = ['pitch', 'yaw', 'roll','both_hands_object', 'left_hand_object', 'right_hand_object', 
-                          'top_face_object', 'bottom_face_object']
+        col_list["ObjectFusion"] = ['pitch', 'yaw', 'roll', 'left_hand_object', 'right_hand_object',
+                          'top_face_object', 'mouth_object', 'shoulder_object']
     return col_list
 
 def zero_out_medians(cluster_median):
@@ -993,6 +993,11 @@ def save_images_detections(df, engine):
                     return None
                 # Safely check for NaN/empty
                 try:
+                    if isinstance(val, dict):
+                        detection_id = val.get('detection_id')
+                        if detection_id is None:
+                            return None
+                        return int(detection_id)
                     if isinstance(val, (list, tuple)):
                         if len(val) == 0:
                             return None
@@ -1051,11 +1056,11 @@ def save_images_detections(df, engine):
                 'right_pointer_x': right_x,
                 'right_pointer_y': right_y,
                 'right_source': row.get('right_source', 'default'),
-                'both_hands_object_id': extract_detection_id(row.get('both_hands_object')),
                 'left_hand_object_id': extract_detection_id(row.get('left_hand_object')),
                 'right_hand_object_id': extract_detection_id(row.get('right_hand_object')),
                 'top_face_object_id': extract_detection_id(row.get('top_face_object')),
-                'bottom_face_object_id': extract_detection_id(row.get('bottom_face_object')),
+                'mouth_object_id': extract_detection_id(row.get('mouth_object')),
+                'shoulder_object_id': extract_detection_id(row.get('shoulder_object')),
             }
             images_detections_records.append(record)
         except Exception as e:
