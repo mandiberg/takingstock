@@ -681,7 +681,7 @@ class YOLOTools:
         right = bbox['right']
         top = bbox['top']
         bottom = bbox['bottom']
-        cv2.rectangle(image, (left, top), (right, bottom), (0, 255, 0), 2)
+        cv2.rectangle(image, (left, top), (right, bottom), (0, 255, 0), 1)
         return image
 
     def map_custom_ids_to_global(self, detect_results, custom_ids_dict):

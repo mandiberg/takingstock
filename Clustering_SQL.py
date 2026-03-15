@@ -255,6 +255,9 @@ if USE_SEGMENT is True and (cl.CLUSTER_TYPE != "Clusters"):
             WHERE += f" AND sc.cluster_id = {SUBSELECT_ONE_CLUSTER} "
         if SegmentHelper_name:
             FROM += f" INNER JOIN {SegmentHelper_name} h ON h.image_id = s.image_id " 
+        if cl.CLUSTER_TYPE == "ObjectFusion":
+            WHERE += " AND s.image_id NOT IN (SELECT image_id FROM NoDetections) "
+            WHERE += " AND s.image_id NOT IN (SELECT image_id FROM NoDetectionsCustom) "
     elif MODE in (1,2):
         FROM += f" LEFT JOIN Images{table_cluster_type} ic ON s.image_id = ic.image_id"
         if MODE == 1: 
@@ -276,7 +279,7 @@ if USE_SEGMENT is True and (cl.CLUSTER_TYPE != "Clusters"):
         WHERE = " cluster_id IS NOT NULL "
 
     # WHERE += " AND h.is_body = 1"
-    LIMIT = 4000000
+    LIMIT = 40000
     BATCH_LIMIT = 10000
 
     '''
@@ -1100,7 +1103,7 @@ def save_images_detections(df, engine):
     else:
         print("WARNING: No valid records to save to ImagesDetections")
 
-def prepare_df(df):
+def prepare_df(df, process_object_detections=True):
     print("columns: ",df.columns)
     print("prepare_df df with cl.CLUSTER_TYPE ", cl.CLUSTER_TYPE, df)
     print("prepare df first row",df.iloc[0])
@@ -1240,7 +1243,12 @@ def prepare_df(df):
         print("first row before query",df.iloc[0].to_string())
         # apply query_detections to each image_id to get the object data
         # df['image_id'].apply(lambda image_id: query_detections(image_id))
-        df = cl.process_detections_for_df(df)
+        if process_object_detections:
+            df = cl.process_detections_for_df(df)
+        else:
+            for col in ['left_hand_object', 'right_hand_object', 'top_face_object', 'mouth_object', 'shoulder_object']:
+                if col not in df.columns:
+                    df[col] = None
 
         pass
     
@@ -1446,14 +1454,55 @@ def fetch_and_prepare_batch(batch_df, batch_num):
     Session = sessionmaker(bind=engine)
     session = Session()
     cl.session = session
-    
-    # Fetch MongoDB data for this batch
-    print(f"[Batch {batch_num}] Fetching MongoDB encodings...")
-    batch_df = fetch_mongo_for_batch(batch_df)
-    
-    # Prepare df (includes MySQL Detections query via cl.process_detections_for_df)
-    print(f"[Batch {batch_num}] Preparing data (includes MySQL queries)...")
-    batch_prepared = prepare_df(batch_df)
+
+    if cl.CLUSTER_TYPE == "ObjectFusion":
+        print(f"[Batch {batch_num}] Hydrating precomputed ImagesDetections first...")
+        batch_prepared = batch_df.copy()
+        batch_prepared, missing_image_ids = cl.hydrate_detections_from_precomputed_table(batch_prepared)
+        hits = len(batch_prepared) - len(missing_image_ids)
+        print(f"[Batch {batch_num}] Precomputed hits: {hits}, missing: {len(missing_image_ids)}")
+
+        batch_prepared['newly_processed_detection'] = False
+
+        if missing_image_ids:
+            print(f"[Batch {batch_num}] Fetching MongoDB encodings for missing IDs only...")
+            missing_df = batch_df[batch_df['image_id'].isin(missing_image_ids)].copy()
+            missing_df = fetch_mongo_for_batch(missing_df)
+
+            print(f"[Batch {batch_num}] Preparing missing rows and classifying detections...")
+            missing_prepared = prepare_df(missing_df)
+
+            if missing_prepared is not None and len(missing_prepared) > 0:
+                missing_prepared['newly_processed_detection'] = True
+
+                update_cols = [
+                    'left_hand_object', 'right_hand_object', 'top_face_object', 'mouth_object', 'shoulder_object',
+                    'left_pointer_knuckle_norm', 'right_pointer_knuckle_norm', 'left_source', 'right_source',
+                    'newly_processed_detection'
+                ]
+
+                missing_update_df = missing_prepared[['image_id'] + [c for c in update_cols if c in missing_prepared.columns]].copy()
+                batch_prepared = batch_prepared.merge(missing_update_df, on='image_id', how='left', suffixes=('', '__missing'))
+
+                for col in update_cols:
+                    missing_col = f"{col}__missing"
+                    if missing_col not in batch_prepared.columns:
+                        continue
+                    if col not in batch_prepared.columns:
+                        batch_prepared[col] = batch_prepared[missing_col]
+                    else:
+                        batch_prepared[col] = batch_prepared[missing_col].combine_first(batch_prepared[col])
+                    batch_prepared.drop(columns=[missing_col], inplace=True)
+        else:
+            print(f"[Batch {batch_num}] No missing IDs; skipping MongoDB fetch.")
+    else:
+        # Non-ObjectFusion path still requires MongoDB data for prepare_df
+        print(f"[Batch {batch_num}] Fetching MongoDB encodings...")
+        batch_df = fetch_mongo_for_batch(batch_df)
+
+        # Prepare df (includes MySQL Detections query via cl.process_detections_for_df)
+        print(f"[Batch {batch_num}] Preparing data (includes MySQL queries)...")
+        batch_prepared = prepare_df(batch_df)
     
     return batch_prepared
 
@@ -1622,8 +1671,17 @@ def main():
                     missing_cols = required_cols - existing_cols
                     print(f"Skipping Encodings geometry update; missing columns: {sorted(missing_cols)}")
 
-                # Save ImagesDetections table
-                save_images_detections(df_with_geometry, engine)
+                # Save ImagesDetections table only for newly processed IDs
+                if 'newly_processed_detection' in df_with_geometry.columns:
+                    df_new = df_with_geometry[df_with_geometry['newly_processed_detection'] == True].copy()
+                    print(f"[DEBUG] Newly processed rows to persist: {len(df_new)}")
+                    if len(df_new) > 0:
+                        save_images_detections(df_new, engine)
+                    else:
+                        print("[DEBUG] No newly processed rows. Skipping ImagesDetections save.")
+                else:
+                    print("[DEBUG] newly_processed_detection column missing; defaulting to full save.")
+                    save_images_detections(df_with_geometry, engine)
             except Exception as e:
                 print(f"Error in ObjectFusion post-processing: {e}")
         
