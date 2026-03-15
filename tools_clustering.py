@@ -15,7 +15,7 @@ class ToolsClustering:
         self.CLUSTER_MEDIANS = None
         self.session = session
         # Object-hand relationship constants
-        self.TOUCH_THRESHOLD = 0.99  # face height units
+        self.TOUCH_THRESHOLD = 0.5  # face height units
         self.CLASS_ID_WEIGHT = 10  # multiplier to give more weight to class_id in clustering (since it's categorical and we want it to separate well)
         self.OVERLAP_IOU_THRESHOLD = 0.5
         self.HIGH_CONFIDENCE_THRESHOLD = 0.9
@@ -290,6 +290,97 @@ class ToolsClustering:
                 width <= self.MAX_FACE_WIDTH and
                 extends_into_top <= self.MAX_FACE_VERT_EXTENSION)
 
+    def is_mouth_object(self, bbox):
+        """Check if object is on mouth area with zero top-zone tolerance."""
+        width = bbox['right'] - bbox['left']
+        extends_into_top = max(0, -bbox['top'])
+
+        return (bbox['bottom'] > 0 and
+                bbox['left'] < 0 and
+                bbox['right'] > 0 and
+                width <= self.MAX_FACE_WIDTH and
+                extends_into_top <= 0.0)
+
+    def _extract_xy_from_landmark(self, landmark):
+        """Extract (x, y) from a landmark in object/dict/list form."""
+        if landmark is None:
+            return None
+
+        if hasattr(landmark, 'x') and hasattr(landmark, 'y'):
+            return [float(landmark.x), float(landmark.y)]
+
+        if isinstance(landmark, dict):
+            if 'x' in landmark and 'y' in landmark:
+                return [float(landmark['x']), float(landmark['y'])]
+            return None
+
+        if isinstance(landmark, (list, tuple, np.ndarray)) and len(landmark) >= 2:
+            return [float(landmark[0]), float(landmark[1])]
+
+        return None
+
+    def extract_shoulder_points(self, body_landmarks_normalized):
+        """Extract left/right shoulder points (landmarks 11/12) as [x, y]."""
+        if body_landmarks_normalized is None:
+            return None, None
+
+        try:
+            landmarks = None
+            if hasattr(body_landmarks_normalized, 'landmark'):
+                landmarks = body_landmarks_normalized.landmark
+            elif isinstance(body_landmarks_normalized, (list, tuple, np.ndarray)):
+                landmarks = body_landmarks_normalized
+
+            if landmarks is None or len(landmarks) <= 12:
+                return None, None
+
+            left_shoulder = self._extract_xy_from_landmark(landmarks[11])
+            right_shoulder = self._extract_xy_from_landmark(landmarks[12])
+            return left_shoulder, right_shoulder
+        except Exception:
+            return None, None
+
+    def is_shoulder_object(self, bbox, left_shoulder, right_shoulder):
+        """
+        Check if object crosses the shoulder band.
+        Shoulder band is the line from lm11 to lm12, extended 1.0 unit lower.
+        """
+        if left_shoulder is None or right_shoulder is None:
+            return False
+
+        x1, y1 = left_shoulder
+        x2, y2 = right_shoulder
+
+        shoulder_x_min = min(x1, x2)
+        shoulder_x_max = max(x1, x2)
+
+        if bbox['right'] < shoulder_x_min or bbox['left'] > shoulder_x_max:
+            return False
+
+        overlap_left = max(bbox['left'], shoulder_x_min)
+        overlap_right = min(bbox['right'], shoulder_x_max)
+        if overlap_right < overlap_left:
+            return False
+
+        if abs(x2 - x1) < 1e-9:
+            shoulder_y_min = min(y1, y2)
+            shoulder_y_max = max(y1, y2)
+        else:
+            def y_on_shoulder_line(x_val):
+                t = (x_val - x1) / (x2 - x1)
+                return y1 + t * (y2 - y1)
+
+            y_left = y_on_shoulder_line(overlap_left)
+            y_right = y_on_shoulder_line(overlap_right)
+            y_mid = y_on_shoulder_line((overlap_left + overlap_right) / 2.0)
+            shoulder_y_min = min(y_left, y_right, y_mid)
+            shoulder_y_max = max(y_left, y_right, y_mid)
+
+        band_top = shoulder_y_min
+        band_bottom = shoulder_y_max + 1.0
+
+        return not (bbox['bottom'] < band_top or bbox['top'] > band_bottom)
+
     def resolve_overlapping_detections(self, detections):
         """
         Resolve overlapping detections by keeping the best one based on confidence rules.
@@ -384,11 +475,11 @@ class ToolsClustering:
             pass
         return detections
     
-    def classify_object_hand_relationships(self, detections, left_knuckle, right_knuckle):
+    def classify_object_hand_relationships(self, detections, left_knuckle, right_knuckle, left_shoulder=None, right_shoulder=None):
         """
         Classify each detection based on its relationship to hands and face.
-        Returns dict with keys: both_hands_object, left_hand_object, right_hand_object, 
-                               top_face_object, bottom_face_object
+        Returns dict with keys: left_hand_object, right_hand_object,
+                               top_face_object, mouth_object, shoulder_object
         Each value is the detection dict or None.
         """
 
@@ -396,11 +487,11 @@ class ToolsClustering:
         detections = self.weight_detection_for_clustering(detections)
         
         results = {
-            'both_hands_object': None,
             'left_hand_object': None,
             'right_hand_object': None,
             'top_face_object': None,
-            'bottom_face_object': None
+            'mouth_object': None,
+            'shoulder_object': None,
         }
         
         if not detections:
@@ -408,103 +499,61 @@ class ToolsClustering:
         
         # First, resolve overlapping detections
         detections = self.resolve_overlapping_detections(detections)
-        
-        # Track which detections have been assigned
-        assigned = set()
-        
-        # 1. Check for both_hands_object first (highest priority for hand-held objects)
+
+        # 1. Check for top_face_object, mouth_object, shoulder_object
         for det in detections:
-            bbox = det['bbox']
-            left_touching = self.is_touching_hand(left_knuckle, bbox)
-            right_touching = self.is_touching_hand(right_knuckle, bbox)
-            
-            if left_touching and right_touching:
-                if results['both_hands_object'] is None:
-                    results['both_hands_object'] = det
-                    assigned.add(det['detection_id'])
-                else:
-                    # Multiple both-hands objects - pick closest to midpoint of hands
-                    existing_dist = self.point_to_bbox_distance(
-                        [(left_knuckle[0] + right_knuckle[0])/2, (left_knuckle[1] + right_knuckle[1])/2],
-                        results['both_hands_object']['bbox']
-                    )
-                    new_dist = self.point_to_bbox_distance(
-                        [(left_knuckle[0] + right_knuckle[0])/2, (left_knuckle[1] + right_knuckle[1])/2],
-                        bbox
-                    )
-                    if new_dist < existing_dist:
-                        assigned.discard(results['both_hands_object']['detection_id'])
-                        results['both_hands_object'] = det
-                        assigned.add(det['detection_id'])
-        
-        # 2. Check for top_face_object and bottom_face_object
-        for det in detections:
-            if det['detection_id'] in assigned:
-                continue
             bbox = det['bbox']
             
             if self.is_top_face_object(bbox):
                 if results['top_face_object'] is None:
                     results['top_face_object'] = det
-                    assigned.add(det['detection_id'])
                 # Keep the one that's most "on top" (most negative top value)
                 elif bbox['top'] < results['top_face_object']['bbox']['top']:
-                    assigned.discard(results['top_face_object']['detection_id'])
                     results['top_face_object'] = det
-                    assigned.add(det['detection_id'])
             
-            if self.is_bottom_face_object(bbox):
-                if results['bottom_face_object'] is None:
-                    results['bottom_face_object'] = det
-                    assigned.add(det['detection_id'])
-                # Keep the one that's most "on bottom" (largest bottom value)
-                elif bbox['bottom'] > results['bottom_face_object']['bbox']['bottom']:
-                    assigned.discard(results['bottom_face_object']['detection_id'])
-                    results['bottom_face_object'] = det
-                    assigned.add(det['detection_id'])
-        
-        # 3. Find closest unassigned object to each hand
-        unassigned = [d for d in detections if d['detection_id'] not in assigned]
-        
-        # Left hand - find closest object
-        if left_knuckle != self.DEFAULT_HAND_POSITION:
-            best_left = None
-            best_left_dist = float('inf')
-            for det in unassigned:
-                dist = self.point_to_bbox_distance(left_knuckle, det['bbox'])
-                if dist < best_left_dist:
-                    best_left_dist = dist
-                    best_left = det
-            
-            if best_left is not None and best_left_dist <= self.TOUCH_THRESHOLD * 2:
-                results['left_hand_object'] = best_left
-                assigned.add(best_left['detection_id'])
-                unassigned = [d for d in unassigned if d['detection_id'] != best_left['detection_id']]
-        
-        # Right hand - find closest from remaining unassigned
-        if right_knuckle != self.DEFAULT_HAND_POSITION:
-            best_right = None
-            best_right_dist = float('inf')
-            for det in unassigned:
-                dist = self.point_to_bbox_distance(right_knuckle, det['bbox'])
-                if dist < best_right_dist:
-                    best_right_dist = dist
-                    best_right = det
-            
-            if best_right is not None and best_right_dist <= self.TOUCH_THRESHOLD * 2:
-                results['right_hand_object'] = best_right
-                assigned.add(best_right['detection_id'])
-        
-        # Sanity check: both_hands should not coexist with single-hand assignment for same object
-        if results['both_hands_object'] is not None:
-            if results['left_hand_object'] is not None and results['left_hand_object']['detection_id'] == results['both_hands_object']['detection_id']:
-                print(f"  🚨 DEBUG ALERT: both_hands_object and left_hand_object are the same! det_id={results['both_hands_object']['detection_id']}")
-            if results['right_hand_object'] is not None and results['right_hand_object']['detection_id'] == results['both_hands_object']['detection_id']:
-                print(f"  🚨 DEBUG ALERT: both_hands_object and right_hand_object are the same! det_id={results['both_hands_object']['detection_id']}")
+            if self.is_mouth_object(bbox):
+                if results['mouth_object'] is None:
+                    results['mouth_object'] = det
+                elif bbox['top'] < results['mouth_object']['bbox']['top']:
+                    results['mouth_object'] = det
+
+            if self.is_shoulder_object(bbox, left_shoulder, right_shoulder):
+                if results['shoulder_object'] is None:
+                    results['shoulder_object'] = det
+                elif det['conf'] > results['shoulder_object']['conf']:
+                    results['shoulder_object'] = det
+
+        # 2. Find best object for each hand independently (same object may be assigned to both)
+        def best_object_for_hand(knuckle):
+            if knuckle == self.DEFAULT_HAND_POSITION:
+                return None
+
+            touching_candidates = []
+            nearby_candidates = []
+
+            for det in detections:
+                dist = self.point_to_bbox_distance(knuckle, det['bbox'])
+                if dist <= self.TOUCH_THRESHOLD:
+                    touching_candidates.append((dist, det))
+                elif dist <= self.TOUCH_THRESHOLD * 2:
+                    nearby_candidates.append((dist, det))
+
+            if touching_candidates:
+                touching_candidates.sort(key=lambda item: item[0])
+                return touching_candidates[0][1]
+
+            if nearby_candidates:
+                nearby_candidates.sort(key=lambda item: item[0])
+                return nearby_candidates[0][1]
+
+            return None
+
+        results['left_hand_object'] = best_object_for_hand(left_knuckle)
+        results['right_hand_object'] = best_object_for_hand(right_knuckle)
         
         return results
 
-    def query_and_classify_detections(self, image_id, left_knuckle, right_knuckle):
+    def query_and_classify_detections(self, image_id, left_knuckle, right_knuckle, left_shoulder=None, right_shoulder=None):
         """
         Query detections for an image and classify their relationship to hands/face.
         Returns dict with 5 keys, each containing a 6-element list or None.
@@ -518,11 +567,11 @@ class ToolsClustering:
         
         if not detection_results:
             return {
-                'both_hands_object': None,
                 'left_hand_object': None,
                 'right_hand_object': None,
                 'top_face_object': None,
-                'bottom_face_object': None
+                'mouth_object': None,
+                'shoulder_object': None,
             }
         
         # Parse detections into standardized format
@@ -543,7 +592,13 @@ class ToolsClustering:
             })
         
         # Classify relationships using class method
-        classified = self.classify_object_hand_relationships(detections, left_knuckle, right_knuckle)
+        classified = self.classify_object_hand_relationships(
+            detections,
+            left_knuckle,
+            right_knuckle,
+            left_shoulder=left_shoulder,
+            right_shoulder=right_shoulder,
+        )
         
         # Convert to 6-element lists for df storage
         result = {}
@@ -568,11 +623,11 @@ class ToolsClustering:
         Expects df to have: image_id, left_pointer_knuckle_norm, right_pointer_knuckle_norm
         """
         # Initialize new columns
-        df['both_hands_object'] = None
         df['left_hand_object'] = None
         df['right_hand_object'] = None
         df['top_face_object'] = None
-        df['bottom_face_object'] = None
+        df['mouth_object'] = None
+        df['shoulder_object'] = None
         
         for idx, row in df.iterrows():
             image_id = row['image_id']
@@ -584,16 +639,24 @@ class ToolsClustering:
                 left_knuckle = self.DEFAULT_HAND_POSITION
             if right_knuckle is None or (isinstance(right_knuckle, list) and len(right_knuckle) == 0):
                 right_knuckle = self.DEFAULT_HAND_POSITION
+
+            left_shoulder, right_shoulder = self.extract_shoulder_points(row.get('body_landmarks_normalized'))
             
             # Query and classify
-            classifications = self.query_and_classify_detections(image_id, left_knuckle, right_knuckle)
+            classifications = self.query_and_classify_detections(
+                image_id,
+                left_knuckle,
+                right_knuckle,
+                left_shoulder=left_shoulder,
+                right_shoulder=right_shoulder,
+            )
             
             # Assign to df
-            df.at[idx, 'both_hands_object'] = classifications['both_hands_object']
             df.at[idx, 'left_hand_object'] = classifications['left_hand_object']
             df.at[idx, 'right_hand_object'] = classifications['right_hand_object']
             df.at[idx, 'top_face_object'] = classifications['top_face_object']
-            df.at[idx, 'bottom_face_object'] = classifications['bottom_face_object']
+            df.at[idx, 'mouth_object'] = classifications['mouth_object']
+            df.at[idx, 'shoulder_object'] = classifications['shoulder_object']
         
         return df
 
@@ -623,6 +686,9 @@ class ToolsClustering:
         """
         Read precomputed detection assignments from ImagesDetections and join to Detections.
         Returns dict keyed by image_id with values containing the 5 detection-list fields.
+        Note: legacy ImagesDetections schema stores bottom_face_object and both_hands_object.
+        We map bottom_face_object -> mouth_object and use both_hands_object as fallback for
+        left/right when either hand-specific field is missing.
         """
         if self.session is None:
             raise ValueError("Session not initialized. Pass session to ToolsClustering.__init__()")
@@ -667,22 +733,31 @@ class ToolsClustering:
         result = {}
         for row in rows:
             image_id = row['image_id']
+            both_hands_object = self._build_detection_list_from_sql_fields(
+                row['both_hands_class_id'], row['both_hands_conf'], row['both_hands_bbox_norm']
+            )
+            left_hand_object = self._build_detection_list_from_sql_fields(
+                row['left_hand_class_id'], row['left_hand_conf'], row['left_hand_bbox_norm']
+            )
+            right_hand_object = self._build_detection_list_from_sql_fields(
+                row['right_hand_class_id'], row['right_hand_conf'], row['right_hand_bbox_norm']
+            )
+
+            if left_hand_object is None and both_hands_object is not None:
+                left_hand_object = both_hands_object
+            if right_hand_object is None and both_hands_object is not None:
+                right_hand_object = both_hands_object
+
             result[image_id] = {
-                'both_hands_object': self._build_detection_list_from_sql_fields(
-                    row['both_hands_class_id'], row['both_hands_conf'], row['both_hands_bbox_norm']
-                ),
-                'left_hand_object': self._build_detection_list_from_sql_fields(
-                    row['left_hand_class_id'], row['left_hand_conf'], row['left_hand_bbox_norm']
-                ),
-                'right_hand_object': self._build_detection_list_from_sql_fields(
-                    row['right_hand_class_id'], row['right_hand_conf'], row['right_hand_bbox_norm']
-                ),
+                'left_hand_object': left_hand_object,
+                'right_hand_object': right_hand_object,
                 'top_face_object': self._build_detection_list_from_sql_fields(
                     row['top_face_class_id'], row['top_face_conf'], row['top_face_bbox_norm']
                 ),
-                'bottom_face_object': self._build_detection_list_from_sql_fields(
+                'mouth_object': self._build_detection_list_from_sql_fields(
                     row['bottom_face_class_id'], row['bottom_face_conf'], row['bottom_face_bbox_norm']
                 ),
+                'shoulder_object': None,
             }
 
         return result
@@ -694,8 +769,8 @@ class ToolsClustering:
         in ImagesDetections at all.
         """
         required_cols = [
-            'both_hands_object', 'left_hand_object', 'right_hand_object',
-            'top_face_object', 'bottom_face_object'
+            'left_hand_object', 'right_hand_object',
+            'top_face_object', 'mouth_object', 'shoulder_object'
         ]
         for col in required_cols:
             if col not in df.columns:
@@ -712,11 +787,11 @@ class ToolsClustering:
             if payload is None:
                 continue
 
-            df.at[idx, 'both_hands_object'] = payload['both_hands_object']
             df.at[idx, 'left_hand_object'] = payload['left_hand_object']
             df.at[idx, 'right_hand_object'] = payload['right_hand_object']
             df.at[idx, 'top_face_object'] = payload['top_face_object']
-            df.at[idx, 'bottom_face_object'] = payload['bottom_face_object']
+            df.at[idx, 'mouth_object'] = payload['mouth_object']
+            df.at[idx, 'shoulder_object'] = payload['shoulder_object']
 
         missing_image_ids = sorted(list(set(image_ids) - set(precomputed.keys())))
         return df, missing_image_ids
@@ -742,8 +817,8 @@ class ToolsClustering:
         numeric_cols = ['pitch', 'yaw', 'roll']
         
         # Detection columns (6 values each: class_id, conf, top, left, right, bottom)
-        detection_cols = ['both_hands_object', 'left_hand_object', 'right_hand_object', 
-                          'top_face_object', 'bottom_face_object']
+        detection_cols = ['left_hand_object', 'right_hand_object', 'top_face_object',
+                  'mouth_object', 'shoulder_object']
         detection_fields = ['class_id', 'conf', 'top', 'left', 'right', 'bottom']
         
         # Create feature dict by concatenating all values
@@ -870,13 +945,13 @@ class ToolsClustering:
     def construct_fusion_list(self, row):
         """
         Construct fusion list from a dataframe row for ObjectFusion sorting.
-        Returns list format: [pitch, yaw, roll, both_hands(6), left_hand(6), right_hand(6), top_face(6), bottom_face(6)]
+        Returns list format: [pitch, yaw, roll, left_hand(6), right_hand(6), top_face(6), mouth(6), shoulder(6)]
         Total: 33 elements (3 + 5*6)
         """
         fusion_list = row['pitch_yaw_roll_list'].copy()  # Start with [pitch, yaw, roll]
         
         # Add detection data (each is 6 elements: class_id, conf, top, left, right, bottom)
-        for col in ['both_hands_object', 'left_hand_object', 'right_hand_object', 'top_face_object', 'bottom_face_object']:
+        for col in ['left_hand_object', 'right_hand_object', 'top_face_object', 'mouth_object', 'shoulder_object']:
             detection = row[col]
             if detection is None:
                 fusion_list.extend([0.0, 0.0, 0.0, 0.0, 0.0, 0.0])  # 6 zeros for None
