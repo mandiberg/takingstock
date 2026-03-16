@@ -5,6 +5,7 @@
 #include <random>
 
 void ofApp::setup() {
+    ofSetBackgroundColor(0, 0, 0);
     if (!ConfigLoader::load("config.txt", config)) {
         ofLogError("ofApp") << "Failed to load config.txt, using defaults";
         config.sizeRatios.push_back(SizeRatio(1, 1, 0.3f, 0.2f, 0.2f));
@@ -119,66 +120,216 @@ void ofApp::setup() {
     for (size_t i = 0; i < arrangements.size(); ++i) pickQueue.push_back(i);
     std::shuffle(pickQueue.begin(), pickQueue.end(), std::mt19937(std::random_device{}()));
 
-    renderer.setup(binSorter.get(), &videoPool);
+    renderer.setup(binSorter.get(), &videoPool, config.videoLoop);
 
     ofSetWindowShape(config.boxWidth, config.boxHeight);
     exportFbo.allocate(config.boxWidth, config.boxHeight, GL_RGB);
+
+    if (arrangements.size() > 1) {
+        nextLayoutIdx = pickNextArrangementIndex();
+        renderer.preloadFromArrangement(arrangements[nextLayoutIdx]);
+    }
+    scheduleNextTransition();
+}
+
+void ofApp::logArrangementInfo(size_t idx) {
+    if (arrangements.empty() || idx >= arrangements.size()) return;
+    ofLogNotice("ofApp") << "Picked arrangement " << (idx + 1) << " of " << arrangements.size();
+    const auto& slots = renderer.getSlots();
+    bool hasBreakBox = !arrangements[idx].nestedBins.empty();
+    ofLogNotice("ofApp") << "Window: " << config.boxWidth << " x " << config.boxHeight
+        << " | nestingLayers=" << config.nestingLayers
+        << " | breakBox=" << (hasBreakBox ? "yes" : "no");
+    if (hasBreakBox) {
+        const auto& bins = arrangements[idx].bins;
+        const auto& nestedBins = arrangements[idx].nestedBins;
+        int bbNum = 0;
+        for (const auto& kv : nestedBins) {
+            int bi = kv.first.first;
+            int parentIdx = kv.first.second;
+            int nx = kv.second.parentX, ny = kv.second.parentY;
+            int nw = kv.second.parentW, nh = kv.second.parentH;
+            if (bi >= 0 && bi < (int)bins.size()) {
+                for (const auto& pit : bins[bi]) {
+                    if (pit.itemIdx == parentIdx) {
+                        nx = pit.x; ny = pit.y; nw = pit.w; nh = pit.h;
+                        break;
+                    }
+                }
+            }
+            int nItems = (int)kv.second.items.size();
+            ofLogNotice("ofApp") << "  breakBox " << (++bbNum) << ": " << nItems << " items"
+                << " at (" << nx << "," << ny << ") size " << nw << "x" << nh;
+        }
+    }
+    for (size_t i = 0; i < slots.size(); ++i) {
+        const auto& s = slots[i];
+        bool outOfBounds = (s.x + s.w > config.boxWidth || s.y + s.h > config.boxHeight ||
+                            s.x < 0 || s.y < 0);
+        ofLogNotice("ofApp") << "  Slot " << (i + 1) << ": x=" << s.x << " y=" << s.y
+            << " w=" << s.w << " h=" << s.h << " right=" << (s.x + s.w)
+            << " bottom=" << (s.y + s.h) << (outOfBounds ? " [OUT OF BOUNDS]" : "");
+    }
+}
+
+void ofApp::swapToPreloadedAndLog(size_t idx) {
+    if (arrangements.empty() || idx >= arrangements.size()) return;
+    if (!renderer.hasPreloadedLayout()) {
+        pickAndLoadArrangement(idx);
+        return;
+    }
+    renderer.swapToPreloaded(arrangements[idx]);
+    logArrangementInfo(idx);
+}
+
+void ofApp::preloadNextLayout() {
+    if (arrangements.size() <= 1) return;
+    nextLayoutIdx = pickNextArrangementIndex();
+    renderer.preloadFromArrangement(arrangements[nextLayoutIdx]);
+}
+
+void ofApp::pickAndLoadArrangement(size_t idx) {
+    if (arrangements.empty() || idx >= arrangements.size()) return;
+    binSorter->loadArrangement(arrangements[idx].bins, arrangements[idx].nestedBins);
+    ofLogNotice("ofApp") << "Picked arrangement " << (idx + 1) << " of " << arrangements.size();
+    renderer.regenerate();
+    const auto& slots = renderer.getSlots();
+    bool hasBreakBox = !arrangements[idx].nestedBins.empty();
+    ofLogNotice("ofApp") << "Window: " << config.boxWidth << " x " << config.boxHeight
+        << " | nestingLayers=" << config.nestingLayers
+        << " | breakBox=" << (hasBreakBox ? "yes" : "no");
+    if (hasBreakBox) {
+        const auto& bins = arrangements[idx].bins;
+        const auto& nestedBins = arrangements[idx].nestedBins;
+        int bbNum = 0;
+        for (const auto& kv : nestedBins) {
+            int bi = kv.first.first;
+            int parentIdx = kv.first.second;
+            int nx = kv.second.parentX, ny = kv.second.parentY;
+            int nw = kv.second.parentW, nh = kv.second.parentH;
+            if (bi >= 0 && bi < (int)bins.size()) {
+                for (const auto& pit : bins[bi]) {
+                    if (pit.itemIdx == parentIdx) {
+                        nx = pit.x; ny = pit.y; nw = pit.w; nh = pit.h;
+                        break;
+                    }
+                }
+            }
+            int nItems = (int)kv.second.items.size();
+            ofLogNotice("ofApp") << "  breakBox " << (++bbNum) << ": " << nItems << " items"
+                << " at (" << nx << "," << ny << ") size " << nw << "x" << nh;
+        }
+    }
+    for (size_t i = 0; i < slots.size(); ++i) {
+        const auto& s = slots[i];
+        bool outOfBounds = (s.x + s.w > config.boxWidth || s.y + s.h > config.boxHeight ||
+                            s.x < 0 || s.y < 0);
+        ofLogNotice("ofApp") << "  Slot " << (i + 1) << ": x=" << s.x << " y=" << s.y
+            << " w=" << s.w << " h=" << s.h << " right=" << (s.x + s.w)
+            << " bottom=" << (s.y + s.h) << (outOfBounds ? " [OUT OF BOUNDS]" : "");
+    }
+}
+
+float ofApp::scheduleNextTransition() {
+    float minT = config.transitionTimerMin;
+    float maxT = config.transitionTimerMax;
+    if (maxT < minT) maxT = minT;
+    float delay = ofRandom(minT, maxT);
+    nextTransitionTime = ofGetElapsedTimef() + delay;
+    return delay;
+}
+
+size_t ofApp::pickNextArrangementIndex() {
+    if (arrangements.empty()) return 0;
+    if (pickQueue.empty()) {
+        for (size_t i = 0; i < arrangements.size(); ++i) pickQueue.push_back(i);
+        std::shuffle(pickQueue.begin(), pickQueue.end(), std::mt19937(std::random_device{}()));
+    }
+    size_t idx = pickQueue.back();
+    pickQueue.pop_back();
+    return idx;
 }
 
 void ofApp::update() {
-    if (arrangementPickRequested && !arrangements.empty()) {
-        arrangementPickRequested = false;
-        if (pickQueue.empty()) {
-            for (size_t i = 0; i < arrangements.size(); ++i) pickQueue.push_back(i);
-            std::shuffle(pickQueue.begin(), pickQueue.end(), std::mt19937(std::random_device{}()));
-        }
-        size_t idx = pickQueue.back();
-        pickQueue.pop_back();
-        binSorter->loadArrangement(arrangements[idx].bins, arrangements[idx].nestedBins);
-        ofLogNotice("ofApp") << "Picked arrangement " << (idx + 1) << " of " << arrangements.size();
-        renderer.regenerate();
-        const auto& slots = renderer.getSlots();
-        bool hasBreakBox = !arrangements[idx].nestedBins.empty();
-        ofLogNotice("ofApp") << "Window: " << config.boxWidth << " x " << config.boxHeight
-            << " | nestingLayers=" << config.nestingLayers
-            << " | breakBox=" << (hasBreakBox ? "yes" : "no");
-        if (hasBreakBox) {
-            const auto& bins = arrangements[idx].bins;
-            const auto& nestedBins = arrangements[idx].nestedBins;
-            int bbNum = 0;
-            for (const auto& kv : nestedBins) {
-                int bi = kv.first.first;
-                int parentIdx = kv.first.second;
-                int nx = kv.second.parentX, ny = kv.second.parentY;
-                int nw = kv.second.parentW, nh = kv.second.parentH;
-                if (bi >= 0 && bi < (int)bins.size()) {
-                    for (const auto& pit : bins[bi]) {
-                        if (pit.itemIdx == parentIdx) {
-                            nx = pit.x; ny = pit.y; nw = pit.w; nh = pit.h;
-                            break;
-                        }
-                    }
-                }
-                int nItems = (int)kv.second.items.size();
-                ofLogNotice("ofApp") << "  breakBox " << (++bbNum) << ": " << nItems << " items"
-                    << " at (" << nx << "," << ny << ") size " << nw << "x" << nh;
+    float now = ofGetElapsedTimef();
+
+    if (transitionState == TransitionState::Idle) {
+        bool trigger = arrangementPickRequested || (now >= nextTransitionTime);
+        if (trigger && !arrangements.empty()) {
+            arrangementPickRequested = false;
+
+            if (config.transitionType == TransitionType::Jumpcut) {
+                swapToPreloadedAndLog(nextLayoutIdx);
+                preloadNextLayout();
+                float nextTimer = scheduleNextTransition();
+                ofLogNotice("ofApp") << "Transition: type=jumpcut duration=0s next_transition_timer=" << nextTimer << "s";
+            } else if (config.transitionType == TransitionType::Fade) {
+                transitionState = TransitionState::FadeDown;
+                transitionStartTime = now;
+            } else {
+                transitionState = TransitionState::HoldBlack;
+                transitionStartTime = now;
             }
         }
-        for (size_t i = 0; i < slots.size(); ++i) {
-            const auto& s = slots[i];
-            bool outOfBounds = (s.x + s.w > config.boxWidth || s.y + s.h > config.boxHeight ||
-                                s.x < 0 || s.y < 0);
-            ofLogNotice("ofApp") << "  Slot " << (i + 1) << ": x=" << s.x << " y=" << s.y
-                << " w=" << s.w << " h=" << s.h << " right=" << (s.x + s.w)
-                << " bottom=" << (s.y + s.h) << (outOfBounds ? " [OUT OF BOUNDS]" : "");
+    } else if (transitionState == TransitionState::FadeDown) {
+        float dur = std::max(0.016f, config.transitionDurationFade);
+        if (now - transitionStartTime >= dur) {
+            swapToPreloadedAndLog(nextLayoutIdx);
+            preloadNextLayout();
+            transitionState = TransitionState::FadeUp;
+            transitionStartTime = now;
+        }
+    } else if (transitionState == TransitionState::HoldBlack) {
+        float dur = std::max(0.016f, config.transitionDurationJumpToBlack);
+        if (now - transitionStartTime >= dur) {
+            swapToPreloadedAndLog(nextLayoutIdx);
+            preloadNextLayout();
+            float nextTimer = scheduleNextTransition();
+            transitionState = TransitionState::Idle;
+            ofLogNotice("ofApp") << "Transition: type=jumpcut_to_black duration=" << dur << "s next_transition_timer=" << nextTimer << "s";
+        }
+    } else if (transitionState == TransitionState::FadeUp) {
+        float dur = std::max(0.016f, config.transitionDurationFade);
+        if (now - transitionStartTime >= dur) {
+            float nextTimer = scheduleNextTransition();
+            transitionState = TransitionState::Idle;
+            preloadNextLayout();
+            float totalDur = config.transitionDurationFade * 2.f;
+            ofLogNotice("ofApp") << "Transition: type=fade duration=" << totalDur << "s next_transition_timer=" << nextTimer << "s";
         }
     }
+
     renderer.update();
 }
 
 void ofApp::draw() {
-    ofBackground(240);
-    renderer.draw(0, 0);
+    ofBackground(0);
+
+    if (transitionState == TransitionState::HoldBlack) {
+        ofFill();
+        ofSetColor(0);
+        ofDrawRectangle(0, 0, ofGetWindowWidth(), ofGetWindowHeight());
+    } else {
+        renderer.draw(0, 0);
+
+        if (transitionState == TransitionState::FadeDown) {
+            float dur = std::max(0.016f, config.transitionDurationFade);
+            float elapsed = ofGetElapsedTimef() - transitionStartTime;
+            float t = std::min(1.f, elapsed / dur);
+            ofEnableAlphaBlending();
+            ofSetColor(0, 0, 0, (int)(t * 255));
+            ofDrawRectangle(0, 0, ofGetWindowWidth(), ofGetWindowHeight());
+            ofDisableAlphaBlending();
+        } else if (transitionState == TransitionState::FadeUp) {
+            float dur = std::max(0.016f, config.transitionDurationFade);
+            float elapsed = ofGetElapsedTimef() - transitionStartTime;
+            float t = std::min(1.f, elapsed / dur);
+            ofEnableAlphaBlending();
+            ofSetColor(0, 0, 0, (int)((1.f - t) * 255));
+            ofDrawRectangle(0, 0, ofGetWindowWidth(), ofGetWindowHeight());
+            ofDisableAlphaBlending();
+        }
+    }
 
     if (exportRequested) {
         renderer.drawToFbo(exportFbo);

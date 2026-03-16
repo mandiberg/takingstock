@@ -4,11 +4,19 @@
 #include <vector>
 #include "BinSorter.h"
 
+enum class TransitionType { Jumpcut, Fade, JumpcutToBlack };
+
 struct BinSorterConfig {
     int boxWidth = 1920;
     int boxHeight = 1080;
     std::string videoAssetPath = "videos";
     std::string arrangementsPath = "arrangements";
+    bool videoLoop = false;  // when false, swap to new video when finished; when true, loop
+    TransitionType transitionType = TransitionType::Jumpcut;
+    float transitionDurationFade = 0.5f;
+    float transitionDurationJumpToBlack = 0.5f;
+    float transitionTimerMin = 30.f;
+    float transitionTimerMax = 90.f;
     std::vector<SizeRatio> sizeRatios;
     int gapFilterThreshold = 1000;   // reject layouts where largest empty rect >= this (px²); 0 = only perfect fill
     int packingStopArea = 1000;     // stop placing when largest placeable item would be < this (px²); prevents infinite tiny items

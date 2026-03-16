@@ -18,12 +18,33 @@ void ConfigLoader::parseLine(const std::string& line, BinSorterConfig& config) {
     if (eq == std::string::npos) return;
     std::string key = trim(line.substr(0, eq));
     std::string value = trim(line.substr(eq + 1));
+    size_t hashPos = value.find('#');
+    if (hashPos != std::string::npos)
+        value = trim(value.substr(0, hashPos));
     if (key.empty()) return;
 
     if (key == "BOX_WIDTH") { config.boxWidth = std::stoi(value); return; }
     if (key == "BOX_HEIGHT") { config.boxHeight = std::stoi(value); return; }
     if (key == "VIDEO_ASSET_PATH") { config.videoAssetPath = value; return; }
     if (key == "ARRANGEMENTS_PATH") { config.arrangementsPath = value; return; }
+    if (key == "VIDEO_LOOP") {
+        std::string v = value;
+        std::transform(v.begin(), v.end(), v.begin(), ::tolower);
+        config.videoLoop = (v == "1" || v == "true" || v == "yes");
+        return;
+    }
+    if (key == "TRANSITION_TYPE") {
+        std::string v = value;
+        std::transform(v.begin(), v.end(), v.begin(), ::tolower);
+        if (v == "fade") config.transitionType = TransitionType::Fade;
+        else if (v == "jumpcut_to_black") config.transitionType = TransitionType::JumpcutToBlack;
+        else config.transitionType = TransitionType::Jumpcut;
+        return;
+    }
+    if (key == "TRANSITION_DURATION_FADE") { config.transitionDurationFade = std::stof(value); return; }
+    if (key == "TRANSITION_DURATION_JUMP_TO_BLACK") { config.transitionDurationJumpToBlack = std::stof(value); return; }
+    if (key == "TRANSITION_TIMER_MIN") { config.transitionTimerMin = std::stof(value); return; }
+    if (key == "TRANSITION_TIMER_MAX") { config.transitionTimerMax = std::stof(value); return; }
     if (key == "MIN_SPACE_THRESHOLD") {
         int v = std::stoi(value);
         config.gapFilterThreshold = v;

@@ -8,6 +8,8 @@
 #include "ConfigLoader.h"
 #include <memory>
 
+enum class TransitionState { Idle, FadeDown, HoldBlack, FadeUp };
+
 class ofApp : public ofBaseApp {
 public:
     void setup();
@@ -16,6 +18,13 @@ public:
     void keyPressed(int key);
 
 private:
+    void pickAndLoadArrangement(size_t idx);
+    void swapToPreloadedAndLog(size_t idx);
+    void logArrangementInfo(size_t idx);
+    void preloadNextLayout();
+    float scheduleNextTransition();
+    size_t pickNextArrangementIndex();
+
     BinSorterConfig config;
     std::unique_ptr<BinSorter> binSorter;
     VideoAssetPool videoPool;
@@ -25,4 +34,9 @@ private:
     std::vector<Arrangement> arrangements;
     std::vector<size_t> pickQueue;
     bool arrangementPickRequested = false;
+
+    TransitionState transitionState = TransitionState::Idle;
+    float transitionStartTime = 0.f;
+    float nextTransitionTime = 0.f;
+    size_t nextLayoutIdx = 0;  // preloaded layout index
 };
