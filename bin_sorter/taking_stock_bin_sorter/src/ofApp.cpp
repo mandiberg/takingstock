@@ -124,6 +124,7 @@ void ofApp::setup() {
 
     ofSetWindowShape(config.boxWidth, config.boxHeight);
     exportFbo.allocate(config.boxWidth, config.boxHeight, GL_RGB);
+    fadeContentFbo.allocate(config.boxWidth, config.boxHeight, GL_RGBA);
 
     if (arrangements.size() > 1) {
         nextLayoutIdx = pickNextArrangementIndex();
@@ -172,13 +173,14 @@ void ofApp::logArrangementInfo(size_t idx) {
     }
 }
 
-void ofApp::swapToPreloadedAndLog(size_t idx) {
+void ofApp::swapToPreloadedAndLog(size_t idx, bool deferPlay) {
     if (arrangements.empty() || idx >= arrangements.size()) return;
     if (!renderer.hasPreloadedLayout()) {
         pickAndLoadArrangement(idx);
         return;
     }
     renderer.swapToPreloaded(arrangements[idx]);
+    if (!deferPlay) renderer.startPlaying();
     logArrangementInfo(idx);
 }
 
@@ -262,7 +264,9 @@ void ofApp::update() {
                 swapToPreloadedAndLog(nextLayoutIdx);
                 preloadNextLayout();
                 float nextTimer = scheduleNextTransition();
+                ofLogNotice("ofApp") << "XXXXXXXXXXX";
                 ofLogNotice("ofApp") << "Transition: type=jumpcut duration=0s next_transition_timer=" << nextTimer << "s";
+                ofLogNotice("ofApp") << "XXXXXXXXXXX";
             } else if (config.transitionType == TransitionType::Fade) {
                 transitionState = TransitionState::FadeDown;
                 transitionStartTime = now;
@@ -274,8 +278,16 @@ void ofApp::update() {
     } else if (transitionState == TransitionState::FadeDown) {
         float dur = std::max(0.016f, config.transitionDurationFade);
         if (now - transitionStartTime >= dur) {
-            swapToPreloadedAndLog(nextLayoutIdx);
-            preloadNextLayout();
+            transitionState = TransitionState::FadeHoldBlack;
+            transitionStartTime = now;
+            fadeHoldBlackSwapDone = false;
+        }
+    } else if (transitionState == TransitionState::FadeHoldBlack) {
+        if (!fadeHoldBlackSwapDone) {
+            swapToPreloadedAndLog(nextLayoutIdx, true);
+            fadeHoldBlackSwapDone = true;
+        } else {
+            renderer.startPlaying();
             transitionState = TransitionState::FadeUp;
             transitionStartTime = now;
         }
@@ -286,7 +298,9 @@ void ofApp::update() {
             preloadNextLayout();
             float nextTimer = scheduleNextTransition();
             transitionState = TransitionState::Idle;
+            ofLogNotice("ofApp") << "XXXXXXXXXXX";
             ofLogNotice("ofApp") << "Transition: type=jumpcut_to_black duration=" << dur << "s next_transition_timer=" << nextTimer << "s";
+            ofLogNotice("ofApp") << "XXXXXXXXXXX";
         }
     } else if (transitionState == TransitionState::FadeUp) {
         float dur = std::max(0.016f, config.transitionDurationFade);
@@ -295,7 +309,9 @@ void ofApp::update() {
             transitionState = TransitionState::Idle;
             preloadNextLayout();
             float totalDur = config.transitionDurationFade * 2.f;
+            ofLogNotice("ofApp") << "XXXXXXXXXXX";
             ofLogNotice("ofApp") << "Transition: type=fade duration=" << totalDur << "s next_transition_timer=" << nextTimer << "s";
+            ofLogNotice("ofApp") << "XXXXXXXXXXX";
         }
     }
 
@@ -305,10 +321,20 @@ void ofApp::update() {
 void ofApp::draw() {
     ofBackground(0);
 
-    if (transitionState == TransitionState::HoldBlack) {
+    if (transitionState == TransitionState::HoldBlack || transitionState == TransitionState::FadeHoldBlack) {
         ofFill();
         ofSetColor(0);
         ofDrawRectangle(0, 0, ofGetWindowWidth(), ofGetWindowHeight());
+    } else if (transitionState == TransitionState::FadeUp) {
+        renderer.draw(0, 0);
+        float dur = std::max(0.016f, config.transitionDurationFade);
+        float elapsed = ofGetElapsedTimef() - transitionStartTime;
+        float t = std::min(1.f, elapsed / dur);
+        ofEnableAlphaBlending();
+        ofFill();
+        ofSetColor(0, 0, 0, (int)((1.f - t) * 255));
+        ofDrawRectangle(0, 0, ofGetWindowWidth(), ofGetWindowHeight());
+        ofDisableAlphaBlending();
     } else {
         renderer.draw(0, 0);
 
@@ -317,15 +343,8 @@ void ofApp::draw() {
             float elapsed = ofGetElapsedTimef() - transitionStartTime;
             float t = std::min(1.f, elapsed / dur);
             ofEnableAlphaBlending();
+            ofFill();
             ofSetColor(0, 0, 0, (int)(t * 255));
-            ofDrawRectangle(0, 0, ofGetWindowWidth(), ofGetWindowHeight());
-            ofDisableAlphaBlending();
-        } else if (transitionState == TransitionState::FadeUp) {
-            float dur = std::max(0.016f, config.transitionDurationFade);
-            float elapsed = ofGetElapsedTimef() - transitionStartTime;
-            float t = std::min(1.f, elapsed / dur);
-            ofEnableAlphaBlending();
-            ofSetColor(0, 0, 0, (int)((1.f - t) * 255));
             ofDrawRectangle(0, 0, ofGetWindowWidth(), ofGetWindowHeight());
             ofDisableAlphaBlending();
         }

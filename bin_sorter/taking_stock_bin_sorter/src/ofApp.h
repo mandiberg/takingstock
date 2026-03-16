@@ -8,7 +8,7 @@
 #include "ConfigLoader.h"
 #include <memory>
 
-enum class TransitionState { Idle, FadeDown, HoldBlack, FadeUp };
+enum class TransitionState { Idle, FadeDown, FadeHoldBlack, HoldBlack, FadeUp };
 
 class ofApp : public ofBaseApp {
 public:
@@ -19,7 +19,7 @@ public:
 
 private:
     void pickAndLoadArrangement(size_t idx);
-    void swapToPreloadedAndLog(size_t idx);
+    void swapToPreloadedAndLog(size_t idx, bool deferPlay = false);
     void logArrangementInfo(size_t idx);
     void preloadNextLayout();
     float scheduleNextTransition();
@@ -30,6 +30,7 @@ private:
     VideoAssetPool videoPool;
     BinSorterRenderer renderer;
     ofFbo exportFbo;
+    ofFbo fadeContentFbo;  // cached frame during FadeUp to reduce render load
     bool exportRequested = false;
     std::vector<Arrangement> arrangements;
     std::vector<size_t> pickQueue;
@@ -39,4 +40,5 @@ private:
     float transitionStartTime = 0.f;
     float nextTransitionTime = 0.f;
     size_t nextLayoutIdx = 0;  // preloaded layout index
+    bool fadeHoldBlackSwapDone = false;
 };

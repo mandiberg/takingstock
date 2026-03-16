@@ -6,7 +6,7 @@
 static void buildSlotsImpl(BinSorter* binSorter, VideoAssetPool* videoPool, bool videoLoop,
     const std::vector<std::vector<BinItem>>& bins,
     const std::map<std::pair<int, int>, NestedBinData>& nestedBins,
-    std::vector<VideoSlot>& out, bool quiet) {
+    std::vector<VideoSlot>& out, bool quiet, bool deferPlay = false) {
     out.clear();
     if (!binSorter) return;
 
@@ -37,7 +37,7 @@ static void buildSlotsImpl(BinSorter* binSorter, VideoAssetPool* videoPool, bool
                     if (!path.empty()) {
                         if (slot.player.load(path)) {
                             slot.player.setLoopState(videoLoop ? OF_LOOP_NORMAL : OF_LOOP_NONE);
-                            slot.player.play();
+                            if (!deferPlay) slot.player.play();
                             if (!videoLoop && !nextPath.empty() && slot.nextPlayer.load(nextPath)) {
                                 slot.nextPlayer.setLoopState(OF_LOOP_NONE);
                                 slot.nextPlayer.setPosition(0);
@@ -75,7 +75,7 @@ static void buildSlotsImpl(BinSorter* binSorter, VideoAssetPool* videoPool, bool
                 if (!path.empty()) {
                     if (slot.player.load(path)) {
                         slot.player.setLoopState(videoLoop ? OF_LOOP_NORMAL : OF_LOOP_NONE);
-                        slot.player.play();
+                        if (!deferPlay) slot.player.play();
                         if (!videoLoop && !nextPath.empty() && slot.nextPlayer.load(nextPath)) {
                             slot.nextPlayer.setLoopState(OF_LOOP_NONE);
                             slot.nextPlayer.setPosition(0);
@@ -122,10 +122,13 @@ void BinSorterRenderer::buildSlotsFromArrangement(const std::vector<std::vector<
 void BinSorterRenderer::preloadFromArrangement(const Arrangement& arr) {
     if (!binSorter) return;
     nextSlots.clear();
-    buildSlotsImpl(binSorter, videoPool, videoLoop, arr.bins, arr.nestedBins, nextSlots, true);
+    buildSlotsImpl(binSorter, videoPool, videoLoop, arr.bins, arr.nestedBins, nextSlots, true, true);
     for (auto& slot : nextSlots) {
-        if (slot.hasVideo && slot.nextPlayer.isLoaded())
-            slot.nextPlayer.update();
+        if (slot.hasVideo) {
+            slot.player.update();
+            if (slot.nextPlayer.isLoaded())
+                slot.nextPlayer.update();
+        }
     }
 }
 
@@ -133,7 +136,18 @@ void BinSorterRenderer::swapToPreloaded(const Arrangement& arr) {
     if (nextSlots.empty()) return;
     binSorter->loadArrangement(arr.bins, arr.nestedBins);
     std::swap(slots, nextSlots);
+    for (auto& slot : nextSlots) {
+        slot.player.close();
+        slot.nextPlayer.close();
+    }
     nextSlots.clear();
+}
+
+void BinSorterRenderer::startPlaying() {
+    for (auto& slot : slots) {
+        if (slot.hasVideo && slot.player.isLoaded())
+            slot.player.play();
+    }
 }
 
 void BinSorterRenderer::update() {

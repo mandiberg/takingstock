@@ -25,6 +25,7 @@ public:
     void regenerate();
     void preloadFromArrangement(const Arrangement& arr);
     void swapToPreloaded(const Arrangement& arr);
+    void startPlaying();
     std::vector<VideoSlot>& getSlots() { return slots; }
     const std::vector<VideoSlot>& getSlots() const { return slots; }
     bool hasPreloadedLayout() const { return !nextSlots.empty(); }
