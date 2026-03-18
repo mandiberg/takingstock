@@ -31,6 +31,8 @@ io = DataIO()
 db = io.db
 engine = create_engine(
     f"mysql+pymysql://{db['user']}:{db['pass']}@/{db['name']}?unix_socket={db['unix_socket']}",
+    pool_pre_ping=True,
+    pool_recycle=600,
     poolclass=NullPool
 )
 Session = sessionmaker(bind=engine)
@@ -49,6 +51,7 @@ ocr_engine = PaddleOCR(
 device = "mps" if torch.backends.mps.is_available() else "cpu"
 print("Using device:", device)
 yolo_model = YOLO("yolov8x.pt").to(device)  # load a pretrained YOLOv8x model
+yolo_custom_model = YOLO("models/takingstock_flag87_v0_yolov8m/weights/best.pt").to(device)
 yolo_custom_model = YOLO("models/takingstock_gun_v2_yolov8m/weights/best.pt").to(device)
 
 VERBOSE = False
@@ -74,7 +77,7 @@ MAKE_VIDEO_CSVS_PATH = None  # to process all images in folder
 OUTPUT_FOLDER = os.path.join(FILE_FOLDER, "test_output")
 BATCH_SIZE = 100
 MASK_THRESHOLD = .15  # HSV distance threshold for mask detection
-CONF_THRESHOLD = 0.4
+CONF_THRESHOLD = 0.3
 RED_THRESH = 180
 RED_DOM = 100
 VAL_MIN_SIZE = 60
@@ -87,12 +90,14 @@ META = False # to return the meta clusters (out of 23, not 96)
 cl = ToolsClustering(CLUSTER_TYPE, VERBOSE=VERBOSE)
 table_cluster_type = cl.set_table_cluster_type(META)
 
-custom_ids_to_global_dict = {
-  0: 90,
-  1: 92,
-  2: 84,
-}
+# custom_ids_to_global_dict = {
+#   0: 89,
+#   1: 90,
+#   2: 92,
+#   3: 84,
+# }
 
+# full class
 # custom_ids_to_global_dict = {
 #   0: 100,
 #   1: 88,
@@ -111,6 +116,42 @@ custom_ids_to_global_dict = {
 #   14: 99,
 #   15: 103
 
+# }
+
+# flowers 11 class
+# custom_ids_to_global_dict = {
+#   0: 100,
+#   1: 107,
+#   2: 97,
+#   3: 104,
+#   4: 98,
+#   5: 106,
+#   6: 102,
+#   7: 101,
+#   8: 99,
+#   9: 105,
+#   10: 103
+# }
+
+# masks class
+custom_ids_to_global_dict = {
+    0: 113,
+    1: 114,
+    2: 112,
+    3: 110,
+    4: 115,
+    5: 111,
+}
+
+
+# custom_ids_to_global_dict = {
+#     0: 92,
+#     1: 84,
+# }
+
+
+# custom_ids_to_global_dict = {
+#     0: 85,
 # }
 
 # custom_ids_to_global_dict = {
@@ -198,25 +239,6 @@ def mask_to_cluster_id(image, face_bbox):
     meta_cluster_id, cluster_id, cluster_dist = bbox_to_cluster_id(image, mask_bbox)
     return meta_cluster_id, cluster_id, cluster_dist
 
-def save_debug_image(output_image_path, image, imagename, image_path=None, move_or_copy=False):
-    # save image to OUTPUT_FOLDER for review
-    if not os.path.exists(os.path.dirname(output_image_path)):
-        os.makedirs(os.path.dirname(output_image_path))
-    cv2.imwrite(output_image_path, image)
-    if move_or_copy == "move" and image_path is not None:
-        os.remove(image_path)
-        print(f"Image {imagename} no detections, MOVED to {output_image_path}. ")
-    elif move_or_copy == "copy" and image_path is not None:
-        print(f"Image {imagename} no detections, saved to {output_image_path}. ")
-
-def draw_bbox_on_image(image, bbox):
-    left = bbox['left']
-    right = bbox['right']
-    top = bbox['top']
-    bottom = bbox['bottom']
-    cv2.rectangle(image, (left, top), (right, bottom), (0, 255, 0), 2)
-    return image
-
 def get_existing_detections(image_id, class_id=None):
     if class_id is not None:
         existing_detections_query = session.query(Detections).filter(Detections.image_id == image_id, Detections.class_id == class_id)
@@ -268,55 +290,6 @@ def assign_hsv_detect_results(detect_results, image):
         # result_dict['cluster_dist'] = cluster_dist
     return detect_results
 
-def map_custom_ids_to_global(detect_results):
-    for result_dict in detect_results:
-        result_dict['class_id'] = custom_ids_to_global_dict.get(result_dict['class_id'], None)
-        if result_dict['class_id'] is None:
-            print(f" ⚠️ Warning: custom class_id {result_dict['class_id']} not found in mapping dictionary, setting to None.")
-            result_dict = None
-        else:
-            print(f" ✅ Mapped custom class_id to global class_id: {result_dict['class_id']}")
-    return detect_results
-
-def save_new_yolo_labels(image_id, image, image_path, results):
-    if len(results) == 0:
-        print(f"Image {image_id} - No detections to save YOLO labels for.")
-        return
-    new_results = [res for res in results if res['class_id'] == CREATE_YOLO_CLASS_ID]
-    if len(new_results) == 0:
-        print(f"Image {image_id} - No valentine detections to save YOLO labels for.")
-        return
-    this_bbox_dict = io.unstring_json(new_results[0]['bbox'])
-    print(f"Image {image_id} - Saving YOLO label for bbox: {this_bbox_dict} from results: {new_results}")
-    # ensure all values are int
-    this_bbox_dict = {k: int(v) for k, v in this_bbox_dict.items()}
-    print(f"Image {image_id} - Converted bbox to int: {this_bbox_dict}")
-    # use this_bbox_dict to creat a YOLO-style bbox for saving as detection label for training
-    # class_id, x_center, y_center, width, height (all normalized)
-    x_center = (this_bbox_dict['left'] + this_bbox_dict['right']) / 2 / image.shape[1]
-    y_center = (this_bbox_dict['top'] + this_bbox_dict['bottom']) / 2 / image.shape[0]
-    width = (this_bbox_dict['right'] - this_bbox_dict['left']) / image.shape[1]
-    height = (this_bbox_dict['bottom'] - this_bbox_dict['top']) / image.shape[0]
-    yolo_label = f"{CREATE_YOLO_CLASS_ID} {x_center:.6f} {y_center:.6f} {width:.6f} {height:.6f}\n"
-
-    all_yolo_labels_folder = os.path.join(OUTPUT_FOLDER, "sort", "all_yolo_labels")
-    files_to_move_folder = os.path.join(OUTPUT_FOLDER, "sort", "move_these")
-    if not os.path.exists(all_yolo_labels_folder):
-        os.makedirs(all_yolo_labels_folder)
-    if not os.path.exists(files_to_move_folder):
-        os.makedirs(files_to_move_folder)
-    file_basename = f"{new_results[0]['conf']:.2f}_{image_id}_YOLO_debug"
-
-
-    label_file_path = os.path.join(all_yolo_labels_folder, file_basename + ".txt")
-    image_file_path = os.path.join(all_yolo_labels_folder, file_basename + ".jpg")
-    print(f"Saving new YOLO label to {label_file_path} and image to {image_file_path}")
-    with open(label_file_path, "w") as label_file:
-        label_file.write(yolo_label)
-
-    # save a copy of the original image to the yolo folder
-    cv2.imwrite(image_file_path, image)
-
 def do_valentine_detections(result, image, image_path, face_bbox):
     image_id = result.image_id
     imagename = result.imagename
@@ -355,9 +328,11 @@ def do_valentine_detections(result, image, image_path, face_bbox):
     print(f"☑️ Image {image_id} - YOLO detections: {val_results}")
     # save_debug_image_yolo_bbox(image_id, imagename, image, val_results)
     if DEBUGGING:
-        save_debug_image_yolo_bbox(image_id, imagename, image, val_results, image_path, draw_box=IS_DRAW_BOX, save_undetected=IS_SAVE_UNDETECTED)
+        yolo.save_debug_image_yolo_bbox(image_id, imagename, image, val_results, image_path, 
+                                        OUTPUT_FOLDER, io, draw_box=IS_DRAW_BOX, 
+                                        save_undetected=IS_SAVE_UNDETECTED, move_or_copy=MOVE_OR_COPY)
 
-    save_new_yolo_labels(image_id, image, image_path, val_results)
+    yolo.save_new_yolo_labels(image_id, image, image_path, val_results, OUTPUT_FOLDER, io)
     # save a copy of 
     if TESTING_NO_DB_WRITE:
         print("TESTING_NO_DB_WRITE is True, skipping DB write.")
@@ -387,15 +362,18 @@ def do_yolo_detections(result, image, image_path, existing_detections, custom=Fa
     unrefined_detect_results = yolo.detect_objects_return_bbox(this_yolo_model,image, device, conf_thresh=CONF_THRESHOLD)
     if VERBOSE: print(f"Image {image_id} - Unrefined YOLO detections: {unrefined_detect_results}")
     if custom:
-        unrefined_detect_results = map_custom_ids_to_global(unrefined_detect_results)
+        unrefined_detect_results = yolo.map_custom_ids_to_global(unrefined_detect_results, custom_ids_to_global_dict)
     detect_results = yolo.merge_yolo_detections(unrefined_detect_results, iou_threshold=0.3, adjacency_threshold_px=50)
     detect_results = assign_hsv_detect_results(detect_results, image)
     if VERBOSE: print(f"Image {image_id} - YOLO detections: {detect_results}")
     # save_debug_image_yolo_bbox(image_id, imagename, image, detect_results)
     if DEBUGGING:
-        save_debug_image_yolo_bbox(image_id, imagename, image, detect_results, image_path, draw_box=IS_DRAW_BOX, save_undetected=IS_SAVE_UNDETECTED)
+        yolo.save_debug_image_yolo_bbox(image_id, imagename, image, detect_results, image_path, 
+                                        OUTPUT_FOLDER, io, draw_box=IS_DRAW_BOX, 
+                                        save_undetected=IS_SAVE_UNDETECTED, move_or_copy=MOVE_OR_COPY,
+                                        combined_class_pairs=CLASSES_TO_COMBINE)
     if SAVE_NEW_LABELS:
-        save_new_yolo_labels(image_id, image, image_path, detect_results)
+        yolo.save_new_yolo_labels(image_id, image, image_path, detect_results, OUTPUT_FOLDER, io)
 
     if TESTING_NO_DB_WRITE:
         print("TESTING_NO_DB_WRITE is True, skipping DB write.")
@@ -496,7 +474,7 @@ def do_detections(result, folder_index):
         # if hsl_distance > MASK_THRESHOLD: output_image_path = os.path.join(OUTPUT_FOLDER, str(meta_cluster_id),debug_file_name)
         # else: output_image_path = os.path.join(OUTPUT_FOLDER, "no_mask",debug_file_name)
         # # save image to OUTPUT_FOLDER for review
-        # save_debug_image(output_image_path, image, imagename)
+        # yolo.save_debug_image(output_image_path, image, imagename)
 
     if DO_OCR and DO_CUSTOM:
         # make a list of sign_detections
@@ -538,8 +516,6 @@ def do_detections(result, folder_index):
                 # ocr.save_images_slogans(session, ImagesSlogans, image_id, slogan_id)
             else:
                 print(f"Error: slogan_id is None for image {image_id}, skipping save to Placards table.")
-    
-    print(f"Finished processing image_id {image_id}, load time: {image_load_end_time - image_load_start_time:.2f} seconds. Detection time: {time.time() - image_detection_start_time:.2f} seconds.")
 
 def save_debug_image_yolo_bbox(image_id, imagename, image, detect_results, image_path, draw_box=True, save_undetected=True):
     if not detect_results and save_undetected:

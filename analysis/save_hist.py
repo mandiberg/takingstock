@@ -50,7 +50,7 @@ NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 
 LIMIT= 2500000
 
-engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}".format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']), poolclass=NullPool)
+engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}".format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']), pool_pre_ping=True, pool_recycle=600, poolclass=NullPool)
 
 session = scoped_session(sessionmaker(bind=engine))
 num_threads = 1

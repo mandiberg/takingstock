@@ -108,7 +108,7 @@ class SortPose:
         self.BRUTEFORCE = False
         self.LMS_DIMENSIONS = LMS_DIMENSIONS
         if self.VERBOSE: print("init LMS_DIMENSIONS",self.LMS_DIMENSIONS)
-        self.CUTOFF = 200 # DOES factor if ONE_SHOT
+        self.CUTOFF = 400 # DOES factor if ONE_SHOT
         self.ORIGIN = 0
         self.this_nose_bridge_dist = self.NOSE_BRIDGE_DIST = None # to be set in first loop, and sort.this_nose_bridge_dist each time
         self.USE_HEAD_POSE = USE_HEAD_POSE
@@ -3900,42 +3900,82 @@ class SortPose:
                 hand_landmarks = hand_results['right_hand'].get('hand_landmarks_norm', [])
         return left_hand_landmarks, left_hand_world_landmarks, left_hand_landmarks_norm, right_hand_landmarks, right_hand_world_landmarks, hand_landmarks
 
-    def prep_knuckle_landmarks(self, hand_results):  
+    def prep_knuckle_landmarks(self, hand_results, body_landmarks_normalized=None):  
+        """
+        Extract hand/finger position from body landmarks (primary source).
+        
+        Uses body pose landmarks 19/20 (left/right index fingers) as the reliable source.
+        Hand landmarks are ignored in favor of body landmarks. Z coordinate set to 0.0
+        since body Z estimates are unreliable.
+        
+        Allows for missing hands (returns default position) to support images like
+        headphone-only photos where hands aren't visible.
+        
+        Args:
+            hand_results: Dict with hand data (currently unused, kept for compatibility)
+            body_landmarks_normalized: Body pose landmarks (REQUIRED for body source)
+            
+        Returns:
+            Tuple: (left_finger_position, right_finger_position, left_source, right_source)
+            - Positions are [x, y, 0.0] in normalized coordinates
+            - Sources: "body" if body landmark available, "default" if hand not visible
+            - Default position: [0.0, 8.0, 0.0] (off-screen, will cluster separately)
+        """
         left_pointer_knuckle_norm = right_pointer_knuckle_norm = []
-        if hand_results:
-            if 'left_hand' in hand_results:
-                try:
-                    left_hand_landmarks_norm = hand_results['left_hand'].get('hand_landmarks_norm', [])
-                    if len(left_hand_landmarks_norm) > 5:
-                        left_pointer_knuckle_norm = left_hand_landmarks_norm[5]  # 5th landmark (index 5), x,y,z
-                    else:
-                        print(f"⚠️  Warning: left_hand_landmarks_norm has insufficient length ({len(left_hand_landmarks_norm)}), expected > 5. Setting default.")
-                        print(f"    Data: {left_hand_landmarks_norm}")
-                        left_pointer_knuckle_norm = [0.0, 8.0, 0.0]
-                except (IndexError, TypeError) as e:
-                    print(f"⚠️  Error accessing left_hand landmark[5]: {e}")
-                    print(f"    hand_results['left_hand']: {hand_results['left_hand']}")
-                    left_pointer_knuckle_norm = [0.0, 8.0, 0.0]
-            else:
-                left_pointer_knuckle_norm = [0.0, 8.0, 0.0]
-            # print("left_pointer_knuckle_norm", left_pointer_knuckle_norm)
-            if 'right_hand' in hand_results:
-                try:
-                    hand_landmarks = hand_results['right_hand'].get('hand_landmarks_norm', [])
-                    if len(hand_landmarks) > 5:
-                        right_pointer_knuckle_norm = hand_landmarks[5]  # 5th landmark (index 5), x,y,z
-                    else:
-                        print(f"⚠️  Warning: right_hand_landmarks_norm has insufficient length ({len(hand_landmarks)}), expected > 5. Setting default.")
-                        print(f"    Data: {hand_landmarks}")
-                        right_pointer_knuckle_norm = [0.0, 8.0, 0.0]
-                except (IndexError, TypeError) as e:
-                    print(f"⚠️  Error accessing right_hand landmark[5]: {e}")
-                    print(f"    hand_results['right_hand']: {hand_results['right_hand']}")
-                    right_pointer_knuckle_norm = [0.0, 8.0, 0.0]
-            else:
-                right_pointer_knuckle_norm = [0.0, 8.0, 0.0]
-            # print("right_pointer_knuckle_norm", right_pointer_knuckle_norm)
-        return left_pointer_knuckle_norm, right_pointer_knuckle_norm
+        left_source = right_source = "default"
+        
+        # Primary: Use body landmarks for finger positions
+        if body_landmarks_normalized:
+            # print("body_landmarks_normalized", type(body_landmarks_normalized))
+            try:
+                if isinstance(body_landmarks_normalized, bytes):
+                    print("body_landmarks_normalized is bytes, unpickling")
+                    from mediapipe.framework.formats import landmark_pb2
+                    body_lms = landmark_pb2.LandmarkList()
+                    body_lms.ParseFromString(body_landmarks_normalized)
+                    
+                    # print("body_lms", body_lms)
+                    # Left index finger (landmark 19)
+                    if len(body_lms.landmark) > 19:
+                        lm = body_lms.landmark[19]
+                        # print("landmark 19", lm)
+                        left_pointer_knuckle_norm = [lm.x, lm.y, 0.0]  # Ignore Z
+                        left_source = "body"
+                    
+                    # Right index finger (landmark 20)
+                    if len(body_lms.landmark) > 20:
+                        lm = body_lms.landmark[20]
+                        right_pointer_knuckle_norm = [lm.x, lm.y, 0.0]  # Ignore Z
+                        right_source = "body"
+                else:
+                    # Already unpickled - it's a NormalizedLandmarkList object
+                    # print("body_landmarks_normalized is already a MediaPipe object")
+                    # Left index finger (landmark 19)
+                    if len(body_landmarks_normalized.landmark) > 19:
+                        lm = body_landmarks_normalized.landmark[19]
+                        # print(f"landmark 19: x={lm.x}, y={lm.y}")
+                        left_pointer_knuckle_norm = [lm.x, lm.y, 0.0]  # Ignore Z
+                        left_source = "body"
+                    
+                    # Right index finger (landmark 20)
+                    if len(body_landmarks_normalized.landmark) > 20:
+                        lm = body_landmarks_normalized.landmark[20]
+                        # print(f"landmark 20: x={lm.x}, y={lm.y}")
+                        right_pointer_knuckle_norm = [lm.x, lm.y, 0.0]  # Ignore Z
+                        right_source = "body"
+            except Exception as e:
+                print("Error processing body landmarks for knuckle positions:", e)
+                # Fall back to default if there's an error
+                
+        
+        # Default fallback for hands not visible in frame
+        # (e.g., headphone photos showing only head/shoulders)
+        if not left_pointer_knuckle_norm:
+            left_pointer_knuckle_norm = [0.0, 8.0, 0.0]
+        if not right_pointer_knuckle_norm:
+            right_pointer_knuckle_norm = [0.0, 8.0, 0.0]
+        
+        return left_pointer_knuckle_norm, right_pointer_knuckle_norm, left_source, right_source
 
     def prep_hsv(self, hue):
         if hue is not None:
@@ -4049,12 +4089,12 @@ class SortPose:
 
         self.HSV_CLUSTER_GROUPS = [
             # [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22],
-            # [[3, 4], [5, 6, 7], [8, 9, 10, 11], [12, 13], [15, 16], [17, 18, 19, 20], [21, 22]],
-            # [[0],[1],[2],[3, 4, 5, 6, 22, 7], [8, 9, 10, 11, 12, 13], [14],[15, 16, 17, 18, 19, 20, 21]], # ALSO USE FOR DEDUPING
+            [[3, 4], [5, 6, 7], [8, 9, 10, 11], [12, 13], [15, 16], [17, 18, 19, 20], [21, 22]],
+            [[0],[1],[2],[3, 4, 5, 6, 22, 7], [8, 9, 10, 11, 12, 13], [14],[15, 16, 17, 18, 19, 20, 21]], # ALSO USE FOR DEDUPING
             # [[3, 4, 5, 6, 22, 7], [8, 9, 10, 11, 12, 13], [14],[15, 16, 17, 18, 19, 20, 21]], # TESTING Nov23
-            # [[3, 4, 5, 6, 22, 7, 8, 9, 10, 11, 12, 13], [14, 15, 16, 17, 18, 19, 20, 21]], # TESTING Nov23
+            [[3, 4, 5, 6, 22, 7, 8, 9, 10, 11, 12, 13], [14, 15, 16, 17, 18, 19, 20, 21]], # TESTING Nov23
             # [[2],[3, 4, 5, 6, 7, 22]],
-            [[0,1,2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 19, 20, 21, 22]]
+            # [[0,1,2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 19, 20, 21, 22]]
         ]
         # Construct the file name and path
         print("topic_no", topic_no)

@@ -21,6 +21,13 @@ MODES = ["merge_images_paris_photo", "merge_images_body_autocrop", "make_video",
 MODE_CHOICE = 3
 CURRENT_MODE = MODES[MODE_CHOICE]
 
+# Provide the path to the folder containing the images
+ROOT_FOLDER_PATH = '/Users/michael.mandiberg/Documents/projects-active/facemap_production/output_folder'
+# ROOT_FOLDER_PATH = '/Users/michaelmandiberg/Documents/projects-active/facemap_production'
+# if IS_CLUSTER this should be the folder holding all the cluster folders
+# if not, this should be the individual folder holding the images
+# will not accept clusterNone -- change to cluster00
+FOLDER_NAME = "phone_c512_w10_TSP"
 
 # iterate through folders? 
 IS_CLUSTER = True

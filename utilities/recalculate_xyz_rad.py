@@ -29,6 +29,8 @@ io = DataIO()
 db = io.db
 engine = create_engine(
     f"mysql+pymysql://{db['user']}:{db['pass']}@/{db['name']}?unix_socket={db['unix_socket']}",
+    pool_pre_ping=True,
+    pool_recycle=600,
     poolclass=NullPool
 )
 Session = sessionmaker(bind=engine)

@@ -68,7 +68,8 @@ if not (io.IS_TENCH or io.IS_MICHELLE) and IS_SSD:
     io.ROOT_PROD=  "/Users/michaelmandiberg/Documents/projects-active/facemap_production" ## MBP
     print("Setting io.ROOT to ROOTSSD:", io.ROOTSSD)
     io.ROOT = os.path.join(io.ROOT_PROD, "output_folder")
-    print("Set io.ROOT to ROOTSSD:", io.ROOT)
+print("Setting io.ROOT to ROOTSSD:", io.ROOTSSD)
+print("Set io.ROOT to ROOTSSD:", io.ROOT)
 
 CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden below for heft keywords
 
@@ -91,7 +92,8 @@ MODES = {0:'paris_photo_torso_images_topics', 1:'paris_photo_torso_videos_topics
 MODE_CHOICE = 6
 CURRENT_MODE = MODES[MODE_CHOICE]
 
-LIMIT = 200000 # this is the limit for the SQL query
+LIMIT = 100000 # this is the limit for the SQL query
+CROP_MULTIPLIER = 5
 
 image_edge_multiplier = None
 # image_edge_multiplier = [1.3,2,2.9,2] # [top, right, bottom, left] setting a default. not sure if this will mess up places it looks for None
@@ -279,6 +281,17 @@ elif CURRENT_MODE == 'heft_torso_keywords':
         if TSP_SORT: MIN_CYCLE_COUNT = FORCE_TARGET_COUNT
         else: MIN_CYCLE_COUNT = 150 # this is the cut off for the SQL query results
         
+
+
+    # HAAAAAAACK
+    # SegmentHelper_name = 'SegmentHelperObject_67_phone'
+    # SegmentHelper_name = "SegmentHelperObject_82_money"
+    # SegmentFolder = "/Volumes/SSD4_Green/segment_images_detected_63_67"
+    # SegmentFolder = "/Volumes/LaCie/segment_images_82_money_cards"
+    # SegmentFolder = "/Volumes/LaCie/segment_images_96_bitcoin"
+    # MIN_CYCLE_COUNT = 200
+    # USE_HSV = True
+
     # HAAAAACK
     # MIN_CYCLE_COUNT = 60
     # this control whether sorting by topics
@@ -568,6 +581,7 @@ elif IS_SEGONLY and io.platform == "darwin":
             print("[setting junction] IS_HAND_POSE_FUSION normal")
             cluster_table = f"Images{CLUSTER1}"
             FROM += f" JOIN {cluster_table} ihp ON s.image_id = ihp.image_id "
+        SELECT += ", ihp.cluster_dist "
         if CLUSTER2: FROM += f" JOIN Images{CLUSTER2} ih ON s.image_id = ih.image_id "
         # WHERE += " AND ihp.cluster_dist < 2.5" # isn't really working how I want it
         if IS_HAND_POSE_FUSION: add_topic_select()
@@ -2236,9 +2250,26 @@ def main():
         except:
             print('you forgot to change the filename DUH')
         if not df.empty:
-            print("going to get mongo encodings")
+            if SORT_TYPE == "object_fusion" or "fusion" in SORT_TYPE:
+                simple_crop = int(sort.CUTOFF * CROP_MULTIPLIER)
+                if 'cluster_dist' in df.columns:
+                    original_len = len(df)
+                    df['cluster_dist'] = pd.to_numeric(df['cluster_dist'], errors='coerce')
+                    df = df.sort_values('cluster_dist', ascending=True).head(simple_crop).reset_index(drop=True)
+                    print(f"[object_fusion] cluster_dist crop: kept {len(df)} of {original_len} rows (simple_crop={simple_crop})")
+                else:
+                    print("[object_fusion] cluster_dist not found in SELECT results; skipping pre-crop")
+
+            # MODE 0 fast path: load precomputed hand positions + detection assignments from ImagesDetections
+            # to avoid re-processing detections from Mongo
+            if MODE == 0 and (SORT_TYPE == "object_fusion" or "fusion" in SORT_TYPE):
+                print("[MODE 0] Checking ImagesDetections for precomputed data...")
+                df, missing_image_ids = cl.hydrate_detections_from_precomputed_table(df)
+                print(f"[MODE 0] Found {len(df) - len(missing_image_ids)} images in ImagesDetections; {len(missing_image_ids)} need Mongo load")
+
+            # Load all encoding/landmark fields from Mongo so MODE 0 CSV contains full data for MODE 1
+            print(f"Loading all encodings from Mongo for all {len(df)} images...")
             print("size",df.size)
-            # use the image_id to query the mongoDB for face_encodings68, face_landmarks, body_landmarks
             df[['face_encodings68', 'face_landmarks', 'body_landmarks', 'body_landmarks_normalized', 'body_landmarks_3D', 'hand_results']] = df['image_id'].apply(io.get_encodings_mongo)
             print("got mongo encodings", df.columns)
             if VERBOSE: print("first row", df.iloc[0])
@@ -2250,18 +2281,22 @@ def main():
             # print("face_encodings68")
             # print(df['face_encodings68'][0])
 
-            # Apply the unpickling function to the 'face_encodings' column
+            # Apply the unpickling function to the Mongo fields
+            print("[MODE] Unpickling Mongo fields from database...")
             df['face_encodings68'] = df['face_encodings68'].apply(io.unpickle_array)
             df['face_landmarks'] = df['face_landmarks'].apply(io.unpickle_array)
             df['body_landmarks'] = df['body_landmarks'].apply(io.unpickle_array)
             df['body_landmarks_3D'] = df['body_landmarks_3D'].apply(io.unpickle_array)
             df['body_landmarks_normalized'] = df['body_landmarks_normalized'].apply(io.unpickle_array)
+            
             # if hand_results has any values
             # if not df['hand_results'].isnull().all():
             # print("body_landmarks_3D", df['body_landmarks_3D'][0])
             df[['left_hand_landmarks', 'left_hand_world_landmarks', 'left_hand_landmarks_norm', 'right_hand_landmarks', 'right_hand_world_landmarks', 'right_hand_landmarks_norm']] = pd.DataFrame(df['hand_results'].apply(sort.prep_hand_landmarks).tolist(), index=df.index)
-            # Get pointer knuckle positions for object-hand relationship detection
-            df[["left_pointer_knuckle_norm","right_pointer_knuckle_norm"]] = pd.DataFrame(df['hand_results'].apply(sort.prep_knuckle_landmarks).tolist(), index=df.index)
+            # Get pointer knuckle positions from body landmarks (now returns 4 values including source tracking)
+            df[["left_pointer_knuckle_norm","right_pointer_knuckle_norm","left_source","right_source"]] = pd.DataFrame(
+                df.apply(lambda row: sort.prep_knuckle_landmarks(row['hand_results'], row['body_landmarks_normalized']), axis=1).tolist(), 
+                index=df.index)
             # if VERBOSE: print("about to split_landmarks_to_columns_or_list,", df.iloc[0])
             # df = sort.split_landmarks_to_columns_or_list(df, left_col="left_hand_world_landmarks", right_col="right_hand_world_landmarks", structure="list")
             df = sort.split_landmarks_to_columns_or_list(df, first_col="left_hand_landmarks_norm", second_col="right_hand_landmarks_norm", structure="list")

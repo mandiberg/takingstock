@@ -646,3 +646,211 @@ class YOLOTools:
         # Convert back to float coordinates for output, but you may want to round or keep as ints depending on convention
         return (x1_red, y1_red, x2_red, y2_red)
 
+    def save_debug_image(self, output_image_path, image, imagename, image_path=None, move_or_copy=False):
+        """
+        Save image to output folder for debugging/review.
+        
+        Args:
+            output_image_path: Full path where image should be saved
+            image: cv2 image array
+            imagename: Name of the image file
+            image_path: Optional source path (for move operation)
+            move_or_copy: "move" to delete source, "copy" to keep it, or False for no action
+        """
+        if not os.path.exists(os.path.dirname(output_image_path)):
+            os.makedirs(os.path.dirname(output_image_path))
+        cv2.imwrite(output_image_path, image)
+        if move_or_copy == "move" and image_path is not None:
+            os.remove(image_path)
+            print(f"Image {imagename} MOVED to {output_image_path}.")
+        elif move_or_copy == "copy" and image_path is not None:
+            print(f"Image {imagename} saved to {output_image_path}.")
+
+    def draw_bbox_on_image(self, image, bbox):
+        """
+        Draw a bounding box on an image.
+        
+        Args:
+            image: cv2 image array
+            bbox: dict with keys 'left', 'right', 'top', 'bottom'
+        
+        Returns:
+            image with bbox drawn (modifies in place)
+        """
+        left = bbox['left']
+        right = bbox['right']
+        top = bbox['top']
+        bottom = bbox['bottom']
+        cv2.rectangle(image, (left, top), (right, bottom), (0, 255, 0), 1)
+        return image
+
+    def map_custom_ids_to_global(self, detect_results, custom_ids_dict):
+        """
+        Map custom model class IDs to global class IDs.
+        
+        Args:
+            detect_results: list of detection dicts with 'class_id' key
+            custom_ids_dict: mapping from custom IDs to global IDs
+        
+        Returns:
+            detect_results with mapped class_ids (modifies in place)
+        """
+        for result_dict in detect_results:
+            original_id = result_dict['class_id']
+            result_dict['class_id'] = custom_ids_dict.get(result_dict['class_id'], None)
+            if result_dict['class_id'] is None:
+                print(f" ⚠️ Warning: custom class_id {original_id} not found in mapping dictionary, setting to None.")
+            else:
+                print(f" ✅ Mapped custom class_id {original_id} to global class_id: {result_dict['class_id']}")
+        return detect_results
+
+    def save_new_yolo_labels(self, image_id, image, image_path, results, output_folder, io_instance):
+        """
+        Save YOLO format labels for detected objects to feed back into training data.
+        Handles multiple detections per image and creates multi-line label files.
+        
+        Args:
+            image_id: ID of the image
+            image: cv2 image array (for dimensions)
+            image_path: Path to source image
+            results: list of detection dicts with 'class_id', 'bbox', 'conf'
+            output_folder: Base output folder path
+            io_instance: DataIO instance for JSON operations
+        """
+        if len(results) == 0:
+            return
+        
+        # Save all detections (not filtering by class)
+        new_results = results
+        if len(new_results) == 0:
+            return
+        
+        # All labels save to the same folder
+        all_yolo_labels_folder = os.path.join(output_folder, "sort", "all_yolo_labels")
+        files_to_move_folder = os.path.join(output_folder, "sort", "move_these")
+        
+        if not os.path.exists(all_yolo_labels_folder):
+            os.makedirs(all_yolo_labels_folder)
+        if not os.path.exists(files_to_move_folder):
+            os.makedirs(files_to_move_folder)
+        
+        # Calculate average confidence for filename
+        avg_conf = sum(res['conf'] for res in new_results) / len(new_results)
+        file_basename = f"{avg_conf:.2f}_{image_id}_YOLO_debug"
+        
+        # Build YOLO labels for all detections
+        yolo_labels = []
+        for result_dict in new_results:
+            this_bbox_dict = io_instance.unstring_json(result_dict['bbox'])
+            print(f"Image {image_id} - Saving YOLO label for class {result_dict['class_id']}, bbox: {this_bbox_dict}")
+            # ensure all values are int
+            this_bbox_dict = {k: int(v) for k, v in this_bbox_dict.items()}
+            print(f"Image {image_id} - Converted bbox to int: {this_bbox_dict}")
+            # use this_bbox_dict to create a YOLO-style bbox for saving as detection label for training
+            # class_id, x_center, y_center, width, height (all normalized)
+            x_center = (this_bbox_dict['left'] + this_bbox_dict['right']) / 2 / image.shape[1]
+            y_center = (this_bbox_dict['top'] + this_bbox_dict['bottom']) / 2 / image.shape[0]
+            width = (this_bbox_dict['right'] - this_bbox_dict['left']) / image.shape[1]
+            height = (this_bbox_dict['bottom'] - this_bbox_dict['top']) / image.shape[0]
+            yolo_label = f"{result_dict['class_id']} {x_center:.6f} {y_center:.6f} {width:.6f} {height:.6f}\n"
+            yolo_labels.append(yolo_label)
+        
+        label_file_path = os.path.join(all_yolo_labels_folder, file_basename + ".txt")
+        image_file_path = os.path.join(all_yolo_labels_folder, file_basename + ".jpg")
+        print(f"Saving new YOLO label to {label_file_path} and image to {image_file_path}")
+        with open(label_file_path, "w") as label_file:
+            label_file.writelines(yolo_labels)
+
+        # save a copy of the original image to the yolo folder
+        cv2.imwrite(image_file_path, image)
+
+    def save_debug_image_yolo_bbox(self, image_id, imagename, image, detect_results, image_path, 
+                                     output_folder, io_instance, draw_box=True, save_undetected=True, 
+                                     move_or_copy="copy", combined_class_pairs=None):
+        """
+        Save debug images with bounding boxes drawn, organized by class ID.
+        Supports combining multiple classes into a single output folder.
+        
+        Args:
+            image_id: ID of the image
+            imagename: Name of the image file
+            image: cv2 image array
+            detect_results: list of detection dicts with 'class_id', 'bbox', 'conf'
+            image_path: Source path of the image
+            output_folder: Base output folder path
+            io_instance: DataIO instance for JSON operations
+            draw_box: Whether to draw bounding boxes on images
+            save_undetected: Whether to save images with no detections
+            move_or_copy: "move", "copy", or False for handling undetected images
+            combined_class_pairs: Optional list of class_ids to combine, e.g., [89, 90, 97, 98, 99, 100, 101, 102, 103]
+                                 If None or empty, each class is saved separately.
+                                 If any of the specified classes are detected, the image is saved once to a folder named
+                                 with the detected class IDs joined by underscores (e.g., 89_90 or 98_103).
+        """
+        if not detect_results and save_undetected:
+            output_image_path = os.path.join(output_folder, "no_detections", imagename)
+            # only undetected get MOVE_OR_COPY option
+            self.save_debug_image(output_image_path, image, imagename, image_path=image_path, move_or_copy=move_or_copy)
+        elif move_or_copy != "move":
+            # only save detected if not moving undetected
+            # Group detections by class_id
+            detections_by_class = {}
+            for result_dict in detect_results:
+                class_id = result_dict['class_id']
+                if class_id == 0:  # skip person class
+                    continue
+                if class_id not in detections_by_class:
+                    detections_by_class[class_id] = []
+                detections_by_class[class_id].append(result_dict)
+            
+            # If combined_class_pairs is specified and not empty
+            if combined_class_pairs:
+                # Find which detected classes are in the combine list
+                detected_classes_to_combine = [cid for cid in detections_by_class.keys() if cid in combined_class_pairs]
+                
+                # If any of the combine classes are detected, save them all together
+                if detected_classes_to_combine:
+                    drawable_image = image.copy()
+                    all_conf = []
+                    print(f"Processing combined classes: {detected_classes_to_combine}")
+                    
+                    for class_id in detected_classes_to_combine:
+                        for result_dict in detections_by_class[class_id]:
+                            print(f"  Detected class: {result_dict['class_id']} with bbox: {result_dict['bbox']} and confidence: {result_dict['conf']}")
+                            if draw_box:
+                                drawable_image = self.draw_bbox_on_image(drawable_image, io_instance.unstring_json(result_dict['bbox']))
+                            all_conf.append(result_dict['conf'])
+                    
+                    avg_conf = sum(all_conf) / len(all_conf)
+                    debug_file_name = f"{avg_conf:.2f}_{image_id}_YOLO_debug.jpg"
+                    # Create folder name from detected combined class IDs joined by underscore
+                    combined_folder_name = "_".join(map(str, sorted(detected_classes_to_combine)))
+                    output_image_path = os.path.join(output_folder, combined_folder_name, debug_file_name)
+                    self.save_debug_image(output_image_path, drawable_image, imagename)
+                    
+                    # Mark these classes as processed so they don't get saved separately
+                    classes_to_skip = set(detected_classes_to_combine)
+                else:
+                    classes_to_skip = set()
+            else:
+                classes_to_skip = set()
+            
+            # Process each class separately (skip if already handled in combined)
+            for class_id, class_detections in detections_by_class.items():
+                if class_id in classes_to_skip:
+                    continue
+                    
+                drawable_image = image.copy()
+                print(f"Processing class_id {class_id} with {len(class_detections)} detection(s)")
+                all_class_conf = []
+                for result_dict in class_detections:
+                    print(f"  Detected class: {result_dict['class_id']} with bbox: {result_dict['bbox']} and confidence: {result_dict['conf']}")
+                    # for debugging, saving to folders
+                    if draw_box:
+                        drawable_image = self.draw_bbox_on_image(drawable_image, io_instance.unstring_json(result_dict['bbox']))
+                    all_class_conf.append(result_dict['conf'])
+                avg_conf = sum(all_class_conf) / len(all_class_conf)
+                debug_file_name = f"{avg_conf:.2f}_{image_id}_YOLO_debug.jpg"
+                output_image_path = os.path.join(output_folder, str(class_id), debug_file_name)
+                self.save_debug_image(output_image_path, drawable_image, imagename)
+
