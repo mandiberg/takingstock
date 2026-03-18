@@ -8,9 +8,9 @@ from sqlalchemy.dialects.mysql import insert
 
 class YOLOTools:
     
-    def __init__(self, DEBUGGING=False):
+    def __init__(self, DEBUGGING=False, VERBOSE=True):
         self.DEBUGGING = DEBUGGING 
-        self.VERBOSE = True     
+        self.VERBOSE = VERBOSE     
         self.io = DataIO(False)
 
 
@@ -137,7 +137,7 @@ class YOLOTools:
             for detection in detections_list:
                 bbox_str = detection.get("bbox")
                 bbox_norm_str = detection.get("bbox_norm")
-                print("detection is", detection)
+                if self.VERBOSE: print("detection is", detection)
                 if not bbox_str:
                     if self.VERBOSE: print(f"Skipping empty bbox for class_id {detection['class_id']}, obj_no {detection['obj_no']}")
                     continue
@@ -163,7 +163,7 @@ class YOLOTools:
                 )
                 try:
                     # print the statement first
-                    print(f"Executing upsert for image_id {image_id}, class_id {detection['class_id']}, obj_no {detection['obj_no']}")
+                    if self.VERBOSE: print(f"Executing upsert for image_id {image_id}, class_id {detection['class_id']}, obj_no {detection['obj_no']}")
                     result = session.execute(stmt)
                     rowcount = getattr(result, "rowcount", None)
                 except Exception as e:

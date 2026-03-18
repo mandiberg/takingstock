@@ -96,15 +96,15 @@ else:
 VERBOSE = True
 None_counter = 0
 # Provide the path to the folder containing the images
-ROOT_FOLDER_PATH = '/Volumes/OWC4/images_to_assemble'
+ROOT_FOLDER_PATH = '/Users/michaelmandiberg/Documents/projects-active/facemap_production'
 # ROOT_FOLDER_PATH = '/Users/michaelmandiberg/Documents/projects-active/facemap_production'
 # if IS_CLUSTER this should be the folder holding all the cluster folders
 # if not, this should be the individual folder holding the images
 # will not accept clusterNone -- change to cluster00
-FOLDER_NAME = "body3D_512_"
+FOLDER_NAME = "output_folder/sq"
 FOLDER_PATH = os.path.join(ROOT_FOLDER_PATH,FOLDER_NAME)
 # FOLDER_PATH = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/keyword_body3D_tests/body3D_512" # temp override for testing
-FOLDER_PATH = '/Volumes/OWC4/segment_images/renderfolder'
+# FOLDER_PATH = os.path.join(io.ROOT_PROD,"render_folder")
 DIRS = ["1x1", "4x3", "16x10"]
 OUTPUT = os.path.join(io.ROOTSSD, "audioproduction")
 # Extract the topic number from the folder name
@@ -965,7 +965,7 @@ def save_concatenated_metas(subfolders, output_path, csv_file):
 
 
 def main():
-    print("starting merge_expanded_images.py")
+    print("starting merge_expanded_images.py, looking in FOLDER_PATH:", FOLDER_PATH)
     if IS_CLUSTER is True:
         subfolders = io.get_folders(FOLDER_PATH, SORT_ORDER)
         # skip any folder with SKIP_PREFIX in it

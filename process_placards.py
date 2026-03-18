@@ -49,25 +49,26 @@ ocr_engine = PaddleOCR(
 device = "mps" if torch.backends.mps.is_available() else "cpu"
 print("Using device:", device)
 yolo_model = YOLO("yolov8x.pt").to(device)  # load a pretrained YOLOv8x model
-yolo_custom_model = YOLO("models/takingstock_steth_head_heart_yolov8m/weights/best.pt").to(device)
+yolo_custom_model = YOLO("models/takingstock_gun_v2_yolov8m/weights/best.pt").to(device)
 
+VERBOSE = False
 ocr = OCRTools(DEBUGGING=True)
-yolo = YOLOTools(DEBUGGING=True)
+yolo = YOLOTools(DEBUGGING=True, VERBOSE=VERBOSE)
 
 
 blank = False
-DEBUGGING = True # saves debug images (option for bboxes drawn)
-SAVE_NEW_LABELS = True # saves new yolo labels to feed back into training data
-TESTING_NO_DB_WRITE = True # if True, will not write to database
-DO_COCO = False
-DO_CUSTOM = True
+DEBUGGING = False # saves debug images (option for bboxes drawn)
+SAVE_NEW_LABELS = False # saves new yolo labels to feed back into training data
+TESTING_NO_DB_WRITE = False # if True, will not write to database
+DO_COCO = True
+DO_CUSTOM = False
 DO_MASK = False
 DO_VALENTINE = False
 use_average_per_row=False # for valentine bbox detection
 DO_OCR = False
 
 # FILE_FOLDER = "/Volumes/LaCie/segment_images_84_valentine"
-FILE_FOLDER = "/Volumes/OWC5/segment_images_90_stethoscope"
+FILE_FOLDER = "/Volumes/RAID18" # must be a folder holding the site folder(s)
 # MAKE_VIDEO_CSVS_PATH = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/book_csvs"
 MAKE_VIDEO_CSVS_PATH = None  # to process all images in folder
 OUTPUT_FOLDER = os.path.join(FILE_FOLDER, "test_output")
@@ -82,7 +83,6 @@ IS_DRAW_BOX = True
 IS_SAVE_UNDETECTED = True
 MOVE_OR_COPY = "copy"  # "move" or "copy"
 CLUSTER_TYPE = "HSV" # only works with cluster save, not with assignment
-VERBOSE = True
 META = False # to return the meta clusters (out of 23, not 96)
 cl = ToolsClustering(CLUSTER_TYPE, VERBOSE=VERBOSE)
 table_cluster_type = cl.set_table_cluster_type(META)
@@ -240,6 +240,25 @@ def save_no_dectections(session,image_id, NoDetectionTable=NoDetections):
         session.commit()
     print(f"Image {image_id} - No detections found, saved to {NoDetectionTable} table.")
 
+def backfill_image_dimensions_if_missing(result, image):
+    image_id = result.image_id
+    current_h = getattr(result, "h", None)
+    current_w = getattr(result, "w", None)
+    if current_h is None or current_w is None:
+        image_h, image_w = image.shape[:2]
+        update_values = {}
+        if current_h is None:
+            update_values["h"] = int(image_h)
+        if current_w is None:
+            update_values["w"] = int(image_w)
+        if update_values:
+            print(f"Image {image_id} - Updating missing dimensions in Images table: {update_values}")
+            session.query(Images).filter(Images.image_id == image_id).update(update_values, synchronize_session=False)
+            if not TESTING_NO_DB_WRITE:
+                session.commit()
+            else:
+                print("TESTING_NO_DB_WRITE is True, skipping Images table update commit.")
+
 def assign_hsv_detect_results(detect_results, image):
     for result_dict in detect_results:
         bbox = io.unstring_json(result_dict['bbox'])
@@ -333,7 +352,7 @@ def do_valentine_detections(result, image, image_path, face_bbox):
     })
     val_results = assign_hsv_detect_results(val_results, image)
 
-    print(f"Image {image_id} - YOLO detections: {val_results}")
+    print(f"☑️ Image {image_id} - YOLO detections: {val_results}")
     # save_debug_image_yolo_bbox(image_id, imagename, image, val_results)
     if DEBUGGING:
         save_debug_image_yolo_bbox(image_id, imagename, image, val_results, image_path, draw_box=IS_DRAW_BOX, save_undetected=IS_SAVE_UNDETECTED)
@@ -366,12 +385,12 @@ def do_yolo_detections(result, image, image_path, existing_detections, custom=Fa
     # Test on new image 
 
     unrefined_detect_results = yolo.detect_objects_return_bbox(this_yolo_model,image, device, conf_thresh=CONF_THRESHOLD)
-    print(f"Image {image_id} - Unrefined YOLO detections: {unrefined_detect_results}")
+    if VERBOSE: print(f"Image {image_id} - Unrefined YOLO detections: {unrefined_detect_results}")
     if custom:
         unrefined_detect_results = map_custom_ids_to_global(unrefined_detect_results)
     detect_results = yolo.merge_yolo_detections(unrefined_detect_results, iou_threshold=0.3, adjacency_threshold_px=50)
     detect_results = assign_hsv_detect_results(detect_results, image)
-    print(f"Image {image_id} - YOLO detections: {detect_results}")
+    if VERBOSE: print(f"Image {image_id} - YOLO detections: {detect_results}")
     # save_debug_image_yolo_bbox(image_id, imagename, image, detect_results)
     if DEBUGGING:
         save_debug_image_yolo_bbox(image_id, imagename, image, detect_results, image_path, draw_box=IS_DRAW_BOX, save_undetected=IS_SAVE_UNDETECTED)
@@ -391,31 +410,34 @@ def do_yolo_detections(result, image, image_path, existing_detections, custom=Fa
 
 def check_for_existing_detections(image_id, existing_detections, custom=False):
     if custom:
-        existing_detections_image_ids = [det.detection_id for det in existing_detections if det.class_id >= 80]
+        existing_detection_ids = [det.detection_id for det in existing_detections if det.class_id >= 80]
         existing_no_detections = get_existing_no_detections(image_id, NoDetectionTable=NoDetectionsCustom)
     else:
-        all_existing_detections_image_ids = [det.detection_id for det in existing_detections if det.class_id < 80]
+        all_existing_detection_ids = [det.detection_id for det in existing_detections if det.class_id < 80]
         # only consider detection_ids > 12455146 which are the new ones, not the original ones
-        existing_detections_image_ids = [det_id for det_id in all_existing_detections_image_ids if det_id > 12455146]
+        existing_detection_ids = [det_id for det_id in all_existing_detection_ids if det_id > 12455146]
         existing_no_detections = get_existing_no_detections(image_id, NoDetectionTable=NoDetections)
-    return existing_detections_image_ids, existing_no_detections
+    return existing_detection_ids, existing_no_detections
 
 
 def do_detections(result, folder_index):
     coco_detections = custom_detections = None
-    existing_detections = get_existing_detections(result.image_id)
-    
+    # existing_detections = get_existing_detections(result.image_id)
+    # start a timer for this function to track how long it takes
+    start_time = time.time()
     image_id = result.image_id
     imagename = result.imagename
     existing_coco = existing_custom = False
     existing_detections = get_existing_detections(result.image_id)
-    existing_detections_image_ids, existing_no_detections = check_for_existing_detections(image_id, existing_detections, custom=False)
-    existing_detections_custom_image_ids, existing_no_detections_custom = check_for_existing_detections(image_id, existing_detections, custom=True)
-    if image_id in existing_detections_image_ids or existing_no_detections: existing_coco = True
-    if image_id in existing_detections_custom_image_ids or existing_no_detections_custom: existing_custom = True
+    if VERBOSE: print(f"Image {image_id} - Retrieved {len(existing_detections)} existing detections from database.")
+    existing_detection_ids, existing_no_detections = check_for_existing_detections(image_id, existing_detections, custom=False)
+    existing_custom_detection_ids, existing_no_detections_custom = check_for_existing_detections(image_id, existing_detections, custom=True)
+    if existing_detection_ids or existing_no_detections: existing_coco = True
+    if existing_custom_detection_ids or existing_no_detections_custom: existing_custom = True
 
     if (existing_coco and existing_custom) or (existing_coco and not DO_CUSTOM) or (existing_custom and not DO_COCO):
-        print(f"Skipping image_id {image_id} due to existing detections record for this configuration.")
+        print(f"Skipping image_id {image_id} due to existing detections record for this configuration, time taken: {time.time() - start_time:.10f} seconds.")
+        print
         return
     # elif len(existing_detection_ids) > 0:
     #     print(f"Skipping image_id {result.image_id} due to existing detections record.")
@@ -432,14 +454,18 @@ def do_detections(result, folder_index):
         print(f"Error parsing label_data JSON for image_id {image_id}: {e}")
         print("Skipping this face_bbox.", result.bbox)
         return
+    image_load_start_time = time.time()
     image_path = os.path.join(FILE_FOLDER, os.path.basename(io.folder_list[folder_index]), imagename)
     # Read the image
     image = cv2.imread(image_path)
     if image is None:
         print(f"Error: Unable to read image at {image_path}. Skipping.")
         return
+    backfill_image_dimensions_if_missing(result, image)
+    image_load_end_time = time.time()
 
     print(f"Processing image_id: {image_id}, imagename: {imagename}")
+    image_detection_start_time = time.time()
     if DO_COCO and not existing_no_detections: 
         coco_detections = do_yolo_detections(result, image, image_path, existing_detections, custom=False)
 
@@ -512,6 +538,8 @@ def do_detections(result, folder_index):
                 # ocr.save_images_slogans(session, ImagesSlogans, image_id, slogan_id)
             else:
                 print(f"Error: slogan_id is None for image {image_id}, skipping save to Placards table.")
+    
+    print(f"Finished processing image_id {image_id}, load time: {image_load_end_time - image_load_start_time:.2f} seconds. Detection time: {time.time() - image_detection_start_time:.2f} seconds.")
 
 def save_debug_image_yolo_bbox(image_id, imagename, image, detect_results, image_path, draw_box=True, save_undetected=True):
     if not detect_results and save_undetected:
@@ -567,15 +595,19 @@ def main():
         df_csvs = load_csvs(MAKE_VIDEO_CSVS_PATH)
     else:
         df_csvs = pd.DataFrame(columns=['site_name_id','site_image_id'])  
-    print("lenth df_csvs:", len(df_csvs))     
+    print("lenth df_csvs if MAKE_VIDEO_CSVS_PATH:", len(df_csvs))     
     folder_count = 0
     for folder_index in folder_indexes:
+        # goes through all. if no folder found, skips and moves on, until it finds the correct site folder
         df_csvs_folder = df_csvs[df_csvs['site_name_id'] == folder_index]
         if MAKE_VIDEO_CSVS_PATH is not None and len(df_csvs_folder) == 0:
             print("Skipping folder_index:", folder_index, "no entries in MAKE_VIDEO_CSVS_PATH")
             continue
         else:
             print("meets or ignores MAKE_VIDEO_CSVS_PATH, folder_index:", folder_index, "len df_csvs_folder:", len(df_csvs_folder))
+        print(io.folder_list)
+        print("basename:", os.path.basename(io.folder_list[folder_index]))
+        print("FILE_FOLDER:", FILE_FOLDER)
         site_folder = os.path.join(FILE_FOLDER, os.path.basename(io.folder_list[folder_index]))
         print(f"folder_index: {folder_index}, site_folder: {site_folder}")
         folder_paths = io.make_hash_folders(site_folder, as_list=True)
@@ -631,7 +663,7 @@ def detect_from_folder(folder_index, csv_foldercount_path, folder_path, folder, 
 
                             # get Images and Encodings values for each site_image_id in the batch
                             # adding in mongo stuff. should return NULL if not there
-                batch_query = session.query(Images.image_id, Images.site_image_id, Images.imagename, Encodings.bbox) \
+                batch_query = session.query(Images.image_id, Images.site_image_id, Images.imagename, Images.h, Images.w, Encodings.bbox) \
                                 .join(Encodings, Encodings.image_id == Images.image_id) \
                                 .filter(Images.site_image_id.in_(batch_site_image_ids), Images.site_name_id == folder_index)
                                                                                                         
@@ -656,13 +688,13 @@ def detect_from_folder(folder_index, csv_foldercount_path, folder_path, folder, 
 
         images_left_to_process = len(batch_site_image_ids)
         for site_image_id in batch_site_image_ids:
-            print(f"image_id to process: {site_image_id}, images left to process in batch: {images_left_to_process}")
+            if VERBOSE: print(f"image_id to process: {site_image_id}, images left to process in batch: {images_left_to_process}")
             images_left_to_process -= 1
             if site_image_id in results_dict:
                 do_detections(results_dict[site_image_id], folder_index)
-                print(f"Found image_id: {results_dict[site_image_id].image_id} for site_image_id: {site_image_id}, imagename: {results_dict[site_image_id].imagename}")
+                if VERBOSE: print(f"Found image_id: {results_dict[site_image_id].image_id} for site_image_id: {site_image_id}, imagename: {results_dict[site_image_id].imagename}")
             else:
-                print(f"site_name_id: {folder_index} site_image_id: {site_image_id} not found in DB, skipping.")
+                if VERBOSE: print(f"site_name_id: {folder_index} site_image_id: {site_image_id} not found in DB, skipping.")
                 continue
                 # save  success to csv_foldercount_path
     io.write_csv(csv_foldercount_path, [folder_path])

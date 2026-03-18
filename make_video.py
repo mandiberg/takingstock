@@ -64,7 +64,8 @@ db = io.db
 # OWC4 SNAFU WORKAROUND
 
 if not (io.IS_TENCH or io.IS_MICHELLE) and IS_SSD:
-    io.ROOT_PROD=  "/Volumes/OWC5/segment_images" ## only on Mac
+    # io.ROOT_PROD=  "/Volumes/OWC5/segment_images" ## only on Mac
+    io.ROOT_PROD=  "/Users/michaelmandiberg/Documents/projects-active/facemap_production" ## MBP
     print("Setting io.ROOT to ROOTSSD:", io.ROOTSSD)
     io.ROOT = os.path.join(io.ROOT_PROD, "output_folder")
     print("Set io.ROOT to ROOTSSD:", io.ROOT)
@@ -78,7 +79,7 @@ CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden b
 # CSV_FOLDER = os.path.join(io.ROOT_DBx, "body3D_segmentbig_useall256_CSVs_test")
 
 # CSV_FOLDER = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion128_test220K"
-CSV_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion"
+CSV_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/bodyLms_768"
 
 # overriding DB for testing
 # io.db["name"] = "stock"
@@ -183,7 +184,12 @@ elif "3D" in CURRENT_MODE:
 
 
 elif CURRENT_MODE == 'heft_torso_keywords':
-    
+
+    # # cludgy hack to get dynamic cropping for testing mar 2026    
+    # AUTO_EDGE_CROP = True
+    # if AUTO_EDGE_CROP:
+    #     EXPAND = True
+
     # set to 0 to disable obj query stuff. this is also for object_fusion
     class_id = 0
 
@@ -320,7 +326,8 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     # initializing default square crop
     # if this is defined, then it will not call min_max_body_landmarks_for_crop
     # image_edge_multiplier = [1.3,1.85,2.4,1.85] # tighter square crop for paris photo videos < Oct 29 FINAL VERSION NOV 2024 DO NOT CHANGE
-    image_edge_multiplier = [1.3,2,2.9,2] # portrait crop for paris photo images < Aug 30
+    # image_edge_multiplier = [1.3,2,2.9,2] # portrait crop for paris photo images < Aug 30
+    image_edge_multiplier = [1.5,2,4.5,2]
 
 else:
     print("unknown mode, exiting")
@@ -791,8 +798,9 @@ if not io.IS_TENCH:
     session = Session()
     Base = declarative_base()
 
-    # Pass session to ToolsClustering instance for database access
-    cl.session = session
+    if SORT_TYPE == "object_fusion" or "fusion" in SORT_TYPE:
+        # Pass session to ToolsClustering instance for database access
+        cl.session = session
 
     mongo_client = pymongo.MongoClient(io.dbmongo['host'])
     mongo_db = mongo_client[io.dbmongo['name']]
