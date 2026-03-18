@@ -63,11 +63,11 @@ class DataIO:
             self.ROOT_DBx = os.path.join(self.home, "Library/CloudStorage/Dropbox/takingstock_dropbox/output_folder")
             self.ROOT_CODE= os.path.join(self.home,"Documents/GitHub/facemap/")
             self.ROOT_PROD=  "/Volumes/OWC5/segment_images" ## only on Mac
-            self.ROOTSSD = os.path.join(self.home,"Documents/projects-active/facemap_production")
+            self.ROOTSSD = os.path.join(self.home,"Documents/projects-active/facemap_production/output_folder") ## only on SSD
             self.ROOT54= "/Volumes/RAID54" ## only on 
             # temp migration for
             # self.ROOT54= "/Volumes/6TB_mayday_2" ## only on 
-            self.ROOT= self.ROOT_PROD ## defining ROOT though may be redefinied in main()
+            self.ROOT= self.ROOTSSD ## defining ROOT though may be redefinied in main()
             self.ROOT4 = "/Volumes/SSD4"
             self.ROOT18 = "/Volumes/RAID18"
             self.NUMBER_OF_PROCESSES = 8
