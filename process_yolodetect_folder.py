@@ -9,28 +9,51 @@ io = DataIO()
 
 device = "mps" if torch.backends.mps.is_available() else "cpu"
 print("Using device:", device)
-yolo_custom_model = YOLO("models/takingstock_chestpiece_onlyfeb5stethoscope_v5_yolov8x/weights/best.pt").to(device)
+yolo_custom_model = YOLO("models/takingstock_gun_v8_yolov8m/weights/best.pt").to(device)
 yolo = YOLOTools(DEBUGGING=True)
 
 
 # Configuration
 DEBUGGING = True
 SAVE_NEW_LABELS = True
-FILE_FOLDER = "/Users/michael.mandiberg/Documents/YOLO_Training_Data/reprocess/none_val_steth_headphones_manual"
+FILE_FOLDER = "/Volumes/OWC5/segment_images_91_gun/guns_unprocessed_mar5"
+# FILE_FOLDER = "/Volumes/LaCie/segment_images_101_flowers_all/flower_image_repository"
 OUTPUT_FOLDER = os.path.join(FILE_FOLDER, "test_output")
-CONF_THRESHOLD = 0.01
+CONF_THRESHOLD = 0.3
 CREATE_YOLO_CLASS_ID = [90]
 IS_DRAW_BOX = True
 IS_SAVE_UNDETECTED = True
 MOVE_OR_COPY = "copy"
 CLASSES_TO_COMBINE = [89, 90]  # merge these classes onto one label, and draw them to one debug image
 
+# custom_ids_to_global_dict = {
+#   0: 89,
+#   1: 90,
+#   2: 92,
+#   3: 84,
+# }
+
+# guns 2 class
 custom_ids_to_global_dict = {
-  0: 89,
-  1: 90,
-  2: 92,
-  3: 84,
+    0: 109,
+    1: 108,
 }
+
+
+# # flowers 11 class
+# custom_ids_to_global_dict = {
+#   0: 100,
+#   1: 107,
+#   2: 97,
+#   3: 104,
+#   4: 98,
+#   5: 106,
+#   6: 102,
+#   7: 101,
+#   8: 99,
+#   9: 105,
+#   10: 103
+# }
 
 
 def do_yolo_detections(result, image, image_path, existing_detections=None, custom=False):

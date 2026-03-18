@@ -41,7 +41,7 @@ class ToolsClustering:
             "BodyPoses": {"data_column": "mongo_body_landmarks", "is_feet": 1, "mongo_hand_landmarks": None},
             "BodyPoses3D": {"data_column": "mongo_body_landmarks_3D", "is_feet": 1, "mongo_hand_landmarks": None}, # changed this for testing
             "ArmsPoses3D": {"data_column": "mongo_body_landmarks_3D", "is_feet": None, "mongo_hand_landmarks": 1},
-            "ObjectFusion": {"data_column": "mongo_hand_landmarks_norm", "is_feet": None, "mongo_hand_landmarks": None},
+            "ObjectFusion": {"data_column": "mongo_body_landmarks_norm", "is_feet": None, "mongo_hand_landmarks": None},
             "HandsGestures": {"data_column": "mongo_hand_landmarks", "is_feet": None, "mongo_hand_landmarks": 1},
             "HandsPositions": {"data_column": "mongo_hand_landmarks_norm", "is_feet": None, "mongo_hand_landmarks": 1},
             "FingertipsPositions": {"data_column": "mongo_hand_landmarks_norm", "is_feet": None, "mongo_hand_landmarks": 1},
@@ -580,7 +580,18 @@ class ToolsClustering:
         detection_results = self.session.query(Detections).filter_by(image_id=image_id).\
             filter(Detections.conf > self.MIN_DETECTION_CONFIDENCE).all()
         
+        debug = self.VERBOSE  # print full math when VERBOSE is on
+        if debug:
+            print(f"\n{'='*60}")
+            print(f"[DEBUG] query_and_classify_detections image_id={image_id}")
+            # print(f"  left_knuckle={left_knuckle}  right_knuckle={right_knuckle}")
+            # print(f"  left_shoulder={left_shoulder}  right_shoulder={right_shoulder}")
+            # print(f"  Raw detection_results count: {len(detection_results)}")
+            # for d in detection_results:
+            #     print(f"    detection_id={d.detection_id} class_id={d.class_id} conf={d.conf:.3f} bbox_norm={d.bbox_norm}")
+
         if not detection_results:
+            if debug: print(f"  → No detections above MIN_DETECTION_CONFIDENCE={self.MIN_DETECTION_CONFIDENCE}; returning all None")
             return {
                 'left_hand_object': None,
                 'right_hand_object': None,
@@ -594,6 +605,7 @@ class ToolsClustering:
         for d in detection_results:
             bbox = self.parse_bbox_norm(d.bbox_norm)
             if bbox is None:
+                # if debug: print(f"  ✗ detection_id={d.detection_id} — bbox_norm parse failed, skipping")
                 continue
             detections.append({
                 'detection_id': d.detection_id,
@@ -605,7 +617,23 @@ class ToolsClustering:
                 'right': bbox['right'],
                 'bottom': bbox['bottom']
             })
-        
+            if debug:
+                print(f"  ✓ detection_id={d.detection_id} parsed: class_id={d.class_id} conf={d.conf:.3f}")
+                print(f"    bbox → top={bbox['top']} left={bbox['left']} right={bbox['right']} bottom={bbox['bottom']}")
+                # Check each classifier
+                print(f"    is_top_face_object:    {self.is_top_face_object(bbox)}")
+                print(f"      (top<0={bbox['top']<0}, left<0={bbox['left']<0}, right>0={bbox['right']>0}, width={bbox['right']-bbox['left']:.4f}<=MAX={self.MAX_FACE_WIDTH}, extends_into_bottom={max(0,bbox['bottom']):.4f}<=MAX_VERT={self.MAX_FACE_VERT_EXTENSION})")
+                print(f"    is_bottom_face_object: {self.is_bottom_face_object(bbox)}")
+                print(f"    is_mouth_object:       {self.is_mouth_object(bbox)}")
+                print(f"    is_shoulder_object:    {self.is_shoulder_object(bbox, left_shoulder, right_shoulder)}")
+                dist_left  = self.point_to_bbox_distance(left_knuckle, bbox)  if left_knuckle  != self.DEFAULT_HAND_POSITION else None
+                dist_right = self.point_to_bbox_distance(right_knuckle, bbox) if right_knuckle != self.DEFAULT_HAND_POSITION else None
+                print(f"    dist left_knuckle→bbox:  {dist_left}  (TOUCH_THRESHOLD={self.TOUCH_THRESHOLD})")
+                print(f"    dist right_knuckle→bbox: {dist_right}")
+
+        if debug:
+            print(f"  Parsed {len(detections)} valid detections (of {len(detection_results)} raw)")
+
         # Classify relationships using class method
         classified = self.classify_object_hand_relationships(
             detections,
@@ -614,6 +642,10 @@ class ToolsClustering:
             left_shoulder=left_shoulder,
             right_shoulder=right_shoulder,
         )
+        if debug:
+            print(f"  Classification results:")
+            for k, v in classified.items():
+                print(f"    {k}: {v}")
         
         # Convert to compact payload dicts for df storage / DB persistence
         result = {}

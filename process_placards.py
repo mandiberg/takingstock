@@ -51,7 +51,7 @@ ocr_engine = PaddleOCR(
 device = "mps" if torch.backends.mps.is_available() else "cpu"
 print("Using device:", device)
 yolo_model = YOLO("yolov8x.pt").to(device)  # load a pretrained YOLOv8x model
-yolo_custom_model = YOLO("models/takingstock_flowers11_v1_yolov8m/weights/best.pt").to(device)
+yolo_custom_model = YOLO("models/takingstock_flag87_v0_yolov8m/weights/best.pt").to(device)
 
 ocr = OCRTools(DEBUGGING=True)
 yolo = YOLOTools(DEBUGGING=True)
@@ -69,14 +69,15 @@ DO_VALENTINE = False
 use_average_per_row=False # for valentine bbox detection
 DO_OCR = False
 
-FILE_FOLDER = "/Volumes/LaCie/segment_images_101_flowers_all"
-# FILE_FOLDER = "/Volumes/OWC5/segment_images_91_gun"
+FILE_FOLDER = "/Volumes/OWC5/segment_images_87_flag/"
+# FILE_FOLDER = "/Volumes/LaCie/segment_images_89_mask"
+# FILE_FOLDER = "/Volumes/OWC52/segment_images_OWC4"
 # MAKE_VIDEO_CSVS_PATH = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/book_csvs"
 MAKE_VIDEO_CSVS_PATH = None  # to process all images in folder
 OUTPUT_FOLDER = os.path.join(FILE_FOLDER, "test_output")
 BATCH_SIZE = 100
 MASK_THRESHOLD = .15  # HSV distance threshold for mask detection
-CONF_THRESHOLD = 0.35
+CONF_THRESHOLD = 0.3
 RED_THRESH = 180
 RED_DOM = 100
 VAL_MIN_SIZE = 60
@@ -119,19 +120,40 @@ table_cluster_type = cl.set_table_cluster_type(META)
 # }
 
 # flowers 11 class
+# custom_ids_to_global_dict = {
+#   0: 100,
+#   1: 107,
+#   2: 97,
+#   3: 104,
+#   4: 98,
+#   5: 106,
+#   6: 102,
+#   7: 101,
+#   8: 99,
+#   9: 105,
+#   10: 103
+# }
+
+# masks class
 custom_ids_to_global_dict = {
-  0: 100,
-  1: 107,
-  2: 97,
-  3: 104,
-  4: 98,
-  5: 106,
-  6: 102,
-  7: 101,
-  8: 99,
-  9: 105,
-  10: 103
+    0: 113,
+    1: 114,
+    2: 112,
+    3: 110,
+    4: 115,
+    5: 111,
 }
+
+
+# custom_ids_to_global_dict = {
+#     0: 92,
+#     1: 84,
+# }
+
+
+# custom_ids_to_global_dict = {
+#     0: 85,
+# }
 
 # custom_ids_to_global_dict = {
 #   0: 100,

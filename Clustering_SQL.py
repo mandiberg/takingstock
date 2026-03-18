@@ -87,7 +87,8 @@ CLUSTER_TYPE = "ObjectFusion"
 # CLUSTER_TYPE = "HandsGestures"
 # CLUSTER_TYPE = "FingertipsPositions"
 # CLUSTER_TYPE = "HSV" # only works with cluster save, not with assignment
-VERBOSE = True
+VERBOSE = False
+DEBUG_IMAGE_ID = None  # Set to None to disable single-image isolation
 cl = ToolsClustering(CLUSTER_TYPE, VERBOSE=VERBOSE)
 # Note: session will be passed to cl after engine/session creation below
 
@@ -103,7 +104,7 @@ OFFSET = 0
 # SELECT MAX(cmb.image_id) FROM ImagesBodyPoses3D cmb JOIN Encodings e ON cmb.image_id = e.image_id WHERE e.is_feet = 0;
 # START_ID = 129478350 # only used in MODE 1
 START_ID = 0 # only used in MODE 1
- 
+DET_CONF_THRESHOLD = 0.4 # only used for ObjectFusion clustering to filter out low confidence detections
 # WHICH TABLE TO USE?
 # SegmentTable_name = 'SegmentOct20'
 SegmentTable_name = 'SegmentBig_isface'
@@ -258,6 +259,10 @@ if USE_SEGMENT is True and (cl.CLUSTER_TYPE != "Clusters"):
         if cl.CLUSTER_TYPE == "ObjectFusion":
             WHERE += " AND s.image_id NOT IN (SELECT image_id FROM NoDetections) "
             WHERE += " AND s.image_id NOT IN (SELECT image_id FROM NoDetectionsCustom) "
+            WHERE += f" AND h.bbox_norm IS NOT NULL AND h.conf >= {DET_CONF_THRESHOLD} " # ensures we have some kind of detection for ObjectFusion clustering
+            if DEBUG_IMAGE_ID is not None:
+                WHERE += f" AND s.image_id = {DEBUG_IMAGE_ID} "
+                print(f"⚠️  DEBUG MODE: isolating to image_id = {DEBUG_IMAGE_ID}")
     elif MODE in (1,2):
         FROM += f" LEFT JOIN Images{table_cluster_type} ic ON s.image_id = ic.image_id"
         if MODE == 1: 
@@ -279,7 +284,7 @@ if USE_SEGMENT is True and (cl.CLUSTER_TYPE != "Clusters"):
         WHERE = " cluster_id IS NOT NULL "
 
     # WHERE += " AND h.is_body = 1"
-    LIMIT = 40000
+    LIMIT = 10000000
     BATCH_LIMIT = 10000
 
     '''
@@ -562,7 +567,11 @@ def build_col_list(df):
     print("building col list for df columns: ", df.columns)
     col_list = {}
     col_list["left"] = col_list["right"] = col_list["body_lms"] = col_list["face"] = col_list["ObjectFusion"] =[]
-    if "body" in cl.CLUSTER_DATA[cl.CLUSTER_TYPE]["data_column"]:
+    if cl.CLUSTER_TYPE == "ObjectFusion":
+        # for ObjectFusion, we need to get pitch, yaw, roll and object detection columns
+        col_list["ObjectFusion"] = ['pitch', 'yaw', 'roll', 'left_hand_object', 'right_hand_object',
+                          'top_face_object', 'mouth_object', 'shoulder_object']
+    elif "body" in cl.CLUSTER_DATA[cl.CLUSTER_TYPE]["data_column"]:
         # tests data_column, so works for ArmsPoses3D too
         second_column_name = df.columns[1]
         # if the second column == 0, then compress the columsn into a list:
@@ -580,10 +589,6 @@ def build_col_list(df):
         col_list["HSV"] = ["hue", "sat", "val"]
     elif cl.CLUSTER_TYPE == "Clusters":
         col_list["face"] = [col for col in df.columns if col.startswith('dim_')]
-    elif cl.CLUSTER_TYPE == "ObjectFusion":
-        # for ObjectFusion, we need to get pitch, yaw, roll and object detection columns
-        col_list["ObjectFusion"] = ['pitch', 'yaw', 'roll', 'left_hand_object', 'right_hand_object',
-                          'top_face_object', 'mouth_object', 'shoulder_object']
     return col_list
 
 def zero_out_medians(cluster_median):
@@ -1103,10 +1108,11 @@ def save_images_detections(df, engine):
     else:
         print("WARNING: No valid records to save to ImagesDetections")
 
-def prepare_df(df, process_object_detections=True):
+def prepare_df(df, process_object_detections=True, batch_label=None):
     print("columns: ",df.columns)
     print("prepare_df df with cl.CLUSTER_TYPE ", cl.CLUSTER_TYPE, df)
     print("prepare df first row",df.iloc[0])
+    label = f"[{batch_label}] " if batch_label else ""
     columns_to_drop = []
     # apply io.convert_decimals_to_float to face_x, face_y, face_z, and mouth_gap 
     # if faxe_x, face_y, face_z, and mouth_gap are not already floats
@@ -1115,8 +1121,96 @@ def prepare_df(df, process_object_detections=True):
     # if cluster_median column is in the df, unpickle it
     if 'cluster_median' in df.columns:
         df['cluster_median'] = df['cluster_median'].apply(io.unpickle_array)
-    if "body" in cl.CLUSTER_DATA[cl.CLUSTER_TYPE]["data_column"]:
+    if cl.CLUSTER_TYPE == "ObjectFusion":
+
+        print("first row of df",df.iloc[0].to_string())
+        objectfusion_rows_in = len(df)
+        print(f"{label}[COUNT] ObjectFusion rows entering prepare_df: {objectfusion_rows_in}")
+        
+        # Filter: Require body_landmarks_normalized (body pose data is mandatory)
+        # This ensures we have reliable finger position data from body landmarks
+        df = df[df['body_landmarks_normalized'].notna()]
+        print(f"After filtering for body_landmarks_normalized: {len(df)} rows remaining")
+        print(f"{label}[COUNT] Rows with body_landmarks_normalized: {len(df)} / {objectfusion_rows_in}")
+        
+        if len(df) == 0:
+            print("WARNING: No rows with body_landmarks_normalized found. Cannot cluster.")
+            return None
+        
+        # Replace NaN values with None before applying prep functions
+        df['hand_results'] = df['hand_results'].apply(lambda x: None if pd.isna(x) else x)
+        df[['left_hand_landmarks', 'left_hand_world_landmarks', 'left_hand_landmarks_norm', 'right_hand_landmarks', 'right_hand_world_landmarks', 'right_hand_landmarks_norm']] = pd.DataFrame(df['hand_results'].apply(sort.prep_hand_landmarks).tolist(), index=df.index)
+        # Debug: check first row landmarks (using iloc to handle any index)
+        if len(df) > 0 and len(df['left_hand_landmarks_norm'].iloc[0]) > 0:
+            print(f"Sample left_hand_landmarks_norm (first landmark): {df['left_hand_landmarks_norm'].iloc[0][0]}")
+        
+        # Extract finger positions from body landmarks (primary source)
+        # hand_results parameter kept for compatibility but body_landmarks_normalized is used
+        print("\n[DEBUG] Extracting finger positions from body landmarks...")
+        print(f"[DEBUG] df shape: {df.shape}")
+        
+        # CRITICAL: Unpickle body_landmarks_normalized before using
+        print("[DEBUG] Unpickling body_landmarks_normalized...")
+        df['body_landmarks_normalized'] = df['body_landmarks_normalized'].apply(io.unpickle_array)
+        # print(f"[DEBUG] Sample body_landmarks_normalized (first row, after unpickling): {df['body_landmarks_normalized'].iloc[0] if len(df) > 0 else 'N/A'}")
+        
+        knuckle_results = df.apply(lambda row: sort.prep_knuckle_landmarks(row['hand_results'], row['body_landmarks_normalized']), axis=1).tolist()
+        print(f"[DEBUG] prep_knuckle_landmarks returned {len(knuckle_results)} results")
+        if len(knuckle_results) > 0:
+            print(f"[DEBUG] Sample result (first row): {knuckle_results[0]}")
+        
+        df[["left_pointer_knuckle_norm","right_pointer_knuckle_norm","left_source","right_source"]] = pd.DataFrame(
+            knuckle_results, 
+            index=df.index)
+
+        left_body_count = int((df['left_source'] == 'body').sum())
+        right_body_count = int((df['right_source'] == 'body').sum())
+        left_default_count = int((df['left_source'] == 'default').sum())
+        right_default_count = int((df['right_source'] == 'default').sum())
+        left_nondefault_count = int(df['left_pointer_knuckle_norm'].apply(lambda value: value != [0.0, 8.0, 0.0] if isinstance(value, list) else False).sum())
+        right_nondefault_count = int(df['right_pointer_knuckle_norm'].apply(lambda value: value != [0.0, 8.0, 0.0] if isinstance(value, list) else False).sum())
+        print(f"{label}[COUNT] Left knuckles from body/default: {left_body_count}/{left_default_count}")
+        print(f"{label}[COUNT] Right knuckles from body/default: {right_body_count}/{right_default_count}")
+        print(f"{label}[COUNT] Rows with non-default left/right knuckles: {left_nondefault_count}/{right_nondefault_count}")
+        
+        # Log source distribution for monitoring
+        left_source_counts = df['left_source'].value_counts()
+        right_source_counts = df['right_source'].value_counts()
+        print(f"[DEBUG] Left finger position sources: {left_source_counts.to_dict()}")
+        print(f"[DEBUG] Right finger position sources: {right_source_counts.to_dict()}")
+        print(f"[DEBUG] Sample left_pointer_knuckle_norm (first row): {df['left_pointer_knuckle_norm'].iloc[0] if len(df) > 0 else 'N/A'}")
+        print(f"[DEBUG] Sample right_pointer_knuckle_norm (first row): {df['right_pointer_knuckle_norm'].iloc[0] if len(df) > 0 else 'N/A'}")
+        
+        print("after getting finger positions from body landmarks",df.iloc[0].to_string())
+        # df = sort.split_landmarks_to_columns(df, left_col="left_hand_landmarks_norm", right_col="right_hand_landmarks_norm")
+        # df = sort.split_landmarks_to_columns_or_list(df, first_col="left_hand_landmarks_norm", second_col="right_hand_landmarks_norm", structure="cols")
+    # def split_landmarks_to_columns_or_list(self, df, first_col="left_hand_world_landmarks", second_col="right_hand_world_landmarks", structure="cols"):
+        print("after split",df)
+        columns_to_drop = ['face_encodings68', 'face_landmarks', 'body_landmarks', 'body_landmarks_3D','body_landmarks_normalized', 
+                           'hand_results', 'left_hand_landmarks', 'right_hand_landmarks', 
+                           'left_hand_world_landmarks', 'right_hand_world_landmarks',
+                           'left_hand_landmarks_norm', 'right_hand_landmarks_norm']
+    # if "Object" in cl.CLUSTER_TYPE:
+        print("first row before query",df.iloc[0].to_string())
+        # apply query_detections to each image_id to get the object data
+        # df['image_id'].apply(lambda image_id: query_detections(image_id))
+        if process_object_detections:
+            df = cl.process_detections_for_df(df)
+            object_assignment_cols = ['left_hand_object', 'right_hand_object', 'top_face_object', 'mouth_object', 'shoulder_object']
+            rows_with_any_object = int(df[object_assignment_cols].notna().any(axis=1).sum())
+            rows_with_no_objects = int(len(df) - rows_with_any_object)
+            print(f"{label}[COUNT] Rows with any object assignment: {rows_with_any_object}")
+            print(f"{label}[COUNT] Rows with no object assignments: {rows_with_no_objects}")
+            for col in object_assignment_cols:
+                print(f"{label}[COUNT] {col} assigned: {int(df[col].notna().sum())}")
+        else:
+            for col in ['left_hand_object', 'right_hand_object', 'top_face_object', 'mouth_object', 'shoulder_object']:
+                if col not in df.columns:
+                    df[col] = None
+
+        pass
     # if cl.CLUSTER_TYPE in ("BodyPoses", "BodyPoses3D", "ArmsPoses3D"):
+    elif "body" in cl.CLUSTER_DATA[cl.CLUSTER_TYPE]["data_column"]:
         print(f"processing body landmarks for cl.CLUSTER_TYPE: {cl.CLUSTER_TYPE}: cl.CLUSTER_DATA[cl.CLUSTER_TYPE]['data_column']: {cl.CLUSTER_DATA[cl.CLUSTER_TYPE]['data_column']}")
         if "3D" in cl.CLUSTER_DATA[cl.CLUSTER_TYPE]["data_column"]:
             keep_col = "body_landmarks_3D"
@@ -1186,11 +1280,14 @@ def prepare_df(df, process_object_detections=True):
     elif cl.CLUSTER_TYPE == "ObjectFusion":
 
         print("first row of df",df.iloc[0].to_string())
+        objectfusion_rows_in = len(df)
+        print(f"{label}[COUNT] ObjectFusion rows entering prepare_df: {objectfusion_rows_in}")
         
         # Filter: Require body_landmarks_normalized (body pose data is mandatory)
         # This ensures we have reliable finger position data from body landmarks
         df = df[df['body_landmarks_normalized'].notna()]
         print(f"After filtering for body_landmarks_normalized: {len(df)} rows remaining")
+        print(f"{label}[COUNT] Rows with body_landmarks_normalized: {len(df)} / {objectfusion_rows_in}")
         
         if len(df) == 0:
             print("WARNING: No rows with body_landmarks_normalized found. Cannot cluster.")
@@ -1221,6 +1318,16 @@ def prepare_df(df, process_object_detections=True):
         df[["left_pointer_knuckle_norm","right_pointer_knuckle_norm","left_source","right_source"]] = pd.DataFrame(
             knuckle_results, 
             index=df.index)
+
+        left_body_count = int((df['left_source'] == 'body').sum())
+        right_body_count = int((df['right_source'] == 'body').sum())
+        left_default_count = int((df['left_source'] == 'default').sum())
+        right_default_count = int((df['right_source'] == 'default').sum())
+        left_nondefault_count = int(df['left_pointer_knuckle_norm'].apply(lambda value: value != [0.0, 8.0, 0.0] if isinstance(value, list) else False).sum())
+        right_nondefault_count = int(df['right_pointer_knuckle_norm'].apply(lambda value: value != [0.0, 8.0, 0.0] if isinstance(value, list) else False).sum())
+        print(f"{label}[COUNT] Left knuckles from body/default: {left_body_count}/{left_default_count}")
+        print(f"{label}[COUNT] Right knuckles from body/default: {right_body_count}/{right_default_count}")
+        print(f"{label}[COUNT] Rows with non-default left/right knuckles: {left_nondefault_count}/{right_nondefault_count}")
         
         # Log source distribution for monitoring
         left_source_counts = df['left_source'].value_counts()
@@ -1245,6 +1352,13 @@ def prepare_df(df, process_object_detections=True):
         # df['image_id'].apply(lambda image_id: query_detections(image_id))
         if process_object_detections:
             df = cl.process_detections_for_df(df)
+            object_assignment_cols = ['left_hand_object', 'right_hand_object', 'top_face_object', 'mouth_object', 'shoulder_object']
+            rows_with_any_object = int(df[object_assignment_cols].notna().any(axis=1).sum())
+            rows_with_no_objects = int(len(df) - rows_with_any_object)
+            print(f"{label}[COUNT] Rows with any object assignment: {rows_with_any_object}")
+            print(f"{label}[COUNT] Rows with no object assignments: {rows_with_no_objects}")
+            for col in object_assignment_cols:
+                print(f"{label}[COUNT] {col} assigned: {int(df[col].notna().sum())}")
         else:
             for col in ['left_hand_object', 'right_hand_object', 'top_face_object', 'mouth_object', 'shoulder_object']:
                 if col not in df.columns:
@@ -1467,10 +1581,11 @@ def fetch_and_prepare_batch(batch_df, batch_num):
         if missing_image_ids:
             print(f"[Batch {batch_num}] Fetching MongoDB encodings for missing IDs only...")
             missing_df = batch_df[batch_df['image_id'].isin(missing_image_ids)].copy()
+            print(f"[Batch {batch_num}] [COUNT] Missing rows before Mongo fetch: {len(missing_df)}")
             missing_df = fetch_mongo_for_batch(missing_df)
 
             print(f"[Batch {batch_num}] Preparing missing rows and classifying detections...")
-            missing_prepared = prepare_df(missing_df)
+            missing_prepared = prepare_df(missing_df, batch_label=f"Batch {batch_num} missing")
 
             if missing_prepared is not None and len(missing_prepared) > 0:
                 missing_prepared['newly_processed_detection'] = True
@@ -1493,6 +1608,17 @@ def fetch_and_prepare_batch(batch_df, batch_num):
                     else:
                         batch_prepared[col] = batch_prepared[missing_col].combine_first(batch_prepared[col])
                     batch_prepared.drop(columns=[missing_col], inplace=True)
+
+                print(f"[Batch {batch_num}] [COUNT] Missing rows surviving prepare_df: {len(missing_prepared)}")
+                if 'left_pointer_knuckle_norm' in batch_prepared.columns:
+                    print(f"[Batch {batch_num}] [COUNT] Batch rows with left knuckle column populated: {int(batch_prepared['left_pointer_knuckle_norm'].notna().sum())}")
+                if 'right_pointer_knuckle_norm' in batch_prepared.columns:
+                    print(f"[Batch {batch_num}] [COUNT] Batch rows with right knuckle column populated: {int(batch_prepared['right_pointer_knuckle_norm'].notna().sum())}")
+                for col in ['left_hand_object', 'right_hand_object', 'top_face_object', 'mouth_object', 'shoulder_object']:
+                    if col in batch_prepared.columns:
+                        print(f"[Batch {batch_num}] [COUNT] Batch {col} populated: {int(batch_prepared[col].notna().sum())}")
+            else:
+                print(f"[Batch {batch_num}] [COUNT] Missing rows surviving prepare_df: 0")
         else:
             print(f"[Batch {batch_num}] No missing IDs; skipping MongoDB fetch.")
     else:
@@ -1502,7 +1628,7 @@ def fetch_and_prepare_batch(batch_df, batch_num):
 
         # Prepare df (includes MySQL Detections query via cl.process_detections_for_df)
         print(f"[Batch {batch_num}] Preparing data (includes MySQL queries)...")
-        batch_prepared = prepare_df(batch_df)
+        batch_prepared = prepare_df(batch_df, batch_label=f"Batch {batch_num}")
     
     return batch_prepared
 
