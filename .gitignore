@@ -171,3 +171,4 @@ model_files/model_isnotface/topics_isnotface_96.txt
 *.task
 openaiAPI.py
 config.ini
+bin_sorter/taking_stock_bin_sorter/README.md
