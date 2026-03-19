@@ -32,7 +32,7 @@ NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 
 engine = create_engine("mysql+pymysql://{user}:{pw}@/{db}?unix_socket={socket}".format(
     user=db['user'], pw=db['pass'], db=db['name'], socket=db['unix_socket']
-), poolclass=NullPool)
+), pool_pre_ping=True, pool_recycle=600, poolclass=NullPool)
 
 # metadata = MetaData(engine)
 Session = sessionmaker(bind=engine)
@@ -134,7 +134,7 @@ def process_batch(batch_start, batch_end):
     # Each thread needs its own session and mongo client
     thread_engine = create_engine("mysql+pymysql://{user}:{pw}@/{db}?unix_socket={socket}".format(
         user=db['user'], pw=db['pass'], db=db['name'], socket=db['unix_socket']
-    ), poolclass=NullPool)
+    ), pool_pre_ping=True, pool_recycle=600, poolclass=NullPool)
     ThreadSession = sessionmaker(bind=thread_engine)
     thread_session = ThreadSession()
     thread_mongo_client = pymongo.MongoClient("mongodb://localhost:27017/")

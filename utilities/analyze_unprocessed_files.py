@@ -31,7 +31,7 @@ HelperTable_name = "SegmentHelper_nov2025_SQL_only"
 
 engine = create_engine("mysql+pymysql://{user}:{pw}@/{db}?unix_socket={socket}".format(
     user=db['user'], pw=db['pass'], db=db['name'], socket=db['unix_socket']
-), poolclass=NullPool)
+), pool_pre_ping=True, pool_recycle=600, poolclass=NullPool)
 
 Base.metadata.bind = engine
 

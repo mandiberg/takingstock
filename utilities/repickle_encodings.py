@@ -24,7 +24,7 @@ NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 def repickle_encodings():
     # Create a SQLAlchemy engine and session
     engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}"
-                                    .format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']), poolclass=NullPool)
+                                    .format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']), pool_pre_ping=True, pool_recycle=600, poolclass=NullPool)
     # metadata = MetaData(engine)
     Session = sessionmaker(bind=engine)
     session = Session()

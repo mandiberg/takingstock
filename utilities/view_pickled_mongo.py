@@ -5,8 +5,15 @@ import pickle
 from mediapipe.framework.formats import landmark_pb2
 import math
 
+from pathlib import Path
+
+# importing project-specific models
 import sys
-sys.path.insert(1, '/Users/michaelmandiberg/Documents/GitHub/facemap/')
+import os
+ROOT_GITHUB = os.path.join(Path.home(), "Documents/GitHub/takingstock/")
+# caution: path[0] is reserved for script path (or '' in REPL)
+sys.path.insert(1, ROOT_GITHUB)
+
 from mp_db_io import DataIO
 
 IS_SSD = True
@@ -18,19 +25,19 @@ mongo_client = pymongo.MongoClient(io.dbmongo['host'])
 mongo_db = mongo_client[io.dbmongo['name']]
 # mongo_collection = mongo_db[io.dbmongo['collection']]
 
-world_body_collection = mongo_db["body_world_landmarks"]
+# world_body_collection = mongo_db["body_world_landmarks"]
 
-# bboxnormed_collection = mongo_db["body_landmarks_norm"]
+bboxnormed_collection = mongo_db["body_landmarks_norm"]
 # n_phonebbox_collection= mongo_db["bboxnormed_phone"]
 
 SUBSET_LANDMARKS = [i for i in range(13,22)]
 
-image_id = 125829255
+image_id = 17830292
 #
 #
 # 10152053
 
-image_id2 = 10145859
+image_id2 = 95350849
 # 10145859
 # 10146238
 # 10576048
@@ -41,16 +48,16 @@ image_id2 = 10145859
 def get_landmarks(image_id):
 
     # for normed bbox version
-    # cursor = bboxnormed_collection.find({"image_id": image_id})
-    # for doc in cursor: 
-    #     nlms = pickle.loads(doc["nlms"])
-    #     return nlms
+    cursor = bboxnormed_collection.find({"image_id": image_id})
+    for doc in cursor: 
+        nlms = pickle.loads(doc["nlms"])
+        return nlms
 
     # for world landmarks version
-    cursor = world_body_collection.find({"image_id": image_id})
-    for doc in cursor: 
-        lms3D = pickle.loads(doc["body_world_landmarks"])
-        return lms3D
+    # cursor = world_body_collection.find({"image_id": image_id})
+    # for doc in cursor: 
+    #     lms3D = pickle.loads(doc["body_world_landmarks"])
+    #     return lms3D
 
 
 lms1 = get_landmarks(image_id)

@@ -31,7 +31,7 @@ SegmentTable_name = 'SegmentOct20'
 # Connect to the database
 engine = create_engine("mysql+pymysql://{user}:{pw}@/{db}?unix_socket={socket}".format(
     user=db['user'], pw=db['pass'], db=db['name'], socket=db['unix_socket']
-), poolclass=NullPool)
+), pool_pre_ping=True, pool_recycle=600, poolclass=NullPool)
 
 # # metadata = MetaData(engine)
 # Session = sessionmaker(bind=engine)
@@ -72,7 +72,7 @@ class SegmentTable(Base):
 # Connect to the second database
 engine2 = create_engine("mysql+pymysql://{user}:{pw}@/{db}?unix_socket={socket}".format(
     user=db['user'], pw=db['pass'], db='ministock1023', socket=db['unix_socket']
-), poolclass=NullPool)
+), pool_pre_ping=True, pool_recycle=600, poolclass=NullPool)
 
 # Bind the engine2 to a new Base class (for the second database)
 Base2 = declarative_base()
