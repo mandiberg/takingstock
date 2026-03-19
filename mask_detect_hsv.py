@@ -24,7 +24,7 @@ yolo = YOLOTools(DEBUGGING=True)
 
 engine = create_engine("mysql+pymysql://{user}:{pw}@/{db}?unix_socket={socket}".format(
     user=db['user'], pw=db['pass'], db=db['name'], socket=db['unix_socket']
-))
+), pool_pre_ping=True, pool_recycle=600)
 
 # metadata = MetaData(engine)
 metadata = MetaData() # apparently don't pass engine

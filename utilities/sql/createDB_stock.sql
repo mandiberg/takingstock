@@ -320,7 +320,7 @@ CREATE TABLE YoloClasses (
     model_version VARCHAR(20)
 );
 
-CREATE TABLE DetectionsTest (
+CREATE TABLE Detections (
     detection_id INT AUTO_INCREMENT PRIMARY KEY,
     image_id INT NOT NULL,
     class_id INT NOT NULL,

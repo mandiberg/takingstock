@@ -42,22 +42,31 @@ USE_DF_SORTED = False  # if True it will use the df_sorted format from make_vide
 USE_RAW_PATHS = False # this skips the site_name_id and joins the ORIGIN to the filename in the CSV directly
 USE_HASH_FOLDERS = True  # if True it will create hash folders in the destination folder
 FROM_SSD_TO_SSD = False # overrides io settings to move from the ORIGIN_SSD to DEST 
-ORIGIN_SSD = "/Volumes/SSD4_Green/segment_images_OWC4"
-ORIGIN_SSD = "/Volumes/LaCie/segment_images_book_clock_bowl"
+# ORIGIN_SSD = "/Volumes/SSD4_Green/segment_images_detected_63_67"
+ORIGIN_SSD = "/Volumes/LaCie/segment_images_101_flowers_all"
+# ORIGIN_SSD = "/Volumes/OWC52/segment_images_OWC4"
+# ORIGIN_SSD = "/Volumes/OWC5/segment_images_94_piggybank"
 IS_TEST = False
 OUTPUT_INTERVAL = 1000
+if FROM_SSD_TO_SSD == False: MOVE_ORIGINAL_FILE = False  # FORCE only allow moving files when going from SSD to SSD
 PRINT_EACH_FILE = False
-ORIGIN = "segment_images_ALL" # this needs to be path to segment_images/images_*
+ORIGIN = "segment_images_COCO" # this needs to be path to segment_images/images_*
 # DEST = os.path.join(io.ROOT_DBx, "NMLdeshard")
-DEST = "/Volumes/SSD4_Green/segment_images_detected_63_67"
-# DEST = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/segment_images_detected_63_67"  # for testing
+DEST = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/debug_bodies" 
+# DEST = "/Volumes/OWC5/segment_images_book_clock_bowl"   # 
+# DEST = "/Volumes/LaCie/focus_clusters/segment_images_103_peony"  # 250k for headphones
+# DEST = "/Volumes/SSD4_Green/segment_images_67_phone_undetected"  # for testing
 if IS_TEST:
     # to run a smaller test, put a few files in the test folder
     DEST = DEST + "_test"
     CSV_FOLDER = CSV_FOLDER + "_test"
     print(f"Running in test mode. Using DEST: {DEST} and CSV_FOLDER: {CSV_FOLDER}")
-START = 3200000
+START = 0
 # START = 0  # for testing restart
+
+#############################################################################
+MOVE_ORIGINAL_FILE = False # CAREFUL!!!!!!!!! IF TRUE, DELETES ORIGINAL FILES
+#############################################################################
 
 # check for site folders
 io.check_site_folders(DEST)
@@ -106,8 +115,12 @@ def move_file_pair(original_path, destination_path):
             if not os.path.exists(destination_path):
                 if PRINT_EACH_FILE:
                     print(f" ++ Copying file: {original_path} to {destination_path}")
-                # Copy the file to the destination location, but leave the original file in place
-                shutil.copy(original_path, destination_path)
+                if MOVE_ORIGINAL_FILE:
+                    # Move the file to the destination location
+                    shutil.move(original_path, destination_path)
+                else:
+                    # Copy the file to the destination location, but leave the original file in place
+                    shutil.copy(original_path, destination_path)
             else:
                 if PRINT_EACH_FILE:
                     print(f"File already exists: {destination_path}")
@@ -237,6 +250,8 @@ def main():
         csv_file_path = os.path.join(CSV_FOLDER, csv_file)
         print(f"Processing CSV file: {csv_file}")
         print(f"moving to {DEST}")
+        if FROM_SSD_TO_SSD:
+            print(f"  from SSD path: {ORIGIN_SSD}")
         i = 0
         print("Starting to move files from CSV... starting at ", START)
         move_files_from_csv(csv_file_path, start=START)

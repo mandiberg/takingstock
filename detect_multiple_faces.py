@@ -451,14 +451,14 @@ def init_session():
     if IS_ULTRA:
         # regular brew installed mysql
         engine = create_engine("mysql+pymysql://{user}:{pw}@localhost/{db}"
-                                        .format(db=db['name'], user=db['user'], pw=db['pass']), poolclass=NullPool)
+                                        .format(db=db['name'], user=db['user'], pw=db['pass']), pool_pre_ping=True, pool_recycle=600, poolclass=NullPool)
         # engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}"
         #                                 .format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']), poolclass=NullPool)
     else:
         # macbook pro with unix socket
         engine = create_engine("mysql+pymysql://{user}:{pw}@/{db}?unix_socket={socket}".format(
             user=db['user'], pw=db['pass'], db=db['name'], socket=db['unix_socket']
-        ), poolclass=NullPool)
+        ), pool_pre_ping=True, pool_recycle=600, poolclass=NullPool)
 
     # metadata = MetaData(engine)
     metadata = MetaData() # apparently don't pass engine

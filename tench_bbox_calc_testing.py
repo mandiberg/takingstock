@@ -823,10 +823,10 @@ if not io.IS_TENCH:
         # for MM's MAMP config
         engine = create_engine("mysql+pymysql://{user}:{pw}@/{db}?unix_socket={socket}".format(
             user=db['user'], pw=db['pass'], db=db['name'], socket=db['unix_socket']
-        ), poolclass=NullPool)
+        ), pool_pre_ping=True, pool_recycle=600, poolclass=NullPool)
     else:
         engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}"
-                                    .format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']), poolclass=NullPool)
+                                    .format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']), pool_pre_ping=True, pool_recycle=600, poolclass=NullPool)
     # metadata = MetaData(engine)
     Session = sessionmaker(bind=engine)
     session = Session()
@@ -1226,32 +1226,9 @@ def prep_encodings_NN(df_segment):
             return [row['lum']*HSV_NORMS["LUM"], row['lum_torso_bb']*HSV_NORMS["LUM"]]
         else:
             return [row['lum']*HSV_NORMS["LUM"], row['lum_torso']*HSV_NORMS["LUM"]]    
-    
-    def set_sort_col():
-        if SORT_TYPE in ["body3D", "arms3D"] or CLUSTER_TYPE in ["BodyPoses3D", "ArmsPoses3D"]:
-            # have to handle both, because handposefusion redefines SORT_TYPE 
-            source_col = sort_column = "body_landmarks_3D"
-        elif SORT_TYPE == "planar_body":
-            if CLUSTER_TYPE == "HandsPositions":
-                source_col = sort_column = "hand_landmarks"
-                # source_col = None
-                # source_col_2 = "right_hand_landmarks_norm"
-            else:
-                sort_column = "body_landmarks_array"
-                source_col = "body_landmarks_normalized"
-                # source_col_2 = None
-        elif SORT_TYPE == "planar_hands" or SORT_TYPE == "planar_hands_USE_ALL" or SORT_TYPE == "fingertips_positions":
-            source_col = sort_column = "hand_landmarks"
-            # source_col = sort_column = "right_hand_landmarks_norm"
-            # source_col = None
-            # source_col_2 = "right_hand_landmarks_norm"
-        elif SORT_TYPE == "128d":
-            source_col = sort_column = "face_encodings68"
-
-        return sort_column, source_col
 
     print("prep_encodings_NN df_segment columns", df_segment.columns)
-    sort_column, source_col = set_sort_col()
+    sort_column, source_col = sort.get_sort_column_mapping(SORT_TYPE, CLUSTER1)
     print(f"degugging df_segment prep encodings for {source_col}:", df_segment.columns)      
     # drop rows where body_landmarks_normalized is None
     # TK this needs to be adapted to handle left vs right hand. 

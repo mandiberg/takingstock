@@ -26,11 +26,11 @@ NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 
 # ADD TO SEGMENTS WHEN SQL/WORKBENCH IS BORKING
 
-HelperTable_name = "SegmentHelper_nov2025_SQL_only_last3K_hands"
+HelperTable_name = "SegmentHelper_dec2025_no_images"
 
 engine = create_engine("mysql+pymysql://{user}:{pw}@/{db}?unix_socket={socket}".format(
     user=db['user'], pw=db['pass'], db=db['name'], socket=db['unix_socket']
-), poolclass=NullPool)
+), pool_pre_ping=True, pool_recycle=600, poolclass=NullPool)
 
 Base.metadata.bind = engine
 
@@ -46,13 +46,16 @@ class HelperTable(Base):
 # engine = create_engine("mysql+pymysql://user:pass@localhost/db?unix_socket=/Applications/MAMP/tmp/mysql/mysql.sock")
 
 chunksize = 50000
-reader = pd.read_csv("/Volumes/OWC4/segment_images/mongo_exports_oct19_sets/SegmentHelper_nov2025_SQL_only_last3K_hands.txt", names=["image_id"])
+reader = pd.read_csv("/Users/michaelmandiberg/Downloads/Images_202512050906-noimages.csv", names=["image_id"])
 original_reader = reader.copy()
 # if first row in reader first column is "image_id", skip it
 first_row = next(reader.iterrows())[1]
 if first_row[0] == "image_id":
     print("Skipping header row")
     # skip first row
+    reader = pd.read_csv("/Users/michaelmandiberg/Downloads/Images_202512050906-noimages.csv", names=["image_id"], skiprows=1)
+    # ensure image_id is integer
+    reader["image_id"] = reader["image_id"].astype(int)
 else:
     reader = original_reader
 reader.to_sql(HelperTable_name, con=engine, if_exists="append", index=False, chunksize=chunksize)

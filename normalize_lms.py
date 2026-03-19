@@ -110,10 +110,10 @@ if db['unix_socket']:
     # for MM's MAMP config
     engine = create_engine("mysql+pymysql://{user}:{pw}@/{db}?unix_socket={socket}".format(
         user=db['user'], pw=db['pass'], db=db['name'], socket=db['unix_socket']
-    ), poolclass=NullPool)
+    ), pool_pre_ping=True, pool_recycle=600, poolclass=NullPool)
 else:
     engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}"
-                                .format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']), poolclass=NullPool)
+                                .format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']), pool_pre_ping=True, pool_recycle=600, poolclass=NullPool)
 
 
 image_edge_multiplier = [1.5,1.5,2,1.5] # bigger portrait

@@ -1,21 +1,47 @@
-from sqlalchemy import create_engine, select, Column, Integer, Float, ForeignKey, BLOB
+from sqlalchemy import create_engine, select, text, bindparam, Column, Integer, Float, ForeignKey, BLOB
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import NullPool
-from my_declarative_base import Base, Images
+from my_declarative_base import Base, Images, Detections
 import pickle
 import numpy as np
+import json
 
 class ToolsClustering:
     """Store key clustering info for use across codebase"""
 
-    def __init__(self, CLUSTER_TYPE, VERBOSE=False):
+    def __init__(self, CLUSTER_TYPE, session=None, VERBOSE=False):
         self.VERBOSE = VERBOSE
         self.CLUSTER_TYPE = CLUSTER_TYPE
         self.CLUSTER_MEDIANS = None
+        self.session = session
+        # Object-hand relationship constants
+        self.TOUCH_THRESHOLD = 0.5  # face height units
+        self.CLASS_ID_WEIGHT = 10  # multiplier to give more weight to class_id in clustering (since it's categorical and we want it to separate well)
+        self.OVERLAP_IOU_THRESHOLD = 0.5
+        self.HIGH_CONFIDENCE_THRESHOLD = 0.9
+        self.CONFIDENCE_DIFF_THRESHOLD = 0.3
+        self.MIN_DETECTION_CONFIDENCE = 0.4
+        self.DEFAULT_HAND_POSITION = [0.0, 8.0, 0.0]
+        # Face object constraints to avoid large background objects
+        self.MAX_FACE_WIDTH = 2.0  # max width of left+right to be considered face object
+        self.MAX_FACE_VERT_EXTENSION = 0.75  # max how far object can extend into opposite zone
+        
+        # Feature standardization settings for ObjectFusion
+        self.USE_FEATURE_STANDARDIZATION = True  # Use StandardScaler to normalize all features to similar scale
+        self.FEATURE_WEIGHTS = {
+            'face_angle': 0.3,      # pitch, yaw, roll - LOW weight (prevent face-angle mega-clusters)
+            'class_id': 5.0,        # class_id - VERY HIGH weight at RAW SCALE (0-107) to force object-type separation
+            'confidence': 0.2,      # detection confidence - very low weight
+            'bbox': 1.0,            # bbox coordinates - reduced to standard weight
+            'has_object': 3.0,      # binary indicator - high weight but lower than class_id
+        }
+        # Store fitted scaler for inverse transform during median calculation
+        self.feature_scaler = None
         self.CLUSTER_DATA = {
             "BodyPoses": {"data_column": "mongo_body_landmarks", "is_feet": 1, "mongo_hand_landmarks": None},
             "BodyPoses3D": {"data_column": "mongo_body_landmarks_3D", "is_feet": 1, "mongo_hand_landmarks": None}, # changed this for testing
             "ArmsPoses3D": {"data_column": "mongo_body_landmarks_3D", "is_feet": None, "mongo_hand_landmarks": 1},
+            "ObjectFusion": {"data_column": "mongo_body_landmarks_norm", "is_feet": None, "mongo_hand_landmarks": None},
             "HandsGestures": {"data_column": "mongo_hand_landmarks", "is_feet": None, "mongo_hand_landmarks": 1},
             "HandsPositions": {"data_column": "mongo_hand_landmarks_norm", "is_feet": None, "mongo_hand_landmarks": 1},
             "FingertipsPositions": {"data_column": "mongo_hand_landmarks_norm", "is_feet": None, "mongo_hand_landmarks": 1},
@@ -161,3 +187,818 @@ class ToolsClustering:
         # print(cluster_id)
         return cluster_id, cluster_dist
 
+    # ==================== OBJECT-HAND RELATIONSHIP METHODS ====================
+
+    def parse_bbox_norm(self, bbox_norm):
+        """Parse bbox_norm from various formats to dict."""
+        if bbox_norm is None:
+            return None
+        if isinstance(bbox_norm, dict):
+            return bbox_norm
+        if isinstance(bbox_norm, str):
+            try:
+                # Handle double-encoded JSON
+                parsed = json.loads(bbox_norm)
+                if isinstance(parsed, str):
+                    parsed = json.loads(parsed)
+                return parsed
+            except:
+                return None
+        return None
+
+    def detection_to_list(self, detection_dict):
+        """Convert detection dict to 6-element list: [class_id, conf, top, left, right, bottom]."""
+        if detection_dict is None:
+            return None
+        return [
+            detection_dict['class_id'],
+            detection_dict['conf'],
+            detection_dict['top'],
+            detection_dict['left'],
+            detection_dict['right'],
+            detection_dict['bottom']
+        ]
+
+    def detection_to_payload(self, detection_dict):
+        """Convert detection dict to a compact payload for DataFrame/DB use."""
+        if detection_dict is None:
+            return None
+
+        return {
+            'detection_id': int(detection_dict['detection_id']),
+            'class_id': float(detection_dict['class_id']),
+            'conf': float(detection_dict['conf']),
+            'top': float(detection_dict['top']),
+            'left': float(detection_dict['left']),
+            'right': float(detection_dict['right']),
+            'bottom': float(detection_dict['bottom']),
+        }
+
+    def calc_iou(self, bbox1, bbox2):
+        """Calculate Intersection over Union between two bboxes."""
+        x_left = max(bbox1['left'], bbox2['left'])
+        x_right = min(bbox1['right'], bbox2['right'])
+        y_top = max(bbox1['top'], bbox2['top'])
+        y_bottom = min(bbox1['bottom'], bbox2['bottom'])
+        
+        if x_right < x_left or y_bottom < y_top:
+            return 0.0
+        
+        intersection = (x_right - x_left) * (y_bottom - y_top)
+        area1 = (bbox1['right'] - bbox1['left']) * (bbox1['bottom'] - bbox1['top'])
+        area2 = (bbox2['right'] - bbox2['left']) * (bbox2['bottom'] - bbox2['top'])
+        union = area1 + area2 - intersection
+        
+        return intersection / union if union > 0 else 0.0
+
+    def point_to_bbox_distance(self, point, bbox):
+        """
+        Calculate minimum distance from a point (x, y) to bbox edges.
+        Returns 0 if point is inside bbox, otherwise returns distance to nearest edge.
+        """
+        px, py = point[0], point[1]  # x, y from knuckle coords
+        
+        # Check if inside bbox
+        if bbox['left'] <= px <= bbox['right'] and bbox['top'] <= py <= bbox['bottom']:
+            return 0.0
+        
+        # Calculate distance to each edge
+        dx = max(bbox['left'] - px, 0, px - bbox['right'])
+        dy = max(bbox['top'] - py, 0, py - bbox['bottom'])
+        
+        return (dx**2 + dy**2)**0.5
+
+    def is_touching_hand(self, knuckle_pos, bbox):
+        """Check if knuckle is within TOUCH_THRESHOLD of bbox."""
+        if knuckle_pos == self.DEFAULT_HAND_POSITION:
+            return False
+        dist = self.point_to_bbox_distance(knuckle_pos, bbox)
+        return dist <= self.TOUCH_THRESHOLD
+
+    def is_top_face_object(self, bbox):
+        """Check if object is on top of face (above nose, spans both sides)."""
+        # Top of bbox is above nose (in this coord system, negative y is above)
+        # AND bbox spans both sides of nose (has both positive and negative x)
+        # AND object is not too wide (max width constraint)
+        # AND object doesn't extend too far into bottom zone
+        width = bbox['right'] - bbox['left']
+        extends_into_bottom = max(0, bbox['bottom'])  # how far does it go into positive y
+        
+        return (bbox['top'] < 0 and 
+                bbox['left'] < 0 and 
+                bbox['right'] > 0 and
+                width <= self.MAX_FACE_WIDTH and
+                extends_into_bottom <= self.MAX_FACE_VERT_EXTENSION)
+
+    def is_bottom_face_object(self, bbox):
+        """Check if object is on bottom of face (below nose, spans both sides)."""
+        # Bottom of bbox is below nose (positive y)
+        # AND bbox spans both sides of nose
+        # AND object is not too wide (max width constraint)
+        # AND object doesn't extend too far into top zone
+        width = bbox['right'] - bbox['left']
+        extends_into_top = max(0, -bbox['top'])  # how far does it go into negative y
+        
+        return (bbox['bottom'] > 0 and 
+                bbox['left'] < 0 and 
+                bbox['right'] > 0 and
+                width <= self.MAX_FACE_WIDTH and
+                extends_into_top <= self.MAX_FACE_VERT_EXTENSION)
+
+    def is_mouth_object(self, bbox):
+        """Check if object is on mouth area with zero top-zone tolerance."""
+        width = bbox['right'] - bbox['left']
+        extends_into_top = max(0, -bbox['top'])
+
+        return (bbox['bottom'] > 0 and
+                bbox['left'] < 0 and
+                bbox['right'] > 0 and
+                width <= self.MAX_FACE_WIDTH and
+                extends_into_top <= 0.0)
+
+    def _extract_xy_from_landmark(self, landmark):
+        """Extract (x, y) from a landmark in object/dict/list form."""
+        if landmark is None:
+            return None
+
+        if hasattr(landmark, 'x') and hasattr(landmark, 'y'):
+            return [float(landmark.x), float(landmark.y)]
+
+        if isinstance(landmark, dict):
+            if 'x' in landmark and 'y' in landmark:
+                return [float(landmark['x']), float(landmark['y'])]
+            return None
+
+        if isinstance(landmark, (list, tuple, np.ndarray)) and len(landmark) >= 2:
+            return [float(landmark[0]), float(landmark[1])]
+
+        return None
+
+    def extract_shoulder_points(self, body_landmarks_normalized):
+        """Extract left/right shoulder points (landmarks 11/12) as [x, y]."""
+        if body_landmarks_normalized is None:
+            return None, None
+
+        try:
+            landmarks = None
+            if hasattr(body_landmarks_normalized, 'landmark'):
+                landmarks = body_landmarks_normalized.landmark
+            elif isinstance(body_landmarks_normalized, (list, tuple, np.ndarray)):
+                landmarks = body_landmarks_normalized
+
+            if landmarks is None or len(landmarks) <= 12:
+                return None, None
+
+            left_shoulder = self._extract_xy_from_landmark(landmarks[11])
+            right_shoulder = self._extract_xy_from_landmark(landmarks[12])
+            return left_shoulder, right_shoulder
+        except Exception:
+            return None, None
+
+    def is_shoulder_object(self, bbox, left_shoulder, right_shoulder):
+        """
+        Check if object crosses the shoulder band.
+        Shoulder band is the line from lm11 to lm12, extended 1.0 unit lower.
+        """
+        if left_shoulder is None or right_shoulder is None:
+            return False
+
+        x1, y1 = left_shoulder
+        x2, y2 = right_shoulder
+
+        shoulder_x_min = min(x1, x2)
+        shoulder_x_max = max(x1, x2)
+
+        if bbox['right'] < shoulder_x_min or bbox['left'] > shoulder_x_max:
+            return False
+
+        overlap_left = max(bbox['left'], shoulder_x_min)
+        overlap_right = min(bbox['right'], shoulder_x_max)
+        if overlap_right < overlap_left:
+            return False
+
+        if abs(x2 - x1) < 1e-9:
+            shoulder_y_min = min(y1, y2)
+            shoulder_y_max = max(y1, y2)
+        else:
+            def y_on_shoulder_line(x_val):
+                t = (x_val - x1) / (x2 - x1)
+                return y1 + t * (y2 - y1)
+
+            y_left = y_on_shoulder_line(overlap_left)
+            y_right = y_on_shoulder_line(overlap_right)
+            y_mid = y_on_shoulder_line((overlap_left + overlap_right) / 2.0)
+            shoulder_y_min = min(y_left, y_right, y_mid)
+            shoulder_y_max = max(y_left, y_right, y_mid)
+
+        band_top = shoulder_y_min
+        band_bottom = shoulder_y_max + 1.0
+
+        return not (bbox['bottom'] < band_top or bbox['top'] > band_bottom)
+
+    def resolve_overlapping_detections(self, detections):
+        """
+        Resolve overlapping detections by keeping the best one based on confidence rules.
+        Returns filtered list of detections.
+        """
+        if len(detections) <= 1:
+            return detections
+        
+        filtered = []
+        used_indices = set()
+        
+        for i, det1 in enumerate(detections):
+            if i in used_indices:
+                continue
+                
+            best_det = det1
+            
+            for j, det2 in enumerate(detections):
+                if j <= i or j in used_indices:
+                    continue
+                    
+                iou = self.calc_iou(det1['bbox'], det2['bbox'])
+                
+                if iou >= self.OVERLAP_IOU_THRESHOLD:
+                    # Overlapping detections - resolve based on confidence
+                    conf1, conf2 = det1['conf'], det2['conf']
+                    conf_diff = abs(conf1 - conf2)
+                    
+                    conf_diff_threshold_scaled_to_iou = self.CONFIDENCE_DIFF_THRESHOLD - (self.CONFIDENCE_DIFF_THRESHOLD * iou)
+                    if conf1 >= self.HIGH_CONFIDENCE_THRESHOLD or conf2 >= self.HIGH_CONFIDENCE_THRESHOLD or conf_diff >= conf_diff_threshold_scaled_to_iou:
+                        winner = det1 if conf1 >= conf2 else det2
+                        loser = det2 if conf1 >= conf2 else det1
+                        if self.VERBOSE:
+                            print(f"  ✅ OVERLAP RESOLVED: Chose class {winner['class_id']} (conf={winner['conf']:.2f}) over class {loser['class_id']} (conf={loser['conf']:.2f}), IoU={iou:.2f}")
+                        best_det = winner
+                        used_indices.add(j)
+                    
+                    if det1['class_id'] == det2['class_id']:
+                        # same class...
+                        if iou >= self.OVERLAP_IOU_THRESHOLD*1.5:
+                            # take the union of the boxes
+                            new_bbox = {
+                                'top': min(det1['bbox']['top'], det2['bbox']['top']),
+                                'left': min(det1['bbox']['left'], det2['bbox']['left']),
+                                'right': max(det1['bbox']['right'], det2['bbox']['right']),
+                                'bottom': max(det1['bbox']['bottom'], det2['bbox']['bottom']),
+                            }
+                            best_det['bbox'] = new_bbox
+                            print(f"  🔄 MERGED SAME CLASS OVERLAP: class {det1['class_id']} (conf={det1['conf']:.2f}) and class {det2['class_id']} (conf={det2['conf']:.2f}), IoU={iou:.2f} - merged bbox")
+                        else:
+                            # keep higher confidence
+                            winner = det1 if conf1 >= conf2 else det2
+                            loser = det2 if conf1 >= conf2 else det1
+                            print(f"  ⚠️ SAME CLASS OVERLAP RESOLVED: Chose class {winner['class_id']} (conf={winner['conf']:.2f}) over class {loser['class_id']} (conf={loser['conf']:.2f}), IoU={iou:.2f}, conf_diff={conf_diff:.2f}")
+                            best_det = winner
+                        used_indices.add(j)
+
+                    elif conf1 >= self.MIN_DETECTION_CONFIDENCE*1.5 or conf2 >= self.MIN_DETECTION_CONFIDENCE*1.5:
+                        # both moderate confidence, keep higher
+                        winner = det1 if conf1 >= conf2 else det2
+                        loser = det2 if conf1 >= conf2 else det1
+                        if self.VERBOSE:
+                            print(f"  ❌ HIGH CONF RESOLVED: Chose class {winner['class_id']} (conf={winner['conf']:.2f}) over class {loser['class_id']} (conf={loser['conf']:.2f}), IoU={iou:.2f}")
+                        best_det = winner
+                        used_indices.add(j)
+
+                    else:
+                        # Cannot determine - alert and discard both
+                        if self.VERBOSE:
+                            print(f"  🚨 OVERLAP UNRESOLVED - DISCARDING: classes {det1['class_id']} (conf={conf1:.2f}) and {det2['class_id']} (conf={conf2:.2f}), IoU={iou:.2f} - keeping both")
+            
+
+            filtered.append(best_det)
+            used_indices.add(i)
+        
+        return filtered
+
+    def weight_detection_for_clustering(self, detections):
+        """
+        Apply weighting to detections features based on class_id for clustering.
+        Note: If USE_FEATURE_STANDARDIZATION=True, this weight is applied BEFORE standardization,
+        then features are standardized, then FEATURE_WEIGHTS are applied after.
+        If USE_FEATURE_STANDARDIZATION=False, only CLASS_ID_WEIGHT is used (legacy behavior).
+        """
+        if not self.USE_FEATURE_STANDARDIZATION:
+            # Legacy behavior: simple multiplication
+            for det in detections:
+                det['class_id'] *= self.CLASS_ID_WEIGHT
+        else:
+            # New behavior: CLASS_ID_WEIGHT is incorporated into FEATURE_WEIGHTS['class_id']
+            # Don't multiply here - let standardization handle it
+            pass
+        return detections
+    
+    def classify_object_hand_relationships(self, detections, left_knuckle, right_knuckle, left_shoulder=None, right_shoulder=None):
+        """
+        Classify each detection based on its relationship to hands and face.
+        Returns dict with keys: left_hand_object, right_hand_object,
+                               top_face_object, mouth_object, shoulder_object
+        Each value is the detection dict or None.
+        """
+
+        # weight the class_ids for better clustering separation of classes
+        detections = self.weight_detection_for_clustering(detections)
+        
+        results = {
+            'left_hand_object': None,
+            'right_hand_object': None,
+            'top_face_object': None,
+            'mouth_object': None,
+            'shoulder_object': None,
+        }
+        
+        if not detections:
+            return results
+        
+        # First, resolve overlapping detections
+        detections = self.resolve_overlapping_detections(detections)
+
+        # 1. Check for top_face_object, mouth_object, shoulder_object
+        for det in detections:
+            bbox = det['bbox']
+            
+            if self.is_top_face_object(bbox):
+                if results['top_face_object'] is None:
+                    results['top_face_object'] = det
+                # Keep the one that's most "on top" (most negative top value)
+                elif bbox['top'] < results['top_face_object']['bbox']['top']:
+                    results['top_face_object'] = det
+            
+            if self.is_mouth_object(bbox):
+                if results['mouth_object'] is None:
+                    results['mouth_object'] = det
+                elif bbox['top'] < results['mouth_object']['bbox']['top']:
+                    results['mouth_object'] = det
+
+            if self.is_shoulder_object(bbox, left_shoulder, right_shoulder):
+                if results['shoulder_object'] is None:
+                    results['shoulder_object'] = det
+                elif det['conf'] > results['shoulder_object']['conf']:
+                    results['shoulder_object'] = det
+
+        # 2. Find best object for each hand independently (same object may be assigned to both)
+        def best_object_for_hand(knuckle):
+            if knuckle == self.DEFAULT_HAND_POSITION:
+                return None
+
+            touching_candidates = []
+            nearby_candidates = []
+
+            for det in detections:
+                dist = self.point_to_bbox_distance(knuckle, det['bbox'])
+                if dist <= self.TOUCH_THRESHOLD:
+                    touching_candidates.append((dist, det))
+                elif dist <= self.TOUCH_THRESHOLD * 2:
+                    nearby_candidates.append((dist, det))
+
+            if touching_candidates:
+                touching_candidates.sort(key=lambda item: item[0])
+                return touching_candidates[0][1]
+
+            if nearby_candidates:
+                nearby_candidates.sort(key=lambda item: item[0])
+                return nearby_candidates[0][1]
+
+            return None
+
+        results['left_hand_object'] = best_object_for_hand(left_knuckle)
+        results['right_hand_object'] = best_object_for_hand(right_knuckle)
+        
+        return results
+
+    def query_and_classify_detections(self, image_id, left_knuckle, right_knuckle, left_shoulder=None, right_shoulder=None):
+        """
+        Query detections for an image and classify their relationship to hands/face.
+        Returns dict with 5 keys, each containing a detection payload dict or None.
+        """
+        if self.session is None:
+            raise ValueError("Session not initialized. Pass session to ToolsClustering.__init__()")
+        
+        # Query detections
+        detection_results = self.session.query(Detections).filter_by(image_id=image_id).\
+            filter(Detections.conf > self.MIN_DETECTION_CONFIDENCE).all()
+        
+        debug = self.VERBOSE  # print full math when VERBOSE is on
+        if debug:
+            print(f"\n{'='*60}")
+            print(f"[DEBUG] query_and_classify_detections image_id={image_id}")
+            # print(f"  left_knuckle={left_knuckle}  right_knuckle={right_knuckle}")
+            # print(f"  left_shoulder={left_shoulder}  right_shoulder={right_shoulder}")
+            # print(f"  Raw detection_results count: {len(detection_results)}")
+            # for d in detection_results:
+            #     print(f"    detection_id={d.detection_id} class_id={d.class_id} conf={d.conf:.3f} bbox_norm={d.bbox_norm}")
+
+        if not detection_results:
+            if debug: print(f"  → No detections above MIN_DETECTION_CONFIDENCE={self.MIN_DETECTION_CONFIDENCE}; returning all None")
+            return {
+                'left_hand_object': None,
+                'right_hand_object': None,
+                'top_face_object': None,
+                'mouth_object': None,
+                'shoulder_object': None,
+            }
+        
+        # Parse detections into standardized format
+        detections = []
+        for d in detection_results:
+            bbox = self.parse_bbox_norm(d.bbox_norm)
+            if bbox is None:
+                # if debug: print(f"  ✗ detection_id={d.detection_id} — bbox_norm parse failed, skipping")
+                continue
+            detections.append({
+                'detection_id': d.detection_id,
+                'class_id': d.class_id,
+                'conf': d.conf,
+                'bbox': bbox,
+                'top': bbox['top'],
+                'left': bbox['left'],
+                'right': bbox['right'],
+                'bottom': bbox['bottom']
+            })
+            if debug:
+                print(f"  ✓ detection_id={d.detection_id} parsed: class_id={d.class_id} conf={d.conf:.3f}")
+                print(f"    bbox → top={bbox['top']} left={bbox['left']} right={bbox['right']} bottom={bbox['bottom']}")
+                # Check each classifier
+                print(f"    is_top_face_object:    {self.is_top_face_object(bbox)}")
+                print(f"      (top<0={bbox['top']<0}, left<0={bbox['left']<0}, right>0={bbox['right']>0}, width={bbox['right']-bbox['left']:.4f}<=MAX={self.MAX_FACE_WIDTH}, extends_into_bottom={max(0,bbox['bottom']):.4f}<=MAX_VERT={self.MAX_FACE_VERT_EXTENSION})")
+                print(f"    is_bottom_face_object: {self.is_bottom_face_object(bbox)}")
+                print(f"    is_mouth_object:       {self.is_mouth_object(bbox)}")
+                print(f"    is_shoulder_object:    {self.is_shoulder_object(bbox, left_shoulder, right_shoulder)}")
+                dist_left  = self.point_to_bbox_distance(left_knuckle, bbox)  if left_knuckle  != self.DEFAULT_HAND_POSITION else None
+                dist_right = self.point_to_bbox_distance(right_knuckle, bbox) if right_knuckle != self.DEFAULT_HAND_POSITION else None
+                print(f"    dist left_knuckle→bbox:  {dist_left}  (TOUCH_THRESHOLD={self.TOUCH_THRESHOLD})")
+                print(f"    dist right_knuckle→bbox: {dist_right}")
+
+        if debug:
+            print(f"  Parsed {len(detections)} valid detections (of {len(detection_results)} raw)")
+
+        # Classify relationships using class method
+        classified = self.classify_object_hand_relationships(
+            detections,
+            left_knuckle,
+            right_knuckle,
+            left_shoulder=left_shoulder,
+            right_shoulder=right_shoulder,
+        )
+        if debug:
+            print(f"  Classification results:")
+            for k, v in classified.items():
+                print(f"    {k}: {v}")
+        
+        # Convert to compact payload dicts for df storage / DB persistence
+        result = {}
+        for key, det in classified.items():
+            if det is None:
+                result[key] = None
+            else:
+                result[key] = self.detection_to_payload(det)
+        
+        return result
+
+    def process_detections_for_df(self, df):
+        """
+        Process all detections for a dataframe and add object classification columns.
+        Expects df to have: image_id, left_pointer_knuckle_norm, right_pointer_knuckle_norm
+        """
+        # Initialize new columns
+        df['left_hand_object'] = None
+        df['right_hand_object'] = None
+        df['top_face_object'] = None
+        df['mouth_object'] = None
+        df['shoulder_object'] = None
+        
+        for idx, row in df.iterrows():
+            image_id = row['image_id']
+            left_knuckle = row.get('left_pointer_knuckle_norm', self.DEFAULT_HAND_POSITION)
+            right_knuckle = row.get('right_pointer_knuckle_norm', self.DEFAULT_HAND_POSITION)
+            
+            # Handle case where knuckle data might be None or string
+            if left_knuckle is None or (isinstance(left_knuckle, list) and len(left_knuckle) == 0):
+                left_knuckle = self.DEFAULT_HAND_POSITION
+            if right_knuckle is None or (isinstance(right_knuckle, list) and len(right_knuckle) == 0):
+                right_knuckle = self.DEFAULT_HAND_POSITION
+
+            left_shoulder, right_shoulder = self.extract_shoulder_points(row.get('body_landmarks_normalized'))
+            
+            # Query and classify
+            classifications = self.query_and_classify_detections(
+                image_id,
+                left_knuckle,
+                right_knuckle,
+                left_shoulder=left_shoulder,
+                right_shoulder=right_shoulder,
+            )
+            
+            # Assign to df
+            df.at[idx, 'left_hand_object'] = classifications['left_hand_object']
+            df.at[idx, 'right_hand_object'] = classifications['right_hand_object']
+            df.at[idx, 'top_face_object'] = classifications['top_face_object']
+            df.at[idx, 'mouth_object'] = classifications['mouth_object']
+            df.at[idx, 'shoulder_object'] = classifications['shoulder_object']
+        
+        return df
+
+    def _build_detection_payload_from_sql_fields(self, detection_id, class_id, conf, bbox_norm):
+        """Build detection payload dict from SQL selected fields."""
+        if detection_id is None or class_id is None or conf is None or bbox_norm is None:
+            return None
+
+        bbox = self.parse_bbox_norm(bbox_norm)
+        if bbox is None:
+            return None
+
+        required_keys = ['top', 'left', 'right', 'bottom']
+        if not all(k in bbox for k in required_keys):
+            return None
+
+        return {
+            'detection_id': int(detection_id),
+            'class_id': float(class_id),
+            'conf': float(conf),
+            'top': float(bbox['top']),
+            'left': float(bbox['left']),
+            'right': float(bbox['right']),
+            'bottom': float(bbox['bottom']),
+        }
+
+    def get_precomputed_detections_by_image_ids(self, image_ids):
+        """
+        Read precomputed detection assignments from ImagesDetections and join to Detections.
+        Returns dict keyed by image_id with values containing the 5 detection payload fields.
+        """
+        if self.session is None:
+            raise ValueError("Session not initialized. Pass session to ToolsClustering.__init__()")
+
+        if not image_ids:
+            return {}
+
+        sql = text("""
+            SELECT
+                idet.image_id,
+
+                lh.detection_id AS left_hand_detection_id,
+                lh.class_id AS left_hand_class_id,
+                lh.conf AS left_hand_conf,
+                lh.bbox_norm AS left_hand_bbox_norm,
+
+                rh.detection_id AS right_hand_detection_id,
+                rh.class_id AS right_hand_class_id,
+                rh.conf AS right_hand_conf,
+                rh.bbox_norm AS right_hand_bbox_norm,
+
+                tf.detection_id AS top_face_detection_id,
+                tf.class_id AS top_face_class_id,
+                tf.conf AS top_face_conf,
+                tf.bbox_norm AS top_face_bbox_norm,
+
+                mo.detection_id AS mouth_detection_id,
+                mo.class_id AS mouth_class_id,
+                mo.conf AS mouth_conf,
+                mo.bbox_norm AS mouth_bbox_norm,
+
+                so.detection_id AS shoulder_detection_id,
+                so.class_id AS shoulder_class_id,
+                so.conf AS shoulder_conf,
+                so.bbox_norm AS shoulder_bbox_norm
+            FROM ImagesDetections idet
+            LEFT JOIN Detections lh ON idet.left_hand_object_id = lh.detection_id
+            LEFT JOIN Detections rh ON idet.right_hand_object_id = rh.detection_id
+            LEFT JOIN Detections tf ON idet.top_face_object_id = tf.detection_id
+            LEFT JOIN Detections mo ON idet.mouth_object_id = mo.detection_id
+            LEFT JOIN Detections so ON idet.shoulder_object_id = so.detection_id
+            WHERE idet.image_id IN :image_ids
+        """).bindparams(bindparam("image_ids", expanding=True))
+
+        rows = self.session.execute(sql, {"image_ids": list(image_ids)}).mappings().all()
+
+        result = {}
+        for row in rows:
+            image_id = row['image_id']
+            result[image_id] = {
+                'left_hand_object': self._build_detection_payload_from_sql_fields(
+                    row['left_hand_detection_id'], row['left_hand_class_id'], row['left_hand_conf'], row['left_hand_bbox_norm']
+                ),
+                'right_hand_object': self._build_detection_payload_from_sql_fields(
+                    row['right_hand_detection_id'], row['right_hand_class_id'], row['right_hand_conf'], row['right_hand_bbox_norm']
+                ),
+                'top_face_object': self._build_detection_payload_from_sql_fields(
+                    row['top_face_detection_id'], row['top_face_class_id'], row['top_face_conf'], row['top_face_bbox_norm']
+                ),
+                'mouth_object': self._build_detection_payload_from_sql_fields(
+                    row['mouth_detection_id'], row['mouth_class_id'], row['mouth_conf'], row['mouth_bbox_norm']
+                ),
+                'shoulder_object': self._build_detection_payload_from_sql_fields(
+                    row['shoulder_detection_id'], row['shoulder_class_id'], row['shoulder_conf'], row['shoulder_bbox_norm']
+                ),
+            }
+
+        return result
+
+    def hydrate_detections_from_precomputed_table(self, df):
+        """
+        Fill detection classification columns from ImagesDetections + Detections.
+        Returns (updated_df, missing_image_ids) where missing_image_ids are not found
+        in ImagesDetections at all.
+        """
+        required_cols = [
+            'left_hand_object', 'right_hand_object',
+            'top_face_object', 'mouth_object', 'shoulder_object'
+        ]
+        for col in required_cols:
+            if col not in df.columns:
+                df[col] = None
+
+        image_ids = [int(x) for x in df['image_id'].dropna().unique().tolist()]
+        precomputed = self.get_precomputed_detections_by_image_ids(image_ids)
+
+        for idx, row in df.iterrows():
+            image_id = row.get('image_id')
+            if image_id is None:
+                continue
+            payload = precomputed.get(int(image_id))
+            if payload is None:
+                continue
+
+            df.at[idx, 'left_hand_object'] = payload['left_hand_object']
+            df.at[idx, 'right_hand_object'] = payload['right_hand_object']
+            df.at[idx, 'top_face_object'] = payload['top_face_object']
+            df.at[idx, 'mouth_object'] = payload['mouth_object']
+            df.at[idx, 'shoulder_object'] = payload['shoulder_object']
+
+        missing_image_ids = sorted(list(set(image_ids) - set(precomputed.keys())))
+        return df, missing_image_ids
+
+    def flatten_object_detections(self, detection_payload):
+        """
+        Flatten a detection payload dict into features.
+        Returns a 6-element list, or [0,0,0,0,0,0] if None.
+        """
+        if detection_payload is None:
+            return [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+        if isinstance(detection_payload, dict):
+            return [
+                float(detection_payload.get('class_id', 0.0)),
+                float(detection_payload.get('conf', 0.0)),
+                float(detection_payload.get('top', 0.0)),
+                float(detection_payload.get('left', 0.0)),
+                float(detection_payload.get('right', 0.0)),
+                float(detection_payload.get('bottom', 0.0)),
+            ]
+        return list(detection_payload)
+
+    def prepare_features_for_knn(self, df):
+        """
+        Flatten all columns into a single feature vector for KNN clustering.
+        Handles numeric columns and object detection lists.
+        Returns df with all features flattened into separate columns (columnar format).
+        """
+        import pandas as pd
+        
+        # Numeric columns to include
+        numeric_cols = ['pitch', 'yaw', 'roll']
+        
+        # Detection columns (6 values each: class_id, conf, top, left, right, bottom)
+        detection_cols = ['left_hand_object', 'right_hand_object', 'top_face_object',
+                  'mouth_object', 'shoulder_object']
+        detection_fields = ['class_id', 'conf', 'top', 'left', 'right', 'bottom']
+        
+        # Create feature dict by concatenating all values
+        features_dict = {}
+        
+        # Add image_id if it exists
+        if 'image_id' in df.columns:
+            features_dict['image_id'] = df['image_id']
+        else:
+            print("Warning: 'image_id' column not found in DataFrame. It will be missing from the features.")
+
+        # Add numeric columns
+        for col in numeric_cols:
+            if col in df.columns:
+                features_dict[col] = df[col].apply(lambda x: float(x) if pd.notna(x) else 0.0)
+        
+        # Add detection features with descriptive column names
+        # ALSO add binary "has_object" indicators to prevent all-zero clustering
+        for det_col in detection_cols:
+            if det_col in df.columns:
+                # Add binary indicator: 1.0 if object present, 0.0 if not
+                has_obj_col = f"{det_col}_has_object"
+                features_dict[has_obj_col] = df[det_col].apply(
+                    lambda x: 1.0 if x is not None else 0.0
+                )
+                
+                # Add standard detection fields
+                for i, field in enumerate(detection_fields):
+                    col_name = f"{det_col}_{field}"
+                    features_dict[col_name] = df[det_col].apply(
+                        lambda x: self.flatten_object_detections(x)[i] if x is not None else 0.0
+                    )
+        
+        result_df = pd.DataFrame(features_dict)
+        print("prepare_features_for_knn result_df columns: ", result_df.columns)
+        return result_df
+    
+    def prepare_features_for_knn_v2(self, df, fit_scaler=False):
+        """
+        Enhanced version with optional StandardScaler and per-feature-group weighting.
+        
+        Args:
+            df: DataFrame with ObjectFusion features
+            fit_scaler: If True, fit new scaler on this data. If False, use existing scaler.
+                       Set True for training data, False for new data assignment.
+        
+        Returns:
+            DataFrame with standardized and weighted features, suitable for K-means.
+        """
+        import pandas as pd
+        from sklearn.preprocessing import StandardScaler
+        
+        # First, get base features using original method
+        features_df = self.prepare_features_for_knn(df)
+        
+        if not self.USE_FEATURE_STANDARDIZATION:
+            return features_df
+        
+        # Separate image_id before scaling
+        image_id_col = None
+        if 'image_id' in features_df.columns:
+            image_id_col = features_df['image_id'].copy()
+            features_df = features_df.drop(columns=['image_id'])
+        
+        # Group columns by feature type for weighted scaling
+        face_angle_cols = ['pitch', 'yaw', 'roll']
+        class_id_cols = [col for col in features_df.columns if col.endswith('_class_id')]
+        confidence_cols = [col for col in features_df.columns if col.endswith('_conf')]
+        bbox_cols = [col for col in features_df.columns if col.endswith(('_top', '_left', '_right', '_bottom'))]
+        has_object_cols = [col for col in features_df.columns if col.endswith('_has_object')]
+        
+        # CRITICAL: Extract class_id columns BEFORE standardization (they're categorical, not continuous)
+        class_id_values = features_df[class_id_cols].copy()
+        
+        # Remove class_id from features to be standardized
+        features_to_scale = features_df.drop(columns=class_id_cols)
+        
+        # Standardize only continuous features (mean=0, std=1)
+        if fit_scaler or self.feature_scaler is None:
+            self.feature_scaler = StandardScaler()
+            scaled_features = self.feature_scaler.fit_transform(features_to_scale)
+            if self.VERBOSE:
+                print("Fitted new StandardScaler on features (excluding class_id)")
+                print(f"  Feature means: {self.feature_scaler.mean_[:5]}...")
+                print(f"  Feature stds: {self.feature_scaler.scale_[:5]}...")
+        else:
+            scaled_features = self.feature_scaler.transform(features_to_scale)
+        
+        # Convert back to DataFrame to apply per-group weights
+        scaled_df = pd.DataFrame(scaled_features, columns=features_to_scale.columns, index=features_df.index)
+        
+        # Re-insert class_id columns at their ORIGINAL scale (not standardized)
+        for col in class_id_cols:
+            scaled_df[col] = class_id_values[col]
+        
+        # Apply feature-group-specific weights
+        for col in scaled_df.columns:
+            if col in face_angle_cols:
+                scaled_df[col] *= self.FEATURE_WEIGHTS['face_angle']
+            elif col in class_id_cols:
+                scaled_df[col] *= self.FEATURE_WEIGHTS['class_id']
+            elif col in confidence_cols:
+                scaled_df[col] *= self.FEATURE_WEIGHTS['confidence']
+            elif col in has_object_cols:
+                scaled_df[col] *= self.FEATURE_WEIGHTS['has_object']
+            elif col in bbox_cols:
+                scaled_df[col] *= self.FEATURE_WEIGHTS['bbox']
+        
+        # Re-add image_id if it existed
+        if image_id_col is not None:
+            scaled_df.insert(0, 'image_id', image_id_col)
+        
+        if self.VERBOSE:
+            print("Feature standardization and weighting applied:")
+            print(f"  Face angles: {self.FEATURE_WEIGHTS['face_angle']}x")
+            print(f"  Class IDs: {self.FEATURE_WEIGHTS['class_id']}x")
+            print(f"  Has Object indicators: {self.FEATURE_WEIGHTS['has_object']}x")
+            print(f"  Confidence: {self.FEATURE_WEIGHTS['confidence']}x")
+            print(f"  BBox coords: {self.FEATURE_WEIGHTS['bbox']}x")
+            print(f"  Final feature range: [{scaled_df.min().min():.2f}, {scaled_df.max().max():.2f}]")
+        
+        return scaled_df
+
+    def construct_fusion_list(self, row):
+        """
+        Construct fusion list from a dataframe row for ObjectFusion sorting.
+        Returns list format: [pitch, yaw, roll, left_hand(6), right_hand(6), top_face(6), mouth(6), shoulder(6)]
+        Total: 33 elements (3 + 5*6)
+        """
+        fusion_list = row['pitch_yaw_roll_list'].copy()  # Start with [pitch, yaw, roll]
+        
+        # Add detection data (each is 6 elements: class_id, conf, top, left, right, bottom)
+        for col in ['left_hand_object', 'right_hand_object', 'top_face_object', 'mouth_object', 'shoulder_object']:
+            detection = row[col]
+            if detection is None:
+                fusion_list.extend([0.0, 0.0, 0.0, 0.0, 0.0, 0.0])  # 6 zeros for None
+            else:
+                fusion_list.extend(self.flatten_object_detections(detection))
+        
+        return fusion_list

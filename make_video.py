@@ -29,6 +29,7 @@ import pymongo
 from mp_sort_pose import SortPose, TSPSorterTwoPhase
 from mp_db_io import DataIO
 from constants_make_video import *
+from tools_clustering import ToolsClustering
 
 # Initialize sorter
 sorter = TSPSorterTwoPhase(
@@ -53,7 +54,7 @@ SegmentHelper_name = 'None' # set below for heft keywords
 # SegmentHelper_name = None
 # SATYAM, this is MM specific
 # for when I'm using files on my SSD vs RAID
-IS_SSD = True
+IS_SSD = False
 #IS_MOVE is in move_toSSD_files.py
 
 # I/O utils
@@ -62,21 +63,25 @@ db = io.db
 
 # OWC4 SNAFU WORKAROUND
 
-if not (io.IS_TENCH or io.IS_MICHELLE):
-    io.ROOT_PROD=  "/Volumes/OWC52/segment_images" ## only on Mac
+if not (io.IS_TENCH or io.IS_MICHELLE) and IS_SSD:
+    # io.ROOT_PROD=  "/Volumes/OWC5/segment_images" ## only on Mac
+    io.ROOT_PROD=  "/Users/michaelmandiberg/Documents/projects-active/facemap_production" ## MBP
     print("Setting io.ROOT to ROOTSSD:", io.ROOTSSD)
     io.ROOT = os.path.join(io.ROOT_PROD, "output_folder")
-    print("Set io.ROOT to ROOTSSD:", io.ROOT)
+print("Setting io.ROOT to ROOTSSD:", io.ROOTSSD)
+print("Set io.ROOT to ROOTSSD:", io.ROOT)
 
 CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden below for heft keywords
 
-CSV_FOLDER = os.path.join("/Users/michaelmandiberg/Documents/projects-active/facemap_production/body3D_segmentbig_useall256_CSVs_test")
+# CSV_FOLDER = os.path.join("/Users/michaelmandiberg/Documents/projects-active/facemap_production/body3D_segmentbig_useall256_CSVs_test")
 # CSV_FOLDER = os.path.join("/Volumes/SSD4_Green/arms3D_placard_Dec12_undetected")
 
 # TENCH UNCOMMENT FOR YOUR COMP:
-CSV_FOLDER = os.path.join(io.ROOT_DBx, "body3D_segmentbig_useall256_CSVs_test")
+# CSV_FOLDER = os.path.join(io.ROOT_DBx, "body3D_segmentbig_useall256_CSVs_test")
 
-# CSV_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/body3D_segmentbig_useall256_CSVs"
+# CSV_FOLDER = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion128_test220K"
+CSV_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/bodyLms_768"
+
 # overriding DB for testing
 # io.db["name"] = "stock"
 # io.db["name"] = "ministock"
@@ -87,7 +92,8 @@ MODES = {0:'paris_photo_torso_images_topics', 1:'paris_photo_torso_videos_topics
 MODE_CHOICE = 6
 CURRENT_MODE = MODES[MODE_CHOICE]
 
-LIMIT = 200000 # this is the limit for the SQL query
+LIMIT = 100000 # this is the limit for the SQL query
+CROP_MULTIPLIER = 5
 
 image_edge_multiplier = None
 # image_edge_multiplier = [1.3,2,2.9,2] # [top, right, bottom, left] setting a default. not sure if this will mess up places it looks for None
@@ -180,34 +186,47 @@ elif "3D" in CURRENT_MODE:
 
 
 elif CURRENT_MODE == 'heft_torso_keywords':
-    
-    class_id = 67
-    class_token = ID_SEGMENT_DICT.get(class_id, None)
 
+    # # cludgy hack to get dynamic cropping for testing mar 2026    
+    # AUTO_EDGE_CROP = True
+    # if AUTO_EDGE_CROP:
+    #     EXPAND = True
+
+    # set to 0 to disable obj query stuff. this is also for object_fusion
+    class_id = 0
+
+    # SORT_TYPE = "obj_bbox"
+    # SORT_TYPE = "planar_hands"
+    # SORT_TYPE = "object_fusion"
+
+    # CLUSTER_TYPE = "ArmsPoses3D"
+    # CLUSTER_TYPE = "object_fusion"
+    # CLUSTER_TYPE = SORT_TYPE = "ArmsPoses3D" # this triggers meta body poses 3D
+    CLUSTER_TYPE = SORT_TYPE = "object_fusion" # make sure OBJ_CLS_ID is set below
+    cl = ToolsClustering(CLUSTER_TYPE, VERBOSE=VERBOSE)
+
+
+    class_token = ID_SEGMENT_DICT.get(class_id, None)
     ssd = ID_SSD_DICT.get(class_id, None)
     if class_id in ID_FOLDER_DICT: folder_token = ID_FOLDER_DICT[class_id]
     else: folder_token = class_token 
 
     # SegmentTable_name = 'SegmentOct20'
     SegmentTable_name = 'SegmentBig_isface'
-    if class_token:
+    if class_token and "fusion" not in (CLUSTER_TYPE+SORT_TYPE).lower():
+        OBJ_DONT_SUBSELECT = False # False means SQL select for OBJ. Set to True by default
         SegmentHelper_name = f'SegmentHelperObject_{class_token}' # TK revisit this for prodution run
         SegmentFolder = f"/Volumes/{ssd}/segment_images_{folder_token}"
         if MODE == 0:
             CSV_FOLDER = os.path.join(CSV_FOLDER, f"{class_token}_{class_id}")
-        SORT_TYPE = "obj_bbox"
-        # SORT_TYPE = "obj_bbox_fusion"
     else:
-        SegmentHelper_name = 'SegmentHelper_sept2025_heft_keywords' # TK revisit this for prodution run
+        # doesn't use class_token helper/select
+        SegmentHelper_name = 'SegmentBig_isface' # TK revisit this for prodution run
         SegmentFolder = None
-        SORT_TYPE = "planar_hands"
-    CLUSTER_TYPE = "ArmsPoses3D"
     if io.IS_TENCH or io.IS_MICHELLE:
         SegmentFolder = io.ROOT
         print("IO ROOT", io.ROOT)
         print("SEGMENT FOLDER", SegmentFolder)
-    # CLUSTER_TYPE = SORT_TYPE = "ArmsPoses3D" # this triggers meta body poses 3D
-    # CLUSTER_TYPE = SORT_TYPE = "obj_bbox" # make sure OBJ_CLS_ID is set below
     # META = True
     USE_HEAD_POSE = True
     IS_HAND_POSE_FUSION = True # do we use fusion clusters
@@ -216,13 +235,16 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     TESTING = True
     if TESTING:
         USE_HSV = False
-        # either you use a FUSION_PAIR_DICT or GENERATE_FUSION_PAIRS. 
-        GENERATE_FUSION_PAIRS = True # if true it will query based on MIN_VIDEO_FUSION_COUNT and create pairs
-                                        # if false, it will grab the list of pair lists below
         # turning all three off to do old style non tsp sort    
-        # ONE_SHOT = True # take all files, based off the very first sort order.
+        ONE_SHOT = True # take all files, based off the very first sort order.
         TSP_SORT = False
         CHOP_ITTER_TSP_SORT = False
+        if CLUSTER_TYPE == "object_fusion":
+            GENERATE_FUSION_PAIRS = False
+        else:
+            # either you use a FUSION_PAIR_DICT or GENERATE_FUSION_PAIRS. 
+            GENERATE_FUSION_PAIRS = True # if true it will query based on MIN_VIDEO_FUSION_COUNT and create pairs
+                                            # if false, it will grab the list of pair lists below
 
     else:
         USE_HSV = True
@@ -243,7 +265,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     # get cutoff for this class_id from constants dict
     cutoff = ID_CUTOFF_DICT.get(class_id, None)
 
-    if not USE_HSV:
+    if not USE_HSV and cutoff is not None:
         # this is for testing all cluster-poses for a keyword
         MIN_VIDEO_FUSION_COUNT = cutoff # this is the cut off for the CSV fusion pairs
         MIN_CYCLE_COUNT = max(int(cutoff/2), FORCE_TARGET_COUNT) # this is the cut off for the SQL query results
@@ -259,6 +281,17 @@ elif CURRENT_MODE == 'heft_torso_keywords':
         if TSP_SORT: MIN_CYCLE_COUNT = FORCE_TARGET_COUNT
         else: MIN_CYCLE_COUNT = 150 # this is the cut off for the SQL query results
         
+
+
+    # HAAAAAAACK
+    # SegmentHelper_name = 'SegmentHelperObject_67_phone'
+    # SegmentHelper_name = "SegmentHelperObject_82_money"
+    # SegmentFolder = "/Volumes/SSD4_Green/segment_images_detected_63_67"
+    # SegmentFolder = "/Volumes/LaCie/segment_images_82_money_cards"
+    # SegmentFolder = "/Volumes/LaCie/segment_images_96_bitcoin"
+    # MIN_CYCLE_COUNT = 200
+    # USE_HSV = True
+
     # HAAAAACK
     # MIN_CYCLE_COUNT = 60
     # this control whether sorting by topics
@@ -306,7 +339,8 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     # initializing default square crop
     # if this is defined, then it will not call min_max_body_landmarks_for_crop
     # image_edge_multiplier = [1.3,1.85,2.4,1.85] # tighter square crop for paris photo videos < Oct 29 FINAL VERSION NOV 2024 DO NOT CHANGE
-    image_edge_multiplier = [1.3,2,2.9,2] # portrait crop for paris photo images < Aug 30
+    # image_edge_multiplier = [1.3,2,2.9,2] # portrait crop for paris photo images < Aug 30
+    image_edge_multiplier = [1.5,2,4.5,2]
 
 else:
     print("unknown mode, exiting")
@@ -334,7 +368,11 @@ VISIBLE_HAND_RIGHT = False
 USE_NOSEBRIDGE = True 
 
 # this is for selecting, set dynamically based on CLUSTER_TYPE set above
-if IS_HAND_POSE_FUSION:
+if CLUSTER_TYPE == "object_fusion":
+    CLUSTER1 = "ObjectFusion"
+    CLUSTER2 = None
+
+elif IS_HAND_POSE_FUSION:
     CLUSTER1, CLUSTER2 = CLUSTER_MAP.get(CLUSTER_TYPE, (None, None))
 
 else:
@@ -424,9 +462,8 @@ if "key" in CURRENT_MODE:
 else: OBJ_CLS_ID = 0
 
 DO_OBJ_SORT = True
-OBJ_DONT_SUBSELECT = False # False means select for OBJ. this is a flag for selecting a specific object type when not sorting on obj
 PHONE_BBOX_LIMITS = [0] # this is an attempt to control the BBOX placement. I don't think it is going to work, but with non-zero it will make a bigger selection. Fix this hack TK. 
-if "obj_bbox" in [SORT_TYPE, CLUSTER_TYPE] and OBJ_CLS_ID == 0:
+if "obj_bbox" in [SORT_TYPE, CLUSTER_TYPE] and OBJ_CLS_ID == 0 and "fusion" not in SORT_TYPE+CLUSTER_TYPE:
     print("WARNING: OBJ_CLS_ID is 0 for obj_bbox SORT_TYPE/CLUSTER_TYPE, quitting")
     sys.exit()
 
@@ -544,6 +581,7 @@ elif IS_SEGONLY and io.platform == "darwin":
             print("[setting junction] IS_HAND_POSE_FUSION normal")
             cluster_table = f"Images{CLUSTER1}"
             FROM += f" JOIN {cluster_table} ihp ON s.image_id = ihp.image_id "
+        SELECT += ", ihp.cluster_dist "
         if CLUSTER2: FROM += f" JOIN Images{CLUSTER2} ih ON s.image_id = ih.image_id "
         # WHERE += " AND ihp.cluster_dist < 2.5" # isn't really working how I want it
         if IS_HAND_POSE_FUSION: add_topic_select()
@@ -773,6 +811,10 @@ if not io.IS_TENCH:
     Session = sessionmaker(bind=engine)
     session = Session()
     Base = declarative_base()
+
+    if SORT_TYPE == "object_fusion" or "fusion" in SORT_TYPE:
+        # Pass session to ToolsClustering instance for database access
+        cl.session = session
 
     mongo_client = pymongo.MongoClient(io.dbmongo['host'])
     mongo_db = mongo_client[io.dbmongo['name']]
@@ -1058,7 +1100,7 @@ if not io.IS_TENCH:
 
             # convert topic_no to a query string
             IN_or_equal_topic_ids_string = is_query_list_string(topic_no)
-            cluster += f"AND {this_alias}.{this_id} {IN_or_equal_topic_ids_string} "
+            if not OBJ_DONT_SUBSELECT: cluster += f"AND {this_alias}.{this_id} {IN_or_equal_topic_ids_string} "
 
         if bool(hsv_cluster) or hsv_cluster == 0:
             print("hsv_cluster is not empty:", hsv_cluster)
@@ -1361,41 +1403,16 @@ def prep_encodings_NN(df_segment):
             return [row['lum']*HSV_NORMS["LUM"], row['lum_torso_bb']*HSV_NORMS["LUM"]]
         else:
             return [row['lum']*HSV_NORMS["LUM"], row['lum_torso']*HSV_NORMS["LUM"]]   
-    
-    def set_sort_col():
-        # these are all properly SORT_TYPE
-        if SORT_TYPE in ["body3D", "ArmsPoses3D"]:
-            # have to handle both, because handposefusion redefines SORT_TYPE 
-            source_col = sort_column = "body_landmarks_3D"
-        elif SORT_TYPE == "planar_body":
-            if CLUSTER1 == "HandsPositions":
-                source_col = sort_column = "hand_landmarks"
-                # source_col = None
-                # source_col_2 = "right_hand_landmarks_norm"
-            else:
-                sort_column = "body_landmarks_array"
-                source_col = "body_landmarks_normalized"
-                # source_col_2 = None
-        elif SORT_TYPE == "planar_hands" or (SORT_TYPE == "planar_hands" and USE_ALL) or SORT_TYPE == "fingertips_positions":
-            source_col = sort_column = "hand_landmarks"
-            # source_col = sort_column = "right_hand_landmarks_norm"
-            # source_col = None
-            # source_col_2 = "right_hand_landmarks_norm"
-        elif SORT_TYPE == "128d":
-            source_col = sort_column = "face_encodings68"
-        elif "obj_bbox" in SORT_TYPE:
-            # does this matter?
-            source_col = sort_column = "bbox_norm"
-        return sort_column, source_col
 
     print("prep_encodings_NN df_segment columns", df_segment.columns)
-    sort_column, source_col = set_sort_col()
+    sort_column, source_col = sort.get_sort_column_mapping(SORT_TYPE, CLUSTER1)
     print(f"degugging df_segment prep encodings for {source_col}:", df_segment.columns)      
     # drop rows where body_landmarks_normalized is None
     # TK this needs to be adapted to handle left vs right hand. 
     # subset needs to be both of them, if both are na
-    if not sort_column == "hand_landmarks":
+    if not sort_column == "hand_landmarks" and not SORT_TYPE == "object_fusion":
         # hand_landmarks are all giving 0's if null, so no NA
+        # skip for object_fusion, as 0's are valid values
         print("df_segment source_col", df_segment[source_col].to_string())
         df_segment = df_segment.dropna(subset=[source_col])
         print("df_segment length", len(df_segment.index))
@@ -1405,9 +1422,9 @@ def prep_encodings_NN(df_segment):
         if not null_encodings.empty:
             print("Rows with invalid body_landmarks_normalized data:")
             print(null_encodings)
-        
-    print(df_segment.size)
-    print(df_segment[source_col])
+    if source_col is not None:    
+        print(df_segment.size)
+        print(df_segment[source_col])
 
 
     # create a column for the hsv values using df_segment.apply(lambda row: create_hsv_list(row), axis=1)
@@ -1415,7 +1432,23 @@ def prep_encodings_NN(df_segment):
     df_segment['lum'] = df_segment.apply(lambda row: create_lum_list(row), axis=1)
     # load the OBJ_CLS_ID bbox as list into obj_bbox_list
     # df_segment['obj_bbox_list'] = df_segment.apply(lambda row: json_to_list(row), axis=1)
-    if OBJ_CLS_ID > 0: 
+
+    # prep the face pitch, yaw, roll into a list for fusion
+    if "pitch" in df_segment.columns and "yaw" in df_segment.columns and "roll" in df_segment.columns:
+        df_segment['pitch_yaw_roll_list'] = df_segment.apply(lambda row: [row['pitch'], row['yaw'], row['roll']], axis=1)
+
+    if SORT_TYPE == "object_fusion" or "fusion" in SORT_TYPE:
+        # Process detections and classify their relationship to hands/face
+        print("Processing detections for object_fusion...")
+        df_segment = cl.process_detections_for_df(df_segment)
+        
+        # Construct obj_bbox_fusion_list using class method
+        df_segment['obj_bbox_fusion_list'] = df_segment.apply(cl.construct_fusion_list, axis=1)
+        if VERBOSE:
+            print("df_segment obj_bbox_fusion_list sample:")
+            print(df_segment[['image_id', 'obj_bbox_fusion_list']].head())
+            print(f"Fusion list length: {len(df_segment['obj_bbox_fusion_list'].iloc[0])} (expected: 33 = 3 pitch/yaw/roll + 5*6 detections)")
+    elif OBJ_CLS_ID > 0: 
         obj_bbox_col = "bbox_norm"
         print(f" prepping {obj_bbox_col} for {CLUSTER1}")
         # move all rows with null obj_bbox_col values to a new df_nulls, and drop them from df_segment
@@ -1430,7 +1463,6 @@ def prep_encodings_NN(df_segment):
             print(null_bboxes)
         # make a obj_bbox_fusion_list column that combines bbox_norm, meta_cluster_id, 'pitch', 'yaw', 'roll'
         # start by creating a pitch_yaw_roll_list column
-        df_segment['pitch_yaw_roll_list'] = df_segment.apply(lambda row: [row['pitch'], row['yaw'], row['roll']], axis=1)
         df_segment['obj_bbox_fusion_list'] = df_segment.apply(lambda row: row['obj_bbox_list'] + [row['meta_cluster_id']] + row['pitch_yaw_roll_list'], axis=1)
         print("df_segment obj_bbox_fusion_list", df_segment['obj_bbox_fusion_list'].head())
 
@@ -2218,9 +2250,26 @@ def main():
         except:
             print('you forgot to change the filename DUH')
         if not df.empty:
-            print("going to get mongo encodings")
+            if SORT_TYPE == "object_fusion" or "fusion" in SORT_TYPE:
+                simple_crop = int(sort.CUTOFF * CROP_MULTIPLIER)
+                if 'cluster_dist' in df.columns:
+                    original_len = len(df)
+                    df['cluster_dist'] = pd.to_numeric(df['cluster_dist'], errors='coerce')
+                    df = df.sort_values('cluster_dist', ascending=True).head(simple_crop).reset_index(drop=True)
+                    print(f"[object_fusion] cluster_dist crop: kept {len(df)} of {original_len} rows (simple_crop={simple_crop})")
+                else:
+                    print("[object_fusion] cluster_dist not found in SELECT results; skipping pre-crop")
+
+            # MODE 0 fast path: load precomputed hand positions + detection assignments from ImagesDetections
+            # to avoid re-processing detections from Mongo
+            if MODE == 0 and (SORT_TYPE == "object_fusion" or "fusion" in SORT_TYPE):
+                print("[MODE 0] Checking ImagesDetections for precomputed data...")
+                df, missing_image_ids = cl.hydrate_detections_from_precomputed_table(df)
+                print(f"[MODE 0] Found {len(df) - len(missing_image_ids)} images in ImagesDetections; {len(missing_image_ids)} need Mongo load")
+
+            # Load all encoding/landmark fields from Mongo so MODE 0 CSV contains full data for MODE 1
+            print(f"Loading all encodings from Mongo for all {len(df)} images...")
             print("size",df.size)
-            # use the image_id to query the mongoDB for face_encodings68, face_landmarks, body_landmarks
             df[['face_encodings68', 'face_landmarks', 'body_landmarks', 'body_landmarks_normalized', 'body_landmarks_3D', 'hand_results']] = df['image_id'].apply(io.get_encodings_mongo)
             print("got mongo encodings", df.columns)
             if VERBOSE: print("first row", df.iloc[0])
@@ -2232,16 +2281,22 @@ def main():
             # print("face_encodings68")
             # print(df['face_encodings68'][0])
 
-            # Apply the unpickling function to the 'face_encodings' column
+            # Apply the unpickling function to the Mongo fields
+            print("[MODE] Unpickling Mongo fields from database...")
             df['face_encodings68'] = df['face_encodings68'].apply(io.unpickle_array)
             df['face_landmarks'] = df['face_landmarks'].apply(io.unpickle_array)
             df['body_landmarks'] = df['body_landmarks'].apply(io.unpickle_array)
             df['body_landmarks_3D'] = df['body_landmarks_3D'].apply(io.unpickle_array)
             df['body_landmarks_normalized'] = df['body_landmarks_normalized'].apply(io.unpickle_array)
+            
             # if hand_results has any values
             # if not df['hand_results'].isnull().all():
             # print("body_landmarks_3D", df['body_landmarks_3D'][0])
             df[['left_hand_landmarks', 'left_hand_world_landmarks', 'left_hand_landmarks_norm', 'right_hand_landmarks', 'right_hand_world_landmarks', 'right_hand_landmarks_norm']] = pd.DataFrame(df['hand_results'].apply(sort.prep_hand_landmarks).tolist(), index=df.index)
+            # Get pointer knuckle positions from body landmarks (now returns 4 values including source tracking)
+            df[["left_pointer_knuckle_norm","right_pointer_knuckle_norm","left_source","right_source"]] = pd.DataFrame(
+                df.apply(lambda row: sort.prep_knuckle_landmarks(row['hand_results'], row['body_landmarks_normalized']), axis=1).tolist(), 
+                index=df.index)
             # if VERBOSE: print("about to split_landmarks_to_columns_or_list,", df.iloc[0])
             # df = sort.split_landmarks_to_columns_or_list(df, left_col="left_hand_world_landmarks", right_col="right_hand_world_landmarks", structure="list")
             df = sort.split_landmarks_to_columns_or_list(df, first_col="left_hand_landmarks_norm", second_col="right_hand_landmarks_norm", structure="list")

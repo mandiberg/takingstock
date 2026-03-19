@@ -53,6 +53,8 @@ def process_batch(task_queue, result_queue, db_config):
     # Create database engine for this process
     engine = create_engine(
         f"mysql+pymysql://{db_config['user']}:{db_config['pass']}@/{db_config['name']}?unix_socket={db_config['unix_socket']}",
+        pool_pre_ping=True,
+        pool_recycle=600,
         poolclass=NullPool
     )
     Session = sessionmaker(bind=engine)
@@ -173,6 +175,8 @@ def main():
     # Main process handles database connection for fetching records only
     engine = create_engine(
         f"mysql+pymysql://{db['user']}:{db['pass']}@/{db['name']}?unix_socket={db['unix_socket']}",
+        pool_pre_ping=True,
+        pool_recycle=600,
         poolclass=NullPool
     )
     Session = sessionmaker(bind=engine)
