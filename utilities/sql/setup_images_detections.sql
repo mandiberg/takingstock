@@ -6,9 +6,31 @@ Use Stock;
 
 -- 1. Add columns to Encodings table for face geometry
 ALTER TABLE Encodings 
-ADD COLUMN IF NOT EXISTS nose_x INT,
-ADD COLUMN IF NOT EXISTS nose_y INT,
-ADD COLUMN IF NOT EXISTS face_height INT;
+ADD COLUMN nose_x INT,
+ADD COLUMN nose_y INT,
+ADD COLUMN face_height INT;
+
+SHOW VARIABLES LIKE 'local_infile';
+
+-- export encoding_id, image_id, nose_x, nose_y, face_height from Encodings to migrate existing data to a different shard
+SELECT encoding_id, image_id, nose_x, nose_y, face_height
+FROM Encodings
+WHERE nose_x IS NOT NULL OR nose_y IS NOT NULL OR face_height IS NOT NULL
+LIMIT 10
+;
+
+
+-- import the data back to the Encodings table on the new shard (after copying the file to the new server)
+LOAD DATA INFILE '/tmp/encodings_face_geometry.csv'
+INTO TABLE Encodings
+FIELDS TERMINATED BY ','
+ENCLOSED BY '"'
+LINES TERMINATED BY '\n'
+(encoding_id, image_id, nose_x, nose_y, face_height)
+SET nose_x = NULLIF(nose_x, ''),
+    nose_y = NULLIF(nose_y, ''),
+    face_height = NULLIF(face_height, '')
+;
 
 -- 2. Recreate ImagesDetections table with current ObjectFusion schema
 DROP TABLE IF EXISTS ImagesDetections;

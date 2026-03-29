@@ -12,6 +12,10 @@ DELETE FROM ImagesDetections  ;
 DELETE FROM ObjectFusion ;
 
 
+SELECT COUNT(image_id)
+FROM ImagesDetections
+;
+
 -- Verify the changes
 DESCRIBE ImagesDetections;
 
@@ -35,6 +39,17 @@ WHERE  e.is_dupe_of IS NULL
 AND e.two_noses IS NULL
 AND e.is_face = 1
 AND e.mongo_body_landmarks_norm = 1
+;
+
+SELECT COUNT(d.image_id)
+FROM Detections d 
+WHERE d.conf = -1
+;
+
+SELECT COUNT(d.image_id)
+FROM Detections d 
+WHERE d.bbox_norm IS NULL
+LIMIT 10
 ;
 
 
@@ -66,7 +81,8 @@ SELECT
     SUM(CASE WHEN d.class_id = 18 THEN 1 ELSE 0 END) AS class_18,
     SUM(CASE WHEN d.class_id = 19 THEN 1 ELSE 0 END) AS class_19,
     SUM(CASE WHEN d.class_id = 20 THEN 1 ELSE 0 END) AS class_20,
-    SUM(CASE WHEN d.class_id = 21 THEN 1 ELSE 0 END) AS class_21,
+    SUM(CASE WHEN d.class_id = 21 
+    THEN 1 ELSE 0 END) AS class_21,
     SUM(CASE WHEN d.class_id = 22 THEN 1 ELSE 0 END) AS class_22,
     SUM(CASE WHEN d.class_id = 23 THEN 1 ELSE 0 END) AS class_23,
     SUM(CASE WHEN d.class_id = 24 THEN 1 ELSE 0 END) AS class_24,

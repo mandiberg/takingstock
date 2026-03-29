@@ -143,6 +143,10 @@ class Encodings(Base):
     pitch                = Column(Float)
     yaw                  = Column(Float)
     roll                 = Column(Float)
+    missing_mongo_body_landmarks_norm   = Column(Boolean)
+    missing_mongo_hand_landmarks   = Column(Boolean)
+    missing_mongo_hand_landmarks_norm   = Column(Boolean)
+    missing_mongo_body_landmarks_3D   = Column(Boolean)
     
 class Clusters(Base):
     __tablename__ = 'Clusters'
