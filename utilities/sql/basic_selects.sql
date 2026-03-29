@@ -21,12 +21,12 @@ LIMIT 10
 
 Select *
 FROM Images
-WHERE image_id = 53748578
+WHERE image_id = 120688973
 ;
 
 SELECT *
 FROM Encodings i 
-WHERE i.image_id = 123694200
+WHERE i.image_id = 337146
 ;
 
 SELECT *
@@ -41,6 +41,25 @@ WHERE e.is_face = 1
 AND e.bbox is NULL
 AND e.migrated = 1
 ;
+
+
+SELECT *
+FROM Detections d 
+WHERE d.image_id = 120688973
+;
+
+SELECT COUNT(*)
+FROM ImagesDetections id  
+;
+
+
+ALTER TABLE encodings
+  ADD COLUMN missing_mongo_body_landmarks_norm  TINYINT(1) DEFAULT NULL,
+  ADD COLUMN missing_mongo_hand_landmarks        TINYINT(1) DEFAULT NULL,
+  ADD COLUMN missing_mongo_hand_landmarks_norm   TINYINT(1) DEFAULT NULL,
+  ADD COLUMN missing_mongo_body_landmarks_3D     TINYINT(1) DEFAULT NULL;
+
+
 
 
 

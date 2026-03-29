@@ -51,8 +51,8 @@ ocr_engine = PaddleOCR(
 device = "mps" if torch.backends.mps.is_available() else "cpu"
 print("Using device:", device)
 yolo_model = YOLO("yolov8x.pt").to(device)  # load a pretrained YOLOv8x model
-yolo_custom_model = YOLO("models/takingstock_flag87_v0_yolov8m/weights/best.pt").to(device)
-yolo_custom_model = YOLO("models/takingstock_gun_v2_yolov8m/weights/best.pt").to(device)
+# yolo_custom_model = YOLO("models/takingstock_flag87_v0_yolov8m/weights/best.pt").to(device)
+yolo_custom_model = YOLO("models/takingstock_c11v3_yolov8m/weights/best.pt").to(device)
 
 VERBOSE = False
 ocr = OCRTools(DEBUGGING=True)
@@ -60,24 +60,26 @@ yolo = YOLOTools(DEBUGGING=True, VERBOSE=VERBOSE)
 
 
 blank = False
-DEBUGGING = False # saves debug images (option for bboxes drawn)
-SAVE_NEW_LABELS = False # saves new yolo labels to feed back into training data
-TESTING_NO_DB_WRITE = False # if True, will not write to database
-DO_COCO = True
-DO_CUSTOM = False
+DEBUGGING = True # saves debug images (option for bboxes drawn)
+SAVE_NEW_LABELS = True # saves new yolo labels to feed back into training data
+TESTING_NO_DB_WRITE = True # if True, will not write to database
+DO_COCO = False
+DO_CUSTOM = True
 DO_MASK = False
 DO_VALENTINE = False
 use_average_per_row=False # for valentine bbox detection
 DO_OCR = False
+CLASSES_TO_COMBINE = [89,90]
 
-# FILE_FOLDER = "/Volumes/LaCie/segment_images_84_valentine"
-FILE_FOLDER = "/Volumes/RAID18" # must be a folder holding the site folder(s)
+# FILE_FOLDER = "/Volumes/OWC5/segment_images_87_flag"
+FILE_FOLDER ="/Volumes/LaCie/segment_images_96_bitcoin"
+# FILE_FOLDER = "/Volumes/RAID18" # must be a folder holding the site folder(s)
 # MAKE_VIDEO_CSVS_PATH = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/book_csvs"
 MAKE_VIDEO_CSVS_PATH = None  # to process all images in folder
 OUTPUT_FOLDER = os.path.join(FILE_FOLDER, "test_output")
 BATCH_SIZE = 100
 MASK_THRESHOLD = .15  # HSV distance threshold for mask detection
-CONF_THRESHOLD = 0.3
+CONF_THRESHOLD = 0.01
 RED_THRESH = 180
 RED_DOM = 100
 VAL_MIN_SIZE = 60
@@ -135,14 +137,19 @@ table_cluster_type = cl.set_table_cluster_type(META)
 
 # masks class
 custom_ids_to_global_dict = {
-    0: 113,
-    1: 114,
-    2: 112,
-    3: 110,
-    4: 115,
-    5: 111,
+  0: 117,
+  1: 113,
+  2: 116,
+  3: 114,
+  4: 112,
+  5: 118,
+  6: 119,
+  7: 110,
+  8: 115,
+  9: 111,
 }
 
+# custom_ids_to_global_dict = {i:i for i in range(228)} # for testing, map custom ids to same global ids
 
 # custom_ids_to_global_dict = {
 #     0: 92,
