@@ -17,7 +17,7 @@ from configparser import ConfigParser
 class DataIO:
     """Store key database and file IO info for use across codebase"""
 
-    def __init__(self, IS_SSD=False, VERBOSE=False):
+    def __init__(self, IS_SSD=False, VERBOSE=False, SSD_PATH=None):
         self.VERBOSE = VERBOSE
         self.max_retries = 3
         self.retry_delay = 5
@@ -62,7 +62,9 @@ class DataIO:
             # moved images to SSD
             self.ROOT_DBx = os.path.join(self.home, "Library/CloudStorage/Dropbox/takingstock_dropbox/output_folder")
             self.ROOT_CODE= os.path.join(self.home,"Documents/GitHub/facemap/")
-            self.ROOT_PROD=  "/Volumes/OWC5/segment_images" ## only on Mac
+            # allow for override when constructing io class for different SSD scratch disks
+            if SSD_PATH: self.ROOT_PROD = SSD_PATH
+            else: self.ROOT_PROD=  "/Volumes/OWC5/segment_images" ## only on Mac
             self.ROOTSSD = os.path.join(self.home,"Documents/projects-active/facemap_production/output_folder") ## only on SSD
             self.ROOT54= "/Volumes/RAID54" ## only on 
             # temp migration for

@@ -36,7 +36,8 @@ NOSE_ID=0
 
 Base = declarative_base()
 VERBOSE = False
-IS_SSD = False
+IS_SSD = True
+SSD_PATH = None
 
 SKIP_EXISTING = False # Skips images with a normed bbox but that have Images.h - I think only applies to phone bbox
 USE_OBJ = False # do objet detections?
@@ -47,17 +48,28 @@ ACCEPT_EXSISTING_HANDS = True # if true, it will accept existing data and update
 IS_SEGMENT_BIG = False # use SegmentBig table. IF False, and IS_SSD is false, it will use Encodings table
 TESTING = False # if true, will not do any DB writes
 DETECTIONS_ONLY = False
-INNER_JOIN_TABLE = "SegmentHelper_topic11_business"
-# done 73 81 82 83 86 94 96
-# next SegmentHelperObject_80_sign
+
+# join on helper to limit scope and use SSD
+INNER_JOIN_HELPER = True
+# if you do this, you need to use the correct THIS_CLASS_ID 
+# that will call an ID_SEGMENT_DICT to produce the table and folder names 
+
+
+# INNER_JOIN_TABLE = "SegmentHelperObject_67_phone"
+# SSD_PATH = "/Volumes/SSD4_Green/segment_images_detected_63_67"
+# INNER_JOIN_TABLE = "SegmentHelperObject_45_salad"
+# SSD_PATH = "/Volumes/OWC5/segment_images_book_clock_bowl"
+
+# done 73 74 81 82 83 86 94 96
+# next SegmentHelperObject_80_sign SegmentHelper_topic11_business
 # SegmentHelperObject_74_clock SegmentHelperObject_73_book SegmentHelperObject_67_phone 
 # SegmentHelperObject_45_salad SegmentHelperObject_41_cup_glass (big)
 
-LIMIT= 15000000
+LIMIT= 10000000
 # Initialize the counter
 counter = 2000
 
-THIS_CLASS_ID = 67 # for object bbox normalization
+THIS_CLASS_ID = 45 # for object bbox normalization
 class_token = ID_SEGMENT_DICT.get(THIS_CLASS_ID, None)
 ssd = ID_SSD_DICT.get(THIS_CLASS_ID, None)
 if THIS_CLASS_ID in ID_FOLDER_DICT: folder_token = ID_FOLDER_DICT[THIS_CLASS_ID]
@@ -70,11 +82,11 @@ if class_token:
     print("SegmentFolder", SegmentFolder)
     # SORT_TYPE = "obj_bbox_fusion"
 else: 
-    SegmentHelper_name = 'SegmentHelperObject_45_salad'
-    # SegmentHelper_name = 'SegmentHelperObject_80_sign'
+    # SegmentHelper_name = 'SegmentHelperObject_45_salad'
+    SegmentHelper_name = 'SegmentHelperObject_80_sign'
     # THIS_CLASS_ID = 80 # for object bbox normalization
     SegmentFolder = "/Volumes/OWC5/segment_images"
-io = DataIO(IS_SSD)
+io = DataIO(IS_SSD, VERBOSE, SSD_PATH)
 db = io.db
 # io.db["name"] = "stock"
 # io.db["name"] = "ministock"
@@ -164,10 +176,10 @@ class SegmentHelper(Base):
     seg_image_id = Column(Integer, primary_key=True, autoincrement=True)
     image_id = Column(Integer, ForeignKey('Images.image_id'))
 
-class SegmentHelperInnerJoin(Base):
-    __tablename__ = INNER_JOIN_TABLE
-    seg_image_id = Column(Integer, primary_key=True, autoincrement=True)
-    image_id = Column(Integer, ForeignKey('Images.image_id'))
+# class SegmentHelperInnerJoin(Base):
+#     __tablename__ = INNER_JOIN_TABLE
+#     seg_image_id = Column(Integer, primary_key=True, autoincrement=True)
+#     image_id = Column(Integer, ForeignKey('Images.image_id'))
 
 
 if VERBOSE: print("objects created")
@@ -860,11 +872,11 @@ elif REPROCESS_HANDS == True and IS_SEGMENT_BIG == False:
         filter(Encodings.mongo_hand_landmarks == 1).\
         filter(Encodings.mongo_hand_landmarks_norm.is_(None)).\
         limit(LIMIT)
-    if INNER_JOIN_TABLE:
-        print(f"SUBSELECT_ON_CLASS_ID: limiting HANDS Encodings query to {INNER_JOIN_TABLE}")
+    if INNER_JOIN_HELPER:
+        print(f"SUBSELECT_ON_CLASS_ID: limiting HANDS Encodings query to {INNER_JOIN_HELPER}")
         distinct_image_ids_query = distinct_image_ids_query.\
         limit(None).\
-        join(SegmentHelperInnerJoin, SegmentHelperInnerJoin.image_id == Encodings.image_id).\
+        join(SegmentHelper, SegmentHelper.image_id == Encodings.image_id).\
         limit(LIMIT)
 
 elif not SKIP_BODY and IS_SEGMENT_BIG == True:
