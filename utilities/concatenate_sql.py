@@ -9,9 +9,9 @@ ONLY_DUPES = False  # Set to True to only include files with "dupes" in the file
 
 ROOT_FOLDER = "/Users/michaelmandiberg/Library/CloudStorage/Dropbox/Michael-Tench/"
 # ROOT_FOLDER = "/Volumes/OWC4/segment_images/dupe_sorting"
-dedupe_this = os.path.join(ROOT_FOLDER, 'dedupe_this')
-duped = os.path.join(ROOT_FOLDER, 'deduped')
-removed_files = os.path.join(ROOT_FOLDER, 'removed_files')
+dedupe_this = os.path.join(ROOT_FOLDER, 'dedupe_this') # this is where the unsorted files go -- they are needed for comparison
+duped = os.path.join(ROOT_FOLDER, 'deduped') # this is where the tench sorted files go
+removed_files = os.path.join(ROOT_FOLDER, 'removed_files') # this the ones that are is_not_dupe_of -- does this need to be emptied beofre running? 
 dupes_file = os.path.join(duped, "dupes.sql")
 
 def concatenate_sql_files(base_folder, merged_file):

@@ -35,17 +35,25 @@ NOSE_ID=0
 
 
 Base = declarative_base()
-VERBOSE = True
-IS_SSD = True
+VERBOSE = False
+IS_SSD = False
 
 SKIP_EXISTING = False # Skips images with a normed bbox but that have Images.h - I think only applies to phone bbox
-USE_OBJ = True # do objet detections?
-SKIP_BODY = True # skip body landmarks. mostly you want to skip when doing obj bbox
+USE_OBJ = False # do objet detections?
+SKIP_BODY = False # skip body landmarks. mostly you want to skip when doing obj bbox
                 # or are just redoing hands
-REPROCESS_HANDS = False # do hands
+REPROCESS_HANDS = True # do hands
+ACCEPT_EXSISTING_HANDS = True # if true, it will accept existing data and update bool in SQL to tru
 IS_SEGMENT_BIG = False # use SegmentBig table. IF False, and IS_SSD is false, it will use Encodings table
+TESTING = False # if true, will not do any DB writes
+DETECTIONS_ONLY = False
+INNER_JOIN_TABLE = "SegmentHelper_topic11_business"
+# done 73 81 82 83 86 94 96
+# next SegmentHelperObject_80_sign
+# SegmentHelperObject_74_clock SegmentHelperObject_73_book SegmentHelperObject_67_phone 
+# SegmentHelperObject_45_salad SegmentHelperObject_41_cup_glass (big)
 
-LIMIT= 6000000
+LIMIT= 15000000
 # Initialize the counter
 counter = 2000
 
@@ -156,6 +164,11 @@ class SegmentHelper(Base):
     seg_image_id = Column(Integer, primary_key=True, autoincrement=True)
     image_id = Column(Integer, ForeignKey('Images.image_id'))
 
+class SegmentHelperInnerJoin(Base):
+    __tablename__ = INNER_JOIN_TABLE
+    seg_image_id = Column(Integer, primary_key=True, autoincrement=True)
+    image_id = Column(Integer, ForeignKey('Images.image_id'))
+
 
 if VERBOSE: print("objects created")
 
@@ -183,7 +196,7 @@ def get_shape(target_image_id):
         )
     
     result = session.execute(select_image_ids_query).fetchall()
-    print("result", result)
+    print(f"result {target_image_id}", result)
     site_name_id, imagename = result[0]
     site_specific_root_folder = io.folder_list[site_name_id]
     if SegmentHelper_name is not None and IS_SSD and SegmentFolder is not None:
@@ -262,18 +275,73 @@ def get_landmarks_mongo(image_id):
             return None
     else:
         return None
+
+
+def has_existing_hand_landmarks_norm(image_id):
+    if image_id is None:
+        return False
+
+    # MySQL can surface ids as int/Decimal/str depending on driver settings.
+    # Query all likely forms to avoid false negatives on type mismatch.
+    candidate_ids = [image_id]
+    try:
+        candidate_ids.append(int(image_id))
+    except Exception:
+        pass
+    try:
+        candidate_ids.append(str(image_id))
+    except Exception:
+        pass
+    try:
+        candidate_ids.append(str(int(image_id)))
+    except Exception:
+        pass
+    # Preserve order, remove duplicates.
+    candidate_ids = list(dict.fromkeys(candidate_ids))
+
+    # Fetch all likely matches and inspect in Python to avoid edge cases with
+    # nested query operators and mixed schema across historical documents.
+    cursor = mongo_hand_collection.find({"image_id": {"$in": candidate_ids}})
+
+    docs_checked = 0
+    for doc in cursor:
+        # print("checking doc", doc)
+        docs_checked += 1
+
+        # Legacy or alternate flat payload shape.
+        flat_norm = doc.get("hand_landmarks_norm")
+        if isinstance(flat_norm, list) and len(flat_norm) > 0:
+            return True
+        if flat_norm not in (None, {}, "", []):
+            return True
+
+        # Canonical nested payload shape.
+        for hand_side in ("left_hand", "right_hand"):
+            hand_payload = doc.get(hand_side)
+            if not isinstance(hand_payload, dict):
+                continue
+            hand_norm = hand_payload.get("hand_landmarks_norm")
+            if isinstance(hand_norm, list) and len(hand_norm) > 0:
+                return True
+            if hand_norm not in (None, {}, "", []):
+                return True
+
+    if (VERBOSE or TESTING) and docs_checked == 0:
+        print("has_existing_hand_landmarks_norm no docs for", image_id, "candidate_ids", candidate_ids)
+
+    return False
     
-def get_hand_landmarks_mongo(image_id):
-    if image_id:
-        results = mongo_hand_collection.find_one({"image_id": image_id})
-        if results:
-            hand_landmarks = results['nlms']
-            # print("got encodings from mongo, types are: ", type(face_encodings68), type(face_landmarks), type(body_landmarks))
-            return unpickle_array(hand_landmarks)
-        else:
-            return None
-    else:
-        return None
+# def get_hand_landmarks_mongo(image_id):
+#     if image_id:
+#         results = mongo_hand_collection.find_one({"image_id": image_id})
+#         if results:
+#             hand_landmarks = results['nlms']
+#             # print("got encodings from mongo, types are: ", type(face_encodings68), type(face_landmarks), type(body_landmarks))
+#             return unpickle_array(hand_landmarks)
+#         else:
+#             return None
+#     else:
+#         return None
     
 # def insert_n_landmarks(image_id,n_landmarks):
 #     nlms_dict = { "image_id": image_id, "nlms": pickle.dumps(n_landmarks) }
@@ -313,7 +381,7 @@ def insert_n_phone_bbox(image_id,n_phone_bbox):
         phone_bbox_norm_entry.bbox_26_norm = cast(json.dumps(n_phone_bbox), JSON_TYPE)
         if VERBOSE:
             print("image_id:", PhoneBbox.image_id,"bbox_26_norm:", phone_bbox_norm_entry.bbox_26_norm)
-    session.commit()
+    if not TESTING: session.commit()
 
 def insert_detections_norm_bbox(detection_id, n_bbox):
     detections_bbox_norm_entry = (
@@ -326,7 +394,7 @@ def insert_detections_norm_bbox(detection_id, n_bbox):
         detections_bbox_norm_entry.bbox_norm = n_bbox
         if VERBOSE:
             print("detection_id:", detection_id, "bbox_norm:", detections_bbox_norm_entry.bbox_norm)
-    session.commit()
+    if not TESTING: session.commit()
 
 
 def unpickle_array(pickled_array):
@@ -398,7 +466,7 @@ def insert_shape(target_image_id,shape):
         Images_entry.w=shape[1]
         if VERBOSE:
             print("image_id:", Images_entry.image_id,"height:", Images_entry.h,"width:", Images_entry.w)
-    session.commit()
+    if not TESTING: session.commit()
     return
 
 def get_obj_bbox(target_image_id):
@@ -442,9 +510,32 @@ def calc_nlm(image_id_to_shape, lock, session):
     target_image_id = list(image_id_to_shape.keys())[0]
     body_landmarks = None
 
+    # short circuit and just check if norm hands exist already
+    if REPROCESS_HANDS and ACCEPT_EXSISTING_HANDS:
+        # Query Mongo directly for existing normalized hands to avoid false
+        # negatives when multiple docs exist for the same image_id.
+        existing_hand_landmarks_norm = has_existing_hand_landmarks_norm(target_image_id)
+        print("existing_hand_landmarks_norm", existing_hand_landmarks_norm)
+        if existing_hand_landmarks_norm:
+            print(f" ☑️ ☑️ ☑️ ACCEPTING EXISTING NORMALIZED HAND LANDMARKS for image_id {target_image_id}, updating SQL to reflect that.")
+            session.query(Encodings).filter(Encodings.image_id == target_image_id).update({
+                    Encodings.mongo_hand_landmarks_norm: 1
+                }, synchronize_session=False)
+            if not IS_SEGMENT_BIG:
+                # skip this if using SegmentBig, no mongo_hand_landmarks_norm column
+                session.query(SegmentTable).filter(SegmentTable.image_id == target_image_id).update({
+                        SegmentTable.mongo_hand_landmarks_norm: 1
+                    }, synchronize_session=False)
+            if not TESTING: 
+                print("committing session for existing normalized hand landmarks", target_image_id)
+                session.commit()    
+            return
+
+
+
     # TK this needs to be ported to calc body code
     height,width, bbox = image_id_to_shape[target_image_id]
-
+    bbox = io.unstring_json(bbox) if type(bbox)==str else bbox
     # get the shape of the image if no height in db
     if height and width:
         if VERBOSE: print(target_image_id, "have height,width already",height,width)
@@ -475,13 +566,21 @@ def calc_nlm(image_id_to_shape, lock, session):
     if sort.VERBOSE: print("nose_pixel_pos from face",nose_pixel_pos_face)
     # only do this if the io.get_encodings_mongo didn't return the body landmarks
     if not body_landmarks: body_landmarks=get_landmarks_mongo(target_image_id)
-    print("body_landmarks",type(body_landmarks), " first few lms:", body_landmarks[:5] if body_landmarks else "None")
+    if VERBOSE:print("body_landmarks",type(body_landmarks), " first few lms:", body_landmarks[:5] if body_landmarks else "None")
     if body_landmarks and type(body_landmarks) == bytes:
         nose_pixel_pos_body_withviz = sort.set_nose_pixel_pos(body_landmarks,[height,width])
+        if nose_pixel_pos_body_withviz is None:
+            print(f" ❌ ❌ ❌ SKIP image_id {target_image_id}: invalid body landmarks for nose pixel projection. No DB writes.")
+            return
         # exit the whole script
-        print(" ✅ ✅ ✅ Converted and saved lms, with nose pixel", nose_pixel_pos_body_withviz)
+        print(f" ✅ ✅ ✅ Converted and saved bodyLms {target_image_id}, with nose pixel", nose_pixel_pos_body_withviz)
         # sys.exit(0)
-
+    elif face_landmarks and type(face_landmarks) == bytes:
+        nose_pixel_pos_body_withviz = sort.set_nose_pixel_pos(face_landmarks,[height,width], bbox)
+        if nose_pixel_pos_body_withviz is None:
+            print(f" ❌ ❌ ❌ SKIP image_id {target_image_id}: invalid face landmarks or missing bbox for nose pixel projection. No DB writes.")
+            return
+        print(f" ☑️ ☑️ ☑️ Converted and saved faceLms {target_image_id}, with nose pixel", nose_pixel_pos_body_withviz)
     else:
         print(" ❌ BODY LANDMARK NOT FOUND 404, bailing for this one ", target_image_id)
         return
@@ -566,7 +665,7 @@ def calc_nlm(image_id_to_shape, lock, session):
             session.query(SegmentTable).filter(SegmentTable.image_id == target_image_id).update({
                     SegmentTable.two_noses: 1
                 }, synchronize_session=False)
-        session.commit()
+        if not TESTING: session.commit()
         return
 
     else:
@@ -577,6 +676,7 @@ def calc_nlm(image_id_to_shape, lock, session):
 
     if hand_results:
         if VERBOSE: print("has hand_landmarks")
+
         hand_landmarks_norm=sort.normalize_hand_landmarks(hand_results,nose_pixel_pos_body,face_height,[height,width])
         # print("hand_landmarks_norm",hand_landmarks_norm)
         sort.update_hand_landmarks_in_mongo(mongo_hand_collection, target_image_id,hand_landmarks_norm)
@@ -588,7 +688,7 @@ def calc_nlm(image_id_to_shape, lock, session):
             session.query(SegmentTable).filter(SegmentTable.image_id == target_image_id).update({
                     SegmentTable.mongo_hand_landmarks_norm: 1
                 }, synchronize_session=False)
-        # session.commit()    
+        # if not TESTING: session.commit()    
         
     if body_landmarks:
         if VERBOSE: print("has body_landmarks")
@@ -601,6 +701,18 @@ def calc_nlm(image_id_to_shape, lock, session):
             if type(body_landmarks) == bytes:
                 body_landmarks = pickle.loads(body_landmarks)
             n_landmarks=sort.normalize_landmarks(body_landmarks,nose_pixel_pos_body,face_height,[height,width])
+            if n_landmarks is None:
+                if isinstance(body_landmarks, list):
+                    print(f"normalize_landmarks returned None for {target_image_id}; retrying after convert_new_mp_to_old_format")
+                    try:
+                        body_landmarks = sort.convert_new_mp_to_old_format(body_landmarks)
+                        n_landmarks = sort.normalize_landmarks(body_landmarks, nose_pixel_pos_body, face_height, [height,width])
+                    except Exception as e:
+                        print(f"convert_new_mp_to_old_format failed for {target_image_id}: {e}")
+                        n_landmarks = None
+                if n_landmarks is None:
+                    print(f" ⚔️ ⚔️ ⚔️ SKIP image_id {target_image_id}: could not normalize body_landmarks input format. No DB writes.")
+                    return
 
             # if VERBOSE: print("Time to get norm lms:", time.time()-start)
             # start = time.time()
@@ -608,7 +720,7 @@ def calc_nlm(image_id_to_shape, lock, session):
             if VERBOSE: print("about to insert n_landmarks",n_landmarks)
             
             # store the normalized landmarks in mongo
-            sort.insert_n_landmarks(bboxnormed_collection, target_image_id,n_landmarks)
+            if not TESTING: sort.insert_n_landmarks(bboxnormed_collection, target_image_id,n_landmarks)
             # update encodings and segment tables to reflect that the landmarks have been normalized
             session.query(Encodings).filter(Encodings.image_id == target_image_id).update({
                     Encodings.mongo_body_landmarks_norm: 1
@@ -618,7 +730,7 @@ def calc_nlm(image_id_to_shape, lock, session):
                 session.query(SegmentTable).filter(SegmentTable.image_id == target_image_id).update({
                         SegmentTable.mongo_body_landmarks_norm: 1
                     }, synchronize_session=False)
-            # session.commit()
+            # if not TESTING: session.commit()
 
             if VERBOSE: print("did insert_n_landmarks, going to get phone bbox")
             # if VERBOSE: print("Time to get insert:", time.time()-start)
@@ -657,7 +769,7 @@ def calc_nlm(image_id_to_shape, lock, session):
         global counter
         counter -= 1
         # temp comment
-        session.commit()
+        if not TESTING: session.commit()
     if counter % 100 == 0:
         print(f"This many left: {counter}")
     return
@@ -748,6 +860,13 @@ elif REPROCESS_HANDS == True and IS_SEGMENT_BIG == False:
         filter(Encodings.mongo_hand_landmarks == 1).\
         filter(Encodings.mongo_hand_landmarks_norm.is_(None)).\
         limit(LIMIT)
+    if INNER_JOIN_TABLE:
+        print(f"SUBSELECT_ON_CLASS_ID: limiting HANDS Encodings query to {INNER_JOIN_TABLE}")
+        distinct_image_ids_query = distinct_image_ids_query.\
+        limit(None).\
+        join(SegmentHelperInnerJoin, SegmentHelperInnerJoin.image_id == Encodings.image_id).\
+        limit(LIMIT)
+
 elif not SKIP_BODY and IS_SEGMENT_BIG == True:
     print("doing BODY using SegmentBig")
     distinct_image_ids_query = select(Images.image_id.distinct(), Images.h, Images.w, SegmentTable.bbox).\
@@ -767,6 +886,16 @@ elif not SKIP_BODY and IS_SEGMENT_BIG == False:
         filter(Encodings.mongo_body_landmarks == 1).\
         filter(Encodings.mongo_body_landmarks_norm.is_(None)).\
         limit(LIMIT)
+    
+    if DETECTIONS_ONLY: 
+        print("DETECTIONS_ONLY: limiting BODY query to images with Detections")
+        distinct_image_ids_query = distinct_image_ids_query.\
+        limit(None).\
+        join(Detections, Detections.image_id == Encodings.image_id).\
+        filter(Detections.bbox != None).\
+        filter(Detections.conf > 0).\
+        limit(LIMIT)
+        
 else:
     print(f"doing something else that wasn't caught because SKIP_BODY is {SKIP_BODY}, REPROCESS_HANDS is {REPROCESS_HANDS} and IS_SEGMENT_BIG is {IS_SEGMENT_BIG}")
 
@@ -821,7 +950,7 @@ if VERBOSE:
 
 
 results = session.execute(distinct_image_ids_query).fetchall()
-if VERBOSE: print("query executed, results length", len(results))
+print("query executed, results length", len(results))
 # make a dictionary of image_id to shape
 for result in results:
     if VERBOSE: print("result", result)
@@ -872,7 +1001,7 @@ threads_completed.wait()
 print("done")
 # Close the session
 # temp comment
-# session.commit()
+# if not TESTING: session.commit()
 session.close()
 
 # Print the time taken

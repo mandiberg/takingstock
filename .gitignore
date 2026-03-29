@@ -171,3 +171,7 @@ model_files/model_isnotface/topics_isnotface_96.txt
 *.task
 openaiAPI.py
 config.ini
+/models
+/models
+/output
+*.pt

@@ -3553,6 +3553,27 @@ class SortPose:
 # BODY BACKGROUND OBJECT DETECTION STUFF            #
 #####################################################
 
+    def check_hands_for_normalization(self, results):
+        # check if hands are present in the results and have non-empty hand_landmarks_norm
+        if not isinstance(results, dict):
+            return False
+
+        for hand_side in ['left_hand', 'right_hand']:
+            hand_payload = results.get(hand_side)
+            if not isinstance(hand_payload, dict):
+                continue
+
+            hand_landmarks_norm = hand_payload.get('hand_landmarks_norm', None)
+            if isinstance(hand_landmarks_norm, list):
+                if len(hand_landmarks_norm) > 0:
+                    return True
+            elif hand_landmarks_norm not in (None, {}, ""):
+                return True
+            else:
+                print(f"results[{hand_side}]: {hand_payload.keys()} does not contain non-empty 'hand_landmarks_norm'")
+                print(f"results[{hand_side}]: {hand_payload}")
+        return False
+
     def normalize_hand_landmarks(self, results, nose_pos, face_height, shape):
         height, width = shape[:2]
         translated_landmark_dict = {}
@@ -3592,13 +3613,45 @@ class SortPose:
         # this is also in tools_yolo. Needed in both places. 
         height,width = shape[:2]
         translated_landmarks = landmark_pb2.NormalizedLandmarkList()
-        for landmark in landmarks.landmark:
-            # print("normalize_landmarks", nose_pos["x"], landmark.x, width, face_height)
+
+        if type(landmarks) == bytes:
+            landmarks = pickle.loads(landmarks)
+
+        if hasattr(landmarks, 'landmark'):
+            landmarks_iter = landmarks.landmark
+        elif isinstance(landmarks, list):
+            landmarks_iter = landmarks
+        else:
+            print(f"normalize_landmarks ERROR: unsupported landmarks type {type(landmarks)}")
+            return None
+
+        for landmark in landmarks_iter:
+            if hasattr(landmark, 'x') and hasattr(landmark, 'y'):
+                lm_x = landmark.x
+                lm_y = landmark.y
+                lm_visibility = getattr(landmark, 'visibility', 0.0)
+            elif isinstance(landmark, dict):
+                if 'x' not in landmark or 'y' not in landmark:
+                    continue
+                lm_x = landmark['x']
+                lm_y = landmark['y']
+                lm_visibility = landmark.get('visibility', 0.0)
+            elif isinstance(landmark, (list, tuple)) and len(landmark) >= 2:
+                lm_x = landmark[0]
+                lm_y = landmark[1]
+                lm_visibility = landmark[3] if len(landmark) > 3 else 0.0
+            else:
+                continue
+
             translated_landmark = landmark_pb2.NormalizedLandmark()
-            translated_landmark.x = (nose_pos["x"]-landmark.x*width )/face_height
-            translated_landmark.y = (nose_pos["y"]-landmark.y*height)/face_height
-            translated_landmark.visibility = landmark.visibility
+            translated_landmark.x = (nose_pos["x"]-lm_x*width )/face_height
+            translated_landmark.y = (nose_pos["y"]-lm_y*height)/face_height
+            translated_landmark.visibility = lm_visibility
             translated_landmarks.landmark.append(translated_landmark)
+
+        if len(translated_landmarks.landmark) == 0:
+            print("normalize_landmarks ERROR: no valid landmarks parsed from input")
+            return None
 
         return translated_landmarks
 
@@ -3631,39 +3684,123 @@ class SortPose:
 
 
 
-    def set_nose_pixel_pos(self,body_landmarks,shape):
-        # body_landmarks = self.ensure_lms_list(body_landmarks)  # Ensure body_landmarks is a list
-        # if body_landmarks is pickled, unpickle it
-        if type(body_landmarks)==bytes:
-            body_landmarks=pickle.loads(body_landmarks)
-        if self.VERBOSE: print("set_nose_pixel_pos: body_landmarks type", type(body_landmarks))
-        height,width = shape[:2]
-        if self.VERBOSE: print("set_nose_pixel_pos bodylms height, width", height, width)
-        nose_pixel_pos ={
-            "x":0,
-            "y":0,
-            "visibility":0
+    def set_nose_pixel_pos(self, body_or_face_landmarks, shape, bbox=None):
+        """
+        Project nose landmark to pixel coordinates for either body or face landmarks.
+        
+        Args:
+            body_or_face_landmarks: MediaPipe landmarks - either body (33 points) or face (468/478 points).
+                Can be protobuf NormalizedLandmarkList, list of NormalizedLandmark, or pickled bytes.
+            shape: Image shape tuple (height, width, channels) - used for pixel projection.
+            bbox: Required for face landmarks (468/478 points). Dict with keys 'left', 'right', 'top', 'bottom'
+                defining face bounding box. Optional for body landmarks.
+        
+        Returns:
+            Dictionary with keys 'x', 'y', 'visibility' representing nose pixel position.
+            Also sets self.nose_2d and self.nose_3d.
+        
+        Notes:
+            Returns None (and logs an error) if:
+            - face landmarks are passed without bbox
+            - landmark count is neither 33 (body) nor 468/478 (face)
+        """
+        # Unpickle if needed
+        if type(body_or_face_landmarks) == bytes:
+            body_or_face_landmarks = pickle.loads(body_or_face_landmarks)
+        
+        if self.VERBOSE: 
+            print("set_nose_pixel_pos: input landmarks type", type(body_or_face_landmarks))
+        
+        height, width = shape[:2]
+        if self.VERBOSE: 
+            print("set_nose_pixel_pos: image dimensions - height:", height, "width:", width)
+        
+        # Convert list format to protobuf if needed
+        if isinstance(body_or_face_landmarks, list):
+            if self.VERBOSE: 
+                print("set_nose_pixel_pos: converting list format to protobuf NormalizedLandmarkList")
+            body_or_face_landmarks = self.convert_new_mp_to_old_format(body_or_face_landmarks)
+        
+        # Detect landmark type by count
+        num_landmarks = len(body_or_face_landmarks.landmark) if hasattr(body_or_face_landmarks, 'landmark') else 0
+        
+        if num_landmarks == 33:
+            # Body landmarks: 33 points from MediaPipe Pose
+            landmark_type = "body"
+            nose_index = 0
+        elif num_landmarks in (468, 478):
+            # Face landmarks: 468 (base) or 478 (with iris) points
+            landmark_type = "face"
+            nose_index = 1
+            if num_landmarks == 478 and self.VERBOSE:
+                print("set_nose_pixel_pos: detected 478-point face landmarks (iris-refined mesh)")
+        else:
+            print(
+                f"set_nose_pixel_pos ERROR: Expected 33 (body) or 468/478 (face) landmarks, got {num_landmarks}. "
+                f"Verify landmark source is MediaPipe Pose (body) or Face Landmarks Detection (face)."
+            )
+            return None
+        
+        # Validate bbox requirement for face landmarks
+        if landmark_type == "face" and bbox is None:
+            print(
+                "set_nose_pixel_pos ERROR: Face landmarks (468/478 points) require bbox parameter. "
+                "Face landmarks are relative to bounding box; provide bbox dict with keys: "
+                "'left', 'right', 'top', 'bottom'."
+            )
+            return None
+        
+        if self.VERBOSE:
+            print(f"set_nose_pixel_pos: detected {landmark_type.upper()} landmarks ({num_landmarks} points), "
+                  f"using nose index {nose_index}")
+        
+        # Initialize nose position dict
+        nose_pixel_pos = {
+            "x": 0,
+            "y": 0,
+            "visibility": 0
         }
-        # Handle different body_landmarks formats
-        if isinstance(body_landmarks, list):
-            # New format: list of NormalizedLandmark objects
-            if self.VERBOSE: print("set_nose_pixel_pos: body_landmarks is a list, converting to protobuf format")            
-            # Convert list to landmark_pb2.NormalizedLandmarkList
-            body_landmarks = self.convert_new_mp_to_old_format(body_landmarks)
-
-        # nose_pixel_pos <- 864, 442 (stay as a separate variable)
-        # nose_normalized_pos 0,0
-        # nose_pos=body_landmarks.landmark[NOSE_ID]
-        if self.VERBOSE: print("unprojected bodylms: ", body_landmarks.landmark[0].x, body_landmarks.landmark[0].y)
-        nose_pixel_pos["x"]+=body_landmarks.landmark[0].x*width
-        nose_pixel_pos["y"]+=body_landmarks.landmark[0].y*height
-        if self.VERBOSE: print ("set_nose_pixel_pos bodylms nose_pixel_pos", nose_pixel_pos)
-        self.nose_2d = nose_pixel_pos # this could be a problem
-        if self.VERBOSE: print("set_nose_pixel_pos nose_pixel_pos",nose_pixel_pos)
-        if self.VERBOSE: print("set_nose_pixel_pos self.nose_2d",self.nose_2d)
-        nose_pixel_pos["visibility"]+=body_landmarks.landmark[0].visibility
-        # nose_3d has visibility 
+        
+        # Get nose landmark
+        nose_landmark = body_or_face_landmarks.landmark[nose_index]
+        
+        if self.VERBOSE:
+            print(f"set_nose_pixel_pos: unprojected {landmark_type} nose - x:{nose_landmark.x:.4f}, y:{nose_landmark.y:.4f}")
+        
+        # Project to pixel coordinates based on landmark type
+        if landmark_type == "body":
+            # Body landmarks are in full image coordinates: multiply by image dimensions
+            nose_pixel_pos["x"] = nose_landmark.x * width
+            nose_pixel_pos["y"] = nose_landmark.y * height
+        else:  # landmark_type == "face"
+            # Face landmarks are bbox-relative: apply bbox offsets before projecting
+            bbox_x = bbox['left']
+            bbox_y = bbox['top']
+            bbox_w = bbox['right'] - bbox['left']
+            bbox_h = bbox['bottom'] - bbox['top']
+            
+            nose_pixel_pos["x"] = nose_landmark.x * bbox_w + bbox_x
+            nose_pixel_pos["y"] = nose_landmark.y * bbox_h + bbox_y
+            
+            if self.VERBOSE:
+                print(f"set_nose_pixel_pos: applying bbox offsets - "
+                      f"bbox: ({bbox_x}, {bbox_y}, {bbox_w}x{bbox_h})")
+        
+        # Set visibility
+        nose_pixel_pos["visibility"] = nose_landmark.visibility
+        
+        if self.VERBOSE:
+            print(f"set_nose_pixel_pos: projected nose_pixel_pos - x:{nose_pixel_pos['x']:.2f}, "
+                  f"y:{nose_pixel_pos['y']:.2f}, visibility:{nose_pixel_pos['visibility']:.4f}")
+        
+        # Store in instance variables
+        self.nose_2d = (nose_pixel_pos["x"], nose_pixel_pos["y"])
         self.nose_3d = nose_pixel_pos
+        
+        if self.VERBOSE:
+            print("set_nose_pixel_pos: stored self.nose_2d =", self.nose_2d)
+            print("set_nose_pixel_pos: stored self.nose_3d =", self.nose_3d)
+        
         return nose_pixel_pos
 
     def convert_new_mp_to_old_format(self, body_landmarks):
