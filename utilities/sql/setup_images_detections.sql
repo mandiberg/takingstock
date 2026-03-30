@@ -53,6 +53,8 @@ CREATE TABLE ImagesDetections (
     left_hand_object_id INT,
     right_hand_object_id INT,
     top_face_object_id INT,
+    left_eye_object_id INT,
+    right_eye_object_id INT,
     mouth_object_id INT,
     shoulder_object_id INT,
     
@@ -70,6 +72,8 @@ CREATE TABLE ImagesDetections (
     CONSTRAINT fk_img_det_left_hand FOREIGN KEY (left_hand_object_id) REFERENCES Detections(detection_id),
     CONSTRAINT fk_img_det_right_hand FOREIGN KEY (right_hand_object_id) REFERENCES Detections(detection_id),
     CONSTRAINT fk_img_det_top_face FOREIGN KEY (top_face_object_id) REFERENCES Detections(detection_id),
+    CONSTRAINT fk_img_det_left_eye FOREIGN KEY (left_eye_object_id) REFERENCES Detections(detection_id),
+    CONSTRAINT fk_img_det_right_eye FOREIGN KEY (right_eye_object_id) REFERENCES Detections(detection_id),
     CONSTRAINT fk_img_det_mouth FOREIGN KEY (mouth_object_id) REFERENCES Detections(detection_id),
     CONSTRAINT fk_img_det_shoulder FOREIGN KEY (shoulder_object_id) REFERENCES Detections(detection_id)
 );
