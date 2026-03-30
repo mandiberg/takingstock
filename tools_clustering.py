@@ -22,6 +22,7 @@ class ToolsClustering:
         self.CONFIDENCE_DIFF_THRESHOLD = 0.3
         self.MIN_DETECTION_CONFIDENCE = 0.4
         self.DEFAULT_HAND_POSITION = [0.0, 8.0, 0.0]
+        self.TIE_CLASS_ID = 27
         self.USE_WHITELIST = True
         all_class_ids = set(range(0, 104))
 
@@ -745,8 +746,88 @@ class ToolsClustering:
         # First, resolve overlapping detections
         detections = self.resolve_overlapping_detections(detections)
 
+        tie_locked_slots = set()
+        tie_blocked_detection_ids = set()
+
+        def assign_slot_if_preferred(slot_name, det):
+            if results[slot_name] is None or det['conf'] > results[slot_name]['conf']:
+                results[slot_name] = det
+
+        tie_detections = [
+            det for det in detections
+            if self._get_detection_class_id(det) == self.TIE_CLASS_ID
+        ]
+        tie_detections.sort(key=lambda det: det.get('conf', 0.0), reverse=True)
+
+        for tie_det in tie_detections:
+            tie_bbox = tie_det['bbox']
+            tie_detection_id = tie_det['detection_id']
+
+            hand_allowed = self._passes_slot_whitelist(tie_det, 'hand')
+            shoulder_allowed = self._passes_slot_whitelist(tie_det, 'shoulder')
+            mouth_allowed = self._passes_slot_whitelist(tie_det, 'mouth')
+
+            if not hand_allowed:
+                self._record_whitelist_reject('hand')
+            if not shoulder_allowed:
+                self._record_whitelist_reject('shoulder')
+            if not mouth_allowed:
+                self._record_whitelist_reject('mouth')
+
+            neck_match = shoulder_allowed and self.is_shoulder_object(tie_bbox, left_shoulder, right_shoulder)
+            left_touching = hand_allowed and self.is_touching_hand(left_knuckle, tie_bbox)
+            right_touching = hand_allowed and self.is_touching_hand(right_knuckle, tie_bbox)
+            mouth_match = mouth_allowed and self.is_mouth_object(tie_bbox)
+
+            if neck_match:
+                assign_slot_if_preferred('shoulder_object', tie_det)
+                tie_locked_slots.add('shoulder_object')
+                tie_blocked_detection_ids.add(tie_detection_id)
+                if self.VERBOSE:
+                    print(f"  [TIE] detection_id={tie_detection_id} -> shoulder_object (neck priority)")
+                continue
+
+            if left_touching and right_touching:
+                assign_slot_if_preferred('left_hand_object', tie_det)
+                assign_slot_if_preferred('right_hand_object', tie_det)
+                tie_locked_slots.update(['left_hand_object', 'right_hand_object'])
+                tie_blocked_detection_ids.add(tie_detection_id)
+                if self.VERBOSE:
+                    print(f"  [TIE] detection_id={tie_detection_id} -> both hands")
+                continue
+
+            if right_touching:
+                assign_slot_if_preferred('right_hand_object', tie_det)
+                tie_locked_slots.add('right_hand_object')
+                tie_blocked_detection_ids.add(tie_detection_id)
+                if self.VERBOSE:
+                    print(f"  [TIE] detection_id={tie_detection_id} -> right_hand_object")
+                continue
+
+            if left_touching:
+                assign_slot_if_preferred('left_hand_object', tie_det)
+                tie_locked_slots.add('left_hand_object')
+                tie_blocked_detection_ids.add(tie_detection_id)
+                if self.VERBOSE:
+                    print(f"  [TIE] detection_id={tie_detection_id} -> left_hand_object")
+                continue
+
+            if mouth_match:
+                assign_slot_if_preferred('mouth_object', tie_det)
+                tie_locked_slots.add('mouth_object')
+                tie_blocked_detection_ids.add(tie_detection_id)
+                if self.VERBOSE:
+                    print(f"  [TIE] detection_id={tie_detection_id} -> mouth_object")
+                continue
+
+            tie_blocked_detection_ids.add(tie_detection_id)
+            if self.VERBOSE:
+                print(f"  [TIE] detection_id={tie_detection_id} -> no assignment")
+
         # 1. Find best object for each hand independently (same object may be assigned to both)
-        def best_object_for_hand(knuckle):
+        def best_object_for_hand(knuckle, existing_hand_object=None):
+            if existing_hand_object is not None:
+                return existing_hand_object
             if knuckle == self.DEFAULT_HAND_POSITION:
                 return None
 
@@ -754,6 +835,8 @@ class ToolsClustering:
             nearby_candidates = []
 
             for det in detections:
+                if det['detection_id'] in tie_blocked_detection_ids:
+                    continue
                 if not self._passes_slot_whitelist(det, 'hand'):
                     self._record_whitelist_reject('hand')
                     continue
@@ -773,8 +856,8 @@ class ToolsClustering:
 
             return None
 
-        results['left_hand_object'] = best_object_for_hand(left_knuckle)
-        results['right_hand_object'] = best_object_for_hand(right_knuckle)
+        results['left_hand_object'] = best_object_for_hand(left_knuckle, results['left_hand_object'])
+        results['right_hand_object'] = best_object_for_hand(right_knuckle, results['right_hand_object'])
 
         # Hand-assigned objects are excluded from all other zones
         hand_detection_ids = set()
@@ -784,7 +867,8 @@ class ToolsClustering:
                 hand_detection_ids.add(hand_det['detection_id'])
 
         non_hand_detections = [
-            det for det in detections if det['detection_id'] not in hand_detection_ids
+            det for det in detections
+            if det['detection_id'] not in hand_detection_ids and det['detection_id'] not in tie_blocked_detection_ids
         ]
 
         # 2. Eye assignments (same object may map to both eyes, e.g., eyeglasses)
@@ -844,13 +928,13 @@ class ToolsClustering:
                 elif bbox['top'] < results['top_face_object']['bbox']['top']:
                     results['top_face_object'] = det
 
-            if mouth_allowed and self.is_mouth_object(bbox):
+            if 'mouth_object' not in tie_locked_slots and mouth_allowed and self.is_mouth_object(bbox):
                 if results['mouth_object'] is None:
                     results['mouth_object'] = det
                 elif bbox['top'] < results['mouth_object']['bbox']['top']:
                     results['mouth_object'] = det
 
-            if shoulder_allowed and self.is_shoulder_object(bbox, left_shoulder, right_shoulder):
+            if 'shoulder_object' not in tie_locked_slots and shoulder_allowed and self.is_shoulder_object(bbox, left_shoulder, right_shoulder):
                 if results['shoulder_object'] is None:
                     results['shoulder_object'] = det
                 elif det['conf'] > results['shoulder_object']['conf']:
