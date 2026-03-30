@@ -36,7 +36,7 @@ NOSE_ID=0
 
 Base = declarative_base()
 VERBOSE = False
-IS_SSD = True
+IS_SSD = False
 SSD_PATH = None
 
 SKIP_EXISTING = False # Skips images with a normed bbox but that have Images.h - I think only applies to phone bbox
@@ -60,16 +60,16 @@ INNER_JOIN_HELPER = True
 # INNER_JOIN_TABLE = "SegmentHelperObject_45_salad"
 # SSD_PATH = "/Volumes/OWC5/segment_images_book_clock_bowl"
 
-# done 73 74 81 82 83 86 94 96
+# done 45 73 74 81 82 83 86 92 94 96
 # next SegmentHelperObject_80_sign SegmentHelper_topic11_business
-# SegmentHelperObject_74_clock SegmentHelperObject_73_book SegmentHelperObject_67_phone 
-# SegmentHelperObject_45_salad SegmentHelperObject_41_cup_glass (big)
+# SegmentHelperObject_67_phone 
+# SegmentHelperObject_41_cup_glass (big)
 
-LIMIT= 10000000
+LIMIT= 2000000
 # Initialize the counter
 counter = 2000
 
-THIS_CLASS_ID = 45 # for object bbox normalization
+THIS_CLASS_ID = 0 # for object bbox normalization
 class_token = ID_SEGMENT_DICT.get(THIS_CLASS_ID, None)
 ssd = ID_SSD_DICT.get(THIS_CLASS_ID, None)
 if THIS_CLASS_ID in ID_FOLDER_DICT: folder_token = ID_FOLDER_DICT[THIS_CLASS_ID]
@@ -83,7 +83,7 @@ if class_token:
     # SORT_TYPE = "obj_bbox_fusion"
 else: 
     # SegmentHelper_name = 'SegmentHelperObject_45_salad'
-    SegmentHelper_name = 'SegmentHelperObject_80_sign'
+    SegmentHelper_name = 'SegmentHelper_topic11_business'
     # THIS_CLASS_ID = 80 # for object bbox normalization
     SegmentFolder = "/Volumes/OWC5/segment_images"
 io = DataIO(IS_SSD, VERBOSE, SSD_PATH)
