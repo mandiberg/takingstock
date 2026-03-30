@@ -25,6 +25,14 @@ class ToolsClustering:
         # Face object constraints to avoid large background objects
         self.MAX_FACE_WIDTH = 2.0  # max width of left+right to be considered face object
         self.MAX_FACE_VERT_EXTENSION = 0.75  # max how far object can extend into opposite zone
+        self.EYE_ZONE_TOP = -0.65
+        self.EYE_ZONE_BOTTOM = 0.15
+        self.LEFT_EYE_X_MIN = -0.9
+        self.LEFT_EYE_X_MAX = -0.05
+        self.RIGHT_EYE_X_MIN = 0.05
+        self.RIGHT_EYE_X_MAX = 0.9
+        self.FULL_FACE_MASK_TOP_MAX = -0.15
+        self.FULL_FACE_MASK_BOTTOM_MIN = 0.15
         
         # Feature standardization settings for ObjectFusion
         self.USE_FEATURE_STANDARDIZATION = True  # Use StandardScaler to normalize all features to similar scale
@@ -316,6 +324,46 @@ class ToolsClustering:
                 width <= self.MAX_FACE_WIDTH and
                 extends_into_top <= 0.0)
 
+    def _bbox_intersects_rect(self, bbox, x_min, x_max, y_top, y_bottom):
+        """Check whether bbox intersects a rectangular zone."""
+        return not (
+            bbox['right'] < x_min
+            or bbox['left'] > x_max
+            or bbox['bottom'] < y_top
+            or bbox['top'] > y_bottom
+        )
+
+    def is_full_face_mask_object(self, bbox):
+        """Check if bbox covers both eyes+mouth region (full-face sheet mask style)."""
+        width = bbox['right'] - bbox['left']
+        return (
+            bbox['left'] < -0.15
+            and bbox['right'] > 0.15
+            and bbox['top'] <= self.FULL_FACE_MASK_TOP_MAX
+            and bbox['bottom'] >= self.FULL_FACE_MASK_BOTTOM_MIN
+            and width <= self.MAX_FACE_WIDTH
+        )
+
+    def is_left_eye_object(self, bbox):
+        """Check if bbox intersects the left-eye zone."""
+        return self._bbox_intersects_rect(
+            bbox,
+            self.LEFT_EYE_X_MIN,
+            self.LEFT_EYE_X_MAX,
+            self.EYE_ZONE_TOP,
+            self.EYE_ZONE_BOTTOM,
+        )
+
+    def is_right_eye_object(self, bbox):
+        """Check if bbox intersects the right-eye zone."""
+        return self._bbox_intersects_rect(
+            bbox,
+            self.RIGHT_EYE_X_MIN,
+            self.RIGHT_EYE_X_MAX,
+            self.EYE_ZONE_TOP,
+            self.EYE_ZONE_BOTTOM,
+        )
+
     def _extract_xy_from_landmark(self, landmark):
         """Extract (x, y) from a landmark in object/dict/list form."""
         if landmark is None:
@@ -494,7 +542,8 @@ class ToolsClustering:
         """
         Classify each detection based on its relationship to hands and face.
         Returns dict with keys: left_hand_object, right_hand_object,
-                               top_face_object, mouth_object, shoulder_object
+                               top_face_object, left_eye_object, right_eye_object,
+                               mouth_object, shoulder_object
         Each value is the detection dict or None.
         """
 
@@ -505,6 +554,8 @@ class ToolsClustering:
             'left_hand_object': None,
             'right_hand_object': None,
             'top_face_object': None,
+            'left_eye_object': None,
+            'right_eye_object': None,
             'mouth_object': None,
             'shoulder_object': None,
         }
@@ -515,30 +566,7 @@ class ToolsClustering:
         # First, resolve overlapping detections
         detections = self.resolve_overlapping_detections(detections)
 
-        # 1. Check for top_face_object, mouth_object, shoulder_object
-        for det in detections:
-            bbox = det['bbox']
-            
-            if self.is_top_face_object(bbox):
-                if results['top_face_object'] is None:
-                    results['top_face_object'] = det
-                # Keep the one that's most "on top" (most negative top value)
-                elif bbox['top'] < results['top_face_object']['bbox']['top']:
-                    results['top_face_object'] = det
-            
-            if self.is_mouth_object(bbox):
-                if results['mouth_object'] is None:
-                    results['mouth_object'] = det
-                elif bbox['top'] < results['mouth_object']['bbox']['top']:
-                    results['mouth_object'] = det
-
-            if self.is_shoulder_object(bbox, left_shoulder, right_shoulder):
-                if results['shoulder_object'] is None:
-                    results['shoulder_object'] = det
-                elif det['conf'] > results['shoulder_object']['conf']:
-                    results['shoulder_object'] = det
-
-        # 2. Find best object for each hand independently (same object may be assigned to both)
+        # 1. Find best object for each hand independently (same object may be assigned to both)
         def best_object_for_hand(knuckle):
             if knuckle == self.DEFAULT_HAND_POSITION:
                 return None
@@ -565,13 +593,65 @@ class ToolsClustering:
 
         results['left_hand_object'] = best_object_for_hand(left_knuckle)
         results['right_hand_object'] = best_object_for_hand(right_knuckle)
+
+        # Hand-assigned objects are excluded from all other zones
+        hand_detection_ids = set()
+        for hand_key in ['left_hand_object', 'right_hand_object']:
+            hand_det = results[hand_key]
+            if hand_det is not None:
+                hand_detection_ids.add(hand_det['detection_id'])
+
+        non_hand_detections = [
+            det for det in detections if det['detection_id'] not in hand_detection_ids
+        ]
+
+        # 2. Eye assignments (same object may map to both eyes, e.g., eyeglasses)
+        for det in non_hand_detections:
+            bbox = det['bbox']
+
+            if self.is_full_face_mask_object(bbox):
+                continue
+
+            if self.is_left_eye_object(bbox):
+                if results['left_eye_object'] is None:
+                    results['left_eye_object'] = det
+                elif det['conf'] > results['left_eye_object']['conf']:
+                    results['left_eye_object'] = det
+
+            if self.is_right_eye_object(bbox):
+                if results['right_eye_object'] is None:
+                    results['right_eye_object'] = det
+                elif det['conf'] > results['right_eye_object']['conf']:
+                    results['right_eye_object'] = det
+
+        # 3. Top-face / mouth / shoulder assignments
+        for det in non_hand_detections:
+            bbox = det['bbox']
+
+            if self.is_top_face_object(bbox):
+                if results['top_face_object'] is None:
+                    results['top_face_object'] = det
+                elif bbox['top'] < results['top_face_object']['bbox']['top']:
+                    results['top_face_object'] = det
+
+            if self.is_mouth_object(bbox):
+                if results['mouth_object'] is None:
+                    results['mouth_object'] = det
+                elif bbox['top'] < results['mouth_object']['bbox']['top']:
+                    results['mouth_object'] = det
+
+            if self.is_shoulder_object(bbox, left_shoulder, right_shoulder):
+                if results['shoulder_object'] is None:
+                    results['shoulder_object'] = det
+                elif det['conf'] > results['shoulder_object']['conf']:
+                    results['shoulder_object'] = det
         
         return results
 
     def query_and_classify_detections(self, image_id, left_knuckle, right_knuckle, left_shoulder=None, right_shoulder=None):
         """
         Query detections for an image and classify their relationship to hands/face.
-        Returns dict with 5 keys, each containing a detection payload dict or None.
+        Returns dict with 7 keys, each containing a detection payload dict or None.
         """
         if self.session is None:
             raise ValueError("Session not initialized. Pass session to ToolsClustering.__init__()")
@@ -596,6 +676,8 @@ class ToolsClustering:
                 'left_hand_object': None,
                 'right_hand_object': None,
                 'top_face_object': None,
+                'left_eye_object': None,
+                'right_eye_object': None,
                 'mouth_object': None,
                 'shoulder_object': None,
             }
@@ -624,6 +706,9 @@ class ToolsClustering:
                 print(f"    is_top_face_object:    {self.is_top_face_object(bbox)}")
                 print(f"      (top<0={bbox['top']<0}, left<0={bbox['left']<0}, right>0={bbox['right']>0}, width={bbox['right']-bbox['left']:.4f}<=MAX={self.MAX_FACE_WIDTH}, extends_into_bottom={max(0,bbox['bottom']):.4f}<=MAX_VERT={self.MAX_FACE_VERT_EXTENSION})")
                 print(f"    is_bottom_face_object: {self.is_bottom_face_object(bbox)}")
+                print(f"    is_left_eye_object:    {self.is_left_eye_object(bbox)}")
+                print(f"    is_right_eye_object:   {self.is_right_eye_object(bbox)}")
+                print(f"    is_full_face_mask:     {self.is_full_face_mask_object(bbox)}")
                 print(f"    is_mouth_object:       {self.is_mouth_object(bbox)}")
                 print(f"    is_shoulder_object:    {self.is_shoulder_object(bbox, left_shoulder, right_shoulder)}")
                 dist_left  = self.point_to_bbox_distance(left_knuckle, bbox)  if left_knuckle  != self.DEFAULT_HAND_POSITION else None
@@ -666,6 +751,8 @@ class ToolsClustering:
         df['left_hand_object'] = None
         df['right_hand_object'] = None
         df['top_face_object'] = None
+        df['left_eye_object'] = None
+        df['right_eye_object'] = None
         df['mouth_object'] = None
         df['shoulder_object'] = None
         
@@ -695,6 +782,8 @@ class ToolsClustering:
             df.at[idx, 'left_hand_object'] = classifications['left_hand_object']
             df.at[idx, 'right_hand_object'] = classifications['right_hand_object']
             df.at[idx, 'top_face_object'] = classifications['top_face_object']
+            df.at[idx, 'left_eye_object'] = classifications['left_eye_object']
+            df.at[idx, 'right_eye_object'] = classifications['right_eye_object']
             df.at[idx, 'mouth_object'] = classifications['mouth_object']
             df.at[idx, 'shoulder_object'] = classifications['shoulder_object']
         
@@ -726,7 +815,7 @@ class ToolsClustering:
     def get_precomputed_detections_by_image_ids(self, image_ids):
         """
         Read precomputed detection assignments from ImagesDetections and join to Detections.
-        Returns dict keyed by image_id with values containing the 5 detection payload fields.
+        Returns dict keyed by image_id with values containing the 7 detection payload fields.
         """
         if self.session is None:
             raise ValueError("Session not initialized. Pass session to ToolsClustering.__init__()")
@@ -753,6 +842,16 @@ class ToolsClustering:
                 tf.conf AS top_face_conf,
                 tf.bbox_norm AS top_face_bbox_norm,
 
+                le.detection_id AS left_eye_detection_id,
+                le.class_id AS left_eye_class_id,
+                le.conf AS left_eye_conf,
+                le.bbox_norm AS left_eye_bbox_norm,
+
+                re.detection_id AS right_eye_detection_id,
+                re.class_id AS right_eye_class_id,
+                re.conf AS right_eye_conf,
+                re.bbox_norm AS right_eye_bbox_norm,
+
                 mo.detection_id AS mouth_detection_id,
                 mo.class_id AS mouth_class_id,
                 mo.conf AS mouth_conf,
@@ -766,6 +865,8 @@ class ToolsClustering:
             LEFT JOIN Detections lh ON idet.left_hand_object_id = lh.detection_id
             LEFT JOIN Detections rh ON idet.right_hand_object_id = rh.detection_id
             LEFT JOIN Detections tf ON idet.top_face_object_id = tf.detection_id
+            LEFT JOIN Detections le ON idet.left_eye_object_id = le.detection_id
+            LEFT JOIN Detections re ON idet.right_eye_object_id = re.detection_id
             LEFT JOIN Detections mo ON idet.mouth_object_id = mo.detection_id
             LEFT JOIN Detections so ON idet.shoulder_object_id = so.detection_id
             WHERE idet.image_id IN :image_ids
@@ -786,6 +887,12 @@ class ToolsClustering:
                 'top_face_object': self._build_detection_payload_from_sql_fields(
                     row['top_face_detection_id'], row['top_face_class_id'], row['top_face_conf'], row['top_face_bbox_norm']
                 ),
+                'left_eye_object': self._build_detection_payload_from_sql_fields(
+                    row['left_eye_detection_id'], row['left_eye_class_id'], row['left_eye_conf'], row['left_eye_bbox_norm']
+                ),
+                'right_eye_object': self._build_detection_payload_from_sql_fields(
+                    row['right_eye_detection_id'], row['right_eye_class_id'], row['right_eye_conf'], row['right_eye_bbox_norm']
+                ),
                 'mouth_object': self._build_detection_payload_from_sql_fields(
                     row['mouth_detection_id'], row['mouth_class_id'], row['mouth_conf'], row['mouth_bbox_norm']
                 ),
@@ -804,7 +911,8 @@ class ToolsClustering:
         """
         required_cols = [
             'left_hand_object', 'right_hand_object',
-            'top_face_object', 'mouth_object', 'shoulder_object'
+            'top_face_object', 'left_eye_object', 'right_eye_object',
+            'mouth_object', 'shoulder_object'
         ]
         for col in required_cols:
             if col not in df.columns:
@@ -824,6 +932,8 @@ class ToolsClustering:
             df.at[idx, 'left_hand_object'] = payload['left_hand_object']
             df.at[idx, 'right_hand_object'] = payload['right_hand_object']
             df.at[idx, 'top_face_object'] = payload['top_face_object']
+            df.at[idx, 'left_eye_object'] = payload['left_eye_object']
+            df.at[idx, 'right_eye_object'] = payload['right_eye_object']
             df.at[idx, 'mouth_object'] = payload['mouth_object']
             df.at[idx, 'shoulder_object'] = payload['shoulder_object']
 
@@ -861,7 +971,7 @@ class ToolsClustering:
         
         # Detection columns (6 values each: class_id, conf, top, left, right, bottom)
         detection_cols = ['left_hand_object', 'right_hand_object', 'top_face_object',
-                  'mouth_object', 'shoulder_object']
+                  'left_eye_object', 'right_eye_object', 'mouth_object', 'shoulder_object']
         detection_fields = ['class_id', 'conf', 'top', 'left', 'right', 'bottom']
         
         # Create feature dict by concatenating all values
@@ -988,13 +1098,15 @@ class ToolsClustering:
     def construct_fusion_list(self, row):
         """
         Construct fusion list from a dataframe row for ObjectFusion sorting.
-        Returns list format: [pitch, yaw, roll, left_hand(6), right_hand(6), top_face(6), mouth(6), shoulder(6)]
-        Total: 33 elements (3 + 5*6)
+        Returns list format: [pitch, yaw, roll, left_hand(6), right_hand(6), top_face(6),
+                              left_eye(6), right_eye(6), mouth(6), shoulder(6)]
+        Total: 45 elements (3 + 7*6)
         """
         fusion_list = row['pitch_yaw_roll_list'].copy()  # Start with [pitch, yaw, roll]
         
         # Add detection data (each is 6 elements: class_id, conf, top, left, right, bottom)
-        for col in ['left_hand_object', 'right_hand_object', 'top_face_object', 'mouth_object', 'shoulder_object']:
+        for col in ['left_hand_object', 'right_hand_object', 'top_face_object',
+                    'left_eye_object', 'right_eye_object', 'mouth_object', 'shoulder_object']:
             detection = row[col]
             if detection is None:
                 fusion_list.extend([0.0, 0.0, 0.0, 0.0, 0.0, 0.0])  # 6 zeros for None
