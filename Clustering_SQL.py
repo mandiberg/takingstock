@@ -105,6 +105,8 @@ OFFSET = 0
 # START_ID = 129478350 # only used in MODE 1
 START_ID = 0 # only used in MODE 1
 DET_CONF_THRESHOLD = 0.4 # only used for ObjectFusion clustering to filter out low confidence detections
+SAVE_IMAGE_DETECTIONS_PER_BATCH = True  # persist ObjectFusion ImagesDetections every 5000-row batch
+DROP_NONE_PLACEMENTS = True  # drop ObjectFusion rows with no object assignments before KMeans
 # WHICH TABLE TO USE?
 # SegmentTable_name = 'SegmentOct20'
 SegmentTable_name = 'SegmentBig_isface'
@@ -284,7 +286,7 @@ if USE_SEGMENT is True and (cl.CLUSTER_TYPE != "Clusters"):
         WHERE = " cluster_id IS NOT NULL "
 
     # WHERE += " AND h.is_body = 1"
-    LIMIT = 10000000
+    LIMIT = 550000
     BATCH_LIMIT = 10000
 
     '''
@@ -570,7 +572,8 @@ def build_col_list(df):
     if cl.CLUSTER_TYPE == "ObjectFusion":
         # for ObjectFusion, we need to get pitch, yaw, roll and object detection columns
         col_list["ObjectFusion"] = ['pitch', 'yaw', 'roll', 'left_hand_object', 'right_hand_object',
-                          'top_face_object', 'mouth_object', 'shoulder_object']
+                          'top_face_object', 'left_eye_object', 'right_eye_object',
+                          'mouth_object', 'shoulder_object']
     elif "body" in cl.CLUSTER_DATA[cl.CLUSTER_TYPE]["data_column"]:
         # tests data_column, so works for ArmsPoses3D too
         second_column_name = df.columns[1]
@@ -1067,6 +1070,8 @@ def save_images_detections(df, engine):
                 'left_hand_object_id': extract_detection_id(row.get('left_hand_object')),
                 'right_hand_object_id': extract_detection_id(row.get('right_hand_object')),
                 'top_face_object_id': extract_detection_id(row.get('top_face_object')),
+                'left_eye_object_id': extract_detection_id(row.get('left_eye_object')),
+                'right_eye_object_id': extract_detection_id(row.get('right_eye_object')),
                 'mouth_object_id': extract_detection_id(row.get('mouth_object')),
                 'shoulder_object_id': extract_detection_id(row.get('shoulder_object')),
             }
@@ -1196,7 +1201,12 @@ def prepare_df(df, process_object_detections=True, batch_label=None):
         # df['image_id'].apply(lambda image_id: query_detections(image_id))
         if process_object_detections:
             df = cl.process_detections_for_df(df)
-            object_assignment_cols = ['left_hand_object', 'right_hand_object', 'top_face_object', 'mouth_object', 'shoulder_object']
+            if getattr(cl, 'USE_WHITELIST', False) and hasattr(cl, 'get_whitelist_reject_counts'):
+                whitelist_rejects = cl.get_whitelist_reject_counts()
+                compact_rejects = {k: int(v) for k, v in whitelist_rejects.items() if int(v) > 0}
+                print(f"{label}[COUNT] Whitelist rejects by slot: {compact_rejects if compact_rejects else 'none'}")
+            object_assignment_cols = ['left_hand_object', 'right_hand_object', 'top_face_object',
+                                      'left_eye_object', 'right_eye_object', 'mouth_object', 'shoulder_object']
             rows_with_any_object = int(df[object_assignment_cols].notna().any(axis=1).sum())
             rows_with_no_objects = int(len(df) - rows_with_any_object)
             print(f"{label}[COUNT] Rows with any object assignment: {rows_with_any_object}")
@@ -1204,7 +1214,8 @@ def prepare_df(df, process_object_detections=True, batch_label=None):
             for col in object_assignment_cols:
                 print(f"{label}[COUNT] {col} assigned: {int(df[col].notna().sum())}")
         else:
-            for col in ['left_hand_object', 'right_hand_object', 'top_face_object', 'mouth_object', 'shoulder_object']:
+            for col in ['left_hand_object', 'right_hand_object', 'top_face_object',
+                        'left_eye_object', 'right_eye_object', 'mouth_object', 'shoulder_object']:
                 if col not in df.columns:
                     df[col] = None
 
@@ -1352,7 +1363,12 @@ def prepare_df(df, process_object_detections=True, batch_label=None):
         # df['image_id'].apply(lambda image_id: query_detections(image_id))
         if process_object_detections:
             df = cl.process_detections_for_df(df)
-            object_assignment_cols = ['left_hand_object', 'right_hand_object', 'top_face_object', 'mouth_object', 'shoulder_object']
+            if getattr(cl, 'USE_WHITELIST', False) and hasattr(cl, 'get_whitelist_reject_counts'):
+                whitelist_rejects = cl.get_whitelist_reject_counts()
+                compact_rejects = {k: int(v) for k, v in whitelist_rejects.items() if int(v) > 0}
+                print(f"{label}[COUNT] Whitelist rejects by slot: {compact_rejects if compact_rejects else 'none'}")
+            object_assignment_cols = ['left_hand_object', 'right_hand_object', 'top_face_object',
+                                      'left_eye_object', 'right_eye_object', 'mouth_object', 'shoulder_object']
             rows_with_any_object = int(df[object_assignment_cols].notna().any(axis=1).sum())
             rows_with_no_objects = int(len(df) - rows_with_any_object)
             print(f"{label}[COUNT] Rows with any object assignment: {rows_with_any_object}")
@@ -1360,7 +1376,8 @@ def prepare_df(df, process_object_detections=True, batch_label=None):
             for col in object_assignment_cols:
                 print(f"{label}[COUNT] {col} assigned: {int(df[col].notna().sum())}")
         else:
-            for col in ['left_hand_object', 'right_hand_object', 'top_face_object', 'mouth_object', 'shoulder_object']:
+            for col in ['left_hand_object', 'right_hand_object', 'top_face_object',
+                        'left_eye_object', 'right_eye_object', 'mouth_object', 'shoulder_object']:
                 if col not in df.columns:
                     df[col] = None
 
@@ -1591,7 +1608,8 @@ def fetch_and_prepare_batch(batch_df, batch_num):
                 missing_prepared['newly_processed_detection'] = True
 
                 update_cols = [
-                    'left_hand_object', 'right_hand_object', 'top_face_object', 'mouth_object', 'shoulder_object',
+                    'left_hand_object', 'right_hand_object', 'top_face_object',
+                    'left_eye_object', 'right_eye_object', 'mouth_object', 'shoulder_object',
                     'left_pointer_knuckle_norm', 'right_pointer_knuckle_norm', 'left_source', 'right_source',
                     'newly_processed_detection'
                 ]
@@ -1614,7 +1632,8 @@ def fetch_and_prepare_batch(batch_df, batch_num):
                     print(f"[Batch {batch_num}] [COUNT] Batch rows with left knuckle column populated: {int(batch_prepared['left_pointer_knuckle_norm'].notna().sum())}")
                 if 'right_pointer_knuckle_norm' in batch_prepared.columns:
                     print(f"[Batch {batch_num}] [COUNT] Batch rows with right knuckle column populated: {int(batch_prepared['right_pointer_knuckle_norm'].notna().sum())}")
-                for col in ['left_hand_object', 'right_hand_object', 'top_face_object', 'mouth_object', 'shoulder_object']:
+                for col in ['left_hand_object', 'right_hand_object', 'top_face_object',
+                            'left_eye_object', 'right_eye_object', 'mouth_object', 'shoulder_object']:
                     if col in batch_prepared.columns:
                         print(f"[Batch {batch_num}] [COUNT] Batch {col} populated: {int(batch_prepared[col].notna().sum())}")
             else:
@@ -1644,6 +1663,26 @@ def main():
     def calculate_clusters_and_save(enc_data):
         # I drop image_id, etc as I pass it to knn bc I need it later, but knn can't handle strings
         print("df columns: ",enc_data.columns)
+
+        if cl.CLUSTER_TYPE == "ObjectFusion" and DROP_NONE_PLACEMENTS:
+            object_assignment_cols = [
+                'left_hand_object', 'right_hand_object', 'top_face_object',
+                'left_eye_object', 'right_eye_object', 'mouth_object', 'shoulder_object'
+            ]
+            existing_object_cols = [col for col in object_assignment_cols if col in enc_data.columns]
+            if existing_object_cols:
+                rows_before_drop = len(enc_data)
+                has_any_object_mask = enc_data[existing_object_cols].notna().any(axis=1)
+                enc_data = enc_data[has_any_object_mask].copy()
+                dropped_rows = rows_before_drop - len(enc_data)
+                print(f"[COUNT] DROP_NONE_PLACEMENTS active: dropped {dropped_rows} rows with no object placements; kept {len(enc_data)}")
+            else:
+                print("[COUNT] DROP_NONE_PLACEMENTS active, but no object assignment columns found; skipping drop.")
+
+        if len(enc_data) == 0:
+            print("No rows remain after DROP_NONE_PLACEMENTS filter. Skipping KMeans clustering.")
+            return
+
         columns_to_drop = []
         columns_to_check = ["image_id", "cluster_id", "body_landmarks_array", "left_hand_landmarks_norm", "right_hand_landmarks_norm", "hand_results", "face_encodings68"]
         columns_to_drop += [col for col in columns_to_check if col in enc_data.columns]
@@ -1798,16 +1837,19 @@ def main():
                     print(f"Skipping Encodings geometry update; missing columns: {sorted(missing_cols)}")
 
                 # Save ImagesDetections table only for newly processed IDs
-                if 'newly_processed_detection' in df_with_geometry.columns:
-                    df_new = df_with_geometry[df_with_geometry['newly_processed_detection'] == True].copy()
-                    print(f"[DEBUG] Newly processed rows to persist: {len(df_new)}")
-                    if len(df_new) > 0:
-                        save_images_detections(df_new, engine)
-                    else:
-                        print("[DEBUG] No newly processed rows. Skipping ImagesDetections save.")
+                if SAVE_IMAGE_DETECTIONS_PER_BATCH:
+                    print("[DEBUG] Skipping final ImagesDetections write (already persisted per batch).")
                 else:
-                    print("[DEBUG] newly_processed_detection column missing; defaulting to full save.")
-                    save_images_detections(df_with_geometry, engine)
+                    if 'newly_processed_detection' in df_with_geometry.columns:
+                        df_new = df_with_geometry[df_with_geometry['newly_processed_detection'] == True].copy()
+                        print(f"[DEBUG] Newly processed rows to persist: {len(df_new)}")
+                        if len(df_new) > 0:
+                            save_images_detections(df_new, engine)
+                        else:
+                            print("[DEBUG] No newly processed rows. Skipping ImagesDetections save.")
+                    else:
+                        print("[DEBUG] newly_processed_detection column missing; defaulting to full save.")
+                        save_images_detections(df_with_geometry, engine)
             except Exception as e:
                 print(f"Error in ObjectFusion post-processing: {e}")
         
@@ -1858,6 +1900,22 @@ def main():
                 
                 # Interleaved: MongoDB + MySQL for this batch
                 batch_prepared = fetch_and_prepare_batch(batch_df, batch_num)
+
+                # Persist ImagesDetections immediately per batch to avoid losing progress on crash
+                if cl.CLUSTER_TYPE == "ObjectFusion" and SAVE_IMAGE_DETECTIONS_PER_BATCH:
+                    try:
+                        if 'newly_processed_detection' in batch_prepared.columns:
+                            batch_to_save = batch_prepared[batch_prepared['newly_processed_detection'] == True].copy()
+                        else:
+                            batch_to_save = batch_prepared.copy()
+
+                        print(f"[Batch {batch_num}] ImagesDetections rows to persist now: {len(batch_to_save)}")
+                        if len(batch_to_save) > 0:
+                            save_images_detections(batch_to_save, engine)
+                        else:
+                            print(f"[Batch {batch_num}] No new ImagesDetections rows to persist.")
+                    except Exception as e:
+                        print(f"[Batch {batch_num}] Error persisting ImagesDetections mid-run: {e}")
                 
                 all_prepared_batches.append(batch_prepared)
                 gc.collect()

@@ -51,8 +51,8 @@ ocr_engine = PaddleOCR(
 device = "mps" if torch.backends.mps.is_available() else "cpu"
 print("Using device:", device)
 yolo_model = YOLO("yolov8x.pt").to(device)  # load a pretrained YOLOv8x model
-# yolo_custom_model = YOLO("models/takingstock_flag87_v0_yolov8m/weights/best.pt").to(device)
-yolo_custom_model = YOLO("models/takingstock_c11v3_yolov8m/weights/best.pt").to(device)
+yolo_custom_model = YOLO("models/takingstock_flag_multi_v1_yolo26m/weights/best.pt").to(device)
+# yolo_custom_model = YOLO("models/takingstock_c11v3_yolov8m/weights/best.pt").to(device)
 
 VERBOSE = False
 ocr = OCRTools(DEBUGGING=True)
@@ -135,21 +135,22 @@ table_cluster_type = cl.set_table_cluster_type(META)
 #   10: 103
 # }
 
-# masks class
-custom_ids_to_global_dict = {
-  0: 117,
-  1: 113,
-  2: 116,
-  3: 114,
-  4: 112,
-  5: 118,
-  6: 119,
-  7: 110,
-  8: 115,
-  9: 111,
-}
+# # masks class
+# custom_ids_to_global_dict = {
+#   0: 117,
+#   1: 113,
+#   2: 116,
+#   3: 114,
+#   4: 112,
+#   5: 118,
+#   6: 119,
+#   7: 110,
+#   8: 115,
+#   9: 111,
+# }
 
-# custom_ids_to_global_dict = {i:i for i in range(228)} # for testing, map custom ids to same global ids
+# flags 230 class
+custom_ids_to_global_dict = {i:i for i in range(228)} # for testing, map custom ids to same global ids
 
 # custom_ids_to_global_dict = {
 #     0: 92,
