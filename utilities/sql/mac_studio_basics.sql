@@ -186,6 +186,18 @@ INNER JOIN (
 
   UNION
 
+  SELECT image_id, left_eye_object_id AS detection_id
+  FROM ImagesDetections
+  WHERE left_eye_object_id IS NOT NULL
+
+  UNION
+
+  SELECT image_id, right_eye_object_id AS detection_id
+  FROM ImagesDetections
+  WHERE right_eye_object_id IS NOT NULL
+
+  UNION
+
   SELECT image_id, mouth_object_id AS detection_id
   FROM ImagesDetections
   WHERE mouth_object_id IS NOT NULL
@@ -208,6 +220,8 @@ SELECT
   SUM(CASE WHEN pos.object_position = 'left_hand' THEN 1 ELSE 0 END) AS left_hand_count,
   SUM(CASE WHEN pos.object_position = 'right_hand' THEN 1 ELSE 0 END) AS right_hand_count,
   SUM(CASE WHEN pos.object_position = 'top_face' THEN 1 ELSE 0 END) AS top_face_count,
+  SUM(CASE WHEN pos.object_position = 'left_eye' THEN 1 ELSE 0 END) AS left_eye_count,
+  SUM(CASE WHEN pos.object_position = 'right_eye' THEN 1 ELSE 0 END) AS right_eye_count,
   SUM(CASE WHEN pos.object_position = 'mouth' THEN 1 ELSE 0 END) AS mouth_count,
   SUM(CASE WHEN pos.object_position = 'shoulder' THEN 1 ELSE 0 END) AS shoulder_count,
   COUNT(*) AS total_position_assignments,
@@ -231,6 +245,18 @@ FROM (
 
   UNION ALL
 
+  SELECT idet.image_id, 'left_eye' AS object_position, d.class_id
+  FROM ImagesDetections idet
+  INNER JOIN Detections d ON idet.left_eye_object_id = d.detection_id
+
+  UNION ALL
+
+  SELECT idet.image_id, 'right_eye' AS object_position, d.class_id
+  FROM ImagesDetections idet
+  INNER JOIN Detections d ON idet.right_eye_object_id = d.detection_id
+
+  UNION ALL
+
   SELECT idet.image_id, 'mouth' AS object_position, d.class_id
   FROM ImagesDetections idet
   INNER JOIN Detections d ON idet.mouth_object_id = d.detection_id
@@ -250,15 +276,7 @@ USE Stock;
 
 DROP TABLE IF EXISTS ImagesObjectFusion;
 
-CREATE TABLE ImagesObjectFusion (
-  image_id INT NOT NULL,
-  cluster_id INT NOT NULL,
-  cluster_dist FLOAT,
-  PRIMARY KEY (image_id),
-  KEY idx_cluster_id (cluster_id),
-  CONSTRAINT fk_iof_image FOREIGN KEY (image_id) REFERENCES Images(image_id) ON DELETE CASCADE,
-  CONSTRAINT fk_iof_cluster FOREIGN KEY (cluster_id) REFERENCES ObjectFusion(cluster_id) ON DELETE CASCADE
-);
+
 
 
 
@@ -281,91 +299,3 @@ FROM (
 -- denormalized class_id: 1024	8	589417	4072.7109	29453.3158708742	67
 	-- face angle 0.3: 1024	2	1430938	4072.7109	50742.639562944336	53
 
-
-
-
--- First, identify the largest 4 clusters
-CREATE TEMPORARY TABLE top_4_clusters AS
-SELECT cluster_id FROM ImagesObjectFusion 
-GROUP BY cluster_id 
-HAVING COUNT(*) > 100000
-ORDER BY COUNT(*) DESC 
-LIMIT 4;
-
--- Then analyze them
-SELECT 
-    ic.cluster_id,
-    COUNT(*) as cluster_size,
-    AVG(e.pitch) as avg_pitch,
-    STDDEV(e.pitch) as stddev_pitch,
-    MIN(e.pitch) as min_pitch, 
-    MAX(e.pitch) as max_pitch,
-    AVG(e.yaw) as avg_yaw,
-    STDDEV(e.yaw) as stddev_yaw,
-    MIN(e.yaw) as min_yaw, 
-    MAX(e.yaw) as max_yaw,
-    AVG(e.roll) as avg_roll,
-    STDDEV(e.roll) as stddev_roll,
-    MIN(e.roll) as min_roll, 
-    MAX(e.roll) as max_roll
-FROM ImagesObjectFusion ic
-JOIN Encodings e ON ic.image_id = e.image_id
-WHERE ic.cluster_id IN (SELECT cluster_id FROM top_4_clusters)
-GROUP BY ic.cluster_id
-ORDER BY cluster_size DESC;
-
-
-
-CREATE TABLE top_4_clusters AS SELECT cluster_id FROM ImagesObjectFusion GROUP BY cluster_id HAVING COUNT(*) > 100000 ORDER BY COUNT(*) DESC LIMIT 4;
-
-SELECT ic.cluster_id, COUNT(*) as cluster_size, AVG(e.pitch) as avg_pitch, STDDEV(e.pitch) as stddev_pitch, MIN(e.pitch) as min_pitch, MAX(e.pitch) as max_pitch, AVG(e.yaw) as avg_yaw, STDDEV(e.yaw) as stddev_yaw, MIN(e.yaw) as min_yaw, MAX(e.yaw) as max_yaw, AVG(e.roll) as avg_roll, STDDEV(e.roll) as stddev_roll, MIN(e.roll) as min_roll, MAX(e.roll) as max_roll
-FROM ImagesObjectFusion ic
-JOIN Encodings e ON ic.image_id = e.image_id
-WHERE ic.cluster_id IN (SELECT cluster_id FROM top_4_clusters)
-GROUP BY ic.cluster_id
-ORDER BY cluster_size DESC;
-
-DROP TABLE top_4_clusters;
-
-
-
--- Query 1: Check the raw counts
-SELECT COUNT(DISTINCT image_id) FROM Detections;  -- expect ~18.5M
--- 18482945
-
-SELECT COUNT(DISTINCT image_id) FROM SegmentBig_isface;  -- ?
--- 75467375
-
-SELECT COUNT(DISTINCT s.image_id) FROM SegmentBig_isface s JOIN Encodings e ON s.image_id = e.image_id WHERE e.is_dupe_of IS NULL;  -- expect ~4M
--- 75442926
-
--- Query 2: Find the gap - images with detections NOT in segment
-SELECT COUNT(DISTINCT d.image_id) 
-FROM Detections d
-LEFT JOIN SegmentBig_isface s ON d.image_id = s.image_id
-WHERE s.image_id IS NULL;  -- these are images with detections but no segment record
--- 566372
-
--- Query 3: Verify dupe filtering
-SELECT 
-  (SELECT COUNT(DISTINCT image_id) FROM SegmentBig_isface) as segment_total,
-  (SELECT COUNT(DISTINCT s.image_id) FROM SegmentBig_isface s JOIN Encodings e ON s.image_id = e.image_id WHERE e.is_dupe_of IS NULL) as segment_non_dupe,
-  (SELECT COUNT(DISTINCT s.image_id) FROM SegmentBig_isface s JOIN Encodings e ON s.image_id = e.image_id WHERE e.is_dupe_of IS NOT NULL) as segment_dupe;
--- 75467375	75442926	24449
-
-
--- Query 4: What Clustering_SQL.py actually queries for ObjectFusion MODE 0
-SELECT COUNT(DISTINCT s.image_id)
-FROM SegmentBig_isface s 
-JOIN Encodings e ON s.image_id = e.image_id 
-INNER JOIN Detections h ON h.image_id = s.image_id
-WHERE e.is_dupe_of IS NULL;
-
-
--- Query 5: Actual Clustering_SQL query for ObjectFusion
-SELECT COUNT(DISTINCT s.image_id)
-FROM SegmentBig_isface s 
-JOIN Encodings e ON s.image_id = e.image_id 
-INNER JOIN Detections h ON h.image_id = s.image_id
-WHERE e.is_dupe_of IS NULL;
--- 17902936

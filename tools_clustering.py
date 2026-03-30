@@ -22,6 +22,87 @@ class ToolsClustering:
         self.CONFIDENCE_DIFF_THRESHOLD = 0.3
         self.MIN_DETECTION_CONFIDENCE = 0.4
         self.DEFAULT_HAND_POSITION = [0.0, 8.0, 0.0]
+        self.USE_WHITELIST = True
+        all_class_ids = set(range(0, 104))
+
+        nonsense_class_ids_dict = {
+            # Hand: exclude things that are basically never hand-held in your dataset.
+            'hand': {
+                1, 2, 3, 4, 5, 6, 7, 8,
+                9, 10, 11, 12, 13,
+                14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
+                56, 57, 58, 59, 60, 61, 62,
+                68, 69, 70, 71, 72,
+            },
+
+            # Left eye: be much stricter here; large/background classes are usually nonsense in the eye zone.
+            'left_eye': {
+                1, 2, 3, 4, 5, 6, 7, 8,
+                9, 10, 11, 12, 13,
+                14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
+                24, 25, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38,
+                42, 43, 44, 45,
+                46, 47, 48, 49, 50, 51, 52, 53, 54, 55,
+                56, 57, 58, 59, 60, 61, 62,
+                68, 69, 70, 71, 72,
+                74, 75, 77, 78,
+            },
+
+            # Right eye: same logic as left eye; keep this strict because weird background hits show up here easily.
+            'right_eye': {
+                1, 2, 3, 4, 5, 6, 7, 8,
+                9, 10, 11, 12, 13,
+                14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
+                24, 25, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38,
+                42, 43, 44, 45,
+                46, 47, 48, 49, 50, 51, 52, 53, 54, 55,
+                56, 57, 58, 59, 60, 61, 62,
+                68, 69, 70, 71, 72,
+                74, 75, 77, 78,
+            },
+
+            # Top face: exclude large scene/background classes, but keep small handheld occluders plausible.
+            'top_face': {
+                1, 2, 3, 4, 5, 6, 7, 8,
+                9, 10, 11, 12, 13,
+                14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
+                30, 31, 36, 37,
+                56, 57, 58, 59, 60, 61, 62,
+                68, 69, 70, 71, 72,
+            },
+
+            # Mouth: exclude large/background classes, but keep food, drink, and small handheld occluders available.
+            'mouth': {
+                1, 2, 3, 4, 5, 6, 7, 8,
+                9, 10, 11, 12, 13,
+                14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
+                29, 30, 31, 32, 33, 34, 35, 36, 37, 38,
+                56, 57, 58, 59, 60, 61, 62,
+                68, 69, 70, 71, 72,
+                74, 75, 77,
+            },
+
+            # Shoulder: keep backpack, handbag, tie, laptop, phone, and book plausible; drop most other background/object classes.
+            'shoulder': {
+                1, 2, 3, 4, 5, 6, 7, 8,
+                9, 10, 11, 12, 13,
+                14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
+                29, 30, 31, 32, 33, 34, 35, 36, 37, 38,
+                39, 40, 41, 42, 43, 44, 45,
+                46, 47, 48, 49, 50, 51, 52, 53, 54, 55,
+                56, 57, 58, 59, 60, 61, 62,
+                64, 65, 66,
+                68, 69, 70, 71, 72,
+                74, 75, 76, 77, 78, 79,
+            },
+        }
+
+        self.WHITELIST_BY_SLOT = {
+            slot_name: all_class_ids - nonsense_class_ids
+            for slot_name, nonsense_class_ids in nonsense_class_ids_dict.items()
+        }
+        self._whitelist_slots = tuple(self.WHITELIST_BY_SLOT.keys())
+        self._whitelist_reject_counts = {slot: 0 for slot in self._whitelist_slots}
         # Face object constraints to avoid large background objects
         self.MAX_FACE_WIDTH = 2.0  # max width of left+right to be considered face object
         self.MAX_FACE_VERT_EXTENSION = 0.75  # max how far object can extend into opposite zone
@@ -241,6 +322,49 @@ class ToolsClustering:
             'right': float(detection_dict['right']),
             'bottom': float(detection_dict['bottom']),
         }
+
+    def _normalize_class_id(self, class_id_value):
+        """Normalize class_id value to int if possible."""
+        if class_id_value is None:
+            return None
+        try:
+            return int(float(class_id_value))
+        except (TypeError, ValueError):
+            return None
+
+    def _get_detection_class_id(self, detection_dict):
+        """Get stable class_id for filtering, preferring raw class ID if available."""
+        class_id_value = detection_dict.get('class_id_raw', detection_dict.get('class_id'))
+        return self._normalize_class_id(class_id_value)
+
+    def _passes_slot_whitelist(self, detection_dict, slot_name):
+        """Check whitelist eligibility for a given slot."""
+        if not self.USE_WHITELIST:
+            return True
+
+        allowed_class_ids = self.WHITELIST_BY_SLOT.get(slot_name)
+        if allowed_class_ids is None:
+            return True
+
+        class_id_value = self._get_detection_class_id(detection_dict)
+        if class_id_value is None:
+            return False
+        return class_id_value in allowed_class_ids
+
+    def _record_whitelist_reject(self, slot_name):
+        """Increment whitelist reject counter for one slot."""
+        if not self.USE_WHITELIST:
+            return
+        if slot_name in self._whitelist_reject_counts:
+            self._whitelist_reject_counts[slot_name] += 1
+
+    def reset_whitelist_reject_counts(self):
+        """Reset per-batch whitelist reject counters."""
+        self._whitelist_reject_counts = {slot: 0 for slot in self._whitelist_slots}
+
+    def get_whitelist_reject_counts(self):
+        """Return a copy of current whitelist reject counters."""
+        return dict(self._whitelist_reject_counts)
 
     def calc_iou(self, bbox1, bbox2):
         """Calculate Intersection over Union between two bboxes."""
@@ -575,6 +699,9 @@ class ToolsClustering:
             nearby_candidates = []
 
             for det in detections:
+                if not self._passes_slot_whitelist(det, 'hand'):
+                    self._record_whitelist_reject('hand')
+                    continue
                 dist = self.point_to_bbox_distance(knuckle, det['bbox'])
                 if dist <= self.TOUCH_THRESHOLD:
                     touching_candidates.append((dist, det))
@@ -609,16 +736,27 @@ class ToolsClustering:
         for det in non_hand_detections:
             bbox = det['bbox']
 
+            left_eye_allowed = self._passes_slot_whitelist(det, 'left_eye')
+            right_eye_allowed = self._passes_slot_whitelist(det, 'right_eye')
+
+            if not left_eye_allowed:
+                self._record_whitelist_reject('left_eye')
+            if not right_eye_allowed:
+                self._record_whitelist_reject('right_eye')
+
+            if not left_eye_allowed and not right_eye_allowed:
+                continue
+
             if self.is_full_face_mask_object(bbox):
                 continue
 
-            if self.is_left_eye_object(bbox):
+            if left_eye_allowed and self.is_left_eye_object(bbox):
                 if results['left_eye_object'] is None:
                     results['left_eye_object'] = det
                 elif det['conf'] > results['left_eye_object']['conf']:
                     results['left_eye_object'] = det
 
-            if self.is_right_eye_object(bbox):
+            if right_eye_allowed and self.is_right_eye_object(bbox):
                 if results['right_eye_object'] is None:
                     results['right_eye_object'] = det
                 elif det['conf'] > results['right_eye_object']['conf']:
@@ -628,19 +766,30 @@ class ToolsClustering:
         for det in non_hand_detections:
             bbox = det['bbox']
 
-            if self.is_top_face_object(bbox):
+            top_face_allowed = self._passes_slot_whitelist(det, 'top_face')
+            mouth_allowed = self._passes_slot_whitelist(det, 'mouth')
+            shoulder_allowed = self._passes_slot_whitelist(det, 'shoulder')
+
+            if not top_face_allowed:
+                self._record_whitelist_reject('top_face')
+            if not mouth_allowed:
+                self._record_whitelist_reject('mouth')
+            if not shoulder_allowed:
+                self._record_whitelist_reject('shoulder')
+
+            if top_face_allowed and self.is_top_face_object(bbox):
                 if results['top_face_object'] is None:
                     results['top_face_object'] = det
                 elif bbox['top'] < results['top_face_object']['bbox']['top']:
                     results['top_face_object'] = det
 
-            if self.is_mouth_object(bbox):
+            if mouth_allowed and self.is_mouth_object(bbox):
                 if results['mouth_object'] is None:
                     results['mouth_object'] = det
                 elif bbox['top'] < results['mouth_object']['bbox']['top']:
                     results['mouth_object'] = det
 
-            if self.is_shoulder_object(bbox, left_shoulder, right_shoulder):
+            if shoulder_allowed and self.is_shoulder_object(bbox, left_shoulder, right_shoulder):
                 if results['shoulder_object'] is None:
                     results['shoulder_object'] = det
                 elif det['conf'] > results['shoulder_object']['conf']:
@@ -692,6 +841,7 @@ class ToolsClustering:
             detections.append({
                 'detection_id': d.detection_id,
                 'class_id': d.class_id,
+                'class_id_raw': d.class_id,
                 'conf': d.conf,
                 'bbox': bbox,
                 'top': bbox['top'],
@@ -747,6 +897,8 @@ class ToolsClustering:
         Process all detections for a dataframe and add object classification columns.
         Expects df to have: image_id, left_pointer_knuckle_norm, right_pointer_knuckle_norm
         """
+        self.reset_whitelist_reject_counts()
+
         # Initialize new columns
         df['left_hand_object'] = None
         df['right_hand_object'] = None

@@ -81,3 +81,30 @@ CREATE TABLE ImagesDetections (
 -- Verify tables
 SELECT 'ImagesDetections table created/verified' AS status;
 DESCRIBE ImagesDetections;
+
+
+
+
+-- create the fusion tables:
+
+SHOW CREATE TABLE ImagesObjectFusion;
+
+CREATE TABLE `ObjectFusion` (
+  `cluster_id` int NOT NULL,
+  `cluster_median` blob,
+  PRIMARY KEY (`cluster_id`)
+) 
+;
+
+
+CREATE TABLE ImagesObjectFusion (
+  image_id INT NOT NULL,
+  cluster_id INT NOT NULL,
+  cluster_dist FLOAT,
+  PRIMARY KEY (image_id),
+  KEY idx_cluster_id (cluster_id),
+  CONSTRAINT fk_iof_image FOREIGN KEY (image_id) REFERENCES Images(image_id) ON DELETE CASCADE,
+  CONSTRAINT fk_iof_cluster FOREIGN KEY (cluster_id) REFERENCES ObjectFusion(cluster_id) ON DELETE CASCADE
+);
+
+
