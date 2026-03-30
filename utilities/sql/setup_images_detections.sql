@@ -57,6 +57,8 @@ CREATE TABLE ImagesDetections (
     right_eye_object_id INT,
     mouth_object_id INT,
     shoulder_object_id INT,
+    waist_object_id INT,
+    feet_object_id INT,
     
     -- Metadata
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -75,7 +77,9 @@ CREATE TABLE ImagesDetections (
     CONSTRAINT fk_img_det_left_eye FOREIGN KEY (left_eye_object_id) REFERENCES Detections(detection_id),
     CONSTRAINT fk_img_det_right_eye FOREIGN KEY (right_eye_object_id) REFERENCES Detections(detection_id),
     CONSTRAINT fk_img_det_mouth FOREIGN KEY (mouth_object_id) REFERENCES Detections(detection_id),
-    CONSTRAINT fk_img_det_shoulder FOREIGN KEY (shoulder_object_id) REFERENCES Detections(detection_id)
+    CONSTRAINT fk_img_det_shoulder FOREIGN KEY (shoulder_object_id) REFERENCES Detections(detection_id),
+    CONSTRAINT fk_img_det_waist FOREIGN KEY (waist_object_id) REFERENCES Detections(detection_id),
+    CONSTRAINT fk_img_det_feet FOREIGN KEY (feet_object_id) REFERENCES Detections(detection_id)
 );
 
 -- Verify tables

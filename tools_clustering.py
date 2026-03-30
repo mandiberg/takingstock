@@ -95,6 +95,31 @@ class ToolsClustering:
                 68, 69, 70, 71, 72,                 # appliances / kitchen fixtures
                 74, 75, 76, 77, 78, 79,             # decor / scissors / stuffed object / bathroom items
             },
+
+            # Waist: tuned to keep seating/support objects plausible (chair/couch/bed), while excluding obvious nonsense.
+            'waist': {
+                1, 2, 3, 4, 5, 6, 7, 8,             # vehicles
+                9, 10, 11, 12, 13,                  # street fixtures / public infrastructure
+                14, 15, 16, 17, 18, 19, 20, 21, 22, 23,  # animals
+                29, 30, 31, 32, 33, 34, 35, 36, 37, 38,  # sports gear and long outdoor equipment
+                39, 40, 41, 42, 43, 44, 45,         # drinkware / utensils / bowl
+                46, 47, 48, 49, 50, 51, 52, 53, 54, 55,  # food items
+                58, 61, 62,                         # plant / toilet / tv
+                64, 65, 66,                         # desktop peripherals
+                68, 69, 70, 71, 72,                 # appliances / kitchen fixtures
+                74, 75, 76, 77, 78, 79,             # decor / scissors / stuffed object / bathroom items
+            },
+
+            # Feet: broad and intentionally permissive to allow occasional meaningful lower-body objects (e.g., skis).
+            'feet': {
+                1, 2, 3, 4, 5, 6, 7, 8,             # vehicles
+                9, 10, 11, 12, 13,                  # street fixtures / public infrastructure
+                14, 15, 16, 17, 18, 19, 20, 21, 22, 23,  # animals
+                42, 43, 44,                         # utensils
+                46, 47, 48, 49, 50, 51, 52, 53, 54, 55,  # food items
+                68, 69, 70, 71, 72,                 # appliances / kitchen fixtures
+                74, 75, 77, 78,                     # decor / stuffed object / hair appliance
+            },
         }
 
         self.WHITELIST_BY_SLOT = {
@@ -114,6 +139,14 @@ class ToolsClustering:
         self.RIGHT_EYE_X_MAX = 0.9
         self.FULL_FACE_MASK_TOP_MAX = -0.15
         self.FULL_FACE_MASK_BOTTOM_MIN = 0.15
+        self.WAIST_ZONE_TOP = 0.75
+        self.WAIST_ZONE_BOTTOM = 2.25
+        self.WAIST_X_MIN = -1.40
+        self.WAIST_X_MAX = 1.40
+        self.FEET_ZONE_TOP = 2.10
+        self.FEET_ZONE_BOTTOM = 6.00
+        self.FEET_X_MIN = -2.00
+        self.FEET_X_MAX = 2.00
         
         # Feature standardization settings for ObjectFusion
         self.USE_FEATURE_STANDARDIZATION = True  # Use StandardScaler to normalize all features to similar scale
@@ -488,6 +521,26 @@ class ToolsClustering:
             self.EYE_ZONE_BOTTOM,
         )
 
+    def is_waist_object(self, bbox):
+        """Check if bbox intersects a broad waist/seat interaction zone."""
+        return self._bbox_intersects_rect(
+            bbox,
+            self.WAIST_X_MIN,
+            self.WAIST_X_MAX,
+            self.WAIST_ZONE_TOP,
+            self.WAIST_ZONE_BOTTOM,
+        )
+
+    def is_feet_object(self, bbox):
+        """Check if bbox intersects a broad lower-body/feet zone."""
+        return self._bbox_intersects_rect(
+            bbox,
+            self.FEET_X_MIN,
+            self.FEET_X_MAX,
+            self.FEET_ZONE_TOP,
+            self.FEET_ZONE_BOTTOM,
+        )
+
     def _extract_xy_from_landmark(self, landmark):
         """Extract (x, y) from a landmark in object/dict/list form."""
         if landmark is None:
@@ -667,7 +720,7 @@ class ToolsClustering:
         Classify each detection based on its relationship to hands and face.
         Returns dict with keys: left_hand_object, right_hand_object,
                                top_face_object, left_eye_object, right_eye_object,
-                               mouth_object, shoulder_object
+                               mouth_object, shoulder_object, waist_object, feet_object
         Each value is the detection dict or None.
         """
 
@@ -682,6 +735,8 @@ class ToolsClustering:
             'right_eye_object': None,
             'mouth_object': None,
             'shoulder_object': None,
+            'waist_object': None,
+            'feet_object': None,
         }
         
         if not detections:
@@ -762,13 +817,15 @@ class ToolsClustering:
                 elif det['conf'] > results['right_eye_object']['conf']:
                     results['right_eye_object'] = det
 
-        # 3. Top-face / mouth / shoulder assignments
+        # 3. Top-face / mouth / shoulder / waist / feet assignments
         for det in non_hand_detections:
             bbox = det['bbox']
 
             top_face_allowed = self._passes_slot_whitelist(det, 'top_face')
             mouth_allowed = self._passes_slot_whitelist(det, 'mouth')
             shoulder_allowed = self._passes_slot_whitelist(det, 'shoulder')
+            waist_allowed = self._passes_slot_whitelist(det, 'waist')
+            feet_allowed = self._passes_slot_whitelist(det, 'feet')
 
             if not top_face_allowed:
                 self._record_whitelist_reject('top_face')
@@ -776,6 +833,10 @@ class ToolsClustering:
                 self._record_whitelist_reject('mouth')
             if not shoulder_allowed:
                 self._record_whitelist_reject('shoulder')
+            if not waist_allowed:
+                self._record_whitelist_reject('waist')
+            if not feet_allowed:
+                self._record_whitelist_reject('feet')
 
             if top_face_allowed and self.is_top_face_object(bbox):
                 if results['top_face_object'] is None:
@@ -794,13 +855,25 @@ class ToolsClustering:
                     results['shoulder_object'] = det
                 elif det['conf'] > results['shoulder_object']['conf']:
                     results['shoulder_object'] = det
+
+            if waist_allowed and self.is_waist_object(bbox):
+                if results['waist_object'] is None:
+                    results['waist_object'] = det
+                elif det['conf'] > results['waist_object']['conf']:
+                    results['waist_object'] = det
+
+            if feet_allowed and self.is_feet_object(bbox):
+                if results['feet_object'] is None:
+                    results['feet_object'] = det
+                elif det['conf'] > results['feet_object']['conf']:
+                    results['feet_object'] = det
         
         return results
 
     def query_and_classify_detections(self, image_id, left_knuckle, right_knuckle, left_shoulder=None, right_shoulder=None):
         """
         Query detections for an image and classify their relationship to hands/face.
-        Returns dict with 7 keys, each containing a detection payload dict or None.
+        Returns dict with 9 keys, each containing a detection payload dict or None.
         """
         if self.session is None:
             raise ValueError("Session not initialized. Pass session to ToolsClustering.__init__()")
@@ -829,6 +902,8 @@ class ToolsClustering:
                 'right_eye_object': None,
                 'mouth_object': None,
                 'shoulder_object': None,
+                'waist_object': None,
+                'feet_object': None,
             }
         
         # Parse detections into standardized format
@@ -861,6 +936,8 @@ class ToolsClustering:
                 print(f"    is_full_face_mask:     {self.is_full_face_mask_object(bbox)}")
                 print(f"    is_mouth_object:       {self.is_mouth_object(bbox)}")
                 print(f"    is_shoulder_object:    {self.is_shoulder_object(bbox, left_shoulder, right_shoulder)}")
+                print(f"    is_waist_object:       {self.is_waist_object(bbox)}")
+                print(f"    is_feet_object:        {self.is_feet_object(bbox)}")
                 dist_left  = self.point_to_bbox_distance(left_knuckle, bbox)  if left_knuckle  != self.DEFAULT_HAND_POSITION else None
                 dist_right = self.point_to_bbox_distance(right_knuckle, bbox) if right_knuckle != self.DEFAULT_HAND_POSITION else None
                 print(f"    dist left_knuckle→bbox:  {dist_left}  (TOUCH_THRESHOLD={self.TOUCH_THRESHOLD})")
@@ -907,6 +984,8 @@ class ToolsClustering:
         df['right_eye_object'] = None
         df['mouth_object'] = None
         df['shoulder_object'] = None
+        df['waist_object'] = None
+        df['feet_object'] = None
         
         for idx, row in df.iterrows():
             image_id = row['image_id']
@@ -938,6 +1017,8 @@ class ToolsClustering:
             df.at[idx, 'right_eye_object'] = classifications['right_eye_object']
             df.at[idx, 'mouth_object'] = classifications['mouth_object']
             df.at[idx, 'shoulder_object'] = classifications['shoulder_object']
+            df.at[idx, 'waist_object'] = classifications['waist_object']
+            df.at[idx, 'feet_object'] = classifications['feet_object']
         
         return df
 
@@ -967,7 +1048,7 @@ class ToolsClustering:
     def get_precomputed_detections_by_image_ids(self, image_ids):
         """
         Read precomputed detection assignments from ImagesDetections and join to Detections.
-        Returns dict keyed by image_id with values containing the 7 detection payload fields.
+        Returns dict keyed by image_id with values containing the 9 detection payload fields.
         """
         if self.session is None:
             raise ValueError("Session not initialized. Pass session to ToolsClustering.__init__()")
@@ -1012,7 +1093,17 @@ class ToolsClustering:
                 so.detection_id AS shoulder_detection_id,
                 so.class_id AS shoulder_class_id,
                 so.conf AS shoulder_conf,
-                so.bbox_norm AS shoulder_bbox_norm
+                so.bbox_norm AS shoulder_bbox_norm,
+
+                wa.detection_id AS waist_detection_id,
+                wa.class_id AS waist_class_id,
+                wa.conf AS waist_conf,
+                wa.bbox_norm AS waist_bbox_norm,
+
+                fe.detection_id AS feet_detection_id,
+                fe.class_id AS feet_class_id,
+                fe.conf AS feet_conf,
+                fe.bbox_norm AS feet_bbox_norm
             FROM ImagesDetections idet
             LEFT JOIN Detections lh ON idet.left_hand_object_id = lh.detection_id
             LEFT JOIN Detections rh ON idet.right_hand_object_id = rh.detection_id
@@ -1021,6 +1112,8 @@ class ToolsClustering:
             LEFT JOIN Detections re ON idet.right_eye_object_id = re.detection_id
             LEFT JOIN Detections mo ON idet.mouth_object_id = mo.detection_id
             LEFT JOIN Detections so ON idet.shoulder_object_id = so.detection_id
+            LEFT JOIN Detections wa ON idet.waist_object_id = wa.detection_id
+            LEFT JOIN Detections fe ON idet.feet_object_id = fe.detection_id
             WHERE idet.image_id IN :image_ids
         """).bindparams(bindparam("image_ids", expanding=True))
 
@@ -1051,6 +1144,12 @@ class ToolsClustering:
                 'shoulder_object': self._build_detection_payload_from_sql_fields(
                     row['shoulder_detection_id'], row['shoulder_class_id'], row['shoulder_conf'], row['shoulder_bbox_norm']
                 ),
+                'waist_object': self._build_detection_payload_from_sql_fields(
+                    row['waist_detection_id'], row['waist_class_id'], row['waist_conf'], row['waist_bbox_norm']
+                ),
+                'feet_object': self._build_detection_payload_from_sql_fields(
+                    row['feet_detection_id'], row['feet_class_id'], row['feet_conf'], row['feet_bbox_norm']
+                ),
             }
 
         return result
@@ -1064,7 +1163,7 @@ class ToolsClustering:
         required_cols = [
             'left_hand_object', 'right_hand_object',
             'top_face_object', 'left_eye_object', 'right_eye_object',
-            'mouth_object', 'shoulder_object'
+            'mouth_object', 'shoulder_object', 'waist_object', 'feet_object'
         ]
         for col in required_cols:
             if col not in df.columns:
@@ -1088,6 +1187,8 @@ class ToolsClustering:
             df.at[idx, 'right_eye_object'] = payload['right_eye_object']
             df.at[idx, 'mouth_object'] = payload['mouth_object']
             df.at[idx, 'shoulder_object'] = payload['shoulder_object']
+            df.at[idx, 'waist_object'] = payload['waist_object']
+            df.at[idx, 'feet_object'] = payload['feet_object']
 
         missing_image_ids = sorted(list(set(image_ids) - set(precomputed.keys())))
         return df, missing_image_ids
@@ -1123,7 +1224,8 @@ class ToolsClustering:
         
         # Detection columns (6 values each: class_id, conf, top, left, right, bottom)
         detection_cols = ['left_hand_object', 'right_hand_object', 'top_face_object',
-                  'left_eye_object', 'right_eye_object', 'mouth_object', 'shoulder_object']
+                  'left_eye_object', 'right_eye_object', 'mouth_object', 'shoulder_object',
+                  'waist_object', 'feet_object']
         detection_fields = ['class_id', 'conf', 'top', 'left', 'right', 'bottom']
         
         # Create feature dict by concatenating all values
@@ -1251,14 +1353,16 @@ class ToolsClustering:
         """
         Construct fusion list from a dataframe row for ObjectFusion sorting.
         Returns list format: [pitch, yaw, roll, left_hand(6), right_hand(6), top_face(6),
-                              left_eye(6), right_eye(6), mouth(6), shoulder(6)]
-        Total: 45 elements (3 + 7*6)
+                              left_eye(6), right_eye(6), mouth(6), shoulder(6),
+                              waist(6), feet(6)]
+        Total: 57 elements (3 + 9*6)
         """
         fusion_list = row['pitch_yaw_roll_list'].copy()  # Start with [pitch, yaw, roll]
         
         # Add detection data (each is 6 elements: class_id, conf, top, left, right, bottom)
         for col in ['left_hand_object', 'right_hand_object', 'top_face_object',
-                    'left_eye_object', 'right_eye_object', 'mouth_object', 'shoulder_object']:
+                    'left_eye_object', 'right_eye_object', 'mouth_object', 'shoulder_object',
+                    'waist_object', 'feet_object']:
             detection = row[col]
             if detection is None:
                 fusion_list.extend([0.0, 0.0, 0.0, 0.0, 0.0, 0.0])  # 6 zeros for None

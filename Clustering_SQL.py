@@ -573,7 +573,7 @@ def build_col_list(df):
         # for ObjectFusion, we need to get pitch, yaw, roll and object detection columns
         col_list["ObjectFusion"] = ['pitch', 'yaw', 'roll', 'left_hand_object', 'right_hand_object',
                           'top_face_object', 'left_eye_object', 'right_eye_object',
-                          'mouth_object', 'shoulder_object']
+                          'mouth_object', 'shoulder_object', 'waist_object', 'feet_object']
     elif "body" in cl.CLUSTER_DATA[cl.CLUSTER_TYPE]["data_column"]:
         # tests data_column, so works for ArmsPoses3D too
         second_column_name = df.columns[1]
@@ -1074,6 +1074,8 @@ def save_images_detections(df, engine):
                 'right_eye_object_id': extract_detection_id(row.get('right_eye_object')),
                 'mouth_object_id': extract_detection_id(row.get('mouth_object')),
                 'shoulder_object_id': extract_detection_id(row.get('shoulder_object')),
+                'waist_object_id': extract_detection_id(row.get('waist_object')),
+                'feet_object_id': extract_detection_id(row.get('feet_object')),
             }
             images_detections_records.append(record)
         except Exception as e:
@@ -1206,7 +1208,8 @@ def prepare_df(df, process_object_detections=True, batch_label=None):
                 compact_rejects = {k: int(v) for k, v in whitelist_rejects.items() if int(v) > 0}
                 print(f"{label}[COUNT] Whitelist rejects by slot: {compact_rejects if compact_rejects else 'none'}")
             object_assignment_cols = ['left_hand_object', 'right_hand_object', 'top_face_object',
-                                      'left_eye_object', 'right_eye_object', 'mouth_object', 'shoulder_object']
+                                      'left_eye_object', 'right_eye_object', 'mouth_object', 'shoulder_object',
+                                      'waist_object', 'feet_object']
             rows_with_any_object = int(df[object_assignment_cols].notna().any(axis=1).sum())
             rows_with_no_objects = int(len(df) - rows_with_any_object)
             print(f"{label}[COUNT] Rows with any object assignment: {rows_with_any_object}")
@@ -1215,7 +1218,8 @@ def prepare_df(df, process_object_detections=True, batch_label=None):
                 print(f"{label}[COUNT] {col} assigned: {int(df[col].notna().sum())}")
         else:
             for col in ['left_hand_object', 'right_hand_object', 'top_face_object',
-                        'left_eye_object', 'right_eye_object', 'mouth_object', 'shoulder_object']:
+                        'left_eye_object', 'right_eye_object', 'mouth_object', 'shoulder_object',
+                        'waist_object', 'feet_object']:
                 if col not in df.columns:
                     df[col] = None
 
@@ -1368,7 +1372,8 @@ def prepare_df(df, process_object_detections=True, batch_label=None):
                 compact_rejects = {k: int(v) for k, v in whitelist_rejects.items() if int(v) > 0}
                 print(f"{label}[COUNT] Whitelist rejects by slot: {compact_rejects if compact_rejects else 'none'}")
             object_assignment_cols = ['left_hand_object', 'right_hand_object', 'top_face_object',
-                                      'left_eye_object', 'right_eye_object', 'mouth_object', 'shoulder_object']
+                                      'left_eye_object', 'right_eye_object', 'mouth_object', 'shoulder_object',
+                                      'waist_object', 'feet_object']
             rows_with_any_object = int(df[object_assignment_cols].notna().any(axis=1).sum())
             rows_with_no_objects = int(len(df) - rows_with_any_object)
             print(f"{label}[COUNT] Rows with any object assignment: {rows_with_any_object}")
@@ -1377,7 +1382,8 @@ def prepare_df(df, process_object_detections=True, batch_label=None):
                 print(f"{label}[COUNT] {col} assigned: {int(df[col].notna().sum())}")
         else:
             for col in ['left_hand_object', 'right_hand_object', 'top_face_object',
-                        'left_eye_object', 'right_eye_object', 'mouth_object', 'shoulder_object']:
+                        'left_eye_object', 'right_eye_object', 'mouth_object', 'shoulder_object',
+                        'waist_object', 'feet_object']:
                 if col not in df.columns:
                     df[col] = None
 
@@ -1610,6 +1616,7 @@ def fetch_and_prepare_batch(batch_df, batch_num):
                 update_cols = [
                     'left_hand_object', 'right_hand_object', 'top_face_object',
                     'left_eye_object', 'right_eye_object', 'mouth_object', 'shoulder_object',
+                    'waist_object', 'feet_object',
                     'left_pointer_knuckle_norm', 'right_pointer_knuckle_norm', 'left_source', 'right_source',
                     'newly_processed_detection'
                 ]
@@ -1633,7 +1640,8 @@ def fetch_and_prepare_batch(batch_df, batch_num):
                 if 'right_pointer_knuckle_norm' in batch_prepared.columns:
                     print(f"[Batch {batch_num}] [COUNT] Batch rows with right knuckle column populated: {int(batch_prepared['right_pointer_knuckle_norm'].notna().sum())}")
                 for col in ['left_hand_object', 'right_hand_object', 'top_face_object',
-                            'left_eye_object', 'right_eye_object', 'mouth_object', 'shoulder_object']:
+                            'left_eye_object', 'right_eye_object', 'mouth_object', 'shoulder_object',
+                            'waist_object', 'feet_object']:
                     if col in batch_prepared.columns:
                         print(f"[Batch {batch_num}] [COUNT] Batch {col} populated: {int(batch_prepared[col].notna().sum())}")
             else:
@@ -1667,7 +1675,8 @@ def main():
         if cl.CLUSTER_TYPE == "ObjectFusion" and DROP_NONE_PLACEMENTS:
             object_assignment_cols = [
                 'left_hand_object', 'right_hand_object', 'top_face_object',
-                'left_eye_object', 'right_eye_object', 'mouth_object', 'shoulder_object'
+                'left_eye_object', 'right_eye_object', 'mouth_object', 'shoulder_object',
+                'waist_object', 'feet_object'
             ]
             existing_object_cols = [col for col in object_assignment_cols if col in enc_data.columns]
             if existing_object_cols:
