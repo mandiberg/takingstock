@@ -28,72 +28,72 @@ class ToolsClustering:
         nonsense_class_ids_dict = {
             # Hand: exclude things that are basically never hand-held in your dataset.
             'hand': {
-                1, 2, 3, 4, 5, 6, 7, 8,
-                9, 10, 11, 12, 13,
-                14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
-                56, 57, 58, 59, 60, 61, 62,
-                68, 69, 70, 71, 72,
+                # 1, 2, 3, 4, 5, 6, 7, 8,             # vehicles
+                9, 10, 11, 12, 13,                  # street fixtures / public infrastructure
+                # 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,  # animals
+                # 56, 57, 58, 59, 60, 61, 62,         # furniture / room fixtures
+                # 68, 69, 70, 71, 72,                 # appliances / kitchen fixtures
             },
 
             # Left eye: be much stricter here; large/background classes are usually nonsense in the eye zone.
             'left_eye': {
-                1, 2, 3, 4, 5, 6, 7, 8,
-                9, 10, 11, 12, 13,
-                14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
-                24, 25, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38,
-                42, 43, 44, 45,
-                46, 47, 48, 49, 50, 51, 52, 53, 54, 55,
-                56, 57, 58, 59, 60, 61, 62,
-                68, 69, 70, 71, 72,
-                74, 75, 77, 78,
+                1, 2, 3, 4, 5, 6, 7, 8,             # vehicles
+                9, 10, 11, 12, 13,                  # street fixtures / public infrastructure
+                14, 15, 16, 17, 18, 19, 20, 21, 22, 23,  # animals
+                24, 25, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38,  # bags, luggage, and sports gear
+                42, 43, 44, 45,                     # utensils / bowl
+                46, 47, 48, 49, 50, 51, 52, 53, 54, 55,  # food items
+                56, 57, 58, 59, 60, 61, 62,         # furniture / room fixtures / tv
+                68, 69, 70, 71, 72,                 # appliances / kitchen fixtures
+                74, 75, 77, 78,                     # decor / stuffed object / hair appliance
             },
 
             # Right eye: same logic as left eye; keep this strict because weird background hits show up here easily.
             'right_eye': {
-                1, 2, 3, 4, 5, 6, 7, 8,
-                9, 10, 11, 12, 13,
-                14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
-                24, 25, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38,
-                42, 43, 44, 45,
-                46, 47, 48, 49, 50, 51, 52, 53, 54, 55,
-                56, 57, 58, 59, 60, 61, 62,
-                68, 69, 70, 71, 72,
-                74, 75, 77, 78,
+                1, 2, 3, 4, 5, 6, 7, 8,             # vehicles
+                9, 10, 11, 12, 13,                  # street fixtures / public infrastructure
+                14, 15, 16, 17, 18, 19, 20, 21, 22, 23,  # animals
+                24, 25, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38,  # bags, luggage, and sports gear
+                42, 43, 44, 45,                     # utensils / bowl
+                46, 47, 48, 49, 50, 51, 52, 53, 54, 55,  # food items
+                56, 57, 58, 59, 60, 61, 62,         # furniture / room fixtures / tv
+                68, 69, 70, 71, 72,                 # appliances / kitchen fixtures
+                74, 75, 77, 78,                     # decor / stuffed object / hair appliance
             },
 
             # Top face: exclude large scene/background classes, but keep small handheld occluders plausible.
             'top_face': {
-                1, 2, 3, 4, 5, 6, 7, 8,
-                9, 10, 11, 12, 13,
-                14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
-                30, 31, 36, 37,
-                56, 57, 58, 59, 60, 61, 62,
-                68, 69, 70, 71, 72,
+                1, 2, 3, 4, 5, 6, 7, 8,             # vehicles
+                9, 10, 11, 12, 13,                  # street fixtures / public infrastructure
+                14, 15, 16, 17, 18, 19, 20, 21, 22, 23,  # animals
+                30, 31, 36, 37,                     # long outdoor sports gear / boards
+                56, 57, 58, 59, 60, 61, 62,         # furniture / room fixtures / tv
+                68, 69, 70, 71, 72,                 # appliances / kitchen fixtures
             },
 
             # Mouth: exclude large/background classes, but keep food, drink, and small handheld occluders available.
             'mouth': {
-                1, 2, 3, 4, 5, 6, 7, 8,
-                9, 10, 11, 12, 13,
-                14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
-                29, 30, 31, 32, 33, 34, 35, 36, 37, 38,
-                56, 57, 58, 59, 60, 61, 62,
-                68, 69, 70, 71, 72,
-                74, 75, 77,
+                1, 2, 3, 4, 5, 6, 7, 8,             # vehicles
+                9, 10, 11, 12, 13,                  # street fixtures / public infrastructure
+                14, 15, 16, 17, 18, 19, 20, 21, 22, 23,  # animals
+                29, 30, 31, 32, 33, 34, 35, 36, 37, 38,  # sports gear and long outdoor equipment
+                56, 57, 58, 59, 60, 61, 62,         # furniture / room fixtures / tv
+                68, 69, 70, 71, 72,                 # appliances / kitchen fixtures
+                74, 75, 77,                         # decor / stuffed object
             },
 
             # Shoulder: keep backpack, handbag, tie, laptop, phone, and book plausible; drop most other background/object classes.
             'shoulder': {
-                1, 2, 3, 4, 5, 6, 7, 8,
-                9, 10, 11, 12, 13,
-                14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
-                29, 30, 31, 32, 33, 34, 35, 36, 37, 38,
-                39, 40, 41, 42, 43, 44, 45,
-                46, 47, 48, 49, 50, 51, 52, 53, 54, 55,
-                56, 57, 58, 59, 60, 61, 62,
-                64, 65, 66,
-                68, 69, 70, 71, 72,
-                74, 75, 76, 77, 78, 79,
+                1, 2, 3, 4, 5, 6, 7, 8,             # vehicles
+                9, 10, 11, 12, 13,                  # street fixtures / public infrastructure
+                14, 15, 16, 17, 18, 19, 20, 21, 22, 23,  # animals
+                29, 30, 31, 32, 33, 34, 35, 36, 37, 38,  # sports gear and long outdoor equipment
+                # 39, 40, 41, 42, 43, 44, 45,         # drinkware / utensils / bowl
+                # 46, 47, 48, 49, 50, 51, 52, 53, 54, 55,  # food items
+                56, 57, 58, 59, 60, 61, 62,         # furniture / room fixtures / tv
+                64, 65, 66,                         # desktop peripherals
+                68, 69, 70, 71, 72,                 # appliances / kitchen fixtures
+                74, 75, 76, 77, 78, 79,             # decor / scissors / stuffed object / bathroom items
             },
         }
 
