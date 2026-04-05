@@ -461,9 +461,12 @@ class SortPose:
             # self.face_height_output = face_height_output
             # takes base image size and multiplies by avg of multiplier
             print("setting output dims based on image_edge_multiplier",self.image_edge_multiplier)
-            print(f"face height is based on: self.face_height_output {self.face_height_output} * avg of {self.image_edge_multiplier[1]} and {self.image_edge_multiplier[3]} for height, and {self.image_edge_multiplier[0]} and {self.image_edge_multiplier[2]} for width")
-            print(f"the averages are: height: {(self.image_edge_multiplier[1]+self.image_edge_multiplier[3])/2}, width: {(self.image_edge_multiplier[0]+self.image_edge_multiplier[2])/2}")
-            self.output_dims = (int(self.face_height_output*(self.image_edge_multiplier[1]+self.image_edge_multiplier[3])/2),int(self.face_height_output*(self.image_edge_multiplier[0]+self.image_edge_multiplier[2])/2))
+            print(f"face height is based on: self.face_height_output {self.face_height_output} * avg of {self.image_edge_multiplier[0]} and {self.image_edge_multiplier[2]} for height, and {self.image_edge_multiplier[1]} and {self.image_edge_multiplier[3]} for width")
+            # print(f"the averages are: height: {(self.image_edge_multiplier[1]+self.image_edge_multiplier[3])/2}, width: {(self.image_edge_multiplier[0]+self.image_edge_multiplier[2])/2}")
+            self.output_dims = (
+                int(self.face_height_output * (abs(self.image_edge_multiplier[1]) + abs(self.image_edge_multiplier[3])) / 2),
+                int(self.face_height_output * (abs(self.image_edge_multiplier[0]) + abs(self.image_edge_multiplier[2])) / 2),
+            )
             # # alternative way to set output dims. Multiply sum of multipliers
             # self.output_dims = (int(self.face_height_output*((self.image_edge_multiplier[1]+self.image_edge_multiplier[3]))),int(self.face_height_output*((self.image_edge_multiplier[0]+self.image_edge_multiplier[2]))))
 
@@ -1044,7 +1047,8 @@ class SortPose:
                 # save txt file with SQL to remove dupe
                 image_id_i = df.iloc[i]['image_id']
                 image_id_j = df.iloc[j]['image_id']
-                sql = f"UPDATE Encodings SET is_dupe_of = {image_id_i} WHERE image_id = {image_id_j};"
+                imagename_i = df.iloc[i]['imagename']
+                sql = f"UPDATE Encodings SET is_dupe_of = {image_id_i} WHERE image_id = {image_id_j}; \n -- image_id_i is {image_id_i} with filename {imagename_i}"
                 with open(os.path.join(save_folder, f"dupe_{image_id_j}.sql"), "a") as f:
                     f.write(sql + "\n")
             return is_dupe
@@ -1227,12 +1231,12 @@ class SortPose:
                     if same_shape:
                         selfie_j = selfie_j[bbox_i["top"]:bbox_i["bottom_extend"], bbox_i["left"]:bbox_i["right"]]
                     else:
-                        print(f'error comparing segmentation masks, images {i},{j} different sizes, {selfie_i.shape}, {selfie_j.shape}')
+                        print(f'imbalance comparing segmentation masks, images {i},{j} different sizes, {selfie_i.shape}, {selfie_j.shape}')
                         selfie_j = selfie_j[bbox_j["top"]:bbox_j["bottom_extend"], bbox_j["left"]:bbox_j["right"]]
                         selfie_j = cv2.resize(selfie_j, (selfie_i.shape[1], selfie_i.shape[0]))
-                        
+                    print(f'selfie sizes after cropping to bbox: {selfie_i.shape}, {selfie_j.shape}')
                     ssim_score = self.calculate_ssim(selfie_i, selfie_j)
-
+                    print(f"SSIM score for selfies of {i} and {j} is {ssim_score}")
                     is_dupe = save_dupes_look_closer(i, j, ssim_score, this_dist_list, df)
                     if is_dupe:
                         if self.VERBOSE: print(f"remove_duplicates: confirmed duplicate {j} of {i} with SSIM {ssim_score} and distances {this_dist_list}")
@@ -1450,8 +1454,11 @@ class SortPose:
                     list_max_xs.append(max(current_x_coords))
                     list_min_ys.append(min(current_y_coords))
                     list_max_ys.append(max(current_y_coords))
-        
-       
+        print("list_min_xs", list_min_xs)
+        print("list_max_xs", list_max_xs)
+        print("list_min_ys", list_min_ys)
+        print("list_max_ys", list_max_ys)
+
         if list_min_xs: # Ensure there's data to calculate median from
             median_min_x = statistics.median(list_min_xs)
             median_max_x = statistics.median(list_max_xs)
@@ -1465,26 +1472,33 @@ class SortPose:
         highest_x = math.ceil(median_max_x + padding)
         highest_y = math.ceil(median_max_y + padding)
         
+        MIN_DYN_BBOX_DIM = 1
         # set min dims to 2 units
-        lowest_y = min(lowest_y, -2)
-        lowest_x = min(lowest_x, -2)
-        highest_y = max(highest_y, 2)
-        highest_x = max(highest_x, 2)
+        lowest_y_cartesian = min(lowest_y, -1*MIN_DYN_BBOX_DIM)
+        lowest_x = min(lowest_x, -1*MIN_DYN_BBOX_DIM)
+        highest_y_cartesian = max(highest_y, MIN_DYN_BBOX_DIM)
+        highest_x = max(highest_x, MIN_DYN_BBOX_DIM)
 
-        # if diff between left and right is less/equal to 1 bboxes, take the bigger one and roll with that.
-        if abs(lowest_x) != abs(highest_x) and abs(abs(lowest_x) - abs(highest_x)) <= 1:
-            if abs(highest_x) > abs(lowest_x):
-                lowest_x = highest_x *-1
-            else:
-                highest_x = abs(lowest_x)
-            if self.VERBOSE: print(f"calc_dynamic_multiplier_from_min_max_body_landmarks: diff between abs min_x and abs max_x less than 2, changing them to {highest_x}")
+        # swapping up and down because of cartesian vs image coordinates
+        # april 3 2026, MM TC pair debug
+        highest_y = lowest_y_cartesian
+        lowest_y = highest_y_cartesian
+        # highest_y = highest_y_cartesian
+        # lowest_y = lowest_y_cartesian
+        # # if diff between left and right is less/equal to 1 bboxes, take the bigger one and roll with that.
+        # if abs(lowest_x) != abs(highest_x) and abs(abs(lowest_x) - abs(highest_x)) <= 1:
+        #     if abs(highest_x) > abs(lowest_x):
+        #         lowest_x = highest_x *-1
+        #     else:
+        #         highest_x = abs(lowest_x)
+        #     if self.VERBOSE: print(f"calc_dynamic_multiplier_from_min_max_body_landmarks: diff between abs min_x and abs max_x less than 2, changing them to {highest_x}")
 
-        # if the ratio of height to width is greater than 2, make it a 3:2 by expanding the width
-        if abs(highest_y - lowest_y) / abs(highest_x - lowest_x) > 2:
-            # height is much larger than width, make width match height
-            highest_x = math.floor(highest_y * 3 / 2)
-            lowest_x = math.ceil(lowest_x * 3 / 2)
-        if self.VERBOSE: print(f"calc_dynamic_multiplier_from_min_max_body_landmarks: {lowest_x},{lowest_y},{highest_x},{highest_y}")
+        # # if the ratio of height to width is greater than 2, make it a 3:2 by expanding the width
+        # if abs(highest_y - lowest_y) / abs(highest_x - lowest_x) > 2:
+        #     # height is much larger than width, make width match height
+        #     highest_x = math.floor(highest_y * 3 / 2)
+        #     lowest_x = math.ceil(lowest_x * 3 / 2)
+        if self.VERBOSE: print(f"calc_dynamic_multiplier_from_min_max_body_landmarks: {lowest_y, highest_x, highest_y, lowest_x}")
         # return [lowest_x, lowest_y, highest_x, highest_y]
         # image_edge_multiplier = [top_y_mult, right_x_mult, bottom_y_mult, left_x_mult,]
         return [lowest_y, highest_x, highest_y, lowest_x]
@@ -1516,7 +1530,8 @@ class SortPose:
         Tench's body landmark crop
         """
         # x1, y1, x2, y2 = self.image_edge_multiplier
-        y1, x2, y2, x1 = self.image_edge_multiplier
+        print(f"auto_edge_crop: image edge multiplier {self.image_edge_multiplier}")
+        top, right, bottom, left = self.image_edge_multiplier
         bbox_dimensions = self.bbox_to_pixel_conversion(bbox)
         print(f"auto_edge_crop: initial bbox dimensions {bbox_dimensions} x {resize} == {bbox_dimensions['horizontal']*resize}, {bbox_dimensions['vertical']*resize}")
         bbox_dimensions["horizontal"] = bbox_dimensions["horizontal"]*resize
@@ -1537,11 +1552,11 @@ class SortPose:
         # I think that you need to account for the fact that the image has been scaled (before it is expanded)
         # I have returned that float from the resize function and it is available here as resize
         print("auto_edge_crop: resize factor", resize)
-        print("y1, x2, y2, x1", y1, x2, y2, x1)
-        top = int((image.shape[0]/2) + (scaled_face_height*(y1*1.3)))
-        right = int((image.shape[1]/2) + (scaled_face_height*(x2*1.3)))
-        bottom = int((image.shape[0]/2) + (scaled_face_height*(y2*1.3)))
-        left = int((image.shape[1]/2) + (scaled_face_height*(x1*1.3)))
+        print("top, right, bottom, left", top, right, bottom, left)
+        top = int((image.shape[0]/2) - abs(scaled_face_height*(top*1.3)))
+        right = int((image.shape[1]/2) + abs(scaled_face_height*(right*1.3)))
+        bottom = int((image.shape[0]/2) + abs(scaled_face_height*(bottom*1.3)))
+        left = int((image.shape[1]/2) - abs(scaled_face_height*(left*1.3)))
 
         print(f"auto_edge_crop: calculated crop coords before bounds check: top:{top}, right:{right}, bottom:{bottom}, left:{left}")
         try:

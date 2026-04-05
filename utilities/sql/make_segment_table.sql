@@ -8,7 +8,7 @@ DROP TABLE SegmentHelperObject_book ;
 DELETE FROM SegmentHelper_sept2025_heft_keywords;
 
 -- create helper segment table
-CREATE TABLE SegmentHelper_jan2026_sign103 (
+CREATE TABLE SegmentHelper_topic11_business (
     seg_image_id int NOT NULL AUTO_INCREMENT PRIMARY KEY,
     image_id INTEGER,
     FOREIGN KEY (image_id) REFERENCES Images(image_id)
@@ -283,6 +283,23 @@ WHERE iap.cluster_id = 103
     )
 LIMIT 200000
 ;
+
+
+USE Stock;
+-- for making a helper from Segment Object based on t64 Topic
+INSERT INTO SegmentHelper_topic11_business (image_id)
+SELECT DISTINCT e.image_id
+FROM SegmentBig_isface e
+JOIN ImagesTopics iap ON iap.image_id = e.image_id
+WHERE (iap.topic_id = 11 OR iap.topic_id2 = 11)
+AND NOT EXISTS (
+        SELECT 1
+        FROM SegmentHelper_topic11_business s
+        WHERE s.image_id = e.image_id
+    )
+LIMIT 2000000
+;
+
 
 
 USE Stock;

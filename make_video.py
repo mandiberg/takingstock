@@ -43,22 +43,23 @@ options = ['sequence and save CSV', 'assemble images from CSV']
 option, MODE = pick(options, title)
 
 # keep this live, even if not SSD
-# SegmentTable_name = 'SegmentOct20'
+SegmentTable_name = 'SegmentOct20'
 # SegmentHelper_name = None
-SegmentTable_name = 'SegmentBig_isface'
+# SegmentTable_name = 'SegmentBig_isface'
 # SegmentTable_name = 'SegmentBig_isnotface'
-# SegmentHelper_name = 'SegmentHelper_may2025_4x4faces'
+SegmentHelper_name = 'SegmentHelper_may2025_4x4faces'
 # SegmentHelper_name = 'SegmentHelper_sept2025_heft_keywords'
 # SegmentHelper_name = 'SegmentHelperObject_90_stethoscope'
-SegmentHelper_name = 'None' # set below for heft keywords
+# SegmentHelper_name = 'None' # set below for heft keywords
 # SegmentHelper_name = None
 # SATYAM, this is MM specific
 # for when I'm using files on my SSD vs RAID
-IS_SSD = False
+IS_SSD = True
+SSD_PATH = "/Volumes/OWC52/segment_images_OWC4"
 #IS_MOVE is in move_toSSD_files.py
 
 # I/O utils
-io = DataIO(IS_SSD)
+io = DataIO(IS_SSD, VERBOSE=VERBOSE, SSD_PATH=SSD_PATH)
 db = io.db
 
 # OWC4 SNAFU WORKAROUND
@@ -92,7 +93,7 @@ MODES = {0:'paris_photo_torso_images_topics', 1:'paris_photo_torso_videos_topics
 MODE_CHOICE = 6
 CURRENT_MODE = MODES[MODE_CHOICE]
 
-LIMIT = 100000 # this is the limit for the SQL query
+LIMIT = 100 # this is the limit for the SQL query
 CROP_MULTIPLIER = 5
 
 image_edge_multiplier = None
@@ -188,9 +189,10 @@ elif "3D" in CURRENT_MODE:
 elif CURRENT_MODE == 'heft_torso_keywords':
 
     # # cludgy hack to get dynamic cropping for testing mar 2026    
-    # AUTO_EDGE_CROP = True
-    # if AUTO_EDGE_CROP:
-    #     EXPAND = True
+    AUTO_EDGE_CROP = True
+    if AUTO_EDGE_CROP:
+        EXPAND = True
+        FULL_BODY = True # haxxor TK
 
     # set to 0 to disable obj query stuff. this is also for object_fusion
     class_id = 0
@@ -201,8 +203,8 @@ elif CURRENT_MODE == 'heft_torso_keywords':
 
     # CLUSTER_TYPE = "ArmsPoses3D"
     # CLUSTER_TYPE = "object_fusion"
-    # CLUSTER_TYPE = SORT_TYPE = "ArmsPoses3D" # this triggers meta body poses 3D
-    CLUSTER_TYPE = SORT_TYPE = "object_fusion" # make sure OBJ_CLS_ID is set below
+    CLUSTER_TYPE = SORT_TYPE = "ArmsPoses3D" # this triggers meta body poses 3D
+    # CLUSTER_TYPE = SORT_TYPE = "object_fusion" # make sure OBJ_CLS_ID is set below
     cl = ToolsClustering(CLUSTER_TYPE, VERBOSE=VERBOSE)
 
 
@@ -340,7 +342,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     # if this is defined, then it will not call min_max_body_landmarks_for_crop
     # image_edge_multiplier = [1.3,1.85,2.4,1.85] # tighter square crop for paris photo videos < Oct 29 FINAL VERSION NOV 2024 DO NOT CHANGE
     # image_edge_multiplier = [1.3,2,2.9,2] # portrait crop for paris photo images < Aug 30
-    image_edge_multiplier = [1.5,2,4.5,2]
+    # image_edge_multiplier = [1.5,2,4.5,2]
 
 else:
     print("unknown mode, exiting")
