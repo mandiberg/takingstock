@@ -34,6 +34,7 @@ from pymongo.errors import DuplicateKeyError
 from mp_pose_est import SelectPose
 from mp_db_io import DataIO
 from mp_sort_pose import SortPose
+from tools_clustering import ToolsClustering
 
 #####new imports #####
 from mediapipe.python.solutions.drawing_utils import _normalized_to_pixel_coordinates
@@ -1072,10 +1073,7 @@ def save_body_hands_mysql_and_mongo(session, image_id, image, bbox_dict, body_la
 
         # MySQL
         ### save image.shape to Images.h and Images.w
-        session.query(Images).filter(Images.image_id == image_id).update({
-            Images.h: image.shape[0],
-            Images.w: image.shape[1]
-        }, synchronize_session=False)
+        ToolsClustering.store_image_face_data(session, image_id, image_h=image.shape[0], image_w=image.shape[1])
 
         ### save bbox_dict (including normed bbox) to PhoneBbox
         for OBJ_CLS_ID in OBJ_CLS_LIST:

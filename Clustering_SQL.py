@@ -983,7 +983,7 @@ def df_list_to_cols(df, col_name):
 def extract_face_geometry(df, sort):
     """
     Extract face geometry (nose position and face height) from each image.
-    Updates df with nose_x, nose_y, face_height columns.
+    Updates df with nose_pixel_x, nose_pixel_y, face_height columns.
     """
     face_data = []
     for idx, row in df.iterrows():
@@ -1000,22 +1000,22 @@ def extract_face_geometry(df, sort):
 
                     # Match utilities/draw_norm_lms.py process_face_doc()
                     sort.nose_2d = sort.get_face_2d_point(1)
-                    sort.nose_x, sort.nose_y = sort.nose_2d
+                    nose_pixel_x, nose_pixel_y = sort.nose_2d
                     sort.get_faceheight_data()
 
                     face_data.append({
                         'image_id': image_id,
-                        'nose_x': int(sort.nose_x) if sort.nose_x is not None else None,
-                        'nose_y': int(sort.nose_y) if sort.nose_y is not None else None,
+                        'nose_pixel_x': int(nose_pixel_x) if nose_pixel_x is not None else None,
+                        'nose_pixel_y': int(nose_pixel_y) if nose_pixel_y is not None else None,
                         'face_height': int(sort.face_height) if sort.face_height is not None else None
                     })
                 else:
-                    face_data.append({'image_id': image_id, 'nose_x': None, 'nose_y': None, 'face_height': None})
+                    face_data.append({'image_id': image_id, 'nose_pixel_x': None, 'nose_pixel_y': None, 'face_height': None})
             else:
-                face_data.append({'image_id': image_id, 'nose_x': None, 'nose_y': None, 'face_height': None})
+                face_data.append({'image_id': image_id, 'nose_pixel_x': None, 'nose_pixel_y': None, 'face_height': None})
         except Exception as e:
             print(f"Error extracting face geometry for image_id {image_id}: {e}")
-            face_data.append({'image_id': image_id, 'nose_x': None, 'nose_y': None, 'face_height': None})
+            face_data.append({'image_id': image_id, 'nose_pixel_x': None, 'nose_pixel_y': None, 'face_height': None})
     
     return pd.DataFrame(face_data)
 
@@ -1983,46 +1983,26 @@ def main():
                     else:
                         print(f"[DEBUG]   ✗ Column '{col}' MISSING from df_with_geometry")
 
-                # Update Encodings table with face geometry using raw SQL so ORM class can lag schema
+                # Update Encodings table with face geometry via centralized helper.
                 updated_count = 0
-                try:
-                    col_check_sql = text("""
-                        SELECT COLUMN_NAME
-                        FROM information_schema.COLUMNS
-                        WHERE TABLE_SCHEMA = DATABASE()
-                          AND TABLE_NAME = 'Encodings'
-                          AND COLUMN_NAME IN ('nose_x', 'nose_y', 'face_height')
-                    """)
-                    existing_cols = {row[0] for row in session.execute(col_check_sql)}
-                except Exception as e:
-                    print(f"Error checking Encodings schema: {e}")
-                    existing_cols = set()
-
-                required_cols = {'nose_x', 'nose_y', 'face_height'}
-                if required_cols.issubset(existing_cols):
-                    update_sql = text("""
-                        UPDATE Encodings
-                        SET nose_x = :nose_x,
-                            nose_y = :nose_y,
-                            face_height = :face_height
-                        WHERE image_id = :image_id
-                    """)
-                    for idx, row in face_geometry_df.iterrows():
-                        try:
-                            session.execute(update_sql, {
-                                'image_id': row['image_id'],
-                                'nose_x': row['nose_x'],
-                                'nose_y': row['nose_y'],
-                                'face_height': row['face_height']
-                            })
+                for idx, row in face_geometry_df.iterrows():
+                    try:
+                        update_result = ToolsClustering.store_image_face_data(
+                            session=session,
+                            target_image_id=row['image_id'],
+                            face_height=row.get('face_height'),
+                            nose_pixel_x=row.get('nose_pixel_x'),
+                            nose_pixel_y=row.get('nose_pixel_y'),
+                            testing=False,
+                            auto_commit=False,
+                        )
+                        if update_result.get('encodings'):
                             updated_count += 1
-                        except Exception as e:
-                            print(f"Error updating Encodings for image_id {row['image_id']}: {e}")
+                    except Exception as e:
+                        print(f"Error updating Encodings for image_id {row['image_id']}: {e}")
+                if updated_count > 0:
                     session.commit()
-                    print(f"✓ Updated Encodings table with face geometry for {updated_count} images")
-                else:
-                    missing_cols = required_cols - existing_cols
-                    print(f"Skipping Encodings geometry update; missing columns: {sorted(missing_cols)}")
+                print(f"✓ Updated Encodings table with face geometry for {updated_count} images")
 
                 # Save ImagesDetections table only for newly processed IDs
                 if SAVE_IMAGE_DETECTIONS_PER_BATCH:

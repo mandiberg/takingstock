@@ -21,6 +21,7 @@ import json
 from my_declarative_base import Base, Clusters, Encodings, Detections, Images,PhoneBbox, SegmentTable, SegmentBig, Images
 #from sqlalchemy.ext.declarative import declarative_base
 from mp_sort_pose import SortPose
+from tools_clustering import ToolsClustering
 import pymongo
 from mediapipe.framework.formats import landmark_pb2
 from pymediainfo import MediaInfo
@@ -467,20 +468,14 @@ def get_face_height_bbox(target_image_id):
     face_height = sort.convert_bbox_to_face_height(bbox)
     return face_height
 
-def insert_shape(target_image_id,shape):
-    Images_entry = (
-        session.query(Images)
-        .filter(Images.image_id == target_image_id)
-        .first() #### MICHAEL I suspect this is a database dependent problem, doesnt work for me
-    )    
-    if Images_entry:
-        if Images_entry.h is None:
-            Images_entry.h=shape[0]
-        if Images_entry.w is None:
-            Images_entry.w=shape[1]
-        if VERBOSE:
-            print("image_id:", Images_entry.image_id,"height:", Images_entry.h,"width:", Images_entry.w)
-    if not TESTING: session.commit()
+def insert_shape(target_image_id, shape):
+    ToolsClustering.store_image_face_data(
+        session=session,
+        target_image_id=target_image_id,
+        image_h=shape[0],
+        image_w=shape[1],
+        testing=TESTING,
+    )
     return
 
 def get_obj_bbox(target_image_id):
@@ -685,21 +680,16 @@ def calc_nlm(image_id_to_shape, lock, session):
     else:
         # store face_height and nose_pixel_pos_body — only if not already set
         if not TESTING:
-            session.query(Encodings).filter(
-                Encodings.image_id == target_image_id,
-                Encodings.face_height.is_(None)
-            ).update({
-                Encodings.face_height: int(face_height),
-                Encodings.nose_pixel_x: xB,
-                Encodings.nose_pixel_y: yB,
-            }, synchronize_session=False)
-            session.query(Images).filter(
-                Images.image_id == target_image_id,
-                Images.h.is_(None)
-            ).update({
-                Images.h: height,
-                Images.w: width,
-            }, synchronize_session=False)
+            ToolsClustering.store_image_face_data(
+                session=session,
+                target_image_id=target_image_id,
+                face_height=face_height,
+                nose_pixel_x=xB,
+                nose_pixel_y=yB,
+                image_h=height,
+                image_w=width,
+                testing=TESTING,
+            )
 
 
     if hand_results:

@@ -180,7 +180,6 @@ SELECT
     SUM(CASE WHEN d.class_id = 117 THEN 1 ELSE 0 END) AS class_117,
     SUM(CASE WHEN d.class_id = 118 THEN 1 ELSE 0 END) AS class_118,
     SUM(CASE WHEN d.class_id = 119 THEN 1 ELSE 0 END) AS class_119,
-    
     COUNT(DISTINCT iof.image_id) AS total_images
 FROM ImagesObjectFusion iof
 INNER JOIN (
@@ -387,9 +386,10 @@ SELECT
   SUM(CASE WHEN bbox IS NOT NULL AND (bbox_norm IS NULL OR JSON_EXTRACT(bbox_norm, '$.left') IS NULL) THEN 1 ELSE 0 END) AS not_null_bbox_and_null_bbox_norm,
   SUM(CASE WHEN bbox IS NOT NULL AND bbox_norm IS NOT NULL AND JSON_EXTRACT(bbox_norm, '$.left') IS NOT NULL THEN 1 ELSE 0 END) AS not_null_bbox_and_not_null_bbox_norm
 FROM Detections
-WHERE class_id = 111;
+;
+-- WHERE class_id = 111;
 
--- 0	405922	8022
+-- 4/5 total: 0	32944858	20900495
 
 
 '''
@@ -402,3 +402,5 @@ JOIN Encodings e ON s.image_id = e.image_id
 WHERE e.face_x IS NOT NULL
 AND (e.pitch IS NULL OR e.yaw IS NULL OR e.roll IS NULL)
 ; 
+
+-- 4/5 total: 2165712

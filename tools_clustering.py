@@ -1,7 +1,7 @@
 from sqlalchemy import create_engine, select, text, bindparam, Column, Integer, Float, ForeignKey, BLOB
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import NullPool
-from my_declarative_base import Base, Images, Detections
+from my_declarative_base import Base, Images, Detections, Encodings
 import pickle
 import numpy as np
 import json
@@ -1811,6 +1811,56 @@ class ToolsClustering:
                 if result.rowcount and result.rowcount > 0:
                     deleted_total += int(result.rowcount)
         return deleted_total
+
+    @staticmethod
+    def store_image_face_data(session, target_image_id, face_height=None, nose_pixel_x=None, nose_pixel_y=None, image_h=None, image_w=None, testing=False, auto_commit=True):
+        """
+        Persist face-height/nose-pixel and image dimensions without overwriting existing values.
+        Only NULL fields are populated.
+        """
+        updated = {
+            'encodings': False,
+            'images': False,
+        }
+
+        enc_q = session.query(Encodings).filter(Encodings.image_id == target_image_id)
+        if face_height is not None:
+            rows = enc_q.filter(Encodings.face_height.is_(None)).update(
+                {Encodings.face_height: int(face_height)}, synchronize_session=False
+            )
+            if rows:
+                updated['encodings'] = True
+        if nose_pixel_x is not None:
+            rows = enc_q.filter(Encodings.nose_pixel_x.is_(None)).update(
+                {Encodings.nose_pixel_x: int(nose_pixel_x)}, synchronize_session=False
+            )
+            if rows:
+                updated['encodings'] = True
+        if nose_pixel_y is not None:
+            rows = enc_q.filter(Encodings.nose_pixel_y.is_(None)).update(
+                {Encodings.nose_pixel_y: int(nose_pixel_y)}, synchronize_session=False
+            )
+            if rows:
+                updated['encodings'] = True
+
+        img_q = session.query(Images).filter(Images.image_id == target_image_id)
+        if image_h is not None:
+            rows = img_q.filter(Images.h.is_(None)).update(
+                {Images.h: int(image_h)}, synchronize_session=False
+            )
+            if rows:
+                updated['images'] = True
+        if image_w is not None:
+            rows = img_q.filter(Images.w.is_(None)).update(
+                {Images.w: int(image_w)}, synchronize_session=False
+            )
+            if rows:
+                updated['images'] = True
+
+        if auto_commit and (not testing) and (updated['encodings'] or updated['images']):
+            session.commit()
+
+        return updated
 
     # ================================================================================
     # DEBUG / TRACKING METHODS (disabled when VERBOSE=False)
