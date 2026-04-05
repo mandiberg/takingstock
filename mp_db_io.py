@@ -373,7 +373,7 @@ class DataIO:
         
         # Already a dict
         if isinstance(json_string, dict):
-            print("json_string is already a dict")
+            if self.VERBOSE: print("json_string is already a dict")
             return json_string
         
         # Not a string (could be other types like int, bool, etc.)

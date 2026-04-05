@@ -21,6 +21,7 @@ import json
 from my_declarative_base import Base, Clusters, Encodings, Detections, Images,PhoneBbox, SegmentTable, SegmentBig, Images
 #from sqlalchemy.ext.declarative import declarative_base
 from mp_sort_pose import SortPose
+from tools_clustering import ToolsClustering
 import pymongo
 from mediapipe.framework.formats import landmark_pb2
 from pymediainfo import MediaInfo
@@ -40,14 +41,14 @@ IS_SSD = False
 SSD_PATH = None
 
 SKIP_EXISTING = False # Skips images with a normed bbox but that have Images.h - I think only applies to phone bbox
-USE_OBJ = False # do objet detections?
-SKIP_BODY = False # skip body landmarks. mostly you want to skip when doing obj bbox
+USE_OBJ = True # do objet detections?
+SKIP_BODY = True # skip body landmarks. mostly you want to skip when doing obj bbox
                 # or are just redoing hands
-REPROCESS_HANDS = True # do hands
+REPROCESS_HANDS = False # do hands
 ACCEPT_EXSISTING_HANDS = True # if true, it will accept existing data and update bool in SQL to tru
 IS_SEGMENT_BIG = False # use SegmentBig table. IF False, and IS_SSD is false, it will use Encodings table
 TESTING = False # if true, will not do any DB writes
-DETECTIONS_ONLY = False
+DETECTIONS_ONLY = True
 
 # join on helper to limit scope and use SSD
 INNER_JOIN_HELPER = True
@@ -65,11 +66,11 @@ INNER_JOIN_HELPER = True
 # SegmentHelperObject_67_phone 
 # SegmentHelperObject_41_cup_glass (big)
 
-LIMIT= 2000000
+LIMIT= 1000000
 # Initialize the counter
 counter = 2000
 
-THIS_CLASS_ID = 0 # for object bbox normalization
+THIS_CLASS_ID = 119 # for object bbox normalization
 class_token = ID_SEGMENT_DICT.get(THIS_CLASS_ID, None)
 ssd = ID_SSD_DICT.get(THIS_CLASS_ID, None)
 if THIS_CLASS_ID in ID_FOLDER_DICT: folder_token = ID_FOLDER_DICT[THIS_CLASS_ID]
@@ -268,7 +269,7 @@ def normalize_obj_bbox(obj_bbox,nose_pos,face_height,shape):
     # n_obj_bbox["left"]=(n_obj_bbox["left"]*width -nose_pos["x"])/face_height
     # n_obj_bbox["top"]=(n_obj_bbox["top"]*height -nose_pos["y"])/face_height
     # n_obj_bbox["bottom"]=(n_obj_bbox["bottom"]*height -nose_pos["y"])/face_height
-    print("n_obj_bbox",n_obj_bbox)
+    print(" 📦 n_obj_bbox",n_obj_bbox)
 
     return n_obj_bbox
 
@@ -467,18 +468,14 @@ def get_face_height_bbox(target_image_id):
     face_height = sort.convert_bbox_to_face_height(bbox)
     return face_height
 
-def insert_shape(target_image_id,shape):
-    Images_entry = (
-        session.query(Images)
-        .filter(Images.image_id == target_image_id)
-        .first() #### MICHAEL I suspect this is a database dependent problem, doesnt work for me
-    )    
-    if Images_entry:
-        Images_entry.h=shape[0]
-        Images_entry.w=shape[1]
-        if VERBOSE:
-            print("image_id:", Images_entry.image_id,"height:", Images_entry.h,"width:", Images_entry.w)
-    if not TESTING: session.commit()
+def insert_shape(target_image_id, shape):
+    ToolsClustering.store_image_face_data(
+        session=session,
+        target_image_id=target_image_id,
+        image_h=shape[0],
+        image_w=shape[1],
+        testing=TESTING,
+    )
     return
 
 def get_obj_bbox(target_image_id):
@@ -681,9 +678,18 @@ def calc_nlm(image_id_to_shape, lock, session):
         return
 
     else:
-        # DO THIS LATER
-        # TK store face_height and nose_pixel_pos_body in encodings table
-        pass
+        # store face_height and nose_pixel_pos_body — only if not already set
+        if not TESTING:
+            ToolsClustering.store_image_face_data(
+                session=session,
+                target_image_id=target_image_id,
+                face_height=face_height,
+                nose_pixel_x=xB,
+                nose_pixel_y=yB,
+                image_h=height,
+                image_w=width,
+                testing=TESTING,
+            )
 
 
     if hand_results:

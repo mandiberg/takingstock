@@ -81,8 +81,7 @@ SELECT
     SUM(CASE WHEN d.class_id = 18 THEN 1 ELSE 0 END) AS class_18,
     SUM(CASE WHEN d.class_id = 19 THEN 1 ELSE 0 END) AS class_19,
     SUM(CASE WHEN d.class_id = 20 THEN 1 ELSE 0 END) AS class_20,
-    SUM(CASE WHEN d.class_id = 21 
-    THEN 1 ELSE 0 END) AS class_21,
+    SUM(CASE WHEN d.class_id = 21 THEN 1 ELSE 0 END) AS class_21,
     SUM(CASE WHEN d.class_id = 22 THEN 1 ELSE 0 END) AS class_22,
     SUM(CASE WHEN d.class_id = 23 THEN 1 ELSE 0 END) AS class_23,
     SUM(CASE WHEN d.class_id = 24 THEN 1 ELSE 0 END) AS class_24,
@@ -165,48 +164,60 @@ SELECT
     SUM(CASE WHEN d.class_id = 101 THEN 1 ELSE 0 END) AS class_101,
     SUM(CASE WHEN d.class_id = 102 THEN 1 ELSE 0 END) AS class_102,
     SUM(CASE WHEN d.class_id = 103 THEN 1 ELSE 0 END) AS class_103,
+    SUM(CASE WHEN d.class_id = 104 THEN 1 ELSE 0 END) AS class_104,
+    SUM(CASE WHEN d.class_id = 105 THEN 1 ELSE 0 END) AS class_105,
+    SUM(CASE WHEN d.class_id = 106 THEN 1 ELSE 0 END) AS class_106,
+    SUM(CASE WHEN d.class_id = 107 THEN 1 ELSE 0 END) AS class_107,
+    SUM(CASE WHEN d.class_id = 108 THEN 1 ELSE 0 END) AS class_108,
+    SUM(CASE WHEN d.class_id = 109 THEN 1 ELSE 0 END) AS class_109,
+    SUM(CASE WHEN d.class_id = 110 THEN 1 ELSE 0 END) AS class_110,
+    SUM(CASE WHEN d.class_id = 111 THEN 1 ELSE 0 END) AS class_111,
+    SUM(CASE WHEN d.class_id = 112 THEN 1 ELSE 0 END) AS class_112,
+    SUM(CASE WHEN d.class_id = 113 THEN 1 ELSE 0 END) AS class_113,
+    SUM(CASE WHEN d.class_id = 114 THEN 1 ELSE 0 END) AS class_114,
+    SUM(CASE WHEN d.class_id = 115 THEN 1 ELSE 0 END) AS class_115,
+    SUM(CASE WHEN d.class_id = 116 THEN 1 ELSE 0 END) AS class_116,
+    SUM(CASE WHEN d.class_id = 117 THEN 1 ELSE 0 END) AS class_117,
+    SUM(CASE WHEN d.class_id = 118 THEN 1 ELSE 0 END) AS class_118,
+    SUM(CASE WHEN d.class_id = 119 THEN 1 ELSE 0 END) AS class_119,
     COUNT(DISTINCT iof.image_id) AS total_images
 FROM ImagesObjectFusion iof
 INNER JOIN (
   SELECT image_id, left_hand_object_id AS detection_id
   FROM ImagesDetections
   WHERE left_hand_object_id IS NOT NULL
-
   UNION
-
   SELECT image_id, right_hand_object_id AS detection_id
   FROM ImagesDetections
   WHERE right_hand_object_id IS NOT NULL
-
   UNION
-
   SELECT image_id, top_face_object_id AS detection_id
   FROM ImagesDetections
   WHERE top_face_object_id IS NOT NULL
-
   UNION
-
   SELECT image_id, left_eye_object_id AS detection_id
   FROM ImagesDetections
   WHERE left_eye_object_id IS NOT NULL
-
   UNION
-
   SELECT image_id, right_eye_object_id AS detection_id
   FROM ImagesDetections
   WHERE right_eye_object_id IS NOT NULL
-
   UNION
-
   SELECT image_id, mouth_object_id AS detection_id
   FROM ImagesDetections
   WHERE mouth_object_id IS NOT NULL
-
   UNION
-
   SELECT image_id, shoulder_object_id AS detection_id
   FROM ImagesDetections
   WHERE shoulder_object_id IS NOT NULL
+  UNION
+  SELECT image_id, waist_object_id AS detection_id
+  FROM ImagesDetections
+  WHERE waist_object_id IS NOT NULL
+  UNION
+  SELECT image_id, feet_object_id AS detection_id
+  FROM ImagesDetections
+  WHERE feet_object_id IS NOT NULL
 ) AS selected_det ON iof.image_id = selected_det.image_id
 INNER JOIN Detections d ON selected_det.detection_id = d.detection_id
 GROUP BY iof.cluster_id
@@ -224,6 +235,8 @@ SELECT
   SUM(CASE WHEN pos.object_position = 'right_eye' THEN 1 ELSE 0 END) AS right_eye_count,
   SUM(CASE WHEN pos.object_position = 'mouth' THEN 1 ELSE 0 END) AS mouth_count,
   SUM(CASE WHEN pos.object_position = 'shoulder' THEN 1 ELSE 0 END) AS shoulder_count,
+  SUM(CASE WHEN pos.object_position = 'waist' THEN 1 ELSE 0 END) AS waist_count,
+  SUM(CASE WHEN pos.object_position = 'feet' THEN 1 ELSE 0 END) AS feet_count,
   COUNT(*) AS total_position_assignments,
   COUNT(DISTINCT pos.image_id) AS total_images_with_class
 FROM (
@@ -266,36 +279,128 @@ FROM (
   SELECT idet.image_id, 'shoulder' AS object_position, d.class_id
   FROM ImagesDetections idet
   INNER JOIN Detections d ON idet.shoulder_object_id = d.detection_id
+
+  UNION ALL
+
+  SELECT idet.image_id, 'waist' AS object_position, d.class_id
+  FROM ImagesDetections idet
+  INNER JOIN Detections d ON idet.waist_object_id = d.detection_id
+
+  UNION ALL
+
+  SELECT idet.image_id, 'feet' AS object_position, d.class_id
+  FROM ImagesDetections idet
+  INNER JOIN Detections d ON idet.feet_object_id = d.detection_id
 ) AS pos
 GROUP BY pos.class_id
 ORDER BY pos.class_id;
 
 
+-- quick slot population sanity check (helps verify whether waist/feet are being written at all)
+SELECT
+  COUNT(*) AS rows_total,
+  SUM(CASE WHEN waist_object_id IS NOT NULL THEN 1 ELSE 0 END) AS waist_rows_nonnull,
+  SUM(CASE WHEN feet_object_id IS NOT NULL THEN 1 ELSE 0 END) AS feet_rows_nonnull,
+  SUM(CASE WHEN shoulder_object_id IS NOT NULL THEN 1 ELSE 0 END) AS shoulder_rows_nonnull,
+  SUM(CASE WHEN mouth_object_id IS NOT NULL THEN 1 ELSE 0 END) AS mouth_rows_nonnull
+FROM ImagesDetections;
 
-USE Stock;
 
-DROP TABLE IF EXISTS ImagesObjectFusion;
-
-
-
-
-
-SELECT 
-    COUNT(*) as num_clusters,
-    MIN(size) as min_size,
-    MAX(size) as max_size,
-    AVG(size) as avg_size,
-    STDDEV(size) as stddev_size,
-    SUM(CASE WHEN size > 10000 THEN 1 ELSE 0 END) as clusters_over_10k
+-- tie-only destination breakdown (class_id 27)
+SELECT
+  pos.object_position,
+  COUNT(*) AS tie_assignments,
+  COUNT(DISTINCT pos.image_id) AS tie_images
 FROM (
-    SELECT cluster_id, COUNT(*) as size
-    FROM ImagesObjectFusion
-    GROUP BY cluster_id
-) AS cluster_sizes;
+  SELECT idet.image_id, 'left_hand' AS object_position, d.class_id
+  FROM ImagesDetections idet
+  INNER JOIN Detections d ON idet.left_hand_object_id = d.detection_id
 
--- existing version: 512	37	355544	8145.4219	30235.87846232398	85
--- revised weighting: 512	19	218434	8145.4219	21739.415825170578	76
--- reduced face angle: 768	11	694946	5430.2813	37600.473401539195	46
--- denormalized class_id: 1024	8	589417	4072.7109	29453.3158708742	67
-	-- face angle 0.3: 1024	2	1430938	4072.7109	50742.639562944336	53
+  UNION ALL
 
+  SELECT idet.image_id, 'right_hand' AS object_position, d.class_id
+  FROM ImagesDetections idet
+  INNER JOIN Detections d ON idet.right_hand_object_id = d.detection_id
+
+  UNION ALL
+
+  SELECT idet.image_id, 'top_face' AS object_position, d.class_id
+  FROM ImagesDetections idet
+  INNER JOIN Detections d ON idet.top_face_object_id = d.detection_id
+
+  UNION ALL
+
+  SELECT idet.image_id, 'left_eye' AS object_position, d.class_id
+  FROM ImagesDetections idet
+  INNER JOIN Detections d ON idet.left_eye_object_id = d.detection_id
+
+  UNION ALL
+
+  SELECT idet.image_id, 'right_eye' AS object_position, d.class_id
+  FROM ImagesDetections idet
+  INNER JOIN Detections d ON idet.right_eye_object_id = d.detection_id
+
+  UNION ALL
+
+  SELECT idet.image_id, 'mouth' AS object_position, d.class_id
+  FROM ImagesDetections idet
+  INNER JOIN Detections d ON idet.mouth_object_id = d.detection_id
+
+  UNION ALL
+
+  SELECT idet.image_id, 'shoulder' AS object_position, d.class_id
+  FROM ImagesDetections idet
+  INNER JOIN Detections d ON idet.shoulder_object_id = d.detection_id
+
+  UNION ALL
+
+  SELECT idet.image_id, 'waist' AS object_position, d.class_id
+  FROM ImagesDetections idet
+  INNER JOIN Detections d ON idet.waist_object_id = d.detection_id
+
+  UNION ALL
+
+  SELECT idet.image_id, 'feet' AS object_position, d.class_id
+  FROM ImagesDetections idet
+  INNER JOIN Detections d ON idet.feet_object_id = d.detection_id
+) AS pos
+WHERE pos.class_id = 27
+GROUP BY pos.object_position
+ORDER BY tie_assignments DESC;
+
+
+
+
+
+
+
+'''
+Detections table has bbox and bbox_norm collumns
+I want to know how many rows have null in bbox_norm but not in bbox, 
+and how many have null in both, and how many have values in both.
+for class_id 110
+'''
+
+SELECT
+  SUM(CASE WHEN bbox IS NULL AND (bbox_norm IS NULL OR JSON_EXTRACT(bbox_norm, '$.left') IS NULL) THEN 1 ELSE 0 END) AS null_bbox_and_null_bbox_norm,
+  SUM(CASE WHEN bbox IS NOT NULL AND (bbox_norm IS NULL OR JSON_EXTRACT(bbox_norm, '$.left') IS NULL) THEN 1 ELSE 0 END) AS not_null_bbox_and_null_bbox_norm,
+  SUM(CASE WHEN bbox IS NOT NULL AND bbox_norm IS NOT NULL AND JSON_EXTRACT(bbox_norm, '$.left') IS NOT NULL THEN 1 ELSE 0 END) AS not_null_bbox_and_not_null_bbox_norm
+FROM Detections
+;
+-- WHERE class_id = 111;
+
+-- 4/5 total: 0	32944858	20900495
+
+
+'''
+count how many image_ids have face_x but pitch yaw roll are NULL, how many have both
+'''
+
+SELECT COUNT(DISTINCT s.image_id) AS total_images_with_face_x_and_null_pitch_yaw_roll
+FROM Detections s
+JOIN Encodings e ON s.image_id = e.image_id
+WHERE e.face_x IS NOT NULL
+AND (e.pitch IS NULL OR e.yaw IS NULL OR e.roll IS NULL)
+; 
+
+-- 4/5 total: 2165712

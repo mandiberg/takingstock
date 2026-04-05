@@ -51,7 +51,7 @@ ocr_engine = PaddleOCR(
 device = "mps" if torch.backends.mps.is_available() else "cpu"
 print("Using device:", device)
 yolo_model = YOLO("yolov8x.pt").to(device)  # load a pretrained YOLOv8x model
-yolo_custom_model = YOLO("models/takingstock_flag_multi_v1_yolo26m/weights/best.pt").to(device)
+yolo_custom_model = YOLO("models/takingstock_c36_v1_yolo26x/weights/best.pt").to(device)
 # yolo_custom_model = YOLO("models/takingstock_c11v3_yolov8m/weights/best.pt").to(device)
 
 VERBOSE = False
@@ -60,9 +60,10 @@ yolo = YOLOTools(DEBUGGING=True, VERBOSE=VERBOSE)
 
 
 blank = False
-DEBUGGING = True # saves debug images (option for bboxes drawn)
-SAVE_NEW_LABELS = True # saves new yolo labels to feed back into training data
-TESTING_NO_DB_WRITE = True # if True, will not write to database
+DEBUGGING = False # saves debug images (option for bboxes drawn)
+SAVE_NEW_LABELS = False # saves new yolo labels to feed back into training data
+SAVE_NODETECTIONS_JPG_FILES = False
+TESTING_NO_DB_WRITE = False # if True, will not write to database
 DO_COCO = False
 DO_CUSTOM = True
 DO_MASK = False
@@ -71,21 +72,29 @@ use_average_per_row=False # for valentine bbox detection
 DO_OCR = False
 CLASSES_TO_COMBINE = [89,90]
 
-# FILE_FOLDER = "/Volumes/OWC5/segment_images_87_flag"
-FILE_FOLDER ="/Volumes/LaCie/segment_images_96_bitcoin"
+OVERWRITE_EXISTING_DETECTIONS = False
+IGNORE_EXISTING_NO_DETECTIONS = True
+DET_ID_THRESHOLD_CUSTOM = 59955150
+DET_ID_THRESHOLD_COCO = 59955148
+# this is for merging books and stuff, but it messes up cucumbers. 
+IOU_THRESHOLD = 0.7
+ADJACENCY_THRESHOLD_PX = 10
+
+# FILE_FOLDER = "/Volumes/OWC52/segment_images_OWC4"
+FILE_FOLDER ="/Volumes/LaCie/segment_images_84_valentine"
 # FILE_FOLDER = "/Volumes/RAID18" # must be a folder holding the site folder(s)
 # MAKE_VIDEO_CSVS_PATH = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/book_csvs"
 MAKE_VIDEO_CSVS_PATH = None  # to process all images in folder
 OUTPUT_FOLDER = os.path.join(FILE_FOLDER, "test_output")
 BATCH_SIZE = 100
 MASK_THRESHOLD = .15  # HSV distance threshold for mask detection
-CONF_THRESHOLD = 0.01
+CONF_THRESHOLD = 0.3
 RED_THRESH = 180
 RED_DOM = 100
 VAL_MIN_SIZE = 60
 CREATE_YOLO_CLASS_ID = 90
 IS_DRAW_BOX = True
-IS_SAVE_UNDETECTED = True
+IS_SAVE_UNDETECTED = False
 MOVE_OR_COPY = "copy"  # "move" or "copy"
 CLUSTER_TYPE = "HSV" # only works with cluster save, not with assignment
 META = False # to return the meta clusters (out of 23, not 96)
@@ -150,7 +159,49 @@ table_cluster_type = cl.set_table_cluster_type(META)
 # }
 
 # flags 230 class
-custom_ids_to_global_dict = {i:i for i in range(228)} # for testing, map custom ids to same global ids
+# custom_ids_to_global_dict = {i:i for i in range(228)} # for testing, map custom ids to same global ids
+
+# complete 36 class model
+custom_ids_to_global_dict = {
+
+  0: 109,
+  1: 89,
+  2: 117,
+  3: 113,
+  4: 108,
+  5: 100,
+  6: 116,
+  7: 114,
+  8: 88,
+  9: 112,
+  10: 118,
+  11: 90,
+  12: 92,
+  13: 107,
+  14: 84,
+  15: 97,
+  16: 83,
+  17: 81,
+  18: 104,
+  19: 82,
+  20: 98,
+  21: 94,
+  22: 95,
+  23: 86,
+  24: 119,
+  25: 106,
+  26: 80,
+  27: 102,
+  28: 110,
+  29: 96,
+  30: 101,
+  31: 99,
+  32: 105,
+  33: 103,
+  34: 115,
+  35: 111,
+
+}
 
 # custom_ids_to_global_dict = {
 #     0: 92,
@@ -261,7 +312,12 @@ def get_existing_no_detections(image_id, NoDetectionTable=NoDetections):
     return existing_no_detections
 
 def save_no_dectections(session,image_id, NoDetectionTable=NoDetections):
-    # save to NoDetections table
+    # Save to no-detections table only if missing (idempotent for reruns).
+    existing_row = session.query(NoDetectionTable).filter(NoDetectionTable.image_id == image_id).first()
+    if existing_row is not None:
+        print(f"Image {image_id} - Existing no-detections row already present in {NoDetectionTable.__tablename__}; leaving untouched.")
+        return
+
     new_no_detection = NoDetectionTable(
         image_id=image_id
     )
@@ -269,6 +325,14 @@ def save_no_dectections(session,image_id, NoDetectionTable=NoDetections):
     if not TESTING_NO_DB_WRITE:
         session.commit()
     print(f"Image {image_id} - No detections found, saved to {NoDetectionTable} table.")
+
+
+def delete_no_detections(session, image_id, NoDetectionTable=NoDetections):
+    deleted_count = session.query(NoDetectionTable).filter(NoDetectionTable.image_id == image_id).delete(synchronize_session=False)
+    if deleted_count > 0:
+        if not TESTING_NO_DB_WRITE:
+            session.commit()
+        print(f"Image {image_id} - Removed stale no-detections row from {NoDetectionTable.__tablename__} after successful detections.")
 
 def backfill_image_dimensions_if_missing(result, image):
     image_id = result.image_id
@@ -371,7 +435,7 @@ def do_yolo_detections(result, image, image_path, existing_detections, custom=Fa
     if VERBOSE: print(f"Image {image_id} - Unrefined YOLO detections: {unrefined_detect_results}")
     if custom:
         unrefined_detect_results = yolo.map_custom_ids_to_global(unrefined_detect_results, custom_ids_to_global_dict)
-    detect_results = yolo.merge_yolo_detections(unrefined_detect_results, iou_threshold=0.3, adjacency_threshold_px=50)
+    detect_results = yolo.merge_yolo_detections(unrefined_detect_results, iou_threshold=IOU_THRESHOLD, adjacency_threshold_px=ADJACENCY_THRESHOLD_PX)
     detect_results = assign_hsv_detect_results(detect_results, image)
     if VERBOSE: print(f"Image {image_id} - YOLO detections: {detect_results}")
     # save_debug_image_yolo_bbox(image_id, imagename, image, detect_results)
@@ -391,17 +455,19 @@ def do_yolo_detections(result, image, image_path, existing_detections, custom=Fa
         save_no_dectections(session,image_id, NoDetectionTable=ThisNoDetectionTable)
         return detect_results
     else:
+        delete_no_detections(session, image_id, NoDetectionTable=ThisNoDetectionTable)
         yolo.save_obj_bbox(session, image_id, detect_results, Detections)
     return detect_results
 
 def check_for_existing_detections(image_id, existing_detections, custom=False):
     if custom:
-        existing_detection_ids = [det.detection_id for det in existing_detections if det.class_id >= 80]
+        all_existing_detection_ids = [det.detection_id for det in existing_detections if det.class_id >= 80]
+        existing_detection_ids = [det_id for det_id in all_existing_detection_ids if det_id > DET_ID_THRESHOLD_CUSTOM]
         existing_no_detections = get_existing_no_detections(image_id, NoDetectionTable=NoDetectionsCustom)
     else:
         all_existing_detection_ids = [det.detection_id for det in existing_detections if det.class_id < 80]
-        # only consider detection_ids > 12455146 which are the new ones, not the original ones
-        existing_detection_ids = [det_id for det_id in all_existing_detection_ids if det_id > 12455146]
+        # only consider detection_ids > DET_ID_THRESHOLD_COCO which are the new ones, not the original ones
+        existing_detection_ids = [det_id for det_id in all_existing_detection_ids if det_id > DET_ID_THRESHOLD_COCO]
         existing_no_detections = get_existing_no_detections(image_id, NoDetectionTable=NoDetections)
     return existing_detection_ids, existing_no_detections
 
@@ -418,8 +484,19 @@ def do_detections(result, folder_index):
     if VERBOSE: print(f"Image {image_id} - Retrieved {len(existing_detections)} existing detections from database.")
     existing_detection_ids, existing_no_detections = check_for_existing_detections(image_id, existing_detections, custom=False)
     existing_custom_detection_ids, existing_no_detections_custom = check_for_existing_detections(image_id, existing_detections, custom=True)
-    if existing_detection_ids or existing_no_detections: existing_coco = True
-    if existing_custom_detection_ids or existing_no_detections_custom: existing_custom = True
+
+    skip_coco_due_to_no_det = bool(existing_no_detections) and not IGNORE_EXISTING_NO_DETECTIONS
+    skip_custom_due_to_no_det = bool(existing_no_detections_custom) and not IGNORE_EXISTING_NO_DETECTIONS
+
+    if bool(existing_no_detections) and IGNORE_EXISTING_NO_DETECTIONS:
+        print(f"Image {image_id} - Ignoring existing no-detections row in NoDetections due to IGNORE_EXISTING_NO_DETECTIONS=True.")
+    if bool(existing_no_detections_custom) and IGNORE_EXISTING_NO_DETECTIONS:
+        print(f"Image {image_id} - Ignoring existing no-detections row in NoDetectionsCustom due to IGNORE_EXISTING_NO_DETECTIONS=True.")
+
+    if existing_detection_ids or skip_coco_due_to_no_det:
+        existing_coco = True
+    if existing_custom_detection_ids or skip_custom_due_to_no_det:
+        existing_custom = True
 
     if (existing_coco and existing_custom) or (existing_coco and not DO_CUSTOM) or (existing_custom and not DO_COCO):
         print(f"Skipping image_id {image_id} due to existing detections record for this configuration, time taken: {time.time() - start_time:.10f} seconds.")
@@ -452,10 +529,10 @@ def do_detections(result, folder_index):
 
     print(f"Processing image_id: {image_id}, imagename: {imagename}")
     image_detection_start_time = time.time()
-    if DO_COCO and not existing_no_detections: 
+    if DO_COCO and not skip_coco_due_to_no_det:
         coco_detections = do_yolo_detections(result, image, image_path, existing_detections, custom=False)
 
-    if DO_CUSTOM and not existing_no_detections_custom: 
+    if DO_CUSTOM and not skip_custom_due_to_no_det:
         custom_detections = do_yolo_detections(result, image, image_path, existing_detections, custom=True)
 
     if DO_VALENTINE and bool(face_bbox):

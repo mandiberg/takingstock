@@ -270,3 +270,26 @@ VALUES
 (102,'Orchid','YoloCustom'),
 (103,'Peony','YoloCustom')
 ;
+
+
+USE Stock;
+-- UPDATE DATE YoloClasses
+INSERT INTO YoloClasses (class_id, class_name, model_version) 
+VALUES
+(104,'Sunflower','YoloCustom'),
+(105,'Daisy','YoloCustom'),
+(106,'Daffodil','YoloCustom'),
+(107,'Hydrangea','YoloCustom'),
+(108,'Pistol','YoloCustom'),
+(109,'Rifle','YoloCustom'),
+(110,'Mask','YoloCustom'),
+(111,'Facial','YoloCustom'),
+(112,'Sheetmask','YoloCustom'),
+(113,'Eyepatch','YoloCustom'),
+(114,'Sleepmask','YoloCustom'),
+(115,'Masquerade_mask','YoloCustom'),
+(116,'Cucumber','YoloCustom'),
+(117,'Kiwi','YoloCustom'),
+(118,'Lemon_slice','YoloCustom'),
+(119,'Avocado_half','YoloCustom')
+;

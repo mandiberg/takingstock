@@ -93,7 +93,7 @@ MODES = {0:'paris_photo_torso_images_topics', 1:'paris_photo_torso_videos_topics
 MODE_CHOICE = 6
 CURRENT_MODE = MODES[MODE_CHOICE]
 
-LIMIT = 100 # this is the limit for the SQL query
+LIMIT = 1000000 # this is the limit for the SQL query, needs to be above 150
 CROP_MULTIPLIER = 5
 
 image_edge_multiplier = None
@@ -194,7 +194,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
         EXPAND = True
         FULL_BODY = True # haxxor TK
 
-    # set to 0 to disable obj query stuff. this is also for object_fusion
+    # set to 0 to disable obj helper segment query stuff. this is also for object_fusion
     class_id = 0
 
     # SORT_TYPE = "obj_bbox"

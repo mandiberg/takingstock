@@ -1,99 +1,146 @@
 from sqlalchemy import create_engine, select, text, bindparam, Column, Integer, Float, ForeignKey, BLOB
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import NullPool
-from my_declarative_base import Base, Images, Detections
+from my_declarative_base import Base, Images, Detections, Encodings
 import pickle
 import numpy as np
 import json
+import pandas as pd
 
 class ToolsClustering:
     """Store key clustering info for use across codebase"""
 
-    def __init__(self, CLUSTER_TYPE, session=None, VERBOSE=False):
+    def __init__(self, CLUSTER_TYPE, VERBOSE=False, session=None):
         self.VERBOSE = VERBOSE
         self.CLUSTER_TYPE = CLUSTER_TYPE
         self.CLUSTER_MEDIANS = None
         self.session = session
         # Object-hand relationship constants
         self.TOUCH_THRESHOLD = 0.5  # face height units
-        self.CLASS_ID_WEIGHT = 10  # multiplier to give more weight to class_id in clustering (since it's categorical and we want it to separate well)
+        self.CLASS_ID_WEIGHT = 10  # OLD WAY multiplier to give more weight to class_id in clustering (since it's categorical and we want it to separate well)
         self.OVERLAP_IOU_THRESHOLD = 0.5
         self.HIGH_CONFIDENCE_THRESHOLD = 0.9
         self.CONFIDENCE_DIFF_THRESHOLD = 0.3
         self.MIN_DETECTION_CONFIDENCE = 0.4
         self.DEFAULT_HAND_POSITION = [0.0, 8.0, 0.0]
+        self.TIE_CLASS_ID = 27
         self.USE_WHITELIST = True
-        all_class_ids = set(range(0, 104))
+        self.FLOWER_CLASSES = {104, 105, 106, 107}
+        self.HAND_ONLY_CLASSES = {108, 109}
+        self.COVID_MASK_CLASSES = {110}
+        self.FULL_FACE_TOP_BIASED_CLASSES = {111, 112}
+        self.UNDER_EYE_CLASSES = {113}
+        self.EYE_OR_FOREHEAD_CLASSES = {114}
+        self.EYE_ONLY_CLASSES = {115}
+        self.HAND_OR_EYE_CLASSES = {116, 117, 118, 119}
+        self.DEBUG_TRACKED_CLASS_IDS = tuple(range(110, 120))
+        self._class_assignment_slot_names = (
+            'left_hand_object',
+            'right_hand_object',
+            'top_face_object',
+            'left_eye_object',
+            'right_eye_object',
+            'mouth_object',
+            'shoulder_object',
+            'waist_object',
+            'feet_object',
+        )
+        all_class_ids = set(range(0, 120))
 
         nonsense_class_ids_dict = {
             # Hand: exclude things that are basically never hand-held in your dataset.
             'hand': {
-                1, 2, 3, 4, 5, 6, 7, 8,
-                9, 10, 11, 12, 13,
-                14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
-                56, 57, 58, 59, 60, 61, 62,
-                68, 69, 70, 71, 72,
+                # 1, 2, 3, 4, 5, 6, 7, 8,             # vehicles
+                9, 10, 11, 12, 13,                  # street fixtures / public infrastructure
+                # 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,  # animals
+                # 56, 57, 58, 59, 60, 61, 62,         # furniture / room fixtures
+                # 68, 69, 70, 71, 72,                 # appliances / kitchen fixtures
             },
 
             # Left eye: be much stricter here; large/background classes are usually nonsense in the eye zone.
             'left_eye': {
-                1, 2, 3, 4, 5, 6, 7, 8,
-                9, 10, 11, 12, 13,
-                14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
-                24, 25, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38,
-                42, 43, 44, 45,
-                46, 47, 48, 49, 50, 51, 52, 53, 54, 55,
-                56, 57, 58, 59, 60, 61, 62,
-                68, 69, 70, 71, 72,
-                74, 75, 77, 78,
+                1, 2, 3, 4, 5, 6, 7, 8,             # vehicles
+                9, 10, 11, 12, 13,                  # street fixtures / public infrastructure
+                14, 15, 16, 17, 18, 19, 20, 21, 22, 23,  # animals
+                24, 25, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38,  # bags, luggage, and sports gear
+                42, 43, 44, 45,                     # utensils / bowl
+                46, 47, 48, 49, 50, 51, 52, 53, 54, 55,  # food items
+                56, 57, 58, 59, 60, 61, 62,         # furniture / room fixtures / tv
+                68, 69, 70, 71, 72,                 # appliances / kitchen fixtures
+                74, 75, 77, 78,                     # decor / stuffed object / hair appliance
             },
 
             # Right eye: same logic as left eye; keep this strict because weird background hits show up here easily.
             'right_eye': {
-                1, 2, 3, 4, 5, 6, 7, 8,
-                9, 10, 11, 12, 13,
-                14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
-                24, 25, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38,
-                42, 43, 44, 45,
-                46, 47, 48, 49, 50, 51, 52, 53, 54, 55,
-                56, 57, 58, 59, 60, 61, 62,
-                68, 69, 70, 71, 72,
-                74, 75, 77, 78,
+                1, 2, 3, 4, 5, 6, 7, 8,             # vehicles
+                9, 10, 11, 12, 13,                  # street fixtures / public infrastructure
+                14, 15, 16, 17, 18, 19, 20, 21, 22, 23,  # animals
+                24, 25, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38,  # bags, luggage, and sports gear
+                42, 43, 44, 45,                     # utensils / bowl
+                46, 47, 48, 49, 50, 51, 52, 53, 54, 55,  # food items
+                56, 57, 58, 59, 60, 61, 62,         # furniture / room fixtures / tv
+                68, 69, 70, 71, 72,                 # appliances / kitchen fixtures
+                74, 75, 77, 78,                     # decor / stuffed object / hair appliance
             },
 
             # Top face: exclude large scene/background classes, but keep small handheld occluders plausible.
             'top_face': {
-                1, 2, 3, 4, 5, 6, 7, 8,
-                9, 10, 11, 12, 13,
-                14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
-                30, 31, 36, 37,
-                56, 57, 58, 59, 60, 61, 62,
-                68, 69, 70, 71, 72,
+                1, 2, 3, 4, 5, 6, 7, 8,             # vehicles
+                9, 10, 11, 12, 13,                  # street fixtures / public infrastructure
+                14, 15, 16, 17, 18, 19, 20, 21, 22, 23,  # animals
+                30, 31, 36, 37,                     # long outdoor sports gear / boards
+                56, 57, 58, 59, 60, 61, 62,         # furniture / room fixtures / tv
+                68, 69, 70, 71, 72,                 # appliances / kitchen fixtures
             },
 
             # Mouth: exclude large/background classes, but keep food, drink, and small handheld occluders available.
             'mouth': {
-                1, 2, 3, 4, 5, 6, 7, 8,
-                9, 10, 11, 12, 13,
-                14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
-                29, 30, 31, 32, 33, 34, 35, 36, 37, 38,
-                56, 57, 58, 59, 60, 61, 62,
-                68, 69, 70, 71, 72,
-                74, 75, 77,
+                1, 2, 3, 4, 5, 6, 7, 8,             # vehicles
+                9, 10, 11, 12, 13,                  # street fixtures / public infrastructure
+                14, 15, 16, 17, 18, 19, 20, 21, 22, 23,  # animals
+                29, 30, 31, 32, 33, 34, 35, 36, 37, 38,  # sports gear and long outdoor equipment
+                56, 57, 58, 59, 60, 61, 62,         # furniture / room fixtures / tv
+                68, 69, 70, 71, 72,                 # appliances / kitchen fixtures
+                74, 75, 77,                         # decor / stuffed object
             },
 
             # Shoulder: keep backpack, handbag, tie, laptop, phone, and book plausible; drop most other background/object classes.
             'shoulder': {
-                1, 2, 3, 4, 5, 6, 7, 8,
-                9, 10, 11, 12, 13,
-                14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
-                29, 30, 31, 32, 33, 34, 35, 36, 37, 38,
-                39, 40, 41, 42, 43, 44, 45,
-                46, 47, 48, 49, 50, 51, 52, 53, 54, 55,
-                56, 57, 58, 59, 60, 61, 62,
-                64, 65, 66,
-                68, 69, 70, 71, 72,
-                74, 75, 76, 77, 78, 79,
+                1, 2, 3, 4, 5, 6, 7, 8,             # vehicles
+                9, 10, 11, 12, 13,                  # street fixtures / public infrastructure
+                14, 15, 16, 17, 18, 19, 20, 21, 22, 23,  # animals
+                29, 30, 31, 32, 33, 34, 35, 36, 37, 38,  # sports gear and long outdoor equipment
+                # 39, 40, 41, 42, 43, 44, 45,         # drinkware / utensils / bowl
+                # 46, 47, 48, 49, 50, 51, 52, 53, 54, 55,  # food items
+                56, 57, 58, 59, 60, 61, 62,         # furniture / room fixtures / tv
+                64, 65, 66,                         # desktop peripherals
+                68, 69, 70, 71, 72,                 # appliances / kitchen fixtures
+                74, 75, 76, 77, 78, 79,             # decor / scissors / stuffed object / bathroom items
+            },
+
+            # Waist: tuned to keep seating/support objects plausible (chair/couch/bed), while excluding obvious nonsense.
+            'waist': {
+                1, 2, 3, 4, 5, 6, 7, 8,             # vehicles
+                9, 10, 11, 12, 13,                  # street fixtures / public infrastructure
+                14, 15, 16, 17, 18, 19, 20, 21, 22, 23,  # animals
+                29, 30, 31, 32, 33, 34, 35, 36, 37, 38,  # sports gear and long outdoor equipment
+                39, 40, 41, 42, 43, 44, 45,         # drinkware / utensils / bowl
+                46, 47, 48, 49, 50, 51, 52, 53, 54, 55,  # food items
+                58, 61, 62,                         # plant / toilet / tv
+                64, 65, 66,                         # desktop peripherals
+                68, 69, 70, 71, 72,                 # appliances / kitchen fixtures
+                74, 75, 76, 77, 78, 79,             # decor / scissors / stuffed object / bathroom items
+            },
+
+            # Feet: broad and intentionally permissive to allow occasional meaningful lower-body objects (e.g., skis).
+            'feet': {
+                1, 2, 3, 4, 5, 6, 7, 8,             # vehicles
+                9, 10, 11, 12, 13,                  # street fixtures / public infrastructure
+                14, 15, 16, 17, 18, 19, 20, 21, 22, 23,  # animals
+                42, 43, 44,                         # utensils
+                46, 47, 48, 49, 50, 51, 52, 53, 54, 55,  # food items
+                68, 69, 70, 71, 72,                 # appliances / kitchen fixtures
+                74, 75, 77, 78,                     # decor / stuffed object / hair appliance
             },
         }
 
@@ -103,6 +150,8 @@ class ToolsClustering:
         }
         self._whitelist_slots = tuple(self.WHITELIST_BY_SLOT.keys())
         self._whitelist_reject_counts = {slot: 0 for slot in self._whitelist_slots}
+        self.reset_class_assignment_debug_counts()
+        self.reset_class_pipeline_debug_counts()
         # Face object constraints to avoid large background objects
         self.MAX_FACE_WIDTH = 2.0  # max width of left+right to be considered face object
         self.MAX_FACE_VERT_EXTENSION = 0.75  # max how far object can extend into opposite zone
@@ -114,15 +163,23 @@ class ToolsClustering:
         self.RIGHT_EYE_X_MAX = 0.9
         self.FULL_FACE_MASK_TOP_MAX = -0.15
         self.FULL_FACE_MASK_BOTTOM_MIN = 0.15
+        self.WAIST_ZONE_TOP = 0.75
+        self.WAIST_ZONE_BOTTOM = 2.25
+        self.WAIST_X_MIN = -1.40
+        self.WAIST_X_MAX = 1.40
+        self.FEET_ZONE_TOP = 2.10
+        self.FEET_ZONE_BOTTOM = 6.00
+        self.FEET_X_MIN = -2.00
+        self.FEET_X_MAX = 2.00
         
         # Feature standardization settings for ObjectFusion
         self.USE_FEATURE_STANDARDIZATION = True  # Use StandardScaler to normalize all features to similar scale
         self.FEATURE_WEIGHTS = {
-            'face_angle': 0.3,      # pitch, yaw, roll - LOW weight (prevent face-angle mega-clusters)
-            'class_id': 5.0,        # class_id - VERY HIGH weight at RAW SCALE (0-107) to force object-type separation
-            'confidence': 0.2,      # detection confidence - very low weight
-            'bbox': 1.0,            # bbox coordinates - reduced to standard weight
-            'has_object': 3.0,      # binary indicator - high weight but lower than class_id
+            'face_angle': .5,      # pitch, yaw, roll - LOW weight (prevent face-angle mega-clusters)
+            'class_id': 3.0,        # class_id - VERY HIGH weight at RAW SCALE (0-107) to force object-type separation
+            'confidence': 0.5,      # detection confidence - very low weight
+            'bbox': 2.0,            # bbox coordinates - reduced to standard weight
+            'has_object': 1.0,      # binary indicator - high weight but lower than class_id
         }
         # Store fitted scaler for inverse transform during median calculation
         self.feature_scaler = None
@@ -282,9 +339,12 @@ class ToolsClustering:
         """Parse bbox_norm from various formats to dict."""
         if bbox_norm is None:
             return None
-        if isinstance(bbox_norm, dict):
+
+        # Already parsed JSON object (SQLAlchemy JSON column can return dict directly)
+        elif isinstance(bbox_norm, dict):
             return bbox_norm
-        if isinstance(bbox_norm, str):
+
+        elif isinstance(bbox_norm, str):
             try:
                 # Handle double-encoded JSON
                 parsed = json.loads(bbox_norm)
@@ -293,7 +353,10 @@ class ToolsClustering:
                 return parsed
             except:
                 return None
-        return None
+
+        else:
+            print(f"[parse_bbox_norm] Unsupported bbox_norm type: {type(bbox_norm)}")
+            return None
 
     def detection_to_list(self, detection_dict):
         """Convert detection dict to 6-element list: [class_id, conf, top, left, right, bottom]."""
@@ -337,6 +400,10 @@ class ToolsClustering:
         class_id_value = detection_dict.get('class_id_raw', detection_dict.get('class_id'))
         return self._normalize_class_id(class_id_value)
 
+    def _is_class_in(self, detection_dict, class_id_set):
+        class_id_value = self._get_detection_class_id(detection_dict)
+        return class_id_value in class_id_set if class_id_value is not None else False
+
     def _passes_slot_whitelist(self, detection_dict, slot_name):
         """Check whitelist eligibility for a given slot."""
         if not self.USE_WHITELIST:
@@ -365,6 +432,64 @@ class ToolsClustering:
     def get_whitelist_reject_counts(self):
         """Return a copy of current whitelist reject counters."""
         return dict(self._whitelist_reject_counts)
+
+    def reset_class_assignment_debug_counts(self):
+        """Reset per-batch assignment counters for tracked class IDs."""
+        self._class_assignment_debug_counts = {
+            class_id: {
+                'seen': 0,
+                'assigned_unique': 0,
+                'assigned_slot_hits': 0,
+                'dropped': 0,
+                'slot_hits': {slot: 0 for slot in self._class_assignment_slot_names},
+            }
+            for class_id in self.DEBUG_TRACKED_CLASS_IDS
+        }
+
+    def reset_class_pipeline_debug_counts(self):
+        """Reset per-batch pipeline-stage counters for tracked class IDs."""
+        self._class_pipeline_debug_counts = {
+            class_id: {
+                'query_hits': 0,
+                'bbox_parse_ok': 0,
+                'bbox_parse_fail': 0,
+                'post_resolve': 0,
+                'tie_blocked': 0,
+                'non_hand_pool': 0,
+                'final_assigned_unique': 0,
+                'parse_fail_examples': [],
+            }
+            for class_id in self.DEBUG_TRACKED_CLASS_IDS
+        }
+
+    def get_class_assignment_debug_counts(self):
+        """Return a copy of tracked class assignment counters."""
+        snapshot = {}
+        for class_id, stats in self._class_assignment_debug_counts.items():
+            snapshot[class_id] = {
+                'seen': int(stats['seen']),
+                'assigned_unique': int(stats['assigned_unique']),
+                'assigned_slot_hits': int(stats['assigned_slot_hits']),
+                'dropped': int(stats['dropped']),
+                'slot_hits': {slot: int(count) for slot, count in stats['slot_hits'].items()},
+            }
+        return snapshot
+
+    def get_class_pipeline_debug_counts(self):
+        """Return a copy of tracked class pipeline counters."""
+        snapshot = {}
+        for class_id, stats in self._class_pipeline_debug_counts.items():
+            snapshot[class_id] = {
+                'query_hits': int(stats['query_hits']),
+                'bbox_parse_ok': int(stats['bbox_parse_ok']),
+                'bbox_parse_fail': int(stats['bbox_parse_fail']),
+                'post_resolve': int(stats['post_resolve']),
+                'tie_blocked': int(stats['tie_blocked']),
+                'non_hand_pool': int(stats['non_hand_pool']),
+                'final_assigned_unique': int(stats['final_assigned_unique']),
+                'parse_fail_examples': list(stats['parse_fail_examples']),
+            }
+        return snapshot
 
     def calc_iou(self, bbox1, bbox2):
         """Calculate Intersection over Union between two bboxes."""
@@ -448,6 +573,49 @@ class ToolsClustering:
                 width <= self.MAX_FACE_WIDTH and
                 extends_into_top <= 0.0)
 
+    def is_covid_mask_object(self, bbox):
+        """Check if bbox looks like a covid mask, including pulled-below-chin cases."""
+        width = bbox['right'] - bbox['left']
+        return (
+            bbox['left'] < 0 and
+            bbox['right'] > 0 and
+            width <= self.MAX_FACE_WIDTH and
+            bbox['top'] >= -0.15 and
+            bbox['top'] <= 0.65 and
+            bbox['bottom'] >= 0.05 and
+            bbox['bottom'] <= 1.60
+        )
+
+    def is_under_eye_object(self, bbox):
+        """Check if bbox falls in an under-eye treatment zone."""
+        return self._bbox_intersects_rect(
+            bbox,
+            self.LEFT_EYE_X_MIN,
+            self.RIGHT_EYE_X_MAX,
+            -0.45,
+            0.45,
+        )
+
+    def is_eye_cover_object(self, bbox):
+        """Check if bbox intersects a broad eye-cover zone used by masks and slices."""
+        return self._bbox_intersects_rect(
+            bbox,
+            self.LEFT_EYE_X_MIN,
+            self.RIGHT_EYE_X_MAX,
+            -0.80,
+            0.30,
+        )
+
+    def is_forehead_object(self, bbox):
+        """Check if bbox intersects a forehead / pushed-up mask zone."""
+        return self._bbox_intersects_rect(
+            bbox,
+            -1.00,
+            1.00,
+            -1.10,
+            -0.10,
+        )
+
     def _bbox_intersects_rect(self, bbox, x_min, x_max, y_top, y_bottom):
         """Check whether bbox intersects a rectangular zone."""
         return not (
@@ -486,6 +654,26 @@ class ToolsClustering:
             self.RIGHT_EYE_X_MAX,
             self.EYE_ZONE_TOP,
             self.EYE_ZONE_BOTTOM,
+        )
+
+    def is_waist_object(self, bbox):
+        """Check if bbox intersects a broad waist/seat interaction zone."""
+        return self._bbox_intersects_rect(
+            bbox,
+            self.WAIST_X_MIN,
+            self.WAIST_X_MAX,
+            self.WAIST_ZONE_TOP,
+            self.WAIST_ZONE_BOTTOM,
+        )
+
+    def is_feet_object(self, bbox):
+        """Check if bbox intersects a broad lower-body/feet zone."""
+        return self._bbox_intersects_rect(
+            bbox,
+            self.FEET_X_MIN,
+            self.FEET_X_MAX,
+            self.FEET_ZONE_TOP,
+            self.FEET_ZONE_BOTTOM,
         )
 
     def _extract_xy_from_landmark(self, landmark):
@@ -667,7 +855,7 @@ class ToolsClustering:
         Classify each detection based on its relationship to hands and face.
         Returns dict with keys: left_hand_object, right_hand_object,
                                top_face_object, left_eye_object, right_eye_object,
-                               mouth_object, shoulder_object
+                               mouth_object, shoulder_object, waist_object, feet_object
         Each value is the detection dict or None.
         """
 
@@ -682,6 +870,8 @@ class ToolsClustering:
             'right_eye_object': None,
             'mouth_object': None,
             'shoulder_object': None,
+            'waist_object': None,
+            'feet_object': None,
         }
         
         if not detections:
@@ -690,8 +880,101 @@ class ToolsClustering:
         # First, resolve overlapping detections
         detections = self.resolve_overlapping_detections(detections)
 
+        for det in detections:
+            class_id = self._get_detection_class_id(det)
+            if class_id in self._class_pipeline_debug_counts:
+                self._class_pipeline_debug_counts[class_id]['post_resolve'] += 1
+
+        tie_locked_slots = set()
+        tie_blocked_detection_ids = set()
+
+        def assign_slot_if_preferred(slot_name, det):
+            if results[slot_name] is None or det['conf'] > results[slot_name]['conf']:
+                results[slot_name] = det
+
+        tie_detections = [
+            det for det in detections
+            if self._get_detection_class_id(det) == self.TIE_CLASS_ID
+        ]
+        tie_detections.sort(key=lambda det: det.get('conf', 0.0), reverse=True)
+
+        for tie_det in tie_detections:
+            tie_bbox = tie_det['bbox']
+            tie_detection_id = tie_det['detection_id']
+
+            hand_allowed = self._passes_slot_whitelist(tie_det, 'hand')
+            shoulder_allowed = self._passes_slot_whitelist(tie_det, 'shoulder')
+            mouth_allowed = self._passes_slot_whitelist(tie_det, 'mouth')
+
+            if not hand_allowed:
+                self._record_whitelist_reject('hand')
+            if not shoulder_allowed:
+                self._record_whitelist_reject('shoulder')
+            if not mouth_allowed:
+                self._record_whitelist_reject('mouth')
+
+            neck_match = shoulder_allowed and self.is_shoulder_object(tie_bbox, left_shoulder, right_shoulder)
+            left_touching = hand_allowed and self.is_touching_hand(left_knuckle, tie_bbox)
+            right_touching = hand_allowed and self.is_touching_hand(right_knuckle, tie_bbox)
+            mouth_match = mouth_allowed and self.is_mouth_object(tie_bbox)
+
+            if neck_match:
+                assign_slot_if_preferred('shoulder_object', tie_det)
+                tie_locked_slots.add('shoulder_object')
+                tie_blocked_detection_ids.add(tie_detection_id)
+                if self.VERBOSE:
+                    print(f"  [TIE] detection_id={tie_detection_id} -> shoulder_object (neck priority)")
+                continue
+
+            if left_touching and right_touching:
+                assign_slot_if_preferred('left_hand_object', tie_det)
+                assign_slot_if_preferred('right_hand_object', tie_det)
+                tie_locked_slots.update(['left_hand_object', 'right_hand_object'])
+                tie_blocked_detection_ids.add(tie_detection_id)
+                if self.VERBOSE:
+                    print(f"  [TIE] detection_id={tie_detection_id} -> both hands")
+                continue
+
+            if right_touching:
+                assign_slot_if_preferred('right_hand_object', tie_det)
+                tie_locked_slots.add('right_hand_object')
+                tie_blocked_detection_ids.add(tie_detection_id)
+                if self.VERBOSE:
+                    print(f"  [TIE] detection_id={tie_detection_id} -> right_hand_object")
+                continue
+
+            if left_touching:
+                assign_slot_if_preferred('left_hand_object', tie_det)
+                tie_locked_slots.add('left_hand_object')
+                tie_blocked_detection_ids.add(tie_detection_id)
+                if self.VERBOSE:
+                    print(f"  [TIE] detection_id={tie_detection_id} -> left_hand_object")
+                continue
+
+            if mouth_match:
+                assign_slot_if_preferred('mouth_object', tie_det)
+                tie_locked_slots.add('mouth_object')
+                tie_blocked_detection_ids.add(tie_detection_id)
+                if self.VERBOSE:
+                    print(f"  [TIE] detection_id={tie_detection_id} -> mouth_object")
+                continue
+
+            tie_blocked_detection_ids.add(tie_detection_id)
+            if self.VERBOSE:
+                print(f"  [TIE] detection_id={tie_detection_id} -> no assignment")
+
+        tie_blocked_ids_set = set(tie_blocked_detection_ids)
+        for det in detections:
+            class_id = self._get_detection_class_id(det)
+            if class_id not in self._class_pipeline_debug_counts:
+                continue
+            if int(det.get('detection_id')) in tie_blocked_ids_set:
+                self._class_pipeline_debug_counts[class_id]['tie_blocked'] += 1
+
         # 1. Find best object for each hand independently (same object may be assigned to both)
-        def best_object_for_hand(knuckle):
+        def best_object_for_hand(knuckle, existing_hand_object=None):
+            if existing_hand_object is not None:
+                return existing_hand_object
             if knuckle == self.DEFAULT_HAND_POSITION:
                 return None
 
@@ -699,6 +982,8 @@ class ToolsClustering:
             nearby_candidates = []
 
             for det in detections:
+                if det['detection_id'] in tie_blocked_detection_ids:
+                    continue
                 if not self._passes_slot_whitelist(det, 'hand'):
                     self._record_whitelist_reject('hand')
                     continue
@@ -718,8 +1003,8 @@ class ToolsClustering:
 
             return None
 
-        results['left_hand_object'] = best_object_for_hand(left_knuckle)
-        results['right_hand_object'] = best_object_for_hand(right_knuckle)
+        results['left_hand_object'] = best_object_for_hand(left_knuckle, results['left_hand_object'])
+        results['right_hand_object'] = best_object_for_hand(right_knuckle, results['right_hand_object'])
 
         # Hand-assigned objects are excluded from all other zones
         hand_detection_ids = set()
@@ -729,12 +1014,21 @@ class ToolsClustering:
                 hand_detection_ids.add(hand_det['detection_id'])
 
         non_hand_detections = [
-            det for det in detections if det['detection_id'] not in hand_detection_ids
+            det for det in detections
+            if det['detection_id'] not in hand_detection_ids and det['detection_id'] not in tie_blocked_detection_ids
         ]
+
+        for det in non_hand_detections:
+            class_id = self._get_detection_class_id(det)
+            if class_id in self._class_pipeline_debug_counts:
+                self._class_pipeline_debug_counts[class_id]['non_hand_pool'] += 1
 
         # 2. Eye assignments (same object may map to both eyes, e.g., eyeglasses)
         for det in non_hand_detections:
             bbox = det['bbox']
+
+            if self._is_class_in(det, self.HAND_ONLY_CLASSES | self.COVID_MASK_CLASSES | self.FULL_FACE_TOP_BIASED_CLASSES):
+                continue
 
             left_eye_allowed = self._passes_slot_whitelist(det, 'left_eye')
             right_eye_allowed = self._passes_slot_whitelist(det, 'right_eye')
@@ -750,6 +1044,42 @@ class ToolsClustering:
             if self.is_full_face_mask_object(bbox):
                 continue
 
+            if self._is_class_in(det, self.UNDER_EYE_CLASSES):
+                if left_eye_allowed and bbox['right'] > 0 and bbox['left'] < 0 and self.is_under_eye_object(bbox):
+                    if results['left_eye_object'] is None:
+                        results['left_eye_object'] = det
+                    elif det['conf'] > results['left_eye_object']['conf']:
+                        results['left_eye_object'] = det
+                    if results['right_eye_object'] is None:
+                        results['right_eye_object'] = det
+                    elif det['conf'] > results['right_eye_object']['conf']:
+                        results['right_eye_object'] = det
+                else:
+                    if left_eye_allowed and self._bbox_intersects_rect(bbox, self.LEFT_EYE_X_MIN, self.LEFT_EYE_X_MAX, -0.45, 0.45):
+                        if results['left_eye_object'] is None:
+                            results['left_eye_object'] = det
+                        elif det['conf'] > results['left_eye_object']['conf']:
+                            results['left_eye_object'] = det
+                    if right_eye_allowed and self._bbox_intersects_rect(bbox, self.RIGHT_EYE_X_MIN, self.RIGHT_EYE_X_MAX, -0.45, 0.45):
+                        if results['right_eye_object'] is None:
+                            results['right_eye_object'] = det
+                        elif det['conf'] > results['right_eye_object']['conf']:
+                            results['right_eye_object'] = det
+                continue
+
+            if self._is_class_in(det, self.EYE_OR_FOREHEAD_CLASSES | self.EYE_ONLY_CLASSES | self.HAND_OR_EYE_CLASSES):
+                if left_eye_allowed and self._bbox_intersects_rect(bbox, self.LEFT_EYE_X_MIN, self.LEFT_EYE_X_MAX, -0.80, 0.30):
+                    if results['left_eye_object'] is None:
+                        results['left_eye_object'] = det
+                    elif det['conf'] > results['left_eye_object']['conf']:
+                        results['left_eye_object'] = det
+                if right_eye_allowed and self._bbox_intersects_rect(bbox, self.RIGHT_EYE_X_MIN, self.RIGHT_EYE_X_MAX, -0.80, 0.30):
+                    if results['right_eye_object'] is None:
+                        results['right_eye_object'] = det
+                    elif det['conf'] > results['right_eye_object']['conf']:
+                        results['right_eye_object'] = det
+                continue
+
             if left_eye_allowed and self.is_left_eye_object(bbox):
                 if results['left_eye_object'] is None:
                     results['left_eye_object'] = det
@@ -762,13 +1092,18 @@ class ToolsClustering:
                 elif det['conf'] > results['right_eye_object']['conf']:
                     results['right_eye_object'] = det
 
-        # 3. Top-face / mouth / shoulder assignments
+        # 3. Top-face / mouth / shoulder / waist / feet assignments
         for det in non_hand_detections:
             bbox = det['bbox']
+
+            if self._is_class_in(det, self.HAND_ONLY_CLASSES):
+                continue
 
             top_face_allowed = self._passes_slot_whitelist(det, 'top_face')
             mouth_allowed = self._passes_slot_whitelist(det, 'mouth')
             shoulder_allowed = self._passes_slot_whitelist(det, 'shoulder')
+            waist_allowed = self._passes_slot_whitelist(det, 'waist')
+            feet_allowed = self._passes_slot_whitelist(det, 'feet')
 
             if not top_face_allowed:
                 self._record_whitelist_reject('top_face')
@@ -776,6 +1111,42 @@ class ToolsClustering:
                 self._record_whitelist_reject('mouth')
             if not shoulder_allowed:
                 self._record_whitelist_reject('shoulder')
+            if not waist_allowed:
+                self._record_whitelist_reject('waist')
+            if not feet_allowed:
+                self._record_whitelist_reject('feet')
+
+            if self._is_class_in(det, self.COVID_MASK_CLASSES):
+                if 'mouth_object' not in tie_locked_slots and mouth_allowed and self.is_covid_mask_object(bbox):
+                    if results['mouth_object'] is None:
+                        results['mouth_object'] = det
+                    elif det['conf'] > results['mouth_object']['conf']:
+                        results['mouth_object'] = det
+                continue
+
+            if self._is_class_in(det, self.FULL_FACE_TOP_BIASED_CLASSES):
+                if top_face_allowed and (self.is_full_face_mask_object(bbox) or self.is_top_face_object(bbox) or self.is_eye_cover_object(bbox)):
+                    if results['top_face_object'] is None:
+                        results['top_face_object'] = det
+                    elif det['conf'] > results['top_face_object']['conf']:
+                        results['top_face_object'] = det
+                elif 'mouth_object' not in tie_locked_slots and mouth_allowed and self.is_covid_mask_object(bbox):
+                    if results['mouth_object'] is None:
+                        results['mouth_object'] = det
+                    elif det['conf'] > results['mouth_object']['conf']:
+                        results['mouth_object'] = det
+                continue
+
+            if self._is_class_in(det, self.EYE_OR_FOREHEAD_CLASSES):
+                if top_face_allowed and self.is_forehead_object(bbox):
+                    if results['top_face_object'] is None:
+                        results['top_face_object'] = det
+                    elif det['conf'] > results['top_face_object']['conf']:
+                        results['top_face_object'] = det
+                continue
+
+            if self._is_class_in(det, self.EYE_ONLY_CLASSES | self.HAND_OR_EYE_CLASSES):
+                continue
 
             if top_face_allowed and self.is_top_face_object(bbox):
                 if results['top_face_object'] is None:
@@ -783,24 +1154,47 @@ class ToolsClustering:
                 elif bbox['top'] < results['top_face_object']['bbox']['top']:
                     results['top_face_object'] = det
 
-            if mouth_allowed and self.is_mouth_object(bbox):
+            if 'mouth_object' not in tie_locked_slots and mouth_allowed and self.is_mouth_object(bbox):
                 if results['mouth_object'] is None:
                     results['mouth_object'] = det
                 elif bbox['top'] < results['mouth_object']['bbox']['top']:
                     results['mouth_object'] = det
 
-            if shoulder_allowed and self.is_shoulder_object(bbox, left_shoulder, right_shoulder):
+            if 'shoulder_object' not in tie_locked_slots and shoulder_allowed and self.is_shoulder_object(bbox, left_shoulder, right_shoulder):
                 if results['shoulder_object'] is None:
                     results['shoulder_object'] = det
                 elif det['conf'] > results['shoulder_object']['conf']:
                     results['shoulder_object'] = det
+
+            if waist_allowed and self.is_waist_object(bbox):
+                if results['waist_object'] is None:
+                    results['waist_object'] = det
+                elif det['conf'] > results['waist_object']['conf']:
+                    results['waist_object'] = det
+
+            if feet_allowed and self.is_feet_object(bbox):
+                if results['feet_object'] is None:
+                    results['feet_object'] = det
+                elif det['conf'] > results['feet_object']['conf']:
+                    results['feet_object'] = det
+
+        assigned_ids_by_class = {class_id: set() for class_id in self.DEBUG_TRACKED_CLASS_IDS}
+        for slot_det in results.values():
+            if slot_det is None:
+                continue
+            class_id = self._get_detection_class_id(slot_det)
+            if class_id in assigned_ids_by_class:
+                assigned_ids_by_class[class_id].add(int(slot_det['detection_id']))
+
+        for class_id in self.DEBUG_TRACKED_CLASS_IDS:
+            self._class_pipeline_debug_counts[class_id]['final_assigned_unique'] += len(assigned_ids_by_class[class_id])
         
         return results
 
     def query_and_classify_detections(self, image_id, left_knuckle, right_knuckle, left_shoulder=None, right_shoulder=None):
         """
         Query detections for an image and classify their relationship to hands/face.
-        Returns dict with 7 keys, each containing a detection payload dict or None.
+        Returns dict with 9 keys, each containing a detection payload dict or None.
         """
         if self.session is None:
             raise ValueError("Session not initialized. Pass session to ToolsClustering.__init__()")
@@ -829,15 +1223,31 @@ class ToolsClustering:
                 'right_eye_object': None,
                 'mouth_object': None,
                 'shoulder_object': None,
+                'waist_object': None,
+                'feet_object': None,
             }
         
         # Parse detections into standardized format
         detections = []
         for d in detection_results:
+            class_id_value = self._normalize_class_id(getattr(d, 'class_id', None))
+            if class_id_value in self._class_pipeline_debug_counts:
+                self._class_pipeline_debug_counts[class_id_value]['query_hits'] += 1
+
             bbox = self.parse_bbox_norm(d.bbox_norm)
             if bbox is None:
+                if class_id_value in self._class_pipeline_debug_counts:
+                    self._class_pipeline_debug_counts[class_id_value]['bbox_parse_fail'] += 1
+                    examples = self._class_pipeline_debug_counts[class_id_value]['parse_fail_examples']
+                    if len(examples) < 3:
+                        raw_preview = str(d.bbox_norm)
+                        examples.append(raw_preview[:160])
                 # if debug: print(f"  ✗ detection_id={d.detection_id} — bbox_norm parse failed, skipping")
                 continue
+
+            if class_id_value in self._class_pipeline_debug_counts:
+                self._class_pipeline_debug_counts[class_id_value]['bbox_parse_ok'] += 1
+
             detections.append({
                 'detection_id': d.detection_id,
                 'class_id': d.class_id,
@@ -861,6 +1271,8 @@ class ToolsClustering:
                 print(f"    is_full_face_mask:     {self.is_full_face_mask_object(bbox)}")
                 print(f"    is_mouth_object:       {self.is_mouth_object(bbox)}")
                 print(f"    is_shoulder_object:    {self.is_shoulder_object(bbox, left_shoulder, right_shoulder)}")
+                print(f"    is_waist_object:       {self.is_waist_object(bbox)}")
+                print(f"    is_feet_object:        {self.is_feet_object(bbox)}")
                 dist_left  = self.point_to_bbox_distance(left_knuckle, bbox)  if left_knuckle  != self.DEFAULT_HAND_POSITION else None
                 dist_right = self.point_to_bbox_distance(right_knuckle, bbox) if right_knuckle != self.DEFAULT_HAND_POSITION else None
                 print(f"    dist left_knuckle→bbox:  {dist_left}  (TOUCH_THRESHOLD={self.TOUCH_THRESHOLD})")
@@ -877,6 +1289,37 @@ class ToolsClustering:
             left_shoulder=left_shoulder,
             right_shoulder=right_shoulder,
         )
+
+        # Track where classes 110-119 are lost: seen in detections vs assigned to any slot.
+        seen_ids_by_class = {class_id: set() for class_id in self.DEBUG_TRACKED_CLASS_IDS}
+        assigned_ids_by_class = {class_id: set() for class_id in self.DEBUG_TRACKED_CLASS_IDS}
+
+        for det in detections:
+            class_id = self._get_detection_class_id(det)
+            if class_id in seen_ids_by_class:
+                seen_ids_by_class[class_id].add(int(det['detection_id']))
+
+        for slot_name, assigned_det in classified.items():
+            if assigned_det is None:
+                continue
+            class_id = self._get_detection_class_id(assigned_det)
+            if class_id not in self._class_assignment_debug_counts:
+                continue
+
+            self._class_assignment_debug_counts[class_id]['assigned_slot_hits'] += 1
+            if slot_name in self._class_assignment_debug_counts[class_id]['slot_hits']:
+                self._class_assignment_debug_counts[class_id]['slot_hits'][slot_name] += 1
+            assigned_ids_by_class[class_id].add(int(assigned_det['detection_id']))
+
+        for class_id in self.DEBUG_TRACKED_CLASS_IDS:
+            seen_count = len(seen_ids_by_class[class_id])
+            assigned_unique_count = len(assigned_ids_by_class[class_id])
+            dropped_count = max(0, seen_count - assigned_unique_count)
+
+            self._class_assignment_debug_counts[class_id]['seen'] += seen_count
+            self._class_assignment_debug_counts[class_id]['assigned_unique'] += assigned_unique_count
+            self._class_assignment_debug_counts[class_id]['dropped'] += dropped_count
+
         if debug:
             print(f"  Classification results:")
             for k, v in classified.items():
@@ -898,6 +1341,8 @@ class ToolsClustering:
         Expects df to have: image_id, left_pointer_knuckle_norm, right_pointer_knuckle_norm
         """
         self.reset_whitelist_reject_counts()
+        self.reset_class_assignment_debug_counts()
+        self.reset_class_pipeline_debug_counts()
 
         # Initialize new columns
         df['left_hand_object'] = None
@@ -907,6 +1352,8 @@ class ToolsClustering:
         df['right_eye_object'] = None
         df['mouth_object'] = None
         df['shoulder_object'] = None
+        df['waist_object'] = None
+        df['feet_object'] = None
         
         for idx, row in df.iterrows():
             image_id = row['image_id']
@@ -938,6 +1385,8 @@ class ToolsClustering:
             df.at[idx, 'right_eye_object'] = classifications['right_eye_object']
             df.at[idx, 'mouth_object'] = classifications['mouth_object']
             df.at[idx, 'shoulder_object'] = classifications['shoulder_object']
+            df.at[idx, 'waist_object'] = classifications['waist_object']
+            df.at[idx, 'feet_object'] = classifications['feet_object']
         
         return df
 
@@ -967,7 +1416,7 @@ class ToolsClustering:
     def get_precomputed_detections_by_image_ids(self, image_ids):
         """
         Read precomputed detection assignments from ImagesDetections and join to Detections.
-        Returns dict keyed by image_id with values containing the 7 detection payload fields.
+        Returns dict keyed by image_id with values containing the 9 detection payload fields.
         """
         if self.session is None:
             raise ValueError("Session not initialized. Pass session to ToolsClustering.__init__()")
@@ -1012,7 +1461,17 @@ class ToolsClustering:
                 so.detection_id AS shoulder_detection_id,
                 so.class_id AS shoulder_class_id,
                 so.conf AS shoulder_conf,
-                so.bbox_norm AS shoulder_bbox_norm
+                so.bbox_norm AS shoulder_bbox_norm,
+
+                wa.detection_id AS waist_detection_id,
+                wa.class_id AS waist_class_id,
+                wa.conf AS waist_conf,
+                wa.bbox_norm AS waist_bbox_norm,
+
+                fe.detection_id AS feet_detection_id,
+                fe.class_id AS feet_class_id,
+                fe.conf AS feet_conf,
+                fe.bbox_norm AS feet_bbox_norm
             FROM ImagesDetections idet
             LEFT JOIN Detections lh ON idet.left_hand_object_id = lh.detection_id
             LEFT JOIN Detections rh ON idet.right_hand_object_id = rh.detection_id
@@ -1021,6 +1480,8 @@ class ToolsClustering:
             LEFT JOIN Detections re ON idet.right_eye_object_id = re.detection_id
             LEFT JOIN Detections mo ON idet.mouth_object_id = mo.detection_id
             LEFT JOIN Detections so ON idet.shoulder_object_id = so.detection_id
+            LEFT JOIN Detections wa ON idet.waist_object_id = wa.detection_id
+            LEFT JOIN Detections fe ON idet.feet_object_id = fe.detection_id
             WHERE idet.image_id IN :image_ids
         """).bindparams(bindparam("image_ids", expanding=True))
 
@@ -1051,6 +1512,12 @@ class ToolsClustering:
                 'shoulder_object': self._build_detection_payload_from_sql_fields(
                     row['shoulder_detection_id'], row['shoulder_class_id'], row['shoulder_conf'], row['shoulder_bbox_norm']
                 ),
+                'waist_object': self._build_detection_payload_from_sql_fields(
+                    row['waist_detection_id'], row['waist_class_id'], row['waist_conf'], row['waist_bbox_norm']
+                ),
+                'feet_object': self._build_detection_payload_from_sql_fields(
+                    row['feet_detection_id'], row['feet_class_id'], row['feet_conf'], row['feet_bbox_norm']
+                ),
             }
 
         return result
@@ -1064,7 +1531,7 @@ class ToolsClustering:
         required_cols = [
             'left_hand_object', 'right_hand_object',
             'top_face_object', 'left_eye_object', 'right_eye_object',
-            'mouth_object', 'shoulder_object'
+            'mouth_object', 'shoulder_object', 'waist_object', 'feet_object'
         ]
         for col in required_cols:
             if col not in df.columns:
@@ -1088,6 +1555,8 @@ class ToolsClustering:
             df.at[idx, 'right_eye_object'] = payload['right_eye_object']
             df.at[idx, 'mouth_object'] = payload['mouth_object']
             df.at[idx, 'shoulder_object'] = payload['shoulder_object']
+            df.at[idx, 'waist_object'] = payload['waist_object']
+            df.at[idx, 'feet_object'] = payload['feet_object']
 
         missing_image_ids = sorted(list(set(image_ids) - set(precomputed.keys())))
         return df, missing_image_ids
@@ -1123,7 +1592,8 @@ class ToolsClustering:
         
         # Detection columns (6 values each: class_id, conf, top, left, right, bottom)
         detection_cols = ['left_hand_object', 'right_hand_object', 'top_face_object',
-                  'left_eye_object', 'right_eye_object', 'mouth_object', 'shoulder_object']
+                  'left_eye_object', 'right_eye_object', 'mouth_object', 'shoulder_object',
+                  'waist_object', 'feet_object']
         detection_fields = ['class_id', 'conf', 'top', 'left', 'right', 'bottom']
         
         # Create feature dict by concatenating all values
@@ -1251,14 +1721,16 @@ class ToolsClustering:
         """
         Construct fusion list from a dataframe row for ObjectFusion sorting.
         Returns list format: [pitch, yaw, roll, left_hand(6), right_hand(6), top_face(6),
-                              left_eye(6), right_eye(6), mouth(6), shoulder(6)]
-        Total: 45 elements (3 + 7*6)
+                              left_eye(6), right_eye(6), mouth(6), shoulder(6),
+                              waist(6), feet(6)]
+        Total: 57 elements (3 + 9*6)
         """
         fusion_list = row['pitch_yaw_roll_list'].copy()  # Start with [pitch, yaw, roll]
         
         # Add detection data (each is 6 elements: class_id, conf, top, left, right, bottom)
         for col in ['left_hand_object', 'right_hand_object', 'top_face_object',
-                    'left_eye_object', 'right_eye_object', 'mouth_object', 'shoulder_object']:
+                    'left_eye_object', 'right_eye_object', 'mouth_object', 'shoulder_object',
+                    'waist_object', 'feet_object']:
             detection = row[col]
             if detection is None:
                 fusion_list.extend([0.0, 0.0, 0.0, 0.0, 0.0, 0.0])  # 6 zeros for None
@@ -1266,3 +1738,237 @@ class ToolsClustering:
                 fusion_list.extend(self.flatten_object_detections(detection))
         
         return fusion_list
+
+    # ================================================================================
+    # REPROCESSING UTILITY METHODS (non-debugging)
+    # ================================================================================
+
+    def iter_chunks(self, items, size):
+        """Yield successive chunks of specified size from items list."""
+        for idx in range(0, len(items), size):
+            yield items[idx:idx + size]
+
+    def get_reprocess_image_ids_for_subset(self, engine, image_ids, cutoff_detection_id, chunk_size):
+        """
+        For a subset of image_ids, return only those with any Detections row where detection_id >= cutoff.
+        """
+        if not image_ids:
+            return set()
+
+        unique_ids = sorted({int(image_id) for image_id in image_ids if pd.notna(image_id)})
+        matched_ids = set()
+        with engine.connect() as conn:
+            for image_id_chunk in self.iter_chunks(unique_ids, chunk_size):
+                ids_sql = ",".join(str(image_id) for image_id in image_id_chunk)
+                chunk_sql = text(
+                    f"""
+                    SELECT DISTINCT d.image_id
+                    FROM Detections d
+                    WHERE d.detection_id >= :cutoff
+                      AND d.image_id IN ({ids_sql})
+                    """
+                )
+                chunk_rows = conn.execute(chunk_sql, {"cutoff": int(cutoff_detection_id)}).fetchall()
+                matched_ids.update(int(row[0]) for row in chunk_rows)
+        return matched_ids
+
+    def count_existing_images_detections_rows(self, engine, image_ids, chunk_size):
+        """
+        Count unique image_ids that currently exist in ImagesDetections for a provided id subset.
+        """
+        if not image_ids:
+            return 0
+
+        total_existing = 0
+        unique_ids = sorted({int(image_id) for image_id in image_ids if pd.notna(image_id)})
+        with engine.connect() as conn:
+            for image_id_chunk in self.iter_chunks(unique_ids, chunk_size):
+                ids_sql = ",".join(str(image_id) for image_id in image_id_chunk)
+                chunk_sql = text(
+                    f"""
+                    SELECT COUNT(*)
+                    FROM ImagesDetections idt
+                    WHERE idt.image_id IN ({ids_sql})
+                    """
+                )
+                total_existing += int(conn.execute(chunk_sql).scalar() or 0)
+        return total_existing
+
+    def delete_images_detections_rows_for_image_ids(self, engine, image_ids, chunk_size):
+        """
+        Delete existing ImagesDetections rows for specific image_ids in chunks.
+        """
+        if not image_ids:
+            return 0
+
+        unique_ids = sorted({int(image_id) for image_id in image_ids if pd.notna(image_id)})
+        deleted_total = 0
+        with engine.begin() as conn:
+            for image_id_chunk in self.iter_chunks(unique_ids, chunk_size):
+                ids_sql = ",".join(str(image_id) for image_id in image_id_chunk)
+                delete_sql = text(f"DELETE FROM ImagesDetections WHERE image_id IN ({ids_sql})")
+                result = conn.execute(delete_sql)
+                if result.rowcount and result.rowcount > 0:
+                    deleted_total += int(result.rowcount)
+        return deleted_total
+
+    @staticmethod
+    def store_image_face_data(session, target_image_id, face_height=None, nose_pixel_x=None, nose_pixel_y=None, image_h=None, image_w=None, testing=False, auto_commit=True):
+        """
+        Persist face-height/nose-pixel and image dimensions without overwriting existing values.
+        Only NULL fields are populated.
+        """
+        updated = {
+            'encodings': False,
+            'images': False,
+        }
+
+        enc_q = session.query(Encodings).filter(Encodings.image_id == target_image_id)
+        if face_height is not None:
+            rows = enc_q.filter(Encodings.face_height.is_(None)).update(
+                {Encodings.face_height: int(face_height)}, synchronize_session=False
+            )
+            if rows:
+                updated['encodings'] = True
+        if nose_pixel_x is not None:
+            rows = enc_q.filter(Encodings.nose_pixel_x.is_(None)).update(
+                {Encodings.nose_pixel_x: int(nose_pixel_x)}, synchronize_session=False
+            )
+            if rows:
+                updated['encodings'] = True
+        if nose_pixel_y is not None:
+            rows = enc_q.filter(Encodings.nose_pixel_y.is_(None)).update(
+                {Encodings.nose_pixel_y: int(nose_pixel_y)}, synchronize_session=False
+            )
+            if rows:
+                updated['encodings'] = True
+
+        img_q = session.query(Images).filter(Images.image_id == target_image_id)
+        if image_h is not None:
+            rows = img_q.filter(Images.h.is_(None)).update(
+                {Images.h: int(image_h)}, synchronize_session=False
+            )
+            if rows:
+                updated['images'] = True
+        if image_w is not None:
+            rows = img_q.filter(Images.w.is_(None)).update(
+                {Images.w: int(image_w)}, synchronize_session=False
+            )
+            if rows:
+                updated['images'] = True
+
+        if auto_commit and (not testing) and (updated['encodings'] or updated['images']):
+            session.commit()
+
+        return updated
+
+    # ================================================================================
+    # DEBUG / TRACKING METHODS (disabled when VERBOSE=False)
+    # ================================================================================
+
+    def count_tracked_detections_for_image_ids(self, engine, image_ids, class_ids=None, conf_threshold=None, chunk_size=1000):
+        """
+        Count detections per tracked class for a provided image_id subset.
+        Returns dict[class_id] -> {'det_rows': int, 'image_rows': int}.
+        Debug method - only outputs if self.VERBOSE is True.
+        """
+        if class_ids is None:
+            class_ids = self.DEBUG_TRACKED_CLASS_IDS
+        
+        counts = {
+            int(class_id): {'det_rows': 0, 'image_rows': 0}
+            for class_id in class_ids
+        }
+        if not image_ids:
+            return counts
+
+        unique_ids = sorted({int(image_id) for image_id in image_ids if pd.notna(image_id)})
+        if not unique_ids:
+            return counts
+
+        class_ids_sql = ",".join(str(int(class_id)) for class_id in sorted(class_ids))
+        conf_filter_sql = ""
+        params = {}
+        if conf_threshold is not None:
+            conf_filter_sql = " AND d.conf >= :conf_threshold "
+            params['conf_threshold'] = float(conf_threshold)
+
+        with engine.connect() as conn:
+            for image_id_chunk in self.iter_chunks(unique_ids, chunk_size):
+                ids_sql = ",".join(str(image_id) for image_id in image_id_chunk)
+                chunk_sql = text(
+                    f"""
+                    SELECT
+                        d.class_id AS class_id,
+                        COUNT(*) AS det_rows,
+                        COUNT(DISTINCT d.image_id) AS image_rows
+                    FROM Detections d
+                    WHERE d.image_id IN ({ids_sql})
+                      AND d.class_id IN ({class_ids_sql})
+                      AND d.bbox_norm IS NOT NULL
+                      AND JSON_EXTRACT(d.bbox_norm, '$.left') IS NOT NULL
+                      {conf_filter_sql}
+                    GROUP BY d.class_id
+                    """
+                )
+                rows = conn.execute(chunk_sql, params).mappings().all()
+                for row in rows:
+                    class_id = int(row['class_id'])
+                    if class_id in counts:
+                        counts[class_id]['det_rows'] += int(row['det_rows'] or 0)
+                        counts[class_id]['image_rows'] += int(row['image_rows'] or 0)
+
+        return counts
+
+    def print_reprocessing_dry_run_counts(self, engine, selected_df, cutoff_detection_id, chunk_size):
+        """
+        Print dry-run counts for reprocessing scope without writing any data.
+        Debug method - only outputs if self.VERBOSE is True.
+        """
+        if not self.VERBOSE:
+            return
+        
+        if selected_df is None or len(selected_df) == 0:
+            print("[REPROCESS DRY-RUN] No selected rows available.")
+            return
+
+        selected_image_ids = selected_df['image_id'].dropna().astype(int).tolist()
+        selected_unique_count = len(set(selected_image_ids))
+
+        with engine.connect() as conn:
+            candidate_total_sql = text("""
+                SELECT COUNT(DISTINCT d.image_id)
+                FROM Detections d
+                WHERE d.detection_id >= :cutoff
+            """)
+            candidate_images_total = int(conn.execute(candidate_total_sql, {
+                "cutoff": int(cutoff_detection_id)
+            }).scalar() or 0)
+
+            affected_existing_global_sql = text("""
+                SELECT COUNT(DISTINCT d.image_id)
+                FROM Detections d
+                INNER JOIN ImagesDetections idt ON idt.image_id = d.image_id
+                WHERE d.detection_id >= :cutoff
+            """)
+            affected_existing_global = int(conn.execute(affected_existing_global_sql, {
+                "cutoff": int(cutoff_detection_id)
+            }).scalar() or 0)
+
+        selected_reprocess_ids = self.get_reprocess_image_ids_for_subset(
+            engine, selected_image_ids, cutoff_detection_id, chunk_size
+        )
+        expected_recompute_rows = len(selected_reprocess_ids)
+        affected_existing_selected = self.count_existing_images_detections_rows(engine, selected_reprocess_ids, chunk_size)
+
+        print("\n" + "=" * 70)
+        print("REPROCESS DRY-RUN SUMMARY (NO WRITES)")
+        print("=" * 70)
+        print(f"Cutoff detection_id (inclusive): {cutoff_detection_id}")
+        print(f"Selected rows from main query: {len(selected_df):,}")
+        print(f"Selected unique image_ids: {selected_unique_count:,}")
+        print(f"Candidate images (global, Detections cutoff): {candidate_images_total:,}")
+        print(f"Affected existing rows (global, join to ImagesDetections): {affected_existing_global:,}")
+        print(f"Expected recompute rows (selected run scope): {expected_recompute_rows:,}")
+        print(f"Affected existing rows (selected run scope): {affected_existing_selected:,}")
+        print("=" * 70 + "\n")
