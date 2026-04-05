@@ -134,7 +134,36 @@ class YOLOTools:
                     # if self.VERBOSE: print(f"No bbox for {OBJ_CLS_ID} in image_id {image_id}")
         else:
             # the new way - allowing multiple objects per class
+            # Group detections by class_id to enforce per-class obj_no limit (127 for TINYINT)
+            detections_by_class = {}
             for detection in detections_list:
+                class_id = detection.get("class_id")
+                if class_id not in detections_by_class:
+                    detections_by_class[class_id] = []
+                detections_by_class[class_id].append(detection)
+            
+            # Truncate per-class and log
+            MAX_OBJ_NO = 127  # TINYINT max
+            truncation_log = []
+            for class_id, class_detections in detections_by_class.items():
+                if len(class_detections) > MAX_OBJ_NO:
+                    truncated_count = len(class_detections) - MAX_OBJ_NO
+                    truncation_log.append(f"image_id {image_id}, class_id {class_id}: truncated {truncated_count} detections (kept {MAX_OBJ_NO})")
+                    detections_by_class[class_id] = class_detections[:MAX_OBJ_NO]
+            
+            if truncation_log:
+                print(f"⚠️  Truncation alert: {'; '.join(truncation_log)}")
+            
+            # Rebuild flattened list with re-assigned obj_no per class (after truncation)
+            final_detections = []
+            for class_id, class_detections in detections_by_class.items():
+                for obj_idx, detection in enumerate(class_detections, start=1):
+                    detection_copy = detection.copy()
+                    detection_copy['obj_no'] = obj_idx  # Re-assign obj_no after truncation
+                    final_detections.append(detection_copy)
+            
+            # Upsert
+            for detection in final_detections:
                 bbox_str = detection.get("bbox")
                 bbox_norm_str = detection.get("bbox_norm")
                 if self.VERBOSE: print("detection is", detection)

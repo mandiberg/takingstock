@@ -40,14 +40,14 @@ IS_SSD = False
 SSD_PATH = None
 
 SKIP_EXISTING = False # Skips images with a normed bbox but that have Images.h - I think only applies to phone bbox
-USE_OBJ = False # do objet detections?
-SKIP_BODY = False # skip body landmarks. mostly you want to skip when doing obj bbox
+USE_OBJ = True # do objet detections?
+SKIP_BODY = True # skip body landmarks. mostly you want to skip when doing obj bbox
                 # or are just redoing hands
-REPROCESS_HANDS = True # do hands
+REPROCESS_HANDS = False # do hands
 ACCEPT_EXSISTING_HANDS = True # if true, it will accept existing data and update bool in SQL to tru
 IS_SEGMENT_BIG = False # use SegmentBig table. IF False, and IS_SSD is false, it will use Encodings table
 TESTING = False # if true, will not do any DB writes
-DETECTIONS_ONLY = False
+DETECTIONS_ONLY = True
 
 # join on helper to limit scope and use SSD
 INNER_JOIN_HELPER = True
@@ -65,11 +65,11 @@ INNER_JOIN_HELPER = True
 # SegmentHelperObject_67_phone 
 # SegmentHelperObject_41_cup_glass (big)
 
-LIMIT= 2000000
+LIMIT= 1000000
 # Initialize the counter
 counter = 2000
 
-THIS_CLASS_ID = 0 # for object bbox normalization
+THIS_CLASS_ID = 119 # for object bbox normalization
 class_token = ID_SEGMENT_DICT.get(THIS_CLASS_ID, None)
 ssd = ID_SSD_DICT.get(THIS_CLASS_ID, None)
 if THIS_CLASS_ID in ID_FOLDER_DICT: folder_token = ID_FOLDER_DICT[THIS_CLASS_ID]
@@ -268,7 +268,7 @@ def normalize_obj_bbox(obj_bbox,nose_pos,face_height,shape):
     # n_obj_bbox["left"]=(n_obj_bbox["left"]*width -nose_pos["x"])/face_height
     # n_obj_bbox["top"]=(n_obj_bbox["top"]*height -nose_pos["y"])/face_height
     # n_obj_bbox["bottom"]=(n_obj_bbox["bottom"]*height -nose_pos["y"])/face_height
-    print("n_obj_bbox",n_obj_bbox)
+    print(" 📦 n_obj_bbox",n_obj_bbox)
 
     return n_obj_bbox
 
@@ -474,8 +474,10 @@ def insert_shape(target_image_id,shape):
         .first() #### MICHAEL I suspect this is a database dependent problem, doesnt work for me
     )    
     if Images_entry:
-        Images_entry.h=shape[0]
-        Images_entry.w=shape[1]
+        if Images_entry.h is None:
+            Images_entry.h=shape[0]
+        if Images_entry.w is None:
+            Images_entry.w=shape[1]
         if VERBOSE:
             print("image_id:", Images_entry.image_id,"height:", Images_entry.h,"width:", Images_entry.w)
     if not TESTING: session.commit()
@@ -681,9 +683,23 @@ def calc_nlm(image_id_to_shape, lock, session):
         return
 
     else:
-        # DO THIS LATER
-        # TK store face_height and nose_pixel_pos_body in encodings table
-        pass
+        # store face_height and nose_pixel_pos_body — only if not already set
+        if not TESTING:
+            session.query(Encodings).filter(
+                Encodings.image_id == target_image_id,
+                Encodings.face_height.is_(None)
+            ).update({
+                Encodings.face_height: int(face_height),
+                Encodings.nose_pixel_x: xB,
+                Encodings.nose_pixel_y: yB,
+            }, synchronize_session=False)
+            session.query(Images).filter(
+                Images.image_id == target_image_id,
+                Images.h.is_(None)
+            ).update({
+                Images.h: height,
+                Images.w: width,
+            }, synchronize_session=False)
 
 
     if hand_results:

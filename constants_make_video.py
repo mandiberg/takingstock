@@ -332,10 +332,25 @@ ALL_FUSION_PAIRS_DICTS = {
     "FUSION_PAIR_DICT_3DBODIES_TOPICS_512": FUSION_PAIR_DICT_3DBODIES_TOPICS_512,
     }
 
+# connects a class_id to a sql helper segment
+ID_SEGMENT_DICT = {45: "45_salad", 67: "67_phone", 73: "73_book", 74: "74_clock", 80: "80_sign", 81: "81_gift", 82: "82_money", 83: "83_bag", 84: "84_valentine", 
+                   85: "TK", 86: "86_dumbbell", 87: "87_flag", 88: "83_bag", 89: "90_stethoscope", 90: "90_stethoscope", 91: "TK", 92: "92_headphones", 
+                   93: "93_clipboard", 94: "94_piggybank", 95: "82_money", 96: "96_bitcoin", 
+                   97: "97_rose", 98: "98_lily", 99: "99_iris", 100: "100_tulip", 101: "101_lisianthus", 102: "102_orchid", 103: "103_peony", 
+                   104: "101_lisianthus", 105: "101_lisianthus", 106: "101_lisianthus", 107: "101_lisianthus", 
+                   108: "91_gun", 109: "91_gun", 
+                   110: "89_mask", 111: "89_mask", 112: "89_mask", 113: "89_mask", 114: "89_mask", 115: "89_mask", 
+                   116: "89_mask", 117: "89_mask", 118: "89_mask", 119: "89_mask",}
+# connects class_id to a SSD name, to get files
+ID_SSD_DICT = {45: "OWC5", 67: "SSD4_Green", 73: "OWC5", 74: "OWC5", 80: "OWC52", 81: "OWC52", 82: "LaCie", 83: "LaCie", 84: "LaCie", 85: "85_salad", 86: "OWC52", 87: "OWC5", 
+               88: "LaCie", 89: "OWC5", 90: "OWC5", 91: "TK", 92: "OWC5", 93: "93_clipboard", 94: "LaCie", 95: "LaCie", 96: "LaCie", 
+               97: "LaCie", 98: "LaCie", 99: "LaCie", 100: "LaCie", 101: "LaCie", 102: "LaCie", 103: "LaCie", 104: "LaCie", 105: "LaCie", 106: "LaCie", 107: "LaCie", 
+               108: "OWC5", 109: "91_gOWC5un", 
+               110: "LaCie", 111: "LaCie", 112: "LaCie", 113: "LaCie", 114: "LaCie", 115: "LaCie", 
+               116: "LaCie", 117: "LaCie", 118: "LaCie", 119: "LaCie",}
+# overrides use of segment name for folder name for certain class_ids
+ID_FOLDER_DICT = {45: "book_clock_bowl", 67: "detected_63_67", 73: "book_clock_bowl", 74: "book_clock_bowl", 82: "82_money_cards", 95: "82_money_cards"}
 
-ID_SEGMENT_DICT = {45: "45_salad", 67: "67_phone", 73: "73_book", 74: "74_clock", 80: "80_sign", 81: "81_gift", 82: "82_money", 83: "83_bag", 84: "84_valentine", 85: "85_salad", 86: "86_dumbbell", 87: "87_flag", 88: "83_bag", 89: "89_mask", 90: "90_stethoscope", 91: "91_gun", 92: "92_headphones", 93: "93_clipboard", 94: "94_piggybank", 95: "82_money", 96: "96_bitcoin", 97: "97_rose", 98: "98_lily", 99: "99_iris", 100: "100_tulip", 101: "101_lisianthus", 102: "102_orchid", 103: "103_peony"}
-ID_SSD_DICT = {45: "OWC5", 67: "SSD4_Green", 73: "OWC5", 74: "OWC5", 80: "OWC52", 81: "OWC52", 82: "LaCie", 83: "LaCie", 84: "LaCie", 85: "85_salad", 86: "OWC52", 87: "87_flag", 88: "LaCie", 89: "LaCie", 90: "90_stethoscope", 91: "91_gun", 92: "92_headphones", 93: "93_clipboard", 94: "LaCie", 95: "LaCie", 96: "LaCie", 97: "LaCie", 98: "LaCie", 99: "LaCie", 100: "LaCie", 101: "LaCie", 102: "LaCie", 103: "LaCie"}
-ID_FOLDER_DICT = {45: "book_clock_bowl", 67: "detected_63_67", 73: "book_clock_bowl", 74: "book_clock_bowl", 82: "82_money_cards", 95:"82_money_cards"}
 ID_CUTOFF_DICT = {45: 800, 67: 200, 73: 3000, 74: 200, 80: 400, 81: 2000, 82: 800, 83: 800, 84: 400, 85: 800, 86: 800, 87: 200, 88: 400, 89: 400, 90: 2000, 91: 200, 92: 800, 93: 800, 94: 400, 95: 400, 96: 200, 97: 400, 98: 400, 99: 400, 100: 400, 101: 400, 102: 400, 103: 400}
 
 # detected_63_67

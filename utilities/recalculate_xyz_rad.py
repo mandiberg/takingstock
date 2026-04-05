@@ -7,6 +7,7 @@ from sqlalchemy import Float, create_engine, Column, Integer, Boolean, String
 from sqlalchemy.orm import sessionmaker, aliased
 from sqlalchemy.pool import NullPool
 from pathlib import Path
+from pymediainfo import MediaInfo
 
 # importing project-specific models
 import sys
@@ -23,9 +24,16 @@ mongo_client = pymongo.MongoClient("mongodb://localhost:27017/")
 mongo_db = mongo_client["stock"]
 mongo_collection = mongo_db["encodings"]  # adjust collection name if needed
 
+VERBOSE = True
+SSD=True
+SSD_FOLDER_OVERRIDE = "/Volumes/OWC52/segment_images_86_dumbbell" # set to None to use default SSD path from config
+HelperTable_name = "SegmentHelperObject_86_dumbbell" # if you set to None, comment out the helpertable join in the query
+# HelperTable_name = None # if you set to none, comment out the helpertable join in the query
+REQUIRE_IMAGES_H_W = False # if True, will skip rows where Images.h or Images.w is NULL, since we need those for the blank image creation
+
 # MySQL setup (preserving credentials framework)
 from mp_db_io import DataIO
-io = DataIO()
+io = DataIO(SSD,VERBOSE,SSD_FOLDER_OVERRIDE)
 db = io.db
 engine = create_engine(
     f"mysql+pymysql://{db['user']}:{db['pass']}@/{db['name']}?unix_socket={db['unix_socket']}",
@@ -38,10 +46,8 @@ session = Session()
 
 # Batch processing parameters
 batch_size = 1000
-last_id = 0 # this is now image_id, not encoding_id
-VERBOSE = False
+last_id = 0 # this is now image_id, not encoding_id. use this to restart the process midway
 
-HelperTable_name = "SegmentHelper_oct2025_every40"
 class HelperTable(Base):
     __tablename__ = HelperTable_name
     seg_image_id=Column(Integer,primary_key=True, autoincrement=True)
@@ -51,6 +57,30 @@ class ImagesArmsPoses3D(Base):
     image_id = Column(Integer, primary_key=True)
     cluster_id = Column(Integer)
     cluster_dist = Column(Float)
+
+print(f"Starting batch processing with batch_size={batch_size}, last_id={last_id}, REQUIRE_IMAGES_H_W={REQUIRE_IMAGES_H_W}")
+print(f"HelperTable_name: {HelperTable_name}, SSD_FOLDER_OVERRIDE: {SSD_FOLDER_OVERRIDE}")
+
+def get_shape(site_name_id, imagename):
+    site_specific_root_folder = io.folder_list[site_name_id]
+    file_path = site_specific_root_folder + "/" + imagename
+
+    try:
+        if io.platform == "darwin":
+            media_info = MediaInfo.parse(file_path, library_file="/opt/homebrew/Cellar/libmediainfo/26.01/lib/libmediainfo.dylib")
+        else:
+            media_info = MediaInfo.parse(file_path)
+    except Exception as e:
+        print(f"🚨 MediaInfo read failed for image file: {file_path} (site_name_id={site_name_id}, imagename={imagename})")
+        print(f"   Error: {type(e).__name__}: {e}")
+        return None, None
+
+    for track in media_info.tracks:
+        if track.track_type == 'Image':
+            return track.height, track.width
+
+    print(f"🚨 MediaInfo found no Image track: {file_path} (site_name_id={site_name_id}, imagename={imagename})")
+    return None, None
 
 def debug_face_pose_simple(self, bbox, faceLms, image_id):
     """Simplified debug with corrected coordinate system"""
@@ -85,9 +115,9 @@ def debug_face_pose_simple(self, bbox, faceLms, image_id):
 
 
 while True:
-    # s = aliased(HelperTable, name='s')
+    s = aliased(HelperTable, name='s')
     # ihp = aliased(ImagesArmsPoses3D, name='ihp')
-    results = (
+    query = (
         session.query(
             Encodings.encoding_id,
             Encodings.image_id,
@@ -98,20 +128,26 @@ while True:
             Encodings.is_feet,
             Images.h,
             Images.w,
+            Images.site_name_id,
+            Images.imagename,
         )
-        # .join(s, s.image_id == Encodings.image_id)
+        .join(s, s.image_id == Encodings.image_id)
         # .join(ihp, s.image_id == ihp.image_id)
         .join(Images, Images.image_id == Encodings.image_id)
         .filter(
             Encodings.mongo_face_landmarks.is_(True),
             Encodings.image_id > last_id,
             Encodings.pitch.is_(None),
+        )
+    )
+
+    if REQUIRE_IMAGES_H_W:
+        query = query.filter(
             Images.h.isnot(None),
             Images.w.isnot(None),
         )
-        .limit(batch_size)
-        .all()
-    )
+
+    results = query.limit(batch_size).all()
     # .order_by(Encodings.image_id)
         # Encodings.is_feet.is_(None),
 
@@ -121,16 +157,51 @@ while True:
     
     print(f"Processing {len(results)} records...")
 
+    batch_stats = {
+        'queried': len(results),
+        'h_w_filled': 0,
+        'h_w_fill_failed': 0,
+        'pose_saved': 0,
+        'skipped': 0,
+    }
+
     # Process in batches
     for i in range(0, len(results), batch_size):
         batch = results[i:i + batch_size]
         batch_success = []
-        for encoding_id, image_id, face_x, face_y, face_z, bbox, is_feet, h, w in batch:
+        images_hw_updates = []
+        for encoding_id, image_id, face_x, face_y, face_z, bbox, is_feet, h, w, site_name_id, imagename in batch:
             if face_x is None or face_y is None or face_z is None:
                 print(f"Skipping image_id {image_id} due to missing face_xyz data.")
+                batch_stats['skipped'] += 1
                 continue
             if VERBOSE:
                 print(f"Processing image_id: {image_id}, encoding_id: {encoding_id}")
+
+            valid_h_w = isinstance(h, int) and isinstance(w, int) and h > 0 and w > 0
+            if not valid_h_w:
+                if REQUIRE_IMAGES_H_W:
+                    print(f"Skipping image_id {image_id}: invalid image dimensions h={h}, w={w}")
+                    batch_stats['skipped'] += 1
+                    continue
+
+                recovered_h, recovered_w = get_shape(site_name_id, imagename)
+                if recovered_h is None or recovered_w is None:
+                    print(f"🚨 ALERT image_id {image_id}: missing/invalid h,w and could not recover from file. site_name_id={site_name_id}, imagename={imagename}")
+                    batch_stats['h_w_fill_failed'] += 1
+                    batch_stats['skipped'] += 1
+                    continue
+
+                h, w = int(recovered_h), int(recovered_w)
+                images_hw_updates.append({
+                    'image_id': int(image_id),
+                    'h': h,
+                    'w': w,
+                })
+                batch_stats['h_w_filled'] += 1
+                if VERBOSE:
+                    print(f"{image_id} - Recovered and queued h,w update: h={h}, w={w}")
+
             # 2. Fetch pickled face_landmarks from Mongo
             mongo_doc = mongo_collection.find_one({"image_id": image_id}, {"face_landmarks": 1})
             is_feet = False
@@ -140,12 +211,14 @@ while True:
                 faceLms = pickle.loads(mongo_doc["face_landmarks"])
             else:
                 print(f"No face_landmarks found in MongoDB for image_id {image_id}. Skipping.")
+                batch_stats['skipped'] += 1
                 continue
 
             # create a blank (all black) image of dimensions h x w
-            # validate h and w (they may be NULL in the DB)
+            # validate h and w (can be recovered above if REQUIRE_IMAGES_H_W is False)
             if not (isinstance(h, int) and isinstance(w, int) and h > 0 and w > 0):
                 print(f"Skipping image_id {image_id}: invalid image dimensions h={h}, w={w}")
+                batch_stats['skipped'] += 1
                 continue
             blank_image = np.zeros((h, w, 3), np.uint8)
 
@@ -167,6 +240,7 @@ while True:
                 continue
             pose.calc_face_data(faceLms)
 
+            if VERBOSE: print(f"{image_id} - Calculating pose with SelectPose...")
             # Initialize once
             pose.model_points = pose.get_model_points_corrected()
 
@@ -185,16 +259,33 @@ while True:
                     'roll': result['roll'],
                 }
                 batch_success.append(result_to_save)
+                batch_stats['pose_saved'] += 1
             else:
                 print(f"❌ {image_id} - Failed to calculate pose")
+                batch_stats['skipped'] += 1
         # 4. Save batch_success to MySQL in one batch based on dictionary
-        if batch_success:
-            # print(f"Saving {len(batch_success)} pose results to MySQL...")
-            # print(f"these are the image_ids: {[item['image_id'] for item in batch_success]}")
-            session.bulk_update_mappings(Encodings, batch_success)
-            # session.bulk_update_mappings(SegmentBig, batch_success)
-            session.commit()
+        if images_hw_updates or batch_success:
+            try:
+                if images_hw_updates:
+                    session.bulk_update_mappings(Images, images_hw_updates)
+                if batch_success:
+                    session.bulk_update_mappings(Encodings, batch_success)
+                    # session.bulk_update_mappings(SegmentBig, batch_success)
+                session.commit()
+            except Exception as e:
+                session.rollback()
+                print(f"🚨 Batch commit failed: {type(e).__name__}: {e}")
         print(f"Saved {len(batch_success)} pose results to MySQL.")
+        if images_hw_updates:
+            print(f"Saved {len(images_hw_updates)} Images.h/w updates to MySQL.")
+
+    print(
+        f"Batch stats: queried={batch_stats['queried']}, "
+        f"h_w_filled={batch_stats['h_w_filled']}, "
+        f"h_w_fill_failed={batch_stats['h_w_fill_failed']}, "
+        f"pose_saved={batch_stats['pose_saved']}, "
+        f"skipped={batch_stats['skipped']}"
+    )
 
     # session.commit()
     last_id = results[-1][1]

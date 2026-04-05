@@ -147,6 +147,9 @@ class Encodings(Base):
     missing_mongo_hand_landmarks   = Column(Boolean)
     missing_mongo_hand_landmarks_norm   = Column(Boolean)
     missing_mongo_body_landmarks_3D   = Column(Boolean)
+    face_height      = Column(SmallInteger)
+    nose_pixel_x     = Column(SmallInteger)
+    nose_pixel_y     = Column(SmallInteger)
     
 class Clusters(Base):
     __tablename__ = 'Clusters'

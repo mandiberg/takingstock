@@ -5,18 +5,19 @@ from my_declarative_base import Base, Images, Detections
 import pickle
 import numpy as np
 import json
+import pandas as pd
 
 class ToolsClustering:
     """Store key clustering info for use across codebase"""
 
-    def __init__(self, CLUSTER_TYPE, session=None, VERBOSE=False):
+    def __init__(self, CLUSTER_TYPE, VERBOSE=False, session=None):
         self.VERBOSE = VERBOSE
         self.CLUSTER_TYPE = CLUSTER_TYPE
         self.CLUSTER_MEDIANS = None
         self.session = session
         # Object-hand relationship constants
         self.TOUCH_THRESHOLD = 0.5  # face height units
-        self.CLASS_ID_WEIGHT = 10  # multiplier to give more weight to class_id in clustering (since it's categorical and we want it to separate well)
+        self.CLASS_ID_WEIGHT = 10  # OLD WAY multiplier to give more weight to class_id in clustering (since it's categorical and we want it to separate well)
         self.OVERLAP_IOU_THRESHOLD = 0.5
         self.HIGH_CONFIDENCE_THRESHOLD = 0.9
         self.CONFIDENCE_DIFF_THRESHOLD = 0.3
@@ -24,7 +25,27 @@ class ToolsClustering:
         self.DEFAULT_HAND_POSITION = [0.0, 8.0, 0.0]
         self.TIE_CLASS_ID = 27
         self.USE_WHITELIST = True
-        all_class_ids = set(range(0, 104))
+        self.FLOWER_CLASSES = {104, 105, 106, 107}
+        self.HAND_ONLY_CLASSES = {108, 109}
+        self.COVID_MASK_CLASSES = {110}
+        self.FULL_FACE_TOP_BIASED_CLASSES = {111, 112}
+        self.UNDER_EYE_CLASSES = {113}
+        self.EYE_OR_FOREHEAD_CLASSES = {114}
+        self.EYE_ONLY_CLASSES = {115}
+        self.HAND_OR_EYE_CLASSES = {116, 117, 118, 119}
+        self.DEBUG_TRACKED_CLASS_IDS = tuple(range(110, 120))
+        self._class_assignment_slot_names = (
+            'left_hand_object',
+            'right_hand_object',
+            'top_face_object',
+            'left_eye_object',
+            'right_eye_object',
+            'mouth_object',
+            'shoulder_object',
+            'waist_object',
+            'feet_object',
+        )
+        all_class_ids = set(range(0, 120))
 
         nonsense_class_ids_dict = {
             # Hand: exclude things that are basically never hand-held in your dataset.
@@ -129,6 +150,8 @@ class ToolsClustering:
         }
         self._whitelist_slots = tuple(self.WHITELIST_BY_SLOT.keys())
         self._whitelist_reject_counts = {slot: 0 for slot in self._whitelist_slots}
+        self.reset_class_assignment_debug_counts()
+        self.reset_class_pipeline_debug_counts()
         # Face object constraints to avoid large background objects
         self.MAX_FACE_WIDTH = 2.0  # max width of left+right to be considered face object
         self.MAX_FACE_VERT_EXTENSION = 0.75  # max how far object can extend into opposite zone
@@ -152,11 +175,11 @@ class ToolsClustering:
         # Feature standardization settings for ObjectFusion
         self.USE_FEATURE_STANDARDIZATION = True  # Use StandardScaler to normalize all features to similar scale
         self.FEATURE_WEIGHTS = {
-            'face_angle': 0.3,      # pitch, yaw, roll - LOW weight (prevent face-angle mega-clusters)
-            'class_id': 5.0,        # class_id - VERY HIGH weight at RAW SCALE (0-107) to force object-type separation
-            'confidence': 0.2,      # detection confidence - very low weight
-            'bbox': 1.0,            # bbox coordinates - reduced to standard weight
-            'has_object': 3.0,      # binary indicator - high weight but lower than class_id
+            'face_angle': .5,      # pitch, yaw, roll - LOW weight (prevent face-angle mega-clusters)
+            'class_id': 3.0,        # class_id - VERY HIGH weight at RAW SCALE (0-107) to force object-type separation
+            'confidence': 0.5,      # detection confidence - very low weight
+            'bbox': 2.0,            # bbox coordinates - reduced to standard weight
+            'has_object': 1.0,      # binary indicator - high weight but lower than class_id
         }
         # Store fitted scaler for inverse transform during median calculation
         self.feature_scaler = None
@@ -316,9 +339,12 @@ class ToolsClustering:
         """Parse bbox_norm from various formats to dict."""
         if bbox_norm is None:
             return None
-        if isinstance(bbox_norm, dict):
+
+        # Already parsed JSON object (SQLAlchemy JSON column can return dict directly)
+        elif isinstance(bbox_norm, dict):
             return bbox_norm
-        if isinstance(bbox_norm, str):
+
+        elif isinstance(bbox_norm, str):
             try:
                 # Handle double-encoded JSON
                 parsed = json.loads(bbox_norm)
@@ -327,7 +353,10 @@ class ToolsClustering:
                 return parsed
             except:
                 return None
-        return None
+
+        else:
+            print(f"[parse_bbox_norm] Unsupported bbox_norm type: {type(bbox_norm)}")
+            return None
 
     def detection_to_list(self, detection_dict):
         """Convert detection dict to 6-element list: [class_id, conf, top, left, right, bottom]."""
@@ -371,6 +400,10 @@ class ToolsClustering:
         class_id_value = detection_dict.get('class_id_raw', detection_dict.get('class_id'))
         return self._normalize_class_id(class_id_value)
 
+    def _is_class_in(self, detection_dict, class_id_set):
+        class_id_value = self._get_detection_class_id(detection_dict)
+        return class_id_value in class_id_set if class_id_value is not None else False
+
     def _passes_slot_whitelist(self, detection_dict, slot_name):
         """Check whitelist eligibility for a given slot."""
         if not self.USE_WHITELIST:
@@ -399,6 +432,64 @@ class ToolsClustering:
     def get_whitelist_reject_counts(self):
         """Return a copy of current whitelist reject counters."""
         return dict(self._whitelist_reject_counts)
+
+    def reset_class_assignment_debug_counts(self):
+        """Reset per-batch assignment counters for tracked class IDs."""
+        self._class_assignment_debug_counts = {
+            class_id: {
+                'seen': 0,
+                'assigned_unique': 0,
+                'assigned_slot_hits': 0,
+                'dropped': 0,
+                'slot_hits': {slot: 0 for slot in self._class_assignment_slot_names},
+            }
+            for class_id in self.DEBUG_TRACKED_CLASS_IDS
+        }
+
+    def reset_class_pipeline_debug_counts(self):
+        """Reset per-batch pipeline-stage counters for tracked class IDs."""
+        self._class_pipeline_debug_counts = {
+            class_id: {
+                'query_hits': 0,
+                'bbox_parse_ok': 0,
+                'bbox_parse_fail': 0,
+                'post_resolve': 0,
+                'tie_blocked': 0,
+                'non_hand_pool': 0,
+                'final_assigned_unique': 0,
+                'parse_fail_examples': [],
+            }
+            for class_id in self.DEBUG_TRACKED_CLASS_IDS
+        }
+
+    def get_class_assignment_debug_counts(self):
+        """Return a copy of tracked class assignment counters."""
+        snapshot = {}
+        for class_id, stats in self._class_assignment_debug_counts.items():
+            snapshot[class_id] = {
+                'seen': int(stats['seen']),
+                'assigned_unique': int(stats['assigned_unique']),
+                'assigned_slot_hits': int(stats['assigned_slot_hits']),
+                'dropped': int(stats['dropped']),
+                'slot_hits': {slot: int(count) for slot, count in stats['slot_hits'].items()},
+            }
+        return snapshot
+
+    def get_class_pipeline_debug_counts(self):
+        """Return a copy of tracked class pipeline counters."""
+        snapshot = {}
+        for class_id, stats in self._class_pipeline_debug_counts.items():
+            snapshot[class_id] = {
+                'query_hits': int(stats['query_hits']),
+                'bbox_parse_ok': int(stats['bbox_parse_ok']),
+                'bbox_parse_fail': int(stats['bbox_parse_fail']),
+                'post_resolve': int(stats['post_resolve']),
+                'tie_blocked': int(stats['tie_blocked']),
+                'non_hand_pool': int(stats['non_hand_pool']),
+                'final_assigned_unique': int(stats['final_assigned_unique']),
+                'parse_fail_examples': list(stats['parse_fail_examples']),
+            }
+        return snapshot
 
     def calc_iou(self, bbox1, bbox2):
         """Calculate Intersection over Union between two bboxes."""
@@ -481,6 +572,49 @@ class ToolsClustering:
                 bbox['right'] > 0 and
                 width <= self.MAX_FACE_WIDTH and
                 extends_into_top <= 0.0)
+
+    def is_covid_mask_object(self, bbox):
+        """Check if bbox looks like a covid mask, including pulled-below-chin cases."""
+        width = bbox['right'] - bbox['left']
+        return (
+            bbox['left'] < 0 and
+            bbox['right'] > 0 and
+            width <= self.MAX_FACE_WIDTH and
+            bbox['top'] >= -0.15 and
+            bbox['top'] <= 0.65 and
+            bbox['bottom'] >= 0.05 and
+            bbox['bottom'] <= 1.60
+        )
+
+    def is_under_eye_object(self, bbox):
+        """Check if bbox falls in an under-eye treatment zone."""
+        return self._bbox_intersects_rect(
+            bbox,
+            self.LEFT_EYE_X_MIN,
+            self.RIGHT_EYE_X_MAX,
+            -0.45,
+            0.45,
+        )
+
+    def is_eye_cover_object(self, bbox):
+        """Check if bbox intersects a broad eye-cover zone used by masks and slices."""
+        return self._bbox_intersects_rect(
+            bbox,
+            self.LEFT_EYE_X_MIN,
+            self.RIGHT_EYE_X_MAX,
+            -0.80,
+            0.30,
+        )
+
+    def is_forehead_object(self, bbox):
+        """Check if bbox intersects a forehead / pushed-up mask zone."""
+        return self._bbox_intersects_rect(
+            bbox,
+            -1.00,
+            1.00,
+            -1.10,
+            -0.10,
+        )
 
     def _bbox_intersects_rect(self, bbox, x_min, x_max, y_top, y_bottom):
         """Check whether bbox intersects a rectangular zone."""
@@ -746,6 +880,11 @@ class ToolsClustering:
         # First, resolve overlapping detections
         detections = self.resolve_overlapping_detections(detections)
 
+        for det in detections:
+            class_id = self._get_detection_class_id(det)
+            if class_id in self._class_pipeline_debug_counts:
+                self._class_pipeline_debug_counts[class_id]['post_resolve'] += 1
+
         tie_locked_slots = set()
         tie_blocked_detection_ids = set()
 
@@ -824,6 +963,14 @@ class ToolsClustering:
             if self.VERBOSE:
                 print(f"  [TIE] detection_id={tie_detection_id} -> no assignment")
 
+        tie_blocked_ids_set = set(tie_blocked_detection_ids)
+        for det in detections:
+            class_id = self._get_detection_class_id(det)
+            if class_id not in self._class_pipeline_debug_counts:
+                continue
+            if int(det.get('detection_id')) in tie_blocked_ids_set:
+                self._class_pipeline_debug_counts[class_id]['tie_blocked'] += 1
+
         # 1. Find best object for each hand independently (same object may be assigned to both)
         def best_object_for_hand(knuckle, existing_hand_object=None):
             if existing_hand_object is not None:
@@ -871,9 +1018,17 @@ class ToolsClustering:
             if det['detection_id'] not in hand_detection_ids and det['detection_id'] not in tie_blocked_detection_ids
         ]
 
+        for det in non_hand_detections:
+            class_id = self._get_detection_class_id(det)
+            if class_id in self._class_pipeline_debug_counts:
+                self._class_pipeline_debug_counts[class_id]['non_hand_pool'] += 1
+
         # 2. Eye assignments (same object may map to both eyes, e.g., eyeglasses)
         for det in non_hand_detections:
             bbox = det['bbox']
+
+            if self._is_class_in(det, self.HAND_ONLY_CLASSES | self.COVID_MASK_CLASSES | self.FULL_FACE_TOP_BIASED_CLASSES):
+                continue
 
             left_eye_allowed = self._passes_slot_whitelist(det, 'left_eye')
             right_eye_allowed = self._passes_slot_whitelist(det, 'right_eye')
@@ -887,6 +1042,42 @@ class ToolsClustering:
                 continue
 
             if self.is_full_face_mask_object(bbox):
+                continue
+
+            if self._is_class_in(det, self.UNDER_EYE_CLASSES):
+                if left_eye_allowed and bbox['right'] > 0 and bbox['left'] < 0 and self.is_under_eye_object(bbox):
+                    if results['left_eye_object'] is None:
+                        results['left_eye_object'] = det
+                    elif det['conf'] > results['left_eye_object']['conf']:
+                        results['left_eye_object'] = det
+                    if results['right_eye_object'] is None:
+                        results['right_eye_object'] = det
+                    elif det['conf'] > results['right_eye_object']['conf']:
+                        results['right_eye_object'] = det
+                else:
+                    if left_eye_allowed and self._bbox_intersects_rect(bbox, self.LEFT_EYE_X_MIN, self.LEFT_EYE_X_MAX, -0.45, 0.45):
+                        if results['left_eye_object'] is None:
+                            results['left_eye_object'] = det
+                        elif det['conf'] > results['left_eye_object']['conf']:
+                            results['left_eye_object'] = det
+                    if right_eye_allowed and self._bbox_intersects_rect(bbox, self.RIGHT_EYE_X_MIN, self.RIGHT_EYE_X_MAX, -0.45, 0.45):
+                        if results['right_eye_object'] is None:
+                            results['right_eye_object'] = det
+                        elif det['conf'] > results['right_eye_object']['conf']:
+                            results['right_eye_object'] = det
+                continue
+
+            if self._is_class_in(det, self.EYE_OR_FOREHEAD_CLASSES | self.EYE_ONLY_CLASSES | self.HAND_OR_EYE_CLASSES):
+                if left_eye_allowed and self._bbox_intersects_rect(bbox, self.LEFT_EYE_X_MIN, self.LEFT_EYE_X_MAX, -0.80, 0.30):
+                    if results['left_eye_object'] is None:
+                        results['left_eye_object'] = det
+                    elif det['conf'] > results['left_eye_object']['conf']:
+                        results['left_eye_object'] = det
+                if right_eye_allowed and self._bbox_intersects_rect(bbox, self.RIGHT_EYE_X_MIN, self.RIGHT_EYE_X_MAX, -0.80, 0.30):
+                    if results['right_eye_object'] is None:
+                        results['right_eye_object'] = det
+                    elif det['conf'] > results['right_eye_object']['conf']:
+                        results['right_eye_object'] = det
                 continue
 
             if left_eye_allowed and self.is_left_eye_object(bbox):
@@ -905,6 +1096,9 @@ class ToolsClustering:
         for det in non_hand_detections:
             bbox = det['bbox']
 
+            if self._is_class_in(det, self.HAND_ONLY_CLASSES):
+                continue
+
             top_face_allowed = self._passes_slot_whitelist(det, 'top_face')
             mouth_allowed = self._passes_slot_whitelist(det, 'mouth')
             shoulder_allowed = self._passes_slot_whitelist(det, 'shoulder')
@@ -921,6 +1115,38 @@ class ToolsClustering:
                 self._record_whitelist_reject('waist')
             if not feet_allowed:
                 self._record_whitelist_reject('feet')
+
+            if self._is_class_in(det, self.COVID_MASK_CLASSES):
+                if 'mouth_object' not in tie_locked_slots and mouth_allowed and self.is_covid_mask_object(bbox):
+                    if results['mouth_object'] is None:
+                        results['mouth_object'] = det
+                    elif det['conf'] > results['mouth_object']['conf']:
+                        results['mouth_object'] = det
+                continue
+
+            if self._is_class_in(det, self.FULL_FACE_TOP_BIASED_CLASSES):
+                if top_face_allowed and (self.is_full_face_mask_object(bbox) or self.is_top_face_object(bbox) or self.is_eye_cover_object(bbox)):
+                    if results['top_face_object'] is None:
+                        results['top_face_object'] = det
+                    elif det['conf'] > results['top_face_object']['conf']:
+                        results['top_face_object'] = det
+                elif 'mouth_object' not in tie_locked_slots and mouth_allowed and self.is_covid_mask_object(bbox):
+                    if results['mouth_object'] is None:
+                        results['mouth_object'] = det
+                    elif det['conf'] > results['mouth_object']['conf']:
+                        results['mouth_object'] = det
+                continue
+
+            if self._is_class_in(det, self.EYE_OR_FOREHEAD_CLASSES):
+                if top_face_allowed and self.is_forehead_object(bbox):
+                    if results['top_face_object'] is None:
+                        results['top_face_object'] = det
+                    elif det['conf'] > results['top_face_object']['conf']:
+                        results['top_face_object'] = det
+                continue
+
+            if self._is_class_in(det, self.EYE_ONLY_CLASSES | self.HAND_OR_EYE_CLASSES):
+                continue
 
             if top_face_allowed and self.is_top_face_object(bbox):
                 if results['top_face_object'] is None:
@@ -951,6 +1177,17 @@ class ToolsClustering:
                     results['feet_object'] = det
                 elif det['conf'] > results['feet_object']['conf']:
                     results['feet_object'] = det
+
+        assigned_ids_by_class = {class_id: set() for class_id in self.DEBUG_TRACKED_CLASS_IDS}
+        for slot_det in results.values():
+            if slot_det is None:
+                continue
+            class_id = self._get_detection_class_id(slot_det)
+            if class_id in assigned_ids_by_class:
+                assigned_ids_by_class[class_id].add(int(slot_det['detection_id']))
+
+        for class_id in self.DEBUG_TRACKED_CLASS_IDS:
+            self._class_pipeline_debug_counts[class_id]['final_assigned_unique'] += len(assigned_ids_by_class[class_id])
         
         return results
 
@@ -993,10 +1230,24 @@ class ToolsClustering:
         # Parse detections into standardized format
         detections = []
         for d in detection_results:
+            class_id_value = self._normalize_class_id(getattr(d, 'class_id', None))
+            if class_id_value in self._class_pipeline_debug_counts:
+                self._class_pipeline_debug_counts[class_id_value]['query_hits'] += 1
+
             bbox = self.parse_bbox_norm(d.bbox_norm)
             if bbox is None:
+                if class_id_value in self._class_pipeline_debug_counts:
+                    self._class_pipeline_debug_counts[class_id_value]['bbox_parse_fail'] += 1
+                    examples = self._class_pipeline_debug_counts[class_id_value]['parse_fail_examples']
+                    if len(examples) < 3:
+                        raw_preview = str(d.bbox_norm)
+                        examples.append(raw_preview[:160])
                 # if debug: print(f"  ✗ detection_id={d.detection_id} — bbox_norm parse failed, skipping")
                 continue
+
+            if class_id_value in self._class_pipeline_debug_counts:
+                self._class_pipeline_debug_counts[class_id_value]['bbox_parse_ok'] += 1
+
             detections.append({
                 'detection_id': d.detection_id,
                 'class_id': d.class_id,
@@ -1038,6 +1289,37 @@ class ToolsClustering:
             left_shoulder=left_shoulder,
             right_shoulder=right_shoulder,
         )
+
+        # Track where classes 110-119 are lost: seen in detections vs assigned to any slot.
+        seen_ids_by_class = {class_id: set() for class_id in self.DEBUG_TRACKED_CLASS_IDS}
+        assigned_ids_by_class = {class_id: set() for class_id in self.DEBUG_TRACKED_CLASS_IDS}
+
+        for det in detections:
+            class_id = self._get_detection_class_id(det)
+            if class_id in seen_ids_by_class:
+                seen_ids_by_class[class_id].add(int(det['detection_id']))
+
+        for slot_name, assigned_det in classified.items():
+            if assigned_det is None:
+                continue
+            class_id = self._get_detection_class_id(assigned_det)
+            if class_id not in self._class_assignment_debug_counts:
+                continue
+
+            self._class_assignment_debug_counts[class_id]['assigned_slot_hits'] += 1
+            if slot_name in self._class_assignment_debug_counts[class_id]['slot_hits']:
+                self._class_assignment_debug_counts[class_id]['slot_hits'][slot_name] += 1
+            assigned_ids_by_class[class_id].add(int(assigned_det['detection_id']))
+
+        for class_id in self.DEBUG_TRACKED_CLASS_IDS:
+            seen_count = len(seen_ids_by_class[class_id])
+            assigned_unique_count = len(assigned_ids_by_class[class_id])
+            dropped_count = max(0, seen_count - assigned_unique_count)
+
+            self._class_assignment_debug_counts[class_id]['seen'] += seen_count
+            self._class_assignment_debug_counts[class_id]['assigned_unique'] += assigned_unique_count
+            self._class_assignment_debug_counts[class_id]['dropped'] += dropped_count
+
         if debug:
             print(f"  Classification results:")
             for k, v in classified.items():
@@ -1059,6 +1341,8 @@ class ToolsClustering:
         Expects df to have: image_id, left_pointer_knuckle_norm, right_pointer_knuckle_norm
         """
         self.reset_whitelist_reject_counts()
+        self.reset_class_assignment_debug_counts()
+        self.reset_class_pipeline_debug_counts()
 
         # Initialize new columns
         df['left_hand_object'] = None
@@ -1454,3 +1738,187 @@ class ToolsClustering:
                 fusion_list.extend(self.flatten_object_detections(detection))
         
         return fusion_list
+
+    # ================================================================================
+    # REPROCESSING UTILITY METHODS (non-debugging)
+    # ================================================================================
+
+    def iter_chunks(self, items, size):
+        """Yield successive chunks of specified size from items list."""
+        for idx in range(0, len(items), size):
+            yield items[idx:idx + size]
+
+    def get_reprocess_image_ids_for_subset(self, engine, image_ids, cutoff_detection_id, chunk_size):
+        """
+        For a subset of image_ids, return only those with any Detections row where detection_id >= cutoff.
+        """
+        if not image_ids:
+            return set()
+
+        unique_ids = sorted({int(image_id) for image_id in image_ids if pd.notna(image_id)})
+        matched_ids = set()
+        with engine.connect() as conn:
+            for image_id_chunk in self.iter_chunks(unique_ids, chunk_size):
+                ids_sql = ",".join(str(image_id) for image_id in image_id_chunk)
+                chunk_sql = text(
+                    f"""
+                    SELECT DISTINCT d.image_id
+                    FROM Detections d
+                    WHERE d.detection_id >= :cutoff
+                      AND d.image_id IN ({ids_sql})
+                    """
+                )
+                chunk_rows = conn.execute(chunk_sql, {"cutoff": int(cutoff_detection_id)}).fetchall()
+                matched_ids.update(int(row[0]) for row in chunk_rows)
+        return matched_ids
+
+    def count_existing_images_detections_rows(self, engine, image_ids, chunk_size):
+        """
+        Count unique image_ids that currently exist in ImagesDetections for a provided id subset.
+        """
+        if not image_ids:
+            return 0
+
+        total_existing = 0
+        unique_ids = sorted({int(image_id) for image_id in image_ids if pd.notna(image_id)})
+        with engine.connect() as conn:
+            for image_id_chunk in self.iter_chunks(unique_ids, chunk_size):
+                ids_sql = ",".join(str(image_id) for image_id in image_id_chunk)
+                chunk_sql = text(
+                    f"""
+                    SELECT COUNT(*)
+                    FROM ImagesDetections idt
+                    WHERE idt.image_id IN ({ids_sql})
+                    """
+                )
+                total_existing += int(conn.execute(chunk_sql).scalar() or 0)
+        return total_existing
+
+    def delete_images_detections_rows_for_image_ids(self, engine, image_ids, chunk_size):
+        """
+        Delete existing ImagesDetections rows for specific image_ids in chunks.
+        """
+        if not image_ids:
+            return 0
+
+        unique_ids = sorted({int(image_id) for image_id in image_ids if pd.notna(image_id)})
+        deleted_total = 0
+        with engine.begin() as conn:
+            for image_id_chunk in self.iter_chunks(unique_ids, chunk_size):
+                ids_sql = ",".join(str(image_id) for image_id in image_id_chunk)
+                delete_sql = text(f"DELETE FROM ImagesDetections WHERE image_id IN ({ids_sql})")
+                result = conn.execute(delete_sql)
+                if result.rowcount and result.rowcount > 0:
+                    deleted_total += int(result.rowcount)
+        return deleted_total
+
+    # ================================================================================
+    # DEBUG / TRACKING METHODS (disabled when VERBOSE=False)
+    # ================================================================================
+
+    def count_tracked_detections_for_image_ids(self, engine, image_ids, class_ids=None, conf_threshold=None, chunk_size=1000):
+        """
+        Count detections per tracked class for a provided image_id subset.
+        Returns dict[class_id] -> {'det_rows': int, 'image_rows': int}.
+        Debug method - only outputs if self.VERBOSE is True.
+        """
+        if class_ids is None:
+            class_ids = self.DEBUG_TRACKED_CLASS_IDS
+        
+        counts = {
+            int(class_id): {'det_rows': 0, 'image_rows': 0}
+            for class_id in class_ids
+        }
+        if not image_ids:
+            return counts
+
+        unique_ids = sorted({int(image_id) for image_id in image_ids if pd.notna(image_id)})
+        if not unique_ids:
+            return counts
+
+        class_ids_sql = ",".join(str(int(class_id)) for class_id in sorted(class_ids))
+        conf_filter_sql = ""
+        params = {}
+        if conf_threshold is not None:
+            conf_filter_sql = " AND d.conf >= :conf_threshold "
+            params['conf_threshold'] = float(conf_threshold)
+
+        with engine.connect() as conn:
+            for image_id_chunk in self.iter_chunks(unique_ids, chunk_size):
+                ids_sql = ",".join(str(image_id) for image_id in image_id_chunk)
+                chunk_sql = text(
+                    f"""
+                    SELECT
+                        d.class_id AS class_id,
+                        COUNT(*) AS det_rows,
+                        COUNT(DISTINCT d.image_id) AS image_rows
+                    FROM Detections d
+                    WHERE d.image_id IN ({ids_sql})
+                      AND d.class_id IN ({class_ids_sql})
+                      AND d.bbox_norm IS NOT NULL
+                      AND JSON_EXTRACT(d.bbox_norm, '$.left') IS NOT NULL
+                      {conf_filter_sql}
+                    GROUP BY d.class_id
+                    """
+                )
+                rows = conn.execute(chunk_sql, params).mappings().all()
+                for row in rows:
+                    class_id = int(row['class_id'])
+                    if class_id in counts:
+                        counts[class_id]['det_rows'] += int(row['det_rows'] or 0)
+                        counts[class_id]['image_rows'] += int(row['image_rows'] or 0)
+
+        return counts
+
+    def print_reprocessing_dry_run_counts(self, engine, selected_df, cutoff_detection_id, chunk_size):
+        """
+        Print dry-run counts for reprocessing scope without writing any data.
+        Debug method - only outputs if self.VERBOSE is True.
+        """
+        if not self.VERBOSE:
+            return
+        
+        if selected_df is None or len(selected_df) == 0:
+            print("[REPROCESS DRY-RUN] No selected rows available.")
+            return
+
+        selected_image_ids = selected_df['image_id'].dropna().astype(int).tolist()
+        selected_unique_count = len(set(selected_image_ids))
+
+        with engine.connect() as conn:
+            candidate_total_sql = text("""
+                SELECT COUNT(DISTINCT d.image_id)
+                FROM Detections d
+                WHERE d.detection_id >= :cutoff
+            """)
+            candidate_images_total = int(conn.execute(candidate_total_sql, {
+                "cutoff": int(cutoff_detection_id)
+            }).scalar() or 0)
+
+            affected_existing_global_sql = text("""
+                SELECT COUNT(DISTINCT d.image_id)
+                FROM Detections d
+                INNER JOIN ImagesDetections idt ON idt.image_id = d.image_id
+                WHERE d.detection_id >= :cutoff
+            """)
+            affected_existing_global = int(conn.execute(affected_existing_global_sql, {
+                "cutoff": int(cutoff_detection_id)
+            }).scalar() or 0)
+
+        selected_reprocess_ids = self.get_reprocess_image_ids_for_subset(
+            engine, selected_image_ids, cutoff_detection_id, chunk_size
+        )
+        expected_recompute_rows = len(selected_reprocess_ids)
+        affected_existing_selected = self.count_existing_images_detections_rows(engine, selected_reprocess_ids, chunk_size)
+
+        print("\n" + "=" * 70)
+        print("REPROCESS DRY-RUN SUMMARY (NO WRITES)")
+        print("=" * 70)
+        print(f"Cutoff detection_id (inclusive): {cutoff_detection_id}")
+        print(f"Selected rows from main query: {len(selected_df):,}")
+        print(f"Selected unique image_ids: {selected_unique_count:,}")
+        print(f"Candidate images (global, Detections cutoff): {candidate_images_total:,}")
+        print(f"Affected existing rows (global, join to ImagesDetections): {affected_existing_global:,}")
+        print(f"Expected recompute rows (selected run scope): {expected_recompute_rows:,}")
+        print(f"Affected existing rows (selected run scope): {affected_existing_selected:,}")
+        print("=" * 70 + "\n")

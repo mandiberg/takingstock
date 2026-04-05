@@ -104,8 +104,14 @@ OFFSET = 0
 # SELECT MAX(cmb.image_id) FROM ImagesBodyPoses3D cmb JOIN Encodings e ON cmb.image_id = e.image_id WHERE e.is_feet = 0;
 # START_ID = 129478350 # only used in MODE 1
 START_ID = 0 # only used in MODE 1
+REPROCESS_EXISTING_IMAGE_DETECTIONS = True # if True, will reprocess and overwrite existing ImagesDetections for images that are already in there. If False, will skip any images that already have detections in ImagesDetections. Only applies to ObjectFusion clustering for now, since that's the only one using ImagesDetections, but could be expanded to other cluster types that use the table.
+START_REPROCESSING_FROM_DETECTION_ID = 59955150 # only applies if REPROCESS_EXISTING_IMAGE_DETECTIONS is True, will start reprocessing from this image_id. Set to 0 to reprocess all existing detections, or set to a specific image_id to start from there.
+REPROCESS_QUERY_CHUNK_SIZE = 1000
+TEST_REPROCESSING = False # if True won't commit
+
+# SKIP_EXISTING_DETECTIONS = True  # only applies to ObjectFusion clustering, checks if we already have detections for an image before including it in the query for clustering
 DET_CONF_THRESHOLD = 0.4 # only used for ObjectFusion clustering to filter out low confidence detections
-SAVE_IMAGE_DETECTIONS_PER_BATCH = True  # persist ObjectFusion ImagesDetections every 5000-row batch
+SAVE_IMAGE_DETECTIONS_PER_BATCH = True  # persist ObjectFusion ImagesDetections once per processing batch (BATCH_LIMIT rows)
 DROP_NONE_PLACEMENTS = True  # drop ObjectFusion rows with no object assignments before KMeans
 # WHICH TABLE TO USE?
 # SegmentTable_name = 'SegmentOct20'
@@ -117,7 +123,8 @@ SegmentTable_name = 'SegmentBig_isface'
 # SegmentHelper_name = None
 # if cl.CLUSTER_TYPE == "ArmsPoses3D":
 # SegmentHelper_name = 'SegmentHelper_sept2025_heft_keywords'
-SegmentHelper_name = 'Detections'
+# SegmentHelper_name = 'Detections' # if CLUSTER_TYPE = "ObjectFusion", it automatically joins to Detections
+SegmentHelper_name = 'SegmentHelperObject_89_mask'
 # SegmentHelper_name = 'SegmentHelper_dec2025_body3D_outOfSegment'
 # SegmentHelper_name = 'SegmentHelper_oct2025_every40'
 FORCE_HAND_LANDMARKS = False # when doing ArmsPoses3D, default is True, so mongo_hand_landmarks = 1
@@ -130,7 +137,7 @@ SKIP_TESTING = False
 # number of clusters produced. run GET_OPTIMAL_CLUSTERS and add that number here
 # 32 for hand positions
 # 128 for hand gestures
-N_CLUSTERS = 768  # Increased from 768 - need more granularity to break up mega-clusters
+N_CLUSTERS = 64  # Increased from 768 - need more granularity to break up mega-clusters
 N_META_CLUSTERS = 256
 if MODE == 3: 
     META = True
@@ -259,12 +266,16 @@ if USE_SEGMENT is True and (cl.CLUSTER_TYPE != "Clusters"):
         if SegmentHelper_name:
             FROM += f" INNER JOIN {SegmentHelper_name} h ON h.image_id = s.image_id " 
         if cl.CLUSTER_TYPE == "ObjectFusion":
+            FROM += f" INNER JOIN Detections d ON d.image_id = s.image_id "
             WHERE += " AND s.image_id NOT IN (SELECT image_id FROM NoDetections) "
             WHERE += " AND s.image_id NOT IN (SELECT image_id FROM NoDetectionsCustom) "
-            WHERE += f" AND h.bbox_norm IS NOT NULL AND h.conf >= {DET_CONF_THRESHOLD} " # ensures we have some kind of detection for ObjectFusion clustering
+            WHERE += f" AND d.bbox_norm IS NOT NULL AND d.conf >= {DET_CONF_THRESHOLD} " # ensures we have some kind of detection for ObjectFusion clustering
             if DEBUG_IMAGE_ID is not None:
                 WHERE += f" AND s.image_id = {DEBUG_IMAGE_ID} "
                 print(f"⚠️  DEBUG MODE: isolating to image_id = {DEBUG_IMAGE_ID}")
+            # if SKIP_EXISTING_DETECTIONS:
+            #     WHERE += " AND NOT EXISTS (SELECT 1 FROM ImagesDetections idt WHERE idt.image_id = s.image_id) "
+
     elif MODE in (1,2):
         FROM += f" LEFT JOIN Images{table_cluster_type} ic ON s.image_id = ic.image_id"
         if MODE == 1: 
@@ -286,7 +297,7 @@ if USE_SEGMENT is True and (cl.CLUSTER_TYPE != "Clusters"):
         WHERE = " cluster_id IS NOT NULL "
 
     # WHERE += " AND h.is_body = 1"
-    LIMIT = 550000
+    LIMIT = 1500000
     BATCH_LIMIT = 10000
 
     '''
@@ -384,6 +395,55 @@ print("="*70 + "\n")
 
 # TK 4 HSV
 Clusters, ImagesClusters, MetaClusters, ClustersMetaClusters = cl.construct_table_classes(table_cluster_type)
+
+OBJECT_ASSIGNMENT_COLS = [
+    'left_hand_object', 'right_hand_object', 'top_face_object',
+    'left_eye_object', 'right_eye_object', 'mouth_object', 'shoulder_object',
+    'waist_object', 'feet_object'
+]
+HAND_POSITION_COLS = ['left_pointer_knuckle_norm', 'right_pointer_knuckle_norm', 'left_source', 'right_source']
+DEBUG_TRACKED_CLASS_IDS = tuple(range(110, 120))
+
+
+def iter_chunks(items, size):
+    for idx in range(0, len(items), size):
+        yield items[idx:idx + size]
+
+
+def get_reprocess_image_ids_for_subset(image_ids, cutoff_detection_id):
+    """
+    For a subset of image_ids, return only those with any Detections row where detection_id >= cutoff.
+    """
+    return cl.get_reprocess_image_ids_for_subset(engine, image_ids, cutoff_detection_id, REPROCESS_QUERY_CHUNK_SIZE)
+
+
+def count_existing_images_detections_rows(image_ids):
+    """
+    Count unique image_ids that currently exist in ImagesDetections for a provided id subset.
+    """
+    return cl.count_existing_images_detections_rows(engine, image_ids, REPROCESS_QUERY_CHUNK_SIZE)
+
+
+def count_tracked_detections_for_image_ids(image_ids, class_ids=DEBUG_TRACKED_CLASS_IDS, conf_threshold=None):
+    """
+    Count detections per tracked class for a provided image_id subset.
+    Returns dict[class_id] -> {'det_rows': int, 'image_rows': int}.
+    """
+    return cl.count_tracked_detections_for_image_ids(engine, image_ids, class_ids, conf_threshold, REPROCESS_QUERY_CHUNK_SIZE)
+
+
+def print_reprocessing_dry_run_counts(selected_df):
+    """
+    Print dry-run counts for reprocessing scope without writing any data.
+    """
+    cl.print_reprocessing_dry_run_counts(engine, selected_df, START_REPROCESSING_FROM_DETECTION_ID, REPROCESS_QUERY_CHUNK_SIZE)
+
+
+def delete_images_detections_rows_for_image_ids(image_ids):
+    """
+    Delete existing ImagesDetections rows for specific image_ids in chunks.
+    """
+    return cl.delete_images_detections_rows_for_image_ids(engine, image_ids, REPROCESS_QUERY_CHUNK_SIZE)
 
 def selectSQL():
     if OFFSET: offset = f" OFFSET {str(OFFSET)}"
@@ -1087,6 +1147,38 @@ def save_images_detections(df, engine):
     print(f"[DEBUG] Building {len(images_detections_records)} records for ImagesDetections...")
     print(f"[DEBUG]   Records with actual hand data (left_x or right_x != 0): {records_with_hand_data}")
     print(f"[DEBUG]   Records with default position only: {records_with_default_only}")
+
+    # Debug: class 110-119 payload visibility right before persistence.
+    tracked_slot_class_counts = {
+        class_id: {slot: 0 for slot in OBJECT_ASSIGNMENT_COLS}
+        for class_id in DEBUG_TRACKED_CLASS_IDS
+    }
+    for _, row in df.iterrows():
+        for slot in OBJECT_ASSIGNMENT_COLS:
+            slot_payload = row.get(slot)
+            if not isinstance(slot_payload, dict):
+                continue
+            class_id_value = slot_payload.get('class_id')
+            if class_id_value is None:
+                continue
+            try:
+                class_id_int = int(float(class_id_value))
+            except (TypeError, ValueError):
+                continue
+            if class_id_int in tracked_slot_class_counts:
+                tracked_slot_class_counts[class_id_int][slot] += 1
+
+    print("[DEBUG] Tracked class payloads (110-119) by slot before save_images_detections:")
+    any_tracked_slot_hits = False
+    for class_id in DEBUG_TRACKED_CLASS_IDS:
+        slot_counts = tracked_slot_class_counts[class_id]
+        total_hits = int(sum(slot_counts.values()))
+        if total_hits > 0:
+            any_tracked_slot_hits = True
+            compact = {slot: int(count) for slot, count in slot_counts.items() if int(count) > 0}
+            print(f"[DEBUG]   class {class_id}: total_slot_hits={total_hits}, slots={compact}")
+    if not any_tracked_slot_hits:
+        print("[DEBUG]   none")
     
     if images_detections_records:
         df_to_insert = pd.DataFrame(images_detections_records)
@@ -1202,7 +1294,62 @@ def prepare_df(df, process_object_detections=True, batch_label=None):
         # apply query_detections to each image_id to get the object data
         # df['image_id'].apply(lambda image_id: query_detections(image_id))
         if process_object_detections:
+            tracked_scope_counts = count_tracked_detections_for_image_ids(
+                df['image_id'].dropna().astype(int).tolist(),
+                class_ids=DEBUG_TRACKED_CLASS_IDS,
+                conf_threshold=DET_CONF_THRESHOLD,
+            )
+            tracked_scope_total_rows = int(sum(v['det_rows'] for v in tracked_scope_counts.values()))
+            tracked_scope_total_images = int(sum(v['image_rows'] for v in tracked_scope_counts.values()))
+            print(
+                f"{label}[COUNT] Tracked classes present in Detections for this df scope "
+                f"(class 110-119, conf>={DET_CONF_THRESHOLD}, bbox_norm not null): "
+                f"det_rows={tracked_scope_total_rows}, image_rows_sum={tracked_scope_total_images}"
+            )
+            for class_id in DEBUG_TRACKED_CLASS_IDS:
+                class_counts = tracked_scope_counts.get(class_id, {'det_rows': 0, 'image_rows': 0})
+                print(
+                    f"{label}[COUNT] Detections scope class {class_id}: "
+                    f"det_rows={int(class_counts['det_rows'])}, image_rows={int(class_counts['image_rows'])}"
+                )
+
             df = cl.process_detections_for_df(df)
+            if hasattr(cl, 'get_class_assignment_debug_counts'):
+                tracked_counts = cl.get_class_assignment_debug_counts()
+                print(f"{label}[COUNT] Class 110-119 assignment summary (seen/assigned_unique/dropped/slot_hits):")
+                for class_id in DEBUG_TRACKED_CLASS_IDS:
+                    stats = tracked_counts.get(class_id, {})
+                    seen_count = int(stats.get('seen', 0))
+                    assigned_unique_count = int(stats.get('assigned_unique', 0))
+                    dropped_count = int(stats.get('dropped', 0))
+                    slot_hits_total = int(stats.get('assigned_slot_hits', 0))
+                    slot_hits = stats.get('slot_hits', {}) if isinstance(stats.get('slot_hits', {}), dict) else {}
+                    compact_slot_hits = {slot: int(count) for slot, count in slot_hits.items() if int(count) > 0}
+                    print(
+                        f"{label}[COUNT] class {class_id}: "
+                        f"seen={seen_count}, assigned_unique={assigned_unique_count}, "
+                        f"dropped={dropped_count}, slot_hits={slot_hits_total}, by_slot={compact_slot_hits if compact_slot_hits else '{}'}"
+                    )
+
+            if hasattr(cl, 'get_class_pipeline_debug_counts'):
+                pipeline_counts = cl.get_class_pipeline_debug_counts()
+                print(f"{label}[COUNT] Class 110-119 pipeline stages (query -> parse -> resolve -> tie/non-hand -> final):")
+                for class_id in DEBUG_TRACKED_CLASS_IDS:
+                    stats = pipeline_counts.get(class_id, {})
+                    print(
+                        f"{label}[COUNT] class {class_id}: "
+                        f"query_hits={int(stats.get('query_hits', 0))}, "
+                        f"bbox_parse_ok={int(stats.get('bbox_parse_ok', 0))}, "
+                        f"bbox_parse_fail={int(stats.get('bbox_parse_fail', 0))}, "
+                        f"post_resolve={int(stats.get('post_resolve', 0))}, "
+                        f"tie_blocked={int(stats.get('tie_blocked', 0))}, "
+                        f"non_hand_pool={int(stats.get('non_hand_pool', 0))}, "
+                        f"final_assigned_unique={int(stats.get('final_assigned_unique', 0))}"
+                    )
+                    fail_examples = stats.get('parse_fail_examples', []) if isinstance(stats.get('parse_fail_examples', []), list) else []
+                    if fail_examples:
+                        print(f"{label}[COUNT] class {class_id} parse_fail_examples: {fail_examples}")
+
             if getattr(cl, 'USE_WHITELIST', False) and hasattr(cl, 'get_whitelist_reject_counts'):
                 whitelist_rejects = cl.get_whitelist_reject_counts()
                 compact_rejects = {k: int(v) for k, v in whitelist_rejects.items() if int(v) > 0}
@@ -1366,6 +1513,25 @@ def prepare_df(df, process_object_detections=True, batch_label=None):
         # apply query_detections to each image_id to get the object data
         # df['image_id'].apply(lambda image_id: query_detections(image_id))
         if process_object_detections:
+            tracked_scope_counts = count_tracked_detections_for_image_ids(
+                df['image_id'].dropna().astype(int).tolist(),
+                class_ids=DEBUG_TRACKED_CLASS_IDS,
+                conf_threshold=DET_CONF_THRESHOLD,
+            )
+            tracked_scope_total_rows = int(sum(v['det_rows'] for v in tracked_scope_counts.values()))
+            tracked_scope_total_images = int(sum(v['image_rows'] for v in tracked_scope_counts.values()))
+            print(
+                f"{label}[COUNT] Tracked classes present in Detections for this df scope "
+                f"(class 110-119, conf>={DET_CONF_THRESHOLD}, bbox_norm not null): "
+                f"det_rows={tracked_scope_total_rows}, image_rows_sum={tracked_scope_total_images}"
+            )
+            for class_id in DEBUG_TRACKED_CLASS_IDS:
+                class_counts = tracked_scope_counts.get(class_id, {'det_rows': 0, 'image_rows': 0})
+                print(
+                    f"{label}[COUNT] Detections scope class {class_id}: "
+                    f"det_rows={int(class_counts['det_rows'])}, image_rows={int(class_counts['image_rows'])}"
+                )
+
             df = cl.process_detections_for_df(df)
             if getattr(cl, 'USE_WHITELIST', False) and hasattr(cl, 'get_whitelist_reject_counts'):
                 whitelist_rejects = cl.get_whitelist_reject_counts()
@@ -1593,61 +1759,74 @@ def fetch_and_prepare_batch(batch_df, batch_num):
     cl.session = session
 
     if cl.CLUSTER_TYPE == "ObjectFusion":
-        print(f"[Batch {batch_num}] Hydrating precomputed ImagesDetections first...")
         batch_prepared = batch_df.copy()
-        batch_prepared, missing_image_ids = cl.hydrate_detections_from_precomputed_table(batch_prepared)
-        hits = len(batch_prepared) - len(missing_image_ids)
-        print(f"[Batch {batch_num}] Precomputed hits: {hits}, missing: {len(missing_image_ids)}")
-
         batch_prepared['newly_processed_detection'] = False
 
-        if missing_image_ids:
-            print(f"[Batch {batch_num}] Fetching MongoDB encodings for missing IDs only...")
-            missing_df = batch_df[batch_df['image_id'].isin(missing_image_ids)].copy()
-            print(f"[Batch {batch_num}] [COUNT] Missing rows before Mongo fetch: {len(missing_df)}")
-            missing_df = fetch_mongo_for_batch(missing_df)
+        force_reprocess_ids = set()
+        if REPROCESS_EXISTING_IMAGE_DETECTIONS:
+            force_reprocess_ids = get_reprocess_image_ids_for_subset(
+                batch_prepared['image_id'].tolist(),
+                START_REPROCESSING_FROM_DETECTION_ID
+            )
+            if force_reprocess_ids:
+                print(f"[Batch {batch_num}] Force reprocess targets from cutoff: {len(force_reprocess_ids)}")
 
-            print(f"[Batch {batch_num}] Preparing missing rows and classifying detections...")
-            missing_prepared = prepare_df(missing_df, batch_label=f"Batch {batch_num} missing")
+        force_reprocess_mask = batch_prepared['image_id'].isin(force_reprocess_ids)
+        force_reprocess_df = batch_prepared[force_reprocess_mask].copy()
+        non_forced_df = batch_prepared[~force_reprocess_mask].copy()
 
-            if missing_prepared is not None and len(missing_prepared) > 0:
-                missing_prepared['newly_processed_detection'] = True
+        to_process_frames = []
 
-                update_cols = [
-                    'left_hand_object', 'right_hand_object', 'top_face_object',
-                    'left_eye_object', 'right_eye_object', 'mouth_object', 'shoulder_object',
-                    'waist_object', 'feet_object',
-                    'left_pointer_knuckle_norm', 'right_pointer_knuckle_norm', 'left_source', 'right_source',
-                    'newly_processed_detection'
-                ]
+        if len(non_forced_df) > 0:
+            print(f"[Batch {batch_num}] Hydrating precomputed ImagesDetections for non-target rows...")
+            hydrated_non_forced, missing_image_ids = cl.hydrate_detections_from_precomputed_table(non_forced_df)
+            hydrated_cols = [col for col in (OBJECT_ASSIGNMENT_COLS + HAND_POSITION_COLS) if col in hydrated_non_forced.columns]
 
-                missing_update_df = missing_prepared[['image_id'] + [c for c in update_cols if c in missing_prepared.columns]].copy()
-                batch_prepared = batch_prepared.merge(missing_update_df, on='image_id', how='left', suffixes=('', '__missing'))
+            if hydrated_cols:
+                batch_prepared = batch_prepared.set_index('image_id')
+                hydrated_non_forced = hydrated_non_forced.set_index('image_id')
+                for col in hydrated_cols:
+                    if col not in batch_prepared.columns:
+                        batch_prepared[col] = None
+                    batch_prepared.loc[hydrated_non_forced.index, col] = hydrated_non_forced[col]
+                batch_prepared = batch_prepared.reset_index()
+
+            hits = len(non_forced_df) - len(missing_image_ids)
+            print(f"[Batch {batch_num}] Precomputed hits (non-target): {hits}, missing: {len(missing_image_ids)}")
+
+            if missing_image_ids:
+                missing_df = non_forced_df[non_forced_df['image_id'].isin(missing_image_ids)].copy()
+                to_process_frames.append(missing_df)
+
+        if len(force_reprocess_df) > 0:
+            print(f"[Batch {batch_num}] Skipping precomputed hydration for forced reprocess rows: {len(force_reprocess_df)}")
+            to_process_frames.append(force_reprocess_df)
+
+        if to_process_frames:
+            to_process_df = pd.concat(to_process_frames, ignore_index=True).drop_duplicates(subset=['image_id'])
+            print(f"[Batch {batch_num}] [COUNT] Rows to recompute from Mongo/object pipeline: {len(to_process_df)}")
+            to_process_df = fetch_mongo_for_batch(to_process_df)
+            recomputed_df = prepare_df(to_process_df, batch_label=f"Batch {batch_num} recompute")
+
+            if recomputed_df is not None and len(recomputed_df) > 0:
+                recomputed_df = recomputed_df.copy()
+                recomputed_df['newly_processed_detection'] = True
+                update_cols = [c for c in (OBJECT_ASSIGNMENT_COLS + HAND_POSITION_COLS + ['newly_processed_detection']) if c in recomputed_df.columns]
+
+                batch_prepared = batch_prepared.set_index('image_id')
+                recomputed_df = recomputed_df.set_index('image_id')
 
                 for col in update_cols:
-                    missing_col = f"{col}__missing"
-                    if missing_col not in batch_prepared.columns:
-                        continue
                     if col not in batch_prepared.columns:
-                        batch_prepared[col] = batch_prepared[missing_col]
-                    else:
-                        batch_prepared[col] = batch_prepared[missing_col].combine_first(batch_prepared[col])
-                    batch_prepared.drop(columns=[missing_col], inplace=True)
+                        batch_prepared[col] = None
+                    batch_prepared.loc[recomputed_df.index, col] = recomputed_df[col]
 
-                print(f"[Batch {batch_num}] [COUNT] Missing rows surviving prepare_df: {len(missing_prepared)}")
-                if 'left_pointer_knuckle_norm' in batch_prepared.columns:
-                    print(f"[Batch {batch_num}] [COUNT] Batch rows with left knuckle column populated: {int(batch_prepared['left_pointer_knuckle_norm'].notna().sum())}")
-                if 'right_pointer_knuckle_norm' in batch_prepared.columns:
-                    print(f"[Batch {batch_num}] [COUNT] Batch rows with right knuckle column populated: {int(batch_prepared['right_pointer_knuckle_norm'].notna().sum())}")
-                for col in ['left_hand_object', 'right_hand_object', 'top_face_object',
-                            'left_eye_object', 'right_eye_object', 'mouth_object', 'shoulder_object',
-                            'waist_object', 'feet_object']:
-                    if col in batch_prepared.columns:
-                        print(f"[Batch {batch_num}] [COUNT] Batch {col} populated: {int(batch_prepared[col].notna().sum())}")
+                batch_prepared = batch_prepared.reset_index()
+                print(f"[Batch {batch_num}] [COUNT] Recomputed rows surviving prepare_df: {len(recomputed_df)}")
             else:
-                print(f"[Batch {batch_num}] [COUNT] Missing rows surviving prepare_df: 0")
+                print(f"[Batch {batch_num}] [COUNT] Recomputed rows surviving prepare_df: 0")
         else:
-            print(f"[Batch {batch_num}] No missing IDs; skipping MongoDB fetch.")
+            print(f"[Batch {batch_num}] No rows require recompute.")
     else:
         # Non-ObjectFusion path still requires MongoDB data for prepare_df
         print(f"[Batch {batch_num}] Fetching MongoDB encodings...")
@@ -1886,6 +2065,11 @@ def main():
         df = pd.json_normalize(resultsjson)
         print(df)
 
+        if cl.CLUSTER_TYPE == "ObjectFusion" and REPROCESS_EXISTING_IMAGE_DETECTIONS and TEST_REPROCESSING:
+            print_reprocessing_dry_run_counts(df)
+            print("TEST_REPROCESSING is True: exiting before any write operations.")
+            return True
+
 
         # tell sort_pose which columns to NOT query
         if cl.CLUSTER_TYPE in ("BodyPoses", "BodyPoses3D", "ArmsPoses3D"): io.query_face = sort.query_face = io.query_hands = sort.query_hands = False
@@ -1900,9 +2084,9 @@ def main():
             all_prepared_batches = []
             total_rows = len(df)
             
-            for batch_start in range(0, total_rows, 5000):
-                batch_end = min(batch_start + 5000, total_rows)
-                batch_num = batch_start // 5000 + 1
+            for batch_start in range(0, total_rows, BATCH_LIMIT):
+                batch_end = min(batch_start + BATCH_LIMIT, total_rows)
+                batch_num = batch_start // BATCH_LIMIT + 1
                 
                 print(f"\n=== Processing Batch {batch_num}: rows {batch_start}-{batch_end} ({batch_end - batch_start} rows) ===")
                 batch_df = df.iloc[batch_start:batch_end].copy()
@@ -1920,7 +2104,13 @@ def main():
 
                         print(f"[Batch {batch_num}] ImagesDetections rows to persist now: {len(batch_to_save)}")
                         if len(batch_to_save) > 0:
-                            save_images_detections(batch_to_save, engine)
+                            if TEST_REPROCESSING:
+                                print(f"[Batch {batch_num}] TEST_REPROCESSING=True -> dry-run only; skipping delete/insert.")
+                            else:
+                                if REPROCESS_EXISTING_IMAGE_DETECTIONS:
+                                    deleted_rows = delete_images_detections_rows_for_image_ids(batch_to_save['image_id'].tolist())
+                                    print(f"[Batch {batch_num}] Deleted existing ImagesDetections rows: {deleted_rows}")
+                                save_images_detections(batch_to_save, engine)
                         else:
                             print(f"[Batch {batch_num}] No new ImagesDetections rows to persist.")
                     except Exception as e:
