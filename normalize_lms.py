@@ -468,15 +468,6 @@ def get_face_height_bbox(target_image_id):
     face_height = sort.convert_bbox_to_face_height(bbox)
     return face_height
 
-def insert_shape(target_image_id, shape):
-    ToolsClustering.store_image_face_data(
-        session=session,
-        target_image_id=target_image_id,
-        image_h=shape[0],
-        image_w=shape[1],
-        testing=TESTING,
-    )
-    return
 
 def get_obj_bbox(target_image_id):
     predicate = text("""
@@ -543,7 +534,7 @@ def calc_nlm(image_id_to_shape, lock, session):
 
 
     # TK this needs to be ported to calc body code
-    height,width, bbox = image_id_to_shape[target_image_id]
+    height,width, bbox, face_height = image_id_to_shape[target_image_id]
     bbox = io.unstring_json(bbox) if type(bbox)==str else bbox
     # get the shape of the image if no height in db
     if height and width:
@@ -553,9 +544,16 @@ def calc_nlm(image_id_to_shape, lock, session):
         if not height or not width: 
             print(">> IMAGE NOT FOUND,", target_image_id)
             return
-        insert_shape(target_image_id,[height,width])
-
-
+        ToolsClustering.store_image_face_data(
+            session=session,
+            target_image_id=target_image_id,
+            image_h=height,
+            image_w=width,
+            testing=TESTING,
+        )
+    # If face geometry already stored, skip expensive Mongo fetch
+    if face_height is not None:
+        return
     sort.h = height
     sort.w = width
     if VERBOSE: print("height,width from DB:",height,width)
@@ -862,8 +860,9 @@ if USE_OBJ:
 
 elif REPROCESS_HANDS == True and IS_SEGMENT_BIG == True:
     print("doing HANDS using SegmentTable")
-    distinct_image_ids_query = select(Images.image_id.distinct(), Images.h, Images.w, SegmentTable.bbox).\
+    distinct_image_ids_query = select(Images.image_id.distinct(), Images.h, Images.w, SegmentTable.bbox, Encodings.face_height).\
         outerjoin(SegmentTable,Images.image_id == SegmentTable.image_id).\
+        outerjoin(Encodings, Encodings.image_id == Images.image_id).\
         filter(SegmentTable.bbox != None).\
         filter(SegmentTable.two_noses.is_(None)).\
         filter(SegmentTable.mongo_hand_landmarks == 1).\
@@ -871,7 +870,7 @@ elif REPROCESS_HANDS == True and IS_SEGMENT_BIG == True:
         limit(LIMIT)
 elif REPROCESS_HANDS == True and IS_SEGMENT_BIG == False:
     print("doing HANDS using Encodings")
-    distinct_image_ids_query = select(Images.image_id.distinct(), Images.h, Images.w, Encodings.bbox).\
+    distinct_image_ids_query = select(Images.image_id.distinct(), Images.h, Images.w, Encodings.bbox, Encodings.face_height).\
         outerjoin(Images, Images.image_id == Encodings.image_id).\
         filter(Encodings.bbox != None).\
         filter(Encodings.two_noses.is_(None)).\
@@ -887,8 +886,9 @@ elif REPROCESS_HANDS == True and IS_SEGMENT_BIG == False:
 
 elif not SKIP_BODY and IS_SEGMENT_BIG == True:
     print("doing BODY using SegmentBig")
-    distinct_image_ids_query = select(Images.image_id.distinct(), Images.h, Images.w, SegmentTable.bbox).\
+    distinct_image_ids_query = select(Images.image_id.distinct(), Images.h, Images.w, SegmentTable.bbox, Encodings.face_height).\
         outerjoin(SegmentTable,Images.image_id == SegmentTable.image_id).\
+        outerjoin(Encodings, Encodings.image_id == Images.image_id).\
         filter(SegmentTable.bbox != None).\
         filter(SegmentTable.two_noses.is_(None)).\
         filter(SegmentTable.mongo_body_landmarks == 1).\
@@ -897,7 +897,7 @@ elif not SKIP_BODY and IS_SEGMENT_BIG == True:
 elif not SKIP_BODY and IS_SEGMENT_BIG == False:
     # use Encodings table
     print("doing BODY using Encodings")
-    distinct_image_ids_query = select(Images.image_id.distinct(), Images.h, Images.w, Encodings.bbox).\
+    distinct_image_ids_query = select(Images.image_id.distinct(), Images.h, Images.w, Encodings.bbox, Encodings.face_height).\
         outerjoin(Images, Images.image_id == Encodings.image_id).\
         filter(Encodings.bbox != None).\
         filter(Encodings.two_noses.is_(None)).\
@@ -973,8 +973,8 @@ print("query executed, results length", len(results))
 for result in results:
     if VERBOSE: print("result", result)
     image_id_to_shape = {}
-    image_id, height, width, bbox = result
-    image_id_to_shape[image_id] = (height, width, bbox)
+    image_id, height, width, bbox, face_height = result
+    image_id_to_shape[image_id] = (height, width, bbox, face_height)
 
     ### temp single thread for debugging
     # calc_nlm(image_id_to_shape, lock=None, session=session)

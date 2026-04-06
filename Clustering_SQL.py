@@ -233,6 +233,7 @@ if USE_SEGMENT is True and (cl.CLUSTER_TYPE != "Clusters"):
     # handle ObjectFusion, just get pitch, yaw, roll. Detections handled later:
     if cl.CLUSTER_TYPE == "ObjectFusion":
         SELECT += f" , {dupe_table_pre}.pitch, {dupe_table_pre}.yaw, {dupe_table_pre}.roll "
+        SELECT += f" , {dupe_table_pre}.face_height, {dupe_table_pre}.nose_pixel_x, {dupe_table_pre}.nose_pixel_y "
 
     if isinstance(this_data_column, list):
         if "HSV" in cl.CLUSTER_TYPE:
@@ -991,6 +992,18 @@ def extract_face_geometry(df, sort):
         
         # Extract face landmarks and calculate position using SortPose methods
         try:
+            # Skip expensive Mongo/SortPose computation if geometry already in DB
+            if (pd.notna(row.get('face_height')) and
+                    pd.notna(row.get('nose_pixel_x')) and
+                    pd.notna(row.get('nose_pixel_y'))):
+                face_data.append({
+                    'image_id': image_id,
+                    'nose_pixel_x': int(row['nose_pixel_x']),
+                    'nose_pixel_y': int(row['nose_pixel_y']),
+                    'face_height': int(row['face_height']),
+                })
+                continue
+
             face_landmarks = row['face_landmarks'] if 'face_landmarks' in row else None
             if pd.notna(face_landmarks):
                 sort.faceLms = io.unpickle_array(face_landmarks)
