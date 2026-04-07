@@ -411,6 +411,7 @@ AND (e.pitch IS NULL OR e.yaw IS NULL OR e.roll IS NULL)
 '''
 count how many image_ids have mongo_body_landmarks but not mongo_body_landmarks_norm, how many have both, how many have neither
 '''
+
 SELECT
   SUM(CASE WHEN mongo_body_landmarks IS NULL AND mongo_body_landmarks_norm IS NULL THEN 1 ELSE 0 END) AS null_landmarks_and_null_norm,
   SUM(CASE WHEN mongo_body_landmarks IS NOT NULL AND mongo_body_landmarks_norm IS NULL THEN 1 ELSE 0 END) AS not_null_landmarks_and_null_norm,
@@ -419,14 +420,148 @@ FROM Encodings
 WHERE mongo_body_landmarks IS NOT NULL OR mongo_body_landmarks_norm IS NOT NULL
 ;
 
+-- 4/7 0	518902	100126063
 
 '''
 count how many image_ids have mongo_hand_landmarks but not mongo_hand_landmarks_norm, how many have both, how many have neither
 '''
+
 SELECT
   SUM(CASE WHEN mongo_hand_landmarks IS NULL AND mongo_hand_landmarks_norm IS NULL THEN 1 ELSE 0 END) AS null_hand_landmarks_and_null_norm,
   SUM(CASE WHEN mongo_hand_landmarks IS NOT NULL AND mongo_hand_landmarks_norm IS NULL THEN 1 ELSE 0 END) AS not_null_hand_landmarks_and_null_norm,
   SUM(CASE WHEN mongo_hand_landmarks IS NOT NULL AND mongo_hand_landmarks_norm IS NOT NULL THEN 1 ELSE 0 END) AS not_null_hand_landmarks_and_not_null_norm
 FROM Encodings
 WHERE mongo_hand_landmarks IS NOT NULL OR mongo_hand_landmarks_norm IS NOT NULL
+
+-- 0	71496732	20636721
+
 ;
+
+
+USE Stock; 
+SHOW TABLES;
+
+'''
+Total images in table: 130,184,028
+Images with h AND w populated: 84,176,129
+Images missing h OR w: 46,007,899
+'''
+
+
+
+-- create helper segment table
+
+CREATE TABLE SegmentHelper_T11_Oct20_COCO_Custom (
+    seg_image_id int NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    image_id INTEGER,
+    FOREIGN KEY (image_id) REFERENCES Images(image_id)
+);
+
+
+
+
+-- insert into SegmentHelper_T11_Oct20_COCO_Custom of union of all image_id in these helper tables
+
+USE Stock;
+
+INSERT INTO SegmentHelper_T11_Oct20_COCO_Custom (image_id)
+    SELECT image_id FROM SegmentHelper_T4_occupation WHERE image_id IS NOT NULL
+    UNION
+    SELECT image_id FROM SegmentHelper_T11_business WHERE image_id IS NOT NULL
+    UNION
+    SELECT image_id FROM SegmentHelper_T37_money WHERE image_id IS NOT NULL
+    UNION
+    SELECT image_id FROM SegmentHelper_T40_technology WHERE image_id IS NOT NULL
+    UNION
+    SELECT image_id FROM SegmentHelperObject_100_tulip WHERE image_id IS NOT NULL
+    UNION
+    SELECT image_id FROM SegmentHelperObject_101_flowers_other WHERE image_id IS NOT NULL
+    UNION
+    SELECT image_id FROM SegmentHelperObject_102_orchid WHERE image_id IS NOT NULL
+    UNION
+    SELECT image_id FROM SegmentHelperObject_103_peony WHERE image_id IS NOT NULL
+    UNION
+    SELECT image_id FROM SegmentHelperObject_41_cup_glass WHERE image_id IS NOT NULL
+    UNION
+    SELECT image_id FROM SegmentHelperObject_45_salad WHERE image_id IS NOT NULL
+    UNION
+    SELECT image_id FROM SegmentHelperObject_55_cake WHERE image_id IS NOT NULL
+    UNION
+    SELECT image_id FROM SegmentHelperObject_67_phone WHERE image_id IS NOT NULL
+    UNION
+    SELECT image_id FROM SegmentHelperObject_73_book WHERE image_id IS NOT NULL
+    UNION
+    SELECT image_id FROM SegmentHelperObject_74_clock WHERE image_id IS NOT NULL
+    UNION
+    SELECT image_id FROM SegmentHelperObject_80_sign WHERE image_id IS NOT NULL
+    UNION
+    SELECT image_id FROM SegmentHelperObject_81_gift WHERE image_id IS NOT NULL
+    UNION
+    SELECT image_id FROM SegmentHelperObject_82_money WHERE image_id IS NOT NULL
+    UNION
+    SELECT image_id FROM SegmentHelperObject_83_bag WHERE image_id IS NOT NULL
+    UNION
+    SELECT image_id FROM SegmentHelperObject_84_valentine WHERE image_id IS NOT NULL
+    UNION
+    SELECT image_id FROM SegmentHelperObject_86_dumbbell WHERE image_id IS NOT NULL
+    UNION
+    SELECT image_id FROM SegmentHelperObject_87_flag WHERE image_id IS NOT NULL
+    UNION
+    SELECT image_id FROM SegmentHelperObject_89_mask WHERE image_id IS NOT NULL
+    UNION
+    SELECT image_id FROM SegmentHelperObject_90_stethoscope WHERE image_id IS NOT NULL
+    UNION
+    SELECT image_id FROM SegmentHelperObject_91_gun WHERE image_id IS NOT NULL
+    UNION
+    SELECT image_id FROM SegmentHelperObject_92_headphones WHERE image_id IS NOT NULL
+    UNION
+    SELECT image_id FROM SegmentHelperObject_94_piggybank WHERE image_id IS NOT NULL
+    UNION
+    SELECT image_id FROM SegmentHelperObject_96_bitcoin WHERE image_id IS NOT NULL
+    UNION
+    SELECT image_id FROM SegmentHelperObject_97_rose WHERE image_id IS NOT NULL
+    UNION
+    SELECT image_id FROM SegmentHelperObject_98_lily WHERE image_id IS NOT NULL
+    UNION
+    SELECT image_id FROM SegmentHelperObject_99_iris WHERE image_id IS NOT NULL
+    UNION
+    SELECT image_id FROM SegmentHelperObjectYOLO WHERE image_id IS NOT NULL
+    UNION
+    SELECT image_id FROM SegmentOct20 WHERE image_id IS NOT NULL
+;
+
+'''
+SegmentHelper_T11_Oct20_COCO_Custom
+SegmentHelper_T4_occupation
+SegmentHelper_T11_business
+SegmentHelper_T37_money
+SegmentHelper_T40_technology
+SegmentHelperObject_100_tulip
+SegmentHelperObject_101_flowers_other
+SegmentHelperObject_102_orchid
+SegmentHelperObject_103_peony
+SegmentHelperObject_41_cup_glass
+SegmentHelperObject_45_salad
+SegmentHelperObject_55_cake
+SegmentHelperObject_67_phone
+SegmentHelperObject_73_book
+SegmentHelperObject_74_clock
+SegmentHelperObject_80_sign
+SegmentHelperObject_81_gift
+SegmentHelperObject_82_money
+SegmentHelperObject_83_bag
+SegmentHelperObject_84_valentine
+SegmentHelperObject_86_dumbbell
+SegmentHelperObject_87_flag
+SegmentHelperObject_89_mask
+SegmentHelperObject_90_stethoscope
+SegmentHelperObject_91_gun
+SegmentHelperObject_92_headphones
+SegmentHelperObject_94_piggybank
+SegmentHelperObject_96_bitcoin
+SegmentHelperObject_97_rose
+SegmentHelperObject_98_lily
+SegmentHelperObject_99_iris
+SegmentHelperObjectYOLO
+SegmentOct20
+'''

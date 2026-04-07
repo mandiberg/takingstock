@@ -66,7 +66,7 @@ INNER_JOIN_HELPER = True
 # SegmentHelperObject_67_phone 
 # SegmentHelperObject_41_cup_glass (big)
 
-LIMIT= 100000
+LIMIT= 1000000
 # Initialize the counter
 counter = 2000
 
@@ -84,9 +84,9 @@ if class_token:
     # SORT_TYPE = "obj_bbox_fusion"
 else: 
     # SegmentHelper_name = 'SegmentOct20'
-    SegmentHelper_name = 'SegmentHelper_oct2025_evens_quarters'
+    # SegmentHelper_name = 'SegmentHelper_oct2025_evens_quarters'
     SegmentFolder = None
-    # SegmentHelper_name = 'SegmentHelper_topic11_business'
+    SegmentHelper_name = 'SegmentHelper_YOLO_Selects'
 
     # HAXXXORS THIS_CLASS_ID is commented out below so that it does ALL classes
     # THIS_CLASS_ID = 82 # for object bbox normalization
@@ -169,10 +169,24 @@ sort = SortPose(config=cfg)
 # Create a session
 session = scoped_session(sessionmaker(bind=engine))
 
+# Validate helper table exists early so runs fail fast with a clear message.
+if SegmentHelper_name:
+    helper_exists = session.execute(
+        text("SHOW TABLES LIKE :tbl"),
+        {"tbl": SegmentHelper_name}
+    ).fetchone()
+    if not helper_exists:
+        raise RuntimeError(
+            f"Configured helper table '{SegmentHelper_name}' does not exist in DB '{db['name']}'."
+        )
+
 
 # Number of threads
 #num_threads = io.NUMBER_OF_PROCESSES
 num_threads = 1
+
+# Batch configuration for efficient bulk updates
+BATCH_SIZE = 200  # Commit every N images instead of per-image
 
 # define SegmentHelper 
 
@@ -383,35 +397,23 @@ def has_existing_hand_landmarks_norm(image_id):
 #     return
 
 
-def insert_n_phone_bbox(image_id,n_phone_bbox):
-    # nlms_dict = { "image_id": image_id, "n_phone_bbox": n_phone_bbox }
-    # x = n_phonebbox_collection.insert_one(nlms_dict)
-    # print("inserted id",x.inserted_id)
-    # return
-    from sqlalchemy import cast, JSON as JSON_TYPE
-    phone_bbox_norm_entry = (
-        session.query(PhoneBbox)
-        .filter(PhoneBbox.image_id == image_id)
-        .first()
-    )    
-    if phone_bbox_norm_entry:
-        phone_bbox_norm_entry.bbox_26_norm = cast(json.dumps(n_phone_bbox), JSON_TYPE)
-        if VERBOSE:
-            print("image_id:", PhoneBbox.image_id,"bbox_26_norm:", phone_bbox_norm_entry.bbox_26_norm)
-    if not TESTING: session.commit()
+def insert_n_phone_bbox(image_id, n_phone_bbox, batch_updates):
+    # Collect update for batching; avoid per-row ORM roundtrip.
+    batch_updates['PhoneBbox'].append({
+        'image_id': int(image_id),
+        'bbox_26_norm': n_phone_bbox,
+    })
+    if VERBOSE:
+        print("queued phone bbox norm for image_id:", image_id)
 
-def insert_detections_norm_bbox(detection_id, n_bbox):
-    detections_bbox_norm_entry = (
-        session.query(Detections)
-        .filter(Detections.detection_id == detection_id)
-        .first()
-    )    
-    if detections_bbox_norm_entry:
-        # Pass the dict directly - SQLAlchemy will handle JSON serialization
-        detections_bbox_norm_entry.bbox_norm = n_bbox
-        if VERBOSE:
-            print("detection_id:", detection_id, "bbox_norm:", detections_bbox_norm_entry.bbox_norm)
-    if not TESTING: session.commit()
+def insert_detections_norm_bbox(detection_id, n_bbox, batch_updates):
+    # Collect update for batched SQL by detection_id.
+    batch_updates['Detections'].append({
+        'detection_id': int(detection_id),
+        'bbox_norm': n_bbox,
+    })
+    if VERBOSE:
+        print("queued detection bbox_norm for detection_id:", detection_id)
 
 
 def unpickle_array(pickled_array):
@@ -509,7 +511,7 @@ def get_phone_bbox(target_image_id):
 
     return phone_bbox
 
-def calc_nlm(image_id_to_shape, lock, session):
+def calc_nlm(image_id_to_shape, batch_updates):
     if VERBOSE: print("calc_nlm image_id_to_shape",image_id_to_shape)
     target_image_id = list(image_id_to_shape.keys())[0]
     body_landmarks = None
@@ -522,17 +524,16 @@ def calc_nlm(image_id_to_shape, lock, session):
         print("existing_hand_landmarks_norm", existing_hand_landmarks_norm)
         if existing_hand_landmarks_norm:
             print(f" ☑️ ☑️ ☑️ ACCEPTING EXISTING NORMALIZED HAND LANDMARKS for image_id {target_image_id}, updating SQL to reflect that.")
-            session.query(Encodings).filter(Encodings.image_id == target_image_id).update({
-                    Encodings.mongo_hand_landmarks_norm: 1
-                }, synchronize_session=False)
+            # Collect updates for batching
+            batch_updates['Encodings'].append({
+                'image_id': target_image_id,
+                'mongo_hand_landmarks_norm': 1
+            })
             if not IS_SEGMENT_BIG:
-                # skip this if using SegmentBig, no mongo_hand_landmarks_norm column
-                session.query(SegmentTable).filter(SegmentTable.image_id == target_image_id).update({
-                        SegmentTable.mongo_hand_landmarks_norm: 1
-                    }, synchronize_session=False)
-            if not TESTING: 
-                print("committing session for existing normalized hand landmarks", target_image_id)
-                session.commit()    
+                batch_updates['SegmentTable'].append({
+                    'image_id': target_image_id,
+                    'mongo_hand_landmarks_norm': 1
+                })
             return
 
 
@@ -554,6 +555,7 @@ def calc_nlm(image_id_to_shape, lock, session):
             image_h=height,
             image_w=width,
             testing=TESTING,
+            auto_commit=False,  # OPTIMIZATION: Batch commits instead of individual commits
         )
     # If face geometry already stored, skip expensive Mongo fetch
     if face_height is not None:
@@ -668,15 +670,16 @@ def calc_nlm(image_id_to_shape, lock, session):
     if distance > 300:
         print(f" >>> TWO NOSES - {target_image_id}. Dist between nose_pixel_pos and nose_pixel_pos_body:", distance)
 
-        session.query(Encodings).filter(Encodings.image_id == target_image_id).update({
-                Encodings.two_noses: 1
-            }, synchronize_session=False)
+        # Collect updates for batching
+        batch_updates['Encodings'].append({
+            'image_id': target_image_id,
+            'two_noses': 1
+        })
         if not IS_SEGMENT_BIG:
-            # skip this if using SegmentBig, no two_noses column
-            session.query(SegmentTable).filter(SegmentTable.image_id == target_image_id).update({
-                    SegmentTable.two_noses: 1
-                }, synchronize_session=False)
-        if not TESTING: session.commit()
+            batch_updates['SegmentTable'].append({
+                'image_id': target_image_id,
+                'two_noses': 1
+            })
         return
 
     else:
@@ -691,6 +694,7 @@ def calc_nlm(image_id_to_shape, lock, session):
                 image_h=height,
                 image_w=width,
                 testing=TESTING,
+                auto_commit=False,  # OPTIMIZATION: Batch commits instead of individual commits
             )
 
 
@@ -700,15 +704,16 @@ def calc_nlm(image_id_to_shape, lock, session):
         hand_landmarks_norm=sort.normalize_hand_landmarks(hand_results,nose_pixel_pos_body,face_height,[height,width])
         # print("hand_landmarks_norm",hand_landmarks_norm)
         sort.update_hand_landmarks_in_mongo(mongo_hand_collection, target_image_id,hand_landmarks_norm)
-        session.query(Encodings).filter(Encodings.image_id == target_image_id).update({
-                Encodings.mongo_hand_landmarks_norm: 1
-            }, synchronize_session=False)
+        # Collect updates for batching
+        batch_updates['Encodings'].append({
+            'image_id': target_image_id,
+            'mongo_hand_landmarks_norm': 1
+        })
         if not IS_SEGMENT_BIG:
-            # skip this if using SegmentBig, no mongo_hand_landmarks_norm column
-            session.query(SegmentTable).filter(SegmentTable.image_id == target_image_id).update({
-                    SegmentTable.mongo_hand_landmarks_norm: 1
-                }, synchronize_session=False)
-        # if not TESTING: session.commit()    
+            batch_updates['SegmentTable'].append({
+                'image_id': target_image_id,
+                'mongo_hand_landmarks_norm': 1
+            })    
         
     if body_landmarks:
         if VERBOSE: print("has body_landmarks")
@@ -741,16 +746,16 @@ def calc_nlm(image_id_to_shape, lock, session):
             
             # store the normalized landmarks in mongo
             if not TESTING: sort.insert_n_landmarks(bboxnormed_collection, target_image_id,n_landmarks)
-            # update encodings and segment tables to reflect that the landmarks have been normalized
-            session.query(Encodings).filter(Encodings.image_id == target_image_id).update({
-                    Encodings.mongo_body_landmarks_norm: 1
-                }, synchronize_session=False)
+            # Collect updates for batching
+            batch_updates['Encodings'].append({
+                'image_id': target_image_id,
+                'mongo_body_landmarks_norm': 1
+            })
             if not IS_SEGMENT_BIG:
-                # skip this if using SegmentBig, no mongo_body_landmarks_norm column
-                session.query(SegmentTable).filter(SegmentTable.image_id == target_image_id).update({
-                        SegmentTable.mongo_body_landmarks_norm: 1
-                    }, synchronize_session=False)
-            # if not TESTING: session.commit()
+                batch_updates['SegmentTable'].append({
+                    'image_id': target_image_id,
+                    'mongo_body_landmarks_norm': 1
+                })
 
             if VERBOSE: print("did insert_n_landmarks, going to get phone bbox")
             # if VERBOSE: print("Time to get insert:", time.time()-start)
@@ -765,7 +770,7 @@ def calc_nlm(image_id_to_shape, lock, session):
                     print("going to normalize obj_bbox",obj_bbox)
                     n_obj_bbox=normalize_obj_bbox(obj_bbox,nose_pixel_pos_body,face_height,[height,width])
                     # temp comment
-                    insert_detections_norm_bbox(detection_id,n_obj_bbox)
+                    insert_detections_norm_bbox(detection_id, n_obj_bbox, batch_updates)
                 else:
                     print("PHONE BBOX NOT FOUND 404", target_image_id)
 
@@ -784,14 +789,6 @@ def calc_nlm(image_id_to_shape, lock, session):
 
 
 
-    with lock:
-        # Increment the counter using the lock to ensure thread safety
-        global counter
-        counter -= 1
-        # temp comment
-        if not TESTING: session.commit()
-    if counter % 100 == 0:
-        print(f"This many left: {counter}")
     return
 
 #######MULTI THREADING##################
@@ -997,12 +994,101 @@ for result in results:
     # work_queue.put(target_image_id)        
 
 if VERBOSE: print("queue filled")
-        
+
+def commit_batch_updates(batch_updates):
+    """Commit all collected updates using batched WHERE IN updates for efficiency.
+    Uses UPDATE ... WHERE image_id IN (...) instead of bulk_update_mappings since
+    Encodings/SegmentTable PKs differ from image_id."""
+    if not TESTING:
+        try:
+            from collections import defaultdict
+            from sqlalchemy import update as sa_update, bindparam
+
+            def _batch_update_by_image_id(model, records):
+                """Group records by (column, value) and issue one UPDATE per group."""
+                if not records:
+                    return
+                col_val_to_ids = defaultdict(list)
+                for rec in records:
+                    img_id = rec['image_id']
+                    for col, val in rec.items():
+                        if col != 'image_id':
+                            col_val_to_ids[(col, val)].append(img_id)
+                for (col_name, val), img_ids in col_val_to_ids.items():
+                    session.execute(
+                        sa_update(model)
+                        .where(model.image_id.in_(img_ids))
+                        .values({col_name: val})
+                        .execution_options(synchronize_session=False)
+                    )
+
+            def _batch_update_detections(records):
+                """Update Detections using executemany by detection_id."""
+                if not records:
+                    return
+                params = [
+                    {
+                        'b_detection_id': rec['detection_id'],
+                        'b_bbox_norm': json.dumps(rec['bbox_norm']),
+                    }
+                    for rec in records
+                ]
+                stmt = text(
+                    "UPDATE Detections "
+                    "SET bbox_norm = :b_bbox_norm "
+                    "WHERE detection_id = :b_detection_id"
+                )
+                session.execute(stmt, params)
+
+            _batch_update_by_image_id(Encodings, batch_updates['Encodings'])
+            _batch_update_by_image_id(SegmentTable, batch_updates['SegmentTable'])
+            _batch_update_detections(batch_updates['Detections'])
+            _batch_update_by_image_id(PhoneBbox, batch_updates['PhoneBbox'])
+
+            # Single commit for all updates (critical optimization)
+            session.commit()
+        except Exception as e:
+            session.rollback()
+            print(f"Error during batch commit: {e}")
+            raise
+
 def threaded_fetching():
+    """Process work queue with per-thread batch accumulation."""
+    batch_updates = {
+        'Encodings': [],
+        'SegmentTable': [],
+        'Detections': [],
+        'PhoneBbox': []
+    }
+    batch_count = 0
+    
     while not work_queue.empty():
         param = work_queue.get()
-        function(param, lock, session)
+        # Process image and collect updates
+        function(param, batch_updates)
+        batch_count += 1
+        
+        # Commit batch at regular intervals to avoid memory bloat
+        if batch_count >= BATCH_SIZE:
+            commit_batch_updates(batch_updates)
+            # Reset batch for next round
+            batch_updates = {
+                'Encodings': [],
+                'SegmentTable': [],
+                'Detections': [],
+                'PhoneBbox': []
+            }
+            batch_count = 0
+            if VERBOSE:
+                with lock:
+                    global counter
+                    print(f"Batch committed. Approx {counter} images remaining")
+        
         work_queue.task_done()
+    
+    # Commit remaining updates
+    if batch_count > 0:
+        commit_batch_updates(batch_updates)
 
 def threaded_processing():
     thread_list = []
@@ -1024,8 +1110,6 @@ threads_completed.wait()
 
 print("done")
 # Close the session
-# temp comment
-# if not TESTING: session.commit()
 session.close()
 
 # Print the time taken

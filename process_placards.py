@@ -64,7 +64,7 @@ DEBUGGING = False # saves debug images (option for bboxes drawn)
 SAVE_NEW_LABELS = False # saves new yolo labels to feed back into training data
 SAVE_NODETECTIONS_JPG_FILES = False
 TESTING_NO_DB_WRITE = False # if True, will not write to database
-DO_COCO = False
+DO_COCO = True
 DO_CUSTOM = True
 DO_MASK = False
 DO_VALENTINE = False
@@ -75,12 +75,13 @@ CLASSES_TO_COMBINE = [89,90]
 OVERWRITE_EXISTING_DETECTIONS = True
 IGNORE_EXISTING_NO_DETECTIONS = True
 DET_ID_THRESHOLD_CUSTOM = 59955150
-DET_ID_THRESHOLD_COCO = 59955148
+DET_ID_THRESHOLD_COCO = 12455146
 # this is for merging books and stuff, but it messes up cucumbers. 
 IOU_THRESHOLD = 0.7
 ADJACENCY_THRESHOLD_PX = 10
 
 FILE_FOLDER = "/Volumes/OWC52/segment_images_OWC4"
+# FILE_FOLDER = "/Volumes/LaCie/segment_images_COCO" # must be a folder holding the site folder(s)
 # FILE_FOLDER ="/Volumes/OWC54/segment_images_40xDetections"
 # FILE_FOLDER = "/Volumes/RAID18" # must be a folder holding the site folder(s)
 # MAKE_VIDEO_CSVS_PATH = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/book_csvs"
@@ -438,6 +439,9 @@ def do_yolo_detections(result, image, image_path, existing_detections, custom=Fa
     detect_results = yolo.merge_yolo_detections(unrefined_detect_results, iou_threshold=IOU_THRESHOLD, adjacency_threshold_px=ADJACENCY_THRESHOLD_PX)
     detect_results = assign_hsv_detect_results(detect_results, image)
     if VERBOSE: print(f"Image {image_id} - YOLO detections: {detect_results}")
+    class_ids = [det.get('class_id') for det in detect_results if det.get('class_id') is not None]
+    if bool(class_ids):
+        print(f" ☑️ Image {image_id} class_ids: {class_ids}")
     # save_debug_image_yolo_bbox(image_id, imagename, image, detect_results)
     if DEBUGGING:
         yolo.save_debug_image_yolo_bbox(image_id, imagename, image, detect_results, image_path, 
@@ -485,15 +489,14 @@ def do_detections(result, folder_index):
     existing_detection_ids, existing_no_detections = check_for_existing_detections(image_id, existing_detections, custom=False)
     existing_custom_detection_ids, existing_no_detections_custom = check_for_existing_detections(image_id, existing_detections, custom=True)
 
-    skip_coco_due_to_no_det = bool(existing_no_detections) and not IGNORE_EXISTING_NO_DETECTIONS
+    skip_coco_due_to_no_det = bool(existing_no_detections)
     skip_custom_due_to_no_det = bool(existing_no_detections_custom) and not IGNORE_EXISTING_NO_DETECTIONS
 
-    if bool(existing_no_detections) and IGNORE_EXISTING_NO_DETECTIONS:
-        print(f"Image {image_id} - Ignoring existing no-detections row in NoDetections due to IGNORE_EXISTING_NO_DETECTIONS=True.")
+    # only skip custom no_detections. we never redo COCO no_detections for COCO
     if bool(existing_no_detections_custom) and IGNORE_EXISTING_NO_DETECTIONS:
         print(f"Image {image_id} - Ignoring existing no-detections row in NoDetectionsCustom due to IGNORE_EXISTING_NO_DETECTIONS=True.")
 
-    if existing_detection_ids or skip_coco_due_to_no_det:
+    if existing_detection_ids:
         existing_coco = True
     if existing_custom_detection_ids or skip_custom_due_to_no_det:
         existing_custom = True
