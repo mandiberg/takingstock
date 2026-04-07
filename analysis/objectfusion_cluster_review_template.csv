@@ -1,0 +1,1 @@
+candidate_id,split,cluster_id,cluster_size,sample_type,neighbor_cluster_ids,face_consistency_1_5,hand_consistency_1_5,slot_consistency_1_5,class_consistency_1_5,overall_coherence_1_5,distinct_vs_neighbors_1_5,is_mixed_0_1,is_duplicate_0_1,review_notes

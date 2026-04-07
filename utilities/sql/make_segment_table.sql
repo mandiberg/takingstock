@@ -8,7 +8,7 @@ DROP TABLE SegmentHelperObject_book ;
 DELETE FROM SegmentHelper_sept2025_heft_keywords;
 
 -- create helper segment table
-CREATE TABLE SegmentHelper_topic11_business (
+CREATE TABLE SegmentHelper_oct2025_every40_even (
     seg_image_id int NOT NULL AUTO_INCREMENT PRIMARY KEY,
     image_id INTEGER,
     FOREIGN KEY (image_id) REFERENCES Images(image_id)
@@ -264,6 +264,22 @@ WHERE e.face_x > -45 AND e.face_x < -6
         WHERE s.image_id = e.image_id
     )
     AND n.nml_id > 4191363
+LIMIT 2000000
+;
+
+
+-- for making a helper from segmentbig
+INSERT INTO SegmentHelper_oct2025_every40_odd (image_id)
+SELECT DISTINCT e.image_id
+FROM SegmentBig_isface e
+JOIN SegmentHelper_oct2025_every40 shoe ON e.image_id = shoe.image_id 
+WHERE shoe.seg_image_id % 2 <> 0.
+    AND NOT EXISTS (
+        SELECT 1
+        FROM SegmentHelper_oct2025_every40_odd s
+        WHERE s.image_id = e.image_id
+    )
+--    AND n.nml_id > 4191363
 LIMIT 2000000
 ;
 

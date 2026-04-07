@@ -174,13 +174,52 @@ class ToolsClustering:
         
         # Feature standardization settings for ObjectFusion
         self.USE_FEATURE_STANDARDIZATION = True  # Use StandardScaler to normalize all features to similar scale
+
+        # baseline
+        # self.FEATURE_WEIGHTS = {
+        #     'face_angle': .5,      # pitch, yaw, roll - LOW weight (prevent face-angle mega-clusters)
+        #     'class_id': 3.0,        # class_id - VERY HIGH weight at RAW SCALE (0-107) to force object-type separation
+        #     'confidence': 0.5,      # detection confidence - very low weight
+        #     'bbox': 2.0,            # bbox coordinates - reduced to standard weight
+        #     'has_object': 1.0,      # binary indicator - high weight but lower than class_id
+        # }
+
+        # # Class-separation stronger
+        # self.FEATURE_WEIGHTS = {
+        #     'face_angle': .5,      # pitch, yaw, roll - LOW weight (prevent face-angle mega-clusters)
+        #     'class_id': 5.0,        # class_id - VERY HIGH weight at RAW SCALE (0-107) to force object-type separation
+        #     'confidence': 0.5,      # detection confidence - very low weight
+        #     'bbox': 2.0,            # bbox coordinates - reduced to standard weight
+        #     'has_object': 1.2,      # binary indicator - high weight but lower than class_id
+        # }
+
+        # # Spatial tighter
+        # self.FEATURE_WEIGHTS = {
+        #     'face_angle': .5,      # pitch, yaw, roll - LOW weight (prevent face-angle mega-clusters)
+        #     'class_id': 3.0,        # class_id - VERY HIGH weight at RAW SCALE (0-107) to force object-type separation
+        #     'confidence': 0.5,      # detection confidence - very low weight
+        #     'bbox': 2.6,            # bbox coordinates - reduced to standard weight
+        #     'has_object': 1.0,      # binary indicator - high weight but lower than class_id
+        # }
+
+        # Spatial looser
+        # self.FEATURE_WEIGHTS = {
+        #     'face_angle': .5,      # pitch, yaw, roll - LOW weight (prevent face-angle mega-clusters)
+        #     'class_id': 3.0,        # class_id - VERY HIGH weight at RAW SCALE (0-107) to force object-type separation
+        #     'confidence': 0.5,      # detection confidence - very low weight
+        #     'bbox': 1.4,            # bbox coordinates - reduced to standard weight
+        #     'has_object': 1.0,      # binary indicator - high weight but lower than class_id
+        # }
+
+        # Face-angle neutralized
         self.FEATURE_WEIGHTS = {
-            'face_angle': .5,      # pitch, yaw, roll - LOW weight (prevent face-angle mega-clusters)
+            'face_angle': .2,      # pitch, yaw, roll - LOW weight (prevent face-angle mega-clusters)
             'class_id': 3.0,        # class_id - VERY HIGH weight at RAW SCALE (0-107) to force object-type separation
             'confidence': 0.5,      # detection confidence - very low weight
             'bbox': 2.0,            # bbox coordinates - reduced to standard weight
             'has_object': 1.0,      # binary indicator - high weight but lower than class_id
         }
+
         # Store fitted scaler for inverse transform during median calculation
         self.feature_scaler = None
         self.CLUSTER_DATA = {
@@ -1823,22 +1862,45 @@ class ToolsClustering:
             'images': False,
         }
 
+        def _to_int_or_none(value):
+            if value is None:
+                return None
+            try:
+                if pd.isna(value):
+                    return None
+            except Exception:
+                pass
+            try:
+                return int(value)
+            except (TypeError, ValueError, OverflowError):
+                return None
+
+        target_image_id = _to_int_or_none(target_image_id)
+        if target_image_id is None:
+            return updated
+
+        face_height = _to_int_or_none(face_height)
+        nose_pixel_x = _to_int_or_none(nose_pixel_x)
+        nose_pixel_y = _to_int_or_none(nose_pixel_y)
+        image_h = _to_int_or_none(image_h)
+        image_w = _to_int_or_none(image_w)
+
         enc_q = session.query(Encodings).filter(Encodings.image_id == target_image_id)
         if face_height is not None:
             rows = enc_q.filter(Encodings.face_height.is_(None)).update(
-                {Encodings.face_height: int(face_height)}, synchronize_session=False
+                {Encodings.face_height: face_height}, synchronize_session=False
             )
             if rows:
                 updated['encodings'] = True
         if nose_pixel_x is not None:
             rows = enc_q.filter(Encodings.nose_pixel_x.is_(None)).update(
-                {Encodings.nose_pixel_x: int(nose_pixel_x)}, synchronize_session=False
+                {Encodings.nose_pixel_x: nose_pixel_x}, synchronize_session=False
             )
             if rows:
                 updated['encodings'] = True
         if nose_pixel_y is not None:
             rows = enc_q.filter(Encodings.nose_pixel_y.is_(None)).update(
-                {Encodings.nose_pixel_y: int(nose_pixel_y)}, synchronize_session=False
+                {Encodings.nose_pixel_y: nose_pixel_y}, synchronize_session=False
             )
             if rows:
                 updated['encodings'] = True
@@ -1846,13 +1908,13 @@ class ToolsClustering:
         img_q = session.query(Images).filter(Images.image_id == target_image_id)
         if image_h is not None:
             rows = img_q.filter(Images.h.is_(None)).update(
-                {Images.h: int(image_h)}, synchronize_session=False
+                {Images.h: image_h}, synchronize_session=False
             )
             if rows:
                 updated['images'] = True
         if image_w is not None:
             rows = img_q.filter(Images.w.is_(None)).update(
-                {Images.w: int(image_w)}, synchronize_session=False
+                {Images.w: image_w}, synchronize_session=False
             )
             if rows:
                 updated['images'] = True

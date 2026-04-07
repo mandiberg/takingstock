@@ -66,11 +66,11 @@ INNER_JOIN_HELPER = True
 # SegmentHelperObject_67_phone 
 # SegmentHelperObject_41_cup_glass (big)
 
-LIMIT= 1000000
+LIMIT= 100000
 # Initialize the counter
 counter = 2000
 
-THIS_CLASS_ID = 119 # for object bbox normalization
+THIS_CLASS_ID = 0 # for object bbox normalization
 class_token = ID_SEGMENT_DICT.get(THIS_CLASS_ID, None)
 ssd = ID_SSD_DICT.get(THIS_CLASS_ID, None)
 if THIS_CLASS_ID in ID_FOLDER_DICT: folder_token = ID_FOLDER_DICT[THIS_CLASS_ID]
@@ -83,10 +83,14 @@ if class_token:
     print("SegmentFolder", SegmentFolder)
     # SORT_TYPE = "obj_bbox_fusion"
 else: 
-    # SegmentHelper_name = 'SegmentHelperObject_45_salad'
-    SegmentHelper_name = 'SegmentHelper_topic11_business'
-    # THIS_CLASS_ID = 80 # for object bbox normalization
-    SegmentFolder = "/Volumes/OWC5/segment_images"
+    # SegmentHelper_name = 'SegmentOct20'
+    SegmentHelper_name = 'SegmentHelper_oct2025_evens_quarters'
+    SegmentFolder = None
+    # SegmentHelper_name = 'SegmentHelper_topic11_business'
+
+    # HAXXXORS THIS_CLASS_ID is commented out below so that it does ALL classes
+    # THIS_CLASS_ID = 82 # for object bbox normalization
+    # SegmentFolder = "/Volumes/OWC52/segment_images_OWC4"
 io = DataIO(IS_SSD, VERBOSE, SSD_PATH)
 db = io.db
 # io.db["name"] = "stock"
@@ -832,7 +836,8 @@ if USE_OBJ:
         Images.image_id.distinct(), 
         Images.h, 
         Images.w, 
-        Encodings.bbox
+        Encodings.bbox,
+        Encodings.face_height
     ).select_from(Detections).\
     join(SegmentHelper, SegmentHelper.image_id == Detections.image_id).\
     join(Encodings, Encodings.image_id == Detections.image_id).\
@@ -842,9 +847,10 @@ if USE_OBJ:
     filter(Encodings.mongo_body_landmarks == 1).\
     filter(Detections.bbox != None).\
     filter(text(predicate_text)).\
-    filter(Detections.class_id == THIS_CLASS_ID).\
     filter(Detections.conf != -1).\
     limit(LIMIT)    
+
+    #filter(Detections.class_id == THIS_CLASS_ID).\
 
 
     # distinct_image_ids_query = select(Images.image_id.distinct(), Images.h, Images.w, Encodings.bbox).\

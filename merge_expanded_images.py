@@ -27,7 +27,7 @@ ROOT_FOLDER_PATH = '/Users/michaelmandiberg/Documents/projects-active/facemap_pr
 # if IS_CLUSTER this should be the folder holding all the cluster folders
 # if not, this should be the individual folder holding the images
 # will not accept clusterNone -- change to cluster00
-FOLDER_NAME = "768_evenweight500s"
+FOLDER_NAME = "40even_128_c4_neutralized"
 
 # iterate through folders? 
 IS_CLUSTER = True

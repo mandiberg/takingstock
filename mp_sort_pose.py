@@ -1479,12 +1479,10 @@ class SortPose:
         highest_y_cartesian = max(highest_y, MIN_DYN_BBOX_DIM)
         highest_x = max(highest_x, MIN_DYN_BBOX_DIM)
 
-        # swapping up and down because of cartesian vs image coordinates
-        # april 3 2026, MM TC pair debug
-        highest_y = lowest_y_cartesian
-        lowest_y = highest_y_cartesian
-        # highest_y = highest_y_cartesian
-        # lowest_y = lowest_y_cartesian
+        # Keep natural orientation for crop multipliers:
+        # lowest_y corresponds to top (negative/up), highest_y to bottom (positive/down).
+        highest_y = highest_y_cartesian
+        lowest_y = lowest_y_cartesian
         # # if diff between left and right is less/equal to 1 bboxes, take the bigger one and roll with that.
         # if abs(lowest_x) != abs(highest_x) and abs(abs(lowest_x) - abs(highest_x)) <= 1:
         #     if abs(highest_x) > abs(lowest_x):

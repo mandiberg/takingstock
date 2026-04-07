@@ -72,7 +72,7 @@ use_average_per_row=False # for valentine bbox detection
 DO_OCR = False
 CLASSES_TO_COMBINE = [89,90]
 
-OVERWRITE_EXISTING_DETECTIONS = False
+OVERWRITE_EXISTING_DETECTIONS = True
 IGNORE_EXISTING_NO_DETECTIONS = True
 DET_ID_THRESHOLD_CUSTOM = 59955150
 DET_ID_THRESHOLD_COCO = 59955148
@@ -80,8 +80,8 @@ DET_ID_THRESHOLD_COCO = 59955148
 IOU_THRESHOLD = 0.7
 ADJACENCY_THRESHOLD_PX = 10
 
-# FILE_FOLDER = "/Volumes/OWC52/segment_images_OWC4"
-FILE_FOLDER ="/Volumes/LaCie/segment_images_84_valentine"
+FILE_FOLDER = "/Volumes/OWC52/segment_images_OWC4"
+# FILE_FOLDER ="/Volumes/OWC54/segment_images_40xDetections"
 # FILE_FOLDER = "/Volumes/RAID18" # must be a folder holding the site folder(s)
 # MAKE_VIDEO_CSVS_PATH = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/book_csvs"
 MAKE_VIDEO_CSVS_PATH = None  # to process all images in folder

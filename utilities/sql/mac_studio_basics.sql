@@ -7,7 +7,7 @@ SET GLOBAL innodb_buffer_pool_size=8053063680;
 
 DELETE FROM ImagesObjectFusion ;
 
-DELETE FROM ImagesDetections  ;
+-- DELETE FROM ImagesDetections  ;
 
 DELETE FROM ObjectFusion ;
 
@@ -390,6 +390,7 @@ FROM Detections
 -- WHERE class_id = 111;
 
 -- 4/5 total: 0	32944858	20900495
+-- 4/7 total: 0	31934191	22982959
 
 
 '''
@@ -404,3 +405,28 @@ AND (e.pitch IS NULL OR e.yaw IS NULL OR e.roll IS NULL)
 ; 
 
 -- 4/5 total: 2165712
+
+
+
+'''
+count how many image_ids have mongo_body_landmarks but not mongo_body_landmarks_norm, how many have both, how many have neither
+'''
+SELECT
+  SUM(CASE WHEN mongo_body_landmarks IS NULL AND mongo_body_landmarks_norm IS NULL THEN 1 ELSE 0 END) AS null_landmarks_and_null_norm,
+  SUM(CASE WHEN mongo_body_landmarks IS NOT NULL AND mongo_body_landmarks_norm IS NULL THEN 1 ELSE 0 END) AS not_null_landmarks_and_null_norm,
+  SUM(CASE WHEN mongo_body_landmarks IS NOT NULL AND mongo_body_landmarks_norm IS NOT NULL THEN 1 ELSE 0 END) AS not_null_landmarks_and_not_null_norm
+FROM Encodings
+WHERE mongo_body_landmarks IS NOT NULL OR mongo_body_landmarks_norm IS NOT NULL
+;
+
+
+'''
+count how many image_ids have mongo_hand_landmarks but not mongo_hand_landmarks_norm, how many have both, how many have neither
+'''
+SELECT
+  SUM(CASE WHEN mongo_hand_landmarks IS NULL AND mongo_hand_landmarks_norm IS NULL THEN 1 ELSE 0 END) AS null_hand_landmarks_and_null_norm,
+  SUM(CASE WHEN mongo_hand_landmarks IS NOT NULL AND mongo_hand_landmarks_norm IS NULL THEN 1 ELSE 0 END) AS not_null_hand_landmarks_and_null_norm,
+  SUM(CASE WHEN mongo_hand_landmarks IS NOT NULL AND mongo_hand_landmarks_norm IS NOT NULL THEN 1 ELSE 0 END) AS not_null_hand_landmarks_and_not_null_norm
+FROM Encodings
+WHERE mongo_hand_landmarks IS NOT NULL OR mongo_hand_landmarks_norm IS NOT NULL
+;

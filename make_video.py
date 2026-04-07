@@ -49,13 +49,13 @@ SegmentTable_name = 'SegmentBig_isface'
 # SegmentTable_name = 'SegmentBig_isnotface'
 # SegmentHelper_name = 'SegmentHelper_may2025_4x4faces'
 # SegmentHelper_name = 'SegmentHelper_sept2025_heft_keywords'
-SegmentHelper_name = 'SegmentHelperObject_89_mask'
+SegmentHelper_name = 'SegmentHelper_oct2025_every40_even'
 # SegmentHelper_name = 'None' # set below for heft keywords
 # SegmentHelper_name = None
 # SATYAM, this is MM specific
 # for when I'm using files on my SSD vs RAID
 IS_SSD = True
-SSD_PATH = "/Volumes/LaCie/segment_images_89_mask"
+SSD_PATH = "/Volumes/OWC54/segment_images_40xDetections"
 #IS_MOVE is in move_toSSD_files.py
 
 # I/O utils
@@ -81,7 +81,7 @@ CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden b
 # CSV_FOLDER = os.path.join(io.ROOT_DBx, "body3D_segmentbig_useall256_CSVs_test")
 
 # CSV_FOLDER = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion128_test220K"
-CSV_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/bodyLms_768"
+CSV_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/40even_testing"
 
 # overriding DB for testing
 # io.db["name"] = "stock"
@@ -279,9 +279,10 @@ elif CURRENT_MODE == 'heft_torso_keywords':
         TSP_SORT = CHOP_ITTER_TSP_SORT = False
     else:
         # smaller numbers when using HSV clusters
-        MIN_VIDEO_FUSION_COUNT = 200 # this is the cut off for the CSV fusion pairs
+        # APRIL 6 TK TEMP 10% CHANGES TO THESE FOR TESTING
+        MIN_VIDEO_FUSION_COUNT = 20 # this is the cut off for the CSV fusion pairs
         if TSP_SORT: MIN_CYCLE_COUNT = FORCE_TARGET_COUNT
-        else: MIN_CYCLE_COUNT = 150 # this is the cut off for the SQL query results
+        else: MIN_CYCLE_COUNT = 15 # this is the cut off for the SQL query results
         
 
 
@@ -2646,7 +2647,7 @@ def main():
             def sub_select_clusters_by_hsv(cluster_topic_no, n_cluster_topics):
                 # N_HSV
                 # make a list where the first value matches cluster_topic_no and the second value is assigned from range(1,N_HSV+1)
-                if USE_HSV: all_potential_hsv_clusters = [[cluster_topic_no, i] for i in range(0, N_HSV + 1)]
+                if USE_HSV: all_potential_hsv_clusters = [[cluster_topic_no, i] for i in range(1, N_HSV + 1)]
                 else: all_potential_hsv_clusters = [[cluster_topic_no, 0]]
                 # print(f"all_potential_hsv_clusters for cluster_topic_no {cluster_topic_no} is {all_potential_hsv_clusters}")
                 this_n_hsv_clusters = []

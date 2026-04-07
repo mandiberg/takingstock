@@ -29,6 +29,7 @@ import numpy as np
 import pandas as pd
 from scipy.optimize import minimize
 import os
+import random
 import time
 import pickle
 from sys import platform
@@ -45,21 +46,22 @@ EXPAND = False
 ONE_SHOT = False # take all files, based off the very first sort order.
 JUMP_SHOT = False # jump to random file if can't find a run
 
-'''
-tracking time based on items, for speed predictions
-earlier
-47000, 240
-100000, 695
+LIMIT = 2000000
+BATCH_LIMIT = 10000
 
-Now
-items, seconds
-10000, 33
-50000, 280
-100000, 1030
-200000, 3202
-300000, 6275
-1.1M, ???
-'''
+# number of clusters produced. run GET_OPTIMAL_CLUSTERS and add that number here
+# 32 for hand positions
+# 128 for hand gestures
+N_CLUSTERS = 128  # Increased from 768 - need more granularity to break up mega-clusters
+N_META_CLUSTERS = 256
+
+# Reproducibility seed for this run (NumPy + Python random).
+GLOBAL_SEED = 42
+np.random.seed(GLOBAL_SEED)
+random.seed(GLOBAL_SEED)
+
+
+
 
 
 io = DataIO()
@@ -124,9 +126,9 @@ SegmentTable_name = 'SegmentBig_isface'
 # if cl.CLUSTER_TYPE == "ArmsPoses3D":
 # SegmentHelper_name = 'SegmentHelper_sept2025_heft_keywords'
 # SegmentHelper_name = 'Detections' # if CLUSTER_TYPE = "ObjectFusion", it automatically joins to Detections
-SegmentHelper_name = 'SegmentHelperObject_89_mask'
+# SegmentHelper_name = 'SegmentHelperObject_89_mask'
 # SegmentHelper_name = 'SegmentHelper_dec2025_body3D_outOfSegment'
-# SegmentHelper_name = 'SegmentHelper_oct2025_every40'
+SegmentHelper_name = 'SegmentHelper_oct2025_evens_quarters'
 FORCE_HAND_LANDMARKS = False # when doing ArmsPoses3D, default is True, so mongo_hand_landmarks = 1
 
 # TESTING MODE - reduce dataset size for faster iteration using pre-filtered table
@@ -134,11 +136,6 @@ FORCE_HAND_LANDMARKS = False # when doing ArmsPoses3D, default is True, so mongo
 # Set to False for production full dataset processing
 SKIP_TESTING = False
 
-# number of clusters produced. run GET_OPTIMAL_CLUSTERS and add that number here
-# 32 for hand positions
-# 128 for hand gestures
-N_CLUSTERS = 64  # Increased from 768 - need more granularity to break up mega-clusters
-N_META_CLUSTERS = 256
 if MODE == 3: 
     META = True
     N_CLUSTERS = N_META_CLUSTERS
@@ -233,7 +230,8 @@ if USE_SEGMENT is True and (cl.CLUSTER_TYPE != "Clusters"):
     # handle ObjectFusion, just get pitch, yaw, roll. Detections handled later:
     if cl.CLUSTER_TYPE == "ObjectFusion":
         SELECT += f" , {dupe_table_pre}.pitch, {dupe_table_pre}.yaw, {dupe_table_pre}.roll "
-        SELECT += f" , {dupe_table_pre}.face_height, {dupe_table_pre}.nose_pixel_x, {dupe_table_pre}.nose_pixel_y "
+        SELECT += " , i.h, i.w "
+        FROM += " LEFT JOIN Images i ON s.image_id = i.image_id "
 
     if isinstance(this_data_column, list):
         if "HSV" in cl.CLUSTER_TYPE:
@@ -297,9 +295,6 @@ if USE_SEGMENT is True and (cl.CLUSTER_TYPE != "Clusters"):
         FROM = table_cluster_type
         WHERE = " cluster_id IS NOT NULL "
 
-    # WHERE += " AND h.is_body = 1"
-    LIMIT = 1500000
-    BATCH_LIMIT = 10000
 
     '''
     Poses
@@ -980,57 +975,6 @@ def df_list_to_cols(df, col_name):
     # Drop the original col_name column
     df = df.drop(col_name, axis=1)
     return df
-
-def extract_face_geometry(df, sort):
-    """
-    Extract face geometry (nose position and face height) from each image.
-    Updates df with nose_pixel_x, nose_pixel_y, face_height columns.
-    """
-    face_data = []
-    for idx, row in df.iterrows():
-        image_id = row['image_id']
-        
-        # Extract face landmarks and calculate position using SortPose methods
-        try:
-            # Skip expensive Mongo/SortPose computation if geometry already in DB
-            if (pd.notna(row.get('face_height')) and
-                    pd.notna(row.get('nose_pixel_x')) and
-                    pd.notna(row.get('nose_pixel_y'))):
-                face_data.append({
-                    'image_id': image_id,
-                    'nose_pixel_x': int(row['nose_pixel_x']),
-                    'nose_pixel_y': int(row['nose_pixel_y']),
-                    'face_height': int(row['face_height']),
-                })
-                continue
-
-            face_landmarks = row['face_landmarks'] if 'face_landmarks' in row else None
-            if pd.notna(face_landmarks):
-                sort.faceLms = io.unpickle_array(face_landmarks)
-                if sort.faceLms and hasattr(sort.faceLms, 'landmark') and len(sort.faceLms.landmark) > 0:
-                    sort.w = row['w']
-                    sort.h = row['h']
-
-                    # Match utilities/draw_norm_lms.py process_face_doc()
-                    sort.nose_2d = sort.get_face_2d_point(1)
-                    nose_pixel_x, nose_pixel_y = sort.nose_2d
-                    sort.get_faceheight_data()
-
-                    face_data.append({
-                        'image_id': image_id,
-                        'nose_pixel_x': int(nose_pixel_x) if nose_pixel_x is not None else None,
-                        'nose_pixel_y': int(nose_pixel_y) if nose_pixel_y is not None else None,
-                        'face_height': int(sort.face_height) if sort.face_height is not None else None
-                    })
-                else:
-                    face_data.append({'image_id': image_id, 'nose_pixel_x': None, 'nose_pixel_y': None, 'face_height': None})
-            else:
-                face_data.append({'image_id': image_id, 'nose_pixel_x': None, 'nose_pixel_y': None, 'face_height': None})
-        except Exception as e:
-            print(f"Error extracting face geometry for image_id {image_id}: {e}")
-            face_data.append({'image_id': image_id, 'nose_pixel_x': None, 'nose_pixel_y': None, 'face_height': None})
-    
-    return pd.DataFrame(face_data)
 
 def save_images_detections(df, engine):
     """
@@ -1964,65 +1908,46 @@ def main():
         
         # Save face geometry and hand detection data for ObjectFusion clustering
         if cl.CLUSTER_TYPE == "ObjectFusion":
-            print("\n=== Saving ImagesDetections table ===")
+            print("\n=== Saving Images Metadata / ImagesDetections table ===")
             try:
-                # Extract face geometry from original df
-                face_geometry_df = extract_face_geometry(df, sort)
-                
-                print(f"[DEBUG] Before merge:")
-                print(f"[DEBUG]   enc_data shape: {enc_data.shape if 'image_id' in enc_data.columns else 'N/A (will use df_columnar)'}")
-                print(f"[DEBUG]   df_columnar shape: {df_columnar.shape}")
-                print(f"[DEBUG]   face_geometry_df shape: {face_geometry_df.shape}")
-                
-                # Merge face geometry with full ObjectFusion data (contains knuckle/source columns)
-                if 'image_id' in enc_data.columns:
-                    print(f"[DEBUG]   Using enc_data for merge (has image_id)")
-                    print(f"[DEBUG]   enc_data columns: {list(enc_data.columns)}")
-                    df_with_geometry = enc_data.merge(face_geometry_df, on='image_id', how='left')
-                else:
-                    print(f"[DEBUG]   Using df_columnar for merge (enc_data missing image_id)")
-                    print(f"[DEBUG]   df_columnar columns: {list(df_columnar.columns)}")
-                    df_with_geometry = df_columnar.merge(face_geometry_df, on='image_id', how='left')
-                
-                print(f"[DEBUG] After merge:")
-                print(f"[DEBUG]   df_with_geometry shape: {df_with_geometry.shape}")
-                print(f"[DEBUG]   df_with_geometry columns: {list(df_with_geometry.columns)}")
-                
-                # Check for hand position columns
-                hand_cols = ['left_pointer_knuckle_norm', 'right_pointer_knuckle_norm', 'left_source', 'right_source']
-                for col in hand_cols:
-                    if col in df_with_geometry.columns:
-                        print(f"[DEBUG]   ✓ Column '{col}' found in df_with_geometry")
-                    else:
-                        print(f"[DEBUG]   ✗ Column '{col}' MISSING from df_with_geometry")
-
-                # Update Encodings table with face geometry via centralized helper.
-                updated_count = 0
-                for idx, row in face_geometry_df.iterrows():
+                updated_images_count = 0
+                skipped_missing_dimensions_count = 0
+                for idx, row in df.iterrows():
                     try:
+                        image_id = row.get('image_id')
+                        if pd.isna(image_id):
+                            continue
+                        image_id = int(image_id)
+
+                        image_h = row.get('h')
+                        image_w = row.get('w')
+                        if pd.isna(image_h) and pd.isna(image_w):
+                            skipped_missing_dimensions_count += 1
+                            continue
+
                         update_result = ToolsClustering.store_image_face_data(
                             session=session,
-                            target_image_id=row['image_id'],
-                            face_height=row.get('face_height'),
-                            nose_pixel_x=row.get('nose_pixel_x'),
-                            nose_pixel_y=row.get('nose_pixel_y'),
+                            target_image_id=image_id,
+                            image_h=image_h,
+                            image_w=image_w,
                             testing=False,
                             auto_commit=False,
                         )
-                        if update_result.get('encodings'):
-                            updated_count += 1
+                        if update_result.get('images'):
+                            updated_images_count += 1
                     except Exception as e:
-                        print(f"Error updating Encodings for image_id {row['image_id']}: {e}")
-                if updated_count > 0:
+                        print(f"Error updating Encodings for image_id {image_id if 'image_id' in locals() else row.get('image_id')}: {e}")
+                if updated_images_count > 0:
                     session.commit()
-                print(f"✓ Updated Encodings table with face geometry for {updated_count} images")
+                print(f"[DEBUG] Skipped {skipped_missing_dimensions_count} rows with no image dimensions to persist")
+                print(f"✓ Updated Images table with h/w for {updated_images_count} images")
 
                 # Save ImagesDetections table only for newly processed IDs
                 if SAVE_IMAGE_DETECTIONS_PER_BATCH:
                     print("[DEBUG] Skipping final ImagesDetections write (already persisted per batch).")
                 else:
-                    if 'newly_processed_detection' in df_with_geometry.columns:
-                        df_new = df_with_geometry[df_with_geometry['newly_processed_detection'] == True].copy()
+                    if 'newly_processed_detection' in enc_data.columns:
+                        df_new = enc_data[enc_data['newly_processed_detection'] == True].copy()
                         print(f"[DEBUG] Newly processed rows to persist: {len(df_new)}")
                         if len(df_new) > 0:
                             save_images_detections(df_new, engine)
@@ -2030,7 +1955,7 @@ def main():
                             print("[DEBUG] No newly processed rows. Skipping ImagesDetections save.")
                     else:
                         print("[DEBUG] newly_processed_detection column missing; defaulting to full save.")
-                        save_images_detections(df_with_geometry, engine)
+                        save_images_detections(enc_data, engine)
             except Exception as e:
                 print(f"Error in ObjectFusion post-processing: {e}")
         
