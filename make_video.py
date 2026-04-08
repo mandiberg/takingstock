@@ -49,7 +49,7 @@ SegmentTable_name = 'SegmentBig_isface'
 # SegmentTable_name = 'SegmentBig_isnotface'
 # SegmentHelper_name = 'SegmentHelper_may2025_4x4faces'
 # SegmentHelper_name = 'SegmentHelper_sept2025_heft_keywords'
-SegmentHelper_name = 'SegmentHelper_oct2025_every40_even'
+SegmentHelper_name = 'SegmentHelper_T11_Oct20_COCO_Custom_evens_quarters'
 # SegmentHelper_name = 'None' # set below for heft keywords
 # SegmentHelper_name = None
 # SATYAM, this is MM specific
@@ -233,7 +233,9 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     USE_HEAD_POSE = True
     IS_HAND_POSE_FUSION = True # do we use fusion clusters
     CHOP_FIRST = True # does a first pass chop before whatever sort happens - this is default now
-
+    # this is an override for development purposes. will only make CSVs from these clusters:
+    TEMP_FOCUS_CLUSTER_HACK_LIST = [16,17,25,70,71,76,92,100,103,120,121,137,138,139,147,148,180,199,210,231,248,249,259,270,285,287,291,319,333,336,337,338,347,354,368,371,385,429,451,464,476,508]
+    
     TESTING = True
     if TESTING:
         USE_HSV = False
@@ -441,6 +443,11 @@ if TOPIC_NO is not None and IS_ONE_TOPIC and IS_HAND_POSE_FUSION and not PURGING
     FOCUS_CLUSTER_HACK_DICT = FOCUS_CLUSTER_DICT.get(CLUSTER1, {})
     if FOCUS_CLUSTER_HACK_DICT is not None:
         FOCUS_CLUSTER_HACK_LIST = FOCUS_CLUSTER_HACK_DICT.get(int(math.floor(TOPIC_NO[0])), None)
+    
+    # development override
+    if TEMP_FOCUS_CLUSTER_HACK_LIST is not None:
+        print("WARNING: FOCUS_CLUSTER_HACK_DICT is None, using TEMP_FOCUS_CLUSTER_HACK_LIST")
+        FOCUS_CLUSTER_HACK_LIST = TEMP_FOCUS_CLUSTER_HACK_LIST
 
 
 DRAW_TEST_LMS = False # this is for testing the landmarks
@@ -2623,7 +2630,7 @@ def main():
                 print(f"IS_TOPICS is {IS_TOPICS} with {n_cluster_topics}")
 
             if N_HSV > 0:
-                n_hsv_clusters = range(1,N_HSV+1)
+                n_hsv_clusters = range(0,N_HSV+1)
             else:
                 n_hsv_clusters = [0]
 
@@ -2636,7 +2643,7 @@ def main():
                 if VERBOSE: print("select_map_images this_topic", this_topic)
                 if VERBOSE: print("select_map_images hsv_cluster", hsv_cluster)
                 resultsjson = selectSQL(this_cluster, this_topic, hsv_cluster)
-                print("got results, count is: ",len(resultsjson))
+                print(f"DEBUG - Got {len(resultsjson)} results from selectSQL with cluster={this_cluster}, topic={this_topic}, hsv={hsv_cluster}")
                 if len(resultsjson) < MIN_CYCLE_COUNT:
                     print(f"less than {MIN_CYCLE_COUNT} resultsjson, skipping this {this_cluster} and {this_topic}")
                     return

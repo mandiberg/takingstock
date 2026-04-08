@@ -55,10 +55,20 @@ LIMIT 10
 
 LIMIT 22000000
 
+
+
+
+
+
+
+
+
+
+
 -- cluster-class_id matrix
 -- produces cluster-class_id matrix withcounts for each intersection
 -- is not location specific. 
-SELECT 
+-- EXCLUDES ALL NON-OBJECT PLACEMENT IMAGES!!
     iof.cluster_id,
     SUM(CASE WHEN d.class_id = 0 THEN 1 ELSE 0 END) AS class_0,
     SUM(CASE WHEN d.class_id = 1 THEN 1 ELSE 0 END) AS class_1,
@@ -385,12 +395,73 @@ SELECT
   SUM(CASE WHEN bbox IS NULL AND (bbox_norm IS NULL OR JSON_EXTRACT(bbox_norm, '$.left') IS NULL) THEN 1 ELSE 0 END) AS null_bbox_and_null_bbox_norm,
   SUM(CASE WHEN bbox IS NOT NULL AND (bbox_norm IS NULL OR JSON_EXTRACT(bbox_norm, '$.left') IS NULL) THEN 1 ELSE 0 END) AS not_null_bbox_and_null_bbox_norm,
   SUM(CASE WHEN bbox IS NOT NULL AND bbox_norm IS NOT NULL AND JSON_EXTRACT(bbox_norm, '$.left') IS NOT NULL THEN 1 ELSE 0 END) AS not_null_bbox_and_not_null_bbox_norm
-FROM Detections
+FROM Detections d
+JOIN SegmentHelper_T11_Oct20_COCO_Custom_evens_quarters s ON s.image_id = d.image_id 
 ;
 -- WHERE class_id = 111;
 
+
+-- SegmentHelper_T11_Oct20_COCO_Custom_evens_quarters 4/7
+-- 0	3198738	4906887
+
+-- SegmentHelper_YOLO_Selects 4/7
+-- 0	11996771	16094438
+
 -- 4/5 total: 0	32944858	20900495
 -- 4/7 total: 0	31934191	22982959
+
+
+
+'''
+Detections table has bbox and bbox_norm collumns
+NoDetections and NoDetectionsCustom contain image_ids of known no detections images
+I want to know the breakdown of SegmentHelper_T11_Oct20_COCO_Custom_evens_quarters by 
+unprocessed_image -- only in SegmentHelper_T11_Oct20_COCO_Custom_evens_quarters
+no_detections -- only in NoDetections
+no_detections_custom -- only in NoDetectionsCustom
+not_null_bbox_and_null_bbox_norm -- in Detections and has bbox but null bbox_norm
+not_null_bbox_and_not_null_bbox_norm -- in Detections and has bbox and bbox_norm
+'''
+
+WITH detection_flags AS (
+  SELECT
+    d.image_id,
+    MAX(CASE
+      WHEN d.bbox IS NOT NULL
+       AND (d.bbox_norm IS NULL OR JSON_EXTRACT(d.bbox_norm, '$.left') IS NULL)
+      THEN 1 ELSE 0 END) AS has_bbox_and_null_bbox_norm,
+    MAX(CASE
+      WHEN d.bbox IS NOT NULL
+       AND d.bbox_norm IS NOT NULL
+       AND JSON_EXTRACT(d.bbox_norm, '$.left') IS NOT NULL
+      THEN 1 ELSE 0 END) AS has_bbox_and_not_null_bbox_norm
+  FROM Detections d
+  GROUP BY d.image_id
+)
+SELECT
+  SUM(CASE WHEN df.image_id IS NULL AND nd.image_id IS NULL AND ndc.image_id IS NULL THEN 1 ELSE 0 END) AS unprocessed_image,
+  SUM(CASE WHEN nd.image_id IS NOT NULL THEN 1 ELSE 0 END) AS no_detections,
+  SUM(CASE WHEN ndc.image_id IS NOT NULL THEN 1 ELSE 0 END) AS no_detections_custom,
+  SUM(CASE WHEN df.has_bbox_and_null_bbox_norm = 1 THEN 1 ELSE 0 END) AS not_null_bbox_and_null_bbox_norm,
+  SUM(CASE WHEN df.has_bbox_and_not_null_bbox_norm = 1 THEN 1 ELSE 0 END) AS not_null_bbox_and_not_null_bbox_norm
+FROM SegmentHelper_T11_Oct20_COCO_Custom_evens_quarters s
+LEFT JOIN (SELECT DISTINCT image_id FROM NoDetections) nd ON s.image_id = nd.image_id
+LEFT JOIN (SELECT DISTINCT image_id FROM NoDetectionsCustom) ndc ON s.image_id = ndc.image_id
+LEFT JOIN detection_flags df ON s.image_id = df.image_id
+;
+
+
+-- results:
+-- 3476286	0	0	887547	7244879
+
+
+SELECT COUNT(image_id)
+FROM SegmentHelper_T11_Oct20_COCO_Custom_evens_quarters s
+;
+-- 8033889
+
+
+-- WHERE class_id = 111;
 
 
 '''
@@ -400,6 +471,7 @@ count how many image_ids have face_x but pitch yaw roll are NULL, how many have 
 SELECT COUNT(DISTINCT s.image_id) AS total_images_with_face_x_and_null_pitch_yaw_roll
 FROM Detections s
 JOIN Encodings e ON s.image_id = e.image_id
+JOIN SegmentHelper_YOLO_Selects sh ON sh.image_id = s.image_id 
 WHERE e.face_x IS NOT NULL
 AND (e.pitch IS NULL OR e.yaw IS NULL OR e.roll IS NULL)
 ; 
@@ -451,20 +523,67 @@ Images missing h OR w: 46,007,899
 
 -- create helper segment table
 
-CREATE TABLE SegmentHelper_T11_Oct20_COCO_Custom (
+CREATE TABLE SegmentHelper_T11_Oct20_COCO_Custom_evens_quarters (
+    seg_image_id int NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    image_id INTEGER,
+    FOREIGN KEY (image_id) REFERENCES Images(image_id)
+);
+
+USE Stock;
+
+CREATE TABLE SegmentHelper_YOLO_Selects (
+    seg_image_id int NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    image_id INTEGER,
+    FOREIGN KEY (image_id) REFERENCES Images(image_id)
+);
+
+CREATE TABLE SegmentHelper_T4_T11_T37_T40 (
     seg_image_id int NOT NULL AUTO_INCREMENT PRIMARY KEY,
     image_id INTEGER,
     FOREIGN KEY (image_id) REFERENCES Images(image_id)
 );
 
 
-
+INSERT INTO SegmentHelper_T11_Oct20_COCO_Custom_evens_quarters (image_id)
+    SELECT shoeq.image_id 
+    FROM SegmentHelper_T11_Oct20_COCO_Custom t
+    JOIN SegmentHelper_oct2025_evens_quarters shoeq ON shoeq.image_id = t.image_id 
+    WHERE shoeq.image_id IS NOT NULL
+;
+    
+INSERT INTO SegmentHelper_T11_Oct20_COCO_Custom (image_id)
+    SELECT image_id FROM SegmentHelper_YOLO_Selects WHERE image_id IS NOT NULL
+    UNION
+    SELECT image_id FROM SegmentHelper_T4_T11_T37_T40 WHERE image_id IS NOT NULL
+    UNION
+    SELECT image_id FROM SegmentHelperObjectYOLO WHERE image_id IS NOT NULL
+    UNION
+    SELECT image_id FROM SegmentOct20 WHERE image_id IS NOT NULL
+;
+-- 38.5M
 
 -- insert into SegmentHelper_T11_Oct20_COCO_Custom of union of all image_id in these helper tables
 
 USE Stock;
 
-INSERT INTO SegmentHelper_T11_Oct20_COCO_Custom (image_id)
+
+USE Stock;
+-- for making a helper from Segment Object based on t64 Topic
+INSERT INTO SegmentHelper_T37_money (image_id)
+SELECT DISTINCT e.image_id
+FROM SegmentBig_isface e
+JOIN ImagesTopics iap ON iap.image_id = e.image_id
+WHERE (iap.topic_id = 37 OR iap.topic_id2 = 37)
+AND NOT EXISTS (
+        SELECT 1
+        FROM SegmentHelper_T37_money s
+        WHERE s.image_id = e.image_id
+    )
+LIMIT 2000000
+;
+
+
+INSERT INTO SegmentHelper_T4_T11_T37_T40 (image_id)
     SELECT image_id FROM SegmentHelper_T4_occupation WHERE image_id IS NOT NULL
     UNION
     SELECT image_id FROM SegmentHelper_T11_business WHERE image_id IS NOT NULL
@@ -472,7 +591,10 @@ INSERT INTO SegmentHelper_T11_Oct20_COCO_Custom (image_id)
     SELECT image_id FROM SegmentHelper_T37_money WHERE image_id IS NOT NULL
     UNION
     SELECT image_id FROM SegmentHelper_T40_technology WHERE image_id IS NOT NULL
-    UNION
+; 
+-- 8M
+
+INSERT INTO SegmentHelper_YOLO_Selects (image_id)
     SELECT image_id FROM SegmentHelperObject_100_tulip WHERE image_id IS NOT NULL
     UNION
     SELECT image_id FROM SegmentHelperObject_101_flowers_other WHERE image_id IS NOT NULL
@@ -524,11 +646,9 @@ INSERT INTO SegmentHelper_T11_Oct20_COCO_Custom (image_id)
     SELECT image_id FROM SegmentHelperObject_98_lily WHERE image_id IS NOT NULL
     UNION
     SELECT image_id FROM SegmentHelperObject_99_iris WHERE image_id IS NOT NULL
-    UNION
-    SELECT image_id FROM SegmentHelperObjectYOLO WHERE image_id IS NOT NULL
-    UNION
-    SELECT image_id FROM SegmentOct20 WHERE image_id IS NOT NULL
 ;
+-- 18.4M
+
 
 '''
 SegmentHelper_T11_Oct20_COCO_Custom

@@ -213,7 +213,7 @@ class ToolsClustering:
 
         # Face-angle neutralized
         self.FEATURE_WEIGHTS = {
-            'face_angle': .2,      # pitch, yaw, roll - LOW weight (prevent face-angle mega-clusters)
+            'face_angle': .5,      # pitch, yaw, roll - LOW weight (prevent face-angle mega-clusters)
             'class_id': 3.0,        # class_id - VERY HIGH weight at RAW SCALE (0-107) to force object-type separation
             'confidence': 0.5,      # detection confidence - very low weight
             'bbox': 2.0,            # bbox coordinates - reduced to standard weight
@@ -222,6 +222,11 @@ class ToolsClustering:
 
         # Store fitted scaler for inverse transform during median calculation
         self.feature_scaler = None
+        self.ARMS_POSE_CACHE_TABLE = 'ImagesArmsFeatures3D'
+        self.ARMS_POSE_SUBSET_NAME = 'arms_0_22_xyz'
+        self.ARMS_POSE_SUBSET_VERSION = 1
+        self.WORLD_LMS_REPORT_MAX_SAMPLES = 20
+        self.world_lms_stats = self._new_world_lms_stats()
         self.CLUSTER_DATA = {
             "BodyPoses": {"data_column": "mongo_body_landmarks", "is_feet": 1, "mongo_hand_landmarks": None},
             "BodyPoses3D": {"data_column": "mongo_body_landmarks_3D", "is_feet": 1, "mongo_hand_landmarks": None}, # changed this for testing
@@ -232,6 +237,47 @@ class ToolsClustering:
             "FingertipsPositions": {"data_column": "mongo_hand_landmarks_norm", "is_feet": None, "mongo_hand_landmarks": 1},
             "HSV": {"data_column": ["hue", "sat", "val"], "is_feet": None},
 }
+
+    def _new_world_lms_stats(self):
+        """Create a fresh world-landmark stats payload for ObjectFusion runs."""
+        return {
+            'candidates_total': 0,
+            'world_lms_present': 0,
+            'world_lms_missing': 0,
+            'world_lms_missing_sample_ids': [],
+            'excluded_missing_world_lms': 0,
+            'excluded_invalid_subset': 0,
+            'excluded_invalid_subset_sample_ids': [],
+            'rows_no_object_retained': 0,
+        }
+
+    def reset_world_lms_stats(self):
+        """Reset world-landmark stats at run start."""
+        self.world_lms_stats = self._new_world_lms_stats()
+        return self.world_lms_stats
+
+    def append_world_lms_sample_id(self, sample_key, image_id):
+        """Append one sample image_id to a stats list with max-size guard."""
+        sample_list = self.world_lms_stats.get(sample_key)
+        if not isinstance(sample_list, list):
+            return
+        if image_id is None:
+            return
+        if len(sample_list) >= self.WORLD_LMS_REPORT_MAX_SAMPLES:
+            return
+        try:
+            sample_list.append(int(image_id))
+        except Exception:
+            return
+
+    def increment_world_lms_stat(self, stat_key, amount=1):
+        """Increment a numeric world-landmark stat in-place."""
+        if stat_key not in self.world_lms_stats:
+            return
+        try:
+            self.world_lms_stats[stat_key] += int(amount)
+        except Exception:
+            return
 
     def get_cluster_medians(self, session, Clusters, USE_SUBSET_MEDIANS=False, SUBSET_LANDMARKS=None):
         print("getting cluster medians")
@@ -1429,6 +1475,94 @@ class ToolsClustering:
         
         return df
 
+    def process_detections_with_debug_reporting(self, df, engine, label="", tracked_class_ids=None, conf_threshold=None):
+        """
+        Run ObjectFusion detection assignment with consolidated debug/report logging.
+        Returns processed dataframe with object assignment columns filled.
+        """
+        tracked_ids = tuple(tracked_class_ids) if tracked_class_ids is not None else self.DEBUG_TRACKED_CLASS_IDS
+        object_assignment_cols = [
+            'left_hand_object', 'right_hand_object', 'top_face_object',
+            'left_eye_object', 'right_eye_object', 'mouth_object', 'shoulder_object',
+            'waist_object', 'feet_object'
+        ]
+
+        # Pre-assignment scope counts from Detections table.
+        image_ids = []
+        if 'image_id' in df.columns:
+            image_ids = df['image_id'].dropna().astype(int).tolist()
+
+        tracked_scope_counts = self.count_tracked_detections_for_image_ids(
+            engine,
+            image_ids,
+            class_ids=tracked_ids,
+            conf_threshold=conf_threshold,
+        )
+        tracked_scope_total_rows = int(sum(v['det_rows'] for v in tracked_scope_counts.values()))
+        tracked_scope_total_images = int(sum(v['image_rows'] for v in tracked_scope_counts.values()))
+        print(
+            f"{label}[COUNT] Tracked classes present in Detections for this df scope "
+            f"(class 110-119, conf>={conf_threshold}, bbox_norm not null): "
+            f"det_rows={tracked_scope_total_rows}, image_rows_sum={tracked_scope_total_images}"
+        )
+        for class_id in tracked_ids:
+            class_counts = tracked_scope_counts.get(class_id, {'det_rows': 0, 'image_rows': 0})
+            print(
+                f"{label}[COUNT] Detections scope class {class_id}: "
+                f"det_rows={int(class_counts['det_rows'])}, image_rows={int(class_counts['image_rows'])}"
+            )
+
+        # Assignment pass.
+        df = self.process_detections_for_df(df)
+
+        tracked_counts = self.get_class_assignment_debug_counts()
+        print(f"{label}[COUNT] Class 110-119 assignment summary (seen/assigned_unique/dropped/slot_hits):")
+        for class_id in tracked_ids:
+            stats = tracked_counts.get(class_id, {})
+            seen_count = int(stats.get('seen', 0))
+            assigned_unique_count = int(stats.get('assigned_unique', 0))
+            dropped_count = int(stats.get('dropped', 0))
+            slot_hits_total = int(stats.get('assigned_slot_hits', 0))
+            slot_hits = stats.get('slot_hits', {}) if isinstance(stats.get('slot_hits', {}), dict) else {}
+            compact_slot_hits = {slot: int(count) for slot, count in slot_hits.items() if int(count) > 0}
+            print(
+                f"{label}[COUNT] class {class_id}: "
+                f"seen={seen_count}, assigned_unique={assigned_unique_count}, "
+                f"dropped={dropped_count}, slot_hits={slot_hits_total}, by_slot={compact_slot_hits if compact_slot_hits else '{}'}"
+            )
+
+        pipeline_counts = self.get_class_pipeline_debug_counts()
+        print(f"{label}[COUNT] Class 110-119 pipeline stages (query -> parse -> resolve -> tie/non-hand -> final):")
+        for class_id in tracked_ids:
+            stats = pipeline_counts.get(class_id, {})
+            print(
+                f"{label}[COUNT] class {class_id}: "
+                f"query_hits={int(stats.get('query_hits', 0))}, "
+                f"bbox_parse_ok={int(stats.get('bbox_parse_ok', 0))}, "
+                f"bbox_parse_fail={int(stats.get('bbox_parse_fail', 0))}, "
+                f"post_resolve={int(stats.get('post_resolve', 0))}, "
+                f"tie_blocked={int(stats.get('tie_blocked', 0))}, "
+                f"non_hand_pool={int(stats.get('non_hand_pool', 0))}, "
+                f"final_assigned_unique={int(stats.get('final_assigned_unique', 0))}"
+            )
+            fail_examples = stats.get('parse_fail_examples', []) if isinstance(stats.get('parse_fail_examples', []), list) else []
+            if fail_examples:
+                print(f"{label}[COUNT] class {class_id} parse_fail_examples: {fail_examples}")
+
+        if self.USE_WHITELIST:
+            whitelist_rejects = self.get_whitelist_reject_counts()
+            compact_rejects = {k: int(v) for k, v in whitelist_rejects.items() if int(v) > 0}
+            print(f"{label}[COUNT] Whitelist rejects by slot: {compact_rejects if compact_rejects else 'none'}")
+
+        rows_with_any_object = int(df[object_assignment_cols].notna().any(axis=1).sum())
+        rows_with_no_objects = int(len(df) - rows_with_any_object)
+        print(f"{label}[COUNT] Rows with any object assignment: {rows_with_any_object}")
+        print(f"{label}[COUNT] Rows with no object assignments: {rows_with_no_objects}")
+        for col in object_assignment_cols:
+            print(f"{label}[COUNT] {col} assigned: {int(df[col].notna().sum())}")
+
+        return df
+
     def _build_detection_payload_from_sql_fields(self, detection_id, class_id, conf, bbox_norm):
         """Build detection payload dict from SQL selected fields."""
         if detection_id is None or class_id is None or conf is None or bbox_norm is None:
@@ -1561,6 +1695,100 @@ class ToolsClustering:
 
         return result
 
+    def ensure_images_armsposes3d_table(self):
+        """Ensure cache table for subsetted arms pose vectors exists."""
+        if self.session is None:
+            raise ValueError("Session not initialized. Pass session to ToolsClustering.__init__()")
+
+        create_sql = text(f"""
+            CREATE TABLE IF NOT EXISTS {self.ARMS_POSE_CACHE_TABLE} (
+                image_id BIGINT NOT NULL,
+                arms_subset_json JSON NULL,
+                has_world_lms TINYINT(1) NOT NULL DEFAULT 0,
+                subset_name VARCHAR(64) NOT NULL,
+                subset_version INT NOT NULL,
+                updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                PRIMARY KEY (image_id)
+            )
+        """)
+        self.session.execute(create_sql)
+
+        # Backfill legacy table schemas in-place when table already exists without
+        # the cache columns needed by ObjectFusion hydration/upsert.
+        existing_cols_sql = text(f"SHOW COLUMNS FROM {self.ARMS_POSE_CACHE_TABLE}")
+        existing_cols_rows = self.session.execute(existing_cols_sql).fetchall()
+        existing_cols = {row[0] for row in existing_cols_rows}
+
+        if 'arms_subset_json' not in existing_cols:
+            self.session.execute(text(
+                f"ALTER TABLE {self.ARMS_POSE_CACHE_TABLE} ADD COLUMN arms_subset_json JSON NULL"
+            ))
+        if 'has_world_lms' not in existing_cols:
+            self.session.execute(text(
+                f"ALTER TABLE {self.ARMS_POSE_CACHE_TABLE} ADD COLUMN has_world_lms TINYINT(1) NOT NULL DEFAULT 0"
+            ))
+        if 'subset_name' not in existing_cols:
+            self.session.execute(text(
+                f"ALTER TABLE {self.ARMS_POSE_CACHE_TABLE} ADD COLUMN subset_name VARCHAR(64) NOT NULL DEFAULT '{self.ARMS_POSE_SUBSET_NAME}'"
+            ))
+        if 'subset_version' not in existing_cols:
+            self.session.execute(text(
+                f"ALTER TABLE {self.ARMS_POSE_CACHE_TABLE} ADD COLUMN subset_version INT NOT NULL DEFAULT {int(self.ARMS_POSE_SUBSET_VERSION)}"
+            ))
+        if 'updated_at' not in existing_cols:
+            self.session.execute(text(
+                f"ALTER TABLE {self.ARMS_POSE_CACHE_TABLE} ADD COLUMN updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP"
+            ))
+
+    def get_precomputed_armsposes_by_image_ids(self, image_ids):
+        """
+        Read precomputed subsetted arms pose vectors from ImagesArmsFeatures3D.
+        Returns dict keyed by image_id with cached payload and flags.
+        """
+        if self.session is None:
+            raise ValueError("Session not initialized. Pass session to ToolsClustering.__init__()")
+
+        if not image_ids:
+            return {}
+
+        self.ensure_images_armsposes3d_table()
+
+        sql = text(f"""
+            SELECT
+                image_id,
+                arms_subset_json,
+                has_world_lms,
+                subset_name,
+                subset_version
+            FROM {self.ARMS_POSE_CACHE_TABLE}
+            WHERE image_id IN :image_ids
+        """).bindparams(bindparam("image_ids", expanding=True))
+
+        rows = self.session.execute(sql, {"image_ids": list(image_ids)}).mappings().all()
+
+        result = {}
+        for row in rows:
+            raw_payload = row.get('arms_subset_json')
+            payload = None
+            if raw_payload is not None:
+                if isinstance(raw_payload, str):
+                    try:
+                        payload = json.loads(raw_payload)
+                    except json.JSONDecodeError:
+                        payload = None
+                else:
+                    payload = raw_payload
+
+            image_id = int(row['image_id'])
+            result[image_id] = {
+                'arms_subset_vector': payload,
+                'has_world_lms': bool(row.get('has_world_lms', 0)),
+                'subset_name': row.get('subset_name'),
+                'subset_version': row.get('subset_version'),
+            }
+
+        return result
+
     def hydrate_detections_from_precomputed_table(self, df):
         """
         Fill detection classification columns from ImagesDetections + Detections.
@@ -1600,6 +1828,174 @@ class ToolsClustering:
         missing_image_ids = sorted(list(set(image_ids) - set(precomputed.keys())))
         return df, missing_image_ids
 
+    def hydrate_armsposes_from_precomputed_table(self, df):
+        """
+        Fill subsetted arms pose columns from ImagesArmsFeatures3D.
+        Returns (updated_df, missing_image_ids) where missing image IDs are not found in cache.
+        """
+        if 'arms_subset_vector' not in df.columns:
+            df['arms_subset_vector'] = None
+        if 'has_world_lms' not in df.columns:
+            df['has_world_lms'] = False
+
+        image_ids = [int(x) for x in df['image_id'].dropna().unique().tolist()]
+        precomputed = self.get_precomputed_armsposes_by_image_ids(image_ids)
+
+        for idx, row in df.iterrows():
+            image_id = row.get('image_id')
+            if image_id is None:
+                continue
+            payload = precomputed.get(int(image_id))
+            if payload is None:
+                continue
+
+            df.at[idx, 'arms_subset_vector'] = payload.get('arms_subset_vector')
+            df.at[idx, 'has_world_lms'] = bool(payload.get('has_world_lms', False))
+
+        missing_image_ids = sorted(list(set(image_ids) - set(precomputed.keys())))
+        return df, missing_image_ids
+
+    def persist_images_armsposes3d(self, df):
+        """Upsert subsetted arms pose vectors into ImagesArmsFeatures3D cache table."""
+        if self.session is None:
+            raise ValueError("Session not initialized. Pass session to ToolsClustering.__init__()")
+
+        if df is None or len(df) == 0:
+            return 0
+
+        self.ensure_images_armsposes3d_table()
+
+        upsert_sql = text(f"""
+            INSERT INTO {self.ARMS_POSE_CACHE_TABLE}
+                (image_id, arms_subset_json, has_world_lms, subset_name, subset_version, updated_at)
+            VALUES
+                (:image_id, :arms_subset_json, :has_world_lms, :subset_name, :subset_version, CURRENT_TIMESTAMP)
+            ON DUPLICATE KEY UPDATE
+                arms_subset_json = VALUES(arms_subset_json),
+                has_world_lms = VALUES(has_world_lms),
+                subset_name = VALUES(subset_name),
+                subset_version = VALUES(subset_version),
+                updated_at = CURRENT_TIMESTAMP
+        """)
+
+        rows_written = 0
+        for _, row in df.iterrows():
+            image_id = row.get('image_id')
+            if image_id is None or (isinstance(image_id, float) and np.isnan(image_id)):
+                continue
+
+            subset_vector = row.get('arms_subset_vector')
+            subset_json = None
+            if subset_vector is not None:
+                try:
+                    subset_json = json.dumps(list(subset_vector))
+                except TypeError:
+                    subset_json = None
+
+            has_world_lms = row.get('has_world_lms')
+            has_world_lms = bool(has_world_lms) if has_world_lms is not None else False
+
+            self.session.execute(upsert_sql, {
+                'image_id': int(image_id),
+                'arms_subset_json': subset_json,
+                'has_world_lms': 1 if has_world_lms else 0,
+                'subset_name': self.ARMS_POSE_SUBSET_NAME,
+                'subset_version': int(self.ARMS_POSE_SUBSET_VERSION),
+            })
+            rows_written += 1
+
+        return rows_written
+
+    def prepare_objectfusion_pose_features(self, df, sort, io, structure="list3D", label=""):
+        """
+        Prepare ObjectFusion pose features from Mongo payloads:
+        - hand landmark unpack
+        - world-landmark subset vector build
+        - world-lms validity filtering
+        - knuckle extraction + source diagnostics
+        """
+        if df is None or len(df) == 0:
+            return None
+
+        # Replace NaN values with None before applying prep functions.
+        df['hand_results'] = df['hand_results'].apply(lambda x: None if pd.isna(x) else x)
+        df[[
+            'left_hand_landmarks', 'left_hand_world_landmarks', 'left_hand_landmarks_norm',
+            'right_hand_landmarks', 'right_hand_world_landmarks', 'right_hand_landmarks_norm'
+        ]] = pd.DataFrame(df['hand_results'].apply(sort.prep_hand_landmarks).tolist(), index=df.index)
+
+        if len(df) > 0 and len(df['left_hand_landmarks_norm'].iloc[0]) > 0:
+            print(f"Sample left_hand_landmarks_norm (first landmark): {df['left_hand_landmarks_norm'].iloc[0][0]}")
+
+        print("\n[DEBUG] Extracting finger positions from body landmarks...")
+        print(f"[DEBUG] df shape: {df.shape}")
+
+        print("[DEBUG] Unpickling body_landmarks_normalized...")
+        df['body_landmarks_normalized'] = df['body_landmarks_normalized'].apply(io.unpickle_array)
+        print("[DEBUG] Unpickling body_landmarks_3D and building subsetted arms vectors...")
+        df['body_landmarks_3D'] = df['body_landmarks_3D'].apply(io.unpickle_array)
+
+        arms_subset_indices = sort.make_subset_landmarks(0, 22)
+        max_subset_index = max(arms_subset_indices)
+        df['body_landmarks_array_3d'] = df['body_landmarks_3D'].apply(
+            lambda x: sort.get_landmarks_2d(x, list(range(33)), structure=structure)
+        )
+        df['arms_subset_vector'] = df['body_landmarks_array_3d'].apply(
+            lambda arr: [arr[i] for i in arms_subset_indices]
+            if isinstance(arr, (list, tuple, np.ndarray)) and len(arr) > max_subset_index
+            else None
+        )
+        df['has_world_lms'] = df['arms_subset_vector'].notna()
+
+        invalid_subset_df = df[df['has_world_lms'] == False]
+        invalid_subset_count = int(len(invalid_subset_df))
+        self.increment_world_lms_stat('excluded_invalid_subset', invalid_subset_count)
+        if invalid_subset_count > 0 and 'image_id' in invalid_subset_df.columns:
+            for image_id in invalid_subset_df['image_id'].head(self.WORLD_LMS_REPORT_MAX_SAMPLES):
+                self.append_world_lms_sample_id('excluded_invalid_subset_sample_ids', image_id)
+            print(f"{label}[COUNT] Rows excluded due to invalid arms subset vectors: {invalid_subset_count}")
+
+        df = df[df['has_world_lms'] == True].copy()
+        if len(df) == 0:
+            print("WARNING: No rows with valid arms subset vectors found. Cannot cluster.")
+            return None
+
+        knuckle_results = df.apply(
+            lambda row: sort.prep_knuckle_landmarks(row['hand_results'], row['body_landmarks_normalized']),
+            axis=1
+        ).tolist()
+        print(f"[DEBUG] prep_knuckle_landmarks returned {len(knuckle_results)} results")
+        if len(knuckle_results) > 0:
+            print(f"[DEBUG] Sample result (first row): {knuckle_results[0]}")
+
+        df[["left_pointer_knuckle_norm", "right_pointer_knuckle_norm", "left_source", "right_source"]] = pd.DataFrame(
+            knuckle_results,
+            index=df.index
+        )
+
+        left_body_count = int((df['left_source'] == 'body').sum())
+        right_body_count = int((df['right_source'] == 'body').sum())
+        left_default_count = int((df['left_source'] == 'default').sum())
+        right_default_count = int((df['right_source'] == 'default').sum())
+        left_nondefault_count = int(df['left_pointer_knuckle_norm'].apply(
+            lambda value: value != [0.0, 8.0, 0.0] if isinstance(value, list) else False
+        ).sum())
+        right_nondefault_count = int(df['right_pointer_knuckle_norm'].apply(
+            lambda value: value != [0.0, 8.0, 0.0] if isinstance(value, list) else False
+        ).sum())
+        print(f"{label}[COUNT] Left knuckles from body/default: {left_body_count}/{left_default_count}")
+        print(f"{label}[COUNT] Right knuckles from body/default: {right_body_count}/{right_default_count}")
+        print(f"{label}[COUNT] Rows with non-default left/right knuckles: {left_nondefault_count}/{right_nondefault_count}")
+
+        left_source_counts = df['left_source'].value_counts()
+        right_source_counts = df['right_source'].value_counts()
+        print(f"[DEBUG] Left finger position sources: {left_source_counts.to_dict()}")
+        print(f"[DEBUG] Right finger position sources: {right_source_counts.to_dict()}")
+        print(f"[DEBUG] Sample left_pointer_knuckle_norm (first row): {df['left_pointer_knuckle_norm'].iloc[0] if len(df) > 0 else 'N/A'}")
+        print(f"[DEBUG] Sample right_pointer_knuckle_norm (first row): {df['right_pointer_knuckle_norm'].iloc[0] if len(df) > 0 else 'N/A'}")
+
+        return df
+
     def flatten_object_detections(self, detection_payload):
         """
         Flatten a detection payload dict into features.
@@ -1626,8 +2022,8 @@ class ToolsClustering:
         """
         import pandas as pd
         
-        # Numeric columns to include
-        numeric_cols = ['pitch', 'yaw', 'roll']
+        # Face angles are retained upstream but excluded from ObjectFusion clustering features.
+        numeric_cols = []
         
         # Detection columns (6 values each: class_id, conf, top, left, right, bottom)
         detection_cols = ['left_hand_object', 'right_hand_object', 'top_face_object',
@@ -1648,6 +2044,28 @@ class ToolsClustering:
         for col in numeric_cols:
             if col in df.columns:
                 features_dict[col] = df[col].apply(lambda x: float(x) if pd.notna(x) else 0.0)
+
+        # Add subsetted arms pose vector dimensions (0-22 landmarks, xyz flattened).
+        if 'arms_subset_vector' in df.columns:
+            arms_dim_count = 0
+            for value in df['arms_subset_vector']:
+                if value is None:
+                    continue
+                if isinstance(value, np.ndarray):
+                    if value.size > 0:
+                        arms_dim_count = int(value.size)
+                        break
+                elif isinstance(value, (list, tuple)):
+                    if len(value) > 0:
+                        arms_dim_count = int(len(value))
+                        break
+
+            if arms_dim_count > 0:
+                for dim_idx in range(arms_dim_count):
+                    col_name = f"arms_subset_dim_{dim_idx}"
+                    features_dict[col_name] = df['arms_subset_vector'].apply(
+                        lambda x: float(x[dim_idx]) if isinstance(x, (list, tuple, np.ndarray)) and len(x) > dim_idx else 0.0
+                    )
         
         # Add detection features with descriptive column names
         # ALSO add binary "has_object" indicators to prevent all-zero clustering
