@@ -8,6 +8,7 @@ from openai import OpenAI
 import torch
 from openaiAPI import api_key
 import time
+from concurrent.futures import ThreadPoolExecutor
 from sqlalchemy.exc import OperationalError
 from ultralytics import YOLO
 import json
@@ -66,14 +67,14 @@ SAVE_NODETECTIONS_JPG_FILES = False
 TESTING_NO_DB_WRITE = False # if True, will not write to database
 DO_COCO = True
 DO_CUSTOM = True
-DO_MASK = False
-DO_VALENTINE = False
-use_average_per_row=False # for valentine bbox detection
 DO_OCR = False
 CLASSES_TO_COMBINE = [89,90]
 
-OVERWRITE_EXISTING_DETECTIONS = True
-IGNORE_EXISTING_NO_DETECTIONS = True
+# False means reruns skip images that already have detections/no-detections state.
+OVERWRITE_EXISTING_DETECTIONS_COCO = False
+OVERWRITE_EXISTING_DETECTIONS_CUSTOM = False
+# False means custom no-detections are treated as complete and skipped on reruns.
+IGNORE_EXISTING_NO_DETECTIONS = False
 DET_ID_THRESHOLD_CUSTOM = 59955150
 DET_ID_THRESHOLD_COCO = 12455146
 # this is for merging books and stuff, but it messes up cucumbers. 
@@ -88,12 +89,9 @@ FILE_FOLDER = "/Volumes/OWC52/segment_images_OWC4"
 MAKE_VIDEO_CSVS_PATH = None  # to process all images in folder
 OUTPUT_FOLDER = os.path.join(FILE_FOLDER, "test_output")
 BATCH_SIZE = 100
-MASK_THRESHOLD = .15  # HSV distance threshold for mask detection
+YOLO_BATCH_SIZE = 8  # number of images per YOLO batch inference call (M3 Ultra: try 32-64)
+IMAGE_LOAD_WORKERS = 8  # concurrent cv2.imread workers before each YOLO batch
 CONF_THRESHOLD = 0.3
-RED_THRESH = 180
-RED_DOM = 100
-VAL_MIN_SIZE = 60
-CREATE_YOLO_CLASS_ID = 90
 IS_DRAW_BOX = True
 IS_SAVE_UNDETECTED = False
 MOVE_OR_COPY = "copy"  # "move" or "copy"
@@ -287,18 +285,6 @@ def bbox_to_cluster_id(image, bbox=None):
 
     return meta_cluster_id, cluster_id, cluster_dist
 
-def mask_to_cluster_id(image, face_bbox):
-    width = face_bbox['right'] - face_bbox['left']
-    height = face_bbox['bottom'] - face_bbox['top']
-    mask_bbox = {
-            'left': face_bbox['left'] + width//4,
-            'right': face_bbox['right'] - width//4,
-            'top': face_bbox['top'] + height//2 + height//8,
-            'bottom': face_bbox['bottom'] - height//4
-        }
-    meta_cluster_id, cluster_id, cluster_dist = bbox_to_cluster_id(image, mask_bbox)
-    return meta_cluster_id, cluster_id, cluster_dist
-
 def get_existing_detections(image_id, class_id=None):
     if class_id is not None:
         existing_detections_query = session.query(Detections).filter(Detections.image_id == image_id, Detections.class_id == class_id)
@@ -312,7 +298,7 @@ def get_existing_no_detections(image_id, NoDetectionTable=NoDetections):
     existing_no_detections = existing_no_detections_query.all()
     return existing_no_detections
 
-def save_no_dectections(session,image_id, NoDetectionTable=NoDetections):
+def save_no_dectections(session,image_id, NoDetectionTable=NoDetections, do_commit=True):
     # Save to no-detections table only if missing (idempotent for reruns).
     existing_row = session.query(NoDetectionTable).filter(NoDetectionTable.image_id == image_id).first()
     if existing_row is not None:
@@ -323,15 +309,15 @@ def save_no_dectections(session,image_id, NoDetectionTable=NoDetections):
         image_id=image_id
     )
     session.add(new_no_detection)
-    if not TESTING_NO_DB_WRITE:
+    if do_commit and not TESTING_NO_DB_WRITE:
         session.commit()
     print(f"Image {image_id} - No detections found, saved to {NoDetectionTable} table.")
 
 
-def delete_no_detections(session, image_id, NoDetectionTable=NoDetections):
+def delete_no_detections(session, image_id, NoDetectionTable=NoDetections, do_commit=True):
     deleted_count = session.query(NoDetectionTable).filter(NoDetectionTable.image_id == image_id).delete(synchronize_session=False)
     if deleted_count > 0:
-        if not TESTING_NO_DB_WRITE:
+        if do_commit and not TESTING_NO_DB_WRITE:
             session.commit()
         print(f"Image {image_id} - Removed stale no-detections row from {NoDetectionTable.__tablename__} after successful detections.")
 
@@ -354,6 +340,11 @@ def backfill_image_dimensions_if_missing(result, image):
             else:
                 print("TESTING_NO_DB_WRITE is True, skipping Images table update commit.")
 
+def load_image_for_inference(load_item):
+    result, image_path, state = load_item
+    image = cv2.imread(image_path)
+    return result, image_path, state, image
+
 def assign_hsv_detect_results(detect_results, image):
     for result_dict in detect_results:
         bbox = io.unstring_json(result_dict['bbox'])
@@ -363,63 +354,7 @@ def assign_hsv_detect_results(detect_results, image):
         # result_dict['cluster_dist'] = cluster_dist
     return detect_results
 
-def do_valentine_detections(result, image, image_path, face_bbox):
-    image_id = result.image_id
-    imagename = result.imagename
-    valentine_bbox = yolo.find_valentine_bbox(face_bbox, image, RED_DOM, RED_THRESH, use_average_per_row=use_average_per_row)
-    # [{'class_id': 27, 'obj_no': 1, 'bbox': '{"left": 1149, "top": 644, "right": 1263, "bottom": 709}', 'conf': 0.79, 'meta_cluster_id': 15, 'cluster_id': 90}]
-
-    if valentine_bbox is None:
-        print(f"Image {image_id} - No valentine bbox detected.")
-        return []
-    else:
-        bbox_height = valentine_bbox[3] - valentine_bbox[1]
-        bbox_width = valentine_bbox[2] - valentine_bbox[0]
-        if bbox_height < VAL_MIN_SIZE or bbox_width < VAL_MIN_SIZE:
-            print(f"Image {image_id} - Detected valentine bbox too small (width: {bbox_width}, height: {bbox_height}), skipping.")
-            return []
-        ratio = bbox_width / bbox_height
-        # if it is too wide or too tall, skip it
-        if ratio < 0.8 or ratio > 1.3:
-            print(f"Image {image_id} - Detected valentine bbox has invalid aspect ratio ({ratio:.2f}), skipping.")
-            return []
-    valentine_bbox_dict = {
-        "left": int(valentine_bbox[0]),
-        "top": int(valentine_bbox[1]),
-        "right": int(valentine_bbox[2]),
-        "bottom": int(valentine_bbox[3])
-    }
-    val_results = []
-    val_results.append({
-        "bbox": valentine_bbox_dict,
-        "class_id": CREATE_YOLO_CLASS_ID,
-     "obj_no": 1,
-        "conf": 1.0
-    })
-    val_results = assign_hsv_detect_results(val_results, image)
-
-    print(f"☑️ Image {image_id} - YOLO detections: {val_results}")
-    # save_debug_image_yolo_bbox(image_id, imagename, image, val_results)
-    if DEBUGGING:
-        yolo.save_debug_image_yolo_bbox(image_id, imagename, image, val_results, image_path, 
-                                        OUTPUT_FOLDER, io, draw_box=IS_DRAW_BOX, 
-                                        save_undetected=IS_SAVE_UNDETECTED, move_or_copy=MOVE_OR_COPY)
-
-    yolo.save_new_yolo_labels(image_id, image, image_path, val_results, OUTPUT_FOLDER, io)
-    # save a copy of 
-    if TESTING_NO_DB_WRITE:
-        print("TESTING_NO_DB_WRITE is True, skipping DB write.")
-        return val_results
-    if len(val_results) == 0:
-        # if custom: return # skipp no    detections save for custom
-        # save_no_dectections(session,image_id, NoDetectionTable=ThisNoDetectionTable)
-        return val_results
-    else:
-        yolo.save_obj_bbox(session, image_id, val_results, Detections)
-
-    return val_results
-
-def do_yolo_detections(result, image, image_path, existing_detections, custom=False):
+def do_yolo_detections(result, image, image_path, existing_detections, custom=False, precomputed_raw_detections=None, do_commit=True):
     image_id = result.image_id
     imagename = result.imagename
 
@@ -430,9 +365,10 @@ def do_yolo_detections(result, image, image_path, existing_detections, custom=Fa
         ThisNoDetectionTable=NoDetections
         this_yolo_model = yolo_model
     # YOLO object detection
-    # Test on new image 
-
-    unrefined_detect_results = yolo.detect_objects_return_bbox(this_yolo_model,image, device, conf_thresh=CONF_THRESHOLD)
+    if precomputed_raw_detections is not None:
+        unrefined_detect_results = precomputed_raw_detections
+    else:
+        unrefined_detect_results = yolo.detect_objects_return_bbox(this_yolo_model, image, device, conf_thresh=CONF_THRESHOLD)
     if VERBOSE: print(f"Image {image_id} - Unrefined YOLO detections: {unrefined_detect_results}")
     if custom:
         unrefined_detect_results = yolo.map_custom_ids_to_global(unrefined_detect_results, custom_ids_to_global_dict)
@@ -455,12 +391,12 @@ def do_yolo_detections(result, image, image_path, existing_detections, custom=Fa
         print("TESTING_NO_DB_WRITE is True, skipping DB write.")
         return detect_results
     if len(detect_results) == 0:
-        if custom: return # skipp no    detections save for custom
-        save_no_dectections(session,image_id, NoDetectionTable=ThisNoDetectionTable)
+        # Persist no-detections for both COCO and custom so reruns can skip completed images.
+        save_no_dectections(session,image_id, NoDetectionTable=ThisNoDetectionTable, do_commit=do_commit)
         return detect_results
     else:
-        delete_no_detections(session, image_id, NoDetectionTable=ThisNoDetectionTable)
-        yolo.save_obj_bbox(session, image_id, detect_results, Detections)
+        delete_no_detections(session, image_id, NoDetectionTable=ThisNoDetectionTable, do_commit=do_commit)
+        yolo.save_obj_bbox(session, image_id, detect_results, Detections, do_commit=do_commit)
     return detect_results
 
 def check_for_existing_detections(image_id, existing_detections, custom=False):
@@ -476,35 +412,66 @@ def check_for_existing_detections(image_id, existing_detections, custom=False):
     return existing_detection_ids, existing_no_detections
 
 
-def do_detections(result, folder_index):
+def _get_skip_state(result):
+    """Check DB skip conditions for one image without loading it. Returns state dict."""
+    image_id = result.image_id
+    existing_detections = get_existing_detections(image_id)
+    existing_detection_ids, existing_no_detections = check_for_existing_detections(image_id, existing_detections, custom=False)
+    existing_custom_detection_ids, existing_no_detections_custom = check_for_existing_detections(image_id, existing_detections, custom=True)
+
+    skip_coco = False if OVERWRITE_EXISTING_DETECTIONS_COCO else bool(existing_no_detections)
+    skip_custom = False if OVERWRITE_EXISTING_DETECTIONS_CUSTOM else (bool(existing_no_detections_custom) and not IGNORE_EXISTING_NO_DETECTIONS)
+    existing_coco = False if OVERWRITE_EXISTING_DETECTIONS_COCO else (bool(existing_detection_ids) or skip_coco)
+    existing_custom = False if OVERWRITE_EXISTING_DETECTIONS_CUSTOM else (bool(existing_custom_detection_ids) or skip_custom)
+    skip_all = (
+        (existing_coco and existing_custom) or
+        (existing_coco and not DO_CUSTOM) or
+        (existing_custom and not DO_COCO)
+    )
+    return {
+        'skip_all': skip_all,
+        'skip_coco': skip_coco,
+        'skip_custom': skip_custom,
+        'existing_detections': existing_detections,
+        'existing_no_detections_custom': existing_no_detections_custom,
+    }
+
+
+def do_detections(result, folder_index, _state=None, _preloaded_image=None, _precomputed_coco=None, _precomputed_custom=None, _do_commit=True):
     coco_detections = custom_detections = None
-    # existing_detections = get_existing_detections(result.image_id)
     # start a timer for this function to track how long it takes
     start_time = time.time()
     image_id = result.image_id
     imagename = result.imagename
-    existing_coco = existing_custom = False
-    existing_detections = get_existing_detections(result.image_id)
-    if VERBOSE: print(f"Image {image_id} - Retrieved {len(existing_detections)} existing detections from database.")
-    existing_detection_ids, existing_no_detections = check_for_existing_detections(image_id, existing_detections, custom=False)
-    existing_custom_detection_ids, existing_no_detections_custom = check_for_existing_detections(image_id, existing_detections, custom=True)
+    if _state is not None:
+        existing_detections = _state['existing_detections']
+        skip_coco_due_to_no_det = _state['skip_coco']
+        skip_custom_due_to_no_det = _state['skip_custom']
+        if _state['existing_no_detections_custom'] and IGNORE_EXISTING_NO_DETECTIONS:
+            print(f"Image {image_id} - Ignoring existing no-detections row in NoDetectionsCustom due to IGNORE_EXISTING_NO_DETECTIONS=True.")
+    else:
+        existing_coco = existing_custom = False
+        existing_detections = get_existing_detections(result.image_id)
+        if VERBOSE: print(f"Image {image_id} - Retrieved {len(existing_detections)} existing detections from database.")
+        existing_detection_ids, existing_no_detections = check_for_existing_detections(image_id, existing_detections, custom=False)
+        existing_custom_detection_ids, existing_no_detections_custom = check_for_existing_detections(image_id, existing_detections, custom=True)
 
-    skip_coco_due_to_no_det = bool(existing_no_detections)
-    skip_custom_due_to_no_det = bool(existing_no_detections_custom) and not IGNORE_EXISTING_NO_DETECTIONS
+        skip_coco_due_to_no_det = False if OVERWRITE_EXISTING_DETECTIONS_COCO else bool(existing_no_detections)
+        skip_custom_due_to_no_det = False if OVERWRITE_EXISTING_DETECTIONS_CUSTOM else (bool(existing_no_detections_custom) and not IGNORE_EXISTING_NO_DETECTIONS)
 
-    # only skip custom no_detections. we never redo COCO no_detections for COCO
-    if bool(existing_no_detections_custom) and IGNORE_EXISTING_NO_DETECTIONS:
-        print(f"Image {image_id} - Ignoring existing no-detections row in NoDetectionsCustom due to IGNORE_EXISTING_NO_DETECTIONS=True.")
+        # only skip custom no_detections. we never redo COCO no_detections for COCO
+        if bool(existing_no_detections_custom) and IGNORE_EXISTING_NO_DETECTIONS:
+            print(f"Image {image_id} - Ignoring existing no-detections row in NoDetectionsCustom due to IGNORE_EXISTING_NO_DETECTIONS=True.")
 
-    if existing_detection_ids:
-        existing_coco = True
-    if existing_custom_detection_ids or skip_custom_due_to_no_det:
-        existing_custom = True
+        if not OVERWRITE_EXISTING_DETECTIONS_COCO and (existing_detection_ids or skip_coco_due_to_no_det):
+            existing_coco = True
+        if not OVERWRITE_EXISTING_DETECTIONS_CUSTOM and (existing_custom_detection_ids or skip_custom_due_to_no_det):
+            existing_custom = True
 
-    if (existing_coco and existing_custom) or (existing_coco and not DO_CUSTOM) or (existing_custom and not DO_COCO):
-        print(f"Skipping image_id {image_id} due to existing detections record for this configuration, time taken: {time.time() - start_time:.10f} seconds.")
-        print
-        return
+        if (existing_coco and existing_custom) or (existing_coco and not DO_CUSTOM) or (existing_custom and not DO_COCO):
+            print(f"Skipping image_id {image_id} due to existing detections record for this configuration, time taken: {time.time() - start_time:.10f} seconds.")
+            print
+            return
     # elif len(existing_detection_ids) > 0:
     #     print(f"Skipping image_id {result.image_id} due to existing detections record.")
     #     return
@@ -520,49 +487,27 @@ def do_detections(result, folder_index):
         print(f"Error parsing label_data JSON for image_id {image_id}: {e}")
         print("Skipping this face_bbox.", result.bbox)
         return
-    image_load_start_time = time.time()
     image_path = os.path.join(FILE_FOLDER, os.path.basename(io.folder_list[folder_index]), imagename)
-    # Read the image
-    image = cv2.imread(image_path)
-    if image is None:
-        print(f"Error: Unable to read image at {image_path}. Skipping.")
-        return
-    backfill_image_dimensions_if_missing(result, image)
-    image_load_end_time = time.time()
+    if _preloaded_image is not None:
+        image = _preloaded_image
+        # backfill already done in batch pre-check phase
+    else:
+        image = cv2.imread(image_path)
+        if image is None:
+            print(f"Error: Unable to read image at {image_path}. Skipping.")
+            return
+        backfill_image_dimensions_if_missing(result, image)
 
     print(f"Processing image_id: {image_id}, imagename: {imagename}")
-    image_detection_start_time = time.time()
     if DO_COCO and not skip_coco_due_to_no_det:
-        coco_detections = do_yolo_detections(result, image, image_path, existing_detections, custom=False)
+        coco_detections = do_yolo_detections(result, image, image_path, existing_detections, custom=False,
+                                                                                         precomputed_raw_detections=_precomputed_coco,
+                                                                                         do_commit=_do_commit)
 
     if DO_CUSTOM and not skip_custom_due_to_no_det:
-        custom_detections = do_yolo_detections(result, image, image_path, existing_detections, custom=True)
-
-    if DO_VALENTINE and bool(face_bbox):
-        pass
-        # if rose class_id = 97 is in custom_detections, skip valentine detections
-        if custom_detections is not None:
-            rose_detections = [det for det in custom_detections if det['class_id'] == 97]
-        else:
-            rose_detections = None
-        if not rose_detections:
-
-            print(f"Image {image_id} - Performing valentine detections. face_bbox: {face_bbox}, boolean: {bool(face_bbox)}")
-            valentine_detections = do_valentine_detections(result, image, image_path, face_bbox)
-            # Image 118796150 - YOLO detections: [{'class_id': 27, 'obj_no': 1, 'bbox': '{"left": 1149, "top": 644, "right": 1263, "bottom": 709}', 'conf': 0.79, 'meta_cluster_id': 15, 'cluster_id': 90}]
-
-            print(f"Image {image_id} - valentine_detections: {valentine_detections}")
-    if DO_MASK:
-        # detect facemask via hsv distance and clustering
-        top_hsl, bot_hsl, hsl_distance = yolo.compute_mask_hsv(image, face_bbox)
-        meta_cluster_id, cluster_id, cluster_dist = mask_to_cluster_id(image, face_bbox)
-    
-        # for debugging mask, saving to folders
-        # debug_file_name = f"{hsl_distance:.2f}_{image_id}_mask_debug.jpg"
-        # if hsl_distance > MASK_THRESHOLD: output_image_path = os.path.join(OUTPUT_FOLDER, str(meta_cluster_id),debug_file_name)
-        # else: output_image_path = os.path.join(OUTPUT_FOLDER, "no_mask",debug_file_name)
-        # # save image to OUTPUT_FOLDER for review
-        # yolo.save_debug_image(output_image_path, image, imagename)
+        custom_detections = do_yolo_detections(result, image, image_path, existing_detections, custom=True,
+                                                                                             precomputed_raw_detections=_precomputed_custom,
+                                                                                             do_commit=_do_commit)
 
     if DO_OCR and DO_CUSTOM:
         # make a list of sign_detections
@@ -698,6 +643,8 @@ def main():
     session.close()
     engine.dispose()
 
+TIMER_INTERVAL = 500  # print throughput every N images processed
+
 def detect_from_folder(folder_index, csv_foldercount_path, folder_path, folder, df_csvs_folder):
     img_list = io.get_img_list(folder, force_ls=True)
     print("len(img_list)", len(img_list))
@@ -705,62 +652,174 @@ def detect_from_folder(folder_index, csv_foldercount_path, folder_path, folder, 
         img_list = [img for img in img_list if img.split(".")[0] in df_csvs_folder['site_image_id'].values]
         print("after filtering with MAKE_VIDEO_CSVS_PATH, len(img_list)", len(img_list))
 
-                # Initialize an empty list to store all the results
     all_results = []
+    processed_count = 0
+    timer_start = time.time()
+    last_timer_count = 0
+    interval_phase_times = {
+        'skip_state': 0.0,
+        'image_load': 0.0,
+        'backfill': 0.0,
+        'coco_infer': 0.0,
+        'custom_infer': 0.0,
+        'postprocess_save': 0.0,
+    }
 
-                # Split the img_list into smaller batches and process them one by one
     for i in range(0, len(img_list), BATCH_SIZE):
-        tasks_in_this_round = 0
-
         batch_img_list = img_list[i : i + BATCH_SIZE]
         batch_site_image_ids = format_site_name_ids(folder_index, batch_img_list)
 
         print(f"total img_list: {len(img_list)} no. processed: {i} no. left: {len(img_list)-i}")
         print(f"folder_index: {folder_index}, {batch_site_image_ids} images.")
-        if len(img_list)-i<BATCH_SIZE: print("last_round for img_list")
+        if len(img_list) - i < BATCH_SIZE:
+            print("last_round for img_list")
 
-                    # query the database for the current batch and return image_id and encoding_id
+        batch_results = []
         for _ in range(io.max_retries):
             try:
-                if VERBOSE: print(f"Processing batch {i//BATCH_SIZE + 1}...")
-                            # init_session()
-
-                            # get Images and Encodings values for each site_image_id in the batch
-                            # adding in mongo stuff. should return NULL if not there
+                if VERBOSE:
+                    print(f"Processing batch {i // BATCH_SIZE + 1}...")
                 batch_query = session.query(Images.image_id, Images.site_image_id, Images.imagename, Images.h, Images.w, Encodings.bbox) \
-                                .join(Encodings, Encodings.image_id == Images.image_id) \
-                                .filter(Images.site_image_id.in_(batch_site_image_ids), Images.site_name_id == folder_index)
-                                                                                                        
+                    .join(Encodings, Encodings.image_id == Images.image_id) \
+                    .filter(Images.site_image_id.in_(batch_site_image_ids), Images.site_name_id == folder_index)
                 batch_results = batch_query.all()
-
                 all_results.extend(batch_results)
-                if VERBOSE: print("about to close_session()")
-                            # # Close the session and dispose of the engine before the worker process exits
-                            # close_session()
-
+                break
             except OperationalError as e:
                 print("error getting batch results")
                 print(e)
                 time.sleep(io.retry_delay)
 
-        if VERBOSE: print(f"no. all_results: {len(all_results)}")
+        if VERBOSE:
+            print(f"no. all_results: {len(all_results)}")
 
-                    # print("results:", all_results)
         results_dict = {result.site_image_id: result for result in batch_results}
-
-                    # going back through the img_list, to use as key for the results_dict
-
         images_left_to_process = len(batch_site_image_ids)
-        for site_image_id in batch_site_image_ids:
-            if VERBOSE: print(f"image_id to process: {site_image_id}, images left to process in batch: {images_left_to_process}")
-            images_left_to_process -= 1
-            if site_image_id in results_dict:
-                do_detections(results_dict[site_image_id], folder_index)
-                if VERBOSE: print(f"Found image_id: {results_dict[site_image_id].image_id} for site_image_id: {site_image_id}, imagename: {results_dict[site_image_id].imagename}")
-            else:
-                if VERBOSE: print(f"site_name_id: {folder_index} site_image_id: {site_image_id} not found in DB, skipping.")
+
+        for j in range(0, len(batch_site_image_ids), YOLO_BATCH_SIZE):
+            yolo_sub_ids = batch_site_image_ids[j:j + YOLO_BATCH_SIZE]
+
+            load_candidates = []
+            for site_image_id in yolo_sub_ids:
+                images_left_to_process -= 1
+                if site_image_id not in results_dict:
+                    if VERBOSE:
+                        print(f"site_name_id: {folder_index} site_image_id: {site_image_id} not found in DB, skipping.")
+                    continue
+
+                result = results_dict[site_image_id]
+                image_id = result.image_id
+                skip_state_start = time.time()
+                state = _get_skip_state(result)
+                interval_phase_times['skip_state'] += time.time() - skip_state_start
+
+                if state['skip_all']:
+                    print(f"Skipping image_id {image_id} due to existing detections.")
+                    continue
+
+                try:
+                    io.unstring_json(result.bbox)
+                except Exception as e:
+                    print(f"Error parsing bbox for image_id {image_id}: {e}. Skipping.")
+                    continue
+
+                image_path = os.path.join(FILE_FOLDER, os.path.basename(io.folder_list[folder_index]), result.imagename)
+                load_candidates.append((result, image_path, state))
+
+            if not load_candidates:
                 continue
-                # save  success to csv_foldercount_path
+
+            image_load_start = time.time()
+            max_workers = min(IMAGE_LOAD_WORKERS, len(load_candidates))
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                loaded_items = list(executor.map(load_image_for_inference, load_candidates))
+            interval_phase_times['image_load'] += time.time() - image_load_start
+
+            to_process = []
+            for result, image_path, state, image in loaded_items:
+                image_id = result.image_id
+                if image is None:
+                    print(f"Error: Unable to read image at {image_path}. Skipping.")
+                    continue
+
+                backfill_start = time.time()
+                backfill_image_dimensions_if_missing(result, image)
+                interval_phase_times['backfill'] += time.time() - backfill_start
+                to_process.append((result, image, image_path, state))
+
+                if VERBOSE:
+                    print(f"Found image_id: {image_id} for site_image_id: {result.site_image_id}, imagename: {result.imagename}")
+
+            if not to_process:
+                continue
+
+            coco_precomputed = [None] * len(to_process)
+            custom_precomputed = [None] * len(to_process)
+
+            coco_indices = [idx for idx, (_, _, _, state) in enumerate(to_process) if DO_COCO and not state['skip_coco']]
+            if coco_indices:
+                coco_imgs = [to_process[idx][1] for idx in coco_indices]
+                coco_infer_start = time.time()
+                coco_batch = yolo.detect_objects_return_bbox_batch(yolo_model, coco_imgs, device, CONF_THRESHOLD)
+                interval_phase_times['coco_infer'] += time.time() - coco_infer_start
+                for idx, det in zip(coco_indices, coco_batch):
+                    coco_precomputed[idx] = det
+
+            custom_indices = [idx for idx, (_, _, _, state) in enumerate(to_process) if DO_CUSTOM and not state['skip_custom']]
+            if custom_indices:
+                custom_imgs = [to_process[idx][1] for idx in custom_indices]
+                custom_infer_start = time.time()
+                custom_batch = yolo.detect_objects_return_bbox_batch(yolo_custom_model, custom_imgs, device, CONF_THRESHOLD)
+                interval_phase_times['custom_infer'] += time.time() - custom_infer_start
+                for idx, det in zip(custom_indices, custom_batch):
+                    custom_precomputed[idx] = det
+
+            for idx, (result, image, image_path, state) in enumerate(to_process):
+                postprocess_start = time.time()
+                do_detections(
+                    result,
+                    folder_index,
+                    _state=state,
+                    _preloaded_image=image,
+                    _precomputed_coco=coco_precomputed[idx],
+                    _precomputed_custom=custom_precomputed[idx],
+                    _do_commit=False
+                )
+                interval_phase_times['postprocess_save'] += time.time() - postprocess_start
+                processed_count += 1
+
+            if to_process and not TESTING_NO_DB_WRITE:
+                commit_start = time.time()
+                try:
+                    session.commit()
+                except Exception:
+                    session.rollback()
+                    raise
+                interval_phase_times['postprocess_save'] += time.time() - commit_start
+
+            while processed_count - last_timer_count >= TIMER_INTERVAL:
+                elapsed = time.time() - timer_start
+                interval_count = processed_count - last_timer_count
+                rate = interval_count / elapsed if elapsed > 0 else 0
+                print(
+                    f"⏱  {processed_count} images processed | last {interval_count} in {elapsed:.1f}s | {rate:.1f} img/s"
+                    f" | skip/db {interval_phase_times['skip_state']:.1f}s"
+                    f" | load {interval_phase_times['image_load']:.1f}s"
+                    f" | backfill {interval_phase_times['backfill']:.1f}s"
+                    f" | coco {interval_phase_times['coco_infer']:.1f}s"
+                    f" | custom {interval_phase_times['custom_infer']:.1f}s"
+                    f" | save {interval_phase_times['postprocess_save']:.1f}s"
+                )
+                last_timer_count = processed_count
+                timer_start = time.time()
+                interval_phase_times = {
+                    'skip_state': 0.0,
+                    'image_load': 0.0,
+                    'backfill': 0.0,
+                    'coco_infer': 0.0,
+                    'custom_infer': 0.0,
+                    'postprocess_save': 0.0,
+                }
     io.write_csv(csv_foldercount_path, [folder_path])
 
 if __name__ == "__main__":

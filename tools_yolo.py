@@ -83,7 +83,7 @@ class YOLOTools:
             return detections_list
 
 
-    def save_obj_bbox(self, session, image_id, detections_list, Detections, OBJ_CLS_LIST=None):
+    def save_obj_bbox(self, session, image_id, detections_list, Detections, OBJ_CLS_LIST=None, do_commit=True):
         """
         Save or update detections for an image using MySQL upsert.
         Args:
@@ -202,16 +202,16 @@ class YOLOTools:
                 if self.VERBOSE:
                     print(f"Upserted detection for image_id {image_id}, class_id {detection['class_id']}, obj_no {detection['obj_no']}")
             
-        # Commit the transaction so the upserts are persisted.
-        try:
-            session.commit()
-            if self.VERBOSE:
-                print(f"Committed session for image_id {image_id}")
-        except Exception as e:
-            session.rollback()
-            if self.VERBOSE:
-                print(f"Commit failed for image_id {image_id}: {e}")
-            raise
+        if do_commit:
+            try:
+                session.commit()
+                if self.VERBOSE:
+                    print(f"Committed session for image_id {image_id}")
+            except Exception as e:
+                session.rollback()
+                if self.VERBOSE:
+                    print(f"Commit failed for image_id {image_id}: {e}")
+                raise
 
         return session
 
@@ -303,7 +303,39 @@ class YOLOTools:
             
             return detections_list
 
-
+    def detect_objects_return_bbox_batch(self, model, images, device=None, conf_thresh=0.45):
+        """
+        Batch YOLO inference on a list of images.
+        Returns a list of detection lists (one per input image), same format as detect_objects_return_bbox.
+        """
+        all_results = model.predict(images, conf=conf_thresh, device=device, verbose=False)
+        all_detections = []
+        for result in all_results:
+            detections_by_class = {}
+            for box in result.boxes:
+                obj_cls_id = int(box.cls[0].item())
+                bbox = box.xyxy[0].tolist()
+                bbox_dict = {
+                    "left": round(bbox[0]),
+                    "top": round(bbox[1]),
+                    "right": round(bbox[2]),
+                    "bottom": round(bbox[3])
+                }
+                conf = round(box.conf[0].item(), 2)
+                if obj_cls_id not in detections_by_class:
+                    detections_by_class[obj_cls_id] = []
+                detections_by_class[obj_cls_id].append({"bbox": bbox_dict, "conf": conf})
+            detections_list = []
+            for class_id, class_detections in detections_by_class.items():
+                for obj_no, detection in enumerate(class_detections, start=1):
+                    detections_list.append({
+                        "class_id": class_id,
+                        "obj_no": obj_no,
+                        "bbox": json.dumps(detection["bbox"]),
+                        "conf": detection["conf"]
+                    })
+            all_detections.append(detections_list)
+        return all_detections
 
 
     def normalize_phone_bbox(self,phone_bbox,nose_pos,face_height,shape):
