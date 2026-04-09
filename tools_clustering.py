@@ -211,13 +211,13 @@ class ToolsClustering:
         #     'has_object': 1.0,      # binary indicator - high weight but lower than class_id
         # }
 
-        # Face-angle neutralized
+        # R1_object_up_2x
         self.FEATURE_WEIGHTS = {
             'face_angle': .5,      # pitch, yaw, roll - LOW weight (prevent face-angle mega-clusters)
-            'class_id': 3.0,        # class_id - VERY HIGH weight at RAW SCALE (0-107) to force object-type separation
-            'confidence': 0.5,      # detection confidence - very low weight
-            'bbox': 2.0,            # bbox coordinates - reduced to standard weight
-            'has_object': 1.0,      # binary indicator - high weight but lower than class_id
+            'class_id': 6.0,        # class_id - VERY HIGH weight at RAW SCALE (0-107) to force object-type separation
+            'confidence': 1.0,      # detection confidence - very low weight
+            'bbox': 4.0,            # bbox coordinates - reduced to standard weight
+            'has_object': 2.0,      # binary indicator - high weight but lower than class_id
         }
 
         # Store fitted scaler for inverse transform during median calculation

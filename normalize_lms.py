@@ -66,7 +66,7 @@ INNER_JOIN_HELPER = True
 # SegmentHelperObject_67_phone 
 # SegmentHelperObject_41_cup_glass (big)
 
-LIMIT= 1000000
+LIMIT= 4000000
 # Initialize the counter
 counter = 2000
 
@@ -86,7 +86,7 @@ else:
     # SegmentHelper_name = 'SegmentOct20'
     # SegmentHelper_name = 'SegmentHelper_oct2025_evens_quarters'
     SegmentFolder = None
-    SegmentHelper_name = 'SegmentHelper_YOLO_Selects'
+    SegmentHelper_name = 'SegmentHelper_T11_Oct20_COCO_Custom'
 
     # HAXXXORS THIS_CLASS_ID is commented out below so that it does ALL classes
     # THIS_CLASS_ID = 82 # for object bbox normalization

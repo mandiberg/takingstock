@@ -46,7 +46,7 @@ EXPAND = False
 ONE_SHOT = False # take all files, based off the very first sort order.
 JUMP_SHOT = False # jump to random file if can't find a run
 
-LIMIT = 4000000
+LIMIT = 7000000
 BATCH_LIMIT = 10000
 
 # number of clusters produced. run GET_OPTIMAL_CLUSTERS and add that number here
@@ -84,11 +84,11 @@ option, MODE = pick(options, title)
 # CLUSTER_TYPE = "BodyPoses"
 # CLUSTER_TYPE = "BodyPoses3D" # use this for META 3D body clusters, Arms will start build but messed up because of subset landmarks
 # CLUSTER_TYPE = "ArmsPoses3D" 
-CLUSTER_TYPE = "ObjectFusion" 
+# CLUSTER_TYPE = "ObjectFusion" 
 # CLUSTER_TYPE = "HandsPositions"
 # CLUSTER_TYPE = "HandsGestures"
 # CLUSTER_TYPE = "FingertipsPositions"
-# CLUSTER_TYPE = "HSV" # only works with cluster save, not with assignment
+CLUSTER_TYPE = "HSV" # only works with cluster save, not with assignment
 VERBOSE = False
 DEBUG_IMAGE_ID = None  # Set to None to disable single-image isolation
 cl = ToolsClustering(CLUSTER_TYPE, VERBOSE=VERBOSE)
@@ -130,8 +130,8 @@ SegmentTable_name = 'SegmentBig_isface'
 # SegmentHelper_name = 'SegmentHelper_sept2025_heft_keywords'
 # SegmentHelper_name = 'Detections' # if CLUSTER_TYPE = "ObjectFusion", it automatically joins to Detections
 # SegmentHelper_name = 'SegmentHelperObject_89_mask'
-# SegmentHelper_name = 'SegmentHelper_dec2025_body3D_outOfSegment'
-SegmentHelper_name = 'SegmentHelper_oct2025_evens_quarters'
+SegmentHelper_name = 'SegmentHelper_T11_Oct20_COCO_Custom'
+# SegmentHelper_name = 'SegmentHelper_T11_Oct20_COCO_Custom_evens_quarters'
 FORCE_HAND_LANDMARKS = False # when doing ArmsPoses3D, default is True, so mongo_hand_landmarks = 1
 
 # TESTING MODE - reduce dataset size for faster iteration using pre-filtered table
@@ -238,7 +238,7 @@ if USE_SEGMENT is True and (cl.CLUSTER_TYPE != "Clusters"):
 
     if isinstance(this_data_column, list):
         if "HSV" in cl.CLUSTER_TYPE:
-            SELECT = SELECT.replace(f"s.face_x, s.face_y, s.face_z, s.mouth_gap", f"ib.hue, ib.sat, ib.val ")
+            SELECT += ", ib.hue, ib.sat, ib.val"
             FROM += f" JOIN ImagesBackground ib ON s.image_id = ib.image_id "
             WHERE += f" AND ib.hue IS NOT NULL AND ib.sat IS NOT NULL AND ib.val IS NOT NULL "
     else:
@@ -928,7 +928,11 @@ def assign_images_clusters_DB(df):
     print("df_subset_landmarks after landmarks_to_df_columnar", df_subset_landmarks)
 
     # if cl.CLUSTER_TYPE in ["BodyPoses","BodyPoses3D","ArmsPoses3D", "HandsGestures", "HandsPositions","FingertipsPositions"]:
-    if "hand" in cl.CLUSTER_DATA[cl.CLUSTER_TYPE]["data_column"] or "body" in cl.CLUSTER_DATA[cl.CLUSTER_TYPE]["data_column"]:
+    if (
+        "hand" in cl.CLUSTER_DATA[cl.CLUSTER_TYPE]["data_column"]
+        or "body" in cl.CLUSTER_DATA[cl.CLUSTER_TYPE]["data_column"]
+        or cl.CLUSTER_TYPE == "HSV"
+    ):
         # combine all columns that start with left_dim_ or right_dim_ or dim_ into one list in the "enc1" column
         df_subset_landmarks = process_landmarks_cluster_dist(df, df_subset_landmarks)
     else:
@@ -1292,6 +1296,11 @@ def prepare_df(df, process_object_detections=True, batch_label=None):
         columns_to_drop = ['face_encodings68', 'face_landmarks', 'body_landmarks', 'body_landmarks_normalized', 
                            'hand_results', 'left_hand_landmarks', 'right_hand_landmarks', 'left_hand_world_landmarks', 'right_hand_world_landmarks']
     elif cl.CLUSTER_TYPE == "HSV":
+        required_hsv_cols = ['hue', 'sat', 'val']
+        missing_hsv_cols = [c for c in required_hsv_cols if c not in df.columns]
+        if missing_hsv_cols:
+            raise ValueError(f"HSV mode requires columns {required_hsv_cols}; missing {missing_hsv_cols}")
+
         # Replace NaN values with appropriate default before applying prep functions
         df['hue'] = df['hue'].apply(lambda x: None if pd.isna(x) else x)
         df['hue'] = pd.DataFrame(df["hue"].apply(sort.prep_hsv).tolist(), index=df.index)
