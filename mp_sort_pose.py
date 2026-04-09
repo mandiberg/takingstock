@@ -1439,67 +1439,127 @@ class SortPose:
         list_max_xs = []
         list_min_ys = []
         list_max_ys = []
+        lower_y_samples = []
+        left_x_samples = []
+        right_x_samples = []
+
+        # Keep low-confidence/placeholder points out of dynamic crop estimation.
+        vis_threshold = 0.35
 
         for landmark_list in landmarks_list:
             if hasattr(landmark_list, 'landmark'):
                 current_x_coords = []
                 current_y_coords = []
-                for landmark in landmark_list.landmark:
-                    if landmark.x is not None and landmark.y is not None:
-                        current_x_coords.append(landmark.x)
-                        current_y_coords.append(landmark.y)
+                for idx, landmark in enumerate(landmark_list.landmark):
+                    if landmark.x is None or landmark.y is None:
+                        continue
+
+                    vis = getattr(landmark, 'visibility', 1.0)
+                    if vis is not None and vis < vis_threshold:
+                        continue
+
+                    x = float(landmark.x)
+                    y = float(landmark.y)
+                    if not np.isfinite(x) or not np.isfinite(y):
+                        continue
+
+                    current_x_coords.append(x)
+                    current_y_coords.append(y)
+
+                    # Orientation anchors from anatomy:
+                    # hips/knees/ankles are below the nose; shoulders/arms indicate left/right.
+                    if idx in (23, 24, 25, 26, 27, 28):
+                        lower_y_samples.append(y)
+                    if idx in (11, 13, 15, 17, 19, 21):
+                        left_x_samples.append(x)
+                    if idx in (12, 14, 16, 18, 20, 22):
+                        right_x_samples.append(x)
                 
                 if current_x_coords: # Check if any valid landmarks were found for this specific list
-                    list_min_xs.append(min(current_x_coords))
-                    list_max_xs.append(max(current_x_coords))
-                    list_min_ys.append(min(current_y_coords))
-                    list_max_ys.append(max(current_y_coords))
+                    # Use robust bounds to reduce outlier-driven flips.
+                    list_min_xs.append(float(np.percentile(current_x_coords, 5)))
+                    list_max_xs.append(float(np.percentile(current_x_coords, 95)))
+                    list_min_ys.append(float(np.percentile(current_y_coords, 5)))
+                    list_max_ys.append(float(np.percentile(current_y_coords, 95)))
         print("list_min_xs", list_min_xs)
         print("list_max_xs", list_max_xs)
         print("list_min_ys", list_min_ys)
         print("list_max_ys", list_max_ys)
 
-        if list_min_xs: # Ensure there's data to calculate median from
-            median_min_x = statistics.median(list_min_xs)
-            median_max_x = statistics.median(list_max_xs)
-            median_min_y = statistics.median(list_min_ys)
-            median_max_y = statistics.median(list_max_ys)
+        if not list_min_xs:
+            print("calc_dynamic_multiplier_from_min_max_body_landmarks: no valid landmarks, keeping existing image_edge_multiplier")
+            return self.image_edge_multiplier
+
+        median_min_x = statistics.median(list_min_xs)
+        median_max_x = statistics.median(list_max_xs)
+        median_min_y = statistics.median(list_min_ys)
+        median_max_y = statistics.median(list_max_ys)
         print("medians: ", median_min_x, median_min_y, median_max_x, median_max_y)
 
-        # Apply floor/ceil and the buffer
-        lowest_x = math.floor(median_min_x  - padding)
-        lowest_y = math.floor(median_min_y - padding)
-        highest_x = math.ceil(median_max_x + padding)
-        highest_y = math.ceil(median_max_y + padding)
-        
         MIN_DYN_BBOX_DIM = 1
-        # set min dims to 2 units
-        lowest_y_cartesian = min(lowest_y, -1*MIN_DYN_BBOX_DIM)
-        lowest_x = min(lowest_x, -1*MIN_DYN_BBOX_DIM)
-        highest_y_cartesian = max(highest_y, MIN_DYN_BBOX_DIM)
-        highest_x = max(highest_x, MIN_DYN_BBOX_DIM)
 
-        # Keep natural orientation for crop multipliers:
-        # lowest_y corresponds to top (negative/up), highest_y to bottom (positive/down).
-        highest_y = highest_y_cartesian
-        lowest_y = lowest_y_cartesian
-        # # if diff between left and right is less/equal to 1 bboxes, take the bigger one and roll with that.
-        # if abs(lowest_x) != abs(highest_x) and abs(abs(lowest_x) - abs(highest_x)) <= 1:
-        #     if abs(highest_x) > abs(lowest_x):
-        #         lowest_x = highest_x *-1
-        #     else:
-        #         highest_x = abs(lowest_x)
-        #     if self.VERBOSE: print(f"calc_dynamic_multiplier_from_min_max_body_landmarks: diff between abs min_x and abs max_x less than 2, changing them to {highest_x}")
+        # Determine orientation using semantic landmarks first, then fallback.
+        if lower_y_samples:
+            below_is_negative = statistics.median(lower_y_samples) < 0
+            y_source = "anatomy"
+        else:
+            below_is_negative = abs(median_min_y) >= abs(median_max_y)
+            y_source = "extrema-fallback"
+
+        if left_x_samples and right_x_samples:
+            right_is_negative = statistics.median(right_x_samples) < statistics.median(left_x_samples)
+            x_source = "anatomy"
+        else:
+            right_is_negative = abs(median_min_x) >= abs(median_max_x)
+            x_source = "extrema-fallback"
+
+        if below_is_negative:
+            # Inverted convention (common in normalize_landmarks):
+            # +y up, -y down
+            top_raw = median_max_y
+            bottom_raw = abs(median_min_y)
+            y_orientation = "inverted(y- is down)"
+        else:
+            # Natural convention:
+            # +y down, -y up
+            top_raw = abs(median_min_y)
+            bottom_raw = median_max_y
+            y_orientation = "natural(y+ is down)"
+
+        if right_is_negative:
+            # Inverted x: +x left, -x right
+            right_raw = abs(median_min_x)
+            left_raw = median_max_x
+            x_orientation = "inverted(x- is right)"
+        else:
+            # Natural x: +x right, -x left
+            right_raw = median_max_x
+            left_raw = abs(median_min_x)
+            x_orientation = "natural(x+ is right)"
+
+        top_extent = max(math.ceil(top_raw + padding), MIN_DYN_BBOX_DIM)
+        right_extent = max(math.ceil(right_raw + padding), MIN_DYN_BBOX_DIM)
+        bottom_extent = max(math.ceil(bottom_raw + padding), MIN_DYN_BBOX_DIM)
+        left_extent = max(math.ceil(left_raw + padding), MIN_DYN_BBOX_DIM)
+
+        # if diff between left and right is less/equal to 1 bbox, take the bigger one and make them symmetrical.
+        if abs(left_extent) != abs(right_extent) and abs(abs(left_extent) - abs(right_extent)) <= 1:
+            if abs(right_extent) > abs(left_extent):
+                left_extent = right_extent
+            else:
+                right_extent = left_extent
+            if self.VERBOSE: print(f"calc_dynamic_multiplier_from_min_max_body_landmarks: left-right imbalance detected, equalizing to {left_extent}")
 
         # # if the ratio of height to width is greater than 2, make it a 3:2 by expanding the width
         # if abs(highest_y - lowest_y) / abs(highest_x - lowest_x) > 2:
         #     # height is much larger than width, make width match height
         #     highest_x = math.floor(highest_y * 3 / 2)
         #     lowest_x = math.ceil(lowest_x * 3 / 2)
-        if self.VERBOSE: print(f"calc_dynamic_multiplier_from_min_max_body_landmarks: {lowest_y, highest_x, highest_y, lowest_x}")
-        # return [lowest_x, lowest_y, highest_x, highest_y]
-        # image_edge_multiplier = [top_y_mult, right_x_mult, bottom_y_mult, left_x_mult,]
-        return [lowest_y, highest_x, highest_y, lowest_x]
+        if self.VERBOSE:
+            print(f"calc_dynamic_multiplier_from_min_max_body_landmarks orientation: {y_orientation}, {x_orientation}")
+            print(f"orientation source: y={y_source}, x={x_source}")
+            print(f"calc_dynamic_multiplier_from_min_max_body_landmarks: {(top_extent, right_extent, bottom_extent, left_extent)}")
+        return [top_extent, right_extent, bottom_extent, left_extent]
     
     def bbox_to_pixel_conversion(self, bbox):
         """

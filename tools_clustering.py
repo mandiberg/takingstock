@@ -214,9 +214,9 @@ class ToolsClustering:
         # R1_object_up_2x
         self.FEATURE_WEIGHTS = {
             'face_angle': .5,      # pitch, yaw, roll - LOW weight (prevent face-angle mega-clusters)
-            'class_id': 6.0,        # class_id - VERY HIGH weight at RAW SCALE (0-107) to force object-type separation
+            'class_id': 9.0,        # class_id - VERY HIGH weight at RAW SCALE (0-107) to force object-type separation
             'confidence': 1.0,      # detection confidence - very low weight
-            'bbox': 4.0,            # bbox coordinates - reduced to standard weight
+            'bbox': 6.0,            # bbox coordinates - reduced to standard weight
             'has_object': 2.0,      # binary indicator - high weight but lower than class_id
         }
 

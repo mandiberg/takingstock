@@ -66,7 +66,7 @@ INNER_JOIN_HELPER = True
 # SegmentHelperObject_67_phone 
 # SegmentHelperObject_41_cup_glass (big)
 
-LIMIT= 4000000
+LIMIT= 20000000
 # Initialize the counter
 counter = 2000
 
@@ -836,7 +836,6 @@ if USE_OBJ:
         Encodings.bbox,
         Encodings.face_height
     ).select_from(Detections).\
-    join(SegmentHelper, SegmentHelper.image_id == Detections.image_id).\
     join(Encodings, Encodings.image_id == Detections.image_id).\
     join(Images, Images.image_id == Detections.image_id).\
     filter(Encodings.bbox != None).\
@@ -846,6 +845,8 @@ if USE_OBJ:
     filter(text(predicate_text)).\
     filter(Detections.conf != -1).\
     limit(LIMIT)    
+
+    # join(SegmentHelper, SegmentHelper.image_id == Detections.image_id).\
 
     #filter(Detections.class_id == THIS_CLASS_ID).\
 

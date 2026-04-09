@@ -46,13 +46,13 @@ EXPAND = False
 ONE_SHOT = False # take all files, based off the very first sort order.
 JUMP_SHOT = False # jump to random file if can't find a run
 
-LIMIT = 7000000
+LIMIT = 100000
 BATCH_LIMIT = 10000
 
 # number of clusters produced. run GET_OPTIMAL_CLUSTERS and add that number here
 # 32 for hand positions
 # 128 for hand gestures
-N_CLUSTERS = 512  # test run at 4M; scale to ~1536-2048 for 38M production run
+N_CLUSTERS = 768  # test run at 4M; scale to ~1536-2048 for 38M production run
 N_META_CLUSTERS = 256
 
 # Reproducibility seed for this run (NumPy + Python random).
@@ -84,11 +84,11 @@ option, MODE = pick(options, title)
 # CLUSTER_TYPE = "BodyPoses"
 # CLUSTER_TYPE = "BodyPoses3D" # use this for META 3D body clusters, Arms will start build but messed up because of subset landmarks
 # CLUSTER_TYPE = "ArmsPoses3D" 
-# CLUSTER_TYPE = "ObjectFusion" 
+CLUSTER_TYPE = "ObjectFusion" 
 # CLUSTER_TYPE = "HandsPositions"
 # CLUSTER_TYPE = "HandsGestures"
 # CLUSTER_TYPE = "FingertipsPositions"
-CLUSTER_TYPE = "HSV" # only works with cluster save, not with assignment
+# CLUSTER_TYPE = "HSV" # only works with cluster save, not with assignment
 VERBOSE = False
 DEBUG_IMAGE_ID = None  # Set to None to disable single-image isolation
 cl = ToolsClustering(CLUSTER_TYPE, VERBOSE=VERBOSE)
