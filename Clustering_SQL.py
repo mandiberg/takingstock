@@ -46,7 +46,7 @@ EXPAND = False
 ONE_SHOT = False # take all files, based off the very first sort order.
 JUMP_SHOT = False # jump to random file if can't find a run
 
-LIMIT = 100000
+LIMIT = 10000000
 BATCH_LIMIT = 10000
 
 # number of clusters produced. run GET_OPTIMAL_CLUSTERS and add that number here
@@ -85,6 +85,7 @@ option, MODE = pick(options, title)
 # CLUSTER_TYPE = "BodyPoses3D" # use this for META 3D body clusters, Arms will start build but messed up because of subset landmarks
 # CLUSTER_TYPE = "ArmsPoses3D" 
 CLUSTER_TYPE = "ObjectFusion" 
+ONLY_EXISTING_IMAGES_DETECTIONS = True # faster for testing: will not calc new object placements
 # CLUSTER_TYPE = "HandsPositions"
 # CLUSTER_TYPE = "HandsGestures"
 # CLUSTER_TYPE = "FingertipsPositions"
@@ -129,7 +130,7 @@ SegmentTable_name = 'SegmentBig_isface'
 # if cl.CLUSTER_TYPE == "ArmsPoses3D":
 # SegmentHelper_name = 'SegmentHelper_sept2025_heft_keywords'
 # SegmentHelper_name = 'Detections' # if CLUSTER_TYPE = "ObjectFusion", it automatically joins to Detections
-# SegmentHelper_name = 'SegmentHelperObject_89_mask'
+# SegmentHelper_name = 'SegmentHelperObject_81_gift'
 SegmentHelper_name = 'SegmentHelper_T11_Oct20_COCO_Custom'
 # SegmentHelper_name = 'SegmentHelper_T11_Oct20_COCO_Custom_evens_quarters'
 FORCE_HAND_LANDMARKS = False # when doing ArmsPoses3D, default is True, so mongo_hand_landmarks = 1
@@ -235,6 +236,8 @@ if USE_SEGMENT is True and (cl.CLUSTER_TYPE != "Clusters"):
         SELECT += f" , {dupe_table_pre}.pitch, {dupe_table_pre}.yaw, {dupe_table_pre}.roll "
         SELECT += " , i.h, i.w "
         FROM += " LEFT JOIN Images i ON s.image_id = i.image_id "
+        if ONLY_EXISTING_IMAGES_DETECTIONS:
+            FROM += " INNER JOIN ImagesDetections idt ON s.image_id = idt.image_id "
 
     if isinstance(this_data_column, list):
         if "HSV" in cl.CLUSTER_TYPE:
@@ -439,6 +442,52 @@ def delete_images_detections_rows_for_image_ids(image_ids):
     Delete existing ImagesDetections rows for specific image_ids in chunks.
     """
     return cl.delete_images_detections_rows_for_image_ids(engine, image_ids, REPROCESS_QUERY_CHUNK_SIZE)
+
+def assert_images_detections_reprocess_column_exists(engine):
+    """
+    Fail fast if ImagesDetections.last_reprocessed_detection_id is missing.
+    """
+    with engine.connect() as conn:
+        has_column_sql = text(
+            """
+            SELECT COUNT(*)
+            FROM INFORMATION_SCHEMA.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'ImagesDetections'
+              AND COLUMN_NAME = 'last_reprocessed_detection_id'
+            """
+        )
+        has_column = int(conn.execute(has_column_sql).scalar() or 0) > 0
+        if not has_column:
+            raise RuntimeError(
+                "Missing required column ImagesDetections.last_reprocessed_detection_id. "
+                "Run: ALTER TABLE ImagesDetections ADD COLUMN last_reprocessed_detection_id BIGINT NULL;"
+            )
+
+def get_max_detection_ids_for_image_ids(engine, image_ids, chunk_size):
+    """
+    For each image_id, return max(detection_id) currently present in Detections.
+    """
+    if not image_ids:
+        return {}
+
+    unique_ids = sorted({int(image_id) for image_id in image_ids if pd.notna(image_id)})
+    max_detection_by_image = {}
+    with engine.connect() as conn:
+        for image_id_chunk in iter_chunks(unique_ids, chunk_size):
+            ids_sql = ",".join(str(image_id) for image_id in image_id_chunk)
+            chunk_sql = text(
+                f"""
+                SELECT d.image_id, MAX(d.detection_id) AS max_detection_id
+                FROM Detections d
+                WHERE d.image_id IN ({ids_sql})
+                GROUP BY d.image_id
+                """
+            )
+            rows = conn.execute(chunk_sql).fetchall()
+            for row in rows:
+                max_detection_by_image[int(row[0])] = int(row[1]) if row[1] is not None else None
+    return max_detection_by_image
 
 def selectSQL():
     if OFFSET: offset = f" OFFSET {str(OFFSET)}"
@@ -991,6 +1040,15 @@ def save_images_detections(df, engine):
     print("\n[DEBUG] save_images_detections called")
     print(f"[DEBUG] Input df shape: {df.shape}")
     print(f"[DEBUG] Columns in df: {list(df.columns)}")
+
+    image_ids_for_lookup = []
+    if 'image_id' in df.columns:
+        for raw_id in df['image_id'].dropna().tolist():
+            try:
+                image_ids_for_lookup.append(int(raw_id))
+            except (TypeError, ValueError):
+                continue
+    max_detection_id_by_image = get_max_detection_ids_for_image_ids(engine, image_ids_for_lookup, REPROCESS_QUERY_CHUNK_SIZE)
     
     # Check if required columns exist
     required_cols = ['left_pointer_knuckle_norm', 'right_pointer_knuckle_norm', 'left_source', 'right_source']
@@ -1079,6 +1137,12 @@ def save_images_detections(df, engine):
             else:
                 records_with_default_only += 1
             
+            image_id_int = None
+            try:
+                image_id_int = int(image_id)
+            except (TypeError, ValueError):
+                image_id_int = None
+
             record = {
                 'image_id': image_id,
                 'left_pointer_x': left_x,
@@ -1096,6 +1160,7 @@ def save_images_detections(df, engine):
                 'shoulder_object_id': extract_detection_id(row.get('shoulder_object')),
                 'waist_object_id': extract_detection_id(row.get('waist_object')),
                 'feet_object_id': extract_detection_id(row.get('feet_object')),
+                'last_reprocessed_detection_id': max_detection_id_by_image.get(image_id_int) if image_id_int is not None else None,
             }
             images_detections_records.append(record)
         except Exception as e:
@@ -1640,6 +1705,9 @@ def main():
     global MEDIAN_DICT
     cl.reset_world_lms_stats()
 
+    if cl.CLUSTER_TYPE == "ObjectFusion" and REPROCESS_EXISTING_IMAGE_DETECTIONS:
+        assert_images_detections_reprocess_column_exists(engine)
+
     def calculate_clusters_and_save(enc_data):
         # I drop image_id, etc as I pass it to knn bc I need it later, but knn can't handle strings
         print("df columns: ",enc_data.columns)
@@ -1759,9 +1827,14 @@ def main():
             print("\n=== Saving Images Metadata / ImagesDetections table ===")
             try:
                 updated_images_count = 0
+                skipped_already_h_w_fromdb_count = 0
                 skipped_missing_dimensions_count = 0
                 for idx, row in df.iterrows():
                     try:
+                        if int(row.get('h_w_fromDB', 0) or 0) == 1:
+                            skipped_already_h_w_fromdb_count += 1
+                            continue
+
                         image_id = row.get('image_id')
                         if pd.isna(image_id):
                             continue
@@ -1787,6 +1860,7 @@ def main():
                         print(f"Error updating Encodings for image_id {image_id if 'image_id' in locals() else row.get('image_id')}: {e}")
                 if updated_images_count > 0:
                     session.commit()
+                print(f"[DEBUG] Skipped {skipped_already_h_w_fromdb_count} rows with h/w already present in initial SELECT")
                 print(f"[DEBUG] Skipped {skipped_missing_dimensions_count} rows with no image dimensions to persist")
                 print(f"✓ Updated Images table with h/w for {updated_images_count} images")
 
@@ -1829,6 +1903,17 @@ def main():
         print("got results, count is: ",len(resultsjson))
         enc_data=pd.DataFrame()
         df = pd.json_normalize(resultsjson)
+        if cl.CLUSTER_TYPE == "ObjectFusion":
+            has_h_col = 'h' in df.columns
+            has_w_col = 'w' in df.columns
+            if has_h_col and has_w_col:
+                df['h_w_fromDB'] = (df['h'].notna() & df['w'].notna()).astype(int)
+            else:
+                df['h_w_fromDB'] = 0
+            print(
+                f"[DEBUG] Initial h/w availability: from_db={int(df['h_w_fromDB'].sum())}, "
+                f"missing={int(len(df) - df['h_w_fromDB'].sum())}"
+            )
         print(df)
 
         if cl.CLUSTER_TYPE == "ObjectFusion" and REPROCESS_EXISTING_IMAGE_DETECTIONS and TEST_REPROCESSING:

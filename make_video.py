@@ -234,7 +234,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     IS_HAND_POSE_FUSION = True # do we use fusion clusters
     CHOP_FIRST = True # does a first pass chop before whatever sort happens - this is default now
     # this is an override for development purposes. will only make CSVs from these clusters:
-    TEMP_FOCUS_CLUSTER_HACK_LIST = [16,17,25,70,71,76,92,100,103,120,121,137,138,139,147,148,180,199,210,231,248,249,259,270,285,287,291,319,333,336,337,338,347,354,368,371,385,429,451,464,476,508]
+    TEMP_FOCUS_CLUSTER_HACK_LIST = [666,128,525,20,150,1,516,160,593,767,145,246,19,464,501,449,79,470,289,139,312,185,345]
     
     TESTING = True
     if TESTING:
@@ -282,9 +282,9 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     else:
         # smaller numbers when using HSV clusters
         # APRIL 6 TK TEMP 10% CHANGES TO THESE FOR TESTING
-        MIN_VIDEO_FUSION_COUNT = 20 # this is the cut off for the CSV fusion pairs
+        MIN_VIDEO_FUSION_COUNT = 200 # this is the cut off for the CSV fusion pairs
         if TSP_SORT: MIN_CYCLE_COUNT = FORCE_TARGET_COUNT
-        else: MIN_CYCLE_COUNT = 15 # this is the cut off for the SQL query results
+        else: MIN_CYCLE_COUNT = 150 # this is the cut off for the SQL query results
         
 
 
@@ -445,7 +445,7 @@ if TOPIC_NO is not None and IS_ONE_TOPIC and IS_HAND_POSE_FUSION and not PURGING
         FOCUS_CLUSTER_HACK_LIST = FOCUS_CLUSTER_HACK_DICT.get(int(math.floor(TOPIC_NO[0])), None)
     
     # development override
-    if TEMP_FOCUS_CLUSTER_HACK_LIST is not None:
+    if bool(TEMP_FOCUS_CLUSTER_HACK_LIST):
         print("WARNING: FOCUS_CLUSTER_HACK_DICT is None, using TEMP_FOCUS_CLUSTER_HACK_LIST")
         FOCUS_CLUSTER_HACK_LIST = TEMP_FOCUS_CLUSTER_HACK_LIST
 

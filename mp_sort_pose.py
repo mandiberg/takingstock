@@ -108,10 +108,11 @@ class SortPose:
         self.BRUTEFORCE = False
         self.LMS_DIMENSIONS = LMS_DIMENSIONS
         if self.VERBOSE: print("init LMS_DIMENSIONS",self.LMS_DIMENSIONS)
-        self.CUTOFF = 50 # DOES factor if ONE_SHOT
+        self.CUTOFF = 200 # DOES factor if ONE_SHOT
         self.ORIGIN = 0
         self.this_nose_bridge_dist = self.NOSE_BRIDGE_DIST = None # to be set in first loop, and sort.this_nose_bridge_dist each time
         self.USE_HEAD_POSE = USE_HEAD_POSE
+        self.MIN_DYN_BBOX_DIM = 2 # controls how closely AUTO_EDGE_CROP can get
 
         self.CHECK_DESC_DIST = 30
 
@@ -1496,7 +1497,6 @@ class SortPose:
         median_max_y = statistics.median(list_max_ys)
         print("medians: ", median_min_x, median_min_y, median_max_x, median_max_y)
 
-        MIN_DYN_BBOX_DIM = 1
 
         # Determine orientation using semantic landmarks first, then fallback.
         if lower_y_samples:
@@ -1537,10 +1537,10 @@ class SortPose:
             left_raw = abs(median_min_x)
             x_orientation = "natural(x+ is right)"
 
-        top_extent = max(math.ceil(top_raw + padding), MIN_DYN_BBOX_DIM)
-        right_extent = max(math.ceil(right_raw + padding), MIN_DYN_BBOX_DIM)
-        bottom_extent = max(math.ceil(bottom_raw + padding), MIN_DYN_BBOX_DIM)
-        left_extent = max(math.ceil(left_raw + padding), MIN_DYN_BBOX_DIM)
+        top_extent = max(math.ceil(top_raw + padding), self.MIN_DYN_BBOX_DIM)
+        right_extent = max(math.ceil(right_raw + padding), self.MIN_DYN_BBOX_DIM)
+        bottom_extent = max(math.ceil(bottom_raw + padding), self.MIN_DYN_BBOX_DIM)
+        left_extent = max(math.ceil(left_raw + padding), self.MIN_DYN_BBOX_DIM)
 
         # if diff between left and right is less/equal to 1 bbox, take the bigger one and make them symmetrical.
         if abs(left_extent) != abs(right_extent) and abs(abs(left_extent) - abs(right_extent)) <= 1:

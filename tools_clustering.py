@@ -2207,7 +2207,8 @@ class ToolsClustering:
 
     def get_reprocess_image_ids_for_subset(self, engine, image_ids, cutoff_detection_id, chunk_size):
         """
-        For a subset of image_ids, return only those with any Detections row where detection_id >= cutoff.
+        For a subset of image_ids, return only those with any Detections row where detection_id >= cutoff
+        and where ImagesDetections has not yet been marked as processed through that detection_id.
         """
         if not image_ids:
             return set()
@@ -2221,8 +2222,19 @@ class ToolsClustering:
                     f"""
                     SELECT DISTINCT d.image_id
                     FROM Detections d
+                                        LEFT JOIN (
+                                                SELECT idt.image_id,
+                                                             MAX(idt.last_reprocessed_detection_id) AS last_reprocessed_detection_id
+                                                FROM ImagesDetections idt
+                                                WHERE idt.image_id IN ({ids_sql})
+                                                GROUP BY idt.image_id
+                                        ) idt ON idt.image_id = d.image_id
                     WHERE d.detection_id >= :cutoff
                       AND d.image_id IN ({ids_sql})
+                                            AND (
+                                                    idt.last_reprocessed_detection_id IS NULL
+                                                    OR idt.last_reprocessed_detection_id < d.detection_id
+                                            )
                     """
                 )
                 chunk_rows = conn.execute(chunk_sql, {"cutoff": int(cutoff_detection_id)}).fetchall()

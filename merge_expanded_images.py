@@ -18,7 +18,7 @@ io = DataIO()
 db = io.db
 
 MODES = ["merge_images_paris_photo", "merge_images_body_autocrop", "make_video", "make_video_heft_keyword_fusion"]
-MODE_CHOICE = 1
+MODE_CHOICE = 3
 CURRENT_MODE = MODES[MODE_CHOICE]
 
 # Provide the path to the folder containing the images
@@ -27,7 +27,7 @@ ROOT_FOLDER_PATH = '/Users/michaelmandiberg/Documents/projects-active/facemap_pr
 # if IS_CLUSTER this should be the folder holding all the cluster folders
 # if not, this should be the individual folder holding the images
 # will not accept clusterNone -- change to cluster00
-FOLDER_NAME = "T11_YOLO_512_ArmsFeatures_baseline"
+FOLDER_NAME = "T11_YOLO_768_ArmsFeatures_3xWeightround2"
 
 # iterate through folders? 
 IS_CLUSTER = True
@@ -549,6 +549,9 @@ def construct_incrementor(merge_count, current_pos, this_period, total_images):
     this_first_merge_count = math.floor(merge_count / 2)
     this_second_merge_count = merge_count - this_first_merge_count
     print("this_first_merge_count", this_first_merge_count, "this_second_merge_count", this_second_merge_count)
+    if this_first_merge_count < 1 or this_second_merge_count < 1:
+        print(f"construct_incrementor: merge_count={merge_count} too small (first={this_first_merge_count}, second={this_second_merge_count}), returning empty incrementors")
+        return [], [], current_pos + merge_count + 1, current_pos + (merge_count * 2)
     leading_incrementor = []
     trailing_incrementor = []
     end_image = min(current_pos + this_period + 1, total_images)
@@ -670,6 +673,9 @@ def process_images_osc(images_to_build, video_writer, total_images, period, curr
     # Phase 3: Decrease merge count back to START_MERGE
     # not subtracting 1 from start_merge to not include the final image
     # adding 1 to PERIOD to include the first image of the next cycle
+    if merge_count < 2:
+        print(f"Skipping construct_incrementor: merge_count={merge_count} is too small for incrementor math")
+        return
 
     leading_incrementor, trailing_incrementor, trailing_start_image, current_image_no = construct_incrementor(merge_count, current_pos, this_period, total_images)
     print("leading_incrementor", leading_incrementor)
@@ -723,6 +729,9 @@ def calculate_period(images_to_build):
     image_count = len(images_to_build)-1 # subtract one for the duplicate first image at the end
     clean_reps = image_count // PERIOD
     leftover = image_count - clean_reps * PERIOD
+    if clean_reps == 0:
+        print("not enough images to fill one period, using period equal to image count", image_count)
+        return image_count
     diff = leftover/clean_reps
     print("image_count", image_count, "clean_reps", clean_reps, "leftover", leftover, "diff", diff)
     if PERIOD - leftover > PERIOD / 2:
@@ -740,6 +749,9 @@ def write_video(img_array, subfolder_path=None):
     print("len img_array before cropping", len(img_array))
     if len(img_array) == 0:
         print("no jpg images found, skipping this folder")
+        return
+    elif len(img_array) < PERIOD/2:
+        print(f"not enough images to fill half a period ({PERIOD/2}), skipping this folder")
         return
     if IS_VIDEO_MERGE: img_array.append(img_array[0]) # add the first image to the end to make a loop
     images_to_build = load_images(img_array, subfolder_path)

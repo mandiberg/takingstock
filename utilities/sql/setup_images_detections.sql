@@ -59,6 +59,7 @@ CREATE TABLE ImagesDetections (
     shoulder_object_id INT,
     waist_object_id INT,
     feet_object_id INT,
+    last_reprocessed_detection_id BIGINT,
     
     -- Metadata
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

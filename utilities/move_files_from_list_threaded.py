@@ -29,12 +29,12 @@ sys.path.insert(1, ROOT_GITHUB)
 # import file
 
 from mp_db_io import DataIO
-IS_SSD = True  # if True it will use the SSD path, if False it will use the RAID path
+IS_SSD = False  # if True it will use the SSD path, if False it will use the RAID path
 
 # Define the path to the CSV file
 # csv_file = '/Users/michaelmandiberg/Documents/projects-active/facemap_production/test_orig/df_sorted_0_ct9422.csv'
 
-VERBOSE = True
+VERBOSE = False
 # set origin before constructing io
 # ORIGIN_SSD = "/Volumes/SSD4_Green/segment_images_detected_63_67"
 ORIGIN_SSD = "/Volumes/LaCie/Volumes/LaCie/segment_images_82_money_cards"
@@ -44,7 +44,7 @@ io = DataIO(IS_SSD, VERBOSE, ORIGIN_SSD)
 
 CSV_FOLDER = os.path.join(io.ROOT_DBx, "NML_transition")
 CSV_FOLDER = "/Users/michaelmandiberg/Documents/takingstock_production/moving_objects_to_SSDs/move_this" # for testing
-USE_DF_SORTED = False  # if True it will use the df_sorted format from make_video.py, false expects output from SQL query above
+USE_DF_SORTED = True  # if True it will use the df_sorted format from make_video.py, false expects output from SQL query above
 USE_RAW_PATHS = False # this skips the site_name_id and joins the ORIGIN to the filename in the CSV directly
 USE_HASH_FOLDERS = True  # if True it will create hash folders in the destination folder
 FROM_SSD_TO_SSD = False # overrides io settings to move from the ORIGIN_SSD to DEST 
@@ -52,10 +52,10 @@ IS_TEST = False
 OUTPUT_INTERVAL = 1000
 if FROM_SSD_TO_SSD == False: MOVE_ORIGINAL_FILE = False  # FORCE only allow moving files when going from SSD to SSD
 VERBOSE = False
-ORIGIN = "segment_images_COCO" # this needs to be path to segment_images/images_*
+ORIGIN = "segment_images_COCO" # if USE_RAW_PATHS this needs to be path to segment_images/images_*
 # DEST = os.path.join(io.ROOT_DBx, "NMLdeshard")
 # DEST = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/debug_bodies" 
-DEST = "/Volumes/OWC54/segment_images_40odd"   # 
+DEST = "/Volumes/OWC54/segment_images"   # 
 # DEST = "/Volumes/LaCie/focus_clusters/segment_images_103_peony"  # 250k for headphones
 # DEST = "/Volumes/SSD4_Green/segment_images_67_phone_undetected"  # for testing
 if IS_TEST:
