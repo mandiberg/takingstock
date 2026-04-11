@@ -22,7 +22,7 @@ NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 # USE THIS TO MAKE THE FILE NECESSARY TO DO KEYWORD BASED MAKE VIDEO OUTPUT
 
 # ROOT_FOLDER_PATH = '/Users/michaelmandiberg/Documents/projects-active/facemap_production/heft_keyword_fusion_clusters'
-ROOT_FOLDER_PATH = '/Users/michael.mandiberg/Documents/GitHub/takingstock/utilities/data/heft_detections_ArmsPoses3D_128'
+ROOT_FOLDER_PATH = '/Users/michaelmandiberg/Documents/GitHub/takingstock/utilities/data/heft_detections_ArmsPoses3D_768'
 
 HACK_LIST_SKIP_DETECTIONS = [87,90,91,92]
 MODE = "Detections" # Topics or Keywords or Detections
@@ -35,12 +35,12 @@ else: MODE_ID =  "keyword_id"
     # elif "hand_gesture_position" in CLUSTER_TYPE: cluster_count = 128
     # elif "MetaBodyPoses3D" in CLUSTER_TYPE: cluster_count = 64
 
-CLUSTER_COUNT = 128
+CLUSTER_COUNT = 768
 CLUSTER_DATA = {
     "ArmsPoses3D_MetaHSV": {"sql_template": "sql_query_template_MetaHSV_Body3D", "cluster_table_name": "ImagesArmsPoses3D", "hsv_type": "ClustersMetaHSV", "cluster_count": CLUSTER_COUNT}
 }
 
-THIS_CLASS_ID = 67 # for object bbox normalization
+THIS_CLASS_ID = 0 # for object bbox normalization
 KEYWORDS = [THIS_CLASS_ID] 
 class_token = ID_SEGMENT_DICT.get(THIS_CLASS_ID, None)
 if class_token: HELPER_TABLE = f'SegmentHelperObject_{class_token}' 

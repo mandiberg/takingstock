@@ -81,7 +81,7 @@ DET_ID_THRESHOLD_COCO = 12455146
 IOU_THRESHOLD = 0.7
 ADJACENCY_THRESHOLD_PX = 10
 
-FILE_FOLDER = "/Volumes/OWC52/segment_images_OWC4"
+FILE_FOLDER = "/Volumes/LaCie/segment_images_82_money_cards"
 # FILE_FOLDER = "/Volumes/LaCie/segment_images_COCO" # must be a folder holding the site folder(s)
 # FILE_FOLDER ="/Volumes/OWC54/segment_images_40xDetections"
 # FILE_FOLDER = "/Volumes/RAID18" # must be a folder holding the site folder(s)

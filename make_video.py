@@ -198,13 +198,13 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     class_id = 0
 
     # SORT_TYPE = "obj_bbox"
-    # SORT_TYPE = "planar_hands"
+    SORT_TYPE = "planar_hands"
     # SORT_TYPE = "object_fusion"
 
-    # CLUSTER_TYPE = "ArmsPoses3D"
+    CLUSTER_TYPE = "ArmsPoses3D"
     # CLUSTER_TYPE = "object_fusion"
     # CLUSTER_TYPE = SORT_TYPE = "ArmsPoses3D" # this triggers meta body poses 3D
-    CLUSTER_TYPE = SORT_TYPE = "object_fusion" # make sure OBJ_CLS_ID is set below
+    # CLUSTER_TYPE = SORT_TYPE = "object_fusion" # make sure OBJ_CLS_ID is set below
     cl = ToolsClustering(CLUSTER_TYPE, VERBOSE=VERBOSE)
 
 
@@ -336,7 +336,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
         
 
     if META: folder = "heft_keyword_fusion_clusters_hsv_meta"
-    else: folder = "heft_detections_ArmsPoses3D_128/"
+    else: folder = "heft_detections_ArmsPoses3D_768/"
 
     FUSION_FOLDER = os.path.join("utilities/data/", folder)
     # CSV_FOLDER = os.path.join("/Users/michaelmandiberg/Documents/projects-active/facemap_production/heft_keyword_fusion_clusters/", folder)

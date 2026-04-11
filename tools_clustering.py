@@ -1855,6 +1855,52 @@ class ToolsClustering:
         missing_image_ids = sorted(list(set(image_ids) - set(precomputed.keys())))
         return df, missing_image_ids
 
+    def convert_arms_subset_vector_to_dim_columns(self, df, source_col='arms_subset_vector', drop_source=False):
+        """
+        Convert flattened arms subset vectors into dim_* columns used by clustering.
+        """
+        if df is None or len(df) == 0:
+            return df
+        if source_col not in df.columns:
+            return df
+
+        def _as_sequence(value):
+            if isinstance(value, np.ndarray):
+                if value.size == 0:
+                    return None
+                return value.flatten().tolist()
+            if isinstance(value, (list, tuple)):
+                if len(value) == 0:
+                    return None
+                return list(value)
+            return None
+
+        dim_count = 0
+        for value in df[source_col]:
+            seq = _as_sequence(value)
+            if seq is not None:
+                dim_count = len(seq)
+                break
+
+        if dim_count == 0:
+            return df
+
+        def _dim_value(value, dim_idx):
+            seq = _as_sequence(value)
+            if seq is None or len(seq) <= dim_idx:
+                return 0.0
+            item = seq[dim_idx]
+            return float(item) if item is not None else 0.0
+
+        for dim_idx in range(dim_count):
+            col_name = f"dim_{dim_idx}"
+            df[col_name] = df[source_col].apply(lambda value: _dim_value(value, dim_idx))
+
+        if drop_source:
+            df = df.drop(columns=[source_col], errors='ignore')
+
+        return df
+
     def persist_images_armsposes3d(self, df):
         """Upsert subsetted arms pose vectors into ImagesArmsFeatures3D cache table."""
         if self.session is None:
