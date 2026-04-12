@@ -22,12 +22,13 @@ NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 # USE THIS TO MAKE THE FILE NECESSARY TO DO KEYWORD BASED MAKE VIDEO OUTPUT
 
 # ROOT_FOLDER_PATH = '/Users/michaelmandiberg/Documents/projects-active/facemap_production/heft_keyword_fusion_clusters'
-ROOT_FOLDER_PATH = '/Users/michaelmandiberg/Documents/GitHub/takingstock/utilities/data/heft_detections_ArmsPoses3D_768'
+ROOT_FOLDER_PATH = '/Users/michaelmandiberg/Documents/GitHub/takingstock/utilities/data/heft_clusters_ArmsPoses3D_768'
 
 HACK_LIST_SKIP_DETECTIONS = [87,90,91,92]
-MODE = "Detections" # Topics or Keywords or Detections
+MODE = "ArmsPoses3D" # Topics or Keywords or Detections or ArmsPoses3D
 if MODE == "Topics": MODE_ID = "topic_id" 
 elif "Detections" in MODE: MODE_ID = "class_id"
+elif MODE == "ArmsPoses3D": MODE_ID = "cluster_id"
 else: MODE_ID =  "keyword_id"
 
     # if "body3D" in CLUSTER_TYPE: cluster_count = 512
@@ -44,7 +45,7 @@ THIS_CLASS_ID = 0 # for object bbox normalization
 KEYWORDS = [THIS_CLASS_ID] 
 class_token = ID_SEGMENT_DICT.get(THIS_CLASS_ID, None)
 if class_token: HELPER_TABLE = f'SegmentHelperObject_{class_token}' 
-else: HELPER_TABLE = 'SegmentHelperObject_45_salad'
+else: HELPER_TABLE = 'SegmentHelper_T11_Oct20_COCO_Custom_evens_quarters'
 
 CLUSTER_TYPE = "ArmsPoses3D_MetaHSV" # key to CLUSTER_DATA dict
 # "ArmsPoses3D_MetaHSV" or "BodyPoses3D_MetaHSV" or "MetaBodyPoses3D" or "BodyPoses3D_HSV" or "body3D" or "hand_gesture_position" - determines whether it checks hand poses or body3D
@@ -556,7 +557,7 @@ def save_query_results_to_csv(query, topic_id):
 
 
 # Adjust the query template based on MODE
-if MODE == "Keywords" or "Detections" in MODE:
+if MODE in ["Keywords", "ArmsPoses3D"] or "Detections" in MODE:
     print("Querying by Keywords with CLUSTER_TYPE:", CLUSTER_TYPE)
     # Loop through each keyword_id and save results to CSV
     for keyword_id in KEYWORDS:
@@ -580,6 +581,12 @@ if MODE == "Keywords" or "Detections" in MODE:
                 print("Before:", sql_query_template)
                 sql_query_template = sql_query_template.replace("WHERE it.{MODE_ID} = {THIS_MODE_ID}", "WHERE 1=1") # remove the where clause for class_id
                 print("After:", sql_query_template)
+        if "ArmsPoses3D" in MODE:
+            # remove the WHERE it.{MODE_ID} = {THIS_MODE_ID} as I want all the dat
+            print(f"removing WHERE clause for ArmsPoses3D.")
+            print("Before:", sql_query_template)
+            sql_query_template = sql_query_template.replace("WHERE it.{MODE_ID} = {THIS_MODE_ID}", "WHERE 1=1") # remove the where clause for class_id
+            print("After:", sql_query_template)
                 
         sql_query_template = sql_query_template.replace("{MODE}", MODE).replace("{MODE_ID}", MODE_ID).replace("{THIS_MODE_ID}", str(keyword_id)).replace("{CLUSTER_TABLE}", this_cluster_table).replace("{HELPER_TABLE}", HELPER_TABLE) 
         print(sql_query_template)

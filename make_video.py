@@ -81,7 +81,7 @@ CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden b
 # CSV_FOLDER = os.path.join(io.ROOT_DBx, "body3D_segmentbig_useall256_CSVs_test")
 
 # CSV_FOLDER = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion128_test220K"
-CSV_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/T11_YOLO_512_ArmsFeatures_baseline"
+CSV_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/T11_YOLO_ArmsPoses3D_768/build"
 
 # overriding DB for testing
 # io.db["name"] = "stock"
@@ -234,7 +234,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     IS_HAND_POSE_FUSION = True # do we use fusion clusters
     CHOP_FIRST = True # does a first pass chop before whatever sort happens - this is default now
     # this is an override for development purposes. will only make CSVs from these clusters:
-    TEMP_FOCUS_CLUSTER_HACK_LIST = [666,128,525,20,150,1,516,160,593,767,145,246,19,464,501,449,79,470,289,139,312,185,345]
+    TEMP_FOCUS_CLUSTER_HACK_LIST = []
     
     TESTING = True
     if TESTING:
@@ -336,7 +336,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
         
 
     if META: folder = "heft_keyword_fusion_clusters_hsv_meta"
-    else: folder = "heft_detections_ArmsPoses3D_768/"
+    else: folder = "heft_clusters_ArmsPoses3D_768/"
 
     FUSION_FOLDER = os.path.join("utilities/data/", folder)
     # CSV_FOLDER = os.path.join("/Users/michaelmandiberg/Documents/projects-active/facemap_production/heft_keyword_fusion_clusters/", folder)
@@ -1778,6 +1778,14 @@ def shift_bbox(bbox, extension_pixels):
 
 def linear_test_df(df_sorted, itter=None):
 
+    def get_cropped_cache_file(row):
+        aspect_ratio = '_'.join(str(v) for v in sort.image_edge_multiplier)
+        folder_root = os.path.dirname(row['folder'])
+        folder_name = os.path.basename(row['folder'])
+        if INPAINT_COLOR:
+            return os.path.join(folder_root, folder_name+"_cropped_"+INPAINT_COLOR+"_"+aspect_ratio, row['imagename'])
+        return os.path.join(folder_root, folder_name+"_cropped_"+aspect_ratio, row['imagename'])
+
     def save_image_metas(row):
         if sort.VERBOSE: print("row", row)
         if sort.VERBOSE: print("save_image_metas for use in TTS")
@@ -1809,6 +1817,37 @@ def linear_test_df(df_sorted, itter=None):
         # return([image_id, description[0], topic_score])
 
     def in_out_paint(img, row):
+        def validate_cached_cropped(cached_img):
+            """Run pair-test validation for a pre-cropped cache hit without recropping."""
+            if cached_img is None:
+                return None, True
+
+            is_face = None
+            if sort.counter_dict["first_run"] is False and sort.counter_dict["last_image"] is None:
+                print(" ><><>< YIKES, last_image is None ><><>< ")
+
+            try:
+                if sort.counter_dict["first_run"] is False:
+                    if VERBOSE:
+                        print("testing is_face for cached cropped image")
+                    if SORT_TYPE not in ("planar_body", "body3D"):
+                        is_face = sort.test_pair(sort.counter_dict["last_image"], cached_img)
+                    else:
+                        print("failed is_face test")
+                else:
+                    print("first round, skipping the pair test")
+            except Exception:
+                print("last_image try failed")
+
+            if is_face or sort.counter_dict["first_run"]:
+                sort.counter_dict["first_run"] = False
+                sort.counter_dict["good_count"] += 1
+                return cached_img, False
+
+            sort.counter_dict["isnot_face_count"] += 1
+            print("pair do not make a face, skipping <<< is this really true? Isn't this for dupes?")
+            return None, True
+
         def check_extension(shape, extension_pixels, threshold):
             key = 0
             for index, (key, value) in enumerate(extension_pixels.items()):
@@ -1830,13 +1869,24 @@ def linear_test_df(df_sorted, itter=None):
         # inpaint_file=os.path.join(os.path.join(os.path.dirname(row['folder']), "inpaint", os.path.basename(row['folder'])),row['filename'])
         # aspect_ratio = '_'.join(sort.image_edge_multiplier)
         aspect_ratio = '_'.join(str(v) for v in sort.image_edge_multiplier)
+        folder_root = os.path.dirname(row['folder'])
+        folder_name = os.path.basename(row['folder'])
         if INPAINT_COLOR:
-            inpaint_file=os.path.join(os.path.dirname(row['folder']), os.path.basename(row['folder'])+"_inpaint_"+INPAINT_COLOR+"_"+aspect_ratio,row['imagename'])
+            inpaint_file=os.path.join(folder_root, folder_name+"_inpaint_"+INPAINT_COLOR+"_"+aspect_ratio,row['imagename'])
+            cropped_file=os.path.join(folder_root, folder_name+"_cropped_"+INPAINT_COLOR+"_"+aspect_ratio,row['imagename'])
         else:
-            inpaint_file=os.path.join(os.path.dirname(row['folder']), os.path.basename(row['folder'])+"_inpaint_"+aspect_ratio,row['imagename'])
+            inpaint_file=os.path.join(folder_root, folder_name+"_inpaint_"+aspect_ratio,row['imagename'])
+            cropped_file=os.path.join(folder_root, folder_name+"_cropped_"+aspect_ratio,row['imagename'])
         print("inpaint_file", inpaint_file)
-        if USE_PAINTED and os.path.exists(inpaint_file):
-            if sort.VERBOSE: print("path exists, loading image",inpaint_file)
+        print("cropped_file", cropped_file)
+        if USE_PAINTED and os.path.exists(cropped_file):
+            if sort.VERBOSE: print("cropped cache exists, loading image",cropped_file)
+            cached_cropped_image = cv2.imread(cropped_file)
+            cropped_image, skip_face = validate_cached_cropped(cached_cropped_image)
+            if sort.VERBOSE: print("cropped cache validated", cropped_image is not None)
+            return cropped_image, face_diff
+        elif USE_PAINTED and os.path.exists(inpaint_file):
+            if sort.VERBOSE: print("legacy inpaint cache exists, loading image",inpaint_file)
             inpaint_image=cv2.imread(inpaint_file)
         else:
             if sort.VERBOSE: print("path doesnt exist, in_out_painting now")
@@ -1918,7 +1968,6 @@ def linear_test_df(df_sorted, itter=None):
                     if SAVE_IMG_PROCESS:  cv2.imwrite(inpaint_file+"6_blurmask.jpg",blurmask)
                     ########
                     if SAVE_IMG_PROCESS: cv2.imwrite(inpaint_file+"_inpaint.jpg",inpaint_image) #for testing out
-                    else: cv2.imwrite(inpaint_file,inpaint_image) #temp comment out
                     print("shape of inpaint_image",np.shape(inpaint_image))
                     print("inpainting done", inpaint_file,"shape",np.shape(inpaint_image))
                 else: 
@@ -1931,7 +1980,6 @@ def linear_test_df(df_sorted, itter=None):
                     os.makedirs(directory)
                 print("outpainting medium extension")
                 inpaint_image=outpaint(img,extension_pixels,downsampling_scale=1,prompt="",negative_prompt="")
-                cv2.imwrite(inpaint_file,inpaint_image) 
             else:
                 print("too big to inpaint -- attempting to bailout")
                 # inpaint_image=0
@@ -1942,6 +1990,13 @@ def linear_test_df(df_sorted, itter=None):
             cropped_image, skip_face = compare_images(sort.counter_dict["last_image"], inpaint_image,row['face_landmarks'], bbox)
             if sort.VERBOSE:print("inpainting done","shape:",np.shape(cropped_image))
             if skip_face:print("still 1x1 image , you're probably shifting both landmarks and bbox, only bbox needs to be shifted")
+            if cropped_image is not None:
+                cropped_dir = os.path.dirname(cropped_file)
+                if not os.path.exists(cropped_dir):
+                    os.makedirs(cropped_dir)
+                cv2.imwrite(cropped_file, cropped_image)
+                if sort.VERBOSE:
+                    print("saved cropped cache", cropped_file)
 
         return cropped_image, face_diff
 
@@ -2082,6 +2137,15 @@ def linear_test_df(df_sorted, itter=None):
 
             # save image
             if cropped_image is not None:
+
+                # Always persist the final cropped frame to cache for reuse across runs.
+                cropped_cache_file = get_cropped_cache_file(row)
+                cropped_cache_dir = os.path.dirname(cropped_cache_file)
+                if not os.path.exists(cropped_cache_dir):
+                    os.makedirs(cropped_cache_dir)
+                cv2.imwrite(cropped_cache_file, cropped_image)
+                if sort.VERBOSE:
+                    print("saved cropped cache", cropped_cache_file)
 
                 cv2.imwrite(outpath, cropped_image)
                 good += 1

@@ -13,7 +13,10 @@ store that data in the table
 ib.is_left_shoulder = 1/0 (boolean)
 ib.is_right_shoulder
 
-s
+
+The way this script works, you have to create empty rows in the table using MODE 0
+Then process those rows using MODE 1. 
+
 '''
 
 
@@ -21,7 +24,7 @@ s
 #################################
 
 import sys
-from sqlalchemy import create_engine, text,func, select, delete, and_
+from sqlalchemy import create_engine, text,func, select, delete, and_, exists
 from sqlalchemy.orm import sessionmaker,scoped_session, declarative_base
 from sqlalchemy.pool import NullPool
 from mp_db_io import DataIO
@@ -37,7 +40,7 @@ import mediapipe as mp
 import shutil
 import pandas as pd
 import json
-from my_declarative_base import Base, Clusters, Images,ImagesBackground, ImagesTopics, SegmentTable, SegmentBig, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON, Images
+from my_declarative_base import Base, Clusters, Encodings, Images,ImagesBackground, ImagesTopics, SegmentTable, SegmentBig, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON, Images
 #from sqlalchemy.ext.declarative import declarative_base
 from mp_sort_pose import SortPose
 import pymongo
@@ -55,7 +58,7 @@ SHOULDER_THRESH=.75
 # HelperTable_name = "SegmentHelperApril12_2x2x33x27"
 
 # for fingerpoint
-HelperTable_name = "SegmentBig_isface"
+HelperTable_name = "SegmentHelper_T11_Oct20_COCO_Custom_evens_quarters"
 # MM controlling which folder to use
 IS_SSD = False
 
@@ -78,7 +81,15 @@ else:
                                 .format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']), pool_pre_ping=True, pool_recycle=600, poolclass=NullPool)
 
 get_background_mp = mp.solutions.selfie_segmentation
-get_bg_segment = get_background_mp.SelfieSegmentation()
+
+# Thread-local storage for MediaPipe instances to avoid timestamp conflicts
+_thread_local = threading.local()
+
+def get_bg_segment_instance():
+    """Get or create a SelfieSegmentation instance for the current thread."""
+    if not hasattr(_thread_local, 'bg_segment'):
+        _thread_local.bg_segment = get_background_mp.SelfieSegmentation(model_selection=0)
+    return _thread_local.bg_segment
 
 image_edge_multiplier = [1.5,1.5,2,1.5] # bigger portrait
 image_edge_multiplier_sm = [1.2, 1.2, 1.6, 1.2] # standard portrait
@@ -131,13 +142,13 @@ title = 'Please choose your operation: '
 options = ['Create table', 'Fetch BG color stats',"test sorting"]
 option, index = pick(options, title)
 
-LIMIT= 1000000
+LIMIT= 3000000
 # Initialize the counter
 counter = 0
 
 # Number of threads
-#num_threads = io.NUMBER_OF_PROCESSES
-num_threads = 1
+num_threads = io.NUMBER_OF_PROCESSES //2
+# num_threads = 1
 
 
 class HelperTable(Base):
@@ -287,8 +298,8 @@ def create_table(row, lock, session):
 def get_filename(target_image_id, return_endfile=False):
     ## get the image somehow
     select_image_ids_query = (
-        select(SegmentTable.site_name_id,SegmentTable.imagename)
-        .filter(SegmentTable.image_id == target_image_id)
+        select(Images.site_name_id,Images.imagename)
+        .filter(Images.image_id == target_image_id)
     )
 
     result = session.execute(select_image_ids_query).fetchall()
@@ -304,7 +315,7 @@ def get_landmarks_mongo(image_id):
     if image_id:
         results = mongo_collection.find_one({"image_id": image_id})
         if results:
-            face_landmarks = results['face_landmarks']
+            face_landmarks = results.get('face_landmarks', None)
             # print("got encodings from mongo, types are: ", type(face_encodings68), type(face_landmarks), type(body_landmarks))
             return face_landmarks
         else:
@@ -332,8 +343,8 @@ def unpickle_array(pickled_array):
 
 def get_bbox(target_image_id):
     select_image_ids_query = (
-        select(SegmentTable.bbox)
-        .filter(SegmentTable.image_id == target_image_id)
+        select(Encodings.bbox)
+        .filter(Encodings.image_id == target_image_id)
     )
     result = session.execute(select_image_ids_query).fetchall()
     bbox=result[0][0]
@@ -394,7 +405,7 @@ def fetch_BG_stat(target_image_id, lock, session):
         return
     #####################
     # hue,sat,val,lum, lum_torso=get_bg_hue_lum(img,bbox,facelandmark)
-    segmentation_mask=sort.get_segmentation_mask(get_bg_segment,img,bbox,face_landmarks)
+    segmentation_mask=sort.get_segmentation_mask(get_bg_segment_instance(),img,bbox,face_landmarks)
 
     is_left_shoulder,is_right_shoulder=sort.test_shoulders(segmentation_mask)
     if VERBOSE:
@@ -478,22 +489,34 @@ if index == 0:
     # select_query = select(Images.image_id,Images.imagename,Images.site_name_id).\
     #     select_from(Images).outerjoin(ImagesBackground,Images.image_id == ImagesBackground.image_id).filter(ImagesBackground.image_id == None).limit(LIMIT)
     
-    # pulling directly frmo segment, to filter on face_x etc
-    select_query = select(SegmentTable.image_id,SegmentTable.imagename,SegmentTable.site_name_id).\
-        select_from(SegmentTable).outerjoin(ImagesBackground,SegmentTable.image_id == ImagesBackground.image_id).filter(ImagesBackground.image_id == None).limit(LIMIT)
+    # # pulling directly frmo segment, to filter on face_x etc
+    # select_query = select(SegmentTable.image_id,SegmentTable.imagename,SegmentTable.site_name_id).\
+    #     select_from(SegmentTable).outerjoin(ImagesBackground,SegmentTable.image_id == ImagesBackground.image_id).filter(ImagesBackground.image_id == None).limit(LIMIT)
     
     # pulling from segment with a join to the helper table
-    # select_query = select(
-    #     SegmentTable.image_id,
-    #     SegmentTable.imagename,
-    #     SegmentTable.site_name_id
-    # ).\
-    # select_from(SegmentTable).\
-    # outerjoin(ImagesBackground, SegmentTable.image_id == ImagesBackground.image_id).\
-    # outerjoin(HelperTable, SegmentTable.image_id == HelperTable.image_id).\
+    select_query = select(
+        Images.image_id,
+        Images.imagename,
+        Images.site_name_id
+    ).\
+    select_from(Images).\
+    join(HelperTable, Images.image_id == HelperTable.image_id).\
+    filter(
+        ~exists(
+            select(1)
+            .select_from(ImagesBackground)
+            .where(ImagesBackground.image_id == HelperTable.image_id)
+        )
+    ).limit(LIMIT)    
+
+
+    # outerjoin(ImagesBackground, Images.image_id == ImagesBackground.image_id).\
+    # outerjoin(HelperTable, Images.image_id == HelperTable.image_id).\
     # filter(ImagesBackground.image_id == None).\
     # filter(HelperTable.image_id != None).\
     # limit(LIMIT)
+
+
     ######################
     # select_query = select(
     #     SegmentTable.image_id,
@@ -536,6 +559,8 @@ if index == 0:
     # )). \
     # limit(LIMIT)
 
+    io.print_sqlalchemy_query(engine, select_query)
+
 
     result = session.execute(select_query).fetchall()
     # print(result)
@@ -551,6 +576,7 @@ if index == 0:
 elif index == 1:
     function=fetch_BG_stat
     #################FETCHING BG stat####################################
+
 
     # OCT 2025 effort to process remaining images missing from ibg. reconstructing query from pieces/mess
     if USE_BBOX:distinct_image_ids_query = select(ImagesBackground.image_id.distinct()).\
@@ -603,6 +629,9 @@ elif index == 1:
     # if USE_BBOX:distinct_image_ids_query = select(ImagesBackground.image_id.distinct()).filter(ImagesBackground.hue_bb == None).limit(LIMIT)
 
     else:distinct_image_ids_query = select(ImagesBackground.image_id.distinct()).filter(ImagesBackground.selfie_bbox == None).limit(LIMIT)
+
+    io.print_sqlalchemy_query(engine, distinct_image_ids_query)
+
     distinct_image_ids = [row[0] for row in session.execute(distinct_image_ids_query).fetchall()]
     for counter,target_image_id in enumerate(distinct_image_ids):
         if counter%1000==0:print("###########"+str(counter)+"images processed ##########")
