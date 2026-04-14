@@ -495,6 +495,10 @@ class DataIO:
             return value
 
 
+    def print_sqlalchemy_query(self, engine, query):
+        # Print the actual SQL SELECT statement with all parameters filled in
+        compiled_query = query.compile(engine, compile_kwargs={"literal_binds": True})
+        print("actual SELECT is ", compiled_query)
 
 
 

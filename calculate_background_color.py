@@ -58,7 +58,7 @@ SHOULDER_THRESH=.75
 # HelperTable_name = "SegmentHelperApril12_2x2x33x27"
 
 # for fingerpoint
-HelperTable_name = "SegmentHelper_T11_Oct20_COCO_Custom_evens_quarters"
+HelperTable_name = "SegmentHelper_T11_business"
 # MM controlling which folder to use
 IS_SSD = False
 
@@ -147,7 +147,7 @@ LIMIT= 3000000
 counter = 0
 
 # Number of threads
-num_threads = io.NUMBER_OF_PROCESSES //2
+num_threads = io.NUMBER_OF_PROCESSES //4
 # num_threads = 1
 
 

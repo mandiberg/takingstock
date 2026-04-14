@@ -25,6 +25,7 @@ import pymongo
 import pickle
 import traceback
 from skimage.metrics import structural_similarity as ssim
+from sqlalchemy import text
 
 
 from deap import base, creator, tools, algorithms
@@ -108,7 +109,7 @@ class SortPose:
         self.BRUTEFORCE = False
         self.LMS_DIMENSIONS = LMS_DIMENSIONS
         if self.VERBOSE: print("init LMS_DIMENSIONS",self.LMS_DIMENSIONS)
-        self.CUTOFF = 200 # DOES factor if ONE_SHOT
+        self.CUTOFF = 80 # DOES factor if ONE_SHOT
         self.ORIGIN = 0
         self.this_nose_bridge_dist = self.NOSE_BRIDGE_DIST = None # to be set in first loop, and sort.this_nose_bridge_dist each time
         self.USE_HEAD_POSE = USE_HEAD_POSE
@@ -256,6 +257,9 @@ class SortPose:
         # place to save bad images
         self.not_make_face = []
         self.same_img = []
+        self.face_pair_result_cache = {}
+        self.face_pair_cache_engine = None
+        self.reset_face_pair_stats()
         # for testing shoulders for image background
         self.SHOULDER_THRESH = 0.75
         self.nose_2d = None
@@ -880,6 +884,131 @@ class SortPose:
             print('failed:', new_file)
             print('Error:', str(e))
             return False
+
+    def set_face_pair_cache_engine(self, engine):
+        self.face_pair_cache_engine = engine
+
+    def reset_face_pair_stats(self):
+        self.face_pair_stats = {
+            "pass": 0,
+            "fail": 0,
+            "cache_pass": 0,
+            "cache_fail": 0,
+            "computed_pass": 0,
+            "computed_fail": 0,
+        }
+
+    def print_face_pair_stats(self, label="face pair cycle"):
+        stats = getattr(self, "face_pair_stats", None)
+        if not stats:
+            print(f"[{label}] no face pair stats available")
+            return
+
+        print(
+            f"[{label}] pass={stats['pass']} fail={stats['fail']} "
+            f"cache_pass={stats['cache_pass']} cache_fail={stats['cache_fail']} "
+            f"computed_pass={stats['computed_pass']} computed_fail={stats['computed_fail']}"
+        )
+
+    def canonicalize_face_pair(self, image_id_a, image_id_b):
+        try:
+            image_id_a = int(image_id_a)
+            image_id_b = int(image_id_b)
+        except (TypeError, ValueError):
+            return None
+
+        if image_id_a == image_id_b:
+            return None
+
+        return tuple(sorted((image_id_a, image_id_b)))
+
+    def get_face_pair_cache_result(self, image_id_a, image_id_b):
+        pair_key = self.canonicalize_face_pair(image_id_a, image_id_b)
+        if pair_key is None:
+            return None
+
+        if pair_key in self.face_pair_result_cache:
+            return self.face_pair_result_cache[pair_key]
+
+        if self.face_pair_cache_engine is None:
+            return None
+
+        lookup_sql = text(
+            "SELECT result FROM FacePairTestCache "
+            "WHERE image_id_lo = :image_id_lo AND image_id_hi = :image_id_hi"
+        )
+        with self.face_pair_cache_engine.connect() as connection:
+            row = connection.execute(
+                lookup_sql,
+                {
+                    "image_id_lo": pair_key[0],
+                    "image_id_hi": pair_key[1],
+                },
+            ).mappings().first()
+
+        if row and row["result"] in ("pass", "fail"):
+            self.face_pair_result_cache[pair_key] = row["result"]
+            return row["result"]
+
+        return None
+
+    def store_face_pair_cache_result(self, image_id_a, image_id_b, result):
+        if result not in ("pass", "fail"):
+            return
+
+        pair_key = self.canonicalize_face_pair(image_id_a, image_id_b)
+        if pair_key is None:
+            return
+
+        self.face_pair_result_cache[pair_key] = result
+
+        if self.face_pair_cache_engine is None:
+            return
+
+        upsert_sql = text(
+            "INSERT INTO FacePairTestCache (image_id_lo, image_id_hi, result) "
+            "VALUES (:image_id_lo, :image_id_hi, :result) "
+            "ON DUPLICATE KEY UPDATE "
+            "result = VALUES(result), updated_at = CURRENT_TIMESTAMP"
+        )
+        with self.face_pair_cache_engine.begin() as connection:
+            connection.execute(
+                upsert_sql,
+                {
+                    "image_id_lo": pair_key[0],
+                    "image_id_hi": pair_key[1],
+                    "result": result,
+                },
+            )
+
+    def test_or_lookup_face_pair(self, last_image, candidate_image, current_image_id):
+        previous_image_id = self.counter_dict.get("last_image_id")
+        cached_result = self.get_face_pair_cache_result(previous_image_id, current_image_id)
+
+        if cached_result == "pass":
+            self.face_pair_stats["pass"] += 1
+            self.face_pair_stats["cache_pass"] += 1
+            print(f"face pair cache hit PASS for {previous_image_id}, {current_image_id}")
+            return True
+        if cached_result == "fail":
+            self.face_pair_stats["fail"] += 1
+            self.face_pair_stats["cache_fail"] += 1
+            print(f"face pair cache hit FAIL for {previous_image_id}, {current_image_id}")
+            return False
+
+        is_face = self.test_pair(last_image, candidate_image)
+        if is_face:
+            self.face_pair_stats["pass"] += 1
+            self.face_pair_stats["computed_pass"] += 1
+        else:
+            self.face_pair_stats["fail"] += 1
+            self.face_pair_stats["computed_fail"] += 1
+        self.store_face_pair_cache_result(
+            previous_image_id,
+            current_image_id,
+            "pass" if is_face else "fail",
+        )
+        return is_face
 
     def preview_img(self,img):
         cv2.imshow("difference", img)
@@ -4296,15 +4425,17 @@ class SortPose:
             prefix = 'Keywords_'
         elif "detections" in folder_path:
             prefix = 'Detections_'
+        elif "clusters" in folder_path:
+            prefix = 'Clusters_'
 
         self.HSV_CLUSTER_GROUPS = [
             # [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22],
-            [[3, 4], [5, 6, 7], [8, 9, 10, 11], [12, 13], [15, 16], [17, 18, 19, 20], [21, 22]],
-            [[0],[1],[2],[3, 4, 5, 6, 22, 7], [8, 9, 10, 11, 12, 13], [14],[15, 16, 17, 18, 19, 20, 21]], # ALSO USE FOR DEDUPING
+            # [[3, 4], [5, 6, 7], [8, 9, 10, 11], [12, 13], [15, 16], [17, 18, 19, 20], [21, 22]],
+            # [[0],[1],[2],[3, 4, 5, 6, 22, 7], [8, 9, 10, 11, 12, 13], [14],[15, 16, 17, 18, 19, 20, 21]], # ALSO USE FOR DEDUPING
             # [[3, 4, 5, 6, 22, 7], [8, 9, 10, 11, 12, 13], [14],[15, 16, 17, 18, 19, 20, 21]], # TESTING Nov23
-            [[3, 4, 5, 6, 22, 7, 8, 9, 10, 11, 12, 13], [14, 15, 16, 17, 18, 19, 20, 21]], # TESTING Nov23
+            # [[3, 4, 5, 6, 22, 7, 8, 9, 10, 11, 12, 13], [14, 15, 16, 17, 18, 19, 20, 21]], # TESTING Nov23
             # [[2],[3, 4, 5, 6, 7, 22]],
-            # [[0,1,2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 19, 20, 21, 22]]
+            [[0,1,2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 19, 20, 21, 22]]
         ]
         # Construct the file name and path
         print("topic_no", topic_no)

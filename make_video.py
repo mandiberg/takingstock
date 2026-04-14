@@ -81,7 +81,7 @@ CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden b
 # CSV_FOLDER = os.path.join(io.ROOT_DBx, "body3D_segmentbig_useall256_CSVs_test")
 
 # CSV_FOLDER = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion128_test220K"
-CSV_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/T11_YOLO_ArmsPoses3D_768/build"
+CSV_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/T11_YOLO_ArmsPoses3D_768"
 
 # overriding DB for testing
 # io.db["name"] = "stock"
@@ -826,6 +826,8 @@ if not io.IS_TENCH:
         # Pass session to ToolsClustering instance for database access
         cl.session = session
 
+    sort.set_face_pair_cache_engine(engine)
+
     mongo_client = pymongo.MongoClient(io.dbmongo['host'])
     mongo_db = mongo_client[io.dbmongo['name']]
     io.mongo_db = mongo_db
@@ -1519,13 +1521,14 @@ def prep_encodings_NN(df_segment):
 
     return df_segment
 
-def compare_images(last_image, img, face_landmarks_or_df, bbox_or_index):
+def compare_images(last_image, img, face_landmarks_or_df, bbox_or_index, current_image_id=None):
     # for some reason the function is called with either a df and index, or face_landmarks and bbox
     # rw to handle both here. 
     if isinstance(face_landmarks_or_df, pd.DataFrame):
         df_sorted = face_landmarks_or_df
         index = bbox_or_index
         face_landmarks, bbox = df_sorted.iloc[index]['face_landmarks'], df_sorted.iloc[index]['bbox']
+        current_image_id = df_sorted.iloc[index].get('image_id', current_image_id)
         is_df = True
     else:
         face_landmarks = face_landmarks_or_df
@@ -1572,7 +1575,7 @@ def compare_images(last_image, img, face_landmarks_or_df, bbox_or_index):
                     #     print("testing is_face to see if the two make a face")
                     #     print("last_image shape:", last_image.shape)
                     #     print("cropped_image shape:", cropped_image.shape)
-                    is_face = sort.test_pair(last_image, cropped_image)
+                    is_face = sort.test_or_lookup_face_pair(last_image, cropped_image, current_image_id)
                     # print("is_face result:", is_face)
                 # sept 2025 dedupe used to happen here, but removing this, as it is now handled in separate dedupe process
                 else:
@@ -1778,6 +1781,8 @@ def shift_bbox(bbox, extension_pixels):
 
 def linear_test_df(df_sorted, itter=None):
 
+    sort.reset_face_pair_stats()
+
     def get_cropped_cache_file(row):
         aspect_ratio = '_'.join(str(v) for v in sort.image_edge_multiplier)
         folder_root = os.path.dirname(row['folder'])
@@ -1831,7 +1836,11 @@ def linear_test_df(df_sorted, itter=None):
                     if VERBOSE:
                         print("testing is_face for cached cropped image")
                     if SORT_TYPE not in ("planar_body", "body3D"):
-                        is_face = sort.test_pair(sort.counter_dict["last_image"], cached_img)
+                        is_face = sort.test_or_lookup_face_pair(
+                            sort.counter_dict["last_image"],
+                            cached_img,
+                            row['image_id'],
+                        )
                     else:
                         print("failed is_face test")
                 else:
@@ -1987,7 +1996,7 @@ def linear_test_df(df_sorted, itter=None):
         if not bailout:
             print("not bailing out, going to compare_images")
             bbox=shift_bbox(row['bbox'],extension_pixels)
-            cropped_image, skip_face = compare_images(sort.counter_dict["last_image"], inpaint_image,row['face_landmarks'], bbox)
+            cropped_image, skip_face = compare_images(sort.counter_dict["last_image"], inpaint_image,row['face_landmarks'], bbox, row['image_id'])
             if sort.VERBOSE:print("inpainting done","shape:",np.shape(cropped_image))
             if skip_face:print("still 1x1 image , you're probably shifting both landmarks and bbox, only bbox needs to be shifted")
             if cropped_image is not None:
@@ -2166,6 +2175,7 @@ def linear_test_df(df_sorted, itter=None):
             print(str(e))
         if VERBOSE: print("metas_list")
         if VERBOSE: print(metas_list)
+    sort.print_face_pair_stats("linear_test_df cycle")
     return
 
 def write_images(img_list):
