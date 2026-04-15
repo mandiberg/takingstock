@@ -2651,9 +2651,9 @@ class SortPose:
 
     def get_start_obj_bbox(self, start_img, df_enc):
         enc1 = None
+        sort_column, _ = self.get_sort_column_mapping(self.SORT_TYPE, self.CLUSTER_TYPE)
         if start_img == "median":
             print("[get_start_obj_bbox] in median", df_enc)
-            sort_column = "obj_bbox_list"
             # df_rounded = self.smart_round_df(df_enc, bbox_col)
 
             # sort_column contains a 4 items lists of int values
@@ -3062,6 +3062,24 @@ class SortPose:
 
 
     def get_enc1(self, df, FIRST_ROUND=False, hsv_sort = False):
+        def value_has_nan(value):
+            if value is None:
+                return True
+            try:
+                arr = np.asarray(value, dtype=float)
+            except (TypeError, ValueError):
+                return pd.isnull(value)
+            return np.isnan(arr).any()
+
+        def get_last_valid_value(frame, column):
+            if column not in frame.columns:
+                return None
+            for _, row in frame.iloc[::-1].iterrows():
+                candidate = row.get(column, None)
+                if not value_has_nan(candidate):
+                    return candidate
+            return None
+
         enc1 = None
         obj_bbox1 = None
         if FIRST_ROUND:
@@ -3120,6 +3138,12 @@ class SortPose:
             else:
                 print("get_enc1: SORT_TYPE not recognized or column missing:", self.SORT_TYPE)
                 enc1 = None
+            if value_has_nan(enc1):
+                sort_column, _ = self.get_sort_column_mapping(self.SORT_TYPE, self.CLUSTER_TYPE)
+                fallback_enc1 = get_last_valid_value(df, sort_column)
+                if fallback_enc1 is not None:
+                    print(f"get_enc1: replacing NaN seed from last valid {sort_column} row")
+                    enc1 = fallback_enc1
             # setting obj_bbox1
             if self.SORT_TYPE in "planar_body" and "obj_bbox_list" in df.columns: obj_bbox1 = df.iloc[-1]["obj_bbox_list"]
         # print("returning enc1, obj_bbox1", enc1, obj_bbox1)
@@ -3310,12 +3334,17 @@ class SortPose:
                         return True
             return False
 
+        def coerce_vector_to_float_array(value):
+            array = np.asarray(value, dtype=float)
+            if array.ndim > 1:
+                array = array.reshape(-1)
+            return array
+
         # Check if the encodings_array contains NaN values
-        if contains_nan(encodings_array):
+        encodings_array = np.asarray(encodings_array, dtype=float)
+
+        if np.isnan(encodings_array).any():
             print("encodings_array of len", len(encodings_array), "contains NaN values")
-            
-            # Convert encodings_array to a NumPy array
-            encodings_array = np.array(encodings_array)
 
             # Create a boolean mask for non-NaN rows in encodings_array
             non_nan_mask = ~np.isnan(encodings_array).any(axis=1)
@@ -3328,6 +3357,25 @@ class SortPose:
             # Remove the same rows from df_enc based on the non_nan_mask
             df_enc = df_enc[non_nan_mask].reset_index(drop=True)
             print("Cleaned df_enc:", df_enc.shape)
+
+        enc1 = coerce_vector_to_float_array(enc1)
+
+        if np.isnan(enc1).any():
+            print("enc1 contains NaN values")
+            if len(encodings_array):
+                column_fill = np.nanmedian(encodings_array, axis=0)
+                if np.isnan(column_fill).any():
+                    column_fill = np.where(np.isnan(column_fill), encodings_array[0], column_fill)
+                if np.isnan(column_fill).any():
+                    column_fill = np.nan_to_num(column_fill)
+                enc1 = np.where(np.isnan(enc1), column_fill, enc1)
+                if np.isnan(enc1).any():
+                    enc1 = np.asarray(encodings_array[0], dtype=float)
+                    print("Replaced enc1 with first clean encoding row")
+                else:
+                    print("Imputed NaN values in enc1 from clean encoding matrix")
+            else:
+                raise ValueError("No clean encodings available after removing NaN rows")
 
     # print len of each item in encodings_array
         if "obj_bbox" in self.SORT_TYPE:
@@ -3547,13 +3595,15 @@ class SortPose:
         # if self.VERBOSE: print("debugging df_sorted", df_sorted.columns)
         if len(df_sorted) == 0: 
             FIRST_ROUND = True
+            if self.OBJ_CLS_ID > 0:
+                sort_column, _ = self.get_sort_column_mapping(self.SORT_TYPE, self.CLUSTER_TYPE)
+                if sort_column in df_enc.columns:
+                    df_enc = df_enc.dropna(subset=[sort_column])
             enc1, obj_bbox1 = self.get_enc1(df_enc, FIRST_ROUND)
             # if self.VERBOSE: print(f"first round enc1, {enc1}   ....    obj_bbox1", obj_bbox1)
-            # drop all rows where obj_bbox_list is None
-            if self.OBJ_CLS_ID > 0: df_enc = df_enc.dropna(subset=["obj_bbox_list"])
         else: 
             FIRST_ROUND = False
-            print(f"about to send df_sorted through to find last obj_bbox_list, which is :", df_sorted.iloc[-1])
+            print("about to send df_sorted through to find last object sort row, which is :", df_sorted.iloc[-1])
             enc1, obj_bbox1 = self.get_enc1(df_sorted, FIRST_ROUND)
             if self.VERBOSE: print(f"LATER round enc1, {enc1} obj_bbox1", obj_bbox1)
 
@@ -4413,8 +4463,26 @@ class SortPose:
             # then convert all values to int
             df = df.astype(float)
             df = df.astype(int)
-        if isinstance(df.iloc[0, 0], str):
-            print("first column is a string,", print(df.iloc[0, 0]))
+        elif isinstance(df.iloc[0, 0], str):
+            # New-style matrix CSV: first row is column headers (e.g. "cluster_id","object_hsv_0",...,"total_images_any_bin")
+            # first column is cluster_id values; not all cluster IDs may be present.
+            # Build a full-size matrix indexed by cluster_id so row index == cluster_id.
+            header = df.iloc[0].tolist()
+            data = df.iloc[1:].reset_index(drop=True)
+            # Find any trailing non-count column (e.g. "total_images_any_bin") to exclude
+            end_col = len(header)
+            for j, h in enumerate(header):
+                if 'total' in str(h).lower():
+                    end_col = j
+                    break
+            cluster_ids = data.iloc[:, 0].astype(int).tolist()
+            count_data = data.iloc[:, 1:end_col].astype(float).astype(int)
+            max_cluster_id = max(cluster_ids)
+            n_hsv_cols = count_data.shape[1]
+            full_matrix = np.zeros((max_cluster_id + 1, n_hsv_cols), dtype=int)
+            for i, cid in enumerate(cluster_ids):
+                full_matrix[cid] = count_data.iloc[i].values
+            df = pd.DataFrame(full_matrix)
         return df, hsv_sum_df, total_df
 
     def find_sorted_suitable_indices(self, topic_no, min_value, folder_path=None, hsv_cluster_groups=None, manifest_file="fusion_manifest.json"):

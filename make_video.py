@@ -83,6 +83,8 @@ CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden b
 # CSV_FOLDER = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion128_test220K"
 CSV_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/T11_YOLO_ArmsPoses3D_768"
 
+HSV_SOURCE_MODE = "background"
+
 # overriding DB for testing
 # io.db["name"] = "stock"
 # io.db["name"] = "ministock"
@@ -195,16 +197,16 @@ elif CURRENT_MODE == 'heft_torso_keywords':
         # FULL_BODY = True # haxxor TK
 
     # set to 0 to disable obj helper segment query stuff. this is also for object_fusion
-    class_id = 0
+    class_id = 27
 
     # SORT_TYPE = "obj_bbox"
-    SORT_TYPE = "planar_hands"
+    # SORT_TYPE = "planar_hands"
     # SORT_TYPE = "object_fusion"
 
-    CLUSTER_TYPE = "ArmsPoses3D"
+    # CLUSTER_TYPE = "ArmsPoses3D"
     # CLUSTER_TYPE = "object_fusion"
     # CLUSTER_TYPE = SORT_TYPE = "ArmsPoses3D" # this triggers meta body poses 3D
-    # CLUSTER_TYPE = SORT_TYPE = "object_fusion" # make sure OBJ_CLS_ID is set below
+    CLUSTER_TYPE = SORT_TYPE = "object_fusion" # make sure OBJ_CLS_ID is set below
     cl = ToolsClustering(CLUSTER_TYPE, VERBOSE=VERBOSE)
 
 
@@ -234,7 +236,8 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     IS_HAND_POSE_FUSION = True # do we use fusion clusters
     CHOP_FIRST = True # does a first pass chop before whatever sort happens - this is default now
     # this is an override for development purposes. will only make CSVs from these clusters:
-    TEMP_FOCUS_CLUSTER_HACK_LIST = []
+    TEMP_FOCUS_CLUSTER_HACK_LIST = [20]
+    HSV_SOURCE_MODE = "object" # "background" or "object" or "both"
     
     TESTING = True
     if TESTING:
@@ -244,7 +247,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
         TSP_SORT = False
         CHOP_ITTER_TSP_SORT = False
         if CLUSTER_TYPE == "object_fusion":
-            GENERATE_FUSION_PAIRS = False
+            GENERATE_FUSION_PAIRS = True # April 14 changing this for testing
         else:
             # either you use a FUSION_PAIR_DICT or GENERATE_FUSION_PAIRS. 
             GENERATE_FUSION_PAIRS = True # if true it will query based on MIN_VIDEO_FUSION_COUNT and create pairs
@@ -320,7 +323,10 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     
     # generate the CSV files with /query_all_fusion_clusters.py
 
-    TOPIC_NO = [class_id] if class_token else [0] # if doing an affect topic fusion, this is the wrapper topic, OR keyword. add .01, .1 etc for sub selects from KEYWORD_DICT
+    if CLUSTER_TYPE == "object_fusion":
+        TOPIC_NO = [class_id]
+    else:
+        TOPIC_NO = [class_id] if class_token else [0] # if doing an affect topic fusion, this is the wrapper topic, OR keyword. add .01, .1 etc for sub selects from KEYWORD_DICT
     OBJ_KEYWORD_CUTOFF = 120 # if below this number it is treated as an object_id and not a keyword with AND/NOT
     
     # this needs to be integrated into the search for each cluster, but doing here for the moment when doing single topic/cluster testing
@@ -335,7 +341,8 @@ elif CURRENT_MODE == 'heft_torso_keywords':
             KEYWORD_OBJECT, KEYWORD_ORIENTATION = CLUSTER_ORIENTATION_VALS
         
 
-    if META: folder = "heft_keyword_fusion_clusters_hsv_meta"
+    if CLUSTER_TYPE == "object_fusion": folder = "objectfusion_object_hsv"
+    elif META: folder = "heft_keyword_fusion_clusters_hsv_meta"
     else: folder = "heft_clusters_ArmsPoses3D_768/"
 
     FUSION_FOLDER = os.path.join("utilities/data/", folder)
@@ -976,7 +983,7 @@ if not io.IS_TENCH:
     # SQL  FUNCTIONS  #
     ###################
 
-    def selectSQL(cluster_no=None, topic_no=None, hsv_cluster=None):
+    def selectSQL(cluster_no=None, topic_no=None, hsv_cluster=None, hsv_source="background"):
         global SELECT, FROM, WHERE, LIMIT, WrapperTopicTable
         local_where = WHERE
         from_affect = where_affect = from_hsv = where_hsv = xyz_where = " "
@@ -1049,8 +1056,37 @@ if not io.IS_TENCH:
                 hsv_cluster = hsv_cluster[1]
             return hsv_cluster
 
+        def resolve_object_hsv_class_scope(topic_value):
+            if OBJ_CLS_ID and OBJ_CLS_ID > 0:
+                return OBJ_CLS_ID
+            if N_TOPICS != 100:
+                return None
+            if isinstance(topic_value, list) and topic_value:
+                candidate = topic_value[0]
+            else:
+                candidate = topic_value
+            if isinstance(candidate, str):
+                try:
+                    candidate = float(candidate)
+                except ValueError:
+                    return None
+            if isinstance(candidate, float):
+                candidate = int(math.floor(candidate))
+            if isinstance(candidate, int) and candidate < OBJ_KEYWORD_CUTOFF:
+                return candidate
+            return None
+
+        def ensure_detection_fields_selected():
+            global SELECT
+            detection_fields = ", d.bbox_norm, d.obj_no, d.orientation, d.meta_cluster_id "
+            if detection_fields.strip() not in SELECT:
+                SELECT += detection_fields
+
         cluster = " " #declare as empty string
-        print(f"[selectSQL] cluster_no {cluster_no} and topic_no {topic_no} and hsv_cluster {hsv_cluster}")
+        print(
+            f"[selectSQL] cluster_no {cluster_no} and topic_no {topic_no} and "
+            f"hsv_cluster {hsv_cluster} hsv_source {hsv_source}"
+        )
         # handle the case where hsv_cluster is passed in as part of a list with cluster_no
         if hsv_cluster and isinstance(hsv_cluster, list) and len(hsv_cluster) == 2:
             hsv_cluster = handle_hsv_cluster_lists(cluster_no, hsv_cluster)
@@ -1118,12 +1154,19 @@ if not io.IS_TENCH:
         if bool(hsv_cluster) or hsv_cluster == 0:
             print("hsv_cluster is not empty:", hsv_cluster)
             IN_or_equal_hsv_string = is_query_list_string(hsv_cluster)
-            # if len(where_hsv) > 2:
-            # if hsv is not " ", then we need to join the table
-            from_hsv = " JOIN ImagesHSV ihsv ON s.image_id = ihsv.image_id JOIN ClustersMetaHSV cmhsv ON ihsv.cluster_id = cmhsv.cluster_id "
-            where_hsv = f" AND cmhsv.meta_cluster_id {IN_or_equal_hsv_string} "
-            # set cluster_no here, as it doesn't catch any of the other condtionals. (admittedly messy)
-            if META: local_where += f" AND cmp.meta_cluster_id = {str(cluster_no)} "
+            if hsv_source == "object":
+                if " JOIN Detections d ON s.image_id = d.image_id " not in (FROM + from_affect + from_hsv):
+                    from_hsv += " JOIN Detections d ON s.image_id = d.image_id "
+                ensure_detection_fields_selected()
+                object_hsv_class_scope = resolve_object_hsv_class_scope(topic_no)
+                where_hsv = f" AND d.meta_cluster_id {IN_or_equal_hsv_string} "
+                if object_hsv_class_scope is not None and f"d.class_id = {object_hsv_class_scope}" not in (local_where + cluster + where_hsv):
+                    where_hsv += f" AND d.class_id = {object_hsv_class_scope} "
+            else:
+                from_hsv = " JOIN ImagesHSV ihsv ON s.image_id = ihsv.image_id JOIN ClustersMetaHSV cmhsv ON ihsv.cluster_id = cmhsv.cluster_id "
+                where_hsv = f" AND cmhsv.meta_cluster_id {IN_or_equal_hsv_string} "
+                # set cluster_no here, as it doesn't catch any of the other condtionals. (admittedly messy)
+                if META: local_where += f" AND cmp.meta_cluster_id = {str(cluster_no)} "
         print(f"after HSV from/where: where_hsv {where_hsv} from_hsv {from_hsv} local_where: {local_where}")
         if bool(cluster_dict_AND):
             print(f"cluster_dict_AND for topic in SQL is {cluster_dict_AND}")
@@ -2237,10 +2280,72 @@ def parse_cluster_no(this_cluster):
     print("map_images cluster_no", cluster_no)
     return cluster_no, pose_no
 
-def set_my_counter_dict(this_topic=None, cluster_no=None, pose_no=None, hsv_no=None, start_img_name=None, start_site_image_id=None):
+def normalize_hsv_bins(hsv_value):
+    if hsv_value is None:
+        return []
+    if isinstance(hsv_value, int):
+        return [hsv_value]
+    if isinstance(hsv_value, str):
+        normalized_value = hsv_value.replace(",", "+")
+        bins = []
+        for chunk in normalized_value.split("+"):
+            chunk = chunk.strip()
+            if not chunk:
+                continue
+            if "-" in chunk:
+                range_parts = [part.strip() for part in chunk.split("-") if part.strip()]
+                if len(range_parts) == 2 and all(part.isdigit() for part in range_parts):
+                    start, end = map(int, range_parts)
+                    if start <= end:
+                        bins.extend(range(start, end + 1))
+                    else:
+                        bins.extend(range(start, end - 1, -1))
+                    continue
+            if chunk.isdigit():
+                bins.append(int(chunk))
+                continue
+            return []
+        if bins:
+            return list(dict.fromkeys(bins))
+        return []
+    if isinstance(hsv_value, list):
+        if len(hsv_value) == 2 and isinstance(hsv_value[1], list):
+            return [int(x) for x in hsv_value[1] if isinstance(x, int)]
+        if len(hsv_value) == 2 and isinstance(hsv_value[1], (int, str)):
+            return normalize_hsv_bins(hsv_value[1])
+        if all(isinstance(x, int) for x in hsv_value):
+            return hsv_value
+    return []
+
+
+def make_hsv_cycle_meta(this_cluster=None, this_topic=None, background_hsv=None, object_hsv=None, cycle_stage=None):
+    background_bins = normalize_hsv_bins(background_hsv)
+    object_bins = normalize_hsv_bins(object_hsv)
+    return {
+        "cluster": this_cluster,
+        "topic": this_topic,
+        "background_hsv_bins": background_bins,
+        "background_hsv_labels": [HSV_BIN_LABELS.get(x, f"bin{x}") for x in background_bins],
+        "background_hsv_preset": HSV_GROUP_PRESET_NAME if background_bins else None,
+        "object_hsv_bins": object_bins,
+        "object_hsv_labels": [HSV_BIN_LABELS.get(x, f"bin{x}") for x in object_bins],
+        "object_hsv_preset": OBJECT_HSV_GROUP_PRESET_NAME if object_bins else None,
+        "hsv_stage": cycle_stage,
+    }
+
+
+def set_my_counter_dict(this_topic=None, cluster_no=None, pose_no=None, hsv_meta=None, start_img_name=None, start_site_image_id=None):
     ### Set counter_dict ###
-    print("set_my_counter_dict this_topic, cluster_no, pose_no, hsv_no, start_img_name, start_site_image_id", this_topic, cluster_no, pose_no, hsv_no, start_img_name, start_site_image_id)
-    cluster_string = const_prefix(this_topic, cluster_no, pose_no, hsv_cluster=hsv_no)
+    print(
+        "set_my_counter_dict this_topic, cluster_no, pose_no, hsv_meta, start_img_name, start_site_image_id",
+        this_topic,
+        cluster_no,
+        pose_no,
+        hsv_meta,
+        start_img_name,
+        start_site_image_id,
+    )
+    cluster_string = const_prefix(this_topic, cluster_no, pose_no, hsv_meta=hsv_meta)
     print("cluster_string", cluster_string)
     if MODE == 0 or (PURGING_DUPES and MODE == 1): mkdir = False
     else: mkdir = True
@@ -2250,34 +2355,37 @@ def set_my_counter_dict(this_topic=None, cluster_no=None, pose_no=None, hsv_no=N
     if VERBOSE: print("set sort.counter_dict:" )
     if VERBOSE: print(sort.counter_dict)
 
-def const_prefix(this_topic, cluster_no, pose_no, hsv_cluster=None):
-    def get_hsv_bins_from_cluster(hsv_value):
-        if hsv_value is None:
-            return []
-        if isinstance(hsv_value, int):
-            return [hsv_value]
-        if isinstance(hsv_value, str):
-            if hsv_value.isdigit():
-                return [int(hsv_value)]
-            return []
-        if isinstance(hsv_value, list):
-            # shape [cluster, hsv] or [cluster, [hsv...]]
-            if len(hsv_value) == 2 and isinstance(hsv_value[1], list):
-                return [int(x) for x in hsv_value[1] if isinstance(x, int)]
-            if len(hsv_value) == 2 and isinstance(hsv_value[1], int):
-                return [hsv_value[1]]
-            if all(isinstance(x, int) for x in hsv_value):
-                return hsv_value
-        return []
-
-    def get_hsv_label_fragment(hsv_value):
-        bins = get_hsv_bins_from_cluster(hsv_value)
-        if not bins:
+def const_prefix(this_topic, cluster_no, pose_no, hsv_meta=None):
+    def bins_to_fragment(hsv_bins):
+        if not hsv_bins:
             return ""
-        labels = [HSV_BIN_LABELS.get(b, f"bin{b}") for b in bins]
-        # preserve order while deduping
-        labels = list(dict.fromkeys(labels))
-        return "-".join(labels)
+        sorted_bins = sorted(dict.fromkeys(hsv_bins))
+        ranges = []
+        range_start = sorted_bins[0]
+        range_end = sorted_bins[0]
+
+        for value in sorted_bins[1:]:
+            if value == range_end + 1:
+                range_end = value
+                continue
+            if range_start == range_end:
+                ranges.append(str(range_start))
+            else:
+                ranges.append(f"{range_start}-{range_end}")
+            range_start = range_end = value
+
+        if range_start == range_end:
+            ranges.append(str(range_start))
+        else:
+            ranges.append(f"{range_start}-{range_end}")
+
+        return "+".join(ranges)
+
+    def append_hsv_fragment(prefix, hsv_bins, cluster_token):
+        hsv_cluster_fragment = bins_to_fragment(hsv_bins)
+        if hsv_cluster_fragment:
+            prefix = f"{prefix}_{cluster_token}{hsv_cluster_fragment}"
+        return prefix
 
     # topic_string = ''.join([str(x) for x in this_topic]) if this_topic is not None else "None"
     # if topic is a list, then just use the first value
@@ -2287,24 +2395,17 @@ def const_prefix(this_topic, cluster_no, pose_no, hsv_cluster=None):
 
     file_prefix = f"c{cluster_no}_p{pose_no}_t{this_topic}" if this_topic is not None else f"c{cluster_no}_p{pose_no}_tNone"
     print("file_prefix before hsv", file_prefix)
-    print("hsv_cluster", hsv_cluster)
-    if hsv_cluster is not None:
-        hsv_label_fragment = get_hsv_label_fragment(hsv_cluster)
-        hsv_cluster_fragment = ""
-        if isinstance(hsv_cluster, int) or isinstance(hsv_cluster, str):
-            hsv_cluster_fragment = str(hsv_cluster)
-        elif isinstance(hsv_cluster, list):
-            # [cluster, hsv], [cluster, [hsv...]], or [hsv...]
-            if len(hsv_cluster) == 2 and isinstance(hsv_cluster[1], int):
-                hsv_cluster_fragment = str(hsv_cluster[1])
-            elif len(hsv_cluster) == 2 and isinstance(hsv_cluster[1], list) and hsv_cluster[1]:
-                hsv_cluster_fragment = f"{hsv_cluster[1][0]}-{hsv_cluster[1][-1]}"
-            elif all(isinstance(x, int) for x in hsv_cluster):
-                hsv_cluster_fragment = "-".join(str(x) for x in hsv_cluster)
-        if hsv_cluster_fragment:
-            file_prefix = f"{file_prefix}_h{hsv_cluster_fragment}"
-        if hsv_label_fragment:
-            file_prefix = f"{file_prefix}_hl{hsv_label_fragment}"
+
+    if hsv_meta is None:
+        hsv_meta = CURRENT_HSV_CYCLE_META
+    if hsv_meta is not None and not isinstance(hsv_meta, dict):
+        hsv_meta = {"background_hsv_bins": normalize_hsv_bins(hsv_meta)}
+
+    if hsv_meta:
+        background_hsv_bins = normalize_hsv_bins(hsv_meta.get("background_hsv_bins"))
+        object_hsv_bins = normalize_hsv_bins(hsv_meta.get("object_hsv_bins"))
+        file_prefix = append_hsv_fragment(file_prefix, background_hsv_bins, "h")
+        file_prefix = append_hsv_fragment(file_prefix, object_hsv_bins, "om")
         print("file_prefix with hsv", file_prefix)
     else:
         print("file_prefix without hsv", file_prefix)
@@ -2365,7 +2466,7 @@ def main():
 
     # this is the key function, which is called for each cluster
     # or only once if no clusters
-    def map_images(resultsjson, this_cluster=None, this_topic=None, this_hsv_cluster=None):
+    def map_images(resultsjson, this_cluster=None, this_topic=None, this_hsv_meta=None):
         
         # get cluster and pose from this_cluster
         cluster_no, pose_no = parse_cluster_no(this_cluster)
@@ -2474,17 +2575,12 @@ def main():
 
             set_multiplier_and_dims(df_segment, cluster_no, pose_no)
 
-            effective_hsv_cluster = this_hsv_cluster
-            if (
-                effective_hsv_cluster is None
-                and CURRENT_HSV_CYCLE_META is not None
-                and CURRENT_HSV_CYCLE_META.get("hsv_bins")
-            ):
-                # Fall back to active HSV cycle metadata so saved filenames stay traceable.
-                effective_hsv_cluster = CURRENT_HSV_CYCLE_META.get("hsv_bins")
+            effective_hsv_meta = this_hsv_meta
+            if effective_hsv_meta is None and CURRENT_HSV_CYCLE_META is not None:
+                effective_hsv_meta = CURRENT_HSV_CYCLE_META
 
             ### Set counter_dict with current HSV cluster when available ###
-            set_my_counter_dict(this_topic, cluster_no, pose_no, effective_hsv_cluster, start_img_name, start_site_image_id)
+            set_my_counter_dict(this_topic, cluster_no, pose_no, effective_hsv_meta, start_img_name, start_site_image_id)
 
             ### Get cluster_median encodings for cluster_no ###
 
@@ -2514,7 +2610,7 @@ def main():
             else:   
                 # hard coding override to just start from median
                 # sort.counter_dict["start_img_name"] = "median"
-                file_prefix = const_prefix(this_topic, cluster_no, pose_no, effective_hsv_cluster)
+                file_prefix = const_prefix(this_topic, cluster_no, pose_no, effective_hsv_meta)
                 # build file prefix for cluster, pose, and topic
                 process_linear(start_img_name,df_segment, file_prefix, sort)
         elif df.empty and IS_CLUSTER:
@@ -2587,7 +2683,7 @@ def main():
         
         def find_parts(parts):
             if VERBOSE: print("finding parts in", parts)
-            cluster_no = pose_no = segment_count = topic_no = hsv_no = None
+            cluster_no = pose_no = segment_count = topic_no = background_hsv_no = object_hsv_no = None
             for part in parts:
                 if part.startswith("ct"):
                     # Extract segment_count from the part that starts with "ct"
@@ -2605,14 +2701,18 @@ def main():
                     # Extract cluster_no from the part that starts with "c"
                     # e.g., c2 -> 2
                     cluster_no = part.split("c")[1]
+                elif part.startswith("oml"):
+                    continue
+                elif part.startswith("om"):
+                    object_hsv_no = part.split("om", 1)[1]
+                elif part.startswith("hl"):
+                    continue
                 elif part.startswith("h"):
                     # Extract hsv_no from the part that starts with "h"
                     # e.g., h2 -> 2
-                    hsv_no = part.split("h")[1]
-            return segment_count, pose_no, topic_no, cluster_no, hsv_no
-
-
-        cluster_no = pose_no = segment_count = topic_no = hsv_no = None
+                    background_hsv_no = part.split("h", 1)[1]
+            return segment_count, pose_no, topic_no, cluster_no, background_hsv_no, object_hsv_no
+        cluster_no = pose_no = segment_count = topic_no = background_hsv_no = object_hsv_no = None
         # list the files in the the CSV_FOLDER
         files_in_folder = os.listdir(CSV_FOLDER)
         # sort files alphabetically
@@ -2626,14 +2726,25 @@ def main():
                 file_prefix = csv_file.replace("df_sorted_", "").replace(".csv", "")
                 print("file_prefix", file_prefix)
 
-                segment_count, pose_no, topic_no, cluster_no, hsv_no = find_parts(parts)
+                segment_count, pose_no, topic_no, cluster_no, background_hsv_no, object_hsv_no = find_parts(parts)
                 if len(parts) >= 3:
                     # legacy for Tench's older file structure. delete on next file refresh. TK
                     cluster_no = parts[2]
-                print(f"assembling cluster {cluster_no}, topic {topic_no}, pose {pose_no}, hsv {hsv_no} from csv file: {csv_file}")
+                print(
+                    f"assembling cluster {cluster_no}, topic {topic_no}, pose {pose_no}, "
+                    f"background_hsv {background_hsv_no}, object_hsv {object_hsv_no} from csv file: {csv_file}"
+                )
 
                 ### Set counter_dict (without start stuff which is not needed) ###
-                set_my_counter_dict(topic_no, cluster_no, pose_no, hsv_no)
+                set_my_counter_dict(
+                    topic_no,
+                    cluster_no,
+                    pose_no,
+                    {
+                        "background_hsv_bins": normalize_hsv_bins(background_hsv_no),
+                        "object_hsv_bins": normalize_hsv_bins(object_hsv_no),
+                    },
+                )
                 df_sorted = load_df_sorted_from_csv(os.path.join(CSV_FOLDER, csv_file))
 
 
@@ -2687,7 +2798,7 @@ def main():
                         TOPIC_NO,
                         MIN_VIDEO_FUSION_COUNT,
                         FUSION_FOLDER,
-                        hsv_cluster_groups=HSV_GROUP_PRESETS[HSV_GROUP_PRESET_NAME],
+                        hsv_cluster_groups=HSV_GROUP_PRESETS[OBJECT_HSV_GROUP_PRESET_NAME if HSV_SOURCE_MODE == "object" else HSV_GROUP_PRESET_NAME],
                         manifest_file=FUSION_MANIFEST_FILE,
                     )
                     log_fusion_pairs_summary("generated fusion_pairs", n_cluster_topics)
@@ -2776,32 +2887,31 @@ def main():
             else:
                 n_hsv_clusters = [0]
 
-            def select_map_images(this_cluster, this_topic, hsv_cluster=None, cycle_stage="background"):
+            def select_map_images(
+                this_cluster,
+                this_topic,
+                hsv_cluster=None,
+                hsv_source="background",
+                cycle_stage="background",
+                background_hsv_cluster=None,
+            ):
                 global CURRENT_HSV_CYCLE_META
-                def parse_hsv_bins(hsv_value):
-                    if hsv_value is None:
-                        return []
-                    if isinstance(hsv_value, int):
-                        return [hsv_value]
-                    if isinstance(hsv_value, list):
-                        if len(hsv_value) == 2 and isinstance(hsv_value[1], int):
-                            return [hsv_value[1]]
-                        if len(hsv_value) == 2 and isinstance(hsv_value[1], list):
-                            return [int(x) for x in hsv_value[1] if isinstance(x, int)]
-                        if all(isinstance(x, int) for x in hsv_value):
-                            return hsv_value
-                    return []
-
-                hsv_bins = parse_hsv_bins(hsv_cluster)
-                hsv_labels = [HSV_BIN_LABELS.get(x, f"bin{x}") for x in hsv_bins]
-                CURRENT_HSV_CYCLE_META = {
-                    "cluster": this_cluster,
-                    "topic": this_topic,
-                    "hsv_bins": hsv_bins,
-                    "hsv_labels": hsv_labels,
-                    "hsv_preset": HSV_GROUP_PRESET_NAME,
-                    "hsv_stage": cycle_stage,
-                }
+                resolved_hsv_source = hsv_source
+                if resolved_hsv_source == "object":
+                    CURRENT_HSV_CYCLE_META = make_hsv_cycle_meta(
+                        this_cluster,
+                        this_topic,
+                        background_hsv=background_hsv_cluster,
+                        object_hsv=hsv_cluster,
+                        cycle_stage=cycle_stage,
+                    )
+                else:
+                    CURRENT_HSV_CYCLE_META = make_hsv_cycle_meta(
+                        this_cluster,
+                        this_topic,
+                        background_hsv=hsv_cluster,
+                        cycle_stage=cycle_stage,
+                    )
                 print("CURRENT_HSV_CYCLE_META", CURRENT_HSV_CYCLE_META)
 
                 # TEMP HACK FIX
@@ -2811,7 +2921,7 @@ def main():
                 if VERBOSE: print("select_map_images this_cluster", this_cluster)
                 if VERBOSE: print("select_map_images this_topic", this_topic)
                 if VERBOSE: print("select_map_images hsv_cluster", hsv_cluster)
-                resultsjson = selectSQL(this_cluster, this_topic, hsv_cluster)
+                resultsjson = selectSQL(this_cluster, this_topic, hsv_cluster, hsv_source=resolved_hsv_source)
                 print(f"DEBUG - Got {len(resultsjson)} results from selectSQL with cluster={this_cluster}, topic={this_topic}, hsv={hsv_cluster}")
                 if len(resultsjson) < MIN_CYCLE_COUNT:
                     print(f"less than {MIN_CYCLE_COUNT} resultsjson, skipping this {this_cluster} and {this_topic}")
@@ -2819,7 +2929,8 @@ def main():
                 else:
                     # If a background HSV bucket is too large, split it into object-color groups.
                     do_object_hsv_subsort = (
-                        cycle_stage == "background"
+                        resolved_hsv_source == "background"
+                        and cycle_stage == "background"
                         and bool(SUBSORT_ON_OBJECT_HSV_CUTOFF)
                         and len(resultsjson) >= SUBSORT_ON_OBJECT_HSV_CUTOFF
                         and USE_HSV
@@ -2837,23 +2948,24 @@ def main():
 
                         emitted_subcycles = 0
                         for object_hsv_cluster in object_hsv_groups:
-                            object_resultsjson = selectSQL(this_cluster, this_topic, object_hsv_cluster)
+                            object_resultsjson = selectSQL(
+                                this_cluster,
+                                this_topic,
+                                object_hsv_cluster,
+                                hsv_source="object",
+                            )
                             if len(object_resultsjson) < MIN_CYCLE_COUNT:
                                 continue
 
-                            object_hsv_pair = [this_cluster, object_hsv_cluster]
-                            object_hsv_labels = [HSV_BIN_LABELS.get(x, f"bin{x}") for x in object_hsv_cluster]
-                            CURRENT_HSV_CYCLE_META = {
-                                "cluster": this_cluster,
-                                "topic": this_topic,
-                                "hsv_bins": object_hsv_cluster,
-                                "hsv_labels": object_hsv_labels,
-                                "hsv_preset": OBJECT_HSV_GROUP_PRESET_NAME,
-                                "hsv_stage": "object_subsort",
-                                "source_background_bins": hsv_bins,
-                            }
+                            CURRENT_HSV_CYCLE_META = make_hsv_cycle_meta(
+                                this_cluster,
+                                this_topic,
+                                background_hsv=hsv_cluster,
+                                object_hsv=object_hsv_cluster,
+                                cycle_stage="object_subsort",
+                            )
                             print("CURRENT_HSV_CYCLE_META", CURRENT_HSV_CYCLE_META)
-                            map_images(object_resultsjson, this_cluster, this_topic, object_hsv_pair)
+                            map_images(object_resultsjson, this_cluster, this_topic, CURRENT_HSV_CYCLE_META)
                             emitted_subcycles += 1
 
                         if emitted_subcycles > 0:
@@ -2862,7 +2974,7 @@ def main():
                         print("Object HSV subsort produced no eligible subcycles, falling back to background cycle")
 
                     # folder_name = this_topic[0] if this_topic else this_cluster
-                    map_images(resultsjson, this_cluster, this_topic, hsv_cluster)
+                    map_images(resultsjson, this_cluster, this_topic, CURRENT_HSV_CYCLE_META)
 
             def sub_select_clusters_by_hsv(cluster_topic_no, n_cluster_topics):
                 # N_HSV
@@ -2899,20 +3011,22 @@ def main():
                 return this_n_hsv_clusters
 
             def do_first_select_map_images(cluster_topic_no, second_cluster_topic, hsv_cluster=None):
+                hsv_source = "object" if HSV_SOURCE_MODE == "object" else "background"
+                cycle_stage = "object" if hsv_source == "object" else "background"
                 # print(f"cluster_topic_no: {cluster_topic_no}, hsv_cluster: {hsv_cluster}")
                 if IS_CLUSTER and cluster_topic_no < START_CLUSTER: return
                 if USE_AFFECT_GROUPS: 
                     cluster_topic_no = AFFECT_GROUPS_LISTS[cluster_topic_no] # redefine cluster_no with affect group list
                 if IS_TOPICS and not IS_HAND_POSE_FUSION: 
                     print(f"IS_TOPICS and not IS_HAND_POSE_FUSION, passing in second_cluster_topic: {second_cluster_topic}, cluster_topic_no: {cluster_topic_no}, hsv_cluster: {hsv_cluster}")
-                    select_map_images(second_cluster_topic, cluster_topic_no, hsv_cluster)
+                    select_map_images(second_cluster_topic, cluster_topic_no, hsv_cluster, hsv_source=hsv_source, cycle_stage=cycle_stage)
                 elif IS_CLUSTER: 
                     print(f"IS_CLUSTER, passing in cluster_topic_no: {cluster_topic_no}, second_cluster_topic: {second_cluster_topic}, hsv_cluster: {hsv_cluster}")
-                    select_map_images(cluster_topic_no, second_cluster_topic, hsv_cluster)
+                    select_map_images(cluster_topic_no, second_cluster_topic, hsv_cluster, hsv_source=hsv_source, cycle_stage=cycle_stage)
                 elif IS_HAND_POSE_FUSION: 
                     # I think this is for one topic with pose/gesture fusion
                     print(f"IS_HAND_POSE_FUSION, passing in cluster_topic_no: {cluster_topic_no}, this_topic: {this_topic}, hsv_cluster: {hsv_cluster}")
-                    select_map_images(cluster_topic_no,this_topic, hsv_cluster)
+                    select_map_images(cluster_topic_no, this_topic, hsv_cluster, hsv_source=hsv_source, cycle_stage=cycle_stage)
 
             if CURRENT_MODE == 'heft_torso_keywords' and N_HSV > 0:
                 print("doing heft_torso_keywords with N_HSV > 0, so Keyword -> MetaClusters -> HSV")
