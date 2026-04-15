@@ -20,7 +20,7 @@ RUNPOD_KEY="$HOME/.ssh/id_ed25519"
 RUNPOD_USER="root"
 RUNPOD_HOST="103.196.86.83"
 RUNPOD_PORT="16980"
-REMOTE_DIR="/workspace/install_make_tts/downloads"
+REMOTE_DIR="/root/install_make_tts/downloads"
 LOCAL_DIR="/Users/tenchc/Documents/GitHub/taking_stock_production/tts_downloads"
 # -----------------------------------------------------------------------
 
@@ -40,7 +40,10 @@ echo ""
 # ---------------------------------------------------------------------------
 # 1. Zip files
 # ---------------------------------------------------------------------------
-mapfile -t REMOTE_FILES < <(
+REMOTE_FILES=()
+while IFS= read -r line; do
+    [[ -n "$line" ]] && REMOTE_FILES+=("$line")
+done < <(
     ssh "${SSH_OPTS[@]}" "${RUNPOD_USER}@${RUNPOD_HOST}" \
         "ls ${REMOTE_DIR}/batch_*.zip 2>/dev/null || true"
 )
