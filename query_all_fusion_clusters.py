@@ -3,6 +3,8 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import NullPool
 from sqlalchemy.ext.declarative import declarative_base
+import json
+import os
 
 import sys
 if sys.platform == "darwin": sys.path.insert(1, '/Users/michaelmandiberg/Documents/GitHub/facemap/')
@@ -23,6 +25,8 @@ NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 
 # ROOT_FOLDER_PATH = '/Users/michaelmandiberg/Documents/projects-active/facemap_production/heft_keyword_fusion_clusters'
 ROOT_FOLDER_PATH = '/Users/michaelmandiberg/Documents/GitHub/takingstock/utilities/data/heft_clusters_ArmsPoses3D_768'
+MANIFEST_FILE = "fusion_manifest.json"
+CONTRACT_VERSION = 1
 
 HACK_LIST_SKIP_DETECTIONS = [87,90,91,92]
 MODE = "ArmsPoses3D" # Topics or Keywords or Detections or ArmsPoses3D
@@ -554,6 +558,74 @@ def save_query_results_to_csv(query, topic_id):
     # Save to CSV
     df.to_csv(csv_file_path, index=False)
     print(f"Saved results for {MODE} {topic_id} to {csv_file_path}")
+    update_fusion_manifest(csv_file_path, topic_id, df)
+
+
+def infer_entity_type(mode):
+    if mode == "Topics":
+        return "topic"
+    if "Detections" in mode:
+        return "detection"
+    if mode == "Keywords":
+        return "keyword"
+    return "cluster"
+
+
+def infer_available_hsv_bins(df):
+    hsv_bins = []
+    for col in df.columns:
+        if not col.startswith("hsv_"):
+            continue
+        suffix = col.replace("hsv_", "")
+        if suffix.isdigit():
+            hsv_bins.append(int(suffix))
+    return sorted(list(set(hsv_bins)))
+
+
+def load_or_init_manifest(folder_path):
+    manifest_path = os.path.join(folder_path, MANIFEST_FILE)
+    if os.path.exists(manifest_path):
+        with open(manifest_path, "r", encoding="utf-8") as f:
+            return manifest_path, json.load(f)
+
+    manifest = {
+        "contract_version": CONTRACT_VERSION,
+        "generator": "query_all_fusion_clusters.py",
+        "mode": MODE,
+        "mode_id": MODE_ID,
+        "cluster_type": CLUSTER_TYPE,
+        "files": {},
+    }
+    return manifest_path, manifest
+
+
+def update_fusion_manifest(csv_file_path, topic_id, df):
+    folder_path = os.path.dirname(csv_file_path)
+    manifest_path, manifest = load_or_init_manifest(folder_path)
+
+    if manifest.get("contract_version") != CONTRACT_VERSION:
+        raise ValueError(
+            f"Manifest contract version mismatch in {manifest_path}: "
+            f"expected {CONTRACT_VERSION}, got {manifest.get('contract_version')}"
+        )
+
+    file_name = os.path.basename(csv_file_path)
+    entity_type = infer_entity_type(MODE)
+    available_hsv_bins = infer_available_hsv_bins(df)
+
+    manifest.setdefault("files", {})
+    manifest["files"][file_name] = {
+        "entity_type": entity_type,
+        "entity_id": int(topic_id),
+        "csv_schema_version": 1,
+        "has_hsv_summary_rows": "hsv_3_to_22_sum" in df.columns,
+        "available_hsv_bins": available_hsv_bins,
+        "hsv_preset_name": "background_default",
+    }
+
+    with open(manifest_path, "w", encoding="utf-8") as f:
+        json.dump(manifest, f, indent=2, sort_keys=True)
+    print(f"Updated manifest: {manifest_path}")
 
 
 # Adjust the query template based on MODE

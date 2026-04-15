@@ -60,9 +60,10 @@ SHOULDER_THRESH=.75
 # for fingerpoint
 HelperTable_name = "SegmentHelper_T11_business"
 # MM controlling which folder to use
-IS_SSD = False
+IS_SSD = True
+SSD_PATH = "/Volumes/OWC54/segment_images"
 
-io = DataIO(IS_SSD)
+io = DataIO(IS_SSD, VERBOSE, SSD_PATH)
 db = io.db
 # io.db["name"] = "stock"
 # io.db["name"] = "ministock"

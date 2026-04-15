@@ -4417,32 +4417,81 @@ class SortPose:
             print("first column is a string,", print(df.iloc[0, 0]))
         return df, hsv_sum_df, total_df
 
-    def find_sorted_suitable_indices(self, topic_no,min_value, folder_path=None):
+    def find_sorted_suitable_indices(self, topic_no, min_value, folder_path=None, hsv_cluster_groups=None, manifest_file="fusion_manifest.json"):
         if folder_path is None:
-            folder_path='utilities/data/october_fusion_clusters'
-            prefix = 'topic_'
-        elif "keyword" in folder_path:
-            prefix = 'Keywords_'
-        elif "detections" in folder_path:
-            prefix = 'Detections_'
-        elif "clusters" in folder_path:
-            prefix = 'Clusters_'
+            raise ValueError("folder_path is required for manifest-driven CSV discovery")
 
-        self.HSV_CLUSTER_GROUPS = [
-            # [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22],
-            # [[3, 4], [5, 6, 7], [8, 9, 10, 11], [12, 13], [15, 16], [17, 18, 19, 20], [21, 22]],
-            # [[0],[1],[2],[3, 4, 5, 6, 22, 7], [8, 9, 10, 11, 12, 13], [14],[15, 16, 17, 18, 19, 20, 21]], # ALSO USE FOR DEDUPING
-            # [[3, 4, 5, 6, 22, 7], [8, 9, 10, 11, 12, 13], [14],[15, 16, 17, 18, 19, 20, 21]], # TESTING Nov23
-            # [[3, 4, 5, 6, 22, 7, 8, 9, 10, 11, 12, 13], [14, 15, 16, 17, 18, 19, 20, 21]], # TESTING Nov23
-            # [[2],[3, 4, 5, 6, 7, 22]],
-            [[0,1,2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 19, 20, 21, 22]]
-        ]
-        # Construct the file name and path
-        print("topic_no", topic_no)
-        isolated_topic = str(topic_no[0]).split('.')[0]  # Get the integer part before the decimal
-        print("prefix", prefix, "isolated topic", isolated_topic)
-        file_name = prefix + isolated_topic + '.csv'
+        manifest_path = os.path.join(folder_path, manifest_file)
+        if not os.path.exists(manifest_path):
+            raise FileNotFoundError(f"Missing fusion manifest: {manifest_path}")
+
+        with open(manifest_path, "r", encoding="utf-8") as f:
+            manifest = json.load(f)
+
+        required_manifest_fields = ["contract_version", "files"]
+        missing_fields = [k for k in required_manifest_fields if k not in manifest]
+        if missing_fields:
+            raise ValueError(f"Invalid manifest {manifest_path}, missing fields: {missing_fields}")
+
+        files_map = manifest.get("files", {})
+        if not isinstance(files_map, dict) or not files_map:
+            raise ValueError(f"Invalid manifest {manifest_path}, 'files' must be a non-empty map")
+
+        if topic_no is None:
+            raise ValueError("topic_no cannot be None for manifest lookup")
+        if isinstance(topic_no, list):
+            isolated_topic = int(float(topic_no[0]))
+        else:
+            isolated_topic = int(float(topic_no))
+
+        file_name = None
+        file_meta = None
+        for candidate_name, candidate_meta in files_map.items():
+            if int(candidate_meta.get("entity_id", -999999)) == isolated_topic:
+                file_name = candidate_name
+                file_meta = candidate_meta
+                break
+
+        if file_name is None:
+            raise ValueError(
+                f"No manifest entry for entity_id {isolated_topic} in {manifest_path}. "
+                f"Known entity_ids: {[v.get('entity_id') for v in files_map.values()]}"
+            )
+
         file_path = os.path.join(folder_path, file_name)
+        if not os.path.exists(file_path):
+            raise FileNotFoundError(f"Manifest file entry not found on disk: {file_path}")
+
+        if hsv_cluster_groups is None:
+            raise ValueError(
+                "hsv_cluster_groups is required. Pass a named preset from constants_make_video.py "
+                "to avoid brittle hardcoded groups."
+            )
+        self.HSV_CLUSTER_GROUPS = hsv_cluster_groups
+
+        def flatten_hsv_groups(groups):
+            flattened = []
+
+            def walk(node):
+                if isinstance(node, int):
+                    flattened.append(node)
+                    return
+                if isinstance(node, (list, tuple)):
+                    for item in node:
+                        walk(item)
+
+            walk(groups)
+            return flattened
+
+        available_hsv_bins = file_meta.get("available_hsv_bins")
+        if available_hsv_bins is not None:
+            configured_bins = sorted(list(set(flatten_hsv_groups(self.HSV_CLUSTER_GROUPS))))
+            missing_bins = [b for b in configured_bins if b not in available_hsv_bins]
+            if missing_bins:
+                raise ValueError(
+                    f"HSV preset references bins not present in {file_name}: {missing_bins}. "
+                    f"Available bins: {available_hsv_bins}"
+                )
         
         # Load the CSV file into a DataFrame
         df = pd.read_csv(file_path, header=None)
@@ -4479,18 +4528,31 @@ class SortPose:
             elif any(not isinstance(y, int) for y in column_list): do_simple = False
             else: do_simple = True
 
-            #temp TK override
-            do_simple = False
             if do_simple:
                 print(f"doing simple with {column_list}")
-                # original per-column behavior
-                suitable_indices = np.argwhere(gesture_array > min_value)
+                # Evaluate only the requested columns in simple mode.
+                if column_list is None:
+                    simple_cols = np.arange(gesture_array.shape[1], dtype=int)
+                else:
+                    simple_cols = np.array(column_list, dtype=int)
+                    simple_cols = simple_cols[(simple_cols >= 0) & (simple_cols < gesture_array.shape[1])]
+
+                if simple_cols.size == 0:
+                    return [], gesture_array
+
+                simple_view = gesture_array[:, simple_cols]
+                row_idx, rel_col_idx = np.where(simple_view > min_value)
+
+                if row_idx.size == 0:
+                    return [], gesture_array
+
+                abs_col_idx = simple_cols[rel_col_idx]
+                suitable_indices = np.column_stack((row_idx, abs_col_idx))
+
                 # zero out selected cells to avoid re-use
                 for row, col in suitable_indices:
                     gesture_array[row, col] = 0
 
-                if suitable_indices.size == 0:
-                    return []
                 # print(f"gesture array for index 239 after simple sort:", gesture_array[239,:])
 
                 # Sort by row then column
