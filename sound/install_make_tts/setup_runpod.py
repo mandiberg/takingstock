@@ -34,6 +34,7 @@ def main() -> None:
         "encodec",      # Bark's audio codec
         "scipy",
         "numpy",
+        "pick",
     )
 
     print("\n=== Attempting Flash Attention 2 install (optional) ===")

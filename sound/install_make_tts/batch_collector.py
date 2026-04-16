@@ -1,13 +1,16 @@
 """
 Audio batch collector — run in a separate tmux pane alongside install_make_tts.py.
 
-Polls tts_bark_out/ and, every BATCH_SIZE .wav files, moves them into a
-sequentially-numbered zip archive inside downloads/ for easy transfer back
-to your local machine.
+On launch you are prompted to choose a mode:
 
-Usage:
-    python batch_collector.py                        # defaults
-    python batch_collector.py --batch-size 100 --poll-interval 60
+  Continuous — continuous loop; waits until BATCH_SIZE .wav files accumulate,
+               then zips and removes them, then waits again.
+               CLI flags: --batch-size, --poll-interval
+
+  Single     — one-shot; zips every .wav currently in tts_bark_out/ into one
+               archive and exits.  Useful for a final sweep at the end of a run.
+
+Requires the `pick` package (pip install pick).
 """
 
 from __future__ import annotations
@@ -17,6 +20,8 @@ import os
 import shutil
 import time
 import zipfile
+
+from pick import pick
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 
@@ -51,15 +56,20 @@ def _write_counter(n: int) -> None:
 # Core logic
 # ---------------------------------------------------------------------------
 
-def _oldest_wavs(out_dir: str, n: int) -> list[str]:
-    """Return the n oldest .wav files in out_dir, sorted by modification time."""
+def _all_wavs(out_dir: str) -> list[str]:
+    """Return all .wav files in out_dir, sorted oldest-first."""
     entries = [
         os.path.join(out_dir, fname)
         for fname in os.listdir(out_dir)
         if fname.lower().endswith(".wav")
     ]
     entries.sort(key=lambda p: os.path.getmtime(p))
-    return entries[:n]
+    return entries
+
+
+def _oldest_wavs(out_dir: str, n: int) -> list[str]:
+    """Return the n oldest .wav files in out_dir, sorted by modification time."""
+    return _all_wavs(out_dir)[:n]
 
 
 def _make_batch_zip(files: list[str], batch_num: int, download_dir: str) -> str:
@@ -85,7 +95,12 @@ def _make_batch_zip(files: list[str], batch_num: int, download_dir: str) -> str:
     return zip_path
 
 
-def run(batch_size: int, poll_interval: int) -> None:
+# ---------------------------------------------------------------------------
+# Modes
+# ---------------------------------------------------------------------------
+
+def run_continuous(batch_size: int, poll_interval: int) -> None:
+    """Continuous loop: zip every batch_size files as they accumulate."""
     os.makedirs(OUT_DIR, exist_ok=True)
     os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 
@@ -110,6 +125,26 @@ def run(batch_size: int, poll_interval: int) -> None:
         print(f"[{label}] Zipped {len(wavs)} files → {zip_path}", flush=True)
 
 
+def run_single() -> None:
+    """One-shot: zip every .wav currently in the folder and exit."""
+    os.makedirs(OUT_DIR, exist_ok=True)
+    os.makedirs(DOWNLOAD_DIR, exist_ok=True)
+
+    wavs = _all_wavs(OUT_DIR)
+    if not wavs:
+        print(f"No .wav files found in {OUT_DIR}. Nothing to do.")
+        return
+
+    print(f"Active mode: found {len(wavs)} file(s) in {OUT_DIR}")
+    batch_num = _read_counter()
+    zip_path = _make_batch_zip(wavs, batch_num, DOWNLOAD_DIR)
+    _write_counter(batch_num + 1)
+
+    label = f"batch_{batch_num:03d}"
+    print(f"[{label}] Zipped {len(wavs)} files → {zip_path}")
+    print("Done.")
+
+
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
@@ -122,20 +157,31 @@ def _build_argparser() -> argparse.ArgumentParser:
         "--batch-size",
         type=int,
         default=BATCH_SIZE,
-        help=f"Number of WAV files per zip archive (default: {BATCH_SIZE}).",
+        help=f"Number of WAV files per zip archive in passive mode (default: {BATCH_SIZE}).",
     )
     p.add_argument(
         "--poll-interval",
         type=int,
         default=POLL_INTERVAL,
-        help=f"Seconds between scans of tts_bark_out/ (default: {POLL_INTERVAL}).",
+        help=f"Seconds between scans in passive mode (default: {POLL_INTERVAL}).",
     )
     return p
 
 
 if __name__ == "__main__":
     args = _build_argparser().parse_args()
+
+    mode, _ = pick(
+        ["Continuous — loop, zip every N files as they arrive",
+         "Single     — zip everything in the folder right now and exit"],
+        "Select batch_collector mode:",
+        indicator="→",
+    )
+
     try:
-        run(batch_size=args.batch_size, poll_interval=args.poll_interval)
+        if mode.startswith("Single"):
+            run_single()
+        else:
+            run_continuous(batch_size=args.batch_size, poll_interval=args.poll_interval)
     except KeyboardInterrupt:
         print("\nStopped.")
