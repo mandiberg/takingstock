@@ -174,6 +174,7 @@ class ToolsClustering:
         
         # Feature standardization settings for ObjectFusion
         self.USE_FEATURE_STANDARDIZATION = True  # Use StandardScaler to normalize all features to similar scale
+        self.SUPPRESS_ARMS_FEATURES = False
 
         # baseline
         # self.FEATURE_WEIGHTS = {
@@ -216,7 +217,7 @@ class ToolsClustering:
             'face_angle': .5,      # pitch, yaw, roll - LOW weight (prevent face-angle mega-clusters)
             'class_id': 9.0,        # class_id - VERY HIGH weight at RAW SCALE (0-107) to force object-type separation
             'confidence': 1.0,      # detection confidence - very low weight
-            'bbox': 6.0,            # bbox coordinates - reduced to standard weight
+            'bbox': 4.0,            # bbox coordinates - reduced to standard weight
             'has_object': 2.0,      # binary indicator - high weight but lower than class_id
         }
 
@@ -1978,33 +1979,34 @@ class ToolsClustering:
 
         print("[DEBUG] Unpickling body_landmarks_normalized...")
         df['body_landmarks_normalized'] = df['body_landmarks_normalized'].apply(io.unpickle_array)
-        print("[DEBUG] Unpickling body_landmarks_3D and building subsetted arms vectors...")
-        df['body_landmarks_3D'] = df['body_landmarks_3D'].apply(io.unpickle_array)
+        if not self.SUPPRESS_ARMS_FEATURES:
+            print("[DEBUG] Unpickling body_landmarks_3D and building subsetted arms vectors...")
+            df['body_landmarks_3D'] = df['body_landmarks_3D'].apply(io.unpickle_array)
 
-        arms_subset_indices = sort.make_subset_landmarks(0, 22)
-        max_subset_index = max(arms_subset_indices)
-        df['body_landmarks_array_3d'] = df['body_landmarks_3D'].apply(
-            lambda x: sort.get_landmarks_2d(x, list(range(33)), structure=structure)
-        )
-        df['arms_subset_vector'] = df['body_landmarks_array_3d'].apply(
-            lambda arr: [arr[i] for i in arms_subset_indices]
-            if isinstance(arr, (list, tuple, np.ndarray)) and len(arr) > max_subset_index
-            else None
-        )
-        df['has_world_lms'] = df['arms_subset_vector'].notna()
+            arms_subset_indices = sort.make_subset_landmarks(0, 22)
+            max_subset_index = max(arms_subset_indices)
+            df['body_landmarks_array_3d'] = df['body_landmarks_3D'].apply(
+                lambda x: sort.get_landmarks_2d(x, list(range(33)), structure=structure)
+            )
+            df['arms_subset_vector'] = df['body_landmarks_array_3d'].apply(
+                lambda arr: [arr[i] for i in arms_subset_indices]
+                if isinstance(arr, (list, tuple, np.ndarray)) and len(arr) > max_subset_index
+                else None
+            )
+            df['has_world_lms'] = df['arms_subset_vector'].notna()
 
-        invalid_subset_df = df[df['has_world_lms'] == False]
-        invalid_subset_count = int(len(invalid_subset_df))
-        self.increment_world_lms_stat('excluded_invalid_subset', invalid_subset_count)
-        if invalid_subset_count > 0 and 'image_id' in invalid_subset_df.columns:
-            for image_id in invalid_subset_df['image_id'].head(self.WORLD_LMS_REPORT_MAX_SAMPLES):
-                self.append_world_lms_sample_id('excluded_invalid_subset_sample_ids', image_id)
-            print(f"{label}[COUNT] Rows excluded due to invalid arms subset vectors: {invalid_subset_count}")
+            invalid_subset_df = df[df['has_world_lms'] == False]
+            invalid_subset_count = int(len(invalid_subset_df))
+            self.increment_world_lms_stat('excluded_invalid_subset', invalid_subset_count)
+            if invalid_subset_count > 0 and 'image_id' in invalid_subset_df.columns:
+                for image_id in invalid_subset_df['image_id'].head(self.WORLD_LMS_REPORT_MAX_SAMPLES):
+                    self.append_world_lms_sample_id('excluded_invalid_subset_sample_ids', image_id)
+                print(f"{label}[COUNT] Rows excluded due to invalid arms subset vectors: {invalid_subset_count}")
 
-        df = df[df['has_world_lms'] == True].copy()
-        if len(df) == 0:
-            print("WARNING: No rows with valid arms subset vectors found. Cannot cluster.")
-            return None
+            df = df[df['has_world_lms'] == True].copy()
+            if len(df) == 0:
+                print("WARNING: No rows with valid arms subset vectors found. Cannot cluster.")
+                return None
 
         knuckle_results = df.apply(
             lambda row: sort.prep_knuckle_landmarks(row['hand_results'], row['body_landmarks_normalized']),

@@ -100,14 +100,14 @@ ImagesObjectFusion
 
 USE Stock;
 
-CREATE TABLE `ArmsPoses3D` (
+CREATE TABLE `ObjectFusion` (
   `cluster_id` int NOT NULL,
   `cluster_median` blob,
   PRIMARY KEY (`cluster_id`)
 ) 
 ;
 
-CREATE TABLE ImagesArmsPoses3D (
+CREATE TABLE ImagesObjectFusion (
 image_id INT NOT NULL,
 cluster_id INT NOT NULL,
 cluster_dist FLOAT,

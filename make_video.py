@@ -197,7 +197,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
         # FULL_BODY = True # haxxor TK
 
     # set to 0 to disable obj helper segment query stuff. this is also for object_fusion
-    class_id = 27
+    class_id = 0
 
     # SORT_TYPE = "obj_bbox"
     # SORT_TYPE = "planar_hands"
@@ -236,8 +236,8 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     IS_HAND_POSE_FUSION = True # do we use fusion clusters
     CHOP_FIRST = True # does a first pass chop before whatever sort happens - this is default now
     # this is an override for development purposes. will only make CSVs from these clusters:
-    TEMP_FOCUS_CLUSTER_HACK_LIST = [20]
-    HSV_SOURCE_MODE = "object" # "background" or "object" or "both"
+    TEMP_FOCUS_CLUSTER_HACK_LIST = []
+    HSV_SOURCE_MODE = "background" # "background" or "object" or "both"
     
     TESTING = True
     if TESTING:
@@ -247,7 +247,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
         TSP_SORT = False
         CHOP_ITTER_TSP_SORT = False
         if CLUSTER_TYPE == "object_fusion":
-            GENERATE_FUSION_PAIRS = True # April 14 changing this for testing
+            GENERATE_FUSION_PAIRS = False # April 14 changing this for testing
         else:
             # either you use a FUSION_PAIR_DICT or GENERATE_FUSION_PAIRS. 
             GENERATE_FUSION_PAIRS = True # if true it will query based on MIN_VIDEO_FUSION_COUNT and create pairs
