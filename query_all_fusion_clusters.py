@@ -33,6 +33,11 @@ CONTRACT_VERSION = 1
 TEMP_FOCUS_CLUSTER_HACK_LIST = [20]
 OBJECT_HSV_EXPORT_CLASS_IDS = [27]
 
+# Arms/ObjectFusion intersection export controls.
+ARMS_OBJECT_FOCUS_CLUSTER_IDS = []
+ARMS_CLUSTER_COUNT = 768
+OBJECTFUSION_CLUSTER_COUNT = 768
+
 HACK_LIST_SKIP_DETECTIONS = [87,90,91,92]
 MODE = "ArmsPoses3D" # Topics or Keywords or Detections or ArmsPoses3D
 if MODE == "Topics": MODE_ID = "topic_id" 
@@ -49,6 +54,12 @@ CLUSTER_COUNT = 768
 CLUSTER_DATA = {
     "ArmsPoses3D_MetaHSV": {"sql_template": "sql_query_template_MetaHSV_Body3D", "cluster_table_name": "ImagesArmsPoses3D", "hsv_type": "ClustersMetaHSV", "cluster_count": CLUSTER_COUNT},
     "ObjectFusion_ObjectHSV": {"sql_template": None, "cluster_table_name": "ImagesObjectFusion", "hsv_type": "Detections.meta_cluster_id", "cluster_count": CLUSTER_COUNT},
+    "ArmsPoses3D_ObjectFusion": {
+        "sql_template": None,
+        "cluster_table_name": "ImagesArmsPoses3D",
+        "hsv_type": None,
+        "cluster_count": ARMS_CLUSTER_COUNT,
+    },
 }
 
 THIS_CLASS_ID = 0 # for object bbox normalization
@@ -57,7 +68,7 @@ class_token = ID_SEGMENT_DICT.get(THIS_CLASS_ID, None)
 if class_token: HELPER_TABLE = f'SegmentHelperObject_{class_token}' 
 else: HELPER_TABLE = 'SegmentHelper_T11_Oct20_COCO_Custom_evens_quarters'
 
-CLUSTER_TYPE = "ObjectFusion_ObjectHSV" # key to CLUSTER_DATA dict
+CLUSTER_TYPE = "ArmsPoses3D_ObjectFusion" # key to CLUSTER_DATA dict
 # "ArmsPoses3D_MetaHSV" or "BodyPoses3D_MetaHSV" or "MetaBodyPoses3D" or "BodyPoses3D_HSV" or "body3D" or "hand_gesture_position" - determines whether it checks hand poses or body3D
 
 
@@ -629,9 +640,10 @@ def update_fusion_manifest(
     available_hsv_bins = infer_available_hsv_bins(df)
 
     manifest.setdefault("files", {})
+    entity_id_value = None if topic_id is None else int(topic_id)
     manifest["files"][file_name] = {
         "entity_type": resolved_entity_type,
-        "entity_id": int(topic_id),
+        "entity_id": entity_id_value,
         "csv_schema_version": 1,
         "has_hsv_summary_rows": "hsv_3_to_22_sum" in df.columns,
         "available_hsv_bins": available_hsv_bins,
@@ -665,6 +677,94 @@ def _ensure_hsv_columns(df, col_prefix="object_hsv", n_bins=23):
     ordered = [f"{col_prefix}_{hsv_bin}" for hsv_bin in range(n_bins)]
     lead_cols = [c for c in df.columns if c not in ordered]
     return df[lead_cols + ordered]
+
+
+def _in_sql_list(values):
+    return ",".join(str(int(v)) for v in values)
+
+
+def _resolve_arms_object_export_class_ids(helper_table, class_ids):
+    if class_ids is not None:
+        return [int(v) for v in class_ids]
+
+    class_query = f"""
+    SELECT DISTINCT d.class_id
+    FROM Detections d
+    JOIN {helper_table} sh ON sh.image_id = d.image_id
+    WHERE d.class_id IS NOT NULL
+    ORDER BY d.class_id
+    """
+    df_classes = pd.read_sql(class_query, engine)
+    return [int(v) for v in df_classes["class_id"].tolist()]
+
+
+def _ensure_full_axes(matrix_df, row_count, col_count):
+    full_rows = pd.Index(range(row_count), name="arms_cluster_id")
+    full_cols = pd.Index(range(col_count), name="object_cluster_id")
+    return matrix_df.reindex(index=full_rows, columns=full_cols, fill_value=0)
+
+
+def export_armsposes3d_objectfusion_csvs(
+    root_base_folder,
+    helper_table,
+    row_cluster_count=768,
+    col_cluster_count=768,
+):
+    """
+    Export a helper-scoped ArmsPoses3D x ObjectFusion count matrix.
+    Rows: ArmsPoses3D cluster_id 0..row_cluster_count-1
+    Cols: ObjectFusion cluster_id 0..col_cluster_count-1
+    """
+    folder_name = f"heft_ArmsPoses3D_{int(row_cluster_count)}_ObjectFusion_{int(col_cluster_count)}"
+    root_folder_path = os.path.join(root_base_folder, folder_name)
+    os.makedirs(root_folder_path, exist_ok=True)
+
+    focus_where = ""
+    if ARMS_OBJECT_FOCUS_CLUSTER_IDS:
+        focus_where = f" AND ia.cluster_id IN ({_in_sql_list(ARMS_OBJECT_FOCUS_CLUSTER_IDS)}) "
+
+    print("Running ArmsPoses3D/ObjectFusion matrix query (class-agnostic)...")
+    matrix_query = f"""
+    SELECT
+        ia.cluster_id AS arms_cluster_id,
+        io.cluster_id AS object_cluster_id,
+        COUNT(DISTINCT ia.image_id) AS image_count
+    FROM ImagesArmsPoses3D ia
+    JOIN ImagesObjectFusion io ON io.image_id = ia.image_id
+    JOIN {helper_table} sh ON sh.image_id = ia.image_id
+    WHERE 1=1
+      {focus_where}
+    GROUP BY ia.cluster_id, io.cluster_id
+    ORDER BY ia.cluster_id, io.cluster_id
+    """
+
+    df_long = pd.read_sql(matrix_query, engine)
+    if df_long.empty:
+        print("No rows for ArmsPoses3D/ObjectFusion global matrix; writing zero matrix.")
+        matrix = pd.DataFrame(0, index=range(row_cluster_count), columns=range(col_cluster_count))
+        matrix.index.name = "arms_cluster_id"
+        matrix.columns.name = "object_cluster_id"
+    else:
+        matrix = df_long.pivot_table(
+            index="arms_cluster_id",
+            columns="object_cluster_id",
+            values="image_count",
+            aggfunc="sum",
+            fill_value=0,
+        )
+        matrix = _ensure_full_axes(matrix, row_cluster_count, col_cluster_count)
+
+    matrix_reset = matrix.reset_index().sort_values("arms_cluster_id").reset_index(drop=True)
+    matrix_reset.columns = [
+        "arms_cluster_id" if c == "arms_cluster_id" else f"object_cluster_{int(c)}"
+        for c in matrix_reset.columns
+    ]
+    matrix_reset["total"] = matrix_reset.drop(columns=["arms_cluster_id"]).sum(axis=1)
+
+    csv_file_path = os.path.join(root_folder_path, "ArmsPoses3D_all.csv")
+    matrix_reset.to_csv(csv_file_path, index=False)
+    print(f"Saved Arms/ObjectFusion matrix: {csv_file_path}")
+    update_fusion_manifest(csv_file_path, None, matrix_reset, entity_type="detection", hsv_preset_name="none")
 
 
 def export_objectfusion_object_hsv_csvs(root_folder_path, class_ids, focus_cluster_ids=None):
@@ -760,6 +860,17 @@ def export_objectfusion_object_hsv_csvs(root_folder_path, class_ids, focus_clust
 
 
 # Adjust the query template based on MODE
+if CLUSTER_TYPE == "ArmsPoses3D_ObjectFusion":
+    print("Running ArmsPoses3D/ObjectFusion matrix CSV exports...")
+    export_armsposes3d_objectfusion_csvs(
+        root_base_folder=os.path.join(os.path.dirname(__file__), "utilities", "data"),
+        helper_table=HELPER_TABLE,
+        row_cluster_count=ARMS_CLUSTER_COUNT,
+        col_cluster_count=OBJECTFUSION_CLUSTER_COUNT,
+    )
+    session.close()
+    sys.exit(0)
+
 if CLUSTER_TYPE == "ObjectFusion_ObjectHSV":
     print("Running ObjectFusion object-HSV CSV exports (Matrix A/B + Table C)...")
     export_objectfusion_object_hsv_csvs(

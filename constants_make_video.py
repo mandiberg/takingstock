@@ -18,6 +18,7 @@ CLUSTER_MAP = {
     "ArmsPoses3D": ["ArmsPoses3D", None],
     "obj_bbox": ["ArmsPoses3D", None],
     "obj_bbox_fusion": ["ObjectFusion", None],
+    "ArmsPoses3D_ObjectFusion": ["ArmsPoses3D", "ObjectFusion"],
 }
 
 

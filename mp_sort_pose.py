@@ -4530,11 +4530,6 @@ class SortPose:
         if not os.path.exists(file_path):
             raise FileNotFoundError(f"Manifest file entry not found on disk: {file_path}")
 
-        if hsv_cluster_groups is None:
-            raise ValueError(
-                "hsv_cluster_groups is required. Pass a named preset from constants_make_video.py "
-                "to avoid brittle hardcoded groups."
-            )
         self.HSV_CLUSTER_GROUPS = hsv_cluster_groups
 
         def flatten_hsv_groups(groups):
@@ -4552,7 +4547,12 @@ class SortPose:
             return flattened
 
         available_hsv_bins = file_meta.get("available_hsv_bins")
-        if available_hsv_bins is not None:
+        if available_hsv_bins:
+            if self.HSV_CLUSTER_GROUPS is None:
+                raise ValueError(
+                    "hsv_cluster_groups is required for HSV-enabled fusion matrices. "
+                    "Pass a named preset from constants_make_video.py."
+                )
             configured_bins = sorted(list(set(flatten_hsv_groups(self.HSV_CLUSTER_GROUPS))))
             missing_bins = [b for b in configured_bins if b not in available_hsv_bins]
             if missing_bins:
@@ -4608,25 +4608,28 @@ class SortPose:
                 if simple_cols.size == 0:
                     return [], gesture_array
 
-                simple_view = gesture_array[:, simple_cols]
-                row_idx, rel_col_idx = np.where(simple_view > min_value)
+                # Deterministic grouped-by-row ranking:
+                # iterate rows in ascending order; within each row sort by
+                # value desc, then column asc for stable tie-breaking.
+                suitable_indices = []
+                for row_idx in range(gesture_array.shape[0]):
+                    row_vals = gesture_array[row_idx, simple_cols]
+                    passing_mask = row_vals > min_value
+                    if not np.any(passing_mask):
+                        continue
 
-                if row_idx.size == 0:
-                    return [], gesture_array
+                    passing_cols = simple_cols[passing_mask]
+                    passing_vals = row_vals[passing_mask]
 
-                abs_col_idx = simple_cols[rel_col_idx]
-                suitable_indices = np.column_stack((row_idx, abs_col_idx))
+                    ranked_pairs = sorted(
+                        zip(passing_cols.tolist(), passing_vals.tolist()),
+                        key=lambda x: (-x[1], x[0]),
+                    )
+                    for col_idx, _ in ranked_pairs:
+                        suitable_indices.append([int(row_idx), int(col_idx)])
+                        gesture_array[row_idx, col_idx] = 0
 
-                # zero out selected cells to avoid re-use
-                for row, col in suitable_indices:
-                    gesture_array[row, col] = 0
-
-                # print(f"gesture array for index 239 after simple sort:", gesture_array[239,:])
-
-                # Sort by row then column
-                suitable_indices_array = np.array(suitable_indices)
-                sorted_idx = suitable_indices_array[np.lexsort((suitable_indices_array[:,1], suitable_indices_array[:,0]))]
-                return sorted_idx.tolist(), gesture_array
+                return suitable_indices, gesture_array
 
             # Normalize column_list into list-of-groups (each group is a list of ints)
             # groups = []

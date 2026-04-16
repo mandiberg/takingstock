@@ -84,6 +84,7 @@ CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden b
 CSV_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/T11_YOLO_ArmsPoses3D_768"
 
 HSV_SOURCE_MODE = "background"
+SKIP_OBJECT_NONE_CLUSTERS = []
 
 # overriding DB for testing
 # io.db["name"] = "stock"
@@ -197,17 +198,19 @@ elif CURRENT_MODE == 'heft_torso_keywords':
         # FULL_BODY = True # haxxor TK
 
     # set to 0 to disable obj helper segment query stuff. this is also for object_fusion
-    class_id = 0
+    class_id = 67  # TEST: match exported ArmsPoses3D_67.csv
 
     # SORT_TYPE = "obj_bbox"
     # SORT_TYPE = "planar_hands"
     # SORT_TYPE = "object_fusion"
 
     # CLUSTER_TYPE = "ArmsPoses3D"
+    CLUSTER_TYPE = "ArmsPoses3D_ObjectFusion"  # TEST: new Arms/ObjectFusion mode
     # CLUSTER_TYPE = "object_fusion"
-    # CLUSTER_TYPE = SORT_TYPE = "ArmsPoses3D" # this triggers meta body poses 3D
-    CLUSTER_TYPE = SORT_TYPE = "object_fusion" # make sure OBJ_CLS_ID is set below
-    cl = ToolsClustering(CLUSTER_TYPE, VERBOSE=VERBOSE)
+    # CLUSTER_TYPE = "ArmsPoses3D" # this triggers meta body poses 3D
+    # CLUSTER_TYPE = "object_fusion"
+    SORT_TYPE = "object_fusion" # for ArmsPoses3D_ObjectFusion keep SORT_TYPE as object_fusion
+    cl = ToolsClustering(SORT_TYPE, VERBOSE=VERBOSE)
 
 
     class_token = ID_SEGMENT_DICT.get(class_id, None)
@@ -237,6 +240,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     CHOP_FIRST = True # does a first pass chop before whatever sort happens - this is default now
     # this is an override for development purposes. will only make CSVs from these clusters:
     TEMP_FOCUS_CLUSTER_HACK_LIST = []
+    SKIP_OBJECT_NONE_CLUSTERS = [0]
     HSV_SOURCE_MODE = "background" # "background" or "object" or "both"
     
     TESTING = True
@@ -323,7 +327,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     
     # generate the CSV files with /query_all_fusion_clusters.py
 
-    if CLUSTER_TYPE == "object_fusion":
+    if CLUSTER_TYPE in ["object_fusion", "ArmsPoses3D_ObjectFusion"]:
         TOPIC_NO = [class_id]
     else:
         TOPIC_NO = [class_id] if class_token else [0] # if doing an affect topic fusion, this is the wrapper topic, OR keyword. add .01, .1 etc for sub selects from KEYWORD_DICT
@@ -341,7 +345,13 @@ elif CURRENT_MODE == 'heft_torso_keywords':
             KEYWORD_OBJECT, KEYWORD_ORIENTATION = CLUSTER_ORIENTATION_VALS
         
 
-    if CLUSTER_TYPE == "object_fusion": folder = "objectfusion_object_hsv"
+    ARMS_CLUSTER_DIM = 768
+    OBJECT_CLUSTER_DIM = 768
+
+    if CLUSTER_TYPE == "object_fusion":
+        folder = "objectfusion_object_hsv"
+    elif CLUSTER_TYPE == "ArmsPoses3D_ObjectFusion":
+        folder = f"heft_ArmsPoses3D_{ARMS_CLUSTER_DIM}_ObjectFusion_{OBJECT_CLUSTER_DIM}"
     elif META: folder = "heft_keyword_fusion_clusters_hsv_meta"
     else: folder = "heft_clusters_ArmsPoses3D_768/"
 
@@ -1110,7 +1120,14 @@ if not io.IS_TENCH:
 
                 # we have two values, C1 and C2. C1 should be IHP, C2 should be IH
                 cluster += f" AND {cluster_target_col} = {str(cluster_no[0])} "            
-                if cluster_no[1]: cluster += f" AND ih.cluster_id = {str(cluster_no[1])} " 
+                if cluster_no[1] is not None:
+                    if cluster_no[1] in SKIP_OBJECT_NONE_CLUSTERS:
+                        print(
+                            f"skipping pair because ih.cluster_id {cluster_no[1]} is in "
+                            f"SKIP_OBJECT_NONE_CLUSTERS {SKIP_OBJECT_NONE_CLUSTERS}"
+                        )
+                        return []
+                    cluster += f" AND ih.cluster_id = {str(cluster_no[1])} "
             else:
                 print("cluster_no is a single value", cluster_no)
                 # set target column based on CLUSTER_TYPE, ArmsPoses3D means we have a meta_cluster_id
@@ -1151,7 +1168,7 @@ if not io.IS_TENCH:
             IN_or_equal_topic_ids_string = is_query_list_string(topic_no)
             if not OBJ_DONT_SUBSELECT: cluster += f"AND {this_alias}.{this_id} {IN_or_equal_topic_ids_string} "
 
-        if bool(hsv_cluster) or hsv_cluster == 0:
+        if USE_HSV and (bool(hsv_cluster) or hsv_cluster == 0):
             print("hsv_cluster is not empty:", hsv_cluster)
             IN_or_equal_hsv_string = is_query_list_string(hsv_cluster)
             if hsv_source == "object":
@@ -2480,7 +2497,9 @@ def main():
         except:
             print('you forgot to change the filename DUH')
         if not df.empty:
-            if SORT_TYPE == "object_fusion" or "fusion" in SORT_TYPE:
+            is_fusion_sort = SORT_TYPE == "object_fusion" or ("fusion" in SORT_TYPE)
+
+            if is_fusion_sort:
                 simple_crop = int(sort.CUTOFF * CROP_MULTIPLIER)
                 if 'cluster_dist' in df.columns:
                     original_len = len(df)
@@ -2492,7 +2511,7 @@ def main():
 
             # MODE 0 fast path: load precomputed hand positions + detection assignments from ImagesDetections
             # to avoid re-processing detections from Mongo
-            if MODE == 0 and (SORT_TYPE == "object_fusion" or "fusion" in SORT_TYPE):
+            if MODE == 0 and is_fusion_sort:
                 print("[MODE 0] Checking ImagesDetections for precomputed data...")
                 df, missing_image_ids = cl.hydrate_detections_from_precomputed_table(df)
                 print(f"[MODE 0] Found {len(df) - len(missing_image_ids)} images in ImagesDetections; {len(missing_image_ids)} need Mongo load")
@@ -2537,12 +2556,14 @@ def main():
             # if VERBOSE: print("df before bboxing,", df.columns)
             if VERBOSE: print("df len before bboxing,", len(df))
 
-            if OBJ_CLS_ID > 0: 
-
+            if OBJ_CLS_ID > 0 and not is_fusion_sort:
                 obj_bbox_col = "bbox_norm"
-                print("before unstringed obj_bbox_col", obj_bbox_col)
-                print("df[obj_bbox_col] example", df[obj_bbox_col].to_string())
-                df[obj_bbox_col] = df[obj_bbox_col].apply(lambda x: io.unstring_json(x))
+                if obj_bbox_col in df.columns:
+                    print("before unstringed obj_bbox_col", obj_bbox_col)
+                    print("df[obj_bbox_col] example", df[obj_bbox_col].to_string())
+                    df[obj_bbox_col] = df[obj_bbox_col].apply(lambda x: io.unstring_json(x))
+                else:
+                    print(f"WARNING: {obj_bbox_col} not present in SELECT results; skipping bbox preprocessing")
                 # # convert obj_bbox_col to list using convert_bbox_to_list
                 # df[obj_bbox_col] = df[obj_bbox_col].apply(lambda x: sort.convert_bbox_to_list(x))
                 # print("unstringed obj_bbox_col", obj_bbox_col)
@@ -3015,6 +3036,16 @@ def main():
                 cycle_stage = "object" if hsv_source == "object" else "background"
                 # print(f"cluster_topic_no: {cluster_topic_no}, hsv_cluster: {hsv_cluster}")
                 if IS_CLUSTER and cluster_topic_no < START_CLUSTER: return
+                if (
+                    isinstance(cluster_topic_no, list)
+                    and len(cluster_topic_no) >= 2
+                    and cluster_topic_no[1] in SKIP_OBJECT_NONE_CLUSTERS
+                ):
+                    print(
+                        f"skipping fusion pair {cluster_topic_no} because object cluster is in "
+                        f"SKIP_OBJECT_NONE_CLUSTERS {SKIP_OBJECT_NONE_CLUSTERS}"
+                    )
+                    return
                 if USE_AFFECT_GROUPS: 
                     cluster_topic_no = AFFECT_GROUPS_LISTS[cluster_topic_no] # redefine cluster_no with affect group list
                 if IS_TOPICS and not IS_HAND_POSE_FUSION: 
@@ -3028,7 +3059,20 @@ def main():
                     print(f"IS_HAND_POSE_FUSION, passing in cluster_topic_no: {cluster_topic_no}, this_topic: {this_topic}, hsv_cluster: {hsv_cluster}")
                     select_map_images(cluster_topic_no, this_topic, hsv_cluster, hsv_source=hsv_source, cycle_stage=cycle_stage)
 
-            if CURRENT_MODE == 'heft_torso_keywords' and N_HSV > 0:
+            if CURRENT_MODE == 'heft_torso_keywords' and IS_HAND_POSE_FUSION and not USE_HSV:
+                print("doing heft_torso_keywords without HSV: iterating fusion pairs directly")
+                if first_loop:
+                    if isinstance(n_cluster_topics, list):
+                        cluster_topic_iter = n_cluster_topics
+                    else:
+                        cluster_topic_iter = []
+                    for cluster_topic_no in cluster_topic_iter:
+                        do_first_select_map_images(cluster_topic_no, second_cluster_topic, None)
+                else:
+                    print("doing regular linear")
+                    select_map_images(this_cluster, this_topic, None)
+
+            elif CURRENT_MODE == 'heft_torso_keywords' and USE_HSV and N_HSV > 0:
                 print("doing heft_torso_keywords with N_HSV > 0, so Keyword -> MetaClusters -> HSV")
                 for cluster_topic_no in range(N_CLUSTERS):
                     # print(f"cluster_topic_no range(N_CLUSTERS): {cluster_topic_no}, n_hsv_clusters: {n_hsv_clusters}")

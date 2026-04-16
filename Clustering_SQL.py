@@ -83,11 +83,11 @@ option, MODE = pick(options, title)
 # CLUSTER_TYPE = "Clusters"
 # CLUSTER_TYPE = "BodyPoses"
 # CLUSTER_TYPE = "BodyPoses3D" # use this for META 3D body clusters, Arms will start build but messed up because of subset landmarks
-# CLUSTER_TYPE = "ArmsPoses3D" 
+CLUSTER_TYPE = "ArmsPoses3D" 
 
 # you need both of these for ObjectFusion
-CLUSTER_TYPE = "ObjectFusion" 
-ONLY_EXISTING_IMAGES_DETECTIONS = True # faster for testing: will not calc new object placements
+# CLUSTER_TYPE = "ObjectFusion" 
+# ONLY_EXISTING_IMAGES_DETECTIONS = True # faster for testing: will not calc new object placements
 
 # CLUSTER_TYPE = "HandsPositions"
 # CLUSTER_TYPE = "HandsGestures"
@@ -137,7 +137,7 @@ SegmentTable_name = 'SegmentBig_isface'
 # SegmentHelper_name = 'Detections' # if CLUSTER_TYPE = "ObjectFusion", it automatically joins to Detections
 # SegmentHelper_name = 'SegmentHelper_T11_Business'
 # SegmentHelper_name = 'SegmentHelper_T11_Oct20_COCO_Custom'
-SegmentHelper_name = 'SegmentHelper_T11_Oct20_COCO_Custom_evens_quarters'
+# SegmentHelper_name = 'SegmentHelper_T11_Oct20_COCO_Custom_evens_quarters'
 FORCE_HAND_LANDMARKS = False # when doing ArmsPoses3D, default is True, so mongo_hand_landmarks = 1
 
 # TESTING MODE - reduce dataset size for faster iteration using pre-filtered table
