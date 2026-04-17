@@ -24,14 +24,14 @@ NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 # USE THIS TO MAKE THE FILE NECESSARY TO DO KEYWORD BASED MAKE VIDEO OUTPUT
 
 # ROOT_FOLDER_PATH = '/Users/michaelmandiberg/Documents/projects-active/facemap_production/heft_keyword_fusion_clusters'
-ROOT_FOLDER_PATH = '/Users/michaelmandiberg/Documents/GitHub/takingstock/utilities/data/objectfusion_object_hsv'
+ROOT_DATA_PATH = '/Users/michaelmandiberg/Documents/GitHub/takingstock/utilities/data/'
 MANIFEST_FILE = "fusion_manifest.json"
 CONTRACT_VERSION = 1
 
 # First-pass ObjectFusion object-HSV export controls.
 # Uses the same temporary focus pattern as make_video for faster debug cycles.
-TEMP_FOCUS_CLUSTER_HACK_LIST = [20]
-OBJECT_HSV_EXPORT_CLASS_IDS = [27]
+TEMP_FOCUS_CLUSTER_HACK_LIST = []
+OBJECT_HSV_EXPORT_CLASS_IDS = []
 
 # Arms/ObjectFusion intersection export controls.
 ARMS_OBJECT_FOCUS_CLUSTER_IDS = []
@@ -40,10 +40,20 @@ OBJECTFUSION_CLUSTER_COUNT = 768
 
 HACK_LIST_SKIP_DETECTIONS = [87,90,91,92]
 MODE = "ArmsPoses3D" # Topics or Keywords or Detections or ArmsPoses3D
-if MODE == "Topics": MODE_ID = "topic_id" 
-elif "Detections" in MODE: MODE_ID = "class_id"
-elif MODE == "ArmsPoses3D": MODE_ID = "cluster_id"
-else: MODE_ID =  "keyword_id"
+if MODE == "Topics": 
+    MODE_ID = "topic_id" 
+    CLUSTER_TYPE = "TK" # needs to be reworked next time it is used
+elif "Detections" in MODE: 
+    MODE_ID = "class_id"
+    CLUSTER_TYPE = "TK" # needs to be reworked next time it is used
+elif MODE == "ArmsPoses3D": 
+    MODE_ID = "cluster_id"
+    CLUSTER_TYPE = "ArmsPoses3D_MetaHSV" # key to CLUSTER_DATA dict
+else: 
+    MODE_ID =  "keyword_id"
+    CLUSTER_TYPE = "ArmsPoses3D_ObjectFusion" # key to CLUSTER_DATA dict
+    # "ArmsPoses3D_MetaHSV" or "BodyPoses3D_MetaHSV" or "MetaBodyPoses3D" or "BodyPoses3D_HSV" or "body3D" or "hand_gesture_position" - determines whether it checks hand poses or body3D
+
 
     # if "body3D" in CLUSTER_TYPE: cluster_count = 512
     # elif "BodyPoses3D" in CLUSTER_TYPE: cluster_count = 768
@@ -51,25 +61,32 @@ else: MODE_ID =  "keyword_id"
     # elif "MetaBodyPoses3D" in CLUSTER_TYPE: cluster_count = 64
 
 CLUSTER_COUNT = 768
+
 CLUSTER_DATA = {
-    "ArmsPoses3D_MetaHSV": {"sql_template": "sql_query_template_MetaHSV_Body3D", "cluster_table_name": "ImagesArmsPoses3D", "hsv_type": "ClustersMetaHSV", "cluster_count": CLUSTER_COUNT},
-    "ObjectFusion_ObjectHSV": {"sql_template": None, "cluster_table_name": "ImagesObjectFusion", "hsv_type": "Detections.meta_cluster_id", "cluster_count": CLUSTER_COUNT},
+    "ArmsPoses3D_MetaHSV": {"sql_template": "sql_query_template_MetaHSV_Body3D", "cluster_table_name": "ImagesArmsPoses3D", "hsv_type": "ClustersMetaHSV", "cluster_count": CLUSTER_COUNT, 
+        "folder_name": f"heft_clusters_ArmsPoses3D_{ARMS_CLUSTER_COUNT}",
+        },
+    "ObjectFusion_ObjectHSV": {"sql_template": None, "cluster_table_name": "ImagesObjectFusion", "hsv_type": "Detections.meta_cluster_id", "cluster_count": CLUSTER_COUNT,
+         "folder_name": f"objectfusion_object_hsv",
+    
+        },
     "ArmsPoses3D_ObjectFusion": {
         "sql_template": None,
         "cluster_table_name": "ImagesArmsPoses3D",
         "hsv_type": None,
         "cluster_count": ARMS_CLUSTER_COUNT,
+        "folder_name": f"heft_ArmsPoses3D_{ARMS_CLUSTER_COUNT}_ObjectFusion_{OBJECTFUSION_CLUSTER_COUNT}"
     },
 }
+ROOT_FOLDER_PATH = os.path.join(ROOT_DATA_PATH, CLUSTER_DATA[CLUSTER_TYPE]["folder_name"])
 
 THIS_CLASS_ID = 0 # for object bbox normalization
 KEYWORDS = [THIS_CLASS_ID] 
 class_token = ID_SEGMENT_DICT.get(THIS_CLASS_ID, None)
 if class_token: HELPER_TABLE = f'SegmentHelperObject_{class_token}' 
-else: HELPER_TABLE = 'SegmentHelper_T11_Oct20_COCO_Custom_evens_quarters'
+# else: HELPER_TABLE = 'SegmentHelper_T11_Oct20_COCO_Custom_evens_quarters'
+else: HELPER_TABLE = 'SegmentHelper_T11_Business'
 
-CLUSTER_TYPE = "ArmsPoses3D_ObjectFusion" # key to CLUSTER_DATA dict
-# "ArmsPoses3D_MetaHSV" or "BodyPoses3D_MetaHSV" or "MetaBodyPoses3D" or "BodyPoses3D_HSV" or "body3D" or "hand_gesture_position" - determines whether it checks hand poses or body3D
 
 
 # Create engine and session

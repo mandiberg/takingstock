@@ -58,10 +58,10 @@ SHOULDER_THRESH=.75
 # HelperTable_name = "SegmentHelperApril12_2x2x33x27"
 
 # for fingerpoint
-HelperTable_name = "SegmentHelper_T11_business"
+HelperTable_name = "SegmentHelperObject_80_sign"
 # MM controlling which folder to use
 IS_SSD = True
-SSD_PATH = "/Volumes/OWC54/segment_images"
+SSD_PATH = "/Volumes/OWC52/segment_images_80_sign"
 
 io = DataIO(IS_SSD, VERBOSE, SSD_PATH)
 db = io.db

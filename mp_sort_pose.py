@@ -72,6 +72,16 @@ class SortPose:
 
               
         self.VERBOSE = VERBOSE
+        self.DIAG_CROP = False
+        self.DIAG_CROP_STDOUT = False
+        self.DIAG_CROP_PATH = None
+        self.current_image_id = None
+        self.current_diag_context = {}
+        self._diag_crop_seq = 0
+        if config is not None and isinstance(config, dict):
+            self.DIAG_CROP = bool(config.get('DIAG_CROP', False))
+            self.DIAG_CROP_STDOUT = bool(config.get('DIAG_CROP_STDOUT', False))
+            self.DIAG_CROP_PATH = config.get('DIAG_CROP_PATH', None)
 
         self.KNN_SORT_DICT = {
             "128d": "128d",
@@ -113,7 +123,7 @@ class SortPose:
         self.ORIGIN = 0
         self.this_nose_bridge_dist = self.NOSE_BRIDGE_DIST = None # to be set in first loop, and sort.this_nose_bridge_dist each time
         self.USE_HEAD_POSE = USE_HEAD_POSE
-        self.MIN_DYN_BBOX_DIM = 2 # controls how closely AUTO_EDGE_CROP can get
+        self.MIN_DYN_BBOX_DIM = 1.5 # controls how closely AUTO_EDGE_CROP can get
 
         self.CHECK_DESC_DIST = 30
 
@@ -505,6 +515,64 @@ class SortPose:
             "cluster_no":cluster_no
 
         }
+
+    def _diag_crop_safe(self, value):
+        if isinstance(value, (np.integer, np.floating, np.bool_)):
+            return value.item()
+        if isinstance(value, np.ndarray):
+            return value.tolist()
+        if isinstance(value, tuple):
+            return [self._diag_crop_safe(v) for v in value]
+        if isinstance(value, list):
+            return [self._diag_crop_safe(v) for v in value]
+        if isinstance(value, dict):
+            return {str(k): self._diag_crop_safe(v) for k, v in value.items()}
+        return value
+
+    def _diag_crop_record(self, stage, payload=None):
+        if not self.DIAG_CROP:
+            return
+        if payload is None:
+            payload = {}
+
+        try:
+            self._diag_crop_seq += 1
+            cluster_no = None
+            if isinstance(self.counter_dict, dict):
+                cluster_no = self.counter_dict.get("cluster_no")
+
+            event = self._diag_crop_safe({
+                "seq": self._diag_crop_seq,
+                "stage": stage,
+                "image_id": self.current_image_id,
+                "cluster_no": cluster_no,
+                "sort_type": self.SORT_TYPE,
+                "context": self.current_diag_context,
+                "payload": payload,
+            })
+
+            out_path = self.DIAG_CROP_PATH
+            if not out_path:
+                outfolder = None
+                if isinstance(self.counter_dict, dict):
+                    outfolder = self.counter_dict.get("outfolder")
+                if outfolder:
+                    out_path = os.path.join(outfolder, "crop_diag.jsonl")
+                else:
+                    out_path = "/tmp/crop_diag.jsonl"
+
+            out_dir = os.path.dirname(out_path)
+            if out_dir and not os.path.exists(out_dir):
+                os.makedirs(out_dir)
+
+            with open(out_path, "a", encoding="utf-8") as f:
+                f.write(json.dumps(event, ensure_ascii=True) + "\n")
+
+            if self.DIAG_CROP_STDOUT:
+                print(f"[DIAG_CROP] {stage}: {event['payload']}")
+        except Exception as e:
+            if self.VERBOSE:
+                print("DIAG_CROP logging failed", e)
 
     # def ensure_lms_list(self, lms):
     #     # convert NormalizedLandmarkList to list of tuples
@@ -1565,6 +1633,7 @@ class SortPose:
         Needs df and padding for number of bboxes to buffer crop
         """
         landmarks_list = df['body_landmarks_normalized'].tolist()
+        image_ids = df['image_id'].tolist() if 'image_id' in df.columns else [None] * len(landmarks_list)
         list_min_xs = []
         list_max_xs = []
         list_min_ys = []
@@ -1572,52 +1641,143 @@ class SortPose:
         lower_y_samples = []
         left_x_samples = []
         right_x_samples = []
+        y_sign_counter = Counter()
+        x_sign_counter = Counter()
+        rejected_image_ids = []
+        rejected_details = []
+        pending_rows = []
 
         # Keep low-confidence/placeholder points out of dynamic crop estimation.
         vis_threshold = 0.35
 
-        for landmark_list in landmarks_list:
-            if hasattr(landmark_list, 'landmark'):
-                current_x_coords = []
-                current_y_coords = []
-                for idx, landmark in enumerate(landmark_list.landmark):
-                    if landmark.x is None or landmark.y is None:
-                        continue
+        for image_id, landmark_list in zip(image_ids, landmarks_list):
+            if not hasattr(landmark_list, 'landmark'):
+                continue
 
-                    vis = getattr(landmark, 'visibility', 1.0)
-                    if vis is not None and vis < vis_threshold:
-                        continue
+            current_x_coords = []
+            current_y_coords = []
+            current_lower_y_samples = []
+            current_left_x_samples = []
+            current_right_x_samples = []
 
-                    x = float(landmark.x)
-                    y = float(landmark.y)
-                    if not np.isfinite(x) or not np.isfinite(y):
-                        continue
+            for idx, landmark in enumerate(landmark_list.landmark):
+                if landmark.x is None or landmark.y is None:
+                    continue
 
-                    current_x_coords.append(x)
-                    current_y_coords.append(y)
+                vis = getattr(landmark, 'visibility', 1.0)
+                if vis is not None and vis < vis_threshold:
+                    continue
 
-                    # Orientation anchors from anatomy:
-                    # hips/knees/ankles are below the nose; shoulders/arms indicate left/right.
-                    if idx in (23, 24, 25, 26, 27, 28):
-                        lower_y_samples.append(y)
-                    if idx in (11, 13, 15, 17, 19, 21):
-                        left_x_samples.append(x)
-                    if idx in (12, 14, 16, 18, 20, 22):
-                        right_x_samples.append(x)
-                
-                if current_x_coords: # Check if any valid landmarks were found for this specific list
-                    # Use robust bounds to reduce outlier-driven flips.
-                    list_min_xs.append(float(np.percentile(current_x_coords, 5)))
-                    list_max_xs.append(float(np.percentile(current_x_coords, 95)))
-                    list_min_ys.append(float(np.percentile(current_y_coords, 5)))
-                    list_max_ys.append(float(np.percentile(current_y_coords, 95)))
-        print("list_min_xs", list_min_xs)
-        print("list_max_xs", list_max_xs)
-        print("list_min_ys", list_min_ys)
-        print("list_max_ys", list_max_ys)
+                x = float(landmark.x)
+                y = float(landmark.y)
+                if not np.isfinite(x) or not np.isfinite(y):
+                    continue
+
+                current_x_coords.append(x)
+                current_y_coords.append(y)
+
+                # Orientation anchors from anatomy:
+                # hips/knees/ankles are below the nose; shoulders/arms indicate left/right.
+                if idx in (23, 24, 25, 26, 27, 28):
+                    current_lower_y_samples.append(y)
+                if idx in (11, 13, 15, 17, 19, 21):
+                    current_left_x_samples.append(x)
+                if idx in (12, 14, 16, 18, 20, 22):
+                    current_right_x_samples.append(x)
+            
+            if current_x_coords:
+                row_min_x = float(np.percentile(current_x_coords, 5))
+                row_max_x = float(np.percentile(current_x_coords, 95))
+                row_min_y = float(np.percentile(current_y_coords, 5))
+                row_max_y = float(np.percentile(current_y_coords, 95))
+
+                if current_lower_y_samples:
+                    row_y_sign = "inverted" if statistics.median(current_lower_y_samples) < 0 else "natural"
+                    row_y_source = "anatomy"
+                else:
+                    row_y_sign = "inverted" if abs(row_min_y) >= abs(row_max_y) else "natural"
+                    row_y_source = "extrema-fallback"
+
+                if current_left_x_samples and current_right_x_samples:
+                    row_x_sign = "inverted" if statistics.median(current_right_x_samples) < statistics.median(current_left_x_samples) else "natural"
+                    row_x_source = "anatomy"
+                else:
+                    row_x_sign = "inverted" if abs(row_min_x) >= abs(row_max_x) else "natural"
+                    row_x_source = "extrema-fallback"
+
+                y_sign_counter[row_y_sign] += 1
+                x_sign_counter[row_x_sign] += 1
+                pending_rows.append(
+                    {
+                        "image_id": image_id,
+                        "min_x": row_min_x,
+                        "max_x": row_max_x,
+                        "min_y": row_min_y,
+                        "max_y": row_max_y,
+                        "y_sign": row_y_sign,
+                        "x_sign": row_x_sign,
+                        "y_source": row_y_source,
+                        "x_source": row_x_source,
+                        "lower_y_samples": current_lower_y_samples,
+                        "left_x_samples": current_left_x_samples,
+                        "right_x_samples": current_right_x_samples,
+                    }
+                )
+
+        dominant_y_sign = y_sign_counter.most_common(1)[0][0] if y_sign_counter else None
+        dominant_x_sign = x_sign_counter.most_common(1)[0][0] if x_sign_counter else None
+
+        for row in pending_rows:
+            if dominant_y_sign and row["y_sign"] != dominant_y_sign:
+                rejected_image_ids.append(row["image_id"])
+                rejected_details.append(
+                    {
+                        "image_id": row["image_id"],
+                        "reason": "y_sign_mismatch",
+                        "row_y_sign": row["y_sign"],
+                        "dominant_y_sign": dominant_y_sign,
+                        "min_y": row["min_y"],
+                        "max_y": row["max_y"],
+                    }
+                )
+                continue
+
+            if dominant_x_sign and row["x_sign"] != dominant_x_sign and self.VERBOSE:
+                print(
+                    f"calc_dynamic_multiplier_from_min_max_body_landmarks: image {row['image_id']} has x sign {row['x_sign']} "
+                    f"but dominant x sign is {dominant_x_sign}; keeping row because crop failure is y-driven"
+                )
+
+            list_min_xs.append(row["min_x"])
+            list_max_xs.append(row["max_x"])
+            list_min_ys.append(row["min_y"])
+            list_max_ys.append(row["max_y"])
+            lower_y_samples.extend(row["lower_y_samples"])
+            left_x_samples.extend(row["left_x_samples"])
+            right_x_samples.extend(row["right_x_samples"])
+
+        if self.VERBOSE:
+            print("list_min_xs", list_min_xs)
+            print("list_max_xs", list_max_xs)
+            print("list_min_ys", list_min_ys)
+            print("list_max_ys", list_max_ys)
 
         if not list_min_xs:
-            print("calc_dynamic_multiplier_from_min_max_body_landmarks: no valid landmarks, keeping existing image_edge_multiplier")
+            print("calc_dynamic_multiplier_from_min_max_body_landmarks: no valid landmarks after mixed-sign filtering, keeping existing image_edge_multiplier")
+            self._diag_crop_record(
+                "dynamic_multiplier",
+                {
+                    "padding": padding,
+                    "rejected_mixed_sign_landmarks": True,
+                    "dominant_y_sign": dominant_y_sign,
+                    "dominant_x_sign": dominant_x_sign,
+                    "y_sign_counter": dict(y_sign_counter),
+                    "x_sign_counter": dict(x_sign_counter),
+                    "rejected_image_ids": rejected_image_ids,
+                    "rejected_details": rejected_details[:10],
+                    "fallback_image_edge_multiplier": self.image_edge_multiplier,
+                },
+            )
             return self.image_edge_multiplier
 
         median_min_x = statistics.median(list_min_xs)
@@ -1687,7 +1847,35 @@ class SortPose:
         if self.VERBOSE:
             print(f"calc_dynamic_multiplier_from_min_max_body_landmarks orientation: {y_orientation}, {x_orientation}")
             print(f"orientation source: y={y_source}, x={x_source}")
+            print(f"dominant sign counters: y={dict(y_sign_counter)}, x={dict(x_sign_counter)}")
+            print(f"rejected mixed-sign image ids: {rejected_image_ids}")
             print(f"calc_dynamic_multiplier_from_min_max_body_landmarks: {(top_extent, right_extent, bottom_extent, left_extent)}")
+        self._diag_crop_record(
+            "dynamic_multiplier",
+            {
+                "padding": padding,
+                "dominant_y_sign": dominant_y_sign,
+                "dominant_x_sign": dominant_x_sign,
+                "y_sign_counter": dict(y_sign_counter),
+                "x_sign_counter": dict(x_sign_counter),
+                "rejected_mixed_sign_count": len(rejected_image_ids),
+                "rejected_image_ids": rejected_image_ids,
+                "orientation_y": y_orientation,
+                "orientation_x": x_orientation,
+                "orientation_source_y": y_source,
+                "orientation_source_x": x_source,
+                "median_min_x": median_min_x,
+                "median_max_x": median_max_x,
+                "median_min_y": median_min_y,
+                "median_max_y": median_max_y,
+                "extents": {
+                    "top": top_extent,
+                    "right": right_extent,
+                    "bottom": bottom_extent,
+                    "left": left_extent,
+                },
+            },
+        )
         return [top_extent, right_extent, bottom_extent, left_extent]
     
     def bbox_to_pixel_conversion(self, bbox):
@@ -1757,6 +1945,22 @@ class SortPose:
         # cv2.waitKey(1)  # Display the window for 1 ms
         # cv2.destroyAllWindows()
         print(f"auto_edge_crop: image edge mult {self.image_edge_multiplier}, bbox dimensions:{bbox_dimensions}, cropped to ({left},{top}),({right},{bottom})")
+        self._diag_crop_record(
+            "auto_edge_crop",
+            {
+                "resize": resize,
+                "scaled_face_height": scaled_face_height,
+                "image_shape": list(image.shape) if image is not None else None,
+                "bbox_dimensions": bbox_dimensions,
+                "crop": {
+                    "top": top,
+                    "right": right,
+                    "bottom": bottom,
+                    "left": left,
+                },
+                "output_shape": list(cropped.shape) if cropped is not None else None,
+            },
+        )
         return cropped
 
 ###########################################################################
@@ -2145,8 +2349,10 @@ class SortPose:
         if self.this_nose_bridge_dist is None:
             try:
                 # self.NOSE_BRIDGE_DIST
-                self.nose_2d = self.get_face_2d_point(1)
+                raw_nose_2d = self.get_face_2d_point(1)
+                self.nose_2d = raw_nose_2d
                 if self.VERBOSE: print("nose_2d",self.nose_2d)
+                nose_delta = None
                 if self.ORIGIN == 6:
                     self.this_nose_bridge_dist = self.calc_nose_bridge_dist(faceLms)
                     if self.VERBOSE: print("NOSE_BRIDGE_DIST, self.this_nose_bridge_dist", self.NOSE_BRIDGE_DIST, self.this_nose_bridge_dist)
@@ -2155,6 +2361,18 @@ class SortPose:
                     self.nose_2d = (math.floor(self.nose_2d[0]), math.floor(self.nose_2d[1] + (nose_delta*self.face_height)))
                 # cv2.circle(self.image, tuple(map(int, self.nose_2d)), 5, (0, 0,0), 5)
                 if self.VERBOSE: print("get_image_face_data new nose_2d",self.nose_2d)
+                self._diag_crop_record(
+                    "face_anchor",
+                    {
+                        "raw_nose_2d": raw_nose_2d,
+                        "nose_2d": self.nose_2d,
+                        "nose_bridge_ref": self.NOSE_BRIDGE_DIST,
+                        "nose_bridge_this": self.this_nose_bridge_dist,
+                        "nose_delta": nose_delta,
+                        "face_height": getattr(self, "face_height", None),
+                        "image_shape": list(image.shape) if image is not None else None,
+                    },
+                )
             except:
                 print("couldn't get nose_2d via faceLms")
         else:
@@ -2340,9 +2558,36 @@ class SortPose:
                     # Define the cropped area
                     new_image = new_image[CROP_TOP:CROP_BOTTOM, CROP_LEFT:CROP_RIGHT]
                     if self.VERBOSE: print("expand_image [-] cropped image to", crop_list)
+                self._diag_crop_record(
+                    "expand_image",
+                    {
+                        "resize": resize,
+                        "resize_dims": list(resize_dims),
+                        "resize_nose": list(resize_nose),
+                        "existing_pixels": {
+                            "above": existing_pixels_above_nose,
+                            "below": existing_pixels_below_nose,
+                            "left": existing_pixels_left_of_nose,
+                            "right": existing_pixels_right_of_nose,
+                        },
+                        "border_list": border_list,
+                        "expand_list": expand_list,
+                        "crop_list": crop_list,
+                        "expand_size": list(this_expand_size),
+                        "new_image_shape": list(new_image.shape) if new_image is not None else None,
+                    },
+                )
             else:
                 new_image = None
                 if self.VERBOSE: print("expand_image [-]failed expand loop, with resize", str(resize), "too big, skipping")
+                self._diag_crop_record(
+                    "expand_image",
+                    {
+                        "resize": resize,
+                        "failed": True,
+                        "reason": "resize_too_large",
+                    },
+                )
 
 
         except Exception as e:
@@ -2372,6 +2617,16 @@ class SortPose:
         #     print("simple crop",simple_crop)
         # simple_crop_image=image[simple_crop["top"]:simple_crop["bottom"],simple_crop["left"]:simple_crop["right"],:]
         if self.VERBOSE: print("extension pixels calculated")
+        self._diag_crop_record(
+            "extension_pixels",
+            {
+                "nose_2d": self.nose_2d,
+                "face_height": self.face_height,
+                "max_image_edge_multiplier": self.MAX_IMAGE_EDGE_MULTIPLIER,
+                "extension_pixels": extension_pixels,
+                "image_wh": [self.w, self.h],
+            },
+        )
         return extension_pixels
 
     def define_corners(self,extension_pixels,shape):

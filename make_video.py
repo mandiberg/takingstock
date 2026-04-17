@@ -48,14 +48,14 @@ option, MODE = pick(options, title)
 SegmentTable_name = 'SegmentBig_isface'
 # SegmentTable_name = 'SegmentBig_isnotface'
 # SegmentHelper_name = 'SegmentHelper_may2025_4x4faces'
-# SegmentHelper_name = 'SegmentHelper_sept2025_heft_keywords'
-SegmentHelper_name = 'SegmentHelper_T11_Oct20_COCO_Custom_evens_quarters'
+SegmentHelper_name = 'SegmentHelper_T11_business'
+# SegmentHelper_name = 'SegmentHelper_T11_Oct20_COCO_Custom_evens_quarters'
 # SegmentHelper_name = 'None' # set below for heft keywords
 # SegmentHelper_name = None
 # SATYAM, this is MM specific
 # for when I'm using files on my SSD vs RAID
-IS_SSD = False
-SSD_PATH = "/Volumes/OWC54/segment_images_40xDetections"
+IS_SSD = True
+SSD_PATH = "/Volumes/OWC54/segment_images"
 #IS_MOVE is in move_toSSD_files.py
 
 # I/O utils
@@ -81,7 +81,7 @@ CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden b
 # CSV_FOLDER = os.path.join(io.ROOT_DBx, "body3D_segmentbig_useall256_CSVs_test")
 
 # CSV_FOLDER = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion128_test220K"
-CSV_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/T11_YOLO_ArmsPoses3D_768"
+CSV_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/expand_crop_debug"
 
 HSV_SOURCE_MODE = "background"
 SKIP_OBJECT_NONE_CLUSTERS = []
@@ -109,7 +109,7 @@ if "paris" in CURRENT_MODE:
                                     # if false, it will grab the list of pair lists below
     USE_FUSION_PAIR_DICT = True
     FUSION_PAIR_DICT_NAME = "FUSION_PAIR_DICT_TOPICS_64"
-    N_HSV = 0 # don't do HSV clusters
+    N_HSV = 23 # don't do HSV clusters
     DO_HSV_KNN = True
     # this control whether sorting by topics
     # IS_TOPICS = True # if using Clusters only, must set this to False
@@ -198,18 +198,22 @@ elif CURRENT_MODE == 'heft_torso_keywords':
         # FULL_BODY = True # haxxor TK
 
     # set to 0 to disable obj helper segment query stuff. this is also for object_fusion
-    class_id = 67  # TEST: match exported ArmsPoses3D_67.csv
+    class_id = 0  # TEST: match exported ArmsPoses3D_67.csv
 
     # SORT_TYPE = "obj_bbox"
-    # SORT_TYPE = "planar_hands"
     # SORT_TYPE = "object_fusion"
 
-    # CLUSTER_TYPE = "ArmsPoses3D"
-    CLUSTER_TYPE = "ArmsPoses3D_ObjectFusion"  # TEST: new Arms/ObjectFusion mode
+    # current arms sort
+    CLUSTER_TYPE = "ArmsPoses3D"
+    SORT_TYPE = "planar_hands"
+
+    # current obj sort
+    # CLUSTER_TYPE = "ArmsPoses3D_ObjectFusion"  # TEST: new Arms/ObjectFusion mode
+    # SORT_TYPE = "object_fusion" # for ArmsPoses3D_ObjectFusion keep SORT_TYPE as object_fusion
+
     # CLUSTER_TYPE = "object_fusion"
     # CLUSTER_TYPE = "ArmsPoses3D" # this triggers meta body poses 3D
     # CLUSTER_TYPE = "object_fusion"
-    SORT_TYPE = "object_fusion" # for ArmsPoses3D_ObjectFusion keep SORT_TYPE as object_fusion
     cl = ToolsClustering(SORT_TYPE, VERBOSE=VERBOSE)
 
 
@@ -245,7 +249,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     
     TESTING = True
     if TESTING:
-        USE_HSV = False
+        USE_HSV = True
         # turning all three off to do old style non tsp sort    
         ONE_SHOT = True # take all files, based off the very first sort order.
         TSP_SORT = False
@@ -449,6 +453,9 @@ HSV_NORMS = {"LUM": .01, "SAT": 1,  "HUE": 0.002777777778, "VAL": 1}
 VERBOSE = True
 CALIBRATING = False
 SAVE_IMG_PROCESS = False
+DIAG_CROP = True
+DIAG_CROP_STDOUT = False
+DIAG_CROP_PATH = None
 # this controls whether it is using the linear or angle process
 IS_ANGLE_SORT = False
 
@@ -794,6 +801,9 @@ cfg = {
     'TSP_SORT': TSP_SORT,
     'USE_HEAD_POSE': USE_HEAD_POSE,
     'DO_HSV_KNN': DO_HSV_KNN,
+    'DIAG_CROP': DIAG_CROP,
+    'DIAG_CROP_STDOUT': DIAG_CROP_STDOUT,
+    'DIAG_CROP_PATH': DIAG_CROP_PATH,
 }
 sort = SortPose(config=cfg)
 
@@ -1590,14 +1600,27 @@ def compare_images(last_image, img, face_landmarks_or_df, bbox_or_index, current
         index = bbox_or_index
         face_landmarks, bbox = df_sorted.iloc[index]['face_landmarks'], df_sorted.iloc[index]['bbox']
         current_image_id = df_sorted.iloc[index].get('image_id', current_image_id)
+        current_yaw = df_sorted.iloc[index].get('yaw', None)
+        current_roll = df_sorted.iloc[index].get('roll', None)
+        current_pitch = df_sorted.iloc[index].get('pitch', None)
         is_df = True
     else:
         face_landmarks = face_landmarks_or_df
         bbox = bbox_or_index
+        current_yaw = current_roll = current_pitch = None
         is_df = False
 
     is_face = None
     skip_face = False
+    sort.current_image_id = current_image_id
+    sort.current_diag_context = {
+        "yaw": current_yaw,
+        "roll": current_roll,
+        "pitch": current_pitch,
+        "is_df": is_df,
+        "full_body": FULL_BODY,
+        "auto_edge_crop": AUTO_EDGE_CROP,
+    }
     #crop image here:
     
     print(f". ---  compare_images with is_df {is_df} for {SORT_TYPE} with EXPAND {sort.EXPAND} and FULL_BODY {FULL_BODY} and self.mult {sort.image_edge_multiplier}")

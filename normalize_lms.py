@@ -66,7 +66,7 @@ INNER_JOIN_HELPER = True
 # SegmentHelperObject_67_phone 
 # SegmentHelperObject_41_cup_glass (big)
 
-LIMIT= 20000000
+LIMIT= 6000000
 # Initialize the counter
 counter = 2000
 
@@ -84,9 +84,10 @@ if class_token:
     # SORT_TYPE = "obj_bbox_fusion"
 else: 
     # SegmentHelper_name = 'SegmentOct20'
-    # SegmentHelper_name = 'SegmentHelper_oct2025_evens_quarters'
+    SegmentHelper_name = 'SegmentHelper_T11_business'
+    SegmentFolder = "/Volumes/OWC54/segment_images"
     SegmentFolder = None
-    SegmentHelper_name = 'SegmentHelper_T11_Oct20_COCO_Custom'
+    # SegmentHelper_name = 'SegmentHelper_T11_Oct20_COCO_Custom'
 
     # HAXXXORS THIS_CLASS_ID is commented out below so that it does ALL classes
     # THIS_CLASS_ID = 82 # for object bbox normalization
