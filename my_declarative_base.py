@@ -150,6 +150,7 @@ class Encodings(Base):
     face_height      = Column(SmallInteger)
     nose_pixel_x     = Column(SmallInteger)
     nose_pixel_y     = Column(SmallInteger)
+    mongo_body_landmarks_norm_recalc = Column(Boolean)
     
 class Clusters(Base):
     __tablename__ = 'Clusters'

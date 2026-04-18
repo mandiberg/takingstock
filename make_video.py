@@ -82,7 +82,7 @@ CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden b
 
 # CSV_FOLDER = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion128_test220K"
 CSV_MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/"
-CSV_RUN_FOLDER = "armsposes_T4etc_partial"
+CSV_RUN_FOLDER = "armsposes_T11_fullrun_dedupable"
 CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, CSV_RUN_FOLDER)
 
 HSV_SOURCE_MODE = "background"
@@ -277,7 +277,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     else:
         N_HSV = 0 # don't do HSV clusters
 
-    PURGING_DUPES = False
+    PURGING_DUPES = True
     FORCE_TARGET_COUNT = 90
     # if TESTING: IS_HAND_POSE_FUSION = GENERATE_FUSION_PAIRS = False
 
