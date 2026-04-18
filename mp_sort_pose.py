@@ -123,7 +123,7 @@ class SortPose:
         self.ORIGIN = 0
         self.this_nose_bridge_dist = self.NOSE_BRIDGE_DIST = None # to be set in first loop, and sort.this_nose_bridge_dist each time
         self.USE_HEAD_POSE = USE_HEAD_POSE
-        self.MIN_DYN_BBOX_DIM = 1.5 # controls how closely AUTO_EDGE_CROP can get
+        self.MIN_DYN_BBOX_DIM = [1.75,2,2,2] # controls how closely AUTO_EDGE_CROP can get
 
         self.CHECK_DESC_DIST = 30
 
@@ -1826,10 +1826,10 @@ class SortPose:
             left_raw = abs(median_min_x)
             x_orientation = "natural(x+ is right)"
 
-        top_extent = max(math.ceil(top_raw + padding), self.MIN_DYN_BBOX_DIM)
-        right_extent = max(math.ceil(right_raw + padding), self.MIN_DYN_BBOX_DIM)
-        bottom_extent = max(math.ceil(bottom_raw + padding), self.MIN_DYN_BBOX_DIM)
-        left_extent = max(math.ceil(left_raw + padding), self.MIN_DYN_BBOX_DIM)
+        top_extent = max(math.ceil(top_raw + padding), self.MIN_DYN_BBOX_DIM[0])
+        right_extent = max(math.ceil(right_raw + padding), self.MIN_DYN_BBOX_DIM[1])
+        bottom_extent = max(math.ceil(bottom_raw + padding), self.MIN_DYN_BBOX_DIM[2])
+        left_extent = max(math.ceil(left_raw + padding), self.MIN_DYN_BBOX_DIM[3])
 
         # if diff between left and right is less/equal to 1 bbox, take the bigger one and make them symmetrical.
         if abs(left_extent) != abs(right_extent) and abs(abs(left_extent) - abs(right_extent)) <= 1:

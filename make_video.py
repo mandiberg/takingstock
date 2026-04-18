@@ -48,14 +48,14 @@ option, MODE = pick(options, title)
 SegmentTable_name = 'SegmentBig_isface'
 # SegmentTable_name = 'SegmentBig_isnotface'
 # SegmentHelper_name = 'SegmentHelper_may2025_4x4faces'
-SegmentHelper_name = 'SegmentHelper_T11_business'
+SegmentHelper_name = 'SegmentHelper_T37_money'
 # SegmentHelper_name = 'SegmentHelper_T11_Oct20_COCO_Custom_evens_quarters'
 # SegmentHelper_name = 'None' # set below for heft keywords
 # SegmentHelper_name = None
 # SATYAM, this is MM specific
 # for when I'm using files on my SSD vs RAID
 IS_SSD = True
-SSD_PATH = "/Volumes/OWC54/segment_images"
+SSD_PATH = "/Volumes/OWC54/segment_images_T4etc"
 #IS_MOVE is in move_toSSD_files.py
 
 # I/O utils
@@ -81,7 +81,9 @@ CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden b
 # CSV_FOLDER = os.path.join(io.ROOT_DBx, "body3D_segmentbig_useall256_CSVs_test")
 
 # CSV_FOLDER = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion128_test220K"
-CSV_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/expand_crop_debug"
+CSV_MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/"
+CSV_RUN_FOLDER = "armsposes_T4etc_partial"
+CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, CSV_RUN_FOLDER)
 
 HSV_SOURCE_MODE = "background"
 SKIP_OBJECT_NONE_CLUSTERS = []
@@ -96,7 +98,7 @@ MODES = {0:'paris_photo_torso_images_topics', 1:'paris_photo_torso_videos_topics
 MODE_CHOICE = 6
 CURRENT_MODE = MODES[MODE_CHOICE]
 
-LIMIT = 10000 # this is the limit for the SQL query, needs to be above 150
+LIMIT = 100000 # this is the limit for the SQL query, needs to be above 150
 CROP_MULTIPLIER = 5
 
 image_edge_multiplier = None
@@ -270,8 +272,10 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     if not GENERATE_FUSION_PAIRS:
         USE_FUSION_PAIR_DICT = True # if True, it will use the FUSION_PAIR_DICT_NAME below
     FUSION_PAIR_DICT_NAME = "FUSION_PAIR_DICT_DETECTIONS_ARMS3D128"
-    N_HSV = 23 # 0-22 metaclusters of 96 HSV clusters
-    # N_HSV = 0 # don't do HSV clusters
+    if USE_HSV == True:
+        N_HSV = 23 # 0-22 metaclusters of 96 HSV clusters
+    else:
+        N_HSV = 0 # don't do HSV clusters
 
     PURGING_DUPES = False
     FORCE_TARGET_COUNT = 90
@@ -286,7 +290,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
         MIN_CYCLE_COUNT = max(int(cutoff/2), FORCE_TARGET_COUNT) # this is the cut off for the SQL query results
     elif PURGING_DUPES:
         MIN_VIDEO_FUSION_COUNT = 100
-        MIN_CYCLE_COUNT = 2
+        MIN_CYCLE_COUNT = 200
         USE_HEAD_POSE = False
         ONE_SHOT = True
         TSP_SORT = CHOP_ITTER_TSP_SORT = False
@@ -450,7 +454,7 @@ HSV_NORMS = {"LUM": .01, "SAT": 1,  "HUE": 0.002777777778, "VAL": 1}
 
 
 # process stuff
-VERBOSE = True
+VERBOSE = False
 CALIBRATING = False
 SAVE_IMG_PROCESS = False
 DIAG_CROP = True
@@ -1005,6 +1009,8 @@ if not io.IS_TENCH:
 
     def selectSQL(cluster_no=None, topic_no=None, hsv_cluster=None, hsv_source="background"):
         global SELECT, FROM, WHERE, LIMIT, WrapperTopicTable
+        local_select = SELECT
+        local_from = FROM
         local_where = WHERE
         from_affect = where_affect = from_hsv = where_hsv = xyz_where = " "
         cluster_dict_AND = cluster_dict_NOT = None
@@ -1097,10 +1103,10 @@ if not io.IS_TENCH:
             return None
 
         def ensure_detection_fields_selected():
-            global SELECT
+            nonlocal local_select
             detection_fields = ", d.bbox_norm, d.obj_no, d.orientation, d.meta_cluster_id "
-            if detection_fields.strip() not in SELECT:
-                SELECT += detection_fields
+            if detection_fields.strip() not in local_select:
+                local_select += detection_fields
 
         cluster = " " #declare as empty string
         print(
@@ -1144,9 +1150,9 @@ if not io.IS_TENCH:
                 cluster += f" AND {cluster_target_col} = {str(cluster_no)} "  
             if KEYWORD_EXCLUDE:
                 print("adding KEYWORD_EXCLUDE to selectSQL")
-                if KEYWORD_OBJECT is None and "ik_obj" not in FROM:
+                if KEYWORD_OBJECT is None and "ik_obj" not in local_from:
                     # do the join if not being done elsewhere
-                    FROM += f" LEFT JOIN Images{topic_no} ik_obj ON s.image_id = ik_obj.image_id "
+                    local_from += f" LEFT JOIN Images{topic_no} ik_obj ON s.image_id = ik_obj.image_id "
                 cluster += f" AND (ik_obj.exclude_cluster IS NULL OR ik_obj.exclude_cluster != {cluster_no}) "         
         # elif cluster_no is not None or topic_no is not None:
         elif IS_CLUSTER or IS_ONE_CLUSTER:
@@ -1182,7 +1188,8 @@ if not io.IS_TENCH:
             print("hsv_cluster is not empty:", hsv_cluster)
             IN_or_equal_hsv_string = is_query_list_string(hsv_cluster)
             if hsv_source == "object":
-                if " JOIN Detections d ON s.image_id = d.image_id " not in (FROM + from_affect + from_hsv):
+                if " JOIN Detections d ON s.image_id = d.image_id " not in (local_from + from_affect + from_hsv):
+                    # add detection join only when object-HSV logic requires detection fields
                     from_hsv += " JOIN Detections d ON s.image_id = d.image_id "
                 ensure_detection_fields_selected()
                 object_hsv_class_scope = resolve_object_hsv_class_scope(topic_no)
@@ -1199,8 +1206,8 @@ if not io.IS_TENCH:
             print(f"cluster_dict_AND for topic in SQL is {cluster_dict_AND}")
             extra_boolean_keyword_string = is_query_list_string(cluster_dict_AND)
             join_and = " JOIN ImagesKeywords and_ik ON and_ik.image_id = s.image_id "
-            if join_and not in FROM:
-                FROM += join_and
+            if join_and not in local_from:
+                local_from += join_and
             cluster +=  f" AND and_ik.{this_id} {extra_boolean_keyword_string} "
         if bool(cluster_dict_NOT):
             extra_boolean_keyword_string = is_query_list_string(cluster_dict_NOT, inclusion=False)
@@ -1208,7 +1215,7 @@ if not io.IS_TENCH:
 
         print(f"cluster SELECT is {cluster}")
 
-        selectsql = f"SELECT {SELECT} FROM {FROM + from_affect + from_hsv} WHERE {local_where + where_affect + where_hsv + xyz_where} {cluster} LIMIT {str(LIMIT)};"
+        selectsql = f"SELECT {local_select} FROM {local_from + from_affect + from_hsv} WHERE {local_where + where_affect + where_hsv + xyz_where} {cluster} LIMIT {str(LIMIT)};"
         print("actual SELECT is: ",selectsql)
         result = engine.connect().execute(text(selectsql))
         resultsjson = ([dict(row) for row in result.mappings()])

@@ -3,10 +3,10 @@ import re
 
 # THIS IS A DESTRUCTIVE OPERATION. DUPLICATE YOUR FILES FIRST, to keep an intact copy.
 # ROOT_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion/"  # Change this to your folder
-ROOT_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/bodyLms_768"
+ROOT_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/armsposes_T11_fullrun_dedupable"
 TRIM_ON_SPLIT = True
 SPLIT_PATTERN = r"^[0-9,A-Z,a-z]+,\d+,http"
-NTH_PATTERN = 40  # Change this to the number of entries you want to keep
+NTH_PATTERN = 1000  # Change this to the number of entries you want to keep
 TRIM_LENGTH = 4200 * NTH_PATTERN  # about 4000-4200 lines per entry
 # note that the make_video CSVs have multiline elements, so 80000 lines is about 20 entries
 

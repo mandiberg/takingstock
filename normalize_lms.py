@@ -46,6 +46,7 @@ SKIP_BODY = True # skip body landmarks. mostly you want to skip when doing obj b
                 # or are just redoing hands
 REPROCESS_HANDS = False # do hands
 ACCEPT_EXSISTING_HANDS = True # if true, it will accept existing data and update bool in SQL to tru
+REPROCESSED_BODY = True 
 IS_SEGMENT_BIG = False # use SegmentBig table. IF False, and IS_SSD is false, it will use Encodings table
 TESTING = False # if true, will not do any DB writes
 DETECTIONS_ONLY = True
@@ -84,8 +85,8 @@ if class_token:
     # SORT_TYPE = "obj_bbox_fusion"
 else: 
     # SegmentHelper_name = 'SegmentOct20'
-    SegmentHelper_name = 'SegmentHelper_T11_business'
-    SegmentFolder = "/Volumes/OWC54/segment_images"
+    SegmentHelper_name = 'SegmentHelper_T4_T11_T37_T40'
+    SegmentFolder = "/Volumes/OWC54/segment_images_T4etc"
     SegmentFolder = None
     # SegmentHelper_name = 'SegmentHelper_T11_Oct20_COCO_Custom'
 
