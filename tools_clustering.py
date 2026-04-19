@@ -25,7 +25,7 @@ class ToolsClustering:
         self.MIN_DETECTION_CONFIDENCE = 0.4
         self.DEFAULT_HAND_POSITION = [0.0, 8.0, 0.0]
         self.TIE_CLASS_ID = 27
-        self.USE_WHITELIST = True
+        self.USE_ALLOWLIST = True
         self.FLOWER_CLASSES = {104, 105, 106, 107}
         self.HAND_ONLY_CLASSES = {108, 109}
         self.COVID_MASK_CLASSES = {110}
@@ -73,8 +73,8 @@ class ToolsClustering:
             'feet_object',
         )
         all_class_ids = set(range(0, 120))
-        self._whitelist_slots = tuple(self.COMPATIBILITY_SLOT_COLUMNS)
-        self._whitelist_reject_counts = {slot: 0 for slot in self._whitelist_slots}
+        self._allowlist_slots = tuple(self.COMPATIBILITY_SLOT_COLUMNS)
+        self._allowlist_reject_counts = {slot: 0 for slot in self._allowlist_slots}
         self.compatibility_matrix = self._load_compatibility_matrix_from_csv(all_class_ids)
         self._slot_unassigned_reason_counts = {
             'waist': {},
@@ -477,13 +477,13 @@ class ToolsClustering:
             }
         return lookup
 
-    def _get_slot_key_for_whitelist_slot(self, slot_name):
+    def _get_slot_key_for_allowlist_slot(self, slot_name):
         if slot_name in ('left_hand', 'right_hand', 'hand'):
             return 'hand'
         return slot_name
 
     def _get_compatibility_level(self, class_id_value, slot_name):
-        slot_key = self._get_slot_key_for_whitelist_slot(slot_name)
+        slot_key = self._get_slot_key_for_allowlist_slot(slot_name)
         if slot_key not in self.COMPATIBILITY_SLOT_COLUMNS:
             return 2
         if class_id_value is None:
@@ -567,25 +567,25 @@ class ToolsClustering:
             for slot, reasons in self._slot_unassigned_reason_counts.items()
         }
 
-    def _passes_slot_whitelist(self, detection_dict, slot_name):
+    def _passes_slot_allowlist(self, detection_dict, slot_name):
         """Compatibility-gated eligibility for a slot (0=reject, 1=de-emphasize, 2=prefer)."""
         class_id_value = self._get_detection_class_id(detection_dict)
         return self._get_compatibility_level(class_id_value, slot_name) > 0
 
-    def _record_whitelist_reject(self, slot_name):
-        """Increment whitelist reject counter for one slot."""
-        if not self.USE_WHITELIST:
+    def _record_allowlist_reject(self, slot_name):
+        """Increment allowlist reject counter for one slot."""
+        if not self.USE_ALLOWLIST:
             return
-        if slot_name in self._whitelist_reject_counts:
-            self._whitelist_reject_counts[slot_name] += 1
+        if slot_name in self._allowlist_reject_counts:
+            self._allowlist_reject_counts[slot_name] += 1
 
-    def reset_whitelist_reject_counts(self):
-        """Reset per-batch whitelist reject counters."""
-        self._whitelist_reject_counts = {slot: 0 for slot in self._whitelist_slots}
+    def reset_allowlist_reject_counts(self):
+        """Reset per-batch allowlist reject counters."""
+        self._allowlist_reject_counts = {slot: 0 for slot in self._allowlist_slots}
 
-    def get_whitelist_reject_counts(self):
-        """Return a copy of current whitelist reject counters."""
-        return dict(self._whitelist_reject_counts)
+    def get_allowlist_reject_counts(self):
+        """Return a copy of current allowlist reject counters."""
+        return dict(self._allowlist_reject_counts)
 
     def reset_class_assignment_debug_counts(self):
         """Reset per-batch assignment counters for tracked class IDs."""
@@ -1077,16 +1077,16 @@ class ToolsClustering:
             tie_bbox = tie_det['bbox']
             tie_detection_id = tie_det['detection_id']
 
-            hand_allowed = self._passes_slot_whitelist(tie_det, 'hand')
-            shoulder_allowed = self._passes_slot_whitelist(tie_det, 'shoulder')
-            mouth_allowed = self._passes_slot_whitelist(tie_det, 'mouth')
+            hand_allowed = self._passes_slot_allowlist(tie_det, 'hand')
+            shoulder_allowed = self._passes_slot_allowlist(tie_det, 'shoulder')
+            mouth_allowed = self._passes_slot_allowlist(tie_det, 'mouth')
 
             if not hand_allowed:
-                self._record_whitelist_reject('hand')
+                self._record_allowlist_reject('hand')
             if not shoulder_allowed:
-                self._record_whitelist_reject('shoulder')
+                self._record_allowlist_reject('shoulder')
             if not mouth_allowed:
-                self._record_whitelist_reject('mouth')
+                self._record_allowlist_reject('mouth')
 
             neck_match = shoulder_allowed and self.is_shoulder_object(tie_bbox, left_shoulder, right_shoulder)
             left_touching = hand_allowed and self.is_touching_hand(left_knuckle, tie_bbox)
@@ -1284,13 +1284,13 @@ class ToolsClustering:
             if self._is_class_in(det, self.HAND_ONLY_CLASSES | self.COVID_MASK_CLASSES | self.FULL_FACE_TOP_BIASED_CLASSES):
                 continue
 
-            left_eye_allowed = self._passes_slot_whitelist(det, 'left_eye')
-            right_eye_allowed = self._passes_slot_whitelist(det, 'right_eye')
+            left_eye_allowed = self._passes_slot_allowlist(det, 'left_eye')
+            right_eye_allowed = self._passes_slot_allowlist(det, 'right_eye')
 
             if not left_eye_allowed:
-                self._record_whitelist_reject('left_eye')
+                self._record_allowlist_reject('left_eye')
             if not right_eye_allowed:
-                self._record_whitelist_reject('right_eye')
+                self._record_allowlist_reject('right_eye')
 
             if not left_eye_allowed and not right_eye_allowed:
                 continue
@@ -1371,22 +1371,22 @@ class ToolsClustering:
             if self._is_class_in(det, self.HAND_ONLY_CLASSES):
                 continue
 
-            top_face_allowed = self._passes_slot_whitelist(det, 'top_face')
-            mouth_allowed = self._passes_slot_whitelist(det, 'mouth')
-            shoulder_allowed = self._passes_slot_whitelist(det, 'shoulder')
-            waist_allowed = self._passes_slot_whitelist(det, 'waist')
-            feet_allowed = self._passes_slot_whitelist(det, 'feet')
+            top_face_allowed = self._passes_slot_allowlist(det, 'top_face')
+            mouth_allowed = self._passes_slot_allowlist(det, 'mouth')
+            shoulder_allowed = self._passes_slot_allowlist(det, 'shoulder')
+            waist_allowed = self._passes_slot_allowlist(det, 'waist')
+            feet_allowed = self._passes_slot_allowlist(det, 'feet')
 
             if not top_face_allowed:
-                self._record_whitelist_reject('top_face')
+                self._record_allowlist_reject('top_face')
             if not mouth_allowed:
-                self._record_whitelist_reject('mouth')
+                self._record_allowlist_reject('mouth')
             if not shoulder_allowed:
-                self._record_whitelist_reject('shoulder')
+                self._record_allowlist_reject('shoulder')
             if not waist_allowed:
-                self._record_whitelist_reject('waist')
+                self._record_allowlist_reject('waist')
             if not feet_allowed:
-                self._record_whitelist_reject('feet')
+                self._record_allowlist_reject('feet')
 
             if self._is_class_in(det, self.COVID_MASK_CLASSES):
                 if 'mouth_object' not in tie_locked_slots and mouth_allowed and self.is_covid_mask_object(bbox):
@@ -1788,10 +1788,10 @@ class ToolsClustering:
             if fail_examples:
                 print(f"{label}[COUNT] class {class_id} parse_fail_examples: {fail_examples}")
 
-        if self.USE_WHITELIST:
-            whitelist_rejects = self.get_whitelist_reject_counts()
-            compact_rejects = {k: int(v) for k, v in whitelist_rejects.items() if int(v) > 0}
-            print(f"{label}[COUNT] Whitelist rejects by slot: {compact_rejects if compact_rejects else 'none'}")
+        if self.USE_ALLOWLIST:
+            allowlist_rejects = self.get_allowlist_reject_counts()
+            compact_rejects = {k: int(v) for k, v in allowlist_rejects.items() if int(v) > 0}
+            print(f"{label}[COUNT] Allowlist rejects by slot: {compact_rejects if compact_rejects else 'none'}")
 
         unassigned_reasons = self.get_unassigned_reason_counts()
         compact_unassigned = {
