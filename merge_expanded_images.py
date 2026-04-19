@@ -1053,6 +1053,15 @@ def save_installation_metas(subfolders, output_path, csv_file):
             print(f"    [_lookup] no match for cluster_no={cluster_no!r}")
         return entry[idx] if entry else None
 
+    # Drop rows for subfolders that produced no video (skipped due to too few/no images)
+    before_count = len(installation_metas)
+    installation_metas = installation_metas[
+        installation_metas["cluster_no"].apply(lambda x: str(x) in video_dims)
+    ].reset_index(drop=True)
+    dropped = before_count - len(installation_metas)
+    if dropped:
+        print(f"[save_installation_metas] dropped {dropped} row(s) with no matching video")
+
     installation_metas["width"] = installation_metas["cluster_no"].apply(lambda x: _lookup(x, 0))
     installation_metas["height"] = installation_metas["cluster_no"].apply(lambda x: _lookup(x, 1))
     installation_metas["ratio"] = installation_metas.apply(
