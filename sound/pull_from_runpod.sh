@@ -18,8 +18,8 @@ set -euo pipefail
 # -----------------------------------------------------------------------
 RUNPOD_KEY="$HOME/.ssh/id_ed25519"
 RUNPOD_USER="root"
-RUNPOD_HOST="213.192.2.107"
-RUNPOD_PORT="40046"
+RUNPOD_HOST="213.173.98.69"
+RUNPOD_PORT="48304"
 REMOTE_DIR="/root/install_make_tts/downloads"
 LOCAL_DIR="/Users/tenchc/Documents/GitHub/taking_stock_production/tts_downloads"
 # -----------------------------------------------------------------------

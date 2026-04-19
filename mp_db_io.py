@@ -101,8 +101,10 @@ class DataIO:
             login = os.getlogin()
             print(f"Running as user: {login}")
             if login == "tenchc":
-                self.ROOT4 = self.ROOT18 = self.ROOT54 = self.ROOT_PROD = self.ROOTSSD = self.ROOT_DBx = os.path.join(self.home, "Documents/GitHub/taking_stock_production")
-                self.ROOT  = self.ROOT_PROD = os.path.join(self.home, "Documents/GitHub/taking_stock_production/segment_images")
+                self.ROOT4  = self.ROOT54 = self.ROOT_PROD = self.ROOTSSD = self.ROOT_DBx = os.path.join(self.home, "Documents/GitHub/taking_stock_production")
+                self.ROOT  = self.ROOT18 = self.ROOT_PROD = os.path.join(self.home, "Documents/GitHub/taking_stock_production/segment_images")
+                print(f'ROOT IS {self.ROOT}')
+                print(f'ROOT18 IS {self.ROOT18}')
                 self.IS_TENCH = True
                 # and specific db dict info, when we get to that point
                 pass
@@ -250,13 +252,20 @@ class DataIO:
 
 
     def write_csv(self,path,value_list):
-
-        # headers = header_list
-
-        with open(path, 'a') as csvfile: 
-        # with open('lat_lon', 'w') as csvfile:
-            writer=csv.writer(csvfile, delimiter=',')
-            writer.writerow(value_list)
+        #check for if value list is a list or dict, if list then do as normal, if dict then use keys as headers
+        if isinstance(value_list, dict):
+            print(f'value_list is a dict, keys are {value_list.keys()}')
+            file_is_empty = not os.path.exists(path) or os.path.getsize(path) == 0
+            with open(path, 'a') as csvfile:
+                writer = csv.writer(csvfile, delimiter=',')
+                if file_is_empty:
+                    writer.writerow(value_list.keys())
+                    writer.writerow(value_list.values())
+                
+        else:
+            with open(path, 'a') as csvfile: 
+                writer=csv.writer(csvfile, delimiter=',')
+                writer.writerow(value_list)
 
     def save_img_list(self, folder):
         img_list = []

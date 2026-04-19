@@ -474,7 +474,7 @@ class SortPose:
         self.MAX_IMAGE_EDGE_MULTIPLIER = self.image_edge_multiplier #testing
         print("output_dims",self.output_dims)
 
-    def set_counters(self,ROOT,cluster_no,start_img_name,start_site_image_id,mkdir=True):
+    def set_counters(self,ROOT,cluster_no,start_img_name,start_site_image_id,hsv_cluster=None,pose_no=None,mkdir=True):
         self.negmargin_count = 0
         self.toosmall_count = 0 
         self.outfolder = os.path.join(ROOT,"cluster"+str(cluster_no)+"_"+str(time.time()))
@@ -498,8 +498,9 @@ class SortPose:
             "last_image_enc":None,
             "last_image_hsv":None,
             "last_image_lum":None,
-            "cluster_no":cluster_no
-
+            "cluster_no":cluster_no,
+            "hsv_no":hsv_cluster,
+            "pose_no":pose_no
         }
 
     # def ensure_lms_list(self, lms):

@@ -54,7 +54,7 @@ SegmentHelper_name = 'SegmentHelper_T11_Oct20_COCO_Custom_evens_quarters'
 # SegmentHelper_name = None
 # SATYAM, this is MM specific
 # for when I'm using files on my SSD vs RAID
-IS_SSD = False
+IS_SSD = True
 SSD_PATH = "/Volumes/OWC54/segment_images_40xDetections"
 #IS_MOVE is in move_toSSD_files.py
 
@@ -227,6 +227,8 @@ elif CURRENT_MODE == 'heft_torso_keywords':
         SegmentFolder = None
     if io.IS_TENCH or io.IS_MICHELLE:
         SegmentFolder = io.ROOT
+        CSV_FOLDER = "/Users/tenchc/Documents/GitHub/taking_stock_production/body3D_segmentbig_useall256_CSVs_test"
+        print(f'CSV FOLDER IS {CSV_FOLDER}')
         print("IO ROOT", io.ROOT)
         print("SEGMENT FOLDER", SegmentFolder)
     # META = True
@@ -485,7 +487,7 @@ if not GENERATE_FUSION_PAIRS:
     FUSION_PAIRS = FUSION_PAIRS_LEGACY_LIST
     print("FUSION_PAIRS", FUSION_PAIRS)
 METAS_FILE = "metas.csv"
-
+INSTALLATION_METAS_FILE = "installation.csv"
 NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 
 # if IS_SSD:
@@ -1779,8 +1781,18 @@ def shift_bbox(bbox, extension_pixels):
 def linear_test_df(df_sorted, itter=None):
 
     def save_image_metas(row):
+        print(f'counter dict is {sort.counter_dict}')
         if sort.VERBOSE: print("row", row)
         if sort.VERBOSE: print("save_image_metas for use in TTS")
+        if sort.VERBOSE: print("saving installation metas")
+        installation_metas = {
+            "cluster_no": sort.counter_dict["cluster_no"],
+            "hsv_no": sort.counter_dict["hsv_no"],
+            "pose_no": sort.counter_dict["pose_no"]
+        }
+        installation_metas_path = os.path.join(sort.counter_dict["outfolder"],INSTALLATION_METAS_FILE)
+        io.write_csv(installation_metas_path, installation_metas)   
+
         # parent_row = df_segment[df_segment['image_id'] == row['image_id']]
         # image_id = parent_row['image_id'].values[0] #NON NN
         image_id = row['image_id']
@@ -1803,8 +1815,10 @@ def linear_test_df(df_sorted, itter=None):
             else:
                 description = description
             metas = [image_id, description, topic_score]
+            
             metas_path = os.path.join(sort.counter_dict["outfolder"],METAS_FILE)
             io.write_csv(metas_path, metas)
+            
         # print(image_id, description[0], topic_score)
         # return([image_id, description[0], topic_score])
 
@@ -2170,7 +2184,7 @@ def set_my_counter_dict(this_topic=None, cluster_no=None, pose_no=None, hsv_no=N
     if MODE == 0 or (PURGING_DUPES and MODE == 1): mkdir = False
     else: mkdir = True
     print("mkdir", mkdir, "root", io.ROOT)
-    sort.set_counters(io.ROOT,cluster_string, start_img_name,start_site_image_id, mkdir)
+    sort.set_counters(io.ROOT,cluster_string, start_img_name,start_site_image_id, hsv_cluster=hsv_no, pose_no=pose_no, mkdir=mkdir)
 
     if VERBOSE: print("set sort.counter_dict:" )
     if VERBOSE: print(sort.counter_dict)
