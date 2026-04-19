@@ -55,7 +55,7 @@ yolo_model = YOLO("yolov8x.pt").to(device)  # load a pretrained YOLOv8x model
 yolo_custom_model = YOLO("models/takingstock_c36_v1_yolo26x/weights/best.pt").to(device)
 # yolo_custom_model = YOLO("models/takingstock_c11v3_yolov8m/weights/best.pt").to(device)
 
-VERBOSE = False
+VERBOSE = True
 ocr = OCRTools(DEBUGGING=True)
 yolo = YOLOTools(DEBUGGING=True, VERBOSE=VERBOSE)
 
@@ -81,9 +81,9 @@ DET_ID_THRESHOLD_COCO = 12455146
 IOU_THRESHOLD = 0.7
 ADJACENCY_THRESHOLD_PX = 10
 
-FILE_FOLDER = "/Volumes/LaCie/segment_images_82_money_cards"
-# FILE_FOLDER = "/Volumes/LaCie/segment_images_COCO" # must be a folder holding the site folder(s)
-# FILE_FOLDER ="/Volumes/OWC54/segment_images_40xDetections"
+# FILE_FOLDER = "/Volumes/LaCie/segment_images_83_bag" #halfway through
+# FILE_FOLDER = "/Volumes/OWC5/segment_images_book_clock_bowl" 
+FILE_FOLDER ="/Volumes/OWC54/segment_images"
 # FILE_FOLDER = "/Volumes/RAID18" # must be a folder holding the site folder(s)
 # MAKE_VIDEO_CSVS_PATH = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/book_csvs"
 MAKE_VIDEO_CSVS_PATH = None  # to process all images in folder

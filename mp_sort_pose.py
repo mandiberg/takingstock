@@ -136,7 +136,7 @@ class SortPose:
             self.MULTIPLIER = self.HSVMULTIPLIER
             self.DUPED = self.FACE_DUPE_DIST
             self.HSV_DELTA_MAX = self.HSV_DELTA_MAX * 1.5
-        elif self.SORT_TYPE == "planar" or "obj_bbox" in self.SORT_TYPE:
+        elif self.SORT_TYPE is not None and ((self.SORT_TYPE == "planar") or ("obj_bbox" in self.SORT_TYPE)):
             self.MIND = self.MINBODYDIST * 1.5
             self.MAXD = self.MAXBODYDIST
             self.MULTIPLIER = self.HSVMULTIPLIER * (self.MINBODYDIST / self.MINFACEDIST)
@@ -234,7 +234,7 @@ class SortPose:
             self.CLUSTER_TYPE = "fingertips_positions" # fingertips_positions
             self.SUBSET_LANDMARKS = self.HAND_LMS_POINTER
             self.SORT_TYPE = "planar_hands"
-        elif "hands" in self.SORT_TYPE:
+        elif self.SORT_TYPE is not None and "hands" in self.SORT_TYPE:
             # catches any hands
             self.CLUSTER_TYPE = "planar_hands"
             self.SUBSET_LANDMARKS = self.HAND_LMS

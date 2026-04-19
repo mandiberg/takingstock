@@ -37,7 +37,7 @@ NOSE_ID=0
 
 Base = declarative_base()
 VERBOSE = False
-IS_SSD = True
+IS_SSD = False
 SSD_PATH = None
 
 SKIP_EXISTING = False # Skips images with a normed bbox but that have Images.h - I think only applies to phone bbox
@@ -50,7 +50,7 @@ REPROCESSED_BODY = True
 REPROCESSED_BODY_DIFF_THRESH = 0.05
 IS_SEGMENT_BIG = False # use SegmentBig table. IF False, and IS_SSD is false, it will use Encodings table
 TESTING = False # if true, will not do any DB writes
-DETECTIONS_ONLY = True
+DETECTIONS_ONLY = False
 
 # join on helper to limit scope and use SSD
 INNER_JOIN_HELPER = True
@@ -68,7 +68,7 @@ INNER_JOIN_HELPER = True
 # SegmentHelperObject_67_phone 
 # SegmentHelperObject_41_cup_glass (big)
 
-LIMIT= 10000000
+LIMIT= 20000000
 # Initialize the counter
 counter = 2000
 STATS_PRINT_EVERY = 1000
@@ -91,11 +91,12 @@ if class_token:
     print("SegmentFolder", SegmentFolder)
     # SORT_TYPE = "obj_bbox_fusion"
 else: 
-    # SegmentHelper_name = 'SegmentOct20'
-    SegmentHelper_name = 'SegmentHelper_T11_business'
-    SegmentFolder = "/Volumes/OWC54/segment_images"
-    # SegmentFolder = None
+    # SegmentHelper_name = 'SegmentHelper_T11_Business'
+    SegmentHelper_name = 'SegmentHelper_T11_Oct20_COCO_Custom'
+    # SegmentFolder = "/Volumes/OWC54/segment_images"
+    SegmentFolder = None
     # SegmentHelper_name = 'SegmentHelper_T11_Oct20_COCO_Custom'
+    # INNER_JOIN_TABLE = "SegmentHelperObject_101_flowers_other"
 
     # HAXXXORS THIS_CLASS_ID is commented out below so that it does ALL classes
     # THIS_CLASS_ID = 82 # for object bbox normalization
@@ -957,8 +958,10 @@ if USE_OBJ:
     # join(SegmentHelper, SegmentHelper.image_id == Detections.image_id).\
 
     #filter(Detections.class_id == THIS_CLASS_ID).\
-
-
+    if not REPROCESSED_BODY:
+        distinct_image_ids_query = distinct_image_ids_query.filter(Encodings.mongo_body_landmarks_norm.is_(None))
+    if not SKIP_BODY:
+        distinct_image_ids_query = distinct_image_ids_query.filter(Encodings.mongo_face_landmarks == 1)
     # distinct_image_ids_query = select(Images.image_id.distinct(), Images.h, Images.w, Encodings.bbox).\
     #     outerjoin(SegmentTable,Images.image_id == SegmentTable.image_id).\
     #     outerjoin(Detections,Detections.image_id == SegmentTable.image_id).\
@@ -1013,11 +1016,15 @@ elif not SKIP_BODY and IS_SEGMENT_BIG == False:
     distinct_image_ids_query = select(Images.image_id.distinct(), Images.h, Images.w, Encodings.bbox, Encodings.face_height, Encodings.nose_pixel_x, Encodings.nose_pixel_y).\
         outerjoin(Images, Images.image_id == Encodings.image_id).\
         filter(Encodings.bbox != None).\
+        filter(Encodings.is_face == 1).\
         filter(Encodings.two_noses.is_(None)).\
         filter(Encodings.mongo_body_landmarks == 1).\
         limit(LIMIT)
     if not REPROCESSED_BODY:
         distinct_image_ids_query = distinct_image_ids_query.filter(Encodings.mongo_body_landmarks_norm.is_(None))
+    else:
+        # skip the ones with a mongo_body_landmarks_norm_recalc value
+        distinct_image_ids_query = distinct_image_ids_query.filter(Encodings.mongo_body_landmarks_norm_recalc.is_(None))
     
     if DETECTIONS_ONLY: 
         print("DETECTIONS_ONLY: limiting BODY query to images with Detections")
@@ -1027,7 +1034,16 @@ elif not SKIP_BODY and IS_SEGMENT_BIG == False:
         filter(Detections.bbox != None).\
         filter(Detections.conf > 0).\
         limit(LIMIT)
-        
+    if INNER_JOIN_HELPER:
+        print(f"SUBSELECT_ON_CLASS_ID: limiting BODY Encodings query to {INNER_JOIN_HELPER}")
+        distinct_image_ids_query = distinct_image_ids_query.\
+        limit(None).\
+        join(SegmentHelper, SegmentHelper.image_id == Encodings.image_id).\
+        limit(LIMIT)
+
+        # add this when using a second segment inner join
+        # join(SegmentHelperInnerJoin, SegmentHelperInnerJoin.image_id == Encodings.image_id).\
+
 else:
     print(f"doing something else that wasn't caught because SKIP_BODY is {SKIP_BODY}, REPROCESS_HANDS is {REPROCESS_HANDS} and IS_SEGMENT_BIG is {IS_SEGMENT_BIG}")
 
@@ -1080,7 +1096,7 @@ if VERBOSE:
     print(workbench_query)
     print("=" * 100)
 
-
+io.print_sqlalchemy_query(engine,distinct_image_ids_query)
 results = session.execute(distinct_image_ids_query).fetchall()
 print("query executed, results length", len(results))
 # make a dictionary of image_id to shape

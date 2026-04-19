@@ -5,6 +5,7 @@ from my_declarative_base import Base, Images, Detections, Encodings
 import pickle
 import numpy as np
 import json
+import os
 import pandas as pd
 
 class ToolsClustering:
@@ -33,6 +34,32 @@ class ToolsClustering:
         self.EYE_OR_FOREHEAD_CLASSES = {114}
         self.EYE_ONLY_CLASSES = {115}
         self.HAND_OR_EYE_CLASSES = {116, 117, 118, 119}
+        self.HANDHELD_LIKE_CLASSES = {39, 40, 41, 67, 73, 76, 77, 79, 80, 82, 95}
+        # Lower-body guardrail for handheld-like classes.
+        # Goal: reduce implausible feet/waist pulls while preserving clear lower-body cases.
+        self.SMALL_HANDHELD_CLASSES = {67, 82, 95}  # legacy stricter subset
+        self.SMALL_HANDHELD_LOWER_BODY_CONF_PENALTY = 0.24
+        self.SMALL_HANDHELD_LOWER_BODY_DISTANCE_MARGIN = 0.35
+        self.HANDHELD_LIKE_LOWER_BODY_MIN_SCORE = 0.62
+        self.LOWER_BODY_VISIBILITY_MIN = 0.45
+        self.LOWER_BODY_OCCLUSION_PENALTY = 0.22
+        self.CLASS67_EXTRA_LOWER_BODY_PENALTY = {
+            'waist': 0.10,
+            'feet': 0.20,
+        }
+        self.COMPATIBILITY_SLOT_COLUMNS = (
+            'hand', 'left_eye', 'right_eye', 'top_face', 'mouth', 'shoulder', 'waist', 'feet'
+        )
+        self.COMPATIBILITY_SCORE_BIAS = {
+            0: -9999.0,  # hard reject
+            1: -0.12,    # de-emphasize
+            2: 0.06,     # prefer
+        }
+        self.COMPATIBILITY_MATRIX_PATH = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)),
+            'utilities','data',
+            'object_slot_compatibility_matrix.csv',
+        )
         self.DEBUG_TRACKED_CLASS_IDS = tuple(range(110, 120))
         self._class_assignment_slot_names = (
             'left_hand_object',
@@ -46,110 +73,13 @@ class ToolsClustering:
             'feet_object',
         )
         all_class_ids = set(range(0, 120))
-
-        nonsense_class_ids_dict = {
-            # Hand: exclude things that are basically never hand-held in your dataset.
-            'hand': {
-                # 1, 2, 3, 4, 5, 6, 7, 8,             # vehicles
-                9, 10, 11, 12, 13,                  # street fixtures / public infrastructure
-                # 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,  # animals
-                # 56, 57, 58, 59, 60, 61, 62,         # furniture / room fixtures
-                # 68, 69, 70, 71, 72,                 # appliances / kitchen fixtures
-            },
-
-            # Left eye: be much stricter here; large/background classes are usually nonsense in the eye zone.
-            'left_eye': {
-                1, 2, 3, 4, 5, 6, 7, 8,             # vehicles
-                9, 10, 11, 12, 13,                  # street fixtures / public infrastructure
-                14, 15, 16, 17, 18, 19, 20, 21, 22, 23,  # animals
-                24, 25, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38,  # bags, luggage, and sports gear
-                42, 43, 44, 45,                     # utensils / bowl
-                46, 47, 48, 49, 50, 51, 52, 53, 54, 55,  # food items
-                56, 57, 58, 59, 60, 61, 62,         # furniture / room fixtures / tv
-                68, 69, 70, 71, 72,                 # appliances / kitchen fixtures
-                74, 75, 77, 78,                     # decor / stuffed object / hair appliance
-            },
-
-            # Right eye: same logic as left eye; keep this strict because weird background hits show up here easily.
-            'right_eye': {
-                1, 2, 3, 4, 5, 6, 7, 8,             # vehicles
-                9, 10, 11, 12, 13,                  # street fixtures / public infrastructure
-                14, 15, 16, 17, 18, 19, 20, 21, 22, 23,  # animals
-                24, 25, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38,  # bags, luggage, and sports gear
-                42, 43, 44, 45,                     # utensils / bowl
-                46, 47, 48, 49, 50, 51, 52, 53, 54, 55,  # food items
-                56, 57, 58, 59, 60, 61, 62,         # furniture / room fixtures / tv
-                68, 69, 70, 71, 72,                 # appliances / kitchen fixtures
-                74, 75, 77, 78,                     # decor / stuffed object / hair appliance
-            },
-
-            # Top face: exclude large scene/background classes, but keep small handheld occluders plausible.
-            'top_face': {
-                1, 2, 3, 4, 5, 6, 7, 8,             # vehicles
-                9, 10, 11, 12, 13,                  # street fixtures / public infrastructure
-                14, 15, 16, 17, 18, 19, 20, 21, 22, 23,  # animals
-                30, 31, 36, 37,                     # long outdoor sports gear / boards
-                56, 57, 58, 59, 60, 61, 62,         # furniture / room fixtures / tv
-                68, 69, 70, 71, 72,                 # appliances / kitchen fixtures
-            },
-
-            # Mouth: exclude large/background classes, but keep food, drink, and small handheld occluders available.
-            'mouth': {
-                1, 2, 3, 4, 5, 6, 7, 8,             # vehicles
-                9, 10, 11, 12, 13,                  # street fixtures / public infrastructure
-                14, 15, 16, 17, 18, 19, 20, 21, 22, 23,  # animals
-                29, 30, 31, 32, 33, 34, 35, 36, 37, 38,  # sports gear and long outdoor equipment
-                56, 57, 58, 59, 60, 61, 62,         # furniture / room fixtures / tv
-                68, 69, 70, 71, 72,                 # appliances / kitchen fixtures
-                74, 75, 77,                         # decor / stuffed object
-            },
-
-            # Shoulder: keep backpack, handbag, tie, laptop, phone, and book plausible; drop most other background/object classes.
-            'shoulder': {
-                1, 2, 3, 4, 5, 6, 7, 8,             # vehicles
-                9, 10, 11, 12, 13,                  # street fixtures / public infrastructure
-                14, 15, 16, 17, 18, 19, 20, 21, 22, 23,  # animals
-                29, 30, 31, 32, 33, 34, 35, 36, 37, 38,  # sports gear and long outdoor equipment
-                # 39, 40, 41, 42, 43, 44, 45,         # drinkware / utensils / bowl
-                # 46, 47, 48, 49, 50, 51, 52, 53, 54, 55,  # food items
-                56, 57, 58, 59, 60, 61, 62,         # furniture / room fixtures / tv
-                64, 65, 66,                         # desktop peripherals
-                68, 69, 70, 71, 72,                 # appliances / kitchen fixtures
-                74, 75, 76, 77, 78, 79,             # decor / scissors / stuffed object / bathroom items
-            },
-
-            # Waist: tuned to keep seating/support objects plausible (chair/couch/bed), while excluding obvious nonsense.
-            'waist': {
-                1, 2, 3, 4, 5, 6, 7, 8,             # vehicles
-                9, 10, 11, 12, 13,                  # street fixtures / public infrastructure
-                14, 15, 16, 17, 18, 19, 20, 21, 22, 23,  # animals
-                29, 30, 31, 32, 33, 34, 35, 36, 37, 38,  # sports gear and long outdoor equipment
-                39, 40, 41, 42, 43, 44, 45,         # drinkware / utensils / bowl
-                46, 47, 48, 49, 50, 51, 52, 53, 54, 55,  # food items
-                58, 61, 62,                         # plant / toilet / tv
-                64, 65, 66,                         # desktop peripherals
-                68, 69, 70, 71, 72,                 # appliances / kitchen fixtures
-                74, 75, 76, 77, 78, 79,             # decor / scissors / stuffed object / bathroom items
-            },
-
-            # Feet: broad and intentionally permissive to allow occasional meaningful lower-body objects (e.g., skis).
-            'feet': {
-                1, 2, 3, 4, 5, 6, 7, 8,             # vehicles
-                9, 10, 11, 12, 13,                  # street fixtures / public infrastructure
-                14, 15, 16, 17, 18, 19, 20, 21, 22, 23,  # animals
-                42, 43, 44,                         # utensils
-                46, 47, 48, 49, 50, 51, 52, 53, 54, 55,  # food items
-                68, 69, 70, 71, 72,                 # appliances / kitchen fixtures
-                74, 75, 77, 78,                     # decor / stuffed object / hair appliance
-            },
-        }
-
-        self.WHITELIST_BY_SLOT = {
-            slot_name: all_class_ids - nonsense_class_ids
-            for slot_name, nonsense_class_ids in nonsense_class_ids_dict.items()
-        }
-        self._whitelist_slots = tuple(self.WHITELIST_BY_SLOT.keys())
+        self._whitelist_slots = tuple(self.COMPATIBILITY_SLOT_COLUMNS)
         self._whitelist_reject_counts = {slot: 0 for slot in self._whitelist_slots}
+        self.compatibility_matrix = self._load_compatibility_matrix_from_csv(all_class_ids)
+        self._slot_unassigned_reason_counts = {
+            'waist': {},
+            'feet': {},
+        }
         self.reset_class_assignment_debug_counts()
         self.reset_class_pipeline_debug_counts()
         # Face object constraints to avoid large background objects
@@ -490,19 +420,157 @@ class ToolsClustering:
         class_id_value = self._get_detection_class_id(detection_dict)
         return class_id_value in class_id_set if class_id_value is not None else False
 
-    def _passes_slot_whitelist(self, detection_dict, slot_name):
-        """Check whitelist eligibility for a given slot."""
-        if not self.USE_WHITELIST:
-            return True
+    def _load_compatibility_matrix_from_csv(self, all_class_ids):
+        if not os.path.exists(self.COMPATIBILITY_MATRIX_PATH):
+            raise FileNotFoundError(
+                f"Compatibility matrix CSV not found: {self.COMPATIBILITY_MATRIX_PATH}"
+            )
 
-        allowed_class_ids = self.WHITELIST_BY_SLOT.get(slot_name)
-        if allowed_class_ids is None:
-            return True
+        try:
+            matrix_df = pd.read_csv(self.COMPATIBILITY_MATRIX_PATH)
+        except Exception as exc:
+            raise RuntimeError(
+                f"Failed to read compatibility matrix CSV: {self.COMPATIBILITY_MATRIX_PATH}"
+            ) from exc
 
-        class_id_value = self._get_detection_class_id(detection_dict)
+        required_cols = ['class_id', *self.COMPATIBILITY_SLOT_COLUMNS]
+        missing_cols = [col for col in required_cols if col not in matrix_df.columns]
+        if missing_cols:
+            raise ValueError(
+                "Compatibility matrix missing required columns: " + ", ".join(missing_cols)
+            )
+
+        matrix_df = matrix_df[required_cols].copy()
+        matrix_df['class_id'] = pd.to_numeric(matrix_df['class_id'], errors='coerce')
+        if matrix_df['class_id'].isna().any():
+            raise ValueError("Compatibility matrix has non-numeric class_id values")
+        matrix_df['class_id'] = matrix_df['class_id'].astype(int)
+
+        if matrix_df['class_id'].duplicated().any():
+            dup_ids = matrix_df[matrix_df['class_id'].duplicated()]['class_id'].tolist()
+            raise ValueError(f"Compatibility matrix has duplicate class_id rows: {dup_ids[:10]}")
+
+        unknown_ids = sorted(list(set(matrix_df['class_id'].tolist()) - set(all_class_ids)))
+        if unknown_ids:
+            raise ValueError(f"Compatibility matrix has unknown class_id values: {unknown_ids[:10]}")
+
+        missing_ids = sorted(list(set(all_class_ids) - set(matrix_df['class_id'].tolist())))
+        if missing_ids:
+            raise ValueError(
+                f"Compatibility matrix missing class_id rows: {missing_ids[:10]}"
+            )
+
+        for col in self.COMPATIBILITY_SLOT_COLUMNS:
+            numeric_col = pd.to_numeric(matrix_df[col], errors='coerce')
+            if numeric_col.isna().any():
+                raise ValueError(f"Compatibility matrix column '{col}' has non-numeric values")
+            if (~numeric_col.isin([0, 1, 2])).any():
+                raise ValueError(f"Compatibility matrix column '{col}' must contain only 0, 1, or 2")
+            matrix_df[col] = numeric_col.astype(int)
+
+        lookup = {}
+        for row in matrix_df.to_dict('records'):
+            class_id = int(row['class_id'])
+            lookup[class_id] = {
+                slot: int(row.get(slot, 2))
+                for slot in self.COMPATIBILITY_SLOT_COLUMNS
+            }
+        return lookup
+
+    def _get_slot_key_for_whitelist_slot(self, slot_name):
+        if slot_name in ('left_hand', 'right_hand', 'hand'):
+            return 'hand'
+        return slot_name
+
+    def _get_compatibility_level(self, class_id_value, slot_name):
+        slot_key = self._get_slot_key_for_whitelist_slot(slot_name)
+        if slot_key not in self.COMPATIBILITY_SLOT_COLUMNS:
+            return 2
         if class_id_value is None:
-            return False
-        return class_id_value in allowed_class_ids
+            return 0
+        class_row = self.compatibility_matrix.get(int(class_id_value))
+        if not class_row:
+            return 2
+        return int(class_row.get(slot_key, 2))
+
+    def _compatibility_biased_score(self, det, slot_name, base_score=None):
+        class_id_value = self._get_detection_class_id(det)
+        level = self._get_compatibility_level(class_id_value, slot_name)
+        if level <= 0:
+            return None
+
+        score = float(det['conf']) if base_score is None else float(base_score)
+        score += float(self.COMPATIBILITY_SCORE_BIAS.get(level, 0.0))
+        return score
+
+    def _extract_landmark_visibility(self, landmark):
+        if landmark is None:
+            return None
+        if hasattr(landmark, 'visibility'):
+            try:
+                return float(landmark.visibility)
+            except Exception:
+                return None
+        if isinstance(landmark, dict) and 'visibility' in landmark:
+            try:
+                return float(landmark['visibility'])
+            except Exception:
+                return None
+        return None
+
+    def _assess_lower_body_visibility(self, body_landmarks_normalized):
+        """Estimate lower-body visibility for occlusion-aware feet/waist gating."""
+        if body_landmarks_normalized is None:
+            return {'known': False, 'visible': False, 'score': None}
+
+        landmarks = None
+        if hasattr(body_landmarks_normalized, 'landmark'):
+            landmarks = body_landmarks_normalized.landmark
+        elif isinstance(body_landmarks_normalized, (list, tuple, np.ndarray)):
+            landmarks = body_landmarks_normalized
+
+        if landmarks is None:
+            return {'known': False, 'visible': False, 'score': None}
+
+        visibility_indices = [23, 24, 25, 26, 27, 28]
+        vals = []
+        for idx in visibility_indices:
+            if idx >= len(landmarks):
+                continue
+            vis = self._extract_landmark_visibility(landmarks[idx])
+            if vis is not None:
+                vals.append(vis)
+
+        if not vals:
+            return {'known': False, 'visible': False, 'score': None}
+
+        mean_vis = float(sum(vals) / len(vals))
+        return {
+            'known': True,
+            'visible': mean_vis >= self.LOWER_BODY_VISIBILITY_MIN,
+            'score': mean_vis,
+        }
+
+    def _record_unassigned_reason(self, slot_name, reason):
+        if slot_name not in self._slot_unassigned_reason_counts:
+            return
+        reason_key = str(reason or 'unspecified')
+        slot_counts = self._slot_unassigned_reason_counts[slot_name]
+        slot_counts[reason_key] = int(slot_counts.get(reason_key, 0)) + 1
+
+    def reset_unassigned_reason_counts(self):
+        self._slot_unassigned_reason_counts = {'waist': {}, 'feet': {}}
+
+    def get_unassigned_reason_counts(self):
+        return {
+            slot: {reason: int(count) for reason, count in reasons.items()}
+            for slot, reasons in self._slot_unassigned_reason_counts.items()
+        }
+
+    def _passes_slot_whitelist(self, detection_dict, slot_name):
+        """Compatibility-gated eligibility for a slot (0=reject, 1=de-emphasize, 2=prefer)."""
+        class_id_value = self._get_detection_class_id(detection_dict)
+        return self._get_compatibility_level(class_id_value, slot_name) > 0
 
     def _record_whitelist_reject(self, slot_name):
         """Increment whitelist reject counter for one slot."""
@@ -936,7 +1004,15 @@ class ToolsClustering:
             pass
         return detections
     
-    def classify_object_hand_relationships(self, detections, left_knuckle, right_knuckle, left_shoulder=None, right_shoulder=None):
+    def classify_object_hand_relationships(
+        self,
+        detections,
+        left_knuckle,
+        right_knuckle,
+        left_shoulder=None,
+        right_shoulder=None,
+        body_landmarks_normalized=None,
+    ):
         """
         Classify each detection based on its relationship to hands and face.
         Returns dict with keys: left_hand_object, right_hand_object,
@@ -973,9 +1049,22 @@ class ToolsClustering:
 
         tie_locked_slots = set()
         tie_blocked_detection_ids = set()
+        lower_body_visibility = self._assess_lower_body_visibility(body_landmarks_normalized)
 
         def assign_slot_if_preferred(slot_name, det):
-            if results[slot_name] is None or det['conf'] > results[slot_name]['conf']:
+            slot_key = 'hand' if slot_name in ('left_hand_object', 'right_hand_object') else slot_name.replace('_object', '')
+            det_score = self._compatibility_biased_score(det, slot_key)
+            if det_score is None:
+                return
+
+            if results[slot_name] is None:
+                results[slot_name] = det
+                return
+
+            current_score = self._compatibility_biased_score(results[slot_name], slot_key)
+            if current_score is None or det_score > current_score or (
+                det_score == current_score and det['conf'] > results[slot_name]['conf']
+            ):
                 results[slot_name] = det
 
         tie_detections = [
@@ -1074,18 +1163,21 @@ class ToolsClustering:
                     self._record_whitelist_reject('hand')
                     continue
                 dist = self.point_to_bbox_distance(knuckle, det['bbox'])
+                compat_score = self._compatibility_biased_score(det, 'hand')
+                if compat_score is None:
+                    continue
                 if dist <= self.TOUCH_THRESHOLD:
-                    touching_candidates.append((dist, det))
+                    touching_candidates.append((dist, -compat_score, det))
                 elif dist <= self.TOUCH_THRESHOLD * 2:
-                    nearby_candidates.append((dist, det))
+                    nearby_candidates.append((dist, -compat_score, det))
 
             if touching_candidates:
                 touching_candidates.sort(key=lambda item: item[0])
-                return touching_candidates[0][1]
+                return touching_candidates[0][2]
 
             if nearby_candidates:
                 nearby_candidates.sort(key=lambda item: item[0])
-                return nearby_candidates[0][1]
+                return nearby_candidates[0][2]
 
             return None
 
@@ -1103,6 +1195,82 @@ class ToolsClustering:
             det for det in detections
             if det['detection_id'] not in hand_detection_ids and det['detection_id'] not in tie_blocked_detection_ids
         ]
+
+        def normalized_distance_to_zone_center(bbox, slot_name):
+            """Lightweight proximity proxy for lower-body slots.
+
+            Smaller is better; used only as a tie-break style guardrail for small handhelds.
+            """
+            cx = (bbox['left'] + bbox['right']) / 2.0
+            cy = (bbox['top'] + bbox['bottom']) / 2.0
+
+            if slot_name == 'waist':
+                zone_y_center = (self.WAIST_ZONE_TOP + self.WAIST_ZONE_BOTTOM) / 2.0
+                x_scale = max(abs(self.WAIST_X_MIN), abs(self.WAIST_X_MAX), 1e-6)
+                y_scale = max((self.WAIST_ZONE_BOTTOM - self.WAIST_ZONE_TOP) / 2.0, 1e-6)
+            elif slot_name == 'feet':
+                zone_y_center = (self.FEET_ZONE_TOP + self.FEET_ZONE_BOTTOM) / 2.0
+                x_scale = max(abs(self.FEET_X_MIN), abs(self.FEET_X_MAX), 1e-6)
+                y_scale = max((self.FEET_ZONE_BOTTOM - self.FEET_ZONE_TOP) / 2.0, 1e-6)
+            else:
+                return 0.0
+
+            dx = cx / x_scale
+            dy = (cy - zone_y_center) / y_scale
+            return (dx * dx + dy * dy) ** 0.5
+
+        def lower_body_candidate_score(det, slot_name):
+            """Score lower-body candidate with mild penalties for small handheld classes.
+
+            Penalty is removed only when lower-body geometry is clearly better than hand proximity.
+            """
+            score = self._compatibility_biased_score(det, slot_name, base_score=det['conf'])
+            if score is None:
+                return None, 'incompatible_by_matrix'
+
+            class_id = self._get_detection_class_id(det)
+            if class_id not in self.HANDHELD_LIKE_CLASSES:
+                return score, None
+
+            bbox = det['bbox']
+            hand_dists = []
+            if left_knuckle != self.DEFAULT_HAND_POSITION:
+                hand_dists.append(self.point_to_bbox_distance(left_knuckle, bbox))
+            if right_knuckle != self.DEFAULT_HAND_POSITION:
+                hand_dists.append(self.point_to_bbox_distance(right_knuckle, bbox))
+
+            if lower_body_visibility['known'] and not lower_body_visibility['visible']:
+                score -= self.LOWER_BODY_OCCLUSION_PENALTY
+
+            # If no hand landmarks are available, keep penalty to avoid over-pulling to lower body.
+            if not hand_dists:
+                score -= self.SMALL_HANDHELD_LOWER_BODY_CONF_PENALTY
+                if class_id == 67:
+                    score -= self.CLASS67_EXTRA_LOWER_BODY_PENALTY.get(slot_name, 0.0)
+                if score < self.HANDHELD_LIKE_LOWER_BODY_MIN_SCORE:
+                    reason = 'weak_lower_body_evidence_no_hand_landmarks'
+                    if lower_body_visibility['known'] and not lower_body_visibility['visible']:
+                        reason = 'lower_body_occluded_and_no_hand_landmarks'
+                    return None, reason
+                return score, None
+
+            best_hand_dist = min(hand_dists)
+            lower_body_dist = normalized_distance_to_zone_center(bbox, slot_name)
+
+            # Waive penalty only when lower-body fit is meaningfully better than hand proximity.
+            distance_margin = best_hand_dist - lower_body_dist
+            if distance_margin < self.SMALL_HANDHELD_LOWER_BODY_DISTANCE_MARGIN:
+                score -= self.SMALL_HANDHELD_LOWER_BODY_CONF_PENALTY
+                if class_id == 67:
+                    score -= self.CLASS67_EXTRA_LOWER_BODY_PENALTY.get(slot_name, 0.0)
+
+            if score < self.HANDHELD_LIKE_LOWER_BODY_MIN_SCORE:
+                reason = 'weak_lower_body_evidence'
+                if lower_body_visibility['known'] and not lower_body_visibility['visible']:
+                    reason = 'lower_body_occluded'
+                return None, reason
+
+            return score, None
 
         for det in non_hand_detections:
             class_id = self._get_detection_class_id(det)
@@ -1169,14 +1337,32 @@ class ToolsClustering:
             if left_eye_allowed and self.is_left_eye_object(bbox):
                 if results['left_eye_object'] is None:
                     results['left_eye_object'] = det
-                elif det['conf'] > results['left_eye_object']['conf']:
-                    results['left_eye_object'] = det
+                else:
+                    candidate_score = self._compatibility_biased_score(det, 'left_eye')
+                    current_score = self._compatibility_biased_score(results['left_eye_object'], 'left_eye')
+                    if current_score is None or (
+                        candidate_score is not None and (
+                            candidate_score > current_score or (
+                                candidate_score == current_score and det['conf'] > results['left_eye_object']['conf']
+                            )
+                        )
+                    ):
+                        results['left_eye_object'] = det
 
             if right_eye_allowed and self.is_right_eye_object(bbox):
                 if results['right_eye_object'] is None:
                     results['right_eye_object'] = det
-                elif det['conf'] > results['right_eye_object']['conf']:
-                    results['right_eye_object'] = det
+                else:
+                    candidate_score = self._compatibility_biased_score(det, 'right_eye')
+                    current_score = self._compatibility_biased_score(results['right_eye_object'], 'right_eye')
+                    if current_score is None or (
+                        candidate_score is not None and (
+                            candidate_score > current_score or (
+                                candidate_score == current_score and det['conf'] > results['right_eye_object']['conf']
+                            )
+                        )
+                    ):
+                        results['right_eye_object'] = det
 
         # 3. Top-face / mouth / shoulder / waist / feet assignments
         for det in non_hand_detections:
@@ -1237,32 +1423,73 @@ class ToolsClustering:
             if top_face_allowed and self.is_top_face_object(bbox):
                 if results['top_face_object'] is None:
                     results['top_face_object'] = det
-                elif bbox['top'] < results['top_face_object']['bbox']['top']:
-                    results['top_face_object'] = det
+                else:
+                    candidate_score = self._compatibility_biased_score(det, 'top_face')
+                    current_score = self._compatibility_biased_score(results['top_face_object'], 'top_face')
+                    if current_score is None or (
+                        candidate_score is not None and (
+                            candidate_score > current_score or (
+                                candidate_score == current_score and bbox['top'] < results['top_face_object']['bbox']['top']
+                            )
+                        )
+                    ):
+                        results['top_face_object'] = det
 
             if 'mouth_object' not in tie_locked_slots and mouth_allowed and self.is_mouth_object(bbox):
                 if results['mouth_object'] is None:
                     results['mouth_object'] = det
-                elif bbox['top'] < results['mouth_object']['bbox']['top']:
-                    results['mouth_object'] = det
+                else:
+                    candidate_score = self._compatibility_biased_score(det, 'mouth')
+                    current_score = self._compatibility_biased_score(results['mouth_object'], 'mouth')
+                    if current_score is None or (
+                        candidate_score is not None and (
+                            candidate_score > current_score or (
+                                candidate_score == current_score and bbox['top'] < results['mouth_object']['bbox']['top']
+                            )
+                        )
+                    ):
+                        results['mouth_object'] = det
 
             if 'shoulder_object' not in tie_locked_slots and shoulder_allowed and self.is_shoulder_object(bbox, left_shoulder, right_shoulder):
                 if results['shoulder_object'] is None:
                     results['shoulder_object'] = det
-                elif det['conf'] > results['shoulder_object']['conf']:
-                    results['shoulder_object'] = det
+                else:
+                    candidate_score = self._compatibility_biased_score(det, 'shoulder')
+                    current_score = self._compatibility_biased_score(results['shoulder_object'], 'shoulder')
+                    if current_score is None or (
+                        candidate_score is not None and (
+                            candidate_score > current_score or (
+                                candidate_score == current_score and det['conf'] > results['shoulder_object']['conf']
+                            )
+                        )
+                    ):
+                        results['shoulder_object'] = det
 
             if waist_allowed and self.is_waist_object(bbox):
-                if results['waist_object'] is None:
+                candidate_score, reject_reason = lower_body_candidate_score(det, 'waist')
+                if candidate_score is None:
+                    self._record_unassigned_reason('waist', reject_reason)
+                elif results['waist_object'] is None:
                     results['waist_object'] = det
-                elif det['conf'] > results['waist_object']['conf']:
-                    results['waist_object'] = det
+                else:
+                    current_score, _ = lower_body_candidate_score(results['waist_object'], 'waist')
+                    if current_score is None or candidate_score > current_score or (
+                        candidate_score == current_score and det['conf'] > results['waist_object']['conf']
+                    ):
+                        results['waist_object'] = det
 
             if feet_allowed and self.is_feet_object(bbox):
-                if results['feet_object'] is None:
+                candidate_score, reject_reason = lower_body_candidate_score(det, 'feet')
+                if candidate_score is None:
+                    self._record_unassigned_reason('feet', reject_reason)
+                elif results['feet_object'] is None:
                     results['feet_object'] = det
-                elif det['conf'] > results['feet_object']['conf']:
-                    results['feet_object'] = det
+                else:
+                    current_score, _ = lower_body_candidate_score(results['feet_object'], 'feet')
+                    if current_score is None or candidate_score > current_score or (
+                        candidate_score == current_score and det['conf'] > results['feet_object']['conf']
+                    ):
+                        results['feet_object'] = det
 
         assigned_ids_by_class = {class_id: set() for class_id in self.DEBUG_TRACKED_CLASS_IDS}
         for slot_det in results.values():
@@ -1277,7 +1504,15 @@ class ToolsClustering:
         
         return results
 
-    def query_and_classify_detections(self, image_id, left_knuckle, right_knuckle, left_shoulder=None, right_shoulder=None):
+    def query_and_classify_detections(
+        self,
+        image_id,
+        left_knuckle,
+        right_knuckle,
+        left_shoulder=None,
+        right_shoulder=None,
+        body_landmarks_normalized=None,
+    ):
         """
         Query detections for an image and classify their relationship to hands/face.
         Returns dict with 9 keys, each containing a detection payload dict or None.
@@ -1374,6 +1609,7 @@ class ToolsClustering:
             right_knuckle,
             left_shoulder=left_shoulder,
             right_shoulder=right_shoulder,
+            body_landmarks_normalized=body_landmarks_normalized,
         )
 
         # Track where classes 110-119 are lost: seen in detections vs assigned to any slot.
@@ -1427,6 +1663,7 @@ class ToolsClustering:
         Expects df to have: image_id, left_pointer_knuckle_norm, right_pointer_knuckle_norm
         """
         self.reset_whitelist_reject_counts()
+        self.reset_unassigned_reason_counts()
         self.reset_class_assignment_debug_counts()
         self.reset_class_pipeline_debug_counts()
 
@@ -1461,6 +1698,7 @@ class ToolsClustering:
                 right_knuckle,
                 left_shoulder=left_shoulder,
                 right_shoulder=right_shoulder,
+                body_landmarks_normalized=row.get('body_landmarks_normalized'),
             )
             
             # Assign to df
@@ -1554,6 +1792,17 @@ class ToolsClustering:
             whitelist_rejects = self.get_whitelist_reject_counts()
             compact_rejects = {k: int(v) for k, v in whitelist_rejects.items() if int(v) > 0}
             print(f"{label}[COUNT] Whitelist rejects by slot: {compact_rejects if compact_rejects else 'none'}")
+
+        unassigned_reasons = self.get_unassigned_reason_counts()
+        compact_unassigned = {
+            slot: reasons
+            for slot, reasons in unassigned_reasons.items()
+            if reasons
+        }
+        print(
+            f"{label}[COUNT] Explicit unassigned lower-body reasons: "
+            f"{compact_unassigned if compact_unassigned else 'none'}"
+        )
 
         rows_with_any_object = int(df[object_assignment_cols].notna().any(axis=1).sum())
         rows_with_no_objects = int(len(df) - rows_with_any_object)
