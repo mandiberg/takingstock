@@ -109,6 +109,30 @@ class ToolsClustering:
         self.COVID_MASK_TOP_MAX = 0.5
         self.COVID_MASK_BOTTOM_MIN = 0.3
         self.COVID_MASK_BOTTOM_MAX = .8
+        # Mask intent scoring constants (class 110) -- Rule Spec v1.0
+        self.MASK_INTENT_WORN_MIN = 0.60
+        self.MASK_INTENT_HELD_MIN = 0.60
+        self.MASK_INTENT_MARGIN = 0.12
+        self.MASK_ALLOW_DUAL_MOUTH_HAND = True
+        self.MASK_MOUTH_STICKY_MARGIN = 0.08
+        self.W_MASK_MOUTH_GEOM = 0.40
+        self.W_MASK_FACE_ANCHOR = 0.25
+        self.W_MASK_CENTERLINE = 0.15
+        self.W_MASK_HAND_PROX = 0.20
+        self.W_MASK_DUAL_HAND = 0.10
+        self.W_MASK_OFF_FACE = 0.25
+        # Classes 108-109 lower-body eligibility constants -- Rule Spec v1.0
+        self.CLASS108109_HAND_PREFERENCE_BONUS = 0.12
+        self.CLASS108109_ENABLE_SHOULDER = True
+        self.CLASS108109_ENABLE_WAIST = True
+        self.CLASS108109_ENABLE_FEET = True
+        self.CLASS108109_SHOULDER_MIN_INTERSECT = 0.12
+        self.CLASS108109_WAIST_MIN_INTERSECT = 0.18
+        self.CLASS108109_FEET_MIN_INTERSECT = 0.22
+        self.CLASS108109_WAIST_MIN_SCORE = 0.58
+        self.CLASS108109_FEET_MIN_SCORE = 0.60
+        self.CLASS108109_NEAR_HAND_DIST = 0.45
+        self.CLASS108109_LOWER_BODY_NEAR_HAND_PENALTY = 0.18
         self.FULL_FACE_MASK_TOP_MAX = -0.15
         self.FULL_FACE_MASK_BOTTOM_MIN = 0.15
         self.UNDER_EYE_ZONE_TOP = -0.45
@@ -787,6 +811,97 @@ class ToolsClustering:
             bbox['bottom'] <= self.COVID_MASK_BOTTOM_MAX
         )
 
+    def _bbox_intersect_fraction(self, bbox, x_min, x_max, y_top, y_bottom):
+        """Return the fraction of bbox area that overlaps with the given rectangle.
+
+        Used to guard lower-body slot assignments when a minimum zone-intersection
+        ratio is required (Rule Spec v1.0 classes 108-109).
+        """
+        ix_left = max(bbox['left'], x_min)
+        ix_right = min(bbox['right'], x_max)
+        iy_top = max(bbox['top'], y_top)
+        iy_bottom = min(bbox['bottom'], y_bottom)
+        if ix_right <= ix_left or iy_bottom <= iy_top:
+            return 0.0
+        intersection = (ix_right - ix_left) * (iy_bottom - iy_top)
+        bbox_area = (bbox['right'] - bbox['left']) * (bbox['bottom'] - bbox['top'])
+        if bbox_area <= 0:
+            return 0.0
+        return intersection / bbox_area
+
+    def _classify_mask_intent(self, bbox, left_knuckle, right_knuckle):
+        """Classify a class-110 mask detection as worn_on_face, held_in_hand, or ambiguous.
+
+        Returns (intent_str, S_worn, S_held).
+        Rule Spec v1.0 -- mask intent scoring.
+        """
+        cx = (bbox['left'] + bbox['right']) / 2.0
+        cy = (bbox['top'] + bbox['bottom']) / 2.0
+
+        # Mouth geometry: how many of the 4 covid-mask constraints are satisfied
+        mask_checks = [
+            bbox['top'] >= self.COVID_MASK_TOP_MIN,
+            bbox['top'] <= self.COVID_MASK_TOP_MAX,
+            bbox['bottom'] >= self.COVID_MASK_BOTTOM_MIN,
+            bbox['bottom'] <= self.COVID_MASK_BOTTOM_MAX,
+        ]
+        s_mouthgeom = sum(mask_checks) / 4.0
+
+        # Face-anchor: centered near nose-mouth region
+        cx_scale = 0.35
+        cy_target = 0.2
+        cy_scale = 0.9
+        s_faceanchor = (
+            max(0.0, 1.0 - abs(cx - self.CENTERLINE_X) / cx_scale)
+            * max(0.0, 1.0 - abs(cy - cy_target) / cy_scale)
+        )
+
+        # Centerline proximity
+        s_centerline = max(0.0, 1.0 - abs(cx - self.CENTERLINE_X) / cx_scale)
+
+        # Hand proximity (0 = far, 1 = touching)
+        hand_dists = []
+        if left_knuckle != self.DEFAULT_HAND_POSITION:
+            hand_dists.append(self.point_to_bbox_distance(left_knuckle, bbox))
+        if right_knuckle != self.DEFAULT_HAND_POSITION:
+            hand_dists.append(self.point_to_bbox_distance(right_knuckle, bbox))
+        if hand_dists:
+            d_min = min(hand_dists)
+            s_handprox = max(0.0, 1.0 - d_min / (2.0 * self.TOUCH_THRESHOLD))
+        else:
+            s_handprox = 0.0
+
+        # Dual-hand indicator
+        s_dualhand = 1.0 if (
+            len(hand_dists) == 2
+            and all(d <= self.TOUCH_THRESHOLD for d in hand_dists)
+        ) else 0.0
+
+        # Off-face: mask center is outside the expected face zone and geometry fails
+        s_offface = 1.0 if (
+            s_mouthgeom < 0.5
+            and (cy < self.COVID_MASK_TOP_MIN or cy > self.COVID_MASK_BOTTOM_MAX)
+        ) else 0.0
+
+        S_worn = (
+            self.W_MASK_MOUTH_GEOM * s_mouthgeom
+            + self.W_MASK_FACE_ANCHOR * s_faceanchor
+            + self.W_MASK_CENTERLINE * s_centerline
+            - self.W_MASK_HAND_PROX * s_handprox
+        )
+        S_held = (
+            self.W_MASK_HAND_PROX * s_handprox
+            + self.W_MASK_DUAL_HAND * s_dualhand
+            + self.W_MASK_OFF_FACE * s_offface
+            - self.W_MASK_MOUTH_GEOM * s_mouthgeom
+        )
+
+        if S_worn >= self.MASK_INTENT_WORN_MIN and S_worn >= S_held + self.MASK_INTENT_MARGIN:
+            return 'worn_on_face', S_worn, S_held
+        if S_held >= self.MASK_INTENT_HELD_MIN and S_held >= S_worn + self.MASK_INTENT_MARGIN:
+            return 'held_in_hand', S_worn, S_held
+        return 'ambiguous', S_worn, S_held
+
     def is_under_eye_object(self, bbox):
         """Check if bbox falls in an under-eye treatment zone."""
         return self._bbox_intersects_rect(
@@ -1233,16 +1348,36 @@ class ToolsClustering:
         results['left_hand_object'] = best_object_for_hand(left_knuckle, results['left_hand_object'])
         results['right_hand_object'] = best_object_for_hand(right_knuckle, results['right_hand_object'])
 
-        # Hand-assigned objects are excluded from all other zones
+        # Hand-assigned objects are excluded from all other zones.
+        # Exception: class 110 (COVID mask) detections classified as worn_on_face
+        # remain eligible for mouth_object even when also assigned to a hand slot.
         hand_detection_ids = set()
         for hand_key in ['left_hand_object', 'right_hand_object']:
             hand_det = results[hand_key]
             if hand_det is not None:
                 hand_detection_ids.add(hand_det['detection_id'])
 
+        # Pre-compute mask intent for all class 110 detections.
+        mask_110_intents = {}
+        for det in detections:
+            if self._get_detection_class_id(det) in self.COVID_MASK_CLASSES:
+                intent, _, _ = self._classify_mask_intent(det['bbox'], left_knuckle, right_knuckle)
+                mask_110_intents[det['detection_id']] = intent
+
+        # Worn-on-face masks are exempt from the hand exclusion so they
+        # can still compete for mouth_object in stage 3.
+        mask_worn_exception_ids = {
+            did for did, intent in mask_110_intents.items()
+            if intent == 'worn_on_face' and did in hand_detection_ids
+        }
+
         non_hand_detections = [
             det for det in detections
-            if det['detection_id'] not in hand_detection_ids and det['detection_id'] not in tie_blocked_detection_ids
+            if (
+                det['detection_id'] not in hand_detection_ids
+                or det['detection_id'] in mask_worn_exception_ids
+            )
+            and det['detection_id'] not in tie_blocked_detection_ids
         ]
 
         def normalized_distance_to_zone_center(bbox, slot_name):
@@ -1441,7 +1576,101 @@ class ToolsClustering:
         for det in non_hand_detections:
             bbox = det['bbox']
 
+            # Needed early for classes 108-109 branch, which now evaluates
+            # shoulder/waist/feet before the general branch logic below.
+            shoulder_allowed = self._passes_slot_allowlist(det, 'shoulder')
+            waist_allowed = self._passes_slot_allowlist(det, 'waist')
+            feet_allowed = self._passes_slot_allowlist(det, 'feet')
+
             if self._is_class_in(det, self.HAND_ONLY_CLASSES):
+                # Classes 108-109 are hand-preferred but not hand-exclusive.
+                # Allow shoulder, waist, and feet with eligibility guards.
+                _h_dists = []
+                if left_knuckle != self.DEFAULT_HAND_POSITION:
+                    _h_dists.append(self.point_to_bbox_distance(left_knuckle, bbox))
+                if right_knuckle != self.DEFAULT_HAND_POSITION:
+                    _h_dists.append(self.point_to_bbox_distance(right_knuckle, bbox))
+                _near_hand_dist = min(_h_dists) if _h_dists else float('inf')
+                _nearhand_penalty = (
+                    self.CLASS108109_LOWER_BODY_NEAR_HAND_PENALTY
+                    if _near_hand_dist <= self.CLASS108109_NEAR_HAND_DIST
+                    else 0.0
+                )
+
+                if 'shoulder_object' not in tie_locked_slots and shoulder_allowed and self.CLASS108109_ENABLE_SHOULDER:
+                    if self.is_shoulder_object(bbox, left_shoulder, right_shoulder):
+                        _score = self._compatibility_biased_score(det, 'shoulder', base_score=det['conf'])
+                        if _score is not None:
+                            _score += self.CLASS108109_HAND_PREFERENCE_BONUS
+                            if results['shoulder_object'] is None:
+                                results['shoulder_object'] = det
+                            else:
+                                _cur = self._compatibility_biased_score(
+                                    results['shoulder_object'], 'shoulder',
+                                    base_score=results['shoulder_object']['conf']
+                                )
+                                if _cur is None or _score > _cur or (
+                                    _score == _cur and det['conf'] > results['shoulder_object']['conf']
+                                ):
+                                    results['shoulder_object'] = det
+
+                if waist_allowed and self.CLASS108109_ENABLE_WAIST and self.is_waist_object(bbox):
+                    _s_int = self._bbox_intersect_fraction(
+                        bbox, self.WAIST_X_MIN, self.WAIST_X_MAX,
+                        self.WAIST_ZONE_TOP, self.WAIST_ZONE_BOTTOM,
+                    )
+                    if _s_int >= self.CLASS108109_WAIST_MIN_INTERSECT:
+                        _base = self._compatibility_biased_score(det, 'waist', base_score=det['conf'])
+                        if _base is not None:
+                            _score = _base + 0.35 * _s_int - _nearhand_penalty
+                            if _score >= self.CLASS108109_WAIST_MIN_SCORE:
+                                if results['waist_object'] is None:
+                                    results['waist_object'] = det
+                                else:
+                                    _cur_base = self._compatibility_biased_score(
+                                        results['waist_object'], 'waist',
+                                        base_score=results['waist_object']['conf']
+                                    )
+                                    _cur_s_int = self._bbox_intersect_fraction(
+                                        results['waist_object']['bbox'],
+                                        self.WAIST_X_MIN, self.WAIST_X_MAX,
+                                        self.WAIST_ZONE_TOP, self.WAIST_ZONE_BOTTOM,
+                                    )
+                                    _cur_score = (_cur_base or 0.0) + 0.35 * _cur_s_int
+                                    if _score > _cur_score or (
+                                        _score == _cur_score
+                                        and det['conf'] > results['waist_object']['conf']
+                                    ):
+                                        results['waist_object'] = det
+
+                if feet_allowed and self.CLASS108109_ENABLE_FEET and self.is_feet_object(bbox):
+                    _s_int = self._bbox_intersect_fraction(
+                        bbox, self.FEET_X_MIN, self.FEET_X_MAX,
+                        self.FEET_ZONE_TOP, self.FEET_ZONE_BOTTOM,
+                    )
+                    if _s_int >= self.CLASS108109_FEET_MIN_INTERSECT:
+                        _base = self._compatibility_biased_score(det, 'feet', base_score=det['conf'])
+                        if _base is not None:
+                            _score = _base + 0.40 * _s_int - _nearhand_penalty
+                            if _score >= self.CLASS108109_FEET_MIN_SCORE:
+                                if results['feet_object'] is None:
+                                    results['feet_object'] = det
+                                else:
+                                    _cur_base = self._compatibility_biased_score(
+                                        results['feet_object'], 'feet',
+                                        base_score=results['feet_object']['conf']
+                                    )
+                                    _cur_s_int = self._bbox_intersect_fraction(
+                                        results['feet_object']['bbox'],
+                                        self.FEET_X_MIN, self.FEET_X_MAX,
+                                        self.FEET_ZONE_TOP, self.FEET_ZONE_BOTTOM,
+                                    )
+                                    _cur_score = (_cur_base or 0.0) + 0.40 * _cur_s_int
+                                    if _score > _cur_score or (
+                                        _score == _cur_score
+                                        and det['conf'] > results['feet_object']['conf']
+                                    ):
+                                        results['feet_object'] = det
                 continue
 
             top_face_allowed = self._passes_slot_allowlist(det, 'top_face')
@@ -1462,11 +1691,15 @@ class ToolsClustering:
                 self._record_allowlist_reject('feet')
 
             if self._is_class_in(det, self.COVID_MASK_CLASSES):
-                if 'mouth_object' not in tie_locked_slots and mouth_allowed and self.is_covid_mask_object(bbox):
-                    if results['mouth_object'] is None:
-                        results['mouth_object'] = det
-                    elif det['conf'] > results['mouth_object']['conf']:
-                        results['mouth_object'] = det
+                # Intent-aware mask assignment (Rule Spec v1.0).
+                # held_in_hand masks skip mouth; worn_on_face and ambiguous evaluate normally.
+                _mask_intent = mask_110_intents.get(det['detection_id'], 'ambiguous')
+                if _mask_intent != 'held_in_hand' and 'mouth_object' not in tie_locked_slots and mouth_allowed:
+                    if self.is_covid_mask_object(bbox):
+                        if results['mouth_object'] is None:
+                            results['mouth_object'] = det
+                        elif det['conf'] > results['mouth_object']['conf']:
+                            results['mouth_object'] = det
                 continue
 
             if self._is_class_in(det, self.FULL_FACE_TOP_BIASED_CLASSES):

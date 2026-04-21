@@ -39,7 +39,7 @@ ARMS_CLUSTER_COUNT = 768
 OBJECTFUSION_CLUSTER_COUNT = 768
 
 HACK_LIST_SKIP_DETECTIONS = []
-MODE = "ObjectFusion_DetectionsOnly" # Topics or Keywords or ObjectFusion_DetectionsOnly or ArmsPoses3D or ObjectFusion to 
+MODE = "ObjectFusion" # Topics or Keywords or ObjectFusion_DetectionsOnly or ArmsPoses3D or ObjectFusion to 
 if MODE == "Topics": 
     MODE_ID = "topic_id" 
     CLUSTER_TYPE = "TK" # needs to be reworked next time it is used
