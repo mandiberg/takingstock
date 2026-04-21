@@ -27,7 +27,7 @@ ROOT_FOLDER_PATH = '/Users/michaelmandiberg/Documents/projects-active/facemap_pr
 # if IS_CLUSTER this should be the folder holding all the cluster folders
 # if not, this should be the individual folder holding the images
 # will not accept clusterNone -- change to cluster00
-FOLDER_NAME = "T11_YOLO_768_ArmsFeatures_3xWeightround2"
+FOLDER_NAME = "T11_YOLO_768_armsposes3D_april12_3"
 
 # iterate through folders? 
 IS_CLUSTER = True
@@ -350,7 +350,7 @@ def merge_images(images_to_build, FOLDER_PATH, output_dims=None):
     # Get a list of image files in the folder
     image_files = io.get_img_list(FOLDER_PATH, FORCE_LS)
     # if VERBOSE: print(image_files)
-    cluster_no = handpose_no = hsv_no = topic_no = None
+    cluster_no = handpose_no = background_hsv_no = object_hsv_no = topic_no = None
     successes = 0
     if len(image_files) > 1:
         # this is legacy stuff to get the cluster number and handpose number from the folder name
@@ -371,23 +371,35 @@ def merge_images(images_to_build, FOLDER_PATH, output_dims=None):
                             None_counter += 1
                 if f.startswith("p"):
                     try:
-                        handpose_no = int(f.replace("p",""))
+                        handpose_no = f.replace("p","", 1)
                     except:
                         print("could not parse handpose number from", f)
                         handpose_no = None
-                if f.startswith("h"):
+                if f.startswith("om"):
                         try:
-                            hsv_no = (f.replace("h",""))
+                            object_hsv_no = f.replace("om","", 1)
+                        except:
+                            print("could not parse object hsv number from", f)
+                            object_hsv_no = None
+                elif f.startswith("h"):
+                        try:
+                            background_hsv_no = f.replace("h","", 1)
                         except:
                             print("could not parse hue number from", f)
-                            hsv_no = None
+                            background_hsv_no = None
                 if f.startswith("t"):
                     try:
-                        topic_no = int(f.replace("t",""))
+                        topic_no = f.replace("t","", 1)
                     except:
                         print("could not parse topic number from", f)
                         topic_no = None
-            print("FOUND cluster_no", cluster_no, "handpose_no", handpose_no, "hsv_no", hsv_no, "topic_no", topic_no)
+            print(
+                "FOUND cluster_no", cluster_no,
+                "handpose_no", handpose_no,
+                "background_hsv_no", background_hsv_no,
+                "object_hsv_no", object_hsv_no,
+                "topic_no", topic_no,
+            )
                 
             # if "None" in image_folder:
             #     cluster_no = None_counter
@@ -402,7 +414,7 @@ def merge_images(images_to_build, FOLDER_PATH, output_dims=None):
         print("about to iterate_image_list with ", len(images_to_build), "images")
         if len(images_to_build) == 0: 
             print("no images to build")
-            return None, 0, cluster_no, handpose_no, hsv_no
+            return None, 0, cluster_no, handpose_no, background_hsv_no, object_hsv_no, topic_no
         merged_pairs, successes = iterate_image_list(FOLDER_PATH,images_to_build,successes, output_dims)
         if merged_pairs is not None and len(merged_pairs) > 0: 
             print("len merged pairs are", len(merged_pairs))
@@ -414,13 +426,23 @@ def merge_images(images_to_build, FOLDER_PATH, output_dims=None):
         else:
             print("no merged pairs found")
             final_merged = None
-        return final_merged, successes, cluster_no, handpose_no, hsv_no, topic_no
+        return final_merged, successes, cluster_no, handpose_no, background_hsv_no, object_hsv_no, topic_no
     else:
-        return None, 0, cluster_no, handpose_no, hsv_no, topic_no
+        return None, 0, cluster_no, handpose_no, background_hsv_no, object_hsv_no, topic_no
 
-def save_merge(merged_image, count, cluster_no, handpose_no, hsv_no, topic_no, FOLDER_PATH):
+def save_merge(merged_image, count, cluster_no, handpose_no, background_hsv_no, object_hsv_no, topic_no, FOLDER_PATH):
     if cluster_no is not None:
-        savename = 'merged_cluster_' + str(cluster_no)+ "_"+ str(handpose_no)+ "_"+ str(hsv_no)+ "_"+ str(topic_no)+ "_"+ str(count*2)+'.jpg'
+        savename_parts = ["merged", f"cluster{cluster_no}"]
+        if handpose_no is not None:
+            savename_parts.append(f"p{handpose_no}")
+        if topic_no is not None:
+            savename_parts.append(f"t{topic_no}")
+        if background_hsv_no is not None:
+            savename_parts.append(f"h{background_hsv_no}")
+        if object_hsv_no is not None:
+            savename_parts.append(f"om{object_hsv_no}")
+        savename_parts.append(str(count * 2))
+        savename = "_".join(savename_parts) + '.jpg'
     else:
         savename = 'merged_image'+str(count)+'.jpg'
     output_path = os.path.join(FOLDER_PATH, savename)
@@ -906,6 +928,19 @@ def load_images(image_list, subfolder_path=None):
     if len(image_list) == 0:
         raise ValueError("Empty image list provided")
 
+    def safe_imread(image_path):
+        """Read image with cv2, then fall back to imdecode for edge-case paths/codecs."""
+        img = cv2.imread(image_path)
+        if img is not None:
+            return img
+        try:
+            data = np.fromfile(image_path, dtype=np.uint8)
+            if data.size == 0:
+                return None
+            return cv2.imdecode(data, cv2.IMREAD_COLOR)
+        except Exception:
+            return None
+
     def construct_image_path(subfolder_path, image_list, index):
         # Load the image at the specified index
         if subfolder_path:
@@ -914,7 +949,20 @@ def load_images(image_list, subfolder_path=None):
             image_path = image_list[index]
         return image_path
 
-    result = cv2.imread(construct_image_path(subfolder_path, image_list, 0))
+    # Find first readable image to initialize result.
+    result = None
+    start_index = 0
+    for idx in range(len(image_list)):
+        candidate_path = construct_image_path(subfolder_path, image_list, idx)
+        candidate = safe_imread(candidate_path)
+        if candidate is not None:
+            result = candidate
+            start_index = idx
+            break
+        print(f"Skipping unreadable image at init: {candidate_path}")
+
+    if result is None:
+        raise ValueError("No readable images found in image_list")
 
     # If only one image, return it
     if len(image_list) == 1:
@@ -928,10 +976,13 @@ def load_images(image_list, subfolder_path=None):
     
     images_to_build = [result]
     # Gradually blend in the other images
-    for i in range(1, len(image_list)):
+    for i in range(start_index + 1, len(image_list)):
 
         image_path = construct_image_path(subfolder_path, image_list, i)        
-        img = cv2.imread(image_path)        
+        img = safe_imread(image_path)
+        if img is None:
+            print(f"Skipping unreadable image: {image_path}")
+            continue
 
         # Handle grayscale images
         if len(result.shape) == 2:  # result is grayscale
@@ -1017,12 +1068,12 @@ def main():
                     print("no output_dims found, skipping this folder", subfolder_path)
                     continue
                 images_to_build = load_images(all_img_path_list, subfolder_path)
-                merged_image, count, cluster_no, handpose_no, hsv_no, topic_no = merge_images(images_to_build, subfolder_path, output_dims)
+                merged_image, count, cluster_no, handpose_no, background_hsv_no, object_hsv_no, topic_no = merge_images(images_to_build, subfolder_path, output_dims)
                 if count == 0:
                     print("no images here")
                     continue
                 else:
-                    save_merge(merged_image, count, cluster_no, handpose_no, hsv_no, topic_no, FOLDER_PATH)
+                    save_merge(merged_image, count, cluster_no, handpose_no, background_hsv_no, object_hsv_no, topic_no, FOLDER_PATH)
     else:
         print("going to get folder ls", FOLDER_PATH)
         all_img_path_list = io.get_img_list(FOLDER_PATH)
@@ -1033,8 +1084,8 @@ def main():
             print("going to merge images to make still")
             images_to_build = load_images(all_img_path_list, FOLDER_PATH)
             print("len images_to_build", len(images_to_build))
-            merged_image, count, cluster_no, handpose_no, hsv_no, topic_no = merge_images(images_to_build, FOLDER_PATH)
-            save_merge(merged_image, count, cluster_no, handpose_no, hsv_no, topic_no, FOLDER_PATH)
+            merged_image, count, cluster_no, handpose_no, background_hsv_no, object_hsv_no, topic_no = merge_images(images_to_build, FOLDER_PATH)
+            save_merge(merged_image, count, cluster_no, handpose_no, background_hsv_no, object_hsv_no, topic_no, FOLDER_PATH)
 
 
 
