@@ -25,6 +25,7 @@ import pymongo
 import pickle
 import traceback
 from skimage.metrics import structural_similarity as ssim
+from sqlalchemy import text
 
 
 from deap import base, creator, tools, algorithms
@@ -71,6 +72,16 @@ class SortPose:
 
               
         self.VERBOSE = VERBOSE
+        self.DIAG_CROP = False
+        self.DIAG_CROP_STDOUT = False
+        self.DIAG_CROP_PATH = None
+        self.current_image_id = None
+        self.current_diag_context = {}
+        self._diag_crop_seq = 0
+        if config is not None and isinstance(config, dict):
+            self.DIAG_CROP = bool(config.get('DIAG_CROP', False))
+            self.DIAG_CROP_STDOUT = bool(config.get('DIAG_CROP_STDOUT', False))
+            self.DIAG_CROP_PATH = config.get('DIAG_CROP_PATH', None)
 
         self.KNN_SORT_DICT = {
             "128d": "128d",
@@ -108,11 +119,11 @@ class SortPose:
         self.BRUTEFORCE = False
         self.LMS_DIMENSIONS = LMS_DIMENSIONS
         if self.VERBOSE: print("init LMS_DIMENSIONS",self.LMS_DIMENSIONS)
-        self.CUTOFF = 200 # DOES factor if ONE_SHOT
+        self.CUTOFF = 40 # DOES factor if ONE_SHOT
         self.ORIGIN = 0
         self.this_nose_bridge_dist = self.NOSE_BRIDGE_DIST = None # to be set in first loop, and sort.this_nose_bridge_dist each time
         self.USE_HEAD_POSE = USE_HEAD_POSE
-        self.MIN_DYN_BBOX_DIM = 2 # controls how closely AUTO_EDGE_CROP can get
+        self.MIN_DYN_BBOX_DIM = [1.75,2,2,2] # controls how closely AUTO_EDGE_CROP can get
 
         self.CHECK_DESC_DIST = 30
 
@@ -125,7 +136,7 @@ class SortPose:
             self.MULTIPLIER = self.HSVMULTIPLIER
             self.DUPED = self.FACE_DUPE_DIST
             self.HSV_DELTA_MAX = self.HSV_DELTA_MAX * 1.5
-        elif self.SORT_TYPE == "planar" or "obj_bbox" in self.SORT_TYPE:
+        elif self.SORT_TYPE is not None and ((self.SORT_TYPE == "planar") or ("obj_bbox" in self.SORT_TYPE)):
             self.MIND = self.MINBODYDIST * 1.5
             self.MAXD = self.MAXBODYDIST
             self.MULTIPLIER = self.HSVMULTIPLIER * (self.MINBODYDIST / self.MINFACEDIST)
@@ -223,7 +234,7 @@ class SortPose:
             self.CLUSTER_TYPE = "fingertips_positions" # fingertips_positions
             self.SUBSET_LANDMARKS = self.HAND_LMS_POINTER
             self.SORT_TYPE = "planar_hands"
-        elif "hands" in self.SORT_TYPE:
+        elif self.SORT_TYPE is not None and "hands" in self.SORT_TYPE:
             # catches any hands
             self.CLUSTER_TYPE = "planar_hands"
             self.SUBSET_LANDMARKS = self.HAND_LMS
@@ -256,6 +267,9 @@ class SortPose:
         # place to save bad images
         self.not_make_face = []
         self.same_img = []
+        self.face_pair_result_cache = {}
+        self.face_pair_cache_engine = None
+        self.reset_face_pair_stats()
         # for testing shoulders for image background
         self.SHOULDER_THRESH = 0.75
         self.nose_2d = None
@@ -502,6 +516,64 @@ class SortPose:
             "hsv_no":hsv_cluster,
             "pose_no":pose_no
         }
+
+    def _diag_crop_safe(self, value):
+        if isinstance(value, (np.integer, np.floating, np.bool_)):
+            return value.item()
+        if isinstance(value, np.ndarray):
+            return value.tolist()
+        if isinstance(value, tuple):
+            return [self._diag_crop_safe(v) for v in value]
+        if isinstance(value, list):
+            return [self._diag_crop_safe(v) for v in value]
+        if isinstance(value, dict):
+            return {str(k): self._diag_crop_safe(v) for k, v in value.items()}
+        return value
+
+    def _diag_crop_record(self, stage, payload=None):
+        if not self.DIAG_CROP:
+            return
+        if payload is None:
+            payload = {}
+
+        try:
+            self._diag_crop_seq += 1
+            cluster_no = None
+            if isinstance(self.counter_dict, dict):
+                cluster_no = self.counter_dict.get("cluster_no")
+
+            event = self._diag_crop_safe({
+                "seq": self._diag_crop_seq,
+                "stage": stage,
+                "image_id": self.current_image_id,
+                "cluster_no": cluster_no,
+                "sort_type": self.SORT_TYPE,
+                "context": self.current_diag_context,
+                "payload": payload,
+            })
+
+            out_path = self.DIAG_CROP_PATH
+            if not out_path:
+                outfolder = None
+                if isinstance(self.counter_dict, dict):
+                    outfolder = self.counter_dict.get("outfolder")
+                if outfolder:
+                    out_path = os.path.join(outfolder, "crop_diag.jsonl")
+                else:
+                    out_path = "/tmp/crop_diag.jsonl"
+
+            out_dir = os.path.dirname(out_path)
+            if out_dir and not os.path.exists(out_dir):
+                os.makedirs(out_dir)
+
+            with open(out_path, "a", encoding="utf-8") as f:
+                f.write(json.dumps(event, ensure_ascii=True) + "\n")
+
+            if self.DIAG_CROP_STDOUT:
+                print(f"[DIAG_CROP] {stage}: {event['payload']}")
+        except Exception as e:
+            if self.VERBOSE:
+                print("DIAG_CROP logging failed", e)
 
     # def ensure_lms_list(self, lms):
     #     # convert NormalizedLandmarkList to list of tuples
@@ -881,6 +953,131 @@ class SortPose:
             print('failed:', new_file)
             print('Error:', str(e))
             return False
+
+    def set_face_pair_cache_engine(self, engine):
+        self.face_pair_cache_engine = engine
+
+    def reset_face_pair_stats(self):
+        self.face_pair_stats = {
+            "pass": 0,
+            "fail": 0,
+            "cache_pass": 0,
+            "cache_fail": 0,
+            "computed_pass": 0,
+            "computed_fail": 0,
+        }
+
+    def print_face_pair_stats(self, label="face pair cycle"):
+        stats = getattr(self, "face_pair_stats", None)
+        if not stats:
+            print(f"[{label}] no face pair stats available")
+            return
+
+        print(
+            f"[{label}] pass={stats['pass']} fail={stats['fail']} "
+            f"cache_pass={stats['cache_pass']} cache_fail={stats['cache_fail']} "
+            f"computed_pass={stats['computed_pass']} computed_fail={stats['computed_fail']}"
+        )
+
+    def canonicalize_face_pair(self, image_id_a, image_id_b):
+        try:
+            image_id_a = int(image_id_a)
+            image_id_b = int(image_id_b)
+        except (TypeError, ValueError):
+            return None
+
+        if image_id_a == image_id_b:
+            return None
+
+        return tuple(sorted((image_id_a, image_id_b)))
+
+    def get_face_pair_cache_result(self, image_id_a, image_id_b):
+        pair_key = self.canonicalize_face_pair(image_id_a, image_id_b)
+        if pair_key is None:
+            return None
+
+        if pair_key in self.face_pair_result_cache:
+            return self.face_pair_result_cache[pair_key]
+
+        if self.face_pair_cache_engine is None:
+            return None
+
+        lookup_sql = text(
+            "SELECT result FROM FacePairTestCache "
+            "WHERE image_id_lo = :image_id_lo AND image_id_hi = :image_id_hi"
+        )
+        with self.face_pair_cache_engine.connect() as connection:
+            row = connection.execute(
+                lookup_sql,
+                {
+                    "image_id_lo": pair_key[0],
+                    "image_id_hi": pair_key[1],
+                },
+            ).mappings().first()
+
+        if row and row["result"] in ("pass", "fail"):
+            self.face_pair_result_cache[pair_key] = row["result"]
+            return row["result"]
+
+        return None
+
+    def store_face_pair_cache_result(self, image_id_a, image_id_b, result):
+        if result not in ("pass", "fail"):
+            return
+
+        pair_key = self.canonicalize_face_pair(image_id_a, image_id_b)
+        if pair_key is None:
+            return
+
+        self.face_pair_result_cache[pair_key] = result
+
+        if self.face_pair_cache_engine is None:
+            return
+
+        upsert_sql = text(
+            "INSERT INTO FacePairTestCache (image_id_lo, image_id_hi, result) "
+            "VALUES (:image_id_lo, :image_id_hi, :result) "
+            "ON DUPLICATE KEY UPDATE "
+            "result = VALUES(result), updated_at = CURRENT_TIMESTAMP"
+        )
+        with self.face_pair_cache_engine.begin() as connection:
+            connection.execute(
+                upsert_sql,
+                {
+                    "image_id_lo": pair_key[0],
+                    "image_id_hi": pair_key[1],
+                    "result": result,
+                },
+            )
+
+    def test_or_lookup_face_pair(self, last_image, candidate_image, current_image_id):
+        previous_image_id = self.counter_dict.get("last_image_id")
+        cached_result = self.get_face_pair_cache_result(previous_image_id, current_image_id)
+
+        if cached_result == "pass":
+            self.face_pair_stats["pass"] += 1
+            self.face_pair_stats["cache_pass"] += 1
+            print(f"face pair cache hit PASS for {previous_image_id}, {current_image_id}")
+            return True
+        if cached_result == "fail":
+            self.face_pair_stats["fail"] += 1
+            self.face_pair_stats["cache_fail"] += 1
+            print(f"face pair cache hit FAIL for {previous_image_id}, {current_image_id}")
+            return False
+
+        is_face = self.test_pair(last_image, candidate_image)
+        if is_face:
+            self.face_pair_stats["pass"] += 1
+            self.face_pair_stats["computed_pass"] += 1
+        else:
+            self.face_pair_stats["fail"] += 1
+            self.face_pair_stats["computed_fail"] += 1
+        self.store_face_pair_cache_result(
+            previous_image_id,
+            current_image_id,
+            "pass" if is_face else "fail",
+        )
+        return is_face
 
     def preview_img(self,img):
         cv2.imshow("difference", img)
@@ -1437,6 +1634,7 @@ class SortPose:
         Needs df and padding for number of bboxes to buffer crop
         """
         landmarks_list = df['body_landmarks_normalized'].tolist()
+        image_ids = df['image_id'].tolist() if 'image_id' in df.columns else [None] * len(landmarks_list)
         list_min_xs = []
         list_max_xs = []
         list_min_ys = []
@@ -1444,52 +1642,143 @@ class SortPose:
         lower_y_samples = []
         left_x_samples = []
         right_x_samples = []
+        y_sign_counter = Counter()
+        x_sign_counter = Counter()
+        rejected_image_ids = []
+        rejected_details = []
+        pending_rows = []
 
         # Keep low-confidence/placeholder points out of dynamic crop estimation.
         vis_threshold = 0.35
 
-        for landmark_list in landmarks_list:
-            if hasattr(landmark_list, 'landmark'):
-                current_x_coords = []
-                current_y_coords = []
-                for idx, landmark in enumerate(landmark_list.landmark):
-                    if landmark.x is None or landmark.y is None:
-                        continue
+        for image_id, landmark_list in zip(image_ids, landmarks_list):
+            if not hasattr(landmark_list, 'landmark'):
+                continue
 
-                    vis = getattr(landmark, 'visibility', 1.0)
-                    if vis is not None and vis < vis_threshold:
-                        continue
+            current_x_coords = []
+            current_y_coords = []
+            current_lower_y_samples = []
+            current_left_x_samples = []
+            current_right_x_samples = []
 
-                    x = float(landmark.x)
-                    y = float(landmark.y)
-                    if not np.isfinite(x) or not np.isfinite(y):
-                        continue
+            for idx, landmark in enumerate(landmark_list.landmark):
+                if landmark.x is None or landmark.y is None:
+                    continue
 
-                    current_x_coords.append(x)
-                    current_y_coords.append(y)
+                vis = getattr(landmark, 'visibility', 1.0)
+                if vis is not None and vis < vis_threshold:
+                    continue
 
-                    # Orientation anchors from anatomy:
-                    # hips/knees/ankles are below the nose; shoulders/arms indicate left/right.
-                    if idx in (23, 24, 25, 26, 27, 28):
-                        lower_y_samples.append(y)
-                    if idx in (11, 13, 15, 17, 19, 21):
-                        left_x_samples.append(x)
-                    if idx in (12, 14, 16, 18, 20, 22):
-                        right_x_samples.append(x)
-                
-                if current_x_coords: # Check if any valid landmarks were found for this specific list
-                    # Use robust bounds to reduce outlier-driven flips.
-                    list_min_xs.append(float(np.percentile(current_x_coords, 5)))
-                    list_max_xs.append(float(np.percentile(current_x_coords, 95)))
-                    list_min_ys.append(float(np.percentile(current_y_coords, 5)))
-                    list_max_ys.append(float(np.percentile(current_y_coords, 95)))
-        print("list_min_xs", list_min_xs)
-        print("list_max_xs", list_max_xs)
-        print("list_min_ys", list_min_ys)
-        print("list_max_ys", list_max_ys)
+                x = float(landmark.x)
+                y = float(landmark.y)
+                if not np.isfinite(x) or not np.isfinite(y):
+                    continue
+
+                current_x_coords.append(x)
+                current_y_coords.append(y)
+
+                # Orientation anchors from anatomy:
+                # hips/knees/ankles are below the nose; shoulders/arms indicate left/right.
+                if idx in (23, 24, 25, 26, 27, 28):
+                    current_lower_y_samples.append(y)
+                if idx in (11, 13, 15, 17, 19, 21):
+                    current_left_x_samples.append(x)
+                if idx in (12, 14, 16, 18, 20, 22):
+                    current_right_x_samples.append(x)
+            
+            if current_x_coords:
+                row_min_x = float(np.percentile(current_x_coords, 5))
+                row_max_x = float(np.percentile(current_x_coords, 95))
+                row_min_y = float(np.percentile(current_y_coords, 5))
+                row_max_y = float(np.percentile(current_y_coords, 95))
+
+                if current_lower_y_samples:
+                    row_y_sign = "inverted" if statistics.median(current_lower_y_samples) < 0 else "natural"
+                    row_y_source = "anatomy"
+                else:
+                    row_y_sign = "inverted" if abs(row_min_y) >= abs(row_max_y) else "natural"
+                    row_y_source = "extrema-fallback"
+
+                if current_left_x_samples and current_right_x_samples:
+                    row_x_sign = "inverted" if statistics.median(current_right_x_samples) < statistics.median(current_left_x_samples) else "natural"
+                    row_x_source = "anatomy"
+                else:
+                    row_x_sign = "inverted" if abs(row_min_x) >= abs(row_max_x) else "natural"
+                    row_x_source = "extrema-fallback"
+
+                y_sign_counter[row_y_sign] += 1
+                x_sign_counter[row_x_sign] += 1
+                pending_rows.append(
+                    {
+                        "image_id": image_id,
+                        "min_x": row_min_x,
+                        "max_x": row_max_x,
+                        "min_y": row_min_y,
+                        "max_y": row_max_y,
+                        "y_sign": row_y_sign,
+                        "x_sign": row_x_sign,
+                        "y_source": row_y_source,
+                        "x_source": row_x_source,
+                        "lower_y_samples": current_lower_y_samples,
+                        "left_x_samples": current_left_x_samples,
+                        "right_x_samples": current_right_x_samples,
+                    }
+                )
+
+        dominant_y_sign = y_sign_counter.most_common(1)[0][0] if y_sign_counter else None
+        dominant_x_sign = x_sign_counter.most_common(1)[0][0] if x_sign_counter else None
+
+        for row in pending_rows:
+            if dominant_y_sign and row["y_sign"] != dominant_y_sign:
+                rejected_image_ids.append(row["image_id"])
+                rejected_details.append(
+                    {
+                        "image_id": row["image_id"],
+                        "reason": "y_sign_mismatch",
+                        "row_y_sign": row["y_sign"],
+                        "dominant_y_sign": dominant_y_sign,
+                        "min_y": row["min_y"],
+                        "max_y": row["max_y"],
+                    }
+                )
+                continue
+
+            if dominant_x_sign and row["x_sign"] != dominant_x_sign and self.VERBOSE:
+                print(
+                    f"calc_dynamic_multiplier_from_min_max_body_landmarks: image {row['image_id']} has x sign {row['x_sign']} "
+                    f"but dominant x sign is {dominant_x_sign}; keeping row because crop failure is y-driven"
+                )
+
+            list_min_xs.append(row["min_x"])
+            list_max_xs.append(row["max_x"])
+            list_min_ys.append(row["min_y"])
+            list_max_ys.append(row["max_y"])
+            lower_y_samples.extend(row["lower_y_samples"])
+            left_x_samples.extend(row["left_x_samples"])
+            right_x_samples.extend(row["right_x_samples"])
+
+        if self.VERBOSE:
+            print("list_min_xs", list_min_xs)
+            print("list_max_xs", list_max_xs)
+            print("list_min_ys", list_min_ys)
+            print("list_max_ys", list_max_ys)
 
         if not list_min_xs:
-            print("calc_dynamic_multiplier_from_min_max_body_landmarks: no valid landmarks, keeping existing image_edge_multiplier")
+            print("calc_dynamic_multiplier_from_min_max_body_landmarks: no valid landmarks after mixed-sign filtering, keeping existing image_edge_multiplier")
+            self._diag_crop_record(
+                "dynamic_multiplier",
+                {
+                    "padding": padding,
+                    "rejected_mixed_sign_landmarks": True,
+                    "dominant_y_sign": dominant_y_sign,
+                    "dominant_x_sign": dominant_x_sign,
+                    "y_sign_counter": dict(y_sign_counter),
+                    "x_sign_counter": dict(x_sign_counter),
+                    "rejected_image_ids": rejected_image_ids,
+                    "rejected_details": rejected_details[:10],
+                    "fallback_image_edge_multiplier": self.image_edge_multiplier,
+                },
+            )
             return self.image_edge_multiplier
 
         median_min_x = statistics.median(list_min_xs)
@@ -1538,10 +1827,10 @@ class SortPose:
             left_raw = abs(median_min_x)
             x_orientation = "natural(x+ is right)"
 
-        top_extent = max(math.ceil(top_raw + padding), self.MIN_DYN_BBOX_DIM)
-        right_extent = max(math.ceil(right_raw + padding), self.MIN_DYN_BBOX_DIM)
-        bottom_extent = max(math.ceil(bottom_raw + padding), self.MIN_DYN_BBOX_DIM)
-        left_extent = max(math.ceil(left_raw + padding), self.MIN_DYN_BBOX_DIM)
+        top_extent = max(math.ceil(top_raw + padding), self.MIN_DYN_BBOX_DIM[0])
+        right_extent = max(math.ceil(right_raw + padding), self.MIN_DYN_BBOX_DIM[1])
+        bottom_extent = max(math.ceil(bottom_raw + padding), self.MIN_DYN_BBOX_DIM[2])
+        left_extent = max(math.ceil(left_raw + padding), self.MIN_DYN_BBOX_DIM[3])
 
         # if diff between left and right is less/equal to 1 bbox, take the bigger one and make them symmetrical.
         if abs(left_extent) != abs(right_extent) and abs(abs(left_extent) - abs(right_extent)) <= 1:
@@ -1559,7 +1848,35 @@ class SortPose:
         if self.VERBOSE:
             print(f"calc_dynamic_multiplier_from_min_max_body_landmarks orientation: {y_orientation}, {x_orientation}")
             print(f"orientation source: y={y_source}, x={x_source}")
+            print(f"dominant sign counters: y={dict(y_sign_counter)}, x={dict(x_sign_counter)}")
+            print(f"rejected mixed-sign image ids: {rejected_image_ids}")
             print(f"calc_dynamic_multiplier_from_min_max_body_landmarks: {(top_extent, right_extent, bottom_extent, left_extent)}")
+        self._diag_crop_record(
+            "dynamic_multiplier",
+            {
+                "padding": padding,
+                "dominant_y_sign": dominant_y_sign,
+                "dominant_x_sign": dominant_x_sign,
+                "y_sign_counter": dict(y_sign_counter),
+                "x_sign_counter": dict(x_sign_counter),
+                "rejected_mixed_sign_count": len(rejected_image_ids),
+                "rejected_image_ids": rejected_image_ids,
+                "orientation_y": y_orientation,
+                "orientation_x": x_orientation,
+                "orientation_source_y": y_source,
+                "orientation_source_x": x_source,
+                "median_min_x": median_min_x,
+                "median_max_x": median_max_x,
+                "median_min_y": median_min_y,
+                "median_max_y": median_max_y,
+                "extents": {
+                    "top": top_extent,
+                    "right": right_extent,
+                    "bottom": bottom_extent,
+                    "left": left_extent,
+                },
+            },
+        )
         return [top_extent, right_extent, bottom_extent, left_extent]
     
     def bbox_to_pixel_conversion(self, bbox):
@@ -1629,6 +1946,22 @@ class SortPose:
         # cv2.waitKey(1)  # Display the window for 1 ms
         # cv2.destroyAllWindows()
         print(f"auto_edge_crop: image edge mult {self.image_edge_multiplier}, bbox dimensions:{bbox_dimensions}, cropped to ({left},{top}),({right},{bottom})")
+        self._diag_crop_record(
+            "auto_edge_crop",
+            {
+                "resize": resize,
+                "scaled_face_height": scaled_face_height,
+                "image_shape": list(image.shape) if image is not None else None,
+                "bbox_dimensions": bbox_dimensions,
+                "crop": {
+                    "top": top,
+                    "right": right,
+                    "bottom": bottom,
+                    "left": left,
+                },
+                "output_shape": list(cropped.shape) if cropped is not None else None,
+            },
+        )
         return cropped
 
 ###########################################################################
@@ -2017,8 +2350,10 @@ class SortPose:
         if self.this_nose_bridge_dist is None:
             try:
                 # self.NOSE_BRIDGE_DIST
-                self.nose_2d = self.get_face_2d_point(1)
+                raw_nose_2d = self.get_face_2d_point(1)
+                self.nose_2d = raw_nose_2d
                 if self.VERBOSE: print("nose_2d",self.nose_2d)
+                nose_delta = None
                 if self.ORIGIN == 6:
                     self.this_nose_bridge_dist = self.calc_nose_bridge_dist(faceLms)
                     if self.VERBOSE: print("NOSE_BRIDGE_DIST, self.this_nose_bridge_dist", self.NOSE_BRIDGE_DIST, self.this_nose_bridge_dist)
@@ -2027,6 +2362,18 @@ class SortPose:
                     self.nose_2d = (math.floor(self.nose_2d[0]), math.floor(self.nose_2d[1] + (nose_delta*self.face_height)))
                 # cv2.circle(self.image, tuple(map(int, self.nose_2d)), 5, (0, 0,0), 5)
                 if self.VERBOSE: print("get_image_face_data new nose_2d",self.nose_2d)
+                self._diag_crop_record(
+                    "face_anchor",
+                    {
+                        "raw_nose_2d": raw_nose_2d,
+                        "nose_2d": self.nose_2d,
+                        "nose_bridge_ref": self.NOSE_BRIDGE_DIST,
+                        "nose_bridge_this": self.this_nose_bridge_dist,
+                        "nose_delta": nose_delta,
+                        "face_height": getattr(self, "face_height", None),
+                        "image_shape": list(image.shape) if image is not None else None,
+                    },
+                )
             except:
                 print("couldn't get nose_2d via faceLms")
         else:
@@ -2212,9 +2559,36 @@ class SortPose:
                     # Define the cropped area
                     new_image = new_image[CROP_TOP:CROP_BOTTOM, CROP_LEFT:CROP_RIGHT]
                     if self.VERBOSE: print("expand_image [-] cropped image to", crop_list)
+                self._diag_crop_record(
+                    "expand_image",
+                    {
+                        "resize": resize,
+                        "resize_dims": list(resize_dims),
+                        "resize_nose": list(resize_nose),
+                        "existing_pixels": {
+                            "above": existing_pixels_above_nose,
+                            "below": existing_pixels_below_nose,
+                            "left": existing_pixels_left_of_nose,
+                            "right": existing_pixels_right_of_nose,
+                        },
+                        "border_list": border_list,
+                        "expand_list": expand_list,
+                        "crop_list": crop_list,
+                        "expand_size": list(this_expand_size),
+                        "new_image_shape": list(new_image.shape) if new_image is not None else None,
+                    },
+                )
             else:
                 new_image = None
                 if self.VERBOSE: print("expand_image [-]failed expand loop, with resize", str(resize), "too big, skipping")
+                self._diag_crop_record(
+                    "expand_image",
+                    {
+                        "resize": resize,
+                        "failed": True,
+                        "reason": "resize_too_large",
+                    },
+                )
 
 
         except Exception as e:
@@ -2244,6 +2618,16 @@ class SortPose:
         #     print("simple crop",simple_crop)
         # simple_crop_image=image[simple_crop["top"]:simple_crop["bottom"],simple_crop["left"]:simple_crop["right"],:]
         if self.VERBOSE: print("extension pixels calculated")
+        self._diag_crop_record(
+            "extension_pixels",
+            {
+                "nose_2d": self.nose_2d,
+                "face_height": self.face_height,
+                "max_image_edge_multiplier": self.MAX_IMAGE_EDGE_MULTIPLIER,
+                "extension_pixels": extension_pixels,
+                "image_wh": [self.w, self.h],
+            },
+        )
         return extension_pixels
 
     def define_corners(self,extension_pixels,shape):
@@ -2523,9 +2907,9 @@ class SortPose:
 
     def get_start_obj_bbox(self, start_img, df_enc):
         enc1 = None
+        sort_column, _ = self.get_sort_column_mapping(self.SORT_TYPE, self.CLUSTER_TYPE)
         if start_img == "median":
             print("[get_start_obj_bbox] in median", df_enc)
-            sort_column = "obj_bbox_list"
             # df_rounded = self.smart_round_df(df_enc, bbox_col)
 
             # sort_column contains a 4 items lists of int values
@@ -2934,6 +3318,24 @@ class SortPose:
 
 
     def get_enc1(self, df, FIRST_ROUND=False, hsv_sort = False):
+        def value_has_nan(value):
+            if value is None:
+                return True
+            try:
+                arr = np.asarray(value, dtype=float)
+            except (TypeError, ValueError):
+                return pd.isnull(value)
+            return np.isnan(arr).any()
+
+        def get_last_valid_value(frame, column):
+            if column not in frame.columns:
+                return None
+            for _, row in frame.iloc[::-1].iterrows():
+                candidate = row.get(column, None)
+                if not value_has_nan(candidate):
+                    return candidate
+            return None
+
         enc1 = None
         obj_bbox1 = None
         if FIRST_ROUND:
@@ -2992,6 +3394,12 @@ class SortPose:
             else:
                 print("get_enc1: SORT_TYPE not recognized or column missing:", self.SORT_TYPE)
                 enc1 = None
+            if value_has_nan(enc1):
+                sort_column, _ = self.get_sort_column_mapping(self.SORT_TYPE, self.CLUSTER_TYPE)
+                fallback_enc1 = get_last_valid_value(df, sort_column)
+                if fallback_enc1 is not None:
+                    print(f"get_enc1: replacing NaN seed from last valid {sort_column} row")
+                    enc1 = fallback_enc1
             # setting obj_bbox1
             if self.SORT_TYPE in "planar_body" and "obj_bbox_list" in df.columns: obj_bbox1 = df.iloc[-1]["obj_bbox_list"]
         # print("returning enc1, obj_bbox1", enc1, obj_bbox1)
@@ -3182,12 +3590,17 @@ class SortPose:
                         return True
             return False
 
+        def coerce_vector_to_float_array(value):
+            array = np.asarray(value, dtype=float)
+            if array.ndim > 1:
+                array = array.reshape(-1)
+            return array
+
         # Check if the encodings_array contains NaN values
-        if contains_nan(encodings_array):
+        encodings_array = np.asarray(encodings_array, dtype=float)
+
+        if np.isnan(encodings_array).any():
             print("encodings_array of len", len(encodings_array), "contains NaN values")
-            
-            # Convert encodings_array to a NumPy array
-            encodings_array = np.array(encodings_array)
 
             # Create a boolean mask for non-NaN rows in encodings_array
             non_nan_mask = ~np.isnan(encodings_array).any(axis=1)
@@ -3200,6 +3613,25 @@ class SortPose:
             # Remove the same rows from df_enc based on the non_nan_mask
             df_enc = df_enc[non_nan_mask].reset_index(drop=True)
             print("Cleaned df_enc:", df_enc.shape)
+
+        enc1 = coerce_vector_to_float_array(enc1)
+
+        if np.isnan(enc1).any():
+            print("enc1 contains NaN values")
+            if len(encodings_array):
+                column_fill = np.nanmedian(encodings_array, axis=0)
+                if np.isnan(column_fill).any():
+                    column_fill = np.where(np.isnan(column_fill), encodings_array[0], column_fill)
+                if np.isnan(column_fill).any():
+                    column_fill = np.nan_to_num(column_fill)
+                enc1 = np.where(np.isnan(enc1), column_fill, enc1)
+                if np.isnan(enc1).any():
+                    enc1 = np.asarray(encodings_array[0], dtype=float)
+                    print("Replaced enc1 with first clean encoding row")
+                else:
+                    print("Imputed NaN values in enc1 from clean encoding matrix")
+            else:
+                raise ValueError("No clean encodings available after removing NaN rows")
 
     # print len of each item in encodings_array
         if "obj_bbox" in self.SORT_TYPE:
@@ -3419,13 +3851,15 @@ class SortPose:
         # if self.VERBOSE: print("debugging df_sorted", df_sorted.columns)
         if len(df_sorted) == 0: 
             FIRST_ROUND = True
+            if self.OBJ_CLS_ID > 0:
+                sort_column, _ = self.get_sort_column_mapping(self.SORT_TYPE, self.CLUSTER_TYPE)
+                if sort_column in df_enc.columns:
+                    df_enc = df_enc.dropna(subset=[sort_column])
             enc1, obj_bbox1 = self.get_enc1(df_enc, FIRST_ROUND)
             # if self.VERBOSE: print(f"first round enc1, {enc1}   ....    obj_bbox1", obj_bbox1)
-            # drop all rows where obj_bbox_list is None
-            if self.OBJ_CLS_ID > 0: df_enc = df_enc.dropna(subset=["obj_bbox_list"])
         else: 
             FIRST_ROUND = False
-            print(f"about to send df_sorted through to find last obj_bbox_list, which is :", df_sorted.iloc[-1])
+            print("about to send df_sorted through to find last object sort row, which is :", df_sorted.iloc[-1])
             enc1, obj_bbox1 = self.get_enc1(df_sorted, FIRST_ROUND)
             if self.VERBOSE: print(f"LATER round enc1, {enc1} obj_bbox1", obj_bbox1)
 
@@ -3718,8 +4152,11 @@ class SortPose:
                 continue
 
             translated_landmark = landmark_pb2.NormalizedLandmark()
-            translated_landmark.x = (nose_pos["x"]-lm_x*width )/face_height
-            translated_landmark.y = (nose_pos["y"]-lm_y*height)/face_height
+            # Keep sign convention aligned with bbox_norm and hand normalization:
+            # negative x = left of nose, positive x = right of nose
+            # negative y = above nose, positive y = below nose
+            translated_landmark.x = (lm_x * width - nose_pos["x"]) / face_height
+            translated_landmark.y = (lm_y * height - nose_pos["y"]) / face_height
             translated_landmark.visibility = lm_visibility
             translated_landmarks.landmark.append(translated_landmark)
 
@@ -3737,8 +4174,8 @@ class SortPose:
             # print(nose_pos)
             #  nose_pos[x]-landmark.x*face_height
             projected_landmark = landmark_pb2.NormalizedLandmark()
-            projected_landmark.x = int(nose_pos["x"]-landmark.x*face_height)
-            projected_landmark.y = int(nose_pos["y"]-landmark.y*face_height)
+            projected_landmark.x = int(nose_pos["x"] + landmark.x * face_height)
+            projected_landmark.y = int(nose_pos["y"] + landmark.y * face_height)
             # projected_landmark.x=projected_landmark.x*height/width
             # projected_landmark.y=projected_landmark.x*width/height   
             projected_landmark.visibility = landmark.visibility
@@ -4285,34 +4722,126 @@ class SortPose:
             # then convert all values to int
             df = df.astype(float)
             df = df.astype(int)
-        if isinstance(df.iloc[0, 0], str):
-            print("first column is a string,", print(df.iloc[0, 0]))
+        elif isinstance(df.iloc[0, 0], str):
+            # New-style matrix CSV: first row is column headers (e.g. "cluster_id","object_hsv_0",...,"total_images_any_bin")
+            # first column is cluster_id values; not all cluster IDs may be present.
+            # Build a full-size matrix indexed by cluster_id so row index == cluster_id.
+            header = df.iloc[0].tolist()
+            data = df.iloc[1:].reset_index(drop=True)
+            # Find any trailing non-count column (e.g. "total_images_any_bin") to exclude
+            end_col = len(header)
+            for j, h in enumerate(header):
+                if 'total' in str(h).lower():
+                    end_col = j
+                    break
+            cluster_ids = data.iloc[:, 0].astype(int).tolist()
+            count_data = data.iloc[:, 1:end_col].astype(float).astype(int)
+            max_cluster_id = max(cluster_ids)
+            n_hsv_cols = count_data.shape[1]
+            full_matrix = np.zeros((max_cluster_id + 1, n_hsv_cols), dtype=int)
+            for i, cid in enumerate(cluster_ids):
+                full_matrix[cid] = count_data.iloc[i].values
+            df = pd.DataFrame(full_matrix)
         return df, hsv_sum_df, total_df
 
-    def find_sorted_suitable_indices(self, topic_no,min_value, folder_path=None):
+    def find_sorted_suitable_indices(self, topic_no, min_value, folder_path=None, hsv_cluster_groups=None, manifest_file="fusion_manifest.json"):
         if folder_path is None:
-            folder_path='utilities/data/october_fusion_clusters'
-            prefix = 'topic_'
-        elif "keyword" in folder_path:
-            prefix = 'Keywords_'
-        elif "detections" in folder_path:
-            prefix = 'Detections_'
+            raise ValueError("folder_path is required for manifest-driven CSV discovery")
 
-        self.HSV_CLUSTER_GROUPS = [
-            # [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22],
-            [[3, 4], [5, 6, 7], [8, 9, 10, 11], [12, 13], [15, 16], [17, 18, 19, 20], [21, 22]],
-            [[0],[1],[2],[3, 4, 5, 6, 22, 7], [8, 9, 10, 11, 12, 13], [14],[15, 16, 17, 18, 19, 20, 21]], # ALSO USE FOR DEDUPING
-            # [[3, 4, 5, 6, 22, 7], [8, 9, 10, 11, 12, 13], [14],[15, 16, 17, 18, 19, 20, 21]], # TESTING Nov23
-            [[3, 4, 5, 6, 22, 7, 8, 9, 10, 11, 12, 13], [14, 15, 16, 17, 18, 19, 20, 21]], # TESTING Nov23
-            # [[2],[3, 4, 5, 6, 7, 22]],
-            # [[0,1,2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 19, 20, 21, 22]]
-        ]
-        # Construct the file name and path
-        print("topic_no", topic_no)
-        isolated_topic = str(topic_no[0]).split('.')[0]  # Get the integer part before the decimal
-        print("prefix", prefix, "isolated topic", isolated_topic)
-        file_name = prefix + isolated_topic + '.csv'
+        manifest_path = os.path.join(folder_path, manifest_file)
+        if not os.path.exists(manifest_path):
+            raise FileNotFoundError(f"Missing fusion manifest: {manifest_path}")
+
+        with open(manifest_path, "r", encoding="utf-8") as f:
+            manifest = json.load(f)
+
+        required_manifest_fields = ["contract_version", "files"]
+        missing_fields = [k for k in required_manifest_fields if k not in manifest]
+        if missing_fields:
+            raise ValueError(f"Invalid manifest {manifest_path}, missing fields: {missing_fields}")
+
+        files_map = manifest.get("files", {})
+        if not isinstance(files_map, dict) or not files_map:
+            raise ValueError(f"Invalid manifest {manifest_path}, 'files' must be a non-empty map")
+
+        if topic_no is None:
+            raise ValueError("topic_no cannot be None for manifest lookup")
+        if isinstance(topic_no, list):
+            isolated_topic = int(float(topic_no[0]))
+        else:
+            isolated_topic = int(float(topic_no))
+
+        file_name = None
+        file_meta = None
+        aggregate_file_name = None
+        aggregate_file_meta = None
+        known_entity_ids = []
+
+        for candidate_name, candidate_meta in files_map.items():
+            raw_entity_id = candidate_meta.get("entity_id", -999999)
+
+            if raw_entity_id is None:
+                if aggregate_file_name is None:
+                    aggregate_file_name = candidate_name
+                    aggregate_file_meta = candidate_meta
+                continue
+
+            try:
+                candidate_entity_id = int(raw_entity_id)
+            except (TypeError, ValueError):
+                continue
+
+            known_entity_ids.append(candidate_entity_id)
+            if candidate_entity_id == isolated_topic:
+                file_name = candidate_name
+                file_meta = candidate_meta
+                break
+
+        if file_name is None and isolated_topic == 0 and aggregate_file_name is not None:
+            file_name = aggregate_file_name
+            file_meta = aggregate_file_meta
+
+        if file_name is None:
+            raise ValueError(
+                f"No manifest entry for entity_id {isolated_topic} in {manifest_path}. "
+                f"Known entity_ids: {known_entity_ids}. "
+                f"Aggregate entries: {[name for name, meta in files_map.items() if meta.get('entity_id') is None]}"
+            )
+
         file_path = os.path.join(folder_path, file_name)
+        if not os.path.exists(file_path):
+            raise FileNotFoundError(f"Manifest file entry not found on disk: {file_path}")
+
+        self.HSV_CLUSTER_GROUPS = hsv_cluster_groups
+
+        def flatten_hsv_groups(groups):
+            flattened = []
+
+            def walk(node):
+                if isinstance(node, int):
+                    flattened.append(node)
+                    return
+                if isinstance(node, (list, tuple)):
+                    for item in node:
+                        walk(item)
+
+            walk(groups)
+            return flattened
+
+        available_hsv_bins = file_meta.get("available_hsv_bins")
+        if available_hsv_bins:
+            if self.HSV_CLUSTER_GROUPS is None:
+                raise ValueError(
+                    "hsv_cluster_groups is required for HSV-enabled fusion matrices. "
+                    "Pass a named preset from constants_make_video.py."
+                )
+            configured_bins = sorted(list(set(flatten_hsv_groups(self.HSV_CLUSTER_GROUPS))))
+            missing_bins = [b for b in configured_bins if b not in available_hsv_bins]
+            if missing_bins:
+                raise ValueError(
+                    f"HSV preset references bins not present in {file_name}: {missing_bins}. "
+                    f"Available bins: {available_hsv_bins}"
+                )
         
         # Load the CSV file into a DataFrame
         df = pd.read_csv(file_path, header=None)
@@ -4349,24 +4878,40 @@ class SortPose:
             elif any(not isinstance(y, int) for y in column_list): do_simple = False
             else: do_simple = True
 
-            #temp TK override
-            do_simple = False
             if do_simple:
                 print(f"doing simple with {column_list}")
-                # original per-column behavior
-                suitable_indices = np.argwhere(gesture_array > min_value)
-                # zero out selected cells to avoid re-use
-                for row, col in suitable_indices:
-                    gesture_array[row, col] = 0
+                # Evaluate only the requested columns in simple mode.
+                if column_list is None:
+                    simple_cols = np.arange(gesture_array.shape[1], dtype=int)
+                else:
+                    simple_cols = np.array(column_list, dtype=int)
+                    simple_cols = simple_cols[(simple_cols >= 0) & (simple_cols < gesture_array.shape[1])]
 
-                if suitable_indices.size == 0:
-                    return []
-                # print(f"gesture array for index 239 after simple sort:", gesture_array[239,:])
+                if simple_cols.size == 0:
+                    return [], gesture_array
 
-                # Sort by row then column
-                suitable_indices_array = np.array(suitable_indices)
-                sorted_idx = suitable_indices_array[np.lexsort((suitable_indices_array[:,1], suitable_indices_array[:,0]))]
-                return sorted_idx.tolist(), gesture_array
+                # Deterministic grouped-by-row ranking:
+                # iterate rows in ascending order; within each row sort by
+                # value desc, then column asc for stable tie-breaking.
+                suitable_indices = []
+                for row_idx in range(gesture_array.shape[0]):
+                    row_vals = gesture_array[row_idx, simple_cols]
+                    passing_mask = row_vals > min_value
+                    if not np.any(passing_mask):
+                        continue
+
+                    passing_cols = simple_cols[passing_mask]
+                    passing_vals = row_vals[passing_mask]
+
+                    ranked_pairs = sorted(
+                        zip(passing_cols.tolist(), passing_vals.tolist()),
+                        key=lambda x: (-x[1], x[0]),
+                    )
+                    for col_idx, _ in ranked_pairs:
+                        suitable_indices.append([int(row_idx), int(col_idx)])
+                        gesture_array[row_idx, col_idx] = 0
+
+                return suitable_indices, gesture_array
 
             # Normalize column_list into list-of-groups (each group is a list of ints)
             # groups = []

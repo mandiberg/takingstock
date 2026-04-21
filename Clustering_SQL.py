@@ -46,7 +46,7 @@ EXPAND = False
 ONE_SHOT = False # take all files, based off the very first sort order.
 JUMP_SHOT = False # jump to random file if can't find a run
 
-LIMIT = 10000000
+LIMIT = 1000000
 BATCH_LIMIT = 10000
 
 # number of clusters produced. run GET_OPTIMAL_CLUSTERS and add that number here
@@ -83,13 +83,16 @@ option, MODE = pick(options, title)
 # CLUSTER_TYPE = "Clusters"
 # CLUSTER_TYPE = "BodyPoses"
 # CLUSTER_TYPE = "BodyPoses3D" # use this for META 3D body clusters, Arms will start build but messed up because of subset landmarks
-# CLUSTER_TYPE = "ArmsPoses3D" 
-CLUSTER_TYPE = "ObjectFusion" 
-ONLY_EXISTING_IMAGES_DETECTIONS = True # faster for testing: will not calc new object placements
+CLUSTER_TYPE = "ArmsPoses3D" 
+
+# you need both of these for ObjectFusion
+# CLUSTER_TYPE = "ObjectFusion" 
+# ONLY_EXISTING_IMAGES_DETECTIONS = True # faster for testing: will not calc new object placements
+
 # CLUSTER_TYPE = "HandsPositions"
 # CLUSTER_TYPE = "HandsGestures"
 # CLUSTER_TYPE = "FingertipsPositions"
-# CLUSTER_TYPE = "HSV" # only works with cluster save, not with assignment
+# CLUSTER_TYPE = "HSV" 
 VERBOSE = False
 DEBUG_IMAGE_ID = None  # Set to None to disable single-image isolation
 cl = ToolsClustering(CLUSTER_TYPE, VERBOSE=VERBOSE)
@@ -118,6 +121,8 @@ SAVE_IMAGE_DETECTIONS_PER_BATCH = True  # persist ObjectFusion ImagesDetections 
 DROP_NONE_PLACEMENTS = False  # keep ObjectFusion rows with no object assignments so arms pose can cluster them
 ARMS_POSE_CACHE_TABLE = 'ImagesArmsFeatures3D'
 ARMS_POSE_SUBSET_NAME = 'arms_0_22_xyz'
+SUPPRESS_ARMS_FEATURES = True  # ObjectFusion: skip appended ArmsFeatures, keep existing object logic intact
+cl.SUPPRESS_ARMS_FEATURES = SUPPRESS_ARMS_FEATURES
 ARMS_POSE_SUBSET_VERSION = 1
 # WHICH TABLE TO USE?
 # SegmentTable_name = 'SegmentOct20'
@@ -130,8 +135,8 @@ SegmentTable_name = 'SegmentBig_isface'
 # if cl.CLUSTER_TYPE == "ArmsPoses3D":
 # SegmentHelper_name = 'SegmentHelper_sept2025_heft_keywords'
 # SegmentHelper_name = 'Detections' # if CLUSTER_TYPE = "ObjectFusion", it automatically joins to Detections
-# SegmentHelper_name = 'SegmentHelperObject_81_gift'
-SegmentHelper_name = 'SegmentHelper_T11_Oct20_COCO_Custom'
+# SegmentHelper_name = 'SegmentHelper_T11_Business'
+SegmentHelper_name = 'SegmentHelper_T4_T11_T37_T40'
 # SegmentHelper_name = 'SegmentHelper_T11_Oct20_COCO_Custom_evens_quarters'
 FORCE_HAND_LANDMARKS = False # when doing ArmsPoses3D, default is True, so mongo_hand_landmarks = 1
 
@@ -1250,25 +1255,26 @@ def prepare_df(df, process_object_detections=True, batch_label=None):
         print("first row of df",df.iloc[0].to_string())
         objectfusion_rows_in = len(df)
         print(f"{label}[COUNT] ObjectFusion rows entering prepare_df: {objectfusion_rows_in}")
-        cl.increment_world_lms_stat('candidates_total', objectfusion_rows_in)
-        
-        # Filter: world landmarks are mandatory for subsetted arms-pose features.
-        missing_world_lms_df = df[df['body_landmarks_3D'].isna()] if 'body_landmarks_3D' in df.columns else df
-        missing_world_count = int(len(missing_world_lms_df))
-        cl.increment_world_lms_stat('world_lms_missing', missing_world_count)
-        cl.increment_world_lms_stat('excluded_missing_world_lms', missing_world_count)
-        if missing_world_count > 0 and 'image_id' in missing_world_lms_df.columns:
-            for image_id in missing_world_lms_df['image_id'].head(cl.WORLD_LMS_REPORT_MAX_SAMPLES):
-                cl.append_world_lms_sample_id('world_lms_missing_sample_ids', image_id)
+        if not cl.SUPPRESS_ARMS_FEATURES:
+            cl.increment_world_lms_stat('candidates_total', objectfusion_rows_in)
+            
+            # Filter: world landmarks are mandatory only when ArmsFeatures are part of ObjectFusion.
+            missing_world_lms_df = df[df['body_landmarks_3D'].isna()] if 'body_landmarks_3D' in df.columns else df
+            missing_world_count = int(len(missing_world_lms_df))
+            cl.increment_world_lms_stat('world_lms_missing', missing_world_count)
+            cl.increment_world_lms_stat('excluded_missing_world_lms', missing_world_count)
+            if missing_world_count > 0 and 'image_id' in missing_world_lms_df.columns:
+                for image_id in missing_world_lms_df['image_id'].head(cl.WORLD_LMS_REPORT_MAX_SAMPLES):
+                    cl.append_world_lms_sample_id('world_lms_missing_sample_ids', image_id)
 
-        df = df[df['body_landmarks_3D'].notna()]
-        cl.increment_world_lms_stat('world_lms_present', len(df))
-        print(f"After filtering for body_landmarks_3D: {len(df)} rows remaining")
-        print(f"{label}[COUNT] Rows with body_landmarks_3D: {len(df)} / {objectfusion_rows_in}")
-        
-        if len(df) == 0:
-            print("WARNING: No rows with body_landmarks_3D found. Cannot cluster.")
-            return None
+            df = df[df['body_landmarks_3D'].notna()]
+            cl.increment_world_lms_stat('world_lms_present', len(df))
+            print(f"After filtering for body_landmarks_3D: {len(df)} rows remaining")
+            print(f"{label}[COUNT] Rows with body_landmarks_3D: {len(df)} / {objectfusion_rows_in}")
+            
+            if len(df) == 0:
+                print("WARNING: No rows with body_landmarks_3D found. Cannot cluster.")
+                return None
         
         df = cl.prepare_objectfusion_pose_features(
             df=df,
@@ -1288,7 +1294,9 @@ def prepare_df(df, process_object_detections=True, batch_label=None):
         columns_to_drop = ['face_encodings68', 'face_landmarks', 'body_landmarks', 'body_landmarks_3D','body_landmarks_normalized', 
                            'hand_results', 'left_hand_landmarks', 'right_hand_landmarks', 
                            'left_hand_world_landmarks', 'right_hand_world_landmarks',
-                           'left_hand_landmarks_norm', 'right_hand_landmarks_norm', 'body_landmarks_array_3d']
+                           'left_hand_landmarks_norm', 'right_hand_landmarks_norm']
+        if not cl.SUPPRESS_ARMS_FEATURES:
+            columns_to_drop.append('body_landmarks_array_3d')
     # if "Object" in cl.CLUSTER_TYPE:
         print("first row before query",df.iloc[0].to_string())
         # apply query_detections to each image_id to get the object data
@@ -1328,6 +1336,26 @@ def prepare_df(df, process_object_detections=True, batch_label=None):
         # workaround is to update the start_id to skip the bad data
         df['body_landmarks_array'] = df[keep_col].apply(lambda x: sort.get_landmarks_2d(x, list(range(33)), structure=STRUCTURE))
 
+        if cl.CLUSTER_TYPE == "ArmsPoses3D":
+            subset_indices = sort.SUBSET_LANDMARKS or []
+            max_subset_index = max(subset_indices) if subset_indices else -1
+            df['arms_subset_vector'] = df['body_landmarks_array'].apply(
+                lambda arr: [arr[i] for i in subset_indices]
+                if isinstance(arr, (list, tuple, np.ndarray)) and len(arr) > max_subset_index
+                else None
+            )
+            df['has_world_lms'] = df['arms_subset_vector'].notna()
+            invalid_subset_count = int((df['has_world_lms'] == False).sum())
+            if invalid_subset_count > 0:
+                print(f"{label}[COUNT] Arms rows excluded due to invalid subset vectors: {invalid_subset_count}")
+            df = df[df['has_world_lms'] == True].copy()
+            if len(df) == 0:
+                print(f"{label} No valid rows remain after arms subset filtering.")
+                return None
+            df_list_to_cols(df, 'arms_subset_vector')
+        else:
+            df_list_to_cols(df, 'body_landmarks_array')
+
         # apply io.convert_decimals_to_float to face_x, face_y, face_z, and mouth_gap 
         # df['body_landmarks_array'] = df.apply(lambda row: io.convert_decimals_to_float(row['body_landmarks_array'] + [row['face_x'], row['face_y'], row['face_z'], row['mouth_gap']]), axis=1)
         # drop the columns that are not needed
@@ -1335,11 +1363,9 @@ def prepare_df(df, process_object_detections=True, batch_label=None):
         columns_to_drop=['face_encodings68', 'face_landmarks', 'body_landmarks', keep_col, drop_col]
         print("before cols",df.iloc[0])
         print("before cols",df.iloc[0]['body_landmarks_array'])
-        df_list_to_cols(df, 'body_landmarks_array')
         print("after cols",df.iloc[0])
         if cl.CLUSTER_TYPE == "ArmsPoses3D":
-            df = sort.make_subset_df_lms(df)
-            print("after make_subset_df_lms",df)
+            print("after ArmsPoses3D subset conversion",df)
     # elif cl.CLUSTER_TYPE == "HandsPositions":
     elif cl.CLUSTER_TYPE in ["HandsPositions","FingertipsPositions"]:
         print("first row of df",df.iloc[0])
@@ -1621,23 +1647,26 @@ def fetch_and_prepare_batch(batch_df, batch_num):
             hits = len(non_forced_df) - len(missing_image_ids)
             print(f"[Batch {batch_num}] Precomputed hits (non-target): {hits}, missing: {len(missing_image_ids)}")
 
-            print(f"[Batch {batch_num}] Hydrating precomputed {ARMS_POSE_CACHE_TABLE} for non-target rows...")
-            hydrated_arms_non_forced, missing_arms_image_ids = cl.hydrate_armsposes_from_precomputed_table(non_forced_df.copy())
-            arms_hydrated_cols = [col for col in ['arms_subset_vector', 'has_world_lms'] if col in hydrated_arms_non_forced.columns]
+            if cl.SUPPRESS_ARMS_FEATURES:
+                missing_union_ids = set(missing_image_ids)
+            else:
+                print(f"[Batch {batch_num}] Hydrating precomputed {ARMS_POSE_CACHE_TABLE} for non-target rows...")
+                hydrated_arms_non_forced, missing_arms_image_ids = cl.hydrate_armsposes_from_precomputed_table(non_forced_df.copy())
+                arms_hydrated_cols = [col for col in ['arms_subset_vector', 'has_world_lms'] if col in hydrated_arms_non_forced.columns]
 
-            if arms_hydrated_cols:
-                batch_prepared = batch_prepared.set_index('image_id')
-                hydrated_arms_non_forced = hydrated_arms_non_forced.set_index('image_id')
-                for col in arms_hydrated_cols:
-                    if col not in batch_prepared.columns:
-                        batch_prepared[col] = None
-                    batch_prepared.loc[hydrated_arms_non_forced.index, col] = hydrated_arms_non_forced[col]
-                batch_prepared = batch_prepared.reset_index()
+                if arms_hydrated_cols:
+                    batch_prepared = batch_prepared.set_index('image_id')
+                    hydrated_arms_non_forced = hydrated_arms_non_forced.set_index('image_id')
+                    for col in arms_hydrated_cols:
+                        if col not in batch_prepared.columns:
+                            batch_prepared[col] = None
+                        batch_prepared.loc[hydrated_arms_non_forced.index, col] = hydrated_arms_non_forced[col]
+                    batch_prepared = batch_prepared.reset_index()
 
-            arms_hits = len(non_forced_df) - len(missing_arms_image_ids)
-            print(f"[Batch {batch_num}] {ARMS_POSE_CACHE_TABLE} hits (non-target): {arms_hits}, missing: {len(missing_arms_image_ids)}")
+                arms_hits = len(non_forced_df) - len(missing_arms_image_ids)
+                print(f"[Batch {batch_num}] {ARMS_POSE_CACHE_TABLE} hits (non-target): {arms_hits}, missing: {len(missing_arms_image_ids)}")
 
-            missing_union_ids = set(missing_image_ids) | set(missing_arms_image_ids)
+                missing_union_ids = set(missing_image_ids) | set(missing_arms_image_ids)
 
             if missing_union_ids:
                 missing_df = non_forced_df[non_forced_df['image_id'].isin(missing_union_ids)].copy()
@@ -1660,7 +1689,7 @@ def fetch_and_prepare_batch(batch_df, batch_num):
                     c for c in (
                         OBJECT_ASSIGNMENT_COLS +
                         HAND_POSITION_COLS +
-                        ['newly_processed_detection', 'arms_subset_vector', 'has_world_lms']
+                        ['newly_processed_detection'] + ([] if cl.SUPPRESS_ARMS_FEATURES else ['arms_subset_vector', 'has_world_lms'])
                     ) if c in recomputed_df.columns
                 ]
 
@@ -1675,7 +1704,7 @@ def fetch_and_prepare_batch(batch_df, batch_num):
                 batch_prepared = batch_prepared.reset_index()
                 print(f"[Batch {batch_num}] [COUNT] Recomputed rows surviving prepare_df: {len(recomputed_df)}")
 
-                if not TEST_REPROCESSING:
+                if not TEST_REPROCESSING and not cl.SUPPRESS_ARMS_FEATURES:
                     cached_rows = cl.persist_images_armsposes3d(recomputed_df.reset_index())
                     if cached_rows > 0:
                         session.commit()
@@ -1684,6 +1713,95 @@ def fetch_and_prepare_batch(batch_df, batch_num):
                 print(f"[Batch {batch_num}] [COUNT] Recomputed rows surviving prepare_df: 0")
         else:
             print(f"[Batch {batch_num}] No rows require recompute.")
+    elif cl.CLUSTER_TYPE == "ArmsPoses3D":
+        print(f"[Batch {batch_num}] Hydrating precomputed {ARMS_POSE_CACHE_TABLE}...")
+        hydrated_batch, missing_arms_image_ids = cl.hydrate_armsposes_from_precomputed_table(batch_df.copy())
+        arms_batch_total = int(len(batch_df))
+
+        def has_valid_arms_subset(value):
+            return isinstance(value, (list, tuple, np.ndarray)) and len(value) > 0
+
+        valid_cache_mask = hydrated_batch['arms_subset_vector'].apply(has_valid_arms_subset)
+        invalid_cached_ids = (
+            hydrated_batch.loc[~valid_cache_mask & hydrated_batch['image_id'].notna(), 'image_id']
+            .astype(int)
+            .tolist()
+        )
+        invalid_cached_ids = sorted(set(invalid_cached_ids))
+
+        cached_ready_df = hydrated_batch[valid_cache_mask].copy()
+        cache_hit_count = int(len(cached_ready_df))
+        cache_missing_count = int(len(missing_arms_image_ids))
+        cache_invalid_count = int(len(invalid_cached_ids))
+        if len(cached_ready_df) > 0:
+            cached_ready_df = cl.convert_arms_subset_vector_to_dim_columns(cached_ready_df)
+
+        recompute_image_ids = sorted(set(missing_arms_image_ids) | set(invalid_cached_ids))
+        recompute_requested_count = int(len(recompute_image_ids))
+        print(
+            f"[Batch {batch_num}] {ARMS_POSE_CACHE_TABLE} hits: {len(cached_ready_df)}, "
+            f"missing_or_invalid: {len(recompute_image_ids)}"
+        )
+
+        recomputed_df = None
+        if recompute_image_ids:
+            to_process_df = batch_df[batch_df['image_id'].isin(recompute_image_ids)].copy()
+            print(f"[Batch {batch_num}] [COUNT] Arms rows to recompute from Mongo: {len(to_process_df)}")
+            to_process_df = fetch_mongo_for_batch(to_process_df)
+            recomputed_df = prepare_df(to_process_df, batch_label=f"Batch {batch_num} arms recompute")
+
+            if recomputed_df is not None and len(recomputed_df) > 0:
+                recomputed_df = recomputed_df.copy()
+                if 'arms_subset_vector' not in recomputed_df.columns:
+                    dim_cols = [
+                        col for col in recomputed_df.columns
+                        if isinstance(col, str) and col.startswith('dim_')
+                    ]
+                    dim_cols = sorted(dim_cols, key=lambda col: int(col.split('_')[1]))
+                    if dim_cols:
+                        recomputed_df['arms_subset_vector'] = recomputed_df[dim_cols].values.tolist()
+                    else:
+                        recomputed_df['arms_subset_vector'] = None
+
+                if 'has_world_lms' not in recomputed_df.columns:
+                    recomputed_df['has_world_lms'] = recomputed_df['arms_subset_vector'].apply(has_valid_arms_subset)
+
+                if not TEST_REPROCESSING:
+                    cached_rows = cl.persist_images_armsposes3d(recomputed_df)
+                    if cached_rows > 0:
+                        session.commit()
+                    print(f"[Batch {batch_num}] {ARMS_POSE_CACHE_TABLE} rows persisted: {cached_rows}")
+            else:
+                print(f"[Batch {batch_num}] [COUNT] Recomputed Arms rows surviving prepare_df: 0")
+
+        recompute_survived_count = int(len(recomputed_df)) if recomputed_df is not None else 0
+        cache_hit_rate = (cache_hit_count / arms_batch_total) if arms_batch_total > 0 else 0.0
+        recompute_rate = (recompute_requested_count / arms_batch_total) if arms_batch_total > 0 else 0.0
+        recompute_survival_rate = (
+            (recompute_survived_count / recompute_requested_count)
+            if recompute_requested_count > 0
+            else 0.0
+        )
+        print(
+            f"[Batch {batch_num}] Arms cache metrics: "
+            f"total={arms_batch_total}, hits={cache_hit_count}, missing={cache_missing_count}, invalid={cache_invalid_count}, "
+            f"recompute_requested={recompute_requested_count}, recompute_survived={recompute_survived_count}, "
+            f"cache_hit_rate={cache_hit_rate:.1%}, recompute_rate={recompute_rate:.1%}, "
+            f"recompute_survival_rate={recompute_survival_rate:.1%}"
+        )
+
+        frames = []
+        if len(cached_ready_df) > 0:
+            frames.append(cached_ready_df)
+        if recomputed_df is not None and len(recomputed_df) > 0:
+            frames.append(recomputed_df)
+
+        if frames:
+            batch_prepared = pd.concat(frames, ignore_index=True)
+            batch_prepared = batch_prepared.drop_duplicates(subset=['image_id'], keep='last')
+        else:
+            print(f"[Batch {batch_num}] No ArmsPoses3D rows available after cache+recompute.")
+            batch_prepared = batch_df.iloc[0:0].copy()
     else:
         # Non-ObjectFusion path still requires MongoDB data for prepare_df
         print(f"[Batch {batch_num}] Fetching MongoDB encodings...")

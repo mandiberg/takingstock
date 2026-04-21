@@ -1,0 +1,521 @@
+{
+  "cluster_type": null,
+  "contract_version": 1,
+  "files": {
+    "topic_0.csv": {
+      "available_hsv_bins": [],
+      "csv_schema_version": 1,
+      "entity_id": 0,
+      "entity_type": "topic",
+      "has_hsv_summary_rows": false,
+      "hsv_preset_name": "background_default"
+    },
+    "topic_1.csv": {
+      "available_hsv_bins": [],
+      "csv_schema_version": 1,
+      "entity_id": 1,
+      "entity_type": "topic",
+      "has_hsv_summary_rows": false,
+      "hsv_preset_name": "background_default"
+    },
+    "topic_10.csv": {
+      "available_hsv_bins": [],
+      "csv_schema_version": 1,
+      "entity_id": 10,
+      "entity_type": "topic",
+      "has_hsv_summary_rows": false,
+      "hsv_preset_name": "background_default"
+    },
+    "topic_11.csv": {
+      "available_hsv_bins": [],
+      "csv_schema_version": 1,
+      "entity_id": 11,
+      "entity_type": "topic",
+      "has_hsv_summary_rows": false,
+      "hsv_preset_name": "background_default"
+    },
+    "topic_12.csv": {
+      "available_hsv_bins": [],
+      "csv_schema_version": 1,
+      "entity_id": 12,
+      "entity_type": "topic",
+      "has_hsv_summary_rows": false,
+      "hsv_preset_name": "background_default"
+    },
+    "topic_13.csv": {
+      "available_hsv_bins": [],
+      "csv_schema_version": 1,
+      "entity_id": 13,
+      "entity_type": "topic",
+      "has_hsv_summary_rows": false,
+      "hsv_preset_name": "background_default"
+    },
+    "topic_14.csv": {
+      "available_hsv_bins": [],
+      "csv_schema_version": 1,
+      "entity_id": 14,
+      "entity_type": "topic",
+      "has_hsv_summary_rows": false,
+      "hsv_preset_name": "background_default"
+    },
+    "topic_15.csv": {
+      "available_hsv_bins": [],
+      "csv_schema_version": 1,
+      "entity_id": 15,
+      "entity_type": "topic",
+      "has_hsv_summary_rows": false,
+      "hsv_preset_name": "background_default"
+    },
+    "topic_16.csv": {
+      "available_hsv_bins": [],
+      "csv_schema_version": 1,
+      "entity_id": 16,
+      "entity_type": "topic",
+      "has_hsv_summary_rows": false,
+      "hsv_preset_name": "background_default"
+    },
+    "topic_17.csv": {
+      "available_hsv_bins": [],
+      "csv_schema_version": 1,
+      "entity_id": 17,
+      "entity_type": "topic",
+      "has_hsv_summary_rows": false,
+      "hsv_preset_name": "background_default"
+    },
+    "topic_18.csv": {
+      "available_hsv_bins": [],
+      "csv_schema_version": 1,
+      "entity_id": 18,
+      "entity_type": "topic",
+      "has_hsv_summary_rows": false,
+      "hsv_preset_name": "background_default"
+    },
+    "topic_19.csv": {
+      "available_hsv_bins": [],
+      "csv_schema_version": 1,
+      "entity_id": 19,
+      "entity_type": "topic",
+      "has_hsv_summary_rows": false,
+      "hsv_preset_name": "background_default"
+    },
+    "topic_2.csv": {
+      "available_hsv_bins": [],
+      "csv_schema_version": 1,
+      "entity_id": 2,
+      "entity_type": "topic",
+      "has_hsv_summary_rows": false,
+      "hsv_preset_name": "background_default"
+    },
+    "topic_20.csv": {
+      "available_hsv_bins": [],
+      "csv_schema_version": 1,
+      "entity_id": 20,
+      "entity_type": "topic",
+      "has_hsv_summary_rows": false,
+      "hsv_preset_name": "background_default"
+    },
+    "topic_21.csv": {
+      "available_hsv_bins": [],
+      "csv_schema_version": 1,
+      "entity_id": 21,
+      "entity_type": "topic",
+      "has_hsv_summary_rows": false,
+      "hsv_preset_name": "background_default"
+    },
+    "topic_22.csv": {
+      "available_hsv_bins": [],
+      "csv_schema_version": 1,
+      "entity_id": 22,
+      "entity_type": "topic",
+      "has_hsv_summary_rows": false,
+      "hsv_preset_name": "background_default"
+    },
+    "topic_23.csv": {
+      "available_hsv_bins": [],
+      "csv_schema_version": 1,
+      "entity_id": 23,
+      "entity_type": "topic",
+      "has_hsv_summary_rows": false,
+      "hsv_preset_name": "background_default"
+    },
+    "topic_24.csv": {
+      "available_hsv_bins": [],
+      "csv_schema_version": 1,
+      "entity_id": 24,
+      "entity_type": "topic",
+      "has_hsv_summary_rows": false,
+      "hsv_preset_name": "background_default"
+    },
+    "topic_25.csv": {
+      "available_hsv_bins": [],
+      "csv_schema_version": 1,
+      "entity_id": 25,
+      "entity_type": "topic",
+      "has_hsv_summary_rows": false,
+      "hsv_preset_name": "background_default"
+    },
+    "topic_26.csv": {
+      "available_hsv_bins": [],
+      "csv_schema_version": 1,
+      "entity_id": 26,
+      "entity_type": "topic",
+      "has_hsv_summary_rows": false,
+      "hsv_preset_name": "background_default"
+    },
+    "topic_27.csv": {
+      "available_hsv_bins": [],
+      "csv_schema_version": 1,
+      "entity_id": 27,
+      "entity_type": "topic",
+      "has_hsv_summary_rows": false,
+      "hsv_preset_name": "background_default"
+    },
+    "topic_28.csv": {
+      "available_hsv_bins": [],
+      "csv_schema_version": 1,
+      "entity_id": 28,
+      "entity_type": "topic",
+      "has_hsv_summary_rows": false,
+      "hsv_preset_name": "background_default"
+    },
+    "topic_29.csv": {
+      "available_hsv_bins": [],
+      "csv_schema_version": 1,
+      "entity_id": 29,
+      "entity_type": "topic",
+      "has_hsv_summary_rows": false,
+      "hsv_preset_name": "background_default"
+    },
+    "topic_3.csv": {
+      "available_hsv_bins": [],
+      "csv_schema_version": 1,
+      "entity_id": 3,
+      "entity_type": "topic",
+      "has_hsv_summary_rows": false,
+      "hsv_preset_name": "background_default"
+    },
+    "topic_30.csv": {
+      "available_hsv_bins": [],
+      "csv_schema_version": 1,
+      "entity_id": 30,
+      "entity_type": "topic",
+      "has_hsv_summary_rows": false,
+      "hsv_preset_name": "background_default"
+    },
+    "topic_31.csv": {
+      "available_hsv_bins": [],
+      "csv_schema_version": 1,
+      "entity_id": 31,
+      "entity_type": "topic",
+      "has_hsv_summary_rows": false,
+      "hsv_preset_name": "background_default"
+    },
+    "topic_32.csv": {
+      "available_hsv_bins": [],
+      "csv_schema_version": 1,
+      "entity_id": 32,
+      "entity_type": "topic",
+      "has_hsv_summary_rows": false,
+      "hsv_preset_name": "background_default"
+    },
+    "topic_33.csv": {
+      "available_hsv_bins": [],
+      "csv_schema_version": 1,
+      "entity_id": 33,
+      "entity_type": "topic",
+      "has_hsv_summary_rows": false,
+      "hsv_preset_name": "background_default"
+    },
+    "topic_34.csv": {
+      "available_hsv_bins": [],
+      "csv_schema_version": 1,
+      "entity_id": 34,
+      "entity_type": "topic",
+      "has_hsv_summary_rows": false,
+      "hsv_preset_name": "background_default"
+    },
+    "topic_35.csv": {
+      "available_hsv_bins": [],
+      "csv_schema_version": 1,
+      "entity_id": 35,
+      "entity_type": "topic",
+      "has_hsv_summary_rows": false,
+      "hsv_preset_name": "background_default"
+    },
+    "topic_36.csv": {
+      "available_hsv_bins": [],
+      "csv_schema_version": 1,
+      "entity_id": 36,
+      "entity_type": "topic",
+      "has_hsv_summary_rows": false,
+      "hsv_preset_name": "background_default"
+    },
+    "topic_37.csv": {
+      "available_hsv_bins": [],
+      "csv_schema_version": 1,
+      "entity_id": 37,
+      "entity_type": "topic",
+      "has_hsv_summary_rows": false,
+      "hsv_preset_name": "background_default"
+    },
+    "topic_38.csv": {
+      "available_hsv_bins": [],
+      "csv_schema_version": 1,
+      "entity_id": 38,
+      "entity_type": "topic",
+      "has_hsv_summary_rows": false,
+      "hsv_preset_name": "background_default"
+    },
+    "topic_39.csv": {
+      "available_hsv_bins": [],
+      "csv_schema_version": 1,
+      "entity_id": 39,
+      "entity_type": "topic",
+      "has_hsv_summary_rows": false,
+      "hsv_preset_name": "background_default"
+    },
+    "topic_4.csv": {
+      "available_hsv_bins": [],
+      "csv_schema_version": 1,
+      "entity_id": 4,
+      "entity_type": "topic",
+      "has_hsv_summary_rows": false,
+      "hsv_preset_name": "background_default"
+    },
+    "topic_40.csv": {
+      "available_hsv_bins": [],
+      "csv_schema_version": 1,
+      "entity_id": 40,
+      "entity_type": "topic",
+      "has_hsv_summary_rows": false,
+      "hsv_preset_name": "background_default"
+    },
+    "topic_41.csv": {
+      "available_hsv_bins": [],
+      "csv_schema_version": 1,
+      "entity_id": 41,
+      "entity_type": "topic",
+      "has_hsv_summary_rows": false,
+      "hsv_preset_name": "background_default"
+    },
+    "topic_42.csv": {
+      "available_hsv_bins": [],
+      "csv_schema_version": 1,
+      "entity_id": 42,
+      "entity_type": "topic",
+      "has_hsv_summary_rows": false,
+      "hsv_preset_name": "background_default"
+    },
+    "topic_43.csv": {
+      "available_hsv_bins": [],
+      "csv_schema_version": 1,
+      "entity_id": 43,
+      "entity_type": "topic",
+      "has_hsv_summary_rows": false,
+      "hsv_preset_name": "background_default"
+    },
+    "topic_44.csv": {
+      "available_hsv_bins": [],
+      "csv_schema_version": 1,
+      "entity_id": 44,
+      "entity_type": "topic",
+      "has_hsv_summary_rows": false,
+      "hsv_preset_name": "background_default"
+    },
+    "topic_45.csv": {
+      "available_hsv_bins": [],
+      "csv_schema_version": 1,
+      "entity_id": 45,
+      "entity_type": "topic",
+      "has_hsv_summary_rows": false,
+      "hsv_preset_name": "background_default"
+    },
+    "topic_46.csv": {
+      "available_hsv_bins": [],
+      "csv_schema_version": 1,
+      "entity_id": 46,
+      "entity_type": "topic",
+      "has_hsv_summary_rows": false,
+      "hsv_preset_name": "background_default"
+    },
+    "topic_47.csv": {
+      "available_hsv_bins": [],
+      "csv_schema_version": 1,
+      "entity_id": 47,
+      "entity_type": "topic",
+      "has_hsv_summary_rows": false,
+      "hsv_preset_name": "background_default"
+    },
+    "topic_48.csv": {
+      "available_hsv_bins": [],
+      "csv_schema_version": 1,
+      "entity_id": 48,
+      "entity_type": "topic",
+      "has_hsv_summary_rows": false,
+      "hsv_preset_name": "background_default"
+    },
+    "topic_49.csv": {
+      "available_hsv_bins": [],
+      "csv_schema_version": 1,
+      "entity_id": 49,
+      "entity_type": "topic",
+      "has_hsv_summary_rows": false,
+      "hsv_preset_name": "background_default"
+    },
+    "topic_5.csv": {
+      "available_hsv_bins": [],
+      "csv_schema_version": 1,
+      "entity_id": 5,
+      "entity_type": "topic",
+      "has_hsv_summary_rows": false,
+      "hsv_preset_name": "background_default"
+    },
+    "topic_50.csv": {
+      "available_hsv_bins": [],
+      "csv_schema_version": 1,
+      "entity_id": 50,
+      "entity_type": "topic",
+      "has_hsv_summary_rows": false,
+      "hsv_preset_name": "background_default"
+    },
+    "topic_51.csv": {
+      "available_hsv_bins": [],
+      "csv_schema_version": 1,
+      "entity_id": 51,
+      "entity_type": "topic",
+      "has_hsv_summary_rows": false,
+      "hsv_preset_name": "background_default"
+    },
+    "topic_52.csv": {
+      "available_hsv_bins": [],
+      "csv_schema_version": 1,
+      "entity_id": 52,
+      "entity_type": "topic",
+      "has_hsv_summary_rows": false,
+      "hsv_preset_name": "background_default"
+    },
+    "topic_53.csv": {
+      "available_hsv_bins": [],
+      "csv_schema_version": 1,
+      "entity_id": 53,
+      "entity_type": "topic",
+      "has_hsv_summary_rows": false,
+      "hsv_preset_name": "background_default"
+    },
+    "topic_54.csv": {
+      "available_hsv_bins": [],
+      "csv_schema_version": 1,
+      "entity_id": 54,
+      "entity_type": "topic",
+      "has_hsv_summary_rows": false,
+      "hsv_preset_name": "background_default"
+    },
+    "topic_55.csv": {
+      "available_hsv_bins": [],
+      "csv_schema_version": 1,
+      "entity_id": 55,
+      "entity_type": "topic",
+      "has_hsv_summary_rows": false,
+      "hsv_preset_name": "background_default"
+    },
+    "topic_56.csv": {
+      "available_hsv_bins": [],
+      "csv_schema_version": 1,
+      "entity_id": 56,
+      "entity_type": "topic",
+      "has_hsv_summary_rows": false,
+      "hsv_preset_name": "background_default"
+    },
+    "topic_57.csv": {
+      "available_hsv_bins": [],
+      "csv_schema_version": 1,
+      "entity_id": 57,
+      "entity_type": "topic",
+      "has_hsv_summary_rows": false,
+      "hsv_preset_name": "background_default"
+    },
+    "topic_58.csv": {
+      "available_hsv_bins": [],
+      "csv_schema_version": 1,
+      "entity_id": 58,
+      "entity_type": "topic",
+      "has_hsv_summary_rows": false,
+      "hsv_preset_name": "background_default"
+    },
+    "topic_59.csv": {
+      "available_hsv_bins": [],
+      "csv_schema_version": 1,
+      "entity_id": 59,
+      "entity_type": "topic",
+      "has_hsv_summary_rows": false,
+      "hsv_preset_name": "background_default"
+    },
+    "topic_6.csv": {
+      "available_hsv_bins": [],
+      "csv_schema_version": 1,
+      "entity_id": 6,
+      "entity_type": "topic",
+      "has_hsv_summary_rows": false,
+      "hsv_preset_name": "background_default"
+    },
+    "topic_60.csv": {
+      "available_hsv_bins": [],
+      "csv_schema_version": 1,
+      "entity_id": 60,
+      "entity_type": "topic",
+      "has_hsv_summary_rows": false,
+      "hsv_preset_name": "background_default"
+    },
+    "topic_61.csv": {
+      "available_hsv_bins": [],
+      "csv_schema_version": 1,
+      "entity_id": 61,
+      "entity_type": "topic",
+      "has_hsv_summary_rows": false,
+      "hsv_preset_name": "background_default"
+    },
+    "topic_62.csv": {
+      "available_hsv_bins": [],
+      "csv_schema_version": 1,
+      "entity_id": 62,
+      "entity_type": "topic",
+      "has_hsv_summary_rows": false,
+      "hsv_preset_name": "background_default"
+    },
+    "topic_63.csv": {
+      "available_hsv_bins": [],
+      "csv_schema_version": 1,
+      "entity_id": 63,
+      "entity_type": "topic",
+      "has_hsv_summary_rows": false,
+      "hsv_preset_name": "background_default"
+    },
+    "topic_7.csv": {
+      "available_hsv_bins": [],
+      "csv_schema_version": 1,
+      "entity_id": 7,
+      "entity_type": "topic",
+      "has_hsv_summary_rows": false,
+      "hsv_preset_name": "background_default"
+    },
+    "topic_8.csv": {
+      "available_hsv_bins": [],
+      "csv_schema_version": 1,
+      "entity_id": 8,
+      "entity_type": "topic",
+      "has_hsv_summary_rows": false,
+      "hsv_preset_name": "background_default"
+    },
+    "topic_9.csv": {
+      "available_hsv_bins": [],
+      "csv_schema_version": 1,
+      "entity_id": 9,
+      "entity_type": "topic",
+      "has_hsv_summary_rows": false,
+      "hsv_preset_name": "background_default"
+    }
+  },
+  "generator": "utilities/migrate_fusion_manifests.py",
+  "mode": "Topics",
+  "mode_id": "topic_id"
+}

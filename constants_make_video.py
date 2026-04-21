@@ -18,6 +18,7 @@ CLUSTER_MAP = {
     "ArmsPoses3D": ["ArmsPoses3D", None],
     "obj_bbox": ["ArmsPoses3D", None],
     "obj_bbox_fusion": ["ObjectFusion", None],
+    "ArmsPoses3D_ObjectFusion": ["ArmsPoses3D", "ObjectFusion"],
 }
 
 
@@ -332,6 +333,68 @@ ALL_FUSION_PAIRS_DICTS = {
     "FUSION_PAIR_DICT_3DBODIES_TOPICS_512": FUSION_PAIR_DICT_3DBODIES_TOPICS_512,
     }
 
+# Contract-driven fusion selection settings.
+FUSION_MANIFEST_FILE = "fusion_manifest.json"
+HSV_GROUP_PRESET_NAME = "background_default"
+OBJECT_HSV_GROUP_PRESET_NAME = "object_color_v1"
+SUBSORT_ON_OBJECT_HSV_CUTOFF = 500
+
+HSV_BIN_LABELS = {
+    0: "black",
+    1: "neutral",
+    2: "white",
+    3: "crimson",
+    4: "red",
+    5: "fucscia",
+    6: "pink",
+    7: "light_yellow",
+    8: "lemon_yellow",
+    9: "orange_yellow",
+    10: "yellow",
+    11: "yellow_mid",
+    12: "taupe",
+    13: "brown",
+    14: "green",
+    15: "teal",
+    16: "dark_blue",
+    17: "vivid_blue",
+    18: "cyan",
+    19: "baby_blue",
+    20: "light_blue",
+    21: "violet",
+    22: "purple",
+}
+
+HSV_GROUP_PRESETS = {
+    # Cascade order: single bins first, then broader fallback groups.
+    "background_default": [
+        # Tier 1: each individual bin.
+        [[0], [1], [2], [3], [4], [5], [6], [7], [8], [9], [10], [11], [12], [13], [14], [15], [16], [17], [18], [19], [20], [21], [22]],
+
+        # Tier 2: grouped colors.
+        [[3, 4], [5, 6, 7], [8, 9, 10, 11], [12, 13], [15, 16], [17, 18, 19, 20], [21, 22]],
+
+        # Tier 3: RYB groups.
+        [[3, 4, 5, 6, 22, 7], [8, 9, 10, 11, 12, 13], [15, 16, 17, 18, 19, 20, 21]],
+
+        # Tier 4: warms vs cools.
+        [[3, 4, 5, 6, 22, 7, 8, 9, 10, 11, 12, 13], [14, 15, 16, 17, 18, 19, 20, 21]],
+
+        # Tier 5: catch-all fallback.
+        [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 19, 20, 21, 22]],
+    ],
+    "background_dedupe": [
+        [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22],
+    ],
+    # Initial object-color grouping, can be tuned as object HSV runs mature.
+    "object_color_v1": [
+        [0], [1], [2],
+        [3, 4, 5, 6, 7, 22],
+        [8, 9, 10, 11, 12, 13],
+        [14, 15, 16, 17, 18, 19, 20, 21],
+    ],
+}
+
 # connects a class_id to a sql helper segment
 ID_SEGMENT_DICT = {45: "45_salad", 67: "67_phone", 73: "73_book", 74: "74_clock", 80: "80_sign", 81: "81_gift", 82: "82_money", 83: "83_bag", 84: "84_valentine", 
                    85: "TK", 86: "86_dumbbell", 87: "87_flag", 88: "83_bag", 89: "90_stethoscope", 90: "90_stethoscope", 91: "TK", 92: "92_headphones", 
@@ -368,6 +431,7 @@ FULL_BODY = IS_HAND_POSE_FUSION = ONLY_ONE = GENERATE_FUSION_PAIRS = USE_FUSION_
 EXPAND = ONE_SHOT = JUMP_SHOT = USE_ALL = CHOP_FIRST = TSP_SORT = USE_HEAD_POSE = False
 USE_PAINTED = OUTPAINT = INPAINT= META = USE_HSV = PURGING_DUPES = DO_HSV_KNN = CHOP_ITTER_TSP_SORT = False
 FUSION_FOLDER = FOCUS_CLUSTER_HACK_LIST = FORCE_TARGET_COUNT = KEYWORD_OBJECT = KEYWORD_ORIENTATION = None
+SSD_PATH = None
 
 OBJ_DONT_SUBSELECT = True
 MIN_CYCLE_COUNT = 1

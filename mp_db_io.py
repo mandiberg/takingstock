@@ -29,7 +29,15 @@ class DataIO:
         # platform specific file folder (mac for michael, win for satyam)
         self.home = Path.home()
         config = ConfigParser()
-        config.read("config.ini")
+        # Load config.ini deterministically from repo root (module directory),
+        # then fall back to cwd for backward compatibility.
+        module_dir = Path(__file__).resolve().parent
+        repo_config_path = module_dir / "config.ini"
+        cwd_config_path = Path.cwd() / "config.ini"
+        config_candidates = [str(repo_config_path)]
+        if cwd_config_path != repo_config_path:
+            config_candidates.append(str(cwd_config_path))
+        config.read(config_candidates)
 
 
         if platform.system() == "Darwin":
@@ -504,6 +512,10 @@ class DataIO:
             return value
 
 
+    def print_sqlalchemy_query(self, engine, query):
+        # Print the actual SQL SELECT statement with all parameters filled in
+        compiled_query = query.compile(engine, compile_kwargs={"literal_binds": True})
+        print("actual SELECT is ", compiled_query)
 
 
 

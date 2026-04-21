@@ -357,5 +357,19 @@ CREATE TABLE NoDetectionsCustom (
 );
 
 
+CREATE TABLE FacePairTestCache (
+    image_id_lo INT NOT NULL,
+    image_id_hi INT NOT NULL,
+    result ENUM('pass', 'fail') NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (image_id_lo, image_id_hi),
+    KEY idx_result (result),
+    KEY idx_updated_at (updated_at),
+    CONSTRAINT chk_distinct_pair CHECK (image_id_lo < image_id_hi)
+) ENGINE=InnoDB
+DEFAULT CHARSET=utf8mb4
+COLLATE=utf8mb4_0900_ai_ci;
+
 
 

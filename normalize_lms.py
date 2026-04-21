@@ -37,18 +37,20 @@ NOSE_ID=0
 
 Base = declarative_base()
 VERBOSE = False
-IS_SSD = False
+IS_SSD = True
 SSD_PATH = None
 
 SKIP_EXISTING = False # Skips images with a normed bbox but that have Images.h - I think only applies to phone bbox
-USE_OBJ = True # do objet detections?
-SKIP_BODY = True # skip body landmarks. mostly you want to skip when doing obj bbox
+USE_OBJ = False # do objet detections?
+SKIP_BODY = False # skip body landmarks. mostly you want to skip when doing obj bbox
                 # or are just redoing hands
 REPROCESS_HANDS = False # do hands
 ACCEPT_EXSISTING_HANDS = True # if true, it will accept existing data and update bool in SQL to tru
+REPROCESSED_BODY = True 
+REPROCESSED_BODY_DIFF_THRESH = -1.0
 IS_SEGMENT_BIG = False # use SegmentBig table. IF False, and IS_SSD is false, it will use Encodings table
 TESTING = False # if true, will not do any DB writes
-DETECTIONS_ONLY = True
+DETECTIONS_ONLY = False
 
 # join on helper to limit scope and use SSD
 INNER_JOIN_HELPER = True
@@ -66,9 +68,15 @@ INNER_JOIN_HELPER = True
 # SegmentHelperObject_67_phone 
 # SegmentHelperObject_41_cup_glass (big)
 
-LIMIT= 20000000
+LIMIT= 4000000
 # Initialize the counter
 counter = 2000
+STATS_PRINT_EVERY = 1000
+
+# Running totals for body-landmark reprocess comparisons.
+rows_processed_count = 0
+good_nlms_count = 0
+bad_nlms_count = 0
 
 THIS_CLASS_ID = 0 # for object bbox normalization
 class_token = ID_SEGMENT_DICT.get(THIS_CLASS_ID, None)
@@ -83,10 +91,12 @@ if class_token:
     print("SegmentFolder", SegmentFolder)
     # SORT_TYPE = "obj_bbox_fusion"
 else: 
-    # SegmentHelper_name = 'SegmentOct20'
-    # SegmentHelper_name = 'SegmentHelper_oct2025_evens_quarters'
-    SegmentFolder = None
-    SegmentHelper_name = 'SegmentHelper_T11_Oct20_COCO_Custom'
+    SegmentHelper_name = 'SegmentHelper_T11_Business'
+    # SegmentHelper_name = 'SegmentHelper_T11_Oct20_COCO_Custom_evens_quarters'
+    SegmentFolder = "/Volumes/OWC54/segment_images"
+    # SegmentFolder = None
+    # SegmentHelper_name = 'SegmentHelper_T11_Oct20_COCO_Custom'
+    # INNER_JOIN_TABLE = "SegmentHelperObject_86_dumbbell"
 
     # HAXXXORS THIS_CLASS_ID is commented out below so that it does ALL classes
     # THIS_CLASS_ID = 82 # for object bbox normalization
@@ -511,7 +521,59 @@ def get_phone_bbox(target_image_id):
 
     return phone_bbox
 
+
+def compute_landmarks_mad(old_landmarks, new_landmarks):
+    """Compute mean absolute difference across overlapping landmark coordinates.
+    
+    Handles both landmark_pb2.NormalizedLandmarkList (protobuf) and list formats.
+    """
+    if old_landmarks is None or new_landmarks is None:
+        if VERBOSE:
+            print(f"  [MAD DEBUG] One input is None: old={old_landmarks is None}, new={new_landmarks is None}")
+        return float("inf")
+
+    try:
+        # Convert protobuf NormalizedLandmarkList to nested list if needed
+        if hasattr(old_landmarks, 'landmark'):  # It's a protobuf object
+            old_list = [[lm.x, lm.y, lm.z, lm.visibility] for lm in old_landmarks.landmark]
+        else:
+            old_list = old_landmarks
+        
+        if hasattr(new_landmarks, 'landmark'):  # It's a protobuf object
+            new_list = [[lm.x, lm.y, lm.z, lm.visibility] for lm in new_landmarks.landmark]
+        else:
+            new_list = new_landmarks
+        
+        old_arr = np.asarray(old_list, dtype=float)
+        new_arr = np.asarray(new_list, dtype=float)
+        
+        if VERBOSE:
+            print(f"  [MAD DEBUG] old shape={old_arr.shape}, new shape={new_arr.shape}")
+        
+        if old_arr.ndim < 2 or new_arr.ndim < 2:
+            if VERBOSE:
+                print(f"  [MAD DEBUG] Invalid ndim: old={old_arr.ndim}, new={new_arr.ndim}")
+            return float("inf")
+
+        n_points = min(old_arr.shape[0], new_arr.shape[0])
+        n_dims = min(old_arr.shape[1], new_arr.shape[1])
+        if n_points == 0 or n_dims == 0:
+            if VERBOSE:
+                print(f"  [MAD DEBUG] Empty array: n_points={n_points}, n_dims={n_dims}")
+            return float("inf")
+
+        delta = np.abs(old_arr[:n_points, :n_dims] - new_arr[:n_points, :n_dims])
+        mad = float(np.nanmean(delta))
+        if VERBOSE:
+            print(f"  [MAD DEBUG] Computed MAD={mad:.6f}")
+        return mad
+    except Exception as e:
+        if VERBOSE:
+            print(f"  [MAD DEBUG] Exception during computation: {e}")
+        return float("inf")
+
 def calc_nlm(image_id_to_shape, batch_updates):
+    global good_nlms_count, bad_nlms_count
     if VERBOSE: print("calc_nlm image_id_to_shape",image_id_to_shape)
     target_image_id = list(image_id_to_shape.keys())[0]
     body_landmarks = None
@@ -539,7 +601,7 @@ def calc_nlm(image_id_to_shape, batch_updates):
 
 
     # TK this needs to be ported to calc body code
-    height,width, bbox, face_height = image_id_to_shape[target_image_id]
+    height, width, bbox, face_height, nose_pixel_x, nose_pixel_y = image_id_to_shape[target_image_id]
     bbox = io.unstring_json(bbox) if type(bbox)==str else bbox
     # get the shape of the image if no height in db
     if height and width:
@@ -557,66 +619,82 @@ def calc_nlm(image_id_to_shape, batch_updates):
             testing=TESTING,
             auto_commit=False,  # OPTIMIZATION: Batch commits instead of individual commits
         )
-    # If face geometry already stored, skip expensive Mongo fetch
-    if face_height is not None:
-        return
     sort.h = height
     sort.w = width
     if VERBOSE: print("height,width from DB:",height,width)
     if VERBOSE: print("target_image_id",target_image_id)
 
+    # Fast path: if face geometry is already stored, avoid the expensive
+    # face landmark fetch and keep processing with cached nose/face values.
+    has_stored_face_geom = (
+        face_height is not None
+        and nose_pixel_x is not None
+        and nose_pixel_y is not None
+    )
 
-    # get all the landmarks
-    face_encodings68, face_landmarks, body_landmarks, body_landmarks_normalized, body_landmarks_3D, hand_results = io.get_encodings_mongo(target_image_id)
-
-    if face_landmarks is None:
-        print("FACE LANDMARK NOT FOUND 404, bailing for this one ", target_image_id)
-        return
-    face_height=get_face_height_face_lms(target_image_id,bbox, face_landmarks)
-    
-    if sort.VERBOSE: print("face_height from lms",face_height)
-    nose_pixel_pos_face = sort.get_face_2d_point(1)
-    if sort.VERBOSE: print("nose_pixel_pos from face",nose_pixel_pos_face)
-    # only do this if the io.get_encodings_mongo didn't return the body landmarks
-    if not body_landmarks: body_landmarks=get_landmarks_mongo(target_image_id)
-    if VERBOSE:print("body_landmarks",type(body_landmarks), " first few lms:", body_landmarks[:5] if body_landmarks else "None")
-    if body_landmarks and type(body_landmarks) == bytes:
-        nose_pixel_pos_body_withviz = sort.set_nose_pixel_pos(body_landmarks,[height,width])
-        if nose_pixel_pos_body_withviz is None:
-            print(f" ❌ ❌ ❌ SKIP image_id {target_image_id}: invalid body landmarks for nose pixel projection. No DB writes.")
-            return
-        # exit the whole script
-        print(f" ✅ ✅ ✅ Converted and saved bodyLms {target_image_id}, with nose pixel", nose_pixel_pos_body_withviz)
-        # sys.exit(0)
-    elif face_landmarks and type(face_landmarks) == bytes:
-        nose_pixel_pos_body_withviz = sort.set_nose_pixel_pos(face_landmarks,[height,width], bbox)
-        if nose_pixel_pos_body_withviz is None:
-            print(f" ❌ ❌ ❌ SKIP image_id {target_image_id}: invalid face landmarks or missing bbox for nose pixel projection. No DB writes.")
-            return
-        print(f" ☑️ ☑️ ☑️ Converted and saved faceLms {target_image_id}, with nose pixel", nose_pixel_pos_body_withviz)
+    if has_stored_face_geom:
+        xB, yB = int(nose_pixel_x), int(nose_pixel_y)
+        xF, yF = xB, yB
+        nose_pixel_pos_face = (xF, yF)
+        nose_pixel_pos_body_withviz = {'x': xB, 'y': yB}
+        nose_pixel_pos_body = {'x': xB, 'y': yB}
+        # Keep body normalization path alive even when skipping full face fetch.
+        body_landmarks = get_landmarks_mongo(target_image_id)
+        hand_results = None
     else:
-        print(" ❌ BODY LANDMARK NOT FOUND 404, bailing for this one ", target_image_id)
-        return
-        nose_pixel_pos_body_withviz = nose_pixel_pos_face
-    if sort.VERBOSE: print("nose_pixel_pos from body",nose_pixel_pos_body_withviz)
-    # hand_results=get_hand_landmarks_mongo(target_image_id)
-    # print("hand_results",hand_results)
 
-    #     # for drawing landmarks on test image
-    # landmarks_2d = sort.get_landmarks_2d(row['face_landmarks'], list(range(33)), "list")
-    # print("landmarks_2d before drawing", landmarks_2d)
-    # cropped_image = sort.draw_point(cropped_image, landmarks_2d, index = 0)                    
 
-    # landmarks_2d = sort.get_landmarks_2d(row['face_landmarks'], list(range(420)), "list")
-    # cropped_image = sort.draw_point(cropped_image, landmarks_2d, index = 0)                    
+        # get all the landmarks
+        face_encodings68, face_landmarks, body_landmarks, body_landmarks_normalized, body_landmarks_3D, hand_results = io.get_encodings_mongo(target_image_id)
 
-    # Extract x and y coordinates
-    xF, yF = int(nose_pixel_pos_face[0]), int(nose_pixel_pos_face[1])
-    xB, yB = int(nose_pixel_pos_body_withviz['x']), int(nose_pixel_pos_body_withviz['y'])
-    
+        if face_landmarks is None:
+            print("FACE LANDMARK NOT FOUND 404, bailing for this one ", target_image_id)
+            return
+        face_height=get_face_height_face_lms(target_image_id,bbox, face_landmarks)
+        
+        if sort.VERBOSE: print("face_height from lms",face_height)
+        nose_pixel_pos_face = sort.get_face_2d_point(1)
+        if sort.VERBOSE: print("nose_pixel_pos from face",nose_pixel_pos_face)
+        # only do this if the io.get_encodings_mongo didn't return the body landmarks
+        if not body_landmarks: body_landmarks=get_landmarks_mongo(target_image_id)
+        if VERBOSE:print("body_landmarks",type(body_landmarks), " first few lms:", body_landmarks[:5] if body_landmarks else "None")
+        if body_landmarks and type(body_landmarks) == bytes:
+            nose_pixel_pos_body_withviz = sort.set_nose_pixel_pos(body_landmarks,[height,width])
+            if nose_pixel_pos_body_withviz is None:
+                print(f" ❌ ❌ ❌ SKIP image_id {target_image_id}: invalid body landmarks for nose pixel projection. No DB writes.")
+                return
+            # exit the whole script
+            print(f" ✅ ✅ ✅ Converted and saved bodyLms {target_image_id}, with nose pixel", nose_pixel_pos_body_withviz)
+            # sys.exit(0)
+        elif face_landmarks and type(face_landmarks) == bytes:
+            nose_pixel_pos_body_withviz = sort.set_nose_pixel_pos(face_landmarks,[height,width], bbox)
+            if nose_pixel_pos_body_withviz is None:
+                print(f" ❌ ❌ ❌ SKIP image_id {target_image_id}: invalid face landmarks or missing bbox for nose pixel projection. No DB writes.")
+                return
+            print(f" ☑️ ☑️ ☑️ Converted and saved faceLms {target_image_id}, with nose pixel", nose_pixel_pos_body_withviz)
+        else:
+            print(" ❌ BODY LANDMARK NOT FOUND 404, bailing for this one ", target_image_id)
+            return
+            nose_pixel_pos_body_withviz = nose_pixel_pos_face
+        if sort.VERBOSE: print("nose_pixel_pos from body",nose_pixel_pos_body_withviz)
+        # hand_results=get_hand_landmarks_mongo(target_image_id)
+        # print("hand_results",hand_results)
 
-        # gets ride of visiblity
-    nose_pixel_pos_body = {'x': xB, 'y': yB}
+        #     # for drawing landmarks on test image
+        # landmarks_2d = sort.get_landmarks_2d(row['face_landmarks'], list(range(33)), "list")
+        # print("landmarks_2d before drawing", landmarks_2d)
+        # cropped_image = sort.draw_point(cropped_image, landmarks_2d, index = 0)                    
+
+        # landmarks_2d = sort.get_landmarks_2d(row['face_landmarks'], list(range(420)), "list")
+        # cropped_image = sort.draw_point(cropped_image, landmarks_2d, index = 0)                    
+
+        # Extract x and y coordinates
+        xF, yF = int(nose_pixel_pos_face[0]), int(nose_pixel_pos_face[1])
+        xB, yB = int(nose_pixel_pos_body_withviz['x']), int(nose_pixel_pos_body_withviz['y'])
+        
+
+            # gets ride of visiblity
+        nose_pixel_pos_body = {'x': xB, 'y': yB}
 
 
     ## begin testing stuff
@@ -743,25 +821,54 @@ def calc_nlm(image_id_to_shape, batch_updates):
             # start = time.time()
 
             if VERBOSE: print("about to insert n_landmarks",n_landmarks)
+
+            recalc_flag = 1
+            should_write_norm = True
+            if REPROCESSED_BODY:
+                existing_doc = bboxnormed_collection.find_one({"image_id": target_image_id})
+                if existing_doc and existing_doc.get("nlms"):
+                    existing_n_landmarks = unpickle_array(existing_doc.get("nlms"))
+                    mad = compute_landmarks_mad(existing_n_landmarks, n_landmarks)
+                    if VERBOSE:
+                        print(f"reprocess compare image_id {target_image_id}: MAD={mad:.6f}")
+                    if mad < REPROCESSED_BODY_DIFF_THRESH:
+                        print(f" ☑️ ☑️ ☑️ ACCEPTING existing nlms for {target_image_id}: MAD={mad:.6f}")
+                        recalc_flag = 0
+                        should_write_norm = False
+                        with lock:
+                            good_nlms_count += 1
+                    else:
+                        print(f" ♻️ ♻️ ♻️ REJECTING existing nlms & updating with new nlms for {target_image_id}. MAD={mad:.6f}")
+                        with lock:
+                            bad_nlms_count += 1
+                else:
+                    recalc_flag = 1
             
             # store the normalized landmarks in mongo
-            if not TESTING: sort.insert_n_landmarks(bboxnormed_collection, target_image_id,n_landmarks)
-            # Collect updates for batching
-            batch_updates['Encodings'].append({
+            if not TESTING and should_write_norm:
+                if VERBOSE: print("inserting n_landmarks into mongo for image_id", target_image_id)
+                sort.insert_n_landmarks(bboxnormed_collection, target_image_id,n_landmarks)
+
+            body_update = {
                 'image_id': target_image_id,
                 'mongo_body_landmarks_norm': 1
-            })
+            }
+            if REPROCESSED_BODY:
+                body_update['mongo_body_landmarks_norm_recalc'] = recalc_flag
+
+            # Collect updates for batching
+            batch_updates['Encodings'].append(body_update)
             if not IS_SEGMENT_BIG:
                 batch_updates['SegmentTable'].append({
                     'image_id': target_image_id,
                     'mongo_body_landmarks_norm': 1
                 })
 
-            if VERBOSE: print("did insert_n_landmarks, going to get phone bbox")
+            if VERBOSE: print(f"insert_n_landmarks done (should_write_norm = {should_write_norm}) going to get phone bbox")
             # if VERBOSE: print("Time to get insert:", time.time()-start)
             # start = time.time()
         
-        elif USE_OBJ: 
+        if USE_OBJ: 
             obj_results = get_obj_bbox(target_image_id)
             # itterate through the obj_results
             print("obj_results",obj_results)
@@ -834,7 +941,9 @@ if USE_OBJ:
         Images.h, 
         Images.w, 
         Encodings.bbox,
-        Encodings.face_height
+        Encodings.face_height,
+        Encodings.nose_pixel_x,
+        Encodings.nose_pixel_y
     ).select_from(Detections).\
     join(Encodings, Encodings.image_id == Detections.image_id).\
     join(Images, Images.image_id == Detections.image_id).\
@@ -847,10 +956,15 @@ if USE_OBJ:
     limit(LIMIT)    
 
     # join(SegmentHelper, SegmentHelper.image_id == Detections.image_id).\
-
+    if SegmentHelper is not None and INNER_JOIN_HELPER:
+        print(f"SUBSELECT_ON_CLASS_ID: limiting OBJ query to {INNER_JOIN_HELPER} using INNER JOIN on SegmentHelper")
+        distinct_image_ids_query = distinct_image_ids_query.\
+        join(SegmentHelper, SegmentHelper.image_id == Detections.image_id)
     #filter(Detections.class_id == THIS_CLASS_ID).\
-
-
+    if not REPROCESSED_BODY:
+        distinct_image_ids_query = distinct_image_ids_query.filter(Encodings.mongo_body_landmarks_norm.is_(None))
+    if not SKIP_BODY:
+        distinct_image_ids_query = distinct_image_ids_query.filter(Encodings.mongo_face_landmarks == 1)
     # distinct_image_ids_query = select(Images.image_id.distinct(), Images.h, Images.w, Encodings.bbox).\
     #     outerjoin(SegmentTable,Images.image_id == SegmentTable.image_id).\
     #     outerjoin(Detections,Detections.image_id == SegmentTable.image_id).\
@@ -864,7 +978,7 @@ if USE_OBJ:
 
 elif REPROCESS_HANDS == True and IS_SEGMENT_BIG == True:
     print("doing HANDS using SegmentTable")
-    distinct_image_ids_query = select(Images.image_id.distinct(), Images.h, Images.w, SegmentTable.bbox, Encodings.face_height).\
+    distinct_image_ids_query = select(Images.image_id.distinct(), Images.h, Images.w, SegmentTable.bbox, Encodings.face_height, Encodings.nose_pixel_x, Encodings.nose_pixel_y).\
         outerjoin(SegmentTable,Images.image_id == SegmentTable.image_id).\
         outerjoin(Encodings, Encodings.image_id == Images.image_id).\
         filter(SegmentTable.bbox != None).\
@@ -874,7 +988,7 @@ elif REPROCESS_HANDS == True and IS_SEGMENT_BIG == True:
         limit(LIMIT)
 elif REPROCESS_HANDS == True and IS_SEGMENT_BIG == False:
     print("doing HANDS using Encodings")
-    distinct_image_ids_query = select(Images.image_id.distinct(), Images.h, Images.w, Encodings.bbox, Encodings.face_height).\
+    distinct_image_ids_query = select(Images.image_id.distinct(), Images.h, Images.w, Encodings.bbox, Encodings.face_height, Encodings.nose_pixel_x, Encodings.nose_pixel_y).\
         outerjoin(Images, Images.image_id == Encodings.image_id).\
         filter(Encodings.bbox != None).\
         filter(Encodings.two_noses.is_(None)).\
@@ -890,24 +1004,30 @@ elif REPROCESS_HANDS == True and IS_SEGMENT_BIG == False:
 
 elif not SKIP_BODY and IS_SEGMENT_BIG == True:
     print("doing BODY using SegmentBig")
-    distinct_image_ids_query = select(Images.image_id.distinct(), Images.h, Images.w, SegmentTable.bbox, Encodings.face_height).\
+    distinct_image_ids_query = select(Images.image_id.distinct(), Images.h, Images.w, SegmentTable.bbox, Encodings.face_height, Encodings.nose_pixel_x, Encodings.nose_pixel_y).\
         outerjoin(SegmentTable,Images.image_id == SegmentTable.image_id).\
         outerjoin(Encodings, Encodings.image_id == Images.image_id).\
         filter(SegmentTable.bbox != None).\
         filter(SegmentTable.two_noses.is_(None)).\
         filter(SegmentTable.mongo_body_landmarks == 1).\
-        filter(SegmentTable.mongo_body_landmarks_norm.is_(None)).\
         limit(LIMIT)
+    if not REPROCESSED_BODY:
+        distinct_image_ids_query = distinct_image_ids_query.filter(SegmentTable.mongo_body_landmarks_norm.is_(None))
 elif not SKIP_BODY and IS_SEGMENT_BIG == False:
     # use Encodings table
     print("doing BODY using Encodings")
-    distinct_image_ids_query = select(Images.image_id.distinct(), Images.h, Images.w, Encodings.bbox, Encodings.face_height).\
+    distinct_image_ids_query = select(Images.image_id.distinct(), Images.h, Images.w, Encodings.bbox, Encodings.face_height, Encodings.nose_pixel_x, Encodings.nose_pixel_y).\
         outerjoin(Images, Images.image_id == Encodings.image_id).\
         filter(Encodings.bbox != None).\
+        filter(Encodings.is_face == 1).\
         filter(Encodings.two_noses.is_(None)).\
         filter(Encodings.mongo_body_landmarks == 1).\
-        filter(Encodings.mongo_body_landmarks_norm.is_(None)).\
         limit(LIMIT)
+    if not REPROCESSED_BODY:
+        distinct_image_ids_query = distinct_image_ids_query.filter(Encodings.mongo_body_landmarks_norm.is_(None))
+    else:
+        # skip the ones with a mongo_body_landmarks_norm_recalc value
+        distinct_image_ids_query = distinct_image_ids_query.filter(Encodings.mongo_body_landmarks_norm_recalc.is_(None))
     
     if DETECTIONS_ONLY: 
         print("DETECTIONS_ONLY: limiting BODY query to images with Detections")
@@ -917,7 +1037,16 @@ elif not SKIP_BODY and IS_SEGMENT_BIG == False:
         filter(Detections.bbox != None).\
         filter(Detections.conf > 0).\
         limit(LIMIT)
-        
+    if INNER_JOIN_HELPER:
+        print(f"SUBSELECT_ON_CLASS_ID: limiting BODY Encodings query to {INNER_JOIN_HELPER}")
+        distinct_image_ids_query = distinct_image_ids_query.\
+        limit(None).\
+        join(SegmentHelper, SegmentHelper.image_id == Encodings.image_id).\
+        limit(LIMIT)
+
+        # add this when using a second segment inner join
+        # join(SegmentHelperInnerJoin, SegmentHelperInnerJoin.image_id == Encodings.image_id).\
+
 else:
     print(f"doing something else that wasn't caught because SKIP_BODY is {SKIP_BODY}, REPROCESS_HANDS is {REPROCESS_HANDS} and IS_SEGMENT_BIG is {IS_SEGMENT_BIG}")
 
@@ -970,15 +1099,15 @@ if VERBOSE:
     print(workbench_query)
     print("=" * 100)
 
-
+io.print_sqlalchemy_query(engine,distinct_image_ids_query)
 results = session.execute(distinct_image_ids_query).fetchall()
 print("query executed, results length", len(results))
 # make a dictionary of image_id to shape
 for result in results:
     if VERBOSE: print("result", result)
     image_id_to_shape = {}
-    image_id, height, width, bbox, face_height = result
-    image_id_to_shape[image_id] = (height, width, bbox, face_height)
+    image_id, height, width, bbox, face_height, nose_pixel_x, nose_pixel_y = result
+    image_id_to_shape[image_id] = (height, width, bbox, face_height, nose_pixel_x, nose_pixel_y)
 
     ### temp single thread for debugging
     # calc_nlm(image_id_to_shape, lock=None, session=session)
@@ -1055,6 +1184,7 @@ def commit_batch_updates(batch_updates):
 
 def threaded_fetching():
     """Process work queue with per-thread batch accumulation."""
+    global rows_processed_count
     batch_updates = {
         'Encodings': [],
         'SegmentTable': [],
@@ -1067,6 +1197,15 @@ def threaded_fetching():
         param = work_queue.get()
         # Process image and collect updates
         function(param, batch_updates)
+
+        with lock:
+            rows_processed_count += 1
+            if rows_processed_count % STATS_PRINT_EVERY == 0:
+                print(
+                    f"[nlms running total] rows_processed={rows_processed_count} "
+                    f"good_nlms={good_nlms_count} bad_nlms={bad_nlms_count}"
+                )
+
         batch_count += 1
         
         # Commit batch at regular intervals to avoid memory bloat
@@ -1110,6 +1249,10 @@ threaded_processing()
 threads_completed.wait()
 
 print("done")
+print(
+    f"[nlms final total] rows_processed={rows_processed_count} "
+    f"good_nlms={good_nlms_count} bad_nlms={bad_nlms_count}"
+)
 # Close the session
 session.close()
 

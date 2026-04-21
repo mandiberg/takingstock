@@ -59,7 +59,6 @@ CREATE TABLE ImagesDetections (
     shoulder_object_id INT,
     waist_object_id INT,
     feet_object_id INT,
-    last_reprocessed_detection_id BIGINT,
     
     -- Metadata
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -94,6 +93,13 @@ DESCRIBE ImagesDetections;
 
 SHOW CREATE TABLE ImagesObjectFusion;
 
+'''
+ObjectFusion
+ImagesObjectFusion
+'''
+
+USE Stock;
+
 CREATE TABLE `ObjectFusion` (
   `cluster_id` int NOT NULL,
   `cluster_median` blob,
@@ -101,15 +107,15 @@ CREATE TABLE `ObjectFusion` (
 ) 
 ;
 
-
 CREATE TABLE ImagesObjectFusion (
-  image_id INT NOT NULL,
-  cluster_id INT NOT NULL,
-  cluster_dist FLOAT,
-  PRIMARY KEY (image_id),
-  KEY idx_cluster_id (cluster_id),
-  CONSTRAINT fk_iof_image FOREIGN KEY (image_id) REFERENCES Images(image_id) ON DELETE CASCADE,
-  CONSTRAINT fk_iof_cluster FOREIGN KEY (cluster_id) REFERENCES ObjectFusion(cluster_id) ON DELETE CASCADE
+image_id INT NOT NULL,
+cluster_id INT NOT NULL,
+cluster_dist FLOAT,
+PRIMARY KEY (image_id),
+KEY idx_cluster_id (cluster_id),
+FOREIGN KEY (image_id) REFERENCES Images(image_id) ON DELETE CASCADE,
+FOREIGN KEY (cluster_id) REFERENCES ObjectFusion(cluster_id) ON DELETE CASCADE
 );
+
 
 

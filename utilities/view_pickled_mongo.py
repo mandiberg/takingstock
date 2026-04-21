@@ -32,7 +32,7 @@ bboxnormed_collection = mongo_db["body_landmarks_norm"]
 
 SUBSET_LANDMARKS = [i for i in range(13,22)]
 
-image_id = 17830292
+image_id = 6791
 #
 #
 # 10152053
