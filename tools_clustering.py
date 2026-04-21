@@ -91,14 +91,40 @@ class ToolsClustering:
         self.LEFT_EYE_X_MAX = -0.05
         self.RIGHT_EYE_X_MIN = 0.05
         self.RIGHT_EYE_X_MAX = 0.9
+        # Tie-specific neck/chest fallback geometry used when shoulder landmarks are missing.
+        self.TIE_NECK_MAX_WIDTH = 1.25
+        self.TIE_NECK_TOP_MAX = 1.25
+        self.TIE_NECK_BOTTOM_MIN = 0.35
+        self.TIE_NECK_BOTTOM_MAX = 3.40
+        self.TIE_NECK_MIN_HEIGHT = 0.45
+        self.TIE_NECK_MIN_ASPECT_RATIO = 1.10
+        self.TIE_NECK_CENTER_X_TOL = 0.35
+        self.CENTERLINE_X = 0.0
+        self.CENTERLINE_Y = 0.0
+        self.MOUTH_MAX_TOP_EXTENSION = 0.0
+        self.FULL_FACE_MASK_X_MIN = -0.15
+        self.FULL_FACE_MASK_X_MAX = 0.15
+        self.SHOULDER_BAND_EXTENSION = 1.0
+        self.COVID_MASK_TOP_MIN = -0.4
+        self.COVID_MASK_TOP_MAX = 0.5
+        self.COVID_MASK_BOTTOM_MIN = 0.3
+        self.COVID_MASK_BOTTOM_MAX = .8
         self.FULL_FACE_MASK_TOP_MAX = -0.15
         self.FULL_FACE_MASK_BOTTOM_MIN = 0.15
-        self.WAIST_ZONE_TOP = 0.75
-        self.WAIST_ZONE_BOTTOM = 2.25
+        self.UNDER_EYE_ZONE_TOP = -0.45
+        self.UNDER_EYE_ZONE_BOTTOM = 0.45
+        self.EYE_COVER_ZONE_TOP = -0.80
+        self.EYE_COVER_ZONE_BOTTOM = 0.30
+        self.FOREHEAD_X_MIN = -1.00
+        self.FOREHEAD_X_MAX = 1.00
+        self.FOREHEAD_ZONE_TOP = -1.10
+        self.FOREHEAD_ZONE_BOTTOM = -0.10
+        self.WAIST_ZONE_TOP = 2.5
+        self.WAIST_ZONE_BOTTOM = 4.5
         self.WAIST_X_MIN = -1.40
         self.WAIST_X_MAX = 1.40
-        self.FEET_ZONE_TOP = 2.10
-        self.FEET_ZONE_BOTTOM = 6.00
+        self.FEET_ZONE_TOP = 4.75
+        self.FEET_ZONE_BOTTOM = 10.20
         self.FEET_X_MIN = -2.00
         self.FEET_X_MAX = 2.00
         
@@ -695,9 +721,9 @@ class ToolsClustering:
         width = bbox['right'] - bbox['left']
         extends_into_bottom = max(0, bbox['bottom'])  # how far does it go into positive y
         
-        return (bbox['top'] < 0 and 
-                bbox['left'] < 0 and 
-                bbox['right'] > 0 and
+        return (bbox['top'] < self.CENTERLINE_Y and 
+            bbox['left'] < self.CENTERLINE_X and 
+            bbox['right'] > self.CENTERLINE_X and
                 width <= self.MAX_FACE_WIDTH and
                 extends_into_bottom <= self.MAX_FACE_VERT_EXTENSION)
 
@@ -710,9 +736,9 @@ class ToolsClustering:
         width = bbox['right'] - bbox['left']
         extends_into_top = max(0, -bbox['top'])  # how far does it go into negative y
         
-        return (bbox['bottom'] > 0 and 
-                bbox['left'] < 0 and 
-                bbox['right'] > 0 and
+        return (bbox['bottom'] > self.CENTERLINE_Y and 
+            bbox['left'] < self.CENTERLINE_X and 
+            bbox['right'] > self.CENTERLINE_X and
                 width <= self.MAX_FACE_WIDTH and
                 extends_into_top <= self.MAX_FACE_VERT_EXTENSION)
 
@@ -721,23 +747,44 @@ class ToolsClustering:
         width = bbox['right'] - bbox['left']
         extends_into_top = max(0, -bbox['top'])
 
-        return (bbox['bottom'] > 0 and
-                bbox['left'] < 0 and
-                bbox['right'] > 0 and
+        return (bbox['bottom'] > self.CENTERLINE_Y and
+            bbox['left'] < self.CENTERLINE_X and
+            bbox['right'] > self.CENTERLINE_X and
                 width <= self.MAX_FACE_WIDTH and
-                extends_into_top <= 0.0)
+            extends_into_top <= self.MOUTH_MAX_TOP_EXTENSION)
+
+    def is_tie_neck_object(self, bbox):
+        """Check if tie bbox matches a centered neck/chest profile."""
+        width = bbox['right'] - bbox['left']
+        height = bbox['bottom'] - bbox['top']
+        center_x = (bbox['left'] + bbox['right']) / 2.0
+
+        if width <= 0 or height <= 0:
+            return False
+
+        return (
+            bbox['left'] < 0
+            and bbox['right'] > 0
+            and abs(center_x) <= self.TIE_NECK_CENTER_X_TOL
+            and width <= self.TIE_NECK_MAX_WIDTH
+            and bbox['top'] <= self.TIE_NECK_TOP_MAX
+            and bbox['bottom'] >= self.TIE_NECK_BOTTOM_MIN
+            and bbox['bottom'] <= self.TIE_NECK_BOTTOM_MAX
+            and height >= self.TIE_NECK_MIN_HEIGHT
+            and (height / width) >= self.TIE_NECK_MIN_ASPECT_RATIO
+        )
 
     def is_covid_mask_object(self, bbox):
         """Check if bbox looks like a covid mask, including pulled-below-chin cases."""
         width = bbox['right'] - bbox['left']
         return (
-            bbox['left'] < 0 and
-            bbox['right'] > 0 and
+            bbox['left'] < self.CENTERLINE_X and
+            bbox['right'] > self.CENTERLINE_X and
             width <= self.MAX_FACE_WIDTH and
-            bbox['top'] >= -0.15 and
-            bbox['top'] <= 0.65 and
-            bbox['bottom'] >= 0.05 and
-            bbox['bottom'] <= 1.60
+            bbox['top'] >= self.COVID_MASK_TOP_MIN and
+            bbox['top'] <= self.COVID_MASK_TOP_MAX and
+            bbox['bottom'] >= self.COVID_MASK_BOTTOM_MIN and
+            bbox['bottom'] <= self.COVID_MASK_BOTTOM_MAX
         )
 
     def is_under_eye_object(self, bbox):
@@ -746,8 +793,8 @@ class ToolsClustering:
             bbox,
             self.LEFT_EYE_X_MIN,
             self.RIGHT_EYE_X_MAX,
-            -0.45,
-            0.45,
+            self.UNDER_EYE_ZONE_TOP,
+            self.UNDER_EYE_ZONE_BOTTOM,
         )
 
     def is_eye_cover_object(self, bbox):
@@ -756,18 +803,18 @@ class ToolsClustering:
             bbox,
             self.LEFT_EYE_X_MIN,
             self.RIGHT_EYE_X_MAX,
-            -0.80,
-            0.30,
+            self.EYE_COVER_ZONE_TOP,
+            self.EYE_COVER_ZONE_BOTTOM,
         )
 
     def is_forehead_object(self, bbox):
         """Check if bbox intersects a forehead / pushed-up mask zone."""
         return self._bbox_intersects_rect(
             bbox,
-            -1.00,
-            1.00,
-            -1.10,
-            -0.10,
+            self.FOREHEAD_X_MIN,
+            self.FOREHEAD_X_MAX,
+            self.FOREHEAD_ZONE_TOP,
+            self.FOREHEAD_ZONE_BOTTOM,
         )
 
     def _bbox_intersects_rect(self, bbox, x_min, x_max, y_top, y_bottom):
@@ -783,8 +830,8 @@ class ToolsClustering:
         """Check if bbox covers both eyes+mouth region (full-face sheet mask style)."""
         width = bbox['right'] - bbox['left']
         return (
-            bbox['left'] < -0.15
-            and bbox['right'] > 0.15
+            bbox['left'] < self.FULL_FACE_MASK_X_MIN
+            and bbox['right'] > self.FULL_FACE_MASK_X_MAX
             and bbox['top'] <= self.FULL_FACE_MASK_TOP_MAX
             and bbox['bottom'] >= self.FULL_FACE_MASK_BOTTOM_MIN
             and width <= self.MAX_FACE_WIDTH
@@ -906,7 +953,7 @@ class ToolsClustering:
             shoulder_y_max = max(y_left, y_right, y_mid)
 
         band_top = shoulder_y_min
-        band_bottom = shoulder_y_max + 1.0
+        band_bottom = shoulder_y_max + self.SHOULDER_BAND_EXTENSION
 
         return not (bbox['bottom'] < band_top or bbox['top'] > band_bottom)
 
@@ -1091,7 +1138,9 @@ class ToolsClustering:
             neck_match = shoulder_allowed and self.is_shoulder_object(tie_bbox, left_shoulder, right_shoulder)
             left_touching = hand_allowed and self.is_touching_hand(left_knuckle, tie_bbox)
             right_touching = hand_allowed and self.is_touching_hand(right_knuckle, tie_bbox)
-            mouth_match = mouth_allowed and self.is_mouth_object(tie_bbox)
+            mouth_match = mouth_allowed and (
+                self.is_mouth_object(tie_bbox) or self.is_tie_neck_object(tie_bbox)
+            )
 
             if neck_match:
                 assign_slot_if_preferred('shoulder_object', tie_det)
@@ -1131,7 +1180,7 @@ class ToolsClustering:
                 tie_locked_slots.add('mouth_object')
                 tie_blocked_detection_ids.add(tie_detection_id)
                 if self.VERBOSE:
-                    print(f"  [TIE] detection_id={tie_detection_id} -> mouth_object")
+                    print(f"  [TIE] detection_id={tie_detection_id} -> mouth_object (neck fallback)")
                 continue
 
             tie_blocked_detection_ids.add(tie_detection_id)
@@ -1159,8 +1208,8 @@ class ToolsClustering:
             for det in detections:
                 if det['detection_id'] in tie_blocked_detection_ids:
                     continue
-                if not self._passes_slot_whitelist(det, 'hand'):
-                    self._record_whitelist_reject('hand')
+                if not self._passes_slot_allowlist(det, 'hand'):
+                    self._record_allowlist_reject('hand')
                     continue
                 dist = self.point_to_bbox_distance(knuckle, det['bbox'])
                 compat_score = self._compatibility_biased_score(det, 'hand')
@@ -1309,12 +1358,24 @@ class ToolsClustering:
                     elif det['conf'] > results['right_eye_object']['conf']:
                         results['right_eye_object'] = det
                 else:
-                    if left_eye_allowed and self._bbox_intersects_rect(bbox, self.LEFT_EYE_X_MIN, self.LEFT_EYE_X_MAX, -0.45, 0.45):
+                    if left_eye_allowed and self._bbox_intersects_rect(
+                        bbox,
+                        self.LEFT_EYE_X_MIN,
+                        self.LEFT_EYE_X_MAX,
+                        self.UNDER_EYE_ZONE_TOP,
+                        self.UNDER_EYE_ZONE_BOTTOM,
+                    ):
                         if results['left_eye_object'] is None:
                             results['left_eye_object'] = det
                         elif det['conf'] > results['left_eye_object']['conf']:
                             results['left_eye_object'] = det
-                    if right_eye_allowed and self._bbox_intersects_rect(bbox, self.RIGHT_EYE_X_MIN, self.RIGHT_EYE_X_MAX, -0.45, 0.45):
+                    if right_eye_allowed and self._bbox_intersects_rect(
+                        bbox,
+                        self.RIGHT_EYE_X_MIN,
+                        self.RIGHT_EYE_X_MAX,
+                        self.UNDER_EYE_ZONE_TOP,
+                        self.UNDER_EYE_ZONE_BOTTOM,
+                    ):
                         if results['right_eye_object'] is None:
                             results['right_eye_object'] = det
                         elif det['conf'] > results['right_eye_object']['conf']:
@@ -1322,12 +1383,24 @@ class ToolsClustering:
                 continue
 
             if self._is_class_in(det, self.EYE_OR_FOREHEAD_CLASSES | self.EYE_ONLY_CLASSES | self.HAND_OR_EYE_CLASSES):
-                if left_eye_allowed and self._bbox_intersects_rect(bbox, self.LEFT_EYE_X_MIN, self.LEFT_EYE_X_MAX, -0.80, 0.30):
+                if left_eye_allowed and self._bbox_intersects_rect(
+                    bbox,
+                    self.LEFT_EYE_X_MIN,
+                    self.LEFT_EYE_X_MAX,
+                    self.EYE_COVER_ZONE_TOP,
+                    self.EYE_COVER_ZONE_BOTTOM,
+                ):
                     if results['left_eye_object'] is None:
                         results['left_eye_object'] = det
                     elif det['conf'] > results['left_eye_object']['conf']:
                         results['left_eye_object'] = det
-                if right_eye_allowed and self._bbox_intersects_rect(bbox, self.RIGHT_EYE_X_MIN, self.RIGHT_EYE_X_MAX, -0.80, 0.30):
+                if right_eye_allowed and self._bbox_intersects_rect(
+                    bbox,
+                    self.RIGHT_EYE_X_MIN,
+                    self.RIGHT_EYE_X_MAX,
+                    self.EYE_COVER_ZONE_TOP,
+                    self.EYE_COVER_ZONE_BOTTOM,
+                ):
                     if results['right_eye_object'] is None:
                         results['right_eye_object'] = det
                     elif det['conf'] > results['right_eye_object']['conf']:
@@ -1402,11 +1475,6 @@ class ToolsClustering:
                         results['top_face_object'] = det
                     elif det['conf'] > results['top_face_object']['conf']:
                         results['top_face_object'] = det
-                elif 'mouth_object' not in tie_locked_slots and mouth_allowed and self.is_covid_mask_object(bbox):
-                    if results['mouth_object'] is None:
-                        results['mouth_object'] = det
-                    elif det['conf'] > results['mouth_object']['conf']:
-                        results['mouth_object'] = det
                 continue
 
             if self._is_class_in(det, self.EYE_OR_FOREHEAD_CLASSES):
@@ -1662,7 +1730,7 @@ class ToolsClustering:
         Process all detections for a dataframe and add object classification columns.
         Expects df to have: image_id, left_pointer_knuckle_norm, right_pointer_knuckle_norm
         """
-        self.reset_whitelist_reject_counts()
+        self.reset_allowlist_reject_counts()
         self.reset_unassigned_reason_counts()
         self.reset_class_assignment_debug_counts()
         self.reset_class_pipeline_debug_counts()

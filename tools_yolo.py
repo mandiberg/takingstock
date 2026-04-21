@@ -344,10 +344,10 @@ class YOLOTools:
         if self.VERBOSE: print("type phone_bbox",type(phone_bbox))
 
         n_phone_bbox=phone_bbox
-        n_phone_bbox["right"] =(nose_pos["x"]-n_phone_bbox["right"] )/face_height
-        n_phone_bbox["left"]  =(nose_pos["x"]-n_phone_bbox["left"]  )/face_height
-        n_phone_bbox["top"]   =(nose_pos["y"]-n_phone_bbox["top"]   )/face_height
-        n_phone_bbox["bottom"]=(nose_pos["y"]-n_phone_bbox["bottom"])/face_height
+        n_phone_bbox["right"] =(n_phone_bbox["right"] - nose_pos["x"]) / face_height
+        n_phone_bbox["left"]  =(n_phone_bbox["left"]  - nose_pos["x"]) / face_height
+        n_phone_bbox["top"]   =(n_phone_bbox["top"]   - nose_pos["y"]) / face_height
+        n_phone_bbox["bottom"]=(n_phone_bbox["bottom"]- nose_pos["y"]) / face_height
         if self.VERBOSE: print("type phone_bbox",type(n_phone_bbox["right"]))
 
         return n_phone_bbox

@@ -41,13 +41,13 @@ IS_SSD = False
 SSD_PATH = None
 
 SKIP_EXISTING = False # Skips images with a normed bbox but that have Images.h - I think only applies to phone bbox
-USE_OBJ = True # do objet detections?
+USE_OBJ = False # do objet detections?
 SKIP_BODY = False # skip body landmarks. mostly you want to skip when doing obj bbox
                 # or are just redoing hands
 REPROCESS_HANDS = False # do hands
 ACCEPT_EXSISTING_HANDS = True # if true, it will accept existing data and update bool in SQL to tru
 REPROCESSED_BODY = True 
-REPROCESSED_BODY_DIFF_THRESH = 0.05
+REPROCESSED_BODY_DIFF_THRESH = -1.0
 IS_SEGMENT_BIG = False # use SegmentBig table. IF False, and IS_SSD is false, it will use Encodings table
 TESTING = False # if true, will not do any DB writes
 DETECTIONS_ONLY = False
@@ -68,7 +68,7 @@ INNER_JOIN_HELPER = True
 # SegmentHelperObject_67_phone 
 # SegmentHelperObject_41_cup_glass (big)
 
-LIMIT= 20000000
+LIMIT= 4000000
 # Initialize the counter
 counter = 2000
 STATS_PRINT_EVERY = 1000
@@ -92,7 +92,7 @@ if class_token:
     # SORT_TYPE = "obj_bbox_fusion"
 else: 
     # SegmentHelper_name = 'SegmentHelper_T11_Business'
-    SegmentHelper_name = 'SegmentHelper_T11_Oct20_COCO_Custom'
+    SegmentHelper_name = 'SegmentHelper_T11_Oct20_COCO_Custom_evens_quarters'
     # SegmentFolder = "/Volumes/OWC54/segment_images"
     SegmentFolder = None
     # SegmentHelper_name = 'SegmentHelper_T11_Oct20_COCO_Custom'
@@ -956,7 +956,10 @@ if USE_OBJ:
     limit(LIMIT)    
 
     # join(SegmentHelper, SegmentHelper.image_id == Detections.image_id).\
-
+    if SegmentHelper is not None and INNER_JOIN_HELPER:
+        print(f"SUBSELECT_ON_CLASS_ID: limiting OBJ query to {INNER_JOIN_HELPER} using INNER JOIN on SegmentHelper")
+        distinct_image_ids_query = distinct_image_ids_query.\
+        join(SegmentHelper, SegmentHelper.image_id == Detections.image_id)
     #filter(Detections.class_id == THIS_CLASS_ID).\
     if not REPROCESSED_BODY:
         distinct_image_ids_query = distinct_image_ids_query.filter(Encodings.mongo_body_landmarks_norm.is_(None))

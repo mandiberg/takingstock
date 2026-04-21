@@ -38,22 +38,25 @@ ARMS_OBJECT_FOCUS_CLUSTER_IDS = []
 ARMS_CLUSTER_COUNT = 768
 OBJECTFUSION_CLUSTER_COUNT = 768
 
-HACK_LIST_SKIP_DETECTIONS = [87,90,91,92]
-MODE = "ArmsPoses3D" # Topics or Keywords or Detections or ArmsPoses3D
+HACK_LIST_SKIP_DETECTIONS = []
+MODE = "ObjectFusion_DetectionsOnly" # Topics or Keywords or ObjectFusion_DetectionsOnly or ArmsPoses3D or ObjectFusion to 
 if MODE == "Topics": 
     MODE_ID = "topic_id" 
     CLUSTER_TYPE = "TK" # needs to be reworked next time it is used
-elif "Detections" in MODE: 
-    MODE_ID = "class_id"
-    CLUSTER_TYPE = "TK" # needs to be reworked next time it is used
+elif "ObjectFusion_DetectionsOnly" in MODE: 
+    MODE_ID = "ObjectFusion"
+    CLUSTER_TYPE = "ObjectFusion_ObjectHSV" # needs to be reworked next time it is used
+    # doing ObjectFusion_DetectionsOnly requires OBJECT_HSV_EXPORT_CLASS_IDS to be set to something
+    OBJECT_HSV_EXPORT_CLASS_IDS = [i for i in range(128) if i not in HACK_LIST_SKIP_DETECTIONS] # for testing, export all but the ones in the hack list
 elif MODE == "ArmsPoses3D": 
     MODE_ID = "cluster_id"
     CLUSTER_TYPE = "ArmsPoses3D_MetaHSV" # key to CLUSTER_DATA dict
-else: 
+elif MODE == "ObjectFusion": 
     MODE_ID =  "keyword_id"
     CLUSTER_TYPE = "ArmsPoses3D_ObjectFusion" # key to CLUSTER_DATA dict
     # "ArmsPoses3D_MetaHSV" or "BodyPoses3D_MetaHSV" or "MetaBodyPoses3D" or "BodyPoses3D_HSV" or "body3D" or "hand_gesture_position" - determines whether it checks hand poses or body3D
-
+else:
+    raise ValueError(f"Unsupported MODE: {MODE}")
 
     # if "body3D" in CLUSTER_TYPE: cluster_count = 512
     # elif "BodyPoses3D" in CLUSTER_TYPE: cluster_count = 768
@@ -62,6 +65,7 @@ else:
 
 CLUSTER_COUNT = 768
 
+print(f"Running with MODE: {MODE}, MODE_ID: {MODE_ID}, CLUSTER_TYPE: {CLUSTER_TYPE}, CLUSTER_COUNT: {CLUSTER_COUNT}")
 CLUSTER_DATA = {
     "ArmsPoses3D_MetaHSV": {"sql_template": "sql_query_template_MetaHSV_Body3D", "cluster_table_name": "ImagesArmsPoses3D", "hsv_type": "ClustersMetaHSV", "cluster_count": CLUSTER_COUNT, 
         "folder_name": f"heft_clusters_ArmsPoses3D_{ARMS_CLUSTER_COUNT}",
@@ -821,7 +825,11 @@ def export_objectfusion_object_hsv_csvs(root_folder_path, class_ids, focus_clust
 
     # Table C
     class_tag = "-".join(str(int(x)) for x in class_ids)
-    focus_tag = "all" if not focus_cluster_ids else "-".join(str(int(x)) for x in focus_cluster_ids)
+    if len(focus_cluster_ids) > 100:
+        print(f"Warning: focus_cluster_ids has {len(focus_cluster_ids)} entries; using 'all' tag for filename.")
+        focus_tag = "all"
+    else:
+        focus_tag = "all" if not focus_cluster_ids else "-".join(str(int(x)) for x in focus_cluster_ids)
     long_name = f"ObjectFusion_object_hsv_long_classes_{class_tag}_clusters_{focus_tag}.csv"
     long_path = os.path.join(root_folder_path, long_name)
     df_long.to_csv(long_path, index=False)

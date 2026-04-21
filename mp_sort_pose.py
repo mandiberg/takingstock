@@ -119,7 +119,7 @@ class SortPose:
         self.BRUTEFORCE = False
         self.LMS_DIMENSIONS = LMS_DIMENSIONS
         if self.VERBOSE: print("init LMS_DIMENSIONS",self.LMS_DIMENSIONS)
-        self.CUTOFF = 80 # DOES factor if ONE_SHOT
+        self.CUTOFF = 40 # DOES factor if ONE_SHOT
         self.ORIGIN = 0
         self.this_nose_bridge_dist = self.NOSE_BRIDGE_DIST = None # to be set in first loop, and sort.this_nose_bridge_dist each time
         self.USE_HEAD_POSE = USE_HEAD_POSE
@@ -4151,8 +4151,11 @@ class SortPose:
                 continue
 
             translated_landmark = landmark_pb2.NormalizedLandmark()
-            translated_landmark.x = (nose_pos["x"]-lm_x*width )/face_height
-            translated_landmark.y = (nose_pos["y"]-lm_y*height)/face_height
+            # Keep sign convention aligned with bbox_norm and hand normalization:
+            # negative x = left of nose, positive x = right of nose
+            # negative y = above nose, positive y = below nose
+            translated_landmark.x = (lm_x * width - nose_pos["x"]) / face_height
+            translated_landmark.y = (lm_y * height - nose_pos["y"]) / face_height
             translated_landmark.visibility = lm_visibility
             translated_landmarks.landmark.append(translated_landmark)
 
@@ -4170,8 +4173,8 @@ class SortPose:
             # print(nose_pos)
             #  nose_pos[x]-landmark.x*face_height
             projected_landmark = landmark_pb2.NormalizedLandmark()
-            projected_landmark.x = int(nose_pos["x"]-landmark.x*face_height)
-            projected_landmark.y = int(nose_pos["y"]-landmark.y*face_height)
+            projected_landmark.x = int(nose_pos["x"] + landmark.x * face_height)
+            projected_landmark.y = int(nose_pos["y"] + landmark.y * face_height)
             # projected_landmark.x=projected_landmark.x*height/width
             # projected_landmark.y=projected_landmark.x*width/height   
             projected_landmark.visibility = landmark.visibility
@@ -4769,16 +4772,39 @@ class SortPose:
 
         file_name = None
         file_meta = None
+        aggregate_file_name = None
+        aggregate_file_meta = None
+        known_entity_ids = []
+
         for candidate_name, candidate_meta in files_map.items():
-            if int(candidate_meta.get("entity_id", -999999)) == isolated_topic:
+            raw_entity_id = candidate_meta.get("entity_id", -999999)
+
+            if raw_entity_id is None:
+                if aggregate_file_name is None:
+                    aggregate_file_name = candidate_name
+                    aggregate_file_meta = candidate_meta
+                continue
+
+            try:
+                candidate_entity_id = int(raw_entity_id)
+            except (TypeError, ValueError):
+                continue
+
+            known_entity_ids.append(candidate_entity_id)
+            if candidate_entity_id == isolated_topic:
                 file_name = candidate_name
                 file_meta = candidate_meta
                 break
 
+        if file_name is None and isolated_topic == 0 and aggregate_file_name is not None:
+            file_name = aggregate_file_name
+            file_meta = aggregate_file_meta
+
         if file_name is None:
             raise ValueError(
                 f"No manifest entry for entity_id {isolated_topic} in {manifest_path}. "
-                f"Known entity_ids: {[v.get('entity_id') for v in files_map.values()]}"
+                f"Known entity_ids: {known_entity_ids}. "
+                f"Aggregate entries: {[name for name, meta in files_map.items() if meta.get('entity_id') is None]}"
             )
 
         file_path = os.path.join(folder_path, file_name)
