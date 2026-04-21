@@ -23,11 +23,17 @@ CURRENT_MODE = MODES[MODE_CHOICE]
 
 # Provide the path to the folder containing the images
 ROOT_FOLDER_PATH = '/Users/michaelmandiberg/Documents/projects-active/facemap_production/output_folder'
+
+
 # ROOT_FOLDER_PATH = '/Users/michaelmandiberg/Documents/projects-active/facemap_production'
 # if IS_CLUSTER this should be the folder holding all the cluster folders
 # if not, this should be the individual folder holding the images
 # will not accept clusterNone -- change to cluster00
 FOLDER_NAME = "T11_YOLO_768_armsposes3D_april12_3"
+
+if io.IS_TENCH:
+    ROOT_FOLDER_PATH = '/Users/tenchc/Documents/GitHub/taking_stock_production/segment_images'
+    FOLDER_NAME = "installation_images"
 
 # iterate through folders? 
 IS_CLUSTER = True
@@ -74,6 +80,7 @@ if IS_VIDEO:
     from moviepy import VideoFileClip, AudioFileClip
 
 SAVE_METAS_AUDIO = False
+SAVE_INSTALLATION_METAS = True
 BUILD_WITH_AUDIO = False
 ALL_ONE_VIDEO = False
 LOWEST_DIMS = True # make this False if assembling big images eg full body # False if doing Paris Photo faces
@@ -881,6 +888,7 @@ def write_video(img_array, subfolder_path=None):
 
     # Release the video writer and close the video file
     video_writer.release()
+
     print("outfile size", os.path.getsize(video_path))
 
     print(f"Video saved at: {video_path}")
@@ -1031,6 +1039,99 @@ def save_concatenated_metas(subfolders, output_path, csv_file):
     cat_metas.to_csv(output_csv_path, index=False)
 
 
+########################################################
+# THIS IS FOR SAVING INSTALLATION METAS TENCH CURRENTLY WORKING ON THIS!!!
+########################################################
+def save_installation_metas(subfolders, output_path, csv_file):
+    print(f"\n[save_installation_metas] output_path={output_path}, csv_file={csv_file}")
+    print(f"[save_installation_metas] {len(subfolders)} subfolders to check")
+
+    # Check each cluster subfolder for its own installation.csv
+    any_missing = False
+    installation_metas = pd.DataFrame(columns=["cluster_no", "hsv_no", "pose_no"])
+    for subfolder_path in subfolders:
+        metas_path = os.path.join(subfolder_path, "installation.csv")
+        if os.path.exists(metas_path):
+            installation_metas_df = pd.read_csv(metas_path)
+            print(f"  [subfolder] {subfolder_path}")
+            print(f"    raw columns: {list(installation_metas_df.columns)}")
+            print(f"    shape: {installation_metas_df.shape}")
+            print(f"    head:\n{installation_metas_df.head()}")
+            installation_metas_df.columns = ["cluster_no", "hsv_no", "pose_no"]
+            installation_metas = pd.concat([installation_metas, installation_metas_df], ignore_index=True)
+        else:
+            print(f"  [subfolder] installation.csv MISSING in: {subfolder_path}")
+            any_missing = True
+
+    print(f"\n[save_installation_metas] combined installation_metas shape: {installation_metas.shape}")
+    print(installation_metas.head())
+    output_filename = "missing_installation.csv" if any_missing else csv_file
+    print(f"[save_installation_metas] any_missing={any_missing} → output file: {output_filename}")
+
+    # Build a lookup: cluster_no (subfolder basename) -> (width, height, file_name, duration)
+    video_dims = {}
+    mp4_files = [f for f in os.listdir(output_path) if f.endswith(".mp4")]
+    print(f"\n[save_installation_metas] mp4 files found in output_path: {mp4_files}")
+    for subfolder_path in subfolders:
+        subfolder_basename = subfolder_path.split("/")[-1]
+        # Use the cluster_no value from the subfolder's installation.csv as the lookup key
+        # so it matches what ends up in the DataFrame — not the raw subfolder basename
+        metas_path = os.path.join(subfolder_path, "installation.csv")
+        if os.path.exists(metas_path):
+            tmp_df = pd.read_csv(metas_path)
+            lookup_key = str(tmp_df.iloc[0, 0])
+        else:
+            lookup_key = subfolder_basename
+        matched = next((f for f in mp4_files if subfolder_basename in f), None)
+        print(f"  subfolder_basename={subfolder_basename!r}, lookup_key={lookup_key!r} → matched mp4={matched!r}")
+        if matched:
+            cap = cv2.VideoCapture(os.path.join(output_path, matched))
+            w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+            h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+            fps = cap.get(cv2.CAP_PROP_FPS)
+            frame_count = cap.get(cv2.CAP_PROP_FRAME_COUNT)
+            duration = round(frame_count / fps, 3) if fps > 0 else None
+            cap.release()
+            print(f"    w={w}, h={h}, fps={fps}, frame_count={frame_count}, duration={duration}")
+            video_dims[lookup_key] = (w, h, matched, duration)
+
+    print(f"\n[save_installation_metas] video_dims keys: {list(video_dims.keys())}")
+    print(f"[save_installation_metas] cluster_no values in df: {installation_metas['cluster_no'].tolist()}")
+
+    def _lookup(cluster_no, idx):
+        entry = video_dims.get(str(cluster_no))
+        if entry is None:
+            print(f"    [_lookup] no match for cluster_no={cluster_no!r}")
+        return entry[idx] if entry else None
+
+    # Drop rows for subfolders that produced no video (skipped due to too few/no images)
+    before_count = len(installation_metas)
+    installation_metas = installation_metas[
+        installation_metas["cluster_no"].apply(lambda x: str(x) in video_dims)
+    ].reset_index(drop=True)
+    dropped = before_count - len(installation_metas)
+    if dropped:
+        print(f"[save_installation_metas] dropped {dropped} row(s) with no matching video")
+
+    installation_metas["width"] = installation_metas["cluster_no"].apply(lambda x: _lookup(x, 0))
+    installation_metas["height"] = installation_metas["cluster_no"].apply(lambda x: _lookup(x, 1))
+    installation_metas["ratio"] = installation_metas.apply(
+        lambda r: round(r["width"] / r["height"], 3)
+        if pd.notna(r.get("width")) and pd.notna(r.get("height")) and r["height"] != 0
+        else None,
+        axis=1,
+    )
+    installation_metas["file_name"] = installation_metas["cluster_no"].apply(lambda x: _lookup(x, 2))
+    installation_metas["duration"] = installation_metas["cluster_no"].apply(lambda x: _lookup(x, 3))
+
+    print(f"\n[save_installation_metas] final DataFrame:\n{installation_metas}")
+    output_csv_path = os.path.join(output_path, output_filename)
+    print(f"[save_installation_metas] saving to: {output_csv_path}")
+    installation_metas.to_csv(output_csv_path, index=False)
+
+
+##### GOING TO GET OBJECTS FROM CLUSTER MEDIANS, TBD NOT WORKING YET
+
 def main():
     print("starting merge_expanded_images.py, looking in FOLDER_PATH:", FOLDER_PATH)
     if IS_CLUSTER is True:
@@ -1045,6 +1146,9 @@ def main():
             if SAVE_METAS_AUDIO is True:
                 print("saving metas")
                 save_concatenated_metas(subfolders, OUTPUT, CSV_FILE)
+            if SAVE_INSTALLATION_METAS is True:
+                print("saving installation metas")
+                save_installation_metas(subfolders, FOLDER_PATH, "installation.csv")
             # # const_videowriter(subfolder_path)
             # for subfolder_path in subfolders:
             #     write_video(subfolder_path)
@@ -1053,9 +1157,15 @@ def main():
                 all_img_path_list = io.get_img_list(subfolder_path, FORCE_LS)
                 # only inlcude jpgs in the list
                 write_video(all_img_path_list, subfolder_path)
+            if SAVE_INSTALLATION_METAS is True:
+                print("saving installation metas")
+                save_installation_metas(subfolders, FOLDER_PATH, "installation.csv")
 
         elif SAVE_METAS_AUDIO is True:
             save_concatenated_metas(subfolders, OUTPUT, CSV_FILE)
+        if SAVE_INSTALLATION_METAS is True:
+            print("saving installation metas")
+            save_installation_metas(subfolders, FOLDER_PATH, "installation.csv")
         else:
             # for merging images into stills
             for subfolder_path in subfolders:
