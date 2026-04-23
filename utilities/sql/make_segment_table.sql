@@ -1,6 +1,10 @@
 
 USE stock;
 
+ALTER TABLE ImagesDetections
+ADD COLUMN last_reprocessed_detection_id BIGINT NULL;
+
+
 SET GLOBAL innodb_buffer_pool_size = 8053063680;
 
 -- cleanup
@@ -8,7 +12,7 @@ DROP TABLE SegmentHelperObject_book ;
 DELETE FROM SegmentHelper_sept2025_heft_keywords;
 
 -- create helper segment table
-CREATE TABLE SegmentHelper_oct2025_every40_even (
+CREATE TABLE SegmentHelper_what_remains (
     seg_image_id int NOT NULL AUTO_INCREMENT PRIMARY KEY,
     image_id INTEGER,
     FOREIGN KEY (image_id) REFERENCES Images(image_id)
@@ -300,23 +304,41 @@ WHERE iap.cluster_id = 103
 LIMIT 200000
 ;
 
+USE Stock;
+DELETE FROM SegmentHelper_T4_occupation;
 
 USE Stock;
 -- for making a helper from Segment Object based on t64 Topic
-INSERT INTO SegmentHelper_topic11_business (image_id)
+INSERT INTO SegmentHelper_what_remains (image_id)
 SELECT DISTINCT e.image_id
 FROM SegmentBig_isface e
 JOIN ImagesTopics iap ON iap.image_id = e.image_id
-WHERE (iap.topic_id = 11 OR iap.topic_id2 = 11)
+WHERE (iap.topic_id = 40 OR iap.topic_id2 = 40)
 AND NOT EXISTS (
         SELECT 1
-        FROM SegmentHelper_topic11_business s
+        FROM SegmentHelper_what_remains s
         WHERE s.image_id = e.image_id
     )
 LIMIT 2000000
 ;
 
-
+USE Stock;
+-- for making a helper from Segment Object based on t64 Topic
+INSERT INTO SegmentHelper_what_remains (image_id)
+SELECT DISTINCT e.image_id
+FROM SegmentHelper_T11_Oct20_COCO_Custom_evens_quarters e
+WHERE NOT EXISTS (
+        SELECT 1
+        FROM SegmentHelperObject_67_phone s
+        WHERE s.image_id = e.image_id
+    )
+AND NOT EXISTS (
+        SELECT 1
+        FROM SegmentOct20 so
+        WHERE so.image_id = e.image_id
+    )
+LIMIT 20000000
+;
 
 USE Stock;
 -- for making an OBJECT helper from segmentbig based on keywords

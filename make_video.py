@@ -48,13 +48,13 @@ option, MODE = pick(options, title)
 SegmentTable_name = 'SegmentBig_isface'
 # SegmentTable_name = 'SegmentBig_isnotface'
 # SegmentHelper_name = 'SegmentHelper_may2025_4x4faces'
-SegmentHelper_name = 'SegmentHelper_T37_money'
-# SegmentHelper_name = 'SegmentHelper_T11_Oct20_COCO_Custom_evens_quarters'
+# SegmentHelper_name = 'SegmentHelper_T11_Oct20_COCO_Custom_every40'
+SegmentHelper_name = 'SegmentHelper_T11_Oct20_COCO_Custom_evens_quarters'
 # SegmentHelper_name = 'None' # set below for heft keywords
 # SegmentHelper_name = None
 # SATYAM, this is MM specific
 # for when I'm using files on my SSD vs RAID
-IS_SSD = True
+IS_SSD = False
 SSD_PATH = "/Volumes/OWC54/segment_images_40xDetections"
 
 #IS_MOVE is in move_toSSD_files.py
@@ -83,7 +83,7 @@ CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden b
 
 # CSV_FOLDER = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion128_test220K"
 CSV_MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/"
-CSV_RUN_FOLDER = "armsposes_T11_fullrun_dedupable"
+CSV_RUN_FOLDER = "SegmentHelper_T11_Oct20_COCO_Custom_evens_quarters" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
 CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, CSV_RUN_FOLDER)
 
 HSV_SOURCE_MODE = "background"
@@ -207,12 +207,14 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     # SORT_TYPE = "object_fusion"
 
     # current arms sort
-    CLUSTER_TYPE = "ArmsPoses3D"
-    SORT_TYPE = "planar_hands"
+    # CLUSTER_TYPE = "ArmsPoses3D"
+    # SORT_TYPE = "planar_hands"
+    # USE_HSV = True
 
     # current obj sort
-    # CLUSTER_TYPE = "ArmsPoses3D_ObjectFusion"  # TEST: new Arms/ObjectFusion mode
-    # SORT_TYPE = "object_fusion" # for ArmsPoses3D_ObjectFusion keep SORT_TYPE as object_fusion
+    CLUSTER_TYPE = "ArmsPoses3D_ObjectFusion"  # TEST: new Arms/ObjectFusion mode
+    SORT_TYPE = "object_fusion" # for ArmsPoses3D_ObjectFusion keep SORT_TYPE as object_fusion
+    USE_HSV = False
 
     # CLUSTER_TYPE = "object_fusion"
     # CLUSTER_TYPE = "ArmsPoses3D" # this triggers meta body poses 3D
@@ -254,7 +256,6 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     
     TESTING = True
     if TESTING:
-        USE_HSV = True
         # turning all three off to do old style non tsp sort    
         ONE_SHOT = True # take all files, based off the very first sort order.
         TSP_SORT = False
@@ -267,7 +268,6 @@ elif CURRENT_MODE == 'heft_torso_keywords':
                                             # if false, it will grab the list of pair lists below
 
     else:
-        USE_HSV = True
         GENERATE_FUSION_PAIRS = False # if true it will query based on MIN_VIDEO_FUSION_COUNT and create pairs
         TSP_SORT = True
         CHOP_ITTER_TSP_SORT = True
@@ -280,7 +280,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     else:
         N_HSV = 0 # don't do HSV clusters
 
-    PURGING_DUPES = True
+    PURGING_DUPES = False
     FORCE_TARGET_COUNT = 90
     # if TESTING: IS_HAND_POSE_FUSION = GENERATE_FUSION_PAIRS = False
 
@@ -2412,7 +2412,7 @@ def set_my_counter_dict(this_topic=None, cluster_no=None, pose_no=None, hsv_meta
     if MODE == 0 or (PURGING_DUPES and MODE == 1): mkdir = False
     else: mkdir = True
     print("mkdir", mkdir, "root", io.ROOT)
-    sort.set_counters(io.ROOT,cluster_string, start_img_name,start_site_image_id, hsv_cluster=hsv_no, pose_no=pose_no, mkdir=mkdir)
+    sort.set_counters(io.ROOT,cluster_string, start_img_name,start_site_image_id, hsv_cluster=hsv_meta, pose_no=pose_no, mkdir=mkdir)
 
     if VERBOSE: print("set sort.counter_dict:" )
     if VERBOSE: print(sort.counter_dict)
@@ -2627,6 +2627,9 @@ def main():
             print("going to segment - current len(df):", len(df))
             # need to make sure has HSV here
             df_segment = sort.make_segment(df)
+            if len(df_segment) == 0:
+                print("segment is empty, skipping this segment")
+                return
             print("made segment - len(df_segment):", len(df_segment))
 
 
@@ -2872,9 +2875,9 @@ def main():
                         print("N_HSV > 0, so making FUSION_PAIR_DICT with keyword: [metacluster, hsv] structure")
                         FUSION_PAIR_DICT = {str(TOPIC_NO[0]): n_cluster_topics}
                     else:
-                        print(f"N_HSV == 0, so making FUSION_PAIR_DICT for {TOPIC_NO} with keyword: no_pairs structure")
-                        # this is how it was before. It doesn't make sense to me b/c key is fusion cluster and all have "no_pairs"
-                        FUSION_PAIR_DICT = {str(TOPIC_NO[0]): "no_pairs" for topic in n_cluster_topics}
+                        print(f"N_HSV == 0, so keeping generated fusion pairs for {TOPIC_NO} without HSV")
+                        # Non-HSV fusion runs still need the [arms_cluster, object_cluster] pairs.
+                        FUSION_PAIR_DICT = {str(TOPIC_NO[0]): n_cluster_topics}
                     print("FUSION_PAIR_DICT", FUSION_PAIR_DICT)
                 else:
                     # doing GENERATE_FUSION_PAIRS where no actual fusion document 

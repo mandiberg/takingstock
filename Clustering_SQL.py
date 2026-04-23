@@ -46,13 +46,13 @@ EXPAND = False
 ONE_SHOT = False # take all files, based off the very first sort order.
 JUMP_SHOT = False # jump to random file if can't find a run
 
-LIMIT = 1000000
+LIMIT = 12000000
 BATCH_LIMIT = 10000
 
 # number of clusters produced. run GET_OPTIMAL_CLUSTERS and add that number here
 # 32 for hand positions
 # 128 for hand gestures
-N_CLUSTERS = 768  # test run at 4M; scale to ~1536-2048 for 38M production run
+N_CLUSTERS = 384 # for testing, was 768  # test run at 4M; scale to ~1536-2048 for 38M production run
 N_META_CLUSTERS = 256
 
 # Reproducibility seed for this run (NumPy + Python random).
@@ -83,11 +83,11 @@ option, MODE = pick(options, title)
 # CLUSTER_TYPE = "Clusters"
 # CLUSTER_TYPE = "BodyPoses"
 # CLUSTER_TYPE = "BodyPoses3D" # use this for META 3D body clusters, Arms will start build but messed up because of subset landmarks
-CLUSTER_TYPE = "ArmsPoses3D" 
+# CLUSTER_TYPE = "ArmsPoses3D" 
 
 # you need both of these for ObjectFusion
-# CLUSTER_TYPE = "ObjectFusion" 
-# ONLY_EXISTING_IMAGES_DETECTIONS = True # faster for testing: will not calc new object placements
+CLUSTER_TYPE = "ObjectFusion" 
+ONLY_EXISTING_IMAGES_DETECTIONS = True # faster for testing: will not calc new object placements
 
 # CLUSTER_TYPE = "HandsPositions"
 # CLUSTER_TYPE = "HandsGestures"
@@ -110,7 +110,7 @@ OFFSET = 0
 # SELECT MAX(cmb.image_id) FROM ImagesBodyPoses3D cmb JOIN Encodings e ON cmb.image_id = e.image_id WHERE e.is_feet = 0;
 # START_ID = 129478350 # only used in MODE 1
 START_ID = 0 # only used in MODE 1
-REPROCESS_EXISTING_IMAGE_DETECTIONS = True # if True, will reprocess and overwrite existing ImagesDetections for images that are already in there. If False, will skip any images that already have detections in ImagesDetections. Only applies to ObjectFusion clustering for now, since that's the only one using ImagesDetections, but could be expanded to other cluster types that use the table.
+REPROCESS_EXISTING_IMAGE_DETECTIONS = False # if True, will reprocess and overwrite existing ImagesDetections for images that are already in there. If False, will skip any images that already have detections in ImagesDetections. Only applies to ObjectFusion clustering for now, since that's the only one using ImagesDetections, but could be expanded to other cluster types that use the table.
 START_REPROCESSING_FROM_DETECTION_ID = 59955150 # only applies if REPROCESS_EXISTING_IMAGE_DETECTIONS is True, will start reprocessing from this image_id. Set to 0 to reprocess all existing detections, or set to a specific image_id to start from there.
 REPROCESS_QUERY_CHUNK_SIZE = 1000
 TEST_REPROCESSING = False # if True won't commit
@@ -135,9 +135,9 @@ SegmentTable_name = 'SegmentBig_isface'
 # if cl.CLUSTER_TYPE == "ArmsPoses3D":
 # SegmentHelper_name = 'SegmentHelper_sept2025_heft_keywords'
 # SegmentHelper_name = 'Detections' # if CLUSTER_TYPE = "ObjectFusion", it automatically joins to Detections
-# SegmentHelper_name = 'SegmentHelper_T11_Business'
-SegmentHelper_name = 'SegmentHelper_T4_T11_T37_T40'
-# SegmentHelper_name = 'SegmentHelper_T11_Oct20_COCO_Custom_evens_quarters'
+# SegmentHelper_name = 'SegmentHelper_T11_Oct20_COCO_Custom_every40'
+# SegmentHelper_name = 'SegmentHelper_T4_T11_T37_T40'
+SegmentHelper_name = 'SegmentHelper_T11_Oct20_COCO_Custom_evens_quarters'
 FORCE_HAND_LANDMARKS = False # when doing ArmsPoses3D, default is True, so mongo_hand_landmarks = 1
 
 # TESTING MODE - reduce dataset size for faster iteration using pre-filtered table
@@ -238,7 +238,8 @@ if USE_SEGMENT is True and (cl.CLUSTER_TYPE != "Clusters"):
 
     # handle ObjectFusion, just get pitch, yaw, roll. Detections handled later:
     if cl.CLUSTER_TYPE == "ObjectFusion":
-        SELECT += f" , {dupe_table_pre}.pitch, {dupe_table_pre}.yaw, {dupe_table_pre}.roll "
+        # April 19 2026, do not need XYZ for fusion right now
+        # SELECT += f" , {dupe_table_pre}.pitch, {dupe_table_pre}.yaw, {dupe_table_pre}.roll "
         SELECT += " , i.h, i.w "
         FROM += " LEFT JOIN Images i ON s.image_id = i.image_id "
         if ONLY_EXISTING_IMAGES_DETECTIONS:

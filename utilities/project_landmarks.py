@@ -25,9 +25,9 @@ import time
 import math
 import sys
 
-sys.path.insert(1, '/Users/michaelmandiberg/Documents/GitHub/facemap/')
+sys.path.insert(1, '/Users/michaelmandiberg/Documents/GitHub/takingstock/')
 from mp_db_io import DataIO
-from my_declarative_base import Images, Base, SegmentTable, PhoneBbox, SegmentBig, Clusters, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON
+from my_declarative_base import Encodings, Images, Base, SegmentTable, PhoneBbox, SegmentBig, Clusters, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON
 from tools_clustering import ToolsClustering
 from mp_sort_pose import SortPose
 
@@ -116,7 +116,7 @@ sort = SortPose(config=cfg)
 # Create a session
 session = scoped_session(sessionmaker(bind=engine))
 
-LIMIT= 2
+LIMIT= 20
 # Initialize the counter
 counter = 0
 
@@ -464,9 +464,11 @@ else:
     print("DOING REGULAR QUERY")
     distinct_image_ids_query = select(Images.image_id.distinct(), Images.h, Images.w, SegmentTable.bbox).\
         outerjoin(SegmentTable,Images.image_id == SegmentTable.image_id).\
+        outerjoin(Encodings, Encodings.image_id == SegmentTable.image_id).\
         filter(SegmentTable.bbox != None).\
         filter(SegmentTable.two_noses.is_(None)).\
         filter(SegmentTable.mongo_body_landmarks_norm == 1).\
+        filter(Encodings.mongo_body_landmarks_norm_recalc == 0).\
         limit(LIMIT)
 
 # put this back in at future date if needed

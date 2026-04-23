@@ -65,7 +65,6 @@ else:
 
 CLUSTER_COUNT = 768
 
-print(f"Running with MODE: {MODE}, MODE_ID: {MODE_ID}, CLUSTER_TYPE: {CLUSTER_TYPE}, CLUSTER_COUNT: {CLUSTER_COUNT}")
 CLUSTER_DATA = {
     "ArmsPoses3D_MetaHSV": {"sql_template": "sql_query_template_MetaHSV_Body3D", "cluster_table_name": "ImagesArmsPoses3D", "hsv_type": "ClustersMetaHSV", "cluster_count": CLUSTER_COUNT, 
         "folder_name": f"heft_clusters_ArmsPoses3D_{ARMS_CLUSTER_COUNT}",
@@ -88,10 +87,11 @@ THIS_CLASS_ID = 0 # for object bbox normalization
 KEYWORDS = [THIS_CLASS_ID] 
 class_token = ID_SEGMENT_DICT.get(THIS_CLASS_ID, None)
 if class_token: HELPER_TABLE = f'SegmentHelperObject_{class_token}' 
-# else: HELPER_TABLE = 'SegmentHelper_T11_Oct20_COCO_Custom_evens_quarters'
-else: HELPER_TABLE = 'SegmentHelper_T11_Business'
+else: HELPER_TABLE = 'SegmentHelper_T11_Oct20_COCO_Custom_evens_quarters'
+# else: HELPER_TABLE = 'SegmentHelper_T11_Business'
 
 
+print(f"Running with MODE: {MODE}, MODE_ID: {MODE_ID}, CLUSTER_TYPE: {CLUSTER_TYPE}, CLUSTER_COUNT: {CLUSTER_COUNT}, HELPER_TABLE: {HELPER_TABLE}, OBJECT_HSV_EXPORT_CLASS_IDS: {OBJECT_HSV_EXPORT_CLASS_IDS}, ARMS_OBJECT_FOCUS_CLUSTER_IDS: {ARMS_OBJECT_FOCUS_CLUSTER_IDS}, ARMS_CLUSTER_COUNT: {ARMS_CLUSTER_COUNT}, OBJECTFUSION_CLUSTER_COUNT: {OBJECTFUSION_CLUSTER_COUNT}")
 
 # Create engine and session
 engine = create_engine("mysql+pymysql://{user}:{pw}@/{db}?unix_socket={socket}".format(
