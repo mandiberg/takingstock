@@ -436,6 +436,7 @@ SSD_PATH = None
 OBJ_DONT_SUBSELECT = True
 MIN_CYCLE_COUNT = 1
 AUTO_EDGE_CROP = False # this triggers the dynamic cropping based on min_max_body_landmarks_for_crop
+TRUST_FACE_PAIR_CACHE = True # set False to force re-test all face pairs, ignoring cached pass/fail results
 
 
 

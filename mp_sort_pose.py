@@ -258,6 +258,7 @@ class SortPose:
         self.same_img = []
         self.face_pair_result_cache = {}
         self.face_pair_cache_engine = None
+        self.trust_face_pair_cache = True  # set False to force re-test, ignoring cached results
         self.object_signature_new_to_old_map = None
         self.object_signature_map_source_path = None
         self.reset_face_pair_stats()
@@ -981,6 +982,10 @@ class SortPose:
         return tuple(sorted((image_id_a, image_id_b)))
 
     def get_face_pair_cache_result(self, image_id_a, image_id_b):
+        print(f"will I trust face pair? {self.trust_face_pair_cache}")
+        if not self.trust_face_pair_cache:
+            return None
+
         pair_key = self.canonicalize_face_pair(image_id_a, image_id_b)
         if pair_key is None:
             return None

@@ -84,7 +84,7 @@ CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden b
 
 # CSV_FOLDER = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion128_test220K"
 CSV_MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/"
-CSV_RUN_FOLDER = "SegmentHelper_T11_Oct20_COCO_Custom_evens_quarters" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
+CSV_RUN_FOLDER = "SegmentHelper_T11_Oct20_COCO_Custom_evens_quarters/build" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
 CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, CSV_RUN_FOLDER)
 
 
@@ -260,6 +260,9 @@ elif "3D" in CURRENT_MODE:
 
 
 elif CURRENT_MODE == 'heft_torso_keywords':
+
+    # TEMPORARY
+    TRUST_FACE_PAIR_CACHE = False
 
     # # cludgy hack to get dynamic cropping for testing mar 2026    
     AUTO_EDGE_CROP = True
@@ -531,7 +534,7 @@ HSV_NORMS = {"LUM": .01, "SAT": 1,  "HUE": 0.002777777778, "VAL": 1}
 
 
 # process stuff
-VERBOSE = False
+VERBOSE = True
 CALIBRATING = False
 SAVE_IMG_PROCESS = False
 # this controls whether it is using the linear or angle process
@@ -881,6 +884,7 @@ cfg = {
     'DO_HSV_KNN': DO_HSV_KNN,
 }
 sort = SortPose(config=cfg)
+sort.trust_face_pair_cache = TRUST_FACE_PAIR_CACHE
 
 # # TEMP TK TESTING
 # sort.MIND = .5
@@ -1758,10 +1762,10 @@ def compare_images(last_image, img, face_landmarks_or_df, bbox_or_index, current
                 if VERBOSE:  print("testing is_face")
                 if SORT_TYPE not in ("planar_body", "body3D"):
                 #     # check to see if the two faces make one
-                    # if VERBOSE:
-                    #     print("testing is_face to see if the two make a face")
-                    #     print("last_image shape:", last_image.shape)
-                    #     print("cropped_image shape:", cropped_image.shape)
+                    if VERBOSE:
+                        print("testing is_face to see if the two make a face")
+                        print("last_image shape:", last_image.shape)
+                        print("cropped_image shape:", cropped_image.shape)
                     is_face = sort.test_or_lookup_face_pair(last_image, cropped_image, current_image_id)
                     # print("is_face result:", is_face)
                 # sept 2025 dedupe used to happen here, but removing this, as it is now handled in separate dedupe process
