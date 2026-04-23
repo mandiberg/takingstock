@@ -3,6 +3,7 @@ import math
 import cv2
 import pandas as pd
 import os
+import glob
 import time
 import sys
 import pickle
@@ -83,8 +84,74 @@ CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden b
 
 # CSV_FOLDER = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion128_test220K"
 CSV_MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/"
-CSV_RUN_FOLDER = "SegmentHelper_T11_Oct20_COCO_Custom_evens_quarters" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
+CSV_RUN_FOLDER = "SegmentHelper_T11_Oct20_COCO_Custom_evens_quarters/200" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
 CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, CSV_RUN_FOLDER)
+
+
+def resolve_arms_object_fusion_folder(
+    root_data_path,
+    arms_cluster_dim,
+    expected_mode=None,
+    expected_cluster_type="ArmsPoses3D_ObjectFusion",
+    expected_signature_min=None,
+):
+    pattern = os.path.join(
+        root_data_path,
+        f"heft_ArmsPoses3D_{arms_cluster_dim}_ObjectFusion_*",
+        "fusion_manifest.json",
+    )
+    manifest_paths = glob.glob(pattern)
+    if not manifest_paths:
+        raise FileNotFoundError(
+            f"No fusion manifest found matching {pattern}. Run query_all_fusion_clusters.py first."
+        )
+
+    def folder_key(manifest_path):
+        folder_name = os.path.basename(os.path.dirname(manifest_path))
+        try:
+            return int(folder_name.rsplit("_", 1)[-1])
+        except (TypeError, ValueError):
+            return -1
+
+    matching_manifests = []
+    for manifest_path in manifest_paths:
+        with open(manifest_path, "r", encoding="utf-8") as manifest_file:
+            manifest = json.load(manifest_file)
+
+        if expected_mode is not None and manifest.get("mode") != expected_mode:
+            continue
+        if expected_cluster_type is not None and manifest.get("cluster_type") != expected_cluster_type:
+            continue
+        if expected_signature_min is not None:
+            manifest_signature_min = (
+                manifest.get("export_options", {}).get("signature_min")
+            )
+            if manifest_signature_min != expected_signature_min:
+                continue
+        matching_manifests.append((manifest_path, manifest))
+
+    if not matching_manifests:
+        raise FileNotFoundError(
+            "No fusion manifest matched the requested metadata: "
+            f"mode={expected_mode}, cluster_type={expected_cluster_type}, "
+            f"signature_min={expected_signature_min}."
+        )
+
+    if len(matching_manifests) > 1:
+        folder_names = [os.path.basename(os.path.dirname(path)) for path, _ in matching_manifests]
+        raise RuntimeError(
+            "Multiple fusion manifests match the requested metadata. "
+            f"Set a more specific selector or remove stale exports: {folder_names}"
+        )
+
+    manifest_path, _manifest = matching_manifests[0]
+    folder_name = os.path.basename(os.path.dirname(manifest_path))
+    object_cluster_dim = folder_key(manifest_path)
+    print(
+        f"Resolved Arms/Object fusion folder from manifest: {folder_name} "
+        f"(OBJECT_CLUSTER_DIM={object_cluster_dim})"
+    )
+    return folder_name, object_cluster_dim
 
 HSV_SOURCE_MODE = "background"
 SKIP_OBJECT_NONE_CLUSTERS = []
@@ -213,7 +280,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
 
     # current obj sort
     CLUSTER_TYPE = "ArmsPoses3D_ObjectFusion"  # TEST: new Arms/ObjectFusion mode
-    SORT_TYPE = "object_fusion" # for ArmsPoses3D_ObjectFusion keep SORT_TYPE as object_fusion
+    SORT_TYPE = "obj_bbox" # for ArmsPoses3D_ObjectFusion keep SORT_TYPE as object_fusion
     USE_HSV = False
 
     # CLUSTER_TYPE = "object_fusion"
@@ -251,7 +318,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     CHOP_FIRST = True # does a first pass chop before whatever sort happens - this is default now
     # this is an override for development purposes. will only make CSVs from these clusters:
     TEMP_FOCUS_CLUSTER_HACK_LIST = []
-    SKIP_OBJECT_NONE_CLUSTERS = [0]
+    SKIP_OBJECT_NONE_CLUSTERS = [0,1]
     HSV_SOURCE_MODE = "background" # "background" or "object" or "both"
     
     TESTING = True
@@ -357,12 +424,19 @@ elif CURRENT_MODE == 'heft_torso_keywords':
         
 
     ARMS_CLUSTER_DIM = 768
-    OBJECT_CLUSTER_DIM = 768
+    OBJECT_CLUSTER_DIM = None
+    OBJECT_SIGNATURE_MIN = 200
 
     if CLUSTER_TYPE == "object_fusion":
         folder = "objectfusion_object_hsv"
     elif CLUSTER_TYPE == "ArmsPoses3D_ObjectFusion":
-        folder = f"heft_ArmsPoses3D_{ARMS_CLUSTER_DIM}_ObjectFusion_{OBJECT_CLUSTER_DIM}"
+        folder, OBJECT_CLUSTER_DIM = resolve_arms_object_fusion_folder(
+            os.path.join(os.getcwd(), "utilities", "data"),
+            ARMS_CLUSTER_DIM,
+            expected_mode="ObjectSignatures",
+            expected_cluster_type=CLUSTER_TYPE,
+            expected_signature_min=OBJECT_SIGNATURE_MIN,
+        )
     elif META: folder = "heft_keyword_fusion_clusters_hsv_meta"
     else: folder = "heft_clusters_ArmsPoses3D_768/"
 
@@ -504,8 +578,8 @@ else: OBJ_CLS_ID = 0
 
 DO_OBJ_SORT = True
 PHONE_BBOX_LIMITS = [0] # this is an attempt to control the BBOX placement. I don't think it is going to work, but with non-zero it will make a bigger selection. Fix this hack TK. 
-if "obj_bbox" in [SORT_TYPE, CLUSTER_TYPE] and OBJ_CLS_ID == 0 and "fusion" not in SORT_TYPE+CLUSTER_TYPE:
-    print("WARNING: OBJ_CLS_ID is 0 for obj_bbox SORT_TYPE/CLUSTER_TYPE, quitting")
+if "obj_bbox" in [SORT_TYPE, CLUSTER_TYPE] and OBJ_CLS_ID == 0 and "fusion" not in (SORT_TYPE+CLUSTER_TYPE).lower():
+    print(f"WARNING: OBJ_CLS_ID is 0 for obj_bbox SORT_TYPE/CLUSTER_TYPE {SORT_TYPE}/{CLUSTER_TYPE}, quitting")
     sys.exit()
 
 if USE_FUSION_PAIR_DICT:
@@ -857,7 +931,11 @@ if not io.IS_TENCH:
     session = Session()
     Base = declarative_base()
 
-    if SORT_TYPE == "object_fusion" or "fusion" in SORT_TYPE:
+    if (
+        SORT_TYPE == "object_fusion"
+        or "fusion" in SORT_TYPE
+        or (CLUSTER_TYPE == "ArmsPoses3D_ObjectFusion" and SORT_TYPE == "obj_bbox")
+    ):
         # Pass session to ToolsClustering instance for database access
         cl.session = session
 
@@ -1497,13 +1575,15 @@ def prep_encodings_NN(df_segment):
         else:
             return [row['lum']*HSV_NORMS["LUM"], row['lum_torso']*HSV_NORMS["LUM"]]   
 
+    is_multislot_obj_bbox_mode = (CLUSTER_TYPE == "ArmsPoses3D_ObjectFusion" and SORT_TYPE == "obj_bbox")
+
     print("prep_encodings_NN df_segment columns", df_segment.columns)
     sort_column, source_col = sort.get_sort_column_mapping(SORT_TYPE, CLUSTER1)
     print(f"degugging df_segment prep encodings for {source_col}:", df_segment.columns)      
     # drop rows where body_landmarks_normalized is None
     # TK this needs to be adapted to handle left vs right hand. 
     # subset needs to be both of them, if both are na
-    if not sort_column == "hand_landmarks" and not SORT_TYPE == "object_fusion":
+    if not sort_column == "hand_landmarks" and not SORT_TYPE == "object_fusion" and not is_multislot_obj_bbox_mode:
         # hand_landmarks are all giving 0's if null, so no NA
         # skip for object_fusion, as 0's are valid values
         print("df_segment source_col", df_segment[source_col].to_string())
@@ -1515,9 +1595,11 @@ def prep_encodings_NN(df_segment):
         if not null_encodings.empty:
             print("Rows with invalid body_landmarks_normalized data:")
             print(null_encodings)
-    if source_col is not None:    
+    if source_col is not None and source_col in df_segment.columns:
         print(df_segment.size)
         print(df_segment[source_col])
+    elif source_col is not None:
+        print(f"prep_encodings_NN advisory: source_col {source_col} not present in df_segment; continuing")
 
 
     # create a column for the hsv values using df_segment.apply(lambda row: create_hsv_list(row), axis=1)
@@ -1530,17 +1612,20 @@ def prep_encodings_NN(df_segment):
     if "pitch" in df_segment.columns and "yaw" in df_segment.columns and "roll" in df_segment.columns:
         df_segment['pitch_yaw_roll_list'] = df_segment.apply(lambda row: [row['pitch'], row['yaw'], row['roll']], axis=1)
 
-    if SORT_TYPE == "object_fusion" or "fusion" in SORT_TYPE:
+    if SORT_TYPE == "object_fusion" or "fusion" in SORT_TYPE or is_multislot_obj_bbox_mode:
         # Process detections and classify their relationship to hands/face
         print("Processing detections for object_fusion...")
         df_segment = cl.process_detections_for_df(df_segment)
         
         # Construct obj_bbox_fusion_list using class method
         df_segment['obj_bbox_fusion_list'] = df_segment.apply(cl.construct_fusion_list, axis=1)
+        if is_multislot_obj_bbox_mode:
+            # Route obj_bbox distance math through a fixed-length, slot-aware vector.
+            df_segment['obj_bbox_list'] = df_segment['obj_bbox_fusion_list']
         if VERBOSE:
             print("df_segment obj_bbox_fusion_list sample:")
             print(df_segment[['image_id', 'obj_bbox_fusion_list']].head())
-            print(f"Fusion list length: {len(df_segment['obj_bbox_fusion_list'].iloc[0])} (expected: 33 = 3 pitch/yaw/roll + 5*6 detections)")
+            print(f"Fusion list length: {len(df_segment['obj_bbox_fusion_list'].iloc[0])}")
     elif OBJ_CLS_ID > 0: 
         obj_bbox_col = "bbox_norm"
         print(f" prepping {obj_bbox_col} for {CLUSTER1}")
@@ -2542,7 +2627,11 @@ def main():
         except:
             print('you forgot to change the filename DUH')
         if not df.empty:
-            is_fusion_sort = SORT_TYPE == "object_fusion" or ("fusion" in SORT_TYPE)
+            is_fusion_sort = (
+                SORT_TYPE == "object_fusion"
+                or ("fusion" in SORT_TYPE)
+                or (CLUSTER_TYPE == "ArmsPoses3D_ObjectFusion" and SORT_TYPE == "obj_bbox")
+            )
 
             if is_fusion_sort:
                 simple_crop = int(sort.CUTOFF * CROP_MULTIPLIER)
@@ -2878,7 +2967,9 @@ def main():
                         print(f"N_HSV == 0, so keeping generated fusion pairs for {TOPIC_NO} without HSV")
                         # Non-HSV fusion runs still need the [arms_cluster, object_cluster] pairs.
                         FUSION_PAIR_DICT = {str(TOPIC_NO[0]): n_cluster_topics}
-                    print("FUSION_PAIR_DICT", FUSION_PAIR_DICT)
+                    
+                    if len(FUSION_PAIR_DICT) < 2000:
+                        print("FUSION_PAIR_DICT", FUSION_PAIR_DICT)
                 else:
                     # doing GENERATE_FUSION_PAIRS where no actual fusion document 
                     print(f"setting SELECT for IS_ONE_TOPIC {TOPIC_NO}")

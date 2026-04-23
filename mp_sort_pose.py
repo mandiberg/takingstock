@@ -119,7 +119,7 @@ class SortPose:
         self.BRUTEFORCE = False
         self.LMS_DIMENSIONS = LMS_DIMENSIONS
         if self.VERBOSE: print("init LMS_DIMENSIONS",self.LMS_DIMENSIONS)
-        self.CUTOFF = 40 # DOES factor if ONE_SHOT
+        self.CUTOFF = 80 # DOES factor if ONE_SHOT
         self.ORIGIN = 0
         self.this_nose_bridge_dist = self.NOSE_BRIDGE_DIST = None # to be set in first loop, and sort.this_nose_bridge_dist each time
         self.USE_HEAD_POSE = USE_HEAD_POSE
@@ -456,6 +456,9 @@ class SortPose:
             # Face encoding sorting
             return ("face_encodings68", "face_encodings68")
         elif "obj_bbox" in SORT_TYPE:
+            # Arms/Object fusion precomputes a fixed-length vector in obj_bbox_list.
+            if CLUSTER1 == "ArmsPoses3D_ObjectFusion":
+                return ("obj_bbox_list", None)
             # Object bounding box (non-fusion)
             return ("bbox_norm", "bbox_norm")
         elif "fusion" in SORT_TYPE.lower():
@@ -3025,6 +3028,24 @@ class SortPose:
         enc1 = None
         sort_column, _ = self.get_sort_column_mapping(self.SORT_TYPE, self.CLUSTER_TYPE)
         print("sort_column", sort_column)
+        if sort_column not in df_enc.columns:
+            fallback_columns = []
+            if self.SORT_TYPE == "obj_bbox":
+                fallback_columns = ["obj_bbox_list", "obj_bbox_fusion_list", "bbox_norm"]
+            elif "fusion" in self.SORT_TYPE.lower():
+                fallback_columns = ["obj_bbox_fusion_list", "obj_bbox_list"]
+
+            resolved_column = next((col for col in fallback_columns if col in df_enc.columns), None)
+            if resolved_column is None:
+                raise KeyError(
+                    f"Sort column '{sort_column}' not found in df_enc. "
+                    f"Available columns: {list(df_enc.columns)}"
+                )
+            print(
+                f"get_start_enc_NN fallback: sort column '{sort_column}' missing; "
+                f"using '{resolved_column}'"
+            )
+            sort_column = resolved_column
         print("sort_column head", df_enc[sort_column].head())
         # print("lengtth of first value", len(df_enc[sort_column].iloc[0]))
         if start_img == "median" or start_img == "start_bbox":

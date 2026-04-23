@@ -46,7 +46,7 @@ EXPAND = False
 ONE_SHOT = False # take all files, based off the very first sort order.
 JUMP_SHOT = False # jump to random file if can't find a run
 
-LIMIT = 12000000
+LIMIT = 10000000
 BATCH_LIMIT = 10000
 
 # number of clusters produced. run GET_OPTIMAL_CLUSTERS and add that number here
@@ -87,6 +87,8 @@ option, MODE = pick(options, title)
 
 # you need both of these for ObjectFusion
 CLUSTER_TYPE = "ObjectFusion" 
+DO_SIGNATURES = True # whether to build and persist object signature token/hash/n_objects for ObjectFusion clustering. This is separate from the clustering itself, so you can choose to do ObjectFusion clustering without signatures if you want to iterate faster without the signature building step, which adds some overhead but is useful for understanding the object distribution within clusters and for future deduplication efforts.
+SIGNATURES_ONLY = True # if True, run signature generation/persistence and skip ObjectFusion cluster assignment steps.
 ONLY_EXISTING_IMAGES_DETECTIONS = True # faster for testing: will not calc new object placements
 
 # CLUSTER_TYPE = "HandsPositions"
@@ -1831,6 +1833,13 @@ def main():
         # I drop image_id, etc as I pass it to knn bc I need it later, but knn can't handle strings
         print("df columns: ",enc_data.columns)
 
+        if cl.CLUSTER_TYPE == "ObjectFusion" and DO_SIGNATURES:
+            enc_data = cl.append_object_signature_fields(enc_data)
+            signature_stats = cl.persist_object_signatures(enc_data, engine)
+            if SIGNATURES_ONLY:
+                cl.print_signature_run_summary(len(enc_data), signature_stats, signatures_only=True)
+                return
+
         if cl.CLUSTER_TYPE == "ObjectFusion":
             object_assignment_cols = [
                 'left_hand_object', 'right_hand_object', 'top_face_object',
@@ -2121,6 +2130,14 @@ def main():
         calculate_clusters_and_save(enc_data)
         
     elif MODE == 1:
+        if cl.CLUSTER_TYPE == "ObjectFusion" and DO_SIGNATURES:
+            enc_data = cl.append_object_signature_fields(enc_data)
+            signature_stats = cl.persist_object_signatures(enc_data, engine)
+            cl.print_signature_run_summary(len(enc_data), signature_stats, signatures_only=SIGNATURES_ONLY)
+            if SIGNATURES_ONLY:
+                print("Signature-only MODE 1 complete; skipping cluster assignment.")
+                return True
+
         total_rows = len(enc_data)
         if total_rows <= BATCH_LIMIT:
             assign_images_clusters_DB(enc_data)

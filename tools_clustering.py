@@ -7,6 +7,7 @@ import numpy as np
 import json
 import os
 import pandas as pd
+import hashlib
 
 class ToolsClustering:
     """Store key clustering info for use across codebase"""
@@ -218,6 +219,208 @@ class ToolsClustering:
             "FingertipsPositions": {"data_column": "mongo_hand_landmarks_norm", "is_feet": None, "mongo_hand_landmarks": 1},
             "HSV": {"data_column": ["hue", "sat", "val"], "is_feet": None},
 }
+        self.OBJECT_SIGNATURE_SLOT_MAP = [
+            ("left_hand_object", "LH"),
+            ("right_hand_object", "RH"),
+            ("top_face_object", "TF"),
+            ("left_eye_object", "LE"),
+            ("right_eye_object", "RE"),
+            ("mouth_object", "MO"),
+            ("shoulder_object", "SH"),
+            ("waist_object", "WA"),
+            ("feet_object", "FT"),
+        ]
+
+    # ==================== OBJECT SIGNATURE METHODS ====================
+
+    def extract_slot_class_id(self, slot_value):
+        """Extract class_id int from one slot payload; return 0 for empty/invalid."""
+        if slot_value is None:
+            return 0
+
+        try:
+            if isinstance(slot_value, dict):
+                class_id = slot_value.get('class_id')
+                if class_id is None:
+                    return 0
+                return int(float(class_id))
+
+            if isinstance(slot_value, (list, tuple, np.ndarray)):
+                if len(slot_value) == 0:
+                    return 0
+                first = slot_value[0]
+                if first is None:
+                    return 0
+                return int(float(first))
+
+            if pd.isna(slot_value):
+                return 0
+            return int(float(slot_value))
+        except Exception:
+            return 0
+
+    def build_slot_signature_fields(self, row):
+        """Build deterministic token/hash/object-count for a row."""
+        token_parts = []
+        n_objects = 0
+
+        for slot_col, slot_label in self.OBJECT_SIGNATURE_SLOT_MAP:
+            class_id = self.extract_slot_class_id(row.get(slot_col))
+            if class_id > 0:
+                n_objects += 1
+            token_parts.append(f"{slot_label}:{class_id}")
+
+        token = "|".join(token_parts)
+        sig_hash = hashlib.sha1(token.encode('utf-8')).hexdigest()
+        return token, sig_hash, n_objects
+
+    def append_object_signature_fields(self, df):
+        """Append slot_signature_token/hash/n_objects columns to DataFrame."""
+        required_slots = [slot for slot, _ in self.OBJECT_SIGNATURE_SLOT_MAP]
+        missing_slots = [col for col in required_slots if col not in df.columns]
+        if missing_slots:
+            print(f"[SIGNATURE] Missing slot columns, skipping signature build: {missing_slots}")
+            return df
+
+        if 'image_id' not in df.columns:
+            print("[SIGNATURE] Missing image_id, skipping signature build.")
+            return df
+
+        out_df = df.copy()
+        sig_values = out_df.apply(self.build_slot_signature_fields, axis=1, result_type='expand')
+        sig_values.columns = ['slot_signature_token', 'slot_signature_hash', 'slot_signature_n_objects']
+        out_df[['slot_signature_token', 'slot_signature_hash', 'slot_signature_n_objects']] = sig_values
+        return out_df
+
+    def persist_object_signatures(self, df, engine, batch_size=5000):
+        """
+        Persist dictionary (ObjectSignatures) and image assignments (ImagesObjectSignatures).
+        Requires columns: image_id, slot_signature_token, slot_signature_hash, slot_signature_n_objects.
+        """
+        required_cols = ['image_id', 'slot_signature_token', 'slot_signature_hash', 'slot_signature_n_objects']
+        missing_cols = [col for col in required_cols if col not in df.columns]
+        if missing_cols:
+            print(f"[SIGNATURE] Missing required columns, skipping DB save: {missing_cols}")
+            return {
+                'unique_signatures': 0,
+                'assignments_total': 0,
+                'assignments_written': 0,
+                'missing_hashes': 0,
+                'skipped': True,
+            }
+
+        persist_df = df[required_cols].copy()
+        persist_df = persist_df.dropna(subset=['image_id', 'slot_signature_hash', 'slot_signature_token'])
+        if len(persist_df) == 0:
+            print("[SIGNATURE] No rows to persist after dropna.")
+            return {
+                'unique_signatures': 0,
+                'assignments_total': 0,
+                'assignments_written': 0,
+                'missing_hashes': 0,
+                'skipped': True,
+            }
+
+        persist_df['image_id'] = persist_df['image_id'].astype(int)
+        persist_df['slot_signature_n_objects'] = persist_df['slot_signature_n_objects'].fillna(0).astype(int)
+
+        dict_rows = (
+            persist_df[['slot_signature_hash', 'slot_signature_token', 'slot_signature_n_objects']]
+            .drop_duplicates(subset=['slot_signature_hash'])
+            .to_dict(orient='records')
+        )
+        assignments = persist_df[['image_id', 'slot_signature_hash']].to_dict(orient='records')
+
+        insert_signature_sql = text(
+            """
+            INSERT INTO ObjectSignatures (
+                slot_signature_hash,
+                slot_signature_token,
+                slot_signature_n_objects
+            ) VALUES (
+                :slot_signature_hash,
+                :slot_signature_token,
+                :slot_signature_n_objects
+            )
+            ON DUPLICATE KEY UPDATE
+                slot_signature_token = VALUES(slot_signature_token),
+                slot_signature_n_objects = VALUES(slot_signature_n_objects)
+            """
+        )
+
+        insert_image_signature_sql = text(
+            """
+            INSERT INTO ImagesObjectSignatures (
+                image_id,
+                cluster_id
+            ) VALUES (
+                :image_id,
+                :cluster_id
+            )
+            ON DUPLICATE KEY UPDATE
+                cluster_id = VALUES(cluster_id)
+            """
+        )
+
+        print(f"[SIGNATURE] Upserting {len(dict_rows)} unique signatures and {len(assignments)} image assignments...")
+
+        with engine.begin() as conn:
+            for start in range(0, len(dict_rows), batch_size):
+                batch = dict_rows[start:start + batch_size]
+                conn.execute(insert_signature_sql, batch)
+
+            unique_hashes = sorted({row['slot_signature_hash'] for row in assignments})
+            hash_to_cluster_id = {}
+            select_map_sql = text(
+                """
+                SELECT cluster_id, slot_signature_hash
+                FROM ObjectSignatures
+                WHERE slot_signature_hash IN :hash_list
+                """
+            ).bindparams(bindparam('hash_list', expanding=True))
+
+            for start in range(0, len(unique_hashes), batch_size):
+                hash_batch = unique_hashes[start:start + batch_size]
+                rows = conn.execute(select_map_sql, {'hash_list': hash_batch}).fetchall()
+                for row in rows:
+                    hash_to_cluster_id[row.slot_signature_hash] = int(row.cluster_id)
+
+            image_rows = []
+            missing_hashes = 0
+            for assignment in assignments:
+                cluster_id = hash_to_cluster_id.get(assignment['slot_signature_hash'])
+                if cluster_id is None:
+                    missing_hashes += 1
+                    continue
+                image_rows.append({'image_id': int(assignment['image_id']), 'cluster_id': cluster_id})
+
+            if missing_hashes > 0:
+                print(f"[SIGNATURE] Warning: missing cluster_id for {missing_hashes} hash rows.")
+
+            for start in range(0, len(image_rows), batch_size):
+                batch = image_rows[start:start + batch_size]
+                conn.execute(insert_image_signature_sql, batch)
+
+        print(f"[SIGNATURE] Persist complete. image_rows_written={len(image_rows)}")
+        return {
+            'unique_signatures': len(dict_rows),
+            'assignments_total': len(assignments),
+            'assignments_written': len(image_rows),
+            'missing_hashes': missing_hashes,
+            'skipped': False,
+        }
+
+    def print_signature_run_summary(self, rows_in, signature_stats, signatures_only=True):
+        """Print standardized summary for signature population runs."""
+        print("\n=== SIGNATURE RUN SUMMARY ===")
+        print(f"rows_in: {rows_in}")
+        print(f"unique_signatures: {signature_stats.get('unique_signatures', 0)}")
+        print(f"assignments_total: {signature_stats.get('assignments_total', 0)}")
+        print(f"assignments_written: {signature_stats.get('assignments_written', 0)}")
+        print(f"missing_hashes: {signature_stats.get('missing_hashes', 0)}")
+        if signatures_only:
+            print("Skipping KMeans/ObjectFusion cluster writes because SIGNATURES_ONLY=True")
+        print("=== END SIGNATURE RUN SUMMARY ===\n")
 
     def _new_world_lms_stats(self):
         """Create a fresh world-landmark stats payload for ObjectFusion runs."""
