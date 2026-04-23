@@ -84,7 +84,7 @@ CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden b
 
 # CSV_FOLDER = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion128_test220K"
 CSV_MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/"
-CSV_RUN_FOLDER = "SegmentHelper_T11_Oct20_COCO_Custom_evens_quarters/200" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
+CSV_RUN_FOLDER = "SegmentHelper_T11_Oct20_COCO_Custom_evens_quarters" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
 CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, CSV_RUN_FOLDER)
 
 
@@ -318,7 +318,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     CHOP_FIRST = True # does a first pass chop before whatever sort happens - this is default now
     # this is an override for development purposes. will only make CSVs from these clusters:
     TEMP_FOCUS_CLUSTER_HACK_LIST = []
-    SKIP_OBJECT_NONE_CLUSTERS = [0,1]
+    SKIP_OBJECT_NONE_CLUSTERS = [1]
     HSV_SOURCE_MODE = "background" # "background" or "object" or "both"
     
     TESTING = True
@@ -534,9 +534,6 @@ HSV_NORMS = {"LUM": .01, "SAT": 1,  "HUE": 0.002777777778, "VAL": 1}
 VERBOSE = False
 CALIBRATING = False
 SAVE_IMG_PROCESS = False
-DIAG_CROP = True
-DIAG_CROP_STDOUT = False
-DIAG_CROP_PATH = None
 # this controls whether it is using the linear or angle process
 IS_ANGLE_SORT = False
 
@@ -882,9 +879,6 @@ cfg = {
     'TSP_SORT': TSP_SORT,
     'USE_HEAD_POSE': USE_HEAD_POSE,
     'DO_HSV_KNN': DO_HSV_KNN,
-    'DIAG_CROP': DIAG_CROP,
-    'DIAG_CROP_STDOUT': DIAG_CROP_STDOUT,
-    'DIAG_CROP_PATH': DIAG_CROP_PATH,
 }
 sort = SortPose(config=cfg)
 
@@ -1218,13 +1212,36 @@ if not io.IS_TENCH:
                 # we have two values, C1 and C2. C1 should be IHP, C2 should be IH
                 cluster += f" AND {cluster_target_col} = {str(cluster_no[0])} "            
                 if cluster_no[1] is not None:
-                    if cluster_no[1] in SKIP_OBJECT_NONE_CLUSTERS:
+                    try:
+                        requested_object_cluster_id = int(float(cluster_no[1]))
+                    except (TypeError, ValueError):
+                        print(f"invalid object cluster id in pair {cluster_no}; skipping")
+                        return []
+
+                    if requested_object_cluster_id in SKIP_OBJECT_NONE_CLUSTERS:
                         print(
-                            f"skipping pair because ih.cluster_id {cluster_no[1]} is in "
+                            f"skipping pair because ih.cluster_id {requested_object_cluster_id} is in "
                             f"SKIP_OBJECT_NONE_CLUSTERS {SKIP_OBJECT_NONE_CLUSTERS}"
                         )
                         return []
-                    cluster += f" AND ih.cluster_id = {str(cluster_no[1])} "
+
+                    object_cluster_sql_id = requested_object_cluster_id
+                    if CLUSTER_TYPE == "ArmsPoses3D_ObjectFusion":
+                        cluster_map_new_to_old = sort.load_object_signature_new_to_old_map_once(
+                            FUSION_FOLDER,
+                            manifest_file=FUSION_MANIFEST_FILE,
+                        )
+                        if requested_object_cluster_id not in cluster_map_new_to_old:
+                            print(
+                                f"requested object cluster {requested_object_cluster_id} not present in signature remap; skipping pair"
+                            )
+                            return []
+                        object_cluster_sql_id = cluster_map_new_to_old[requested_object_cluster_id]
+                        print(
+                            f"translated object cluster new_id={requested_object_cluster_id} -> old_id={object_cluster_sql_id} for ih.cluster_id SQL filter"
+                        )
+
+                    cluster += f" AND ih.cluster_id = {str(object_cluster_sql_id)} "
             else:
                 print("cluster_no is a single value", cluster_no)
                 # set target column based on CLUSTER_TYPE, ArmsPoses3D means we have a meta_cluster_id
@@ -1707,15 +1724,6 @@ def compare_images(last_image, img, face_landmarks_or_df, bbox_or_index, current
 
     is_face = None
     skip_face = False
-    sort.current_image_id = current_image_id
-    sort.current_diag_context = {
-        "yaw": current_yaw,
-        "roll": current_roll,
-        "pitch": current_pitch,
-        "is_df": is_df,
-        "full_body": FULL_BODY,
-        "auto_edge_crop": AUTO_EDGE_CROP,
-    }
     #crop image here:
     
     print(f". ---  compare_images with is_df {is_df} for {SORT_TYPE} with EXPAND {sort.EXPAND} and FULL_BODY {FULL_BODY} and self.mult {sort.image_edge_multiplier}")
