@@ -36,7 +36,7 @@ POLL_INTERVAL=3600   # seconds between polls (1 hour)
 # -----------------------------------------------------------------------
 
 REMOTE_PARENT="$(dirname "$REMOTE_DIR")"
-@ -31,67 +35,80 @@ SCP_OPTS=(-i "$RUNPOD_KEY" -P "$RUNPOD_PORT" -o StrictHostKeyChecking=no -o Batc
+SCP_OPTS=(-i "$RUNPOD_KEY" -P "$RUNPOD_PORT" -o StrictHostKeyChecking=no -o BatchMode=yes)
 
 mkdir -p "$LOCAL_DIR"
 
