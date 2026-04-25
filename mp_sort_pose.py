@@ -72,17 +72,6 @@ class SortPose:
 
               
         self.VERBOSE = VERBOSE
-        self.DIAG_CROP = False
-        self.DIAG_CROP_STDOUT = False
-        self.DIAG_CROP_PATH = None
-        self.current_image_id = None
-        self.current_diag_context = {}
-        self._diag_crop_seq = 0
-        if config is not None and isinstance(config, dict):
-            self.DIAG_CROP = bool(config.get('DIAG_CROP', False))
-            self.DIAG_CROP_STDOUT = bool(config.get('DIAG_CROP_STDOUT', False))
-            self.DIAG_CROP_PATH = config.get('DIAG_CROP_PATH', None)
-
         self.KNN_SORT_DICT = {
             "128d": "128d",
             "planar": "planar",
@@ -119,7 +108,7 @@ class SortPose:
         self.BRUTEFORCE = False
         self.LMS_DIMENSIONS = LMS_DIMENSIONS
         if self.VERBOSE: print("init LMS_DIMENSIONS",self.LMS_DIMENSIONS)
-        self.CUTOFF = 40 # DOES factor if ONE_SHOT
+        self.CUTOFF = 80 # DOES factor if ONE_SHOT
         self.ORIGIN = 0
         self.this_nose_bridge_dist = self.NOSE_BRIDGE_DIST = None # to be set in first loop, and sort.this_nose_bridge_dist each time
         self.USE_HEAD_POSE = USE_HEAD_POSE
@@ -271,6 +260,9 @@ class SortPose:
         self.same_img = []
         self.face_pair_result_cache = {}
         self.face_pair_cache_engine = None
+        self.trust_face_pair_cache = True  # set False to force re-test, ignoring cached results
+        self.object_signature_new_to_old_map = None
+        self.object_signature_map_source_path = None
         self.reset_face_pair_stats()
         # for testing shoulders for image background
         self.SHOULDER_THRESH = 0.75
@@ -428,6 +420,59 @@ class SortPose:
             self.SORT = 'face_x'
             self.ROUND = 1
 
+    def load_object_signature_new_to_old_map_once(self, fusion_folder, manifest_file="fusion_manifest.json"):
+        if not fusion_folder:
+            raise ValueError("fusion_folder is required to load object signature cluster map")
+
+        fusion_folder_abs = fusion_folder
+        if not os.path.isabs(fusion_folder_abs):
+            fusion_folder_abs = os.path.join(os.getcwd(), fusion_folder_abs)
+
+        manifest_path = os.path.join(fusion_folder_abs, manifest_file)
+        if not os.path.exists(manifest_path):
+            raise FileNotFoundError(f"Missing fusion manifest for signature map lookup: {manifest_path}")
+
+        # Reuse cached map when the source manifest has not changed.
+        if (
+            self.object_signature_new_to_old_map is not None
+            and self.object_signature_map_source_path is not None
+            and os.path.samefile(
+                os.path.dirname(self.object_signature_map_source_path),
+                os.path.dirname(manifest_path),
+            )
+        ):
+            return self.object_signature_new_to_old_map
+
+        with open(manifest_path, "r", encoding="utf-8") as f:
+            manifest = json.load(f)
+
+        map_file_name = manifest.get("export_options", {}).get("cluster_map_file")
+        if not map_file_name:
+            raise ValueError(
+                f"Manifest {manifest_path} missing export_options.cluster_map_file; cannot map new->old cluster ids"
+            )
+
+        map_path = os.path.join(fusion_folder_abs, map_file_name)
+        if not os.path.exists(map_path):
+            raise FileNotFoundError(f"Missing signature cluster map file: {map_path}")
+
+        map_df = pd.read_csv(map_path)
+        required_cols = {"old_cluster_id", "new_cluster_id"}
+        if not required_cols.issubset(set(map_df.columns)):
+            raise ValueError(
+                f"Invalid signature cluster map file {map_path}; expected columns {sorted(required_cols)}"
+            )
+
+        self.object_signature_new_to_old_map = {
+            int(new_id): int(old_id)
+            for old_id, new_id in zip(map_df["old_cluster_id"], map_df["new_cluster_id"])
+        }
+        self.object_signature_map_source_path = map_path
+        print(
+            f"Loaded object signature remap ({len(self.object_signature_new_to_old_map)} ids) from {self.object_signature_map_source_path}"
+        )
+        return self.object_signature_new_to_old_map
+
     def get_sort_column_mapping(self, SORT_TYPE, CLUSTER1=None):
         """
         Centralized mapping of SORT_TYPE to (sort_column, source_col) for data preprocessing.
@@ -458,6 +503,9 @@ class SortPose:
             # Face encoding sorting
             return ("face_encodings68", "face_encodings68")
         elif "obj_bbox" in SORT_TYPE:
+            # Arms/Object fusion precomputes a fixed-length vector in obj_bbox_list.
+            if CLUSTER1 == "ArmsPoses3D_ObjectFusion":
+                return ("obj_bbox_list", None)
             # Object bounding box (non-fusion)
             return ("bbox_norm", "bbox_norm")
         elif "fusion" in SORT_TYPE.lower():
@@ -518,64 +566,6 @@ class SortPose:
             "hsv_no":hsv_cluster,
             "pose_no":pose_no
         }
-
-    def _diag_crop_safe(self, value):
-        if isinstance(value, (np.integer, np.floating, np.bool_)):
-            return value.item()
-        if isinstance(value, np.ndarray):
-            return value.tolist()
-        if isinstance(value, tuple):
-            return [self._diag_crop_safe(v) for v in value]
-        if isinstance(value, list):
-            return [self._diag_crop_safe(v) for v in value]
-        if isinstance(value, dict):
-            return {str(k): self._diag_crop_safe(v) for k, v in value.items()}
-        return value
-
-    def _diag_crop_record(self, stage, payload=None):
-        if not self.DIAG_CROP:
-            return
-        if payload is None:
-            payload = {}
-
-        try:
-            self._diag_crop_seq += 1
-            cluster_no = None
-            if isinstance(self.counter_dict, dict):
-                cluster_no = self.counter_dict.get("cluster_no")
-
-            event = self._diag_crop_safe({
-                "seq": self._diag_crop_seq,
-                "stage": stage,
-                "image_id": self.current_image_id,
-                "cluster_no": cluster_no,
-                "sort_type": self.SORT_TYPE,
-                "context": self.current_diag_context,
-                "payload": payload,
-            })
-
-            out_path = self.DIAG_CROP_PATH
-            if not out_path:
-                outfolder = None
-                if isinstance(self.counter_dict, dict):
-                    outfolder = self.counter_dict.get("outfolder")
-                if outfolder:
-                    out_path = os.path.join(outfolder, "crop_diag.jsonl")
-                else:
-                    out_path = "/tmp/crop_diag.jsonl"
-
-            out_dir = os.path.dirname(out_path)
-            if out_dir and not os.path.exists(out_dir):
-                os.makedirs(out_dir)
-
-            with open(out_path, "a", encoding="utf-8") as f:
-                f.write(json.dumps(event, ensure_ascii=True) + "\n")
-
-            if self.DIAG_CROP_STDOUT:
-                print(f"[DIAG_CROP] {stage}: {event['payload']}")
-        except Exception as e:
-            if self.VERBOSE:
-                print("DIAG_CROP logging failed", e)
 
     # def ensure_lms_list(self, lms):
     #     # convert NormalizedLandmarkList to list of tuples
@@ -929,8 +919,18 @@ class SortPose:
 
             # Check if dimensions match
             if size != last_size:
-                print('Image dimensions do not match. Skipping blending.')
-                return False
+                print(f'Image dimensions do not match. Resizing for blend test: current={size}, previous={last_size}')
+                # Normalize both images to a shared size for robust pair testing.
+                # Use the smaller dimensions to avoid heavy upscaling artifacts.
+                target_width = min(size[0], last_size[0])
+                target_height = min(size[1], last_size[1])
+                if target_width <= 0 or target_height <= 0:
+                    print('Invalid target dimensions for blend test. Skipping blending.')
+                    return False
+                img = cv2.resize(img, (target_width, target_height), interpolation=cv2.INTER_AREA)
+                last_img = cv2.resize(last_img, (target_width, target_height), interpolation=cv2.INTER_AREA)
+                size = (target_width, target_height)
+                last_size = (target_width, target_height)
 
             # code for face detection and blending
             if self.is_face(img):
@@ -952,7 +952,7 @@ class SortPose:
                 return False
 
         except Exception as e:
-            print('failed:', new_file)
+            print('test_pair failed while processing image pair')
             print('Error:', str(e))
             return False
 
@@ -994,6 +994,10 @@ class SortPose:
         return tuple(sorted((image_id_a, image_id_b)))
 
     def get_face_pair_cache_result(self, image_id_a, image_id_b):
+        print(f"will I trust face pair? {self.trust_face_pair_cache}")
+        if not self.trust_face_pair_cache:
+            return None
+
         pair_key = self.canonicalize_face_pair(image_id_a, image_id_b)
         if pair_key is None:
             return None
@@ -1767,20 +1771,6 @@ class SortPose:
 
         if not list_min_xs:
             print("calc_dynamic_multiplier_from_min_max_body_landmarks: no valid landmarks after mixed-sign filtering, keeping existing image_edge_multiplier")
-            self._diag_crop_record(
-                "dynamic_multiplier",
-                {
-                    "padding": padding,
-                    "rejected_mixed_sign_landmarks": True,
-                    "dominant_y_sign": dominant_y_sign,
-                    "dominant_x_sign": dominant_x_sign,
-                    "y_sign_counter": dict(y_sign_counter),
-                    "x_sign_counter": dict(x_sign_counter),
-                    "rejected_image_ids": rejected_image_ids,
-                    "rejected_details": rejected_details[:10],
-                    "fallback_image_edge_multiplier": self.image_edge_multiplier,
-                },
-            )
             return self.image_edge_multiplier
 
         median_min_x = statistics.median(list_min_xs)
@@ -1853,32 +1843,6 @@ class SortPose:
             print(f"dominant sign counters: y={dict(y_sign_counter)}, x={dict(x_sign_counter)}")
             print(f"rejected mixed-sign image ids: {rejected_image_ids}")
             print(f"calc_dynamic_multiplier_from_min_max_body_landmarks: {(top_extent, right_extent, bottom_extent, left_extent)}")
-        self._diag_crop_record(
-            "dynamic_multiplier",
-            {
-                "padding": padding,
-                "dominant_y_sign": dominant_y_sign,
-                "dominant_x_sign": dominant_x_sign,
-                "y_sign_counter": dict(y_sign_counter),
-                "x_sign_counter": dict(x_sign_counter),
-                "rejected_mixed_sign_count": len(rejected_image_ids),
-                "rejected_image_ids": rejected_image_ids,
-                "orientation_y": y_orientation,
-                "orientation_x": x_orientation,
-                "orientation_source_y": y_source,
-                "orientation_source_x": x_source,
-                "median_min_x": median_min_x,
-                "median_max_x": median_max_x,
-                "median_min_y": median_min_y,
-                "median_max_y": median_max_y,
-                "extents": {
-                    "top": top_extent,
-                    "right": right_extent,
-                    "bottom": bottom_extent,
-                    "left": left_extent,
-                },
-            },
-        )
         return [top_extent, right_extent, bottom_extent, left_extent]
 
     def calc_dynamic_multiplier_from_image_dims(self, df, padding=0):
@@ -2084,22 +2048,6 @@ class SortPose:
         # cv2.waitKey(1)  # Display the window for 1 ms
         # cv2.destroyAllWindows()
         print(f"auto_edge_crop: image edge mult {self.image_edge_multiplier}, bbox dimensions:{bbox_dimensions}, cropped to ({left},{top}),({right},{bottom})")
-        self._diag_crop_record(
-            "auto_edge_crop",
-            {
-                "resize": resize,
-                "scaled_face_height": scaled_face_height,
-                "image_shape": list(image.shape) if image is not None else None,
-                "bbox_dimensions": bbox_dimensions,
-                "crop": {
-                    "top": top,
-                    "right": right,
-                    "bottom": bottom,
-                    "left": left,
-                },
-                "output_shape": list(cropped.shape) if cropped is not None else None,
-            },
-        )
         return cropped
 
 ###########################################################################
@@ -2500,18 +2448,6 @@ class SortPose:
                     self.nose_2d = (math.floor(self.nose_2d[0]), math.floor(self.nose_2d[1] + (nose_delta*self.face_height)))
                 # cv2.circle(self.image, tuple(map(int, self.nose_2d)), 5, (0, 0,0), 5)
                 if self.VERBOSE: print("get_image_face_data new nose_2d",self.nose_2d)
-                self._diag_crop_record(
-                    "face_anchor",
-                    {
-                        "raw_nose_2d": raw_nose_2d,
-                        "nose_2d": self.nose_2d,
-                        "nose_bridge_ref": self.NOSE_BRIDGE_DIST,
-                        "nose_bridge_this": self.this_nose_bridge_dist,
-                        "nose_delta": nose_delta,
-                        "face_height": getattr(self, "face_height", None),
-                        "image_shape": list(image.shape) if image is not None else None,
-                    },
-                )
             except:
                 print("couldn't get nose_2d via faceLms")
         else:
@@ -2697,36 +2633,9 @@ class SortPose:
                     # Define the cropped area
                     new_image = new_image[CROP_TOP:CROP_BOTTOM, CROP_LEFT:CROP_RIGHT]
                     if self.VERBOSE: print("expand_image [-] cropped image to", crop_list)
-                self._diag_crop_record(
-                    "expand_image",
-                    {
-                        "resize": resize,
-                        "resize_dims": list(resize_dims),
-                        "resize_nose": list(resize_nose),
-                        "existing_pixels": {
-                            "above": existing_pixels_above_nose,
-                            "below": existing_pixels_below_nose,
-                            "left": existing_pixels_left_of_nose,
-                            "right": existing_pixels_right_of_nose,
-                        },
-                        "border_list": border_list,
-                        "expand_list": expand_list,
-                        "crop_list": crop_list,
-                        "expand_size": list(this_expand_size),
-                        "new_image_shape": list(new_image.shape) if new_image is not None else None,
-                    },
-                )
             else:
                 new_image = None
                 if self.VERBOSE: print("expand_image [-]failed expand loop, with resize", str(resize), "too big, skipping")
-                self._diag_crop_record(
-                    "expand_image",
-                    {
-                        "resize": resize,
-                        "failed": True,
-                        "reason": "resize_too_large",
-                    },
-                )
 
 
         except Exception as e:
@@ -2756,16 +2665,6 @@ class SortPose:
         #     print("simple crop",simple_crop)
         # simple_crop_image=image[simple_crop["top"]:simple_crop["bottom"],simple_crop["left"]:simple_crop["right"],:]
         if self.VERBOSE: print("extension pixels calculated")
-        self._diag_crop_record(
-            "extension_pixels",
-            {
-                "nose_2d": self.nose_2d,
-                "face_height": self.face_height,
-                "max_image_edge_multiplier": self.MAX_IMAGE_EDGE_MULTIPLIER,
-                "extension_pixels": extension_pixels,
-                "image_wh": [self.w, self.h],
-            },
-        )
         return extension_pixels
 
     def define_corners(self,extension_pixels,shape):
@@ -3163,6 +3062,24 @@ class SortPose:
         enc1 = None
         sort_column, _ = self.get_sort_column_mapping(self.SORT_TYPE, self.CLUSTER_TYPE)
         print("sort_column", sort_column)
+        if sort_column not in df_enc.columns:
+            fallback_columns = []
+            if self.SORT_TYPE == "obj_bbox":
+                fallback_columns = ["obj_bbox_list", "obj_bbox_fusion_list", "bbox_norm"]
+            elif "fusion" in self.SORT_TYPE.lower():
+                fallback_columns = ["obj_bbox_fusion_list", "obj_bbox_list"]
+
+            resolved_column = next((col for col in fallback_columns if col in df_enc.columns), None)
+            if resolved_column is None:
+                raise KeyError(
+                    f"Sort column '{sort_column}' not found in df_enc. "
+                    f"Available columns: {list(df_enc.columns)}"
+                )
+            print(
+                f"get_start_enc_NN fallback: sort column '{sort_column}' missing; "
+                f"using '{resolved_column}'"
+            )
+            sort_column = resolved_column
         print("sort_column head", df_enc[sort_column].head())
         # print("lengtth of first value", len(df_enc[sort_column].iloc[0]))
         if start_img == "median" or start_img == "start_bbox":

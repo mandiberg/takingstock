@@ -7,6 +7,7 @@ import numpy as np
 import json
 import os
 import pandas as pd
+import hashlib
 
 class ToolsClustering:
     """Store key clustering info for use across codebase"""
@@ -218,6 +219,383 @@ class ToolsClustering:
             "FingertipsPositions": {"data_column": "mongo_hand_landmarks_norm", "is_feet": None, "mongo_hand_landmarks": 1},
             "HSV": {"data_column": ["hue", "sat", "val"], "is_feet": None},
 }
+        self.OBJECT_SIGNATURE_SLOT_MAP = [
+            ("left_hand_object", "LH"),
+            ("right_hand_object", "RH"),
+            ("top_face_object", "TF"),
+            ("left_eye_object", "LE"),
+            ("right_eye_object", "RE"),
+            ("mouth_object", "MO"),
+            ("shoulder_object", "SH"),
+            ("waist_object", "WA"),
+            ("feet_object", "FT"),
+        ]
+        self.SIGNATURE_HEAD_MIN_SUPPORT = 200
+        self.SIGNATURE_FALLBACK_MAX_SLOTS = 4
+        self.SIGNATURE_FALLBACK_PRIORITY = {
+            "left_hand_object": 80.0,
+            "right_hand_object": 80.0,
+            "top_face_object": 35.0,
+            "left_eye_object": 30.0,
+            "right_eye_object": 30.0,
+            "mouth_object": 30.0,
+            "shoulder_object": 25.0,
+            "waist_object": 20.0,
+            "feet_object": -9999.0,
+        }
+        self.SIGNATURE_COMPATIBILITY_FALLBACK_BONUS = {
+            0: -9999.0,
+            1: 1.0,
+            2: 5.0,
+        }
+        self.SIGNATURE_FALLBACK_CONF_WEIGHT = 10.0
+
+    # ==================== OBJECT SIGNATURE METHODS ====================
+
+    def extract_slot_class_id(self, slot_value):
+        """Extract class_id int from one slot payload; return 0 for empty/invalid."""
+        if slot_value is None:
+            return 0
+
+        try:
+            if isinstance(slot_value, dict):
+                class_id = slot_value.get('class_id')
+                if class_id is None:
+                    return 0
+                return int(float(class_id))
+
+            if isinstance(slot_value, (list, tuple, np.ndarray)):
+                if len(slot_value) == 0:
+                    return 0
+                first = slot_value[0]
+                if first is None:
+                    return 0
+                return int(float(first))
+
+            if pd.isna(slot_value):
+                return 0
+            return int(float(slot_value))
+        except Exception:
+            return 0
+
+    def build_slot_signature_fields(self, row):
+        """Build deterministic token/hash/object-count for a row."""
+        token_parts = []
+        n_objects = 0
+
+        for slot_col, slot_label in self.OBJECT_SIGNATURE_SLOT_MAP:
+            class_id = self.extract_slot_class_id(row.get(slot_col))
+            if class_id > 0:
+                n_objects += 1
+            token_parts.append(f"{slot_label}:{class_id}")
+
+        token = "|".join(token_parts)
+        sig_hash = hashlib.sha1(token.encode('utf-8')).hexdigest()
+        return token, sig_hash, n_objects
+
+    def append_object_signature_fields(self, df):
+        """Append slot_signature_token/hash/n_objects columns to DataFrame."""
+        required_slots = [slot for slot, _ in self.OBJECT_SIGNATURE_SLOT_MAP]
+        missing_slots = [col for col in required_slots if col not in df.columns]
+        if missing_slots:
+            print(f"[SIGNATURE] Missing slot columns, skipping signature build: {missing_slots}")
+            return df
+
+        if 'image_id' not in df.columns:
+            print("[SIGNATURE] Missing image_id, skipping signature build.")
+            return df
+
+        out_df = df.copy()
+        sig_values = out_df.apply(self.build_slot_signature_fields, axis=1, result_type='expand')
+        sig_values.columns = ['slot_signature_token', 'slot_signature_hash', 'slot_signature_n_objects']
+        out_df[['slot_signature_token', 'slot_signature_hash', 'slot_signature_n_objects']] = sig_values
+        return out_df
+
+    def extract_slot_confidence(self, slot_value):
+        """Extract confidence float from one slot payload; return 0.0 for empty/invalid."""
+        if slot_value is None:
+            return 0.0
+
+        try:
+            if isinstance(slot_value, dict):
+                conf_val = slot_value.get('conf', 0.0)
+                if conf_val is None:
+                    return 0.0
+                return float(conf_val)
+
+            if isinstance(slot_value, (list, tuple, np.ndarray)):
+                if len(slot_value) > 1 and slot_value[1] is not None:
+                    return float(slot_value[1])
+                return 0.0
+
+            return 0.0
+        except Exception:
+            return 0.0
+
+    def _slot_name_for_compatibility(self, slot_col):
+        if slot_col in ('left_hand_object', 'right_hand_object'):
+            return 'hand'
+        return slot_col.replace('_object', '')
+
+    def build_fallback_signature_fields(self, row, max_slots=None):
+        """
+        Build fallback token/hash/n_objects for low-support signatures.
+        Rules:
+        - Exclude feet first.
+        - Keep shoulder only when class_id == 27 (tie/neck case); otherwise drop shoulder.
+        - Prioritize tie/neck class 27 in shoulder slot, then hands, then everything else.
+        - Use compatibility matrix tier and confidence to break ties.
+        """
+        candidates = []
+        selected_slots = set()
+        slot_limit = self.SIGNATURE_FALLBACK_MAX_SLOTS if max_slots is None else max(int(max_slots), 0)
+
+        for slot_col, _slot_label in self.OBJECT_SIGNATURE_SLOT_MAP:
+            slot_value = row.get(slot_col)
+            class_id = self.extract_slot_class_id(slot_value)
+            if class_id <= 0:
+                continue
+
+            if slot_col == 'feet_object':
+                continue
+
+            # Neck/shoulder policy: keep only class 27; demote all other shoulder placements.
+            if slot_col == 'shoulder_object' and class_id != self.TIE_CLASS_ID:
+                continue
+
+            slot_name = self._slot_name_for_compatibility(slot_col)
+            compat_level = self._get_compatibility_level(class_id, slot_name)
+            compat_bonus = float(self.SIGNATURE_COMPATIBILITY_FALLBACK_BONUS.get(compat_level, 0.0))
+            if compat_bonus <= -9999.0:
+                continue
+
+            base_priority = float(self.SIGNATURE_FALLBACK_PRIORITY.get(slot_col, 10.0))
+            if slot_col == 'shoulder_object' and class_id == self.TIE_CLASS_ID:
+                # User-priority: neck+27 is highest-priority retained placement.
+                base_priority = 100.0
+
+            conf = self.extract_slot_confidence(slot_value)
+            score = base_priority + compat_bonus + (max(conf, 0.0) * self.SIGNATURE_FALLBACK_CONF_WEIGHT)
+            candidates.append((score, slot_col, class_id))
+
+        # Prefer highest-priority compatible placements, capped for stronger tail collapse.
+        candidates.sort(key=lambda x: (-x[0], x[1], x[2]))
+        for _score, slot_col, _class_id in candidates[:slot_limit]:
+            selected_slots.add(slot_col)
+
+        token_parts = []
+        n_objects = 0
+        for slot_col, slot_label in self.OBJECT_SIGNATURE_SLOT_MAP:
+            class_id = 0
+            if slot_col in selected_slots:
+                class_id = self.extract_slot_class_id(row.get(slot_col))
+                if class_id > 0:
+                    n_objects += 1
+            token_parts.append(f"{slot_label}:{class_id}")
+
+        token = "|".join(token_parts)
+        sig_hash = hashlib.sha1(token.encode('utf-8')).hexdigest()
+        return token, sig_hash, n_objects
+
+    def persist_object_signatures(self, df, engine, batch_size=5000):
+        """
+        Persist dictionary (ObjectSignatures) and image assignments (ImagesObjectSignatures).
+        Requires columns: image_id, slot_signature_token, slot_signature_hash, slot_signature_n_objects.
+        """
+        required_cols = ['image_id', 'slot_signature_token', 'slot_signature_hash', 'slot_signature_n_objects']
+        missing_cols = [col for col in required_cols if col not in df.columns]
+        if missing_cols:
+            print(f"[SIGNATURE] Missing required columns, skipping DB save: {missing_cols}")
+            return {
+                'unique_signatures': 0,
+                'assignments_total': 0,
+                'assignments_written': 0,
+                'missing_hashes': 0,
+                'skipped': True,
+            }
+
+        fallback_required_slots = [slot for slot, _ in self.OBJECT_SIGNATURE_SLOT_MAP]
+        fallback_slot_cols = [col for col in fallback_required_slots if col in df.columns]
+        persist_columns = required_cols + [col for col in fallback_slot_cols if col not in required_cols]
+
+        persist_df = df[persist_columns].copy()
+        persist_df = persist_df.dropna(subset=['image_id', 'slot_signature_hash', 'slot_signature_token'])
+        if len(persist_df) == 0:
+            print("[SIGNATURE] No rows to persist after dropna.")
+            return {
+                'unique_signatures': 0,
+                'assignments_total': 0,
+                'assignments_written': 0,
+                'missing_hashes': 0,
+                'skipped': True,
+            }
+
+        persist_df['image_id'] = persist_df['image_id'].astype(int)
+        persist_df['slot_signature_n_objects'] = persist_df['slot_signature_n_objects'].fillna(0).astype(int)
+
+        # Head/tail routing for signatures:
+        # - Head signatures (>= SIGNATURE_HEAD_MIN_SUPPORT) keep original token/hash.
+        # - Tail signatures (< SIGNATURE_HEAD_MIN_SUPPORT) are iteratively remapped via fallback token rules
+        #   until they either reach the support floor or collapse to the all-Nones signature.
+        signature_counts = persist_df['slot_signature_hash'].value_counts(dropna=False)
+        persist_df['slot_signature_support'] = persist_df['slot_signature_hash'].map(signature_counts).fillna(0).astype(int)
+        tail_mask = persist_df['slot_signature_support'] < int(self.SIGNATURE_HEAD_MIN_SUPPORT)
+
+        fallback_applied_rows = 0
+        if fallback_slot_cols and tail_mask.any():
+            persist_df['_fallback_slot_budget'] = -1
+            persist_df.loc[tail_mask, '_fallback_slot_budget'] = int(self.SIGNATURE_FALLBACK_MAX_SLOTS)
+
+            while True:
+                active_fallback_mask = tail_mask & (persist_df['_fallback_slot_budget'] >= 0)
+                if not active_fallback_mask.any():
+                    break
+
+                fallback_values = persist_df.loc[active_fallback_mask].apply(
+                    lambda row: self.build_fallback_signature_fields(
+                        row,
+                        max_slots=int(row['_fallback_slot_budget']),
+                    ),
+                    axis=1,
+                    result_type='expand',
+                )
+                fallback_values.columns = ['slot_signature_token', 'slot_signature_hash', 'slot_signature_n_objects']
+                persist_df.loc[active_fallback_mask, ['slot_signature_token', 'slot_signature_hash', 'slot_signature_n_objects']] = fallback_values
+
+                signature_counts = persist_df['slot_signature_hash'].value_counts(dropna=False)
+                persist_df['slot_signature_support'] = persist_df['slot_signature_hash'].map(signature_counts).fillna(0).astype(int)
+
+                unresolved_mask = (
+                    tail_mask
+                    & (persist_df['slot_signature_support'] < int(self.SIGNATURE_HEAD_MIN_SUPPORT))
+                    & (persist_df['_fallback_slot_budget'] > 0)
+                )
+                if not unresolved_mask.any():
+                    break
+
+                persist_df.loc[unresolved_mask, '_fallback_slot_budget'] = (
+                    persist_df.loc[unresolved_mask, '_fallback_slot_budget'].astype(int) - 1
+                )
+
+            fallback_applied_rows = int(tail_mask.sum())
+            persist_df = persist_df.drop(columns=['_fallback_slot_budget'])
+
+        persist_df['slot_signature_n_objects'] = persist_df['slot_signature_n_objects'].fillna(0).astype(int)
+
+        dict_rows = (
+            persist_df[['slot_signature_hash', 'slot_signature_token', 'slot_signature_n_objects']]
+            .drop_duplicates(subset=['slot_signature_hash'])
+            .to_dict(orient='records')
+        )
+        assignments = persist_df[['image_id', 'slot_signature_hash']].to_dict(orient='records')
+
+        insert_signature_sql = text(
+            """
+            INSERT INTO ObjectSignatures (
+                slot_signature_hash,
+                slot_signature_token,
+                slot_signature_n_objects
+            ) VALUES (
+                :slot_signature_hash,
+                :slot_signature_token,
+                :slot_signature_n_objects
+            )
+            ON DUPLICATE KEY UPDATE
+                slot_signature_token = VALUES(slot_signature_token),
+                slot_signature_n_objects = VALUES(slot_signature_n_objects)
+            """
+        )
+
+        insert_image_signature_sql = text(
+            """
+            INSERT INTO ImagesObjectSignatures (
+                image_id,
+                cluster_id
+            ) VALUES (
+                :image_id,
+                :cluster_id
+            )
+            ON DUPLICATE KEY UPDATE
+                cluster_id = VALUES(cluster_id)
+            """
+        )
+
+        print(
+            f"[SIGNATURE] Upserting {len(dict_rows)} unique signatures and {len(assignments)} image assignments... "
+            f"fallback_applied_rows={fallback_applied_rows} head_min={self.SIGNATURE_HEAD_MIN_SUPPORT}"
+        )
+
+        with engine.begin() as conn:
+            for start in range(0, len(dict_rows), batch_size):
+                batch = dict_rows[start:start + batch_size]
+                conn.execute(insert_signature_sql, batch)
+                # Seed cluster_id=0 as the canonical "all-Nones" signature before any auto-increment rows
+                none_row = {slot: None for slot, _ in self.OBJECT_SIGNATURE_SLOT_MAP}
+                none_token, none_hash, _ = self.build_slot_signature_fields(none_row)
+                seed_sql = text(
+                    """
+                    INSERT IGNORE INTO ObjectSignatures (cluster_id, slot_signature_hash, slot_signature_token, slot_signature_n_objects)
+                    VALUES (0, :slot_signature_hash, :slot_signature_token, 0)
+                    """
+                )
+                conn.execute(seed_sql, {'slot_signature_hash': none_hash, 'slot_signature_token': none_token})
+
+            unique_hashes = sorted({row['slot_signature_hash'] for row in assignments})
+            hash_to_cluster_id = {}
+            select_map_sql = text(
+                """
+                SELECT cluster_id, slot_signature_hash
+                FROM ObjectSignatures
+                WHERE slot_signature_hash IN :hash_list
+                """
+            ).bindparams(bindparam('hash_list', expanding=True))
+
+            for start in range(0, len(unique_hashes), batch_size):
+                hash_batch = unique_hashes[start:start + batch_size]
+                rows = conn.execute(select_map_sql, {'hash_list': hash_batch}).fetchall()
+                for row in rows:
+                    hash_to_cluster_id[row.slot_signature_hash] = int(row.cluster_id)
+
+            image_rows = []
+            missing_hashes = 0
+            for assignment in assignments:
+                cluster_id = hash_to_cluster_id.get(assignment['slot_signature_hash'])
+                if cluster_id is None:
+                    missing_hashes += 1
+                    continue
+                image_rows.append({'image_id': int(assignment['image_id']), 'cluster_id': cluster_id})
+
+            if missing_hashes > 0:
+                print(f"[SIGNATURE] Warning: missing cluster_id for {missing_hashes} hash rows.")
+
+            for start in range(0, len(image_rows), batch_size):
+                batch = image_rows[start:start + batch_size]
+                conn.execute(insert_image_signature_sql, batch)
+
+        print(f"[SIGNATURE] Persist complete. image_rows_written={len(image_rows)}")
+        return {
+            'unique_signatures': len(dict_rows),
+            'assignments_total': len(assignments),
+            'assignments_written': len(image_rows),
+            'missing_hashes': missing_hashes,
+            'fallback_applied_rows': fallback_applied_rows,
+            'head_min_support': int(self.SIGNATURE_HEAD_MIN_SUPPORT),
+            'skipped': False,
+        }
+
+    def print_signature_run_summary(self, rows_in, signature_stats, signatures_only=True):
+        """Print standardized summary for signature population runs."""
+        print("\n=== SIGNATURE RUN SUMMARY ===")
+        print(f"rows_in: {rows_in}")
+        print(f"unique_signatures: {signature_stats.get('unique_signatures', 0)}")
+        print(f"assignments_total: {signature_stats.get('assignments_total', 0)}")
+        print(f"assignments_written: {signature_stats.get('assignments_written', 0)}")
+        print(f"missing_hashes: {signature_stats.get('missing_hashes', 0)}")
+        print(f"fallback_applied_rows: {signature_stats.get('fallback_applied_rows', 0)}")
+        print(f"head_min_support: {signature_stats.get('head_min_support', self.SIGNATURE_HEAD_MIN_SUPPORT)}")
+        if signatures_only:
+            print("Skipping KMeans/ObjectFusion cluster writes because SIGNATURES_ONLY=True")
+        print("=== END SIGNATURE RUN SUMMARY ===\n")
 
     def _new_world_lms_stats(self):
         """Create a fresh world-landmark stats payload for ObjectFusion runs."""

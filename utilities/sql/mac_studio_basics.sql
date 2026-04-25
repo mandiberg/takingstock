@@ -7,14 +7,15 @@ SET GLOBAL innodb_buffer_pool_size=8053063680;
 
 DELETE FROM ImagesObjectFusion ;
 
--- DELETE FROM ImagesDetections  ;
 
 DELETE FROM ObjectFusion ;
 
 
-SELECT COUNT(image_id)
-FROM ImagesDetections
+SELECT COUNT(sh.image_id)
+FROM SegmentHelper_oct2025_every40 sh
+INNER JOIN SegmentHelper_T11_Oct20_COCO_Custom t on t.image_id = sh.image_id  
 ;
+-- 963574
 
 -- Verify the changes
 DESCRIBE ImagesDetections;
@@ -53,7 +54,6 @@ LIMIT 10
 ;
 
 
-LIMIT 22000000
 
 
 
@@ -69,7 +69,8 @@ LIMIT 22000000
 -- produces cluster-class_id matrix withcounts for each intersection
 -- is not location specific. 
 -- EXCLUDES ALL NON-OBJECT PLACEMENT IMAGES!!
-    iof.cluster_id,
+
+   SELECT iof.cluster_id,
     SUM(CASE WHEN d.class_id = 0 THEN 1 ELSE 0 END) AS class_0,
     SUM(CASE WHEN d.class_id = 1 THEN 1 ELSE 0 END) AS class_1,
     SUM(CASE WHEN d.class_id = 2 THEN 1 ELSE 0 END) AS class_2,
@@ -233,6 +234,11 @@ INNER JOIN Detections d ON selected_det.detection_id = d.detection_id
 GROUP BY iof.cluster_id
 ORDER BY iof.cluster_id;
 
+
+SELECT COUNT(*)
+FROM SegmentHelper_T11_Oct20_COCO_Custom_evens_quarters id 
+;
+-- 22103472
   
 -- class_id x object-position matrix (from ImagesDetections)
 -- rows are class_id; columns are ObjectFusion positions in ImagesDetections
@@ -391,21 +397,28 @@ and how many have null in both, and how many have values in both.
 for class_id 110
 '''
 
+USE Stock;
+
 SELECT
   SUM(CASE WHEN bbox IS NULL AND (bbox_norm IS NULL OR JSON_EXTRACT(bbox_norm, '$.left') IS NULL) THEN 1 ELSE 0 END) AS null_bbox_and_null_bbox_norm,
   SUM(CASE WHEN bbox IS NOT NULL AND (bbox_norm IS NULL OR JSON_EXTRACT(bbox_norm, '$.left') IS NULL) THEN 1 ELSE 0 END) AS not_null_bbox_and_null_bbox_norm,
   SUM(CASE WHEN bbox IS NOT NULL AND bbox_norm IS NOT NULL AND JSON_EXTRACT(bbox_norm, '$.left') IS NOT NULL THEN 1 ELSE 0 END) AS not_null_bbox_and_not_null_bbox_norm
 FROM Detections d
-JOIN SegmentHelper_T11_Oct20_COCO_Custom_evens_quarters s ON s.image_id = d.image_id 
+JOIN SegmentHelper_T11_Oct20_COCO_Custom s ON s.image_id = d.image_id 
 ;
 -- WHERE class_id = 111;
+
+-- SegmentHelper_T11_Oct20_COCO_Custom
+-- 0	6464930	31286406
 
 
 -- SegmentHelper_T11_Oct20_COCO_Custom_evens_quarters 4/7
 -- 0	3198738	4906887
+0	690974	7478491
 
 -- SegmentHelper_YOLO_Selects 4/7
 -- 0	11996771	16094438
+-- 0	5378188	22820307
 
 -- 4/5 total: 0	32944858	20900495
 -- 4/7 total: 0	31934191	22982959
@@ -537,7 +550,7 @@ CREATE TABLE SegmentHelper_YOLO_Selects (
     FOREIGN KEY (image_id) REFERENCES Images(image_id)
 );
 
-CREATE TABLE SegmentHelper_T4_T11_T37_T40 (
+CREATE TABLE SegmentHelper_T11_Oct20_COCO_Custom_every40 (
     seg_image_id int NOT NULL AUTO_INCREMENT PRIMARY KEY,
     image_id INTEGER,
     FOREIGN KEY (image_id) REFERENCES Images(image_id)
@@ -583,15 +596,12 @@ LIMIT 2000000
 ;
 
 
-INSERT INTO SegmentHelper_T4_T11_T37_T40 (image_id)
-    SELECT image_id FROM SegmentHelper_T4_occupation WHERE image_id IS NOT NULL
-    UNION
-    SELECT image_id FROM SegmentHelper_T11_business WHERE image_id IS NOT NULL
-    UNION
-    SELECT image_id FROM SegmentHelper_T37_money WHERE image_id IS NOT NULL
-    UNION
-    SELECT image_id FROM SegmentHelper_T40_technology WHERE image_id IS NOT NULL
-; 
+INSERT INTO SegmentHelper_T11_Oct20_COCO_Custom_every40 (image_id)
+    SELECT sh.image_id FROM SegmentHelper_oct2025_every40 sh
+	INNER JOIN SegmentHelper_T11_Oct20_COCO_Custom t on t.image_id = sh.image_id  
+
+    
+    ; 
 -- 8M
 
 INSERT INTO SegmentHelper_YOLO_Selects (image_id)
@@ -685,3 +695,7 @@ SegmentHelperObject_99_iris
 SegmentHelperObjectYOLO
 SegmentOct20
 '''
+
+
+
+

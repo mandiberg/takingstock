@@ -20,6 +20,13 @@ FROM Images i
 JOIN ImagesKeywords ik on i.image_id = ik.image_id
 JOIN SegmentOct20 s on i.image_id = s.image_id
 WHERE ik.keyword_id = 4222
+
+
+SELECT i.site_name_id, i.imagename
+FROM Images i
+JOIN SegmentHelper_T4_T11_T37_T40 s on i.image_id = s.image_id
+WHERE NOT (EXISTS (SELECT 1 FROM SegmentHelper_T11_business h WHERE h.image_id = i.image_id))
+
 '''
 
 ROOT_GITHUB = os.path.join(Path.home(), "Documents/GitHub/takingstock/")
@@ -37,25 +44,26 @@ IS_SSD = False  # if True it will use the SSD path, if False it will use the RAI
 VERBOSE = False
 # set origin before constructing io
 # ORIGIN_SSD = "/Volumes/SSD4_Green/segment_images_detected_63_67"
-ORIGIN_SSD = "/Volumes/LaCie/Volumes/LaCie/segment_images_82_money_cards"
-# ORIGIN_SSD = "/Volumes/OWC52/segment_images_OWC4"
-# ORIGIN_SSD = "/Volumes/OWC5/segment_images_book_clock_bowl"
+# ORIGIN_SSD = "/Volumes/OWC54/segment_images_40xDetections"
+# ORIGIN_SSD = "/Volumes/OWC52/segment_images_80_sign"
+ORIGIN_SSD = "/Volumes/OWC5/segment_images_90_stethoscope"
+# ORIGIN_SSD = "/Volumes/LaCie/segment_images_94_piggybank"
 io = DataIO(IS_SSD, VERBOSE, ORIGIN_SSD)
 
 CSV_FOLDER = os.path.join(io.ROOT_DBx, "NML_transition")
 CSV_FOLDER = "/Users/michaelmandiberg/Documents/takingstock_production/moving_objects_to_SSDs/move_this" # for testing
-USE_DF_SORTED = True  # if True it will use the df_sorted format from make_video.py, false expects output from SQL query above
+USE_DF_SORTED = False  # if True it will use the df_sorted format from make_video.py, false expects output from SQL query above
 USE_RAW_PATHS = False # this skips the site_name_id and joins the ORIGIN to the filename in the CSV directly
 USE_HASH_FOLDERS = True  # if True it will create hash folders in the destination folder
 FROM_SSD_TO_SSD = False # overrides io settings to move from the ORIGIN_SSD to DEST 
-IS_TEST = False
+IS_TEST = False # this is old, does a shorter run or something. 
+TESTING_PRINT_ONLY = False # if True doesn't move, just prints what it would do
 OUTPUT_INTERVAL = 1000
 if FROM_SSD_TO_SSD == False: MOVE_ORIGINAL_FILE = False  # FORCE only allow moving files when going from SSD to SSD
-VERBOSE = False
 ORIGIN = "segment_images_COCO" # if USE_RAW_PATHS this needs to be path to segment_images/images_*
 # DEST = os.path.join(io.ROOT_DBx, "NMLdeshard")
-# DEST = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/debug_bodies" 
-DEST = "/Volumes/OWC54/segment_images"   # 
+# DEST = "/Volumes/RAID18" 
+DEST = "/Volumes/OWC54/segment_images_T4"   # 
 # DEST = "/Volumes/LaCie/focus_clusters/segment_images_103_peony"  # 250k for headphones
 # DEST = "/Volumes/SSD4_Green/segment_images_67_phone_undetected"  # for testing
 if IS_TEST:
@@ -65,6 +73,7 @@ if IS_TEST:
     print(f"Running in test mode. Using DEST: {DEST} and CSV_FOLDER: {CSV_FOLDER}")
 START = 0
 # START = 0  # for testing restart
+# first csv file is restart at 2297000
 
 #############################################################################
 MOVE_ORIGINAL_FILE = False # CAREFUL!!!!!!!!! IF TRUE, DELETES ORIGINAL FILES
@@ -101,7 +110,7 @@ exists_count = 0
 failed_count = 0
 i = 0
 counter_lock = Lock()
-MAX_WORKERS = 8  # number of threads to use
+MAX_WORKERS = io.NUMBER_OF_PROCESSES //2  # number of threads to use
 MAX_IN_FLIGHT = MAX_WORKERS * 4  # throttle outstanding futures to cap memory
 
 def move_file_pair(original_path, destination_path):
@@ -115,24 +124,25 @@ def move_file_pair(original_path, destination_path):
     if os.path.exists(original_path):
         try:
             if not os.path.exists(destination_path):
-                if VERBOSE:
+                if VERBOSE or TESTING_PRINT_ONLY:
                     print(f" ++ Copying file: {original_path} to {destination_path}")
-                if MOVE_ORIGINAL_FILE:
-                    # Move the file to the destination location
-                    shutil.move(original_path, destination_path)
-                else:
-                    # Copy the file to the destination location, but leave the original file in place
-                    shutil.copy(original_path, destination_path)
+                if not TESTING_PRINT_ONLY:
+                    if MOVE_ORIGINAL_FILE:
+                        # Move the file to the destination location
+                        shutil.move(original_path, destination_path)
+                    else:
+                        # Copy the file to the destination location, but leave the original file in place
+                        shutil.copy(original_path, destination_path)
             else:
-                if VERBOSE:
+                if VERBOSE or TESTING_PRINT_ONLY:
                     print(f"File already exists: {destination_path}")
                 return "exists"
         except Exception as e:
-            if VERBOSE:
+            if VERBOSE or TESTING_PRINT_ONLY:
                 print(f"An error occurred: {e}")
             return "error"
     else:
-        if VERBOSE:
+        if VERBOSE or TESTING_PRINT_ONLY:
             print(f" ><>< File does not exist: {original_path}")
         return "missing"
 
@@ -141,13 +151,15 @@ def move_file_pair(original_path, destination_path):
 
 def worker_task(row_data):
     """Worker function for thread pool"""
-    # print("worker_task called")
+    # print("worker_task called with row_data:", row_data)
     row, row_idx = row_data
+    # if VERBOSE: print(f"Processing row {row_idx}: {row}")
     if USE_RAW_PATHS:
         filename = row[1]
         original_path = os.path.join(ORIGIN, filename)
         destination_path = os.path.join(DEST, filename)
     else:
+        if VERBOSE: print(f"Processing row {row_idx}: {row}")
         # if not isinstance(row[1], int): return "error"
         try:site_name_id = int(row[1]) if USE_DF_SORTED else int(row[0])
         except ValueError:

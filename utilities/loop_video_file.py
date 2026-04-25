@@ -30,8 +30,8 @@ except ModuleNotFoundError as e:
     raise SystemExit("moviepy is not importable in this Python environment.")
 
 ROOT = "/Users/michaelmandiberg/Library/CloudStorage/Dropbox/takingstock_dropbox/MUD_model_files"
-ROOT = "/Volumes/OWC4/segment_images/renderfolder"
-LOOPS_PER_VIDEO = 3
+ROOT = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/output_folder/SegmentHelper_T11_Oct20_COCO_Custom_evens_quarters_signatures2/yes"
+LOOPS_PER_VIDEO = 2
 
 OUTPUT_FOLDER = os.path.join(ROOT, "looped_videos")
 os.makedirs(OUTPUT_FOLDER, exist_ok=True)

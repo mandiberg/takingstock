@@ -58,10 +58,10 @@ SHOULDER_THRESH=.75
 # HelperTable_name = "SegmentHelperApril12_2x2x33x27"
 
 # for fingerpoint
-HelperTable_name = "SegmentHelper_T4_T11_T37_T40"
+HelperTable_name = "SegmentHelperObject_86_dumbbell"
 # MM controlling which folder to use
 IS_SSD = True
-SSD_PATH = "/Volumes/OWC52/segment_images_T4etc"
+SSD_PATH = "/Volumes/OWC52/segment_images_86_dumbbell"
 
 io = DataIO(IS_SSD, VERBOSE, SSD_PATH)
 db = io.db
@@ -143,7 +143,7 @@ title = 'Please choose your operation: '
 options = ['Create table', 'Fetch BG color stats',"test sorting"]
 option, index = pick(options, title)
 
-LIMIT= 3000000
+LIMIT= 30000000
 # Initialize the counter
 counter = 0
 
