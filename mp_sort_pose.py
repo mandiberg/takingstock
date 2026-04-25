@@ -2065,10 +2065,12 @@ class SortPose:
         # I have returned that float from the resize function and it is available here as resize
         print("auto_edge_crop: resize factor", resize)
         print("top, right, bottom, left", top, right, bottom, left)
-        top = int((image.shape[0]/2) - abs(scaled_face_height*(top*1.3)))
-        right = int((image.shape[1]/2) + abs(scaled_face_height*(right*1.3)))
-        bottom = int((image.shape[0]/2) + abs(scaled_face_height*(bottom*1.3)))
-        left = int((image.shape[1]/2) - abs(scaled_face_height*(left*1.3)))
+        factor = 1.0 if self.DYN_BBOX_FROM_IMAGE_DIMS else 1.3
+        print(f"auto_edge_crop: multiplier factor={factor} (DYN_BBOX_FROM_IMAGE_DIMS={self.DYN_BBOX_FROM_IMAGE_DIMS})")
+        top = int((image.shape[0]/2) - abs(scaled_face_height*(top*factor)))
+        right = int((image.shape[1]/2) + abs(scaled_face_height*(right*factor)))
+        bottom = int((image.shape[0]/2) + abs(scaled_face_height*(bottom*factor)))
+        left = int((image.shape[1]/2) - abs(scaled_face_height*(left*factor)))
 
         print(f"auto_edge_crop: calculated crop coords before bounds check: top:{top}, right:{right}, bottom:{bottom}, left:{left}")
         try:
