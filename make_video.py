@@ -49,14 +49,14 @@ option, MODE = pick(options, title)
 SegmentTable_name = 'SegmentBig_isface'
 # SegmentTable_name = 'SegmentBig_isnotface'
 # SegmentHelper_name = 'SegmentHelper_may2025_4x4faces'
-# SegmentHelper_name = 'SegmentHelper_T11_Oct20_COCO_Custom_every40'
-SegmentHelper_name = 'SegmentHelper_T11_Oct20_COCO_Custom_evens_quarters'
+SegmentHelper_name = 'SegmentHelper_T4_occupation'
+# SegmentHelper_name = 'SegmentHelper_T11_Oct20_COCO_Custom_evens_quarters'
 # SegmentHelper_name = 'None' # set below for heft keywords
 # SegmentHelper_name = None
 # SATYAM, this is MM specific
 # for when I'm using files on my SSD vs RAID
-IS_SSD = False
-SSD_PATH = "/Volumes/OWC54/segment_images_40xDetections"
+IS_SSD = True
+SSD_PATH = "/Volumes/OWC54/segment_images_T4"
 
 #IS_MOVE is in move_toSSD_files.py
 
@@ -84,7 +84,7 @@ CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden b
 
 # CSV_FOLDER = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion128_test220K"
 CSV_MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/"
-CSV_RUN_FOLDER = "SegmentHelper_T11_Oct20_COCO_Custom_evens_quarters/build" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
+CSV_RUN_FOLDER = "SegmentHelper_T4_occupation" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
 CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, CSV_RUN_FOLDER)
 
 
@@ -321,7 +321,10 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     CHOP_FIRST = True # does a first pass chop before whatever sort happens - this is default now
     # this is an override for development purposes. will only make CSVs from these clusters:
     TEMP_FOCUS_CLUSTER_HACK_LIST = []
-    SKIP_OBJECT_NONE_CLUSTERS = [1]
+    OBJECT_NONE_CLUSTERS = [0]
+    CLUSTER_MIN_HSV_BG = 6000
+    CLUSTER_MIN_HSV_OBJ = 5000
+    OBJ_CLUSTER_COLUMN_MIN_FOR_FUSION_SORT = 1000
     HSV_SOURCE_MODE = "background" # "background" or "object" or "both"
     
     TESTING = True
@@ -534,7 +537,7 @@ HSV_NORMS = {"LUM": .01, "SAT": 1,  "HUE": 0.002777777778, "VAL": 1}
 
 
 # process stuff
-VERBOSE = True
+VERBOSE = False
 CALIBRATING = False
 SAVE_IMG_PROCESS = False
 # this controls whether it is using the linear or angle process
@@ -1222,10 +1225,10 @@ if not io.IS_TENCH:
                         print(f"invalid object cluster id in pair {cluster_no}; skipping")
                         return []
 
-                    if requested_object_cluster_id in SKIP_OBJECT_NONE_CLUSTERS:
+                    if requested_object_cluster_id in OBJECT_NONE_CLUSTERS:
                         print(
                             f"skipping pair because ih.cluster_id {requested_object_cluster_id} is in "
-                            f"SKIP_OBJECT_NONE_CLUSTERS {SKIP_OBJECT_NONE_CLUSTERS}"
+                            f"OBJECT_NONE_CLUSTERS {OBJECT_NONE_CLUSTERS}"
                         )
                         return []
 

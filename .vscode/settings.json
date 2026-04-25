@@ -2,6 +2,9 @@
     "python-envs.defaultEnvManager": "ms-python.python:conda",
     "python-envs.defaultPackageManager": "ms-python.python:conda",
     "chat.tools.terminal.autoApprove": {
-        "conda": true
+        "conda": true,
+        "/usr/bin/cat": true,
+        "/usr/bin/head": true,
+        "/opt/homebrew/Caskroom/miniconda/base/bin/python3": true
     }
 }

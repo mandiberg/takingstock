@@ -29,7 +29,7 @@ ROOT_FOLDER_PATH = '/Users/michaelmandiberg/Documents/projects-active/facemap_pr
 # if IS_CLUSTER this should be the folder holding all the cluster folders
 # if not, this should be the individual folder holding the images
 # will not accept clusterNone -- change to cluster00
-FOLDER_NAME = "SegmentHelper_T11_Oct20_COCO_Custom_evens_quarters2"
+FOLDER_NAME = "SegmentHelper_T11_Oct20_COCO_Custom_evens_quarters_signatures3/build"
 
 if io.IS_TENCH:
     ROOT_FOLDER_PATH = '/Users/tenchc/Documents/GitHub/taking_stock_production/segment_images'
@@ -1163,9 +1163,6 @@ def main():
 
         elif SAVE_METAS_AUDIO is True:
             save_concatenated_metas(subfolders, OUTPUT, CSV_FILE)
-        if SAVE_INSTALLATION_METAS is True:
-            print("saving installation metas")
-            save_installation_metas(subfolders, FOLDER_PATH, "installation.csv")
         else:
             # for merging images into stills
             for subfolder_path in subfolders:

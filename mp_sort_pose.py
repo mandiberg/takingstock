@@ -917,8 +917,18 @@ class SortPose:
 
             # Check if dimensions match
             if size != last_size:
-                print('Image dimensions do not match. Skipping blending.')
-                return False
+                print(f'Image dimensions do not match. Resizing for blend test: current={size}, previous={last_size}')
+                # Normalize both images to a shared size for robust pair testing.
+                # Use the smaller dimensions to avoid heavy upscaling artifacts.
+                target_width = min(size[0], last_size[0])
+                target_height = min(size[1], last_size[1])
+                if target_width <= 0 or target_height <= 0:
+                    print('Invalid target dimensions for blend test. Skipping blending.')
+                    return False
+                img = cv2.resize(img, (target_width, target_height), interpolation=cv2.INTER_AREA)
+                last_img = cv2.resize(last_img, (target_width, target_height), interpolation=cv2.INTER_AREA)
+                size = (target_width, target_height)
+                last_size = (target_width, target_height)
 
             # code for face detection and blending
             if self.is_face(img):
@@ -940,7 +950,7 @@ class SortPose:
                 return False
 
         except Exception as e:
-            print('failed:', new_file)
+            print('test_pair failed while processing image pair')
             print('Error:', str(e))
             return False
 
