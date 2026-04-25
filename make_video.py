@@ -2616,6 +2616,58 @@ def main():
         suffix = " ..." if len(pairs) > len(preview) else ""
         print(f"{label}: count={len(pairs)} preview={preview}{suffix}")
 
+    def populate_image_dims(df_segment):
+        """
+        Pre-pass for DYN_BBOX_FROM_IMAGE_DIMS mode.
+        Loads each image from disk to obtain pixel dimensions, nose position,
+        and face_height via sort.get_image_face_data.
+        Adds columns to df_segment:
+            image_w, image_h        -- original image pixel dims
+            face_height_px          -- face height in pixels
+            nose_x_px, nose_y_px    -- nose anchor position in original image pixels
+        Rows that cannot be loaded are stored as None and skipped during median.
+        """
+        total_rows = len(df_segment)
+        print(f"populate_image_dims: starting pre-pass for {total_rows} rows")
+        ws, hs, fhs, nose_xs, nose_ys = [], [], [], [], []
+        for idx, (_, row) in enumerate(df_segment.iterrows()):
+            image_id = row.get('image_id', '?')
+            try:
+                if IS_SSD and SegmentFolder is not None:
+                    open_path = os.path.join(SegmentFolder, os.path.basename(io.folder_list[row['site_name_id']]), row['imagename'])
+                else:
+                    open_path = os.path.join(io.folder_list[row['site_name_id']], row['imagename'])
+                print(f"populate_image_dims [{idx+1}/{total_rows}] image_id={image_id} path={open_path}")
+                img = cv2.imread(open_path)
+                if img is None:
+                    raise ValueError(f"cv2.imread returned None for {open_path}")
+                h, w = img.shape[:2]
+                print(f"populate_image_dims [{idx+1}/{total_rows}] image shape h={h} w={w}")
+                sort.get_image_face_data(img, row['face_landmarks'], row['bbox'])
+                fh = sort.face_height
+                nx, ny = sort.nose_2d[0], sort.nose_2d[1]
+                print(f"populate_image_dims [{idx+1}/{total_rows}] face_height={fh:.2f}  nose=({nx:.1f},{ny:.1f})  above={ny:.0f}px  below={h-ny:.0f}px  left={nx:.0f}px  right={w-nx:.0f}px")
+                ws.append(w)
+                hs.append(h)
+                fhs.append(fh)
+                nose_xs.append(nx)
+                nose_ys.append(ny)
+            except Exception as e:
+                print(f"populate_image_dims: skipping {image_id}: {e}")
+                ws.append(None)
+                hs.append(None)
+                fhs.append(None)
+                nose_xs.append(None)
+                nose_ys.append(None)
+        n_ok = sum(1 for v in ws if v is not None)
+        print(f"populate_image_dims: pre-pass complete — {n_ok}/{total_rows} rows succeeded")
+        df_segment = df_segment.copy()
+        df_segment['image_w'] = ws
+        df_segment['image_h'] = hs
+        df_segment['face_height_px'] = fhs
+        df_segment['nose_x_px'] = nose_xs
+        df_segment['nose_y_px'] = nose_ys
+        return df_segment
     def build_route_counts_from_fusion_matrix(folder_path):
         matrix_path = os.path.join(folder_path, "ArmsPoses3D_all.csv")
         if not os.path.exists(matrix_path):
@@ -2820,8 +2872,12 @@ def main():
 
         elif image_edge_multiplier is None:
             print("dynamic image_edge_multiplier called here")
-            # if dynamic, set the first one here
-            sort.image_edge_multiplier = sort.calc_dynamic_multiplier_from_min_max_body_landmarks(df_segment, 0)     
+            if sort.DYN_BBOX_FROM_IMAGE_DIMS:
+                print("DYN_BBOX_FROM_IMAGE_DIMS enabled: computing multiplier from image pixel dimensions")
+                df_segment = populate_image_dims(df_segment)
+                sort.image_edge_multiplier = sort.calc_dynamic_multiplier_from_image_dims(df_segment, 0)
+            else:
+                sort.image_edge_multiplier = sort.calc_dynamic_multiplier_from_min_max_body_landmarks(df_segment, 0)
         # reset face_height_output for each round, in case it gets redefined inside loop
         sort.face_height_output = face_height_output
         # use image_edge_multiplier to crop for each
