@@ -12,7 +12,7 @@ DROP TABLE SegmentHelperObject_book ;
 DELETE FROM SegmentHelper_sept2025_heft_keywords;
 
 -- create helper segment table
-CREATE TABLE SegmentHelper_what_remains (
+CREATE TABLE SegmentHelper_TheOffice (
     seg_image_id int NOT NULL AUTO_INCREMENT PRIMARY KEY,
     image_id INTEGER,
     FOREIGN KEY (image_id) REFERENCES Images(image_id)
@@ -309,14 +309,14 @@ DELETE FROM SegmentHelper_T4_occupation;
 
 USE Stock;
 -- for making a helper from Segment Object based on t64 Topic
-INSERT INTO SegmentHelper_what_remains (image_id)
+INSERT INTO SegmentHelper_TheOffice (image_id)
 SELECT DISTINCT e.image_id
 FROM SegmentBig_isface e
-JOIN ImagesTopics iap ON iap.image_id = e.image_id
-WHERE (iap.topic_id = 40 OR iap.topic_id2 = 40)
+JOIN Detections iap ON iap.image_id = e.image_id
+WHERE (iap.class_id = 27)
 AND NOT EXISTS (
         SELECT 1
-        FROM SegmentHelper_what_remains s
+        FROM SegmentHelper_TheOffice s
         WHERE s.image_id = e.image_id
     )
 LIMIT 2000000
@@ -324,21 +324,43 @@ LIMIT 2000000
 
 USE Stock;
 -- for making a helper from Segment Object based on t64 Topic
-INSERT INTO SegmentHelper_what_remains (image_id)
+INSERT INTO SegmentHelper_TheOffice (image_id)
 SELECT DISTINCT e.image_id
-FROM SegmentHelper_T11_Oct20_COCO_Custom_evens_quarters e
+FROM SegmentHelperObject_82_money e
+-- JOIN ImagesTopics iap ON iap.image_id = e.image_id
 WHERE NOT EXISTS (
         SELECT 1
-        FROM SegmentHelperObject_67_phone s
+        FROM SegmentHelper_TheOffice s
         WHERE s.image_id = e.image_id
     )
+LIMIT 2000000
+;
+
+-- updates 0
+
+SELECT COUNT(*) as ccount, ik.keyword_id, k.keyword_text 
+FROM SegmentBig_isface e
+JOIN ImagesTopics it ON it.image_id = e.image_id
+JOIN ImagesKeywords ik ON ik.image_id = e.image_id
+JOIN Keywords k ON k.keyword_id = ik.keyword_id 
+;
+-- 75467375
+-- with join 55418764
+
+SELECT COUNT(*)
+FROM SegmentBig_isface e
+JOIN Detections iap ON iap.image_id = e.image_id
+JOIN ImagesTopics it ON it.image_id = e.image_id 
+WHERE (iap.class_id = 27)
 AND NOT EXISTS (
         SELECT 1
-        FROM SegmentOct20 so
-        WHERE so.image_id = e.image_id
+        FROM SegmentHelper_TheOffice s
+        WHERE s.image_id = e.image_id
     )
-LIMIT 20000000
 ;
+
+-- total 2322054 
+-- with it join 1251538
 
 USE Stock;
 -- for making an OBJECT helper from segmentbig based on keywords

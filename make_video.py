@@ -155,6 +155,7 @@ def resolve_arms_object_fusion_folder(
 
 HSV_SOURCE_MODE = "background"
 SKIP_OBJECT_NONE_CLUSTERS = []
+MULTIPOLICY = False
 
 # overriding DB for testing
 # io.db["name"] = "stock"
@@ -321,7 +322,8 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     CHOP_FIRST = True # does a first pass chop before whatever sort happens - this is default now
     # this is an override for development purposes. will only make CSVs from these clusters:
     TEMP_FOCUS_CLUSTER_HACK_LIST = []
-    OBJECT_NONE_CLUSTERS = [0]
+    OBJECT_NONE_CLUSTERS = [0] # if MULTIPOLICY these get HSV BG, else these don't run in fusion
+    MULTIPOLICY = True # controls whether it does multi-bucket fusion policy based on cluster size for HSV, clusters, and metabodyposes3D
     CLUSTER_MIN_HSV_BG = 6000
     CLUSTER_MIN_HSV_OBJ = 5000
     OBJ_CLUSTER_COLUMN_MIN_FOR_FUSION_SORT = 1000
@@ -1089,13 +1091,23 @@ if not io.IS_TENCH:
     # SQL  FUNCTIONS  #
     ###################
 
-    def selectSQL(cluster_no=None, topic_no=None, hsv_cluster=None, hsv_source="background"):
+    def selectSQL(
+        cluster_no=None,
+        topic_no=None,
+        hsv_cluster=None,
+        hsv_source="background",
+        use_hsv_override=None,
+        allow_object_none=False,
+        use_meta_cluster=False,
+        meta_cluster_id=None,
+    ):
         global SELECT, FROM, WHERE, LIMIT, WrapperTopicTable
         local_select = SELECT
         local_from = FROM
         local_where = WHERE
         from_affect = where_affect = from_hsv = where_hsv = xyz_where = " "
         cluster_dict_AND = cluster_dict_NOT = None
+        effective_use_hsv = USE_HSV if use_hsv_override is None else bool(use_hsv_override)
 
         def is_query_list_string(topic_no, inclusion=True):
             if inclusion:
@@ -1210,14 +1222,27 @@ if not io.IS_TENCH:
                 print(f"updated WHERE clause for heft keywords: {xyz_where}")
 
         if IS_HAND_POSE_FUSION:
-            if META: cluster_target_col = "cmp.meta_cluster_id"
-            else: cluster_target_col = "ihp.cluster_id"
+            if use_meta_cluster:
+                cluster_target_col = "cmp.meta_cluster_id"
+            elif META:
+                cluster_target_col = "cmp.meta_cluster_id"
+            else:
+                cluster_target_col = "ihp.cluster_id"
             if isinstance(cluster_no, list):
                 print("cluster_no is a list", cluster_no)
                 # set target column based on CLUSTER_TYPE, ArmsPoses3D means we have a meta_cluster_id
 
                 # we have two values, C1 and C2. C1 should be IHP, C2 should be IH
-                cluster += f" AND {cluster_target_col} = {str(cluster_no[0])} "            
+                if use_meta_cluster:
+                    if meta_cluster_id is None:
+                        print(f"meta fallback requested but no meta_cluster_id for pair {cluster_no}; skipping")
+                        return []
+                    meta_join = " JOIN ClustersMetaBodyPoses3D cmp ON ihp.cluster_id = cmp.cluster_id "
+                    if meta_join not in (local_from + from_affect + from_hsv):
+                        local_from += meta_join
+                    cluster += f" AND {cluster_target_col} = {int(meta_cluster_id)} "
+                else:
+                    cluster += f" AND {cluster_target_col} = {str(cluster_no[0])} "
                 if cluster_no[1] is not None:
                     try:
                         requested_object_cluster_id = int(float(cluster_no[1]))
@@ -1225,7 +1250,7 @@ if not io.IS_TENCH:
                         print(f"invalid object cluster id in pair {cluster_no}; skipping")
                         return []
 
-                    if requested_object_cluster_id in OBJECT_NONE_CLUSTERS:
+                    if requested_object_cluster_id in OBJECT_NONE_CLUSTERS and not allow_object_none:
                         print(
                             f"skipping pair because ih.cluster_id {requested_object_cluster_id} is in "
                             f"OBJECT_NONE_CLUSTERS {OBJECT_NONE_CLUSTERS}"
@@ -1289,7 +1314,7 @@ if not io.IS_TENCH:
             IN_or_equal_topic_ids_string = is_query_list_string(topic_no)
             if not OBJ_DONT_SUBSELECT: cluster += f"AND {this_alias}.{this_id} {IN_or_equal_topic_ids_string} "
 
-        if USE_HSV and (bool(hsv_cluster) or hsv_cluster == 0):
+        if effective_use_hsv and (bool(hsv_cluster) or hsv_cluster == 0):
             print("hsv_cluster is not empty:", hsv_cluster)
             IN_or_equal_hsv_string = is_query_list_string(hsv_cluster)
             if hsv_source == "object":
@@ -2591,6 +2616,186 @@ def main():
         suffix = " ..." if len(pairs) > len(preview) else ""
         print(f"{label}: count={len(pairs)} preview={preview}{suffix}")
 
+    def build_route_counts_from_fusion_matrix(folder_path):
+        matrix_path = os.path.join(folder_path, "ArmsPoses3D_all.csv")
+        if not os.path.exists(matrix_path):
+            raise FileNotFoundError(f"Missing fusion matrix CSV: {matrix_path}")
+
+        matrix_df = pd.read_csv(matrix_path)
+        if "arms_cluster_id" not in matrix_df.columns:
+            raise ValueError(f"Expected arms_cluster_id in {matrix_path}")
+
+        object_cols = [col for col in matrix_df.columns if col.startswith("object_cluster_")]
+        if not object_cols:
+            raise ValueError(f"No object cluster columns found in {matrix_path}")
+
+        route_counts = {}
+        object_column_totals = {}
+        for col in object_cols:
+            object_cluster_id = int(col.replace("object_cluster_", ""))
+            object_column_totals[object_cluster_id] = int(pd.to_numeric(matrix_df[col], errors="coerce").fillna(0).sum())
+
+        for _idx, row in matrix_df.iterrows():
+            from_cluster = int(row["arms_cluster_id"])
+            cluster_counts = route_counts.setdefault(from_cluster, {})
+            for col in object_cols:
+                object_cluster_id = int(col.replace("object_cluster_", ""))
+                numeric_val = pd.to_numeric(row[col], errors="coerce")
+                if pd.isna(numeric_val):
+                    numeric_val = 0
+                cell_count = int(numeric_val)
+                cluster_counts[object_cluster_id] = cell_count
+
+        print(
+            f"Loaded fusion matrix routing stats: rows={len(route_counts)}, "
+            f"object_columns={len(object_column_totals)}"
+        )
+        return route_counts, object_column_totals
+
+    def load_arms_to_meta_cluster_map():
+        map_sql = text(
+            """
+            SELECT cluster_id, meta_cluster_id
+            FROM ClustersMetaBodyPoses3D
+            WHERE meta_cluster_id IS NOT NULL
+            """
+        )
+        rows = session.execute(map_sql).fetchall()
+        mapping = {}
+        for row in rows:
+            try:
+                mapping[int(row.cluster_id)] = int(row.meta_cluster_id)
+            except (TypeError, ValueError):
+                continue
+        print(f"Loaded Arms->MetaBody map rows: {len(mapping)}")
+        return mapping
+
+    def classify_fusion_pair_route(cluster_topic_no, route_counts, object_column_totals, arms_to_meta_map):
+        default_policy = {
+            "bucket": "legacy_single_policy",
+            "hsv_source": "object" if HSV_SOURCE_MODE == "object" else "background",
+            "use_hsv": USE_HSV,
+            "allow_object_none": False,
+            "use_meta_cluster": False,
+            "meta_cluster_id": None,
+            "cycle_stage": "object" if HSV_SOURCE_MODE == "object" else "background",
+            "cell_count": None,
+            "column_total": None,
+            "reason": "legacy single-policy mode",
+        }
+        if not MULTIPOLICY:
+            return default_policy
+
+        if not (isinstance(cluster_topic_no, list) and len(cluster_topic_no) >= 2):
+            out = default_policy.copy()
+            out.update({
+                "bucket": "unclassified_nonpair",
+                "reason": "cluster_topic_no is not a [arms_cluster, object_cluster] pair",
+            })
+            return out
+
+        try:
+            arms_cluster_id = int(float(cluster_topic_no[0]))
+            object_cluster_id = int(float(cluster_topic_no[1]))
+        except (TypeError, ValueError):
+            out = default_policy.copy()
+            out.update({
+                "bucket": "invalid_pair",
+                "reason": f"cannot parse pair ids: {cluster_topic_no}",
+            })
+            return out
+
+        cell_count = int(route_counts.get(arms_cluster_id, {}).get(object_cluster_id, 0))
+        column_total = int(object_column_totals.get(object_cluster_id, 0))
+
+        # Bucket 4 first: low-support object columns route to MetaBody fallback.
+        if (
+            object_cluster_id not in OBJECT_NONE_CLUSTERS
+            and column_total < int(OBJ_CLUSTER_COLUMN_MIN_FOR_FUSION_SORT)
+        ):
+            return {
+                "bucket": "small_column_meta_fallback",
+                "hsv_source": "background",
+                "use_hsv": False,
+                "allow_object_none": object_cluster_id in OBJECT_NONE_CLUSTERS,
+                "use_meta_cluster": True,
+                "meta_cluster_id": arms_to_meta_map.get(arms_cluster_id),
+                "cycle_stage": "meta_fallback",
+                "cell_count": cell_count,
+                "column_total": column_total,
+                "reason": (
+                    f"column_total {column_total} < OBJ_CLUSTER_COLUMN_MIN_FOR_FUSION_SORT "
+                    f"{OBJ_CLUSTER_COLUMN_MIN_FOR_FUSION_SORT}"
+                ),
+            }
+
+        # Bucket 1: object-none columns with large cells -> HSV background.
+        if object_cluster_id in OBJECT_NONE_CLUSTERS and cell_count >= int(CLUSTER_MIN_HSV_BG):
+            return {
+                "bucket": "none_column_large_cell_hsv_background",
+                "hsv_source": "background",
+                "use_hsv": True,
+                "allow_object_none": True,
+                "use_meta_cluster": False,
+                "meta_cluster_id": None,
+                "cycle_stage": "background",
+                "cell_count": cell_count,
+                "column_total": column_total,
+                "reason": (
+                    f"object cluster {object_cluster_id} in OBJECT_NONE_CLUSTERS and "
+                    f"cell_count {cell_count} >= CLUSTER_MIN_HSV_BG {CLUSTER_MIN_HSV_BG}"
+                ),
+            }
+
+        # Bucket 2: object columns with large cells -> HSV object.
+        if object_cluster_id not in OBJECT_NONE_CLUSTERS and cell_count >= int(CLUSTER_MIN_HSV_OBJ):
+            return {
+                "bucket": "object_column_large_cell_hsv_object",
+                "hsv_source": "object",
+                "use_hsv": True,
+                "allow_object_none": False,
+                "use_meta_cluster": False,
+                "meta_cluster_id": None,
+                "cycle_stage": "object",
+                "cell_count": cell_count,
+                "column_total": column_total,
+                "reason": (
+                    f"object cluster {object_cluster_id} not in OBJECT_NONE_CLUSTERS and "
+                    f"cell_count {cell_count} >= CLUSTER_MIN_HSV_OBJ {CLUSTER_MIN_HSV_OBJ}"
+                ),
+            }
+
+        # Bucket 3: medium/default bucket -> non-HSV fusion sort.
+        return {
+            "bucket": "default_nonhsv_fusion",
+            "hsv_source": "background",
+            "use_hsv": False,
+            "allow_object_none": object_cluster_id in OBJECT_NONE_CLUSTERS,
+            "use_meta_cluster": False,
+            "meta_cluster_id": None,
+            "cycle_stage": "default_nonhsv",
+            "cell_count": cell_count,
+            "column_total": column_total,
+            "reason": "passes column floor and does not qualify for large-cell HSV buckets",
+        }
+
+    def expand_hsv_query_groups(preset_groups):
+        expanded = []
+        if not isinstance(preset_groups, list):
+            return expanded
+
+        for item in preset_groups:
+            if isinstance(item, list) and item and all(isinstance(x, int) for x in item):
+                expanded.append(item)
+                continue
+
+            if isinstance(item, list):
+                for sub_item in item:
+                    if isinstance(sub_item, list) and sub_item and all(isinstance(x, int) for x in sub_item):
+                        expanded.append(sub_item)
+
+        return expanded
+
     def set_multiplier_and_dims(df_segment, cluster_no=None, pose_no=None):
         print(f"set_multiplier_and_dims cluster_no: {cluster_no}, pose_no: {pose_no}")
         if isinstance(cluster_no, str) and cluster_no.startswith('c'):
@@ -3069,9 +3274,14 @@ def main():
                 hsv_source="background",
                 cycle_stage="background",
                 background_hsv_cluster=None,
+                use_hsv_override=None,
+                allow_object_none=False,
+                use_meta_cluster=False,
+                meta_cluster_id=None,
             ):
                 global CURRENT_HSV_CYCLE_META
                 resolved_hsv_source = hsv_source
+                effective_use_hsv = USE_HSV if use_hsv_override is None else bool(use_hsv_override)
                 if resolved_hsv_source == "object":
                     CURRENT_HSV_CYCLE_META = make_hsv_cycle_meta(
                         this_cluster,
@@ -3096,7 +3306,16 @@ def main():
                 if VERBOSE: print("select_map_images this_cluster", this_cluster)
                 if VERBOSE: print("select_map_images this_topic", this_topic)
                 if VERBOSE: print("select_map_images hsv_cluster", hsv_cluster)
-                resultsjson = selectSQL(this_cluster, this_topic, hsv_cluster, hsv_source=resolved_hsv_source)
+                resultsjson = selectSQL(
+                    this_cluster,
+                    this_topic,
+                    hsv_cluster,
+                    hsv_source=resolved_hsv_source,
+                    use_hsv_override=effective_use_hsv,
+                    allow_object_none=allow_object_none,
+                    use_meta_cluster=use_meta_cluster,
+                    meta_cluster_id=meta_cluster_id,
+                )
                 print(f"DEBUG - Got {len(resultsjson)} results from selectSQL with cluster={this_cluster}, topic={this_topic}, hsv={hsv_cluster}")
                 if len(resultsjson) < MIN_CYCLE_COUNT:
                     print(f"less than {MIN_CYCLE_COUNT} resultsjson, skipping this {this_cluster} and {this_topic}")
@@ -3108,7 +3327,7 @@ def main():
                         and cycle_stage == "background"
                         and bool(SUBSORT_ON_OBJECT_HSV_CUTOFF)
                         and len(resultsjson) >= SUBSORT_ON_OBJECT_HSV_CUTOFF
-                        and USE_HSV
+                        and effective_use_hsv
                     )
                     if do_object_hsv_subsort:
                         object_hsv_groups = HSV_GROUP_PRESETS.get(OBJECT_HSV_GROUP_PRESET_NAME)
@@ -3128,6 +3347,10 @@ def main():
                                 this_topic,
                                 object_hsv_cluster,
                                 hsv_source="object",
+                                use_hsv_override=effective_use_hsv,
+                                allow_object_none=allow_object_none,
+                                use_meta_cluster=use_meta_cluster,
+                                meta_cluster_id=meta_cluster_id,
                             )
                             if len(object_resultsjson) < MIN_CYCLE_COUNT:
                                 continue
@@ -3185,9 +3408,23 @@ def main():
                 # # print(f"this_n_hsv_clusters for cluster_topic_no {cluster_topic_no} is {this_n_hsv_clusters}")
                 return this_n_hsv_clusters
 
-            def do_first_select_map_images(cluster_topic_no, second_cluster_topic, hsv_cluster=None):
-                hsv_source = "object" if HSV_SOURCE_MODE == "object" else "background"
-                cycle_stage = "object" if hsv_source == "object" else "background"
+            def do_first_select_map_images(cluster_topic_no, second_cluster_topic, hsv_cluster=None, route_policy=None):
+                if route_policy is None:
+                    route_policy = {
+                        "hsv_source": "object" if HSV_SOURCE_MODE == "object" else "background",
+                        "cycle_stage": "object" if HSV_SOURCE_MODE == "object" else "background",
+                        "use_hsv": USE_HSV,
+                        "allow_object_none": False,
+                        "use_meta_cluster": False,
+                        "meta_cluster_id": None,
+                    }
+
+                hsv_source = route_policy.get("hsv_source", "background")
+                cycle_stage = route_policy.get("cycle_stage", "background")
+                use_hsv_override = bool(route_policy.get("use_hsv", USE_HSV))
+                allow_object_none = bool(route_policy.get("allow_object_none", False))
+                use_meta_cluster = bool(route_policy.get("use_meta_cluster", False))
+                meta_cluster_id = route_policy.get("meta_cluster_id")
                 # print(f"cluster_topic_no: {cluster_topic_no}, hsv_cluster: {hsv_cluster}")
                 if IS_CLUSTER and cluster_topic_no < START_CLUSTER: return
                 if (
@@ -3204,14 +3441,44 @@ def main():
                     cluster_topic_no = AFFECT_GROUPS_LISTS[cluster_topic_no] # redefine cluster_no with affect group list
                 if IS_TOPICS and not IS_HAND_POSE_FUSION: 
                     print(f"IS_TOPICS and not IS_HAND_POSE_FUSION, passing in second_cluster_topic: {second_cluster_topic}, cluster_topic_no: {cluster_topic_no}, hsv_cluster: {hsv_cluster}")
-                    select_map_images(second_cluster_topic, cluster_topic_no, hsv_cluster, hsv_source=hsv_source, cycle_stage=cycle_stage)
+                    select_map_images(
+                        second_cluster_topic,
+                        cluster_topic_no,
+                        hsv_cluster,
+                        hsv_source=hsv_source,
+                        cycle_stage=cycle_stage,
+                        use_hsv_override=use_hsv_override,
+                        allow_object_none=allow_object_none,
+                        use_meta_cluster=use_meta_cluster,
+                        meta_cluster_id=meta_cluster_id,
+                    )
                 elif IS_CLUSTER: 
                     print(f"IS_CLUSTER, passing in cluster_topic_no: {cluster_topic_no}, second_cluster_topic: {second_cluster_topic}, hsv_cluster: {hsv_cluster}")
-                    select_map_images(cluster_topic_no, second_cluster_topic, hsv_cluster, hsv_source=hsv_source, cycle_stage=cycle_stage)
+                    select_map_images(
+                        cluster_topic_no,
+                        second_cluster_topic,
+                        hsv_cluster,
+                        hsv_source=hsv_source,
+                        cycle_stage=cycle_stage,
+                        use_hsv_override=use_hsv_override,
+                        allow_object_none=allow_object_none,
+                        use_meta_cluster=use_meta_cluster,
+                        meta_cluster_id=meta_cluster_id,
+                    )
                 elif IS_HAND_POSE_FUSION: 
                     # I think this is for one topic with pose/gesture fusion
                     print(f"IS_HAND_POSE_FUSION, passing in cluster_topic_no: {cluster_topic_no}, this_topic: {this_topic}, hsv_cluster: {hsv_cluster}")
-                    select_map_images(cluster_topic_no, this_topic, hsv_cluster, hsv_source=hsv_source, cycle_stage=cycle_stage)
+                    select_map_images(
+                        cluster_topic_no,
+                        this_topic,
+                        hsv_cluster,
+                        hsv_source=hsv_source,
+                        cycle_stage=cycle_stage,
+                        use_hsv_override=use_hsv_override,
+                        allow_object_none=allow_object_none,
+                        use_meta_cluster=use_meta_cluster,
+                        meta_cluster_id=meta_cluster_id,
+                    )
 
             if CURRENT_MODE == 'heft_torso_keywords' and IS_HAND_POSE_FUSION and not USE_HSV:
                 print("doing heft_torso_keywords without HSV: iterating fusion pairs directly")
@@ -3220,8 +3487,83 @@ def main():
                         cluster_topic_iter = n_cluster_topics
                     else:
                         cluster_topic_iter = []
+                    route_counts = object_column_totals = arms_to_meta_map = None
+                    route_bucket_stats = {}
+                    object_none_bucket_stats = {}
+                    object_none_pair_count = 0
+                    if MULTIPOLICY:
+                        try:
+                            route_counts, object_column_totals = build_route_counts_from_fusion_matrix(FUSION_FOLDER)
+                        except Exception as route_e:
+                            print(f"Failed to load fusion matrix routing stats: {route_e}")
+                            route_counts, object_column_totals = {}, {}
+                        try:
+                            arms_to_meta_map = load_arms_to_meta_cluster_map()
+                        except Exception as meta_e:
+                            print(f"Failed to load Arms->MetaBody map, disabling meta fallback: {meta_e}")
+                            arms_to_meta_map = {}
+
                     for cluster_topic_no in cluster_topic_iter:
-                        do_first_select_map_images(cluster_topic_no, second_cluster_topic, None)
+                        route_policy = None
+                        if MULTIPOLICY:
+                            route_policy = classify_fusion_pair_route(
+                                cluster_topic_no,
+                                route_counts or {},
+                                object_column_totals or {},
+                                arms_to_meta_map or {},
+                            )
+                            route_bucket = route_policy.get("bucket", "unknown")
+                            route_bucket_stats[route_bucket] = route_bucket_stats.get(route_bucket, 0) + 1
+
+                            object_cluster_id = None
+                            if isinstance(cluster_topic_no, list) and len(cluster_topic_no) >= 2:
+                                try:
+                                    object_cluster_id = int(float(cluster_topic_no[1]))
+                                except (TypeError, ValueError):
+                                    object_cluster_id = None
+                            if object_cluster_id in OBJECT_NONE_CLUSTERS:
+                                object_none_pair_count += 1
+                                object_none_bucket_stats[route_bucket] = object_none_bucket_stats.get(route_bucket, 0) + 1
+
+                            print(
+                                f"[MULTIPOLICY] pair={cluster_topic_no} bucket={route_bucket} "
+                                f"cell={route_policy.get('cell_count')} col_total={route_policy.get('column_total')} "
+                                f"hsv={route_policy.get('use_hsv')} source={route_policy.get('hsv_source')} "
+                                f"meta={route_policy.get('use_meta_cluster')} reason={route_policy.get('reason')}"
+                            )
+
+                        if route_policy and route_policy.get("use_hsv"):
+                            preset_name = (
+                                OBJECT_HSV_GROUP_PRESET_NAME
+                                if route_policy.get("hsv_source") == "object"
+                                else HSV_GROUP_PRESET_NAME
+                            )
+                            hsv_groups = expand_hsv_query_groups(HSV_GROUP_PRESETS.get(preset_name, []))
+                            if not hsv_groups:
+                                print(
+                                    f"[MULTIPOLICY] No HSV groups found for preset {preset_name}; "
+                                    f"falling back to non-HSV for pair {cluster_topic_no}"
+                                )
+                                fallback_policy = dict(route_policy)
+                                fallback_policy["use_hsv"] = False
+                                do_first_select_map_images(cluster_topic_no, second_cluster_topic, None, route_policy=fallback_policy)
+                            else:
+                                for hsv_cluster in hsv_groups:
+                                    do_first_select_map_images(
+                                        cluster_topic_no,
+                                        second_cluster_topic,
+                                        hsv_cluster,
+                                        route_policy=route_policy,
+                                    )
+                        else:
+                            do_first_select_map_images(cluster_topic_no, second_cluster_topic, None, route_policy=route_policy)
+
+                    if MULTIPOLICY and route_bucket_stats:
+                        print(f"[MULTIPOLICY] bucket summary: {route_bucket_stats}")
+                        print(
+                            f"[MULTIPOLICY] object-none summary: total_pairs={object_none_pair_count} "
+                            f"bucket_counts={object_none_bucket_stats}"
+                        )
                 else:
                     print("doing regular linear")
                     select_map_images(this_cluster, this_topic, None)

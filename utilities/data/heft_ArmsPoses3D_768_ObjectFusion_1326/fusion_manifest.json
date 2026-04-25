@@ -1,0 +1,24 @@
+{
+  "cluster_type": "ArmsPoses3D_ObjectFusion",
+  "contract_version": 1,
+  "export_options": {
+    "cluster_map_file": "object_signature_cluster_map_min200.csv",
+    "helper_table": "SegmentHelper_T11_Oct20_COCO_Custom_evens_quarters",
+    "kept_cluster_count": 1326,
+    "object_cluster_table_name": "ImagesObjectSignatures",
+    "signature_min": 200
+  },
+  "files": {
+    "ArmsPoses3D_all.csv": {
+      "available_hsv_bins": [],
+      "csv_schema_version": 1,
+      "entity_id": null,
+      "entity_type": "detection",
+      "has_hsv_summary_rows": false,
+      "hsv_preset_name": "none"
+    }
+  },
+  "generator": "query_all_fusion_clusters.py",
+  "mode": "ObjectSignatures",
+  "mode_id": "cluster_id"
+}
