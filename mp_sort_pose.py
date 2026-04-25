@@ -123,7 +123,9 @@ class SortPose:
         self.ORIGIN = 0
         self.this_nose_bridge_dist = self.NOSE_BRIDGE_DIST = None # to be set in first loop, and sort.this_nose_bridge_dist each time
         self.USE_HEAD_POSE = USE_HEAD_POSE
-        self.MIN_DYN_BBOX_DIM = [1.75,2,2,2] # controls how closely AUTO_EDGE_CROP can get
+        self.MIN_DYN_BBOX_DIM = [1.5,1.5,1.5,1.5] # controls how closely AUTO_EDGE_CROP can get
+        self.DYN_BBOX_FROM_IMAGE_DIMS = True # if True, use image dimensions to calculate dynamic multiplier rather than body landmarks
+        self.DYN_BBOX_ROUND_TO = 0.25 # round to nearest 0.25 bbox for crop dimensions
 
         self.CHECK_DESC_DIST = 30
 
@@ -1878,7 +1880,141 @@ class SortPose:
             },
         )
         return [top_extent, right_extent, bottom_extent, left_extent]
-    
+
+    def calc_dynamic_multiplier_from_image_dims(self, df, padding=0):
+        """
+        Returns image_edge_multiplier [top, right, bottom, left] in face-height units
+        by measuring each image's pixel half-extents from its geometric center,
+        normalized by face_height, then taking the per-cluster median.
+
+        Requires df columns populated by populate_image_dims():
+            image_w        -- original image pixel width
+            image_h        -- original image pixel height
+            face_height_px -- face height in pixels (same scale as image_w/h)
+
+        The resize factor cancels out in the face-height normalization, so only
+        the original (pre-expand) dims are needed.
+        """
+        print(f"calc_dynamic_multiplier_from_image_dims: called with {len(df)} rows, padding={padding}")
+        required_cols = {'image_w', 'image_h', 'face_height_px', 'nose_x_px', 'nose_y_px'}
+        if not required_cols.issubset(df.columns):
+            missing = required_cols - set(df.columns)
+            print(f"calc_dynamic_multiplier_from_image_dims: missing columns {missing}, falling back to body landmarks")
+            return self.calc_dynamic_multiplier_from_min_max_body_landmarks(df, padding)
+
+        tops, rights, bottoms, lefts = [], [], [], []
+        skipped = 0
+        for idx, (_, row) in enumerate(df.iterrows()):
+            image_id = row.get('image_id', idx)
+            w = row.get('image_w')
+            h = row.get('image_h')
+            fh = row.get('face_height_px')
+            nx = row.get('nose_x_px')
+            ny = row.get('nose_y_px')
+            if any(v is None for v in (w, h, fh, nx, ny)):
+                print(f"calc_dynamic_multiplier_from_image_dims: row {image_id} skipped — None value (w={w}, h={h}, fh={fh}, nx={nx}, ny={ny})")
+                skipped += 1
+                continue
+            try:
+                w, h, fh, nx, ny = float(w), float(h), float(fh), float(nx), float(ny)
+            except (TypeError, ValueError):
+                print(f"calc_dynamic_multiplier_from_image_dims: row {image_id} skipped — could not convert to float")
+                skipped += 1
+                continue
+            if not (w > 0 and h > 0 and fh > 0 and 0 <= nx <= w and 0 <= ny <= h):
+                print(f"calc_dynamic_multiplier_from_image_dims: row {image_id} skipped — out-of-bounds value (w={w}, h={h}, fh={fh}, nx={nx}, ny={ny})")
+                skipped += 1
+                continue
+            # Pixels from nose to each image edge, normalised by face_height
+            t = ny / fh               # pixels above nose → top extent
+            b = (h - ny) / fh         # pixels below nose → bottom extent
+            l = nx / fh               # pixels left of nose → left extent
+            r = (w - nx) / fh         # pixels right of nose → right extent
+            print(f"calc_dynamic_multiplier_from_image_dims: row {image_id} w={w:.0f} h={h:.0f} fh={fh:.2f} nose=({nx:.1f},{ny:.1f}) → top={t:.3f} bot={b:.3f} left={l:.3f} right={r:.3f}")
+            tops.append(t)
+            bottoms.append(b)
+            lefts.append(l)
+            rights.append(r)
+
+        print(f"calc_dynamic_multiplier_from_image_dims: {len(tops)} valid rows, {skipped} skipped")
+        print(f"calc_dynamic_multiplier_from_image_dims: tops={[round(v,3) for v in tops]}")
+        print(f"calc_dynamic_multiplier_from_image_dims: bottoms={[round(v,3) for v in bottoms]}")
+        print(f"calc_dynamic_multiplier_from_image_dims: lefts={[round(v,3) for v in lefts]}")
+        print(f"calc_dynamic_multiplier_from_image_dims: rights={[round(v,3) for v in rights]}")
+
+        if not tops:
+            print("calc_dynamic_multiplier_from_image_dims: no valid rows, keeping existing image_edge_multiplier")
+            self._diag_crop_record(
+                "image_dims_multiplier",
+                {
+                    "padding": padding,
+                    "skipped": skipped,
+                    "fallback_image_edge_multiplier": self.image_edge_multiplier,
+                },
+            )
+            return self.image_edge_multiplier
+
+        def percentile_filtered_median(values, label):
+            arr = np.array(values, dtype=float)
+            p5  = float(np.percentile(arr, 5))
+            p95 = float(np.percentile(arr, 95))
+            filtered = arr[(arr >= p5) & (arr <= p95)]
+            result = float(np.percentile(filtered, 40))
+            print(f"calc_dynamic_multiplier_from_image_dims: {label} p5={p5:.3f} p95={p95:.3f} kept={len(filtered)}/{len(arr)} p40={result:.3f}")
+            return result
+
+        median_top    = percentile_filtered_median(tops,    "top")
+        median_bottom = percentile_filtered_median(bottoms, "bottom")
+        median_left   = percentile_filtered_median(lefts,   "left")
+        median_right  = percentile_filtered_median(rights,  "right")
+
+        print(f"calc_dynamic_multiplier_from_image_dims: filtered medians top={median_top:.3f} right={median_right:.3f} bottom={median_bottom:.3f} left={median_left:.3f}")
+
+        # Centre x-axis: equalise left and right using the larger of the two
+        x_center = max(median_left, median_right)
+        print(f"calc_dynamic_multiplier_from_image_dims: x-centering left={median_left:.3f} right={median_right:.3f} → both={x_center:.3f}")
+        median_left = x_center
+        median_right = x_center
+
+        # Round to nearest DYN_BBOX_ROUND_TO step (e.g. 0.25)
+        if self.DYN_BBOX_ROUND_TO and self.DYN_BBOX_ROUND_TO > 0:
+            step = self.DYN_BBOX_ROUND_TO
+            pre_round = (median_top, median_right, median_bottom, median_left)
+            median_top = math.floor(median_top / step) * step
+            median_right = math.floor(median_right / step) * step
+            median_bottom = math.floor(median_bottom / step) * step
+            median_left = math.floor(median_left / step) * step
+            print(f"calc_dynamic_multiplier_from_image_dims: after rounding (step={step}) pre={[round(v,3) for v in pre_round]} post=[{median_top}, {median_right}, {median_bottom}, {median_left}]")
+
+        # Apply MIN_DYN_BBOX_DIM floor
+        print(f"calc_dynamic_multiplier_from_image_dims: MIN_DYN_BBOX_DIM={self.MIN_DYN_BBOX_DIM}")
+        top_extent = max(median_top + padding, self.MIN_DYN_BBOX_DIM[0])
+        right_extent = max(median_right + padding, self.MIN_DYN_BBOX_DIM[1])
+        bottom_extent = max(median_bottom + padding, self.MIN_DYN_BBOX_DIM[2])
+        left_extent = max(median_left + padding, self.MIN_DYN_BBOX_DIM[3])
+
+        print(f"calc_dynamic_multiplier_from_image_dims: final extents [top={top_extent}, right={right_extent}, bottom={bottom_extent}, left={left_extent}]")
+
+        self._diag_crop_record(
+            "image_dims_multiplier",
+            {
+                "padding": padding,
+                "n_valid": len(tops),
+                "skipped": skipped,
+                "median_top": median_top,
+                "median_right": median_right,
+                "median_bottom": median_bottom,
+                "median_left": median_left,
+                "extents": {
+                    "top": top_extent,
+                    "right": right_extent,
+                    "bottom": bottom_extent,
+                    "left": left_extent,
+                },
+            },
+        )
+        return [top_extent, right_extent, bottom_extent, left_extent]
+
     def bbox_to_pixel_conversion(self, bbox):
         """
         Converts bbox/image edge mult to pixels for crop
