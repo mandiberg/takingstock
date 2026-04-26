@@ -5,6 +5,7 @@
         "conda": true,
         "/usr/bin/cat": true,
         "/usr/bin/head": true,
-        "/opt/homebrew/Caskroom/miniconda/base/bin/python3": true
+        "/opt/homebrew/Caskroom/miniconda/base/bin/python3": true,
+        "printf": true
     }
 }

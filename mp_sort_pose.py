@@ -1908,14 +1908,6 @@ class SortPose:
 
         if not tops:
             print("calc_dynamic_multiplier_from_image_dims: no valid rows, keeping existing image_edge_multiplier")
-            self._diag_crop_record(
-                "image_dims_multiplier",
-                {
-                    "padding": padding,
-                    "skipped": skipped,
-                    "fallback_image_edge_multiplier": self.image_edge_multiplier,
-                },
-            )
             return self.image_edge_multiplier
 
         def percentile_filtered_median(values, label):
@@ -1959,24 +1951,6 @@ class SortPose:
 
         print(f"calc_dynamic_multiplier_from_image_dims: final extents [top={top_extent}, right={right_extent}, bottom={bottom_extent}, left={left_extent}]")
 
-        self._diag_crop_record(
-            "image_dims_multiplier",
-            {
-                "padding": padding,
-                "n_valid": len(tops),
-                "skipped": skipped,
-                "median_top": median_top,
-                "median_right": median_right,
-                "median_bottom": median_bottom,
-                "median_left": median_left,
-                "extents": {
-                    "top": top_extent,
-                    "right": right_extent,
-                    "bottom": bottom_extent,
-                    "left": left_extent,
-                },
-            },
-        )
         return [top_extent, right_extent, bottom_extent, left_extent]
 
     def bbox_to_pixel_conversion(self, bbox):

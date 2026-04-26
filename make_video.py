@@ -49,13 +49,13 @@ option, MODE = pick(options, title)
 SegmentTable_name = 'SegmentBig_isface'
 # SegmentTable_name = 'SegmentBig_isnotface'
 # SegmentHelper_name = 'SegmentHelper_may2025_4x4faces'
-SegmentHelper_name = 'SegmentHelper_T4_occupation'
-# SegmentHelper_name = 'SegmentHelper_T11_Oct20_COCO_Custom_evens_quarters'
+# SegmentHelper_name = 'SegmentHelper_T4_occupation'
+SegmentHelper_name = 'SegmentHelper_T11_Oct20_COCO_Custom_evens_quarters'
 # SegmentHelper_name = 'None' # set below for heft keywords
 # SegmentHelper_name = None
 # SATYAM, this is MM specific
 # for when I'm using files on my SSD vs RAID
-IS_SSD = True
+IS_SSD = False
 SSD_PATH = "/Volumes/OWC54/segment_images_T4"
 
 #IS_MOVE is in move_toSSD_files.py
@@ -84,7 +84,7 @@ CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden b
 
 # CSV_FOLDER = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion128_test220K"
 CSV_MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/"
-CSV_RUN_FOLDER = "SegmentHelper_T4_occupation" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
+CSV_RUN_FOLDER = "SegmentHelper_T11_Oct20_COCO_Custom_evens_quarters/build1" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
 CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, CSV_RUN_FOLDER)
 
 
@@ -2633,6 +2633,7 @@ def main():
         for idx, (_, row) in enumerate(df_segment.iterrows()):
             image_id = row.get('image_id', '?')
             try:
+                sort.this_nose_bridge_dist = None
                 if IS_SSD and SegmentFolder is not None:
                     open_path = os.path.join(SegmentFolder, os.path.basename(io.folder_list[row['site_name_id']]), row['imagename'])
                 else:
