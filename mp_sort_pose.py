@@ -116,6 +116,8 @@ class SortPose:
         self.DYN_BBOX_FROM_IMAGE_DIMS = True # if True, use image dimensions to calculate dynamic multiplier rather than body landmarks
         self.DYN_BBOX_ROUND_TO = 0.5 # round to nearest 0.5 bbox for crop dimensions
         self.DYN_BBOX_PCT = 40 # percentile for dynamic bbox calculation
+        self.DYN_BBOX_ROUND_CANONICAL = True # if True, it will round to canonical ratios
+        self.DYN_BBOX_CANONICAL_RATIOS = [(3,2), (4,3), (5,4), (7,6), (1,1), (6,7), (4,5), (3,4), (2,3), (1,2)] # these are the canonical ratios that dynamic bboxes will round to if DYN_BBOX_ROUND_CANONICAL is True
 
         self.CHECK_DESC_DIST = 30
 
@@ -1940,8 +1942,50 @@ class SortPose:
         # median_left = x_center
         # median_right = x_center
 
-        # Round to nearest DYN_BBOX_ROUND_TO step (e.g. 0.25)
-        if self.DYN_BBOX_ROUND_TO and self.DYN_BBOX_ROUND_TO > 0:
+        if self.DYN_BBOX_ROUND_CANONICAL:
+            # round to the closest ratio in self.DYN_BBOX_CANONICAL_RATIOS
+            def closest_canonical(median_top, median_bottom, median_left, median_right, canonical_ratios):
+                closest = None
+                smallest_diff = float('inf')
+                this_ratio = (abs(median_top) + abs(median_bottom)) / (abs(median_left) + abs(median_right)) if (abs(median_left) + abs(median_right)) != 0 else float('inf')
+                for h, w in canonical_ratios:
+                    ratio = w / h if h != 0 else float('inf')
+                    diff = abs(this_ratio - ratio)
+                    if diff < smallest_diff:
+                        smallest_diff = diff
+                        closest = ratio
+                return closest
+            
+            canonical_ratio = closest_canonical(median_top, median_bottom, median_left, median_right, self.DYN_BBOX_CANONICAL_RATIOS)
+            if canonical_ratio > 1:
+                # horizontal, round top to step = self.DYN_BBOX_ROUND_TO
+                median_top = math.ceil(median_top / self.DYN_BBOX_ROUND_TO) * self.DYN_BBOX_ROUND_TO
+                median_bottom = math.ceil(median_bottom / self.DYN_BBOX_ROUND_TO) * self.DYN_BBOX_ROUND_TO
+                # adjust left and right to match the canonical ratio
+                new_height = (median_left + median_right) 
+                canonical_width = new_height * canonical_ratio
+                median_left = round(canonical_width / 2, 3)
+                median_right = round(canonical_width / 2, 3)
+                print(f"calc_dynamic_multiplier_from_image_dims: rounded to horizontal canonical ratio {canonical_ratio:.3f} → top={median_top}, right={median_right}, bottom={median_bottom}, left={median_left}") 
+
+            else:
+                # vertical, round left to step = self.DYN_BBOX_ROUND_TO
+                median_left = math.ceil(median_left / self.DYN_BBOX_ROUND_TO) * self.DYN_BBOX_ROUND_TO
+                median_right = math.ceil(median_right / self.DYN_BBOX_ROUND_TO) * self.DYN_BBOX_ROUND_TO
+                # adjust top and bottom to match the canonical ratio
+                new_width = (median_top + median_bottom)
+                canonical_height = new_width / canonical_ratio
+                median_top = round(canonical_height / 2, 3)
+                median_bottom = round(canonical_height / 2, 3)
+                print(f"calc_dynamic_multiplier_from_image_dims: rounded to vertical canonical ratio {canonical_ratio:.3f} → top={median_top}, right={median_right}, bottom={median_bottom}, left={median_left}")
+            # median_top = closest_canonical(median_top, self.DYN_BBOX_CANONICAL_RATIOS)
+            # median_right = closest_canonical(median_right, self.DYN_BBOX_CANONICAL_RATIOS)
+            # median_bottom = closest_canonical(median_bottom, self.DYN_BBOX_CANONICAL_RATIOS)
+            # median_left = closest_canonical(median_left, self.DYN_BBOX_CANONICAL_RATIOS)
+            
+            print(f"calc_dynamic_multiplier_from_image_dims: after rounding to canonical ratios {self.DYN_BBOX_CANONICAL_RATIOS} → top={median_top}, right={median_right}, bottom={median_bottom}, left={median_left}")
+
+        elif self.DYN_BBOX_ROUND_TO and self.DYN_BBOX_ROUND_TO > 0:
             step = self.DYN_BBOX_ROUND_TO
             pre_round = (median_top, median_right, median_bottom, median_left)
             median_top = math.ceil(median_top / step) * step

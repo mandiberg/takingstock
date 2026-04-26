@@ -404,7 +404,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
 
     USE_PAINTED = True
     INPAINT= True
-    INPAINT_COLOR = "white" # "white" or "black" or None (none means generative inpainting with size limits)
+    INPAINT_COLOR = "black" # "white" or "black" or None (none means generative inpainting with size limits)
 
     # when doing IS_HAND_POSE_FUSION code currently only supports one topic at a time
     IS_ONE_TOPIC = True
@@ -895,6 +895,12 @@ cfg = {
 }
 sort = SortPose(config=cfg)
 sort.trust_face_pair_cache = TRUST_FACE_PAIR_CACHE
+
+# Keep EXPAND background fill consistent with INPAINT_COLOR.
+if INPAINT_COLOR == "black":
+    sort.BGCOLOR = [0, 0, 0]
+elif INPAINT_COLOR == "white":
+    sort.BGCOLOR = [255, 255, 255]
 
 # # TEMP TK TESTING
 # sort.MIND = .5
