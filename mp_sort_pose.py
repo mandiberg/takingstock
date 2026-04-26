@@ -114,7 +114,8 @@ class SortPose:
         self.USE_HEAD_POSE = USE_HEAD_POSE
         self.MIN_DYN_BBOX_DIM = [1.5,1.5,1.5,1.5] # controls how closely AUTO_EDGE_CROP can get
         self.DYN_BBOX_FROM_IMAGE_DIMS = True # if True, use image dimensions to calculate dynamic multiplier rather than body landmarks
-        self.DYN_BBOX_ROUND_TO = 0.25 # round to nearest 0.25 bbox for crop dimensions
+        self.DYN_BBOX_ROUND_TO = 0.5 # round to nearest 0.5 bbox for crop dimensions
+        self.DYN_BBOX_PCT = 40 # percentile for dynamic bbox calculation
 
         self.CHECK_DESC_DIST = 30
 
@@ -1910,36 +1911,43 @@ class SortPose:
             print("calc_dynamic_multiplier_from_image_dims: no valid rows, keeping existing image_edge_multiplier")
             return self.image_edge_multiplier
 
-        def percentile_filtered_median(values, label):
-            arr = np.array(values, dtype=float)
-            p5  = float(np.percentile(arr, 5))
-            p95 = float(np.percentile(arr, 95))
-            filtered = arr[(arr >= p5) & (arr <= p95)]
-            result = float(np.percentile(filtered, 40))
-            print(f"calc_dynamic_multiplier_from_image_dims: {label} p5={p5:.3f} p95={p95:.3f} kept={len(filtered)}/{len(arr)} p40={result:.3f}")
-            return result
+        def percentile_filtered_median(tops, bottoms, lefts, rights, pct=self.DYN_BBOX_PCT):
+            results = []
+            for values, label in [(tops, "top"), (bottoms, "bottom"), (lefts, "left"), (rights, "right")]:
+                arr = np.array(values, dtype=float)
+                p5  = float(np.percentile(arr, 5))
+                p95 = float(np.percentile(arr, 95))
+                filtered = arr[(arr >= p5) & (arr <= p95)]
+                result = float(np.percentile(filtered, pct))
+                print(f"calc_dynamic_multiplier_from_image_dims: {label} p5={p5:.3f} p95={p95:.3f} kept={len(filtered)}/{len(arr)} p{int(pct)}={result:.3f}")
+                results.append(result)
+            return results
 
-        median_top    = percentile_filtered_median(tops,    "top")
-        median_bottom = percentile_filtered_median(bottoms, "bottom")
-        median_left   = percentile_filtered_median(lefts,   "left")
-        median_right  = percentile_filtered_median(rights,  "right")
+        median_top, median_bottom, median_left, median_right = percentile_filtered_median(tops, bottoms, lefts, rights)
 
         print(f"calc_dynamic_multiplier_from_image_dims: filtered medians top={median_top:.3f} right={median_right:.3f} bottom={median_bottom:.3f} left={median_left:.3f}")
 
-        # Centre x-axis: equalise left and right using the larger of the two
-        x_center = max(median_left, median_right)
-        print(f"calc_dynamic_multiplier_from_image_dims: x-centering left={median_left:.3f} right={median_right:.3f} → both={x_center:.3f}")
-        median_left = x_center
-        median_right = x_center
+        # # if the cropped image is a square
+        # if abs(median_top + median_bottom) / abs(median_left + median_right) == 1:
+        #     print("calc_dynamic_multiplier_from_image_dims: image is square, will redo  with wider")
+        #     new_dyn_bbox_pct = self.DYN_BBOX_PCT + (100 - self.DYN_BBOX_PCT) / 2
+        #     median_top, median_bottom, median_left, median_right = percentile_filtered_median(tops, bottoms, lefts, rights, pct=new_dyn_bbox_pct) # use 50th percentile to get wider crop for square images
+
+        
+        # # Centre x-axis: equalise left and right using the larger of the two
+        # x_center = max(median_left, median_right)
+        # print(f"calc_dynamic_multiplier_from_image_dims: x-centering left={median_left:.3f} right={median_right:.3f} → both={x_center:.3f}")
+        # median_left = x_center
+        # median_right = x_center
 
         # Round to nearest DYN_BBOX_ROUND_TO step (e.g. 0.25)
         if self.DYN_BBOX_ROUND_TO and self.DYN_BBOX_ROUND_TO > 0:
             step = self.DYN_BBOX_ROUND_TO
             pre_round = (median_top, median_right, median_bottom, median_left)
-            median_top = math.floor(median_top / step) * step
-            median_right = math.floor(median_right / step) * step
-            median_bottom = math.floor(median_bottom / step) * step
-            median_left = math.floor(median_left / step) * step
+            median_top = math.ceil(median_top / step) * step
+            median_right = math.ceil(median_right / step) * step
+            median_bottom = math.ceil(median_bottom / step) * step
+            median_left = math.ceil(median_left / step) * step
             print(f"calc_dynamic_multiplier_from_image_dims: after rounding (step={step}) pre={[round(v,3) for v in pre_round]} post=[{median_top}, {median_right}, {median_bottom}, {median_left}]")
 
         # Apply MIN_DYN_BBOX_DIM floor

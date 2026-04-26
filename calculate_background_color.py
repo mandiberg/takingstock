@@ -58,9 +58,9 @@ SHOULDER_THRESH=.75
 # HelperTable_name = "SegmentHelperApril12_2x2x33x27"
 
 # for fingerpoint
-HelperTable_name = "SegmentHelperObject_86_dumbbell"
+HelperTable_name = "SegmentHelper_T11_Oct20_COCO_Custom"
 # MM controlling which folder to use
-IS_SSD = True
+IS_SSD = False
 SSD_PATH = "/Volumes/OWC52/segment_images_86_dumbbell"
 
 io = DataIO(IS_SSD, VERBOSE, SSD_PATH)

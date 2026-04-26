@@ -41,7 +41,12 @@ sorter = TSPSorterTwoPhase(
 
 title = 'Please choose your operation: '
 options = ['sequence and save CSV', 'assemble images from CSV']
-option, MODE = pick(options, title)
+if '--0' in sys.argv:
+    option, MODE = options[0], 0
+elif '--1' in sys.argv:
+    option, MODE = options[1], 1
+else:
+    option, MODE = pick(options, title)
 
 # keep this live, even if not SSD
 # SegmentTable_name = 'SegmentOct20'
@@ -2863,7 +2868,7 @@ def main():
             pose_type = POSE_CROP_DICT.get(cluster_no, 1)
             sort.image_edge_multiplier = MULTIPLIER_LIST[POSE_CROP_DICT[cluster_no]]
             if VERBOSE: print(f"using pose {cluster_no} getting POSE_CROP_DICT value {pose_type} for image_edge_multiplier", sort.image_edge_multiplier)
-        elif cluster_no is not None and crop_dict_index is not None:
+        elif cluster_no is not None and crop_dict_index is not None and USE_FUSION_PAIR_DICT:
             print("using cluster_no to set image_edge_multiplier", cluster_no)
             # for ArmsPoses etc
             print("crop_dict_index", crop_dict_index)
