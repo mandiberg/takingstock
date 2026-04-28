@@ -92,8 +92,8 @@ THIS_CLASS_ID = 0 # for object bbox normalization
 KEYWORDS = [THIS_CLASS_ID] 
 class_token = ID_SEGMENT_DICT.get(THIS_CLASS_ID, None)
 if class_token: HELPER_TABLE = f'SegmentHelperObject_{class_token}' 
-else: HELPER_TABLE = 'SegmentHelper_T11_Oct20_COCO_Custom_evens_quarters'
-# else: HELPER_TABLE = 'SegmentHelper_T4_occupation'
+# else: HELPER_TABLE = 'SegmentHelper_T11_Oct20_COCO_Custom_evens_quarters'
+else: HELPER_TABLE = 'SegmentBig_isface'
 
 
 print(f"Running with MODE: {MODE}, MODE_ID: {MODE_ID}, CLUSTER_TYPE: {CLUSTER_TYPE}, CLUSTER_COUNT: {CLUSTER_COUNT}, HELPER_TABLE: {HELPER_TABLE}, OBJECT_HSV_EXPORT_CLASS_IDS: {OBJECT_HSV_EXPORT_CLASS_IDS}, ARMS_OBJECT_FOCUS_CLUSTER_IDS: {ARMS_OBJECT_FOCUS_CLUSTER_IDS}, ARMS_CLUSTER_COUNT: {ARMS_CLUSTER_COUNT}, OBJECTFUSION_CLUSTER_COUNT: {OBJECTFUSION_CLUSTER_COUNT}")

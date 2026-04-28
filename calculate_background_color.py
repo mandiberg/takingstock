@@ -61,7 +61,7 @@ SHOULDER_THRESH=.75
 HelperTable_name = "SegmentHelper_T11_Oct20_COCO_Custom"
 # MM controlling which folder to use
 IS_SSD = False
-SSD_PATH = "/Volumes/OWC52/segment_images_86_dumbbell"
+SSD_PATH = "/Volumes/SSD4_Green/segment_images_detected_63_67"
 
 io = DataIO(IS_SSD, VERBOSE, SSD_PATH)
 db = io.db

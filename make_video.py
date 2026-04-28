@@ -53,15 +53,15 @@ else:
 # SegmentHelper_name = None
 SegmentTable_name = 'SegmentBig_isface'
 # SegmentTable_name = 'SegmentBig_isnotface'
-# SegmentHelper_name = 'SegmentHelper_may2025_4x4faces'
+SegmentHelper_name = 'SegmentHelper_TheOffice'
 # SegmentHelper_name = 'SegmentHelper_T4_occupation'
-SegmentHelper_name = 'SegmentHelper_T11_Oct20_COCO_Custom_evens_quarters'
+# SegmentHelper_name = 'SegmentHelper_T11_Oct20_COCO_Custom_evens_quarters'
 # SegmentHelper_name = 'None' # set below for heft keywords
 # SegmentHelper_name = None
-# SATYAM, this is MM specific
+# this is MM specific
 # for when I'm using files on my SSD vs RAID
-IS_SSD = False
-SSD_PATH = "/Volumes/OWC54/segment_images_T4"
+IS_SSD = True
+SSD_PATH = "/Volumes/OWC54/segment_images"
 
 #IS_MOVE is in move_toSSD_files.py
 
@@ -89,7 +89,7 @@ CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden b
 
 # CSV_FOLDER = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion128_test220K"
 CSV_MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/"
-CSV_RUN_FOLDER = "SegmentHelper_T11_Oct20_COCO_Custom_evens_quarters/build1" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
+CSV_RUN_FOLDER = "SegmentHelper_TheOffice/tsp_apr27" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
 CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, CSV_RUN_FOLDER)
 
 
@@ -268,7 +268,7 @@ elif "3D" in CURRENT_MODE:
 elif CURRENT_MODE == 'heft_torso_keywords':
 
     # TEMPORARY
-    TRUST_FACE_PAIR_CACHE = False
+    TRUST_FACE_PAIR_CACHE = True
 
     # # cludgy hack to get dynamic cropping for testing mar 2026    
     AUTO_EDGE_CROP = True
@@ -313,7 +313,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
             CSV_FOLDER = os.path.join(CSV_FOLDER, f"{class_token}_{class_id}")
     else:
         # doesn't use class_token helper/select
-        SegmentHelper_name = 'SegmentBig_isface' # TK revisit this for prodution run
+        SegmentHelper_name = SegmentHelper_name # TK revisit this for prodution run
         SegmentFolder = None
     if io.IS_TENCH or io.IS_MICHELLE:
         SegmentFolder = io.ROOT
@@ -327,8 +327,8 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     CHOP_FIRST = True # does a first pass chop before whatever sort happens - this is default now
     # this is an override for development purposes. will only make CSVs from these clusters:
     TEMP_FOCUS_CLUSTER_HACK_LIST = []
-    OBJECT_NONE_CLUSTERS = [0] # if MULTIPOLICY these get HSV BG, else these don't run in fusion
-    MULTIPOLICY = True # controls whether it does multi-bucket fusion policy based on cluster size for HSV, clusters, and metabodyposes3D
+    OBJECT_NONE_CLUSTERS = [1] # if MULTIPOLICY these get HSV BG, else these don't run in fusion
+    MULTIPOLICY = False # controls whether it does multi-bucket fusion policy based on cluster size for HSV, clusters, and metabodyposes3D
     CLUSTER_MIN_HSV_BG = 6000
     CLUSTER_MIN_HSV_OBJ = 5000
     OBJ_CLUSTER_COLUMN_MIN_FOR_FUSION_SORT = 1000
@@ -338,7 +338,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     if TESTING:
         # turning all three off to do old style non tsp sort    
         ONE_SHOT = True # take all files, based off the very first sort order.
-        TSP_SORT = False
+        TSP_SORT = True
         CHOP_ITTER_TSP_SORT = False
         if CLUSTER_TYPE == "object_fusion":
             GENERATE_FUSION_PAIRS = False # April 14 changing this for testing
@@ -361,7 +361,8 @@ elif CURRENT_MODE == 'heft_torso_keywords':
         N_HSV = 0 # don't do HSV clusters
 
     PURGING_DUPES = False
-    FORCE_TARGET_COUNT = 90
+    FORCE_TARGET_COUNT = 90 # default for GIF version
+    # FORCE_TARGET_COUNT = 200 # for testing. 
     # if TESTING: IS_HAND_POSE_FUSION = GENERATE_FUSION_PAIRS = False
 
     # get cutoff for this class_id from constants dict
@@ -379,7 +380,6 @@ elif CURRENT_MODE == 'heft_torso_keywords':
         TSP_SORT = CHOP_ITTER_TSP_SORT = False
     else:
         # smaller numbers when using HSV clusters
-        # APRIL 6 TK TEMP 10% CHANGES TO THESE FOR TESTING
         MIN_VIDEO_FUSION_COUNT = 200 # this is the cut off for the CSV fusion pairs
         if TSP_SORT: MIN_CYCLE_COUNT = FORCE_TARGET_COUNT
         else: MIN_CYCLE_COUNT = 150 # this is the cut off for the SQL query results
@@ -404,7 +404,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
 
     USE_PAINTED = True
     INPAINT= True
-    INPAINT_COLOR = "black" # "white" or "black" or None (none means generative inpainting with size limits)
+    INPAINT_COLOR = "white" # "white" or "black" or None (none means generative inpainting with size limits)
 
     # when doing IS_HAND_POSE_FUSION code currently only supports one topic at a time
     IS_ONE_TOPIC = True
@@ -2642,22 +2642,40 @@ def main():
         print(f"populate_image_dims: starting pre-pass for {total_rows} rows")
         ws, hs, fhs, nose_xs, nose_ys = [], [], [], [], []
         for idx, (_, row) in enumerate(df_segment.iterrows()):
+            print("row columns:", row.index.tolist())
             image_id = row.get('image_id', '?')
             try:
-                sort.this_nose_bridge_dist = None
-                if IS_SSD and SegmentFolder is not None:
-                    open_path = os.path.join(SegmentFolder, os.path.basename(io.folder_list[row['site_name_id']]), row['imagename'])
+                if io.IS_TENCH:
+                    sort.this_nose_bridge_dist = None
+                    if IS_SSD and SegmentFolder is not None:
+                        open_path = os.path.join(SegmentFolder, os.path.basename(io.folder_list[row['site_name_id']]), row['imagename'])
+                    else:
+                        open_path = os.path.join(io.folder_list[row['site_name_id']], row['imagename'])
+                    print(f"populate_image_dims [{idx+1}/{total_rows}] image_id={image_id} path={open_path}")
+                    img = cv2.imread(open_path)
+                    if img is None:
+                        raise ValueError(f"cv2.imread returned None for {open_path}")
+                    h, w = img.shape[:2]
+                    print(f"populate_image_dims [{idx+1}/{total_rows}] image shape h={h} w={w}")
+                    sort.get_image_face_data(img, row['face_landmarks'], row['bbox'])
+                    fh = sort.face_height
+                    nx, ny = sort.nose_2d[0], sort.nose_2d[1]
                 else:
-                    open_path = os.path.join(io.folder_list[row['site_name_id']], row['imagename'])
-                print(f"populate_image_dims [{idx+1}/{total_rows}] image_id={image_id} path={open_path}")
-                img = cv2.imread(open_path)
-                if img is None:
-                    raise ValueError(f"cv2.imread returned None for {open_path}")
-                h, w = img.shape[:2]
-                print(f"populate_image_dims [{idx+1}/{total_rows}] image shape h={h} w={w}")
-                sort.get_image_face_data(img, row['face_landmarks'], row['bbox'])
-                fh = sort.face_height
-                nx, ny = sort.nose_2d[0], sort.nose_2d[1]
+                    # I need to get the data from the db directly
+                    # query MySQL for images.h, images.w, encodings.face_height, encodings.nose_pixel_x, encodings.nose_pixel_y
+                    sql = text(
+                        """
+                        SELECT images.w, images.h, encodings.face_height, encodings.nose_pixel_x, encodings.nose_pixel_y
+                        FROM images
+                        JOIN encodings ON images.image_id = encodings.image_id
+                        WHERE images.image_id = :image_id
+                        """
+                    )
+                    result = session.execute(sql, {"image_id": image_id}).fetchone()
+                    if result is None:
+                        raise ValueError(f"No database record found for image_id {image_id}")
+                    w, h, fh, nx, ny = result
+
                 print(f"populate_image_dims [{idx+1}/{total_rows}] face_height={fh:.2f}  nose=({nx:.1f},{ny:.1f})  above={ny:.0f}px  below={h-ny:.0f}px  left={nx:.0f}px  right={w-nx:.0f}px")
                 ws.append(w)
                 hs.append(h)
@@ -2679,7 +2697,8 @@ def main():
         df_segment['face_height_px'] = fhs
         df_segment['nose_x_px'] = nose_xs
         df_segment['nose_y_px'] = nose_ys
-        return df_segment
+        return df_segment, n_ok
+    
     def build_route_counts_from_fusion_matrix(folder_path):
         matrix_path = os.path.join(folder_path, "ArmsPoses3D_all.csv")
         if not os.path.exists(matrix_path):
@@ -2886,8 +2905,11 @@ def main():
             print("dynamic image_edge_multiplier called here")
             if sort.DYN_BBOX_FROM_IMAGE_DIMS:
                 print("DYN_BBOX_FROM_IMAGE_DIMS enabled: computing multiplier from image pixel dimensions")
-                df_segment = populate_image_dims(df_segment)
-                sort.image_edge_multiplier = sort.calc_dynamic_multiplier_from_image_dims(df_segment, 0)
+                df_segment, n_ok = populate_image_dims(df_segment)
+                if n_ok > 10:
+                    sort.image_edge_multiplier = sort.calc_dynamic_multiplier_from_image_dims(df_segment, 0)
+                else:
+                    print(f"Not enough valid image dimensions ({n_ok}) to compute dynamic multiplier; using default {sort.image_edge_multiplier}")
             else:
                 sort.image_edge_multiplier = sort.calc_dynamic_multiplier_from_min_max_body_landmarks(df_segment, 0)
         # reset face_height_output for each round, in case it gets redefined inside loop

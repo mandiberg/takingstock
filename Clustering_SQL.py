@@ -1,5 +1,6 @@
 #sklearn imports
 import gc
+import sys
 from sklearn.decomposition import PCA #Principal Component Analysis
 from sklearn.cluster import KMeans #K-Means Clustering
 from sklearn.metrics import silhouette_score
@@ -46,7 +47,7 @@ EXPAND = False
 ONE_SHOT = False # take all files, based off the very first sort order.
 JUMP_SHOT = False # jump to random file if can't find a run
 
-LIMIT = 10000000
+LIMIT = 100000000
 BATCH_LIMIT = 10000
 
 # number of clusters produced. run GET_OPTIMAL_CLUSTERS and add that number here
@@ -78,7 +79,13 @@ db = io.db
 NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 title = 'Please choose your operation: '
 options = ['kmeans cluster and save clusters', 'cluster assignment', 'calculate cluster medians, cluster_dist and save clusters', 'make meta clusters']
-option, MODE = pick(options, title)
+if '--0' in sys.argv:
+    option, MODE = options[0], 0
+elif '--1' in sys.argv:
+    option, MODE = options[1], 1
+else:
+    option, MODE = pick(options, title)
+
 # MODE = 1
 # CLUSTER_TYPE = "Clusters"
 # CLUSTER_TYPE = "BodyPoses"
@@ -139,7 +146,7 @@ SegmentTable_name = 'SegmentBig_isface'
 # SegmentHelper_name = 'Detections' # if CLUSTER_TYPE = "ObjectFusion", it automatically joins to Detections
 # SegmentHelper_name = 'SegmentHelper_T11_Oct20_COCO_Custom_every40'
 # SegmentHelper_name = 'SegmentHelper_T4_T11_T37_T40'
-SegmentHelper_name = 'SegmentHelper_T11_Oct20_COCO_Custom_evens_quarters'
+SegmentHelper_name = 'SegmentHelper_T11_Oct20_COCO_Custom'
 FORCE_HAND_LANDMARKS = False # when doing ArmsPoses3D, default is True, so mongo_hand_landmarks = 1
 
 # TESTING MODE - reduce dataset size for faster iteration using pre-filtered table

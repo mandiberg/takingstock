@@ -36,17 +36,17 @@ sys.path.insert(1, ROOT_GITHUB)
 # import file
 
 from mp_db_io import DataIO
-IS_SSD = False  # if True it will use the SSD path, if False it will use the RAID path
+IS_SSD =False  # if True it will use the SSD path, if False it will use the RAID path
 
 # Define the path to the CSV file
 # csv_file = '/Users/michaelmandiberg/Documents/projects-active/facemap_production/test_orig/df_sorted_0_ct9422.csv'
 
-VERBOSE = False
+VERBOSE = False  
 # set origin before constructing io
 # ORIGIN_SSD = "/Volumes/SSD4_Green/segment_images_detected_63_67"
-# ORIGIN_SSD = "/Volumes/OWC54/segment_images_40xDetections"
-# ORIGIN_SSD = "/Volumes/OWC52/segment_images_80_sign"
-ORIGIN_SSD = "/Volumes/OWC5/segment_images_90_stethoscope"
+ORIGIN_SSD = "/Volumes/OWC54/segment_images_T4"
+# ORIGIN_SSD = "/Volumes/OWC5/segment_images_92_headphones"
+ORIGIN_SSD = "/Volumes/SSD4_Green/segment_images_detected_63_67"
 # ORIGIN_SSD = "/Volumes/LaCie/segment_images_94_piggybank"
 io = DataIO(IS_SSD, VERBOSE, ORIGIN_SSD)
 
@@ -63,8 +63,8 @@ if FROM_SSD_TO_SSD == False: MOVE_ORIGINAL_FILE = False  # FORCE only allow movi
 ORIGIN = "segment_images_COCO" # if USE_RAW_PATHS this needs to be path to segment_images/images_*
 # DEST = os.path.join(io.ROOT_DBx, "NMLdeshard")
 # DEST = "/Volumes/RAID18" 
-DEST = "/Volumes/OWC54/segment_images_T4"   # 
-# DEST = "/Volumes/LaCie/focus_clusters/segment_images_103_peony"  # 250k for headphones
+# DEST = "/Volumes/OWC54/segment_images"  
+DEST = "/Volumes/SSD4_Green/segment_images_detected_63_67"  # 250k for headphones
 # DEST = "/Volumes/SSD4_Green/segment_images_67_phone_undetected"  # for testing
 if IS_TEST:
     # to run a smaller test, put a few files in the test folder

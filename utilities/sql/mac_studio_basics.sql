@@ -6,9 +6,11 @@ SET GLOBAL innodb_buffer_pool_size=8053063680;
 
 
 DELETE FROM ImagesObjectFusion ;
-
-
 DELETE FROM ObjectFusion ;
+
+
+DELETE FROM ImagesObjectSignatures ;
+DELETE FROM ObjectSignatures ;
 
 
 SELECT COUNT(sh.image_id)

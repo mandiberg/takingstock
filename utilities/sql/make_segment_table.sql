@@ -12,7 +12,7 @@ DROP TABLE SegmentHelperObject_book ;
 DELETE FROM SegmentHelper_sept2025_heft_keywords;
 
 -- create helper segment table
-CREATE TABLE SegmentHelper_TheOffice (
+CREATE TABLE SegmentHelper_april26_deleteme_bboxnorm_done (
     seg_image_id int NOT NULL AUTO_INCREMENT PRIMARY KEY,
     image_id INTEGER,
     FOREIGN KEY (image_id) REFERENCES Images(image_id)
@@ -343,6 +343,7 @@ FROM SegmentBig_isface e
 JOIN ImagesTopics it ON it.image_id = e.image_id
 JOIN ImagesKeywords ik ON ik.image_id = e.image_id
 JOIN Keywords k ON k.keyword_id = ik.keyword_id 
+GROUP BY ik.keyword_id 
 ;
 -- 75467375
 -- with join 55418764
