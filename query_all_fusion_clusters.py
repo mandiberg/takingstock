@@ -37,10 +37,6 @@ OBJECT_HSV_EXPORT_CLASS_IDS = []
 ARMS_OBJECT_FOCUS_CLUSTER_IDS = []
 ARMS_CLUSTER_COUNT = 768
 OBJECTFUSION_CLUSTER_COUNT = None
-SIGNATURE_MIN = 200
-
-SIGNATURE_CLUSTER_MAP_DF = None
-SIGNATURE_CLUSTER_METADATA = {}
 
 HACK_LIST_SKIP_DETECTIONS = []
 MODE = "ObjectSignatures" # Topics or Keywords or ObjectFusion_DetectionsOnly or ArmsPoses3D or ObjectSignatures to 
@@ -92,8 +88,8 @@ THIS_CLASS_ID = 0 # for object bbox normalization
 KEYWORDS = [THIS_CLASS_ID] 
 class_token = ID_SEGMENT_DICT.get(THIS_CLASS_ID, None)
 if class_token: HELPER_TABLE = f'SegmentHelperObject_{class_token}' 
-# else: HELPER_TABLE = 'SegmentHelper_T11_Oct20_COCO_Custom_evens_quarters'
-else: HELPER_TABLE = 'SegmentBig_isface'
+else: HELPER_TABLE = 'SegmentHelper_TheOffice'
+# else: HELPER_TABLE = 'SegmentBig_isface'
 
 
 print(f"Running with MODE: {MODE}, MODE_ID: {MODE_ID}, CLUSTER_TYPE: {CLUSTER_TYPE}, CLUSTER_COUNT: {CLUSTER_COUNT}, HELPER_TABLE: {HELPER_TABLE}, OBJECT_HSV_EXPORT_CLASS_IDS: {OBJECT_HSV_EXPORT_CLASS_IDS}, ARMS_OBJECT_FOCUS_CLUSTER_IDS: {ARMS_OBJECT_FOCUS_CLUSTER_IDS}, ARMS_CLUSTER_COUNT: {ARMS_CLUSTER_COUNT}, OBJECTFUSION_CLUSTER_COUNT: {OBJECTFUSION_CLUSTER_COUNT}")
@@ -113,54 +109,6 @@ def resolve_dense_cluster_count(table_name, id_column="cluster_id"):
     return int(result.iloc[0]["dense_cluster_count"])
 
 
-def resolve_signature_cluster_map(helper_table, object_cluster_table_name, signature_min=0):
-    focus_where = ""
-    focus_join = ""
-    if ARMS_OBJECT_FOCUS_CLUSTER_IDS:
-        focus_join = " JOIN ImagesArmsPoses3D ia ON ia.image_id = io.image_id "
-        focus_where = f" AND ia.cluster_id IN ({_in_sql_list(ARMS_OBJECT_FOCUS_CLUSTER_IDS)}) "
-
-    counts_query = f"""
-    SELECT
-        io.cluster_id AS old_cluster_id,
-        COUNT(DISTINCT io.image_id) AS image_count
-    FROM {object_cluster_table_name} io
-    JOIN {helper_table} sh ON sh.image_id = io.image_id
-    {focus_join}
-    WHERE io.cluster_id IS NOT NULL
-      {focus_where}
-    GROUP BY io.cluster_id
-    ORDER BY io.cluster_id
-    """
-    df_counts = pd.read_sql(counts_query, engine)
-    if df_counts.empty:
-        return df_counts, {
-            "signature_min": int(signature_min),
-            "original_nonempty_cluster_count": 0,
-            "kept_cluster_count": 0,
-            "dropped_cluster_count": 0,
-        }
-
-    df_counts["old_cluster_id"] = df_counts["old_cluster_id"].astype(int)
-    df_counts["image_count"] = df_counts["image_count"].astype(int)
-
-    if signature_min and signature_min > 0:
-        df_kept = df_counts[df_counts["image_count"] >= int(signature_min)].copy()
-    else:
-        df_kept = df_counts.copy()
-
-    df_kept = df_kept.sort_values("old_cluster_id").reset_index(drop=True)
-    df_kept["new_cluster_id"] = range(len(df_kept))
-
-    metadata = {
-        "signature_min": int(signature_min),
-        "original_nonempty_cluster_count": int(len(df_counts)),
-        "kept_cluster_count": int(len(df_kept)),
-        "dropped_cluster_count": int(len(df_counts) - len(df_kept)),
-    }
-    return df_kept, metadata
-
-
 def resolve_object_cluster_table_name(mode, cluster_type):
     if cluster_type == "ArmsPoses3D_ObjectFusion" and mode == "ObjectSignatures":
         return "ImagesObjectSignatures"
@@ -171,15 +119,7 @@ def resolve_object_cluster_table_name(mode, cluster_type):
 
 if CLUSTER_TYPE == "ArmsPoses3D_ObjectFusion":
     object_cluster_table_name = resolve_object_cluster_table_name(MODE, CLUSTER_TYPE)
-    if MODE == "ObjectSignatures":
-        SIGNATURE_CLUSTER_MAP_DF, SIGNATURE_CLUSTER_METADATA = resolve_signature_cluster_map(
-            HELPER_TABLE,
-            object_cluster_table_name,
-            signature_min=SIGNATURE_MIN,
-        )
-        OBJECTFUSION_CLUSTER_COUNT = int(len(SIGNATURE_CLUSTER_MAP_DF))
-    else:
-        OBJECTFUSION_CLUSTER_COUNT = resolve_dense_cluster_count(object_cluster_table_name)
+    OBJECTFUSION_CLUSTER_COUNT = resolve_dense_cluster_count(object_cluster_table_name)
     CLUSTER_DATA[CLUSTER_TYPE]["object_cluster_table_name"] = object_cluster_table_name
     CLUSTER_DATA[CLUSTER_TYPE]["folder_name"] = (
         f"heft_ArmsPoses3D_{ARMS_CLUSTER_COUNT}_ObjectFusion_{OBJECTFUSION_CLUSTER_COUNT}"
@@ -825,8 +765,6 @@ def export_armsposes3d_objectfusion_csvs(
     row_cluster_count=768,
     col_cluster_count=768,
     object_cluster_table_name="ImagesObjectFusion",
-    signature_cluster_map_df=None,
-    signature_min=None,
 ):
     """
     Export a helper-scoped ArmsPoses3D x ObjectFusion count matrix.
@@ -841,18 +779,6 @@ def export_armsposes3d_objectfusion_csvs(
     if ARMS_OBJECT_FOCUS_CLUSTER_IDS:
         focus_where = f" AND ia.cluster_id IN ({_in_sql_list(ARMS_OBJECT_FOCUS_CLUSTER_IDS)}) "
 
-    map_file_name = None
-    signature_where = ""
-    cluster_remap = None
-    if signature_cluster_map_df is not None and not signature_cluster_map_df.empty:
-        cluster_remap = signature_cluster_map_df[["old_cluster_id", "new_cluster_id"]].copy()
-        kept_cluster_ids = cluster_remap["old_cluster_id"].astype(int).tolist()
-        signature_where = f" AND io.cluster_id IN ({_in_sql_list(kept_cluster_ids)}) "
-        map_file_name = f"object_signature_cluster_map_min{int(signature_min)}.csv"
-        map_file_path = os.path.join(root_folder_path, map_file_name)
-        signature_cluster_map_df.to_csv(map_file_path, index=False)
-        print(f"Saved signature cluster map: {map_file_path}")
-
     print("Running ArmsPoses3D/ObjectFusion matrix query (class-agnostic)...")
     matrix_query = f"""
     SELECT
@@ -864,7 +790,6 @@ def export_armsposes3d_objectfusion_csvs(
     JOIN {helper_table} sh ON sh.image_id = ia.image_id
     WHERE 1=1
       {focus_where}
-            {signature_where}
     GROUP BY ia.cluster_id, io.cluster_id
     ORDER BY ia.cluster_id, io.cluster_id
     """
@@ -876,11 +801,6 @@ def export_armsposes3d_objectfusion_csvs(
         matrix.index.name = "arms_cluster_id"
         matrix.columns.name = "object_cluster_id"
     else:
-        if cluster_remap is not None:
-            df_long["object_cluster_id"] = df_long["object_cluster_id"].astype(int)
-            df_long = df_long.merge(cluster_remap, how="inner", left_on="object_cluster_id", right_on="old_cluster_id")
-            df_long["object_cluster_id"] = df_long["new_cluster_id"].astype(int)
-
         matrix = df_long.pivot_table(
             index="arms_cluster_id",
             columns="object_cluster_id",
@@ -909,9 +829,7 @@ def export_armsposes3d_objectfusion_csvs(
         manifest_metadata={
             "helper_table": helper_table,
             "object_cluster_table_name": object_cluster_table_name,
-            "signature_min": signature_min,
             "kept_cluster_count": col_cluster_count,
-            "cluster_map_file": map_file_name,
         },
     )
 
@@ -1021,8 +939,6 @@ if CLUSTER_TYPE == "ArmsPoses3D_ObjectFusion":
         row_cluster_count=ARMS_CLUSTER_COUNT,
         col_cluster_count=OBJECTFUSION_CLUSTER_COUNT,
         object_cluster_table_name=CLUSTER_DATA[CLUSTER_TYPE]["object_cluster_table_name"],
-        signature_cluster_map_df=SIGNATURE_CLUSTER_MAP_DF,
-        signature_min=SIGNATURE_MIN if MODE == "ObjectSignatures" else None,
     )
     session.close()
     sys.exit(0)

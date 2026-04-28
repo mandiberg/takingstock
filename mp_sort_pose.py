@@ -108,7 +108,7 @@ class SortPose:
         self.BRUTEFORCE = False
         self.LMS_DIMENSIONS = LMS_DIMENSIONS
         if self.VERBOSE: print("init LMS_DIMENSIONS",self.LMS_DIMENSIONS)
-        self.CUTOFF = 80 # DOES factor if ONE_SHOT
+        self.CUTOFF = 3000 # DOES factor if ONE_SHOT and TSP_SORT
         self.ORIGIN = 0
         self.this_nose_bridge_dist = self.NOSE_BRIDGE_DIST = None # to be set in first loop, and sort.this_nose_bridge_dist each time
         self.USE_HEAD_POSE = USE_HEAD_POSE
@@ -264,8 +264,6 @@ class SortPose:
         self.face_pair_result_cache = {}
         self.face_pair_cache_engine = None
         self.trust_face_pair_cache = True  # set False to force re-test, ignoring cached results
-        self.object_signature_new_to_old_map = None
-        self.object_signature_map_source_path = None
         self.reset_face_pair_stats()
         # for testing shoulders for image background
         self.SHOULDER_THRESH = 0.75
@@ -422,59 +420,6 @@ class SortPose:
             self.MAXMOUTHGAP = 1000
             self.SORT = 'face_x'
             self.ROUND = 1
-
-    def load_object_signature_new_to_old_map_once(self, fusion_folder, manifest_file="fusion_manifest.json"):
-        if not fusion_folder:
-            raise ValueError("fusion_folder is required to load object signature cluster map")
-
-        fusion_folder_abs = fusion_folder
-        if not os.path.isabs(fusion_folder_abs):
-            fusion_folder_abs = os.path.join(os.getcwd(), fusion_folder_abs)
-
-        manifest_path = os.path.join(fusion_folder_abs, manifest_file)
-        if not os.path.exists(manifest_path):
-            raise FileNotFoundError(f"Missing fusion manifest for signature map lookup: {manifest_path}")
-
-        # Reuse cached map when the source manifest has not changed.
-        if (
-            self.object_signature_new_to_old_map is not None
-            and self.object_signature_map_source_path is not None
-            and os.path.samefile(
-                os.path.dirname(self.object_signature_map_source_path),
-                os.path.dirname(manifest_path),
-            )
-        ):
-            return self.object_signature_new_to_old_map
-
-        with open(manifest_path, "r", encoding="utf-8") as f:
-            manifest = json.load(f)
-
-        map_file_name = manifest.get("export_options", {}).get("cluster_map_file")
-        if not map_file_name:
-            raise ValueError(
-                f"Manifest {manifest_path} missing export_options.cluster_map_file; cannot map new->old cluster ids"
-            )
-
-        map_path = os.path.join(fusion_folder_abs, map_file_name)
-        if not os.path.exists(map_path):
-            raise FileNotFoundError(f"Missing signature cluster map file: {map_path}")
-
-        map_df = pd.read_csv(map_path)
-        required_cols = {"old_cluster_id", "new_cluster_id"}
-        if not required_cols.issubset(set(map_df.columns)):
-            raise ValueError(
-                f"Invalid signature cluster map file {map_path}; expected columns {sorted(required_cols)}"
-            )
-
-        self.object_signature_new_to_old_map = {
-            int(new_id): int(old_id)
-            for old_id, new_id in zip(map_df["old_cluster_id"], map_df["new_cluster_id"])
-        }
-        self.object_signature_map_source_path = map_path
-        print(
-            f"Loaded object signature remap ({len(self.object_signature_new_to_old_map)} ids) from {self.object_signature_map_source_path}"
-        )
-        return self.object_signature_new_to_old_map
 
     def get_sort_column_mapping(self, SORT_TYPE, CLUSTER1=None):
         """

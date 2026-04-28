@@ -98,7 +98,6 @@ def resolve_arms_object_fusion_folder(
     arms_cluster_dim,
     expected_mode=None,
     expected_cluster_type="ArmsPoses3D_ObjectFusion",
-    expected_signature_min=None,
 ):
     pattern = os.path.join(
         root_data_path,
@@ -127,19 +126,12 @@ def resolve_arms_object_fusion_folder(
             continue
         if expected_cluster_type is not None and manifest.get("cluster_type") != expected_cluster_type:
             continue
-        if expected_signature_min is not None:
-            manifest_signature_min = (
-                manifest.get("export_options", {}).get("signature_min")
-            )
-            if manifest_signature_min != expected_signature_min:
-                continue
         matching_manifests.append((manifest_path, manifest))
 
     if not matching_manifests:
         raise FileNotFoundError(
             "No fusion manifest matched the requested metadata: "
-            f"mode={expected_mode}, cluster_type={expected_cluster_type}, "
-            f"signature_min={expected_signature_min}."
+            f"mode={expected_mode}, cluster_type={expected_cluster_type}."
         )
 
     if len(matching_manifests) > 1:
@@ -361,8 +353,9 @@ elif CURRENT_MODE == 'heft_torso_keywords':
         N_HSV = 0 # don't do HSV clusters
 
     PURGING_DUPES = False
-    FORCE_TARGET_COUNT = 90 # default for GIF version
-    # FORCE_TARGET_COUNT = 200 # for testing. 
+    # FORCE_TARGET_COUNT = 90 # default for GIF version
+    FORCE_TARGET_COUNT = 200 # for testing. 
+    TSP_NOLIMITS = True # if True, it will not apply the FORCE_TARGET_COUNT cutoff to the TSP sort, which means it will sort on all files. If False, it will apply the cutoff, which means it will only sort on the top FORCE_TARGET_COUNT files. This is for testing whether the TSP sort is working on all files or just the top ones.
     # if TESTING: IS_HAND_POSE_FUSION = GENERATE_FUSION_PAIRS = False
 
     # get cutoff for this class_id from constants dict
@@ -438,7 +431,6 @@ elif CURRENT_MODE == 'heft_torso_keywords':
 
     ARMS_CLUSTER_DIM = 768
     OBJECT_CLUSTER_DIM = None
-    OBJECT_SIGNATURE_MIN = 200
 
     if CLUSTER_TYPE == "object_fusion":
         folder = "objectfusion_object_hsv"
@@ -448,7 +440,6 @@ elif CURRENT_MODE == 'heft_torso_keywords':
             ARMS_CLUSTER_DIM,
             expected_mode="ObjectSignatures",
             expected_cluster_type=CLUSTER_TYPE,
-            expected_signature_min=OBJECT_SIGNATURE_MIN,
         )
     elif META: folder = "heft_keyword_fusion_clusters_hsv_meta"
     else: folder = "heft_clusters_ArmsPoses3D_768/"
@@ -1269,21 +1260,6 @@ if not io.IS_TENCH:
                         return []
 
                     object_cluster_sql_id = requested_object_cluster_id
-                    if CLUSTER_TYPE == "ArmsPoses3D_ObjectFusion":
-                        cluster_map_new_to_old = sort.load_object_signature_new_to_old_map_once(
-                            FUSION_FOLDER,
-                            manifest_file=FUSION_MANIFEST_FILE,
-                        )
-                        if requested_object_cluster_id not in cluster_map_new_to_old:
-                            print(
-                                f"requested object cluster {requested_object_cluster_id} not present in signature remap; skipping pair"
-                            )
-                            return []
-                        object_cluster_sql_id = cluster_map_new_to_old[requested_object_cluster_id]
-                        print(
-                            f"translated object cluster new_id={requested_object_cluster_id} -> old_id={object_cluster_sql_id} for ih.cluster_id SQL filter"
-                        )
-
                     cluster += f" AND ih.cluster_id = {str(object_cluster_sql_id)} "
             else:
                 print("cluster_no is a single value", cluster_no)
@@ -1566,7 +1542,9 @@ def tsp_sort(df_enc):
     df_clean = expand_face_encodings(df_enc)
     df_clean['original_index'] = df_clean.index  # or however they map
     START_IDX = END_IDX = None
-    sorter.set_TSP_sort(df_clean, START_IDX, END_IDX, FORCE_TARGET_COUNT)
+    if TSP_NOLIMITS: force_count = None
+    else: force_count = FORCE_TARGET_COUNT
+    sorter.set_TSP_sort(df_clean, START_IDX, END_IDX, force_count)
     df_sorted_clean = sorter.do_TSP_SORT(df_clean)
 
     # Then map back 
@@ -2013,13 +1991,101 @@ def linear_test_df(df_sorted, itter=None):
 
     sort.reset_face_pair_stats()
 
+    def format_multiplier_for_cache_path(multiplier_values, places=4):
+        def format_one(value):
+            rounded = round(float(value), places)
+            text_value = f"{rounded:.{places}f}".rstrip("0").rstrip(".")
+            if "." not in text_value:
+                text_value += ".0"
+            return text_value
+
+        return '_'.join(format_one(value) for value in multiplier_values)
+
+    def get_row_source_path_value(row):
+        path_fields = ["filepath", "file_path", "image_path", "path", "local_path", "source_path"]
+        for field in path_fields:
+            value = row.get(field, None)
+            if isinstance(value, str):
+                value = value.strip()
+                if value and value.lower() != "nan":
+                    return value
+        return None
+
+    def resolve_source_image_path(row):
+        explicit_path = get_row_source_path_value(row)
+        if explicit_path:
+            if os.path.isabs(explicit_path):
+                return explicit_path
+
+            folder_value = row.get('folder', None)
+            if isinstance(folder_value, str) and folder_value.strip() and folder_value.lower() != "nan":
+                return os.path.join(folder_value, explicit_path)
+            return explicit_path
+
+        # fallback to legacy source path construction
+        if IS_SSD and SegmentFolder is not None:
+            return os.path.join(SegmentFolder, os.path.basename(io.folder_list[row['site_name_id']]), row['imagename'])
+        return os.path.join(io.folder_list[row['site_name_id']], row['imagename'])
+
     def get_cropped_cache_file(row):
-        aspect_ratio = '_'.join(str(v) for v in sort.image_edge_multiplier)
-        folder_root = os.path.dirname(row['folder'])
-        folder_name = os.path.basename(row['folder'])
+        source_path = resolve_source_image_path(row)
+        source_folder = os.path.dirname(source_path) if source_path else None
+        image_name = row.get('imagename', None)
+        if not isinstance(image_name, str) or not image_name.strip() or image_name.lower() == "nan":
+            image_name = os.path.basename(source_path) if source_path else None
+
+        folder_value = row.get('folder', None)
+        if isinstance(folder_value, str) and folder_value.strip() and folder_value.lower() != "nan":
+            base_folder = folder_value
+        elif source_folder:
+            base_folder = source_folder
+        else:
+            return None
+
+        if not image_name:
+            return None
+
+        aspect_ratio = format_multiplier_for_cache_path(sort.image_edge_multiplier)
+        folder_root = os.path.dirname(base_folder)
+        folder_name = os.path.basename(base_folder)
         if INPAINT_COLOR:
-            return os.path.join(folder_root, folder_name+"_cropped_"+INPAINT_COLOR+"_"+aspect_ratio, row['imagename'])
-        return os.path.join(folder_root, folder_name+"_cropped_"+aspect_ratio, row['imagename'])
+            return os.path.join(folder_root, folder_name+"_cropped_"+INPAINT_COLOR+"_"+aspect_ratio, image_name)
+        return os.path.join(folder_root, folder_name+"_cropped_"+aspect_ratio, image_name)
+
+    def validate_cached_cropped(cached_img, current_image_id):
+        """Run pair-test validation for a pre-cropped cache hit without recropping."""
+        if cached_img is None:
+            return None, True
+
+        is_face = None
+        if sort.counter_dict["first_run"] is False and sort.counter_dict["last_image"] is None:
+            print(" ><><>< YIKES, last_image is None ><><>< ")
+
+        try:
+            if sort.counter_dict["first_run"] is False:
+                if VERBOSE:
+                    print("testing is_face for cached cropped image")
+                if SORT_TYPE not in ("planar_body", "body3D"):
+                    is_face = sort.test_or_lookup_face_pair(
+                        sort.counter_dict["last_image"],
+                        cached_img,
+                        current_image_id,
+                    )
+                else:
+                    print("failed is_face test")
+            else:
+                print("first round, skipping the pair test")
+        except Exception:
+            print("last_image try failed")
+
+        if is_face or sort.counter_dict["first_run"]:
+            sort.counter_dict["first_run"] = False
+            sort.counter_dict["good_count"] += 1
+            return cached_img, False
+
+        sort.counter_dict["isnot_face_count"] += 1
+        print("pair do not make a face, skipping <<< is this really true? Isn't this for dupes?")
+        return None, True
 
     def save_image_metas(row):
         print(f'counter dict is {sort.counter_dict}')
@@ -2064,41 +2130,6 @@ def linear_test_df(df_sorted, itter=None):
         # return([image_id, description[0], topic_score])
 
     def in_out_paint(img, row):
-        def validate_cached_cropped(cached_img):
-            """Run pair-test validation for a pre-cropped cache hit without recropping."""
-            if cached_img is None:
-                return None, True
-
-            is_face = None
-            if sort.counter_dict["first_run"] is False and sort.counter_dict["last_image"] is None:
-                print(" ><><>< YIKES, last_image is None ><><>< ")
-
-            try:
-                if sort.counter_dict["first_run"] is False:
-                    if VERBOSE:
-                        print("testing is_face for cached cropped image")
-                    if SORT_TYPE not in ("planar_body", "body3D"):
-                        is_face = sort.test_or_lookup_face_pair(
-                            sort.counter_dict["last_image"],
-                            cached_img,
-                            row['image_id'],
-                        )
-                    else:
-                        print("failed is_face test")
-                else:
-                    print("first round, skipping the pair test")
-            except Exception:
-                print("last_image try failed")
-
-            if is_face or sort.counter_dict["first_run"]:
-                sort.counter_dict["first_run"] = False
-                sort.counter_dict["good_count"] += 1
-                return cached_img, False
-
-            sort.counter_dict["isnot_face_count"] += 1
-            print("pair do not make a face, skipping <<< is this really true? Isn't this for dupes?")
-            return None, True
-
         def check_extension(shape, extension_pixels, threshold):
             key = 0
             for index, (key, value) in enumerate(extension_pixels.items()):
@@ -2119,21 +2150,30 @@ def linear_test_df(df_sorted, itter=None):
         if sort.VERBOSE:print("extension_pixels",extension_pixels)
         # inpaint_file=os.path.join(os.path.join(os.path.dirname(row['folder']), "inpaint", os.path.basename(row['folder'])),row['filename'])
         # aspect_ratio = '_'.join(sort.image_edge_multiplier)
-        aspect_ratio = '_'.join(str(v) for v in sort.image_edge_multiplier)
-        folder_root = os.path.dirname(row['folder'])
-        folder_name = os.path.basename(row['folder'])
-        if INPAINT_COLOR:
-            inpaint_file=os.path.join(folder_root, folder_name+"_inpaint_"+INPAINT_COLOR+"_"+aspect_ratio,row['imagename'])
-            cropped_file=os.path.join(folder_root, folder_name+"_cropped_"+INPAINT_COLOR+"_"+aspect_ratio,row['imagename'])
+        aspect_ratio = format_multiplier_for_cache_path(sort.image_edge_multiplier)
+        source_path = resolve_source_image_path(row)
+        source_image_name = row.get('imagename', None)
+        if not isinstance(source_image_name, str) or not source_image_name.strip() or source_image_name.lower() == "nan":
+            source_image_name = os.path.basename(source_path)
+        folder_value = row.get('folder', None)
+        if isinstance(folder_value, str) and folder_value.strip() and folder_value.lower() != "nan":
+            base_folder = folder_value
         else:
-            inpaint_file=os.path.join(folder_root, folder_name+"_inpaint_"+aspect_ratio,row['imagename'])
-            cropped_file=os.path.join(folder_root, folder_name+"_cropped_"+aspect_ratio,row['imagename'])
+            base_folder = os.path.dirname(source_path)
+        folder_root = os.path.dirname(base_folder)
+        folder_name = os.path.basename(base_folder)
+        if INPAINT_COLOR:
+            inpaint_file=os.path.join(folder_root, folder_name+"_inpaint_"+INPAINT_COLOR+"_"+aspect_ratio,source_image_name)
+            cropped_file=os.path.join(folder_root, folder_name+"_cropped_"+INPAINT_COLOR+"_"+aspect_ratio,source_image_name)
+        else:
+            inpaint_file=os.path.join(folder_root, folder_name+"_inpaint_"+aspect_ratio,source_image_name)
+            cropped_file=os.path.join(folder_root, folder_name+"_cropped_"+aspect_ratio,source_image_name)
         print("inpaint_file", inpaint_file)
         print("cropped_file", cropped_file)
         if USE_PAINTED and os.path.exists(cropped_file):
             if sort.VERBOSE: print("cropped cache exists, loading image",cropped_file)
             cached_cropped_image = cv2.imread(cropped_file)
-            cropped_image, skip_face = validate_cached_cropped(cached_cropped_image)
+            cropped_image, skip_face = validate_cached_cropped(cached_cropped_image, row['image_id'])
             if sort.VERBOSE: print("cropped cache validated", cropped_image is not None)
             return cropped_image, face_diff
         elif USE_PAINTED and os.path.exists(inpaint_file):
@@ -2278,56 +2318,70 @@ def linear_test_df(df_sorted, itter=None):
             # Open the Image
             imgfilename = const_imgfilename_NN(row['image_id'], df_sorted, imgfileprefix)
             outpath = os.path.join(sort.counter_dict["outfolder"],imgfilename)
-            # this handles SSD vs default RAID paths
-            if IS_SSD and SegmentFolder is not None:
-                open_path = os.path.join(SegmentFolder, os.path.basename(io.folder_list[row['site_name_id']]), row['imagename'])
+
+            used_cached_cropped = False
+            skip_face = False
+            face_diff = None
+            img = None
+
+            cropped_cache_file = get_cropped_cache_file(row)
+            if USE_PAINTED and cropped_cache_file and os.path.exists(cropped_cache_file):
+                if sort.VERBOSE:
+                    print("linear_test_df cache hit, loading cropped image", cropped_cache_file)
+                cache_hit_t0 = time.perf_counter()
+                cached_cropped_image = cv2.imread(cropped_cache_file)
+                cropped_image, skip_face = validate_cached_cropped(cached_cropped_image, row['image_id'])
+                cache_hit_elapsed = time.perf_counter() - cache_hit_t0
+                print(f"[timing] cache-hit load+validate {cache_hit_elapsed:.3f}s image_id={row['image_id']}")
+                used_cached_cropped = True
             else:
-                open_path = os.path.join(io.folder_list[row['site_name_id']],row['imagename'])
-            print("open_path", open_path)
-            print("open_path constructed from", io.folder_list[row['site_name_id']],row['folder'],row['imagename'])
-            # print("io.folder_list:",row['site_name_id'],io.folder_list[row['site_name_id']])
+                open_path = resolve_source_image_path(row)
+                print("open_path", open_path)
+                if 'site_name_id' in row and 'folder' in row:
+                    print("open_path constructed from", io.folder_list[row['site_name_id']], row['folder'], row['imagename'])
+
             description = row['description']
-            try:
-                img = cv2.imread(open_path)
-                print("just opened image shape", img.shape)
-                if DRAW_TEST_LMS:
-                    # for testing, draw in points
-                    # list(range(20)
-                    print("about to draw landmarks, subset", sort.SUBSET_LANDMARKS)
-                    landmarks_2d = sort.get_landmarks_2d(row['left_hand_landmarks'], sort.SUBSET_LANDMARKS, "list")
-                    landmarks_2d2 = sort.get_landmarks_2d(row['right_hand_landmarks'], sort.SUBSET_LANDMARKS, "list")
-                    landmarks_2d = landmarks_2d + landmarks_2d2
-                    print("landmarks_2d before drawing", landmarks_2d)
-                    # transpose x and y in the landmarks    
-                    img = sort.draw_point(img, landmarks_2d, index = 0)
-                    # img = sort.draw_point(img, [.25,.25,.5,.5], index = 0)
-                    
-                    # cv2.imshow("img", img)
+            if not used_cached_cropped:
+                try:
+                    img = cv2.imread(open_path)
+                    if img is None:
+                        print(f"failed to open image at {open_path}")
+                        continue
+                    print("just opened image shape", img.shape)
+                    if DRAW_TEST_LMS:
+                        # for testing, draw in points
+                        # list(range(20)
+                        print("about to draw landmarks, subset", sort.SUBSET_LANDMARKS)
+                        landmarks_2d = sort.get_landmarks_2d(row['left_hand_landmarks'], sort.SUBSET_LANDMARKS, "list")
+                        landmarks_2d2 = sort.get_landmarks_2d(row['right_hand_landmarks'], sort.SUBSET_LANDMARKS, "list")
+                        landmarks_2d = landmarks_2d + landmarks_2d2
+                        print("landmarks_2d before drawing", landmarks_2d)
+                        # transpose x and y in the landmarks
+                        img = sort.draw_point(img, landmarks_2d, index = 0)
 
-                    # cv2.waitKey(0)
-                    # cv2.destroyAllWindows()
+                    if row["site_name_id"] in [2,9]:
+                        if VERBOSE: print("shutter alamy trimming at the bottom")
+                        img = sort.trim_bottom(img, row["site_name_id"])
+                except Exception:
+                    print("trim failed")
+                    continue
 
-                if row["site_name_id"] in [2,9]: 
-                    if VERBOSE: print("shutter alamy trimming at the bottom")
-                    img = sort.trim_bottom(img, row["site_name_id"])
-            except:
-                print("trim failed")
-                continue
+                # establish the origin
+                sort.get_image_face_data(img, row['face_landmarks'], row['bbox'])
 
-            # establish the origin
-            sort.get_image_face_data(img, row['face_landmarks'], row['bbox'])
+                # control distance
+                this_dist = row.get('dist', None)
+                if this_dist is not None and this_dist > sort.MAXD:
+                    sort.counter_dict["failed_dist_count"] += 1
+                    print(f"this_dist {this_dist} > MAXD" , str(sort.MAXD))
+                    continue
 
-            # control distance 
-            this_dist = row.get('dist', None)
-            if this_dist is not None and this_dist > sort.MAXD:
-                sort.counter_dict["failed_dist_count"] += 1
-                print(f"this_dist {this_dist} > MAXD" , str(sort.MAXD))
-                continue
-
-            # compare_images to make sure they are face and not the same
-            # last_image is cv2 np.array
-            cropped_image, skip_face = compare_images(sort.counter_dict["last_image"], img, df_sorted, index)
-            print("after compare_images, cropped_image shape:", None if cropped_image is None else cropped_image.shape)
+                # compare_images to make sure they are face and not the same
+                # last_image is cv2 np.array
+                cropped_image, skip_face = compare_images(sort.counter_dict["last_image"], img, df_sorted, index)
+                print("after compare_images, cropped_image shape:", None if cropped_image is None else cropped_image.shape)
+            else:
+                print("used cached cropped image, skipping resize/crop path")
             # deduping is done elsehwere now
             # # test and handle duplicates 
             # if cropped_image is None and skip_face:
@@ -2365,7 +2419,7 @@ def linear_test_df(df_sorted, itter=None):
             if skip_face and not USE_ALL:
                 print("skipping face")
                 continue
-            elif cropped_image is None:
+            elif cropped_image is None and not used_cached_cropped and img is not None:
             # if len(cropped_image)==1 and (OUTPAINT or INPAINT):
                 print("gotta paint that shizzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz")
                 cropped_image, face_diff = in_out_paint(img, row)
@@ -2391,16 +2445,30 @@ def linear_test_df(df_sorted, itter=None):
 
                 # Always persist the final cropped frame to cache for reuse across runs.
                 cropped_cache_file = get_cropped_cache_file(row)
-                cropped_cache_dir = os.path.dirname(cropped_cache_file)
-                if not os.path.exists(cropped_cache_dir):
-                    os.makedirs(cropped_cache_dir)
-                cv2.imwrite(cropped_cache_file, cropped_image)
-                if sort.VERBOSE:
-                    print("saved cropped cache", cropped_cache_file)
+                if cropped_cache_file and not used_cached_cropped:
+                    cropped_cache_dir = os.path.dirname(cropped_cache_file)
+                    if not os.path.exists(cropped_cache_dir):
+                        os.makedirs(cropped_cache_dir)
+                    cache_write_t0 = time.perf_counter()
+                    cv2.imwrite(cropped_cache_file, cropped_image)
+                    cache_write_elapsed = time.perf_counter() - cache_write_t0
+                    print(f"[timing] cache write {cache_write_elapsed:.3f}s path={cropped_cache_file}")
+                    if sort.VERBOSE:
+                        print("saved cropped cache", cropped_cache_file)
+                elif cropped_cache_file and used_cached_cropped:
+                    print(f"[timing] cache-hit skip cache rewrite path={cropped_cache_file}")
+                else:
+                    print("skipping cropped cache save; could not resolve cache path for row")
 
+                output_write_t0 = time.perf_counter()
                 cv2.imwrite(outpath, cropped_image)
+                output_write_elapsed = time.perf_counter() - output_write_t0
+                print(f"[timing] output write {output_write_elapsed:.3f}s path={outpath}")
                 good += 1
+                metas_write_t0 = time.perf_counter()
                 save_image_metas(row)
+                metas_write_elapsed = time.perf_counter() - metas_write_t0
+                print(f"[timing] metas write {metas_write_elapsed:.3f}s image_id={row['image_id']}")
                 sort.counter_dict["start_img_name"] = row['imagename']
                 print("saved: ",outpath)
                 sort.counter_dict["counter"] += 1
@@ -2619,6 +2687,138 @@ def main():
     global FUSION_PAIRS
     global FUSION_PAIR_DICT
     global CURRENT_HSV_CYCLE_META
+
+    canonical_multiplier_registry = {}
+    canonical_multiplier_csv_path = None
+
+    def normalize_cluster_token(value):
+        if value is None:
+            return None
+        if isinstance(value, str):
+            token = value.strip()
+            if not token or token.lower() in ("none", "nan"):
+                return None
+            if token[0] in ("c", "p") and len(token) > 1:
+                token = token[1:]
+            value = token
+        try:
+            return int(float(value))
+        except (TypeError, ValueError):
+            return None
+
+    def should_use_canonical_multiplier_registry():
+        return MODE == 1 and CLUSTER_TYPE == "ArmsPoses3D_ObjectFusion"
+
+    def resolve_canonical_multiplier_csv_path():
+        data_dir = os.path.join(os.getcwd(), "utilities", "data")
+        arms_dim = globals().get("ARMS_CLUSTER_DIM", "unknown")
+        object_dim = globals().get("OBJECT_CLUSTER_DIM", "unknown")
+        if object_dim in (None, ""):
+            object_dim = "unknown"
+        filename = f"canonical_multipliers_ArmsPoses3D_{arms_dim}_ObjectFusion_{object_dim}.csv"
+        return os.path.join(data_dir, filename)
+
+    def write_canonical_multiplier_registry():
+        nonlocal canonical_multiplier_csv_path
+        if canonical_multiplier_csv_path is None:
+            canonical_multiplier_csv_path = resolve_canonical_multiplier_csv_path()
+
+        rows = []
+        for (arms_cluster_id, object_signature_cluster_id), multipliers in sorted(canonical_multiplier_registry.items()):
+            rows.append(
+                {
+                    "arms_cluster_id": int(arms_cluster_id),
+                    "object_signature_cluster_id": int(object_signature_cluster_id),
+                    "mult_top": float(multipliers[0]),
+                    "mult_right": float(multipliers[1]),
+                    "mult_bottom": float(multipliers[2]),
+                    "mult_left": float(multipliers[3]),
+                }
+            )
+
+        os.makedirs(os.path.dirname(canonical_multiplier_csv_path), exist_ok=True)
+        temp_path = canonical_multiplier_csv_path + ".tmp"
+        pd.DataFrame(rows).to_csv(temp_path, index=False)
+        os.replace(temp_path, canonical_multiplier_csv_path)
+        print(
+            f"[canonical multipliers] wrote {len(rows)} rows to {canonical_multiplier_csv_path}"
+        )
+
+    def load_canonical_multiplier_registry_once():
+        nonlocal canonical_multiplier_csv_path
+        if not should_use_canonical_multiplier_registry():
+            return
+
+        canonical_multiplier_csv_path = resolve_canonical_multiplier_csv_path()
+        if not os.path.exists(canonical_multiplier_csv_path):
+            print(
+                f"[canonical multipliers] no existing file, will create: {canonical_multiplier_csv_path}"
+            )
+            return
+
+        try:
+            canonical_df = pd.read_csv(canonical_multiplier_csv_path)
+        except Exception as load_error:
+            print(f"[canonical multipliers] failed to read {canonical_multiplier_csv_path}: {load_error}")
+            return
+
+        loaded_count = 0
+        for _, row in canonical_df.iterrows():
+            arms_cluster_id = normalize_cluster_token(row.get("arms_cluster_id"))
+            object_signature_cluster_id = normalize_cluster_token(row.get("object_signature_cluster_id"))
+            if arms_cluster_id is None or object_signature_cluster_id is None:
+                continue
+
+            multiplier_values = [
+                row.get("mult_top", None),
+                row.get("mult_right", None),
+                row.get("mult_bottom", None),
+                row.get("mult_left", None),
+            ]
+            try:
+                parsed_values = [float(value) for value in multiplier_values]
+            except (TypeError, ValueError):
+                continue
+
+            key = (arms_cluster_id, object_signature_cluster_id)
+            canonical_multiplier_registry[key] = parsed_values
+            loaded_count += 1
+
+        print(
+            f"[canonical multipliers] loaded {loaded_count} rows from {canonical_multiplier_csv_path}"
+        )
+
+    def get_canonical_multiplier(cluster_no, pose_no):
+        if not should_use_canonical_multiplier_registry():
+            return None
+        arms_cluster_id = normalize_cluster_token(cluster_no)
+        object_signature_cluster_id = normalize_cluster_token(pose_no)
+        if arms_cluster_id is None or object_signature_cluster_id is None:
+            return None
+        return canonical_multiplier_registry.get((arms_cluster_id, object_signature_cluster_id))
+
+    def register_canonical_multiplier(cluster_no, pose_no, multiplier_values):
+        if not should_use_canonical_multiplier_registry():
+            return
+        arms_cluster_id = normalize_cluster_token(cluster_no)
+        object_signature_cluster_id = normalize_cluster_token(pose_no)
+        if arms_cluster_id is None or object_signature_cluster_id is None:
+            return
+        if multiplier_values is None or len(multiplier_values) != 4:
+            return
+
+        key = (arms_cluster_id, object_signature_cluster_id)
+        if key in canonical_multiplier_registry:
+            return
+
+        canonical_multiplier_registry[key] = [float(value) for value in multiplier_values]
+        print(
+            "[canonical multipliers] learned new combo "
+            f"arms={arms_cluster_id} object_signature={object_signature_cluster_id} "
+            f"mult={canonical_multiplier_registry[key]}"
+        )
+        write_canonical_multiplier_registry()
+
     def log_fusion_pairs_summary(label, pairs):
         if not isinstance(pairs, list):
             print(f"{label}: {pairs}")
@@ -2881,19 +3081,28 @@ def main():
 
     def set_multiplier_and_dims(df_segment, cluster_no=None, pose_no=None):
         print(f"set_multiplier_and_dims cluster_no: {cluster_no}, pose_no: {pose_no}")
-        if isinstance(cluster_no, str) and cluster_no.startswith('c'):
-            cluster_no = int(cluster_no[1:])
+        cluster_no = normalize_cluster_token(cluster_no)
+        pose_no = normalize_cluster_token(pose_no)
+
+        canonical_multiplier = get_canonical_multiplier(cluster_no, pose_no)
+        if canonical_multiplier is not None:
+            sort.image_edge_multiplier = list(canonical_multiplier)
+            print(
+                "[canonical multipliers] using stored multiplier "
+                f"for arms={cluster_no} object_signature={pose_no}: {sort.image_edge_multiplier}"
+            )
+
         if TOPIC_NO is not None and isinstance(TOPIC_NO, list):
             FOCUS_CLUSTER_HACK_LIST = FOCUS_CLUSTER_DICT.get(CLUSTER1, {}).get(int(math.floor(TOPIC_NO[0])), None)
 
         crop_dict_index = CLUSTER_CROP_DICT.get(CLUSTER1, {}).get(cluster_no, None)
         # if pose_no, overide sort.image_edge_multiplier based on pose_no
-        if pose_no is not None and USE_POSE_CROP_DICT:
+        if canonical_multiplier is None and pose_no is not None and USE_POSE_CROP_DICT:
             print("using pose_no to set image_edge_multiplier", pose_no)
             pose_type = POSE_CROP_DICT.get(cluster_no, 1)
             sort.image_edge_multiplier = MULTIPLIER_LIST[POSE_CROP_DICT[cluster_no]]
             if VERBOSE: print(f"using pose {cluster_no} getting POSE_CROP_DICT value {pose_type} for image_edge_multiplier", sort.image_edge_multiplier)
-        elif cluster_no is not None and crop_dict_index is not None and USE_FUSION_PAIR_DICT:
+        elif canonical_multiplier is None and cluster_no is not None and crop_dict_index is not None and USE_FUSION_PAIR_DICT:
             print("using cluster_no to set image_edge_multiplier", cluster_no)
             # for ArmsPoses etc
             print("crop_dict_index", crop_dict_index)
@@ -2901,7 +3110,7 @@ def main():
             else: print(" ><>< PROBLEM!! no crop_dict_index found for cluster_no ", cluster_no)
             if VERBOSE: print(f"using cluster_no {cluster_no} for image_edge_multiplier", sort.image_edge_multiplier)
 
-        elif image_edge_multiplier is None:
+        elif canonical_multiplier is None and image_edge_multiplier is None:
             print("dynamic image_edge_multiplier called here")
             if sort.DYN_BBOX_FROM_IMAGE_DIMS:
                 print("DYN_BBOX_FROM_IMAGE_DIMS enabled: computing multiplier from image pixel dimensions")
@@ -2912,6 +3121,10 @@ def main():
                     print(f"Not enough valid image dimensions ({n_ok}) to compute dynamic multiplier; using default {sort.image_edge_multiplier}")
             else:
                 sort.image_edge_multiplier = sort.calc_dynamic_multiplier_from_min_max_body_landmarks(df_segment, 0)
+
+        if canonical_multiplier is None:
+            register_canonical_multiplier(cluster_no, pose_no, sort.image_edge_multiplier)
+
         # reset face_height_output for each round, in case it gets redefined inside loop
         sort.face_height_output = face_height_output
         # use image_edge_multiplier to crop for each
@@ -3090,6 +3303,8 @@ def main():
 
 
     def save_images_from_csv_folder():
+
+        load_canonical_multiplier_registry_once()
 
         def recheck_is_dupe_of(session, df):
             '''
