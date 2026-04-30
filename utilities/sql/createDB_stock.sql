@@ -373,3 +373,26 @@ COLLATE=utf8mb4_0900_ai_ci;
 
 
 
+CREATE TABLE IF NOT EXISTS ObjectSignatures (
+cluster_id INT NOT NULL AUTO_INCREMENT,
+slot_signature_hash CHAR(40) NOT NULL,
+slot_signature_token VARCHAR(255) NOT NULL,
+slot_signature_n_objects TINYINT UNSIGNED NOT NULL,
+created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+PRIMARY KEY (cluster_id),
+UNIQUE KEY uq_objectsignatures_hash (slot_signature_hash),
+KEY idx_objectsignatures_nobj (slot_signature_n_objects)
+);
+
+CREATE TABLE IF NOT EXISTS ImagesObjectSignatures (
+image_id BIGINT NOT NULL,
+cluster_id INT NOT NULL,
+created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+PRIMARY KEY (image_id),
+KEY idx_ios_cluster (cluster_id),
+CONSTRAINT fk_ios_cluster
+FOREIGN KEY (cluster_id)
+REFERENCES ObjectSignatures(cluster_id)
+);
+
+

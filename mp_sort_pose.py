@@ -108,16 +108,16 @@ class SortPose:
         self.BRUTEFORCE = False
         self.LMS_DIMENSIONS = LMS_DIMENSIONS
         if self.VERBOSE: print("init LMS_DIMENSIONS",self.LMS_DIMENSIONS)
-        self.CUTOFF = 80 # DOES factor if ONE_SHOT
+        self.CUTOFF = 3000 # DOES factor if ONE_SHOT and TSP_SORT
         self.ORIGIN = 0
         self.this_nose_bridge_dist = self.NOSE_BRIDGE_DIST = None # to be set in first loop, and sort.this_nose_bridge_dist each time
         self.USE_HEAD_POSE = USE_HEAD_POSE
-        self.MIN_DYN_BBOX_DIM = [1.5,1.5,1.5,1.5] # controls how closely AUTO_EDGE_CROP can get
+        self.MIN_DYN_BBOX_DIM = [1.0,1.0,1.0,1.0] # controls how closely AUTO_EDGE_CROP can get
         self.DYN_BBOX_FROM_IMAGE_DIMS = True # if True, use image dimensions to calculate dynamic multiplier rather than body landmarks
-        self.DYN_BBOX_ROUND_TO = 0.5 # round to nearest 0.5 bbox for crop dimensions
-        self.DYN_BBOX_PCT = 40 # percentile for dynamic bbox calculation
+        self.DYN_BBOX_ROUND_TO = 0.25 # round to nearest 0.5 bbox for crop dimensions
+        self.DYN_BBOX_PCT = 50 # percentile for dynamic bbox calculation
         self.DYN_BBOX_ROUND_CANONICAL = True # if True, it will round to canonical ratios
-        self.DYN_BBOX_CANONICAL_RATIOS = [(3,2), (4,3), (5,4), (7,6), (1,1), (6,7), (4,5), (3,4), (2,3), (1,2)] # these are the canonical ratios that dynamic bboxes will round to if DYN_BBOX_ROUND_CANONICAL is True
+        self.DYN_BBOX_CANONICAL_RATIOS = [(2,1),(3,2), (4,3), (5,4), (7,6), (1,1), (6,7), (4,5), (3,4), (2,3), (1,2)] # these are the canonical ratios that dynamic bboxes will round to if DYN_BBOX_ROUND_CANONICAL is True
 
         self.CHECK_DESC_DIST = 30
 
@@ -264,8 +264,6 @@ class SortPose:
         self.face_pair_result_cache = {}
         self.face_pair_cache_engine = None
         self.trust_face_pair_cache = True  # set False to force re-test, ignoring cached results
-        self.object_signature_new_to_old_map = None
-        self.object_signature_map_source_path = None
         self.reset_face_pair_stats()
         # for testing shoulders for image background
         self.SHOULDER_THRESH = 0.75
@@ -422,59 +420,6 @@ class SortPose:
             self.MAXMOUTHGAP = 1000
             self.SORT = 'face_x'
             self.ROUND = 1
-
-    def load_object_signature_new_to_old_map_once(self, fusion_folder, manifest_file="fusion_manifest.json"):
-        if not fusion_folder:
-            raise ValueError("fusion_folder is required to load object signature cluster map")
-
-        fusion_folder_abs = fusion_folder
-        if not os.path.isabs(fusion_folder_abs):
-            fusion_folder_abs = os.path.join(os.getcwd(), fusion_folder_abs)
-
-        manifest_path = os.path.join(fusion_folder_abs, manifest_file)
-        if not os.path.exists(manifest_path):
-            raise FileNotFoundError(f"Missing fusion manifest for signature map lookup: {manifest_path}")
-
-        # Reuse cached map when the source manifest has not changed.
-        if (
-            self.object_signature_new_to_old_map is not None
-            and self.object_signature_map_source_path is not None
-            and os.path.samefile(
-                os.path.dirname(self.object_signature_map_source_path),
-                os.path.dirname(manifest_path),
-            )
-        ):
-            return self.object_signature_new_to_old_map
-
-        with open(manifest_path, "r", encoding="utf-8") as f:
-            manifest = json.load(f)
-
-        map_file_name = manifest.get("export_options", {}).get("cluster_map_file")
-        if not map_file_name:
-            raise ValueError(
-                f"Manifest {manifest_path} missing export_options.cluster_map_file; cannot map new->old cluster ids"
-            )
-
-        map_path = os.path.join(fusion_folder_abs, map_file_name)
-        if not os.path.exists(map_path):
-            raise FileNotFoundError(f"Missing signature cluster map file: {map_path}")
-
-        map_df = pd.read_csv(map_path)
-        required_cols = {"old_cluster_id", "new_cluster_id"}
-        if not required_cols.issubset(set(map_df.columns)):
-            raise ValueError(
-                f"Invalid signature cluster map file {map_path}; expected columns {sorted(required_cols)}"
-            )
-
-        self.object_signature_new_to_old_map = {
-            int(new_id): int(old_id)
-            for old_id, new_id in zip(map_df["old_cluster_id"], map_df["new_cluster_id"])
-        }
-        self.object_signature_map_source_path = map_path
-        print(
-            f"Loaded object signature remap ({len(self.object_signature_new_to_old_map)} ids) from {self.object_signature_map_source_path}"
-        )
-        return self.object_signature_new_to_old_map
 
     def get_sort_column_mapping(self, SORT_TYPE, CLUSTER1=None):
         """
@@ -1943,12 +1888,13 @@ class SortPose:
         # median_right = x_center
 
         if self.DYN_BBOX_ROUND_CANONICAL:
+            # ratio is W / H = (left + right) / (top + bottom)
             # round to the closest ratio in self.DYN_BBOX_CANONICAL_RATIOS
             def closest_canonical(median_top, median_bottom, median_left, median_right, canonical_ratios):
                 closest = None
                 smallest_diff = float('inf')
-                this_ratio = (abs(median_top) + abs(median_bottom)) / (abs(median_left) + abs(median_right)) if (abs(median_left) + abs(median_right)) != 0 else float('inf')
-                for h, w in canonical_ratios:
+                this_ratio =  (abs(median_left) + abs(median_right)) / (abs(median_top) + abs(median_bottom)) if (abs(median_left) + abs(median_right)) != 0 else float('inf')
+                for w, h in canonical_ratios:
                     ratio = w / h if h != 0 else float('inf')
                     diff = abs(this_ratio - ratio)
                     if diff < smallest_diff:
@@ -1957,15 +1903,18 @@ class SortPose:
                 return closest
             
             canonical_ratio = closest_canonical(median_top, median_bottom, median_left, median_right, self.DYN_BBOX_CANONICAL_RATIOS)
+
             if canonical_ratio > 1:
                 # horizontal, round top to step = self.DYN_BBOX_ROUND_TO
+                print(f"before rounding to canonical ratio {canonical_ratio:.3f} → top={median_top}, right={median_right}, bottom={median_bottom}, left={median_left}")
                 median_top = math.ceil(median_top / self.DYN_BBOX_ROUND_TO) * self.DYN_BBOX_ROUND_TO
                 median_bottom = math.ceil(median_bottom / self.DYN_BBOX_ROUND_TO) * self.DYN_BBOX_ROUND_TO
                 # adjust left and right to match the canonical ratio
-                new_height = (median_left + median_right) 
+                new_height = (median_top + median_bottom) 
                 canonical_width = new_height * canonical_ratio
-                median_left = round(canonical_width / 2, 3)
-                median_right = round(canonical_width / 2, 3)
+                # make new median_left based on ratio of left to right
+                median_left = canonical_width * (abs(median_left) / (abs(median_left) + abs(median_right)))
+                median_right = canonical_width - median_left
                 print(f"calc_dynamic_multiplier_from_image_dims: rounded to horizontal canonical ratio {canonical_ratio:.3f} → top={median_top}, right={median_right}, bottom={median_bottom}, left={median_left}") 
 
             else:
@@ -1973,10 +1922,11 @@ class SortPose:
                 median_left = math.ceil(median_left / self.DYN_BBOX_ROUND_TO) * self.DYN_BBOX_ROUND_TO
                 median_right = math.ceil(median_right / self.DYN_BBOX_ROUND_TO) * self.DYN_BBOX_ROUND_TO
                 # adjust top and bottom to match the canonical ratio
-                new_width = (median_top + median_bottom)
+                new_width = (median_left + median_right)
                 canonical_height = new_width / canonical_ratio
-                median_top = round(canonical_height / 2, 3)
-                median_bottom = round(canonical_height / 2, 3)
+                # make new median_left based on ratio of left to right
+                median_top = canonical_height * (abs(median_top) / (abs(median_top) + abs(median_bottom)))
+                median_bottom = canonical_height - median_top
                 print(f"calc_dynamic_multiplier_from_image_dims: rounded to vertical canonical ratio {canonical_ratio:.3f} → top={median_top}, right={median_right}, bottom={median_bottom}, left={median_left}")
             # median_top = closest_canonical(median_top, self.DYN_BBOX_CANONICAL_RATIOS)
             # median_right = closest_canonical(median_right, self.DYN_BBOX_CANONICAL_RATIOS)
@@ -1984,7 +1934,8 @@ class SortPose:
             # median_left = closest_canonical(median_left, self.DYN_BBOX_CANONICAL_RATIOS)
             
             print(f"calc_dynamic_multiplier_from_image_dims: after rounding to canonical ratios {self.DYN_BBOX_CANONICAL_RATIOS} → top={median_top}, right={median_right}, bottom={median_bottom}, left={median_left}")
-
+            return [median_top, median_right, median_bottom, median_left]
+        
         elif self.DYN_BBOX_ROUND_TO and self.DYN_BBOX_ROUND_TO > 0:
             step = self.DYN_BBOX_ROUND_TO
             pre_round = (median_top, median_right, median_bottom, median_left)
@@ -1994,16 +1945,16 @@ class SortPose:
             median_left = math.ceil(median_left / step) * step
             print(f"calc_dynamic_multiplier_from_image_dims: after rounding (step={step}) pre={[round(v,3) for v in pre_round]} post=[{median_top}, {median_right}, {median_bottom}, {median_left}]")
 
-        # Apply MIN_DYN_BBOX_DIM floor
-        print(f"calc_dynamic_multiplier_from_image_dims: MIN_DYN_BBOX_DIM={self.MIN_DYN_BBOX_DIM}")
-        top_extent = max(median_top + padding, self.MIN_DYN_BBOX_DIM[0])
-        right_extent = max(median_right + padding, self.MIN_DYN_BBOX_DIM[1])
-        bottom_extent = max(median_bottom + padding, self.MIN_DYN_BBOX_DIM[2])
-        left_extent = max(median_left + padding, self.MIN_DYN_BBOX_DIM[3])
+            # Apply MIN_DYN_BBOX_DIM floor
+            print(f"calc_dynamic_multiplier_from_image_dims: MIN_DYN_BBOX_DIM={self.MIN_DYN_BBOX_DIM}")
+            top_extent = max(median_top + padding, self.MIN_DYN_BBOX_DIM[0])
+            right_extent = max(median_right + padding, self.MIN_DYN_BBOX_DIM[1])
+            bottom_extent = max(median_bottom + padding, self.MIN_DYN_BBOX_DIM[2])
+            left_extent = max(median_left + padding, self.MIN_DYN_BBOX_DIM[3])
 
-        print(f"calc_dynamic_multiplier_from_image_dims: final extents [top={top_extent}, right={right_extent}, bottom={bottom_extent}, left={left_extent}]")
+            print(f"calc_dynamic_multiplier_from_image_dims: final extents [top={top_extent}, right={right_extent}, bottom={bottom_extent}, left={left_extent}]")
 
-        return [top_extent, right_extent, bottom_extent, left_extent]
+            return [top_extent, right_extent, bottom_extent, left_extent]
 
     def bbox_to_pixel_conversion(self, bbox):
         """

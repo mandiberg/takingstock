@@ -1,0 +1,22 @@
+{
+  "cluster_type": "ArmsPoses3D_ObjectFusion",
+  "contract_version": 1,
+  "export_options": {
+    "helper_table": "SegmentHelper_TheOffice",
+    "kept_cluster_count": 3929,
+    "object_cluster_table_name": "ImagesObjectSignatures"
+  },
+  "files": {
+    "ArmsPoses3D_all.csv": {
+      "available_hsv_bins": [],
+      "csv_schema_version": 1,
+      "entity_id": null,
+      "entity_type": "detection",
+      "has_hsv_summary_rows": false,
+      "hsv_preset_name": "none"
+    }
+  },
+  "generator": "query_all_fusion_clusters.py",
+  "mode": "ObjectSignatures",
+  "mode_id": "cluster_id"
+}
