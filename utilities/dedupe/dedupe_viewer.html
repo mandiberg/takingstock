@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dedupe Viewer</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #111;
+      color: #eee;
+      font-family: system-ui, sans-serif;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* ── Progress bar ─────────────────────────────────────────── */
+    #progress-bar-wrap {
+      flex-shrink: 0;
+      height: 28px;
+      background: #222;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 0 12px;
+      border-bottom: 1px solid #2a2a2a;
+    }
+
+    /* ── Key guide ────────────────────────────────────────────── */
+    #key-guide {
+      flex-shrink: 0;
+      height: 26px;
+      background: #1a1a1a;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 28px;
+      border-bottom: 1px solid #333;
+    }
+
+    #key-guide span {
+      font-size: 11px;
+      color: #666;
+      white-space: nowrap;
+    }
+
+    #key-guide .k {
+      display: inline-block;
+      background: #2e2e2e;
+      color: #aaa;
+      border: 1px solid #444;
+      border-radius: 3px;
+      padding: 0 5px;
+      font-family: monospace;
+      font-size: 10px;
+      line-height: 16px;
+      margin-right: 4px;
+    }
+
+    #key-guide .action-dupe     { color: #e06c75; }
+    #key-guide .action-notdupe  { color: #98c379; }
+
+    #progress-bar-track {
+      flex: 1;
+      height: 8px;
+      background: #444;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    #progress-bar-fill {
+      height: 100%;
+      background: #4a9eff;
+      border-radius: 4px;
+      transition: width 0.2s ease;
+      width: 0%;
+    }
+
+    #progress-counter {
+      font-size: 12px;
+      color: #aaa;
+      white-space: nowrap;
+      min-width: 70px;
+      text-align: right;
+    }
+
+    #path-label {
+      font-size: 11px;
+      color: #666;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 50%;
+    }
+
+    /* ── Landing / states ────────────────────────────────────── */
+    #landing {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+    }
+
+    #landing h1 { font-size: 22px; font-weight: 500; color: #ccc; }
+
+    #status-msg {
+      font-size: 14px;
+      color: #888;
+      max-width: 420px;
+      text-align: center;
+      line-height: 1.6;
+    }
+
+    #status-msg code {
+      background: #2a2a2a;
+      border: 1px solid #444;
+      border-radius: 4px;
+      padding: 2px 6px;
+      font-size: 13px;
+      color: #ccc;
+    }
+
+    /* ── Viewer ──────────────────────────────────────────────── */
+    #viewer {
+      display: none;
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+    }
+
+    #side-by-side {
+      display: flex;
+      width: 100%;
+      height: 100%;
+    }
+
+    .img-panel {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .img-panel + .img-panel {
+      border-left: 1px solid #333;
+    }
+
+    .img-panel img {
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+      display: block;
+    }
+
+    .img-label {
+      position: absolute;
+      bottom: 8px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 11px;
+      color: #666;
+      white-space: nowrap;
+      pointer-events: none;
+    }
+
+    /* Full-image overlay */
+    #full-overlay {
+      display: none;
+      position: absolute;
+      inset: 0;
+      background: #000;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #full-overlay.active { display: flex; }
+
+    #full-img {
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+    }
+
+
+    /* Done screen */
+    #done-msg {
+      display: none;
+      flex: 1;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      font-size: 18px;
+      color: #888;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Progress bar -->
+  <div id="progress-bar-wrap">
+    <div id="progress-bar-track">
+      <div id="progress-bar-fill"></div>
+    </div>
+    <span id="progress-counter">—</span>
+    <span id="path-label"></span>
+  </div>
+
+  <!-- Key guide -->
+  <div id="key-guide">
+    <span><span class="k">Enter</span><span class="action-dupe">dupe — move on</span></span>
+    <span><span class="k">CapsLock</span><span class="action-notdupe">not a dupe — delete SQL &amp; move on</span></span>
+    <span><span class="k">Space</span>fullscreen toggle</span>
+    <span><span class="k">`</span>back to side-by-side</span>
+  </div>
+
+  <!-- Landing / status screen -->
+  <div id="landing">
+    <h1>Dedupe Viewer</h1>
+    <p id="status-msg">
+      Start the local server, then open this page via the server URL.<br><br>
+      <code>node server.js /path/to/root/folder</code><br><br>
+      Then visit <code>http://localhost:3000</code>
+    </p>
+  </div>
+
+  <!-- Viewer (hidden until pairs loaded) -->
+  <div id="viewer">
+    <div id="side-by-side">
+      <div class="img-panel">
+        <img id="img-left" src="" alt="" />
+        <span class="img-label" id="label-left"></span>
+      </div>
+      <div class="img-panel">
+        <img id="img-right" src="" alt="" />
+        <span class="img-label" id="label-right"></span>
+      </div>
+    </div>
+
+    <!-- Full-image overlay -->
+    <div id="full-overlay">
+      <img id="full-img" src="" alt="" />
+    </div>
+
+  </div>
+
+  <!-- Done screen -->
+  <div id="done-msg">
+    All pairs reviewed.
+  </div>
+
+  <script>
+    // ── State ──────────────────────────────────────────────────
+    let pairs        = [];
+    let currentIndex = 0;
+    let viewState    = 'side';  // 'side' | 'full-left' | 'full-right'
+
+    // ── DOM refs ───────────────────────────────────────────────
+    const landingEl     = document.getElementById('landing');
+    const statusMsg     = document.getElementById('status-msg');
+    const viewerEl      = document.getElementById('viewer');
+    const doneMsgEl     = document.getElementById('done-msg');
+
+    const progressFill  = document.getElementById('progress-bar-fill');
+    const progressCount = document.getElementById('progress-counter');
+    const pathLabel     = document.getElementById('path-label');
+
+    const imgLeft       = document.getElementById('img-left');
+    const imgRight      = document.getElementById('img-right');
+    const labelLeft     = document.getElementById('label-left');
+    const labelRight    = document.getElementById('label-right');
+    const fullOverlay   = document.getElementById('full-overlay');
+    const fullImg       = document.getElementById('full-img');
+
+    // ── Bootstrap ──────────────────────────────────────────────
+    // Only attempt to load if we're being served from the local server
+    // (not opened directly as a file://)
+    if (location.protocol !== 'file:') {
+      statusMsg.textContent = 'Loading pairs…';
+      fetch('/api/pairs')
+        .then(r => r.json())
+        .then(data => {
+          pairs = data;
+          if (pairs.length === 0) {
+            statusMsg.textContent = 'No image pairs found in the root directory.';
+            return;
+          }
+          landingEl.style.display = 'none';
+          viewerEl.style.display  = 'block';
+          renderPair(0);
+        })
+        .catch(() => {
+          statusMsg.innerHTML =
+            'Could not reach the server. Make sure it\'s running:<br><br>' +
+            '<code>node server.js /path/to/root/folder</code>';
+        });
+    }
+
+    // ── Render ─────────────────────────────────────────────────
+    function renderPair(index) {
+      viewState = 'side';
+      fullOverlay.classList.remove('active');
+
+      if (index >= pairs.length) {
+        viewerEl.style.display  = 'none';
+        doneMsgEl.style.display = 'flex';
+        updateProgress(pairs.length, pairs.length);
+        return;
+      }
+
+      currentIndex = index;
+      const pair = pairs[index];
+
+      const srcA = `/image?p=${encodeURIComponent(pair.imgA)}`;
+      const srcB = `/image?p=${encodeURIComponent(pair.imgB)}`;
+
+      imgLeft.src  = srcA;
+      imgRight.src = srcB;
+      imgLeft.alt  = pair.imgA.split('/').pop();
+      imgRight.alt = pair.imgB.split('/').pop();
+      labelLeft.textContent  = imgLeft.alt;
+      labelRight.textContent = imgRight.alt;
+
+      updateProgress(index + 1, pairs.length);
+      pathLabel.textContent = pair.label;
+    }
+
+    // ── Progress bar ───────────────────────────────────────────
+    function updateProgress(current, total) {
+      const pct = total > 0 ? (current / total) * 100 : 0;
+      progressFill.style.width  = `${pct}%`;
+      progressCount.textContent = total > 0 ? `${current} / ${total}` : '—';
+    }
+
+    // ── SQL deletion ───────────────────────────────────────────
+    async function deleteSQL(pair) {
+      if (!pair.sqlPath) return;
+      try {
+        await fetch('/api/delete-sql', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sqlPath: pair.sqlPath }),
+        });
+        pair.sqlPath = null;
+      } catch (e) {
+        console.warn('Could not delete SQL file:', e);
+      }
+    }
+
+    // ── Keyboard handlers ──────────────────────────────────────
+    document.addEventListener('keydown', async (e) => {
+      if (!pairs.length || currentIndex >= pairs.length) return;
+
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        renderPair(currentIndex + 1);
+        return;
+      }
+
+      if (e.key === 'CapsLock') {
+        e.preventDefault();
+        await deleteSQL(pairs[currentIndex]);
+        renderPair(currentIndex + 1);
+        return;
+      }
+
+      if (e.key === ' ') {
+        e.preventDefault();
+        if (viewState === 'side') {
+          setFullImage('left');
+        } else if (viewState === 'full-left') {
+          setFullImage('right');
+        } else {
+          setFullImage('left');
+        }
+        return;
+      }
+
+      if (e.key === '`') {
+        e.preventDefault();
+        if (viewState !== 'side') {
+          viewState = 'side';
+          fullOverlay.classList.remove('active');
+        }
+        return;
+      }
+    });
+
+    function setFullImage(side) {
+      fullImg.src = side === 'left' ? imgLeft.src : imgRight.src;
+      fullImg.alt = side === 'left' ? imgLeft.alt : imgRight.alt;
+      fullOverlay.classList.add('active');
+      viewState = side === 'left' ? 'full-left' : 'full-right';
+    }
+  </script>
+</body>
+</html>
