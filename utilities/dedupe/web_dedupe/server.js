@@ -71,6 +71,26 @@ function collectPair(scorePath, clusterName, tierName, scoreName) {
 
 function sorted(arr) { return [...arr].sort(); }
 
+// ── Progress file ────────────────────────────────────────────────────────────
+
+const PROGRESS_FILE = path.join(__dirname, 'progress.json');
+
+function loadProgress() {
+  if (!fs.existsSync(PROGRESS_FILE)) return null;
+  try {
+    const data = JSON.parse(fs.readFileSync(PROGRESS_FILE, 'utf8'));
+    return data.rootDir === ROOT ? data : null;
+  } catch { return null; }
+}
+
+function saveProgress(data) {
+  fs.writeFileSync(PROGRESS_FILE, JSON.stringify({ rootDir: ROOT, ...data }, null, 2));
+}
+
+function clearProgress() {
+  if (fs.existsSync(PROGRESS_FILE)) fs.unlinkSync(PROGRESS_FILE);
+}
+
 // ── MIME types ───────────────────────────────────────────────────────────────
 
 const MIME = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.html': 'text/html' };
@@ -85,7 +105,7 @@ const server = http.createServer((req, res) => {
 
   // CORS for local dev
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
   if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
@@ -134,6 +154,35 @@ const server = http.createServer((req, res) => {
         json(res, 500, { error: e.message });
       }
     });
+    return;
+  }
+
+  // Load saved progress
+  if (req.method === 'GET' && pathname === '/api/load-progress') {
+    json(res, 200, loadProgress());
+    return;
+  }
+
+  // Save progress
+  if (req.method === 'POST' && pathname === '/api/save-progress') {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', () => {
+      try {
+        saveProgress(JSON.parse(body));
+        json(res, 200, { ok: true });
+      } catch (e) {
+        json(res, 500, { error: e.message });
+      }
+    });
+    return;
+  }
+
+  // Clear progress (called when all pairs are reviewed)
+  if (req.method === 'DELETE' && pathname === '/api/clear-progress') {
+    clearProgress();
+    console.log('Progress cleared — all pairs reviewed.');
+    json(res, 200, { ok: true });
     return;
   }
 
