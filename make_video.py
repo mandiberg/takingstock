@@ -61,7 +61,8 @@ SegmentHelper_name = 'SegmentHelper_TheOffice'
 # this is MM specific
 # for when I'm using files on my SSD vs RAID
 IS_SSD = True
-SSD_PATH = "/Volumes/OWC54/segment_images"
+SSD_PATH = "/Volumes/OWC5/segment_images"
+start = time.time()
 
 #IS_MOVE is in move_toSSD_files.py
 
@@ -72,10 +73,10 @@ db = io.db
 # OWC4 SNAFU WORKAROUND
 
 if not (io.IS_TENCH or io.IS_MICHELLE) and IS_SSD:
-    # io.ROOT_PROD=  "/Volumes/OWC5/segment_images" ## only on Mac
-    io.ROOT_PROD=  "/Users/michaelmandiberg/Documents/projects-active/facemap_production" ## MBP
+    io.ROOT_PROD=  "/Volumes/OWC5" ## only on Mac
+    # io.ROOT_PROD=  "/Users/michaelmandiberg/Documents/projects-active/facemap_production" ## MBP
     print("Setting io.ROOT to ROOTSSD:", io.ROOTSSD)
-    io.ROOT = os.path.join(io.ROOT_PROD, "output_folder")
+    io.ROOT = os.path.join(io.ROOT_PROD, "cache_folder")
 print("Setting io.ROOT to ROOTSSD:", io.ROOTSSD)
 print("Set io.ROOT to ROOTSSD:", io.ROOT)
 
@@ -89,7 +90,7 @@ CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden b
 
 # CSV_FOLDER = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion128_test220K"
 CSV_MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/"
-CSV_RUN_FOLDER = "SegmentHelper_TheOffice/tsp_apr27" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
+CSV_RUN_FOLDER = "SegmentHelper_TheOffice/MTL_multipolicy/1k_sort_object_fusion" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
 CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, CSV_RUN_FOLDER)
 
 
@@ -281,7 +282,9 @@ elif CURRENT_MODE == 'heft_torso_keywords':
 
     # current obj sort
     CLUSTER_TYPE = "ArmsPoses3D_ObjectFusion"  # TEST: new Arms/ObjectFusion mode
-    SORT_TYPE = "obj_bbox" # for ArmsPoses3D_ObjectFusion keep SORT_TYPE as object_fusion
+    # SORT_TYPE = "planar_hands"
+    # SORT_TYPE = "obj_bbox" # for ArmsPoses3D_ObjectFusion keep SORT_TYPE as object_fusion
+    SORT_TYPE = "object_fusion" 
     USE_HSV = False
 
     # CLUSTER_TYPE = "object_fusion"
@@ -319,8 +322,12 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     CHOP_FIRST = True # does a first pass chop before whatever sort happens - this is default now
     # this is an override for development purposes. will only make CSVs from these clusters:
     TEMP_FOCUS_CLUSTER_HACK_LIST = []
-    OBJECT_NONE_CLUSTERS = [1] # if MULTIPOLICY these get HSV BG, else these don't run in fusion
-    MULTIPOLICY = False # controls whether it does multi-bucket fusion policy based on cluster size for HSV, clusters, and metabodyposes3D
+    # OBJECT_NONE_CLUSTERS = [1] # if MULTIPOLICY these get HSV BG, else these don't run in fusion
+    # OBJECT_NONE_CLUSTERS = [1,15,113,34] # skip these and go to 18 
+    # OBJECT_KEEP_CLUSTERS = [727, 734, 2341] # money cards for big cluster testing if MULTIPOLICY these get HSV BG, else these are the only ones that run in fusion
+    OBJECT_KEEP_CLUSTERS = [1026, 103, 104, 1064, 1182, 1254, 1411, 141, 1478, 1569, 2036, 2229, 3130, 320, 3276, 3529, 359, 42, 710, 765, 808, 849] # for 1k or less testing
+    OBJECT_NONE_CLUSTERS = [i for i in range(4000) if i not in OBJECT_KEEP_CLUSTERS] # skip these and go to 18
+    MULTIPOLICY = True # controls whether it does multi-bucket fusion policy based on cluster size for HSV, clusters, and metabodyposes3D
     CLUSTER_MIN_HSV_BG = 6000
     CLUSTER_MIN_HSV_OBJ = 5000
     OBJ_CLUSTER_COLUMN_MIN_FOR_FUSION_SORT = 1000
@@ -329,7 +336,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     TESTING = True
     if TESTING:
         # turning all three off to do old style non tsp sort    
-        ONE_SHOT = True # take all files, based off the very first sort order.
+        ONE_SHOT = False # take all files, based off the very first sort order.
         TSP_SORT = True
         CHOP_ITTER_TSP_SORT = False
         if CLUSTER_TYPE == "object_fusion":
@@ -1330,6 +1337,8 @@ if not io.IS_TENCH:
             extra_boolean_keyword_string = is_query_list_string(cluster_dict_NOT, inclusion=False)
             cluster +=  f" AND it.{this_id} {extra_boolean_keyword_string} "
 
+        # treat -1 cluster_id as special case meaning "no cluster filter" so not null
+        cluster = cluster.replace(".cluster_id = -1", ".cluster_id IS NOT NULL")
         print(f"cluster SELECT is {cluster}")
 
         selectsql = f"SELECT {local_select} FROM {local_from + from_affect + from_hsv} WHERE {local_where + where_affect + where_hsv + xyz_where} {cluster} LIMIT {str(LIMIT)};"
@@ -2519,6 +2528,9 @@ def process_linear(start_img_name, df_segment, file_prefix, sort):
         if not os.path.exists(CSV_FOLDER): os.makedirs(CSV_FOLDER)
         df_sorted.to_csv(f"{CSV_FOLDER}/df_sorted_{file_prefix}_ct{segment_count}.csv", index=False)
 
+        lap_time = time.time() - start
+        print(f"sorting by face distance took {lap_time:.2f} seconds for {segment_count} segments")
+
         # test to see if they make good faces
         # write_images(img_list)
         # write_images(sort.not_make_face)
@@ -2967,6 +2979,7 @@ def main():
             "reason": "legacy single-policy mode",
         }
         if not MULTIPOLICY:
+            print("MULTIPOLICY is False, applying default policy to all pairs")
             return default_policy
 
         if not (isinstance(cluster_topic_no, list) and len(cluster_topic_no) >= 2):
@@ -2996,6 +3009,10 @@ def main():
             object_cluster_id not in OBJECT_NONE_CLUSTERS
             and column_total < int(OBJ_CLUSTER_COLUMN_MIN_FOR_FUSION_SORT)
         ):
+            print(
+                f"Routing arms_cluster {arms_cluster_id} and object_cluster {object_cluster_id} "
+                f"to Bucket 4 object MetaBody fallback due to low column support: column_total {column_total}"
+                )
             return {
                 "bucket": "small_column_meta_fallback",
                 "hsv_source": "background",
@@ -3477,14 +3494,20 @@ def main():
             if IS_ONE_TOPIC:
                 if GENERATE_FUSION_PAIRS:
                     print("doing GENERATE_FUSION_PAIRS and storing in FUSION_PAIR_DICT")
-                    n_cluster_topics = sort.find_sorted_suitable_indices(
+                    n_cluster_topics, small_fusion_columns = sort.find_sorted_suitable_indices(
                         TOPIC_NO,
                         MIN_VIDEO_FUSION_COUNT,
                         FUSION_FOLDER,
                         hsv_cluster_groups=HSV_GROUP_PRESETS[OBJECT_HSV_GROUP_PRESET_NAME if HSV_SOURCE_MODE == "object" else HSV_GROUP_PRESET_NAME],
                         manifest_file=FUSION_MANIFEST_FILE,
+                        multipolicy = MULTIPOLICY,
                     )
                     log_fusion_pairs_summary("generated fusion_pairs", n_cluster_topics)
+                    print(f"small_fusion_columns (for fusion pair classification): {small_fusion_columns}")
+                    if bool(small_fusion_columns):
+                        small_fusion_columns_as_pairs = [[-1, col] for col in small_fusion_columns]
+                        n_cluster_topics = small_fusion_columns_as_pairs + n_cluster_topics
+                        print(f"prepended small_fusion_columns as pairs to n_cluster_topics: {n_cluster_topics}")
                     if N_HSV > 0:
                         print("N_HSV > 0, so making FUSION_PAIR_DICT with keyword: [metacluster, hsv] structure")
                         FUSION_PAIR_DICT = {str(TOPIC_NO[0]): n_cluster_topics}
@@ -3515,7 +3538,6 @@ def main():
     
             print(f"MODE 0 or 2, for this_topic {this_topic} sorting and saving CSV", CSV_FOLDER)
             #creating my objects
-            start = time.time()
 
             # to loop or not to loop that is the cluster
             print(f"doing {CURRENT_MODE}: SORT_TYPE {SORT_TYPE}, IS_HAND_POSE_FUSION {IS_HAND_POSE_FUSION}, GENERATE_FUSION_PAIRS {GENERATE_FUSION_PAIRS}, MIN_VIDEO_FUSION_COUNT {MIN_VIDEO_FUSION_COUNT}, IS_TOPICS {IS_TOPICS}, IS_ONE_TOPIC {IS_ONE_TOPIC}, this_topic {this_topic}, USE_AFFECT_GROUPS {USE_AFFECT_GROUPS}")
@@ -3548,6 +3570,7 @@ def main():
                     print("FUSION_PAIR_DICT is not None so using existing FUSION_PAIR_DICT")
                     n_cluster_topics = FUSION_PAIR_DICT[this_topic]
                     log_fusion_pairs_summary("set n_cluster_topics from FUSION_PAIR_DICT", n_cluster_topics)
+                    print(f"small_fusion_columns (for fusion pair classification): {small_fusion_columns}")
                 elif USE_FUSION_PAIR_DICT:
                     n_cluster_topics = FUSION_PAIR_DICT[this_topic]
                 else: 

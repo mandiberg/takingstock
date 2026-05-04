@@ -123,6 +123,7 @@ class SortPose:
 
         self.SORT_TYPE = SORT_TYPE
         self.TSP_SORT = TSP_SORT
+        self.MIN_COL_SUM_MULTIPLIER = 5 # this determines which columns are "small" under MULTIPOLICY
 
         if self.SORT_TYPE == "128d":
             self.MIND = self.MINFACEDIST * 1.5
@@ -4776,7 +4777,8 @@ class SortPose:
             df = pd.DataFrame(full_matrix)
         return df, hsv_sum_df, total_df
 
-    def find_sorted_suitable_indices(self, topic_no, min_value, folder_path=None, hsv_cluster_groups=None, manifest_file="fusion_manifest.json"):
+    def find_sorted_suitable_indices(self, topic_no, min_value, folder_path=None, hsv_cluster_groups=None, manifest_file="fusion_manifest.json", multipolicy=False):
+        small_fusion_columns = {}
         if folder_path is None:
             raise ValueError("folder_path is required for manifest-driven CSV discovery")
 
@@ -4889,7 +4891,7 @@ class SortPose:
         # print("Shape of the array:", gesture_array.shape)
         print(gesture_array)  # Print the array to verify its contents
 
-        def find_indices(gesture_array, min_value, column_list=None):
+        def find_indices(gesture_array, min_value, column_list=None, multipolicy=False):
             """Find (row, hsv_group) pairs where values exceed min_value.
 
             If column_list is None, operate on individual columns (original behavior).
@@ -4901,6 +4903,22 @@ class SortPose:
             avoid duplicate matches across groups.
             """
             results = []
+            small_fusion_columns = []
+
+            # handle small columns first, if multipolicy is true:
+            if multipolicy:
+                # set a dynamic threshold for small columns based on the min_value and a multiplier
+                min_column_sum = min_value * self.MIN_COL_SUM_MULTIPLIER
+                # get the sums of each column and find the columns that are below the min_value threshold
+                column_sums = gesture_array.sum(axis=0)
+                small_columns = np.where(column_sums <= min_column_sum)[0].tolist()
+                small_fusion_columns.extend(small_columns)
+                # zero out the small columns so they won't interfere with group sums                gesture_array[:, small_columns] = 0
+                print(f"Multipolicy enabled: identified small columns with sums <= {min_column_sum}: {small_columns}")
+
+                # zero out the small columns so they won't interfere with group sums
+                gesture_array[:, small_columns] = 0
+                print(f"Gesture array after zeroing small columns: {gesture_array}")
 
             # Work on a view so modifications (zeroing) affect caller's gesture_array
             gesture_array = gesture_array
@@ -4943,7 +4961,7 @@ class SortPose:
                         suitable_indices.append([int(row_idx), int(col_idx)])
                         gesture_array[row_idx, col_idx] = 0
 
-                return suitable_indices, gesture_array
+                return suitable_indices, small_fusion_columns, gesture_array
 
             # Normalize column_list into list-of-groups (each group is a list of ints)
             # groups = []
@@ -4997,11 +5015,11 @@ class SortPose:
             # if we are dealing with HSV, then itterate over the HSV_CLUSTER_GROUPS
             for column_list in self.HSV_CLUSTER_GROUPS:
                 print(f" column_list", column_list)
-                these_suitable_indices, gesture_array = find_indices(gesture_array, min_value, column_list=column_list)
+                these_suitable_indices, small_fusion_columns, gesture_array = find_indices(gesture_array, min_value, column_list=column_list, multipolicy=multipolicy)
                 all_suitable_indices.extend(these_suitable_indices)
             # Now sort all_suitable_indices by row then group index
             if len(all_suitable_indices) == 0:
-                return []
+                return [], small_fusion_columns
 
             # doing this the hard ugly way, because the smooth way wasn't working
             # results is a list of [row, group_cols], get all row values in a list
@@ -5021,12 +5039,12 @@ class SortPose:
             # all_suitable_indices_arr = np.array(all_suitable_indices)
             # sorted_idx = all_suitable_indices_arr[np.lexsort((all_suitable_indices_arr[:,1], all_suitable_indices_arr[:,0]))]
             # sorted_suitable_indices = sorted_idx.tolist()
-            return sorted_suitable_indices
+            return sorted_suitable_indices, small_fusion_columns
             # the fancy way of sorting is failing, so I'm going to do it the simple way
                 
         else:
-            sorted_suitable_indices, gesture_array = find_indices(gesture_array, min_value)
-        return sorted_suitable_indices
+            sorted_suitable_indices, small_fusion_columns, gesture_array = find_indices(gesture_array, min_value, column_list=None, multipolicy=multipolicy)
+        return sorted_suitable_indices, small_fusion_columns
 
 
 # Mass Build file management stuff

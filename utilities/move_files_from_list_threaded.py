@@ -29,14 +29,14 @@ WHERE NOT (EXISTS (SELECT 1 FROM SegmentHelper_T11_business h WHERE h.image_id =
 
 '''
 
-ROOT_GITHUB = os.path.join(Path.home(), "Documents/GitHub/takingstock/")
+ROOT_GITHUB = os.path.join(Path.home(), "Documents/GitHub/facemap/")
 # caution: path[0] is reserved for script path (or '' in REPL)
 sys.path.insert(1, ROOT_GITHUB)
 
 # import file
 
 from mp_db_io import DataIO
-IS_SSD =False  # if True it will use the SSD path, if False it will use the RAID path
+IS_SSD =True  # if True it will use the SSD path, if False it will use the RAID path
 
 # Define the path to the CSV file
 # csv_file = '/Users/michaelmandiberg/Documents/projects-active/facemap_production/test_orig/df_sorted_0_ct9422.csv'
@@ -44,14 +44,14 @@ IS_SSD =False  # if True it will use the SSD path, if False it will use the RAID
 VERBOSE = False  
 # set origin before constructing io
 # ORIGIN_SSD = "/Volumes/SSD4_Green/segment_images_detected_63_67"
-ORIGIN_SSD = "/Volumes/OWC54/segment_images_T4"
+ORIGIN_SSD = "/Volumes/OWC5/segment_images"
 # ORIGIN_SSD = "/Volumes/OWC5/segment_images_92_headphones"
-ORIGIN_SSD = "/Volumes/SSD4_Green/segment_images_detected_63_67"
+# ORIGIN_SSD = "/Volumes/SSD4_Green/segment_images_detected_63_67"
 # ORIGIN_SSD = "/Volumes/LaCie/segment_images_94_piggybank"
 io = DataIO(IS_SSD, VERBOSE, ORIGIN_SSD)
 
 CSV_FOLDER = os.path.join(io.ROOT_DBx, "NML_transition")
-CSV_FOLDER = "/Users/michaelmandiberg/Documents/takingstock_production/moving_objects_to_SSDs/move_this" # for testing
+CSV_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/moving_objects_to_SSDs/move_this" # for testing
 USE_DF_SORTED = False  # if True it will use the df_sorted format from make_video.py, false expects output from SQL query above
 USE_RAW_PATHS = False # this skips the site_name_id and joins the ORIGIN to the filename in the CSV directly
 USE_HASH_FOLDERS = True  # if True it will create hash folders in the destination folder
@@ -63,8 +63,8 @@ if FROM_SSD_TO_SSD == False: MOVE_ORIGINAL_FILE = False  # FORCE only allow movi
 ORIGIN = "segment_images_COCO" # if USE_RAW_PATHS this needs to be path to segment_images/images_*
 # DEST = os.path.join(io.ROOT_DBx, "NMLdeshard")
 # DEST = "/Volumes/RAID18" 
-# DEST = "/Volumes/OWC54/segment_images"  
-DEST = "/Volumes/SSD4_Green/segment_images_detected_63_67"  # 250k for headphones
+DEST = "/Volumes/OWC5/segment_images_frame"  
+# DEST = "/Volumes/SSD4_Green/segment_images_detected_63_67"  # 250k for headphones
 # DEST = "/Volumes/SSD4_Green/segment_images_67_phone_undetected"  # for testing
 if IS_TEST:
     # to run a smaller test, put a few files in the test folder
