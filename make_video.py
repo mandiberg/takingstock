@@ -90,7 +90,7 @@ CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden b
 
 # CSV_FOLDER = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion128_test220K"
 CSV_MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/"
-CSV_RUN_FOLDER = "SegmentHelper_TheOffice/MTL_multipolicy/1k_sort_object_fusion" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
+CSV_RUN_FOLDER = "SegmentHelper_TheOffice/MTL_multipolicy/1k_planarhands" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
 CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, CSV_RUN_FOLDER)
 
 
@@ -282,9 +282,9 @@ elif CURRENT_MODE == 'heft_torso_keywords':
 
     # current obj sort
     CLUSTER_TYPE = "ArmsPoses3D_ObjectFusion"  # TEST: new Arms/ObjectFusion mode
-    # SORT_TYPE = "planar_hands"
+    SORT_TYPE = "planar_hands"
     # SORT_TYPE = "obj_bbox" # for ArmsPoses3D_ObjectFusion keep SORT_TYPE as object_fusion
-    SORT_TYPE = "object_fusion" 
+    # SORT_TYPE = "object_fusion" 
     USE_HSV = False
 
     # CLUSTER_TYPE = "object_fusion"
@@ -1261,8 +1261,7 @@ if not io.IS_TENCH:
 
                     if requested_object_cluster_id in OBJECT_NONE_CLUSTERS and not allow_object_none:
                         print(
-                            f"skipping pair because ih.cluster_id {requested_object_cluster_id} is in "
-                            f"OBJECT_NONE_CLUSTERS {OBJECT_NONE_CLUSTERS}"
+                            f"skipping pair because ih.cluster_id {requested_object_cluster_id} is in OBJECT_NONE_CLUSTERS"
                         )
                         return []
 
@@ -3018,7 +3017,8 @@ def main():
                 "hsv_source": "background",
                 "use_hsv": False,
                 "allow_object_none": object_cluster_id in OBJECT_NONE_CLUSTERS,
-                "use_meta_cluster": True,
+                # "use_meta_cluster": True, # my original idea was to use meta clusters, but that isn't patched in for SQL, and was working fine with a full select
+                "use_meta_cluster": False,
                 "meta_cluster_id": arms_to_meta_map.get(arms_cluster_id),
                 "cycle_stage": "meta_fallback",
                 "cell_count": cell_count,
@@ -3031,6 +3031,10 @@ def main():
 
         # Bucket 1: object-none columns with large cells -> HSV background.
         if object_cluster_id in OBJECT_NONE_CLUSTERS and cell_count >= int(CLUSTER_MIN_HSV_BG):
+            print(
+                f"Routing arms_cluster {arms_cluster_id} and object_cluster {object_cluster_id} "
+                f"to Bucket 1 HSV background due to large cell count {cell_count} in object-none column"
+            )
             return {
                 "bucket": "none_column_large_cell_hsv_background",
                 "hsv_source": "background",
@@ -3049,6 +3053,10 @@ def main():
 
         # Bucket 2: object columns with large cells -> HSV object.
         if object_cluster_id not in OBJECT_NONE_CLUSTERS and cell_count >= int(CLUSTER_MIN_HSV_OBJ):
+            print(
+                f"Routing arms_cluster {arms_cluster_id} and object_cluster {object_cluster_id} "
+                f"to Bucket 2 HSV object due to large cell count {cell_count} in object column"
+            )
             return {
                 "bucket": "object_column_large_cell_hsv_object",
                 "hsv_source": "object",
@@ -3065,19 +3073,25 @@ def main():
                 ),
             }
 
-        # Bucket 3: medium/default bucket -> non-HSV fusion sort.
-        return {
-            "bucket": "default_nonhsv_fusion",
-            "hsv_source": "background",
-            "use_hsv": False,
-            "allow_object_none": object_cluster_id in OBJECT_NONE_CLUSTERS,
-            "use_meta_cluster": False,
-            "meta_cluster_id": None,
-            "cycle_stage": "default_nonhsv",
-            "cell_count": cell_count,
-            "column_total": column_total,
-            "reason": "passes column floor and does not qualify for large-cell HSV buckets",
-        }
+        if cell_count >= int(MIN_VIDEO_FUSION_COUNT):
+            # Bucket 3: medium/default bucket -> non-HSV fusion sort.
+            print(
+                f"Routing arms_cluster {arms_cluster_id} and object_cluster {object_cluster_id} "
+                f"to Bucket 3 default non-HSV due to cell count {cell_count} in object column"
+            )
+            return {
+                "bucket": "default_nonhsv_fusion",
+                "hsv_source": "background",
+                "use_hsv": False,
+                "allow_object_none": object_cluster_id in OBJECT_NONE_CLUSTERS,
+                "use_meta_cluster": False,
+                "meta_cluster_id": None,
+                "cycle_stage": "default_nonhsv",
+                "cell_count": cell_count,
+                "column_total": column_total,
+                "reason": "passes column floor and does not qualify for large-cell HSV buckets",
+            }
+        return None
 
     def expand_hsv_query_groups(preset_groups):
         expanded = []
@@ -3840,6 +3854,10 @@ def main():
                                 object_column_totals or {},
                                 arms_to_meta_map or {},
                             )
+                            if route_policy is None:
+                                print(f"No route policy for pair {cluster_topic_no}, skipping this pair")
+                                continue
+
                             route_bucket = route_policy.get("bucket", "unknown")
                             route_bucket_stats[route_bucket] = route_bucket_stats.get(route_bucket, 0) + 1
 
