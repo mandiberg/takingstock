@@ -7,8 +7,8 @@ ONLY_DUPES = False  # Set to True to only include files with "dupes" in the file
 # DUPES_FILE = os.path.join(BASE_FOLDER, "dupes.sql")
 # MODE = 1 # 0 is for is_dupe, 1 is for is_not_dupe
 
-ROOT_FOLDER = "/Users/michaelmandiberg/Library/CloudStorage/Dropbox/Michael-Tench/"
-# ROOT_FOLDER = "/Volumes/OWC4/segment_images/dupe_sorting"
+# ROOT_FOLDER = "/Users/michaelmandiberg/Library/CloudStorage/Dropbox/Michael-Tench/"
+ROOT_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/dupestuff"
 dedupe_this = os.path.join(ROOT_FOLDER, 'dedupe_this') # this is where the unsorted files go -- they are needed for comparison
 duped = os.path.join(ROOT_FOLDER, 'deduped') # this is where the tench sorted files go
 removed_files = os.path.join(ROOT_FOLDER, 'removed_files') # this the ones that are is_not_dupe_of -- does this need to be emptied beofre running? 
