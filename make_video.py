@@ -61,7 +61,8 @@ SegmentHelper_name = 'SegmentHelper_TheOffice'
 # this is MM specific
 # for when I'm using files on my SSD vs RAID
 IS_SSD = True
-SSD_PATH = "/Volumes/OWC54/segment_images"
+SSD_PATH = "/Volumes/LaCie/segment_images"
+ONLY_SAVE_CACHE = True
 
 #IS_MOVE is in move_toSSD_files.py
 
@@ -72,8 +73,8 @@ db = io.db
 # OWC4 SNAFU WORKAROUND
 
 if not (io.IS_TENCH or io.IS_MICHELLE) and IS_SSD:
-    # io.ROOT_PROD=  "/Volumes/OWC5/segment_images" ## only on Mac
-    io.ROOT_PROD=  "/Users/michaelmandiberg/Documents/projects-active/facemap_production" ## MBP
+    io.ROOT_PROD=  "/Volumes/LaCie" ## only on Mac
+    # io.ROOT_PROD=  "/Users/michaelmandiberg/Documents/projects-active/facemap_production" ## MBP
     print("Setting io.ROOT to ROOTSSD:", io.ROOTSSD)
     io.ROOT = os.path.join(io.ROOT_PROD, "output_folder")
 print("Setting io.ROOT to ROOTSSD:", io.ROOTSSD)
@@ -89,7 +90,7 @@ CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden b
 
 # CSV_FOLDER = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion128_test220K"
 CSV_MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/"
-CSV_RUN_FOLDER = "SegmentHelper_TheOffice/tsp_apr27" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
+CSV_RUN_FOLDER = "SegmentHelper_TheOffice/one_shot_preMTL" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
 CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, CSV_RUN_FOLDER)
 
 
@@ -164,7 +165,7 @@ MODES = {0:'paris_photo_torso_images_topics', 1:'paris_photo_torso_videos_topics
 MODE_CHOICE = 6
 CURRENT_MODE = MODES[MODE_CHOICE]
 
-LIMIT = 100000 # this is the limit for the SQL query, needs to be above 150
+LIMIT = 1000000 # this is the limit for the SQL query, needs to be above 150
 CROP_MULTIPLIER = 5
 
 image_edge_multiplier = None
@@ -281,7 +282,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
 
     # current obj sort
     CLUSTER_TYPE = "ArmsPoses3D_ObjectFusion"  # TEST: new Arms/ObjectFusion mode
-    SORT_TYPE = "obj_bbox" # for ArmsPoses3D_ObjectFusion keep SORT_TYPE as object_fusion
+    SORT_TYPE = "object_fusion" # for ArmsPoses3D_ObjectFusion keep SORT_TYPE as object_fusion
     USE_HSV = False
 
     # CLUSTER_TYPE = "object_fusion"
@@ -319,7 +320,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     CHOP_FIRST = True # does a first pass chop before whatever sort happens - this is default now
     # this is an override for development purposes. will only make CSVs from these clusters:
     TEMP_FOCUS_CLUSTER_HACK_LIST = []
-    OBJECT_NONE_CLUSTERS = [1] # if MULTIPOLICY these get HSV BG, else these don't run in fusion
+    OBJECT_NONE_CLUSTERS = [] # if MULTIPOLICY these get HSV BG, else these don't run in fusion
     MULTIPOLICY = False # controls whether it does multi-bucket fusion policy based on cluster size for HSV, clusters, and metabodyposes3D
     CLUSTER_MIN_HSV_BG = 6000
     CLUSTER_MIN_HSV_OBJ = 5000
@@ -330,7 +331,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     if TESTING:
         # turning all three off to do old style non tsp sort    
         ONE_SHOT = True # take all files, based off the very first sort order.
-        TSP_SORT = True
+        TSP_SORT = False
         CHOP_ITTER_TSP_SORT = False
         if CLUSTER_TYPE == "object_fusion":
             GENERATE_FUSION_PAIRS = False # April 14 changing this for testing
@@ -2306,6 +2307,7 @@ def linear_test_df(df_sorted, itter=None):
     if sort.ORIGIN == 6: sort.NOSE_BRIDGE_DIST = sort.calc_nose_bridge_dist(df_sorted.iloc[0]['face_landmarks'])    
     # print("nose bridge dist", sort.NOSE_BRIDGE_DIST)
     good = 0
+    cluster_file_rows = []
     # img_list = []
     metas_list = []
     description = None
@@ -2460,17 +2462,35 @@ def linear_test_df(df_sorted, itter=None):
                 else:
                     print("skipping cropped cache save; could not resolve cache path for row")
 
-                output_write_t0 = time.perf_counter()
-                cv2.imwrite(outpath, cropped_image)
-                output_write_elapsed = time.perf_counter() - output_write_t0
-                print(f"[timing] output write {output_write_elapsed:.3f}s path={outpath}")
+                if ONLY_SAVE_CACHE:
+                    image_number = int(sort.counter_dict["counter"])
+                    if image_number < 1:
+                        image_number = image_number + 1
+                    cluster_file_rows.append(
+                        {
+                            "image_number": image_number,
+                            "image_id": int(row["image_id"]),
+                            "path_to_cache_file": cropped_cache_file if cropped_cache_file else "",
+                        }
+                    )
+                    print(
+                        f"[timing] output write skipped ONLY_SAVE_CACHE=True image_id={row['image_id']}"
+                    )
+                else:
+                    output_write_t0 = time.perf_counter()
+                    cv2.imwrite(outpath, cropped_image)
+                    output_write_elapsed = time.perf_counter() - output_write_t0
+                    print(f"[timing] output write {output_write_elapsed:.3f}s path={outpath}")
                 good += 1
                 metas_write_t0 = time.perf_counter()
                 save_image_metas(row)
                 metas_write_elapsed = time.perf_counter() - metas_write_t0
                 print(f"[timing] metas write {metas_write_elapsed:.3f}s image_id={row['image_id']}")
                 sort.counter_dict["start_img_name"] = row['imagename']
-                print("saved: ",outpath)
+                if ONLY_SAVE_CACHE:
+                    print("saved cache-only record for image_id:", row['image_id'])
+                else:
+                    print("saved: ",outpath)
                 sort.counter_dict["counter"] += 1
                 if itter and good > itter:
                     print("breaking after this many itters,", str(good), str(itter))
@@ -2485,6 +2505,16 @@ def linear_test_df(df_sorted, itter=None):
             print(str(e))
         if VERBOSE: print("metas_list")
         if VERBOSE: print(metas_list)
+    if ONLY_SAVE_CACHE:
+        cluster_files_path = os.path.join(sort.counter_dict["outfolder"], "cluster_files.csv")
+        cluster_files_df = pd.DataFrame(
+            cluster_file_rows,
+            columns=["image_number", "image_id", "path_to_cache_file"],
+        )
+        cluster_files_df.to_csv(cluster_files_path, index=False)
+        print(
+            f"[cluster_files] wrote {len(cluster_file_rows)} rows to {cluster_files_path}"
+        )
     sort.print_face_pair_stats("linear_test_df cycle")
     return
 
@@ -2842,7 +2872,7 @@ def main():
         print(f"populate_image_dims: starting pre-pass for {total_rows} rows")
         ws, hs, fhs, nose_xs, nose_ys = [], [], [], [], []
         for idx, (_, row) in enumerate(df_segment.iterrows()):
-            print("row columns:", row.index.tolist())
+            # print("row columns:", row.index.tolist())
             image_id = row.get('image_id', '?')
             try:
                 if io.IS_TENCH:
@@ -2851,12 +2881,12 @@ def main():
                         open_path = os.path.join(SegmentFolder, os.path.basename(io.folder_list[row['site_name_id']]), row['imagename'])
                     else:
                         open_path = os.path.join(io.folder_list[row['site_name_id']], row['imagename'])
-                    print(f"populate_image_dims [{idx+1}/{total_rows}] image_id={image_id} path={open_path}")
+                    # print(f"populate_image_dims [{idx+1}/{total_rows}] image_id={image_id} path={open_path}")
                     img = cv2.imread(open_path)
                     if img is None:
                         raise ValueError(f"cv2.imread returned None for {open_path}")
                     h, w = img.shape[:2]
-                    print(f"populate_image_dims [{idx+1}/{total_rows}] image shape h={h} w={w}")
+                    # print(f"populate_image_dims [{idx+1}/{total_rows}] image shape h={h} w={w}")
                     sort.get_image_face_data(img, row['face_landmarks'], row['bbox'])
                     fh = sort.face_height
                     nx, ny = sort.nose_2d[0], sort.nose_2d[1]
@@ -2876,7 +2906,7 @@ def main():
                         raise ValueError(f"No database record found for image_id {image_id}")
                     w, h, fh, nx, ny = result
 
-                print(f"populate_image_dims [{idx+1}/{total_rows}] face_height={fh:.2f}  nose=({nx:.1f},{ny:.1f})  above={ny:.0f}px  below={h-ny:.0f}px  left={nx:.0f}px  right={w-nx:.0f}px")
+                # print(f"populate_image_dims [{idx+1}/{total_rows}] face_height={fh:.2f}  nose=({nx:.1f},{ny:.1f})  above={ny:.0f}px  below={h-ny:.0f}px  left={nx:.0f}px  right={w-nx:.0f}px")
                 ws.append(w)
                 hs.append(h)
                 fhs.append(fh)
@@ -3254,7 +3284,8 @@ def main():
                 print("saved segment to segmentTable")
                 quit()
 
-            set_multiplier_and_dims(df_segment, cluster_no, pose_no)
+            if MODE == 1:
+                set_multiplier_and_dims(df_segment, cluster_no, pose_no)
 
             effective_hsv_meta = this_hsv_meta
             if effective_hsv_meta is None and CURRENT_HSV_CYCLE_META is not None:

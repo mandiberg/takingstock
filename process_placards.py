@@ -83,8 +83,8 @@ ADJACENCY_THRESHOLD_PX = 10
 
 # FILE_FOLDER = "/Volumes/LaCie/segment_images_83_bag" #halfway through
 # FILE_FOLDER = "/Volumes/OWC5/segment_images_book_clock_bowl" 
-FILE_FOLDER ="/Volumes/OWC54/segment_images"
-# FILE_FOLDER = "/Volumes/RAID18" # must be a folder holding the site folder(s)
+# FILE_FOLDER ="/Volumes/OWC54/segment_images"
+FILE_FOLDER = "/Volumes/RAID18" # must be a folder holding the site folder(s)
 # MAKE_VIDEO_CSVS_PATH = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/book_csvs"
 MAKE_VIDEO_CSVS_PATH = None  # to process all images in folder
 OUTPUT_FOLDER = os.path.join(FILE_FOLDER, "test_output")

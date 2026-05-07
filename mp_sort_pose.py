@@ -108,7 +108,7 @@ class SortPose:
         self.BRUTEFORCE = False
         self.LMS_DIMENSIONS = LMS_DIMENSIONS
         if self.VERBOSE: print("init LMS_DIMENSIONS",self.LMS_DIMENSIONS)
-        self.CUTOFF = 3000 # DOES factor if ONE_SHOT and TSP_SORT
+        self.CUTOFF = 20000 # DOES factor if ONE_SHOT and TSP_SORT
         self.ORIGIN = 0
         self.this_nose_bridge_dist = self.NOSE_BRIDGE_DIST = None # to be set in first loop, and sort.this_nose_bridge_dist each time
         self.USE_HEAD_POSE = USE_HEAD_POSE
@@ -680,7 +680,7 @@ class SortPose:
             median_xyz = self.get_median_value(df_clean, "xyz")
             print(" ~~~ median_xyz: ", median_xyz)
             
-            if self.SORT_TYPE != "object_fusion":
+            if self.SORT_TYPE not in ["object_fusion", "obj_bbox"]:
                 # set XYZ HIGH and LOW based on median
                 margin_dict = {'pitch': 15, 'yaw': 8, 'roll': 8}
                 low_high_dict = {}
@@ -1807,7 +1807,7 @@ class SortPose:
         The resize factor cancels out in the face-height normalization, so only
         the original (pre-expand) dims are needed.
         """
-        print(f"calc_dynamic_multiplier_from_image_dims: called with {len(df)} rows, padding={padding}")
+        # print(f"calc_dynamic_multiplier_from_image_dims: called with {len(df)} rows, padding={padding}")
         required_cols = {'image_w', 'image_h', 'face_height_px', 'nose_x_px', 'nose_y_px'}
         if not required_cols.issubset(df.columns):
             missing = required_cols - set(df.columns)
