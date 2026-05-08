@@ -63,6 +63,7 @@ SegmentHelper_name = 'SegmentHelper_TheOffice'
 IS_SSD = True
 SSD_PATH = "/Volumes/LaCie/segment_images"
 ONLY_SAVE_CACHE = True
+MAKE_CACHE_MODE = True
 
 #IS_MOVE is in move_toSSD_files.py
 
@@ -1726,6 +1727,40 @@ def prep_encodings_NN(df_segment):
 
     return df_segment
 
+def generate_cropped_image(img, context):
+    """Generate a crop and return a structured status without sequence validation."""
+    if not context or not context.get("is_valid"):
+        return None, "failed"
+
+    face_landmarks = context.get("face_landmarks")
+    bbox = context.get("bbox")
+    if face_landmarks is None or bbox is None:
+        return None, "failed"
+
+    if sort.EXPAND:
+        cropped_image, resize = sort.expand_image(img, face_landmarks, bbox)
+        if cropped_image is None:
+            return None, "failed"
+        if FULL_BODY or AUTO_EDGE_CROP:
+            print('running AUTO_EDGE_CROP')
+            cropped_image = sort.auto_edge_crop(bbox, cropped_image, resize)
+        else:
+            # crop the expanded image back down based on incremental dimensions
+            cropped_image = sort.crop_whitespace(cropped_image)
+        if cropped_image is None:
+            return None, "failed"
+        return cropped_image, "ok"
+
+    cropped_image, is_inpaint = sort.crop_image(img, face_landmarks, bbox)
+    if cropped_image is None and is_inpaint:
+        return None, "needs_inpaint"
+    if cropped_image is None:
+        return None, "failed"
+    if is_inpaint:
+        return None, "needs_inpaint"
+    return cropped_image, "ok"
+
+
 def compare_images(last_image, img, face_landmarks_or_df, bbox_or_index, current_image_id=None):
     # for some reason the function is called with either a df and index, or face_landmarks and bbox
     # rw to handle both here. 
@@ -1750,24 +1785,17 @@ def compare_images(last_image, img, face_landmarks_or_df, bbox_or_index, current
     
     print(f". ---  compare_images with is_df {is_df} for {SORT_TYPE} with EXPAND {sort.EXPAND} and FULL_BODY {FULL_BODY} and self.mult {sort.image_edge_multiplier}")
     if sort.counter_dict["first_run"] is False and last_image is None: print(" ><><>< YIKES, last_image is None ><><>< ")
-    # this is where the image gets cropped or expanded
-    if sort.EXPAND:
-        cropped_image, resize = sort.expand_image(img, face_landmarks, bbox)
-        
-        if FULL_BODY or AUTO_EDGE_CROP: 
-            print('running AUTO_EDGE_CROP')
-            cropped_image = sort.auto_edge_crop(bbox, cropped_image, resize)
-        else:   
-            # cropp the 25K image back down to 10K
-            # does this based on the incremental dimensions
-            cropped_image = sort.crop_whitespace(cropped_image)
-        
-        # else: 
-        #     # trim the top 25% of the image
-        #     cropped_image = sort.trim_top_crop(cropped_image, 0.25)
-        is_inpaint = False
-    else:
-        cropped_image, is_inpaint = sort.crop_image(img, face_landmarks, bbox)
+    crop_context = {
+        "is_valid": True,
+        "face_landmarks": face_landmarks,
+        "bbox": bbox,
+        "current_image_id": current_image_id,
+        "yaw": current_yaw,
+        "roll": current_roll,
+        "pitch": current_pitch,
+    }
+    cropped_image, crop_status = generate_cropped_image(img, crop_context)
+    is_inpaint = crop_status == "needs_inpaint"
 
 
     # this code takes image i, and blends it with the subsequent image
@@ -1988,70 +2016,202 @@ def shift_bbox(bbox, extension_pixels):
     if sort.VERBOSE:print("after shifting",bbox)
     return bbox
 
-def linear_test_df(df_sorted, itter=None):
+def format_multiplier_for_cache_path(multiplier_values, places=4):
+    """Format a list of multiplier floats into a cache-path-safe string."""
+    def format_one(value):
+        rounded = round(float(value), places)
+        text_value = f"{rounded:.{places}f}".rstrip("0").rstrip(".")
+        if "." not in text_value:
+            text_value += ".0"
+        return text_value
+    return '_'.join(format_one(value) for value in multiplier_values)
 
-    sort.reset_face_pair_stats()
 
-    def format_multiplier_for_cache_path(multiplier_values, places=4):
-        def format_one(value):
-            rounded = round(float(value), places)
-            text_value = f"{rounded:.{places}f}".rstrip("0").rstrip(".")
-            if "." not in text_value:
-                text_value += ".0"
-            return text_value
-
-        return '_'.join(format_one(value) for value in multiplier_values)
-
-    def get_row_source_path_value(row):
+def resolve_row_io_paths(row):
+    """Resolve source and cache paths for a row without mutating shared state."""
+    def get_row_source_path_value(row_obj):
         path_fields = ["filepath", "file_path", "image_path", "path", "local_path", "source_path"]
         for field in path_fields:
-            value = row.get(field, None)
+            value = row_obj.get(field, None)
             if isinstance(value, str):
                 value = value.strip()
                 if value and value.lower() != "nan":
                     return value
         return None
 
-    def resolve_source_image_path(row):
-        explicit_path = get_row_source_path_value(row)
-        if explicit_path:
-            if os.path.isabs(explicit_path):
-                return explicit_path
-
+    explicit_path = get_row_source_path_value(row)
+    source_path = None
+    if explicit_path:
+        if os.path.isabs(explicit_path):
+            source_path = explicit_path
+        else:
             folder_value = row.get('folder', None)
             if isinstance(folder_value, str) and folder_value.strip() and folder_value.lower() != "nan":
-                return os.path.join(folder_value, explicit_path)
-            return explicit_path
-
+                source_path = os.path.join(folder_value, explicit_path)
+            else:
+                source_path = explicit_path
+    else:
         # fallback to legacy source path construction
         if IS_SSD and SegmentFolder is not None:
-            return os.path.join(SegmentFolder, os.path.basename(io.folder_list[row['site_name_id']]), row['imagename'])
-        return os.path.join(io.folder_list[row['site_name_id']], row['imagename'])
-
-    def get_cropped_cache_file(row):
-        source_path = resolve_source_image_path(row)
-        source_folder = os.path.dirname(source_path) if source_path else None
-        image_name = row.get('imagename', None)
-        if not isinstance(image_name, str) or not image_name.strip() or image_name.lower() == "nan":
-            image_name = os.path.basename(source_path) if source_path else None
-
-        folder_value = row.get('folder', None)
-        if isinstance(folder_value, str) and folder_value.strip() and folder_value.lower() != "nan":
-            base_folder = folder_value
-        elif source_folder:
-            base_folder = source_folder
+            source_path = os.path.join(SegmentFolder, os.path.basename(io.folder_list[row['site_name_id']]), row['imagename'])
         else:
-            return None
+            source_path = os.path.join(io.folder_list[row['site_name_id']], row['imagename'])
 
-        if not image_name:
-            return None
+    source_folder = os.path.dirname(source_path) if source_path else None
+    source_image_name = row.get('imagename', None)
+    if not isinstance(source_image_name, str) or not source_image_name.strip() or source_image_name.lower() == "nan":
+        source_image_name = os.path.basename(source_path) if source_path else None
 
-        aspect_ratio = format_multiplier_for_cache_path(sort.image_edge_multiplier)
+    folder_value = row.get('folder', None)
+    if isinstance(folder_value, str) and folder_value.strip() and folder_value.lower() != "nan":
+        base_folder = folder_value
+    elif source_folder:
+        base_folder = source_folder
+    else:
+        base_folder = None
+
+    cropped_cache_file = None
+    inpaint_cache_file = None
+    aspect_ratio = format_multiplier_for_cache_path(sort.image_edge_multiplier)
+    if base_folder and source_image_name:
         folder_root = os.path.dirname(base_folder)
         folder_name = os.path.basename(base_folder)
         if INPAINT_COLOR:
-            return os.path.join(folder_root, folder_name+"_cropped_"+INPAINT_COLOR+"_"+aspect_ratio, image_name)
-        return os.path.join(folder_root, folder_name+"_cropped_"+aspect_ratio, image_name)
+            cropped_cache_file = os.path.join(folder_root, folder_name + "_cropped_" + INPAINT_COLOR + "_" + aspect_ratio, source_image_name)
+            inpaint_cache_file = os.path.join(folder_root, folder_name + "_inpaint_" + INPAINT_COLOR + "_" + aspect_ratio, source_image_name)
+        else:
+            cropped_cache_file = os.path.join(folder_root, folder_name + "_cropped_" + aspect_ratio, source_image_name)
+            inpaint_cache_file = os.path.join(folder_root, folder_name + "_inpaint_" + aspect_ratio, source_image_name)
+
+    return {
+        "source_path": source_path,
+        "source_folder": source_folder,
+        "source_image_name": source_image_name,
+        "base_folder": base_folder,
+        "aspect_ratio": aspect_ratio,
+        "cropped_cache_file": cropped_cache_file,
+        "inpaint_cache_file": inpaint_cache_file,
+    }
+
+
+def load_source_image_for_row(row, io_paths):
+    """Load source image and preserve existing debug drawing/trim behavior."""
+    open_path = io_paths["source_path"]
+    img = cv2.imread(open_path)
+    if img is None:
+        print(f"failed to open image at {open_path}")
+        return None
+    print("just opened image shape", img.shape)
+
+    if DRAW_TEST_LMS:
+        print("about to draw landmarks, subset", sort.SUBSET_LANDMARKS)
+        landmarks_2d = sort.get_landmarks_2d(row['left_hand_landmarks'], sort.SUBSET_LANDMARKS, "list")
+        landmarks_2d2 = sort.get_landmarks_2d(row['right_hand_landmarks'], sort.SUBSET_LANDMARKS, "list")
+        landmarks_2d = landmarks_2d + landmarks_2d2
+        print("landmarks_2d before drawing", landmarks_2d)
+        img = sort.draw_point(img, landmarks_2d, index=0)
+
+    if row["site_name_id"] in [2, 9]:
+        if VERBOSE:
+            print("shutter alamy trimming at the bottom")
+        img = sort.trim_bottom(img, row["site_name_id"])
+
+    return img
+
+
+def prepare_crop_context(img, row):
+    """Build row-local crop context dict (Option A scaffolding)."""
+    context = {
+        "image": img,
+        "h": img.shape[0],
+        "w": img.shape[1],
+        "face_landmarks": row.get('face_landmarks', None),
+        "bbox": row.get('bbox', None),
+        "current_image_id": row.get('image_id', None),
+        "yaw": row.get('yaw', None),
+        "roll": row.get('roll', None),
+        "pitch": row.get('pitch', None),
+        "nose_2d": None,
+        "face_height": None,
+        "is_valid": False,
+    }
+
+    try:
+        # Keep current behavior by invoking existing geometry setup.
+        sort.get_image_face_data(img, context["face_landmarks"], context["bbox"])
+        context["nose_2d"] = getattr(sort, "nose_2d", None)
+        context["face_height"] = getattr(sort, "face_height", None)
+        context["is_valid"] = context["bbox"] is not None and context["face_landmarks"] is not None
+    except Exception:
+        print(traceback.format_exc())
+        print("prepare_crop_context failed")
+
+    return context
+
+
+def linear_test_df(df_sorted, itter=None):
+
+    sort.reset_face_pair_stats()
+
+    def resolve_source_image_path(row):
+        return resolve_row_io_paths(row)["source_path"]
+
+    def get_cropped_cache_file(row):
+        return resolve_row_io_paths(row)["cropped_cache_file"]
+
+    def validate_generated_crop_for_sequence(cropped_image, crop_status, current_image_id):
+        """Apply pair validation and counter updates to generated crops."""
+        is_face = None
+
+        if sort.counter_dict["first_run"] is False and sort.counter_dict["last_image"] is None:
+            print(" ><><>< YIKES, last_image is None ><><>< ")
+
+        if crop_status == "ok" and cropped_image is not None:
+            if VERBOSE:
+                print("have a cropped image trying to save", cropped_image.shape)
+            try:
+                if sort.counter_dict["first_run"] is False:
+                    if VERBOSE:
+                        print("testing is_face")
+                    if SORT_TYPE not in ("planar_body", "body3D"):
+                        if VERBOSE:
+                            print("testing is_face to see if the two make a face")
+                            print("last_image shape:", sort.counter_dict["last_image"].shape)
+                            print("cropped_image shape:", cropped_image.shape)
+                        is_face = sort.test_or_lookup_face_pair(
+                            sort.counter_dict["last_image"],
+                            cropped_image,
+                            current_image_id,
+                        )
+                    else:
+                        print("failed is_face test")
+                else:
+                    print("first round, skipping the pair test")
+            except Exception:
+                print("last_image try failed")
+
+            if is_face or sort.counter_dict["first_run"]:
+                sort.counter_dict["first_run"] = False
+                sort.counter_dict["good_count"] += 1
+                return cropped_image, False
+
+            sort.counter_dict["isnot_face_count"] += 1
+            print("pair do not make a face, skipping <<< is this really true? Isn't this for dupes?")
+            return None, True
+
+        if crop_status == "needs_inpaint":
+            print("bad crop, will try inpainting and try again")
+            sort.counter_dict["inpaint_count"] += 1
+            return None, False
+
+        if sort.counter_dict["first_run"]:
+            print("first run, but bad first image")
+            sort.counter_dict["cropfail_count"] += 1
+            return None, False
+
+        print("no image or resize to great, trying next")
+        sort.counter_dict["cropfail_count"] += 1
+        return None, True
 
     def validate_cached_cropped(cached_img, current_image_id):
         """Run pair-test validation for a pre-cropped cache hit without recropping."""
@@ -2277,11 +2437,23 @@ def linear_test_df(df_sorted, itter=None):
                 # inpaint_image=0
                 bailout=True
         if not bailout:
-            print("not bailing out, going to compare_images")
-            bbox=shift_bbox(row['bbox'],extension_pixels)
-            cropped_image, skip_face = compare_images(sort.counter_dict["last_image"], inpaint_image,row['face_landmarks'], bbox, row['image_id'])
-            if sort.VERBOSE:print("inpainting done","shape:",np.shape(cropped_image))
-            if skip_face:print("still 1x1 image , you're probably shifting both landmarks and bbox, only bbox needs to be shifted")
+            print("not bailing out, going to generate crop from inpainted image")
+            bbox = shift_bbox(row['bbox'], extension_pixels)
+            # Build a context for the inpainted image so generate_cropped_image can work on it.
+            # Note: shift_bbox mutates sort.nose_2d as a side effect (thread-safety audit point).
+            inpaint_crop_context = {
+                "is_valid": True,
+                "face_landmarks": row['face_landmarks'],
+                "bbox": bbox,
+                "current_image_id": row.get('image_id', None),
+                "yaw": row.get('yaw', None),
+                "roll": row.get('roll', None),
+                "pitch": row.get('pitch', None),
+            }
+            cropped_image, crop_status = generate_cropped_image(inpaint_image, inpaint_crop_context)
+            if sort.VERBOSE: print("inpainting crop done", "status:", crop_status, "shape:", np.shape(cropped_image))
+            if crop_status != "ok" or cropped_image is None:
+                print("still failed after inpaint crop; you're probably shifting both landmarks and bbox, only bbox needs to be shifted")
             if cropped_image is not None:
                 cropped_dir = os.path.dirname(cropped_file)
                 if not os.path.exists(cropped_dir):
@@ -2289,8 +2461,10 @@ def linear_test_df(df_sorted, itter=None):
                 cv2.imwrite(cropped_file, cropped_image)
                 if sort.VERBOSE:
                     print("saved cropped cache", cropped_file)
+            # Return the raw crop; caller is responsible for pair validation.
+            return cropped_image, crop_status
 
-        return cropped_image, face_diff
+        return None, "bailout"
 
     # def trim_bottom(img, site_name_id):
     #     if VERBOSE: print("trimming bottom")
@@ -2326,7 +2500,8 @@ def linear_test_df(df_sorted, itter=None):
             face_diff = None
             img = None
 
-            cropped_cache_file = get_cropped_cache_file(row)
+            io_paths = resolve_row_io_paths(row)
+            cropped_cache_file = io_paths["cropped_cache_file"]
             if USE_PAINTED and cropped_cache_file and os.path.exists(cropped_cache_file):
                 if sort.VERBOSE:
                     print("linear_test_df cache hit, loading cropped image", cropped_cache_file)
@@ -2337,7 +2512,7 @@ def linear_test_df(df_sorted, itter=None):
                 print(f"[timing] cache-hit load+validate {cache_hit_elapsed:.3f}s image_id={row['image_id']}")
                 used_cached_cropped = True
             else:
-                open_path = resolve_source_image_path(row)
+                open_path = io_paths["source_path"]
                 print("open_path", open_path)
                 if 'site_name_id' in row and 'folder' in row:
                     print("open_path constructed from", io.folder_list[row['site_name_id']], row['folder'], row['imagename'])
@@ -2345,31 +2520,17 @@ def linear_test_df(df_sorted, itter=None):
             description = row['description']
             if not used_cached_cropped:
                 try:
-                    img = cv2.imread(open_path)
+                    img = load_source_image_for_row(row, io_paths)
                     if img is None:
-                        print(f"failed to open image at {open_path}")
                         continue
-                    print("just opened image shape", img.shape)
-                    if DRAW_TEST_LMS:
-                        # for testing, draw in points
-                        # list(range(20)
-                        print("about to draw landmarks, subset", sort.SUBSET_LANDMARKS)
-                        landmarks_2d = sort.get_landmarks_2d(row['left_hand_landmarks'], sort.SUBSET_LANDMARKS, "list")
-                        landmarks_2d2 = sort.get_landmarks_2d(row['right_hand_landmarks'], sort.SUBSET_LANDMARKS, "list")
-                        landmarks_2d = landmarks_2d + landmarks_2d2
-                        print("landmarks_2d before drawing", landmarks_2d)
-                        # transpose x and y in the landmarks
-                        img = sort.draw_point(img, landmarks_2d, index = 0)
-
-                    if row["site_name_id"] in [2,9]:
-                        if VERBOSE: print("shutter alamy trimming at the bottom")
-                        img = sort.trim_bottom(img, row["site_name_id"])
                 except Exception:
                     print("trim failed")
                     continue
 
-                # establish the origin
-                sort.get_image_face_data(img, row['face_landmarks'], row['bbox'])
+                crop_context = prepare_crop_context(img, row)
+                if not crop_context["is_valid"]:
+                    print("invalid crop context, skipping row")
+                    continue
 
                 # control distance
                 this_dist = row.get('dist', None)
@@ -2378,10 +2539,18 @@ def linear_test_df(df_sorted, itter=None):
                     print(f"this_dist {this_dist} > MAXD" , str(sort.MAXD))
                     continue
 
-                # compare_images to make sure they are face and not the same
-                # last_image is cv2 np.array
-                cropped_image, skip_face = compare_images(sort.counter_dict["last_image"], img, df_sorted, index)
-                print("after compare_images, cropped_image shape:", None if cropped_image is None else cropped_image.shape)
+                cropped_image, crop_status = generate_cropped_image(img, crop_context)
+                cropped_image, skip_face = validate_generated_crop_for_sequence(
+                    cropped_image,
+                    crop_status,
+                    crop_context["current_image_id"],
+                )
+                print(
+                    "after generate_cropped_image, status:",
+                    crop_status,
+                    "cropped_image shape:",
+                    None if cropped_image is None else cropped_image.shape,
+                )
             else:
                 print("used cached cropped image, skipping resize/crop path")
             # deduping is done elsehwere now
@@ -2424,7 +2593,16 @@ def linear_test_df(df_sorted, itter=None):
             elif cropped_image is None and not used_cached_cropped and img is not None:
             # if len(cropped_image)==1 and (OUTPAINT or INPAINT):
                 print("gotta paint that shizzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz")
-                cropped_image, face_diff = in_out_paint(img, row)
+                inpaint_result, inpaint_status = in_out_paint(img, row)
+                cropped_image = inpaint_result
+                # If inpaint returned a raw crop (not yet pair-validated), validate now for sequence.
+                if inpaint_status not in ("bailout", None) and cropped_image is not None:
+                    cropped_image, skip_face = validate_generated_crop_for_sequence(
+                        cropped_image, "ok", row.get('image_id', None)
+                    )
+                elif inpaint_result is None:
+                    skip_face = True
+                face_diff = None
 
             # handle/debug counter_dict
             temp_first_run = sort.counter_dict["first_run"]
@@ -2517,6 +2695,85 @@ def linear_test_df(df_sorted, itter=None):
         )
     sort.print_face_pair_stats("linear_test_df cycle")
     return
+
+
+def process_row_for_cache_only(row):
+    """Version A cache-mode row processor: generate and write crop to cache, skip validation.
+
+    Thread-safe when sort.get_image_face_data is audited (Phase 5).
+    Returns a result dict with status in: 'skipped', 'generated', 'failed'.
+    """
+    try:
+        # 1. Resolve paths
+        io_paths = resolve_row_io_paths(row)
+        source_path = io_paths["source_path"]
+        source_image_name = io_paths["source_image_name"]
+        cropped_cache_file = io_paths["cropped_cache_file"]
+
+        if not source_path:
+            return {"cache_file": None, "status": "failed", "cropped_image": None, "skip_reason": "no source path"}
+        if not cropped_cache_file:
+            return {"cache_file": None, "status": "failed", "cropped_image": None, "skip_reason": "no cache path"}
+
+        # 2. Skip if cache already exists
+        if USE_PAINTED and os.path.exists(cropped_cache_file):
+            print(f"[cache_mode] cache exists, skipping image_id={row.get('image_id', '?')} path={cropped_cache_file}")
+            return {"cache_file": cropped_cache_file, "status": "skipped", "cropped_image": None, "skip_reason": "cache exists"}
+
+        # 3. Load source image (with debug landmark drawing if enabled)
+        img = load_source_image_for_row(row, io_paths)
+        if img is None:
+            print(f"[cache_mode] failed to open image at {source_path}")
+            return {"cache_file": cropped_cache_file, "status": "failed", "cropped_image": None, "skip_reason": "imread failed"}
+
+        # 4. Build crop context
+        context = prepare_crop_context(img, row)
+        if not context["is_valid"]:
+            return {"cache_file": cropped_cache_file, "status": "failed", "cropped_image": None, "skip_reason": "no face_landmarks or bbox"}
+
+        # 5. Generate crop (Version A: direct expand-crop only, no inpaint fallback)
+        cropped_image, crop_status = generate_cropped_image(img, context)
+        if crop_status == "needs_inpaint":
+            print(f"[cache_mode] needs_inpaint, skipping (Version A) image_id={row.get('image_id', '?')}")
+            return {"cache_file": cropped_cache_file, "status": "skipped", "cropped_image": None, "skip_reason": "needs_inpaint (Version A)"}
+        if crop_status == "failed" or cropped_image is None:
+            print(f"[cache_mode] crop failed image_id={row.get('image_id', '?')}")
+            return {"cache_file": cropped_cache_file, "status": "failed", "cropped_image": None, "skip_reason": "crop failed"}
+
+        # 6. Write to cache folder only (no metas, no output JPG, no counter updates)
+        cropped_cache_dir = os.path.dirname(cropped_cache_file)
+        if not os.path.exists(cropped_cache_dir):
+            os.makedirs(cropped_cache_dir)
+        cv2.imwrite(cropped_cache_file, cropped_image)
+        print(f"[cache_mode] generated cache image_id={row.get('image_id', '?')} path={cropped_cache_file}")
+        return {"cache_file": cropped_cache_file, "status": "generated", "cropped_image": cropped_image, "skip_reason": None}
+
+    except Exception:
+        print(traceback.format_exc())
+        return {"cache_file": None, "status": "failed", "cropped_image": None, "skip_reason": "exception"}
+
+
+def process_csv_cache_only(df_sorted, csv_path, num_workers=4):
+    """Thread pool orchestrator for MAKE_CACHE_MODE: parallel per-row cache generation."""
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    results = []
+    rows = [row for _, row in df_sorted.iterrows()]
+    print(f"[cache_mode] processing {len(rows)} rows from {csv_path} with {num_workers} workers")
+    with ThreadPoolExecutor(max_workers=num_workers) as executor:
+        futures = {executor.submit(process_row_for_cache_only, row): i for i, row in enumerate(rows)}
+        for future in as_completed(futures):
+            try:
+                result = future.result()
+                results.append(result)
+            except Exception:
+                print(traceback.format_exc())
+                results.append({"status": "failed", "skip_reason": "executor exception"})
+    skipped = sum(1 for r in results if r["status"] == "skipped")
+    generated = sum(1 for r in results if r["status"] == "generated")
+    failed = sum(1 for r in results if r["status"] == "failed")
+    print(f"[cache_mode] done: generated={generated} skipped={skipped} failed={failed} total={len(results)}")
+    return results
+
 
 def write_images(img_list):
     for path_img in img_list:
@@ -3489,7 +3746,15 @@ def main():
                 set_multiplier_and_dims(df_sorted, cluster_no, pose_no)
 
                 if CALIBRATING: continue
-                linear_test_df(df_sorted)
+
+                if MAKE_CACHE_MODE:
+                    # MAKE_CACHE_MODE: threaded cache generation, skip dedupe + pair validation
+                    # num_workers = getattr(io, 'NUMBER_OF_PROCESSES_GPU', 4)
+                    # temp override for testing
+                    num_workers = 1
+                    process_csv_cache_only(df_sorted, csv_file, num_workers=num_workers)
+                else:
+                    linear_test_df(df_sorted)
 
 
 
