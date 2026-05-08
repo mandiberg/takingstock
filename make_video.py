@@ -6,6 +6,9 @@ import os
 import glob
 import time
 import sys
+import threading
+import resource
+import subprocess
 import pickle
 import base64
 import json
@@ -914,6 +917,16 @@ start_site_image_id = None
 d = None
 CURRENT_HSV_CYCLE_META = None
 
+CACHE_WORKER_STATE = threading.local()
+
+
+def get_cache_worker_upscale_model():
+    model = getattr(CACHE_WORKER_STATE, "upscale_model", None)
+    if model is None:
+        CACHE_WORKER_STATE.upscale_model = sort.set_upscale_model(UPSCALE_MODEL_PATH)
+        model = CACHE_WORKER_STATE.upscale_model
+    return model
+
 
 # override io.db for testing mode
 # db['name'] = "123test"
@@ -1734,8 +1747,45 @@ def generate_cropped_image(img, context):
 
     face_landmarks = context.get("face_landmarks")
     bbox = context.get("bbox")
+    geometry = context.get("geometry")
+    use_pure_geometry = context.get("use_pure_geometry", False)
+    upscale_model = context.get("upscale_model")
     if face_landmarks is None or bbox is None:
         return None, "failed"
+
+    if use_pure_geometry and geometry and geometry.get("is_valid"):
+        if sort.EXPAND:
+            cropped_image, resize = sort.expand_image_from_geometry(
+                geometry,
+                upscale_model=upscale_model,
+            )
+            if cropped_image is None:
+                return None, "failed"
+            if FULL_BODY or AUTO_EDGE_CROP:
+                print('running AUTO_EDGE_CROP')
+                cropped_image = sort.auto_edge_crop_from_geometry(
+                    bbox,
+                    cropped_image,
+                    resize,
+                    geometry.get("face_height"),
+                )
+            else:
+                cropped_image = sort.crop_whitespace(cropped_image)
+            if cropped_image is None:
+                return None, "failed"
+            return cropped_image, "ok"
+
+        crop_data = context.get("crop_data") or sort.compute_scalable_crop_data(geometry)
+        cropped_image, is_inpaint = sort.crop_image_from_geometry(
+            geometry,
+            crop_data=crop_data,
+            upscale_model=upscale_model,
+        )
+        if cropped_image is None and is_inpaint:
+            return None, "needs_inpaint"
+        if cropped_image is None:
+            return None, "failed"
+        return cropped_image, "ok"
 
     if sort.EXPAND:
         cropped_image, resize = sort.expand_image(img, face_landmarks, bbox)
@@ -2133,15 +2183,34 @@ def prepare_crop_context(img, row):
         "pitch": row.get('pitch', None),
         "nose_2d": None,
         "face_height": None,
+        "geometry": None,
+        "crop_data": None,
+        "use_pure_geometry": False,
+        "upscale_model": None,
         "is_valid": False,
     }
 
     try:
-        # Keep current behavior by invoking existing geometry setup.
-        sort.get_image_face_data(img, context["face_landmarks"], context["bbox"])
-        context["nose_2d"] = getattr(sort, "nose_2d", None)
-        context["face_height"] = getattr(sort, "face_height", None)
         context["is_valid"] = context["bbox"] is not None and context["face_landmarks"] is not None
+        if not context["is_valid"]:
+            return context
+
+        if row.get("_cache_use_pure_geometry"):
+            geometry = sort.compute_face_geometry(img, context["face_landmarks"], context["bbox"])
+            context["geometry"] = geometry
+            context["use_pure_geometry"] = geometry is not None and geometry.get("is_valid", False)
+            if context["use_pure_geometry"]:
+                context["nose_2d"] = geometry.get("nose_2d")
+                context["face_height"] = geometry.get("face_height")
+                if not sort.EXPAND:
+                    context["crop_data"] = sort.compute_scalable_crop_data(geometry)
+            else:
+                context["is_valid"] = False
+        else:
+            # Keep sequence-mode behavior on the legacy mutating path.
+            sort.get_image_face_data(img, context["face_landmarks"], context["bbox"])
+            context["nose_2d"] = getattr(sort, "nose_2d", None)
+            context["face_height"] = getattr(sort, "face_height", None)
     except Exception:
         print(traceback.format_exc())
         print("prepare_crop_context failed")
@@ -2727,9 +2796,12 @@ def process_row_for_cache_only(row):
             return {"cache_file": cropped_cache_file, "status": "failed", "cropped_image": None, "skip_reason": "imread failed"}
 
         # 4. Build crop context
+        row = row.copy()
+        row["_cache_use_pure_geometry"] = True
         context = prepare_crop_context(img, row)
         if not context["is_valid"]:
             return {"cache_file": cropped_cache_file, "status": "failed", "cropped_image": None, "skip_reason": "no face_landmarks or bbox"}
+        context["upscale_model"] = get_cache_worker_upscale_model()
 
         # 5. Generate crop (Version A: direct expand-crop only, no inpaint fallback)
         cropped_image, crop_status = generate_cropped_image(img, context)
@@ -2746,7 +2818,8 @@ def process_row_for_cache_only(row):
             os.makedirs(cropped_cache_dir)
         cv2.imwrite(cropped_cache_file, cropped_image)
         print(f"[cache_mode] generated cache image_id={row.get('image_id', '?')} path={cropped_cache_file}")
-        return {"cache_file": cropped_cache_file, "status": "generated", "cropped_image": cropped_image, "skip_reason": None}
+        # Do not return image arrays from workers; that causes unbounded memory growth.
+        return {"cache_file": cropped_cache_file, "status": "generated", "skip_reason": None}
 
     except Exception:
         print(traceback.format_exc())
@@ -2756,23 +2829,57 @@ def process_row_for_cache_only(row):
 def process_csv_cache_only(df_sorted, csv_path, num_workers=4):
     """Thread pool orchestrator for MAKE_CACHE_MODE: parallel per-row cache generation."""
     from concurrent.futures import ThreadPoolExecutor, as_completed
-    results = []
+
+    def get_peak_rss_mb():
+        # ru_maxrss units are bytes on macOS and kilobytes on Linux.
+        rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+        if sys.platform == "darwin":
+            return rss / (1024 * 1024)
+        return rss / 1024
+
+    def get_current_rss_mb():
+        # Use `ps` to get current RSS in KiB, then convert to MiB.
+        try:
+            pid = str(os.getpid())
+            rss_kb = int(subprocess.check_output(["ps", "-o", "rss=", "-p", pid], text=True).strip())
+            return rss_kb / 1024
+        except Exception:
+            return -1.0
+
+    skipped = 0
+    generated = 0
+    failed = 0
+    total = 0
+    log_every = 200
     rows = [row for _, row in df_sorted.iterrows()]
     print(f"[cache_mode] processing {len(rows)} rows from {csv_path} with {num_workers} workers")
     with ThreadPoolExecutor(max_workers=num_workers) as executor:
         futures = {executor.submit(process_row_for_cache_only, row): i for i, row in enumerate(rows)}
         for future in as_completed(futures):
+            total += 1
             try:
                 result = future.result()
-                results.append(result)
+                status = result.get("status") if isinstance(result, dict) else None
+                if status == "generated":
+                    generated += 1
+                elif status == "skipped":
+                    skipped += 1
+                else:
+                    failed += 1
             except Exception:
                 print(traceback.format_exc())
-                results.append({"status": "failed", "skip_reason": "executor exception"})
-    skipped = sum(1 for r in results if r["status"] == "skipped")
-    generated = sum(1 for r in results if r["status"] == "generated")
-    failed = sum(1 for r in results if r["status"] == "failed")
-    print(f"[cache_mode] done: generated={generated} skipped={skipped} failed={failed} total={len(results)}")
-    return results
+                failed += 1
+            if total % log_every == 0:
+                rss_mb = get_current_rss_mb()
+                peak_rss_mb = get_peak_rss_mb()
+                rss_display = f"{rss_mb:.1f}" if rss_mb >= 0 else "n/a"
+                print(
+                    f"[cache_mode] progress {total}/{len(rows)} "
+                    f"generated={generated} skipped={skipped} failed={failed} "
+                    f"rss_mb={rss_display} maxrss_mb={peak_rss_mb:.1f}"
+                )
+    print(f"[cache_mode] done: generated={generated} skipped={skipped} failed={failed} total={total}")
+    return {"generated": generated, "skipped": skipped, "failed": failed, "total": total}
 
 
 def write_images(img_list):
@@ -3750,8 +3857,7 @@ def main():
                 if MAKE_CACHE_MODE:
                     # MAKE_CACHE_MODE: threaded cache generation, skip dedupe + pair validation
                     # num_workers = getattr(io, 'NUMBER_OF_PROCESSES_GPU', 4)
-                    # temp override for testing
-                    num_workers = 1
+                    num_workers = 12
                     process_csv_cache_only(df_sorted, csv_file, num_workers=num_workers)
                 else:
                     linear_test_df(df_sorted)

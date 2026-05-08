@@ -2287,6 +2287,129 @@ class SortPose:
         distance = s_sq_difference**0.5
         return distance    
 
+    def get_face_2d_point_from_geometry(self, geometry, point):
+        img_h = geometry["h"]
+        img_w = geometry["w"]
+        bbox = geometry["bbox"]
+        face_lms = geometry["faceLms"]
+        bbox_x = bbox['left']
+        bbox_y = bbox['top']
+        bbox_w = bbox['right'] - bbox['left']
+        bbox_h = bbox['bottom'] - bbox['top']
+
+        if face_lms is None or not hasattr(face_lms, "landmark"):
+            return None
+
+        point_xy = None
+        for idx, lm in enumerate(face_lms.landmark):
+            if idx == point:
+                if self.VERBOSE: print("unprojected face lms", lm.x, lm.y)
+                point_xy = (lm.x * img_w, lm.y * img_h)
+                point_xy = (lm.x * bbox_w + bbox_x, lm.y * bbox_h + bbox_y)
+                break
+        return point_xy
+
+    def compute_face_geometry(self, image, faceLms, bbox, nose_bridge_dist=None):
+        if image is None or bbox is None or faceLms is None:
+            return None
+
+        geometry = {
+            "image": image,
+            "h": image.shape[0],
+            "w": image.shape[1],
+            "size": (image.shape[0], image.shape[1]),
+            "faceLms": faceLms,
+            "bbox": bbox,
+            "nose_2d": None,
+            "face_height": None,
+            "this_nose_bridge_dist": nose_bridge_dist,
+            "is_valid": False,
+        }
+
+        try:
+            if faceLms is not None and hasattr(faceLms, "landmark") and faceLms.landmark:
+                top_2d = self.get_face_2d_point_from_geometry(geometry, 10)
+                bottom_2d = self.get_face_2d_point_from_geometry(geometry, 152)
+                if top_2d is not None and bottom_2d is not None:
+                    geometry["face_height"] = self.dist(self.point(bottom_2d), self.point(top_2d))
+            else:
+                geometry["face_height"] = (bbox['bottom'] - bbox['top']) / 2
+        except Exception:
+            print(traceback.format_exc())
+            print("compute_face_geometry: couldn't get face height")
+
+        try:
+            raw_nose_2d = self.get_face_2d_point_from_geometry(geometry, 1)
+            geometry["nose_2d"] = raw_nose_2d
+            if self.VERBOSE: print("nose_2d", geometry["nose_2d"])
+
+            if self.ORIGIN == 6 and raw_nose_2d is not None and geometry["face_height"] is not None:
+                if geometry["this_nose_bridge_dist"] is None:
+                    geometry["this_nose_bridge_dist"] = self.calc_nose_bridge_dist(faceLms)
+                if self.VERBOSE: print("NOSE_BRIDGE_DIST, this_nose_bridge_dist", self.NOSE_BRIDGE_DIST, geometry["this_nose_bridge_dist"])
+                if self.NOSE_BRIDGE_DIST is not None and geometry["this_nose_bridge_dist"] is not None:
+                    nose_delta = self.NOSE_BRIDGE_DIST - geometry["this_nose_bridge_dist"]
+                    if self.VERBOSE: print("nose_delta", nose_delta)
+                    geometry["nose_2d"] = (
+                        math.floor(raw_nose_2d[0]),
+                        math.floor(raw_nose_2d[1] + (nose_delta * geometry["face_height"])),
+                    )
+            if self.VERBOSE: print("compute_face_geometry new nose_2d", geometry["nose_2d"])
+        except Exception:
+            print("compute_face_geometry: couldn't get nose_2d via faceLms")
+
+        geometry["is_valid"] = geometry["nose_2d"] is not None and geometry["face_height"] is not None
+        return geometry
+
+    def compute_scalable_crop_data(self, geometry, image_edge_multiplier=None):
+        if not geometry or not geometry.get("is_valid"):
+            return {"toobig": True, "simple_crop": None}
+
+        multiplier = image_edge_multiplier or self.image_edge_multiplier
+        p1 = (int(geometry["nose_2d"][0]), int(geometry["nose_2d"][1]))
+        width, height = geometry["w"], geometry["h"]
+        if self.VERBOSE: print("checkig boundaries")
+        if self.VERBOSE: print("width", width, "height", height)
+        if self.VERBOSE: print("nose_2d", p1)
+        if self.VERBOSE: print("face_height", geometry["face_height"])
+
+        if multiplier[1] != multiplier[3]:
+            if self.VERBOSE: print(" --- WARNING --- image_edge_multiplier left and right are not symmetrical breaking out", multiplier[1], multiplier[3])
+
+        topcrop = int(p1[1] - geometry["face_height"] * multiplier[0])
+        rightcrop = int(p1[0] + geometry["face_height"] * multiplier[1])
+        botcrop = int(p1[1] + geometry["face_height"] * multiplier[2])
+        leftcrop = int(p1[0] - geometry["face_height"] * multiplier[3])
+        simple_crop = [topcrop, rightcrop, botcrop, leftcrop]
+        if self.VERBOSE: print("crop top, right, bot, left")
+        if self.VERBOSE: print(simple_crop)
+
+        toobig = any([topcrop < 0, width - rightcrop < 0, height - botcrop < 0, leftcrop < 0])
+        if toobig:
+            if self.VERBOSE: print("one is negative: topcrop", topcrop, "rightcrop", width - rightcrop, "botcrop", height - botcrop, "leftcrop", leftcrop)
+            if self.VERBOSE: print("width", width, "height", height)
+        else:
+            if self.VERBOSE: print("all positive")
+
+        return {
+            "toobig": toobig,
+            "simple_crop": simple_crop,
+            "nose_2d": p1,
+            "face_height": geometry["face_height"],
+            "image_edge_multiplier": multiplier,
+        }
+
+    def _resolve_upscale_model(self, upscale_model=None):
+        if upscale_model is not None:
+            return upscale_model
+        return getattr(self, "upscale_model", None)
+
+    def _upsample_with_model(self, image, upscale_model=None):
+        model = self._resolve_upscale_model(upscale_model)
+        if model is None:
+            return image
+        return model.upsample(image)
+
     def get_face_2d_point(self, point):
         # print("get_face_2d_point")
 
@@ -2359,6 +2482,151 @@ class SortPose:
             toobig = False
 
         return toobig
+
+    def auto_edge_crop_from_geometry(self, bbox, image, resize, face_height, image_edge_multiplier=None):
+        """Tench's body landmark crop using row-local geometry."""
+        if bbox is None or image is None or face_height is None:
+            return image
+
+        multiplier = image_edge_multiplier or self.image_edge_multiplier
+        print(f"auto_edge_crop: image edge multiplier {multiplier}")
+        top, right, bottom, left = multiplier
+        bbox_dimensions = self.bbox_to_pixel_conversion(bbox)
+        print(f"auto_edge_crop: initial bbox dimensions {bbox_dimensions} x {resize} == {bbox_dimensions['horizontal']*resize}, {bbox_dimensions['vertical']*resize}")
+        bbox_dimensions["horizontal"] = bbox_dimensions["horizontal"] * resize
+        bbox_dimensions["vertical"] = bbox_dimensions["vertical"] * resize
+
+        scaled_face_height = face_height * resize
+        print(f"auto_edge_crop: should multiply/crop w/ scaled_face_height {face_height} x {resize}: {scaled_face_height}")
+        print(f"auto_edge_crop: we {bbox_dimensions}")
+        print("auto_edge_crop: current image shape", image.shape)
+        print("auto_edge_crop: resize factor", resize)
+        print("top, right, bottom, left", top, right, bottom, left)
+        factor = 1.0 if self.DYN_BBOX_FROM_IMAGE_DIMS else 1.3
+        print(f"auto_edge_crop: multiplier factor={factor} (DYN_BBOX_FROM_IMAGE_DIMS={self.DYN_BBOX_FROM_IMAGE_DIMS})")
+        top = int((image.shape[0] / 2) - abs(scaled_face_height * (top * factor)))
+        right = int((image.shape[1] / 2) + abs(scaled_face_height * (right * factor)))
+        bottom = int((image.shape[0] / 2) + abs(scaled_face_height * (bottom * factor)))
+        left = int((image.shape[1] / 2) - abs(scaled_face_height * (left * factor)))
+
+        print(f"auto_edge_crop: calculated crop coords before bounds check: top:{top}, right:{right}, bottom:{bottom}, left:{left}")
+        try:
+            cropped = image[top:bottom, left:right]
+            print(f"auto_edge_crop: cropped image shape {cropped.shape}")
+        except Exception as e:
+            print(f"auto_edge_crop: error cropping image: {e}")
+            cropped = image
+        print(f"auto_edge_crop: image edge mult {multiplier}, bbox dimensions:{bbox_dimensions}, cropped to ({left},{top}),({right},{bottom})")
+        return cropped
+
+    def expand_image_from_geometry(self, geometry, expand_size=None, face_height_output=None, bg_color=None, upscale_model=None):
+        if not geometry or not geometry.get("is_valid"):
+            return None, None
+
+        image = geometry["image"]
+        face_height = geometry["face_height"]
+        nose_2d = geometry["nose_2d"]
+        expand_size = expand_size or self.EXPAND_SIZE
+        face_height_output = face_height_output or self.face_height_output
+        bg_color = self.BGCOLOR if bg_color is None else bg_color
+
+        try:
+            borderType = cv2.BORDER_CONSTANT
+
+            if self.USE_INCREMENTAL_RESIZE:
+                resize_factor = math.ceil(face_height / self.resize_increment)
+                if self.VERBOSE: print("expand_image resize_factor", str(resize_factor))
+                face_incremental_output_size = resize_factor * self.resize_increment
+                if self.VERBOSE: print("expand_image face_incremental_output_size", str(face_incremental_output_size))
+                resize = face_incremental_output_size / face_height
+                if self.VERBOSE: print("expand_image resize", str(resize))
+            else:
+                resize_factor = None
+                resize = face_height_output / face_height
+                face_incremental_output_size = None
+            if self.VERBOSE: print("expand_image resize", str(resize))
+
+            if resize >= 15:
+                if self.VERBOSE: print("expand_image [-]failed expand loop, with resize", str(resize), "too big, skipping")
+                return None, resize
+
+            resize_dims = (int(image.shape[1] * resize), int(image.shape[0] * resize))
+            if self.VERBOSE: print("expand_image [-] resize", str(resize), "resize_dims", str(resize_dims))
+            resize_nose = (int(nose_2d[0] * resize), int(nose_2d[1] * resize))
+            if self.VERBOSE: print(f"expand_image [-] resize_factor {resize_factor} resize_dims {resize_dims}")
+
+            upsized_image = self._upsample_with_model(image, upscale_model)
+            resized_image = cv2.resize(upsized_image, resize_dims)
+            print("expand_image [-] resized_image shape after upscale and resize:", resized_image.shape)
+
+            if face_incremental_output_size:
+                image_incremental_output_ratio = face_incremental_output_size / face_height_output
+                if self.VERBOSE: print("expand_image [-] face_incremental_output_size self.EXPAND_SIZE, face_incremental_output_size, self.face_height_output", expand_size, face_incremental_output_size, face_height_output)
+                this_expand_size = (int(expand_size[0] * image_incremental_output_ratio), int(expand_size[1] * image_incremental_output_ratio))
+                if self.VERBOSE: print("expand_image [-] this_expand_size", image_incremental_output_ratio, this_expand_size)
+            else:
+                this_expand_size = (expand_size[0], expand_size[1])
+
+            final_height_unit_from_nose = int(this_expand_size[1] / 2)
+            final_width_unit_from_nose = int(this_expand_size[0] / 2)
+            existing_height = int(resize_dims[1])
+            existing_width = int(resize_dims[0])
+            existing_pixels_above_nose = int(resize_nose[1])
+            existing_pixels_below_nose = int(resize_dims[1] - existing_pixels_above_nose)
+            existing_pixels_left_of_nose = int(resize_nose[0])
+            existing_pixels_right_of_nose = int(resize_dims[0] - existing_pixels_left_of_nose)
+
+            top_border = int(final_height_unit_from_nose - existing_pixels_above_nose)
+            bottom_border = int(final_height_unit_from_nose - (existing_height - existing_pixels_above_nose))
+            left_border = int(final_width_unit_from_nose - existing_pixels_left_of_nose)
+            right_border = int(final_width_unit_from_nose - (existing_width - existing_pixels_left_of_nose))
+
+            border_list = [top_border, bottom_border, left_border, right_border]
+            existing_list = [existing_pixels_above_nose, existing_pixels_below_nose, existing_pixels_left_of_nose, existing_pixels_right_of_nose]
+            if self.VERBOSE: print("expand_image [-] borders to expand to", border_list)
+            if self.VERBOSE: print("existing pixels", existing_list)
+
+            expand_list = []
+            crop_list = []
+            if all(x >= 0 for x in border_list):
+                expand_list = border_list
+                if self.VERBOSE: print("expand_image [-] expand is good")
+            else:
+                for border in border_list:
+                    if border > 0:
+                        expand_list.append(border)
+                        crop_list.append(0)
+                    else:
+                        expand_list.append(0)
+                        crop_list.append(abs(border))
+                if self.VERBOSE: print("expand failed, at least one is crop")
+
+            if self.VERBOSE: print("going to expand image with borders", expand_list)
+            new_image = cv2.copyMakeBorder(
+                resized_image,
+                expand_list[0],
+                expand_list[1],
+                expand_list[2],
+                expand_list[3],
+                borderType,
+                None,
+                bg_color,
+            )
+            if self.VERBOSE: print("expand_image [-] new_image shape after expanding:", new_image.shape)
+            if any(x != 0 for x in crop_list):
+                if self.VERBOSE: print("expand_image [-]    some borders are negative, cropping")
+                crop_top = crop_list[0]
+                crop_bottom = crop_list[0] + this_expand_size[1]
+                crop_left = crop_list[2]
+                crop_right = crop_list[2] + this_expand_size[0]
+                if self.VERBOSE: print("expand_image [-] CROP_LEFT, CROP_RIGHT, CROP_TOP, CROP_BOTTOM", crop_left, crop_right, crop_top, crop_bottom)
+                new_image = new_image[crop_top:crop_bottom, crop_left:crop_right]
+                if self.VERBOSE: print("expand_image [-] cropped image to", crop_list)
+            return new_image, resize
+        except Exception as e:
+            print("not expand_image_from_geometry loop failed")
+            print('Error:', str(e))
+            return None, None
 
     def calc_nose_bridge_dist(self, face_landmarks):
         """
@@ -2748,6 +3016,41 @@ class SortPose:
         sr.readModel(UPSCALE_MODEL_PATH)
         sr.setModel("fsrcnn", 4) 
         return sr
+
+    def crop_image_from_geometry(self, geometry, crop_data=None, output_dims=None, resize_max=None, upscale_model=None):
+        if not geometry or not geometry.get("is_valid"):
+            return None, False
+
+        is_inpaint = False
+        cropped_image = None
+        output_dims = output_dims or self.output_dims
+        resize_max = self.resize_max if resize_max is None else resize_max
+        crop_data = crop_data or self.compute_scalable_crop_data(geometry)
+
+        if crop_data.get("toobig"):
+            print("crop_image_from_geometry: cropped_image is None because too big is", crop_data.get("toobig"))
+            return None, True
+
+        simple_crop = crop_data["simple_crop"]
+        try:
+            image = geometry["image"]
+            cropped_actualsize_image = image[simple_crop[0]:simple_crop[2], simple_crop[3]:simple_crop[1]]
+            if self.VERBOSE: print("cropped_actualsize_image.shape", cropped_actualsize_image.shape)
+            resize = output_dims[0] / cropped_actualsize_image.shape[0]
+            if self.VERBOSE: print("resize", resize)
+            if resize > resize_max:
+                if self.VERBOSE: print("toosmall, returning None")
+                return None, is_inpaint
+            if self.VERBOSE: print("about to resize")
+            if self.VERBOSE: print("output dims", output_dims)
+            upsized_image = self._upsample_with_model(cropped_actualsize_image, upscale_model)
+            cropped_image = cv2.resize(upsized_image, output_dims)
+            if self.VERBOSE: print("image actually cropped")
+        except Exception:
+            cropped_image = None
+            print("not crop_image_from_geometry loop")
+
+        return cropped_image, is_inpaint
 
     def crop_image(self,image, faceLms, bbox, sinY=0,SAVE=False):
         print(f'Crop image image type {type(image)}')
