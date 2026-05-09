@@ -3838,7 +3838,7 @@ def main():
                 # don't pass in session if IS_TENCH
                 if io.IS_TENCH or io.IS_MICHELLE == True: 
                     not_dupe_list = None
-                else: 
+                elif not ONLY_SAVE_CACHE: 
                     if VERBOSE: print("before recheck_is_dupe_of, df_sorted size", df_sorted.size)
                     df_sorted = recheck_is_dupe_of(session, df_sorted)  # recheck is_dupe_of from DB to catch any new dupes since CSV was made
                     if VERBOSE: print("after recheck_is_dupe_of, df_sorted size", df_sorted.size)

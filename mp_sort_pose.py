@@ -1824,7 +1824,7 @@ class SortPose:
             nx = row.get('nose_x_px')
             ny = row.get('nose_y_px')
             if any(v is None for v in (w, h, fh, nx, ny)):
-                print(f"calc_dynamic_multiplier_from_image_dims: row {image_id} skipped — None value (w={w}, h={h}, fh={fh}, nx={nx}, ny={ny})")
+                # print(f"calc_dynamic_multiplier_from_image_dims: row {image_id} skipped — None value (w={w}, h={h}, fh={fh}, nx={nx}, ny={ny})")
                 skipped += 1
                 continue
             try:
@@ -1849,10 +1849,10 @@ class SortPose:
             rights.append(r)
 
         print(f"calc_dynamic_multiplier_from_image_dims: {len(tops)} valid rows, {skipped} skipped")
-        print(f"calc_dynamic_multiplier_from_image_dims: tops={[round(v,3) for v in tops]}")
-        print(f"calc_dynamic_multiplier_from_image_dims: bottoms={[round(v,3) for v in bottoms]}")
-        print(f"calc_dynamic_multiplier_from_image_dims: lefts={[round(v,3) for v in lefts]}")
-        print(f"calc_dynamic_multiplier_from_image_dims: rights={[round(v,3) for v in rights]}")
+        # print(f"calc_dynamic_multiplier_from_image_dims: tops={[round(v,3) for v in tops]}")
+        # print(f"calc_dynamic_multiplier_from_image_dims: bottoms={[round(v,3) for v in bottoms]}")
+        # print(f"calc_dynamic_multiplier_from_image_dims: lefts={[round(v,3) for v in lefts]}")
+        # print(f"calc_dynamic_multiplier_from_image_dims: rights={[round(v,3) for v in rights]}")
 
         if not tops:
             print("calc_dynamic_multiplier_from_image_dims: no valid rows, keeping existing image_edge_multiplier")
@@ -1866,7 +1866,7 @@ class SortPose:
                 p95 = float(np.percentile(arr, 95))
                 filtered = arr[(arr >= p5) & (arr <= p95)]
                 result = float(np.percentile(filtered, pct))
-                print(f"calc_dynamic_multiplier_from_image_dims: {label} p5={p5:.3f} p95={p95:.3f} kept={len(filtered)}/{len(arr)} p{int(pct)}={result:.3f}")
+                # print(f"calc_dynamic_multiplier_from_image_dims: {label} p5={p5:.3f} p95={p95:.3f} kept={len(filtered)}/{len(arr)} p{int(pct)}={result:.3f}")
                 results.append(result)
             return results
 
