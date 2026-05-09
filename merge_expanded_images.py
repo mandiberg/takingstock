@@ -29,7 +29,7 @@ ROOT_FOLDER_PATH = '/Users/michaelmandiberg/Documents/projects-active/facemap_pr
 # if IS_CLUSTER this should be the folder holding all the cluster folders
 # if not, this should be the individual folder holding the images
 # will not accept clusterNone -- change to cluster00
-FOLDER_NAME = "SegmentHelper_T11_Oct20_COCO_Custom_evens_quarters_signatures3/build"
+FOLDER_NAME = "TheOffice_w50_TSP_april28"
 
 if io.IS_TENCH:
     ROOT_FOLDER_PATH = '/Users/tenchc/Documents/GitHub/taking_stock_production/segment_images'
@@ -208,7 +208,7 @@ def get_median_image_dimensions(all_img_path_list, subfolder_path=None):
     counter = 0
     for image_path in all_img_path_list:
         # print("checking image for dimensions", image_path)
-        if subfolder_path:
+        if subfolder_path and not os.path.isabs(image_path):
             image_path = os.path.join(subfolder_path, image_path)
         metadata = MediaInfo.parse(image_path)
         if metadata is None or metadata.tracks is None: continue
@@ -462,23 +462,64 @@ def get_img_list_subfolders(subfolders):
     all_img_path_list = []
     for subfolder_path in subfolders:
         print("subfolder_path", subfolder_path)
-        img_list = io.get_img_list(subfolder_path, FORCE_LS)
-        # if any file ends with .json, remove it
-        img_list = [img for img in img_list if not img.endswith(".json")]
-        img_list.sort()
-        img_path_list = []
-        for img in img_list:
-            img_path = os.path.join (subfolder_path, img)
-            img_path_list.append(img_path)
-        # print(img_path_list)
+        img_path_list = get_cluster_input_paths(subfolder_path, FORCE_LS)
         all_img_path_list += img_path_list
     # print(all_img_path_list)
     return all_img_path_list
 
+
+def get_cluster_input_paths(subfolder_path, force_ls=False):
+    cluster_files_path = os.path.join(subfolder_path, "cluster_files.csv")
+    if os.path.exists(cluster_files_path):
+        try:
+            cluster_files_df = pd.read_csv(cluster_files_path)
+            required_cols = {"image_number", "image_id", "path_to_cache_file"}
+            if not required_cols.issubset(set(cluster_files_df.columns)):
+                print(
+                    f"cluster_files.csv missing required columns in {cluster_files_path}, "
+                    "falling back to jpg listing"
+                )
+            else:
+                cluster_files_df = cluster_files_df.copy()
+                cluster_files_df["image_number"] = pd.to_numeric(
+                    cluster_files_df["image_number"], errors="coerce"
+                )
+                cluster_files_df = cluster_files_df.sort_values(
+                    by="image_number", kind="stable"
+                )
+                candidate_paths = [
+                    str(path).strip()
+                    for path in cluster_files_df["path_to_cache_file"].tolist()
+                    if isinstance(path, str) and str(path).strip()
+                ]
+
+                path_list = []
+                for cache_path in candidate_paths:
+                    if os.path.exists(cache_path):
+                        path_list.append(cache_path)
+                    else:
+                        print(f"warning: missing cache file listed in cluster_files.csv, skipping: {cache_path}")
+
+                if path_list:
+                    print(
+                        f"using cluster_files.csv in {subfolder_path}: {len(path_list)} paths"
+                    )
+                    return path_list
+        except Exception as e:
+            print(f"failed to read cluster_files.csv at {cluster_files_path}: {e}")
+
+    img_list = io.get_img_list(subfolder_path, force_ls)
+    img_list = [img for img in img_list if isinstance(img, str) and img.endswith(".jpg")]
+    img_list.sort()
+    return [os.path.join(subfolder_path, img) for img in img_list]
+
 def get_path(subfolder_path, img_array):
     if subfolder_path:
         cluster_no = subfolder_path.split("/")[-1]
-        image_path = os.path.join(subfolder_path, img_array[0])
+        if os.path.isabs(img_array[0]):
+            image_path = img_array[0]
+        else:
+            image_path = os.path.join(subfolder_path, img_array[0])
     else:
         cluster_no = img_array[0].replace(FOLDER_PATH,"").split("/")[0]
         image_path = img_array[0]
@@ -951,10 +992,13 @@ def load_images(image_list, subfolder_path=None):
 
     def construct_image_path(subfolder_path, image_list, index):
         # Load the image at the specified index
-        if subfolder_path:
-            image_path = os.path.join(subfolder_path, image_list[index])
+        candidate_path = image_list[index]
+        if isinstance(candidate_path, str) and os.path.isabs(candidate_path):
+            image_path = candidate_path
+        elif subfolder_path:
+            image_path = os.path.join(subfolder_path, candidate_path)
         else:
-            image_path = image_list[index]
+            image_path = candidate_path
         return image_path
 
     # Find first readable image to initialize result.
@@ -1154,7 +1198,7 @@ def main():
             #     write_video(subfolder_path)
         elif IS_VIDEO is True and ALL_ONE_VIDEO is False:
             for subfolder_path in subfolders:
-                all_img_path_list = io.get_img_list(subfolder_path, FORCE_LS)
+                all_img_path_list = get_cluster_input_paths(subfolder_path, FORCE_LS)
                 # only inlcude jpgs in the list
                 write_video(all_img_path_list, subfolder_path)
             if SAVE_INSTALLATION_METAS is True:
@@ -1167,7 +1211,7 @@ def main():
             # for merging images into stills
             for subfolder_path in subfolders:
                 # print("subfolder_path", subfolder_path)
-                all_img_path_list = io.get_img_list(subfolder_path, FORCE_LS)
+                all_img_path_list = get_cluster_input_paths(subfolder_path, FORCE_LS)
                 output_dims = get_median_image_dimensions(all_img_path_list, subfolder_path)
                 if output_dims is not None:
                     print(" ", output_dims)
