@@ -67,6 +67,7 @@ IS_SSD = True
 SSD_PATH = "/Volumes/LaCie/segment_images"
 ONLY_SAVE_CACHE = True
 MAKE_CACHE_MODE = True
+start = time.time()
 
 #IS_MOVE is in move_toSSD_files.py
 
@@ -80,7 +81,7 @@ if not (io.IS_TENCH or io.IS_MICHELLE) and IS_SSD:
     io.ROOT_PROD=  "/Volumes/LaCie" ## only on Mac
     # io.ROOT_PROD=  "/Users/michaelmandiberg/Documents/projects-active/facemap_production" ## MBP
     print("Setting io.ROOT to ROOTSSD:", io.ROOTSSD)
-    io.ROOT = os.path.join(io.ROOT_PROD, "output_folder")
+    io.ROOT = os.path.join(io.ROOT_PROD, "cache_folder")
 print("Setting io.ROOT to ROOTSSD:", io.ROOTSSD)
 print("Set io.ROOT to ROOTSSD:", io.ROOT)
 
@@ -324,6 +325,10 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     CHOP_FIRST = True # does a first pass chop before whatever sort happens - this is default now
     # this is an override for development purposes. will only make CSVs from these clusters:
     TEMP_FOCUS_CLUSTER_HACK_LIST = []
+
+    # process for dealing with keep/none
+    # OBJECT_NONE_CLUSTERS = [i for i in range(4000) if i not in OBJECT_KEEP_CLUSTERS] # skip these and go to 18
+    # MULTIPOLICY = True # controls whether it does multi-bucket fusion policy based on cluster size for HSV, clusters, and metabodyposes3D
     OBJECT_NONE_CLUSTERS = [] # if MULTIPOLICY these get HSV BG, else these don't run in fusion
     MULTIPOLICY = False # controls whether it does multi-bucket fusion policy based on cluster size for HSV, clusters, and metabodyposes3D
     CLUSTER_MIN_HSV_BG = 6000
@@ -1269,8 +1274,7 @@ if not io.IS_TENCH:
 
                     if requested_object_cluster_id in OBJECT_NONE_CLUSTERS and not allow_object_none:
                         print(
-                            f"skipping pair because ih.cluster_id {requested_object_cluster_id} is in "
-                            f"OBJECT_NONE_CLUSTERS {OBJECT_NONE_CLUSTERS}"
+                            f"skipping pair because ih.cluster_id {requested_object_cluster_id} is in OBJECT_NONE_CLUSTERS"
                         )
                         return []
 
@@ -1345,6 +1349,8 @@ if not io.IS_TENCH:
             extra_boolean_keyword_string = is_query_list_string(cluster_dict_NOT, inclusion=False)
             cluster +=  f" AND it.{this_id} {extra_boolean_keyword_string} "
 
+        # treat -1 cluster_id as special case meaning "no cluster filter" so not null
+        cluster = cluster.replace(".cluster_id = -1", ".cluster_id IS NOT NULL")
         print(f"cluster SELECT is {cluster}")
 
         selectsql = f"SELECT {local_select} FROM {local_from + from_affect + from_hsv} WHERE {local_where + where_affect + where_hsv + xyz_where} {cluster} LIMIT {str(LIMIT)};"
@@ -2913,6 +2919,9 @@ def process_linear(start_img_name, df_segment, file_prefix, sort):
         if not os.path.exists(CSV_FOLDER): os.makedirs(CSV_FOLDER)
         df_sorted.to_csv(f"{CSV_FOLDER}/df_sorted_{file_prefix}_ct{segment_count}.csv", index=False)
 
+        lap_time = time.time() - start
+        print(f"sorting by face distance took {lap_time:.2f} seconds for {segment_count} segments")
+
         # test to see if they make good faces
         # write_images(img_list)
         # write_images(sort.not_make_face)
@@ -3361,6 +3370,7 @@ def main():
             "reason": "legacy single-policy mode",
         }
         if not MULTIPOLICY:
+            print("MULTIPOLICY is False, applying default policy to all pairs")
             return default_policy
 
         if not (isinstance(cluster_topic_no, list) and len(cluster_topic_no) >= 2):
@@ -3390,12 +3400,17 @@ def main():
             object_cluster_id not in OBJECT_NONE_CLUSTERS
             and column_total < int(OBJ_CLUSTER_COLUMN_MIN_FOR_FUSION_SORT)
         ):
+            print(
+                f"Routing arms_cluster {arms_cluster_id} and object_cluster {object_cluster_id} "
+                f"to Bucket 4 object MetaBody fallback due to low column support: column_total {column_total}"
+                )
             return {
                 "bucket": "small_column_meta_fallback",
                 "hsv_source": "background",
                 "use_hsv": False,
                 "allow_object_none": object_cluster_id in OBJECT_NONE_CLUSTERS,
-                "use_meta_cluster": True,
+                # "use_meta_cluster": True, # my original idea was to use meta clusters, but that isn't patched in for SQL, and was working fine with a full select
+                "use_meta_cluster": False,
                 "meta_cluster_id": arms_to_meta_map.get(arms_cluster_id),
                 "cycle_stage": "meta_fallback",
                 "cell_count": cell_count,
@@ -3408,6 +3423,10 @@ def main():
 
         # Bucket 1: object-none columns with large cells -> HSV background.
         if object_cluster_id in OBJECT_NONE_CLUSTERS and cell_count >= int(CLUSTER_MIN_HSV_BG):
+            print(
+                f"Routing arms_cluster {arms_cluster_id} and object_cluster {object_cluster_id} "
+                f"to Bucket 1 HSV background due to large cell count {cell_count} in object-none column"
+            )
             return {
                 "bucket": "none_column_large_cell_hsv_background",
                 "hsv_source": "background",
@@ -3426,6 +3445,10 @@ def main():
 
         # Bucket 2: object columns with large cells -> HSV object.
         if object_cluster_id not in OBJECT_NONE_CLUSTERS and cell_count >= int(CLUSTER_MIN_HSV_OBJ):
+            print(
+                f"Routing arms_cluster {arms_cluster_id} and object_cluster {object_cluster_id} "
+                f"to Bucket 2 HSV object due to large cell count {cell_count} in object column"
+            )
             return {
                 "bucket": "object_column_large_cell_hsv_object",
                 "hsv_source": "object",
@@ -3442,19 +3465,25 @@ def main():
                 ),
             }
 
-        # Bucket 3: medium/default bucket -> non-HSV fusion sort.
-        return {
-            "bucket": "default_nonhsv_fusion",
-            "hsv_source": "background",
-            "use_hsv": False,
-            "allow_object_none": object_cluster_id in OBJECT_NONE_CLUSTERS,
-            "use_meta_cluster": False,
-            "meta_cluster_id": None,
-            "cycle_stage": "default_nonhsv",
-            "cell_count": cell_count,
-            "column_total": column_total,
-            "reason": "passes column floor and does not qualify for large-cell HSV buckets",
-        }
+        if cell_count >= int(MIN_VIDEO_FUSION_COUNT):
+            # Bucket 3: medium/default bucket -> non-HSV fusion sort.
+            print(
+                f"Routing arms_cluster {arms_cluster_id} and object_cluster {object_cluster_id} "
+                f"to Bucket 3 default non-HSV due to cell count {cell_count} in object column"
+            )
+            return {
+                "bucket": "default_nonhsv_fusion",
+                "hsv_source": "background",
+                "use_hsv": False,
+                "allow_object_none": object_cluster_id in OBJECT_NONE_CLUSTERS,
+                "use_meta_cluster": False,
+                "meta_cluster_id": None,
+                "cycle_stage": "default_nonhsv",
+                "cell_count": cell_count,
+                "column_total": column_total,
+                "reason": "passes column floor and does not qualify for large-cell HSV buckets",
+            }
+        return None
 
     def expand_hsv_query_groups(preset_groups):
         expanded = []
@@ -3879,14 +3908,20 @@ def main():
             if IS_ONE_TOPIC:
                 if GENERATE_FUSION_PAIRS:
                     print("doing GENERATE_FUSION_PAIRS and storing in FUSION_PAIR_DICT")
-                    n_cluster_topics = sort.find_sorted_suitable_indices(
+                    n_cluster_topics, small_fusion_columns = sort.find_sorted_suitable_indices(
                         TOPIC_NO,
                         MIN_VIDEO_FUSION_COUNT,
                         FUSION_FOLDER,
                         hsv_cluster_groups=HSV_GROUP_PRESETS[OBJECT_HSV_GROUP_PRESET_NAME if HSV_SOURCE_MODE == "object" else HSV_GROUP_PRESET_NAME],
                         manifest_file=FUSION_MANIFEST_FILE,
+                        multipolicy = MULTIPOLICY,
                     )
                     log_fusion_pairs_summary("generated fusion_pairs", n_cluster_topics)
+                    print(f"small_fusion_columns (for fusion pair classification): {small_fusion_columns}")
+                    if bool(small_fusion_columns):
+                        small_fusion_columns_as_pairs = [[-1, col] for col in small_fusion_columns]
+                        n_cluster_topics = small_fusion_columns_as_pairs + n_cluster_topics
+                        print(f"prepended small_fusion_columns as pairs to n_cluster_topics: {n_cluster_topics}")
                     if N_HSV > 0:
                         print("N_HSV > 0, so making FUSION_PAIR_DICT with keyword: [metacluster, hsv] structure")
                         FUSION_PAIR_DICT = {str(TOPIC_NO[0]): n_cluster_topics}
@@ -3917,7 +3952,6 @@ def main():
     
             print(f"MODE 0 or 2, for this_topic {this_topic} sorting and saving CSV", CSV_FOLDER)
             #creating my objects
-            start = time.time()
 
             # to loop or not to loop that is the cluster
             print(f"doing {CURRENT_MODE}: SORT_TYPE {SORT_TYPE}, IS_HAND_POSE_FUSION {IS_HAND_POSE_FUSION}, GENERATE_FUSION_PAIRS {GENERATE_FUSION_PAIRS}, MIN_VIDEO_FUSION_COUNT {MIN_VIDEO_FUSION_COUNT}, IS_TOPICS {IS_TOPICS}, IS_ONE_TOPIC {IS_ONE_TOPIC}, this_topic {this_topic}, USE_AFFECT_GROUPS {USE_AFFECT_GROUPS}")
@@ -3950,6 +3984,7 @@ def main():
                     print("FUSION_PAIR_DICT is not None so using existing FUSION_PAIR_DICT")
                     n_cluster_topics = FUSION_PAIR_DICT[this_topic]
                     log_fusion_pairs_summary("set n_cluster_topics from FUSION_PAIR_DICT", n_cluster_topics)
+                    print(f"small_fusion_columns (for fusion pair classification): {small_fusion_columns}")
                 elif USE_FUSION_PAIR_DICT:
                     n_cluster_topics = FUSION_PAIR_DICT[this_topic]
                 else: 
@@ -4219,6 +4254,10 @@ def main():
                                 object_column_totals or {},
                                 arms_to_meta_map or {},
                             )
+                            if route_policy is None:
+                                print(f"No route policy for pair {cluster_topic_no}, skipping this pair")
+                                continue
+
                             route_bucket = route_policy.get("bucket", "unknown")
                             route_bucket_stats[route_bucket] = route_bucket_stats.get(route_bucket, 0) + 1
 
