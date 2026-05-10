@@ -5497,9 +5497,8 @@ class TSPSorterTwoPhase:
         Simple TSP fitness: total path distance.
         No skipping logic here - just pure TSP optimization.
         """
-        route = list(ind)
-        total = sum(dist_matrix[route[i], route[i+1]] 
-                   for i in range(len(route)-1))
+        route_arr = np.array(ind)
+        total = dist_matrix[route_arr[:-1], route_arr[1:]].sum()
         return (total,)
     
     def create_toolbox(self, n_points, start_idx, end_idx, dist_matrix):
@@ -5800,6 +5799,16 @@ class TSPSorterTwoPhase:
         remaining_skips = total_to_skip
         
         all_skipped = []
+        iter_pop_size = 160
+        iter_generations = 40
+        final_pop_size = 180
+        final_generations = 45
+        if self.VERBOSE:
+            print(
+                "TSP GA budgets "
+                f"iter(pop={iter_pop_size}, gen={iter_generations}) "
+                f"final(pop={final_pop_size}, gen={final_generations})"
+            )
         
         for iteration in range(self.ITERATIONS):
             if self.VERBOSE:
@@ -5811,8 +5820,8 @@ class TSPSorterTwoPhase:
                 current_dist_matrix, 
                 current_start, 
                 current_end,
-                pop_size=200,
-                generations=50
+                pop_size=iter_pop_size,
+                generations=iter_generations
             )
             
             # Phase 2: Identify points to skip
@@ -5854,15 +5863,8 @@ class TSPSorterTwoPhase:
             current_indices = kept_original_indices
             
             # Rebuild distance matrix for remaining points
+            current_dist_matrix = self.dist_matrix[np.ix_(current_indices, current_indices)]
             n = len(current_indices)
-            new_dist = np.zeros((n, n))
-            for i in range(n):
-                for j in range(n):
-                    new_dist[i, j] = self.dist_matrix[
-                        current_indices[i], 
-                        current_indices[j]
-                    ]
-            current_dist_matrix = new_dist
             current_start = 0
             current_end = n - 1
             
@@ -5878,8 +5880,8 @@ class TSPSorterTwoPhase:
             current_dist_matrix,
             current_start,
             current_end,
-            pop_size=300,
-            generations=100
+            pop_size=final_pop_size,
+            generations=final_generations
         )
         
         # Map back to original dataframe indices
