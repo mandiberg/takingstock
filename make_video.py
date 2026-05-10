@@ -97,6 +97,7 @@ CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden b
 CSV_MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/"
 CSV_RUN_FOLDER = "SegmentHelper_TheOffice/multipolicy_tests" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
 CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, CSV_RUN_FOLDER)
+MAX_ROWS_PER_OUTPUT_CSV = 1200
 
 
 def resolve_arms_object_fusion_folder(
@@ -3556,6 +3557,82 @@ def main():
         # use image_edge_multiplier to crop for each
         sort.set_output_dims()
 
+    def compute_partition_cluster_count(row_count, max_rows_per_csv):
+        if row_count <= 0:
+            return 1
+        return max(1, int(math.ceil(float(row_count) / float(max_rows_per_csv))))
+
+    def partition_segment_with_kmeans(df_segment, max_rows_per_csv):
+        row_count = len(df_segment.index)
+        if row_count <= max_rows_per_csv:
+            return [df_segment]
+
+        n_clusters = compute_partition_cluster_count(row_count, max_rows_per_csv)
+        if n_clusters >= row_count:
+            # Degenerate case fallback: one-row groups in deterministic index order.
+            return [df_segment.iloc[[idx]].copy().reset_index(drop=True) for idx in range(row_count)]
+
+        print(
+            f"[partition] running KMeans for row_count={row_count} with n_clusters={n_clusters} "
+            f"and max_rows_per_csv={max_rows_per_csv}"
+        )
+
+        labels = cl.kmeans_cluster(
+            df_segment,
+            n_clusters=n_clusters,
+            fit_scaler=True,
+            random_state=42,
+            max_iter=300,
+            n_init=10,
+            verbose=0,
+            drop_image_id=True,
+            return_model=False,
+        )
+
+        partition_df = df_segment.copy()
+        partition_df["_partition_label"] = labels
+
+        partition_groups = []
+        unique_labels = sorted(partition_df["_partition_label"].dropna().astype(int).unique().tolist())
+        for label in unique_labels:
+            group_df = partition_df[partition_df["_partition_label"] == label].copy()
+            if "image_id" in group_df.columns:
+                group_df = group_df.sort_values("image_id", kind="mergesort")
+            group_df = group_df.drop(columns=["_partition_label"]).reset_index(drop=True)
+            partition_groups.append(group_df)
+
+        print(
+            f"[partition] produced {len(partition_groups)} groups with sizes "
+            f"{[len(group.index) for group in partition_groups]}"
+        )
+        return partition_groups
+
+    def one_shot_sort_dataframe(df_segment):
+        global ONE_SHOT, TSP_SORT, CHOP_ITTER_TSP_SORT, CHOP_FIRST
+
+        df_enc = prep_encodings_NN(df_segment)
+        if df_enc.empty:
+            return df_enc
+
+        prev_one_shot = ONE_SHOT
+        prev_tsp_sort = TSP_SORT
+        prev_chop_itter_tsp_sort = CHOP_ITTER_TSP_SORT
+        prev_chop_first = CHOP_FIRST
+
+        try:
+            ONE_SHOT = True
+            TSP_SORT = False
+            CHOP_ITTER_TSP_SORT = False
+            CHOP_FIRST = False
+            df_sorted = sort_by_face_dist_NN(df_enc)
+        finally:
+            ONE_SHOT = prev_one_shot
+            TSP_SORT = prev_tsp_sort
+            CHOP_ITTER_TSP_SORT = prev_chop_itter_tsp_sort
+            CHOP_FIRST = prev_chop_first
+
+        return df_sorted
+
     ###################
     #  MAP THE IMGS   #
     ###################
@@ -3718,9 +3795,41 @@ def main():
             else:   
                 # hard coding override to just start from median
                 # sort.counter_dict["start_img_name"] = "median"
-                file_prefix = const_prefix(this_topic, cluster_no, pose_no, effective_hsv_meta)
-                # build file prefix for cluster, pose, and topic
-                process_linear(start_img_name,df_segment, file_prefix, sort)
+                base_file_prefix = const_prefix(this_topic, cluster_no, pose_no, effective_hsv_meta)
+
+                should_partition_before_sort = (
+                    MODE == 0
+                    and is_fusion_sort
+                    and len(df_segment.index) > MAX_ROWS_PER_OUTPUT_CSV
+                )
+
+                if should_partition_before_sort:
+                    print(
+                        f"[partition] oversized segment detected ({len(df_segment.index)} rows); "
+                        "partitioning before process_linear"
+                    )
+                    partition_groups = partition_segment_with_kmeans(df_segment, MAX_ROWS_PER_OUTPUT_CSV)
+
+                    for subset_idx, subset_df in enumerate(partition_groups, start=1):
+                        if subset_df.empty:
+                            continue
+
+                        subset_suffix = f"sb{subset_idx:03d}"
+                        subset_prefix = f"{base_file_prefix}_{subset_suffix}"
+                        set_my_counter_dict(this_topic, cluster_no, pose_no, effective_hsv_meta, start_img_name, start_site_image_id)
+
+                        if len(subset_df.index) > MAX_ROWS_PER_OUTPUT_CSV:
+                            print(
+                                f"[partition] subset {subset_suffix} still oversized "
+                                f"({len(subset_df.index)} rows); applying ONE_SHOT sort and trim"
+                            )
+                            one_shot_sorted = one_shot_sort_dataframe(subset_df)
+                            subset_df = one_shot_sorted.head(MAX_ROWS_PER_OUTPUT_CSV).reset_index(drop=True)
+
+                        process_linear(start_img_name, subset_df, subset_prefix, sort)
+                else:
+                    # build file prefix for cluster, pose, and topic
+                    process_linear(start_img_name, df_segment, base_file_prefix, sort)
         elif df.empty and IS_CLUSTER:
             print('dataframe empty, but IS_CLUSTER so continuing to next cluster_no')
 
