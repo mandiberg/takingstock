@@ -98,6 +98,8 @@ CSV_MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_pro
 CSV_RUN_FOLDER = "SegmentHelper_TheOffice/multipolicy_tests" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
 CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, CSV_RUN_FOLDER)
 MAX_ROWS_PER_OUTPUT_CSV = 1200
+ENABLE_MODE0_TIMING = True
+ENABLE_MODE1_TIMING = True
 
 
 def resolve_arms_object_fusion_folder(
@@ -926,6 +928,12 @@ d = None
 CURRENT_HSV_CYCLE_META = None
 
 CACHE_WORKER_STATE = threading.local()
+MODE0_TIMING_CALLBACK = None
+
+
+def record_mode0_timing(stage, elapsed):
+    if MODE0_TIMING_CALLBACK is not None:
+        MODE0_TIMING_CALLBACK(stage, elapsed)
 
 
 def get_cache_worker_upscale_model():
@@ -1468,6 +1476,7 @@ def get_closest_knn_or_break(df_enc, df_sorted):
 
 
 def sort_by_face_dist_NN(df_enc):
+    sort_stage_start = time.perf_counter()
     
     # start here
     # create emtpy df_sorted with the same columns as df_enc
@@ -1488,16 +1497,22 @@ def sort_by_face_dist_NN(df_enc):
 
     if CHOP_FIRST or CHOP_ITTER_TSP_SORT:
         sort.ONE_SHOT = True # force it to chop
+        chop_start = time.perf_counter()
         df_enc = sort_and_chop(df_enc)
+        record_mode0_timing("chop_first", time.perf_counter() - chop_start)
     
     if CHOP_ITTER_TSP_SORT or not TSP_SORT:
         sort.ONE_SHOT = False # force it to do full itters
         print("CHOP_ITTER_TSP_SORT is true or not TSP_SORT, so doing itter_sort")
+        itter_start = time.perf_counter()
         df_enc = itter_sort(df_enc, itters)
+        record_mode0_timing("itter_sort", time.perf_counter() - itter_start)
     
     if CHOP_ITTER_TSP_SORT or TSP_SORT:
         print("CHOP_ITTER_TSP_SORT is true or TSP_SORT, so doing TSP_sort")
+        tsp_start = time.perf_counter()
         df_enc = tsp_sort(df_enc)
+        record_mode0_timing("tsp_sort", time.perf_counter() - tsp_start)
 
 
     # use the colum site_name_id to asign the value of io.folder_list[site_name_id] to the folder column
@@ -1515,6 +1530,7 @@ def sort_by_face_dist_NN(df_enc):
     
     # print all columns in df_enc
     print("df_enc.columns", df_enc.columns)
+    record_mode0_timing("sort_by_face_dist_NN", time.perf_counter() - sort_stage_start)
     
     ## Set a start_img_name for next round --> for clusters
     try:
@@ -2939,20 +2955,26 @@ def process_linear(start_img_name, df_segment, file_prefix, sort, effective_sort
     try:
         # preps the encodings for sort
         # df_enc, df_128_enc, df_33_lms = prep_encodings(df_segment)
+        prep_start = time.perf_counter()
         df_enc = prep_encodings_NN(df_segment, effective_sort_type=active_sort_type)
+        record_mode0_timing("prep_encodings", time.perf_counter() - prep_start)
         segment_count = df_enc.shape[0]
         if VERBOSE: print("sort.counter_dict after prep_encodings_NN", sort.counter_dict)
 
         # if results in df_enc, then sort by face distance
         if not df_enc.empty:
             # # get dataframe sorted by distance
+            sort_start = time.perf_counter()
             df_sorted = sort_by_face_dist_NN(df_enc)
+            record_mode0_timing("process_sort", time.perf_counter() - sort_start)
         # df_sorted = sort_by_face_dist(df_enc, df_128_enc, df_33_lms)
 
         # TK this is where i save df_sorted to csv
         # check to see if CSV_FOLDER exists and create if not
             if not os.path.exists(CSV_FOLDER): os.makedirs(CSV_FOLDER)
+            write_start = time.perf_counter()
             df_sorted.to_csv(f"{CSV_FOLDER}/df_sorted_{file_prefix}_ct{segment_count}.csv", index=False)
+            record_mode0_timing("write_sorted_csv", time.perf_counter() - write_start)
 
             lap_time = time.time() - start
             print(f"sorting by face distance took {lap_time:.2f} seconds for {segment_count} segments")
@@ -3130,6 +3152,108 @@ def main():
 
     canonical_multiplier_registry = {}
     canonical_multiplier_csv_path = None
+
+    mode0_timing_enabled = ENABLE_MODE0_TIMING and MODE == 0
+    mode0_run_start = time.perf_counter()
+    mode0_timing_totals = {
+        "sql_select": 0.0,
+        "json_normalize": 0.0,
+        "hydrate_precomputed": 0.0,
+        "mongo_load": 0.0,
+        "unpickle_and_prep": 0.0,
+        "segment": 0.0,
+        "partition": 0.0,
+        "one_shot": 0.0,
+        "process_linear": 0.0,
+        "map_total": 0.0,
+        "map_dispatch": 0.0,
+    }
+    mode0_counts = {
+        "select_calls": 0,
+        "map_calls": 0,
+        "selected_rows": 0,
+    }
+
+    def add_mode0_timing(stage, elapsed):
+        if not mode0_timing_enabled:
+            return
+        mode0_timing_totals[stage] = mode0_timing_totals.get(stage, 0.0) + float(elapsed)
+
+    def add_mode0_count(name, increment=1):
+        if not mode0_timing_enabled:
+            return
+        mode0_counts[name] = mode0_counts.get(name, 0) + int(increment)
+
+    global MODE0_TIMING_CALLBACK
+    MODE0_TIMING_CALLBACK = add_mode0_timing
+
+    def print_mode0_timing_summary():
+        if not mode0_timing_enabled:
+            return
+        wall_time = time.perf_counter() - mode0_run_start
+        measured_time = sum(mode0_timing_totals.values())
+        print("\n[MODE0 TIMING] ===== Baseline Summary =====")
+        print(
+            f"[MODE0 TIMING] wall_time={wall_time:.2f}s measured_stage_sum={measured_time:.2f}s "
+            f"select_calls={mode0_counts.get('select_calls', 0)} map_calls={mode0_counts.get('map_calls', 0)} "
+            f"selected_rows={mode0_counts.get('selected_rows', 0)}"
+        )
+        for stage in [
+            "sql_select",
+            "json_normalize",
+            "hydrate_precomputed",
+            "mongo_load",
+            "unpickle_and_prep",
+            "segment",
+            "partition",
+            "one_shot",
+            "process_linear",
+            "prep_encodings",
+            "process_sort",
+            "sort_by_face_dist_NN",
+            "chop_first",
+            "itter_sort",
+            "tsp_sort",
+            "write_sorted_csv",
+            "map_dispatch",
+            "map_total",
+        ]:
+            stage_time = mode0_timing_totals.get(stage, 0.0)
+            pct_wall = (stage_time / wall_time * 100.0) if wall_time > 0 else 0.0
+            print(f"[MODE0 TIMING] {stage}: {stage_time:.2f}s ({pct_wall:.1f}% of wall)")
+        print("[MODE0 TIMING] ============================\n")
+
+    def print_mode0_timing_progress(last_map_elapsed):
+        if not mode0_timing_enabled:
+            return
+        wall_time = time.perf_counter() - mode0_run_start
+        map_calls = mode0_counts.get("map_calls", 0)
+        avg_map = (mode0_timing_totals.get("map_total", 0.0) / map_calls) if map_calls > 0 else 0.0
+        print(
+            "[MODE0 TIMING] progress "
+            f"map_calls={map_calls} selected_rows={mode0_counts.get('selected_rows', 0)} "
+            f"last_map={last_map_elapsed:.2f}s avg_map={avg_map:.2f}s wall={wall_time:.2f}s"
+        )
+        print(
+            "[MODE0 TIMING] cumulative "
+            f"sql={mode0_timing_totals.get('sql_select', 0.0):.2f}s "
+            f"mongo={mode0_timing_totals.get('mongo_load', 0.0):.2f}s "
+            f"prep={mode0_timing_totals.get('unpickle_and_prep', 0.0):.2f}s "
+            f"segment={mode0_timing_totals.get('segment', 0.0):.2f}s "
+            f"partition={mode0_timing_totals.get('partition', 0.0):.2f}s "
+            f"one_shot={mode0_timing_totals.get('one_shot', 0.0):.2f}s "
+            f"process_linear={mode0_timing_totals.get('process_linear', 0.0):.2f}s"
+        )
+        print(
+            "[MODE0 TIMING] linear_detail "
+            f"prep_encodings={mode0_timing_totals.get('prep_encodings', 0.0):.2f}s "
+            f"process_sort={mode0_timing_totals.get('process_sort', 0.0):.2f}s "
+            f"sort_total={mode0_timing_totals.get('sort_by_face_dist_NN', 0.0):.2f}s "
+            f"chop_first={mode0_timing_totals.get('chop_first', 0.0):.2f}s "
+            f"itter_sort={mode0_timing_totals.get('itter_sort', 0.0):.2f}s "
+            f"tsp_sort={mode0_timing_totals.get('tsp_sort', 0.0):.2f}s "
+            f"write_csv={mode0_timing_totals.get('write_sorted_csv', 0.0):.2f}s"
+        )
 
     def normalize_cluster_token(value):
         if value is None:
@@ -3674,19 +3798,34 @@ def main():
     # this is the key function, which is called for each cluster
     # or only once if no clusters
     def map_images(resultsjson, this_cluster=None, this_topic=None, this_hsv_meta=None):
+        map_start = time.perf_counter()
+        add_mode0_count("map_calls", 1)
+        try:
         
         # get cluster and pose from this_cluster
-        cluster_no, pose_no = parse_cluster_no(this_cluster)
+            cluster_no, pose_no = parse_cluster_no(this_cluster)
 
 
 
         # read the csv and construct dataframe
-        try:
-            df = pd.json_normalize(resultsjson)
-            print(df)
-        except:
-            print('you forgot to change the filename DUH')
-        if not df.empty:
+            try:
+                normalize_start = time.perf_counter()
+                df = pd.json_normalize(resultsjson)
+                add_mode0_timing("json_normalize", time.perf_counter() - normalize_start)
+                add_mode0_count("selected_rows", len(df.index))
+                print(df)
+            except:
+                print('you forgot to change the filename DUH')
+                df = pd.DataFrame()
+
+            if df.empty:
+                if IS_CLUSTER:
+                    print('dataframe empty, but IS_CLUSTER so continuing to next cluster_no')
+                else:
+                    print('dataframe empty, and not IS_CLUSTER so probably bad path or bad SQL')
+                    sys.exit()
+                return
+
             is_fusion_sort = (
                 SORT_TYPE == "object_fusion"
                 or ("fusion" in SORT_TYPE)
@@ -3707,13 +3846,17 @@ def main():
             # to avoid re-processing detections from Mongo
             if MODE == 0 and is_fusion_sort:
                 print("[MODE 0] Checking ImagesDetections for precomputed data...")
+                hydrate_start = time.perf_counter()
                 df, missing_image_ids = cl.hydrate_detections_from_precomputed_table(df)
+                add_mode0_timing("hydrate_precomputed", time.perf_counter() - hydrate_start)
                 print(f"[MODE 0] Found {len(df) - len(missing_image_ids)} images in ImagesDetections; {len(missing_image_ids)} need Mongo load")
 
             # Load all encoding/landmark fields from Mongo so MODE 0 CSV contains full data for MODE 1
             print(f"Loading all encodings from Mongo for all {len(df)} images...")
             print("size",df.size)
+            mongo_start = time.perf_counter()
             df[['face_encodings68', 'face_landmarks', 'body_landmarks', 'body_landmarks_normalized', 'body_landmarks_3D', 'hand_results']] = df['image_id'].apply(io.get_encodings_mongo)
+            add_mode0_timing("mongo_load", time.perf_counter() - mongo_start)
             print("got mongo encodings", df.columns)
             if VERBOSE: print("first row", df.iloc[0])
 
@@ -3726,6 +3869,7 @@ def main():
 
             # Apply the unpickling function to the Mongo fields
             print("[MODE] Unpickling Mongo fields from database...")
+            prep_start = time.perf_counter()
             df['face_encodings68'] = df['face_encodings68'].apply(io.unpickle_array)
             df['face_landmarks'] = df['face_landmarks'].apply(io.unpickle_array)
             df['body_landmarks'] = df['body_landmarks'].apply(io.unpickle_array)
@@ -3769,13 +3913,16 @@ def main():
 
             columns_to_convert = ['face_x', 'face_y', 'face_z', 'mouth_gap', 'pitch', 'yaw', 'roll']
             df[columns_to_convert] = df[columns_to_convert].applymap(io.make_float)
+            add_mode0_timing("unpickle_and_prep", time.perf_counter() - prep_start)
 
             ### SEGMENT THE DATA ###
 
             # make the segment based on settings
             print("going to segment - current len(df):", len(df))
             # need to make sure has HSV here
+            segment_start = time.perf_counter()
             df_segment = sort.make_segment(df)
+            add_mode0_timing("segment", time.perf_counter() - segment_start)
             if len(df_segment) == 0:
                 print("segment is empty, skipping this segment")
                 return
@@ -3842,7 +3989,9 @@ def main():
                         f"[partition] oversized segment detected ({len(df_segment.index)} rows); "
                         "partitioning before process_linear"
                     )
+                    partition_start = time.perf_counter()
                     partition_groups = partition_segment_with_kmeans(df_segment, MAX_ROWS_PER_OUTPUT_CSV)
+                    add_mode0_timing("partition", time.perf_counter() - partition_start)
 
                     for subset_idx, subset_df in enumerate(partition_groups, start=1):
                         if subset_df.empty:
@@ -3857,24 +4006,61 @@ def main():
                                 f"[partition] subset {subset_suffix} still oversized "
                                 f"({len(subset_df.index)} rows); applying ONE_SHOT sort and trim"
                             )
+                            one_shot_start = time.perf_counter()
                             one_shot_sorted = one_shot_sort_dataframe(subset_df)
+                            add_mode0_timing("one_shot", time.perf_counter() - one_shot_start)
                             subset_df = one_shot_sorted.head(MAX_ROWS_PER_OUTPUT_CSV).reset_index(drop=True)
 
                         _none_obj_sort = SORT_TYPE_NONEOBJECT if (pose_no is not None and pose_no in OBJECT_NONE_CLUSTERS) else None
+                        process_linear_start = time.perf_counter()
                         process_linear(start_img_name, subset_df, subset_prefix, sort, effective_sort_type=_none_obj_sort)
+                        add_mode0_timing("process_linear", time.perf_counter() - process_linear_start)
                 else:
                     # build file prefix for cluster, pose, and topic
                     _none_obj_sort = SORT_TYPE_NONEOBJECT if (pose_no is not None and pose_no in OBJECT_NONE_CLUSTERS) else None
+                    process_linear_start = time.perf_counter()
                     process_linear(start_img_name, df_segment, base_file_prefix, sort, effective_sort_type=_none_obj_sort)
-        elif df.empty and IS_CLUSTER:
-            print('dataframe empty, but IS_CLUSTER so continuing to next cluster_no')
-
-        else: 
-            print('dataframe empty, and not IS_CLUSTER so probably bad path or bad SQL')
-            sys.exit()
+                    add_mode0_timing("process_linear", time.perf_counter() - process_linear_start)
+        finally:
+            map_elapsed = time.perf_counter() - map_start
+            add_mode0_timing("map_total", map_elapsed)
+            print_mode0_timing_progress(map_elapsed)
 
 
     def save_images_from_csv_folder():
+
+        mode1_timing_enabled = ENABLE_MODE1_TIMING
+        mode1_run_start = time.perf_counter()
+        mode1_timing_totals = {
+            "csv_read": 0.0,
+            "csv_parse": 0.0,
+            "db_dedupe": 0.0,
+            "multiplier_setup": 0.0,
+            "assembly": 0.0,
+            "file_total": 0.0,
+        }
+        mode1_processed_files = 0
+
+        def add_mode1_timing(stage, elapsed):
+            if not mode1_timing_enabled:
+                return
+            mode1_timing_totals[stage] = mode1_timing_totals.get(stage, 0.0) + float(elapsed)
+
+        def print_mode1_timing_summary(total_csv_candidates):
+            if not mode1_timing_enabled:
+                return
+            wall_time = time.perf_counter() - mode1_run_start
+            measured_time = sum(mode1_timing_totals.values())
+            print("\n[MODE1 TIMING] ===== Baseline Summary =====")
+            print(
+                f"[MODE1 TIMING] csv_candidates={total_csv_candidates} processed_files={mode1_processed_files} "
+                f"wall_time={wall_time:.2f}s measured_stage_sum={measured_time:.2f}s"
+            )
+            for stage in ["csv_read", "csv_parse", "db_dedupe", "multiplier_setup", "assembly", "file_total"]:
+                stage_time = mode1_timing_totals.get(stage, 0.0)
+                pct_wall = (stage_time / wall_time * 100.0) if wall_time > 0 else 0.0
+                print(f"[MODE1 TIMING] {stage}: {stage_time:.2f}s ({pct_wall:.1f}% of wall)")
+            print("[MODE1 TIMING] ============================\n")
 
         load_canonical_multiplier_registry_once()
 
@@ -3905,12 +4091,15 @@ def main():
 
 
         def load_df_sorted_from_csv(csv_file):
+            read_start = time.perf_counter()
             df = pd.read_csv(csv_file)
+            add_mode1_timing("csv_read", time.perf_counter() - read_start)
             print("df head", df.head())
             if df.empty:
                 print("dataframe is empty, skipping")
                 return
 
+            parse_start = time.perf_counter()
             # Convert face_landmarks from string to mediapipe landmark object
             if "face_landmarks" in df.columns:
                 df["face_landmarks"] = df["face_landmarks"].apply(sort.str_to_landmarks)
@@ -3933,6 +4122,7 @@ def main():
             # conver face_x	face_y	face_z	mouth_gap site_image_id to float
             columns_to_convert = ['face_x', 'face_y', 'face_z', 'mouth_gap', 'site_image_id']
             df[columns_to_convert] = df[columns_to_convert].applymap(io.make_float)
+            add_mode1_timing("csv_parse", time.perf_counter() - parse_start)
             # Process the dataframe as needed
             return df
         
@@ -3972,10 +4162,13 @@ def main():
         files_in_folder = os.listdir(CSV_FOLDER)
         # sort files alphabetically
         files_in_folder.sort()
+        total_csv_candidates = len([f for f in files_in_folder if f.endswith(".csv") and f.startswith("df_sorted_")])
         print("files in folder", files_in_folder)
         for csv_file in files_in_folder:
             print("csv_file", csv_file)
             if csv_file.endswith(".csv") and csv_file.startswith("df_sorted_"):
+                file_start = time.perf_counter()
+                mode1_processed_files += 1
                 # Extract cluster_no from filename, e.g., df_sorted_{cluster_no}_ct{segment_count}_p{pose_no}.csv
                 parts = csv_file.replace(".csv", "").split("_")
                 file_prefix = csv_file.replace("df_sorted_", "").replace(".csv", "")
@@ -4013,6 +4206,7 @@ def main():
 
 
                 # don't pass in session if IS_TENCH
+                db_start = time.perf_counter()
                 if io.IS_TENCH or io.IS_MICHELLE == True: 
                     not_dupe_list = None
                 elif not ONLY_SAVE_CACHE: 
@@ -4022,15 +4216,20 @@ def main():
                     not_dupe_list = get_not_dupes_sql(session)  # get list of image_ids that are not dupes
                     if VERBOSE: print("not_dupe_list size", len(not_dupe_list))
                     df_sorted = sort.remove_duplicates(io.folder_list, df_sorted, not_dupe_list, PURGING_DUPES)
+                add_mode1_timing("db_dedupe", time.perf_counter() - db_start)
                 if PURGING_DUPES: 
                     print("PURGING_DUPES is True, so bailing out")
+                    add_mode1_timing("file_total", time.perf_counter() - file_start)
                     continue
 
                 # wrapping the multiplier in a function that sets dims too
+                multiplier_start = time.perf_counter()
                 set_multiplier_and_dims(df_sorted, cluster_no, pose_no)
+                add_mode1_timing("multiplier_setup", time.perf_counter() - multiplier_start)
 
                 if CALIBRATING: continue
 
+                assembly_start = time.perf_counter()
                 if MAKE_CACHE_MODE:
                     # MAKE_CACHE_MODE: threaded cache generation, skip dedupe + pair validation
                     # num_workers = getattr(io, 'NUMBER_OF_PROCESSES_GPU', 4)
@@ -4038,6 +4237,10 @@ def main():
                     process_csv_cache_only(df_sorted, csv_file, num_workers=num_workers)
                 else:
                     linear_test_df(df_sorted)
+                add_mode1_timing("assembly", time.perf_counter() - assembly_start)
+                add_mode1_timing("file_total", time.perf_counter() - file_start)
+
+        print_mode1_timing_summary(total_csv_candidates)
 
 
 
@@ -4196,6 +4399,8 @@ def main():
                 if VERBOSE: print("select_map_images this_cluster", this_cluster)
                 if VERBOSE: print("select_map_images this_topic", this_topic)
                 if VERBOSE: print("select_map_images hsv_cluster", hsv_cluster)
+                add_mode0_count("select_calls", 1)
+                select_start = time.perf_counter()
                 resultsjson = selectSQL(
                     this_cluster,
                     this_topic,
@@ -4206,6 +4411,7 @@ def main():
                     use_meta_cluster=use_meta_cluster,
                     meta_cluster_id=meta_cluster_id,
                 )
+                add_mode0_timing("sql_select", time.perf_counter() - select_start)
                 print(f"DEBUG - Got {len(resultsjson)} results from selectSQL with cluster={this_cluster}, topic={this_topic}, hsv={hsv_cluster}")
                 if len(resultsjson) < MIN_CYCLE_COUNT:
                     print(f"less than {MIN_CYCLE_COUNT} resultsjson, skipping this {this_cluster} and {this_topic}")
@@ -4234,6 +4440,8 @@ def main():
 
                         emitted_subcycles = 0
                         for object_hsv_cluster in object_hsv_groups:
+                            add_mode0_count("select_calls", 1)
+                            object_select_start = time.perf_counter()
                             object_resultsjson = selectSQL(
                                 this_cluster,
                                 this_topic,
@@ -4244,6 +4452,7 @@ def main():
                                 use_meta_cluster=use_meta_cluster,
                                 meta_cluster_id=meta_cluster_id,
                             )
+                            add_mode0_timing("sql_select", time.perf_counter() - object_select_start)
                             if len(object_resultsjson) < MIN_CYCLE_COUNT:
                                 continue
 
@@ -4255,7 +4464,9 @@ def main():
                                 cycle_stage="object_subsort",
                             )
                             print("CURRENT_HSV_CYCLE_META", CURRENT_HSV_CYCLE_META)
+                            map_dispatch_start = time.perf_counter()
                             map_images(object_resultsjson, this_cluster, this_topic, CURRENT_HSV_CYCLE_META)
+                            add_mode0_timing("map_dispatch", time.perf_counter() - map_dispatch_start)
                             emitted_subcycles += 1
 
                         if emitted_subcycles > 0:
@@ -4264,7 +4475,9 @@ def main():
                         print("Object HSV subsort produced no eligible subcycles, falling back to background cycle")
 
                     # folder_name = this_topic[0] if this_topic else this_cluster
+                    map_dispatch_start = time.perf_counter()
                     map_images(resultsjson, this_cluster, this_topic, CURRENT_HSV_CYCLE_META)
+                    add_mode0_timing("map_dispatch", time.perf_counter() - map_dispatch_start)
 
             def sub_select_clusters_by_hsv(cluster_topic_no, n_cluster_topics):
                 # N_HSV
@@ -4511,6 +4724,8 @@ def main():
             if MODE == 2:
                 print("MODE 2, now assembling from CSV_FOLDER", CSV_FOLDER)
                 save_images_from_csv_folder()
+
+        print_mode0_timing_summary()
 
 
 if __name__ == '__main__':
