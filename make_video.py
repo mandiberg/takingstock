@@ -1631,11 +1631,34 @@ def prep_encodings_NN(df_segment):
         else:
             return [row['hue']*HSV_NORMS["HUE"], row['sat']*HSV_NORMS["SAT"], row['val']*HSV_NORMS["VAL"]]    
     def create_lum_list(row):
+        lum_value = row['lum']
+        # Idempotent path: when prep_encodings_NN runs twice, lum may already be [lum, lum_torso].
+        if isinstance(lum_value, (list, tuple, np.ndarray)) and len(lum_value) > 0:
+            try:
+                base_lum = float(lum_value[0])
+            except (TypeError, ValueError):
+                base_lum = 0.0
+        else:
+            try:
+                base_lum = float(lum_value)
+            except (TypeError, ValueError):
+                base_lum = 0.0
+
+        try:
+            torso_lum = float(row['lum_torso'])
+        except (TypeError, ValueError):
+            torso_lum = base_lum
+
+        try:
+            torso_bb_lum = float(row['lum_torso_bb'])
+        except (TypeError, ValueError):
+            torso_bb_lum = -1.0
+
         if row['lum_torso_bb'] >= 0 and row['lum_torso_bb'] != 1:
             # print("create_hsv_list bb", [row['hue_bb'], row['sat_bb'], row['lum_bb']])
-            return [row['lum']*HSV_NORMS["LUM"], row['lum_torso_bb']*HSV_NORMS["LUM"]]
+            return [base_lum*HSV_NORMS["LUM"], torso_bb_lum*HSV_NORMS["LUM"]]
         else:
-            return [row['lum']*HSV_NORMS["LUM"], row['lum_torso']*HSV_NORMS["LUM"]]   
+            return [base_lum*HSV_NORMS["LUM"], torso_lum*HSV_NORMS["LUM"]]   
 
     is_multislot_obj_bbox_mode = (CLUSTER_TYPE == "ArmsPoses3D_ObjectFusion" and SORT_TYPE == "obj_bbox")
 
