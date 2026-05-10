@@ -289,6 +289,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     # current obj sort
     CLUSTER_TYPE = "ArmsPoses3D_ObjectFusion"  # TEST: new Arms/ObjectFusion mode
     SORT_TYPE = "object_fusion" # for ArmsPoses3D_ObjectFusion keep SORT_TYPE as object_fusion
+    SORT_TYPE_NONEOBJECT = "planar_hands" # sort used when pose_no is in OBJECT_NONE_CLUSTERS
     USE_HSV = False
 
     # CLUSTER_TYPE = "object_fusion"
@@ -1623,7 +1624,8 @@ def cycling_order(CYCLECOUNT, sort):
         # print(angle_list)
     return img_array, size
 
-def prep_encodings_NN(df_segment):
+def prep_encodings_NN(df_segment, effective_sort_type=None):
+    _sort_type = effective_sort_type if effective_sort_type is not None else SORT_TYPE
     def create_hsv_list(row):
         if row['hue_bb'] >= 0:
             # print("create_hsv_list bb", [row['hue_bb'], row['sat_bb'], row['lum_bb']])
@@ -1660,15 +1662,15 @@ def prep_encodings_NN(df_segment):
         else:
             return [base_lum*HSV_NORMS["LUM"], torso_lum*HSV_NORMS["LUM"]]   
 
-    is_multislot_obj_bbox_mode = (CLUSTER_TYPE == "ArmsPoses3D_ObjectFusion" and SORT_TYPE == "obj_bbox")
+    is_multislot_obj_bbox_mode = (CLUSTER_TYPE == "ArmsPoses3D_ObjectFusion" and _sort_type == "obj_bbox")
 
     print("prep_encodings_NN df_segment columns", df_segment.columns)
-    sort_column, source_col = sort.get_sort_column_mapping(SORT_TYPE, CLUSTER1)
+    sort_column, source_col = sort.get_sort_column_mapping(_sort_type, CLUSTER1)
     print(f"degugging df_segment prep encodings for {source_col}:", df_segment.columns)      
     # drop rows where body_landmarks_normalized is None
     # TK this needs to be adapted to handle left vs right hand. 
     # subset needs to be both of them, if both are na
-    if not sort_column == "hand_landmarks" and not SORT_TYPE == "object_fusion" and not is_multislot_obj_bbox_mode:
+    if not sort_column == "hand_landmarks" and not _sort_type == "object_fusion" and not is_multislot_obj_bbox_mode:
         # hand_landmarks are all giving 0's if null, so no NA
         # skip for object_fusion, as 0's are valid values
         print("df_segment source_col", df_segment[source_col].to_string())
@@ -1697,7 +1699,7 @@ def prep_encodings_NN(df_segment):
     if "pitch" in df_segment.columns and "yaw" in df_segment.columns and "roll" in df_segment.columns:
         df_segment['pitch_yaw_roll_list'] = df_segment.apply(lambda row: [row['pitch'], row['yaw'], row['roll']], axis=1)
 
-    if SORT_TYPE == "object_fusion" or "fusion" in SORT_TYPE or is_multislot_obj_bbox_mode:
+    if _sort_type == "object_fusion" or "fusion" in _sort_type or is_multislot_obj_bbox_mode:
         # Process detections and classify their relationship to hands/face
         print("Processing detections for object_fusion...")
         df_segment = cl.process_detections_for_df(df_segment)
@@ -2920,7 +2922,7 @@ def write_images(img_list):
 
 
 
-def process_linear(start_img_name, df_segment, file_prefix, sort):
+def process_linear(start_img_name, df_segment, file_prefix, sort, effective_sort_type=None):
     # linear sort by encoding distance
     print("processing linear")
 
@@ -2928,25 +2930,34 @@ def process_linear(start_img_name, df_segment, file_prefix, sort):
     # sort.set_counters(io.ROOT,cluster_no, start_img_name, start_site_image_id)  
     # print("sort.counter_dict after sort.set_counters", sort.counter_dict)
 
-    # preps the encodings for sort
-    # df_enc, df_128_enc, df_33_lms = prep_encodings(df_segment)
-    df_enc = prep_encodings_NN(df_segment)
-    segment_count = df_enc.shape[0]
-    if VERBOSE: print("sort.counter_dict after prep_encodings_NN", sort.counter_dict)
+    original_sort_type = sort.SORT_TYPE
+    active_sort_type = effective_sort_type if effective_sort_type is not None else original_sort_type
+    if active_sort_type != original_sort_type:
+        print(f"process_linear overriding sort.SORT_TYPE from {original_sort_type} to {active_sort_type}")
+    sort.SORT_TYPE = active_sort_type
 
-    # if results in df_enc, then sort by face distance
-    if not df_enc.empty:
-        # # get dataframe sorted by distance
-        df_sorted = sort_by_face_dist_NN(df_enc)
+    try:
+        # preps the encodings for sort
+        # df_enc, df_128_enc, df_33_lms = prep_encodings(df_segment)
+        df_enc = prep_encodings_NN(df_segment, effective_sort_type=active_sort_type)
+        segment_count = df_enc.shape[0]
+        if VERBOSE: print("sort.counter_dict after prep_encodings_NN", sort.counter_dict)
+
+        # if results in df_enc, then sort by face distance
+        if not df_enc.empty:
+            # # get dataframe sorted by distance
+            df_sorted = sort_by_face_dist_NN(df_enc)
         # df_sorted = sort_by_face_dist(df_enc, df_128_enc, df_33_lms)
 
         # TK this is where i save df_sorted to csv
         # check to see if CSV_FOLDER exists and create if not
-        if not os.path.exists(CSV_FOLDER): os.makedirs(CSV_FOLDER)
-        df_sorted.to_csv(f"{CSV_FOLDER}/df_sorted_{file_prefix}_ct{segment_count}.csv", index=False)
+            if not os.path.exists(CSV_FOLDER): os.makedirs(CSV_FOLDER)
+            df_sorted.to_csv(f"{CSV_FOLDER}/df_sorted_{file_prefix}_ct{segment_count}.csv", index=False)
 
-        lap_time = time.time() - start
-        print(f"sorting by face distance took {lap_time:.2f} seconds for {segment_count} segments")
+            lap_time = time.time() - start
+            print(f"sorting by face distance took {lap_time:.2f} seconds for {segment_count} segments")
+    finally:
+        sort.SORT_TYPE = original_sort_type
 
         # test to see if they make good faces
         # write_images(img_list)
@@ -3849,10 +3860,12 @@ def main():
                             one_shot_sorted = one_shot_sort_dataframe(subset_df)
                             subset_df = one_shot_sorted.head(MAX_ROWS_PER_OUTPUT_CSV).reset_index(drop=True)
 
-                        process_linear(start_img_name, subset_df, subset_prefix, sort)
+                        _none_obj_sort = SORT_TYPE_NONEOBJECT if (pose_no is not None and pose_no in OBJECT_NONE_CLUSTERS) else None
+                        process_linear(start_img_name, subset_df, subset_prefix, sort, effective_sort_type=_none_obj_sort)
                 else:
                     # build file prefix for cluster, pose, and topic
-                    process_linear(start_img_name, df_segment, base_file_prefix, sort)
+                    _none_obj_sort = SORT_TYPE_NONEOBJECT if (pose_no is not None and pose_no in OBJECT_NONE_CLUSTERS) else None
+                    process_linear(start_img_name, df_segment, base_file_prefix, sort, effective_sort_type=_none_obj_sort)
         elif df.empty and IS_CLUSTER:
             print('dataframe empty, but IS_CLUSTER so continuing to next cluster_no')
 
