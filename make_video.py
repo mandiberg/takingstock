@@ -2326,7 +2326,7 @@ def linear_test_df(df_sorted, itter=None):
         return None, True
 
     def save_image_metas(row):
-        print(f'counter dict is {sort.counter_dict}')
+        # print(f'counter dict is {sort.counter_dict}')
         if sort.VERBOSE: print("row", row)
         if sort.VERBOSE: print("save_image_metas for use in TTS")
         if sort.VERBOSE: print("saving installation metas")

@@ -29,7 +29,7 @@ ROOT_FOLDER_PATH = '/Volumes/LaCie/output_folder/'
 # if IS_CLUSTER this should be the folder holding all the cluster folders
 # if not, this should be the individual folder holding the images
 # will not accept clusterNone -- change to cluster00
-FOLDER_NAME = "May_oneshot_cache1/bigfiles"
+FOLDER_NAME = "multipolicy_test"
 
 if io.IS_TENCH:
     ROOT_FOLDER_PATH = '/Users/tenchc/Documents/GitHub/taking_stock_production/segment_images'
