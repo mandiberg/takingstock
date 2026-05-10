@@ -22,14 +22,14 @@ MODE_CHOICE = 3
 CURRENT_MODE = MODES[MODE_CHOICE]
 
 # Provide the path to the folder containing the images
-ROOT_FOLDER_PATH = '/Volumes/OWC5/cache_folder/'
+ROOT_FOLDER_PATH = '/Volumes/LaCie/output_folder/'
 
 
 # ROOT_FOLDER_PATH = '/Users/michaelmandiberg/Documents/projects-active/facemap_production'
 # if IS_CLUSTER this should be the folder holding all the cluster folders
 # if not, this should be the individual folder holding the images
 # will not accept clusterNone -- change to cluster00
-FOLDER_NAME = "TheOffice_w50_TSP_april28"
+FOLDER_NAME = "May_oneshot_cache1/bigfiles"
 
 if io.IS_TENCH:
     ROOT_FOLDER_PATH = '/Users/tenchc/Documents/GitHub/taking_stock_production/segment_images'

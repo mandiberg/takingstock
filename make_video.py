@@ -66,7 +66,7 @@ SegmentHelper_name = 'SegmentHelper_TheOffice'
 IS_SSD = True
 SSD_PATH = "/Volumes/LaCie/segment_images"
 ONLY_SAVE_CACHE = True
-MAKE_CACHE_MODE = True
+MAKE_CACHE_MODE = False
 start = time.time()
 
 #IS_MOVE is in move_toSSD_files.py
@@ -81,7 +81,7 @@ if not (io.IS_TENCH or io.IS_MICHELLE) and IS_SSD:
     io.ROOT_PROD=  "/Volumes/LaCie" ## only on Mac
     # io.ROOT_PROD=  "/Users/michaelmandiberg/Documents/projects-active/facemap_production" ## MBP
     print("Setting io.ROOT to ROOTSSD:", io.ROOTSSD)
-    io.ROOT = os.path.join(io.ROOT_PROD, "cache_folder")
+    io.ROOT = os.path.join(io.ROOT_PROD, "output_folder")
 print("Setting io.ROOT to ROOTSSD:", io.ROOTSSD)
 print("Set io.ROOT to ROOTSSD:", io.ROOT)
 
@@ -95,7 +95,7 @@ CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden b
 
 # CSV_FOLDER = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion128_test220K"
 CSV_MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/"
-CSV_RUN_FOLDER = "SegmentHelper_TheOffice/one_shot_preMTL" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
+CSV_RUN_FOLDER = "SegmentHelper_TheOffice/multipolicy_tests" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
 CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, CSV_RUN_FOLDER)
 
 
@@ -329,18 +329,19 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     # process for dealing with keep/none
     # OBJECT_NONE_CLUSTERS = [i for i in range(4000) if i not in OBJECT_KEEP_CLUSTERS] # skip these and go to 18
     # MULTIPOLICY = True # controls whether it does multi-bucket fusion policy based on cluster size for HSV, clusters, and metabodyposes3D
-    OBJECT_NONE_CLUSTERS = [] # if MULTIPOLICY these get HSV BG, else these don't run in fusion
-    MULTIPOLICY = False # controls whether it does multi-bucket fusion policy based on cluster size for HSV, clusters, and metabodyposes3D
-    CLUSTER_MIN_HSV_BG = 6000
-    CLUSTER_MIN_HSV_OBJ = 5000
+    OBJECT_NONE_CLUSTERS = [1] # if MULTIPOLICY these get HSV BG, else these don't run in fusion
+    MULTIPOLICY = True # controls whether it does multi-bucket fusion policy based on cluster size for HSV, clusters, and metabodyposes3D
+    CLUSTER_MIN_HSV_BG = 1500
+    CLUSTER_MIN_HSV_OBJ = 1500
     OBJ_CLUSTER_COLUMN_MIN_FOR_FUSION_SORT = 1000
+    DO_SMALL_CLUSTER_FUSION_BUCKET = False # if MULTIPOLICY is True, this controls whether clusters below the CLUSTER_MIN_HSV_OBJ threshold get put into a small cluster fusion bucket, or just skipped for fusion entirely. If False, they get skipped for fusion and go to the end of the sort. If True, they get put into a small cluster fusion bucket that gets sorted after the main fusion buckets, but before the non-fusion clusters.
     HSV_SOURCE_MODE = "background" # "background" or "object" or "both"
     
     TESTING = True
     if TESTING:
         # turning all three off to do old style non tsp sort    
-        ONE_SHOT = True # take all files, based off the very first sort order.
-        TSP_SORT = False
+        ONE_SHOT = False # take all files, based off the very first sort order.
+        TSP_SORT = True
         CHOP_ITTER_TSP_SORT = False
         if CLUSTER_TYPE == "object_fusion":
             GENERATE_FUSION_PAIRS = False # April 14 changing this for testing
@@ -1036,6 +1037,7 @@ if not io.IS_TENCH:
         __tablename__ = 'IsNotDupeOf'
         image_id_i = Column(Integer, ForeignKey('Images.image_id'), primary_key=True)
         image_id_j = Column(Integer, ForeignKey('Encodings.encoding_id'), primary_key=True)
+        manual_check = Column(Boolean, default=False)
 
     # not currently in use
     if IS_HAND_POSE_FUSION and CLUSTER2:
@@ -3397,7 +3399,8 @@ def main():
 
         # Bucket 4 first: low-support object columns route to MetaBody fallback.
         if (
-            object_cluster_id not in OBJECT_NONE_CLUSTERS
+            DO_SMALL_CLUSTER_FUSION_BUCKET
+            and object_cluster_id not in OBJECT_NONE_CLUSTERS
             and column_total < int(OBJ_CLUSTER_COLUMN_MIN_FOR_FUSION_SORT)
         ):
             print(
@@ -4063,6 +4066,7 @@ def main():
                     print(f"less than {MIN_CYCLE_COUNT} resultsjson, skipping this {this_cluster} and {this_topic}")
                     return
                 else:
+                    print(f"Got {len(resultsjson)} results from selectSQL for cluster {this_cluster}, topic {this_topic}, hsv {hsv_cluster} - proceeding to map_images")
                     # If a background HSV bucket is too large, split it into object-color groups.
                     do_object_hsv_subsort = (
                         resolved_hsv_source == "background"
@@ -4070,6 +4074,7 @@ def main():
                         and bool(SUBSORT_ON_OBJECT_HSV_CUTOFF)
                         and len(resultsjson) >= SUBSORT_ON_OBJECT_HSV_CUTOFF
                         and effective_use_hsv
+                        and this_cluster[1] not in OBJECT_NONE_CLUSTERS # this skips the subsort for any cluster-topic combos that have the object-none cluster
                     )
                     if do_object_hsv_subsort:
                         object_hsv_groups = HSV_GROUP_PRESETS.get(OBJECT_HSV_GROUP_PRESET_NAME)

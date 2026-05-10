@@ -1212,11 +1212,35 @@ class SortPose:
         def pop_look_closer_dict(look_closer_dict, keys_to_remove):
             for key in keys_to_remove:
                 look_closer_dict.pop(key, None)
-            return look_closer_dict
+            # does not need to return, modifies in place
         
         def check_mysql_for_dupes(session, ij):
             print(ij)
             return None
+
+        is_not_dupe_insert_sql = text(
+            "INSERT IGNORE INTO IsNotDupeOf (image_id_i, image_id_j, manual_check) "
+            "VALUES (:image_id_i, :image_id_j, 0)"
+        )
+
+        def write_is_not_dupe_sql(i, j, df):
+            if self.face_pair_cache_engine is None:
+                return
+
+            image_id_i = df.iloc[i].get('image_id')
+            image_id_j = df.iloc[j].get('image_id')
+            pair_key = self.canonicalize_face_pair(image_id_i, image_id_j)
+            if pair_key is None:
+                return
+
+            with self.face_pair_cache_engine.begin() as connection:
+                connection.execute(
+                    is_not_dupe_insert_sql,
+                    {
+                        "image_id_i": pair_key[0],
+                        "image_id_j": pair_key[1],
+                    },
+                )
 
         for i in range(n_rows):
             # only check within check_range frames for speed
@@ -1259,7 +1283,7 @@ class SortPose:
                 if (i,j) in not_dupes or (j,i) in not_dupes:
                     not_dupes_to_remove.append((i,j))
                     continue
-            look_closer_dict = pop_look_closer_dict(look_closer_dict, not_dupes_to_remove)
+            pop_look_closer_dict(look_closer_dict, not_dupes_to_remove)
 
         #pass 2
         keys_to_remove_prob_not_dupes = []
@@ -1278,7 +1302,7 @@ class SortPose:
                 # mark for removal after iteration
                 keys_to_remove_prob_not_dupes.append((i,j))
                 continue
-        keys_to_remove_prob_not_dupes = pop_look_closer_dict(look_closer_dict, keys_to_remove_prob_not_dupes)
+        pop_look_closer_dict(look_closer_dict, keys_to_remove_prob_not_dupes)
 
         #pass 3 hand gesture, description, site name id
         for (i,j), this_dist_list in look_closer_dict.items():
@@ -1395,6 +1419,9 @@ class SortPose:
                     if is_dupe:
                         if self.VERBOSE: print(f"remove_duplicates: confirmed duplicate {j} of {i} with SSIM {ssim_score} and distances {this_dist_list}")
                         confirmed_dupes.add(j)
+                    else:
+                        # if it passess SSIM, save isnotdupe pair to sql to avoid future work
+                        write_is_not_dupe_sql(i, j, df)
                 except Exception as e:
                     print(f"Error processing segmentation masks for images {i} and {j}: {e}")
                     ssim_score = 0
