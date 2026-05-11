@@ -65,8 +65,8 @@ SegmentHelper_name = 'SegmentHelper_TheOffice'
 # for when I'm using files on my SSD vs RAID
 IS_SSD = True
 SSD_PATH = "/Volumes/LaCie/segment_images"
-ONLY_SAVE_CACHE = True
-MAKE_CACHE_MODE = False
+ONLY_SAVE_CACHE = True # only save CSVs to cluster folder, not images which are saved in cache folders -- for speed
+MAKE_CACHE_MODE = False # only make cache folders, skips dedupe and is_face testing
 start = time.time()
 
 #IS_MOVE is in move_toSSD_files.py
@@ -95,11 +95,16 @@ CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden b
 
 # CSV_FOLDER = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion128_test220K"
 CSV_MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/"
-CSV_RUN_FOLDER = "SegmentHelper_TheOffice/multipolicy_tests_DEAPtweak" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
+CSV_RUN_FOLDER = "SegmentHelper_TheOffice/multipolicy_tests_parquet" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
 CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, CSV_RUN_FOLDER)
 MAX_ROWS_PER_OUTPUT_CSV = 1200
 ENABLE_MODE0_TIMING = True
 ENABLE_MODE1_TIMING = True
+MODE0_WRITE_TYPED_INTERMEDIATE = True
+MODE0_WRITE_CSV_FALLBACK = True
+MODE1_USE_TYPED_INTERMEDIATE = True
+MODE1_TYPED_STRICT = False
+MODE_TYPED_SCHEMA_VERSION = "typed_intermediate_v1"
 
 
 def resolve_arms_object_fusion_folder(
@@ -2937,6 +2942,129 @@ def write_images(img_list):
         cv2.imwrite(path_img[0],path_img[1])
 
 
+def _build_sorted_artifact_paths(csv_folder, file_prefix, segment_count):
+    stem = f"df_sorted_{file_prefix}_ct{segment_count}"
+    base_path = os.path.join(csv_folder, stem)
+    return {
+        "stem": stem,
+        "csv": f"{base_path}.csv",
+        "parquet": f"{base_path}.parquet",
+        "pickle": f"{base_path}.pkl",
+        "manifest": f"{base_path}.manifest.json",
+    }
+
+
+def write_sorted_artifacts(df_sorted, csv_folder, file_prefix, segment_count):
+    paths = _build_sorted_artifact_paths(csv_folder, file_prefix, segment_count)
+    if not os.path.exists(csv_folder):
+        os.makedirs(csv_folder)
+
+    write_stats = {
+        "csv_written": False,
+        "typed_written": False,
+        "typed_format": None,
+        "paths": paths,
+        "timing": {
+            "csv": 0.0,
+            "typed": 0.0,
+            "manifest": 0.0,
+        },
+    }
+
+    if MODE0_WRITE_CSV_FALLBACK:
+        csv_start = time.perf_counter()
+        df_sorted.to_csv(paths["csv"], index=False)
+        write_stats["timing"]["csv"] = time.perf_counter() - csv_start
+        write_stats["csv_written"] = True
+
+    if MODE0_WRITE_TYPED_INTERMEDIATE:
+        typed_start = time.perf_counter()
+        parquet_error = None
+        try:
+            df_sorted.to_parquet(paths["parquet"], index=False)
+            write_stats["typed_written"] = True
+            write_stats["typed_format"] = "parquet"
+        except Exception as exc:
+            parquet_error = str(exc)
+
+        if not write_stats["typed_written"]:
+            df_sorted.to_pickle(paths["pickle"])
+            write_stats["typed_written"] = True
+            write_stats["typed_format"] = "pickle"
+        write_stats["timing"]["typed"] = time.perf_counter() - typed_start
+
+        manifest_start = time.perf_counter()
+        manifest_payload = {
+            "schema_version": MODE_TYPED_SCHEMA_VERSION,
+            "file_prefix": file_prefix,
+            "segment_count": int(segment_count),
+            "row_count": int(len(df_sorted)),
+            "mode": MODE,
+            "sort_type": getattr(sort, "SORT_TYPE", None),
+            "paths": {
+                "csv": os.path.basename(paths["csv"]),
+                "parquet": os.path.basename(paths["parquet"]),
+                "pickle": os.path.basename(paths["pickle"]),
+            },
+            "writer_options": {
+                "csv_enabled": MODE0_WRITE_CSV_FALLBACK,
+                "typed_enabled": MODE0_WRITE_TYPED_INTERMEDIATE,
+                "typed_format": write_stats["typed_format"],
+            },
+            "created_at_epoch": time.time(),
+            "parquet_error": parquet_error,
+        }
+        with open(paths["manifest"], "w", encoding="utf-8") as manifest_file:
+            json.dump(manifest_payload, manifest_file, indent=2)
+        write_stats["timing"]["manifest"] = time.perf_counter() - manifest_start
+
+    return write_stats
+
+
+def resolve_sorted_artifact_paths(csv_file_path):
+    csv_dir = os.path.dirname(csv_file_path)
+    csv_name = os.path.basename(csv_file_path)
+    if csv_name.endswith(".csv"):
+        stem = csv_name[:-4]
+    else:
+        stem = csv_name
+    manifest_path = os.path.join(csv_dir, f"{stem}.manifest.json")
+    parquet_path = os.path.join(csv_dir, f"{stem}.parquet")
+    pickle_path = os.path.join(csv_dir, f"{stem}.pkl")
+    info = {
+        "csv": csv_file_path,
+        "manifest": manifest_path,
+        "parquet": parquet_path,
+        "pickle": pickle_path,
+        "manifest_payload": None,
+    }
+    if os.path.exists(manifest_path):
+        try:
+            with open(manifest_path, "r", encoding="utf-8") as manifest_file:
+                info["manifest_payload"] = json.load(manifest_file)
+        except Exception:
+            info["manifest_payload"] = None
+    return info
+
+
+def load_df_sorted_typed_or_csv(paths_info):
+    if MODE1_USE_TYPED_INTERMEDIATE:
+        if os.path.exists(paths_info["parquet"]):
+            try:
+                return pd.read_parquet(paths_info["parquet"]), "typed_parquet"
+            except Exception as exc:
+                if MODE1_TYPED_STRICT:
+                    raise RuntimeError(f"Failed to read parquet artifact: {paths_info['parquet']} ({exc})")
+        if os.path.exists(paths_info["pickle"]):
+            try:
+                return pd.read_pickle(paths_info["pickle"]), "typed_pickle"
+            except Exception as exc:
+                if MODE1_TYPED_STRICT:
+                    raise RuntimeError(f"Failed to read pickle artifact: {paths_info['pickle']} ({exc})")
+
+    return pd.read_csv(paths_info["csv"]), "csv"
+
+
 
 def process_linear(start_img_name, df_segment, file_prefix, sort, effective_sort_type=None):
     # linear sort by encoding distance
@@ -2971,10 +3099,13 @@ def process_linear(start_img_name, df_segment, file_prefix, sort, effective_sort
 
         # TK this is where i save df_sorted to csv
         # check to see if CSV_FOLDER exists and create if not
-            if not os.path.exists(CSV_FOLDER): os.makedirs(CSV_FOLDER)
             write_start = time.perf_counter()
-            df_sorted.to_csv(f"{CSV_FOLDER}/df_sorted_{file_prefix}_ct{segment_count}.csv", index=False)
+            write_stats = write_sorted_artifacts(df_sorted, CSV_FOLDER, file_prefix, segment_count)
             record_mode0_timing("write_sorted_csv", time.perf_counter() - write_start)
+            record_mode0_timing("write_sorted_csv_only", write_stats["timing"].get("csv", 0.0))
+            if write_stats.get("typed_written"):
+                record_mode0_timing("write_sorted_typed", write_stats["timing"].get("typed", 0.0))
+                record_mode0_timing("write_sorted_manifest", write_stats["timing"].get("manifest", 0.0))
 
             lap_time = time.time() - start
             print(f"sorting by face distance took {lap_time:.2f} seconds for {segment_count} segments")
@@ -3215,6 +3346,9 @@ def main():
             "itter_sort",
             "tsp_sort",
             "write_sorted_csv",
+            "write_sorted_csv_only",
+            "write_sorted_typed",
+            "write_sorted_manifest",
             "map_dispatch",
             "map_total",
         ]:
@@ -4034,6 +4168,8 @@ def main():
         mode1_timing_totals = {
             "csv_read": 0.0,
             "csv_parse": 0.0,
+            "typed_read": 0.0,
+            "csv_fallback_read": 0.0,
             "db_dedupe": 0.0,
             "multiplier_setup": 0.0,
             "assembly": 0.0,
@@ -4056,7 +4192,16 @@ def main():
                 f"[MODE1 TIMING] csv_candidates={total_csv_candidates} processed_files={mode1_processed_files} "
                 f"wall_time={wall_time:.2f}s measured_stage_sum={measured_time:.2f}s"
             )
-            for stage in ["csv_read", "csv_parse", "db_dedupe", "multiplier_setup", "assembly", "file_total"]:
+            for stage in [
+                "typed_read",
+                "csv_read",
+                "csv_fallback_read",
+                "csv_parse",
+                "db_dedupe",
+                "multiplier_setup",
+                "assembly",
+                "file_total",
+            ]:
                 stage_time = mode1_timing_totals.get(stage, 0.0)
                 pct_wall = (stage_time / wall_time * 100.0) if wall_time > 0 else 0.0
                 print(f"[MODE1 TIMING] {stage}: {stage_time:.2f}s ({pct_wall:.1f}% of wall)")
@@ -4092,8 +4237,14 @@ def main():
 
         def load_df_sorted_from_csv(csv_file):
             read_start = time.perf_counter()
-            df = pd.read_csv(csv_file)
-            add_mode1_timing("csv_read", time.perf_counter() - read_start)
+            path_info = resolve_sorted_artifact_paths(csv_file)
+            df, load_mode = load_df_sorted_typed_or_csv(path_info)
+            read_elapsed = time.perf_counter() - read_start
+            if load_mode == "csv":
+                add_mode1_timing("csv_read", read_elapsed)
+                add_mode1_timing("csv_fallback_read", read_elapsed)
+            else:
+                add_mode1_timing("typed_read", read_elapsed)
             print("df head", df.head())
             if df.empty:
                 print("dataframe is empty, skipping")
@@ -4103,7 +4254,8 @@ def main():
             # Convert face_landmarks from string to mediapipe landmark object
             if "face_landmarks" in df.columns:
                 df["face_landmarks"] = df["face_landmarks"].apply(sort.str_to_landmarks)
-            df['bbox'] = df['bbox'].apply(lambda x: io.unstring_json(x))
+            if "bbox" in df.columns:
+                df['bbox'] = df['bbox'].apply(lambda x: io.unstring_json(x) if isinstance(x, str) else x)
             df['folder'] = df['folder'].apply(lambda x: os.path.join(io.ROOT, os.path.basename(x)))
             # convert 'face_encodings68' from string to list
             df["face_encodings68"] = df["face_encodings68"].apply(lambda x: eval(x) if isinstance(x, str) else x)

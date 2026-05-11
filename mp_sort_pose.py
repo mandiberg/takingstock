@@ -5464,7 +5464,7 @@ class TSPSorterTwoPhase:
     Iterate: Re-optimize TSP on remaining points
     """
     
-    def __init__(self, skip_frac=0.25, verbose=True, iterations=2):
+    def __init__(self, skip_frac=0.25, verbose=True, iterations=2, print_original_indices=False):
         """
         Parameters
         ----------
@@ -5478,6 +5478,7 @@ class TSPSorterTwoPhase:
         self.SKIP_FRAC = skip_frac
         self.VERBOSE = verbose
         self.ITERATIONS = iterations
+        self.PRINT_TSP_ORIGINAL_INDICES = print_original_indices
         
         # Will be set during processing
         self.dist_matrix = None
@@ -5485,6 +5486,16 @@ class TSPSorterTwoPhase:
         self.START_IDX = None
         self.END_IDX = None
         self.original_indices = None  # Track original df indices
+
+    def _get_adaptive_ga_budgets(self, n_points):
+        """Tune GA effort by problem size; smaller sets keep higher search effort."""
+        if n_points >= 900:
+            return 140, 35, 160, 40
+        if n_points >= 700:
+            return 150, 35, 170, 40
+        if n_points >= 500:
+            return 160, 40, 180, 45
+        return 170, 45, 190, 50
         
     def compute_distance_matrix(self, df):
         """Compute pairwise distance matrix from dataframe."""
@@ -5799,10 +5810,9 @@ class TSPSorterTwoPhase:
         remaining_skips = total_to_skip
         
         all_skipped = []
-        iter_pop_size = 160
-        iter_generations = 40
-        final_pop_size = 180
-        final_generations = 45
+        iter_pop_size, iter_generations, final_pop_size, final_generations = self._get_adaptive_ga_budgets(
+            self.N_POINTS
+        )
         if self.VERBOSE:
             print(
                 "TSP GA budgets "
@@ -5900,9 +5910,9 @@ class TSPSorterTwoPhase:
             )
             print(f"Final tour distance: {final_dist:.3f}")
         
-        for idx, row in sorted_df.iterrows():
-            # print original_index
-            print(row['original_index'])
+        if self.PRINT_TSP_ORIGINAL_INDICES:
+            for _, row in sorted_df.iterrows():
+                print(row['original_index'])
         return sorted_df
 
 
