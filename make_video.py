@@ -70,7 +70,7 @@ MAKE_CACHE_MODE = False # only make cache folders, skips dedupe and is_face test
 MODE1_ENABLE_DB_DEDUPE = False # skip dedupe during crunch time drafts  
 SKIP_PAIRCHECK = True # draft mode: trust cached crops and skip face-pair validation
 START_CLUSTER = 0
-PARALLEL_MODE1_WORKERS = 4  # set > 1 to parallelize MODE 1 assembly across CSVs (uses multiprocessing.Pool)
+PARALLEL_MODE1_WORKERS = 12  # set > 1 to parallelize MODE 1 assembly across CSVs (uses multiprocessing.Pool)
 
 start = time.time()
 
@@ -100,7 +100,7 @@ CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden b
 
 # CSV_FOLDER = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion128_test220K"
 CSV_MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/"
-CSV_RUN_FOLDER = "SegmentHelper_TheOffice/multipolicy_tests_parquet/set300" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
+CSV_RUN_FOLDER = "SegmentHelper_TheOffice/multipolicy_tests_parquet/set460" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
 CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, CSV_RUN_FOLDER)
 MAX_ROWS_PER_OUTPUT_CSV = 1200
 ENABLE_MODE0_TIMING = True
