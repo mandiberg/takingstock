@@ -69,8 +69,8 @@ ONLY_SAVE_CACHE = True # only save CSVs to cluster folder, not images which are 
 MAKE_CACHE_MODE = False # only make cache folders, skips dedupe and is_face testing
 MODE1_ENABLE_DB_DEDUPE = False # skip dedupe during crunch time drafts  
 SKIP_PAIRCHECK = True # draft mode: trust cached crops and skip face-pair validation
-START_CLUSTER = 0
-PARALLEL_MODE1_WORKERS = 12  # set > 1 to parallelize MODE 1 assembly across CSVs (uses multiprocessing.Pool)
+START_CLUSTER = 483
+PARALLEL_WORKERS = 4  # set > 1 to parallelize per-CSV work in MODE 0 and MODE 1
 
 start = time.time()
 
@@ -100,7 +100,7 @@ CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden b
 
 # CSV_FOLDER = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion128_test220K"
 CSV_MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/"
-CSV_RUN_FOLDER = "SegmentHelper_TheOffice/multipolicy_tests_parquet/set460" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
+CSV_RUN_FOLDER = "SegmentHelper_TheOffice/multipolicy_tests_parquet" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
 CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, CSV_RUN_FOLDER)
 MAX_ROWS_PER_OUTPUT_CSV = 1200
 ENABLE_MODE0_TIMING = True
@@ -3596,6 +3596,45 @@ def _mode1_csv_worker(csv_file: str) -> dict:
     return {"csv_file": csv_file, "success": True, "early_return": None, "error": None, "timing": timing}
 
 
+def _mode0_process_linear_worker(job: dict) -> dict:
+    """Top-level worker for one MODE 0 output CSV unit.
+
+    A job corresponds to exactly one process_linear call:
+    - one partition subset (sbXXX) OR
+    - one full segment
+    """
+    try:
+        worker_start = time.perf_counter()
+        set_my_counter_dict(
+            job.get("this_topic"),
+            job.get("cluster_no"),
+            job.get("pose_no"),
+            job.get("hsv_meta"),
+            job.get("start_img_name"),
+            job.get("start_site_image_id"),
+        )
+        process_linear(
+            job.get("start_img_name"),
+            job.get("df_segment"),
+            job.get("file_prefix"),
+            sort,
+            effective_sort_type=job.get("effective_sort_type"),
+        )
+        return {
+            "success": True,
+            "error": None,
+            "file_prefix": job.get("file_prefix"),
+            "elapsed": time.perf_counter() - worker_start,
+        }
+    except Exception as exc:
+        return {
+            "success": False,
+            "error": str(exc),
+            "file_prefix": job.get("file_prefix"),
+            "elapsed": 0.0,
+        }
+
+
 def main():
     # IDK why I need to declare this a global, but it borks otherwise
     global FUSION_PAIRS
@@ -4439,6 +4478,8 @@ def main():
                     and len(df_segment.index) > MAX_ROWS_PER_OUTPUT_CSV
                 )
 
+                mode0_jobs = []
+
                 if should_partition_before_sort:
                     print(
                         f"[partition] oversized segment detected ({len(df_segment.index)} rows); "
@@ -4454,7 +4495,6 @@ def main():
 
                         subset_suffix = f"sb{subset_idx:03d}"
                         subset_prefix = f"{base_file_prefix}_{subset_suffix}"
-                        set_my_counter_dict(this_topic, cluster_no, pose_no, effective_hsv_meta, start_img_name, start_site_image_id)
 
                         if len(subset_df.index) > MAX_ROWS_PER_OUTPUT_CSV:
                             print(
@@ -4467,15 +4507,59 @@ def main():
                             subset_df = one_shot_sorted.head(MAX_ROWS_PER_OUTPUT_CSV).reset_index(drop=True)
 
                         _none_obj_sort = SORT_TYPE_NONEOBJECT if (pose_no is not None and pose_no in OBJECT_NONE_CLUSTERS) else None
-                        process_linear_start = time.perf_counter()
-                        process_linear(start_img_name, subset_df, subset_prefix, sort, effective_sort_type=_none_obj_sort)
-                        add_mode0_timing("process_linear", time.perf_counter() - process_linear_start)
+                        mode0_jobs.append(
+                            {
+                                "this_topic": this_topic,
+                                "cluster_no": cluster_no,
+                                "pose_no": pose_no,
+                                "hsv_meta": effective_hsv_meta,
+                                "start_img_name": start_img_name,
+                                "start_site_image_id": start_site_image_id,
+                                "df_segment": subset_df,
+                                "file_prefix": subset_prefix,
+                                "effective_sort_type": _none_obj_sort,
+                            }
+                        )
                 else:
                     # build file prefix for cluster, pose, and topic
                     _none_obj_sort = SORT_TYPE_NONEOBJECT if (pose_no is not None and pose_no in OBJECT_NONE_CLUSTERS) else None
-                    process_linear_start = time.perf_counter()
-                    process_linear(start_img_name, df_segment, base_file_prefix, sort, effective_sort_type=_none_obj_sort)
-                    add_mode0_timing("process_linear", time.perf_counter() - process_linear_start)
+                    mode0_jobs.append(
+                        {
+                            "this_topic": this_topic,
+                            "cluster_no": cluster_no,
+                            "pose_no": pose_no,
+                            "hsv_meta": effective_hsv_meta,
+                            "start_img_name": start_img_name,
+                            "start_site_image_id": start_site_image_id,
+                            "df_segment": df_segment,
+                            "file_prefix": base_file_prefix,
+                            "effective_sort_type": _none_obj_sort,
+                        }
+                    )
+
+                if MODE == 0 and PARALLEL_WORKERS > 1 and len(mode0_jobs) > 1:
+                    import multiprocessing as _mp
+                    print(
+                        f"[MODE0] parallel process_linear dispatch: {len(mode0_jobs)} jobs "
+                        f"across {PARALLEL_WORKERS} workers"
+                    )
+                    with _mp.Pool(processes=PARALLEL_WORKERS) as pool:
+                        for result in pool.imap_unordered(_mode0_process_linear_worker, mode0_jobs):
+                            add_mode0_timing("process_linear", result.get("elapsed", 0.0))
+                            if not result.get("success"):
+                                print(
+                                    f"[MODE0 WORKER] error in {result.get('file_prefix')}: "
+                                    f"{result.get('error')}"
+                                )
+                else:
+                    for job in mode0_jobs:
+                        result = _mode0_process_linear_worker(job)
+                        add_mode0_timing("process_linear", result.get("elapsed", 0.0))
+                        if not result.get("success"):
+                            print(
+                                f"[MODE0] process_linear failed in {result.get('file_prefix')}: "
+                                f"{result.get('error')}"
+                            )
         finally:
             map_elapsed = time.perf_counter() - map_start
             add_mode0_timing("map_total", map_elapsed)
@@ -4787,7 +4871,7 @@ def main():
             if f.endswith(".csv") and f.startswith("df_sorted_")
         ]
 
-        if PARALLEL_MODE1_WORKERS > 1:
+        if PARALLEL_WORKERS > 1:
             import multiprocessing as _mp
             worker_cfg = {
                 "CSV_FOLDER": CSV_FOLDER,
@@ -4797,10 +4881,10 @@ def main():
             mode1_processed_files += len(csv_files_to_process)
             print(
                 f"[MODE1] parallel dispatch: {len(csv_files_to_process)} CSVs "
-                f"across {PARALLEL_MODE1_WORKERS} workers"
+                f"across {PARALLEL_WORKERS} workers"
             )
             with _mp.Pool(
-                processes=PARALLEL_MODE1_WORKERS,
+                processes=PARALLEL_WORKERS,
                 initializer=_mode1_worker_init,
                 initargs=(worker_cfg,),
             ) as pool:
