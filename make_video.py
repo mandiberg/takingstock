@@ -69,8 +69,8 @@ ONLY_SAVE_CACHE = True # only save CSVs to cluster folder, not images which are 
 MAKE_CACHE_MODE = False # only make cache folders, skips dedupe and is_face testing
 MODE1_ENABLE_DB_DEDUPE = False # skip dedupe during crunch time drafts  
 SKIP_PAIRCHECK = True # draft mode: trust cached crops and skip face-pair validation
-START_CLUSTER = 483
-PARALLEL_WORKERS = 4  # set > 1 to parallelize per-CSV work in MODE 0 and MODE 1
+START_CLUSTER = 488
+PARALLEL_WORKERS = 12  # set > 1 to parallelize per-CSV work in MODE 0 and MODE 1
 
 start = time.time()
 
@@ -3749,6 +3749,53 @@ def main():
             f"write_csv={mode0_timing_totals.get('write_sorted_csv', 0.0):.2f}s"
         )
 
+    mode0_parallel_enabled = MODE == 0 and PARALLEL_WORKERS > 1
+    mode0_pool = None
+    mode0_async_results = []
+
+    def handle_mode0_worker_result(result):
+        add_mode0_timing("process_linear", result.get("elapsed", 0.0))
+        if not result.get("success"):
+            print(
+                f"[MODE0 WORKER] error in {result.get('file_prefix')}: "
+                f"{result.get('error')}"
+            )
+
+    def submit_mode0_job(job):
+        nonlocal mode0_pool
+        if mode0_parallel_enabled:
+            if mode0_pool is None:
+                import multiprocessing as _mp
+                print(f"[MODE0] opening shared pool with {PARALLEL_WORKERS} workers")
+                mode0_pool = _mp.Pool(processes=PARALLEL_WORKERS)
+            mode0_async_results.append(mode0_pool.apply_async(_mode0_process_linear_worker, (job,)))
+        else:
+            result = _mode0_process_linear_worker(job)
+            handle_mode0_worker_result(result)
+
+    def drain_mode0_jobs(wait_all=True):
+        nonlocal mode0_async_results
+        if not mode0_async_results:
+            return
+
+        remaining_results = []
+        for async_result in mode0_async_results:
+            if wait_all or async_result.ready():
+                try:
+                    result = async_result.get()
+                except Exception as exc:
+                    result = {
+                        "success": False,
+                        "error": str(exc),
+                        "file_prefix": "<async_result_get>",
+                        "elapsed": 0.0,
+                    }
+                handle_mode0_worker_result(result)
+            else:
+                remaining_results.append(async_result)
+
+        mode0_async_results = remaining_results
+
     def normalize_cluster_token(value):
         if value is None:
             return None
@@ -4537,29 +4584,16 @@ def main():
                         }
                     )
 
-                if MODE == 0 and PARALLEL_WORKERS > 1 and len(mode0_jobs) > 1:
-                    import multiprocessing as _mp
+                if mode0_parallel_enabled and mode0_jobs:
                     print(
-                        f"[MODE0] parallel process_linear dispatch: {len(mode0_jobs)} jobs "
-                        f"across {PARALLEL_WORKERS} workers"
+                        f"[MODE0] queued process_linear jobs: {len(mode0_jobs)} "
+                        f"(shared pool size {PARALLEL_WORKERS})"
                     )
-                    with _mp.Pool(processes=PARALLEL_WORKERS) as pool:
-                        for result in pool.imap_unordered(_mode0_process_linear_worker, mode0_jobs):
-                            add_mode0_timing("process_linear", result.get("elapsed", 0.0))
-                            if not result.get("success"):
-                                print(
-                                    f"[MODE0 WORKER] error in {result.get('file_prefix')}: "
-                                    f"{result.get('error')}"
-                                )
-                else:
-                    for job in mode0_jobs:
-                        result = _mode0_process_linear_worker(job)
-                        add_mode0_timing("process_linear", result.get("elapsed", 0.0))
-                        if not result.get("success"):
-                            print(
-                                f"[MODE0] process_linear failed in {result.get('file_prefix')}: "
-                                f"{result.get('error')}"
-                            )
+                for job in mode0_jobs:
+                    submit_mode0_job(job)
+
+                # Non-blocking harvest so progress reflects finished jobs during long runs.
+                drain_mode0_jobs(wait_all=False)
         finally:
             map_elapsed = time.perf_counter() - map_start
             add_mode0_timing("map_total", map_elapsed)
@@ -5389,6 +5423,13 @@ def main():
             if MODE == 2:
                 print("MODE 2, now assembling from CSV_FOLDER", CSV_FOLDER)
                 save_images_from_csv_folder()
+
+        if mode0_parallel_enabled:
+            print("[MODE0] draining remaining process_linear jobs")
+            drain_mode0_jobs(wait_all=True)
+            if mode0_pool is not None:
+                mode0_pool.close()
+                mode0_pool.join()
 
         print_mode0_timing_summary()
 
