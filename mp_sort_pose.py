@@ -1083,16 +1083,33 @@ class SortPose:
         score, _ = ssim(gray1, gray2, full=True)
         return score  # Return the SSIM score
 
-    def remove_duplicates(self, folder_list, df: pd.DataFrame, not_dupe_list, PURGING_DUPES=False) -> pd.DataFrame:
+    def remove_duplicates(self, folder_list, df: pd.DataFrame, not_dupe_list, PURGING_DUPES=False, timing_callback=None) -> pd.DataFrame:
         """
         Main method to remove duplicates from the dataframe.
         Returns sorted_df with all duplicates removed (keeping first occurrence).
         """
+        remove_total_start = time.perf_counter()
         to_remove = set()
         confirmed_dupes = set()
         none_images = set()
         n_rows = len(df)
         not_dupes = set(not_dupe_list)
+        dedupe_stats = {
+            "look_closer_candidates": 0,
+            "removed_by_notdupe_cache": 0,
+            "removed_pass2": 0,
+            "ssim_pairs_tested": 0,
+            "confirmed_dupes": 0,
+            "is_not_dupe_writes": 0,
+        }
+
+        def add_remove_timing(stage, elapsed):
+            if timing_callback is None:
+                return
+            try:
+                timing_callback(stage, float(elapsed))
+            except Exception:
+                return
 
         # df = self.split_landmarks_to_columns_or_list(df, first_col="left_hand_world_landmarks", second_col="right_hand_world_landmarks", structure="list")
 
@@ -1241,7 +1258,9 @@ class SortPose:
                         "image_id_j": pair_key[1],
                     },
                 )
+            dedupe_stats["is_not_dupe_writes"] += 1
 
+        pass1_start = time.perf_counter()
         for i in range(n_rows):
             # only check within check_range frames for speed
             if i < 1000: check_range = 300
@@ -1276,6 +1295,10 @@ class SortPose:
                     
                     continue
                       # If only one of the checks passed, skip to next pair
+        add_remove_timing("pass1", time.perf_counter() - pass1_start)
+        dedupe_stats["look_closer_candidates"] = len(look_closer_dict)
+
+        notdupe_filter_start = time.perf_counter()
         if not_dupes is not None:
             #interlude 1, check to see if any are in not_dupes list, if so, remove from look_closer_dic
             not_dupes_to_remove = []
@@ -1284,8 +1307,11 @@ class SortPose:
                     not_dupes_to_remove.append((i,j))
                     continue
             pop_look_closer_dict(look_closer_dict, not_dupes_to_remove)
+            dedupe_stats["removed_by_notdupe_cache"] = len(not_dupes_to_remove)
+        add_remove_timing("notdupe_filter", time.perf_counter() - notdupe_filter_start)
 
         #pass 2
+        pass2_start = time.perf_counter()
         keys_to_remove_prob_not_dupes = []
         for (i,j), this_dist_list in look_closer_dict.items():
             key = "face_encodings68"
@@ -1303,8 +1329,11 @@ class SortPose:
                 keys_to_remove_prob_not_dupes.append((i,j))
                 continue
         pop_look_closer_dict(look_closer_dict, keys_to_remove_prob_not_dupes)
+        dedupe_stats["removed_pass2"] = len(keys_to_remove_prob_not_dupes)
+        add_remove_timing("pass2", time.perf_counter() - pass2_start)
 
         #pass 3 hand gesture, description, site name id
+        pass3_start = time.perf_counter()
         for (i,j), this_dist_list in look_closer_dict.items():
             # calculate full body lms distance
             key = "body_landmarks_normalized_array"
@@ -1336,6 +1365,7 @@ class SortPose:
 
             this_dist_list.extend([normed_hand_dist, desc_dist, normed_site_name_id_dist])
             look_closer_dict[(i,j)] = this_dist_list
+        add_remove_timing("pass3", time.perf_counter() - pass3_start)
 
         # print(f"  >>> look_closer_dict is {look_closer_dict}")
         if self.VERBOSE: print("--------------------------------dupe_detection analysis--------------------------------")
@@ -1349,11 +1379,13 @@ class SortPose:
                 # remove all entries with i as well
             return image_i
 
+        ssim_start = time.perf_counter()
         for (i,j), this_dist_list in look_closer_dict.items():
             if i in confirmed_dupes:
                 if self.VERBOSE: print(f"  >>> skipping {i},{j} because {i} is already confirmed dupe")
                 continue
             if self.VERBOSE: print(f"  >>> closest_look {i},{j} with distances {this_dist_list}")
+            dedupe_stats["ssim_pairs_tested"] += 1
 
             # open images i and j, crop to bbox. if can't open, remove from df and continue
             image_i = open_image_remove_if_error(i, df)
@@ -1419,6 +1451,7 @@ class SortPose:
                     if is_dupe:
                         if self.VERBOSE: print(f"remove_duplicates: confirmed duplicate {j} of {i} with SSIM {ssim_score} and distances {this_dist_list}")
                         confirmed_dupes.add(j)
+                        dedupe_stats["confirmed_dupes"] += 1
                     else:
                         # if it passess SSIM, save isnotdupe pair to sql to avoid future work
                         write_is_not_dupe_sql(i, j, df)
@@ -1432,6 +1465,7 @@ class SortPose:
                 ssim_score = 0
                 selfie_ssim_score = 0
                 continue
+            add_remove_timing("ssim", time.perf_counter() - ssim_start)
             
             # save i and j and SQL to a shared folder
             # return True if dupe, False if not, to remove from this_dist_list
@@ -1441,6 +1475,7 @@ class SortPose:
         # ADD all good j's to to_remove HERE !!!
 
         # Create sorted_df with all duplicates removed
+        finalize_start = time.perf_counter()
         print(f"Removing {len(none_images)} duplicates from {df.shape[0]} images...")
         print(none_images)
         to_remove = to_remove.union(none_images).union(confirmed_dupes)
@@ -1451,6 +1486,18 @@ class SortPose:
         sorted_df = df.drop(df.index[list(to_remove)]).reset_index(drop=True)
         print(f"Resulting dataframe has {sorted_df.shape[0]} images after duplicate removal.")
         print(sorted_df.head())
+        add_remove_timing("finalize", time.perf_counter() - finalize_start)
+        add_remove_timing("total", time.perf_counter() - remove_total_start)
+        print(
+            "[DEDUPE] remove_duplicates summary "
+            f"rows_in={n_rows} rows_out={sorted_df.shape[0]} "
+            f"look_closer={dedupe_stats['look_closer_candidates']} "
+            f"notdupe_cache_skips={dedupe_stats['removed_by_notdupe_cache']} "
+            f"pass2_pruned={dedupe_stats['removed_pass2']} "
+            f"ssim_pairs={dedupe_stats['ssim_pairs_tested']} "
+            f"confirmed_dupes={dedupe_stats['confirmed_dupes']} "
+            f"is_not_dupe_writes={dedupe_stats['is_not_dupe_writes']}"
+        )
         return sorted_df
     
 
