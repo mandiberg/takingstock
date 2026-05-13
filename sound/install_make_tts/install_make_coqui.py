@@ -14,6 +14,7 @@ Output:      tts_bark_out/  (same dir as Bark — picked up by batch_collector.p
 from __future__ import annotations
 
 import argparse
+import contextlib
 import csv
 import logging
 import os
@@ -47,7 +48,7 @@ HAVE_BARKED_CSV = os.path.join(_HERE, "have_barked.csv")
 
 TOPIC_FIT_FIELD = "topic_fit"
 TOPIC_FIT_MIN   = 0.6
-TOPIC_FIT_MAX   = 0.65
+TOPIC_FIT_MAX   = 0.7
 
 MAX_PROCESSED = 0  # 0 = no limit
 
@@ -204,7 +205,8 @@ class CoquiVITS:
 
     def synthesize_to_wav(self, text: str, out_wav_path: str, speaker: str) -> str:
         os.makedirs(os.path.dirname(os.path.abspath(out_wav_path)) or ".", exist_ok=True)
-        self._tts.tts_to_file(text=text, speaker=speaker, file_path=out_wav_path)
+        with open(os.devnull, "w") as _devnull, contextlib.redirect_stdout(_devnull):
+            self._tts.tts_to_file(text=text, speaker=speaker, file_path=out_wav_path)
         return out_wav_path
 
     def random_speaker(self) -> str:
@@ -245,7 +247,6 @@ def _flush_batch(
             _append_have_barked_id(HAVE_BARKED_CSV, item.image_id)
             already.add(item.image_id)
             written.append(item.out_path)
-            print(item.out_path)
         except Exception as e:
             print(f"  Failed image_id={item.image_id} speaker={item.speaker}: "
                   f"{type(e).__name__}: {e}")
@@ -373,8 +374,7 @@ def main() -> None:
 
             if len(pending) >= args.batch_size:
                 flush()
-                if successes % 100 == 0 and successes > 0:
-                    _log_progress()
+                _log_progress()
 
             if MAX_PROCESSED and successes >= MAX_PROCESSED:
                 done = True
