@@ -3150,6 +3150,142 @@ class ToolsClustering:
         
         return scaled_df
 
+    def kmeans_cluster(
+        self,
+        df,
+        n_clusters=32,
+        fit_scaler=False,
+        prepare_fn=None,
+        random_state=42,
+        max_iter=300,
+        n_init=10,
+        verbose=0,
+        drop_image_id=True,
+        return_model=False,
+    ):
+        """
+        Run KMeans clustering using shared preprocessing logic.
+
+        Args:
+            df: Input DataFrame.
+            n_clusters: Number of KMeans clusters.
+            fit_scaler: Whether preprocessors should fit a new scaler.
+            prepare_fn: Optional callable for cluster-type-specific column prep.
+            random_state: Reproducibility seed for KMeans.
+            max_iter: Maximum KMeans iterations.
+            n_init: Number of initializations.
+            verbose: KMeans verbosity.
+            drop_image_id: Drop image_id from model input when present.
+            return_model: Return fitted model together with labels.
+
+        Returns:
+            labels ndarray, or (labels ndarray, fitted_model) when return_model=True.
+        """
+        from sklearn.cluster import KMeans
+
+        if prepare_fn is not None:
+            try:
+                df_columnar = prepare_fn(df, fit_scaler=fit_scaler)
+            except TypeError:
+                # Backward-compatible path for prepare callables that do not accept fit_scaler.
+                df_columnar = prepare_fn(df)
+        elif self.CLUSTER_TYPE == "ObjectFusion":
+            df_columnar = self.prepare_features_for_knn_v2(df, fit_scaler=fit_scaler)
+        else:
+            df_columnar = df
+
+        if hasattr(df_columnar, 'copy'):
+            model_input = df_columnar.copy()
+        else:
+            model_input = df_columnar
+
+        if isinstance(model_input, pd.DataFrame):
+            if drop_image_id and 'image_id' in model_input.columns:
+                model_input = model_input.drop(columns=['image_id'])
+
+            non_numeric_cols = [
+                col for col in model_input.columns if not pd.api.types.is_numeric_dtype(model_input[col])
+            ]
+            if non_numeric_cols:
+                model_input = model_input.drop(columns=non_numeric_cols)
+                if self.VERBOSE:
+                    print(f"Dropped non-numeric columns before KMeans: {non_numeric_cols}")
+
+            if model_input.shape[1] == 0:
+                raise ValueError("No numeric columns available for KMeans input.")
+
+        if self.VERBOSE:
+            shape_info = model_input.shape if hasattr(model_input, 'shape') else 'unknown'
+            print(f"kmeans_cluster shared input shape: {shape_info}")
+
+        kmeans = KMeans(
+            n_clusters=n_clusters,
+            n_init=n_init,
+            init='k-means++',
+            random_state=random_state,
+            max_iter=max_iter,
+            verbose=verbose,
+        )
+        labels = kmeans.fit_predict(model_input)
+
+        if return_model:
+            return labels, kmeans
+        return labels
+
+    def best_kmeans_cluster_count(
+        self,
+        df,
+        cluster_values,
+        fit_scaler=False,
+        prepare_fn=None,
+        random_state=42,
+        max_iter=300,
+        n_init=10,
+    ):
+        """
+        Evaluate silhouette scores across candidate KMeans cluster counts.
+
+        Returns:
+            (best_cluster_count, score_by_cluster_count)
+        """
+        from sklearn.cluster import KMeans
+        from sklearn.metrics import silhouette_score
+
+        if prepare_fn is not None:
+            try:
+                model_input = prepare_fn(df, fit_scaler=fit_scaler)
+            except TypeError:
+                model_input = prepare_fn(df)
+        elif self.CLUSTER_TYPE == "ObjectFusion":
+            model_input = self.prepare_features_for_knn_v2(df, fit_scaler=fit_scaler)
+        else:
+            model_input = df
+
+        if isinstance(model_input, pd.DataFrame) and 'image_id' in model_input.columns:
+            model_input = model_input.drop(columns=['image_id'])
+
+        if isinstance(model_input, pd.DataFrame):
+            non_numeric_cols = [
+                col for col in model_input.columns if not pd.api.types.is_numeric_dtype(model_input[col])
+            ]
+            if non_numeric_cols:
+                model_input = model_input.drop(columns=non_numeric_cols)
+
+        score_by_cluster_count = {}
+        for n_clusters in cluster_values:
+            kmeans = KMeans(
+                n_clusters=int(n_clusters),
+                n_init=n_init,
+                init='k-means++',
+                random_state=random_state,
+                max_iter=max_iter,
+            )
+            preds = kmeans.fit_predict(model_input)
+            score_by_cluster_count[int(n_clusters)] = silhouette_score(model_input, preds)
+
+        best_cluster_count = max(score_by_cluster_count, key=score_by_cluster_count.get)
+        return best_cluster_count, score_by_cluster_count
+
     def construct_fusion_list(self, row):
         """
         Construct fusion list from a dataframe row for ObjectFusion sorting.
