@@ -22,14 +22,14 @@ MODE_CHOICE = 3
 CURRENT_MODE = MODES[MODE_CHOICE]
 
 # Provide the path to the folder containing the images
-ROOT_FOLDER_PATH = '/Volumes/LaCie/output_folder/'
+# ROOT_FOLDER_PATH = '/Volumes/LaCie/output_folder/'
 
 
-# ROOT_FOLDER_PATH = '/Users/michaelmandiberg/Documents/projects-active/facemap_production'
+ROOT_FOLDER_PATH = '/Users/michaelmandiberg/Documents/projects-active/facemap_production'
 # if IS_CLUSTER this should be the folder holding all the cluster folders
 # if not, this should be the individual folder holding the images
 # will not accept clusterNone -- change to cluster00
-FOLDER_NAME = "TRRset2"
+FOLDER_NAME = "output_folder/money_mix"
 
 if io.IS_TENCH:
     ROOT_FOLDER_PATH = '/Users/tenchc/Documents/GitHub/taking_stock_production/segment_images'
@@ -37,7 +37,7 @@ if io.IS_TENCH:
 
 # iterate through folders? 
 IS_CLUSTER = True
-PARALLEL_MERGE_WORKERS = 8  # set > 1 to parallelize per-subfolder work with multiprocessing.Pool
+PARALLEL_MERGE_WORKERS = 16  # set > 1 to parallelize per-subfolder work with multiprocessing.Pool
 
 LOOPING = False # defaults
 last_image_written = None

@@ -56,20 +56,21 @@ else:
 # SegmentHelper_name = None
 SegmentTable_name = 'SegmentBig_isface'
 # SegmentTable_name = 'SegmentBig_isnotface'
-SegmentHelper_name = 'SegmentHelper_TheOffice'
-# SegmentHelper_name = 'SegmentHelper_T4_occupation'
+# SegmentHelper_name = 'SegmentHelper_TheOffice'
+SegmentHelper_name = 'SegmentHelperObject_82_money'
 # SegmentHelper_name = 'SegmentHelper_T11_Oct20_COCO_Custom_evens_quarters'
 # SegmentHelper_name = 'None' # set below for heft keywords
 # SegmentHelper_name = None
 # this is MM specific
 # for when I'm using files on my SSD vs RAID
-IS_SSD = True
-SSD_PATH = "/Volumes/LaCie/segment_images"
+IS_SSD = False
+# SSD_PATH = "/Volumes/LaCie/segment_images"
+SSD_PATH = "/Volumes/OWC52/segment_images"
 ONLY_SAVE_CACHE = True # only save CSVs to cluster folder, not images which are saved in cache folders -- for speed
 MAKE_CACHE_MODE = False # only make cache folders, skips dedupe and is_face testing
-MODE1_ENABLE_DB_DEDUPE = False # skip dedupe during crunch time drafts  
+MODE1_ENABLE_DB_DEDUPE = False # False skips dedupe during crunch time drafts  
 SKIP_PAIRCHECK = True # draft mode: trust cached crops and skip face-pair validation
-START_CLUSTER = 488
+START_CLUSTER = 0
 PARALLEL_WORKERS = 12  # set > 1 to parallelize per-CSV work in MODE 0 and MODE 1
 
 start = time.time()
@@ -83,8 +84,8 @@ db = io.db
 # OWC4 SNAFU WORKAROUND
 
 if not (io.IS_TENCH or io.IS_MICHELLE) and IS_SSD:
-    io.ROOT_PROD=  "/Volumes/LaCie" ## only on Mac
-    # io.ROOT_PROD=  "/Users/michaelmandiberg/Documents/projects-active/facemap_production" ## MBP
+    # io.ROOT_PROD=  "/Volumes/LaCie" ## only on Mac
+    io.ROOT_PROD=  "/Users/michaelmandiberg/Documents/projects-active/facemap_production" ## MBP
     print("Setting io.ROOT to ROOTSSD:", io.ROOTSSD)
     io.ROOT = os.path.join(io.ROOT_PROD, "output_folder")
 print("Setting io.ROOT to ROOTSSD:", io.ROOTSSD)
@@ -100,7 +101,7 @@ CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden b
 
 # CSV_FOLDER = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion128_test220K"
 CSV_MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/"
-CSV_RUN_FOLDER = "SegmentHelper_TheOffice/multipolicy_tests_parquet" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
+CSV_RUN_FOLDER = "SegmentHelper_TheOffice/TRRmoney" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
 CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, CSV_RUN_FOLDER)
 MAX_ROWS_PER_OUTPUT_CSV = 1200
 ENABLE_MODE0_TIMING = True
@@ -170,7 +171,7 @@ def resolve_arms_object_fusion_folder(
     return folder_name, object_cluster_dim
 
 HSV_SOURCE_MODE = "background"
-SKIP_OBJECT_NONE_CLUSTERS = []
+SKIP_OBJECT_NONE_CLUSTERS = [1]
 MULTIPOLICY = False
 
 # overriding DB for testing
@@ -2888,17 +2889,23 @@ def linear_test_df(df_sorted, itter=None, counter_state=None):
             print(str(e))
         if VERBOSE: print("metas_list")
         if VERBOSE: print(metas_list)
-    if ONLY_SAVE_CACHE:
-        cluster_files_path = os.path.join(sort.counter_dict["outfolder"], "cluster_files.csv")
-        cluster_files_df = pd.DataFrame(
-            cluster_file_rows,
-            columns=["image_number", "image_id", "path_to_cache_file"],
-        )
-        cluster_files_df.to_csv(cluster_files_path, index=False)
-        print(
-            f"[cluster_files] wrote {len(cluster_file_rows)} rows to {cluster_files_path}"
-        )
-    linear_test_elapsed = time.perf_counter() - linear_test_start
+        print(f"finished linear_test_df loop, processed {good} images")
+        if ONLY_SAVE_CACHE:
+            try:
+                cluster_files_path = os.path.join(sort.counter_dict["outfolder"], "cluster_files.csv")
+                print(f"writing cluster_files.csv with {len(cluster_file_rows)} rows to {cluster_files_path}")
+                cluster_files_df = pd.DataFrame(
+                    cluster_file_rows,
+                    columns=["image_number", "image_id", "path_to_cache_file"],
+                )
+                cluster_files_df.to_csv(cluster_files_path, index=False)
+                print(
+                    f"[cluster_files] wrote {len(cluster_file_rows)} rows to {cluster_files_path}"
+                )
+            except Exception as e:
+                traceback.print_exc()
+                print(f"failed to write cluster_files.csv: {str(e)}")
+        linear_test_elapsed = time.perf_counter() - linear_test_start
     print(
         "[MODE1 ASSEMBLY] linear_test_df summary "
         f"rows_total={assembly_stats['rows_total']} rows_saved={assembly_stats['rows_saved']} "
