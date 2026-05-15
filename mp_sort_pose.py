@@ -120,7 +120,8 @@ class SortPose:
         self.DYN_BBOX_CANONICAL_RATIOS = [(2,1),(3,2), (4,3), (5,4), (7,6), (1,1), (6,7), (4,5), (3,4), (2,3), (1,2)] # these are the canonical ratios that dynamic bboxes will round to if DYN_BBOX_ROUND_CANONICAL is True
 
         self.CHECK_DESC_DIST = 30
-
+        self.CHECK_RANGE_LATE = 100
+        self.CHECK_RANGE_EARLY = 50
         self.SORT_TYPE = SORT_TYPE
         self.TSP_SORT = TSP_SORT
         self.MIN_COL_SUM_MULTIPLIER = 5 # this determines which columns are "small" under MULTIPOLICY
@@ -1263,8 +1264,8 @@ class SortPose:
         pass1_start = time.perf_counter()
         for i in range(n_rows):
             # only check within check_range frames for speed
-            if i < 1000: check_range = 300
-            else: check_range = 150 
+            if i < 1000: check_range = self.CHECK_RANGE_LATE
+            else: check_range = self.CHECK_RANGE_EARLY
             for j in range(i + 1, n_rows):
                 if abs(i - j) > check_range: continue
                 this_dist_list = []

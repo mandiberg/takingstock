@@ -68,10 +68,10 @@ IS_SSD = False
 SSD_PATH = "/Volumes/OWC52/segment_images"
 ONLY_SAVE_CACHE = True # only save CSVs to cluster folder, not images which are saved in cache folders -- for speed
 MAKE_CACHE_MODE = False # only make cache folders, skips dedupe and is_face testing
-MODE1_ENABLE_DB_DEDUPE = False # False skips dedupe during crunch time drafts  
-SKIP_PAIRCHECK = True # draft mode: trust cached crops and skip face-pair validation
+MODE1_ENABLE_DB_DEDUPE = True # False skips dedupe during crunch time drafts  
+SKIP_PAIRCHECK = False # draft mode: trust cached crops and skip face-pair validation
 START_CLUSTER = 0
-PARALLEL_WORKERS = 12  # set > 1 to parallelize per-CSV work in MODE 0 and MODE 1
+PARALLEL_WORKERS = 16  # set > 1 to parallelize per-CSV work in MODE 0 and MODE 1
 
 start = time.time()
 
@@ -101,7 +101,7 @@ CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden b
 
 # CSV_FOLDER = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion128_test220K"
 CSV_MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/"
-CSV_RUN_FOLDER = "SegmentHelper_TheOffice/TRRmoney" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
+CSV_RUN_FOLDER = "SegmentHelper_TheOffice/one_shot_preMTL/cached" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
 CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, CSV_RUN_FOLDER)
 MAX_ROWS_PER_OUTPUT_CSV = 1200
 ENABLE_MODE0_TIMING = True
@@ -378,7 +378,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     else:
         N_HSV = 0 # don't do HSV clusters
 
-    PURGING_DUPES = False
+    PURGING_DUPES = True # skips build/save, just compares dupes
     # FORCE_TARGET_COUNT = 90 # default for GIF version
     FORCE_TARGET_COUNT = 200 # for testing. 
     TSP_NOLIMITS = True # if True, it will not apply the FORCE_TARGET_COUNT cutoff to the TSP sort, which means it will sort on all files. If False, it will apply the cutoff, which means it will only sort on the top FORCE_TARGET_COUNT files. This is for testing whether the TSP sort is working on all files or just the top ones.
@@ -3403,12 +3403,49 @@ def const_prefix(this_topic, cluster_no, pose_no, hsv_meta=None):
 # ---------------------------------------------------------------------------
 
 _MODE1_WORKER_CFG: dict = {}  # populated by pool initializer, read by _mode1_csv_worker
+_MODE1_WORKER_DB: dict = {"engine": None, "session": None}
+
+
+def _mode1_create_worker_session():
+    """Create a per-process engine/session for MODE1 DB dedupe work."""
+    if io.IS_TENCH or io.IS_MICHELLE:
+        return None, None
+    try:
+        if db["unix_socket"]:
+            worker_engine = create_engine(
+                "mysql+pymysql://{user}:{pw}@/{db}?unix_socket={socket}".format(
+                    user=db["user"],
+                    pw=db["pass"],
+                    db=db["name"],
+                    socket=db["unix_socket"],
+                ),
+                poolclass=NullPool,
+            )
+        else:
+            worker_engine = create_engine(
+                "mysql+pymysql://{user}:{pw}@{host}/{db}".format(
+                    host=db["host"],
+                    db=db["name"],
+                    user=db["user"],
+                    pw=db["pass"],
+                ),
+                poolclass=NullPool,
+            )
+        worker_session = sessionmaker(bind=worker_engine)()
+        return worker_engine, worker_session
+    except Exception as exc:
+        print(f"[MODE1 WORKER] failed to initialize DB session: {exc}")
+        return None, None
 
 
 def _mode1_worker_init(cfg: dict) -> None:
-    """Pool initializer: store worker config in the module-level dict."""
-    global _MODE1_WORKER_CFG
+    """Pool initializer: store worker cfg and create per-process DB session if needed."""
+    global _MODE1_WORKER_CFG, _MODE1_WORKER_DB
     _MODE1_WORKER_CFG = cfg
+    _MODE1_WORKER_DB = {"engine": None, "session": None}
+    if cfg.get("mode1_enable_db_dedupe") and not MAKE_CACHE_MODE:
+        worker_engine, worker_session = _mode1_create_worker_session()
+        _MODE1_WORKER_DB = {"engine": worker_engine, "session": worker_session}
 
 
 def _mode1_find_parts(parts: list) -> tuple:
@@ -3527,80 +3564,186 @@ def _mode1_load_df(csv_path: str, timing: dict):
     return df
 
 
-def _mode1_csv_worker(csv_file: str) -> dict:
-    """Top-level per-CSV worker for multiprocessing.Pool.imap_unordered.
+def _mode1_recheck_is_dupe_of(db_session, df):
+    """Query Encodings.is_dupe_of and drop rows flagged as duplicates."""
+    if VERBOSE:
+        print("Rechecking is_dupe_of in database for potential duplicates...")
+    image_id_list = df["image_id"].tolist()
+    query = db_session.query(Encodings.image_id, Encodings.is_dupe_of).filter(
+        Encodings.image_id.in_(image_id_list),
+        Encodings.is_dupe_of.isnot(None),
+    ).all()
+    image_dict = {image.image_id: image.is_dupe_of for image in query}
+    if bool(image_dict):
+        df["is_dupe_of"] = df["image_id"].map(image_dict)
+        df = df[df["is_dupe_of"] != 1]
+    return df
 
-    Reads config from _MODE1_WORKER_CFG (set by _mode1_worker_init).
-    Accesses io/sort as module-level globals — each spawned worker process
-    re-imports the module and gets its own independent instances, so there
-    is no sort.counter_dict race condition.
-    Returns a result dict including a 'timing' sub-dict for the parent to
-    merge into mode1_timing_totals.
 
-    NOTE: MODE1_ENABLE_DB_DEDUPE=True in workers is a no-op in B.2 — the DB
-    session lives in the parent process.  Phase D will add per-worker sessions.
-    """
-    cfg = _MODE1_WORKER_CFG
-    CSV_FOLDER = cfg["CSV_FOLDER"]
+def _mode1_get_not_dupes_sql(db_session):
+    query = db_session.query(IsNotDupeOf.image_id_i, IsNotDupeOf.image_id_j).all()
+    return {(row.image_id_i, row.image_id_j): True for row in query}
+
+
+def _mode1_run_db_dedupe(df_sorted, db_session, mode1_enable_db_dedupe, timing):
+    """Apply MODE1 dedupe flow; timing is accumulated into the provided dict."""
+    db_start = time.perf_counter()
+    if io.IS_TENCH or io.IS_MICHELLE:
+        print("[MODE1 DEDUPE] skipped dedupe: platform mode bypass")
+        timing["db_dedupe"] = timing.get("db_dedupe", 0.0) + (time.perf_counter() - db_start)
+        return df_sorted
+    if not mode1_enable_db_dedupe:
+        print("[MODE1 DEDUPE] skipped dedupe: MODE1_ENABLE_DB_DEDUPE=False")
+        timing["db_dedupe"] = timing.get("db_dedupe", 0.0) + (time.perf_counter() - db_start)
+        return df_sorted
+    if MAKE_CACHE_MODE:
+        print("[MODE1 DEDUPE] skipped dedupe: MAKE_CACHE_MODE=True")
+        timing["db_dedupe"] = timing.get("db_dedupe", 0.0) + (time.perf_counter() - db_start)
+        return df_sorted
+    if db_session is None:
+        print("[MODE1 DEDUPE] skipped dedupe: no DB session available")
+        timing["db_dedupe"] = timing.get("db_dedupe", 0.0) + (time.perf_counter() - db_start)
+        return df_sorted
+
+    if VERBOSE:
+        print("before recheck_is_dupe_of, df_sorted size", df_sorted.size)
+    recheck_start = time.perf_counter()
+    df_sorted = _mode1_recheck_is_dupe_of(db_session, df_sorted)
+    timing["db_recheck_is_dupe_of"] = timing.get("db_recheck_is_dupe_of", 0.0) + (
+        time.perf_counter() - recheck_start
+    )
+
+    get_not_dupes_start = time.perf_counter()
+    not_dupe_list = _mode1_get_not_dupes_sql(db_session)
+    timing["db_fetch_not_dupes"] = timing.get("db_fetch_not_dupes", 0.0) + (
+        time.perf_counter() - get_not_dupes_start
+    )
+
+    remove_start = time.perf_counter()
+    df_sorted = sort.remove_duplicates(
+        io.folder_list,
+        df_sorted,
+        not_dupe_list,
+        PURGING_DUPES,
+        timing_callback=lambda stage, elapsed: timing.__setitem__(
+            f"db_remove_{stage}",
+            timing.get(f"db_remove_{stage}", 0.0) + float(elapsed),
+        ),
+    )
+    timing["db_remove_duplicates_total"] = timing.get("db_remove_duplicates_total", 0.0) + (
+        time.perf_counter() - remove_start
+    )
+    timing["db_dedupe"] = timing.get("db_dedupe", 0.0) + (time.perf_counter() - db_start)
+    return df_sorted
+
+
+def _mode1_process_one_csv_shared(csv_file: str, cfg: dict, db_session=None) -> dict:
+    """Shared serial/parallel per-CSV MODE1 implementation."""
+    csv_folder = cfg["CSV_FOLDER"]
     canonical_registry = cfg.get("canonical_registry", {})
     mode1_enable_db_dedupe = cfg.get("mode1_enable_db_dedupe", False)
 
     timing: dict = {}
     file_start = time.perf_counter()
 
-    parts = csv_file.replace(".csv", "").split("_")
-    file_prefix = csv_file.replace("df_sorted_", "").replace(".csv", "")
-    print("file_prefix", file_prefix)
+    try:
+        parts = csv_file.replace(".csv", "").split("_")
+        segment_count, pose_no, topic_no, cluster_no, background_hsv_no, object_hsv_no = _mode1_find_parts(parts)
+        if len(parts) >= 3:
+            cluster_no = parts[2]
 
-    segment_count, pose_no, topic_no, cluster_no, background_hsv_no, object_hsv_no = _mode1_find_parts(parts)
-    if len(parts) >= 3:
-        cluster_no = parts[2]
-    print(
-        f"[worker] assembling cluster {cluster_no}, topic {topic_no}, pose {pose_no}, "
-        f"background_hsv {background_hsv_no}, object_hsv {object_hsv_no} from csv file: {csv_file}"
-    )
+        print(
+            f"assembling cluster {cluster_no}, topic {topic_no}, pose {pose_no}, "
+            f"background_hsv {background_hsv_no}, object_hsv {object_hsv_no} from csv file: {csv_file}"
+        )
 
-    csv_counter_state = set_my_counter_dict(
-        topic_no,
-        cluster_no,
-        pose_no,
-        {
-            "background_hsv_bins": normalize_hsv_bins(background_hsv_no),
-            "object_hsv_bins": normalize_hsv_bins(object_hsv_no),
-        },
-    )
+        csv_counter_state = set_my_counter_dict(
+            topic_no,
+            cluster_no,
+            pose_no,
+            {
+                "background_hsv_bins": normalize_hsv_bins(background_hsv_no),
+                "object_hsv_bins": normalize_hsv_bins(object_hsv_no),
+            },
+        )
 
-    df_sorted = _mode1_load_df(os.path.join(CSV_FOLDER, csv_file), timing)
-    if df_sorted is None:
+        df_sorted = _mode1_load_df(os.path.join(csv_folder, csv_file), timing)
+        if df_sorted is None:
+            timing["file_total"] = timing.get("file_total", 0.0) + (time.perf_counter() - file_start)
+            return {
+                "csv_file": csv_file,
+                "success": False,
+                "early_return": "empty_df",
+                "error": "empty df",
+                "timing": timing,
+            }
+
+        df_sorted = _mode1_run_db_dedupe(
+            df_sorted,
+            db_session,
+            mode1_enable_db_dedupe,
+            timing,
+        )
+
+        if PURGING_DUPES:
+            timing["file_total"] = timing.get("file_total", 0.0) + (time.perf_counter() - file_start)
+            return {
+                "csv_file": csv_file,
+                "success": True,
+                "early_return": "purging_dupes",
+                "error": None,
+                "timing": timing,
+            }
+
+        multiplier_start = time.perf_counter()
+        _mode1_set_multiplier(df_sorted, cluster_no, pose_no, canonical_registry)
+        timing["multiplier_setup"] = timing.get("multiplier_setup", 0.0) + (
+            time.perf_counter() - multiplier_start
+        )
+
+        if CALIBRATING:
+            timing["file_total"] = timing.get("file_total", 0.0) + (time.perf_counter() - file_start)
+            return {
+                "csv_file": csv_file,
+                "success": True,
+                "early_return": "calibrating",
+                "error": None,
+                "timing": timing,
+            }
+
+        assembly_start = time.perf_counter()
+        if MAKE_CACHE_MODE:
+            process_csv_cache_only(df_sorted, csv_file, num_workers=12)
+        else:
+            linear_test_df(df_sorted, counter_state=csv_counter_state)
+        timing["assembly"] = timing.get("assembly", 0.0) + (time.perf_counter() - assembly_start)
         timing["file_total"] = timing.get("file_total", 0.0) + (time.perf_counter() - file_start)
-        return {"csv_file": csv_file, "success": False, "early_return": "empty_df", "error": "empty df", "timing": timing}
-
-    # DB dedupe requires a DB session — deferred to Phase D.
-    if mode1_enable_db_dedupe:
-        print("[MODE1 WORKER] MODE1_ENABLE_DB_DEDUPE=True is a no-op in pool workers (Phase D)")
-
-    timing["db_dedupe"] = 0.0  # placeholder; no DB work done in B.2 workers
-
-    if PURGING_DUPES:
+        return {
+            "csv_file": csv_file,
+            "success": True,
+            "early_return": None,
+            "error": None,
+            "timing": timing,
+        }
+    except Exception as exc:
         timing["file_total"] = timing.get("file_total", 0.0) + (time.perf_counter() - file_start)
-        return {"csv_file": csv_file, "success": True, "early_return": "purging_dupes", "error": None, "timing": timing}
+        return {
+            "csv_file": csv_file,
+            "success": False,
+            "early_return": None,
+            "error": str(exc),
+            "timing": timing,
+        }
 
-    multiplier_start = time.perf_counter()
-    _mode1_set_multiplier(df_sorted, cluster_no, pose_no, canonical_registry)
-    timing["multiplier_setup"] = timing.get("multiplier_setup", 0.0) + (time.perf_counter() - multiplier_start)
 
-    if CALIBRATING:
-        timing["file_total"] = timing.get("file_total", 0.0) + (time.perf_counter() - file_start)
-        return {"csv_file": csv_file, "success": True, "early_return": "calibrating", "error": None, "timing": timing}
+def _mode1_csv_worker(csv_file: str) -> dict:
+    """Top-level per-CSV worker for multiprocessing.Pool.imap_unordered.
 
-    assembly_start = time.perf_counter()
-    if MAKE_CACHE_MODE:
-        process_csv_cache_only(df_sorted, csv_file, num_workers=12)
-    else:
-        linear_test_df(df_sorted, counter_state=csv_counter_state)
-    timing["assembly"] = timing.get("assembly", 0.0) + (time.perf_counter() - assembly_start)
-    timing["file_total"] = timing.get("file_total", 0.0) + (time.perf_counter() - file_start)
-    return {"csv_file": csv_file, "success": True, "early_return": None, "error": None, "timing": timing}
+    Reads config from _MODE1_WORKER_CFG and delegates to shared implementation.
+    """
+    cfg = _MODE1_WORKER_CFG
+    worker_session = _MODE1_WORKER_DB.get("session")
+    return _mode1_process_one_csv_shared(csv_file, cfg, db_session=worker_session)
 
 
 def _mode0_process_linear_worker(job: dict) -> dict:
@@ -4698,207 +4841,12 @@ def main():
         global MODE1_ASSEMBLY_TIMING_CALLBACK
         MODE1_ASSEMBLY_TIMING_CALLBACK = add_mode1_timing
 
-        def recheck_is_dupe_of(session, df):
-            '''
-            Query the database to recheck if an image is a duplicate of another.
-            '''
-            if VERBOSE: print("Rechecking is_dupe_of in database for potential duplicates...")
-            print("before dropping", df)
-            image_id_list = df['image_id'].tolist()
-            query = session.query(Encodings.image_id, Encodings.is_dupe_of).filter(Encodings.image_id.in_(image_id_list), Encodings.is_dupe_of.isnot(None)).all()
-            image_dict = {image.image_id: image.is_dupe_of for image in query}
-            print("image_dict", image_dict)
-            if bool(image_dict):
-                # if there are any values:
-                # TK this needs to be refine when image_dict is not empty
-                df['is_dupe_of'] = df['image_id'].map(image_dict)
-                # Drop rows where is_dupe_of is 1
-                df = df[df['is_dupe_of'] != 1]
-                print("after dropping", df)
-            return df
-
-        def get_not_dupes_sql(session):
-            # Query the IsNotDupeOf table and return all values as list of tuples
-            query = session.query(IsNotDupeOf.image_id_i, IsNotDupeOf.image_id_j).all()
-            not_dupe_list = {(row.image_id_i, row.image_id_j): True for row in query}
-            return not_dupe_list
-
-
-        def load_df_sorted_from_csv(csv_file):
-            read_start = time.perf_counter()
-            path_info = resolve_sorted_artifact_paths(csv_file)
-            df, load_mode = load_df_sorted_typed_or_csv(path_info)
-            read_elapsed = time.perf_counter() - read_start
-            if load_mode == "csv":
-                add_mode1_timing("csv_read", read_elapsed)
-                add_mode1_timing("csv_fallback_read", read_elapsed)
-            else:
-                add_mode1_timing("typed_read", read_elapsed)
-            print("df head", df.head())
-            if df.empty:
-                print("dataframe is empty, skipping")
-                return
-
-            parse_start = time.perf_counter()
-            # Convert face_landmarks from string to mediapipe landmark object
-            if "face_landmarks" in df.columns:
-                df["face_landmarks"] = df["face_landmarks"].apply(sort.str_to_landmarks)
-            if "bbox" in df.columns:
-                df['bbox'] = df['bbox'].apply(lambda x: io.unstring_json(x) if isinstance(x, str) else x)
-            df['folder'] = df['folder'].apply(lambda x: os.path.join(io.ROOT, os.path.basename(x)))
-            # convert 'face_encodings68' from string to list
-            df["face_encodings68"] = df["face_encodings68"].apply(lambda x: eval(x) if isinstance(x, str) else x)
-            df["body_landmarks_array"] = df["body_landmarks_array"].apply(lambda x: eval(x) if isinstance(x, str) else x)
-            df["body_landmarks_normalized"] = df["body_landmarks_normalized"].apply(sort.str_to_landmarks)
-            df["body_landmarks_normalized_array"] = df["body_landmarks_normalized"].apply(lambda x: sort.prep_enc(x, structure="list")) # convert mp lms to list
-            df["body_landmarks_normalized_visible_array"] = df["body_landmarks_normalized"].apply(lambda x: sort.prep_enc(x, structure="visible")) # convert mp lms to list
-            df["wrist_ankle_landmarks_normalized_array"] = df["body_landmarks_normalized"].apply(lambda x: sort.prep_enc(x, structure="wrists_and_ankles")) # convert mp lms to list
-            df["face_xyz"] = df[['face_x','face_y', 'face_z']].apply(lambda x: [x[0], x[1], x[2]], axis=1)
-            df['bbox_array'] = df['bbox'].apply(lambda x: list(x.values()))            
-            df['body_landmarks_normalized_visible'] = df['body_landmarks_normalized'].apply(lambda x: sort.crop_prep(x))
-            if VERBOSE: 
-                # print("after unpickle_array, first row", df.iloc[0]['body_landmarks_normalized_visible'])
-                print("list of columns", df.columns)
-                print(df.iloc[0])
-            # conver face_x	face_y	face_z	mouth_gap site_image_id to float
-            columns_to_convert = ['face_x', 'face_y', 'face_z', 'mouth_gap', 'site_image_id']
-            df[columns_to_convert] = df[columns_to_convert].applymap(io.make_float)
-            add_mode1_timing("csv_parse", time.perf_counter() - parse_start)
-            # Process the dataframe as needed
-            return df
-        
-        def find_parts(parts):
-            if VERBOSE: print("finding parts in", parts)
-            cluster_no = pose_no = segment_count = topic_no = background_hsv_no = object_hsv_no = None
-            for part in parts:
-                if part.startswith("ct"):
-                    # Extract segment_count from the part that starts with "ct"
-                    # e.g., ct5 -> 5
-                    segment_count = part.split("ct")[1]
-                elif part.startswith("p"):
-                    # Extract pose_no from the part that starts with "p"
-                    # e.g., p1 -> 1
-                    pose_no = part.split("p")[1]
-                elif part.startswith("t"):
-                    # Extract topic from the part that starts with "t"
-                    # e.g., t3 -> 3
-                    topic_no = part.split("t")[1]
-                elif part.startswith("c"):
-                    # Extract cluster_no from the part that starts with "c"
-                    # e.g., c2 -> 2
-                    cluster_no = part.split("c")[1]
-                elif part.startswith("oml"):
-                    continue
-                elif part.startswith("om"):
-                    object_hsv_no = part.split("om", 1)[1]
-                elif part.startswith("hl"):
-                    continue
-                elif part.startswith("h"):
-                    # Extract hsv_no from the part that starts with "h"
-                    # e.g., h2 -> 2
-                    background_hsv_no = part.split("h", 1)[1]
-            return segment_count, pose_no, topic_no, cluster_no, background_hsv_no, object_hsv_no
-
-        def _process_one_csv(csv_file):
-            """Process one CSV file: parse filename, set counters, dedupe, assemble.
-
-            B.1 scaffolding: nested inside save_images_from_csv_folder so all helper
-            closures (find_parts, load_df_sorted_from_csv, recheck_is_dupe_of,
-            get_not_dupes_sql, add_mode1_timing) remain accessible without change.
-
-            Returns a compact result dict. B.2 will promote this to a top-level
-            function for pool dispatch.
-            """
-            file_start = time.perf_counter()
-            # Extract cluster_no from filename, e.g., df_sorted_{cluster_no}_ct{segment_count}_p{pose_no}.csv
-            parts = csv_file.replace(".csv", "").split("_")
-            file_prefix = csv_file.replace("df_sorted_", "").replace(".csv", "")
-            print("file_prefix", file_prefix)
-
-            segment_count, pose_no, topic_no, cluster_no, background_hsv_no, object_hsv_no = find_parts(parts)
-            if len(parts) >= 3:
-                # legacy for Tench's older file structure. delete on next file refresh. TK
-                cluster_no = parts[2]
-            print(
-                f"assembling cluster {cluster_no}, topic {topic_no}, pose {pose_no}, "
-                f"background_hsv {background_hsv_no}, object_hsv {object_hsv_no} from csv file: {csv_file}"
-            )
-
-            ### Set counter_dict (without start stuff which is not needed) ###
-            csv_counter_state = set_my_counter_dict(
-                topic_no,
-                cluster_no,
-                pose_no,
-                {
-                    "background_hsv_bins": normalize_hsv_bins(background_hsv_no),
-                    "object_hsv_bins": normalize_hsv_bins(object_hsv_no),
-                },
-            )
-            df_sorted = load_df_sorted_from_csv(os.path.join(CSV_FOLDER, csv_file))
-
-            #can delete this line after, using it to check dupe detection
-            #first run use it to see the images to double check, then can comment out for speed
-            #linear_test_df(df_sorted,segment_count,cluster_no)
-
-            #Dedupe sorting here!
-            # df_sorted.to_csv(os.path.join(io.ROOT_DBx, f"df_sorted_{cluster_no}_ct{segment_count}_p{pose_no}.csv"), index=False)
-            # df_sorted = df_sorted.head(10)  # Keep only the top entries
-
-            # don't pass in session if IS_TENCH
-            db_start = time.perf_counter()
-            if io.IS_TENCH or io.IS_MICHELLE == True:
-                not_dupe_list = None
-                print("[MODE1 DEDUPE] skipped dedupe: platform mode bypass")
-            elif not mode1_enable_db_dedupe:
-                not_dupe_list = None
-                print("[MODE1 DEDUPE] skipped dedupe: MODE1_ENABLE_DB_DEDUPE=False")
-            elif not MAKE_CACHE_MODE:
-                if VERBOSE: print("before recheck_is_dupe_of, df_sorted size", df_sorted.size)
-                recheck_start = time.perf_counter()
-                df_sorted = recheck_is_dupe_of(session, df_sorted)  # recheck is_dupe_of from DB to catch any new dupes since CSV was made
-                add_mode1_timing("db_recheck_is_dupe_of", time.perf_counter() - recheck_start)
-                if VERBOSE: print("after recheck_is_dupe_of, df_sorted size", df_sorted.size)
-                get_not_dupes_start = time.perf_counter()
-                not_dupe_list = get_not_dupes_sql(session)  # get list of image_ids that are not dupes
-                add_mode1_timing("db_fetch_not_dupes", time.perf_counter() - get_not_dupes_start)
-                if VERBOSE: print("not_dupe_list size", len(not_dupe_list))
-                remove_start = time.perf_counter()
-                df_sorted = sort.remove_duplicates(
-                    io.folder_list,
-                    df_sorted,
-                    not_dupe_list,
-                    PURGING_DUPES,
-                    timing_callback=lambda stage, elapsed: add_mode1_timing(f"db_remove_{stage}", elapsed),
-                )
-                add_mode1_timing("db_remove_duplicates_total", time.perf_counter() - remove_start)
-            else:
-                not_dupe_list = None
-                print("[MODE1 DEDUPE] skipped dedupe: MAKE_CACHE_MODE=True")
-            add_mode1_timing("db_dedupe", time.perf_counter() - db_start)
-            if PURGING_DUPES:
-                print("PURGING_DUPES is True, so bailing out")
-                add_mode1_timing("file_total", time.perf_counter() - file_start)
-                return {"csv_file": csv_file, "success": True, "early_return": "purging_dupes", "error": None}
-
-            # wrapping the multiplier in a function that sets dims too
-            multiplier_start = time.perf_counter()
-            set_multiplier_and_dims(df_sorted, cluster_no, pose_no)
-            add_mode1_timing("multiplier_setup", time.perf_counter() - multiplier_start)
-
-            if CALIBRATING:
-                return {"csv_file": csv_file, "success": True, "early_return": "calibrating", "error": None}
-
-            assembly_start = time.perf_counter()
-            if MAKE_CACHE_MODE:
-                # MAKE_CACHE_MODE: threaded cache generation, skip dedupe + pair validation
-                # num_workers = getattr(io, 'NUMBER_OF_PROCESSES_GPU', 4)
-                num_workers = 12
-                process_csv_cache_only(df_sorted, csv_file, num_workers=num_workers)
-            else:
-                linear_test_df(df_sorted, counter_state=csv_counter_state)
-            add_mode1_timing("assembly", time.perf_counter() - assembly_start)
-            add_mode1_timing("file_total", time.perf_counter() - file_start)
-            return {"csv_file": csv_file, "success": True, "early_return": None, "error": None}
+        parent_session = globals().get("session") if not io.IS_TENCH else None
+        mode1_shared_cfg = {
+            "CSV_FOLDER": CSV_FOLDER,
+            "mode1_enable_db_dedupe": mode1_enable_db_dedupe,
+            "canonical_registry": dict(canonical_multiplier_registry),
+        }
 
         cluster_no = pose_no = segment_count = topic_no = background_hsv_no = object_hsv_no = None
         # list the files in the the CSV_FOLDER
@@ -4914,11 +4862,7 @@ def main():
 
         if PARALLEL_WORKERS > 1:
             import multiprocessing as _mp
-            worker_cfg = {
-                "CSV_FOLDER": CSV_FOLDER,
-                "mode1_enable_db_dedupe": mode1_enable_db_dedupe,
-                "canonical_registry": dict(canonical_multiplier_registry),
-            }
+            worker_cfg = dict(mode1_shared_cfg)
             mode1_processed_files += len(csv_files_to_process)
             print(
                 f"[MODE1] parallel dispatch: {len(csv_files_to_process)} CSVs "
@@ -4941,7 +4885,18 @@ def main():
             for csv_file in csv_files_to_process:
                 print("csv_file", csv_file)
                 mode1_processed_files += 1
-                _process_one_csv(csv_file)
+                result = _mode1_process_one_csv_shared(
+                    csv_file,
+                    mode1_shared_cfg,
+                    db_session=parent_session,
+                )
+                for stage, elapsed in result.get("timing", {}).items():
+                    add_mode1_timing(stage, elapsed)
+                if not result.get("success"):
+                    print(
+                        f"[MODE1 SERIAL] error in {result.get('csv_file')}: "
+                        f"{result.get('error')}"
+                    )
 
         print_mode1_timing_summary(total_csv_candidates)
         MODE1_ASSEMBLY_TIMING_CALLBACK = None

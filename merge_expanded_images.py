@@ -71,7 +71,7 @@ elif "make_video" in CURRENT_MODE:
         FRAMERATE = 30
 
     if "linear" in CURRENT_MODE:
-        SMOOTH_MERGE_COUNT = 2 # how many transition tween frames betwen each keyframe
+        SMOOTH_MERGE_COUNT = 3 # how many transition tween frames betwen each keyframe
         MERGE_COUNT = 1 # how many additional images are sent in to the merge funciton (1 + MERGE_COUNT is total)
     elif "osc" in CURRENT_MODE:
         OSCILATING_MERGE = True # if true, will do an oscillating merge from START_MERGE up to MERGE_COUNT and back down to START_MERGE 
