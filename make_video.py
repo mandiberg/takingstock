@@ -23,7 +23,7 @@ from sqlalchemy.pool import NullPool
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
 # my ORM
-from my_declarative_base import Base, Encodings, SegmentTable,ImagesBackground, Hands, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON, Images
+from my_declarative_base import Base, Encodings, ImagesTopics, SegmentTable,ImagesBackground, Hands, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON, Images
 import pymongo 
 
 #mine
@@ -332,7 +332,8 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     CLUSTER_MIN_HSV_OBJ = 5000
     OBJ_CLUSTER_COLUMN_MIN_FOR_FUSION_SORT = 1000
     HSV_SOURCE_MODE = "background" # "background" or "object" or "both"
-    
+    FORCE_TOPIC_FIT_SCORE = True # adds topic score to csvs at the very end of linear sort
+
     TESTING = True
     if TESTING:
         # turning all three off to do old style non tsp sort    
@@ -2501,6 +2502,30 @@ def write_images(img_list):
         cv2.imwrite(path_img[0],path_img[1])
 
 
+def assign_topic_fit_score(df):
+    # parse segmenthelper for topic id
+    parts = SegmentHelper_name.split("_")
+    for part in parts:
+        if part.startswith("T"):
+            topic_id = int(part[1:])
+            break
+    else:
+        topic_id = None
+    if topic_id is not None:
+        # go through the df and see if there is a topic_score column, if not, query mysql for topic score
+        # then assign topic fit score to the df
+        if 'topic_score' not in df.columns:
+            topic_scores = {}
+            for image_id in df['image_id']:
+                try:
+                    topic_score = session.query(ImagesTopics.topic_score).filter(ImagesTopics.image_id == image_id, ImagesTopics.topic_id == topic_id).first()
+                    topic_scores[image_id] = topic_score[0] if topic_score else None
+                except Exception as e:
+                    traceback.print_exc()
+                    print(str(e))
+                    topic_scores[image_id] = None
+            df['topic_score'] = df['image_id'].map(topic_scores)
+    return df 
 
 def process_linear(start_img_name, df_segment, file_prefix, sort):
     # linear sort by encoding distance
@@ -2522,6 +2547,8 @@ def process_linear(start_img_name, df_segment, file_prefix, sort):
         df_sorted = sort_by_face_dist_NN(df_enc)
         # df_sorted = sort_by_face_dist(df_enc, df_128_enc, df_33_lms)
 
+        if FORCE_TOPIC_FIT_SCORE:
+            df_sorted = assign_topic_fit_score(df_sorted)
         # TK this is where i save df_sorted to csv
         # check to see if CSV_FOLDER exists and create if not
         if not os.path.exists(CSV_FOLDER): os.makedirs(CSV_FOLDER)

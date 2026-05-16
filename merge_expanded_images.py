@@ -18,25 +18,25 @@ io = DataIO()
 db = io.db
 
 MODES = ["merge_images_paris_photo", "merge_images_body_autocrop", "make_video", "make_video_heft_keyword_fusion"]
-MODE_CHOICE = 3
+MODE_CHOICE = 1
 CURRENT_MODE = MODES[MODE_CHOICE]
 
 # Provide the path to the folder containing the images
-ROOT_FOLDER_PATH = '/Volumes/OWC5/cache_folder/'
+ROOT_FOLDER_PATH = "/Users/michaelmandiberg/Documents/projects-active/facemap_production"
 
 
 # ROOT_FOLDER_PATH = '/Users/michaelmandiberg/Documents/projects-active/facemap_production'
 # if IS_CLUSTER this should be the folder holding all the cluster folders
 # if not, this should be the individual folder holding the images
 # will not accept clusterNone -- change to cluster00
-FOLDER_NAME = "MTL_testing_1k_orLess"
+FOLDER_NAME = "gift_big_clustercc246/whitefront/giga"
 
 if io.IS_TENCH:
     ROOT_FOLDER_PATH = '/Users/tenchc/Documents/GitHub/taking_stock_production/segment_images'
     FOLDER_NAME = "installation_images"
 
 # iterate through folders? 
-IS_CLUSTER = True
+IS_CLUSTER = False
 
 LOOPING = False # defaults
 last_image_written = None
@@ -83,6 +83,7 @@ SAVE_METAS_AUDIO = False
 SAVE_INSTALLATION_METAS = True
 BUILD_WITH_AUDIO = False
 ALL_ONE_VIDEO = False
+USE_CURRENT_DIMS = True # don't do any scaling
 LOWEST_DIMS = True # make this False if assembling big images eg full body # False if doing Paris Photo faces
 FULLBODY = False # this is for full body images, will change GIGA_DIMS to FULLBODY_DIMS
 SORT_ORDER = "Chronological"
@@ -94,7 +95,9 @@ REG_DIMS = [3448,3448]
 VID_DIMS_HEFTTEST = [1080,1080]
 SKIP_PREFIX = "_x"
 FORCE_LS = True
-if LOWEST_DIMS: 
+if USE_CURRENT_DIMS: 
+	GIGA_DIMS = None
+elif LOWEST_DIMS: 
     if "heft" in CURRENT_MODE:
         GIGA_DIMS = VID_DIMS_HEFTTEST
     else:
@@ -228,7 +231,10 @@ def get_median_image_dimensions(all_img_path_list, subfolder_path=None):
     return int(median_height), int(median_width)
 
 def crop_scale_giga(img1, DIMS=GIGA_DIMS):
-    if SCALE_IMGS:
+    if GIGA_DIMS is None:
+    	# just return the existing image, at the original scale
+    	return img1
+    elif SCALE_IMGS:
         # this is potentially messy, because it was originally designed to crop images when there were small size differences
         # but now I'm using it to resize gigas during test runs. 
         # Resize the image to GIGA_DIMS
