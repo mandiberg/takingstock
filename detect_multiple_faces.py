@@ -118,7 +118,7 @@ switching to topic targeted
 18	afripics - where are these?
 '''
 # I think this only matters for IS_FOLDER mode, and the old SQL way
-SITE_NAME_ID = 2
+SITE_NAME_ID = 1
 # 2, shutter. 4, istock
 # 7 pond5, 8 123rf
 POSE_ID = 0
@@ -134,7 +134,7 @@ POSE_ID = 0
 # MAIN_FOLDER5 = "/Volumes/SSD2/images_123rf"
 
 # #testing locally with two
-MAIN_FOLDER1 = "/Volumes/LaCie/segment_images_no_images/images_shutterstock"
+MAIN_FOLDER1 = "/Volumes/OWC5 1/segment_images_missing/images_getty"
 # MAIN_FOLDER1 = "/Volumes/LaCie/segment_images_no_images/images_shutterstock"
 # MAIN_FOLDERS = [MAIN_FOLDER1, MAIN_FOLDER2]
 
@@ -160,13 +160,13 @@ IS_SSD=False
 # for HDD topic, start at 28714744
 BODYLMS = True
 HANDLMS = True
-REDO_BODYLMS_3D = False # this makes it skip hands and YOLO
+REDO_BODYLMS_3D = True # this makes it skip hands and YOLO
 if REDO_BODYLMS_3D: HANDLMS = False # if doing 3D redo, don't do hands
 TOPIC_ID = None
 # TOPIC_ID = [24, 29] # adding a TOPIC_ID forces it to work from SegmentBig_isface, currently at 7412083
 SEGMENT = 0 # topic_id set to 0 or False if using HelperTable or not using a segment
-# HelperTable_name = "SegmentHelper_nov2025_faces_without_bbox" # set to False if not using a HelperTable
-HelperTable_name = False    
+HelperTable_name = "SegmentHelper_may26_deleteme_missingArms3D" # set to False if not using a HelperTable
+# HelperTable_name = False    
 # SegmentTable_name = 'SegmentOct20'
 SegmentTable_name = 'SegmentBig_isface'
 # if HelperTable_name, set start point
@@ -314,21 +314,11 @@ yo = YOLOTools()
 
 # --- Initialize MediaPipe objects with GPU delegate ---
 
-NML_GITHUB = "/Users/michaelmandiberg/Documents/GitHub/takingstock/"
-HOME_GITHUB = "/Users/michaelmandiberg/Documents/GitHub/facemap/"
-ULTRA_GITHUB = "/Users/michael.mandiberg/Documents/GitHub/takingstock/"
-# check to see which one exists
-if os.path.exists(NML_GITHUB):
-    ROOT_GITHUB = NML_GITHUB
+if io.name == "mac_studio_60": ROOT_GITHUB = "/Users/michaelmandiberg/Documents/GitHub/takingstock/"
+else: ROOT_GITHUB = "Users/michaelmandiberg/Documents/GitHub/facemap/"
+print(f"Using ROOT_GITHUB: {ROOT_GITHUB}")
 
-elif os.path.exists(HOME_GITHUB):
-    ROOT_GITHUB = HOME_GITHUB
-    IS_ULTRA = False
-elif os.path.exists(ULTRA_GITHUB):
-    ROOT_GITHUB = ULTRA_GITHUB
-    IS_ULTRA = True
-    io.NUMBER_OF_PROCESSES = 20
-    io.NUMBER_OF_PROCESSES_GPU = 60
+# Follow DataIO/config.ini process settings; keep this script on the GPU-tuned count.
 io.NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES_GPU
 
 
@@ -336,7 +326,7 @@ FACE_DETECTOR_MODEL_PATH = os.path.join(ROOT_GITHUB, 'models', 'blaze_face_short
 FACE_LANDMARKER_MODEL_PATH = os.path.join(ROOT_GITHUB, 'models', 'face_landmarker.task')
 HAND_LANDMARKER_MODEL_PATH = os.path.join(ROOT_GITHUB, 'models', 'hand_landmarker.task')
 POSE_LANDMARKER_MODEL_PATH = os.path.join(ROOT_GITHUB, 'models', 'pose_landmarker_full.task')
-
+print(f"Using FACE_DETECTOR_MODEL_PATH: {FACE_DETECTOR_MODEL_PATH}")
 # Base options for GPU
 base_options_detector_gpu = python.BaseOptions(
     delegate=python.BaseOptions.Delegate.GPU,
@@ -449,17 +439,26 @@ start = time.time()
 def init_session():
     # init session
     global engine, Session, session
-    if IS_ULTRA:
-        # regular brew installed mysql
-        engine = create_engine("mysql+pymysql://{user}:{pw}@localhost/{db}"
-                                        .format(db=db['name'], user=db['user'], pw=db['pass']), pool_pre_ping=True, pool_recycle=600, poolclass=NullPool)
-        # engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}"
-        #                                 .format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']), poolclass=NullPool)
+    if db.get('unix_socket'):
+        # Prefer unix socket when configured by DataIO/config.ini.
+        engine = create_engine(
+            "mysql+pymysql://{user}:{pw}@/{db}?unix_socket={socket}".format(
+                user=db['user'], pw=db['pass'], db=db['name'], socket=db['unix_socket']
+            ),
+            pool_pre_ping=True,
+            pool_recycle=600,
+            poolclass=NullPool,
+        )
     else:
-        # macbook pro with unix socket
-        engine = create_engine("mysql+pymysql://{user}:{pw}@/{db}?unix_socket={socket}".format(
-            user=db['user'], pw=db['pass'], db=db['name'], socket=db['unix_socket']
-        ), pool_pre_ping=True, pool_recycle=600, poolclass=NullPool)
+        # Fallback to TCP host from DataIO/config.ini.
+        engine = create_engine(
+            "mysql+pymysql://{user}:{pw}@{host}/{db}".format(
+                host=db['host'], db=db['name'], user=db['user'], pw=db['pass']
+            ),
+            pool_pre_ping=True,
+            pool_recycle=600,
+            poolclass=NullPool,
+        )
 
     # metadata = MetaData(engine)
     metadata = MetaData() # apparently don't pass engine
@@ -2149,7 +2148,7 @@ def main():
                 HANDLMS = False # if doing 3D redo, don't do hands
             else:
                 REDO_BODYLMS_3D = False
-                HANDLMS = True # if doing 3D redo, do hands
+                HANDLMS = True # if not doing 3D redo, do hands
 
             for csv_foldercount_name in CSV_FOLDERCOUNT_NAMES:
                 if csv_foldercount_name == "folder_countout2.csv": first_pass = False
@@ -2167,6 +2166,7 @@ def main():
                     if folder_path not in completed_folders:
 
                         folder = os.path.join(main_folder,folder_path)
+                        print("folder", folder)
                         folder_count += 1
                         if not os.path.exists(folder):
                             # print(str(folder_count), "no folder here:",folder)

@@ -2,8 +2,6 @@
 import gc
 import sys
 from sklearn.decomposition import PCA #Principal Component Analysis
-from sklearn.cluster import KMeans #K-Means Clustering
-from sklearn.metrics import silhouette_score
 from scipy.optimize import minimize
 #from sklearn.manifold import TSNE #T-Distributed Stochastic Neighbor Embedding
 #from sklearn.preprocessing import StandardScaler #used for 'Feature Scaling'
@@ -47,7 +45,7 @@ EXPAND = False
 ONE_SHOT = False # take all files, based off the very first sort order.
 JUMP_SHOT = False # jump to random file if can't find a run
 
-LIMIT = 100000000
+LIMIT = 10000000
 BATCH_LIMIT = 10000
 
 # number of clusters produced. run GET_OPTIMAL_CLUSTERS and add that number here
@@ -94,6 +92,8 @@ else:
 
 # you need both of these for ObjectFusion
 CLUSTER_TYPE = "ObjectFusion" 
+# to create imagesdetections, use analysis/imagesdetections_debug/object_placement_audit/rerun_imagesdetections_assignments.py
+# then use this with the next three as True to assign those imagesdetections to signature clusters
 DO_SIGNATURES = True # whether to build and persist object signature token/hash/n_objects for ObjectFusion clustering. This is separate from the clustering itself, so you can choose to do ObjectFusion clustering without signatures if you want to iterate faster without the signature building step, which adds some overhead but is useful for understanding the object distribution within clusters and for future deduplication efforts.
 SIGNATURES_ONLY = True # if True, run signature generation/persistence and skip ObjectFusion cluster assignment steps.
 ONLY_EXISTING_IMAGES_DETECTIONS = True # faster for testing: will not calc new object placements
@@ -145,8 +145,8 @@ SegmentTable_name = 'SegmentBig_isface'
 # SegmentHelper_name = 'SegmentHelper_sept2025_heft_keywords'
 # SegmentHelper_name = 'Detections' # if CLUSTER_TYPE = "ObjectFusion", it automatically joins to Detections
 # SegmentHelper_name = 'SegmentHelper_T11_Oct20_COCO_Custom_every40'
-# SegmentHelper_name = 'SegmentHelper_T4_T11_T37_T40'
-SegmentHelper_name = 'SegmentHelper_T11_Oct20_COCO_Custom'
+# SegmentHelper_name = 'SegmentHelper_TheOffice'
+SegmentHelper_name = 'SegmentHelper_may26_deleteme_missingObject'
 FORCE_HAND_LANDMARKS = False # when doing ArmsPoses3D, default is True, so mongo_hand_landmarks = 1
 
 # TESTING MODE - reduce dataset size for faster iteration using pre-filtered table
@@ -588,43 +588,36 @@ def landmarks_to_df_columnar(df, add_list=False, fit_scaler=False):
 # Use cl.flatten_object_detections(), cl.prepare_features_for_knn(), or cl.prepare_features_for_knn_v2() (with StandardScaler)
 
 def kmeans_cluster(df, n_clusters=32, fit_scaler=True):
-    # Select only the numerical columns (dim_0 to dim_65)
     print("kmeans_cluster sort.SUBSET_LANDMARKS: ",sort.SUBSET_LANDMARKS)
-
-
-
     if cl.CLUSTER_TYPE in ["BodyPoses", "BodyPoses3D", "ArmsPoses3D", "ObjectFusion"]:
         print("cl.CLUSTER_TYPE == BodyPoses || ArmsPoses3D", df)
-        df_columnar = landmarks_to_df_columnar(df, fit_scaler=fit_scaler)
-    else:
-        df_columnar = df
-    print("clustering subset data shape: ", df_columnar.shape)
-    if hasattr(df_columnar, 'iloc'):
-        print("first row of numerical data: ", df_columnar.iloc[0])
-    else:
-        print("columnar is not a df: ")
 
-
-    kmeans = KMeans(n_clusters=n_clusters, n_init=10, init='k-means++', random_state=42, max_iter=300, verbose=1)
-    kmeans.fit(df_columnar)
-    clusters = kmeans.predict(df_columnar)
-    return clusters
+    return cl.kmeans_cluster(
+        df=df,
+        n_clusters=n_clusters,
+        fit_scaler=fit_scaler,
+        prepare_fn=landmarks_to_df_columnar,
+        random_state=42,
+        max_iter=300,
+        n_init=10,
+        verbose=1,
+    )
     
 def best_score(df):
     print("starting best score", df)
     print("about to subset landmarks to thse columns: ",sort.SUBSET_LANDMARKS)
-    df = landmarks_to_df_columnar(df)
-    print("about to best score with subset data", df)
-
-    n_list=np.linspace(4,24,6,dtype='int')
-    score=np.zeros(len(n_list))
-    for i,n_clusters in enumerate(n_list):
-        kmeans = KMeans(n_clusters,n_init=10, init = 'k-means++', random_state = 42, max_iter = 300)
-        preds = kmeans.fit_predict(df)
-        score[i]=silhouette_score(df, preds)
+    n_list = np.linspace(4, 24, 6, dtype='int')
+    b_score, score_by_cluster_count = cl.best_kmeans_cluster_count(
+        df=df,
+        cluster_values=n_list,
+        fit_scaler=False,
+        prepare_fn=landmarks_to_df_columnar,
+        random_state=42,
+        max_iter=300,
+        n_init=10,
+    )
+    score = np.array([score_by_cluster_count[int(n)] for n in n_list])
     print(n_list, score)
-    b_score=n_list[np.argmax(score)]
-    
     return b_score
     
 def geometric_median(X, eps=1e-5, zero_threshold=1e-6):

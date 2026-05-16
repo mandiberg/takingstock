@@ -265,6 +265,7 @@ CREATE TABLE LocationHandsFeet (
 CREATE TABLE IsNotDupeOf (
     image_id_i int REFERENCES Images (image_id),
     image_id_j int REFERENCES Encodings (encoding_id),
+    manual_check boolean,
     PRIMARY KEY (image_id_i, image_id_j)
 );
 

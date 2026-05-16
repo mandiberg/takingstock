@@ -17,33 +17,34 @@ from pymediainfo import MediaInfo
 io = DataIO()
 db = io.db
 
-MODES = ["merge_images_paris_photo", "merge_images_body_autocrop", "make_video", "make_video_heft_keyword_fusion"]
-MODE_CHOICE = 1
+MODES = ["merge_images_paris_photo", "merge_images_body_autocrop", "make_video", "make_video_smooth_osc", "make_video_smooth_linear"]
+MODE_CHOICE = 4
 CURRENT_MODE = MODES[MODE_CHOICE]
 
 # Provide the path to the folder containing the images
-ROOT_FOLDER_PATH = "/Users/michaelmandiberg/Documents/projects-active/facemap_production"
+# ROOT_FOLDER_PATH = '/Volumes/LaCie/output_folder/'
 
 
-# ROOT_FOLDER_PATH = '/Users/michaelmandiberg/Documents/projects-active/facemap_production'
+ROOT_FOLDER_PATH = '/Users/michaelmandiberg/Documents/projects-active/facemap_production'
 # if IS_CLUSTER this should be the folder holding all the cluster folders
 # if not, this should be the individual folder holding the images
 # will not accept clusterNone -- change to cluster00
-FOLDER_NAME = "gift_big_clustercc246/whitefront/giga"
+FOLDER_NAME = "output_folder/money_mix"
 
 if io.IS_TENCH:
     ROOT_FOLDER_PATH = '/Users/tenchc/Documents/GitHub/taking_stock_production/segment_images'
     FOLDER_NAME = "installation_images"
 
 # iterate through folders? 
-IS_CLUSTER = False
+IS_CLUSTER = True
+PARALLEL_MERGE_WORKERS = 1  # set > 1 to parallelize per-subfolder work with multiprocessing.Pool
 
 LOOPING = False # defaults
 last_image_written = None
 run_counter = 0
 
 MERGE_COUNT = START_MERGE = PERIOD = FRAMERATE = ALREADY_CROPPED = None
-IS_VIDEO = IS_VIDEO_MERGE = SMOOTH_MERGE = False
+IS_VIDEO = IS_VIDEO_MERGE = SMOOTH_MERGE = OSCILATING_MERGE = False
 if "merge_images" in CURRENT_MODE:
 # are we making videos or making merged stills?
     IS_VIDEO = False
@@ -60,18 +61,25 @@ elif "make_video" in CURRENT_MODE:
     # control default merging behavior
     FRAMERATE = 12
     PERIOD = 30 # how many images in each merge cycle
-    MERGE_COUNT = 12 # largest number of merged images 
+    MERGE_COUNT = 12 # largest number of merged images, overriden below
     START_MERGE = 1 # number of images merged into the first image. Can be 1 (no merges) or >1 (two or more images merged)
 
-    if "keyword_fusion" in CURRENT_MODE:
-        IS_VIDEO_MERGE = True
-        OSCILATING_MERGE = True # if true, will do an oscillating merge from START_MERGE up to MERGE_COUNT and back down to START_MERGE 
+    if "smooth" in CURRENT_MODE:
+        # all smooth video shared settings go here
         SMOOTH_MERGE = True # if true, will do a smooth merge from MERGE_COUNT down to START_MERGE
-        if SMOOTH_MERGE: FRAMERATE = 30
+        IS_VIDEO_MERGE = True
+        FRAMERATE = 30
+
+    if "linear" in CURRENT_MODE:
+        SMOOTH_MERGE_COUNT = 3 # how many transition tween frames betwen each keyframe
+        MERGE_COUNT = 1 # how many additional images are sent in to the merge funciton (1 + MERGE_COUNT is total)
+    elif "osc" in CURRENT_MODE:
+        OSCILATING_MERGE = True # if true, will do an oscillating merge from START_MERGE up to MERGE_COUNT and back down to START_MERGE 
         LOOPING = True
         PERIOD = 30 # how many images in each merge cycle
         MERGE_COUNT = 10 # largest number of merged images 
         START_MERGE = 1 # number of images merged into the first image. Can be 1 (no merges) or >1 (two or more images merged)
+        SMOOTH_MERGE_COUNT = 2 # how many transition tween frames betwen each keyframe
 
 # import moviepy only if making videos
 if IS_VIDEO:
@@ -92,14 +100,16 @@ GIGA_DIMS = [20688,20648]
 FULLBODY_DIMS = [32000,32000]
 TEST_DIMS = [4000,4000] 
 REG_DIMS = [3448,3448]
-VID_DIMS_HEFTTEST = [1080,1080]
+VID_DIMS_TEST = [1080,1080]
 SKIP_PREFIX = "_x"
 FORCE_LS = True
+
+SCALE_IMGS = False # default
 if USE_CURRENT_DIMS: 
 	GIGA_DIMS = None
 elif LOWEST_DIMS: 
-    if "heft" in CURRENT_MODE:
-        GIGA_DIMS = VID_DIMS_HEFTTEST
+    if "smooth" in CURRENT_MODE:
+        GIGA_DIMS = VID_DIMS_TEST
     else:
         GIGA_DIMS = REG_DIMS
     SCALE_IMGS = True
@@ -108,8 +118,6 @@ elif FULLBODY:
     SCALE_IMGS = False
 elif ALREADY_CROPPED:
     SCALE_IMGS = True
-else:
-    SCALE_IMGS = False
 VERBOSE = True
 None_counter = 0
 # Provide the path to the folder containing the images
@@ -131,6 +139,19 @@ else:
     print("TOPIC", TOPIC)
 CSV_FILE = f"metas_{TOPIC}.csv"
 
+
+def smooth_merge_transition(image1, image2, blend_steps):
+    transition_images = []
+    total_alphas = np.linspace(0, 1, (blend_steps + 2))  # including the start and end images
+    # exclude the start one, as that is not needed
+    useful_alphas = total_alphas[1:]
+    for alpha in useful_alphas:
+        print(f"alpha: {alpha:.2f}")
+        blended = cv2.addWeighted(image1, 1 - alpha, image2, alpha, 0)
+        blended_uint8 = np.clip(blended, 0, 255).astype(np.uint8)
+        transition_images.append(blended_uint8)
+    return transition_images
+
 def merge_images_numpy(image_list, make_first_image=False):
     global last_image_written
     """
@@ -148,8 +169,11 @@ def merge_images_numpy(image_list, make_first_image=False):
         return None
     elif len(image_list) == 1 and last_image_written is None:
         print("only one image, returning it directly AS LIST, shape is", image_list[0].shape)
+        if make_first_image:
+            last_image_written = image_list[0].astype(np.float32)
+            return last_image_written
         return [image_list[0]]
-    
+    print("image_list[0].shape", image_list[0].shape)
     if len(image_list[0].shape) == 2:
         print("removed item 0 from the list - i think for non-images?")
         image_list.pop(0)
@@ -189,14 +213,7 @@ def merge_images_numpy(image_list, make_first_image=False):
     # print("this_last_image_written shape", this_last_image_written.shape if this_last_image_written is not None else 'None')
     # print("merged_img_float shape", merged_img_float.shape)
     if SMOOTH_MERGE:
-        # print("doing smooth merge with this many images", len(processed_images))
-        transition_image1 = cv2.addWeighted(this_last_image_written, 0.67, merged_img_float, 0.33, 0)
-        transition_image2 = cv2.addWeighted(this_last_image_written, 0.33, merged_img_float, 0.67, 0)
-        # Convert to uint8 for output
-        transition_image1 = np.clip(transition_image1, 0, 255).astype(np.uint8)
-        transition_image2 = np.clip(transition_image2, 0, 255).astype(np.uint8)
-        merged_img_uint8 = np.clip(merged_img, 0, 255).astype(np.uint8)
-        images_to_return = [transition_image1, transition_image2, merged_img_uint8]
+        images_to_return = smooth_merge_transition(this_last_image_written, merged_img_float, SMOOTH_MERGE_COUNT)
     else:
         merged_img_uint8 = np.clip(merged_img, 0, 255).astype(np.uint8)
         images_to_return.append(merged_img_uint8)
@@ -211,7 +228,7 @@ def get_median_image_dimensions(all_img_path_list, subfolder_path=None):
     counter = 0
     for image_path in all_img_path_list:
         # print("checking image for dimensions", image_path)
-        if subfolder_path:
+        if subfolder_path and not os.path.isabs(image_path):
             image_path = os.path.join(subfolder_path, image_path)
         metadata = MediaInfo.parse(image_path)
         if metadata is None or metadata.tracks is None: continue
@@ -232,8 +249,8 @@ def get_median_image_dimensions(all_img_path_list, subfolder_path=None):
 
 def crop_scale_giga(img1, DIMS=GIGA_DIMS):
     if GIGA_DIMS is None:
-    	# just return the existing image, at the original scale
-    	return img1
+        print("GIGA_DIMS is None, returning original image")
+        return img1
     elif SCALE_IMGS:
         # this is potentially messy, because it was originally designed to crop images when there were small size differences
         # but now I'm using it to resize gigas during test runs. 
@@ -468,23 +485,64 @@ def get_img_list_subfolders(subfolders):
     all_img_path_list = []
     for subfolder_path in subfolders:
         print("subfolder_path", subfolder_path)
-        img_list = io.get_img_list(subfolder_path, FORCE_LS)
-        # if any file ends with .json, remove it
-        img_list = [img for img in img_list if not img.endswith(".json")]
-        img_list.sort()
-        img_path_list = []
-        for img in img_list:
-            img_path = os.path.join (subfolder_path, img)
-            img_path_list.append(img_path)
-        # print(img_path_list)
+        img_path_list = get_cluster_input_paths(subfolder_path, FORCE_LS)
         all_img_path_list += img_path_list
     # print(all_img_path_list)
     return all_img_path_list
 
+
+def get_cluster_input_paths(subfolder_path, force_ls=False):
+    cluster_files_path = os.path.join(subfolder_path, "cluster_files.csv")
+    if os.path.exists(cluster_files_path):
+        try:
+            cluster_files_df = pd.read_csv(cluster_files_path)
+            required_cols = {"image_number", "image_id", "path_to_cache_file"}
+            if not required_cols.issubset(set(cluster_files_df.columns)):
+                print(
+                    f"cluster_files.csv missing required columns in {cluster_files_path}, "
+                    "falling back to jpg listing"
+                )
+            else:
+                cluster_files_df = cluster_files_df.copy()
+                cluster_files_df["image_number"] = pd.to_numeric(
+                    cluster_files_df["image_number"], errors="coerce"
+                )
+                cluster_files_df = cluster_files_df.sort_values(
+                    by="image_number", kind="stable"
+                )
+                candidate_paths = [
+                    str(path).strip()
+                    for path in cluster_files_df["path_to_cache_file"].tolist()
+                    if isinstance(path, str) and str(path).strip()
+                ]
+
+                path_list = []
+                for cache_path in candidate_paths:
+                    if os.path.exists(cache_path):
+                        path_list.append(cache_path)
+                    else:
+                        print(f"warning: missing cache file listed in cluster_files.csv, skipping: {cache_path}")
+
+                if path_list:
+                    print(
+                        f"using cluster_files.csv in {subfolder_path}: {len(path_list)} paths"
+                    )
+                    return path_list
+        except Exception as e:
+            print(f"failed to read cluster_files.csv at {cluster_files_path}: {e}")
+
+    img_list = io.get_img_list(subfolder_path, force_ls)
+    img_list = [img for img in img_list if isinstance(img, str) and img.endswith(".jpg")]
+    img_list.sort()
+    return [os.path.join(subfolder_path, img) for img in img_list]
+
 def get_path(subfolder_path, img_array):
     if subfolder_path:
         cluster_no = subfolder_path.split("/")[-1]
-        image_path = os.path.join(subfolder_path, img_array[0])
+        if os.path.isabs(img_array[0]):
+            image_path = img_array[0]
+        else:
+            image_path = os.path.join(subfolder_path, img_array[0])
     else:
         cluster_no = img_array[0].replace(FOLDER_PATH,"").split("/")[0]
         image_path = img_array[0]
@@ -639,7 +697,7 @@ def save_images_to_video(images_to_return, video_writer):
             video_writer.write(img)
         last_image_written = images_to_return[-1]
 
-def process_images(images_to_build, video_writer, total_images, current_pos=0):
+def process_images(images_to_build, video_writer, total_images, current_pos=0, merge_count=MERGE_COUNT):
     global last_image_written
 
     last_ten_images = images_to_build[-10:]
@@ -648,24 +706,24 @@ def process_images(images_to_build, video_writer, total_images, current_pos=0):
     padded_images_to_build = last_ten_images + images_to_build + first_ten_images
 
     # no periods for this one. Just merge merge_count images at a time, sliding through the array
-    for i in range(current_pos, total_images + MERGE_COUNT + 1):
+    for i in range(current_pos, total_images + merge_count + 1):
 
         make_first_image = True
         start_idx = i
-        end_idx = i + MERGE_COUNT
+        end_idx = i + merge_count
         if last_image_written is None:
             print(" ~~~~ making first last_image_written for i", i, "start_idx", start_idx, "end_idx", end_idx)
             last_image_written = merge_images_numpy(padded_images_to_build[start_idx:end_idx], make_first_image=make_first_image)
-        # print("type images_to_return, last_image_written", type(last_image_written))
+        print("type images_to_return, last_image_written", type(last_image_written))
         # Load and merge images from current_pos to current_pos + MERGE_COUNT
         images_to_return = merge_images_numpy(padded_images_to_build[start_idx:end_idx])
         print(f"have images for i {i}, start_idx {start_idx}, end_idx {end_idx}, len images_to_build {len(images_to_build)}")
-        if i <= MERGE_COUNT: continue
-        if i + MERGE_COUNT*2 >= len(padded_images_to_build): continue
+        if i <= merge_count: continue
+        if i + merge_count*2 >= len(padded_images_to_build): continue
         save_images_to_video(images_to_return, video_writer)
         # Print the current number of frames written so far
         # print(f"{video_writer.get(cv2.CAP_PROP_POS_FRAMES)} frames written so far")
-        print(f"saved merged img current_pos+i", start_idx, "len images_to_build", len(images_to_build), MERGE_COUNT)
+        print(f"saved merged img current_pos+i", start_idx, "len images_to_build", len(images_to_build), merge_count)
 
 def process_images_osc(images_to_build, video_writer, total_images, period, current_pos=0, merge_count=MERGE_COUNT):
     global last_image_written
@@ -673,7 +731,14 @@ def process_images_osc(images_to_build, video_writer, total_images, period, curr
     # it should start with START_MERGE, go up to merge_count, then slide through, then go back down to START_MERGE
     # if it can't reach merge_count, it should just go up to the max it can
     # and it should not add the last image, since it's a duplicate of the first image
-
+    print(f"process_images_osc called with total_images {total_images}, images_to_build {len(images_to_build)}, period {period}, current_pos {current_pos}, merge_count {merge_count}")
+    # adjust total_images to account for SMOOTH_MERGE extra frames
+    # if SMOOTH_MERGE:
+    #     total_images = total_images + (total_images - current_pos) * SMOOTH_MERGE_COUNT
+    #     print(f"total_images to {total_images} to account for SMOOTH_MERGE extra frames")
+    # else:
+    #     total_images = total_images
+        
     if total_images - current_pos < period:
         this_period = total_images - current_pos
         last_cycle = True
@@ -687,6 +752,7 @@ def process_images_osc(images_to_build, video_writer, total_images, period, curr
         # Load and merge images from current_pos to current_pos + i
     # if i % 2 == 0:
         images_to_return = merge_images_numpy(images_to_build[current_pos:current_pos+i])
+        print(f"images_to_return: {len(images_to_return)} images for i {i}, current_pos {current_pos}, len images_to_build {len(images_to_build)}")
         # print("type merged_img", type(merged_img))
         save_images_to_video(images_to_return, video_writer)
         # Print the current number of frames written so far
@@ -822,7 +888,7 @@ def write_video(img_array, subfolder_path=None):
         total_images = len(img_array)
         current_pos = 0
 
-        if OSCILATING_MERGE:
+        if SMOOTH_MERGE and OSCILATING_MERGE:
             # Calculate images_per_cycle and check if MERGE_COUNT needs adjustment
             # this is when the period is shorter than the merge up and down cycle
             # images_per_cycle = period + (MERGE_COUNT - START_MERGE * 2)
@@ -844,7 +910,7 @@ def write_video(img_array, subfolder_path=None):
                 # Handle remaining images because there are not enough for a full cycle
                 # make sure to merge up to the last image, and then discard it, since it's a duplicate of the first image
                 remaining = total_images - current_pos
-                if "heft_keyword_fusion" in CURRENT_MODE:
+                if "smooth_osc" in CURRENT_MODE:
                     if remaining > START_MERGE:
                         print("remaining", remaining)
                         if merge_count *2 > remaining:
@@ -957,10 +1023,13 @@ def load_images(image_list, subfolder_path=None):
 
     def construct_image_path(subfolder_path, image_list, index):
         # Load the image at the specified index
-        if subfolder_path:
-            image_path = os.path.join(subfolder_path, image_list[index])
+        candidate_path = image_list[index]
+        if isinstance(candidate_path, str) and os.path.isabs(candidate_path):
+            image_path = candidate_path
+        elif subfolder_path:
+            image_path = os.path.join(subfolder_path, candidate_path)
         else:
-            image_path = image_list[index]
+            image_path = candidate_path
         return image_path
 
     # Find first readable image to initialize result.
@@ -1052,18 +1121,39 @@ def save_installation_metas(subfolders, output_path, csv_file):
     print(f"\n[save_installation_metas] output_path={output_path}, csv_file={csv_file}")
     print(f"[save_installation_metas] {len(subfolders)} subfolders to check")
 
+    def _normalize_installation_df(raw_df, metas_path):
+        required_cols = ["cluster_no", "hsv_no", "pose_no"]
+        if all(col in raw_df.columns for col in required_cols):
+            return raw_df[required_cols].copy()
+        if len(raw_df.columns) >= 3:
+            print(
+                f"  [subfolder] non-standard installation.csv columns in {metas_path}; "
+                "using first three columns as cluster_no/hsv_no/pose_no"
+            )
+            normalized_df = raw_df.iloc[:, :3].copy()
+            normalized_df.columns = required_cols
+            return normalized_df
+        print(
+            f"  [subfolder] invalid installation.csv shape in {metas_path}; "
+            f"expected >=3 columns, got {len(raw_df.columns)}"
+        )
+        return None
+
     # Check each cluster subfolder for its own installation.csv
     any_missing = False
     installation_metas = pd.DataFrame(columns=["cluster_no", "hsv_no", "pose_no"])
     for subfolder_path in subfolders:
         metas_path = os.path.join(subfolder_path, "installation.csv")
         if os.path.exists(metas_path):
-            installation_metas_df = pd.read_csv(metas_path)
+            installation_metas_raw_df = pd.read_csv(metas_path)
             print(f"  [subfolder] {subfolder_path}")
-            print(f"    raw columns: {list(installation_metas_df.columns)}")
-            print(f"    shape: {installation_metas_df.shape}")
-            print(f"    head:\n{installation_metas_df.head()}")
-            installation_metas_df.columns = ["cluster_no", "hsv_no", "pose_no"]
+            print(f"    raw columns: {list(installation_metas_raw_df.columns)}")
+            print(f"    shape: {installation_metas_raw_df.shape}")
+            print(f"    head:\n{installation_metas_raw_df.head()}")
+            installation_metas_df = _normalize_installation_df(installation_metas_raw_df, metas_path)
+            if installation_metas_df is None:
+                any_missing = True
+                continue
             installation_metas = pd.concat([installation_metas, installation_metas_df], ignore_index=True)
         else:
             print(f"  [subfolder] installation.csv MISSING in: {subfolder_path}")
@@ -1084,8 +1174,12 @@ def save_installation_metas(subfolders, output_path, csv_file):
         # so it matches what ends up in the DataFrame — not the raw subfolder basename
         metas_path = os.path.join(subfolder_path, "installation.csv")
         if os.path.exists(metas_path):
-            tmp_df = pd.read_csv(metas_path)
-            lookup_key = str(tmp_df.iloc[0, 0])
+            tmp_raw_df = pd.read_csv(metas_path)
+            tmp_df = _normalize_installation_df(tmp_raw_df, metas_path)
+            if tmp_df is not None and not tmp_df.empty:
+                lookup_key = str(tmp_df.iloc[0]["cluster_no"])
+            else:
+                lookup_key = subfolder_basename
         else:
             lookup_key = subfolder_basename
         matched = next((f for f in mp4_files if subfolder_basename in f), None)
@@ -1138,6 +1232,59 @@ def save_installation_metas(subfolders, output_path, csv_file):
 
 ##### GOING TO GET OBJECTS FROM CLUSTER MEDIANS, TBD NOT WORKING YET
 
+# ---------------------------------------------------------------------------
+# Per-subfolder pool workers — module-level so they can be pickled.
+# ---------------------------------------------------------------------------
+
+def _video_worker(subfolder_path: str) -> dict:
+    """Pool worker: build one video from one subfolder."""
+    try:
+        all_img_path_list = get_cluster_input_paths(subfolder_path, FORCE_LS)
+        write_video(all_img_path_list, subfolder_path)
+        return {"subfolder": subfolder_path, "success": True, "error": None}
+    except Exception as exc:
+        print(f"[MERGE WORKER] error in {subfolder_path}: {exc}")
+        return {"subfolder": subfolder_path, "success": False, "error": str(exc)}
+
+
+def _still_merge_worker(subfolder_path: str) -> dict:
+    """Pool worker: merge images into a single still from one subfolder."""
+    try:
+        all_img_path_list = get_cluster_input_paths(subfolder_path, FORCE_LS)
+        output_dims = get_median_image_dimensions(all_img_path_list, subfolder_path)
+        if output_dims is None:
+            print(f"no output_dims found, skipping {subfolder_path}")
+            return {"subfolder": subfolder_path, "success": False, "error": "no output_dims"}
+        images_to_build = load_images(all_img_path_list, subfolder_path)
+        merged_image, count, cluster_no, handpose_no, background_hsv_no, object_hsv_no, topic_no = merge_images(
+            images_to_build, subfolder_path, output_dims
+        )
+        if count == 0:
+            print(f"no images in {subfolder_path}")
+            return {"subfolder": subfolder_path, "success": False, "error": "count == 0"}
+        save_merge(merged_image, count, cluster_no, handpose_no, background_hsv_no, object_hsv_no, topic_no, FOLDER_PATH)
+        return {"subfolder": subfolder_path, "success": True, "error": None}
+    except Exception as exc:
+        print(f"[MERGE WORKER] error in {subfolder_path}: {exc}")
+        return {"subfolder": subfolder_path, "success": False, "error": str(exc)}
+
+
+def _run_pool(worker_fn, subfolders):
+    """Dispatch worker_fn over subfolders via Pool.imap_unordered or serial fallback."""
+    if PARALLEL_MERGE_WORKERS > 1:
+        import multiprocessing as _mp
+        print(f"[MERGE] parallel dispatch: {len(subfolders)} subfolders across {PARALLEL_MERGE_WORKERS} workers")
+        with _mp.Pool(processes=PARALLEL_MERGE_WORKERS) as pool:
+            for result in pool.imap_unordered(worker_fn, subfolders):
+                if not result.get("success"):
+                    print(f"[MERGE WORKER] failed: {result.get('subfolder')} — {result.get('error')}")
+    else:
+        for subfolder_path in subfolders:
+            result = worker_fn(subfolder_path)
+            if not result.get("success"):
+                print(f"[MERGE] failed: {result.get('subfolder')} — {result.get('error')}")
+
+
 def main():
     print("starting merge_expanded_images.py, looking in FOLDER_PATH:", FOLDER_PATH)
     if IS_CLUSTER is True:
@@ -1159,10 +1306,7 @@ def main():
             # for subfolder_path in subfolders:
             #     write_video(subfolder_path)
         elif IS_VIDEO is True and ALL_ONE_VIDEO is False:
-            for subfolder_path in subfolders:
-                all_img_path_list = io.get_img_list(subfolder_path, FORCE_LS)
-                # only inlcude jpgs in the list
-                write_video(all_img_path_list, subfolder_path)
+            _run_pool(_video_worker, subfolders)
             if SAVE_INSTALLATION_METAS is True:
                 print("saving installation metas")
                 save_installation_metas(subfolders, FOLDER_PATH, "installation.csv")
@@ -1171,22 +1315,7 @@ def main():
             save_concatenated_metas(subfolders, OUTPUT, CSV_FILE)
         else:
             # for merging images into stills
-            for subfolder_path in subfolders:
-                # print("subfolder_path", subfolder_path)
-                all_img_path_list = io.get_img_list(subfolder_path, FORCE_LS)
-                output_dims = get_median_image_dimensions(all_img_path_list, subfolder_path)
-                if output_dims is not None:
-                    print(" ", output_dims)
-                else:
-                    print("no output_dims found, skipping this folder", subfolder_path)
-                    continue
-                images_to_build = load_images(all_img_path_list, subfolder_path)
-                merged_image, count, cluster_no, handpose_no, background_hsv_no, object_hsv_no, topic_no = merge_images(images_to_build, subfolder_path, output_dims)
-                if count == 0:
-                    print("no images here")
-                    continue
-                else:
-                    save_merge(merged_image, count, cluster_no, handpose_no, background_hsv_no, object_hsv_no, topic_no, FOLDER_PATH)
+            _run_pool(_still_merge_worker, subfolders)
     else:
         print("going to get folder ls", FOLDER_PATH)
         all_img_path_list = io.get_img_list(FOLDER_PATH)
