@@ -1,0 +1,18 @@
+{
+  "generated_at": "2026-05-15T16:42:09.637483Z",
+  "helper_table": "SegmentHelper_may26_deleteme_missingObject",
+  "backup_table": null,
+  "skip_backup": true,
+  "skip_initial_delete": false,
+  "dry_run": false,
+  "chunk_size": 1000,
+  "offset": 0,
+  "limit": null,
+  "image_count": 3189783,
+  "total_batches": 3190,
+  "total_processed": 3189783,
+  "total_written": 3189783,
+  "include_last_reprocessed_detection_id": true,
+  "resumed_from_checkpoint": false,
+  "checkpoint_file": null
+}
