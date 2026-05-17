@@ -56,20 +56,20 @@ else:
 # SegmentHelper_name = None
 SegmentTable_name = 'SegmentBig_isface'
 # SegmentTable_name = 'SegmentBig_isnotface'
-# SegmentHelper_name = 'SegmentHelper_TheOffice'
-SegmentHelper_name = 'SegmentHelperObject_82_money'
+SegmentHelper_name = 'SegmentHelper_TheOffice'
+# SegmentHelper_name = 'SegmentHelperObject_82_money'
 # SegmentHelper_name = 'SegmentHelper_T11_Oct20_COCO_Custom_evens_quarters'
 # SegmentHelper_name = 'None' # set below for heft keywords
 # SegmentHelper_name = None
 # this is MM specific
 # for when I'm using files on my SSD vs RAID
-IS_SSD = False
-# SSD_PATH = "/Volumes/LaCie/segment_images"
-SSD_PATH = "/Volumes/OWC52/segment_images"
+IS_SSD = True
+SSD_PATH = "/Volumes/LaCie/segment_images"
+# SSD_PATH = "/Volumes/OWC52/segment_images"
 ONLY_SAVE_CACHE = True # only save CSVs to cluster folder, not images which are saved in cache folders -- for speed
 MAKE_CACHE_MODE = False # only make cache folders, skips dedupe and is_face testing
 MODE1_ENABLE_DB_DEDUPE = True # False skips dedupe during crunch time drafts  
-SKIP_PAIRCHECK = False # draft mode: trust cached crops and skip face-pair validation
+SKIP_PAIRCHECK = False # True for draft mode, False does paircheck, and caches them 
 START_CLUSTER = 0
 PARALLEL_WORKERS = 16  # set > 1 to parallelize per-CSV work in MODE 0 and MODE 1
 
@@ -84,8 +84,8 @@ db = io.db
 # OWC4 SNAFU WORKAROUND
 
 if not (io.IS_TENCH or io.IS_MICHELLE) and IS_SSD:
-    # io.ROOT_PROD=  "/Volumes/LaCie" ## only on Mac
-    io.ROOT_PROD=  "/Users/michaelmandiberg/Documents/projects-active/facemap_production" ## MBP
+    io.ROOT_PROD=  "/Volumes/LaCie" ## only on Mac
+    # io.ROOT_PROD=  "/Users/michaelmandiberg/Documents/projects-active/facemap_production" ## MBP
     print("Setting io.ROOT to ROOTSSD:", io.ROOTSSD)
     io.ROOT = os.path.join(io.ROOT_PROD, "output_folder")
 print("Setting io.ROOT to ROOTSSD:", io.ROOTSSD)
@@ -101,7 +101,7 @@ CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden b
 
 # CSV_FOLDER = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion128_test220K"
 CSV_MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/"
-CSV_RUN_FOLDER = "SegmentHelper_TheOffice/one_shot_preMTL/cached" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
+CSV_RUN_FOLDER = "SegmentHelper_TheOffice/selecting" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
 CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, CSV_RUN_FOLDER)
 MAX_ROWS_PER_OUTPUT_CSV = 1200
 ENABLE_MODE0_TIMING = True
@@ -111,7 +111,6 @@ MODE0_WRITE_CSV_FALLBACK = True
 MODE1_USE_TYPED_INTERMEDIATE = True
 MODE1_TYPED_STRICT = False
 MODE_TYPED_SCHEMA_VERSION = "typed_intermediate_v1"
-
 
 def resolve_arms_object_fusion_folder(
     root_data_path,
@@ -169,6 +168,8 @@ def resolve_arms_object_fusion_folder(
         f"(OBJECT_CLUSTER_DIM={object_cluster_dim})"
     )
     return folder_name, object_cluster_dim
+
+
 
 HSV_SOURCE_MODE = "background"
 SKIP_OBJECT_NONE_CLUSTERS = [1]
@@ -338,14 +339,11 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     USE_HEAD_POSE = True
     IS_HAND_POSE_FUSION = True # do we use fusion clusters
     CHOP_FIRST = True # does a first pass chop before whatever sort happens - this is default now
-    # this is an override for development purposes. will only make CSVs from these clusters:
-    TEMP_FOCUS_CLUSTER_HACK_LIST = []
 
-    # process for dealing with keep/none
-    # OBJECT_NONE_CLUSTERS = [i for i in range(4000) if i not in OBJECT_KEEP_CLUSTERS] # skip these and go to 18
-    # MULTIPOLICY = True # controls whether it does multi-bucket fusion policy based on cluster size for HSV, clusters, and metabodyposes3D
     OBJECT_NONE_CLUSTERS = [1] # if MULTIPOLICY these get HSV BG, else these don't run in fusion
+    # MULTIPOLICY = True # controls whether it does multi-bucket fusion policy based on cluster size for HSV, clusters, and metabodyposes3D
     MULTIPOLICY = True # controls whether it does multi-bucket fusion policy based on cluster size for HSV, clusters, and metabodyposes3D
+
     CLUSTER_MIN_HSV_BG = 1500
     CLUSTER_MIN_HSV_OBJ = 1500
     OBJ_CLUSTER_COLUMN_MIN_FOR_FUSION_SORT = 1000
@@ -359,8 +357,12 @@ elif CURRENT_MODE == 'heft_torso_keywords':
         ONE_SHOT = False # take all files, based off the very first sort order.
         TSP_SORT = True
         CHOP_ITTER_TSP_SORT = False
-        if CLUSTER_TYPE == "object_fusion":
-            GENERATE_FUSION_PAIRS = False # April 14 changing this for testing
+        if CLUSTER_TYPE == "ArmsPoses3D_ObjectFusion":
+            GENERATE_FUSION_PAIRS = True # April 14 changing this for testing
+            MULTIPOLICY = True # MULTIPOLICY conflicts with GENERATE_FUSION_PAIRS 
+
+            # GENERATE_FUSION_PAIRS = False # April 14 changing this for testing
+            # MULTIPOLICY = False # MULTIPOLICY conflicts with GENERATE_FUSION_PAIRS 
         else:
             # either you use a FUSION_PAIR_DICT or GENERATE_FUSION_PAIRS. 
             GENERATE_FUSION_PAIRS = True # if true it will query based on MIN_VIDEO_FUSION_COUNT and create pairs
@@ -371,15 +373,22 @@ elif CURRENT_MODE == 'heft_torso_keywords':
         TSP_SORT = True
         CHOP_ITTER_TSP_SORT = True
 
-    if not GENERATE_FUSION_PAIRS:
+    if GENERATE_FUSION_PAIRS:
+        TEMP_FOCUS_CLUSTER_HACK_LIST = []
+        # this is an override for development purposes. will only make CSVs from these clusters:
+        OBJECT_KEEP_CLUSTERS = [25,2341,1685,734,727,2263,586,28,733,258,960,84,2230,728,783,964,1660,2630,3052,3269]
+        if bool(OBJECT_KEEP_CLUSTERS):
+            # how to skip objects (columns!)
+            SKIP_OBJECT_NONE_CLUSTERS = [i for i in range(4000) if i not in OBJECT_KEEP_CLUSTERS] # skip these and go to 18
+    else:
         USE_FUSION_PAIR_DICT = True # if True, it will use the FUSION_PAIR_DICT_NAME below
-    FUSION_PAIR_DICT_NAME = "FUSION_PAIR_DICT_DETECTIONS_ARMS3D128"
+    FUSION_PAIR_DICT_NAME = "FUSION_PAIR_DICT_DETECTIONS_THEOFFICE"
     if USE_HSV == True:
         N_HSV = 23 # 0-22 metaclusters of 96 HSV clusters
     else:
         N_HSV = 0 # don't do HSV clusters
 
-    PURGING_DUPES = True # skips build/save, just compares dupes
+    PURGING_DUPES = False # skips build/save, just compares dupes
     # FORCE_TARGET_COUNT = 90 # default for GIF version
     FORCE_TARGET_COUNT = 200 # for testing. 
     TSP_NOLIMITS = True # if True, it will not apply the FORCE_TARGET_COUNT cutoff to the TSP sort, which means it will sort on all files. If False, it will apply the cutoff, which means it will only sort on the top FORCE_TARGET_COUNT files. This is for testing whether the TSP sort is working on all files or just the top ones.
@@ -420,7 +429,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     # this control whether sorting by topics
     # IS_TOPICS = True # if using Clusters only, must set this to False
     # JUMP_SHOT = True # jump to random file if can't find a run (I don't think this applies to planar?)
-    # USE_ALL = True # do this for HEFT bc it turns off face xyz and mouthgap filters && if SORT_TYPE == "planar_hands" forces ONE_SHOT
+    USE_ALL = True # do this for HEFT bc it turns off face xyz and mouthgap filters && if SORT_TYPE == "planar_hands" forces ONE_SHOT
 
     USE_PAINTED = True
     INPAINT= True
@@ -3062,12 +3071,16 @@ def write_images(img_list):
 def assign_topic_fit_score(df):
     # parse segmenthelper for topic id
     parts = SegmentHelper_name.split("_")
+    topic_id = None
     for part in parts:
-        if part.startswith("T"):
-            topic_id = int(part[1:])
-            break
-    else:
-        topic_id = None
+        # Only parse tokens like "T11" (or T-prefixed numeric values), not names like "TheOffice".
+        if isinstance(part, str) and part.startswith("T") and len(part) > 1:
+            topic_token = part[1:]
+            try:
+                topic_id = int(float(topic_token))
+                break
+            except (TypeError, ValueError):
+                continue
     if topic_id is not None:
         # go through the df and see if there is a topic_score column, if not, query mysql for topic score
         # then assign topic fit score to the df
@@ -3238,8 +3251,8 @@ def process_linear(start_img_name, df_segment, file_prefix, sort, effective_sort
             record_mode0_timing("process_sort", time.perf_counter() - sort_start)
         # df_sorted = sort_by_face_dist(df_enc, df_128_enc, df_33_lms)
 
-        if FORCE_TOPIC_FIT_SCORE:
-            df_sorted = assign_topic_fit_score(df_sorted)
+        # if FORCE_TOPIC_FIT_SCORE:
+        #     df_sorted = assign_topic_fit_score(df_sorted)
         # TK this is where i save df_sorted to csv
         # check to see if CSV_FOLDER exists and create if not
             write_start = time.perf_counter()
@@ -3945,7 +3958,8 @@ def main():
                 import multiprocessing as _mp
                 print(f"[MODE0] opening shared pool with {PARALLEL_WORKERS} workers")
                 mode0_pool = _mp.Pool(processes=PARALLEL_WORKERS)
-            mode0_async_results.append(mode0_pool.apply_async(_mode0_process_linear_worker, (job,)))
+            async_result = mode0_pool.apply_async(_mode0_process_linear_worker, (job,))
+            mode0_async_results.append((async_result, job))
         else:
             result = _mode0_process_linear_worker(job)
             handle_mode0_worker_result(result)
@@ -3956,20 +3970,19 @@ def main():
             return
 
         remaining_results = []
-        for async_result in mode0_async_results:
+        for async_result, job in mode0_async_results:
             if wait_all or async_result.ready():
                 try:
                     result = async_result.get()
                 except Exception as exc:
-                    result = {
-                        "success": False,
-                        "error": str(exc),
-                        "file_prefix": "<async_result_get>",
-                        "elapsed": 0.0,
-                    }
+                    print(
+                        f"[MODE0 WORKER] async failure for {job.get('file_prefix')}: {exc}. "
+                        "Falling back to serial execution for this job."
+                    )
+                    result = _mode0_process_linear_worker(job)
                 handle_mode0_worker_result(result)
             else:
-                remaining_results.append(async_result)
+                remaining_results.append((async_result, job))
 
         mode0_async_results = remaining_results
 
@@ -5227,7 +5240,7 @@ def main():
                 ):
                     print(
                         f"skipping fusion pair {cluster_topic_no} because object cluster is in "
-                        f"SKIP_OBJECT_NONE_CLUSTERS {SKIP_OBJECT_NONE_CLUSTERS}"
+                        f"SKIP_OBJECT_NONE_CLUSTERS {SKIP_OBJECT_NONE_CLUSTERS[:5]}"
                     )
                     return
                 if USE_AFFECT_GROUPS: 

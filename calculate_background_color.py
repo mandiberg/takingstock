@@ -47,9 +47,9 @@ import pymongo
 
 Base = declarative_base()
 USE_BBOX=True
-VERBOSE = False
+VERBOSE = True
 TOPIC = 0
-START_ID = 91034671 # only used for one query below
+START_ID = 0 # only used for one query below
 # 3.8 M large table (for Topic Model)
 # HelperTable_name = "SegmentHelperMar23_headon"
 SHOULDER_THRESH=.75
@@ -58,10 +58,10 @@ SHOULDER_THRESH=.75
 # HelperTable_name = "SegmentHelperApril12_2x2x33x27"
 
 # for fingerpoint
-HelperTable_name = "SegmentHelper_T11_Oct20_COCO_Custom"
+HelperTable_name = "SegmentHelper_TheOffice"
 # MM controlling which folder to use
-IS_SSD = False
-SSD_PATH = "/Volumes/OWC5/segment_images_book_clock_bowl"
+IS_SSD = True
+SSD_PATH = "/Volumes/LaCie/segment_images"
 
 io = DataIO(IS_SSD, VERBOSE, SSD_PATH)
 db = io.db

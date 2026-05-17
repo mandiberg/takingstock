@@ -239,6 +239,10 @@ class SortPose:
             # self.CLUSTER_TYPE = "BodyPoses3D"
             self.SUBSET_LANDMARKS = self.ARMS_HEAD_LMS
             print("using ArmPoses3D cluster type, ", self.SUBSET_LANDMARKS)
+        elif self.SORT_TYPE == "ArmsPoses3D_ObjectFusion":
+            self.CLUSTER_TYPE = "ArmsPoses3D_ObjectFusion"
+            self.SUBSET_LANDMARKS = self.ARMS_HEAD_LMS
+            print("using ArmsPoses3D_ObjectFusion cluster type, ", self.SUBSET_LANDMARKS)
         else:
             self.CLUSTER_TYPE = "BodyPoses" # defaults
             self.SUBSET_LANDMARKS = self.BODY_LMS
@@ -664,9 +668,10 @@ class SortPose:
 
     def make_segment(self, df):
 
-        print(len(df))
+        print("make_segment: ", len(df))
 
         if self.USE_HEAD_POSE:
+            print("using head pose angles for filtering")
             # xyz = ['face_x', 'face_y', 'face_z']
             xyz = ['pitch', 'yaw', 'roll']
             df["xyz"] = df.apply(lambda row: self.cols_to_list(row, xyz), axis=1)

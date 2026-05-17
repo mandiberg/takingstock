@@ -18,19 +18,16 @@ io = DataIO()
 db = io.db
 
 MODES = ["merge_images_paris_photo", "merge_images_body_autocrop", "make_video", "make_video_smooth_osc", "make_video_smooth_linear"]
-MODE_CHOICE = 4
+MODE_CHOICE = 1
 CURRENT_MODE = MODES[MODE_CHOICE]
 
 # Provide the path to the folder containing the images
-# ROOT_FOLDER_PATH = '/Volumes/LaCie/output_folder/'
-
-
-ROOT_FOLDER_PATH = '/Users/michaelmandiberg/Documents/projects-active/facemap_production'
+ROOT_FOLDER_PATH = '/Volumes/LaCie/'
+# ROOT_FOLDER_PATH = '/Users/michaelmandiberg/Documents/projects-active/facemap_production'
 # if IS_CLUSTER this should be the folder holding all the cluster folders
 # if not, this should be the individual folder holding the images
 # will not accept clusterNone -- change to cluster00
-FOLDER_NAME = "output_folder/money_mix"
-
+FOLDER_NAME = "output_folder/clusters_selecting_450"
 if io.IS_TENCH:
     ROOT_FOLDER_PATH = '/Users/tenchc/Documents/GitHub/taking_stock_production/segment_images'
     FOLDER_NAME = "installation_images"
@@ -38,6 +35,8 @@ if io.IS_TENCH:
 # iterate through folders? 
 IS_CLUSTER = True
 PARALLEL_MERGE_WORKERS = 1  # set > 1 to parallelize per-subfolder work with multiprocessing.Pool
+
+CROP_AFTER_COUNT = 80
 
 LOOPING = False # defaults
 last_image_written = None
@@ -377,12 +376,9 @@ def merge_images(images_to_build, FOLDER_PATH, output_dims=None):
     print("merging images, this many images_to_build", len(images_to_build))
     if len(images_to_build) % 2 != 0:
         print("odd number of images, skipping last image")
-    # Get a list of image files in the folder
-    image_files = io.get_img_list(FOLDER_PATH, FORCE_LS)
-    # if VERBOSE: print(image_files)
     cluster_no = handpose_no = background_hsv_no = object_hsv_no = topic_no = None
     successes = 0
-    if len(image_files) > 1:
+    if len(images_to_build) > 1:
         # this is legacy stuff to get the cluster number and handpose number from the folder name
         image_folder = FOLDER_PATH.split("/")[-1]
         if "cluster" in image_folder:
@@ -440,7 +436,7 @@ def merge_images(images_to_build, FOLDER_PATH, output_dims=None):
             #     cluster_no = int(image_folder.split("_")[0].replace("cluster",""))
             #     try: handpose_no = int(image_folder.split("_")[1])
             #     except: print("handpose_no = None")
-        count = len(image_files)
+        count = len(images_to_build)
         print("about to iterate_image_list with ", len(images_to_build), "images")
         if len(images_to_build) == 0: 
             print("no images to build")
@@ -524,16 +520,18 @@ def get_cluster_input_paths(subfolder_path, force_ls=False):
                         print(f"warning: missing cache file listed in cluster_files.csv, skipping: {cache_path}")
 
                 if path_list:
-                    print(
-                        f"using cluster_files.csv in {subfolder_path}: {len(path_list)} paths"
-                    )
+                    path_list = path_list[:CROP_AFTER_COUNT] if CROP_AFTER_COUNT else path_list
+                    print(f"using cluster_files.csv in {subfolder_path}: {len(path_list)} paths")
+                    print("first few paths:", path_list[:5])
                     return path_list
         except Exception as e:
             print(f"failed to read cluster_files.csv at {cluster_files_path}: {e}")
 
+    print(f"no valid cluster_files.csv found in {subfolder_path}, falling back to jpg listing")
     img_list = io.get_img_list(subfolder_path, force_ls)
     img_list = [img for img in img_list if isinstance(img, str) and img.endswith(".jpg")]
     img_list.sort()
+
     return [os.path.join(subfolder_path, img) for img in img_list]
 
 def get_path(subfolder_path, img_array):
