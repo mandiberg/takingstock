@@ -101,7 +101,7 @@ CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden b
 
 # CSV_FOLDER = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion128_test220K"
 CSV_MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/"
-CSV_RUN_FOLDER = "SegmentHelper_TheOffice/selecting" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
+CSV_RUN_FOLDER = "SegmentHelper_TheOffice/revTSP" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
 CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, CSV_RUN_FOLDER)
 MAX_ROWS_PER_OUTPUT_CSV = 1200
 ENABLE_MODE0_TIMING = True
@@ -280,6 +280,11 @@ elif "3D" in CURRENT_MODE:
 
 elif CURRENT_MODE == 'heft_torso_keywords':
 
+    '''
+    SORT_TYPE options: "planar_hands", "128d", "obj_bbox", "object_fusion"
+    object_fusion is only for ArmsPoses3D_ObjectFusion cluster type. It combines:
+        pitch, yaw, roll, and bbox for all 9 object positions.
+    '''
     # TEMPORARY
     TRUST_FACE_PAIR_CACHE = True
 
@@ -1445,24 +1450,56 @@ if not io.IS_TENCH:
 # for linear it is in the df_enc, but for itter, the start_img_name is in prev df_enc
 # takes a dataframe of images and encodings and returns a df sorted by distance
 
-def expand_face_encodings(df,encoding_col= "face_encodings68",):
-    """
-    Given a DataFrame with:
-      - a 'face_encodings68' column where each entry is a length-128 list or array,
-    return a new DataFrame of shape (n_rows, 128) where:
-      - Columns 1..128 are the individual encoding dimensions,
-        named 'enc_0', 'enc_1', ..., 'enc_127'.
-    """
-    # Helper: if entries are string representations of lists, eval to real lists
-    def parse_encoding(x):
-        if isinstance(x, str):
-            return list(eval(x))
-        return list(x)
+def expand_vector_column(df, vector_col="face_encodings68", prefix="enc", expected_len=None):
+    """Expand one vector-like DataFrame column into numeric feature columns."""
+    if vector_col not in df.columns:
+        raise KeyError(f"Vector column '{vector_col}' not found. Available columns: {list(df.columns)}")
 
-    # Apply parsing and expand into a DataFrame
-    encodings = df[encoding_col].apply(parse_encoding).tolist()
-    enc_df = pd.DataFrame(encodings, columns=[f"enc_{i}" for i in range(128)])
-    return enc_df
+    def parse_vector(value):
+        if isinstance(value, str):
+            parsed = ast.literal_eval(value)
+        else:
+            parsed = value
+
+        if isinstance(parsed, np.ndarray):
+            parsed = parsed.tolist()
+
+        if isinstance(parsed, (list, tuple)):
+            return list(parsed)
+
+        raise ValueError(f"Unsupported vector value type for '{vector_col}': {type(value)}")
+
+    parsed_vectors = df[vector_col].apply(parse_vector)
+
+    lengths = parsed_vectors.apply(len)
+    unique_lengths = sorted(lengths.unique().tolist())
+    if expected_len is not None and any(length != int(expected_len) for length in unique_lengths):
+        raise ValueError(
+            f"Column '{vector_col}' has vector lengths {unique_lengths}, expected only {expected_len}."
+        )
+    if len(unique_lengths) != 1:
+        raise ValueError(
+            f"Column '{vector_col}' has inconsistent vector lengths: {unique_lengths}."
+        )
+
+    vector_len = unique_lengths[0]
+    vector_df = pd.DataFrame(
+        parsed_vectors.tolist(),
+        columns=[f"{prefix}_{i}" for i in range(vector_len)],
+        index=df.index,
+    )
+    vector_df = vector_df.apply(pd.to_numeric, errors="coerce")
+    if vector_df.isnull().any().any():
+        nan_rows = int(vector_df.isnull().any(axis=1).sum())
+        raise ValueError(
+            f"Column '{vector_col}' produced non-numeric values after parsing; rows with NaNs: {nan_rows}."
+        )
+    return vector_df
+
+
+def expand_face_encodings(df,encoding_col= "face_encodings68",):
+    """Backward-compatible wrapper for face encoding expansion."""
+    return expand_vector_column(df, vector_col=encoding_col, prefix="enc", expected_len=128)
 
 def get_closest_knn_or_break(df_enc, df_sorted):
     # send in both dfs, and return same dfs with 1+ rows sorted
@@ -1606,8 +1643,29 @@ def sort_and_chop(df_enc):
 
 
 def tsp_sort(df_enc):
-    # track the mapping
-    df_clean = expand_face_encodings(df_enc)
+    # Build TSP input from the active sort vector so TSP and KNN use the same feature family.
+    sort_column, _ = sort.get_sort_column_mapping(sort.SORT_TYPE, CLUSTER1)
+    print(f"[TSP DEBUG] SORT_TYPE={sort.SORT_TYPE} resolved sort_column={sort_column}")
+    if sort_column not in df_enc.columns:
+        raise KeyError(
+            f"TSP input column '{sort_column}' not found for SORT_TYPE={sort.SORT_TYPE}. "
+            f"Available columns: {list(df_enc.columns)}"
+        )
+
+    try:
+        vector_lengths = df_enc[sort_column].apply(lambda x: len(x) if hasattr(x, "__len__") else -1)
+        unique_lengths = sorted(vector_lengths.unique().tolist())
+        print(
+            f"[TSP DEBUG] input rows={len(df_enc)} column={sort_column} "
+            f"unique_vector_lengths={unique_lengths[:10]}"
+        )
+    except Exception as debug_exc:
+        print(f"[TSP DEBUG] unable to summarize vector lengths for {sort_column}: {debug_exc}")
+
+    df_clean = expand_vector_column(df_enc, vector_col=sort_column, prefix="tsp")
+    print(f"[TSP DEBUG] expanded matrix shape={df_clean.shape}")
+    df_clean = sort.apply_sort_feature_weights_df(df_clean, sort_type=sort.SORT_TYPE)
+    print(f"[TSP DEBUG] weighted matrix shape={df_clean.shape}")
     df_clean['original_index'] = df_clean.index  # or however they map
     START_IDX = END_IDX = None
     if TSP_NOLIMITS: force_count = None

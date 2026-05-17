@@ -68,7 +68,15 @@ class SortPose:
         # need to refactor this for GPU
         self.mp_face_detection = mp.solutions.face_detection
         self.mp_drawing = mp.solutions.drawing_utils
-        self.get_bg_segment=mp.solutions.selfie_segmentation.SelfieSegmentation()
+        self.get_bg_segment = None
+        try:
+            self.get_bg_segment = mp.solutions.selfie_segmentation.SelfieSegmentation()
+        except Exception as e:
+            # Fail-open for headless/GPU-restricted environments (e.g., NSOpenGLContext unavailable).
+            print(
+                "[ADVISORY] SelfieSegmentation init failed; continuing without segmentation mask. "
+                f"Reason: {e}"
+            )
 
               
         self.VERBOSE = VERBOSE
@@ -93,6 +101,13 @@ class SortPose:
             "HSV": ("hsvll", "dist_HSV"),
             "obj": ("obj_bbox_list", "dist_obj"),
             "object_fusion": ("obj_bbox_fusion_list", "dist_obj_fusion")
+        }
+
+        # Sort-time vector weights used by both KNN and TSP for object fusion families.
+        self.SORT_VECTOR_WEIGHTS = {
+            "head_pose": 0.5,
+            "hand_signal": 2.0,
+            "bbox": 4.0,
         }
 
         #maximum allowable distance between encodings (this accounts for dHSV)
@@ -461,7 +476,7 @@ class SortPose:
             if CLUSTER1 == "ArmsPoses3D_ObjectFusion":
                 return ("obj_bbox_list", None)
             # Object bounding box (non-fusion)
-            return ("bbox_norm", "bbox_norm")
+            return ("obj_bbox_list", "bbox_norm")
         elif "fusion" in SORT_TYPE.lower():
             # Object fusion (combines hand position, face pose, and detections)
             return ("obj_bbox_fusion_list", None)
@@ -470,6 +485,65 @@ class SortPose:
             if self.VERBOSE:
                 print(f"Warning: Unknown SORT_TYPE '{SORT_TYPE}', defaulting to 128d")
             return ("face_encodings68", "face_encodings68")
+
+    def _fusion_weight_slices(self, sort_type, vector_len):
+        """
+        Return index slices for weighted fusion-style vectors.
+
+        Expected ordering for weighted fusion vectors:
+        [pitch, yaw, roll, left_hand(x,y), right_hand(x,y), slot_bboxes...]
+        """
+        if sort_type not in ("object_fusion", "obj_bbox"):
+            return None
+
+        # Non-fusion obj_bbox is a plain 4D box and should remain unweighted here.
+        if sort_type == "obj_bbox" and vector_len <= 8:
+            return None
+
+        if vector_len < 3:
+            return None
+
+        hand_dims = min(4, max(0, vector_len - 3))
+        bbox_start = 3 + hand_dims
+        if bbox_start > vector_len:
+            bbox_start = vector_len
+
+        return {
+            "head_pose": slice(0, min(3, vector_len)),
+            "hand_signal": slice(3, bbox_start),
+            "bbox": slice(bbox_start, vector_len),
+        }
+
+    def apply_sort_feature_weights_array(self, values, sort_type=None):
+        """Apply sort-time feature weights to a 1D vector or 2D matrix."""
+        active_sort_type = self.SORT_TYPE if sort_type is None else sort_type
+        arr = np.asarray(values, dtype=float)
+        input_was_1d = arr.ndim == 1
+        if input_was_1d:
+            arr = arr.reshape(1, -1)
+
+        if arr.ndim != 2 or arr.shape[1] == 0:
+            return values
+
+        slices = self._fusion_weight_slices(active_sort_type, arr.shape[1])
+        if not slices:
+            return arr[0] if input_was_1d else arr
+
+        weighted = arr.copy()
+        for group_name, group_slice in slices.items():
+            group_weight = float(self.SORT_VECTOR_WEIGHTS.get(group_name, 1.0))
+            if group_slice.start < group_slice.stop:
+                weighted[:, group_slice] *= group_weight
+
+        return weighted[0] if input_was_1d else weighted
+
+    def apply_sort_feature_weights_df(self, df, sort_type=None):
+        """Apply sort-time feature weights to a numeric DataFrame."""
+        if df is None or not isinstance(df, pd.DataFrame) or df.empty:
+            return df
+
+        weighted = self.apply_sort_feature_weights_array(df.to_numpy(dtype=float), sort_type=sort_type)
+        return pd.DataFrame(weighted, columns=df.columns, index=df.index)
 
     def set_output_dims(self):
         if self.image_edge_multiplier == [1.3,1.85,2.4,1.85]:
@@ -4015,6 +4089,9 @@ class SortPose:
         # Check if the encodings_array contains NaN values
         encodings_array = np.asarray(encodings_array, dtype=float)
 
+        # Keep KNN and TSP in the same metric space for fusion vectors.
+        encodings_array = self.apply_sort_feature_weights_array(encodings_array, sort_type=self.SORT_TYPE)
+
         if np.isnan(encodings_array).any():
             print("encodings_array of len", len(encodings_array), "contains NaN values")
 
@@ -4031,6 +4108,7 @@ class SortPose:
             print("Cleaned df_enc:", df_enc.shape)
 
         enc1 = coerce_vector_to_float_array(enc1)
+        enc1 = self.apply_sort_feature_weights_array(enc1, sort_type=self.SORT_TYPE)
 
         if np.isnan(enc1).any():
             print("enc1 contains NaN values")
@@ -4885,6 +4963,12 @@ class SortPose:
                 if self.VERBOSE: print("FAILED CROPPING, bad bbox",bbox)
                 return -2,-2,-2,-2,-2
             print("bbox['bottom'], ", bbox['bottom'])
+
+        if get_bg_segment is None:
+            # Fallback: no segmenter available, treat full image as foreground.
+            if self.VERBOSE:
+                print("[ADVISORY] get_segmentation_mask fallback: segmenter unavailable, returning full-frame mask")
+            return np.ones(img.shape[:2], dtype=np.float32)
 
         result = get_bg_segment.process(img[:,:,::-1]) #convert RBG to BGR then process with mp
         if self.VERBOSE: print("[get_bg_hue_lum] got result")

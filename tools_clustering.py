@@ -3289,22 +3289,45 @@ class ToolsClustering:
     def construct_fusion_list(self, row):
         """
         Construct fusion list from a dataframe row for ObjectFusion sorting.
-        Returns list format: [pitch, yaw, roll, left_hand(6), right_hand(6), top_face(6),
-                              left_eye(6), right_eye(6), mouth(6), shoulder(6),
-                              waist(6), feet(6)]
-        Total: 57 elements (3 + 9*6)
+        Returns list format:
+          [pitch, yaw, roll,
+           left_knuckle_x, left_knuckle_y, right_knuckle_x, right_knuckle_y,
+           left_hand_bbox(4), right_hand_bbox(4), top_face_bbox(4),
+           left_eye_bbox(4), right_eye_bbox(4), mouth_bbox(4), shoulder_bbox(4),
+           waist_bbox(4), feet_bbox(4)]
+        Total: 43 elements (3 + 4 + 9*4)
         """
+        def parse_hand_xy(hand_value):
+            if isinstance(hand_value, np.ndarray):
+                hand_value = hand_value.tolist()
+            if isinstance(hand_value, (list, tuple)) and len(hand_value) >= 2:
+                try:
+                    return [float(hand_value[0]), float(hand_value[1])]
+                except (TypeError, ValueError):
+                    return [0.0, 0.0]
+            return [0.0, 0.0]
+
+        def parse_detection_bbox(detection_payload):
+            if detection_payload is None:
+                return [0.0, 0.0, 0.0, 0.0]
+            return [
+                float(detection_payload.get('top', 0.0)),
+                float(detection_payload.get('left', 0.0)),
+                float(detection_payload.get('right', 0.0)),
+                float(detection_payload.get('bottom', 0.0)),
+            ]
+
         fusion_list = row['pitch_yaw_roll_list'].copy()  # Start with [pitch, yaw, roll]
-        
-        # Add detection data (each is 6 elements: class_id, conf, top, left, right, bottom)
+
+        # Add explicit left/right hand position signal from normalized knuckle features.
+        fusion_list.extend(parse_hand_xy(row.get('left_pointer_knuckle_norm')))
+        fusion_list.extend(parse_hand_xy(row.get('right_pointer_knuckle_norm')))
+
+        # Add per-slot bbox geometry only (class_id/conf handled separately by signatures).
         for col in ['left_hand_object', 'right_hand_object', 'top_face_object',
                     'left_eye_object', 'right_eye_object', 'mouth_object', 'shoulder_object',
                     'waist_object', 'feet_object']:
-            detection = row[col]
-            if detection is None:
-                fusion_list.extend([0.0, 0.0, 0.0, 0.0, 0.0, 0.0])  # 6 zeros for None
-            else:
-                fusion_list.extend(self.flatten_object_detections(detection))
+            fusion_list.extend(parse_detection_bbox(row[col]))
         
         return fusion_list
 
