@@ -941,7 +941,7 @@ class SortPose:
                         df = df_clean
                     else:
                         # Use the indices from df_filtered to filter the original df
-                        df = df.loc[df_filtered.index]
+                        df = df.loc[df_filtered.index].reset_index(drop=True)
                 else:
                     print("   Skipping head pose filtering due to data issues.")
                     df = df_clean  # Fall back to NaN-cleaned data
