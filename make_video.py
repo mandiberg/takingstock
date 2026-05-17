@@ -111,7 +111,6 @@ MODE0_WRITE_CSV_FALLBACK = True
 MODE1_USE_TYPED_INTERMEDIATE = True
 MODE1_TYPED_STRICT = False
 MODE_TYPED_SCHEMA_VERSION = "typed_intermediate_v1"
-
 def resolve_arms_object_fusion_folder(
     root_data_path,
     arms_cluster_dim,
@@ -1807,6 +1806,11 @@ def prep_encodings_NN(df_segment, effective_sort_type=None):
         
         # Construct obj_bbox_fusion_list using class method
         df_segment['obj_bbox_fusion_list'] = df_segment.apply(cl.construct_fusion_list, axis=1)
+        projection_indices = cl.build_signature_projection_indices(sort.counter_dict.get("pose_no"))
+        if projection_indices is not None:
+            df_segment['obj_bbox_fusion_list'] = df_segment['obj_bbox_fusion_list'].apply(
+                lambda value: cl.project_vector_by_indices(value, projection_indices)
+            )
         if is_multislot_obj_bbox_mode:
             # Route obj_bbox distance math through a fixed-length, slot-aware vector.
             df_segment['obj_bbox_list'] = df_segment['obj_bbox_fusion_list']

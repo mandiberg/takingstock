@@ -230,6 +230,23 @@ class ToolsClustering:
             ("waist_object", "WA"),
             ("feet_object", "FT"),
         ]
+        self.OBJECT_SIGNATURE_EXPORT_PATH = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)),
+            'utilities',
+            'ImagesObjectSignatures_ObjectSignatures_202604272237.csv',
+        )
+        self.OBJECT_SIGNATURE_SLOT_BLOCKS = {
+            'LH': (7, 11),
+            'RH': (11, 15),
+            'TF': (15, 19),
+            'LE': (19, 23),
+            'RE': (23, 27),
+            'MO': (27, 31),
+            'SH': (31, 35),
+            'WA': (35, 39),
+            'FT': (39, 43),
+        }
+        self.object_signature_registry = None
         self.SIGNATURE_HEAD_MIN_SUPPORT = 200
         self.SIGNATURE_FALLBACK_MAX_SLOTS = 4
         self.SIGNATURE_FALLBACK_PRIORITY = {
@@ -251,6 +268,82 @@ class ToolsClustering:
         self.SIGNATURE_FALLBACK_CONF_WEIGHT = 10.0
 
     # ==================== OBJECT SIGNATURE METHODS ====================
+
+    def _normalize_signature_cluster_token(self, value):
+        if value is None:
+            return None
+        if isinstance(value, str):
+            token = value.strip()
+            if not token or token.lower() in ('none', 'nan'):
+                return None
+            value = token
+        try:
+            return int(float(value))
+        except (TypeError, ValueError):
+            return None
+
+    def load_object_signature_registry(self):
+        if self.object_signature_registry is not None:
+            return self.object_signature_registry
+
+        if not os.path.exists(self.OBJECT_SIGNATURE_EXPORT_PATH):
+            print(f"[projection advisory] signature export not found: {self.OBJECT_SIGNATURE_EXPORT_PATH}")
+            self.object_signature_registry = {}
+            return self.object_signature_registry
+
+        try:
+            signature_df = pd.read_csv(self.OBJECT_SIGNATURE_EXPORT_PATH)
+            slot_cols = list(self.OBJECT_SIGNATURE_SLOT_BLOCKS.keys())
+            registry = {}
+            for _, row in signature_df.iterrows():
+                cluster_id = self._normalize_signature_cluster_token(row.get('cluster_id'))
+                if cluster_id is None:
+                    continue
+                registry[cluster_id] = {
+                    slot: self._normalize_signature_cluster_token(row.get(slot)) or 0
+                    for slot in slot_cols
+                }
+            self.object_signature_registry = registry
+            print(
+                f"[projection advisory] loaded object signature registry: {len(self.object_signature_registry)} clusters"
+            )
+        except Exception as exc:
+            print(f"[projection advisory] failed to load signature export: {exc}")
+            self.object_signature_registry = {}
+
+        return self.object_signature_registry
+
+    def build_signature_projection_indices(self, signature_cluster_id):
+        registry = self.load_object_signature_registry()
+        cluster_key = self._normalize_signature_cluster_token(signature_cluster_id)
+        slot_row = registry.get(cluster_key)
+        if slot_row is None:
+            print(
+                f"[projection advisory] no canonical signature row for pose_no={signature_cluster_id}; using full fusion vector"
+            )
+            return None
+
+        kept_indices = list(range(7))
+        kept_slots = []
+        for slot_label, (start_idx, end_idx) in self.OBJECT_SIGNATURE_SLOT_BLOCKS.items():
+            if int(slot_row.get(slot_label, 0)) != 0:
+                kept_indices.extend(range(start_idx, end_idx))
+                kept_slots.append(slot_label)
+
+        print(
+            f"[projection advisory] pose_no={cluster_key} keeps slots={kept_slots if kept_slots else []} "
+            f"dims={len(kept_indices)}"
+        )
+        return kept_indices
+
+    def project_vector_by_indices(self, vector_value, kept_indices):
+        if kept_indices is None:
+            return vector_value
+        if isinstance(vector_value, np.ndarray):
+            vector_value = vector_value.tolist()
+        if not isinstance(vector_value, (list, tuple)):
+            return vector_value
+        return [vector_value[idx] for idx in kept_indices if idx < len(vector_value)]
 
     def extract_slot_class_id(self, slot_value):
         """Extract class_id int from one slot payload; return 0 for empty/invalid."""

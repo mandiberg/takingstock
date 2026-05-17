@@ -27,7 +27,7 @@ ROOT_FOLDER_PATH = '/Volumes/LaCie/'
 # if IS_CLUSTER this should be the folder holding all the cluster folders
 # if not, this should be the individual folder holding the images
 # will not accept clusterNone -- change to cluster00
-FOLDER_NAME = "output_folder/TSPtestPostRev45"
+FOLDER_NAME = "output_folder/TSPtestPostRev45mask"
 if io.IS_TENCH:
     ROOT_FOLDER_PATH = '/Users/tenchc/Documents/GitHub/taking_stock_production/segment_images'
     FOLDER_NAME = "installation_images"
