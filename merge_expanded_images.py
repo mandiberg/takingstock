@@ -27,7 +27,7 @@ ROOT_FOLDER_PATH = '/Volumes/LaCie/'
 # if IS_CLUSTER this should be the folder holding all the cluster folders
 # if not, this should be the individual folder holding the images
 # will not accept clusterNone -- change to cluster00
-FOLDER_NAME = "output_folder/TSPtestPostRev45_1-2-1"
+FOLDER_NAME = "output_folder/TSP_IQR"
 if io.IS_TENCH:
     ROOT_FOLDER_PATH = '/Users/tenchc/Documents/GitHub/taking_stock_production/segment_images'
     FOLDER_NAME = "installation_images"
@@ -36,7 +36,7 @@ if io.IS_TENCH:
 IS_CLUSTER = True
 PARALLEL_MERGE_WORKERS = 16  # set > 1 to parallelize per-subfolder work with multiprocessing.Pool
 
-CROP_AFTER_COUNT = 80
+CROP_AFTER_COUNT = 100
 
 LOOPING = False # defaults
 last_image_written = None
@@ -70,7 +70,7 @@ elif "make_video" in CURRENT_MODE:
         FRAMERATE = 30
 
     if "linear" in CURRENT_MODE:
-        SMOOTH_MERGE_COUNT = 3 # how many transition tween frames betwen each keyframe
+        SMOOTH_MERGE_COUNT = 2 # how many transition tween frames betwen each keyframe
         MERGE_COUNT = 1 # how many additional images are sent in to the merge funciton (1 + MERGE_COUNT is total)
     elif "osc" in CURRENT_MODE:
         OSCILATING_MERGE = True # if true, will do an oscillating merge from START_MERGE up to MERGE_COUNT and back down to START_MERGE 

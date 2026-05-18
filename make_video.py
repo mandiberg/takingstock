@@ -71,7 +71,7 @@ MAKE_CACHE_MODE = False # only make cache folders, skips dedupe and is_face test
 MODE1_ENABLE_DB_DEDUPE = True # False skips dedupe during crunch time drafts  
 SKIP_PAIRCHECK = False # True for draft mode, False does paircheck, and caches them 
 START_CLUSTER = 0
-PARALLEL_WORKERS = 1  # set > 1 to parallelize per-CSV work in MODE 0 and MODE 1
+PARALLEL_WORKERS = 16  # set > 1 to parallelize per-CSV work in MODE 0 and MODE 1
 
 start = time.time()
 
@@ -101,7 +101,7 @@ CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden b
 
 # CSV_FOLDER = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion128_test220K"
 CSV_MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/"
-CSV_RUN_FOLDER = "SegmentHelper_TheOffice/faceangle" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
+CSV_RUN_FOLDER = "SegmentHelper_TheOffice/sort723" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
 CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, CSV_RUN_FOLDER)
 MAX_ROWS_PER_OUTPUT_CSV = 1200
 ENABLE_MODE0_TIMING = True
@@ -171,7 +171,7 @@ def resolve_arms_object_fusion_folder(
 
 
 HSV_SOURCE_MODE = "background"
-SKIP_OBJECT_NONE_CLUSTERS = [1]
+SKIP_OBJECT_NONE_CLUSTERS = [0] # set to 1 if you want to skip Nones
 MULTIPOLICY = False
 
 # overriding DB for testing
@@ -307,7 +307,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     # current obj sort
     CLUSTER_TYPE = "ArmsPoses3D_ObjectFusion"  # TEST: new Arms/ObjectFusion mode
     SORT_TYPE = "object_fusion" # for ArmsPoses3D_ObjectFusion keep SORT_TYPE as object_fusion
-    SORT_TYPE_NONEOBJECT = "planar_hands" # sort used when pose_no is in OBJECT_NONE_CLUSTERS
+    SORT_TYPE_NONEOBJECT = "object_fusion" # sort used when pose_no is in OBJECT_NONE_CLUSTERS
     USE_HSV = False
 
     # CLUSTER_TYPE = "object_fusion"
@@ -362,7 +362,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
         TSP_SORT = True
         CHOP_ITTER_TSP_SORT = False
         if CLUSTER_TYPE == "ArmsPoses3D_ObjectFusion":
-            GENERATE_FUSION_PAIRS = True # April 14 changing this for testing
+            GENERATE_FUSION_PAIRS = False # April 14 changing this for testing
             MULTIPOLICY = True # MULTIPOLICY conflicts with GENERATE_FUSION_PAIRS 
 
             # GENERATE_FUSION_PAIRS = False # April 14 changing this for testing
@@ -378,7 +378,6 @@ elif CURRENT_MODE == 'heft_torso_keywords':
         CHOP_ITTER_TSP_SORT = True
 
     if GENERATE_FUSION_PAIRS:
-        TEMP_FOCUS_CLUSTER_HACK_LIST = []
         # this is an override for development purposes. will only make CSVs from these clusters:
         OBJECT_KEEP_CLUSTERS = [25,2341,1685,734,727,2263,586,28,733,258,960,84,2230,728,783,964,1660,2630,3052,3269]
         if bool(OBJECT_KEEP_CLUSTERS):
