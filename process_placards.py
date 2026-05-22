@@ -52,8 +52,8 @@ ocr_engine = PaddleOCR(
 device = "mps" if torch.backends.mps.is_available() else "cpu"
 print("Using device:", device)
 yolo_model = YOLO("yolov8x.pt").to(device)  # load a pretrained YOLOv8x model
-yolo_custom_model = YOLO("models/takingstock_c36_v1_yolo26x/weights/best.pt").to(device)
-# yolo_custom_model = YOLO("models/takingstock_clipboard_v3_yolov8x/weights/best.pt").to(device)
+# yolo_custom_model = YOLO("models/takingstock_c36_v1_yolo26x/weights/best.pt").to(device)
+yolo_custom_model = YOLO("models/takingstock_clipcalc_v2_yolov8x/weights/best.pt").to(device)
 
 VERBOSE = True
 ocr = OCRTools(DEBUGGING=True)
@@ -61,11 +61,11 @@ yolo = YOLOTools(DEBUGGING=True, VERBOSE=VERBOSE)
 
 
 blank = False
-DEBUGGING = False # saves debug images (option for bboxes drawn)
-SAVE_NEW_LABELS = False # saves new yolo labels to feed back into training data
-SAVE_NODETECTIONS_JPG_FILES = False
-TESTING_NO_DB_WRITE = False # if True, will not write to database
-DO_COCO = True
+DEBUGGING = True # saves debug images (option for bboxes drawn)
+SAVE_NEW_LABELS = True # saves new yolo labels to feed back into training data
+IS_SAVE_UNDETECTED = True # saves images with no detections
+TESTING_NO_DB_WRITE = True # if True, will not write to database
+DO_COCO = False
 DO_CUSTOM = True
 DO_OCR = False
 CLASSES_TO_COMBINE = [89,90]
@@ -81,19 +81,18 @@ DET_ID_THRESHOLD_COCO = 12455146
 IOU_THRESHOLD = 0.7
 ADJACENCY_THRESHOLD_PX = 10
 
-# FILE_FOLDER = "/Volumes/LaCie/segment_images_83_bag" #halfway through
+FILE_FOLDER = "/Volumes/OWC5/segment_images_93" #halfway through
 # FILE_FOLDER = "/Volumes/OWC5/segment_images_book_clock_bowl" 
 # FILE_FOLDER ="/Volumes/OWC54/segment_images"
-FILE_FOLDER = "/Volumes/RAID18" # must be a folder holding the site folder(s)
+# FILE_FOLDER = "/Volumes/RAID18" # must be a folder holding the site folder(s)
 # MAKE_VIDEO_CSVS_PATH = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/book_csvs"
 MAKE_VIDEO_CSVS_PATH = None  # to process all images in folder
 OUTPUT_FOLDER = os.path.join(FILE_FOLDER, "test_output")
 BATCH_SIZE = 100
 YOLO_BATCH_SIZE = 8  # number of images per YOLO batch inference call (M3 Ultra: try 32-64)
 IMAGE_LOAD_WORKERS = 8  # concurrent cv2.imread workers before each YOLO batch
-CONF_THRESHOLD = 0.3
+CONF_THRESHOLD = 0.30
 IS_DRAW_BOX = True
-IS_SAVE_UNDETECTED = False
 MOVE_OR_COPY = "copy"  # "move" or "copy"
 CLUSTER_TYPE = "HSV" # only works with cluster save, not with assignment
 META = False # to return the meta clusters (out of 23, not 96)
@@ -160,51 +159,52 @@ table_cluster_type = cl.set_table_cluster_type(META)
 # flags 230 class
 # custom_ids_to_global_dict = {i:i for i in range(228)} # for testing, map custom ids to same global ids
 
-# # complete 36 class model
-custom_ids_to_global_dict = {
-
-  0: 109,
-  1: 89,
-  2: 117,
-  3: 113,
-  4: 108,
-  5: 100,
-  6: 116,
-  7: 114,
-  8: 88,
-  9: 112,
-  10: 118,
-  11: 90,
-  12: 92,
-  13: 107,
-  14: 84,
-  15: 97,
-  16: 83,
-  17: 81,
-  18: 104,
-  19: 82,
-  20: 98,
-  21: 94,
-  22: 95,
-  23: 86,
-  24: 119,
-  25: 106,
-  26: 80,
-  27: 102,
-  28: 110,
-  29: 96,
-  30: 101,
-  31: 99,
-  32: 105,
-  33: 103,
-  34: 115,
-  35: 111,
-
-}
-
+# # # complete 36 class model
 # custom_ids_to_global_dict = {
-#     0: 93,
+
+#   0: 109,
+#   1: 89,
+#   2: 117,
+#   3: 113,
+#   4: 108,
+#   5: 100,
+#   6: 116,
+#   7: 114,
+#   8: 88,
+#   9: 112,
+#   10: 118,
+#   11: 90,
+#   12: 92,
+#   13: 107,
+#   14: 84,
+#   15: 97,
+#   16: 83,
+#   17: 81,
+#   18: 104,
+#   19: 82,
+#   20: 98,
+#   21: 94,
+#   22: 95,
+#   23: 86,
+#   24: 119,
+#   25: 106,
+#   26: 80,
+#   27: 102,
+#   28: 110,
+#   29: 96,
+#   30: 101,
+#   31: 99,
+#   32: 105,
+#   33: 103,
+#   34: 115,
+#   35: 111,
+
 # }
+
+custom_ids_to_global_dict = {
+    0: 127,
+    1: 93,
+}
 
 
 # custom_ids_to_global_dict = {
