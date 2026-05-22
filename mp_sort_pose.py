@@ -34,7 +34,7 @@ from deap import base, creator, tools, algorithms
 class SortPose:
     # """Sort image files based on head pose"""
 
-    def __init__(self, motion=None, face_height_output=None, image_edge_multiplier=None, EXPAND=False, ONE_SHOT=False, JUMP_SHOT=False, HSV_CONTROL=None, VERBOSE=True,INPAINT=False, SORT_TYPE="128d", OBJ_CLS_ID = None,UPSCALE_MODEL_PATH=None, LMS_DIMENSIONS=2,TSP_SORT=False, USE_HEAD_POSE=False, config=None):
+    def __init__(self, motion=None, face_height_output=None, image_edge_multiplier=None, EXPAND=False, ONE_SHOT=False, JUMP_SHOT=False, HSV_CONTROL=None, VERBOSE=True,INPAINT=False, SORT_TYPE="128d", OBJ_CLS_ID = None,UPSCALE_MODEL_PATH=None, LMS_DIMENSIONS=2,TSP_SORT=False, USE_HEAD_POSE=False, IQR_SCALE_FACTOR=1.0, config=None):
 
         # allow construction via a single config dict for safer parameter passing
         # keep backward-compatible positional signature; if `config` is provided
@@ -56,6 +56,7 @@ class SortPose:
             LMS_DIMENSIONS = config.get('LMS_DIMENSIONS', LMS_DIMENSIONS)
             TSP_SORT = config.get('TSP_SORT', TSP_SORT)
             USE_HEAD_POSE = config.get('USE_HEAD_POSE', USE_HEAD_POSE)
+            IQR_SCALE_FACTOR = config.get('IQR_SCALE_FACTOR', IQR_SCALE_FACTOR)
             self.DO_HSV_KNN = config.get('DO_HSV_KNN', False)
 
         if image_edge_multiplier is None:
@@ -68,10 +69,19 @@ class SortPose:
         # need to refactor this for GPU
         self.mp_face_detection = mp.solutions.face_detection
         self.mp_drawing = mp.solutions.drawing_utils
-        self.get_bg_segment=mp.solutions.selfie_segmentation.SelfieSegmentation()
+        self.get_bg_segment = None
+        try:
+            self.get_bg_segment = mp.solutions.selfie_segmentation.SelfieSegmentation()
+        except Exception as e:
+            # Fail-open for headless/GPU-restricted environments (e.g., NSOpenGLContext unavailable).
+            print(
+                "[ADVISORY] SelfieSegmentation init failed; continuing without segmentation mask. "
+                f"Reason: {e}"
+            )
 
               
         self.VERBOSE = VERBOSE
+        self.IQR_SCALE_FACTOR = IQR_SCALE_FACTOR
         self.KNN_SORT_DICT = {
             "128d": "128d",
             "planar": "planar",
@@ -95,6 +105,13 @@ class SortPose:
             "object_fusion": ("obj_bbox_fusion_list", "dist_obj_fusion")
         }
 
+        # Sort-time vector weights used by both KNN and TSP for object fusion families.
+        self.SORT_VECTOR_WEIGHTS = {
+            "head_pose": 1.0,
+            "hand_signal": 2.0,
+            "bbox": 1.0,
+        }
+
         #maximum allowable distance between encodings (this accounts for dHSV)
         self.MAXFACEDIST = .8
         self.MINFACEDIST = .5 #TK
@@ -112,6 +129,7 @@ class SortPose:
         self.ORIGIN = 0
         self.this_nose_bridge_dist = self.NOSE_BRIDGE_DIST = None # to be set in first loop, and sort.this_nose_bridge_dist each time
         self.USE_HEAD_POSE = USE_HEAD_POSE
+        # IQR_SCALE_FACTOR already set above after VERBOSE
         self.MIN_DYN_BBOX_DIM = [1.0,1.0,1.0,1.0] # controls how closely AUTO_EDGE_CROP can get
         self.DYN_BBOX_FROM_IMAGE_DIMS = True # if True, use image dimensions to calculate dynamic multiplier rather than body landmarks
         self.DYN_BBOX_ROUND_TO = 0.25 # round to nearest 0.5 bbox for crop dimensions
@@ -239,6 +257,10 @@ class SortPose:
             # self.CLUSTER_TYPE = "BodyPoses3D"
             self.SUBSET_LANDMARKS = self.ARMS_HEAD_LMS
             print("using ArmPoses3D cluster type, ", self.SUBSET_LANDMARKS)
+        elif self.SORT_TYPE == "ArmsPoses3D_ObjectFusion":
+            self.CLUSTER_TYPE = "ArmsPoses3D_ObjectFusion"
+            self.SUBSET_LANDMARKS = self.ARMS_HEAD_LMS
+            print("using ArmsPoses3D_ObjectFusion cluster type, ", self.SUBSET_LANDMARKS)
         else:
             self.CLUSTER_TYPE = "BodyPoses" # defaults
             self.SUBSET_LANDMARKS = self.BODY_LMS
@@ -457,7 +479,7 @@ class SortPose:
             if CLUSTER1 == "ArmsPoses3D_ObjectFusion":
                 return ("obj_bbox_list", None)
             # Object bounding box (non-fusion)
-            return ("bbox_norm", "bbox_norm")
+            return ("obj_bbox_list", "bbox_norm")
         elif "fusion" in SORT_TYPE.lower():
             # Object fusion (combines hand position, face pose, and detections)
             return ("obj_bbox_fusion_list", None)
@@ -466,6 +488,65 @@ class SortPose:
             if self.VERBOSE:
                 print(f"Warning: Unknown SORT_TYPE '{SORT_TYPE}', defaulting to 128d")
             return ("face_encodings68", "face_encodings68")
+
+    def _fusion_weight_slices(self, sort_type, vector_len):
+        """
+        Return index slices for weighted fusion-style vectors.
+
+        Expected ordering for weighted fusion vectors:
+        [pitch, yaw, roll, left_hand(x,y), right_hand(x,y), slot_bboxes...]
+        """
+        if sort_type not in ("object_fusion", "obj_bbox"):
+            return None
+
+        # Non-fusion obj_bbox is a plain 4D box and should remain unweighted here.
+        if sort_type == "obj_bbox" and vector_len <= 8:
+            return None
+
+        if vector_len < 3:
+            return None
+
+        hand_dims = min(4, max(0, vector_len - 3))
+        bbox_start = 3 + hand_dims
+        if bbox_start > vector_len:
+            bbox_start = vector_len
+
+        return {
+            "head_pose": slice(0, min(3, vector_len)),
+            "hand_signal": slice(3, bbox_start),
+            "bbox": slice(bbox_start, vector_len),
+        }
+
+    def apply_sort_feature_weights_array(self, values, sort_type=None):
+        """Apply sort-time feature weights to a 1D vector or 2D matrix."""
+        active_sort_type = self.SORT_TYPE if sort_type is None else sort_type
+        arr = np.asarray(values, dtype=float)
+        input_was_1d = arr.ndim == 1
+        if input_was_1d:
+            arr = arr.reshape(1, -1)
+
+        if arr.ndim != 2 or arr.shape[1] == 0:
+            return values
+
+        slices = self._fusion_weight_slices(active_sort_type, arr.shape[1])
+        if not slices:
+            return arr[0] if input_was_1d else arr
+
+        weighted = arr.copy()
+        for group_name, group_slice in slices.items():
+            group_weight = float(self.SORT_VECTOR_WEIGHTS.get(group_name, 1.0))
+            if group_slice.start < group_slice.stop:
+                weighted[:, group_slice] *= group_weight
+
+        return weighted[0] if input_was_1d else weighted
+
+    def apply_sort_feature_weights_df(self, df, sort_type=None):
+        """Apply sort-time feature weights to a numeric DataFrame."""
+        if df is None or not isinstance(df, pd.DataFrame) or df.empty:
+            return df
+
+        weighted = self.apply_sort_feature_weights_array(df.to_numpy(dtype=float), sort_type=sort_type)
+        return pd.DataFrame(weighted, columns=df.columns, index=df.index)
 
     def set_output_dims(self):
         if self.image_edge_multiplier == [1.3,1.85,2.4,1.85]:
@@ -662,40 +743,217 @@ class SortPose:
                 merged_list.append(value)
         return merged_list
 
+    def analyze_head_pose_by_cluster(self, df_clean):
+        """Print and CSV-append head pose stats for the current cluster.
+
+        Called from make_segment after NaN removal on pitch/yaw/roll.
+        One row per cluster per run is appended to analysis/face_angle/head_pose_stats.csv.
+        """
+        import os, csv
+        angles = ['pitch', 'yaw', 'roll']
+        margin_dict = {'pitch': 15, 'yaw': 8, 'roll': 8}
+
+        counter_dict = getattr(self, "counter_dict", {})
+        cluster_no = counter_dict.get("cluster_no", "?")
+        pose_no    = counter_dict.get("pose_no", "?")
+        n          = len(df_clean)
+
+        print(f"\n=== HEAD POSE ANALYSIS  cluster={cluster_no}  pose={pose_no}  n={n} ===")
+
+        stats = {}
+        for a in angles:
+            col = df_clean[a]
+            med  = col.median()
+            mean = col.mean()
+            std  = col.std()
+            if pd.isna(std):
+                std = 0.0
+            p5   = col.quantile(0.05)
+            p95  = col.quantile(0.95)
+            iqr  = col.quantile(0.75) - col.quantile(0.25)
+            margin = margin_dict[a]
+            survivors = int(((col - med).abs() <= margin).sum())
+            survival_pct = 100.0 * survivors / n if n > 0 else 0.0
+            outlier_pct  = 100.0 * int((((col - med).abs()) > 2 * std).sum()) / n if n > 0 else 0.0
+            stats[a] = dict(median=med, mean=mean, std=std, p5=p5, p95=p95,
+                            iqr=iqr, survival_pct=survival_pct, outlier_pct=outlier_pct)
+            print(f"  {a:5s}: median={med:+7.2f}  mean={mean:+7.2f}  std={std:5.2f}"
+                  f"  IQR={iqr:5.2f}  p5={p5:+7.2f}  p95={p95:+7.2f}"
+                  f"  |±{margin}° survival={survival_pct:.1f}%  outliers>2σ={outlier_pct:.1f}%")
+
+        fixed_joint_mask = pd.Series(True, index=df_clean.index)
+        iqr_joint_mask = pd.Series(True, index=df_clean.index)
+        std_joint_mask = pd.Series(True, index=df_clean.index)
+        iqr_margin_dict = {}
+        std_margin_dict = {}
+
+        for a in angles:
+            col = df_clean[a]
+            med = stats[a]["median"]
+            fixed_joint_mask &= (col - med).abs() <= margin_dict[a]
+            iqr_margin_dict[a] = stats[a]["iqr"]
+            std_margin_dict[a] = stats[a]["std"]
+            iqr_joint_mask &= (col - med).abs() <= iqr_margin_dict[a]
+            std_joint_mask &= (col - med).abs() <= std_margin_dict[a]
+
+        fixed_joint_keep_count = int(fixed_joint_mask.sum())
+        iqr_joint_keep_count = int(iqr_joint_mask.sum())
+        std_joint_keep_count = int(std_joint_mask.sum())
+
+        fixed_joint_survival_pct = 100.0 * fixed_joint_keep_count / n if n > 0 else 0.0
+        iqr_joint_survival_pct = 100.0 * iqr_joint_keep_count / n if n > 0 else 0.0
+        std_joint_survival_pct = 100.0 * std_joint_keep_count / n if n > 0 else 0.0
+
+        print("  joint_keep:")
+        print(f"    fixed_15_8_8   = {fixed_joint_keep_count}/{n} ({fixed_joint_survival_pct:.1f}%)")
+        print(
+            f"    median_plus_iqr = {iqr_joint_keep_count}/{n} ({iqr_joint_survival_pct:.1f}%)"
+            f"  margins=({iqr_margin_dict['pitch']:.2f}, {iqr_margin_dict['yaw']:.2f}, {iqr_margin_dict['roll']:.2f})"
+        )
+        print(
+            f"    median_plus_std = {std_joint_keep_count}/{n} ({std_joint_survival_pct:.1f}%)"
+            f"  margins=({std_margin_dict['pitch']:.2f}, {std_margin_dict['yaw']:.2f}, {std_margin_dict['roll']:.2f})"
+        )
+
+        # cross-cluster CSV (appended row per call)
+        out_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "analysis", "face_angle")
+        os.makedirs(out_dir, exist_ok=True)
+        csv_path = os.path.join(out_dir, "head_pose_stats.csv")
+        write_header = not os.path.exists(csv_path)
+        fieldnames = ["cluster_no", "pose_no", "n"]
+        for a in angles:
+            for k in ("median", "mean", "std", "p5", "p95", "iqr", "survival_pct", "outlier_pct"):
+                fieldnames.append(f"{a}_{k}")
+        row = {"cluster_no": cluster_no, "pose_no": pose_no, "n": n}
+        for a in angles:
+            for k, v in stats[a].items():
+                row[f"{a}_{k}"] = round(v, 4)
+        with open(csv_path, "a", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            if write_header:
+                writer.writeheader()
+            writer.writerow(row)
+
+        comparison_csv_path = os.path.join(out_dir, "head_pose_filter_comparison.csv")
+        comparison_write_header = not os.path.exists(comparison_csv_path)
+        comparison_fieldnames = [
+            "cluster_no", "pose_no", "n",
+            "fixed_pitch_margin", "fixed_yaw_margin", "fixed_roll_margin",
+            "fixed_joint_keep_count", "fixed_joint_survival_pct",
+            "iqr_pitch_margin", "iqr_yaw_margin", "iqr_roll_margin",
+            "iqr_joint_keep_count", "iqr_joint_survival_pct",
+            "std_pitch_margin", "std_yaw_margin", "std_roll_margin",
+            "std_joint_keep_count", "std_joint_survival_pct",
+        ]
+        comparison_row = {
+            "cluster_no": cluster_no,
+            "pose_no": pose_no,
+            "n": n,
+            "fixed_pitch_margin": margin_dict["pitch"],
+            "fixed_yaw_margin": margin_dict["yaw"],
+            "fixed_roll_margin": margin_dict["roll"],
+            "fixed_joint_keep_count": fixed_joint_keep_count,
+            "fixed_joint_survival_pct": round(fixed_joint_survival_pct, 4),
+            "iqr_pitch_margin": round(iqr_margin_dict["pitch"], 4),
+            "iqr_yaw_margin": round(iqr_margin_dict["yaw"], 4),
+            "iqr_roll_margin": round(iqr_margin_dict["roll"], 4),
+            "iqr_joint_keep_count": iqr_joint_keep_count,
+            "iqr_joint_survival_pct": round(iqr_joint_survival_pct, 4),
+            "std_pitch_margin": round(std_margin_dict["pitch"], 4),
+            "std_yaw_margin": round(std_margin_dict["yaw"], 4),
+            "std_roll_margin": round(std_margin_dict["roll"], 4),
+            "std_joint_keep_count": std_joint_keep_count,
+            "std_joint_survival_pct": round(std_joint_survival_pct, 4),
+        }
+        with open(comparison_csv_path, "a", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=comparison_fieldnames)
+            if comparison_write_header:
+                writer.writeheader()
+            writer.writerow(comparison_row)
+        print(f"  → appended to {csv_path}")
+        print(f"  → appended to {comparison_csv_path}")
+        print("=== END HEAD POSE ANALYSIS ===\n")
+        
+        return stats
+
     def make_segment(self, df):
 
-        print(len(df))
+        print("make_segment: ", len(df))
 
         if self.USE_HEAD_POSE:
-            # xyz = ['face_x', 'face_y', 'face_z']
-            xyz = ['pitch', 'yaw', 'roll']
-            df["xyz"] = df.apply(lambda row: self.cols_to_list(row, xyz), axis=1)
-            # drop any rows with missing xyz data
-            df_clean = df[df['xyz'].apply(lambda x: not any(np.isnan(x)))]
-            print(f" finding median Dropped {len(df) - len(df_clean)} rows with NaN values")
-            # print("df with xyz columns (after removing NaNs), will find median of 3D points")
-            # print(df_clean[['xyz']].to_string())
+            try:
+                print("using head pose angles for filtering")
+                # xyz = ['face_x', 'face_y', 'face_z']
+                xyz = ['pitch', 'yaw', 'roll']
+                df["xyz"] = df.apply(lambda row: self.cols_to_list(row, xyz), axis=1)
+                # drop any rows with missing xyz data
+                df_clean = df[df['xyz'].apply(lambda x: not any(np.isnan(x)))]
+                print(f" finding median Dropped {len(df) - len(df_clean)} rows with NaN values")
+                # print("df with xyz columns (after removing NaNs), will find median of 3D points")
+                # print(df_clean[['xyz']].to_string())
 
-            if len(df_clean) == 0:
-                print("No valid data after removing NaNs in head pose angles. Returning empty DataFrame.")
-                return None
-            median_xyz = self.get_median_value(df_clean, "xyz")
-            print(" ~~~ median_xyz: ", median_xyz)
-            
-            if self.SORT_TYPE not in ["object_fusion", "obj_bbox"]:
-                # set XYZ HIGH and LOW based on median
-                margin_dict = {'pitch': 15, 'yaw': 8, 'roll': 8}
+                if len(df_clean) == 0:
+                    print("No valid data after removing NaNs in head pose angles. Returning empty DataFrame.")
+                    return None
+                median_xyz = self.get_median_value(df_clean, "xyz")
+                print(" ~~~ median_xyz: ", median_xyz)
+
+                stats = self.analyze_head_pose_by_cluster(df_clean)
+
+                # Build adaptive margin_dict from IQR scaled by self.IQR_SCALE_FACTOR
+                margin_dict = {}
+                for angle in xyz:
+                    iqr = stats[angle]["iqr"]
+                    # Ensure IQR is a valid number (not NaN or zero); use small default if needed
+                    if pd.isna(iqr) or iqr == 0:
+                        iqr = 1.0
+                    margin_dict[angle] = iqr * self.IQR_SCALE_FACTOR
+                
+                # Safely extract median values (handle Series or list)
+                if hasattr(median_xyz, '__getitem__'):
+                    median_list = list(median_xyz) if not isinstance(median_xyz, list) else median_xyz
+                else:
+                    median_list = median_xyz
+                
                 low_high_dict = {}
                 for angle in xyz:
-                    low_high_dict[angle] = (median_xyz[xyz.index(angle)] - margin_dict[angle], median_xyz[xyz.index(angle)] + margin_dict[angle])
-                print("   low_high_dict: ", low_high_dict)
+                    try:
+                        idx = xyz.index(angle)
+                        median_val = median_list[idx] if idx < len(median_list) else 0
+                        low_high_dict[angle] = (median_val - margin_dict[angle], median_val + margin_dict[angle])
+                    except (IndexError, TypeError) as e:
+                        print(f"   WARNING: failed to compute margin for {angle}: {e}. Skipping head pose filtering.")
+                        low_high_dict = None
+                        break
+                
+                if low_high_dict is not None:
+                    print(f"   adaptive margin_dict (IQR × {self.IQR_SCALE_FACTOR}): {{{', '.join([f'{k}: {v:.2f}' for k, v in margin_dict.items()])}}}")
+                    print("   low_high_dict: ", low_high_dict)
 
-                # use low_high_dict to filter
-                for angle in xyz:
-                    df = df.loc[((df[angle] < low_high_dict[angle][1]) & (df[angle] > low_high_dict[angle][0]))]
-                    print(f"after filtering dynamically by {angle}, len(df): {len(df)}")
-            else:
-                print("   object_fusion sorting, skipping dynamic head pose filtering")
+                    # Filter df_clean by the adaptive margins, then use those indices on the original df
+                    df_filtered = df_clean.copy()
+                    for angle in xyz:
+                        df_filtered = df_filtered.loc[((df_filtered[angle] < low_high_dict[angle][1]) & (df_filtered[angle] > low_high_dict[angle][0]))]
+                        print(f"after filtering dynamically by {angle}, len(df_filtered): {len(df_filtered)}")
+                    
+                    if len(df_filtered) == 0:
+                        print(f"   WARNING: head pose filtering removed all rows. Returning the NaN-cleaned data without further filtering.")
+                        df = df_clean
+                    else:
+                        # Use the indices from df_filtered to filter the original df
+                        df = df.loc[df_filtered.index].reset_index(drop=True)
+                else:
+                    print("   Skipping head pose filtering due to data issues.")
+                    df = df_clean  # Fall back to NaN-cleaned data
+                
+            except Exception as e:
+                print(f"   ERROR in head pose filtering: {type(e).__name__}: {e}. Falling back to NaN-cleaned data.")
+                import traceback
+                traceback.print_exc()
+                # Fall back: just use NaN-cleaned data
+                xyz = ['pitch', 'yaw', 'roll']
+                df["xyz"] = df.apply(lambda row: self.cols_to_list(row, xyz), axis=1)
+                df = df[df['xyz'].apply(lambda x: not any(np.isnan(x)))]
         else:
             # use the defaults set in __init__
             df = df.loc[((df['face_y'] < self.YHIGH) & (df['face_y'] > self.YLOW))]
@@ -1432,9 +1690,9 @@ class SortPose:
                 selfie_j = cv2.bitwise_and(image_resize_j, segmentation_mask_j)
                 
                 try:
-                    bbox_i = df.at[i,"bbox"]
-                    bbox_j = df.at[j, "bbox"]
-                    print(f'image {i},{j} sizes: {image_i.size}, {image_resize_j.size}')
+                    bbox_i = df.iloc[i]["bbox"]
+                    bbox_j = df.iloc[j]["bbox"]
+                    print(f'image {i},{j} sizes: {image_i.shape}, {image_resize_j.shape}')
                     bbox_i["bottom_extend"] = bbox_i["top"]+ ((bbox_i["bottom"]- bbox_i["top"])*2)
                     bbox_j["bottom_extend"] = bbox_j["top"]+ ((bbox_j["bottom"]- bbox_j["top"])*2)
 
@@ -1484,7 +1742,15 @@ class SortPose:
         print(f"Removing {len(to_remove)} duplicates (includes nones) from {df.shape[0]} images...")
         print(to_remove)
         print(df.head())
-        sorted_df = df.drop(df.index[list(to_remove)]).reset_index(drop=True)
+        # to_remove holds positional indices from range(n_rows); never treat them as index labels.
+        # Using label-based drop can remove unintended rows when df has duplicate/non-range index labels.
+        remove_positions = sorted(
+            idx for idx in to_remove
+            if isinstance(idx, (int, np.integer)) and 0 <= idx < len(df)
+        )
+        keep_mask = np.ones(len(df), dtype=bool)
+        keep_mask[remove_positions] = False
+        sorted_df = df.iloc[keep_mask].reset_index(drop=True)
         print(f"Resulting dataframe has {sorted_df.shape[0]} images after duplicate removal.")
         print(sorted_df.head())
         add_remove_timing("finalize", time.perf_counter() - finalize_start)
@@ -4010,6 +4276,9 @@ class SortPose:
         # Check if the encodings_array contains NaN values
         encodings_array = np.asarray(encodings_array, dtype=float)
 
+        # Keep KNN and TSP in the same metric space for fusion vectors.
+        encodings_array = self.apply_sort_feature_weights_array(encodings_array, sort_type=self.SORT_TYPE)
+
         if np.isnan(encodings_array).any():
             print("encodings_array of len", len(encodings_array), "contains NaN values")
 
@@ -4026,6 +4295,7 @@ class SortPose:
             print("Cleaned df_enc:", df_enc.shape)
 
         enc1 = coerce_vector_to_float_array(enc1)
+        enc1 = self.apply_sort_feature_weights_array(enc1, sort_type=self.SORT_TYPE)
 
         if np.isnan(enc1).any():
             print("enc1 contains NaN values")
@@ -4880,6 +5150,12 @@ class SortPose:
                 if self.VERBOSE: print("FAILED CROPPING, bad bbox",bbox)
                 return -2,-2,-2,-2,-2
             print("bbox['bottom'], ", bbox['bottom'])
+
+        if get_bg_segment is None:
+            # Fallback: no segmenter available, treat full image as foreground.
+            if self.VERBOSE:
+                print("[ADVISORY] get_segmentation_mask fallback: segmenter unavailable, returning full-frame mask")
+            return np.ones(img.shape[:2], dtype=np.float32)
 
         result = get_bg_segment.process(img[:,:,::-1]) #convert RBG to BGR then process with mp
         if self.VERBOSE: print("[get_bg_hue_lum] got result")

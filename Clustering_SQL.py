@@ -93,7 +93,7 @@ else:
 # you need both of these for ObjectFusion
 CLUSTER_TYPE = "ObjectFusion" 
 # to create imagesdetections, use analysis/imagesdetections_debug/object_placement_audit/rerun_imagesdetections_assignments.py
-# then use this with the next three as True to assign those imagesdetections to signature clusters
+# then use ObjectFusion with this with the next three as True to assign those imagesdetections to signature clusters
 DO_SIGNATURES = True # whether to build and persist object signature token/hash/n_objects for ObjectFusion clustering. This is separate from the clustering itself, so you can choose to do ObjectFusion clustering without signatures if you want to iterate faster without the signature building step, which adds some overhead but is useful for understanding the object distribution within clusters and for future deduplication efforts.
 SIGNATURES_ONLY = True # if True, run signature generation/persistence and skip ObjectFusion cluster assignment steps.
 ONLY_EXISTING_IMAGES_DETECTIONS = True # faster for testing: will not calc new object placements
@@ -146,7 +146,7 @@ SegmentTable_name = 'SegmentBig_isface'
 # SegmentHelper_name = 'Detections' # if CLUSTER_TYPE = "ObjectFusion", it automatically joins to Detections
 # SegmentHelper_name = 'SegmentHelper_T11_Oct20_COCO_Custom_every40'
 # SegmentHelper_name = 'SegmentHelper_TheOffice'
-SegmentHelper_name = 'SegmentHelper_may26_deleteme_missingObject'
+SegmentHelper_name = 'SegmentHelper_may26_deleteme_missingArms3D' # this is a temporary helper table that is just a subset of the full SegmentHelperMar23_headon, which is too large to join to for clustering, but has the same structure and can be used for testing and for MODE 2 cluster assignment based on the subset of data it contains. It is missing the ArmsPoses3D data, so it is only useful for testing BodyPoses3D and ObjectFusion clustering and assignment, not ArmsPoses3D clustering and assignment, but it is useful for testing the overall pipeline with a smaller dataset. It has 1.1M rows, which is still large but more manageable than the full 3.8M rows in SegmentHelperMar23_headon.
 FORCE_HAND_LANDMARKS = False # when doing ArmsPoses3D, default is True, so mongo_hand_landmarks = 1
 
 # TESTING MODE - reduce dataset size for faster iteration using pre-filtered table

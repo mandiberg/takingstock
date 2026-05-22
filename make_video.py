@@ -26,7 +26,7 @@ from sqlalchemy.pool import NullPool
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
 # my ORM
-from my_declarative_base import Base, Encodings, ImagesTopics, SegmentTable,ImagesBackground, Hands, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON, Images
+from my_declarative_base import Base, Encodings, ImagesTopics, SegmentTable,ImagesBackground, Hands, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON, Images, Detections
 import pymongo 
 
 #mine
@@ -56,20 +56,20 @@ else:
 # SegmentHelper_name = None
 SegmentTable_name = 'SegmentBig_isface'
 # SegmentTable_name = 'SegmentBig_isnotface'
-# SegmentHelper_name = 'SegmentHelper_TheOffice'
-SegmentHelper_name = 'SegmentHelperObject_82_money'
+SegmentHelper_name = 'SegmentHelper_TheOffice'
+# SegmentHelper_name = 'SegmentHelperObject_82_money'
 # SegmentHelper_name = 'SegmentHelper_T11_Oct20_COCO_Custom_evens_quarters'
 # SegmentHelper_name = 'None' # set below for heft keywords
 # SegmentHelper_name = None
 # this is MM specific
 # for when I'm using files on my SSD vs RAID
-IS_SSD = False
-# SSD_PATH = "/Volumes/LaCie/segment_images"
-SSD_PATH = "/Volumes/OWC52/segment_images"
-ONLY_SAVE_CACHE = True # only save CSVs to cluster folder, not images which are saved in cache folders -- for speed
+IS_SSD = True
+SSD_PATH = "/Volumes/LaCie/segment_images"
+# SSD_PATH = "/Volumes/OWC52/segment_images"
+ONLY_SAVE_CACHE = False # only save CSVs to cluster folder, not images which are saved in cache folders -- for speed
 MAKE_CACHE_MODE = False # only make cache folders, skips dedupe and is_face testing
 MODE1_ENABLE_DB_DEDUPE = True # False skips dedupe during crunch time drafts  
-SKIP_PAIRCHECK = False # draft mode: trust cached crops and skip face-pair validation
+SKIP_PAIRCHECK = False # True for draft mode, False does paircheck, and caches them 
 START_CLUSTER = 0
 PARALLEL_WORKERS = 16  # set > 1 to parallelize per-CSV work in MODE 0 and MODE 1
 
@@ -84,8 +84,8 @@ db = io.db
 # OWC4 SNAFU WORKAROUND
 
 if not (io.IS_TENCH or io.IS_MICHELLE) and IS_SSD:
-    # io.ROOT_PROD=  "/Volumes/LaCie" ## only on Mac
-    io.ROOT_PROD=  "/Users/michaelmandiberg/Documents/projects-active/facemap_production" ## MBP
+    io.ROOT_PROD=  "/Volumes/LaCie" ## only on Mac
+    # io.ROOT_PROD=  "/Users/michaelmandiberg/Documents/projects-active/facemap_production" ## MBP
     print("Setting io.ROOT to ROOTSSD:", io.ROOTSSD)
     io.ROOT = os.path.join(io.ROOT_PROD, "output_folder")
 print("Setting io.ROOT to ROOTSSD:", io.ROOTSSD)
@@ -101,7 +101,7 @@ CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden b
 
 # CSV_FOLDER = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion128_test220K"
 CSV_MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/"
-CSV_RUN_FOLDER = "SegmentHelper_TheOffice/one_shot_preMTL/cached" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
+CSV_RUN_FOLDER = "SegmentHelper_TheOffice/p15_selects_may21_noTSP/" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
 CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, CSV_RUN_FOLDER)
 MAX_ROWS_PER_OUTPUT_CSV = 1200
 ENABLE_MODE0_TIMING = True
@@ -111,8 +111,6 @@ MODE0_WRITE_CSV_FALLBACK = True
 MODE1_USE_TYPED_INTERMEDIATE = True
 MODE1_TYPED_STRICT = False
 MODE_TYPED_SCHEMA_VERSION = "typed_intermediate_v1"
-
-
 def resolve_arms_object_fusion_folder(
     root_data_path,
     arms_cluster_dim,
@@ -170,8 +168,10 @@ def resolve_arms_object_fusion_folder(
     )
     return folder_name, object_cluster_dim
 
+
+
 HSV_SOURCE_MODE = "background"
-SKIP_OBJECT_NONE_CLUSTERS = [1]
+SKIP_OBJECT_NONE_CLUSTERS = [0] # set to 1 if you want to skip Nones
 MULTIPOLICY = False
 
 # overriding DB for testing
@@ -279,6 +279,11 @@ elif "3D" in CURRENT_MODE:
 
 elif CURRENT_MODE == 'heft_torso_keywords':
 
+    '''
+    SORT_TYPE options: "planar_hands", "128d", "obj_bbox", "object_fusion"
+    object_fusion is only for ArmsPoses3D_ObjectFusion cluster type. It combines:
+        pitch, yaw, roll, and bbox for all 9 object positions.
+    '''
     # TEMPORARY
     TRUST_FACE_PAIR_CACHE = True
 
@@ -287,6 +292,8 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     if AUTO_EDGE_CROP:
         EXPAND = True
         # FULL_BODY = True # haxxor TK
+
+
 
     # set to 0 to disable obj helper segment query stuff. this is also for object_fusion
     class_id = 0  # TEST: match exported ArmsPoses3D_67.csv
@@ -302,7 +309,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     # current obj sort
     CLUSTER_TYPE = "ArmsPoses3D_ObjectFusion"  # TEST: new Arms/ObjectFusion mode
     SORT_TYPE = "object_fusion" # for ArmsPoses3D_ObjectFusion keep SORT_TYPE as object_fusion
-    SORT_TYPE_NONEOBJECT = "planar_hands" # sort used when pose_no is in OBJECT_NONE_CLUSTERS
+    SORT_TYPE_NONEOBJECT = "object_fusion" # sort used when pose_no is in OBJECT_NONE_CLUSTERS
     USE_HSV = False
 
     # CLUSTER_TYPE = "object_fusion"
@@ -338,14 +345,11 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     USE_HEAD_POSE = True
     IS_HAND_POSE_FUSION = True # do we use fusion clusters
     CHOP_FIRST = True # does a first pass chop before whatever sort happens - this is default now
-    # this is an override for development purposes. will only make CSVs from these clusters:
-    TEMP_FOCUS_CLUSTER_HACK_LIST = []
 
-    # process for dealing with keep/none
-    # OBJECT_NONE_CLUSTERS = [i for i in range(4000) if i not in OBJECT_KEEP_CLUSTERS] # skip these and go to 18
-    # MULTIPOLICY = True # controls whether it does multi-bucket fusion policy based on cluster size for HSV, clusters, and metabodyposes3D
     OBJECT_NONE_CLUSTERS = [1] # if MULTIPOLICY these get HSV BG, else these don't run in fusion
+    # MULTIPOLICY = True # controls whether it does multi-bucket fusion policy based on cluster size for HSV, clusters, and metabodyposes3D
     MULTIPOLICY = True # controls whether it does multi-bucket fusion policy based on cluster size for HSV, clusters, and metabodyposes3D
+
     CLUSTER_MIN_HSV_BG = 1500
     CLUSTER_MIN_HSV_OBJ = 1500
     OBJ_CLUSTER_COLUMN_MIN_FOR_FUSION_SORT = 1000
@@ -353,36 +357,60 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     HSV_SOURCE_MODE = "background" # "background" or "object" or "both"
     FORCE_TOPIC_FIT_SCORE = True # adds topic score to csvs at the very end of linear sort
 
-    TESTING = True
+    TESTING = False
     if TESTING:
-        # turning all three off to do old style non tsp sort    
         ONE_SHOT = False # take all files, based off the very first sort order.
         TSP_SORT = True
         CHOP_ITTER_TSP_SORT = False
-        if CLUSTER_TYPE == "object_fusion":
-            GENERATE_FUSION_PAIRS = False # April 14 changing this for testing
+        if CLUSTER_TYPE == "ArmsPoses3D_ObjectFusion":
+            GENERATE_FUSION_PAIRS = True # April 14 changing this for testing
+            MULTIPOLICY = True # MULTIPOLICY conflicts with GENERATE_FUSION_PAIRS 
+
+            # GENERATE_FUSION_PAIRS = False # April 14 changing this for testing
+            # MULTIPOLICY = False # MULTIPOLICY conflicts with GENERATE_FUSION_PAIRS 
         else:
             # either you use a FUSION_PAIR_DICT or GENERATE_FUSION_PAIRS. 
-            GENERATE_FUSION_PAIRS = True # if true it will query based on MIN_VIDEO_FUSION_COUNT and create pairs
-                                            # if false, it will grab the list of pair lists below
+            GENERATE_FUSION_PAIRS = False # if true it will query based on MIN_VIDEO_FUSION_COUNT and create pairs
+                                            # if false, it will grab the list of pair lists below from CONSTANTS
+            AUTO_EDGE_CROP = False # override for production, will call in POSE_CROP_DICT
+            USE_POSE_CROP_DICT = True # override for production
+            # turning all three off to do old style non-tsp itter-sort    
+            TSP_SORT = False
+            CHOP_ITTER_TSP_SORT = False
+            ONE_SHOT = False # take all files, based off the very first sort order.
 
     else:
+        # this is for short animation production, set crop sizes 1:1 or 9:16/16:9
         GENERATE_FUSION_PAIRS = False # if true it will query based on MIN_VIDEO_FUSION_COUNT and create pairs
-        TSP_SORT = True
-        CHOP_ITTER_TSP_SORT = True
+        # TSP_SORT = True
+        # CHOP_ITTER_TSP_SORT = True
+        MULTIPOLICY = True # MULTIPOLICY conflicts with GENERATE_FUSION_PAIRS 
+        AUTO_EDGE_CROP = False # override for production, will call in POSE_CROP_DICT
+        USE_POSE_CROP_DICT = True # override for production
+        EXPAND = False # if USE_POSE_CROP_DICT, then no expansion
+        # turning all three off to do old style non-tsp itter-sort    
+        TSP_SORT = False
+        CHOP_ITTER_TSP_SORT = False
+        ONE_SHOT = False # take all files, based off the very first sort order.
 
-    if not GENERATE_FUSION_PAIRS:
+    if GENERATE_FUSION_PAIRS:
+        # this is an override for development purposes. will only make CSVs from these clusters:
+        OBJECT_KEEP_CLUSTERS = [25,2341,1685,734,727,2263,586,28,733,258,960,84,2230,728,783,964,1660,2630,3052,3269]
+        if bool(OBJECT_KEEP_CLUSTERS):
+            # how to skip objects (columns!)
+            SKIP_OBJECT_NONE_CLUSTERS = [i for i in range(4000) if i not in OBJECT_KEEP_CLUSTERS] # skip these and go to 18
+    else:
         USE_FUSION_PAIR_DICT = True # if True, it will use the FUSION_PAIR_DICT_NAME below
-    FUSION_PAIR_DICT_NAME = "FUSION_PAIR_DICT_DETECTIONS_ARMS3D128"
+    FUSION_PAIR_DICT_NAME = "FUSION_PAIR_DICT_DETECTIONS_THEOFFICE"
     if USE_HSV == True:
         N_HSV = 23 # 0-22 metaclusters of 96 HSV clusters
     else:
         N_HSV = 0 # don't do HSV clusters
 
-    PURGING_DUPES = True # skips build/save, just compares dupes
+    PURGING_DUPES = False # skips build/save, just compares dupes
     # FORCE_TARGET_COUNT = 90 # default for GIF version
     FORCE_TARGET_COUNT = 200 # for testing. 
-    TSP_NOLIMITS = True # if True, it will not apply the FORCE_TARGET_COUNT cutoff to the TSP sort, which means it will sort on all files. If False, it will apply the cutoff, which means it will only sort on the top FORCE_TARGET_COUNT files. This is for testing whether the TSP sort is working on all files or just the top ones.
+    TSP_NOLIMITS = False # if True, it will not apply the FORCE_TARGET_COUNT cutoff to the TSP sort, which means it will sort on all files. If False, it will apply the cutoff, which means it will only sort on the top FORCE_TARGET_COUNT files. This is for testing whether the TSP sort is working on all files or just the top ones.
     # if TESTING: IS_HAND_POSE_FUSION = GENERATE_FUSION_PAIRS = False
 
     # get cutoff for this class_id from constants dict
@@ -420,7 +448,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     # this control whether sorting by topics
     # IS_TOPICS = True # if using Clusters only, must set this to False
     # JUMP_SHOT = True # jump to random file if can't find a run (I don't think this applies to planar?)
-    # USE_ALL = True # do this for HEFT bc it turns off face xyz and mouthgap filters && if SORT_TYPE == "planar_hands" forces ONE_SHOT
+    USE_ALL = True # do this for HEFT bc it turns off face xyz and mouthgap filters && if SORT_TYPE == "planar_hands" forces ONE_SHOT
 
     USE_PAINTED = True
     INPAINT= True
@@ -1436,24 +1464,56 @@ if not io.IS_TENCH:
 # for linear it is in the df_enc, but for itter, the start_img_name is in prev df_enc
 # takes a dataframe of images and encodings and returns a df sorted by distance
 
-def expand_face_encodings(df,encoding_col= "face_encodings68",):
-    """
-    Given a DataFrame with:
-      - a 'face_encodings68' column where each entry is a length-128 list or array,
-    return a new DataFrame of shape (n_rows, 128) where:
-      - Columns 1..128 are the individual encoding dimensions,
-        named 'enc_0', 'enc_1', ..., 'enc_127'.
-    """
-    # Helper: if entries are string representations of lists, eval to real lists
-    def parse_encoding(x):
-        if isinstance(x, str):
-            return list(eval(x))
-        return list(x)
+def expand_vector_column(df, vector_col="face_encodings68", prefix="enc", expected_len=None):
+    """Expand one vector-like DataFrame column into numeric feature columns."""
+    if vector_col not in df.columns:
+        raise KeyError(f"Vector column '{vector_col}' not found. Available columns: {list(df.columns)}")
 
-    # Apply parsing and expand into a DataFrame
-    encodings = df[encoding_col].apply(parse_encoding).tolist()
-    enc_df = pd.DataFrame(encodings, columns=[f"enc_{i}" for i in range(128)])
-    return enc_df
+    def parse_vector(value):
+        if isinstance(value, str):
+            parsed = ast.literal_eval(value)
+        else:
+            parsed = value
+
+        if isinstance(parsed, np.ndarray):
+            parsed = parsed.tolist()
+
+        if isinstance(parsed, (list, tuple)):
+            return list(parsed)
+
+        raise ValueError(f"Unsupported vector value type for '{vector_col}': {type(value)}")
+
+    parsed_vectors = df[vector_col].apply(parse_vector)
+
+    lengths = parsed_vectors.apply(len)
+    unique_lengths = sorted(lengths.unique().tolist())
+    if expected_len is not None and any(length != int(expected_len) for length in unique_lengths):
+        raise ValueError(
+            f"Column '{vector_col}' has vector lengths {unique_lengths}, expected only {expected_len}."
+        )
+    if len(unique_lengths) != 1:
+        raise ValueError(
+            f"Column '{vector_col}' has inconsistent vector lengths: {unique_lengths}."
+        )
+
+    vector_len = unique_lengths[0]
+    vector_df = pd.DataFrame(
+        parsed_vectors.tolist(),
+        columns=[f"{prefix}_{i}" for i in range(vector_len)],
+        index=df.index,
+    )
+    vector_df = vector_df.apply(pd.to_numeric, errors="coerce")
+    if vector_df.isnull().any().any():
+        nan_rows = int(vector_df.isnull().any(axis=1).sum())
+        raise ValueError(
+            f"Column '{vector_col}' produced non-numeric values after parsing; rows with NaNs: {nan_rows}."
+        )
+    return vector_df
+
+
+def expand_face_encodings(df,encoding_col= "face_encodings68",):
+    """Backward-compatible wrapper for face encoding expansion."""
+    return expand_vector_column(df, vector_col=encoding_col, prefix="enc", expected_len=128)
 
 def get_closest_knn_or_break(df_enc, df_sorted):
     # send in both dfs, and return same dfs with 1+ rows sorted
@@ -1582,7 +1642,7 @@ def itter_sort(df_enc, itters):
     return df_sorted
 
 def sort_and_chop(df_enc):
-    sort_and_chop_cutoff = sort.CUTOFF*FORCE_CUTOFF_MULTIPLIER
+    sort_and_chop_cutoff = sort.CUTOFF
     df_sorted = pd.DataFrame(columns = df_enc.columns)
     # print(f"CHOP_FIRST is true with sort.counter_dict['start_img_name'], {sort.counter_dict['start_img_name']}")
     if sort.counter_dict["start_img_name"] is None:
@@ -1597,8 +1657,29 @@ def sort_and_chop(df_enc):
 
 
 def tsp_sort(df_enc):
-    # track the mapping
-    df_clean = expand_face_encodings(df_enc)
+    # Build TSP input from the active sort vector so TSP and KNN use the same feature family.
+    sort_column, _ = sort.get_sort_column_mapping(sort.SORT_TYPE, CLUSTER1)
+    print(f"[TSP DEBUG] SORT_TYPE={sort.SORT_TYPE} resolved sort_column={sort_column}")
+    if sort_column not in df_enc.columns:
+        raise KeyError(
+            f"TSP input column '{sort_column}' not found for SORT_TYPE={sort.SORT_TYPE}. "
+            f"Available columns: {list(df_enc.columns)}"
+        )
+
+    try:
+        vector_lengths = df_enc[sort_column].apply(lambda x: len(x) if hasattr(x, "__len__") else -1)
+        unique_lengths = sorted(vector_lengths.unique().tolist())
+        print(
+            f"[TSP DEBUG] input rows={len(df_enc)} column={sort_column} "
+            f"unique_vector_lengths={unique_lengths[:10]}"
+        )
+    except Exception as debug_exc:
+        print(f"[TSP DEBUG] unable to summarize vector lengths for {sort_column}: {debug_exc}")
+
+    df_clean = expand_vector_column(df_enc, vector_col=sort_column, prefix="tsp")
+    print(f"[TSP DEBUG] expanded matrix shape={df_clean.shape}")
+    df_clean = sort.apply_sort_feature_weights_df(df_clean, sort_type=sort.SORT_TYPE)
+    print(f"[TSP DEBUG] weighted matrix shape={df_clean.shape}")
     df_clean['original_index'] = df_clean.index  # or however they map
     START_IDX = END_IDX = None
     if TSP_NOLIMITS: force_count = None
@@ -1740,6 +1821,11 @@ def prep_encodings_NN(df_segment, effective_sort_type=None):
         
         # Construct obj_bbox_fusion_list using class method
         df_segment['obj_bbox_fusion_list'] = df_segment.apply(cl.construct_fusion_list, axis=1)
+        projection_indices = cl.build_signature_projection_indices(sort.counter_dict.get("pose_no"))
+        if projection_indices is not None:
+            df_segment['obj_bbox_fusion_list'] = df_segment['obj_bbox_fusion_list'].apply(
+                lambda value: cl.project_vector_by_indices(value, projection_indices)
+            )
         if is_multislot_obj_bbox_mode:
             # Route obj_bbox distance math through a fixed-length, slot-aware vector.
             df_segment['obj_bbox_list'] = df_segment['obj_bbox_fusion_list']
@@ -2295,10 +2381,13 @@ def linear_test_df(df_sorted, itter=None, counter_state=None):
         # sort internals continue reading sort.counter_dict.
         sort.counter_dict = counter_state
 
+    df_sorted = enrich_image_metas(df_sorted)
+
     linear_test_start = time.perf_counter()
     assembly_stats = {
         "rows_total": int(len(df_sorted)),
         "rows_saved": 0,
+        "rows_write_failed": 0,
         "cache_hit_rows": 0,
         "cache_miss_rows": 0,
         "skip_face_rows": 0,
@@ -2442,6 +2531,10 @@ def linear_test_df(df_sorted, itter=None, counter_state=None):
         else: description = None
         try: topic_score = row['topic_score']
         except: topic_score = 0
+        try: detection_count = row['detection_count']
+        except: detection_count = 0
+        try: detections_json = row['detections_json']
+        except: detections_json = "[]"
         # use image_id to retrieve description from mysql database 
         # this is temporary until I resegment the images with description in the segment
         # try:
@@ -2456,7 +2549,7 @@ def linear_test_df(df_sorted, itter=None, counter_state=None):
                 description = None
             else:
                 description = description
-            metas = [image_id, description, topic_score]
+            metas = [image_id, description, topic_score, detection_count, detections_json]
             
             metas_path = os.path.join(sort.counter_dict["outfolder"],METAS_FILE)
             io.write_csv(metas_path, metas)
@@ -2541,8 +2634,8 @@ def linear_test_df(df_sorted, itter=None, counter_state=None):
             ##################
             if do_inpaint and not bailout:
                 directory = os.path.dirname(inpaint_file)
-                # Create the directory if it doesn't exist (creates directories even if skips below because extension too large)
-                if not os.path.exists(directory):
+                # Only create debug inpaint directory when we are actually writing debug artifacts.
+                if SAVE_IMG_PROCESS and not os.path.exists(directory):
                     os.makedirs(directory)
                 # maxkey = max(extension_pixels, key=lambda y: abs(extension_pixels[y]))
 
@@ -2600,10 +2693,6 @@ def linear_test_df(df_sorted, itter=None, counter_state=None):
                     print("inpainting failed")
                     bailout=True
             elif check_extension(img.shape, extension_pixels, OUTPAINT_MAX) and OUTPAINT:
-                directory = os.path.dirname(inpaint_file)
-                # Create the directory if it doesn't exist (creates directories even if skips below because extension too large)
-                if not os.path.exists(directory):
-                    os.makedirs(directory)
                 print("outpainting medium extension")
                 inpaint_image=outpaint(img,extension_pixels,downsampling_scale=1,prompt="",negative_prompt="")
             else:
@@ -2632,9 +2721,14 @@ def linear_test_df(df_sorted, itter=None, counter_state=None):
                 cropped_dir = os.path.dirname(cropped_file)
                 if not os.path.exists(cropped_dir):
                     os.makedirs(cropped_dir)
-                cv2.imwrite(cropped_file, cropped_image)
-                if sort.VERBOSE:
+                cropped_write_ok = cv2.imwrite(cropped_file, cropped_image)
+                if cropped_write_ok and sort.VERBOSE:
                     print("saved cropped cache", cropped_file)
+                elif not cropped_write_ok:
+                    print(
+                        f"[write-fail] inpaint cropped cache write failed image_id={row.get('image_id', '?')} "
+                        f"path={cropped_file} shape={getattr(cropped_image, 'shape', None)}"
+                    )
             # Return the raw crop; caller is responsible for pair validation.
             return cropped_image, crop_status
 
@@ -2829,12 +2923,17 @@ def linear_test_df(df_sorted, itter=None, counter_state=None):
                     if not os.path.exists(cropped_cache_dir):
                         os.makedirs(cropped_cache_dir)
                     cache_write_t0 = time.perf_counter()
-                    cv2.imwrite(cropped_cache_file, cropped_image)
+                    cache_write_ok = cv2.imwrite(cropped_cache_file, cropped_image)
                     cache_write_elapsed = time.perf_counter() - cache_write_t0
                     add_assembly_timing("cache_write", cache_write_elapsed)
-                    print(f"[timing] cache write {cache_write_elapsed:.3f}s path={cropped_cache_file}")
-                    if sort.VERBOSE:
+                    print(f"[timing] cache write {cache_write_elapsed:.3f}s path={cropped_cache_file} ok={cache_write_ok}")
+                    if cache_write_ok and sort.VERBOSE:
                         print("saved cropped cache", cropped_cache_file)
+                    elif not cache_write_ok:
+                        print(
+                            f"[write-fail] cache write failed image_id={row.get('image_id', '?')} "
+                            f"path={cropped_cache_file} shape={getattr(cropped_image, 'shape', None)}"
+                        )
                 elif cropped_cache_file and used_cached_cropped:
                     print(f"[timing] cache-hit skip cache rewrite path={cropped_cache_file}")
                 else:
@@ -2856,13 +2955,22 @@ def linear_test_df(df_sorted, itter=None, counter_state=None):
                     )
                 else:
                     output_write_t0 = time.perf_counter()
+                    output_write_ok = True
                     if isinstance(cropped_image, str):
                         shutil.copy2(cropped_image, outpath)
+                        output_write_ok = os.path.exists(outpath)
                     else:
-                        cv2.imwrite(outpath, cropped_image)
+                        output_write_ok = cv2.imwrite(outpath, cropped_image)
                     output_write_elapsed = time.perf_counter() - output_write_t0
                     add_assembly_timing("output_write", output_write_elapsed)
-                    print(f"[timing] output write {output_write_elapsed:.3f}s path={outpath}")
+                    print(f"[timing] output write {output_write_elapsed:.3f}s path={outpath} ok={output_write_ok}")
+                    if not output_write_ok:
+                        print(
+                            f"[write-fail] output write failed image_id={row.get('image_id', '?')} "
+                            f"path={outpath} shape={getattr(cropped_image, 'shape', None)}"
+                        )
+                        assembly_stats["rows_write_failed"] += 1
+                        continue
                 good += 1
                 assembly_stats["rows_saved"] += 1
                 metas_write_t0 = time.perf_counter()
@@ -2910,6 +3018,7 @@ def linear_test_df(df_sorted, itter=None, counter_state=None):
     print(
         "[MODE1 ASSEMBLY] linear_test_df summary "
         f"rows_total={assembly_stats['rows_total']} rows_saved={assembly_stats['rows_saved']} "
+        f"rows_write_failed={assembly_stats['rows_write_failed']} "
         f"cache_hits={assembly_stats['cache_hit_rows']} cache_misses={assembly_stats['cache_miss_rows']} "
         f"skip_face={assembly_stats['skip_face_rows']} total={linear_test_elapsed:.2f}s"
     )
@@ -2988,7 +3097,18 @@ def process_row_for_cache_only(row):
         cropped_cache_dir = os.path.dirname(cropped_cache_file)
         if not os.path.exists(cropped_cache_dir):
             os.makedirs(cropped_cache_dir)
-        cv2.imwrite(cropped_cache_file, cropped_image)
+        cache_write_ok = cv2.imwrite(cropped_cache_file, cropped_image)
+        if not cache_write_ok:
+            print(
+                f"[cache_mode][write-fail] image_id={row.get('image_id', '?')} "
+                f"path={cropped_cache_file} shape={getattr(cropped_image, 'shape', None)}"
+            )
+            return {
+                "cache_file": cropped_cache_file,
+                "status": "failed",
+                "cropped_image": None,
+                "skip_reason": "cache write failed",
+            }
         print(f"[cache_mode] generated cache image_id={row.get('image_id', '?')} path={cropped_cache_file}")
         # Do not return image arrays from workers; that causes unbounded memory growth.
         return {"cache_file": cropped_cache_file, "status": "generated", "skip_reason": None}
@@ -3059,29 +3179,83 @@ def write_images(img_list):
         cv2.imwrite(path_img[0],path_img[1])
 
 
-def assign_topic_fit_score(df):
-    # parse segmenthelper for topic id
+def enrich_image_metas(df):
+    print("enriching image metas")
     parts = SegmentHelper_name.split("_")
+    topic_id = None
     for part in parts:
-        if part.startswith("T"):
-            topic_id = int(part[1:])
-            break
-    else:
-        topic_id = None
+        # Only parse tokens like "T11" (or T-prefixed numeric values), not names like "TheOffice".
+        if isinstance(part, str) and part.startswith("T") and len(part) > 1:
+            topic_token = part[1:]
+            try:
+                topic_id = int(float(topic_token))
+                break
+            except (TypeError, ValueError):
+                continue
+    if topic_id is None:
+        if SegmentHelper_name == "SegmentHelper_TheOffice":
+            topic_id = 11
+            print(f"Parsed topic_id=11 from SegmentHelper_name: {SegmentHelper_name}")
+        else:
+            print(f"Could not parse topic_id from SegmentHelper_name: {SegmentHelper_name}")
+    if 'description' not in df.columns:
+        df['description'] = None
     if topic_id is not None:
-        # go through the df and see if there is a topic_score column, if not, query mysql for topic score
-        # then assign topic fit score to the df
         if 'topic_score' not in df.columns:
+            image_ids = df['image_id'].dropna().tolist()
             topic_scores = {}
-            for image_id in df['image_id']:
+            if image_ids:
                 try:
-                    topic_score = session.query(ImagesTopics.topic_score).filter(ImagesTopics.image_id == image_id, ImagesTopics.topic_id == topic_id).first()
-                    topic_scores[image_id] = topic_score[0] if topic_score else None
+                    score_rows = session.query(ImagesTopics.image_id, ImagesTopics.topic_score).filter(
+                        ImagesTopics.topic_id == topic_id,
+                        ImagesTopics.image_id.in_(image_ids),
+                    ).all()
+                    topic_scores = {image_id: topic_score for image_id, topic_score in score_rows}
                 except Exception as e:
                     traceback.print_exc()
                     print(str(e))
-                    topic_scores[image_id] = None
+                    topic_scores = {}
             df['topic_score'] = df['image_id'].map(topic_scores)
+            print(
+                f"Assigned topic_score for {len(topic_scores)} of {len(df.index)} rows "
+                f"using topic_id={topic_id}"
+            )
+    image_ids = df['image_id'].dropna().tolist()
+    detection_payloads = {}
+    if image_ids:
+        try:
+            detection_rows = session.query(Detections).filter(
+                Detections.image_id.in_(image_ids)
+            ).all()
+            grouped_detections = {}
+            for detection in detection_rows:
+                grouped_detections.setdefault(detection.image_id, []).append({
+                    "detection_id": detection.detection_id,
+                    "image_id": detection.image_id,
+                    "class_id": detection.class_id,
+                    "obj_no": detection.obj_no,
+                    "bbox": detection.bbox,
+                    "conf": detection.conf,
+                    "bbox_norm": detection.bbox_norm,
+                    "meta_cluster_id": detection.meta_cluster_id,
+                    "cluster_id": detection.cluster_id,
+                })
+            detection_payloads = {
+                image_id: json.dumps(detections, ensure_ascii=False)
+                for image_id, detections in grouped_detections.items()
+            }
+        except Exception as e:
+            traceback.print_exc()
+            print(str(e))
+            detection_payloads = {}
+    if 'detections_json' not in df.columns:
+        df['detections_json'] = df['image_id'].map(detection_payloads).fillna("[]")
+    else:
+        df['detections_json'] = df['detections_json'].fillna("[]")
+    if 'detection_count' not in df.columns:
+        df['detection_count'] = df['detections_json'].apply(
+            lambda value: len(json.loads(value)) if isinstance(value, str) and value else 0
+        )
     return df 
 def _build_sorted_artifact_paths(csv_folder, file_prefix, segment_count):
     stem = f"df_sorted_{file_prefix}_ct{segment_count}"
@@ -3238,8 +3412,6 @@ def process_linear(start_img_name, df_segment, file_prefix, sort, effective_sort
             record_mode0_timing("process_sort", time.perf_counter() - sort_start)
         # df_sorted = sort_by_face_dist(df_enc, df_128_enc, df_33_lms)
 
-        if FORCE_TOPIC_FIT_SCORE:
-            df_sorted = assign_topic_fit_score(df_sorted)
         # TK this is where i save df_sorted to csv
         # check to see if CSV_FOLDER exists and create if not
             write_start = time.perf_counter()
@@ -3525,14 +3697,17 @@ def _mode1_set_multiplier(df_segment, cluster_no, pose_no, canonical_registry):
     """
     cluster_no = _mode1_normalize_token(cluster_no)
     pose_no = _mode1_normalize_token(pose_no)
-    canonical_multiplier = (canonical_registry or {}).get((cluster_no, pose_no))
+    use_pose_crop = bool(USE_POSE_CROP_DICT and pose_no is not None)
+    canonical_multiplier = None
+    if not use_pose_crop:
+        canonical_multiplier = (canonical_registry or {}).get((cluster_no, pose_no))
     if canonical_multiplier is not None:
         sort.image_edge_multiplier = list(canonical_multiplier)
         print(
             "[canonical multipliers] using stored multiplier "
             f"for arms={cluster_no} object_signature={pose_no}: {sort.image_edge_multiplier}"
         )
-    elif pose_no is not None and USE_POSE_CROP_DICT:
+    elif use_pose_crop:
         sort.image_edge_multiplier = MULTIPLIER_LIST[POSE_CROP_DICT.get(cluster_no, 1)]
     elif cluster_no is not None and USE_FUSION_PAIR_DICT:
         crop_dict_index = CLUSTER_CROP_DICT.get(CLUSTER1, {}).get(cluster_no, None)
@@ -3945,7 +4120,8 @@ def main():
                 import multiprocessing as _mp
                 print(f"[MODE0] opening shared pool with {PARALLEL_WORKERS} workers")
                 mode0_pool = _mp.Pool(processes=PARALLEL_WORKERS)
-            mode0_async_results.append(mode0_pool.apply_async(_mode0_process_linear_worker, (job,)))
+            async_result = mode0_pool.apply_async(_mode0_process_linear_worker, (job,))
+            mode0_async_results.append((async_result, job))
         else:
             result = _mode0_process_linear_worker(job)
             handle_mode0_worker_result(result)
@@ -3956,20 +4132,19 @@ def main():
             return
 
         remaining_results = []
-        for async_result in mode0_async_results:
+        for async_result, job in mode0_async_results:
             if wait_all or async_result.ready():
                 try:
                     result = async_result.get()
                 except Exception as exc:
-                    result = {
-                        "success": False,
-                        "error": str(exc),
-                        "file_prefix": "<async_result_get>",
-                        "elapsed": 0.0,
-                    }
+                    print(
+                        f"[MODE0 WORKER] async failure for {job.get('file_prefix')}: {exc}. "
+                        "Falling back to serial execution for this job."
+                    )
+                    result = _mode0_process_linear_worker(job)
                 handle_mode0_worker_result(result)
             else:
-                remaining_results.append(async_result)
+                remaining_results.append((async_result, job))
 
         mode0_async_results = remaining_results
 
@@ -4386,8 +4561,11 @@ def main():
         print(f"set_multiplier_and_dims cluster_no: {cluster_no}, pose_no: {pose_no}")
         cluster_no = normalize_cluster_token(cluster_no)
         pose_no = normalize_cluster_token(pose_no)
+        use_pose_crop = bool(USE_POSE_CROP_DICT and pose_no is not None)
 
-        canonical_multiplier = get_canonical_multiplier(cluster_no, pose_no)
+        canonical_multiplier = None
+        if not use_pose_crop:
+            canonical_multiplier = get_canonical_multiplier(cluster_no, pose_no)
         if canonical_multiplier is not None:
             sort.image_edge_multiplier = list(canonical_multiplier)
             print(
@@ -4400,10 +4578,10 @@ def main():
 
         crop_dict_index = CLUSTER_CROP_DICT.get(CLUSTER1, {}).get(cluster_no, None)
         # if pose_no, overide sort.image_edge_multiplier based on pose_no
-        if canonical_multiplier is None and pose_no is not None and USE_POSE_CROP_DICT:
+        if canonical_multiplier is None and use_pose_crop:
             print("using pose_no to set image_edge_multiplier", pose_no)
             pose_type = POSE_CROP_DICT.get(cluster_no, 1)
-            sort.image_edge_multiplier = MULTIPLIER_LIST[POSE_CROP_DICT[cluster_no]]
+            sort.image_edge_multiplier = MULTIPLIER_LIST[POSE_CROP_DICT.get(cluster_no, 1)]
             if VERBOSE: print(f"using pose {cluster_no} getting POSE_CROP_DICT value {pose_type} for image_edge_multiplier", sort.image_edge_multiplier)
         elif canonical_multiplier is None and cluster_no is not None and crop_dict_index is not None and USE_FUSION_PAIR_DICT:
             print("using cluster_no to set image_edge_multiplier", cluster_no)
@@ -4425,7 +4603,7 @@ def main():
             else:
                 sort.image_edge_multiplier = sort.calc_dynamic_multiplier_from_min_max_body_landmarks(df_segment, 0)
 
-        if canonical_multiplier is None:
+        if canonical_multiplier is None and not use_pose_crop:
             register_canonical_multiplier(cluster_no, pose_no, sort.image_edge_multiplier)
 
         # reset face_height_output for each round, in case it gets redefined inside loop
@@ -5227,7 +5405,7 @@ def main():
                 ):
                     print(
                         f"skipping fusion pair {cluster_topic_no} because object cluster is in "
-                        f"SKIP_OBJECT_NONE_CLUSTERS {SKIP_OBJECT_NONE_CLUSTERS}"
+                        f"SKIP_OBJECT_NONE_CLUSTERS {SKIP_OBJECT_NONE_CLUSTERS[:5]}"
                     )
                     return
                 if USE_AFFECT_GROUPS: 
