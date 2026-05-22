@@ -29,8 +29,8 @@ OUT_DIR      = os.path.join(_HERE, "tts_bark_out")
 DOWNLOAD_DIR = os.path.join(_HERE, "downloads")
 COUNTER_FILE = os.path.join(DOWNLOAD_DIR, ".batch_counter")
 
-BATCH_SIZE    = 200
-POLL_INTERVAL = 30  # seconds
+BATCH_SIZE    = 1000
+POLL_INTERVAL = 600  # seconds
 
 
 # ---------------------------------------------------------------------------
