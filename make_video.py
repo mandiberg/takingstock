@@ -66,7 +66,7 @@ SegmentHelper_name = 'SegmentHelper_TheOffice'
 IS_SSD = True
 SSD_PATH = "/Volumes/LaCie/segment_images"
 # SSD_PATH = "/Volumes/OWC52/segment_images"
-ONLY_SAVE_CACHE = True # only save CSVs to cluster folder, not images which are saved in cache folders -- for speed
+ONLY_SAVE_CACHE = False # only save CSVs to cluster folder, not images which are saved in cache folders -- for speed
 MAKE_CACHE_MODE = False # only make cache folders, skips dedupe and is_face testing
 MODE1_ENABLE_DB_DEDUPE = True # False skips dedupe during crunch time drafts  
 SKIP_PAIRCHECK = False # True for draft mode, False does paircheck, and caches them 
@@ -293,6 +293,8 @@ elif CURRENT_MODE == 'heft_torso_keywords':
         EXPAND = True
         # FULL_BODY = True # haxxor TK
 
+
+
     # set to 0 to disable obj helper segment query stuff. this is also for object_fusion
     class_id = 0  # TEST: match exported ArmsPoses3D_67.csv
 
@@ -355,28 +357,39 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     HSV_SOURCE_MODE = "background" # "background" or "object" or "both"
     FORCE_TOPIC_FIT_SCORE = True # adds topic score to csvs at the very end of linear sort
 
-    TESTING = True
+    TESTING = False
     if TESTING:
-        # turning all three off to do old style non tsp sort    
         ONE_SHOT = False # take all files, based off the very first sort order.
-        TSP_SORT = False
+        TSP_SORT = True
         CHOP_ITTER_TSP_SORT = False
         if CLUSTER_TYPE == "ArmsPoses3D_ObjectFusion":
-            GENERATE_FUSION_PAIRS = False # April 14 changing this for testing
+            GENERATE_FUSION_PAIRS = True # April 14 changing this for testing
             MULTIPOLICY = True # MULTIPOLICY conflicts with GENERATE_FUSION_PAIRS 
 
             # GENERATE_FUSION_PAIRS = False # April 14 changing this for testing
             # MULTIPOLICY = False # MULTIPOLICY conflicts with GENERATE_FUSION_PAIRS 
         else:
             # either you use a FUSION_PAIR_DICT or GENERATE_FUSION_PAIRS. 
-            GENERATE_FUSION_PAIRS = True # if true it will query based on MIN_VIDEO_FUSION_COUNT and create pairs
-                                            # if false, it will grab the list of pair lists below
+            GENERATE_FUSION_PAIRS = False # if true it will query based on MIN_VIDEO_FUSION_COUNT and create pairs
+                                            # if false, it will grab the list of pair lists below from CONSTANTS
+            AUTO_EDGE_CROP = False # override for production, will call in POSE_CROP_DICT
+            USE_POSE_CROP_DICT = True # override for production
+            # turning all three off to do old style non-tsp itter-sort    
+            TSP_SORT = False
+            CHOP_ITTER_TSP_SORT = False
+            ONE_SHOT = False # take all files, based off the very first sort order.
 
     else:
         GENERATE_FUSION_PAIRS = False # if true it will query based on MIN_VIDEO_FUSION_COUNT and create pairs
-        TSP_SORT = True
-        CHOP_ITTER_TSP_SORT = True
+        # TSP_SORT = True
+        # CHOP_ITTER_TSP_SORT = True
         MULTIPOLICY = True # MULTIPOLICY conflicts with GENERATE_FUSION_PAIRS 
+        AUTO_EDGE_CROP = False # override for production, will call in POSE_CROP_DICT
+        USE_POSE_CROP_DICT = True # override for production
+        # turning all three off to do old style non-tsp itter-sort    
+        TSP_SORT = False
+        CHOP_ITTER_TSP_SORT = False
+        ONE_SHOT = False # take all files, based off the very first sort order.
 
     if GENERATE_FUSION_PAIRS:
         # this is an override for development purposes. will only make CSVs from these clusters:
