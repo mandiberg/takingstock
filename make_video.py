@@ -26,7 +26,7 @@ from sqlalchemy.pool import NullPool
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
 # my ORM
-from my_declarative_base import Base, Encodings, ImagesTopics, SegmentTable,ImagesBackground, Hands, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON, Images
+from my_declarative_base import Base, Encodings, ImagesTopics, SegmentTable,ImagesBackground, Hands, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON, Images, Detections
 import pymongo 
 
 #mine
@@ -2366,6 +2366,8 @@ def linear_test_df(df_sorted, itter=None, counter_state=None):
         # sort internals continue reading sort.counter_dict.
         sort.counter_dict = counter_state
 
+    df_sorted = enrich_image_metas(df_sorted)
+
     linear_test_start = time.perf_counter()
     assembly_stats = {
         "rows_total": int(len(df_sorted)),
@@ -2513,6 +2515,10 @@ def linear_test_df(df_sorted, itter=None, counter_state=None):
         else: description = None
         try: topic_score = row['topic_score']
         except: topic_score = 0
+        try: detection_count = row['detection_count']
+        except: detection_count = 0
+        try: detections_json = row['detections_json']
+        except: detections_json = "[]"
         # use image_id to retrieve description from mysql database 
         # this is temporary until I resegment the images with description in the segment
         # try:
@@ -2527,7 +2533,7 @@ def linear_test_df(df_sorted, itter=None, counter_state=None):
                 description = None
             else:
                 description = description
-            metas = [image_id, description, topic_score]
+            metas = [image_id, description, topic_score, detection_count, detections_json]
             
             metas_path = os.path.join(sort.counter_dict["outfolder"],METAS_FILE)
             io.write_csv(metas_path, metas)
@@ -3130,9 +3136,8 @@ def write_images(img_list):
         cv2.imwrite(path_img[0],path_img[1])
 
 
-def assign_topic_fit_score(df):
-    # parse segmenthelper for topic id
-    print("assigning topic fit score")
+def enrich_image_metas(df):
+    print("enriching image metas")
     parts = SegmentHelper_name.split("_")
     topic_id = None
     for part in parts:
@@ -3150,6 +3155,8 @@ def assign_topic_fit_score(df):
             print(f"Parsed topic_id=11 from SegmentHelper_name: {SegmentHelper_name}")
         else:
             print(f"Could not parse topic_id from SegmentHelper_name: {SegmentHelper_name}")
+    if 'description' not in df.columns:
+        df['description'] = None
     if topic_id is not None:
         if 'topic_score' not in df.columns:
             image_ids = df['image_id'].dropna().tolist()
@@ -3170,6 +3177,42 @@ def assign_topic_fit_score(df):
                 f"Assigned topic_score for {len(topic_scores)} of {len(df.index)} rows "
                 f"using topic_id={topic_id}"
             )
+    image_ids = df['image_id'].dropna().tolist()
+    detection_payloads = {}
+    if image_ids:
+        try:
+            detection_rows = session.query(Detections).filter(
+                Detections.image_id.in_(image_ids)
+            ).all()
+            grouped_detections = {}
+            for detection in detection_rows:
+                grouped_detections.setdefault(detection.image_id, []).append({
+                    "detection_id": detection.detection_id,
+                    "image_id": detection.image_id,
+                    "class_id": detection.class_id,
+                    "obj_no": detection.obj_no,
+                    "bbox": detection.bbox,
+                    "conf": detection.conf,
+                    "bbox_norm": detection.bbox_norm,
+                    "meta_cluster_id": detection.meta_cluster_id,
+                    "cluster_id": detection.cluster_id,
+                })
+            detection_payloads = {
+                image_id: json.dumps(detections, ensure_ascii=False)
+                for image_id, detections in grouped_detections.items()
+            }
+        except Exception as e:
+            traceback.print_exc()
+            print(str(e))
+            detection_payloads = {}
+    if 'detections_json' not in df.columns:
+        df['detections_json'] = df['image_id'].map(detection_payloads).fillna("[]")
+    else:
+        df['detections_json'] = df['detections_json'].fillna("[]")
+    if 'detection_count' not in df.columns:
+        df['detection_count'] = df['detections_json'].apply(
+            lambda value: len(json.loads(value)) if isinstance(value, str) and value else 0
+        )
     return df 
 def _build_sorted_artifact_paths(csv_folder, file_prefix, segment_count):
     stem = f"df_sorted_{file_prefix}_ct{segment_count}"
@@ -3326,8 +3369,6 @@ def process_linear(start_img_name, df_segment, file_prefix, sort, effective_sort
             record_mode0_timing("process_sort", time.perf_counter() - sort_start)
         # df_sorted = sort_by_face_dist(df_enc, df_128_enc, df_33_lms)
 
-        if FORCE_TOPIC_FIT_SCORE:
-            df_sorted = assign_topic_fit_score(df_sorted)
         # TK this is where i save df_sorted to csv
         # check to see if CSV_FOLDER exists and create if not
             write_start = time.perf_counter()
