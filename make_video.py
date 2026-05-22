@@ -101,7 +101,7 @@ CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden b
 
 # CSV_FOLDER = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion128_test220K"
 CSV_MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/"
-CSV_RUN_FOLDER = "SegmentHelper_TheOffice/sort723" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
+CSV_RUN_FOLDER = "SegmentHelper_TheOffice/p15_selects_may21_noTSP/" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
 CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, CSV_RUN_FOLDER)
 MAX_ROWS_PER_OUTPUT_CSV = 1200
 ENABLE_MODE0_TIMING = True
@@ -359,7 +359,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     if TESTING:
         # turning all three off to do old style non tsp sort    
         ONE_SHOT = False # take all files, based off the very first sort order.
-        TSP_SORT = True
+        TSP_SORT = False
         CHOP_ITTER_TSP_SORT = False
         if CLUSTER_TYPE == "ArmsPoses3D_ObjectFusion":
             GENERATE_FUSION_PAIRS = False # April 14 changing this for testing
@@ -376,6 +376,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
         GENERATE_FUSION_PAIRS = False # if true it will query based on MIN_VIDEO_FUSION_COUNT and create pairs
         TSP_SORT = True
         CHOP_ITTER_TSP_SORT = True
+        MULTIPOLICY = True # MULTIPOLICY conflicts with GENERATE_FUSION_PAIRS 
 
     if GENERATE_FUSION_PAIRS:
         # this is an override for development purposes. will only make CSVs from these clusters:
@@ -394,7 +395,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     PURGING_DUPES = False # skips build/save, just compares dupes
     # FORCE_TARGET_COUNT = 90 # default for GIF version
     FORCE_TARGET_COUNT = 200 # for testing. 
-    TSP_NOLIMITS = True # if True, it will not apply the FORCE_TARGET_COUNT cutoff to the TSP sort, which means it will sort on all files. If False, it will apply the cutoff, which means it will only sort on the top FORCE_TARGET_COUNT files. This is for testing whether the TSP sort is working on all files or just the top ones.
+    TSP_NOLIMITS = False # if True, it will not apply the FORCE_TARGET_COUNT cutoff to the TSP sort, which means it will sort on all files. If False, it will apply the cutoff, which means it will only sort on the top FORCE_TARGET_COUNT files. This is for testing whether the TSP sort is working on all files or just the top ones.
     # if TESTING: IS_HAND_POSE_FUSION = GENERATE_FUSION_PAIRS = False
 
     # get cutoff for this class_id from constants dict
@@ -1626,7 +1627,7 @@ def itter_sort(df_enc, itters):
     return df_sorted
 
 def sort_and_chop(df_enc):
-    sort_and_chop_cutoff = sort.CUTOFF*FORCE_CUTOFF_MULTIPLIER
+    sort_and_chop_cutoff = sort.CUTOFF
     df_sorted = pd.DataFrame(columns = df_enc.columns)
     # print(f"CHOP_FIRST is true with sort.counter_dict['start_img_name'], {sort.counter_dict['start_img_name']}")
     if sort.counter_dict["start_img_name"] is None:
@@ -3131,6 +3132,7 @@ def write_images(img_list):
 
 def assign_topic_fit_score(df):
     # parse segmenthelper for topic id
+    print("assigning topic fit score")
     parts = SegmentHelper_name.split("_")
     topic_id = None
     for part in parts:
@@ -3142,20 +3144,32 @@ def assign_topic_fit_score(df):
                 break
             except (TypeError, ValueError):
                 continue
+    if topic_id is None:
+        if SegmentHelper_name == "SegmentHelper_TheOffice":
+            topic_id = 11
+            print(f"Parsed topic_id=11 from SegmentHelper_name: {SegmentHelper_name}")
+        else:
+            print(f"Could not parse topic_id from SegmentHelper_name: {SegmentHelper_name}")
     if topic_id is not None:
-        # go through the df and see if there is a topic_score column, if not, query mysql for topic score
-        # then assign topic fit score to the df
         if 'topic_score' not in df.columns:
+            image_ids = df['image_id'].dropna().tolist()
             topic_scores = {}
-            for image_id in df['image_id']:
+            if image_ids:
                 try:
-                    topic_score = session.query(ImagesTopics.topic_score).filter(ImagesTopics.image_id == image_id, ImagesTopics.topic_id == topic_id).first()
-                    topic_scores[image_id] = topic_score[0] if topic_score else None
+                    score_rows = session.query(ImagesTopics.image_id, ImagesTopics.topic_score).filter(
+                        ImagesTopics.topic_id == topic_id,
+                        ImagesTopics.image_id.in_(image_ids),
+                    ).all()
+                    topic_scores = {image_id: topic_score for image_id, topic_score in score_rows}
                 except Exception as e:
                     traceback.print_exc()
                     print(str(e))
-                    topic_scores[image_id] = None
+                    topic_scores = {}
             df['topic_score'] = df['image_id'].map(topic_scores)
+            print(
+                f"Assigned topic_score for {len(topic_scores)} of {len(df.index)} rows "
+                f"using topic_id={topic_id}"
+            )
     return df 
 def _build_sorted_artifact_paths(csv_folder, file_prefix, segment_count):
     stem = f"df_sorted_{file_prefix}_ct{segment_count}"
@@ -3312,8 +3326,8 @@ def process_linear(start_img_name, df_segment, file_prefix, sort, effective_sort
             record_mode0_timing("process_sort", time.perf_counter() - sort_start)
         # df_sorted = sort_by_face_dist(df_enc, df_128_enc, df_33_lms)
 
-        # if FORCE_TOPIC_FIT_SCORE:
-        #     df_sorted = assign_topic_fit_score(df_sorted)
+        if FORCE_TOPIC_FIT_SCORE:
+            df_sorted = assign_topic_fit_score(df_sorted)
         # TK this is where i save df_sorted to csv
         # check to see if CSV_FOLDER exists and create if not
             write_start = time.perf_counter()
