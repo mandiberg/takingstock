@@ -68,7 +68,7 @@ MULTIPLIER_LIST = [
     [1.5,2,2.9,2.4], # 23 Medium SQ (left)
     [1.5,2.4,2.9,2], # 24 Medium SQ (right)
     [1.5,2.75,7.5,2.75], #25 16x9 portrait (regular head crop)
-    [4,2.75,5,2.75], #26 16x9 portrait (arms up, crop at knee)
+    [3,2.75,6,2.75], #26 16x9 portrait (arms up, crop at knee)
 
 ]
 

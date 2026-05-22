@@ -71,7 +71,7 @@ MAKE_CACHE_MODE = False # only make cache folders, skips dedupe and is_face test
 MODE1_ENABLE_DB_DEDUPE = True # False skips dedupe during crunch time drafts  
 SKIP_PAIRCHECK = False # True for draft mode, False does paircheck, and caches them 
 START_CLUSTER = 0
-PARALLEL_WORKERS = 16  # set > 1 to parallelize per-CSV work in MODE 0 and MODE 1
+PARALLEL_WORKERS = 1  # set > 1 to parallelize per-CSV work in MODE 0 and MODE 1
 
 start = time.time()
 
@@ -380,12 +380,14 @@ elif CURRENT_MODE == 'heft_torso_keywords':
             ONE_SHOT = False # take all files, based off the very first sort order.
 
     else:
+        # this is for short animation production, set crop sizes 1:1 or 9:16/16:9
         GENERATE_FUSION_PAIRS = False # if true it will query based on MIN_VIDEO_FUSION_COUNT and create pairs
         # TSP_SORT = True
         # CHOP_ITTER_TSP_SORT = True
         MULTIPOLICY = True # MULTIPOLICY conflicts with GENERATE_FUSION_PAIRS 
         AUTO_EDGE_CROP = False # override for production, will call in POSE_CROP_DICT
         USE_POSE_CROP_DICT = True # override for production
+        EXPAND = False # if USE_POSE_CROP_DICT, then no expansion
         # turning all three off to do old style non-tsp itter-sort    
         TSP_SORT = False
         CHOP_ITTER_TSP_SORT = False
@@ -3667,14 +3669,17 @@ def _mode1_set_multiplier(df_segment, cluster_no, pose_no, canonical_registry):
     """
     cluster_no = _mode1_normalize_token(cluster_no)
     pose_no = _mode1_normalize_token(pose_no)
-    canonical_multiplier = (canonical_registry or {}).get((cluster_no, pose_no))
+    use_pose_crop = bool(USE_POSE_CROP_DICT and pose_no is not None)
+    canonical_multiplier = None
+    if not use_pose_crop:
+        canonical_multiplier = (canonical_registry or {}).get((cluster_no, pose_no))
     if canonical_multiplier is not None:
         sort.image_edge_multiplier = list(canonical_multiplier)
         print(
             "[canonical multipliers] using stored multiplier "
             f"for arms={cluster_no} object_signature={pose_no}: {sort.image_edge_multiplier}"
         )
-    elif pose_no is not None and USE_POSE_CROP_DICT:
+    elif use_pose_crop:
         sort.image_edge_multiplier = MULTIPLIER_LIST[POSE_CROP_DICT.get(cluster_no, 1)]
     elif cluster_no is not None and USE_FUSION_PAIR_DICT:
         crop_dict_index = CLUSTER_CROP_DICT.get(CLUSTER1, {}).get(cluster_no, None)
@@ -4528,8 +4533,11 @@ def main():
         print(f"set_multiplier_and_dims cluster_no: {cluster_no}, pose_no: {pose_no}")
         cluster_no = normalize_cluster_token(cluster_no)
         pose_no = normalize_cluster_token(pose_no)
+        use_pose_crop = bool(USE_POSE_CROP_DICT and pose_no is not None)
 
-        canonical_multiplier = get_canonical_multiplier(cluster_no, pose_no)
+        canonical_multiplier = None
+        if not use_pose_crop:
+            canonical_multiplier = get_canonical_multiplier(cluster_no, pose_no)
         if canonical_multiplier is not None:
             sort.image_edge_multiplier = list(canonical_multiplier)
             print(
@@ -4542,10 +4550,10 @@ def main():
 
         crop_dict_index = CLUSTER_CROP_DICT.get(CLUSTER1, {}).get(cluster_no, None)
         # if pose_no, overide sort.image_edge_multiplier based on pose_no
-        if canonical_multiplier is None and pose_no is not None and USE_POSE_CROP_DICT:
+        if canonical_multiplier is None and use_pose_crop:
             print("using pose_no to set image_edge_multiplier", pose_no)
             pose_type = POSE_CROP_DICT.get(cluster_no, 1)
-            sort.image_edge_multiplier = MULTIPLIER_LIST[POSE_CROP_DICT[cluster_no]]
+            sort.image_edge_multiplier = MULTIPLIER_LIST[POSE_CROP_DICT.get(cluster_no, 1)]
             if VERBOSE: print(f"using pose {cluster_no} getting POSE_CROP_DICT value {pose_type} for image_edge_multiplier", sort.image_edge_multiplier)
         elif canonical_multiplier is None and cluster_no is not None and crop_dict_index is not None and USE_FUSION_PAIR_DICT:
             print("using cluster_no to set image_edge_multiplier", cluster_no)
@@ -4567,7 +4575,7 @@ def main():
             else:
                 sort.image_edge_multiplier = sort.calc_dynamic_multiplier_from_min_max_body_landmarks(df_segment, 0)
 
-        if canonical_multiplier is None:
+        if canonical_multiplier is None and not use_pose_crop:
             register_canonical_multiplier(cluster_no, pose_no, sort.image_edge_multiplier)
 
         # reset face_height_output for each round, in case it gets redefined inside loop
