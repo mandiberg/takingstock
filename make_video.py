@@ -2387,6 +2387,7 @@ def linear_test_df(df_sorted, itter=None, counter_state=None):
     assembly_stats = {
         "rows_total": int(len(df_sorted)),
         "rows_saved": 0,
+        "rows_write_failed": 0,
         "cache_hit_rows": 0,
         "cache_miss_rows": 0,
         "skip_face_rows": 0,
@@ -2633,8 +2634,8 @@ def linear_test_df(df_sorted, itter=None, counter_state=None):
             ##################
             if do_inpaint and not bailout:
                 directory = os.path.dirname(inpaint_file)
-                # Create the directory if it doesn't exist (creates directories even if skips below because extension too large)
-                if not os.path.exists(directory):
+                # Only create debug inpaint directory when we are actually writing debug artifacts.
+                if SAVE_IMG_PROCESS and not os.path.exists(directory):
                     os.makedirs(directory)
                 # maxkey = max(extension_pixels, key=lambda y: abs(extension_pixels[y]))
 
@@ -2692,10 +2693,6 @@ def linear_test_df(df_sorted, itter=None, counter_state=None):
                     print("inpainting failed")
                     bailout=True
             elif check_extension(img.shape, extension_pixels, OUTPAINT_MAX) and OUTPAINT:
-                directory = os.path.dirname(inpaint_file)
-                # Create the directory if it doesn't exist (creates directories even if skips below because extension too large)
-                if not os.path.exists(directory):
-                    os.makedirs(directory)
                 print("outpainting medium extension")
                 inpaint_image=outpaint(img,extension_pixels,downsampling_scale=1,prompt="",negative_prompt="")
             else:
@@ -2724,9 +2721,14 @@ def linear_test_df(df_sorted, itter=None, counter_state=None):
                 cropped_dir = os.path.dirname(cropped_file)
                 if not os.path.exists(cropped_dir):
                     os.makedirs(cropped_dir)
-                cv2.imwrite(cropped_file, cropped_image)
-                if sort.VERBOSE:
+                cropped_write_ok = cv2.imwrite(cropped_file, cropped_image)
+                if cropped_write_ok and sort.VERBOSE:
                     print("saved cropped cache", cropped_file)
+                elif not cropped_write_ok:
+                    print(
+                        f"[write-fail] inpaint cropped cache write failed image_id={row.get('image_id', '?')} "
+                        f"path={cropped_file} shape={getattr(cropped_image, 'shape', None)}"
+                    )
             # Return the raw crop; caller is responsible for pair validation.
             return cropped_image, crop_status
 
@@ -2921,12 +2923,17 @@ def linear_test_df(df_sorted, itter=None, counter_state=None):
                     if not os.path.exists(cropped_cache_dir):
                         os.makedirs(cropped_cache_dir)
                     cache_write_t0 = time.perf_counter()
-                    cv2.imwrite(cropped_cache_file, cropped_image)
+                    cache_write_ok = cv2.imwrite(cropped_cache_file, cropped_image)
                     cache_write_elapsed = time.perf_counter() - cache_write_t0
                     add_assembly_timing("cache_write", cache_write_elapsed)
-                    print(f"[timing] cache write {cache_write_elapsed:.3f}s path={cropped_cache_file}")
-                    if sort.VERBOSE:
+                    print(f"[timing] cache write {cache_write_elapsed:.3f}s path={cropped_cache_file} ok={cache_write_ok}")
+                    if cache_write_ok and sort.VERBOSE:
                         print("saved cropped cache", cropped_cache_file)
+                    elif not cache_write_ok:
+                        print(
+                            f"[write-fail] cache write failed image_id={row.get('image_id', '?')} "
+                            f"path={cropped_cache_file} shape={getattr(cropped_image, 'shape', None)}"
+                        )
                 elif cropped_cache_file and used_cached_cropped:
                     print(f"[timing] cache-hit skip cache rewrite path={cropped_cache_file}")
                 else:
@@ -2948,13 +2955,22 @@ def linear_test_df(df_sorted, itter=None, counter_state=None):
                     )
                 else:
                     output_write_t0 = time.perf_counter()
+                    output_write_ok = True
                     if isinstance(cropped_image, str):
                         shutil.copy2(cropped_image, outpath)
+                        output_write_ok = os.path.exists(outpath)
                     else:
-                        cv2.imwrite(outpath, cropped_image)
+                        output_write_ok = cv2.imwrite(outpath, cropped_image)
                     output_write_elapsed = time.perf_counter() - output_write_t0
                     add_assembly_timing("output_write", output_write_elapsed)
-                    print(f"[timing] output write {output_write_elapsed:.3f}s path={outpath}")
+                    print(f"[timing] output write {output_write_elapsed:.3f}s path={outpath} ok={output_write_ok}")
+                    if not output_write_ok:
+                        print(
+                            f"[write-fail] output write failed image_id={row.get('image_id', '?')} "
+                            f"path={outpath} shape={getattr(cropped_image, 'shape', None)}"
+                        )
+                        assembly_stats["rows_write_failed"] += 1
+                        continue
                 good += 1
                 assembly_stats["rows_saved"] += 1
                 metas_write_t0 = time.perf_counter()
@@ -3002,6 +3018,7 @@ def linear_test_df(df_sorted, itter=None, counter_state=None):
     print(
         "[MODE1 ASSEMBLY] linear_test_df summary "
         f"rows_total={assembly_stats['rows_total']} rows_saved={assembly_stats['rows_saved']} "
+        f"rows_write_failed={assembly_stats['rows_write_failed']} "
         f"cache_hits={assembly_stats['cache_hit_rows']} cache_misses={assembly_stats['cache_miss_rows']} "
         f"skip_face={assembly_stats['skip_face_rows']} total={linear_test_elapsed:.2f}s"
     )
@@ -3080,7 +3097,18 @@ def process_row_for_cache_only(row):
         cropped_cache_dir = os.path.dirname(cropped_cache_file)
         if not os.path.exists(cropped_cache_dir):
             os.makedirs(cropped_cache_dir)
-        cv2.imwrite(cropped_cache_file, cropped_image)
+        cache_write_ok = cv2.imwrite(cropped_cache_file, cropped_image)
+        if not cache_write_ok:
+            print(
+                f"[cache_mode][write-fail] image_id={row.get('image_id', '?')} "
+                f"path={cropped_cache_file} shape={getattr(cropped_image, 'shape', None)}"
+            )
+            return {
+                "cache_file": cropped_cache_file,
+                "status": "failed",
+                "cropped_image": None,
+                "skip_reason": "cache write failed",
+            }
         print(f"[cache_mode] generated cache image_id={row.get('image_id', '?')} path={cropped_cache_file}")
         # Do not return image arrays from workers; that causes unbounded memory growth.
         return {"cache_file": cropped_cache_file, "status": "generated", "skip_reason": None}

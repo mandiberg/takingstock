@@ -1690,9 +1690,9 @@ class SortPose:
                 selfie_j = cv2.bitwise_and(image_resize_j, segmentation_mask_j)
                 
                 try:
-                    bbox_i = df.at[i,"bbox"]
-                    bbox_j = df.at[j, "bbox"]
-                    print(f'image {i},{j} sizes: {image_i.size}, {image_resize_j.size}')
+                    bbox_i = df.iloc[i]["bbox"]
+                    bbox_j = df.iloc[j]["bbox"]
+                    print(f'image {i},{j} sizes: {image_i.shape}, {image_resize_j.shape}')
                     bbox_i["bottom_extend"] = bbox_i["top"]+ ((bbox_i["bottom"]- bbox_i["top"])*2)
                     bbox_j["bottom_extend"] = bbox_j["top"]+ ((bbox_j["bottom"]- bbox_j["top"])*2)
 
@@ -1742,7 +1742,15 @@ class SortPose:
         print(f"Removing {len(to_remove)} duplicates (includes nones) from {df.shape[0]} images...")
         print(to_remove)
         print(df.head())
-        sorted_df = df.drop(df.index[list(to_remove)]).reset_index(drop=True)
+        # to_remove holds positional indices from range(n_rows); never treat them as index labels.
+        # Using label-based drop can remove unintended rows when df has duplicate/non-range index labels.
+        remove_positions = sorted(
+            idx for idx in to_remove
+            if isinstance(idx, (int, np.integer)) and 0 <= idx < len(df)
+        )
+        keep_mask = np.ones(len(df), dtype=bool)
+        keep_mask[remove_positions] = False
+        sorted_df = df.iloc[keep_mask].reset_index(drop=True)
         print(f"Resulting dataframe has {sorted_df.shape[0]} images after duplicate removal.")
         print(sorted_df.head())
         add_remove_timing("finalize", time.perf_counter() - finalize_start)
