@@ -53,27 +53,132 @@ CLASSES = {
     119: "Avocado_half",
 }
 
+COCO_CLASSES = {
+    0: "person",
+    1: "bicycle",
+    2: "car",
+    3: "motorcycle",
+    4: "airplane",
+    5: "bus",
+    6: "train",
+    7: "truck",
+    8: "boat",
+    9: "traffic light",
+    10: "fire hydrant",
+    11: "stop sign",
+    12: "parking meter",
+    13: "bench",
+    14: "bird",
+    15: "cat",
+    16: "dog",
+    17: "horse",
+    18: "sheep",
+    19: "cow",
+    20: "elephant",
+    21: "bear",
+    22: "zebra",
+    23: "giraffe",
+    24: "backpack",
+    25: "umbrella",
+    26: "handbag",
+    27: "tie",
+    28: "suitcase",
+    29: "frisbee",
+    30: "skis",
+    31: "snowboard",
+    32: "sports ball",
+    33: "kite",
+    34: "baseball bat",
+    35: "baseball glove",
+    36: "skateboard",
+    37: "surfboard",
+    38: "tennis racket",
+    39: "bottle",
+    40: "wine glass",
+    41: "cup",
+    42: "fork",
+    43: "knife",
+    44: "spoon",
+    45: "bowl",
+    46: "banana",
+    47: "apple",
+    48: "sandwich",
+    49: "orange",
+    50: "broccoli",
+    51: "carrot",
+    52: "hot dog",
+    53: "pizza",
+    54: "donut",
+    55: "cake",
+    56: "chair",
+    57: "couch",
+    58: "potted plant",
+    59: "bed",
+    60: "dining table",
+    61: "toilet",
+    62: "tv",
+    63: "laptop",
+    64: "mouse",
+    65: "remote",
+    66: "keyboard",
+    67: "cell phone",
+    68: "microwave",
+    69: "oven",
+    70: "toaster",
+    71: "sink",
+    72: "refrigerator",
+    73: "book",
+    74: "clock",
+    75: "vase",
+    76: "scissors",
+    77: "teddy bear",
+    78: "hair drier",
+    79: "toothbrush",
+}
+
+ALL_CLASSES = {**COCO_CLASSES, **CLASSES}
+
+COLOR_MODES = {
+    0: "centerwhitehorizontal",
+    1: "centerallwhite",
+    2: "alternatinghorizontal",
+    3: "alternatinghorizontal_flipflop"
+}
+USING_MODE = 3
 
 SCREEN_WIDTH = 1080
 SCREEN_HEIGHT = 1920
-ROWS_PER_SECOND = 10.0
+ROWS_PER_SECOND = 9.0
 ROW_HEIGHT = 54
-TOP_MARGIN = 84
+TOP_MARGIN = 28
 BOTTOM_MARGIN = 64
 
 BG_COLOR = (8, 9, 12)
 GRID_COLOR = (32, 35, 42)
+# TEXT_COLOR = (228, 233, 242)
 TEXT_COLOR = (228, 233, 242)
-MUTED_TEXT = (136, 146, 162)
-ID_COLOR = (153, 209, 255)
-HEADER_COLOR = (166, 179, 199)
+MUTED_TEXT = (192, 200, 215)
+# MUTED_TEXT = (136, 146, 162)
+ID_TEXT_COLOR = (24, 27, 32)
+CENTER_BG_COLOR = (245, 245, 245)
+ZEBRA_DARK_A = (8, 10, 14)
+ZEBRA_DARK_B = (30, 34, 45)
+# ZEBRA_DARK_B = (26, 30, 38)
+# ZEBRA_LIGHT_A = (248, 248, 248)
+ZEBRA_LIGHT_A = (237, 242, 245)
+ZEBRA_LIGHT_B = (210, 213, 220)
+# ZEBRA_LIGHT_B = (220, 224, 230)
 
-LEFT_X = 28
-LEFT_W = 430
-MID_X = LEFT_X + LEFT_W + 16
-MID_W = 190
-RIGHT_X = MID_X + MID_W + 16
-RIGHT_W = SCREEN_WIDTH - RIGHT_X - 28
+OUTER_PAD = 28
+GUTTER = 16
+MID_W = 150
+MID_X = (SCREEN_WIDTH - MID_W) // 2
+SIDE_W = (SCREEN_WIDTH - (OUTER_PAD * 2) - MID_W - (GUTTER * 2)) // 2
+LEFT_X = OUTER_PAD
+LEFT_W = SIDE_W
+RIGHT_X = MID_X + MID_W + GUTTER
+RIGHT_W = SIDE_W
+MID_TEXT_PAD = 14
 
 
 @dataclass
@@ -104,23 +209,30 @@ def parse_detection_json(raw_json: str) -> List[dict]:
 
 
 def class_label(class_id: int) -> str:
-    return CLASSES.get(class_id, f"class_{class_id}")
+    return ALL_CLASSES.get(class_id, f"class_{class_id}")
 
 
 def render_detection_text(detections: List[dict]) -> str:
     if not detections:
         return "none"
+    show_conf = len(detections) == 1
     parts = []
     for det in detections:
         class_id = det.get("class_id")
-        obj_no = det.get("obj_no")
-        if class_id is None:
+        try:
+            class_id = int(class_id)
+        except (TypeError, ValueError):
             continue
-        if obj_no is None:
-            parts.append(f"{class_id}:{class_label(class_id)}")
-        else:
-            parts.append(f"{class_id}:{class_label(class_id)}#{obj_no}")
-    return " | ".join(parts) if parts else "none"
+        label = f"class_id:{class_id} ({class_label(class_id)})"
+        if show_conf:
+            conf = det.get("conf")
+            try:
+                conf_text = f"{float(conf):.2f}"
+            except (TypeError, ValueError):
+                conf_text = "n/a"
+            label = f"{label} conf:{conf_text}"
+        parts.append(label)
+    return ", ".join(parts) if parts else "none"
 
 
 def load_rows(csv_path: Path) -> List[MetaRow]:
@@ -153,35 +265,76 @@ def draw_text_clipped(surface, font, text, color, x, y, width):
     surface.blit(clip_surface, (x, y))
 
 
-def draw_text_fade_right(surface, font, text, color, x, y, width, fade_width, bg_color):
+def draw_text_clipped_right(surface, font, text, color, x, y, width):
     text_surface = font.render(text, True, color)
+    text_w = text_surface.get_width()
     text_h = text_surface.get_height()
 
-    if text_surface.get_width() <= width:
-        surface.blit(text_surface, (x, y))
+    if text_w <= width:
+        surface.blit(text_surface, (x + width - text_w, y))
         return
 
     clip_surface = pygame.Surface((width, text_h), pygame.SRCALPHA)
-    clip_surface.blit(text_surface, (0, 0))
+    clip_surface.blit(text_surface, (width - text_w, 0))
+    surface.blit(clip_surface, (x, y))
 
-    fade_surface = pygame.Surface((fade_width, text_h), pygame.SRCALPHA)
+
+def draw_text_fade_right(
+    surface,
+    font,
+    text,
+    color,
+    x,
+    y,
+    width,
+    fade_width,
+    fade_top,
+    fade_height,
+    fade_color,
+):
+    # Draw text clipped to column width first.
+    draw_text_clipped(surface, font, text, color, x, y, width)
+
+    # Fade across the full row height so zebra stripes and text fade together.
+    fade_surface = pygame.Surface((fade_width, fade_height), pygame.SRCALPHA)
     for i in range(fade_width):
         alpha = int(255 * (i / max(1, fade_width - 1)))
         pygame.draw.line(
             fade_surface,
-            (bg_color[0], bg_color[1], bg_color[2], alpha),
+            (fade_color[0], fade_color[1], fade_color[2], alpha),
             (i, 0),
-            (i, text_h),
+            (i, fade_height),
         )
-    clip_surface.blit(fade_surface, (width - fade_width, 0))
-    surface.blit(clip_surface, (x, y))
+    surface.blit(fade_surface, (x + width - fade_width, fade_top))
 
 
-def draw_headers(surface, font):
-    pygame.draw.line(surface, GRID_COLOR, (LEFT_X, TOP_MARGIN - 16), (SCREEN_WIDTH - 28, TOP_MARGIN - 16), 1)
-    surface.blit(font.render("objects", True, HEADER_COLOR), (LEFT_X, 24))
-    surface.blit(font.render("image_id", True, HEADER_COLOR), (MID_X, 24))
-    surface.blit(font.render("description", True, HEADER_COLOR), (RIGHT_X, 24))
+def draw_text_fade_left(
+    surface,
+    font,
+    text,
+    color,
+    x,
+    y,
+    width,
+    fade_width,
+    fade_top,
+    fade_height,
+    fade_color,
+):
+    # Draw right-aligned text clipped to column width first.
+    draw_text_clipped_right(surface, font, text, color, x, y, width)
+
+    # Fade across the full row height so zebra stripes and text fade together.
+    fade_surface = pygame.Surface((fade_width, fade_height), pygame.SRCALPHA)
+    for i in range(fade_width):
+        alpha = int(255 * (1.0 - (i / max(1, fade_width - 1))))
+        pygame.draw.line(
+            fade_surface,
+            (fade_color[0], fade_color[1], fade_color[2], alpha),
+            (i, 0),
+            (i, fade_height),
+        )
+    surface.blit(fade_surface, (x, fade_top))
 
 
 def main():
@@ -213,11 +366,10 @@ def main():
     clock = pygame.time.Clock()
 
     font_row = pygame.font.SysFont("Menlo", 24)
-    font_header = pygame.font.SysFont("Menlo", 20, bold=True)
-
     offset_y = float(SCREEN_HEIGHT)
     speed_px_s = ROW_HEIGHT * max(args.rows_per_second, 0.0)
     frozen = False
+    color_mode = COLOR_MODES.get(USING_MODE, COLOR_MODES[0])
 
     running = True
     while running:
@@ -237,18 +389,56 @@ def main():
                 frozen = True
 
         screen.fill(BG_COLOR)
-        draw_headers(screen, font_header)
+        if color_mode in {"centerwhitehorizontal", "centerallwhite"}:
+            pygame.draw.rect(screen, CENTER_BG_COLOR, (MID_X, 0, MID_W, SCREEN_HEIGHT), 0)
 
         for idx, row in enumerate(rows):
             y = int(offset_y + idx * ROW_HEIGHT)
             if y < TOP_MARGIN - ROW_HEIGHT or y > SCREEN_HEIGHT - BOTTOM_MARGIN:
                 continue
 
-            if idx % 2 == 0:
-                pygame.draw.rect(screen, (12, 14, 18), (LEFT_X, y - 2, SCREEN_WIDTH - 56, ROW_HEIGHT - 4), 0)
+            image_id_color = ID_TEXT_COLOR
 
-            draw_text_clipped(screen, font_row, row.objects_text, TEXT_COLOR, LEFT_X, y + 8, LEFT_W)
-            draw_text_clipped(screen, font_row, row.image_id, ID_COLOR, MID_X, y + 8, MID_W)
+            if color_mode == "alternatinghorizontal_flipflop":
+                side_row_color = ZEBRA_DARK_A if idx % 2 == 0 else ZEBRA_DARK_B
+                center_row_color = ZEBRA_DARK_B if idx % 2 == 0 else ZEBRA_DARK_A
+                pygame.draw.rect(screen, side_row_color, (LEFT_X, y, LEFT_W, ROW_HEIGHT), 0)
+                pygame.draw.rect(screen, center_row_color, (MID_X, y, MID_W, ROW_HEIGHT), 0)
+                pygame.draw.rect(screen, side_row_color, (RIGHT_X, y, RIGHT_W, ROW_HEIGHT), 0)
+                image_id_color = TEXT_COLOR
+            elif color_mode == "alternatinghorizontal":
+                dark_row_color = ZEBRA_DARK_A if idx % 2 == 0 else ZEBRA_DARK_B
+                light_row_color = ZEBRA_LIGHT_A if idx % 2 == 0 else ZEBRA_LIGHT_B
+                pygame.draw.rect(screen, dark_row_color, (LEFT_X, y, LEFT_W, ROW_HEIGHT), 0)
+                pygame.draw.rect(screen, light_row_color, (MID_X, y, MID_W, ROW_HEIGHT), 0)
+                pygame.draw.rect(screen, dark_row_color, (RIGHT_X, y, RIGHT_W, ROW_HEIGHT), 0)
+            elif idx % 2 == 0:
+                if color_mode != "alternatinghorizontal":
+                    pygame.draw.rect(screen, (12, 14, 18), (LEFT_X, y - 2, LEFT_W, ROW_HEIGHT - 4), 0)
+                    pygame.draw.rect(screen, (12, 14, 18), (RIGHT_X, y - 2, RIGHT_W, ROW_HEIGHT - 4), 0)
+
+            draw_text_fade_left(
+                screen,
+                font_row,
+                row.objects_text,
+                MUTED_TEXT,
+                LEFT_X,
+                y + 8,
+                LEFT_W,
+                fade_width=70,
+                fade_top=y,
+                fade_height=ROW_HEIGHT,
+                fade_color=BG_COLOR,
+            )
+            draw_text_clipped(
+                screen,
+                font_row,
+                row.image_id,
+                image_id_color,
+                MID_X + MID_TEXT_PAD,
+                y + 8,
+                MID_W - (MID_TEXT_PAD * 2),
+            )
             draw_text_fade_right(
                 screen,
                 font_row,
@@ -258,10 +448,18 @@ def main():
                 y + 8,
                 RIGHT_W,
                 fade_width=70,
-                bg_color=BG_COLOR,
+                fade_top=y,
+                fade_height=ROW_HEIGHT,
+                fade_color=BG_COLOR,
             )
 
-            pygame.draw.line(screen, GRID_COLOR, (LEFT_X, y + ROW_HEIGHT - 1), (SCREEN_WIDTH - 28, y + ROW_HEIGHT - 1), 1)
+            if color_mode in {"alternatinghorizontal", "alternatinghorizontal_flipflop"}:
+                pass
+            elif color_mode == "centerallwhite":
+                pygame.draw.line(screen, GRID_COLOR, (LEFT_X, y + ROW_HEIGHT - 1), (LEFT_X + LEFT_W, y + ROW_HEIGHT - 1), 1)
+                pygame.draw.line(screen, GRID_COLOR, (RIGHT_X, y + ROW_HEIGHT - 1), (SCREEN_WIDTH - OUTER_PAD, y + ROW_HEIGHT - 1), 1)
+            else:
+                pygame.draw.line(screen, GRID_COLOR, (LEFT_X, y + ROW_HEIGHT - 1), (SCREEN_WIDTH - OUTER_PAD, y + ROW_HEIGHT - 1), 1)
 
         pygame.display.flip()
 
