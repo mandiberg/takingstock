@@ -1095,6 +1095,13 @@ if not io.IS_TENCH:
         image_id_j = Column(Integer, ForeignKey('Encodings.encoding_id'), primary_key=True)
         manual_check = Column(Boolean, default=False)
 
+    class Exclude(Base):
+        __tablename__ = 'Exclude'
+        seg_image_id = Column(Integer, primary_key=True, autoincrement=True)
+        image_id = Column(Integer, ForeignKey('Images.image_id'))
+        c_id = Column(Integer)
+        p_id = Column(Integer)
+
     # not currently in use
     if IS_HAND_POSE_FUSION and CLUSTER2:
         ClustersTable_name_2 = CLUSTER2
@@ -3787,7 +3794,64 @@ def _mode1_get_not_dupes_sql(db_session):
     return {(row.image_id_i, row.image_id_j): True for row in query}
 
 
-def _mode1_run_db_dedupe(df_sorted, db_session, mode1_enable_db_dedupe, timing):
+def _mode1_filter_excluded_images(db_session, df, dedupe_cluster_id, dedupe_pose_id, timing):
+    """Drop rows from the current CSV when image_id is in Exclude for c_id/p_id."""
+    if dedupe_cluster_id is None or dedupe_pose_id is None:
+        print(
+            "[MODE1 DEDUPE][exclude] skipped: unresolved cluster/pose "
+            f"cluster_no={dedupe_cluster_id} pose_no={dedupe_pose_id}"
+        )
+        return df
+
+    rows_before = int(len(df.index))
+    lookup_start = time.perf_counter()
+    excluded_rows = db_session.query(Exclude.image_id).filter(
+        Exclude.c_id == dedupe_cluster_id,
+        Exclude.p_id == dedupe_pose_id,
+        Exclude.image_id.isnot(None),
+    ).all()
+    lookup_elapsed = time.perf_counter() - lookup_start
+    timing["db_exclude_lookup"] = timing.get("db_exclude_lookup", 0.0) + lookup_elapsed
+
+    excluded_ids = {int(row.image_id) for row in excluded_rows if row.image_id is not None}
+    match_count = int(len(excluded_ids))
+
+    print(
+        "[MODE1 DEDUPE][exclude] applying "
+        f"c_id={dedupe_cluster_id} p_id={dedupe_pose_id} rows_before={rows_before}"
+    )
+
+    filter_start = time.perf_counter()
+    if excluded_ids:
+        df = df[~df["image_id"].isin(excluded_ids)]
+    filter_elapsed = time.perf_counter() - filter_start
+    timing["db_exclude_filter"] = timing.get("db_exclude_filter", 0.0) + filter_elapsed
+
+    rows_after = int(len(df.index))
+    rows_dropped = int(rows_before - rows_after)
+
+    timing["db_exclude_rows_before"] = timing.get("db_exclude_rows_before", 0) + rows_before
+    timing["db_exclude_rows_after"] = timing.get("db_exclude_rows_after", 0) + rows_after
+    timing["db_exclude_rows_dropped"] = timing.get("db_exclude_rows_dropped", 0) + rows_dropped
+    timing["db_exclude_match_count"] = timing.get("db_exclude_match_count", 0) + match_count
+    timing["db_exclude_total"] = timing.get("db_exclude_total", 0.0) + (lookup_elapsed + filter_elapsed)
+
+    print(
+        "[MODE1 DEDUPE][exclude] "
+        f"matched={match_count} dropped={rows_dropped} rows_after={rows_after} "
+        f"lookup={lookup_elapsed:.3f}s filter={filter_elapsed:.3f}s"
+    )
+    return df
+
+
+def _mode1_run_db_dedupe(
+    df_sorted,
+    db_session,
+    mode1_enable_db_dedupe,
+    timing,
+    dedupe_cluster_id=None,
+    dedupe_pose_id=None,
+):
     """Apply MODE1 dedupe flow; timing is accumulated into the provided dict."""
     db_start = time.perf_counter()
     if io.IS_TENCH or io.IS_MICHELLE:
@@ -3809,6 +3873,22 @@ def _mode1_run_db_dedupe(df_sorted, db_session, mode1_enable_db_dedupe, timing):
 
     if VERBOSE:
         print("before recheck_is_dupe_of, df_sorted size", df_sorted.size)
+
+    try:
+        df_sorted = _mode1_filter_excluded_images(
+            db_session,
+            df_sorted,
+            dedupe_cluster_id,
+            dedupe_pose_id,
+            timing,
+        )
+    except Exception as exclude_exc:
+        print(
+            "[MODE1 DEDUPE][exclude] error, continuing without exclude filter: "
+            f"{exclude_exc}"
+        )
+        timing["db_exclude_error_count"] = timing.get("db_exclude_error_count", 0) + 1
+
     recheck_start = time.perf_counter()
     df_sorted = _mode1_recheck_is_dupe_of(db_session, df_sorted)
     timing["db_recheck_is_dupe_of"] = timing.get("db_recheck_is_dupe_of", 0.0) + (
@@ -3869,6 +3949,9 @@ def _mode1_process_one_csv_shared(csv_file: str, cfg: dict, db_session=None) -> 
             },
         )
 
+        dedupe_cluster_id = _mode1_normalize_token(cluster_no)
+        dedupe_pose_id = _mode1_normalize_token(pose_no)
+
         df_sorted = _mode1_load_df(os.path.join(csv_folder, csv_file), timing)
         if df_sorted is None:
             timing["file_total"] = timing.get("file_total", 0.0) + (time.perf_counter() - file_start)
@@ -3885,6 +3968,8 @@ def _mode1_process_one_csv_shared(csv_file: str, cfg: dict, db_session=None) -> 
             db_session,
             mode1_enable_db_dedupe,
             timing,
+            dedupe_cluster_id=dedupe_cluster_id,
+            dedupe_pose_id=dedupe_pose_id,
         )
 
         if PURGING_DUPES:
