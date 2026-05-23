@@ -819,7 +819,7 @@ def build_osc_schedule(current_pos, this_period, total_images, merge_count, star
 
     return schedule
 
-def process_images_osc(images_to_build, video_writer, total_images, period, current_pos=0, merge_count=MERGE_COUNT):
+def process_images_osc(images_to_build, video_writer, total_images, period, current_pos=0, merge_count=MERGE_COUNT, is_final_cycle=False):
     global last_image_written
     print(f"process_images_osc called with total_images {total_images}, images_to_build {len(images_to_build)}, period {period}, current_pos {current_pos}, merge_count {merge_count}")
 
@@ -852,10 +852,17 @@ def process_images_osc(images_to_build, video_writer, total_images, period, curr
         f"last_sizes={schedule_sizes[-8:]}",
     )
 
-    for step in schedule:
+    for step_i, step in enumerate(schedule):
         start_idx = step["start_idx"]
         end_idx = step["end_idx"]
         if end_idx - start_idx <= 0:
+            continue
+
+        # In strict unique mode, skip the terminal singleton of the final cycle.
+        # This avoids a visible "hard hold" on the last source image before seam blending.
+        is_terminal_singleton = step_i == (len(schedule) - 1) and step["size"] == 1
+        if STRICT_UNIQUE_IMAGE_PLACEMENT and BLEND_END_TO_FIRST and is_final_cycle and is_terminal_singleton:
+            print("skipping terminal singleton on final cycle to improve end seam")
             continue
 
         images_to_return = merge_images_numpy(images_to_build[start_idx:end_idx])
@@ -974,9 +981,19 @@ def write_video(img_array, subfolder_path=None):
             if total_images >= max(merge_count, START_MERGE):
                 
                 while current_pos < total_images:
-                    process_images_osc(images_to_build, video_writer, total_images, period, current_pos, merge_count)
+                    next_pos = current_pos + cycle_advance
+                    is_final_cycle = next_pos >= total_images
+                    process_images_osc(
+                        images_to_build,
+                        video_writer,
+                        total_images,
+                        period,
+                        current_pos,
+                        merge_count,
+                        is_final_cycle=is_final_cycle,
+                    )
                     # Move to next cycle. In strict mode this is period-sized and non-overlapping.
-                    current_pos += cycle_advance
+                    current_pos = next_pos
                     print("current_pos", current_pos)
 
                 # Handle remaining images because there are not enough for a full cycle
@@ -991,10 +1008,11 @@ def write_video(img_array, subfolder_path=None):
                     if BLEND_END_TO_FIRST:
                         # Coda: bridge last rendered frame back toward first rendered frame.
                         # Excludes endpoints, so this adds only in-between blend frames.
+                        seam_blend_steps = 2 if STRICT_UNIQUE_IMAGE_PLACEMENT else LOOP_SEAM_BLEND_STEPS
                         seam_frames = build_loop_seam_transition(
                             last_image_written,
                             first_image_written,
-                            blend_steps=LOOP_SEAM_BLEND_STEPS,
+                            blend_steps=seam_blend_steps,
                         )
                         print(
                             "creating seam bridge between rendered last and first frames:",
