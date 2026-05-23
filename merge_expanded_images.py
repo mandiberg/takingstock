@@ -79,7 +79,7 @@ elif "make_video" in CURRENT_MODE:
     elif "osc" in CURRENT_MODE:
         OSCILATING_MERGE = True # if true, will do an oscillating merge from START_MERGE up to MERGE_COUNT and back down to START_MERGE 
         LOOPING = True
-        PERIOD = 5 # how many images in each merge cycle
+        PERIOD = 10 # how many images in each merge cycle
         MERGE_COUNT = 5 # largest number of merged images 
         START_MERGE = 1 # number of images merged into the first image. Can be 1 (no merges) or >1 (two or more images merged)
         SMOOTH_MERGE_COUNT = 2 # how many transition tween frames betwen each keyframe
@@ -768,7 +768,7 @@ def build_osc_schedule(current_pos, this_period, total_images, merge_count, star
     local_merge_count = max(local_start_merge, int(merge_count))
 
     schedule = []
-    for step in range(this_period):
+    for step in range(this_period - 1):
         # Triangular distance from the nearest edge gives a mirrored up/down envelope.
         edge_dist = min(step, this_period - 1 - step)
         size = min(local_start_merge + edge_dist, local_merge_count)
@@ -944,7 +944,7 @@ def write_video(img_array, subfolder_path=None):
                 while current_pos + period <= total_images:
                     process_images_osc(images_to_build, video_writer, total_images, period, current_pos, merge_count)
                     # Move to the next cycle
-                    current_pos += period
+                    current_pos += max(1, period - 1)
                     print("current_pos", current_pos)
 
                 # Handle remaining images because there are not enough for a full cycle
