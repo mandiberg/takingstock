@@ -79,7 +79,7 @@ elif "make_video" in CURRENT_MODE:
     elif "osc" in CURRENT_MODE:
         OSCILATING_MERGE = True # if true, will do an oscillating merge from START_MERGE up to MERGE_COUNT and back down to START_MERGE 
         LOOPING = True
-        PERIOD = 10 # how many images in each merge cycle
+        PERIOD = 30 # how many images in each merge cycle
         MERGE_COUNT = 5 # largest number of merged images 
         START_MERGE = 1 # number of images merged into the first image. Can be 1 (no merges) or >1 (two or more images merged)
         SMOOTH_MERGE_COUNT = 2 # how many transition tween frames betwen each keyframe
@@ -767,20 +767,38 @@ def build_osc_schedule(current_pos, this_period, total_images, merge_count, star
     local_start_merge = max(1, int(start_merge))
     local_merge_count = max(local_start_merge, int(merge_count))
 
-    schedule = []
-    for step in range(this_period - 1):
-        # Triangular distance from the nearest edge gives a mirrored up/down envelope.
-        edge_dist = min(step, this_period - 1 - step)
-        size = min(local_start_merge + edge_dist, local_merge_count)
+    max_available = total_images - current_pos
+    if max_available < local_start_merge:
+        return []
 
+    # Use the period as the full cycle budget, with one shared boundary frame omitted.
+    cycle_steps = min(max_available, max(1, int(this_period) - 1))
+    peak_size = min(local_merge_count, max_available, max(local_start_merge, (cycle_steps + 1) // 2))
+
+    if cycle_steps < (2 * peak_size - 1):
+        peak_size = max(local_start_merge, cycle_steps // 2 + 1)
+
+    plateau_steps = max(0, cycle_steps - (2 * peak_size - 1))
+
+    # Build mirrored sizes with a flat top: up to peak, hold, then down.
+    up_sizes = list(range(local_start_merge, peak_size))
+    hold_sizes = [peak_size] * (plateau_steps + 1)
+    down_sizes = list(range(peak_size - 1, local_start_merge - 1, -1))
+    size_sequence = up_sizes + hold_sizes + down_sizes
+
+    schedule = []
+    for step, size in enumerate(size_sequence):
         end_idx = current_pos + step + 1
+
         if end_idx > total_images:
             break
-        start_idx = max(current_pos, end_idx - size)
 
-        # Clamp minimum slice width to one image.
+        start_idx = end_idx - size
+        if start_idx < current_pos:
+            start_idx = current_pos
+
         if start_idx >= end_idx:
-            start_idx = max(current_pos, end_idx - 1)
+            continue
 
         schedule.append(
             {
@@ -938,13 +956,15 @@ def write_video(img_array, subfolder_path=None):
             else:
                 merge_count = MERGE_COUNT
                 
-            # Process only if there are enough images to complete at least one cycle
-            if total_images >= period:
+            cycle_advance = max(1, merge_count - START_MERGE)
+
+            # Process only if there are enough images to build at least one peak merge.
+            if total_images >= max(merge_count, START_MERGE):
                 
-                while current_pos + period <= total_images:
+                while current_pos + merge_count <= total_images:
                     process_images_osc(images_to_build, video_writer, total_images, period, current_pos, merge_count)
-                    # Move to the next cycle
-                    current_pos += max(1, period - 1)
+                    # Move to the next cycle at the shared boundary frame.
+                    current_pos += cycle_advance
                     print("current_pos", current_pos)
 
                 # Handle remaining images because there are not enough for a full cycle
@@ -953,12 +973,8 @@ def write_video(img_array, subfolder_path=None):
                 if "smooth_osc" in CURRENT_MODE:
                     if remaining > START_MERGE:
                         print("remaining", remaining)
-                        if merge_count *2 > remaining:
-                            merge_count = math.floor(remaining / 2)
-                            print("adjusted merge_count to", merge_count)
-                        # remaining_merge_count = math.floor(remaining // 2)
-                        # merge_count = min(merge_count, remaining_merge_count)
-                        process_images_osc(images_to_build, video_writer, total_images, period, current_pos, merge_count)
+                        tail_merge_count = min(merge_count, remaining)
+                        process_images_osc(images_to_build, video_writer, total_images, remaining, current_pos, tail_merge_count)
 
                     # Coda: bridge last rendered frame back toward first rendered frame.
                     # This keeps first-frame duplication semantics while softening seam jumpiness.
