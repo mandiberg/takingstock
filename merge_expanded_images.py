@@ -41,6 +41,8 @@ PARALLEL_MERGE_WORKERS = 16  # set > 1 to parallelize per-subfolder work with mu
 CROP_AFTER_COUNT = 100
 
 LOOPING = False # defaults
+STRICT_UNIQUE_IMAGE_PLACEMENT = False
+BLEND_END_TO_FIRST = True
 last_image_written = None
 first_image_written = None
 run_counter = 0
@@ -79,6 +81,8 @@ elif "make_video" in CURRENT_MODE:
     elif "osc" in CURRENT_MODE:
         OSCILATING_MERGE = True # if true, will do an oscillating merge from START_MERGE up to MERGE_COUNT and back down to START_MERGE 
         LOOPING = True
+        # Enforce no cycle overlap and no source-image duplication for this mode.
+        STRICT_UNIQUE_IMAGE_PLACEMENT = True
         PERIOD = 30 # how many images in each merge cycle
         MERGE_COUNT = 5 # largest number of merged images 
         START_MERGE = 1 # number of images merged into the first image. Can be 1 (no merges) or >1 (two or more images merged)
@@ -771,8 +775,12 @@ def build_osc_schedule(current_pos, this_period, total_images, merge_count, star
     if max_available < local_start_merge:
         return []
 
-    # Use the period as the full cycle budget, with one shared boundary frame omitted.
-    cycle_steps = min(max_available, max(1, int(this_period) - 1))
+    # Use the full period budget in strict mode so cycles do not share boundary frames.
+    if STRICT_UNIQUE_IMAGE_PLACEMENT:
+        cycle_steps = min(max_available, max(1, int(this_period)))
+    else:
+        # Legacy mode: one shared boundary frame omitted.
+        cycle_steps = min(max_available, max(1, int(this_period) - 1))
     peak_size = min(local_merge_count, max_available, max(local_start_merge, (cycle_steps + 1) // 2))
 
     if cycle_steps < (2 * peak_size - 1):
@@ -912,7 +920,8 @@ def write_video(img_array, subfolder_path=None):
     elif len(img_array) < PERIOD/2:
         print(f"not enough images to fill half a period ({PERIOD/2}), skipping this folder")
         return
-    if IS_VIDEO_MERGE: img_array.append(img_array[0]) # add the first image to the end to make a loop
+    if IS_VIDEO_MERGE and not STRICT_UNIQUE_IMAGE_PLACEMENT:
+        img_array.append(img_array[0]) # add the first image to the end to make a loop
     images_to_build = load_images(img_array, subfolder_path)
     # print("img_array", img_array)
     print("len images_to_build", len(images_to_build))
@@ -956,14 +965,17 @@ def write_video(img_array, subfolder_path=None):
             else:
                 merge_count = MERGE_COUNT
                 
-            cycle_advance = max(1, merge_count - START_MERGE)
+            if STRICT_UNIQUE_IMAGE_PLACEMENT:
+                cycle_advance = max(1, int(period))
+            else:
+                cycle_advance = max(1, merge_count - START_MERGE)
 
             # Process only if there are enough images to build at least one peak merge.
             if total_images >= max(merge_count, START_MERGE):
                 
-                while current_pos + merge_count <= total_images:
+                while current_pos < total_images:
                     process_images_osc(images_to_build, video_writer, total_images, period, current_pos, merge_count)
-                    # Move to the next cycle at the shared boundary frame.
+                    # Move to next cycle. In strict mode this is period-sized and non-overlapping.
                     current_pos += cycle_advance
                     print("current_pos", current_pos)
 
@@ -976,19 +988,20 @@ def write_video(img_array, subfolder_path=None):
                         tail_merge_count = min(merge_count, remaining)
                         process_images_osc(images_to_build, video_writer, total_images, remaining, current_pos, tail_merge_count)
 
-                    # Coda: bridge last rendered frame back toward first rendered frame.
-                    # This keeps first-frame duplication semantics while softening seam jumpiness.
-                    seam_frames = build_loop_seam_transition(
-                        last_image_written,
-                        first_image_written,
-                        blend_steps=LOOP_SEAM_BLEND_STEPS,
-                    )
-                    print(
-                        "creating seam bridge between rendered last and first frames:",
-                        f"seam_count={len(seam_frames)}",
-                    )
-                    if seam_frames:
-                        save_images_to_video(seam_frames, video_writer)
+                    if BLEND_END_TO_FIRST:
+                        # Coda: bridge last rendered frame back toward first rendered frame.
+                        # Excludes endpoints, so this adds only in-between blend frames.
+                        seam_frames = build_loop_seam_transition(
+                            last_image_written,
+                            first_image_written,
+                            blend_steps=LOOP_SEAM_BLEND_STEPS,
+                        )
+                        print(
+                            "creating seam bridge between rendered last and first frames:",
+                            f"seam_count={len(seam_frames)}",
+                        )
+                        if seam_frames:
+                            save_images_to_video(seam_frames, video_writer)
                         
 
                 else:
@@ -1028,7 +1041,8 @@ def write_video(img_array, subfolder_path=None):
 
 
 
-    if LOOPING: shift_video_frames(video_path)
+    if LOOPING and not STRICT_UNIQUE_IMAGE_PLACEMENT:
+        shift_video_frames(video_path)
 
     # Add audio to the video if needed
     if BUILD_WITH_AUDIO:
