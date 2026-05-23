@@ -35,7 +35,7 @@ if io.IS_TENCH:
 
 # iterate through folders? 
 IS_CLUSTER = True
-PARALLEL_MERGE_WORKERS = 16  # set > 1 to parallelize per-subfolder work with multiprocessing.Pool
+PARALLEL_MERGE_WORKERS = 1  # set > 1 to parallelize per-subfolder work with multiprocessing.Pool
 
 # if None, won't crop. else if int, will crop output to that count
 CROP_AFTER_COUNT = 100
@@ -98,7 +98,7 @@ SAVE_METAS_AUDIO = False
 SAVE_INSTALLATION_METAS = True
 BUILD_WITH_AUDIO = False
 ALL_ONE_VIDEO = False
-USE_CURRENT_DIMS = False # don't do any scaling
+USE_CURRENT_DIMS = True # don't do any scaling
 LOWEST_DIMS = True # make this False if assembling big images eg full body # False if doing Paris Photo faces
 FULLBODY = False # this is for full body images, will change GIGA_DIMS to FULLBODY_DIMS
 SORT_ORDER = "Chronological"
@@ -795,8 +795,17 @@ def build_osc_schedule(current_pos, this_period, total_images, merge_count, star
     size_sequence = up_sizes + hold_sizes + down_sizes
 
     schedule = []
+    up_len = len(up_sizes)
+    hold_len = len(hold_sizes)
+    cycle_end_idx = min(total_images, current_pos + cycle_steps)
+
     for step, size in enumerate(size_sequence):
-        end_idx = current_pos + step + 1
+        if STRICT_UNIQUE_IMAGE_PLACEMENT and step >= (up_len + hold_len):
+            # Strict mode: keep the down-ramp tail anchored so late transitions
+            # do not pull in a new third image while size is shrinking.
+            end_idx = cycle_end_idx
+        else:
+            end_idx = current_pos + step + 1
 
         if end_idx > total_images:
             break
