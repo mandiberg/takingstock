@@ -10,15 +10,23 @@ Save that list as a text file in the same folder, called image_ids.txt
 
 import os
 
-def parse_folder(folderpath):
+def parse_folder(folderpath, exclude=False):
     image_ids = []
+    cluster_id = p_id = None
     for filename in os.listdir(folderpath):
         if filename.endswith(".jpg"):
+            if exclude:
+                print(f"Parsing filename for exclude: {filename}")
+                cluster_id = filename.split("_cc")[1].split("_")[0]
+                p_id = filename.split("_p")[1].split("_")[0]
             parts = filename.split("_")
             image_id_with_ext = parts[-1]
             image_id = image_id_with_ext.split(".")[0]
-            image_ids.append(image_id)
-    image_ids_str = ",".join(image_ids)
+            if cluster_id and p_id:
+                image_ids.append((image_id, cluster_id, p_id))
+            else:
+                image_ids.append(image_id)
+    image_ids_str = ",".join([id for id, _, _ in image_ids]) if image_ids and isinstance(image_ids[0], tuple) else ",".join(image_ids)
     output_filepath = os.path.join(folderpath, "image_ids.txt")
     with open(output_filepath, "w") as f:
         f.write(image_ids_str)
@@ -36,22 +44,54 @@ def build_sql(folderpath, keyword_id, image_ids, object_id, orientation=None):
             f.write(stmt)
     print(f"Saved sql to {output_filepath}")
     
-    # USE Stock;
-    # INSERT IGNORE INTO IsNotDupeOf (image_id_i, image_id_j) VALUES (112511474,110166102);
+def build_dedupe_sql(folderpath, image_ids):
+    print(f"Building dedupe SQL for {len(image_ids)} image_ids")
+    output_filepath = os.path.join(folderpath, f"dedupe.sql")
+    with open(output_filepath, "w") as f:
+        f.write("USE Stock;\n")
+        for image_id in image_ids:
+            stmt = f"UPDATE Encodings SET is_dupe_of = 1 WHERE image_id = {image_id};\n"
+            f.write(stmt)
 
-WALK_FOLDERS = True
+def build_exclude_sql(folderpath, image_ids):
+    print(f"Building exclude SQL for {len(image_ids)} image_ids")
+    output_filepath = os.path.join(folderpath, f"exclude.sql")
+    with open(output_filepath, "w") as f:
+        f.write("USE Stock;\n")
+        for image_id, c_id, p_id in image_ids:
+            stmt = f"INSERT IGNORE INTO Exclude (image_id, c_id, p_id) VALUES ({image_id}, {c_id}, {p_id});\n"
+            f.write(stmt)
+
+WALK_FOLDERS = False
+DEDUPE = EXCLUDE = False
+keyword_id = None
+
 # ROOT= "/Volumes/OWC4/segment_images/phone_tests_nov4_money1000"
-ROOT= "/Users/michaelmandiberg/Documents/projects-active/facemap_production/heft_keyword_fusion_clusters/clustercc332_pNone_t553_h0_FOR_SQLinput"
-ROOT = "/Users/michaelmandiberg/Library/CloudStorage/Dropbox/takingstock_dropbox/dupe_sorting_flags_notsorting_reclusterfirst/clustercc77_pNone_t553_h2-2_1762728693.992975"
-keyword_id = ROOT.split("_t")[1].split("_")[0]
+# ROOT= "/Users/michaelmandiberg/Documents/projects-active/facemap_production/heft_keyword_fusion_clusters/clustercc332_pNone_t553_h0_FOR_SQLinput"
+# ROOT = "/Volumes/LaCie/dedupe/dupe"
+ROOT = "/Volumes/LaCie/dedupe/exclude"
+
+
+if "_t" in ROOT:
+    keyword_id = ROOT.split("_t")[1].split("_")[0]
 all_image_ids = []
 for foldername in os.listdir(ROOT):
     # foldername is 
+    if "dupe" in foldername:
+        DEDUPE = True
+    elif "exclude" in foldername:
+        EXCLUDE = True
     print(f"Processing folder: {foldername}")
     folderpath = os.path.join(ROOT, foldername)
     if os.path.isdir(folderpath):
-        image_ids = parse_folder(folderpath)
-        build_sql(folderpath, keyword_id, image_ids, foldername, orientation=None)
+        image_ids = parse_folder(folderpath, EXCLUDE)
+        if DEDUPE:
+            build_dedupe_sql(folderpath, image_ids)
+        elif EXCLUDE:
+            # image_ids is a list of tuples (image_id, cluster_id, p_id)
+            build_exclude_sql(folderpath, image_ids)
+        else:
+            build_sql(folderpath, keyword_id, image_ids, foldername, orientation=None)
         subfilenames = os.listdir(folderpath)
         subfoldernames = [fn for fn in subfilenames if os.path.isdir(os.path.join(folderpath, fn))]
         for subfoldername in subfoldernames:

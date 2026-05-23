@@ -397,3 +397,14 @@ REFERENCES ObjectSignatures(cluster_id)
 );
 
 
+-- create helper table for excluding images from cluster/pose combos
+-- c_id and p_id are generic a/b combos, assuming that image_id + a/b will be sufficiently unique
+CREATE TABLE Exclude (
+    seg_image_id int NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    image_id INTEGER,
+    c_id INTEGER,
+    p_id INTEGER,
+    FOREIGN KEY (image_id) REFERENCES Images(image_id)
+);
+
+
