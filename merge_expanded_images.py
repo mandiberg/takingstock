@@ -47,6 +47,7 @@ BLEND_END_TO_FIRST = True
 OFFSET_ON_BUILD = True
 START_FRAME_OFFSET = 0
 pending_offset_frames = []
+SINGLETON_MODE = "blended_singleton"  # blended_singleton preserves the current soft singleton behavior
 singleton_skip_counts = {
     "leading_non_first": 0,
     "terminal_non_final": 0,
@@ -92,8 +93,11 @@ elif "make_video" in CURRENT_MODE:
         LOOPING = True
         # Enforce no cycle overlap and no source-image duplication for this mode.
         STRICT_UNIQUE_IMAGE_PLACEMENT = True
+        # distinct_singleton is fully reaches singleton
+        # blended_singleton is a softer version never fully reaches singleton
+        SINGLETON_MODE = "blended_singleton"
         PERIOD = 30 # how many images in each merge cycle
-        MERGE_COUNT = 5 # largest number of merged images 
+        MERGE_COUNT = 8 # largest number of merged images 
         START_MERGE = 1 # number of images merged into the first image. Can be 1 (no merges) or >1 (two or more images merged)
         SMOOTH_MERGE_COUNT = 2 # how many transition tween frames betwen each keyframe
 
@@ -885,24 +889,40 @@ def process_images_osc(images_to_build, video_writer, total_images, period, curr
         is_first_step_singleton = step_i == 0 and step["size"] == 1
         is_terminal_singleton = step_i == (len(schedule) - 1) and step["size"] == 1
 
-        # In strict unique mode, drop boundary singleton frames between cycles.
-        # This prevents end/start cycle boundaries from showing repeated single-image beats.
         if STRICT_UNIQUE_IMAGE_PLACEMENT and BLEND_END_TO_FIRST:
-            if current_pos > 0 and is_first_step_singleton:
-                singleton_skip_counts["leading_non_first"] += 1
-                print("skipping leading singleton on non-first cycle")
-                continue
-            if (not is_final_cycle) and is_terminal_singleton:
-                singleton_skip_counts["terminal_non_final"] += 1
-                print("skipping terminal singleton on non-final cycle")
-                continue
+            if SINGLETON_MODE == "blended_singleton":
+                # Preserve the current soft singleton behavior by dropping boundary singleton frames.
+                if current_pos > 0 and is_first_step_singleton:
+                    singleton_skip_counts["leading_non_first"] += 1
+                    print("skipping leading singleton on non-first cycle")
+                    continue
+                if (not is_final_cycle) and is_terminal_singleton:
+                    singleton_skip_counts["terminal_non_final"] += 1
+                    print("skipping terminal singleton on non-final cycle")
+                    continue
 
-        # In strict unique mode, skip the terminal singleton of the final cycle.
-        # This avoids a visible "hard hold" on the last source image before seam blending.
-        if STRICT_UNIQUE_IMAGE_PLACEMENT and BLEND_END_TO_FIRST and is_final_cycle and is_terminal_singleton:
-            singleton_skip_counts["terminal_final"] += 1
-            print("skipping terminal singleton on final cycle to improve end seam")
-            continue
+                # Avoid a visible hard hold on the last source image before seam blending.
+                if is_final_cycle and is_terminal_singleton:
+                    singleton_skip_counts["terminal_final"] += 1
+                    print("skipping terminal singleton on final cycle to improve end seam")
+                    continue
+            elif SINGLETON_MODE == "distinct_singleton":
+                # Distinct singleton mode writes the full singleton frame.
+                pass
+            else:
+                print(f"unknown SINGLETON_MODE={SINGLETON_MODE!r}, defaulting to blended_singleton behavior")
+                if current_pos > 0 and is_first_step_singleton:
+                    singleton_skip_counts["leading_non_first"] += 1
+                    print("skipping leading singleton on non-first cycle")
+                    continue
+                if (not is_final_cycle) and is_terminal_singleton:
+                    singleton_skip_counts["terminal_non_final"] += 1
+                    print("skipping terminal singleton on non-final cycle")
+                    continue
+                if is_final_cycle and is_terminal_singleton:
+                    singleton_skip_counts["terminal_final"] += 1
+                    print("skipping terminal singleton on final cycle to improve end seam")
+                    continue
 
         images_to_return = merge_images_numpy(images_to_build[start_idx:end_idx])
         print(
