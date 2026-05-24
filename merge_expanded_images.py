@@ -1,6 +1,7 @@
 import math
 import cv2
 import os
+import random
 import numpy as np
 import pandas as pd
 
@@ -43,6 +44,14 @@ CROP_AFTER_COUNT = 100
 LOOPING = False # defaults
 STRICT_UNIQUE_IMAGE_PLACEMENT = False
 BLEND_END_TO_FIRST = True
+OFFSET_ON_BUILD = True
+START_FRAME_OFFSET = 0
+pending_offset_frames = []
+singleton_skip_counts = {
+    "leading_non_first": 0,
+    "terminal_non_final": 0,
+    "terminal_final": 0,
+}
 last_image_written = None
 first_image_written = None
 run_counter = 0
@@ -716,6 +725,7 @@ def save_images_to_video(images_to_return, video_writer):
     global last_image_written
     global first_image_written
     global run_counter
+    global pending_offset_frames
     # print("save_images_to_video called with", len(images_to_return) if images_to_return is not None else 0, "images")
     if images_to_return is not None: 
         for img in images_to_return:
@@ -727,7 +737,11 @@ def save_images_to_video(images_to_return, video_writer):
             # print(f"save_images_to_video test_{run_counter}.png", img.shape)
             # print(img.shape, img.dtype, img.flags['C_CONTIGUOUS'])
             # print("video_writer.isOpened:", video_writer.isOpened())
-            video_writer.write(img)
+            if OFFSET_ON_BUILD and len(pending_offset_frames) < START_FRAME_OFFSET:
+                # Hold first N frames so playback starts at offset, then append held frames at end.
+                pending_offset_frames.append(img.copy())
+            else:
+                video_writer.write(img)
         last_image_written = images_to_return[-1]
 
 def process_images(images_to_build, video_writer, total_images, current_pos=0, merge_count=MERGE_COUNT):
@@ -830,6 +844,7 @@ def build_osc_schedule(current_pos, this_period, total_images, merge_count, star
 
 def process_images_osc(images_to_build, video_writer, total_images, period, current_pos=0, merge_count=MERGE_COUNT, is_final_cycle=False):
     global last_image_written
+    global singleton_skip_counts
     print(f"process_images_osc called with total_images {total_images}, images_to_build {len(images_to_build)}, period {period}, current_pos {current_pos}, merge_count {merge_count}")
 
     if total_images - current_pos < period:
@@ -867,10 +882,25 @@ def process_images_osc(images_to_build, video_writer, total_images, period, curr
         if end_idx - start_idx <= 0:
             continue
 
+        is_first_step_singleton = step_i == 0 and step["size"] == 1
+        is_terminal_singleton = step_i == (len(schedule) - 1) and step["size"] == 1
+
+        # In strict unique mode, drop boundary singleton frames between cycles.
+        # This prevents end/start cycle boundaries from showing repeated single-image beats.
+        if STRICT_UNIQUE_IMAGE_PLACEMENT and BLEND_END_TO_FIRST:
+            if current_pos > 0 and is_first_step_singleton:
+                singleton_skip_counts["leading_non_first"] += 1
+                print("skipping leading singleton on non-first cycle")
+                continue
+            if (not is_final_cycle) and is_terminal_singleton:
+                singleton_skip_counts["terminal_non_final"] += 1
+                print("skipping terminal singleton on non-final cycle")
+                continue
+
         # In strict unique mode, skip the terminal singleton of the final cycle.
         # This avoids a visible "hard hold" on the last source image before seam blending.
-        is_terminal_singleton = step_i == (len(schedule) - 1) and step["size"] == 1
         if STRICT_UNIQUE_IMAGE_PLACEMENT and BLEND_END_TO_FIRST and is_final_cycle and is_terminal_singleton:
+            singleton_skip_counts["terminal_final"] += 1
             print("skipping terminal singleton on final cycle to improve end seam")
             continue
 
@@ -925,9 +955,21 @@ def write_video(img_array, subfolder_path=None):
     global last_image_written
     global first_image_written
     global run_counter
+    global OFFSET_ON_BUILD
+    global START_FRAME_OFFSET
+    global pending_offset_frames
+    global singleton_skip_counts
     last_image_written = None
     first_image_written = None
     run_counter = 0
+    OFFSET_ON_BUILD = False
+    START_FRAME_OFFSET = 0
+    pending_offset_frames = []
+    singleton_skip_counts = {
+        "leading_non_first": 0,
+        "terminal_non_final": 0,
+        "terminal_final": 0,
+    }
     img_array = [img for img in img_array if img.endswith(".jpg")]
     print("len img_array before cropping", len(img_array))
     if len(img_array) == 0:
@@ -970,6 +1012,18 @@ def write_video(img_array, subfolder_path=None):
         # Validate and adjust parameters for edge cases
         total_images = len(img_array)
         current_pos = 0
+
+        if LOOPING:
+            offset_center = max(0, int(MERGE_COUNT))
+            offset_min = max(0, offset_center - 2)
+            offset_max = max(offset_min, offset_center + 2)
+            START_FRAME_OFFSET = random.randint(offset_min, offset_max)
+            OFFSET_ON_BUILD = START_FRAME_OFFSET > 0
+            print(
+                "on-build start offset enabled:",
+                f"start_offset={START_FRAME_OFFSET}",
+                f"range=[{offset_min},{offset_max}]",
+            )
 
         if SMOOTH_MERGE and OSCILATING_MERGE:
             # Calculate images_per_cycle and check if MERGE_COUNT needs adjustment
@@ -1059,6 +1113,24 @@ def write_video(img_array, subfolder_path=None):
 
 
     # Release the video writer and close the video file
+    if OFFSET_ON_BUILD and pending_offset_frames:
+        print(f"appending deferred offset frames at end: {len(pending_offset_frames)}")
+        for frame in pending_offset_frames:
+            video_writer.write(frame)
+
+    singleton_skip_total = (
+        singleton_skip_counts["leading_non_first"]
+        + singleton_skip_counts["terminal_non_final"]
+        + singleton_skip_counts["terminal_final"]
+    )
+    print(
+        "singleton_skip_counts",
+        f"leading_non_first={singleton_skip_counts['leading_non_first']}",
+        f"terminal_non_final={singleton_skip_counts['terminal_non_final']}",
+        f"terminal_final={singleton_skip_counts['terminal_final']}",
+        f"total={singleton_skip_total}",
+    )
+
     video_writer.release()
 
     print("outfile size", os.path.getsize(video_path))
@@ -1068,7 +1140,7 @@ def write_video(img_array, subfolder_path=None):
 
 
 
-    if LOOPING and not STRICT_UNIQUE_IMAGE_PLACEMENT:
+    if LOOPING and not STRICT_UNIQUE_IMAGE_PLACEMENT and not OFFSET_ON_BUILD:
         shift_video_frames(video_path)
 
     # Add audio to the video if needed
