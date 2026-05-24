@@ -35,7 +35,7 @@ if io.IS_TENCH:
 
 # iterate through folders? 
 IS_CLUSTER = True
-PARALLEL_MERGE_WORKERS = 1  # set > 1 to parallelize per-subfolder work with multiprocessing.Pool
+PARALLEL_MERGE_WORKERS = 8  # set > 1 to parallelize per-subfolder work with multiprocessing.Pool
 
 # if None, won't crop. else if int, will crop output to that count
 CROP_AFTER_COUNT = 100
