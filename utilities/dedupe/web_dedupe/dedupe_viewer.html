@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dedupe Viewer</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #111;
+      color: #eee;
+      font-family: system-ui, sans-serif;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* ── Progress bar ─────────────────────────────────────────── */
+    #progress-bar-wrap {
+      flex-shrink: 0;
+      height: 28px;
+      background: #222;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 0 12px;
+      border-bottom: 1px solid #2a2a2a;
+    }
+
+    /* ── Key guide ────────────────────────────────────────────── */
+    #key-guide {
+      flex-shrink: 0;
+      height: 26px;
+      background: #1a1a1a;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 28px;
+      border-bottom: 1px solid #333;
+    }
+
+    #key-guide span {
+      font-size: 11px;
+      color: #666;
+      white-space: nowrap;
+    }
+
+    #key-guide .k {
+      display: inline-block;
+      background: #2e2e2e;
+      color: #aaa;
+      border: 1px solid #444;
+      border-radius: 3px;
+      padding: 0 5px;
+      font-family: monospace;
+      font-size: 10px;
+      line-height: 16px;
+      margin-right: 4px;
+    }
+
+    #key-guide .action-dupe     { color: #e06c75; }
+    #key-guide .action-notdupe  { color: #98c379; }
+
+    #flicker-speed {
+      width: 46px;
+      background: #2e2e2e;
+      border: 1px solid #444;
+      border-radius: 3px;
+      color: #ccc;
+      font-size: 11px;
+      padding: 1px 4px;
+      text-align: center;
+      margin: 0 3px;
+      /* hide spin arrows */
+      -moz-appearance: textfield;
+    }
+    #flicker-speed::-webkit-inner-spin-button,
+    #flicker-speed::-webkit-outer-spin-button { -webkit-appearance: none; }
+    #flicker-speed:focus { outline: 1px solid #4a9eff; border-color: #4a9eff; }
+
+    .speed-unit { color: #555; font-size: 10px; }
+
+    #progress-bar-track {
+      flex: 1;
+      height: 8px;
+      background: #444;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    #progress-bar-fill {
+      height: 100%;
+      background: #4a9eff;
+      border-radius: 4px;
+      transition: width 0.2s ease;
+      width: 0%;
+    }
+
+    #progress-counter {
+      font-size: 12px;
+      color: #aaa;
+      white-space: nowrap;
+      min-width: 70px;
+      text-align: right;
+    }
+
+    #path-label {
+      font-size: 11px;
+      color: #666;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 50%;
+    }
+
+    /* ── Landing / states ────────────────────────────────────── */
+    #landing {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+    }
+
+    #landing h1 { font-size: 22px; font-weight: 500; color: #ccc; }
+
+    #status-msg {
+      font-size: 14px;
+      color: #888;
+      max-width: 420px;
+      text-align: center;
+      line-height: 1.6;
+    }
+
+    #status-msg code {
+      background: #2a2a2a;
+      border: 1px solid #444;
+      border-radius: 4px;
+      padding: 2px 6px;
+      font-size: 13px;
+      color: #ccc;
+    }
+
+    /* ── Viewer ──────────────────────────────────────────────── */
+    #viewer {
+      display: none;
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+    }
+
+    #side-by-side {
+      display: flex;
+      width: 100%;
+      height: 100%;
+    }
+
+    .img-panel {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .img-panel + .img-panel {
+      border-left: 1px solid #333;
+    }
+
+    .img-panel img {
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+      display: block;
+    }
+
+    .img-label {
+      position: absolute;
+      bottom: 8px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 11px;
+      color: #666;
+      white-space: nowrap;
+      pointer-events: none;
+    }
+
+    /* Flicker overlay */
+    #flicker-overlay {
+      display: none;
+      position: absolute;
+      inset: 0;
+      background: #111;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #flicker-overlay.active { display: flex; }
+
+    #flicker-img {
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+    }
+
+    /* Flicker mode badge */
+    #viewer.flicker-mode #flicker-label {
+      display: block;
+    }
+
+    #flicker-label {
+      display: none;
+      position: absolute;
+      top: 10px;
+      right: 14px;
+      background: rgba(74, 158, 255, 0.85);
+      color: #fff;
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.07em;
+      padding: 2px 8px;
+      border-radius: 4px;
+      pointer-events: none;
+      z-index: 20;
+    }
+
+
+    /* Pending-deletion indicator */
+    #viewer.pending-delete::after {
+      content: 'MARKED FOR DELETION';
+      position: absolute;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(224, 108, 117, 0.85);
+      color: #fff;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      padding: 3px 10px;
+      border-radius: 4px;
+      pointer-events: none;
+      z-index: 10;
+    }
+
+    /* Done screen */
+    #done-msg {
+      display: none;
+      flex: 1;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      font-size: 18px;
+      color: #888;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Progress bar -->
+  <div id="progress-bar-wrap">
+    <div id="progress-bar-track">
+      <div id="progress-bar-fill"></div>
+    </div>
+    <span id="progress-counter">—</span>
+    <span id="path-label"></span>
+  </div>
+
+  <!-- Key guide -->
+  <div id="key-guide">
+    <span><span class="k">Enter</span><span class="action-dupe">dupe — move on</span></span>
+    <span><span class="k">Tab</span><span class="action-notdupe">not a dupe — delete SQL &amp; move on</span></span>
+    <span><span class="k">Z</span>undo (up to 10)</span>
+    <span>
+      <span class="k">Space</span>flicker mode
+      <input id="flicker-speed" type="number" value="0.1" min="0.05" max="2" step="0.05" title="Flicker interval in seconds" />
+      <span class="speed-unit">sec</span>
+    </span>
+  </div>
+
+  <!-- Landing / status screen -->
+  <div id="landing">
+    <h1>Dedupe Viewer</h1>
+    <p id="status-msg">
+      Start the local server, then open this page via the server URL.<br><br>
+      <code>node server.js /path/to/root/folder</code><br><br>
+      Then visit <code>http://localhost:3000</code>
+    </p>
+  </div>
+
+  <!-- Viewer (hidden until pairs loaded) -->
+  <div id="viewer">
+    <div id="side-by-side">
+      <div class="img-panel">
+        <img id="img-left" src="" alt="" />
+        <span class="img-label" id="label-left"></span>
+      </div>
+      <div class="img-panel">
+        <img id="img-right" src="" alt="" />
+        <span class="img-label" id="label-right"></span>
+      </div>
+    </div>
+
+    <!-- Flicker overlay -->
+    <div id="flicker-overlay">
+      <img id="flicker-img" src="" alt="" />
+    </div>
+    <span id="flicker-label">FLICKER</span>
+
+  </div>
+
+  <!-- Done screen -->
+  <div id="done-msg">
+    All pairs reviewed.
+  </div>
+
+  <script>
+    // ── State ──────────────────────────────────────────────────
+    let pairs        = [];
+    let currentIndex = 0;
+    let viewState    = 'side';  // 'side' | 'flicker'
+    let flickerTimer = null;
+    let flickerFrame = 0;       // alternates 0/1 between imgA and imgB
+
+    const HISTORY_LIMIT = 10;
+
+    // Each entry: { index: number, markedForDeletion: bool }
+    // Oldest is at [0], most recent at [length-1]
+    let history = [];
+
+    // Indices of pairs Tab-pressed but not yet physically deleted
+    let pendingDeletions = new Set();
+
+    // ── DOM refs ───────────────────────────────────────────────
+    const landingEl     = document.getElementById('landing');
+    const statusMsg     = document.getElementById('status-msg');
+    const viewerEl      = document.getElementById('viewer');
+    const doneMsgEl     = document.getElementById('done-msg');
+
+    const progressFill  = document.getElementById('progress-bar-fill');
+    const progressCount = document.getElementById('progress-counter');
+    const pathLabel     = document.getElementById('path-label');
+
+    const flickerSpeedEl  = document.getElementById('flicker-speed');
+    const imgLeft         = document.getElementById('img-left');
+    const imgRight        = document.getElementById('img-right');
+    const labelLeft       = document.getElementById('label-left');
+    const labelRight      = document.getElementById('label-right');
+    const flickerOverlay  = document.getElementById('flicker-overlay');
+    const flickerImg      = document.getElementById('flicker-img');
+    const sideBySideEl    = document.getElementById('side-by-side');
+
+    // ── Bootstrap ──────────────────────────────────────────────
+    if (location.protocol !== 'file:') {
+      statusMsg.textContent = 'Loading pairs…';
+      Promise.all([
+        fetch('/api/pairs').then(r => r.json()),
+        fetch('/api/load-progress').then(r => r.json()),
+      ])
+        .then(([pairsData, saved]) => {
+          pairs = pairsData;
+          if (pairs.length === 0) {
+            statusMsg.textContent = 'No image pairs found in the root directory.';
+            return;
+          }
+
+          let startIndex = 0;
+          if (saved) {
+            // Build label → index map
+            const labelToIndex = new Map(pairs.map((p, i) => [p.label, i]));
+
+            if (saved.currentLabel && labelToIndex.has(saved.currentLabel)) {
+              startIndex = labelToIndex.get(saved.currentLabel);
+            }
+            if (Array.isArray(saved.pendingDeletionLabels)) {
+              for (const lbl of saved.pendingDeletionLabels) {
+                const idx = labelToIndex.get(lbl);
+                if (idx !== undefined) pendingDeletions.add(idx);
+              }
+            }
+            if (saved.viewState === 'flicker') viewState = 'flicker';
+          }
+
+          landingEl.style.display = 'none';
+          viewerEl.style.display  = 'block';
+          renderPair(startIndex);
+        })
+        .catch(() => {
+          statusMsg.innerHTML =
+            'Could not reach the server. Make sure it\'s running:<br><br>' +
+            '<code>node server.js /path/to/root/folder</code>';
+        });
+    }
+
+    // ── Save / clear progress ──────────────────────────────────
+    function saveProgress() {
+      const pendingDeletionLabels = [...pendingDeletions].map(i => pairs[i]?.label).filter(Boolean);
+      fetch('/api/save-progress', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          currentLabel: pairs[currentIndex]?.label,
+          pendingDeletionLabels,
+          viewState,
+        }),
+      }).catch(console.warn);
+    }
+
+    function clearProgress() {
+      fetch('/api/clear-progress', { method: 'DELETE' }).catch(console.warn);
+    }
+
+    // ── Render ─────────────────────────────────────────────────
+    function renderPair(index) {
+      stopFlicker();
+
+      if (index >= pairs.length) {
+        flushPending().then(() => {
+          clearProgress();
+          viewerEl.style.display  = 'none';
+          doneMsgEl.style.display = 'flex';
+          updateProgress(pairs.length, pairs.length);
+        });
+        return;
+      }
+
+      currentIndex = index;
+      const pair = pairs[index];
+
+      imgLeft.src  = `/image?p=${encodeURIComponent(pair.imgA)}`;
+      imgRight.src = `/image?p=${encodeURIComponent(pair.imgB)}`;
+      imgLeft.alt  = pair.imgA.split('/').pop();
+      imgRight.alt = pair.imgB.split('/').pop();
+      labelLeft.textContent  = imgLeft.alt;
+      labelRight.textContent = imgRight.alt;
+
+      viewerEl.classList.toggle('pending-delete', pendingDeletions.has(index));
+
+      updateProgress(index + 1, pairs.length);
+      pathLabel.textContent = pair.label;
+
+      // Restore persisted view state
+      if (viewState === 'flicker') {
+        startFlicker();
+      } else {
+        showSideBySide();
+      }
+    }
+
+    // ── Flicker mode ───────────────────────────────────────────
+    function flickerIntervalMs() {
+      const val = parseFloat(flickerSpeedEl.value);
+      return isFinite(val) && val > 0 ? Math.round(val * 1000) : 100;
+    }
+
+    function startFlicker() {
+      stopFlicker();
+      viewState = 'flicker';
+      viewerEl.classList.add('flicker-mode');
+      sideBySideEl.style.display = 'none';
+      flickerOverlay.classList.add('active');
+      flickerFrame = 0;
+      flickerImg.src = imgLeft.src;
+      flickerTimer = setInterval(() => {
+        flickerFrame = 1 - flickerFrame;
+        flickerImg.src = flickerFrame === 0 ? imgLeft.src : imgRight.src;
+      }, flickerIntervalMs());
+    }
+
+    function stopFlicker() {
+      if (flickerTimer) { clearInterval(flickerTimer); flickerTimer = null; }
+    }
+
+    // Restart timer live when speed input changes
+    flickerSpeedEl.addEventListener('change', () => {
+      if (viewState === 'flicker') {
+        stopFlicker();
+        startFlicker();
+      }
+    });
+
+    // Prevent keypresses on the input from triggering viewer shortcuts
+    flickerSpeedEl.addEventListener('keydown', e => e.stopPropagation());
+
+    function showSideBySide() {
+      stopFlicker();
+      viewState = 'side';
+      viewerEl.classList.remove('flicker-mode');
+      flickerOverlay.classList.remove('active');
+      sideBySideEl.style.display = 'flex';
+    }
+
+    // ── Advance (Enter or Tab) ─────────────────────────────────
+    async function advance(markedForDeletion) {
+      // Record decision in history
+      history.push({ index: currentIndex, markedForDeletion });
+
+      if (markedForDeletion) {
+        pendingDeletions.add(currentIndex);
+      }
+
+      // If history exceeds limit, commit the oldest entry's deletion
+      if (history.length > HISTORY_LIMIT) {
+        const evicted = history.shift();
+        if (evicted.markedForDeletion && pendingDeletions.has(evicted.index)) {
+          await commitDelete(evicted.index);
+        }
+      }
+
+      renderPair(currentIndex + 1);
+      saveProgress();
+
+      // Flush all pending if fewer than HISTORY_LIMIT pairs remain
+      const remaining = pairs.length - (currentIndex + 1);
+      if (remaining < HISTORY_LIMIT) {
+        await flushPending();
+      }
+    }
+
+    // ── Undo (Z) ───────────────────────────────────────────────
+    function goBack() {
+      if (history.length === 0) return;
+      const prev = history.pop();
+      pendingDeletions.delete(prev.index);
+      renderPair(prev.index);
+      saveProgress();
+    }
+
+    // ── Commit / flush pending deletions ──────────────────────
+    async function commitDelete(index) {
+      const pair = pairs[index];
+      if (!pair || !pair.sqlPath) return;
+      try {
+        await fetch('/api/delete-sql', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sqlPath: pair.sqlPath }),
+        });
+        pair.sqlPath = null;
+        pendingDeletions.delete(index);
+      } catch (e) {
+        console.warn('Could not delete SQL file:', e);
+      }
+    }
+
+    async function flushPending() {
+      for (const idx of [...pendingDeletions]) {
+        await commitDelete(idx);
+      }
+    }
+
+    // ── Progress bar ───────────────────────────────────────────
+    function updateProgress(current, total) {
+      const pct = total > 0 ? (current / total) * 100 : 0;
+      progressFill.style.width  = `${pct}%`;
+      progressCount.textContent = total > 0 ? `${current} / ${total}` : '—';
+    }
+
+    // ── Keyboard handlers ──────────────────────────────────────
+    document.addEventListener('keydown', async (e) => {
+      if (!pairs.length || currentIndex >= pairs.length) return;
+
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        await advance(false);
+        return;
+      }
+
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        await advance(true);
+        return;
+      }
+
+      if (e.key === 'z' || e.key === 'Z') {
+        e.preventDefault();
+        goBack();
+        return;
+      }
+
+      if (e.key === ' ') {
+        e.preventDefault();
+        if (viewState === 'side') {
+          startFlicker();
+        } else {
+          showSideBySide();
+        }
+        return;
+      }
+    });
+  </script>
+</body>
+</html>
