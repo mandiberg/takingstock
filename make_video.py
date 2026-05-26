@@ -26,7 +26,7 @@ from sqlalchemy.pool import NullPool
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
 # my ORM
-from my_declarative_base import Base, Encodings, SegmentTable,ImagesBackground, Hands, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON, Images
+from my_declarative_base import Base, Encodings, ImagesTopics, SegmentTable,ImagesBackground, Hands, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON, Images, Detections
 import pymongo 
 
 #mine
@@ -57,7 +57,7 @@ else:
 SegmentTable_name = 'SegmentBig_isface'
 # SegmentTable_name = 'SegmentBig_isnotface'
 SegmentHelper_name = 'SegmentHelper_TheOffice'
-# SegmentHelper_name = 'SegmentHelper_T4_occupation'
+# SegmentHelper_name = 'SegmentHelperObject_82_money'
 # SegmentHelper_name = 'SegmentHelper_T11_Oct20_COCO_Custom_evens_quarters'
 # SegmentHelper_name = 'None' # set below for heft keywords
 # SegmentHelper_name = None
@@ -65,12 +65,13 @@ SegmentHelper_name = 'SegmentHelper_TheOffice'
 # for when I'm using files on my SSD vs RAID
 IS_SSD = True
 SSD_PATH = "/Volumes/LaCie/segment_images"
-ONLY_SAVE_CACHE = True # only save CSVs to cluster folder, not images which are saved in cache folders -- for speed
+# SSD_PATH = "/Volumes/OWC52/segment_images"
+ONLY_SAVE_CACHE = False # only save CSVs to cluster folder, not images which are saved in cache folders -- for speed
 MAKE_CACHE_MODE = False # only make cache folders, skips dedupe and is_face testing
-MODE1_ENABLE_DB_DEDUPE = False # skip dedupe during crunch time drafts  
-SKIP_PAIRCHECK = True # draft mode: trust cached crops and skip face-pair validation
-START_CLUSTER = 488
-PARALLEL_WORKERS = 12  # set > 1 to parallelize per-CSV work in MODE 0 and MODE 1
+MODE1_ENABLE_DB_DEDUPE = True # False skips dedupe during crunch time drafts  
+SKIP_PAIRCHECK = False # True for draft mode, False does paircheck, and caches them 
+START_CLUSTER = 0
+PARALLEL_WORKERS = 16  # set > 1 to parallelize per-CSV work in MODE 0 and MODE 1
 
 start = time.time()
 
@@ -100,7 +101,7 @@ CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden b
 
 # CSV_FOLDER = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion128_test220K"
 CSV_MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/"
-CSV_RUN_FOLDER = "SegmentHelper_TheOffice/multipolicy_tests_parquet" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
+CSV_RUN_FOLDER = "SegmentHelper_TheOffice/p15_selects_may21_noTSP/" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
 CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, CSV_RUN_FOLDER)
 MAX_ROWS_PER_OUTPUT_CSV = 1200
 ENABLE_MODE0_TIMING = True
@@ -110,8 +111,6 @@ MODE0_WRITE_CSV_FALLBACK = True
 MODE1_USE_TYPED_INTERMEDIATE = True
 MODE1_TYPED_STRICT = False
 MODE_TYPED_SCHEMA_VERSION = "typed_intermediate_v1"
-
-
 def resolve_arms_object_fusion_folder(
     root_data_path,
     arms_cluster_dim,
@@ -169,8 +168,10 @@ def resolve_arms_object_fusion_folder(
     )
     return folder_name, object_cluster_dim
 
+
+
 HSV_SOURCE_MODE = "background"
-SKIP_OBJECT_NONE_CLUSTERS = []
+SKIP_OBJECT_NONE_CLUSTERS = [0] # set to 1 if you want to skip Nones
 MULTIPOLICY = False
 
 # overriding DB for testing
@@ -278,6 +279,11 @@ elif "3D" in CURRENT_MODE:
 
 elif CURRENT_MODE == 'heft_torso_keywords':
 
+    '''
+    SORT_TYPE options: "planar_hands", "128d", "obj_bbox", "object_fusion"
+    object_fusion is only for ArmsPoses3D_ObjectFusion cluster type. It combines:
+        pitch, yaw, roll, and bbox for all 9 object positions.
+    '''
     # TEMPORARY
     TRUST_FACE_PAIR_CACHE = True
 
@@ -286,6 +292,8 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     if AUTO_EDGE_CROP:
         EXPAND = True
         # FULL_BODY = True # haxxor TK
+
+
 
     # set to 0 to disable obj helper segment query stuff. this is also for object_fusion
     class_id = 0  # TEST: match exported ArmsPoses3D_67.csv
@@ -301,7 +309,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     # current obj sort
     CLUSTER_TYPE = "ArmsPoses3D_ObjectFusion"  # TEST: new Arms/ObjectFusion mode
     SORT_TYPE = "object_fusion" # for ArmsPoses3D_ObjectFusion keep SORT_TYPE as object_fusion
-    SORT_TYPE_NONEOBJECT = "planar_hands" # sort used when pose_no is in OBJECT_NONE_CLUSTERS
+    SORT_TYPE_NONEOBJECT = "object_fusion" # sort used when pose_no is in OBJECT_NONE_CLUSTERS
     USE_HSV = False
 
     # CLUSTER_TYPE = "object_fusion"
@@ -337,50 +345,72 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     USE_HEAD_POSE = True
     IS_HAND_POSE_FUSION = True # do we use fusion clusters
     CHOP_FIRST = True # does a first pass chop before whatever sort happens - this is default now
-    # this is an override for development purposes. will only make CSVs from these clusters:
-    TEMP_FOCUS_CLUSTER_HACK_LIST = []
 
-    # process for dealing with keep/none
-    # OBJECT_NONE_CLUSTERS = [i for i in range(4000) if i not in OBJECT_KEEP_CLUSTERS] # skip these and go to 18
-    # MULTIPOLICY = True # controls whether it does multi-bucket fusion policy based on cluster size for HSV, clusters, and metabodyposes3D
     OBJECT_NONE_CLUSTERS = [1] # if MULTIPOLICY these get HSV BG, else these don't run in fusion
+    # MULTIPOLICY = True # controls whether it does multi-bucket fusion policy based on cluster size for HSV, clusters, and metabodyposes3D
     MULTIPOLICY = True # controls whether it does multi-bucket fusion policy based on cluster size for HSV, clusters, and metabodyposes3D
+
     CLUSTER_MIN_HSV_BG = 1500
     CLUSTER_MIN_HSV_OBJ = 1500
     OBJ_CLUSTER_COLUMN_MIN_FOR_FUSION_SORT = 1000
     DO_SMALL_CLUSTER_FUSION_BUCKET = False # if MULTIPOLICY is True, this controls whether clusters below the CLUSTER_MIN_HSV_OBJ threshold get put into a small cluster fusion bucket, or just skipped for fusion entirely. If False, they get skipped for fusion and go to the end of the sort. If True, they get put into a small cluster fusion bucket that gets sorted after the main fusion buckets, but before the non-fusion clusters.
     HSV_SOURCE_MODE = "background" # "background" or "object" or "both"
-    
-    TESTING = True
+    FORCE_TOPIC_FIT_SCORE = True # adds topic score to csvs at the very end of linear sort
+
+    TESTING = False
     if TESTING:
-        # turning all three off to do old style non tsp sort    
         ONE_SHOT = False # take all files, based off the very first sort order.
         TSP_SORT = True
         CHOP_ITTER_TSP_SORT = False
-        if CLUSTER_TYPE == "object_fusion":
-            GENERATE_FUSION_PAIRS = False # April 14 changing this for testing
+        if CLUSTER_TYPE == "ArmsPoses3D_ObjectFusion":
+            GENERATE_FUSION_PAIRS = True # April 14 changing this for testing
+            MULTIPOLICY = True # MULTIPOLICY conflicts with GENERATE_FUSION_PAIRS 
+
+            # GENERATE_FUSION_PAIRS = False # April 14 changing this for testing
+            # MULTIPOLICY = False # MULTIPOLICY conflicts with GENERATE_FUSION_PAIRS 
         else:
             # either you use a FUSION_PAIR_DICT or GENERATE_FUSION_PAIRS. 
-            GENERATE_FUSION_PAIRS = True # if true it will query based on MIN_VIDEO_FUSION_COUNT and create pairs
-                                            # if false, it will grab the list of pair lists below
+            GENERATE_FUSION_PAIRS = False # if true it will query based on MIN_VIDEO_FUSION_COUNT and create pairs
+                                            # if false, it will grab the list of pair lists below from CONSTANTS
+            AUTO_EDGE_CROP = False # override for production, will call in POSE_CROP_DICT
+            USE_POSE_CROP_DICT = True # override for production
+            # turning all three off to do old style non-tsp itter-sort    
+            TSP_SORT = False
+            CHOP_ITTER_TSP_SORT = False
+            ONE_SHOT = False # take all files, based off the very first sort order.
 
     else:
+        # this is for short animation production, set crop sizes 1:1 or 9:16/16:9
         GENERATE_FUSION_PAIRS = False # if true it will query based on MIN_VIDEO_FUSION_COUNT and create pairs
-        TSP_SORT = True
-        CHOP_ITTER_TSP_SORT = True
+        # TSP_SORT = True
+        # CHOP_ITTER_TSP_SORT = True
+        MULTIPOLICY = True # MULTIPOLICY conflicts with GENERATE_FUSION_PAIRS 
+        AUTO_EDGE_CROP = False # override for production, will call in POSE_CROP_DICT
+        USE_POSE_CROP_DICT = True # override for production
+        EXPAND = False # if USE_POSE_CROP_DICT, then no expansion
+        # turning all three off to do old style non-tsp itter-sort    
+        TSP_SORT = False
+        CHOP_ITTER_TSP_SORT = False
+        ONE_SHOT = False # take all files, based off the very first sort order.
 
-    if not GENERATE_FUSION_PAIRS:
+    if GENERATE_FUSION_PAIRS:
+        # this is an override for development purposes. will only make CSVs from these clusters:
+        OBJECT_KEEP_CLUSTERS = [25,2341,1685,734,727,2263,586,28,733,258,960,84,2230,728,783,964,1660,2630,3052,3269]
+        if bool(OBJECT_KEEP_CLUSTERS):
+            # how to skip objects (columns!)
+            SKIP_OBJECT_NONE_CLUSTERS = [i for i in range(4000) if i not in OBJECT_KEEP_CLUSTERS] # skip these and go to 18
+    else:
         USE_FUSION_PAIR_DICT = True # if True, it will use the FUSION_PAIR_DICT_NAME below
-    FUSION_PAIR_DICT_NAME = "FUSION_PAIR_DICT_DETECTIONS_ARMS3D128"
+    FUSION_PAIR_DICT_NAME = "FUSION_PAIR_DICT_DETECTIONS_THEOFFICE"
     if USE_HSV == True:
         N_HSV = 23 # 0-22 metaclusters of 96 HSV clusters
     else:
         N_HSV = 0 # don't do HSV clusters
 
-    PURGING_DUPES = False
+    PURGING_DUPES = False # skips build/save, just compares dupes
     # FORCE_TARGET_COUNT = 90 # default for GIF version
     FORCE_TARGET_COUNT = 200 # for testing. 
-    TSP_NOLIMITS = True # if True, it will not apply the FORCE_TARGET_COUNT cutoff to the TSP sort, which means it will sort on all files. If False, it will apply the cutoff, which means it will only sort on the top FORCE_TARGET_COUNT files. This is for testing whether the TSP sort is working on all files or just the top ones.
+    TSP_NOLIMITS = False # if True, it will not apply the FORCE_TARGET_COUNT cutoff to the TSP sort, which means it will sort on all files. If False, it will apply the cutoff, which means it will only sort on the top FORCE_TARGET_COUNT files. This is for testing whether the TSP sort is working on all files or just the top ones.
     # if TESTING: IS_HAND_POSE_FUSION = GENERATE_FUSION_PAIRS = False
 
     # get cutoff for this class_id from constants dict
@@ -418,7 +448,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     # this control whether sorting by topics
     # IS_TOPICS = True # if using Clusters only, must set this to False
     # JUMP_SHOT = True # jump to random file if can't find a run (I don't think this applies to planar?)
-    # USE_ALL = True # do this for HEFT bc it turns off face xyz and mouthgap filters && if SORT_TYPE == "planar_hands" forces ONE_SHOT
+    USE_ALL = True # do this for HEFT bc it turns off face xyz and mouthgap filters && if SORT_TYPE == "planar_hands" forces ONE_SHOT
 
     USE_PAINTED = True
     INPAINT= True
@@ -1434,24 +1464,56 @@ if not io.IS_TENCH:
 # for linear it is in the df_enc, but for itter, the start_img_name is in prev df_enc
 # takes a dataframe of images and encodings and returns a df sorted by distance
 
-def expand_face_encodings(df,encoding_col= "face_encodings68",):
-    """
-    Given a DataFrame with:
-      - a 'face_encodings68' column where each entry is a length-128 list or array,
-    return a new DataFrame of shape (n_rows, 128) where:
-      - Columns 1..128 are the individual encoding dimensions,
-        named 'enc_0', 'enc_1', ..., 'enc_127'.
-    """
-    # Helper: if entries are string representations of lists, eval to real lists
-    def parse_encoding(x):
-        if isinstance(x, str):
-            return list(eval(x))
-        return list(x)
+def expand_vector_column(df, vector_col="face_encodings68", prefix="enc", expected_len=None):
+    """Expand one vector-like DataFrame column into numeric feature columns."""
+    if vector_col not in df.columns:
+        raise KeyError(f"Vector column '{vector_col}' not found. Available columns: {list(df.columns)}")
 
-    # Apply parsing and expand into a DataFrame
-    encodings = df[encoding_col].apply(parse_encoding).tolist()
-    enc_df = pd.DataFrame(encodings, columns=[f"enc_{i}" for i in range(128)])
-    return enc_df
+    def parse_vector(value):
+        if isinstance(value, str):
+            parsed = ast.literal_eval(value)
+        else:
+            parsed = value
+
+        if isinstance(parsed, np.ndarray):
+            parsed = parsed.tolist()
+
+        if isinstance(parsed, (list, tuple)):
+            return list(parsed)
+
+        raise ValueError(f"Unsupported vector value type for '{vector_col}': {type(value)}")
+
+    parsed_vectors = df[vector_col].apply(parse_vector)
+
+    lengths = parsed_vectors.apply(len)
+    unique_lengths = sorted(lengths.unique().tolist())
+    if expected_len is not None and any(length != int(expected_len) for length in unique_lengths):
+        raise ValueError(
+            f"Column '{vector_col}' has vector lengths {unique_lengths}, expected only {expected_len}."
+        )
+    if len(unique_lengths) != 1:
+        raise ValueError(
+            f"Column '{vector_col}' has inconsistent vector lengths: {unique_lengths}."
+        )
+
+    vector_len = unique_lengths[0]
+    vector_df = pd.DataFrame(
+        parsed_vectors.tolist(),
+        columns=[f"{prefix}_{i}" for i in range(vector_len)],
+        index=df.index,
+    )
+    vector_df = vector_df.apply(pd.to_numeric, errors="coerce")
+    if vector_df.isnull().any().any():
+        nan_rows = int(vector_df.isnull().any(axis=1).sum())
+        raise ValueError(
+            f"Column '{vector_col}' produced non-numeric values after parsing; rows with NaNs: {nan_rows}."
+        )
+    return vector_df
+
+
+def expand_face_encodings(df,encoding_col= "face_encodings68",):
+    """Backward-compatible wrapper for face encoding expansion."""
+    return expand_vector_column(df, vector_col=encoding_col, prefix="enc", expected_len=128)
 
 def get_closest_knn_or_break(df_enc, df_sorted):
     # send in both dfs, and return same dfs with 1+ rows sorted
@@ -1580,7 +1642,7 @@ def itter_sort(df_enc, itters):
     return df_sorted
 
 def sort_and_chop(df_enc):
-    sort_and_chop_cutoff = sort.CUTOFF*FORCE_CUTOFF_MULTIPLIER
+    sort_and_chop_cutoff = sort.CUTOFF
     df_sorted = pd.DataFrame(columns = df_enc.columns)
     # print(f"CHOP_FIRST is true with sort.counter_dict['start_img_name'], {sort.counter_dict['start_img_name']}")
     if sort.counter_dict["start_img_name"] is None:
@@ -1595,8 +1657,29 @@ def sort_and_chop(df_enc):
 
 
 def tsp_sort(df_enc):
-    # track the mapping
-    df_clean = expand_face_encodings(df_enc)
+    # Build TSP input from the active sort vector so TSP and KNN use the same feature family.
+    sort_column, _ = sort.get_sort_column_mapping(sort.SORT_TYPE, CLUSTER1)
+    print(f"[TSP DEBUG] SORT_TYPE={sort.SORT_TYPE} resolved sort_column={sort_column}")
+    if sort_column not in df_enc.columns:
+        raise KeyError(
+            f"TSP input column '{sort_column}' not found for SORT_TYPE={sort.SORT_TYPE}. "
+            f"Available columns: {list(df_enc.columns)}"
+        )
+
+    try:
+        vector_lengths = df_enc[sort_column].apply(lambda x: len(x) if hasattr(x, "__len__") else -1)
+        unique_lengths = sorted(vector_lengths.unique().tolist())
+        print(
+            f"[TSP DEBUG] input rows={len(df_enc)} column={sort_column} "
+            f"unique_vector_lengths={unique_lengths[:10]}"
+        )
+    except Exception as debug_exc:
+        print(f"[TSP DEBUG] unable to summarize vector lengths for {sort_column}: {debug_exc}")
+
+    df_clean = expand_vector_column(df_enc, vector_col=sort_column, prefix="tsp")
+    print(f"[TSP DEBUG] expanded matrix shape={df_clean.shape}")
+    df_clean = sort.apply_sort_feature_weights_df(df_clean, sort_type=sort.SORT_TYPE)
+    print(f"[TSP DEBUG] weighted matrix shape={df_clean.shape}")
     df_clean['original_index'] = df_clean.index  # or however they map
     START_IDX = END_IDX = None
     if TSP_NOLIMITS: force_count = None
@@ -1738,6 +1821,11 @@ def prep_encodings_NN(df_segment, effective_sort_type=None):
         
         # Construct obj_bbox_fusion_list using class method
         df_segment['obj_bbox_fusion_list'] = df_segment.apply(cl.construct_fusion_list, axis=1)
+        projection_indices = cl.build_signature_projection_indices(sort.counter_dict.get("pose_no"))
+        if projection_indices is not None:
+            df_segment['obj_bbox_fusion_list'] = df_segment['obj_bbox_fusion_list'].apply(
+                lambda value: cl.project_vector_by_indices(value, projection_indices)
+            )
         if is_multislot_obj_bbox_mode:
             # Route obj_bbox distance math through a fixed-length, slot-aware vector.
             df_segment['obj_bbox_list'] = df_segment['obj_bbox_fusion_list']
@@ -2293,10 +2381,13 @@ def linear_test_df(df_sorted, itter=None, counter_state=None):
         # sort internals continue reading sort.counter_dict.
         sort.counter_dict = counter_state
 
+    df_sorted = enrich_image_metas(df_sorted)
+
     linear_test_start = time.perf_counter()
     assembly_stats = {
         "rows_total": int(len(df_sorted)),
         "rows_saved": 0,
+        "rows_write_failed": 0,
         "cache_hit_rows": 0,
         "cache_miss_rows": 0,
         "skip_face_rows": 0,
@@ -2440,6 +2531,10 @@ def linear_test_df(df_sorted, itter=None, counter_state=None):
         else: description = None
         try: topic_score = row['topic_score']
         except: topic_score = 0
+        try: detection_count = row['detection_count']
+        except: detection_count = 0
+        try: detections_json = row['detections_json']
+        except: detections_json = "[]"
         # use image_id to retrieve description from mysql database 
         # this is temporary until I resegment the images with description in the segment
         # try:
@@ -2454,7 +2549,7 @@ def linear_test_df(df_sorted, itter=None, counter_state=None):
                 description = None
             else:
                 description = description
-            metas = [image_id, description, topic_score]
+            metas = [image_id, description, topic_score, detection_count, detections_json]
             
             metas_path = os.path.join(sort.counter_dict["outfolder"],METAS_FILE)
             io.write_csv(metas_path, metas)
@@ -2539,8 +2634,8 @@ def linear_test_df(df_sorted, itter=None, counter_state=None):
             ##################
             if do_inpaint and not bailout:
                 directory = os.path.dirname(inpaint_file)
-                # Create the directory if it doesn't exist (creates directories even if skips below because extension too large)
-                if not os.path.exists(directory):
+                # Only create debug inpaint directory when we are actually writing debug artifacts.
+                if SAVE_IMG_PROCESS and not os.path.exists(directory):
                     os.makedirs(directory)
                 # maxkey = max(extension_pixels, key=lambda y: abs(extension_pixels[y]))
 
@@ -2598,10 +2693,6 @@ def linear_test_df(df_sorted, itter=None, counter_state=None):
                     print("inpainting failed")
                     bailout=True
             elif check_extension(img.shape, extension_pixels, OUTPAINT_MAX) and OUTPAINT:
-                directory = os.path.dirname(inpaint_file)
-                # Create the directory if it doesn't exist (creates directories even if skips below because extension too large)
-                if not os.path.exists(directory):
-                    os.makedirs(directory)
                 print("outpainting medium extension")
                 inpaint_image=outpaint(img,extension_pixels,downsampling_scale=1,prompt="",negative_prompt="")
             else:
@@ -2630,9 +2721,14 @@ def linear_test_df(df_sorted, itter=None, counter_state=None):
                 cropped_dir = os.path.dirname(cropped_file)
                 if not os.path.exists(cropped_dir):
                     os.makedirs(cropped_dir)
-                cv2.imwrite(cropped_file, cropped_image)
-                if sort.VERBOSE:
+                cropped_write_ok = cv2.imwrite(cropped_file, cropped_image)
+                if cropped_write_ok and sort.VERBOSE:
                     print("saved cropped cache", cropped_file)
+                elif not cropped_write_ok:
+                    print(
+                        f"[write-fail] inpaint cropped cache write failed image_id={row.get('image_id', '?')} "
+                        f"path={cropped_file} shape={getattr(cropped_image, 'shape', None)}"
+                    )
             # Return the raw crop; caller is responsible for pair validation.
             return cropped_image, crop_status
 
@@ -2827,12 +2923,17 @@ def linear_test_df(df_sorted, itter=None, counter_state=None):
                     if not os.path.exists(cropped_cache_dir):
                         os.makedirs(cropped_cache_dir)
                     cache_write_t0 = time.perf_counter()
-                    cv2.imwrite(cropped_cache_file, cropped_image)
+                    cache_write_ok = cv2.imwrite(cropped_cache_file, cropped_image)
                     cache_write_elapsed = time.perf_counter() - cache_write_t0
                     add_assembly_timing("cache_write", cache_write_elapsed)
-                    print(f"[timing] cache write {cache_write_elapsed:.3f}s path={cropped_cache_file}")
-                    if sort.VERBOSE:
+                    print(f"[timing] cache write {cache_write_elapsed:.3f}s path={cropped_cache_file} ok={cache_write_ok}")
+                    if cache_write_ok and sort.VERBOSE:
                         print("saved cropped cache", cropped_cache_file)
+                    elif not cache_write_ok:
+                        print(
+                            f"[write-fail] cache write failed image_id={row.get('image_id', '?')} "
+                            f"path={cropped_cache_file} shape={getattr(cropped_image, 'shape', None)}"
+                        )
                 elif cropped_cache_file and used_cached_cropped:
                     print(f"[timing] cache-hit skip cache rewrite path={cropped_cache_file}")
                 else:
@@ -2854,13 +2955,22 @@ def linear_test_df(df_sorted, itter=None, counter_state=None):
                     )
                 else:
                     output_write_t0 = time.perf_counter()
+                    output_write_ok = True
                     if isinstance(cropped_image, str):
                         shutil.copy2(cropped_image, outpath)
+                        output_write_ok = os.path.exists(outpath)
                     else:
-                        cv2.imwrite(outpath, cropped_image)
+                        output_write_ok = cv2.imwrite(outpath, cropped_image)
                     output_write_elapsed = time.perf_counter() - output_write_t0
                     add_assembly_timing("output_write", output_write_elapsed)
-                    print(f"[timing] output write {output_write_elapsed:.3f}s path={outpath}")
+                    print(f"[timing] output write {output_write_elapsed:.3f}s path={outpath} ok={output_write_ok}")
+                    if not output_write_ok:
+                        print(
+                            f"[write-fail] output write failed image_id={row.get('image_id', '?')} "
+                            f"path={outpath} shape={getattr(cropped_image, 'shape', None)}"
+                        )
+                        assembly_stats["rows_write_failed"] += 1
+                        continue
                 good += 1
                 assembly_stats["rows_saved"] += 1
                 metas_write_t0 = time.perf_counter()
@@ -2888,20 +2998,27 @@ def linear_test_df(df_sorted, itter=None, counter_state=None):
             print(str(e))
         if VERBOSE: print("metas_list")
         if VERBOSE: print(metas_list)
-    if ONLY_SAVE_CACHE:
-        cluster_files_path = os.path.join(sort.counter_dict["outfolder"], "cluster_files.csv")
-        cluster_files_df = pd.DataFrame(
-            cluster_file_rows,
-            columns=["image_number", "image_id", "path_to_cache_file"],
-        )
-        cluster_files_df.to_csv(cluster_files_path, index=False)
-        print(
-            f"[cluster_files] wrote {len(cluster_file_rows)} rows to {cluster_files_path}"
-        )
-    linear_test_elapsed = time.perf_counter() - linear_test_start
+        print(f"finished linear_test_df loop, processed {good} images")
+        if ONLY_SAVE_CACHE:
+            try:
+                cluster_files_path = os.path.join(sort.counter_dict["outfolder"], "cluster_files.csv")
+                print(f"writing cluster_files.csv with {len(cluster_file_rows)} rows to {cluster_files_path}")
+                cluster_files_df = pd.DataFrame(
+                    cluster_file_rows,
+                    columns=["image_number", "image_id", "path_to_cache_file"],
+                )
+                cluster_files_df.to_csv(cluster_files_path, index=False)
+                print(
+                    f"[cluster_files] wrote {len(cluster_file_rows)} rows to {cluster_files_path}"
+                )
+            except Exception as e:
+                traceback.print_exc()
+                print(f"failed to write cluster_files.csv: {str(e)}")
+        linear_test_elapsed = time.perf_counter() - linear_test_start
     print(
         "[MODE1 ASSEMBLY] linear_test_df summary "
         f"rows_total={assembly_stats['rows_total']} rows_saved={assembly_stats['rows_saved']} "
+        f"rows_write_failed={assembly_stats['rows_write_failed']} "
         f"cache_hits={assembly_stats['cache_hit_rows']} cache_misses={assembly_stats['cache_miss_rows']} "
         f"skip_face={assembly_stats['skip_face_rows']} total={linear_test_elapsed:.2f}s"
     )
@@ -2980,7 +3097,18 @@ def process_row_for_cache_only(row):
         cropped_cache_dir = os.path.dirname(cropped_cache_file)
         if not os.path.exists(cropped_cache_dir):
             os.makedirs(cropped_cache_dir)
-        cv2.imwrite(cropped_cache_file, cropped_image)
+        cache_write_ok = cv2.imwrite(cropped_cache_file, cropped_image)
+        if not cache_write_ok:
+            print(
+                f"[cache_mode][write-fail] image_id={row.get('image_id', '?')} "
+                f"path={cropped_cache_file} shape={getattr(cropped_image, 'shape', None)}"
+            )
+            return {
+                "cache_file": cropped_cache_file,
+                "status": "failed",
+                "cropped_image": None,
+                "skip_reason": "cache write failed",
+            }
         print(f"[cache_mode] generated cache image_id={row.get('image_id', '?')} path={cropped_cache_file}")
         # Do not return image arrays from workers; that causes unbounded memory growth.
         return {"cache_file": cropped_cache_file, "status": "generated", "skip_reason": None}
@@ -3051,6 +3179,84 @@ def write_images(img_list):
         cv2.imwrite(path_img[0],path_img[1])
 
 
+def enrich_image_metas(df):
+    print("enriching image metas")
+    parts = SegmentHelper_name.split("_")
+    topic_id = None
+    for part in parts:
+        # Only parse tokens like "T11" (or T-prefixed numeric values), not names like "TheOffice".
+        if isinstance(part, str) and part.startswith("T") and len(part) > 1:
+            topic_token = part[1:]
+            try:
+                topic_id = int(float(topic_token))
+                break
+            except (TypeError, ValueError):
+                continue
+    if topic_id is None:
+        if SegmentHelper_name == "SegmentHelper_TheOffice":
+            topic_id = 11
+            print(f"Parsed topic_id=11 from SegmentHelper_name: {SegmentHelper_name}")
+        else:
+            print(f"Could not parse topic_id from SegmentHelper_name: {SegmentHelper_name}")
+    if 'description' not in df.columns:
+        df['description'] = None
+    if topic_id is not None:
+        if 'topic_score' not in df.columns:
+            image_ids = df['image_id'].dropna().tolist()
+            topic_scores = {}
+            if image_ids:
+                try:
+                    score_rows = session.query(ImagesTopics.image_id, ImagesTopics.topic_score).filter(
+                        ImagesTopics.topic_id == topic_id,
+                        ImagesTopics.image_id.in_(image_ids),
+                    ).all()
+                    topic_scores = {image_id: topic_score for image_id, topic_score in score_rows}
+                except Exception as e:
+                    traceback.print_exc()
+                    print(str(e))
+                    topic_scores = {}
+            df['topic_score'] = df['image_id'].map(topic_scores)
+            print(
+                f"Assigned topic_score for {len(topic_scores)} of {len(df.index)} rows "
+                f"using topic_id={topic_id}"
+            )
+    image_ids = df['image_id'].dropna().tolist()
+    detection_payloads = {}
+    if image_ids:
+        try:
+            detection_rows = session.query(Detections).filter(
+                Detections.image_id.in_(image_ids)
+            ).all()
+            grouped_detections = {}
+            for detection in detection_rows:
+                grouped_detections.setdefault(detection.image_id, []).append({
+                    "detection_id": detection.detection_id,
+                    "image_id": detection.image_id,
+                    "class_id": detection.class_id,
+                    "obj_no": detection.obj_no,
+                    "bbox": detection.bbox,
+                    "conf": detection.conf,
+                    "bbox_norm": detection.bbox_norm,
+                    "meta_cluster_id": detection.meta_cluster_id,
+                    "cluster_id": detection.cluster_id,
+                })
+            detection_payloads = {
+                image_id: json.dumps(detections, ensure_ascii=False)
+                for image_id, detections in grouped_detections.items()
+            }
+        except Exception as e:
+            traceback.print_exc()
+            print(str(e))
+            detection_payloads = {}
+    if 'detections_json' not in df.columns:
+        df['detections_json'] = df['image_id'].map(detection_payloads).fillna("[]")
+    else:
+        df['detections_json'] = df['detections_json'].fillna("[]")
+    if 'detection_count' not in df.columns:
+        df['detection_count'] = df['detections_json'].apply(
+            lambda value: len(json.loads(value)) if isinstance(value, str) and value else 0
+        )
+    return df 
 def _build_sorted_artifact_paths(csv_folder, file_prefix, segment_count):
     stem = f"df_sorted_{file_prefix}_ct{segment_count}"
     base_path = os.path.join(csv_folder, stem)
@@ -3396,12 +3602,49 @@ def const_prefix(this_topic, cluster_no, pose_no, hsv_meta=None):
 # ---------------------------------------------------------------------------
 
 _MODE1_WORKER_CFG: dict = {}  # populated by pool initializer, read by _mode1_csv_worker
+_MODE1_WORKER_DB: dict = {"engine": None, "session": None}
+
+
+def _mode1_create_worker_session():
+    """Create a per-process engine/session for MODE1 DB dedupe work."""
+    if io.IS_TENCH or io.IS_MICHELLE:
+        return None, None
+    try:
+        if db["unix_socket"]:
+            worker_engine = create_engine(
+                "mysql+pymysql://{user}:{pw}@/{db}?unix_socket={socket}".format(
+                    user=db["user"],
+                    pw=db["pass"],
+                    db=db["name"],
+                    socket=db["unix_socket"],
+                ),
+                poolclass=NullPool,
+            )
+        else:
+            worker_engine = create_engine(
+                "mysql+pymysql://{user}:{pw}@{host}/{db}".format(
+                    host=db["host"],
+                    db=db["name"],
+                    user=db["user"],
+                    pw=db["pass"],
+                ),
+                poolclass=NullPool,
+            )
+        worker_session = sessionmaker(bind=worker_engine)()
+        return worker_engine, worker_session
+    except Exception as exc:
+        print(f"[MODE1 WORKER] failed to initialize DB session: {exc}")
+        return None, None
 
 
 def _mode1_worker_init(cfg: dict) -> None:
-    """Pool initializer: store worker config in the module-level dict."""
-    global _MODE1_WORKER_CFG
+    """Pool initializer: store worker cfg and create per-process DB session if needed."""
+    global _MODE1_WORKER_CFG, _MODE1_WORKER_DB
     _MODE1_WORKER_CFG = cfg
+    _MODE1_WORKER_DB = {"engine": None, "session": None}
+    if cfg.get("mode1_enable_db_dedupe") and not MAKE_CACHE_MODE:
+        worker_engine, worker_session = _mode1_create_worker_session()
+        _MODE1_WORKER_DB = {"engine": worker_engine, "session": worker_session}
 
 
 def _mode1_find_parts(parts: list) -> tuple:
@@ -3454,14 +3697,17 @@ def _mode1_set_multiplier(df_segment, cluster_no, pose_no, canonical_registry):
     """
     cluster_no = _mode1_normalize_token(cluster_no)
     pose_no = _mode1_normalize_token(pose_no)
-    canonical_multiplier = (canonical_registry or {}).get((cluster_no, pose_no))
+    use_pose_crop = bool(USE_POSE_CROP_DICT and pose_no is not None)
+    canonical_multiplier = None
+    if not use_pose_crop:
+        canonical_multiplier = (canonical_registry or {}).get((cluster_no, pose_no))
     if canonical_multiplier is not None:
         sort.image_edge_multiplier = list(canonical_multiplier)
         print(
             "[canonical multipliers] using stored multiplier "
             f"for arms={cluster_no} object_signature={pose_no}: {sort.image_edge_multiplier}"
         )
-    elif pose_no is not None and USE_POSE_CROP_DICT:
+    elif use_pose_crop:
         sort.image_edge_multiplier = MULTIPLIER_LIST[POSE_CROP_DICT.get(cluster_no, 1)]
     elif cluster_no is not None and USE_FUSION_PAIR_DICT:
         crop_dict_index = CLUSTER_CROP_DICT.get(CLUSTER1, {}).get(cluster_no, None)
@@ -3520,80 +3766,186 @@ def _mode1_load_df(csv_path: str, timing: dict):
     return df
 
 
-def _mode1_csv_worker(csv_file: str) -> dict:
-    """Top-level per-CSV worker for multiprocessing.Pool.imap_unordered.
+def _mode1_recheck_is_dupe_of(db_session, df):
+    """Query Encodings.is_dupe_of and drop rows flagged as duplicates."""
+    if VERBOSE:
+        print("Rechecking is_dupe_of in database for potential duplicates...")
+    image_id_list = df["image_id"].tolist()
+    query = db_session.query(Encodings.image_id, Encodings.is_dupe_of).filter(
+        Encodings.image_id.in_(image_id_list),
+        Encodings.is_dupe_of.isnot(None),
+    ).all()
+    image_dict = {image.image_id: image.is_dupe_of for image in query}
+    if bool(image_dict):
+        df["is_dupe_of"] = df["image_id"].map(image_dict)
+        df = df[df["is_dupe_of"] != 1]
+    return df
 
-    Reads config from _MODE1_WORKER_CFG (set by _mode1_worker_init).
-    Accesses io/sort as module-level globals — each spawned worker process
-    re-imports the module and gets its own independent instances, so there
-    is no sort.counter_dict race condition.
-    Returns a result dict including a 'timing' sub-dict for the parent to
-    merge into mode1_timing_totals.
 
-    NOTE: MODE1_ENABLE_DB_DEDUPE=True in workers is a no-op in B.2 — the DB
-    session lives in the parent process.  Phase D will add per-worker sessions.
-    """
-    cfg = _MODE1_WORKER_CFG
-    CSV_FOLDER = cfg["CSV_FOLDER"]
+def _mode1_get_not_dupes_sql(db_session):
+    query = db_session.query(IsNotDupeOf.image_id_i, IsNotDupeOf.image_id_j).all()
+    return {(row.image_id_i, row.image_id_j): True for row in query}
+
+
+def _mode1_run_db_dedupe(df_sorted, db_session, mode1_enable_db_dedupe, timing):
+    """Apply MODE1 dedupe flow; timing is accumulated into the provided dict."""
+    db_start = time.perf_counter()
+    if io.IS_TENCH or io.IS_MICHELLE:
+        print("[MODE1 DEDUPE] skipped dedupe: platform mode bypass")
+        timing["db_dedupe"] = timing.get("db_dedupe", 0.0) + (time.perf_counter() - db_start)
+        return df_sorted
+    if not mode1_enable_db_dedupe:
+        print("[MODE1 DEDUPE] skipped dedupe: MODE1_ENABLE_DB_DEDUPE=False")
+        timing["db_dedupe"] = timing.get("db_dedupe", 0.0) + (time.perf_counter() - db_start)
+        return df_sorted
+    if MAKE_CACHE_MODE:
+        print("[MODE1 DEDUPE] skipped dedupe: MAKE_CACHE_MODE=True")
+        timing["db_dedupe"] = timing.get("db_dedupe", 0.0) + (time.perf_counter() - db_start)
+        return df_sorted
+    if db_session is None:
+        print("[MODE1 DEDUPE] skipped dedupe: no DB session available")
+        timing["db_dedupe"] = timing.get("db_dedupe", 0.0) + (time.perf_counter() - db_start)
+        return df_sorted
+
+    if VERBOSE:
+        print("before recheck_is_dupe_of, df_sorted size", df_sorted.size)
+    recheck_start = time.perf_counter()
+    df_sorted = _mode1_recheck_is_dupe_of(db_session, df_sorted)
+    timing["db_recheck_is_dupe_of"] = timing.get("db_recheck_is_dupe_of", 0.0) + (
+        time.perf_counter() - recheck_start
+    )
+
+    get_not_dupes_start = time.perf_counter()
+    not_dupe_list = _mode1_get_not_dupes_sql(db_session)
+    timing["db_fetch_not_dupes"] = timing.get("db_fetch_not_dupes", 0.0) + (
+        time.perf_counter() - get_not_dupes_start
+    )
+
+    remove_start = time.perf_counter()
+    df_sorted = sort.remove_duplicates(
+        io.folder_list,
+        df_sorted,
+        not_dupe_list,
+        PURGING_DUPES,
+        timing_callback=lambda stage, elapsed: timing.__setitem__(
+            f"db_remove_{stage}",
+            timing.get(f"db_remove_{stage}", 0.0) + float(elapsed),
+        ),
+    )
+    timing["db_remove_duplicates_total"] = timing.get("db_remove_duplicates_total", 0.0) + (
+        time.perf_counter() - remove_start
+    )
+    timing["db_dedupe"] = timing.get("db_dedupe", 0.0) + (time.perf_counter() - db_start)
+    return df_sorted
+
+
+def _mode1_process_one_csv_shared(csv_file: str, cfg: dict, db_session=None) -> dict:
+    """Shared serial/parallel per-CSV MODE1 implementation."""
+    csv_folder = cfg["CSV_FOLDER"]
     canonical_registry = cfg.get("canonical_registry", {})
     mode1_enable_db_dedupe = cfg.get("mode1_enable_db_dedupe", False)
 
     timing: dict = {}
     file_start = time.perf_counter()
 
-    parts = csv_file.replace(".csv", "").split("_")
-    file_prefix = csv_file.replace("df_sorted_", "").replace(".csv", "")
-    print("file_prefix", file_prefix)
+    try:
+        parts = csv_file.replace(".csv", "").split("_")
+        segment_count, pose_no, topic_no, cluster_no, background_hsv_no, object_hsv_no = _mode1_find_parts(parts)
+        if len(parts) >= 3:
+            cluster_no = parts[2]
 
-    segment_count, pose_no, topic_no, cluster_no, background_hsv_no, object_hsv_no = _mode1_find_parts(parts)
-    if len(parts) >= 3:
-        cluster_no = parts[2]
-    print(
-        f"[worker] assembling cluster {cluster_no}, topic {topic_no}, pose {pose_no}, "
-        f"background_hsv {background_hsv_no}, object_hsv {object_hsv_no} from csv file: {csv_file}"
-    )
+        print(
+            f"assembling cluster {cluster_no}, topic {topic_no}, pose {pose_no}, "
+            f"background_hsv {background_hsv_no}, object_hsv {object_hsv_no} from csv file: {csv_file}"
+        )
 
-    csv_counter_state = set_my_counter_dict(
-        topic_no,
-        cluster_no,
-        pose_no,
-        {
-            "background_hsv_bins": normalize_hsv_bins(background_hsv_no),
-            "object_hsv_bins": normalize_hsv_bins(object_hsv_no),
-        },
-    )
+        csv_counter_state = set_my_counter_dict(
+            topic_no,
+            cluster_no,
+            pose_no,
+            {
+                "background_hsv_bins": normalize_hsv_bins(background_hsv_no),
+                "object_hsv_bins": normalize_hsv_bins(object_hsv_no),
+            },
+        )
 
-    df_sorted = _mode1_load_df(os.path.join(CSV_FOLDER, csv_file), timing)
-    if df_sorted is None:
+        df_sorted = _mode1_load_df(os.path.join(csv_folder, csv_file), timing)
+        if df_sorted is None:
+            timing["file_total"] = timing.get("file_total", 0.0) + (time.perf_counter() - file_start)
+            return {
+                "csv_file": csv_file,
+                "success": False,
+                "early_return": "empty_df",
+                "error": "empty df",
+                "timing": timing,
+            }
+
+        df_sorted = _mode1_run_db_dedupe(
+            df_sorted,
+            db_session,
+            mode1_enable_db_dedupe,
+            timing,
+        )
+
+        if PURGING_DUPES:
+            timing["file_total"] = timing.get("file_total", 0.0) + (time.perf_counter() - file_start)
+            return {
+                "csv_file": csv_file,
+                "success": True,
+                "early_return": "purging_dupes",
+                "error": None,
+                "timing": timing,
+            }
+
+        multiplier_start = time.perf_counter()
+        _mode1_set_multiplier(df_sorted, cluster_no, pose_no, canonical_registry)
+        timing["multiplier_setup"] = timing.get("multiplier_setup", 0.0) + (
+            time.perf_counter() - multiplier_start
+        )
+
+        if CALIBRATING:
+            timing["file_total"] = timing.get("file_total", 0.0) + (time.perf_counter() - file_start)
+            return {
+                "csv_file": csv_file,
+                "success": True,
+                "early_return": "calibrating",
+                "error": None,
+                "timing": timing,
+            }
+
+        assembly_start = time.perf_counter()
+        if MAKE_CACHE_MODE:
+            process_csv_cache_only(df_sorted, csv_file, num_workers=12)
+        else:
+            linear_test_df(df_sorted, counter_state=csv_counter_state)
+        timing["assembly"] = timing.get("assembly", 0.0) + (time.perf_counter() - assembly_start)
         timing["file_total"] = timing.get("file_total", 0.0) + (time.perf_counter() - file_start)
-        return {"csv_file": csv_file, "success": False, "early_return": "empty_df", "error": "empty df", "timing": timing}
-
-    # DB dedupe requires a DB session — deferred to Phase D.
-    if mode1_enable_db_dedupe:
-        print("[MODE1 WORKER] MODE1_ENABLE_DB_DEDUPE=True is a no-op in pool workers (Phase D)")
-
-    timing["db_dedupe"] = 0.0  # placeholder; no DB work done in B.2 workers
-
-    if PURGING_DUPES:
+        return {
+            "csv_file": csv_file,
+            "success": True,
+            "early_return": None,
+            "error": None,
+            "timing": timing,
+        }
+    except Exception as exc:
         timing["file_total"] = timing.get("file_total", 0.0) + (time.perf_counter() - file_start)
-        return {"csv_file": csv_file, "success": True, "early_return": "purging_dupes", "error": None, "timing": timing}
+        return {
+            "csv_file": csv_file,
+            "success": False,
+            "early_return": None,
+            "error": str(exc),
+            "timing": timing,
+        }
 
-    multiplier_start = time.perf_counter()
-    _mode1_set_multiplier(df_sorted, cluster_no, pose_no, canonical_registry)
-    timing["multiplier_setup"] = timing.get("multiplier_setup", 0.0) + (time.perf_counter() - multiplier_start)
 
-    if CALIBRATING:
-        timing["file_total"] = timing.get("file_total", 0.0) + (time.perf_counter() - file_start)
-        return {"csv_file": csv_file, "success": True, "early_return": "calibrating", "error": None, "timing": timing}
+def _mode1_csv_worker(csv_file: str) -> dict:
+    """Top-level per-CSV worker for multiprocessing.Pool.imap_unordered.
 
-    assembly_start = time.perf_counter()
-    if MAKE_CACHE_MODE:
-        process_csv_cache_only(df_sorted, csv_file, num_workers=12)
-    else:
-        linear_test_df(df_sorted, counter_state=csv_counter_state)
-    timing["assembly"] = timing.get("assembly", 0.0) + (time.perf_counter() - assembly_start)
-    timing["file_total"] = timing.get("file_total", 0.0) + (time.perf_counter() - file_start)
-    return {"csv_file": csv_file, "success": True, "early_return": None, "error": None, "timing": timing}
+    Reads config from _MODE1_WORKER_CFG and delegates to shared implementation.
+    """
+    cfg = _MODE1_WORKER_CFG
+    worker_session = _MODE1_WORKER_DB.get("session")
+    return _mode1_process_one_csv_shared(csv_file, cfg, db_session=worker_session)
 
 
 def _mode0_process_linear_worker(job: dict) -> dict:
@@ -3768,7 +4120,8 @@ def main():
                 import multiprocessing as _mp
                 print(f"[MODE0] opening shared pool with {PARALLEL_WORKERS} workers")
                 mode0_pool = _mp.Pool(processes=PARALLEL_WORKERS)
-            mode0_async_results.append(mode0_pool.apply_async(_mode0_process_linear_worker, (job,)))
+            async_result = mode0_pool.apply_async(_mode0_process_linear_worker, (job,))
+            mode0_async_results.append((async_result, job))
         else:
             result = _mode0_process_linear_worker(job)
             handle_mode0_worker_result(result)
@@ -3779,20 +4132,19 @@ def main():
             return
 
         remaining_results = []
-        for async_result in mode0_async_results:
+        for async_result, job in mode0_async_results:
             if wait_all or async_result.ready():
                 try:
                     result = async_result.get()
                 except Exception as exc:
-                    result = {
-                        "success": False,
-                        "error": str(exc),
-                        "file_prefix": "<async_result_get>",
-                        "elapsed": 0.0,
-                    }
+                    print(
+                        f"[MODE0 WORKER] async failure for {job.get('file_prefix')}: {exc}. "
+                        "Falling back to serial execution for this job."
+                    )
+                    result = _mode0_process_linear_worker(job)
                 handle_mode0_worker_result(result)
             else:
-                remaining_results.append(async_result)
+                remaining_results.append((async_result, job))
 
         mode0_async_results = remaining_results
 
@@ -4209,8 +4561,11 @@ def main():
         print(f"set_multiplier_and_dims cluster_no: {cluster_no}, pose_no: {pose_no}")
         cluster_no = normalize_cluster_token(cluster_no)
         pose_no = normalize_cluster_token(pose_no)
+        use_pose_crop = bool(USE_POSE_CROP_DICT and pose_no is not None)
 
-        canonical_multiplier = get_canonical_multiplier(cluster_no, pose_no)
+        canonical_multiplier = None
+        if not use_pose_crop:
+            canonical_multiplier = get_canonical_multiplier(cluster_no, pose_no)
         if canonical_multiplier is not None:
             sort.image_edge_multiplier = list(canonical_multiplier)
             print(
@@ -4223,10 +4578,10 @@ def main():
 
         crop_dict_index = CLUSTER_CROP_DICT.get(CLUSTER1, {}).get(cluster_no, None)
         # if pose_no, overide sort.image_edge_multiplier based on pose_no
-        if canonical_multiplier is None and pose_no is not None and USE_POSE_CROP_DICT:
+        if canonical_multiplier is None and use_pose_crop:
             print("using pose_no to set image_edge_multiplier", pose_no)
             pose_type = POSE_CROP_DICT.get(cluster_no, 1)
-            sort.image_edge_multiplier = MULTIPLIER_LIST[POSE_CROP_DICT[cluster_no]]
+            sort.image_edge_multiplier = MULTIPLIER_LIST[POSE_CROP_DICT.get(cluster_no, 1)]
             if VERBOSE: print(f"using pose {cluster_no} getting POSE_CROP_DICT value {pose_type} for image_edge_multiplier", sort.image_edge_multiplier)
         elif canonical_multiplier is None and cluster_no is not None and crop_dict_index is not None and USE_FUSION_PAIR_DICT:
             print("using cluster_no to set image_edge_multiplier", cluster_no)
@@ -4248,7 +4603,7 @@ def main():
             else:
                 sort.image_edge_multiplier = sort.calc_dynamic_multiplier_from_min_max_body_landmarks(df_segment, 0)
 
-        if canonical_multiplier is None:
+        if canonical_multiplier is None and not use_pose_crop:
             register_canonical_multiplier(cluster_no, pose_no, sort.image_edge_multiplier)
 
         # reset face_height_output for each round, in case it gets redefined inside loop
@@ -4691,207 +5046,12 @@ def main():
         global MODE1_ASSEMBLY_TIMING_CALLBACK
         MODE1_ASSEMBLY_TIMING_CALLBACK = add_mode1_timing
 
-        def recheck_is_dupe_of(session, df):
-            '''
-            Query the database to recheck if an image is a duplicate of another.
-            '''
-            if VERBOSE: print("Rechecking is_dupe_of in database for potential duplicates...")
-            print("before dropping", df)
-            image_id_list = df['image_id'].tolist()
-            query = session.query(Encodings.image_id, Encodings.is_dupe_of).filter(Encodings.image_id.in_(image_id_list), Encodings.is_dupe_of.isnot(None)).all()
-            image_dict = {image.image_id: image.is_dupe_of for image in query}
-            print("image_dict", image_dict)
-            if bool(image_dict):
-                # if there are any values:
-                # TK this needs to be refine when image_dict is not empty
-                df['is_dupe_of'] = df['image_id'].map(image_dict)
-                # Drop rows where is_dupe_of is 1
-                df = df[df['is_dupe_of'] != 1]
-                print("after dropping", df)
-            return df
-
-        def get_not_dupes_sql(session):
-            # Query the IsNotDupeOf table and return all values as list of tuples
-            query = session.query(IsNotDupeOf.image_id_i, IsNotDupeOf.image_id_j).all()
-            not_dupe_list = {(row.image_id_i, row.image_id_j): True for row in query}
-            return not_dupe_list
-
-
-        def load_df_sorted_from_csv(csv_file):
-            read_start = time.perf_counter()
-            path_info = resolve_sorted_artifact_paths(csv_file)
-            df, load_mode = load_df_sorted_typed_or_csv(path_info)
-            read_elapsed = time.perf_counter() - read_start
-            if load_mode == "csv":
-                add_mode1_timing("csv_read", read_elapsed)
-                add_mode1_timing("csv_fallback_read", read_elapsed)
-            else:
-                add_mode1_timing("typed_read", read_elapsed)
-            print("df head", df.head())
-            if df.empty:
-                print("dataframe is empty, skipping")
-                return
-
-            parse_start = time.perf_counter()
-            # Convert face_landmarks from string to mediapipe landmark object
-            if "face_landmarks" in df.columns:
-                df["face_landmarks"] = df["face_landmarks"].apply(sort.str_to_landmarks)
-            if "bbox" in df.columns:
-                df['bbox'] = df['bbox'].apply(lambda x: io.unstring_json(x) if isinstance(x, str) else x)
-            df['folder'] = df['folder'].apply(lambda x: os.path.join(io.ROOT, os.path.basename(x)))
-            # convert 'face_encodings68' from string to list
-            df["face_encodings68"] = df["face_encodings68"].apply(lambda x: eval(x) if isinstance(x, str) else x)
-            df["body_landmarks_array"] = df["body_landmarks_array"].apply(lambda x: eval(x) if isinstance(x, str) else x)
-            df["body_landmarks_normalized"] = df["body_landmarks_normalized"].apply(sort.str_to_landmarks)
-            df["body_landmarks_normalized_array"] = df["body_landmarks_normalized"].apply(lambda x: sort.prep_enc(x, structure="list")) # convert mp lms to list
-            df["body_landmarks_normalized_visible_array"] = df["body_landmarks_normalized"].apply(lambda x: sort.prep_enc(x, structure="visible")) # convert mp lms to list
-            df["wrist_ankle_landmarks_normalized_array"] = df["body_landmarks_normalized"].apply(lambda x: sort.prep_enc(x, structure="wrists_and_ankles")) # convert mp lms to list
-            df["face_xyz"] = df[['face_x','face_y', 'face_z']].apply(lambda x: [x[0], x[1], x[2]], axis=1)
-            df['bbox_array'] = df['bbox'].apply(lambda x: list(x.values()))            
-            df['body_landmarks_normalized_visible'] = df['body_landmarks_normalized'].apply(lambda x: sort.crop_prep(x))
-            if VERBOSE: 
-                # print("after unpickle_array, first row", df.iloc[0]['body_landmarks_normalized_visible'])
-                print("list of columns", df.columns)
-                print(df.iloc[0])
-            # conver face_x	face_y	face_z	mouth_gap site_image_id to float
-            columns_to_convert = ['face_x', 'face_y', 'face_z', 'mouth_gap', 'site_image_id']
-            df[columns_to_convert] = df[columns_to_convert].applymap(io.make_float)
-            add_mode1_timing("csv_parse", time.perf_counter() - parse_start)
-            # Process the dataframe as needed
-            return df
-        
-        def find_parts(parts):
-            if VERBOSE: print("finding parts in", parts)
-            cluster_no = pose_no = segment_count = topic_no = background_hsv_no = object_hsv_no = None
-            for part in parts:
-                if part.startswith("ct"):
-                    # Extract segment_count from the part that starts with "ct"
-                    # e.g., ct5 -> 5
-                    segment_count = part.split("ct")[1]
-                elif part.startswith("p"):
-                    # Extract pose_no from the part that starts with "p"
-                    # e.g., p1 -> 1
-                    pose_no = part.split("p")[1]
-                elif part.startswith("t"):
-                    # Extract topic from the part that starts with "t"
-                    # e.g., t3 -> 3
-                    topic_no = part.split("t")[1]
-                elif part.startswith("c"):
-                    # Extract cluster_no from the part that starts with "c"
-                    # e.g., c2 -> 2
-                    cluster_no = part.split("c")[1]
-                elif part.startswith("oml"):
-                    continue
-                elif part.startswith("om"):
-                    object_hsv_no = part.split("om", 1)[1]
-                elif part.startswith("hl"):
-                    continue
-                elif part.startswith("h"):
-                    # Extract hsv_no from the part that starts with "h"
-                    # e.g., h2 -> 2
-                    background_hsv_no = part.split("h", 1)[1]
-            return segment_count, pose_no, topic_no, cluster_no, background_hsv_no, object_hsv_no
-
-        def _process_one_csv(csv_file):
-            """Process one CSV file: parse filename, set counters, dedupe, assemble.
-
-            B.1 scaffolding: nested inside save_images_from_csv_folder so all helper
-            closures (find_parts, load_df_sorted_from_csv, recheck_is_dupe_of,
-            get_not_dupes_sql, add_mode1_timing) remain accessible without change.
-
-            Returns a compact result dict. B.2 will promote this to a top-level
-            function for pool dispatch.
-            """
-            file_start = time.perf_counter()
-            # Extract cluster_no from filename, e.g., df_sorted_{cluster_no}_ct{segment_count}_p{pose_no}.csv
-            parts = csv_file.replace(".csv", "").split("_")
-            file_prefix = csv_file.replace("df_sorted_", "").replace(".csv", "")
-            print("file_prefix", file_prefix)
-
-            segment_count, pose_no, topic_no, cluster_no, background_hsv_no, object_hsv_no = find_parts(parts)
-            if len(parts) >= 3:
-                # legacy for Tench's older file structure. delete on next file refresh. TK
-                cluster_no = parts[2]
-            print(
-                f"assembling cluster {cluster_no}, topic {topic_no}, pose {pose_no}, "
-                f"background_hsv {background_hsv_no}, object_hsv {object_hsv_no} from csv file: {csv_file}"
-            )
-
-            ### Set counter_dict (without start stuff which is not needed) ###
-            csv_counter_state = set_my_counter_dict(
-                topic_no,
-                cluster_no,
-                pose_no,
-                {
-                    "background_hsv_bins": normalize_hsv_bins(background_hsv_no),
-                    "object_hsv_bins": normalize_hsv_bins(object_hsv_no),
-                },
-            )
-            df_sorted = load_df_sorted_from_csv(os.path.join(CSV_FOLDER, csv_file))
-
-            #can delete this line after, using it to check dupe detection
-            #first run use it to see the images to double check, then can comment out for speed
-            #linear_test_df(df_sorted,segment_count,cluster_no)
-
-            #Dedupe sorting here!
-            # df_sorted.to_csv(os.path.join(io.ROOT_DBx, f"df_sorted_{cluster_no}_ct{segment_count}_p{pose_no}.csv"), index=False)
-            # df_sorted = df_sorted.head(10)  # Keep only the top entries
-
-            # don't pass in session if IS_TENCH
-            db_start = time.perf_counter()
-            if io.IS_TENCH or io.IS_MICHELLE == True:
-                not_dupe_list = None
-                print("[MODE1 DEDUPE] skipped dedupe: platform mode bypass")
-            elif not mode1_enable_db_dedupe:
-                not_dupe_list = None
-                print("[MODE1 DEDUPE] skipped dedupe: MODE1_ENABLE_DB_DEDUPE=False")
-            elif not MAKE_CACHE_MODE:
-                if VERBOSE: print("before recheck_is_dupe_of, df_sorted size", df_sorted.size)
-                recheck_start = time.perf_counter()
-                df_sorted = recheck_is_dupe_of(session, df_sorted)  # recheck is_dupe_of from DB to catch any new dupes since CSV was made
-                add_mode1_timing("db_recheck_is_dupe_of", time.perf_counter() - recheck_start)
-                if VERBOSE: print("after recheck_is_dupe_of, df_sorted size", df_sorted.size)
-                get_not_dupes_start = time.perf_counter()
-                not_dupe_list = get_not_dupes_sql(session)  # get list of image_ids that are not dupes
-                add_mode1_timing("db_fetch_not_dupes", time.perf_counter() - get_not_dupes_start)
-                if VERBOSE: print("not_dupe_list size", len(not_dupe_list))
-                remove_start = time.perf_counter()
-                df_sorted = sort.remove_duplicates(
-                    io.folder_list,
-                    df_sorted,
-                    not_dupe_list,
-                    PURGING_DUPES,
-                    timing_callback=lambda stage, elapsed: add_mode1_timing(f"db_remove_{stage}", elapsed),
-                )
-                add_mode1_timing("db_remove_duplicates_total", time.perf_counter() - remove_start)
-            else:
-                not_dupe_list = None
-                print("[MODE1 DEDUPE] skipped dedupe: MAKE_CACHE_MODE=True")
-            add_mode1_timing("db_dedupe", time.perf_counter() - db_start)
-            if PURGING_DUPES:
-                print("PURGING_DUPES is True, so bailing out")
-                add_mode1_timing("file_total", time.perf_counter() - file_start)
-                return {"csv_file": csv_file, "success": True, "early_return": "purging_dupes", "error": None}
-
-            # wrapping the multiplier in a function that sets dims too
-            multiplier_start = time.perf_counter()
-            set_multiplier_and_dims(df_sorted, cluster_no, pose_no)
-            add_mode1_timing("multiplier_setup", time.perf_counter() - multiplier_start)
-
-            if CALIBRATING:
-                return {"csv_file": csv_file, "success": True, "early_return": "calibrating", "error": None}
-
-            assembly_start = time.perf_counter()
-            if MAKE_CACHE_MODE:
-                # MAKE_CACHE_MODE: threaded cache generation, skip dedupe + pair validation
-                # num_workers = getattr(io, 'NUMBER_OF_PROCESSES_GPU', 4)
-                num_workers = 12
-                process_csv_cache_only(df_sorted, csv_file, num_workers=num_workers)
-            else:
-                linear_test_df(df_sorted, counter_state=csv_counter_state)
-            add_mode1_timing("assembly", time.perf_counter() - assembly_start)
-            add_mode1_timing("file_total", time.perf_counter() - file_start)
-            return {"csv_file": csv_file, "success": True, "early_return": None, "error": None}
+        parent_session = globals().get("session") if not io.IS_TENCH else None
+        mode1_shared_cfg = {
+            "CSV_FOLDER": CSV_FOLDER,
+            "mode1_enable_db_dedupe": mode1_enable_db_dedupe,
+            "canonical_registry": dict(canonical_multiplier_registry),
+        }
 
         cluster_no = pose_no = segment_count = topic_no = background_hsv_no = object_hsv_no = None
         # list the files in the the CSV_FOLDER
@@ -4907,11 +5067,7 @@ def main():
 
         if PARALLEL_WORKERS > 1:
             import multiprocessing as _mp
-            worker_cfg = {
-                "CSV_FOLDER": CSV_FOLDER,
-                "mode1_enable_db_dedupe": mode1_enable_db_dedupe,
-                "canonical_registry": dict(canonical_multiplier_registry),
-            }
+            worker_cfg = dict(mode1_shared_cfg)
             mode1_processed_files += len(csv_files_to_process)
             print(
                 f"[MODE1] parallel dispatch: {len(csv_files_to_process)} CSVs "
@@ -4934,7 +5090,18 @@ def main():
             for csv_file in csv_files_to_process:
                 print("csv_file", csv_file)
                 mode1_processed_files += 1
-                _process_one_csv(csv_file)
+                result = _mode1_process_one_csv_shared(
+                    csv_file,
+                    mode1_shared_cfg,
+                    db_session=parent_session,
+                )
+                for stage, elapsed in result.get("timing", {}).items():
+                    add_mode1_timing(stage, elapsed)
+                if not result.get("success"):
+                    print(
+                        f"[MODE1 SERIAL] error in {result.get('csv_file')}: "
+                        f"{result.get('error')}"
+                    )
 
         print_mode1_timing_summary(total_csv_candidates)
         MODE1_ASSEMBLY_TIMING_CALLBACK = None
@@ -5238,7 +5405,7 @@ def main():
                 ):
                     print(
                         f"skipping fusion pair {cluster_topic_no} because object cluster is in "
-                        f"SKIP_OBJECT_NONE_CLUSTERS {SKIP_OBJECT_NONE_CLUSTERS}"
+                        f"SKIP_OBJECT_NONE_CLUSTERS {SKIP_OBJECT_NONE_CLUSTERS[:5]}"
                     )
                     return
                 if USE_AFFECT_GROUPS: 
