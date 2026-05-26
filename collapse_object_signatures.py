@@ -39,13 +39,29 @@ Session = sessionmaker(bind=engine)
 session = Session()
 Base = declarative_base()
 
-rows = session.execute(text("""
-    SELECT ios.cluster_id, COUNT(*) AS cnt
-    FROM ImagesObjectSignatures ios
-    JOIN ImagesTopics it ON ios.image_id = it.image_id
-    WHERE it.topic_id = :topic_id
-    GROUP BY ios.cluster_id
-"""), {'topic_id': 11}).fetchall()
+
+SegmentHelper_name = 'SegmentHelper_TheOffice'
+topic_id = None
+
+if SegmentHelper_name is not None:
+    if not SegmentHelper_name.replace('_', '').isalnum():
+        raise ValueError("Invalid SegmentHelper_name")
+    rows = session.execute(text(f"""
+        SELECT ios.cluster_id, COUNT(*) AS cnt
+        FROM ImagesObjectSignatures ios
+        JOIN `{SegmentHelper_name}` s ON ios.image_id = s.image_id
+        GROUP BY ios.cluster_id
+    """)).fetchall()
+elif topic_id is not None:
+    rows = session.execute(text("""
+        SELECT ios.cluster_id, COUNT(*) AS cnt
+        FROM ImagesObjectSignatures ios
+        JOIN ImagesTopics it ON ios.image_id = it.image_id
+        WHERE it.topic_id = :topic_id
+        GROUP BY ios.cluster_id
+    """), {'topic_id': 11}).fetchall()
+else:
+    raise ValueError("Must specify either SegmentHelper_name or topic_id")
 
 topic_sig_counts = {int(r.cluster_id): int(r.cnt) for r in rows}
 

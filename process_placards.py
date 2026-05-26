@@ -53,20 +53,20 @@ device = "mps" if torch.backends.mps.is_available() else "cpu"
 print("Using device:", device)
 yolo_model = YOLO("yolov8x.pt").to(device)  # load a pretrained YOLOv8x model
 # yolo_custom_model = YOLO("models/takingstock_c36_v1_yolo26x/weights/best.pt").to(device)
-yolo_custom_model = YOLO("models/takingstock_clipcalc_debug_yolo26n/weights/best.pt").to(device)
+yolo_custom_model = YOLO("models/takingstock_clipcalc_debug_yolo26m/weights/best.pt").to(device)
 
 VERBOSE = True
 ocr = OCRTools(DEBUGGING=True)
 yolo = YOLOTools(DEBUGGING=True, VERBOSE=VERBOSE)
 
 
-# Get the number of classes
-num_classes = len(yolo_custom_model.names)
-print(f"Number of classes: {num_classes}")
-
-# See the actual class names
-print(yolo_custom_model.names)
-exit()
+# # Get the number of classes
+# num_classes = len(yolo_custom_model.names)
+# print(f"Number of classes: {num_classes}")
+# 
+# # See the actual class names
+# print(yolo_custom_model.names)
+# exit()
 
 blank = False
 DEBUGGING = True # saves debug images (option for bboxes drawn)
