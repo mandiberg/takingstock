@@ -18,6 +18,10 @@ import sys
 if sys.platform == "darwin": sys.path.insert(1, '/Users/michaelmandiberg/Documents/GitHub/facemap/')
 # if sys.platform == "darwin": sys.path.insert(1, '/Users/brandonflores/Documents/gitHub/takingstock_brandon/')
 elif sys.platform == "win32": sys.path.insert(1, 'C:/Users/jhash/Documents/GitHub/facemap2/')
+
+if os.path.exists('/Users/tenchc/Documents/GitHub/takingstock/'):
+    sys.path.insert(1, '/Users/tenchc/Documents/GitHub/takingstock/')
+    
 from mp_db_io import DataIO
 
 # after you make_video, you to need put them in a folder and merge_expanded_images to produce a metas file. 
@@ -28,14 +32,15 @@ OPTION, MODE = pick(options, title)
 
 start = time.time()
 io = DataIO()
+print(io.ROOTSSD)
 INPUT = os.path.join(io.ROOTSSD, "audioproduction")
-OUTPUT = os.path.join(io.ROOTSSD, "tts_files_test")
+OUTPUT = os.path.join(io.ROOTSSD, "tts_files")
 # Brandon paths
 # INPUT = os.path.join(io.ROOTSSD, "sound")
 # OUTPUT = os.path.join(io.ROOTSSD, "sound/tts_files_test")
 WINDOW = [0,1]
 
-TOPIC = 23
+TOPIC = 124
 sourcefile = f"metas_{TOPIC}.csv"
 output_csv = f"output_file_{TOPIC}.csv"
 
@@ -56,9 +61,8 @@ def get_existing_image_ids():
 
 # Function to write TTS using Eleven Labs
 def write_TTS_eleven_labs(client, input_text, file_name, voice_id):
-    audio_stream = client.text_to_speech.convert_as_stream(
+    audio_stream = client.text_to_speech.stream(
         voice_id=voice_id,
-        optimize_streaming_latency="0",
         output_format="mp3_22050_32",
         text=input_text,
         voice_settings=VoiceSettings(
@@ -85,7 +89,7 @@ def write_TTS_openai(input_text, file_name):
       voice=voice_preset,
       input=input_text
     )
-    response.stream_to_file(file_name)
+    response.write_to_file(file_name)
 
 def write_TTS_meta(input_text, file_name):
     inputs = tokenizer(input_text, return_tensors="pt")
@@ -139,9 +143,19 @@ elif OPTION == "meta":
     sample_rate = 16000
     write_TTS = write_TTS_meta
 
+existing_image_ids = get_existing_image_ids()
+
+with open(os.path.join(INPUT, sourcefile), mode='r', encoding='utf-8-sig', newline='') as _f:
+    _lines_to_process = sum(
+        1 for row in csv.DictReader(_f)
+        if int(row['image_id']) not in existing_image_ids
+        and row['description']
+        and WINDOW[0] <= float(row['topic_fit']) < WINDOW[1]
+    )
+print(f"Lines to process: {_lines_to_process} (window {WINDOW})")
+
 with open(os.path.join(INPUT, sourcefile), mode='r', encoding='utf-8-sig', newline='') as csvfile:
     reader = csv.DictReader(csvfile)
-    existing_image_ids = get_existing_image_ids()
     mode = 'w' if not os.path.exists(os.path.join(OUTPUT, output_csv)) else 'a'
 
     with open(os.path.join(OUTPUT, output_csv), mode, newline='') as output_csvfile:

@@ -13,6 +13,7 @@ import csv
 import os
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 
@@ -98,13 +99,24 @@ def main():
         print("No 2px dimension pairs found. Nothing to do.")
         return
 
-    print("2px dimension pairs that will be normalized (larger → smaller):")
+    pair_counts = {}
+    for row in rows:
+        w, h = int(row["width"]), int(row["height"])
+        if (w, h) in pairs:
+            pair_counts[(w, h)] = pair_counts.get((w, h), 0) + 1
+    total_to_crop = sum(pair_counts.values())
+
+    print(f"Found {total_to_crop} file(s) to crop across {len(pairs)} dimension pair(s):")
     for larger, smaller in sorted(pairs.items()):
-        print(f"  {larger[0]}x{larger[1]}  →  {smaller[0]}x{smaller[1]}")
+        count = pair_counts.get(larger, 0)
+        print(f"  {larger[0]}x{larger[1]}  →  {smaller[0]}x{smaller[1]}  ({count} file(s))")
     print()
 
     updated_rows = []
     errors = []
+    crop_index = 0
+    success_count = 0
+    start_time = time.time()
 
     for row in rows:
         w, h = int(row["width"]), int(row["height"])
@@ -113,6 +125,7 @@ def main():
             updated_rows.append(row)
             continue
 
+        crop_index += 1
         target_w, target_h = pairs[(w, h)]
         file_name = row["file_name"]
         video_path = folder / file_name
@@ -122,29 +135,36 @@ def main():
             updated_rows.append(row)
             continue
 
-        print(f"  {'[dry-run] ' if args.dry_run else ''}Cropping {file_name}")
+        print(f"  [{crop_index}/{total_to_crop}] {'[dry-run] ' if args.dry_run else ''}Cropping {file_name}")
         print(f"    {w}x{h}  →  {target_w}x{target_h}")
 
-        if args.dry_run:
-            updated_rows.append(row)
-            continue
+        if not args.dry_run:
+            tmp_path = video_path.with_suffix(".tmp.mp4")
+            success, stderr = crop_video(video_path, tmp_path, w, h, target_w, target_h)
 
-        tmp_path = video_path.with_suffix(".tmp.mp4")
-        success, stderr = crop_video(video_path, tmp_path, w, h, target_w, target_h)
+            if success:
+                success_count += 1
+                os.replace(tmp_path, video_path)
+                new_ratio = round(target_w / target_h, 3)
+                row = dict(row)
+                row["width"] = target_w
+                row["height"] = target_h
+                row["ratio"] = new_ratio
+                print(f"    Done — new ratio {new_ratio}")
+            else:
+                print(f"    ERROR: ffmpeg failed:\n{stderr[-400:]}", file=sys.stderr)
+                errors.append(file_name)
+                if tmp_path.exists():
+                    tmp_path.unlink()
 
-        if success:
-            os.replace(tmp_path, video_path)
-            new_ratio = round(target_w / target_h, 3)
-            row = dict(row)
-            row["width"] = target_w
-            row["height"] = target_h
-            row["ratio"] = new_ratio
-            print(f"    Done — new ratio {new_ratio}")
-        else:
-            print(f"    ERROR: ffmpeg failed:\n{stderr[-400:]}", file=sys.stderr)
-            errors.append(file_name)
-            if tmp_path.exists():
-                tmp_path.unlink()
+            if crop_index % 10 == 0 or crop_index == total_to_crop:
+                elapsed = time.time() - start_time
+                rate = crop_index / elapsed if elapsed > 0 else 0
+                print(
+                    f"\n  --- Progress: {crop_index}/{total_to_crop} processed, "
+                    f"{success_count} succeeded, {len(errors)} error(s) — "
+                    f"{elapsed:.1f}s elapsed ({rate:.2f} files/s) ---\n"
+                )
 
         updated_rows.append(row)
 
