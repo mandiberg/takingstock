@@ -232,7 +232,7 @@ class ToolsClustering:
         ]
         self.OBJECT_SIGNATURE_EXPORT_PATH = os.path.join(
             os.path.dirname(os.path.abspath(__file__)),
-            'utilities',
+            'utilities','data',
             'ImagesObjectSignatures_ObjectSignatures_202604272237.csv',
         )
         self.OBJECT_SIGNATURE_SLOT_BLOCKS = {
@@ -689,6 +689,145 @@ class ToolsClustering:
         if signatures_only:
             print("Skipping KMeans/ObjectFusion cluster writes because SIGNATURES_ONLY=True")
         print("=== END SIGNATURE RUN SUMMARY ===\n")
+
+    def _build_token_from_slot_labels(self, slot_class_ids):
+        """Build (token, hash) from a {slot_label: class_id} dict."""
+        parts = []
+        for _, slot_label in self.OBJECT_SIGNATURE_SLOT_MAP:
+            class_id = int(slot_class_ids.get(slot_label, 0) or 0)
+            parts.append(f"{slot_label}:{class_id}")
+        token = "|".join(parts)
+        sig_hash = hashlib.sha1(token.encode('utf-8')).hexdigest()
+        return token, sig_hash
+
+    def compute_topic_collapse_mapping(self, topic_sig_counts, collapse_min):
+        """
+        Compute a per-topic mapping that collapses under-supported canonical
+        object signatures into larger ones using data-driven slot-drop ordering.
+
+        The drop order for each under-supported signature is determined by
+        topic_object_positions_rankings: the (class_id, slot) pair that is
+        rarest across the whole topic is dropped first.  Drops are chained —
+        once a slot is zeroed it stays zeroed — until either a canonical
+        signature with >= collapse_min images in the topic is found (remap) or
+        all slots are exhausted / only the all-zeros signature remains (discard).
+        The canonical ObjectSignatures table is never modified.
+
+        Parameters
+        ----------
+        topic_sig_counts : dict  {cluster_id (int) -> count (int)}
+            Number of images in topic T per canonical cluster_id.
+            Obtained by querying ImagesObjectSignatures JOIN ImagesTopics.
+        collapse_min : int
+            Minimum per-topic image count for a signature to be retained.
+
+        Returns
+        -------
+        dict with keys:
+            'mapping'   : {source_cluster_id: target_cluster_id}
+            'discarded' : [cluster_id, ...]   under-supported, no valid target
+            'retained'  : [cluster_id, ...]   already >= collapse_min
+            'stats'     : summary counts
+        """
+        registry = self.load_object_signature_registry()
+        if not registry:
+            print("[COLLAPSE] Empty signature registry; returning empty mapping.")
+            return {'mapping': {}, 'discarded': [], 'retained': [], 'stats': {}}
+
+        slot_labels = [label for _, label in self.OBJECT_SIGNATURE_SLOT_MAP]
+
+        # Build hash -> cluster_id lookup for all canonical signatures.
+        hash_to_cluster_id = {}
+        for cid, slot_values in registry.items():
+            _, h = self._build_token_from_slot_labels(slot_values)
+            hash_to_cluster_id[h] = cid
+
+        # Compute the all-zeros hash so we never collapse into the null signature.
+        null_slot_values = {label: 0 for label in slot_labels}
+        _, null_hash = self._build_token_from_slot_labels(null_slot_values)
+
+        # --- Step 1: topic_object_positions_rankings ---
+        # For each (class_id, slot_label) pair, sum topic image counts across
+        # all canonical signatures (over- and under-supported) that carry that
+        # class in that slot.  Rarest pair = lowest total = dropped first.
+        position_counts = {}
+        for cid, slot_values in registry.items():
+            cid_count = topic_sig_counts.get(int(cid), 0)
+            if cid_count <= 0:
+                continue
+            for slot_label in slot_labels:
+                class_id = int(slot_values.get(slot_label, 0) or 0)
+                if class_id == 0:
+                    continue
+                key = (class_id, slot_label)
+                position_counts[key] = position_counts.get(key, 0) + cid_count
+
+        # Rank: lower rank index = rarer = drop first.
+        sorted_positions = sorted(position_counts.items(), key=lambda x: x[1])
+        position_rank = {pair: rank for rank, (pair, _) in enumerate(sorted_positions)}
+
+        # --- Step 2: classify and cascade ---
+        mapping = {}
+        discarded = []
+        retained = []
+
+        for cid, slot_values in registry.items():
+            cid = int(cid)
+            cid_count = topic_sig_counts.get(cid, 0)
+            if cid_count <= 0:
+                continue  # not present in this topic
+            if cid_count >= collapse_min:
+                retained.append(cid)
+                continue
+
+            # Under-supported: chained drop cascade.
+            # Build the ordered drop list from the original non-zero slots,
+            # sorted rarest-first by topic_object_positions_rankings.
+            current_slots = {label: int(slot_values.get(label, 0) or 0) for label in slot_labels}
+            non_zero_pairs = [
+                (class_id, slot_label)
+                for slot_label, class_id in current_slots.items()
+                if class_id > 0
+            ]
+            drop_order_list = sorted(non_zero_pairs, key=lambda x: position_rank.get(x, 0))
+
+            remapped = False
+            for class_id, slot_label in drop_order_list:
+                current_slots[slot_label] = 0  # zero this slot; stays zeroed for subsequent rounds
+                _, candidate_hash = self._build_token_from_slot_labels(current_slots)
+
+                if candidate_hash == null_hash:
+                    break  # collapsed to all-zeros: discard
+
+                target_cid = hash_to_cluster_id.get(candidate_hash)
+                if target_cid is not None and topic_sig_counts.get(int(target_cid), 0) >= collapse_min:
+                    mapping[cid] = int(target_cid)
+                    remapped = True
+                    break
+                # Slot stays zeroed; continue dropping the next rarest slot.
+
+            if not remapped:
+                discarded.append(cid)
+
+        stats = {
+            'collapse_min': collapse_min,
+            'total_canonical_in_topic': len(retained) + len(mapping) + len(discarded),
+            'retained': len(retained),
+            'remapped': len(mapping),
+            'discarded': len(discarded),
+            'unique_positions_ranked': len(position_rank),
+        }
+        print(
+            f"[COLLAPSE] topic collapse complete: "
+            f"retained={stats['retained']} remapped={stats['remapped']} "
+            f"discarded={stats['discarded']} collapse_min={collapse_min}"
+        )
+        return {
+            'mapping': mapping,
+            'discarded': discarded,
+            'retained': retained,
+            'stats': stats,
+        }
 
     def _new_world_lms_stats(self):
         """Create a fresh world-landmark stats payload for ObjectFusion runs."""
