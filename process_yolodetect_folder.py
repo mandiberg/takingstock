@@ -12,15 +12,20 @@ io = DataIO()
 
 device = "mps" if torch.backends.mps.is_available() else "cpu"
 print("Using device:", device)
-yolo_custom_model = YOLO("models/takingstock_flowers_pod4x4090_yolo26x/weights/best.pt").to(device)
-# yolo_custom_model = YOLO("models/takingstock_mask_v7_yolo26x/weights/best.pt").to(device)
+# yolo_custom_model = YOLO("models/takingstock_flatstuff_c5_v3_yolo26x/weights/best.pt").to(device)
+yolo_custom_model = YOLO('yolov8x.pt')  # Options: yolo26n.pt, yolo26s.pt, yolo26m.pt, yolo26x-objv1-150.pt
+
+print(yolo_custom_model.names)
+
 yolo = YOLOTools(DEBUGGING=True)
 
+
+# exit()
 
 # Configuration
 DEBUGGING = True
 # FILE_FOLDER = "/Volumes/OWC5/segment_images_91_gun/guns_unprocessed_mar5"
-FILE_FOLDER = "/Users/michaelmandiberg/Documents/YOLO_Training_Data/sorted_images_flag/multi_flags_detected_mar25"
+FILE_FOLDER = "/Users/michaelmandiberg/Documents/YOLO_Training_Data/sorted_images_misc/decoys_steth_etc"
 OUTPUT_FOLDER = os.path.join(FILE_FOLDER, "test_output")
 INPUT_IMAGES_FOLDER = os.path.join(FILE_FOLDER, "images")
 INPUT_LABELS_FOLDER = os.path.join(FILE_FOLDER, "labels")
@@ -29,6 +34,12 @@ INPUT_LABELS_FOLDER = os.path.join(FILE_FOLDER, "labels")
 OUTPUT_MERGED_FOLDER = os.path.join(OUTPUT_FOLDER, "merged_dataset")
 OUTPUT_MERGED_IMAGES = os.path.join(OUTPUT_MERGED_FOLDER, "images")
 OUTPUT_MERGED_LABELS = os.path.join(OUTPUT_MERGED_FOLDER, "labels")
+
+# Review branch export control.
+EXPORT_ONLY_WITH_NEW_DETECTIONS = True
+OUTPUT_REVIEW_FOLDER = os.path.join(OUTPUT_FOLDER, "review_new_detections")
+OUTPUT_REVIEW_IMAGES = os.path.join(OUTPUT_REVIEW_FOLDER, "images")
+OUTPUT_REVIEW_LABELS = os.path.join(OUTPUT_REVIEW_FOLDER, "labels")
 
 # Secondary debug output (optional).
 ENABLE_DEBUG_EXPORT = True
@@ -43,6 +54,10 @@ NEW_CLASSES_TO_ADD = None
 IOU_SAME_CLASS_THRESHOLD = 0.65
 USE_CENTER_DISTANCE_CHECK = True
 CENTER_DIST_THRESHOLD_NORM = 0.05
+
+# Existing labels in these classes always win over overlapping new detections.
+PROTECTED_EXISTING_CLASS_IDS = {80,81,82,83, 84, 95}
+PROTECTED_CLASS_IOU_THRESHOLD = 0.10
 
 CONF_THRESHOLD = 0.6
 CREATE_YOLO_CLASS_ID = [90]
@@ -102,20 +117,25 @@ CLASSES_TO_COMBINE = [89, 90]  # merge these classes onto one label, and draw th
 # }
 
 
-# flowers 11 class
+# flatstuff
 custom_ids_to_global_dict = {
-  0: 100,
-  1: 107,
-  2: 97,
-  3: 104,
-  4: 98,
-  5: 106,
-  6: 102,
-  7: 101,
-  8: 99,
-  9: 105,
-  10: 103
+  0: 124,
+  1: 127,
+  2: 93,
+  3: 136,
+  4: 137,
 }
+
+# COCO for 63 67
+custom_ids_to_global_dict = {
+  62: 62,
+  63: 63,
+  66: 66,
+  67: 67,
+  73: 73,
+}
+
+
 
 
 if NEW_CLASSES_TO_ADD is None:
@@ -247,14 +267,39 @@ def should_suppress_prediction(pred_box, existing_box):
     return center_dist <= CENTER_DIST_THRESHOLD_NORM
 
 
+def is_protected_class_conflict(pred_box, existing_box):
+    existing_class_id = existing_box.get("class_id")
+    if existing_class_id not in PROTECTED_EXISTING_CLASS_IDS:
+        return False
+
+    pred_xyxy = yolo_to_xyxy(pred_box)
+    existing_xyxy = yolo_to_xyxy(existing_box)
+    iou = xyxy_iou(pred_xyxy, existing_xyxy)
+    return iou >= PROTECTED_CLASS_IOU_THRESHOLD
+
+
 def merge_existing_and_predictions(existing_labels, predicted_labels):
     merged = list(existing_labels)
     suppressed = 0
     kept_predictions = 0
+    suppressed_by_protected_class = 0
+    kept_prediction_indices = []
 
-    for pred in predicted_labels:
+    for pred_idx, pred in enumerate(predicted_labels):
         pred_class = pred["class_id"]
         if pred_class not in NEW_CLASSES_TO_ADD:
+            continue
+
+        # Protected existing classes (money/credit-card) always overrule
+        # overlapping new detections, regardless of predicted class.
+        protected_conflict = False
+        for existing in existing_labels:
+            if is_protected_class_conflict(pred, existing):
+                protected_conflict = True
+                suppressed += 1
+                suppressed_by_protected_class += 1
+                break
+        if protected_conflict:
             continue
 
         suppress = False
@@ -269,8 +314,9 @@ def merge_existing_and_predictions(existing_labels, predicted_labels):
         if not suppress:
             merged.append(pred)
             kept_predictions += 1
+            kept_prediction_indices.append(pred_idx)
 
-    return merged, kept_predictions, suppressed
+    return merged, kept_predictions, suppressed, suppressed_by_protected_class, kept_prediction_indices
 
 
 def write_yolo_labels(label_path, labels):
@@ -301,13 +347,7 @@ def do_yolo_detections(result, image, image_path, existing_detections=None, cust
     
     detect_results = yolo.merge_yolo_detections(unrefined_detect_results, iou_threshold=0.3, adjacency_threshold_px=50)
     print(f"Image {image_id} - YOLO detections: {detect_results}")
-    
-    if ENABLE_DEBUG_EXPORT:
-        yolo.save_debug_image_yolo_bbox(image_id, imagename, image, detect_results, image_path, 
-                                        OUTPUT_DEBUG_FOLDER, io, draw_box=IS_DRAW_BOX,
-                                        save_undetected=IS_SAVE_UNDETECTED, move_or_copy=MOVE_OR_COPY,
-                                        combined_class_pairs=CLASSES_TO_COMBINE)
-    
+
     return detect_results
 
 
@@ -320,6 +360,9 @@ def main():
     total_predicted = 0
     total_kept_predictions = 0
     total_suppressed_predictions = 0
+    total_suppressed_by_protected_class = 0
+    total_exported_images = 0
+    total_skipped_without_new = 0
 
     for image_path in image_paths:
         rel_image_path = os.path.relpath(image_path, INPUT_IMAGES_FOLDER)
@@ -341,7 +384,7 @@ def main():
         existing_labels = parse_yolo_label_file(existing_label_path)
         predicted_labels = [prediction_to_yolo(d, image.shape) for d in custom_detections]
 
-        merged_labels, kept_predictions, suppressed_predictions = merge_existing_and_predictions(
+        merged_labels, kept_predictions, suppressed_predictions, suppressed_by_protected_class, kept_prediction_indices = merge_existing_and_predictions(
             existing_labels,
             predicted_labels,
         )
@@ -350,12 +393,36 @@ def main():
         total_predicted += len(predicted_labels)
         total_kept_predictions += kept_predictions
         total_suppressed_predictions += suppressed_predictions
+        total_suppressed_by_protected_class += suppressed_by_protected_class
 
-        out_image_path = os.path.join(OUTPUT_MERGED_IMAGES, rel_image_path)
-        out_label_path = os.path.join(OUTPUT_MERGED_LABELS, rel_no_ext + ".txt")
+        has_new_detections = kept_predictions > 0
+        if EXPORT_ONLY_WITH_NEW_DETECTIONS and not has_new_detections:
+            total_skipped_without_new += 1
+            print(f"Image {image_id} - no kept new detections, skipping review export")
+            continue
+
+        if ENABLE_DEBUG_EXPORT and has_new_detections:
+            kept_debug_detections = [custom_detections[i] for i in kept_prediction_indices if i < len(custom_detections)]
+            yolo.save_debug_image_yolo_bbox(
+                image_id,
+                img_name,
+                image,
+                kept_debug_detections,
+                image_path,
+                OUTPUT_DEBUG_FOLDER,
+                io,
+                draw_box=IS_DRAW_BOX,
+                save_undetected=False,
+                move_or_copy=MOVE_OR_COPY,
+                combined_class_pairs=CLASSES_TO_COMBINE,
+            )
+
+        out_image_path = os.path.join(OUTPUT_REVIEW_IMAGES, rel_image_path)
+        out_label_path = os.path.join(OUTPUT_REVIEW_LABELS, rel_no_ext + ".txt")
         os.makedirs(os.path.dirname(out_image_path), exist_ok=True)
         shutil.copy2(image_path, out_image_path)
         write_yolo_labels(out_label_path, merged_labels)
+        total_exported_images += 1
 
         print(
             f"Image {image_id} - existing={len(existing_labels)} predicted={len(predicted_labels)} "
@@ -369,7 +436,11 @@ def main():
     print(f"Predicted labels produced: {total_predicted}")
     print(f"Predicted labels kept: {total_kept_predictions}")
     print(f"Predicted labels suppressed (same class + same location): {total_suppressed_predictions}")
-    print(f"Merged dataset output: {OUTPUT_MERGED_FOLDER}")
+    print(f"Predicted labels suppressed by protected classes {sorted(PROTECTED_EXISTING_CLASS_IDS)}: {total_suppressed_by_protected_class}")
+    print(f"Images exported for review: {total_exported_images}")
+    if EXPORT_ONLY_WITH_NEW_DETECTIONS:
+        print(f"Images skipped (no new detections): {total_skipped_without_new}")
+    print(f"Review dataset output: {OUTPUT_REVIEW_FOLDER}")
     if ENABLE_DEBUG_EXPORT:
         print(f"Debug output: {OUTPUT_DEBUG_FOLDER}")
 
