@@ -1,6 +1,8 @@
 import math
 import cv2
 import os
+import random
+import json
 import numpy as np
 import pandas as pd
 
@@ -28,21 +30,34 @@ ROOT_FOLDER_PATH = '/Volumes/LaCie/'
 # if not, this should be the individual folder holding the images
 # will not accept clusterNone -- change to cluster00
 # FOLDER_NAME = "output_folder/_sort723_p1/100tobuild"
-FOLDER_NAME = "output_folder/_oneshot_doover_may21_noTSP"
+FOLDER_NAME = "output_folder/_dress_rehearsal_2plus"
 if io.IS_TENCH:
     ROOT_FOLDER_PATH = '/Users/tenchc/Documents/GitHub/taking_stock_production/segment_images'
     FOLDER_NAME = "installation_images"
 
 # iterate through folders? 
 IS_CLUSTER = True
-PARALLEL_MERGE_WORKERS = 1  # set > 1 to parallelize per-subfolder work with multiprocessing.Pool
+PARALLEL_MERGE_WORKERS = 16  # set > 1 to parallelize per-subfolder work with multiprocessing.Pool
 
 # if None, won't crop. else if int, will crop output to that count
-CROP_AFTER_COUNT = 100
+CROP_AFTER_COUNT = None
 
 LOOPING = False # defaults
+STRICT_UNIQUE_IMAGE_PLACEMENT = False
+BLEND_END_TO_FIRST = True
+OFFSET_ON_BUILD = True
+START_FRAME_OFFSET = 0
+pending_offset_frames = []
+SINGLETON_MODE = "blended_singleton"  # blended_singleton preserves the current soft singleton behavior
+singleton_skip_counts = {
+    "leading_non_first": 0,
+    "terminal_non_final": 0,
+    "terminal_final": 0,
+}
 last_image_written = None
+first_image_written = None
 run_counter = 0
+LOOP_SEAM_BLEND_STEPS = 4
 
 MERGE_COUNT = START_MERGE = PERIOD = FRAMERATE = ALREADY_CROPPED = None
 IS_VIDEO = IS_VIDEO_MERGE = SMOOTH_MERGE = OSCILATING_MERGE = False
@@ -77,8 +92,13 @@ elif "make_video" in CURRENT_MODE:
     elif "osc" in CURRENT_MODE:
         OSCILATING_MERGE = True # if true, will do an oscillating merge from START_MERGE up to MERGE_COUNT and back down to START_MERGE 
         LOOPING = True
+        # Enforce no cycle overlap and no source-image duplication for this mode.
+        STRICT_UNIQUE_IMAGE_PLACEMENT = True
+        # distinct_singleton is fully reaches singleton
+        # blended_singleton is a softer version never fully reaches singleton
+        SINGLETON_MODE = "blended_singleton"
         PERIOD = 30 # how many images in each merge cycle
-        MERGE_COUNT = 10 # largest number of merged images 
+        MERGE_COUNT = 8 # largest number of merged images 
         START_MERGE = 1 # number of images merged into the first image. Can be 1 (no merges) or >1 (two or more images merged)
         SMOOTH_MERGE_COUNT = 2 # how many transition tween frames betwen each keyframe
 
@@ -92,7 +112,7 @@ SAVE_METAS_AUDIO = False
 SAVE_INSTALLATION_METAS = True
 BUILD_WITH_AUDIO = False
 ALL_ONE_VIDEO = False
-USE_CURRENT_DIMS = False # don't do any scaling
+USE_CURRENT_DIMS = True # don't do any scaling
 LOWEST_DIMS = True # make this False if assembling big images eg full body # False if doing Paris Photo faces
 FULLBODY = False # this is for full body images, will change GIGA_DIMS to FULLBODY_DIMS
 SORT_ORDER = "Chronological"
@@ -139,6 +159,12 @@ else:
     TOPIC = None
     print("TOPIC", TOPIC)
 CSV_FILE = f"metas_{TOPIC}.csv"
+OBJECT_SIGNATURE_EXPORT_PATH = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)),
+    "utilities",
+    "data",
+    "ImagesObjectSignatures_ObjectSignatures_202604272237.csv",
+)
 
 
 def smooth_merge_transition(image1, image2, blend_steps):
@@ -152,6 +178,30 @@ def smooth_merge_transition(image1, image2, blend_steps):
         blended_uint8 = np.clip(blended, 0, 255).astype(np.uint8)
         transition_images.append(blended_uint8)
     return transition_images
+
+
+def build_loop_seam_transition(last_frame, first_frame, blend_steps=LOOP_SEAM_BLEND_STEPS):
+    """Return in-between seam frames from last rendered frame to first rendered frame.
+
+    Excludes both endpoints to avoid duplicating existing boundary frames.
+    """
+    if last_frame is None or first_frame is None:
+        return []
+
+    last_u8 = np.clip(last_frame, 0, 255).astype(np.uint8)
+    first_u8 = np.clip(first_frame, 0, 255).astype(np.uint8)
+
+    if last_u8.shape != first_u8.shape:
+        first_u8 = cv2.resize(first_u8, (last_u8.shape[1], last_u8.shape[0]), interpolation=cv2.INTER_AREA)
+
+    total = max(1, int(blend_steps))
+    # Keep only interior alphas so we do not duplicate the already-written endpoints.
+    alphas = np.linspace(0.0, 1.0, total + 2)[1:-1]
+    seam_frames = []
+    for alpha in alphas:
+        blended = cv2.addWeighted(last_u8, 1.0 - alpha, first_u8, alpha, 0.0)
+        seam_frames.append(np.clip(blended, 0, 255).astype(np.uint8))
+    return seam_frames
 
 def merge_images_numpy(image_list, make_first_image=False):
     global last_image_written
@@ -684,17 +734,25 @@ def construct_incrementor(merge_count, current_pos, this_period, total_images):
 
 def save_images_to_video(images_to_return, video_writer):
     global last_image_written
+    global first_image_written
     global run_counter
+    global pending_offset_frames
     # print("save_images_to_video called with", len(images_to_return) if images_to_return is not None else 0, "images")
     if images_to_return is not None: 
         for img in images_to_return:
             run_counter += 1
+            if first_image_written is None:
+                first_image_written = img.copy()
             # save this image for testing
             # cv2.imwrite(os.path.join(FOLDER_PATH, f"test_{run_counter}.png"), img)
             # print(f"save_images_to_video test_{run_counter}.png", img.shape)
             # print(img.shape, img.dtype, img.flags['C_CONTIGUOUS'])
             # print("video_writer.isOpened:", video_writer.isOpened())
-            video_writer.write(img)
+            if OFFSET_ON_BUILD and len(pending_offset_frames) < START_FRAME_OFFSET:
+                # Hold first N frames so playback starts at offset, then append held frames at end.
+                pending_offset_frames.append(img.copy())
+            else:
+                video_writer.write(img)
         last_image_written = images_to_return[-1]
 
 def process_images(images_to_build, video_writer, total_images, current_pos=0, merge_count=MERGE_COUNT):
@@ -725,20 +783,81 @@ def process_images(images_to_build, video_writer, total_images, current_pos=0, m
         # print(f"{video_writer.get(cv2.CAP_PROP_POS_FRAMES)} frames written so far")
         print(f"saved merged img current_pos+i", start_idx, "len images_to_build", len(images_to_build), merge_count)
 
-def process_images_osc(images_to_build, video_writer, total_images, period, current_pos=0, merge_count=MERGE_COUNT):
+
+def build_osc_schedule(current_pos, this_period, total_images, merge_count, start_merge=START_MERGE):
+    """Build a symmetric oscillating schedule of window sizes and index spans.
+
+    Returns a list of dicts with keys: step, size, start_idx, end_idx.
+    end_idx is exclusive to support Python slicing.
+    """
+    if this_period <= 0:
+        return []
+
+    local_start_merge = max(1, int(start_merge))
+    local_merge_count = max(local_start_merge, int(merge_count))
+
+    max_available = total_images - current_pos
+    if max_available < local_start_merge:
+        return []
+
+    # Use the full period budget in strict mode so cycles do not share boundary frames.
+    if STRICT_UNIQUE_IMAGE_PLACEMENT:
+        cycle_steps = min(max_available, max(1, int(this_period)))
+    else:
+        # Legacy mode: one shared boundary frame omitted.
+        cycle_steps = min(max_available, max(1, int(this_period) - 1))
+    peak_size = min(local_merge_count, max_available, max(local_start_merge, (cycle_steps + 1) // 2))
+
+    if cycle_steps < (2 * peak_size - 1):
+        peak_size = max(local_start_merge, cycle_steps // 2 + 1)
+
+    plateau_steps = max(0, cycle_steps - (2 * peak_size - 1))
+
+    # Build mirrored sizes with a flat top: up to peak, hold, then down.
+    up_sizes = list(range(local_start_merge, peak_size))
+    hold_sizes = [peak_size] * (plateau_steps + 1)
+    down_sizes = list(range(peak_size - 1, local_start_merge - 1, -1))
+    size_sequence = up_sizes + hold_sizes + down_sizes
+
+    schedule = []
+    up_len = len(up_sizes)
+    hold_len = len(hold_sizes)
+    cycle_end_idx = min(total_images, current_pos + cycle_steps)
+
+    for step, size in enumerate(size_sequence):
+        if STRICT_UNIQUE_IMAGE_PLACEMENT and step >= (up_len + hold_len):
+            # Strict mode: keep the down-ramp tail anchored so late transitions
+            # do not pull in a new third image while size is shrinking.
+            end_idx = cycle_end_idx
+        else:
+            end_idx = current_pos + step + 1
+
+        if end_idx > total_images:
+            break
+
+        start_idx = end_idx - size
+        if start_idx < current_pos:
+            start_idx = current_pos
+
+        if start_idx >= end_idx:
+            continue
+
+        schedule.append(
+            {
+                "step": step,
+                "size": int(size),
+                "start_idx": int(start_idx),
+                "end_idx": int(end_idx),
+            }
+        )
+
+    return schedule
+
+def process_images_osc(images_to_build, video_writer, total_images, period, current_pos=0, merge_count=MERGE_COUNT, is_final_cycle=False):
     global last_image_written
-    # take the total remaining, and make one full cycle with it
-    # it should start with START_MERGE, go up to merge_count, then slide through, then go back down to START_MERGE
-    # if it can't reach merge_count, it should just go up to the max it can
-    # and it should not add the last image, since it's a duplicate of the first image
+    global singleton_skip_counts
     print(f"process_images_osc called with total_images {total_images}, images_to_build {len(images_to_build)}, period {period}, current_pos {current_pos}, merge_count {merge_count}")
-    # adjust total_images to account for SMOOTH_MERGE extra frames
-    # if SMOOTH_MERGE:
-    #     total_images = total_images + (total_images - current_pos) * SMOOTH_MERGE_COUNT
-    #     print(f"total_images to {total_images} to account for SMOOTH_MERGE extra frames")
-    # else:
-    #     total_images = total_images
-        
+
     if total_images - current_pos < period:
         this_period = total_images - current_pos
         last_cycle = True
@@ -746,70 +865,86 @@ def process_images_osc(images_to_build, video_writer, total_images, period, curr
     else:
         this_period = period
         last_cycle = False
-    # Phase 1: Increase merge count from START_MERGE to merge_count
-    # video_writer.write(images_to_build[current_pos])
-    for i in range(START_MERGE, merge_count + 1):
-        # Load and merge images from current_pos to current_pos + i
-    # if i % 2 == 0:
-        images_to_return = merge_images_numpy(images_to_build[current_pos:current_pos+i])
-        print(f"images_to_return: {len(images_to_return)} images for i {i}, current_pos {current_pos}, len images_to_build {len(images_to_build)}")
-        # print("type merged_img", type(merged_img))
-        save_images_to_video(images_to_return, video_writer)
-        # Print the current number of frames written so far
-        # print(f"{video_writer.get(cv2.CAP_PROP_POS_FRAMES)} frames written so far")
-        print(f"merged starting img current_pos+i", current_pos+i, "len images_to_build", len(images_to_build), merge_count)
 
-    print("finished phase 1, does i carry over?", i)
-    # if the remaining images are greater than merge_count, then write the middle even section
-    if total_images - (current_pos) > merge_count:
-        print(f"going to write the middle even section because {total_images} - ({current_pos} + {i}) > {merge_count}")
-        # Phase 2: Slide through the array maintaining merge_count images merged
-        # this_period - merge_count allows for a flexible number of middle images
-        # for heft, it this_period - merge_count == merge_count*2
-        build_even_merge(images_to_build, video_writer, current_pos, merge_count, this_period)
-
-    else:
-        print(f"skipping the middle even section because {total_images} - ({current_pos} + {i}) <= {merge_count}")
-    
-    # Phase 3: Decrease merge count back to START_MERGE
-    # not subtracting 1 from start_merge to not include the final image
-    # adding 1 to PERIOD to include the first image of the next cycle
-    if merge_count < 2:
-        print(f"Skipping construct_incrementor: merge_count={merge_count} is too small for incrementor math")
+    schedule = build_osc_schedule(
+        current_pos=current_pos,
+        this_period=this_period,
+        total_images=total_images,
+        merge_count=merge_count,
+        start_merge=START_MERGE,
+    )
+    if not schedule:
+        print("empty oscillating schedule, skipping cycle")
         return
 
-    leading_incrementor, trailing_incrementor, trailing_start_image, current_image_no = construct_incrementor(merge_count, current_pos, this_period, total_images)
-    print("leading_incrementor", leading_incrementor)
-    print("trailing_incrementor", trailing_incrementor)
+    schedule_sizes = [step["size"] for step in schedule]
+    print(
+        "osc schedule summary:",
+        f"steps={len(schedule)}",
+        f"min_size={min(schedule_sizes)}",
+        f"max_size={max(schedule_sizes)}",
+        f"first_sizes={schedule_sizes[:8]}",
+        f"last_sizes={schedule_sizes[-8:]}",
+    )
 
-    trailing_inc = 0
-    leading_inc = 0
-    for i, t_inc, in enumerate(trailing_incrementor):
-        trailing_inc += t_inc
-        if i <= len(leading_incrementor)-1:
-            leading_inc += leading_incrementor[i]
-        print(f"trailing i {i}, trailing_inc {trailing_inc}, leading_inc {leading_inc}")
-        start_idx = trailing_start_image + trailing_inc
-        end_idx = current_image_no + leading_inc
-        print("start_idx", start_idx, "end_idx", end_idx, "i", i, "len images_to_build", len(images_to_build), merge_count)
-        if end_idx == total_images and start_idx >= end_idx:
-            print("skipping this iteration because start_idx >= end_idx")
-            # continue
-        elif start_idx >= end_idx-1:
-            print("IDK why but it seems that non-final ones have an extra frame, so skipping")
+    for step_i, step in enumerate(schedule):
+        start_idx = step["start_idx"]
+        end_idx = step["end_idx"]
+        if end_idx - start_idx <= 0:
             continue
+
+        is_first_step_singleton = step_i == 0 and step["size"] == 1
+        is_terminal_singleton = step_i == (len(schedule) - 1) and step["size"] == 1
+
+        if STRICT_UNIQUE_IMAGE_PLACEMENT and BLEND_END_TO_FIRST:
+            if SINGLETON_MODE == "blended_singleton":
+                # Preserve the current soft singleton behavior by dropping boundary singleton frames.
+                if current_pos > 0 and is_first_step_singleton:
+                    singleton_skip_counts["leading_non_first"] += 1
+                    print("skipping leading singleton on non-first cycle")
+                    continue
+                if (not is_final_cycle) and is_terminal_singleton:
+                    singleton_skip_counts["terminal_non_final"] += 1
+                    print("skipping terminal singleton on non-final cycle")
+                    continue
+
+                # Avoid a visible hard hold on the last source image before seam blending.
+                if is_final_cycle and is_terminal_singleton:
+                    singleton_skip_counts["terminal_final"] += 1
+                    print("skipping terminal singleton on final cycle to improve end seam")
+                    continue
+            elif SINGLETON_MODE == "distinct_singleton":
+                # Distinct singleton mode writes the full singleton frame.
+                pass
+            else:
+                print(f"unknown SINGLETON_MODE={SINGLETON_MODE!r}, defaulting to blended_singleton behavior")
+                if current_pos > 0 and is_first_step_singleton:
+                    singleton_skip_counts["leading_non_first"] += 1
+                    print("skipping leading singleton on non-first cycle")
+                    continue
+                if (not is_final_cycle) and is_terminal_singleton:
+                    singleton_skip_counts["terminal_non_final"] += 1
+                    print("skipping terminal singleton on non-final cycle")
+                    continue
+                if is_final_cycle and is_terminal_singleton:
+                    singleton_skip_counts["terminal_final"] += 1
+                    print("skipping terminal singleton on final cycle to improve end seam")
+                    continue
+
         images_to_return = merge_images_numpy(images_to_build[start_idx:end_idx])
-        print(i, "{current_pos+i}", current_pos+i, "start_idx", start_idx, "end_idx", end_idx, "len images_to_build", len(images_to_build), merge_count)
-        print(f"last_cycle is {last_cycle}, i is {i}")
-        # if last_cycle is not True :
-        if last_cycle is True and i >= 3:
-            print("skipping last image to avoid duplicate of first image")
-        elif last_cycle is False and i == 1:
-            print("skipping last image to avoid duplicate of first image")
-        else:
-            print("writing descending image")
-            # if it isn't the last cycle, do the regular write
-            save_images_to_video(images_to_return, video_writer)
+        print(
+            "osc step",
+            step["step"],
+            "size",
+            step["size"],
+            "start_idx",
+            start_idx,
+            "end_idx",
+            end_idx,
+            "last_cycle",
+            last_cycle,
+        )
+        save_images_to_video(images_to_return, video_writer)
 
 def build_even_merge(images_to_build, video_writer, current_pos, merge_count, this_period):
     for i in range(MERGE_COUNT + 1, this_period - MERGE_COUNT + 1):
@@ -845,7 +980,23 @@ def calculate_period(images_to_build):
 
 def write_video(img_array, subfolder_path=None):
     global last_image_written
+    global first_image_written
+    global run_counter
+    global OFFSET_ON_BUILD
+    global START_FRAME_OFFSET
+    global pending_offset_frames
+    global singleton_skip_counts
     last_image_written = None
+    first_image_written = None
+    run_counter = 0
+    OFFSET_ON_BUILD = False
+    START_FRAME_OFFSET = 0
+    pending_offset_frames = []
+    singleton_skip_counts = {
+        "leading_non_first": 0,
+        "terminal_non_final": 0,
+        "terminal_final": 0,
+    }
     img_array = [img for img in img_array if img.endswith(".jpg")]
     print("len img_array before cropping", len(img_array))
     if len(img_array) == 0:
@@ -854,7 +1005,8 @@ def write_video(img_array, subfolder_path=None):
     elif len(img_array) < PERIOD/2:
         print(f"not enough images to fill half a period ({PERIOD/2}), skipping this folder")
         return
-    if IS_VIDEO_MERGE: img_array.append(img_array[0]) # add the first image to the end to make a loop
+    if IS_VIDEO_MERGE and not STRICT_UNIQUE_IMAGE_PLACEMENT:
+        img_array.append(img_array[0]) # add the first image to the end to make a loop
     images_to_build = load_images(img_array, subfolder_path)
     # print("img_array", img_array)
     print("len images_to_build", len(images_to_build))
@@ -888,6 +1040,18 @@ def write_video(img_array, subfolder_path=None):
         total_images = len(img_array)
         current_pos = 0
 
+        if LOOPING:
+            offset_center = max(0, int(MERGE_COUNT))
+            offset_min = max(0, offset_center - 2)
+            offset_max = max(offset_min, offset_center + 2)
+            START_FRAME_OFFSET = random.randint(offset_min, offset_max)
+            OFFSET_ON_BUILD = START_FRAME_OFFSET > 0
+            print(
+                "on-build start offset enabled:",
+                f"start_offset={START_FRAME_OFFSET}",
+                f"range=[{offset_min},{offset_max}]",
+            )
+
         if SMOOTH_MERGE and OSCILATING_MERGE:
             # Calculate images_per_cycle and check if MERGE_COUNT needs adjustment
             # this is when the period is shorter than the merge up and down cycle
@@ -898,13 +1062,28 @@ def write_video(img_array, subfolder_path=None):
             else:
                 merge_count = MERGE_COUNT
                 
-            # Process only if there are enough images to complete at least one cycle
-            if total_images >= period:
+            if STRICT_UNIQUE_IMAGE_PLACEMENT:
+                cycle_advance = max(1, int(period))
+            else:
+                cycle_advance = max(1, merge_count - START_MERGE)
+
+            # Process only if there are enough images to build at least one peak merge.
+            if total_images >= max(merge_count, START_MERGE):
                 
-                while current_pos + period <= total_images:
-                    process_images_osc(images_to_build, video_writer, total_images, period, current_pos, merge_count)
-                    # Move to the next cycle
-                    current_pos += period
+                while current_pos < total_images:
+                    next_pos = current_pos + cycle_advance
+                    is_final_cycle = next_pos >= total_images
+                    process_images_osc(
+                        images_to_build,
+                        video_writer,
+                        total_images,
+                        period,
+                        current_pos,
+                        merge_count,
+                        is_final_cycle=is_final_cycle,
+                    )
+                    # Move to next cycle. In strict mode this is period-sized and non-overlapping.
+                    current_pos = next_pos
                     print("current_pos", current_pos)
 
                 # Handle remaining images because there are not enough for a full cycle
@@ -913,22 +1092,24 @@ def write_video(img_array, subfolder_path=None):
                 if "smooth_osc" in CURRENT_MODE:
                     if remaining > START_MERGE:
                         print("remaining", remaining)
-                        if merge_count *2 > remaining:
-                            merge_count = math.floor(remaining / 2)
-                            print("adjusted merge_count to", merge_count)
-                        # remaining_merge_count = math.floor(remaining // 2)
-                        # merge_count = min(merge_count, remaining_merge_count)
-                        process_images_osc(images_to_build, video_writer, total_images, period, current_pos, merge_count)
+                        tail_merge_count = min(merge_count, remaining)
+                        process_images_osc(images_to_build, video_writer, total_images, remaining, current_pos, tail_merge_count)
 
-                    # coda: make one final merge to ease the final image into to the first image in the loop
-                    first_img = images_to_build[0]
-                    last_img = images_to_build[-1]
-                    print("creating final transition merge between last and first image", first_img.shape, last_img.shape)
-                    images_to_return = merge_images_numpy([last_img, first_img])
-                    print("images_to_return", len(images_to_return), "images_to_return[0].shape", images_to_return[0].shape)
-                    if images_to_return is not None: 
-                        # save all but the last image to avoid duplicate of first image
-                        save_images_to_video(images_to_return[:-1], video_writer)
+                    if BLEND_END_TO_FIRST:
+                        # Coda: bridge last rendered frame back toward first rendered frame.
+                        # Excludes endpoints, so this adds only in-between blend frames.
+                        seam_blend_steps = 2 if STRICT_UNIQUE_IMAGE_PLACEMENT else LOOP_SEAM_BLEND_STEPS
+                        seam_frames = build_loop_seam_transition(
+                            last_image_written,
+                            first_image_written,
+                            blend_steps=seam_blend_steps,
+                        )
+                        print(
+                            "creating seam bridge between rendered last and first frames:",
+                            f"seam_count={len(seam_frames)}",
+                        )
+                        if seam_frames:
+                            save_images_to_video(seam_frames, video_writer)
                         
 
                 else:
@@ -959,6 +1140,24 @@ def write_video(img_array, subfolder_path=None):
 
 
     # Release the video writer and close the video file
+    if OFFSET_ON_BUILD and pending_offset_frames:
+        print(f"appending deferred offset frames at end: {len(pending_offset_frames)}")
+        for frame in pending_offset_frames:
+            video_writer.write(frame)
+
+    singleton_skip_total = (
+        singleton_skip_counts["leading_non_first"]
+        + singleton_skip_counts["terminal_non_final"]
+        + singleton_skip_counts["terminal_final"]
+    )
+    print(
+        "singleton_skip_counts",
+        f"leading_non_first={singleton_skip_counts['leading_non_first']}",
+        f"terminal_non_final={singleton_skip_counts['terminal_non_final']}",
+        f"terminal_final={singleton_skip_counts['terminal_final']}",
+        f"total={singleton_skip_total}",
+    )
+
     video_writer.release()
 
     print("outfile size", os.path.getsize(video_path))
@@ -968,7 +1167,8 @@ def write_video(img_array, subfolder_path=None):
 
 
 
-    if LOOPING: shift_video_frames(video_path)
+    if LOOPING and not STRICT_UNIQUE_IMAGE_PLACEMENT and not OFFSET_ON_BUILD:
+        shift_video_frames(video_path)
 
     # Add audio to the video if needed
     if BUILD_WITH_AUDIO:
@@ -1139,6 +1339,57 @@ def save_installation_metas(subfolders, output_path, csv_file):
         )
         return None
 
+    def _normalize_cluster_token(value):
+        if value is None or pd.isna(value):
+            return None
+        if isinstance(value, str):
+            token = value.strip()
+            if not token or token.lower() in ("none", "nan"):
+                return None
+            value = token
+        try:
+            return int(float(value))
+        except (TypeError, ValueError):
+            return None
+
+    def _load_object_signature_registry():
+        slot_cols = ["LH", "RH", "TF", "LE", "RE", "MO", "SH", "WA", "FT"]
+        if not os.path.exists(OBJECT_SIGNATURE_EXPORT_PATH):
+            print(
+                f"[save_installation_metas] object signature export missing: {OBJECT_SIGNATURE_EXPORT_PATH}"
+            )
+            return {}
+
+        try:
+            signature_df = pd.read_csv(OBJECT_SIGNATURE_EXPORT_PATH)
+        except Exception as exc:
+            print(f"[save_installation_metas] failed to load object signature export: {exc}")
+            return {}
+
+        missing_cols = [col for col in ["cluster_id", *slot_cols] if col not in signature_df.columns]
+        if missing_cols:
+            print(
+                f"[save_installation_metas] object signature export missing columns: {missing_cols}"
+            )
+            return {}
+
+        registry = {}
+        for _, row in signature_df.iterrows():
+            cluster_id = _normalize_cluster_token(row.get("cluster_id"))
+            if cluster_id is None:
+                continue
+            object_ids = []
+            for col in slot_cols:
+                obj_id = _normalize_cluster_token(row.get(col))
+                if obj_id is not None and obj_id != 0:
+                    object_ids.append(obj_id)
+            registry[cluster_id] = json.dumps(sorted(set(object_ids)))
+
+        print(
+            f"[save_installation_metas] loaded object signature registry: {len(registry)} rows"
+        )
+        return registry
+
     # Check each cluster subfolder for its own installation.csv
     any_missing = False
     installation_metas = pd.DataFrame(columns=["cluster_no", "hsv_no", "pose_no"])
@@ -1213,6 +1464,8 @@ def save_installation_metas(subfolders, output_path, csv_file):
     if dropped:
         print(f"[save_installation_metas] dropped {dropped} row(s) with no matching video")
 
+    object_signature_registry = _load_object_signature_registry()
+
     installation_metas["width"] = installation_metas["cluster_no"].apply(lambda x: _lookup(x, 0))
     installation_metas["height"] = installation_metas["cluster_no"].apply(lambda x: _lookup(x, 1))
     installation_metas["ratio"] = installation_metas.apply(
@@ -1223,6 +1476,9 @@ def save_installation_metas(subfolders, output_path, csv_file):
     )
     installation_metas["file_name"] = installation_metas["cluster_no"].apply(lambda x: _lookup(x, 2))
     installation_metas["duration"] = installation_metas["cluster_no"].apply(lambda x: _lookup(x, 3))
+    installation_metas["objects"] = installation_metas["pose_no"].apply(
+        lambda x: object_signature_registry.get(_normalize_cluster_token(x), "[]")
+    )
 
     print(f"\n[save_installation_metas] final DataFrame:\n{installation_metas}")
     output_csv_path = os.path.join(output_path, output_filename)
