@@ -12,8 +12,8 @@ io = DataIO()
 
 device = "mps" if torch.backends.mps.is_available() else "cpu"
 print("Using device:", device)
-# yolo_custom_model = YOLO("models/takingstock_flatstuff_c5_v3_yolo26x/weights/best.pt").to(device)
-yolo_custom_model = YOLO('yolov8x.pt')  # Options: yolo26n.pt, yolo26s.pt, yolo26m.pt, yolo26x-objv1-150.pt
+yolo_custom_model = YOLO("models/takingstock_clipcalc_v2_yolov8x/weights/best.pt").to(device)
+yolo_model = YOLO('yolov8x.pt')  # Options: yolo26n.pt, yolo26s.pt, yolo26m.pt, yolo26x-objv1-150.pt
 
 print(yolo_custom_model.names)
 
@@ -25,7 +25,7 @@ yolo = YOLOTools(DEBUGGING=True)
 # Configuration
 DEBUGGING = True
 # FILE_FOLDER = "/Volumes/OWC5/segment_images_91_gun/guns_unprocessed_mar5"
-FILE_FOLDER = "/Users/michaelmandiberg/Documents/YOLO_Training_Data/sorted_images_misc/decoys_steth_etc"
+FILE_FOLDER = "/Users/michaelmandiberg/Documents/YOLO_Training_Data/sorted_images_moneymix_testing/misc_Money_mix"
 OUTPUT_FOLDER = os.path.join(FILE_FOLDER, "test_output")
 INPUT_IMAGES_FOLDER = os.path.join(FILE_FOLDER, "images")
 INPUT_LABELS_FOLDER = os.path.join(FILE_FOLDER, "labels")
@@ -56,7 +56,7 @@ USE_CENTER_DISTANCE_CHECK = True
 CENTER_DIST_THRESHOLD_NORM = 0.05
 
 # Existing labels in these classes always win over overlapping new detections.
-PROTECTED_EXISTING_CLASS_IDS = {80,81,82,83, 84, 95}
+PROTECTED_EXISTING_CLASS_IDS = {80,81,82,83, 84, 95, 93, 127}
 PROTECTED_CLASS_IOU_THRESHOLD = 0.10
 
 CONF_THRESHOLD = 0.6
@@ -119,27 +119,37 @@ CLASSES_TO_COMBINE = [89, 90]  # merge these classes onto one label, and draw th
 
 # flatstuff
 custom_ids_to_global_dict = {
-  0: 124,
+  0: 93,
   1: 127,
-  2: 93,
-  3: 136,
-  4: 137,
 }
+
+# # flatstuff
+# custom_ids_to_global_dict = {
+#   0: 124,
+#   1: 135,
+#   2: 134,
+#   3: 133,
+#   4: 136,
+#   5: 137,
+# }
+
+# {0: '124_Tablet', 1: '135_Computer_monitor', 2: '134_Book', 3: '133_Remote_control', 4: '136_Laptop', 5: '137_Phone_handheld'}
+
 
 # COCO for 63 67
-custom_ids_to_global_dict = {
-  62: 62,
-  63: 63,
-  66: 66,
-  67: 67,
-  73: 73,
+COCO_ids_to_global_dict = {
+  62: 132,
+  63: 133,
+  65: 135,
+  66: 136,
+  67: 137,
+  73: 123,
 }
-
 
 
 
 if NEW_CLASSES_TO_ADD is None:
-    NEW_CLASSES_TO_ADD = set(custom_ids_to_global_dict.values())
+    NEW_CLASSES_TO_ADD = set(custom_ids_to_global_dict.values()) | set(COCO_ids_to_global_dict.values())
 
 
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".webp", ".tif", ".tiff"}
@@ -328,25 +338,19 @@ def write_yolo_labels(label_path, labels):
             )
 
 
-def do_yolo_detections(result, image, image_path, existing_detections=None, custom=False):
+def do_yolo_detections(result, image, image_path, model, class_map, model_name="model"):
     image_id = result.image_id
     imagename = result.imagename
 
-    if custom:
-        this_yolo_model = yolo_custom_model
-    else:
-        raise ValueError("This workflow expects custom=True with yolo_custom_model configured.")
-    
-    print(f"Image {image_id} - Performing YOLO detections. custom={custom}")
-    unrefined_detect_results = yolo.detect_objects_return_bbox(this_yolo_model, image, device, conf_thresh=CONF_THRESHOLD)
-    print(f"Image {image_id} - Unrefined YOLO detections: {unrefined_detect_results}")
-    
-    if custom:
-        unrefined_detect_results = yolo.map_custom_ids_to_global(unrefined_detect_results, custom_ids_to_global_dict)
-        unrefined_detect_results = [d for d in unrefined_detect_results if d.get("class_id") is not None]
-    
-    detect_results = yolo.merge_yolo_detections(unrefined_detect_results, iou_threshold=0.3, adjacency_threshold_px=50)
-    print(f"Image {image_id} - YOLO detections: {detect_results}")
+    print(f"Image {image_id} - Performing YOLO detections. model={model_name}")
+    unrefined_detect_results = yolo.detect_objects_return_bbox(model, image, device, conf_thresh=CONF_THRESHOLD)
+    print(f"Image {image_id} - Unrefined {model_name} detections: {unrefined_detect_results}")
+
+    mapped_results = yolo.map_custom_ids_to_global(unrefined_detect_results, class_map)
+    mapped_results = [d for d in mapped_results if d.get("class_id") is not None]
+
+    detect_results = yolo.merge_yolo_detections(mapped_results, iou_threshold=0.3, adjacency_threshold_px=50)
+    print(f"Image {image_id} - {model_name} detections: {detect_results}")
 
     return detect_results
 
@@ -376,13 +380,29 @@ def main():
 
         image_id = image_id_from_filename(img_name)
         result = type('obj', (object,), {'image_id': image_id, 'imagename': img_name, 'bbox': '{}'})
-        custom_detections = do_yolo_detections(result, image, image_path, existing_detections=None, custom=True)
+        coco_detections = do_yolo_detections(
+            result,
+            image,
+            image_path,
+            yolo_model,
+            COCO_ids_to_global_dict,
+            model_name="COCO",
+        )
+        custom_detections = do_yolo_detections(
+            result,
+            image,
+            image_path,
+            yolo_custom_model,
+            custom_ids_to_global_dict,
+            model_name="custom",
+        )
+        combined_detections = coco_detections + custom_detections
 
         rel_no_ext = os.path.splitext(rel_image_path)[0]
         existing_label_path = os.path.join(INPUT_LABELS_FOLDER, rel_no_ext + ".txt")
 
         existing_labels = parse_yolo_label_file(existing_label_path)
-        predicted_labels = [prediction_to_yolo(d, image.shape) for d in custom_detections]
+        predicted_labels = [prediction_to_yolo(d, image.shape) for d in combined_detections]
 
         merged_labels, kept_predictions, suppressed_predictions, suppressed_by_protected_class, kept_prediction_indices = merge_existing_and_predictions(
             existing_labels,
@@ -402,7 +422,7 @@ def main():
             continue
 
         if ENABLE_DEBUG_EXPORT and has_new_detections:
-            kept_debug_detections = [custom_detections[i] for i in kept_prediction_indices if i < len(custom_detections)]
+            kept_debug_detections = [combined_detections[i] for i in kept_prediction_indices if i < len(combined_detections)]
             yolo.save_debug_image_yolo_bbox(
                 image_id,
                 img_name,
