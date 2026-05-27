@@ -30,7 +30,7 @@ ROOT_FOLDER_PATH = '/Volumes/LaCie/'
 # if not, this should be the individual folder holding the images
 # will not accept clusterNone -- change to cluster00
 # FOLDER_NAME = "output_folder/_sort723_p1/100tobuild"
-FOLDER_NAME = "output_folder/_dress_rehearsal_2plus"
+FOLDER_NAME = "output_folder/_dress_rehearsal_483"
 if io.IS_TENCH:
     ROOT_FOLDER_PATH = '/Users/tenchc/Documents/GitHub/taking_stock_production/segment_images'
     FOLDER_NAME = "installation_images"
@@ -112,7 +112,7 @@ SAVE_METAS_AUDIO = False
 SAVE_INSTALLATION_METAS = True
 BUILD_WITH_AUDIO = False
 ALL_ONE_VIDEO = False
-USE_CURRENT_DIMS = True # don't do any scaling
+USE_CURRENT_DIMS = False # don't do any scaling
 LOWEST_DIMS = True # make this False if assembling big images eg full body # False if doing Paris Photo faces
 FULLBODY = False # this is for full body images, will change GIGA_DIMS to FULLBODY_DIMS
 SORT_ORDER = "Chronological"
@@ -1476,7 +1476,7 @@ def save_installation_metas(subfolders, output_path, csv_file):
     )
     installation_metas["file_name"] = installation_metas["cluster_no"].apply(lambda x: _lookup(x, 2))
     installation_metas["duration"] = installation_metas["cluster_no"].apply(lambda x: _lookup(x, 3))
-    installation_metas["objects"] = installation_metas["pose_no"].apply(
+    installation_metas["object"] = installation_metas["pose_no"].apply(
         lambda x: object_signature_registry.get(_normalize_cluster_token(x), "[]")
     )
 
