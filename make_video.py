@@ -66,7 +66,7 @@ SegmentHelper_name = 'SegmentHelper_TheOffice'
 IS_SSD = True
 SSD_PATH = "/Volumes/LaCie/segment_images"
 # SSD_PATH = "/Volumes/OWC52/segment_images"
-ONLY_SAVE_CACHE = False # only save CSVs to cluster folder, not images which are saved in cache folders -- for speed
+ONLY_SAVE_CACHE = True # only save CSVs to cluster folder, not images which are saved in cache folders -- for speed
 MAKE_CACHE_MODE = False # only make cache folders, skips dedupe and is_face testing
 MODE1_ENABLE_DB_DEDUPE = True # False skips dedupe during crunch time drafts  
 SKIP_PAIRCHECK = False # True for draft mode, False does paircheck, and caches them 
@@ -101,7 +101,7 @@ CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden b
 
 # CSV_FOLDER = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion128_test220K"
 CSV_MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/"
-CSV_RUN_FOLDER = "SegmentHelper_TheOffice/projector_test/" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
+CSV_RUN_FOLDER = "SegmentHelper_TheOffice/projector_test_483/" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
 CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, CSV_RUN_FOLDER)
 MAX_ROWS_PER_OUTPUT_CSV = 1200
 ENABLE_MODE0_TIMING = True
@@ -365,8 +365,9 @@ elif CURRENT_MODE == 'heft_torso_keywords':
         TSP_SORT = False
         CHOP_ITTER_TSP_SORT = False
         if CLUSTER_TYPE == "ArmsPoses3D_ObjectFusion":
-            GENERATE_FUSION_PAIRS = True # April 14 changing this for testing
-            MULTIPOLICY = True # MULTIPOLICY conflicts with GENERATE_FUSION_PAIRS 
+            GENERATE_FUSION_PAIRS = False # April 14 changing this for testing
+            MULTIPOLICY = False # MULTIPOLICY conflicts with GENERATE_FUSION_PAIRS 
+            OBJECT_NONE_CLUSTERS = [] # sneaky HACK to force non multi to run P1
 
             # GENERATE_FUSION_PAIRS = False # April 14 changing this for testing
             # MULTIPOLICY = False # MULTIPOLICY conflicts with GENERATE_FUSION_PAIRS 
@@ -394,6 +395,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
         TSP_SORT = False
         CHOP_ITTER_TSP_SORT = False
         ONE_SHOT = False # take all files, based off the very first sort order.
+        ONLY_SAVE_CACHE = True # when doing animations, save the images for manual review
 
     if GENERATE_FUSION_PAIRS:
         # this is an override for development purposes. will only make CSVs from these clusters:
