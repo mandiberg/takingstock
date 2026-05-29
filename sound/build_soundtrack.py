@@ -86,8 +86,6 @@ LOUD_RESET = 7
 loud_counter = []
 fake_loud = False
 channel_counter = 0
-# TEMP: 0=quiet(topic_fit<QUIET), 1=keys-found, 2=no-keys-medium — change per run
-ACTIVE_TIERS = {0, 1, 2}
 KEYS = {
     0: ["sport", "exercis", "activ", "athlet", "fit", "train", "workout", "lifestyl", "healthi", "yoga"],
     1: ["outsid", "think", "sceneri", "landscap", "calm", "contempl", "peac", "retir", "pension", "blur"],
@@ -257,17 +255,6 @@ def scale_volume(row, cycler, audio_data, sample_rate):
 
     # search_for_keys to see where the matching keys are
     key_index,desc_count=search_for_keys(row)
-
-    # TEMP: determine tier and skip if not in ACTIVE_TIERS
-    if volume_fit < QUIET:
-        _tier = 0
-    elif len(key_index) > 0:
-        _tier = 1
-    else:
-        _tier = 2
-    if _tier not in ACTIVE_TIERS:
-        return 0, fadeout, fadein
-    # END TEMP
 
     if volume_fit < QUIET:
         # vol = scale_volume_exp(volume_fit, 3)
@@ -585,17 +572,18 @@ def merge_audio(combined_audio, chunk_audio_without_silence):
     # sf.write(str(len(c ombined_audio))+"combined_audio.wav", combined_audio, TARGET_SAMPLE_RATE, format='wav')
     return combined_audio
 
-# TEMP: helper to reset mutable globals between tier runs
-def reset_globals():
-    global loud_counter, fake_loud, channel_counter
-    loud_counter = []
-    fake_loud = False
-    channel_counter = 0
 
-# TEMP: runs one full mixdown pass and writes to output_path
-def run_mixdown(existing_files, output_path):
+def main():
+    io = DataIO()
+
+    existing_files = io.get_img_list(os.path.join(INPUT, SOUND_FOLDER))
+    existing_files = {os.path.basename(f).split("_")[0]:f for f in existing_files}
+    existing_files = {k: v for k, v in existing_files.items() if int(k) in df['image_id'].values}
+    print("Existing files after INTERSECT:", len(existing_files))
+
     combined_audio = None
     start_index = 0
+    output_path = os.path.join(INPUT, f"multitrack_mixdown_offset_{TOPIC}.wav")
     chunks = pd.read_csv(os.path.join(INPUT, "audioproduction", CSV_FILE), chunksize=CHUNK_SIZE)
     for chunk_index, chunk in enumerate(chunks):
         chunk_audio, chunk_end_time = process_audio_chunk(chunk, existing_files, INPUT, start_index, chunk_index)
@@ -618,36 +606,6 @@ def run_mixdown(existing_files, output_path):
     print("Combined audio shape before writing:", combined_audio.shape)
     print("writing to file", output_path)
     sf.write(output_path, combined_audio, TARGET_SAMPLE_RATE, format='wav')
-
-def main():
-    io = DataIO()
-
-    existing_files = io.get_img_list(os.path.join(INPUT, SOUND_FOLDER))
-    existing_files = {os.path.basename(f).split("_")[0]:f for f in existing_files}
-    existing_files = {k: v for k, v in existing_files.items() if int(k) in df['image_id'].values}
-    print("Existing files after INTERSECT:", len(existing_files))
-
-    # TEMP: 7 tier combinations — tiers: 0=quiet, 1=keys-found, 2=no-keys-medium
-    TIER_COMBINATIONS = [
-        ({0},       "tier0_quiet"),
-        ({1},       "tier1_keys"),
-        ({2},       "tier2_nokeys"),
-        ({0, 1},    "tier01_quiet_keys"),
-        ({0, 2},    "tier02_quiet_nokeys"),
-        ({1, 2},    "tier12_keys_nokeys"),
-        ({0, 1, 2}, "tier_all"),
-    ]
-
-    global ACTIVE_TIERS
-    for tiers, label in TIER_COMBINATIONS:
-        ACTIVE_TIERS = tiers
-        reset_globals()
-        output_path = os.path.join(INPUT, f"multitrack_mixdown_offset_{TOPIC}_{label}.wav")
-        print(f"\n{'='*60}")
-        print(f"Running mixdown: {label}  (tiers={tiers})")
-        print(f"{'='*60}\n")
-        run_mixdown(existing_files, output_path)
-    # END TEMP
 
 if __name__ == "__main__":
     main()
