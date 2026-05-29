@@ -66,7 +66,7 @@ SegmentHelper_name = 'SegmentHelper_TheOffice'
 IS_SSD = True
 SSD_PATH = "/Volumes/LaCie/segment_images"
 # SSD_PATH = "/Volumes/OWC52/segment_images"
-ONLY_SAVE_CACHE = False # only save CSVs to cluster folder, not images which are saved in cache folders -- for speed
+ONLY_SAVE_CACHE = True # only save CSVs to cluster folder, not images which are saved in cache folders -- for speed
 MAKE_CACHE_MODE = False # only make cache folders, skips dedupe and is_face testing
 MODE1_ENABLE_DB_DEDUPE = True # False skips dedupe during crunch time drafts  
 SKIP_PAIRCHECK = False # True for draft mode, False does paircheck, and caches them 
@@ -101,7 +101,7 @@ CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden b
 
 # CSV_FOLDER = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion128_test220K"
 CSV_MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/"
-CSV_RUN_FOLDER = "SegmentHelper_TheOffice/p15_selects_may21_noTSP/" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
+CSV_RUN_FOLDER = "SegmentHelper_TheOffice/projector_test_483/" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
 CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, CSV_RUN_FOLDER)
 MAX_ROWS_PER_OUTPUT_CSV = 1200
 ENABLE_MODE0_TIMING = True
@@ -172,6 +172,8 @@ def resolve_arms_object_fusion_folder(
 
 HSV_SOURCE_MODE = "background"
 SKIP_OBJECT_NONE_CLUSTERS = [0] # set to 1 if you want to skip Nones
+DO_OBJECT_COLLAPSE = True       # compute and apply per-topic object signature collapse mapping
+OBJECT_COLLAPSE_MIN = 1000       # minimum topic-count for a signature bin to be retained
 MULTIPOLICY = False
 
 # overriding DB for testing
@@ -350,21 +352,22 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     # MULTIPOLICY = True # controls whether it does multi-bucket fusion policy based on cluster size for HSV, clusters, and metabodyposes3D
     MULTIPOLICY = True # controls whether it does multi-bucket fusion policy based on cluster size for HSV, clusters, and metabodyposes3D
 
-    CLUSTER_MIN_HSV_BG = 1500
-    CLUSTER_MIN_HSV_OBJ = 1500
+    CLUSTER_MIN_HSV_BG = 1200
+    CLUSTER_MIN_HSV_OBJ = 1000
     OBJ_CLUSTER_COLUMN_MIN_FOR_FUSION_SORT = 1000
     DO_SMALL_CLUSTER_FUSION_BUCKET = False # if MULTIPOLICY is True, this controls whether clusters below the CLUSTER_MIN_HSV_OBJ threshold get put into a small cluster fusion bucket, or just skipped for fusion entirely. If False, they get skipped for fusion and go to the end of the sort. If True, they get put into a small cluster fusion bucket that gets sorted after the main fusion buckets, but before the non-fusion clusters.
     HSV_SOURCE_MODE = "background" # "background" or "object" or "both"
     FORCE_TOPIC_FIT_SCORE = True # adds topic score to csvs at the very end of linear sort
 
-    TESTING = False
+    TESTING = True
     if TESTING:
         ONE_SHOT = False # take all files, based off the very first sort order.
-        TSP_SORT = True
+        TSP_SORT = False
         CHOP_ITTER_TSP_SORT = False
         if CLUSTER_TYPE == "ArmsPoses3D_ObjectFusion":
-            GENERATE_FUSION_PAIRS = True # April 14 changing this for testing
-            MULTIPOLICY = True # MULTIPOLICY conflicts with GENERATE_FUSION_PAIRS 
+            GENERATE_FUSION_PAIRS = False # April 14 changing this for testing
+            MULTIPOLICY = False # MULTIPOLICY conflicts with GENERATE_FUSION_PAIRS 
+            OBJECT_NONE_CLUSTERS = [] # sneaky HACK to force non multi to run P1
 
             # GENERATE_FUSION_PAIRS = False # April 14 changing this for testing
             # MULTIPOLICY = False # MULTIPOLICY conflicts with GENERATE_FUSION_PAIRS 
@@ -392,10 +395,12 @@ elif CURRENT_MODE == 'heft_torso_keywords':
         TSP_SORT = False
         CHOP_ITTER_TSP_SORT = False
         ONE_SHOT = False # take all files, based off the very first sort order.
+        ONLY_SAVE_CACHE = True # when doing animations, save the images for manual review
 
     if GENERATE_FUSION_PAIRS:
         # this is an override for development purposes. will only make CSVs from these clusters:
-        OBJECT_KEEP_CLUSTERS = [25,2341,1685,734,727,2263,586,28,733,258,960,84,2230,728,783,964,1660,2630,3052,3269]
+        # OBJECT_KEEP_CLUSTERS = [25,2341,1685,734,727,2263,586,28,733,258,960,84,2230,728,783,964,1660,2630,3052,3269]
+        OBJECT_KEEP_CLUSTERS = []
         if bool(OBJECT_KEEP_CLUSTERS):
             # how to skip objects (columns!)
             SKIP_OBJECT_NONE_CLUSTERS = [i for i in range(4000) if i not in OBJECT_KEEP_CLUSTERS] # skip these and go to 18
@@ -655,6 +660,12 @@ NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 #     io.ROOT = io.ROOT36
 
 ########################## BEGIN SQL CONSTRUCTION ##############################
+
+# Object signature collapse mapping globals — populated inside main() per topic run.
+# selectSQL reads these directly as module-level globals.
+_collapse_discarded_set = set()          # pose_no values to skip entirely
+_collapse_sources_map = {}               # source_cluster_id → target_cluster_id
+_collapse_targets_to_sources = {}        # target_cluster_id → [source_cluster_ids]
 
 if IS_SEGONLY is not True:
     print("production run. IS_SSD is", IS_SSD)
@@ -1095,6 +1106,13 @@ if not io.IS_TENCH:
         image_id_j = Column(Integer, ForeignKey('Encodings.encoding_id'), primary_key=True)
         manual_check = Column(Boolean, default=False)
 
+    class Exclude(Base):
+        __tablename__ = 'Exclude'
+        seg_image_id = Column(Integer, primary_key=True, autoincrement=True)
+        image_id = Column(Integer, ForeignKey('Images.image_id'))
+        c_id = Column(Integer)
+        p_id = Column(Integer)
+
     # not currently in use
     if IS_HAND_POSE_FUSION and CLUSTER2:
         ClustersTable_name_2 = CLUSTER2
@@ -1337,7 +1355,12 @@ if not io.IS_TENCH:
                         return []
 
                     object_cluster_sql_id = requested_object_cluster_id
-                    cluster += f" AND ih.cluster_id = {str(object_cluster_sql_id)} "
+                    _extra_sources = _collapse_targets_to_sources.get(object_cluster_sql_id, [])
+                    if DO_OBJECT_COLLAPSE and _extra_sources:
+                        _all_ids = [object_cluster_sql_id] + _extra_sources
+                        cluster += f" AND ih.cluster_id IN ({', '.join(str(i) for i in _all_ids)}) "
+                    else:
+                        cluster += f" AND ih.cluster_id = {str(object_cluster_sql_id)} "
             else:
                 print("cluster_no is a single value", cluster_no)
                 # set target column based on CLUSTER_TYPE, ArmsPoses3D means we have a meta_cluster_id
@@ -3787,7 +3810,64 @@ def _mode1_get_not_dupes_sql(db_session):
     return {(row.image_id_i, row.image_id_j): True for row in query}
 
 
-def _mode1_run_db_dedupe(df_sorted, db_session, mode1_enable_db_dedupe, timing):
+def _mode1_filter_excluded_images(db_session, df, dedupe_cluster_id, dedupe_pose_id, timing):
+    """Drop rows from the current CSV when image_id is in Exclude for c_id/p_id."""
+    if dedupe_cluster_id is None or dedupe_pose_id is None:
+        print(
+            "[MODE1 DEDUPE][exclude] skipped: unresolved cluster/pose "
+            f"cluster_no={dedupe_cluster_id} pose_no={dedupe_pose_id}"
+        )
+        return df
+
+    rows_before = int(len(df.index))
+    lookup_start = time.perf_counter()
+    excluded_rows = db_session.query(Exclude.image_id).filter(
+        Exclude.c_id == dedupe_cluster_id,
+        Exclude.p_id == dedupe_pose_id,
+        Exclude.image_id.isnot(None),
+    ).all()
+    lookup_elapsed = time.perf_counter() - lookup_start
+    timing["db_exclude_lookup"] = timing.get("db_exclude_lookup", 0.0) + lookup_elapsed
+
+    excluded_ids = {int(row.image_id) for row in excluded_rows if row.image_id is not None}
+    match_count = int(len(excluded_ids))
+
+    print(
+        "[MODE1 DEDUPE][exclude] applying "
+        f"c_id={dedupe_cluster_id} p_id={dedupe_pose_id} rows_before={rows_before}"
+    )
+
+    filter_start = time.perf_counter()
+    if excluded_ids:
+        df = df[~df["image_id"].isin(excluded_ids)]
+    filter_elapsed = time.perf_counter() - filter_start
+    timing["db_exclude_filter"] = timing.get("db_exclude_filter", 0.0) + filter_elapsed
+
+    rows_after = int(len(df.index))
+    rows_dropped = int(rows_before - rows_after)
+
+    timing["db_exclude_rows_before"] = timing.get("db_exclude_rows_before", 0) + rows_before
+    timing["db_exclude_rows_after"] = timing.get("db_exclude_rows_after", 0) + rows_after
+    timing["db_exclude_rows_dropped"] = timing.get("db_exclude_rows_dropped", 0) + rows_dropped
+    timing["db_exclude_match_count"] = timing.get("db_exclude_match_count", 0) + match_count
+    timing["db_exclude_total"] = timing.get("db_exclude_total", 0.0) + (lookup_elapsed + filter_elapsed)
+
+    print(
+        "[MODE1 DEDUPE][exclude] "
+        f"matched={match_count} dropped={rows_dropped} rows_after={rows_after} "
+        f"lookup={lookup_elapsed:.3f}s filter={filter_elapsed:.3f}s"
+    )
+    return df
+
+
+def _mode1_run_db_dedupe(
+    df_sorted,
+    db_session,
+    mode1_enable_db_dedupe,
+    timing,
+    dedupe_cluster_id=None,
+    dedupe_pose_id=None,
+):
     """Apply MODE1 dedupe flow; timing is accumulated into the provided dict."""
     db_start = time.perf_counter()
     if io.IS_TENCH or io.IS_MICHELLE:
@@ -3809,6 +3889,22 @@ def _mode1_run_db_dedupe(df_sorted, db_session, mode1_enable_db_dedupe, timing):
 
     if VERBOSE:
         print("before recheck_is_dupe_of, df_sorted size", df_sorted.size)
+
+    try:
+        df_sorted = _mode1_filter_excluded_images(
+            db_session,
+            df_sorted,
+            dedupe_cluster_id,
+            dedupe_pose_id,
+            timing,
+        )
+    except Exception as exclude_exc:
+        print(
+            "[MODE1 DEDUPE][exclude] error, continuing without exclude filter: "
+            f"{exclude_exc}"
+        )
+        timing["db_exclude_error_count"] = timing.get("db_exclude_error_count", 0) + 1
+
     recheck_start = time.perf_counter()
     df_sorted = _mode1_recheck_is_dupe_of(db_session, df_sorted)
     timing["db_recheck_is_dupe_of"] = timing.get("db_recheck_is_dupe_of", 0.0) + (
@@ -3869,6 +3965,9 @@ def _mode1_process_one_csv_shared(csv_file: str, cfg: dict, db_session=None) -> 
             },
         )
 
+        dedupe_cluster_id = _mode1_normalize_token(cluster_no)
+        dedupe_pose_id = _mode1_normalize_token(pose_no)
+
         df_sorted = _mode1_load_df(os.path.join(csv_folder, csv_file), timing)
         if df_sorted is None:
             timing["file_total"] = timing.get("file_total", 0.0) + (time.perf_counter() - file_start)
@@ -3885,6 +3984,8 @@ def _mode1_process_one_csv_shared(csv_file: str, cfg: dict, db_session=None) -> 
             db_session,
             mode1_enable_db_dedupe,
             timing,
+            dedupe_cluster_id=dedupe_cluster_id,
+            dedupe_pose_id=dedupe_pose_id,
         )
 
         if PURGING_DUPES:
@@ -5219,6 +5320,48 @@ def main():
                 # if USE_AFFECT_GROUPS: N_CLUSTERS = len(AFFECT_GROUPS_LISTS) # redefine for affect groups
                 print(f"IS_TOPICS is {IS_TOPICS} with {n_cluster_topics}")
 
+            # Compute per-topic object signature collapse mapping so that small bins are merged
+            # into larger canonical ones before iterating fusion pairs.
+            global _collapse_discarded_set, _collapse_sources_map, _collapse_targets_to_sources
+            _collapse_discarded_set = set()
+            _collapse_sources_map = {}
+            _collapse_targets_to_sources = {}
+            if DO_OBJECT_COLLAPSE and IS_HAND_POSE_FUSION:
+                try:
+                    if SegmentHelper_name is not None:
+                        if not SegmentHelper_name.replace('_', '').isalnum():
+                            raise ValueError(f"Invalid SegmentHelper_name: {SegmentHelper_name!r}")
+                        _sig_rows = session.execute(text(
+                            f"SELECT ios.cluster_id, COUNT(*) AS cnt"
+                            f" FROM ImagesObjectSignatures ios"
+                            f" JOIN `{SegmentHelper_name}` sh ON ios.image_id = sh.image_id"
+                            f" GROUP BY ios.cluster_id"
+                        )).fetchall()
+                    else:
+                        _topic_id_for_collapse = int(float(this_topic)) if this_topic is not None else None
+                        if _topic_id_for_collapse is None:
+                            raise ValueError("DO_OBJECT_COLLAPSE requires SegmentHelper_name or a numeric this_topic")
+                        _sig_rows = session.execute(text(
+                            "SELECT ios.cluster_id, COUNT(*) AS cnt"
+                            " FROM ImagesObjectSignatures ios"
+                            " JOIN ImagesTopics it ON ios.image_id = it.image_id"
+                            " WHERE it.topic_id = :topic_id"
+                            " GROUP BY ios.cluster_id"
+                        ), {'topic_id': _topic_id_for_collapse}).fetchall()
+
+                    _topic_sig_counts = {int(r.cluster_id): int(r.cnt) for r in _sig_rows}
+                    _collapse_result = cl.compute_topic_collapse_mapping(_topic_sig_counts, OBJECT_COLLAPSE_MIN)
+                    _collapse_discarded_set = set(_collapse_result['discarded'])
+                    _collapse_sources_map = _collapse_result['mapping']
+                    for _src, _tgt in _collapse_sources_map.items():
+                        _collapse_targets_to_sources.setdefault(_tgt, []).append(_src)
+                    print(f"[COLLAPSE] mapping ready for topic={this_topic}: {_collapse_result['stats']}")
+                except Exception as _collapse_err:
+                    print(f"[COLLAPSE] WARNING: collapse mapping failed, running without collapse: {_collapse_err}")
+                    _collapse_discarded_set = set()
+                    _collapse_sources_map = {}
+                    _collapse_targets_to_sources = {}
+
             if N_HSV > 0:
                 n_hsv_clusters = range(0,N_HSV+1)
             else:
@@ -5408,6 +5551,17 @@ def main():
                         f"SKIP_OBJECT_NONE_CLUSTERS {SKIP_OBJECT_NONE_CLUSTERS[:5]}"
                     )
                     return
+                if DO_OBJECT_COLLAPSE and isinstance(cluster_topic_no, list) and len(cluster_topic_no) >= 2:
+                    try:
+                        _pose_val = int(float(cluster_topic_no[1]))
+                    except (TypeError, ValueError):
+                        _pose_val = None
+                    if _pose_val is not None and _pose_val in _collapse_discarded_set:
+                        print(f"[COLLAPSE] skipping pair {cluster_topic_no}: pose_no {_pose_val} discarded by collapse mapping")
+                        return
+                    if _pose_val is not None and _pose_val in _collapse_sources_map:
+                        print(f"[COLLAPSE] skipping pair {cluster_topic_no}: pose_no {_pose_val} is a collapse source → target {_collapse_sources_map[_pose_val]}")
+                        return
                 if USE_AFFECT_GROUPS: 
                     cluster_topic_no = AFFECT_GROUPS_LISTS[cluster_topic_no] # redefine cluster_no with affect group list
                 if IS_TOPICS and not IS_HAND_POSE_FUSION: 
