@@ -12,7 +12,7 @@ io = DataIO()
 
 device = "mps" if torch.backends.mps.is_available() else "cpu"
 print("Using device:", device)
-yolo_custom_model = YOLO("models/takingstock_clipcalc_v2_yolov8x/weights/best.pt").to(device)
+yolo_custom_model = YOLO("models/takingstock_flatstuff_c5_v3_yolo26x/weights/best.pt").to(device)
 yolo_model = YOLO('yolov8x.pt')  # Options: yolo26n.pt, yolo26s.pt, yolo26m.pt, yolo26x-objv1-150.pt
 
 print(yolo_custom_model.names)
@@ -25,7 +25,7 @@ yolo = YOLOTools(DEBUGGING=True)
 # Configuration
 DEBUGGING = True
 # FILE_FOLDER = "/Volumes/OWC5/segment_images_91_gun/guns_unprocessed_mar5"
-FILE_FOLDER = "/Users/michaelmandiberg/Documents/YOLO_Training_Data/sorted_images_moneymix_testing/misc_Money_mix"
+FILE_FOLDER = "/Users/michaelmandiberg/Documents/YOLO_Training_Data/sorted_images_reprocess/flowers_only"
 OUTPUT_FOLDER = os.path.join(FILE_FOLDER, "test_output")
 INPUT_IMAGES_FOLDER = os.path.join(FILE_FOLDER, "images")
 INPUT_LABELS_FOLDER = os.path.join(FILE_FOLDER, "labels")
@@ -119,9 +119,15 @@ CLASSES_TO_COMBINE = [89, 90]  # merge these classes onto one label, and draw th
 
 # flatstuff
 custom_ids_to_global_dict = {
-  0: 93,
+  0: 124,
   1: 127,
+  2: 93,
+#   3: 133,
+#   4: 137,
 }
+
+
+{0: '124_Tablet', 1: '127_calculator', 2: '93_clipboard', 3: '136_Laptop', 4: '137_Phone_handheld'}
 
 # # flatstuff
 # custom_ids_to_global_dict = {
