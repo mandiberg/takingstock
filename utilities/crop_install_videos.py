@@ -61,14 +61,15 @@ def crop_video(input_path, output_path, src_w, src_h, target_w, target_h,
     y_offset = (src_h - target_h) // 2
 
     cmd = [
-        "ffmpeg", "-y",
+        "ffmpeg", "-nostdin", "-y",
+        "-loglevel", "error",
         "-i", str(input_path),
         "-vf", f"crop={target_w}:{target_h}:{x_offset}:{y_offset}",
         "-c:a", "copy",
         "-threads", str(threads_per_job),
         str(output_path),
     ]
-    result = subprocess.run(cmd, capture_output=True, text=True)
+    result = subprocess.run(cmd, capture_output=True, text=True, stdin=subprocess.DEVNULL)
     return result.returncode == 0, result.stderr
 
 
@@ -134,9 +135,9 @@ def main():
     parser.add_argument(
         "--workers",
         type=int,
-        default=10,
+        default=4,
         metavar="N",
-        help="Number of parallel ffmpeg jobs (default: 10)",
+        help="Number of parallel ffmpeg jobs (default: 4)",
     )
     parser.add_argument(
         "--threads-per-job",
