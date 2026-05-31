@@ -1737,12 +1737,16 @@ class ToolsClustering:
             if not mouth_allowed:
                 self._record_allowlist_reject('mouth')
 
-            neck_match = shoulder_allowed and self.is_shoulder_object(tie_bbox, left_shoulder, right_shoulder)
+            # is_tie_neck_object() identifies anatomically-correct neck ties that fail
+            # is_shoulder_object() because the tie bbox doesn't reach the MediaPipe
+            # shoulder landmark band. Route both to shoulder (neck_match), not mouth.
+            neck_match = shoulder_allowed and (
+                self.is_shoulder_object(tie_bbox, left_shoulder, right_shoulder)
+                or self.is_tie_neck_object(tie_bbox)
+            )
             left_touching = hand_allowed and self.is_touching_hand(left_knuckle, tie_bbox)
             right_touching = hand_allowed and self.is_touching_hand(right_knuckle, tie_bbox)
-            mouth_match = mouth_allowed and (
-                self.is_mouth_object(tie_bbox) or self.is_tie_neck_object(tie_bbox)
-            )
+            mouth_match = mouth_allowed and self.is_mouth_object(tie_bbox)
 
             if neck_match:
                 assign_slot_if_preferred('shoulder_object', tie_det)

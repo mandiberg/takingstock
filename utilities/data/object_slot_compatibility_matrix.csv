@@ -22,8 +22,8 @@ class_id,hand,left_eye,right_eye,top_face,mouth,shoulder,waist,feet,class_name
 20,2,0,0,0,0,0,0,0,elephant
 21,2,0,0,0,0,0,0,0,bear
 22,2,0,0,0,0,0,0,0,zebra
-23,2,0,0,0,0,0,0,0,giraffe
-24,1,0,0,0,1,2,2,2,backpack
+23
+24,0,0,0,0,1,2,2,2,backpack
 25,2,0,0,0,0,0,1,1,umbrella
 26,1,0,0,0,1,2,1,2,handbag
 27,1,0,0,0,1,2,0,0,tie
@@ -55,14 +55,14 @@ class_id,hand,left_eye,right_eye,top_face,mouth,shoulder,waist,feet,class_name
 53,2,1,1,1,2,1,1,0,pizza
 54,2,1,1,1,2,1,1,0,donut
 55,2,1,1,1,2,1,1,0,cake
-56,1,0,0,0,0,0,2,2,chair
-57,1,0,0,0,0,0,2,2,couch
+56,0,0,0,0,0,0,2,2,chair
+57,0,0,0,0,0,0,2,2,couch
 58,2,0,0,0,0,0,0,1,potted plant
-59,2,0,0,0,0,0,2,2,bed
-60,2,0,0,0,0,0,2,2,dining table
+59,0,0,0,0,0,0,2,2,bed
+60,0,0,0,0,0,0,2,2,dining table
 61,1,0,0,0,0,0,2,1,toilet
 62,2,0,0,0,0,0,1,1,tv
-63,2,0,0,0,1,1,1,1,laptop
+63,2,0,0,0,1,0,1,1,laptop
 64,2,1,1,1,1,0,0,0,mouse
 65,2,1,1,1,2,0,0,0,remote
 66,2,1,1,1,1,0,0,0,keyboard
@@ -89,7 +89,7 @@ class_id,hand,left_eye,right_eye,top_face,mouth,shoulder,waist,feet,class_name
 87,2,0,0,0,2,1,1,0,rose
 88,1,0,0,0,1,0,2,0,Groceries
 89,2,0,0,0,2,1,0,0,mask
-90,1,0,0,0,1,2,1,0,Stethoscope
+90,0,0,0,0,1,2,1,0,Stethoscope
 91,2,0,0,0,0,1,0,0,Gun
 92,2,0,0,2,1,2,0,0,Headphones
 93,2,0,0,0,0,2,0,0,Clipboard
@@ -116,6 +116,13 @@ class_id,hand,left_eye,right_eye,top_face,mouth,shoulder,waist,feet,class_name
 114,0,1,1,2,0,0,0,0,Sleepmask
 115,0,2,2,1,0,0,0,0,Masquerade_mask
 116,2,2,2,1,2,0,0,0,Cucumber
+117,2,2,2,1,2,0,0,0,Kiwi
+118,2,2,2,1,2,0,0,0,Lemon_slice
+119,2,2,2,1,2,0,0,0,Avocado_half
+116,2,2,2,1,2,0,0,0,Cucumber
+117,2,2,2,1,2,0,0,0,Kiwi
+118,2,2,2,1,2,0,0,0,Lemon_slice
+119,2,2,2,1,2,0,0,0,Avocado_halfber
 117,2,2,2,1,2,0,0,0,Kiwi
 118,2,2,2,1,2,0,0,0,Lemon_slice
 119,2,2,2,1,2,0,0,0,Avocado_half
