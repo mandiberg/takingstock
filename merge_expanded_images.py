@@ -30,17 +30,17 @@ ROOT_FOLDER_PATH = '/Volumes/LaCie/'
 # if not, this should be the individual folder holding the images
 # will not accept clusterNone -- change to cluster00
 # FOLDER_NAME = "output_folder/_sort723_p1/100tobuild"
-FOLDER_NAME = "output_folder/_dress_rehearsal_483test"
+FOLDER_NAME = "output_folder/_dress_rehearsal_483"
 if io.IS_TENCH:
     ROOT_FOLDER_PATH = '/Users/tenchc/Documents/GitHub/taking_stock_production/segment_images'
     FOLDER_NAME = "installation_images"
 
 # iterate through folders? 
 IS_CLUSTER = True
-PARALLEL_MERGE_WORKERS = 8  # set > 1 to parallelize per-subfolder work with multiprocessing.Pool
+PARALLEL_MERGE_WORKERS = 16  # set > 1 to parallelize per-subfolder work with multiprocessing.Pool
 
 # if None, won't crop. else if int, will crop output to that count
-CROP_AFTER_COUNT = 100
+CROP_AFTER_COUNT = None
 
 LOOPING = False # defaults
 STRICT_UNIQUE_IMAGE_PLACEMENT = False
@@ -121,7 +121,7 @@ GIGA_DIMS = [20688,20648]
 FULLBODY_DIMS = [32000,32000]
 TEST_DIMS = [4000,4000] 
 REG_DIMS = [3448,3448]
-VID_DIMS_TEST = [1080,1080]
+VID_DIMS_TEST = [2160,2160]
 SKIP_PREFIX = "_x"
 FORCE_LS = True
 
@@ -1476,7 +1476,7 @@ def save_installation_metas(subfolders, output_path, csv_file):
     )
     installation_metas["file_name"] = installation_metas["cluster_no"].apply(lambda x: _lookup(x, 2))
     installation_metas["duration"] = installation_metas["cluster_no"].apply(lambda x: _lookup(x, 3))
-    installation_metas["objects"] = installation_metas["pose_no"].apply(
+    installation_metas["object"] = installation_metas["pose_no"].apply(
         lambda x: object_signature_registry.get(_normalize_cluster_token(x), "[]")
     )
 

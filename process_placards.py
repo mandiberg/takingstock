@@ -53,12 +53,20 @@ device = "mps" if torch.backends.mps.is_available() else "cpu"
 print("Using device:", device)
 yolo_model = YOLO("yolov8x.pt").to(device)  # load a pretrained YOLOv8x model
 # yolo_custom_model = YOLO("models/takingstock_c36_v1_yolo26x/weights/best.pt").to(device)
-yolo_custom_model = YOLO("models/takingstock_clipcalc_v2_yolov8x/weights/best.pt").to(device)
+yolo_custom_model = YOLO("models/takingstock_clipcalc_debug_yolo26m/weights/best.pt").to(device)
 
 VERBOSE = True
 ocr = OCRTools(DEBUGGING=True)
 yolo = YOLOTools(DEBUGGING=True, VERBOSE=VERBOSE)
 
+
+# # Get the number of classes
+# num_classes = len(yolo_custom_model.names)
+# print(f"Number of classes: {num_classes}")
+# 
+# # See the actual class names
+# print(yolo_custom_model.names)
+# exit()
 
 blank = False
 DEBUGGING = True # saves debug images (option for bboxes drawn)
@@ -81,10 +89,10 @@ DET_ID_THRESHOLD_COCO = 12455146
 IOU_THRESHOLD = 0.7
 ADJACENCY_THRESHOLD_PX = 10
 
-FILE_FOLDER = "/Volumes/OWC5/segment_images_93" #halfway through
+FILE_FOLDER = "/Volumes/Lacie/segment_images_127" #halfway through
 # FILE_FOLDER = "/Volumes/OWC5/segment_images_book_clock_bowl" 
 # FILE_FOLDER ="/Volumes/OWC54/segment_images"
-FILE_FOLDER = "/Volumes/RAID54" # must be a folder holding the site folder(s)
+# FILE_FOLDER = "/Volumes/RAID54" # must be a folder holding the site folder(s)
 # MAKE_VIDEO_CSVS_PATH = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/book_csvs"
 MAKE_VIDEO_CSVS_PATH = None  # to process all images in folder
 OUTPUT_FOLDER = os.path.join(FILE_FOLDER, "test_output")
