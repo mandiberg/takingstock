@@ -293,3 +293,12 @@ VALUES
 (118,'Lemon_slice','YoloCustom'),
 (119,'Avocado_half','YoloCustom')
 ;
+
+
+SELECT *
+FROM Detections
+WHERE image_id = 105190538;
+
+SELECT *
+FROM Images
+WHERE image_id = 105190538;

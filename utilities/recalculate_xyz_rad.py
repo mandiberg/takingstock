@@ -25,9 +25,9 @@ mongo_db = mongo_client["stock"]
 mongo_collection = mongo_db["encodings"]  # adjust collection name if needed
 
 VERBOSE = True
-SSD=False
-SSD_FOLDER_OVERRIDE = "/Volumes/OWC54/segment_images_40xDetections" # set to None to use default SSD path from config
-HelperTable_name = "SegmentHelper_oct2025_evens_quarters" # if you set to None, comment out the helpertable join in the query
+SSD=True
+SSD_FOLDER_OVERRIDE = "/Volumes/OWC54/segment_images" # set to None to use default SSD path from config
+HelperTable_name = "SegmentHelper_TheOffice" # if you set to None, comment out the helpertable join in the query
 # HelperTable_name = None # if you set to none, comment out the helpertable join in the query
 REQUIRE_IMAGES_H_W = False # if True, will skip rows where Images.h or Images.w is NULL, since we need those for the blank image creation
 

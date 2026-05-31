@@ -1,9 +1,0 @@
-{
-  "run_id": "20260517T024603Z",
-  "helper_table": "SegmentHelper_may26_deleteme_missingArms3D",
-  "last_completed_batch_num": 1313,
-  "total_batches": 1313,
-  "total_processed": 1312039,
-  "total_written": 1312039,
-  "checkpoint_saved_at": "2026-05-17T03:49:45.566764Z"
-}

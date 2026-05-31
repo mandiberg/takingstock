@@ -453,6 +453,11 @@ class ImagesSlogans(Base):
     image_id = Column(Integer, ForeignKey('images.image_id'), primary_key=True)
     slogan_id = Column(Integer, ForeignKey('Slogans.slogan_id'), primary_key=True)
 
+class ImagesObjectSignatures(Base):
+    __tablename__ = 'ImagesObjectSignatures'
+    image_id   = Column(Integer, ForeignKey('images.image_id'), primary_key=True)
+    cluster_id = Column(Integer, nullable=False)
+
 class RefinedText(Base):
     __tablename__ = 'RefinedText'
     refined_id = Column(Integer, primary_key=True, autoincrement=True)

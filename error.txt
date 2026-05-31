@@ -1,0 +1,37 @@
+(video) michaelmandiberg@Mac takingstock % python utilities/crop_install_videos.py /Volumes/LaCie/output_folder/_video.483
+2px dimension pairs that will be normalized (larger → smaller):
+  720x1080  →  718x1080
+  864x1080  →  862x1080
+  926x1080  →  924x1080
+  1080x720  →  1080x718
+  1080x810  →  1080x808
+  1080x864  →  1080x862
+  1080x926  →  1080x924
+
+Workers: 4  |  threads/job: 4
+
+  Cropping output_folder__dress_rehearsal_483clustercc100_p733_t0_1779858707.493089_p29_st1_ct8.mp4  (1080x810 → 1080x808)
+    Done — new ratio 1.337
+  Cropping output_folder__dress_rehearsal_483clustercc100_p2263_t0_1779858707.493061_p29_st1_ct8.mp4  (1080x810 → 1080x808)
+    Done — new ratio 1.337
+  Cropping output_folder__dress_rehearsal_483clustercc100_p734_t0_1779858707.49313_p36_st1_ct8.mp4  (1080x720 → 1080x718)
+    Done — new ratio 1.504
+  Cropping output_folder__dress_rehearsal_483clustercc104_p15_t0_1779858707.493345_p34_st1_ct8.mp4  (1080x810 → 1080x808)
+    Done — new ratio 1.337
+  Cropping output_folder__dress_rehearsal_483clustercc104_p1_t0_1779858707.493533_p29_st1_ct8.mp4  (1080x810 → 1080x808)
+    Done — new ratio 1.337
+Traceback (most recent call last):
+  File "/Users/michaelmandiberg/Documents/GitHub/takingstock/utilities/crop_install_videos.py", line 215, in <module>
+    main()
+  File "/Users/michaelmandiberg/Documents/GitHub/takingstock/utilities/crop_install_videos.py", line 183, in main
+    updated_row, error, out_lines, err_lines = future.result()
+  File "/opt/homebrew/Caskroom/miniconda/base/envs/video/lib/python3.10/concurrent/futures/_base.py", line 451, in result
+    return self.__get_result()
+  File "/opt/homebrew/Caskroom/miniconda/base/envs/video/lib/python3.10/concurrent/futures/_base.py", line 403, in __get_result
+    raise self._exception
+  File "/opt/homebrew/Caskroom/miniconda/base/envs/video/lib/python3.10/concurrent/futures/thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+  File "/Users/michaelmandiberg/Documents/GitHub/takingstock/utilities/crop_install_videos.py", line 107, in crop_job
+    os.replace(tmp_path, video_path)
+FileNotFoundError: [Errno 2] No such file or directory: '/Volumes/LaCie/output_folder/_video.483/output_folder__dress_rehearsal_483clustercc104_p1_t0_1779858707.493533_p29_st1_ct8.tmp.mp4' -> '/Volumes/LaCie/output_folder/_video.483/output_folder__dress_rehearsal_483clustercc104_p1_t0_1779858707.493533_p29_st1_ct8.mp4'
+(video) michaelmandiberg@Mac takingstock %  

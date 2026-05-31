@@ -1,9 +1,0 @@
-{
-  "run_id": "20260515T134735Z",
-  "helper_table": "SegmentHelper_may26_deleteme_missingObject",
-  "last_completed_batch_num": 3190,
-  "total_batches": 3190,
-  "total_processed": 3189783,
-  "total_written": 3189783,
-  "checkpoint_saved_at": "2026-05-15T16:42:09.636542Z"
-}

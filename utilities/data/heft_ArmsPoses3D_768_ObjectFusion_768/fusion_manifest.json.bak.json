@@ -2,6 +2,14 @@
   "cluster_type": "ArmsPoses3D_ObjectFusion",
   "contract_version": 1,
   "files": {
+    "ArmsPoses3D_67.csv": {
+      "available_hsv_bins": [],
+      "csv_schema_version": 1,
+      "entity_id": 67,
+      "entity_type": "detection",
+      "has_hsv_summary_rows": false,
+      "hsv_preset_name": "none"
+    },
     "ArmsPoses3D_all.csv": {
       "available_hsv_bins": [],
       "csv_schema_version": 1,
@@ -12,6 +20,6 @@
     }
   },
   "generator": "query_all_fusion_clusters.py",
-  "mode": "ObjectFusion",
-  "mode_id": "keyword_id"
+  "mode": "ArmsPoses3D",
+  "mode_id": "cluster_id"
 }

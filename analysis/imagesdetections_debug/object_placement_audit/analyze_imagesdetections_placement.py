@@ -47,7 +47,7 @@ HELPER_TABLE_PROGRESSION = [
 ]
 
 # Unified testing-set helper target requested by user.
-DEFAULT_HELPER_TABLE = "SegmentHelper_T11_Oct20_COCO_Custom_every40"
+DEFAULT_HELPER_TABLE = "SegmentHelper_T11_Oct20_COCO_Custom_evens_quarters"
 TESTING_SET_INTERSECT_TABLE = None
 
 SLOTS = [

@@ -16,7 +16,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.pool import NullPool
 
 if sys.platform == "darwin":
-    sys.path.insert(1, "/Users/michaelmandiberg/Documents/GitHub/facemap/")
+    sys.path.insert(1, "/Users/michaelmandiberg/Documents/GitHub/takingstock/")
 
 from mp_db_io import DataIO  # noqa: E402
 
@@ -38,8 +38,10 @@ COCO_TARGET_CLASS_IDS = [
 ] + list(range(39, 51))
 CUSTOM_CLASS_MIN_ID = 80
 
+COCO_TARGET_CLASS_IDS += [13, 24, 25, 26, 56, 57, 60, 63]
+
 HELPER_TABLE_PROGRESSION = [
-    "SegmentHelper_oct2025_every40_even",
+    "SegmentHelper_TheOffice",
     "SegmentHelper_oct2025_every40",
     "SegmentHelper_T11_Oct20_COCO_Custom_evens_quarters",
     "SegmentHelper_T11_Oct20_COCO_Custom",
@@ -423,6 +425,11 @@ def run_one_stage(engine, helper_table, output_root):
             print(f"Skipping missing helper table: {helper_table}")
             return False
 
+    # Reconnect with READ UNCOMMITTED to avoid lock table overflow on large
+    # Detections joins. SET SESSION only applies to the *next* transaction, so
+    # we must set the isolation level before the connection is used.
+    ru_engine = engine.execution_options(isolation_level="READ UNCOMMITTED")
+    with ru_engine.connect() as conn:
         build_temp_tables(conn, helper_table)
         denom, assigned, slot_counts = fetch_frames(conn)
 

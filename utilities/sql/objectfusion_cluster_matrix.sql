@@ -57,6 +57,10 @@ GROUP BY iof.cluster_id
 ORDER BY iof.cluster_id'
 );
 
+
+-- FROM ImagesObjectFusion iof
+-- FROM ImagesArmsPoses3D iof
+
 PREPARE stmt FROM @pivot_sql;
 EXECUTE stmt;
 DEALLOCATE PREPARE stmt;

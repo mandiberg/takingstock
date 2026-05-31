@@ -177,3 +177,4 @@ config.ini
 *.pt
 utilities/data/reprocess_tracking.numbers
 output.txt
+/analysis/imagesdetections_debug/object_placement_audit/_done_ignore
