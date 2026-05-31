@@ -24,6 +24,10 @@ class ToolsClustering:
         self.HIGH_CONFIDENCE_THRESHOLD = 0.9
         self.CONFIDENCE_DIFF_THRESHOLD = 0.3
         self.MIN_DETECTION_CONFIDENCE = 0.4
+        # Run-gap: detection_id gap indicating a newer model run.
+        # Newer detection wins unless old confidence exceeds new by RUN_GAP_CONF_DIFF.
+        self.RUN_GAP = 100_000
+        self.RUN_GAP_CONF_DIFF = 0.2
         self.DEFAULT_HAND_POSITION = [0.0, 8.0, 0.0]
         self.TIE_CLASS_ID = 27
         self.USE_ALLOWLIST = True
@@ -35,7 +39,7 @@ class ToolsClustering:
         self.EYE_OR_FOREHEAD_CLASSES = {114}
         self.EYE_ONLY_CLASSES = {115}
         self.HAND_OR_EYE_CLASSES = {116, 117, 118, 119}
-        self.HANDHELD_LIKE_CLASSES = {39, 40, 41, 67, 73, 76, 77, 79, 80, 82, 95}
+        self.HANDHELD_LIKE_CLASSES = {39, 40, 41, 63, 67, 73, 76, 77, 79, 80, 82, 95}
         # Lower-body guardrail for handheld-like classes.
         # Goal: reduce implausible feet/waist pulls while preserving clear lower-body cases.
         self.SMALL_HANDHELD_CLASSES = {67, 82, 95}  # legacy stricter subset
@@ -1569,17 +1573,29 @@ class ToolsClustering:
                 if iou >= self.OVERLAP_IOU_THRESHOLD:
                     # Overlapping detections - resolve based on confidence
                     conf1, conf2 = det1['conf'], det2['conf']
-                    conf_diff = abs(conf1 - conf2)
-                    
+
+                    # Run-gap priority: give newer model-run detections a confidence
+                    # bonus when detection_ids differ by more than RUN_GAP.
+                    id1, id2 = det1['detection_id'], det2['detection_id']
+                    if abs(id1 - id2) > self.RUN_GAP:
+                        if id2 > id1:  # det2 is from a newer run
+                            eff_conf1, eff_conf2 = conf1, conf2 + self.RUN_GAP_CONF_DIFF
+                        else:          # det1 is from a newer run
+                            eff_conf1, eff_conf2 = conf1 + self.RUN_GAP_CONF_DIFF, conf2
+                    else:
+                        eff_conf1, eff_conf2 = conf1, conf2
+
+                    conf_diff = abs(eff_conf1 - eff_conf2)
+
                     conf_diff_threshold_scaled_to_iou = self.CONFIDENCE_DIFF_THRESHOLD - (self.CONFIDENCE_DIFF_THRESHOLD * iou)
                     if conf1 >= self.HIGH_CONFIDENCE_THRESHOLD or conf2 >= self.HIGH_CONFIDENCE_THRESHOLD or conf_diff >= conf_diff_threshold_scaled_to_iou:
-                        winner = det1 if conf1 >= conf2 else det2
-                        loser = det2 if conf1 >= conf2 else det1
+                        winner = det1 if eff_conf1 >= eff_conf2 else det2
+                        loser = det2 if eff_conf1 >= eff_conf2 else det1
                         if self.VERBOSE:
                             print(f"  ✅ OVERLAP RESOLVED: Chose class {winner['class_id']} (conf={winner['conf']:.2f}) over class {loser['class_id']} (conf={loser['conf']:.2f}), IoU={iou:.2f}")
                         best_det = winner
                         used_indices.add(j)
-                    
+
                     if det1['class_id'] == det2['class_id']:
                         # same class...
                         if iou >= self.OVERLAP_IOU_THRESHOLD*1.5:
@@ -1593,17 +1609,17 @@ class ToolsClustering:
                             best_det['bbox'] = new_bbox
                             print(f"  🔄 MERGED SAME CLASS OVERLAP: class {det1['class_id']} (conf={det1['conf']:.2f}) and class {det2['class_id']} (conf={det2['conf']:.2f}), IoU={iou:.2f} - merged bbox")
                         else:
-                            # keep higher confidence
-                            winner = det1 if conf1 >= conf2 else det2
-                            loser = det2 if conf1 >= conf2 else det1
+                            # keep higher effective confidence (run-gap priority applied)
+                            winner = det1 if eff_conf1 >= eff_conf2 else det2
+                            loser = det2 if eff_conf1 >= eff_conf2 else det1
                             print(f"  ⚠️ SAME CLASS OVERLAP RESOLVED: Chose class {winner['class_id']} (conf={winner['conf']:.2f}) over class {loser['class_id']} (conf={loser['conf']:.2f}), IoU={iou:.2f}, conf_diff={conf_diff:.2f}")
                             best_det = winner
                         used_indices.add(j)
 
                     elif conf1 >= self.MIN_DETECTION_CONFIDENCE*1.5 or conf2 >= self.MIN_DETECTION_CONFIDENCE*1.5:
-                        # both moderate confidence, keep higher
-                        winner = det1 if conf1 >= conf2 else det2
-                        loser = det2 if conf1 >= conf2 else det1
+                        # both moderate confidence, keep higher effective confidence
+                        winner = det1 if eff_conf1 >= eff_conf2 else det2
+                        loser = det2 if eff_conf1 >= eff_conf2 else det1
                         if self.VERBOSE:
                             print(f"  ❌ HIGH CONF RESOLVED: Chose class {winner['class_id']} (conf={winner['conf']:.2f}) over class {loser['class_id']} (conf={loser['conf']:.2f}), IoU={iou:.2f}")
                         best_det = winner

@@ -33,7 +33,7 @@ OUTPUT_DIR_NAME = "review_refined_detections"
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".webp", ".tif", ".tiff"}
 
 # The user asked for 0.10 to stay consistent with the protected-conflict logic.
-IOU_COLLAPSE_THRESHOLD = 0.10
+IOU_COLLAPSE_THRESHOLD = 0.50
 
 # Priority ladder for new detections. Larger numbers win.
 # Specific pairwise rules requested by the user are encoded here.
@@ -85,23 +85,22 @@ def normalize_stem(filename: str) -> str:
 def parse_debug_image_id(filename: str) -> Optional[str]:
 	"""Extract image_id from debug filenames like 0.87_12345_YOLO_debug.jpg."""
 	stem = normalize_stem(filename)
-	match = re.match(r"^(?:\d+(?:\.\d+)?_)?(.+?)_YOLO_debug$", stem)
-	if match:
-		return match.group(1)
 	if stem.endswith("_YOLO_debug"):
-		return stem[:-len("_YOLO_debug")].lstrip("0123456789._") or None
+		core = stem[:-len("_YOLO_debug")]
+		tokens = [token for token in core.split("_") if token]
+		# Prefer the rightmost numeric token. This handles names like
+		# 0.93_0.59_126548916_YOLO_debug where image_id is 126548916.
+		for token in reversed(tokens):
+			if token.isdigit():
+				return token
+		if core:
+			return core
 	return stem or None
 
 
 def parse_label_image_id(filename: str) -> Optional[str]:
 	"""Extract image_id from label filenames."""
-	stem = normalize_stem(filename)
-	if not stem:
-		return None
-	match = re.match(r"^(?:\d+(?:\.\d+)?_)?(.+?)_YOLO_debug$", stem)
-	if match:
-		return match.group(1)
-	return stem
+	return parse_debug_image_id(filename)
 
 
 def parse_class_folder_name(folder_name: str) -> List[int]:
