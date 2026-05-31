@@ -11,7 +11,9 @@ import argparse
 import json
 import os
 import sys
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
+from functools import partial
 
 import pandas as pd
 from sqlalchemy import bindparam, create_engine, text
@@ -163,26 +165,32 @@ def build_sortpose_for_knuckles():
     return SortPose(config=cfg)
 
 
-def fetch_mongo_batch(io, image_ids):
-    rows = []
-    for image_id in image_ids:
-        try:
-            series = io.get_encodings_mongo(int(image_id))
-            rows.append(
-                {
-                    "image_id": int(image_id),
-                    "body_landmarks_normalized": io.unpickle_array(series[3]),
-                    "hand_results": series[5],
-                }
-            )
-        except Exception:
-            rows.append(
-                {
-                    "image_id": int(image_id),
-                    "body_landmarks_normalized": None,
-                    "hand_results": None,
-                }
-            )
+def _fetch_one(io, image_id):
+    """Fetch encodings for a single image_id. Designed to be called from threads."""
+    try:
+        series = io.get_encodings_mongo(int(image_id))
+        return {
+            "image_id": int(image_id),
+            "body_landmarks_normalized": io.unpickle_array(series[3]),
+            "hand_results": series[5],
+        }
+    except Exception:
+        return {
+            "image_id": int(image_id),
+            "body_landmarks_normalized": None,
+            "hand_results": None,
+        }
+
+
+def fetch_mongo_batch(io, image_ids, num_workers=8):
+    """Fetch a batch of images from MongoDB concurrently using a thread pool.
+
+    MongoClient is thread-safe; threads share the single io instance safely.
+    executor.map preserves input order.
+    """
+    fetch_fn = partial(_fetch_one, io)
+    with ThreadPoolExecutor(max_workers=num_workers) as executor:
+        rows = list(executor.map(fetch_fn, image_ids))
     return pd.DataFrame(rows)
 
 
@@ -298,6 +306,7 @@ def parse_args():
     parser.add_argument("--find-checkpoint", action="store_true", help="Auto-find checkpoint for this helper table.")
     parser.add_argument("--cleanup-checkpoint", action="store_true", help="Delete checkpoint file on successful completion.")
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--mongo-workers", default=8, type=int, help="Number of threads for parallel MongoDB fetching (default: 8).")
     return parser.parse_args()
 
 
@@ -378,6 +387,7 @@ def main():
     print(f"Total batches: {total_batches}")
     print(f"Dry run: {args.dry_run}")
     print(f"Starting batch: {start_batch}")
+    print(f"Mongo workers: {args.mongo_workers}")
 
     if start_batch == 1 and not args.skip_backup and not args.dry_run:
         with engine.begin() as conn:
@@ -392,21 +402,26 @@ def main():
     total_written = checkpoint.get("total_written", 0) if checkpoint else 0
     total_processed = checkpoint.get("total_processed", 0) if checkpoint else 0
 
+    # Create ToolsClustering once — avoids re-reading the compatibility matrix CSV
+    # on every batch. Session is swapped per-batch below.
+    cl = ToolsClustering("ObjectFusion", VERBOSE=False, session=None)
+
     for batch_num, batch_ids in all_batches:
         if batch_num < start_batch:
             continue
         
         batch_ids = list(batch_ids)
-        batch_df = fetch_mongo_batch(io, batch_ids)
+        batch_df = fetch_mongo_batch(io, batch_ids, num_workers=args.mongo_workers)
         batch_df = add_knuckle_columns(batch_df, sort_pose)
 
         session = Session()
-        cl = ToolsClustering("ObjectFusion", VERBOSE=False, session=session)
+        cl.session = session
 
         try:
             batch_df = cl.process_detections_for_df(batch_df)
         finally:
             session.close()
+            cl.session = None
 
         with engine.connect() as conn:
             max_det_map = max_detection_id_by_image(conn, batch_ids)
@@ -422,7 +437,7 @@ def main():
                 ids_sql = ",".join(str(int(x)) for x in batch_ids)
                 conn.execute(text(f"DELETE FROM ImagesDetections WHERE image_id IN ({ids_sql})"))
                 if len(insert_df) > 0:
-                    insert_df.to_sql("ImagesDetections", con=conn, if_exists="append", index=False)
+                    insert_df.to_sql("ImagesDetections", con=conn, if_exists="append", index=False, method="multi")
 
         total_processed += len(batch_ids)
         total_written += len(insert_df)
