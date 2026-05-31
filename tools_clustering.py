@@ -28,6 +28,9 @@ class ToolsClustering:
         # Newer detection wins unless old confidence exceeds new by RUN_GAP_CONF_DIFF.
         self.RUN_GAP = 100_000
         self.RUN_GAP_CONF_DIFF = 0.2
+        # Dual-hand guard: if the same detection is picked by both hands,
+        # drop the farther hand unless dist_far / dist_near <= this ratio.
+        self.DUAL_HAND_DISTANCE_RATIO = 2.5
         self.DEFAULT_HAND_POSITION = [0.0, 8.0, 0.0]
         self.TIE_CLASS_ID = 27
         self.USE_ALLOWLIST = True
@@ -110,6 +113,11 @@ class ToolsClustering:
         self.FULL_FACE_MASK_X_MIN = -0.15
         self.FULL_FACE_MASK_X_MAX = 0.15
         self.SHOULDER_BAND_EXTENSION = 1.0
+        # Strap-worn classes may hang well below the shoulder band;
+        # extend the band downward by SHOULDER_STRAP_EXTENSION for these classes
+        # so that the top of a hanging bag/stethoscope bbox still qualifies.
+        self.SHOULDER_STRAP_CLASSES = {24, 26, 83, 90}  # backpack, handbag, bag, stethoscope
+        self.SHOULDER_STRAP_EXTENSION = 1.5
         self.COVID_MASK_TOP_MIN = -0.4
         self.COVID_MASK_TOP_MAX = 0.5
         self.COVID_MASK_BOTTOM_MIN = 0.3
@@ -1506,10 +1514,13 @@ class ToolsClustering:
         except Exception:
             return None, None
 
-    def is_shoulder_object(self, bbox, left_shoulder, right_shoulder):
+    def is_shoulder_object(self, bbox, left_shoulder, right_shoulder, class_id=None):
         """
         Check if object crosses the shoulder band.
         Shoulder band is the line from lm11 to lm12, extended 1.0 unit lower.
+        For strap-worn classes (SHOULDER_STRAP_CLASSES) the band is extended an
+        additional SHOULDER_STRAP_EXTENSION units to catch bags/stethoscopes that
+        hang below the landmark band but are still strap-attached at shoulder level.
         """
         if left_shoulder is None or right_shoulder is None:
             return False
@@ -1543,7 +1554,8 @@ class ToolsClustering:
             shoulder_y_max = max(y_left, y_right, y_mid)
 
         band_top = shoulder_y_min
-        band_bottom = shoulder_y_max + self.SHOULDER_BAND_EXTENSION
+        strap_extra = self.SHOULDER_STRAP_EXTENSION if class_id in self.SHOULDER_STRAP_CLASSES else 0.0
+        band_bottom = shoulder_y_max + self.SHOULDER_BAND_EXTENSION + strap_extra
 
         return not (bbox['bottom'] < band_top or bbox['top'] > band_bottom)
 
@@ -1838,6 +1850,24 @@ class ToolsClustering:
 
         results['left_hand_object'] = best_object_for_hand(left_knuckle, results['left_hand_object'])
         results['right_hand_object'] = best_object_for_hand(right_knuckle, results['right_hand_object'])
+
+        # Distance-ratio guard: if the same detection was picked by both hands
+        # independently, drop the farther hand unless the distances are comparable
+        # (ratio <= DUAL_HAND_DISTANCE_RATIO). Prevents a single large object from
+        # spuriously filling both LH and RH when one knuckle is clearly not holding it.
+        _lh = results['left_hand_object']
+        _rh = results['right_hand_object']
+        if (_lh is not None and _rh is not None and
+                _lh['detection_id'] == _rh['detection_id']):
+            _d_left = self.point_to_bbox_distance(left_knuckle, _lh['bbox'])
+            _d_right = self.point_to_bbox_distance(right_knuckle, _rh['bbox'])
+            _d_near = min(_d_left, _d_right)
+            _d_far = max(_d_left, _d_right)
+            if _d_far > _d_near * self.DUAL_HAND_DISTANCE_RATIO:
+                if _d_left <= _d_right:
+                    results['right_hand_object'] = None
+                else:
+                    results['left_hand_object'] = None
 
         # Hand-assigned objects are excluded from all other zones.
         # Exception: class 110 (COVID mask) detections classified as worn_on_face
@@ -2242,7 +2272,7 @@ class ToolsClustering:
                     ):
                         results['mouth_object'] = det
 
-            if 'shoulder_object' not in tie_locked_slots and shoulder_allowed and self.is_shoulder_object(bbox, left_shoulder, right_shoulder):
+            if 'shoulder_object' not in tie_locked_slots and shoulder_allowed and self.is_shoulder_object(bbox, left_shoulder, right_shoulder, class_id=self._get_detection_class_id(det)):
                 if results['shoulder_object'] is None:
                     results['shoulder_object'] = det
                 else:
