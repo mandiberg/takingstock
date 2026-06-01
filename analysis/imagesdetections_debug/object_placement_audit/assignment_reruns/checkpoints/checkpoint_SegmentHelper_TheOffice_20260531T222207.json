@@ -1,9 +1,9 @@
 {
   "run_id": "20260531T222207Z",
   "helper_table": "SegmentHelper_TheOffice",
-  "last_completed_batch_num": 1355,
+  "last_completed_batch_num": 2575,
   "total_batches": 8544,
-  "total_processed": 1355000,
-  "total_written": 1355000,
-  "checkpoint_saved_at": "2026-05-31T23:36:26.798561Z"
+  "total_processed": 2575000,
+  "total_written": 2575000,
+  "checkpoint_saved_at": "2026-06-01T00:22:14.176340Z"
 }
