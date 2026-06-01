@@ -119,11 +119,3 @@ class_id,hand,left_eye,right_eye,top_face,mouth,shoulder,waist,feet,class_name
 117,2,2,2,1,2,0,0,0,Kiwi
 118,2,2,2,1,2,0,0,0,Lemon_slice
 119,2,2,2,1,2,0,0,0,Avocado_half
-123,2,1,1,2,2,1,1,1,Book_custom
-124,2,0,0,1,1,1,2,1,Tablet
-127,2,0,0,1,1,1,2,1,Calculator
-1322,2,0,0,0,0,0,1,1,Computer_monitor
-133,2,0,0,0,1,0,1,1,Laptop_custom
-135,2,1,1,1,2,0,0,0,Remote_control_custom
-136,2,1,1,1,1,0,0,0,Keybaord_custom
-137,2,0,0,1,1,1,2,1,Phone_handheld

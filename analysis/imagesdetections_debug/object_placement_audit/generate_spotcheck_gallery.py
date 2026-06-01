@@ -42,7 +42,7 @@ from sqlalchemy.pool import NullPool
 
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-REPO_ROOT = os.path.expanduser("~/Documents/GitHub/takingstock/")
+REPO_ROOT = os.path.expanduser("~/Documents/GitHub/facemap/")
 if REPO_ROOT not in sys.path:
     sys.path.insert(1, REPO_ROOT)
 

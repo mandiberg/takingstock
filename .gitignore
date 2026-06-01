@@ -178,3 +178,6 @@ config.ini
 utilities/data/reprocess_tracking.numbers
 output.txt
 /analysis/imagesdetections_debug/object_placement_audit/_done_ignore
+/analysis/imagesdetections_debug/object_placement_audit/batch
+/analysis/imagesdetections_debug/object_placement_audit/placement_diff_phase1
+/analysis/imagesdetections_debug/object_placement_audit/_completed

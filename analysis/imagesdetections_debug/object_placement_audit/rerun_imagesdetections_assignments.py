@@ -121,22 +121,26 @@ def save_checkpoint(checkpoint_path, state):
         json.dump(state, f, indent=2)
 
 
-def find_existing_checkpoint(helper_table, run_date, output_dir):
-    """Find checkpoint matching helper table and run date prefix."""
+def find_existing_checkpoint(helper_table, output_dir):
+    """Find the most recent checkpoint for the given helper table (any date)."""
     assignment_reruns_dir = os.path.join(output_dir, "assignment_reruns")
     if not os.path.exists(assignment_reruns_dir):
         return None
-    
+
     checkpoint_dir = os.path.join(assignment_reruns_dir, "checkpoints")
     if not os.path.exists(checkpoint_dir):
         return None
-    
-    # Look for checkpoint files matching pattern: checkpoint_{helper_table}_{run_date}*.json
-    for fname in os.listdir(checkpoint_dir):
-        if fname.startswith(f"checkpoint_{helper_table}_{run_date}") and fname.endswith(".json"):
-            return os.path.join(checkpoint_dir, fname)
-    
-    return None
+
+    prefix = f"checkpoint_{helper_table}_"
+    matches = [
+        os.path.join(checkpoint_dir, fname)
+        for fname in os.listdir(checkpoint_dir)
+        if fname.startswith(prefix) and fname.endswith(".json")
+    ]
+    if not matches:
+        return None
+    # Return most recently modified checkpoint
+    return max(matches, key=os.path.getmtime)
 
 
 def build_sortpose_for_knuckles():
@@ -321,7 +325,7 @@ def main():
     
     # Auto-find checkpoint if requested
     if args.find_checkpoint and not checkpoint_file:
-        checkpoint_file = find_existing_checkpoint(args.helper_table, run_date[:10], args.output_root)
+        checkpoint_file = find_existing_checkpoint(args.helper_table, args.output_root)
         if checkpoint_file:
             print(f"Found checkpoint: {checkpoint_file}")
     

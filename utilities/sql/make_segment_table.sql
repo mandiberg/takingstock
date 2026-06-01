@@ -12,7 +12,7 @@ DROP TABLE SegmentHelperObject_book ;
 DELETE FROM SegmentHelper_sept2025_heft_keywords;
 
 -- create helper segment table
-CREATE TABLE SegmentHelper_may26_deleteme_missingObject (
+CREATE TABLE SegmentHelper_TheOffice_NULL_bbox_norm_June1 (
     seg_image_id int NOT NULL AUTO_INCREMENT PRIMARY KEY,
     image_id INTEGER,
     FOREIGN KEY (image_id) REFERENCES Images(image_id)
@@ -483,6 +483,27 @@ WHERE ik.keyword_id IN (23375,13130,21463,184,23726,4222,8874,8136,133749,26241,
     )
 GROUP BY ik.keyword_id
 ;
+
+
+INSERT INTO SegmentHelper_TheOffice_NULL_bbox_norm_June1 (image_id)
+SELECT DISTINCT d.image_id
+FROM Detections d
+JOIN SegmentHelper_TheOffice sh ON sh.image_id = d.image_id
+WHERE d.bbox IS NOT NULL
+  AND d.conf != -1
+  AND d.image_id > 57721000
+  AND NOT (
+    d.bbox_norm IS NULL
+    OR JSON_EXTRACT(d.bbox_norm, '$.left') IS NULL
+  )
+    AND NOT EXISTS (
+        SELECT 1
+        FROM SegmentHelper_TheOffice_NULL_bbox_norm_June1 s
+        WHERE s.image_id = d.image_id
+    )
+LIMIT 1000
+;
+
 
 
 

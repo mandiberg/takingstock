@@ -1,0 +1,18 @@
+{
+  "generated_at": "2026-06-01T05:23:22.354457Z",
+  "helper_table": "SegmentHelper_TheOffice",
+  "backup_table": null,
+  "skip_backup": true,
+  "skip_initial_delete": false,
+  "dry_run": false,
+  "chunk_size": 1000,
+  "offset": 0,
+  "limit": null,
+  "image_count": 8543096,
+  "total_batches": 8544,
+  "total_processed": 8543096,
+  "total_written": 8543096,
+  "include_last_reprocessed_detection_id": true,
+  "resumed_from_checkpoint": true,
+  "checkpoint_file": "/Users/michaelmandiberg/Documents/GitHub/facemap/analysis/imagesdetections_debug/object_placement_audit/assignment_reruns/checkpoints/checkpoint_SegmentHelper_TheOffice_20260531T222207.json"
+}

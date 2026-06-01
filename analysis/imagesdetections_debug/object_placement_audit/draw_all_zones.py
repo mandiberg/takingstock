@@ -46,13 +46,18 @@ if REPO_ROOT not in sys.path:
 from tools_clustering import ToolsClustering  # noqa: E402
 from mp_db_io import DataIO  # noqa: E402
 
+IS_SSD=True
+VERBOSE=False
+SSD_PATH="/Volumes/SanDiskBlack/segment_images_82_money_cards"
+# SSD_PATH = None
+io_obj = DataIO(IS_SSD=IS_SSD, VERBOSE=VERBOSE, SSD_PATH=SSD_PATH)
 
 Color = Tuple[int, int, int]
 UPSCALE_MODEL_PATH = os.path.join(REPO_ROOT, "models", "FSRCNN_x4.pb")
-UP_RES_4X = True
+UP_RES_4X = False
 BATCH_OUTPUT_SUBDIR = "batch"
 
-INPUT_LIST = [108519667,112764012,88651258,109939096,107172785,6135759,13776183,117002201,11070174,11071780,33299249,42148802,37573372]
+INPUT_LIST = [6301419, 82968541, 86341312, 107057552, 107989301, 110249649, 125734939]
 
 
 def parse_args():
@@ -251,7 +256,6 @@ def resolve_local_image_path(
 
 
 def fetch_image_context_from_mysql(image_id: int) -> Dict[str, Optional[float]]:
-    io_obj = DataIO()
     engine = get_engine(io_obj)
 
     q = text(
@@ -300,11 +304,19 @@ def fetch_image_context_from_mysql(image_id: int) -> Dict[str, Optional[float]]:
     # Try to fetch normalized body landmarks from mongo for dynamic shoulder-band drawing.
     body_landmarks_normalized = None
     try:
-        series = io_obj.get_encodings_mongo(int(image_id))
-        if len(series) > 3:
-            raw_nlms = series[3]
-            body_landmarks_normalized = io_obj.unpickle_array(raw_nlms) if raw_nlms is not None else None
-    except Exception:
+        import pickle as _pickle
+        import pymongo as _pymongo
+        _mongo_client = _pymongo.MongoClient(io_obj.dbmongo["host"])
+        _mongo_db = _mongo_client[io_obj.dbmongo["name"]]
+        _col = _mongo_db["body_landmarks_norm"]
+        _doc = _col.find_one({"image_id": int(image_id)})
+        if _doc and _doc.get("nlms"):
+            body_landmarks_normalized = _pickle.loads(_doc["nlms"])
+            print(f"  mongo body_landmarks_normalized: {type(body_landmarks_normalized)}")
+        else:
+            print(f"  mongo: no body_landmarks_norm doc for image_id={image_id}")
+    except Exception as e:
+        print(f"  mongo fetch failed: {e}")
         body_landmarks_normalized = None
 
     data["body_landmarks_normalized"] = body_landmarks_normalized
