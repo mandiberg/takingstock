@@ -10,6 +10,9 @@ import gc
 import sys
 if sys.platform == "darwin": sys.path.insert(1, '/Users/michaelmandiberg/Documents/GitHub/facemap/')
 elif sys.platform == "win32": sys.path.insert(1, 'C:/Users/jhash/Documents/GitHub/facemap2/')
+
+if os.path.exists('/Users/tenchc/Documents/GitHub/takingstock/'):
+    sys.path.insert(1, '/Users/tenchc/Documents/GitHub/takingstock/')
 from mp_db_io import DataIO
 
 
@@ -18,6 +21,7 @@ TOPIC=37 # what folder are the files in?
 
 CSV_FILE = f"metas_{TOPIC}.csv"
 SOUND_FOLDER = "tts_files_test"
+SOUND_FOLDER = "tts_files_pitch_shift"
 # SOUND_FOLDER = "37_metas_hold_for_now"
 
 # TOPICFOLDER = "topic" + str(TOPIC)
@@ -251,6 +255,7 @@ def scale_volume(row, cycler, audio_data, sample_rate):
 
     # search_for_keys to see where the matching keys are
     key_index,desc_count=search_for_keys(row)
+
     if volume_fit < QUIET:
         # vol = scale_volume_exp(volume_fit, 3)
         vol = scale_volume_linear(volume_fit, .02,.08)*cycler[0]
@@ -567,27 +572,19 @@ def merge_audio(combined_audio, chunk_audio_without_silence):
     # sf.write(str(len(c ombined_audio))+"combined_audio.wav", combined_audio, TARGET_SAMPLE_RATE, format='wav')
     return combined_audio
 
+
 def main():
     io = DataIO()
-    # INPUT = os.path.join(io.ROOTSSD, "audioproduction") # commenting out bc defined at top
-    
-    # Read the CSV file in chunks
-    chunks = pd.read_csv(os.path.join(INPUT, "audioproduction", CSV_FILE), chunksize=CHUNK_SIZE)
-    
+
     existing_files = io.get_img_list(os.path.join(INPUT, SOUND_FOLDER))
     existing_files = {os.path.basename(f).split("_")[0]:f for f in existing_files}
-
-    # get the intersection of the existing files and the image ids in the csv
     existing_files = {k: v for k, v in existing_files.items() if int(k) in df['image_id'].values}
     print("Existing files after INTERSECT:", len(existing_files))
-    print("Existing file 1:", existing_files.keys())
 
-
-    output_file = os.path.join(INPUT, f"multitrack_mixdown_offset_{TOPIC}.wav")
-    
     combined_audio = None
     start_index = 0
-    
+    output_path = os.path.join(INPUT, f"multitrack_mixdown_offset_{TOPIC}.wav")
+    chunks = pd.read_csv(os.path.join(INPUT, "audioproduction", CSV_FILE), chunksize=CHUNK_SIZE)
     for chunk_index, chunk in enumerate(chunks):
         chunk_audio, chunk_end_time = process_audio_chunk(chunk, existing_files, INPUT, start_index, chunk_index)
         print("Chunk audio length/sample:", len(chunk_audio)/TARGET_SAMPLE_RATE, "Chunk end time:", chunk_end_time)
@@ -595,40 +592,20 @@ def main():
             combined_audio = chunk_audio
             print(chunk_index, "Combined audio shape:", combined_audio.shape, "Chunk audio shape:", chunk_audio.shape)
         else:
-            # chunk_audio has silene that is the same length as len combined_audio
-            # IDK where this is coming from, but I am just going to remove it
-            
-            # find the point where the audio is no longer silent
-            # non_silent_index_raw = np.argmax(np.abs(chunk_audio) > 0)
             non_silent_index_raw = np.argmax(np.abs(chunk_audio) > 0)
-            # divide that by 2, because for some reason the line above returns 2x value
             non_silent_index = int(np.floor(non_silent_index_raw / 2))
-
             print("Non-silent index:", non_silent_index)
             print("combined_audio shape:", combined_audio.shape, "chunk_audio shape:", chunk_audio.shape)
             np.set_printoptions(threshold=100)
             print(chunk_audio[:non_silent_index])
             print(chunk_audio[non_silent_index:])
             chunk_audio_without_silence = chunk_audio[non_silent_index:]
-            # remove_silence(chunk_audio, 50, TARGET_SAMPLE_RATE)
-
-            # Combine the original combined_audio and the processed chunk_audio
             combined_audio = merge_audio(combined_audio, chunk_audio_without_silence)
-      
-        # Clear memory
         del chunk_audio
         gc.collect()
-    
-    # Normalize the final audio to prevent clipping
-    # max_amplitude = np.max(np.abs(combined_audio))
-    # if max_amplitude > 1.0:
-    #     combined_audio /= max_amplitude
-    
-    # Write the final output file
     print("Combined audio shape before writing:", combined_audio.shape)
-    print("writing to file", output_file)
-
-    sf.write(output_file, combined_audio, TARGET_SAMPLE_RATE, format='wav')
+    print("writing to file", output_path)
+    sf.write(output_path, combined_audio, TARGET_SAMPLE_RATE, format='wav')
 
 if __name__ == "__main__":
     main()
