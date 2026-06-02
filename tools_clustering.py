@@ -84,7 +84,7 @@ class ToolsClustering:
             'utilities','data',
             'object_slot_compatibility_matrix.csv',
         )
-        self.DEBUG_TRACKED_CLASS_IDS = tuple(range(110, 120))
+        self.DEBUG_TRACKED_CLASS_IDS = tuple(range(110, 141))
         self._class_assignment_slot_names = (
             'left_hand_object',
             'right_hand_object',
@@ -96,7 +96,7 @@ class ToolsClustering:
             'waist_object',
             'feet_object',
         )
-        all_class_ids = set(range(0, 120))
+        all_class_ids = set(range(0, 141))
         self._allowlist_slots = tuple(self.COMPATIBILITY_SLOT_COLUMNS)
         self._allowlist_reject_counts = {slot: 0 for slot in self._allowlist_slots}
         self.compatibility_matrix = self._load_compatibility_matrix_from_csv(all_class_ids)

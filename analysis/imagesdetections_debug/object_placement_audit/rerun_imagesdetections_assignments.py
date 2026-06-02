@@ -12,7 +12,7 @@ python analysis/imagesdetections_debug/object_placement_audit/rerun_imagesdetect
   --skip-backup \
   --dry-run
 
- 
+--delete-chunk-size 2000
   --find-checkpoint
 
 """
@@ -40,6 +40,7 @@ from mp_sort_pose import SortPose  # noqa: E402
 from tools_clustering import ToolsClustering  # noqa: E402
 DEFAULT_HELPER_TABLE = "SegmentHelper_may26_deleteme_missingArms3D"
 DEFAULT_CHUNK_SIZE = 1000
+DEFAULT_DELETE_CHUNK_SIZE = 5000
 DEFAULT_OUTPUT_ROOT = (
     "/Users/michaelmandiberg/Documents/GitHub/takingstock/"
     "analysis/imagesdetections_debug/object_placement_audit"
@@ -293,17 +294,33 @@ def ensure_subset_backup(conn, helper_table, backup_table):
     )
 
 
-def delete_subset_rows(conn, helper_table):
-    result = conn.execute(
-        text(
-            f"""
-            DELETE idt
-            FROM ImagesDetections idt
-            INNER JOIN {helper_table} sh ON sh.image_id = idt.image_id
-            """
-        )
+def delete_subset_rows_batched(engine, image_ids, delete_chunk_size=DEFAULT_DELETE_CHUNK_SIZE):
+    """Delete existing ImagesDetections rows for target image_ids in small committed chunks.
+
+    This avoids one giant transaction that can hit lock-wait timeouts.
+    """
+    if not image_ids:
+        return 0
+
+    sql = text("DELETE FROM ImagesDetections WHERE image_id IN :image_ids").bindparams(
+        bindparam("image_ids", expanding=True)
     )
-    return int(result.rowcount or 0)
+
+    total_deleted = 0
+    batches = list(chunked(list(image_ids), int(delete_chunk_size)))
+    total_batches = len(batches)
+
+    for idx, batch_ids in enumerate(batches, start=1):
+        with engine.begin() as conn:
+            result = conn.execute(sql, {"image_ids": [int(x) for x in batch_ids]})
+            total_deleted += int(result.rowcount or 0)
+        if idx % 20 == 0 or idx == total_batches:
+            print(
+                f"[initial-delete {idx}/{total_batches}] "
+                f"deleted_rows_so_far={total_deleted}"
+            )
+
+    return total_deleted
 
 
 def parse_args():
@@ -321,6 +338,12 @@ def parse_args():
     parser.add_argument("--cleanup-checkpoint", action="store_true", help="Delete checkpoint file on successful completion.")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--mongo-workers", default=8, type=int, help="Number of threads for parallel MongoDB fetching (default: 8).")
+    parser.add_argument(
+        "--delete-chunk-size",
+        default=DEFAULT_DELETE_CHUNK_SIZE,
+        type=int,
+        help="Chunk size for initial delete phase (default: 5000).",
+    )
     return parser.parse_args()
 
 
@@ -409,9 +432,16 @@ def main():
             ensure_subset_backup(conn, args.helper_table, backup_table)
 
     if start_batch == 1 and not args.skip_initial_delete and not args.dry_run:
-        with engine.begin() as conn:
-            deleted = delete_subset_rows(conn, args.helper_table)
-            print(f"Initial subset delete complete. Rows deleted: {deleted}")
+        print(
+            "Initial subset delete starting in batches: "
+            f"chunk_size={int(args.delete_chunk_size)}"
+        )
+        deleted = delete_subset_rows_batched(
+            engine,
+            image_ids,
+            delete_chunk_size=int(args.delete_chunk_size),
+        )
+        print(f"Initial subset delete complete. Rows deleted: {deleted}")
 
     total_written = checkpoint.get("total_written", 0) if checkpoint else 0
     total_processed = checkpoint.get("total_processed", 0) if checkpoint else 0
@@ -435,10 +465,11 @@ def main():
     # on every batch. Session is swapped per-batch below.
     cl = ToolsClustering("ObjectFusion", VERBOSE=False, session=None)
 
+    print(f"Starting batch processing from batch {start_batch} of {total_batches}...")
     for batch_num, batch_ids in all_batches:
         if batch_num < start_batch:
             continue
-        
+        print(f"Processing batch {batch_num}/{total_batches} with {len(batch_ids)} images...")
         batch_ids = list(batch_ids)
         batch_df = fetch_mongo_batch(io, batch_ids, num_workers=args.mongo_workers)
         batch_df = add_knuckle_columns(batch_df, sort_pose)
@@ -449,7 +480,9 @@ def main():
 
         try:
             batch_df = cl.process_detections_for_df(batch_df)
+            print(f"Batch {batch_num} processing complete. Fetching pre-placement suppression stats...")
             batch_suppression = cl.get_preplacement_suppression_stats()
+            print(f"Batch {batch_num} suppression stats: {batch_suppression}")
         finally:
             session.close()
             cl.session = None

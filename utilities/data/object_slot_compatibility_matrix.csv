@@ -137,5 +137,6 @@ class_id,hand,left_eye,right_eye,top_face,mouth,shoulder,waist,feet,class_name
 135,2,1,1,1,0,0,1,0,Remote_control_custom
 136,2,0,0,1,0,0,1,0,Keybaord_custom
 137,2,0,0,1,1,1,2,1,Phone_handheld
+138,0,0,0,0,0,0,0,0,None
 139,2,0,0,0,0,0,1,0,Corded_phone
 140,2,0,0,0,0,0,0,0,Boxing_gloves
