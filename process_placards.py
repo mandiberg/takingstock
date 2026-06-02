@@ -88,9 +88,26 @@ OVERWRITE_EXISTING_DETECTIONS_CUSTOM = False
 IGNORE_EXISTING_NO_DETECTIONS = True
 # excludes any with an existing ObjectSignature = 1
 EXCLUDE_EXISTING_OBJECT_SIGNATURE_NONES = [1,58,15,7,25,113]
+new_excludes = [i for i in range(4000) if i not in [1,58,15,7,25,113]]
+EXCLUDE_EXISTING_OBJECT_SIGNATURE_NONES = new_excludes
 # redo any detection below this threshold
 DET_ID_THRESHOLD_CUSTOM = 133468545
 DET_ID_THRESHOLD_COCO = 12455146
+WRITE_NEW_OR_UPDATED_DETECTION_IDS_TABLE = "SegmentHelper_NewDetections_June2"  # set to None to disable
+
+# this was added by copilot, kind of overkill
+if WRITE_NEW_OR_UPDATED_DETECTION_IDS_TABLE:
+    if not re.match(r"^[A-Za-z0-9_]+$", WRITE_NEW_OR_UPDATED_DETECTION_IDS_TABLE):
+        raise ValueError(f"Invalid WRITE_NEW_OR_UPDATED_DETECTION_IDS_TABLE name: {WRITE_NEW_OR_UPDATED_DETECTION_IDS_TABLE}")
+    helper_exists = session.execute(
+        sqlalchemy.text("SHOW TABLES LIKE :tbl"),
+        {"tbl": WRITE_NEW_OR_UPDATED_DETECTION_IDS_TABLE}
+    ).first()
+    if helper_exists is None:
+        raise RuntimeError(
+            f"Helper table '{WRITE_NEW_OR_UPDATED_DETECTION_IDS_TABLE}' was not found. "
+            "Set WRITE_NEW_OR_UPDATED_DETECTION_IDS_TABLE=None to disable logging, or create the table first."
+        )
 # this is for merging books and stuff, but it messes up cucumbers. 
 IOU_THRESHOLD = 0.7
 ADJACENCY_THRESHOLD_PX = 10
@@ -375,6 +392,77 @@ def assign_hsv_detect_results(detect_results, image):
         # result_dict['cluster_dist'] = cluster_dist
     return detect_results
 
+
+def _build_final_detection_keys(detections_list):
+    """Mirror save_obj_bbox key assignment: obj_no is re-numbered per class starting at 1."""
+    detections_by_class = {}
+    for detection in detections_list:
+        class_id = detection.get("class_id")
+        if class_id is None:
+            continue
+        detections_by_class.setdefault(class_id, []).append(detection)
+
+    max_obj_no = 127
+    final_keys = set()
+    for class_id, class_detections in detections_by_class.items():
+        trimmed = class_detections[:max_obj_no]
+        for obj_idx, detection in enumerate(trimmed, start=1):
+            if detection.get("bbox"):
+                final_keys.add((int(class_id), int(obj_idx)))
+    return final_keys
+
+
+def save_new_detection_ids_for_reprocess(session, image_id, existing_detections, detect_results, do_commit=False):
+    """Persist image_id + detection_id for detections touched by upsert (new or updated)."""
+    if not WRITE_NEW_OR_UPDATED_DETECTION_IDS_TABLE:
+        if VERBOSE:
+            print(f"Image {image_id} - WRITE_NEW_OR_UPDATED_DETECTION_IDS_TABLE is disabled; skipping helper insert.")
+        return
+
+    final_keys = _build_final_detection_keys(detect_results)
+    if VERBOSE:
+        print(
+            f"Image {image_id} - helper debug: upsert_touched_keys={len(final_keys)}"
+        )
+    if not final_keys:
+        if VERBOSE:
+            print(f"Image {image_id} - No upsert-touched (class_id, obj_no) keys; nothing to log.")
+        return
+
+    # Resolve detection_ids after upsert by reading the current image rows.
+    current_rows = session.query(Detections.detection_id, Detections.class_id, Detections.obj_no).filter(
+        Detections.image_id == image_id
+    ).all()
+
+    rows_to_insert = []
+    for detection_id, class_id, obj_no in current_rows:
+        key = (int(class_id), int(obj_no))
+        if detection_id is not None and key in final_keys:
+            rows_to_insert.append({"image_id": int(image_id), "detection_id": int(detection_id)})
+
+    if not rows_to_insert:
+        if VERBOSE:
+            print(
+                f"Image {image_id} - helper debug: upsert_touched_keys found but no detection_id rows matched. "
+                f"current_rows={len(current_rows)}"
+            )
+        return
+
+    table_name = WRITE_NEW_OR_UPDATED_DETECTION_IDS_TABLE
+    if not re.match(r"^[A-Za-z0-9_]+$", table_name):
+        raise ValueError(f"Invalid WRITE_NEW_OR_UPDATED_DETECTION_IDS_TABLE name: {table_name}")
+
+    stmt = sqlalchemy.text(
+        f"INSERT INTO `{table_name}` (image_id, detection_id) VALUES (:image_id, :detection_id)"
+    )
+    if VERBOSE:
+        print(f"Image {image_id} - helper debug: inserting {len(rows_to_insert)} rows into {table_name}.")
+    session.execute(stmt, rows_to_insert)
+    print(f"Image {image_id} - Logged {len(rows_to_insert)} touched detection_id rows to {table_name}.")
+
+    if do_commit and not TESTING_NO_DB_WRITE:
+        session.commit()
+
 def do_yolo_detections(result, image, image_path, existing_detections, custom=False, precomputed_raw_detections=None, do_commit=True):
     image_id = result.image_id
     imagename = result.imagename
@@ -418,6 +506,13 @@ def do_yolo_detections(result, image, image_path, existing_detections, custom=Fa
     else:
         delete_no_detections(session, image_id, NoDetectionTable=ThisNoDetectionTable, do_commit=do_commit)
         yolo.save_obj_bbox(session, image_id, detect_results, Detections, do_commit=do_commit)
+        save_new_detection_ids_for_reprocess(
+            session,
+            image_id,
+            existing_detections,
+            detect_results,
+            do_commit=do_commit,
+        )
     return detect_results
 
 def check_for_existing_detections(image_id, existing_detections, custom=False):

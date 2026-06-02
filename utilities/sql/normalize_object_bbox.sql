@@ -4,6 +4,7 @@
 
 Use Stock;
 
+SET GLOBAL innodb_buffer_pool_size=805306368000;
 
 
 -- PRODUCTION
@@ -30,7 +31,7 @@ JSON_EXTRACT(CAST(JSON_UNQUOTE(d.bbox) AS JSON),'$.right'), NULL)) AS DECIMAL(12
 IF(JSON_VALID(JSON_UNQUOTE(d.bbox)),
 JSON_EXTRACT(CAST(JSON_UNQUOTE(d.bbox) AS JSON),'$.bottom'), NULL)) AS DECIMAL(12,6)) - e.nose_pixel_y) / e.face_height
 )
-WHERE d.detection_id BETWEEN 5000000 AND 10000000
+WHERE d.detection_id BETWEEN 80000000 AND 1000000000
 AND d.bbox IS NOT NULL
 AND d.conf != -1
 AND e.face_height > 0
