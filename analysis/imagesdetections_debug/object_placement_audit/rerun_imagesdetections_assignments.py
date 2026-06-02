@@ -415,6 +415,21 @@ def main():
 
     total_written = checkpoint.get("total_written", 0) if checkpoint else 0
     total_processed = checkpoint.get("total_processed", 0) if checkpoint else 0
+    suppression_totals = {
+        "enabled": None,
+        "iou_threshold": None,
+        "new_bonus": None,
+        "pair_candidates_total": 0,
+        "family_candidates_total": 0,
+        "suppressed_total": 0,
+        "suppressed_pair_total": 0,
+        "suppressed_family_total": 0,
+        "dual_keep_total": 0,
+        "new_bonus_win_total": 0,
+        "custom_tie_win_total": 0,
+        "by_rule": {},
+        "events": [],
+    }
 
     # Create ToolsClustering once — avoids re-reading the compatibility matrix CSV
     # on every batch. Session is swapped per-batch below.
@@ -430,12 +445,46 @@ def main():
 
         session = Session()
         cl.session = session
+        batch_suppression = None
 
         try:
             batch_df = cl.process_detections_for_df(batch_df)
+            batch_suppression = cl.get_preplacement_suppression_stats()
         finally:
             session.close()
             cl.session = None
+
+        if batch_suppression:
+            suppression_totals["enabled"] = batch_suppression.get("enabled")
+            suppression_totals["iou_threshold"] = batch_suppression.get("iou_threshold")
+            suppression_totals["new_bonus"] = batch_suppression.get("new_bonus")
+            for key in (
+                "pair_candidates_total",
+                "family_candidates_total",
+                "suppressed_total",
+                "suppressed_pair_total",
+                "suppressed_family_total",
+                "dual_keep_total",
+                "new_bonus_win_total",
+                "custom_tie_win_total",
+            ):
+                suppression_totals[key] += int(batch_suppression.get(key, 0))
+
+            for rule_id, counts in batch_suppression.get("by_rule", {}).items():
+                if rule_id not in suppression_totals["by_rule"]:
+                    suppression_totals["by_rule"][rule_id] = {
+                        "candidates": 0,
+                        "suppressed": 0,
+                        "dual_keep": 0,
+                        "new_bonus_win": 0,
+                        "custom_tie_win": 0,
+                    }
+                for key in ("candidates", "suppressed", "dual_keep", "new_bonus_win", "custom_tie_win"):
+                    suppression_totals["by_rule"][rule_id][key] += int(counts.get(key, 0))
+
+            if len(suppression_totals["events"]) < 200:
+                needed = 200 - len(suppression_totals["events"])
+                suppression_totals["events"].extend(batch_suppression.get("events", [])[:needed])
 
         with engine.connect() as conn:
             max_det_map = max_detection_id_by_image(conn, batch_ids)
@@ -472,7 +521,7 @@ def main():
         if batch_num % 10 == 0 or total_processed == len(image_ids):
             print(
                 f"[batch {batch_num}/{total_batches}] processed={total_processed}/{len(image_ids)} "
-                f"written={total_written}"
+                f"written={total_written} suppressed={suppression_totals['suppressed_total']}"
             )
 
     meta = {
@@ -492,6 +541,7 @@ def main():
         "include_last_reprocessed_detection_id": bool(include_last_reprocessed),
         "resumed_from_checkpoint": bool(checkpoint),
         "checkpoint_file": checkpoint_file if checkpoint else None,
+        "preplacement_suppression": suppression_totals,
     }
 
     with open(run_meta_path, "w", encoding="utf-8") as f:

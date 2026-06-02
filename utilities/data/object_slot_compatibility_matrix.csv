@@ -14,8 +14,8 @@ class_id,hand,left_eye,right_eye,top_face,mouth,shoulder,waist,feet,class_name
 12,0,0,0,0,0,0,0,0,parking meter
 13,0,0,0,0,0,2,0,0,bench
 14,2,0,0,0,0,0,0,0,bird
-15,2,0,0,0,0,0,0,0,cat
-16,2,0,0,0,0,0,0,0,dog
+15,2,0,0,0,0,0,0,1,cat
+16,2,0,0,0,0,0,0,1,dog
 17,2,0,0,0,0,0,0,0,horse
 18,2,0,0,0,0,0,0,0,sheep
 19,2,0,0,0,0,0,0,0,cow
@@ -55,24 +55,24 @@ class_id,hand,left_eye,right_eye,top_face,mouth,shoulder,waist,feet,class_name
 53,2,1,1,1,2,1,1,0,pizza
 54,2,1,1,1,2,1,1,0,donut
 55,2,1,1,1,2,1,1,0,cake
-56,0,0,0,0,0,0,2,2,chair
-57,0,0,0,0,0,0,2,2,couch
+56,0,0,0,0,0,0,2,1,chair
+57,0,0,0,0,0,0,2,1,couch
 58,2,0,0,0,0,0,0,1,potted plant
-59,0,0,0,0,0,0,2,2,bed
-60,0,0,0,0,0,0,2,2,dining table
+59,0,0,0,0,0,0,2,1,bed
+60,0,0,0,0,0,0,2,1,dining table
 61,1,0,0,0,0,0,2,1,toilet
 62,2,0,0,0,0,0,1,1,tv
 63,2,0,0,0,1,0,1,1,laptop
-64,2,1,1,1,1,0,0,0,mouse
-65,2,1,1,1,2,0,0,0,remote
-66,2,1,1,1,1,0,0,0,keyboard
+64,2,0,0,0,0,0,0,0,mouse
+65,2,1,1,1,0,0,1,0,remote
+66,2,0,0,1,0,0,1,0,keyboard
 67,2,0,0,1,1,1,2,1,cell phone
 68,2,0,0,0,0,0,0,0,microwave
 69,2,0,0,0,0,0,0,0,oven
 70,2,0,0,0,0,0,0,0,toaster
 71,2,0,0,0,0,0,0,0,sink
 72,2,0,0,0,0,0,0,0,refrigerator
-73,2,1,1,2,2,1,1,1,book
+73,2,1,1,2,1,1,1,1,book
 74,2,0,0,2,0,0,0,0,clock
 75,2,0,0,2,0,0,0,0,vase
 76,2,1,1,1,1,0,0,0,scissors
@@ -88,7 +88,7 @@ class_id,hand,left_eye,right_eye,top_face,mouth,shoulder,waist,feet,class_name
 86,2,0,0,1,1,2,1,1,Dumbbell
 87,2,0,0,0,2,1,1,0,rose
 88,1,0,0,0,1,0,2,0,Groceries
-89,2,0,0,0,2,1,0,0,mask
+89,2,0,0,0,1,1,0,0,mask
 90,0,0,0,0,1,2,1,0,Stethoscope
 91,2,0,0,0,0,1,0,0,Gun
 92,2,0,0,2,1,2,0,0,Headphones
@@ -119,3 +119,23 @@ class_id,hand,left_eye,right_eye,top_face,mouth,shoulder,waist,feet,class_name
 117,2,2,2,1,2,0,0,0,Kiwi
 118,2,2,2,1,2,0,0,0,Lemon_slice
 119,2,2,2,1,2,0,0,0,Avocado_half
+120,0,0,0,0,0,0,0,0,None
+121,2,0,0,0,0,0,0,0,Cigarette
+122,2,0,0,0,0,0,0,0,Vape
+123,2,1,1,2,1,1,1,1,Book_custom
+124,2,0,0,0,0,1,2,1,Tablet
+125,2,0,0,0,0,1,1,0,Picture_frame
+126,2,0,0,0,0,1,1,0,Playing_cards
+127,2,0,0,0,0,1,1,0,Calculator
+128,2,0,0,0,0,1,1,0,Megaphone
+129,2,0,0,0,0,1,1,0,Drill_tool
+130,2,0,0,0,0,1,1,0,Camera
+131,2,0,0,0,0,1,1,0,Binoculars
+132,2,0,0,0,0,0,1,1,Computer_monitor
+133,2,0,0,0,0,0,1,1,Laptop_custom
+134,2,0,0,0,1,0,0,0,Microphone
+135,2,1,1,1,0,0,1,0,Remote_control_custom
+136,2,0,0,1,0,0,1,0,Keybaord_custom
+137,2,0,0,1,1,1,2,1,Phone_handheld
+139,2,0,0,0,0,0,1,0,Corded_phone
+140,2,0,0,0,0,0,0,0,Boxing_gloves

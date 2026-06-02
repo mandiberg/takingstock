@@ -28,6 +28,22 @@ class ToolsClustering:
         # Newer detection wins unless old confidence exceeds new by RUN_GAP_CONF_DIFF.
         self.RUN_GAP = 100_000
         self.RUN_GAP_CONF_DIFF = 0.2
+        # Option A pre-placement suppression (explicit pair/family rules).
+        self.PREPLACEMENT_SUPPRESSION_ENABLED = True
+        self.PREPLACEMENT_SUPPRESSION_IOU_THRESHOLD = 0.7
+        self.PREPLACEMENT_SUPPRESSION_MAX_EVENT_SAMPLES = 200
+        self.PREPLACEMENT_SUPPRESSION_PAIR_RULES = (
+            {"rule_id": "pair_63_133", "base_class_id": 63, "custom_class_id": 133},
+            {"rule_id": "pair_67_137", "base_class_id": 67, "custom_class_id": 137},
+            {"rule_id": "pair_73_123", "base_class_id": 73, "custom_class_id": 123},
+            {"rule_id": "pair_65_135", "base_class_id": 65, "custom_class_id": 135},
+            {"rule_id": "pair_66_136", "base_class_id": 66, "custom_class_id": 136},
+        )
+        self.PREPLACEMENT_SUPPRESSION_FAMILY_RULES = (
+            {"rule_id": "family_124_tablet", "anchor_class_id": 124, "suppress_class_ids": {63, 67, 73, 133, 137, 123}},
+            {"rule_id": "family_93_clipboard", "anchor_class_id": 93, "suppress_class_ids": {63, 67, 73, 133, 137}},
+            {"rule_id": "family_127_calculator", "anchor_class_id": 127, "suppress_class_ids": {67, 137}},
+        )
         # Dual-hand guard: if the same detection is picked by both hands,
         # drop the farther hand unless dist_far / dist_near <= this ratio.
         self.DUAL_HAND_DISTANCE_RATIO = 2.5
@@ -88,6 +104,7 @@ class ToolsClustering:
             'waist': {},
             'feet': {},
         }
+        self.reset_preplacement_suppression_stats()
         self.reset_class_assignment_debug_counts()
         self.reset_class_pipeline_debug_counts()
         # Face object constraints to avoid large background objects
@@ -1259,6 +1276,115 @@ class ToolsClustering:
         """Return a copy of current allowlist reject counters."""
         return dict(self._allowlist_reject_counts)
 
+    def reset_preplacement_suppression_stats(self):
+        """Reset per-batch Option A suppression counters and sampled events."""
+        self._preplacement_suppression_stats = {
+            'enabled': bool(self.PREPLACEMENT_SUPPRESSION_ENABLED),
+            'iou_threshold': float(self.PREPLACEMENT_SUPPRESSION_IOU_THRESHOLD),
+            'new_bonus': float(self.RUN_GAP_CONF_DIFF),
+            'pair_candidates_total': 0,
+            'family_candidates_total': 0,
+            'suppressed_total': 0,
+            'suppressed_pair_total': 0,
+            'suppressed_family_total': 0,
+            'dual_keep_total': 0,
+            'new_bonus_win_total': 0,
+            'custom_tie_win_total': 0,
+            'by_rule': {},
+            'events': [],
+        }
+
+    def get_preplacement_suppression_stats(self):
+        """Return a copy of current pre-placement suppression counters."""
+        stats = self._preplacement_suppression_stats
+        return {
+            'enabled': bool(stats.get('enabled', False)),
+            'iou_threshold': float(stats.get('iou_threshold', self.PREPLACEMENT_SUPPRESSION_IOU_THRESHOLD)),
+            'new_bonus': float(stats.get('new_bonus', self.RUN_GAP_CONF_DIFF)),
+            'pair_candidates_total': int(stats.get('pair_candidates_total', 0)),
+            'family_candidates_total': int(stats.get('family_candidates_total', 0)),
+            'suppressed_total': int(stats.get('suppressed_total', 0)),
+            'suppressed_pair_total': int(stats.get('suppressed_pair_total', 0)),
+            'suppressed_family_total': int(stats.get('suppressed_family_total', 0)),
+            'dual_keep_total': int(stats.get('dual_keep_total', 0)),
+            'new_bonus_win_total': int(stats.get('new_bonus_win_total', 0)),
+            'custom_tie_win_total': int(stats.get('custom_tie_win_total', 0)),
+            'by_rule': {
+                str(rule_id): {
+                    'candidates': int(rule_counts.get('candidates', 0)),
+                    'suppressed': int(rule_counts.get('suppressed', 0)),
+                    'dual_keep': int(rule_counts.get('dual_keep', 0)),
+                    'new_bonus_win': int(rule_counts.get('new_bonus_win', 0)),
+                    'custom_tie_win': int(rule_counts.get('custom_tie_win', 0)),
+                }
+                for rule_id, rule_counts in stats.get('by_rule', {}).items()
+            },
+            'events': [dict(evt) for evt in stats.get('events', [])],
+        }
+
+    def _ensure_suppression_rule_bucket(self, rule_id):
+        by_rule = self._preplacement_suppression_stats.setdefault('by_rule', {})
+        rule_key = str(rule_id)
+        if rule_key not in by_rule:
+            by_rule[rule_key] = {
+                'candidates': 0,
+                'suppressed': 0,
+                'dual_keep': 0,
+                'new_bonus_win': 0,
+                'custom_tie_win': 0,
+            }
+        return by_rule[rule_key]
+
+    def _record_suppression_event(self, event):
+        events = self._preplacement_suppression_stats.setdefault('events', [])
+        if len(events) < self.PREPLACEMENT_SUPPRESSION_MAX_EVENT_SAMPLES:
+            events.append(dict(event))
+
+    def _effective_conf_with_new_bonus(self, det, other_det):
+        base_conf = float(det.get('conf', 0.0))
+        det_id = int(det.get('detection_id'))
+        other_id = int(other_det.get('detection_id'))
+        bonus_applied = False
+        if abs(det_id - other_id) > self.RUN_GAP and det_id > other_id:
+            base_conf += self.RUN_GAP_CONF_DIFF
+            bonus_applied = True
+        return base_conf, bonus_applied
+
+    def _choose_suppression_winner(self, det_a, det_b, preferred_class_ids):
+        a_eff, a_bonus = self._effective_conf_with_new_bonus(det_a, det_b)
+        b_eff, b_bonus = self._effective_conf_with_new_bonus(det_b, det_a)
+        a_cls = self._get_detection_class_id(det_a)
+        b_cls = self._get_detection_class_id(det_b)
+
+        custom_tie_win = False
+        if a_eff > b_eff:
+            winner, loser = det_a, det_b
+        elif b_eff > a_eff:
+            winner, loser = det_b, det_a
+        else:
+            a_pref = a_cls in preferred_class_ids
+            b_pref = b_cls in preferred_class_ids
+            if a_pref and not b_pref:
+                winner, loser = det_a, det_b
+                custom_tie_win = True
+            elif b_pref and not a_pref:
+                winner, loser = det_b, det_a
+                custom_tie_win = True
+            elif float(det_a.get('conf', 0.0)) >= float(det_b.get('conf', 0.0)):
+                winner, loser = det_a, det_b
+            else:
+                winner, loser = det_b, det_a
+
+        winner_bonus = a_bonus if winner is det_a else b_bonus
+        return {
+            'winner': winner,
+            'loser': loser,
+            'winner_effective_conf': float(a_eff if winner is det_a else b_eff),
+            'loser_effective_conf': float(b_eff if winner is det_a else a_eff),
+            'winner_bonus_applied': bool(winner_bonus),
+            'custom_tie_win': bool(custom_tie_win),
+        }
+
     def reset_class_assignment_debug_counts(self):
         """Reset per-batch assignment counters for tracked class IDs."""
         self._class_assignment_debug_counts = {
@@ -1787,6 +1913,129 @@ class ToolsClustering:
         
         return filtered
 
+    def apply_preplacement_suppression(self, detections, image_id=None):
+        """Apply Option A suppression after overlap-resolution and before slot assignment."""
+        if not self.PREPLACEMENT_SUPPRESSION_ENABLED or len(detections) <= 1:
+            return detections
+
+        active = list(detections)
+        active_ids = {int(det['detection_id']) for det in active}
+        iou_threshold = float(self.PREPLACEMENT_SUPPRESSION_IOU_THRESHOLD)
+
+        def det_is_active(det):
+            return int(det['detection_id']) in active_ids
+
+        def rule_candidates_for_classes(class_ids):
+            return [det for det in active if det_is_active(det) and self._get_detection_class_id(det) in class_ids]
+
+        def apply_rule(rule_id, rule_type, left_det, right_det, preferred_class_ids):
+            if not (det_is_active(left_det) and det_is_active(right_det)):
+                return
+
+            iou = self.calc_iou(left_det['bbox'], right_det['bbox'])
+            bucket = self._ensure_suppression_rule_bucket(rule_id)
+            bucket['candidates'] += 1
+            if rule_type == 'pair':
+                self._preplacement_suppression_stats['pair_candidates_total'] += 1
+            else:
+                self._preplacement_suppression_stats['family_candidates_total'] += 1
+
+            if iou < iou_threshold:
+                self._preplacement_suppression_stats['dual_keep_total'] += 1
+                bucket['dual_keep'] += 1
+                if self.VERBOSE:
+                    print(
+                        f"[SUPPRESS][{rule_id}] image_id={image_id} dual-keep "
+                        f"det={left_det['detection_id']} cls={self._get_detection_class_id(left_det)} conf={left_det['conf']:.3f} "
+                        f"vs det={right_det['detection_id']} cls={self._get_detection_class_id(right_det)} conf={right_det['conf']:.3f} "
+                        f"iou={iou:.3f} (<{iou_threshold:.2f})"
+                    )
+                self._record_suppression_event({
+                    'rule_id': rule_id,
+                    'rule_type': rule_type,
+                    'image_id': int(image_id) if image_id is not None else None,
+                    'decision': 'dual_keep',
+                    'iou': float(iou),
+                    'left_detection_id': int(left_det['detection_id']),
+                    'left_class_id': self._get_detection_class_id(left_det),
+                    'left_conf': float(left_det['conf']),
+                    'right_detection_id': int(right_det['detection_id']),
+                    'right_class_id': self._get_detection_class_id(right_det),
+                    'right_conf': float(right_det['conf']),
+                })
+                return
+
+            decision = self._choose_suppression_winner(left_det, right_det, preferred_class_ids)
+            winner = decision['winner']
+            loser = decision['loser']
+            loser_id = int(loser['detection_id'])
+            if loser_id in active_ids:
+                active_ids.remove(loser_id)
+
+            self._preplacement_suppression_stats['suppressed_total'] += 1
+            if rule_type == 'pair':
+                self._preplacement_suppression_stats['suppressed_pair_total'] += 1
+            else:
+                self._preplacement_suppression_stats['suppressed_family_total'] += 1
+            bucket['suppressed'] += 1
+
+            if decision['winner_bonus_applied']:
+                self._preplacement_suppression_stats['new_bonus_win_total'] += 1
+                bucket['new_bonus_win'] += 1
+            if decision['custom_tie_win']:
+                self._preplacement_suppression_stats['custom_tie_win_total'] += 1
+                bucket['custom_tie_win'] += 1
+
+            if self.VERBOSE:
+                print(
+                    f"[SUPPRESS][{rule_id}] image_id={image_id} suppress det={loser['detection_id']} "
+                    f"cls={self._get_detection_class_id(loser)} conf={loser['conf']:.3f} -> keep det={winner['detection_id']} "
+                    f"cls={self._get_detection_class_id(winner)} conf={winner['conf']:.3f} "
+                    f"iou={iou:.3f} eff=({decision['winner_effective_conf']:.3f}>{decision['loser_effective_conf']:.3f})"
+                )
+
+            self._record_suppression_event({
+                'rule_id': rule_id,
+                'rule_type': rule_type,
+                'image_id': int(image_id) if image_id is not None else None,
+                'decision': 'suppress',
+                'iou': float(iou),
+                'winner_detection_id': int(winner['detection_id']),
+                'winner_class_id': self._get_detection_class_id(winner),
+                'winner_conf': float(winner['conf']),
+                'winner_effective_conf': float(decision['winner_effective_conf']),
+                'winner_bonus_applied': bool(decision['winner_bonus_applied']),
+                'loser_detection_id': int(loser['detection_id']),
+                'loser_class_id': self._get_detection_class_id(loser),
+                'loser_conf': float(loser['conf']),
+                'loser_effective_conf': float(decision['loser_effective_conf']),
+                'custom_tie_win': bool(decision['custom_tie_win']),
+            })
+
+        # Pass 1: explicit COCO/custom pairs.
+        for rule in self.PREPLACEMENT_SUPPRESSION_PAIR_RULES:
+            rule_id = rule['rule_id']
+            base_class = int(rule['base_class_id'])
+            custom_class = int(rule['custom_class_id'])
+            base_candidates = rule_candidates_for_classes({base_class})
+            custom_candidates = rule_candidates_for_classes({custom_class})
+            for base_det in base_candidates:
+                for custom_det in custom_candidates:
+                    apply_rule(rule_id, 'pair', base_det, custom_det, {custom_class})
+
+        # Pass 2: explicit family-anchor suppressions.
+        for rule in self.PREPLACEMENT_SUPPRESSION_FAMILY_RULES:
+            rule_id = rule['rule_id']
+            anchor_class = int(rule['anchor_class_id'])
+            suppress_classes = {int(x) for x in rule['suppress_class_ids']}
+            anchor_candidates = rule_candidates_for_classes({anchor_class})
+            suppress_candidates = rule_candidates_for_classes(suppress_classes)
+            for anchor_det in anchor_candidates:
+                for suppress_det in suppress_candidates:
+                    apply_rule(rule_id, 'family', anchor_det, suppress_det, {anchor_class})
+
+        return [det for det in active if int(det['detection_id']) in active_ids]
+
     def weight_detection_for_clustering(self, detections):
         """
         Apply weighting to detections features based on class_id for clustering.
@@ -1812,6 +2061,7 @@ class ToolsClustering:
         left_shoulder=None,
         right_shoulder=None,
         body_landmarks_normalized=None,
+        image_id=None,
     ):
         """
         Classify each detection based on its relationship to hands and face.
@@ -1841,6 +2091,7 @@ class ToolsClustering:
         
         # First, resolve overlapping detections
         detections = self.resolve_overlapping_detections(detections)
+        detections = self.apply_preplacement_suppression(detections, image_id=image_id)
 
         for det in detections:
             class_id = self._get_detection_class_id(det)
@@ -2571,6 +2822,7 @@ class ToolsClustering:
             left_shoulder=left_shoulder,
             right_shoulder=right_shoulder,
             body_landmarks_normalized=body_landmarks_normalized,
+            image_id=image_id,
         )
 
         # Track where classes 110-119 are lost: seen in detections vs assigned to any slot.
@@ -2625,6 +2877,7 @@ class ToolsClustering:
         """
         self.reset_allowlist_reject_counts()
         self.reset_unassigned_reason_counts()
+        self.reset_preplacement_suppression_stats()
         self.reset_class_assignment_debug_counts()
         self.reset_class_pipeline_debug_counts()
 
