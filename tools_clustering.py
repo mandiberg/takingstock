@@ -42,7 +42,7 @@ class ToolsClustering:
         self.EYE_OR_FOREHEAD_CLASSES = {114}
         self.EYE_ONLY_CLASSES = {115}
         self.HAND_OR_EYE_CLASSES = {116, 117, 118, 119}
-        self.HANDHELD_LIKE_CLASSES = {39, 40, 41, 63, 67, 73, 76, 77, 79, 80, 82, 95}
+        self.HANDHELD_LIKE_CLASSES = {39, 40, 41, 67, 73, 76, 77, 79, 80, 82, 95}
         # Lower-body guardrail for handheld-like classes.
         # Goal: reduce implausible feet/waist pulls while preserving clear lower-body cases.
         self.SMALL_HANDHELD_CLASSES = {67, 82, 95}  # legacy stricter subset
