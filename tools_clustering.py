@@ -135,6 +135,10 @@ class ToolsClustering:
         # so that the top of a hanging bag/stethoscope bbox still qualifies.
         self.SHOULDER_STRAP_CLASSES = {24, 26, 83, 90}  # backpack, handbag, bag, stethoscope
         self.SHOULDER_STRAP_EXTENSION = 1.5
+        # Post-assignment mouth/shoulder reconciliation when both slots point to
+        # the same detection_id. Canonical class precedence comes from audit review.
+        self.MOUTH_SHOULDER_RECONCILE_SHOULDER_CLASSES = {24, 26, 90, 92}
+        self.MOUTH_SHOULDER_RECONCILE_MOUTH_PREFERRED_CLASSES = {67, 73}
         self.COVID_MASK_TOP_MIN = -0.4
         self.COVID_MASK_TOP_MAX = 0.5
         self.COVID_MASK_BOTTOM_MIN = 0.3
@@ -2703,6 +2707,10 @@ class ToolsClustering:
                     ):
                         results['feet_object'] = det
 
+        # Reconcile one structural edge case: the exact same detection can satisfy
+        # both mouth and shoulder geometry and be written to both slots.
+        self._reconcile_mouth_shoulder_same_detection(results)
+
         assigned_ids_by_class = {class_id: set() for class_id in self.DEBUG_TRACKED_CLASS_IDS}
         for slot_det in results.values():
             if slot_det is None:
@@ -2715,6 +2723,55 @@ class ToolsClustering:
             self._class_pipeline_debug_counts[class_id]['final_assigned_unique'] += len(assigned_ids_by_class[class_id])
         
         return results
+
+    def _reconcile_mouth_shoulder_same_detection(self, results):
+        """Resolve mouth/shoulder dual assignment when both slots share one detection."""
+        mouth_det = results.get('mouth_object')
+        shoulder_det = results.get('shoulder_object')
+        if mouth_det is None or shoulder_det is None:
+            return
+
+        try:
+            mouth_id = int(mouth_det.get('detection_id'))
+            shoulder_id = int(shoulder_det.get('detection_id'))
+        except Exception:
+            return
+
+        if mouth_id != shoulder_id:
+            return
+
+        class_id = self._get_detection_class_id(mouth_det)
+
+        # Canonical precedence from audit decisions.
+        if class_id in self.MOUTH_SHOULDER_RECONCILE_SHOULDER_CLASSES:
+            results['mouth_object'] = None
+            return
+
+        if class_id in self.MOUTH_SHOULDER_RECONCILE_MOUTH_PREFERRED_CLASSES:
+            results['shoulder_object'] = None
+            return
+
+        # Generic fallback for classes without explicit policy.
+        mouth_score = self._compatibility_biased_score(mouth_det, 'mouth')
+        shoulder_score = self._compatibility_biased_score(shoulder_det, 'shoulder')
+
+        if mouth_score is None and shoulder_score is None:
+            # Conservative fallback: prefer shoulder for centered hanging objects.
+            results['mouth_object'] = None
+            return
+
+        if mouth_score is None:
+            results['mouth_object'] = None
+            return
+
+        if shoulder_score is None:
+            results['shoulder_object'] = None
+            return
+
+        if shoulder_score > mouth_score:
+            results['mouth_object'] = None
+        else:
+            results['shoulder_object'] = None
 
     def query_and_classify_detections(
         self,

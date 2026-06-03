@@ -34,7 +34,7 @@ from datetime import datetime
 import pandas as pd
 
 # Phase 1 target class_ids and their human names
-DEFAULT_TRACKED = [24, 26, 27, 56, 57, 59, 60, 63, 90]
+DEFAULT_TRACKED = [24, 26, 27, 56, 57, 59, 60, 63, 67, 82, 89, 90, 94, 95,96]
 CLASS_NAMES = {
     1: "person",
     13: "stop sign",
