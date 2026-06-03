@@ -32,6 +32,7 @@ from datetime import datetime
 
 from sqlalchemy import create_engine, text
 from sqlalchemy.pool import NullPool
+from sqlalchemy.orm import sessionmaker
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT = os.path.abspath(os.path.join(SCRIPT_DIR, "..", "..", ".."))
@@ -280,16 +281,20 @@ def main():
     out_dir = os.path.join(args.output_root, f"hand_ab_audit_{ts}")
     os.makedirs(out_dir, exist_ok=True)
 
+    # metadata = MetaData(engine)
+    Session = sessionmaker(bind=engine)
+    session = Session()
+
     # A: baseline (distance-only) by zeroing non-distance hand weights.
     tc_baseline = ToolsClustering(CLUSTER_TYPE="ObjectFusion", VERBOSE=bool(args.verbose), session=None)
-    tc_baseline.session = io_obj.session
+    tc_baseline.session = session
     tc_baseline.HAND_DIRECTIONAL_BIAS_WEIGHT = 0.0
     tc_baseline.HAND_CONFIDENCE_WEIGHT = 0.0
     tc_baseline.HAND_COMPAT_LEVEL_WEIGHT = 0.0
 
     # B: current behavior (directional + confidence + compat level weights enabled).
     tc_new = ToolsClustering(CLUSTER_TYPE="ObjectFusion", VERBOSE=bool(args.verbose), session=None)
-    tc_new.session = io_obj.session
+    tc_new.session = session
 
     sort_pose = build_sortpose_for_knuckles()
     default_hand_pos = list(tc_new.DEFAULT_HAND_POSITION)
