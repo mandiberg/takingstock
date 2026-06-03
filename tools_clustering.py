@@ -37,6 +37,9 @@ class ToolsClustering:
             {"rule_id": "pair_65_135", "base_class_id": 65, "custom_class_id": 135},
             {"rule_id": "pair_66_136", "base_class_id": 66, "custom_class_id": 136},
         )
+        self.PREPLACEMENT_SUPPRESSION_PAIR_DICT = {
+            rule["custom_class_id"]: rule["base_class_id"] for rule in self.PREPLACEMENT_SUPPRESSION_PAIR_RULES
+        }
         self.PREPLACEMENT_SUPPRESSION_FAMILY_RULES = (
             {"rule_id": "family_124_tablet", "anchor_class_id": 124, "suppress_class_ids": {63, 67, 73, 133, 137, 123}},
             {"rule_id": "family_93_clipboard", "anchor_class_id": 93, "suppress_class_ids": {63, 67, 73, 133, 137}},
@@ -405,6 +408,20 @@ class ToolsClustering:
         except Exception:
             return 0
 
+    def _canonicalize_signature_class_id(self, class_id, slot_col=None):
+        """Map custom class IDs to canonical COCO IDs for signature tokens."""
+        if class_id <= 0:
+            return class_id
+        if self.PREPLACEMENT_SUPPRESSION_ENABLED and class_id in self.PREPLACEMENT_SUPPRESSION_PAIR_DICT:
+            original_class_id = self.PREPLACEMENT_SUPPRESSION_PAIR_DICT[class_id]
+            # print(
+            #     f"[SIGNATURE] Applying pre-placement suppression: slot {slot_col or 'unknown_slot'} "
+            #     f"has class_id {class_id}, replacing with original class_id {original_class_id} "
+            #     f"for signature purposes."
+            # )
+            return int(original_class_id)
+        return int(class_id)
+
     def build_slot_signature_fields(self, row):
         """Build deterministic token/hash/object-count for a row."""
         token_parts = []
@@ -413,6 +430,7 @@ class ToolsClustering:
         for slot_col, slot_label in self.OBJECT_SIGNATURE_SLOT_MAP:
             class_id = self.extract_slot_class_id(row.get(slot_col))
             if class_id > 0:
+                class_id = self._canonicalize_signature_class_id(class_id, slot_col=slot_col)
                 n_objects += 1
             token_parts.append(f"{slot_label}:{class_id}")
 
@@ -431,6 +449,9 @@ class ToolsClustering:
         if 'image_id' not in df.columns:
             print("[SIGNATURE] Missing image_id, skipping signature build.")
             return df
+        print(f"[SIGNATURE] Building slot signatures for {len(df)} rows...")
+        print(df.columns)
+        print(f"[preplacement suppression] pair rules: {self.PREPLACEMENT_SUPPRESSION_PAIR_DICT}")
 
         out_df = df.copy()
         sig_values = out_df.apply(self.build_slot_signature_fields, axis=1, result_type='expand')
@@ -517,6 +538,7 @@ class ToolsClustering:
             if slot_col in selected_slots:
                 class_id = self.extract_slot_class_id(row.get(slot_col))
                 if class_id > 0:
+                    class_id = self._canonicalize_signature_class_id(class_id, slot_col=slot_col)
                     n_objects += 1
             token_parts.append(f"{slot_label}:{class_id}")
 
@@ -727,8 +749,14 @@ class ToolsClustering:
     def _build_token_from_slot_labels(self, slot_class_ids):
         """Build (token, hash) from a {slot_label: class_id} dict."""
         parts = []
+        slot_label_to_col = {slot_label: slot_col for slot_col, slot_label in self.OBJECT_SIGNATURE_SLOT_MAP}
         for _, slot_label in self.OBJECT_SIGNATURE_SLOT_MAP:
             class_id = int(slot_class_ids.get(slot_label, 0) or 0)
+            if class_id > 0:
+                class_id = self._canonicalize_signature_class_id(
+                    class_id,
+                    slot_col=slot_label_to_col.get(slot_label),
+                )
             parts.append(f"{slot_label}:{class_id}")
         token = "|".join(parts)
         sig_hash = hashlib.sha1(token.encode('utf-8')).hexdigest()
