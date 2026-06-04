@@ -304,7 +304,10 @@ if USE_SEGMENT is True and (cl.CLUSTER_TYPE != "Clusters"):
             #     WHERE += " AND NOT EXISTS (SELECT 1 FROM ImagesDetections idt WHERE idt.image_id = s.image_id) "
 
     elif MODE in (1,2):
-        FROM += f" LEFT JOIN Images{table_cluster_type} ic ON s.image_id = ic.image_id"
+        if DO_SIGNATURES and cl.CLUSTER_TYPE == "ObjectFusion":
+            FROM += f" LEFT JOIN ImagesObjectSignatures ic ON s.image_id = ic.image_id"
+        else: 
+            FROM += f" LEFT JOIN Images{table_cluster_type} ic ON s.image_id = ic.image_id"
         if MODE == 1: 
             WHERE += " AND ic.cluster_id IS NULL "
             if SegmentHelper_name:

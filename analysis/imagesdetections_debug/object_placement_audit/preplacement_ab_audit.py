@@ -9,8 +9,8 @@ It writes CSV artifacts to support golden-set review.
 
 Example:
 python analysis/imagesdetections_debug/object_placement_audit/preplacement_ab_audit.py \
-  --image-ids 396589,125734939 \
-  --output-root /Users/michaelmandiberg/Documents/GitHub/facemap/analysis/imagesdetections_debug/object_placement_audit
+  --image-ids 119173689 \
+  --output-root /Users/michaelmandiberg/Documents/GitHub/takingstock/analysis/imagesdetections_debug/object_placement_audit
 """
 
 import argparse
