@@ -4025,6 +4025,12 @@ class SortPose:
             #     enc1 = self.cluster_medians[self.counter_dict["cluster_no"]]
             #     print("set enc1 from cluster median")
             #     print("enc1", enc1)
+            
+            # super HACK to handle weird situation where it is FIRST_ROUND, but sending through image path
+            if "/" in this_start:
+                print(" ♻️♻️♻️ this_start looks like an image path, setting to median")
+                this_start = "median"
+
             print("this_start", this_start)
             if this_start not in ["median", "start_site_image_id", "start_image_id", "start_face_encodings", "start_bbox"]:
             # elif this_start not in ["median", "start_site_image_id", "start_face_encodings", "start_bbox"]:
@@ -4547,7 +4553,8 @@ class SortPose:
         if self.VERBOSE: print(f"get_closest_df_NN, self.SORT_TYPE is {self.SORT_TYPE} FIRST_ROUND is {FIRST_ROUND}")
 
         knn_sort = get_knn_sort(self, enc1)
-
+        print("knn_sort", knn_sort)
+        print("enc1 for knn_sort", enc1)
         if self.VERBOSE: print(f"get_closest_df_NN - pre first sort_df_KNN knn - {knn_sort} - enc1 len", len(enc1))
         # sort KNN (always for planar) or BRUTEFORCE (optional only for 128d)
         if self.BRUTEFORCE and knn_sort == "128d": df_dist_enc = self.brute_force(df_enc, enc1)
