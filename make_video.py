@@ -71,7 +71,7 @@ MAKE_CACHE_MODE = False # only make cache folders, skips dedupe and is_face test
 MODE1_ENABLE_DB_DEDUPE = True # False skips dedupe during crunch time drafts  
 SKIP_PAIRCHECK = False # True for draft mode, False does paircheck, and caches them 
 START_CLUSTER = 0
-PARALLEL_WORKERS = 16  # set > 1 to parallelize per-CSV work in MODE 0 and MODE 1
+PARALLEL_WORKERS = 1  # set > 1 to parallelize per-CSV work in MODE 0 and MODE 1
 VERBOSE = True
 
 start = time.time()
@@ -102,7 +102,7 @@ CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden b
 
 # CSV_FOLDER = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion128_test220K"
 CSV_MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/"
-CSV_RUN_FOLDER = "SegmentHelper_TheOffice/new_sig_test_oldones/p15_priority3" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
+CSV_RUN_FOLDER = "SegmentHelper_TheOffice/looping_selection/recovery_oneshot/pt2" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
 CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, CSV_RUN_FOLDER)
 MAX_ROWS_PER_OUTPUT_CSV = 1200
 ENABLE_MODE0_TIMING = True
@@ -288,7 +288,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
         pitch, yaw, roll, and bbox for all 9 object positions.
     '''
     # TEMPORARY
-    TRUST_FACE_PAIR_CACHE = True
+    TRUST_FACE_PAIR_CACHE = False
 
     # # cludgy hack to get dynamic cropping for testing mar 2026    
     AUTO_EDGE_CROP = True
@@ -362,7 +362,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
 
     INSTALLATION_VIDEO = True
     if INSTALLATION_VIDEO:
-        ONE_SHOT = False # take all files, based off the very first sort order.
+        ONE_SHOT = True # take all files, based off the very first sort order.
         TSP_SORT = False
         CHOP_ITTER_TSP_SORT = False
         if CLUSTER_TYPE == "ArmsPoses3D_ObjectFusion":
@@ -373,6 +373,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
             OBJECT_NONE_CLUSTERS = [] # sneaky HACK to force non multi to run P1
             # GENERATE_FUSION_PAIRS = False # April 14 changing this for INSTALLATION_VIDEO
             # MULTIPOLICY = False # MULTIPOLICY conflicts with GENERATE_FUSION_PAIRS 
+            # META = True
         else:
             print(f"in second condition for INSTALLATION_VIDEO: {CLUSTER_TYPE}")
 
@@ -752,7 +753,7 @@ elif IS_SEGONLY and io.platform == "darwin":
 
     if IS_HAND_POSE_FUSION:
         # handle META situation, where ArmsPoses3D needs to look for meta clusters
-        if CLUSTER_TYPE == "ArmsPoses3D" and META:
+        if CLUSTER_TYPE in ["ArmsPoses3D", "ArmsPoses3D_ObjectFusion"] and META:
             # this is for META 
             cluster_table = f"ImagesBodyPoses3D"
             # ihp as ClustersMetaBodyPoses3D - selecting the meta clusters id below
@@ -2043,7 +2044,7 @@ def compare_images(last_image, img, face_landmarks_or_df, bbox_or_index, current
                         print("last_image shape:", last_image.shape)
                         print("cropped_image shape:", cropped_image.shape)
                     is_face = sort.test_or_lookup_face_pair(last_image, cropped_image, current_image_id)
-                    # print("is_face result:", is_face)
+                    print("test_or_lookup_face_pair is_face result:", is_face)
                 # sept 2025 dedupe used to happen here, but removing this, as it is now handled in separate dedupe process
                 else:
                     print("failed is_face test")
