@@ -3632,13 +3632,13 @@ _MODE1_WORKER_CFG: dict = {}  # populated by pool initializer, read by _mode1_cs
 _MODE1_WORKER_DB: dict = {"engine": None, "session": None}
 
 
-def _mode1_create_worker_session():
-    """Create a per-process engine/session for MODE1 DB dedupe work."""
+def _create_worker_engine():
+    """Create a fresh per-process SQLAlchemy engine for worker processes."""
     if io.IS_TENCH or io.IS_MICHELLE:
-        return None, None
+        return None
     try:
         if db["unix_socket"]:
-            worker_engine = create_engine(
+            return create_engine(
                 "mysql+pymysql://{user}:{pw}@/{db}?unix_socket={socket}".format(
                     user=db["user"],
                     pw=db["pass"],
@@ -3647,21 +3647,41 @@ def _mode1_create_worker_session():
                 ),
                 poolclass=NullPool,
             )
-        else:
-            worker_engine = create_engine(
-                "mysql+pymysql://{user}:{pw}@{host}/{db}".format(
-                    host=db["host"],
-                    db=db["name"],
-                    user=db["user"],
-                    pw=db["pass"],
-                ),
-                poolclass=NullPool,
-            )
+        return create_engine(
+            "mysql+pymysql://{user}:{pw}@{host}/{db}".format(
+                host=db["host"],
+                db=db["name"],
+                user=db["user"],
+                pw=db["pass"],
+            ),
+            poolclass=NullPool,
+        )
+    except Exception as exc:
+        print(f"[WORKER DB] failed to create worker engine: {exc}")
+        return None
+
+
+def _mode1_create_worker_session():
+    """Create a per-process engine/session for MODE1 DB dedupe work."""
+    worker_engine = _create_worker_engine()
+    if worker_engine is None:
+        return None, None
+    try:
         worker_session = sessionmaker(bind=worker_engine)()
         return worker_engine, worker_session
     except Exception as exc:
         print(f"[MODE1 WORKER] failed to initialize DB session: {exc}")
-        return None, None
+        return worker_engine, None
+
+
+def _mode0_worker_init() -> None:
+    """Pool initializer for MODE0 multiprocessing workers."""
+    worker_engine = _create_worker_engine()
+    sort.set_face_pair_cache_engine(worker_engine)
+    if worker_engine is None:
+        print("[MODE0 WORKER] no DB engine available for face pair cache")
+    else:
+        print("[MODE0 WORKER] face pair cache engine initialized")
 
 
 def _mode1_worker_init(cfg: dict) -> None:
@@ -3669,9 +3689,11 @@ def _mode1_worker_init(cfg: dict) -> None:
     global _MODE1_WORKER_CFG, _MODE1_WORKER_DB
     _MODE1_WORKER_CFG = cfg
     _MODE1_WORKER_DB = {"engine": None, "session": None}
+    sort.set_face_pair_cache_engine(None)
     if cfg.get("mode1_enable_db_dedupe") and not MAKE_CACHE_MODE:
         worker_engine, worker_session = _mode1_create_worker_session()
         _MODE1_WORKER_DB = {"engine": worker_engine, "session": worker_session}
+        sort.set_face_pair_cache_engine(worker_engine)
 
 
 def _mode1_find_parts(parts: list) -> tuple:
@@ -4227,7 +4249,10 @@ def main():
             if mode0_pool is None:
                 import multiprocessing as _mp
                 print(f"[MODE0] opening shared pool with {PARALLEL_WORKERS} workers")
-                mode0_pool = _mp.Pool(processes=PARALLEL_WORKERS)
+                mode0_pool = _mp.Pool(
+                    processes=PARALLEL_WORKERS,
+                    initializer=_mode0_worker_init,
+                )
             async_result = mode0_pool.apply_async(_mode0_process_linear_worker, (job,))
             mode0_async_results.append((async_result, job))
         else:

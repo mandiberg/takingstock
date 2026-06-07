@@ -1171,6 +1171,7 @@ class SortPose:
         self.face_pair_stats = {
             "pass": 0,
             "fail": 0,
+            "this_fail": 0,
             "cache_pass": 0,
             "cache_fail": 0,
             "computed_pass": 0,
@@ -1256,6 +1257,7 @@ class SortPose:
             "ON DUPLICATE KEY UPDATE "
             "result = VALUES(result), updated_at = CURRENT_TIMESTAMP"
         )
+        if self.VERBOSE: print(f"[store_face_pair_cache_result] Attempting to store cache result for pair ({pair_key[0]}, {pair_key[1]}): {result}")
         try:
             with self.face_pair_cache_engine.begin() as connection:
                 connection.execute(
@@ -1267,16 +1269,18 @@ class SortPose:
                     },
                 )
         except Exception as e:
-            print(f"[store_face_pair_cache_result] Error storing face pair cache result for pair ({pair_key[0]}, {pair_key[1]}): {e}")
-
+            if self.VERBOSE: print(f"[store_face_pair_cache_result] Error storing face pair cache result for pair ({pair_key[0]}, {pair_key[1]}): {e}")
+        if self.VERBOSE: print(f"[store_face_pair_cache_result] Stored cache result for pair ({pair_key[0]}, {pair_key[1]}): {result}")
+        
+    
     def test_or_lookup_face_pair(self, last_image, candidate_image, current_image_id):
         previous_image_id = self.counter_dict.get("last_image_id")
         cached_result = self.get_face_pair_cache_result(previous_image_id, current_image_id)
-        print(f"cached_result for pair ({previous_image_id}, {current_image_id}): {cached_result}")
+        if self.VERBOSE: print(f"cached_result for pair ({previous_image_id}, {current_image_id}): {cached_result}")
         if cached_result == "pass":
             self.face_pair_stats["pass"] += 1
             self.face_pair_stats["cache_pass"] += 1
-            print(f"face pair cache hit PASS for {previous_image_id}, {current_image_id}")
+            if self.VERBOSE: print(f"face pair cache hit PASS for {previous_image_id}, {current_image_id}")
             return True
         if cached_result == "fail":
             self.face_pair_stats["fail"] += 1
@@ -1298,17 +1302,18 @@ class SortPose:
             self.face_pair_stats["fail"] += 1
             self.face_pair_stats["computed_fail"] += 1
             self.face_pair_stats["this_fail"] += 1
+        # if self.VERBOSE: print(f"about to store face pair cache result for {previous_image_id}, {current_image_id}: {'PASS' if is_face else 'FAIL'}")
         self.store_face_pair_cache_result(
             previous_image_id,
             current_image_id,
             "pass" if is_face else "fail",
         )
-        if self.VERBOSE: print(f"self.face_pair_stats['this_fail']: {self.face_pair_stats['this_fail']}")
+        if self.VERBOSE: print(f"store_face_pair_cache_result was called for pair ({previous_image_id}, {current_image_id}) with result: {'PASS' if is_face else 'FAIL'}")
         if self.face_pair_stats["this_fail"] >= 3:
-            print(f" we have a problem, this is fail number {self.face_pair_stats['this_fail']} in a row, set current image to not dupe and move on")
+            if self.VERBOSE: print(f" we have a problem, this is fail number {self.face_pair_stats['this_fail']} in a row, set current image to not dupe and move on")
             self.face_pair_stats["this_fail"] = 0
             return True
-        print(f"face pair computed result for {previous_image_id}, {current_image_id}: {'PASS' if is_face else 'FAIL'}")
+        if self.VERBOSE: print(f"face pair computed result for {previous_image_id}, {current_image_id}: {'PASS' if is_face else 'FAIL'}")
         return is_face
 
     def preview_img(self,img):
