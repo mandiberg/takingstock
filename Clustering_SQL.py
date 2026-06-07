@@ -45,7 +45,7 @@ EXPAND = False
 ONE_SHOT = False # take all files, based off the very first sort order.
 JUMP_SHOT = False # jump to random file if can't find a run
 
-LIMIT = 10000000
+LIMIT = 1000
 BATCH_LIMIT = 10000
 
 # number of clusters produced. run GET_OPTIMAL_CLUSTERS and add that number here
@@ -89,14 +89,20 @@ else:
 # CLUSTER_TYPE = "BodyPoses"
 # CLUSTER_TYPE = "BodyPoses3D" # use this for META 3D body clusters, Arms will start build but messed up because of subset landmarks
 # CLUSTER_TYPE = "ArmsPoses3D" 
+CLUSTER_TYPE = "HandsPositions"
+# CLUSTER_TYPE = "HandsGestures"
+# CLUSTER_TYPE = "FingertipsPositions"
+# CLUSTER_TYPE = "HSV" 
 
 # you need both of these for ObjectFusion
-CLUSTER_TYPE = "ObjectFusion" 
+# CLUSTER_TYPE = "ObjectFusion" 
 # to create imagesdetections, use analysis/imagesdetections_debug/object_placement_audit/rerun_imagesdetections_assignments.py
 # then use ObjectFusion with this with the next three as True to assign those imagesdetections to signature clusters
 DO_SIGNATURES = True # whether to build and persist object signature token/hash/n_objects for ObjectFusion clustering. This is separate from the clustering itself, so you can choose to do ObjectFusion clustering without signatures if you want to iterate faster without the signature building step, which adds some overhead but is useful for understanding the object distribution within clusters and for future deduplication efforts.
 SIGNATURES_ONLY = True # if True, run signature generation/persistence and skip ObjectFusion cluster assignment steps.
-ONLY_EXISTING_IMAGES_DETECTIONS = True # faster for testing: will not calc new object placements
+ONLY_EXISTING_IMAGES_DETECTIONS = True # faster for testing: will not calc new object placements, and this done in rerun_imagesdetections_assignments.py now anyway
+
+ADD_LIST = True
 """
 process for redoing objectsignatures as new objects get added:
 1. redo placements using rerun_imagesdetections_assignments.py
@@ -109,10 +115,7 @@ process for redoing objectsignatures as new objects get added:
 """
 
 
-# CLUSTER_TYPE = "HandsPositions"
-# CLUSTER_TYPE = "HandsGestures"
-# CLUSTER_TYPE = "FingertipsPositions"
-# CLUSTER_TYPE = "HSV" 
+
 VERBOSE = False
 DEBUG_IMAGE_ID = None  # Set to None to disable single-image isolation
 cl = ToolsClustering(CLUSTER_TYPE, VERBOSE=VERBOSE)
@@ -155,7 +158,7 @@ SegmentTable_name = 'SegmentBig_isface'
 # if cl.CLUSTER_TYPE == "ArmsPoses3D":
 # SegmentHelper_name = 'SegmentHelper_sept2025_heft_keywords'
 # SegmentHelper_name = 'Detections' # if CLUSTER_TYPE = "ObjectFusion", it automatically joins to Detections
-# SegmentHelper_name = 'SegmentHelper_T11_Oct20_COCO_Custom_every40'
+# SegmentHelper_name = 'SegmentHelper_NewDetections_June2'
 SegmentHelper_name = 'SegmentHelper_TheOffice'
 # SegmentHelper_name = 'SegmentHelper_may26_deleteme_missingArms3D' # this is a temporary helper table that is just a subset of the full SegmentHelperMar23_headon, which is too large to join to for clustering, but has the same structure and can be used for testing and for MODE 2 cluster assignment based on the subset of data it contains. It is missing the ArmsPoses3D data, so it is only useful for testing BodyPoses3D and ObjectFusion clustering and assignment, not ArmsPoses3D clustering and assignment, but it is useful for testing the overall pipeline with a smaller dataset. It has 1.1M rows, which is still large but more manageable than the full 3.8M rows in SegmentHelperMar23_headon.
 FORCE_HAND_LANDMARKS = False # when doing ArmsPoses3D, default is True, so mongo_hand_landmarks = 1
@@ -562,7 +565,25 @@ def landmarks_to_df_columnar(df, add_list=False, fit_scaler=False):
         numerical_columns = [col for col in df.columns if col.startswith('dim_')]
         prefix_dim = True
     # set hand_columns = to the numerical_columns in sort.SUBSET_LANDMARKS
+    elif "hand" in cl.CLUSTER_DATA[cl.CLUSTER_TYPE]["data_column"]:
+        numerical_columns = [col for col in df.columns if col.startswith('left_dim_') or col.startswith('right_dim_')]
+        prefix_dim = True
     print("lms df columns: ",df.columns)
+
+# OLD LEGACY CODE TO INTEGRATE FOR OLD PATHWAYS
+#   elif "hand" in cl.CLUSTER_DATA[cl.CLUSTER_TYPE]["data_column"]:
+#     # elif cl.CLUSTER_TYPE in ["HandsPositions", "HandsGestures", "FingertipsPositions"]:
+#         col_list["left"] = [col for col in df.columns if col.startswith('left_dim_')]
+#         col_list["right"] = [col for col in df.columns if col.startswith('right_dim_')]
+#     elif cl.CLUSTER_TYPE == "HSV":
+#         col_list["HSV"] = ["hue", "sat", "val"]
+#     elif cl.CLUSTER_TYPE == "Clusters":
+#         col_list["face"] = [col for col in df.columns if col.startswith('dim_')]
+#     return col_list
+
+    # Preserve order while preventing duplicate label amplification downstream.
+    numerical_columns = list(dict.fromkeys(numerical_columns))
+
     if sort.SUBSET_LANDMARKS and (len(numerical_columns)/len(sort.SUBSET_LANDMARKS)) % 1 != 0:
         # only do this if the number of numerical columns is not a multiple of the subset landmarks
         # which is to say: the lms have already been subsetted
@@ -579,11 +600,11 @@ def landmarks_to_df_columnar(df, add_list=False, fit_scaler=False):
         subset_columns = numerical_columns
 
     if "image_id" in df.columns:
-        df_columnar = df[['image_id'] + subset_columns]
+        df_columnar = df[['image_id'] + subset_columns].copy()
     else:
-        df_columnar = df[subset_columns]
+        df_columnar = df[subset_columns].copy()
 
-    if add_list:
+    if add_list and cl.CLUSTER_TYPE == "ObjectFusion":
         print("landmarks_to_df_columnar adding obj_bbox_list column")
         df_columnar["obj_bbox_list"] = df[subset_columns].values.tolist()
 
@@ -926,10 +947,16 @@ def process_landmarks_cluster_dist(df, df_subset_landmarks):
     # print(f"process_landmarks_cluster_dist df type {type(df)} first col: ",first_col)
     # print(f"df_subset_landmarks type {type(df_subset_landmarks)} columns", df_subset_landmarks.columns)
     # if the first column is an int, then the columns are integers
+    # Duplicate column labels can multiply feature vectors when selecting by label.
+    if df_subset_landmarks.columns.duplicated().any():
+        dup_count = int(df_subset_landmarks.columns.duplicated().sum())
+        print(f"process_landmarks_cluster_dist dropping {dup_count} duplicate columns by name")
+        df_subset_landmarks = df_subset_landmarks.loc[:, ~df_subset_landmarks.columns.duplicated()].copy()
+
     if isinstance(first_col, int):
         dim_columns = [col for col in df_subset_landmarks.columns if isinstance(col, int)]
-    elif any(isinstance(col, str) and col.startswith('dim_') for col in df_subset_landmarks.columns):
-    # Step 1: Identify columns that contain "_dim_"
+    elif any(isinstance(col, str) and (col.startswith('dim_') or col.startswith('left_dim_') or col.startswith('right_dim_')) for col in df_subset_landmarks.columns):
+    # Step 1: Identify columns that contain "dim_" (covers dim_, left_dim_, right_dim_)
         dim_columns = [col for col in df_subset_landmarks.columns if "dim_" in col]
     elif cl.CLUSTER_TYPE == "HSV":
         dim_columns = cl.CLUSTER_DATA[cl.CLUSTER_TYPE]["data_column"]
@@ -995,7 +1022,7 @@ def assign_images_clusters_DB(df):
     
     #assign clusters to each image's encodings
     print("assigning images to clusters, df at start",df)
-    df_subset_landmarks = landmarks_to_df_columnar(df, add_list=True)
+    df_subset_landmarks = landmarks_to_df_columnar(df, add_list=ADD_LIST)
     print("df_subset_landmarks after landmarks_to_df_columnar", df_subset_landmarks)
 
     # if cl.CLUSTER_TYPE in ["BodyPoses","BodyPoses3D","ArmsPoses3D", "HandsGestures", "HandsPositions","FingertipsPositions"]:

@@ -1057,7 +1057,7 @@ class ToolsClustering:
         # print("prepping pose clusters for enc1: ", enc1, " with median_dict: ", median_dict, " and CLUSTER_MEDIANS: ", self.CLUSTER_MEDIANS)
         if median_dict is None and self.CLUSTER_MEDIANS is not None:
             median_dict = self.CLUSTER_MEDIANS
-        # print("current image enc1", enc1)  
+        print("current image enc1", enc1)  
         enc1 = np.array(enc1)
         
         this_dist_dict = {}
@@ -1068,7 +1068,7 @@ class ToolsClustering:
         
         cluster_id, cluster_dist = min(this_dist_dict.items(), key=lambda x: x[1])
 
-        # print(cluster_id)
+        print("assigned cluster_id", cluster_id)
         return cluster_id, cluster_dist
 
     # ==================== OBJECT-HAND RELATIONSHIP METHODS ====================
