@@ -288,6 +288,7 @@ class SortPose:
         self.face_pair_result_cache = {}
         self.face_pair_cache_engine = None
         self.trust_face_pair_cache = True  # set False to force re-test, ignoring cached results
+        self.skip_face_pair_testing = False  # set True to skip face pair testing entirely (use with caution, may lead to poor sorting results)
         self.reset_face_pair_stats()
         # for testing shoulders for image background
         self.SHOULDER_THRESH = 0.75
@@ -1274,6 +1275,9 @@ class SortPose:
         
     
     def test_or_lookup_face_pair(self, last_image, candidate_image, current_image_id):
+        if self.skip_face_pair_testing:
+            if self.VERBOSE: print("Skipping face pair testing due to skip_face_pair_testing=True")
+            return True
         previous_image_id = self.counter_dict.get("last_image_id")
         cached_result = self.get_face_pair_cache_result(previous_image_id, current_image_id)
         if self.VERBOSE: print(f"cached_result for pair ({previous_image_id}, {current_image_id}): {cached_result}")

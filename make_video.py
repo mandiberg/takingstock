@@ -71,7 +71,7 @@ MAKE_CACHE_MODE = False # only make cache folders, skips dedupe and is_face test
 MODE1_ENABLE_DB_DEDUPE = True # False skips dedupe during crunch time drafts  
 SKIP_PAIRCHECK = False # True for draft mode, False does paircheck, and caches them 
 START_CLUSTER = 0
-PARALLEL_WORKERS = 1  # set > 1 to parallelize per-CSV work in MODE 0 and MODE 1
+PARALLEL_WORKERS = 16  # set > 1 to parallelize per-CSV work in MODE 0 and MODE 1
 VERBOSE = True
 
 start = time.time()
@@ -102,7 +102,7 @@ CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden b
 
 # CSV_FOLDER = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion128_test220K"
 CSV_MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/"
-CSV_RUN_FOLDER = "SegmentHelper_TheOffice/looping_selection/recovery_oneshot/pt2" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
+CSV_RUN_FOLDER = "SegmentHelper_TheOffice/looping_selection/_looping_shortlist" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
 CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, CSV_RUN_FOLDER)
 MAX_ROWS_PER_OUTPUT_CSV = 1200
 ENABLE_MODE0_TIMING = True
@@ -289,6 +289,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     '''
     # TEMPORARY
     TRUST_FACE_PAIR_CACHE = False
+    SKIP_FACE_PAIR_TESTING = True  # set True to skip face pair testing entirely (use with caution, may lead to poor sorting results)
 
     # # cludgy hack to get dynamic cropping for testing mar 2026    
     AUTO_EDGE_CROP = True
@@ -314,6 +315,11 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     SORT_TYPE = "object_fusion" # for ArmsPoses3D_ObjectFusion keep SORT_TYPE as object_fusion
     SORT_TYPE_NONEOBJECT = "object_fusion" # sort used when pose_no is in OBJECT_NONE_CLUSTERS
     USE_HSV = False
+
+
+    # SELECT ON HAND LOCATION + OBJECT SIGNATURE
+    CLUSTER_TYPE = "planar_hands_ObjectFusion"
+    OBJECT_SIG = 1685
 
     # CLUSTER_TYPE = "object_fusion"
     # CLUSTER_TYPE = "ArmsPoses3D" # this triggers meta body poses 3D
@@ -362,10 +368,10 @@ elif CURRENT_MODE == 'heft_torso_keywords':
 
     INSTALLATION_VIDEO = True
     if INSTALLATION_VIDEO:
-        ONE_SHOT = True # take all files, based off the very first sort order.
+        ONE_SHOT = False # take all files, based off the very first sort order.
         TSP_SORT = False
         CHOP_ITTER_TSP_SORT = False
-        if CLUSTER_TYPE == "ArmsPoses3D_ObjectFusion":
+        if "ObjectFusion" in CLUSTER_TYPE:
             print(f"in first condition for INSTALLATION_VIDEO: {CLUSTER_TYPE}")
             GENERATE_FUSION_PAIRS = False # April 14 changing this for INSTALLATION_VIDEO
             FORCE_CANONICAL_MULT_CREATION = True # GENERATE_FUSION_PAIRS = False disables canonical creation. this turns it back on. 
@@ -956,6 +962,7 @@ cfg = {
 }
 sort = SortPose(config=cfg)
 sort.trust_face_pair_cache = TRUST_FACE_PAIR_CACHE
+sort.skip_face_pair_testing = SKIP_FACE_PAIR_TESTING
 
 # Keep EXPAND background fill consistent with INPAINT_COLOR.
 if INPAINT_COLOR == "black":
@@ -1545,11 +1552,14 @@ def expand_face_encodings(df,encoding_col= "face_encodings68",):
 def get_closest_knn_or_break(df_enc, df_sorted):
     # send in both dfs, and return same dfs with 1+ rows sorted
     print(" -- BEFORE sort_by_face_dist_NN _ for loop df_enc is", df_enc)
+    print(" BEFORE, df cols are", df_enc.columns.tolist())
     is_break = False
     df_enc, df_sorted, output_cols = sort.get_closest_df_NN(df_enc, df_sorted)
 
     print(" -- AFTER sort_by_face_dist_NN _ for loop df_enc is", len(df_enc))
     print(" -- AFTER sort_by_face_dist_NN _ for loop df_sorted is", len(df_sorted))
+    print(" AFTER, df_enc cols are", df_enc.columns.tolist())
+    print(" AFTER, df_sorted cols are", df_sorted.columns.tolist())
 
     # # test to see if body_landmarks for row with image_id = 5251199 still is the same as test_lms
     # retest_row = df_enc.loc[df_enc['image_id'] == 10498233]
@@ -1665,6 +1675,11 @@ def itter_sort(df_enc, itters):
             print(str(e))
             traceback.print_exc()
             # rename the distance column to dist -- there is no dist for TSP
+    # Drop any pre-existing 'dist' column so that the rename below never creates duplicates.
+    # This can happen when df_enc was produced by a prior sort pass (e.g. one_shot_sort_dataframe
+    # on an oversized partition subset), which already carries a 'dist' column.
+    if 'dist' in df_sorted.columns and output_cols != 'dist':
+        df_sorted = df_sorted.drop(columns=['dist'])
     df_sorted.rename(columns={output_cols: 'dist'}, inplace=True)
     return df_sorted
 
@@ -1991,92 +2006,92 @@ def generate_cropped_image(img, context):
         return None, "needs_inpaint"
     return cropped_image, "ok"
 
+# this seems deprecated?????
+# def compare_images(last_image, img, face_landmarks_or_df, bbox_or_index, current_image_id=None):
+#     # for some reason the function is called with either a df and index, or face_landmarks and bbox
+#     # rw to handle both here. 
+#     if isinstance(face_landmarks_or_df, pd.DataFrame):
+#         df_sorted = face_landmarks_or_df
+#         index = bbox_or_index
+#         face_landmarks, bbox = df_sorted.iloc[index]['face_landmarks'], df_sorted.iloc[index]['bbox']
+#         current_image_id = df_sorted.iloc[index].get('image_id', current_image_id)
+#         current_yaw = df_sorted.iloc[index].get('yaw', None)
+#         current_roll = df_sorted.iloc[index].get('roll', None)
+#         current_pitch = df_sorted.iloc[index].get('pitch', None)
+#         is_df = True
+#     else:
+#         face_landmarks = face_landmarks_or_df
+#         bbox = bbox_or_index
+#         current_yaw = current_roll = current_pitch = None
+#         is_df = False
 
-def compare_images(last_image, img, face_landmarks_or_df, bbox_or_index, current_image_id=None):
-    # for some reason the function is called with either a df and index, or face_landmarks and bbox
-    # rw to handle both here. 
-    if isinstance(face_landmarks_or_df, pd.DataFrame):
-        df_sorted = face_landmarks_or_df
-        index = bbox_or_index
-        face_landmarks, bbox = df_sorted.iloc[index]['face_landmarks'], df_sorted.iloc[index]['bbox']
-        current_image_id = df_sorted.iloc[index].get('image_id', current_image_id)
-        current_yaw = df_sorted.iloc[index].get('yaw', None)
-        current_roll = df_sorted.iloc[index].get('roll', None)
-        current_pitch = df_sorted.iloc[index].get('pitch', None)
-        is_df = True
-    else:
-        face_landmarks = face_landmarks_or_df
-        bbox = bbox_or_index
-        current_yaw = current_roll = current_pitch = None
-        is_df = False
-
-    is_face = None
-    skip_face = False
-    #crop image here:
+#     is_face = None
+#     skip_face = False
+#     #crop image here:
     
-    print(f". ---  compare_images with is_df {is_df} for {SORT_TYPE} with EXPAND {sort.EXPAND} and FULL_BODY {FULL_BODY} and self.mult {sort.image_edge_multiplier}")
-    if sort.counter_dict["first_run"] is False and last_image is None: print(" ><><>< YIKES, last_image is None ><><>< ")
-    crop_context = {
-        "is_valid": True,
-        "face_landmarks": face_landmarks,
-        "bbox": bbox,
-        "current_image_id": current_image_id,
-        "yaw": current_yaw,
-        "roll": current_roll,
-        "pitch": current_pitch,
-    }
-    cropped_image, crop_status = generate_cropped_image(img, crop_context)
-    is_inpaint = crop_status == "needs_inpaint"
+#     print(f". ---  compare_images with is_df {is_df} for {SORT_TYPE} with EXPAND {sort.EXPAND} and FULL_BODY {FULL_BODY} and self.mult {sort.image_edge_multiplier}")
+#     if sort.counter_dict["first_run"] is False and last_image is None: print(" ><><>< YIKES, last_image is None ><><>< ")
+#     crop_context = {
+#         "is_valid": True,
+#         "face_landmarks": face_landmarks,
+#         "bbox": bbox,
+#         "current_image_id": current_image_id,
+#         "yaw": current_yaw,
+#         "roll": current_roll,
+#         "pitch": current_pitch,
+#     }
+#     cropped_image, crop_status = generate_cropped_image(img, crop_context)
+#     is_inpaint = crop_status == "needs_inpaint"
 
 
-    # this code takes image i, and blends it with the subsequent image
-    # next step is to test to see if mp can recognize a face in the image
-    # if no face, a bad blend, try again with i+2, etc. 
-    if cropped_image is not None and not is_inpaint:
-        if VERBOSE: print("have a cropped image trying to save", cropped_image.shape)
-        try:
-            if sort.counter_dict["first_run"] is False:
-                if VERBOSE:  print("testing is_face")
-                if SORT_TYPE not in ("planar_body", "body3D"):
-                #     # check to see if the two faces make one
-                    if VERBOSE:
-                        print("testing is_face to see if the two make a face")
-                        print("last_image shape:", last_image.shape)
-                        print("cropped_image shape:", cropped_image.shape)
-                    is_face = sort.test_or_lookup_face_pair(last_image, cropped_image, current_image_id)
-                    print("test_or_lookup_face_pair is_face result:", is_face)
-                # sept 2025 dedupe used to happen here, but removing this, as it is now handled in separate dedupe process
-                else:
-                    print("failed is_face test")
-            else:
-                print("first round, skipping the pair test")
-        except:
-            print("last_image try failed")
-        # if is_face or first_run and sort.resize_factor < sort.resize_max:
-        if is_face or sort.counter_dict["first_run"]:
-            # if successful, prepare for the next round
-            sort.counter_dict["first_run"] = False
-            last_image = cropped_image
-            sort.counter_dict["good_count"] += 1
-        else: 
-            sort.counter_dict["isnot_face_count"] += 1
-            print("pair do not make a face, skipping <<< is this really true? Isn't this for dupes?")
-            return None, True
+#     # this code takes image i, and blends it with the subsequent image
+#     # next step is to test to see if mp can recognize a face in the image
+#     # if no face, a bad blend, try again with i+2, etc. 
+#     if cropped_image is not None and not is_inpaint:
+#         if VERBOSE: print("have a cropped image trying to save", cropped_image.shape)
+#         try:
+#             if sort.counter_dict["first_run"] is False:
+#                 if VERBOSE:  print("testing is_face")
+#                 if SORT_TYPE not in ("planar_body", "body3D"):
+#                 #     # check to see if the two faces make one
+#                     if VERBOSE:
+#                         print("testing is_face to see if the two make a face")
+#                         print("last_image shape:", last_image.shape)
+#                         print("cropped_image shape:", cropped_image.shape)
+#                     is_face = sort.test_or_lookup_face_pair(last_image, cropped_image, current_image_id)
+#                     print("test_or_lookup_face_pair is_face result:", is_face)
+#                 # sept 2025 dedupe used to happen here, but removing this, as it is now handled in separate dedupe process
+#                 else:
+#                     print("failed is_face test")
+#             else:
+#                 print("first round, skipping the pair test")
+#         except:
+#             print("last_image try failed")
+#         # if is_face or first_run and sort.resize_factor < sort.resize_max:
+#         if is_face or sort.counter_dict["first_run"]:
+#             # if successful, prepare for the next round
+#             sort.counter_dict["first_run"] = False
+#             last_image = cropped_image
+#             sort.counter_dict["good_count"] += 1
+#         else: 
+#             sort.counter_dict["isnot_face_count"] += 1
+#             print("pair do not make a face, skipping <<< is this really true? Isn't this for dupes?")
+#             return None, True
         
-    elif cropped_image is None and sort.counter_dict["first_run"]:
-        print("first run, but bad first image")
-        last_image = cropped_image
-        sort.counter_dict["cropfail_count"] += 1
-    elif is_inpaint:
-        print("bad crop, will try inpainting and try again")
-        sort.counter_dict["inpaint_count"] += 1
-    elif cropped_image is None:
-        print("no image or resize to great, trying next")
-        sort.counter_dict["cropfail_count"] += 1
-        skip_face = True
-    # print(type(cropped_image),"$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$")
+#     elif cropped_image is None and sort.counter_dict["first_run"]:
+#         print("first run, but bad first image")
+#         last_image = cropped_image
+#         sort.counter_dict["cropfail_count"] += 1
+#     elif is_inpaint:
+#         print("bad crop, will try inpainting and try again")
+#         sort.counter_dict["inpaint_count"] += 1
+#     elif cropped_image is None:
+#         print("no image or resize to great, trying next")
+#         sort.counter_dict["cropfail_count"] += 1
+#         skip_face = True
+#     # print(type(cropped_image),"$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$")
 
-    return cropped_image, skip_face
+#     return cropped_image, skip_face
 
 
 def print_counters(counter_state=None):
@@ -2481,7 +2496,7 @@ def linear_test_df(df_sorted, itter=None, counter_state=None):
                 return cropped_image, False
 
             sort.counter_dict["isnot_face_count"] += 1
-            print("pair do not make a face, skipping <<< is this really true? Isn't this for dupes?")
+            print("pair do not make a face, skipping <<< [validate_generated_crop_for_sequence]")
             return None, True
 
         if crop_status == "needs_inpaint":
@@ -2535,7 +2550,7 @@ def linear_test_df(df_sorted, itter=None, counter_state=None):
             return cached_img, False
 
         sort.counter_dict["isnot_face_count"] += 1
-        print("pair do not make a face, skipping <<< is this really true? Isn't this for dupes?")
+        print("pair do not make a face, skipping <<< [validate_cached_cropped]")
         return None, True
 
     def save_image_metas(row):
@@ -2847,8 +2862,15 @@ def linear_test_df(df_sorted, itter=None, counter_state=None):
                     print("invalid crop context, skipping row")
                     continue
 
+                print("row.keys()", row.keys())
                 # control distance
                 this_dist = row.get('dist', None)
+                # Guard: duplicate 'dist' columns in df_sorted produce a Series instead of
+                # a scalar (pandas returns all matching column values for row[name]).
+                if isinstance(this_dist, pd.Series):
+                    print(f"[WARN] 'dist' is a Series (duplicate columns); taking first value. Values: {this_dist.tolist()}")
+                    this_dist = this_dist.iloc[0]
+                if VERBOSE: print("this_dist", this_dist, "MAXD", sort.MAXD)
                 if this_dist is not None and this_dist > sort.MAXD:
                     sort.counter_dict["failed_dist_count"] += 1
                     print(f"this_dist {this_dist} > MAXD" , str(sort.MAXD))

@@ -1,42 +1,91 @@
 import os
 
-# FOLDER = "/Volumes/LaCie/output_folder/_test_downsize"
-FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/SegmentHelper_TheOffice/new_sig_test_oldones/obj_not_p15"
+'''
+This script is for moving folders (and files I think) based on the fusion list. 
+It moves files with the fusion cluster pairs into a a subfolder in that directory
+I believe it is designed to work with make_video MODES 0 and 1:
+It parses clustercc and clusterc_ filenames
+'''
+# FOLDER = "/Volumes/LaCie/output_folder/_looping_selects_round2"
+# FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/SegmentHelper_TheOffice/new_sig_test_oldones/obj_not_p15"
+FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/SegmentHelper_TheOffice/looping_selection/full_length_full_set/"
 MOVED_FOLDERS = "moved_folders"
 NEW_FOLDER = os.path.join(FOLDER, MOVED_FOLDERS)
 os.makedirs(NEW_FOLDER, exist_ok=True)
 
 FUSION_PAIR_DICT_DETECTIONS_THEOFFICE = {
     0: [
-#         # LUMEN tests
-#         #[arms_pose_cluster, object_signature_cluster]
+        # looping videos
+#### first block is 15 Tie ####
+# arms_crossed
+[155,15],  [399,15],   [541,15], [605,15], 
 
-#         # phone:
-        [350,25],
-       
-#         # laptop:
-        [224,34],[291,34],[503,34],[711,34],
+#blan
+[234,15],   [443,15],  [471,15],
 
-#         # # arms_head:
-        [126,15],[332,15],[662,15],[702,15],[734,15],[654,15],
+#_arms_ou
+[134,15], [344,15], [364,15],   [597,15],   [707,15], [738,15], [78,15],
 
-#         # # money both hands
-        [319,1685],
+#_arms_stress:], 
+[254,15], [104,15], [128,15], [182,15], [390,15], [390,15],   [7,15], 
 
-#         # # credit card both hands
-        [272,258],[701,258],
-        
-        [47,734],
-        
-#         # arms_pointing:
-        [101,15],[204,15],[226,15],[494,15],[602,15],[670,15],[756,15],
+#_weird:], 
+ [519,15], [593,15], [649,15], [710,15], [647,15],  
 
-        # money:
-        [106,2341],[129,2263],[129,2341],[140,2341],[173,2341],[174,2341],[176,2341],[181,1685],[18,1685],
-        [218,1685],[221,2341],[232,1685],[240,1685],[252,2263],[276,2341],[299,2341],[410,2341],[479,1685],[47,2341],[722,2341],[752,1685],[752,2341],[84,2341],
-        # [319,1685],
+# pointing
+[101,15], [176,15], [204,15], [25,15], [494,15], [670,15], [756,15],
+
+#_standin
+[126,15], [183,15], [332,15], [347,15], [626,15], [632,15], [702,15],
+
+#_arms_backhea
+[286,15], [343,15], 
+
+#pensiv
+[119,15], [197,15], [265,15],
+
+#_arms_hip
+[514,15], [698,15], 
+
+# video_good/selects,], 
+[117,7], [181,2230], [18,586], [18,733], [197,25], [253,7], [307,25], [308,7], [350,25], [369,11], [378,25], [426,11], [479,2230], [482,7], 
+[487,2263], [537,282], [552,11], [572,734], [69,282], [729,7], [745,11], [77,11], [82,282], [83,1685], [18,3052], [359,11], [385,11], [432,11], 
+[45,11], [463,11], [472,7], [486,7], [628,11], [673,11], [698,11], [726,58],
     ]
 }
+
+
+# FUSION_PAIR_DICT_DETECTIONS_THEOFFICE = {
+#     0: [
+# #         # LUMEN tests
+# #         #[arms_pose_cluster, object_signature_cluster]
+
+# #         # phone:
+#         [350,25],
+       
+# #         # laptop:
+#         [224,34],[291,34],[503,34],[711,34],
+
+# #         # # arms_head:
+#         [126,15],[332,15],[662,15],[702,15],[734,15],[654,15],
+
+# #         # # money both hands
+#         [319,1685],
+
+# #         # # credit card both hands
+#         [272,258],[701,258],
+        
+#         [47,734],
+        
+# #         # arms_pointing:
+#         [101,15],[204,15],[226,15],[494,15],[602,15],[670,15],[756,15],
+
+#         # money:
+#         [106,2341],[129,2263],[129,2341],[140,2341],[173,2341],[174,2341],[176,2341],[181,1685],[18,1685],
+#         [218,1685],[221,2341],[232,1685],[240,1685],[252,2263],[276,2341],[299,2341],[410,2341],[479,1685],[47,2341],[722,2341],[752,1685],[752,2341],[84,2341],
+#         # [319,1685],
+#     ]
+# }
 
 
 # FUSION_PAIR_DICT_DETECTIONS_THEOFFICE = {
