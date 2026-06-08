@@ -24,9 +24,7 @@ class ToolsClustering:
         self.HIGH_CONFIDENCE_THRESHOLD = 0.9
         self.CONFIDENCE_DIFF_THRESHOLD = 0.3
         self.MIN_DETECTION_CONFIDENCE = 0.4
-        # Run-gap: detection_id gap indicating a newer model run.
-        # Newer detection wins unless old confidence exceeds new by RUN_GAP_CONF_DIFF.
-        self.RUN_GAP = 100_000
+        # Semantic precedence bonus for COCO/custom overlap ties.
         self.RUN_GAP_CONF_DIFF = 0.2
         # Option A pre-placement suppression (explicit pair/family rules).
         self.PREPLACEMENT_SUPPRESSION_ENABLED = True
@@ -39,6 +37,9 @@ class ToolsClustering:
             {"rule_id": "pair_65_135", "base_class_id": 65, "custom_class_id": 135},
             {"rule_id": "pair_66_136", "base_class_id": 66, "custom_class_id": 136},
         )
+        self.PREPLACEMENT_SUPPRESSION_PAIR_DICT = {
+            rule["custom_class_id"]: rule["base_class_id"] for rule in self.PREPLACEMENT_SUPPRESSION_PAIR_RULES
+        }
         self.PREPLACEMENT_SUPPRESSION_FAMILY_RULES = (
             {"rule_id": "family_124_tablet", "anchor_class_id": 124, "suppress_class_ids": {63, 67, 73, 133, 137, 123}},
             {"rule_id": "family_93_clipboard", "anchor_class_id": 93, "suppress_class_ids": {63, 67, 73, 133, 137}},
@@ -47,6 +48,9 @@ class ToolsClustering:
         # Dual-hand guard: if the same detection is picked by both hands,
         # drop the farther hand unless dist_far / dist_near <= this ratio.
         self.DUAL_HAND_DISTANCE_RATIO = 2.5
+        self.HAND_DIRECTIONAL_BIAS_WEIGHT = 0.18
+        self.HAND_CONFIDENCE_WEIGHT = 0.10
+        self.HAND_COMPAT_LEVEL_WEIGHT = 0.08
         self.DEFAULT_HAND_POSITION = [0.0, 8.0, 0.0]
         self.TIE_CLASS_ID = 27
         self.USE_ALLOWLIST = True
@@ -135,6 +139,10 @@ class ToolsClustering:
         # so that the top of a hanging bag/stethoscope bbox still qualifies.
         self.SHOULDER_STRAP_CLASSES = {24, 26, 83, 90}  # backpack, handbag, bag, stethoscope
         self.SHOULDER_STRAP_EXTENSION = 1.5
+        # Post-assignment mouth/shoulder reconciliation when both slots point to
+        # the same detection_id. Canonical class precedence comes from audit review.
+        self.MOUTH_SHOULDER_RECONCILE_SHOULDER_CLASSES = {24, 26, 90, 92}
+        self.MOUTH_SHOULDER_RECONCILE_MOUTH_PREFERRED_CLASSES = {67, 73}
         self.COVID_MASK_TOP_MIN = -0.4
         self.COVID_MASK_TOP_MAX = 0.5
         self.COVID_MASK_BOTTOM_MIN = 0.3
@@ -400,6 +408,20 @@ class ToolsClustering:
         except Exception:
             return 0
 
+    def _canonicalize_signature_class_id(self, class_id, slot_col=None):
+        """Map custom class IDs to canonical COCO IDs for signature tokens."""
+        if class_id <= 0:
+            return class_id
+        if self.PREPLACEMENT_SUPPRESSION_ENABLED and class_id in self.PREPLACEMENT_SUPPRESSION_PAIR_DICT:
+            original_class_id = self.PREPLACEMENT_SUPPRESSION_PAIR_DICT[class_id]
+            # print(
+            #     f"[SIGNATURE] Applying pre-placement suppression: slot {slot_col or 'unknown_slot'} "
+            #     f"has class_id {class_id}, replacing with original class_id {original_class_id} "
+            #     f"for signature purposes."
+            # )
+            return int(original_class_id)
+        return int(class_id)
+
     def build_slot_signature_fields(self, row):
         """Build deterministic token/hash/object-count for a row."""
         token_parts = []
@@ -408,6 +430,7 @@ class ToolsClustering:
         for slot_col, slot_label in self.OBJECT_SIGNATURE_SLOT_MAP:
             class_id = self.extract_slot_class_id(row.get(slot_col))
             if class_id > 0:
+                class_id = self._canonicalize_signature_class_id(class_id, slot_col=slot_col)
                 n_objects += 1
             token_parts.append(f"{slot_label}:{class_id}")
 
@@ -426,6 +449,9 @@ class ToolsClustering:
         if 'image_id' not in df.columns:
             print("[SIGNATURE] Missing image_id, skipping signature build.")
             return df
+        print(f"[SIGNATURE] Building slot signatures for {len(df)} rows...")
+        print(df.columns)
+        print(f"[preplacement suppression] pair rules: {self.PREPLACEMENT_SUPPRESSION_PAIR_DICT}")
 
         out_df = df.copy()
         sig_values = out_df.apply(self.build_slot_signature_fields, axis=1, result_type='expand')
@@ -512,6 +538,7 @@ class ToolsClustering:
             if slot_col in selected_slots:
                 class_id = self.extract_slot_class_id(row.get(slot_col))
                 if class_id > 0:
+                    class_id = self._canonicalize_signature_class_id(class_id, slot_col=slot_col)
                     n_objects += 1
             token_parts.append(f"{slot_label}:{class_id}")
 
@@ -722,8 +749,14 @@ class ToolsClustering:
     def _build_token_from_slot_labels(self, slot_class_ids):
         """Build (token, hash) from a {slot_label: class_id} dict."""
         parts = []
+        slot_label_to_col = {slot_label: slot_col for slot_col, slot_label in self.OBJECT_SIGNATURE_SLOT_MAP}
         for _, slot_label in self.OBJECT_SIGNATURE_SLOT_MAP:
             class_id = int(slot_class_ids.get(slot_label, 0) or 0)
+            if class_id > 0:
+                class_id = self._canonicalize_signature_class_id(
+                    class_id,
+                    slot_col=slot_label_to_col.get(slot_label),
+                )
             parts.append(f"{slot_label}:{class_id}")
         token = "|".join(parts)
         sig_hash = hashlib.sha1(token.encode('utf-8')).hexdigest()
@@ -1035,7 +1068,7 @@ class ToolsClustering:
         
         cluster_id, cluster_dist = min(this_dist_dict.items(), key=lambda x: x[1])
 
-        # print(cluster_id)
+        print("assigned cluster_id", cluster_id)
         return cluster_id, cluster_dist
 
     # ==================== OBJECT-HAND RELATIONSHIP METHODS ====================
@@ -1340,12 +1373,31 @@ class ToolsClustering:
         if len(events) < self.PREPLACEMENT_SUPPRESSION_MAX_EVENT_SAMPLES:
             events.append(dict(event))
 
+    def _semantic_bonus_applies(self, class_id, other_class_id):
+        """Return True when class_id should get precedence bonus over other_class_id."""
+        if class_id is None or other_class_id is None:
+            return False
+
+        for rule in self.PREPLACEMENT_SUPPRESSION_PAIR_RULES:
+            base_class = int(rule['base_class_id'])
+            custom_class = int(rule['custom_class_id'])
+            if class_id == custom_class and other_class_id == base_class:
+                return True
+
+        for rule in self.PREPLACEMENT_SUPPRESSION_FAMILY_RULES:
+            anchor_class = int(rule['anchor_class_id'])
+            suppress_classes = {int(x) for x in rule['suppress_class_ids']}
+            if class_id == anchor_class and other_class_id in suppress_classes:
+                return True
+
+        return False
+
     def _effective_conf_with_new_bonus(self, det, other_det):
         base_conf = float(det.get('conf', 0.0))
-        det_id = int(det.get('detection_id'))
-        other_id = int(other_det.get('detection_id'))
+        det_cls = self._get_detection_class_id(det)
+        other_cls = self._get_detection_class_id(other_det)
         bonus_applied = False
-        if abs(det_id - other_id) > self.RUN_GAP and det_id > other_id:
+        if self._semantic_bonus_applies(det_cls, other_cls):
             base_conf += self.RUN_GAP_CONF_DIFF
             bonus_applied = True
         return base_conf, bonus_applied
@@ -1851,16 +1903,9 @@ class ToolsClustering:
                     # Overlapping detections - resolve based on confidence
                     conf1, conf2 = det1['conf'], det2['conf']
 
-                    # Run-gap priority: give newer model-run detections a confidence
-                    # bonus when detection_ids differ by more than RUN_GAP.
-                    id1, id2 = det1['detection_id'], det2['detection_id']
-                    if abs(id1 - id2) > self.RUN_GAP:
-                        if id2 > id1:  # det2 is from a newer run
-                            eff_conf1, eff_conf2 = conf1, conf2 + self.RUN_GAP_CONF_DIFF
-                        else:          # det1 is from a newer run
-                            eff_conf1, eff_conf2 = conf1 + self.RUN_GAP_CONF_DIFF, conf2
-                    else:
-                        eff_conf1, eff_conf2 = conf1, conf2
+                    # Semantic precedence bonus for known COCO/custom pair and family rules.
+                    eff_conf1, _ = self._effective_conf_with_new_bonus(det1, det2)
+                    eff_conf2, _ = self._effective_conf_with_new_bonus(det2, det1)
 
                     conf_diff = abs(eff_conf1 - eff_conf2)
 
@@ -2204,7 +2249,58 @@ class ToolsClustering:
                 self._class_pipeline_debug_counts[class_id]['tie_blocked'] += 1
 
         # 1. Find best object for each hand independently (same object may be assigned to both)
-        def best_object_for_hand(knuckle, existing_hand_object=None):
+        def infer_hand_pose_mode(hand_side, knuckle):
+            """Infer hand mode: 'up' favors above-hand objects; else favor torso side."""
+            shoulder = left_shoulder if hand_side == 'left' else right_shoulder
+            if shoulder is None:
+                return 'down_or_side'
+            try:
+                knuckle_y = float(knuckle[1])
+                shoulder_y = float(shoulder[1])
+            except Exception:
+                return 'down_or_side'
+            return 'up' if knuckle_y < (shoulder_y - 0.15) else 'down_or_side'
+
+        def hand_directional_bias(det, hand_side, knuckle, hand_mode):
+            """Directional bias: above-hand for raised hands, torso-side for down/side hands."""
+            bbox = det['bbox']
+            obj_cx = (bbox['left'] + bbox['right']) / 2.0
+            obj_cy = (bbox['top'] + bbox['bottom']) / 2.0
+            hand_x = float(knuckle[0])
+            hand_y = float(knuckle[1])
+
+            if hand_mode == 'up':
+                # In this coordinate system, smaller y is higher in the image.
+                raw_bias = (hand_y - obj_cy) / max(self.TOUCH_THRESHOLD, 1e-6)
+            elif hand_side == 'left':
+                raw_bias = (obj_cx - hand_x) / max(self.TOUCH_THRESHOLD, 1e-6)
+            else:
+                raw_bias = (hand_x - obj_cx) / max(self.TOUCH_THRESHOLD, 1e-6)
+
+            return max(-1.0, min(1.0, raw_bias))
+
+        def hand_candidate_score(det, hand_side, knuckle, dist):
+            """Composite hand score with distance primary and directional bias secondary."""
+            class_id = self._get_detection_class_id(det)
+            compat_level = self._get_compatibility_level(class_id, 'hand')
+            if compat_level <= 0:
+                return None
+
+            hand_mode = infer_hand_pose_mode(hand_side, knuckle)
+            directional_bias = hand_directional_bias(det, hand_side, knuckle, hand_mode)
+            conf = float(det.get('conf', 0.0))
+
+            # Distance remains the dominant term to avoid regressions.
+            distance_term = -(dist / max(self.TOUCH_THRESHOLD, 1e-6))
+            score = (
+                distance_term
+                + (self.HAND_DIRECTIONAL_BIAS_WEIGHT * directional_bias)
+                + (self.HAND_CONFIDENCE_WEIGHT * conf)
+                + (self.HAND_COMPAT_LEVEL_WEIGHT * float(compat_level))
+            )
+            return score
+
+        def best_object_for_hand(hand_side, knuckle, existing_hand_object=None):
             if existing_hand_object is not None:
                 return existing_hand_object
             if knuckle == self.DEFAULT_HAND_POSITION:
@@ -2220,26 +2316,26 @@ class ToolsClustering:
                     self._record_allowlist_reject('hand')
                     continue
                 dist = self.point_to_bbox_distance(knuckle, det['bbox'])
-                compat_score = self._compatibility_biased_score(det, 'hand')
-                if compat_score is None:
+                score = hand_candidate_score(det, hand_side, knuckle, dist)
+                if score is None:
                     continue
                 if dist <= self.TOUCH_THRESHOLD:
-                    touching_candidates.append((dist, -compat_score, det))
+                    touching_candidates.append((score, dist, float(det.get('conf', 0.0)), det))
                 elif dist <= self.TOUCH_THRESHOLD * 2:
-                    nearby_candidates.append((dist, -compat_score, det))
+                    nearby_candidates.append((score, dist, float(det.get('conf', 0.0)), det))
 
             if touching_candidates:
-                touching_candidates.sort(key=lambda item: item[0])
-                return touching_candidates[0][2]
+                touching_candidates.sort(key=lambda item: (-item[0], item[1], -item[2]))
+                return touching_candidates[0][3]
 
             if nearby_candidates:
-                nearby_candidates.sort(key=lambda item: item[0])
-                return nearby_candidates[0][2]
+                nearby_candidates.sort(key=lambda item: (-item[0], item[1], -item[2]))
+                return nearby_candidates[0][3]
 
             return None
 
-        results['left_hand_object'] = best_object_for_hand(left_knuckle, results['left_hand_object'])
-        results['right_hand_object'] = best_object_for_hand(right_knuckle, results['right_hand_object'])
+        results['left_hand_object'] = best_object_for_hand('left', left_knuckle, results['left_hand_object'])
+        results['right_hand_object'] = best_object_for_hand('right', right_knuckle, results['right_hand_object'])
 
         # Distance-ratio guard: if the same detection was picked by both hands
         # independently, drop the farther hand unless the distances are comparable
@@ -2703,6 +2799,10 @@ class ToolsClustering:
                     ):
                         results['feet_object'] = det
 
+        # Reconcile one structural edge case: the exact same detection can satisfy
+        # both mouth and shoulder geometry and be written to both slots.
+        self._reconcile_mouth_shoulder_same_detection(results)
+
         assigned_ids_by_class = {class_id: set() for class_id in self.DEBUG_TRACKED_CLASS_IDS}
         for slot_det in results.values():
             if slot_det is None:
@@ -2715,6 +2815,55 @@ class ToolsClustering:
             self._class_pipeline_debug_counts[class_id]['final_assigned_unique'] += len(assigned_ids_by_class[class_id])
         
         return results
+
+    def _reconcile_mouth_shoulder_same_detection(self, results):
+        """Resolve mouth/shoulder dual assignment when both slots share one detection."""
+        mouth_det = results.get('mouth_object')
+        shoulder_det = results.get('shoulder_object')
+        if mouth_det is None or shoulder_det is None:
+            return
+
+        try:
+            mouth_id = int(mouth_det.get('detection_id'))
+            shoulder_id = int(shoulder_det.get('detection_id'))
+        except Exception:
+            return
+
+        if mouth_id != shoulder_id:
+            return
+
+        class_id = self._get_detection_class_id(mouth_det)
+
+        # Canonical precedence from audit decisions.
+        if class_id in self.MOUTH_SHOULDER_RECONCILE_SHOULDER_CLASSES:
+            results['mouth_object'] = None
+            return
+
+        if class_id in self.MOUTH_SHOULDER_RECONCILE_MOUTH_PREFERRED_CLASSES:
+            results['shoulder_object'] = None
+            return
+
+        # Generic fallback for classes without explicit policy.
+        mouth_score = self._compatibility_biased_score(mouth_det, 'mouth')
+        shoulder_score = self._compatibility_biased_score(shoulder_det, 'shoulder')
+
+        if mouth_score is None and shoulder_score is None:
+            # Conservative fallback: prefer shoulder for centered hanging objects.
+            results['mouth_object'] = None
+            return
+
+        if mouth_score is None:
+            results['mouth_object'] = None
+            return
+
+        if shoulder_score is None:
+            results['shoulder_object'] = None
+            return
+
+        if shoulder_score > mouth_score:
+            results['mouth_object'] = None
+        else:
+            results['shoulder_object'] = None
 
     def query_and_classify_detections(
         self,

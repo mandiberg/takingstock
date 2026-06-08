@@ -20,7 +20,7 @@ io = DataIO()
 db = io.db
 
 MODES = ["merge_images_paris_photo", "merge_images_body_autocrop", "make_video", "make_video_smooth_osc", "make_video_smooth_linear"]
-MODE_CHOICE = 3
+MODE_CHOICE = 1
 CURRENT_MODE = MODES[MODE_CHOICE]
 
 # Provide the path to the folder containing the images
@@ -30,7 +30,7 @@ ROOT_FOLDER_PATH = '/Volumes/LaCie/'
 # if not, this should be the individual folder holding the images
 # will not accept clusterNone -- change to cluster00
 # FOLDER_NAME = "output_folder/_sort723_p1/100tobuild"
-FOLDER_NAME = "output_folder/_dress_rehearsal_483"
+FOLDER_NAME = "output_folder/_looping_selection2"
 if io.IS_TENCH:
     ROOT_FOLDER_PATH = '/Users/tenchc/Documents/GitHub/taking_stock_production/segment_images'
     FOLDER_NAME = "installation_images"
@@ -40,7 +40,7 @@ IS_CLUSTER = True
 PARALLEL_MERGE_WORKERS = 16  # set > 1 to parallelize per-subfolder work with multiprocessing.Pool
 
 # if None, won't crop. else if int, will crop output to that count
-CROP_AFTER_COUNT = 16
+CROP_AFTER_COUNT = 80
 
 LOOPING = False # defaults
 STRICT_UNIQUE_IMAGE_PLACEMENT = False
@@ -121,7 +121,8 @@ GIGA_DIMS = [20688,20648]
 FULLBODY_DIMS = [32000,32000]
 TEST_DIMS = [4000,4000] 
 REG_DIMS = [3448,3448]
-VID_DIMS_TEST = [2160,2160]
+# VID_DIMS_TEST = [1746,1746]
+VID_DIMS_TEST = [1080,1080]
 SKIP_PREFIX = "_x"
 FORCE_LS = True
 

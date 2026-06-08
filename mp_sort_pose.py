@@ -288,6 +288,7 @@ class SortPose:
         self.face_pair_result_cache = {}
         self.face_pair_cache_engine = None
         self.trust_face_pair_cache = True  # set False to force re-test, ignoring cached results
+        self.skip_face_pair_testing = False  # set True to skip face pair testing entirely (use with caution, may lead to poor sorting results)
         self.reset_face_pair_stats()
         # for testing shoulders for image background
         self.SHOULDER_THRESH = 0.75
@@ -1150,7 +1151,7 @@ class SortPose:
                 blended_face = self.is_face(blend)
                 # print('blended is_face', blended_face)
                 if blended_face:
-                    # if self.VERBOSE: print('test_pair: is_face True! adding it')
+                    if self.VERBOSE: print('test_pair: is_face True! adding it')
                     return True
                 else:
                     print('test_pair: skipping this one')
@@ -1171,6 +1172,7 @@ class SortPose:
         self.face_pair_stats = {
             "pass": 0,
             "fail": 0,
+            "this_fail": 0,
             "cache_pass": 0,
             "cache_fail": 0,
             "computed_pass": 0,
@@ -1236,16 +1238,18 @@ class SortPose:
         return None
 
     def store_face_pair_cache_result(self, image_id_a, image_id_b, result):
+        if self.VERBOSE: print(f"store_face_pair_cache_result for pair ({image_id_a}, {image_id_b}): {result}")
         if result not in ("pass", "fail"):
             return
 
         pair_key = self.canonicalize_face_pair(image_id_a, image_id_b)
         if pair_key is None:
             return
-
+        if self.VERBOSE: print(f"storing face pair cache result for pair_key {pair_key}: {result}")
         self.face_pair_result_cache[pair_key] = result
 
         if self.face_pair_cache_engine is None:
+            print(f"[store_face_pair_cache_result] No cache engine available, skipping database storage for pair ({pair_key[0]}, {pair_key[1]})")
             return
 
         upsert_sql = text(
@@ -1254,43 +1258,66 @@ class SortPose:
             "ON DUPLICATE KEY UPDATE "
             "result = VALUES(result), updated_at = CURRENT_TIMESTAMP"
         )
-        with self.face_pair_cache_engine.begin() as connection:
-            connection.execute(
-                upsert_sql,
-                {
-                    "image_id_lo": pair_key[0],
-                    "image_id_hi": pair_key[1],
-                    "result": result,
-                },
-            )
-
+        if self.VERBOSE: print(f"[store_face_pair_cache_result] Attempting to store cache result for pair ({pair_key[0]}, {pair_key[1]}): {result}")
+        try:
+            with self.face_pair_cache_engine.begin() as connection:
+                connection.execute(
+                    upsert_sql,
+                    {
+                        "image_id_lo": pair_key[0],
+                        "image_id_hi": pair_key[1],
+                        "result": result,
+                    },
+                )
+        except Exception as e:
+            if self.VERBOSE: print(f"[store_face_pair_cache_result] Error storing face pair cache result for pair ({pair_key[0]}, {pair_key[1]}): {e}")
+        if self.VERBOSE: print(f"[store_face_pair_cache_result] Stored cache result for pair ({pair_key[0]}, {pair_key[1]}): {result}")
+        
+    
     def test_or_lookup_face_pair(self, last_image, candidate_image, current_image_id):
+        if self.skip_face_pair_testing:
+            if self.VERBOSE: print("Skipping face pair testing due to skip_face_pair_testing=True")
+            return True
         previous_image_id = self.counter_dict.get("last_image_id")
         cached_result = self.get_face_pair_cache_result(previous_image_id, current_image_id)
-
+        if self.VERBOSE: print(f"cached_result for pair ({previous_image_id}, {current_image_id}): {cached_result}")
         if cached_result == "pass":
             self.face_pair_stats["pass"] += 1
             self.face_pair_stats["cache_pass"] += 1
-            print(f"face pair cache hit PASS for {previous_image_id}, {current_image_id}")
+            if self.VERBOSE: print(f"face pair cache hit PASS for {previous_image_id}, {current_image_id}")
             return True
         if cached_result == "fail":
             self.face_pair_stats["fail"] += 1
             self.face_pair_stats["cache_fail"] += 1
             print(f"face pair cache hit FAIL for {previous_image_id}, {current_image_id}")
             return False
-
-        is_face = self.test_pair(last_image, candidate_image)
+        if self.VERBOSE: print(f"[test_or_lookup_face_pair] face pair cache miss for {previous_image_id}, {current_image_id}, running test_pair")
+        try:
+            is_face = self.test_pair(last_image, candidate_image)
+        except Exception as e:
+            print(f"Error occurred while testing face pair: {e}")
+            return False
+        if self.VERBOSE: print(f"[test_or_lookup_face_pair] face pair test result for {previous_image_id}, {current_image_id}: {'PASS' if is_face else 'FAIL'}")
         if is_face:
             self.face_pair_stats["pass"] += 1
             self.face_pair_stats["computed_pass"] += 1
         else:
+            if self.VERBOSE: print(f"[test_or_lookup_face_pair] face pair test failed for {previous_image_id}, {current_image_id}")
             self.face_pair_stats["fail"] += 1
             self.face_pair_stats["computed_fail"] += 1
+            self.face_pair_stats["this_fail"] += 1
+        # if self.VERBOSE: print(f"about to store face pair cache result for {previous_image_id}, {current_image_id}: {'PASS' if is_face else 'FAIL'}")
         self.store_face_pair_cache_result(
             previous_image_id,
             current_image_id,
             "pass" if is_face else "fail",
         )
+        if self.VERBOSE: print(f"store_face_pair_cache_result was called for pair ({previous_image_id}, {current_image_id}) with result: {'PASS' if is_face else 'FAIL'}")
+        if self.face_pair_stats["this_fail"] >= 3:
+            if self.VERBOSE: print(f" we have a problem, this is fail number {self.face_pair_stats['this_fail']} in a row, set current image to not dupe and move on")
+            self.face_pair_stats["this_fail"] = 0
+            return True
+        if self.VERBOSE: print(f"face pair computed result for {previous_image_id}, {current_image_id}: {'PASS' if is_face else 'FAIL'}")
         return is_face
 
     def preview_img(self,img):
@@ -2585,11 +2612,19 @@ class SortPose:
                 col_num = 63
             # col_num = 
             # Create new columns for each dimension (21 points * 3 = 63 columns for each hand)
-            first_landmark_cols = pd.DataFrame(first_landmarks.tolist(), columns=[f'left_dim_{i+1}' for i in range(col_num)])
-            first_landmark_cols = pd.DataFrame(second_landmarks.tolist(), columns=[f'right_dim_{i+1}' for i in range(col_num)])
+            first_landmark_cols = pd.DataFrame(
+                first_landmarks.tolist(),
+                index=df.index,
+                columns=[f'left_dim_{i+1}' for i in range(col_num)]
+            )
+            second_landmark_cols = pd.DataFrame(
+                second_landmarks.tolist(),
+                index=df.index,
+                columns=[f'right_dim_{i+1}' for i in range(col_num)]
+            )
             
             # Concatenate the original DataFrame with the new columns
-            df = pd.concat([df, first_landmark_cols, first_landmark_cols], axis=1)
+            df = pd.concat([df, first_landmark_cols, second_landmark_cols], axis=1)
         if structure == "list":
             # combine the left and right landmarks into a single list
             if not first_landmarks.all(): 
@@ -4025,6 +4060,12 @@ class SortPose:
             #     enc1 = self.cluster_medians[self.counter_dict["cluster_no"]]
             #     print("set enc1 from cluster median")
             #     print("enc1", enc1)
+            
+            # super HACK to handle weird situation where it is FIRST_ROUND, but sending through image path
+            if "/" in this_start:
+                print(" ♻️♻️♻️ this_start looks like an image path, setting to median")
+                this_start = "median"
+
             print("this_start", this_start)
             if this_start not in ["median", "start_site_image_id", "start_image_id", "start_face_encodings", "start_bbox"]:
             # elif this_start not in ["median", "start_site_image_id", "start_face_encodings", "start_bbox"]:
@@ -4547,7 +4588,8 @@ class SortPose:
         if self.VERBOSE: print(f"get_closest_df_NN, self.SORT_TYPE is {self.SORT_TYPE} FIRST_ROUND is {FIRST_ROUND}")
 
         knn_sort = get_knn_sort(self, enc1)
-
+        print("knn_sort", knn_sort)
+        print("enc1 for knn_sort", enc1)
         if self.VERBOSE: print(f"get_closest_df_NN - pre first sort_df_KNN knn - {knn_sort} - enc1 len", len(enc1))
         # sort KNN (always for planar) or BRUTEFORCE (optional only for 128d)
         if self.BRUTEFORCE and knn_sort == "128d": df_dist_enc = self.brute_force(df_enc, enc1)

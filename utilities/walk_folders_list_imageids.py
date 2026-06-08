@@ -68,8 +68,8 @@ keyword_id = None
 
 # ROOT= "/Volumes/OWC4/segment_images/phone_tests_nov4_money1000"
 # ROOT= "/Users/michaelmandiberg/Documents/projects-active/facemap_production/heft_keyword_fusion_clusters/clustercc332_pNone_t553_h0_FOR_SQLinput"
-ROOT = "/Volumes/LaCie/dedupe/dupe"
-# ROOT = "/Volumes/LaCie/dedupe/exclude"
+# ROOT = "/Volumes/LaCie/dedupe/dupe"
+ROOT = "/Volumes/LaCie/dedupe/exclude"
 
 
 if "_t" in ROOT:

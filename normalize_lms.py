@@ -41,10 +41,10 @@ IS_SSD = False
 SSD_PATH = "/Volumes/SanDiskBlack/segment_images_82_money_cards"
 
 SKIP_EXISTING = False # Skips images with a normed bbox but that have Images.h - I think only applies to phone bbox
-USE_OBJ = True # do objet detections?
-SKIP_BODY = True # skip body landmarks. mostly you want to skip when doing obj bbox
+USE_OBJ = False # do objet detections?
+SKIP_BODY = False # skip body landmarks. mostly you want to skip when doing obj bbox
                 # or are just redoing hands
-REPROCESS_HANDS = False # do hands
+REPROCESS_HANDS = True # do hands
 ACCEPT_EXSISTING_HANDS = True # if true, it will accept existing data and update bool in SQL to tru
 REPROCESSED_BODY = True 
 REPROCESSED_BODY_DIFF_THRESH = -1.0
@@ -68,7 +68,7 @@ INNER_JOIN_HELPER = True
 # SegmentHelperObject_67_phone 
 # SegmentHelperObject_41_cup_glass (big)
 
-LIMIT= 100000
+LIMIT= 1000000
 # Initialize the counter
 counter = 2000
 STATS_PRINT_EVERY = 1000
@@ -91,9 +91,10 @@ if class_token:
     print("SegmentFolder", SegmentFolder)
     # SORT_TYPE = "obj_bbox_fusion"
 else: 
-    SegmentHelper_name = 'SegmentHelper_TheOffice'
+    # overrides THIS_CLASS_ID
+    SegmentHelper_name = 'SegmentHelper_june2025_nmlGPU300k'
     # SegmentHelper_name = 'SegmentHelper_T11_Oct20_COCO_Custom_evens_quarters'
-    SegmentFolder = "/Volumes/SanDiskBlack/segment_images_82_money_cards"
+    SegmentFolder = "/Volumes/LaCie/output_folder"
     # SegmentFolder = None
     # SegmentHelper_name = 'SegmentHelper_T11_Oct20_COCO_Custom'
     # INNER_JOIN_TABLE = "SegmentHelperObject_100_tulip"

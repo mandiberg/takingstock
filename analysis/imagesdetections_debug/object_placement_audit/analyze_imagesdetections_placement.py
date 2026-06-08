@@ -16,7 +16,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.pool import NullPool
 
 if sys.platform == "darwin":
-    sys.path.insert(1, "/Users/michaelmandiberg/Documents/GitHub/facemap/")
+    sys.path.insert(1, "/Users/michaelmandiberg/Documents/GitHub/takingstock/")
 
 from mp_db_io import DataIO  # noqa: E402
 

@@ -10,9 +10,8 @@ python analysis/imagesdetections_debug/object_placement_audit/rerun_imagesdetect
   --helper-table SegmentHelper_TheOffice \
   --output-root /Users/michaelmandiberg/Documents/GitHub/facemap/analysis/imagesdetections_debug/object_placement_audit \
   --skip-backup \
-  --dry-run
-
---delete-chunk-size 2000
+    --dry-run \
+    --delete-chunk-size 2000 \
   --find-checkpoint
 
 """
@@ -361,6 +360,18 @@ def main():
         checkpoint_file = find_existing_checkpoint(args.helper_table, args.output_root)
         if checkpoint_file:
             print(f"Found checkpoint: {checkpoint_file}")
+
+    # Guardrail: surface ignored checkpoint candidates so users do not
+    # accidentally restart from batch 1 when resume artifacts exist.
+    if not args.find_checkpoint and not checkpoint_file:
+        existing_checkpoint = find_existing_checkpoint(args.helper_table, args.output_root)
+        if existing_checkpoint:
+            print(
+                "Warning: matching checkpoint exists but is not being used. "
+                "Pass --find-checkpoint to resume automatically or "
+                "--checkpoint-file <path> to select one explicitly."
+            )
+            print(f"Ignored checkpoint candidate: {existing_checkpoint}")
     
     # Load checkpoint state if available
     checkpoint = load_checkpoint(checkpoint_file) if checkpoint_file else None
