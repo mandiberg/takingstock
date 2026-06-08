@@ -102,7 +102,7 @@ CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden b
 
 # CSV_FOLDER = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion128_test220K"
 CSV_MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/"
-CSV_RUN_FOLDER = "SegmentHelper_TheOffice/looping_selection/_handsort" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
+CSV_RUN_FOLDER = "SegmentHelper_TheOffice/looping_selection/_mouthgap_test" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
 CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, CSV_RUN_FOLDER)
 MAX_ROWS_PER_OUTPUT_CSV = 1200
 ENABLE_MODE0_TIMING = True
@@ -287,8 +287,12 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     object_fusion is only for ArmsPoses3D_ObjectFusion cluster type. It combines:
         pitch, yaw, roll, and bbox for all 9 object positions.
     '''
-    # TEMPORARY
-    TRUST_FACE_PAIR_CACHE = False
+
+    # main switches
+    INSTALLATION_VIDEO = True 
+    HAND_POSE_GESTURE_FUSION = False # this triggers cluster on hand pose/gesture, and sort on object fusion features. Used for phone/money facing forward
+    
+    TRUST_FACE_PAIR_CACHE = False # if True it will accept what is in the DB. it was acting funny, so turning off
     SKIP_FACE_PAIR_TESTING = True  # set True to skip face pair testing entirely (use with caution, may lead to poor sorting results)
 
     FUSION_PAIR_DICT_NAME = "FUSION_PAIR_DICT_DETECTIONS_THEOFFICE"
@@ -303,7 +307,6 @@ elif CURRENT_MODE == 'heft_torso_keywords':
 
     # set to 0 to disable obj helper segment query stuff. this is also for object_fusion
     class_id = 0  # TEST: match exported ArmsPoses3D_67.csv
-    class_id = 1685
     # SORT_TYPE = "obj_bbox"
     # SORT_TYPE = "object_fusion"
 
@@ -318,18 +321,20 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     SORT_TYPE_NONEOBJECT = "object_fusion" # sort used when pose_no is in OBJECT_NONE_CLUSTERS
     USE_HSV = False
 
+    if HAND_POSE_GESTURE_FUSION:
+        # SELECT ON HAND LOCATION + OBJECT SIGNATURE
+        CLUSTER_TYPE = "planar_hands_ObjectFusion"
+        OBJECT_SIG = 2341 # I'm not sure this is connected to anything
+        # image_edge_multiplier = [1.3,1.85,2.4,1.85] # tighter square crop for paris photo videos < Oct 29 FINAL VERSION NOV 2024 DO NOT CHANGE
+        image_edge_multiplier = [1.6,2.35,2.9,2.35] #18 using as default for money/phones for testing
+        USE_PAINTED = False
+        INPAINT= True
+        INPAINT_COLOR = "white" # "white" or "black" or None (none means generative inpainting with size limits)
+        # when doing IS_HAND_POSE_FUSION code currently only supports one topic at a time
+        IS_ONE_TOPIC = True
+        TOPIC_NO = [63] # I'm not sure this matters
+        class_id = 1685 # this is where the class is set, though this also may not matter as it goes through the whole FUSION_PAIR_DICT_NAME
 
-    # SELECT ON HAND LOCATION + OBJECT SIGNATURE
-    CLUSTER_TYPE = "planar_hands_ObjectFusion"
-    OBJECT_SIG = 2341
-    # image_edge_multiplier = [1.3,1.85,2.4,1.85] # tighter square crop for paris photo videos < Oct 29 FINAL VERSION NOV 2024 DO NOT CHANGE
-    image_edge_multiplier = [1.6,2.35,2.9,2.35] #18 using as default for money/phones for testing
-    USE_PAINTED = False
-    INPAINT= True
-    INPAINT_COLOR = "white" # "white" or "black" or None (none means generative inpainting with size limits)
-    # when doing IS_HAND_POSE_FUSION code currently only supports one topic at a time
-    IS_ONE_TOPIC = True
-    TOPIC_NO = [63] # if doing an affect topic fusion, this is the wrapper topic
 
     # CLUSTER_TYPE = "object_fusion"
     # CLUSTER_TYPE = "ArmsPoses3D" # this triggers meta body poses 3D
@@ -376,7 +381,6 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     HSV_SOURCE_MODE = "background" # "background" or "object" or "both"
     FORCE_TOPIC_FIT_SCORE = True # adds topic score to csvs at the very end of linear sort
 
-    INSTALLATION_VIDEO = True
     if INSTALLATION_VIDEO:
         ONE_SHOT = False # take all files, based off the very first sort order.
         TSP_SORT = False
@@ -1407,7 +1411,7 @@ if not io.IS_TENCH:
                 where_affect = f" AND iwt.topic_id = {TOPIC_NO[0]} AND iwt.topic_score > .3"
             # cluster +=f"AND it.topic_id = {str(topic_no)} "
             if N_TOPICS == 100:
-                if "object" in CLUSTER_TYPE.lower():
+                if HAND_POSE_GESTURE_FUSION:
                     print("handling topic_no with potential keyword logic for object cluster type")
                     local_from += f" JOIN ImagesObjectSignatures ios ON s.image_id = ios.image_id "
                     local_where += f" AND ios.cluster_id = {str(topic_no)} "

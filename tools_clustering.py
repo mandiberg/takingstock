@@ -239,6 +239,9 @@ class ToolsClustering:
             'has_object': 2.0,      # binary indicator - high weight but lower than class_id
         }
 
+        # Keep mouth-gap influence in the same rough numeric band as head pose values.
+        self.FUSION_MOUTH_GAP_SCALE = 0.25
+
         # Store fitted scaler for inverse transform during median calculation
         self.feature_scaler = None
         self.ARMS_POSE_CACHE_TABLE = 'ImagesArmsFeatures3D'
@@ -273,15 +276,15 @@ class ToolsClustering:
             'ImagesObjectSignatures_ObjectSignatures_202604272237.csv',
         )
         self.OBJECT_SIGNATURE_SLOT_BLOCKS = {
-            'LH': (7, 11),
-            'RH': (11, 15),
-            'TF': (15, 19),
-            'LE': (19, 23),
-            'RE': (23, 27),
-            'MO': (27, 31),
-            'SH': (31, 35),
-            'WA': (35, 39),
-            'FT': (39, 43),
+            'LH': (8, 12),
+            'RH': (12, 16),
+            'TF': (16, 20),
+            'LE': (20, 24),
+            'RE': (24, 28),
+            'MO': (28, 32),
+            'SH': (32, 36),
+            'WA': (36, 40),
+            'FT': (40, 44),
         }
         self.object_signature_registry = None
         self.SIGNATURE_HEAD_MIN_SUPPORT = 200
@@ -360,7 +363,7 @@ class ToolsClustering:
             )
             return None
 
-        kept_indices = list(range(7))
+        kept_indices = list(range(8))
         kept_slots = []
         for slot_label, (start_idx, end_idx) in self.OBJECT_SIGNATURE_SLOT_BLOCKS.items():
             if int(slot_row.get(slot_label, 0)) != 0:
@@ -3974,12 +3977,12 @@ class ToolsClustering:
         """
         Construct fusion list from a dataframe row for ObjectFusion sorting.
         Returns list format:
-          [pitch, yaw, roll,
+                    [pitch, yaw, roll, mouth_gap,
            left_knuckle_x, left_knuckle_y, right_knuckle_x, right_knuckle_y,
            left_hand_bbox(4), right_hand_bbox(4), top_face_bbox(4),
            left_eye_bbox(4), right_eye_bbox(4), mouth_bbox(4), shoulder_bbox(4),
            waist_bbox(4), feet_bbox(4)]
-        Total: 43 elements (3 + 4 + 9*4)
+                Total: 44 elements (4 + 4 + 9*4)
         """
         def parse_hand_xy(hand_value):
             if isinstance(hand_value, np.ndarray):
@@ -4001,7 +4004,16 @@ class ToolsClustering:
                 float(detection_payload.get('bottom', 0.0)),
             ]
 
+        def parse_mouth_gap(mouth_gap_value):
+            try:
+                if pd.isna(mouth_gap_value):
+                    return 0.0
+                return float(mouth_gap_value) * float(self.FUSION_MOUTH_GAP_SCALE)
+            except Exception:
+                return 0.0
+
         fusion_list = row['pitch_yaw_roll_list'].copy()  # Start with [pitch, yaw, roll]
+        fusion_list.append(parse_mouth_gap(row.get('mouth_gap', 0.0)))
 
         # Add explicit left/right hand position signal from normalized knuckle features.
         fusion_list.extend(parse_hand_xy(row.get('left_pointer_knuckle_norm')))

@@ -495,7 +495,8 @@ class SortPose:
         Return index slices for weighted fusion-style vectors.
 
         Expected ordering for weighted fusion vectors:
-        [pitch, yaw, roll, left_hand(x,y), right_hand(x,y), slot_bboxes...]
+        Legacy: [pitch, yaw, roll, left_hand(x,y), right_hand(x,y), slot_bboxes...]
+        Current: [pitch, yaw, roll, mouth_gap, left_hand(x,y), right_hand(x,y), slot_bboxes...]
         """
         if sort_type not in ("object_fusion", "obj_bbox"):
             return None
@@ -507,14 +508,22 @@ class SortPose:
         if vector_len < 3:
             return None
 
-        hand_dims = min(4, max(0, vector_len - 3))
-        bbox_start = 3 + hand_dims
+        # Backward-compatible head block detection:
+        # - legacy vectors: 3 head dims + 4 hand dims + 4*k bbox dims => len = 7 + 4*k
+        # - current vectors: 4 head dims + 4 hand dims + 4*k bbox dims => len = 8 + 4*k
+        if vector_len >= 8 and (vector_len - 8) % 4 == 0:
+            head_pose_dims = 4
+        else:
+            head_pose_dims = 3
+
+        hand_dims = min(4, max(0, vector_len - head_pose_dims))
+        bbox_start = head_pose_dims + hand_dims
         if bbox_start > vector_len:
             bbox_start = vector_len
 
         return {
-            "head_pose": slice(0, min(3, vector_len)),
-            "hand_signal": slice(3, bbox_start),
+            "head_pose": slice(0, min(head_pose_dims, vector_len)),
+            "hand_signal": slice(head_pose_dims, bbox_start),
             "bbox": slice(bbox_start, vector_len),
         }
 
