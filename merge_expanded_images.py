@@ -40,7 +40,7 @@ IS_CLUSTER = True
 PARALLEL_MERGE_WORKERS = 16  # set > 1 to parallelize per-subfolder work with multiprocessing.Pool
 
 # if None, won't crop. else if int, will crop output to that count
-CROP_AFTER_COUNT = None
+CROP_AFTER_COUNT = 16
 
 LOOPING = False # defaults
 STRICT_UNIQUE_IMAGE_PLACEMENT = False
@@ -124,6 +124,25 @@ REG_DIMS = [3448,3448]
 VID_DIMS_TEST = [2160,2160]
 SKIP_PREFIX = "_x"
 FORCE_LS = True
+
+
+USE_CANONICAL_RATIOS = True
+
+RATIOS_1080 = {1080 : [ {0.665 : [718, 1080]}, 
+{0.750 : [810,1080]}, {0.798 : [862,1080]}, 
+{0.856 : [924, 1080]}, {1.000 : [1080, 1080]}, 
+{1.169 : [1263, 1080]}, {1.253 : [1354, 1080]}, 
+{1.337 : [1444, 1080]}, {1.504: [1625 ,1080]}]}
+
+RATIOS_2160 = {2160 : [ {0.665 : [1436, 2160]}, 
+{0.750 : [1620,2160]}, {0.798 : [1724,2160]}, 
+{0.856 : [1848, 2160]}, {1.000 : [2160, 2160]}, 
+{1.169 : [2526,2160]}, {1.253 : [2707,2160]}, 
+{1.337 : [2888,2160]}, {1.504: [3249 ,2160]}]}
+
+LIMIT_1080 = [1920, 1080]
+LIMIT_2160 = [3840, 2160]
+
 
 SCALE_IMGS = False # default
 if USE_CURRENT_DIMS: 
@@ -352,6 +371,81 @@ def crop_scale_giga(img1, DIMS=GIGA_DIMS):
             img1 = img1[start_row:start_row + DIMS[0], start_col:start_col + DIMS[1]]
     return img1
 
+def crop_scale_canonical(img1, ratios_table=None, limit=None):
+    """This function is used to crop and scale images to a canonical ratio, it is enabled by setting USE_CANONICAL_RATIOS to True in the top of merge_expanded_images.py file.
+    It uses a table of ratios and limits to determine the appropriate ratio and limit to use.
+    The table of ratios and limits is stored in the RATIOS_1080 and RATIOS_2160 dictionaries in the top of merge_expanded_images.py file.
+    The limit is the maximum width and height of the image.
+    The ratio is the aspect ratio of the image.
+    The function returns the cropped and scaled image.
+    """
+    img_height, img_width = img1.shape[:2]
+    print(f"crop_scale_canonical: img shape {img1.shape}, VID_DIMS_TEST[0]={VID_DIMS_TEST[0]}")
+
+    if ratios_table is None:
+        if VID_DIMS_TEST[0] == 1080:
+            ratios_table = RATIOS_1080
+            limit = LIMIT_1080
+            print("crop_scale_canonical: VID_DIMS_TEST[0]=1080, selected RATIOS_1080, limit", limit)
+        elif VID_DIMS_TEST[0] == 2160:
+            ratios_table = RATIOS_2160
+            limit = LIMIT_2160
+            print("crop_scale_canonical: VID_DIMS_TEST[0]=2160, selected RATIOS_2160, limit", limit)
+        else:
+            print(f"ERROR crop_scale_canonical: VID_DIMS_TEST[0]={VID_DIMS_TEST[0]} must be 1080 or 2160 to select a ratios table — exiting")
+            import sys; sys.exit(1)
+    else:
+        print("crop_scale_canonical: using provided ratios_table, limit", limit)
+
+    base_dim = list(ratios_table.keys())[0]
+    ratio_list = ratios_table[base_dim]
+    print(f"crop_scale_canonical: base_dim={base_dim}, {len(ratio_list)} canonical ratios available")
+
+    aspect_ratio = img_width / img_height
+    print(f"crop_scale_canonical: image aspect_ratio (w/h) = {aspect_ratio:.4f}")
+
+    closest_ratio_key = None
+    closest_dims = None
+    min_diff = float('inf')
+    for ratio_dict in ratio_list:
+        for ratio_key, dims in ratio_dict.items():
+            diff = abs(ratio_key - aspect_ratio)
+            print(f"  checking canonical ratio {ratio_key} -> dims {dims}, diff={diff:.4f}")
+            if diff < min_diff:
+                min_diff = diff
+                closest_ratio_key = ratio_key
+                closest_dims = dims
+
+    print(f"crop_scale_canonical: closest canonical ratio={closest_ratio_key}, target dims (w,h)={closest_dims}, diff={min_diff:.4f}")
+
+    target_w, target_h = closest_dims
+    if target_w > limit[0] or target_h > limit[1]:
+        print(f"WARNING crop_scale_canonical: target dims [{target_w},{target_h}] exceed limit {limit} — clamping")
+        target_w = min(target_w, limit[0])
+        target_h = min(target_h, limit[1])
+        print(f"crop_scale_canonical: clamped target dims to [{target_w},{target_h}]")
+    else:
+        print(f"crop_scale_canonical: target dims [{target_w},{target_h}] within limit {limit} — ok")
+
+    scale_w = target_w / img_width
+    scale_h = target_h / img_height
+    scale = max(scale_w, scale_h)
+    scaled_w = int(img_width * scale)
+    scaled_h = int(img_height * scale)
+    print(f"crop_scale_canonical: scale_w={scale_w:.4f}, scale_h={scale_h:.4f}, using scale={scale:.4f}")
+    print(f"crop_scale_canonical: resizing to ({scaled_w}, {scaled_h}) before crop")
+
+    img1 = cv2.resize(img1, (scaled_w, scaled_h), interpolation=cv2.INTER_AREA)
+    print(f"crop_scale_canonical: img shape after resize {img1.shape}")
+
+    start_row = (scaled_h - target_h) // 2
+    start_col = (scaled_w - target_w) // 2
+    print(f"crop_scale_canonical: center-crop start_row={start_row}, start_col={start_col}")
+    img1 = img1[start_row:start_row + target_h, start_col:start_col + target_w]
+    print(f"crop_scale_canonical: img shape after center-crop {img1.shape}")
+
+    return img1
+
 def iterate_image_list(FOLDER_PATH,image_files, successes, output_dims=None):
 
     def handle_giga_dims(img1, output_dims=None):
@@ -372,7 +466,22 @@ def iterate_image_list(FOLDER_PATH,image_files, successes, output_dims=None):
             if VERBOSE: print(f"image shape {img1.shape} > {REG_DIMS}, {image_files[i]}")
             img1 = crop_scale_giga(img1, REG_DIMS)
         return img1
-    
+
+    def handle_canonical_dims(img1, output_dims=None):
+        """This function is used to crop and scale images to a canonical ratio, it is enabled by setting USE_CANONICAL_RATIOS to True in the top of merge_expanded_images.py file."""
+        print(f"handle_canonical_dims: img shape {img1.shape}, output_dims={output_dims}")
+        if output_dims is not None:
+            print("handle_canonical_dims: output_dims provided, resizing directly to", output_dims)
+            output_height, output_width = output_dims
+            # need to flip these for cv2
+            img1 = cv2.resize(img1, (output_width, output_height), interpolation=cv2.INTER_AREA)
+            print("handle_canonical_dims: img shape after resize to output_dims", img1.shape)
+        else:
+            print("handle_canonical_dims: no output_dims, delegating to crop_scale_canonical")
+            img1 = crop_scale_canonical(img1)
+            print("handle_canonical_dims: img shape after crop_scale_canonical", img1.shape)
+        return img1
+
     def load_image(img_file_or_path):
         if type(img_file_or_path) is np.ndarray:
             img1 = img_file_or_path
@@ -391,12 +500,18 @@ def iterate_image_list(FOLDER_PATH,image_files, successes, output_dims=None):
     # Iterate through the image files and merge them in pairs
     for i in range(0, len(image_files), 2):
         img1 = load_image(image_files[i])
-        img1 = handle_giga_dims(img1, output_dims)
+        if USE_CANONICAL_RATIOS:
+            img1 = handle_canonical_dims(img1, output_dims)
+        else:
+            img1 = handle_giga_dims(img1, output_dims)
         print("starting round", i, "img1.shape", img1.shape)
         # Check if there is a second image available
         if i + 1 < len(image_files):
             img2 = load_image(image_files[i+1])
-            img2 = handle_giga_dims(img2, output_dims)
+            if USE_CANONICAL_RATIOS:
+                img2 = handle_canonical_dims(img2, output_dims)
+            else:
+                img2 = handle_giga_dims(img2, output_dims)
 
             if len(img1.shape) == 2:  # img1 is grayscale
                 img1 = cv2.cvtColor(img1, cv2.COLOR_GRAY2BGR)
@@ -1016,9 +1131,12 @@ def write_video(img_array, subfolder_path=None):
         period = PERIOD
 
     if LOWEST_DIMS:
-        # run crop_scale_giga(img1) on all images to ensure they are the same dimensions
+        # run crop/scale on all images to ensure they are the same dimensions
         for i in range(len(images_to_build)):
-            images_to_build[i] = crop_scale_giga(images_to_build[i])
+            if USE_CANONICAL_RATIOS:
+                images_to_build[i] = crop_scale_canonical(images_to_build[i])
+            else:
+                images_to_build[i] = crop_scale_giga(images_to_build[i])
 
     print("using period of", period)
     # Get the dimensions of the first image in the array
@@ -1314,9 +1432,6 @@ def save_concatenated_metas(subfolders, output_path, csv_file):
     cat_metas.to_csv(output_csv_path, index=False)
 
 
-########################################################
-# THIS IS FOR SAVING INSTALLATION METAS TENCH CURRENTLY WORKING ON THIS!!!
-########################################################
 def save_installation_metas(subfolders, output_path, csv_file):
     print(f"\n[save_installation_metas] output_path={output_path}, csv_file={csv_file}")
     print(f"[save_installation_metas] {len(subfolders)} subfolders to check")
