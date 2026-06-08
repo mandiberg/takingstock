@@ -1057,7 +1057,7 @@ class ToolsClustering:
         # print("prepping pose clusters for enc1: ", enc1, " with median_dict: ", median_dict, " and CLUSTER_MEDIANS: ", self.CLUSTER_MEDIANS)
         if median_dict is None and self.CLUSTER_MEDIANS is not None:
             median_dict = self.CLUSTER_MEDIANS
-        print("current image enc1", enc1)  
+        # print("current image enc1", enc1)  
         enc1 = np.array(enc1)
         
         this_dist_dict = {}

@@ -2612,8 +2612,16 @@ class SortPose:
                 col_num = 63
             # col_num = 
             # Create new columns for each dimension (21 points * 3 = 63 columns for each hand)
-            first_landmark_cols = pd.DataFrame(first_landmarks.tolist(), columns=[f'left_dim_{i+1}' for i in range(col_num)])
-            second_landmark_cols = pd.DataFrame(second_landmarks.tolist(), columns=[f'right_dim_{i+1}' for i in range(col_num)])
+            first_landmark_cols = pd.DataFrame(
+                first_landmarks.tolist(),
+                index=df.index,
+                columns=[f'left_dim_{i+1}' for i in range(col_num)]
+            )
+            second_landmark_cols = pd.DataFrame(
+                second_landmarks.tolist(),
+                index=df.index,
+                columns=[f'right_dim_{i+1}' for i in range(col_num)]
+            )
             
             # Concatenate the original DataFrame with the new columns
             df = pd.concat([df, first_landmark_cols, second_landmark_cols], axis=1)

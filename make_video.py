@@ -71,7 +71,7 @@ MAKE_CACHE_MODE = False # only make cache folders, skips dedupe and is_face test
 MODE1_ENABLE_DB_DEDUPE = True # False skips dedupe during crunch time drafts  
 SKIP_PAIRCHECK = False # True for draft mode, False does paircheck, and caches them 
 START_CLUSTER = 0
-PARALLEL_WORKERS = 1  # set > 1 to parallelize per-CSV work in MODE 0 and MODE 1
+PARALLEL_WORKERS = 16  # set > 1 to parallelize per-CSV work in MODE 0 and MODE 1
 VERBOSE = True
 
 start = time.time()
@@ -102,7 +102,7 @@ CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden b
 
 # CSV_FOLDER = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion128_test220K"
 CSV_MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/"
-CSV_RUN_FOLDER = "SegmentHelper_TheOffice/looping_selection/_looping_shortlist/_isolated" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
+CSV_RUN_FOLDER = "SegmentHelper_TheOffice/looping_selection/_handsort" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
 CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, CSV_RUN_FOLDER)
 MAX_ROWS_PER_OUTPUT_CSV = 1200
 ENABLE_MODE0_TIMING = True
@@ -173,7 +173,7 @@ def resolve_arms_object_fusion_folder(
 
 HSV_SOURCE_MODE = "background"
 SKIP_OBJECT_NONE_CLUSTERS = [0] # set to 1 if you want to skip Nones
-DO_OBJECT_COLLAPSE = True       # compute and apply per-topic object signature collapse mapping
+DO_OBJECT_COLLAPSE = False #TEMP TK       # compute and apply per-topic object signature collapse mapping
 OBJECT_COLLAPSE_MIN = 1000       # minimum topic-count for a signature bin to be retained
 MULTIPOLICY = False
 
@@ -184,7 +184,7 @@ MULTIPOLICY = False
 MODES = {0:'paris_photo_torso_images_topics', 1:'paris_photo_torso_videos_topics', 
          2:'3D_bodies_topics', 3:'3D_full_bodies_topics', 4:'3D_arms', 5:'3D_arms_meta',
          6:'heft_torso_keywords'}
-MODE_CHOICE = 1
+MODE_CHOICE = 6
 CURRENT_MODE = MODES[MODE_CHOICE]
 
 LIMIT = 1000000 # this is the limit for the SQL query, needs to be above 150
@@ -291,6 +291,8 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     TRUST_FACE_PAIR_CACHE = False
     SKIP_FACE_PAIR_TESTING = True  # set True to skip face pair testing entirely (use with caution, may lead to poor sorting results)
 
+    FUSION_PAIR_DICT_NAME = "FUSION_PAIR_DICT_DETECTIONS_THEOFFICE"
+
     # # cludgy hack to get dynamic cropping for testing mar 2026    
     AUTO_EDGE_CROP = True
     if AUTO_EDGE_CROP:
@@ -301,7 +303,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
 
     # set to 0 to disable obj helper segment query stuff. this is also for object_fusion
     class_id = 0  # TEST: match exported ArmsPoses3D_67.csv
-
+    class_id = 1685
     # SORT_TYPE = "obj_bbox"
     # SORT_TYPE = "object_fusion"
 
@@ -319,7 +321,15 @@ elif CURRENT_MODE == 'heft_torso_keywords':
 
     # SELECT ON HAND LOCATION + OBJECT SIGNATURE
     CLUSTER_TYPE = "planar_hands_ObjectFusion"
-    OBJECT_SIG = 1685
+    OBJECT_SIG = 2341
+    # image_edge_multiplier = [1.3,1.85,2.4,1.85] # tighter square crop for paris photo videos < Oct 29 FINAL VERSION NOV 2024 DO NOT CHANGE
+    image_edge_multiplier = [1.6,2.35,2.9,2.35] #18 using as default for money/phones for testing
+    USE_PAINTED = False
+    INPAINT= True
+    INPAINT_COLOR = "white" # "white" or "black" or None (none means generative inpainting with size limits)
+    # when doing IS_HAND_POSE_FUSION code currently only supports one topic at a time
+    IS_ONE_TOPIC = True
+    TOPIC_NO = [63] # if doing an affect topic fusion, this is the wrapper topic
 
     # CLUSTER_TYPE = "object_fusion"
     # CLUSTER_TYPE = "ArmsPoses3D" # this triggers meta body poses 3D
@@ -416,8 +426,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
             # how to skip objects (columns!)
             SKIP_OBJECT_NONE_CLUSTERS = [i for i in range(4000) if i not in OBJECT_KEEP_CLUSTERS] # skip these and go to 18
     else:
-        USE_FUSION_PAIR_DICT = True # if True, it will use the FUSION_PAIR_DICT_NAME below
-    FUSION_PAIR_DICT_NAME = "FUSION_PAIR_DICT_DETECTIONS_THEOFFICE"
+        USE_FUSION_PAIR_DICT = True # if True, it will use the FUSION_PAIR_DICT_NAME above
     if USE_HSV == True:
         N_HSV = 23 # 0-22 metaclusters of 96 HSV clusters
     else:
@@ -1389,6 +1398,7 @@ if not io.IS_TENCH:
             else: cluster_column = "ic.cluster_id"
             cluster += cluster_topic_select(cluster_column, cluster_no)
         if IS_TOPICS or IS_ONE_TOPIC:
+            print("current SQL statement before topic handling: ", local_select, local_from, local_where)
             this_alias = "it"
             if IS_TOPICS and IS_ONE_TOPIC and USE_AFFECT_GROUPS and WrapperTopicTable is not None:
 
@@ -1396,15 +1406,21 @@ if not io.IS_TENCH:
                 from_affect = f" JOIN {WrapperTopicTable} iwt ON s.image_id = iwt.image_id "
                 where_affect = f" AND iwt.topic_id = {TOPIC_NO[0]} AND iwt.topic_score > .3"
             # cluster +=f"AND it.topic_id = {str(topic_no)} "
-            if N_TOPICS == 100: 
-                # check if the topic_no has related keywords in the KEYWORD_DICT
-                # if it doesn't, it just returns the same topic_no
-                topic_no, cluster_dict_AND, cluster_dict_NOT = access_keyword_dict(topic_no)
-                print(f"after accessing keyword dict, topic_no is {topic_no}")
-                if topic_no[0] >= OBJ_KEYWORD_CUTOFF: this_id = "keyword_id"
+            if N_TOPICS == 100:
+                if "object" in CLUSTER_TYPE.lower():
+                    print("handling topic_no with potential keyword logic for object cluster type")
+                    local_from += f" JOIN ImagesObjectSignatures ios ON s.image_id = ios.image_id "
+                    local_where += f" AND ios.cluster_id = {str(topic_no)} "
+                    print(f"after joining to ImagesObjectSignatures for topic_no {topic_no}, local_from is {local_from} and local_where is {local_where}")
                 else: 
-                    this_id = "class_id"
-                    this_alias = "d" # for Detections table
+                    # check if the topic_no has related keywords in the KEYWORD_DICT
+                    # if it doesn't, it just returns the same topic_no
+                    topic_no, cluster_dict_AND, cluster_dict_NOT = access_keyword_dict(topic_no)
+                    print(f"after accessing keyword dict, topic_no is {topic_no}")
+                    if topic_no[0] >= OBJ_KEYWORD_CUTOFF: this_id = "keyword_id"
+                    else: 
+                        this_id = "class_id"
+                        this_alias = "d" # for Detections table
             else: 
                 this_id = "topic_id"
 

@@ -422,7 +422,7 @@ class DataIO:
 
         # print("self.query_face: ", self.query_face)
         # print("self.query_body: ", self.query_body)
-        results_face = results_body_norm = results_hands = None
+        results_face = results_body_norm = results_hands = results_body3D = None
         if image_id:
             if self.query_face: 
                 results_face = self.mongo_collection_face.find_one({"image_id": image_id})

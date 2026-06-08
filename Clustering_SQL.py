@@ -45,7 +45,7 @@ EXPAND = False
 ONE_SHOT = False # take all files, based off the very first sort order.
 JUMP_SHOT = False # jump to random file if can't find a run
 
-LIMIT = 1000
+LIMIT = 1000000
 BATCH_LIMIT = 10000
 
 # number of clusters produced. run GET_OPTIMAL_CLUSTERS and add that number here
@@ -158,7 +158,7 @@ SegmentTable_name = 'SegmentBig_isface'
 # if cl.CLUSTER_TYPE == "ArmsPoses3D":
 # SegmentHelper_name = 'SegmentHelper_sept2025_heft_keywords'
 # SegmentHelper_name = 'Detections' # if CLUSTER_TYPE = "ObjectFusion", it automatically joins to Detections
-# SegmentHelper_name = 'SegmentHelper_NewDetections_June2'
+# SegmentHelper_name = 'SegmentHelper_june2025_nmlGPU300k'
 SegmentHelper_name = 'SegmentHelper_TheOffice'
 # SegmentHelper_name = 'SegmentHelper_may26_deleteme_missingArms3D' # this is a temporary helper table that is just a subset of the full SegmentHelperMar23_headon, which is too large to join to for clustering, but has the same structure and can be used for testing and for MODE 2 cluster assignment based on the subset of data it contains. It is missing the ArmsPoses3D data, so it is only useful for testing BodyPoses3D and ObjectFusion clustering and assignment, not ArmsPoses3D clustering and assignment, but it is useful for testing the overall pipeline with a smaller dataset. It has 1.1M rows, which is still large but more manageable than the full 3.8M rows in SegmentHelperMar23_headon.
 FORCE_HAND_LANDMARKS = False # when doing ArmsPoses3D, default is True, so mongo_hand_landmarks = 1
@@ -1045,6 +1045,12 @@ def assign_images_clusters_DB(df):
     print(df_subset_landmarks)
     print(df_subset_landmarks[["image_id", "cluster_id","cluster_dist"]])
 
+    if 'image_id' in df_subset_landmarks.columns:
+        nan_image_id_count = int(df_subset_landmarks['image_id'].isna().sum())
+        if nan_image_id_count > 0:
+            print(f"[WARN] Dropping {nan_image_id_count} rows with NaN image_id before save_images_clusters_DB")
+            df_subset_landmarks = df_subset_landmarks[df_subset_landmarks['image_id'].notna()].copy()
+
     # print all rows where cluster_id is 68
     # print(df_subset_landmarks[df_subset_landmarks["cluster_id"] == 68])
 
@@ -1505,7 +1511,7 @@ def fetch_mongo_for_batch(batch_df):
         image_id = int(row['image_id'])
         try:
             result = io.get_encodings_mongo(image_id)
-            
+            # print(f"Fetched MongoDB encodings for image_id {image_id}: {result}")
             # result is a pd.Series with 6 values
             # Check if all values are None (missing document)
             if isinstance(result, pd.Series):
@@ -1542,88 +1548,89 @@ def fetch_mongo_for_batch(batch_df):
     
     return batch_df
 
-def fetch_encodings_mongo_batched(df, batch_size=5000, mongo_reconnect_interval=5):
-    """
-    Fetch MongoDB encodings in batches with periodic reconnection to prevent timeouts.
-    Handles missing documents and NumPy type conversions.
-    Note: get_encodings_mongo() returns a pd.Series, not a tuple
-    """
-    print(f"Fetching encodings in batches of {batch_size}...")
+# deprecated legacy code I think
+# def fetch_encodings_mongo_batched(df, batch_size=5000, mongo_reconnect_interval=5):
+#     """
+#     Fetch MongoDB encodings in batches with periodic reconnection to prevent timeouts.
+#     Handles missing documents and NumPy type conversions.
+#     Note: get_encodings_mongo() returns a pd.Series, not a tuple
+#     """
+#     print(f"Fetching encodings in batches of {batch_size}...")
     
-    total_rows = len(df)
-    results_list = []
-    missing_count = 0
-    error_count = 0
-    success_count = 0
+#     total_rows = len(df)
+#     results_list = []
+#     missing_count = 0
+#     error_count = 0
+#     success_count = 0
     
-    # Debug: test one call to see what we get
-    if total_rows > 0:
-        test_image_id = int(df.iloc[0]['image_id'])
-        test_result = io.get_encodings_mongo(test_image_id)
-        # print(f"DEBUG: Sample result for image_id {test_image_id}:")
-        # print(f"  Type: {type(test_result)}")
-        # print(f"  Values: {test_result.tolist() if isinstance(test_result, pd.Series) else test_result}")
-        # print(f"  All None?: {test_result.isna().all() if isinstance(test_result, pd.Series) else all(v is None for v in test_result)}")
+#     # Debug: test one call to see what we get
+#     if total_rows > 0:
+#         test_image_id = int(df.iloc[0]['image_id'])
+#         test_result = io.get_encodings_mongo(test_image_id)
+#         print(f"DEBUG: Sample result for image_id {test_image_id}:")
+#         print(f"  Type: {type(test_result)}")
+#         print(f"  Values: {test_result.tolist() if isinstance(test_result, pd.Series) else test_result}")
+#         print(f"  All None?: {test_result.isna().all() if isinstance(test_result, pd.Series) else all(v is None for v in test_result)}")
     
-    for batch_num, batch_start in enumerate(range(0, total_rows, batch_size)):
-        batch_end = min(batch_start + batch_size, total_rows)
-        batch_size_actual = batch_end - batch_start
+#     for batch_num, batch_start in enumerate(range(0, total_rows, batch_size)):
+#         batch_end = min(batch_start + batch_size, total_rows)
+#         batch_size_actual = batch_end - batch_start
         
-        print(f"[Batch {batch_num + 1}] Fetching rows {batch_start} to {batch_end} ({batch_size_actual} rows)...")
+#         print(f"[Batch {batch_num + 1}] Fetching rows {batch_start} to {batch_end} ({batch_size_actual} rows)...")
         
-        batch_df = df.iloc[batch_start:batch_end]
-        batch_results = []
+#         batch_df = df.iloc[batch_start:batch_end]
+#         batch_results = []
         
-        for idx, row in batch_df.iterrows():
-            image_id = int(row['image_id'])
-            try:
-                result = io.get_encodings_mongo(image_id)
+#         for idx, row in batch_df.iterrows():
+#             image_id = int(row['image_id'])
+#             try:
+#                 result = io.get_encodings_mongo(image_id)
                 
-                # result is a pd.Series with 6 values
-                # Check if all values are None (missing document)
-                if isinstance(result, pd.Series):
-                    is_all_none = result.isna().all() or all(v is None for v in result.values)
-                else:
-                    is_all_none = all(v is None for v in result)
+#                 # result is a pd.Series with 6 values
+#                 # Check if all values are None (missing document)
+#                 if isinstance(result, pd.Series):
+#                     is_all_none = result.isna().all() or all(v is None for v in result.values)
+#                 else:
+#                     is_all_none = all(v is None for v in result)
                 
-                if is_all_none:
-                    missing_count += 1
-                    if missing_count <= 10:
-                        print(f"[Batch {batch_num + 1}] Missing/Empty result for image_id {image_id}")
-                    batch_results.append((None, None, None, None, None, None))
-                else:
-                    success_count += 1
-                    # Convert Series to tuple if needed
-                    if isinstance(result, pd.Series):
-                        batch_results.append(tuple(result.values))
-                    else:
-                        batch_results.append(result)
+#                 if is_all_none:
+#                     missing_count += 1
+#                     if missing_count <= 10:
+#                         print(f"[Batch {batch_num + 1}] Missing/Empty result for image_id {image_id}")
+#                     batch_results.append((None, None, None, None, None, None))
+#                 else:
+#                     success_count += 1
+#                     # Convert Series to tuple if needed
+#                     if isinstance(result, pd.Series):
+#                         batch_results.append(tuple(result.values))
+#                     else:
+#                         batch_results.append(result)
                     
-            except Exception as e:
-                error_count += 1
-                if error_count <= 10:
-                    error_msg = str(e)[:150]
-                    print(f"[Batch {batch_num + 1}] ERROR fetching image_id {image_id}: {error_msg}")
-                batch_results.append((None, None, None, None, None, None))
+#             except Exception as e:
+#                 error_count += 1
+#                 if error_count <= 10:
+#                     error_msg = str(e)[:150]
+#                     print(f"[Batch {batch_num + 1}] ERROR fetching image_id {image_id}: {error_msg}")
+#                 batch_results.append((None, None, None, None, None, None))
         
-        results_list.extend(batch_results)
-        gc.collect()
-        batch_summary = f"success={success_count}, missing={missing_count}, errors={error_count}"
-        print(f"[Batch {batch_num + 1}] Completed ({batch_summary})...")
+#         results_list.extend(batch_results)
+#         gc.collect()
+#         batch_summary = f"success={success_count}, missing={missing_count}, errors={error_count}"
+#         print(f"[Batch {batch_num + 1}] Completed ({batch_summary})...")
     
-    # Convert results list to DataFrame columns
-    print(f"\n=== Summary ===")
-    print(f"Total rows processed: {total_rows}")
-    print(f"Successful: {success_count}")
-    print(f"Missing/Empty: {missing_count}")
-    print(f"Errors: {error_count}")
-    print(f"=== End Summary ===\n")
+#     # Convert results list to DataFrame columns
+#     print(f"\n=== Summary ===")
+#     print(f"Total rows processed: {total_rows}")
+#     print(f"Successful: {success_count}")
+#     print(f"Missing/Empty: {missing_count}")
+#     print(f"Errors: {error_count}")
+#     print(f"=== End Summary ===\n")
     
-    results_df = pd.DataFrame(results_list, columns=['face_encodings68', 'face_landmarks', 'body_landmarks', 'body_landmarks_normalized', 'body_landmarks_3D', 'hand_results'])
-    df[['face_encodings68', 'face_landmarks', 'body_landmarks', 'body_landmarks_normalized', 'body_landmarks_3D', 'hand_results']] = results_df
+#     results_df = pd.DataFrame(results_list, columns=['face_encodings68', 'face_landmarks', 'body_landmarks', 'body_landmarks_normalized', 'body_landmarks_3D', 'hand_results'])
+#     df[['face_encodings68', 'face_landmarks', 'body_landmarks', 'body_landmarks_normalized', 'body_landmarks_3D', 'hand_results']] = results_df
     
-    print(f"Finished fetching {total_rows} encodings")
-    return df
+#     print(f"Finished fetching {total_rows} encodings")
+#     return df
 
 # ==================== OBJECT-HAND RELATIONSHIP FUNCTIONS ====================
 # These functions have been moved to ToolsClustering class.
